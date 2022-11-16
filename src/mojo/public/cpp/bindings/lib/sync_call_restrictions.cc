@@ -6,9 +6,9 @@
 
 #if ENABLE_SYNC_CALL_RESTRICTIONS
 
+#include "base/check_op.h"
 #include "base/debug/leak_annotations.h"
 #include "base/logging.h"
-#include "base/macros.h"
 #include "base/no_destructor.h"
 #include "base/synchronization/lock.h"
 #include "base/threading/sequence_local_storage_map.h"
@@ -22,6 +22,10 @@ namespace {
 class GlobalSyncCallSettings {
  public:
   GlobalSyncCallSettings() = default;
+
+  GlobalSyncCallSettings(const GlobalSyncCallSettings&) = delete;
+  GlobalSyncCallSettings& operator=(const GlobalSyncCallSettings&) = delete;
+
   ~GlobalSyncCallSettings() = default;
 
   bool sync_call_allowed_by_default() const {
@@ -37,8 +41,6 @@ class GlobalSyncCallSettings {
  private:
   mutable base::Lock lock_;
   bool sync_call_allowed_by_default_ = true;
-
-  DISALLOW_COPY_AND_ASSIGN(GlobalSyncCallSettings);
 };
 
 GlobalSyncCallSettings& GetGlobalSettings() {

@@ -5,7 +5,6 @@
 #ifndef CHROME_BROWSER_ASH_PRINTING_HISTORY_PRINT_JOB_HISTORY_CLEANER_H_
 #define CHROME_BROWSER_ASH_PRINTING_HISTORY_PRINT_JOB_HISTORY_CLEANER_H_
 
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/printing/history/print_job_database.h"
@@ -16,7 +15,7 @@ namespace base {
 class Clock;
 }  // namespace base
 
-namespace chromeos {
+namespace ash {
 
 class PrintJobHistoryCleaner {
  public:
@@ -26,6 +25,10 @@ class PrintJobHistoryCleaner {
 
   PrintJobHistoryCleaner(PrintJobDatabase* print_job_database,
                          PrefService* pref_service);
+
+  PrintJobHistoryCleaner(const PrintJobHistoryCleaner&) = delete;
+  PrintJobHistoryCleaner& operator=(const PrintJobHistoryCleaner&) = delete;
+
   ~PrintJobHistoryCleaner();
 
   // Removes expired print jobs from the database.
@@ -60,10 +63,8 @@ class PrintJobHistoryCleaner {
   base::Time oldest_print_job_completion_time_;
 
   base::WeakPtrFactory<PrintJobHistoryCleaner> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(PrintJobHistoryCleaner);
 };
 
-}  // namespace chromeos
+}  // namespace ash
 
 #endif  // CHROME_BROWSER_ASH_PRINTING_HISTORY_PRINT_JOB_HISTORY_CLEANER_H_

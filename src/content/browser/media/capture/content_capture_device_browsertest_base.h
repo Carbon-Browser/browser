@@ -7,11 +7,11 @@
 
 #include <memory>
 
-#include "base/macros.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "content/browser/media/capture/fake_video_capture_stack.h"
 #include "content/public/test/content_browser_test.h"
+#include "media/base/video_types.h"
 #include "media/capture/video_capture_types.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkColor.h"
@@ -34,6 +34,12 @@ class FrameSinkVideoCaptureDevice;
 class ContentCaptureDeviceBrowserTestBase : public ContentBrowserTest {
  public:
   ContentCaptureDeviceBrowserTestBase();
+
+  ContentCaptureDeviceBrowserTestBase(
+      const ContentCaptureDeviceBrowserTestBase&) = delete;
+  ContentCaptureDeviceBrowserTestBase& operator=(
+      const ContentCaptureDeviceBrowserTestBase&) = delete;
+
   ~ContentCaptureDeviceBrowserTestBase() override;
 
   FakeVideoCaptureStack* capture_stack() { return &capture_stack_; }
@@ -49,6 +55,8 @@ class ContentCaptureDeviceBrowserTestBase : public ContentBrowserTest {
   gfx::Size GetExpectedSourceSize();
 
   // Returns capture parameters based on the captured source size.
+  // Capture format can be customized by the subclasses, see
+  // |GetVideoPixelFormat()|.
   media::VideoCaptureParams SnapshotCaptureParams();
 
   // Returns the actual minimum capture period the device is using. This should
@@ -94,6 +102,9 @@ class ContentCaptureDeviceBrowserTestBase : public ContentBrowserTest {
   virtual bool IsFixedAspectRatioTest() const;
   virtual bool IsCrossSiteCaptureTest() const;
 
+  // Used to customize the video pixel format that will be used for capture.
+  virtual media::VideoPixelFormat GetVideoPixelFormat() const;
+
   // Returns the size of the original content (i.e., not including any
   // stretching/scaling being done to fit it within a video frame).
   virtual gfx::Size GetCapturedSourceSize() const = 0;
@@ -132,8 +143,6 @@ class ContentCaptureDeviceBrowserTestBase : public ContentBrowserTest {
   static constexpr char kSingleFramePath[] = "/single.html";
   static constexpr char kAlternateHostname[] = "alternate.com";
   static constexpr char kAlternatePath[] = "/alternate.html";
-
-  DISALLOW_COPY_AND_ASSIGN(ContentCaptureDeviceBrowserTestBase);
 };
 
 }  // namespace content

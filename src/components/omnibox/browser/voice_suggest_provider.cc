@@ -29,9 +29,7 @@ constexpr int ConfidenceScoreToSuggestionScore(float confidence_score) {
 }
 }  // namespace
 
-VoiceSuggestProvider::VoiceSuggestProvider(
-    AutocompleteProviderClient* client,
-    AutocompleteProviderListener* listener)
+VoiceSuggestProvider::VoiceSuggestProvider(AutocompleteProviderClient* client)
     : BaseSearchProvider(TYPE_VOICE_SUGGEST, client) {}
 
 VoiceSuggestProvider::~VoiceSuggestProvider() = default;
@@ -91,10 +89,11 @@ void VoiceSuggestProvider::RecordDeletionResult(bool success) {}
 
 void VoiceSuggestProvider::Stop(bool clear_cached_results,
                                 bool due_to_user_inactivity) {
+  AutocompleteProvider::Stop(clear_cached_results, due_to_user_inactivity);
+
   if (clear_cached_results) {
     ClearCache();
   }
-  matches_.clear();
 }
 
 void VoiceSuggestProvider::ClearCache() {

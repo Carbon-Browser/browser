@@ -5,6 +5,7 @@
 #ifndef CHROME_BROWSER_SIGNIN_HEADER_MODIFICATION_DELEGATE_IMPL_H_
 #define CHROME_BROWSER_SIGNIN_HEADER_MODIFICATION_DELEGATE_IMPL_H_
 
+#include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "build/buildflag.h"
 #include "chrome/browser/signin/header_modification_delegate.h"
@@ -21,12 +22,17 @@ namespace signin {
 // interface.
 class HeaderModificationDelegateImpl : public HeaderModificationDelegate {
  public:
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   explicit HeaderModificationDelegateImpl(Profile* profile,
                                           bool incognito_enabled);
 #else
   explicit HeaderModificationDelegateImpl(Profile* profile);
 #endif
+
+  HeaderModificationDelegateImpl(const HeaderModificationDelegateImpl&) =
+      delete;
+  HeaderModificationDelegateImpl& operator=(
+      const HeaderModificationDelegateImpl&) = delete;
 
   ~HeaderModificationDelegateImpl() override;
 
@@ -49,14 +55,12 @@ class HeaderModificationDelegateImpl : public HeaderModificationDelegate {
 #endif
 
  private:
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
   scoped_refptr<content_settings::CookieSettings> cookie_settings_;
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   bool incognito_enabled_;
 #endif
-
-  DISALLOW_COPY_AND_ASSIGN(HeaderModificationDelegateImpl);
 };
 
 }  // namespace signin

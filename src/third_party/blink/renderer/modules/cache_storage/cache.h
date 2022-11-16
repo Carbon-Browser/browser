@@ -5,7 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_CACHE_STORAGE_CACHE_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_CACHE_STORAGE_CACHE_H_
 
-#include "base/macros.h"
+#include "base/memory/scoped_refptr.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
 #include "mojo/public/cpp/bindings/pending_associated_remote.h"
 #include "third_party/blink/public/mojom/cache_storage/cache_storage.mojom-blink.h"
@@ -55,6 +55,9 @@ class MODULES_EXPORT Cache : public ScriptWrappable {
         CacheStorageBlobClientList* blob_client_list,
         mojo::PendingAssociatedRemote<mojom::blink::CacheStorageCache>,
         scoped_refptr<base::SingleThreadTaskRunner>);
+
+  Cache(const Cache&) = delete;
+  Cache& operator=(const Cache&) = delete;
 
   // From Cache.idl:
   ScriptPromise match(ScriptState* script_state,
@@ -127,8 +130,6 @@ class MODULES_EXPORT Cache : public ScriptWrappable {
   Member<CacheStorageBlobClientList> blob_client_list_;
 
   mojo::AssociatedRemote<mojom::blink::CacheStorageCache> cache_remote_;
-
-  DISALLOW_COPY_AND_ASSIGN(Cache);
 };
 
 }  // namespace blink

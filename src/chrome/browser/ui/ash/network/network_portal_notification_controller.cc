@@ -10,17 +10,18 @@
 #include <string>
 #include <vector>
 
+#include "ash/constants/notifier_catalogs.h"
 #include "ash/public/cpp/notification_utils.h"
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "chrome/app/vector_icons/vector_icons.h"
 #include "chrome/browser/ash/mobile/mobile_activator.h"
+#include "chrome/browser/ash/net/network_portal_web_dialog.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
-#include "chrome/browser/chromeos/net/network_portal_web_dialog.h"
+#include "chrome/browser/ash/profiles/signin_profile_handler.h"
 #include "chrome/browser/notifications/notification_handler.h"
 #include "chrome/browser/notifications/system_notification_helper.h"
 #include "chrome/browser/profiles/profile_manager.h"
@@ -29,8 +30,8 @@
 #include "chrome/browser/ui/singleton_tabs.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/grit/generated_resources.h"
-#include "chromeos/network/network_state.h"
-#include "chromeos/network/network_type_pattern.h"
+#include "chromeos/ash/components/network/network_state.h"
+#include "chromeos/ash/components/network/network_type_pattern.h"
 #include "components/captive_portal/core/captive_portal_detector.h"
 #include "components/prefs/pref_service.h"
 #include "components/session_manager/core/session_manager.h"
@@ -61,6 +62,11 @@ class NetworkPortalNotificationControllerDelegate
       base::WeakPtr<NetworkPortalNotificationController> controller)
       : guid_(guid), clicked_(false), controller_(controller) {}
 
+  NetworkPortalNotificationControllerDelegate(
+      const NetworkPortalNotificationControllerDelegate&) = delete;
+  NetworkPortalNotificationControllerDelegate& operator=(
+      const NetworkPortalNotificationControllerDelegate&) = delete;
+
   // Overridden from message_center::NotificationDelegate:
   void Click(const absl::optional<int>& button_index,
              const absl::optional<std::u16string>& reply) override;
@@ -74,8 +80,6 @@ class NetworkPortalNotificationControllerDelegate
   bool clicked_;
 
   base::WeakPtr<NetworkPortalNotificationController> controller_;
-
-  DISALLOW_COPY_AND_ASSIGN(NetworkPortalNotificationControllerDelegate);
 };
 
 void NetworkPortalNotificationControllerDelegate::Click(
@@ -190,7 +194,7 @@ void NetworkPortalNotificationController::OnDialogDestroyed(
     const NetworkPortalWebDialog* dialog) {
   if (dialog == dialog_) {
     dialog_ = nullptr;
-    ProfileHelper::Get()->ClearSigninProfile(base::NullCallback());
+    ash::SigninProfileHandler::Get()->ClearSigninProfile(base::NullCallback());
   }
 }
 
@@ -202,7 +206,8 @@ NetworkPortalNotificationController::CreateDefaultCaptivePortalNotification(
           network->guid(), weak_factory_.GetWeakPtr());
   message_center::NotifierId notifier_id(
       message_center::NotifierType::SYSTEM_COMPONENT,
-      kNotifierNetworkPortalDetector);
+      kNotifierNetworkPortalDetector,
+      ash::NotificationCatalogName::kNetworkPortalDetector);
   bool is_wifi = NetworkTypePattern::WiFi().MatchesType(network->type());
   std::unique_ptr<message_center::Notification> notification =
       ash::CreateSystemNotification(

@@ -9,7 +9,7 @@
 
 #include <string>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/glib/glib_signal.h"
 #include "ui/base/glib/scoped_gobject.h"
 #include "ui/gtk/settings_provider.h"
@@ -24,6 +24,11 @@ class SettingsProviderGSettings : public SettingsProvider {
  public:
   // Sends data to the GtkUi when available.
   explicit SettingsProviderGSettings(GtkUi* delegate);
+
+  SettingsProviderGSettings(const SettingsProviderGSettings&) = delete;
+  SettingsProviderGSettings& operator=(const SettingsProviderGSettings&) =
+      delete;
+
   ~SettingsProviderGSettings() override;
 
  private:
@@ -43,14 +48,12 @@ class SettingsProviderGSettings : public SettingsProvider {
 
   void ParseAndStoreMiddleClickValue(const std::string&);
 
-  GtkUi* delegate_;
+  raw_ptr<GtkUi> delegate_;
 
   ScopedGObject<GSettings> button_settings_;
   ScopedGObject<GSettings> click_settings_;
   gulong signal_button_id_;
   gulong signal_middle_click_id_;
-
-  DISALLOW_COPY_AND_ASSIGN(SettingsProviderGSettings);
 };
 
 }  // namespace gtk

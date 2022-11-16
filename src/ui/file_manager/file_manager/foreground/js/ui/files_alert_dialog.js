@@ -2,9 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {AlertDialog} from 'chrome://resources/js/cr/ui/dialogs.m.js';
-
 import {util} from '../../../common/js/util.js';
+
+import {AlertDialog} from './dialogs.js';
 
 /**
  * Alert dialog.
@@ -65,5 +65,14 @@ export class FilesAlertDialog extends AlertDialog {
   showHtml(title, message, ...args) {
     this.frame.classList.toggle('no-title', !title);
     super.showHtml(title, message, ...args);
+  }
+
+  /**
+   * Async version of show().
+   * @param {string} title
+   * @returns {!Promise<void>} Resolves when dismissed.
+   */
+  showAsync(title) {
+    return new Promise(resolve => this.show(title, resolve));
   }
 }

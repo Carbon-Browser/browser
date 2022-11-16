@@ -33,7 +33,7 @@ class MediaRouterIntegrationOneUABrowserTest
     // Set up embedded test server to serve offscreen presentation with relative
     // URL "presentation_receiver.html".
     base::FilePath resource_dir =
-        base::PathService::CheckedGet(base::DIR_MODULE)
+        base::PathService::CheckedGet(base::DIR_ASSETS)
             .Append(FILE_PATH_LITERAL("media_router/browser_test_resources/"));
     embedded_test_server()->ServeFilesFromDirectory(resource_dir);
     ASSERT_TRUE(embedded_test_server()->Start());
@@ -57,7 +57,7 @@ class MediaRouterIntegrationOneUABrowserTest
     test_provider_->CaptureOffScreenTab(GetActiveWebContents(), receiver_page,
                                         presentation_id);
     // Wait for offscreen tab to be created and loaded.
-    Wait(base::TimeDelta::FromSeconds(3));
+    Wait(base::Seconds(3));
   }
 };
 
@@ -67,18 +67,18 @@ class MediaRouterIntegrationOneUABrowserTest
 #else
 #define MAYBE_Basic Basic
 #endif
-IN_PROC_BROWSER_TEST_F(MediaRouterIntegrationOneUABrowserTest, MAYBE_Basic) {
+IN_PROC_BROWSER_TEST_P(MediaRouterIntegrationOneUABrowserTest, MAYBE_Basic) {
   RunBasicTest();
 }
 
 // TODO(https://crbug.com/822231): Flaky in Chromium waterfall.
-IN_PROC_BROWSER_TEST_F(MediaRouterIntegrationOneUABrowserTest,
+IN_PROC_BROWSER_TEST_P(MediaRouterIntegrationOneUABrowserTest,
                        MANUAL_SendAndOnMessage) {
   RunSendMessageTest("foo");
 }
 
 // TODO(https://crbug.com/822231): Flaky in Chromium waterfall.
-IN_PROC_BROWSER_TEST_F(MediaRouterIntegrationOneUABrowserTest,
+IN_PROC_BROWSER_TEST_P(MediaRouterIntegrationOneUABrowserTest,
                        MANUAL_ReceiverCloseConnection) {
   WebContents* web_contents = StartSessionWithTestPageAndChooseSink();
   CheckSessionValidity(web_contents);
@@ -91,14 +91,14 @@ IN_PROC_BROWSER_TEST_F(MediaRouterIntegrationOneUABrowserTest,
 #else
 #define MAYBE_Fail_SendMessage Fail_SendMessage
 #endif
-IN_PROC_BROWSER_TEST_F(MediaRouterIntegrationOneUABrowserTest,
+IN_PROC_BROWSER_TEST_P(MediaRouterIntegrationOneUABrowserTest,
                        MAYBE_Fail_SendMessage) {
   RunFailToSendMessageTest();
 }
 #undef MAYBE_Fail_SendMessage
 
-#if defined(OS_CHROMEOS) ||                                      \
-    (defined(OS_LINUX) &&                                        \
+#if BUILDFLAG(IS_CHROMEOS) ||                                    \
+    (BUILDFLAG(IS_LINUX) &&                                      \
      (BUILDFLAG(CFI_CAST_CHECK) || BUILDFLAG(CFI_ICALL_CHECK) || \
       BUILDFLAG(CFI_ENFORCEMENT_TRAP) ||                         \
       BUILDFLAG(CFI_ENFORCEMENT_DIAGNOSTIC)))
@@ -108,7 +108,7 @@ IN_PROC_BROWSER_TEST_F(MediaRouterIntegrationOneUABrowserTest,
 #else
 #define MAYBE_ReconnectSession ReconnectSession
 #endif
-IN_PROC_BROWSER_TEST_F(MediaRouterIntegrationOneUABrowserTest,
+IN_PROC_BROWSER_TEST_P(MediaRouterIntegrationOneUABrowserTest,
                        MAYBE_ReconnectSession) {
   RunReconnectSessionTest();
 }
@@ -120,7 +120,7 @@ IN_PROC_BROWSER_TEST_F(MediaRouterIntegrationOneUABrowserTest,
 #else
 #define MAYBE_ReconnectSessionSameTab ReconnectSessionSameTab
 #endif
-IN_PROC_BROWSER_TEST_F(MediaRouterIntegrationOneUABrowserTest,
+IN_PROC_BROWSER_TEST_P(MediaRouterIntegrationOneUABrowserTest,
                        MAYBE_ReconnectSessionSameTab) {
   RunReconnectSessionSameTabTest();
 }
@@ -133,7 +133,7 @@ class MediaRouterIntegrationOneUANoReceiverBrowserTest
     return embedded_test_server()->GetURL(
         "/basic_test.html?__oneUANoReceiver__=true");
   }
-};
+};  // namespace media_router
 
 // TODO(https://crbug.com/822231): Flaky in Chromium waterfall.
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -141,7 +141,7 @@ class MediaRouterIntegrationOneUANoReceiverBrowserTest
 #else
 #define MAYBE_Basic Basic
 #endif
-IN_PROC_BROWSER_TEST_F(MediaRouterIntegrationOneUANoReceiverBrowserTest,
+IN_PROC_BROWSER_TEST_P(MediaRouterIntegrationOneUANoReceiverBrowserTest,
                        MAYBE_Basic) {
   RunBasicTest();
 }
@@ -153,7 +153,7 @@ IN_PROC_BROWSER_TEST_F(MediaRouterIntegrationOneUANoReceiverBrowserTest,
 #else
 #define MAYBE_Fail_SendMessage Fail_SendMessage
 #endif
-IN_PROC_BROWSER_TEST_F(MediaRouterIntegrationOneUANoReceiverBrowserTest,
+IN_PROC_BROWSER_TEST_P(MediaRouterIntegrationOneUANoReceiverBrowserTest,
                        MAYBE_Fail_SendMessage) {
   RunFailToSendMessageTest();
 }
@@ -165,7 +165,7 @@ IN_PROC_BROWSER_TEST_F(MediaRouterIntegrationOneUANoReceiverBrowserTest,
 #else
 #define MAYBE_ReconnectSession ReconnectSession
 #endif
-IN_PROC_BROWSER_TEST_F(MediaRouterIntegrationOneUANoReceiverBrowserTest,
+IN_PROC_BROWSER_TEST_P(MediaRouterIntegrationOneUANoReceiverBrowserTest,
                        MAYBE_ReconnectSession) {
   RunReconnectSessionTest();
 }
@@ -176,10 +176,15 @@ IN_PROC_BROWSER_TEST_F(MediaRouterIntegrationOneUANoReceiverBrowserTest,
 #else
 #define MAYBE_ReconnectSessionSameTab ReconnectSessionSameTab
 #endif
-IN_PROC_BROWSER_TEST_F(MediaRouterIntegrationOneUANoReceiverBrowserTest,
+IN_PROC_BROWSER_TEST_P(MediaRouterIntegrationOneUANoReceiverBrowserTest,
                        MAYBE_ReconnectSessionSameTab) {
   RunReconnectSessionSameTabTest();
 }
 #undef MAYBE_ReconnectSessionSameTab
+
+INSTANTIATE_MEDIA_ROUTER_INTEGRATION_BROWER_TEST_SUITE(
+    MediaRouterIntegrationOneUABrowserTest);
+INSTANTIATE_MEDIA_ROUTER_INTEGRATION_BROWER_TEST_SUITE(
+    MediaRouterIntegrationOneUANoReceiverBrowserTest);
 
 }  // namespace media_router

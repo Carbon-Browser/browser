@@ -14,7 +14,6 @@
 #include "base/posix/eintr_wrapper.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
-#include "base/task/post_task.h"
 #include "base/task/thread_pool.h"
 #include "components/exo/data_source_delegate.h"
 #include "components/exo/data_source_observer.h"
@@ -34,6 +33,8 @@ constexpr char kTextRTF[] = "text/rtf";
 constexpr char kTextHTML[] = "text/html";
 constexpr char kTextUriList[] = "text/uri-list";
 constexpr char kApplicationOctetStream[] = "application/octet-stream";
+constexpr char kWebCustomData[] = "chromium/x-web-custom-data";
+constexpr char kDataTransferEndpoint[] = "chromium/x-data-transfer-endpoint";
 
 constexpr char kUtfPrefix[] = "UTF";
 constexpr char kEncoding16[] = "16";
@@ -94,12 +95,13 @@ int GetCharsetRank(const std::string& charset_input) {
 // considered to have any greater meaning. In particular, these are not expected
 // to remain stable over time.
 int GetImageTypeRank(const std::string& mime_type) {
-  // Prefer bitmaps most of all to avoid needing to decode the image, followed
-  // by other lossless formats, followed by any other format we support.
-  if (net::MatchesMimeType(std::string(kImageBitmap), mime_type))
-    return 0;
+  // Prefer PNG most of all because this format preserves the alpha channel and
+  // is lossless, followed by BMP for being lossless and fast to decode (but
+  // doesn't preserve alpha), followed by everything else.
   if (net::MatchesMimeType(std::string(kImagePNG), mime_type) ||
       net::MatchesMimeType(std::string(kImageAPNG), mime_type))
+    return 0;
+  if (net::MatchesMimeType(std::string(kImageBitmap), mime_type))
     return 1;
   return 2;
 }
@@ -252,6 +254,16 @@ void DataSource::OnDataRead(ReadDataCallback callback,
   std::move(callback).Run(mime_type, *data);
 }
 
+void DataSource::ReadDataTransferEndpoint(
+    ReadTextDataCallback dte_reader,
+    base::RepeatingClosure failure_callback) {
+  ReadData(kDataTransferEndpoint,
+           base::BindOnce(&DataSource::OnTextRead,
+                          read_data_weak_ptr_factory_.GetWeakPtr(),
+                          std::move(dte_reader)),
+           failure_callback);
+}
+
 void DataSource::GetDataForPreferredMimeTypes(
     ReadTextDataCallback text_reader,
     ReadDataCallback rtf_reader,
@@ -259,6 +271,7 @@ void DataSource::GetDataForPreferredMimeTypes(
     ReadDataCallback image_reader,
     ReadDataCallback filenames_reader,
     ReadFileContentsDataCallback file_contents_reader,
+    ReadDataCallback web_custom_data_reader,
     base::RepeatingClosure failure_callback) {
   std::string text_mime;
   std::string rtf_mime;
@@ -266,6 +279,7 @@ void DataSource::GetDataForPreferredMimeTypes(
   std::string image_mime;
   std::string filenames_mime;
   std::string file_contents_mime;
+  std::string web_custom_data_mime;
 
   int text_rank = std::numeric_limits<int>::max();
   int html_rank = std::numeric_limits<int>::max();
@@ -317,6 +331,8 @@ void DataSource::GetDataForPreferredMimeTypes(
       filenames_mime = mime_type;
     } else if (!GetApplicationOctetStreamName(mime_type).empty()) {
       file_contents_mime = mime_type;
+    } else if (net::MatchesMimeType(std::string(kWebCustomData), mime_type)) {
+      web_custom_data_mime = mime_type;
     }
   }
 
@@ -337,6 +353,8 @@ void DataSource::GetDataForPreferredMimeTypes(
            base::BindOnce(&DataSource::OnFileContentsRead,
                           read_data_weak_ptr_factory_.GetWeakPtr(),
                           std::move(file_contents_reader)),
+           failure_callback);
+  ReadData(web_custom_data_mime, std::move(web_custom_data_reader),
            failure_callback);
 }
 

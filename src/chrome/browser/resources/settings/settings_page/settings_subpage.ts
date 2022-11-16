@@ -13,23 +13,26 @@ import '//resources/cr_elements/cr_search_field/cr_search_field.js';
 import '//resources/cr_elements/icons.m.js';
 import '//resources/cr_elements/shared_style_css.m.js';
 import '//resources/polymer/v3_0/paper-spinner/paper-spinner-lite.js';
-import '../settings_shared_css.js';
+import '../settings_shared.css.js';
+import '../site_favicon.js';
 
 import {CrSearchFieldElement} from '//resources/cr_elements/cr_search_field/cr_search_field.js';
-import {FindShortcutBehavior} from '//resources/cr_elements/find_shortcut_behavior.js';
-import {assert} from '//resources/js/assert.m.js';
+import {FindShortcutMixin, FindShortcutMixinInterface} from '//resources/cr_elements/find_shortcut_mixin.js';
+import {assert} from '//resources/js/assert_ts.js';
 import {focusWithoutInk} from '//resources/js/cr/ui/focus_without_ink.m.js';
-import {I18nBehavior} from '//resources/js/i18n_behavior.m.js';
+import {I18nMixin, I18nMixinInterface} from '//resources/js/i18n_mixin.js';
 import {listenOnce} from '//resources/js/util.m.js';
 import {IronResizableBehavior} from '//resources/polymer/v3_0/iron-resizable-behavior/iron-resizable-behavior.js';
-import {afterNextRender, html, mixinBehaviors, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {afterNextRender, mixinBehaviors, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 import {EventTracker} from 'chrome://resources/js/event_tracker.m.js';
 
 import {loadTimeData} from '../i18n_setup.js';
-import {Route, RouteObserverMixin, Router} from '../router.js';
+import {Route, RouteObserverMixin, RouteObserverMixinInterface, Router} from '../router.js';
 import {getSettingIdParameter} from '../setting_id_param_util.js';
 
-interface SettingsSubpageElement {
+import {getTemplate} from './settings_subpage.html.js';
+
+export interface SettingsSubpageElement {
   $: {
     closeButton: HTMLElement,
   };
@@ -37,12 +40,13 @@ interface SettingsSubpageElement {
 
 const SettingsSubpageElementBase =
     mixinBehaviors(
-        [FindShortcutBehavior, I18nBehavior, IronResizableBehavior],
-        RouteObserverMixin(PolymerElement)) as
-    {new (): PolymerElement & FindShortcutBehavior & I18nBehavior};
+        [IronResizableBehavior],
+        RouteObserverMixin(FindShortcutMixin(I18nMixin(PolymerElement)))) as {
+      new (): PolymerElement & FindShortcutMixinInterface & I18nMixinInterface &
+          RouteObserverMixinInterface,
+    };
 
-/** @polymer */
-class SettingsSubpageElement extends SettingsSubpageElementBase {
+export class SettingsSubpageElement extends SettingsSubpageElementBase {
   static get is() {
     return 'settings-subpage';
   }
@@ -51,7 +55,11 @@ class SettingsSubpageElement extends SettingsSubpageElementBase {
     return {
       pageTitle: String,
 
+      /** Setting this will display the icon at the given URL. */
       titleIcon: String,
+
+      /** Setting this will display the favicon of the website. */
+      faviconSiteUrl: String,
 
       learnMoreUrl: String,
 
@@ -115,6 +123,7 @@ class SettingsSubpageElement extends SettingsSubpageElementBase {
 
   pageTitle: string;
   titleIcon: string;
+  faviconSiteUrl: string;
   learnMoreUrl: string;
   searchLabel: string;
   searchTerm: string;
@@ -134,7 +143,7 @@ class SettingsSubpageElement extends SettingsSubpageElementBase {
     this.findShortcutListenOnAttach = false;
   }
 
-  connectedCallback() {
+  override connectedCallback() {
     super.connectedCallback();
 
     if (this.searchLabel) {
@@ -145,7 +154,7 @@ class SettingsSubpageElement extends SettingsSubpageElementBase {
     }
   }
 
-  disconnectedCallback() {
+  override disconnectedCallback() {
     super.disconnectedCallback();
 
     if (this.eventTracker_) {
@@ -163,7 +172,8 @@ class SettingsSubpageElement extends SettingsSubpageElementBase {
     return new Promise(resolve => {
       listenOnce(this, 'dom-change', () => {
         searchField = this.shadowRoot!.querySelector('cr-search-field');
-        resolve(assert(searchField!));
+        assert(!!searchField);
+        resolve(searchField);
       });
     });
   }
@@ -195,7 +205,7 @@ class SettingsSubpageElement extends SettingsSubpageElementBase {
     afterNextRender(this, () => focusWithoutInk(this.$.closeButton));
   }
 
-  currentRouteChanged(newRoute: Route, oldRoute: Route|null) {
+  override currentRouteChanged(newRoute: Route, oldRoute?: Route) {
     this.active_ = this.getAttribute('route-path') === newRoute.path;
     if (this.active_ && this.searchLabel && this.preserveSearchTerm) {
       this.getSearchField_().then(() => this.restoreSearchInput_());
@@ -272,7 +282,7 @@ class SettingsSubpageElement extends SettingsSubpageElementBase {
   }
 
   // Override FindShortcutBehavior methods.
-  handleFindShortcut(modalContextOpen: boolean) {
+  override handleFindShortcut(modalContextOpen: boolean) {
     if (modalContextOpen) {
       return false;
     }
@@ -281,13 +291,19 @@ class SettingsSubpageElement extends SettingsSubpageElementBase {
   }
 
   // Override FindShortcutBehavior methods.
-  searchInputHasFocus() {
+  override searchInputHasFocus() {
     const field = this.shadowRoot!.querySelector('cr-search-field')!;
     return field.getSearchInput() === field.shadowRoot!.activeElement;
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'settings-subpage': SettingsSubpageElement;
   }
 }
 

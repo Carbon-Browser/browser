@@ -39,10 +39,8 @@ source_set("feature_flags") {
 
   configs += [ "//build/config/compiler:enable_arc" ]
 
-  deps = [
-    "//base",
-    "//components/flags_ui",
-  ]
+  deps = [ "//components/flags_ui" ]
+  public_deps = [ "//base" ]
 }
 
 source_set("coordinators") {
@@ -148,6 +146,7 @@ source_set("unit_tests") {
     ":internal",
     ":ui",
     "//base/test:test_support",
+    "//ios/chrome/browser/browser_state:test_support",
     "//ios/chrome/browser/main:test_support",
     "//ios/chrome/browser/ui:feature_flags",
     "//ios/chrome/browser/ui/broadcaster",
@@ -166,7 +165,6 @@ source_set("unit_tests") {
 }
 
 source_set("eg2_tests") {
-  defines = [ "CHROME_EARL_GREY_2" ]
   configs += [
     "//build/config/compiler:enable_arc",
     "//build/config/ios:xctest_config",
@@ -176,6 +174,8 @@ source_set("eg2_tests") {
   deps = [
     "//base",
     "//base/test:test_support",
+    "//components/translate/core/browser:translate_pref_names",
+    "//ios/chrome/browser/ui/fullscreen:feature_flags",
     "//ios/chrome/browser/ui/fullscreen/test:eg_test_support+eg2",
     "//ios/chrome/browser/ui/util",
     "//ios/chrome/test:eg_test_support+eg2",

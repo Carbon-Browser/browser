@@ -10,6 +10,7 @@
 
 #include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/observer_list.h"
 #include "base/strings/string_number_conversions.h"
 #include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "extensions/browser/extension_prefs.h"
@@ -29,8 +30,7 @@ namespace extensions {
 
 AppWindowGeometryCache::AppWindowGeometryCache(content::BrowserContext* context,
                                                ExtensionPrefs* prefs)
-    : prefs_(prefs),
-      sync_delay_(base::TimeDelta::FromMilliseconds(kSyncTimeoutMilliseconds)) {
+    : prefs_(prefs), sync_delay_(base::Milliseconds(kSyncTimeoutMilliseconds)) {
   extension_registry_observation_.Observe(ExtensionRegistry::Get(context));
 }
 
@@ -111,16 +111,16 @@ void AppWindowGeometryCache::SyncToStorage() {
       DCHECK(!bounds.IsEmpty());
       DCHECK(!screen_bounds.IsEmpty());
       DCHECK(data_it->second.window_state != ui::SHOW_STATE_DEFAULT);
-      value->SetInteger("x", bounds.x());
-      value->SetInteger("y", bounds.y());
-      value->SetInteger("w", bounds.width());
-      value->SetInteger("h", bounds.height());
-      value->SetInteger("screen_bounds_x", screen_bounds.x());
-      value->SetInteger("screen_bounds_y", screen_bounds.y());
-      value->SetInteger("screen_bounds_w", screen_bounds.width());
-      value->SetInteger("screen_bounds_h", screen_bounds.height());
-      value->SetInteger("state", data_it->second.window_state);
-      value->SetString(
+      value->SetIntKey("x", bounds.x());
+      value->SetIntKey("y", bounds.y());
+      value->SetIntKey("w", bounds.width());
+      value->SetIntKey("h", bounds.height());
+      value->SetIntKey("screen_bounds_x", screen_bounds.x());
+      value->SetIntKey("screen_bounds_y", screen_bounds.y());
+      value->SetIntKey("screen_bounds_w", screen_bounds.width());
+      value->SetIntKey("screen_bounds_h", screen_bounds.height());
+      value->SetIntKey("state", data_it->second.window_state);
+      value->SetStringKey(
           "ts",
           base::NumberToString(data_it->second.last_change.ToInternalValue()));
       dict->SetKey(data_it->first,
@@ -195,7 +195,7 @@ void AppWindowGeometryCache::OnExtensionUnloaded(
 }
 
 void AppWindowGeometryCache::SetSyncDelayForTests(int timeout_ms) {
-  sync_delay_ = base::TimeDelta::FromMilliseconds(timeout_ms);
+  sync_delay_ = base::Milliseconds(timeout_ms);
 }
 
 void AppWindowGeometryCache::LoadGeometryFromStorage(
@@ -219,30 +219,37 @@ void AppWindowGeometryCache::LoadGeometryFromStorage(
       if (it.value().GetAsDictionary(&stored_window)) {
         WindowData& window_data = extension_data[it.key()];
 
-        int i;
-        if (stored_window->GetInteger("x", &i))
-          window_data.bounds.set_x(i);
-        if (stored_window->GetInteger("y", &i))
-          window_data.bounds.set_y(i);
-        if (stored_window->GetInteger("w", &i))
-          window_data.bounds.set_width(i);
-        if (stored_window->GetInteger("h", &i))
-          window_data.bounds.set_height(i);
-        if (stored_window->GetInteger("screen_bounds_x", &i))
-          window_data.screen_bounds.set_x(i);
-        if (stored_window->GetInteger("screen_bounds_y", &i))
-          window_data.screen_bounds.set_y(i);
-        if (stored_window->GetInteger("screen_bounds_w", &i))
-          window_data.screen_bounds.set_width(i);
-        if (stored_window->GetInteger("screen_bounds_h", &i))
-          window_data.screen_bounds.set_height(i);
-        if (stored_window->GetInteger("state", &i)) {
-          window_data.window_state = static_cast<ui::WindowShowState>(i);
+        if (absl::optional<int> i = stored_window->FindIntKey("x"))
+          window_data.bounds.set_x(*i);
+        if (absl::optional<int> i = stored_window->FindIntKey("y"))
+          window_data.bounds.set_y(*i);
+        if (absl::optional<int> i = stored_window->FindIntKey("w"))
+          window_data.bounds.set_width(*i);
+        if (absl::optional<int> i = stored_window->FindIntKey("h"))
+          window_data.bounds.set_height(*i);
+        if (absl::optional<int> i =
+                stored_window->FindIntKey("screen_bounds_x")) {
+          window_data.screen_bounds.set_x(*i);
         }
-        std::string ts_as_string;
-        if (stored_window->GetString("ts", &ts_as_string)) {
+        if (absl::optional<int> i =
+                stored_window->FindIntKey("screen_bounds_y")) {
+          window_data.screen_bounds.set_y(*i);
+        }
+        if (absl::optional<int> i =
+                stored_window->FindIntKey("screen_bounds_w")) {
+          window_data.screen_bounds.set_width(*i);
+        }
+        if (absl::optional<int> i =
+                stored_window->FindIntKey("screen_bounds_h")) {
+          window_data.screen_bounds.set_height(*i);
+        }
+        if (absl::optional<int> i = stored_window->FindIntKey("state")) {
+          window_data.window_state = static_cast<ui::WindowShowState>(*i);
+        }
+        if (const std::string* ts_as_string =
+                stored_window->FindStringKey("ts")) {
           int64_t ts;
-          if (base::StringToInt64(ts_as_string, &ts)) {
+          if (base::StringToInt64(*ts_as_string, &ts)) {
             window_data.last_change = base::Time::FromInternalValue(ts);
           }
         }

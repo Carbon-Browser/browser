@@ -11,9 +11,9 @@
 #include <vector>
 
 #include "base/callback_forward.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/sequence_checker.h"
+#include "base/time/time.h"
 #include "components/invalidation/public/invalidation.h"
 #include "components/invalidation/public/invalidator_state.h"
 #include "components/invalidation/public/topic_invalidation_map.h"
@@ -28,7 +28,9 @@
 
 namespace syncer {
 
+class KeyDerivationParams;
 class ModelTypeController;
+class Nigori;
 class SyncEngineImpl;
 
 class SyncEngineBackend : public base::RefCountedThreadSafe<SyncEngineBackend>,
@@ -47,7 +49,6 @@ class SyncEngineBackend : public base::RefCountedThreadSafe<SyncEngineBackend>,
     RestoredLocalTransportData(const RestoredLocalTransportData&) = delete;
     ~RestoredLocalTransportData();
 
-    std::string keystore_encryption_bootstrap_token;
     std::map<ModelType, int64_t> invalidation_versions;
 
     // Initial authoritative values (usually read from prefs).
@@ -59,9 +60,30 @@ class SyncEngineBackend : public base::RefCountedThreadSafe<SyncEngineBackend>,
     base::TimeDelta poll_interval;
   };
 
+  // Used to record result of handling of incoming sync invalidations. These
+  // values are persisted to logs. Entries should not be renumbered and numeric
+  // values should never be reused.
+  enum class IncomingInvalidationStatus {
+    // The payload parsed successfully and contains at least one valid data
+    // type.
+    kSuccess = 0,
+
+    // Failed to parse incoming payload, relevant only for sync standalone
+    // invalidations.
+    kPayloadParseFailed = 1,
+
+    // All data types in the payload are unknown.
+    kUnknownModelType = 2,
+
+    kMaxValue = kUnknownModelType,
+  };
+
   SyncEngineBackend(const std::string& name,
                     const base::FilePath& sync_data_folder,
                     const base::WeakPtr<SyncEngineImpl>& host);
+
+  SyncEngineBackend(const SyncEngineBackend&) = delete;
+  SyncEngineBackend& operator=(const SyncEngineBackend&) = delete;
 
   // SyncManager::Observer implementation.  The Backend just acts like an air
   // traffic controller here, forwarding incoming messages to appropriate
@@ -109,10 +131,13 @@ class SyncEngineBackend : public base::RefCountedThreadSafe<SyncEngineBackend>,
   void DoStartSyncing(base::Time last_poll_time);
 
   // Called to set the passphrase for encryption.
-  void DoSetEncryptionPassphrase(const std::string& passphrase);
+  void DoSetEncryptionPassphrase(
+      const std::string& passphrase,
+      const KeyDerivationParams& key_derivation_params);
 
-  // Called to decrypt the pending keys using user-entered passphrases.
-  void DoSetDecryptionPassphrase(const std::string& passphrase);
+  // Called to decrypt the pending keys using the |key| derived from
+  // user-entered passphrase.
+  void DoSetExplicitPassphraseDecryptionKey(std::unique_ptr<Nigori> key);
 
   // Called to decrypt the pending keys using trusted vault keys.
   void DoAddTrustedVaultDecryptionKeys(
@@ -144,15 +169,17 @@ class SyncEngineBackend : public base::RefCountedThreadSafe<SyncEngineBackend>,
   void DisableProtocolEventForwarding();
 
   // Notify the syncer that the cookie jar has changed.
-  void DoOnCookieJarChanged(bool account_mismatch,
-                            base::OnceClosure callback);
+  void DoOnCookieJarChanged(bool account_mismatch, base::OnceClosure callback);
 
   // Notify about change in client id.
   void DoOnInvalidatorClientIdChange(const std::string& client_id);
 
-  // Forwards an invalidation to the sync manager for all data types from the
-  // |payload|.
-  void DoOnInvalidationReceived(const std::string& payload);
+  // Forwards an invalidation to the sync manager for all data types extracted
+  // from the |payload|. This method is called for sync standalone
+  // invalidations.
+  void DoOnStandaloneInvalidationReceived(
+      const std::string& payload,
+      const ModelTypeSet& interested_data_types);
 
   // Returns a ListValue representing Nigori node.
   void GetNigoriNodeForDebugging(AllNodesCallback callback);
@@ -176,6 +203,10 @@ class SyncEngineBackend : public base::RefCountedThreadSafe<SyncEngineBackend>,
       ModelType Type) const;
 
   void LoadAndConnectNigoriController();
+
+  IncomingInvalidationStatus DoOnStandaloneInvalidationReceivedImpl(
+      const std::string& payload,
+      const ModelTypeSet& interested_data_types);
 
   // Name used for debugging.
   const std::string name_;
@@ -218,8 +249,6 @@ class SyncEngineBackend : public base::RefCountedThreadSafe<SyncEngineBackend>,
   SEQUENCE_CHECKER(sequence_checker_);
 
   base::WeakPtrFactory<SyncEngineBackend> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(SyncEngineBackend);
 };
 
 }  // namespace syncer

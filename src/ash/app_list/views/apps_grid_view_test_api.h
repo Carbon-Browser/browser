@@ -8,10 +8,13 @@
 #include <string>
 
 #include "ash/app_list/views/apps_grid_view.h"
-#include "base/macros.h"
 
 namespace gfx {
 class Rect;
+}
+
+namespace ui {
+class Layer;
 }
 
 namespace views {
@@ -28,6 +31,10 @@ namespace test {
 class AppsGridViewTestApi {
  public:
   explicit AppsGridViewTestApi(AppsGridView* view);
+
+  AppsGridViewTestApi(const AppsGridViewTestApi&) = delete;
+  AppsGridViewTestApi& operator=(const AppsGridViewTestApi&) = delete;
+
   ~AppsGridViewTestApi();
 
   views::View* GetViewAtModelIndex(int index) const;
@@ -41,7 +48,7 @@ class AppsGridViewTestApi {
 
   void PressItemAt(int index);
 
-  int TilesPerPage(int page) const;
+  size_t TilesPerPage(int page) const;
 
   int AppsOnPage(int page) const;
 
@@ -59,11 +66,25 @@ class AppsGridViewTestApi {
 
   void WaitForItemMoveAnimationDone();
 
+  // Fires the reordering timer if the timer is running. Then waits for the
+  // reordering animation to complete.
+  void FireReorderTimerAndWaitForAnimationDone();
+
+  // Fires the timer for reparenting items from a folder apps grid.
+  void FireFolderItemReparentTimer();
+
   void Update() { view_->Update(); }
 
   // Returns the drag icon proxy view's bounds in the apps grid coordinates.
   // Returns empty bounds if the icon proxy has not been created.
   gfx::Rect GetDragIconBoundsInAppsGridView();
+
+  // Returns the layer used by the app drag icon proxy.
+  ui::Layer* GetDragIconLayer();
+
+  // Moves the app list item at `source_index` to `target_index` by drag and
+  // drop. `source_index` and `target_index` are view indices in `view_`.
+  void ReorderItemByDragAndDrop(int source_index, int target_index);
 
   AppListItemList* GetItemList() { return view_->item_list_; }
 
@@ -73,8 +94,6 @@ class AppsGridViewTestApi {
 
  private:
   AppsGridView* view_;
-
-  DISALLOW_COPY_AND_ASSIGN(AppsGridViewTestApi);
 };
 
 }  // namespace test

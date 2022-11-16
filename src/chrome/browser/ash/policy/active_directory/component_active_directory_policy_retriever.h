@@ -9,10 +9,9 @@
 #include <vector>
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
-#include "chromeos/dbus/login_manager/policy_descriptor.pb.h"
-#include "chromeos/dbus/session_manager/session_manager_client.h"
+#include "chromeos/ash/components/dbus/login_manager/policy_descriptor.pb.h"
+#include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
 #include "components/policy/core/common/policy_namespace.h"
 
 namespace policy {
@@ -23,8 +22,7 @@ namespace policy {
 class ComponentActiveDirectoryPolicyRetriever {
  public:
   // Response type from a policy retrieval request for a single namespace.
-  using ResponseType =
-      chromeos::SessionManagerClient::RetrievePolicyResponseType;
+  using ResponseType = ash::SessionManagerClient::RetrievePolicyResponseType;
 
   // Result from a policy retrieval request for a single policy namespace.
   struct RetrieveResult {
@@ -48,6 +46,11 @@ class ComponentActiveDirectoryPolicyRetriever {
       std::string account_id,
       std::vector<PolicyNamespace> namespaces,
       RetrieveCallback callback);
+
+  ComponentActiveDirectoryPolicyRetriever(
+      const ComponentActiveDirectoryPolicyRetriever&) = delete;
+  ComponentActiveDirectoryPolicyRetriever& operator=(
+      const ComponentActiveDirectoryPolicyRetriever&) = delete;
 
   ~ComponentActiveDirectoryPolicyRetriever();
 
@@ -86,7 +89,6 @@ class ComponentActiveDirectoryPolicyRetriever {
 
   base::WeakPtrFactory<ComponentActiveDirectoryPolicyRetriever>
       weak_ptr_factory_{this};
-  DISALLOW_COPY_AND_ASSIGN(ComponentActiveDirectoryPolicyRetriever);
 };
 
 }  // namespace policy

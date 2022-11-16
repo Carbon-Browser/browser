@@ -14,7 +14,6 @@
 #include "base/command_line.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
-#include "base/task/post_task.h"
 #include "base/test/bind.h"
 #include "build/build_config.h"
 #include "chrome/browser/browser_process.h"
@@ -48,21 +47,27 @@ namespace {
 class HeaderModifyingThrottle : public blink::URLLoaderThrottle {
  public:
   HeaderModifyingThrottle() = default;
+
+  HeaderModifyingThrottle(const HeaderModifyingThrottle&) = delete;
+  HeaderModifyingThrottle& operator=(const HeaderModifyingThrottle&) = delete;
+
   ~HeaderModifyingThrottle() override = default;
 
   void WillStartRequest(network::ResourceRequest* request,
                         bool* defer) override {
     request->headers.SetHeader(signin::kChromeConnectedHeader, "User Data");
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(HeaderModifyingThrottle);
 };
 
 class ThrottleContentBrowserClient : public ChromeContentBrowserClient {
  public:
   explicit ThrottleContentBrowserClient(const GURL& watch_url)
       : watch_url_(watch_url) {}
+
+  ThrottleContentBrowserClient(const ThrottleContentBrowserClient&) = delete;
+  ThrottleContentBrowserClient& operator=(const ThrottleContentBrowserClient&) =
+      delete;
+
   ~ThrottleContentBrowserClient() override = default;
 
   // ContentBrowserClient overrides:
@@ -81,8 +86,6 @@ class ThrottleContentBrowserClient : public ChromeContentBrowserClient {
 
  private:
   const GURL watch_url_;
-
-  DISALLOW_COPY_AND_ASSIGN(ThrottleContentBrowserClient);
 };
 
 // Subclass of DiceManageAccountBrowserTest with Mirror enabled.

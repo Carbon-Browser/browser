@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "third_party/blink/public/mojom/script/script_type.mojom-blink.h"
 #include "third_party/blink/public/mojom/v8_cache_options.mojom-blink.h"
@@ -30,6 +30,8 @@
 #include "third_party/blink/renderer/platform/loader/fetch/fetch_client_settings_object_snapshot.h"
 #include "third_party/blink/renderer/platform/loader/fetch/worker_resource_timing_notifier.h"
 #include "third_party/blink/renderer/platform/scheduler/public/post_cross_thread_task.h"
+#include "third_party/blink/renderer/platform/wtf/cross_thread_copier_base.h"
+#include "third_party/blink/renderer/platform/wtf/cross_thread_copier_std.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 
 namespace blink {
@@ -60,21 +62,26 @@ void ThreadedWorkletMessagingProxy::Initialize(
   DCHECK(csp);
 
   LocalFrameClient* frame_client = window->GetFrame()->Client();
+  // For now we should prioritize to send full UA string if opted into both
+  // Reduction and SendFullUserAgentAfterReduction Origin Trial
   const String user_agent =
-      RuntimeEnabledFeatures::UserAgentReductionEnabled(window)
-          ? frame_client->ReducedUserAgent()
-          : frame_client->UserAgent();
+      RuntimeEnabledFeatures::SendFullUserAgentAfterReductionEnabled(window)
+          ? frame_client->FullUserAgent()
+          : (RuntimeEnabledFeatures::UserAgentReductionEnabled(window)
+                 ? frame_client->ReducedUserAgent()
+                 : frame_client->UserAgent());
 
   auto global_scope_creation_params =
       std::make_unique<GlobalScopeCreationParams>(
           window->Url(), mojom::blink::ScriptType::kModule, global_scope_name,
           user_agent, frame_client->UserAgentMetadata(),
           frame_client->CreateWorkerFetchContext(),
-          mojo::Clone(csp->GetParsedPolicies()), window->GetReferrerPolicy(),
-          window->GetSecurityOrigin(), window->IsSecureContext(),
-          window->GetHttpsState(), worker_clients,
+          mojo::Clone(csp->GetParsedPolicies()),
+          Vector<network::mojom::blink::ContentSecurityPolicyPtr>(),
+          window->GetReferrerPolicy(), window->GetSecurityOrigin(),
+          window->IsSecureContext(), window->GetHttpsState(), worker_clients,
           frame_client->CreateWorkerContentSettingsClient(),
-          window->AddressSpace(), OriginTrialContext::GetTokens(window).get(),
+          OriginTrialContext::GetInheritedTrialFeatures(window).get(),
           base::UnguessableToken::Create(),
           std::make_unique<WorkerSettings>(window->GetFrame()->GetSettings()),
           mojom::blink::V8CacheOptions::kDefault, module_responses_map,
@@ -84,7 +91,7 @@ void ThreadedWorkletMessagingProxy::Initialize(
           window->GetAgentClusterID(), ukm::kInvalidSourceId,
           window->GetExecutionContextToken(),
           window->CrossOriginIsolatedCapability(),
-          window->DirectSocketCapability());
+          window->IsolatedApplicationCapability());
 
   // Worklets share the pre-initialized backing thread so that we don't have to
   // specify the backing thread startup data.

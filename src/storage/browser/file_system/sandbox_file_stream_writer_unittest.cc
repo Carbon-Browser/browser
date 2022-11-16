@@ -3,7 +3,7 @@
 // found in the LICENSE file.
 
 #include "storage/browser/file_system/sandbox_file_stream_writer.h"
-#include "base/test/bind.h"
+#include "base/test/test_future.h"
 #include "storage/browser/file_system/file_stream_writer_test.h"
 
 #include <stdint.h>
@@ -16,6 +16,9 @@
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/time/time.h"
+#include "components/services/storage/public/cpp/buckets/bucket_info.h"
+#include "components/services/storage/public/cpp/buckets/constants.h"
+#include "components/services/storage/public/cpp/quota_error_or.h"
 #include "net/base/io_buffer.h"
 #include "net/base/net_errors.h"
 #include "storage/browser/file_system/file_stream_reader.h"
@@ -26,6 +29,7 @@
 #include "storage/browser/test/async_file_test_helper.h"
 #include "storage/browser/test/mock_quota_manager_proxy.h"
 #include "storage/browser/test/mock_special_storage_policy.h"
+#include "storage/browser/test/quota_manager_proxy_sync.h"
 #include "storage/browser/test/test_file_system_context.h"
 #include "storage/common/file_system/file_system_types.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
@@ -38,25 +42,29 @@ const char kURLOrigin[] = "http://remote/";
 
 class SandboxFileStreamWriterTest : public FileStreamWriterTest {
  public:
-  SandboxFileStreamWriterTest() = default;
+  SandboxFileStreamWriterTest()
+      : special_storage_policy_(
+            base::MakeRefCounted<MockSpecialStoragePolicy>()) {}
+  ~SandboxFileStreamWriterTest() override = default;
 
   void SetUp() override {
     ASSERT_TRUE(dir_.CreateUniqueTempDir());
 
     quota_manager_ = base::MakeRefCounted<storage::MockQuotaManager>(
         is_incognito(), dir_.GetPath(), base::ThreadTaskRunnerHandle::Get(),
-        nullptr);
+        special_storage_policy_);
     quota_manager_proxy_ = base::MakeRefCounted<storage::MockQuotaManagerProxy>(
-        quota_manager_.get(), base::ThreadTaskRunnerHandle::Get().get());
+        quota_manager_.get(), base::ThreadTaskRunnerHandle::Get());
 
     file_system_context_ =
         CreateFileSystemContext(quota_manager_proxy_.get(), dir_);
 
     file_system_context_->OpenFileSystem(
         blink::StorageKey::CreateFromStringForTesting(kURLOrigin),
-        kFileSystemTypeTemporary, OPEN_FILE_SYSTEM_CREATE_IF_NONEXISTENT,
-        base::BindOnce([](const GURL& root_url, const std::string& name,
-                          base::File::Error result) {
+        /*bucket=*/absl::nullopt, kFileSystemTypeTemporary,
+        OPEN_FILE_SYSTEM_CREATE_IF_NONEXISTENT,
+        base::BindOnce([](const FileSystemURL& root_url,
+                          const std::string& name, base::File::Error result) {
           ASSERT_EQ(base::File::FILE_OK, result);
         }));
 
@@ -71,7 +79,8 @@ class SandboxFileStreamWriterTest : public FileStreamWriterTest {
   }
 
  protected:
-  base::ScopedTempDir dir_;
+  scoped_refptr<MockSpecialStoragePolicy> special_storage_policy_;
+
   scoped_refptr<FileSystemContext> file_system_context_;
   scoped_refptr<MockQuotaManager> quota_manager_;
   scoped_refptr<MockQuotaManagerProxy> quota_manager_proxy_;
@@ -148,16 +157,16 @@ class SandboxFileStreamWriterTest : public FileStreamWriterTest {
   }
 
   quota_usage_and_info GetUsageAndQuotaSync() {
-    quota_usage_and_info info;
+    base::test::TestFuture<blink::mojom::QuotaStatusCode, int64_t, int64_t>
+        future;
     quota_manager_->GetUsageAndQuota(
         blink::StorageKey::CreateFromStringForTesting(kURLOrigin),
-        blink::mojom::StorageType::kTemporary,
-        base::BindLambdaForTesting([&](blink::mojom::QuotaStatusCode status,
-                                       int64_t usage, int64_t quota) {
-          info.status = status;
-          info.usage = usage;
-          info.quota = quota;
-        }));
+        blink::mojom::StorageType::kTemporary, future.GetCallback());
+
+    quota_usage_and_info info;
+    info.status = future.Get<0>();
+    info.usage = future.Get<1>();
+    info.quota = future.Get<2>();
     return info;
   }
 
@@ -175,6 +184,23 @@ class SandboxFileStreamWriterTest : public FileStreamWriterTest {
   void SetFreeQuota(int64_t free_quota) {
     auto info = GetUsageAndQuotaSync();
     SetQuota(info.usage + free_quota);
+  }
+
+  void Test_Quota_DefaultBucketCreated() {
+    // Call method on context to ensure that OpenFileSystem task has completed.
+    EXPECT_TRUE(CreateFileWithContent("file_a", "foo"));
+
+    QuotaManagerProxySync quota_manager_proxy_sync(quota_manager_proxy_.get());
+
+    // Check default bucket exist.
+    QuotaErrorOr<BucketInfo> result = quota_manager_proxy_sync.GetBucket(
+        blink::StorageKey::CreateFromStringForTesting(kURLOrigin),
+        kDefaultBucketName, blink::mojom::StorageType::kTemporary);
+    EXPECT_TRUE(result.ok());
+    EXPECT_EQ(result->name, kDefaultBucketName);
+    EXPECT_EQ(result->storage_key,
+              blink::StorageKey::CreateFromStringForTesting(kURLOrigin));
+    EXPECT_GT(result->id.value(), 0);
   }
 
   void Test_Quota_OK() {
@@ -285,6 +311,10 @@ class SandboxFileStreamWriterTest : public FileStreamWriterTest {
   }
 };
 
+TEST_F(SandboxFileStreamWriterTest, Test_Quota_DefaultBucketCreated) {
+  Test_Quota_DefaultBucketCreated();
+}
+
 TEST_F(SandboxFileStreamWriterTest, Quota_OK) {
   Test_Quota_OK();
 }
@@ -334,6 +364,10 @@ class SandboxFileStreamWriterIncognitoTest
 
   bool is_incognito() override { return true; }
 };
+
+TEST_F(SandboxFileStreamWriterIncognitoTest, Test_Quota_DefaultBucketCreated) {
+  Test_Quota_DefaultBucketCreated();
+}
 
 TEST_F(SandboxFileStreamWriterIncognitoTest, Quota_OK) {
   Test_Quota_OK();

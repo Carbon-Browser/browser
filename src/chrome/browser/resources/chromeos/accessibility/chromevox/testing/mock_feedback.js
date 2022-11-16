@@ -114,7 +114,7 @@ MockFeedback = class {
     const MockTts = function() {};
     MockTts.prototype = {
       __proto__: TtsInterface.prototype,
-      speak: this.addUtterance_.bind(this)
+      speak: this.addUtterance_.bind(this),
     };
 
     ChromeVox.tts = new MockTts();
@@ -122,7 +122,7 @@ MockFeedback = class {
     const MockBraille = function() {};
     MockBraille.prototype = {
       __proto__: BrailleInterface.prototype,
-      write: this.addBraille_.bind(this)
+      write: this.addBraille_.bind(this),
     };
 
     ChromeVox.braille = new MockBraille();
@@ -130,7 +130,7 @@ MockFeedback = class {
     const MockEarcons = function() {};
     MockEarcons.prototype = {
       __proto__: AbstractEarcons.prototype,
-      playEarcon: this.addEarcon_.bind(this)
+      playEarcon: this.addEarcon_.bind(this),
     };
 
     // ChromeVox.earcons is a getter that switches between Classic and
@@ -165,12 +165,12 @@ MockFeedback = class {
     Array.prototype.forEach.call(arguments, function(text) {
       this.pendingActions_.push({
         perform: function() {
-          return !!MockFeedback.matchAndConsume_(
-              text, {}, this.pendingUtterances_);
+          return Boolean(
+              MockFeedback.matchAndConsume_(text, {}, this.pendingUtterances_));
         }.bind(this),
         toString() {
           return 'Speak \'' + text + '\'';
-        }
+        },
       });
     }.bind(this));
     return this;
@@ -239,13 +239,13 @@ MockFeedback = class {
     Array.prototype.forEach.call(rest, function(text) {
       this.pendingActions_.push({
         perform: function() {
-          return !!MockFeedback.matchAndConsume_(
-              text, expectedProps, this.pendingUtterances_);
+          return Boolean(MockFeedback.matchAndConsume_(
+              text, expectedProps, this.pendingUtterances_));
         }.bind(this),
         toString() {
           return 'Speak \'' + text + '\' with props ' +
               JSON.stringify(expectedProps);
-        }
+        },
       });
     }.bind(this));
     return this;
@@ -281,7 +281,7 @@ MockFeedback = class {
         }.bind(this),
         toString() {
           return 'Do not speak \'' + text + '\'';
-        }
+        },
       });
     }.bind(this));
     return this;
@@ -305,11 +305,11 @@ MockFeedback = class {
         if (match) {
           this.lastMatchedBraille_ = match;
         }
-        return !!match;
+        return Boolean(match);
       }.bind(this),
       toString() {
         return 'Braille \'' + text + '\' ' + JSON.stringify(props);
-      }
+      },
     });
     return this;
   }
@@ -326,11 +326,11 @@ MockFeedback = class {
       perform: function() {
         const match =
             MockFeedback.matchAndConsume_(earconName, {}, this.pendingEarcons_);
-        return !!match;
+        return Boolean(match);
       }.bind(this),
       toString() {
         return 'Earcon \'' + earconName + '\'';
-      }
+      },
     });
     return this;
   }
@@ -351,7 +351,7 @@ MockFeedback = class {
       },
       toString() {
         return 'Callback';
-      }
+      },
     });
     return this;
   }
@@ -523,7 +523,8 @@ MockFeedback = class {
      * @private
      */
     static matchAndConsume_(text, props, pending) {
-      let i, candidate;
+      let i;
+      let candidate;
       for (i = 0; candidate = pending[i]; ++i) {
         let candidateText = candidate.text;
         if (typeof (candidateText) !== 'string') {

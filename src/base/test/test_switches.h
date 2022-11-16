@@ -24,6 +24,7 @@ extern const char kTestLauncherInteractive[];
 extern const char kTestLauncherJobs[];
 extern const char kTestLauncherListTests[];
 extern const char kTestLauncherOutput[];
+extern const char kTestLauncherOutputBytesLimit[];
 extern const char kTestLauncherPrintTempLeaks[];
 extern const char kTestLauncherPrintTestStdio[];
 extern const char kTestLauncherPrintTimestamps[];
@@ -40,7 +41,7 @@ extern const char kTestTinyTimeout[];
 extern const char kUiTestActionMaxTimeout[];
 extern const char kUiTestActionTimeout[];
 
-#if defined(OS_IOS)
+#if BUILDFLAG(IS_IOS)
 extern const char kEnableRunIOSUnittestsWithXCTest[];
 extern const char kWriteCompiledTestsJsonToWritablePath[];
 #endif

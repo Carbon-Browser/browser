@@ -13,6 +13,7 @@
 #include "ash/shelf/shelf_view.h"
 #include "ash/shelf/shelf_widget.h"
 #include "base/run_loop.h"
+#include "base/time/time.h"
 #include "ui/views/animation/bounds_animator.h"
 #include "ui/views/controls/menu/menu_runner.h"
 #include "ui/views/controls/separator.h"
@@ -24,6 +25,10 @@ namespace {
 class TestAPIAnimationObserver : public views::BoundsAnimatorObserver {
  public:
   TestAPIAnimationObserver() = default;
+
+  TestAPIAnimationObserver(const TestAPIAnimationObserver&) = delete;
+  TestAPIAnimationObserver& operator=(const TestAPIAnimationObserver&) = delete;
+
   ~TestAPIAnimationObserver() override = default;
 
   // views::BoundsAnimatorObserver overrides:
@@ -31,9 +36,6 @@ class TestAPIAnimationObserver : public views::BoundsAnimatorObserver {
   void OnBoundsAnimatorDone(views::BoundsAnimator* animator) override {
     base::RunLoop::QuitCurrentWhenIdleDeprecated();
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(TestAPIAnimationObserver);
 };
 
 }  // namespace
@@ -45,7 +47,7 @@ ShelfViewTestAPI::ShelfViewTestAPI(ShelfView* shelf_view)
 
 ShelfViewTestAPI::~ShelfViewTestAPI() = default;
 
-int ShelfViewTestAPI::GetButtonCount() {
+size_t ShelfViewTestAPI::GetButtonCount() {
   return shelf_view_->view_model_->view_size();
 }
 
@@ -157,7 +159,7 @@ void ShelfViewTestAPI::SetShelfContextMenuCallback(
   shelf_view_->context_menu_shown_callback_ = std::move(closure);
 }
 
-int ShelfViewTestAPI::GetSeparatorIndex() const {
+absl::optional<size_t> ShelfViewTestAPI::GetSeparatorIndex() const {
   return shelf_view_->separator_index_;
 }
 

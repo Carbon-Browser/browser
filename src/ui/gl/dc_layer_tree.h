@@ -69,14 +69,18 @@ class DCLayerTree {
                                    IDCompositionDelegatedInkTrail,
                                    DCompositionInkTrailPoint>;
 
-  DCLayerTree(bool disable_nv12_dynamic_textures, bool disable_vp_scaling);
+  DCLayerTree(bool disable_nv12_dynamic_textures,
+              bool disable_vp_scaling,
+              bool disable_vp_super_resolution,
+              bool no_downscaled_overlay_promotion);
+
+  DCLayerTree(const DCLayerTree&) = delete;
+  DCLayerTree& operator=(const DCLayerTree&) = delete;
 
   ~DCLayerTree();
 
   // Returns true on success.
-  bool Initialize(HWND window,
-                  Microsoft::WRL::ComPtr<ID3D11Device> d3d11_device,
-                  Microsoft::WRL::ComPtr<IDCompositionDevice2> dcomp_device);
+  bool Initialize(HWND window);
 
   // Present pending overlay layers, and perform a direct composition commit if
   // necessary.  Returns true if presentation and commit succeeded.
@@ -101,6 +105,14 @@ class DCLayerTree {
   }
 
   bool disable_vp_scaling() const { return disable_vp_scaling_; }
+
+  bool disable_vp_super_resolution() const {
+    return disable_vp_super_resolution_;
+  }
+
+  bool no_downscaled_overlay_promotion() const {
+    return no_downscaled_overlay_promotion_;
+  }
 
   VideoProcessorWrapper& GetOrCreateVideoProcessor(bool is_hdr);
 
@@ -146,6 +158,8 @@ class DCLayerTree {
 
   const bool disable_nv12_dynamic_textures_;
   const bool disable_vp_scaling_;
+  const bool disable_vp_super_resolution_;
+  const bool no_downscaled_overlay_promotion_;
 
   HWND window_;
   Microsoft::WRL::ComPtr<ID3D11Device> d3d11_device_;
@@ -193,8 +207,6 @@ class DCLayerTree {
   // platform supports delegated ink trails. It must be initialized via the
   // Initialize() method in order to be used for drawing delegated ink trails.
   std::unique_ptr<DelegatedInkRenderer> ink_renderer_;
-
-  DISALLOW_COPY_AND_ASSIGN(DCLayerTree);
 };
 
 }  // namespace gl

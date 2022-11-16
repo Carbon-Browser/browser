@@ -5,17 +5,16 @@
 #include "media/base/fake_demuxer_stream.h"
 
 #include <stdint.h>
-#include <memory>
 
+#include <memory>
 #include <vector>
 
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/check_op.h"
-#include "base/cxx17_backports.h"
 #include "base/location.h"
 #include "base/notreached.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "media/base/bind_to_current_loop.h"
 #include "media/base/decoder_buffer.h"
@@ -75,8 +74,8 @@ void FakeDemuxerStream::Initialize() {
   num_configs_left_ = num_configs_;
   num_buffers_left_in_current_config_ = num_buffers_in_one_config_;
   num_buffers_returned_ = 0;
-  current_timestamp_ = base::TimeDelta::FromMilliseconds(kStartTimestampMs);
-  duration_ = base::TimeDelta::FromMilliseconds(kDurationMs);
+  current_timestamp_ = base::Milliseconds(kStartTimestampMs);
+  duration_ = base::Milliseconds(kDurationMs);
   next_size_ = start_coded_size_;
   next_read_num_ = 0;
 }
@@ -206,9 +205,8 @@ void FakeDemuxerStream::DoRead() {
   // TODO(xhwang): Output out-of-order buffers if needed.
   if (is_encrypted_) {
     buffer->set_decrypt_config(DecryptConfig::CreateCencConfig(
-        std::string(kKeyId, kKeyId + base::size(kKeyId)),
-        std::string(kIv, kIv + base::size(kIv)),
-        std::vector<SubsampleEntry>()));
+        std::string(kKeyId, kKeyId + std::size(kKeyId)),
+        std::string(kIv, kIv + std::size(kIv)), std::vector<SubsampleEntry>()));
   }
   buffer->set_timestamp(current_timestamp_);
   buffer->set_duration(duration_);

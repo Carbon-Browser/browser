@@ -13,9 +13,7 @@
 #include "ash/system/tray/actionable_view.h"
 #include "ash/system/tray/tray_bubble_view.h"
 #include "ash/system/user/login_status.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
-#include "ui/compositor/layer_animation_observer.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/views/context_menu_controller.h"
 
@@ -39,14 +37,16 @@ class TrayEventFilter;
 // PerformAction when clicked on.
 class ASH_EXPORT TrayBackgroundView : public ActionableView,
                                       public views::ContextMenuController,
-                                      public ui::LayerAnimationObserver,
                                       public ShelfBackgroundAnimatorObserver,
                                       public TrayBubbleView::Delegate,
                                       public VirtualKeyboardModel::Observer {
  public:
   METADATA_HEADER(TrayBackgroundView);
 
-  explicit TrayBackgroundView(Shelf* shelf);
+  enum RoundedCornerBehavior { kStartRounded, kEndRounded, kAllRounded };
+
+  TrayBackgroundView(Shelf* shelf,
+                     RoundedCornerBehavior corner_behavior = kAllRounded);
   TrayBackgroundView(const TrayBackgroundView&) = delete;
   TrayBackgroundView& operator=(const TrayBackgroundView&) = delete;
   ~TrayBackgroundView() override;
@@ -54,7 +54,8 @@ class ASH_EXPORT TrayBackgroundView : public ActionableView,
   // Called after the tray has been added to the widget containing it.
   virtual void Initialize();
 
-  // Initializes animations for the bubble.
+  // Initializes animations for the bubble. This contains only a fade out
+  // animation that hides `bubble_widget` when it becomes invisible.
   static void InitializeBubbleAnimations(views::Widget* bubble_widget);
 
   // ActionableView:
@@ -71,9 +72,16 @@ class ASH_EXPORT TrayBackgroundView : public ActionableView,
   // returns nullptr.
   virtual views::Widget* GetBubbleWidget() const;
 
+  // Returns a lock that prevents window activation from closing bubbles.
+  [[nodiscard]] static base::ScopedClosureRunner
+  DisableCloseBubbleOnWindowActivated();
+
+  // Whether a window activation change should close bubbles.
+  static bool ShouldCloseBubbleOnWindowActivated();
+
   // Closes the associated tray bubble view if it exists and is currently
   // showing.
-  virtual void CloseBubble();
+  virtual void CloseBubble() {}
 
   // Shows the associated tray bubble if one exists. |show_by_click| indicates
   // whether the showing operation is initiated by mouse or gesture click.
@@ -105,6 +113,13 @@ class ASH_EXPORT TrayBackgroundView : public ActionableView,
 
   // Called when the bubble is resized.
   virtual void BubbleResized(const TrayBubbleView* bubble_view);
+
+  // Updates this bubble about visibility change of *ANY* tray bubble
+  // including itself.
+  // `bubble_widget` is the bubble with visibility change. Please note that it
+  // can be the current bubble as well.
+  virtual void OnAnyBubbleVisibilityChanged(views::Widget* bubble_widget,
+                                            bool visible);
 
   // Hides the bubble associated with |bubble_view|. Called when the widget
   // is closed.
@@ -158,10 +173,13 @@ class ASH_EXPORT TrayBackgroundView : public ActionableView,
 
   // Disables bounce in and fade in animation. The animation will remain
   // disabled until the returned scoped closure runner is run.
-  base::ScopedClosureRunner DisableShowAnimation() WARN_UNUSED_RESULT;
+  [[nodiscard]] base::ScopedClosureRunner DisableShowAnimation();
 
   // Returns true if the view is showing a context menu.
   bool IsShowingMenu() const;
+
+  // Returns the corners based on the `corner_behavior_`;
+  gfx::RoundedCornersF GetRoundedCorners();
 
  protected:
   // ActionableView:
@@ -222,12 +240,6 @@ class ASH_EXPORT TrayBackgroundView : public ActionableView,
   // child layers will still be there until all the animation finished.
   std::unique_ptr<ui::Layer> RecreateLayer() override;
 
-  // ui::ImplicitAnimationObserver:
-  void OnLayerAnimationAborted(ui::LayerAnimationSequence* sequence) override;
-  void OnLayerAnimationEnded(ui::LayerAnimationSequence* sequence) override;
-  void OnLayerAnimationScheduled(
-      ui::LayerAnimationSequence* sequence) override {}
-
   // Callbacks for Animations
   void OnAnimationAborted();
   void OnAnimationEnded();
@@ -280,6 +292,10 @@ class ASH_EXPORT TrayBackgroundView : public ActionableView,
 
   // Number of active requests to disable the bounce-in and fade-in animation.
   size_t disable_show_animation_count_ = 0;
+
+  // The shape of this tray which is only applied to the horizontal tray.
+  // Defaults to `kAllRounded`.
+  const RoundedCornerBehavior corner_behavior_;
 
   std::unique_ptr<TrayWidgetObserver> widget_observer_;
   std::unique_ptr<TrayEventFilter> tray_event_filter_;

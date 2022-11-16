@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "chrome/browser/offline_pages/offline_page_utils.h"
@@ -60,6 +60,9 @@ class OfflinePageTabHelper
       mojo::PendingAssociatedReceiver<offline_pages::mojom::MhtmlPageNotifier>
           receiver,
       content::RenderFrameHost* rfh);
+
+  OfflinePageTabHelper(const OfflinePageTabHelper&) = delete;
+  OfflinePageTabHelper& operator=(const OfflinePageTabHelper&) = delete;
 
   ~OfflinePageTabHelper() override;
 
@@ -210,7 +213,7 @@ class OfflinePageTabHelper
   bool reloading_url_on_net_error_ = false;
 
   // Service, outlives this object.
-  PrefetchService* prefetch_service_ = nullptr;
+  raw_ptr<PrefetchService> prefetch_service_ = nullptr;
 
   // TODO(crbug.com/827215): We only really want interface messages for the main
   // frame but this is not easily done with the current helper classes.
@@ -220,8 +223,6 @@ class OfflinePageTabHelper
   base::WeakPtrFactory<OfflinePageTabHelper> weak_ptr_factory_{this};
 
   WEB_CONTENTS_USER_DATA_KEY_DECL();
-
-  DISALLOW_COPY_AND_ASSIGN(OfflinePageTabHelper);
 };
 
 }  // namespace offline_pages

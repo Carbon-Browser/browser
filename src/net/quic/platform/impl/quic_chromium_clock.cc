@@ -4,6 +4,7 @@
 
 #include "net/quic/platform/impl/quic_chromium_clock.h"
 
+#include "base/check_op.h"
 #include "base/no_destructor.h"
 #include "base/time/time.h"
 
@@ -44,8 +45,7 @@ base::TimeTicks QuicChromiumClock::QuicTimeToTimeTicks(QuicTime quic_time) {
   // quic::QuicTime::Zero(). See QuicChromiumClock::Now() above.
   QuicTime::Delta offset_from_zero = quic_time - QuicTime::Zero();
   int64_t offset_from_zero_us = offset_from_zero.ToMicroseconds();
-  return base::TimeTicks() +
-         base::TimeDelta::FromMicroseconds(offset_from_zero_us);
+  return base::TimeTicks() + base::Microseconds(offset_from_zero_us);
 }
 
 }  // namespace quic

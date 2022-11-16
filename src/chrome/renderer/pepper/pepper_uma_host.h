@@ -11,7 +11,6 @@
 #include <string>
 
 #include "base/files/file_path.h"
-#include "base/macros.h"
 #include "ppapi/c/pp_instance.h"
 #include "ppapi/c/pp_resource.h"
 #include "ppapi/host/resource_host.h"
@@ -32,6 +31,9 @@ class PepperUMAHost : public ppapi::host::ResourceHost {
   PepperUMAHost(content::RendererPpapiHost* host,
                 PP_Instance instance,
                 PP_Resource resource);
+
+  PepperUMAHost(const PepperUMAHost&) = delete;
+  PepperUMAHost& operator=(const PepperUMAHost&) = delete;
 
   ~PepperUMAHost() override;
 
@@ -75,8 +77,6 @@ class PepperUMAHost : public ppapi::host::ResourceHost {
   std::set<std::string> allowed_histogram_prefixes_;
   // Set of plugin files names that are allowed to use this interface.
   std::set<base::FilePath::StringType> allowed_plugin_base_names_;
-
-  DISALLOW_COPY_AND_ASSIGN(PepperUMAHost);
 };
 
 #endif  // CHROME_RENDERER_PEPPER_PEPPER_UMA_HOST_H_

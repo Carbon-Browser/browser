@@ -24,11 +24,12 @@ class HatsHandler : public SettingsPageUIHandler {
   // WebUIMessageHandler implementation.
   void RegisterMessages() override;
 
-  void HandleTrustSafetyInteractionOccurred(const base::ListValue* args);
+  void HandleTrustSafetyInteractionOccurred(const base::Value::List& args);
 
  private:
   friend class HatsHandlerTest;
   FRIEND_TEST_ALL_PREFIXES(HatsHandlerTest, PrivacySettingsHats);
+  FRIEND_TEST_ALL_PREFIXES(HatsHandlerTest, PrivacyGuideHats);
   FRIEND_TEST_ALL_PREFIXES(HatsHandlerTest, PrivacySandboxHats);
   FRIEND_TEST_ALL_PREFIXES(HatsHandlerTest, TrustSafetySentimentInteractions);
   FRIEND_TEST_ALL_PREFIXES(HatsHandlerNoSandboxTest, PrivacySettings);
@@ -43,6 +44,7 @@ class HatsHandler : public SettingsPageUIHandler {
     USED_PRIVACY_CARD = 1,
     OPENED_PRIVACY_SANDBOX = 2,
     OPENED_PASSWORD_MANAGER = 3,
+    COMPLETED_PRIVACY_GUIDE = 4,
   };
 
   // Requests the appropriate HaTS survey, which may be none, for |interaction|.

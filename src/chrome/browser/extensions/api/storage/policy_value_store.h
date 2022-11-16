@@ -11,11 +11,9 @@
 #include <string>
 #include <vector>
 
-#include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
+#include "components/value_store/value_store.h"
 #include "extensions/browser/api/storage/settings_observer.h"
-#include "extensions/browser/value_store/value_store.h"
 
 namespace policy {
 class PolicyMap;
@@ -31,8 +29,12 @@ namespace extensions {
 class PolicyValueStore : public value_store::ValueStore {
  public:
   PolicyValueStore(const std::string& extension_id,
-                   scoped_refptr<SettingsObserverList> observers,
+                   SequenceBoundSettingsChangedCallback observer,
                    std::unique_ptr<value_store::ValueStore> delegate);
+
+  PolicyValueStore(const PolicyValueStore&) = delete;
+  PolicyValueStore& operator=(const PolicyValueStore&) = delete;
+
   ~PolicyValueStore() override;
 
   // Stores |policy| in the persistent database represented by the |delegate_|
@@ -53,7 +55,7 @@ class PolicyValueStore : public value_store::ValueStore {
                   const std::string& key,
                   const base::Value& value) override;
   WriteResult Set(WriteOptions options,
-                  const base::DictionaryValue& values) override;
+                  const base::Value::Dict& values) override;
   WriteResult Remove(const std::string& key) override;
   WriteResult Remove(const std::vector<std::string>& keys) override;
   WriteResult Clear() override;
@@ -63,10 +65,8 @@ class PolicyValueStore : public value_store::ValueStore {
 
  private:
   std::string extension_id_;
-  scoped_refptr<SettingsObserverList> observers_;
+  SequenceBoundSettingsChangedCallback observer_;
   std::unique_ptr<value_store::ValueStore> delegate_;
-
-  DISALLOW_COPY_AND_ASSIGN(PolicyValueStore);
 };
 
 }  // namespace extensions

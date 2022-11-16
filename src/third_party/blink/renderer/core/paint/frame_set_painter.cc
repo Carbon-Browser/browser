@@ -8,6 +8,7 @@
 #include "third_party/blink/renderer/core/html/html_frame_set_element.h"
 #include "third_party/blink/renderer/core/layout/layout_frame_set.h"
 #include "third_party/blink/renderer/core/paint/box_painter.h"
+#include "third_party/blink/renderer/core/paint/paint_auto_dark_mode.h"
 #include "third_party/blink/renderer/core/paint/paint_info.h"
 #include "third_party/blink/renderer/core/paint/scoped_paint_state.h"
 #include "third_party/blink/renderer/platform/graphics/paint/drawing_recorder.h"
@@ -27,7 +28,7 @@ static Color BorderFillColor() {
 }
 
 void FrameSetPainter::PaintColumnBorder(const PaintInfo& paint_info,
-                                        const IntRect& border_rect) {
+                                        const gfx::Rect& border_rect) {
   if (!paint_info.GetCullRect().Intersects(border_rect))
     return;
 
@@ -36,44 +37,60 @@ void FrameSetPainter::PaintColumnBorder(const PaintInfo& paint_info,
 
   // Fill first.
   GraphicsContext& context = paint_info.context;
-  context.FillRect(border_rect, layout_frame_set_.FrameSet()->HasBorderColor()
-                                    ? layout_frame_set_.ResolveColor(
-                                          GetCSSPropertyBorderLeftColor())
-                                    : BorderFillColor());
+  Color border_color =
+      layout_frame_set_.FrameSet()->HasBorderColor()
+          ? layout_frame_set_.ResolveColor(GetCSSPropertyBorderLeftColor())
+          : BorderFillColor();
+  context.FillRect(
+      border_rect, border_color,
+      BorderPaintAutoDarkMode(layout_frame_set_.StyleRef(), border_color));
 
   // Now stroke the edges but only if we have enough room to paint both edges
   // with a little bit of the fill color showing through.
-  if (border_rect.Width() >= 3) {
+  if (border_rect.width() >= 3) {
     context.FillRect(
-        IntRect(border_rect.Location(), IntSize(1, border_rect.Height())),
-        BorderStartEdgeColor());
-    context.FillRect(IntRect(IntPoint(border_rect.MaxX() - 1, border_rect.Y()),
-                             IntSize(1, border_rect.Height())),
-                     BorderEndEdgeColor());
+        gfx::Rect(border_rect.origin(), gfx::Size(1, border_rect.height())),
+        BorderStartEdgeColor(),
+        BorderPaintAutoDarkMode(layout_frame_set_.StyleRef(),
+                                BorderStartEdgeColor()));
+    context.FillRect(
+        gfx::Rect(gfx::Point(border_rect.right() - 1, border_rect.y()),
+                  gfx::Size(1, border_rect.height())),
+        BorderEndEdgeColor(),
+        BorderPaintAutoDarkMode(layout_frame_set_.StyleRef(),
+                                BorderEndEdgeColor()));
   }
 }
 
 void FrameSetPainter::PaintRowBorder(const PaintInfo& paint_info,
-                                     const IntRect& border_rect) {
+                                     const gfx::Rect& border_rect) {
   // FIXME: We should do something clever when borders from distinct framesets
   // meet at a join.
 
   // Fill first.
   GraphicsContext& context = paint_info.context;
-  context.FillRect(border_rect, layout_frame_set_.FrameSet()->HasBorderColor()
-                                    ? layout_frame_set_.ResolveColor(
-                                          GetCSSPropertyBorderLeftColor())
-                                    : BorderFillColor());
+  Color border_color =
+      layout_frame_set_.FrameSet()->HasBorderColor()
+          ? layout_frame_set_.ResolveColor(GetCSSPropertyBorderLeftColor())
+          : BorderFillColor();
+  context.FillRect(
+      border_rect, border_color,
+      BorderPaintAutoDarkMode(layout_frame_set_.StyleRef(), border_color));
 
   // Now stroke the edges but only if we have enough room to paint both edges
   // with a little bit of the fill color showing through.
-  if (border_rect.Height() >= 3) {
+  if (border_rect.height() >= 3) {
     context.FillRect(
-        IntRect(border_rect.Location(), IntSize(border_rect.Width(), 1)),
-        BorderStartEdgeColor());
-    context.FillRect(IntRect(IntPoint(border_rect.X(), border_rect.MaxY() - 1),
-                             IntSize(border_rect.Width(), 1)),
-                     BorderEndEdgeColor());
+        gfx::Rect(border_rect.origin(), gfx::Size(border_rect.width(), 1)),
+        BorderStartEdgeColor(),
+        BorderPaintAutoDarkMode(layout_frame_set_.StyleRef(),
+                                BorderStartEdgeColor()));
+    context.FillRect(
+        gfx::Rect(gfx::Point(border_rect.x(), border_rect.bottom() - 1),
+                  gfx::Size(border_rect.width(), 1)),
+        BorderEndEdgeColor(),
+        BorderPaintAutoDarkMode(layout_frame_set_.StyleRef(),
+                                BorderEndEdgeColor()));
   }
 }
 
@@ -107,7 +124,7 @@ void FrameSetPainter::PaintBorders(const PaintInfo& paint_info,
       if (ShouldPaintBorderAfter(layout_frame_set_.Columns(), c)) {
         PaintColumnBorder(
             paint_info,
-            PixelSnappedIntRect(PhysicalRect(
+            ToPixelSnappedRect(PhysicalRect(
                 paint_offset.left + x_pos, paint_offset.top + y_pos,
                 border_thickness, layout_frame_set_.Size().Height() - y_pos)));
         x_pos += border_thickness;
@@ -119,7 +136,7 @@ void FrameSetPainter::PaintBorders(const PaintInfo& paint_info,
     y_pos += layout_frame_set_.Rows().sizes_[r];
     if (ShouldPaintBorderAfter(layout_frame_set_.Rows(), r)) {
       PaintRowBorder(paint_info,
-                     PixelSnappedIntRect(PhysicalRect(
+                     ToPixelSnappedRect(PhysicalRect(
                          paint_offset.left, paint_offset.top + y_pos,
                          layout_frame_set_.Size().Width(), border_thickness)));
       y_pos += border_thickness;
@@ -155,8 +172,10 @@ void FrameSetPainter::Paint(const PaintInfo& paint_info) {
   if (paint_info.phase != PaintPhase::kForeground)
     return;
 
-  LayoutObject* child = layout_frame_set_.FirstChild();
-  if (!child)
+  if (!layout_frame_set_.FirstChild())
+    return;
+
+  if (layout_frame_set_.StyleRef().Visibility() != EVisibility::kVisible)
     return;
 
   ScopedPaintState paint_state(layout_frame_set_, paint_info);

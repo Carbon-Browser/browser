@@ -16,6 +16,7 @@
 #include "ash/login/ui/login_big_user_view.h"
 #include "ash/login/ui/login_test_base.h"
 #include "ash/login/ui/login_test_utils.h"
+#include "ash/metrics/user_metrics_recorder.h"
 #include "ash/session/test_session_controller_client.h"
 #include "ash/shell.h"
 #include "ash/wm/tablet_mode/tablet_mode_controller.h"
@@ -39,6 +40,10 @@ constexpr char kUserClicksInOobeHistogramName[] = "Ash.Login.OOBE.UserClicks";
 class LoginMetricsRecorderTest : public LoginTestBase {
  public:
   LoginMetricsRecorderTest() = default;
+
+  LoginMetricsRecorderTest(const LoginMetricsRecorderTest&) = delete;
+  LoginMetricsRecorderTest& operator=(const LoginMetricsRecorderTest&) = delete;
+
   ~LoginMetricsRecorderTest() override = default;
 
   // LoginTestBase:
@@ -77,9 +82,6 @@ class LoginMetricsRecorderTest : public LoginTestBase {
 
   // Used to verify recorded data.
   std::unique_ptr<base::HistogramTester> histogram_tester_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(LoginMetricsRecorderTest);
 };
 
 }  // namespace

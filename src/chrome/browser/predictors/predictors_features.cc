@@ -35,11 +35,11 @@ const base::Feature kLoadingPredictorDisregardAlwaysAccessesNetwork{
 
 const base::FeatureState
     kLoadingPredictorUseOptimizationGuideDefaultFeatureState =
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
         base::FEATURE_ENABLED_BY_DEFAULT;
-#else   // !defined(OS_ANDROID)
+#else
         base::FEATURE_DISABLED_BY_DEFAULT;
-#endif  // defined(OS_ANDROID)
+#endif
 
 // Modifies loading predictor so that it can also use predictions coming from
 // the optimization guide.
@@ -48,11 +48,11 @@ const base::Feature kLoadingPredictorUseOptimizationGuide{
     kLoadingPredictorUseOptimizationGuideDefaultFeatureState};
 
 const base::FeatureState kLoadingPredictorPrefetchDefaultFeatureState =
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
     base::FEATURE_ENABLED_BY_DEFAULT;
-#else   // !defined(OS_ANDROID)
+#else
     base::FEATURE_DISABLED_BY_DEFAULT;
-#endif  // defined(OS_ANDROID)
+#endif
 
 // Modifies loading predictor so that it does prefetches of subresources instead
 // of preconnects.
@@ -90,12 +90,6 @@ bool ShouldAlwaysRetrieveOptimizationGuidePredictions() {
   return base::GetFieldTrialParamByFeatureAsBool(
       kLoadingPredictorUseOptimizationGuide, "always_retrieve_predictions",
       false);
-}
-
-size_t GetMaxInflightPreresolves() {
-  return static_cast<size_t>(base::GetFieldTrialParamByFeatureAsInt(
-      kLoadingPredictorInflightPredictiveActions, "max_inflight_preresolves",
-      3));
 }
 
 size_t GetMaxInflightPrefetches() {

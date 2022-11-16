@@ -6,10 +6,9 @@
 
 #include <memory>
 
-#include "base/macros.h"
 #include "base/message_loop/message_pump_type.h"
-#include "base/single_thread_task_runner.h"
-#include "base/task_runner.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/task/task_runner.h"
 #include "base/threading/thread.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "ipc/ipc_message.h"
@@ -21,7 +20,6 @@
 #include "ppapi/proxy/ppb_message_loop_proxy.h"
 #include "ppapi/proxy/resource_reply_thread_registrar.h"
 #include "ppapi/proxy/udp_socket_filter.h"
-#include "ppapi/shared_impl/ppapi_constants.h"
 #include "ppapi/shared_impl/proxy_lock.h"
 #include "ppapi/thunk/enter.h"
 
@@ -36,6 +34,9 @@ class PluginGlobals::BrowserSender : public IPC::Sender {
   explicit BrowserSender(IPC::Sender* underlying_sender)
       : underlying_sender_(underlying_sender) {
   }
+
+  BrowserSender(const BrowserSender&) = delete;
+  BrowserSender& operator=(const BrowserSender&) = delete;
 
   ~BrowserSender() override {}
 
@@ -53,8 +54,6 @@ class PluginGlobals::BrowserSender : public IPC::Sender {
  private:
   // Non-owning pointer.
   IPC::Sender* underlying_sender_;
-
-  DISALLOW_COPY_AND_ASSIGN(BrowserSender);
 };
 
 PluginGlobals* PluginGlobals::plugin_globals_ = NULL;

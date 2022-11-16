@@ -92,7 +92,7 @@ const CSSValue* ComputedStylePropertyMap::GetProperty(
 }
 
 const CSSValue* ComputedStylePropertyMap::GetCustomProperty(
-    AtomicString property_name) const {
+    const AtomicString& property_name) const {
   const ComputedStyle* style = UpdateStyle();
   if (!style)
     return nullptr;
@@ -142,10 +142,8 @@ String ComputedStylePropertyMap::SerializationForShorthand(
     const CSSProperty& property) const {
   DCHECK(property.IsShorthand());
   const ComputedStyle* style = UpdateStyle();
-  if (!style) {
-    NOTREACHED();
+  if (!style)
     return "";
-  }
 
   if (const CSSValue* value = property.CSSValueFromComputedStyle(
           *style, nullptr /* layout_object */, false)) {

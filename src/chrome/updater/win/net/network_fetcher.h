@@ -23,10 +23,12 @@ class FilePath;
 class SingleThreadTaskRunner;
 }  // namespace base
 
-namespace updater {
-
-class NetworkFetcherWinHTTP;
+namespace winhttp {
+class NetworkFetcher;
 class ProxyConfiguration;
+}  // namespace winhttp
+
+namespace updater {
 
 class NetworkFetcher : public update_client::NetworkFetcher {
  public:
@@ -39,7 +41,7 @@ class NetworkFetcher : public update_client::NetworkFetcher {
       update_client::NetworkFetcher::DownloadToFileCompleteCallback;
 
   NetworkFetcher(const HINTERNET& session_handle,
-                 scoped_refptr<ProxyConfiguration> proxy_config);
+                 scoped_refptr<winhttp::ProxyConfiguration> proxy_config);
   ~NetworkFetcher() override;
   NetworkFetcher(const NetworkFetcher&) = delete;
   NetworkFetcher& operator=(const NetworkFetcher&) = delete;
@@ -63,10 +65,10 @@ class NetworkFetcher : public update_client::NetworkFetcher {
  private:
   SEQUENCE_CHECKER(sequence_checker_);
 
-  void PostRequestComplete();
-  void DownloadToFileComplete();
+  void PostRequestComplete(int response_code);
+  void DownloadToFileComplete(int response_code);
 
-  scoped_refptr<NetworkFetcherWinHTTP> network_fetcher_;
+  scoped_refptr<winhttp::NetworkFetcher> winhttp_network_fetcher_;
   scoped_refptr<base::SingleThreadTaskRunner> main_thread_task_runner_;
 
   DownloadToFileCompleteCallback download_to_file_complete_callback_;

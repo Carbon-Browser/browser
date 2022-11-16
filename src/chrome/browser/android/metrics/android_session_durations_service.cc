@@ -38,8 +38,7 @@ class IncognitoSessionDurationsMetricsRecorder {
     // later.
     base::UmaHistogramCustomCounts(
         "Profile.Incognito.ResumedAfterReportedDuration",
-        last_reported_duration_.InMinutes(), 1,
-        base::TimeDelta::FromDays(28).InMinutes(), 50);
+        last_reported_duration_.InMinutes(), 1, base::Days(28).InMinutes(), 50);
   }
 
   void OnAppEnterBackground() {
@@ -52,8 +51,7 @@ class IncognitoSessionDurationsMetricsRecorder {
     last_reported_duration_ = base::Time::Now() - session_start_;
     base::UmaHistogramCustomCounts(
         "Profile.Incognito.MovedToBackgroundAfterDuration",
-        last_reported_duration_.InMinutes(), 1,
-        base::TimeDelta::FromDays(28).InMinutes(), 50);
+        last_reported_duration_.InMinutes(), 1, base::Days(28).InMinutes(), 50);
   }
 
   void SetSessionStartTimeForTesting(base::Time session_start) {
@@ -108,6 +106,14 @@ void AndroidSessionDurationsService::InitializeForIncognitoProfile() {
   incognito_session_metrics_recorder_ =
       std::make_unique<IncognitoSessionDurationsMetricsRecorder>();
   OnAppEnterForeground(base::TimeTicks::Now());
+}
+
+bool AndroidSessionDurationsService::IsSignedIn() const {
+  return sync_session_metrics_recorder_->IsSignedIn();
+}
+
+bool AndroidSessionDurationsService::IsSyncing() const {
+  return sync_session_metrics_recorder_->IsSyncing();
 }
 
 void AndroidSessionDurationsService::Shutdown() {
@@ -196,7 +202,7 @@ void JNI_AndroidSessionDurationsServiceState_RestoreAndroidSessionDurationsServi
   base::Time session_start_time = base::Time::FromJavaTime(
       Java_AndroidSessionDurationsServiceState_getSessionStartTime(
           env, j_duration_service));
-  base::TimeDelta last_reported_duration = base::TimeDelta::FromMinutes(
+  base::TimeDelta last_reported_duration = base::Minutes(
       Java_AndroidSessionDurationsServiceState_getLastReportedDuration(
           env, j_duration_service));
 

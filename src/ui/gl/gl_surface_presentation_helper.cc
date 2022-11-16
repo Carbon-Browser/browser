@@ -96,7 +96,7 @@ bool GLSurfacePresentationHelper::GetFrameTimestampInfoIfAvailable(
     int64_t start = 0;
     int64_t end = 0;
     frame.timer->GetStartEndTimestamps(&start, &end);
-    *timestamp = base::TimeTicks() + base::TimeDelta::FromMicroseconds(start);
+    *timestamp = base::TimeTicks() + base::Microseconds(start);
   } else {
     if (!frame.fence->HasCompleted())
       return false;
@@ -215,7 +215,7 @@ void GLSurfacePresentationHelper::OnMakeCurrent(GLContext* context,
 
 // https://crbug.com/854298 : disable GLFence on Android as they seem to cause
 // issues on some devices.
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
   gl_fence_supported_ = GLFence::IsSupported();
 #endif
 }
@@ -391,9 +391,8 @@ void GLSurfacePresentationHelper::ScheduleCheckPendingFrames(
   // If the |vsync_provider_| can not notify us for the next VSync
   // asynchronically, we have to compute the next VSync time and post a delayed
   // task so we can check the VSync later.
-  base::TimeDelta interval = vsync_interval_.is_zero()
-                                 ? base::TimeDelta::FromSeconds(1) / 60
-                                 : vsync_interval_;
+  base::TimeDelta interval =
+      vsync_interval_.is_zero() ? base::Seconds(1) / 60 : vsync_interval_;
   auto now = base::TimeTicks::Now();
   auto next_vsync = now.SnappedToNextTick(vsync_timebase_, interval);
   base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(

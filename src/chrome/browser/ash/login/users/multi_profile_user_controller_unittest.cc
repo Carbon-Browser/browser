@@ -9,16 +9,15 @@
 #include <memory>
 
 #include "base/bind.h"
-#include "base/cxx17_backports.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/browser/ash/login/users/multi_profile_user_controller_delegate.h"
-#include "chrome/browser/ash/policy/networking/policy_cert_service.h"
-#include "chrome/browser/ash/policy/networking/policy_cert_service_factory.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
+#include "chrome/browser/policy/networking/policy_cert_service.h"
+#include "chrome/browser/policy/networking/policy_cert_service_factory.h"
 #include "chrome/browser/prefs/browser_prefs.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/scoped_testing_local_state.h"
@@ -109,7 +108,7 @@ const BehaviorTestCase kBehaviorTestCases[] = {
 std::unique_ptr<KeyedService> TestPolicyCertServiceFactory(
     content::BrowserContext* context) {
   return policy::PolicyCertService::CreateForTesting(
-      kUsers[0], user_manager::UserManager::Get());
+      Profile::FromBrowserContext(context));
 }
 
 }  // namespace
@@ -122,10 +121,15 @@ class MultiProfileUserControllerTest
       : fake_user_manager_(new FakeChromeUserManager),
         user_manager_enabler_(base::WrapUnique(fake_user_manager_)),
         user_not_allowed_count_(0) {
-    for (size_t i = 0; i < base::size(kUsers); ++i) {
+    for (size_t i = 0; i < std::size(kUsers); ++i) {
       test_users_.push_back(AccountId::FromUserEmail(kUsers[i]));
     }
   }
+
+  MultiProfileUserControllerTest(const MultiProfileUserControllerTest&) =
+      delete;
+  MultiProfileUserControllerTest& operator=(
+      const MultiProfileUserControllerTest&) = delete;
 
   ~MultiProfileUserControllerTest() override {}
 
@@ -216,9 +220,6 @@ class MultiProfileUserControllerTest
   int user_not_allowed_count_;
 
   std::vector<AccountId> test_users_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(MultiProfileUserControllerTest);
 };
 
 // Tests that everyone is allowed before a session starts.
@@ -228,7 +229,7 @@ TEST_F(MultiProfileUserControllerTest, AllAllowedBeforeLogin) {
       MultiProfileUserController::kBehaviorPrimaryOnly,
       MultiProfileUserController::kBehaviorNotAllowed,
   };
-  for (size_t i = 0; i < base::size(kTestCases); ++i) {
+  for (size_t i = 0; i < std::size(kTestCases); ++i) {
     SetCachedBehavior(0, kTestCases[i]);
     MultiProfileUserController::UserAllowedInSessionReason reason;
     EXPECT_TRUE(controller()->IsUserAllowedInSession(
@@ -259,7 +260,7 @@ TEST_F(MultiProfileUserControllerTest, CachedBehaviorUpdate) {
       MultiProfileUserController::kBehaviorNotAllowed,
       MultiProfileUserController::kBehaviorUnrestricted,
   };
-  for (size_t i = 0; i < base::size(kTestCases); ++i) {
+  for (size_t i = 0; i < std::size(kTestCases); ++i) {
     SetPrefBehavior(0, kTestCases[i]);
     EXPECT_EQ(kTestCases[i], GetCachedBehavior(0));
   }
@@ -291,7 +292,7 @@ TEST_F(MultiProfileUserControllerTest, CompromisedCacheFixedOnLogin) {
 TEST_F(MultiProfileUserControllerTest, IsSecondaryAllowed) {
   LoginUser(0);
 
-  for (size_t i = 0; i < base::size(kBehaviorTestCases); ++i) {
+  for (size_t i = 0; i < std::size(kBehaviorTestCases); ++i) {
     SetPrefBehavior(0, kBehaviorTestCases[i].primary);
     SetCachedBehavior(1, kBehaviorTestCases[i].secondary);
     EXPECT_EQ(kBehaviorTestCases[i].expected_primary_policy,
@@ -310,7 +311,7 @@ TEST_F(MultiProfileUserControllerTest, PrimaryBehaviorChange) {
   LoginUser(0);
   LoginUser(1);
 
-  for (size_t i = 0; i < base::size(kBehaviorTestCases); ++i) {
+  for (size_t i = 0; i < std::size(kBehaviorTestCases); ++i) {
     SetPrefBehavior(0, MultiProfileUserController::kBehaviorUnrestricted);
     SetPrefBehavior(1, MultiProfileUserController::kBehaviorUnrestricted);
     ResetCounts();
@@ -333,8 +334,12 @@ TEST_F(MultiProfileUserControllerTest,
        UsedPolicyCertificatesAllowedForPrimary) {
   // Verifies that any user can sign-in as the primary user, regardless of the
   // tainted state.
-  policy::PolicyCertServiceFactory::SetUsedPolicyCertificates(
-      test_users_[0].GetUserEmail());
+  ASSERT_TRUE(
+      policy::PolicyCertServiceFactory::GetInstance()->SetTestingFactoryAndUse(
+          profile(0), base::BindRepeating(&TestPolicyCertServiceFactory)));
+  policy::PolicyCertServiceFactory::GetForProfile(profile(0))
+      ->SetUsedPolicyCertificates();
+
   MultiProfileUserController::UserAllowedInSessionReason reason;
   EXPECT_TRUE(controller()->IsUserAllowedInSession(
       test_users_[0].GetUserEmail(), &reason));
@@ -361,8 +366,12 @@ TEST_F(MultiProfileUserControllerTest,
       test_users_[0].GetUserEmail(), &reason));
   EXPECT_EQ(MultiProfileUserController::ALLOWED, reason);
 
-  policy::PolicyCertServiceFactory::SetUsedPolicyCertificates(
-      test_users_[0].GetUserEmail());
+  ASSERT_TRUE(
+      policy::PolicyCertServiceFactory::GetInstance()->SetTestingFactoryAndUse(
+          profile(0), base::BindRepeating(&TestPolicyCertServiceFactory)));
+  policy::PolicyCertServiceFactory::GetForProfile(profile(0))
+      ->SetUsedPolicyCertificates();
+
   EXPECT_TRUE(controller()->IsUserAllowedInSession(
       test_users_[0].GetUserEmail(), &reason));
   EXPECT_EQ(MultiProfileUserController::ALLOWED, reason);
@@ -372,13 +381,12 @@ TEST_F(MultiProfileUserControllerTest,
        SecondaryAllowedWhenPrimaryUsedPolicyCertificates) {
   // Verifies that if a tainted user is signed-in then other users can still be
   // added.
-  policy::PolicyCertServiceFactory::SetUsedPolicyCertificates(
-      test_users_[0].GetUserEmail());
-  LoginUser(0);
-
   ASSERT_TRUE(
       policy::PolicyCertServiceFactory::GetInstance()->SetTestingFactoryAndUse(
           profile(0), base::BindRepeating(&TestPolicyCertServiceFactory)));
+  policy::PolicyCertServiceFactory::GetForProfile(profile(0))
+      ->SetUsedPolicyCertificates();
+  LoginUser(0);
 
   MultiProfileUserController::UserAllowedInSessionReason reason;
   EXPECT_TRUE(controller()->IsUserAllowedInSession(
@@ -386,8 +394,13 @@ TEST_F(MultiProfileUserControllerTest,
   EXPECT_EQ(MultiProfileUserController::ALLOWED, reason);
   EXPECT_EQ(MultiProfileUserController::ALLOWED,
             MultiProfileUserController::GetPrimaryUserPolicy());
-  policy::PolicyCertServiceFactory::SetUsedPolicyCertificates(
-      test_users_[1].GetUserEmail());
+
+  ASSERT_TRUE(
+      policy::PolicyCertServiceFactory::GetInstance()->SetTestingFactoryAndUse(
+          profile(1), base::BindRepeating(&TestPolicyCertServiceFactory)));
+  policy::PolicyCertServiceFactory::GetForProfile(profile(1))
+      ->SetUsedPolicyCertificates();
+
   EXPECT_TRUE(controller()->IsUserAllowedInSession(
       test_users_[1].GetUserEmail(), &reason));
   EXPECT_EQ(MultiProfileUserController::ALLOWED, reason);

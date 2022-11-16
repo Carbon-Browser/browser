@@ -11,7 +11,6 @@
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
 #include "third_party/blink/public/common/input/web_input_event_attribution.h"
-#include "third_party/blink/public/platform/scheduler/web_widget_scheduler.h"
 #include "third_party/blink/renderer/platform/scheduler/common/features.h"
 #include "third_party/blink/renderer/platform/scheduler/common/tracing_helper.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/main_thread_scheduler_impl.h"
@@ -38,37 +37,10 @@ WebThreadScheduler::CreateMainThreadScheduler(
                     std::move(message_pump), std::move(settings))
           : base::sequence_manager::CreateSequenceManagerOnCurrentThread(
                 std::move(settings));
-  return std::make_unique<MainThreadSchedulerImpl>(std::move(sequence_manager),
-                                                   absl::nullopt);
-}
-
-// static
-const char* WebThreadScheduler::InputEventStateToString(
-    InputEventState input_event_state) {
-  switch (input_event_state) {
-    case InputEventState::EVENT_CONSUMED_BY_COMPOSITOR:
-      return "event_consumed_by_compositor";
-    case InputEventState::EVENT_FORWARDED_TO_MAIN_THREAD:
-      return "event_forwarded_to_main_thread";
-    default:
-      NOTREACHED();
-      return nullptr;
-  }
+  return std::make_unique<MainThreadSchedulerImpl>(std::move(sequence_manager));
 }
 
 // Stubs for main thread only virtual functions.
-scoped_refptr<base::SingleThreadTaskRunner>
-WebThreadScheduler::DefaultTaskRunner() {
-  NOTREACHED();
-  return nullptr;
-}
-
-scoped_refptr<base::SingleThreadTaskRunner>
-WebThreadScheduler::InputTaskRunner() {
-  NOTREACHED();
-  return nullptr;
-}
-
 scoped_refptr<base::SingleThreadTaskRunner>
 WebThreadScheduler::CompositorTaskRunner() {
   NOTREACHED();
@@ -86,70 +58,6 @@ std::unique_ptr<Thread> WebThreadScheduler::CreateMainThread() {
   return nullptr;
 }
 
-std::unique_ptr<WebWidgetScheduler>
-WebThreadScheduler::CreateWidgetScheduler() {
-  NOTREACHED();
-  return nullptr;
-}
-
-std::unique_ptr<WebRenderWidgetSchedulingState>
-WebThreadScheduler::NewRenderWidgetSchedulingState() {
-  NOTREACHED();
-  return nullptr;
-}
-
-void WebThreadScheduler::BeginFrameNotExpectedSoon() {
-  NOTREACHED();
-}
-
-void WebThreadScheduler::BeginMainFrameNotExpectedUntil(base::TimeTicks time) {
-  NOTREACHED();
-}
-
-void WebThreadScheduler::WillBeginFrame(const viz::BeginFrameArgs& args) {
-  NOTREACHED();
-}
-
-void WebThreadScheduler::DidCommitFrameToCompositor() {
-  NOTREACHED();
-}
-
-void WebThreadScheduler::DidHandleInputEventOnCompositorThread(
-    const WebInputEvent& web_input_event,
-    InputEventState event_state) {
-  NOTREACHED();
-}
-
-void WebThreadScheduler::WillPostInputEventToMainThread(
-    WebInputEvent::Type web_input_event_type,
-    const WebInputEventAttribution& attribution) {
-  NOTREACHED();
-}
-
-void WebThreadScheduler::WillHandleInputEventOnMainThread(
-    WebInputEvent::Type web_input_event_type,
-    const WebInputEventAttribution& attribution) {
-  NOTREACHED();
-}
-
-void WebThreadScheduler::DidHandleInputEventOnMainThread(
-    const WebInputEvent& web_input_event,
-    WebInputEventResult result) {
-  NOTREACHED();
-}
-
-void WebThreadScheduler::DidAnimateForInputOnCompositorThread() {
-  NOTREACHED();
-}
-
-void WebThreadScheduler::DidScheduleBeginMainFrame() {
-  NOTREACHED();
-}
-
-void WebThreadScheduler::DidRunBeginMainFrame() {
-  NOTREACHED();
-}
-
 void WebThreadScheduler::SetRendererHidden(bool hidden) {
   NOTREACHED();
 }
@@ -158,7 +66,7 @@ void WebThreadScheduler::SetRendererBackgrounded(bool backgrounded) {
   NOTREACHED();
 }
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 void WebThreadScheduler::PauseTimersForAndroidWebView() {
   NOTREACHED();
 }
@@ -166,17 +74,12 @@ void WebThreadScheduler::PauseTimersForAndroidWebView() {
 void WebThreadScheduler::ResumeTimersForAndroidWebView() {
   NOTREACHED();
 }
-#endif  // defined(OS_ANDROID)
+#endif  // BUILDFLAG(IS_ANDROID)
 
 std::unique_ptr<WebThreadScheduler::RendererPauseHandle>
 WebThreadScheduler::PauseRenderer() {
   NOTREACHED();
   return nullptr;
-}
-
-bool WebThreadScheduler::IsHighPriorityWorkAnticipated() {
-  NOTREACHED();
-  return false;
 }
 
 void WebThreadScheduler::SetTopLevelBlameContext(
@@ -185,10 +88,6 @@ void WebThreadScheduler::SetTopLevelBlameContext(
 }
 
 void WebThreadScheduler::SetRendererProcessType(WebRendererProcessType type) {
-  NOTREACHED();
-}
-
-void WebThreadScheduler::OnMainFrameRequestedForInput() {
   NOTREACHED();
 }
 

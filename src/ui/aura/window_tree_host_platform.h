@@ -7,8 +7,6 @@
 
 #include <memory>
 
-#include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "ui/aura/aura_export.h"
 #include "ui/aura/client/window_types.h"
 #include "ui/aura/window.h"
@@ -32,6 +30,10 @@ class AURA_EXPORT WindowTreeHostPlatform : public WindowTreeHost,
  public:
   explicit WindowTreeHostPlatform(ui::PlatformWindowInitProperties properties,
                                   std::unique_ptr<Window> = nullptr);
+
+  WindowTreeHostPlatform(const WindowTreeHostPlatform&) = delete;
+  WindowTreeHostPlatform& operator=(const WindowTreeHostPlatform&) = delete;
+
   ~WindowTreeHostPlatform() override;
 
   // WindowTreeHost:
@@ -41,7 +43,6 @@ class AURA_EXPORT WindowTreeHostPlatform : public WindowTreeHost,
   void HideImpl() override;
   gfx::Rect GetBoundsInPixels() const override;
   void SetBoundsInPixels(const gfx::Rect& bounds) override;
-  gfx::Point GetLocationOnScreenInPixels() const override;
   void SetCapture() override;
   void ReleaseCapture() override;
   void SetCursorNative(gfx::NativeCursor cursor) override;
@@ -82,8 +83,10 @@ class AURA_EXPORT WindowTreeHostPlatform : public WindowTreeHost,
   void OnMouseEnter() override;
   void OnOcclusionStateChanged(
       ui::PlatformWindowOcclusionState occlusion_state) override;
+  void SetFrameRateThrottleEnabled(bool enabled) override;
 
   // Overridden from aura::WindowTreeHost:
+  gfx::Point GetLocationOnScreenInPixels() const override;
   bool CaptureSystemKeyEventsImpl(
       absl::optional<base::flat_set<ui::DomCode>> dom_codes) override;
   void ReleaseSystemKeyEventCapture() override;
@@ -98,14 +101,10 @@ class AURA_EXPORT WindowTreeHostPlatform : public WindowTreeHost,
 
   std::unique_ptr<ui::KeyboardHook> keyboard_hook_;
 
-  gfx::Size pending_size_;
-
   // Tracks how nested OnBoundsChanged() is. That is, on entering
   // OnBoundsChanged() this is incremented and on leaving OnBoundsChanged() this
   // is decremented.
   int on_bounds_changed_recursion_depth_ = 0;
-
-  DISALLOW_COPY_AND_ASSIGN(WindowTreeHostPlatform);
 };
 
 }  // namespace aura

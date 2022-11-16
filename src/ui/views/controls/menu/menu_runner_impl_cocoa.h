@@ -9,7 +9,6 @@
 
 #include "base/callback.h"
 #import "base/mac/scoped_nsobject.h"
-#include "base/macros.h"
 #include "base/time/time.h"
 #include "ui/views/controls/menu/menu_runner_impl_interface.h"
 
@@ -27,6 +26,9 @@ class VIEWS_EXPORT MenuRunnerImplCocoa : public MenuRunnerImplInterface {
  public:
   MenuRunnerImplCocoa(ui::MenuModel* menu,
                       base::RepeatingClosure on_menu_closed_callback);
+
+  MenuRunnerImplCocoa(const MenuRunnerImplCocoa&) = delete;
+  MenuRunnerImplCocoa& operator=(const MenuRunnerImplCocoa&) = delete;
 
   bool IsRunning() const override;
   void Release() override;
@@ -51,18 +53,16 @@ class VIEWS_EXPORT MenuRunnerImplCocoa : public MenuRunnerImplInterface {
   base::scoped_nsobject<MenuControllerDelegate> menu_delegate_;
 
   // Are we in run waiting for it to return?
-  bool running_;
+  bool running_ = false;
 
   // Set if |running_| and Release() has been invoked.
-  bool delete_after_run_;
+  bool delete_after_run_ = false;
 
   // The timestamp of the event which closed the menu - or 0.
   base::TimeTicks closing_event_time_;
 
   // Invoked before RunMenuAt() returns, except upon a Release().
   base::RepeatingClosure on_menu_closed_callback_;
-
-  DISALLOW_COPY_AND_ASSIGN(MenuRunnerImplCocoa);
 };
 
 }  // namespace internal

@@ -41,7 +41,7 @@ class SpotlightBookmarkModelBridge;
 
   // Keep a reference to detach before deallocing. Life cycle of _bookmarkModel
   // is longer than life cycle of a SpotlightManager as
-  // |BookmarkModelBeingDeleted| will cause deletion of SpotlightManager.
+  // `BookmarkModelBeingDeleted` will cause deletion of SpotlightManager.
   bookmarks::BookmarkModel* _bookmarkModel;  // weak
 
   // Number of nodes indexed in initial scan.
@@ -51,7 +51,7 @@ class SpotlightBookmarkModelBridge;
   BOOL _initialIndexDone;
 }
 
-// Detaches the |SpotlightBookmarkModelBridge| from the bookmark model. The
+// Detaches the `SpotlightBookmarkModelBridge` from the bookmark model. The
 // manager must not be used after calling this method.
 - (void)detachBookmarkModel;
 
@@ -63,7 +63,7 @@ class SpotlightBookmarkModelBridge;
 - (void)clearAndReindexModel;
 
 // Refreshes all nodes in the subtree of node.
-// If |initial| is YES, limit the number of nodes to kMaxInitialIndexSize.
+// If `initial` is YES, limit the number of nodes to kMaxInitialIndexSize.
 - (void)refreshNodeInIndex:(const bookmarks::BookmarkNode*)node
                    initial:(BOOL)initial;
 
@@ -333,9 +333,8 @@ initWithLargeIconService:(favicon::LargeIconService*)largeIconService
   NSDate* endOfReindexing = [NSDate date];
   NSTimeInterval indexingDuration =
       [endOfReindexing timeIntervalSinceDate:startOfReindexing];
-  UMA_HISTOGRAM_TIMES(
-      "IOS.Spotlight.BookmarksIndexingDuration",
-      base::TimeDelta::FromMillisecondsD(1000 * indexingDuration));
+  UMA_HISTOGRAM_TIMES("IOS.Spotlight.BookmarksIndexingDuration",
+                      base::Milliseconds(1000 * indexingDuration));
   UMA_HISTOGRAM_COUNTS_1000("IOS.Spotlight.BookmarksInitialIndexSize",
                             [self pendingLargeIconTasksCount]);
   [[NSUserDefaults standardUserDefaults]

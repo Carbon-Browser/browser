@@ -44,7 +44,7 @@ public class WebContentsDelegateAndroid {
     public void closeContents() {}
 
     @CalledByNative
-    public void loadingStateChanged(boolean toDifferentDocument) {}
+    public void loadingStateChanged(boolean shouldShowLoadingUI) {}
 
     @CalledByNative
     public void navigationStateChanged(int flags) {}
@@ -111,10 +111,11 @@ public class WebContentsDelegateAndroid {
     public void showRepostFormWarningDialog() {}
 
     @CalledByNative
-    public void enterFullscreenModeForTab(boolean prefersNavigationBar) {}
+    public void enterFullscreenModeForTab(boolean prefersNavigationBar, boolean prefersStatusBar) {}
 
     @CalledByNative
-    public void fullscreenStateChangedForTab(boolean prefersNavigationBar) {}
+    public void fullscreenStateChangedForTab(
+            boolean prefersNavigationBar, boolean prefersStatusBar) {}
 
     @CalledByNative
     public void exitFullscreenModeForTab() {}

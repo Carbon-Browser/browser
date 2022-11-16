@@ -7,6 +7,7 @@
 
 
 #include "base/component_export.h"
+#include "base/notreached.h"
 #include "build/build_config.h"
 #include "mojo/public/cpp/bindings/enum_traits.h"
 #include "mojo/public/cpp/bindings/struct_traits.h"
@@ -28,6 +29,8 @@ struct COMPONENT_EXPORT(GFX_SHARED_MOJOM_TRAITS)
         return gfx::mojom::BufferFormat::R_16;
       case gfx::BufferFormat::RG_88:
         return gfx::mojom::BufferFormat::RG_88;
+      case gfx::BufferFormat::RG_1616:
+        return gfx::mojom::BufferFormat::RG_1616;
       case gfx::BufferFormat::BGR_565:
         return gfx::mojom::BufferFormat::BGR_565;
       case gfx::BufferFormat::RGBA_4444:
@@ -68,6 +71,9 @@ struct COMPONENT_EXPORT(GFX_SHARED_MOJOM_TRAITS)
         return true;
       case gfx::mojom::BufferFormat::RG_88:
         *out = gfx::BufferFormat::RG_88;
+        return true;
+      case gfx::mojom::BufferFormat::RG_1616:
+        *out = gfx::BufferFormat::RG_1616;
         return true;
       case gfx::mojom::BufferFormat::BGR_565:
         *out = gfx::BufferFormat::BGR_565;

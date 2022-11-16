@@ -4,14 +4,15 @@
 
 #import "ios/chrome/browser/ui/settings/default_browser/default_browser_settings_table_view_controller.h"
 
+#include "base/metrics/histogram_functions.h"
 #include "base/metrics/user_metrics.h"
 #include "base/metrics/user_metrics_action.h"
+#import "ios/chrome/browser/ui/settings/settings_table_view_controller_constants.h"
 #import "ios/chrome/browser/ui/table_view/cells/table_view_detail_icon_item.h"
 #import "ios/chrome/browser/ui/table_view/cells/table_view_image_item.h"
 #import "ios/chrome/browser/ui/table_view/cells/table_view_link_header_footer_item.h"
 #import "ios/chrome/browser/ui/table_view/cells/table_view_text_item.h"
 #import "ios/chrome/browser/ui/table_view/table_view_utils.h"
-#include "ios/chrome/browser/ui/ui_feature_flags.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #include "ios/chrome/grit/ios_strings.h"
 #include "ui/base/l10n/l10n_util_mac.h"
@@ -27,7 +28,8 @@ NSString* const kSettingsImageName = @"settings";
 NSString* const kSelectChromeStepImageName = @"chrome_icon";
 
 typedef NS_ENUM(NSInteger, SectionIdentifier) {
-  SectionIdentifierSteps = kSectionIdentifierEnumZero,
+  SectionIdentifierIntro = kSectionIdentifierEnumZero,
+  SectionIdentifierSteps,
   SectionIdentifierOpenSettings,
 };
 
@@ -44,9 +46,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
 @implementation DefaultBrowserSettingsTableViewController
 
 - (instancetype)init {
-  UITableViewStyle style = base::FeatureList::IsEnabled(kSettingsRefresh)
-                               ? ChromeTableViewStyle()
-                               : UITableViewStylePlain;
+  UITableViewStyle style = ChromeTableViewStyle();
   return [super initWithStyle:style];
 }
 
@@ -54,6 +54,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
   [super viewDidLoad];
   self.title = l10n_util::GetNSString(IDS_IOS_SETTINGS_SET_DEFAULT_BROWSER);
   self.shouldHideDoneButton = YES;
+  self.tableView.accessibilityIdentifier = kDefaultBrowserSettingsTableViewId;
 
   [self loadModel];
 }
@@ -63,11 +64,25 @@ typedef NS_ENUM(NSInteger, ItemType) {
 - (void)loadModel {
   [super loadModel];
 
-  [self.tableViewModel addSectionWithIdentifier:SectionIdentifierSteps];
+  // The Default Browser Settings page breaks down into 3 sections, as follows:
+
+  // Section 1: Introduction.
+  [self.tableViewModel addSectionWithIdentifier:SectionIdentifierIntro];
+
   TableViewLinkHeaderFooterItem* headerItem =
       [[TableViewLinkHeaderFooterItem alloc] initWithType:ItemTypeHeaderItem];
   headerItem.text = l10n_util::GetNSString(IDS_IOS_SETTINGS_HEADER_TEXT);
   [self.tableViewModel setHeader:headerItem
+        forSectionWithIdentifier:SectionIdentifierIntro];
+
+  // Section 2: Instructions for setting the default browser.
+  [self.tableViewModel addSectionWithIdentifier:SectionIdentifierSteps];
+
+  TableViewLinkHeaderFooterItem* followStepsBelowItem =
+      [[TableViewLinkHeaderFooterItem alloc] initWithType:ItemTypeHeaderItem];
+  followStepsBelowItem.text =
+      l10n_util::GetNSString(IDS_IOS_SETTINGS_FOLLOW_STEPS_BELOW_TEXT);
+  [self.tableViewModel setHeader:followStepsBelowItem
         forSectionWithIdentifier:SectionIdentifierSteps];
 
   TableViewDetailIconItem* openSettingsStepItem =
@@ -95,7 +110,9 @@ typedef NS_ENUM(NSInteger, ItemType) {
   [self.tableViewModel addItem:selectChromeStepItem
        toSectionWithIdentifier:SectionIdentifierSteps];
 
+  // Section 3: 'Open Chrome Settings' action
   [self.tableViewModel addSectionWithIdentifier:SectionIdentifierOpenSettings];
+
   TableViewTextItem* openSettingsButtonItem =
       [[TableViewTextItem alloc] initWithType:ItemTypeOpenSettingsButton];
   openSettingsButtonItem.text =
@@ -129,6 +146,8 @@ typedef NS_ENUM(NSInteger, ItemType) {
 
   if (itemType == ItemTypeOpenSettingsButton) {
     base::RecordAction(base::UserMetricsAction("Settings.DefaultBrowser"));
+    base::UmaHistogramEnumeration("Settings.DefaultBrowserFromSource",
+                                  self.source);
     [[UIApplication sharedApplication]
                   openURL:[NSURL
                               URLWithString:UIApplicationOpenSettingsURLString]

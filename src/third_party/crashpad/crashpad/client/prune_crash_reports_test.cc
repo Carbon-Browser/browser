@@ -69,6 +69,7 @@ class MockDatabase : public CrashReportDatabase {
               (override));
   MOCK_METHOD(OperationStatus, DeleteReport, (const UUID&), (override));
   MOCK_METHOD(OperationStatus, RequestUpload, (const UUID&), (override));
+  MOCK_METHOD(base::FilePath, DatabasePath, (), (override));
 
   // Google Mock doesn't support mocking methods with non-copyable types such as
   // unique_ptr.
@@ -144,11 +145,39 @@ TEST(PruneCrashReports, SizeCondition) {
     // |report_1k| should be pruned as the cumulated size is now past 0kB.
     EXPECT_TRUE(condition.ShouldPruneReport(report_1k));
   }
+
+  {
+    DatabaseSizePruneCondition condition(/*max_size_in_kb=*/6);
+    // |report_3k| should not be pruned as the cumulated size is not past 6kB
+    // yet.
+    EXPECT_FALSE(condition.ShouldPruneReport(report_3k));
+    // |report_3k| should not be pruned as the cumulated size is not past 6kB
+    // yet.
+    EXPECT_FALSE(condition.ShouldPruneReport(report_3k));
+    // |report_1k| should be pruned as the cumulated size is now past 6kB.
+    EXPECT_TRUE(condition.ShouldPruneReport(report_1k));
+
+    // Reset |measured_size_in_kb_|, which stores the size of reports, to 0.
+    condition.ResetPruneConditionState();
+
+    // |report_3k| should not be pruned as the cumulated size is not past 6kB
+    // yet.
+    EXPECT_FALSE(condition.ShouldPruneReport(report_3k));
+    // |report_3k| should not be pruned as the cumulated size is not past 6kB
+    // yet.
+    EXPECT_FALSE(condition.ShouldPruneReport(report_3k));
+    // |report_1k| should be pruned as the cumulated size is now past 6kB.
+    EXPECT_TRUE(condition.ShouldPruneReport(report_1k));
+  }
 }
 
 class StaticCondition final : public PruneCondition {
  public:
   explicit StaticCondition(bool value) : value_(value), did_execute_(false) {}
+
+  StaticCondition(const StaticCondition&) = delete;
+  StaticCondition& operator=(const StaticCondition&) = delete;
+
   ~StaticCondition() {}
 
   bool ShouldPruneReport(const CrashReportDatabase::Report& report) override {
@@ -156,13 +185,13 @@ class StaticCondition final : public PruneCondition {
     return value_;
   }
 
+  void ResetPruneConditionState() override {}
+
   bool did_execute() const { return did_execute_; }
 
  private:
   const bool value_;
   bool did_execute_;
-
-  DISALLOW_COPY_AND_ASSIGN(StaticCondition);
 };
 
 TEST(PruneCrashReports, BinaryCondition) {

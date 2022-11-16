@@ -4,6 +4,7 @@
 
 #include "content/browser/file_system_access/file_system_access_file_handle_impl.h"
 
+#include "base/callback_forward.h"
 #include "base/callback_helpers.h"
 #include "base/feature_list.h"
 #include "base/files/file_error_or.h"
@@ -17,9 +18,12 @@
 #include "content/browser/file_system_access/file_system_access_access_handle_host_impl.h"
 #include "content/browser/file_system_access/file_system_access_error.h"
 #include "content/browser/file_system_access/file_system_access_handle_base.h"
+#include "content/browser/file_system_access/file_system_access_manager_impl.h"
 #include "content/browser/file_system_access/file_system_access_transfer_token_impl.h"
+#include "content/browser/file_system_access/file_system_access_write_lock_manager.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
+#include "content/public/browser/render_frame_host.h"
 #include "content/public/common/content_features.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -27,6 +31,7 @@
 #include "storage/browser/blob/blob_data_builder.h"
 #include "storage/browser/blob/blob_impl.h"
 #include "storage/browser/blob/blob_storage_context.h"
+#include "storage/browser/file_system/copy_or_move_hook_delegate.h"
 #include "storage/browser/file_system/file_system_operation_runner.h"
 #include "storage/common/file_system/file_system_types.h"
 #include "third_party/blink/public/mojom/blob/blob.mojom.h"
@@ -36,7 +41,7 @@
 #include "third_party/blink/public/mojom/file_system_access/file_system_access_file_handle.mojom.h"
 #include "third_party/blink/public/mojom/file_system_access/file_system_access_transfer_token.mojom.h"
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include <windows.h>
 #endif
 
@@ -48,65 +53,36 @@ using storage::FileSystemOperationRunner;
 
 namespace content {
 
+using WriteLockType = FileSystemAccessWriteLockManager::WriteLockType;
+
 namespace {
 
-void CreateBlobOnIOThread(
-    scoped_refptr<storage::FileSystemContext> file_system_context,
-    const scoped_refptr<ChromeBlobStorageContext>& blob_context,
-    mojo::PendingReceiver<blink::mojom::Blob> blob_receiver,
-    const storage::FileSystemURL& url,
-    const std::string& blob_uuid,
-    const std::string& content_type,
-    const base::File::Info& info) {
-  DCHECK_CURRENTLY_ON(BrowserThread::IO);
-
-  auto blob_builder = std::make_unique<storage::BlobDataBuilder>(blob_uuid);
-  // Only append if the file has data.
-  if (info.size > 0) {
-    // Use AppendFileSystemFile here, since we're streaming the file directly
-    // from the file system backend, and the file thus might not actually be
-    // backed by a file on disk.
-    blob_builder->AppendFileSystemFile(url, 0, info.size, info.last_modified,
-                                       std::move(file_system_context));
-  }
-  blob_builder->set_content_type(content_type);
-
-  std::unique_ptr<BlobDataHandle> blob_handle =
-      blob_context->context()->AddFinishedBlob(std::move(blob_builder));
-
-  // Since the blob we're creating doesn't depend on other blobs, and doesn't
-  // require blob memory/disk quota, creating the blob can't fail.
-  DCHECK(!blob_handle->IsBroken());
-
-  BlobImpl::Create(std::move(blob_handle), std::move(blob_receiver));
-}
-
-std::pair<base::File, base::FileErrorOr<int>> GetFileLengthOnBlockingThread(
+std::pair<base::File, base::FileErrorOr<int64_t>> GetFileLengthOnBlockingThread(
     base::File file) {
   int64_t file_length = file.GetLength();
   if (file_length < 0)
     return {std::move(file), base::File::GetLastFileError()};
-  return {std::move(file), file_length};
+  return {std::move(file), std::move(file_length)};
 }
 
 bool HasWritePermission(const base::FilePath& path) {
   if (!base::PathExists(path))
     return true;
 
-#if defined(OS_POSIX)
+#if BUILDFLAG(IS_POSIX)
   int mode;
   if (!base::GetPosixFilePermissions(path, &mode))
     return true;
 
   if (!(mode & base::FILE_PERMISSION_WRITE_BY_USER))
     return false;
-#elif defined(OS_WIN)
+#elif BUILDFLAG(IS_WIN)
   DWORD attrs = ::GetFileAttributes(path.value().c_str());
   if (attrs == INVALID_FILE_ATTRIBUTES)
     return true;
   if (attrs & FILE_ATTRIBUTE_READONLY)
     return false;
-#endif  // defined(OS_POSIX)
+#endif  // BUILDFLAG(IS_POSIX)
 
   return true;
 }
@@ -146,7 +122,7 @@ void FileSystemAccessFileHandleImpl::AsBlob(AsBlobCallback callback) {
 
   // TODO(mek): Check backend::SupportsStreaming and create snapshot file if
   // streaming is not supported.
-  DoFileSystemOperation(
+  manager()->DoFileSystemOperation(
       FROM_HERE, &FileSystemOperationRunner::GetMetadata,
       base::BindOnce(&FileSystemAccessFileHandleImpl::DidGetMetaDataForBlob,
                      weak_factory_.GetWeakPtr(), std::move(callback)),
@@ -180,10 +156,14 @@ void FileSystemAccessFileHandleImpl::Move(
     MoveCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
+  RenderFrameHost* rfh = RenderFrameHost::FromID(context().frame_id);
+  bool has_transient_user_activation = rfh && rfh->HasTransientUserActivation();
+
   RunWithWritePermission(
       base::BindOnce(&FileSystemAccessHandleBase::DoMove,
                      weak_factory_.GetWeakPtr(),
-                     std::move(destination_directory), new_entry_name),
+                     std::move(destination_directory), new_entry_name,
+                     has_transient_user_activation),
       base::BindOnce([](blink::mojom::FileSystemAccessErrorPtr result,
                         MoveCallback callback) {
         std::move(callback).Run(std::move(result));
@@ -195,9 +175,13 @@ void FileSystemAccessFileHandleImpl::Rename(const std::string& new_entry_name,
                                             RenameCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
+  RenderFrameHost* rfh = RenderFrameHost::FromID(context().frame_id);
+  bool has_transient_user_activation = rfh && rfh->HasTransientUserActivation();
+
   RunWithWritePermission(
       base::BindOnce(&FileSystemAccessHandleBase::DoRename,
-                     weak_factory_.GetWeakPtr(), new_entry_name),
+                     weak_factory_.GetWeakPtr(), new_entry_name,
+                     has_transient_user_activation),
       base::BindOnce([](blink::mojom::FileSystemAccessErrorPtr result,
                         MoveCallback callback) {
         std::move(callback).Run(std::move(result));
@@ -210,7 +194,8 @@ void FileSystemAccessFileHandleImpl::Remove(RemoveCallback callback) {
 
   RunWithWritePermission(
       base::BindOnce(&FileSystemAccessHandleBase::DoRemove,
-                     weak_factory_.GetWeakPtr(), url(), /*recurse=*/false),
+                     weak_factory_.GetWeakPtr(), url(), /*recurse=*/false,
+                     WriteLockType::kExclusive),
       base::BindOnce([](blink::mojom::FileSystemAccessErrorPtr result,
                         RemoveCallback callback) {
         std::move(callback).Run(std::move(result));
@@ -226,18 +211,17 @@ void FileSystemAccessFileHandleImpl::OpenAccessHandle(
     std::move(callback).Run(
         file_system_access_error::FromStatus(
             FileSystemAccessStatus::kInvalidState,
-            "Access handles may only be created on temporary file systems"),
+            "Access Handles may only be created on temporary file systems"),
         blink::mojom::FileSystemAccessAccessHandleFilePtr(),
         mojo::NullRemote());
     return;
   }
 
-  auto lock = manager()->TakeWriteLock(
-      url(), FileSystemAccessWriteLockManager::WriteLockType::kExclusive);
-  if (!lock.has_value()) {
+  auto lock = manager()->TakeWriteLock(url(), WriteLockType::kExclusive);
+  if (!lock) {
     std::move(callback).Run(
         file_system_access_error::FromStatus(
-            FileSystemAccessStatus::kInvalidState,
+            FileSystemAccessStatus::kNoModificationAllowedError,
             "Access Handles cannot be created if there is another open Access "
             "Handle or Writable stream associated with the same file."),
         blink::mojom::FileSystemAccessAccessHandleFilePtr(),
@@ -248,9 +232,9 @@ void FileSystemAccessFileHandleImpl::OpenAccessHandle(
   auto open_file_callback =
       file_system_context()->is_incognito()
           ? base::BindOnce(&FileSystemAccessFileHandleImpl::DoOpenIncognitoFile,
-                           weak_factory_.GetWeakPtr(), std::move(lock.value()))
+                           weak_factory_.GetWeakPtr(), std::move(lock))
           : base::BindOnce(&FileSystemAccessFileHandleImpl::DoOpenFile,
-                           weak_factory_.GetWeakPtr(), std::move(lock.value()));
+                           weak_factory_.GetWeakPtr(), std::move(lock));
   RunWithWritePermission(
       std::move(open_file_callback),
       base::BindOnce([](blink::mojom::FileSystemAccessErrorPtr result,
@@ -275,7 +259,8 @@ void FileSystemAccessFileHandleImpl::DoOpenIncognitoFile(
   mojo::PendingRemote<blink::mojom::FileSystemAccessAccessHandleHost>
       access_handle_host_remote = manager()->CreateAccessHandleHost(
           url(), file_delegate_host_remote.InitWithNewPipeAndPassReceiver(),
-          mojo::NullReceiver(), 0, std::move(lock));
+          mojo::NullReceiver(), 0, std::move(lock),
+          base::ScopedClosureRunner());
 
   std::move(callback).Run(
       file_system_access_error::Ok(),
@@ -291,7 +276,7 @@ void FileSystemAccessFileHandleImpl::DoOpenFile(
   DCHECK_EQ(GetWritePermissionStatus(),
             blink::mojom::PermissionStatus::GRANTED);
 
-  DoFileSystemOperation(
+  manager()->DoFileSystemOperation(
       FROM_HERE, &FileSystemOperationRunner::OpenFile,
       base::BindOnce(&FileSystemAccessFileHandleImpl::DoGetLengthAfterOpenFile,
                      weak_factory_.GetWeakPtr(), std::move(callback),
@@ -304,7 +289,7 @@ void FileSystemAccessFileHandleImpl::DoGetLengthAfterOpenFile(
     OpenAccessHandleCallback callback,
     scoped_refptr<FileSystemAccessWriteLockManager::WriteLock> lock,
     base::File file,
-    base::OnceClosure /*on_close_callback*/) {
+    base::ScopedClosureRunner on_close_callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   blink::mojom::FileSystemAccessErrorPtr result =
@@ -333,17 +318,19 @@ void FileSystemAccessFileHandleImpl::DoGetLengthAfterOpenFile(
       base::BindOnce(&GetFileLengthOnBlockingThread, std::move(file)),
       base::BindOnce(&FileSystemAccessFileHandleImpl::DidOpenFileAndGetLength,
                      weak_factory_.GetWeakPtr(), std::move(callback),
-                     std::move(lock)));
+                     std::move(lock), std::move(on_close_callback)));
 }
 
 void FileSystemAccessFileHandleImpl::DidOpenFileAndGetLength(
     OpenAccessHandleCallback callback,
     scoped_refptr<FileSystemAccessWriteLockManager::WriteLock> lock,
-    std::pair<base::File, base::FileErrorOr<int>> file_and_length) {
+    base::ScopedClosureRunner on_close_callback,
+    std::pair<base::File, base::FileErrorOr<int64_t>> file_and_length) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   base::File file = std::move(file_and_length.first);
-  base::FileErrorOr<int> length_or_error = std::move(file_and_length.second);
+  base::FileErrorOr<int64_t> length_or_error =
+      std::move(file_and_length.second);
 
   if (length_or_error.is_error()) {
     std::move(callback).Run(
@@ -360,7 +347,8 @@ void FileSystemAccessFileHandleImpl::DidOpenFileAndGetLength(
       access_handle_host_remote = manager()->CreateAccessHandleHost(
           url(), mojo::NullReceiver(),
           capacity_allocation_host_remote.InitWithNewPipeAndPassReceiver(),
-          length_or_error.value(), std::move(lock));
+          length_or_error.value(), std::move(lock),
+          std::move(on_close_callback));
 
   std::move(callback).Run(
       file_system_access_error::Ok(),
@@ -459,11 +447,11 @@ void FileSystemAccessFileHandleImpl::DidGetMetaDataForBlob(
 
   GetIOThreadTaskRunner({})->PostTask(
       FROM_HERE,
-      base::BindOnce(&CreateBlobOnIOThread,
-                     base::WrapRefCounted(file_system_context()),
+      base::BindOnce(&ChromeBlobStorageContext::CreateFileSystemBlob,
                      base::WrapRefCounted(manager()->blob_context()),
+                     base::WrapRefCounted(file_system_context()),
                      std::move(blob_receiver), url(), std::move(uuid),
-                     std::move(content_type), info));
+                     std::move(content_type), info.size, info.last_modified));
 }
 
 void FileSystemAccessFileHandleImpl::CreateFileWriterImpl(
@@ -495,6 +483,7 @@ void FileSystemAccessFileHandleImpl::DidVerifyHasWritePermissions(
     bool auto_close,
     CreateFileWriterCallback callback,
     bool can_write) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (!can_write) {
     std::move(callback).Run(
         file_system_access_error::FromStatus(
@@ -504,15 +493,15 @@ void FileSystemAccessFileHandleImpl::DidVerifyHasWritePermissions(
     return;
   }
 
-  auto lock = manager()->TakeWriteLock(
-      url(), FileSystemAccessWriteLockManager::WriteLockType::kShared);
-  if (!lock.has_value()) {
-    std::move(callback).Run(file_system_access_error::FromStatus(
-                                FileSystemAccessStatus::kInvalidState,
-                                "Writable streams cannot be created if there "
-                                "is an open Access Handle "
-                                "associated with the same file."),
-                            mojo::NullRemote());
+  auto lock = manager()->TakeWriteLock(url(), WriteLockType::kShared);
+  if (!lock) {
+    std::move(callback).Run(
+        file_system_access_error::FromStatus(
+            FileSystemAccessStatus::kNoModificationAllowedError,
+            "Writable streams cannot be created if there "
+            "is an open Access Handle "
+            "associated with the same file."),
+        mojo::NullRemote());
     return;
   }
 
@@ -524,8 +513,19 @@ void FileSystemAccessFileHandleImpl::DidVerifyHasWritePermissions(
   // Writer creation request owns the file and eliminates possible race
   // conditions.
   CreateSwapFile(
-      /*count=*/0, keep_existing_data, auto_close, std::move(lock.value()),
+      /*count=*/0, keep_existing_data, auto_close, std::move(lock),
       std::move(callback));
+}
+
+storage::FileSystemURL FileSystemAccessFileHandleImpl::GetSwapURL(
+    const base::FilePath& swap_path) {
+  storage::FileSystemURL swap_url =
+      manager()->context()->CreateCrackedFileSystemURL(
+          url().storage_key(), url().mount_type(), swap_path);
+  if (url().bucket()) {
+    swap_url.SetBucket(url().bucket().value());
+  }
+  return swap_url;
 }
 
 void FileSystemAccessFileHandleImpl::CreateSwapFile(
@@ -566,12 +566,10 @@ void FileSystemAccessFileHandleImpl::CreateSwapFile(
 
   // First attempt to just create the swap file in the same file system as
   // this file.
-  storage::FileSystemURL swap_url =
-      manager()->context()->CreateCrackedFileSystemURL(
-          url().storage_key(), url().mount_type(), swap_path);
+  storage::FileSystemURL swap_url = GetSwapURL(swap_path);
   DCHECK(swap_url.is_valid());
 
-  DoFileSystemOperation(
+  manager()->DoFileSystemOperation(
       FROM_HERE, &FileSystemOperationRunner::CreateFile,
       base::BindOnce(&FileSystemAccessFileHandleImpl::DidCreateSwapFile,
                      weak_factory_.GetWeakPtr(), count, swap_url,
@@ -618,15 +616,17 @@ void FileSystemAccessFileHandleImpl::DidCreateSwapFile(
     return;
   }
 
-  DoFileSystemOperation(
+  manager()->DoFileSystemOperation(
       FROM_HERE, &FileSystemOperationRunner::Copy,
       base::BindOnce(&FileSystemAccessFileHandleImpl::DidCopySwapFile,
                      weak_factory_.GetWeakPtr(), swap_url, auto_close,
                      std::move(lock), std::move(callback)),
       url(), swap_url,
-      storage::FileSystemOperation::OPTION_PRESERVE_LAST_MODIFIED,
+      storage::FileSystemOperation::CopyOrMoveOptionSet(
+          storage::FileSystemOperation::CopyOrMoveOption::
+              kPreserveLastModified),
       storage::FileSystemOperation::ERROR_BEHAVIOR_ABORT,
-      storage::FileSystemOperation::CopyOrMoveProgressCallback());
+      std::make_unique<storage::CopyOrMoveHookDelegate>());
 }
 
 void FileSystemAccessFileHandleImpl::DidCopySwapFile(
@@ -657,6 +657,7 @@ void FileSystemAccessFileHandleImpl::DidCopySwapFile(
 
 base::WeakPtr<FileSystemAccessHandleBase>
 FileSystemAccessFileHandleImpl::AsWeakPtr() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   return weak_factory_.GetWeakPtr();
 }
 

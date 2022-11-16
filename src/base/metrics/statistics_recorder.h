@@ -23,9 +23,10 @@
 #include "base/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/lazy_instance.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/histogram_base.h"
+#include "base/metrics/ranges_manager.h"
 #include "base/metrics/record_histogram_checker.h"
 #include "base/observer_list_threadsafe.h"
 #include "base/strings/string_piece.h"
@@ -97,6 +98,9 @@ class BASE_EXPORT StatisticsRecorder {
   };
 
   typedef std::vector<HistogramBase*> Histograms;
+
+  StatisticsRecorder(const StatisticsRecorder&) = delete;
+  StatisticsRecorder& operator=(const StatisticsRecorder&) = delete;
 
   // Restores the previous global recorder.
   //
@@ -173,11 +177,12 @@ class BASE_EXPORT StatisticsRecorder {
   // This method must be called on the UI thread.
   static void ImportProvidedHistograms();
 
-  // Snapshots all histograms via |snapshot_manager|. |flags_to_set| is used to
-  // set flags for each histogram. |required_flags| is used to select
-  // histograms to be recorded. Only histograms that have all the flags
-  // specified by the argument will be chosen. If all histograms should be
-  // recorded, set it to |Histogram::kNoFlags|.
+  // Snapshots all histograms via |snapshot_manager|. |include_persistent|
+  // determines whether histograms held in persistent storage are
+  // snapshotted. |flags_to_set| is used to set flags for each histogram.
+  // |required_flags| is used to select which histograms to record. Only
+  // histograms with all required flags are selected. If all histograms should
+  // be recorded, use |Histogram::kNoFlags| as the required flag.
   static void PrepareDeltas(bool include_persistent,
                             HistogramBase::Flags flags_to_set,
                             HistogramBase::Flags required_flags,
@@ -220,8 +225,8 @@ class BASE_EXPORT StatisticsRecorder {
   // they're created.
   //
   // This method is thread safe.
-  static std::unique_ptr<StatisticsRecorder> CreateTemporaryForTesting()
-      WARN_UNUSED_RESULT;
+  [[nodiscard]] static std::unique_ptr<StatisticsRecorder>
+  CreateTemporaryForTesting();
 
   // Sets the record checker for determining if a histogram should be recorded.
   // Record checker doesn't affect any already recorded histograms, so this
@@ -302,18 +307,6 @@ class BASE_EXPORT StatisticsRecorder {
                              scoped_refptr<HistogramSampleObserverList>>
       ObserverMap;
 
-  struct BucketRangesHash {
-    size_t operator()(const BucketRanges* a) const;
-  };
-
-  struct BucketRangesEqual {
-    bool operator()(const BucketRanges* a, const BucketRanges* b) const;
-  };
-
-  typedef std::
-      unordered_set<const BucketRanges*, BucketRangesHash, BucketRangesEqual>
-          RangesMap;
-
   friend class StatisticsRecorderTest;
   FRIEND_TEST_ALL_PREFIXES(StatisticsRecorderTest, IterationTest);
 
@@ -336,6 +329,10 @@ class BASE_EXPORT StatisticsRecorder {
   // Constructs a new StatisticsRecorder and sets it as the current global
   // recorder.
   //
+  // This singleton instance should be started during the single-threaded
+  // portion of startup and hence it is not thread safe. It initializes globals
+  // to provide support for all future calls.
+  //
   // Precondition: The global lock is already acquired.
   StatisticsRecorder();
 
@@ -347,12 +344,12 @@ class BASE_EXPORT StatisticsRecorder {
 
   HistogramMap histograms_;
   ObserverMap observers_;
-  RangesMap ranges_;
   HistogramProviders providers_;
+  RangesManager ranges_manager_;
   std::unique_ptr<RecordHistogramChecker> record_checker_;
 
   // Previous global recorder that existed when this one was created.
-  StatisticsRecorder* previous_ = nullptr;
+  raw_ptr<StatisticsRecorder> previous_ = nullptr;
 
   // Global lock for internal synchronization.
   static LazyInstance<Lock>::Leaky lock_;
@@ -372,8 +369,6 @@ class BASE_EXPORT StatisticsRecorder {
   // Stores a raw callback which should be called on any every histogram sample
   // which gets added.
   static std::atomic<GlobalSampleCallback> global_sample_callback_;
-
-  DISALLOW_COPY_AND_ASSIGN(StatisticsRecorder);
 };
 
 }  // namespace base

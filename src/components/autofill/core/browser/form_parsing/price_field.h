@@ -9,9 +9,8 @@
 
 #include "base/compiler_specific.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "components/autofill/core/browser/form_parsing/form_field.h"
-#include "components/autofill/core/browser/pattern_provider/pattern_provider.h"
 #include "components/autofill/core/common/language_code.h"
 
 namespace autofill {
@@ -26,8 +25,12 @@ class PriceField : public FormField {
  public:
   static std::unique_ptr<FormField> Parse(AutofillScanner* scanner,
                                           const LanguageCode& page_language,
+                                          PatternSource pattern_source,
                                           LogManager* log_manager);
   explicit PriceField(const AutofillField* field);
+
+  PriceField(const PriceField&) = delete;
+  PriceField& operator=(const PriceField&) = delete;
 
  protected:
   void AddClassifications(FieldCandidatesMap* field_candidates) const override;
@@ -36,9 +39,7 @@ class PriceField : public FormField {
   FRIEND_TEST_ALL_PREFIXES(PriceFieldTest, ParsePrice);
   FRIEND_TEST_ALL_PREFIXES(PriceFieldTest, ParseNonPrice);
 
-  const AutofillField* field_;
-
-  DISALLOW_COPY_AND_ASSIGN(PriceField);
+  raw_ptr<const AutofillField> field_;
 };
 
 }  // namespace autofill

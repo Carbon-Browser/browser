@@ -2,13 +2,41 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "content/test/mock_client_hints_controller_delegate.h"
+#include "content/public/test/mock_client_hints_controller_delegate.h"
 
 #include "content/public/common/origin_util.h"
+#include "services/network/public/cpp/is_potentially_trustworthy.h"
 #include "third_party/blink/public/common/user_agent/user_agent_metadata.h"
 #include "url/gurl.h"
 
 namespace content {
+
+namespace {
+
+bool PersistClientHintsHelper(const GURL& url,
+                              const blink::EnabledClientHints& client_hints,
+                              ClientHintsContainer* container) {
+  DCHECK(container);
+  if (!network::IsUrlPotentiallyTrustworthy(url)) {
+    return false;
+  }
+  const url::Origin origin = url::Origin::Create(url);
+  (*container)[origin] = client_hints;
+  return true;
+}
+
+void GetAllowedClientHintsFromSourceHelper(
+    const url::Origin& origin,
+    const ClientHintsContainer& container,
+    blink::EnabledClientHints* client_hints) {
+  const auto& it = container.find(origin);
+  DCHECK(client_hints);
+  if (it != container.end()) {
+    *client_hints = it->second;
+  }
+}
+
+}  // namespace
 
 MockClientHintsControllerDelegate::MockClientHintsControllerDelegate(
     const blink::UserAgentMetadata& metadata)
@@ -22,8 +50,15 @@ MockClientHintsControllerDelegate::GetNetworkQualityTracker() {
   return nullptr;
 }
 
-bool MockClientHintsControllerDelegate::IsJavaScriptAllowed(const GURL& url) {
+bool MockClientHintsControllerDelegate::IsJavaScriptAllowed(
+    const GURL& url,
+    content::RenderFrameHost* parent_rfh) {
   return true;
+}
+
+bool MockClientHintsControllerDelegate::AreThirdPartyCookiesBlocked(
+    const GURL& url) {
+  return false;
 }
 
 blink::UserAgentMetadata
@@ -33,22 +68,23 @@ MockClientHintsControllerDelegate::GetUserAgentMetadata() {
 
 void MockClientHintsControllerDelegate::PersistClientHints(
     const url::Origin& primary_origin,
-    const std::vector<::network::mojom::WebClientHintsType>& client_hints,
-    base::TimeDelta expiration_duration) {
+    content::RenderFrameHost* parent_rfh,
+    const std::vector<::network::mojom::WebClientHintsType>& client_hints) {
   blink::EnabledClientHints enabled_client_hints;
   for (const auto& type : client_hints) {
     enabled_client_hints.SetIsEnabled(type, true);
   }
 
   PersistClientHintsHelper(primary_origin.GetURL(), enabled_client_hints,
-                           expiration_duration, &client_hints_map_);
+                           &client_hints_map_);
 }
 
 // Get which client hints opt-ins were persisted on current origin.
 void MockClientHintsControllerDelegate::GetAllowedClientHintsFromSource(
-    const GURL& url,
+    const url::Origin& origin,
     blink::EnabledClientHints* client_hints) {
-  GetAllowedClientHintsFromSourceHelper(url, client_hints_map_, client_hints);
+  GetAllowedClientHintsFromSourceHelper(origin, client_hints_map_,
+                                        client_hints);
   for (auto hint : additional_hints_)
     client_hints->SetIsEnabled(hint, true);
 }

@@ -6,6 +6,8 @@
 
 #include "ash/style/ash_color_provider.h"
 #include "ash/system/tray/tray_popup_utils.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/color/color_id.h"
 #include "ui/gfx/image/image_skia_operations.h"
 #include "ui/views/controls/focus_ring.h"
 #include "ui/views/controls/highlight_path_generator.h"
@@ -20,8 +22,10 @@ constexpr int kRecentAppButtonSize = 32;
 
 }  // namespace
 
-PhoneHubRecentAppButton::PhoneHubRecentAppButton(const gfx::Image& icon,
-                                                 PressedCallback callback)
+PhoneHubRecentAppButton::PhoneHubRecentAppButton(
+    const gfx::Image& icon,
+    const std::u16string& visible_app_name,
+    PressedCallback callback)
     : views::ImageButton(callback) {
   SetImage(views::Button::STATE_NORMAL,
            gfx::ImageSkiaOperations::CreateResizedImage(
@@ -31,6 +35,9 @@ PhoneHubRecentAppButton::PhoneHubRecentAppButton(const gfx::Image& icon,
   SetImageVerticalAlignment(ALIGN_MIDDLE);
   TrayPopupUtils::ConfigureTrayPopupButton(this);
   views::InstallCircleHighlightPathGenerator(this);
+  SetAccessibleName(visible_app_name);
+  SetTooltipText(visible_app_name);
+  views::FocusRing::Get(this)->SetColorId(ui::kColorAshFocusRing);
 }
 
 PhoneHubRecentAppButton::~PhoneHubRecentAppButton() = default;
@@ -49,16 +56,7 @@ void PhoneHubRecentAppButton::PaintButtonContents(gfx::Canvas* canvas) {
   views::ImageButton::PaintButtonContents(canvas);
 }
 
-void PhoneHubRecentAppButton::OnThemeChanged() {
-  views::ImageButton::OnThemeChanged();
-  views::FocusRing::Get(this)->SetColor(
-      AshColorProvider::Get()->GetControlsLayerColor(
-          AshColorProvider::ControlsLayerType::kFocusRingColor));
-  SchedulePaint();
-}
-
-const char* PhoneHubRecentAppButton::GetClassName() const {
-  return "PhoneHubRecentAppButton";
-}
+BEGIN_METADATA(PhoneHubRecentAppButton, views::ImageButton)
+END_METADATA
 
 }  // namespace ash

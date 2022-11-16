@@ -114,7 +114,7 @@
     return;
   if (_contentBlocked) {
     // If the content was previously blocked, remove the blocking view before
-    // resetting to |contentBlocked|.
+    // resetting to `contentBlocked`.
     [self.contentBlockingView removeFromSuperview];
     self.contentBlockingView = nil;
   }
@@ -122,12 +122,8 @@
   if (_contentBlocked) {
     // Install the blocking view.
     self.contentBlockingView = [[UIView alloc] initWithFrame:CGRectZero];
-    if (@available(iOS 13, *)) {
-      self.contentBlockingView.backgroundColor =
-          [UIColor secondarySystemBackgroundColor];
-    } else {
-      self.contentBlockingView.backgroundColor = [UIColor whiteColor];
-    }
+    self.contentBlockingView.backgroundColor =
+        [UIColor secondarySystemBackgroundColor];
     UIView* overlayContainerView =
         self.webContentsOverlayContainerViewController.view;
     if (overlayContainerView) {

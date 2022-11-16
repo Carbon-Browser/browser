@@ -5,6 +5,7 @@
 #include "ash/wm/desks/desk_drag_proxy.h"
 
 #include "ash/drag_drop/drag_image_view.h"
+#include "ash/style/system_shadow.h"
 #include "ash/wm/desks/desk_mini_view.h"
 #include "ash/wm/desks/desk_preview_view.h"
 #include "ash/wm/desks/desks_bar_view.h"
@@ -13,7 +14,7 @@
 #include "ui/compositor/scoped_layer_animation_settings.h"
 #include "ui/display/screen.h"
 #include "ui/events/event_observer.h"
-#include "ui/gfx/transform_util.h"
+#include "ui/gfx/geometry/transform_util.h"
 #include "ui/views/widget/widget.h"
 
 namespace ash {
@@ -23,11 +24,9 @@ namespace {
 // Scale of dragged desk proxy.
 constexpr float kDragProxyScale = 1.2f;
 // Time duration of scaling up dragged desk proxy.
-constexpr base::TimeDelta kDragProxyScaleUpDuration =
-    base::TimeDelta::FromMilliseconds(200);
+constexpr base::TimeDelta kDragProxyScaleUpDuration = base::Milliseconds(200);
 // Time duration of snapping back drag proxy.
-constexpr base::TimeDelta kDragProxySnapBackDuration =
-    base::TimeDelta::FromMilliseconds(300);
+constexpr base::TimeDelta kDragProxySnapBackDuration = base::Milliseconds(300);
 
 }  // namespace
 
@@ -69,8 +68,9 @@ void DeskDragProxy::InitAndScaleAndMoveToX(float location_screen_x) {
   drag_widget_->SetVisibilityAnimationTransition(views::Widget::ANIMATE_NONE);
 
   // Copy the preview of the dragged desk to the widget content.
-  drag_widget_->SetContentsView(std::make_unique<DeskPreviewView>(
-      views::Button::PressedCallback(), drag_view_));
+  drag_preview_ =
+      drag_widget_->SetContentsView(std::make_unique<DeskPreviewView>(
+          views::Button::PressedCallback(), drag_view_));
 
   // Set the bounds of dragged preview to drag proxy.
   drag_widget_->SetBounds(drag_view_->GetPreviewBoundsInScreen());
@@ -89,6 +89,9 @@ void DeskDragProxy::InitAndScaleAndMoveToX(float location_screen_x) {
       proxy_bounds_in_screen.CenterPoint() -
           proxy_bounds_in_screen.origin().OffsetFromOrigin(),
       scale_transform));
+
+  // When being dragged, the shadow elevation will be increased.
+  drag_preview_->shadow()->SetType(DeskPreviewView::kDraggedShadowType);
 
   // Perform Moving.
   DragToX(location_screen_x);
@@ -123,6 +126,9 @@ void DeskDragProxy::SnapBackToDragView() {
   settings.SetTweenType(gfx::Tween::ACCEL_LIN_DECEL_60);
   settings.AddObserver(this);
   layer->SetTransform(gfx::Transform());
+
+  // Reset the shadow elevation when drag ends.
+  drag_preview_->shadow()->SetType(DeskPreviewView::kDefaultShadowType);
 
   state_ = State::kSnappingBack;
 }

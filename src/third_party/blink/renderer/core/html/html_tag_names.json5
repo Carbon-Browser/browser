@@ -290,7 +290,7 @@
     },
     {
       name: "main",
-      interfaceName: "HTMLElement",
+      interfaceName: "HTMLMainElement",
     },
     "map",
     {
@@ -299,7 +299,10 @@
     },
     "marquee",
     "menu",
-    "meta",
+    {
+      name: "meta",
+      constructorNeedsCreateElementFlags: true,
+    },
     {
       name: "meter",
       interfaceName: "HTMLMeterElement",
@@ -358,11 +361,6 @@
     {
       name: "plaintext",
       interfaceName: "HTMLElement",
-    },
-    {
-      name: "popup",
-      interfaceName: "HTMLPopupElement",
-      runtimeEnabled: "HTMLPopupElement",
     },
     {
       name: "portal",

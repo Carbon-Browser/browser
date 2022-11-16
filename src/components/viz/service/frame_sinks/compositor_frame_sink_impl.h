@@ -6,9 +6,10 @@
 #define COMPONENTS_VIZ_SERVICE_FRAME_SINKS_COMPOSITOR_FRAME_SINK_IMPL_H_
 
 #include <memory>
+#include <vector>
 
-#include "base/macros.h"
 #include "base/memory/read_only_shared_memory_region.h"
+#include "build/build_config.h"
 #include "components/viz/common/surfaces/frame_sink_bundle_id.h"
 #include "components/viz/common/surfaces/frame_sink_id.h"
 #include "components/viz/common/surfaces/local_surface_id.h"
@@ -35,6 +36,9 @@ class CompositorFrameSinkImpl : public mojom::CompositorFrameSink {
       mojo::PendingReceiver<mojom::CompositorFrameSink> receiver,
       mojo::PendingRemote<mojom::CompositorFrameSinkClient> client);
 
+  CompositorFrameSinkImpl(const CompositorFrameSinkImpl&) = delete;
+  CompositorFrameSinkImpl& operator=(const CompositorFrameSinkImpl&) = delete;
+
   ~CompositorFrameSinkImpl() override;
 
   // mojom::CompositorFrameSink:
@@ -57,6 +61,9 @@ class CompositorFrameSinkImpl : public mojom::CompositorFrameSink {
   void DidDeleteSharedBitmap(const SharedBitmapId& id) override;
   void InitializeCompositorFrameSinkType(
       mojom::CompositorFrameSinkType type) override;
+#if BUILDFLAG(IS_ANDROID)
+  void SetThreadIds(const std::vector<int32_t>& thread_ids) override;
+#endif
 
  private:
   void SubmitCompositorFrameInternal(
@@ -76,8 +83,6 @@ class CompositorFrameSinkImpl : public mojom::CompositorFrameSink {
   // Must be destroyed before |compositor_frame_sink_client_|. This must never
   // change for the lifetime of CompositorFrameSinkImpl.
   const std::unique_ptr<CompositorFrameSinkSupport> support_;
-
-  DISALLOW_COPY_AND_ASSIGN(CompositorFrameSinkImpl);
 };
 
 }  // namespace viz

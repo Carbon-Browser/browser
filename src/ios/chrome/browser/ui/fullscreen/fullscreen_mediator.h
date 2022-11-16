@@ -7,7 +7,6 @@
 
 #import <Foundation/Foundation.h>
 
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #import "ios/chrome/browser/ui/fullscreen/fullscreen_animator.h"
@@ -30,6 +29,10 @@ class WebState;
 class FullscreenMediator : public FullscreenModelObserver {
  public:
   FullscreenMediator(FullscreenController* controller, FullscreenModel* model);
+
+  FullscreenMediator(const FullscreenMediator&) = delete;
+  FullscreenMediator& operator=(const FullscreenMediator&) = delete;
+
   ~FullscreenMediator() override;
 
   // Adds and removes FullscreenControllerObservers.
@@ -69,12 +72,12 @@ class FullscreenMediator : public FullscreenModelObserver {
   void FullscreenModelScrollEventEnded(FullscreenModel* model) override;
   void FullscreenModelWasReset(FullscreenModel* model) override;
 
-  // Sets up |animator_| with |style|, notifies FullscreenControllerObservers,
+  // Sets up `animator_` with `style`, notifies FullscreenControllerObservers,
   // and starts the animation.
   void AnimateWithStyle(FullscreenAnimatorStyle style);
 
   // Stops the current scroll end animation if one is in progress.  If
-  // |update_model| is true, the FullscreenModel will be updated with the active
+  // `update_model` is true, the FullscreenModel will be updated with the active
   // animator's current progress value.
   void StopAnimating(bool update_model);
 
@@ -97,8 +100,6 @@ class FullscreenMediator : public FullscreenModelObserver {
   base::ObserverList<FullscreenControllerObserver>::Unchecked observers_;
 
   base::WeakPtrFactory<FullscreenMediator> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(FullscreenMediator);
 };
 
 #endif  // IOS_CHROME_BROWSER_UI_FULLSCREEN_FULLSCREEN_MEDIATOR_H_

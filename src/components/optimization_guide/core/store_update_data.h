@@ -7,7 +7,6 @@
 
 #include <string>
 
-#include "base/macros.h"
 #include "base/sequence_checker.h"
 #include "base/time/time.h"
 #include "base/version.h"
@@ -17,7 +16,6 @@
 namespace optimization_guide {
 namespace proto {
 class Hint;
-class HostModelFeatures;
 class PredictionModel;
 class StoreEntry;
 }  // namespace proto
@@ -25,10 +23,12 @@ class StoreEntry;
 using EntryVector =
     leveldb_proto::ProtoDatabase<proto::StoreEntry>::KeyEntryVector;
 
-// Holds hint, prediction model, or host model features data for updating the
-// OptimizationGuideStore.
+// Holds hint or prediction model data for updating the OptimizationGuideStore.
 class StoreUpdateData {
  public:
+  StoreUpdateData(const StoreUpdateData&) = delete;
+  StoreUpdateData& operator=(const StoreUpdateData&) = delete;
+
   ~StoreUpdateData();
 
   // Creates an update data object for a component hint update.
@@ -41,12 +41,6 @@ class StoreUpdateData {
 
   // Creates an update data object for a prediction model update.
   static std::unique_ptr<StoreUpdateData> CreatePredictionModelStoreUpdateData(
-      base::Time expiry_time);
-
-  // Creates an update data object for a host model features update.
-  static std::unique_ptr<StoreUpdateData>
-  CreateHostModelFeaturesStoreUpdateData(
-      base::Time host_model_features_update_time,
       base::Time expiry_time);
 
   // Returns the component version of a component hint update.
@@ -64,10 +58,6 @@ class StoreUpdateData {
   // called, |hint| is no longer valid.
   void MoveHintIntoUpdateData(proto::Hint&& hint);
 
-  // Copies |host_model_features| into this update data.
-  void CopyHostModelFeaturesIntoUpdateData(
-      const proto::HostModelFeatures& host_model_features);
-
   // Copies |prediction_model| into this update data.
   void CopyPredictionModelIntoUpdateData(
       const proto::PredictionModel& prediction_model);
@@ -79,8 +69,6 @@ class StoreUpdateData {
   StoreUpdateData(absl::optional<base::Version> component_version,
                   absl::optional<base::Time> fetch_update_time,
                   absl::optional<base::Time> expiry_time);
-  StoreUpdateData(base::Time host_model_features_update_time,
-                  base::Time expiry_time);
   explicit StoreUpdateData(base::Time expiry_time);
 
   // The component version of the update data for a component update.
@@ -100,8 +88,6 @@ class StoreUpdateData {
   std::unique_ptr<EntryVector> entries_to_save_;
 
   SEQUENCE_CHECKER(sequence_checker_);
-
-  DISALLOW_COPY_AND_ASSIGN(StoreUpdateData);
 };
 
 }  // namespace optimization_guide

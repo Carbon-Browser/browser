@@ -80,16 +80,14 @@ bool SerialPolicyAllowedPorts::HasPortPermission(
 void SerialPolicyAllowedPorts::LoadAllowAllPortsForUrlsPolicy() {
   all_ports_policy_.clear();
 
-  const base::Value* pref_value = pref_change_registrar_.prefs()->Get(
-      prefs::kManagedSerialAllowAllPortsForUrls);
-  if (!pref_value) {
-    return;
-  }
+  const base::Value::List& pref_list =
+      pref_change_registrar_.prefs()->GetValueList(
+          prefs::kManagedSerialAllowAllPortsForUrls);
 
   // The pref value has already been validated by the policy handler, so it is
   // safe to assume that |pref_value| follows the policy template.
   std::vector<url::Origin> urls;
-  for (const auto& url_value : pref_value->GetList()) {
+  for (const auto& url_value : pref_list) {
     GURL url(url_value.GetString());
     if (!url.is_valid()) {
       continue;
@@ -105,20 +103,18 @@ void SerialPolicyAllowedPorts::LoadAllowUsbDevicesForUrlsPolicy() {
   usb_device_policy_.clear();
   usb_vendor_policy_.clear();
 
-  const base::Value* pref_value = pref_change_registrar_.prefs()->Get(
-      prefs::kManagedSerialAllowUsbDevicesForUrls);
-  if (!pref_value) {
-    return;
-  }
+  const base::Value::List& pref_list =
+      pref_change_registrar_.prefs()->GetValueList(
+          prefs::kManagedSerialAllowUsbDevicesForUrls);
 
   // The pref value has already been validated by the policy handler, so it is
   // safe to assume that |pref_value| follows the policy template.
-  for (const auto& item : pref_value->GetList()) {
+  for (const auto& item : pref_list) {
     const base::Value* urls_value = item.FindKey(kPrefUrlsKey);
     DCHECK(urls_value);
 
     std::vector<url::Origin> urls;
-    for (const auto& url_value : urls_value->GetList()) {
+    for (const auto& url_value : urls_value->GetListDeprecated()) {
       GURL url(url_value.GetString());
       if (!url.is_valid()) {
         continue;
@@ -133,7 +129,7 @@ void SerialPolicyAllowedPorts::LoadAllowUsbDevicesForUrlsPolicy() {
 
     const base::Value* devices_value = item.FindKey(kPrefDevicesKey);
     DCHECK(devices_value);
-    for (const auto& port_value : devices_value->GetList()) {
+    for (const auto& port_value : devices_value->GetListDeprecated()) {
       const base::Value* vendor_id_value = port_value.FindKey(kPrefVendorIdKey);
       DCHECK(vendor_id_value);
 

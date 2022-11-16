@@ -26,9 +26,15 @@ const char kChannel[] = "channel";
 // this option is not compatible with any other installer options.
 const char kConfigureUserSettings[] = "configure-user-settings";
 
+// Create shortcuts with the installer operation arg.
+const char kCreateShortcuts[] = "create-shortcuts";
+
 // The version number of an update containing critical fixes, for which an
 // in-use Chrome should be restarted ASAP.
 const char kCriticalUpdateVersion[] = "critical-update-version";
+
+// Deletes any existing DMToken from the registry.
+const char kDeleteDMToken[] = "delete-dmtoken";
 
 // Delete files that belong to old versions of Chrome from the install
 // directory.
@@ -38,8 +44,11 @@ const char kDeleteOldVersions[] = "delete-old-versions";
 // kUninstall, otherwise it is silently ignored.
 const char kDeleteProfile[] = "delete-profile";
 
-// Disable logging
+// Disable logging.
 const char kDisableLogging[] = "disable-logging";
+
+// Specifies the DM server URL to use with the rotate device key command.
+const char kDmServerUrl[] = "dm-server-url";
 
 // Prevent installer from launching Chrome after a successful first install.
 const char kDoNotLaunchChrome[] = "do-not-launch-chrome";
@@ -79,6 +88,9 @@ const char kInstallArchive[] = "install-archive";
 // Specify the file path of Chrome initial preference file.
 const char kInstallerData[] = "installerdata";
 
+// What install level to create shortcuts for, if "create-shortcuts" is present.
+const char kInstallLevel[] = "install-level";
+
 // If present, specify file path to write logging info.
 const char kLogFile[] = "log-file";
 
@@ -91,9 +103,14 @@ const char kMakeChromeDefault[] = "make-chrome-default";
 // Tells installer to expect to be run as a subsidiary to an MSI.
 const char kMsi[] = "msi";
 
-// Useful only when used with --update-setup-exe, otherwise ignored. It
-// specifies the full path where updated setup.exe will be stored.
+// Useful only when used with --update-setup-exe; otherwise ignored. Specifies
+// the full path where the updated setup.exe will be written. Any other files
+// created in the indicated directory may be deleted by the caller after process
+// termination.
 const char kNewSetupExe[] = "new-setup-exe";
+
+// Specifies a nonce to use with the rotate device key command.
+const char kNonce[] = "nonce";
 
 // Notify the installer that the OS has been upgraded.
 const char kOnOsUpgrade[] = "on-os-upgrade";
@@ -140,6 +157,9 @@ const char kRemoveChromeRegistration[] = "remove-chrome-registration";
 // to support in-use updates. Also deletes opv key.
 const char kRenameChromeExe[] = "rename-chrome-exe";
 
+// Rotate the stored device trust signing key.
+const char kRotateDeviceTrustKey[] = "rotate-dtkey";
+
 // When we try to relaunch setup.exe as admin on Vista, we append this command
 // line flag so that we try the launch only once.
 const char kRunAsAdmin[] = "run-as-admin";
@@ -150,9 +170,6 @@ const char kSelfDestruct[] = "self-destruct";
 
 // Show the embedded EULA dialog.
 const char kShowEula[] = "show-eula";
-
-// Rotate the stored device trust signing key.
-const char kRotateDeviceTrustKey[] = "rotate-dtkey";
 
 // Saves the specified device management token to the registry.
 const char kStoreDMToken[] = "store-dmtoken";
@@ -209,6 +226,7 @@ const wchar_t kChromeProxyOldExe[] = L"old_chrome_proxy.exe";
 const wchar_t kCmdOnOsUpgrade[] = L"on-os-upgrade";
 const wchar_t kCmdRotateDeviceTrustKey[] = L"rotate-dtkey";
 const wchar_t kCmdStoreDMToken[] = L"store-dmtoken";
+const wchar_t kCmdDeleteDMToken[] = L"delete-dmtoken";
 const wchar_t kEulaSentinelFile[] = L"EULA Accepted";
 const wchar_t kInstallBinaryDir[] = L"Application";
 const wchar_t kInstallerDir[] = L"Installer";
@@ -216,6 +234,7 @@ const wchar_t kInstallTempDir[] = L"Temp";
 const wchar_t kLnkExt[] = L".lnk";
 const wchar_t kNaClExe[] = L"nacl64.exe";
 const wchar_t kNotificationHelperExe[] = L"notification_helper.exe";
+const wchar_t kWerDll[] = L"chrome_wer.dll";
 
 // DowngradeVersion holds the version from which Chrome was downgraded. In case
 // of multiple downgrades (e.g., 75->74->73), it retains the highest version

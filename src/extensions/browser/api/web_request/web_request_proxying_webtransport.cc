@@ -4,7 +4,7 @@
 
 #include "extensions/browser/api/web_request/web_request_proxying_webtransport.h"
 
-#include "components/ukm/content/source_url_recorder.h"
+#include "base/memory/raw_ptr.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/web_contents.h"
@@ -12,6 +12,8 @@
 #include "extensions/browser/api/web_request/web_request_info.h"
 #include "extensions/browser/browser_context_keyed_api_factory.h"
 #include "extensions/browser/extension_navigation_ui_data.h"
+#include "services/metrics/public/cpp/ukm_source_id.h"
+#include "services/network/public/mojom/url_response_head.mojom.h"
 #include "services/network/public/mojom/web_transport.mojom.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
@@ -23,6 +25,21 @@ namespace {
 using network::mojom::WebTransportHandshakeClient;
 using CreateCallback =
     content::ContentBrowserClient::WillCreateWebTransportCallback;
+
+net::HttpRequestHeaders GetRequestHeaders() {
+  // We don't attach certain headers:
+  //  1. We cannot store pseudo-headers to `request_headers_` and they can be
+  //     accessed via other ways, e.g., "url" for :scheme, :authority and
+  //     :path.
+  //  2. We don't attach the "origin" header, to be aligned with the usual
+  //     loading case. Extension authors can use the "initiator" property to
+  //     observe it.
+  auto headers = net::HttpRequestHeaders();
+  // TODO(1240935): Share the code with
+  // DedicatedWebTransportHttp3Client::DoSendRequest.
+  headers.SetHeader("sec-webtransport-http3-draft02", "1");
+  return headers;
+}
 
 class WebTransportHandshakeProxy : public WebRequestAPI::Proxy,
                                    public WebTransportHandshakeClient {
@@ -51,11 +68,14 @@ class WebTransportHandshakeProxy : public WebRequestAPI::Proxy,
 
   void Start() {
     bool should_collapse_initiator = false;
+    // Since WebTransport doesn't support redirect, 'redirect_url' is ignored
+    // even if extensions assigned it.
     const int result =
         ExtensionWebRequestEventRouter::GetInstance()->OnBeforeRequest(
             browser_context_, &info_,
-            base::BindOnce(&WebTransportHandshakeProxy::StartProxyWhenNoError,
-                           base::Unretained(this)),
+            base::BindOnce(
+                &WebTransportHandshakeProxy::OnBeforeRequestCompleted,
+                base::Unretained(this)),
             &redirect_url_, &should_collapse_initiator);
     // It doesn't make sense to collapse WebTransport requests since they won't
     // be associated with a DOM element.
@@ -65,34 +85,59 @@ class WebTransportHandshakeProxy : public WebRequestAPI::Proxy,
       return;
 
     DCHECK(result == net::OK || result == net::ERR_BLOCKED_BY_CLIENT) << result;
-    StartProxyWhenNoError(result);
+    OnBeforeRequestCompleted(result);
   }
 
-  // Below two events should be triggered before proxing.
-  // TODO(crbug.com/1240935): Implement onBeforeSendHeaders
-  // TODO(crbug.com/1240935): Implement onSendHeaders
-
-  void StartProxyWhenNoError(int error_code) {
+  void OnBeforeRequestCompleted(int error_code) {
     if (error_code != net::OK) {
-      auto webtransport_error = network::mojom::WebTransportError::New(
-          error_code, quic::QUIC_INTERNAL_ERROR, "Blocked by an extension",
-          false);
-      std::move(create_callback_)
-          .Run(std::move(handshake_client_), std::move(webtransport_error));
-      OnCompleted(error_code);
+      OnError(error_code);
       // `this` is deleted.
       return;
     }
 
+    request_headers_ = GetRequestHeaders();
+    const int result =
+        ExtensionWebRequestEventRouter::GetInstance()->OnBeforeSendHeaders(
+            browser_context_, &info_,
+            base::BindOnce(
+                &WebTransportHandshakeProxy::OnBeforeSendHeadersCompleted,
+                base::Unretained(this)),
+            &request_headers_);
+    if (result == net::ERR_IO_PENDING)
+      return;
+
+    DCHECK(result == net::OK || result == net::ERR_BLOCKED_BY_CLIENT) << result;
+    // See the comments in the OnBeforeSendHeadersCompleted to see why
+    // we pass empty values.
+    OnBeforeSendHeadersCompleted({}, {}, result);
+  }
+
+  void OnBeforeSendHeadersCompleted(
+      const std::set<std::string>& removed_headers,
+      const std::set<std::string>& set_headers,
+      int error_code) {
+    if (error_code != net::OK) {
+      OnError(error_code);
+      // `this` is deleted.
+      return;
+    }
+
+    // We don't allow extension authors to add/remove/change request headers,
+    // as that may lead to a WebTransport over HTTP/3 protocol violation. We may
+    // change this policy once https://github.com/w3c/webtransport/issues/263 is
+    // resolved.
+    ExtensionWebRequestEventRouter::GetInstance()->OnSendHeaders(
+        browser_context_, &info_, GetRequestHeaders());
+
     // Set up proxing.
     remote_.Bind(std::move(handshake_client_));
     remote_.set_disconnect_handler(
-        base::BindOnce(&WebTransportHandshakeProxy::OnCompleted,
+        base::BindOnce(&WebTransportHandshakeProxy::OnError,
                        base::Unretained(this), net::ERR_ABORTED));
     std::move(create_callback_)
         .Run(receiver_.BindNewPipeAndPassRemote(), absl::nullopt);
     receiver_.set_disconnect_handler(
-        base::BindOnce(&WebTransportHandshakeProxy::OnCompleted,
+        base::BindOnce(&WebTransportHandshakeProxy::OnError,
                        base::Unretained(this), net::ERR_ABORTED));
   }
 
@@ -100,37 +145,88 @@ class WebTransportHandshakeProxy : public WebRequestAPI::Proxy,
   // Proxing should be finished with either of below functions.
   void OnConnectionEstablished(
       mojo::PendingRemote<network::mojom::WebTransport> transport,
-      mojo::PendingReceiver<network::mojom::WebTransportClient> client)
+      mojo::PendingReceiver<network::mojom::WebTransportClient> client,
+      const scoped_refptr<net::HttpResponseHeaders>& response_headers)
       override {
-    remote_->OnConnectionEstablished(std::move(transport), std::move(client));
+    receiver_.reset();
+    pending_transport_ = std::move(transport);
+    pending_client_ = std::move(client);
+    response_headers_ = response_headers;
+    // Since WebTransport doesn't support redirect, 'redirect_url' is ignored
+    // even if extensions assigned it.
+    const int result =
+        ExtensionWebRequestEventRouter::GetInstance()->OnHeadersReceived(
+            browser_context_, &info_,
+            base::BindOnce(
+                &WebTransportHandshakeProxy::OnHeadersReceivedCompleted,
+                base::Unretained(this)),
+            response_headers_.get(), &override_headers_, &redirect_url_);
 
-    OnCompleted(net::OK);
+    if (result == net::ERR_IO_PENDING)
+      return;
+
+    DCHECK(result == net::OK || result == net::ERR_BLOCKED_BY_CLIENT) << result;
+    OnHeadersReceivedCompleted(result);
+  }
+
+  void OnHeadersReceivedCompleted(int error_code) {
+    if (error_code != net::OK) {
+      OnError(error_code);
+      return;
+    }
+
+    network::mojom::URLResponseHead response;
+    response.headers =
+        override_headers_ ? override_headers_ : response_headers_;
+    DCHECK(response.headers);
+    // TODO(1250090): Assign actual server IP 'response';
+    response.remote_endpoint = net::IPEndPoint();
+    // Web transport doesn't use the http cache.
+    response.was_fetched_via_cache = false;
+    info_.AddResponseInfoFromResourceResponse(response);
+
+    ExtensionWebRequestEventRouter::GetInstance()->OnResponseStarted(
+        browser_context_, &info_, net::OK);
+
+    remote_->OnConnectionEstablished(std::move(pending_transport_),
+                                     std::move(pending_client_),
+                                     response.headers);
+
+    OnCompleted();
     // `this` is deleted.
   }
+
   void OnHandshakeFailed(
       const absl::optional<net::WebTransportError>& error) override {
     remote_->OnHandshakeFailed(error);
 
     int error_code = net::ERR_ABORTED;
     if (error.has_value()) {
-      int webtransport_error_code = error.value().net_error;
-      if (webtransport_error_code != net::OK)
-        error_code = webtransport_error_code;
+      error_code = error->net_error;
     }
-    OnCompleted(error_code);
+    OnError(error_code);
     // `this` is deleted.
   }
 
-  // TODO(crbug.com/1240935): Implement WebRequestAPI::onHeadersReceived
-  // TODO(crbug.com/1240935): Implement WebRequestAPI::onResponseStarted
-  // TODO(crbug.com/1240935): Implement WebRequestAPI::onCompleted
-
-  void OnCompleted(int error_code) {
-    if (error_code != net::OK) {
-      ExtensionWebRequestEventRouter::GetInstance()->OnErrorOccurred(
-          browser_context_, &info_, /*started=*/true, error_code);
+  void OnError(int error_code) {
+    DCHECK_NE(error_code, net::OK);
+    if (create_callback_) {
+      auto webtransport_error = network::mojom::WebTransportError::New(
+          error_code, quic::QUIC_INTERNAL_ERROR, "Blocked by an extension",
+          false);
+      std::move(create_callback_)
+          .Run(std::move(handshake_client_), std::move(webtransport_error));
     }
+    ExtensionWebRequestEventRouter::GetInstance()->OnErrorOccurred(
+        browser_context_, &info_, /*started=*/true, error_code);
 
+    proxies_.RemoveProxy(this);
+    // `this` is deleted.
+  }
+
+  void OnCompleted() {
+    ExtensionWebRequestEventRouter::GetInstance()->OnCompleted(browser_context_,
+                                                               &info_, net::OK);
     // Delete `this`.
     proxies_.RemoveProxy(this);
   }
@@ -140,47 +236,54 @@ class WebTransportHandshakeProxy : public WebRequestAPI::Proxy,
   // Weak reference to the ProxySet. This is safe as `proxies_` owns this
   // object.
   WebRequestAPI::ProxySet& proxies_;
-  content::BrowserContext* browser_context_;
+  raw_ptr<content::BrowserContext> browser_context_;
   WebRequestInfo info_;
+  net::HttpRequestHeaders request_headers_;
   GURL redirect_url_;
   mojo::Remote<WebTransportHandshakeClient> remote_;
   mojo::Receiver<WebTransportHandshakeClient> receiver_{this};
+  scoped_refptr<net::HttpResponseHeaders> response_headers_;
+  scoped_refptr<net::HttpResponseHeaders> override_headers_;
+  mojo::PendingRemote<network::mojom::WebTransport> pending_transport_;
+  mojo::PendingReceiver<network::mojom::WebTransportClient> pending_client_;
+
   CreateCallback create_callback_;
 };
 
 }  // namespace
 
 void StartWebRequestProxyingWebTransport(
-    content::RenderFrameHost& frame,
+    content::RenderProcessHost& render_process_host,
+    int frame_routing_id,
     const GURL& url,
+    const url::Origin& initiator_origin,
     mojo::PendingRemote<WebTransportHandshakeClient> handshake_client,
     int64_t request_id,
     WebRequestAPI::ProxySet& proxies,
     content::ContentBrowserClient::WillCreateWebTransportCallback callback) {
   content::BrowserContext* browser_context =
-      frame.GetProcess()->GetBrowserContext();
+      render_process_host.GetBrowserContext();
 
   // Filling ResourceRequest fields required to create WebRequestInfoInitParams.
   network::ResourceRequest request;
   request.method = net::HttpRequestHeaders::kConnectMethod;
   request.url = url;
-  request.request_initiator = frame.GetLastCommittedOrigin();
+  request.request_initiator = initiator_origin;
 
-  const auto* web_contents = content::WebContents::FromRenderFrameHost(&frame);
+  const int process_id = render_process_host.GetID();
+  content::RenderFrameHost* frame =
+      content::RenderFrameHost::FromID(process_id, frame_routing_id);
   const ukm::SourceIdObj& ukm_source_id =
-      web_contents ? ukm::SourceIdObj::FromInt64(
-                         ukm::GetSourceIdForWebContentsDocument(web_contents))
-                   : ukm::kInvalidSourceIdObj;
+      frame ? ukm::SourceIdObj::FromInt64(frame->GetPageUkmSourceId())
+            : ukm::kInvalidSourceIdObj;
 
-  WebRequestInfoInitParams params = WebRequestInfoInitParams(
-      request_id, frame.GetProcess()->GetID(), frame.GetRoutingID(),
-      // TODO(crbug.com/1243521): Set appropriate view_routing_id.
-      /*navigation_ui_data=*/nullptr, /*view_routing_id=*/MSG_ROUTING_NONE,
-      request,
-      /*is_download=*/false,
-      /*is_async=*/true,
-      /*is_service_worker_script=*/false,
-      /*navigation_id=*/absl::nullopt, ukm_source_id);
+  WebRequestInfoInitParams params =
+      WebRequestInfoInitParams(request_id, process_id, frame_routing_id,
+                               /*navigation_ui_data=*/nullptr, request,
+                               /*is_download=*/false,
+                               /*is_async=*/true,
+                               /*is_service_worker_script=*/false,
+                               /*navigation_id=*/absl::nullopt, ukm_source_id);
   params.web_request_type = WebRequestResourceType::WEB_TRANSPORT;
 
   auto proxy = std::make_unique<WebTransportHandshakeProxy>(

@@ -37,6 +37,10 @@ namespace {
 class WeakPtrToWebContents : private content::WebContentsObserver {
  public:
   WeakPtrToWebContents() = default;
+
+  WeakPtrToWebContents(const WeakPtrToWebContents&) = delete;
+  WeakPtrToWebContents& operator=(const WeakPtrToWebContents&) = delete;
+
   ~WeakPtrToWebContents() override = default;
 
   void Set(int render_process_id, int render_frame_id) {
@@ -52,10 +56,6 @@ class WeakPtrToWebContents : private content::WebContentsObserver {
   content::WebContents* get() const {
     return WebContentsObserver::web_contents();
   }
-
- private:
-  // WebContentsObserver does not allow copy or assign.
-  DISALLOW_COPY_AND_ASSIGN(WeakPtrToWebContents);
 };
 
 }  // namespace
@@ -83,6 +83,23 @@ struct CaptureAccessHandlerBase::Session {
   gfx::NativeWindow target_window;
   std::unique_ptr<WeakPtrToWebContents> target_weak_web_contents;
 };
+
+CaptureAccessHandlerBase::PendingAccessRequest::PendingAccessRequest(
+    std::unique_ptr<DesktopMediaPicker> picker,
+    const content::MediaStreamRequest& request,
+    content::MediaResponseCallback callback,
+    std::u16string application_title,
+    bool should_display_notification,
+    bool is_allowlisted_extension)
+    : picker(std::move(picker)),
+      request(request),
+      callback(std::move(callback)),
+      application_title(std::move(application_title)),
+      should_display_notification(should_display_notification),
+      is_allowlisted_extension(is_allowlisted_extension) {}
+
+CaptureAccessHandlerBase::PendingAccessRequest::~PendingAccessRequest() =
+    default;
 
 CaptureAccessHandlerBase::CaptureAccessHandlerBase() = default;
 
@@ -139,6 +156,7 @@ void CaptureAccessHandlerBase::UpdateMediaRequestState(
     case blink::mojom::MediaStreamType::DISPLAY_VIDEO_CAPTURE:
     case blink::mojom::MediaStreamType::DISPLAY_AUDIO_CAPTURE:
     case blink::mojom::MediaStreamType::DISPLAY_VIDEO_CAPTURE_THIS_TAB:
+    case blink::mojom::MediaStreamType::DISPLAY_VIDEO_CAPTURE_SET:
       break;
     default:
       return;
@@ -165,8 +183,8 @@ void CaptureAccessHandlerBase::UpdateMediaRequestState(
 
 void CaptureAccessHandlerBase::UpdateExtensionTrusted(
     const content::MediaStreamRequest& request,
-    const extensions::Extension* extension) {
-  UpdateTrusted(request, IsExtensionAllowedForScreenCapture(extension) ||
+    bool is_allowlisted_extension) {
+  UpdateTrusted(request, is_allowlisted_extension ||
                              IsBuiltInFeedbackUI(request.security_origin));
 }
 
@@ -326,9 +344,5 @@ bool CaptureAccessHandlerBase::IsExtensionAllowedForScreenCapture(
 }
 
 bool CaptureAccessHandlerBase::IsBuiltInFeedbackUI(const GURL& origin) {
-  return
-      // Feedback Extension.
-      origin.spec() == "chrome-extension://gfdkimpbcpahaombhbimeihdjnejgicl/" ||
-      (origin.spec() == chrome::kChromeUIFeedbackURL &&
-       base::FeatureList::IsEnabled(features::kWebUIFeedback));
+  return origin.spec() == chrome::kChromeUIFeedbackURL;
 }

@@ -5,6 +5,8 @@
 #ifndef COMPONENTS_FEED_CORE_V2_PUBLIC_COMMON_ENUMS_H_
 #define COMPONENTS_FEED_CORE_V2_PUBLIC_COMMON_ENUMS_H_
 
+#include <iosfwd>
+
 // Unlike most code from feed/core, these enums are used by both iOS and
 // Android.
 namespace feed {
@@ -113,11 +115,61 @@ enum class FeedUserActionType {
   // After long-pressing on the feed and seeing the preview, the user tapped
   // on the preview.
   kTappedDiscoverFeedPreview = 39,
+  // User tapped "Settings" link to open feed autoplay settings.
+  kOpenedAutoplaySettings = 40,
+  // User tapped "Add to Reading List" in the context menu.
+  kTappedAddToReadingList = 41,
+  // User tapped "Manage" icon to open the manage intestitial.
+  kTappedManage = 42,
+  // User tapped "Hidden" in the manage intestitial.
+  kTappedManageHidden = 43,
+  // User tapped the "Follow" button on the main menu. (Android)
+  // User tapped the "Follow" option on the context menu. (IOS)
+  kTappedFollowButton = 44,
+  // User tapped on the Discover feed from the feed header.
+  kDiscoverFeedSelected = 45,
+  // User tapped on the Following feed from the feed header.
+  kFollowingFeedSelected = 46,
+  // User tapped the "Unfollow" option on the context menu.
+  kTappedUnfollowButton = 47,
+  // User action caused a follow succeed snackbar to be shown. User action not
+  // reported here. iOS only.
+  kShowFollowSucceedSnackbar = 48,
+  // User action caused a follow failed snackbar to be shown. User action not
+  // reported here. iOS only.
+  kShowFollowFailedSnackbar = 49,
+  // User action caused a unfollow succeed snackbar to be shown. User action not
+  // reported here. iOS only.
+  kShowUnfollowSucceedSnackbar = 50,
+  // User action caused a unfollow failed snackbar to be shown. User action not
+  // reported here. iOS only.
+  kShowUnfollowFailedSnackbar = 51,
+  // User tapped to go to feed using the snackbar 'go to feed' option.
+  kTappedGoToFeedOnSnackbar = 52,
+  // User tapped the Crow button in the context menu.
+  kTappedCrowButton = 53,
+  // User action caused a first follow sheet to be shown. User action not
+  // reported here. iOS only.
+  kFirstFollowSheetShown = 54,
+  // User tapped the "Go To Feed" button on the first follow sheet. (IOS)
+  kFirstFollowSheetTappedGoToFeed = 55,
+  // User tapped the "Got It" button on the first follow sheet. (IOS)
+  kFirstFollowSheetTappedGotIt = 56,
+  // Page load caused a Follow Recommendation IPH to be shown. User action not
+  // reported here. iOS only.
+  kFollowRecommendationIPHShown = 57,
 
-  kMaxValue = kTappedDiscoverFeedPreview,
+  kMaxValue = kFollowRecommendationIPHShown,
 };
 
-// The requested order of the Feed content.
+// For testing and debugging only.
+std::ostream& operator<<(std::ostream& out, FeedUserActionType value);
+
+// Values for the UMA
+// ContentSuggestions.Feed.WebFeed.RefreshContentOrder histogram.
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused. This must be kept in sync with
+// FeedContentOrder in enums.xml.
 // GENERATED_JAVA_ENUM_PACKAGE: org.chromium.chrome.browser.feed.v2
 enum class ContentOrder : int {
   // Content order is not specified.
@@ -126,6 +178,8 @@ enum class ContentOrder : int {
   kGrouped = 1,
   // Content is ungrouped, and arranged in reverse chronological order.
   kReverseChron = 2,
+
+  kMaxValue = kReverseChron,
 };
 
 }  // namespace feed

@@ -10,7 +10,8 @@
 #include "ash/assistant/model/assistant_notification_model.h"
 #include "ash/assistant/model/assistant_notification_model_observer.h"
 #include "base/bind.h"
-#include "chromeos/services/assistant/public/cpp/assistant_service.h"
+#include "base/time/time.h"
+#include "chromeos/ash/services/assistant/public/cpp/assistant_service.h"
 
 namespace ash {
 
@@ -41,6 +42,10 @@ class AssistantNotificationExpiryMonitor::Observer
  public:
   explicit Observer(AssistantNotificationExpiryMonitor* monitor)
       : monitor_(monitor) {}
+
+  Observer(const Observer&) = delete;
+  Observer& operator=(const Observer&) = delete;
+
   ~Observer() override = default;
 
   void OnNotificationAdded(const AssistantNotification& notification) override {
@@ -63,8 +68,6 @@ class AssistantNotificationExpiryMonitor::Observer
 
  private:
   AssistantNotificationExpiryMonitor* const monitor_;
-
-  DISALLOW_COPY_AND_ASSIGN(Observer);
 };
 
 AssistantNotificationExpiryMonitor::AssistantNotificationExpiryMonitor(

@@ -9,10 +9,14 @@
 
 namespace web_app {
 
+extern const char kCalculatorAppId[];
 extern const char kCameraAppId[];
 extern const char kCanvasAppId[];
+extern const char kCloudGamingPartnerPlatform[];
+extern const char kCroshAppId[];
 extern const char kCursiveAppId[];
 extern const char kDiagnosticsAppId[];
+extern const char kFirmwareUpdateAppId[];
 extern const char kGmailAppId[];
 extern const char kGoogleCalendarAppId[];
 extern const char kGoogleChatAppId[];
@@ -21,16 +25,18 @@ extern const char kGoogleDriveAppId[];
 extern const char kGoogleKeepAppId[];
 extern const char kGoogleMapsAppId[];
 extern const char kGoogleMeetAppId[];
+extern const char kGoogleMoviesAppId[];
 extern const char kGoogleNewsAppId[];
 extern const char kGoogleSheetsAppId[];
 extern const char kGoogleSlidesAppId[];
 extern const char kHelpAppId[];
 extern const char kMediaAppId[];
-extern const char kMediaAppAudioId[];
 extern const char kMessagesAppId[];
+extern const char kMessagesDogfoodDeprecatedAppId[];
 extern const char kMockSystemAppId[];
 extern const char kOsFeedbackAppId[];
 extern const char kOsSettingsAppId[];
+extern const char kPersonalizationAppId[];
 extern const char kPlayBooksAppId[];
 extern const char kPrintManagementAppId[];
 extern const char kScanningAppId[];
@@ -42,6 +48,10 @@ extern const char kStadiaAppId[];
 extern const char kYoutubeAppId[];
 extern const char kYoutubeMusicAppId[];
 extern const char kYoutubeTVAppId[];
+
+#if !defined(OFFICIAL_BUILD)
+extern const char kSampleSystemWebAppId[];
+#endif  // !defined(OFFICIAL_BUILD)
 
 bool IsSystemAppIdWithFileHandlers(base::StringPiece id);
 

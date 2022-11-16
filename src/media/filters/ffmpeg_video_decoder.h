@@ -5,11 +5,10 @@
 #ifndef MEDIA_FILTERS_FFMPEG_VIDEO_DECODER_H_
 #define MEDIA_FILTERS_FFMPEG_VIDEO_DECODER_H_
 
-#include <list>
 #include <memory>
 
 #include "base/callback.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/sequence_checker.h"
 #include "media/base/supported_video_decoder_config.h"
@@ -33,6 +32,10 @@ class MEDIA_EXPORT FFmpegVideoDecoder : public VideoDecoder {
   static SupportedVideoDecoderConfigs SupportedConfigsForWebRTC();
 
   explicit FFmpegVideoDecoder(MediaLog* media_log);
+
+  FFmpegVideoDecoder(const FFmpegVideoDecoder&) = delete;
+  FFmpegVideoDecoder& operator=(const FFmpegVideoDecoder&) = delete;
+
   ~FFmpegVideoDecoder() override;
 
   // Allow decoding of individual NALU. Entire frames are required by default.
@@ -76,7 +79,7 @@ class MEDIA_EXPORT FFmpegVideoDecoder : public VideoDecoder {
 
   SEQUENCE_CHECKER(sequence_checker_);
 
-  MediaLog* const media_log_;
+  const raw_ptr<MediaLog> media_log_;
 
   DecoderState state_ = DecoderState::kUninitialized;
 
@@ -94,8 +97,6 @@ class MEDIA_EXPORT FFmpegVideoDecoder : public VideoDecoder {
   bool force_allocation_error_ = false;
 
   std::unique_ptr<FFmpegDecodingLoop> decoding_loop_;
-
-  DISALLOW_COPY_AND_ASSIGN(FFmpegVideoDecoder);
 };
 
 }  // namespace media

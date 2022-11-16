@@ -8,7 +8,7 @@
 
 #include "base/check_op.h"
 #include "base/compiler_specific.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/numerics/math_constants.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
@@ -25,6 +25,10 @@ namespace {
 class DisconnectWindowGtk : public HostWindow {
  public:
   DisconnectWindowGtk();
+
+  DisconnectWindowGtk(const DisconnectWindowGtk&) = delete;
+  DisconnectWindowGtk& operator=(const DisconnectWindowGtk&) = delete;
+
   ~DisconnectWindowGtk() override;
 
   // HostWindow overrides.
@@ -59,14 +63,12 @@ class DisconnectWindowGtk : public HostWindow {
 
   GtkWidget* disconnect_window_;
   GtkWidget* message_;
-  GtkWidget* button_;
+  raw_ptr<GtkWidget> button_;
 
   // Used to distinguish resize events from other types of "configure-event"
   // notifications.
   int current_width_;
   int current_height_;
-
-  DISALLOW_COPY_AND_ASSIGN(DisconnectWindowGtk);
 };
 
 // Helper function for creating a rectangular path with rounded corners, as

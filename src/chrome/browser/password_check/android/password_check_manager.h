@@ -5,7 +5,9 @@
 #ifndef CHROME_BROWSER_PASSWORD_CHECK_ANDROID_PASSWORD_CHECK_MANAGER_H_
 #define CHROME_BROWSER_PASSWORD_CHECK_ANDROID_PASSWORD_CHECK_MANAGER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/strings/string_piece_forward.h"
 #include "chrome/browser/password_check/android/password_check_ui_status.h"
@@ -18,6 +20,7 @@
 #include "components/password_manager/core/browser/bulk_leak_check_service_interface.h"
 #include "components/password_manager/core/browser/password_scripts_fetcher.h"
 #include "components/password_manager/core/browser/ui/bulk_leak_check_service_adapter.h"
+#include "components/password_manager/core/browser/ui/credential_ui_entry.h"
 #include "components/password_manager/core/browser/ui/insecure_credentials_manager.h"
 #include "components/password_manager/core/browser/ui/saved_passwords_presenter.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -38,9 +41,9 @@ class PasswordCheckManager
                                                 int remaining_in_queue) = 0;
   };
 
-  struct CompromisedCredentialForUI : password_manager::CredentialWithPassword {
+  struct CompromisedCredentialForUI : password_manager::CredentialUIEntry {
     explicit CompromisedCredentialForUI(
-        const password_manager::CredentialWithPassword& credential);
+        const password_manager::CredentialUIEntry& credential_entry);
 
     CompromisedCredentialForUI(const CompromisedCredentialForUI& other);
     CompromisedCredentialForUI(CompromisedCredentialForUI&& other);
@@ -175,11 +178,11 @@ class PasswordCheckManager
                         password_manager::IsLeaked is_leaked) override;
   void OnBulkCheckServiceShutDown() override;
 
-  // Turns a `CredentialWithPassword` into a `CompromisedCredentialForUI`,
+  // Turns a `CredentialUIEntry` into a `CompromisedCredentialForUI`,
   // getting suitable strings for all display elements (e.g. url, app name,
   // app package, username, etc.).
   CompromisedCredentialForUI MakeUICredential(
-      const password_manager::CredentialWithPassword& credential) const;
+      const password_manager::CredentialUIEntry& credential) const;
 
   // Converts the state retrieved from the check service into a state that
   // can be used by the UI to display appropriate messages.
@@ -191,10 +194,10 @@ class PasswordCheckManager
   // in the account if the quota limit was reached.
   bool CanUseAccountCheck() const;
 
-  // Returns true if the password scripts fetching (kPasswordScriptsFetching) is
-  // enabled. To have precise metrics about user actions on credentials with
-  // scripts, scripts are fetched only for the users who can start a script,
-  // i.e. sync users.
+  // Returns true if the password scripts fetching (kPasswordScriptsFetching or
+  // kPasswordDomainCapabilitiesFetching) is enabled. To have precise metrics
+  // about user actions on credentials with scripts, scripts are fetched only
+  // for the users who can start a script, i.e. sync users.
   bool ShouldFetchPasswordScripts() const;
 
   // Callback when PasswordScriptsFetcher's cache has been warmed up.
@@ -214,23 +217,23 @@ class PasswordCheckManager
 
   // Obsever being notified of UI-relevant events.
   // It must outlive `this`.
-  Observer* observer_ = nullptr;
+  raw_ptr<Observer> observer_ = nullptr;
 
   // The profile for which the passwords are checked.
-  Profile* profile_ = nullptr;
+  raw_ptr<Profile> profile_ = nullptr;
 
   // Object storing the progress of a running password check.
   std::unique_ptr<PasswordCheckProgress> progress_;
 
   // Handle to the password store, powering both `saved_passwords_presenter_`
   // and `insecure_credentials_manager_`.
-  scoped_refptr<password_manager::PasswordStore> password_store_ =
+  scoped_refptr<password_manager::PasswordStoreInterface> password_store_ =
       PasswordStoreFactory::GetForProfile(profile_,
                                           ServiceAccessType::EXPLICIT_ACCESS);
 
   // Used to check whether autofill assistant scripts are available for
   // the specified domain.
-  password_manager::PasswordScriptsFetcher* password_script_fetcher_ =
+  raw_ptr<password_manager::PasswordScriptsFetcher> password_script_fetcher_ =
       PasswordScriptsFetcherFactory::GetInstance()->GetForBrowserContext(
           profile_);
 
@@ -283,6 +286,9 @@ class PasswordCheckManager
       password_manager::BulkLeakCheckServiceInterface,
       password_manager::BulkLeakCheckServiceInterface::Observer>
       observed_bulk_leak_check_service_{this};
+
+  // Weak pointer factory for callback binding safety.
+  base::WeakPtrFactory<PasswordCheckManager> weak_ptr_factory_{this};
 };
 
 #endif  // CHROME_BROWSER_PASSWORD_CHECK_ANDROID_PASSWORD_CHECK_MANAGER_H_

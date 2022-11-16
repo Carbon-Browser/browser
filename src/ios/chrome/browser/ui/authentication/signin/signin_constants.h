@@ -58,14 +58,13 @@ extern NSString* const kWebSigninContinueAsButtonAccessibilityIdentifier;
 // consistency sheet.
 extern NSString* const kWebSigninSkipButtonAccessibilityIdentifier;
 
-// Action that is required to do to complete the sign-in. This action is in
-// charge of the SigninCoordinator's owner.
+// Action that is required to do to complete the sign-in, or instead of sign-in.
+// This action is in charge of the SigninCoordinator's owner.
 typedef NS_ENUM(NSUInteger, SigninCompletionAction) {
   // No action needed.
   SigninCompletionActionNone,
-  // The advanced settings sign-in view is needed to finish the sign-in.
-  // This case is only used for the first run sign-in.
-  SigninCompletionActionShowAdvancedSettingsSignin,
+  // The user tapped the manager, learn more, link and sign-in was cancelled.
+  SigninCompletionActionShowManagedLearnMore,
 };
 
 // Intent for TrustedVaultReauthenticationCoordinator to display either
@@ -81,12 +80,5 @@ typedef NS_ENUM(NSUInteger, SigninTrustedVaultDialogIntent) {
 // Max dismissal count for web sign-in consistency dialog (the dismissal value
 // is reset as soon as the user shows sign-in intent).
 extern const int kDefaultWebSignInDismissalCount;
-
-// Metrics to record the number of times the web sign-in is displayed.
-extern const char* kSigninAccountConsistencyPromoActionShownCount;
-// Metrics to record how many times the web sign-in has been displayed before
-// the user signs in. This value is based on
-// |prefs::kSigninBottomSheetShownCount|.
-extern const char* kSigninAccountConsistencyPromoActionSignedInCount;
 
 #endif  // IOS_CHROME_BROWSER_UI_AUTHENTICATION_SIGNIN_SIGNIN_CONSTANTS_H_

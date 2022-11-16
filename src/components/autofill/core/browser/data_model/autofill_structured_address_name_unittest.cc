@@ -168,6 +168,10 @@ TEST(AutofillStructuredName, ParseFullName) {
       // Name with multiple middle names.
       {"George Walker Junior Bush", "", "George", "Walker Junior", "Bush", "",
        "", "Bush"},
+      // Name with a middle name initial.
+      {"George W Bush", "", "George", "W", "Bush", "", "", "Bush"},
+      // Name with a middle name initial.
+      {"George W. Bush", "", "George", "W.", "Bush", "", "", "Bush"},
       // Name with a single middle name.
       {"George Walker Bush", "", "George", "Walker", "Bush", "", "", "Bush"},
       // Name without names.
@@ -1028,8 +1032,8 @@ TEST(AutofillStructuredName, MergeSubsetLastname_WithNonSpaceSeparators) {
   // After normalization, the two names should have a single-token-superset
   // relation.
   SortedTokenComparisonResult token_comparison_result =
-      CompareSortedTokens(name.ValueForComparisonForTesting(),
-                          subset_name.ValueForComparisonForTesting());
+      CompareSortedTokens(name.ValueForComparisonForTesting(subset_name),
+                          subset_name.ValueForComparisonForTesting(name));
   EXPECT_TRUE(token_comparison_result.IsSingleTokenSuperset());
 
   // Without normalization, the two names should be considered distinct.

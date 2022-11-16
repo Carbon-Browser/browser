@@ -8,19 +8,26 @@
 #include <atomic>
 
 #include "base/allocator/partition_allocator/page_allocator.h"
+#include "base/allocator/partition_allocator/partition_alloc_base/compiler_specific.h"
+#include "base/allocator/partition_allocator/partition_alloc_base/component_export.h"
 #include "base/allocator/partition_allocator/partition_alloc_forward.h"
 #include "base/allocator/partition_allocator/partition_direct_map_extent.h"
 #include "base/allocator/partition_allocator/partition_page.h"
 #include "base/allocator/partition_allocator/starscan/pcscan_scheduling.h"
-#include "base/base_export.h"
-#include "base/compiler_specific.h"
+#include "base/allocator/partition_allocator/tagging.h"
 
-#define PCSCAN_DISABLE_SAFEPOINTS 0
+// Double free detection comes with expensive cmpxchg (with the loop around it).
+// We currently disable it to improve the runtime.
+#define PA_STARSCAN_EAGER_DOUBLE_FREE_DETECTION_ENABLED 0
 
-namespace base {
+namespace partition_alloc {
+
+class StatsReporter;
+
 namespace internal {
 
-[[noreturn]] BASE_EXPORT NOINLINE NOT_TAIL_CALLED void DoubleFreeAttempt();
+[[noreturn]] PA_COMPONENT_EXPORT(PARTITION_ALLOC) PA_NOINLINE PA_NOT_TAIL_CALLED
+    void DoubleFreeAttempt();
 
 // PCScan (Probabilistic Conservative Scanning) is the algorithm that eliminates
 // use-after-free bugs by verifying that there are no pointers in memory which
@@ -33,7 +40,7 @@ namespace internal {
 // unreachable and therefore can be safely reclaimed.
 //
 // The driver class encapsulates the entire PCScan infrastructure.
-class BASE_EXPORT PCScan final {
+class PA_COMPONENT_EXPORT(PARTITION_ALLOC) PCScan final {
  public:
   using Root = PartitionRoot<ThreadSafe>;
   using SlotSpan = SlotSpanMetadata<ThreadSafe>;
@@ -52,18 +59,29 @@ class BASE_EXPORT PCScan final {
     kEager,
   };
 
-  // Based on the provided mode, PCScan will try to use a certain
-  // WriteProtector, if supported by the system.
-  enum class WantedWriteProtectionMode : uint8_t {
-    kDisabled,
-    kEnabled,
+  // Parameters used to initialize *Scan.
+  struct InitConfig {
+    // Based on the provided mode, PCScan will try to use a certain
+    // WriteProtector, if supported by the system.
+    enum class WantedWriteProtectionMode : uint8_t {
+      kDisabled,
+      kEnabled,
+    } write_protection = WantedWriteProtectionMode::kDisabled;
+
+    // Flag that enables safepoints that stop mutator execution and help
+    // scanning.
+    enum class SafepointMode : uint8_t {
+      kDisabled,
+      kEnabled,
+    } safepoint = SafepointMode::kDisabled;
   };
 
   PCScan(const PCScan&) = delete;
   PCScan& operator=(const PCScan&) = delete;
 
   // Initializes PCScan and prepares internal data structures.
-  static void Initialize(WantedWriteProtectionMode);
+  static void Initialize(InitConfig);
+  static bool IsInitialized();
 
   // Disable/reenable PCScan. Temporal disabling can be useful in CPU demanding
   // contexts.
@@ -80,26 +98,27 @@ class BASE_EXPORT PCScan final {
 
   // Registers a newly allocated super page for |root|.
   static void RegisterNewSuperPage(Root* root, uintptr_t super_page_base);
-  static void RegisterNewSuperPage(PartitionRoot<NotThreadSafe>* root,
-                                   uintptr_t super_page_base) {}
 
-  ALWAYS_INLINE static void MoveToQuarantine(void* ptr,
-                                             size_t usable_size,
-                                             size_t slot_size);
+  PA_ALWAYS_INLINE static void MoveToQuarantine(void* object,
+                                                size_t usable_size,
+                                                uintptr_t slot_start,
+                                                size_t slot_size);
 
   // Performs scanning unconditionally.
   static void PerformScan(InvocationMode invocation_mode);
   // Performs scanning only if a certain quarantine threshold was reached.
   static void PerformScanIfNeeded(InvocationMode invocation_mode);
   // Performs scanning with specified delay.
-  static void PerformDelayedScan(TimeDelta delay);
+  static void PerformDelayedScan(int64_t delay_in_microseconds);
 
+  // Enables safepoints in mutator threads.
+  static void EnableSafepoints();
   // Join scan from safepoint in mutator thread. As soon as PCScan is scheduled,
   // mutators can join PCScan helping out with clearing and scanning.
   static void JoinScanIfNeeded();
 
   // Checks if there is a PCScan task currently in progress.
-  ALWAYS_INLINE static bool IsInProgress();
+  PA_ALWAYS_INLINE static bool IsInProgress();
 
   // Sets process name (used for histograms). |name| must be a string literal.
   static void SetProcessName(const char* name);
@@ -122,10 +141,13 @@ class BASE_EXPORT PCScan final {
 
   inline static PCScanScheduler& scheduler();
 
+  // Registers reporting class.
+  static void RegisterStatsReporter(partition_alloc::StatsReporter* reporter);
+
  private:
   class PCScanThread;
   friend class PCScanTask;
-  friend class PartitionAllocPCScanTest;
+  friend class PartitionAllocPCScanTestBase;
   friend class PCScanInternal;
 
   enum class State : uint8_t {
@@ -139,9 +161,10 @@ class BASE_EXPORT PCScan final {
     kSweepingAndFinishing
   };
 
-  ALWAYS_INLINE static PCScan& Instance();
+  PA_ALWAYS_INLINE static PCScan& Instance();
 
-  ALWAYS_INLINE bool IsJoinable() const;
+  PA_ALWAYS_INLINE bool IsJoinable() const;
+  PA_ALWAYS_INLINE void SetJoinableIfSafepointEnabled(bool);
 
   inline constexpr PCScan();
 
@@ -152,22 +175,24 @@ class BASE_EXPORT PCScan final {
   static void FinishScanForTesting();
 
   // Reinitialize internal structures (e.g. card table).
-  static void ReinitForTesting(WantedWriteProtectionMode);
+  static void ReinitForTesting(InitConfig);
 
   size_t epoch() const { return scheduler_.epoch(); }
 
-  // CONSTINIT for fast access (avoiding static thread-safe initialization).
-  static PCScan instance_ CONSTINIT;
+  // PA_CONSTINIT for fast access (avoiding static thread-safe initialization).
+  static PCScan instance_ PA_CONSTINIT;
 
   PCScanScheduler scheduler_{};
   std::atomic<State> state_{State::kNotRunning};
+  std::atomic<bool> is_joinable_{false};
+  bool is_safepoint_enabled_{false};
   ClearType clear_type_{ClearType::kLazy};
 };
 
 // To please Chromium's clang plugin.
 constexpr PCScan::PCScan() = default;
 
-ALWAYS_INLINE PCScan& PCScan::Instance() {
+PA_ALWAYS_INLINE PCScan& PCScan::Instance() {
   // The instance is declared as a static member, not static local. The reason
   // is that we want to use the require_constant_initialization attribute to
   // avoid double-checked-locking which would otherwise have been introduced
@@ -176,26 +201,41 @@ ALWAYS_INLINE PCScan& PCScan::Instance() {
   return instance_;
 }
 
-ALWAYS_INLINE bool PCScan::IsInProgress() {
+PA_ALWAYS_INLINE bool PCScan::IsInProgress() {
   const PCScan& instance = Instance();
   return instance.state_.load(std::memory_order_relaxed) != State::kNotRunning;
 }
 
-ALWAYS_INLINE bool PCScan::IsJoinable() const {
-  // We can only join PCScan in the mutator if it's running and not sweeping.
+PA_ALWAYS_INLINE bool PCScan::IsJoinable() const {
   // This has acquire semantics since a mutator relies on the task being set up.
-  return state_.load(std::memory_order_acquire) == State::kScanning;
+  return is_joinable_.load(std::memory_order_acquire);
 }
 
-ALWAYS_INLINE void PCScan::JoinScanIfNeeded() {
+PA_ALWAYS_INLINE void PCScan::SetJoinableIfSafepointEnabled(bool value) {
+  if (!is_safepoint_enabled_) {
+    PA_DCHECK(!is_joinable_.load(std::memory_order_relaxed));
+    return;
+  }
+  // Release semantics is required to "publish" the change of the state so that
+  // the mutators can join scanning and expect the consistent state.
+  is_joinable_.store(value, std::memory_order_release);
+}
+
+PA_ALWAYS_INLINE void PCScan::EnableSafepoints() {
   PCScan& instance = Instance();
-  if (UNLIKELY(instance.IsJoinable()))
+  instance.is_safepoint_enabled_ = true;
+}
+
+PA_ALWAYS_INLINE void PCScan::JoinScanIfNeeded() {
+  PCScan& instance = Instance();
+  if (PA_UNLIKELY(instance.IsJoinable()))
     instance.JoinScan();
 }
 
-ALWAYS_INLINE void PCScan::MoveToQuarantine(void* ptr,
-                                            size_t usable_size,
-                                            size_t slot_size) {
+PA_ALWAYS_INLINE void PCScan::MoveToQuarantine(void* object,
+                                               size_t usable_size,
+                                               uintptr_t slot_start,
+                                               size_t slot_size) {
   PCScan& instance = Instance();
   if (instance.clear_type_ == ClearType::kEager) {
     // We need to distinguish between usable_size and slot_size in this context:
@@ -204,20 +244,24 @@ ALWAYS_INLINE void PCScan::MoveToQuarantine(void* ptr,
     // TODO(bikineev): If we start protecting quarantine memory, we can lose
     // double-free coverage (the check below). Consider performing the
     // double-free check before protecting if eager clearing becomes default.
-    SecureMemset(ptr, 0, usable_size);
+    SecureMemset(object, 0, usable_size);
   }
 
-  auto* state_bitmap = StateBitmapFromPointer(ptr);
+  auto* state_bitmap = StateBitmapFromAddr(slot_start);
 
   // Mark the state in the state bitmap as quarantined. Make sure to do it after
   // the clearing to avoid racing with *Scan Sweeper.
-  const bool succeeded = state_bitmap->Quarantine(
-      reinterpret_cast<uintptr_t>(ptr), instance.epoch());
-  if (UNLIKELY(!succeeded))
+  [[maybe_unused]] const bool succeeded =
+      state_bitmap->Quarantine(slot_start, instance.epoch());
+#if PA_STARSCAN_EAGER_DOUBLE_FREE_DETECTION_ENABLED
+  if (PA_UNLIKELY(!succeeded))
     DoubleFreeAttempt();
+#else
+  // The compiler is able to optimize cmpxchg to a lock-prefixed and.
+#endif
 
   const bool is_limit_reached = instance.scheduler_.AccountFreed(slot_size);
-  if (UNLIKELY(is_limit_reached)) {
+  if (PA_UNLIKELY(is_limit_reached)) {
     // Perform a quick check if another scan is already in progress.
     if (instance.IsInProgress())
       return;
@@ -232,6 +276,6 @@ inline PCScanScheduler& PCScan::scheduler() {
 }
 
 }  // namespace internal
-}  // namespace base
+}  // namespace partition_alloc
 
 #endif  // BASE_ALLOCATOR_PARTITION_ALLOCATOR_STARSCAN_PCSCAN_H_

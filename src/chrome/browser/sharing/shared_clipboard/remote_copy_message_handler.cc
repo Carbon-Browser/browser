@@ -11,7 +11,6 @@
 #include "base/callback_helpers.h"
 #include "base/guid.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/task/post_task.h"
 #include "base/task/thread_pool.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
@@ -52,8 +51,7 @@ constexpr size_t kMaxImageDownloadSize = 5 * 1024 * 1024;
 
 // The initial delay for the timer that detects clipboard writes. An exponential
 // backoff will double this value whenever the OneShotTimer reschedules.
-constexpr base::TimeDelta kInitialDetectionTimerDelay =
-    base::TimeDelta::FromMilliseconds(1);
+constexpr base::TimeDelta kInitialDetectionTimerDelay = base::Milliseconds(1);
 
 const net::NetworkTrafficAnnotationTag kTrafficAnnotation =
     net::DefineNetworkTrafficAnnotation("remote_copy_message_handler",
@@ -227,7 +225,7 @@ void RemoteCopyMessageHandler::OnURLLoadComplete(
   LogRemoteCopyReceivedImageSizeBeforeDecode(content->size());
 
   timer_ = base::ElapsedTimer();
-  ImageDecoder::Start(this, *content);
+  ImageDecoder::Start(this, std::move(*content));
 }
 
 void RemoteCopyMessageHandler::OnImageDecoded(const SkBitmap& image) {
@@ -278,7 +276,6 @@ void RemoteCopyMessageHandler::ShowNotification(const std::u16string& title,
                                                 const SkBitmap& image) {
   TRACE_EVENT0("sharing", "RemoteCopyMessageHandler::ShowNotification");
 
-  gfx::Image icon;
   message_center::RichNotificationData rich_notification_data;
   rich_notification_data.vector_small_image = &kSendTabToSelfIcon;
   rich_notification_data.renotify = true;
@@ -290,7 +287,7 @@ void RemoteCopyMessageHandler::ShowNotification(const std::u16string& title,
       l10n_util::GetStringFUTF16(
           IDS_SHARING_REMOTE_COPY_NOTIFICATION_DESCRIPTION,
           paste_accelerator.GetShortcutText()),
-      icon,
+      ui::ImageModel(),
       /*display_source=*/std::u16string(),
       /*origin_url=*/GURL(), message_center::NotifierId(),
       rich_notification_data,
@@ -315,7 +312,7 @@ void RemoteCopyMessageHandler::DetectWrite(
     return;
   }
 
-  if (elapsed > base::TimeDelta::FromSeconds(10))
+  if (elapsed > base::Seconds(10))
     return;
 
   // Unretained(this) is safe here because |this| owns |write_detection_timer_|.

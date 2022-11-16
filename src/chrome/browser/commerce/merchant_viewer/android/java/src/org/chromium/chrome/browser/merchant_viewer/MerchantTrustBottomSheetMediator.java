@@ -5,13 +5,18 @@
 package org.chromium.chrome.browser.merchant_viewer;
 
 import android.content.Context;
+import android.graphics.drawable.Drawable;
 import android.os.Handler;
 import android.view.ViewGroup;
 
 import androidx.annotation.DrawableRes;
 import androidx.annotation.VisibleForTesting;
+import androidx.appcompat.content.res.AppCompatResources;
 
-import org.chromium.chrome.browser.version.ChromeVersionInfo;
+import org.chromium.base.supplier.ObservableSupplier;
+import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.ui.favicon.FaviconHelper;
+import org.chromium.chrome.browser.ui.favicon.FaviconUtils;
 import org.chromium.chrome.tab_ui.R;
 import org.chromium.components.embedder_support.delegate.WebContentsDelegateAndroid;
 import org.chromium.components.embedder_support.util.UrlUtilitiesJni;
@@ -19,12 +24,14 @@ import org.chromium.components.embedder_support.view.ContentView;
 import org.chromium.components.security_state.ConnectionSecurityLevel;
 import org.chromium.components.security_state.SecurityStateModel;
 import org.chromium.components.thinwebview.ThinWebView;
+import org.chromium.components.version_info.VersionInfo;
 import org.chromium.content_public.browser.LoadUrlParams;
 import org.chromium.content_public.browser.NavigationHandle;
 import org.chromium.content_public.browser.RenderCoordinates;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.content_public.browser.WebContentsObserver;
 import org.chromium.content_public.common.ResourceRequestBody;
+import org.chromium.ui.UiUtils;
 import org.chromium.ui.base.ViewAndroidDelegate;
 import org.chromium.ui.base.WindowAndroid;
 import org.chromium.ui.modelutil.PropertyModel;
@@ -38,6 +45,9 @@ public class MerchantTrustBottomSheetMediator {
     private final WindowAndroid mWindowAndroid;
     private final MerchantTrustMetrics mMetrics;
     private final int mTopControlsHeightDp;
+    private final FaviconHelper mFaviconHelper;
+    private final int mFaviconSize;
+    private final ObservableSupplier<Profile> mProfileSupplier;
 
     private PropertyModel mToolbarModel;
     private WebContents mWebContents;
@@ -45,16 +55,22 @@ public class MerchantTrustBottomSheetMediator {
     private WebContentsDelegateAndroid mWebContentsDelegate;
     private WebContentsObserver mWebContentsObserver;
     private WebContents mWebContentsForTesting;
+    private Drawable mFaviconDrawableForTesting;
 
     /** Creates a new instance. */
-    MerchantTrustBottomSheetMediator(
-            Context context, WindowAndroid windowAndroid, MerchantTrustMetrics metrics) {
+    MerchantTrustBottomSheetMediator(Context context, WindowAndroid windowAndroid,
+            MerchantTrustMetrics metrics, ObservableSupplier<Profile> profileSupplier,
+            FaviconHelper faviconHelper) {
         mContext = context;
         mWindowAndroid = windowAndroid;
         mMetrics = metrics;
         mTopControlsHeightDp = (int) (mContext.getResources().getDimensionPixelSize(
                                               R.dimen.toolbar_height_no_shadow)
                 / mWindowAndroid.getDisplay().getDipScale());
+        mFaviconHelper = faviconHelper;
+        mFaviconSize =
+                mContext.getResources().getDimensionPixelSize(R.dimen.preview_tab_favicon_size);
+        mProfileSupplier = profileSupplier;
     }
 
     void setupSheetWebContents(ThinWebView thinWebView, PropertyModel toolbarModel) {
@@ -65,6 +81,8 @@ public class MerchantTrustBottomSheetMediator {
         createWebContents();
 
         mWebContentsObserver = new WebContentsObserver(mWebContents) {
+            private GURL mCurrentUrl;
+
             @Override
             public void loadProgressChanged(float progress) {
                 if (mToolbarModel != null) {
@@ -73,8 +91,20 @@ public class MerchantTrustBottomSheetMediator {
             }
 
             @Override
-            public void didStartNavigation(NavigationHandle navigation) {
+            public void didStartNavigationInPrimaryMainFrame(NavigationHandle navigation) {
                 mMetrics.recordNavigateLinkOnBottomSheet();
+                if (!navigation.isSameDocument() && (navigation.getUrl() != null)) {
+                    GURL url = navigation.getUrl();
+                    if (url.equals(mCurrentUrl)) return;
+                    mCurrentUrl = url;
+                    loadFavicon(url);
+                }
+            }
+
+            @Override
+            public void didStartNavigationNoop(NavigationHandle navigation) {
+                mMetrics.recordNavigateLinkOnBottomSheet();
+                if (!navigation.isInPrimaryMainFrame()) return;
             }
 
             @Override
@@ -115,7 +145,7 @@ public class MerchantTrustBottomSheetMediator {
             }
 
             @Override
-            public void loadingStateChanged(boolean toDifferentDocument) {
+            public void loadingStateChanged(boolean shouldShowLoadingUI) {
                 boolean isLoading = mWebContents != null && mWebContents.isLoading();
                 if (isLoading) {
                     if (mToolbarModel == null) return;
@@ -142,6 +172,8 @@ public class MerchantTrustBottomSheetMediator {
         thinWebView.attachWebContents(mWebContents, mWebContentView, mWebContentsDelegate);
     }
 
+    // This method should only be used for the first navigation before showing some content in the
+    // bottom sheet.
     void navigateToUrl(GURL url, String title) {
         assert isValidUrl(url) && mWebContents != null && mToolbarModel != null;
 
@@ -165,7 +197,7 @@ public class MerchantTrustBottomSheetMediator {
         mWebContentView = ContentView.createContentView(mContext, null, mWebContents);
         final ViewAndroidDelegate delegate =
                 ViewAndroidDelegate.createBasicDelegate(mWebContentView);
-        mWebContents.initialize(ChromeVersionInfo.getProductVersion(), delegate, mWebContentView,
+        mWebContents.initialize(VersionInfo.getProductVersion(), delegate, mWebContentView,
                 mWindowAndroid, WebContents.createDefaultInternalsHolder());
         WebContentsHelpers.setUserAgentOverride(mWebContents);
     }
@@ -207,12 +239,60 @@ public class MerchantTrustBottomSheetMediator {
         return 0;
     }
 
+    // This method is used to determine whether we want to show content in the bottom sheet and
+    // whether we want to use a Google icon if no favicon found for the url. When the definition of
+    // "valid" url changes, update the favicon rule if needed.
     private boolean isValidUrl(GURL url) {
-        return UrlUtilitiesJni.get().isGoogleDomainUrl(url.getSpec(), true);
+        return UrlUtilitiesJni.get().isGoogleDomainUrl(url.getSpec(), true)
+                || UrlUtilitiesJni.get().isGoogleSubDomainUrl(url.getSpec());
     }
 
     @VisibleForTesting
     void setWebContentsForTesting(WebContents webContents) {
         mWebContentsForTesting = webContents;
+    }
+
+    /**
+     * Generates a favicon for a given URL. If no favicon could be found or generated from
+     * the URL, a default favicon will be shown.
+     */
+    private void loadFavicon(GURL url) {
+        Profile profile = mProfileSupplier.get();
+        // TODO(crbug.com/1266143): {@link FaviconHelper#getLocalFaviconImageForURL} may return
+        // wrong non-null bitmap for the first navigation within bottom sheet, so we use Google icon
+        // directly for valid urls.
+        if (isValidUrl(url) || (profile == null)) {
+            mToolbarModel.set(BottomSheetToolbarProperties.FAVICON_ICON_DRAWABLE,
+                    getDefaultFaviconDrawable(url));
+            return;
+        }
+        mFaviconHelper.getLocalFaviconImageForURL(profile, url, mFaviconSize, (bitmap, iconUrl) -> {
+            Drawable drawable;
+            if (mFaviconDrawableForTesting != null) {
+                drawable = mFaviconDrawableForTesting;
+            } else if (bitmap != null) {
+                drawable =
+                        FaviconUtils.createRoundedBitmapDrawable(mContext.getResources(), bitmap);
+            } else {
+                drawable = getDefaultFaviconDrawable(url);
+            }
+            mToolbarModel.set(BottomSheetToolbarProperties.FAVICON_ICON_DRAWABLE, drawable);
+        });
+    }
+
+    // Used when we cannot find a favicon for the url. If url is valid, we use the Google icon.
+    // Otherwise, we use the default icon.
+    private Drawable getDefaultFaviconDrawable(GURL url) {
+        if (isValidUrl(url)) {
+            return AppCompatResources.getDrawable(mContext, R.drawable.ic_logo_googleg_24dp);
+        } else {
+            return UiUtils.getTintedDrawable(
+                    mContext, R.drawable.ic_globe_24dp, R.color.default_icon_color_tint_list);
+        }
+    }
+
+    @VisibleForTesting
+    void setFaviconDrawableForTesting(Drawable drawableForTesting) {
+        mFaviconDrawableForTesting = drawableForTesting;
     }
 }

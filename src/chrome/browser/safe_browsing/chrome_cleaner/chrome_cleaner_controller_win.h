@@ -9,7 +9,6 @@
 #include <vector>
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/observer_list_types.h"
 #include "chrome/browser/safe_browsing/chrome_cleaner/chrome_cleaner_scanner_results_win.h"
 #include "chrome/browser/safe_browsing/chrome_cleaner/sw_reporter_invocation_win.h"
@@ -18,18 +17,6 @@
 class Profile;
 
 namespace safe_browsing {
-
-// These values are used to send UMA information and are replicated in the
-// histograms.xml file, so the order MUST NOT CHANGE.
-enum CleanupStartedHistogramValue {
-  CLEANUP_STARTED_FROM_PROMPT_DIALOG = 0,
-  CLEANUP_STARTED_FROM_PROMPT_IN_SETTINGS = 1,
-
-  CLEANUP_STARTED_MAX,
-};
-
-// Records a SoftwareReporter.CleanupStarted histogram.
-void RecordCleanupStartedHistogram(CleanupStartedHistogramValue value);
 
 // Interface for the Chrome Cleaner controller class that keeps track of the
 // execution of the Chrome Cleaner and the various states through which the
@@ -112,6 +99,9 @@ class ChromeCleanerController {
   // Returns the global controller object.
   static ChromeCleanerController* GetInstance();
 
+  ChromeCleanerController(const ChromeCleanerController&) = delete;
+  ChromeCleanerController& operator=(const ChromeCleanerController&) = delete;
+
   virtual State state() const = 0;
   virtual IdleReason idle_reason() const = 0;
 
@@ -157,8 +147,9 @@ class ChromeCleanerController {
   // unless the user has manually requested a reporter run, in which case the
   // |SwReporterInvocationType::kUserInitiatedWithLogsAllowed| or
   // |SwReporterInvocationType::kUserInitiatedWithLogsDisallowed| types will be
-  // passed.
+  // passed. |prompt_seed| is the seed specified in the component manifest.
   virtual void OnSwReporterReady(
+      const std::string& prompt_seed,
       SwReporterInvocationSequence&& invocations) = 0;
 
   // Downloads the Chrome Cleaner binary, executes it and waits for the Cleaner
@@ -208,12 +199,12 @@ class ChromeCleanerController {
   // Returns true if cleaner reporting is managed by enterprise policy.
   virtual bool IsReportingManagedByPolicy(Profile* profile) = 0;
 
+  // Returns the prompt seed specified in the component manifest.
+  virtual std::string GetIncomingPromptSeed() = 0;
+
  protected:
   ChromeCleanerController();
   virtual ~ChromeCleanerController();
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ChromeCleanerController);
 };
 
 // Registers the reporter scan completion time preference.

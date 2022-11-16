@@ -5,7 +5,7 @@
 import("//build/config/chromeos/ui_mode.gni")
 import("//build/config/features.gni")
 import(
-    "//chrome/browser/resources/chromeos/accessibility/common/run_jsbundler.gni")
+    "//chrome/browser/resources/chromeos/accessibility/tools/run_jsbundler.gni")
 import("//chrome/common/features.gni")
 import("//chrome/test/base/js2gtest.gni")
 import("//testing/test.gni")
@@ -17,7 +17,25 @@ select_to_speak_out_dir =
     "$root_out_dir/resources/chromeos/accessibility/select_to_speak"
 
 group("build") {
-  deps = [ ":select_to_speak_copied_files" ]
+  deps = [
+    ":select_to_speak_copied_files",
+    ":select_to_speak_script",
+  ]
+}
+
+# Pulls in Closure-based common files and loads Select to Speak.
+run_jsbundler("select_to_speak_script") {
+  mode = "compressed_bundle"
+  modules = [
+    "//third_party/chromevox/third_party/closure-library/closure/goog/base.js",
+    "../common/automation_predicate.js",
+    "../common/automation_util.js",
+    "../common/constants.js",
+    "../common/key_code.js",
+    "../common/tree_walker.js",
+  ]
+  sources = [ "loader.js" ]
+  output_file = "$select_to_speak_out_dir/selectToSpeakScript.js"
 }
 
 # Instead of setting up one copy target for each subdirectory, use a script
@@ -26,10 +44,10 @@ run_jsbundler("select_to_speak_copied_files") {
   mode = "copy"
   dest_dir = select_to_speak_out_dir
   sources = [
-    "background.html",
     "checked.png",
     "earcons/null_selection.ogg",
     "input_handler.js",
+    "loader.js",
     "metrics_utils.js",
     "node_navigation_utils.js",
     "node_utils.js",
@@ -103,16 +121,17 @@ js2gtest("select_to_speak_extjs_tests") {
     "word_utils_unittest.js",
   ]
   gen_include_files = [
+    "../common/testing/accessibility_test_base.js",
     "../common/testing/callback_helper.js",
     "../common/testing/e2e_test_base.js",
-    "mock_storage.js",
-    "mock_tts.js",
+    "../common/testing/mock_storage.js",
+    "../common/testing/mock_tts.js",
     "select_to_speak_e2e_test_base.js",
     "pipe.jpg",
   ]
   extra_js_files = [
     "fake_settings_private.js",
-    "//chrome/test/data/webui/fake_chrome_event.js",
+    "fake_chrome_event.js",
   ]
 
   # The test base classes generate C++ code with these deps.
@@ -120,7 +139,8 @@ js2gtest("select_to_speak_extjs_tests") {
     "//ash",
     "//ash/keyboard/ui",
     "//base",
-    "//chrome/browser/chromeos",
+    "//chrome/browser/ash",
+    "//chrome/browser/ash/crosapi",
     "//chrome/common",
   ]
   defines = [ "HAS_OUT_OF_PROC_TEST_RUNNER" ]

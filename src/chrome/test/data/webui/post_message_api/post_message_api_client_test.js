@@ -9,9 +9,16 @@ const ServerOriginURLFilter = 'chrome://chrome-signin/';
 
 class TestRequestHandler extends RequestHandler {
   constructor() {
-    super();
+    super(null, ServerOriginURLFilter, ServerOriginURLFilter);
     this.registerMethod('isTestFinalized', this.isTestFinalized_.bind(this));
+    this.registerMethod(
+        'rejectedPromiseTest', this.rejectedPromiseTest_.bind(this));
     this.isTestFinalized_ = false;
+  }
+
+  /** @override */
+  targetWindow() {
+    return window.parent;
   }
 
   // Called by client when the test cases are satisfied.
@@ -19,17 +26,32 @@ class TestRequestHandler extends RequestHandler {
     this.isTestFinalized_ = true;
   }
 
-  // PostMessageAPIRequest that comes from the server to check if test is
-  // finalized.
+  /**
+   * PostMessageAPIRequest that comes from the server to check if test is
+   * finalized.
+   * @return {boolean}
+   */
   isTestFinalized_() {
     return this.isTestFinalized_;
+  }
+
+  /**
+   * A test used to ensure that rejected promises are passed to client.
+   * @return {Promise<boolean>}
+   */
+  rejectedPromiseTest_(args) {
+    const reject = args[0];
+    if (reject) {
+      return Promise.reject(new Error('Promise rejected'));
+    }
+    return Promise.resolve(true);
   }
 }
 
 class TestPostMessageAPIClient extends PostMessageAPIClient {
   constructor(requestHandler) {
     super(ServerOriginURLFilter, null);
-    this.setHandler(requestHandler);
+    this.requestHandler_ = requestHandler;
   }
 
   setX(x) {
@@ -92,6 +114,6 @@ class TestPostMessageAPIClient extends PostMessageAPIClient {
 
 document.addEventListener('DOMContentLoaded', function() {
   // Construct the PostMessageAPIClient so that it can run the tests.
-  const post_message_listener =
+  const postMessageClient =
       new TestPostMessageAPIClient(new TestRequestHandler());
 });

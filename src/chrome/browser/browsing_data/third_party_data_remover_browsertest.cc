@@ -35,11 +35,15 @@ using content::BrowserThread;
 namespace {
 
 const std::vector<std::string> kStorageTypes{
-    "LocalStorage",   "FileSystem",    "FileSystemAccess",
-    "SessionStorage", "IndexedDb",     "WebSql",
-    "CacheStorage",   "ServiceWorker", "StorageFoundation"};
+    "LocalStorage", "FileSystem",   "FileSystemAccess", "SessionStorage",
+    "IndexedDb",    "CacheStorage", "ServiceWorker",    "StorageFoundation"};
 
 class ThirdPartyDataRemoverTest : public InProcessBrowserTest {
+ public:
+  ThirdPartyDataRemoverTest(const ThirdPartyDataRemoverTest&) = delete;
+  ThirdPartyDataRemoverTest& operator=(const ThirdPartyDataRemoverTest&) =
+      delete;
+
  protected:
   ThirdPartyDataRemoverTest()
       : https_server_(net::EmbeddedTestServer::TYPE_HTTPS) {
@@ -82,8 +86,9 @@ class ThirdPartyDataRemoverTest : public InProcessBrowserTest {
     std::unique_ptr<net::CanonicalCookie> cookie =
         net::CanonicalCookie::CreateUnsafeCookieForTesting(
             name, "foobar", host, "/", base::Time(), base::Time(), base::Time(),
-            /* secure= */ true, /* httponly= */ false, same_site,
-            net::COOKIE_PRIORITY_LOW, /* same_party= */ false);
+            base::Time(),
+            /*secure=*/true, /*httponly=*/false, same_site,
+            net::COOKIE_PRIORITY_LOW, /*same_party=*/false);
     net::CookieOptions options;
     options.set_same_site_cookie_context(cookie_context);
     bool result_out;
@@ -127,7 +132,7 @@ class ThirdPartyDataRemoverTest : public InProcessBrowserTest {
   content::RenderFrameHost* GetFrame() {
     content::WebContents* web_contents =
         browser()->tab_strip_model()->GetActiveWebContents();
-    return ChildFrameAt(web_contents->GetMainFrame(), 0);
+    return ChildFrameAt(web_contents->GetPrimaryMainFrame(), 0);
   }
 
   void AddStorage(const std::string& top_level_host,
@@ -162,8 +167,6 @@ class ThirdPartyDataRemoverTest : public InProcessBrowserTest {
  private:
   base::test::ScopedFeatureList scoped_feature_list_;
   net::test_server::EmbeddedTestServer https_server_;
-
-  DISALLOW_COPY_AND_ASSIGN(ThirdPartyDataRemoverTest);
 };
 
 // Test that ClearThirdPartyData clears SameSite=None cookies.
@@ -202,6 +205,12 @@ IN_PROC_BROWSER_TEST_F(ThirdPartyDataRemoverTest,
 }
 
 class ThirdPartyDataRemoverFallbackTest : public ThirdPartyDataRemoverTest {
+ public:
+  ThirdPartyDataRemoverFallbackTest(const ThirdPartyDataRemoverFallbackTest&) =
+      delete;
+  ThirdPartyDataRemoverFallbackTest& operator=(
+      const ThirdPartyDataRemoverFallbackTest&) = delete;
+
  protected:
   ThirdPartyDataRemoverFallbackTest()
       : https_server_(net::EmbeddedTestServer::TYPE_HTTPS) {
@@ -212,8 +221,6 @@ class ThirdPartyDataRemoverFallbackTest : public ThirdPartyDataRemoverTest {
  private:
   base::test::ScopedFeatureList scoped_feature_list_;
   net::test_server::EmbeddedTestServer https_server_;
-
-  DISALLOW_COPY_AND_ASSIGN(ThirdPartyDataRemoverFallbackTest);
 };
 
 // Test the fallback behavior of ClearThirdPartyData when access context

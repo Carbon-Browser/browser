@@ -9,6 +9,10 @@
 
 #include <utility>
 
+#include "ash/components/arc/arc_features.h"
+#include "ash/components/disks/disk.h"
+#include "ash/components/disks/disk_mount_manager.h"
+#include "ash/constants/ash_features.h"
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/command_line.h"
@@ -35,17 +39,18 @@
 #include "chrome/browser/ash/crostini/crostini_util.h"
 #include "chrome/browser/ash/drive/drive_integration_service.h"
 #include "chrome/browser/ash/drive/file_system_util.h"
+#include "chrome/browser/ash/file_manager/fusebox_mounter.h"
 #include "chrome/browser/ash/file_manager/path_util.h"
 #include "chrome/browser/ash/file_manager/snapshot_manager.h"
 #include "chrome/browser/ash/file_manager/volume_manager_factory.h"
 #include "chrome/browser/ash/file_manager/volume_manager_observer.h"
 #include "chrome/browser/ash/file_system_provider/provided_file_system_info.h"
+#include "chrome/browser/ash/guest_os/guest_id.h"
+#include "chrome/browser/ash/guest_os/public/types.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/media_galleries/fileapi/mtp_device_map_service.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/common/pref_names.h"
-#include "chromeos/disks/disk.h"
-#include "chromeos/disks/disk_mount_manager.h"
+#include "chromeos/components/disks/disks_prefs.h"
 #include "components/prefs/pref_service.h"
 #include "components/storage_monitor/storage_monitor.h"
 #include "content/public/browser/browser_context.h"
@@ -54,6 +59,8 @@
 #include "services/device/public/mojom/mtp_manager.mojom.h"
 #include "services/device/public/mojom/mtp_storage_info.mojom.h"
 #include "storage/browser/file_system/external_mount_points.h"
+#include "ui/base/l10n/l10n_util.h"
+#include "ui/chromeos/strings/grit/ui_chromeos_strings.h"
 
 namespace file_manager {
 namespace {
@@ -86,12 +93,22 @@ bool RegisterDownloadsMountPoint(Profile* profile, const base::FilePath& path) {
 
 // Registers a mount point for Android files to ExternalMountPoints.
 bool RegisterAndroidFilesMountPoint() {
+  if (base::FeatureList::IsEnabled(arc::kEnableVirtioBlkForData))
+    return false;
   storage::ExternalMountPoints* const mount_points =
       storage::ExternalMountPoints::GetSystemInstance();
   return mount_points->RegisterFileSystem(
       file_manager::util::GetAndroidFilesMountPointName(),
       storage::kFileSystemTypeLocal, storage::FileSystemMountOption(),
       base::FilePath(util::kAndroidFilesPath));
+}
+
+bool RegisterShareCacheMountPoint(Profile* profile) {
+  storage::ExternalMountPoints* const mount_points =
+      storage::ExternalMountPoints::GetSystemInstance();
+  return mount_points->RegisterFileSystem(
+      util::kShareCacheMountPointName, storage::kFileSystemTypeLocal,
+      storage::FileSystemMountOption(), util::GetShareCacheFilePath(profile));
 }
 
 // Finds the path register as the "Downloads" folder to FileSystem API backend.
@@ -153,6 +170,10 @@ std::string VolumeTypeToString(VolumeType type) {
       return "crostini";
     case VOLUME_TYPE_SMB:
       return "smb";
+    case VOLUME_TYPE_SYSTEM_INTERNAL:
+      return "system_internal";
+    case VOLUME_TYPE_GUEST_OS:
+      return "guest_os";
     case NUM_VOLUME_TYPE:
       break;
   }
@@ -168,6 +189,11 @@ std::string GenerateVolumeId(const Volume& volume) {
           volume.mount_path().BaseName().AsUTF8Unsafe());
 }
 
+std::string FuseBoxMTPSubdir(const std::string& storage_info_location) {
+  auto suffix = base::TrimString(storage_info_location, "/", base::TRIM_ALL);
+  return std::string(kMtpVolumeIdPrefix).append(std::string(suffix));
+}
+
 std::string GetMountPointNameForMediaStorage(
     const storage_monitor::StorageInfo& info) {
   std::string name(kFileManagerMTPMountNamePrefix);
@@ -176,7 +202,7 @@ std::string GetMountPointNameForMediaStorage(
 }
 
 chromeos::MountAccessMode GetExternalStorageAccessMode(const Profile* profile) {
-  return profile->GetPrefs()->GetBoolean(prefs::kExternalStorageReadOnly)
+  return profile->GetPrefs()->GetBoolean(disks::prefs::kExternalStorageReadOnly)
              ? chromeos::MOUNT_ACCESS_MODE_READ_ONLY
              : chromeos::MOUNT_ACCESS_MODE_READ_WRITE;
 }
@@ -209,21 +235,40 @@ void RecordDownloadsDiskUsageStats(base::FilePath downloads_path) {
   }
 }
 
+// Returns the localized label for a given media view.
+std::string MediaViewDocumentIdToLabel(std::string root_document_id) {
+  if (root_document_id == arc::kAudioRootDocumentId) {
+    return l10n_util::GetStringUTF8(
+        IDS_FILE_BROWSER_MEDIA_VIEW_AUDIO_ROOT_LABEL);
+  } else if (root_document_id == arc::kImagesRootDocumentId) {
+    return l10n_util::GetStringUTF8(
+        IDS_FILE_BROWSER_MEDIA_VIEW_IMAGES_ROOT_LABEL);
+  } else if (root_document_id == arc::kVideosRootDocumentId) {
+    return l10n_util::GetStringUTF8(
+        IDS_FILE_BROWSER_MEDIA_VIEW_VIDEOS_ROOT_LABEL);
+  } else if (root_document_id == arc::kDocumentsRootDocumentId) {
+    return l10n_util::GetStringUTF8(
+        IDS_FILE_BROWSER_MEDIA_VIEW_DOCUMENTS_ROOT_LABEL);
+  }
+  NOTREACHED();
+  return "";
+}
+
 }  // namespace
 
 Volume::Volume()
     : source_(SOURCE_FILE),
       type_(VOLUME_TYPE_GOOGLE_DRIVE),
       device_type_(chromeos::DEVICE_TYPE_UNKNOWN),
-      mount_condition_(chromeos::disks::MOUNT_CONDITION_NONE),
+      mount_condition_(ash::disks::MOUNT_CONDITION_NONE),
       mount_context_(MOUNT_CONTEXT_UNKNOWN),
       is_parent_(false),
       is_read_only_(false),
       is_read_only_removable_device_(false),
       has_media_(false),
       configurable_(false),
-      watchable_(false) {
-}
+      watchable_(false),
+      hidden_(false) {}
 
 Volume::~Volume() = default;
 
@@ -236,8 +281,10 @@ std::unique_ptr<Volume> Volume::CreateForDrive(
   volume->source_path_ = drive_path;
   volume->source_ = SOURCE_NETWORK;
   volume->mount_path_ = drive_path;
-  volume->mount_condition_ = chromeos::disks::MOUNT_CONDITION_NONE;
+  volume->mount_condition_ = ash::disks::MOUNT_CONDITION_NONE;
   volume->volume_id_ = GenerateVolumeId(*volume);
+  volume->volume_label_ =
+      l10n_util::GetStringUTF8(IDS_FILE_BROWSER_DRIVE_DIRECTORY_LABEL);
   volume->watchable_ = true;
   return volume;
 }
@@ -251,16 +298,18 @@ std::unique_ptr<Volume> Volume::CreateForDownloads(
   // Keep source_path empty.
   volume->source_ = SOURCE_SYSTEM;
   volume->mount_path_ = downloads_path;
-  volume->mount_condition_ = chromeos::disks::MOUNT_CONDITION_NONE;
+  volume->mount_condition_ = ash::disks::MOUNT_CONDITION_NONE;
   volume->volume_id_ = GenerateVolumeId(*volume);
+  volume->volume_label_ =
+      l10n_util::GetStringUTF8(IDS_FILE_BROWSER_MY_FILES_ROOT_LABEL);
   volume->watchable_ = true;
   return volume;
 }
 
 // static
 std::unique_ptr<Volume> Volume::CreateForRemovable(
-    const chromeos::disks::DiskMountManager::MountPointInfo& mount_point,
-    const chromeos::disks::Disk* disk) {
+    const ash::disks::DiskMountManager::MountPointInfo& mount_point,
+    const ash::disks::Disk* disk) {
   std::unique_ptr<Volume> volume(new Volume());
   volume->type_ = MountTypeToVolumeType(mount_point.mount_type);
   volume->source_path_ = base::FilePath(mount_point.source_path);
@@ -296,8 +345,10 @@ std::unique_ptr<Volume> Volume::CreateForProvidedFileSystem(
     const ash::file_system_provider::ProvidedFileSystemInfo& file_system_info,
     MountContext mount_context) {
   std::unique_ptr<Volume> volume(new Volume());
+
   volume->file_system_id_ = file_system_info.file_system_id();
   volume->provider_id_ = file_system_info.provider_id();
+
   switch (file_system_info.source()) {
     case extensions::SOURCE_FILE:
       volume->source_ = SOURCE_FILE;
@@ -309,17 +360,60 @@ std::unique_ptr<Volume> Volume::CreateForProvidedFileSystem(
       volume->source_ = SOURCE_NETWORK;
       break;
   }
+
   volume->volume_label_ = file_system_info.display_name();
   volume->type_ = VOLUME_TYPE_PROVIDED;
   volume->mount_path_ = file_system_info.mount_path();
-  volume->mount_condition_ = chromeos::disks::MOUNT_CONDITION_NONE;
+  volume->mount_condition_ = ash::disks::MOUNT_CONDITION_NONE;
   volume->mount_context_ = mount_context;
+
   volume->is_parent_ = true;
   volume->is_read_only_ = !file_system_info.writable();
   volume->configurable_ = file_system_info.configurable();
   volume->watchable_ = file_system_info.watchable();
-  volume->volume_id_ = GenerateVolumeId(*volume);
   volume->icon_set_ = file_system_info.icon_set();
+
+  volume->volume_id_ = GenerateVolumeId(*volume);
+  return volume;
+}
+
+// static
+std::unique_ptr<Volume> Volume::CreateForFuseBoxProvidedFileSystem(
+    const base::FilePath& mount_path,
+    const ash::file_system_provider::ProvidedFileSystemInfo& file_system_info,
+    MountContext mount_context) {
+  std::unique_ptr<Volume> volume(new Volume());
+
+  switch (file_system_info.source()) {
+    case extensions::SOURCE_FILE:
+      volume->source_ = SOURCE_FILE;
+      break;
+    case extensions::SOURCE_DEVICE:
+      volume->source_ = SOURCE_DEVICE;
+      break;
+    case extensions::SOURCE_NETWORK:
+      volume->source_ = SOURCE_NETWORK;
+      break;
+  }
+
+  volume->volume_label_ = file_system_info.display_name();
+  if (ash::features::IsFileManagerFuseBoxDebugEnabled())
+    volume->volume_label_.insert(0, "fusebox ");
+
+  volume->type_ = VOLUME_TYPE_PROVIDED;
+  volume->file_system_type_ = util::kFuseBox;
+  volume->mount_path_ = mount_path;
+  volume->mount_condition_ = ash::disks::MOUNT_CONDITION_NONE;
+  volume->mount_context_ = mount_context;
+
+  volume->is_parent_ = true;
+  volume->is_read_only_ = !file_system_info.writable();
+  volume->configurable_ = file_system_info.configurable();
+  volume->icon_set_ = file_system_info.icon_set();
+
+  // "fusebox" prefix the original FSP volume id.
+  volume->volume_id_ = util::kFuseBox;
+  volume->volume_id_.append(GenerateVolumeId(*volume));
   return volume;
 }
 
@@ -330,7 +424,7 @@ std::unique_ptr<Volume> Volume::CreateForMTP(const base::FilePath& mount_path,
   std::unique_ptr<Volume> volume(new Volume());
   volume->type_ = VOLUME_TYPE_MTP;
   volume->mount_path_ = mount_path;
-  volume->mount_condition_ = chromeos::disks::MOUNT_CONDITION_NONE;
+  volume->mount_condition_ = ash::disks::MOUNT_CONDITION_NONE;
   volume->is_parent_ = true;
   volume->is_read_only_ = read_only;
   volume->volume_id_ = kMtpVolumeIdPrefix + label;
@@ -338,6 +432,30 @@ std::unique_ptr<Volume> Volume::CreateForMTP(const base::FilePath& mount_path,
   volume->source_path_ = mount_path;
   volume->source_ = SOURCE_DEVICE;
   volume->device_type_ = chromeos::DEVICE_TYPE_MOBILE;
+  return volume;
+}
+
+// static
+std::unique_ptr<Volume> Volume::CreateForFuseBoxMTP(
+    const base::FilePath& mount_path,
+    const std::string& label,
+    bool read_only) {
+  std::unique_ptr<Volume> volume(new Volume());
+  volume->type_ = VOLUME_TYPE_MTP;
+  volume->file_system_type_ = util::kFuseBox;
+  volume->device_type_ = chromeos::DEVICE_TYPE_MOBILE;
+  volume->source_path_ = mount_path;
+  volume->source_ = SOURCE_DEVICE;
+  volume->mount_path_ = mount_path;
+  volume->mount_condition_ = ash::disks::MOUNT_CONDITION_NONE;
+  volume->is_parent_ = true;
+  volume->is_read_only_ = read_only;
+  // "fusebox" prefix the original MTP volume id.
+  volume->volume_id_ = util::kFuseBox;
+  volume->volume_id_.append(kMtpVolumeIdPrefix + label);
+  volume->volume_label_ = label;
+  if (ash::features::IsFileManagerFuseBoxDebugEnabled())
+    volume->volume_label_.insert(0, "fusebox ");
   return volume;
 }
 
@@ -350,9 +468,10 @@ std::unique_ptr<Volume> Volume::CreateForMediaView(
   volume->source_ = SOURCE_SYSTEM;
   volume->mount_path_ = arc::GetDocumentsProviderMountPath(
       arc::kMediaDocumentsProviderAuthority, root_document_id);
-  volume->mount_condition_ = chromeos::disks::MOUNT_CONDITION_NONE;
-  volume->volume_label_ = root_document_id;
-  volume->is_read_only_ = true;
+  volume->mount_condition_ = ash::disks::MOUNT_CONDITION_NONE;
+  volume->volume_label_ = MediaViewDocumentIdToLabel(root_document_id);
+  volume->is_read_only_ =
+      arc::ArcDocumentsProviderRootMap::IsDocumentProviderRootReadOnly();
   volume->watchable_ = false;
   volume->volume_id_ = arc::GetMediaViewVolumeId(root_document_id);
   return volume;
@@ -369,9 +488,32 @@ std::unique_ptr<Volume> Volume::CreateForSshfsCrostini(
   volume->source_ = SOURCE_SYSTEM;
   volume->mount_path_ = sshfs_mount_path;
   volume->remote_mount_path_ = remote_mount_path;
-  volume->mount_condition_ = chromeos::disks::MOUNT_CONDITION_NONE;
+  volume->mount_condition_ = ash::disks::MOUNT_CONDITION_NONE;
   volume->volume_id_ = GenerateVolumeId(*volume);
+  volume->volume_label_ =
+      l10n_util::GetStringUTF8(IDS_FILE_BROWSER_LINUX_FILES_ROOT_LABEL);
   volume->watchable_ = false;
+  return volume;
+}
+
+// static
+std::unique_ptr<Volume> Volume::CreateForSftpGuestOs(
+    const std::string display_name,
+    const base::FilePath& sftp_mount_path,
+    const base::FilePath& remote_mount_path,
+    const guest_os::VmType vm_type) {
+  std::unique_ptr<Volume> volume(new Volume());
+  volume->type_ = VOLUME_TYPE_GUEST_OS;
+  volume->device_type_ = chromeos::DEVICE_TYPE_UNKNOWN;
+  // Keep source_path empty.
+  volume->source_ = SOURCE_SYSTEM;
+  volume->mount_path_ = sftp_mount_path;
+  volume->remote_mount_path_ = remote_mount_path;
+  volume->mount_condition_ = ash::disks::MOUNT_CONDITION_NONE;
+  volume->volume_id_ = GenerateVolumeId(*volume);
+  volume->volume_label_ = display_name;
+  volume->watchable_ = false;
+  volume->vm_type_ = vm_type;
   return volume;
 }
 
@@ -384,8 +526,10 @@ std::unique_ptr<Volume> Volume::CreateForAndroidFiles(
   // Keep source_path empty.
   volume->source_ = SOURCE_SYSTEM;
   volume->mount_path_ = mount_path;
-  volume->mount_condition_ = chromeos::disks::MOUNT_CONDITION_NONE;
+  volume->mount_condition_ = ash::disks::MOUNT_CONDITION_NONE;
   volume->volume_id_ = GenerateVolumeId(*volume);
+  volume->volume_label_ =
+      l10n_util::GetStringUTF8(IDS_FILE_BROWSER_ANDROID_FILES_ROOT_LABEL);
   volume->watchable_ = true;
   return volume;
 }
@@ -406,7 +550,7 @@ std::unique_ptr<Volume> Volume::CreateForDocumentsProvider(
   volume->source_ = SOURCE_SYSTEM;
   volume->mount_path_ =
       arc::GetDocumentsProviderMountPath(authority, document_id);
-  volume->mount_condition_ = chromeos::disks::MOUNT_CONDITION_NONE;
+  volume->mount_condition_ = ash::disks::MOUNT_CONDITION_NONE;
   volume->volume_label_ = title;
   volume->is_read_only_ = read_only;
   volume->watchable_ = false;
@@ -429,11 +573,32 @@ std::unique_ptr<Volume> Volume::CreateForSmb(const base::FilePath& mount_point,
   // Keep source_path empty.
   volume->source_ = SOURCE_NETWORK;
   volume->mount_path_ = mount_point;
-  volume->mount_condition_ = chromeos::disks::MOUNT_CONDITION_NONE;
+  volume->mount_condition_ = ash::disks::MOUNT_CONDITION_NONE;
   volume->volume_id_ = GenerateVolumeId(*volume);
   volume->volume_label_ = display_name;
   volume->watchable_ = false;
   volume->is_read_only_ = false;
+  return volume;
+}
+
+// ShareCache is not visible in the file manager and so this volume does not
+// represent a real, user-visible Volume. However, shared files can be read
+// through ImageLoader, which needs a Volume present to be able to read from the
+// directory.
+// static
+std::unique_ptr<Volume> Volume::CreateForShareCache(
+    const base::FilePath& mount_path) {
+  std::unique_ptr<Volume> volume(new Volume());
+  volume->type_ = VOLUME_TYPE_SYSTEM_INTERNAL;
+  volume->device_type_ = chromeos::DEVICE_TYPE_UNKNOWN;
+  // Keep source_path empty.
+  volume->source_ = SOURCE_SYSTEM;
+  volume->mount_path_ = mount_path;
+  volume->mount_condition_ = ash::disks::MOUNT_CONDITION_NONE;
+  volume->volume_id_ = GenerateVolumeId(*volume);
+  volume->watchable_ = false;
+  volume->is_read_only_ = true;
+  volume->hidden_ = true;
   return volume;
 }
 
@@ -445,7 +610,8 @@ std::unique_ptr<Volume> Volume::CreateForTesting(
     bool read_only,
     const base::FilePath& device_path,
     const std::string& drive_label,
-    const std::string& file_system_type) {
+    const std::string& file_system_type,
+    bool hidden) {
   std::unique_ptr<Volume> volume(new Volume());
   volume->type_ = volume_type;
   volume->device_type_ = device_type;
@@ -453,13 +619,14 @@ std::unique_ptr<Volume> Volume::CreateForTesting(
   volume->source_ = SOURCE_DEVICE;
   volume->mount_path_ = path;
   volume->storage_device_path_ = device_path;
-  volume->mount_condition_ = chromeos::disks::MOUNT_CONDITION_NONE;
+  volume->mount_condition_ = ash::disks::MOUNT_CONDITION_NONE;
   volume->is_read_only_ = read_only;
   volume->volume_id_ = GenerateVolumeId(*volume);
   volume->drive_label_ = drive_label;
   if (volume_type == VOLUME_TYPE_REMOVABLE_DISK_PARTITION) {
     volume->file_system_type_ = file_system_type;
   }
+  volume->hidden_ = hidden;
   return volume;
 }
 
@@ -477,7 +644,7 @@ VolumeManager::VolumeManager(
     Profile* profile,
     drive::DriveIntegrationService* drive_integration_service,
     chromeos::PowerManagerClient* power_manager_client,
-    chromeos::disks::DiskMountManager* disk_mount_manager,
+    ash::disks::DiskMountManager* disk_mount_manager,
     ash::file_system_provider::Service* file_system_provider_service,
     GetMtpStorageInfoCallback get_mtp_storage_info_callback)
     : profile_(profile),
@@ -490,7 +657,8 @@ VolumeManager::VolumeManager(
           std::make_unique<DocumentsProviderRootManager>(
               profile_,
               arc::ArcFileSystemOperationRunner::GetForBrowserContext(
-                  profile_))) {
+                  profile_))),
+      io_task_controller_() {
   DCHECK(disk_mount_manager);
 }
 
@@ -503,9 +671,16 @@ VolumeManager* VolumeManager::Get(content::BrowserContext* context) {
 void VolumeManager::Initialize() {
   // If in the Sign in profile or the lock screen app profile or lock screen
   // profile, skip mounting and listening for mount events.
-  if (!chromeos::ProfileHelper::IsRegularProfile(profile_)) {
+  if (!ash::ProfileHelper::IsRegularProfile(profile_)) {
     return;
   }
+
+  if (!fusebox_mounter_.get())
+    fusebox_mounter_.reset(FuseBoxMounter::Create());
+  // The fusebox_mounter_ is enabled by a chrome flag: Create() will return
+  // nullptr if the flag is disabled. Check it before attempting to Mount.
+  if (fusebox_mounter_.get())
+    fusebox_mounter_->Mount(disk_mount_manager_);
 
   const base::FilePath localVolume =
       file_manager::util::GetMyFilesFolderForProfile(profile_);
@@ -542,26 +717,21 @@ void VolumeManager::Initialize() {
   // Subscribe to FileSystemProviderService and register currently mounted
   // volumes for the profile.
   if (file_system_provider_service_) {
-    using ash::file_system_provider::ProvidedFileSystemInfo;
-    file_system_provider_service_->AddObserver(this);
-
-    std::vector<ProvidedFileSystemInfo> file_system_info_list =
-        file_system_provider_service_->GetProvidedFileSystemInfoList();
-    for (size_t i = 0; i < file_system_info_list.size(); ++i) {
-      std::unique_ptr<Volume> volume = Volume::CreateForProvidedFileSystem(
-          file_system_info_list[i], MOUNT_CONTEXT_AUTO);
-      DoMountEvent(chromeos::MOUNT_ERROR_NONE, std::move(volume));
-    }
+    auto restore_provided_file_systems =
+        base::BindOnce(&VolumeManager::RestoreProvidedFileSystems,
+                       weak_ptr_factory_.GetWeakPtr());
+    content::GetUIThreadTaskRunner({})->PostTask(
+        FROM_HERE, std::move(restore_provided_file_systems));
   }
 
   // Subscribe to Profile Preference change.
   pref_change_registrar_.Init(profile_->GetPrefs());
   pref_change_registrar_.Add(
-      prefs::kExternalStorageDisabled,
+      disks::prefs::kExternalStorageDisabled,
       base::BindRepeating(&VolumeManager::OnExternalStorageDisabledChanged,
                           weak_ptr_factory_.GetWeakPtr()));
   pref_change_registrar_.Add(
-      prefs::kExternalStorageReadOnly,
+      disks::prefs::kExternalStorageReadOnly,
       base::BindRepeating(&VolumeManager::OnExternalStorageReadOnlyChanged,
                           weak_ptr_factory_.GetWeakPtr()));
 
@@ -582,6 +752,11 @@ void VolumeManager::Initialize() {
     OnArcPlayStoreEnabledChanged(
         arc::IsArcPlayStoreEnabledForProfile(profile_));
   }
+
+  RegisterShareCacheMountPoint(profile_);
+  DoMountEvent(
+      chromeos::MOUNT_ERROR_NONE,
+      Volume::CreateForShareCache(util::GetShareCacheFilePath(profile_)));
 }
 
 void VolumeManager::Shutdown() {
@@ -610,6 +785,9 @@ void VolumeManager::Shutdown() {
     if (session_manager)
       session_manager->RemoveObserver(this);
   }
+
+  if (fusebox_mounter_.get())
+    fusebox_mounter_->Unmount(disk_mount_manager_);
 }
 
 void VolumeManager::AddObserver(VolumeManagerObserver* observer) {
@@ -645,6 +823,18 @@ base::WeakPtr<Volume> VolumeManager::FindVolumeById(
   return base::WeakPtr<Volume>();
 }
 
+base::WeakPtr<Volume> VolumeManager::FindVolumeFromPath(
+    const base::FilePath& path) {
+  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+  for (const auto& pair : mounted_volumes_) {
+    base::FilePath volume_mount_path = pair.second->mount_path();
+    if (path == volume_mount_path || volume_mount_path.IsParent(path)) {
+      return pair.second->AsWeakPtr();
+    }
+  }
+  return nullptr;
+}
+
 void VolumeManager::AddSshfsCrostiniVolume(
     const base::FilePath& sshfs_mount_path,
     const base::FilePath& remote_mount_path) {
@@ -659,13 +849,27 @@ void VolumeManager::AddSshfsCrostiniVolume(
   // Listen for crostini container shutdown and remove volume.
   crostini::CrostiniManager::GetForProfile(profile_)
       ->AddShutdownContainerCallback(
-          crostini::ContainerId::GetDefault(),
+          crostini::DefaultContainerId(),
           base::BindOnce(&VolumeManager::RemoveSshfsCrostiniVolume,
                          weak_ptr_factory_.GetWeakPtr(), sshfs_mount_path,
                          base::BindOnce([](bool result) {
                            if (!result)
                              LOG(ERROR) << "Failed to remove sshfs mount";
                          })));
+}
+
+void VolumeManager::AddSftpGuestOsVolume(
+    const std::string display_name,
+    const base::FilePath& sftp_mount_path,
+    const base::FilePath& remote_mount_path,
+    const guest_os::VmType vm_type) {
+  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+  std::unique_ptr<Volume> volume = Volume::CreateForSftpGuestOs(
+      display_name, sftp_mount_path, remote_mount_path, vm_type);
+  // Ignore if volume already exists.
+  if (mounted_volumes_.find(volume->volume_id()) != mounted_volumes_.end())
+    return;
+  DoMountEvent(chromeos::MOUNT_ERROR_NONE, std::move(volume));
 }
 
 void VolumeManager::RemoveSshfsCrostiniVolume(
@@ -675,7 +879,18 @@ void VolumeManager::RemoveSshfsCrostiniVolume(
   disk_mount_manager_->UnmountPath(
       sshfs_mount_path.value(),
       base::BindOnce(&VolumeManager::OnSshfsCrostiniUnmountCallback,
-                     base::Unretained(this), sshfs_mount_path,
+                     weak_ptr_factory_.GetWeakPtr(), sshfs_mount_path,
+                     std::move(callback)));
+}
+
+void VolumeManager::RemoveSftpGuestOsVolume(
+    const base::FilePath& sftp_mount_path,
+    RemoveSshfsCrostiniVolumeCallback callback) {
+  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+  disk_mount_manager_->UnmountPath(
+      sftp_mount_path.value(),
+      base::BindOnce(&VolumeManager::OnSftpGuestOsUnmountCallback,
+                     weak_ptr_factory_.GetWeakPtr(), sftp_mount_path,
                      std::move(callback)));
 }
 
@@ -755,12 +970,13 @@ void VolumeManager::AddVolumeForTesting(const base::FilePath& path,
                                         bool read_only,
                                         const base::FilePath& device_path,
                                         const std::string& drive_label,
-                                        const std::string& file_system_type) {
+                                        const std::string& file_system_type,
+                                        bool hidden) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  DoMountEvent(
-      chromeos::MOUNT_ERROR_NONE,
-      Volume::CreateForTesting(path, volume_type, device_type, read_only,
-                               device_path, drive_label, file_system_type));
+  DoMountEvent(chromeos::MOUNT_ERROR_NONE,
+               Volume::CreateForTesting(path, volume_type, device_type,
+                                        read_only, device_path, drive_label,
+                                        file_system_type, hidden));
 }
 
 void VolumeManager::AddVolumeForTesting(std::unique_ptr<Volume> volume) {
@@ -801,8 +1017,8 @@ void VolumeManager::OnFileSystemBeingUnmounted() {
 }
 
 void VolumeManager::OnAutoMountableDiskEvent(
-    chromeos::disks::DiskMountManager::DiskEvent event,
-    const chromeos::disks::Disk& disk) {
+    ash::disks::DiskMountManager::DiskEvent event,
+    const ash::disks::Disk& disk) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
   // Disregard hidden devices.
@@ -810,8 +1026,8 @@ void VolumeManager::OnAutoMountableDiskEvent(
     return;
 
   switch (event) {
-    case chromeos::disks::DiskMountManager::DISK_ADDED:
-    case chromeos::disks::DiskMountManager::DISK_CHANGED: {
+    case ash::disks::DiskMountManager::DISK_ADDED:
+    case ash::disks::DiskMountManager::DISK_CHANGED: {
       if (disk.device_path().empty()) {
         DVLOG(1) << "Empty system path for " << disk.device_path();
         return;
@@ -819,7 +1035,8 @@ void VolumeManager::OnAutoMountableDiskEvent(
 
       bool mounting = false;
       if (disk.mount_path().empty() && disk.has_media() &&
-          !profile_->GetPrefs()->GetBoolean(prefs::kExternalStorageDisabled)) {
+          !profile_->GetPrefs()->GetBoolean(
+              disks::prefs::kExternalStorageDisabled)) {
         // TODO(crbug.com/774890): Remove |mount_label| when the issue gets
         // resolved. Currently we suggest a mount point name, because in case
         // when disk's name contains '#', content will not load in Files App.
@@ -831,10 +1048,10 @@ void VolumeManager::OnAutoMountableDiskEvent(
         // Initiate disk mount operation. MountPath auto-detects the filesystem
         // format if the second argument is empty. The third argument (mount
         // label) is not used in a disk mount operation.
-        disk_mount_manager_->MountPath(disk.device_path(), std::string(),
-                                       mount_label, {},
-                                       chromeos::MOUNT_TYPE_DEVICE,
-                                       GetExternalStorageAccessMode(profile_));
+        disk_mount_manager_->MountPath(
+            disk.device_path(), std::string(), mount_label, {},
+            chromeos::MOUNT_TYPE_DEVICE, GetExternalStorageAccessMode(profile_),
+            base::DoNothing());
         mounting = true;
       }
 
@@ -844,12 +1061,12 @@ void VolumeManager::OnAutoMountableDiskEvent(
       return;
     }
 
-    case chromeos::disks::DiskMountManager::DISK_REMOVED:
+    case ash::disks::DiskMountManager::DISK_REMOVED:
       // If the disk is already mounted, unmount it.
       if (!disk.mount_path().empty()) {
         disk_mount_manager_->UnmountPath(
             disk.mount_path(),
-            chromeos::disks::DiskMountManager::UnmountPathCallback());
+            ash::disks::DiskMountManager::UnmountPathCallback());
       }
 
       // Notify to observers.
@@ -861,22 +1078,22 @@ void VolumeManager::OnAutoMountableDiskEvent(
 }
 
 void VolumeManager::OnDeviceEvent(
-    chromeos::disks::DiskMountManager::DeviceEvent event,
+    ash::disks::DiskMountManager::DeviceEvent event,
     const std::string& device_path) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
   DVLOG(1) << "OnDeviceEvent: " << event << ", " << device_path;
   switch (event) {
-    case chromeos::disks::DiskMountManager::DEVICE_ADDED:
+    case ash::disks::DiskMountManager::DEVICE_ADDED:
       for (auto& observer : observers_)
         observer.OnDeviceAdded(device_path);
       return;
-    case chromeos::disks::DiskMountManager::DEVICE_REMOVED: {
+    case ash::disks::DiskMountManager::DEVICE_REMOVED: {
       for (auto& observer : observers_)
         observer.OnDeviceRemoved(device_path);
       return;
     }
-    case chromeos::disks::DiskMountManager::DEVICE_SCANNED:
+    case ash::disks::DiskMountManager::DEVICE_SCANNED:
       DVLOG(1) << "Ignore SCANNED event: " << device_path;
       return;
   }
@@ -884,24 +1101,25 @@ void VolumeManager::OnDeviceEvent(
 }
 
 void VolumeManager::OnMountEvent(
-    chromeos::disks::DiskMountManager::MountEvent event,
+    ash::disks::DiskMountManager::MountEvent event,
     chromeos::MountError error_code,
-    const chromeos::disks::DiskMountManager::MountPointInfo& mount_info) {
+    const ash::disks::DiskMountManager::MountPointInfo& mount_info) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+
   // Network storage is responsible for doing its own mounting.
   if (mount_info.mount_type == chromeos::MOUNT_TYPE_NETWORK_STORAGE)
     return;
 
   // Notify a mounting/unmounting event to observers.
-  const chromeos::disks::Disk* const disk =
+  const ash::disks::Disk* const disk =
       disk_mount_manager_->FindDiskBySourcePath(mount_info.source_path);
   std::unique_ptr<Volume> volume = Volume::CreateForRemovable(mount_info, disk);
   switch (event) {
-    case chromeos::disks::DiskMountManager::MOUNTING: {
+    case ash::disks::DiskMountManager::MOUNTING: {
       DoMountEvent(error_code, std::move(volume));
       return;
     }
-    case chromeos::disks::DiskMountManager::UNMOUNTING:
+    case ash::disks::DiskMountManager::UNMOUNTING:
       DoUnmountEvent(error_code, *volume);
       return;
   }
@@ -909,7 +1127,7 @@ void VolumeManager::OnMountEvent(
 }
 
 void VolumeManager::OnFormatEvent(
-    chromeos::disks::DiskMountManager::FormatEvent event,
+    ash::disks::DiskMountManager::FormatEvent event,
     chromeos::FormatError error_code,
     const std::string& device_path,
     const std::string& device_label) {
@@ -918,13 +1136,13 @@ void VolumeManager::OnFormatEvent(
            << ", " << device_path;
 
   switch (event) {
-    case chromeos::disks::DiskMountManager::FORMAT_STARTED:
+    case ash::disks::DiskMountManager::FORMAT_STARTED:
       for (auto& observer : observers_) {
         observer.OnFormatStarted(device_path, device_label,
                                  error_code == chromeos::FORMAT_ERROR_NONE);
       }
       return;
-    case chromeos::disks::DiskMountManager::FORMAT_COMPLETED:
+    case ash::disks::DiskMountManager::FORMAT_COMPLETED:
       // Even if format did not complete successfully, try to mount the device
       // so the user can retry.
       // MountPath auto-detects filesystem format if second argument is
@@ -932,7 +1150,8 @@ void VolumeManager::OnFormatEvent(
       // operation.
       disk_mount_manager_->MountPath(device_path, std::string(), std::string(),
                                      {}, chromeos::MOUNT_TYPE_DEVICE,
-                                     GetExternalStorageAccessMode(profile_));
+                                     GetExternalStorageAccessMode(profile_),
+                                     base::DoNothing());
 
       for (auto& observer : observers_) {
         observer.OnFormatCompleted(device_path, device_label,
@@ -945,7 +1164,7 @@ void VolumeManager::OnFormatEvent(
 }
 
 void VolumeManager::OnPartitionEvent(
-    chromeos::disks::DiskMountManager::PartitionEvent event,
+    ash::disks::DiskMountManager::PartitionEvent event,
     chromeos::PartitionError error_code,
     const std::string& device_path,
     const std::string& device_label) {
@@ -954,23 +1173,23 @@ void VolumeManager::OnPartitionEvent(
            << device_path;
 
   switch (event) {
-    case chromeos::disks::DiskMountManager::PARTITION_STARTED:
+    case ash::disks::DiskMountManager::PARTITION_STARTED:
       for (auto& observer : observers_) {
         observer.OnPartitionStarted(
             device_path, device_label,
             error_code == chromeos::PARTITION_ERROR_NONE);
       }
       return;
-    case chromeos::disks::DiskMountManager::PARTITION_COMPLETED:
+    case ash::disks::DiskMountManager::PARTITION_COMPLETED:
       // If partitioning failed, try to mount the device so the user can retry.
       // MountPath auto-detects filesystem format if second argument is
       // empty. The third argument (mount label) is not used in a disk mount
       // operation.
       if (error_code != chromeos::PARTITION_ERROR_NONE) {
-        disk_mount_manager_->MountPath(device_path, std::string(),
-                                       std::string(), {},
-                                       chromeos::MOUNT_TYPE_DEVICE,
-                                       GetExternalStorageAccessMode(profile_));
+        disk_mount_manager_->MountPath(
+            device_path, std::string(), std::string(), {},
+            chromeos::MOUNT_TYPE_DEVICE, GetExternalStorageAccessMode(profile_),
+            base::DoNothing());
       }
 
       for (auto& observer : observers_) {
@@ -984,7 +1203,7 @@ void VolumeManager::OnPartitionEvent(
 }
 
 void VolumeManager::OnRenameEvent(
-    chromeos::disks::DiskMountManager::RenameEvent event,
+    ash::disks::DiskMountManager::RenameEvent event,
     chromeos::RenameError error_code,
     const std::string& device_path,
     const std::string& device_label) {
@@ -993,13 +1212,13 @@ void VolumeManager::OnRenameEvent(
            << device_path;
 
   switch (event) {
-    case chromeos::disks::DiskMountManager::RENAME_STARTED:
+    case ash::disks::DiskMountManager::RENAME_STARTED:
       for (auto& observer : observers_) {
         observer.OnRenameStarted(device_path, device_label,
                                  error_code == chromeos::RENAME_ERROR_NONE);
       }
       return;
-    case chromeos::disks::DiskMountManager::RENAME_COMPLETED:
+    case ash::disks::DiskMountManager::RENAME_COMPLETED:
       // Find previous mount point label if it exists
       std::string mount_label;
       auto disk_map_iter = disk_mount_manager_->disks().find(device_path);
@@ -1016,7 +1235,8 @@ void VolumeManager::OnRenameEvent(
       // of the volume name).
       disk_mount_manager_->MountPath(device_path, std::string(), mount_label,
                                      {}, chromeos::MOUNT_TYPE_DEVICE,
-                                     GetExternalStorageAccessMode(profile_));
+                                     GetExternalStorageAccessMode(profile_),
+                                     base::DoNothing());
 
       bool successfully_renamed = error_code == chromeos::RENAME_ERROR_NONE;
       for (auto& observer : observers_)
@@ -1026,6 +1246,21 @@ void VolumeManager::OnRenameEvent(
       return;
   }
   NOTREACHED();
+}
+
+void VolumeManager::RestoreProvidedFileSystems() {
+  using ash::file_system_provider::ProvidedFileSystemInfo;
+
+  DCHECK(file_system_provider_service_);
+  file_system_provider_service_->AddObserver(this);
+
+  std::vector<ProvidedFileSystemInfo> file_system_info_list =
+      file_system_provider_service_->GetProvidedFileSystemInfoList();
+  for (const auto& file_system_info : file_system_info_list) {
+    OnProvidedFileSystemMount(file_system_info,
+                              ash::file_system_provider::MOUNT_CONTEXT_RESTORE,
+                              base::File::FILE_OK);
+  }
 }
 
 void VolumeManager::OnProvidedFileSystemMount(
@@ -1061,6 +1296,71 @@ void VolumeManager::OnProvidedFileSystemMount(
   }
 
   DoMountEvent(mount_error, std::move(volume));
+
+  // The fusebox_mounter_ is enabled by a chrome flag.
+  if (!fusebox_mounter_.get())
+    return;
+
+  // The FSP is not added to chrome::storage if mounting failed.
+  if (error != base::File::FILE_OK)
+    return;
+
+  // Get the FileSystemURL of the FSP storage device.
+  const std::string fsid =
+      file_system_info.mount_path().BaseName().AsUTF8Unsafe();
+  auto* mount_points = storage::ExternalMountPoints::GetSystemInstance();
+  auto fsp_file_system_url = mount_points->CreateExternalFileSystemURL(
+      blink::StorageKey(util::GetFilesAppOrigin()), fsid, {});
+  const std::string url = fsp_file_system_url.ToGURL().spec();
+  DCHECK(fsp_file_system_url.is_valid());
+
+  // Attach the FSP storage device to the fusebox daemon.
+  const std::string subdir = "fsp:" + fsid;
+  fusebox_mounter_->AttachStorage(
+      subdir, url, !file_system_info.writable(),
+      base::BindOnce(&VolumeManager::OnFuseboxAttachStorageProvidedFileSystem,
+                     weak_ptr_factory_.GetWeakPtr(), subdir, fsid,
+                     file_system_info, volume_context));
+}
+
+void VolumeManager::OnFuseboxAttachStorageProvidedFileSystem(
+    const std::string& subdir,
+    const std::string& fsid,
+    const ash::file_system_provider::ProvidedFileSystemInfo& file_system_info,
+    MountContext volume_context,
+    int error) {
+  LOG_IF(ERROR, error) << "failed attaching fsp " << fsid;
+  if (error)
+    return;
+
+  // Create a Volume for the fusebox FSP storage device.
+  const base::FilePath mount_path =
+      base::FilePath(util::kFuseBoxMediaPath).Append(subdir);
+  std::unique_ptr<Volume> volume = Volume::CreateForFuseBoxProvidedFileSystem(
+      mount_path, file_system_info, volume_context);
+
+  // Register the fusebox FSP storage device with chrome::storage.
+  auto* mount_points = storage::ExternalMountPoints::GetSystemInstance();
+  bool result = mount_points->RegisterFileSystem(
+      /*prefixed*/ util::kFuseBox + fsid, storage::kFileSystemTypeFuseBox,
+      storage::FileSystemMountOption(), volume->mount_path());
+  DCHECK(result);
+
+  // Mount the fusebox FSP storage device in files app.
+  DoMountEvent(chromeos::MOUNT_ERROR_NONE, std::move(volume));
+}
+
+void VolumeManager::ConvertFuseBoxFSPVolumeIdToFSPIfNeeded(
+    std::string* volume_id) const {
+  DCHECK(volume_id);
+
+  static const base::FilePath::CharType kFuseBoxFSPVolumeIdPrefix[] =
+      FILE_PATH_LITERAL("fuseboxprovided:fsp:");
+  if (!base::StartsWith(*volume_id, kFuseBoxFSPVolumeIdPrefix))
+    return;
+
+  int prefix = strlen(kFuseBoxFSPVolumeIdPrefix);
+  *volume_id = volume_id->substr(prefix).insert(0, "provided:");
 }
 
 void VolumeManager::OnProvidedFileSystemUnmount(
@@ -1074,6 +1374,30 @@ void VolumeManager::OnProvidedFileSystemUnmount(
   std::unique_ptr<Volume> volume = Volume::CreateForProvidedFileSystem(
       file_system_info, MOUNT_CONTEXT_UNKNOWN);
   DoUnmountEvent(mount_error, *volume);
+
+  // The fusebox_mounter_ is enabled by a chrome flag.
+  if (!fusebox_mounter_.get())
+    return;
+
+  // Get FSP chrome::storage |fsid| and fusebox daemon |subdir|.
+  const std::string fsid =
+      file_system_info.mount_path().BaseName().AsUTF8Unsafe();
+  const std::string subdir = "fsp:" + fsid;
+
+  // Unmount the fusebox FSP storage device in files app.
+  const base::FilePath mount_path =
+      base::FilePath(util::kFuseBoxMediaPath).Append(subdir);
+  std::unique_ptr<Volume> fusebox_volume =
+      Volume::CreateForFuseBoxProvidedFileSystem(mount_path, file_system_info,
+                                                 MOUNT_CONTEXT_UNKNOWN);
+  DoUnmountEvent(mount_error, *fusebox_volume);
+
+  // Remove the fusebox FSP storage device from chrome::storage.
+  auto* mount_points = storage::ExternalMountPoints::GetSystemInstance();
+  mount_points->RevokeFileSystem(util::kFuseBox + fsid);
+
+  // Detach the fusebox FSP storage device from the fusebox daemon.
+  fusebox_mounter_->DetachStorage(subdir, base::DoNothing());
 }
 
 void VolumeManager::OnExternalStorageDisabledChangedUnmountCallback(
@@ -1109,6 +1433,7 @@ void VolumeManager::OnArcPlayStoreEnabledChanged(bool enabled) {
   if (enabled == arc_volumes_mounted_)
     return;
 
+  // Need to mount all roots declared in in arc_media_view_util.cc.
   if (enabled) {
     DoMountEvent(chromeos::MOUNT_ERROR_NONE,
                  Volume::CreateForMediaView(arc::kImagesRootDocumentId));
@@ -1116,9 +1441,12 @@ void VolumeManager::OnArcPlayStoreEnabledChanged(bool enabled) {
                  Volume::CreateForMediaView(arc::kVideosRootDocumentId));
     DoMountEvent(chromeos::MOUNT_ERROR_NONE,
                  Volume::CreateForMediaView(arc::kAudioRootDocumentId));
-    DoMountEvent(
-        chromeos::MOUNT_ERROR_NONE,
-        Volume::CreateForAndroidFiles(base::FilePath(util::kAndroidFilesPath)));
+    DoMountEvent(chromeos::MOUNT_ERROR_NONE,
+                 Volume::CreateForMediaView(arc::kDocumentsRootDocumentId));
+    if (!base::FeatureList::IsEnabled(arc::kEnableVirtioBlkForData))
+      DoMountEvent(chromeos::MOUNT_ERROR_NONE,
+                   Volume::CreateForAndroidFiles(
+                       base::FilePath(util::kAndroidFilesPath)));
   } else {
     DoUnmountEvent(chromeos::MOUNT_ERROR_NONE,
                    *Volume::CreateForMediaView(arc::kImagesRootDocumentId));
@@ -1127,8 +1455,11 @@ void VolumeManager::OnArcPlayStoreEnabledChanged(bool enabled) {
     DoUnmountEvent(chromeos::MOUNT_ERROR_NONE,
                    *Volume::CreateForMediaView(arc::kAudioRootDocumentId));
     DoUnmountEvent(chromeos::MOUNT_ERROR_NONE,
-                   *Volume::CreateForAndroidFiles(
-                       base::FilePath(util::kAndroidFilesPath)));
+                   *Volume::CreateForMediaView(arc::kDocumentsRootDocumentId));
+    if (!base::FeatureList::IsEnabled(arc::kEnableVirtioBlkForData))
+      DoUnmountEvent(chromeos::MOUNT_ERROR_NONE,
+                     *Volume::CreateForAndroidFiles(
+                         base::FilePath(util::kAndroidFilesPath)));
   }
 
   documents_provider_root_manager_->SetEnabled(enabled);
@@ -1139,7 +1470,8 @@ void VolumeManager::OnExternalStorageDisabledChanged() {
   // If the policy just got disabled we have to unmount every device currently
   // mounted. The opposite is fine - we can let the user re-plug their device to
   // make it available.
-  if (profile_->GetPrefs()->GetBoolean(prefs::kExternalStorageDisabled)) {
+  if (profile_->GetPrefs()->GetBoolean(
+          disks::prefs::kExternalStorageDisabled)) {
     // We do not iterate on mount_points directly, because mount_points can
     // be changed by UnmountPath(). Also, a failing unmount shouldn't be retried
     // indefinitely. So make a set of all the mount points that should be
@@ -1173,7 +1505,7 @@ void VolumeManager::OnRemovableStorageAttached(
     const storage_monitor::StorageInfo& info) {
   if (!storage_monitor::StorageInfo::IsMTPDevice(info.device_id()))
     return;
-  if (profile_->GetPrefs()->GetBoolean(prefs::kExternalStorageDisabled))
+  if (profile_->GetPrefs()->GetBoolean(disks::prefs::kExternalStorageDisabled))
     return;
 
   // Resolve mtp storage name and get MtpStorageInfo.
@@ -1223,19 +1555,66 @@ void VolumeManager::DoAttachMtpStorage(
   for (int i = 2; mounted_volumes_.count(kMtpVolumeIdPrefix + label); ++i)
     label = base_name + base::StringPrintf(" (%d)", i);
 
-  bool result =
-      storage::ExternalMountPoints::GetSystemInstance()->RegisterFileSystem(
-          fsid, storage::kFileSystemTypeDeviceMediaAsFileStorage,
-          storage::FileSystemMountOption(), path);
+  // Register the MTP storage device with chrome::storage.
+  auto* mount_points = storage::ExternalMountPoints::GetSystemInstance();
+  bool result = mount_points->RegisterFileSystem(
+      fsid, storage::kFileSystemTypeDeviceMediaAsFileStorage,
+      storage::FileSystemMountOption(), path);
   DCHECK(result);
 
+  // Register the MTP storage device with the MTPDeviceMapService.
   content::GetIOThreadTaskRunner({})->PostTask(
       FROM_HERE,
       base::BindOnce(&MTPDeviceMapService::RegisterMTPFileSystem,
                      base::Unretained(MTPDeviceMapService::GetInstance()),
                      info.location(), fsid, read_only));
 
+  // Mount the MTP storage device in files app.
   std::unique_ptr<Volume> volume = Volume::CreateForMTP(path, label, read_only);
+  DoMountEvent(chromeos::MOUNT_ERROR_NONE, std::move(volume));
+
+  // The fusebox_mounter_ is enabled by a chrome flag.
+  if (!fusebox_mounter_.get())
+    return;
+
+  // Get the FileSystemURL of the MTP storage device.
+  auto mtp_file_system_url = mount_points->CreateExternalFileSystemURL(
+      blink::StorageKey(util::GetFilesAppOrigin()), fsid, {});
+  const std::string url = mtp_file_system_url.ToGURL().spec();
+  DCHECK(mtp_file_system_url.is_valid());
+
+  // Attach the MTP storage device to the fusebox daemon.
+  std::string subdir = FuseBoxMTPSubdir(info.location());
+  fusebox_mounter_->AttachStorage(
+      subdir, url, read_only,
+      base::BindOnce(&VolumeManager::OnFuseboxAttachStorageMTP,
+                     weak_ptr_factory_.GetWeakPtr(), subdir, fsid, label,
+                     read_only));
+}
+
+void VolumeManager::OnFuseboxAttachStorageMTP(const std::string& subdir,
+                                              const std::string& fsid,
+                                              const std::string& label,
+                                              bool read_only,
+                                              int error) {
+  LOG_IF(ERROR, error) << "failed attaching mtp " << fsid;
+  if (error)
+    return;
+
+  // Create a Volume for the fusebox MTP storage device.
+  const base::FilePath mount_path =
+      base::FilePath(util::kFuseBoxMediaPath).Append(subdir);
+  std::unique_ptr<Volume> volume =
+      Volume::CreateForFuseBoxMTP(mount_path, label, read_only);
+
+  // Register the fusebox MTP storage device with chrome::storage.
+  auto* mount_points = storage::ExternalMountPoints::GetSystemInstance();
+  bool result = mount_points->RegisterFileSystem(
+      /*prefixed*/ util::kFuseBox + fsid, storage::kFileSystemTypeFuseBox,
+      storage::FileSystemMountOption(), volume->mount_path());
+  DCHECK(result);
+
+  // Mount the fusebox MTP storage device in files app.
   DoMountEvent(chromeos::MOUNT_ERROR_NONE, std::move(volume));
 }
 
@@ -1245,18 +1624,41 @@ void VolumeManager::OnRemovableStorageDetached(
     return;
 
   for (const auto& mounted_volume : mounted_volumes_) {
-    if (mounted_volume.second->source_path().value() == info.location()) {
-      DoUnmountEvent(chromeos::MOUNT_ERROR_NONE, *mounted_volume.second.get());
+    if (mounted_volume.second->source_path().value() != info.location())
+      continue;
 
-      const std::string fsid = GetMountPointNameForMediaStorage(info);
-      storage::ExternalMountPoints::GetSystemInstance()->RevokeFileSystem(fsid);
-      content::GetIOThreadTaskRunner({})->PostTask(
-          FROM_HERE,
-          base::BindOnce(&MTPDeviceMapService::RevokeMTPFileSystem,
-                         base::Unretained(MTPDeviceMapService::GetInstance()),
-                         fsid));
+    // Unmount the MTP storage device in files app.
+    const std::string volume_id = mounted_volume.second->volume_id();
+    DoUnmountEvent(chromeos::MOUNT_ERROR_NONE, *mounted_volume.second.get());
+
+    // Remove the MTP storage device from chrome::storage.
+    const std::string fsid = GetMountPointNameForMediaStorage(info);
+    auto* mount_points = storage::ExternalMountPoints::GetSystemInstance();
+    mount_points->RevokeFileSystem(fsid);
+
+    // Remove the MTP storage device from the MTPDeviceMapService.
+    content::GetIOThreadTaskRunner({})->PostTask(
+        FROM_HERE,
+        base::BindOnce(&MTPDeviceMapService::RevokeMTPFileSystem,
+                       base::Unretained(MTPDeviceMapService::GetInstance()),
+                       fsid));
+
+    // The fusebox_mounter_ is enabled by a chrome flag.
+    if (!fusebox_mounter_.get())
       return;
-    }
+
+    // Unmount the fusebox MTP storage device in files app.
+    base::WeakPtr<Volume> volume = FindVolumeById(util::kFuseBox + volume_id);
+    if (volume.get())
+      DoUnmountEvent(chromeos::MOUNT_ERROR_NONE, *volume.get());
+
+    // Remove the fusebox MTP storage device from chrome::storage.
+    mount_points->RevokeFileSystem(util::kFuseBox + fsid);
+
+    // Detach the fusebox MTP storage device from the fusebox daemon.
+    std::string subdir = FuseBoxMTPSubdir(info.location());
+    fusebox_mounter_->DetachStorage(subdir, base::DoNothing());
+    return;
   }
 }
 
@@ -1310,7 +1712,7 @@ void VolumeManager::OnDiskMountManagerRefreshed(bool success) {
 
   std::vector<std::unique_ptr<Volume>> archives;
 
-  const chromeos::disks::DiskMountManager::MountPointMap& mount_points =
+  const ash::disks::DiskMountManager::MountPointMap& mount_points =
       disk_mount_manager_->mount_points();
   for (const auto& mount_point : mount_points) {
     switch (mount_point.second.mount_type) {
@@ -1371,8 +1773,8 @@ void VolumeManager::OnDiskMountManagerRefreshed(bool success) {
 void VolumeManager::OnStorageMonitorInitialized() {
   std::vector<storage_monitor::StorageInfo> storages =
       storage_monitor::StorageMonitor::GetInstance()->GetAllAvailableStorages();
-  for (size_t i = 0; i < storages.size(); ++i)
-    OnRemovableStorageAttached(storages[i]);
+  for (auto& storage : storages)
+    OnRemovableStorageAttached(storage);
   storage_monitor::StorageMonitor::GetInstance()->AddObserver(this);
 }
 
@@ -1398,7 +1800,8 @@ void VolumeManager::DoMountEvent(chromeos::MountError error_code,
 
   // Filter out removable disks if forbidden by policy for this profile.
   if (volume->type() == VOLUME_TYPE_REMOVABLE_DISK_PARTITION &&
-      profile_->GetPrefs()->GetBoolean(prefs::kExternalStorageDisabled)) {
+      profile_->GetPrefs()->GetBoolean(
+          disks::prefs::kExternalStorageDisabled)) {
     return;
   }
 
@@ -1451,6 +1854,33 @@ void VolumeManager::OnSshfsCrostiniUnmountCallback(
   }
 
   LOG(ERROR) << "Unmounting " << sshfs_mount_path.value() << " failed";
+  if (callback)
+    std::move(callback).Run(false);
+}
+
+void VolumeManager::OnSftpGuestOsUnmountCallback(
+    const base::FilePath& sftp_mount_path,
+    RemoveSftpGuestOsVolumeCallback callback,
+    chromeos::MountError error_code) {
+  if ((error_code == chromeos::MOUNT_ERROR_NONE) ||
+      (error_code == chromeos::MOUNT_ERROR_PATH_NOT_MOUNTED)) {
+    // Remove metadata associated with the mount. It will be a no-op if it
+    // wasn't mounted or unmounted out of band. We need the VolumeId to be
+    // consistent, which means the mount path needs to be the same.
+    // display_name, remote_mount_path and vm_type aren't needed and we don't
+    // know them at unmount so leave them blank.
+    DoUnmountEvent(
+        chromeos::MOUNT_ERROR_NONE,
+        // TODO(b/230667118): Once http://crrev/3627129 makes it into
+        // Chrome change the type to unknown.
+        *Volume::CreateForSftpGuestOs("", sftp_mount_path, base::FilePath(),
+                                      guest_os::VmType::TERMINA));
+    if (callback)
+      std::move(callback).Run(true);
+    return;
+  }
+
+  LOG(ERROR) << "Unmounting SFTP path failed with error: " << error_code;
   if (callback)
     std::move(callback).Run(false);
 }

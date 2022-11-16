@@ -8,6 +8,7 @@
 #include "third_party/blink/renderer/bindings/core/v8/to_v8_traits.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_string_resource.h"
 #include "third_party/blink/renderer/core/dom/events/event_target.h"
+#include "third_party/blink/renderer/core/event_target_names.h"
 #include "third_party/blink/renderer/core/events/before_unload_event.h"
 #include "third_party/blink/renderer/core/events/error_event.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
@@ -143,7 +144,7 @@ void JSEventHandler::InvokeInternal(EventTarget& event_target,
   if (v8_return_value->IsNullOrUndefined())
     return;
 
-  // https://heycam.github.io/webidl/#invoke-a-callback-function
+  // https://webidl.spec.whatwg.org/#invoke-a-callback-function
   // step 13: Set completion to the result of converting callResult.[[Value]] to
   //          an IDL value of the same type as the operation's return type.
   //

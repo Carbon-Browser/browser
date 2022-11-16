@@ -7,7 +7,6 @@
 
 #include <memory>
 
-#include "base/macros.h"
 #include "remoting/host/setup/daemon_controller.h"
 
 namespace remoting {
@@ -15,16 +14,21 @@ namespace remoting {
 class DaemonControllerDelegateLinux : public DaemonController::Delegate {
  public:
   DaemonControllerDelegateLinux();
+
+  DaemonControllerDelegateLinux(const DaemonControllerDelegateLinux&) = delete;
+  DaemonControllerDelegateLinux& operator=(
+      const DaemonControllerDelegateLinux&) = delete;
+
   ~DaemonControllerDelegateLinux() override;
 
   // DaemonController::Delegate interface.
   DaemonController::State GetState() override;
-  std::unique_ptr<base::DictionaryValue> GetConfig() override;
+  absl::optional<base::Value::Dict> GetConfig() override;
   void CheckPermission(bool it2me, DaemonController::BoolCallback) override;
-  void SetConfigAndStart(std::unique_ptr<base::DictionaryValue> config,
+  void SetConfigAndStart(base::Value::Dict config,
                          bool consent,
                          DaemonController::CompletionCallback done) override;
-  void UpdateConfig(std::unique_ptr<base::DictionaryValue> config,
+  void UpdateConfig(base::Value::Dict config,
                     DaemonController::CompletionCallback done) override;
   void Stop(DaemonController::CompletionCallback done) override;
   DaemonController::UsageStatsConsent GetUsageStatsConsent() override;
@@ -35,9 +39,6 @@ class DaemonControllerDelegateLinux : public DaemonController::Delegate {
   // SetConfigAndStart only sets the config, and it is up to the caller to
   // start the host if needed.
   static void set_start_host_after_setup(bool start_host);
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(DaemonControllerDelegateLinux);
 };
 
 }  // namespace remoting

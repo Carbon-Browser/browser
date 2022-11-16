@@ -4,6 +4,7 @@
 
 #include "base/callback.h"
 #include "base/json/json_string_value_serializer.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/strings/stringprintf.h"
 #include "base/values.h"
@@ -38,14 +39,14 @@ enum OriginTypeMask {
   EXTENSION = chrome_browsing_data_remover::ORIGIN_TYPE_EXTENSION
 };
 
+// TODO(http://crbug.com/1266606): appcache is a noop and should be removed.
 const char kRemoveEverythingArguments[] =
     R"([{"since": 1000}, {
-    "appcache": true, "cache": true, "cookies": true,
-    "downloads": true, "fileSystems": true, "formData": true,
-    "history": true, "indexedDB": true, "localStorage": true,
-    "serverBoundCertificates": true, "passwords": true,
-    "pluginData": true, "serviceWorkers": true, "cacheStorage": true,
-    "webSQL": true
+    "appcache": true, "cache": true, "cookies": true, "downloads": true,
+    "fileSystems": true, "formData": true, "history": true, "indexedDB": true,
+    "localStorage": true, "serverBoundCertificates": true, "passwords": true,
+    "pluginData": true, "serviceWorkers": true, "cacheStorage": true, "webSQL":
+    true
     }])";
 
 class BrowsingDataApiTest : public ExtensionServiceTestBase {
@@ -62,12 +63,6 @@ class BrowsingDataApiTest : public ExtensionServiceTestBase {
 
     remover_ = profile()->GetBrowsingDataRemover();
     remover_->SetEmbedderDelegate(&delegate_);
-
-    // TODO(crbug.com/1182630): This can be removed once crbug.com/1182630 is
-    // fixed. Make sure quota manager for storage partition is finished
-    // initializing.
-    profile()->GetDefaultStoragePartition();
-    task_environment()->RunUntilIdle();
   }
 
   void TearDown() override {
@@ -87,12 +82,11 @@ class BrowsingDataApiTest : public ExtensionServiceTestBase {
     return remover_->GetLastUsedOriginTypeMaskForTesting();
   }
 
-  uint64_t GetAsMask(const base::DictionaryValue* dict,
+  uint64_t GetAsMask(const base::Value* dict,
                      std::string path,
                      uint64_t mask_value) {
-    bool result;
-    EXPECT_TRUE(dict->GetBoolean(path, &result)) << "for " << path;
-    return result ? mask_value : 0;
+    EXPECT_TRUE(dict->FindBoolKey(path));
+    return *dict->FindBoolKey(path) ? mask_value : 0;
   }
 
   void RunBrowsingDataRemoveFunctionAndCompareRemovalMask(
@@ -147,15 +141,11 @@ class BrowsingDataApiTest : public ExtensionServiceTestBase {
     scoped_refptr<BrowsingDataSettingsFunction> function =
         new BrowsingDataSettingsFunction();
     SCOPED_TRACE("settings");
-    std::unique_ptr<base::Value> result_value(RunFunctionAndReturnSingleResult(
-        function.get(), std::string("[]"), browser()));
-
-    base::DictionaryValue* result;
-    EXPECT_TRUE(result_value->GetAsDictionary(&result));
-    base::DictionaryValue* options;
-    EXPECT_TRUE(result->GetDictionary("options", &options));
-    double since;
-    EXPECT_TRUE(options->GetDouble("since", &since));
+    std::unique_ptr<base::Value> result = RunFunctionAndReturnSingleResult(
+        function.get(), std::string("[]"), browser());
+    EXPECT_TRUE(result->is_dict());
+    ASSERT_TRUE(result->FindDoublePath("options.since"));
+    double since = *result->FindDoublePath("options.since");
 
     double expected_since = 0;
     if (since_pref != browsing_data::TimePeriod::ALL_TIME) {
@@ -234,27 +224,22 @@ class BrowsingDataApiTest : public ExtensionServiceTestBase {
     scoped_refptr<BrowsingDataSettingsFunction> function =
         new BrowsingDataSettingsFunction();
     SCOPED_TRACE("settings");
-    std::unique_ptr<base::Value> result_value(RunFunctionAndReturnSingleResult(
+    std::unique_ptr<base::Value> result(RunFunctionAndReturnSingleResult(
         function.get(), std::string("[]"), browser()));
 
-    base::DictionaryValue* result;
-    EXPECT_TRUE(result_value->GetAsDictionary(&result));
+    EXPECT_TRUE(result->is_dict());
 
-    base::DictionaryValue* options;
-    EXPECT_TRUE(result->GetDictionary("options", &options));
-    base::DictionaryValue* origin_types;
-    EXPECT_TRUE(options->GetDictionary("originTypes", &origin_types));
+    base::Value* origin_types = result->FindDictPath("options.originTypes");
+    EXPECT_TRUE(origin_types);
     uint64_t origin_type_mask =
         GetAsMask(origin_types, "unprotectedWeb", UNPROTECTED_WEB) |
         GetAsMask(origin_types, "protectedWeb", PROTECTED_WEB) |
         GetAsMask(origin_types, "extension", EXTENSION);
     EXPECT_EQ(expected_origin_type_mask, origin_type_mask);
 
-    base::DictionaryValue* data_to_remove;
-    EXPECT_TRUE(result->GetDictionary("dataToRemove", &data_to_remove));
+    base::Value* data_to_remove = result->FindDictKey("dataToRemove");
+    EXPECT_TRUE(data_to_remove);
     uint64_t removal_mask =
-        GetAsMask(data_to_remove, "appcache",
-                  content::BrowsingDataRemover::DATA_TYPE_APP_CACHE) |
         GetAsMask(data_to_remove, "cache",
                   content::BrowsingDataRemover::DATA_TYPE_CACHE) |
         GetAsMask(data_to_remove, "cacheStorage",
@@ -332,7 +317,7 @@ class BrowsingDataApiTest : public ExtensionServiceTestBase {
  private:
   std::unique_ptr<TestBrowserWindow> browser_window_;
   std::unique_ptr<Browser> browser_;
-  content::BrowsingDataRemover* remover_;
+  raw_ptr<content::BrowsingDataRemover> remover_;
   content::MockBrowsingDataRemoverDelegate delegate_;
 };
 
@@ -342,7 +327,6 @@ TEST_F(BrowsingDataApiTest, RemovalProhibited) {
   PrefService* prefs = browser()->profile()->GetPrefs();
   prefs->SetBoolean(prefs::kAllowDeletingBrowserHistory, false);
 
-  CheckRemovalPermitted("{\"appcache\": true}", true);
   CheckRemovalPermitted("{\"cache\": true}", true);
   CheckRemovalPermitted("{\"cacheStorage\": true}", true);
   CheckRemovalPermitted("{\"cookies\": true}", true);
@@ -422,8 +406,6 @@ TEST_F(BrowsingDataApiTest, BrowsingDataOriginTypeMask) {
 
 TEST_F(BrowsingDataApiTest, BrowsingDataRemovalMask) {
   RunBrowsingDataRemoveWithKeyAndCompareRemovalMask(
-      "appcache", content::BrowsingDataRemover::DATA_TYPE_APP_CACHE);
-  RunBrowsingDataRemoveWithKeyAndCompareRemovalMask(
       "cache", content::BrowsingDataRemover::DATA_TYPE_CACHE);
   RunBrowsingDataRemoveWithKeyAndCompareRemovalMask(
       "cacheStorage", content::BrowsingDataRemover::DATA_TYPE_CACHE_STORAGE);
@@ -453,9 +435,8 @@ TEST_F(BrowsingDataApiTest, BrowsingDataRemovalMask) {
 // Test an arbitrary combination of data types.
 TEST_F(BrowsingDataApiTest, BrowsingDataRemovalMaskCombination) {
   RunBrowsingDataRemoveFunctionAndCompareRemovalMask(
-      "{\"appcache\": true, \"cookies\": true, \"history\": true}",
-      content::BrowsingDataRemover::DATA_TYPE_APP_CACHE |
-          content::BrowsingDataRemover::DATA_TYPE_COOKIES |
+      "{\"cookies\": true, \"history\": true}",
+      content::BrowsingDataRemover::DATA_TYPE_COOKIES |
           chrome_browsing_data_remover::DATA_TYPE_HISTORY);
 }
 
@@ -482,13 +463,12 @@ TEST_F(BrowsingDataApiTest, BrowsingDataRemovalInputFromSettings) {
     scoped_refptr<BrowsingDataSettingsFunction> settings_function =
         new BrowsingDataSettingsFunction();
     SCOPED_TRACE("settings_json");
-    std::unique_ptr<base::Value> result_value(RunFunctionAndReturnSingleResult(
+    std::unique_ptr<base::Value> result(RunFunctionAndReturnSingleResult(
         settings_function.get(), std::string("[]"), browser()));
 
-    base::DictionaryValue* result;
-    EXPECT_TRUE(result_value->GetAsDictionary(&result));
-    base::DictionaryValue* data_to_remove;
-    EXPECT_TRUE(result->GetDictionary("dataToRemove", &data_to_remove));
+    EXPECT_TRUE(result->is_dict());
+    base::Value* data_to_remove = result->FindDictKey("dataToRemove");
+    EXPECT_TRUE(data_to_remove);
 
     JSONStringValueSerializer serializer(&json);
     EXPECT_TRUE(serializer.Serialize(*data_to_remove));
@@ -506,8 +486,6 @@ TEST_F(BrowsingDataApiTest, BrowsingDataRemovalInputFromSettings) {
 }
 
 TEST_F(BrowsingDataApiTest, ShortcutFunctionRemovalMask) {
-  RunAndCompareRemovalMask<BrowsingDataRemoveAppcacheFunction>(
-      content::BrowsingDataRemover::DATA_TYPE_APP_CACHE);
   RunAndCompareRemovalMask<BrowsingDataRemoveCacheFunction>(
       content::BrowsingDataRemover::DATA_TYPE_CACHE);
   RunAndCompareRemovalMask<BrowsingDataRemoveCacheStorageFunction>(

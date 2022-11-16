@@ -7,49 +7,52 @@
 
 #include "base/callback_forward.h"
 #include "base/files/file_path.h"
+#include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
+#include "components/services/storage/privileged/mojom/indexed_db_control.mojom.h"
 #include "components/services/storage/public/cpp/constants.h"
 #include "components/services/storage/public/mojom/cache_storage_control.mojom.h"
-#include "components/services/storage/public/mojom/indexed_db_control.mojom.h"
 #include "components/services/storage/public/mojom/local_storage_control.mojom.h"
 #include "content/public/browser/storage_partition.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/network/public/mojom/network_context.mojom.h"
 
+namespace blink {
+class StorageKey;
+}  // namespace blink
+
 namespace leveldb_proto {
 class ProtoDatabaseProvider;
-}
+}  // namespace leveldb_proto
 
 namespace content {
 
-class AppCacheService;
 class BackgroundSyncContext;
 class DevToolsBackgroundServicesContext;
 class DOMStorageContext;
 class FileSystemAccessEntryFactory;
-class PlatformNotificationContext;
-class ServiceWorkerContext;
-
-#if !defined(OS_ANDROID)
 class HostZoomLevelContext;
 class HostZoomMap;
+class PlatformNotificationContext;
+class ServiceWorkerContext;
 class ZoomLevelDelegate;
-#endif  // !defined(OS_ANDROID)
 
 namespace mojom {
 class NetworkContext;
-}
+}  // namespace mojom
 
 // Fake implementation of StoragePartition.
 class TestStoragePartition : public StoragePartition {
  public:
   TestStoragePartition();
+
+  TestStoragePartition(const TestStoragePartition&) = delete;
+  TestStoragePartition& operator=(const TestStoragePartition&) = delete;
+
   ~TestStoragePartition() override;
 
   void set_path(base::FilePath file_path) { file_path_ = file_path; }
   base::FilePath GetPath() override;
-
-  base::FilePath GetBucketBasePath() override;
 
   void set_network_context(network::mojom::NetworkContext* context) {
     network_context_ = context;
@@ -71,8 +74,8 @@ class TestStoragePartition : public StoragePartition {
   }
   network::mojom::CookieManager* GetCookieManagerForBrowserProcess() override;
 
-  void CreateHasTrustTokensAnswerer(
-      mojo::PendingReceiver<network::mojom::HasTrustTokensAnswerer> receiver,
+  void CreateTrustTokenQueryAnswerer(
+      mojo::PendingReceiver<network::mojom::TrustTokenQueryAnswerer> receiver,
       const url::Origin& top_frame_origin) override;
 
   mojo::PendingRemote<network::mojom::URLLoaderNetworkServiceObserver>
@@ -81,24 +84,17 @@ class TestStoragePartition : public StoragePartition {
 
   mojo::PendingRemote<network::mojom::URLLoaderNetworkServiceObserver>
   CreateURLLoaderNetworkObserverForNavigationRequest(
-      int frame_tree_id) override;
+      NavigationRequest& navigation_request) override;
 
   void set_quota_manager(storage::QuotaManager* manager) {
     quota_manager_ = manager;
   }
   storage::QuotaManager* GetQuotaManager() override;
 
-  void set_app_cache_service(AppCacheService* service) {
-    app_cache_service_ = service;
-  }
-  AppCacheService* GetAppCacheService() override;
-
   void set_file_system_context(storage::FileSystemContext* context) {
     file_system_context_ = context;
   }
   storage::FileSystemContext* GetFileSystemContext() override;
-
-  FontAccessContext* GetFontAccessContext() override;
 
   void set_background_sync_context(BackgroundSyncContext* context) {
     background_sync_context_ = context;
@@ -145,6 +141,14 @@ class TestStoragePartition : public StoragePartition {
   }
   PlatformNotificationContext* GetPlatformNotificationContext() override;
 
+  InterestGroupManager* GetInterestGroupManager() override;
+
+  void set_browsing_topics_site_data_manager(
+      BrowsingTopicsSiteDataManager* manager) {
+    browsing_topics_site_data_manager_ = manager;
+  }
+  BrowsingTopicsSiteDataManager* GetBrowsingTopicsSiteDataManager() override;
+
   void set_devtools_background_services_context(
       DevToolsBackgroundServicesContext* context) {
     devtools_background_services_context_ = context;
@@ -166,7 +170,6 @@ class TestStoragePartition : public StoragePartition {
 
   NativeIOContext* GetNativeIOContext() override;
 
-#if !defined(OS_ANDROID)
   void set_host_zoom_map(HostZoomMap* map) { host_zoom_map_ = map; }
   HostZoomMap* GetHostZoomMap() override;
 
@@ -179,7 +182,6 @@ class TestStoragePartition : public StoragePartition {
     zoom_level_delegate_ = delegate;
   }
   ZoomLevelDelegate* GetZoomLevelDelegate() override;
-#endif  // !defined(OS_ANDROID)
 
   void ClearDataForOrigin(uint32_t remove_mask,
                           uint32_t quota_storage_remove_mask,
@@ -188,14 +190,14 @@ class TestStoragePartition : public StoragePartition {
 
   void ClearData(uint32_t remove_mask,
                  uint32_t quota_storage_remove_mask,
-                 const GURL& storage_origin,
+                 const blink::StorageKey& storage_key,
                  const base::Time begin,
                  const base::Time end,
                  base::OnceClosure callback) override;
 
   void ClearData(uint32_t remove_mask,
                  uint32_t quota_storage_remove_mask,
-                 OriginMatcherFunction origin_matcher,
+                 StorageKeyPolicyMatcherFunction storage_key_matcher,
                  network::mojom::CookieDeletionFilterPtr cookie_deletion_filter,
                  bool perform_storage_cleanup,
                  const base::Time begin,
@@ -217,6 +219,8 @@ class TestStoragePartition : public StoragePartition {
   int GetDataRemovalObserverCount();
 
   void ClearBluetoothAllowedDevicesMapForTesting() override;
+  void ResetAttributionManagerForTesting(
+      base::OnceCallback<void(bool)> callback) override;
   void FlushNetworkInterfaceForTesting() override;
   void WaitForDeletionTasksForTesting() override;
   void WaitForCodeCacheShutdownForTesting() override;
@@ -224,37 +228,41 @@ class TestStoragePartition : public StoragePartition {
       mojo::PendingRemote<network::mojom::NetworkContext>
           network_context_remote) override;
 
+  base::WeakPtr<StoragePartition> GetWeakPtr();
+  void InvalidateWeakPtrs();
+
  private:
   base::FilePath file_path_;
   mojo::Remote<network::mojom::NetworkContext> network_context_remote_;
-  network::mojom::NetworkContext* network_context_ = nullptr;
-  network::mojom::CookieManager* cookie_manager_for_browser_process_ = nullptr;
-  storage::QuotaManager* quota_manager_ = nullptr;
-  AppCacheService* app_cache_service_ = nullptr;
-  BackgroundSyncContext* background_sync_context_ = nullptr;
-  storage::FileSystemContext* file_system_context_ = nullptr;
-  storage::DatabaseTracker* database_tracker_ = nullptr;
-  DOMStorageContext* dom_storage_context_ = nullptr;
+  raw_ptr<network::mojom::NetworkContext> network_context_ = nullptr;
+  raw_ptr<network::mojom::CookieManager> cookie_manager_for_browser_process_ =
+      nullptr;
+  raw_ptr<storage::QuotaManager> quota_manager_ = nullptr;
+  raw_ptr<BackgroundSyncContext> background_sync_context_ = nullptr;
+  raw_ptr<storage::FileSystemContext> file_system_context_ = nullptr;
+  raw_ptr<storage::DatabaseTracker> database_tracker_ = nullptr;
+  raw_ptr<DOMStorageContext> dom_storage_context_ = nullptr;
   mojo::Remote<storage::mojom::LocalStorageControl> local_storage_control_;
   mojo::Remote<storage::mojom::IndexedDBControl> indexed_db_control_;
-  ServiceWorkerContext* service_worker_context_ = nullptr;
-  DedicatedWorkerService* dedicated_worker_service_ = nullptr;
-  SharedWorkerService* shared_worker_service_ = nullptr;
+  raw_ptr<ServiceWorkerContext> service_worker_context_ = nullptr;
+  raw_ptr<DedicatedWorkerService> dedicated_worker_service_ = nullptr;
+  raw_ptr<SharedWorkerService> shared_worker_service_ = nullptr;
   mojo::Remote<storage::mojom::CacheStorageControl> cache_storage_control_;
-  GeneratedCodeCacheContext* generated_code_cache_context_ = nullptr;
-  PlatformNotificationContext* platform_notification_context_ = nullptr;
-  DevToolsBackgroundServicesContext* devtools_background_services_context_ =
+  raw_ptr<GeneratedCodeCacheContext> generated_code_cache_context_ = nullptr;
+  raw_ptr<BrowsingTopicsSiteDataManager> browsing_topics_site_data_manager_ =
       nullptr;
-  ContentIndexContext* content_index_context_ = nullptr;
-  NativeIOContext* native_io_context_ = nullptr;
-#if !defined(OS_ANDROID)
-  HostZoomMap* host_zoom_map_ = nullptr;
-  HostZoomLevelContext* host_zoom_level_context_ = nullptr;
-  ZoomLevelDelegate* zoom_level_delegate_ = nullptr;
-#endif  // !defined(OS_ANDROID)
+  raw_ptr<PlatformNotificationContext> platform_notification_context_ = nullptr;
+  raw_ptr<DevToolsBackgroundServicesContext>
+      devtools_background_services_context_ = nullptr;
+  raw_ptr<ContentIndexContext> content_index_context_ = nullptr;
+  raw_ptr<NativeIOContext> native_io_context_ = nullptr;
+  raw_ptr<HostZoomMap> host_zoom_map_ = nullptr;
+  raw_ptr<HostZoomLevelContext> host_zoom_level_context_ = nullptr;
+  raw_ptr<ZoomLevelDelegate> zoom_level_delegate_ = nullptr;
   int data_removal_observer_count_ = 0;
 
-  DISALLOW_COPY_AND_ASSIGN(TestStoragePartition);
+  // This member must be the last member.
+  base::WeakPtrFactory<TestStoragePartition> weak_factory_{this};
 };
 
 }  // namespace content

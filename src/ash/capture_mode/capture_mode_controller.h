@@ -11,13 +11,16 @@
 #include "ash/ash_export.h"
 #include "ash/capture_mode/capture_mode_metrics.h"
 #include "ash/capture_mode/capture_mode_types.h"
+#include "ash/capture_mode/video_recording_watcher.h"
 #include "ash/public/cpp/capture_mode/capture_mode_delegate.h"
 #include "ash/public/cpp/session/session_observer.h"
 #include "ash/services/recording/public/mojom/recording_service.mojom.h"
 #include "base/callback_forward.h"
+#include "base/files/file_path.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "chromeos/dbus/power/power_manager_client.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -27,6 +30,8 @@
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/image/image.h"
 
+class PrefRegistrySimple;
+
 namespace base {
 class FilePath;
 class Time;
@@ -35,15 +40,38 @@ class SequencedTaskRunner;
 
 namespace ash {
 
+class CaptureModeCameraController;
 class CaptureModeSession;
-class VideoRecordingWatcher;
 
-// Controls starting and ending a Capture Mode session and its behavior.
+// Defines a callback type that will be invoked when an attempt to delete the
+// given `path` is completed with the given status `delete_successful`.
+using OnFileDeletedCallback =
+    base::OnceCallback<void(const base::FilePath& path,
+                            bool delete_successful)>;
+
+// Controls starting and ending a Capture Mode session and its behavior. There
+// are various checks that are run when a capture session start is attempted,
+// and when a capture operation is performed, to make sure they're allowed. For
+// example, checking that policy allows screen capture, and there are no content
+// on the screen restricted by DLP (Data Leak Prevention). In the case of video
+// recording, HDCP is also checked to ensure no protected content is being
+// recorded.
 class ASH_EXPORT CaptureModeController
     : public recording::mojom::RecordingServiceClient,
+      public recording::mojom::DriveFsQuotaDelegate,
       public SessionObserver,
       public chromeos::PowerManagerClient::Observer {
  public:
+  // Contains info about the folder used for saving the captured images and
+  // videos.
+  struct CaptureFolder {
+    // The absolute path of the folder used for saving the captures.
+    base::FilePath path;
+
+    // True if the above `path` is the default "Downloads" folder on the device.
+    bool is_default_downloads_folder = false;
+  };
+
   explicit CaptureModeController(std::unique_ptr<CaptureModeDelegate> delegate);
   CaptureModeController(const CaptureModeController&) = delete;
   CaptureModeController& operator=(const CaptureModeController&) = delete;
@@ -53,6 +81,11 @@ class ASH_EXPORT CaptureModeController
   // owned by Shell.
   static CaptureModeController* Get();
 
+  static void RegisterProfilePrefs(PrefRegistrySimple* registry);
+
+  CaptureModeCameraController* camera_controller() {
+    return camera_controller_.get();
+  }
   CaptureModeType type() const { return type_; }
   CaptureModeSource source() const { return source_; }
   CaptureModeSession* capture_mode_session() const {
@@ -60,7 +93,11 @@ class ASH_EXPORT CaptureModeController
   }
   gfx::Rect user_capture_region() const { return user_capture_region_; }
   bool enable_audio_recording() const { return enable_audio_recording_; }
-  bool is_recording_in_progress() const { return !!video_recording_watcher_; }
+  bool is_recording_in_progress() const {
+    return is_initializing_recording_ ||
+           (video_recording_watcher_ &&
+            !video_recording_watcher_->is_shutting_down());
+  }
 
   // Returns true if a capture mode session is currently active. If you only
   // need to call this method, but don't need the rest of the controller, use
@@ -88,6 +125,38 @@ class ASH_EXPORT CaptureModeController
   // update |last_capture_region_update_time_|.
   void SetUserCaptureRegion(const gfx::Rect& region, bool by_user);
 
+  // Returns true if we can show a user nudge animation and a toast message to
+  // alert users any available new features.
+  bool CanShowUserNudge() const;
+
+  // Disables showing the user nudge from now on. Calling the above
+  // CanShowUserNudge() will return false for the current active user going
+  // forward.
+  void DisableUserNudgeForever();
+
+  // Sets whether the currently logged in user selected to use the default
+  // "Downloads" folder as the current save location, even while they already
+  // have a currently set custom folder. When this setting is true, any
+  // currently set custom folder is ignored but not removed.
+  // This can only be called when user is logged in.
+  void SetUsesDefaultCaptureFolder(bool value);
+
+  // Sets the given |path| as the custom save location of captured images and
+  // videos for the currently logged in user. Setting an empty |path| clears any
+  // custom selected folder resulting in using the default downloads folder.
+  // Calling this function will reset the value of "UsesDefaultCaptureFolder" to
+  // false, since it means the user wants to switch to a custom folder when it's
+  // set.
+  // This can only be called when user is logged in.
+  void SetCustomCaptureFolder(const base::FilePath& path);
+
+  base::FilePath GetCustomCaptureFolder() const;
+
+  // Returns the folder in which all taken screenshots and videos will be saved.
+  // It can be the temp directory if the user is not logged in, the default
+  // "Downloads" folder, or a user-selected custom location.
+  CaptureFolder GetCurrentCaptureFolder() const;
+
   // Full screen capture for each available display if no restricted
   // content exists on that display, each capture is saved as an individual
   // file. Note: this won't start a capture mode session.
@@ -99,6 +168,13 @@ class ASH_EXPORT CaptureModeController
   void PerformCapture();
 
   void EndVideoRecording(EndRecordingReason reason);
+
+  // Posts a task to the blocking pool to check the availability of the given
+  // `folder` and replies back asynchronously by calling the given `callback`
+  // with `available` set either to true or false.
+  void CheckFolderAvailability(
+      const base::FilePath& folder,
+      base::OnceCallback<void(bool available)> callback);
 
   // Sets the |protection_mask| that is currently set on the given |window|. If
   // the |protection_mask| is |display::CONTENT_PROTECTION_METHOD_NONE|, then
@@ -114,9 +190,46 @@ class ASH_EXPORT CaptureModeController
   // protection.
   void RefreshContentProtection();
 
+  // Toggles the recording overlay on or off. When on, the recording overlay
+  // widget's window will be shown and can consume all the events targeting the
+  // window being recorded. Otherwise, it's hidden and cannot accept any events.
+  // This can only be called while recording is in progress for a Projector
+  // session.
+  void ToggleRecordingOverlayEnabled();
+
+  // Returns a new instance of the concrete view that will be used as the
+  // content view of the recording overlay widget.
+  std::unique_ptr<RecordingOverlayView> CreateRecordingOverlayView();
+
+  // Returns true if the given `path` is the root folder of DriveFS, false
+  // otherwise.
+  bool IsRootDriveFsPath(const base::FilePath& path) const;
+
+  // Returns true if the given `path` is the same as the Android Play files
+  // path, false otherwise.
+  bool IsAndroidFilesPath(const base::FilePath& path) const;
+
+  // Returns true if the given `path` is the same as the Linux Files path, false
+  // otherwise.
+  bool IsLinuxFilesPath(const base::FilePath& path) const;
+
+  // Returns the current parent window for
+  // `CaptureModeCameraController::camera_preview_widget_`.
+  aura::Window* GetCameraPreviewParentWindow() const;
+
+  // Returns the camera preview's confine bounds, which actually indicates the
+  // bounds of the surface that will be recorded. The bounds is in screen
+  // coordinate when capture source is `kFullscreen` or 'kRegion', but in
+  // window's coordinate when it is 'kWindow' type.
+  gfx::Rect GetCameraPreviewConfineBounds() const;
+
   // recording::mojom::RecordingServiceClient:
   void OnRecordingEnded(recording::mojom::RecordingStatus status,
                         const gfx::ImageSkia& thumbnail) override;
+
+  // recording::mojom::DriveFsQuotaDelegate:
+  void GetDriveFsFreeSpaceBytes(
+      GetDriveFsFreeSpaceBytesCallback callback) override;
 
   // SessionObserver:
   void OnActiveUserSessionChanged(const AccountId& account_id) override;
@@ -197,12 +310,6 @@ class ASH_EXPORT CaptureModeController
   // Called back when the mojo pipe to the recording service gets disconnected.
   void OnRecordingServiceDisconnected();
 
-  // Returns whether doing a screen capture is currently allowed by enterprise
-  // policies and a reason otherwise.
-  // ShouldBlockRecordingForContentProtection() should be used for HDCP checks.
-  CaptureAllowance IsCaptureAllowedByEnterprisePolicies(
-      const CaptureParams& capture_params) const;
-
   // Terminates the recording service process, closes any recording-related UI
   // elements (only if |success| is false as this indicates that recording was
   // not ended normally by calling EndVideoRecording()), and shows the video
@@ -231,20 +338,29 @@ class ASH_EXPORT CaptureModeController
                        scoped_refptr<base::RefCountedMemory> png_bytes);
 
   // Called back when an attempt to save the image file has been completed, with
-  // |success| indicating whether the attempt succeeded for failed. |png_bytes|
-  // is the buffer containing the captured image in a PNG format, which will be
-  // used to show a preview of the image in a notification, and save it as a
-  // bitmap in the clipboard. If saving was successful, then the image was saved
-  // in |path|.
+  // `file_saved_path` indicating whether the attempt succeeded or failed. If
+  // `file_saved_path` is empty, the attempt failed. `png_bytes` is the buffer
+  // containing the captured image in a PNG format, which will be used to show a
+  // preview of the image in a notification, and save it as a bitmap in the
+  // clipboard. If saving was successful, then the image was saved in
+  // `file_saved_path`.
   void OnImageFileSaved(scoped_refptr<base::RefCountedMemory> png_bytes,
-                        const base::FilePath& path,
-                        bool success);
+                        const base::FilePath& file_saved_path);
+
+  // Called back when the check for custom folder's availability is done in
+  // `CheckFolderAvailability`, with `available` indicating whether the custom
+  // folder is available or not.
+  void OnCustomFolderAvailabilityChecked(bool available);
 
   // Called back when the |video_file_handler_| flushes the remaining cached
   // video chunks in its buffer. Called on the UI thread. |video_thumbnail| is
   // an RGB image provided by the recording service that can be used as a
-  // thumbnail of the video in the notification.
-  void OnVideoFileSaved(const gfx::ImageSkia& video_thumbnail, bool success);
+  // thumbnail of the video in the notification. If |in_projector_mode| is true
+  // the recording will not be shown in tote or notification.
+  void OnVideoFileSaved(const base::FilePath& saved_video_file_path,
+                        const gfx::ImageSkia& video_thumbnail,
+                        bool success,
+                        bool in_projector_mode);
 
   // Shows a preview notification of the newly taken screenshot or screen
   // recording.
@@ -268,6 +384,10 @@ class ASH_EXPORT CaptureModeController
   base::FilePath BuildPathNoExtension(const char* const format_string,
                                       base::Time timestamp) const;
 
+  // Returns a fallback path concatenating the default `Downloads` folder and
+  // the base name of `path`.
+  base::FilePath GetFallbackFilePathFromFile(const base::FilePath& path);
+
   // Records the number of screenshots taken.
   void RecordAndResetScreenshotsTakenInLastDay();
   void RecordAndResetScreenshotsTakenInLastWeek();
@@ -279,11 +399,70 @@ class ASH_EXPORT CaptureModeController
   // Called when the video record 3-seconds count down finishes.
   void OnVideoRecordCountDownFinished();
 
+  // Called when the Projector controller creates the DriveFS folder that will
+  // host the video file along with the associated metadata file created by the
+  // Projector session. Note that |file_path_no_extension| is the full path of
+  // the video file minus its (.webm) extension.
+  void OnProjectorContainerFolderCreated(
+      const CaptureParams& capture_params,
+      const base::FilePath& file_path_no_extension);
+
+  // Ends the capture session and starts the video recording for the given
+  // |capture_params|. The video will be saved to a file to the given
+  // |video_file_path|. |for_projector| will be true if this recording was
+  // initiated for a Projector session.
+  // This can only be called while the session is still active.
+  void BeginVideoRecording(const CaptureParams& capture_params,
+                           bool for_projector,
+                           const base::FilePath& video_file_path);
+
   // Called to interrupt the ongoing video recording because it's not anymore
   // allowed to be captured.
   void InterruptVideoRecording();
 
+  // Called by the DLP manager when it's checked for any on-screen content
+  // restriction at the time when the capture operation is attempted. `proceed`
+  // will be set to true if the capture operation should continue, false if it
+  // should be aborted.
+  void OnDlpRestrictionCheckedAtPerformingCapture(bool proceed);
+
+  // Called by the DLP manager when it's checked again for any on-screen content
+  // restriction at the time when the video capture 3-second countdown ends.
+  // `proceed` will be set to true if video recording should begin, or false if
+  // it should be aborted.
+  void OnDlpRestrictionCheckedAtCountDownFinished(bool proceed);
+
+  // Bound to a callback that will be called by the DLP manager to let us know
+  // whether a pending session initialization should `proceed` or abort due to
+  // some restricted contents on the screen.
+  void OnDlpRestrictionCheckedAtSessionInit(CaptureModeEntryType entry_type,
+                                            bool proceed);
+
+  // At the end of a video recording, the DLP manager is checked to see if there
+  // were any restricted content of a warning level type during the recording
+  // (warning-level restrictions do not result in interrupting the video
+  // recording), if so, the DLP manager shows a dialog asking the user whether
+  // to continue with saving the video file. When the dialog closes, this
+  // function is called to provide the user choice; save the video file when
+  // `proceed` is true, or to delete it when `proceed` is false.
+  void OnDlpRestrictionCheckedAtVideoEnd(const gfx::ImageSkia& video_thumbnail,
+                                         bool success,
+                                         bool in_projector_mode,
+                                         bool proceed);
+
+  // Bound to a callback that will be called by DLP manager to let the user know
+  // whether full screen capture on all displays should `proceed` or abort due
+  // to some restricted contents on the screen.
+  void OnDlpRestrictionCheckedAtCaptureScreenshotsOfAllDisplays(bool proceed);
+
+  // Gets the corresponding `SaveLocation` enum value on the given `path`.
+  CaptureModeSaveToLocation GetSaveToOption(const base::FilePath& path);
+
   std::unique_ptr<CaptureModeDelegate> delegate_;
+
+  // Controls the selfie camera feature of capture mode. This is only available
+  // when the feature `kCaptureModeSelfieCamera` is enabled.
+  std::unique_ptr<CaptureModeCameraController> camera_controller_;
 
   CaptureModeType type_ = CaptureModeType::kImage;
   CaptureModeSource source_ = CaptureModeSource::kRegion;
@@ -293,10 +472,13 @@ class ASH_EXPORT CaptureModeController
 
   mojo::Remote<recording::mojom::RecordingService> recording_service_remote_;
   mojo::Receiver<recording::mojom::RecordingServiceClient>
-      recording_service_client_receiver_;
+      recording_service_client_receiver_{this};
+  mojo::Receiver<recording::mojom::DriveFsQuotaDelegate>
+      drive_fs_quota_delegate_receiver_{this};
 
   // This is the file path of the video file currently being recorded. It is
-  // empty when no video recording is in progress.
+  // empty when no video recording is in progress or when no video is being
+  // saved.
   base::FilePath current_video_file_path_;
 
   // We remember the user selected capture region when the source is |kRegion|
@@ -321,6 +503,11 @@ class ASH_EXPORT CaptureModeController
   // to explain why the recording was ended, and is then reset back to false.
   bool low_disk_space_threshold_reached_ = false;
 
+  // Set to true when we're waiting for a callback from the DLP manager to check
+  // content restrictions that may block capture mode at any of its stages
+  // (initialization or performing the capture).
+  bool pending_dlp_check_ = false;
+
   // Watches events that lead to ending video recording.
   std::unique_ptr<VideoRecordingWatcher> video_recording_watcher_;
 
@@ -332,7 +519,12 @@ class ASH_EXPORT CaptureModeController
       protected_windows_;
 
   // If set, it will be called when either an image or video file is saved.
-  base::OnceCallback<void(const base::FilePath&)> on_file_saved_callback_;
+  base::OnceCallback<void(const base::FilePath&)>
+      on_file_saved_callback_for_test_;
+
+  OnFileDeletedCallback on_file_deleted_callback_for_test_;
+
+  base::OnceClosure on_countdown_finished_callback_for_test_;
 
   // Timers used to schedule recording of the number of screenshots taken.
   base::RepeatingTimer num_screenshots_taken_in_last_day_scheduler_;
@@ -358,6 +550,9 @@ class ASH_EXPORT CaptureModeController
   // has passed since the last time the user changes the capture region when the
   // new capture session starts .
   base::TimeTicks last_capture_region_update_time_;
+
+  // True in the scope of BeginVideoRecording().
+  bool is_initializing_recording_ = false;
 
   base::WeakPtrFactory<CaptureModeController> weak_ptr_factory_{this};
 };

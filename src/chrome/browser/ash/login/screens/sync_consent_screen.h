@@ -9,8 +9,8 @@
 #include <string>
 
 #include "base/auto_reset.h"
-#include "base/macros.h"
 #include "base/scoped_observation.h"
+#include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "chrome/browser/ash/login/screens/base_screen.h"
 // TODO(https://crbug.com/1164001): move to forward declaration.
@@ -56,6 +56,11 @@ class SyncConsentScreen : public BaseScreen,
    public:
     SyncConsentScreenTestDelegate() = default;
 
+    SyncConsentScreenTestDelegate(const SyncConsentScreenTestDelegate&) =
+        delete;
+    SyncConsentScreenTestDelegate& operator=(
+        const SyncConsentScreenTestDelegate&) = delete;
+
     // This is called from SyncConsentScreen when user consent is passed to
     // consent auditor with resource ids recorder as consent.
     virtual void OnConsentRecordedIds(
@@ -68,9 +73,6 @@ class SyncConsentScreen : public BaseScreen,
     virtual void OnConsentRecordedStrings(
         const ::login::StringList& consent_description,
         const std::string& consent_confirmation) = 0;
-
-   private:
-    DISALLOW_COPY_AND_ASSIGN(SyncConsentScreenTestDelegate);
   };
 
   class SyncConsentScreenExitTestDelegate {
@@ -88,27 +90,23 @@ class SyncConsentScreen : public BaseScreen,
 
   SyncConsentScreen(SyncConsentScreenView* view,
                     const ScreenExitCallback& exit_callback);
+
+  SyncConsentScreen(const SyncConsentScreen&) = delete;
+  SyncConsentScreen& operator=(const SyncConsentScreen&) = delete;
+
   ~SyncConsentScreen() override;
 
   // Inits `user_`, its `profile_` and `behavior_` before using the screen.
-  void Init();
+  void Init(const WizardContext* context);
 
   // syncer::SyncServiceObserver:
   void OnStateChanged(syncer::SyncService* sync) override;
 
-  // Reacts to user action on non-split-settings sync.
-  void OnNonSplitSettingsContinue(const bool opted_in,
-                                  const bool review_sync,
-                                  const std::vector<int>& consent_description,
-                                  const int consent_confirmation);
-
-  // Reacts to "Yes, I'm in" and "No, thanks".
-  void OnContinue(const std::vector<int>& consent_description,
-                  int consent_confirmation,
-                  SyncConsentScreenHandler::UserChoice choice);
-
-  // Configures OS sync and browser sync.
-  void UpdateSyncSettings(bool enable_sync);
+  // Reacts to user action on sync.
+  void OnContinue(const bool opted_in,
+                  const bool review_sync,
+                  const std::vector<int>& consent_description,
+                  const int consent_confirmation);
 
   // Enables sync if required when skipping the dialog.
   void MaybeEnableSyncForSkip();
@@ -131,6 +129,10 @@ class SyncConsentScreen : public BaseScreen,
   static void SetSyncConsentScreenExitTestDelegate(
       SyncConsentScreenExitTestDelegate* test_delegate);
 
+  // Test API
+  // Returns true if profile sync is disabled by policy for test.
+  bool IsProfileSyncDisabledByPolicyForTest() const;
+
  private:
   // Marks the dialog complete and runs `exit_callback_`.
   void Finish(Result result);
@@ -141,10 +143,10 @@ class SyncConsentScreen : public BaseScreen,
   void HideImpl() override;
 
   // Returns new SyncScreenBehavior value.
-  SyncScreenBehavior GetSyncScreenBehavior() const;
+  SyncScreenBehavior GetSyncScreenBehavior(const WizardContext& context) const;
 
   // Calculates updated `behavior_` and performs required update actions.
-  void UpdateScreen();
+  void UpdateScreen(const WizardContext& context);
 
   // Records user Sync consent.
   void RecordConsent(ConsentGiven consent_given,
@@ -193,8 +195,6 @@ class SyncConsentScreen : public BaseScreen,
   SyncConsentScreenTestDelegate* test_delegate_ = nullptr;
 
   base::WeakPtrFactory<SyncConsentScreen> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(SyncConsentScreen);
 };
 
 }  // namespace ash

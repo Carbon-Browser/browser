@@ -1,34 +1,84 @@
 <style include="cr-shared-style shimless-rma-shared">
-  iron-icon {
-    width: 300px;
-    height: 200px;
+  #performUpdateButton {
+    border-color: var(--google-blue-600);
+  }
+
+  #restartIcon {
+    padding-inline-start: 8px;
+  }
+
+  #retryIcon {
+    padding-inline-end: 8px;
+  }
+
+  #updateIcon {
+    color: var(--cros-icon-color-secondary);
   }
 </style>
-
-<base-page orientation="column">
-  <div slot="header">
-    <!-- TODO(joonbug): Update strings for i18n -->
-    <h1>Make sure Chrome OS is up to date</h1>
-    <p>Update to the latest version of Chrome OS for an optimized repair process.</p>
-    <p id="versionInfo">{{currentVersionText_}}</p>
-    <p id="progressMessage">{{updateProgressMessage_}}</p>
-    <p id="networkUnavailable" hidden$="{{networkAvailable}}">
-      To check if OS is up to date, connect to the internet in previous screen
-    </p>
-    <p hidden$="{{!checkInProgress_}}">Checking OS version...</p>
-    <cr-button disabled="{{checkInProgress_}}"
-        hidden$="{{updateCheckButtonHidden_(networkAvailable, updateAvailable_)}}"
-        id="checkUpdate" on-click="onUpdateCheckButtonClicked_">
-      Check for updates
-    </cr-button>
-    <cr-button disabled="{{updateInProgress_}}"
-        hidden$="{{!updateAvailable_}}"
-        id="performUpdate" on-click="onUpdateButtonClicked_">
-      Update version and restart
-    </cr-button>
+<base-page equal-panes>
+  <div slot="left-pane">
+    <h1>[[i18n('osUpdateTitleText')]]</h1>
+    <div id="updateInstructionsDiv"
+        hidden$="[[!shouldShowUpdateInstructions_(updateInProgress_,
+        osUpdateEncounteredError_)]]">
+      <div hidden$="[[isCompliant_]]" class="instructions">
+        <div inner-h-t-m-l="[[verificationFailedMessage_]]"></div>
+        <div>[[i18n('osUpdateUnqualifiedComponentsBottomText')]]</div>
+      </div>
+      <div hidden$="[[!isCompliant_]]" class="instructions">
+        [[i18n('osUpdateOutOfDateDescriptionText')]]
+      </div>
+      <div id="versionInfo" class="icon-message">
+        <iron-icon id="updateIcon" class="small-icon"
+            icon="shimless-icon:info">
+        </iron-icon>
+        <span class="instructions">[[currentVersionText_]]</span>
+      </div>
+      <cr-button id="performUpdateButton" disabled="[[allButtonsDisabled]]"
+          on-click="onUpdateButtonClicked_">
+          [[updateVersionButtonLabel_]]
+        <iron-icon id="restartIcon" icon="shimless-icon:update"
+            class="small-icon-base">
+        </iron-icon>
+      </cr-button>
+    </div>
+    <div id="updateStatusDiv" class="icon-message" hidden$="[[!updateInProgress_]]">
+       <paper-spinner-lite class="small-spinner" active>
+      </paper-spinner-lite>
+      <span class="instructions">[[i18n('updatingOsVersionText')]]</span>
+    </div>
+    <div id="updateErrorDiv" hidden$="[[!osUpdateEncounteredError_]]">
+      <div id="updateErrorInstructionsDiv" class="icon-message">
+        <iron-icon class="small-icon warning-icon"
+            icon="shimless-icon:warning">
+        </iron-icon>
+        <span class="instructions">[[i18n('updatingOsErrorMessage')]]</span>
+      </div>
+      <cr-button id="retryUpdateButton" disabled="[[allButtonsDisabled]]"
+          on-click="onRetryUpdateButtonClicked_">
+          <!-- TODO(swifton): Replace this with the real retry icon when it's ready. -->
+          <iron-icon id="retryIcon" icon="shimless-icon:update"
+            class="small-icon-base">
+          </iron-icon>
+          [[i18n('retryButtonLabel')]]
+      </cr-button>
+    </div>
   </div>
-  <div slot="body">
-    <!-- TODO(joonbug): Replace with real image -->
-    <iron-icon icon="shimless:shimless-placeholder"></iron-icon>
+  <div slot="right-pane">
+    <div class="illustration-wrapper">
+      <img class="illustration" src="illustrations/update_os.svg"
+          alt="[[i18n('updateOsAltText')]]">
+    </div>
   </div>
 </base-page>
+
+<cr-dialog id="unqualifiedComponentsDialog" on-cancel="closeDialog_"
+    ignore-popstate>
+  <div slot="title">[[i18n('unqualifiedComponentsTitle')]]</div>
+  <div slot="body" id="dialogBody">[[unqualifiedComponentsText_]]</div>
+  <div slot="button-container">
+    <cr-button class="action-button" on-click="closeDialog_">
+      [[i18n('okButtonLabel')]]
+    </cr-button>
+  </div>
+</cr-dialog>

@@ -8,7 +8,8 @@
 #include <utility>
 
 #include "base/bind.h"
-#include "base/single_thread_task_runner.h"
+#include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/unguessable_token.h"
 #include "gpu/ipc/service/command_buffer_stub.h"
 #include "gpu/ipc/service/gpu_channel.h"
@@ -25,10 +26,17 @@ class DecoderProviderImpl : public mojom::GpuAcceleratedVideoDecoderProvider,
  public:
   DecoderProviderImpl(gpu::CommandBufferStub* stub,
                       const AndroidOverlayMojoFactoryCB& overlay_factory_cb)
-      : stub_(stub), overlay_factory_cb_(overlay_factory_cb) {}
+      : stub_(stub), overlay_factory_cb_(overlay_factory_cb) {
+    stub_->AddDestructionObserver(this);
+  }
+
   DecoderProviderImpl(const DecoderProviderImpl&) = delete;
   DecoderProviderImpl& operator=(const DecoderProviderImpl&) = delete;
-  ~DecoderProviderImpl() override = default;
+  ~DecoderProviderImpl() override {
+    if (stub_) {
+      stub_->RemoveDestructionObserver(this);
+    }
+  }
 
   // mojom::GpuAcceleratedVideoDecoderProvider:
   void CreateAcceleratedVideoDecoder(
@@ -57,7 +65,7 @@ class DecoderProviderImpl : public mojom::GpuAcceleratedVideoDecoderProvider,
   // gpu::CommandBufferStub::DestructionObserver:
   void OnWillDestroyStub(bool have_context) override { stub_ = nullptr; }
 
-  gpu::CommandBufferStub* stub_;
+  raw_ptr<gpu::CommandBufferStub> stub_;
   const AndroidOverlayMojoFactoryCB overlay_factory_cb_;
 };
 

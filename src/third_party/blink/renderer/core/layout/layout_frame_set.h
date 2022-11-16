@@ -23,6 +23,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_LAYOUT_LAYOUT_FRAME_SET_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_LAYOUT_LAYOUT_FRAME_SET_H_
 
+#include "base/check_op.h"
 #include "third_party/blink/renderer/core/layout/layout_box.h"
 
 namespace blink {
@@ -97,8 +98,8 @@ class LayoutFrameSet final : public LayoutBox {
 
   bool UserResize(const MouseEvent&);
 
-  bool CanResizeRow(const IntPoint&) const;
-  bool CanResizeColumn(const IntPoint&) const;
+  bool CanResizeRow(const gfx::Point&) const;
+  bool CanResizeColumn(const gfx::Point&) const;
 
   void NotifyFrameEdgeInfoChanged();
   HTMLFrameSetElement* FrameSet() const;

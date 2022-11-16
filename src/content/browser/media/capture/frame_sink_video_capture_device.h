@@ -10,15 +10,20 @@
 #include <utility>
 #include <vector>
 
-#include "base/macros.h"
+#include "base/callback_forward.h"
+#include "base/check.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "build/build_config.h"
+#include "components/viz/common/gpu/context_lost_observer.h"
 #include "components/viz/common/surfaces/frame_sink_id.h"
+#include "components/viz/common/surfaces/video_capture_target.h"
 #include "components/viz/host/client_frame_sink_video_capturer.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/browser_thread.h"
 #include "media/base/video_frame.h"
+#include "media/base/video_types.h"
+#include "media/capture/mojom/video_capture_types.mojom.h"
 #include "media/capture/video/video_capture_device.h"
 #include "media/capture/video/video_frame_receiver.h"
 #include "media/capture/video_capture_types.h"
@@ -26,7 +31,9 @@
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/device/public/mojom/wake_lock.mojom.h"
+#include "services/viz/public/cpp/compositing/video_capture_target_mojom_traits.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/compositor/compositor.h"
 
 namespace content {
 
@@ -48,9 +55,15 @@ class MouseCursorOverlayController;
 // capture, and to notify other components that capture is taking place.
 class CONTENT_EXPORT FrameSinkVideoCaptureDevice
     : public media::VideoCaptureDevice,
-      public viz::mojom::FrameSinkVideoConsumer {
+      public viz::mojom::FrameSinkVideoConsumer,
+      public viz::ContextLostObserver {
  public:
   FrameSinkVideoCaptureDevice();
+
+  FrameSinkVideoCaptureDevice(const FrameSinkVideoCaptureDevice&) = delete;
+  FrameSinkVideoCaptureDevice& operator=(const FrameSinkVideoCaptureDevice&) =
+      delete;
+
   ~FrameSinkVideoCaptureDevice() override;
 
   // Deviation from the VideoCaptureDevice interface: Since the memory pooling
@@ -72,48 +85,36 @@ class CONTENT_EXPORT FrameSinkVideoCaptureDevice
   void RequestRefreshFrame() final;
   void MaybeSuspend() final;
   void Resume() final;
+  void Crop(const base::Token& crop_id,
+            uint32_t crop_version,
+            base::OnceCallback<void(media::mojom::CropRequestResult)> callback)
+      override;
   void StopAndDeAllocate() final;
-  void OnUtilizationReport(int frame_feedback_id,
-                           media::VideoCaptureFeedback feedback) final;
+  void OnUtilizationReport(media::VideoCaptureFeedback feedback) final;
 
   // FrameSinkVideoConsumer implementation.
   void OnFrameCaptured(
-      base::ReadOnlySharedMemoryRegion data,
+      media::mojom::VideoBufferHandlePtr data,
       media::mojom::VideoFrameInfoPtr info,
       const gfx::Rect& content_rect,
       mojo::PendingRemote<viz::mojom::FrameSinkVideoConsumerFrameCallbacks>
-          callbacks) final;
+          callbacks) override;
+  void OnNewCropVersion(uint32_t crop_version) final;
+  void OnFrameWithEmptyRegionCapture() final;
   void OnStopped() final;
   void OnLog(const std::string& message) final;
 
-  // All of the information necessary to select a target for capture.
-  struct VideoCaptureTarget {
-    // The target frame sink id.
-    viz::FrameSinkId frame_sink_id;
-
-    // The subtree capture identifier--may be default initialized to indicate
-    // that the entire frame sink (defined by |frame_sink_id|) should be
-    // captured.
-    viz::SubtreeCaptureId subtree_capture_id;
-
-    inline bool operator==(const VideoCaptureTarget& other) const {
-      return frame_sink_id == other.frame_sink_id &&
-             subtree_capture_id == other.subtree_capture_id;
-    }
-
-    inline bool operator!=(const VideoCaptureTarget& other) const {
-      return !(*this == other);
-    }
-  };
-
   // These are called to notify when the capture target has changed or was
-  // permanently lost.
-  virtual void OnTargetChanged(const VideoCaptureTarget& target);
+  // permanently lost. NOTE: a target can be temporarily absl::nullopt without
+  // being permanently lost.
+  virtual void OnTargetChanged(
+      const absl::optional<viz::VideoCaptureTarget>& target,
+      uint32_t crop_version);
   virtual void OnTargetPermanentlyLost();
 
  protected:
   MouseCursorOverlayController* cursor_controller() const {
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
     return cursor_controller_.get();
 #else
     return nullptr;
@@ -130,6 +131,9 @@ class CONTENT_EXPORT FrameSinkVideoCaptureDevice
   virtual void CreateCapturer(
       mojo::PendingReceiver<viz::mojom::FrameSinkVideoCapturer> receiver);
 
+  // viz::ContextLostObserver implementation:
+  void OnContextLost() override;
+
   // Establishes connection to FrameSinkVideoCapturer using the global
   // viz::HostFrameSinkManager.
   static void CreateCapturerViaGlobalManager(
@@ -137,6 +141,31 @@ class CONTENT_EXPORT FrameSinkVideoCaptureDevice
 
  private:
   using BufferId = decltype(media::VideoCaptureDevice::Client::Buffer::id);
+
+  // Fetches |context_provider_| and starts observing it for context lost
+  // events. When a context provider is set, we will also set
+  // |gpu_capabilities_| and |gpu_capabilities_generation_| - they will be kept
+  // up to date for the lifetime of the device.
+  void ObserveContextProvider();
+
+  // Re-creates the |capturer_| if needed. The capturer will be recreated (and
+  // re-started if the current one was running) if it is configured to use a
+  // pixel format that is different than the pixel format that we are able to
+  // use given current device capabilities (e.g. when a capturer was configured
+  // to use NV12 format but conditions changed and now we can only capture
+  // I420 format).
+  void RestartCapturerIfNeeded();
+
+  // Helper, checks if the FrameSinkVideoCapturer should be able to support
+  // capture using NV12 pixel format - this depends on device capabilities.
+  bool CanSupportNV12Format() const;
+
+  // Helper, returns desired video pixel format based on the contents of
+  // |capture_parameters_|. If the capture parameters specify
+  // PIXEL_FORMAT_UNKNOWN, it means we need to decide between I420 and NV12.
+  media::VideoPixelFormat GetDesiredVideoPixelFormat() const;
+
+  void AllocateCapturer(media::VideoPixelFormat pixel_format);
 
   // If not consuming and all preconditions are met, set up and start consuming.
   void MaybeStartConsuming();
@@ -158,7 +187,7 @@ class CONTENT_EXPORT FrameSinkVideoCaptureDevice
   // Current capture target. This is cached to resolve a race where
   // OnTargetChanged() can be called before the |capturer_| is created in
   // OnCapturerCreated().
-  VideoCaptureTarget target_;
+  absl::optional<viz::VideoCaptureTarget> target_;
 
   // The requested format, rate, and other capture constraints.
   media::VideoCaptureParams capture_params_;
@@ -174,6 +203,12 @@ class CONTENT_EXPORT FrameSinkVideoCaptureDevice
 
   std::unique_ptr<viz::ClientFrameSinkVideoCapturer> capturer_;
 
+  // Context provider that was used to query the GPU capabilities. May be null
+  // if the GPU capabilities were not needed to be known to start the capture.
+  scoped_refptr<viz::ContextProvider> context_provider_;
+  // Capabilities obtained from |context_provider_|.
+  absl::optional<gpu::Capabilities> gpu_capabilities_;
+
   // A vector that holds the "callbacks" mojo::Remote for each frame while the
   // frame is being processed by VideoFrameReceiver. The index corresponding to
   // a particular frame is used as the BufferId passed to VideoFrameReceiver.
@@ -188,20 +223,27 @@ class CONTENT_EXPORT FrameSinkVideoCaptureDevice
 
   SEQUENCE_CHECKER(sequence_checker_);
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
   // Controls the overlay that renders the mouse cursor onto each video frame.
   const std::unique_ptr<MouseCursorOverlayController,
                         BrowserThread::DeleteOnUIThread>
       cursor_controller_;
 #endif
 
+  // Whenever the crop-target of a stream changes, the associated crop-version
+  // is incremented. This value is used in frames' metadata so as to allow
+  // other modules (mostly Blink) to see which frames are cropped to the
+  // old/new specified crop-target.
+  // The value 0 is used before any crop-target is assigned. (Note that by
+  // cropping and then uncropping, values other than 0 can also be associated
+  // with an uncropped track.)
+  uint32_t crop_version_ = 0;
+
   // Prevent display sleeping while content capture is in progress.
   mojo::Remote<device::mojom::WakeLock> wake_lock_;
 
   // Creates WeakPtrs for use on the device thread.
   base::WeakPtrFactory<FrameSinkVideoCaptureDevice> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(FrameSinkVideoCaptureDevice);
 };
 
 }  // namespace content

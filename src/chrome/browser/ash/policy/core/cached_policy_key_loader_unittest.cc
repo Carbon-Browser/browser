@@ -6,17 +6,17 @@
 
 #include <memory>
 
+#include "ash/components/cryptohome/cryptohome_parameters.h"
 #include "base/bind.h"
 #include "base/callback.h"
 #include "base/callback_helpers.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
-#include "chromeos/cryptohome/cryptohome_parameters.h"
-#include "chromeos/dbus/userdataauth/fake_cryptohome_misc_client.h"
-#include "chromeos/dbus/userdataauth/userdataauth_client.h"
+#include "chromeos/ash/components/dbus/userdataauth/fake_cryptohome_misc_client.h"
+#include "chromeos/ash/components/dbus/userdataauth/userdataauth_client.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace policy {
@@ -30,6 +30,10 @@ const char kTestUserName[] = "test-user@example.com";
 class CachedPolicyKeyLoaderTest : public testing::Test {
  protected:
   CachedPolicyKeyLoaderTest() = default;
+
+  CachedPolicyKeyLoaderTest(const CachedPolicyKeyLoaderTest&) = delete;
+  CachedPolicyKeyLoaderTest& operator=(const CachedPolicyKeyLoaderTest&) =
+      delete;
 
   void SetUp() override {
     ASSERT_TRUE(tmp_dir_.CreateUniqueTempDir());
@@ -50,7 +54,7 @@ class CachedPolicyKeyLoaderTest : public testing::Test {
 
   base::FilePath user_policy_key_file() const {
     const std::string sanitized_username =
-        chromeos::UserDataAuthClient::GetStubSanitizedUsername(cryptohome_id_);
+        ash::UserDataAuthClient::GetStubSanitizedUsername(cryptohome_id_);
     return user_policy_keys_dir()
         .AppendASCII(sanitized_username)
         .AppendASCII("policy.pub");
@@ -70,7 +74,7 @@ class CachedPolicyKeyLoaderTest : public testing::Test {
 
   base::test::TaskEnvironment task_environment_{
       base::test::TaskEnvironment::MainThreadType::UI};
-  chromeos::FakeCryptohomeMiscClient cryptohome_misc_client_;
+  ash::FakeCryptohomeMiscClient cryptohome_misc_client_;
   const AccountId account_id_ = AccountId::FromUserEmail(kTestUserName);
   const cryptohome::AccountIdentifier cryptohome_id_ =
       cryptohome::CreateAccountIdentifierFromAccountId(account_id_);
@@ -82,8 +86,6 @@ class CachedPolicyKeyLoaderTest : public testing::Test {
 
  private:
   base::ScopedTempDir tmp_dir_;
-
-  DISALLOW_COPY_AND_ASSIGN(CachedPolicyKeyLoaderTest);
 };
 
 // Loads an existing key file using EnsurePolicyKeyLoaded.

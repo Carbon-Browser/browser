@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "base/time/default_tick_clock.h"
+#include "base/time/time.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/mojom/frame/user_activation_notification_type.mojom-blink.h"
@@ -195,8 +196,14 @@ void MediaSession::OnMetadataChanged() {
   if (!service)
     return;
 
-  service->SetMetadata(MediaMetadataSanitizer::SanitizeAndConvertToMojo(
-      metadata_, GetSupplementable()->DomWindow()));
+  // OnMetadataChanged() is called from a timer. The Window/ExecutionContext
+  // might detaches in the meantime. See https://crbug.com/1269522
+  ExecutionContext* context = GetSupplementable()->DomWindow();
+  if (!context)
+    return;
+
+  service->SetMetadata(
+      MediaMetadataSanitizer::SanitizeAndConvertToMojo(metadata_, context));
 }
 
 void MediaSession::setActionHandler(const String& action,
@@ -352,7 +359,7 @@ base::TimeDelta MediaSession::GetPositionNow() const {
       (now - position_state_->last_updated_time);
   const base::TimeDelta updated_position =
       position_state_->position + elapsed_time;
-  const base::TimeDelta start = base::TimeDelta::FromSeconds(0);
+  const base::TimeDelta start = base::Seconds(0);
 
   if (updated_position <= start)
     return start;

@@ -7,62 +7,83 @@
  * Settings page for managing Parental Controls features.
  */
 
-Polymer({
-  is: 'settings-parental-controls-page',
+import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
+import 'chrome://resources/cr_elements/icons.m.js';
+import '../../settings_page/settings_animated_pages.js';
+import '../../settings_page/settings_subpage.js';
+import '../../settings_shared.css.js';
 
-  behaviors: [
-    I18nBehavior,
-  ],
+import {I18nBehavior, I18nBehaviorInterface} from 'chrome://resources/js/i18n_behavior.m.js';
+import {html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-  properties: {
-    /** @private */
-    isChild_: {
-      type: Boolean,
-      value() {
-        return loadTimeData.getBoolean('isChild');
-      }
-    },
+import {loadTimeData} from '../../i18n_setup.js';
 
-    /** @private */
-    online_: {
-      type: Boolean,
-      value() {
-        return navigator.onLine;
-      }
-    },
+import {ParentalControlsBrowserProxy, ParentalControlsBrowserProxyImpl} from './parental_controls_browser_proxy.js';
 
-    /**
-     * True if redesign of account management flows is enabled.
-     * @private
-     */
-    isAccountManagementFlowsV2Enabled_: {
-      type: Boolean,
-      value() {
-        return loadTimeData.getBoolean('isAccountManagementFlowsV2Enabled');
+/**
+ * @constructor
+ * @extends {PolymerElement}
+ * @implements {I18nBehaviorInterface}
+ */
+const SettingsParentalControlsPageElementBase =
+    mixinBehaviors([I18nBehavior], PolymerElement);
+
+/** @polymer */
+export class SettingsParentalControlsPageElement extends
+    SettingsParentalControlsPageElementBase {
+  static get is() {
+    return 'settings-parental-controls-page';
+  }
+
+  static get template() {
+    return html`{__html_template__}`;
+  }
+
+  static get properties() {
+    return {
+      /** @private */
+      isChild_: {
+        type: Boolean,
+        value() {
+          return loadTimeData.getBoolean('isChild');
+        },
       },
-      readOnly: true,
-    },
-  },
+
+      /** @private */
+      online_: {
+        type: Boolean,
+        value() {
+          return navigator.onLine;
+        },
+      },
+    };
+  }
 
   /** @override */
-  created() {
-    this.browserProxy_ = parental_controls.ParentalControlsBrowserProxyImpl.getInstance();
-  },
+  constructor() {
+    super();
+
+    /** @private {!ParentalControlsBrowserProxy} */
+    this.browserProxy_ = ParentalControlsBrowserProxyImpl.getInstance();
+  }
 
   /** @override */
   ready() {
+    super.ready();
+
     // Set up online/offline listeners.
     window.addEventListener('offline', this.onOffline_.bind(this));
     window.addEventListener('online', this.onOnline_.bind(this));
-  },
+  }
 
   /**
    * Returns the setup parental controls CrButtonElement.
    * @return {?CrButtonElement}
    */
   getSetupButton() {
-    return /** @type {?CrButtonElement} */ (this.$$('#setupButton'));
-  },
+    return /** @type {?CrButtonElement} */ (
+        this.shadowRoot.querySelector('#setupButton'));
+  }
 
   /**
    * Updates the UI when the device goes offline.
@@ -70,7 +91,7 @@ Polymer({
    */
   onOffline_() {
     this.online_ = false;
-  },
+  }
 
   /**
    * Updates the UI when the device comes online.
@@ -78,7 +99,7 @@ Polymer({
    */
   onOnline_() {
     this.online_ = true;
-  },
+  }
 
   /**
    * @return {string} Returns the string to display in the main
@@ -91,35 +112,21 @@ Polymer({
     } else {
       return this.i18n('parentalControlsPageConnectToInternetLabel');
     }
-  },
-
-  /**
-   * @return {string}
-   * @private
-   */
-  getLabelClassList_() {
-    return this.isAccountManagementFlowsV2Enabled_ ?
-        'middle settings-box-text' :
-        'start settings-box-text';
-  },
-
-  /**
-   * @return {string}
-   * @private
-   */
-  getStartIcon_() {
-    return this.isAccountManagementFlowsV2Enabled_ ? 'cr20:kite' : '';
-  },
+  }
 
   /** @private */
   handleSetupButtonClick_(event) {
     event.stopPropagation();
     this.browserProxy_.showAddSupervisionDialog();
-  },
+  }
 
   /** @private */
   handleFamilyLinkButtonClick_(event) {
     event.stopPropagation();
     this.browserProxy_.launchFamilyLinkSettings();
-  },
-});
+  }
+}
+
+customElements.define(
+    SettingsParentalControlsPageElement.is,
+    SettingsParentalControlsPageElement);

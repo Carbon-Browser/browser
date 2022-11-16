@@ -7,7 +7,7 @@
 
 #include "third_party/blink/renderer/modules/sensor/sensor_proxy.h"
 
-#include "third_party/blink/renderer/platform/heap/handle.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_receiver.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_remote.h"
 #include "third_party/blink/renderer/platform/timer.h"
@@ -25,6 +25,10 @@ class SensorProxyImpl final : public SensorProxy,
   SensorProxyImpl(device::mojom::blink::SensorType,
                   SensorProviderProxy*,
                   Page*);
+
+  SensorProxyImpl(const SensorProxyImpl&) = delete;
+  SensorProxyImpl& operator=(const SensorProxyImpl&) = delete;
+
   ~SensorProxyImpl() override;
 
   void Trace(Visitor*) const override;
@@ -87,8 +91,6 @@ class SensorProxyImpl final : public SensorProxy,
 
   WTF::Vector<double> active_frequencies_;
   HeapTaskRunnerTimer<SensorProxyImpl> polling_timer_;
-
-  DISALLOW_COPY_AND_ASSIGN(SensorProxyImpl);
 };
 
 }  // namespace blink

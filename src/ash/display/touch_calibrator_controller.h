@@ -15,6 +15,7 @@
 #include "ui/display/manager/managed_display_info.h"
 #include "ui/events/devices/touchscreen_device.h"
 #include "ui/events/event_handler.h"
+#include "ui/gfx/geometry/transform.h"
 #include "ui/views/widget/unique_widget_ptr.h"
 
 namespace ui {
@@ -44,6 +45,11 @@ class ASH_EXPORT TouchCalibratorController
   static const base::TimeDelta kTouchIntervalThreshold;
 
   TouchCalibratorController();
+
+  TouchCalibratorController(const TouchCalibratorController&) = delete;
+  TouchCalibratorController& operator=(const TouchCalibratorController&) =
+      delete;
+
   ~TouchCalibratorController() override;
 
   // ui::EventHandler
@@ -131,8 +137,6 @@ class ASH_EXPORT TouchCalibratorController
   // linked to. We need to undo these transformations before recording the event
   // locations.
   gfx::Transform event_transformer_;
-
-  DISALLOW_COPY_AND_ASSIGN(TouchCalibratorController);
 };
 
 }  // namespace ash

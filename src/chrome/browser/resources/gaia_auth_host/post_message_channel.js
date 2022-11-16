@@ -24,7 +24,7 @@
     'chrome://oobe',
     'chrome://chrome-signin',
     'chrome://password-change',
-    'chrome://lock-reauth'
+    'chrome://lock-reauth',
   ];
 
   /** @const */
@@ -66,7 +66,7 @@
       for (let i = 0; i < this.listeners_.length; ++i) {
         this.listeners_[i].call(undefined, e);
       }
-    }
+    },
   };
 
   /**
@@ -198,7 +198,7 @@
       this.postToUpperWindow({
         type: CHANNEL_CONNECT_MESSAGE,
         channelId: port.channelId,
-        channelName: port.name
+        channelName: port.name,
       });
       return port;
     },
@@ -222,7 +222,7 @@
      * Window 'message' handler.
      */
     onMessage_(e) {
-      if (typeof e.data != 'object' || !e.data.hasOwnProperty('type')) {
+      if (typeof e.data !== 'object' || !e.data.hasOwnProperty('type')) {
         return;
       }
 
@@ -249,7 +249,7 @@
           this.postToUpperWindow(e.data);
         }
       } else if (e.data.type === CHANNEL_INIT_MESSAGE) {
-        if (ALLOWED_ORIGINS.indexOf(e.origin) == -1) {
+        if (ALLOWED_ORIGINS.indexOf(e.origin) === -1) {
           return;
         }
 
@@ -268,7 +268,7 @@
         }
         this.deferredUpperWindowPorts_ = [];
       }
-    }
+    },
   };
 
   /**
@@ -323,7 +323,7 @@
 
     handleWindowMessage(e) {
       this.onMessage.dispatch(e.data.payload);
-    }
+    },
   };
 
   /**

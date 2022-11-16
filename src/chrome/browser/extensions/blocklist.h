@@ -14,15 +14,18 @@
 
 #include "base/callback.h"
 #include "base/callback_list.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "components/keyed_service/core/keyed_service.h"
-#include "components/safe_browsing/core/browser/db/database_manager.h"
 #include "extensions/browser/blocklist_state.h"
 
 namespace content {
 class BrowserContext;
+}
+
+namespace safe_browsing {
+class SafeBrowsingDatabaseManager;
 }
 
 namespace extensions {
@@ -44,21 +47,7 @@ class Blocklist : public KeyedService, public base::SupportsWeakPtr<Blocklist> {
     virtual ~Observer();
 
    private:
-    Blocklist* blocklist_;
-  };
-
-  class ScopedDatabaseManagerForTest {
-   public:
-    explicit ScopedDatabaseManagerForTest(
-        scoped_refptr<safe_browsing::SafeBrowsingDatabaseManager>
-            database_manager);
-
-    ~ScopedDatabaseManagerForTest();
-
-   private:
-    scoped_refptr<safe_browsing::SafeBrowsingDatabaseManager> original_;
-
-    DISALLOW_COPY_AND_ASSIGN(ScopedDatabaseManagerForTest);
+    raw_ptr<Blocklist> blocklist_;
   };
 
   using BlocklistStateMap = std::map<std::string, BlocklistState>;
@@ -71,7 +60,12 @@ class Blocklist : public KeyedService, public base::SupportsWeakPtr<Blocklist> {
 
   using IsBlocklistedCallback = base::OnceCallback<void(BlocklistState)>;
 
+  using DatabaseReadyCallback = base::OnceCallback<void(bool)>;
+
   explicit Blocklist(ExtensionPrefs* prefs);
+
+  Blocklist(const Blocklist&) = delete;
+  Blocklist& operator=(const Blocklist&) = delete;
 
   ~Blocklist() override;
 
@@ -118,7 +112,13 @@ class Blocklist : public KeyedService, public base::SupportsWeakPtr<Blocklist> {
   void AddObserver(Observer* observer);
   void RemoveObserver(Observer* observer);
 
+  // Invokes the callback method with a boolean indicating
+  // whether the database is ready.
+  void IsDatabaseReady(DatabaseReadyCallback callback);
+
  private:
+  friend class ScopedDatabaseManagerForTest;
+
   // Use via ScopedDatabaseManagerForTest.
   static void SetDatabaseManager(
       scoped_refptr<safe_browsing::SafeBrowsingDatabaseManager>
@@ -160,8 +160,6 @@ class Blocklist : public KeyedService, public base::SupportsWeakPtr<Blocklist> {
   // is a pair of [vector of string ids to check, response closure].
   std::list<std::pair<std::vector<std::string>, base::OnceClosure>>
       state_requests_;
-
-  DISALLOW_COPY_AND_ASSIGN(Blocklist);
 };
 
 }  // namespace extensions

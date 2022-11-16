@@ -18,15 +18,15 @@
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "components/policy/core/browser/browser_policy_connector.h"
 #include "components/policy/core/common/cloud/device_management_service.h"
-#include "components/signin/public/identity_manager/consent_level.h"
+#include "components/signin/public/base/consent_level.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 
 namespace arc {
 
 namespace {
 
-constexpr base::TimeDelta kRetryDelayMin = base::TimeDelta::FromSeconds(10);
-constexpr base::TimeDelta kRetryDelayMax = base::TimeDelta::FromHours(1);
+constexpr base::TimeDelta kRetryDelayMin = base::Seconds(10);
+constexpr base::TimeDelta kRetryDelayMax = base::Hours(1);
 
 policy::DeviceManagementService* GetDeviceManagementService() {
   policy::BrowserPolicyConnectorAsh* const connector =

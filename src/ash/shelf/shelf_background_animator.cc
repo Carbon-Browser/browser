@@ -17,6 +17,7 @@
 #include "ash/style/default_color_constants.h"
 #include "ash/wallpaper/wallpaper_controller_impl.h"
 #include "ash/wm/tablet_mode/tablet_mode_controller.h"
+#include "base/time/time.h"
 #include "ui/gfx/animation/slide_animation.h"
 #include "ui/gfx/color_analysis.h"
 #include "ui/gfx/color_palette.h"
@@ -178,7 +179,7 @@ void ShelfBackgroundAnimator::CreateAnimator(
     case ShelfBackgroundType::kAppList:
     case ShelfBackgroundType::kHomeLauncher:
     case ShelfBackgroundType::kMaximizedWithAppList:
-      duration = base::TimeDelta::FromMilliseconds(500);
+      duration = base::Milliseconds(500);
       break;
     case ShelfBackgroundType::kMaximized:
     case ShelfBackgroundType::kOobe:
@@ -186,7 +187,7 @@ void ShelfBackgroundAnimator::CreateAnimator(
     case ShelfBackgroundType::kLoginNonBlurredWallpaper:
     case ShelfBackgroundType::kOverview:
     case ShelfBackgroundType::kInApp:
-      duration = base::TimeDelta::FromMilliseconds(250);
+      duration = base::Milliseconds(250);
       break;
   }
 
@@ -244,6 +245,11 @@ SkColor ShelfBackgroundAnimator::GetBackgroundColor(
       break;
   }
   return shelf_target_color;
+}
+
+void ShelfBackgroundAnimator::CompleteAnimationForTesting() {
+  if (animator_)
+    animator_->End();
 }
 
 void ShelfBackgroundAnimator::SetAnimationValues(double t) {

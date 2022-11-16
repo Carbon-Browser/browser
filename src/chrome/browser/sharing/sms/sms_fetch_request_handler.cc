@@ -28,8 +28,7 @@ namespace {
 // To mitigate the overlapping of the notification for SMS and the one for
 // user permission, we postpone showing the latter to make sure it's always
 // visible to users.
-static constexpr base::TimeDelta kNotificationDelay =
-    base::TimeDelta::FromSeconds(1);
+static constexpr base::TimeDelta kNotificationDelay = base::Seconds(1);
 
 bool DoesMatchOriginList(const std::vector<std::u16string>& origins,
                          const content::OriginList& origin_list) {
@@ -193,7 +192,7 @@ SmsFetchRequestHandler::Request::Request(
       origin_list_(origin_list),
       client_name_(client_name),
       respond_callback_(std::move(respond_callback)) {
-  fetcher_->Subscribe(origin_list_, this);
+  fetcher_->Subscribe(origin_list_, *this);
 }
 
 SmsFetchRequestHandler::Request::~Request() {

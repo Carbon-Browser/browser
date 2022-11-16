@@ -12,9 +12,13 @@
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/values.h"
+#include "chrome/browser/ash/system_extensions/system_extensions_profile_utils.h"
+#include "chrome/browser/ash/system_extensions/system_extensions_provider.h"
 #include "content/public/common/url_constants.h"
 #include "services/data_decoder/public/cpp/data_decoder.h"
 #include "url/gurl.h"
+
+namespace ash {
 
 namespace {
 
@@ -63,7 +67,8 @@ void SystemExtensionsSandboxedUnpacker::GetSystemExtensionFromDir(
 
 void SystemExtensionsSandboxedUnpacker::OnSystemExtensionManifestRead(
     GetSystemExtensionFromCallback callback,
-    SystemExtensionsStatusOr<std::string, Status> result) {
+    SystemExtensionsStatusOr<SystemExtensionsInstallStatus, std::string>
+        result) {
   if (!result.ok()) {
     std::move(callback).Run(result.status());
     return;
@@ -84,12 +89,13 @@ void SystemExtensionsSandboxedUnpacker::GetSystemExtensionFromString(
 void SystemExtensionsSandboxedUnpacker::OnSystemExtensionManifestParsed(
     GetSystemExtensionFromCallback callback,
     data_decoder::DataDecoder::ValueOrError value_or_error) {
-  if (value_or_error.error.has_value()) {
-    std::move(callback).Run(Status::kFailedJsonErrorParsingManifest);
+  if (!value_or_error.has_value()) {
+    std::move(callback).Run(
+        SystemExtensionsInstallStatus::kFailedJsonErrorParsingManifest);
     return;
   }
 
-  base::Value& parsed_manifest = value_or_error.value.value();
+  base::Value& parsed_manifest = *value_or_error;
 
   SystemExtension system_extension;
 
@@ -98,12 +104,12 @@ void SystemExtensionsSandboxedUnpacker::OnSystemExtensionManifestParsed(
   // Parse id.
   std::string* id_str = parsed_manifest.FindStringKey(kIdKey);
   if (!id_str) {
-    std::move(callback).Run(Status::kFailedIdMissing);
+    std::move(callback).Run(SystemExtensionsInstallStatus::kFailedIdMissing);
     return;
   }
   absl::optional<SystemExtensionId> id = SystemExtension::StringToId(*id_str);
   if (!id.has_value()) {
-    std::move(callback).Run(Status::kFailedIdInvalid);
+    std::move(callback).Run(SystemExtensionsInstallStatus::kFailedIdInvalid);
     return;
   }
   system_extension.id = id.value();
@@ -111,11 +117,11 @@ void SystemExtensionsSandboxedUnpacker::OnSystemExtensionManifestParsed(
   // Parse type.
   std::string* type_str = parsed_manifest.FindStringKey(kTypeKey);
   if (!type_str) {
-    std::move(callback).Run(Status::kFailedTypeMissing);
+    std::move(callback).Run(SystemExtensionsInstallStatus::kFailedTypeMissing);
     return;
   }
   if (base::CompareCaseInsensitiveASCII("echo", *type_str) != 0) {
-    std::move(callback).Run(Status::kFailedTypeInvalid);
+    std::move(callback).Run(SystemExtensionsInstallStatus::kFailedTypeInvalid);
     return;
   }
   system_extension.type = SystemExtensionType::kEcho;
@@ -125,22 +131,27 @@ void SystemExtensionsSandboxedUnpacker::OnSystemExtensionManifestParsed(
   // If both the type and id are valid, there is no possible way for the
   // base_url to be invalid.
   CHECK(base_url.is_valid());
+  CHECK(SystemExtension::IsSystemExtensionOrigin(url::Origin::Create(base_url)))
+      << base_url.spec();
   system_extension.base_url = base_url;
 
   // Parse service_worker_url.
   std::string* service_worker_path =
       parsed_manifest.FindStringKey(kServiceWorkerUrlKey);
   if (!service_worker_path) {
-    std::move(callback).Run(Status::kFailedServiceWorkerUrlMissing);
+    std::move(callback).Run(
+        SystemExtensionsInstallStatus::kFailedServiceWorkerUrlMissing);
     return;
   }
   const GURL service_worker_url = base_url.Resolve(*service_worker_path);
   if (!service_worker_url.is_valid() || service_worker_url == base_url) {
-    std::move(callback).Run(Status::kFailedServiceWorkerUrlInvalid);
+    std::move(callback).Run(
+        SystemExtensionsInstallStatus::kFailedServiceWorkerUrlInvalid);
     return;
   }
   if (!url::IsSameOriginWith(base_url, service_worker_url)) {
-    std::move(callback).Run(Status::kFailedServiceWorkerUrlDifferentOrigin);
+    std::move(callback).Run(
+        SystemExtensionsInstallStatus::kFailedServiceWorkerUrlDifferentOrigin);
     return;
   }
   system_extension.service_worker_url = service_worker_url;
@@ -150,12 +161,12 @@ void SystemExtensionsSandboxedUnpacker::OnSystemExtensionManifestParsed(
   // installation.
   std::string* name = parsed_manifest.FindStringKey(kNameKey);
   if (!name) {
-    std::move(callback).Run(Status::kFailedNameMissing);
+    std::move(callback).Run(SystemExtensionsInstallStatus::kFailedNameMissing);
     return;
   }
 
   if (name->empty()) {
-    std::move(callback).Run(Status::kFailedNameEmpty);
+    std::move(callback).Run(SystemExtensionsInstallStatus::kFailedNameEmpty);
     return;
   }
   system_extension.name = *name;
@@ -186,20 +197,22 @@ void SystemExtensionsSandboxedUnpacker::OnSystemExtensionManifestParsed(
 
 SystemExtensionsSandboxedUnpacker::IOHelper::~IOHelper() = default;
 
-SystemExtensionsStatusOr<std::string, SystemExtensionsSandboxedUnpacker::Status>
+SystemExtensionsStatusOr<SystemExtensionsInstallStatus, std::string>
 SystemExtensionsSandboxedUnpacker::IOHelper::ReadManifestInDirectory(
     const base::FilePath& system_extension_dir) {
   // Validate input |system_extension_dir|.
   if (system_extension_dir.value().empty() ||
       !base::DirectoryExists(system_extension_dir)) {
-    return Status::kFailedDirectoryMissing;
+    return SystemExtensionsInstallStatus::kFailedDirectoryMissing;
   }
 
   base::FilePath manifest_path = system_extension_dir.Append(kManifestName);
   std::string manifest_contents;
   if (!base::ReadFileToString(manifest_path, &manifest_contents)) {
-    return Status::kFailedManifestReadError;
+    return SystemExtensionsInstallStatus::kFailedManifestReadError;
   }
 
   return manifest_contents;
 }
+
+}  // namespace ash

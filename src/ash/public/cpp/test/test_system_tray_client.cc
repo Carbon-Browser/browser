@@ -16,17 +16,25 @@ void TestSystemTrayClient::ShowBluetoothSettings() {
   show_bluetooth_settings_count_++;
 }
 
+void TestSystemTrayClient::ShowBluetoothSettings(const std::string& device_id) {
+  show_bluetooth_settings_count_++;
+  last_bluetooth_settings_device_id_ = device_id;
+}
+
 void TestSystemTrayClient::ShowBluetoothPairingDialog(
-    const std::string& address,
-    const std::u16string& name_for_display,
-    bool paired,
-    bool connected) {}
+    absl::optional<base::StringPiece> device_address) {
+  show_bluetooth_pairing_dialog_count_++;
+}
 
 void TestSystemTrayClient::ShowDateSettings() {}
 
 void TestSystemTrayClient::ShowSetTimeDialog() {}
 
 void TestSystemTrayClient::ShowDisplaySettings() {}
+
+void TestSystemTrayClient::ShowDarkModeSettings() {}
+
+void TestSystemTrayClient::ShowStorageSettings() {}
 
 void TestSystemTrayClient::ShowPowerSettings() {}
 
@@ -46,8 +54,6 @@ void TestSystemTrayClient::ShowWifiSyncSettings() {
 
 void TestSystemTrayClient::ShowAboutChromeOS() {}
 
-void TestSystemTrayClient::ShowHelp() {}
-
 void TestSystemTrayClient::ShowAccessibilityHelp() {}
 
 void TestSystemTrayClient::ShowAccessibilitySettings() {}
@@ -62,14 +68,19 @@ void TestSystemTrayClient::ShowPrivacyAndSecuritySettings() {
   show_os_settings_privacy_and_security_count_++;
 }
 
-void TestSystemTrayClient::ShowPublicAccountInfo() {}
+void TestSystemTrayClient::ShowSmartPrivacySettings() {
+  show_os_smart_privacy_settings_count_++;
+}
 
 void TestSystemTrayClient::ShowEnterpriseInfo() {}
 
 void TestSystemTrayClient::ShowNetworkConfigure(const std::string& network_id) {
 }
 
-void TestSystemTrayClient::ShowNetworkCreate(const std::string& type) {}
+void TestSystemTrayClient::ShowNetworkCreate(const std::string& type) {
+  show_network_create_count_++;
+  last_network_type_ = type;
+}
 
 void TestSystemTrayClient::ShowSettingsCellularSetup(bool show_psim_flow) {}
 
@@ -82,15 +93,31 @@ void TestSystemTrayClient::ShowThirdPartyVpnCreate(
 
 void TestSystemTrayClient::ShowArcVpnCreate(const std::string& app_id) {}
 
-void TestSystemTrayClient::ShowNetworkSettings(const std::string& network_id) {}
+void TestSystemTrayClient::ShowNetworkSettings(const std::string& network_id) {
+  show_network_settings_count_++;
+  last_network_settings_network_id_ = network_id;
+}
 
 void TestSystemTrayClient::ShowMultiDeviceSetup() {
   show_multi_device_setup_count_++;
+}
+
+void TestSystemTrayClient::ShowFirmwareUpdate() {
+  show_firmware_update_count_++;
 }
 
 void TestSystemTrayClient::RequestRestartForUpdate() {}
 
 void TestSystemTrayClient::SetLocaleAndExit(
     const std::string& locale_iso_code) {}
+
+void TestSystemTrayClient::ShowAccessCodeCastingDialog(
+    AccessCodeCastDialogOpenLocation open_location) {}
+
+void TestSystemTrayClient::ShowCalendarEvent(
+    const absl::optional<GURL>& event_url,
+    const base::Time& date,
+    bool& opened_pwa,
+    GURL& final_event_url) {}
 
 }  // namespace ash

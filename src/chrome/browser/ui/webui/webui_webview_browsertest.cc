@@ -3,7 +3,6 @@
 // found in the LICENSE file.
 
 #include "base/bind.h"
-#include "base/macros.h"
 #include "base/path_service.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
@@ -30,7 +29,7 @@
 // Turn these tests off on Mac while we collect data on windows server crashes
 // on mac chromium builders.
 // http://crbug.com/653353
-#if !defined(OS_MAC)
+#if !BUILDFLAG(IS_MAC)
 
 #if !BUILDFLAG(IS_CHROMEOS_ASH) && defined(USE_AURA)
 #include "ui/aura/window.h"
@@ -41,23 +40,25 @@ class WebUIMessageListener : public base::SupportsWeakPtr<WebUIMessageListener>{
  public:
   WebUIMessageListener(content::WebUI* web_ui, const std::string& message)
       : message_loop_(new content::MessageLoopRunner) {
-    web_ui->RegisterDeprecatedMessageCallback(
+    web_ui->RegisterMessageCallback(
         message,
         base::BindRepeating(&WebUIMessageListener::HandleMessage, AsWeakPtr()));
   }
+
+  WebUIMessageListener(const WebUIMessageListener&) = delete;
+  WebUIMessageListener& operator=(const WebUIMessageListener&) = delete;
+
   bool Wait() {
     message_loop_->Run();
     return true;
   }
 
  private:
-  void HandleMessage(const base::ListValue* test_result) {
+  void HandleMessage(const base::Value::List& test_result) {
     message_loop_->Quit();
   }
 
   scoped_refptr<content::MessageLoopRunner> message_loop_;
-
-  DISALLOW_COPY_AND_ASSIGN(WebUIMessageListener);
 };
 
 class DNDToInputNavigationObserver : public content::WebContentsObserver {
@@ -65,6 +66,11 @@ class DNDToInputNavigationObserver : public content::WebContentsObserver {
   explicit DNDToInputNavigationObserver(content::WebContents* web_contents) {
     Observe(web_contents);
   }
+
+  DNDToInputNavigationObserver(const DNDToInputNavigationObserver&) = delete;
+  DNDToInputNavigationObserver& operator=(const DNDToInputNavigationObserver&) =
+      delete;
+
   void DidFinishNavigation(
       content::NavigationHandle* navigation_handle) override {
     navigated = true;
@@ -73,8 +79,6 @@ class DNDToInputNavigationObserver : public content::WebContentsObserver {
 
  private:
   bool navigated = false;
-
-  DISALLOW_COPY_AND_ASSIGN(DNDToInputNavigationObserver);
 };
 
 int ExecuteHostScriptAndExtractInt(content::WebContents* web_contents,
@@ -105,6 +109,9 @@ class WebUIWebViewBrowserTest : public WebUIBrowserTest {
  public:
   WebUIWebViewBrowserTest() {}
 
+  WebUIWebViewBrowserTest(const WebUIWebViewBrowserTest&) = delete;
+  WebUIWebViewBrowserTest& operator=(const WebUIWebViewBrowserTest&) = delete;
+
   void SetUpOnMainThread() override {
     WebUIBrowserTest::SetUpOnMainThread();
     AddLibrary(
@@ -131,9 +138,6 @@ class WebUIWebViewBrowserTest : public WebUIBrowserTest {
         signin_metrics::Reason::kForcedSigninPrimaryAccount, false));
 #endif
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(WebUIWebViewBrowserTest);
 };
 
 // Checks that hiding and showing the WebUI host page doesn't break guests in
@@ -334,9 +338,11 @@ IN_PROC_BROWSER_TEST_F(WebUIWebViewBrowserTest, ContextMenuInspectElement) {
   ASSERT_TRUE(
       ui_test_utils::NavigateToURL(browser(), GetWebViewEnabledWebUIURL()));
   content::ContextMenuParams params;
-  TestRenderViewContextMenu menu(
-      browser()->tab_strip_model()->GetActiveWebContents()->GetMainFrame(),
-      params);
+  TestRenderViewContextMenu menu(*browser()
+                                      ->tab_strip_model()
+                                      ->GetActiveWebContents()
+                                      ->GetPrimaryMainFrame(),
+                                 params);
   EXPECT_FALSE(menu.IsItemPresent(IDC_CONTENT_CONTEXT_INSPECTELEMENT));
 }
 
@@ -353,7 +359,7 @@ IN_PROC_BROWSER_TEST_F(WebUIWebViewBrowserTest, DISABLED_DragAndDropToInput) {
   // Flush any pending events to make sure we start with a clean slate.
   content::RunAllPendingInMessageLoop();
   content::RenderViewHost* const render_view_host =
-      embedder_web_contents->GetMainFrame()->GetRenderViewHost();
+      embedder_web_contents->GetPrimaryMainFrame()->GetRenderViewHost();
 
   gfx::NativeView view = embedder_web_contents->GetNativeView();
   view->SetBounds(gfx::Rect(0, 0, 400, 400));
@@ -439,4 +445,4 @@ IN_PROC_BROWSER_TEST_F(WebUIWebViewBrowserTest, DISABLED_DragAndDropToInput) {
 }
 #endif
 
-#endif  // !defined(OS_MAC)
+#endif  // !BUILDFLAG(IS_MAC)

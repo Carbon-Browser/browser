@@ -19,14 +19,14 @@ RTCEncodedAudioFrameDelegate::RTCEncodedAudioFrameDelegate(
       contributing_sources_(std::move(contributing_sources)) {}
 
 uint32_t RTCEncodedAudioFrameDelegate::Timestamp() const {
-  MutexLocker lock(mutex_);
+  base::AutoLock lock(lock_);
   return webrtc_frame_ ? webrtc_frame_->GetTimestamp() : 0;
 }
 
 DOMArrayBuffer* RTCEncodedAudioFrameDelegate::CreateDataBuffer() const {
   ArrayBufferContents contents;
   {
-    MutexLocker lock(mutex_);
+    base::AutoLock lock(lock_);
     if (!webrtc_frame_)
       return nullptr;
 
@@ -42,32 +42,33 @@ DOMArrayBuffer* RTCEncodedAudioFrameDelegate::CreateDataBuffer() const {
 }
 
 void RTCEncodedAudioFrameDelegate::SetData(const DOMArrayBuffer* data) {
-  MutexLocker lock(mutex_);
+  base::AutoLock lock(lock_);
   if (webrtc_frame_ && data) {
     webrtc_frame_->SetData(rtc::ArrayView<const uint8_t>(
         static_cast<const uint8_t*>(data->Data()), data->ByteLength()));
   }
 }
 
-uint32_t RTCEncodedAudioFrameDelegate::Ssrc() const {
-  MutexLocker lock(mutex_);
-  return webrtc_frame_ ? webrtc_frame_->GetSsrc() : 0;
+absl::optional<uint32_t> RTCEncodedAudioFrameDelegate::Ssrc() const {
+  base::AutoLock lock(lock_);
+  return webrtc_frame_ ? absl::make_optional(webrtc_frame_->GetSsrc())
+                       : absl::nullopt;
 }
 
-uint8_t RTCEncodedAudioFrameDelegate::PayloadType() const {
-  MutexLocker lock(mutex_);
-  // 255 is outside the range [0..127] of valid payload types.
-  return webrtc_frame_ ? webrtc_frame_->GetPayloadType() : 255;
+absl::optional<uint8_t> RTCEncodedAudioFrameDelegate::PayloadType() const {
+  base::AutoLock lock(lock_);
+  return webrtc_frame_ ? absl::make_optional(webrtc_frame_->GetPayloadType())
+                       : absl::nullopt;
 }
 
 Vector<uint32_t> RTCEncodedAudioFrameDelegate::ContributingSources() const {
-  MutexLocker lock(mutex_);
+  base::AutoLock lock(lock_);
   return contributing_sources_;
 }
 
 std::unique_ptr<webrtc::TransformableFrameInterface>
 RTCEncodedAudioFrameDelegate::PassWebRtcFrame() {
-  MutexLocker lock(mutex_);
+  base::AutoLock lock(lock_);
   return std::move(webrtc_frame_);
 }
 

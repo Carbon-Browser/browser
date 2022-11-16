@@ -11,6 +11,7 @@
 #include "components/sync/driver/sync_service.h"
 #include "components/sync/driver/sync_user_settings_impl.h"
 #include "components/sync/driver/test_sync_service.h"
+#include "components/sync/engine/nigori/nigori.h"
 
 namespace syncer {
 
@@ -62,13 +63,18 @@ UserSelectableTypeSet TestSyncUserSettings::GetSelectedTypes() const {
 
 void TestSyncUserSettings::SetSelectedTypes(bool sync_everything,
                                             UserSelectableTypeSet types) {
+  // TODO(crbug.com/1330894): take custom logic for Lacros apps into account.
+  // It's probably easier to address TODO about logic inversion above first.
   sync_everything_enabled_ = sync_everything;
-  syncer::ModelTypeSet preferred_types;
+
   if (sync_everything_enabled_) {
-    preferred_types = syncer::ModelTypeSet::All();
-  } else {
-    preferred_types =
-        syncer::SyncUserSettingsImpl::ResolvePreferredTypesForTesting(types);
+    service_->SetPreferredDataTypes(syncer::ModelTypeSet::All());
+    return;
+  }
+
+  syncer::ModelTypeSet preferred_types;
+  for (UserSelectableType type : types) {
+    preferred_types.PutAll(UserSelectableTypeToAllModelTypes(type));
   }
   service_->SetPreferredDataTypes(preferred_types);
 }
@@ -115,13 +121,19 @@ UserSelectableOsTypeSet TestSyncUserSettings::GetRegisteredSelectableOsTypes()
     const {
   return UserSelectableOsTypeSet::All();
 }
+#endif
 
-bool TestSyncUserSettings::IsOsSyncFeatureEnabled() const {
-  return os_sync_feature_enabled_;
-}
-
-void TestSyncUserSettings::SetOsSyncFeatureEnabled(bool enabled) {
-  os_sync_feature_enabled_ = enabled;
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+void TestSyncUserSettings::SetAppsSyncEnabledByOs(bool apps_sync_enabled) {
+  syncer::ModelTypeSet preferred_types = service_->GetPreferredDataTypes();
+  if (apps_sync_enabled) {
+    preferred_types.PutAll(
+        UserSelectableTypeToAllModelTypes(UserSelectableType::kApps));
+  } else {
+    preferred_types.RemoveAll(
+        UserSelectableTypeToAllModelTypes(UserSelectableType::kApps));
+  }
+  service_->SetPreferredDataTypes(preferred_types);
 }
 #endif
 
@@ -194,6 +206,13 @@ void TestSyncUserSettings::SetEncryptionPassphrase(
 bool TestSyncUserSettings::SetDecryptionPassphrase(
     const std::string& passphrase) {
   return false;
+}
+
+void TestSyncUserSettings::SetDecryptionNigoriKey(
+    std::unique_ptr<Nigori> nigori) {}
+
+std::unique_ptr<Nigori> TestSyncUserSettings::GetDecryptionNigoriKey() const {
+  return nullptr;
 }
 
 void TestSyncUserSettings::SetFirstSetupComplete() {

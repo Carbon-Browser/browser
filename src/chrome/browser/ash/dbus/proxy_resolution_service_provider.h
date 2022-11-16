@@ -8,10 +8,9 @@
 #include <memory>
 #include <string>
 
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
-#include "chromeos/dbus/services/cros_dbus_service.h"
+#include "chromeos/ash/components/dbus/services/cros_dbus_service.h"
 #include "dbus/exported_object.h"
 #include "net/base/network_isolation_key.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
@@ -67,6 +66,12 @@ class ProxyResolutionServiceProvider
                               const std::string& pac_string)>;
 
   ProxyResolutionServiceProvider();
+
+  ProxyResolutionServiceProvider(const ProxyResolutionServiceProvider&) =
+      delete;
+  ProxyResolutionServiceProvider& operator=(
+      const ProxyResolutionServiceProvider&) = delete;
+
   ~ProxyResolutionServiceProvider() override;
 
   void set_network_context_for_test(
@@ -125,8 +130,6 @@ class ProxyResolutionServiceProvider
   const net::NetworkIsolationKey network_isolation_key_;
 
   base::WeakPtrFactory<ProxyResolutionServiceProvider> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ProxyResolutionServiceProvider);
 };
 
 }  // namespace ash

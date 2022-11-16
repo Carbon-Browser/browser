@@ -6,7 +6,6 @@
 
 #include <algorithm>
 
-#include "base/macros.h"
 #include "base/memory/ptr_util.h"
 #include "third_party/blink/public/mojom/permissions_policy/permissions_policy.mojom-blink.h"
 #include "third_party/blink/public/platform/web_encrypted_media_client.h"
@@ -18,7 +17,6 @@
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
-#include "third_party/blink/renderer/core/frame/deprecation.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/inspector/console_message.h"
@@ -31,7 +29,7 @@
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/bindings/v8_throw_exception.h"
 #include "third_party/blink/renderer/platform/encrypted_media_request.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/network/mime/content_type.h"
 #include "third_party/blink/renderer/platform/network/parsed_content_type.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
@@ -51,6 +49,12 @@ class MediaKeySystemAccessInitializer final
       const String& key_system,
       const HeapVector<Member<MediaKeySystemConfiguration>>&
           supported_configurations);
+
+  MediaKeySystemAccessInitializer(const MediaKeySystemAccessInitializer&) =
+      delete;
+  MediaKeySystemAccessInitializer& operator=(
+      const MediaKeySystemAccessInitializer&) = delete;
+
   ~MediaKeySystemAccessInitializer() override = default;
 
   // EncryptedMediaRequest implementation.
@@ -63,9 +67,6 @@ class MediaKeySystemAccessInitializer final
   void Trace(Visitor* visitor) const override {
     MediaKeySystemAccessInitializerBase::Trace(visitor);
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(MediaKeySystemAccessInitializer);
 };
 
 MediaKeySystemAccessInitializer::MediaKeySystemAccessInitializer(
@@ -84,8 +85,8 @@ void MediaKeySystemAccessInitializer::RequestSucceeded(
   if (!IsExecutionContextValid())
     return;
 
-  resolver_->Resolve(MakeGarbageCollected<MediaKeySystemAccess>(
-      KeySystem(), std::move(access)));
+  resolver_->Resolve(
+      MakeGarbageCollected<MediaKeySystemAccess>(std::move(access)));
   resolver_.Clear();
 }
 

@@ -34,11 +34,12 @@
 #include "chrome/common/chrome_constants.h"
 #include "components/policy/core/common/cloud/cloud_policy_core.h"
 #include "components/policy/proto/device_management_backend.pb.h"
+#include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 #include "components/session_manager/core/session_manager.h"
+#include "components/signin/public/base/consent_level.h"
 #include "components/signin/public/identity_manager/access_token_info.h"
 #include "components/signin/public/identity_manager/account_info.h"
-#include "components/signin/public/identity_manager/consent_level.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "content/public/browser/web_ui.h"
 #include "google_apis/gaia/gaia_constants.h"
@@ -129,6 +130,12 @@ std::string GetDeviceIdForActiveUserProfile() {
 
 }  // namespace
 
+void EduCoexistenceLoginHandler::RegisterProfilePrefs(
+    PrefRegistrySimple* registry) {
+  registry->RegisterStringPref(ash::prefs::kEduCoexistenceId,
+                               std::string() /* default_value */);
+}
+
 EduCoexistenceLoginHandler::EduCoexistenceLoginHandler(
     const base::RepeatingClosure& close_dialog_closure)
     : EduCoexistenceLoginHandler(close_dialog_closure, GetIdentityManager()) {}
@@ -146,7 +153,6 @@ EduCoexistenceLoginHandler::EduCoexistenceLoginHandler(
 
   OAuth2AccessTokenManager::ScopeSet scopes;
   scopes.insert(GaiaConstants::kKidsSupervisionSetupChildOAuth2Scope);
-  scopes.insert(GaiaConstants::kKidManagementOAuth2Scope);
   scopes.insert(GaiaConstants::kAccountsReauthOAuth2Scope);
   scopes.insert(GaiaConstants::kAuditRecordingOAuth2Scope);
   scopes.insert(GaiaConstants::kClearCutOAuth2Scope);
@@ -160,7 +166,7 @@ EduCoexistenceLoginHandler::EduCoexistenceLoginHandler(
               &EduCoexistenceLoginHandler::OnOAuthAccessTokensFetched,
               base::Unretained(this)),
           signin::PrimaryAccountAccessTokenFetcher::Mode::kWaitUntilAvailable,
-          signin::ConsentLevel::kSignin);
+          signin::ConsentLevel::kSync);
 }
 
 EduCoexistenceLoginHandler::~EduCoexistenceLoginHandler() {
@@ -177,22 +183,22 @@ void EduCoexistenceLoginHandler::RegisterMessages() {
       web_ui(), /* is_onboarding */ session_manager::SessionManager::Get()
                     ->IsUserSessionBlocked());
 
-  web_ui()->RegisterDeprecatedMessageCallback(
+  web_ui()->RegisterMessageCallback(
       "initializeEduArgs",
       base::BindRepeating(&EduCoexistenceLoginHandler::InitializeEduArgs,
                           base::Unretained(this)));
 
-  web_ui()->RegisterDeprecatedMessageCallback(
+  web_ui()->RegisterMessageCallback(
       "consentValid",
       base::BindRepeating(&EduCoexistenceLoginHandler::ConsentValid,
                           base::Unretained(this)));
 
-  web_ui()->RegisterDeprecatedMessageCallback(
+  web_ui()->RegisterMessageCallback(
       "consentLogged",
       base::BindRepeating(&EduCoexistenceLoginHandler::ConsentLogged,
                           base::Unretained(this)));
 
-  web_ui()->RegisterDeprecatedMessageCallback(
+  web_ui()->RegisterMessageCallback(
       "error", base::BindRepeating(&EduCoexistenceLoginHandler::OnError,
                                    base::Unretained(this)));
 }
@@ -249,10 +255,10 @@ void EduCoexistenceLoginHandler::OnOAuthAccessTokensFetched(
 }
 
 void EduCoexistenceLoginHandler::InitializeEduArgs(
-    const base::ListValue* args) {
+    const base::Value::List& args) {
   AllowJavascript();
 
-  initialize_edu_args_callback_ = args->GetList()[0].GetString();
+  initialize_edu_args_callback_ = args[0].GetString();
 
   if (in_error_state_) {
     FireWebUIListener(kOnErrorWebUIListener);
@@ -318,22 +324,22 @@ void EduCoexistenceLoginHandler::SendInitializeEduArgs() {
   initialize_edu_args_callback_ = absl::nullopt;
 }
 
-void EduCoexistenceLoginHandler::ConsentValid(const base::ListValue* args) {
+void EduCoexistenceLoginHandler::ConsentValid(const base::Value::List& args) {
   AllowJavascript();
   DCHECK(!in_error_state_);
   EduCoexistenceStateTracker::Get()->OnWebUiStateChanged(
       web_ui(), EduCoexistenceStateTracker::FlowResult::kConsentValid);
 }
 
-void EduCoexistenceLoginHandler::ConsentLogged(const base::ListValue* args) {
-  if (!args || args->GetList().size() == 0)
+void EduCoexistenceLoginHandler::ConsentLogged(const base::Value::List& args) {
+  if (args.size() == 0)
     return;
 
   DCHECK(!in_error_state_);
 
-  account_added_callback_ = args->GetList()[0].GetString();
+  account_added_callback_ = args[0].GetString();
 
-  const base::Value::ConstListView& arguments = args->GetList()[1].GetList();
+  const base::Value::List& arguments = args[1].GetList();
 
   edu_account_email_ = arguments[0].GetString();
   terms_of_service_version_number_ = arguments[1].GetString();
@@ -343,13 +349,12 @@ void EduCoexistenceLoginHandler::ConsentLogged(const base::ListValue* args) {
                                                      edu_account_email_);
 }
 
-void EduCoexistenceLoginHandler::OnError(const base::ListValue* args) {
+void EduCoexistenceLoginHandler::OnError(const base::Value::List& args) {
   AllowJavascript();
-  if (!args || args->GetList().size() == 0)
+  if (args.size() == 0)
     return;
   in_error_state_ = true;
-  const base::Value::ConstListView& arguments = args->GetList();
-  for (const base::Value& message : arguments) {
+  for (const base::Value& message : args) {
     DCHECK(message.is_string());
     LOG(ERROR) << message.GetString();
   }

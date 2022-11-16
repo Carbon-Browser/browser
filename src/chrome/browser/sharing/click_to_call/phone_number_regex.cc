@@ -8,7 +8,6 @@
 
 #include "base/bind.h"
 #include "base/feature_list.h"
-#include "base/task/post_task.h"
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
 #include "third_party/re2/src/re2/re2.h"
@@ -39,7 +38,7 @@ const re2::RE2& GetPhoneNumberRegex() {
 }
 
 void PrecompilePhoneNumberRegexesAsync() {
-  constexpr auto kParseDelay = base::TimeDelta::FromSeconds(15);
+  constexpr auto kParseDelay = base::Seconds(15);
   base::ThreadPool::PostDelayedTask(
       FROM_HERE,
       {base::TaskPriority::BEST_EFFORT,

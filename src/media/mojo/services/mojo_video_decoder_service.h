@@ -8,19 +8,21 @@
 #include <map>
 #include <memory>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/unguessable_token.h"
 #include "media/base/cdm_context.h"
-#include "media/base/decode_status.h"
+#include "media/base/decoder_status.h"
 #include "media/base/overlay_info.h"
 #include "media/base/video_decoder.h"
+#include "media/mojo/mojom/stable/stable_video_decoder.mojom.h"
 #include "media/mojo/mojom/video_decoder.mojom.h"
 #include "media/mojo/services/media_mojo_export.h"
 #include "media/mojo/services/mojo_media_client.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
 #include "mojo/public/cpp/bindings/pending_associated_remote.h"
+#include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -40,7 +42,13 @@ class MEDIA_MOJO_EXPORT MojoVideoDecoderService final
  public:
   explicit MojoVideoDecoderService(
       MojoMediaClient* mojo_media_client,
-      MojoCdmServiceContext* mojo_cdm_service_context);
+      MojoCdmServiceContext* mojo_cdm_service_context,
+      mojo::PendingRemote<stable::mojom::StableVideoDecoder>
+          oop_video_decoder_remote);
+
+  MojoVideoDecoderService(const MojoVideoDecoderService&) = delete;
+  MojoVideoDecoderService& operator=(const MojoVideoDecoderService&) = delete;
+
   ~MojoVideoDecoderService() final;
 
   // mojom::VideoDecoder implementation
@@ -66,13 +74,13 @@ class MEDIA_MOJO_EXPORT MojoVideoDecoderService final
   // running mojom::VideoDecoder callbacks after connection error happens and
   // |this| is deleted. It's not safe to run the callbacks after a connection
   // error.
-  void OnDecoderInitialized(Status status);
+  void OnDecoderInitialized(DecoderStatus status);
   void OnReaderRead(DecodeCallback callback,
                     std::unique_ptr<ScopedDecodeTrace> trace_event,
                     scoped_refptr<DecoderBuffer> buffer);
   void OnDecoderDecoded(DecodeCallback callback,
                         std::unique_ptr<ScopedDecodeTrace> trace_event,
-                        media::Status status);
+                        DecoderStatus status);
 
   // Called by |mojo_decoder_buffer_reader_| when reset is finished.
   void OnReaderFlushed();
@@ -93,10 +101,10 @@ class MEDIA_MOJO_EXPORT MojoVideoDecoderService final
   std::string codec_string_;
 
   // Decoder factory.
-  MojoMediaClient* mojo_media_client_;
+  raw_ptr<MojoMediaClient> mojo_media_client_;
 
   // A helper object required to get the CDM from a CDM ID.
-  MojoCdmServiceContext* const mojo_cdm_service_context_ = nullptr;
+  const raw_ptr<MojoCdmServiceContext> mojo_cdm_service_context_ = nullptr;
 
   // Channel for sending async messages to the client.
   mojo::AssociatedRemote<mojom::VideoDecoderClient> client_;
@@ -119,6 +127,13 @@ class MEDIA_MOJO_EXPORT MojoVideoDecoderService final
 
   std::unique_ptr<media::VideoDecoder> decoder_;
 
+  // An out-of-process video decoder to forward decode requests to. This member
+  // just holds the PendingRemote in between the construction of the
+  // MojoVideoDecoderService and the call to
+  // |mojo_media_client_|->CreateVideoDecoder().
+  mojo::PendingRemote<stable::mojom::StableVideoDecoder>
+      oop_video_decoder_pending_remote_;
+
   InitializeCallback init_cb_;
   ResetCallback reset_cb_;
 
@@ -126,8 +141,6 @@ class MEDIA_MOJO_EXPORT MojoVideoDecoderService final
 
   base::WeakPtr<MojoVideoDecoderService> weak_this_;
   base::WeakPtrFactory<MojoVideoDecoderService> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(MojoVideoDecoderService);
 };
 
 }  // namespace media

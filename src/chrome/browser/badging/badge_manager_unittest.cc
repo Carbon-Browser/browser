@@ -9,10 +9,12 @@
 #include <vector>
 
 #include "base/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/bind.h"
+#include "build/chromeos_buildflags.h"
 #include "chrome/browser/badging/badge_manager_delegate.h"
 #include "chrome/browser/badging/test_badge_manager_delegate.h"
-#include "chrome/browser/web_applications/test/test_web_app_registry_controller.h"
+#include "chrome/browser/web_applications/test/fake_web_app_registry_controller.h"
 #include "chrome/browser/web_applications/test/web_app_test_observers.h"
 #include "chrome/browser/web_applications/web_app_id.h"
 #include "chrome/browser/web_applications/web_app_registrar.h"
@@ -55,13 +57,21 @@ namespace badging {
 class BadgeManagerUnittest : public ::testing::Test {
  public:
   BadgeManagerUnittest() = default;
+
+  BadgeManagerUnittest(const BadgeManagerUnittest&) = delete;
+  BadgeManagerUnittest& operator=(const BadgeManagerUnittest&) = delete;
+
   ~BadgeManagerUnittest() override = default;
 
   void SetUp() override {
-    profile_ = std::make_unique<TestingProfile>();
+    TestingProfile::Builder builder;
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+    builder.SetIsMainProfile(true);
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+    profile_ = builder.Build();
 
-    test_registry_controller_ =
-        std::make_unique<web_app::TestWebAppRegistryController>();
+    fake_registry_controller_ =
+        std::make_unique<web_app::FakeWebAppRegistryController>();
     controller().SetUp(profile());
     controller().Init();
 
@@ -83,19 +93,17 @@ class BadgeManagerUnittest : public ::testing::Test {
 
   Profile* profile() const { return profile_.get(); }
 
-  web_app::TestWebAppRegistryController& controller() {
-    return *test_registry_controller_;
+  web_app::FakeWebAppRegistryController& controller() {
+    return *fake_registry_controller_;
   }
 
  private:
-  TestBadgeManagerDelegate* delegate_;
+  raw_ptr<TestBadgeManagerDelegate> delegate_;
   content::BrowserTaskEnvironment task_environment_;
   std::unique_ptr<TestingProfile> profile_;
   std::unique_ptr<BadgeManager> badge_manager_;
-  std::unique_ptr<web_app::TestWebAppRegistryController>
-      test_registry_controller_;
-
-  DISALLOW_COPY_AND_ASSIGN(BadgeManagerUnittest);
+  std::unique_ptr<web_app::FakeWebAppRegistryController>
+      fake_registry_controller_;
 };
 
 TEST_F(BadgeManagerUnittest, SetFlagBadgeForApp) {
@@ -190,14 +198,15 @@ TEST_F(BadgeManagerUnittest, ClearBadgeForBadgedApp) {
   EXPECT_EQ(kAppId, delegate()->cleared_badges().front());
 }
 
+#if !BUILDFLAG(IS_CHROMEOS_LACROS)
 TEST_F(BadgeManagerUnittest, BadgingMultipleProfiles) {
   std::unique_ptr<Profile> other_profile = std::make_unique<TestingProfile>();
-  auto test_registry_controller =
-      std::make_unique<web_app::TestWebAppRegistryController>();
-  test_registry_controller->SetUp(other_profile.get());
-  test_registry_controller->Init();
+  auto fake_registry_controller =
+      std::make_unique<web_app::FakeWebAppRegistryController>();
+  fake_registry_controller->SetUp(other_profile.get());
+  fake_registry_controller->Init();
   auto other_badge_manager = std::make_unique<TestBadgeManager>(
-      other_profile.get(), &test_registry_controller->sync_bridge());
+      other_profile.get(), &fake_registry_controller->sync_bridge());
 
   auto owned_other_delegate = std::make_unique<TestBadgeManagerDelegate>(
       other_profile.get(), other_badge_manager.get());
@@ -207,7 +216,7 @@ TEST_F(BadgeManagerUnittest, BadgingMultipleProfiles) {
   std::vector<web_app::AppId> updated_apps;
   std::vector<web_app::AppId> other_updated_apps;
   web_app::WebAppTestRegistryObserverAdapter other_observer(
-      &test_registry_controller->registrar());
+      &fake_registry_controller->registrar());
   other_observer.SetWebAppLastBadgingTimeChangedDelegate(
       base::BindLambdaForTesting(
           [&other_updated_apps](const web_app::AppId& app_id,
@@ -247,11 +256,24 @@ TEST_F(BadgeManagerUnittest, BadgingMultipleProfiles) {
   EXPECT_FALSE(other_updated_apps.empty());
   EXPECT_EQ(kAppId, other_updated_apps[0]);
 }
+#endif  // !BUILDFLAG(IS_CHROMEOS_LACROS)
 
 // Tests methods which call into the badge manager delegate do not crash when
 // the delegate is unset.
 TEST_F(BadgeManagerUnittest, BadgingWithNoDelegateDoesNotCrash) {
   badge_manager().SetDelegate(nullptr);
+
+  badge_manager().SetBadgeForTesting(kAppId, absl::nullopt,
+                                     ukm::TestUkmRecorder::Get());
+  badge_manager().SetBadgeForTesting(
+      kAppId, absl::make_optional(kBadgeContents), ukm::TestUkmRecorder::Get());
+  badge_manager().ClearBadgeForTesting(kAppId, ukm::TestUkmRecorder::Get());
+}
+
+// Tests methods which use the web app sync_bridge do not crash when web
+// apps aren't supported (and thus sync_bridge is null).
+TEST_F(BadgeManagerUnittest, BadgingWithNoSyncBridgeDoesNotCrash) {
+  badge_manager().SetSyncBridgeForTesting(nullptr);
 
   badge_manager().SetBadgeForTesting(kAppId, absl::nullopt,
                                      ukm::TestUkmRecorder::Get());

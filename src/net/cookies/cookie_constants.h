@@ -44,6 +44,20 @@ enum class CookieSameSite {
   kMaxValue = STRICT_MODE
 };
 
+// The same as CookieSameSite except that the enums start at 0 to support
+// standard (non-sparse) enum histograms. Standard enum histograms do not
+// support negative numbers and while sparse histograms do they have
+// performance penalties that we want to avoid.
+enum class CookieSameSiteForMetrics {
+  UNSPECIFIED = 0,
+  NO_RESTRICTION = 1,
+  LAX_MODE = 2,
+  STRICT_MODE = 3,
+
+  // Keep last, used for histograms.
+  kMaxValue = STRICT_MODE
+};
+
 // These are the enforcement modes that may be applied to a cookie when deciding
 // inclusion/exclusion. They mostly correspond to CookieSameSite values.
 // Keep in sync with enums.xml.
@@ -352,6 +366,23 @@ CookieSourceSchemeName GetSchemeNameEnum(const GURL& url);
 //
 // Empty string was chosen because it is the smallest, non-null value.
 NET_EXPORT extern const char kEmptyCookiePartitionKey[];
+
+// Used for a histogram that measures which character caused the cookie
+// string to be truncated.
+//
+// Do not reorder or renumber. Used for metrics.
+enum class TruncatingCharacterInCookieStringType {
+  // No truncating character in the cookie line.
+  kTruncatingCharNone = 0,
+  // Cookie line truncated because of \x0.
+  kTruncatingCharNull = 1,
+  // Cookie line truncated because of \xD.
+  kTruncatingCharNewline = 2,
+  // Cookie line truncated because of \xA.
+  kTruncatingCharLineFeed = 3,
+
+  kMaxValue = kTruncatingCharLineFeed,  // Keep as the last value.
+};
 
 }  // namespace net
 

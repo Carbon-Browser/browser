@@ -7,7 +7,7 @@
 
 #include <stdint.h>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "content/browser/service_worker/service_worker_context_core_observer.h"
 
 class GURL;
@@ -28,6 +28,10 @@ class PushMessagingContext : public ServiceWorkerContextCoreObserver {
   PushMessagingContext(
       BrowserContext* browser_context,
       const scoped_refptr<ServiceWorkerContextWrapper>& service_worker_context);
+
+  PushMessagingContext(const PushMessagingContext&) = delete;
+  PushMessagingContext& operator=(const PushMessagingContext&) = delete;
+
   ~PushMessagingContext() override;
 
   // ServiceWorkerContextCoreObserver methods
@@ -37,11 +41,9 @@ class PushMessagingContext : public ServiceWorkerContextCoreObserver {
   void OnStorageWiped() override;
 
  private:
-  BrowserContext* browser_context_;
+  raw_ptr<BrowserContext> browser_context_;
 
   scoped_refptr<ServiceWorkerContextWrapper> service_worker_context_;
-
-  DISALLOW_COPY_AND_ASSIGN(PushMessagingContext);
 };
 
 }  // namespace content

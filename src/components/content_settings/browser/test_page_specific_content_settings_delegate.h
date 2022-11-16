@@ -5,6 +5,7 @@
 #ifndef COMPONENTS_CONTENT_SETTINGS_BROWSER_TEST_PAGE_SPECIFIC_CONTENT_SETTINGS_DELEGATE_H_
 #define COMPONENTS_CONTENT_SETTINGS_BROWSER_TEST_PAGE_SPECIFIC_CONTENT_SETTINGS_DELEGATE_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "components/content_settings/browser/page_specific_content_settings.h"
 
@@ -19,13 +20,11 @@ class TestPageSpecificContentSettingsDelegate
 
   // PageSpecificContentSettings::Delegate:
   void UpdateLocationBar() override;
-  void SetContentSettingRules(
-      content::RenderProcessHost* process,
-      const RendererContentSettingRules& rules) override;
   PrefService* GetPrefs() override;
   HostContentSettingsMap* GetSettingsMap() override;
-  ContentSetting GetEmbargoSetting(const GURL& request_origin,
-                                   ContentSettingsType permission) override;
+  void SetDefaultRendererContentSettingRules(
+      content::RenderFrameHost* rfh,
+      RendererContentSettingRules* rules) override;
   std::vector<storage::FileSystemType> GetAdditionalFileSystemTypes() override;
   browsing_data::CookieHelper::IsDeletionDisabledCallback
   GetIsDeletionDisabledCallback() override;
@@ -38,16 +37,17 @@ class TestPageSpecificContentSettingsDelegate
       override;
   void OnContentAllowed(ContentSettingsType type) override;
   void OnContentBlocked(ContentSettingsType type) override;
-  void OnCacheStorageAccessAllowed(const url::Origin& origin) override;
-  void OnCookieAccessAllowed(const net::CookieList& accessed_cookies) override;
-  void OnDomStorageAccessAllowed(const url::Origin& origin) override;
-  void OnFileSystemAccessAllowed(const url::Origin& origin) override;
-  void OnIndexedDBAccessAllowed(const url::Origin& origin) override;
-  void OnServiceWorkerAccessAllowed(const url::Origin& origin) override;
-  void OnWebDatabaseAccessAllowed(const url::Origin& origin) override;
+  void OnStorageAccessAllowed(
+      content_settings::mojom::ContentSettingsManager::StorageType storage_type,
+      const url::Origin& origin,
+      content::Page& page) override;
+  void OnCookieAccessAllowed(const net::CookieList& accessed_cookies,
+                             content::Page& page) override;
+  void OnServiceWorkerAccessAllowed(const url::Origin& origin,
+                                    content::Page& page) override;
 
  private:
-  PrefService* prefs_;
+  raw_ptr<PrefService> prefs_;
   scoped_refptr<HostContentSettingsMap> settings_map_;
 };
 

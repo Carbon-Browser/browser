@@ -7,11 +7,12 @@
 #include <memory>
 #include <utility>
 
-#include "base/allocator/buildflags.h"
+#include "base/allocator/allocator_shim_default_dispatch_to_partition_alloc.h"
 #include "base/allocator/partition_allocator/partition_alloc.h"
+#include "base/allocator/partition_allocator/partition_alloc_base/compiler_specific.h"
+#include "base/allocator/partition_allocator/partition_alloc_base/logging.h"
+#include "base/allocator/partition_allocator/partition_alloc_buildflags.h"
 #include "base/allocator/partition_allocator/partition_alloc_config.h"
-#include "base/logging.h"
-#include "base/test/task_environment.h"
 #include "build/build_config.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -24,64 +25,54 @@
 // meaningless.
 #if !defined(MEMORY_TOOL_REPLACES_ALLOCATOR)
 
-namespace base {
+namespace partition_alloc {
 
 namespace {
 
 void HandleOOM(size_t unused_size) {
-  LOG(FATAL) << "Out of memory";
+  PA_LOG(FATAL) << "Out of memory";
 }
 
 }  // namespace
 
-class PartitionAllocMemoryReclaimerTest : public ::testing::Test {
+class MemoryReclaimerTest : public ::testing::Test {
  public:
-  PartitionAllocMemoryReclaimerTest()
-      : ::testing::Test(),
-        task_environment_(test::TaskEnvironment::TimeSource::MOCK_TIME),
-        allocator_() {}
+  MemoryReclaimerTest() = default;
 
  protected:
   void SetUp() override {
     PartitionAllocGlobalInit(HandleOOM);
-    PartitionAllocMemoryReclaimer::Instance()->ResetForTesting();
+    MemoryReclaimer::Instance()->ResetForTesting();
     allocator_ = std::make_unique<PartitionAllocator>();
-    allocator_->init({PartitionOptions::AlignedAlloc::kDisallowed,
-                      PartitionOptions::ThreadCache::kDisabled,
-                      PartitionOptions::Quarantine::kAllowed,
-                      PartitionOptions::Cookie::kAllowed,
-                      PartitionOptions::RefCount::kDisallowed});
+    allocator_->init({
+        PartitionOptions::AlignedAlloc::kDisallowed,
+        PartitionOptions::ThreadCache::kDisabled,
+        PartitionOptions::Quarantine::kAllowed,
+        PartitionOptions::Cookie::kAllowed,
+        PartitionOptions::BackupRefPtr::kDisabled,
+        PartitionOptions::BackupRefPtrZapping::kDisabled,
+        PartitionOptions::UseConfigurablePool::kNo,
+    });
+    allocator_->root()->UncapEmptySlotSpanMemoryForTesting();
   }
 
   void TearDown() override {
     allocator_ = nullptr;
-    PartitionAllocMemoryReclaimer::Instance()->ResetForTesting();
-    task_environment_.FastForwardUntilNoTasksRemain();
+    MemoryReclaimer::Instance()->ResetForTesting();
     PartitionAllocGlobalUninitForTesting();
   }
 
-  void StartReclaimer() {
-    auto* memory_reclaimer = PartitionAllocMemoryReclaimer::Instance();
-    memory_reclaimer->Start(task_environment_.GetMainThreadTaskRunner());
-  }
+  void Reclaim() { MemoryReclaimer::Instance()->ReclaimNormal(); }
 
   void AllocateAndFree() {
     void* data = allocator_->root()->Alloc(1, "");
     allocator_->root()->Free(data);
   }
 
-  test::TaskEnvironment task_environment_;
   std::unique_ptr<PartitionAllocator> allocator_;
 };
 
-TEST_F(PartitionAllocMemoryReclaimerTest, Simple) {
-  StartReclaimer();
-
-  EXPECT_EQ(1u, task_environment_.GetPendingMainThreadTaskCount());
-  EXPECT_TRUE(task_environment_.NextTaskIsDelayed());
-}
-
-TEST_F(PartitionAllocMemoryReclaimerTest, FreesMemory) {
+TEST_F(MemoryReclaimerTest, FreesMemory) {
   PartitionRoot<internal::ThreadSafe>* root = allocator_->root();
 
   size_t committed_initially = root->get_total_size_of_committed_pages();
@@ -90,15 +81,13 @@ TEST_F(PartitionAllocMemoryReclaimerTest, FreesMemory) {
 
   EXPECT_GT(committed_before, committed_initially);
 
-  StartReclaimer();
-  task_environment_.FastForwardBy(
-      task_environment_.NextMainThreadPendingTaskDelay());
+  Reclaim();
   size_t committed_after = root->get_total_size_of_committed_pages();
   EXPECT_LT(committed_after, committed_before);
   EXPECT_LE(committed_initially, committed_after);
 }
 
-TEST_F(PartitionAllocMemoryReclaimerTest, Reclaim) {
+TEST_F(MemoryReclaimerTest, Reclaim) {
   PartitionRoot<internal::ThreadSafe>* root = allocator_->root();
   size_t committed_initially = root->get_total_size_of_committed_pages();
 
@@ -107,7 +96,7 @@ TEST_F(PartitionAllocMemoryReclaimerTest, Reclaim) {
 
     size_t committed_before = root->get_total_size_of_committed_pages();
     EXPECT_GT(committed_before, committed_initially);
-    PartitionAllocMemoryReclaimer::Instance()->ReclaimAll();
+    MemoryReclaimer::Instance()->ReclaimAll();
     size_t committed_after = root->get_total_size_of_committed_pages();
 
     EXPECT_LT(committed_after, committed_before);
@@ -115,32 +104,32 @@ TEST_F(PartitionAllocMemoryReclaimerTest, Reclaim) {
   }
 }
 
-// ThreadCache tests disabled when USE_BACKUP_REF_PTR is enabled, because the
-// "original" PartitionRoot has ThreadCache disabled.
 #if BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC) && \
-    defined(PA_THREAD_CACHE_SUPPORTED) && !BUILDFLAG(USE_BACKUP_REF_PTR)
+    defined(PA_THREAD_CACHE_SUPPORTED)
 
 namespace {
 // malloc() / free() pairs can be removed by the compiler, this is enough (for
 // now) to prevent that.
-NOINLINE void FreeForTest(void* data) {
+PA_NOINLINE void FreeForTest(void* data) {
   free(data);
 }
 }  // namespace
 
-TEST_F(PartitionAllocMemoryReclaimerTest, DoNotAlwaysPurgeThreadCache) {
-  for (size_t i = 0; i < internal::ThreadCache::kDefaultSizeThreshold; i++) {
+TEST_F(MemoryReclaimerTest, DoNotAlwaysPurgeThreadCache) {
+  // Make sure the thread cache is enabled in the main partition.
+  base::internal::PartitionAllocMalloc::Allocator()
+      ->EnableThreadCacheIfSupported();
+
+  for (size_t i = 0; i < ThreadCache::kDefaultSizeThreshold; i++) {
     void* data = malloc(i);
     FreeForTest(data);
   }
 
-  auto* tcache = internal::ThreadCache::Get();
+  auto* tcache = ThreadCache::Get();
   ASSERT_TRUE(tcache);
   size_t cached_size = tcache->CachedMemory();
 
-  StartReclaimer();
-  task_environment_.FastForwardBy(
-      task_environment_.NextMainThreadPendingTaskDelay());
+  Reclaim();
 
   // No thread cache purging during periodic purge, but with ReclaimAll().
   //
@@ -149,16 +138,16 @@ TEST_F(PartitionAllocMemoryReclaimerTest, DoNotAlwaysPurgeThreadCache) {
   // allocations in the test harness.
   EXPECT_GT(tcache->CachedMemory(), cached_size / 2);
 
-  PartitionAllocMemoryReclaimer::Instance()->ReclaimPeriodically();
+  Reclaim();
   EXPECT_GT(tcache->CachedMemory(), cached_size / 2);
 
-  PartitionAllocMemoryReclaimer::Instance()->ReclaimAll();
+  MemoryReclaimer::Instance()->ReclaimAll();
   EXPECT_LT(tcache->CachedMemory(), cached_size / 2);
 }
 
 #endif  // BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC) && \
-        // defined(PA_THREAD_CACHE_SUPPORTED) && \
-        // !BUILDFLAG(USE_BACKUP_REF_PTR)
+        // defined(PA_THREAD_CACHE_SUPPORTED)
 
-}  // namespace base
+}  // namespace partition_alloc
+
 #endif  // !defined(MEMORY_TOOL_REPLACES_ALLOCATOR)

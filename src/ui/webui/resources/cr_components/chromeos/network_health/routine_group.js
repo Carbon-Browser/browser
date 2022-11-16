@@ -6,7 +6,18 @@
  * @fileoverview Polymer element for a group of diagnostic routines.
  */
 
+import '//resources/polymer/v3_0/paper-spinner/paper-spinner-lite.js';
+import './network_health_container.js';
+
+import {html, Polymer} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {RoutineResult, RoutineVerdict} from 'chrome://resources/mojo/chromeos/services/network_health/public/mojom/network_diagnostics.mojom-webui.js';
+
+import {I18nBehavior} from '../../../js/i18n_behavior.m.js';
+
+import {Icons, Routine} from './network_diagnostics_types.js';
+
 Polymer({
+  _template: html`{__html_template__}`,
   is: 'routine-group',
 
   behaviors: [
@@ -16,7 +27,7 @@ Polymer({
   properties: {
     /**
      * List of routines to display in the group.
-     * @private {!Array<!Routine>}
+     * @type {!Array<!Routine>}
      */
     routines: {
       type: Array,
@@ -25,7 +36,7 @@ Polymer({
 
     /**
      * Localized name for the group of routines.
-     * @private {String}
+     * @type {string}
      */
     name: {
       type: String,
@@ -33,17 +44,8 @@ Polymer({
     },
 
     /**
-     * Boolean flag if any routines in the group are running.
-     * @private {Boolean}
-     */
-    running: {
-      type: Boolean,
-      computed: 'routinesRunning_(routines.*)',
-    },
-
-    /**
      * Boolean flag if the container is expanded.
-     * @private {Boolean}
+     * @type {boolean}
      */
     expanded: {
       type: Boolean,
@@ -51,12 +53,21 @@ Polymer({
     },
 
     /**
-     * Boolean flag if icon representing the group result should be shown.
-     * @private {Boolean}
+     * Boolean flag if any routines in the group are running.
+     * @private {boolean}
      */
-    showGroupIcon: {
+    running_: {
       type: Boolean,
-      computed: 'showGroupIcon_(running, expanded)',
+      computed: 'routinesRunning_(routines.*)',
+    },
+
+    /**
+     * Boolean flag if icon representing the group result should be shown.
+     * @private {boolean}
+     */
+    showGroupIcon_: {
+      type: Boolean,
+      computed: 'computeShowGroupIcon_(running_, expanded)',
     },
   },
 
@@ -79,12 +90,12 @@ Polymer({
       }
 
       switch (routine.result.verdict) {
-        case chromeos.networkDiagnostics.mojom.RoutineVerdict.kNoProblem:
+        case RoutineVerdict.kNoProblem:
           continue;
-        case chromeos.networkDiagnostics.mojom.RoutineVerdict.kProblem:
+        case RoutineVerdict.kProblem:
           failed = true;
           break;
-        case chromeos.networkDiagnostics.mojom.RoutineVerdict.kNotRun:
+        case RoutineVerdict.kNotRun:
           complete = false;
           break;
       }
@@ -102,18 +113,16 @@ Polymer({
 
   /**
    * Determine if the group routine icon should be showing.
-   * @param {boolean} running
-   * @param {boolean} expanded
    * @return {boolean}
    * @private
    */
-  showGroupIcon_(running, expanded) {
-    return !running && !expanded;
+  computeShowGroupIcon_() {
+    return !this.running_ && !this.expanded;
   },
 
   /**
    * Helper function to get the icon for a routine based on the result.
-   * @param {!chromeos.networkDiagnostics.mojom.RoutineResult} result
+   * @param {!RoutineResult} result
    * @return {string}
    * @private
    */
@@ -123,11 +132,11 @@ Polymer({
     }
 
     switch (result.verdict) {
-      case chromeos.networkDiagnostics.mojom.RoutineVerdict.kNoProblem:
+      case RoutineVerdict.kNoProblem:
         return Icons.TEST_PASSED;
-      case chromeos.networkDiagnostics.mojom.RoutineVerdict.kProblem:
+      case RoutineVerdict.kProblem:
         return Icons.TEST_FAILED;
-      case chromeos.networkDiagnostics.mojom.RoutineVerdict.kNotRun:
+      case RoutineVerdict.kNotRun:
         return Icons.TEST_NOT_RUN;
     }
 

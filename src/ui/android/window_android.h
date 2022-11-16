@@ -12,7 +12,7 @@
 #include "base/android/jni_weak_ref.h"
 #include "base/android/scoped_java_ref.h"
 #include "base/callback.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/time/time.h"
 #include "ui/android/ui_android_export.h"
@@ -35,6 +35,17 @@ class WindowAndroidObserver;
 // WindowAndroid is also the root of a ViewAndroid tree.
 class UI_ANDROID_EXPORT WindowAndroid : public ViewAndroid {
  public:
+  class ScopedWindowAndroidForTesting {
+   public:
+    ScopedWindowAndroidForTesting(WindowAndroid* window);
+    ~ScopedWindowAndroidForTesting();
+
+    WindowAndroid* get() { return window_; }
+
+   private:
+    raw_ptr<WindowAndroid> window_;
+  };
+
   static WindowAndroid* FromJavaWindowAndroid(
       const base::android::JavaParamRef<jobject>& jwindow_android);
 
@@ -43,6 +54,9 @@ class UI_ANDROID_EXPORT WindowAndroid : public ViewAndroid {
                 int display_id,
                 float scroll_factor,
                 bool window_is_wide_color_gamut);
+
+  WindowAndroid(const WindowAndroid&) = delete;
+  WindowAndroid& operator=(const WindowAndroid&) = delete;
 
   ~WindowAndroid() override;
 
@@ -91,10 +105,7 @@ class UI_ANDROID_EXPORT WindowAndroid : public ViewAndroid {
 
   float mouse_wheel_scroll_factor() const { return mouse_wheel_scroll_factor_; }
 
-  static WindowAndroid* CreateForTesting();
-
-  // Return the window token for this window, if one exists.
-  base::android::ScopedJavaLocalRef<jobject> GetWindowToken();
+  static std::unique_ptr<ScopedWindowAndroidForTesting> CreateForTesting();
 
   // This should return the same Display as Screen::GetDisplayNearestWindow
   // except the color space depends on the status of this particular window
@@ -118,7 +129,7 @@ class UI_ANDROID_EXPORT WindowAndroid : public ViewAndroid {
     ~ScopedSelectionHandles();
 
    private:
-    WindowAndroid* window_;
+    raw_ptr<WindowAndroid> window_;
   };
 
  private:
@@ -138,18 +149,16 @@ class UI_ANDROID_EXPORT WindowAndroid : public ViewAndroid {
   base::android::ScopedJavaGlobalRef<jobject> java_window_;
   const int display_id_;
   const bool window_is_wide_color_gamut_;
-  WindowAndroidCompositor* compositor_;
+  raw_ptr<WindowAndroidCompositor> compositor_;
 
   base::ObserverList<WindowAndroidObserver>::Unchecked observer_list_;
 
   float mouse_wheel_scroll_factor_;
   bool vsync_paused_ = false;
 
-  TestHooks* test_hooks_ = nullptr;
+  raw_ptr<TestHooks> test_hooks_ = nullptr;
 
   int selection_handles_active_count_ = 0;
-
-  DISALLOW_COPY_AND_ASSIGN(WindowAndroid);
 };
 
 }  // namespace ui

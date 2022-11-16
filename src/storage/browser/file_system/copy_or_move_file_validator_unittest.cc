@@ -13,9 +13,8 @@
 #include "base/files/file_path.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/location.h"
-#include "base/macros.h"
 #include "base/run_loop.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "storage/browser/blob/shareable_file_reference.h"
@@ -25,8 +24,9 @@
 #include "storage/browser/file_system/file_system_context.h"
 #include "storage/browser/file_system/file_system_url.h"
 #include "storage/browser/file_system/isolated_context.h"
-#include "storage/browser/quota/quota_manager_proxy.h"
 #include "storage/browser/test/async_file_test_helper.h"
+#include "storage/browser/test/mock_quota_manager.h"
+#include "storage/browser/test/mock_quota_manager_proxy.h"
 #include "storage/browser/test/mock_special_storage_policy.h"
 #include "storage/browser/test/test_file_system_backend.h"
 #include "storage/browser/test/test_file_system_context.h"
@@ -58,6 +58,11 @@ class CopyOrMoveFileValidatorTestHelper {
         src_type_(src_type),
         dest_type_(dest_type) {}
 
+  CopyOrMoveFileValidatorTestHelper(const CopyOrMoveFileValidatorTestHelper&) =
+      delete;
+  CopyOrMoveFileValidatorTestHelper& operator=(
+      const CopyOrMoveFileValidatorTestHelper&) = delete;
+
   ~CopyOrMoveFileValidatorTestHelper() {
     file_system_context_ = nullptr;
     base::RunLoop().RunUntilIdle();
@@ -67,8 +72,14 @@ class CopyOrMoveFileValidatorTestHelper {
     ASSERT_TRUE(base_.CreateUniqueTempDir());
     base::FilePath base_dir = base_.GetPath();
 
-    file_system_context_ = CreateFileSystemContextForTesting(
-        /*quota_manager_proxy=*/nullptr, base_dir);
+    quota_manager_ = base::MakeRefCounted<storage::MockQuotaManager>(
+        /*is_incognito=*/false, base_dir, base::ThreadTaskRunnerHandle::Get(),
+        base::MakeRefCounted<storage::MockSpecialStoragePolicy>());
+    quota_manager_proxy_ = base::MakeRefCounted<storage::MockQuotaManagerProxy>(
+        quota_manager_.get(), base::ThreadTaskRunnerHandle::Get());
+    // Prepare file system.
+    file_system_context_ = storage::CreateFileSystemContextForTesting(
+        quota_manager_proxy_.get(), base_dir);
 
     // Set up TestFileSystemBackend to require CopyOrMoveFileValidator.
     FileSystemBackend* test_file_system_backend =
@@ -183,14 +194,14 @@ class CopyOrMoveFileValidatorTestHelper {
   std::string dest_fsid_;
 
   base::test::TaskEnvironment task_environment_;
+  scoped_refptr<storage::MockQuotaManager> quota_manager_;
+  scoped_refptr<storage::MockQuotaManagerProxy> quota_manager_proxy_;
   scoped_refptr<FileSystemContext> file_system_context_;
 
   FileSystemURL copy_src_;
   FileSystemURL copy_dest_;
   FileSystemURL move_src_;
   FileSystemURL move_dest_;
-
-  DISALLOW_COPY_AND_ASSIGN(CopyOrMoveFileValidatorTestHelper);
 };
 
 // For TestCopyOrMoveFileValidatorFactory
@@ -203,6 +214,12 @@ class TestCopyOrMoveFileValidatorFactory
   // TODO(gbillock): switch args to enum or something
   explicit TestCopyOrMoveFileValidatorFactory(Validity validity)
       : validity_(validity) {}
+
+  TestCopyOrMoveFileValidatorFactory(
+      const TestCopyOrMoveFileValidatorFactory&) = delete;
+  TestCopyOrMoveFileValidatorFactory& operator=(
+      const TestCopyOrMoveFileValidatorFactory&) = delete;
+
   ~TestCopyOrMoveFileValidatorFactory() override = default;
 
   CopyOrMoveFileValidator* CreateCopyOrMoveFileValidator(
@@ -221,6 +238,11 @@ class TestCopyOrMoveFileValidatorFactory
           write_result_(validity == VALID || validity == PRE_WRITE_INVALID
                             ? base::File::FILE_OK
                             : base::File::FILE_ERROR_SECURITY) {}
+
+    TestCopyOrMoveFileValidator(const TestCopyOrMoveFileValidator&) = delete;
+    TestCopyOrMoveFileValidator& operator=(const TestCopyOrMoveFileValidator&) =
+        delete;
+
     ~TestCopyOrMoveFileValidator() override = default;
 
     void StartPreWriteValidation(ResultCallback result_callback) override {
@@ -239,13 +261,9 @@ class TestCopyOrMoveFileValidatorFactory
    private:
     base::File::Error result_;
     base::File::Error write_result_;
-
-    DISALLOW_COPY_AND_ASSIGN(TestCopyOrMoveFileValidator);
   };
 
   Validity validity_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestCopyOrMoveFileValidatorFactory);
 };
 
 }  // namespace

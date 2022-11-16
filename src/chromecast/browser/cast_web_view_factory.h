@@ -9,7 +9,6 @@
 #include <vector>
 
 #include "base/callback_forward.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "chromecast/browser/cast_web_view.h"
 
@@ -24,10 +23,13 @@ class CastWebService;
 class CastWebViewFactory {
  public:
   explicit CastWebViewFactory(content::BrowserContext* browser_context);
+
+  CastWebViewFactory(const CastWebViewFactory&) = delete;
+  CastWebViewFactory& operator=(const CastWebViewFactory&) = delete;
+
   virtual ~CastWebViewFactory();
 
   virtual std::unique_ptr<CastWebView> CreateWebView(
-      const CastWebView::CreateParams& create_params,
       mojom::CastWebViewParamsPtr params,
       CastWebService* web_service);
 
@@ -36,8 +38,6 @@ class CastWebViewFactory {
  protected:
   content::BrowserContext* const browser_context_;
   base::RepeatingCallback<void(CastWebView*, int)> register_callback_;
-
-  DISALLOW_COPY_AND_ASSIGN(CastWebViewFactory);
 };
 
 }  // namespace chromecast

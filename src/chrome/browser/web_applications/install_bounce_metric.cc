@@ -35,8 +35,7 @@ absl::optional<base::Time> ParseTime(const base::Value* value) {
   if (!base::StringToInt64(value->GetString(), &integer))
     return absl::nullopt;
 
-  return base::Time::FromDeltaSinceWindowsEpoch(
-      base::TimeDelta::FromMicroseconds(integer));
+  return base::Time::FromDeltaSinceWindowsEpoch(base::Microseconds(integer));
 }
 
 base::Value SerializeTime(const base::Time& time) {
@@ -57,7 +56,7 @@ absl::optional<InstallMetrics> ParseInstallMetricsFromPrefs(
     const web_app::AppId& app_id) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
-  const base::DictionaryValue* ids_to_metrics =
+  const base::Value* ids_to_metrics =
       pref_service->GetDictionary(prefs::kWebAppInstallMetrics);
   if (!ids_to_metrics)
     return absl::nullopt;
@@ -119,8 +118,7 @@ void RecordWebAppUninstallation(PrefService* pref_service,
   if (!metrics)
     return;
 
-  constexpr base::TimeDelta kMaxInstallBounceDuration =
-      base::TimeDelta::FromHours(1);
+  constexpr base::TimeDelta kMaxInstallBounceDuration = base::Hours(1);
   if (GetTime() - metrics->timestamp > kMaxInstallBounceDuration)
     return;
 

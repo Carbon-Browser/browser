@@ -14,7 +14,7 @@ import org.json.JSONObject;
 
 import org.chromium.base.Callback;
 import org.chromium.base.Log;
-import org.chromium.base.supplier.Supplier;
+import org.chromium.base.annotations.DoNotClassMerge;
 import org.chromium.chrome.browser.endpoint_fetcher.EndpointFetcher;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.tab.Tab;
@@ -28,7 +28,11 @@ import java.util.concurrent.TimeUnit;
 /**
  * {@link PersistedTabData} for Store websites with opening/closing hours.
  * TODO(crbug.com/1199134) Add tests for StorePersistedTabData
+ *
+ * This class should not be merged because it is being used as a key in a Map
+ * in PersistedTabDataConfiguration.java.
  */
+@DoNotClassMerge
 public class StorePersistedTabData extends PersistedTabData {
     private static final String MISSING_STRING = "missing";
     private static final String COLON_STRING = ":";
@@ -235,7 +239,7 @@ public class StorePersistedTabData extends PersistedTabData {
     }
 
     @Override
-    Supplier<ByteBuffer> getSerializeSupplier() {
+    Serializer<ByteBuffer> getSerializer() {
         StorePersistedTabDataProto.Builder builder =
                 StorePersistedTabDataProto.newBuilder()
                         .setOpeningTime(mStoreHours.mOpeningTime)
@@ -278,11 +282,13 @@ public class StorePersistedTabData extends PersistedTabData {
      * @param callback {@link Callback} {@link StorePersistedTabData is passed back in}
      */
     public static void from(Tab tab, Callback<StorePersistedTabData> callback) {
-        // TODO(crbug.com/995852): Replace NO_TRAFFIC_ANNOTATION_YET with a real traffic
+        // TODO(crbug.com/995852): Replace MISSING_TRAFFIC_ANNOTATION with a real traffic
         // annotation.
         PersistedTabData.from(tab,
-                (data, storage, id)
-                        -> { return new StorePersistedTabData(tab, data, storage, id); },
+                (data, storage, id, factoryCallback)
+                        -> {
+                    factoryCallback.onResult(new StorePersistedTabData(tab, storage, id));
+                },
                 (supplierCallback)
                         -> {
                     EndpointFetcher.fetchUsingOAuth(
@@ -294,7 +300,7 @@ public class StorePersistedTabData extends PersistedTabData {
                             Profile.getLastUsedRegularProfile(), PERSISTED_TAB_DATA_ID,
                             String.format(Locale.US, ENDPOINT, tab.getUrl().getSpec()),
                             HTTPS_METHOD, CONTENT_TYPE, SCOPES, EMPTY_POST_DATA, TIMEOUT_MS,
-                            NetworkTrafficAnnotationTag.NO_TRAFFIC_ANNOTATION_YET);
+                            NetworkTrafficAnnotationTag.MISSING_TRAFFIC_ANNOTATION);
                 },
                 StorePersistedTabData.class, callback);
     }

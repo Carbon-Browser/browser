@@ -10,6 +10,7 @@
 #include "base/bind.h"
 #include "base/run_loop.h"
 #include "base/strings/strcat.h"
+#include "build/build_config.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/test/base/in_process_browser_test.h"
@@ -119,21 +120,27 @@ class ConditionalCacheCountingHelperBrowserTest : public InProcessBrowserTest {
 
 // Tests that ConditionalCacheCountingHelper only counts those cache entries
 // that match the condition.
-IN_PROC_BROWSER_TEST_F(ConditionalCacheCountingHelperBrowserTest, Count) {
+// TODO(https://crbug.com/1287432): The test is flaky on Win.
+#if BUILDFLAG(IS_WIN)
+#define MAYBE_Count DISABLED_Count
+#else
+#define MAYBE_Count Count
+#endif
+IN_PROC_BROWSER_TEST_F(ConditionalCacheCountingHelperBrowserTest, MAYBE_Count) {
   // Create 5 entries.
   std::set<std::string> keys1 = {"1", "2", "3", "4", "5"};
 
   base::Time t1 = base::Time::Now();
   CreateCacheEntries(keys1);
 
-  base::PlatformThread::Sleep(base::TimeDelta::FromMilliseconds(kTimeoutMs));
+  base::PlatformThread::Sleep(base::Milliseconds(kTimeoutMs));
   base::Time t2 = base::Time::Now();
-  base::PlatformThread::Sleep(base::TimeDelta::FromMilliseconds(kTimeoutMs));
+  base::PlatformThread::Sleep(base::Milliseconds(kTimeoutMs));
 
   std::set<std::string> keys2 = {"6", "7"};
   CreateCacheEntries(keys2);
 
-  base::PlatformThread::Sleep(base::TimeDelta::FromMilliseconds(kTimeoutMs));
+  base::PlatformThread::Sleep(base::Milliseconds(kTimeoutMs));
   base::Time t3 = base::Time::Now();
 
   // Count all entries.

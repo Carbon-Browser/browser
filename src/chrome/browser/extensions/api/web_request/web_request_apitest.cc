@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <array>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -10,15 +11,15 @@
 #include "base/bind.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
+#include "base/files/file_util.h"
 #include "base/json/json_reader.h"
-#include "base/macros.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/string_split.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/synchronization/lock.h"
-#include "base/task/post_task.h"
 #include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
@@ -29,6 +30,7 @@
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/chrome_notification_types.h"
+#include "chrome/browser/devtools/protocol/devtools_protocol_test_support.h"
 #include "chrome/browser/devtools/url_constants.h"
 #include "chrome/browser/extensions/active_tab_permission_granter.h"
 #include "chrome/browser/extensions/api/extension_action/test_extension_action_api_observer.h"
@@ -70,7 +72,7 @@
 #include "components/prefs/pref_service.h"
 #include "components/proxy_config/proxy_config_dictionary.h"
 #include "components/proxy_config/proxy_config_pref_names.h"
-#include "components/web_package/test_support/web_bundle_builder.h"
+#include "components/web_package/web_bundle_builder.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/navigation_controller.h"
@@ -88,11 +90,13 @@
 #include "content/public/common/page_type.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
+#include "content/public/test/prerender_test_util.h"
 #include "content/public/test/simple_url_loader_test_helper.h"
 #include "content/public/test/url_loader_interceptor.h"
 #include "content/public/test/url_loader_monitor.h"
 #include "content/public/test/web_transport_simple_test_server.h"
 #include "extensions/browser/api/web_request/web_request_api.h"
+#include "extensions/browser/background_script_executor.h"
 #include "extensions/browser/blocked_action_type.h"
 #include "extensions/browser/extension_prefs.h"
 #include "extensions/browser/extension_registry.h"
@@ -124,6 +128,7 @@
 #include "services/network/public/mojom/fetch_api.mojom.h"
 #include "services/network/test/test_url_loader_client.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/input/web_input_event.h"
 #include "ui/base/ui_base_features.h"
 #include "url/origin.h"
@@ -152,6 +157,9 @@ class CancelLoginDialog : public content::NotificationObserver {
                    content::NotificationService::AllSources());
   }
 
+  CancelLoginDialog(const CancelLoginDialog&) = delete;
+  CancelLoginDialog& operator=(const CancelLoginDialog&) = delete;
+
   ~CancelLoginDialog() override {}
 
   void Observe(int type,
@@ -164,8 +172,6 @@ class CancelLoginDialog : public content::NotificationObserver {
 
  private:
   content::NotificationRegistrar registrar_;
-
-  DISALLOW_COPY_AND_ASSIGN(CancelLoginDialog);
 };
 
 // Observer that listens for messages from chrome.test.sendMessage to allow them
@@ -173,8 +179,7 @@ class CancelLoginDialog : public content::NotificationObserver {
 // testing purposes.
 class NavigateTabMessageHandler {
  public:
-  explicit NavigateTabMessageHandler(Profile* profile)
-      : profile_(profile), navigate_listener_(/* will_reply */ false) {
+  explicit NavigateTabMessageHandler(Profile* profile) : profile_(profile) {
     navigate_listener_.SetOnRepeatedlySatisfied(base::BindRepeating(
         &NavigateTabMessageHandler::HandleNavigateTabMessage,
         base::Unretained(this)));
@@ -204,7 +209,7 @@ class NavigateTabMessageHandler {
     navigate_listener_.Reset();
   }
 
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
   ExtensionTestMessageListener navigate_listener_;
 };
 
@@ -244,23 +249,50 @@ void PerformXhrInFrame(content::RenderFrameHost* frame,
   EXPECT_TRUE(success);
 }
 
+base::Value ExecuteScriptAndReturnValue(const ExtensionId& extension_id,
+                                        content::BrowserContext* context,
+                                        const std::string& script) {
+  return BackgroundScriptExecutor::ExecuteScript(
+      context, extension_id, script,
+      BackgroundScriptExecutor::ResultCapture::kSendScriptResult);
+}
+
+absl::optional<bool> ExecuteScriptAndReturnBool(
+    const ExtensionId& extension_id,
+    content::BrowserContext* context,
+    const std::string& script) {
+  absl::optional<bool> result;
+  base::Value script_result =
+      ExecuteScriptAndReturnValue(extension_id, context, script);
+  if (script_result.is_bool())
+    result = script_result.GetBool();
+  return result;
+}
+
+absl::optional<std::string> ExecuteScriptAndReturnString(
+    const ExtensionId& extension_id,
+    content::BrowserContext* context,
+    const std::string& script) {
+  absl::optional<std::string> result;
+  base::Value script_result =
+      ExecuteScriptAndReturnValue(extension_id, context, script);
+  if (script_result.is_string())
+    result = script_result.GetString();
+  return result;
+}
+
 // Returns the current count of a variable stored in the |extension| background
 // page. Returns -1 if something goes awry.
 int GetCountFromBackgroundPage(const Extension* extension,
                                content::BrowserContext* context,
                                const std::string& variable_name) {
-  ExtensionHost* host =
-      ProcessManager::Get(context)->GetBackgroundHostForExtension(
-          extension->id());
-  if (!host || !host->host_contents())
+  const std::string script = base::StringPrintf(
+      "chrome.test.sendScriptResult(%s)", variable_name.c_str());
+  base::Value value =
+      ExecuteScriptAndReturnValue(extension->id(), context, script);
+  if (!value.is_int())
     return -1;
-
-  int count = -1;
-  if (!ExecuteScriptAndExtractInt(
-          host->host_contents(),
-          "window.domAutomationController.send(" + variable_name + ")", &count))
-    return -1;
-  return count;
+  return value.GetInt();
 }
 
 // Returns the current count of webRequests received by the |extension| in
@@ -268,8 +300,7 @@ int GetCountFromBackgroundPage(const Extension* extension,
 // object). Returns -1 if something goes awry.
 int GetWebRequestCountFromBackgroundPage(const Extension* extension,
                                          content::BrowserContext* context) {
-  return GetCountFromBackgroundPage(extension, context,
-                                    "window.webRequestCount");
+  return GetCountFromBackgroundPage(extension, context, "self.webRequestCount");
 }
 
 // Returns true if the |extension|'s background page saw an event for a request
@@ -277,22 +308,14 @@ int GetWebRequestCountFromBackgroundPage(const Extension* extension,
 bool HasSeenWebRequestInBackgroundPage(const Extension* extension,
                                        content::BrowserContext* context,
                                        const std::string& hostname) {
-  // TODO(devlin): Here and in Get*CountFromBackgroundPage(), we should leverage
-  // ExecuteScriptInBackgroundPage().
-  ExtensionHost* host =
-      ProcessManager::Get(context)->GetBackgroundHostForExtension(
-          extension->id());
-  if (!host || !host->host_contents())
-    return false;
-
-  bool seen = false;
-  std::string script = base::StringPrintf(
-      R"(domAutomationController.send(
-                 window.requestedHostnames.includes('%s'));)",
+  const std::string script = base::StringPrintf(
+      R"(chrome.test.sendScriptResult(
+                 self.requestedHostnames.includes('%s'));)",
       hostname.c_str());
-  EXPECT_TRUE(
-      ExecuteScriptAndExtractBool(host->host_contents(), script, &seen));
-  return seen;
+  base::Value value =
+      ExecuteScriptAndReturnValue(extension->id(), context, script);
+  DCHECK(value.is_bool());
+  return value.GetBool();
 }
 
 void WaitForExtraHeadersListener(base::WaitableEvent* event,
@@ -451,20 +474,199 @@ class DevToolsFrontendInWebRequestApiTest : public ExtensionApiTest {
 
 IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest, WebRequestApi) {
   ASSERT_TRUE(StartEmbeddedTestServer());
-  ASSERT_TRUE(RunExtensionTest("webrequest", {.page_url = "test_api.html"}))
-      << message_;
+  ASSERT_TRUE(RunExtensionTest("webrequest/test_api")) << message_;
 }
 
 IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest, WebRequestSimple) {
   ASSERT_TRUE(StartEmbeddedTestServer());
-  ASSERT_TRUE(RunExtensionTest("webrequest", {.page_url = "test_simple.html"}))
-      << message_;
+  ASSERT_TRUE(RunExtensionTest("webrequest/test_simple")) << message_;
 }
 
 IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest, WebRequestComplex) {
   ASSERT_TRUE(StartEmbeddedTestServer());
-  ASSERT_TRUE(RunExtensionTest("webrequest", {.page_url = "test_complex.html"}))
-      << message_;
+  ASSERT_TRUE(RunExtensionTest("webrequest/test_complex")) << message_;
+}
+
+class ExtensionDevToolsProtocolTest
+    : public ExtensionWebRequestApiTest,
+      public content::TestDevToolsProtocolClient {
+ protected:
+  void Attach() { AttachToWebContents(web_contents()); }
+
+  void TearDownOnMainThread() override {
+    DetachProtocolClient();
+    ExtensionWebRequestApiTest::TearDownOnMainThread();
+  }
+
+  content::WebContents* web_contents() {
+    return browser()->tab_strip_model()->GetWebContentsAt(0);
+  }
+};
+
+IN_PROC_BROWSER_TEST_F(ExtensionDevToolsProtocolTest,
+                       HeaderOverriddenByExtension) {
+  Attach();
+  ASSERT_TRUE(embedded_test_server()->Start());
+  TestExtensionDir test_dir;
+  test_dir.WriteManifest(R"({
+        "name": "Header Override Test",
+        "manifest_version": 2,
+        "version": "0.1",
+        "background": { "scripts": ["background.js"], "persistent": true },
+        "permissions": ["<all_urls>", "webRequest", "webRequestBlocking"]
+      })");
+  test_dir.WriteFile(FILE_PATH_LITERAL("background.js"), R"(
+        chrome.webRequest.onHeadersReceived.addListener(function(details) {
+            var headers = details.responseHeaders;
+            headers.push({name: "extensionHeaderName",
+                value: "extensionHeaderValue"});
+            return {responseHeaders: headers};
+          },
+          {urls: ['<all_urls>']},
+          ['responseHeaders', 'extraHeaders', 'blocking']);
+        chrome.test.sendMessage('ready');
+      )");
+
+  ExtensionTestMessageListener listener("ready");
+  ASSERT_TRUE(LoadExtension(test_dir.UnpackedPath()));
+  EXPECT_TRUE(listener.WaitUntilSatisfied());
+
+  SendCommand("Network.enable", base::Value::Dict(), true);
+  const GURL url(
+      embedded_test_server()->GetURL("/set-cookie?cookieName=cookieValue"));
+  ui_test_utils::NavigateToURLWithDisposition(
+      browser(), url, WindowOpenDisposition::CURRENT_TAB,
+      ui_test_utils::BROWSER_TEST_NONE);
+
+  // Check that `Network.responseReceived` contains the response header added
+  // by the extension
+  base::Value::Dict response_received_result =
+      WaitForNotification("Network.responseReceived", false);
+  auto* extension_header = response_received_result.FindByDottedPath(
+      "response.headers.extensionHeaderName");
+  ASSERT_TRUE(extension_header);
+  ASSERT_EQ(*extension_header, "extensionHeaderValue");
+
+  // Check that the cookie as specified in the original headers has been set
+  auto* get_all_cookies_result =
+      SendCommand("Network.getAllCookies", base::Value::Dict(), true);
+  const base::Value::List* cookies =
+      get_all_cookies_result->FindList("cookies");
+  ASSERT_TRUE(cookies);
+  ASSERT_EQ(cookies->size(), 1u);
+  auto* cookie_name = cookies->front().FindStringKey("name");
+  ASSERT_TRUE(cookie_name);
+  ASSERT_EQ(*cookie_name, "cookieName");
+  auto* cookie_value = cookies->front().FindStringKey("value");
+  ASSERT_TRUE(cookie_value);
+  ASSERT_EQ(*cookie_value, "cookieValue");
+}
+
+IN_PROC_BROWSER_TEST_F(ExtensionDevToolsProtocolTest,
+                       HeaderOverrideViaProtocolAllowedByExtension) {
+  Attach();
+  ASSERT_TRUE(embedded_test_server()->Start());
+  TestExtensionDir test_dir;
+  test_dir.WriteManifest(R"({
+        "name": "Header Override Test",
+        "manifest_version": 2,
+        "version": "0.1",
+        "background": { "scripts": ["background.js"], "persistent": true },
+        "permissions": ["<all_urls>", "webRequest", "webRequestBlocking"]
+      })");
+  test_dir.WriteFile(FILE_PATH_LITERAL("background.js"), R"(
+        chrome.webRequest.onHeadersReceived.addListener(function(details) {
+            var headers = details.responseHeaders;
+            headers.push({name: "extensionHeaderName",
+                value: "extensionHeaderValue"});
+            return {responseHeaders: headers};
+          },
+          {urls: ['<all_urls>']},
+          ['responseHeaders', 'extraHeaders', 'blocking']);
+        chrome.test.sendMessage('ready');
+      )");
+
+  ExtensionTestMessageListener listener("ready");
+  ASSERT_TRUE(LoadExtension(test_dir.UnpackedPath()));
+  EXPECT_TRUE(listener.WaitUntilSatisfied());
+
+  SendCommand("Network.enable", base::Value::Dict(), true);
+
+  base::Value::Dict enable_params;
+  base::Value::List patterns;
+  base::Value::Dict pattern;
+  pattern.Set("requestStage", "Response");
+  patterns.Append(std::move(pattern));
+  enable_params.Set("patterns", std::move(patterns));
+  SendCommand("Fetch.enable", std::move(enable_params), true);
+
+  const GURL url(
+      embedded_test_server()->GetURL("/set-cookie?cookieName=cookieValue"));
+  ui_test_utils::NavigateToURLWithDisposition(
+      browser(), url, WindowOpenDisposition::CURRENT_TAB,
+      ui_test_utils::BROWSER_TEST_NONE);
+  base::Value::Dict request_paused_result =
+      WaitForNotification("Fetch.requestPaused", true);
+  std::string* request_id = request_paused_result.FindString("requestId");
+
+  // Checks that `Fetch.requestPaused` contains the response headers added by
+  // the extension
+  base::Value::List* response_headers =
+      request_paused_result.FindListByDottedPath("responseHeaders");
+  auto* header_name = response_headers->back().FindStringKey("name");
+  ASSERT_TRUE(header_name);
+  ASSERT_EQ(*header_name, "extensionHeaderName");
+  auto* header_value = response_headers->back().FindStringKey("value");
+  ASSERT_TRUE(header_value);
+  ASSERT_EQ(*header_value, "extensionHeaderValue");
+
+  // Response headers are replaced by new overrides
+  base::Value::Dict params;
+  params.Set("requestId", *request_id);
+  base::Value::Dict header_1;
+  header_1.Set("name", "firstName");
+  header_1.Set("value", "firstValue");
+  base::Value::Dict header_2;
+  header_2.Set("name", "secondName");
+  header_2.Set("value", "secondValue");
+  base::Value::List headers;
+  headers.Append(std::move(header_1));
+  headers.Append(std::move(header_2));
+  params.Set("responseHeaders", std::move(headers));
+  params.Set("responseCode", 200);
+  params.Set("body", "");
+  SendCommand("Fetch.fulfillRequest", std::move(params), false);
+
+  // Check that `Network.responseReceived` contains the response headers as
+  // specified via `Fetch.fulfillRequest`
+  base::Value::Dict response_received_result =
+      WaitForNotification("Network.responseReceived", false);
+  auto* first_header =
+      response_received_result.FindByDottedPath("response.headers.firstName");
+  ASSERT_TRUE(first_header);
+  ASSERT_EQ(*first_header, "firstValue");
+  auto* second_header =
+      response_received_result.FindByDottedPath("response.headers.secondName");
+  ASSERT_TRUE(second_header);
+  ASSERT_EQ(*second_header, "secondValue");
+  ASSERT_EQ(response_received_result.FindByDottedPath("response.headers")
+                ->GetDict()
+                .size(),
+            2u);
+
+  // Check that the cookie as specified in the original headers has been set
+  auto* get_all_cookies_result =
+      SendCommand("Network.getAllCookies", base::Value::Dict(), true);
+  const base::Value::List* cookies =
+      get_all_cookies_result->FindList("cookies");
+  ASSERT_TRUE(cookies);
+  ASSERT_EQ(cookies->size(), 1u);
+  auto* cookie_name = cookies->front().FindStringKey("name");
+  ASSERT_TRUE(cookie_name);
+  ASSERT_EQ(*cookie_name, "cookieName");
+  auto* cookie_value = cookies->front().FindStringKey("value");
+  ASSERT_TRUE(cookie_value);
+  ASSERT_EQ(*cookie_value, "cookieValue");
 }
 
 // This test times out regularly on ASAN/MSAN trybots. See
@@ -472,8 +674,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest, WebRequestComplex) {
 // TODO(crbug.com/1177120) Re-enable test
 IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest, DISABLED_WebRequestTypes) {
   ASSERT_TRUE(StartEmbeddedTestServer());
-  ASSERT_TRUE(RunExtensionTest("webrequest", {.page_url = "test_types.html"}))
-      << message_;
+  ASSERT_TRUE(RunExtensionTest("webrequest/test_types")) << message_;
 }
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -483,9 +684,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest, WebRequestPublicSession) {
   // Disable a CHECK while doing api tests.
   WebRequestPermissions::AllowAllExtensionLocationsInPublicSessionForTesting(
       true);
-  ASSERT_TRUE(
-      RunExtensionTest("webrequest_public_session", {.page_url = "test.html"}))
-      << message_;
+  ASSERT_TRUE(RunExtensionTest("webrequest_public_session")) << message_;
   WebRequestPermissions::AllowAllExtensionLocationsInPublicSessionForTesting(
       false);
 }
@@ -493,8 +692,8 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest, WebRequestPublicSession) {
 
 // Test that a request to an OpenSearch description document (OSDD) generates
 // an event with the expected details.
-// Flaky on Windows: https://crbug.com/1218893
-#if defined(OS_WIN)
+// Flaky on Windows and Mac: https://crbug.com/1218893
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
 #define MAYBE_WebRequestTestOSDD DISABLED_WebRequestTestOSDD
 #else
 #define MAYBE_WebRequestTestOSDD WebRequestTestOSDD
@@ -508,15 +707,13 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest, MAYBE_WebRequestTestOSDD) {
 
   search_test_utils::WaitForTemplateURLServiceToLoad(
       TemplateURLServiceFactory::GetForProfile(profile()));
-  ASSERT_TRUE(RunExtensionTest("webrequest", {.page_url = "test_osdd.html"}))
-      << message_;
+  ASSERT_TRUE(RunExtensionTest("webrequest/test_osdd")) << message_;
 }
 
 // Test that the webRequest events are dispatched with the expected details when
 // a frame or tab is removed while a response is being received.
-// Flaky: https://crbug.com/617865
 IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
-                       DISABLED_WebRequestUnloadAfterRequest) {
+                       WebRequestUnloadAfterRequest) {
   ASSERT_TRUE(StartEmbeddedTestServer());
   ASSERT_TRUE(
       RunExtensionTest("webrequest", {.page_url = "test_unload.html?1"}))
@@ -535,7 +732,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
 // Test that the webRequest events are dispatched with the expected details when
 // a frame or tab is immediately removed after starting a request.
 // Flaky on Linux/Mac. See crbug.com/780369 for detail.
-#if defined(OS_MAC) || defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 #define MAYBE_WebRequestUnloadImmediately DISABLED_WebRequestUnloadImmediately
 #else
 #define MAYBE_WebRequestUnloadImmediately WebRequestUnloadImmediately
@@ -560,41 +757,79 @@ class ExtensionWebRequestApiAuthRequiredTest
     : public ExtensionWebRequestApiTest,
       public testing::WithParamInterface<ProfileMode> {
  protected:
-  bool GetEnableIncognito() const {
+  static bool GetEnableIncognito() {
     return GetParam() == ProfileMode::kIncognito;
+  }
+
+  static std::string FormatCustomArg(const char* test_name) {
+    static constexpr char custom_arg_format[] =
+        R"({"testName": "%s", "runInIncognito": %s})";
+
+    return base::StringPrintf(custom_arg_format, test_name,
+                              GetEnableIncognito() ? "true" : "false");
   }
 };
 
-// Note: this is flaky on multiple platforms (crbug.com/1003598).
 IN_PROC_BROWSER_TEST_P(ExtensionWebRequestApiAuthRequiredTest,
-                       DISABLED_WebRequestAuthRequired) {
+                       WebRequestAuthRequired) {
   CancelLoginDialog login_dialog_helper;
 
   ASSERT_TRUE(StartEmbeddedTestServer());
 
-  // Pass "debug" as a custom arg to debug test flakiness.
-  ASSERT_TRUE(RunExtensionTest("webrequest",
-                               {.page_url = "test_auth_required.html",
-                                .custom_arg = "debug",
-                                .open_in_incognito = GetEnableIncognito()},
-                               {.allow_in_incognito = GetEnableIncognito()}))
+  // If running in incognito, create an incognito browser so the test
+  // framework can create an incognito window.
+  const bool incognito = GetEnableIncognito();
+  if (incognito)
+    CreateIncognitoBrowser(profile());
+
+  ASSERT_TRUE(RunExtensionTest(
+      "webrequest/test_auth_required",
+      {.custom_arg = FormatCustomArg("authRequiredNonBlocking").c_str()},
+      {.allow_in_incognito = incognito}))
+      << message_;
+  ASSERT_TRUE(RunExtensionTest(
+      "webrequest/test_auth_required",
+      {.custom_arg = FormatCustomArg("authRequiredSyncNoAction").c_str()},
+      {.allow_in_incognito = incognito}))
+      << message_;
+  ASSERT_TRUE(RunExtensionTest(
+      "webrequest/test_auth_required",
+      {.custom_arg = FormatCustomArg("authRequiredSyncCancelAuth").c_str()},
+      {.allow_in_incognito = incognito}))
+      << message_;
+  ASSERT_TRUE(RunExtensionTest(
+      "webrequest/test_auth_required",
+      {.custom_arg = FormatCustomArg("authRequiredSyncSetAuth").c_str()},
+      {.allow_in_incognito = incognito}))
       << message_;
 }
 
-// Note: this is flaky on multiple platforms (crbug.com/1003598). Temporarily
-// enabled to find flakiness cause.
 IN_PROC_BROWSER_TEST_P(ExtensionWebRequestApiAuthRequiredTest,
-                       DISABLED_WebRequestAuthRequiredAsync) {
+                       WebRequestAuthRequiredAsync) {
   CancelLoginDialog login_dialog_helper;
 
   ASSERT_TRUE(StartEmbeddedTestServer());
 
-  // Pass "debug" as a custom arg to debug test flakiness.
-  ASSERT_TRUE(RunExtensionTest("webrequest",
-                               {.page_url = "test_auth_required_async.html",
-                                .custom_arg = "debug",
-                                .open_in_incognito = GetEnableIncognito()},
-                               {.allow_in_incognito = GetEnableIncognito()}))
+  // If running in incognito, create an incognito browser so the tests
+  // run in an incognito window.
+  const bool incognito = GetEnableIncognito();
+  if (incognito)
+    CreateIncognitoBrowser(profile());
+
+  ASSERT_TRUE(RunExtensionTest(
+      "webrequest/test_auth_required_async",
+      {.custom_arg = FormatCustomArg("authRequiredAsyncNoAction").c_str()},
+      {.allow_in_incognito = incognito}))
+      << message_;
+  ASSERT_TRUE(RunExtensionTest(
+      "webrequest/test_auth_required_async",
+      {.custom_arg = FormatCustomArg("authRequiredAsyncCancelAuth").c_str()},
+      {.allow_in_incognito = incognito}))
+      << message_;
+  ASSERT_TRUE(RunExtensionTest(
+      "webrequest/test_auth_required_async",
+      {.custom_arg = FormatCustomArg("authRequiredAsyncSetAuth").c_str()},
+      {.allow_in_incognito = incognito}))
       << message_;
 }
 
@@ -604,11 +839,16 @@ IN_PROC_BROWSER_TEST_P(ExtensionWebRequestApiAuthRequiredTest,
                        DISABLED_WebRequestAuthRequiredParallel) {
   CancelLoginDialog login_dialog_helper;
 
+  const bool incognito = GetEnableIncognito();
+  if (incognito)
+    CreateIncognitoBrowser(profile());
+
+  const char* const custom_arg = incognito ? R"({"runInIncognito": true})"
+                                           : R"({"runInIncognito": false})";
   ASSERT_TRUE(StartEmbeddedTestServer());
-  ASSERT_TRUE(RunExtensionTest("webrequest",
-                               {.page_url = "test_auth_required_parallel.html",
-                                .open_in_incognito = GetEnableIncognito()},
-                               {.allow_in_incognito = GetEnableIncognito()}))
+  ASSERT_TRUE(RunExtensionTest("webrequest/test_auth_required_parallel",
+                               {.custom_arg = custom_arg},
+                               {.allow_in_incognito = incognito}))
       << message_;
 }
 
@@ -619,35 +859,42 @@ INSTANTIATE_TEST_SUITE_P(Incognito,
                          ExtensionWebRequestApiAuthRequiredTest,
                          ::testing::Values(ProfileMode::kIncognito));
 
+IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest, WebRequestBlocking) {
+  ASSERT_TRUE(StartEmbeddedTestServer());
+  ASSERT_TRUE(RunExtensionTest("webrequest/test_blocking",
+                               {.custom_arg = R"({"testSuite": "normal"})"}))
+      << message_;
+}
+
 // This test times out regularly on win_rel trybots. See http://crbug.com/122178
 // Also on Linux/ChromiumOS debug, ASAN and MSAN builds.
 // https://crbug.com/670415
-#if defined(OS_WIN) || !defined(NDEBUG) || defined(ADDRESS_SANITIZER) || \
+// Slower and flaky tests should be isolated in the "slow" group of tests in
+// the JS file. This prevents losing test coverage for those tests that are
+// not causing timeouts and flakes.
+#if BUILDFLAG(IS_WIN) || !defined(NDEBUG) || defined(ADDRESS_SANITIZER) || \
     defined(MEMORY_SANITIZER)
-#define MAYBE_WebRequestBlocking DISABLED_WebRequestBlocking
+#define MAYBE_WebRequestBlockingSlow DISABLED_WebRequestBlockingSlow
 #else
-#define MAYBE_WebRequestBlocking WebRequestBlocking
+#define MAYBE_WebRequestBlockingSlow WebRequestBlockingSlow
 #endif
-IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest, MAYBE_WebRequestBlocking) {
+IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
+                       MAYBE_WebRequestBlockingSlow) {
   ASSERT_TRUE(StartEmbeddedTestServer());
-  ASSERT_TRUE(
-      RunExtensionTest("webrequest", {.page_url = "test_blocking.html"}))
+  ASSERT_TRUE(RunExtensionTest("webrequest/test_blocking",
+                               {.custom_arg = R"({"testSuite": "slow"})"}))
       << message_;
 }
 
 IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
                        WebRequestBlockingSetCookieHeader) {
   ASSERT_TRUE(StartEmbeddedTestServer());
-  ASSERT_TRUE(
-      RunExtensionTest("webrequest", {.page_url = "test_blocking_cookie.html"}))
-      << message_;
+  ASSERT_TRUE(RunExtensionTest("webrequest/test_blocking_cookie")) << message_;
 }
 
 IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest, WebRequestExtraHeaders) {
   ASSERT_TRUE(StartEmbeddedTestServer());
-  ASSERT_TRUE(
-      RunExtensionTest("webrequest", {.page_url = "test_extra_headers.html"}))
-      << message_;
+  ASSERT_TRUE(RunExtensionTest("webrequest/test_extra_headers")) << message_;
 }
 
 // Flaky on all platforms: https://crbug.com/1003661
@@ -656,37 +903,32 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
   CancelLoginDialog login_dialog_helper;
 
   ASSERT_TRUE(StartEmbeddedTestServer());
-  ASSERT_TRUE(RunExtensionTest("webrequest",
-                               {.page_url = "test_extra_headers_auth.html"}))
+  ASSERT_TRUE(RunExtensionTest("webrequest/test_extra_headers_auth"))
       << message_;
 }
 
 IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest, WebRequestChangeCSPHeaders) {
   ASSERT_TRUE(StartEmbeddedTestServer());
-  ASSERT_TRUE(RunExtensionTest("webrequest",
-                               {.page_url = "test_change_csp_headers.html"}))
+  ASSERT_TRUE(RunExtensionTest("webrequest/test_change_csp_headers"))
       << message_;
 }
 
 IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
                        WebRequestCORSWithExtraHeaders) {
   ASSERT_TRUE(StartEmbeddedTestServer());
-  ASSERT_TRUE(RunExtensionTest("webrequest", {.page_url = "test_cors.html"}))
-      << message_;
+  ASSERT_TRUE(RunExtensionTest("webrequest/test_cors")) << message_;
 }
 
 IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest, WebRequestRedirects) {
   ASSERT_TRUE(StartEmbeddedTestServer());
-  ASSERT_TRUE(
-      RunExtensionTest("webrequest", {.page_url = "test_redirects.html"}))
-      << message_;
+  ASSERT_TRUE(RunExtensionTest("webrequest/test_redirects")) << message_;
 }
 
 IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
                        WebRequestRedirectsWithExtraHeaders) {
   ASSERT_TRUE(StartEmbeddedTestServer());
-  ASSERT_TRUE(RunExtensionTest("webrequest", {.page_url = "test_redirects.html",
-                                              .custom_arg = "useExtraHeaders"}))
+  ASSERT_TRUE(RunExtensionTest("webrequest/test_redirects",
+                               {.custom_arg = R"({"useExtraHeaders": true})"}))
       << message_;
 }
 
@@ -709,34 +951,30 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
 
   std::string config_string;
   base::JSONWriter::Write(custom_args, &config_string);
-  ASSERT_TRUE(RunExtensionTest("webrequest",
-                               {.page_url = "test_redirects_from_secure.html",
-                                .custom_arg = config_string.c_str()}))
+  ASSERT_TRUE(RunExtensionTest("webrequest/test_redirects_from_secure",
+                               {.custom_arg = config_string.c_str()}))
       << message_;
 }
 
 IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
                        WebRequestSubresourceRedirects) {
   ASSERT_TRUE(StartEmbeddedTestServer());
-  ASSERT_TRUE(RunExtensionTest("webrequest",
-                               {.page_url = "test_subresource_redirects.html"}))
+  ASSERT_TRUE(RunExtensionTest("webrequest/test_subresource_redirects"))
       << message_;
 }
 
 IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
                        WebRequestSubresourceRedirectsWithExtraHeaders) {
   ASSERT_TRUE(StartEmbeddedTestServer());
-  ASSERT_TRUE(RunExtensionTest("webrequest",
-                               {.page_url = "test_subresource_redirects.html",
-                                .custom_arg = "useExtraHeaders"}))
+  ASSERT_TRUE(RunExtensionTest("webrequest/test_subresource_redirects",
+                               {.custom_arg = R"({"useExtraHeaders": true})"}))
       << message_;
 }
 
 IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest, WebRequestNewTab) {
   ASSERT_TRUE(StartEmbeddedTestServer());
   // Wait for the extension to set itself up and return control to us.
-  ASSERT_TRUE(RunExtensionTest("webrequest", {.page_url = "test_newTab.html"}))
-      << message_;
+  ASSERT_TRUE(RunExtensionTest("webrequest/test_new_tab")) << message_;
 
   WebContents* tab = browser()->tab_strip_model()->GetActiveWebContents();
   EXPECT_TRUE(content::WaitForLoadStop(tab));
@@ -759,33 +997,41 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest, WebRequestNewTab) {
   mouse_event.button = blink::WebMouseEvent::Button::kLeft;
   mouse_event.SetPositionInWidget(7, 7);
   mouse_event.click_count = 1;
-  tab->GetMainFrame()->GetRenderViewHost()->GetWidget()->ForwardMouseEvent(
-      mouse_event);
+  tab->GetPrimaryMainFrame()
+      ->GetRenderViewHost()
+      ->GetWidget()
+      ->ForwardMouseEvent(mouse_event);
   mouse_event.SetType(blink::WebInputEvent::Type::kMouseUp);
-  tab->GetMainFrame()->GetRenderViewHost()->GetWidget()->ForwardMouseEvent(
-      mouse_event);
+  tab->GetPrimaryMainFrame()
+      ->GetRenderViewHost()
+      ->GetWidget()
+      ->ForwardMouseEvent(mouse_event);
 
   ASSERT_TRUE(catcher.GetNextResult()) << catcher.message();
 }
 
-// This test times out regularly on MSAN trybots. See https://crbug.com/733395.
-// Also flaky. See https://crbug.com/846555.
-IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
-                       DISABLED_WebRequestDeclarative1) {
+IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest, WebRequestDeclarative1) {
   ASSERT_TRUE(StartEmbeddedTestServer());
-  ASSERT_TRUE(
-      RunExtensionTest("webrequest", {.page_url = "test_declarative1.html"}))
+  ASSERT_TRUE(RunExtensionTest("webrequest",
+                               {.page_url = "test_declarative1.html",
+                                .custom_arg = R"({"testSuite": "normal"})"}))
       << message_;
 }
 
-// This test times out regularly on MSAN trybots. See https://crbug.com/733395.
-#if defined(MEMORY_SANITIZER)
-#define MAYBE_WebRequestDeclarative2 DISABLED_WebRequestDeclarative2
-#else
-#define MAYBE_WebRequestDeclarative2 WebRequestDeclarative2
-#endif
+// This test fixture runs all of the broken and flaky tests. It's disabled
+// until these tests are fixed and moved to the set of tests that aren't
+// broken or flaky. Should tests become flaky, they can be moved here.
+// See https://crbug.com/846555.
 IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
-                       MAYBE_WebRequestDeclarative2) {
+                       DISABLED_WebRequestDeclarative1Broken) {
+  ASSERT_TRUE(StartEmbeddedTestServer());
+  ASSERT_TRUE(RunExtensionTest("webrequest",
+                               {.page_url = "test_declarative1.html",
+                                .custom_arg = R"({"testSuite": "broken"})"}))
+      << message_;
+}
+
+IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest, WebRequestDeclarative2) {
   ASSERT_TRUE(StartEmbeddedTestServer());
   ASSERT_TRUE(
       RunExtensionTest("webrequest", {.page_url = "test_declarative2.html"}))
@@ -804,8 +1050,8 @@ void ExtensionWebRequestApiTest::RunPermissionTest(
   catcher_incognito.RestrictToBrowserContext(
       browser()->profile()->GetPrimaryOTRProfile(/*create_if_needed=*/true));
 
-  ExtensionTestMessageListener listener("done", false);
-  ExtensionTestMessageListener listener_incognito("done_incognito", false);
+  ExtensionTestMessageListener listener("done");
+  ExtensionTestMessageListener listener_incognito("done_incognito");
 
   ASSERT_TRUE(LoadExtension(
       test_data_dir_.AppendASCII("webrequest_permissions")
@@ -907,8 +1153,8 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
 IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest, IncognitoSplitModeReload) {
   ASSERT_TRUE(StartEmbeddedTestServer());
   // Wait for rules to be set up.
-  ExtensionTestMessageListener listener("done", false);
-  ExtensionTestMessageListener listener_incognito("done_incognito", false);
+  ExtensionTestMessageListener listener("done");
+  ExtensionTestMessageListener listener_incognito("done_incognito");
 
   const Extension* extension =
       LoadExtension(test_data_dir_.AppendASCII("webrequest_reload"),
@@ -921,8 +1167,8 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest, IncognitoSplitModeReload) {
 
   // Reload extension and wait for rules to be set up again. This should not
   // crash the browser.
-  ExtensionTestMessageListener listener2("done", false);
-  ExtensionTestMessageListener listener_incognito2("done_incognito", false);
+  ExtensionTestMessageListener listener2("done");
+  ExtensionTestMessageListener listener_incognito2("done_incognito");
 
   ReloadExtension(extension->id());
 
@@ -932,11 +1178,13 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest, IncognitoSplitModeReload) {
 
 IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest, ExtensionRequests) {
   ASSERT_TRUE(StartEmbeddedTestServer());
-  ExtensionTestMessageListener listener_main1("web_request_status1", true);
-  ExtensionTestMessageListener listener_main2("web_request_status2", true);
+  ExtensionTestMessageListener listener_main1("web_request_status1",
+                                              ReplyBehavior::kWillReply);
+  ExtensionTestMessageListener listener_main2("web_request_status2",
+                                              ReplyBehavior::kWillReply);
 
-  ExtensionTestMessageListener listener_app("app_done", false);
-  ExtensionTestMessageListener listener_extension("extension_done", false);
+  ExtensionTestMessageListener listener_app("app_done");
+  ExtensionTestMessageListener listener_extension("extension_done");
 
   // Set up webRequest listener
   ASSERT_TRUE(LoadExtension(
@@ -955,7 +1203,8 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest, ExtensionRequests) {
 
   // Load a page, a content script from "webrequest_extensions/extension" will
   // ping us when it is ready.
-  ExtensionTestMessageListener listener_pageready("contentscript_ready", true);
+  ExtensionTestMessageListener listener_pageready("contentscript_ready",
+                                                  ReplyBehavior::kWillReply);
   ASSERT_TRUE(ui_test_utils::NavigateToURL(
       browser(), embedded_test_server()->GetURL(
                      "/extensions/test_file.html?match_webrequest_test")));
@@ -965,14 +1214,13 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest, ExtensionRequests) {
   // webRequest event filtered by type 'xmlhttprequest'.
   // (check this here instead of before the navigation, in case the webRequest
   // event routing is slow for some reason).
-  ExtensionTestMessageListener listener_result(false);
+  ExtensionTestMessageListener listener_result;
   listener_main1.Reply("");
   EXPECT_TRUE(listener_result.WaitUntilSatisfied());
   EXPECT_EQ("Did not intercept any requests.", listener_result.message());
 
-  ExtensionTestMessageListener listener_contentscript("contentscript_done",
-                                                      false);
-  ExtensionTestMessageListener listener_framescript("framescript_done", false);
+  ExtensionTestMessageListener listener_contentscript("contentscript_done");
+  ExtensionTestMessageListener listener_framescript("framescript_done");
 
   // Proceed with the final tests: Let the content script fire a request and
   // then load an iframe which also fires a XHR request.
@@ -1020,8 +1268,8 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest, HostedAppRequest) {
           .Build();
   extension_service()->AddExtension(hosted_app.get());
 
-  ExtensionTestMessageListener listener1("main_frame", false);
-  ExtensionTestMessageListener listener2("xmlhttprequest", false);
+  ExtensionTestMessageListener listener1("main_frame");
+  ExtensionTestMessageListener listener2("xmlhttprequest");
 
   ASSERT_TRUE(LoadExtension(
           test_data_dir_.AppendASCII("webrequest_hosted_app")));
@@ -1040,7 +1288,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
 
   // Load an extension that registers a listener for webRequest events, and
   // wait until it's initialized.
-  ExtensionTestMessageListener listener("ready", false);
+  ExtensionTestMessageListener listener("ready");
   const Extension* extension =
       LoadExtension(test_data_dir_.AppendASCII("webrequest_activetab"));
   ASSERT_TRUE(extension) << message_;
@@ -1063,50 +1311,46 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
       ExtensionActionRunner::GetForWebContents(web_contents);
   ASSERT_TRUE(runner);
 
-  // The extension shouldn't have currently received any webRequest events,
-  // since it doesn't have any permissions.
-  EXPECT_EQ(0, GetWebRequestCountFromBackgroundPage(extension, profile()));
-
-  auto get_main_and_child_frame = [](content::WebContents* web_contents,
-                                     content::RenderFrameHost** main_frame,
-                                     content::RenderFrameHost** child_frame) {
-    *child_frame = nullptr;
-    *main_frame = web_contents->GetMainFrame();
-    std::vector<content::RenderFrameHost*> all_frames =
-        web_contents->GetAllFrames();
-    ASSERT_EQ(3u, all_frames.size());
-    *child_frame = all_frames[0] == *main_frame ? all_frames[1] : all_frames[0];
-    ASSERT_TRUE(*child_frame);
-  };
-
-  content::RenderFrameHost* main_frame = nullptr;
-  content::RenderFrameHost* child_frame = nullptr;
-  get_main_and_child_frame(web_contents, &main_frame, &child_frame);
-  const std::string kMainHost = main_frame->GetLastCommittedURL().host();
-  const std::string kChildHost = child_frame->GetLastCommittedURL().host();
-
   int port = embedded_test_server()->port();
   const std::string kXhrPath = "simple.html";
 
-  // The extension shouldn't be able to intercept the xhr requests since it
-  // doesn't have any permissions.
-  PerformXhrInFrame(main_frame, kHost, port, kXhrPath);
-  PerformXhrInFrame(child_frame, kChildHost, port, kXhrPath);
-  EXPECT_EQ(0, GetWebRequestCountFromBackgroundPage(extension, profile()));
-  EXPECT_EQ(BLOCKED_ACTION_WEB_REQUEST, runner->GetBlockedActions(extension));
+  // The extension shouldn't have currently received any webRequest events,
+  // since it doesn't have any permissions.
+  {
+    EXPECT_EQ(0, GetWebRequestCountFromBackgroundPage(extension, profile()));
 
-  // Grant activeTab permission.
-  runner->set_default_bubble_close_action_for_testing(
-      base::WrapUnique(new ToolbarActionsBarBubbleDelegate::CloseAction(
-          ToolbarActionsBarBubbleDelegate::CLOSE_EXECUTE)));
-  runner->RunAction(extension, true);
-  base::RunLoop().RunUntilIdle();
-  EXPECT_TRUE(content::WaitForLoadStop(web_contents));
+    content::RenderFrameHostWrapper main_frame(
+        web_contents->GetPrimaryMainFrame());
+    content::RenderFrameHostWrapper child_frame(
+        ChildFrameAt(main_frame.get(), 0));
+    ASSERT_TRUE(child_frame);
+    const std::string kChildHost = child_frame->GetLastCommittedURL().host();
+
+    // The extension shouldn't be able to intercept the xhr requests since it
+    // doesn't have any permissions.
+    PerformXhrInFrame(main_frame.get(), kHost, port, kXhrPath);
+    PerformXhrInFrame(child_frame.get(), kChildHost, port, kXhrPath);
+    EXPECT_EQ(0, GetWebRequestCountFromBackgroundPage(extension, profile()));
+    EXPECT_EQ(BLOCKED_ACTION_WEB_REQUEST,
+              runner->GetBlockedActions(extension->id()));
+
+    // Grant activeTab permission.
+    runner->accept_bubble_for_testing(true);
+    runner->RunAction(extension, true);
+    base::RunLoop().RunUntilIdle();
+    EXPECT_TRUE(content::WaitForLoadStop(web_contents));
+  }
 
   // The runner will have refreshed the page, and the extension will have
   // received access to the main-frame ("a.com"). It should still not be able to
   // intercept the cross-origin sub-frame requests to "b.com" and "c.com".
-  get_main_and_child_frame(web_contents, &main_frame, &child_frame);
+  content::RenderFrameHostWrapper main_frame(
+      web_contents->GetPrimaryMainFrame());
+  content::RenderFrameHostWrapper child_frame(
+      ChildFrameAt(main_frame.get(), 0));
+  const std::string kChildHost = child_frame->GetLastCommittedURL().host();
+
+  ASSERT_TRUE(child_frame);
   EXPECT_TRUE(HasSeenWebRequestInBackgroundPage(extension, profile(), "a.com"));
   EXPECT_FALSE(
       HasSeenWebRequestInBackgroundPage(extension, profile(), "b.com"));
@@ -1114,25 +1358,25 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
       HasSeenWebRequestInBackgroundPage(extension, profile(), "c.com"));
 
   // The withheld sub-frame requests should not show up as a blocked action.
-  EXPECT_EQ(BLOCKED_ACTION_NONE, runner->GetBlockedActions(extension));
+  EXPECT_EQ(BLOCKED_ACTION_NONE, runner->GetBlockedActions(extension->id()));
 
   int request_count =
       GetWebRequestCountFromBackgroundPage(extension, profile());
 
   // ... and the extension should receive future events.
-  PerformXhrInFrame(main_frame, kHost, port, kXhrPath);
+  PerformXhrInFrame(main_frame.get(), kHost, port, kXhrPath);
   ++request_count;
   EXPECT_EQ(request_count,
             GetWebRequestCountFromBackgroundPage(extension, profile()));
 
   // However, activeTab only grants access to the main frame, not to child
   // frames. As such, trying to XHR in the child frame should still fail.
-  PerformXhrInFrame(child_frame, kChildHost, port, kXhrPath);
+  PerformXhrInFrame(child_frame.get(), kChildHost, port, kXhrPath);
   EXPECT_EQ(request_count,
             GetWebRequestCountFromBackgroundPage(extension, profile()));
   // But since there's no way for the user to currently grant access to child
   // frames, this shouldn't show up as a blocked action.
-  EXPECT_EQ(BLOCKED_ACTION_NONE, runner->GetBlockedActions(extension));
+  EXPECT_EQ(BLOCKED_ACTION_NONE, runner->GetBlockedActions(extension->id()));
 
   // Revoke the extension's tab permissions.
   ActiveTabPermissionGranter* granter =
@@ -1146,13 +1390,14 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
   // badge UI.
   TestExtensionActionAPIObserver action_updated_waiter(profile(),
                                                        extension->id());
-  PerformXhrInFrame(main_frame, kHost, port, kXhrPath);
+  PerformXhrInFrame(main_frame.get(), kHost, port, kXhrPath);
   action_updated_waiter.Wait();
   EXPECT_EQ(web_contents, action_updated_waiter.last_web_contents());
 
   EXPECT_EQ(request_count,
             GetWebRequestCountFromBackgroundPage(extension, profile()));
-  EXPECT_EQ(BLOCKED_ACTION_WEB_REQUEST, runner->GetBlockedActions(extension));
+  EXPECT_EQ(BLOCKED_ACTION_WEB_REQUEST,
+            runner->GetBlockedActions(extension->id()));
 }
 
 // Test that extensions with granted runtime host permissions to a tab can
@@ -1164,7 +1409,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
 
   // Load an extension that registers a listener for webRequest events, and
   // wait until it's initialized.
-  ExtensionTestMessageListener listener("ready", false);
+  ExtensionTestMessageListener listener("ready");
   const Extension* extension =
       LoadExtension(test_data_dir_.AppendASCII("webrequest_activetab"));
   ASSERT_TRUE(extension) << message_;
@@ -1186,20 +1431,19 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
       ExtensionActionRunner::GetForWebContents(web_contents);
   ASSERT_TRUE(runner);
 
-  EXPECT_EQ(BLOCKED_ACTION_WEB_REQUEST, runner->GetBlockedActions(extension));
+  EXPECT_EQ(BLOCKED_ACTION_WEB_REQUEST,
+            runner->GetBlockedActions(extension->id()));
 
   // Grant runtime host permission to the page. The page should refresh. Even
   // though the request is for b.com (and the extension only has access to
   // a.com), it should still see the request. This is necessary for extensions
   // with webRequest to work with runtime host permissions.
   // https://crbug.com/851722.
-  runner->set_default_bubble_close_action_for_testing(
-      base::WrapUnique(new ToolbarActionsBarBubbleDelegate::CloseAction(
-          ToolbarActionsBarBubbleDelegate::CLOSE_EXECUTE)));
+  runner->accept_bubble_for_testing(true);
   runner->RunAction(extension, true /* grant tab permissions */);
   base::RunLoop().RunUntilIdle();
   EXPECT_TRUE(content::WaitForLoadStop(web_contents));
-  EXPECT_EQ(BLOCKED_ACTION_NONE, runner->GetBlockedActions(extension));
+  EXPECT_EQ(BLOCKED_ACTION_NONE, runner->GetBlockedActions(extension->id()));
 
   EXPECT_TRUE(
       HasSeenWebRequestInBackgroundPage(extension, profile(), kCrossSiteHost));
@@ -1222,22 +1466,22 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
            "name": "Web Request Withheld Hosts",
            "manifest_version": 2,
            "version": "0.1",
-           "background": { "scripts": ["background.js"] },
+           "background": { "scripts": ["background.js"], "persistent": true },
            "permissions": ["*://b.com:*/*", "webRequest"]
          })");
   test_dir.WriteFile(FILE_PATH_LITERAL("background.js"),
-                     R"(window.webRequestCount = 0;
-         window.requestedHostnames = [];
+                     R"(self.webRequestCount = 0;
+         self.requestedHostnames = [];
 
          chrome.webRequest.onBeforeRequest.addListener(function(details) {
-           ++window.webRequestCount;
-           window.requestedHostnames.push((new URL(details.url)).hostname);
+           ++self.webRequestCount;
+           self.requestedHostnames.push((new URL(details.url)).hostname);
          }, {urls:['<all_urls>']});
          chrome.test.sendMessage('ready');)");
 
   // Load an extension that registers a listener for webRequest events, and
   // wait until it's initialized.
-  ExtensionTestMessageListener listener("ready", false);
+  ExtensionTestMessageListener listener("ready");
   const Extension* extension = LoadExtension(test_dir.UnpackedPath());
   ASSERT_TRUE(extension) << message_;
   ScriptingPermissionsModifier(profile(), base::WrapRefCounted(extension))
@@ -1258,7 +1502,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
 
   // Even though the extension has access to b.com, it shouldn't show that it
   // wants to run, because example.com is not a requested host.
-  EXPECT_EQ(BLOCKED_ACTION_NONE, runner->GetBlockedActions(extension));
+  EXPECT_EQ(BLOCKED_ACTION_NONE, runner->GetBlockedActions(extension->id()));
   EXPECT_FALSE(
       HasSeenWebRequestInBackgroundPage(extension, profile(), "b.com"));
 
@@ -1267,7 +1511,8 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
   ASSERT_TRUE(ui_test_utils::NavigateToURL(
       browser(), embedded_test_server()->GetURL(
                      "b.com", "/extensions/cross_site_script.html")));
-  EXPECT_EQ(BLOCKED_ACTION_WEB_REQUEST, runner->GetBlockedActions(extension));
+  EXPECT_EQ(BLOCKED_ACTION_WEB_REQUEST,
+            runner->GetBlockedActions(extension->id()));
 }
 
 // Verify that requests to clientsX.google.com are protected properly.
@@ -1279,7 +1524,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
 
   // Load an extension that registers a listener for webRequest events, and
   // wait until it's initialized.
-  ExtensionTestMessageListener listener("ready", false);
+  ExtensionTestMessageListener listener("ready");
   const Extension* extension = LoadExtension(
       test_data_dir_.AppendASCII("webrequest_clients_google_com"));
   ASSERT_TRUE(extension) << message_;
@@ -1287,11 +1532,11 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
 
   auto get_clients_google_request_count = [this, extension]() {
     return GetCountFromBackgroundPage(extension, profile(),
-                                      "window.clientsGoogleWebRequestCount");
+                                      "self.clientsGoogleWebRequestCount");
   };
   auto get_yahoo_request_count = [this, extension]() {
     return GetCountFromBackgroundPage(extension, profile(),
-                                      "window.yahooWebRequestCount");
+                                      "self.yahooWebRequestCount");
   };
 
   EXPECT_EQ(0, get_clients_google_request_count());
@@ -1318,7 +1563,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
       xhr.onerror = () => {window.domAutomationController.send(false);};
       xhr.send();)";
   bool success = false;
-  EXPECT_TRUE(ExecuteScriptAndExtractBool(web_contents->GetMainFrame(),
+  EXPECT_TRUE(ExecuteScriptAndExtractBool(web_contents->GetPrimaryMainFrame(),
                                           kRequest, &success));
   // Requests always fail due to cross origin nature.
   EXPECT_FALSE(success);
@@ -1371,7 +1616,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
 
   // Load an extension that registers a listener for webRequest events, and
   // wait until it's initialized.
-  ExtensionTestMessageListener listener("ready", false);
+  ExtensionTestMessageListener listener("ready");
   const Extension* extension =
       LoadExtension(test_data_dir_.AppendASCII("webrequest_pac_request"));
   ASSERT_TRUE(extension) << message_;
@@ -1395,11 +1640,11 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
 
   // The extension should not have seen the PAC request.
   EXPECT_EQ(0, GetCountFromBackgroundPage(extension, profile(),
-                                          "window.pacRequestCount"));
+                                          "self.pacRequestCount"));
 
   // The extension should have seen the request for the main frame.
   EXPECT_EQ(1, GetCountFromBackgroundPage(extension, profile(),
-                                          "window.title2RequestCount"));
+                                          "self.title2RequestCount"));
 
   // The PAC request should have succeeded, as should the subsequent URL
   // request.
@@ -1417,7 +1662,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
                        WebRequestDiceHeaderProtection) {
   // Load an extension that registers a listener for webRequest events, and
   // wait until it is initialized.
-  ExtensionTestMessageListener listener("ready", false);
+  ExtensionTestMessageListener listener("ready");
   const Extension* extension =
       LoadExtension(test_data_dir_.AppendASCII("webrequest_dice_header"));
   ASSERT_TRUE(extension) << message_;
@@ -1492,9 +1737,9 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
 
   // Check that the Dice header cannot be read by the extension.
   EXPECT_EQ(0, GetCountFromBackgroundPage(extension, profile(),
-                                          "window.diceResponseHeaderCount"));
+                                          "self.diceResponseHeaderCount"));
   EXPECT_EQ(1, GetCountFromBackgroundPage(extension, profile(),
-                                          "window.controlResponseHeaderCount"));
+                                          "self.controlResponseHeaderCount"));
 
   // Navigate to a non-Gaia URL intercepted by the extension.
   test_webcontents_observer.Clear();
@@ -1512,9 +1757,9 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
 
   // Check that the Dice header can be read by the extension.
   EXPECT_EQ(1, GetCountFromBackgroundPage(extension, profile(),
-                                          "window.diceResponseHeaderCount"));
+                                          "self.diceResponseHeaderCount"));
   EXPECT_EQ(2, GetCountFromBackgroundPage(extension, profile(),
-                                          "window.controlResponseHeaderCount"));
+                                          "self.controlResponseHeaderCount"));
 }
 
 // Test that the webRequest events are dispatched for the WebSocket handshake
@@ -1599,8 +1844,17 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiWebTransportTest,
   ASSERT_TRUE(RunTest("test_webtransport_dedicated_worker.html")) << message_;
 }
 
-// TODO(crbug.com/1240935): Add test for this OnBeforeRequest reject case.
-// TODO(crbug.com/1240935): Add test for dedicated worker.
+// Test that the webRequest events are dispatched for the WebTransport
+// handshake in a shared worker.
+IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiWebTransportTest, SharedWorker) {
+  ASSERT_TRUE(RunTest("test_webtransport_shared_worker.html")) << message_;
+}
+
+// Test that the webRequest events are dispatched for the WebTransport
+// handshake in a service worker.
+IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiWebTransportTest, ServiceWorker) {
+  ASSERT_TRUE(RunTest("test_webtransport_service_worker.html")) << message_;
+}
 
 // Test behavior when intercepting requests from a browser-initiated url fetch.
 IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
@@ -1614,7 +1868,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
            "version": "0.1",
            "permissions": ["webRequest", "webRequestBlocking", "*://*/*"],
            "manifest_version": 2,
-           "background": { "scripts": ["background.js"] }
+           "background": { "scripts": ["background.js"], "persistent": true }
          })");
   test_dir.WriteFile(FILE_PATH_LITERAL("background.js"),
                      R"(chrome.webRequest.onBeforeRequest.addListener(
@@ -1627,7 +1881,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
 
   const Extension* extension = nullptr;
   {
-    ExtensionTestMessageListener listener("ready", false);
+    ExtensionTestMessageListener listener("ready");
     extension = LoadExtension(test_dir.UnpackedPath());
     ASSERT_TRUE(extension);
     EXPECT_TRUE(listener.WaitUntilSatisfied());
@@ -1773,7 +2027,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
 IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest, InitiatorAccessRequired) {
   ASSERT_TRUE(StartEmbeddedTestServer());
 
-  ExtensionTestMessageListener listener("ready", false);
+  ExtensionTestMessageListener listener("ready");
   const Extension* extension = LoadExtension(
       test_data_dir_.AppendASCII("webrequest_permissions/initiator"));
   ASSERT_TRUE(extension) << message_;
@@ -1800,14 +2054,14 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest, InitiatorAccessRequired) {
   for (const auto& testcase : testcases) {
     SCOPED_TRACE(testcase.navigate_before_start + ":" + testcase.xhr_domain +
                  ":" + testcase.expected_initiator);
-    ExtensionTestMessageListener initiator_listener(false);
+    ExtensionTestMessageListener initiator_listener;
     initiator_listener.set_extension_id(extension->id());
     ASSERT_TRUE(ui_test_utils::NavigateToURL(
         browser(),
         embedded_test_server()->GetURL(testcase.navigate_before_start,
                                        "/extensions/body1.html")));
-    PerformXhrInFrame(web_contents->GetMainFrame(), testcase.xhr_domain, port,
-                      "extensions/api_test/webrequest/xhr/data.json");
+    PerformXhrInFrame(web_contents->GetPrimaryMainFrame(), testcase.xhr_domain,
+                      port, "extensions/api_test/webrequest/xhr/data.json");
 
     // Ensure that the extension wasn't able to intercept the request if it
     // didn't have permission to the initiator or the request url.
@@ -1816,11 +2070,9 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest, InitiatorAccessRequired) {
 
     // Run a script in the extensions background page to ensure that we have
     // received the initiator message from the extension.
-    ASSERT_EQ(
-        std::to_string(expected_requests_intercepted_count),
-        ExecuteScriptInBackgroundPage(extension->id(),
-                                      "window.domAutomationController.send("
-                                      "requestsIntercepted.toString());"));
+    ASSERT_EQ(expected_requests_intercepted_count,
+              GetCountFromBackgroundPage(extension, profile(),
+                                         "self.requestsIntercepted"));
 
     if (testcase.expected_initiator.empty()) {
       EXPECT_FALSE(initiator_listener.was_satisfied());
@@ -1871,7 +2123,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
   // Create a profile that will be destroyed later.
   base::ScopedAllowBlockingForTesting allow_blocking;
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  chromeos::ProfileHelper::SetAlwaysReturnPrimaryUserForTesting(true);
+  ash::ProfileHelper::SetAlwaysReturnPrimaryUserForTesting(true);
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
   ProfileManager* profile_manager = g_browser_process->profile_manager();
   Profile* temp_profile =
@@ -1889,7 +2141,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
   auto pending_receiver = factory.BindNewPipeAndPassReceiver();
   auto temp_web_contents =
       WebContents::Create(WebContents::CreateParams(temp_profile));
-  content::RenderFrameHost* frame = temp_web_contents->GetMainFrame();
+  content::RenderFrameHost* frame = temp_web_contents->GetPrimaryMainFrame();
   EXPECT_TRUE(api->MaybeProxyURLLoaderFactory(
       frame->GetProcess()->GetBrowserContext(), frame,
       frame->GetProcess()->GetID(),
@@ -1938,6 +2190,11 @@ class NTPInterceptionWebRequestAPITest : public ExtensionApiTest {
   NTPInterceptionWebRequestAPITest()
       : https_test_server_(net::EmbeddedTestServer::TYPE_HTTPS) {}
 
+  NTPInterceptionWebRequestAPITest(const NTPInterceptionWebRequestAPITest&) =
+      delete;
+  NTPInterceptionWebRequestAPITest& operator=(
+      const NTPInterceptionWebRequestAPITest&) = delete;
+
   // ExtensionApiTest override:
   void SetUpOnMainThread() override {
     ExtensionApiTest::SetUpOnMainThread();
@@ -1957,7 +2214,6 @@ class NTPInterceptionWebRequestAPITest : public ExtensionApiTest {
 
  private:
   net::EmbeddedTestServer https_test_server_;
-  DISALLOW_COPY_AND_ASSIGN(NTPInterceptionWebRequestAPITest);
 };
 
 // Ensures that requests made by the NTP Instant renderer are hidden from the
@@ -1966,7 +2222,7 @@ IN_PROC_BROWSER_TEST_F(NTPInterceptionWebRequestAPITest,
                        NTPRendererRequestsHidden) {
   // Loads an extension which tries to intercept requests to
   // "fake_ntp_script.js", which will be loaded as part of the NTP renderer.
-  ExtensionTestMessageListener listener("ready", true /*will_reply*/);
+  ExtensionTestMessageListener listener("ready", ReplyBehavior::kWillReply);
   const Extension* extension =
       LoadExtension(test_data_dir_.AppendASCII("extension"));
   ASSERT_TRUE(extension);
@@ -1980,12 +2236,11 @@ IN_PROC_BROWSER_TEST_F(NTPInterceptionWebRequestAPITest,
   // Returns true if the given extension was able to intercept the request to
   // "fake_ntp_script.js".
   auto was_script_request_intercepted =
-      [this](const std::string& extension_id) {
-        const std::string result = ExecuteScriptInBackgroundPage(
-            extension_id, "getAndResetRequestIntercepted();");
-        EXPECT_TRUE(result == "true" || result == "false")
-            << "Unexpected result " << result;
-        return result == "true";
+      [this](const ExtensionId& extension_id) {
+        const absl::optional<bool> result = ExecuteScriptAndReturnBool(
+            extension_id, profile(), "getAndResetRequestIntercepted();");
+        DCHECK(result);
+        return *result;
       };
 
   // Returns true if the given |web_contents| has window.scriptExecuted set to
@@ -2027,6 +2282,11 @@ class WebUiNtpInterceptionWebRequestAPITest
  public:
   WebUiNtpInterceptionWebRequestAPITest()
       : https_test_server_(net::EmbeddedTestServer::TYPE_HTTPS) {}
+
+  WebUiNtpInterceptionWebRequestAPITest(
+      const WebUiNtpInterceptionWebRequestAPITest&) = delete;
+  WebUiNtpInterceptionWebRequestAPITest& operator=(
+      const WebUiNtpInterceptionWebRequestAPITest&) = delete;
 
   // ExtensionApiTest override:
   void SetUp() override {
@@ -2097,14 +2357,12 @@ class WebUiNtpInterceptionWebRequestAPITest
   bool one_google_bar_request_seen_ = false;
 
   base::Lock lock_;
-
-  DISALLOW_COPY_AND_ASSIGN(WebUiNtpInterceptionWebRequestAPITest);
 };
 
 IN_PROC_BROWSER_TEST_F(WebUiNtpInterceptionWebRequestAPITest,
                        OneGoogleBarRequestsHidden) {
   // Loads an extension which tries to intercept requests to the OneGoogleBar.
-  ExtensionTestMessageListener listener("ready", true /*will_reply*/);
+  ExtensionTestMessageListener listener("ready", ReplyBehavior::kWillReply);
   const Extension* extension =
       LoadExtension(test_data_dir_.AppendASCII("webrequest")
                         .AppendASCII("ntp_request_interception")
@@ -2118,12 +2376,11 @@ IN_PROC_BROWSER_TEST_F(WebUiNtpInterceptionWebRequestAPITest,
   // Returns true if the given extension was able to intercept the request to
   // |one_google_bar_url()|.
   auto was_script_request_intercepted =
-      [this](const std::string& extension_id) {
-        const std::string result = ExecuteScriptInBackgroundPage(
-            extension_id, "getAndResetRequestIntercepted();");
-        EXPECT_TRUE(result == "true" || result == "false")
-            << "Unexpected result " << result;
-        return result == "true";
+      [this](const ExtensionId& extension_id) {
+        absl::optional<bool> result = ExecuteScriptAndReturnBool(
+            extension_id, profile(), "getAndResetRequestIntercepted();");
+        DCHECK(result);
+        return *result;
       };
 
   ASSERT_FALSE(GetAndResetOneGoogleBarRequestSeen());
@@ -2175,7 +2432,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionApiTestWithManagementPolicy,
       example_com,
       "/extensions/api_test/webrequest/policy_blocked/ref_remote_js.html");
 
-  ExtensionTestMessageListener listener("ready", false);
+  ExtensionTestMessageListener listener("ready");
   const Extension* extension =
       LoadExtension(test_data_dir_.AppendASCII("webrequest/policy_blocked"));
   ASSERT_TRUE(extension) << message_;
@@ -2186,7 +2443,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionApiTestWithManagementPolicy,
 
   // The number of requests initiated by a protected origin is tracked in
   // the extension's background page under this variable name.
-  const std::string request_counter_name = "window.protectedOriginCount";
+  const std::string request_counter_name = "self.protectedOriginCount";
 
   EXPECT_EQ(0, GetCountFromBackgroundPage(extension, profile(),
                                           request_counter_name));
@@ -2235,9 +2492,8 @@ IN_PROC_BROWSER_TEST_F(ExtensionApiTestWithManagementPolicy,
 
 // Tests that the webRequest events aren't dispatched when the URL of the
 // request is protected by policy.
-// Disabled because it is flaky. See https://crbug.com/835155
 IN_PROC_BROWSER_TEST_F(ExtensionApiTestWithManagementPolicy,
-                       DISABLED_UrlProtectedByPolicy) {
+                       UrlProtectedByPolicy) {
   // Host protected by policy.
   const std::string protected_domain = "example.com";
 
@@ -2250,8 +2506,8 @@ IN_PROC_BROWSER_TEST_F(ExtensionApiTestWithManagementPolicy,
 
   LoadExtension(test_data_dir_.AppendASCII("webrequest/policy_blocked"));
 
-  // Listen in case extension sees the requst.
-  ExtensionTestMessageListener before_request_listener("protected_url", false);
+  // Listen in case extension sees the request.
+  ExtensionTestMessageListener before_request_listener("protected_url");
 
   // Path to resolve during test navigations.
   const std::string test_path = "/defaultresponse?protected_url";
@@ -2301,7 +2557,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionApiTestWithManagementPolicy,
 
   ASSERT_TRUE(StartEmbeddedTestServer());
 
-  ExtensionTestMessageListener listener("ready", false);
+  ExtensionTestMessageListener listener("ready");
   const Extension* extension =
       LoadExtension(test_data_dir_.AppendASCII("webrequest_activetab"));
   ASSERT_TRUE(extension) << message_;
@@ -2328,7 +2584,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionApiTestWithManagementPolicy,
   // The extension shouldn't have currently received any webRequest events,
   // since it doesn't have permission (and shouldn't receive any from an XHR).
   EXPECT_EQ(0, GetWebRequestCountFromBackgroundPage(extension, profile()));
-  PerformXhrInFrame(web_contents->GetMainFrame(), protected_domain, port,
+  PerformXhrInFrame(web_contents->GetPrimaryMainFrame(), protected_domain, port,
                     kXhrPath);
   EXPECT_EQ(0, GetWebRequestCountFromBackgroundPage(extension, profile()));
 
@@ -2336,20 +2592,18 @@ IN_PROC_BROWSER_TEST_F(ExtensionApiTestWithManagementPolicy,
   // still be blocked due to ExtensionSettings policy on example.com.
   // Only records ACCESS_WITHHELD, not ACCESS_DENIED, this is why it matches
   // BLOCKED_ACTION_NONE.
-  EXPECT_EQ(BLOCKED_ACTION_NONE, runner->GetBlockedActions(extension));
-  runner->set_default_bubble_close_action_for_testing(
-      base::WrapUnique(new ToolbarActionsBarBubbleDelegate::CloseAction(
-          ToolbarActionsBarBubbleDelegate::CLOSE_EXECUTE)));
+  EXPECT_EQ(BLOCKED_ACTION_NONE, runner->GetBlockedActions(extension->id()));
+  runner->accept_bubble_for_testing(true);
   runner->RunAction(extension, true);
   base::RunLoop().RunUntilIdle();
   EXPECT_TRUE(content::WaitForLoadStop(web_contents));
-  EXPECT_EQ(BLOCKED_ACTION_NONE, runner->GetBlockedActions(extension));
+  EXPECT_EQ(BLOCKED_ACTION_NONE, runner->GetBlockedActions(extension->id()));
   int xhr_count = GetWebRequestCountFromBackgroundPage(extension, profile());
   // ... which means that we should have a non-zero xhr count if the policy
   // didn't block the events.
   EXPECT_EQ(0, xhr_count);
   // And the extension should also block future events.
-  PerformXhrInFrame(web_contents->GetMainFrame(), protected_domain, port,
+  PerformXhrInFrame(web_contents->GetPrimaryMainFrame(), protected_domain, port,
                     kXhrPath);
   EXPECT_EQ(0, GetWebRequestCountFromBackgroundPage(extension, profile()));
 }
@@ -2363,15 +2617,19 @@ class ExtensionWebRequestMockedClockTest : public ExtensionWebRequestApiTest {
                                     nullptr,
                                     nullptr) {}
 
+  ExtensionWebRequestMockedClockTest(
+      const ExtensionWebRequestMockedClockTest&) = delete;
+  ExtensionWebRequestMockedClockTest& operator=(
+      const ExtensionWebRequestMockedClockTest&) = delete;
+
  private:
   static base::Time Now() {
     static base::Time now_time = base::Time::UnixEpoch();
-    now_time += base::TimeDelta::FromMilliseconds(1);
+    now_time += base::Milliseconds(1);
     return now_time;
   }
 
   base::subtle::ScopedTimeClockOverrides scoped_time_clock_override_;
-  DISALLOW_COPY_AND_ASSIGN(ExtensionWebRequestMockedClockTest);
 };
 
 // Tests that we correctly dispatch the OnActionIgnored event on an extension
@@ -2386,8 +2644,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestMockedClockTest,
       test_data_dir_.AppendASCII("webrequest/on_action_ignored");
 
   // Load the first extension.
-  ExtensionTestMessageListener ready_1_listener("ready_1",
-                                                false /*will_reply*/);
+  ExtensionTestMessageListener ready_1_listener("ready_1");
   const Extension* extension_1 =
       LoadExtension(test_dir.AppendASCII("extension_1"));
   ASSERT_TRUE(extension_1);
@@ -2395,8 +2652,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestMockedClockTest,
   const std::string extension_id_1 = extension_1->id();
 
   // Load the second extension.
-  ExtensionTestMessageListener ready_2_listener("ready_2",
-                                                false /*will_reply*/);
+  ExtensionTestMessageListener ready_2_listener("ready_2");
   const Extension* extension_2 =
       LoadExtension(test_dir.AppendASCII("extension_2"));
   ASSERT_TRUE(extension_2);
@@ -2409,10 +2665,9 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestMockedClockTest,
 
   // The extensions will notify the browser if their proposed redirect was
   // successful or not.
-  ExtensionTestMessageListener redirect_ignored_listener("redirect_ignored",
-                                                         false /*will_reply*/);
+  ExtensionTestMessageListener redirect_ignored_listener("redirect_ignored");
   ExtensionTestMessageListener redirect_successful_listener(
-      "redirect_successful", false /*will_reply*/);
+      "redirect_successful");
 
   const GURL url = embedded_test_server()->GetURL("google.com", "/simple.html");
   const GURL expected_redirect_url_1 =
@@ -2467,19 +2722,19 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest, StaleHeadersAfterRedirect) {
         "name": "Web Request Stale Headers Test",
         "manifest_version": 2,
         "version": "0.1",
-        "background": { "scripts": ["background.js"] },
+        "background": { "scripts": ["background.js"], "persistent": true },
         "permissions": ["<all_urls>", "webRequest", "webRequestBlocking"]
       })");
   test_dir.WriteFile(FILE_PATH_LITERAL("background.js"), R"(
-        window.locationCount = 0;
-        window.requestCount = 0;
+        self.locationCount = 0;
+        self.requestCount = 0;
         chrome.test.sendMessage('ready', function(reply) {
           chrome.webRequest.onResponseStarted.addListener(function(details) {
-              window.requestCount++;
+              self.requestCount++;
               var headers = details.responseHeaders;
               for (var i = 0; i < headers.length; i++) {
                 if (headers[i].name === 'Location') {
-                  window.locationCount++;
+                  self.locationCount++;
                 }
               }
             },
@@ -2489,7 +2744,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest, StaleHeadersAfterRedirect) {
         });
       )");
 
-  ExtensionTestMessageListener listener("ready", true);
+  ExtensionTestMessageListener listener("ready", ReplyBehavior::kWillReply);
   const Extension* extension = LoadExtension(test_dir.UnpackedPath());
   ASSERT_TRUE(extension);
   EXPECT_TRUE(listener.WaitUntilSatisfied());
@@ -2530,14 +2785,13 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest, StaleHeadersAfterRedirect) {
   // Make a XHR request which redirects. The final response should not include
   // the Location header.
   auto* web_contents = browser()->tab_strip_model()->GetActiveWebContents();
-  PerformXhrInFrame(web_contents->GetMainFrame(),
+  PerformXhrInFrame(web_contents->GetPrimaryMainFrame(),
                     embedded_test_server()->host_port_pair().host(),
                     embedded_test_server()->port(), "redirect-and-wait");
   EXPECT_EQ(
-      GetCountFromBackgroundPage(extension, profile(), "window.requestCount"),
-      1);
+      GetCountFromBackgroundPage(extension, profile(), "self.requestCount"), 1);
   EXPECT_EQ(
-      GetCountFromBackgroundPage(extension, profile(), "window.locationCount"),
+      GetCountFromBackgroundPage(extension, profile(), "self.locationCount"),
       0);
 }
 
@@ -2554,7 +2808,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest, ChangeHeaderUMAs) {
         "name": "Web Request UMA Test",
         "manifest_version": 2,
         "version": "0.1",
-        "background": { "scripts": ["background.js"] },
+        "background": { "scripts": ["background.js"], "persistent": true },
         "permissions": ["<all_urls>", "webRequest", "webRequestBlocking"]
       })");
   test_dir.WriteFile(FILE_PATH_LITERAL("background.js"), R"(
@@ -2593,7 +2847,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest, ChangeHeaderUMAs) {
         chrome.test.sendMessage('ready');
       )");
 
-  ExtensionTestMessageListener listener("ready", false);
+  ExtensionTestMessageListener listener("ready");
   ASSERT_TRUE(LoadExtension(test_dir.UnpackedPath()));
   EXPECT_TRUE(listener.WaitUntilSatisfied());
 
@@ -2650,7 +2904,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest, RemoveHeaderUMAs) {
         "name": "Web Request UMA Test",
         "manifest_version": 2,
         "version": "0.1",
-        "background": { "scripts": ["background.js"] },
+        "background": { "scripts": ["background.js"], "persistent": true },
         "permissions": ["<all_urls>", "webRequest", "webRequestBlocking"]
       })");
   test_dir.WriteFile(FILE_PATH_LITERAL("background.js"), R"(
@@ -2681,7 +2935,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest, RemoveHeaderUMAs) {
         chrome.test.sendMessage('ready');
       )");
 
-  ExtensionTestMessageListener listener("ready", false);
+  ExtensionTestMessageListener listener("ready");
   ASSERT_TRUE(LoadExtension(test_dir.UnpackedPath()));
   EXPECT_TRUE(listener.WaitUntilSatisfied());
 
@@ -2732,7 +2986,7 @@ class ServiceWorkerWebRequestApiTest : public testing::WithParamInterface<bool>,
         "name": "Web Request Header Modifying Extension",
         "manifest_version": 2,
         "version": "0.1",
-        "background": { "scripts": ["background.js"] },
+        "background": { "scripts": ["background.js"], "persistent": true },
         "permissions": ["<all_urls>", "webRequest", "webRequestBlocking"]
       })");
 
@@ -2761,7 +3015,7 @@ class ServiceWorkerWebRequestApiTest : public testing::WithParamInterface<bool>,
         FILE_PATH_LITERAL("background.js"),
         base::StringPrintf(kBackgroundScript, opt_extra_info_spec.c_str()));
 
-    ExtensionTestMessageListener listener("ready", false);
+    ExtensionTestMessageListener listener("ready");
     ASSERT_TRUE(LoadExtension(test_dir.UnpackedPath()));
     EXPECT_TRUE(listener.WaitUntilSatisfied());
   }
@@ -3134,13 +3388,14 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
   embedded_test_server()->ServeFilesFromSourceDirectory("chrome/test/data");
   ASSERT_TRUE(embedded_test_server()->Start());
 
-  const bool will_reply = false;
-  ExtensionTestMessageListener ready_listener("ready", will_reply);
+  ExtensionTestMessageListener ready_listener("ready");
   const Extension* extension =
       LoadExtension(test_data_dir_.AppendASCII("webrequest")
                         .AppendASCII("initiator_spanning"));
   ASSERT_TRUE(extension);
-  const std::string extension_id = extension->id();
+  // Save the ID because enabling the extension for incognito mode will
+  // invalidate |extension|.
+  const ExtensionId extension_id = extension->id();
   EXPECT_TRUE(ready_listener.WaitUntilSatisfied());
 
   Browser* incognito_browser = CreateIncognitoBrowser(profile());
@@ -3151,21 +3406,26 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
   GURL url = embedded_test_server()->GetURL("google.com", "/iframe.html");
   const std::string url_origin = url::Origin::Create(url).Serialize();
 
-  const char* kScript = R"(
-    domAutomationController.send(JSON.stringify(window.initiators));
-    window.initiators = [];
+  static constexpr char kScript[] = R"(
+    chrome.test.sendScriptResult(JSON.stringify(self.initiators));
+    self.initiators = [];
   )";
 
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
-  EXPECT_EQ(base::StringPrintf("[\"%s\"]", url_origin.c_str()),
-            ExecuteScriptInBackgroundPage(extension_id, kScript));
+  absl::optional<std::string> result =
+      ExecuteScriptAndReturnString(extension_id, profile(), kScript);
+  ASSERT_TRUE(result);
+  EXPECT_EQ(base::StringPrintf("[\"%s\"]", url_origin.c_str()), *result);
 
   // The extension isn't enabled in incognito. Se we shouldn't intercept the
   // request to |url|.
   ASSERT_TRUE(ui_test_utils::NavigateToURL(incognito_browser, url));
-  EXPECT_EQ("[]", ExecuteScriptInBackgroundPage(extension_id, kScript));
+  result = ExecuteScriptAndReturnString(extension_id, profile(), kScript);
+  ASSERT_TRUE(result);
+  EXPECT_EQ("[]", *result);
 
   // Now enable the extension in incognito.
+  extension = nullptr;
   ready_listener.Reset();
   extensions::util::SetIsIncognitoEnabled(extension_id, profile(),
                                           true /* enabled */);
@@ -3173,8 +3433,9 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
 
   // Now we should be able to intercept the incognito request.
   ASSERT_TRUE(ui_test_utils::NavigateToURL(incognito_browser, url));
-  EXPECT_EQ(base::StringPrintf("[\"%s\"]", url_origin.c_str()),
-            ExecuteScriptInBackgroundPage(extension_id, kScript));
+  result = ExecuteScriptAndReturnString(extension_id, profile(), kScript);
+  ASSERT_TRUE(result);
+  EXPECT_EQ(base::StringPrintf("[\"%s\"]", url_origin.c_str()), *result);
 }
 
 // Ensure we don't strip off initiator incorrectly in web request events when
@@ -3184,10 +3445,8 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest, Initiator_SplitIncognito) {
   embedded_test_server()->ServeFilesFromSourceDirectory("chrome/test/data");
   ASSERT_TRUE(embedded_test_server()->Start());
 
-  const bool will_reply = false;
-  ExtensionTestMessageListener ready_listener("ready", will_reply);
-  ExtensionTestMessageListener incognito_ready_listener("incognito ready",
-                                                        will_reply);
+  ExtensionTestMessageListener ready_listener("ready");
+  ExtensionTestMessageListener incognito_ready_listener("incognito ready");
   const Extension* extension = LoadExtension(
       test_data_dir_.AppendASCII("webrequest").AppendASCII("initiator_split"),
       {.allow_in_incognito = true});
@@ -3208,20 +3467,22 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest, Initiator_SplitIncognito) {
   const std::string origin_incognito =
       url::Origin::Create(url_incognito).Serialize();
 
-  const char* kScript = R"(
-    domAutomationController.send(JSON.stringify(window.initiators));
-    window.initiators = [];
+  static constexpr char kScript[] = R"(
+    chrome.test.sendScriptResult(JSON.stringify(self.initiators));
+    self.initiators = [];
   )";
 
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url_normal));
   ASSERT_TRUE(ui_test_utils::NavigateToURL(incognito_browser, url_incognito));
-  EXPECT_EQ(base::StringPrintf("[\"%s\"]", origin_normal.c_str()),
-            browsertest_util::ExecuteScriptInBackgroundPage(
-                profile(), extension->id(), kScript));
-  EXPECT_EQ(base::StringPrintf("[\"%s\"]", origin_incognito.c_str()),
-            browsertest_util::ExecuteScriptInBackgroundPage(
-                profile()->GetPrimaryOTRProfile(/*create_if_needed=*/true),
-                extension->id(), kScript));
+  absl::optional<std::string> result =
+      ExecuteScriptAndReturnString(extension->id(), profile(), kScript);
+  ASSERT_TRUE(result);
+  EXPECT_EQ(base::StringPrintf("[\"%s\"]", origin_normal.c_str()), *result);
+  result = ExecuteScriptAndReturnString(
+      extension->id(),
+      profile()->GetPrimaryOTRProfile(/*create_if_needed=*/true), kScript);
+  ASSERT_TRUE(result);
+  EXPECT_EQ(base::StringPrintf("[\"%s\"]", origin_incognito.c_str()), *result);
 }
 
 // A request handler that sets the Access-Control-Allow-Origin header.
@@ -3248,19 +3509,19 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
         "name": "Web Request HSTS Test",
         "manifest_version": 2,
         "version": "0.1",
-        "background": { "scripts": ["background.js"] },
+        "background": { "scripts": ["background.js"], "persistent": true },
         "permissions": ["<all_urls>", "webRequest", "webRequestBlocking"]
       })");
   test_dir.WriteFile(FILE_PATH_LITERAL("background.js"), R"(
         chrome.webRequest.onBeforeRedirect.addListener(function(details) {
-          window.headerCount = details.responseHeaders.length;
+          self.headerCount = details.responseHeaders.length;
         }, {urls: ['<all_urls>']},
         ['responseHeaders', 'extraHeaders']);
 
         chrome.test.sendMessage('ready');
       )");
 
-  ExtensionTestMessageListener listener("ready", false);
+  ExtensionTestMessageListener listener("ready");
   const Extension* extension = LoadExtension(test_dir.UnpackedPath());
   ASSERT_TRUE(extension);
   EXPECT_TRUE(listener.WaitUntilSatisfied());
@@ -3273,17 +3534,17 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
   base::RunLoop run_loop;
   partition->GetNetworkContext()->AddHSTS(
       https_test_server.host_port_pair().host(),
-      base::Time::Now() + base::TimeDelta::FromDays(100), true,
-      run_loop.QuitClosure());
+      base::Time::Now() + base::Days(100), true, run_loop.QuitClosure());
   run_loop.Run();
 
-  PerformXhrInFrame(
-      browser()->tab_strip_model()->GetActiveWebContents()->GetMainFrame(),
-      https_test_server.host_port_pair().host(), https_test_server.port(),
-      "echo");
+  PerformXhrInFrame(browser()
+                        ->tab_strip_model()
+                        ->GetActiveWebContents()
+                        ->GetPrimaryMainFrame(),
+                    https_test_server.host_port_pair().host(),
+                    https_test_server.port(), "echo");
   EXPECT_GT(
-      GetCountFromBackgroundPage(extension, profile(), "window.headerCount"),
-      0);
+      GetCountFromBackgroundPage(extension, profile(), "self.headerCount"), 0);
 }
 
 // Ensure that when an extension blocks a main-frame request, the resultant
@@ -3321,7 +3582,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest, HSTSUpgradeAfterRedirect) {
         "name": "Web Request HSTS Test",
         "manifest_version": 2,
         "version": "0.1",
-        "background": { "scripts": ["background.js"] },
+        "background": { "scripts": ["background.js"], "persistent": true },
         "permissions": ["<all_urls>", "webRequest", "webRequestBlocking"]
       })");
   test_dir.WriteFile(FILE_PATH_LITERAL("background.js"), R"(
@@ -3332,7 +3593,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest, HSTSUpgradeAfterRedirect) {
         chrome.test.sendMessage('ready');
       )");
 
-  ExtensionTestMessageListener listener("ready", false);
+  ExtensionTestMessageListener listener("ready");
   const Extension* extension = LoadExtension(test_dir.UnpackedPath());
   ASSERT_TRUE(extension);
   EXPECT_TRUE(listener.WaitUntilSatisfied());
@@ -3340,9 +3601,9 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest, HSTSUpgradeAfterRedirect) {
   content::StoragePartition* partition =
       profile()->GetDefaultStoragePartition();
   base::RunLoop run_loop;
-  partition->GetNetworkContext()->AddHSTS(
-      "hsts.com", base::Time::Now() + base::TimeDelta::FromDays(100), true,
-      run_loop.QuitClosure());
+  partition->GetNetworkContext()->AddHSTS("hsts.com",
+                                          base::Time::Now() + base::Days(100),
+                                          true, run_loop.QuitClosure());
   run_loop.Run();
 
   GURL final_url = https_test_server.GetURL("hsts.com", "/echo");
@@ -3398,7 +3659,7 @@ class SubresourceWebBundlesWebRequestApiTest
           })();
         )",
                                             script_src.c_str());
-    EXPECT_TRUE(ExecuteScriptAndExtractBool(web_contents->GetMainFrame(),
+    EXPECT_TRUE(ExecuteScriptAndExtractBool(web_contents->GetPrimaryMainFrame(),
                                             script, &success));
     return success;
   }
@@ -3409,21 +3670,23 @@ class SubresourceWebBundlesWebRequestApiTest
     bool success = false;
     std::string script = base::StringPrintf(R"(
           (() => {
-            const link = document.createElement('link');
-            link.rel = 'webbundle';
-            link.addEventListener('load', () => {
+            const script = document.createElement('script');
+            script.type = 'webbundle';
+            script.addEventListener('load', () => {
               window.domAutomationController.send(true);
             });
-            link.addEventListener('error', () => {
+            script.addEventListener('error', () => {
               window.domAutomationController.send(false);
             });
-            link.href = '%s';
-            link.resources = '%s';
-            document.body.appendChild(link);
+            script.textContent = JSON.stringify({
+              'source': '%s',
+              'resources': ['%s']
+            });
+            document.body.appendChild(script);
           })();
         )",
                                             href.c_str(), resources.c_str());
-    EXPECT_TRUE(ExecuteScriptAndExtractBool(web_contents->GetMainFrame(),
+    EXPECT_TRUE(ExecuteScriptAndExtractBool(web_contents->GetPrimaryMainFrame(),
                                             script, &success));
     return success;
   }
@@ -3483,17 +3746,18 @@ INSTANTIATE_TEST_SUITE_P(All,
 
 // Ensure web request listeners can intercept requests for a web bundle and its
 // subresources.
+// TODO(https://crbug.com/1264982): Fix flane and re-enable test.
 IN_PROC_BROWSER_TEST_P(SubresourceWebBundlesWebRequestApiTest,
-                       RequestIntercepted) {
-  const std::string urn_uuid_script_url =
-      "urn:uuid:6a059ece-62f4-4c79-a9e2-1c641cbdbaaf";
+                       DISABLED_RequestIntercepted) {
+  const std::string uuid_in_package_script_url =
+      "uuid-in-package:6a059ece-62f4-4c79-a9e2-1c641cbdbaaf";
   // Create an extension that intercepts requests.
   TestExtensionDir test_dir;
   test_dir.WriteManifest(R"({
         "name": "Web Request Subresource Web Bundles Test",
         "manifest_version": 2,
         "version": "0.1",
-        "background": { "scripts": ["background.js"] },
+        "background": { "scripts": ["background.js"], "persistent": true },
         "permissions": ["<all_urls>", "webRequest"]
       })");
 
@@ -3502,34 +3766,35 @@ IN_PROC_BROWSER_TEST_P(SubresourceWebBundlesWebRequestApiTest,
     opt_extra_info_spec += "'extraHeaders'";
   test_dir.WriteFile(FILE_PATH_LITERAL("background.js"),
                      base::StringPrintf(R"(
-        window.numMainResourceRequests = 0;
-        window.numWebBundleRequests = 0;
-        window.numScriptRequests = 0;
-        window.numUrnUUIDScriptRequests = 0;
+        self.numMainResourceRequests = 0;
+        self.numWebBundleRequests = 0;
+        self.numScriptRequests = 0;
+        self.numUUIDInPackageScriptRequests = 0;
         chrome.webRequest.onBeforeRequest.addListener(function(details) {
           if (details.url.includes('test.html'))
-            window.numMainResourceRequests++;
+            self.numMainResourceRequests++;
           else if (details.url.includes('web_bundle.wbn'))
-            window.numWebBundleRequests++;
+            self.numWebBundleRequests++;
           else if (details.url.includes('test.js'))
-            window.numScriptRequests++;
+            self.numScriptRequests++;
           else if (details.url === '%s')
-            window.numUrnUUIDScriptRequests++;
+            self.numUUIDInPackageScriptRequests++;
         }, {urls: ['<all_urls>']}, [%s]);
 
         chrome.test.sendMessage('ready');
       )",
-                                        urn_uuid_script_url.c_str(),
+                                        uuid_in_package_script_url.c_str(),
                                         opt_extra_info_spec.c_str()));
   const Extension* extension = nullptr;
   {
-    ExtensionTestMessageListener listener("ready", false);
+    ExtensionTestMessageListener listener("ready");
     extension = LoadExtension(test_dir.UnpackedPath());
     ASSERT_TRUE(extension);
     EXPECT_TRUE(listener.WaitUntilSatisfied());
   }
 
-  const std::string page_html = base::StringPrintf(R"(
+  const std::string page_html = base::StringPrintf(
+      R"(
         <title>Loaded</title>
         <body>
         <script>
@@ -3537,25 +3802,28 @@ IN_PROC_BROWSER_TEST_P(SubresourceWebBundlesWebRequestApiTest,
             const wbn_url =
                 new URL('./web_bundle.wbn', location.href).toString();
             const script_url = new URL('./test.js', location.href).toString();
-            const urn_uuid_script_url = '%s';
-            const link = document.createElement('link');
-            link.rel = 'webbundle';
-            link.href = wbn_url;
-            link.resources = script_url + ' ' + urn_uuid_script_url;
-            document.body.appendChild(link);
+            const uuid_in_package_script_url = '%s';
+
+            const script_web_bundle = document.createElement('script');
+            script_web_bundle.type = 'webbundle';
+            script_web_bundle.textContent = JSON.stringify({
+              'source': wbn_url,
+              'resources': [script_url, uuid_in_package_script_url]
+            });
+            document.body.appendChild(script);
             const script = document.createElement('script');
             script.src = script_url;
             script.addEventListener('load', () => {
-              const urn_uuid_script = document.createElement('script');
-              urn_uuid_script.src = urn_uuid_script_url;
-              document.body.appendChild(urn_uuid_script);
+              const uuid_in_package_script = document.createElement('script');
+              uuid_in_package_script.src = uuid_in_package_script_url;
+              document.body.appendChild(uuid_in_package_script);
             });
             document.body.appendChild(script);
           })();
         </script>
         </body>
       )",
-                                                   urn_uuid_script_url.c_str());
+      uuid_in_package_script_url.c_str());
   std::string web_bundle;
   RegisterWebBundleRequestHandler("/web_bundle.wbn", &web_bundle);
   RegisterRequestHandler("/test.html", "text/html", page_html);
@@ -3564,26 +3832,22 @@ IN_PROC_BROWSER_TEST_P(SubresourceWebBundlesWebRequestApiTest,
   // Create a web bundle.
   std::string script_url_str =
       embedded_test_server()->GetURL("/test.js").spec();
-  // Currently the web bundle format requires a valid GURL for the fallback URL
-  // of a web bundle. So we use |script_url_str| for the fallback URL.
-  // TODO(crbug.com/966753): Stop using |script_url_str| when
-  // https://github.com/WICG/webpackage/issues/590 is resolved.
-  web_package::test::WebBundleBuilder builder(script_url_str, "");
-  auto script_location = builder.AddResponse(
+  web_package::WebBundleBuilder builder;
+  builder.AddExchange(
+      script_url_str,
       {{":status", "200"}, {"content-type", "application/javascript"}},
       "document.title = 'ScriptDone';");
-  auto urn_uuid_script_location = builder.AddResponse(
+  builder.AddExchange(
+      uuid_in_package_script_url,
       {{":status", "200"}, {"content-type", "application/javascript"}},
-      "document.title += ':UrnUUIDScriptDone';");
-  builder.AddIndexEntry(script_url_str, "", {script_location});
-  builder.AddIndexEntry(urn_uuid_script_url, "", {urn_uuid_script_location});
+      "document.title += ':UUIDInPackageScriptDone';");
   std::vector<uint8_t> bundle = builder.CreateBundle();
   web_bundle = std::string(bundle.begin(), bundle.end());
 
   GURL page_url = embedded_test_server()->GetURL("/test.html");
   content::WebContents* web_contents =
       browser()->tab_strip_model()->GetActiveWebContents();
-  std::u16string expected_title = u"ScriptDone:UrnUUIDScriptDone";
+  std::u16string expected_title = u"ScriptDone:UUIDInPackageScriptDone";
   content::TitleWatcher title_watcher(web_contents, expected_title);
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), page_url));
   EXPECT_EQ(page_url, web_contents->GetLastCommittedURL());
@@ -3592,13 +3856,14 @@ IN_PROC_BROWSER_TEST_P(SubresourceWebBundlesWebRequestApiTest,
   EXPECT_EQ(expected_title, title_watcher.WaitAndGetTitle());
 
   EXPECT_EQ(1, GetCountFromBackgroundPage(extension, profile(),
-                                          "window.numMainResourceRequests"));
+                                          "self.numMainResourceRequests"));
   EXPECT_EQ(1, GetCountFromBackgroundPage(extension, profile(),
-                                          "window.numWebBundleRequests"));
+                                          "self.numWebBundleRequests"));
   EXPECT_EQ(1, GetCountFromBackgroundPage(extension, profile(),
-                                          "window.numScriptRequests"));
-  EXPECT_EQ(1, GetCountFromBackgroundPage(extension, profile(),
-                                          "window.numUrnUUIDScriptRequests"));
+                                          "self.numScriptRequests"));
+  EXPECT_EQ(1,
+            GetCountFromBackgroundPage(extension, profile(),
+                                       "self.numUUIDInPackageScriptRequests"));
 }
 
 // Ensure web request API can block the requests for the subresources inside the
@@ -3611,51 +3876,52 @@ IN_PROC_BROWSER_TEST_P(SubresourceWebBundlesWebRequestApiTest,
         "name": "Web Request Subresource Web Bundles Test",
         "manifest_version": 2,
         "version": "0.1",
-        "background": { "scripts": ["background.js"] },
+        "background": { "scripts": ["background.js"], "persistent": true },
         "permissions": ["<all_urls>", "webRequest", "webRequestBlocking"]
       })");
-  std::string pass_urn_uuid_js_url =
-      "urn:uuid:bf50ad1f-899e-42ca-95ac-ca592aa2ecb5";
-  std::string cancel_urn_uuid_js_url =
-      "urn:uuid:9cc02e52-05b6-466a-8c0e-f22ee86825a8";
+  std::string pass_uuid_in_package_js_url =
+      "uuid-in-package:bf50ad1f-899e-42ca-95ac-ca592aa2ecb5";
+  std::string cancel_uuid_in_package_js_url =
+      "uuid-in-package:9cc02e52-05b6-466a-8c0e-f22ee86825a8";
   std::string opt_extra_info_spec = "'blocking'";
   if (GetExtraInfoSpec() == ExtraInfoSpec::kExtraHeaders)
     opt_extra_info_spec += ", 'extraHeaders'";
   test_dir.WriteFile(FILE_PATH_LITERAL("background.js"),
                      base::StringPrintf(R"(
-        window.numPassScriptRequests = 0;
-        window.numCancelScriptRequests = 0;
-        window.numUrnUUIDPassScriptRequests = 0;
-        window.numUrnUUIDCancelScriptRequests = 0;
+        self.numPassScriptRequests = 0;
+        self.numCancelScriptRequests = 0;
+        self.numUUIDInPackagePassScriptRequests = 0;
+        self.numUUIDInPackageCancelScriptRequests = 0;
         chrome.webRequest.onBeforeRequest.addListener(function(details) {
           if (details.url.includes('pass.js')) {
-            window.numPassScriptRequests++;
+            self.numPassScriptRequests++;
             return {cancel: false};
           } else if (details.url.includes('cancel.js')) {
-            window.numCancelScriptRequests++;
+            self.numCancelScriptRequests++;
             return {cancel: true};
           } else if (details.url === '%s') {
-            window.numUrnUUIDPassScriptRequests++;
+            self.numUUIDInPackagePassScriptRequests++;
             return {cancel: false};
           } else if (details.url === '%s') {
-            window.numUrnUUIDCancelScriptRequests++;
+            self.numUUIDInPackageCancelScriptRequests++;
             return {cancel: true};
           }
         }, {urls: ['<all_urls>']}, [%s]);
 
         chrome.test.sendMessage('ready');
       )",
-                                        pass_urn_uuid_js_url.c_str(),
-                                        cancel_urn_uuid_js_url.c_str(),
+                                        pass_uuid_in_package_js_url.c_str(),
+                                        cancel_uuid_in_package_js_url.c_str(),
                                         opt_extra_info_spec.c_str()));
   const Extension* extension = nullptr;
   {
-    ExtensionTestMessageListener listener("ready", false);
+    ExtensionTestMessageListener listener("ready");
     extension = LoadExtension(test_dir.UnpackedPath());
     ASSERT_TRUE(extension);
     EXPECT_TRUE(listener.WaitUntilSatisfied());
   }
-  std::string page_html = base::StringPrintf(R"(
+  std::string page_html = base::StringPrintf(
+      R"(
         <title>Loaded</title>
         <body>
         <script>
@@ -3664,22 +3930,23 @@ IN_PROC_BROWSER_TEST_P(SubresourceWebBundlesWebRequestApiTest,
           const pass_js_url = new URL('./pass.js', location.href).toString();
           const cancel_js_url =
               new URL('./cancel.js', location.href).toString();
-          const pass_urn_uuid_js_url = '%s';
-          const cancel_urn_uuid_js_url = '%s';
-          const link = document.createElement('link');
-          link.rel = 'webbundle';
-          link.href = wbn_url;
-          link.resources.add(pass_js_url,
-                             cancel_js_url,
-                             pass_urn_uuid_js_url,
-                             cancel_urn_uuid_js_url);
-          document.body.appendChild(link);
+          const pass_uuid_in_package_js_url = '%s';
+          const cancel_uuid_in_package_js_url = '%s';
+          const script = document.createElement('script');
+          script.type = 'webbundle';
+          script.textContent = JSON.stringify({
+            'source': wbn_url,
+            'resources': [pass_js_url, cancel_js_url,
+                          pass_uuid_in_package_js_url,
+                          cancel_uuid_in_package_js_url]
+          });
+          document.body.appendChild(script);
         })();
         </script>
         </body>
       )",
-                                             pass_urn_uuid_js_url.c_str(),
-                                             cancel_urn_uuid_js_url.c_str());
+      pass_uuid_in_package_js_url.c_str(),
+      cancel_uuid_in_package_js_url.c_str());
 
   std::string web_bundle;
   RegisterWebBundleRequestHandler("/web_bundle.wbn", &web_bundle);
@@ -3691,22 +3958,21 @@ IN_PROC_BROWSER_TEST_P(SubresourceWebBundlesWebRequestApiTest,
       embedded_test_server()->GetURL("/pass.js").spec();
   std::string cancel_js_url_str =
       embedded_test_server()->GetURL("/cancel.js").spec();
-  web_package::test::WebBundleBuilder builder(pass_js_url_str, "");
-  auto pass_js_location = builder.AddResponse(
+  web_package::WebBundleBuilder builder;
+  builder.AddExchange(
+      pass_js_url_str,
       {{":status", "200"}, {"content-type", "application/javascript"}},
       "document.title = 'script loaded';");
-  auto cancel_js_location = builder.AddResponse(
+  builder.AddExchange(
+      cancel_js_url_str,
       {{":status", "200"}, {"content-type", "application/javascript"}}, "");
-  auto urn_uuid_pass_js_location = builder.AddResponse(
+  builder.AddExchange(
+      pass_uuid_in_package_js_url,
       {{":status", "200"}, {"content-type", "application/javascript"}},
-      "document.title = 'urn uuid script loaded';");
-  auto urn_uuid_cancel_js_location = builder.AddResponse(
+      "document.title = 'uuid-in-package script loaded';");
+  builder.AddExchange(
+      cancel_uuid_in_package_js_url,
       {{":status", "200"}, {"content-type", "application/javascript"}}, "");
-  builder.AddIndexEntry(pass_js_url_str, "", {pass_js_location});
-  builder.AddIndexEntry(cancel_js_url_str, "", {cancel_js_location});
-  builder.AddIndexEntry(pass_urn_uuid_js_url, "", {urn_uuid_pass_js_location});
-  builder.AddIndexEntry(cancel_urn_uuid_js_url, "",
-                        {urn_uuid_cancel_js_location});
   std::vector<uint8_t> bundle = builder.CreateBundle();
   web_bundle = std::string(bundle.begin(), bundle.end());
 
@@ -3725,25 +3991,25 @@ IN_PROC_BROWSER_TEST_P(SubresourceWebBundlesWebRequestApiTest,
 
   EXPECT_FALSE(TryLoadScript("cancel.js"));
 
-  std::u16string expected_title2 = u"urn uuid script loaded";
+  std::u16string expected_title2 = u"uuid-in-package script loaded";
   content::TitleWatcher title_watcher2(web_contents, expected_title2);
-  EXPECT_TRUE(TryLoadScript(pass_urn_uuid_js_url));
-  // Check that the urn UUID script in the web bundle is correctly loaded even
-  // when the extension with blocking handler intercepted the request.
+  EXPECT_TRUE(TryLoadScript(pass_uuid_in_package_js_url));
+  // Check that the uuid-in-package script in the web bundle is correctly loaded
+  // even when the extension with blocking handler intercepted the request.
   EXPECT_EQ(expected_title2, title_watcher2.WaitAndGetTitle());
 
-  EXPECT_FALSE(TryLoadScript(cancel_urn_uuid_js_url));
+  EXPECT_FALSE(TryLoadScript(cancel_uuid_in_package_js_url));
 
   EXPECT_EQ(1, GetCountFromBackgroundPage(extension, profile(),
-                                          "window.numPassScriptRequests"));
+                                          "self.numPassScriptRequests"));
   EXPECT_EQ(1, GetCountFromBackgroundPage(extension, profile(),
-                                          "window.numCancelScriptRequests"));
-  EXPECT_EQ(1,
-            GetCountFromBackgroundPage(extension, profile(),
-                                       "window.numUrnUUIDPassScriptRequests"));
+                                          "self.numCancelScriptRequests"));
   EXPECT_EQ(
       1, GetCountFromBackgroundPage(extension, profile(),
-                                    "window.numUrnUUIDCancelScriptRequests"));
+                                    "self.numUUIDInPackagePassScriptRequests"));
+  EXPECT_EQ(1, GetCountFromBackgroundPage(
+                   extension, profile(),
+                   "self.numUUIDInPackageCancelScriptRequests"));
 }
 
 // Ensure web request API can change the headers of the subresources inside the
@@ -3756,7 +4022,7 @@ IN_PROC_BROWSER_TEST_P(SubresourceWebBundlesWebRequestApiTest, ChangeHeader) {
         "name": "Web Request Subresource Web Bundles Test",
         "manifest_version": 2,
         "version": "0.1",
-        "background": { "scripts": ["background.js"] },
+        "background": { "scripts": ["background.js"], "persistent": true },
         "permissions": ["<all_urls>", "webRequest", "webRequestBlocking"]
       })");
   std::string opt_extra_info_spec = "'blocking', 'responseHeaders'";
@@ -3783,7 +4049,7 @@ IN_PROC_BROWSER_TEST_P(SubresourceWebBundlesWebRequestApiTest, ChangeHeader) {
                                         opt_extra_info_spec.c_str()));
   const Extension* extension = nullptr;
   {
-    ExtensionTestMessageListener listener("ready", false);
+    ExtensionTestMessageListener listener("ready");
     extension = LoadExtension(test_dir.UnpackedPath());
     ASSERT_TRUE(extension);
     EXPECT_TRUE(listener.WaitUntilSatisfied());
@@ -3795,11 +4061,13 @@ IN_PROC_BROWSER_TEST_P(SubresourceWebBundlesWebRequestApiTest, ChangeHeader) {
         (async () => {
           const wbn_url = new URL('./web_bundle.wbn', location.href).toString();
           const target_url = new URL('./target.txt', location.href).toString();
-          const link = document.createElement('link');
-          link.rel = 'webbundle';
-          link.href = wbn_url;
-          link.resources = target_url;
-          document.body.appendChild(link);
+          const script = document.createElement('script');
+          script.type = 'webbundle';
+          script.textContent = JSON.stringify({
+            'source': wbn_url,
+            'resources': [target_url]
+          });
+          document.body.appendChild(script);
           const res = await fetch(target_url);
           document.title = res.status + ':' + res.headers.get('foo');
         })();
@@ -3815,11 +4083,11 @@ IN_PROC_BROWSER_TEST_P(SubresourceWebBundlesWebRequestApiTest, ChangeHeader) {
   // Create a web bundle.
   std::string target_txt_url_str =
       embedded_test_server()->GetURL("/target.txt").spec();
-  web_package::test::WebBundleBuilder builder(target_txt_url_str, "");
-  auto target_txt_location = builder.AddResponse(
+  web_package::WebBundleBuilder builder;
+  builder.AddExchange(
+      target_txt_url_str,
       {{":status", "200"}, {"content-type", "text/plain"}, {"foo", "bar"}},
       "Hello world");
-  builder.AddIndexEntry(target_txt_url_str, "", {target_txt_location});
   std::vector<uint8_t> bundle = builder.CreateBundle();
   web_bundle = std::string(bundle.begin(), bundle.end());
 
@@ -3837,34 +4105,32 @@ IN_PROC_BROWSER_TEST_P(SubresourceWebBundlesWebRequestApiTest, ChangeHeader) {
   EXPECT_EQ(expected_title, title_watcher.WaitAndGetTitle());
 }
 
-// Ensure web request API can change the response headers of the urn uuid URL
-// subresources inside the web bundle.
-// Note: Currently we can't directly check the response headers of urn uuid URL
-// resources, because CORS requests are not allowed for urn uuid URLs. So we
-// change the content-type header of a JavaScript file and monitor the error
-// handler. Subresources in web bundles should be treated as if an artificial
-// `X-Content-Type-Options: nosniff` header field is set. So when the
-// content-type is not suitable for script execution, the script should fail to
-// load.
+// Ensure web request API can change the response headers of uuid-in-package:
+// URL subresources inside the web bundle.
+// Note: Currently we can't directly check the response headers of
+// uuid-in-package: URL resources, because CORS requests are not allowed for
+// such URLs. So we change the content-type header of a JavaScript file and
+// monitor the error handler. Subresources in web bundles should be treated as
+// if an artificial `X-Content-Type-Options: nosniff` header field is set. So
+// when the content-type is not suitable for script execution, the script
+// should fail to load.
 IN_PROC_BROWSER_TEST_P(SubresourceWebBundlesWebRequestApiTest,
-                       ChangeHeaderUrnUuidUrlResource) {
-  std::string uun_uuid_url = "urn:uuid:71940cde-d20b-4fb5-b920-38a58a92c516";
-  // Create an extension that changes the header of the subresources inside the
-  // web bundle.
+                       ChangeHeaderUuidInPackageUrlResource) {
+  std::string uuid_url = "uuid-in-package:71940cde-d20b-4fb5-b920-38a58a92c516";
+  // Create an extension that changes the header of the subresources inside
+  // the web bundle.
   TestExtensionDir test_dir;
   test_dir.WriteManifest(R"({
         "name": "Web Request Subresource Web Bundles Test",
         "manifest_version": 2,
         "version": "0.1",
-        "background": { "scripts": ["background.js"] },
+        "background": { "scripts": ["background.js"], "persistent": true },
         "permissions": ["<all_urls>", "webRequest", "webRequestBlocking"]
       })");
   std::string opt_extra_info_spec = "'blocking', 'responseHeaders'";
   if (GetExtraInfoSpec() == ExtraInfoSpec::kExtraHeaders)
     opt_extra_info_spec += ", 'extraHeaders'";
-  test_dir.WriteFile(
-      FILE_PATH_LITERAL("background.js"),
-      base::StringPrintf(R"(
+  static constexpr char kJsTemplate[] = R"(
         chrome.webRequest.onHeadersReceived.addListener(function(details) {
           if (details.url != '%s') {
             return;
@@ -3879,29 +4145,32 @@ IN_PROC_BROWSER_TEST_P(SubresourceWebBundlesWebRequestApiTest,
         }, {urls: ['<all_urls>']}, [%s]);
 
         chrome.test.sendMessage('ready');
-      )",
-                         uun_uuid_url.c_str(), opt_extra_info_spec.c_str()));
+      )";
+  test_dir.WriteFile(FILE_PATH_LITERAL("background.js"),
+                     base::StringPrintf(kJsTemplate, uuid_url.c_str(),
+                                        opt_extra_info_spec.c_str()));
   const Extension* extension = nullptr;
   {
-    ExtensionTestMessageListener listener("ready", false);
+    ExtensionTestMessageListener listener("ready");
     extension = LoadExtension(test_dir.UnpackedPath());
     ASSERT_TRUE(extension);
     EXPECT_TRUE(listener.WaitUntilSatisfied());
   }
-  std::string page_html = base::StringPrintf(R"(
+  static constexpr char kHtmlTemplate[] = R"(
         <title>Loaded</title>
         <body>
         <script>
         (async () => {
           const wbn_url = new URL('./web_bundle.wbn', location.href).toString();
-          const urn_uuid_url = '%s';
-          const link = document.createElement('link');
-          link.rel = 'webbundle';
-          link.href = wbn_url;
-          link.resources = urn_uuid_url;
-          document.body.appendChild(link);
+          const uuid_url = '%s';
+          const script_web_bundle = document.createElement('script');
+          script_web_bundle.type = 'webbundle';
+          script_web_bundle.textContent = JSON.stringify({
+            'source': wbn_url,
+            'resources': [uuid_url]
+          });
           const script = document.createElement('script');
-          script.src = urn_uuid_url;
+          script.src = uuid_url;
           script.addEventListener('error', () => {
             document.title = 'failed to load';
           });
@@ -3909,8 +4178,8 @@ IN_PROC_BROWSER_TEST_P(SubresourceWebBundlesWebRequestApiTest,
         })();
         </script>
         </body>
-      )",
-                                             uun_uuid_url.c_str());
+      )";
+  std::string page_html = base::StringPrintf(kHtmlTemplate, uuid_url.c_str());
 
   std::string web_bundle;
   RegisterWebBundleRequestHandler("/web_bundle.wbn", &web_bundle);
@@ -3918,11 +4187,11 @@ IN_PROC_BROWSER_TEST_P(SubresourceWebBundlesWebRequestApiTest,
   ASSERT_TRUE(StartEmbeddedTestServer());
 
   // Create a web bundle.
-  web_package::test::WebBundleBuilder builder(uun_uuid_url, "");
-  auto uun_uuid_script = builder.AddResponse(
+  web_package::WebBundleBuilder builder;
+  builder.AddExchange(
+      uuid_url,
       {{":status", "200"}, {"content-type", "application/javascript"}},
       "document.title = 'loaded';");
-  builder.AddIndexEntry(uun_uuid_url, "", {uun_uuid_script});
   std::vector<uint8_t> bundle = builder.CreateBundle();
   web_bundle = std::string(bundle.begin(), bundle.end());
 
@@ -3950,7 +4219,7 @@ IN_PROC_BROWSER_TEST_P(SubresourceWebBundlesWebRequestApiTest,
         "name": "Web Request Subresource Web Bundles Test",
         "manifest_version": 2,
         "version": "0.1",
-        "background": { "scripts": ["background.js"] },
+        "background": { "scripts": ["background.js"], "persistent": true },
         "permissions": ["<all_urls>", "webRequest", "webRequestBlocking"]
       })");
   std::string opt_extra_info_spec = "'blocking'";
@@ -3981,7 +4250,7 @@ IN_PROC_BROWSER_TEST_P(SubresourceWebBundlesWebRequestApiTest,
                                         opt_extra_info_spec.c_str()));
   const Extension* extension = nullptr;
   {
-    ExtensionTestMessageListener listener("ready", false);
+    ExtensionTestMessageListener listener("ready");
     extension = LoadExtension(test_dir.UnpackedPath());
     ASSERT_TRUE(extension);
     EXPECT_TRUE(listener.WaitUntilSatisfied());
@@ -4000,13 +4269,15 @@ IN_PROC_BROWSER_TEST_P(SubresourceWebBundlesWebRequestApiTest,
               new URL('./redirect_to_unlisted.js', location.href).toString();
           const redirect_to_server =
               new URL('./redirect_to_server.js', location.href).toString();
-          const link = document.createElement('link');
-          link.rel = 'webbundle';
-          link.href = wbn_url;
-          link.resources = redirect_js_url + ' ' + redirected_js_url + ' ' +
-                           redirect_to_unlisted_js_url + ' ' +
-                           redirect_to_server;
-          document.body.appendChild(link);
+          const script = document.createElement('script');
+          script.type = 'webbundle';
+          script.textContent = JSON.stringify({
+            'source': wbn_url,
+            'resources': [redirect_js_url, redirected_js_url,
+                          redirect_to_unlisted_js_url, redirect_to_server]
+          });
+          document.body.appendChild(script);
+
         })();
         </script>
         </body>
@@ -4030,30 +4301,27 @@ IN_PROC_BROWSER_TEST_P(SubresourceWebBundlesWebRequestApiTest,
       embedded_test_server()->GetURL("/redirected_to_unlisted.js").spec();
   std::string redirect_to_server_js_url_str =
       embedded_test_server()->GetURL("/redirect_to_server.js").spec();
-  web_package::test::WebBundleBuilder builder(redirect_js_url_str, "");
-  auto redirect_js_location = builder.AddResponse(
+  web_package::WebBundleBuilder builder;
+  builder.AddExchange(
+      redirect_js_url_str,
       {{":status", "200"}, {"content-type", "application/javascript"}},
       "document.title = 'redirect';");
-  auto redirected_js_location = builder.AddResponse(
+  builder.AddExchange(
+      redirected_js_url_str,
       {{":status", "200"}, {"content-type", "application/javascript"}},
       "document.title = 'redirected';");
-  auto redirect_to_unlisted_location = builder.AddResponse(
+  builder.AddExchange(
+      redirect_to_unlisted_js_url_str,
       {{":status", "200"}, {"content-type", "application/javascript"}},
       "document.title = 'redirect_to_unlisted';");
-  auto redirected_to_unlisted_js_location = builder.AddResponse(
+  builder.AddExchange(
+      redirected_to_unlisted_js_url_str,
       {{":status", "200"}, {"content-type", "application/javascript"}},
       "document.title = 'redirected_to_unlisted';");
-  auto redirect_to_server_js_location = builder.AddResponse(
+  builder.AddExchange(
+      redirect_to_server_js_url_str,
       {{":status", "200"}, {"content-type", "application/javascript"}},
       "document.title = 'redirect_to_server';");
-  builder.AddIndexEntry(redirect_js_url_str, "", {redirect_js_location});
-  builder.AddIndexEntry(redirected_js_url_str, "", {redirected_js_location});
-  builder.AddIndexEntry(redirect_to_unlisted_js_url_str, "",
-                        {redirect_to_unlisted_location});
-  builder.AddIndexEntry(redirected_to_unlisted_js_url_str, "",
-                        {redirected_to_unlisted_js_location});
-  builder.AddIndexEntry(redirect_to_server_js_url_str, "",
-                        {redirect_to_server_js_location});
   std::vector<uint8_t> bundle = builder.CreateBundle();
   web_bundle = std::string(bundle.begin(), bundle.end());
 
@@ -4092,7 +4360,7 @@ IN_PROC_BROWSER_TEST_P(SubresourceWebBundlesWebRequestApiTest,
         "name": "Web Request Subresource Web Bundles Test",
         "manifest_version": 2,
         "version": "0.1",
-        "background": { "scripts": ["background.js"] },
+        "background": { "scripts": ["background.js"], "persistent": true },
         "permissions": ["<all_urls>", "webRequest", "webRequestBlocking"]
       })");
   std::string opt_extra_info_spec = "'blocking'";
@@ -4113,7 +4381,7 @@ IN_PROC_BROWSER_TEST_P(SubresourceWebBundlesWebRequestApiTest,
                                         opt_extra_info_spec.c_str()));
   const Extension* extension = nullptr;
   {
-    ExtensionTestMessageListener listener("ready", false);
+    ExtensionTestMessageListener listener("ready");
     extension = LoadExtension(test_dir.UnpackedPath());
     ASSERT_TRUE(extension);
     EXPECT_TRUE(listener.WaitUntilSatisfied());
@@ -4126,7 +4394,7 @@ IN_PROC_BROWSER_TEST_P(SubresourceWebBundlesWebRequestApiTest,
 
   // Create a web bundle.
   std::string js_url_str = embedded_test_server()->GetURL("/script.js").spec();
-  web_package::test::WebBundleBuilder builder(js_url_str, "");
+  web_package::WebBundleBuilder builder;
   builder.AddExchange(
       js_url_str,
       {{":status", "200"}, {"content-type", "application/javascript"}},
@@ -4170,7 +4438,7 @@ class RedirectInfoWebRequestApiTest
           "name": "Simple Redirect",
           "manifest_version": 2,
           "version": "0.1",
-          "background": { "scripts": ["background.js"] },
+          "background": { "scripts": ["background.js"], "persistent": true },
           "permissions": ["<all_urls>", "webRequest", "webRequestBlocking"]
         })");
     test_dir.WriteFile(
@@ -4190,7 +4458,7 @@ class RedirectInfoWebRequestApiTest
                                ? "onBeforeRequest"
                                : "onHeadersReceived",
                            resource_type.c_str()));
-    ExtensionTestMessageListener listener("ready", false);
+    ExtensionTestMessageListener listener("ready");
     const Extension* extension = LoadExtension(test_dir.UnpackedPath());
     ASSERT_TRUE(extension);
     EXPECT_TRUE(listener.WaitUntilSatisfied());
@@ -4264,14 +4532,13 @@ IN_PROC_BROWSER_TEST_P(RedirectInfoWebRequestApiTest,
   ASSERT_TRUE(web_contents);
   EXPECT_EQ(page_with_iframe_url, web_contents->GetLastCommittedURL());
 
-  // Since frames are returned in breadth first order, and there's only one
-  // iframe, the iframe should be the second frame in this vector.
-  std::vector<content::RenderFrameHost*> all_frames =
-      web_contents->GetAllFrames();
-  ASSERT_EQ(2u, all_frames.size());
+  content::RenderFrameHostWrapper child_frame(
+      ChildFrameAt(web_contents->GetPrimaryMainFrame(), 0));
+  ASSERT_TRUE(child_frame);
+
   GURL redirected_url =
       embedded_test_server()->GetURL("redirected.test", "/hello.html");
-  ASSERT_EQ(redirected_url, all_frames[1]->GetLastCommittedURL());
+  ASSERT_EQ(redirected_url, child_frame->GetLastCommittedURL());
 
   // Check the parameters passed to the URLLoaderFactory.
   absl::optional<network::ResourceRequest> resource_request =
@@ -4317,7 +4584,8 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiIdentifiabilityTest, Loader) {
 
   content::WebContents* web_contents =
       browser()->tab_strip_model()->GetActiveWebContents();
-  ukm::SourceId frame_id = web_contents->GetMainFrame()->GetPageUkmSourceId();
+  ukm::SourceId frame_id =
+      web_contents->GetPrimaryMainFrame()->GetPageUkmSourceId();
 
   std::map<ukm::SourceId, ukm::mojom::UkmEntryPtr> merged_entries =
       identifiability_metrics_test_helper_.NavigateToBlankAndWaitForMetrics(
@@ -4345,7 +4613,8 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiIdentifiabilityTest, Navigation) {
 
   content::WebContents* web_contents =
       browser()->tab_strip_model()->GetActiveWebContents();
-  ukm::SourceId frame_id = web_contents->GetMainFrame()->GetPageUkmSourceId();
+  ukm::SourceId frame_id =
+      web_contents->GetPrimaryMainFrame()->GetPageUkmSourceId();
 
   std::map<ukm::SourceId, ukm::mojom::UkmEntryPtr> merged_entries =
       identifiability_metrics_test_helper_.NavigateToBlankAndWaitForMetrics(
@@ -4374,7 +4643,8 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiIdentifiabilityTest, WebSocket) {
 
   content::WebContents* web_contents =
       browser()->tab_strip_model()->GetActiveWebContents();
-  ukm::SourceId frame_id = web_contents->GetMainFrame()->GetPageUkmSourceId();
+  ukm::SourceId frame_id =
+      web_contents->GetPrimaryMainFrame()->GetPageUkmSourceId();
 
   std::map<ukm::SourceId, ukm::mojom::UkmEntryPtr> merged_entries =
       identifiability_metrics_test_helper_.NavigateToBlankAndWaitForMetrics(
@@ -4556,7 +4826,7 @@ class ProxyCORSWebRequestApiTest : public ExtensionApiTest {
 IN_PROC_BROWSER_TEST_F(ProxyCORSWebRequestApiTest,
                        PreflightCompletesSuccessfully) {
   ProceedLoginDialog login_dialog(kCORSProxyUser, kCORSProxyPass);
-  ExtensionTestMessageListener ready_listener("ready", false);
+  ExtensionTestMessageListener ready_listener("ready");
   const Extension* extension =
       LoadExtension(test_data_dir_.AppendASCII("webrequest_cors_preflight"));
   ASSERT_TRUE(extension) << message_;
@@ -4566,9 +4836,8 @@ IN_PROC_BROWSER_TEST_F(ProxyCORSWebRequestApiTest,
   content::WebContents* web_contents =
       browser()->tab_strip_model()->GetActiveWebContents();
   ASSERT_TRUE(web_contents);
-  ExtensionTestMessageListener preflight_listener("cors-preflight-succeeded",
-                                                  false);
-  const char kCORSPreflightedRequest[] = R"(
+  ExtensionTestMessageListener preflight_listener("cors-preflight-succeeded");
+  static constexpr char kCORSPreflightedRequest[] = R"(
       var xhr = new XMLHttpRequest();
       xhr.open('GET', '%s');
       xhr.setRequestHeader('%s', 'testvalue');
@@ -4577,21 +4846,79 @@ IN_PROC_BROWSER_TEST_F(ProxyCORSWebRequestApiTest,
       xhr.send();)";
   bool success = false;
   ASSERT_TRUE(ExecuteScriptAndExtractBool(
-      web_contents->GetMainFrame(),
+      web_contents->GetPrimaryMainFrame(),
       base::StringPrintf(kCORSPreflightedRequest, kCORSUrl,
                          kCustomPreflightHeader),
       &success));
   EXPECT_TRUE(success);
   EXPECT_TRUE(preflight_listener.WaitUntilSatisfied());
-  EXPECT_EQ(1, GetCountFromBackgroundPage(extension, profile(),
-                                          "preflightHeadersReceivedCount"));
-  EXPECT_EQ(1, GetCountFromBackgroundPage(extension, profile(),
-                                          "preflightProxyAuthRequiredCount"));
-  EXPECT_EQ(1, GetCountFromBackgroundPage(extension, profile(),
-                                          "preflightResponseStartedCount"));
+  EXPECT_EQ(1, GetCountFromBackgroundPage(
+                   extension, profile(), "self.preflightHeadersReceivedCount"));
+  EXPECT_EQ(1,
+            GetCountFromBackgroundPage(extension, profile(),
+                                       "self.preflightProxyAuthRequiredCount"));
+  EXPECT_EQ(1, GetCountFromBackgroundPage(
+                   extension, profile(), "self.preflightResponseStartedCount"));
   EXPECT_EQ(1, GetCountFromBackgroundPage(
                    extension, profile(),
-                   "preflightResponseStartedSuccessfullyCount"));
+                   "self.preflightResponseStartedSuccessfullyCount"));
+}
+
+class ExtensionWebRequestApiFencedFrameTest
+    : public ExtensionWebRequestApiTest,
+      public testing::WithParamInterface<bool /* shadow_dom_fenced_frame */> {
+ protected:
+  ExtensionWebRequestApiFencedFrameTest() {
+    feature_list_.InitWithFeaturesAndParameters(
+        {{blink::features::kFencedFrames,
+          {{"implementation_type", GetParam() ? "shadow_dom" : "mparch"}}},
+         {features::kPrivacySandboxAdsAPIsOverride, {}}},
+        {/* disabled_features */});
+    // Fenced frames are only allowed in secure contexts.
+    UseHttpsTestServer();
+  }
+  ~ExtensionWebRequestApiFencedFrameTest() override = default;
+
+ private:
+  base::test::ScopedFeatureList feature_list_;
+};
+
+IN_PROC_BROWSER_TEST_P(ExtensionWebRequestApiFencedFrameTest, Load) {
+  ASSERT_TRUE(StartEmbeddedTestServer());
+  ASSERT_TRUE(RunExtensionTest(
+      "webrequest", {.page_url = "test_fenced_frames.html",
+                     .custom_arg = !GetParam() ? R"({"mparch": true})" : ""}))
+      << message_;
+}
+
+IN_PROC_BROWSER_TEST_P(ExtensionWebRequestApiFencedFrameTest,
+                       DeclarativeSendMessage) {
+  ASSERT_TRUE(StartEmbeddedTestServer());
+  ASSERT_TRUE(RunExtensionTest(
+      "webrequest", {.page_url = "test_fenced_frames_send_message.html",
+                     .custom_arg = !GetParam() ? R"({"mparch": true})" : ""}))
+      << message_;
+}
+
+INSTANTIATE_TEST_SUITE_P(ExtensionWebRequestApiFencedFrameTest,
+                         ExtensionWebRequestApiFencedFrameTest,
+                         testing::Bool());
+
+class ExtensionWebRequestApiPrerenderingTest
+    : public ExtensionWebRequestApiTest {
+ protected:
+  ExtensionWebRequestApiPrerenderingTest() = default;
+  ~ExtensionWebRequestApiPrerenderingTest() override = default;
+
+ private:
+  content::test::ScopedPrerenderFeatureList prerender_feature_list_;
+};
+
+IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiPrerenderingTest, Load) {
+  ASSERT_TRUE(StartEmbeddedTestServer());
+  ASSERT_TRUE(
+      RunExtensionTest("webrequest", {.page_url = "test_prerendering.html"}))
+      << message_;
 }
 
 }  // namespace extensions

@@ -7,12 +7,12 @@
 #include <algorithm>
 
 #include "base/bind.h"
+#include "base/time/time.h"
 #include "remoting/host/linux/x11_keyboard.h"
 
 namespace {
 
-constexpr base::TimeDelta kMappingExpireDuration =
-    base::TimeDelta::FromMilliseconds(200);
+constexpr base::TimeDelta kMappingExpireDuration = base::Milliseconds(200);
 
 }  // namespace
 

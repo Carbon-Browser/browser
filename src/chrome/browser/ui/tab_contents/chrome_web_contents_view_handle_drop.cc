@@ -8,9 +8,8 @@
 #include "base/files/file_util.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/task/post_task.h"
+#include "base/task/task_runner_util.h"
 #include "base/task/thread_pool.h"
-#include "base/task_runner_util.h"
 #include "chrome/browser/enterprise/connectors/analysis/content_analysis_delegate.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/safe_browsing/cloud_content_scanning/deep_scanning_utils.h"
@@ -127,11 +126,17 @@ void HandleOnPerformDrop(
     data.text.push_back(base::UTF16ToUTF8(*drop_data.text));
   if (drop_data.html)
     data.text.push_back(base::UTF16ToUTF8(*drop_data.html));
-  if (!drop_data.file_contents.empty())
-    data.text.push_back(drop_data.file_contents);
+
+  // `callback` should only run asynchronously when scanning is blocking.
+  content::WebContentsViewDelegate::DropCompletionCallback scan_callback =
+      base::DoNothing();
+  if (data.settings.block_until_verdict ==
+      enterprise_connectors::BlockUntilVerdict::kBlock) {
+    scan_callback = std::move(callback);
+  }
 
   auto* handle_drop_scan_data =
-      new HandleDropScanData(web_contents, std::move(callback));
+      new HandleDropScanData(web_contents, std::move(scan_callback));
   if (drop_data.filenames.empty()) {
     handle_drop_scan_data->ScanData(std::move(data));
   } else {
@@ -140,5 +145,10 @@ void HandleOnPerformDrop(
         base::BindOnce(&GetPathsToScan, drop_data, std::move(data)),
         base::BindOnce(&HandleDropScanData::ScanData,
                        handle_drop_scan_data->GetWeakPtr()));
+  }
+
+  if (!callback.is_null()) {
+    std::move(callback).Run(
+        content::WebContentsViewDelegate::DropCompletionResult::kContinue);
   }
 }

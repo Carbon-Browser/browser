@@ -5,7 +5,6 @@
 #ifndef CHROME_BROWSER_BACKGROUND_SYNC_PERIODIC_BACKGROUND_SYNC_PERMISSION_CONTEXT_H_
 #define CHROME_BROWSER_BACKGROUND_SYNC_PERIODIC_BACKGROUND_SYNC_PERMISSION_CONTEXT_H_
 
-#include "base/macros.h"
 #include "build/build_config.h"
 #include "components/content_settings/core/common/content_settings.h"
 #include "components/permissions/permission_context_base.h"
@@ -35,12 +34,18 @@ class PeriodicBackgroundSyncPermissionContext
  public:
   explicit PeriodicBackgroundSyncPermissionContext(
       content::BrowserContext* browser_context);
+
+  PeriodicBackgroundSyncPermissionContext(
+      const PeriodicBackgroundSyncPermissionContext&) = delete;
+  PeriodicBackgroundSyncPermissionContext& operator=(
+      const PeriodicBackgroundSyncPermissionContext&) = delete;
+
   ~PeriodicBackgroundSyncPermissionContext() override;
 
  protected:
   // Virtual for testing.
   virtual bool IsPwaInstalled(const GURL& origin) const;
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   virtual bool IsTwaInstalled(const GURL& origin) const;
 #endif
   virtual GURL GetDefaultSearchEngineUrl() const;
@@ -53,7 +58,6 @@ class PeriodicBackgroundSyncPermissionContext
       const GURL& requesting_origin,
       const GURL& embedding_origin) const override;
   void DecidePermission(
-      content::WebContents* web_contents,
       const permissions::PermissionRequestID& id,
       const GURL& requesting_origin,
       const GURL& embedding_origin,
@@ -66,8 +70,6 @@ class PeriodicBackgroundSyncPermissionContext
                            bool persist,
                            ContentSetting content_setting,
                            bool is_one_time) override;
-
-  DISALLOW_COPY_AND_ASSIGN(PeriodicBackgroundSyncPermissionContext);
 };
 
 #endif  // CHROME_BROWSER_BACKGROUND_SYNC_PERIODIC_BACKGROUND_SYNC_PERMISSION_CONTEXT_H_

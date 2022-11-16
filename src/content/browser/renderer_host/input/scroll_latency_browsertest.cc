@@ -33,7 +33,7 @@
 #include "ui/base/ui_base_features.h"
 #include "ui/native_theme/native_theme_features.h"
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 #include "ui/base/test/scoped_preferred_scroller_style_mac.h"
 #endif
 
@@ -75,12 +75,16 @@ namespace content {
 class ScrollLatencyBrowserTest : public ContentBrowserTest {
  public:
   ScrollLatencyBrowserTest() {}
+
+  ScrollLatencyBrowserTest(const ScrollLatencyBrowserTest&) = delete;
+  ScrollLatencyBrowserTest& operator=(const ScrollLatencyBrowserTest&) = delete;
+
   ~ScrollLatencyBrowserTest() override {}
 
   RenderWidgetHostImpl* GetWidgetHost() {
     return RenderWidgetHostImpl::From(shell()
                                           ->web_contents()
-                                          ->GetMainFrame()
+                                          ->GetPrimaryMainFrame()
                                           ->GetRenderViewHost()
                                           ->GetWidget());
   }
@@ -90,8 +94,7 @@ class ScrollLatencyBrowserTest : public ContentBrowserTest {
   void GiveItSomeTime() {
     base::RunLoop run_loop;
     base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
-        FROM_HERE, run_loop.QuitClosure(),
-        base::TimeDelta::FromMillisecondsD(10));
+        FROM_HERE, run_loop.QuitClosure(), base::Milliseconds(10));
     run_loop.Run();
   }
 
@@ -144,7 +147,7 @@ class ScrollLatencyBrowserTest : public ContentBrowserTest {
       // latency histograms being logged).
       // We must install a callback for each gesture since they are one-shot
       // callbacks.
-      shell()->web_contents()->GetMainFrame()->InsertVisualStateCallback(
+      shell()->web_contents()->GetPrimaryMainFrame()->InsertVisualStateCallback(
           base::BindOnce(&ScrollLatencyBrowserTest::InvokeVisualStateCallback,
                          base::Unretained(this)));
 
@@ -188,7 +191,7 @@ class ScrollLatencyBrowserTest : public ContentBrowserTest {
 
   // Returns true if the given histogram has recorded the expected number of
   // samples.
-  WARN_UNUSED_RESULT bool VerifyRecordedSamplesForHistogram(
+  [[nodiscard]] bool VerifyRecordedSamplesForHistogram(
       const size_t num_samples,
       const std::string& histogram_name) const {
     return num_samples == GetSampleCountForHistogram(histogram_name);
@@ -204,12 +207,11 @@ class ScrollLatencyBrowserTest : public ContentBrowserTest {
  protected:
   base::HistogramTester histogram_tester_;
   uint32_t visual_state_callback_count_ = 0;
-
-  DISALLOW_COPY_AND_ASSIGN(ScrollLatencyBrowserTest);
 };
 
 // Disabled due to flakiness https://crbug.com/1163246.
-#if defined(OS_LINUX) || defined(OS_WIN)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || \
+    BUILDFLAG(IS_ANDROID)
 #define MAYBE_MultipleWheelScroll DISABLED_MultipleWheelScroll
 #else
 #define MAYBE_MultipleWheelScroll MultipleWheelScroll
@@ -223,7 +225,7 @@ IN_PROC_BROWSER_TEST_F(ScrollLatencyBrowserTest, MAYBE_MultipleWheelScroll) {
 }
 
 // Disabled due to flakiness https://crbug.com/1163246.
-#if defined(OS_LINUX) || defined(OS_WIN)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_ANDROID)
 #define MAYBE_MultipleWheelScrollOnMain DISABLED_MultipleWheelScrollOnMain
 #else
 #define MAYBE_MultipleWheelScrollOnMain MultipleWheelScrollOnMain
@@ -288,7 +290,14 @@ IN_PROC_BROWSER_TEST_F(ScrollLatencyBrowserTest,
 
 using ScrollThroughputBrowserTest = ScrollLatencyBrowserTest;
 
-IN_PROC_BROWSER_TEST_F(ScrollThroughputBrowserTest, ScrollThroughputMetrics) {
+// https://crbug.com/1067492. Flaky on Android.
+#if BUILDFLAG(IS_ANDROID)
+#define MAYBE_ScrollThroughputMetrics DISABLED_ScrollThroughputMetrics
+#else
+#define MAYBE_ScrollThroughputMetrics ScrollThroughputMetrics
+#endif
+IN_PROC_BROWSER_TEST_F(ScrollThroughputBrowserTest,
+                       MAYBE_ScrollThroughputMetrics) {
   LoadURL();
   auto scroll_update_watcher = std::make_unique<InputMsgWatcher>(
       GetWidgetHost(), blink::WebInputEvent::Type::kGestureScrollEnd);
@@ -348,7 +357,7 @@ class ScrollLatencyScrollbarBrowserTest : public ScrollLatencyBrowserTest {
   ~ScrollLatencyScrollbarBrowserTest() override = default;
 
  private:
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   // Native scrollbars on Mac are overlay scrollbars. Hence they need to be
   // disabled.
   ui::test::ScopedPreferredScrollerStyle scroller_style_override{false};
@@ -366,7 +375,7 @@ class ScrollLatencyScrollbarBrowserTest : public ScrollLatencyBrowserTest {
     // and WebPreferences (e.g. kOverlayScrollbar feature, and viewport_enabled
     // WebPreferences) but at that point, we're not really testing a shipping
     // configuration.
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
     // Click on the forward scrollbar button to induce a compositor thread
     // scrollbar scroll.
     gfx::PointF scrollbar_forward_button(795, 595);
@@ -402,13 +411,13 @@ class ScrollLatencyScrollbarBrowserTest : public ScrollLatencyBrowserTest {
     EXPECT_TRUE(VerifyRecordedSamplesForHistogram(
         1, "Event.Latency.ScrollBegin.Scrollbar.HandledToRendererSwap2_" +
                thread_name));
-#endif  // !defined(OS_ANDROID)
+#endif  // !BUILDFLAG(IS_ANDROID)
   }
 
   void RunScrollbarThumbDragLatencyTest() {
     // See above comment in RunScrollbarButtonLatencyTest for why this test
     // doesn't run on Android.
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
     // Click on the scrollbar thumb and drag it twice to induce a compositor
     // thread scrollbar ScrollBegin and ScrollUpdate.
     gfx::PointF scrollbar_thumb(795, 30);
@@ -500,7 +509,7 @@ class ScrollLatencyScrollbarBrowserTest : public ScrollLatencyBrowserTest {
             "Event.Latency.ScrollUpdate.Scrollbar.HandledToRendererSwap2_" +
             thread_name),
         0u);
-#endif  // !defined(OS_ANDROID)
+#endif  // !BUILDFLAG(IS_ANDROID)
   }
 
   virtual bool DoesScrollbarScrollOnMainThread() const { return true; }
@@ -552,7 +561,7 @@ IN_PROC_BROWSER_TEST_F(ScrollLatencyCompositedScrollbarBrowserTest,
 }
 
 // Crashes on Mac ASAN.  https://crbug.com/1188553
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 #define MAYBE_ScrollbarThumbDragLatency DISABLED_ScrollbarThumbDragLatency
 #else
 #define MAYBE_ScrollbarThumbDragLatency ScrollbarThumbDragLatency
@@ -566,7 +575,7 @@ IN_PROC_BROWSER_TEST_F(ScrollLatencyCompositedScrollbarBrowserTest,
 
 IN_PROC_BROWSER_TEST_F(ScrollLatencyCompositedScrollbarBrowserTest,
                        ScrollbarThumbDragDeviceChange) {
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
   LoadURL();
 
   // First, set up a gesture scroll for any device other than a scrollbar.
@@ -622,7 +631,7 @@ IN_PROC_BROWSER_TEST_F(ScrollLatencyCompositedScrollbarBrowserTest,
   EXPECT_GT(GetSampleCountForHistogram("Event.Latency.ScrollUpdate.Scrollbar."
                                        "RendererSwapToBrowserNotified2"),
             0u);
-#endif  // !defined(OS_ANDROID)
+#endif  // !BUILDFLAG(IS_ANDROID)
 }
 
 }  // namespace content

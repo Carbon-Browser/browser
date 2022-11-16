@@ -9,7 +9,6 @@
 #include <string>
 
 #include "base/check_op.h"
-#include "base/macros.h"
 #include "base/notreached.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
@@ -26,7 +25,8 @@ namespace autofill {
 namespace {
 
 // Factory for the structured tree to be used in NameInfo.
-std::unique_ptr<AddressComponent> CreateStructuredNameTree() {
+std::unique_ptr<structured_address::AddressComponent>
+CreateStructuredNameTree() {
   if (structured_address::HonorificPrefixEnabled()) {
     return std::make_unique<structured_address::NameFullWithPrefix>();
   }

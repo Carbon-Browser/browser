@@ -5,6 +5,9 @@
 #include "chrome/browser/task_manager/task_manager_interface.h"
 
 #include "base/bind.h"
+#include "base/observer_list.h"
+#include "build/build_config.h"
+#include "build/chromeos_buildflags.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/task_manager/sampling/task_manager_impl.h"
 #include "chrome/common/chrome_switches.h"
@@ -14,9 +17,9 @@
 #include "content/public/browser/browser_thread.h"
 #include "content/public/common/child_process_host.h"
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 #include "chrome/browser/ui/browser_dialogs.h"
-#endif  // defined(OS_MAC)
+#endif  // BUILDFLAG(IS_MAC)
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "chrome/browser/ash/crosapi/browser_util.h"
@@ -49,14 +52,13 @@ TaskManagerInterface* TaskManagerInterface::GetTaskManager() {
 
 // static
 void TaskManagerInterface::UpdateAccumulatedStatsNetworkForRoute(
-    int process_id,
-    int route_id,
+    content::GlobalRenderFrameHostId render_frame_host_id,
     int64_t recv_bytes,
     int64_t sent_bytes) {
   // Don't create a task manager if it hasn't already been created.
   if (TaskManagerImpl::IsCreated()) {
     TaskManagerImpl::GetInstance()->UpdateAccumulatedStatsNetworkForRoute(
-        process_id, route_id, recv_bytes, sent_bytes);
+        render_frame_host_id, recv_bytes, sent_bytes);
   }
 }
 
@@ -89,11 +91,11 @@ void TaskManagerInterface::RemoveObserver(TaskManagerObserver* observer) {
   // Recalculate the minimum refresh rate and the enabled resource flags.
   int64_t flags = 0;
   base::TimeDelta min_time = base::TimeDelta::Max();
-  for (auto& observer : observers_) {
-    if (observer.desired_refresh_time() < min_time)
-      min_time = observer.desired_refresh_time();
+  for (auto& obs : observers_) {
+    if (obs.desired_refresh_time() < min_time)
+      min_time = obs.desired_refresh_time();
 
-    flags |= observer.desired_resources_flags();
+    flags |= obs.desired_resources_flags();
   }
 
   if (min_time == base::TimeDelta::Max()) {

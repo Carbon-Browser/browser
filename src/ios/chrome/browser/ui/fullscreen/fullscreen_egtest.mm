@@ -8,11 +8,15 @@
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #import "base/test/ios/wait_util.h"
+#include "components/translate/core/browser/translate_pref_names.h"
+#import "ios/chrome/browser/ui/fullscreen/fullscreen_features.h"
 #import "ios/chrome/browser/ui/fullscreen/test/fullscreen_app_interface.h"
 #include "ios/chrome/browser/ui/util/ui_util.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
+#import "ios/chrome/test/earl_grey/chrome_earl_grey_app_interface.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey_ui.h"
 #import "ios/chrome/test/earl_grey/chrome_matchers.h"
+#include "ios/chrome/test/earl_grey/scoped_block_popups_pref.h"
 #import "ios/chrome/test/earl_grey/web_http_server_chrome_test_case.h"
 #import "ios/chrome/test/scoped_eg_synchronization_disabler.h"
 #import "ios/testing/earl_grey/earl_grey_test.h"
@@ -43,7 +47,7 @@ void HideToolbarUsingUI() {
       performAction:grey_swipeFastInDirection(kGREYDirectionUp)];
 }
 
-// Asserts that the current URL is the |expectedURL| one.
+// Asserts that the current URL is the `expectedURL` one.
 void AssertURLIs(const GURL& expectedURL) {
   NSString* description = [NSString
       stringWithFormat:@"Timeout waiting for the url to be %@",
@@ -88,8 +92,36 @@ void WaitforPDFExtensionView() {
 
 @implementation FullscreenTestCase
 
+// TODO(crbug.com/1345810): Remove when iOS16/kSmoothScrollingDefault is fixed.
+- (AppLaunchConfiguration)appConfigurationForTestCase {
+  AppLaunchConfiguration config = [super appConfigurationForTestCase];
+  if (@available(iOS 16, *)) {
+    NSString* bundleIdentifier = [[NSBundle mainBundle] bundleIdentifier];
+    if ([bundleIdentifier hasPrefix:@"org.chromium.ost.chrome"]) {
+      config.features_disabled.push_back(
+          fullscreen::features::kSmoothScrollingDefault);
+    }
+  }
+  return config;
+}
+
 - (void)setUp {
   [super setUp];
+
+  // Disable translate to avoid the info bar that block the top toolbar.
+  [ChromeEarlGreyAppInterface
+      setBoolValue:NO
+       forUserPref:base::SysUTF8ToNSString(
+                       translate::prefs::kOfferTranslateEnabled)];
+}
+
+- (void)tearDown {
+  // Reactivate translation.
+  [ChromeEarlGreyAppInterface
+      setBoolValue:YES
+       forUserPref:base::SysUTF8ToNSString(
+                       translate::prefs::kOfferTranslateEnabled)];
+  [super tearDown];
 }
 
 // Verifies that the content offset of the web view is set up at the correct
@@ -119,7 +151,7 @@ void WaitforPDFExtensionView() {
   // Test that the toolbar is still visible after a user swipes down.
   // Use a slow swipe here because in this combination of conditions (one
   // page PDF, overscroll actions enabled, fast swipe), the
-  // |UIScrollViewDelegate scrollViewDidEndDecelerating:| is not called leading
+  // `UIScrollViewDelegate scrollViewDidEndDecelerating:` is not called leading
   // to an EarlGrey infinite wait.
   [[EarlGrey selectElementWithMatcher:WebStateScrollViewMatcher()]
       performAction:grey_swipeSlowInDirection(kGREYDirectionDown)];
@@ -173,7 +205,7 @@ void WaitforPDFExtensionView() {
                       "document.body.innerHTML += \"<meta name='viewport' "
                       "content='width=10'>\""
                       "})()";
-  [ChromeEarlGrey executeJavaScript:script];
+  [ChromeEarlGrey evaluateJavaScriptForSideEffect:script];
 
   // Scroll up to be sure the toolbar can be dismissed by scrolling down.
   [[EarlGrey selectElementWithMatcher:WebStateScrollViewMatcher()]
@@ -258,7 +290,7 @@ void WaitforPDFExtensionView() {
       kPageHeightEM, javaScript.c_str());
 
   web::test::SetUpSimpleHttpServer(responses);
-  [ChromeEarlGrey setContentSettings:CONTENT_SETTING_ALLOW];
+  ScopedBlockPopupsPref prefSetter(CONTENT_SETTING_ALLOW);
 
   [ChromeEarlGrey loadURL:URL];
   [ChromeEarlGrey waitForWebStateContainingText:"link1"];

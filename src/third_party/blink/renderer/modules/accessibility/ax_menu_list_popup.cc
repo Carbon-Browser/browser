@@ -25,6 +25,7 @@
 
 #include "third_party/blink/renderer/modules/accessibility/ax_menu_list_popup.h"
 
+#include "base/auto_reset.h"
 #include "third_party/blink/renderer/core/html/forms/html_select_element.h"
 #include "third_party/blink/renderer/modules/accessibility/ax_menu_list_option.h"
 #include "third_party/blink/renderer/modules/accessibility/ax_object_cache_impl.h"
@@ -196,7 +197,13 @@ AXObject* AXMenuListPopup::ActiveDescendant() {
   if (active_index_ < 0 || active_index_ >= ChildCountIncludingIgnored())
     return nullptr;
 
-  return children_[active_index_].Get();
+  auto* select = DynamicTo<HTMLSelectElement>(parent_->GetNode());
+  if (!select)
+    return nullptr;
+
+  HTMLOptionElement* option = select->item(active_index_);
+  DCHECK(option);
+  return AXObjectCache().Get(option);
 }
 
 }  // namespace blink

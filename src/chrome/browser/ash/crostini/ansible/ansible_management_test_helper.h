@@ -6,8 +6,8 @@
 #define CHROME_BROWSER_ASH_CROSTINI_ANSIBLE_ANSIBLE_MANAGEMENT_TEST_HELPER_H_
 
 #include "base/test/scoped_feature_list.h"
-#include "chromeos/dbus/cicerone/cicerone_service.pb.h"
-#include "chromeos/dbus/cicerone/fake_cicerone_client.h"
+#include "chromeos/ash/components/dbus/cicerone/cicerone_service.pb.h"
+#include "chromeos/ash/components/dbus/cicerone/fake_cicerone_client.h"
 
 class Profile;
 
@@ -29,13 +29,15 @@ class AnsibleManagementTestHelper {
       vm_tools::cicerone::ApplyAnsiblePlaybookResponse::Status status);
   void SendSucceededInstallSignal();
   void SendSucceededApplySignal();
+  void SendFailedInstallSignal();
+  void SendFailedApplySignal();
 
  private:
   Profile* profile_;
   base::test::ScopedFeatureList scoped_feature_list_;
 
   // Owned by chromeos::DBusThreadManager
-  chromeos::FakeCiceroneClient* fake_cicerone_client_;
+  ash::FakeCiceroneClient* fake_cicerone_client_;
 };
 
 }  // namespace crostini

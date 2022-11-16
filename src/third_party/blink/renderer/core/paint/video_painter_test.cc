@@ -102,12 +102,10 @@ class VideoStubLocalFrameClient : public EmptyLocalFrameClient {
   }
 };
 
-class VideoPainterTestForCAP : private ScopedCompositeAfterPaintForTest,
-                               public PaintControllerPaintTestBase {
+class VideoPainterTest : public PaintControllerPaintTestBase {
  public:
-  VideoPainterTestForCAP()
-      : ScopedCompositeAfterPaintForTest(true),
-        PaintControllerPaintTestBase(
+  VideoPainterTest()
+      : PaintControllerPaintTestBase(
             MakeGarbageCollected<VideoStubLocalFrameClient>()) {}
 
   void SetUp() override {
@@ -121,7 +119,7 @@ class VideoPainterTestForCAP : private ScopedCompositeAfterPaintForTest,
   }
 };
 
-TEST_F(VideoPainterTestForCAP, VideoLayerAppearsInLayerTree) {
+TEST_F(VideoPainterTest, VideoLayerAppearsInLayerTree) {
   // Insert a <video> and allow it to begin loading.
   SetBodyInnerHTML("<video width=300 height=300 src=test.ogv>");
   test::RunPendingTasks();
@@ -158,7 +156,8 @@ class TestWebFrameClientImpl : public frame_test_helpers::TestWebFrameClient {
       WebMediaPlayerEncryptedMediaClient*,
       WebContentDecryptionModule*,
       const WebString& sink_id,
-      const cc::LayerTreeSettings& settings) override {
+      const cc::LayerTreeSettings& settings,
+      scoped_refptr<base::TaskRunner> compositor_worker_task_runner) override {
     return new MockWebMediaPlayer();
   }
 };

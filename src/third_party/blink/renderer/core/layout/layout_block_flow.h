@@ -264,6 +264,8 @@ class CORE_EXPORT LayoutBlockFlow : public LayoutBlock {
                 LayoutObject* before_child = nullptr) override;
   void RemoveChild(LayoutObject*) override;
 
+  bool CreatesAnonymousWrapper() const override;
+
   void MoveAllChildrenIncludingFloatsTo(LayoutBlock* to_block,
                                         bool full_remove_insert);
 
@@ -355,6 +357,17 @@ class CORE_EXPORT LayoutBlockFlow : public LayoutBlock {
       rare_data_->multi_column_flow_thread_ = nullptr;
   }
 
+  // Return true if this block establishes a fragmentation context root (e.g. a
+  // multicol container).
+  //
+  // Implementation detail: At some point in the future there should be no flow
+  // threads. Callers that only want to know if this is a fragmentation context
+  // root (and don't depend on flow threads) should call this method.
+  bool IsFragmentationContextRoot() const override {
+    NOT_DESTROYED();
+    return MultiColumnFlowThread();
+  }
+
   void AddVisualOverflowFromInlineChildren();
 
   void AddLayoutOverflowFromInlineChildren();
@@ -415,7 +428,7 @@ class CORE_EXPORT LayoutBlockFlow : public LayoutBlock {
   LayoutUnit XPositionForFloatIncludingMargin(
       const FloatingObject& child) const {
     NOT_DESTROYED();
-    LayoutUnit scrollbar_adjustment(OriginAdjustmentForScrollbars().Width());
+    LayoutUnit scrollbar_adjustment(OriginAdjustmentForScrollbars().x());
     if (IsHorizontalWritingMode()) {
       return child.X() + child.GetLayoutObject()->MarginLeft() +
              scrollbar_adjustment;
@@ -526,6 +539,8 @@ class CORE_EXPORT LayoutBlockFlow : public LayoutBlock {
   }
   virtual void WillCollectInlines() { NOT_DESTROYED(); }
 
+  void StopDeferringShaping() const;
+
 #if DCHECK_IS_ON()
   void ShowLineTreeAndMark(const InlineBox* = nullptr,
                            const char* = nullptr,
@@ -548,12 +563,11 @@ class CORE_EXPORT LayoutBlockFlow : public LayoutBlock {
 
   void UpdateBlockChildDirtyBitsBeforeLayout(bool relayout_children,
                                              LayoutBox&);
-  void AbsoluteQuads(Vector<FloatQuad>&,
+  void AbsoluteQuads(Vector<gfx::QuadF>&,
                      MapCoordinatesFlags mode = 0) const override;
-  void LocalQuadsForSelf(Vector<FloatQuad>& quads) const override;
-  void AbsoluteQuadsForSelf(Vector<FloatQuad>& quads,
+  void LocalQuadsForSelf(Vector<gfx::QuadF>& quads) const override;
+  void AbsoluteQuadsForSelf(Vector<gfx::QuadF>& quads,
                             MapCoordinatesFlags mode = 0) const override;
-  LayoutObject* HoverAncestor() const final;
 
   LayoutUnit LogicalRightOffsetForLine(
       LayoutUnit logical_top,
@@ -587,6 +601,7 @@ class CORE_EXPORT LayoutBlockFlow : public LayoutBlock {
   void DetermineLogicalLeftPositionForChild(LayoutBox& child);
 
   void AddOutlineRects(Vector<PhysicalRect>&,
+                       OutlineInfo*,
                        const PhysicalOffset& additional_offset,
                        NGOutlineType) const override;
 
@@ -596,12 +611,12 @@ class CORE_EXPORT LayoutBlockFlow : public LayoutBlock {
   bool HitTestChildren(HitTestResult&,
                        const HitTestLocation&,
                        const PhysicalOffset& accumulated_offset,
-                       HitTestAction) override;
+                       HitTestPhase) override;
 
   PhysicalOffset AccumulateRelativePositionOffsets() const override;
 
  private:
-  void QuadsForSelfInternal(Vector<FloatQuad>& quads,
+  void QuadsForSelfInternal(Vector<gfx::QuadF>& quads,
                             MapCoordinatesFlags mode,
                             bool map_to_absolute) const;
 
@@ -875,9 +890,6 @@ class CORE_EXPORT LayoutBlockFlow : public LayoutBlock {
     NOT_DESTROYED();
     return floating_objects_;
   }
-
-  static void UpdateAncestorShouldPaintFloatingObject(
-      const LayoutBox& float_box);
 
   bool ShouldTruncateOverflowingText() const;
 

@@ -5,10 +5,14 @@
 #include "gpu/ipc/shared_image_interface_in_process.h"
 
 #include "base/bind.h"
+#include "base/memory/raw_ptr.h"
+#include "base/synchronization/waitable_event.h"
+#include "build/build_config.h"
 #include "gpu/command_buffer/client/gpu_memory_buffer_manager.h"
+#include "gpu/command_buffer/common/shared_image_usage.h"
 #include "gpu/command_buffer/common/sync_token.h"
 #include "gpu/command_buffer/service/mailbox_manager.h"
-#include "gpu/command_buffer/service/shared_image_factory.h"
+#include "gpu/command_buffer/service/shared_image/shared_image_factory.h"
 #include "gpu/command_buffer/service/sync_point_manager.h"
 #include "gpu/ipc/command_buffer_task_executor.h"
 #include "gpu/ipc/common/gpu_client_ids.h"
@@ -17,20 +21,87 @@
 
 namespace gpu {
 
+struct SharedImageInterfaceInProcess::SetUpOnGpuParams {
+  const GpuPreferences gpu_preferences;
+  const GpuDriverBugWorkarounds gpu_workarounds;
+  const GpuFeatureInfo gpu_feature_info;
+  const raw_ptr<gpu::SharedContextState> context_state;
+  const raw_ptr<MailboxManager> mailbox_manager;
+  const raw_ptr<SharedImageManager> shared_image_manager;
+  const raw_ptr<ImageFactory> image_factory;
+  const raw_ptr<MemoryTracker> memory_tracker;
+  const bool is_for_display_compositor;
+
+  SetUpOnGpuParams(const GpuPreferences& gpu_preferences,
+                   const GpuDriverBugWorkarounds& gpu_workarounds,
+                   const GpuFeatureInfo& gpu_feature_info,
+                   gpu::SharedContextState* context_state,
+                   MailboxManager* mailbox_manager,
+                   SharedImageManager* shared_image_manager,
+                   ImageFactory* image_factory,
+                   MemoryTracker* memory_tracker,
+                   bool is_for_display_compositor)
+      : gpu_preferences(gpu_preferences),
+        gpu_workarounds(gpu_workarounds),
+        gpu_feature_info(gpu_feature_info),
+        context_state(context_state),
+        mailbox_manager(mailbox_manager),
+        shared_image_manager(shared_image_manager),
+        image_factory(image_factory),
+        memory_tracker(memory_tracker),
+        is_for_display_compositor(is_for_display_compositor) {}
+
+  ~SetUpOnGpuParams() = default;
+
+  SetUpOnGpuParams(const SetUpOnGpuParams& other) = delete;
+  SetUpOnGpuParams& operator=(const SetUpOnGpuParams& other) = delete;
+};
+
 SharedImageInterfaceInProcess::SharedImageInterfaceInProcess(
     SingleTaskSequence* task_sequence,
     DisplayCompositorMemoryAndTaskControllerOnGpu* display_controller,
     std::unique_ptr<CommandBufferHelper> command_buffer_helper)
+    : SharedImageInterfaceInProcess(
+          task_sequence,
+          display_controller->sync_point_manager(),
+          display_controller->gpu_preferences(),
+          display_controller->gpu_driver_bug_workarounds(),
+          display_controller->gpu_feature_info(),
+          display_controller->shared_context_state(),
+          display_controller->mailbox_manager(),
+          display_controller->shared_image_manager(),
+          display_controller->image_factory(),
+          display_controller->memory_tracker(),
+          /*is_for_display_compositor=*/true,
+          std::move(command_buffer_helper)) {}
+
+SharedImageInterfaceInProcess::SharedImageInterfaceInProcess(
+    SingleTaskSequence* task_sequence,
+    SyncPointManager* sync_point_manager,
+    const GpuPreferences& gpu_preferences,
+    const GpuDriverBugWorkarounds& gpu_workarounds,
+    const GpuFeatureInfo& gpu_feature_info,
+    gpu::SharedContextState* context_state,
+    MailboxManager* mailbox_manager,
+    SharedImageManager* shared_image_manager,
+    ImageFactory* image_factory,
+    MemoryTracker* memory_tracker,
+    bool is_for_display_compositor,
+    std::unique_ptr<CommandBufferHelper> command_buffer_helper)
     : task_sequence_(task_sequence),
-      command_buffer_id_(display_controller->NextCommandBufferId()),
+      command_buffer_id_(
+          DisplayCompositorMemoryAndTaskControllerOnGpu::NextCommandBufferId()),
       command_buffer_helper_(std::move(command_buffer_helper)),
-      shared_image_manager_(display_controller->shared_image_manager()),
-      mailbox_manager_(display_controller->mailbox_manager()),
-      sync_point_manager_(display_controller->sync_point_manager()) {
+      shared_image_manager_(shared_image_manager),
+      sync_point_manager_(sync_point_manager) {
   DETACH_FROM_SEQUENCE(gpu_sequence_checker_);
   task_sequence_->ScheduleTask(
-      base::BindOnce(&SharedImageInterfaceInProcess::SetUpOnGpu,
-                     base::Unretained(this), display_controller),
+      base::BindOnce(
+          &SharedImageInterfaceInProcess::SetUpOnGpu, base::Unretained(this),
+          std::make_unique<SetUpOnGpuParams>(
+              gpu_preferences, gpu_workarounds, gpu_feature_info, context_state,
+              mailbox_manager, shared_image_manager, image_factory,
+              memory_tracker, is_for_display_compositor)),
       {});
 }
 
@@ -46,26 +117,21 @@ SharedImageInterfaceInProcess::~SharedImageInterfaceInProcess() {
   completion.Wait();
 }
 void SharedImageInterfaceInProcess::SetUpOnGpu(
-    DisplayCompositorMemoryAndTaskControllerOnGpu* display_controller) {
+    std::unique_ptr<SetUpOnGpuParams> params) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(gpu_sequence_checker_);
-  context_state_ = display_controller->shared_context_state();
+  context_state_ = params->context_state.get();
 
   create_factory_ = base::BindOnce(
-      [](DisplayCompositorMemoryAndTaskControllerOnGpu* display_controller,
-         bool enable_wrapped_sk_image) {
+      [](std::unique_ptr<SetUpOnGpuParams> params) {
         auto shared_image_factory = std::make_unique<SharedImageFactory>(
-            display_controller->gpu_preferences(),
-            display_controller->gpu_driver_bug_workarounds(),
-            display_controller->gpu_feature_info(),
-            display_controller->shared_context_state(),
-            display_controller->mailbox_manager(),
-            display_controller->shared_image_manager(),
-            display_controller->image_factory(),
-            display_controller->memory_tracker(), enable_wrapped_sk_image,
-            /*is_for_display_compositor=*/true);
+            params->gpu_preferences, params->gpu_workarounds,
+            params->gpu_feature_info, params->context_state,
+            params->mailbox_manager, params->shared_image_manager,
+            params->image_factory, params->memory_tracker,
+            params->is_for_display_compositor);
         return shared_image_factory;
       },
-      display_controller);
+      std::move(params));
 
   // Make the SharedImageInterface use the same sequence as the command buffer,
   // it's necessary for WebView because of the blocking behavior.
@@ -116,14 +182,7 @@ bool SharedImageInterfaceInProcess::LazyCreateSharedImageFactory() {
   if (!MakeContextCurrent(/*needs_gl=*/true))
     return false;
 
-  // We need WrappedSkImage to support creating a SharedImage with pixel data
-  // when GL is unavailable. This is used in various unit tests. If we don't
-  // have a command buffer helper, that means this class is created for
-  // SkiaRenderer, and we definitely need to turn on enable_wrapped_sk_image.
-  const bool enable_wrapped_sk_image =
-      !command_buffer_helper_ || command_buffer_helper_->EnableWrappedSkImage();
-  shared_image_factory_ =
-      std::move(create_factory_).Run(enable_wrapped_sk_image);
+  shared_image_factory_ = std::move(create_factory_).Run();
   return true;
 }
 
@@ -135,6 +194,7 @@ Mailbox SharedImageInterfaceInProcess::CreateSharedImage(
     SkAlphaType alpha_type,
     uint32_t usage,
     gpu::SurfaceHandle surface_handle) {
+  DCHECK(gpu::IsValidClientUsage(usage));
   auto mailbox = Mailbox::GenerateForSharedImage();
   {
     base::AutoLock lock(lock_);
@@ -189,6 +249,7 @@ Mailbox SharedImageInterfaceInProcess::CreateSharedImage(
     SkAlphaType alpha_type,
     uint32_t usage,
     base::span<const uint8_t> pixel_data) {
+  DCHECK(gpu::IsValidClientUsage(usage));
   auto mailbox = Mailbox::GenerateForSharedImage();
   std::vector<uint8_t> pixel_data_copy(pixel_data.begin(), pixel_data.end());
   {
@@ -245,13 +306,14 @@ Mailbox SharedImageInterfaceInProcess::CreateSharedImage(
     GrSurfaceOrigin surface_origin,
     SkAlphaType alpha_type,
     uint32_t usage) {
+  DCHECK(gpu::IsValidClientUsage(usage));
   DCHECK(gpu_memory_buffer->GetType() == gfx::NATIVE_PIXMAP ||
          gpu_memory_buffer->GetType() == gfx::ANDROID_HARDWARE_BUFFER ||
          gpu_memory_buffer_manager);
 
   // TODO(piman): DCHECK GMB format support.
   DCHECK(IsImageSizeValidForGpuMemoryBufferFormat(
-      gpu_memory_buffer->GetSize(), gpu_memory_buffer->GetFormat(), plane));
+      gpu_memory_buffer->GetSize(), gpu_memory_buffer->GetFormat()));
   DCHECK(IsPlaneValidForGpuMemoryBufferFormat(plane,
                                               gpu_memory_buffer->GetFormat()));
 
@@ -315,48 +377,6 @@ void SharedImageInterfaceInProcess::CreateGMBSharedImageOnGpuThread(
   sync_point_client_state_->ReleaseFenceSync(sync_token.release_count());
 }
 
-#if defined(OS_ANDROID)
-Mailbox SharedImageInterfaceInProcess::CreateSharedImageWithAHB(
-    const Mailbox& in_mailbox,
-    uint32_t usage,
-    const SyncToken& sync_token) {
-  auto out_mailbox = Mailbox::GenerateForSharedImage();
-  {
-    base::AutoLock lock(lock_);
-    // Note: we enqueue the task under the lock to guarantee monotonicity of
-    // the release ids as seen by the service. Unretained is safe because
-    // SharedImageInterfaceInProcess synchronizes with the GPU thread at
-    // destruction time, cancelling tasks, before |this| is destroyed.
-    ScheduleGpuTask(
-        base::BindOnce(
-            &SharedImageInterfaceInProcess::CreateSharedImageWithAHBOnGpuThread,
-            base::Unretained(this), out_mailbox, in_mailbox, usage,
-            MakeSyncToken(next_fence_sync_release_++)),
-        {sync_token});
-  }
-  return out_mailbox;
-}
-
-void SharedImageInterfaceInProcess::CreateSharedImageWithAHBOnGpuThread(
-    const Mailbox& out_mailbox,
-    const Mailbox& in_mailbox,
-    uint32_t usage,
-    const SyncToken& sync_token) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(gpu_sequence_checker_);
-  if (!MakeContextCurrent())
-    return;
-
-  if (!shared_image_factory_ ||
-      !shared_image_factory_->CreateSharedImageWithAHB(out_mailbox, in_mailbox,
-                                                       usage)) {
-    // Signal errors by losing the command buffer.
-    command_buffer_helper_->SetError();
-    return;
-  }
-  sync_point_client_state_->ReleaseFenceSync(sync_token.release_count());
-}
-#endif
-
 SharedImageInterface::SwapChainMailboxes
 SharedImageInterfaceInProcess::CreateSwapChain(
     viz::ResourceFormat format,
@@ -375,7 +395,7 @@ void SharedImageInterfaceInProcess::PresentSwapChain(
   NOTREACHED();
 }
 
-#if defined(OS_FUCHSIA)
+#if BUILDFLAG(IS_FUCHSIA)
 void SharedImageInterfaceInProcess::RegisterSysmemBufferCollection(
     gfx::SysmemBufferCollectionId id,
     zx::channel token,
@@ -388,7 +408,7 @@ void SharedImageInterfaceInProcess::ReleaseSysmemBufferCollection(
     gfx::SysmemBufferCollectionId id) {
   NOTREACHED();
 }
-#endif  // defined(OS_FUCHSIA)
+#endif  // BUILDFLAG(IS_FUCHSIA)
 
 void SharedImageInterfaceInProcess::UpdateSharedImage(
     const SyncToken& sync_token,

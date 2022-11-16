@@ -14,11 +14,12 @@
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/string_util.h"
+#include "base/time/time.h"
 #include "base/timer/timer.h"
-#include "chromeos/services/assistant/public/cpp/assistant_browser_delegate.h"
-#include "chromeos/services/assistant/public/cpp/features.h"
+#include "chromeos/ash/services/assistant/public/cpp/assistant_browser_delegate.h"
+#include "chromeos/ash/services/assistant/public/cpp/features.h"
+#include "chromeos/assistant/internal/libassistant/shared_headers.h"
 #include "chromeos/services/libassistant/audio/audio_input_stream.h"
-#include "libassistant/shared/public/platform_audio_buffer.h"
 #include "media/audio/audio_device_description.h"
 #include "media/base/audio_parameters.h"
 #include "media/base/audio_sample_types.h"
@@ -63,11 +64,13 @@ class DspHotwordStateManager : public AudioInputImpl::HotwordStateManager {
   }
 
   void OnConversationTurnFinished() override {
-    input_->RecreateAudioInputStream(true /* use_dsp */);
-    if (stream_state_ == StreamState::HOTWORD) {
-      // If |stream_state_| remains unchanged, that indicates the first stage
-      // DSP hotword detection was rejected by Libassistant.
-      RecordDspHotwordDetection(DspHotwordDetectionStatus::SOFTWARE_REJECTED);
+    if (input_->IsHotwordEnabled()) {
+      input_->RecreateAudioInputStream(true /* use_dsp */);
+      if (stream_state_ == StreamState::HOTWORD) {
+        // If |stream_state_| remains unchanged, that indicates the first stage
+        // DSP hotword detection was rejected by Libassistant.
+        RecordDspHotwordDetection(DspHotwordDetectionStatus::SOFTWARE_REJECTED);
+      }
     }
     stream_state_ = StreamState::HOTWORD;
   }
@@ -80,7 +83,7 @@ class DspHotwordStateManager : public AudioInputImpl::HotwordStateManager {
       // libassistant has rejected the hotword supplied by DSP. Thus, we reset
       // and reopen the device on hotword state.
       second_phase_timer_.Start(
-          FROM_HERE, base::TimeDelta::FromSeconds(1),
+          FROM_HERE, base::Seconds(1),
           base::BindRepeating(
               &DspHotwordStateManager::OnConversationTurnFinished,
               base::Unretained(this)));
@@ -236,8 +239,7 @@ class AudioCapturer : public media::AudioCapturerSource::CaptureCallback {
     captured_frames_count_ += num_arrived_frames;
     if (VLOG_IS_ON(1)) {
       auto now = base::TimeTicks::Now();
-      if ((now - last_frame_count_report_time_) >
-          base::TimeDelta::FromMinutes(2)) {
+      if ((now - last_frame_count_report_time_) > base::Minutes(2)) {
         VLOG(1) << "Captured frames: " << captured_frames_count_;
         last_frame_count_report_time_ = now;
       }

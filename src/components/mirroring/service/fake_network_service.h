@@ -13,16 +13,21 @@
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/network/public/mojom/udp_socket.mojom.h"
 #include "services/network/test/test_network_context.h"
+#include "services/network/test/test_udp_socket.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace mirroring {
 
-class MockUdpSocket final : public network::mojom::UDPSocket {
+class MockUdpSocket final : public network::TestUDPSocket {
  public:
   MockUdpSocket(
       mojo::PendingReceiver<network::mojom::UDPSocket> receiver,
       mojo::PendingRemote<network::mojom::UDPSocketListener> listener);
+
+  MockUdpSocket(const MockUdpSocket&) = delete;
+  MockUdpSocket& operator=(const MockUdpSocket&) = delete;
+
   ~MockUdpSocket() override;
 
   MOCK_METHOD0(OnSend, void());
@@ -31,29 +36,10 @@ class MockUdpSocket final : public network::mojom::UDPSocket {
   void Connect(const net::IPEndPoint& remote_addr,
                network::mojom::UDPSocketOptionsPtr options,
                ConnectCallback callback) override;
-  void Bind(const net::IPEndPoint& local_addr,
-            network::mojom::UDPSocketOptionsPtr options,
-            BindCallback callback) override {}
-  void SetBroadcast(bool broadcast, SetBroadcastCallback callback) override {}
-  void SetSendBufferSize(int32_t send_buffer_size,
-                         SetSendBufferSizeCallback callback) override {}
-  void SetReceiveBufferSize(int32_t receive_buffer_size,
-                            SetReceiveBufferSizeCallback callback) override {}
-  void JoinGroup(const net::IPAddress& group_address,
-                 JoinGroupCallback callback) override {}
-  void LeaveGroup(const net::IPAddress& group_address,
-                  LeaveGroupCallback callback) override {}
   void ReceiveMore(uint32_t num_additional_datagrams) override;
-  void ReceiveMoreWithBufferSize(uint32_t num_additional_datagrams,
-                                 uint32_t buffer_size) override {}
-  void SendTo(const net::IPEndPoint& dest_addr,
-              base::span<const uint8_t> data,
-              const net::MutableNetworkTrafficAnnotationTag& traffic_annotation,
-              SendToCallback callback) override {}
   void Send(base::span<const uint8_t> data,
             const net::MutableNetworkTrafficAnnotationTag& traffic_annotation,
             SendCallback callback) override;
-  void Close() override {}
 
   // Simulate receiving a packet from the network.
   void OnReceivedPacket(const media::cast::Packet& packet);
@@ -65,14 +51,16 @@ class MockUdpSocket final : public network::mojom::UDPSocket {
   mojo::Remote<network::mojom::UDPSocketListener> listener_;
   std::unique_ptr<media::cast::Packet> sending_packet_;
   int num_ask_for_receive_ = 0;
-
-  DISALLOW_COPY_AND_ASSIGN(MockUdpSocket);
 };
 
 class MockNetworkContext : public network::TestNetworkContext {
  public:
   explicit MockNetworkContext(
       mojo::PendingReceiver<network::mojom::NetworkContext> receiver);
+
+  MockNetworkContext(const MockNetworkContext&) = delete;
+  MockNetworkContext& operator=(const MockNetworkContext&) = delete;
+
   ~MockNetworkContext() override;
 
   MOCK_METHOD0(OnUDPSocketCreated, void());
@@ -90,7 +78,6 @@ class MockNetworkContext : public network::TestNetworkContext {
  private:
   mojo::Receiver<network::mojom::NetworkContext> receiver_;
   std::unique_ptr<MockUdpSocket> udp_socket_;
-  DISALLOW_COPY_AND_ASSIGN(MockNetworkContext);
 };
 
 }  // namespace mirroring

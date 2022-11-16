@@ -231,7 +231,6 @@ class ListIdentifier {
 std::ostream& operator<<(std::ostream& os, const ListIdentifier& id);
 
 PlatformType GetCurrentPlatformType();
-ListIdentifier GetCertCsdDownloadAllowlistId();
 ListIdentifier GetChromeExtMalwareId();
 ListIdentifier GetChromeUrlApiId();
 ListIdentifier GetChromeUrlClientIncidentId();
@@ -302,14 +301,24 @@ enum V4OperationResult {
   // Identical operation already pending.
   ALREADY_PENDING_ERROR = 6,
 
+  // A network error that can be retried without backoff (e.g.
+  // NETWORK_DISCONNECTED).
+  RETRIABLE_NETWORK_ERROR = 7,
+
+  // An HTTP error code that can be retried without backoff.
+  RETRIABLE_HTTP_ERROR = 8,
+
   // Memory space for histograms is determined by the max.  ALWAYS
   // ADD NEW VALUES BEFORE THIS ONE.
-  OPERATION_RESULT_MAX = 7
+  OPERATION_RESULT_MAX = 9
 };
 
 // A class that provides static methods related to the Pver4 protocol.
 class V4ProtocolManagerUtil {
  public:
+  V4ProtocolManagerUtil(const V4ProtocolManagerUtil&) = delete;
+  V4ProtocolManagerUtil& operator=(const V4ProtocolManagerUtil&) = delete;
+
   // Canonicalizes url as per Google Safe Browsing Specification.
   // See: https://developers.google.com/safe-browsing/v4/urls-hashing
   static void CanonicalizeUrl(const GURL& url,
@@ -358,16 +367,6 @@ class V4ProtocolManagerUtil {
   // where n is the number of consecutive errors.
   static base::TimeDelta GetNextBackOffInterval(size_t* error_count,
                                                 size_t* multiplier);
-
-  // Record HTTP response code when there's no error in fetching an HTTP
-  // request, and the error code, when there is.
-  // |metric_name| is the name of the UMA metric to record the response code or
-  // error code against, |net_error| represents the net error code of the HTTP
-  // request, and |response code| represents the HTTP response code received
-  // from the server.
-  static void RecordHttpResponseOrErrorCode(const char* metric_name,
-                                            int net_error,
-                                            int response_code);
 
   // Generate the set of FullHashes to check for |url|.
   static void UrlToFullHashes(const GURL& url,
@@ -433,8 +432,6 @@ class V4ProtocolManagerUtil {
 
   static std::string RemoveConsecutiveChars(base::StringPiece str,
                                             const char c);
-
-  DISALLOW_COPY_AND_ASSIGN(V4ProtocolManagerUtil);
 };
 
 using StoresToCheck = std::unordered_set<ListIdentifier>;

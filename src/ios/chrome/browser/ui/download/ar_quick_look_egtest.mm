@@ -28,9 +28,6 @@ using base::test::ios::kWaitForUIElementTimeout;
 
 namespace {
 
-// Use separate timeout for EG2 tests to accomodate for IPC delays.
-const NSTimeInterval kWaitForARPresentationTimeout = 30.0;
-
 // USDZ landing page and download request handler.
 std::unique_ptr<net::test_server::HttpResponse> GetResponse(
     const net::test_server::HttpRequest& request) {
@@ -91,172 +88,47 @@ std::unique_ptr<net::test_server::HttpResponse> GetResponse(
 
 // Tests that QLPreviewController is shown for sucessfully downloaded USDZ file.
 - (void)testDownloadUsdz {
-#if defined(__IPHONE_14_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_14_0
-  // TODO(crbug.com/1114202): The XCUIElement queries in this test are broken on
-  // Xcode 12 beta 4 when running on the iOS 12 simulator.  Disable until Xcode
-  // is fixed.
-  if (@available(iOS 13, *)) {
-  } else {
-    EARL_GREY_TEST_DISABLED(@"Test disabled on iOS12.");
-  }
-#endif
-
   [ChromeEarlGrey loadURL:self.testServer->GetURL("/")];
   [ChromeEarlGrey waitForWebStateContainingText:"Good"];
   [ChromeEarlGrey tapWebStateElementWithID:@"good"];
 
-  // QLPreviewController UI is rendered out of host process so EarlGrey matcher
-  // can not find QLPreviewController UI.
-  // EG2 test uses XCUIApplication API to check for Quick Look dialog UI
-  // presentation.
-  XCUIApplication* app = [[XCUIApplication alloc] init];
-  XCUIElement* goodTitle = app.staticTexts[@"good"];
-#if TARGET_IPHONE_SIMULATOR
-  if (@available(iOS 14, *)) {
-    goodTitle = app.staticTexts[@"Unsupported file format"];
-  }
-#endif
-  GREYAssert(
-      [goodTitle waitForExistenceWithTimeout:kWaitForARPresentationTimeout],
-      @"AR preview dialog UI was not presented");
+  // Verify QLPreviewControllerView is presented.
+  [[EarlGrey
+      selectElementWithMatcher:grey_kindOfClassName(@"QLPreviewControllerView")]
+      assertWithMatcher:grey_notNil()];
 }
 
 - (void)testDownloadUnauthorized {
-#if defined(__IPHONE_14_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_14_0
-  // TODO(crbug.com/1114202): The XCUIElement queries in this test are broken on
-  // Xcode 12 beta 4 when running on the iOS 12 simulator.  Disable until Xcode
-  // is fixed.
-  if (@available(iOS 13, *)) {
-  } else {
-    EARL_GREY_TEST_DISABLED(@"Test disabled on iOS12.");
-  }
-#endif
-
   [ChromeEarlGrey loadURL:self.testServer->GetURL("/")];
   [ChromeEarlGrey waitForWebStateContainingText:"Unauthorized"];
   [ChromeEarlGrey tapWebStateElementWithID:@"unauthorized"];
 
-  // QLPreviewController UI is rendered out of host process so EarlGrey matcher
-  // can not find QLPreviewController UI.
-  // EG2 test uses XCUIApplication API to check for Quick Look dialog UI
-  // presentation.
-  XCUIApplication* app = [[XCUIApplication alloc] init];
-  XCUIElement* goodTitle = app.staticTexts[@"good"];
-#if TARGET_IPHONE_SIMULATOR
-  if (@available(iOS 14, *)) {
-    goodTitle = app.staticTexts[@"Unsupported file format"];
-  }
-#endif
-  GREYAssertFalse(
-      [goodTitle waitForExistenceWithTimeout:kWaitForARPresentationTimeout],
-      @"AR preview dialog UI was presented");
+  // Verify QLPreviewControllerView is not presented.
+  [[EarlGrey
+      selectElementWithMatcher:grey_kindOfClassName(@"QLPreviewControllerView")]
+      assertWithMatcher:grey_nil()];
 }
 
 - (void)testDownloadForbidden {
-#if defined(__IPHONE_14_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_14_0
-  // TODO(crbug.com/1114202): The XCUIElement queries in this test are broken on
-  // Xcode 12 beta 4 when running on the iOS 12 simulator.  Disable until Xcode
-  // is fixed.
-  if (@available(iOS 13, *)) {
-  } else {
-    EARL_GREY_TEST_DISABLED(@"Test disabled on iOS12.");
-  }
-#endif
-
   [ChromeEarlGrey loadURL:self.testServer->GetURL("/")];
   [ChromeEarlGrey waitForWebStateContainingText:"Forbidden"];
   [ChromeEarlGrey tapWebStateElementWithID:@"forbidden"];
 
-  // QLPreviewController UI is rendered out of host process so EarlGrey matcher
-  // can not find QLPreviewController UI.
-  // EG2 test uses XCUIApplication API to check for Quick Look dialog UI
-  // presentation.
-  XCUIApplication* app = [[XCUIApplication alloc] init];
-  XCUIElement* goodTitle = app.staticTexts[@"good"];
-#if TARGET_IPHONE_SIMULATOR
-  if (@available(iOS 14, *)) {
-    goodTitle = app.staticTexts[@"Unsupported file format"];
-  }
-#endif
-  GREYAssertFalse(
-      [goodTitle waitForExistenceWithTimeout:kWaitForARPresentationTimeout],
-      @"AR preview dialog UI was presented");
+  // Verify QLPreviewControllerView is not presented.
+  [[EarlGrey
+      selectElementWithMatcher:grey_kindOfClassName(@"QLPreviewControllerView")]
+      assertWithMatcher:grey_nil()];
 }
 
 - (void)testDownloadChangingMimeType {
-#if defined(__IPHONE_14_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_14_0
-  // TODO(crbug.com/1114202): The XCUIElement queries in this test are broken on
-  // Xcode 12 beta 4 when running on the iOS 12 simulator.  Disable until Xcode
-  // is fixed.
-  if (@available(iOS 13, *)) {
-  } else {
-    EARL_GREY_TEST_DISABLED(@"Test disabled on iOS12.");
-  }
-#endif
-
   [ChromeEarlGrey loadURL:self.testServer->GetURL("/")];
   [ChromeEarlGrey waitForWebStateContainingText:"Changing Mime Type"];
   [ChromeEarlGrey tapWebStateElementWithID:@"changing-mime-type"];
 
-  // QLPreviewController UI is rendered out of host process so EarlGrey matcher
-  // can not find QLPreviewController UI.
-  // EG2 test uses XCUIApplication API to check for Quick Look dialog UI
-  // presentation.
-  XCUIApplication* app = [[XCUIApplication alloc] init];
-  XCUIElement* goodTitle = app.staticTexts[@"good"];
-#if TARGET_IPHONE_SIMULATOR
-  if (@available(iOS 14, *)) {
-    goodTitle = app.staticTexts[@"Unsupported file format"];
-  }
-#endif
-  GREYAssertFalse(
-      [goodTitle waitForExistenceWithTimeout:kWaitForARPresentationTimeout],
-      @"AR preview dialog UI was presented");
-}
-
-// Tests that the visibilitychange event is fired when quicklook is
-// shown/hidden.
-- (void)testVisibilitychangeEventFired {
-#if defined(__IPHONE_14_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_14_0
-  // TODO(crbug.com/1114202): The XCUIElement queries in this test are broken on
-  // Xcode 12 beta 4 when running on the iOS 12 simulator.  Disable until Xcode
-  // is fixed.
-  if (@available(iOS 13, *)) {
-  } else {
-    EARL_GREY_TEST_DISABLED(@"Test disabled on iOS12.");
-  }
-#endif
-
-  [ChromeEarlGrey loadURL:self.testServer->GetURL("/")];
-  [ChromeEarlGrey waitForWebStateContainingText:"Good"];
-  [ChromeEarlGrey tapWebStateElementWithID:@"good"];
-
-  [ChromeEarlGrey waitForWebStateContainingText:"hidden"];
-
-  // QLPreviewController UI is rendered out of host process so EarlGrey matcher
-  // can not find QLPreviewController UI.
-  // EG2 test uses XCUIApplication API to check for Quick Look dialog UI
-  // presentation.
-  XCUIApplication* app = [[XCUIApplication alloc] init];
-  XCUIElement* goodTitle = app.staticTexts[@"good"];
-#if TARGET_IPHONE_SIMULATOR
-  if (@available(iOS 14, *)) {
-    goodTitle = app.staticTexts[@"Unsupported file format"];
-  }
-#endif
-  GREYAssert(
-      [goodTitle waitForExistenceWithTimeout:kWaitForARPresentationTimeout],
-      @"AR preview dialog UI was not presented");
-
-  // Close the QuickLook dialog.
-  XCUIElement* doneButton = app.buttons[@"Done"];
-  GREYAssert(
-      [doneButton waitForExistenceWithTimeout:kWaitForARPresentationTimeout],
-      @"Done button not visible");
-  [doneButton tap];
-
-  // Check that the visibilitychange event is triggered.
-  [ChromeEarlGrey waitForWebStateContainingText:"visible"];
+  // Verify QLPreviewControllerView is not presented.
+  [[EarlGrey
+      selectElementWithMatcher:grey_kindOfClassName(@"QLPreviewControllerView")]
+      assertWithMatcher:grey_nil()];
 }
 
 @end

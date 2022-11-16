@@ -9,10 +9,12 @@
 #include <string>
 
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
-#include "base/sequenced_task_runner_helpers.h"
+#include "base/task/sequenced_task_runner_helpers.h"
+#include "base/token.h"
+#include "base/unguessable_token.h"
 #include "content/browser/renderer_host/media/video_capture_controller.h"
 #include "content/browser/renderer_host/media/video_capture_controller_event_handler.h"
 #include "content/common/content_export.h"
@@ -36,6 +38,10 @@ class CONTENT_EXPORT VideoCaptureHost
   class RenderProcessHostDelegate;
   VideoCaptureHost(std::unique_ptr<RenderProcessHostDelegate> delegate,
                    MediaStreamManager* media_stream_manager);
+
+  VideoCaptureHost(const VideoCaptureHost&) = delete;
+  VideoCaptureHost& operator=(const VideoCaptureHost&) = delete;
+
   ~VideoCaptureHost() override;
 
   static void Create(
@@ -67,6 +73,8 @@ class CONTENT_EXPORT VideoCaptureHost
   void OnBufferReady(const VideoCaptureControllerID& controller_id,
                      const ReadyBuffer& buffer,
                      const std::vector<ReadyBuffer>& scaled_buffers) override;
+  void OnFrameWithEmptyRegionCapture(
+      const VideoCaptureControllerID& controller_id) override;
   void OnEnded(const VideoCaptureControllerID& id) override;
   void OnStarted(const VideoCaptureControllerID& id) override;
   void OnStartedUsingGpuDecode(const VideoCaptureControllerID& id) override;
@@ -95,6 +103,8 @@ class CONTENT_EXPORT VideoCaptureHost
                              GetDeviceFormatsInUseCallback callback) override;
   void OnFrameDropped(const base::UnguessableToken& device_id,
                       media::VideoCaptureFrameDropReason reason) override;
+  void OnNewCropVersion(const base::UnguessableToken& device_id,
+                        uint32_t crop_version) override;
   void OnLog(const base::UnguessableToken& device_id,
              const std::string& message) override;
 
@@ -122,7 +132,7 @@ class CONTENT_EXPORT VideoCaptureHost
   std::unique_ptr<RenderProcessHostDelegate> render_process_host_delegate_;
   uint32_t number_of_active_streams_ = 0;
 
-  MediaStreamManager* const media_stream_manager_;
+  const raw_ptr<MediaStreamManager> media_stream_manager_;
 
   // A map of VideoCaptureControllerID to the VideoCaptureController to which it
   // is connected. An entry in this map holds a null controller while it is in
@@ -136,9 +146,9 @@ class CONTENT_EXPORT VideoCaptureHost
            mojo::Remote<media::mojom::VideoCaptureObserver>>
       device_id_to_observer_map_;
 
-  base::WeakPtrFactory<VideoCaptureHost> weak_factory_{this};
+  absl::optional<gfx::Rect> region_capture_rect_;
 
-  DISALLOW_COPY_AND_ASSIGN(VideoCaptureHost);
+  base::WeakPtrFactory<VideoCaptureHost> weak_factory_{this};
 };
 
 }  // namespace content

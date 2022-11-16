@@ -7,8 +7,7 @@
 #include "base/bind.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/process/process_metrics.h"
-#include "base/single_thread_task_runner.h"
-#include "base/task/post_task.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/time.h"
@@ -36,10 +35,10 @@ namespace memory_pressure {
 namespace os_linux {
 
 const base::TimeDelta SystemMemoryPressureEvaluator::kMemorySamplingPeriod =
-    base::TimeDelta::FromSeconds(5);
+    base::Seconds(5);
 
 const base::TimeDelta SystemMemoryPressureEvaluator::kModeratePressureCooldown =
-    base::TimeDelta::FromSeconds(10);
+    base::Seconds(10);
 
 const int SystemMemoryPressureEvaluator::kDefaultModerateThresholdPc = 75;
 const int SystemMemoryPressureEvaluator::kDefaultCriticalThresholdPc = 85;

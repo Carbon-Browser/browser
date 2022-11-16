@@ -8,8 +8,6 @@
 #include <memory>
 #include <string>
 
-#include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "components/sync/model/syncable_service.h"
@@ -37,8 +35,12 @@ class SyncStorageBackend;
 class SyncValueStoreCache : public ValueStoreCache {
  public:
   SyncValueStoreCache(scoped_refptr<value_store::ValueStoreFactory> factory,
-                      scoped_refptr<SettingsObserverList> observers,
+                      SettingsChangedCallback observer,
                       const base::FilePath& profile_path);
+
+  SyncValueStoreCache(const SyncValueStoreCache&) = delete;
+  SyncValueStoreCache& operator=(const SyncValueStoreCache&) = delete;
+
   ~SyncValueStoreCache() override;
 
   base::WeakPtr<SyncValueStoreCache> AsWeakPtr();
@@ -52,15 +54,13 @@ class SyncValueStoreCache : public ValueStoreCache {
 
  private:
   void InitOnBackend(scoped_refptr<value_store::ValueStoreFactory> factory,
-                     scoped_refptr<SettingsObserverList> observers,
+                     SequenceBoundSettingsChangedCallback observer,
                      const base::FilePath& profile_path);
 
   bool initialized_;
   std::unique_ptr<SyncStorageBackend> app_backend_;
   std::unique_ptr<SyncStorageBackend> extension_backend_;
   base::WeakPtrFactory<SyncValueStoreCache> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(SyncValueStoreCache);
 };
 
 }  // namespace extensions

@@ -4,9 +4,9 @@
 
 #include "ash/webui/diagnostics_ui/backend/system_routine_controller.h"
 
+#include "ash/system/diagnostics/routine_log.h"
 #include "ash/webui/diagnostics_ui/backend/cros_healthd_helpers.h"
 #include "ash/webui/diagnostics_ui/backend/histogram_util.h"
-#include "ash/webui/diagnostics_ui/backend/routine_log.h"
 #include "ash/webui/diagnostics_ui/backend/routine_properties.h"
 #include "base/bind.h"
 #include "base/containers/contains.h"
@@ -19,9 +19,9 @@
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "base/values.h"
-#include "chromeos/services/cros_healthd/public/cpp/service_connection.h"
-#include "chromeos/services/cros_healthd/public/mojom/cros_healthd_diagnostics.mojom.h"
-#include "chromeos/services/cros_healthd/public/mojom/nullable_primitives.mojom.h"
+#include "chromeos/ash/services/cros_healthd/public/cpp/service_connection.h"
+#include "chromeos/ash/services/cros_healthd/public/mojom/cros_healthd_diagnostics.mojom.h"
+#include "chromeos/ash/services/cros_healthd/public/mojom/nullable_primitives.mojom.h"
 #include "content/public/browser/device_service.h"
 #include "services/device/public/mojom/wake_lock_provider.mojom.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -72,6 +72,7 @@ mojom::StandardRoutineResult TestStatusToResult(
     case healthd::DiagnosticRoutineStatusEnum::kWaiting:
     case healthd::DiagnosticRoutineStatusEnum::kRemoved:
     case healthd::DiagnosticRoutineStatusEnum::kCancelling:
+    case healthd::DiagnosticRoutineStatusEnum::kUnknown:
       NOTREACHED();
       return mojom::StandardRoutineResult::kExecutionError;
   }
@@ -124,8 +125,8 @@ SystemRoutineController::~SystemRoutineController() {
     diagnostics_service_->GetRoutineUpdate(
         inflight_routine_id_, healthd::DiagnosticRoutineCommandEnum::kCancel,
         /*should_include_output=*/false, base::DoNothing());
-    if (IsLoggingEnabled()) {
-      routine_log_ptr_->LogRoutineCancelled();
+    if (IsLoggingEnabled() && inflight_routine_type_.has_value()) {
+      routine_log_ptr_->LogRoutineCancelled(inflight_routine_type_.value());
     }
   }
 
@@ -203,6 +204,12 @@ void SystemRoutineController::ExecuteRoutine(mojom::RoutineType routine_type) {
   BindCrosHealthdDiagnosticsServiceIfNeccessary();
 
   switch (routine_type) {
+    case mojom::RoutineType::kArcDnsResolution:
+      diagnostics_service_->RunArcDnsResolutionRoutine(
+          base::BindOnce(&SystemRoutineController::OnRoutineStarted,
+                         weak_factory_.GetWeakPtr(), routine_type));
+      break;
+
     case mojom::RoutineType::kArcHttp:
       diagnostics_service_->RunArcHttpRoutine(
           base::BindOnce(&SystemRoutineController::OnRoutineStarted,
@@ -345,6 +352,7 @@ void SystemRoutineController::OnRoutineStarted(
 
   DCHECK_EQ(kInvalidRoutineId, inflight_routine_id_);
   inflight_routine_id_ = response_ptr->id;
+  inflight_routine_type_ = routine_type;
 
   // Sleep for the length of the test using a one-shot timer, then start
   // querying again for status.
@@ -366,6 +374,7 @@ void SystemRoutineController::OnPowerRoutineStarted(
 
   DCHECK_EQ(kInvalidRoutineId, inflight_routine_id_);
   inflight_routine_id_ = response_ptr->id;
+  inflight_routine_type_ = routine_type;
 
   ContinuePowerRoutine(routine_type);
 }
@@ -455,6 +464,7 @@ void SystemRoutineController::OnRoutineStatusUpdated(
     case healthd::DiagnosticRoutineStatusEnum::kRemoved:
     case healthd::DiagnosticRoutineStatusEnum::kCancelling:
     case healthd::DiagnosticRoutineStatusEnum::kNotRun:
+    case healthd::DiagnosticRoutineStatusEnum::kUnknown:
       // Any other reason, report failure.
       DVLOG(2) << "Routine failed: " << update->status_message;
       OnStandardRoutineResult(routine_type, TestStatusToResult(status));
@@ -519,7 +529,7 @@ void SystemRoutineController::ScheduleCheckRoutineStatus(
     uint32_t duration_in_seconds,
     mojom::RoutineType routine_type) {
   inflight_routine_timer_->Start(
-      FROM_HERE, base::TimeDelta::FromSeconds(duration_in_seconds),
+      FROM_HERE, base::Seconds(duration_in_seconds),
       base::BindOnce(&SystemRoutineController::CheckRoutineStatus,
                      weak_factory_.GetWeakPtr(), routine_type));
 }
@@ -572,17 +582,15 @@ void SystemRoutineController::OnPowerRoutineResultFetched(
 void SystemRoutineController::OnPowerRoutineJsonParsed(
     mojom::RoutineType routine_type,
     data_decoder::DataDecoder::ValueOrError result) {
-  if (!result.value) {
+  if (!result.has_value()) {
     OnPowerRoutineResult(routine_type,
                          mojom::StandardRoutineResult::kExecutionError,
                          /*percent_change=*/0, /*seconds_elapsed=*/0);
-    DVLOG(2) << "JSON parsing failed: " << *result.error;
+    DVLOG(2) << "JSON parsing failed: " << result.error();
     return;
   }
 
-  const base::Value& parsed_json = *result.value;
-
-  if (parsed_json.type() != base::Value::Type::DICTIONARY) {
+  if (!result->is_dict()) {
     OnPowerRoutineResult(routine_type,
                          mojom::StandardRoutineResult::kExecutionError,
                          /*percent_change=*/0, /*seconds_elapsed=*/0);
@@ -590,8 +598,9 @@ void SystemRoutineController::OnPowerRoutineJsonParsed(
     return;
   }
 
-  const base::Value* result_details_dict =
-      parsed_json.FindDictKey(kResultDetailsKey);
+  const base::Value::Dict& parsed_json = result->GetDict();
+  const base::Value::Dict* result_details_dict =
+      parsed_json.FindDict(kResultDetailsKey);
   if (!result_details_dict) {
     OnPowerRoutineResult(routine_type,
                          mojom::StandardRoutineResult::kExecutionError,
@@ -602,8 +611,8 @@ void SystemRoutineController::OnPowerRoutineJsonParsed(
 
   absl::optional<double> charge_percent_opt =
       routine_type == mojom::RoutineType::kBatteryCharge
-          ? result_details_dict->FindDoubleKey(kChargePercentKey)
-          : result_details_dict->FindDoubleKey(kDischargePercentKey);
+          ? result_details_dict->FindDouble(kChargePercentKey)
+          : result_details_dict->FindDouble(kDischargePercentKey);
   if (!charge_percent_opt.has_value()) {
     OnPowerRoutineResult(routine_type,
                          mojom::StandardRoutineResult::kExecutionError,
@@ -651,9 +660,18 @@ void SystemRoutineController::OnPowerRoutineResult(
 
 void SystemRoutineController::SendRoutineResult(
     mojom::RoutineResultInfoPtr result_info) {
-  inflight_routine_runner_->OnRoutineResult(std::move(result_info));
+  // Added as part of investigation of crash reported in crbug/1316648 to test
+  // if crash is related to memory resource allocation. Remove if crash
+  // continues to occur.
+  if (!result_info.is_null() && !result_info->result.is_null()) {
+    inflight_routine_runner_->OnRoutineResult(std::move(result_info));
+  } else {
+    LOG(ERROR) << "RoutineResult is null";
+  }
+
   inflight_routine_runner_.reset();
   inflight_routine_id_ = kInvalidRoutineId;
+  inflight_routine_type_.reset();
 }
 
 void SystemRoutineController::BindCrosHealthdDiagnosticsServiceIfNeccessary() {
@@ -695,8 +713,8 @@ void SystemRoutineController::OnInflightRoutineRunnerDisconnected() {
   // Reset `inflight_routine_id_` to maintain invariant.
   inflight_routine_id_ = kInvalidRoutineId;
 
-  if (IsLoggingEnabled()) {
-    routine_log_ptr_->LogRoutineCancelled();
+  if (IsLoggingEnabled() && inflight_routine_type_.has_value()) {
+    routine_log_ptr_->LogRoutineCancelled(inflight_routine_type_.value());
   }
 }
 

@@ -19,6 +19,7 @@
 #include "base/containers/stack_container.h"
 #include "base/debug/alias.h"
 #include "base/memory/aligned_memory.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/notreached.h"
 #include "cc/base/math_util.h"
@@ -26,14 +27,22 @@
 #include "cc/paint/paint_canvas.h"
 #include "cc/paint/paint_export.h"
 #include "cc/paint/paint_flags.h"
+#include "cc/paint/skottie_color_map.h"
+#include "cc/paint/skottie_frame_data.h"
+#include "cc/paint/skottie_resource_metadata.h"
+#include "cc/paint/skottie_text_property_value.h"
+#include "cc/paint/skottie_wrapper.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "third_party/skia/include/core/SkPath.h"
+#include "third_party/skia/include/core/SkRRect.h"
 #include "third_party/skia/include/core/SkRect.h"
+#include "third_party/skia/include/core/SkRefCnt.h"
 #include "third_party/skia/include/core/SkScalar.h"
 #include "ui/gfx/geometry/rect.h"
 
 class SkColorSpace;
+class SkImage;
 class SkStrikeClient;
 class SkStrikeServer;
 class SkTextBlob;
@@ -44,7 +53,7 @@ namespace cc {
 class ClientPaintCache;
 class ImageProvider;
 class ServicePaintCache;
-class SkottieWrapper;
+class SkottieSerializationHistory;
 class TransferCacheDeserializeHelper;
 class TransferCacheSerializeHelper;
 
@@ -58,9 +67,16 @@ class CC_PAINT_EXPORT ThreadsafePath : public SkPath {
 
 class CC_PAINT_EXPORT SharedImageProvider {
  public:
+  enum class Error {
+    kNoError,
+    kUnknownMailbox,
+    kNoAccess,
+    kSkImageCreationFailed,
+  };
+
   virtual ~SharedImageProvider() = default;
-  virtual sk_sp<SkImage> OpenSharedImageForRead(
-      const gpu::Mailbox& mailbox) = 0;
+  virtual sk_sp<SkImage> OpenSharedImageForRead(const gpu::Mailbox& mailbox,
+                                                Error& error) = 0;
 };
 
 // See PaintOp::Serialize/Deserialize for comments.  Derived Serialize types
@@ -127,11 +143,15 @@ struct CC_PAINT_EXPORT PlaybackParams {
   PlaybackParams(const PlaybackParams& other);
   PlaybackParams& operator=(const PlaybackParams& other);
 
-  ImageProvider* image_provider;
+  // `image_provider` is not a raw_ptr<...> for performance reasons (based on
+  // analysis of sampling profiler data and tab_search:top100:2020).
+  RAW_PTR_EXCLUSION ImageProvider* image_provider;
+
   SkM44 original_ctm;
   CustomDataRasterCallback custom_callback;
   DidDrawOpCallback did_draw_op_callback;
   absl::optional<bool> save_layer_alpha_should_preserve_lcd_text;
+  bool is_analyzing = false;
 };
 
 class CC_PAINT_EXPORT PaintOp {
@@ -161,6 +181,7 @@ class CC_PAINT_EXPORT PaintOp {
                      ClientPaintCache* paint_cache,
                      SkStrikeServer* strike_server,
                      sk_sp<SkColorSpace> color_space,
+                     SkottieSerializationHistory* skottie_serialization_history,
                      bool can_use_lcd_text,
                      bool context_supports_distance_field_text,
                      int max_texture_size);
@@ -169,11 +190,13 @@ class CC_PAINT_EXPORT PaintOp {
     ~SerializeOptions();
 
     // Required.
-    ImageProvider* image_provider = nullptr;
-    TransferCacheSerializeHelper* transfer_cache = nullptr;
-    ClientPaintCache* paint_cache = nullptr;
-    SkStrikeServer* strike_server = nullptr;
-    sk_sp<SkColorSpace> color_space = nullptr;
+    raw_ptr<ImageProvider> image_provider = nullptr;
+    raw_ptr<TransferCacheSerializeHelper> transfer_cache = nullptr;
+    raw_ptr<ClientPaintCache> paint_cache = nullptr;
+    raw_ptr<SkStrikeServer> strike_server = nullptr;
+    sk_sp<SkColorSpace> color_space;
+    raw_ptr<SkottieSerializationHistory> skottie_serialization_history =
+        nullptr;
     bool can_use_lcd_text = false;
     bool context_supports_distance_field_text = true;
     int max_texture_size = 0;
@@ -269,6 +292,7 @@ class CC_PAINT_EXPORT PaintOp {
 
   bool HasNonAAPaint() const { return false; }
   bool HasDrawTextOps() const { return false; }
+  bool HasSaveLayerOps() const { return false; }
   bool HasSaveLayerAlphaOps() const { return false; }
   // Returns true if effects are present that would break LCD text or be broken
   // by the flags for SaveLayerAlpha to preserving LCD text.
@@ -496,7 +520,7 @@ class CC_PAINT_EXPORT DrawColorOp final : public PaintOp {
  public:
   static constexpr PaintOpType kType = PaintOpType::DrawColor;
   static constexpr bool kIsDrawOp = true;
-  DrawColorOp(SkColor color, SkBlendMode mode)
+  DrawColorOp(SkColor4f color, SkBlendMode mode)
       : PaintOp(kType), color(color), mode(mode) {}
   static void Raster(const DrawColorOp* op,
                      SkCanvas* canvas,
@@ -505,7 +529,7 @@ class CC_PAINT_EXPORT DrawColorOp final : public PaintOp {
   static bool AreEqual(const PaintOp* left, const PaintOp* right);
   HAS_SERIALIZATION_FUNCTIONS();
 
-  SkColor color;
+  SkColor4f color;
   SkBlendMode mode;
 
  private:
@@ -739,6 +763,7 @@ class CC_PAINT_EXPORT DrawRecordOp final : public PaintOp {
   int CountSlowPaths() const;
   bool HasNonAAPaint() const;
   bool HasDrawTextOps() const;
+  bool HasSaveLayerOps() const;
   bool HasSaveLayerAlphaOps() const;
   bool HasEffectsPreventingLCDTextForSaveLayerAlpha() const;
   HAS_SERIALIZATION_FUNCTIONS();
@@ -790,7 +815,12 @@ class CC_PAINT_EXPORT DrawSkottieOp final : public PaintOp {
  public:
   static constexpr PaintOpType kType = PaintOpType::DrawSkottie;
   static constexpr bool kIsDrawOp = true;
-  DrawSkottieOp(scoped_refptr<SkottieWrapper> skottie, SkRect dst, float t);
+  DrawSkottieOp(scoped_refptr<SkottieWrapper> skottie,
+                SkRect dst,
+                float t,
+                SkottieFrameDataMap images,
+                const SkottieColorMap& color_map,
+                SkottieTextPropertyValueMap text_map);
   ~DrawSkottieOp();
   static void Raster(const DrawSkottieOp* op,
                      SkCanvas* canvas,
@@ -799,16 +829,36 @@ class CC_PAINT_EXPORT DrawSkottieOp final : public PaintOp {
     return !!skottie && !dst.isEmpty() && t >= 0 && t <= 1.f;
   }
   static bool AreEqual(const PaintOp* left, const PaintOp* right);
+  bool HasDiscardableImages() const;
   HAS_SERIALIZATION_FUNCTIONS();
 
   scoped_refptr<SkottieWrapper> skottie;
   SkRect dst;
   float t;
+  // Image to use for each asset in this frame of the animation. If an asset is
+  // missing, the most recently used image for that asset (from a previous
+  // DrawSkottieOp) gets reused when rendering this frame. Given that image
+  // assets generally do not change from frame to frame in most animations, that
+  // means in practice, this map is often empty.
+  SkottieFrameDataMap images;
+  // Node name hashes and corresponding colors to use for dynamic coloration.
+  SkottieColorMap color_map;
+  SkottieTextPropertyValueMap text_map;
 
  private:
+  SkottieWrapper::FrameDataFetchResult GetImageAssetForRaster(
+      SkCanvas* canvas,
+      const PlaybackParams& params,
+      SkottieResourceIdHash asset_id,
+      float t_frame,
+      sk_sp<SkImage>& image_out,
+      SkSamplingOptions& sampling_out) const;
+
   DrawSkottieOp();
 };
 
+// TODO(penghuang): Replace DrawTextBlobOp with DrawSlugOp, when GrSlug can be
+// serialized.
 class CC_PAINT_EXPORT DrawTextBlobOp final : public PaintOpWithFlags {
  public:
   static constexpr PaintOpType kType = PaintOpType::DrawTextBlob;
@@ -833,6 +883,8 @@ class CC_PAINT_EXPORT DrawTextBlobOp final : public PaintOpWithFlags {
   HAS_SERIALIZATION_FUNCTIONS();
 
   sk_sp<SkTextBlob> blob;
+  sk_sp<GrSlug> slug;
+  std::vector<sk_sp<GrSlug>> extra_slugs;
   SkScalar x;
   SkScalar y;
   // This field isn't serialized.
@@ -912,6 +964,7 @@ class CC_PAINT_EXPORT SaveLayerOp final : public PaintOpWithFlags {
   // transparent layer) would break LCD text or be broken by the flags for
   // SaveLayerAlpha to preserve LCD text.
   bool HasEffectsPreventingLCDTextForSaveLayerAlpha() const { return true; }
+  bool HasSaveLayerOps() const { return true; }
   HAS_SERIALIZATION_FUNCTIONS();
 
   SkRect bounds;
@@ -930,6 +983,7 @@ class CC_PAINT_EXPORT SaveLayerAlphaOp final : public PaintOp {
                      const PlaybackParams& params);
   bool IsValid() const { return IsValidOrUnsetRect(bounds); }
   static bool AreEqual(const PaintOp* left, const PaintOp* right);
+  bool HasSaveLayerOps() const { return true; }
   bool HasSaveLayerAlphaOps() const { return true; }
   HAS_SERIALIZATION_FUNCTIONS();
 
@@ -1024,6 +1078,9 @@ using LargestPaintOp =
                               DrawImageRectOp,
                               DrawDRRectOp>::type;
 
+// Defined outside of the class as this const is used in multiple files.
+static constexpr int kMinNumberOfSlowPathsForMSAA = 6;
+
 class CC_PAINT_EXPORT PaintOpBuffer : public SkRefCnt {
  public:
   enum { kInitialBufferSize = 4096 };
@@ -1079,16 +1136,21 @@ class CC_PAINT_EXPORT PaintOpBuffer : public SkRefCnt {
   size_t total_op_count() const { return op_count_ + subrecord_op_count_; }
 
   size_t next_op_offset() const { return used_; }
-  int numSlowPaths() const { return num_slow_paths_; }
+  int num_slow_paths_up_to_min_for_MSAA() const {
+    return num_slow_paths_up_to_min_for_MSAA_;
+  }
   bool HasNonAAPaint() const { return has_non_aa_paint_; }
   bool HasDiscardableImages() const { return has_discardable_images_; }
 
   bool has_draw_ops() const { return has_draw_ops_; }
   bool has_draw_text_ops() const { return has_draw_text_ops_; }
+  bool has_save_layer_ops() const { return has_save_layer_ops_; }
   bool has_save_layer_alpha_ops() const { return has_save_layer_alpha_ops_; }
   bool has_effects_preventing_lcd_text_for_save_layer_alpha() const {
     return has_effects_preventing_lcd_text_for_save_layer_alpha_;
   }
+  bool are_ops_destroyed() const { return are_ops_destroyed_; }
+  void MarkOpsDestroyed() { are_ops_destroyed_ = true; }
 
   bool NeedsAdditionalInvalidationForLCDText(
       const PaintOpBuffer& old_buffer) const;
@@ -1145,8 +1207,10 @@ class CC_PAINT_EXPORT PaintOpBuffer : public SkRefCnt {
     static_assert(!std::is_same<T, PaintOp>::value,
                   "AnalyzeAddedOp needs a subtype of PaintOp");
 
-    num_slow_paths_ += op->CountSlowPathsFromFlags();
-    num_slow_paths_ += op->CountSlowPaths();
+    if (num_slow_paths_up_to_min_for_MSAA_ < kMinNumberOfSlowPathsForMSAA) {
+      num_slow_paths_up_to_min_for_MSAA_ += op->CountSlowPathsFromFlags();
+      num_slow_paths_up_to_min_for_MSAA_ += op->CountSlowPaths();
+    }
 
     has_non_aa_paint_ |= op->HasNonAAPaint();
 
@@ -1158,6 +1222,7 @@ class CC_PAINT_EXPORT PaintOpBuffer : public SkRefCnt {
 
     has_draw_ops_ |= op->IsDrawOp();
     has_draw_text_ops_ |= op->HasDrawTextOps();
+    has_save_layer_ops_ |= op->HasSaveLayerOps();
     has_save_layer_alpha_ops_ |= op->HasSaveLayerAlphaOps();
     has_effects_preventing_lcd_text_for_save_layer_alpha_ |=
         op->HasEffectsPreventingLCDTextForSaveLayerAlpha();
@@ -1175,7 +1240,8 @@ class CC_PAINT_EXPORT PaintOpBuffer : public SkRefCnt {
 
   size_t GetOpOffsetForTracing(const PaintOp* op) const {
     DCHECK_GE(reinterpret_cast<const char*>(op), data_.get());
-    size_t result = reinterpret_cast<const char*>(op) - data_.get();
+    size_t result =
+        static_cast<size_t>(reinterpret_cast<const char*>(op) - data_.get());
     DCHECK_LT(result, used_);
     return result;
   }
@@ -1210,10 +1276,15 @@ class CC_PAINT_EXPORT PaintOpBuffer : public SkRefCnt {
 
    private:
     Iterator(const PaintOpBuffer* buffer, char* ptr, size_t op_offset)
-        : buffer_(buffer), ptr_(ptr), op_offset_(op_offset) {}
+        : buffer_(buffer), ptr_(ptr), op_offset_(op_offset) {
+      DCHECK(!buffer->are_ops_destroyed());
+    }
 
-    const PaintOpBuffer* buffer_ = nullptr;
-    char* ptr_ = nullptr;
+    // `buffer_` and `ptr_` are not a raw_ptr<...> for performance reasons
+    // (based on analysis of sampling profiler data and tab_search:top100:2020).
+    RAW_PTR_EXCLUSION const PaintOpBuffer* buffer_ = nullptr;
+    RAW_PTR_EXCLUSION char* ptr_ = nullptr;
+
     size_t op_offset_ = 0;
   };
 
@@ -1223,6 +1294,7 @@ class CC_PAINT_EXPORT PaintOpBuffer : public SkRefCnt {
     OffsetIterator(const PaintOpBuffer* buffer,
                    const std::vector<size_t>* offsets)
         : buffer_(buffer), ptr_(buffer_->data_.get()), offsets_(offsets) {
+      DCHECK(!buffer->are_ops_destroyed());
       if (!offsets || offsets->empty()) {
         *this = end();
         return;
@@ -1272,14 +1344,17 @@ class CC_PAINT_EXPORT PaintOpBuffer : public SkRefCnt {
                    char* ptr,
                    size_t op_offset,
                    const std::vector<size_t>* offsets)
-        : buffer_(buffer),
-          ptr_(ptr),
-          offsets_(offsets),
-          op_offset_(op_offset) {}
+        : buffer_(buffer), ptr_(ptr), offsets_(offsets), op_offset_(op_offset) {
+      DCHECK(!buffer->are_ops_destroyed());
+    }
 
-    const PaintOpBuffer* buffer_ = nullptr;
-    char* ptr_ = nullptr;
-    const std::vector<size_t>* offsets_;
+    // `buffer_`, `ptr_`, and `offsets_` are not a raw_ptr<...> for performance
+    // reasons (based on analysis of sampling profiler data and
+    // tab_search:top100:2020).
+    RAW_PTR_EXCLUSION const PaintOpBuffer* buffer_ = nullptr;
+    RAW_PTR_EXCLUSION char* ptr_ = nullptr;
+    RAW_PTR_EXCLUSION const std::vector<size_t>* offsets_;
+
     size_t op_offset_ = 0;
     size_t offsets_index_ = 0;
   };
@@ -1352,7 +1427,11 @@ class CC_PAINT_EXPORT PaintOpBuffer : public SkRefCnt {
     // FIFO queue of paint ops that have been peeked at.
     base::StackVector<const PaintOp*, 3> stack_;
     DrawColorOp folded_draw_color_;
-    const PaintOp* current_op_ = nullptr;
+
+    // `current_op_` is not a raw_ptr<...> for performance reasons (based on
+    // analysis of sampling profiler data and tab_search:top100:2020).
+    RAW_PTR_EXCLUSION const PaintOp* current_op_ = nullptr;
+
     uint8_t current_alpha_ = 255;
   };
 
@@ -1381,15 +1460,19 @@ class CC_PAINT_EXPORT PaintOpBuffer : public SkRefCnt {
   size_t subrecord_bytes_used_ = 0;
   // Record total op count of referenced sub-record and display lists.
   size_t subrecord_op_count_ = 0;
-  // Record paths for veto-to-msaa for gpu raster.
-  int num_slow_paths_ = 0;
+  // Record paths for veto-to-msaa for gpu raster. Counting slow paths can be
+  // very expensive, we stop counting them once reaching the minimum number
+  // required for an MSAA sample count for raster.
+  int num_slow_paths_up_to_min_for_MSAA_ = 0;
 
   bool has_non_aa_paint_ : 1;
   bool has_discardable_images_ : 1;
   bool has_draw_ops_ : 1;
   bool has_draw_text_ops_ : 1;
+  bool has_save_layer_ops_ : 1;
   bool has_save_layer_alpha_ops_ : 1;
   bool has_effects_preventing_lcd_text_for_save_layer_alpha_ : 1;
+  bool are_ops_destroyed_ : 1;
 };
 
 }  // namespace cc

@@ -32,6 +32,9 @@ class TranslateClientImpl
       public content::WebContentsObserver,
       public content::WebContentsUserData<TranslateClientImpl> {
  public:
+  TranslateClientImpl(const TranslateClientImpl&) = delete;
+  TranslateClientImpl& operator=(const TranslateClientImpl&) = delete;
+
   ~TranslateClientImpl() override;
 
   // Gets the LanguageState associated with the page.
@@ -50,8 +53,8 @@ class TranslateClientImpl
   translate::TranslateDriver* GetTranslateDriver() override;
   PrefService* GetPrefs() override;
   std::unique_ptr<translate::TranslatePrefs> GetTranslatePrefs() override;
-  translate::TranslateAcceptLanguages* GetTranslateAcceptLanguages() override;
-#if defined(OS_ANDROID)
+  language::AcceptLanguagesService* GetAcceptLanguagesService() override;
+#if BUILDFLAG(IS_ANDROID)
   std::unique_ptr<infobars::InfoBar> CreateInfoBar(
       std::unique_ptr<translate::TranslateInfoBarDelegate> delegate)
       const override;
@@ -94,8 +97,6 @@ class TranslateClientImpl
       observation_{this};
 
   WEB_CONTENTS_USER_DATA_KEY_DECL();
-
-  DISALLOW_COPY_AND_ASSIGN(TranslateClientImpl);
 };
 
 }  // namespace weblayer

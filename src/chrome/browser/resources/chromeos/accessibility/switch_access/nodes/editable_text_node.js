@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {EventGenerator} from '../../common/event_generator.js';
 import {Navigator} from '../navigator.js';
 import {SwitchAccess} from '../switch_access.js';
 import {SAConstants, SwitchAccessMenuAction} from '../switch_access_constants.js';
@@ -144,5 +145,5 @@ export class EditableTextNode extends BasicNode {
 
 BasicNode.creators.push({
   predicate: SwitchAccessPredicate.isTextInput,
-  creator: (node, parentNode) => new EditableTextNode(node, parentNode)
+  creator: (node, parentNode) => new EditableTextNode(node, parentNode),
 });

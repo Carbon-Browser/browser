@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "base/base64.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/values.h"
 #include "components/sync/base/unique_position.h"
@@ -25,12 +26,14 @@
 #include "components/sync/protocol/extension_setting_specifics.pb.h"
 #include "components/sync/protocol/extension_specifics.pb.h"
 #include "components/sync/protocol/history_delete_directive_specifics.pb.h"
+#include "components/sync/protocol/history_specifics.pb.h"
 #include "components/sync/protocol/nigori_specifics.pb.h"
 #include "components/sync/protocol/os_preference_specifics.pb.h"
 #include "components/sync/protocol/os_priority_preference_specifics.pb.h"
 #include "components/sync/protocol/password_specifics.pb.h"
 #include "components/sync/protocol/preference_specifics.pb.h"
 #include "components/sync/protocol/printer_specifics.pb.h"
+#include "components/sync/protocol/printers_authorization_server_specifics.pb.h"
 #include "components/sync/protocol/priority_preference_specifics.pb.h"
 #include "components/sync/protocol/proto_visitors.h"
 #include "components/sync/protocol/reading_list_specifics.pb.h"
@@ -108,8 +111,8 @@ namespace {
 //
 //    std::unique_ptr<base::DictionaryValue> ToValue(
 //        const sync_pb::GreenProto& proto) const {
-//      auto value = ToValueImpl(proto);
-//      value->SetString("secret", "<clobbered>");
+//      std::unique_ptr<base::DictionaryValue> value = ToValueImpl(proto);
+//      value->SetStringKey("secret", "<clobbered>");
 //      return value;
 //    }
 //
@@ -123,10 +126,9 @@ namespace {
 //
 class ToValueVisitor {
  public:
-  ToValueVisitor(bool include_specifics = true,
-                 base::DictionaryValue* value = nullptr)
-    : value_(value)
-    , include_specifics_(include_specifics) {}
+  explicit ToValueVisitor(bool include_specifics = true,
+                          base::DictionaryValue* value = nullptr)
+      : value_(value), include_specifics_(include_specifics) {}
 
   template <class P>
   void VisitBytes(const P& parent_proto,
@@ -147,7 +149,7 @@ class ToValueVisitor {
     if (!repeated_field.empty()) {
       std::unique_ptr<base::ListValue> list(new base::ListValue());
       for (const auto& field : repeated_field) {
-        list->Append(ToValue(field));
+        list->Append(base::Value::FromUniquePtrValue(ToValue(field)));
       }
       value_->Set(field_name, std::move(list));
     }
@@ -160,7 +162,7 @@ class ToValueVisitor {
     if (!repeated_field.empty()) {
       std::unique_ptr<base::ListValue> list(new base::ListValue());
       for (const auto& field : repeated_field) {
-        list->Append(ToValue(field));
+        list->Append(base::Value::FromUniquePtrValue(ToValue(field)));
       }
       value_->Set(field_name, std::move(list));
     }
@@ -191,7 +193,7 @@ class ToValueVisitor {
   // AutofillWalletSpecifics
   std::unique_ptr<base::DictionaryValue> ToValue(
       const sync_pb::AutofillWalletSpecifics& proto) const {
-    auto value = ToValueImpl(proto);
+    std::unique_ptr<base::DictionaryValue> value = ToValueImpl(proto);
     if (proto.type() != sync_pb::AutofillWalletSpecifics::POSTAL_ADDRESS) {
       value->RemoveKey("address");
     }
@@ -268,22 +270,21 @@ class ToValueVisitor {
     value_->Set(field_name, ToValue(field));
   }
 
-  base::DictionaryValue* value_;
+  raw_ptr<base::DictionaryValue> value_;
   bool include_specifics_;
 };
 
 }  // namespace
 
-#define IMPLEMENT_PROTO_TO_VALUE(Proto) \
+#define IMPLEMENT_PROTO_TO_VALUE(Proto)                  \
   std::unique_ptr<base::DictionaryValue> Proto##ToValue( \
-      const sync_pb::Proto& proto) { \
-    return ToValueVisitor().ToValue(proto); \
+      const sync_pb::Proto& proto) {                     \
+    return ToValueVisitor().ToValue(proto);              \
   }
 
-#define IMPLEMENT_PROTO_TO_VALUE_INCLUDE_SPECIFICS(Proto) \
-  std::unique_ptr<base::DictionaryValue> Proto##ToValue( \
-      const sync_pb::Proto& proto, \
-      bool include_specifics) { \
+#define IMPLEMENT_PROTO_TO_VALUE_INCLUDE_SPECIFICS(Proto)    \
+  std::unique_ptr<base::DictionaryValue> Proto##ToValue(     \
+      const sync_pb::Proto& proto, bool include_specifics) { \
     return ToValueVisitor(include_specifics).ToValue(proto); \
   }
 
@@ -297,7 +298,6 @@ IMPLEMENT_PROTO_TO_VALUE(AutofillSpecifics)
 IMPLEMENT_PROTO_TO_VALUE(AutofillWalletSpecifics)
 IMPLEMENT_PROTO_TO_VALUE(BookmarkSpecifics)
 IMPLEMENT_PROTO_TO_VALUE(ClientConfigParams)
-IMPLEMENT_PROTO_TO_VALUE(DatatypeAssociationStats)
 IMPLEMENT_PROTO_TO_VALUE(DebugEventInfo)
 IMPLEMENT_PROTO_TO_VALUE(DebugInfo)
 IMPLEMENT_PROTO_TO_VALUE(DeviceInfoSpecifics)
@@ -309,6 +309,7 @@ IMPLEMENT_PROTO_TO_VALUE(ExtensionSettingSpecifics)
 IMPLEMENT_PROTO_TO_VALUE(ExtensionSpecifics)
 IMPLEMENT_PROTO_TO_VALUE(GlobalIdDirective)
 IMPLEMENT_PROTO_TO_VALUE(HistoryDeleteDirectiveSpecifics)
+IMPLEMENT_PROTO_TO_VALUE(HistorySpecifics)
 IMPLEMENT_PROTO_TO_VALUE(LinkedAppIconInfo)
 IMPLEMENT_PROTO_TO_VALUE(ManagedUserSettingSpecifics)
 IMPLEMENT_PROTO_TO_VALUE(NavigationRedirect)
@@ -317,10 +318,13 @@ IMPLEMENT_PROTO_TO_VALUE(OsPreferenceSpecifics)
 IMPLEMENT_PROTO_TO_VALUE(OsPriorityPreferenceSpecifics)
 IMPLEMENT_PROTO_TO_VALUE(PasswordSpecifics)
 IMPLEMENT_PROTO_TO_VALUE(PasswordSpecificsData)
+IMPLEMENT_PROTO_TO_VALUE(PasswordSpecificsData_Notes)
+IMPLEMENT_PROTO_TO_VALUE(PasswordSpecificsData_Notes_Note)
 IMPLEMENT_PROTO_TO_VALUE(PaymentsCustomerData)
 IMPLEMENT_PROTO_TO_VALUE(PreferenceSpecifics)
 IMPLEMENT_PROTO_TO_VALUE(PrinterPPDReference)
 IMPLEMENT_PROTO_TO_VALUE(PrinterSpecifics)
+IMPLEMENT_PROTO_TO_VALUE(PrintersAuthorizationServerSpecifics)
 IMPLEMENT_PROTO_TO_VALUE(PriorityPreferenceSpecifics)
 IMPLEMENT_PROTO_TO_VALUE(ReadingListSpecifics)
 IMPLEMENT_PROTO_TO_VALUE(SearchEngineSpecifics)

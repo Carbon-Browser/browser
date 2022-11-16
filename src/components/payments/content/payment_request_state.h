@@ -9,10 +9,9 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
-#include "components/autofill/core/browser/address_normalizer.h"
 #include "components/payments/content/initialization_task.h"
 #include "components/payments/content/payment_app_factory.h"
 #include "components/payments/content/payment_request_spec.h"
@@ -28,6 +27,7 @@
 #include "url/origin.h"
 
 namespace autofill {
+class AddressNormalizer;
 class AutofillProfile;
 class CreditCard;
 class PersonalDataManager;
@@ -95,7 +95,8 @@ class PaymentRequestState : public PaymentAppFactory::Delegate,
   using StatusCallback = base::OnceCallback<void(bool)>;
   using MethodsSupportedCallback =
       base::OnceCallback<void(bool methods_supported,
-                              const std::string& error_message)>;
+                              const std::string& error_message,
+                              AppCreationFailureReason error_reason)>;
 
   // The `spec` parameter should not be null.
   PaymentRequestState(
@@ -109,6 +110,10 @@ class PaymentRequestState : public PaymentAppFactory::Delegate,
       autofill::PersonalDataManager* personal_data_manager,
       base::WeakPtr<ContentPaymentRequestDelegate> payment_request_delegate,
       base::WeakPtr<JourneyLogger> journey_logger);
+
+  PaymentRequestState(const PaymentRequestState&) = delete;
+  PaymentRequestState& operator=(const PaymentRequestState&) = delete;
+
   ~PaymentRequestState() override;
 
   // PaymentAppFactory::Delegate
@@ -135,7 +140,10 @@ class PaymentRequestState : public PaymentAppFactory::Delegate,
   bool MayCrawlForInstallablePaymentApps() override;
   bool IsOffTheRecord() const override;
   void OnPaymentAppCreated(std::unique_ptr<PaymentApp> app) override;
-  void OnPaymentAppCreationError(const std::string& error_message) override;
+  void OnPaymentAppCreationError(
+      const std::string& error_message,
+      AppCreationFailureReason reason =
+          AppCreationFailureReason::UNKNOWN) override;
   bool SkipCreatingNativePaymentApps() const override;
   void OnDoneCreatingPaymentApps() override;
   void SetCanMakePaymentEvenWithoutApps() override;
@@ -291,10 +299,6 @@ class PaymentRequestState : public PaymentAppFactory::Delegate,
 
   base::WeakPtr<PaymentRequestState> AsWeakPtr();
 
-  void set_is_show_user_gesture(bool is_show_user_gesture) {
-    is_show_user_gesture_ = is_show_user_gesture;
-  }
-
  private:
   // Fetches the Autofill Profiles for this user from the PersonalDataManager,
   // and stores copies of them, owned by this PaymentRequestState, in
@@ -359,10 +363,6 @@ class PaymentRequestState : public PaymentAppFactory::Delegate,
   // |get_all_apps_finished_| is true.
   bool has_enrolled_instrument_ = false;
 
-  // Whether there's at least one app that is not an autofill credit card. Can
-  // be used only after |get_all_apps_finished_| is true.
-  bool has_non_autofill_app_ = false;
-
   // Whether the data is currently being validated by the merchant.
   bool is_waiting_for_merchant_validation_ = false;
 
@@ -376,19 +376,22 @@ class PaymentRequestState : public PaymentAppFactory::Delegate,
   base::WeakPtr<JourneyLogger> journey_logger_;
 
   // Not owned. Never null. Will outlive this object.
-  autofill::PersonalDataManager* personal_data_manager_;
+  raw_ptr<autofill::PersonalDataManager> personal_data_manager_;
 
   StatusCallback can_make_payment_callback_;
   StatusCallback has_enrolled_instrument_callback_;
   MethodsSupportedCallback are_requested_methods_supported_callback_;
   bool are_requested_methods_supported_ = false;
   std::string get_all_payment_apps_error_;
+  AppCreationFailureReason get_all_payment_apps_error_reason_ =
+      AppCreationFailureReason::UNKNOWN;
 
-  autofill::AutofillProfile* selected_shipping_profile_ = nullptr;
-  autofill::AutofillProfile* selected_shipping_option_error_profile_ = nullptr;
-  autofill::AutofillProfile* selected_contact_profile_ = nullptr;
-  autofill::AutofillProfile* invalid_shipping_profile_ = nullptr;
-  autofill::AutofillProfile* invalid_contact_profile_ = nullptr;
+  raw_ptr<autofill::AutofillProfile> selected_shipping_profile_ = nullptr;
+  raw_ptr<autofill::AutofillProfile> selected_shipping_option_error_profile_ =
+      nullptr;
+  raw_ptr<autofill::AutofillProfile> selected_contact_profile_ = nullptr;
+  raw_ptr<autofill::AutofillProfile> invalid_shipping_profile_ = nullptr;
+  raw_ptr<autofill::AutofillProfile> invalid_contact_profile_ = nullptr;
   base::WeakPtr<PaymentApp> selected_app_;
 
   // Profiles may change due to (e.g.) sync events, so profiles are cached after
@@ -409,9 +412,6 @@ class PaymentRequestState : public PaymentAppFactory::Delegate,
 
   base::ObserverList<Observer>::Unchecked observers_;
 
-  // Whether PaymentRequest.show() was invoked with a user gesture.
-  bool is_show_user_gesture_ = false;
-
   // If set to true, then both GetCanMakePaymentValue() and
   // GetHasEnrolledInstrumentValue() will return true, regardless of presence of
   // payment apps. This is used by secure payment confirmation, where
@@ -422,8 +422,6 @@ class PaymentRequestState : public PaymentAppFactory::Delegate,
   bool can_make_payment_even_without_apps_ = false;
 
   base::WeakPtrFactory<PaymentRequestState> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(PaymentRequestState);
 };
 
 }  // namespace payments

@@ -9,7 +9,6 @@
 #include <wrl/client.h>
 
 #include "base/base_export.h"
-#include "base/macros.h"
 #include "base/threading/thread_checker.h"
 #include "base/win/com_init_balancer.h"
 #include "base/win/scoped_windows_thread_environment.h"
@@ -52,6 +51,9 @@ class BASE_EXPORT ScopedCOMInitializer : public ScopedWindowsThreadEnvironment {
       SelectMTA mta,
       Uninitialization uninitialization = Uninitialization::kAllow);
 
+  ScopedCOMInitializer(const ScopedCOMInitializer&) = delete;
+  ScopedCOMInitializer& operator=(const ScopedCOMInitializer&) = delete;
+
   ~ScopedCOMInitializer() override;
 
   // ScopedWindowsThreadEnvironment:
@@ -66,8 +68,6 @@ class BASE_EXPORT ScopedCOMInitializer : public ScopedWindowsThreadEnvironment {
   HRESULT hr_ = S_OK;
   Microsoft::WRL::ComPtr<internal::ComInitBalancer> com_balancer_;
   THREAD_CHECKER(thread_checker_);
-
-  DISALLOW_COPY_AND_ASSIGN(ScopedCOMInitializer);
 };
 
 }  // namespace win

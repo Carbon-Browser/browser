@@ -6,6 +6,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/task/thread_pool.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/mock_callback.h"
@@ -18,6 +19,7 @@
 using ::testing::_;
 using ::testing::InSequence;
 using ::testing::Invoke;
+using ::testing::StrEq;
 using ::testing::WithArg;
 
 namespace enterprise_reporting {
@@ -68,7 +70,7 @@ class FakeRealTimeUploader : public RealTimeUploader {
  private:
   reporting::error::Code code_ = reporting::error::OK;
   std::unique_ptr<reporting::MockReportQueue> mock_report_queue_;
-  reporting::MockReportQueue* mock_report_queue_ptr_;
+  raw_ptr<reporting::MockReportQueue> mock_report_queue_ptr_;
 };
 }  // namespace
 
@@ -158,7 +160,7 @@ TEST_F(RealTimeUploaderTest, UploadReport) {
     InSequence sequence;
 
     EXPECT_CALL(*uploader_->mock_report_queue(),
-                AddRecord(base::StringPiece(expected_report_1), kPriority, _))
+                AddRecord(StrEq(expected_report_1), kPriority, _))
         .Times(1)
         .WillOnce(WithArg<2>(
             Invoke([](reporting::ReportQueue::EnqueueCallback callback) {
@@ -168,7 +170,7 @@ TEST_F(RealTimeUploaderTest, UploadReport) {
             })));
 
     EXPECT_CALL(*uploader_->mock_report_queue(),
-                AddRecord(base::StringPiece(expected_report_2), kPriority, _))
+                AddRecord(StrEq(expected_report_2), kPriority, _))
         .Times(1)
         .WillOnce(WithArg<2>(
             Invoke([](reporting::ReportQueue::EnqueueCallback callback) {
@@ -206,7 +208,7 @@ TEST_F(RealTimeUploaderTest, UploadReportBeforeQueueIsReady) {
 
   EXPECT_CALL(*uploader_->mock_report_queue(),
 
-              AddRecord(base::StringPiece(expected_report), kPriority, _))
+              AddRecord(StrEq(expected_report), kPriority, _))
       .Times(1)
       .WillOnce(WithArg<2>(
           Invoke([](reporting::ReportQueue::EnqueueCallback callback) {

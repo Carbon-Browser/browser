@@ -23,18 +23,17 @@ class DisplayItemClient;
 class GraphicsContext;
 class TransformPaintPropertyNode;
 
-// Represents a non-custom scrollbar in CompositeAfterPaint. During paint, we
-// create a ScrollbarDisplayItem for a non-custom scrollbar. During
-// PaintArtifactCompositor::Update(), we decide whether to composite the
+// During paint, we create a ScrollbarDisplayItem for a non-custom scrollbar.
+// During PaintArtifactCompositor::Update(), we decide whether to composite the
 // scrollbar and, if not composited, call Paint() to actually paint the
-// scrollbar into a paint record, otherwise call CreateLayer() to create a
-// cc scrollbar layer.
+// scrollbar into a paint record, otherwise call CreateLayer() to create a cc
+// scrollbar layer.
 class PLATFORM_EXPORT ScrollbarDisplayItem final : public DisplayItem {
  public:
   ScrollbarDisplayItem(DisplayItemClientId,
                        Type,
                        scoped_refptr<cc::Scrollbar>,
-                       const IntRect& visual_rect,
+                       const gfx::Rect& visual_rect,
                        const TransformPaintPropertyNode* scroll_translation,
                        CompositorElementId element_id,
                        RasterEffectOutset outset,
@@ -65,7 +64,7 @@ class PLATFORM_EXPORT ScrollbarDisplayItem final : public DisplayItem {
                      const DisplayItemClient&,
                      DisplayItem::Type,
                      scoped_refptr<cc::Scrollbar>,
-                     const IntRect& visual_rect,
+                     const gfx::Rect& visual_rect,
                      const TransformPaintPropertyNode* scroll_translation,
                      CompositorElementId element_id);
 

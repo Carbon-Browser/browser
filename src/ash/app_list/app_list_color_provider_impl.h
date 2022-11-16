@@ -36,23 +36,33 @@ class AppListColorProviderImpl : public AppListColorProvider {
   SkColor GetFolderHintTextColor() const override;
   SkColor GetFolderNameBorderColor(bool active) const override;
   SkColor GetFolderNameSelectionColor() const override;
+  SkColor GetFolderNotificationBadgeColor() const override;
   SkColor GetContentsBackgroundColor() const override;
   SkColor GetGridBackgroundCardActiveColor() const override;
   SkColor GetGridBackgroundCardInactiveColor() const override;
-  SkColor GetSeparatorColor() const override;
+  ui::ColorId GetSeparatorColorId() const override;
   SkColor GetFocusRingColor() const override;
-  float GetFolderBackgrounBlurSigma() const override;
-  SkColor GetRippleAttributesBaseColor(
+  SkColor GetInkDropBaseColor(
       SkColor bg_color = gfx::kPlaceholderColor) const override;
-  float GetRippleAttributesInkDropOpacity(
+  float GetInkDropOpacity(
       SkColor bg_color = gfx::kPlaceholderColor) const override;
-  float GetRippleAttributesHighlightOpacity(
+  SkColor GetInvertedInkDropBaseColor(
+      SkColor bg_color = gfx::kPlaceholderColor) const override;
+  float GetInvertedInkDropOpacity(
       SkColor bg_color = gfx::kPlaceholderColor) const override;
   SkColor GetSearchResultViewHighlightColor() const override;
+  SkColor GetTextColorURL() const override;
 
  private:
+  bool ShouldUseDarkLightColors() const;
   // Unowned.
   AshColorProvider* const ash_color_provider_;
+  // Whether feature DarkLightMode is enabled. Cached for efficiency.
+  const bool is_dark_light_mode_enabled_;
+  // Whether feature ProductivityLauncher is enabled. Cached for efficiency.
+  const bool is_productivity_launcher_enabled_;
+  // Whether feature BackgroundBlur is enabled. Cached for efficiency.
+  const bool is_background_blur_enabled_;
 };
 
 }  // namespace ash

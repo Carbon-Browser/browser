@@ -5,8 +5,7 @@
 #import "content/browser/sandbox_support_mac_impl.h"
 
 #include "base/bind.h"
-#include "base/task/post_task.h"
-#include "base/task_runner_util.h"
+#include "base/task/task_runner_util.h"
 #import "content/browser/theme_helper_mac.h"
 #include "content/common/mac/font_loader.h"
 #include "content/public/browser/browser_task_traits.h"

@@ -7,10 +7,11 @@
 #include <utility>
 
 #include "ash/constants/ash_features.h"
+#include "ash/constants/notifier_catalogs.h"
 #include "ash/public/cpp/media_controller.h"
 #include "ash/public/cpp/notification_utils.h"
-#include "ash/public/cpp/toast_data.h"
-#include "ash/public/cpp/toast_manager.h"
+#include "ash/public/cpp/system/toast_data.h"
+#include "ash/public/cpp/system/toast_manager.h"
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/check_op.h"
@@ -18,13 +19,11 @@
 #include "base/feature_list.h"
 #include "base/location.h"
 #include "base/metrics/histogram_functions.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/system/sys_info.h"
 #include "base/task/current_thread.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
-#include "chrome/browser/apps/app_service/app_service_proxy.h"
-#include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
 #include "chrome/browser/ash/camera_mic/vm_camera_mic_manager.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/chromeos/extensions/media_player_api.h"
@@ -44,6 +43,7 @@
 #include "components/services/app_service/public/cpp/app_capability_access_cache.h"
 #include "components/services/app_service/public/cpp/app_capability_access_cache_wrapper.h"
 #include "components/services/app_service/public/cpp/app_registry_cache.h"
+#include "components/services/app_service/public/cpp/app_registry_cache_wrapper.h"
 #include "components/user_manager/user_manager.h"
 #include "components/vector_icons/vector_icons.h"
 #include "content/public/browser/media_session.h"
@@ -105,10 +105,6 @@ constexpr char kCameraPrivacySwitchOnToastId[] =
 // The ID for the toast shown when the camera privacy switch is turned off.
 constexpr char kCameraPrivacySwitchOffToastId[] =
     "ash.media.camera.privacy_switch_off";
-
-// The amount of time for which the camera privacy switch toasts will remain
-// displayed.
-constexpr int kCameraPrivacySwitchToastDurationMs = 6 * 1000;
 
 MediaCaptureState& operator|=(MediaCaptureState& lhs, MediaCaptureState rhs) {
   lhs = static_cast<MediaCaptureState>(static_cast<int>(lhs) |
@@ -213,16 +209,14 @@ std::u16string GetNameOfAppAccessingCameraInternal() {
     return std::u16string();
 
   auto account_id = active_user->GetAccountId();
-  Profile* profile =
-      chromeos::ProfileHelper::Get()->GetProfileByUser(active_user);
-  apps::AppServiceProxyChromeOs* proxy =
-      apps::AppServiceProxyFactory::GetForProfile(profile);
-  apps::AppRegistryCache& reg_cache = proxy->AppRegistryCache();
+  apps::AppRegistryCache* reg_cache =
+      apps::AppRegistryCacheWrapper::Get().GetAppRegistryCache(account_id);
+  DCHECK(reg_cache);
   apps::AppCapabilityAccessCache* cap_cache =
       apps::AppCapabilityAccessCacheWrapper::Get().GetAppCapabilityAccessCache(
           account_id);
   DCHECK(cap_cache);
-  return MediaClientImpl::GetNameOfAppAccessingCamera(cap_cache, &reg_cache);
+  return MediaClientImpl::GetNameOfAppAccessingCamera(cap_cache, reg_cache);
 }
 
 }  // namespace
@@ -326,7 +320,7 @@ void MediaClientImpl::RequestCaptureState() {
   auto* manager = user_manager::UserManager::Get();
   for (user_manager::User* user : manager->GetLRULoggedInUsers()) {
     capture_states[user->GetAccountId()] = GetMediaCaptureStateOfAllWebContents(
-        chromeos::ProfileHelper::Get()->GetProfileByUser(user));
+        ash::ProfileHelper::Get()->GetProfileByUser(user));
   }
 
   const user_manager::User* primary_user = manager->GetPrimaryUser();
@@ -404,9 +398,9 @@ void MediaClientImpl::OnCameraPrivacySwitchStatusChanged(
       ash::ToastManager::Get()->Cancel(kCameraPrivacySwitchOffToastId);
       ash::ToastData toast(
           kCameraPrivacySwitchOnToastId,
+          ash::ToastCatalogName::kCameraPrivacySwitchOn,
           l10n_util::GetStringUTF16(IDS_CAMERA_PRIVACY_SWITCH_ON_TOAST),
-          kCameraPrivacySwitchToastDurationMs,
-          /*dismiss_text=*/absl::nullopt,
+          ash::ToastData::kDefaultToastDuration,
           /*visible_on_lock_screen=*/true);
       ash::ToastManager::Get()->Show(toast);
       break;
@@ -440,9 +434,9 @@ void MediaClientImpl::OnCameraPrivacySwitchStatusChanged(
       ash::ToastManager::Get()->Cancel(kCameraPrivacySwitchOnToastId);
       ash::ToastData toast(
           kCameraPrivacySwitchOffToastId,
+          ash::ToastCatalogName::kCameraPrivacySwitchOff,
           l10n_util::GetStringUTF16(IDS_CAMERA_PRIVACY_SWITCH_OFF_TOAST),
-          kCameraPrivacySwitchToastDurationMs,
-          /*dismiss_text=*/absl::nullopt,
+          ash::ToastData::kDefaultToastDuration,
           /*visible_on_lock_screen=*/true);
       ash::ToastManager::Get()->Show(toast);
       break;
@@ -600,10 +594,11 @@ void MediaClientImpl::ShowCameraOffNotification() {
           message, std::u16string(), GURL(),
           message_center::NotifierId(
               message_center::NotifierType::SYSTEM_COMPONENT,
-              kCameraPrivacySwitchNotifierId),
+              kCameraPrivacySwitchNotifierId,
+              ash::NotificationCatalogName::kCameraPrivacySwitch),
           message_center::RichNotificationData(),
           new message_center::HandleNotificationClickDelegate(
-              base::DoNothing::Repeatedly()),
+              base::DoNothingAs<void()>()),
           vector_icons::kVideocamOffIcon,
           message_center::SystemNotificationWarningLevel::NORMAL);
   SystemNotificationHelper::GetInstance()->Display(*notification);

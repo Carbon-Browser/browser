@@ -5,11 +5,12 @@
 #include "third_party/blink/renderer/platform/p2p/socket_dispatcher.h"
 
 #include "base/memory/scoped_refptr.h"
+#include "base/threading/thread_task_runner_handle.h"
 #include "base/types/pass_key.h"
 #include "services/network/public/cpp/p2p_param_traits.h"
 #include "third_party/blink/public/common/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/platform/platform.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/heap/persistent.h"
 #include "third_party/blink/renderer/platform/mojo/mojo_binding_context.h"
 #include "third_party/blink/renderer/platform/p2p/network_list_observer.h"

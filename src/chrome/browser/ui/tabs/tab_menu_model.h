@@ -5,7 +5,8 @@
 #ifndef CHROME_BROWSER_UI_TABS_TAB_MENU_MODEL_H_
 #define CHROME_BROWSER_UI_TABS_TAB_MENU_MODEL_H_
 
-#include "chrome/browser/ui/send_tab_to_self/send_tab_to_self_sub_menu_model.h"
+#include "base/memory/raw_ptr.h"
+#include "ui/base/interaction/element_identifier.h"
 #include "ui/base/models/simple_menu_model.h"
 
 class TabStripModel;
@@ -22,7 +23,6 @@ class TabMenuModelDelegate;
 // likely having to expand it later on:
 //   ExistingTabGroupSubMenuModel
 //   ExistingWindowSubMenuModel
-//   SendTabToSelfSubMenuModel
 class TabMenuModel : public ui::SimpleMenuModel {
  public:
   TabMenuModel(ui::SimpleMenuModel::Delegate* delegate,
@@ -33,17 +33,15 @@ class TabMenuModel : public ui::SimpleMenuModel {
   TabMenuModel& operator=(const TabMenuModel&) = delete;
   ~TabMenuModel() override;
 
+  DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kAddToNewGroupItemIdentifier);
+
  private:
   void Build(TabStripModel* tab_strip, int index);
 
   std::unique_ptr<ui::SimpleMenuModel> add_to_existing_group_submenu_;
   std::unique_ptr<ui::SimpleMenuModel> add_to_existing_window_submenu_;
 
-  // Send tab to self submenu.
-  std::unique_ptr<send_tab_to_self::SendTabToSelfSubMenuModel>
-      send_tab_to_self_sub_menu_model_;
-
-  TabMenuModelDelegate* tab_menu_model_delegate_;
+  raw_ptr<TabMenuModelDelegate> tab_menu_model_delegate_;
 };
 
 #endif  // CHROME_BROWSER_UI_TABS_TAB_MENU_MODEL_H_

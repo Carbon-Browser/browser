@@ -9,9 +9,7 @@
 #include <memory>
 #include <vector>
 
-#include "base/compiler_specific.h"
 #include "base/containers/flat_set.h"
-#include "base/macros.h"
 #include "build/build_config.h"
 #include "content/browser/devtools/devtools_agent_host_impl.h"
 #include "content/common/content_export.h"
@@ -20,20 +18,16 @@
 #include "net/base/net_errors.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/device/public/mojom/wake_lock.mojom.h"
 #include "ui/android/view_android.h"
-#endif  // OS_ANDROID
-
-namespace cc {
-class RenderFrameMetadata;
-}
+#endif  // BUILDFLAG(IS_ANDROID)
 
 namespace content {
 
 class BrowserContext;
-class DevToolsFrameTraceRecorder;
+class FencedFrame;
 class FrameTreeNode;
 class FrameAutoAttacher;
 class NavigationRequest;
@@ -64,26 +58,25 @@ class CONTENT_EXPORT RenderFrameDevToolsAgentHost
   // whether DevToolsAgentHost has actually been created.
   static bool ShouldCreateDevToolsForHost(RenderFrameHostImpl* rfh);
 
-  // This method is called when new frame is created for a portal or local root
-  // navigation.
-  static scoped_refptr<DevToolsAgentHost> CreateForLocalRootOrPortalNavigation(
-      NavigationRequest* request);
-  static scoped_refptr<DevToolsAgentHost> FindForDangling(
+  // This method is called when new frame is created for an emebedded page
+  // (portal or fenced frame) or local root navigation.
+  static scoped_refptr<RenderFrameDevToolsAgentHost>
+  CreateForLocalRootOrEmbeddedPageNavigation(NavigationRequest* request);
+  static scoped_refptr<RenderFrameDevToolsAgentHost> FindForDangling(
       FrameTreeNode* frame_tree_node);
 
-  static void AttachToWebContents(WebContents* web_contents);
+  RenderFrameDevToolsAgentHost(const RenderFrameDevToolsAgentHost&) = delete;
+  RenderFrameDevToolsAgentHost& operator=(const RenderFrameDevToolsAgentHost&) =
+      delete;
 
-#if defined(OS_ANDROID)
-  static void SignalSynchronousSwapCompositorFrame(
-      RenderFrameHost* frame_host,
-      const cc::RenderFrameMetadata& frame_metadata);
-#endif
+  static void AttachToWebContents(WebContents* web_contents);
 
   FrameTreeNode* frame_tree_node() { return frame_tree_node_; }
 
   void OnNavigationRequestWillBeSent(
       const NavigationRequest& navigation_request);
   void UpdatePortals();
+  void DidCreateFencedFrame(FencedFrame* fenced_frame);
 
   // DevToolsAgentHost overrides.
   void DisconnectWebContents() override;
@@ -114,6 +107,7 @@ class CONTENT_EXPORT RenderFrameDevToolsAgentHost
 
  private:
   friend class DevToolsAgentHost;
+  friend class RenderFrameDevToolsAgentHostFencedFrameBrowserTest;
 
   static void UpdateRawHeadersAccess(RenderFrameHostImpl* rfh);
 
@@ -136,7 +130,6 @@ class CONTENT_EXPORT RenderFrameDevToolsAgentHost
   void FrameDeleted(int frame_tree_node_id) override;
   void RenderFrameDeleted(RenderFrameHost* rfh) override;
   void OnVisibilityChanged(content::Visibility visibility) override;
-  void OnPageScaleFactorChanged(float page_scale_factor) override;
 
   // RenderProcessHostObserver overrides.
   void RenderProcessExited(RenderProcessHost* host,
@@ -152,16 +145,13 @@ class CONTENT_EXPORT RenderFrameDevToolsAgentHost
 
   bool ShouldAllowSession(DevToolsSession* session);
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   device::mojom::WakeLock* GetWakeLock();
-  void SynchronousSwapCompositorFrame(
-      const cc::RenderFrameMetadata& frame_metadata);
 #endif
 
   void UpdateResourceLoaderFactories();
 
-#if defined(OS_ANDROID)
-  std::unique_ptr<DevToolsFrameTraceRecorder> frame_trace_recorder_;
+#if BUILDFLAG(IS_ANDROID)
   mojo::Remote<device::mojom::WakeLock> wake_lock_;
 #endif
 
@@ -174,10 +164,6 @@ class CONTENT_EXPORT RenderFrameDevToolsAgentHost
 
   // The FrameTreeNode associated with this agent.
   FrameTreeNode* frame_tree_node_;
-
-  double page_scale_factor_ = 1;
-
-  DISALLOW_COPY_AND_ASSIGN(RenderFrameDevToolsAgentHost);
 };
 
 // Returns the ancestor FrameTreeNode* for which a RenderFrameDevToolsAgentHost

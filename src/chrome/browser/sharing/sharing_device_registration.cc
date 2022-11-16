@@ -13,7 +13,6 @@
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "chrome/browser/sharing/buildflags.h"
-#include "chrome/browser/sharing/shared_clipboard/feature_flags.h"
 #include "chrome/browser/sharing/sharing_constants.h"
 #include "chrome/browser/sharing/sharing_device_registration_result.h"
 #include "chrome/browser/sharing/sharing_sync_preference.h"
@@ -23,12 +22,13 @@
 #include "chrome/common/pref_names.h"
 #include "components/gcm_driver/crypto/p256_key_util.h"
 #include "components/gcm_driver/instance_id/instance_id_driver.h"
+#include "components/optimization_guide/core/optimization_guide_features.h"
 #include "components/prefs/pref_service.h"
 #include "components/sync/driver/sync_service.h"
 #include "components/sync_device_info/device_info.h"
 #include "crypto/ec_private_key.h"
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #include "chrome/android/chrome_jni_headers/SharingJNIBridge_jni.h"
 #endif
 
@@ -287,6 +287,10 @@ SharingDeviceRegistration::GetEnabledFeatures(bool supports_vapid) const {
     enabled_features.insert(SharingSpecificFields::SMS_FETCHER);
   if (IsRemoteCopySupported())
     enabled_features.insert(SharingSpecificFields::REMOTE_COPY);
+  if (IsOptimizationGuidePushNotificationSupported()) {
+    enabled_features.insert(
+        SharingSpecificFields::OPTIMIZATION_GUIDE_PUSH_NOTIFICATION);
+  }
 #if BUILDFLAG(ENABLE_DISCOVERY)
   enabled_features.insert(SharingSpecificFields::DISCOVERY);
 #endif
@@ -295,7 +299,7 @@ SharingDeviceRegistration::GetEnabledFeatures(bool supports_vapid) const {
 }
 
 bool SharingDeviceRegistration::IsClickToCallSupported() const {
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   JNIEnv* env = base::android::AttachCurrentThread();
   return Java_SharingJNIBridge_isTelephonySupported(env);
 #else
@@ -313,7 +317,7 @@ bool SharingDeviceRegistration::IsSharedClipboardSupported() const {
 }
 
 bool SharingDeviceRegistration::IsSmsFetcherSupported() const {
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   return base::FeatureList::IsEnabled(kWebOTPCrossDevice);
 #else
   return false;
@@ -321,9 +325,19 @@ bool SharingDeviceRegistration::IsSmsFetcherSupported() const {
 }
 
 bool SharingDeviceRegistration::IsRemoteCopySupported() const {
-#if defined(OS_WIN) || defined(OS_MAC) || defined(OS_LINUX) || \
-    defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) || \
+    BUILDFLAG(IS_CHROMEOS)
   return true;
+#else
+  return false;
+#endif
+}
+
+bool SharingDeviceRegistration::IsOptimizationGuidePushNotificationSupported()
+    const {
+#if BUILDFLAG(IS_ANDROID)
+  return optimization_guide::features::IsOptimizationHintsEnabled() &&
+         optimization_guide::features::IsPushNotificationsEnabled();
 #else
   return false;
 #endif

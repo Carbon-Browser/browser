@@ -8,7 +8,6 @@
 #include <stdint.h>
 #include <queue>
 
-#include "base/macros.h"
 #include "chromecast/base/statistics/weighted_mean.h"
 
 namespace chromecast {
@@ -31,6 +30,12 @@ class WeightedMovingLinearRegression {
   };
 
   explicit WeightedMovingLinearRegression(int64_t max_x_range);
+
+  WeightedMovingLinearRegression(const WeightedMovingLinearRegression&) =
+      delete;
+  WeightedMovingLinearRegression& operator=(
+      const WeightedMovingLinearRegression&) = delete;
+
   ~WeightedMovingLinearRegression();
 
   // Returns the current number of samples that are in the regression.
@@ -81,8 +86,6 @@ class WeightedMovingLinearRegression {
   double intercept_variance_ = 0.0;
 
   bool has_estimate_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(WeightedMovingLinearRegression);
 };
 
 }  // namespace chromecast

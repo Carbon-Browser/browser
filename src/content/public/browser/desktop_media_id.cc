@@ -9,7 +9,6 @@
 #include <vector>
 
 #include "base/containers/id_map.h"
-#include "base/macros.h"
 #include "base/memory/singleton.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
@@ -22,7 +21,7 @@ namespace content {
 const char kScreenPrefix[] = "screen";
 const char kWindowPrefix[] = "window";
 
-#if defined(USE_AURA) || defined(OS_MAC)
+#if defined(USE_AURA) || BUILDFLAG(IS_MAC)
 // static
 DesktopMediaID DesktopMediaID::RegisterNativeWindow(DesktopMediaID::Type type,
                                                     gfx::NativeWindow window) {

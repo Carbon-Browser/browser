@@ -6,11 +6,11 @@
 
 #include <memory>
 
-#include "base/macros.h"
 #include "base/metrics/histogram.h"
 #include "base/metrics/histogram_samples.h"
 #include "base/metrics/metrics_hashes.h"
 #include "base/metrics/statistics_recorder.h"
+#include "base/time/time.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "testing/platform_test.h"
 
@@ -33,6 +33,9 @@ class MetricsRecorder {
     if (histogram)
       base_samples_ = histogram->SnapshotSamples();
   }
+
+  MetricsRecorder(const MetricsRecorder&) = delete;
+  MetricsRecorder& operator=(const MetricsRecorder&) = delete;
 
   void CheckLanguageVerification(int expected_model_disabled,
                                  int expected_model_only,
@@ -128,8 +131,6 @@ class MetricsRecorder {
   std::string key_;
   std::unique_ptr<HistogramSamples> base_samples_;
   std::unique_ptr<HistogramSamples> samples_;
-
-  DISALLOW_COPY_AND_ASSIGN(MetricsRecorder);
 };
 
 TEST(TranslateMetricsTest, ReportLanguageVerification) {
@@ -181,7 +182,7 @@ TEST(TranslateMetricsTest, ReportUserActionDuration) {
   MetricsRecorder recorder(metrics_internal::kTranslateUserActionDuration);
   recorder.CheckTotalCount(0);
   TimeTicks begin = TimeTicks::Now();
-  TimeTicks end = begin + base::TimeDelta::FromSeconds(3776);
+  TimeTicks end = begin + base::Seconds(3776);
   ReportUserActionDuration(begin, end);
   recorder.CheckValueInLogs(3776000.0);
   recorder.CheckTotalCount(1);

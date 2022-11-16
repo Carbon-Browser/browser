@@ -1,5 +1,17 @@
 #!/usr/bin/env python3
 
+# This file is part of eyeo Chromium SDK,
+# Copyright (C) 2006-present eyeo GmbH
+# eyeo Chromium SDK is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 3 as
+# published by the Free Software Foundation.
+# eyeo Chromium SDK is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# You should have received a copy of the GNU General Public License
+# along with eyeo Chromium SDK.  If not, see <http://www.gnu.org/licenses/>.
+
 """
 This script publishes the code coverage results into a Mattermost channel.
 """
@@ -63,7 +75,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     gl = gitlab.Gitlab(
-        os.environ["CI_SERVER_URL"], private_token=os.environ["CHROMIUM_GITLAB_TOKEN"],
+        os.environ["CI_SERVER_URL"], private_token=os.environ["CHROMIUM_GITLAB_COM_TOKEN"],
     )
     gl.auth()
 

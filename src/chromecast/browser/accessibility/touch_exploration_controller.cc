@@ -317,7 +317,6 @@ ui::EventDispatchDetails TouchExplorationController::InSingleTapPressed(
   if (type == ui::ET_TOUCH_RELEASED || type == ui::ET_TOUCH_CANCELLED) {
     if (current_touch_ids_.size() == 0 &&
         event.pointer_details().id == initial_press_->pointer_details().id) {
-      MaybeSendSimulatedTapInLiftActivationBounds(event, continuation);
       SET_STATE(SINGLE_TAP_RELEASED);
     } else if (current_touch_ids_.size() == 0) {
       SET_STATE(NO_FINGERS_DOWN);
@@ -898,7 +897,7 @@ int TouchExplorationController::FindEdgesWithinInset(gfx::Point point_dip,
                                                      float horiz_inset,
                                                      float vert_inset) {
   gfx::RectF inner_bounds_dip(root_window_->bounds());
-  inner_bounds_dip.Inset(horiz_inset, vert_inset);
+  inner_bounds_dip.Inset(gfx::InsetsF::VH(vert_inset, horiz_inset));
 
   // Bitwise manipulation in order to determine where on the screen the point
   // lies. If more than one bit is turned on, then it is a corner where the two

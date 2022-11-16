@@ -6,6 +6,7 @@
 
 #include <algorithm>
 
+#include "base/memory/raw_ptr.h"
 #include "base/strings/strcat.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/power_monitor_test.h"
@@ -42,7 +43,7 @@ std::string GetHistogramNameWithBatteryStateSuffix(const char* histogram_name) {
 class TestTabStatsObserver : public TabStatsObserver {
  public:
   // Functions used to update the counts.
-  void OnMainFrameNavigationCommitted(
+  void OnPrimaryMainFrameNavigationCommitted(
       content::WebContents* web_contents) override {
     ++main_frame_committed_navigations_count_;
   }
@@ -64,6 +65,10 @@ class TestTabStatsTracker : public TabStatsTracker {
   using UmaStatsReportingDelegate = TabStatsTracker::UmaStatsReportingDelegate;
 
   explicit TestTabStatsTracker(PrefService* pref_service);
+
+  TestTabStatsTracker(const TestTabStatsTracker&) = delete;
+  TestTabStatsTracker& operator=(const TestTabStatsTracker&) = delete;
+
   ~TestTabStatsTracker() override {}
 
   // Helper functions to update the number of tabs/windows.
@@ -106,6 +111,14 @@ class TestTabStatsTracker : public TabStatsTracker {
     return tab_stats_data_store()->tab_stats().window_count;
   }
 
+  void DiscardedStateChange(ChromeRenderViewHostTestHarness* test_harness,
+                            ::mojom::LifecycleUnitDiscardReason reason,
+                            bool is_discarded) {
+    std::unique_ptr<content::WebContents> tab =
+        test_harness->CreateTestWebContents();
+    OnDiscardedStateChange(tab.get(), reason, is_discarded);
+  }
+
   void CheckDailyEventInterval() { daily_event_for_testing()->CheckInterval(); }
 
   void TriggerDailyEvent() {
@@ -119,7 +132,7 @@ class TestTabStatsTracker : public TabStatsTracker {
             reporting_delegate_for_testing(), tab_stats_data_store()));
 
     // Update the daily event registry to the previous day and trigger it.
-    base::Time last_time = base::Time::Now() - base::TimeDelta::FromHours(25);
+    base::Time last_time = base::Time::Now() - base::Hours(25);
     pref_service_->SetInt64(prefs::kTabStatsDailySample,
                             last_time.since_origin().InMicroseconds());
     CheckDailyEventInterval();
@@ -132,9 +145,7 @@ class TestTabStatsTracker : public TabStatsTracker {
   TabStatsDataStore* data_store() { return tab_stats_data_store(); }
 
  private:
-  PrefService* pref_service_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestTabStatsTracker);
+  raw_ptr<PrefService> pref_service_;
 };
 
 class TestUmaStatsReportingDelegate
@@ -144,13 +155,14 @@ class TestUmaStatsReportingDelegate
       GetIntervalHistogramName;
   TestUmaStatsReportingDelegate() {}
 
+  TestUmaStatsReportingDelegate(const TestUmaStatsReportingDelegate&) = delete;
+  TestUmaStatsReportingDelegate& operator=(
+      const TestUmaStatsReportingDelegate&) = delete;
+
  protected:
   // Skip the check that ensures that there's at least one visible window as
   // there's no window in the context of these tests.
   bool IsChromeBackgroundedWithoutWindows() override { return false; }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(TestUmaStatsReportingDelegate);
 };
 
 class TabStatsTrackerTest : public ChromeRenderViewHostTestHarness {
@@ -165,6 +177,9 @@ class TabStatsTrackerTest : public ChromeRenderViewHostTestHarness {
     // using it.
     tab_stats_tracker_ = std::make_unique<TestTabStatsTracker>(&pref_service_);
   }
+
+  TabStatsTrackerTest(const TabStatsTrackerTest&) = delete;
+  TabStatsTrackerTest& operator=(const TabStatsTrackerTest&) = delete;
 
   void SetUp() override {
     ChromeRenderViewHostTestHarness::SetUp();
@@ -194,10 +209,7 @@ class TabStatsTrackerTest : public ChromeRenderViewHostTestHarness {
   TestingPrefServiceSimple pref_service_;
 
   std::unique_ptr<Browser> browser_;
-  TabStripModel* tab_strip_model_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(TabStatsTrackerTest);
+  raw_ptr<TabStripModel> tab_strip_model_;
 };
 
 TestTabStatsTracker::TestTabStatsTracker(PrefService* pref_service)
@@ -404,8 +416,93 @@ TEST_F(TabStatsTrackerTest, StatsGetReportedDaily) {
       stats.window_count_max, 1);
 }
 
+TEST_F(TabStatsTrackerTest, DailyDiscards) {
+  // This test checks that the discard/reload counts are reported when the
+  // daily event triggers.
+
+  // Daily report is skipped when there is no tab. Adds tabs to avoid that.
+  tab_stats_tracker_->AddTabs(1, this, tab_strip_model_);
+
+  constexpr size_t kExpectedDiscardsExternal = 3;
+  constexpr size_t kExpectedDiscardsUrgent = 5;
+  constexpr size_t kExpectedReloadsExternal = 7;
+  constexpr size_t kExpectedReloadsUrgent = 9;
+  for (size_t i = 0; i < kExpectedDiscardsExternal; ++i) {
+    tab_stats_tracker_->DiscardedStateChange(
+        this, LifecycleUnitDiscardReason::EXTERNAL, /*is_discarded*/ true);
+  }
+  for (size_t i = 0; i < kExpectedDiscardsUrgent; ++i) {
+    tab_stats_tracker_->DiscardedStateChange(
+        this, LifecycleUnitDiscardReason::URGENT, /*is_discarded*/ true);
+  }
+  for (size_t i = 0; i < kExpectedReloadsExternal; ++i) {
+    tab_stats_tracker_->DiscardedStateChange(
+        this, LifecycleUnitDiscardReason::EXTERNAL, /*is_discarded*/ false);
+  }
+  for (size_t i = 0; i < kExpectedReloadsUrgent; ++i) {
+    tab_stats_tracker_->DiscardedStateChange(
+        this, LifecycleUnitDiscardReason::URGENT, /*is_discarded*/ false);
+  }
+
+  // Triggers the daily event.
+  tab_stats_tracker_->TriggerDailyEvent();
+
+  // Checks that the histograms have been properly updated.
+  histogram_tester_.ExpectUniqueSample(
+      UmaStatsReportingDelegate::kDailyDiscardsExternalHistogramName,
+      kExpectedDiscardsExternal, 1);
+  histogram_tester_.ExpectUniqueSample(
+      UmaStatsReportingDelegate::kDailyDiscardsUrgentHistogramName,
+      kExpectedDiscardsUrgent, 1);
+  histogram_tester_.ExpectUniqueSample(
+      UmaStatsReportingDelegate::kDailyReloadsExternalHistogramName,
+      kExpectedReloadsExternal, 1);
+  histogram_tester_.ExpectUniqueSample(
+      UmaStatsReportingDelegate::kDailyReloadsUrgentHistogramName,
+      kExpectedReloadsUrgent, 1);
+
+  // Checks that the second report also updates the histograms properly.
+  constexpr size_t kExpectedDiscardsExternal2 = 15;
+  constexpr size_t kExpectedDiscardsUrgent2 = 25;
+  constexpr size_t kExpectedReloadsExternal2 = 35;
+  constexpr size_t kExpectedReloadsUrgent2 = 45;
+  for (size_t i = 0; i < kExpectedDiscardsExternal2; ++i) {
+    tab_stats_tracker_->DiscardedStateChange(
+        this, LifecycleUnitDiscardReason::EXTERNAL, /*is_discarded=*/true);
+  }
+  for (size_t i = 0; i < kExpectedDiscardsUrgent2; ++i) {
+    tab_stats_tracker_->DiscardedStateChange(
+        this, LifecycleUnitDiscardReason::URGENT, /*is_discarded=*/true);
+  }
+  for (size_t i = 0; i < kExpectedReloadsExternal2; ++i) {
+    tab_stats_tracker_->DiscardedStateChange(
+        this, LifecycleUnitDiscardReason::EXTERNAL, /*is_discarded=*/false);
+  }
+  for (size_t i = 0; i < kExpectedReloadsUrgent2; ++i) {
+    tab_stats_tracker_->DiscardedStateChange(
+        this, LifecycleUnitDiscardReason::URGENT, /*is_discarded=*/false);
+  }
+
+  // Triggers the daily event again.
+  tab_stats_tracker_->TriggerDailyEvent();
+
+  // Checks that the histograms have been properly updated.
+  histogram_tester_.ExpectBucketCount(
+      UmaStatsReportingDelegate::kDailyDiscardsExternalHistogramName,
+      kExpectedDiscardsExternal2, 1);
+  histogram_tester_.ExpectBucketCount(
+      UmaStatsReportingDelegate::kDailyDiscardsUrgentHistogramName,
+      kExpectedDiscardsUrgent2, 1);
+  histogram_tester_.ExpectBucketCount(
+      UmaStatsReportingDelegate::kDailyReloadsExternalHistogramName,
+      kExpectedReloadsExternal2, 1);
+  histogram_tester_.ExpectBucketCount(
+      UmaStatsReportingDelegate::kDailyReloadsUrgentHistogramName,
+      kExpectedReloadsUrgent2, 1);
+}
+
 TEST_F(TabStatsTrackerTest, TabUsageGetsReported) {
-  constexpr base::TimeDelta kValidLongInterval = base::TimeDelta::FromHours(12);
+  constexpr base::TimeDelta kValidLongInterval = base::Hours(12);
   TabStatsDataStore::TabsStateDuringIntervalMap* interval_map =
       tab_stats_tracker_->data_store()->AddInterval();
 
@@ -543,6 +640,8 @@ TEST_F(TabStatsTrackerTest, HeartbeatMetrics) {
 
   expected_tab_count = tab_stats_tracker_->RemoveTabs(4, tab_strip_model_);
   expected_window_count = tab_stats_tracker_->RemoveWindows(3);
+
+  ASSERT_TRUE(tab_strip_model_->SupportsTabGroups());
   tab_groups::TabGroupId group_id1 = tab_strip_model_->AddToNewGroup({0, 1});
   tab_groups::TabGroupId group_id2 = tab_strip_model_->AddToNewGroup({5});
   const tab_groups::TabGroupVisualData visual_data(

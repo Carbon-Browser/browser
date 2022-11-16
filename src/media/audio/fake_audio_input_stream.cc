@@ -13,13 +13,12 @@
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/logging.h"
-#include "base/macros.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/scoped_refptr.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/string_split.h"
 #include "base/synchronization/lock.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/thread_annotations.h"
 #include "base/threading/platform_thread.h"
 #include "base/threading/thread.h"
@@ -75,11 +74,10 @@ void FakeAudioInputStream::Start(AudioInputCallback* callback) {
   DCHECK(!fake_audio_worker_);
 
   capture_thread_.reset(new base::Thread("FakeAudioInput"));
-  base::Thread::Options options;
-  // REALTIME_AUDIO priority is needed to avoid audio playout delays.
+  // kRealtimeAudio priority is needed to avoid audio playout delays.
   // See crbug.com/971265
-  options.priority = base::ThreadPriority::REALTIME_AUDIO;
-  CHECK(capture_thread_->StartWithOptions(std::move(options)));
+  CHECK(capture_thread_->StartWithOptions(
+      base::Thread::Options(base::ThreadType::kRealtimeAudio)));
 
   {
     base::AutoLock lock(callback_lock_);

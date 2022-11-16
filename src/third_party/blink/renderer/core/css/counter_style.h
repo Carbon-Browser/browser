@@ -5,8 +5,10 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_CSS_COUNTER_STYLE_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_CSS_COUNTER_STYLE_H_
 
+#include "base/check_op.h"
 #include "third_party/blink/renderer/core/core_export.h"
-#include "third_party/blink/renderer/platform/heap/handle.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/wtf/text/atomic_string.h"
 
 namespace blink {
@@ -120,6 +122,9 @@ class CORE_EXPORT CounterStyle final : public GarbageCollected<CounterStyle> {
     return *speak_as_style_;
   }
 
+  // Converts kReference and kAuto to one of the remaining values.
+  CounterStyleSpeakAs EffectiveSpeakAs() const;
+
   // Generates the alternative text for the given counter value according to the
   // 'speak-as' descriptor. Consumed by accessibility.
   String GenerateTextAlternative(int value) const;
@@ -147,9 +152,6 @@ class CORE_EXPORT CounterStyle final : public GarbageCollected<CounterStyle> {
   String GenerateFallbackRepresentation(int value) const;
 
   String IndexesToString(const Vector<wtf_size_t>& symbol_indexes) const;
-
-  // Converts kReference and kAuto to one of the remaining values.
-  CounterStyleSpeakAs EffectiveSpeakAs() const;
 
   String GenerateTextAlternativeWithoutPrefixSuffix(int value) const;
 

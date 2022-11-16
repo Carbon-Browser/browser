@@ -6,12 +6,16 @@
 #define CHROME_BROWSER_UI_ASH_ACCESSIBILITY_FAKE_ACCESSIBILITY_CONTROLLER_H_
 
 #include "ash/public/cpp/accessibility_controller.h"
-#include "base/macros.h"
 
 // Fake implementation of ash's mojo AccessibilityController interface.
 class FakeAccessibilityController : ash::AccessibilityController {
  public:
   FakeAccessibilityController();
+
+  FakeAccessibilityController(const FakeAccessibilityController&) = delete;
+  FakeAccessibilityController& operator=(const FakeAccessibilityController&) =
+      delete;
+
   ~FakeAccessibilityController() override;
 
   bool was_client_set() const { return was_client_set_; }
@@ -59,15 +63,19 @@ class FakeAccessibilityController : ash::AccessibilityController {
       const std::string& path) override;
   void DisableSwitchAccessDisableConfirmationDialogTesting() override;
   void UpdateDictationButtonOnSpeechRecognitionDownloadChanged(
-      bool download_in_progress) override;
+      int download_progress) override;
   void ShowSpeechRecognitionDownloadNotificationForDictation(
       bool succeeded,
       const std::u16string& display_language) override;
+  void UpdateDictationBubble(
+      bool visible,
+      ash::DictationBubbleIconType icon,
+      const absl::optional<std::u16string>& text,
+      const absl::optional<std::vector<ash::DictationBubbleHintType>>& hints)
+      override;
 
  private:
   bool was_client_set_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(FakeAccessibilityController);
 };
 
 #endif  // CHROME_BROWSER_UI_ASH_ACCESSIBILITY_FAKE_ACCESSIBILITY_CONTROLLER_H_

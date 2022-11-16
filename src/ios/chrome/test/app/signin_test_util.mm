@@ -8,6 +8,8 @@
 #import "base/test/ios/wait_util.h"
 #include "components/prefs/pref_service.h"
 #include "components/signin/public/base/signin_pref_names.h"
+#import "components/sync/driver/sync_service.h"
+#import "components/sync/driver/sync_user_settings.h"
 #include "google_apis/gaia/gaia_constants.h"
 #include "ios/chrome/browser/browser_state/chrome_browser_state.h"
 #include "ios/chrome/browser/pref_names.h"
@@ -16,6 +18,8 @@
 #import "ios/chrome/browser/signin/chrome_account_manager_service.h"
 #import "ios/chrome/browser/signin/chrome_account_manager_service_factory.h"
 #include "ios/chrome/browser/signin/gaia_auth_fetcher_ios.h"
+#import "ios/chrome/browser/sync/sync_service_factory.h"
+#import "ios/chrome/browser/ui/authentication/authentication_flow.h"
 #import "ios/chrome/browser/ui/authentication/cells/signin_promo_view.h"
 #import "ios/chrome/test/app/chrome_test_util.h"
 #import "ios/public/provider/chrome/browser/chrome_browser_provider.h"
@@ -55,7 +59,6 @@ void StartForgetAllIdentities(ChromeBrowserState* browser_state) {
 void SetUpMockAuthentication() {
   std::unique_ptr<ios::FakeChromeIdentityService> service(
       new ios::FakeChromeIdentityService());
-  service->SetUpForIntegrationTests();
   ios::GetChromeBrowserProvider().SetChromeIdentityServiceForTesting(
       std::move(service));
 }
@@ -116,6 +119,8 @@ void ResetSigninPromoPreferences() {
   prefs->SetBoolean(prefs::kIosBookmarkPromoAlreadySeen, false);
   prefs->SetInteger(prefs::kIosSettingsSigninPromoDisplayedCount, 0);
   prefs->SetBoolean(prefs::kIosSettingsPromoAlreadySeen, false);
+  prefs->SetInteger(prefs::kIosNtpFeedTopSigninPromoDisplayedCount, 0);
+  prefs->SetBoolean(prefs::kIosNtpFeedTopPromoAlreadySeen, false);
   prefs->SetBoolean(prefs::kSigninShouldPromptForSigninAgain, false);
 }
 
@@ -125,10 +130,27 @@ void ResetUserApprovedAccountListManager() {
   prefs->ClearPref(prefs::kSigninLastAccounts);
 }
 
-void RevokeSyncConsent() {
-  ChromeBrowserState* browser_state = GetOriginalBrowserState();
-  PrefService* prefs = browser_state->GetPrefs();
-  prefs->SetBoolean(prefs::kGoogleServicesConsentedToSync, false);
+void SignInWithoutSync(ChromeIdentity* identity) {
+  Browser* browser = GetMainBrowser();
+  UIViewController* viewController = GetActiveViewController();
+  __block AuthenticationFlow* authenticationFlow =
+      [[AuthenticationFlow alloc] initWithBrowser:browser
+                                         identity:identity
+                                 postSignInAction:POST_SIGNIN_ACTION_NONE
+                         presentingViewController:viewController];
+  authenticationFlow.dispatcher = (id<BrowsingDataCommands>)GetMainController();
+  [authenticationFlow startSignInWithCompletion:^(BOOL success) {
+    authenticationFlow = nil;
+  }];
+}
+
+void ResetSyncSelectedDataTypes() {
+  ChromeBrowserState* browserState =
+      chrome_test_util::GetOriginalBrowserState();
+  syncer::SyncService* syncService =
+      SyncServiceFactory::GetForBrowserState(browserState);
+  syncService->GetUserSettings()->SetSelectedTypes(/*sync_everything=*/true,
+                                                   {});
 }
 
 }  // namespace chrome_test_util

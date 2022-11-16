@@ -6,10 +6,11 @@
 #define CONTENT_PUBLIC_TEST_CONTENT_BROWSER_TEST_H_
 
 #include "base/files/file_path.h"
+#include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "content/public/test/browser_test_base.h"
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 #include "base/mac/scoped_nsautorelease_pool.h"
 #endif
 
@@ -44,9 +45,9 @@ class ContentBrowserTest : public BrowserTestBase {
   base::FilePath GetTestDataFilePath();
 
  private:
-  Shell* shell_ = nullptr;
+  raw_ptr<Shell, DanglingUntriaged> shell_ = nullptr;
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   // On Mac, without the following autorelease pool, code which is directly
   // executed (as opposed to executed inside a message loop) would autorelease
   // objects into a higher-level pool. This pool is not recycled in-sync with
@@ -54,7 +55,7 @@ class ContentBrowserTest : public BrowserTestBase {
   // deallocation via an autorelease pool (such as browser window closure and
   // browser shutdown). To avoid this, the following pool is recycled after each
   // time code is directly executed.
-  base::mac::ScopedNSAutoreleasePool* pool_ = nullptr;
+  raw_ptr<base::mac::ScopedNSAutoreleasePool> pool_ = nullptr;
 #endif
 
   // Used to detect incorrect overriding of PreRunTestOnMainThread() with

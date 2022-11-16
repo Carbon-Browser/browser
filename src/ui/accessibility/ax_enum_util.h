@@ -36,10 +36,6 @@ AX_BASE_EXPORT const char* ToString(ax::mojom::ActionFlags action_flags);
 AX_BASE_EXPORT const char* ToString(
     ax::mojom::DefaultActionVerb default_action_verb);
 
-// Returns a localized string that corresponds to the name of the given action.
-AX_BASE_EXPORT std::string ToLocalizedString(
-    ax::mojom::DefaultActionVerb action_verb);
-
 // ax::mojom::Mutation
 AX_BASE_EXPORT const char* ToString(ax::mojom::Mutation mutation);
 
@@ -69,6 +65,9 @@ AX_BASE_EXPORT const char* ToString(ax::mojom::ListStyle list_style);
 
 // ax::mojom::MarkerType
 AX_BASE_EXPORT const char* ToString(ax::mojom::MarkerType marker_type);
+
+// ax::mojom::HighlightType
+AX_BASE_EXPORT const char* ToString(ax::mojom::HighlightType highlight_type);
 
 // ax::mojom::MoveDirection
 AX_BASE_EXPORT const char* ToString(ax::mojom::MoveDirection move_direction);

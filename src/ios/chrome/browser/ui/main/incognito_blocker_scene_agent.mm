@@ -74,17 +74,9 @@
 #pragma mark - private
 
 - (void)showOverlay {
-  NSArray<UIWindow*>* windows = nil;
+  NSArray<UIWindow*>* windows = self.sceneState.scene.windows;
 
-  if (base::ios::IsSceneStartupSupported()) {
-    if (@available(iOS 13, *)) {
-      windows = self.sceneState.scene.windows;
-    }
-  } else {
-    windows = UIApplication.sharedApplication.windows;
-  }
-
-  // Adding |self.overlayView| to sceneState.window won't cover overlay windows
+  // Adding `self.overlayView` to sceneState.window won't cover overlay windows
   // such as fullscreen video.  Instead use the topmost window.
 
   NSArray<UIWindow*>* sortedWindows =

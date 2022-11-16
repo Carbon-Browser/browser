@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "ash/components/cryptohome/cryptohome_parameters.h"
 #include "ash/constants/ash_switches.h"
 #include "base/base64.h"
 #include "base/command_line.h"
@@ -20,14 +21,12 @@
 #include "base/strings/stringprintf.h"
 #include "base/values.h"
 #include "chrome/common/chrome_paths.h"
-#include "chromeos/cryptohome/cryptohome_parameters.h"
-#include "chromeos/dbus/session_manager/fake_session_manager_client.h"
+#include "chromeos/ash/components/dbus/session_manager/fake_session_manager_client.h"
 #include "components/user_manager/user_names.h"
 #include "third_party/cros_system_api/switches/chrome_switches.h"
 
-namespace chromeos {
+namespace ash {
 namespace test {
-
 namespace {
 
 // Keys for values in dictionary used to preserve session manager state.
@@ -62,11 +61,11 @@ void SessionFlagsManager::SetUpSessionRestore() {
 
 void SessionFlagsManager::SetDefaultLoginSwitches(
     const std::vector<Switch>& switches) {
-  default_switches_ = {{switches::kPolicySwitchesBegin, ""}};
+  default_switches_ = {{chromeos::switches::kPolicySwitchesBegin, ""}};
   default_switches_.insert(default_switches_.end(), switches.begin(),
                            switches.end());
   default_switches_.emplace_back(
-      std::make_pair(switches::kPolicySwitchesEnd, ""));
+      std::make_pair(chromeos::switches::kPolicySwitchesEnd, ""));
 }
 
 void SessionFlagsManager::AppendSwitchesToCommandLine(
@@ -137,7 +136,7 @@ void SessionFlagsManager::LoadStateFromBackingFile() {
   base::Value* user_flags = value->FindListKey(kUserFlagsKey);
   if (user_flags) {
     user_flags_ = std::vector<Switch>();
-    for (const base::Value& flag : user_flags->GetList()) {
+    for (const base::Value& flag : user_flags->GetListDeprecated()) {
       DCHECK(flag.is_dict());
       user_flags_->emplace_back(
           std::make_pair(*flag.FindStringKey(kFlagNameKey),
@@ -148,7 +147,7 @@ void SessionFlagsManager::LoadStateFromBackingFile() {
   base::Value* restart_job = value->FindListKey(kRestartJobKey);
   if (restart_job) {
     restart_job_ = std::vector<Switch>();
-    for (const base::Value& job_switch : restart_job->GetList()) {
+    for (const base::Value& job_switch : restart_job->GetListDeprecated()) {
       DCHECK(job_switch.is_dict());
       restart_job_->emplace_back(
           std::make_pair(*job_switch.FindStringKey(kFlagNameKey),
@@ -158,12 +157,12 @@ void SessionFlagsManager::LoadStateFromBackingFile() {
 }
 
 void SessionFlagsManager::StoreStateToBackingFile() {
+  FakeSessionManagerClient* session_manager = FakeSessionManagerClient::Get();
   const SessionManagerClient::ActiveSessionsMap& sessions =
-      FakeSessionManagerClient::Get()->user_sessions();
+      session_manager->user_sessions();
   const bool session_active =
-      !sessions.empty() && !FakeSessionManagerClient::Get()->session_stopped();
-  const bool has_restart_job =
-      FakeSessionManagerClient::Get()->restart_job_argv().has_value();
+      !sessions.empty() && !session_manager->session_stopped();
+  const bool has_restart_job = session_manager->restart_job_argv().has_value();
   // If a user session is not active, clear the backing file so default flags
   // are used next time.
   if (!session_active && !has_restart_job) {
@@ -181,10 +180,12 @@ void SessionFlagsManager::StoreStateToBackingFile() {
     // job sets these flags to expected guest user values.
     user_id = user_manager::kGuestUserName;
   } else {
-    // Currently, only support single user sessions.
-    DCHECK_EQ(1u, sessions.size());
-    user_id = sessions.begin()->first;
-    user_profile = sessions.begin()->second;
+    // Only the primary user's switches/flags are preserved. This is the same
+    // behavior of session_manager daemon.
+    DCHECK(session_manager->primary_user_id().has_value());
+    const auto it = sessions.find(*session_manager->primary_user_id());
+    user_id = it->first;
+    user_profile = it->second;
   }
 
   base::Value cached_state(base::Value::Type::DICTIONARY);
@@ -243,4 +244,4 @@ base::Value SessionFlagsManager::GetSwitchesValueFromArgv(
 }
 
 }  // namespace test
-}  // namespace chromeos
+}  // namespace ash

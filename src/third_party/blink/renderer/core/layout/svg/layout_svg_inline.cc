@@ -23,6 +23,7 @@
 
 #include "third_party/blink/renderer/core/layout/layout_view.h"
 #include "third_party/blink/renderer/core/layout/ng/inline/ng_inline_cursor.h"
+#include "third_party/blink/renderer/core/layout/ng/svg/layout_ng_svg_text.h"
 #include "third_party/blink/renderer/core/layout/svg/layout_svg_inline_text.h"
 #include "third_party/blink/renderer/core/layout/svg/layout_svg_resource_container.h"
 #include "third_party/blink/renderer/core/layout/svg/layout_svg_text.h"
@@ -82,24 +83,24 @@ bool LayoutSVGInline::IsObjectBoundingBoxValid() const {
 
 // static
 void LayoutSVGInline::ObjectBoundingBoxForCursor(NGInlineCursor& cursor,
-                                                 FloatRect& bounds) {
+                                                 gfx::RectF& bounds) {
   for (; cursor; cursor.MoveToNextForSameLayoutObject()) {
     const NGFragmentItem& item = *cursor.CurrentItem();
     if (item.Type() == NGFragmentItem::kSvgText) {
-      bounds.Unite(item.ObjectBoundingBox());
+      bounds.Union(cursor.Current().ObjectBoundingBox(cursor));
     } else if (NGInlineCursor descendants = cursor.CursorForDescendants()) {
       for (; descendants; descendants.MoveToNext()) {
         const NGFragmentItem& descendant_item = *descendants.CurrentItem();
         if (descendant_item.Type() == NGFragmentItem::kSvgText)
-          bounds.Unite(descendant_item.ObjectBoundingBox());
+          bounds.Union(descendants.Current().ObjectBoundingBox(cursor));
       }
     }
   }
 }
 
-FloatRect LayoutSVGInline::ObjectBoundingBox() const {
+gfx::RectF LayoutSVGInline::ObjectBoundingBox() const {
   NOT_DESTROYED();
-  FloatRect bounds;
+  gfx::RectF bounds;
   if (IsInLayoutNGInlineFormattingContext()) {
     NGInlineCursor cursor;
     cursor.MoveToIncludingCulledInline(*this);
@@ -107,21 +108,21 @@ FloatRect LayoutSVGInline::ObjectBoundingBox() const {
     return bounds;
   }
   for (InlineFlowBox* box : *LineBoxes())
-    bounds.Unite(FloatRect(box->FrameRect()));
+    bounds.Union(gfx::RectF(box->FrameRect()));
   return bounds;
 }
 
-FloatRect LayoutSVGInline::StrokeBoundingBox() const {
+gfx::RectF LayoutSVGInline::StrokeBoundingBox() const {
   NOT_DESTROYED();
   if (!IsObjectBoundingBoxValid())
-    return FloatRect();
+    return gfx::RectF();
   return SVGLayoutSupport::ExtendTextBBoxWithStroke(*this, ObjectBoundingBox());
 }
 
-FloatRect LayoutSVGInline::VisualRectInLocalSVGCoordinates() const {
+gfx::RectF LayoutSVGInline::VisualRectInLocalSVGCoordinates() const {
   NOT_DESTROYED();
   if (!IsObjectBoundingBoxValid())
-    return FloatRect();
+    return gfx::RectF();
   return SVGLayoutSupport::ComputeVisualRectForText(*this, ObjectBoundingBox());
 }
 
@@ -138,7 +139,7 @@ void LayoutSVGInline::MapLocalToAncestor(const LayoutBoxModelObject* ancestor,
   SVGLayoutSupport::MapLocalToAncestor(this, ancestor, transform_state, flags);
 }
 
-void LayoutSVGInline::AbsoluteQuads(Vector<FloatQuad>& quads,
+void LayoutSVGInline::AbsoluteQuads(Vector<gfx::QuadF>& quads,
                                     MapCoordinatesFlags mode) const {
   NOT_DESTROYED();
   if (IsInLayoutNGInlineFormattingContext()) {
@@ -147,19 +148,36 @@ void LayoutSVGInline::AbsoluteQuads(Vector<FloatQuad>& quads,
          cursor.MoveToNextForSameLayoutObject()) {
       const NGFragmentItem& item = *cursor.CurrentItem();
       if (item.Type() == NGFragmentItem::kSvgText) {
-        quads.push_back(
-            LocalToAbsoluteQuad(SVGLayoutSupport::ExtendTextBBoxWithStroke(
-                                    *this, item.ObjectBoundingBox()),
-                                mode));
+        quads.push_back(LocalToAbsoluteQuad(
+            gfx::QuadF(SVGLayoutSupport::ExtendTextBBoxWithStroke(
+                *this, cursor.Current().ObjectBoundingBox(cursor))),
+            mode));
       }
     }
     return;
   }
   for (InlineFlowBox* box : *LineBoxes()) {
-    FloatRect box_rect(box->FrameRect());
+    gfx::RectF box_rect(box->FrameRect());
     quads.push_back(LocalToAbsoluteQuad(
-        SVGLayoutSupport::ExtendTextBBoxWithStroke(*this, box_rect), mode));
+        gfx::QuadF(SVGLayoutSupport::ExtendTextBBoxWithStroke(*this, box_rect)),
+        mode));
   }
+}
+
+void LayoutSVGInline::AddOutlineRects(Vector<PhysicalRect>& rect_list,
+                                      OutlineInfo* info,
+                                      const PhysicalOffset& additional_offset,
+                                      NGOutlineType outline_type) const {
+  if (!IsInLayoutNGInlineFormattingContext()) {
+    LayoutInline::AddOutlineRects(rect_list, nullptr, additional_offset,
+                                  outline_type);
+  } else {
+    auto rect = PhysicalRect::EnclosingRect(ObjectBoundingBox());
+    rect.Move(additional_offset);
+    rect_list.push_back(rect);
+  }
+  if (info)
+    *info = OutlineInfo::GetUnzoomedFromStyle(StyleRef());
 }
 
 void LayoutSVGInline::WillBeDestroyed() {
@@ -172,6 +190,13 @@ void LayoutSVGInline::WillBeDestroyed() {
 void LayoutSVGInline::StyleDidChange(StyleDifference diff,
                                      const ComputedStyle* old_style) {
   NOT_DESTROYED();
+  if (diff.HasDifference()) {
+    if (auto* svg_text = DynamicTo<LayoutNGSVGText>(
+            LayoutSVGText::LocateLayoutSVGTextAncestor(this))) {
+      if (svg_text->NeedsTextMetricsUpdate())
+        diff.SetNeedsFullLayout();
+    }
+  }
   LayoutInline::StyleDidChange(diff, old_style);
 
   if (diff.NeedsFullLayout())
@@ -183,8 +208,6 @@ void LayoutSVGInline::StyleDidChange(StyleDifference diff,
 
   if (!Parent())
     return;
-  if (diff.CompositingReasonsChanged())
-    SVGLayoutSupport::NotifySVGRootOfChangedCompositingReasons(this);
   if (diff.HasDifference())
     LayoutSVGResourceContainer::StyleChanged(*this, diff);
 }
@@ -211,10 +234,6 @@ void LayoutSVGInline::InsertedIntoTree() {
                                                                          false);
   if (StyleRef().HasSVGEffect())
     SetNeedsPaintPropertyUpdate();
-  if (CompositingReasonFinder::DirectReasonsForSVGChildPaintProperties(*this) !=
-      CompositingReason::kNone) {
-    SVGLayoutSupport::NotifySVGRootOfChangedCompositingReasons(this);
-  }
 }
 
 void LayoutSVGInline::WillBeRemovedFromTree() {
@@ -224,10 +243,6 @@ void LayoutSVGInline::WillBeRemovedFromTree() {
   if (StyleRef().HasSVGEffect())
     SetNeedsPaintPropertyUpdate();
   LayoutInline::WillBeRemovedFromTree();
-  if (CompositingReasonFinder::DirectReasonsForSVGChildPaintProperties(*this) !=
-      CompositingReason::kNone) {
-    SVGLayoutSupport::NotifySVGRootOfChangedCompositingReasons(this);
-  }
 }
 
 }  // namespace blink

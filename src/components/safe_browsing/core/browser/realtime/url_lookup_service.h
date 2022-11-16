@@ -9,6 +9,7 @@
 #include <string>
 
 #include "base/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
@@ -65,6 +66,10 @@ class RealTimeUrlLookupService : public RealTimeUrlLookupServiceBase {
       bool is_off_the_record,
       variations::VariationsService* variations_service,
       ReferrerChainProvider* referrer_chain_provider);
+
+  RealTimeUrlLookupService(const RealTimeUrlLookupService&) = delete;
+  RealTimeUrlLookupService& operator=(const RealTimeUrlLookupService&) = delete;
+
   ~RealTimeUrlLookupService() override;
 
   // RealTimeUrlLookupServiceBase:
@@ -72,16 +77,27 @@ class RealTimeUrlLookupService : public RealTimeUrlLookupServiceBase {
   bool CanCheckSubresourceURL() const override;
   bool CanCheckSafeBrowsingDb() const override;
   void Shutdown() override;
+  bool CanSendRTSampleRequest() const override;
+
+#if defined(UNIT_TEST)
+  void set_bypass_probability_for_tests(
+      bool bypass_protego_probability_for_tests) {
+    bypass_protego_probability_for_tests_ =
+        bypass_protego_probability_for_tests;
+  }
+#endif
 
  private:
   // RealTimeUrlLookupServiceBase:
   GURL GetRealTimeLookupUrl() const override;
   net::NetworkTrafficAnnotationTag GetTrafficAnnotationTag() const override;
   bool CanPerformFullURLLookupWithToken() const override;
-  bool CanAttachReferrerChain() const override;
   int GetReferrerUserGestureLimit() const override;
+  bool CanSendPageLoadToken() const override;
   void GetAccessToken(
       const GURL& url,
+      const GURL& last_committed_url,
+      bool is_mainframe,
       RTLookupRequestCallback request_callback,
       RTLookupResponseCallback response_callback,
       scoped_refptr<base::SequencedTaskRunner> callback_task_runner) override;
@@ -97,6 +113,8 @@ class RealTimeUrlLookupService : public RealTimeUrlLookupServiceBase {
   // Called when the access token is obtained from |token_fetcher_|.
   void OnGetAccessToken(
       const GURL& url,
+      const GURL& last_committed_url,
+      bool is_mainframe,
       RTLookupRequestCallback request_callback,
       RTLookupResponseCallback response_callback,
       scoped_refptr<base::SequencedTaskRunner> callback_task_runner,
@@ -104,7 +122,7 @@ class RealTimeUrlLookupService : public RealTimeUrlLookupServiceBase {
       const std::string& access_token);
 
   // Unowned object used for getting preference settings.
-  PrefService* pref_service_;
+  raw_ptr<PrefService> pref_service_;
 
   // Observes changes to kSafeBrowsingEnhanced and
   // kUrlKeyedAnonymizedDataCollectionEnabled;
@@ -126,7 +144,11 @@ class RealTimeUrlLookupService : public RealTimeUrlLookupServiceBase {
 
   // Unowned. For checking whether real-time checks can be enabled in a given
   // location.
-  variations::VariationsService* variations_;
+  raw_ptr<variations::VariationsService> variations_;
+
+  // Bypasses the check for probability when sending Protego sample pings.
+  // Only for unit tests.
+  bool bypass_protego_probability_for_tests_ = false;
 
   // True if Shutdown() has already been called, or started running. This allows
   // us to skip unnecessary calls to SendRequest().
@@ -135,8 +157,6 @@ class RealTimeUrlLookupService : public RealTimeUrlLookupServiceBase {
   friend class RealTimeUrlLookupServiceTest;
 
   base::WeakPtrFactory<RealTimeUrlLookupService> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(RealTimeUrlLookupService);
 
 };  // class RealTimeUrlLookupService
 

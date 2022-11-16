@@ -8,12 +8,15 @@
 #include <stdint.h>
 #include <map>
 
+#include "base/callback.h"
 #include "base/feature_list.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/unsafe_shared_memory_pool.h"
 #include "base/memory/weak_ptr.h"
 #include "base/thread_annotations.h"
 #include "base/threading/thread_checker.h"
+#include "base/time/time.h"
+#include "base/token.h"
 #include "media/base/video_frame.h"
 #include "media/capture/mojom/video_capture.mojom-blink.h"
 #include "media/capture/video_capture_types.h"
@@ -73,10 +76,14 @@ class PLATFORM_EXPORT VideoCaptureImpl
   // used later to stop receiving video frames.
   // |state_update_cb| will be called when state changes.
   // |deliver_frame_cb| will be called when a frame is ready.
+  // |crop_version_cb| will be called when it is guaranteed that all
+  // subsequent frames |deliver_frame_cb| is called for, have a crop version
+  // that is equal-to-or-greater-than the given crop version.
   void StartCapture(int client_id,
                     const media::VideoCaptureParams& params,
                     const VideoCaptureStateUpdateCB& state_update_cb,
-                    const VideoCaptureDeliverFrameCB& deliver_frame_cb);
+                    const VideoCaptureDeliverFrameCB& deliver_frame_cb,
+                    const VideoCaptureCropVersionCB& crop_version_cb);
 
   // Stop capturing. |client_id| is the identifier used to call StartCapture.
   void StopCapture(int client_id);
@@ -109,7 +116,8 @@ class PLATFORM_EXPORT VideoCaptureImpl
       std::unique_ptr<gpu::GpuMemoryBufferSupport> gpu_memory_buffer_support);
 
   // media::mojom::VideoCaptureObserver implementation.
-  void OnStateChanged(media::mojom::VideoCaptureState state) override;
+  void OnStateChanged(
+      media::mojom::blink::VideoCaptureResultPtr result) override;
   void OnNewBuffer(
       int32_t buffer_id,
       media::mojom::blink::VideoBufferHandlePtr buffer_handle) override;
@@ -117,14 +125,14 @@ class PLATFORM_EXPORT VideoCaptureImpl
       media::mojom::blink::ReadyBufferPtr buffer,
       Vector<media::mojom::blink::ReadyBufferPtr> scaled_buffers) override;
   void OnBufferDestroyed(int32_t buffer_id) override;
+  void OnNewCropVersion(uint32_t crop_version) override;
 
   void ProcessFeedback(const media::VideoCaptureFeedback& feedback);
 
   // The returned weak pointer can only be dereferenced on the IO thread.
   base::WeakPtr<VideoCaptureImpl> GetWeakPtr();
 
-  static constexpr base::TimeDelta kCaptureStartTimeout =
-      base::TimeDelta::FromSeconds(10);
+  static constexpr base::TimeDelta kCaptureStartTimeout = base::Seconds(10);
 
  private:
   friend class VideoCaptureImplTest;
@@ -234,6 +242,13 @@ class PLATFORM_EXPORT VideoCaptureImpl
   void SetGpuFactoriesHandleOnIOTaskRunner(
       media::GpuVideoAcceleratorFactories* gpu_factories);
 
+  // Sets fallback mode which will make it always request
+  // premapped frames from the capturer.
+  void RequirePremappedFrames();
+
+  // Generates feedback accounding for premapped frames requirement.
+  media::VideoCaptureFeedback DefaultFeedback();
+
   // |device_id_| and |session_id_| are different concepts, but we reuse the
   // same numerical value, passed on construction.
   const base::UnguessableToken device_id_;
@@ -281,6 +296,8 @@ class PLATFORM_EXPORT VideoCaptureImpl
   // Stores feedback from the clients, received in |ProcessFeedback()|.
   // Only accessed on the IO thread.
   media::VideoCaptureFeedback feedback_;
+
+  bool require_premapped_frames_ = false;
 
   THREAD_CHECKER(io_thread_checker_);
 

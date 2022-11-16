@@ -6,18 +6,16 @@
 
 #include <memory>
 
+#include "base/bind.h"
 #include "base/check.h"
+#include "chromeos/ash/services/assistant/public/cpp/features.h"
 #include "chromeos/assistant/internal/internal_util.h"
-#include "chromeos/assistant/internal/proto/shared/proto/v2/delegate/event_handler_interface.pb.h"
-#include "chromeos/assistant/internal/proto/shared/proto/v2/device_state_event.pb.h"
-#include "chromeos/services/assistant/public/cpp/features.h"
+#include "chromeos/assistant/internal/libassistant/shared_headers.h"
 #include "chromeos/services/libassistant/chromium_api_delegate.h"
 #include "chromeos/services/libassistant/grpc/assistant_client.h"
-#include "chromeos/services/libassistant/grpc/external_services/grpc_services_observer.h"
 #include "chromeos/services/libassistant/libassistant_factory.h"
 #include "chromeos/services/libassistant/settings_controller.h"
 #include "chromeos/services/libassistant/util.h"
-#include "libassistant/shared/internal_api/assistant_manager_internal.h"
 #include "services/network/public/cpp/cross_thread_pending_shared_url_loader_factory.h"
 #include "services/network/public/cpp/wrapper_shared_url_loader_factory.h"
 
@@ -90,38 +88,6 @@ void SetServerExperiments(AssistantClient* assistant_client) {
 }  // namespace
 
 ////////////////////////////////////////////////////////////////////////////////
-//  DeviceStateEventObserver
-////////////////////////////////////////////////////////////////////////////////
-
-class ServiceController::DeviceStateEventObserver
-    : public GrpcServicesObserver<::assistant::api::OnDeviceStateEventRequest> {
- public:
-  explicit DeviceStateEventObserver(ServiceController* parent)
-      : parent_(parent) {}
-  DeviceStateEventObserver(const DeviceStateEventObserver&) = delete;
-  DeviceStateEventObserver& operator=(const DeviceStateEventObserver&) = delete;
-  ~DeviceStateEventObserver() override = default;
-
-  // GrpcServicesObserver:
-  // Invoked when a device state event has been received.
-  void OnGrpcMessage(
-      const ::assistant::api::OnDeviceStateEventRequest& request) override {
-    if (!request.event().has_on_state_changed())
-      return;
-
-    const auto& new_state = request.event().on_state_changed().new_state();
-    if (!new_state.has_startup_state())
-      return;
-
-    if (new_state.startup_state().finished())
-      parent_->OnStartFinished();
-  }
-
- private:
-  ServiceController* const parent_;
-};
-
-////////////////////////////////////////////////////////////////////////////////
 //  ServiceController
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -152,11 +118,22 @@ void ServiceController::Initialize(
     return;
   }
 
+  // Currently only V1 library is uploaded to DLC.
+  // If V2 flag is enabled, will fallback to load libassistant.so from rootfs.
+  if (!chromeos::assistant::features::IsLibAssistantV2Enabled()) {
+    libassistant_factory_.LoadLibassistantLibraryFromDlc(config->dlc_path);
+  }
+
   auto assistant_manager = libassistant_factory_.CreateAssistantManager(
       ToLibassistantConfig(*config));
-  auto* assistant_manager_internal =
-      libassistant_factory_.UnwrapAssistantManagerInternal(
-          assistant_manager.get());
+  assistant_client::AssistantManagerInternal* assistant_manager_internal =
+      nullptr;
+
+  if (!chromeos::assistant::features::IsLibAssistantV2Enabled()) {
+    assistant_manager_internal =
+        libassistant_factory_.UnwrapAssistantManagerInternal(
+            assistant_manager.get());
+  }
 
   assistant_client_ = AssistantClient::Create(std::move(assistant_manager),
                                               assistant_manager_internal);
@@ -170,7 +147,6 @@ void ServiceController::Initialize(
       config->spoken_feedback_enabled);
   settings_controller_->SetDarkModeEnabled(config->dark_mode_enabled);
 
-  CreateAndRegisterDeviceStateEventObserver();
   CreateAndRegisterChromiumApiDelegate(std::move(url_loader_factory));
 
   SetServerExperiments(assistant_client_.get());
@@ -187,15 +163,8 @@ void ServiceController::Start() {
   DCHECK(IsInitialized()) << "Initialize() must be called before Start()";
   DVLOG(1) << "Starting Libassistant service";
 
-  assistant_client_->StartServices();
-
-  SetStateAndInformObservers(ServiceState::kStarted);
-
-  for (auto& observer : assistant_client_observers_) {
-    observer.OnAssistantClientStarted(assistant_client_.get());
-  }
-
-  DVLOG(1) << "Started Libassistant service";
+  // |this| will outlive |assistant_client_|.
+  assistant_client_->StartServices(/*services_status_observer=*/this);
 }
 
 void ServiceController::Stop() {
@@ -211,7 +180,6 @@ void ServiceController::Stop() {
 
   assistant_client_ = nullptr;
   chromium_api_delegate_ = nullptr;
-  device_state_event_observer_ = nullptr;
 
   for (auto& observer : assistant_client_observers_)
     observer.OnAssistantClientDestroyed();
@@ -234,6 +202,22 @@ void ServiceController::AddAndFireStateObserver(
   observer->OnStateChanged(state_);
 
   state_observers_.Add(std::move(observer));
+}
+
+void ServiceController::OnServicesStatusChanged(ServicesStatus status) {
+  switch (status) {
+    case ServicesStatus::ONLINE_ALL_SERVICES_AVAILABLE:
+      OnAllServicesReady();
+      break;
+    case ServicesStatus::ONLINE_BOOTING_UP:
+      // Configing internal options or other essential services that are
+      // supported during bootup stage should happen here.
+      OnServicesBootingUp();
+      break;
+    case ServicesStatus::OFFLINE:
+      // No action needed.
+      break;
+  }
 }
 
 void ServiceController::AddAndFireAssistantClientObserver(
@@ -294,23 +278,48 @@ AssistantClient* ServiceController::assistant_client() {
   return assistant_client_.get();
 }
 
-assistant_client::AssistantManager* ServiceController::assistant_manager() {
-  return assistant_client_ ? assistant_client_->assistant_manager() : nullptr;
-}
+void ServiceController::OnAllServicesReady() {
+  DVLOG(1) << "Libassistant services are ready.";
 
-assistant_client::AssistantManagerInternal*
-ServiceController::assistant_manager_internal() {
-  return assistant_client_ ? assistant_client_->assistant_manager_internal()
-                           : nullptr;
-}
-
-void ServiceController::OnStartFinished() {
-  DVLOG(1) << "Libassistant start is finished";
+  // Notify observers on Libassistant services ready.
   SetStateAndInformObservers(mojom::ServiceState::kRunning);
 
-  for (auto& observer : assistant_client_observers_) {
+  for (auto& observer : assistant_client_observers_)
     observer.OnAssistantClientRunning(assistant_client_.get());
+}
+
+void ServiceController::OnServicesBootingUp() {
+  DVLOG(1) << "Started Libassistant service";
+
+  // We set one precondition of BootupState to reach `INITIALIZING_INTERNAL`
+  // is to wait for the gRPC HttpConnection be ready. Only after the BootupState
+  // meets the state, can AssistantManager start.
+  if (chromeos::assistant::features::IsLibAssistantV2Enabled()) {
+    assistant_client_->StartGrpcHttpConnectionClient(
+        chromium_api_delegate_->GetHttpConnectionFactory());
   }
+
+  // The Libassistant BootupState goes to `RUNNING` right after
+  // `SETTING_UP_ESSENTIAL_SERVICES` if AssistantManager::Start() is called
+  // right after the AssistantManager is created. And Libassistant emits signals
+  // of `ESSENTIAL_SERVICES_AVAILABLE` and `ALL_SERVICES_AVAILABLE` almost the
+  // same time. However, unary gRPC does not guarantee order. ChromeOS could
+  // receive these signals out of order.
+  // We call AssistantManager::Start() here, ServicesBootingUp(), which is
+  // triggered by `ESSENTIAL_SERVICES_AVAILABLE`. After the AssistantManager is
+  // started, it will trigger `ALL_SERVICES_AVAILABLE`. Therefore these two
+  // signals are generated in order.
+  // For V1, a fake `ESSENTIAL_SERVICES_AVAILABLE` signal is sent in
+  // AssistantClientV1::StartServices(). An equivalent signal of
+  // `ALL_SERVICES_AVAILABLE`, DeviceState::StartupState::finished, is sent
+  // in AssistantManagerImpl::OnBootupCheckinDone().
+  assistant_client_->assistant_manager()->Start();
+
+  // Notify observer on Libassistant services started.
+  SetStateAndInformObservers(ServiceState::kStarted);
+
+  for (auto& observer : assistant_client_observers_)
+    observer.OnAssistantClientStarted(assistant_client_.get());
 }
 
 void ServiceController::SetStateAndInformObservers(
@@ -323,20 +332,13 @@ void ServiceController::SetStateAndInformObservers(
     observer->OnStateChanged(state_);
 }
 
-void ServiceController::CreateAndRegisterDeviceStateEventObserver() {
-  device_state_event_observer_ =
-      std::make_unique<DeviceStateEventObserver>(this);
-
-  // |device_state_event_observer_| outlives |assistant_client_|.
-  assistant_client_->AddDeviceStateEventObserver(
-      device_state_event_observer_.get());
-}
-
 void ServiceController::CreateAndRegisterChromiumApiDelegate(
     mojo::PendingRemote<network::mojom::URLLoaderFactory>
         url_loader_factory_remote) {
   CreateChromiumApiDelegate(std::move(url_loader_factory_remote));
-  assistant_client_->SetChromeOSApiDelegate(chromium_api_delegate_.get());
+  if (!chromeos::assistant::features::IsLibAssistantV2Enabled()) {
+    assistant_client_->SetChromeOSApiDelegate(chromium_api_delegate_.get());
+  }
 }
 
 void ServiceController::CreateChromiumApiDelegate(

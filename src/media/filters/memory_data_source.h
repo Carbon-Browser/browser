@@ -5,10 +5,12 @@
 #ifndef MEDIA_FILTERS_MEMORY_DATA_SOURCE_H_
 #define MEDIA_FILTERS_MEMORY_DATA_SOURCE_H_
 
+#include <stddef.h>
 #include <stdint.h>
 
-#include "base/compiler_specific.h"
-#include "base/macros.h"
+#include <atomic>
+#include <string>
+
 #include "media/base/data_source.h"
 
 namespace media {
@@ -24,6 +26,9 @@ class MEDIA_EXPORT MemoryDataSource final : public DataSource {
   // Similar to the above, but takes ownership of the std::string.
   explicit MemoryDataSource(std::string data);
 
+  MemoryDataSource(const MemoryDataSource&) = delete;
+  MemoryDataSource& operator=(const MemoryDataSource&) = delete;
+
   ~MemoryDataSource() final;
 
   // Implementation of DataSource.
@@ -33,7 +38,7 @@ class MEDIA_EXPORT MemoryDataSource final : public DataSource {
             DataSource::ReadCB read_cb) final;
   void Stop() final;
   void Abort() final;
-  bool GetSize(int64_t* size_out) final WARN_UNUSED_RESULT;
+  [[nodiscard]] bool GetSize(int64_t* size_out) final;
   bool IsStreaming() final;
   void SetBitrate(int bitrate) final;
 
@@ -46,8 +51,6 @@ class MEDIA_EXPORT MemoryDataSource final : public DataSource {
   // the media thread. It's harmless if we fulfill a read after Stop() has been
   // called, so an atomic without a lock is safe.
   std::atomic<bool> is_stopped_{false};
-
-  DISALLOW_COPY_AND_ASSIGN(MemoryDataSource);
 };
 
 }  // namespace media

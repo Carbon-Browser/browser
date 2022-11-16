@@ -8,31 +8,39 @@
  */
 import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.m.js';
 import 'chrome://resources/cr_elements/icons.m.js';
-import './search_engine_entry_css.js';
-import '../settings_shared_css.js';
+import './search_engine_entry.css.js';
+import '../settings_shared.css.js';
 import '../site_favicon.js';
 
 import {AnchorAlignment} from 'chrome://resources/cr_elements/cr_action_menu/cr_action_menu.js';
-import {assert} from 'chrome://resources/js/assert.m.js';
+import {assert} from 'chrome://resources/js/assert_ts.js';
 import {FocusRowBehavior} from 'chrome://resources/js/cr/ui/focus_row_behavior.m.js';
-import {html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {ExtensionControlBrowserProxy, ExtensionControlBrowserProxyImpl} from '../extension_control_browser_proxy.js';
 
+import {getTemplate} from './omnibox_extension_entry.html.js';
 import {SearchEngine} from './search_engines_browser_proxy.js';
+
+export interface SettingsOmniboxExtensionEntryElement {
+  $: {
+    disable: HTMLButtonElement,
+    manage: HTMLButtonElement,
+  };
+}
 
 const SettingsOmniboxExtensionEntryElementBase =
     mixinBehaviors([FocusRowBehavior], PolymerElement) as
     {new (): PolymerElement & FocusRowBehavior};
 
-class SettingsOmniboxExtensionEntryElement extends
+export class SettingsOmniboxExtensionEntryElement extends
     SettingsOmniboxExtensionEntryElementBase {
   static get is() {
     return 'settings-omnibox-extension-entry';
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
   }
 
   static get properties() {
@@ -60,10 +68,17 @@ class SettingsOmniboxExtensionEntryElement extends
   }
 
   private onDotsTap_() {
-    this.shadowRoot!.querySelector('cr-action-menu')!.showAt(
-        assert(this.shadowRoot!.querySelector('cr-icon-button')!), {
-          anchorAlignmentY: AnchorAlignment.AFTER_END,
-        });
+    const dots = this.shadowRoot!.querySelector('cr-icon-button');
+    assert(dots);
+    this.shadowRoot!.querySelector('cr-action-menu')!.showAt(dots, {
+      anchorAlignmentY: AnchorAlignment.AFTER_END,
+    });
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'settings-omnibox-extension-entry': SettingsOmniboxExtensionEntryElement;
   }
 }
 

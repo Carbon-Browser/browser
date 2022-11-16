@@ -5,8 +5,10 @@
 #include <memory>
 
 #include "base/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/time/time.h"
 #include "chrome/browser/password_manager/account_password_store_factory.h"
 #include "chrome/browser/password_manager/password_store_factory.h"
 #include "chrome/browser/sync/sync_service_factory.h"
@@ -17,7 +19,6 @@
 #include "components/browsing_data/core/counters/passwords_counter.h"
 #include "components/browsing_data/core/pref_names.h"
 #include "components/password_manager/core/browser/password_form.h"
-#include "components/password_manager/core/browser/password_store.h"
 #include "components/password_manager/core/browser/password_store_interface.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/browser_thread.h"
@@ -71,9 +72,7 @@ class PasswordsCounterTest : public InProcessBrowserTest {
         browsing_data::prefs::kDeleteTimePeriod, static_cast<int>(period));
   }
 
-  void RevertTimeInDays(int days) {
-    time_ -= base::TimeDelta::FromDays(days);
-  }
+  void RevertTimeInDays(int days) { time_ -= base::Days(days); }
 
   void SetTimesUsed(int occurrences) { times_used_ = occurrences; }
 
@@ -136,15 +135,17 @@ class PasswordsCounterTest : public InProcessBrowserTest {
     PasswordForm result;
     result.signon_realm = origin;
     result.url = GURL(origin);
-    result.username_value = base::ASCIIToUTF16(username);
-    result.password_value = u"hunter2";
+    if (!blocked_by_user) {
+      result.username_value = base::ASCIIToUTF16(username);
+      result.password_value = u"hunter2";
+    }
     result.blocked_by_user = blocked_by_user;
     result.date_created = time_;
     result.times_used = times_used_;
     return result;
   }
 
-  password_manager::PasswordStoreInterface* store_;
+  raw_ptr<password_manager::PasswordStoreInterface> store_;
 
   std::unique_ptr<base::RunLoop> run_loop_;
   base::Time time_;
@@ -184,8 +185,8 @@ IN_PROC_BROWSER_TEST_F(PasswordsCounterTest, SameDomain) {
 // Tests that the counter doesn't count blocklisted entries.
 IN_PROC_BROWSER_TEST_F(PasswordsCounterTest, blocklisted) {
   AddLogin("https://www.google.com", "user1", false);
-  AddLogin("https://www.google.com", "user2", true);
-  AddLogin("https://www.chrome.com", "user3", true);
+  AddLogin("https://www.google.com", "", true);
+  AddLogin("https://www.chrome.com", "", true);
 
   Profile* profile = browser()->profile();
   browsing_data::PasswordsCounter counter(

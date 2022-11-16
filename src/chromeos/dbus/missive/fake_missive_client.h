@@ -5,15 +5,23 @@
 #ifndef CHROMEOS_DBUS_MISSIVE_FAKE_MISSIVE_CLIENT_H_
 #define CHROMEOS_DBUS_MISSIVE_FAKE_MISSIVE_CLIENT_H_
 
-#include "base/callback_forward.h"
-#include "base/files/scoped_file.h"
-#include "base/macros.h"
+#include <vector>
+
+#include "base/callback.h"
+#include "base/containers/flat_map.h"
+#include "base/memory/weak_ptr.h"
+#include "base/observer_list.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chromeos/dbus/missive/missive_client.h"
+#include "components/reporting/proto/synced/record.pb.h"
+#include "components/reporting/proto/synced/record_constants.pb.h"
 
 namespace chromeos {
 
 // Fake implementation of MissiveClient. This is currently a no-op fake.
-class FakeMissiveClient : public MissiveClient {
+class COMPONENT_EXPORT(MISSIVE) FakeMissiveClient
+    : public MissiveClient,
+      public MissiveClient::TestInterface {
  public:
   FakeMissiveClient();
   ~FakeMissiveClient() override;
@@ -23,24 +31,31 @@ class FakeMissiveClient : public MissiveClient {
 
   void Init();
 
- private:
+  // MissiveClient implementation:
   void EnqueueRecord(
-      reporting::Priority priority,
+      const reporting::Priority priority,
       reporting::Record record,
-      base::OnceCallback<void(reporting::Status)> completion_callback);
-
-  void Flush(reporting::Priority priority,
-             base::OnceCallback<void(reporting::Status)> completion_callback);
-
-  void ReportSuccess(
-      const reporting::SequencingInformation& sequencing_information,
-      bool force_confirm);
-
+      base::OnceCallback<void(reporting::Status)> completion_callback) override;
+  void Flush(
+      const reporting::Priority priority,
+      base::OnceCallback<void(reporting::Status)> completion_callback) override;
   void UpdateEncryptionKey(
-      const reporting::SignedEncryptionInfo& encryption_info);
+      const reporting::SignedEncryptionInfo& encryption_info) override;
+  void ReportSuccess(const reporting::SequenceInformation& sequence_information,
+                     bool force_confirm) override;
+  TestInterface* GetTestInterface() override;
+  base::WeakPtr<MissiveClient> GetWeakPtr() override;
 
-  // Sequenced task runner - must be first member of the class.
-  scoped_refptr<base::SequencedTaskRunner> sequenced_task_runner_;
+  // |MissiveClient::TestInterface| implementation:
+  const std::vector<::reporting::Record>& GetEnqueuedRecords(
+      ::reporting::Priority priority) override;
+  void AddObserver(Observer* observer) override;
+  void RemoveObserver(Observer* observer) override;
+
+ private:
+  base::flat_map<::reporting::Priority, std::vector<::reporting::Record>>
+      enqueued_records_;
+  base::ObserverList<Observer> observer_list_;
 
   // Weak pointer factory - must be last member of the class.
   base::WeakPtrFactory<FakeMissiveClient> weak_ptr_factory_{this};

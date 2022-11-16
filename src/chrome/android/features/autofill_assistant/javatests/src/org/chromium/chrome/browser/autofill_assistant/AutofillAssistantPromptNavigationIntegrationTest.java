@@ -21,7 +21,7 @@ import org.junit.rules.TestRule;
 import org.junit.runner.RunWith;
 
 import org.chromium.base.test.util.CommandLineFlags;
-import org.chromium.base.test.util.DisableIf;
+import org.chromium.base.test.util.DisabledTest;
 import org.chromium.chrome.browser.autofill_assistant.proto.ActionProto;
 import org.chromium.chrome.browser.autofill_assistant.proto.ChipProto;
 import org.chromium.chrome.browser.autofill_assistant.proto.PromptProto;
@@ -54,8 +54,9 @@ public class AutofillAssistantPromptNavigationIntegrationTest {
      */
     @Test
     @MediumTest
-    @DisableIf.Build(sdk_is_less_than = 21)
-    public void reloadEndsPrompt() throws Exception {
+    @DisabledTest(message = "https://crbug.com/1270760")
+    public void
+    reloadEndsPrompt() throws Exception {
         ArrayList<ActionProto> list = new ArrayList<>();
         list.add(ActionProto.newBuilder()
                          .setPrompt(PromptProto.newBuilder().setEndOnNavigation(true).addChoices(
@@ -71,8 +72,7 @@ public class AutofillAssistantPromptNavigationIntegrationTest {
         AutofillAssistantTestScript script = new AutofillAssistantTestScript(
                 SupportedScriptProto.newBuilder()
                         .setPath(TEST_PAGE)
-                        .setPresentation(PresentationProto.newBuilder().setAutostart(true).setChip(
-                                ChipProto.newBuilder().setText("Done")))
+                        .setPresentation(PresentationProto.newBuilder().setAutostart(true))
                         .build(),
                 list);
 

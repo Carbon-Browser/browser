@@ -8,8 +8,6 @@
 #include <vector>
 
 #include "ash/ash_export.h"
-#include "base/macros.h"
-#include "ui/aura/env_observer.h"
 #include "ui/aura/window_observer.h"
 #include "ui/wm/public/activation_change_observer.h"
 
@@ -35,13 +33,16 @@ bool CanIncludeWindowInMruList(aura::Window* window);
 
 // Maintains a most recently used list of windows. This is used for window
 // cycling using Alt+Tab and overview mode.
-class ASH_EXPORT MruWindowTracker : public ::wm::ActivationChangeObserver,
-                                    public aura::WindowObserver,
-                                    public aura::EnvObserver {
+class ASH_EXPORT MruWindowTracker : public wm::ActivationChangeObserver,
+                                    public aura::WindowObserver {
  public:
   using WindowList = std::vector<aura::Window*>;
 
   MruWindowTracker();
+
+  MruWindowTracker(const MruWindowTracker&) = delete;
+  MruWindowTracker& operator=(const MruWindowTracker&) = delete;
+
   ~MruWindowTracker() override;
 
   // Returns the set windows in the mru list regardless of whether they can be
@@ -92,13 +93,18 @@ class ASH_EXPORT MruWindowTracker : public ::wm::ActivationChangeObserver,
   // used window across all desks.
   void OnWindowMovedOutFromRemovingDesk(aura::Window* window);
 
+  // Called when a window is moved to another desk or created by a window
+  // restore feature. This function should be only called by
+  // `WindowRestoreController`.
+  void OnWindowAlteredByWindowRestore(aura::Window* window);
+
   const std::vector<aura::Window*>& GetMruWindowsForTesting() {
     return mru_windows_;
   }
 
  private:
-  // Updates the mru_windows_ list to insert/move |active_window| at/to the
-  // front.
+  // Updates the `mru_windows_` list to insert/move `active_window` at/to the
+  // back.
   void SetActiveWindow(aura::Window* active_window);
 
   // wm::ActivationChangeObserver:
@@ -109,16 +115,13 @@ class ASH_EXPORT MruWindowTracker : public ::wm::ActivationChangeObserver,
   // aura::WindowObserver:
   void OnWindowDestroyed(aura::Window* window) override;
 
-  // EnvObserver:
-  void OnWindowInitialized(aura::Window* window) override;
-
   // List of windows that have been activated in containers that we cycle
-  // through, sorted such that the most recently used window comes last.
+  // through, sorted such that the most recently used window comes last. Note
+  // that this ordering differs from the lists returned by the
+  // `Build*Window*List` functions, which are reversed.
   std::vector<aura::Window*> mru_windows_;
 
   bool ignore_window_activations_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(MruWindowTracker);
 };
 
 }  // namespace ash

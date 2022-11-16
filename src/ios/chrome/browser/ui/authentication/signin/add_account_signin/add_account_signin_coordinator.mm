@@ -77,10 +77,10 @@ using signin_metrics::PromoAction;
                  completion:(ProceduralBlock)completion {
   if (self.userSigninCoordinator) {
     DCHECK(!self.addAccountSigninManager);
-    // When interrupting |self.userSigninCoordinator|,
-    // |self.userSigninCoordinator.signinCompletion| is called. This callback
-    // is in charge to call |[self runCompletionCallbackWithSigninResult:
-    // completionInfo:].
+    // When interrupting `self.userSigninCoordinator`,
+    // `self.userSigninCoordinator.signinCompletion` is called. This callback
+    // is in charge to call `[self runCompletionCallbackWithSigninResult:
+    // completionInfo:]`.
     [self.userSigninCoordinator interruptWithAction:action
                                          completion:completion];
     return;
@@ -162,7 +162,7 @@ using signin_metrics::PromoAction;
     // is already stopped. This call can be ignored.
     return;
   }
-  // Add account is done, we don't need |self.AddAccountSigninManager|
+  // Add account is done, we don't need `self.AddAccountSigninManager`
   // anymore.
   self.addAccountSigninManager = nil;
   if (signinResult == SigninCoordinatorResultInterrupted) {
@@ -173,7 +173,12 @@ using signin_metrics::PromoAction;
 
   if (signinResult == SigninCoordinatorResultSuccess &&
       !self.accountManagerService->IsValidIdentity(identity)) {
-    [self presentSignInWithRestrictedAccountAlert];
+    __weak __typeof(self) weakSelf = self;
+    // A dispatch is needed to ensure that the alert is displayed after
+    // dismissing the signin view.
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [weakSelf presentSignInWithRestrictedAccountAlert];
+    });
     return;
   }
 
@@ -229,7 +234,7 @@ using signin_metrics::PromoAction;
                               identity:(ChromeIdentity*)identity {
   DCHECK(!self.alertCoordinator);
   DCHECK(!self.userSigninCoordinator);
-  // |identity| is set, only and only if the sign-in is successful.
+  // `identity` is set, only and only if the sign-in is successful.
   DCHECK(((signinResult == SigninCoordinatorResultSuccess) && identity) ||
          ((signinResult != SigninCoordinatorResultSuccess) && !identity));
   SigninCompletionInfo* completionInfo =
@@ -238,7 +243,7 @@ using signin_metrics::PromoAction;
                                completionInfo:completionInfo];
 }
 
-// Presents the user consent screen with |identity| pre-selected.
+// Presents the user consent screen with `identity` pre-selected.
 - (void)presentUserConsentWithIdentity:(ChromeIdentity*)identity {
   // The UserSigninViewController is presented on top of the currently displayed
   // view controller.
@@ -259,6 +264,18 @@ using signin_metrics::PromoAction;
                                         identity:signinCompletionInfo.identity];
       };
   [self.userSigninCoordinator start];
+}
+
+#pragma mark - NSObject
+
+- (NSString*)description {
+  return [NSString
+      stringWithFormat:@"<%@: %p, signinIntent: %lu, accessPoint: %d, "
+                       @"userSigninCoordinator: %p, addAccountSigninManager: "
+                       @"%p, alertCoordinator: %p>",
+                       self.class.description, self, self.signinIntent,
+                       self.accessPoint, self.userSigninCoordinator,
+                       self.addAccountSigninManager, self.alertCoordinator];
 }
 
 @end

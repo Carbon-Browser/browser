@@ -5,7 +5,6 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
@@ -61,7 +60,7 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestCreditCardEditorTest,
   InvokePaymentRequestUI();
 
   // No apps are available.
-  PaymentRequest* request = GetPaymentRequests(GetActiveWebContents()).front();
+  PaymentRequest* request = GetPaymentRequests().front();
   EXPECT_EQ(0U, request->state()->available_apps().size());
   EXPECT_EQ(nullptr, request->state()->selected_app());
 
@@ -119,7 +118,7 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestCreditCardEditorTest,
   InvokePaymentRequestUI();
 
   // No apps are available.
-  PaymentRequest* request = GetPaymentRequests(GetActiveWebContents()).front();
+  PaymentRequest* request = GetPaymentRequests().front();
   EXPECT_EQ(0U, request->state()->available_apps().size());
   EXPECT_EQ(nullptr, request->state()->selected_app());
 
@@ -217,146 +216,6 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestCreditCardEditorTest,
   SetComboboxValue(u"12", autofill::CREDIT_CARD_EXP_MONTH);
 
   EXPECT_TRUE(save_button->GetEnabled());
-}
-
-class DISABLED_PaymentRequestCreditCardEditorTestWithGooglePayEnabled
-    : public DISABLED_PaymentRequestCreditCardEditorTest {
- public:
-  DISABLED_PaymentRequestCreditCardEditorTestWithGooglePayEnabled() {
-    // Masked cards are from Google Pay.
-    feature_list_.InitAndEnableFeature(features::kReturnGooglePayInBasicCard);
-  }
-
- private:
-  base::test::ScopedFeatureList feature_list_;
-};
-
-IN_PROC_BROWSER_TEST_F(
-    DISABLED_PaymentRequestCreditCardEditorTestWithGooglePayEnabled,
-    EditingMaskedCard) {
-  NavigateTo("/payment_request_no_shipping_test.html");
-  autofill::TestAutofillClock test_clock;
-  test_clock.SetNow(kJune2017);
-
-  autofill::AutofillProfile billing_profile(autofill::test::GetFullProfile());
-  AddAutofillProfile(billing_profile);
-  // Add a second address profile to the DB.
-  autofill::AutofillProfile additional_profile =
-      autofill::test::GetFullProfile2();
-  AddAutofillProfile(additional_profile);
-  autofill::CreditCard card = autofill::test::GetMaskedServerCard();
-  card.set_billing_address_id(billing_profile.guid());
-  AddCreditCard(card);
-
-  InvokePaymentRequestUI();
-
-  OpenPaymentMethodScreen();
-
-  views::View* list_view = dialog_view()->GetViewByID(
-      static_cast<int>(DialogViewID::PAYMENT_METHOD_SHEET_LIST_VIEW));
-  EXPECT_TRUE(list_view);
-  EXPECT_EQ(1u, list_view->children().size());
-
-  views::View* edit_button = list_view->children().front()->GetViewByID(
-      static_cast<int>(DialogViewID::EDIT_ITEM_BUTTON));
-
-  ResetEventWaiter(DialogEvent::CREDIT_CARD_EDITOR_OPENED);
-  ClickOnDialogViewAndWait(edit_button);
-
-  // Name, number and expiration are readonly labels.
-  EXPECT_EQ(card.NetworkAndLastFourDigits(),
-            GetLabelText(static_cast<payments::DialogViewID>(
-                EditorViewController::GetInputFieldViewId(
-                    autofill::CREDIT_CARD_NUMBER))));
-  EXPECT_EQ(u"Bonnie Parker", GetLabelText(static_cast<payments::DialogViewID>(
-                                  EditorViewController::GetInputFieldViewId(
-                                      autofill::CREDIT_CARD_NAME_FULL))));
-  EXPECT_EQ(card.ExpirationDateForDisplay(),
-            GetLabelText(static_cast<payments::DialogViewID>(
-                EditorViewController::GetInputFieldViewId(
-                    autofill::CREDIT_CARD_EXP_DATE_4_DIGIT_YEAR))));
-
-  // Billing address combobox must be enabled.
-  views::Combobox* billing_address_combobox = static_cast<views::Combobox*>(
-      dialog_view()->GetViewByID(EditorViewController::GetInputFieldViewId(
-          autofill::ADDRESS_BILLING_LINE1)));
-  ASSERT_NE(nullptr, billing_address_combobox);
-  EXPECT_TRUE(billing_address_combobox->GetEnabled());
-  autofill::AddressComboboxModel* model =
-      static_cast<autofill::AddressComboboxModel*>(
-          billing_address_combobox->GetModel());
-  EXPECT_EQ(
-      billing_profile.guid(),
-      model->GetItemIdentifierAt(billing_address_combobox->GetSelectedIndex()));
-
-  // Select a different billing address.
-  SelectBillingAddress(additional_profile.guid());
-
-  // Verifying the data is in the DB.
-  autofill::PersonalDataManager* personal_data_manager = GetDataManager();
-  personal_data_manager->AddObserver(&personal_data_observer_);
-
-  ResetEventWaiter(DialogEvent::BACK_TO_PAYMENT_SHEET_NAVIGATION);
-
-  // Wait until the web database has been updated and the notification sent.
-  base::RunLoop data_loop;
-  EXPECT_CALL(personal_data_observer_, OnPersonalDataChanged())
-      .WillOnce(QuitMessageLoop(&data_loop));
-  ClickOnDialogViewAndWait(DialogViewID::EDITOR_SAVE_BUTTON);
-  data_loop.Run();
-
-  PaymentRequest* request = GetPaymentRequests(GetActiveWebContents()).front();
-  autofill::CreditCard* selected =
-      static_cast<AutofillPaymentApp*>(request->state()->selected_app())
-          ->credit_card();
-  EXPECT_EQ(additional_profile.guid(), selected->billing_address_id());
-}
-
-IN_PROC_BROWSER_TEST_F(
-    DISABLED_PaymentRequestCreditCardEditorTestWithGooglePayEnabled,
-    EditingMaskedCard_ClickOnPaymentsLink) {
-  NavigateTo("/payment_request_no_shipping_test.html");
-  autofill::TestAutofillClock test_clock;
-  test_clock.SetNow(kJune2017);
-
-  autofill::AutofillProfile billing_profile(autofill::test::GetFullProfile());
-  AddAutofillProfile(billing_profile);
-  // Add a second address profile to the DB.
-  autofill::AutofillProfile additional_profile =
-      autofill::test::GetFullProfile2();
-  AddAutofillProfile(additional_profile);
-  autofill::CreditCard card = autofill::test::GetMaskedServerCard();
-  card.set_billing_address_id(billing_profile.guid());
-  AddCreditCard(card);
-
-  InvokePaymentRequestUI();
-
-  OpenPaymentMethodScreen();
-
-  views::View* list_view = dialog_view()->GetViewByID(
-      static_cast<int>(DialogViewID::PAYMENT_METHOD_SHEET_LIST_VIEW));
-  EXPECT_TRUE(list_view);
-  EXPECT_EQ(1u, list_view->children().size());
-
-  views::View* edit_button = list_view->children().front()->GetViewByID(
-      static_cast<int>(DialogViewID::EDIT_ITEM_BUTTON));
-
-  ResetEventWaiter(DialogEvent::CREDIT_CARD_EDITOR_OPENED);
-  ClickOnDialogViewAndWait(edit_button);
-
-  views::StyledLabel* styled_label =
-      static_cast<views::StyledLabel*>(dialog_view()->GetViewByID(
-          static_cast<int>(DialogViewID::GOOGLE_PAYMENTS_EDIT_LINK_LABEL)));
-  EXPECT_TRUE(styled_label);
-
-  content::WebContentsAddedObserver web_contents_added_observer;
-  styled_label->ClickLinkForTesting();
-  content::WebContents* new_tab_contents =
-      web_contents_added_observer.GetWebContents();
-
-  // A tab has opened at the Google Payments link.
-  EXPECT_EQ(autofill::payments::GetManageAddressesUrl(),
-            new_tab_contents->GetVisibleURL());
 }
 
 IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestCreditCardEditorTest,
@@ -529,7 +388,7 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestCreditCardEditorTest,
 
   // One app is available, and it's selected because that's allowed for expired
   // credit cards.
-  PaymentRequest* request = GetPaymentRequests(GetActiveWebContents()).front();
+  PaymentRequest* request = GetPaymentRequests().front();
   EXPECT_EQ(1U, request->state()->available_apps().size());
   EXPECT_NE(nullptr, request->state()->selected_app());
 
@@ -614,7 +473,7 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestCreditCardEditorTest,
   InvokePaymentRequestUI();
 
   // One app is available, but it's not selected.
-  PaymentRequest* request = GetPaymentRequests(GetActiveWebContents()).front();
+  PaymentRequest* request = GetPaymentRequests().front();
   EXPECT_EQ(1U, request->state()->available_apps().size());
   EXPECT_EQ(nullptr, request->state()->selected_app());
 
@@ -626,7 +485,7 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestCreditCardEditorTest,
 
   // Proper error shown.
   EXPECT_EQ(l10n_util::GetStringUTF16(IDS_PAYMENTS_BILLING_ADDRESS_REQUIRED),
-            GetErrorLabelForType(autofill::ADDRESS_BILLING_LINE1));
+            GetErrorLabelForType(autofill::ADDRESS_HOME_LINE1));
 
   // Fixing the billing address.
   SelectBillingAddress(billing_profile.guid());
@@ -675,7 +534,7 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestCreditCardEditorTest,
   InvokePaymentRequestUI();
 
   // One app is available, but it's not selected.
-  PaymentRequest* request = GetPaymentRequests(GetActiveWebContents()).front();
+  PaymentRequest* request = GetPaymentRequests().front();
   EXPECT_EQ(1U, request->state()->available_apps().size());
   EXPECT_EQ(nullptr, request->state()->selected_app());
 
@@ -735,7 +594,7 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestCreditCardEditorTest,
   InvokePaymentRequestUI();
 
   // One app is available, it is not selected, but is properly named.
-  PaymentRequest* request = GetPaymentRequests(GetActiveWebContents()).front();
+  PaymentRequest* request = GetPaymentRequests().front();
   EXPECT_EQ(1U, request->state()->available_apps().size());
   EXPECT_EQ(nullptr, request->state()->selected_app());
   EXPECT_EQ(
@@ -786,7 +645,7 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestCreditCardEditorTest,
   InvokePaymentRequestUI();
 
   // One app is available, but it's not selected.
-  PaymentRequest* request = GetPaymentRequests(GetActiveWebContents()).front();
+  PaymentRequest* request = GetPaymentRequests().front();
   EXPECT_EQ(1U, request->state()->available_apps().size());
   EXPECT_EQ(nullptr, request->state()->selected_app());
 
@@ -796,9 +655,8 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestCreditCardEditorTest,
   ClickOnChildInListViewAndWait(/*child_index=*/0, /*num_children=*/1,
                                 DialogViewID::PAYMENT_METHOD_SHEET_LIST_VIEW);
   // Billing address combobox must be disabled since there are no saved address.
-  views::View* billing_address_combobox =
-      dialog_view()->GetViewByID(EditorViewController::GetInputFieldViewId(
-          autofill::ADDRESS_BILLING_LINE1));
+  views::View* billing_address_combobox = dialog_view()->GetViewByID(
+      EditorViewController::GetInputFieldViewId(autofill::ADDRESS_HOME_LINE1));
   ASSERT_NE(nullptr, billing_address_combobox);
   EXPECT_FALSE(billing_address_combobox->GetEnabled());
 
@@ -831,7 +689,7 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestCreditCardEditorTest,
   // The billing address must be properly selected and valid.
   views::Combobox* billing_combobox = static_cast<views::Combobox*>(
       dialog_view()->GetViewByID(EditorViewController::GetInputFieldViewId(
-          autofill::ADDRESS_BILLING_LINE1)));
+          autofill::ADDRESS_HOME_LINE1)));
   ASSERT_NE(nullptr, billing_combobox);
   EXPECT_FALSE(billing_combobox->GetInvalid());
   EXPECT_TRUE(billing_combobox->GetEnabled());
@@ -872,7 +730,7 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestCreditCardEditorTest,
   InvokePaymentRequestUI();
 
   // One app is available, but it's not selected.
-  PaymentRequest* request = GetPaymentRequests(GetActiveWebContents()).front();
+  PaymentRequest* request = GetPaymentRequests().front();
   EXPECT_EQ(1U, request->state()->available_apps().size());
   EXPECT_EQ(nullptr, request->state()->selected_app());
 
@@ -886,7 +744,7 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestCreditCardEditorTest,
   InvokePaymentRequestUI();
 
   // Still have one app, but now it's selected.
-  request = GetPaymentRequests(GetActiveWebContents()).front();
+  request = GetPaymentRequests().front();
   EXPECT_EQ(1U, request->state()->available_apps().size());
   EXPECT_EQ(request->state()->available_apps().back().get(),
             request->state()->selected_app());
@@ -959,7 +817,7 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestCreditCardEditorTest,
   InvokePaymentRequestUI();
 
   // No apps are available.
-  PaymentRequest* request = GetPaymentRequests(GetActiveWebContents()).front();
+  PaymentRequest* request = GetPaymentRequests().front();
   EXPECT_EQ(0U, request->state()->available_apps().size());
   EXPECT_EQ(nullptr, request->state()->selected_app());
 

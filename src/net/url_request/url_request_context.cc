@@ -5,6 +5,7 @@
 #include "net/url_request/url_request_context.h"
 
 #include <inttypes.h>
+#include <stdint.h>
 
 #include "base/compiler_specific.h"
 #include "base/debug/alias.h"
@@ -14,10 +15,7 @@
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/threading/thread_task_runner_handle.h"
-#include "base/trace_event/memory_allocator_dump.h"
-#include "base/trace_event/memory_dump_manager.h"
-#include "base/trace_event/memory_dump_request_args.h"
-#include "base/trace_event/process_memory_dump.h"
+#include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "net/base/http_user_agent_settings.h"
 #include "net/cookies/cookie_store.h"
@@ -25,49 +23,20 @@
 #include "net/http/http_cache.h"
 #include "net/http/http_network_session.h"
 #include "net/http/http_transaction_factory.h"
+#include "net/log/net_log_source.h"
 #include "net/socket/ssl_client_socket_impl.h"
 #include "net/url_request/url_request.h"
 
 namespace net {
 
-URLRequestContext::URLRequestContext()
-    : net_log_(nullptr),
-      host_resolver_(nullptr),
-      cert_verifier_(nullptr),
-      http_auth_handler_factory_(nullptr),
-      proxy_resolution_service_(nullptr),
-      proxy_delegate_(nullptr),
-      ssl_config_service_(nullptr),
-      network_delegate_(nullptr),
-      http_server_properties_(nullptr),
-      http_user_agent_settings_(nullptr),
-      cookie_store_(nullptr),
-      transport_security_state_(nullptr),
-      ct_policy_enforcer_(nullptr),
-      sct_auditing_delegate_(nullptr),
-      http_transaction_factory_(nullptr),
-      job_factory_(nullptr),
-      throttler_manager_(nullptr),
-      quic_context_(nullptr),
-      network_quality_estimator_(nullptr),
-#if BUILDFLAG(ENABLE_REPORTING)
-      reporting_service_(nullptr),
-      network_error_logging_service_(nullptr),
-#endif  // BUILDFLAG(ENABLE_REPORTING)
-      url_requests_(std::make_unique<std::set<const URLRequest*>>()),
-      enable_brotli_(false),
-      check_cleartext_permitted_(false),
-      require_network_isolation_key_(false),
-      name_("unknown") {
-  base::trace_event::MemoryDumpManager::GetInstance()->RegisterDumpProvider(
-      this, "URLRequestContext", base::ThreadTaskRunnerHandle::Get());
-}
+URLRequestContext::URLRequestContext(
+    base::PassKey<URLRequestContextBuilder> pass_key)
+    : url_requests_(std::make_unique<std::set<const URLRequest*>>()),
+      bound_network_(NetworkChangeNotifier::kInvalidNetworkHandle) {}
 
 URLRequestContext::~URLRequestContext() {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   AssertNoURLRequests();
-  base::trace_event::MemoryDumpManager::GetInstance()->UnregisterDumpProvider(
-      this);
 }
 
 const HttpNetworkSessionParams* URLRequestContext::GetNetworkSessionParams()
@@ -94,7 +63,8 @@ const HttpNetworkSessionContext* URLRequestContext::GetNetworkSessionContext()
 
 // TODO(crbug.com/1052397): Revisit once build flag switch of lacros-chrome is
 // complete.
-#if !defined(OS_WIN) && !(defined(OS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS))
+#if !BUILDFLAG(IS_WIN) && \
+    !(BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS))
 std::unique_ptr<URLRequest> URLRequestContext::CreateRequest(
     const GURL& url,
     RequestPriority priority,
@@ -109,9 +79,11 @@ std::unique_ptr<URLRequest> URLRequestContext::CreateRequest(
     RequestPriority priority,
     URLRequest::Delegate* delegate,
     NetworkTrafficAnnotationTag traffic_annotation,
-    bool is_for_websockets) const {
-  return base::WrapUnique(new URLRequest(
-      url, priority, delegate, this, traffic_annotation, is_for_websockets));
+    bool is_for_websockets,
+    const absl::optional<net::NetLogSource> net_log_source) const {
+  return base::WrapUnique(new URLRequest(url, priority, delegate, this,
+                                         traffic_annotation, is_for_websockets,
+                                         net_log_source));
 }
 
 void URLRequestContext::set_cookie_store(CookieStore* cookie_store) {
@@ -131,26 +103,6 @@ void URLRequestContext::AssertNoURLRequests() const {
     CHECK(false) << "Leaked " << num_requests << " URLRequest(s). First URL: "
                  << request->url().spec().c_str() << ".";
   }
-}
-
-bool URLRequestContext::OnMemoryDump(
-    const base::trace_event::MemoryDumpArgs& args,
-    base::trace_event::ProcessMemoryDump* pmd) {
-  std::string dump_name =
-      base::StringPrintf("net/url_request_context/%s/0x%" PRIxPTR,
-                         name_.c_str(), reinterpret_cast<uintptr_t>(this));
-  base::trace_event::MemoryAllocatorDump* dump =
-      pmd->CreateAllocatorDump(dump_name);
-  dump->AddScalar(base::trace_event::MemoryAllocatorDump::kNameObjectCount,
-                  base::trace_event::MemoryAllocatorDump::kUnitsObjects,
-                  url_requests_->size());
-  HttpTransactionFactory* transaction_factory = http_transaction_factory();
-  if (transaction_factory) {
-    HttpCache* http_cache = transaction_factory->GetCache();
-    if (http_cache)
-      http_cache->DumpMemoryStats(pmd, dump->absolute_name());
-  }
-  return true;
 }
 
 }  // namespace net

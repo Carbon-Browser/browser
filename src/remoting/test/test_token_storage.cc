@@ -9,7 +9,6 @@
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/logging.h"
-#include "base/macros.h"
 #include "base/memory/ptr_util.h"
 #include "base/values.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -37,6 +36,10 @@ class TestTokenStorageOnDisk : public TestTokenStorage {
  public:
   TestTokenStorageOnDisk(const std::string& user_name,
                          const base::FilePath& tokens_file_path);
+
+  TestTokenStorageOnDisk(const TestTokenStorageOnDisk&) = delete;
+  TestTokenStorageOnDisk& operator=(const TestTokenStorageOnDisk&) = delete;
+
   ~TestTokenStorageOnDisk() override;
 
   // TestTokenStorage interface.
@@ -62,8 +65,6 @@ class TestTokenStorageOnDisk : public TestTokenStorage {
 
   // Path used to retrieve the tokens file.
   base::FilePath file_path_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestTokenStorageOnDisk);
 };
 
 TestTokenStorageOnDisk::TestTokenStorageOnDisk(const std::string& user_name,

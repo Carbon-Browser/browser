@@ -8,12 +8,14 @@
 #include <vector>
 
 #include "base/bind.h"
+#include "base/command_line.h"
 #include "base/run_loop.h"
 #include "base/test/scoped_command_line.h"
 #include "base/test/simple_test_clock.h"
 #include "base/test/simple_test_tick_clock.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_mock_time_task_runner.h"
+#include "base/time/time.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/testing_pref_service.h"
 #include "components/query_tiles/internal/black_hole_log_sink.h"
@@ -88,7 +90,7 @@ class TileServiceSchedulerTest : public testing::Test {
 
   std::unique_ptr<net::BackoffEntry> GetBackoffPolicy() {
     std::unique_ptr<net::BackoffEntry> result;
-    const base::ListValue* value = prefs()->GetList(kBackoffEntryKey);
+    const base::Value* value = prefs()->GetList(kBackoffEntryKey);
     if (value) {
       result = net::BackoffEntrySerializer::DeserializeFromValue(
           *value, &kTestPolicy, tick_clock(), clock()->Now());
@@ -254,7 +256,7 @@ TEST_F(TileServiceSchedulerTest, FirstKickoffNotOverride) {
   auto now = clock()->Now();
   tile_service_scheduler()->OnTileManagerInitialized(TileGroupStatus::kNoTiles);
   EXPECT_EQ(prefs()->GetTime(kFirstScheduleTimeKey), now);
-  auto two_hours_later = now + base::TimeDelta::FromHours(2);
+  auto two_hours_later = now + base::Hours(2);
   clock()->SetNow(two_hours_later);
   tile_service_scheduler()->OnTileManagerInitialized(TileGroupStatus::kNoTiles);
   tile_service_scheduler()->OnTileManagerInitialized(TileGroupStatus::kNoTiles);
@@ -284,7 +286,7 @@ TEST_F(TileServiceSchedulerTest, FirstRunFinishedAfterInstantFetchComplete) {
   // tiles, the scheduler should start a new first kickoff flow.
   scoped_command_line.GetProcessCommandLine()->RemoveSwitch(
       query_tiles::switches::kQueryTilesInstantBackgroundTask);
-  auto two_hours_later = now + base::TimeDelta::FromHours(2);
+  auto two_hours_later = now + base::Hours(2);
   clock()->SetNow(two_hours_later);
   EXPECT_CALL(*native_scheduler(), Schedule(_)).Times(1);
   tile_service_scheduler()->OnTileManagerInitialized(TileGroupStatus::kNoTiles);

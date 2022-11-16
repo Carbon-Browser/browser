@@ -12,15 +12,16 @@
 
 #include "base/bind.h"
 #include "base/callback_helpers.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/task_runner_util.h"
+#include "base/task/task_runner_util.h"
 #include "build/branding_buildflags.h"
 #include "build/build_config.h"
+#include "build/chromeos_buildflags.h"
 #include "chrome/browser/metrics/metrics_reporting_state.h"
 #include "chrome/browser/prefs/session_startup_pref.h"
+#include "chrome/browser/sessions/exit_type_service.h"
 #include "chrome/browser/sessions/session_restore.h"
-#include "chrome/browser/ui/browser_dialogs.h"
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/browser_list_observer.h"
 #include "chrome/browser/ui/bubble_anchor_util.h"
@@ -39,6 +40,7 @@
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_thread.h"
 #include "ui/base/buildflags.h"
+#include "ui/base/interaction/element_identifier.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/models/dialog_model.h"
 #include "ui/base/window_open_disposition.h"
@@ -54,11 +56,13 @@
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "chrome/browser/browser_process.h"
-#include "components/metrics/structured/neutrino_logging.h"
-#include "components/metrics/structured/neutrino_logging_util.h"
+#include "components/metrics/structured/neutrino_logging.h"       // nogncheck
+#include "components/metrics/structured/neutrino_logging_util.h"  // nogncheck
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 namespace {
+
+views::BubbleDialogDelegate* g_instance_for_test = nullptr;
 
 enum SessionCrashedBubbleHistogramValue {
   SESSION_CRASHED_BUBBLE_SHOWN,
@@ -96,10 +100,19 @@ void OpenUmaLink(Browser* browser, const ui::Event& event) {
   RecordBubbleHistogramValue(SESSION_CRASHED_BUBBLE_HELP);
 }
 
-constexpr int kUmaConsentCheckboxId = 1;
+DEFINE_LOCAL_ELEMENT_IDENTIFIER_VALUE(kUmaConsentCheckboxId);
 
 class SessionCrashedBubbleDelegate : public ui::DialogModelDelegate {
  public:
+  explicit SessionCrashedBubbleDelegate(Profile* profile) {
+    if (ExitTypeService* exit_type_service =
+            ExitTypeService::GetInstanceForProfile(profile)) {
+      crashed_lock_ = exit_type_service->CreateCrashedLock();
+    }
+  }
+
+  ~SessionCrashedBubbleDelegate() override { g_instance_for_test = nullptr; }
+
   void OpenStartupPages(Browser* browser) {
     ignored_ = false;
 
@@ -120,6 +133,11 @@ class SessionCrashedBubbleDelegate : public ui::DialogModelDelegate {
   void RestorePreviousSession(Browser* browser) {
     ignored_ = false;
     MaybeEnableUma();
+    // The call to Close() deletes this. Grab the lock so that session restore
+    // is triggered before the lock is destroyed, otherwise ExitTypeService
+    // won't wait for restore to complete.
+    std::unique_ptr<ExitTypeService::CrashedLock> lock =
+        std::move(crashed_lock_);
     dialog_model()->host()->Close();
 
     RecordBubbleHistogramValue(SESSION_CRASHED_BUBBLE_RESTORED);
@@ -149,6 +167,7 @@ class SessionCrashedBubbleDelegate : public ui::DialogModelDelegate {
 
  private:
   bool ignored_ = true;
+  std::unique_ptr<ExitTypeService::CrashedLock> crashed_lock_;
 };
 
 }  // namespace
@@ -162,6 +181,9 @@ class SessionCrashedBubbleView::BrowserRemovalObserver
     BrowserList::AddObserver(this);
   }
 
+  BrowserRemovalObserver(const BrowserRemovalObserver&) = delete;
+  BrowserRemovalObserver& operator=(const BrowserRemovalObserver&) = delete;
+
   ~BrowserRemovalObserver() override { BrowserList::RemoveObserver(this); }
 
   // Overridden from BrowserListObserver.
@@ -173,9 +195,7 @@ class SessionCrashedBubbleView::BrowserRemovalObserver
   Browser* browser() const { return browser_; }
 
  private:
-  Browser* browser_;
-
-  DISALLOW_COPY_AND_ASSIGN(BrowserRemovalObserver);
+  raw_ptr<Browser> browser_;
 };
 
 // static
@@ -227,18 +247,21 @@ void SessionCrashedBubbleView::Show(
   RecordBubbleHistogramValue(SESSION_CRASHED_BUBBLE_ERROR);
 }
 
+// static
+views::BubbleDialogDelegate* SessionCrashedBubbleView::GetInstanceForTest() {
+  return g_instance_for_test;
+}
+
 views::BubbleDialogDelegate* SessionCrashedBubbleView::ShowBubble(
     Browser* browser,
     bool uma_opted_in_already,
     bool offer_uma_optin) {
-  chrome::RecordDialogCreation(chrome::DialogIdentifier::SESSION_CRASHED);
-
   views::View* anchor_view = BrowserView::GetBrowserViewForBrowser(browser)
                                  ->toolbar_button_provider()
                                  ->GetAppMenuButton();
 
   auto bubble_delegate_unique =
-      std::make_unique<SessionCrashedBubbleDelegate>();
+      std::make_unique<SessionCrashedBubbleDelegate>(browser->profile());
   SessionCrashedBubbleDelegate* bubble_delegate = bubble_delegate_unique.get();
 
   ui::DialogModel::Builder dialog_builder(std::move(bubble_delegate_unique));
@@ -246,7 +269,7 @@ views::BubbleDialogDelegate* SessionCrashedBubbleView::ShowBubble(
       .SetTitle(l10n_util::GetStringUTF16(IDS_SESSION_CRASHED_BUBBLE_TITLE))
       .DisableCloseOnDeactivate()
       .SetIsAlertDialog()
-      .SetWindowClosingCallback(
+      .SetDialogDestroyingCallback(
           base::BindOnce(&SessionCrashedBubbleDelegate::OnWindowClosing,
                          base::Unretained(bubble_delegate)))
       .AddBodyText(ui::DialogModelLabel(IDS_SESSION_CRASHED_VIEW_MESSAGE));
@@ -267,7 +290,7 @@ views::BubbleDialogDelegate* SessionCrashedBubbleView::ShowBubble(
   const SessionStartupPref session_startup_pref =
       SessionStartupPref::GetStartupPref(browser->profile());
 
-  if (session_startup_pref.type == SessionStartupPref::URLS &&
+  if (session_startup_pref.ShouldOpenUrls() &&
       !session_startup_pref.urls.empty()) {
     dialog_builder.AddCancelButton(
         base::BindOnce(&SessionCrashedBubbleDelegate::OpenStartupPages,
@@ -283,6 +306,7 @@ views::BubbleDialogDelegate* SessionCrashedBubbleView::ShowBubble(
       dialog_builder.Build(), anchor_view, views::BubbleBorder::TOP_RIGHT);
 
   views::BubbleDialogDelegate* bubble_ptr = bubble.get();
+  g_instance_for_test = bubble_ptr;
   views::BubbleDialogDelegate::CreateBubble(std::move(bubble))->Show();
 
   RecordBubbleHistogramValue(SESSION_CRASHED_BUBBLE_SHOWN);

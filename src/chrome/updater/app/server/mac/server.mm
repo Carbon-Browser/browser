@@ -8,12 +8,12 @@
 #include <xpc/xpc.h>
 
 #include "base/bind.h"
+#include "base/callback.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/mac/foundation_util.h"
 #include "base/mac/scoped_nsobject.h"
 #include "base/memory/ref_counted.h"
-#include "base/task/post_task.h"
 #include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/time.h"
 #include "chrome/updater/app/app.h"
@@ -22,6 +22,7 @@
 #include "chrome/updater/app/server/mac/service_delegate.h"
 #include "chrome/updater/configurator.h"
 #include "chrome/updater/constants.h"
+#include "chrome/updater/mac/setup/keystone.h"
 #include "chrome/updater/mac/setup/setup.h"
 #import "chrome/updater/mac/xpc_service_names.h"
 #include "chrome/updater/prefs.h"
@@ -56,7 +57,9 @@ void AppServerMac::ActiveDutyInternal(
                                 appServer:scoped_refptr<AppServerMac>(this)]);
 
     update_service_internal_listener_.reset([[NSXPCListener alloc]
-        initWithMachServiceName:GetUpdateServiceInternalMachName().get()]);
+        initWithMachServiceName:GetUpdateServiceInternalMachName(
+                                    updater_scope())
+                                    .get()]);
     update_service_internal_listener_.get().delegate =
         update_service_internal_delegate_.get();
 
@@ -74,7 +77,8 @@ void AppServerMac::ActiveDuty(scoped_refptr<UpdateService> update_service) {
                     appServer:scoped_refptr<AppServerMac>(this)]);
 
     update_check_listener_.reset([[NSXPCListener alloc]
-        initWithMachServiceName:GetUpdateServiceMachName().get()]);
+        initWithMachServiceName:GetUpdateServiceMachName(updater_scope())
+                                    .get()]);
     update_check_listener_.get().delegate = update_check_delegate_.get();
 
     [update_check_listener_ resume];
@@ -85,8 +89,14 @@ void AppServerMac::UninstallSelf() {
   UninstallCandidate(updater_scope());
 }
 
-bool AppServerMac::SwapRPCInterfaces() {
-  return PromoteCandidate(updater_scope()) == setup_exit_codes::kSuccess;
+bool AppServerMac::SwapInNewVersion() {
+  return PromoteCandidate(updater_scope()) == kErrorOk;
+}
+
+bool AppServerMac::MigrateLegacyUpdaters(
+    base::RepeatingCallback<void(const RegistrationRequest&)>
+        register_callback) {
+  return ConvertKeystone(updater_scope(), register_callback);
 }
 
 void AppServerMac::TaskStarted() {
@@ -103,7 +113,7 @@ void AppServerMac::MarkTaskStarted() {
 base::TimeDelta AppServerMac::ServerKeepAlive() {
   int seconds = external_constants()->ServerKeepAliveSeconds();
   VLOG(2) << "ServerKeepAliveSeconds: " << seconds;
-  return base::TimeDelta::FromSeconds(seconds);
+  return base::Seconds(seconds);
 }
 
 void AppServerMac::TaskCompleted() {

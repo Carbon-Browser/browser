@@ -4,8 +4,6 @@
 
 #include "extensions/browser/api/extension_types_utils.h"
 
-#include "base/macros.h"
-
 namespace extensions {
 
 mojom::RunLocation ConvertRunLocation(api::extension_types::RunAt run_at) {
@@ -42,6 +40,33 @@ api::extension_types::RunAt ConvertRunLocationForAPI(
 
   NOTREACHED();
   return api::extension_types::RUN_AT_DOCUMENT_IDLE;
+}
+
+mojom::ExecutionWorld ConvertExecutionWorld(
+    api::extension_types::ExecutionWorld world) {
+  mojom::ExecutionWorld execution_world = mojom::ExecutionWorld::kIsolated;
+  switch (world) {
+    case api::extension_types::EXECUTION_WORLD_NONE:
+    case api::extension_types::EXECUTION_WORLD_ISOLATED:
+      break;  // Default to mojom::ExecutionWorld::kIsolated.
+    case api::extension_types::EXECUTION_WORLD_MAIN:
+      execution_world = mojom::ExecutionWorld::kMain;
+  }
+
+  return execution_world;
+}
+
+api::extension_types::ExecutionWorld ConvertExecutionWorldForAPI(
+    mojom::ExecutionWorld world) {
+  switch (world) {
+    case mojom::ExecutionWorld::kIsolated:
+      return api::extension_types::EXECUTION_WORLD_ISOLATED;
+    case mojom::ExecutionWorld::kMain:
+      return api::extension_types::EXECUTION_WORLD_MAIN;
+  }
+
+  NOTREACHED();
+  return api::extension_types::EXECUTION_WORLD_ISOLATED;
 }
 
 }  // namespace extensions

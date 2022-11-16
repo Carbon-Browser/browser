@@ -109,7 +109,8 @@ enum class TriggerDecision {
   kAutomaticTranslationByPref = 15,
   kShowUIFromHref = 16,
   kAutomaticTranslationByHref = 17,
-  kMaxValue = kAutomaticTranslationByHref,
+  kAutomaticTranslationToPredefinedTarget = 18,
+  kMaxValue = kAutomaticTranslationToPredefinedTarget,
 };
 
 // These values are persisted to logs. Entries should not be renumbered and
@@ -125,7 +126,8 @@ enum class UIInteraction {
   kNeverTranslateSite = 7,
   kCloseUIExplicitly = 8,
   kCloseUILostFocus = 9,
-  kMaxValue = kCloseUILostFocus,
+  kCloseUITimerRanOut = 10,
+  kMaxValue = kCloseUITimerRanOut,
 };
 
 // TranslateMetricsLogger tracks and logs various UKM and UMA metrics for Chrome

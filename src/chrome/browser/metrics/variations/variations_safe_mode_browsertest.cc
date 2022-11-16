@@ -6,14 +6,9 @@
 // should be kept in sync with those in ios/chrome/browser/variations/
 // variations_safe_mode_egtest.mm.
 
-#include <string>
-
-#include "base/metrics/field_trial.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/test/base/in_process_browser_test.h"
-#include "components/metrics/clean_exit_beacon.h"
-#include "components/metrics/metrics_pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "components/variations/metrics.h"
 #include "components/variations/pref_names.h"
@@ -23,30 +18,6 @@
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace variations {
-namespace {
-
-// Sets |local_state|'s seed and seed signature prefs to a valid seed-signature
-// pair. If |use_safe_seed_prefs| is true, then uses the safe seed prefs.
-void StoreTestSeedAndSignature(PrefService* local_state,
-                               bool use_safe_seed_prefs) {
-  const std::string seed_pref = use_safe_seed_prefs
-                                    ? prefs::kVariationsSafeCompressedSeed
-                                    : prefs::kVariationsCompressedSeed;
-  local_state->SetString(seed_pref, kCompressedBase64TestSeedData);
-
-  const std::string signature_pref = use_safe_seed_prefs
-                                         ? prefs::kVariationsSafeSeedSignature
-                                         : prefs::kVariationsSeedSignature;
-  local_state->SetString(signature_pref, kBase64TestSeedSignature);
-}
-
-// Simulates a crash by forcing Chrome to fail to exit cleanly.
-void SimulateCrash(PrefService* local_state) {
-  local_state->SetBoolean(metrics::prefs::kStabilityExitedCleanly, false);
-  metrics::CleanExitBeacon::SkipCleanShutdownStepsForTesting();
-}
-
-}  // namespace
 
 class VariationsSafeModeBrowserTest : public InProcessBrowserTest {
  public:
@@ -64,7 +35,7 @@ IN_PROC_BROWSER_TEST_F(VariationsSafeModeBrowserTest,
   // pref to be set early enough to be read by the variations code, which runs
   // very early during startup.
   PrefService* local_state = g_browser_process->local_state();
-  StoreTestSeedAndSignature(local_state, /*use_safe_seed_prefs=*/true);
+  WriteSeedData(local_state, kTestSeedData, kSafeSeedPrefKeys);
   SimulateCrash(local_state);
 }
 
@@ -93,9 +64,8 @@ IN_PROC_BROWSER_TEST_F(VariationsSafeModeBrowserTest,
   histogram_tester_.ExpectUniqueSample("Variations.SeedUsage",
                                        SeedUsage::kSafeSeedUsed, 1);
 
-  // Verify that there is a field trial associated with the sole test seed
-  // study, |kTestSeedStudyName|.
-  EXPECT_TRUE(base::FieldTrialList::TrialExists(kTestSeedStudyName));
+  // Verify that |kTestSeedData| has been applied.
+  EXPECT_TRUE(FieldTrialListHasAllStudiesFrom(kTestSeedData));
 }
 
 IN_PROC_BROWSER_TEST_F(VariationsSafeModeBrowserTest,
@@ -106,7 +76,7 @@ IN_PROC_BROWSER_TEST_F(VariationsSafeModeBrowserTest,
   // very early during startup.
   PrefService* local_state = g_browser_process->local_state();
   local_state->SetInteger(prefs::kVariationsFailedToFetchSeedStreak, 25);
-  StoreTestSeedAndSignature(local_state, /*use_safe_seed_prefs=*/true);
+  WriteSeedData(local_state, kTestSeedData, kSafeSeedPrefKeys);
 }
 
 IN_PROC_BROWSER_TEST_F(VariationsSafeModeBrowserTest,
@@ -121,9 +91,8 @@ IN_PROC_BROWSER_TEST_F(VariationsSafeModeBrowserTest,
   histogram_tester_.ExpectUniqueSample("Variations.SeedUsage",
                                        SeedUsage::kSafeSeedUsed, 1);
 
-  // Verify that there is a field trial associated with the sole test seed
-  // study, |kTestSeedStudyName|.
-  EXPECT_TRUE(base::FieldTrialList::TrialExists(kTestSeedStudyName));
+  // Verify that |kTestSeedData| has been applied.
+  EXPECT_TRUE(FieldTrialListHasAllStudiesFrom(kTestSeedData));
 }
 
 IN_PROC_BROWSER_TEST_F(VariationsSafeModeBrowserTest,
@@ -135,7 +104,7 @@ IN_PROC_BROWSER_TEST_F(VariationsSafeModeBrowserTest,
   PrefService* local_state = g_browser_process->local_state();
   local_state->SetInteger(prefs::kVariationsCrashStreak, 2);
   local_state->SetInteger(prefs::kVariationsFailedToFetchSeedStreak, 24);
-  StoreTestSeedAndSignature(local_state, /*use_safe_seed_prefs=*/false);
+  WriteSeedData(local_state, kTestSeedData, kRegularSeedPrefKeys);
 }
 
 IN_PROC_BROWSER_TEST_F(VariationsSafeModeBrowserTest, DoNotTriggerSafeMode) {

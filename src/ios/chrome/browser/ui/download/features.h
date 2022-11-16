@@ -7,7 +7,13 @@
 
 #include "base/feature_list.h"
 
-// Feature to download .mobileconfig files in SFSafariViewController.
-extern const base::Feature kDownloadMobileConfigFile;
+// Feature to download Calendar files.
+extern const base::Feature kDownloadCalendar;
+
+// Kill switch for Vcard support.
+extern const base::Feature kVCardKillSwitch;
+
+// Kill switch for AR support.
+extern const base::Feature kARKillSwitch;
 
 #endif  // IOS_CHROME_BROWSER_UI_DOWNLOAD_FEATURES_H_

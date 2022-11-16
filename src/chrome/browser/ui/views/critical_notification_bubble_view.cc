@@ -48,7 +48,6 @@ CriticalNotificationBubbleView::CriticalNotificationBubbleView(
       base::BindOnce(&CriticalNotificationBubbleView::OnDialogCancelled,
                      base::Unretained(this)));
   set_close_on_deactivate(false);
-  chrome::RecordDialogCreation(chrome::DialogIdentifier::CRITICAL_NOTIFICATION);
 }
 
 CriticalNotificationBubbleView::~CriticalNotificationBubbleView() {
@@ -56,7 +55,7 @@ CriticalNotificationBubbleView::~CriticalNotificationBubbleView() {
 
 base::TimeDelta CriticalNotificationBubbleView::GetRemainingTime() const {
   // How long to give the user until auto-restart if no action is taken.
-  constexpr auto kCountdownDuration = base::TimeDelta::FromSeconds(30);
+  constexpr auto kCountdownDuration = base::Seconds(30);
   const base::TimeDelta time_lapsed = base::TimeTicks::Now() - bubble_created_;
   return kCountdownDuration - time_lapsed;
 }
@@ -87,7 +86,7 @@ void CriticalNotificationBubbleView::OnCountdown() {
 
 std::u16string CriticalNotificationBubbleView::GetWindowTitle() const {
   const auto remaining_time = GetRemainingTime();
-  return remaining_time > base::TimeDelta()
+  return remaining_time.is_positive()
              ? l10n_util::GetPluralStringFUTF16(IDS_CRITICAL_NOTIFICATION_TITLE,
                                                 remaining_time.InSeconds())
              : l10n_util::GetStringUTF16(
@@ -130,7 +129,7 @@ void CriticalNotificationBubbleView::Init() {
                      margins().width());
   AddChildView(std::move(message));
 
-  refresh_timer_.Start(FROM_HERE, base::TimeDelta::FromSeconds(1), this,
+  refresh_timer_.Start(FROM_HERE, base::Seconds(1), this,
                        &CriticalNotificationBubbleView::OnCountdown);
 
   base::RecordAction(UserMetricsAction("CriticalNotificationShown"));

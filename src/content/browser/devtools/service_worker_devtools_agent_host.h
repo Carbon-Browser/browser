@@ -9,7 +9,6 @@
 
 #include <map>
 
-#include "base/macros.h"
 #include "base/scoped_observation.h"
 #include "base/time/time.h"
 #include "base/unguessable_token.h"
@@ -18,6 +17,7 @@
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/render_process_host_observer.h"
 #include "services/network/public/cpp/cross_origin_embedder_policy.h"
+#include "services/network/public/mojom/client_security_state.mojom-forward.h"
 #include "services/network/public/mojom/cross_origin_embedder_policy.mojom.h"
 #include "third_party/blink/public/mojom/devtools/devtools_agent.mojom.h"
 
@@ -32,6 +32,12 @@ class ServiceWorkerDevToolsAgentHost : public DevToolsAgentHostImpl,
   using Map = std::map<std::string,
                        scoped_refptr<ServiceWorkerDevToolsAgentHost>>;
 
+  // Instantiates an agent host for the service worker identified by
+  // `worker_process_id` and `worker_route_id`.
+  //
+  // `client_security_state` may be nullptr if the worker script headers have
+  // not been fetched yet. In that case, `UpdateClientSecurityState()` should be
+  // called once the headers have been fetched.
   ServiceWorkerDevToolsAgentHost(
       int worker_process_id,
       int worker_route_id,
@@ -40,11 +46,15 @@ class ServiceWorkerDevToolsAgentHost : public DevToolsAgentHostImpl,
       const GURL& url,
       const GURL& scope,
       bool is_installed_version,
-      absl::optional<network::CrossOriginEmbedderPolicy>
-          cross_origin_embedder_policy,
+      network::mojom::ClientSecurityStatePtr client_security_state,
       mojo::PendingRemote<network::mojom::CrossOriginEmbedderPolicyReporter>
           coep_reporter,
       const base::UnguessableToken& devtools_worker_token);
+
+  ServiceWorkerDevToolsAgentHost(const ServiceWorkerDevToolsAgentHost&) =
+      delete;
+  ServiceWorkerDevToolsAgentHost& operator=(
+      const ServiceWorkerDevToolsAgentHost&) = delete;
 
   // DevToolsAgentHost overrides.
   BrowserContext* GetBrowserContext() override;
@@ -64,10 +74,15 @@ class ServiceWorkerDevToolsAgentHost : public DevToolsAgentHostImpl,
   void WorkerReadyForInspection(
       mojo::PendingRemote<blink::mojom::DevToolsAgent> agent_remote,
       mojo::PendingReceiver<blink::mojom::DevToolsAgentHost> host_receiver);
-  void UpdateCrossOriginEmbedderPolicy(
-      network::CrossOriginEmbedderPolicy cross_origin_embedder_policy,
+
+  // Sets the client security state of the linked service worker.
+  // Called when the worker starts, once the client security state is known.
+  // `client_security_state` must not be nullptr.
+  void UpdateClientSecurityState(
+      network::mojom::ClientSecurityStatePtr client_security_state,
       mojo::PendingRemote<network::mojom::CrossOriginEmbedderPolicyReporter>
           coep_reporter);
+
   void WorkerStopped();
   void WorkerVersionInstalled();
   void WorkerVersionDoomed();
@@ -141,14 +156,16 @@ class ServiceWorkerDevToolsAgentHost : public DevToolsAgentHostImpl,
   // of the ServiceWorker as `should_wait_for_debugger`.
   bool should_pause_on_start_ = false;
 
-  absl::optional<network::CrossOriginEmbedderPolicy>
-      cross_origin_embedder_policy_;
+  // The client security state of the linked service worker.
+  // This is passed to network URL loader factories used for fetches initiated
+  // by the service worker.
+  network::mojom::ClientSecurityStatePtr client_security_state_;
+
   mojo::Remote<network::mojom::CrossOriginEmbedderPolicyReporter>
       coep_reporter_;
+
   base::ScopedObservation<RenderProcessHost, RenderProcessHostObserver>
       process_observation_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ServiceWorkerDevToolsAgentHost);
 };
 
 }  // namespace content

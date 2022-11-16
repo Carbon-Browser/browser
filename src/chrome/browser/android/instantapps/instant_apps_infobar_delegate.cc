@@ -15,6 +15,7 @@
 #include "components/infobars/content/content_infobar_manager.h"
 #include "components/infobars/core/infobar_delegate.h"
 #include "content/public/browser/navigation_handle.h"
+#include "content/public/browser/page.h"
 #include "content/public/browser/web_contents.h"
 #include "ui/base/page_transition_types.h"
 
@@ -94,7 +95,7 @@ bool InstantAppsInfoBarDelegate::EqualsDelegate(
 void InstantAppsInfoBarDelegate::InfoBarDismissed() {
   content::WebContents* web_contents =
       infobars::ContentInfoBarManager::WebContentsFromInfoBar(infobar());
-  InstantAppsSettings::RecordInfoBarDismissEvent(web_contents, url_);
+  InstantAppsSettings::RecordDismissEvent(web_contents, url_);
   if (instant_app_is_default_) {
     base::RecordAction(base::UserMetricsAction(
         "Android.InstantApps.BannerDismissedAppIsDefault"));
@@ -110,19 +111,15 @@ void InstantAppsInfoBarDelegate::DidStartNavigation(
     return;
   if (!user_navigated_away_from_launch_url_ &&
       !GURL(url_).EqualsIgnoringRef(
-          navigation_handle->GetWebContents()->GetURL())) {
+          navigation_handle->GetWebContents()->GetLastCommittedURL())) {
     user_navigated_away_from_launch_url_ =
         PageTransitionInitiatedByUser(navigation_handle);
   }
 }
 
-void InstantAppsInfoBarDelegate::DidFinishNavigation(
-    content::NavigationHandle* navigation_handle) {
-  if (!navigation_handle->IsInPrimaryMainFrame())
-    return;
-  if (navigation_handle->IsErrorPage()) {
+void InstantAppsInfoBarDelegate::PrimaryPageChanged(content::Page& page) {
+  if (page.GetMainDocument().IsErrorDocument())
     infobar()->RemoveSelf();
-  }
 }
 
 bool InstantAppsInfoBarDelegate::ShouldExpire(
@@ -142,7 +139,7 @@ void JNI_InstantAppsInfoBarDelegate_Launch(
 
   InstantAppsInfoBarDelegate::Create(web_contents, jdata, url,
                                      instant_app_is_default);
-  InstantAppsSettings::RecordInfoBarShowEvent(web_contents, url);
+  InstantAppsSettings::RecordShowEvent(web_contents, url);
 
   if (instant_app_is_default) {
     base::RecordAction(

@@ -9,8 +9,8 @@
 #include "base/bind.h"
 #include "base/location.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/task/task_runner.h"
 #include "base/task/task_traits.h"
-#include "base/task_runner.h"
 #include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/clock.h"
 #include "base/timer/timer.h"
@@ -24,8 +24,7 @@ namespace {
 constexpr char kSafeBrowsingNotificationPermissionName[] = "NOTIFICATIONS";
 
 // The maximum amount of time to wait for the Safe Browsing response.
-constexpr base::TimeDelta kSafeBrowsingCheckTimeout =
-    base::TimeDelta::FromSeconds(2);
+constexpr base::TimeDelta kSafeBrowsingCheckTimeout = base::Seconds(2);
 
 }  // namespace
 
@@ -55,8 +54,7 @@ class CrowdDenySafeBrowsingRequest::SafeBrowsingClient
     timeout_.Start(FROM_HERE, kSafeBrowsingCheckTimeout, this,
                    &SafeBrowsingClient::OnTimeout);
 
-    if (!database_manager_->IsSupported() ||
-        database_manager_->CheckApiBlocklistUrl(origin.GetURL(), this)) {
+    if (database_manager_->CheckApiBlocklistUrl(origin.GetURL(), this)) {
       timeout_.AbandonAndStop();
       SendResultToHandler(Verdict::kAcceptable);
     }

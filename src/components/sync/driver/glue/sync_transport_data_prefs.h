@@ -8,6 +8,7 @@
 #include <map>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/time/time.h"
 #include "components/prefs/pref_member.h"
@@ -55,22 +56,24 @@ class SyncTransportDataPrefs {
   base::TimeDelta GetPollInterval() const;
   void SetPollInterval(base::TimeDelta interval);
 
-  // Use this keystore bootstrap token if we're not using an explicit
-  // passphrase.
-  std::string GetKeystoreEncryptionBootstrapToken() const;
-  void SetKeystoreEncryptionBootstrapToken(const std::string& token);
-
   // Get/set for the last known sync invalidation versions.
   std::map<ModelType, int64_t> GetInvalidationVersions() const;
   void UpdateInvalidationVersions(
       const std::map<ModelType, int64_t>& invalidation_versions);
 
+  // Migrates invalidation versions from a deprecated pref to the current one.
+  // Does nothing if the pref was already migrated. Should be called during
+  // browser startup.
+  static void MigrateInvalidationVersions(PrefService* pref_service);
+
  private:
   // Never null.
-  PrefService* const pref_service_;
+  const raw_ptr<PrefService> pref_service_;
 
   SEQUENCE_CHECKER(sequence_checker_);
 };
+
+void ClearObsoleteKeystoreBootstrapTokenPref(PrefService* pref_service);
 
 }  // namespace syncer
 

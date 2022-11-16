@@ -19,7 +19,8 @@
 #include "chrome/browser/local_discovery/service_discovery_shared_client.h"
 #include "chrome/browser/profiles/profile.h"
 
-namespace chromeos {
+namespace ash {
+
 // Supported service names for printers.
 const char ZeroconfPrinterDetector::kIppServiceName[] = "_ipp._tcp.local";
 const char ZeroconfPrinterDetector::kIppsServiceName[] = "_ipps._tcp.local";
@@ -151,13 +152,13 @@ bool ConvertToPrinter(const std::string& service_type,
     return false;
   }
 
-  Printer& printer = detected_printer->printer;
+  chromeos::Printer& printer = detected_printer->printer;
   printer.set_id(ZeroconfPrinterId(service_description, metadata));
   printer.set_uuid(metadata.UUID);
   printer.set_display_name(service_description.instance_name());
   printer.set_description(metadata.note);
   printer.set_make_and_model(metadata.ty);
-  Uri uri;
+  chromeos::Uri uri;
   std::string rp = metadata.rp;
   if (service_type == ZeroconfPrinterDetector::kIppServiceName ||
       service_type == ZeroconfPrinterDetector::kIppEverywhereServiceName) {
@@ -194,7 +195,7 @@ bool ConvertToPrinter(const std::string& service_type,
 
   // Gather ppd identification candidates.
   detected_printer->ppd_search_data.discovery_type =
-      PrinterSearchData::PrinterDiscoveryType::kZeroconf;
+      chromeos::PrinterSearchData::PrinterDiscoveryType::kZeroconf;
   if (!metadata.ty.empty()) {
     detected_printer->ppd_search_data.make_and_model.push_back(metadata.ty);
   }
@@ -405,4 +406,4 @@ ZeroconfPrinterDetector::CreateForTesting(
   return std::make_unique<ZeroconfPrinterDetectorImpl>(device_listers);
 }
 
-}  // namespace chromeos
+}  // namespace ash

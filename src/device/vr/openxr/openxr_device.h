@@ -7,7 +7,6 @@
 
 #include <memory>
 
-#include "base/macros.h"
 #include "components/viz/common/gpu/context_provider.h"
 #include "device/vr/openxr/context_provider_callbacks.h"
 #include "device/vr/openxr/openxr_util.h"
@@ -29,6 +28,10 @@ class DEVICE_VR_EXPORT OpenXrDevice
       public mojom::XRCompositorHost {
  public:
   OpenXrDevice(VizContextProviderFactoryAsync context_provider_factory_async);
+
+  OpenXrDevice(const OpenXrDevice&) = delete;
+  OpenXrDevice& operator=(const OpenXrDevice&) = delete;
+
   ~OpenXrDevice() override;
 
   // VRDeviceBase
@@ -67,8 +70,6 @@ class DEVICE_VR_EXPORT OpenXrDevice
   mojom::XRRuntime::RequestSessionCallback request_session_callback_;
 
   base::WeakPtrFactory<OpenXrDevice> weak_ptr_factory_;
-
-  DISALLOW_COPY_AND_ASSIGN(OpenXrDevice);
 };
 
 }  // namespace device

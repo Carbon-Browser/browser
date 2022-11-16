@@ -19,7 +19,7 @@ if (current_cpu == "x86") {
     cpu_arch_full = "x64"
   }
 } else if (current_cpu == "arm") {
-  if (is_chromeos_ash) {
+  if (is_chromeos) {
     # ChromeOS gets highbd vp9 but other arm targets do not.
     cpu_arch_full = "arm-neon-highbd"
   } else if (arm_use_neon) {
@@ -30,7 +30,7 @@ if (current_cpu == "x86") {
     cpu_arch_full = "arm"
   }
 } else if (current_cpu == "arm64") {
-  if (is_chromeos_ash || is_mac) {
+  if (is_chromeos || is_mac) {
     cpu_arch_full = "arm64-highbd"
   } else {
     cpu_arch_full = current_cpu
@@ -378,7 +378,7 @@ static_library("libvpx") {
     sources = libvpx_srcs_mips
     public_deps = [ ":libvpx_mips_headers" ]
   } else if (current_cpu == "arm") {
-    if (is_chromeos_ash) {
+    if (is_chromeos) {
       sources = libvpx_srcs_arm_neon_highbd
       public_deps = [ ":libvpx_arm_neon_highbd_headers" ]
     } else if (arm_use_neon) {
@@ -392,13 +392,15 @@ static_library("libvpx") {
       public_deps = [ ":libvpx_arm_headers" ]
     }
   } else if (current_cpu == "arm64") {
-    if (is_chromeos_ash || is_win || is_mac) {
+    if (is_chromeos || is_win || is_mac) {
       sources = libvpx_srcs_arm64_highbd
       public_deps = [ ":libvpx_arm64_highbd_headers" ]
     } else {
       sources = libvpx_srcs_arm64
       public_deps = [ ":libvpx_arm64_headers" ]
     }
+  } else if (current_cpu == "ppc64") {
+    sources = libvpx_srcs_ppc64
   }
 
   configs -= [ "//build/config/compiler:chromium_code" ]
@@ -430,15 +432,18 @@ static_library("libvpx") {
   public_configs = [ ":libvpx_external_config" ]
 }
 
-static_library("libvp9rc") {
+static_library("libvpxrc") {
   if (!is_debug && is_win) {
     configs -= [ "//build/config/compiler:default_optimization" ]
     configs += [ "//build/config/compiler:optimize_max" ]
   }
 
   sources = [
+    "//third_party/libvpx/source/libvpx/vp8/vp8_ratectrl_rtc.cc",
+    "//third_party/libvpx/source/libvpx/vp8/vp8_ratectrl_rtc.h",
     "//third_party/libvpx/source/libvpx/vp9/ratectrl_rtc.cc",
     "//third_party/libvpx/source/libvpx/vp9/ratectrl_rtc.h",
+    "//third_party/libvpx/source/libvpx/vpx/internal/vpx_ratectrl_rtc.h",
   ]
 
   configs -= [ "//build/config/compiler:chromium_code" ]

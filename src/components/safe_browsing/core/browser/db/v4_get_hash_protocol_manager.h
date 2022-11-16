@@ -21,7 +21,7 @@
 #include <vector>
 
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/time/default_clock.h"
 #include "base/time/time.h"
@@ -152,6 +152,9 @@ class V4GetHashProtocolManager {
   using ThreatMetadataForApiCallback =
       base::OnceCallback<void(const ThreatMetadata& md)>;
 
+  V4GetHashProtocolManager(const V4GetHashProtocolManager&) = delete;
+  V4GetHashProtocolManager& operator=(const V4GetHashProtocolManager&) = delete;
+
   virtual ~V4GetHashProtocolManager();
 
   // Create an instance of the safe browsing v4 protocol manager.
@@ -226,6 +229,7 @@ class V4GetHashProtocolManager {
                            TestGetHashErrorHandlingParallelRequests);
   FRIEND_TEST_ALL_PREFIXES(V4GetHashProtocolManagerTest, GetCachedResults);
   FRIEND_TEST_ALL_PREFIXES(V4GetHashProtocolManagerTest, TestUpdatesAreMerged);
+  FRIEND_TEST_ALL_PREFIXES(V4GetHashProtocolManagerTest, TestBackoffErrorHistogramCount);
   friend class V4GetHashProtocolManagerTest;
   friend class V4GetHashProtocolManagerFuzzer;
   friend class V4GetHashProtocolManagerFactoryImpl;
@@ -326,6 +330,9 @@ class V4GetHashProtocolManager {
   // response, used for request backoff timing.
   size_t gethash_error_count_;
 
+  // The number of backoff errors since the last successful HTTP response.
+  size_t backoff_error_count_ = 0;
+
   // Multiplier for the backoff error after the second.
   size_t gethash_back_off_mult_;
 
@@ -346,7 +353,7 @@ class V4GetHashProtocolManager {
   int number_of_hits_ = 0;
 
   // The clock used to vend times.
-  base::Clock* clock_;
+  raw_ptr<base::Clock> clock_;
 
   // The following sets represent the combination of lists that we would always
   // request from the server, irrespective of which list we found the hash
@@ -356,22 +363,23 @@ class V4GetHashProtocolManager {
   std::vector<ThreatType> threat_types_;
 
   SEQUENCE_CHECKER(sequence_checker_);
-
-  DISALLOW_COPY_AND_ASSIGN(V4GetHashProtocolManager);
 };
 
 // Interface of a factory to create V4GetHashProtocolManager.  Useful for tests.
 class V4GetHashProtocolManagerFactory {
  public:
   V4GetHashProtocolManagerFactory() {}
+
+  V4GetHashProtocolManagerFactory(const V4GetHashProtocolManagerFactory&) =
+      delete;
+  V4GetHashProtocolManagerFactory& operator=(
+      const V4GetHashProtocolManagerFactory&) = delete;
+
   virtual ~V4GetHashProtocolManagerFactory() {}
   virtual std::unique_ptr<V4GetHashProtocolManager> CreateProtocolManager(
       scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
       const StoresToCheck& stores_to_check,
       const V4ProtocolConfig& config) = 0;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(V4GetHashProtocolManagerFactory);
 };
 
 #ifndef NDEBUG

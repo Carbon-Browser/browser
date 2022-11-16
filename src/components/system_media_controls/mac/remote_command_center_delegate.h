@@ -22,9 +22,14 @@ class SystemMediaControlsObserver;
 namespace internal {
 
 // Wraps an NSObject which interfaces with the MPRemoteCommandCenter.
-class API_AVAILABLE(macos(10.12.2)) RemoteCommandCenterDelegate {
+class RemoteCommandCenterDelegate {
  public:
   RemoteCommandCenterDelegate();
+
+  RemoteCommandCenterDelegate(const RemoteCommandCenterDelegate&) = delete;
+  RemoteCommandCenterDelegate& operator=(const RemoteCommandCenterDelegate&) =
+      delete;
+
   ~RemoteCommandCenterDelegate();
 
   // Part of the implementation of SystemMediaControls.
@@ -61,8 +66,6 @@ class API_AVAILABLE(macos(10.12.2)) RemoteCommandCenterDelegate {
       remote_command_center_delegate_cocoa_;
   base::ObserverList<SystemMediaControlsObserver> observers_;
   base::flat_set<Command> enabled_commands_;
-
-  DISALLOW_COPY_AND_ASSIGN(RemoteCommandCenterDelegate);
 };
 
 }  // namespace internal

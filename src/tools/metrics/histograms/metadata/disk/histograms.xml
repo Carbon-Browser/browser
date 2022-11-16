@@ -11,10 +11,11 @@ along with a detailed description for each histogram.
 For best practices on writing histogram descriptions, see
 https://chromium.googlesource.com/chromium/src.git/+/HEAD/tools/metrics/histograms/README.md
 
-Please send CLs to chromium-metrics-reviews@google.com rather than to specific
-individuals. These CLs will be automatically reassigned to a reviewer within
-about 5 minutes. This approach helps the metrics team to load-balance incoming
-reviews. Googlers can read more about this at go/gwsq-gerrit.
+Please follow the instructions in the OWNERS file in this directory to find a
+reviewer. If no OWNERS file exists, please consider signing up at
+go/reviewing-metrics (Googlers only), as all subdirectories are expected to
+have an OWNERS file. As a last resort you can send the CL to
+chromium-metrics-reviews@google.com.
 -->
 
 <histogram-configuration>
@@ -123,9 +124,15 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
   </summary>
 </histogram>
 
-<histogram name="DiskCache.0.Error" enum="DiskCacheError" expires_after="M85">
-  <owner>rvargas@chromium.org</owner>
-  <summary>Critical error ids.</summary>
+<histogram name="DiskCache.0.Error" enum="DiskCacheError"
+    expires_after="2023-01-15">
+  <owner>wfh@chromium.org</owner>
+  <owner>src/net/disk_cache/OWNERS</owner>
+  <summary>
+    Critical error ids. Reported each time the disk backed blockfile cache
+    encounters an error or a critical error. Warning: this histogram was expired
+    from Oct 2020 to Sep 2021; data may be missing.
+  </summary>
 </histogram>
 
 <histogram name="DiskCache.0.FillupAge" units="hours" expires_after="M85">
@@ -288,17 +295,6 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
   <summary>
     Percentage of the cache used by entries of more than 512 KB. It is only
     measured after the cache is full, so evictions are taking place.
-  </summary>
-</histogram>
-
-<histogram name="DiskCache.0.LoadTime" units="ms" expires_after="M85">
-  <obsolete>
-    Removed 05/2021. Not used.
-  </obsolete>
-  <owner>rvargas@chromium.org</owner>
-  <summary>
-    The time to load the main entry data from disk, with a &quot;loaded&quot;
-    system.
   </summary>
 </histogram>
 
@@ -783,17 +779,6 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
   </summary>
 </histogram>
 
-<histogram name="DiskCache.2.LoadTime" units="ms" expires_after="M85">
-  <obsolete>
-    Removed 05/2021. Not used.
-  </obsolete>
-  <owner>rvargas@chromium.org</owner>
-  <summary>
-    The time to load the main entry data from disk, with a &quot;loaded&quot;
-    system. Media-specific cache.
-  </summary>
-</histogram>
-
 <histogram name="DiskCache.2.MaxOpenEntries2" units="?" expires_after="M85">
   <owner>rvargas@chromium.org</owner>
   <summary>
@@ -1209,17 +1194,6 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
   </summary>
 </histogram>
 
-<histogram name="DiskCache.3.LoadTime" units="ms" expires_after="M79">
-  <obsolete>
-    Removed 05/2021. Not used.
-  </obsolete>
-  <owner>Please list the metric's owners. Add more owner tags as needed.</owner>
-  <summary>
-    The time to load the main entry data from disk, with a &quot;loaded&quot;
-    system. AppCache.
-  </summary>
-</histogram>
-
 <histogram name="DiskCache.3.MaxOpenEntries2" units="entries"
     expires_after="M79">
   <owner>Please list the metric's owners. Add more owner tags as needed.</owner>
@@ -1603,17 +1577,6 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
   </summary>
 </histogram>
 
-<histogram name="DiskCache.4.LoadTime" units="ms" expires_after="M79">
-  <obsolete>
-    Removed 05/2021. Not used.
-  </obsolete>
-  <owner>Please list the metric's owners. Add more owner tags as needed.</owner>
-  <summary>
-    The time to load the main entry data from disk, with a &quot;loaded&quot;
-    system. ShaderCache.
-  </summary>
-</histogram>
-
 <histogram name="DiskCache.4.MaxOpenEntries2" units="?" expires_after="M79">
   <owner>Please list the metric's owners. Add more owner tags as needed.</owner>
   <summary>
@@ -1724,70 +1687,6 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 <histogram name="DiskCache.4.WriteTime" units="ms" expires_after="M79">
   <owner>Please list the metric's owners. Add more owner tags as needed.</owner>
   <summary>The time spent writing to an entry. ShaderCache.</summary>
-</histogram>
-
-<histogram name="DiskCache.BlockLoad_0" units="%" expires_after="M79">
-  <obsolete>
-    Removed 05/2021. Not used.
-  </obsolete>
-  <owner>Please list the metric's owners. Add more owner tags as needed.</owner>
-  <summary>The percentage of use for blocks of type 0 (links).</summary>
-</histogram>
-
-<histogram name="DiskCache.BlockLoad_1" units="%" expires_after="M79">
-  <obsolete>
-    Removed 05/2021. Not used.
-  </obsolete>
-  <owner>Please list the metric's owners. Add more owner tags as needed.</owner>
-  <summary>The percentage of use for blocks of type 1 (256 bytes).</summary>
-</histogram>
-
-<histogram name="DiskCache.BlockLoad_2" units="%" expires_after="M79">
-  <obsolete>
-    Removed 05/2021. Not used.
-  </obsolete>
-  <owner>Please list the metric's owners. Add more owner tags as needed.</owner>
-  <summary>The percentage of use for blocks of type 2 (1024 bytes).</summary>
-</histogram>
-
-<histogram name="DiskCache.BlockLoad_3" units="%" expires_after="M79">
-  <obsolete>
-    Removed 05/2021. Not used.
-  </obsolete>
-  <owner>Please list the metric's owners. Add more owner tags as needed.</owner>
-  <summary>The percentage of use for blocks of type 3 (4096 bytes).</summary>
-</histogram>
-
-<histogram name="DiskCache.Blocks_0" units="blocks" expires_after="M79">
-  <obsolete>
-    Removed 05/2021. Not used.
-  </obsolete>
-  <owner>Please list the metric's owners. Add more owner tags as needed.</owner>
-  <summary>The number of used blocks of type 0 (links).</summary>
-</histogram>
-
-<histogram name="DiskCache.Blocks_1" units="blocks" expires_after="M79">
-  <obsolete>
-    Removed 05/2021. Not used.
-  </obsolete>
-  <owner>Please list the metric's owners. Add more owner tags as needed.</owner>
-  <summary>The number of used blocks of type 1 (256 bytes).</summary>
-</histogram>
-
-<histogram name="DiskCache.Blocks_2" units="blocks" expires_after="M79">
-  <obsolete>
-    Removed 05/2021. Not used.
-  </obsolete>
-  <owner>Please list the metric's owners. Add more owner tags as needed.</owner>
-  <summary>The number of used blocks of type 2 (1024 bytes).</summary>
-</histogram>
-
-<histogram name="DiskCache.Blocks_3" units="blocks" expires_after="M79">
-  <obsolete>
-    Removed 05/2021. Not used.
-  </obsolete>
-  <owner>Please list the metric's owners. Add more owner tags as needed.</owner>
-  <summary>The number of used blocks of type 3 (4096 bytes).</summary>
 </histogram>
 
 <histogram name="DiskCache.DeleteFailed2" units="files" expires_after="M79">

@@ -5,8 +5,10 @@
 #ifndef CHROME_BROWSER_CHROMEOS_EXTENSIONS_TELEMETRY_API_BASE_TELEMETRY_EXTENSION_BROWSER_TEST_H_
 #define CHROME_BROWSER_CHROMEOS_EXTENSIONS_TELEMETRY_API_BASE_TELEMETRY_EXTENSION_BROWSER_TEST_H_
 
+#include <memory>
 #include <string>
 
+#include "chrome/browser/chromeos/extensions/telemetry/api/api_guard_delegate.h"
 #include "chrome/browser/extensions/extension_browsertest.h"
 
 namespace chromeos {
@@ -26,23 +28,15 @@ class BaseTelemetryExtensionBrowserTest
   void SetUpOnMainThread() override;
 
  protected:
+  std::string extension_id() const;
+  std::string public_key() const;
+  virtual std::string pwa_page_url() const;
+  virtual std::string matches_origin() const;
   void CreateExtensionAndRunServiceWorker(
       const std::string& service_worker_content);
-};
+  virtual std::string GetManifestFile(const std::string& matches_origin);
 
-class BaseTelemetryExtensionApiAllowedBrowserTest
-    : public BaseTelemetryExtensionBrowserTest {
- public:
-  BaseTelemetryExtensionApiAllowedBrowserTest();
-  ~BaseTelemetryExtensionApiAllowedBrowserTest() override;
-
-  BaseTelemetryExtensionApiAllowedBrowserTest(
-      const BaseTelemetryExtensionApiAllowedBrowserTest&) = delete;
-  BaseTelemetryExtensionApiAllowedBrowserTest& operator=(
-      const BaseTelemetryExtensionApiAllowedBrowserTest&) = delete;
-
-  // BrowserTestBase:
-  void SetUpOnMainThread() override;
+  std::unique_ptr<ApiGuardDelegate::Factory> api_guard_delegate_factory_;
 };
 
 }  // namespace chromeos

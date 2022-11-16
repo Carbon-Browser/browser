@@ -2,8 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {FilesAppState} from 'chrome-extension://hhaomjibdihmijegdhdafkllkbggdgoj/common/js/files_app_state.js';
-
+import {FilesAppState} from '../files_app_state.js';
 import {addEntries, ENTRIES, getCaller, pending, repeatUntil, RootPath, sendTestMessage, TestEntryInfo} from '../test_util.js';
 import {testcase} from '../testcase.js';
 
@@ -13,7 +12,7 @@ import {BASIC_DRIVE_ENTRY_SET, BASIC_LOCAL_ENTRY_SET} from './test_data.js';
 /**
  * Expected files shown in the search results for 'hello'
  *
- * @type {Array<TestEntryInfo>}
+ * @type {!Array<!TestEntryInfo>}
  * @const
  */
 const SEARCH_RESULTS_ENTRY_SET = [
@@ -94,7 +93,7 @@ testcase.searchDownloadsClearSearch = async () => {
   // Click on the clear search button.
   await remoteCall.waitAndClickElement(appId, '#search-box .clear');
 
-  // Wait for fil list to display all files.
+  // Wait for file list to display all files.
   await remoteCall.waitForFiles(
       appId, TestEntryInfo.getExpectedRows(BASIC_LOCAL_ENTRY_SET));
 
@@ -125,6 +124,20 @@ testcase.searchDownloadsClearSearchKeyDown = async () => {
   const searchInput =
       await remoteCall.waitForElement(appId, '#search-box [type="search"]');
   chrome.test.assertEq('', searchInput.value);
+
+  // Wait until the search button get the focus.
+  // Use repeatUntil() here because the focus won't shift to search button
+  // until the CSS animation is finished.
+  const caller = getCaller();
+  await repeatUntil(async () => {
+    const activeElement =
+        await remoteCall.callRemoteTestUtil('getActiveElement', appId, []);
+    if (activeElement.attributes['id'] !== 'search-button') {
+      return pending(
+          caller, 'Expected active element should be search-button, got %s',
+          activeElement.attributes['id']);
+    }
+  });
 };
 
 /**
@@ -146,8 +159,8 @@ testcase.searchHidingTextEntryField = async () => {
 
   // Verify the toolbar search text entry box is enabled.
   let textInputElement =
-      await remoteCall.waitForElement(appId, ['#search-box cr-input']);
-  chrome.test.assertEq('false', textInputElement.attributes['aria-disabled']);
+      await remoteCall.waitForElement(appId, ['#search-box cr-input', 'input']);
+  chrome.test.assertEq(undefined, textInputElement.attributes['disabled']);
 
   // Send a 'mousedown' to the toolbar 'delete' button.
   chrome.test.assertTrue(await remoteCall.callRemoteTestUtil(
@@ -155,8 +168,8 @@ testcase.searchHidingTextEntryField = async () => {
 
   // Verify the toolbar search text entry is still enabled.
   textInputElement =
-      await remoteCall.waitForElement(appId, ['#search-box cr-input']);
-  chrome.test.assertEq('false', textInputElement.attributes['aria-disabled']);
+      await remoteCall.waitForElement(appId, ['#search-box cr-input', 'input']);
+  chrome.test.assertEq(undefined, textInputElement.attributes['disabled']);
 
   // Send a 'mouseup' to the toolbar 'delete' button.
   chrome.test.assertTrue(await remoteCall.callRemoteTestUtil(
@@ -164,8 +177,8 @@ testcase.searchHidingTextEntryField = async () => {
 
   // Verify the toolbar search text entry is still enabled.
   textInputElement =
-      await remoteCall.waitForElement(appId, ['#search-box cr-input']);
-  chrome.test.assertEq('false', textInputElement.attributes['aria-disabled']);
+      await remoteCall.waitForElement(appId, ['#search-box cr-input', 'input']);
+  chrome.test.assertEq(undefined, textInputElement.attributes['disabled']);
 };
 
 /**

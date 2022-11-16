@@ -9,6 +9,7 @@
 #include "media/video/video_encode_accelerator.h"
 #include "third_party/blink/renderer/modules/mediarecorder/video_track_recorder.h"
 
+#include "base/time/time.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 #include "ui/gfx/geometry/size.h"
 
@@ -32,7 +33,7 @@ class VEAEncoder final : public VideoTrackRecorder::Encoder,
   static scoped_refptr<VEAEncoder> Create(
       const VideoTrackRecorder::OnEncodedVideoCB& on_encoded_video_cb,
       const VideoTrackRecorder::OnErrorCB& on_error_cb,
-      int32_t bits_per_second,
+      uint32_t bits_per_second,
       media::VideoCodecProfile codec,
       absl::optional<uint8_t> level,
       const gfx::Size& size,
@@ -68,7 +69,7 @@ class VEAEncoder final : public VideoTrackRecorder::Encoder,
 
   VEAEncoder(const VideoTrackRecorder::OnEncodedVideoCB& on_encoded_video_cb,
              const VideoTrackRecorder::OnErrorCB& on_error_cb,
-             int32_t bits_per_second,
+             uint32_t bits_per_second,
              media::VideoCodecProfile codec,
              absl::optional<uint8_t> level,
              const gfx::Size& size,

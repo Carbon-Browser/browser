@@ -34,27 +34,11 @@ public class TosAndUmaFirstRunFragmentWithEnterpriseSupport
 
     private static Runnable sOverridenOnExitFreRunnableForTest;
 
-    /** FRE page that instantiates this fragment. */
-    public static class Page
-            implements FirstRunPage<TosAndUmaFirstRunFragmentWithEnterpriseSupport> {
-        @Override
-        public boolean shouldSkipPageOnCreate() {
-            // TODO(crbug.com/1111490): Revisit during post-MVP.
-            // There's an edge case where we accept the welcome page in the main app, abort the FRE,
-            // then go through this CCT FRE again.
-            return FirstRunStatus.shouldSkipWelcomePage();
-        }
-
-        @Override
-        public TosAndUmaFirstRunFragmentWithEnterpriseSupport instantiateFragment() {
-            return new TosAndUmaFirstRunFragmentWithEnterpriseSupport();
-        }
-    }
-
     private class CctTosFragmentMetricsNameProvider
             implements SkipTosDialogPolicyListener.HistogramNameProvider {
         @Override
         public String getOnDeviceOwnedDetectedTimeHistogramName() {
+            // Seems to currently be impossible to ever hit the faster case here.
             return mViewCreated ? "MobileFre.CctTos.IsDeviceOwnedCheckSpeed2.SlowerThanInflation"
                                 : "MobileFre.CctTos.IsDeviceOwnedCheckSpeed2.FasterThanInflation";
         }
@@ -155,6 +139,7 @@ public class TosAndUmaFirstRunFragmentWithEnterpriseSupport
 
     @Override
     public void onHideLoadingUIComplete() {
+        super.onHideLoadingUIComplete();
         assert mSkipTosDialogPolicyListener.get() != null;
 
         RecordHistogram.recordTimesHistogram("MobileFre.CctTos.LoadingDuration",

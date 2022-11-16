@@ -15,7 +15,6 @@
 #include "content/browser/gpu/gpu_process_host.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
-#include "content/public/common/content_features.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/content_browser_test.h"
 #include "content/public/test/test_utils.h"
@@ -66,9 +65,12 @@ class TestGpuService : public viz::mojom::GpuService {
                            base::ProcessId client_pid) override {}
   void CloseChannel(int32_t client_id) override {}
 #if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(USE_CHROMEOS_MEDIA_ACCELERATION)
   void CreateArcVideoDecodeAccelerator(
       mojo::PendingReceiver<arc::mojom::VideoDecodeAccelerator> vda_receiver)
       override {}
+  void CreateArcVideoDecoder(
+      mojo::PendingReceiver<arc::mojom::VideoDecoder> vd_receiver) override {}
   void CreateArcVideoEncodeAccelerator(
       mojo::PendingReceiver<arc::mojom::VideoEncodeAccelerator> vea_receiver)
       override {}
@@ -78,6 +80,7 @@ class TestGpuService : public viz::mojom::GpuService {
   void CreateArcProtectedBufferManager(
       mojo::PendingReceiver<arc::mojom::ProtectedBufferManager> pbm_receiver)
       override {}
+#endif  // BUILDFLAG(USE_CHROMEOS_MEDIA_ACCELERATION)
   void CreateJpegDecodeAccelerator(
       mojo::PendingReceiver<chromeos_camera::mojom::MjpegDecodeAccelerator>
           jda_receiver) override {}
@@ -85,7 +88,7 @@ class TestGpuService : public viz::mojom::GpuService {
       mojo::PendingReceiver<chromeos_camera::mojom::JpegEncodeAccelerator>
           jea_receiver) override {}
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   void RegisterDCOMPSurfaceHandle(
       mojo::PlatformHandle surface_handle,
       RegisterDCOMPSurfaceHandleCallback callback) override {}
@@ -110,7 +113,9 @@ class TestGpuService : public viz::mojom::GpuService {
                            CopyGpuMemoryBufferCallback callback) override {}
   void GetVideoMemoryUsageStats(
       GetVideoMemoryUsageStatsCallback callback) override {}
-  void RequestHDRStatus(RequestHDRStatusCallback callback) override {}
+#if BUILDFLAG(IS_WIN)
+  void RequestDXGIInfo(RequestDXGIInfoCallback callback) override {}
+#endif
   void LoadedShader(int32_t client_id,
                     const std::string& key,
                     const std::string& data) override {}
@@ -123,11 +128,11 @@ class TestGpuService : public viz::mojom::GpuService {
   void OnBackgroundCleanup() override {}
   void OnBackgrounded() override {}
   void OnForegrounded() override {}
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
   void OnMemoryPressure(
       base::MemoryPressureListener::MemoryPressureLevel level) override {}
 #endif
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   void BeginCATransaction() override {}
   void CommitCATransaction(CommitCATransactionCallback callback) override {}
 #endif
@@ -144,15 +149,6 @@ class TestGpuService : public viz::mojom::GpuService {
   base::RepeatingClosure quit_closure_;
 };
 
-// Runs |task| on the Browser's IO thread, and blocks the Main thread until that
-// task has ran.
-void PostTaskToIOThreadAndWait(base::OnceClosure task) {
-  base::RunLoop run_loop;
-  content::GetIOThreadTaskRunner({})->PostTaskAndReply(
-      FROM_HERE, std::move(task), run_loop.QuitClosure());
-  run_loop.Run();
-}
-
 }  // namespace
 
 class PeakGpuMemoryTrackerImplTest : public ContentBrowserTest {
@@ -163,26 +159,7 @@ class PeakGpuMemoryTrackerImplTest : public ContentBrowserTest {
   // Waits until all messages to the mojo::Remote<viz::mojom::GpuService> have
   // been processed.
   void FlushRemoteForTesting() {
-    if (base::FeatureList::IsEnabled(features::kProcessHostOnUI)) {
-      gpu_host_impl_test_api_->FlushRemoteForTesting();
-    } else {
-      PostTaskToIOThreadAndWait(
-          base::BindOnce(&viz::GpuHostImplTestApi::FlushRemoteForTesting,
-                         base::Unretained(gpu_host_impl_test_api_.get())));
-    }
-  }
-
-  // Initializes the TestGpuService, and installs it as the active service.
-  void InitOnProcessThread(base::RepeatingClosure quit_closure) {
-    gpu_host_impl_test_api_ = std::make_unique<viz::GpuHostImplTestApi>(
-        GpuProcessHost::Get()->gpu_host());
-    test_gpu_service_ = std::make_unique<TestGpuService>(quit_closure);
-    mojo::Remote<viz::mojom::GpuService> gpu_service_remote;
-    gpu_service_receiver_ =
-        std::make_unique<mojo::Receiver<viz::mojom::GpuService>>(
-            test_gpu_service_.get(),
-            gpu_service_remote.BindNewPipeAndPassReceiver());
-    gpu_host_impl_test_api_->SetGpuService(std::move(gpu_service_remote));
+    gpu_host_impl_test_api_->FlushRemoteForTesting();
   }
 
   void SetTestingCallback(PeakGpuMemoryTracker* tracker,
@@ -200,23 +177,21 @@ class PeakGpuMemoryTrackerImplTest : public ContentBrowserTest {
   void PreRunTestOnMainThread() override {
     run_loop_for_start_ = std::make_unique<base::RunLoop>();
     ContentBrowserTest::PreRunTestOnMainThread();
-    if (base::FeatureList::IsEnabled(features::kProcessHostOnUI)) {
-      InitOnProcessThread(run_loop_for_start_->QuitClosure());
-    } else {
-      PostTaskToIOThreadAndWait(base::BindOnce(
-          &PeakGpuMemoryTrackerImplTest::InitOnProcessThread,
-          base::Unretained(this), run_loop_for_start_->QuitClosure()));
-    }
+
+    // Initializes the TestGpuService, and installs it as the active service.
+    gpu_host_impl_test_api_ = std::make_unique<viz::GpuHostImplTestApi>(
+        GpuProcessHost::Get()->gpu_host());
+    test_gpu_service_ =
+        std::make_unique<TestGpuService>(run_loop_for_start_->QuitClosure());
+    mojo::Remote<viz::mojom::GpuService> gpu_service_remote;
+    gpu_service_receiver_ =
+        std::make_unique<mojo::Receiver<viz::mojom::GpuService>>(
+            test_gpu_service_.get(),
+            gpu_service_remote.BindNewPipeAndPassReceiver());
+    gpu_host_impl_test_api_->SetGpuService(std::move(gpu_service_remote));
   }
   void PostRunTestOnMainThread() override {
-    if (base::FeatureList::IsEnabled(features::kProcessHostOnUI)) {
-      gpu_service_receiver_.reset();
-    } else {
-      PostTaskToIOThreadAndWait(base::BindOnce(
-          [](std::unique_ptr<mojo::Receiver<viz::mojom::GpuService>>
-                 gpu_service_receiver) {},
-          std::move(gpu_service_receiver_)));
-    }
+    gpu_service_receiver_.reset();
     ContentBrowserTest::PostRunTestOnMainThread();
   }
 

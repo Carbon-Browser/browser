@@ -6,6 +6,7 @@
 
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
+#include "third_party/skia/include/core/SkColorSpace.h"
 
 namespace gfx {
 
@@ -41,10 +42,11 @@ size_t GetIndex(ContentColorUsage color_usage, bool needs_alpha) {
 }  // namespace
 
 DisplayColorSpaces::DisplayColorSpaces() {
-  for (auto& color_space : color_spaces_)
-    color_space = gfx::ColorSpace::CreateSRGB();
-  for (auto& buffer_format : buffer_formats_)
-    buffer_format = DefaultBufferFormat();
+  // TODO(crbug/1309228): Revert back to range-based for loops if possible
+  for (size_t i = 0; i < kConfigCount; i++) {
+    color_spaces_[i] = gfx::ColorSpace::CreateSRGB();
+    buffer_formats_[i] = DefaultBufferFormat();
+  }
 }
 
 DisplayColorSpaces::DisplayColorSpaces(const gfx::DisplayColorSpaces&) =
@@ -57,15 +59,15 @@ DisplayColorSpaces::DisplayColorSpaces(const gfx::ColorSpace& c)
     : DisplayColorSpaces() {
   if (!c.IsValid())
     return;
-  for (auto& color_space : color_spaces_)
-    color_space = c;
+  for (size_t i = 0; i < kConfigCount; i++)  // NOLINT (modernize-loop-convert)
+    color_spaces_[i] = c;
 }
 
 DisplayColorSpaces::DisplayColorSpaces(const ColorSpace& c, BufferFormat f) {
-  for (auto& color_space : color_spaces_)
-    color_space = c.IsValid() ? c : gfx::ColorSpace::CreateSRGB();
-  for (auto& buffer_format : buffer_formats_)
-    buffer_format = f;
+  for (size_t i = 0; i < kConfigCount; i++) {
+    color_spaces_[i] = c.IsValid() ? c : gfx::ColorSpace::CreateSRGB();
+    buffer_formats_[i] = f;
+  }
 }
 
 void DisplayColorSpaces::SetOutputBufferFormats(
@@ -117,6 +119,12 @@ gfx::ColorSpace DisplayColorSpaces::GetCompositingColorSpace(
 bool DisplayColorSpaces::SupportsHDR() const {
   return GetOutputColorSpace(ContentColorUsage::kHDR, false).IsHDR() ||
          GetOutputColorSpace(ContentColorUsage::kHDR, true).IsHDR();
+}
+
+SkColorSpacePrimaries DisplayColorSpaces::GetPrimaries() const {
+  // TODO(https://crbug.com/1274220): Store this directly, rather than inferring
+  // it from the raster color space.
+  return GetRasterColorSpace().GetColorSpacePrimaries();
 }
 
 ColorSpace DisplayColorSpaces::GetScreenInfoColorSpace() const {
@@ -189,7 +197,9 @@ bool DisplayColorSpaces::operator==(const DisplayColorSpaces& other) const {
     if (buffer_formats_[i] != other.buffer_formats_[i])
       return false;
   }
-  if (sdr_white_level_ != other.sdr_white_level_)
+  if (sdr_max_luminance_nits_ != other.sdr_max_luminance_nits_)
+    return false;
+  if (hdr_max_luminance_relative_ != other.hdr_max_luminance_relative_)
     return false;
 
   return true;

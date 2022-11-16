@@ -3,10 +3,11 @@
 // found in the LICENSE file.
 
 #include "media/gpu/test/fake_command_buffer_helper.h"
-#include "gpu/command_buffer/service/shared_image_backing.h"
-#include "gpu/command_buffer/service/shared_image_representation.h"
 
 #include "base/logging.h"
+#include "build/build_config.h"
+#include "gpu/command_buffer/service/shared_image/shared_image_backing.h"
+#include "gpu/command_buffer/service/shared_image/shared_image_representation.h"
 
 namespace media {
 
@@ -69,6 +70,13 @@ gl::GLContext* FakeCommandBufferHelper::GetGLContext() {
 gpu::SharedImageStub* FakeCommandBufferHelper::GetSharedImageStub() {
   return nullptr;
 }
+
+#if BUILDFLAG(IS_WIN)
+gpu::DXGISharedHandleManager*
+FakeCommandBufferHelper::GetDXGISharedHandleManager() {
+  return nullptr;
+}
+#endif
 
 bool FakeCommandBufferHelper::HasStub() {
   return has_stub_;

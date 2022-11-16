@@ -66,22 +66,22 @@ void VolumeMap::LoadVolumeMap(std::unique_ptr<base::Value> cast_audio_config) {
 
   double prev_level = -1.0;
   std::vector<LevelToDb> new_map;
-  for (size_t i = 0; i < volume_map_list->GetList().size(); ++i) {
-    const base::DictionaryValue* volume_map_entry;
-    CHECK(volume_map_list->GetDictionary(i, &volume_map_entry));
 
-    double level;
-    CHECK(volume_map_entry->GetDouble(kKeyLevel, &level));
-    CHECK_GE(level, 0.0);
-    CHECK_LE(level, 1.0);
-    CHECK_GT(level, prev_level);
-    prev_level = level;
+  for (const auto& value : volume_map_list->GetList()) {
+    const base::Value::Dict& volume_map_entry = value.GetDict();
 
-    double db;
-    CHECK(volume_map_entry->GetDouble(kKeyDb, &db));
-    CHECK_LE(db, 0.0);
+    absl::optional<double> level = volume_map_entry.FindDouble(kKeyLevel);
+    CHECK(level);
+    CHECK_GE(*level, 0.0);
+    CHECK_LE(*level, 1.0);
+    CHECK_GT(*level, prev_level);
+    prev_level = *level;
 
-    new_map.push_back({static_cast<float>(level), static_cast<float>(db)});
+    absl::optional<double> db = volume_map_entry.FindDouble(kKeyDb);
+    CHECK(db);
+    CHECK_LE(*db, 0.0);
+
+    new_map.push_back({static_cast<float>(*level), static_cast<float>(*db)});
   }
 
   if (new_map.empty()) {

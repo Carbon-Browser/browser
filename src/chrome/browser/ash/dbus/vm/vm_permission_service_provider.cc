@@ -19,7 +19,7 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/common/pref_names.h"
-#include "chromeos/dbus/vm_permission_service/vm_permission_service.pb.h"
+#include "chromeos/ash/components/dbus/vm_permission_service/vm_permission_service.pb.h"
 #include "components/prefs/pref_service.h"
 #include "dbus/message.h"
 #include "media/capture/video/chromeos/camera_hal_dispatcher_impl.h"
@@ -357,8 +357,8 @@ void VmPermissionServiceProvider::UpdatePluginVmPermissions(VmInfo* vm) {
 
 void VmPermissionServiceProvider::UpdateBorealisPermissions(VmInfo* vm) {
   Profile* profile = ProfileManager::GetPrimaryUserProfile();
-  if (!profile || chromeos::ProfileHelper::GetUserIdHashFromProfile(profile) !=
-                      vm->owner_id) {
+  if (!profile ||
+      ProfileHelper::GetUserIdHashFromProfile(profile) != vm->owner_id) {
     return;
   }
 

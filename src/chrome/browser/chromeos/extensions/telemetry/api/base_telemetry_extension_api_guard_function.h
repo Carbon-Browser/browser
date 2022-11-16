@@ -5,6 +5,9 @@
 #ifndef CHROME_BROWSER_CHROMEOS_EXTENSIONS_TELEMETRY_API_BASE_TELEMETRY_EXTENSION_API_GUARD_FUNCTION_H_
 #define CHROME_BROWSER_CHROMEOS_EXTENSIONS_TELEMETRY_API_BASE_TELEMETRY_EXTENSION_API_GUARD_FUNCTION_H_
 
+#include <string>
+
+#include "chrome/browser/chromeos/extensions/telemetry/api/api_guard_delegate.h"
 #include "extensions/browser/extension_function.h"
 
 namespace chromeos {
@@ -28,7 +31,12 @@ class BaseTelemetryExtensionApiGuardFunction : public ExtensionFunction {
   // ExtensionFunction:
   ResponseAction Run() final;
 
-  virtual ResponseAction RunIfAllowed() = 0;
+  virtual void RunIfAllowed() = 0;
+
+ private:
+  void OnCanAccessApi(std::string error);
+
+  std::unique_ptr<ApiGuardDelegate> api_guard_delegate_;
 };
 
 }  // namespace chromeos

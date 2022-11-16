@@ -40,21 +40,17 @@ enum ServerFieldType {
   NAME_SUFFIX = 8,
   EMAIL_ADDRESS = 9,
   PHONE_HOME_NUMBER = 10,
+  // Never includes a trunk prefix. Used in combination with a
+  // PHONE_HOME_COUNTRY_CODE field.
   PHONE_HOME_CITY_CODE = 11,
   PHONE_HOME_COUNTRY_CODE = 12,
+  // A number in national format and with a trunk prefix, if applicable in the
+  // number's region. Used when no PHONE_HOME_COUNTRY_CODE field is present.
   PHONE_HOME_CITY_AND_NUMBER = 13,
   PHONE_HOME_WHOLE_NUMBER = 14,
 
   // Work phone numbers (values [15,19]) are deprecated.
-
-  // Fax numbers (values [20,24]) are deprecated in Chrome, but still supported
-  // by the server.
-  PHONE_FAX_NUMBER = 20,
-  PHONE_FAX_CITY_CODE = 21,
-  PHONE_FAX_COUNTRY_CODE = 22,
-  PHONE_FAX_CITY_AND_NUMBER = 23,
-  PHONE_FAX_WHOLE_NUMBER = 24,
-
+  // Fax numbers (values [20,24]) are deprecated.
   // Cell phone numbers (values [25, 29]) are deprecated.
 
   ADDRESS_HOME_LINE1 = 30,
@@ -64,15 +60,9 @@ enum ServerFieldType {
   ADDRESS_HOME_STATE = 34,
   ADDRESS_HOME_ZIP = 35,
   ADDRESS_HOME_COUNTRY = 36,
-  ADDRESS_BILLING_LINE1 = 37,
-  ADDRESS_BILLING_LINE2 = 38,
-  ADDRESS_BILLING_APT_NUM = 39,
-  ADDRESS_BILLING_CITY = 40,
-  ADDRESS_BILLING_STATE = 41,
-  ADDRESS_BILLING_ZIP = 42,
-  ADDRESS_BILLING_COUNTRY = 43,
 
-  // ADDRESS_SHIPPING values [44,50] are deprecated.
+  // ADDRESS_BILLING values [37, 43] are deprecated.
+  // ADDRESS_SHIPPING values [44, 50] are deprecated.
 
   CREDIT_CARD_NAME_FULL = 51,
   CREDIT_CARD_NUMBER = 52,
@@ -89,18 +79,8 @@ enum ServerFieldType {
   // Generic type whose default value is known.
   FIELD_WITH_DEFAULT_VALUE = 61,
 
-  PHONE_BILLING_NUMBER = 62,
-  PHONE_BILLING_CITY_CODE = 63,
-  PHONE_BILLING_COUNTRY_CODE = 64,
-  PHONE_BILLING_CITY_AND_NUMBER = 65,
-  PHONE_BILLING_WHOLE_NUMBER = 66,
-
-  NAME_BILLING_FIRST = 67,
-  NAME_BILLING_MIDDLE = 68,
-  NAME_BILLING_LAST = 69,
-  NAME_BILLING_MIDDLE_INITIAL = 70,
-  NAME_BILLING_FULL = 71,
-  NAME_BILLING_SUFFIX = 72,
+  // PHONE_BILLING values [62, 66] are deprecated.
+  // NAME_BILLING values [67, 72] are deprecated.
 
   // Field types for options generally found in merchant buyflows. Given that
   // these are likely to be filled out differently on a case by case basis,
@@ -120,7 +100,7 @@ enum ServerFieldType {
   //   123 Main Street,
   //   Apt. #42
   ADDRESS_HOME_STREET_ADDRESS = 77,
-  ADDRESS_BILLING_STREET_ADDRESS = 78,
+  // ADDRESS_BILLING_STREET_ADDRESS 78 is deprecated.
 
   // A sorting code is similar to a postal code. However, whereas a postal code
   // normally refers to a single geographical location, a sorting code often
@@ -128,17 +108,17 @@ enum ServerFieldType {
   // might be geographically distributed. The most prominent example of a
   // sorting code system is CEDEX in France.
   ADDRESS_HOME_SORTING_CODE = 79,
-  ADDRESS_BILLING_SORTING_CODE = 80,
+  // ADDRESS_BILLING_SORTING_CODE 80 is deprecated.
 
   // A dependent locality is a subunit of a locality, where a "locality" is
   // roughly equivalent to a city. Examples of dependent localities include
   // inner-city districts and suburbs.
   ADDRESS_HOME_DEPENDENT_LOCALITY = 81,
-  ADDRESS_BILLING_DEPENDENT_LOCALITY = 82,
+  // ADDRESS_BILLING_DEPENDENT_LOCALITY 82 is deprecated.
 
   // The third line of the street address.
   ADDRESS_HOME_LINE3 = 83,
-  ADDRESS_BILLING_LINE3 = 84,
+  // ADDRESS_BILLING_LINE3 84 is deprecated.
 
   // Inverse of ACCOUNT_CREATION_PASSWORD. Sent when there is data that
   // a previous upload of ACCOUNT_CREATION_PASSWORD was incorrect.
@@ -239,9 +219,29 @@ enum ServerFieldType {
   // The full name including the honorific prefix.
   NAME_FULL_WITH_HONORIFIC_PREFIX = 117,
 
+  // Types to represent a birthdate.
+  BIRTHDATE_DAY = 118,
+  BIRTHDATE_MONTH = 119,
+  BIRTHDATE_4_DIGIT_YEAR = 120,
+
+  // Types for better trunk prefix support for phone numbers.
+  // Like PHONE_HOME_CITY_CODE, but with a trunk prefix, if applicable in the
+  // number's region. Used when no PHONE_HOME_COUNTRY_CODE field is present.
+  PHONE_HOME_CITY_CODE_WITH_TRUNK_PREFIX = 121,
+  // Like PHONE_HOME_CITY_AND_NUMBER, but never includes a trunk prefix. Used in
+  // combination with a PHONE_HOME_COUNTRY_CODE field.
+  PHONE_HOME_CITY_AND_NUMBER_WITHOUT_TRUNK_PREFIX = 122,
+
+  // PHONE_HOME_NUMBER = PHONE_HOME_NUMBER_PREFIX + PHONE_HOME_NUMBER_SUFFIX.
+  // For the US numbers (650) 234-5678 the types correspond to 234 and 5678.
+  PHONE_HOME_NUMBER_PREFIX = 123,
+  PHONE_HOME_NUMBER_SUFFIX = 124,
+
+  // IBAN data.
+  IBAN_VALUE = 125,
   // No new types can be added without a corresponding change to the Autofill
   // server.
-  MAX_VALID_FIELD_TYPE = 118,
+  MAX_VALID_FIELD_TYPE = 126,
 };
 
 // The list of all HTML autocomplete field type hints supported by Chrome.
@@ -297,6 +297,11 @@ enum HtmlFieldType {
   // Email.
   HTML_TYPE_EMAIL,
 
+  // Birthdate.
+  HTML_TYPE_BIRTHDATE_DAY,
+  HTML_TYPE_BIRTHDATE_MONTH,
+  HTML_TYPE_BIRTHDATE_YEAR,
+
   // Transaction details.
   HTML_TYPE_TRANSACTION_AMOUNT,
   HTML_TYPE_TRANSACTION_CURRENCY,
@@ -316,6 +321,9 @@ enum HtmlFieldType {
 
   // Phone number verification one-time-codes.
   HTML_TYPE_ONE_TIME_CODE,
+
+  // Promo code for merchant sites.
+  HTML_TYPE_MERCHANT_PROMO_CODE,
 
   // Non-standard autocomplete types.
   HTML_TYPE_UNRECOGNIZED,
@@ -344,7 +352,8 @@ enum class FieldTypeGroup {
   kTransaction,
   kUsernameField,
   kUnfillable,
-  kMaxValue = kUnfillable,
+  kBirthdateField,
+  kMaxValue = kBirthdateField,
 };
 
 using ServerFieldTypeSet = DenseSet<ServerFieldType, MAX_VALID_FIELD_TYPE>;

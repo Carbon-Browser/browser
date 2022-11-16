@@ -8,15 +8,16 @@
 #include <cmath>
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "build/chromeos_buildflags.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/cursor/mojom/cursor_type.mojom-shared.h"
-#include "ui/base/cursor/ozone/bitmap_cursor_factory_ozone.h"
 #include "ui/base/cursor/platform_cursor.h"
 #include "ui/events/devices/device_data_manager.h"
 #include "ui/events/event.h"
+#include "ui/ozone/common/bitmap_cursor_factory.h"
 #include "ui/ozone/platform/wayland/host/wayland_cursor.h"
 #include "ui/ozone/platform/wayland/host/wayland_window.h"
 #include "ui/ozone/platform/wayland/test/mock_pointer.h"
@@ -38,6 +39,9 @@ class WaylandPointerTest : public WaylandTest {
  public:
   WaylandPointerTest() {}
 
+  WaylandPointerTest(const WaylandPointerTest&) = delete;
+  WaylandPointerTest& operator=(const WaylandPointerTest&) = delete;
+
   void SetUp() override {
     WaylandTest::SetUp();
 
@@ -57,10 +61,7 @@ class WaylandPointerTest : public WaylandTest {
   }
 
  protected:
-  wl::MockPointer* pointer_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(WaylandPointerTest);
+  raw_ptr<wl::MockPointer> pointer_;
 };
 
 void SendAxisEvents(struct wl_resource* resource,
@@ -139,6 +140,7 @@ TEST_P(WaylandPointerTest, Leave) {
   wl_pointer_send_button(pointer_->resource(), 4, 1004, BTN_LEFT,
                          WL_POINTER_BUTTON_STATE_PRESSED);
   EXPECT_CALL(delegate_, DispatchEvent(_)).Times(2);
+  EXPECT_CALL(other_delegate, DispatchEvent(_)).Times(2);
 
   // Do an extra Sync() here so that we process the second enter event before we
   // destroy |other_window|.
@@ -216,24 +218,24 @@ TEST_P(WaylandPointerTest, AxisSourceTypes) {
 
   SendAxisEvents(pointer_->resource(), ++time, WL_POINTER_AXIS_SOURCE_WHEEL,
                  WL_POINTER_AXIS_VERTICAL_SCROLL, rand() % 20);
-  task_environment_.FastForwardBy(base::TimeDelta::FromMilliseconds(1));
+  task_environment_.FastForwardBy(base::Milliseconds(1));
   Sync();
 
   SendAxisEvents(pointer_->resource(), ++time, WL_POINTER_AXIS_SOURCE_FINGER,
                  WL_POINTER_AXIS_VERTICAL_SCROLL, rand() % 20);
-  task_environment_.FastForwardBy(base::TimeDelta::FromMilliseconds(1));
+  task_environment_.FastForwardBy(base::Milliseconds(1));
   Sync();
 
   SendAxisEvents(pointer_->resource(), ++time,
                  WL_POINTER_AXIS_SOURCE_CONTINUOUS,
                  WL_POINTER_AXIS_VERTICAL_SCROLL, rand() % 20);
-  task_environment_.FastForwardBy(base::TimeDelta::FromMilliseconds(1));
+  task_environment_.FastForwardBy(base::Milliseconds(1));
   Sync();
 
   SendAxisEvents(pointer_->resource(), ++time,
                  WL_POINTER_AXIS_SOURCE_WHEEL_TILT,
                  WL_POINTER_AXIS_VERTICAL_SCROLL, rand() % 20);
-  task_environment_.FastForwardBy(base::TimeDelta::FromMilliseconds(1));
+  task_environment_.FastForwardBy(base::Milliseconds(1));
   Sync();
 
   ASSERT_TRUE(event1);
@@ -246,65 +248,43 @@ TEST_P(WaylandPointerTest, AxisSourceTypes) {
   ASSERT_TRUE(event4->IsMouseWheelEvent());
 }
 
-TEST_P(WaylandPointerTest, AxisVertical) {
+TEST_P(WaylandPointerTest, Axis) {
   wl_pointer_send_enter(pointer_->resource(), 1, surface_->resource(),
                         wl_fixed_from_int(0), wl_fixed_from_int(0));
-  wl_pointer_send_button(pointer_->resource(), 2, 1002, BTN_RIGHT,
-                         WL_POINTER_BUTTON_STATE_PRESSED);
 
   Sync();
 
-  std::unique_ptr<Event> event;
-  EXPECT_CALL(delegate_, DispatchEvent(_)).WillOnce(CloneEvent(&event));
-  // Wayland servers typically send a value of 10 per mouse wheel click.
-  wl_pointer_send_axis_source(pointer_->resource(),
-                              WL_POINTER_AXIS_SOURCE_WHEEL);
-  wl_pointer_send_axis(pointer_->resource(), 1003,
-                       WL_POINTER_AXIS_VERTICAL_SCROLL, wl_fixed_from_int(20));
-  wl_pointer_send_frame(pointer_->resource());
+  for (uint32_t axis :
+       {WL_POINTER_AXIS_VERTICAL_SCROLL, WL_POINTER_AXIS_HORIZONTAL_SCROLL}) {
+    for (bool send_axis_source : {false, true}) {
+      std::unique_ptr<Event> event;
+      EXPECT_CALL(delegate_, DispatchEvent(_)).WillOnce(CloneEvent(&event));
 
-  Sync();
+      if (send_axis_source) {
+        // The axis source event is optional.  When it is not set within the
+        // event frame, we assume the mouse wheel.
+        wl_pointer_send_axis_source(pointer_->resource(),
+                                    WL_POINTER_AXIS_SOURCE_WHEEL);
+      }
 
-  ASSERT_TRUE(event);
-  ASSERT_TRUE(event->IsMouseWheelEvent());
-  auto* mouse_wheel_event = event->AsMouseWheelEvent();
-  EXPECT_EQ(gfx::Vector2d(0, -2 * MouseWheelEvent::kWheelDelta),
-            mouse_wheel_event->offset());
-  EXPECT_EQ(EF_RIGHT_MOUSE_BUTTON, mouse_wheel_event->button_flags());
-  EXPECT_EQ(0, mouse_wheel_event->changed_button_flags());
-  EXPECT_EQ(gfx::PointF(), mouse_wheel_event->location_f());
-  EXPECT_EQ(gfx::PointF(), mouse_wheel_event->root_location_f());
-}
+      // Wayland servers typically send a value of 10 per mouse wheel click.
+      wl_pointer_send_axis(pointer_->resource(), 1003, axis,
+                           wl_fixed_from_int(10));
+      wl_pointer_send_frame(pointer_->resource());
 
-TEST_P(WaylandPointerTest, AxisHorizontal) {
-  wl_pointer_send_enter(pointer_->resource(), 1, surface_->resource(),
-                        wl_fixed_from_int(50), wl_fixed_from_int(75));
-  wl_pointer_send_button(pointer_->resource(), 2, 1002, BTN_LEFT,
-                         WL_POINTER_BUTTON_STATE_PRESSED);
+      Sync();
 
-  Sync();
-
-  std::unique_ptr<Event> event;
-  EXPECT_CALL(delegate_, DispatchEvent(_)).WillOnce(CloneEvent(&event));
-  // Wayland servers typically send a value of 10 per mouse wheel click.
-  wl_pointer_send_axis_source(pointer_->resource(),
-                              WL_POINTER_AXIS_SOURCE_WHEEL);
-  wl_pointer_send_axis(pointer_->resource(), 1003,
-                       WL_POINTER_AXIS_HORIZONTAL_SCROLL,
-                       wl_fixed_from_int(10));
-  wl_pointer_send_frame(pointer_->resource());
-
-  Sync();
-
-  ASSERT_TRUE(event);
-  ASSERT_TRUE(event->IsMouseWheelEvent());
-  auto* mouse_wheel_event = event->AsMouseWheelEvent();
-  EXPECT_EQ(gfx::Vector2d(-MouseWheelEvent::kWheelDelta, 0),
-            mouse_wheel_event->offset());
-  EXPECT_EQ(EF_LEFT_MOUSE_BUTTON, mouse_wheel_event->button_flags());
-  EXPECT_EQ(0, mouse_wheel_event->changed_button_flags());
-  EXPECT_EQ(gfx::PointF(50, 75), mouse_wheel_event->location_f());
-  EXPECT_EQ(gfx::PointF(50, 75), mouse_wheel_event->root_location_f());
+      ASSERT_TRUE(event);
+      ASSERT_TRUE(event->IsMouseWheelEvent());
+      auto* mouse_wheel_event = event->AsMouseWheelEvent();
+      EXPECT_EQ(axis == WL_POINTER_AXIS_VERTICAL_SCROLL
+                    ? gfx::Vector2d(0, -MouseWheelEvent::kWheelDelta)
+                    : gfx::Vector2d(-MouseWheelEvent::kWheelDelta, 0),
+                mouse_wheel_event->offset());
+      EXPECT_EQ(gfx::PointF(), mouse_wheel_event->location_f());
+      EXPECT_EQ(gfx::PointF(), mouse_wheel_event->root_location_f());
+    }
+  }
 }
 
 TEST_P(WaylandPointerTest, SetBitmap) {
@@ -344,7 +324,7 @@ TEST_P(WaylandPointerTest, SetBitmapAndScaleOnPointerFocus) {
                                          SkAlphaType::kPremul_SkAlphaType);
     dummy_cursor.allocPixels(info, size.width() * 4);
 
-    BitmapCursorFactoryOzone cursor_factory;
+    BitmapCursorFactory cursor_factory;
     cursor_factory.SetDeviceScaleFactor(scale);
     auto cursor = cursor_factory.CreateImageCursor(
         mojom::CursorType::kCustom, dummy_cursor, gfx::Point(5, 8));
@@ -409,18 +389,18 @@ TEST_P(WaylandPointerTest, FlingVertical) {
   // 1st axis event.
   SendAxisEvents(pointer_->resource(), ++time, WL_POINTER_AXIS_SOURCE_FINGER,
                  WL_POINTER_AXIS_VERTICAL_SCROLL, 10);
-  task_environment_.FastForwardBy(base::TimeDelta::FromMilliseconds(1));
+  task_environment_.FastForwardBy(base::Milliseconds(1));
   Sync();
 
   // 2nd axis event.
   SendAxisEvents(pointer_->resource(), ++time, WL_POINTER_AXIS_SOURCE_FINGER,
                  WL_POINTER_AXIS_VERTICAL_SCROLL, 10);
-  task_environment_.FastForwardBy(base::TimeDelta::FromMilliseconds(1));
+  task_environment_.FastForwardBy(base::Milliseconds(1));
   Sync();
 
   // axis_stop event which should trigger fling scroll.
   SendAxisStopEvents(pointer_->resource(), ++time);
-  task_environment_.FastForwardBy(base::TimeDelta::FromMilliseconds(1));
+  task_environment_.FastForwardBy(base::Milliseconds(1));
   Sync();
 
   // Usual axis events should follow before the fling event.
@@ -463,18 +443,18 @@ TEST_P(WaylandPointerTest, FlingHorizontal) {
   // 1st axis event.
   SendAxisEvents(pointer_->resource(), ++time, WL_POINTER_AXIS_SOURCE_FINGER,
                  WL_POINTER_AXIS_HORIZONTAL_SCROLL, 10);
-  task_environment_.FastForwardBy(base::TimeDelta::FromMilliseconds(1));
+  task_environment_.FastForwardBy(base::Milliseconds(1));
   Sync();
 
   // 2nd axis event.
   SendAxisEvents(pointer_->resource(), ++time, WL_POINTER_AXIS_SOURCE_FINGER,
                  WL_POINTER_AXIS_HORIZONTAL_SCROLL, 10);
-  task_environment_.FastForwardBy(base::TimeDelta::FromMilliseconds(1));
+  task_environment_.FastForwardBy(base::Milliseconds(1));
   Sync();
 
   // axis_stop event which should trigger fling scroll.
   SendAxisStopEvents(pointer_->resource(), ++time);
-  task_environment_.FastForwardBy(base::TimeDelta::FromMilliseconds(1));
+  task_environment_.FastForwardBy(base::Milliseconds(1));
   Sync();
 
   // Usual axis events should follow before the fling event.
@@ -518,25 +498,25 @@ TEST_P(WaylandPointerTest, FlingCancel) {
   // 1st axis event.
   SendAxisEvents(pointer_->resource(), ++time, WL_POINTER_AXIS_SOURCE_FINGER,
                  WL_POINTER_AXIS_VERTICAL_SCROLL, 10);
-  task_environment_.FastForwardBy(base::TimeDelta::FromMilliseconds(1));
+  task_environment_.FastForwardBy(base::Milliseconds(1));
   Sync();
 
   // 2nd axis event.
   SendAxisEvents(pointer_->resource(), ++time, WL_POINTER_AXIS_SOURCE_FINGER,
                  WL_POINTER_AXIS_VERTICAL_SCROLL, 10);
-  task_environment_.FastForwardBy(base::TimeDelta::FromMilliseconds(1));
+  task_environment_.FastForwardBy(base::Milliseconds(1));
   Sync();
 
   // 3rd axis event, whose offset is 0, should make the following axis_stop
   // trigger fling cancel.
   SendAxisEvents(pointer_->resource(), ++time, WL_POINTER_AXIS_SOURCE_FINGER,
                  WL_POINTER_AXIS_VERTICAL_SCROLL, 0);
-  task_environment_.FastForwardBy(base::TimeDelta::FromMilliseconds(1));
+  task_environment_.FastForwardBy(base::Milliseconds(1));
   Sync();
 
   // axis_stop event which should trigger fling cancel.
   SendAxisStopEvents(pointer_->resource(), ++time);
-  task_environment_.FastForwardBy(base::TimeDelta::FromMilliseconds(1));
+  task_environment_.FastForwardBy(base::Milliseconds(1));
   Sync();
 
   // Usual axis events should follow before the fling event.
@@ -583,18 +563,18 @@ TEST_P(WaylandPointerTest, FlingDiagonal) {
   // 1st axis event notifies scrolls both in vertical and horizontal.
   SendDiagonalAxisEvents(pointer_->resource(), ++time,
                          WL_POINTER_AXIS_SOURCE_FINGER, 20, 10);
-  task_environment_.FastForwardBy(base::TimeDelta::FromMilliseconds(1));
+  task_environment_.FastForwardBy(base::Milliseconds(1));
   Sync();
 
   // 2st axis event notifies scrolls both in vertical and horizontal.
   SendDiagonalAxisEvents(pointer_->resource(), ++time,
                          WL_POINTER_AXIS_SOURCE_FINGER, 20, 10);
-  task_environment_.FastForwardBy(base::TimeDelta::FromMilliseconds(1));
+  task_environment_.FastForwardBy(base::Milliseconds(1));
   Sync();
 
   // axis_stop event which should trigger fling scroll.
   SendAxisStopEvents(pointer_->resource(), ++time);
-  task_environment_.FastForwardBy(base::TimeDelta::FromMilliseconds(1));
+  task_environment_.FastForwardBy(base::Milliseconds(1));
   Sync();
 
   // Usual axis events should follow before the fling event.

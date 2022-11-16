@@ -23,6 +23,7 @@ import org.chromium.chrome.browser.omnibox.R;
 import org.chromium.chrome.browser.omnibox.styles.OmniboxResourceProvider;
 import org.chromium.chrome.browser.omnibox.suggestions.SuggestionCommonProperties;
 import org.chromium.chrome.browser.omnibox.suggestions.base.BaseSuggestionViewProperties.Action;
+import org.chromium.chrome.browser.ui.theme.BrandedColorScheme;
 import org.chromium.components.browser_ui.styles.ChromeColors;
 import org.chromium.ui.modelutil.PropertyKey;
 import org.chromium.ui.modelutil.PropertyModel;
@@ -59,7 +60,7 @@ public final class BaseSuggestionViewBinder<T extends View>
             ViewCompat.setLayoutDirection(
                     view, model.get(SuggestionCommonProperties.LAYOUT_DIRECTION));
             updateContentViewPadding(model, view.getDecoratedSuggestionView());
-        } else if (SuggestionCommonProperties.OMNIBOX_THEME == propertyKey) {
+        } else if (SuggestionCommonProperties.COLOR_SCHEME == propertyKey) {
             updateColorScheme(model, view);
         } else if (BaseSuggestionViewProperties.ACTIONS == propertyKey) {
             bindActionButtons(model, view, model.get(BaseSuggestionViewProperties.ACTIONS));
@@ -102,7 +103,7 @@ public final class BaseSuggestionViewBinder<T extends View>
             actionView.setContentDescription(action.accessibilityDescription);
             actionView.setBackground(copyDrawable(backgroundDrawable));
             updateIcon(actionView, action.icon,
-                    ChromeColors.getPrimaryIconTintRes(!useDarkColors(model)));
+                    ChromeColors.getPrimaryIconTintRes(isIncognito(model)));
 
             actionView.setAccessibilityDelegate(new AccessibilityDelegate() {
                 @Override
@@ -142,14 +143,13 @@ public final class BaseSuggestionViewBinder<T extends View>
             ImageView actionView = actionViews.get(index);
             actionView.setBackground(copyDrawable(backgroundDrawable));
             updateIcon(actionView, actions.get(index).icon,
-                    ChromeColors.getPrimaryIconTintRes(!useDarkColors(model)));
+                    ChromeColors.getPrimaryIconTintRes(isIncognito(model)));
         }
     }
 
-    /** @return Whether currently used color scheme is considered to be dark. */
-    private static boolean useDarkColors(PropertyModel model) {
-        return !OmniboxResourceProvider.isDarkMode(
-                model.get(SuggestionCommonProperties.OMNIBOX_THEME));
+    /** @return Whether the current {@link BrandedColorScheme} is INCOGNITO. */
+    private static boolean isIncognito(PropertyModel model) {
+        return model.get(SuggestionCommonProperties.COLOR_SCHEME) == BrandedColorScheme.INCOGNITO;
     }
 
     /** Update attributes of decorated suggestion icon. */
@@ -175,7 +175,7 @@ public final class BaseSuggestionViewBinder<T extends View>
             rciv.setClipToOutline(sds.useRoundedCorners);
         }
 
-        updateIcon(rciv, sds, ChromeColors.getSecondaryIconTintRes(!useDarkColors(model)));
+        updateIcon(rciv, sds, ChromeColors.getSecondaryIconTintRes(isIncognito(model)));
     }
 
     /**
@@ -207,14 +207,10 @@ public final class BaseSuggestionViewBinder<T extends View>
                 verticalPadRes = R.dimen.omnibox_suggestion_compact_padding;
                 minimumHeightRes = R.dimen.omnibox_suggestion_compact_height;
                 break;
-            case BaseSuggestionViewProperties.Density.SEMICOMPACT:
+            case BaseSuggestionViewProperties.Density.DEFAULT:
+            default:
                 verticalPadRes = R.dimen.omnibox_suggestion_semicompact_padding;
                 minimumHeightRes = R.dimen.omnibox_suggestion_semicompact_height;
-                break;
-            case BaseSuggestionViewProperties.Density.COMFORTABLE:
-            default:
-                verticalPadRes = R.dimen.omnibox_suggestion_comfortable_padding;
-                minimumHeightRes = R.dimen.omnibox_suggestion_comfortable_height;
                 break;
         }
         final int verticalPad = view.getResources().getDimensionPixelSize(verticalPadRes);
@@ -234,9 +230,9 @@ public final class BaseSuggestionViewBinder<T extends View>
      * @param model A property model to look up relevant properties.
      * @return A selectable background drawable.
      */
-    private static Drawable getSelectableBackgroundDrawable(View view, PropertyModel model) {
+    public static Drawable getSelectableBackgroundDrawable(View view, PropertyModel model) {
         return OmniboxResourceProvider.resolveAttributeToDrawable(view.getContext(),
-                model.get(SuggestionCommonProperties.OMNIBOX_THEME),
+                model.get(SuggestionCommonProperties.COLOR_SCHEME),
                 R.attr.selectableItemBackground);
     }
 
@@ -254,8 +250,6 @@ public final class BaseSuggestionViewBinder<T extends View>
     /** Update image view using supplied drawable state object. */
     private static void updateIcon(
             ImageView view, SuggestionDrawableState sds, @ColorRes int tintRes) {
-        final Resources res = view.getContext().getResources();
-
         view.setVisibility(sds == null ? View.GONE : View.VISIBLE);
         if (sds == null) {
             // Release any drawable that is still attached to this view to reclaim memory.

@@ -7,9 +7,8 @@
 #include <string>
 
 #include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
-#include "build/chromeos_buildflags.h"
+#include "build/build_config.h"
 #include "device/bluetooth/bluetooth_device.h"
 #include "device/bluetooth/test/fake_central.h"
 #include "device/bluetooth/test/fake_remote_gatt_service.h"
@@ -28,6 +27,10 @@ namespace bluetooth {
 class FakePeripheral : public device::BluetoothDevice {
  public:
   FakePeripheral(FakeCentral* fake_central, const std::string& address);
+
+  FakePeripheral(const FakePeripheral&) = delete;
+  FakePeripheral& operator=(const FakePeripheral&) = delete;
+
   ~FakePeripheral() override;
 
   // Changes the name of the device.
@@ -73,7 +76,7 @@ class FakePeripheral : public device::BluetoothDevice {
 
   // BluetoothDevice overrides:
   uint32_t GetBluetoothClass() const override;
-#if defined(OS_CHROMEOS) || defined(OS_LINUX)
+#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX)
   device::BluetoothTransport GetType() const override;
 #endif
   std::string GetIdentifier() const override;
@@ -87,13 +90,13 @@ class FakePeripheral : public device::BluetoothDevice {
   absl::optional<std::string> GetName() const override;
   std::u16string GetNameForDisplay() const override;
   bool IsPaired() const override;
+#if BUILDFLAG(IS_CHROMEOS)
+  bool IsBonded() const override;
+#endif  // BUILDFLAG(IS_CHROMEOS)
   bool IsConnected() const override;
   bool IsGattConnected() const override;
   bool IsConnectable() const override;
   bool IsConnecting() const override;
-#if defined(OS_CHROMEOS)
-  bool IsBlockedByPolicy() const override;
-#endif
   bool ExpectingPinCode() const override;
   bool ExpectingPasskey() const override;
   bool ExpectingConfirmation() const override;
@@ -103,6 +106,10 @@ class FakePeripheral : public device::BluetoothDevice {
                             ErrorCallback error_callback) override;
   void Connect(PairingDelegate* pairing_delegate,
                ConnectCallback callback) override;
+#if BUILDFLAG(IS_CHROMEOS)
+  void ConnectClassic(PairingDelegate* pairing_delegate,
+                      ConnectCallback callback) override;
+#endif  // BUILDFLAG(IS_CHROMEOS)
   void SetPinCode(const std::string& pincode) override;
   void SetPasskey(uint32_t passkey) override;
   void ConfirmPairing() override;
@@ -123,12 +130,12 @@ class FakePeripheral : public device::BluetoothDevice {
       GattConnectionCallback callback,
       absl::optional<device::BluetoothUUID> service_uuid) override;
   bool IsGattServicesDiscoveryComplete() const override;
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   void ExecuteWrite(base::OnceClosure callback,
                     ExecuteWriteErrorCallback error_callback) override;
   void AbortWrite(base::OnceClosure callback,
                   AbortWriteErrorCallback error_callback) override;
-#endif
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
  protected:
   void CreateGattConnectionImpl(absl::optional<device::BluetoothUUID>) override;
@@ -165,8 +172,6 @@ class FakePeripheral : public device::BluetoothDevice {
   // Mutable because IsGattServicesDiscoveryComplete needs to post a task but
   // is const.
   mutable base::WeakPtrFactory<FakePeripheral> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(FakePeripheral);
 };
 
 }  // namespace bluetooth

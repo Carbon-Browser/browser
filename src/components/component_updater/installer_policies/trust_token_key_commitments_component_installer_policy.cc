@@ -11,14 +11,12 @@
 
 #include "base/bind.h"
 #include "base/command_line.h"
-#include "base/cxx17_backports.h"
 #include "base/feature_list.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
 #include "base/path_service.h"
-#include "base/task/post_task.h"
 #include "base/task/thread_pool.h"
 #include "base/version.h"
 #include "components/component_updater/component_updater_paths.h"
@@ -70,7 +68,7 @@ TrustTokenKeyCommitmentsComponentInstallerPolicy::
 
 bool TrustTokenKeyCommitmentsComponentInstallerPolicy::
     SupportsGroupPolicyEnabledComponentUpdates() const {
-  return false;
+  return true;
 }
 
 bool TrustTokenKeyCommitmentsComponentInstallerPolicy::
@@ -85,7 +83,7 @@ bool TrustTokenKeyCommitmentsComponentInstallerPolicy::
 
 update_client::CrxInstaller::Result
 TrustTokenKeyCommitmentsComponentInstallerPolicy::OnCustomInstall(
-    const base::DictionaryValue& manifest,
+    const base::Value& manifest,
     const base::FilePath& install_dir) {
   return update_client::CrxInstaller::Result(0);  // Nothing custom here.
 }
@@ -107,7 +105,7 @@ TrustTokenKeyCommitmentsComponentInstallerPolicy::GetInstalledPath(
 void TrustTokenKeyCommitmentsComponentInstallerPolicy::ComponentReady(
     const base::Version& version,
     const base::FilePath& install_dir,
-    std::unique_ptr<base::DictionaryValue> manifest) {
+    base::Value manifest) {
   VLOG(1) << "Component ready, version " << version.GetString() << " in "
           << install_dir.value();
 
@@ -118,7 +116,7 @@ void TrustTokenKeyCommitmentsComponentInstallerPolicy::ComponentReady(
 
 // Called during startup and installation before ComponentReady().
 bool TrustTokenKeyCommitmentsComponentInstallerPolicy::VerifyInstallation(
-    const base::DictionaryValue& manifest,
+    const base::Value& manifest,
     const base::FilePath& install_dir) const {
   // No need to actually validate the commitments here, since we'll do the
   // checking in NetworkService::SetTrustTokenKeyCommitments.
@@ -152,7 +150,7 @@ void TrustTokenKeyCommitmentsComponentInstallerPolicy::GetPublicKeyHash(
   DCHECK(hash);
   hash->assign(kTrustTokenKeyCommitmentsPublicKeySHA256,
                kTrustTokenKeyCommitmentsPublicKeySHA256 +
-                   base::size(kTrustTokenKeyCommitmentsPublicKeySHA256));
+                   std::size(kTrustTokenKeyCommitmentsPublicKeySHA256));
 }
 
 // static

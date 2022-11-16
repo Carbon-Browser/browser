@@ -6,11 +6,10 @@
 
 #include "base/bind.h"
 #include "base/check.h"
-#include "base/task/post_task.h"
 #include "base/threading/sequenced_task_runner_handle.h"
 #include "printing/printer_status.h"
 
-namespace chromeos {
+namespace ash {
 
 void QueryIppPrinter(const std::string& host,
                      const int port,
@@ -26,4 +25,4 @@ void QueryIppPrinter(const std::string& host,
                                 std::vector<std::string>{}, false));
 }
 
-}  // namespace chromeos
+}  // namespace ash

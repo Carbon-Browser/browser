@@ -7,7 +7,7 @@
 #include "build/build_config.h"
 #include "url/gurl.h"
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/android/shortcut_helper.h"
 #else
 #include "chrome/browser/profiles/profile.h"
@@ -20,8 +20,8 @@
 bool DoesOriginContainAnyInstalledWebApp(
     content::BrowserContext* browser_context,
     const GURL& origin) {
-  DCHECK_EQ(origin, origin.GetOrigin());
-#if defined(OS_ANDROID)
+  DCHECK_EQ(origin, origin.DeprecatedGetOriginAsURL());
+#if BUILDFLAG(IS_ANDROID)
   return ShortcutHelper::DoesOriginContainAnyInstalledWebApk(origin);
 #else
   auto* provider = web_app::WebAppProvider::GetForWebApps(
@@ -36,7 +36,7 @@ bool DoesOriginContainAnyInstalledWebApp(
 
 std::set<GURL> GetOriginsWithInstalledWebApps(
     content::BrowserContext* browser_context) {
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   return ShortcutHelper::GetOriginsWithInstalledWebApksOrTwas();
 #else
   auto* provider = web_app::WebAppProvider::GetForWebApps(
@@ -49,7 +49,7 @@ std::set<GURL> GetOriginsWithInstalledWebApps(
   auto app_ids = registrar.GetAppIds();
   std::set<GURL> installed_origins;
   for (auto& app_id : app_ids) {
-    GURL origin = registrar.GetAppScope(app_id).GetOrigin();
+    GURL origin = registrar.GetAppScope(app_id).DeprecatedGetOriginAsURL();
     DCHECK(origin.is_valid());
     if (origin.SchemeIs(url::kHttpScheme))
       installed_origins.emplace(origin);

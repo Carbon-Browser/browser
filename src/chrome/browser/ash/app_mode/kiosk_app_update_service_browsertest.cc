@@ -16,11 +16,10 @@
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/location.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/test/scoped_path_override.h"
@@ -34,7 +33,7 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/pref_names.h"
-#include "chromeos/dbus/update_engine/update_engine_client.h"
+#include "chromeos/ash/components/dbus/update_engine/update_engine_client.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/test/browser_test.h"
@@ -48,7 +47,7 @@ namespace {
 
 // Maximum time for AutomaticRebootManager initialization to complete.
 constexpr base::TimeDelta kAutomaticRebootManagerInitTimeout =
-    base::TimeDelta::FromSeconds(60);
+    base::Seconds(60);
 
 // Blocks until |manager| is initialized and then sets |success_out| to true and
 // runs |quit_closure|. If initialization does not occur within |timeout|, sets
@@ -84,13 +83,13 @@ class KioskAppUpdateServiceTest
     ASSERT_TRUE(temp_dir_.CreateUniqueTempDir());
     const base::FilePath& temp_dir = temp_dir_.GetPath();
 
-    const base::TimeDelta uptime = base::TimeDelta::FromHours(3);
+    const base::TimeDelta uptime = base::Hours(3);
     const std::string uptime_seconds =
         base::NumberToString(uptime.InSecondsF());
     const base::FilePath uptime_file = temp_dir.Append("uptime");
     ASSERT_TRUE(base::WriteFile(uptime_file, uptime_seconds));
-    uptime_file_override_ = std::make_unique<base::ScopedPathOverride>(
-        chromeos::FILE_UPTIME, uptime_file);
+    uptime_file_override_ =
+        std::make_unique<base::ScopedPathOverride>(FILE_UPTIME, uptime_file);
   }
 
   void SetUpOnMainThread() override {
@@ -155,8 +154,8 @@ class KioskAppUpdateServiceTest
 
   void RequestPeriodicReboot() {
     run_loop_ = std::make_unique<base::RunLoop>();
-    g_browser_process->local_state()->SetInteger(
-        prefs::kUptimeLimit, base::TimeDelta::FromHours(2).InSeconds());
+    g_browser_process->local_state()->SetInteger(prefs::kUptimeLimit,
+                                                 base::Hours(2).InSeconds());
     run_loop_->Run();
   }
 
@@ -174,7 +173,7 @@ class KioskAppUpdateServiceTest
 IN_PROC_BROWSER_TEST_F(KioskAppUpdateServiceTest, AppUpdate) {
   CreateKioskAppUpdateService();
 
-  ExtensionTestMessageListener listener("app_update", false);
+  ExtensionTestMessageListener listener("app_update");
   FireAppUpdateAvailable();
   EXPECT_TRUE(listener.WaitUntilSatisfied());
 }
@@ -186,7 +185,7 @@ IN_PROC_BROWSER_TEST_F(KioskAppUpdateServiceTest, OsUpdate) {
   CreateKioskAppUpdateService();
 
   g_browser_process->local_state()->SetBoolean(prefs::kRebootAfterUpdate, true);
-  ExtensionTestMessageListener listener("os_update", false);
+  ExtensionTestMessageListener listener("os_update");
   FireUpdatedNeedReboot();
   EXPECT_TRUE(listener.WaitUntilSatisfied());
 }
@@ -196,7 +195,7 @@ IN_PROC_BROWSER_TEST_F(KioskAppUpdateServiceTest, OsUpdate) {
 IN_PROC_BROWSER_TEST_F(KioskAppUpdateServiceTest, Periodic) {
   CreateKioskAppUpdateService();
 
-  ExtensionTestMessageListener listener("periodic", false);
+  ExtensionTestMessageListener listener("periodic");
   RequestPeriodicReboot();
   EXPECT_TRUE(listener.WaitUntilSatisfied());
 }
@@ -208,7 +207,7 @@ IN_PROC_BROWSER_TEST_F(KioskAppUpdateServiceTest, StartAfterOsUpdate) {
   g_browser_process->local_state()->SetBoolean(prefs::kRebootAfterUpdate, true);
   FireUpdatedNeedReboot();
 
-  ExtensionTestMessageListener listener("os_update", false);
+  ExtensionTestMessageListener listener("os_update");
   CreateKioskAppUpdateService();
   EXPECT_TRUE(listener.WaitUntilSatisfied());
 }
@@ -218,7 +217,7 @@ IN_PROC_BROWSER_TEST_F(KioskAppUpdateServiceTest, StartAfterOsUpdate) {
 IN_PROC_BROWSER_TEST_F(KioskAppUpdateServiceTest, StartAfterPeriodic) {
   RequestPeriodicReboot();
 
-  ExtensionTestMessageListener listener("periodic", false);
+  ExtensionTestMessageListener listener("periodic");
   CreateKioskAppUpdateService();
   EXPECT_TRUE(listener.WaitUntilSatisfied());
 }

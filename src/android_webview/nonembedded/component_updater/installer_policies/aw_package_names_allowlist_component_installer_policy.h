@@ -15,7 +15,7 @@
 #include "base/callback.h"
 
 namespace base {
-class DictionaryValue;
+class Value;
 class FilePath;
 }  // namespace base
 
@@ -38,9 +38,9 @@ class AwPackageNamesAllowlistComponentInstallerPolicy
   bool SupportsGroupPolicyEnabledComponentUpdates() const override;
   bool RequiresNetworkEncryption() const override;
   update_client::CrxInstaller::Result OnCustomInstall(
-      const base::DictionaryValue& manifest,
+      const base::Value& manifest,
       const base::FilePath& install_dir) override;
-  bool VerifyInstallation(const base::DictionaryValue& manifest,
+  bool VerifyInstallation(const base::Value& manifest,
                           const base::FilePath& install_dir) const override;
   base::FilePath GetRelativeInstallDir() const override;
   std::string GetName() const override;
@@ -50,7 +50,7 @@ class AwPackageNamesAllowlistComponentInstallerPolicy
 // Call once during startup to make the component update service aware of
 // the package name logging component.
 void RegisterWebViewAppsPackageNamesAllowlistComponent(
-    base::OnceCallback<bool(const update_client::CrxComponent&)>
+    base::OnceCallback<bool(const component_updater::ComponentRegistration&)>
         register_callback,
     base::OnceClosure registration_finished);
 

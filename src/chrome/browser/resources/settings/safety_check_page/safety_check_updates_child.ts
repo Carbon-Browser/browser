@@ -7,16 +7,23 @@
  * 'settings-safety-updates-child' is the settings page containing the safety
  * check child showing the browser's update status.
  */
-import {assertNotReached} from 'chrome://resources/js/assert.m.js';
-import {I18nBehavior} from 'chrome://resources/js/i18n_behavior.m.js';
-import {WebUIListenerBehavior} from 'chrome://resources/js/web_ui_listener_behavior.m.js';
-import {html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {LifetimeBrowserProxyImpl} from '../lifetime_browser_proxy.js';
+// <if expr="not chromeos_ash">
+import '../relaunch_confirmation_dialog.js';
+
+// </if>
+
+import {assertNotReached} from 'chrome://resources/js/assert_ts.js';
+import {I18nMixin} from 'chrome://resources/js/i18n_mixin.js';
+import {WebUIListenerMixin} from 'chrome://resources/js/web_ui_listener_mixin.js';
+import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+
 import {MetricsBrowserProxy, MetricsBrowserProxyImpl, SafetyCheckInteractions} from '../metrics_browser_proxy.js';
+import {RelaunchMixin, RestartType} from '../relaunch_mixin.js';
 
 import {SafetyCheckCallbackConstants, SafetyCheckUpdatesStatus} from './safety_check_browser_proxy.js';
 import {SafetyCheckIconStatus} from './safety_check_child.js';
+import {getTemplate} from './safety_check_updates_child.html.js';
 
 type UpdatesChangedEvent = {
   newState: SafetyCheckUpdatesStatus,
@@ -24,8 +31,7 @@ type UpdatesChangedEvent = {
 };
 
 const SettingsSafetyCheckUpdatesChildElementBase =
-    mixinBehaviors([I18nBehavior, WebUIListenerBehavior], PolymerElement) as
-    {new (): PolymerElement & I18nBehavior & WebUIListenerBehavior};
+    RelaunchMixin(WebUIListenerMixin(I18nMixin(PolymerElement)));
 
 export class SettingsSafetyCheckUpdatesChildElement extends
     SettingsSafetyCheckUpdatesChildElementBase {
@@ -34,7 +40,7 @@ export class SettingsSafetyCheckUpdatesChildElement extends
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
   }
 
   static get properties() {
@@ -59,7 +65,7 @@ export class SettingsSafetyCheckUpdatesChildElement extends
   private metricsBrowserProxy_: MetricsBrowserProxy =
       MetricsBrowserProxyImpl.getInstance();
 
-  connectedCallback() {
+  override connectedCallback() {
     super.connectedCallback();
 
     // Register for safety check status updates.
@@ -89,7 +95,6 @@ export class SettingsSafetyCheckUpdatesChildElement extends
         return SafetyCheckIconStatus.WARNING;
       default:
         assertNotReached();
-        return SafetyCheckIconStatus.WARNING;
     }
   }
 
@@ -109,7 +114,7 @@ export class SettingsSafetyCheckUpdatesChildElement extends
     this.metricsBrowserProxy_.recordAction(
         'Settings.SafetyCheck.RelaunchAfterUpdates');
 
-    LifetimeBrowserProxyImpl.getInstance().relaunch();
+    this.performRestart(RestartType.RELAUNCH);
   }
 
   private getManagedIcon_(): string|null {
@@ -119,6 +124,13 @@ export class SettingsSafetyCheckUpdatesChildElement extends
       default:
         return null;
     }
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'settings-safety-check-updates-child':
+        SettingsSafetyCheckUpdatesChildElement;
   }
 }
 

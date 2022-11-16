@@ -12,9 +12,8 @@
 #include "base/containers/flat_map.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
-#include "base/sequenced_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/thread_checker.h"
 #include "media/base/provision_fetcher.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -35,6 +34,8 @@ class FuchsiaCdmManager {
   // A map from key system name to its CreateKeySystemCallback.
   using CreateKeySystemCallbackMap =
       base::flat_map<std::string, CreateKeySystemCallback>;
+
+  static FuchsiaCdmManager* GetInstance();
 
   // |cdm_data_quota_bytes| is currently only applied once, when the manager is
   // created.

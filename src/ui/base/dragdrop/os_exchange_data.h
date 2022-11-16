@@ -16,7 +16,6 @@
 #include "base/callback_forward.h"
 #include "base/component_export.h"
 #include "base/files/file_path.h"
-#include "base/macros.h"
 #include "ui/base/dragdrop/os_exchange_data_provider.h"
 
 class GURL;
@@ -49,13 +48,16 @@ class COMPONENT_EXPORT(UI_BASE) OSExchangeData {
  public:
   // Enumeration of the known formats.
   enum Format {
-    STRING         = 1 << 0,
-    URL            = 1 << 1,
-    FILE_NAME      = 1 << 2,
-    PICKLED_DATA   = 1 << 3,
-    FILE_CONTENTS  = 1 << 4,
+    STRING = 1 << 0,
+    URL = 1 << 1,
+    FILE_NAME = 1 << 2,
+    PICKLED_DATA = 1 << 3,
+    FILE_CONTENTS = 1 << 4,
 #if defined(USE_AURA)
-    HTML           = 1 << 5,
+    HTML = 1 << 5,
+#endif
+#if BUILDFLAG(IS_CHROMEOS)
+    DATA_TRANSFER_ENDPOINT = 1 << 6,
 #endif
   };
 
@@ -63,6 +65,9 @@ class COMPONENT_EXPORT(UI_BASE) OSExchangeData {
   // Creates an OSExchangeData with the specified provider. OSExchangeData
   // takes ownership of the supplied provider.
   explicit OSExchangeData(std::unique_ptr<OSExchangeDataProvider> provider);
+
+  OSExchangeData(const OSExchangeData&) = delete;
+  OSExchangeData& operator=(const OSExchangeData&) = delete;
 
   ~OSExchangeData();
 
@@ -75,6 +80,12 @@ class COMPONENT_EXPORT(UI_BASE) OSExchangeData {
   // since it could allow potential escalation of privileges.
   void MarkOriginatedFromRenderer();
   bool DidOriginateFromRenderer() const;
+
+  // Marks drag data as from privileged WebContents. This is used to
+  // make sure non-privileged WebContents will not accept drop data from
+  // privileged WebContents or vise versa.
+  void MarkAsFromPrivileged();
+  bool IsFromPrivileged() const;
 
   // These functions add data to the OSExchangeData object of various Chrome
   // types. The OSExchangeData object takes care of translating the data into
@@ -134,7 +145,7 @@ class COMPONENT_EXPORT(UI_BASE) OSExchangeData {
   bool GetFileContents(base::FilePath* filename,
                        std::string* file_contents) const;
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   // Methods used to query and retrieve file data from a drag source
   // IDataObject implementation packaging the data with the
   // CFSTR_FILEDESCRIPTOR/CFSTR_FILECONTENTS clipboard formats instead of the
@@ -191,8 +202,6 @@ class COMPONENT_EXPORT(UI_BASE) OSExchangeData {
  private:
   // Provides the actual data.
   std::unique_ptr<OSExchangeDataProvider> provider_;
-
-  DISALLOW_COPY_AND_ASSIGN(OSExchangeData);
 };
 
 }  // namespace ui

@@ -19,14 +19,19 @@ namespace quick_unlock {
 namespace {
 
 class PinStoragePrefsUnitTest : public testing::Test {
+ public:
+  PinStoragePrefsUnitTest(const PinStoragePrefsUnitTest&) = delete;
+  PinStoragePrefsUnitTest& operator=(const PinStoragePrefsUnitTest&) = delete;
+
  protected:
   PinStoragePrefsUnitTest() : profile_(std::make_unique<TestingProfile>()) {}
   ~PinStoragePrefsUnitTest() override = default;
 
   // testing::Test:
-  void SetUp() override { EnabledForTesting(true); }
-
-  void TearDown() override { EnabledForTesting(false); }
+  void SetUp() override {
+    test_api_ = std::make_unique<TestApi>(/*override_quick_unlock=*/true);
+    test_api_->EnablePinByPolicy(Purpose::kAny);
+  }
 
   PinStoragePrefs* PinStoragePrefs() const {
     return QuickUnlockFactory::GetForProfile(profile_.get())
@@ -35,8 +40,7 @@ class PinStoragePrefsUnitTest : public testing::Test {
 
   content::BrowserTaskEnvironment task_environment_;
   std::unique_ptr<TestingProfile> profile_;
-
-  DISALLOW_COPY_AND_ASSIGN(PinStoragePrefsUnitTest);
+  std::unique_ptr<TestApi> test_api_;
 };
 
 }  // namespace
@@ -48,21 +52,23 @@ class PinStoragePrefsTestApi {
   explicit PinStoragePrefsTestApi(PinStoragePrefs* pin_storage)
       : pin_storage_(pin_storage) {}
 
+  PinStoragePrefsTestApi(const PinStoragePrefsTestApi&) = delete;
+  PinStoragePrefsTestApi& operator=(const PinStoragePrefsTestApi&) = delete;
+
   std::string PinSalt() const { return pin_storage_->PinSalt(); }
 
   std::string PinSecret() const { return pin_storage_->PinSecret(); }
 
   bool IsPinAuthenticationAvailable() const {
-    return pin_storage_->IsPinAuthenticationAvailable();
+    return pin_storage_->IsPinAuthenticationAvailable(Purpose::kAny);
   }
   bool TryAuthenticatePin(const std::string& secret, Key::KeyType key_type) {
-    return pin_storage_->TryAuthenticatePin(Key(key_type, "" /*salt*/, secret));
+    return pin_storage_->TryAuthenticatePin(Key(key_type, "" /*salt*/, secret),
+                                            Purpose::kAny);
   }
 
  private:
   PinStoragePrefs* pin_storage_;
-
-  DISALLOW_COPY_AND_ASSIGN(PinStoragePrefsTestApi);
 };
 
 // Verifies that:

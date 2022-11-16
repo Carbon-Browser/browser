@@ -34,9 +34,8 @@ class ReportingNetworkChangeObserverTest : public ReportingTestBase {
   }
 
   void SetEndpoint() {
-    ASSERT_TRUE(
-        SetEndpointInCache(kGroupKey_, kEndpoint_,
-                           base::Time::Now() + base::TimeDelta::FromDays(7)));
+    ASSERT_TRUE(SetEndpointInCache(kGroupKey_, kEndpoint_,
+                                   base::Time::Now() + base::Days(7)));
   }
 
   size_t report_count() {
@@ -65,8 +64,8 @@ TEST_F(ReportingNetworkChangeObserverTest, ClearNothing) {
   UsePolicy(new_policy);
 
   cache()->AddReport(kReportingSource_, kNik_, kUrl_, kUserAgent_, kGroup_,
-                     kType_, std::make_unique<base::DictionaryValue>(), 0,
-                     tick_clock()->NowTicks(), 0);
+                     kType_, base::Value::Dict(), 0, tick_clock()->NowTicks(),
+                     0);
   SetEndpoint();
   ASSERT_EQ(1u, report_count());
   ASSERT_EQ(1u, cache()->GetEndpointCount());
@@ -84,8 +83,8 @@ TEST_F(ReportingNetworkChangeObserverTest, ClearReports) {
   UsePolicy(new_policy);
 
   cache()->AddReport(kReportingSource_, kNik_, kUrl_, kUserAgent_, kGroup_,
-                     kType_, std::make_unique<base::DictionaryValue>(), 0,
-                     tick_clock()->NowTicks(), 0);
+                     kType_, base::Value::Dict(), 0, tick_clock()->NowTicks(),
+                     0);
   SetEndpoint();
   ASSERT_EQ(1u, report_count());
   ASSERT_EQ(1u, cache()->GetEndpointCount());
@@ -103,8 +102,8 @@ TEST_F(ReportingNetworkChangeObserverTest, ClearClients) {
   UsePolicy(new_policy);
 
   cache()->AddReport(kReportingSource_, kNik_, kUrl_, kUserAgent_, kGroup_,
-                     kType_, std::make_unique<base::DictionaryValue>(), 0,
-                     tick_clock()->NowTicks(), 0);
+                     kType_, base::Value::Dict(), 0, tick_clock()->NowTicks(),
+                     0);
   SetEndpoint();
   ASSERT_EQ(1u, report_count());
   ASSERT_EQ(1u, cache()->GetEndpointCount());
@@ -122,8 +121,8 @@ TEST_F(ReportingNetworkChangeObserverTest, ClearReportsAndClients) {
   UsePolicy(new_policy);
 
   cache()->AddReport(kReportingSource_, kNik_, kUrl_, kUserAgent_, kGroup_,
-                     kType_, std::make_unique<base::DictionaryValue>(), 0,
-                     tick_clock()->NowTicks(), 0);
+                     kType_, base::Value::Dict(), 0, tick_clock()->NowTicks(),
+                     0);
   SetEndpoint();
   ASSERT_EQ(1u, report_count());
   ASSERT_EQ(1u, cache()->GetEndpointCount());

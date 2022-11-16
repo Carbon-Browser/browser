@@ -12,9 +12,8 @@
 #include "base/command_line.h"
 #include "base/compiler_specific.h"
 #include "base/location.h"
-#include "base/macros.h"
 #include "base/run_loop.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
 #include "chrome/browser/ash/accessibility/accessibility_manager.h"
@@ -49,6 +48,9 @@ class PrefChangeWatcher {
  public:
   PrefChangeWatcher(const char* pref_name, PrefService* prefs);
 
+  PrefChangeWatcher(const PrefChangeWatcher&) = delete;
+  PrefChangeWatcher& operator=(const PrefChangeWatcher&) = delete;
+
   void Wait();
 
   void OnPrefChange();
@@ -58,8 +60,6 @@ class PrefChangeWatcher {
 
   base::RunLoop run_loop_;
   PrefChangeRegistrar registrar_;
-
-  DISALLOW_COPY_AND_ASSIGN(PrefChangeWatcher);
 };
 
 PrefChangeWatcher::PrefChangeWatcher(const char* pref_name,
@@ -84,6 +84,12 @@ void PrefChangeWatcher::OnPrefChange() {
 
 class LoginScreenAccessibilityPolicyBrowsertest
     : public DevicePolicyCrosBrowserTest {
+ public:
+  LoginScreenAccessibilityPolicyBrowsertest(
+      const LoginScreenAccessibilityPolicyBrowsertest&) = delete;
+  LoginScreenAccessibilityPolicyBrowsertest& operator=(
+      const LoginScreenAccessibilityPolicyBrowsertest&) = delete;
+
  protected:
   LoginScreenAccessibilityPolicyBrowsertest();
   ~LoginScreenAccessibilityPolicyBrowsertest() override;
@@ -100,9 +106,6 @@ class LoginScreenAccessibilityPolicyBrowsertest
   base::Value GetPrefValue(const char* pref_name) const;
 
   Profile* login_profile_ = nullptr;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(LoginScreenAccessibilityPolicyBrowsertest);
 };
 
 LoginScreenAccessibilityPolicyBrowsertest::
@@ -113,18 +116,18 @@ LoginScreenAccessibilityPolicyBrowsertest::
 
 void LoginScreenAccessibilityPolicyBrowsertest::SetUpOnMainThread() {
   DevicePolicyCrosBrowserTest::SetUpOnMainThread();
-  login_profile_ = chromeos::ProfileHelper::GetSigninProfile();
+  login_profile_ = ash::ProfileHelper::GetSigninProfile();
   ASSERT_TRUE(login_profile_);
   // Set the login screen profile.
   AccessibilityManager* accessibility_manager = AccessibilityManager::Get();
   ASSERT_TRUE(accessibility_manager);
   accessibility_manager->SetProfileForTest(
-      chromeos::ProfileHelper::GetSigninProfile());
+      ash::ProfileHelper::GetSigninProfile());
 
   MagnificationManager* magnification_manager = MagnificationManager::Get();
   ASSERT_TRUE(magnification_manager);
   magnification_manager->SetProfileForTest(
-      chromeos::ProfileHelper::GetSigninProfile());
+      ash::ProfileHelper::GetSigninProfile());
 
   // Disable PolicyRecommendationRestorer. See https://crbug.com/1015763#c13 for
   // details.
@@ -142,8 +145,8 @@ void LoginScreenAccessibilityPolicyBrowsertest::
 void LoginScreenAccessibilityPolicyBrowsertest::SetUpCommandLine(
     base::CommandLine* command_line) {
   DevicePolicyCrosBrowserTest::SetUpCommandLine(command_line);
-  command_line->AppendSwitch(chromeos::switches::kLoginManager);
-  command_line->AppendSwitch(chromeos::switches::kForceLoginManagerInTests);
+  command_line->AppendSwitch(ash::switches::kLoginManager);
+  command_line->AppendSwitch(ash::switches::kForceLoginManagerInTests);
 }
 
 bool LoginScreenAccessibilityPolicyBrowsertest::IsPrefManaged(

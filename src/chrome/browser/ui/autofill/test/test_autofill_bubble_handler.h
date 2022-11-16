@@ -7,7 +7,6 @@
 
 #include <memory>
 
-#include "base/macros.h"
 #include "chrome/browser/ui/autofill/autofill_bubble_base.h"
 #include "chrome/browser/ui/autofill/autofill_bubble_handler.h"
 #include "chrome/browser/ui/autofill/payments/save_upi_bubble.h"
@@ -25,6 +24,11 @@ class TestSaveUPIBubble final : public SaveUPIBubble {
 class TestAutofillBubbleHandler : public AutofillBubbleHandler {
  public:
   TestAutofillBubbleHandler();
+
+  TestAutofillBubbleHandler(const TestAutofillBubbleHandler&) = delete;
+  TestAutofillBubbleHandler& operator=(const TestAutofillBubbleHandler&) =
+      delete;
+
   ~TestAutofillBubbleHandler() override;
 
   // AutofillBubbleHandler:
@@ -58,6 +62,10 @@ class TestAutofillBubbleHandler : public AutofillBubbleHandler {
       content::WebContents* web_contents,
       VirtualCardManualFallbackBubbleController* controller,
       bool is_user_gesture) override;
+  AutofillBubbleBase* ShowVirtualCardEnrollBubble(
+      content::WebContents* web_contents,
+      VirtualCardEnrollBubbleController* controller,
+      bool is_user_gesture) override;
   void OnPasswordSaved() override;
 
  private:
@@ -69,8 +77,7 @@ class TestAutofillBubbleHandler : public AutofillBubbleHandler {
   std::unique_ptr<TestAutofillBubble> update_address_profile_bubble_view_;
   std::unique_ptr<TestAutofillBubble> edit_address_profile_bubble_view_;
   std::unique_ptr<TestAutofillBubble> virtual_card_manual_fallback_bubble_view_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestAutofillBubbleHandler);
+  std::unique_ptr<TestAutofillBubble> virtual_card_enroll_bubble_view_;
 };
 
 }  // namespace autofill

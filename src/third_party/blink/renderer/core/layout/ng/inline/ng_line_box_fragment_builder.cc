@@ -55,9 +55,10 @@ void NGLineBoxFragmentBuilder::PropagateChildrenData(
       PropagateChildData(
           child.layout_result->PhysicalFragment(),
           child.Offset() -
-              ComputeRelativeOffsetForInline(*ConstraintSpace(),
+              ComputeRelativeOffsetForInline(ConstraintSpace(),
                                              child.PhysicalFragment()->Style()),
-          /* reltaive_offset */ LogicalOffset());
+          ComputeRelativeOffsetForOOFInInline(
+              ConstraintSpace(), child.PhysicalFragment()->Style()));
 
       // Skip over any children, the information should have already been
       // propagated into this layout result.
@@ -75,20 +76,18 @@ void NGLineBoxFragmentBuilder::PropagateChildrenData(
   }
 
   DCHECK(oof_positioned_descendants_.IsEmpty());
-  MoveOutOfFlowDescendantCandidatesToDescendants(
-      /* relative_offset */ LogicalOffset());
+  MoveOutOfFlowDescendantCandidatesToDescendants();
 }
 
-scoped_refptr<const NGLayoutResult>
-NGLineBoxFragmentBuilder::ToLineBoxFragment() {
+const NGLayoutResult* NGLineBoxFragmentBuilder::ToLineBoxFragment() {
   writing_direction_.SetWritingMode(ToLineWritingMode(GetWritingMode()));
 
-  scoped_refptr<const NGPhysicalLineBoxFragment> fragment =
+  const NGPhysicalLineBoxFragment* fragment =
       NGPhysicalLineBoxFragment::Create(this);
 
-  return base::AdoptRef(
-      new NGLayoutResult(NGLayoutResult::NGLineBoxFragmentBuilderPassKey(),
-                         std::move(fragment), this));
+  return MakeGarbageCollected<NGLayoutResult>(
+      NGLayoutResult::NGLineBoxFragmentBuilderPassKey(), std::move(fragment),
+      this);
 }
 
 }  // namespace blink

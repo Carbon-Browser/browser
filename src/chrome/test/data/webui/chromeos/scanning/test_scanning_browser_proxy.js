@@ -9,7 +9,7 @@ import {TestBrowserProxy} from '../../test_browser_proxy.js';
 
 const EMPTY_SELECTED_PATH = {
   baseName: '',
-  filePath: ''
+  filePath: '',
 };
 
 /**
@@ -87,11 +87,13 @@ export class TestScanningBrowserProxy extends TestBrowserProxy {
       case ('scanButtonText'):
         pluralString = count === 0 ? 'Scan' : 'Scan page ' + count;
         break;
-      case ('removePageButtonLabel'):
-        pluralString = count === 0 ? 'Remove page' : 'Remove page ' + count;
+      case ('removePageDialogTitle'):
+        pluralString =
+            count === 0 ? 'Remove page?' : 'Remove page ' + count + '?';
         break;
-      case ('rescanPageButtonLabel'):
-        pluralString = count === 0 ? 'Rescan page' : 'Rescan page ' + count;
+      case ('rescanPageDialogTitle'):
+        pluralString =
+            count === 0 ? 'Rescan page?' : 'Rescan page ' + count + '?';
         break;
     }
 

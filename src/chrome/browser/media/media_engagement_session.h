@@ -5,6 +5,7 @@
 #ifndef CHROME_BROWSER_MEDIA_MEDIA_ENGAGEMENT_SESSION_H_
 #define CHROME_BROWSER_MEDIA_MEDIA_ENGAGEMENT_SESSION_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/time/time.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
@@ -32,8 +33,11 @@ class MediaEngagementSession : public base::RefCounted<MediaEngagementSession> {
                          RestoreType restore_status,
                          ukm::SourceId ukm_source_id);
 
-  // Returns whether the session's origin is same origin with |origin|.
-  bool IsSameOriginWith(const url::Origin& origin) const;
+  MediaEngagementSession(const MediaEngagementSession&) = delete;
+  MediaEngagementSession& operator=(const MediaEngagementSession&) = delete;
+
+  // Returns whether the session's origin is same origin with |url|.
+  bool IsSameOriginWith(const GURL& url) const;
 
   // Record that the session received a significant playback from a media
   // element.
@@ -84,7 +88,7 @@ class MediaEngagementSession : public base::RefCounted<MediaEngagementSession> {
   void CommitPendingData();
 
   // Weak pointer because |this| has a lifetime shorter than it.
-  MediaEngagementService* service_;
+  raw_ptr<MediaEngagementService> service_;
 
   // Origin associated with the session.
   url::Origin origin_;
@@ -119,8 +123,6 @@ class MediaEngagementSession : public base::RefCounted<MediaEngagementSession> {
 
   // If the |is_high_| bit has changed since this object was created.
   bool high_score_changed_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(MediaEngagementSession);
 };
 
 #endif  // CHROME_BROWSER_MEDIA_MEDIA_ENGAGEMENT_SESSION_H_

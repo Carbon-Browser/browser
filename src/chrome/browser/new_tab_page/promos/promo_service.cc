@@ -12,6 +12,7 @@
 #include "base/json/json_string_value_serializer.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/observer_list.h"
 #include "base/strings/strcat.h"
 #include "base/time/time.h"
 #include "base/values.h"
@@ -200,8 +201,8 @@ void PromoService::OnLoadDone(std::unique_ptr<std::string> response_body) {
 
 void PromoService::OnJsonParsed(
     data_decoder::DataDecoder::ValueOrError result) {
-  if (!result.value) {
-    DVLOG(1) << "Parsing JSON failed: " << *result.error;
+  if (!result.has_value()) {
+    DVLOG(1) << "Parsing JSON failed: " << result.error();
     PromoDataLoaded(Status::FATAL_ERROR, absl::nullopt);
     return;
   }
@@ -209,7 +210,7 @@ void PromoService::OnJsonParsed(
   absl::optional<PromoData> data;
   PromoService::Status status;
 
-  if (JsonToPromoData(*result.value, &data)) {
+  if (JsonToPromoData(*result, &data)) {
     bool is_blocked = IsBlockedAfterClearingExpired(data->promo_id);
     if (is_blocked)
       data = PromoData();
@@ -232,6 +233,10 @@ void PromoService::Shutdown() {
 // static
 void PromoService::RegisterProfilePrefs(PrefRegistrySimple* registry) {
   registry->RegisterDictionaryPref(prefs::kNtpPromoBlocklist);
+}
+
+const absl::optional<PromoData>& PromoService::promo_data() const {
+  return promo_data_;
 }
 
 void PromoService::AddObserver(PromoServiceObserver* observer) {
@@ -282,7 +287,7 @@ bool PromoService::IsBlockedAfterClearingExpired(
   if (promo_id.empty() || !CanBlockPromos())
     return false;
 
-  auto expired_delta = base::TimeDelta::FromDays(kDaysThatBlocklistExpiresIn);
+  auto expired_delta = base::Days(kDaysThatBlocklistExpiresIn);
   auto expired_time = base::Time::Now() - expired_delta;
   double expired = expired_time.ToDeltaSinceWindowsEpoch().InSecondsF();
 

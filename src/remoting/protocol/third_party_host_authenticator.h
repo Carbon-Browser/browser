@@ -9,7 +9,6 @@
 #include <string>
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "remoting/protocol/third_party_authenticator_base.h"
 #include "remoting/protocol/token_validator.h"
 
@@ -32,6 +31,11 @@ class ThirdPartyHostAuthenticator : public ThirdPartyAuthenticatorBase {
   ThirdPartyHostAuthenticator(
       const CreateBaseAuthenticatorCallback& create_base_authenticator_callback,
       std::unique_ptr<TokenValidator> token_validator);
+
+  ThirdPartyHostAuthenticator(const ThirdPartyHostAuthenticator&) = delete;
+  ThirdPartyHostAuthenticator& operator=(const ThirdPartyHostAuthenticator&) =
+      delete;
+
   ~ThirdPartyHostAuthenticator() override;
 
  protected:
@@ -48,8 +52,6 @@ class ThirdPartyHostAuthenticator : public ThirdPartyAuthenticatorBase {
 
   CreateBaseAuthenticatorCallback create_base_authenticator_callback_;
   std::unique_ptr<TokenValidator> token_validator_;
-
-  DISALLOW_COPY_AND_ASSIGN(ThirdPartyHostAuthenticator);
 };
 
 }  // namespace protocol

@@ -8,6 +8,7 @@
 #include <vector>
 
 #include <v8-inspector.h>
+#include "third_party/blink/renderer/bindings/core/v8/script_value.h"
 #include "third_party/blink/renderer/core/inspector/inspector_overlay_agent.h"
 #include "third_party/blink/renderer/core/inspector/node_content_visibility_state.h"
 
@@ -63,7 +64,7 @@ class QuadHighlightTool : public InspectTool {
  public:
   QuadHighlightTool(InspectorOverlayAgent* overlay,
                     OverlayFrontend* frontend,
-                    std::unique_ptr<FloatQuad> quad,
+                    std::unique_ptr<gfx::QuadF> quad,
                     Color color,
                     Color outline_color);
   QuadHighlightTool(const QuadHighlightTool&) = delete;
@@ -74,7 +75,7 @@ class QuadHighlightTool : public InspectTool {
   bool HideOnHideHighlight() override;
   void Draw(float scale) override;
   String GetOverlayName() override;
-  std::unique_ptr<FloatQuad> quad_;
+  std::unique_ptr<gfx::QuadF> quad_;
   Color color_;
   Color outline_color_;
 };
@@ -144,19 +145,20 @@ class SourceOrderTool : public InspectTool {
 };
 
 // -----------------------------------------------------------------------------
-
-using GridConfigs = Vector<
-    std::pair<Member<Node>, std::unique_ptr<InspectorGridHighlightConfig>>>;
+using GridConfigs = HeapHashMap<WeakMember<Node>,
+                                std::unique_ptr<InspectorGridHighlightConfig>>;
 using FlexContainerConfigs =
-    Vector<std::pair<Member<Node>,
-                     std::unique_ptr<InspectorFlexContainerHighlightConfig>>>;
-using ScrollSnapConfigs = Vector<
-    std::pair<Member<Node>,
-              std::unique_ptr<InspectorScrollSnapContainerHighlightConfig>>>;
-
-using ContainerQueryConfigs = Vector<std::pair<
-    Member<Node>,
-    std::unique_ptr<InspectorContainerQueryContainerHighlightConfig>>>;
+    HeapHashMap<WeakMember<Node>,
+                std::unique_ptr<InspectorFlexContainerHighlightConfig>>;
+using ScrollSnapConfigs =
+    HeapHashMap<WeakMember<Node>,
+                std::unique_ptr<InspectorScrollSnapContainerHighlightConfig>>;
+using ContainerQueryConfigs = HeapHashMap<
+    WeakMember<Node>,
+    std::unique_ptr<InspectorContainerQueryContainerHighlightConfig>>;
+using IsolatedElementConfigs =
+    HeapHashMap<WeakMember<Element>,
+                std::unique_ptr<InspectorIsolationModeHighlightConfig>>;
 
 class PersistentTool : public InspectTool {
   using InspectTool::InspectTool;
@@ -171,20 +173,26 @@ class PersistentTool : public InspectTool {
   void SetFlexContainerConfigs(FlexContainerConfigs);
   void SetScrollSnapConfigs(ScrollSnapConfigs);
   void SetContainerQueryConfigs(ContainerQueryConfigs);
+  void SetIsolatedElementConfigs(IsolatedElementConfigs);
 
   std::unique_ptr<protocol::DictionaryValue> GetGridInspectorHighlightsAsJson()
       const;
+
+  void Trace(Visitor* visitor) const override;
 
  private:
   bool ForwardEventsToOverlay() override;
   bool HideOnMouseMove() override;
   bool HideOnHideHighlight() override;
   String GetOverlayName() override;
+  void Dispatch(const ScriptValue& message,
+                ExceptionState& exception_state) override;
 
   GridConfigs grid_node_highlights_;
   FlexContainerConfigs flex_container_configs_;
   ScrollSnapConfigs scroll_snap_configs_;
   ContainerQueryConfigs container_query_configs_;
+  IsolatedElementConfigs isolated_element_configs_;
 };
 
 // -----------------------------------------------------------------------------
@@ -232,7 +240,8 @@ class ScreenshotTool : public InspectTool {
   ScreenshotTool& operator=(const ScreenshotTool&) = delete;
 
  private:
-  void Dispatch(const String& message) override;
+  void Dispatch(const ScriptValue& message,
+                ExceptionState& exception_state) override;
   String GetOverlayName() override;
 };
 
@@ -252,7 +261,8 @@ class PausedInDebuggerTool : public InspectTool {
 
  private:
   void Draw(float scale) override;
-  void Dispatch(const String& message) override;
+  void Dispatch(const ScriptValue& message,
+                ExceptionState& exception_state) override;
   String GetOverlayName() override;
   v8_inspector::V8InspectorSession* v8_session_;
   String message_;

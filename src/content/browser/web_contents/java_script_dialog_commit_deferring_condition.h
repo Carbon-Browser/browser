@@ -8,11 +8,10 @@
 #include <memory>
 
 #include "base/memory/weak_ptr.h"
-#include "content/browser/renderer_host/commit_deferring_condition.h"
+#include "content/public/browser/commit_deferring_condition.h"
 
 namespace content {
 
-class WebContentsImpl;
 class NavigationRequest;
 
 // Defers a navigation from committing while a JavaScript dialog is showing.
@@ -21,19 +20,18 @@ class JavaScriptDialogCommitDeferringCondition
  public:
   static std::unique_ptr<CommitDeferringCondition> MaybeCreate(
       NavigationRequest& navigation_request);
+
+  JavaScriptDialogCommitDeferringCondition(
+      const JavaScriptDialogCommitDeferringCondition&) = delete;
+  JavaScriptDialogCommitDeferringCondition& operator=(
+      const JavaScriptDialogCommitDeferringCondition&) = delete;
+
   ~JavaScriptDialogCommitDeferringCondition() override;
 
   Result WillCommitNavigation(base::OnceClosure resume) override;
 
  private:
-  JavaScriptDialogCommitDeferringCondition(NavigationRequest& request,
-                                           WebContentsImpl& web_contents);
-
-  // Bare reference is ok here because this class is indirectly owned by the
-  // NavigationRequest which will be destroyed before the WebContentsImpl.
-  WebContentsImpl& web_contents_;
-
-  DISALLOW_COPY_AND_ASSIGN(JavaScriptDialogCommitDeferringCondition);
+  explicit JavaScriptDialogCommitDeferringCondition(NavigationRequest& request);
 };
 
 }  // namespace content

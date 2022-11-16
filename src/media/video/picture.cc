@@ -6,7 +6,6 @@
 
 #include "base/check_op.h"
 #include "base/logging.h"
-#include "base/macros.h"
 
 namespace media {
 
@@ -99,7 +98,8 @@ Picture::Picture(int32_t picture_buffer_id,
       read_lock_fences_enabled_(false),
       size_changed_(false),
       texture_owner_(false),
-      wants_promotion_hint_(false) {}
+      wants_promotion_hint_(false),
+      is_webgpu_compatible_(false) {}
 
 Picture::Picture(const Picture& other) = default;
 

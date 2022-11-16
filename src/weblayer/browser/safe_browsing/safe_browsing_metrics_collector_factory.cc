@@ -4,8 +4,9 @@
 
 #include "weblayer/browser/safe_browsing/safe_browsing_metrics_collector_factory.h"
 
+#include "base/no_destructor.h"
 #include "components/keyed_service/content/browser_context_dependency_manager.h"
-#include "components/safe_browsing/content/browser/safe_browsing_metrics_collector.h"
+#include "components/safe_browsing/core/browser/safe_browsing_metrics_collector.h"
 #include "weblayer/browser/browser_context_impl.h"
 
 namespace weblayer {

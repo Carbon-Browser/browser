@@ -8,10 +8,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#if defined(OS_WIN)
 #include <string>
 #include <vector>
-#endif
 
 #include "base/component_export.h"
 #include "base/i18n/rtl.h"
@@ -26,6 +24,7 @@
 #include "ui/base/ime/text_input_type.h"
 #include "ui/gfx/native_widget_types.h"
 #include "ui/gfx/range/range.h"
+#include "url/gurl.h"
 
 namespace gfx {
 class Rect;
@@ -56,7 +55,7 @@ class COMPONENT_EXPORT(UI_BASE_IME) TextInputClient {
     FOCUS_REASON_OTHER,
   };
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   enum SubClass {
     kRenderWidgetHostViewAura = 0,
     kArcImeService = 1,
@@ -178,6 +177,7 @@ class COMPONENT_EXPORT(UI_BASE_IME) TextInputClient {
   // Returns false if the operation is not supported.
   virtual bool SetEditableSelectionRange(const gfx::Range& range) = 0;
 
+#if BUILDFLAG(IS_MAC)
   // Deletes contents in the given UTF-16 code unit range. Current
   // composition text will be confirmed before deleting the range.
   // The input caret will be moved to the place where the range gets deleted.
@@ -187,6 +187,7 @@ class COMPONENT_EXPORT(UI_BASE_IME) TextInputClient {
   // between browser and renderer. Returns false if the operation is not
   // supported.
   virtual bool DeleteRange(const gfx::Range& range) = 0;
+#endif
 
   // Retrieves the text content in a given UTF-16 code unit range.
   // The result will be stored into |*text|.
@@ -239,7 +240,7 @@ class COMPONENT_EXPORT(UI_BASE_IME) TextInputClient {
   // fields that are considered 'private' (e.g. in incognito tabs).
   virtual bool ShouldDoLearning() = 0;
 
-#if defined(OS_WIN) || BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   // Start composition over a given UTF-16 code range from existing text. This
   // should only be used for composition scenario when IME wants to start
   // composition on existing text. Returns whether the operation was successful.
@@ -249,7 +250,7 @@ class COMPONENT_EXPORT(UI_BASE_IME) TextInputClient {
       const std::vector<ui::ImeTextSpan>& ui_ime_text_spans) = 0;
 #endif
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   // Return the start and end index of the autocorrect range. If non-existent,
   // return an empty Range.
   virtual gfx::Range GetAutocorrectRange() const = 0;
@@ -267,10 +268,9 @@ class COMPONENT_EXPORT(UI_BASE_IME) TextInputClient {
   // no modifications are made and this function returns false.
   virtual bool SetAutocorrectRange(const gfx::Range& range) = 0;
 
-  // Returns the grammar fragment which contains |range|. If non-existent,
-  // returns an empty Fragment.
-  virtual absl::optional<GrammarFragment> GetGrammarFragment(
-      const gfx::Range& range);
+  // Returns the grammar fragment which contains the current cursor. If
+  // non-existent, returns nullopt.
+  virtual absl::optional<GrammarFragment> GetGrammarFragmentAtCursor() const;
 
   // Clears all the grammar fragments in |range|, returns whether the operation
   // is successful. Should return true if the there is no fragment in the range.
@@ -283,15 +283,19 @@ class COMPONENT_EXPORT(UI_BASE_IME) TextInputClient {
       const std::vector<GrammarFragment>& fragments);
 #endif
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_CHROMEOS)
   // Returns false if either the focused editable element or the EditContext
   // bounds is not available, else it returns true with the control and
   // selection bounds for the EditContext or control bounds of the active
   // editable element. This is used to report the layout bounds of the text
-  // input control to TSF on Windows.
+  // input control to TSF on Windows and to the Virtual Keyboard extension on
+  // ChromeOS.
   virtual void GetActiveTextInputControlLayoutBounds(
       absl::optional<gfx::Rect>* control_bounds,
       absl::optional<gfx::Rect>* selection_bounds) = 0;
+#endif
+
+#if BUILDFLAG(IS_WIN)
   // Notifies accessibility about active composition. This API is currently
   // only defined for TSF which is available only on Windows
   // https://docs.microsoft.com/en-us/windows/desktop/api/UIAutomationCore/
@@ -302,6 +306,13 @@ class COMPONENT_EXPORT(UI_BASE_IME) TextInputClient {
       const gfx::Range& range,
       const std::u16string& active_composition_text,
       bool is_composition_committed) = 0;
+
+  struct EditingContext {
+    // Contains the active web content's URL.
+    GURL page_url;
+  };
+
+  virtual ui::TextInputClient::EditingContext GetTextEditingContext();
 #endif
 
   // Called before ui::InputMethod dispatches a not-consumed event to PostIME

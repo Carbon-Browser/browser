@@ -15,7 +15,6 @@
 #include "base/cxx17_backports.h"
 #include "base/files/file_path.h"
 #include "base/json/json_reader.h"
-#include "base/macros.h"
 #include "base/metrics/histogram.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/notreached.h"
@@ -32,7 +31,10 @@
 
 namespace policy {
 
-// ConfigurationPolicyHandler implementation -----------------------------------
+const size_t kMaxUrlFiltersPerPolicy = 1000;
+
+// ConfigurationPolicyHandler implementation
+// -----------------------------------
 
 ConfigurationPolicyHandler::ConfigurationPolicyHandler() {}
 
@@ -76,7 +78,8 @@ bool TypeCheckingPolicyHandler::CheckPolicySettings(const PolicyMap& policies,
 bool TypeCheckingPolicyHandler::CheckAndGetValue(const PolicyMap& policies,
                                                  PolicyErrorMap* errors,
                                                  const base::Value** value) {
-  *value = policies.GetValue(policy_name());
+  // It is safe to use `GetValueUnsafe()` as multiple policy types are handled.
+  *value = policies.GetValueUnsafe(policy_name());
   if (*value && (*value)->type() != value_type_) {
     errors->AddError(policy_name(), IDS_POLICY_TYPE_ERROR,
                      base::Value::GetTypeName(value_type_));
@@ -117,7 +120,7 @@ bool ListPolicyHandler::CheckAndGetList(const policy::PolicyMap& policies,
     return true;
 
   // Filter the list, rejecting any invalid strings.
-  base::Value::ConstListView list = value->GetList();
+  const base::Value::List& list = value->GetList();
   if (filtered_list)
     *filtered_list = base::Value(base::Value::Type::LIST);
   for (size_t list_index = 0; list_index < list.size(); ++list_index) {
@@ -139,7 +142,7 @@ bool ListPolicyHandler::CheckAndGetList(const policy::PolicyMap& policies,
     }
 
     if (filtered_list)
-      filtered_list->Append(entry.Clone());
+      filtered_list->GetList().Append(entry.Clone());
   }
 
   return true;
@@ -175,11 +178,7 @@ bool IntRangePolicyHandlerBase::EnsureInRange(const base::Value* input,
   if (!input)
     return true;
 
-  if (!input->is_int()) {
-    NOTREACHED();
-    return false;
-  }
-
+  DCHECK(input->is_int());
   int value = input->GetInt();
 
   if (value < min_ || value > max_) {
@@ -231,7 +230,8 @@ void StringMappingListPolicyHandler::ApplyPolicySettings(
     PrefValueMap* prefs) {
   if (!pref_path_)
     return;
-  const base::Value* value = policies.GetValue(policy_name());
+  const base::Value* value =
+      policies.GetValue(policy_name(), base::Value::Type::LIST);
   base::ListValue list;
   if (value && Convert(value, &list, nullptr))
     prefs->SetValue(pref_path_, std::move(list));
@@ -243,14 +243,9 @@ bool StringMappingListPolicyHandler::Convert(const base::Value* input,
   if (!input)
     return true;
 
-  const base::ListValue* list_value = nullptr;
-  if (!input->GetAsList(&list_value)) {
-    NOTREACHED();
-    return false;
-  }
-
+  DCHECK(input->is_list());
   int index = -1;
-  for (const auto& entry : list_value->GetList()) {
+  for (const auto& entry : input->GetListDeprecated()) {
     ++index;
     if (!entry.is_string()) {
       if (errors) {
@@ -262,8 +257,10 @@ bool StringMappingListPolicyHandler::Convert(const base::Value* input,
 
     std::unique_ptr<base::Value> mapped_value = Map(entry.GetString());
     if (mapped_value) {
-      if (output)
-        output->Append(std::move(mapped_value));
+      if (output) {
+        output->GetList().Append(
+            base::Value::FromUniquePtrValue(std::move(mapped_value)));
+      }
     } else if (errors) {
       errors->AddError(policy_name(), index, IDS_POLICY_OUT_OF_RANGE_ERROR);
     }
@@ -303,7 +300,8 @@ void IntRangePolicyHandler::ApplyPolicySettings(const PolicyMap& policies,
                                                 PrefValueMap* prefs) {
   if (!pref_path_)
     return;
-  const base::Value* value = policies.GetValue(policy_name());
+  const base::Value* value =
+      policies.GetValue(policy_name(), base::Value::Type::INTEGER);
   int value_in_range;
   if (value && EnsureInRange(value, &value_in_range, nullptr))
     prefs->SetInteger(pref_path_, value_in_range);
@@ -327,7 +325,8 @@ void IntPercentageToDoublePolicyHandler::ApplyPolicySettings(
     PrefValueMap* prefs) {
   if (!pref_path_)
     return;
-  const base::Value* value = policies.GetValue(policy_name());
+  const base::Value* value =
+      policies.GetValue(policy_name(), base::Value::Type::INTEGER);
   int percentage;
   if (value && EnsureInRange(value, &percentage, nullptr))
     prefs->SetDouble(pref_path_, static_cast<double>(percentage) / 100.);
@@ -347,7 +346,8 @@ void SimplePolicyHandler::ApplyPolicySettings(const PolicyMap& policies,
                                               PrefValueMap* prefs) {
   if (!pref_path_)
     return;
-  const base::Value* value = policies.GetValue(policy_name());
+  // It is safe to use `GetValueUnsafe()` as multiple policy types are handled.
+  const base::Value* value = policies.GetValueUnsafe(policy_name());
   if (value)
     prefs->SetValue(pref_path_, value->Clone());
 }
@@ -367,7 +367,8 @@ SchemaValidatingPolicyHandler::~SchemaValidatingPolicyHandler() {}
 bool SchemaValidatingPolicyHandler::CheckPolicySettings(
     const PolicyMap& policies,
     PolicyErrorMap* errors) {
-  const base::Value* value = policies.GetValue(policy_name());
+  // It is safe to use `GetValueUnsafe()` as multiple policy types are handled.
+  const base::Value* value = policies.GetValueUnsafe(policy_name());
   if (!value)
     return true;
 
@@ -376,8 +377,6 @@ bool SchemaValidatingPolicyHandler::CheckPolicySettings(
   bool result = schema_.Validate(*value, strategy_, &error_path, &error);
 
   if (errors && !error.empty()) {
-    if (error_path.empty())
-      error_path = "(ROOT)";
     errors->AddError(policy_name(), error_path, error);
   }
 
@@ -388,7 +387,8 @@ bool SchemaValidatingPolicyHandler::CheckAndGetValue(
     const PolicyMap& policies,
     PolicyErrorMap* errors,
     std::unique_ptr<base::Value>* output) {
-  const base::Value* value = policies.GetValue(policy_name());
+  // It is safe to use `GetValueUnsafe()` as multiple policy types are handled.
+  const base::Value* value = policies.GetValueUnsafe(policy_name());
   if (!value)
     return true;
 
@@ -399,8 +399,6 @@ bool SchemaValidatingPolicyHandler::CheckAndGetValue(
       schema_.Normalize(output->get(), strategy_, &error_path, &error, nullptr);
 
   if (errors && !error.empty()) {
-    if (error_path.empty())
-      error_path = "(ROOT)";
     errors->AddError(policy_name(), error_path, error);
   }
 
@@ -448,7 +446,8 @@ void SimpleSchemaValidatingPolicyHandler::ApplyPolicySettings(
     PrefValueMap* prefs) {
   if (!pref_path_)
     return;
-  const base::Value* value = policies.GetValue(policy_name());
+  // It is safe to use `GetValueUnsafe()` as multiple policy types are handled.
+  const base::Value* value = policies.GetValueUnsafe(policy_name());
   if (value)
     prefs->SetValue(pref_path_, value->Clone());
 }
@@ -480,7 +479,8 @@ SimpleJsonStringSchemaValidatingPolicyHandler::
 bool SimpleJsonStringSchemaValidatingPolicyHandler::CheckPolicySettings(
     const PolicyMap& policies,
     PolicyErrorMap* errors) {
-  const base::Value* root_value = policies.GetValue(policy_name());
+  // It is safe to use `GetValueUnsafe()` as multiple policy types are handled.
+  const base::Value* root_value = policies.GetValueUnsafe(policy_name());
   if (!root_value)
     return true;
 
@@ -506,7 +506,7 @@ bool SimpleJsonStringSchemaValidatingPolicyHandler::CheckSingleJsonString(
   // First validate the root value is a string.
   if (!root_value->is_string()) {
     if (errors) {
-      errors->AddError(policy_name(), "(ROOT)", IDS_POLICY_TYPE_ERROR,
+      errors->AddError(policy_name(), IDS_POLICY_TYPE_ERROR,
                        base::Value::GetTypeName(base::Value::Type::STRING));
     }
     return false;
@@ -527,7 +527,7 @@ bool SimpleJsonStringSchemaValidatingPolicyHandler::CheckListOfJsonStrings(
   // First validate the root value is a list.
   if (!root_value->is_list()) {
     if (errors) {
-      errors->AddError(policy_name(), "(ROOT)", IDS_POLICY_TYPE_ERROR,
+      errors->AddError(policy_name(), IDS_POLICY_TYPE_ERROR,
                        base::Value::GetTypeName(base::Value::Type::LIST));
     }
     return false;
@@ -535,7 +535,7 @@ bool SimpleJsonStringSchemaValidatingPolicyHandler::CheckListOfJsonStrings(
 
   // If that succeeds, validate all the list items are strings and validate
   // the JSON inside the strings.
-  base::Value::ConstListView list = root_value->GetList();
+  const base::Value::List& list = root_value->GetList();
   bool json_error_seen = false;
 
   for (size_t index = 0; index < list.size(); ++index) {
@@ -564,14 +564,13 @@ bool SimpleJsonStringSchemaValidatingPolicyHandler::ValidateJsonString(
     const std::string& json_string,
     PolicyErrorMap* errors,
     int index) {
-  base::JSONReader::ValueWithError value_with_error =
-      base::JSONReader::ReadAndReturnValueWithError(
-          json_string, base::JSONParserOptions::JSON_ALLOW_TRAILING_COMMAS);
-  if (!value_with_error.value) {
+  auto value_with_error = base::JSONReader::ReadAndReturnValueWithError(
+      json_string, base::JSONParserOptions::JSON_ALLOW_TRAILING_COMMAS);
+  if (!value_with_error.has_value()) {
     if (errors) {
       errors->AddError(policy_name(), ErrorPath(index, ""),
                        IDS_POLICY_INVALID_JSON_ERROR,
-                       value_with_error.error_message);
+                       value_with_error.error().message);
     }
     return false;
   }
@@ -583,9 +582,8 @@ bool SimpleJsonStringSchemaValidatingPolicyHandler::ValidateJsonString(
   // Even though we are validating this schema here, we don't actually change
   // the policy if it fails to validate. This validation is just so we can show
   // the user errors.
-  bool validated = json_string_schema.Validate(value_with_error.value.value(),
-                                               SCHEMA_ALLOW_UNKNOWN,
-                                               &error_path, &schema_error);
+  bool validated = json_string_schema.Validate(
+      *value_with_error, SCHEMA_ALLOW_UNKNOWN, &error_path, &schema_error);
   if (errors && !schema_error.empty())
     errors->AddError(policy_name(), ErrorPath(index, error_path), schema_error);
   if (!validated)
@@ -603,7 +601,7 @@ std::string SimpleJsonStringSchemaValidatingPolicyHandler::ErrorPath(
                : base::StringPrintf("items[%d].%s", index,
                                     json_error_path.c_str());
   }
-  return json_error_path.empty() ? "(ROOT)" : json_error_path;
+  return json_error_path;
 }
 
 void SimpleJsonStringSchemaValidatingPolicyHandler::ApplyPolicySettings(
@@ -611,7 +609,8 @@ void SimpleJsonStringSchemaValidatingPolicyHandler::ApplyPolicySettings(
     PrefValueMap* prefs) {
   if (!pref_path_)
     return;
-  const base::Value* value = policies.GetValue(policy_name());
+  // It is safe to use `GetValueUnsafe()` as multiple policy types are handled.
+  const base::Value* value = policies.GetValueUnsafe(policy_name());
   if (value)
     prefs->SetValue(pref_path_, value->Clone());
 }

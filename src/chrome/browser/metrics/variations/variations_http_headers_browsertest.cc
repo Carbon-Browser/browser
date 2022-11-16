@@ -9,9 +9,9 @@
 
 #include "base/bind.h"
 #include "base/containers/contains.h"
-#include "base/macros.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
+#include "base/strings/escape.h"
 #include "base/strings/strcat.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/scoped_feature_list.h"
@@ -26,7 +26,6 @@
 #include "chrome/browser/predictors/predictors_features.h"
 #include "chrome/browser/predictors/predictors_switches.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/signin/identity_browser_test_base.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
@@ -53,7 +52,6 @@
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/network_connection_change_simulator.h"
 #include "content/public/test/simple_url_loader_test_helper.h"
-#include "net/base/escape.h"
 #include "net/dns/mock_host_resolver.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "net/test/embedded_test_server/http_request.h"
@@ -71,6 +69,10 @@ namespace {
 class VariationHeaderSetter : public ChromeBrowserMainExtraParts {
  public:
   VariationHeaderSetter() = default;
+
+  VariationHeaderSetter(const VariationHeaderSetter&) = delete;
+  VariationHeaderSetter& operator=(const VariationHeaderSetter&) = delete;
+
   ~VariationHeaderSetter() override = default;
 
   // ChromeBrowserMainExtraParts:
@@ -80,19 +82,22 @@ class VariationHeaderSetter : public ChromeBrowserMainExtraParts {
         variations::VariationsIdsProvider::GetInstance();
     variations_provider->ForceVariationIds({"12", "456", "t789"}, "");
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(VariationHeaderSetter);
 };
 
-class VariationsHttpHeadersBrowserTest : public IdentityBrowserTestBase {
+class VariationsHttpHeadersBrowserTest : public InProcessBrowserTest {
  public:
   VariationsHttpHeadersBrowserTest()
       : https_server_(net::test_server::EmbeddedTestServer::TYPE_HTTPS) {}
+
+  VariationsHttpHeadersBrowserTest(const VariationsHttpHeadersBrowserTest&) =
+      delete;
+  VariationsHttpHeadersBrowserTest& operator=(
+      const VariationsHttpHeadersBrowserTest&) = delete;
+
   ~VariationsHttpHeadersBrowserTest() override = default;
 
   void CreatedBrowserMainParts(content::BrowserMainParts* parts) override {
-    IdentityBrowserTestBase::CreatedBrowserMainParts(parts);
+    InProcessBrowserTest::CreatedBrowserMainParts(parts);
     static_cast<ChromeBrowserMainParts*>(parts)->AddParts(
         std::make_unique<VariationHeaderSetter>());
   }
@@ -251,6 +256,19 @@ class VariationsHttpHeadersBrowserTest : public IdentityBrowserTestBase {
                               base::StrCat({"fetch_from_page('",
                                             GetExampleUrl().spec(), "');"})));
     EXPECT_FALSE(HasReceivedHeader(GetExampleUrl(), "X-Client-Data"));
+
+    // Navigate to a Google URL which causes redirects.
+    ASSERT_TRUE(
+        ui_test_utils::NavigateToURL(browser(), GetGoogleRedirectUrl1()));
+
+    // Verify redirect requests from google domains.
+    // Redirect to google domains.
+    EXPECT_TRUE(HasReceivedHeader(GetGoogleRedirectUrl1(), "X-Client-Data"));
+    EXPECT_TRUE(HasReceivedHeader(GetGoogleRedirectUrl2(), "X-Client-Data"));
+
+    // Redirect to non-google domains.
+    EXPECT_TRUE(HasReceivedHeader(GetExampleUrl(), "Host"));
+    EXPECT_FALSE(HasReceivedHeader(GetExampleUrl(), "X-Client-Data"));
   }
 
   // Creates a worker and tests that the main script and import scripts have
@@ -266,13 +284,13 @@ class VariationsHttpHeadersBrowserTest : public IdentityBrowserTestBase {
     GURL absolute_import = GetExampleUrlWithPath("/workers/empty.js");
     const std::string worker_path = base::StrCat(
         {worker, "?import=",
-         net::EscapeQueryParamValue(absolute_import.spec(), false)});
+         base::EscapeQueryParamValue(absolute_import.spec(), false)});
     GURL worker_url = GetGoogleUrlWithPath(worker_path);
 
     // Build the page URL that tells the page to create the worker.
-    const std::string page_path = base::StrCat(
-        {page,
-         "?worker_url=", net::EscapeQueryParamValue(worker_url.spec(), false)});
+    const std::string page_path =
+        base::StrCat({page, "?worker_url=",
+                      base::EscapeQueryParamValue(worker_url.spec(), false)});
     GURL page_url = GetGoogleUrlWithPath(page_path);
 
     // Navigate and test.
@@ -311,8 +329,6 @@ class VariationsHttpHeadersBrowserTest : public IdentityBrowserTestBase {
 
   // For waiting for requests.
   std::map<GURL, base::OnceClosure> done_callbacks_;
-
-  DISALLOW_COPY_AND_ASSIGN(VariationsHttpHeadersBrowserTest);
 };
 
 // Used for testing the kRestrictGoogleWebVisibility feature.
@@ -330,11 +346,13 @@ class VariationsHttpHeadersBrowserTestWithRestrictedVisibility
     }
   }
 
+  VariationsHttpHeadersBrowserTestWithRestrictedVisibility(
+      const VariationsHttpHeadersBrowserTestWithRestrictedVisibility&) = delete;
+  VariationsHttpHeadersBrowserTestWithRestrictedVisibility& operator=(
+      const VariationsHttpHeadersBrowserTestWithRestrictedVisibility&) = delete;
+
  private:
   base::test::ScopedFeatureList scoped_feature_list_;
-
-  DISALLOW_COPY_AND_ASSIGN(
-      VariationsHttpHeadersBrowserTestWithRestrictedVisibility);
 };
 
 std::unique_ptr<net::test_server::HttpResponse>
@@ -350,8 +368,8 @@ VariationsHttpHeadersBrowserTest::RequestHandler(
   // Recover the original URL of the request by replacing the host name in
   // request.GetURL() (which is 127.0.0.1) with the host name from the request
   // headers.
-  url::Replacements<char> replacements;
-  replacements.SetHost(host.c_str(), url::Component(0, host.length()));
+  GURL::Replacements replacements;
+  replacements.SetHostStr(host);
   GURL original_url = request.GetURL().ReplaceComponents(replacements);
 
   // Memorize the request headers for this URL for later verification.
@@ -607,7 +625,7 @@ IN_PROC_BROWSER_TEST_F(VariationsHttpHeadersBrowserTest,
                        CheckLowEntropySourceValue) {
   std::unique_ptr<const base::FieldTrial::EntropyProvider>
       low_entropy_provider = g_browser_process->GetMetricsServicesManager()
-                                 ->CreateEntropyProvider();
+                                 ->CreateLowEntropyProviderForTesting();
 
   // Create a trial with 100 groups and variation ids to validate that the group
   // reported in the variations header is actually based on the low entropy
@@ -768,6 +786,13 @@ IN_PROC_BROWSER_TEST_F(VariationsHttpHeadersBrowserTest,
 }
 
 // Verify in an integration test that the variations header (X-Client-Data) is
+// not exposed in the service worker fetch event.
+IN_PROC_BROWSER_TEST_F(VariationsHttpHeadersBrowserTest,
+                       ServiceWorkerDoesNotSeeHeader) {
+  ServiceWorkerTest("/service_worker/fail_on_variations_header_worker.js");
+}
+
+// Verify in an integration test that the variations header (X-Client-Data) is
 // attached to requests after the service worker does
 // respondWith(fetch(request)).
 IN_PROC_BROWSER_TEST_F(VariationsHttpHeadersBrowserTest,
@@ -782,7 +807,7 @@ IN_PROC_BROWSER_TEST_F(VariationsHttpHeadersBrowserTest, ServiceWorkerScript) {
   GURL absolute_import = GetExampleUrlWithPath("/service_worker/empty.js");
   const std::string worker_path =
       "/service_worker/import_scripts_worker.js?import=" +
-      net::EscapeQueryParamValue(absolute_import.spec(), false);
+      base::EscapeQueryParamValue(absolute_import.spec(), false);
   RegisterServiceWorker(worker_path);
 
   // Test that the header is present on the main script request.

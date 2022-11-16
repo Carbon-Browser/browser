@@ -12,13 +12,14 @@
 #include <vector>
 
 #include "base/containers/flat_map.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "content/browser/renderer_host/back_forward_cache_metrics.h"
 #include "content/browser/renderer_host/frame_navigation_entry.h"
 #include "content/browser/site_instance_impl.h"
+#include "content/common/content_export.h"
 #include "content/public/browser/favicon_status.h"
 #include "content/public/browser/global_request_id.h"
 #include "content/public/browser/navigation_entry.h"
@@ -28,7 +29,6 @@
 #include "content/public/browser/ssl_status.h"
 #include "net/base/isolation_info.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
-#include "third_party/blink/public/common/loader/previews_state.h"
 #include "third_party/blink/public/common/page_state/page_state.h"
 #include "third_party/blink/public/mojom/navigation/navigation_params.mojom-forward.h"
 #include "url/origin.h"
@@ -82,7 +82,7 @@ class CONTENT_EXPORT NavigationEntryImpl : public NavigationEntry {
         ClonePolicy clone_policy) const;
 
     // The parent of this node.
-    TreeNode* parent;
+    raw_ptr<TreeNode> parent;
 
     // Ref counted pointer that keeps the FrameNavigationEntry alive as long as
     // it is needed by this node's NavigationEntry.
@@ -107,17 +107,23 @@ class CONTENT_EXPORT NavigationEntryImpl : public NavigationEntry {
       const std::u16string& title,
       ui::PageTransition transition_type,
       bool is_renderer_initiated,
-      scoped_refptr<network::SharedURLLoaderFactory> blob_url_loader_factory);
+      scoped_refptr<network::SharedURLLoaderFactory> blob_url_loader_factory,
+      bool is_initial_entry);
+
+  NavigationEntryImpl(const NavigationEntryImpl&) = delete;
+  NavigationEntryImpl& operator=(const NavigationEntryImpl&) = delete;
+
   ~NavigationEntryImpl() override;
 
   // NavigationEntry implementation:
+  bool IsInitialEntry() override;
   int GetUniqueID() override;
   PageType GetPageType() override;
   void SetURL(const GURL& url) override;
   const GURL& GetURL() override;
   void SetBaseURLForDataURL(const GURL& url) override;
   const GURL& GetBaseURLForDataURL() override;
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   void SetDataURLAsString(
       scoped_refptr<base::RefCountedString> data_url) override;
   const scoped_refptr<const base::RefCountedString>& GetDataURLAsString()
@@ -200,7 +206,6 @@ class CONTENT_EXPORT NavigationEntryImpl : public NavigationEntry {
       const GURL& dest_url,
       blink::mojom::ReferrerPtr dest_referrer,
       blink::mojom::NavigationType navigation_type,
-      blink::PreviewsState previews_state,
       base::TimeTicks navigation_start,
       base::TimeTicks input_start);
   blink::mojom::CommitNavigationParamsPtr ConstructCommitNavigationParams(
@@ -213,7 +218,8 @@ class CONTENT_EXPORT NavigationEntryImpl : public NavigationEntry {
       int pending_offset_to_send,
       int current_offset_to_send,
       int current_length_to_send,
-      const blink::FramePolicy& frame_policy);
+      const blink::FramePolicy& frame_policy,
+      bool ancestor_or_self_has_cspee);
 
   // Once a navigation entry is committed, we should no longer track several
   // pieces of non-persisted state, as documented on the members below.
@@ -242,7 +248,7 @@ class CONTENT_EXPORT NavigationEntryImpl : public NavigationEntry {
       UpdatePolicy update_policy,
       int64_t item_sequence_number,
       int64_t document_sequence_number,
-      const std::string& app_history_key,
+      const std::string& navigation_api_key,
       SiteInstanceImpl* site_instance,
       scoped_refptr<SiteInstanceImpl> source_site_instance,
       const GURL& url,
@@ -423,6 +429,63 @@ class CONTENT_EXPORT NavigationEntryImpl : public NavigationEntry {
     back_forward_cache_metrics_ = metrics;
   }
 
+  // Whether this NavigationEntry is the initial NavigationEntry or not, and
+  // whether it's for the initial empty document or the synchronously
+  // committed about:blank document. The original initial NavigationEntry is
+  // created when the FrameTree is created, so it might not be associated with
+  // any navigation, but represents a placeholder NavigationEntry for the
+  // "initial empty document", which commits in the renderer on frame creation
+  // but doesn't notify the browser of the commit. However, more initial
+  // NavigationEntries might be created after that in response to navigations,
+  // and update or replace the original NavigationEntry. The initial
+  // NavigationEntry will only get replaced with a non-initial NavigationEntry
+  // by the first navigation that satisfies all of the following conditions:
+  //   1. Happens on the main frame
+  //   2. Classified as NEW_ENTRY (won't reuse the NavigationEntry)
+  //   3. Is not the synchronous about:blank commit
+  // So the "initial" status will be retained/copied to the new
+  // NavigationEntry on subframe navigations, or when the NavigationEntry is
+  // reused/classified as EXISTING_ENTRY (same-document navigations,
+  // renderer-initiated reloads), or on the synchronous about:blank commit.
+  // Some other important properties of initial NavigationEntries:
+  // - The initial NavigationEntry always gets reused or replaced on the next
+  // navigation (potentially by another initial NavigationEntry), so if there
+  // is an initial NavigationEntry in the session history, it must be the only
+  // NavigationEntry (as it is impossible to append to session history if the
+  // initial NavigationEntry exists), which means it's not possible to do
+  // a history navigation to an initial NavigationEntry.
+  // - The initial NavigationEntry never gets restored on session restore,
+  // because we never restore tabs with only the initial NavigationEntry.
+  enum class InitialNavigationEntryState {
+    // An initial NavigationEntry for the initial empty document or a
+    // renderer-reloaded initial empty document.
+    kInitialNotForSynchronousAboutBlank,
+    // An initial NavigationEntry for the synchronously committed about:blank
+    // document.
+    kInitialForSynchronousAboutBlank,
+    // Not an initial NavigationEntry.
+    kNonInitial
+  };
+
+  bool IsInitialEntryNotForSynchronousAboutBlank() {
+    return initial_navigation_entry_state_ ==
+           InitialNavigationEntryState::kInitialNotForSynchronousAboutBlank;
+  }
+
+  bool IsInitialEntryForSynchronousAboutBlank() {
+    return initial_navigation_entry_state_ ==
+           InitialNavigationEntryState::kInitialForSynchronousAboutBlank;
+  }
+
+  void set_initial_navigation_entry_state(
+      InitialNavigationEntryState initial_navigation_entry_state) {
+    initial_navigation_entry_state_ = initial_navigation_entry_state;
+  }
+
+  InitialNavigationEntryState initial_navigation_entry_state() {
+    return initial_navigation_entry_state_;
+  }
+
  private:
   std::unique_ptr<NavigationEntryImpl> CloneAndReplaceInternal(
       scoped_refptr<FrameNavigationEntry> frame_entry,
@@ -474,7 +537,7 @@ class CONTENT_EXPORT NavigationEntryImpl : public NavigationEntry {
   // persisted by Android WebView.
   GURL base_url_for_data_url_;
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   // Used for passing really big data URLs from browser to renderers. Only used
   // and persisted by Android WebView.
   scoped_refptr<const base::RefCountedString> data_url_as_string_;
@@ -553,7 +616,9 @@ class CONTENT_EXPORT NavigationEntryImpl : public NavigationEntry {
   // It is preserved at commit but not persisted.
   scoped_refptr<BackForwardCacheMetrics> back_forward_cache_metrics_;
 
-  DISALLOW_COPY_AND_ASSIGN(NavigationEntryImpl);
+  // See comment for the enum for explanation.
+  InitialNavigationEntryState initial_navigation_entry_state_ =
+      InitialNavigationEntryState::kNonInitial;
 };
 
 }  // namespace content

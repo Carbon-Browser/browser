@@ -10,7 +10,6 @@
 #include "third_party/blink/renderer/core/html/media/media_source_tracer.h"
 #include "third_party/blink/renderer/core/html/track/audio_track.h"
 #include "third_party/blink/renderer/core/html/track/video_track.h"
-#include "third_party/blink/renderer/platform/heap/handle.h"
 #include "third_party/blink/renderer/platform/wtf/forward.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 
@@ -31,6 +30,11 @@ class MediaSourceAttachmentSupplement : public MediaSourceAttachment {
   using RunExclusivelyCB = base::OnceCallback<void(ExclusiveKey)>;
   using SourceBufferPassKey = base::PassKey<SourceBuffer>;
 
+  MediaSourceAttachmentSupplement(const MediaSourceAttachmentSupplement&) =
+      delete;
+  MediaSourceAttachmentSupplement& operator=(
+      const MediaSourceAttachmentSupplement&) = delete;
+
   // Communicates a change in the media resource duration to the attached media
   // element. In a same-thread attachment, communicates this information
   // synchronously. In a cross-thread attachment, underlying WebMediaSource
@@ -48,7 +52,7 @@ class MediaSourceAttachmentSupplement : public MediaSourceAttachment {
   // (via |tracer| in a same thread implementation) or rely on a "recent"
   // currentTime pumped by the attached element via the MediaSourceAttachment
   // interface (in a cross-thread implementation).
-  virtual double GetRecentMediaTime(MediaSourceTracer* tracer) = 0;
+  virtual base::TimeDelta GetRecentMediaTime(MediaSourceTracer* tracer) = 0;
 
   // Retrieves whether or not the media element currently has an error.
   // Implementations may choose to either directly, synchronously consult the
@@ -142,8 +146,6 @@ class MediaSourceAttachmentSupplement : public MediaSourceAttachment {
   ~MediaSourceAttachmentSupplement() override;
 
   ExclusiveKey GetExclusiveKey() const;
-
-  DISALLOW_COPY_AND_ASSIGN(MediaSourceAttachmentSupplement);
 };
 
 }  // namespace blink

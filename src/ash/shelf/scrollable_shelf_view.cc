@@ -7,7 +7,6 @@
 #include <algorithm>
 
 #include "ash/app_list/app_list_controller_impl.h"
-#include "ash/public/cpp/presentation_time_recorder.h"
 #include "ash/public/cpp/shelf_config.h"
 #include "ash/screen_util.h"
 #include "ash/shelf/scrollable_shelf_constants.h"
@@ -17,6 +16,7 @@
 #include "ash/shelf/shelf_tooltip_manager.h"
 #include "ash/shelf/shelf_widget.h"
 #include "ash/shell.h"
+#include "ash/strings/grit/ash_strings.h"
 #include "ash/system/status_area_widget.h"
 #include "ash/wm/tablet_mode/tablet_mode_controller.h"
 #include "base/bind.h"
@@ -25,12 +25,12 @@
 #include "base/metrics/histogram_functions.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/compositor/animation_throughput_reporter.h"
+#include "ui/compositor/presentation_time_recorder.h"
 #include "ui/compositor/scoped_layer_animation_settings.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/geometry/rect_f.h"
+#include "ui/gfx/geometry/transform_util.h"
 #include "ui/gfx/geometry/vector2d_conversions.h"
-#include "ui/gfx/transform_util.h"
-#include "ui/strings/grit/ui_strings.h"
 #include "ui/views/animation/ink_drop.h"
 #include "ui/views/focus/focus_search.h"
 #include "ui/views/view_targeter_delegate.h"
@@ -46,28 +46,28 @@ int64_t GetDisplayIdForView(const views::View* view) {
 }
 
 void ReportSmoothness(bool tablet_mode, bool launcher_visible, int smoothness) {
-  base::UmaHistogramPercentageObsoleteDoNotUse(
+  base::UmaHistogramPercentage(
       scrollable_shelf_constants::kAnimationSmoothnessHistogram, smoothness);
   if (tablet_mode) {
     if (launcher_visible) {
-      base::UmaHistogramPercentageObsoleteDoNotUse(
+      base::UmaHistogramPercentage(
           scrollable_shelf_constants::
               kAnimationSmoothnessTabletLauncherVisibleHistogram,
           smoothness);
     } else {
-      base::UmaHistogramPercentageObsoleteDoNotUse(
+      base::UmaHistogramPercentage(
           scrollable_shelf_constants::
               kAnimationSmoothnessTabletLauncherHiddenHistogram,
           smoothness);
     }
   } else {
     if (launcher_visible) {
-      base::UmaHistogramPercentageObsoleteDoNotUse(
+      base::UmaHistogramPercentage(
           scrollable_shelf_constants::
               kAnimationSmoothnessClamshellLauncherVisibleHistogram,
           smoothness);
     } else {
-      base::UmaHistogramPercentageObsoleteDoNotUse(
+      base::UmaHistogramPercentage(
           scrollable_shelf_constants::
               kAnimationSmoothnessClamshellLauncherHiddenHistogram,
           smoothness);
@@ -76,8 +76,8 @@ void ReportSmoothness(bool tablet_mode, bool launcher_visible, int smoothness) {
 }
 
 gfx::Insets GetMirroredInsets(const gfx::Insets& insets) {
-  return gfx::Insets(/*top=*/insets.top(), /*left=*/insets.right(),
-                     /*bottom=*/insets.bottom(), /*right=*/insets.left());
+  return gfx::Insets::TLBR(insets.top(), insets.right(), insets.bottom(),
+                           insets.left());
 }
 
 }  // namespace
@@ -91,17 +91,18 @@ class ScrollableShelfView::ScrollableShelfArrowView
  public:
   explicit ScrollableShelfArrowView(ArrowType arrow_type,
                                     bool is_horizontal_alignment,
-                                    Shelf* shelf,
+                                    ShelfView* shelf_view,
                                     ShelfButtonDelegate* shelf_button_delegate)
       : ScrollArrowView(arrow_type,
                         is_horizontal_alignment,
-                        shelf,
+                        shelf_view->shelf(),
                         shelf_button_delegate),
-        shelf_(shelf) {
+        shelf_(shelf_view->shelf()) {
     views::InkDrop::Get(this)->SetMode(views::InkDropHost::InkDropMode::OFF);
     SetEventTargeter(std::make_unique<views::ViewTargeter>(this));
     SetPaintToLayer();
     layer()->SetFillsBoundsOpaquely(false);
+    set_context_menu_controller(shelf_view);
 
     // When the spoken feedback is enabled, scrollable shelf should ensure that
     // the hidden icon which receives the accessibility focus shows through
@@ -120,8 +121,12 @@ class ScrollableShelfView::ScrollableShelfArrowView
     // Calculates the tapping area. Note that tapping area is bigger than the
     // arrow button's bounds.
     gfx::Rect tap_rect(
-        scrollable_shelf_constants::kArrowButtonTapAreaHorizontal,
-        shelf_->hotseat_widget()->GetHotseatSize());
+        shelf_->PrimaryAxisValue(
+            scrollable_shelf_constants::kArrowButtonTapAreaHorizontal,
+            shelf_->hotseat_widget()->GetHotseatSize()),
+        shelf_->PrimaryAxisValue(
+            shelf_->hotseat_widget()->GetHotseatSize(),
+            scrollable_shelf_constants::kArrowButtonTapAreaHorizontal));
     tap_rect -= gfx::Vector2d((tap_rect.width() - bounds.width()) / 2,
                               (tap_rect.height() - bounds.height()) / 2);
     DCHECK(tap_rect.Contains(bounds));
@@ -141,7 +146,7 @@ class ScrollableShelfView::ScrollableShelfArrowView
   }
 
  private:
-  Shelf* const shelf_ = nullptr;
+  Shelf* const shelf_;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -180,6 +185,11 @@ class ScrollableShelfContainerView : public ShelfContainerView,
         scrollable_shelf_view_(scrollable_shelf_view) {
     SetEventTargeter(std::make_unique<views::ViewTargeter>(this));
   }
+
+  ScrollableShelfContainerView(const ScrollableShelfContainerView&) = delete;
+  ScrollableShelfContainerView& operator=(const ScrollableShelfContainerView&) =
+      delete;
+
   ~ScrollableShelfContainerView() override = default;
 
   // ShelfContainerView:
@@ -194,8 +204,6 @@ class ScrollableShelfContainerView : public ShelfContainerView,
                          const gfx::Rect& rect) const override;
 
   ScrollableShelfView* scrollable_shelf_view_ = nullptr;
-
-  DISALLOW_COPY_AND_ASSIGN(ScrollableShelfContainerView);
 };
 
 void ScrollableShelfContainerView::TranslateShelfView(
@@ -245,6 +253,10 @@ class ScrollableShelfFocusSearch : public views::FocusSearch {
                     /*accessibility_mode=*/true),
         scrollable_shelf_view_(scrollable_shelf_view) {}
 
+  ScrollableShelfFocusSearch(const ScrollableShelfFocusSearch&) = delete;
+  ScrollableShelfFocusSearch& operator=(const ScrollableShelfFocusSearch&) =
+      delete;
+
   ~ScrollableShelfFocusSearch() override = default;
 
   // views::FocusSearch
@@ -276,22 +288,23 @@ class ScrollableShelfFocusSearch : public views::FocusSearch {
 
     // Scrolls to the new page if the focused shelf item is not tappable
     // on the current page.
-    if (new_index < 0)
+    if (new_index < 0) {
       new_index = focusable_views.size() - 1;
-    else if (new_index >= static_cast<int>(focusable_views.size()))
+    } else if (static_cast<size_t>(new_index) >= focusable_views.size()) {
       new_index = 0;
-    else if (new_index < scrollable_shelf_view_->first_tappable_app_index())
+    } else if (static_cast<size_t>(new_index) <
+               scrollable_shelf_view_->first_tappable_app_index()) {
       scrollable_shelf_view_->ScrollToNewPage(/*forward=*/false);
-    else if (new_index > scrollable_shelf_view_->last_tappable_app_index())
+    } else if (static_cast<size_t>(new_index) >
+               scrollable_shelf_view_->last_tappable_app_index()) {
       scrollable_shelf_view_->ScrollToNewPage(/*forward=*/true);
+    }
 
     return focusable_views[new_index];
   }
 
  private:
   ScrollableShelfView* scrollable_shelf_view_ = nullptr;
-
-  DISALLOW_COPY_AND_ASSIGN(ScrollableShelfFocusSearch);
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -334,15 +347,16 @@ void ScrollableShelfView::Init() {
 
   // Initialize the left arrow button.
   left_arrow_ = AddChildView(std::make_unique<ScrollableShelfArrowView>(
-      ScrollArrowView::kLeft, GetShelf()->IsHorizontalAlignment(), GetShelf(),
+      ScrollArrowView::kLeft, GetShelf()->IsHorizontalAlignment(), shelf_view_,
       this));
 
   // Initialize the right arrow button.
   right_arrow_ = AddChildView(std::make_unique<ScrollableShelfArrowView>(
-      ScrollArrowView::kRight, GetShelf()->IsHorizontalAlignment(), GetShelf(),
+      ScrollArrowView::kRight, GetShelf()->IsHorizontalAlignment(), shelf_view_,
       this));
 
-  gradient_layer_delegate_ = std::make_unique<GradientLayerDelegate>();
+  gradient_layer_delegate_ =
+      std::make_unique<GradientLayerDelegate>(/*animate_in=*/false);
   layer()->SetMaskLayer(gradient_layer_delegate_->layer());
 
   focus_search_ = std::make_unique<ScrollableShelfFocusSearch>(this);
@@ -400,10 +414,10 @@ views::View* ScrollableShelfView::GetDefaultFocusableChild() {
     ScrollToMainOffset(CalculateScrollUpperBound(GetSpaceForIcons()),
                        /*animating=*/true);
     return FindLastFocusableChild();
-  } else {
-    ScrollToMainOffset(/*target_offset=*/0.f, /*animating=*/true);
-    return FindFirstFocusableChild();
   }
+
+  ScrollToMainOffset(/*target_offset=*/0.f, /*animating=*/true);
+  return FindFirstFocusableChild();
 }
 
 gfx::Rect ScrollableShelfView::GetHotseatBackgroundBounds() const {
@@ -421,6 +435,15 @@ bool ScrollableShelfView::NeedUpdateToTargetBounds() const {
 
 gfx::Rect ScrollableShelfView::GetTargetScreenBoundsOfItemIcon(
     const ShelfID& id) const {
+  const int item_index_in_model = shelf_view_->model()->ItemIndexByID(id);
+
+  // Return a dummy value if the item specified by `id` does not exist in the
+  // shelf model.
+  // TODO(https://crbug.com/1270498): it is a quick fixing. We should
+  // investigate the root cause.
+  if (item_index_in_model < 0)
+    return gfx::Rect();
+
   // Calculates the available space for child views based on the target bounds.
   // To ease coding, we use the variables before mirroring in computation.
   const gfx::Insets target_edge_padding_RTL_mirrored =
@@ -436,8 +459,8 @@ gfx::Rect ScrollableShelfView::GetTargetScreenBoundsOfItemIcon(
   const gfx::Insets current_edge_padding_before_RTL_mirror =
       ShouldAdaptToRTL() ? GetMirroredInsets(current_edge_padding_RTL_mirrored)
                          : current_edge_padding_RTL_mirrored;
-  gfx::Rect icon_bounds = shelf_view_->view_model()->ideal_bounds(
-      shelf_view_->model()->ItemIndexByID(id));
+  gfx::Rect icon_bounds =
+      shelf_view_->view_model()->ideal_bounds(item_index_in_model);
   icon_bounds.Offset(target_edge_padding_before_RTL_mirror.left() -
                          current_edge_padding_before_RTL_mirror.left(),
                      0);
@@ -543,13 +566,11 @@ gfx::Insets ScrollableShelfView::CalculateMirroredEdgePadding(
 
   gfx::Insets padding_insets;
   if (GetShelf()->IsHorizontalAlignment()) {
-    padding_insets =
-        gfx::Insets(/*top=*/0, before_padding, /*bottom=*/0, after_padding);
+    padding_insets = gfx::Insets::TLBR(0, before_padding, 0, after_padding);
     if (ShouldAdaptToRTL())
       padding_insets = GetMirroredInsets(padding_insets);
   } else {
-    padding_insets =
-        gfx::Insets(before_padding, /*left=*/0, after_padding, /*right=*/0);
+    padding_insets = gfx::Insets::TLBR(before_padding, 0, after_padding, 0);
   }
 
   return padding_insets;
@@ -725,9 +746,9 @@ void ScrollableShelfView::Layout() {
     left_arrow_bounds =
         gfx::Rect(left_arrow_start_point, arrow_button_group_size);
     left_arrow_bounds.Offset(before_padding, 0);
-    left_arrow_bounds.Inset(
-        scrollable_shelf_constants::kArrowButtonEndPadding, 0,
-        scrollable_shelf_constants::kDistanceToArrowButton, 0);
+    left_arrow_bounds.Inset(gfx::Insets::TLBR(
+        0, scrollable_shelf_constants::kArrowButtonEndPadding, 0,
+        scrollable_shelf_constants::kDistanceToArrowButton));
     left_arrow_bounds.ClampToCenteredSize(arrow_button_size);
   }
 
@@ -739,9 +760,9 @@ void ScrollableShelfView::Layout() {
         0);
     right_arrow_bounds =
         gfx::Rect(right_arrow_start_point, arrow_button_group_size);
-    right_arrow_bounds.Inset(
-        scrollable_shelf_constants::kDistanceToArrowButton, 0,
-        scrollable_shelf_constants::kArrowButtonEndPadding, 0);
+    right_arrow_bounds.Inset(gfx::Insets::TLBR(
+        0, scrollable_shelf_constants::kDistanceToArrowButton, 0,
+        scrollable_shelf_constants::kArrowButtonEndPadding));
     right_arrow_bounds.ClampToCenteredSize(arrow_button_size);
   }
 
@@ -779,6 +800,7 @@ void ScrollableShelfView::Layout() {
 void ScrollableShelfView::ChildPreferredSizeChanged(views::View* child) {
   // Add/remove a shelf icon may change the layout strategy.
   UpdateAvailableSpaceAndScroll();
+  shelf_container_view_->TranslateShelfView(scroll_offset_);
   Layout();
 }
 
@@ -997,6 +1019,31 @@ void ScrollableShelfView::HandleAccessibleActionScrollToMakeVisible(
   GetShelf()->shelf_widget()->shelf_layout_manager()->UpdateVisibilityState();
 }
 
+void ScrollableShelfView::OnButtonWillBeRemoved() {
+  const int view_size_before_removal = shelf_view_->view_model()->view_size();
+  DCHECK_GT(view_size_before_removal, 0);
+
+  // Ensure `last_tappable_app_index_` to be valid after removal. Normally
+  // `last_tappable_app_index_` updates when the shelf button is removed. But
+  // button removal could be performed at the end of the button fade out
+  // animation, which means that incorrect `last_tappable_app_index_` could be
+  // accessed during the animation. To handle this issue, update
+  // `last_tappable_app_index_` before removal finishes.
+  // The code block also covers the edge case that the only shelf item is going
+  // to be removed, i.e. `view_size_before_removal_` is one. In this case,
+  // both `first_tappable_app_index_` and `last_tappable_app_index_` are reset
+  // to invalid values (see https://crbug.com/1300561).
+  if (view_size_before_removal < 2) {
+    last_tappable_app_index_ = absl::nullopt;
+  } else {
+    last_tappable_app_index_ = std::min(
+        last_tappable_app_index_,
+        absl::make_optional(static_cast<size_t>(view_size_before_removal - 2)));
+  }
+  first_tappable_app_index_ =
+      std::min(first_tappable_app_index_, last_tappable_app_index_);
+}
+
 std::unique_ptr<ScrollableShelfView::ScopedActiveInkDropCount>
 ScrollableShelfView::CreateScopedActiveInkDropCount(const ShelfButton* sender) {
   if (!ShouldCountActivatedInkDrop(sender))
@@ -1200,13 +1247,11 @@ gfx::Insets ScrollableShelfView::CalculateMirroredPaddingForDisplayCentering(
 
   gfx::Insets padding_insets;
   if (GetShelf()->IsHorizontalAlignment()) {
-    padding_insets =
-        gfx::Insets(/*top=*/0, before_padding, /*bottom=*/0, after_padding);
+    padding_insets = gfx::Insets::TLBR(0, before_padding, 0, after_padding);
     if (ShouldAdaptToRTL())
       padding_insets = GetMirroredInsets(padding_insets);
   } else {
-    padding_insets =
-        gfx::Insets(before_padding, /*left=*/0, after_padding, /*right=*/0);
+    padding_insets = gfx::Insets::TLBR(before_padding, 0, after_padding, 0);
   }
 
   return padding_insets;
@@ -1686,23 +1731,23 @@ void ScrollableShelfView::UpdateTappableIconIndices() {
 
   // The value returned by CalculateMainAxisScrollDistance() can be casted into
   // an integer without losing precision since the decimal part is zero.
-  const std::pair<int, int> tappable_indices = CalculateTappableIconIndices(
+  const auto tappable_indices = CalculateTappableIconIndices(
       layout_strategy_, CalculateMainAxisScrollDistance());
   first_tappable_app_index_ = tappable_indices.first;
   last_tappable_app_index_ = tappable_indices.second;
 }
 
-std::pair<int, int> ScrollableShelfView::CalculateTappableIconIndices(
+std::pair<absl::optional<size_t>, absl::optional<size_t>>
+ScrollableShelfView::CalculateTappableIconIndices(
     ScrollableShelfView::LayoutStrategy layout_strategy,
     int scroll_distance_on_main_axis) const {
   const auto& visible_views_indices = shelf_view_->visible_views_indices();
 
   if (visible_views_indices.empty() || visible_space_.IsEmpty())
-    return std::pair<int, int>(-1, -1);
+    return {absl::nullopt, absl::nullopt};
 
   if (layout_strategy == ScrollableShelfView::kNotShowArrowButtons) {
-    return std::pair<int, int>(visible_views_indices.front(),
-                               visible_views_indices.back());
+    return {visible_views_indices.front(), visible_views_indices.back()};
   }
 
   const int visible_size = GetShelf()->IsHorizontalAlignment()
@@ -1715,8 +1760,8 @@ std::pair<int, int> ScrollableShelfView::CalculateTappableIconIndices(
   // are on an inactive desk. Therefore, the indices of tappable apps may not be
   // contiguous, so we need to map from a visible view index back to an app
   // index. The below are indices into the |visible_views_indices| vector.
-  int first_visible_view_index = -1;
-  int last_visible_view_index = -1;
+  size_t first_visible_view_index;
+  size_t last_visible_view_index;
   if (layout_strategy == kShowRightArrowButton ||
       layout_strategy == kShowButtons) {
     first_visible_view_index =
@@ -1748,15 +1793,11 @@ std::pair<int, int> ScrollableShelfView::CalculateTappableIconIndices(
             : last_visible_view_index;
   }
 
-  DCHECK_GE(first_visible_view_index, 0);
-  DCHECK_LT(first_visible_view_index,
-            static_cast<int>(visible_views_indices.size()));
-  DCHECK_GE(last_visible_view_index, 0);
-  DCHECK_LT(last_visible_view_index,
-            static_cast<int>(visible_views_indices.size()));
+  DCHECK_LT(first_visible_view_index, visible_views_indices.size());
+  DCHECK_LT(last_visible_view_index, visible_views_indices.size());
 
-  return std::pair<int, int>(visible_views_indices[first_visible_view_index],
-                             visible_views_indices[last_visible_view_index]);
+  return {visible_views_indices[first_visible_view_index],
+          visible_views_indices[last_visible_view_index]};
 }
 
 views::View* ScrollableShelfView::FindFirstFocusableChild() {
@@ -1896,12 +1937,13 @@ gfx::Rect ScrollableShelfView::CalculateVisibleSpace(
 
   gfx::Insets visible_space_insets;
   if (ShouldAdaptToRTL()) {
-    visible_space_insets = gfx::Insets(0, after_padding, 0, before_padding);
+    visible_space_insets =
+        gfx::Insets::TLBR(0, after_padding, 0, before_padding);
   } else {
     visible_space_insets =
         GetShelf()->IsHorizontalAlignment()
-            ? gfx::Insets(0, before_padding, 0, after_padding)
-            : gfx::Insets(before_padding, 0, after_padding, 0);
+            ? gfx::Insets::TLBR(0, before_padding, 0, after_padding)
+            : gfx::Insets::TLBR(before_padding, 0, after_padding, 0);
   }
   visible_space_insets -= CalculateRipplePaddingInsets();
 
@@ -1923,11 +1965,11 @@ gfx::Insets ScrollableShelfView::CalculateRipplePaddingInsets() const {
       (in_tablet_mode && !ShouldShowRightArrow()) ? 0 : ripple_padding;
 
   if (ShouldAdaptToRTL())
-    return gfx::Insets(0, after_padding, 0, before_padding);
+    return gfx::Insets::TLBR(0, after_padding, 0, before_padding);
 
   return GetShelf()->IsHorizontalAlignment()
-             ? gfx::Insets(0, before_padding, 0, after_padding)
-             : gfx::Insets(before_padding, 0, after_padding, 0);
+             ? gfx::Insets::TLBR(0, before_padding, 0, after_padding)
+             : gfx::Insets::TLBR(before_padding, 0, after_padding, 0);
 }
 
 gfx::RoundedCornersF
@@ -2102,21 +2144,23 @@ bool ScrollableShelfView::ShouldCountActivatedInkDrop(
   if (during_scroll_animation_)
     return should_count;
 
-  if (first_tappable_app_index_ == -1 || last_tappable_app_index_ == -1) {
+  if (!first_tappable_app_index_.has_value() ||
+      !last_tappable_app_index_.has_value()) {
     // Verify that `first_tappable_app_index_` and `last_tappable_app_index_`
-    // may be both illegal. In that case, return early.
-    DCHECK_EQ(first_tappable_app_index_, last_tappable_app_index_);
+    // are both illegal. In that case, return early.
+    DCHECK(first_tappable_app_index_ == last_tappable_app_index_);
     return false;
   }
 
   // The ink drop needs to be clipped only if |sender| is the app at one of the
   // corners of the shelf. This happens if it is either the first or the last
   // tappable app and no arrow is showing on its side.
-  if (shelf_view_->view_model()->view_at(first_tappable_app_index_) == sender) {
+  if (shelf_view_->view_model()->view_at(first_tappable_app_index_.value()) ==
+      sender) {
     should_count = !(layout_strategy_ == kShowButtons ||
                      layout_strategy_ == kShowLeftArrowButton);
-  } else if (shelf_view_->view_model()->view_at(last_tappable_app_index_) ==
-             sender) {
+  } else if (shelf_view_->view_model()->view_at(
+                 last_tappable_app_index_.value()) == sender) {
     should_count = !(layout_strategy_ == kShowButtons ||
                      layout_strategy_ == kShowRightArrowButton);
   }
@@ -2168,8 +2212,11 @@ void ScrollableShelfView::OnActiveInkDropChange(bool increase) {
   // When long pressing icons, sometimes there are more ripple animations
   // pending over others buttons. Only activate rounded corners when at least
   // one button needs them.
+  // NOTE: `last_tappable_app_index_` is used to compute whether a button is
+  // at the corner or not. Meanwhile, `last_tappable_app_index_` could update
+  // before the button fade out animation ends. As a result, in edge cases
+  // `activated_corner_buttons_` could be greater than 2.
   CHECK_GE(activated_corner_buttons_, 0);
-  CHECK_LE(activated_corner_buttons_, 2);
   EnableShelfRoundedCorners(activated_corner_buttons_ > 0);
 }
 

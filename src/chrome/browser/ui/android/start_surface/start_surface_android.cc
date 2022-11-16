@@ -6,12 +6,13 @@
 
 #include "base/android/jni_android.h"
 #include "base/bind.h"
-#include "base/task/post_task.h"
+#include "base/metrics/field_trial_params.h"
 #include "base/time/time.h"
 #include "chrome/android/features/start_surface/jni_headers/StartSurfaceConfiguration_jni.h"
 #include "chrome/browser/flags/android/chrome_feature_list.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_android.h"
+#include "chrome/browser/ui/android/start_surface/start_surface_android.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/render_process_host.h"
@@ -29,6 +30,11 @@ void WarmUpRenderProcess(Profile* profile) {
 
 }  // namespace
 
+bool IsStartSurfaceBehaviouralTargetingEnabled() {
+  JNIEnv* env = base::android::AttachCurrentThread();
+  return Java_StartSurfaceConfiguration_isBehaviouralTargetingEnabled(env);
+}
+
 static void JNI_StartSurfaceConfiguration_WarmupRenderer(
     JNIEnv* env,
     const JavaParamRef<jobject>& jprofile) {
@@ -37,7 +43,7 @@ static void JNI_StartSurfaceConfiguration_WarmupRenderer(
       chrome::android::kStartSurfaceAndroid, "spare_renderer_delay_ms",
       SPARE_RENDERER_DELAY_MS);
 
-  base::PostDelayedTask(FROM_HERE, {content::BrowserThread::UI},
-                        base::BindOnce(&WarmUpRenderProcess, profile),
-                        base::TimeDelta::FromMilliseconds(renderer_delay_ms));
+  content::GetUIThreadTaskRunner({})->PostDelayedTask(
+      FROM_HERE, base::BindOnce(&WarmUpRenderProcess, profile),
+      base::Milliseconds(renderer_delay_ms));
 }

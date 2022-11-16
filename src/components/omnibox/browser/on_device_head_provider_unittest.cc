@@ -45,7 +45,8 @@ class OnDeviceHeadProviderTest : public testing::Test,
   }
 
   // AutocompleteProviderListener:
-  void OnProviderUpdate(bool updated_matches) override {
+  void OnProviderUpdate(bool updated_matches,
+                        const AutocompleteProvider* provider) override {
     // No action required.
   }
 
@@ -70,20 +71,18 @@ class OnDeviceHeadProviderTest : public testing::Test,
   bool IsOnDeviceHeadProviderAllowed(const AutocompleteInput& input) {
     return provider_->IsOnDeviceHeadProviderAllowed(input);
   }
-
+  // This needs to be declared before the TaskEnvironment so that the
+  // TaskEnvironment is destroyed before the ScopedFeatureList.
+  base::test::ScopedFeatureList scoped_feature_list_;
   base::test::TaskEnvironment task_environment_;
   std::unique_ptr<FakeAutocompleteProviderClient> client_;
   scoped_refptr<OnDeviceHeadProvider> provider_;
 };
 
 TEST_F(OnDeviceHeadProviderTest, ModelInstanceNotCreated) {
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitAndEnableFeatureWithParameters(
-      omnibox::kOnDeviceHeadProviderNonIncognito,
-      {{OmniboxFieldTrial::kOnDeviceHeadSuggestDelaySuggestRequestMs, "0"}});
   AutocompleteInput input(u"M", metrics::OmniboxEventProto::OTHER,
                           TestSchemeClassifier());
-  input.set_want_asynchronous_matches(true);
+  input.set_omit_asynchronous_matches(false);
   ResetModelInstance();
 
   EXPECT_CALL(*client_.get(), IsOffTheRecord()).WillRepeatedly(Return(false));
@@ -100,13 +99,9 @@ TEST_F(OnDeviceHeadProviderTest, ModelInstanceNotCreated) {
 }
 
 TEST_F(OnDeviceHeadProviderTest, RejectSynchronousRequest) {
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitAndEnableFeatureWithParameters(
-      omnibox::kOnDeviceHeadProviderNonIncognito,
-      {{OmniboxFieldTrial::kOnDeviceHeadSuggestDelaySuggestRequestMs, "0"}});
   AutocompleteInput input(u"M", metrics::OmniboxEventProto::OTHER,
                           TestSchemeClassifier());
-  input.set_want_asynchronous_matches(false);
+  input.set_omit_asynchronous_matches(true);
 
   ASSERT_FALSE(IsOnDeviceHeadProviderAllowed(input));
 }
@@ -114,7 +109,7 @@ TEST_F(OnDeviceHeadProviderTest, RejectSynchronousRequest) {
 TEST_F(OnDeviceHeadProviderTest, TestIfIncognitoIsAllowed) {
   AutocompleteInput input(u"M", metrics::OmniboxEventProto::OTHER,
                           TestSchemeClassifier());
-  input.set_want_asynchronous_matches(true);
+  input.set_omit_asynchronous_matches(false);
 
   EXPECT_CALL(*client_.get(), IsOffTheRecord()).WillRepeatedly(Return(true));
   EXPECT_CALL(*client_.get(), SearchSuggestEnabled())
@@ -127,13 +122,9 @@ TEST_F(OnDeviceHeadProviderTest, TestIfIncognitoIsAllowed) {
 }
 
 TEST_F(OnDeviceHeadProviderTest, RejectOnFocusRequest) {
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitAndEnableFeatureWithParameters(
-      omnibox::kOnDeviceHeadProviderNonIncognito,
-      {{OmniboxFieldTrial::kOnDeviceHeadSuggestDelaySuggestRequestMs, "0"}});
   AutocompleteInput input(u"M", metrics::OmniboxEventProto::OTHER,
                           TestSchemeClassifier());
-  input.set_want_asynchronous_matches(true);
+  input.set_omit_asynchronous_matches(false);
   input.set_focus_type(OmniboxFocusType::ON_FOCUS);
 
   EXPECT_CALL(*client_.get(), IsOffTheRecord()).WillRepeatedly(Return(false));
@@ -143,13 +134,9 @@ TEST_F(OnDeviceHeadProviderTest, RejectOnFocusRequest) {
 }
 
 TEST_F(OnDeviceHeadProviderTest, NoMatches) {
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitAndEnableFeatureWithParameters(
-      omnibox::kOnDeviceHeadProviderNonIncognito,
-      {{OmniboxFieldTrial::kOnDeviceHeadSuggestDelaySuggestRequestMs, "0"}});
   AutocompleteInput input(u"b", metrics::OmniboxEventProto::OTHER,
                           TestSchemeClassifier());
-  input.set_want_asynchronous_matches(true);
+  input.set_omit_asynchronous_matches(false);
 
   EXPECT_CALL(*client_.get(), IsOffTheRecord()).WillRepeatedly(Return(false));
   EXPECT_CALL(*client_.get(), SearchSuggestEnabled())
@@ -165,13 +152,9 @@ TEST_F(OnDeviceHeadProviderTest, NoMatches) {
 }
 
 TEST_F(OnDeviceHeadProviderTest, HasMatches) {
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitAndEnableFeatureWithParameters(
-      omnibox::kOnDeviceHeadProviderNonIncognito,
-      {{OmniboxFieldTrial::kOnDeviceHeadSuggestDelaySuggestRequestMs, "0"}});
   AutocompleteInput input(u"M", metrics::OmniboxEventProto::OTHER,
                           TestSchemeClassifier());
-  input.set_want_asynchronous_matches(true);
+  input.set_omit_asynchronous_matches(false);
 
   EXPECT_CALL(*client_.get(), IsOffTheRecord()).WillRepeatedly(Return(false));
   EXPECT_CALL(*client_.get(), SearchSuggestEnabled())
@@ -190,16 +173,12 @@ TEST_F(OnDeviceHeadProviderTest, HasMatches) {
 }
 
 TEST_F(OnDeviceHeadProviderTest, CancelInProgressRequest) {
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitAndEnableFeatureWithParameters(
-      omnibox::kOnDeviceHeadProviderNonIncognito,
-      {{OmniboxFieldTrial::kOnDeviceHeadSuggestDelaySuggestRequestMs, "0"}});
   AutocompleteInput input1(u"g", metrics::OmniboxEventProto::OTHER,
                            TestSchemeClassifier());
-  input1.set_want_asynchronous_matches(true);
+  input1.set_omit_asynchronous_matches(false);
   AutocompleteInput input2(u"m", metrics::OmniboxEventProto::OTHER,
                            TestSchemeClassifier());
-  input2.set_want_asynchronous_matches(true);
+  input2.set_omit_asynchronous_matches(false);
 
   EXPECT_CALL(*client_.get(), IsOffTheRecord()).WillRepeatedly(Return(false));
   EXPECT_CALL(*client_.get(), SearchSuggestEnabled())

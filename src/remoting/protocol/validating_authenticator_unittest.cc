@@ -9,8 +9,8 @@
 
 #include "base/bind.h"
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "remoting/protocol/authenticator.h"
@@ -46,6 +46,11 @@ ACTION_TEMPLATE(InvokeCallbackArgument,
 class ValidatingAuthenticatorTest : public testing::Test {
  public:
   ValidatingAuthenticatorTest();
+
+  ValidatingAuthenticatorTest(const ValidatingAuthenticatorTest&) = delete;
+  ValidatingAuthenticatorTest& operator=(const ValidatingAuthenticatorTest&) =
+      delete;
+
   ~ValidatingAuthenticatorTest() override;
 
   void ValidateCallback(const std::string& remote_jid,
@@ -63,7 +68,7 @@ class ValidatingAuthenticatorTest : public testing::Test {
   // to |validating_authenticator_|.  Lifetime of the object is controlled by
   // |validating_authenticator_| so this pointer is no longer valid once
   // the owner is destroyed.
-  testing::NiceMock<MockAuthenticator>* mock_authenticator_ = nullptr;
+  raw_ptr<testing::NiceMock<MockAuthenticator>> mock_authenticator_ = nullptr;
 
   // This member is used to drive behavior in |validating_authenticator_| when
   // its validation complete callback is run.
@@ -77,8 +82,6 @@ class ValidatingAuthenticatorTest : public testing::Test {
 
  private:
   base::test::SingleThreadTaskEnvironment task_environment_;
-
-  DISALLOW_COPY_AND_ASSIGN(ValidatingAuthenticatorTest);
 };
 
 ValidatingAuthenticatorTest::ValidatingAuthenticatorTest() = default;

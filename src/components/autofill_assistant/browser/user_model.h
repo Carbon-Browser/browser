@@ -5,22 +5,27 @@
 #ifndef COMPONENTS_AUTOFILL_ASSISTANT_BROWSER_USER_MODEL_H_
 #define COMPONENTS_AUTOFILL_ASSISTANT_BROWSER_USER_MODEL_H_
 
-#include <map>
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
+#include "base/containers/flat_map.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
-#include "components/autofill/core/browser/data_model/autofill_profile.h"
-#include "components/autofill/core/browser/data_model/credit_card.h"
 #include "components/autofill_assistant/browser/model.pb.h"
-#include "components/autofill_assistant/browser/user_data.h"
 #include "components/autofill_assistant/browser/value_util.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
+namespace autofill {
+class AutofillProfile;
+class CreditCard;
+}  // namespace autofill
+
 namespace autofill_assistant {
+
+class UserData;
+struct LoginChoice;
+struct CollectUserDataOptions;
 
 // Manages a map of |ValueProto| instances and notifies observers of changes.
 //
@@ -39,7 +44,11 @@ class UserModel {
   };
 
   UserModel();
-  ~UserModel();
+
+  UserModel(const UserModel&) = delete;
+  UserModel& operator=(const UserModel&) = delete;
+
+  virtual ~UserModel();
 
   base::WeakPtr<UserModel> GetWeakPtr();
 
@@ -85,8 +94,22 @@ class UserModel {
   // Sets the selected credit card. A nullptr |card| will clear the selected
   // card. This also sets it to |user_data|.
   // TODO(b/187286050) complete the migration to UserModel and remove UserData.
-  void SetSelectedCreditCard(std::unique_ptr<autofill::CreditCard> card,
-                             UserData* user_data);
+  virtual void SetSelectedCreditCard(std::unique_ptr<autofill::CreditCard> card,
+                                     UserData* user_data);
+
+  // Sets the selected login choice. A nullptr |login_choice| will clear the
+  // selected login choice. This sets it to |user_data|.
+  // TODO(b/187286050) complete the migration to UserModel and remove UserData.
+  void SetSelectedLoginChoice(std::unique_ptr<LoginChoice> login_choice,
+                              UserData* user_data);
+
+  // Sets the selected login choice. If the identifier can not be found the
+  // selected login choice will be cleared. This sets it to |user_data|.
+  // TODO(b/187286050) complete the migration to UserModel and remove UserData.
+  void SetSelectedLoginChoiceByIdentifier(
+      const std::string& identifier,
+      const CollectUserDataOptions& collect_user_data_options,
+      UserData* user_data);
 
   // Replaces the set of available autofill profiles.
   void SetAutofillProfiles(
@@ -96,7 +119,7 @@ class UserModel {
   // Sets the selected autofill profile for |profile_name|. A nullptr |profile|
   // will clear the entry. The profile is also set in |user_data|.
   // TODO(b/187286050) complete the migration to UserModel and remove UserData.
-  void SetSelectedAutofillProfile(
+  virtual void SetSelectedAutofillProfile(
       const std::string& profile_name,
       std::unique_ptr<autofill::AutofillProfile> profile,
       UserData* user_data);
@@ -139,21 +162,22 @@ class UserModel {
  private:
   friend class UserModelTest;
 
-  std::map<std::string, ValueProto> values_;
+  base::flat_map<std::string, ValueProto> values_;
   // Guid to credit card map.
-  std::map<std::string, std::unique_ptr<autofill::CreditCard>> credit_cards_;
+  base::flat_map<std::string, std::unique_ptr<autofill::CreditCard>>
+      credit_cards_;
   // The selected credit card.
   std::unique_ptr<autofill::CreditCard> selected_card_;
   // Guid to profile map.
-  std::map<std::string, std::unique_ptr<autofill::AutofillProfile>> profiles_;
+  base::flat_map<std::string, std::unique_ptr<autofill::AutofillProfile>>
+      profiles_;
   // Profile name to profile map.
-  std::map<std::string, std::unique_ptr<autofill::AutofillProfile>>
+  base::flat_map<std::string, std::unique_ptr<autofill::AutofillProfile>>
       selected_profiles_;
 
   GURL current_url_;
   base::ObserverList<Observer> observers_;
   base::WeakPtrFactory<UserModel> weak_ptr_factory_{this};
-  DISALLOW_COPY_AND_ASSIGN(UserModel);
 };
 
 }  //  namespace autofill_assistant

@@ -9,7 +9,9 @@
 #include <string>
 #include <vector>
 
+#include "ash/public/cpp/style/color_mode_observer.h"
 #include "base/memory/ref_counted.h"
+#include "base/memory/weak_ptr.h"
 #include "chrome/browser/ui/views/extensions/extension_dialog_observer.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/native_widget_types.h"  // gfx::NativeWindow
@@ -36,7 +38,8 @@ class SelectFilePolicy;
 // Shows a dialog box for selecting a file or a folder, using the
 // file manager extension implementation.
 class SelectFileDialogExtension : public ui::SelectFileDialog,
-                                  public ExtensionDialogObserver {
+                                  public ExtensionDialogObserver,
+                                  public ash::ColorModeObserver {
  public:
   // Opaque ID type for identifying the tab spawned each dialog, unique for
   // every WebContents or every Android task ID.
@@ -49,13 +52,16 @@ class SelectFileDialogExtension : public ui::SelectFileDialog,
       ui::SelectFileDialog::Listener* listener,
       std::unique_ptr<ui::SelectFilePolicy> policy);
 
-  // BaseShellDialog implementation.
+  // ui::SelectFileDialog:
   bool IsRunning(gfx::NativeWindow owner_window) const override;
   void ListenerDestroyed() override;
 
-  // ExtensionDialog::Observer implementation.
+  // ExtensionDialogObserver:
   void ExtensionDialogClosing(ExtensionDialog* dialog) override;
   void ExtensionTerminated(ExtensionDialog* dialog) override;
+
+  // ash::ColorModeObserver:
+  void OnColorModeChanged(bool dark_mode_enabled) override;
 
   // Routes callback to appropriate SelectFileDialog::Listener based on the
   // owning |web_contents|.
@@ -77,10 +83,11 @@ class SelectFileDialogExtension : public ui::SelectFileDialog,
                             int file_type_index,
                             const std::string& search_query,
                             bool show_android_picker_apps,
+                            std::vector<std::string> volume_filter,
                             Profile* profile);
 
   // Allows access to the extension's main frame for injecting javascript.
-  content::RenderFrameHost* GetMainFrame();
+  content::RenderFrameHost* GetPrimaryMainFrame();
 
   // Call SelectFile with params specific to Chrome OS file manager.
   // |owner| specifies the window and app type that opened the dialog.
@@ -93,8 +100,12 @@ class SelectFileDialogExtension : public ui::SelectFileDialog,
     aura::Window* window = nullptr;
     // Android task ID if the owner window is an Android app.
     absl::optional<int> android_task_id;
-    // Lacros window ID if the owner window is a Lacros browser.
+    // Lacros window ID if the owner window is a Lacros browser. This field
+    // can be nullopt even when is_lacros is true, for dialogs that are not
+    // owned by a particular window, aka "modeless" dialog.
     absl::optional<std::string> lacros_window_id;
+    // Set to true only if SelectFileAsh opened the dialog.
+    bool is_lacros = false;
   };
   void SelectFileWithFileManagerParams(Type type,
                                        const std::u16string& title,
@@ -104,10 +115,11 @@ class SelectFileDialogExtension : public ui::SelectFileDialog,
                                        void* params,
                                        const Owner& owner,
                                        const std::string& search_query,
-                                       bool show_android_picker_apps);
+                                       bool show_android_picker_apps,
+                                       bool use_media_store_filter = false);
 
  protected:
-  // SelectFileDialog implementation.
+  // ui::SelectFileDialog:
   void SelectFileImpl(Type type,
                       const std::u16string& title,
                       const base::FilePath& default_path,
@@ -180,6 +192,7 @@ class SelectFileDialogExtension : public ui::SelectFileDialog,
   int selection_index_ = 0;
   bool can_resize_ = true;
   void* params_ = nullptr;
+  base::WeakPtrFactory<SelectFileDialogExtension> weak_factory_{this};
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_SELECT_FILE_DIALOG_EXTENSION_H_

@@ -7,10 +7,8 @@
  * the browser.
  */
 
-// clang-format off
 import {assertNotReached} from 'chrome://resources/js/assert.m.js';
-import {addSingletonGetter, sendWithPromise} from 'chrome://resources/js/cr.m.js';
-// clang-format on
+import {sendWithPromise} from 'chrome://resources/js/cr.m.js';
 
 /**
  * @typedef {{
@@ -109,7 +107,7 @@ export let UpdateStatusChangedEvent;
  */
 export function browserChannelToI18nId(channel, isLts) {
   if (isLts) {
-    return 'aboutChannelLongTermStable';
+    return 'aboutChannelLongTermSupport';
   }
 
   switch (channel) {
@@ -175,6 +173,15 @@ export class AboutPageBrowserProxy {
   /** Opens the OS help page. */
   openOsHelpPage() {}
 
+  /** Opens the firmware updates page. */
+  openFirmwareUpdatesPage() {}
+
+  /**
+   * Requests the number of firmware updates.
+   * @return {!Promise<number>}
+   */
+  getFirmwareUpdateCount() {}
+
   /**
    * Checks for available update and applies if it exists.
    */
@@ -232,12 +239,36 @@ export class AboutPageBrowserProxy {
    * @return {!Promise<boolean>}
    */
   checkInternetConnection() {}
+
+  /** @return {!Promise<boolean>} */
+  isManagedAutoUpdateEnabled() {}
+
+  /** @return {!Promise<boolean>} */
+  isConsumerAutoUpdateEnabled() {}
+
+  /**
+   * @param {boolean} enable
+   */
+  setConsumerAutoUpdate(enable) {}
 }
+
+/** @type {?AboutPageBrowserProxy} */
+let instance = null;
 
 /**
  * @implements {AboutPageBrowserProxy}
  */
 export class AboutPageBrowserProxyImpl {
+  /** @return {!AboutPageBrowserProxy} */
+  static getInstance() {
+    return instance || (instance = new AboutPageBrowserProxyImpl());
+  }
+
+  /** @param {!AboutPageBrowserProxy} obj */
+  static setInstanceForTesting(obj) {
+    instance = obj;
+  }
+
   /** @override */
   pageReady() {
     chrome.send('aboutPageReady');
@@ -269,6 +300,16 @@ export class AboutPageBrowserProxyImpl {
   /** @override */
   openOsHelpPage() {
     chrome.send('openOsHelpPage');
+  }
+
+  /** @override */
+  openFirmwareUpdatesPage() {
+    chrome.send('openFirmwareUpdatesPage');
+  }
+
+  /** @override */
+  getFirmwareUpdateCount() {
+    return sendWithPromise('getFirmwareUpdateCount');
   }
 
   /** @override */
@@ -320,6 +361,19 @@ export class AboutPageBrowserProxyImpl {
   refreshTPMFirmwareUpdateStatus() {
     chrome.send('refreshTPMFirmwareUpdateStatus');
   }
-}
 
-addSingletonGetter(AboutPageBrowserProxyImpl);
+  /** @override */
+  isManagedAutoUpdateEnabled() {
+    return sendWithPromise('isManagedAutoUpdateEnabled');
+  }
+
+  /** @override */
+  isConsumerAutoUpdateEnabled() {
+    return sendWithPromise('isConsumerAutoUpdateEnabled');
+  }
+
+  /** @override */
+  setConsumerAutoUpdate(enable) {
+    chrome.send('setConsumerAutoUpdate', [enable]);
+  }
+}

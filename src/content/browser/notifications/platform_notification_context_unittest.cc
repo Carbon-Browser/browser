@@ -8,6 +8,7 @@
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/bind.h"
@@ -18,7 +19,6 @@
 #include "content/browser/service_worker/embedded_worker_test_helper.h"
 #include "content/browser/service_worker/service_worker_context_wrapper.h"
 #include "content/public/browser/notification_database_data.h"
-#include "content/public/browser/permission_type.h"
 #include "content/public/common/content_client.h"
 #include "content/public/common/content_features.h"
 #include "content/public/test/browser_task_environment.h"
@@ -27,6 +27,7 @@
 #include "content/test/mock_platform_notification_service.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/notifications/notification_resources.h"
+#include "third_party/blink/public/common/permissions/permission_utils.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_registration.mojom.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_registration_options.mojom.h"
@@ -48,7 +49,7 @@ class PlatformNotificationContextTest : public ::testing::Test {
     // Provide a mock permission manager to the |browser_context_|.
     permission_manager_ = new ::testing::NiceMock<MockPermissionManager>();
     browser_context_.SetPermissionControllerDelegate(
-        base::WrapUnique(permission_manager_));
+        base::WrapUnique(permission_manager_.get()));
     browser_context_.SetPlatformNotificationService(
         std::make_unique<MockPlatformNotificationService>(&browser_context_));
   }
@@ -210,7 +211,8 @@ class PlatformNotificationContextTest : public ::testing::Test {
   void SetPermissionStatus(const GURL& origin,
                            blink::mojom::PermissionStatus permission_status) {
     ON_CALL(*permission_manager_,
-            GetPermissionStatus(PermissionType::NOTIFICATIONS, origin, origin))
+            GetPermissionStatus(blink::PermissionType::NOTIFICATIONS, origin,
+                                origin))
         .WillByDefault(Return(permission_status));
   }
 
@@ -245,7 +247,7 @@ class PlatformNotificationContextTest : public ::testing::Test {
 
  private:
   TestBrowserContext browser_context_;
-  MockPermissionManager* permission_manager_ = nullptr;
+  raw_ptr<MockPermissionManager> permission_manager_ = nullptr;
 
   bool success_ = false;
   size_t deleted_count_ = 0;
@@ -807,7 +809,7 @@ TEST_F(PlatformNotificationContextTest, SynchronizeNotifications) {
 
   // Let some time pass so the stored notification is not considered new anymore
   // and gets deleted in the next synchronize pass.
-  task_environment_.FastForwardBy(base::TimeDelta::FromSeconds(1));
+  task_environment_.FastForwardBy(base::Seconds(1));
 
   // Delete the notification from the display service without removing it from
   // the database. It should automatically synchronize on the next read.
@@ -847,7 +849,7 @@ TEST_F(PlatformNotificationContextTest, DeleteOldNotifications) {
   WriteNotificationDataSync(context.get(), origin, data);
 
   // Let some time pass but not enough to delete the notification yet.
-  task_environment_.FastForwardBy(base::TimeDelta::FromDays(5));
+  task_environment_.FastForwardBy(base::Days(5));
   context->TriggerNotifications();
   // Allow for closing notifications on the UI thread.
   base::RunLoop().RunUntilIdle();
@@ -864,7 +866,7 @@ TEST_F(PlatformNotificationContextTest, DeleteOldNotifications) {
 
   // Let some more time pass so the first notification is not considered new
   // anymore and should get closed while the second one should stay.
-  task_environment_.FastForwardBy(base::TimeDelta::FromDays(2));
+  task_environment_.FastForwardBy(base::Days(2));
   context->TriggerNotifications();
   // Allow for closing notifications on the UI thread.
   base::RunLoop().RunUntilIdle();
@@ -923,11 +925,11 @@ TEST_F(PlatformNotificationContextTest, WriteReadNotificationResources) {
 
   // Store resources for the new notification.
   std::vector<NotificationResourceData> resources;
-  resources.push_back(
-      {notification_id, origin, blink::NotificationResources()});
+  resources.emplace_back(notification_id, origin,
+                         blink::NotificationResources());
   // Also try inserting resources for an invalid notification id.
   std::string invalid_id = "invalid-id";
-  resources.push_back({invalid_id, origin, blink::NotificationResources()});
+  resources.emplace_back(invalid_id, origin, blink::NotificationResources());
   // Writing resources should succeed.
   ASSERT_TRUE(
       WriteNotificationResourcesSync(context.get(), std::move(resources)));
@@ -957,15 +959,15 @@ TEST_F(PlatformNotificationContextTest, ReDisplayNotifications) {
   NotificationDatabaseData data1;
   data1.notification_resources = blink::NotificationResources();
   data1.notification_data.show_trigger_timestamp =
-      base::Time::Now() + base::TimeDelta::FromDays(10);
+      base::Time::Now() + base::Days(10);
   WriteNotificationDataSync(context.get(), origin, data1);
   // 1 notification with stored resources.
   NotificationDatabaseData data2;
   std::string notification_id =
       WriteNotificationDataSync(context.get(), origin, data2);
   std::vector<NotificationResourceData> resources;
-  resources.push_back(
-      {notification_id, origin, blink::NotificationResources()});
+  resources.emplace_back(notification_id, origin,
+                         blink::NotificationResources());
   WriteNotificationResourcesSync(context.get(), std::move(resources));
   // 1 notification without resources.
   NotificationDatabaseData data3;
@@ -1020,7 +1022,7 @@ TEST_F(PlatformNotificationContextTest, CountVisibleNotification) {
       WriteNotificationDataSync(context.get(), origin, data);
   // Scheduled notification won't be visible.
   data.notification_data.show_trigger_timestamp =
-      base::Time::Now() + base::TimeDelta::FromDays(10);
+      base::Time::Now() + base::Days(10);
   WriteNotificationDataSync(context.get(), origin, data);
 
   // Expect to see three notifications.
@@ -1153,7 +1155,7 @@ TEST_F(PlatformNotificationContextTest, GetOldestNotificationTime) {
 
     // This is done to simulate a change in time to have notifications from
     // different times and days.
-    task_environment_.FastForwardBy(base::TimeDelta::FromDays(1));
+    task_environment_.FastForwardBy(base::Days(1));
   }
 
   // Verify that the 5 notifications are present.

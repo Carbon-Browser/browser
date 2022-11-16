@@ -22,6 +22,7 @@
 #include "device/fido/authenticator_supported_options.h"
 #include "device/fido/features.h"
 #include "device/fido/fido_constants.h"
+#include "device/fido/fido_transport_protocol.h"
 #include "device/fido/opaque_attestation_statement.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -118,6 +119,7 @@ ReadCTAPMakeCredentialResponse(FidoTransportProtocol transport_used,
 }
 
 absl::optional<AuthenticatorGetAssertionResponse> ReadCTAPGetAssertionResponse(
+    FidoTransportProtocol transport_used,
     const absl::optional<cbor::Value>& cbor) {
   if (!cbor || !cbor->is_map())
     return absl::nullopt;
@@ -140,6 +142,8 @@ absl::optional<AuthenticatorGetAssertionResponse> ReadCTAPGetAssertionResponse(
   auto signature = it->second.GetBytestring();
   AuthenticatorGetAssertionResponse response(std::move(*auth_data),
                                              std::move(signature));
+
+  response.transport_used = transport_used;
 
   it = response_map.find(CBOR(0x01));
   if (it != response_map.end()) {
@@ -164,6 +168,15 @@ absl::optional<AuthenticatorGetAssertionResponse> ReadCTAPGetAssertionResponse(
       return absl::nullopt;
 
     response.num_credentials = it->second.GetUnsigned();
+  }
+
+  it = response_map.find(CBOR(0x06));
+  if (it != response_map.end()) {
+    if (!it->second.is_bool() || response.num_credentials.has_value()) {
+      return absl::nullopt;
+    }
+
+    response.user_selected = it->second.GetBool();
   }
 
   it = response_map.find(CBOR(0x07));
@@ -281,6 +294,8 @@ absl::optional<AuthenticatorGetInfoResponse> ReadCTAPGetInfoResponse(
         options.supports_cred_protect = true;
       } else if (extension_str == kExtensionCredBlob) {
         cred_blob_extension_seen = true;
+      } else if (extension_str == kExtensionMinPINLength) {
+        options.supports_min_pin_length_extension = true;
       }
       extensions.push_back(extension_str);
     }
@@ -511,6 +526,24 @@ absl::optional<AuthenticatorGetInfoResponse> ReadCTAPGetInfoResponse(
 
     response.max_credential_id_length =
         base::saturated_cast<uint32_t>(it->second.GetUnsigned());
+  }
+
+  it = response_map.find(CBOR(0x09));
+  if (it != response_map.end()) {
+    if (!it->second.is_array())
+      return absl::nullopt;
+
+    response.transports.emplace();
+    for (const auto& transport_str : it->second.GetArray()) {
+      if (!transport_str.is_string())
+        return absl::nullopt;
+
+      absl::optional<FidoTransportProtocol> maybe_transport(
+          ConvertToFidoTransportProtocol(transport_str.GetString()));
+      if (maybe_transport.has_value()) {
+        response.transports->insert(*maybe_transport);
+      }
+    }
   }
 
   it = response_map.find(CBOR(0x0a));

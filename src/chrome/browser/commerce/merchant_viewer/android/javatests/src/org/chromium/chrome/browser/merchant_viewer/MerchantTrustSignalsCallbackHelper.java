@@ -5,7 +5,7 @@
 package org.chromium.chrome.browser.merchant_viewer;
 
 import org.chromium.base.test.util.CallbackHelper;
-import org.chromium.chrome.browser.merchant_viewer.proto.MerchantTrustSignalsOuterClass.MerchantTrustSignals;
+import org.chromium.components.commerce.core.ShoppingService.MerchantInfo;
 
 /**
  * Extends {@link CallbackHelper} to offer a set of convenience methods for handling merchant trust
@@ -13,7 +13,7 @@ import org.chromium.chrome.browser.merchant_viewer.proto.MerchantTrustSignalsOut
  */
 class MerchantTrustSignalsCallbackHelper extends CallbackHelper {
     private MerchantTrustMessageContext mResult;
-    private MerchantTrustSignals mMerchantTrustSignalsResult;
+    private MerchantInfo mMerchantInfoResult;
 
     /** Handles callbacks with type {@link MerchantTrustMessageContext}. */
     void notifyCalled(MerchantTrustMessageContext context) {
@@ -21,20 +21,18 @@ class MerchantTrustSignalsCallbackHelper extends CallbackHelper {
         notifyCalled();
     }
 
-    /** Handles callbacks with type {@link MerchantTrustSignals}. */
-    void notifyCalled(MerchantTrustSignals signals) {
-        mMerchantTrustSignalsResult = signals;
+    /** Handles callbacks with type {@link MerchantInfo}. */
+    void notifyCalled(MerchantInfo info) {
+        mMerchantInfoResult = info;
         notifyCalled();
     }
 
-    /** Returns the cached {@link MerchantTrustSignals} result. */
-
-    MerchantTrustSignals getMerchantTrustSignalsResult() {
-        return mMerchantTrustSignalsResult;
+    /** Returns the cached {@link MerchantInfo} result. */
+    MerchantInfo getMerchantTrustSignalsResult() {
+        return mMerchantInfoResult;
     }
 
     /** Returns the cached {@link MerchantTrustMessageContext} result. */
-
     MerchantTrustMessageContext getResult() {
         return mResult;
     }

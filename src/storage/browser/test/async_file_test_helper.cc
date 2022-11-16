@@ -4,6 +4,7 @@
 
 #include "storage/browser/test/async_file_test_helper.h"
 
+#include <memory>
 #include <utility>
 
 #include "base/bind.h"
@@ -11,6 +12,7 @@
 #include "base/files/scoped_temp_dir.h"
 #include "base/run_loop.h"
 #include "storage/browser/blob/shareable_file_reference.h"
+#include "storage/browser/file_system/copy_or_move_hook_delegate.h"
 #include "storage/browser/file_system/file_system_backend.h"
 #include "storage/browser/file_system/file_system_context.h"
 #include "storage/browser/file_system/file_system_operation_runner.h"
@@ -102,20 +104,23 @@ const int64_t AsyncFileTestHelper::kDontCheckSize = -1;
 base::File::Error AsyncFileTestHelper::Copy(FileSystemContext* context,
                                             const FileSystemURL& src,
                                             const FileSystemURL& dest) {
-  return CopyWithProgress(context, src, dest, CopyOrMoveProgressCallback());
+  return CopyWithHookDelegate(
+      context, src, dest, FileSystemOperation::ERROR_BEHAVIOR_ABORT,
+      std::make_unique<storage::CopyOrMoveHookDelegate>());
 }
 
-base::File::Error AsyncFileTestHelper::CopyWithProgress(
+base::File::Error AsyncFileTestHelper::CopyWithHookDelegate(
     FileSystemContext* context,
     const FileSystemURL& src,
     const FileSystemURL& dest,
-    const CopyOrMoveProgressCallback& progress_callback) {
+    FileSystemOperation::ErrorBehavior error_behavior,
+    std::unique_ptr<CopyOrMoveHookDelegate> copy_or_move_hook_delegate) {
   base::File::Error result = base::File::FILE_ERROR_FAILED;
   base::RunLoop run_loop;
-  context->operation_runner()->Copy(src, dest, FileSystemOperation::OPTION_NONE,
-                                    FileSystemOperation::ERROR_BEHAVIOR_ABORT,
-                                    progress_callback,
-                                    AssignAndQuitCallback(&run_loop, &result));
+  context->operation_runner()->Copy(
+      src, dest, FileSystemOperation::CopyOrMoveOptionSet(), error_behavior,
+      std::move(copy_or_move_hook_delegate),
+      AssignAndQuitCallback(&run_loop, &result));
   run_loop.Run();
   return result;
 }
@@ -127,7 +132,7 @@ base::File::Error AsyncFileTestHelper::CopyFileLocal(
   base::File::Error result = base::File::FILE_ERROR_FAILED;
   base::RunLoop run_loop;
   context->operation_runner()->CopyFileLocal(
-      src, dest, FileSystemOperation::OPTION_NONE,
+      src, dest, FileSystemOperation::CopyOrMoveOptionSet(),
       FileSystemOperation::CopyFileProgressCallback(),
       AssignAndQuitCallback(&run_loop, &result));
   run_loop.Run();
@@ -137,28 +142,23 @@ base::File::Error AsyncFileTestHelper::CopyFileLocal(
 base::File::Error AsyncFileTestHelper::Move(FileSystemContext* context,
                                             const FileSystemURL& src,
                                             const FileSystemURL& dest) {
-  base::File::Error result = base::File::FILE_ERROR_FAILED;
-  base::RunLoop run_loop;
-  context->operation_runner()->Move(
-      src, dest, FileSystemOperation::OPTION_NONE,
-      storage::FileSystemOperation::ERROR_BEHAVIOR_ABORT,
-      storage::FileSystemOperation::CopyOrMoveProgressCallback(),
-      AssignAndQuitCallback(&run_loop, &result));
-  run_loop.Run();
-  return result;
+  return MoveWithHookDelegate(
+      context, src, dest, FileSystemOperation::ERROR_BEHAVIOR_ABORT,
+      std::make_unique<storage::CopyOrMoveHookDelegate>());
 }
 
-base::File::Error AsyncFileTestHelper::MoveWithProgress(
+base::File::Error AsyncFileTestHelper::MoveWithHookDelegate(
     FileSystemContext* context,
     const FileSystemURL& src,
     const FileSystemURL& dest,
-    const CopyOrMoveProgressCallback& progress_callback) {
+    FileSystemOperation::ErrorBehavior error_behavior,
+    std::unique_ptr<CopyOrMoveHookDelegate> copy_or_move_hook_delegate) {
   base::File::Error result = base::File::FILE_ERROR_FAILED;
   base::RunLoop run_loop;
-  context->operation_runner()->Move(src, dest, FileSystemOperation::OPTION_NONE,
-                                    FileSystemOperation::ERROR_BEHAVIOR_ABORT,
-                                    progress_callback,
-                                    AssignAndQuitCallback(&run_loop, &result));
+  context->operation_runner()->Move(
+      src, dest, FileSystemOperation::CopyOrMoveOptionSet(), error_behavior,
+      std::move(copy_or_move_hook_delegate),
+      AssignAndQuitCallback(&run_loop, &result));
   run_loop.Run();
   return result;
 }
@@ -170,7 +170,7 @@ base::File::Error AsyncFileTestHelper::MoveFileLocal(
   base::File::Error result = base::File::FILE_ERROR_FAILED;
   base::RunLoop run_loop;
   context->operation_runner()->MoveFileLocal(
-      src, dest, FileSystemOperation::OPTION_NONE,
+      src, dest, FileSystemOperation::CopyOrMoveOptionSet(),
       AssignAndQuitCallback(&run_loop, &result));
   run_loop.Run();
   return result;
@@ -300,16 +300,17 @@ bool AsyncFileTestHelper::DirectoryExists(FileSystemContext* context,
 }
 
 blink::mojom::QuotaStatusCode AsyncFileTestHelper::GetUsageAndQuota(
-    QuotaManager* quota_manager,
-    const url::Origin& origin,
+    QuotaManagerProxy* quota_manager_proxy,
+    const blink::StorageKey& storage_key,
     FileSystemType type,
     int64_t* usage,
     int64_t* quota) {
   blink::mojom::QuotaStatusCode status =
       blink::mojom::QuotaStatusCode::kUnknown;
   base::RunLoop run_loop;
-  quota_manager->GetUsageAndQuota(
-      blink::StorageKey(origin), FileSystemTypeToQuotaStorageType(type),
+  quota_manager_proxy->GetUsageAndQuota(
+      storage_key, FileSystemTypeToQuotaStorageType(type),
+      base::SequencedTaskRunnerHandle::Get(),
       base::BindOnce(&DidGetUsageAndQuota, &status, usage, quota,
                      run_loop.QuitWhenIdleClosure()));
   run_loop.Run();

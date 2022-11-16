@@ -154,8 +154,8 @@ class FunctorHasRestrictedIdentities
 PatternAccountRestriction PatternAccountRestrictionFromPreference(
     PrefService* pref_service) {
   auto maybe_restriction = PatternAccountRestrictionFromValue(
-      pref_service->GetList(prefs::kRestrictAccountsToPatterns));
-  CHECK(maybe_restriction.has_value());
+      pref_service->GetList(prefs::kRestrictAccountsToPatterns)
+          ->GetListDeprecated());
   return *std::move(maybe_restriction);
 }
 
@@ -260,6 +260,12 @@ UIImage* ChromeAccountManagerService::GetIdentityAvatarWithIdentity(
   return [avatar_cache resizedAvatarForIdentity:identity];
 }
 
+bool ChromeAccountManagerService::IsServiceSupported() const {
+  ios::ChromeIdentityService* identity_service =
+      ios::GetChromeBrowserProvider().GetChromeIdentityService();
+  return identity_service->IsServiceSupported();
+}
+
 void ChromeAccountManagerService::Shutdown() {
   if (pref_service_) {
     registrar_.RemoveAll();
@@ -273,6 +279,13 @@ void ChromeAccountManagerService::AddObserver(Observer* observer) {
 
 void ChromeAccountManagerService::RemoveObserver(Observer* observer) {
   observer_list_.RemoveObserver(observer);
+}
+
+void ChromeAccountManagerService::OnAccessTokenRefreshFailed(
+    ChromeIdentity* identity,
+    NSDictionary* user_info) {
+  for (auto& observer : observer_list_)
+    observer.OnAccessTokenRefreshFailed(identity, user_info);
 }
 
 void ChromeAccountManagerService::OnIdentityListChanged(
@@ -294,6 +307,12 @@ void ChromeAccountManagerService::OnChromeIdentityServiceDidChange(
     ios::ChromeIdentityService* new_service) {
   identity_service_observation_.Observe(
       ios::GetChromeBrowserProvider().GetChromeIdentityService());
+  // All avatar caches needs to be removed to avoid mixing fake identities and
+  // sso identities.
+  default_table_view_avatar_cache_ = nil;
+  small_size_avatar_cache_ = nil;
+  default_large_avatar_cache_ = nil;
+  OnIdentityListChanged(false);
 }
 
 void ChromeAccountManagerService::OnChromeBrowserProviderWillBeDestroyed() {

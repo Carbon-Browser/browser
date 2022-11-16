@@ -11,9 +11,6 @@
 // Feature to open tab switcher after sliding down the toolbar.
 extern const base::Feature kExpandedTabStrip;
 
-// Feature to apply UI Refresh theme to the settings.
-extern const base::Feature kSettingsRefresh;
-
 // Test-only: Feature flag used to verify that EG2 can trigger flags. Must be
 // always disabled by default, because it is used to verify that enabling
 // features in tests works.
@@ -22,26 +19,17 @@ extern const base::Feature kTestFeature;
 // Feature flag to enable Shared Highlighting (Link to Text).
 extern const base::Feature kSharedHighlightingIOS;
 
-// Feature flag that enables 'default browser' screen in FRE to suggest the
-// users to update the default browser in the Settings.app.
-extern const base::Feature kEnableFREDefaultBrowserScreen;
+// Feature flag for testing the 'default browser' screen in FRE and different
+// experiments to suggest the users to update the default browser in the
+// Settings.app.
+extern const base::Feature kEnableFREDefaultBrowserPromoScreen;
 
 // Feature flag that enables using the FRE UI module to show first run screens.
 extern const base::Feature kEnableFREUIModuleIOS;
 
-// Feature flag that enables using the strings of the previous sync screen in
-// the current FRE.
-extern const base::Feature kOldSyncStringFRE;
-
-// Feature flag that enables taking fullpage screenshots of a webpage.
-extern const base::Feature kEnableFullPageScreenshot;
-
 // TODO(crbug.com/1128242): Remove this flag after the refactoring work is
 // finished. Flag to modernize the tabstrip without disturbing the existing one.
 extern const base::Feature kModernTabStrip;
-
-// Adds a setting to enable biometric authentication for incognito tabs.
-extern const base::Feature kIncognitoAuthentication;
 
 // Enables the usage of dark mode color while in Incognito mode.
 extern const base::Feature kIncognitoBrandConsistencyForIOS;
@@ -49,39 +37,65 @@ extern const base::Feature kIncognitoBrandConsistencyForIOS;
 // Feature flag to enable revamped Incognito NTP page.
 extern const base::Feature kIncognitoNtpRevamp;
 
-// Feature flag that experiments with new location permissions user experiences.
-extern const base::Feature kLocationPermissionsPrompt;
+// Feature flag to enable third-party intents in Incognito.
+extern const base::Feature kIOS3PIntentsInIncognito;
 
 // Feature flag that experiments with the default browser fullscreen promo UI.
 extern const base::Feature kDefaultBrowserFullscreenPromoExperiment;
 
-// Feature flag that enables non-modal default browser promos.
-extern const base::Feature kDefaultPromoNonModal;
+// Feature flag that allows external apps to show default browser settings.
+extern const base::Feature kDefaultBrowserIntentsShowSettings;
 
-// Feature flag that enables tailored fullscreen browser promos.
-extern const base::Feature kDefaultPromoTailored;
+// Feature flag that shows iOS 15 context menu, instead of tooltip popover,
+// during a location bar long press gesture.
+extern const base::Feature kIOSLocationBarUseNativeContextMenu;
 
 // Feature flag that swaps the omnibox textfield implementation.
 extern const base::Feature kIOSNewOmniboxImplementation;
 
-// Feature flag that fixes omnibox behavior when using iOS native dictation
-extern const base::Feature kIOSOmniboxAllowEditsDuringDictation;
+// Feature flag that toggles the SwiftUI omnibox popup implementation.
+extern const base::Feature kIOSOmniboxUpdatedPopupUI;
 
-// Feature flag that enables persisting the Crash Restore Infobar across
-// navigations.
-extern const base::Feature kIOSPersistCrashRestore;
+// Parameter name for the parameter controlling which UI variation to use for
+// the SwiftUI omnibox popup.
+extern const char kIOSOmniboxUpdatedPopupUIVariationName[];
 
-// Enables the Search History Link in Clear Browsing Data for iOS.
-extern const base::Feature kSearchHistoryLinkIOS;
+// Variation 1 for the parameter controlling which UI variation to use for
+// the SwiftUI omnibox popup.
+extern const char kIOSOmniboxUpdatedPopupUIVariation1[];
+// Variation 2 for the parameter controlling which UI variation to use for
+// the SwiftUI omnibox popup.
+extern const char kIOSOmniboxUpdatedPopupUIVariation2[];
 
 // Feature flag to enable removing any entry points to the history UI from
 // Incognito mode.
 extern const base::Feature kUpdateHistoryEntryPointsInIncognito;
 
-// Feature to update context menu actions.
-extern const base::Feature kContextMenuActionsRefresh;
+// Feature flag to enable using Lens to search for images.
+extern const base::Feature kUseLensToSearchForImage;
 
-// Whether the ContextMenuActionsRefresh flag is enabled.
-bool IsContextMenuActionsRefreshEnabled();
+// Feature flag to enable duplicate NTP cleanup.
+extern const base::Feature kRemoveExcessNTPs;
+
+// Feature flag to enable shortened instruction to turn on Password AutoFill for
+// Chrome.
+extern const base::Feature kEnableShortenedPasswordAutoFillInstruction;
+
+// Feature flag to show the setting allowing the user to choose the mode
+// (Desktop/Mobile) in which the pages will be requested by default.
+extern const base::Feature kAddSettingForDefaultPageMode;
+
+// Feature flag to switch images to SFSymbols when enabled.
+extern const base::Feature kUseSFSymbols;
+
+// Feature flag to enable Calendar event in experience kit.
+extern const base::Feature kCalendarExperienceKit;
+
+// Feature flag to enable Apple Calendar event in experience kit.
+extern const base::Feature kEnableExpKitAppleCalendar;
+
+// Feature flag to enable Text Classifier entity detection in experience kit
+// calendar.
+extern const base::Feature kEnableExpKitCalendarTextClassifier;
 
 #endif  // IOS_CHROME_BROWSER_UI_UI_FEATURE_FLAGS_H_

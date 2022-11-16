@@ -98,10 +98,9 @@ class EduAccountLoginHandler : public content::WebUIMessageHandler,
   void RegisterMessages() override;
   void OnJavascriptDisallowed() override;
 
-  void HandleIsNetworkReady(const base::ListValue* args);
-  void HandleGetParents(const base::ListValue* args);
-  void HandleCloseDialog(const base::ListValue* args);
-  void HandleParentSignin(const base::ListValue* args);
+  void HandleIsNetworkReady(const base::Value::List& args);
+  void HandleGetParents(const base::Value::List& args);
+  void HandleParentSignin(const base::Value::List& args);
 
   virtual void FetchFamilyMembers();
   virtual void FetchParentImages(

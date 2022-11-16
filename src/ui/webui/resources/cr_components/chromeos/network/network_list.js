@@ -64,6 +64,9 @@ Polymer({
      */
     deviceState: Object,
 
+    /** @type {!chromeos.networkConfig.mojom.GlobalPolicy|undefined} */
+    globalPolicy: Object,
+
     /**
      * Contains |networks| + |customItems|.
      * @private {!Array<!NetworkList.NetworkListItemType>}
@@ -86,6 +89,9 @@ Polymer({
      * @private
      */
     listBlurred_: Boolean,
+
+    /** Disables all the network items. */
+    disabled: Boolean,
   },
 
   behaviors: [CrScrollableBehavior, ListPropertyUpdateBehavior],

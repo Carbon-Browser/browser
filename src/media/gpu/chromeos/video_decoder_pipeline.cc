@@ -4,29 +4,37 @@
 
 #include "media/gpu/chromeos/video_decoder_pipeline.h"
 
+#include <atomic>
 #include <memory>
 
 #include "base/bind.h"
+#include "base/command_line.h"
 #include "base/containers/contains.h"
 #include "base/memory/ptr_util.h"
-#include "base/sequenced_task_runner.h"
-#include "base/task/post_task.h"
+#include "base/no_destructor.h"
+#include "base/strings/string_number_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
+#include "base/threading/thread.h"
+#include "build/build_config.h"
 #include "gpu/config/gpu_driver_bug_workarounds.h"
 #include "media/base/async_destroy_video_decoder.h"
 #include "media/base/bind_to_current_loop.h"
 #include "media/base/limits.h"
 #include "media/base/media_log.h"
+#include "media/base/media_switches.h"
 #include "media/gpu/chromeos/dmabuf_video_frame_pool.h"
 #include "media/gpu/chromeos/image_processor.h"
 #include "media/gpu/chromeos/image_processor_factory.h"
+#include "media/gpu/chromeos/oop_video_decoder.h"
 #include "media/gpu/chromeos/platform_video_frame_pool.h"
 #include "media/gpu/macros.h"
 #include "media/media_buildflags.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 #if BUILDFLAG(USE_VAAPI)
+#include <drm_fourcc.h>
 #include "media/gpu/vaapi/vaapi_video_decoder.h"
 #elif BUILDFLAG(USE_V4L2_CODEC)
 #include "media/gpu/v4l2/v4l2_video_decoder.h"
@@ -37,39 +45,127 @@
 namespace media {
 namespace {
 
+using PixelLayoutCandidate = ImageProcessor::PixelLayoutCandidate;
+
 // The number of requested frames used for the image processor should be the
 // number of frames in media::Pipeline plus the current processing frame.
 constexpr size_t kNumFramesForImageProcessor = limits::kMaxVideoFrames + 1;
 
 // Preferred output formats in order of preference.
 // TODO(mcasas): query the platform for its preferred formats and modifiers.
-constexpr Fourcc::Value kPreferredRenderableFourccs[] = {
-    Fourcc::NV12,
-    Fourcc::YV12,
-    Fourcc::P010,
+constexpr Fourcc kPreferredRenderableFourccs[] = {
+    Fourcc(Fourcc::NV12),
+    Fourcc(Fourcc::P010),
+    // Only used for Hana (MT8173). Remove when that device reaches EOL.
+    Fourcc(Fourcc::YV12),
 };
 
 // Picks the preferred compositor renderable format from |candidates|, if any.
-// If |preferred_fourcc| is provided and considered renderable, it returns that.
-// Otherwise, it goes through |kPreferredRenderableFourccs| until it finds one
-// that's in |candidates|. If it can't find a renderable format in |candidates|,
-// it returns absl::nullopt.
+// If |preferred_fourcc| is provided, contained in |candidates|, and considered
+// renderable, it returns that. Otherwise, it goes through
+// |kPreferredRenderableFourccs| until it finds one that's in |candidates|. If
+// it can't find a renderable format in |candidates|, it returns absl::nullopt.
 absl::optional<Fourcc> PickRenderableFourcc(
     const std::vector<Fourcc>& candidates,
     absl::optional<Fourcc> preferred_fourcc) {
-  if (preferred_fourcc) {
-    DCHECK(base::Contains(candidates, preferred_fourcc));
-    for (const auto value : kPreferredRenderableFourccs) {
-      if (Fourcc(value) == preferred_fourcc)
-        return preferred_fourcc;
-    }
+  if (preferred_fourcc && base::Contains(candidates, *preferred_fourcc) &&
+      base::Contains(kPreferredRenderableFourccs, *preferred_fourcc)) {
+    return preferred_fourcc;
   }
-  for (const auto value : kPreferredRenderableFourccs) {
-    if (base::Contains(candidates, Fourcc(value)))
-      return Fourcc(value);
+  for (const auto& value : kPreferredRenderableFourccs) {
+    if (base::Contains(candidates, value))
+      return value;
   }
   return absl::nullopt;
 }
+
+class DecoderThreadPool {
+ public:
+  DecoderThreadPool(const DecoderThreadPool&) = delete;
+  DecoderThreadPool& operator=(const DecoderThreadPool&) = delete;
+
+  static scoped_refptr<base::SingleThreadTaskRunner> CreateTaskRunner() {
+    static base::NoDestructor<DecoderThreadPool> decoder_thread_pool;
+    return decoder_thread_pool->GetTaskRunner();
+  }
+
+ private:
+  friend class base::NoDestructor<DecoderThreadPool>;
+
+  DecoderThreadPool() {
+    base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
+    if (!command_line->HasSwitch(switches::kMaxChromeOSDecoderThreads))
+      return;
+
+    const std::string& num_threads_switch =
+        command_line->GetSwitchValueASCII(switches::kMaxChromeOSDecoderThreads);
+    if (num_threads_switch.empty()) {
+      LOG(ERROR) << "Failed to read the value of "
+                 << switches::kMaxChromeOSDecoderThreads;
+      return;
+    }
+    size_t num_threads = 0;
+    if (!base::StringToSizeT(num_threads_switch, &num_threads)) {
+      LOG(ERROR) << "Failed to convert the value of "
+                 << switches::kMaxChromeOSDecoderThreads << ", "
+                 << num_threads_switch << ", to integer";
+      return;
+    }
+
+    for (size_t i = 0; i < num_threads; i++) {
+      const std::string thread_name =
+          "VDecThread" +
+          base::NumberToString(base::checked_cast<unsigned int>(i));
+      decoder_threads_.emplace_back(
+          std::make_unique<base::Thread>(thread_name));
+      auto& thread = decoder_threads_.back();
+      if (!thread->Start()) {
+        LOG(ERROR) << "Failed to start thread: " << thread->thread_name();
+        decoder_threads_.clear();
+        task_runners_.clear();
+        return;
+      }
+
+      CHECK(thread->task_runner());
+      task_runners_.emplace_back(thread->task_runner());
+    }
+    VLOGF(2) << decoder_threads_.size() << " VideoDecoder Threads are created";
+  }
+
+  scoped_refptr<base::SingleThreadTaskRunner> GetTaskRunner() {
+    if (task_runners_.empty()) {
+      // Note that the decoder thread is created with base::MayBlock(). This is
+      // because the underlying |decoder_| may need to allocate a dummy buffer
+      // to discover the most native modifier accepted by the hardware video
+      // decoder; this in turn may need to open the render node, and this is the
+      // operation that may block.
+      return base::ThreadPool::CreateSingleThreadTaskRunner(
+          {base::WithBaseSyncPrimitives(), base::TaskPriority::USER_VISIBLE,
+           base::MayBlock()},
+          base::SingleThreadTaskRunnerThreadMode::DEDICATED);
+    }
+
+    // atomic unsigned integer may have undefined behavior on overflow.
+    // Use atomic signed integer, which is stated in the C++ specification;
+    // "Signed integer arithmetic is defined to use two's complement; there are
+    // no undefined results."
+    int atomic_index = counter_.fetch_add(1, std::memory_order_relaxed);
+    size_t index = 0;
+    if (atomic_index == INT_MIN) {
+      // Negating INT_MIN would cause an overflow, so just wrap around to
+      // INT_MAX.
+      atomic_index = INT_MAX;
+    }
+    index = base::checked_cast<size_t>(atomic_index >= 0 ? atomic_index
+                                                         : -atomic_index);
+    index %= task_runners_.size();
+    return task_runners_[index];
+  }
+
+  std::vector<std::unique_ptr<base::Thread>> decoder_threads_;
+  std::vector<scoped_refptr<base::SingleThreadTaskRunner>> task_runners_;
+  std::atomic_int counter_{0};
+};
 
 }  //  namespace
 
@@ -77,7 +173,8 @@ VideoDecoderMixin::VideoDecoderMixin(
     std::unique_ptr<MediaLog> media_log,
     scoped_refptr<base::SequencedTaskRunner> decoder_task_runner,
     base::WeakPtr<VideoDecoderMixin::Client> client)
-    : decoder_task_runner_(std::move(decoder_task_runner)),
+    : media_log_(std::move(media_log)),
+      decoder_task_runner_(std::move(decoder_task_runner)),
       client_(std::move(client)) {}
 
 VideoDecoderMixin::~VideoDecoderMixin() = default;
@@ -91,17 +188,24 @@ std::unique_ptr<VideoDecoder> VideoDecoderPipeline::Create(
     scoped_refptr<base::SequencedTaskRunner> client_task_runner,
     std::unique_ptr<DmabufVideoFramePool> frame_pool,
     std::unique_ptr<VideoFrameConverter> frame_converter,
-    std::unique_ptr<MediaLog> media_log) {
+    std::unique_ptr<MediaLog> media_log,
+    mojo::PendingRemote<stable::mojom::StableVideoDecoder> oop_video_decoder) {
   DCHECK(client_task_runner);
   DCHECK(frame_pool);
   DCHECK(frame_converter);
 
-  CreateDecoderFunctionCB create_decoder_function_cb =
+  CreateDecoderFunctionCB create_decoder_function_cb;
+  if (oop_video_decoder) {
+    create_decoder_function_cb =
+        base::BindOnce(&OOPVideoDecoder::Create, std::move(oop_video_decoder));
+  } else {
+    create_decoder_function_cb =
 #if BUILDFLAG(USE_VAAPI)
-      base::BindOnce(&VaapiVideoDecoder::Create);
+        base::BindOnce(&VaapiVideoDecoder::Create);
 #elif BUILDFLAG(USE_V4L2_CODEC)
-      base::BindOnce(&V4L2VideoDecoder::Create);
+        base::BindOnce(&V4L2VideoDecoder::Create);
 #endif
+  }
 
   auto* pipeline = new VideoDecoderPipeline(
       std::move(client_task_runner), std::move(frame_pool),
@@ -116,6 +220,8 @@ absl::optional<SupportedVideoDecoderConfigs>
 VideoDecoderPipeline::GetSupportedConfigs(
     const gpu::GpuDriverBugWorkarounds& workarounds) {
   absl::optional<SupportedVideoDecoderConfigs> configs =
+  // TODO(b/195769334): figure out the best way to query the supported
+  // configurations when using an out-of-process video decoder.
 #if BUILDFLAG(USE_VAAPI)
       VaapiVideoDecoder::GetSupportedConfigs();
 #elif BUILDFLAG(USE_V4L2_CODEC)
@@ -156,9 +262,7 @@ VideoDecoderPipeline::VideoDecoderPipeline(
     std::unique_ptr<MediaLog> media_log,
     CreateDecoderFunctionCB create_decoder_function_cb)
     : client_task_runner_(std::move(client_task_runner)),
-      decoder_task_runner_(base::ThreadPool::CreateSingleThreadTaskRunner(
-          {base::WithBaseSyncPrimitives(), base::TaskPriority::USER_VISIBLE},
-          base::SingleThreadTaskRunnerThreadMode::DEDICATED)),
+      decoder_task_runner_(DecoderThreadPool::CreateTaskRunner()),
       main_frame_pool_(std::move(frame_pool)),
       frame_converter_(std::move(frame_converter)),
       media_log_(std::move(media_log)),
@@ -257,24 +361,24 @@ void VideoDecoderPipeline::Initialize(const VideoDecoderConfig& config,
 
   if (!config.IsValidConfig()) {
     VLOGF(1) << "config is not valid";
-    std::move(init_cb).Run(StatusCode::kDecoderUnsupportedConfig);
+    std::move(init_cb).Run(DecoderStatus::Codes::kUnsupportedConfig);
     return;
   }
 #if BUILDFLAG(USE_CHROMEOS_PROTECTED_MEDIA)
   if (config.is_encrypted() && !cdm_context) {
     VLOGF(1) << "Encrypted streams require a CdmContext";
-    std::move(init_cb).Run(StatusCode::kDecoderUnsupportedConfig);
+    std::move(init_cb).Run(DecoderStatus::Codes::kUnsupportedConfig);
     return;
   }
 #else   // BUILDFLAG(USE_CHROMEOS_PROTECTED_MEDIA)
   if (config.is_encrypted() && !allow_encrypted_content_for_testing_) {
     VLOGF(1) << "Encrypted streams are not supported for this VD";
-    std::move(init_cb).Run(StatusCode::kEncryptedContentUnsupported);
+    std::move(init_cb).Run(DecoderStatus::Codes::kUnsupportedEncryptionMode);
     return;
   }
   if (cdm_context && !allow_encrypted_content_for_testing_) {
     VLOGF(1) << "cdm_context is not supported.";
-    std::move(init_cb).Run(StatusCode::kEncryptedContentUnsupported);
+    std::move(init_cb).Run(DecoderStatus::Codes::kUnsupportedEncryptionMode);
     return;
   }
 #endif  // !BUILDFLAG(USE_CHROMEOS_PROTECTED_MEDIA)
@@ -312,7 +416,8 @@ void VideoDecoderPipeline::InitializeTask(const VideoDecoderConfig& config,
     OnError("|decoder_| creation failed.");
     client_task_runner_->PostTask(
         FROM_HERE,
-        base::BindOnce(std::move(init_cb), StatusCode::kDecoderFailedCreation));
+        base::BindOnce(std::move(init_cb),
+                       DecoderStatus::Codes::kFailedToCreateDecoder));
     return;
   }
 
@@ -328,14 +433,14 @@ void VideoDecoderPipeline::InitializeTask(const VideoDecoderConfig& config,
 
 void VideoDecoderPipeline::OnInitializeDone(InitCB init_cb,
                                             CdmContext* cdm_context,
-                                            Status status) {
+                                            DecoderStatus status) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(decoder_sequence_checker_);
-  DVLOGF(4) << "Initialization status = " << status.code();
+  DVLOGF(4) << "Initialization status = " << static_cast<int>(status.code());
 
   if (!status.is_ok()) {
     MEDIA_LOG(ERROR, media_log_)
         << "VideoDecoderPipeline |decoder_| Initialize() failed, status: "
-        << status.code();
+        << static_cast<int>(status.code());
     decoder_ = nullptr;
   }
   MEDIA_LOG(INFO, media_log_)
@@ -346,7 +451,7 @@ void VideoDecoderPipeline::OnInitializeDone(InitCB init_cb,
     if (!cdm_context) {
       VLOGF(1) << "CdmContext required for transcryption";
       decoder_ = nullptr;
-      status = Status(StatusCode::kDecoderMissingCdmForEncryptedContent);
+      status = DecoderStatus::Codes::kUnsupportedEncryptionMode;
     } else {
       // We need to enable transcryption for protected content.
       buffer_transcryptor_ = std::make_unique<DecoderBufferTranscryptor>(
@@ -394,10 +499,10 @@ void VideoDecoderPipeline::OnResetDone(base::OnceClosure reset_cb) {
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   if (buffer_transcryptor_)
-    buffer_transcryptor_->Reset(DecodeStatus::ABORTED);
+    buffer_transcryptor_->Reset(DecoderStatus::Codes::kAborted);
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
-  CallFlushCbIfNeeded(DecodeStatus::ABORTED);
+  CallFlushCbIfNeeded(DecoderStatus::Codes::kAborted);
 
   if (need_frame_pool_rebuild_) {
     need_frame_pool_rebuild_ = false;
@@ -429,8 +534,8 @@ void VideoDecoderPipeline::DecodeTask(scoped_refptr<DecoderBuffer> buffer,
 
   if (has_error_) {
     client_task_runner_->PostTask(
-        FROM_HERE, base::BindOnce(std::move(decode_cb),
-                                  Status(DecodeStatus::DECODE_ERROR)));
+        FROM_HERE,
+        base::BindOnce(std::move(decode_cb), DecoderStatus::Codes::kFailed));
     return;
   }
 
@@ -453,16 +558,17 @@ void VideoDecoderPipeline::DecodeTask(scoped_refptr<DecoderBuffer> buffer,
 
 void VideoDecoderPipeline::OnDecodeDone(bool is_flush,
                                         DecodeCB decode_cb,
-                                        Status status) {
+                                        DecoderStatus status) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(decoder_sequence_checker_);
-  DVLOGF(4) << "is_flush: " << is_flush << ", status: " << status.code();
+  DVLOGF(4) << "is_flush: " << is_flush
+            << ", status: " << static_cast<int>(status.code());
 
   if (has_error_)
-    status = Status(DecodeStatus::DECODE_ERROR);
+    status = DecoderStatus::Codes::kFailed;
 
   if (is_flush && status.is_ok()) {
     client_flush_cb_ = std::move(decode_cb);
-    CallFlushCbIfNeeded(DecodeStatus::OK);
+    CallFlushCbIfNeeded(DecoderStatus::Codes::kOk);
     return;
   }
 
@@ -518,7 +624,7 @@ void VideoDecoderPipeline::OnFrameConverted(scoped_refptr<VideoFrame> frame) {
       FROM_HERE, base::BindOnce(client_output_cb_, std::move(frame)));
 
   // After outputting a frame, flush might be completed.
-  CallFlushCbIfNeeded(DecodeStatus::OK);
+  CallFlushCbIfNeeded(DecoderStatus::Codes::kOk);
   CallApplyResolutionChangeIfNeeded();
 }
 
@@ -547,20 +653,20 @@ void VideoDecoderPipeline::OnError(const std::string& msg) {
   has_error_ = true;
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   if (buffer_transcryptor_)
-    buffer_transcryptor_->Reset(DecodeStatus::DECODE_ERROR);
+    buffer_transcryptor_->Reset(DecoderStatus::Codes::kFailed);
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
-  CallFlushCbIfNeeded(DecodeStatus::DECODE_ERROR);
+  CallFlushCbIfNeeded(DecoderStatus::Codes::kFailed);
 }
 
-void VideoDecoderPipeline::CallFlushCbIfNeeded(DecodeStatus status) {
+void VideoDecoderPipeline::CallFlushCbIfNeeded(DecoderStatus status) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(decoder_sequence_checker_);
-  DVLOGF(3) << "status: " << status;
+  DVLOGF(3) << "status: " << static_cast<int>(status.code());
 
   if (!client_flush_cb_)
     return;
 
   // Flush is not completed yet.
-  if (status == DecodeStatus::OK && HasPendingFrames())
+  if (status == DecoderStatus::Codes::kOk && HasPendingFrames())
     return;
 
   client_task_runner_->PostTask(
@@ -599,84 +705,153 @@ DmabufVideoFramePool* VideoDecoderPipeline::GetVideoFramePool() const {
   return main_frame_pool_.get();
 }
 
-StatusOr<std::pair<Fourcc, gfx::Size>>
+CroStatus::Or<PixelLayoutCandidate>
 VideoDecoderPipeline::PickDecoderOutputFormat(
-    const std::vector<std::pair<Fourcc, gfx::Size>>& candidates,
+    const std::vector<PixelLayoutCandidate>& candidates,
     const gfx::Rect& decoder_visible_rect,
     const gfx::Size& decoder_natural_size,
     absl::optional<gfx::Size> output_size,
     size_t num_of_pictures,
     bool use_protected,
-    bool need_aux_frame_pool) {
+    bool need_aux_frame_pool,
+    absl::optional<DmabufVideoFramePool::CreateFrameCB> allocator) {
   DVLOGF(3);
   DCHECK_CALLED_ON_VALID_SEQUENCE(decoder_sequence_checker_);
 
   if (candidates.empty())
-    return Status(StatusCode::kInvalidArgument);
+    return CroStatus::Codes::kNoDecoderOutputFormatCandidates;
 
   auxiliary_frame_pool_.reset();
   image_processor_.reset();
 
   // As long as we're not scaling, check if any of the |candidates| formats is
-  // directly renderable.
+  // directly renderable. If so, and (VA-API-only) the modifier of buffers
+  // provided by the frame pool matches the one supported by the |decoder_|, we
+  // don't need an image processor.
+  absl::optional<PixelLayoutCandidate> viable_candidate;
   if (!output_size || *output_size == decoder_visible_rect.size()) {
-    for (const auto preferred_fourcc : kPreferredRenderableFourccs) {
+    for (const auto& preferred_fourcc : kPreferredRenderableFourccs) {
       for (const auto& candidate : candidates) {
-        if (candidate.first == Fourcc(preferred_fourcc)) {
-          StatusOr<GpuBufferLayout> status_or_layout =
-              main_frame_pool_->Initialize(
-                  candidate.first, candidate.second, decoder_visible_rect,
-                  decoder_natural_size, num_of_pictures, use_protected);
-          return status_or_layout.has_error()
-                     ? StatusOr<std::pair<Fourcc, gfx::Size>>(
-                           std::move(status_or_layout).error())
-                     : StatusOr<std::pair<Fourcc, gfx::Size>>(candidate);
+        if (candidate.fourcc == preferred_fourcc) {
+          viable_candidate = candidate;
+          break;
         }
       }
+      if (viable_candidate)
+        break;
     }
   }
 
-  std::unique_ptr<ImageProcessor> image_processor =
-      ImageProcessorFactory::CreateWithInputCandidates(
-          candidates, /*input_visible_rect=*/decoder_visible_rect, *output_size,
-          kNumFramesForImageProcessor, decoder_task_runner_,
-          base::BindRepeating(&PickRenderableFourcc),
-          BindToCurrentLoop(base::BindRepeating(&VideoDecoderPipeline::OnError,
-                                                decoder_weak_this_,
-                                                "ImageProcessor error")));
+#if BUILDFLAG(IS_LINUX)
+  // Linux should always use a custom allocator (to allocate buffers using
+  // libva) and a PlatformVideoFramePool.
+  CHECK(allocator.has_value());
+  CHECK(main_frame_pool_->AsPlatformVideoFramePool());
+  main_frame_pool_->AsPlatformVideoFramePool()->SetCustomFrameAllocator(
+      *allocator);
+#elif BUILDFLAG(IS_CHROMEOS_LACROS)
+  // Lacros should always use a PlatformVideoFramePool outside of tests (because
+  // it doesn't need to handle ARC++/ARCVM requests) with no custom allocator
+  // (because buffers are allocated with minigbm).
+  CHECK(!allocator.has_value());
+  CHECK(main_frame_pool_->AsPlatformVideoFramePool() ||
+        main_frame_pool_->IsFakeVideoFramePool());
+#elif BUILDFLAG(IS_CHROMEOS_ASH)
+  // Ash Chrome can use any type of frame pool (because it may get requests from
+  // ARC++/ARCVM) but never a custom allocator.
+  CHECK(!allocator.has_value());
+#else
+#error "Unsupported platform"
+#endif
+
+#if BUILDFLAG(IS_LINUX)
+  // viable_candidate should always be set unless using L1 protected content,
+  // which isn't an option on linux.
+  CHECK(viable_candidate);
+#endif
+
+  if (viable_candidate) {
+    CroStatus::Or<GpuBufferLayout> status_or_layout =
+        main_frame_pool_->Initialize(viable_candidate->fourcc,
+                                     viable_candidate->size,
+                                     decoder_visible_rect, decoder_natural_size,
+                                     num_of_pictures, use_protected);
+    if (status_or_layout.has_error())
+      return std::move(status_or_layout).error();
+
+#if BUILDFLAG(USE_VAAPI) && BUILDFLAG(IS_CHROMEOS_ASH)
+    // Linux and Lacros do not check the modifiers,
+    // since they do not set any.
+    const GpuBufferLayout layout(std::move(status_or_layout).value());
+    if (layout.modifier() == viable_candidate->modifier) {
+      return *viable_candidate;
+    } else if (layout.modifier() != DRM_FORMAT_MOD_LINEAR) {
+      // In theory, we could accept any |layout|.modifier(). However, the only
+      // known use case for a modifier different than the one native to the
+      // |decoder_| is when Android wishes to get linear decoded data. Thus, to
+      // reduce the number of of moving parts that can fail, we restrict the
+      // modifiers of pool buffers to be either the hardware decoder's native
+      // modifier or DRM_FORMAT_MOD_LINEAR.
+      DVLOGF(2) << "Unsupported modifier, " << std::hex
+                << viable_candidate->modifier << ", passed in";
+      return CroStatus::Codes::kFailedToCreateImageProcessor;
+    }
+#else
+    return *viable_candidate;
+#endif  // BUILDFLAG(USE_VAAPI) && BUILDFLAG(IS_CHROMEOS_ASH)
+  }
+
+  std::unique_ptr<ImageProcessor> image_processor;
+  if (create_image_processor_cb_for_testing_) {
+    image_processor = create_image_processor_cb_for_testing_.Run(
+        candidates,
+        /*input_visible_rect=*/decoder_visible_rect,
+        output_size ? *output_size : decoder_visible_rect.size(),
+        kNumFramesForImageProcessor);
+  } else {
+    image_processor = ImageProcessorFactory::CreateWithInputCandidates(
+        candidates, /*input_visible_rect=*/decoder_visible_rect,
+        output_size ? *output_size : decoder_visible_rect.size(),
+        kNumFramesForImageProcessor, decoder_task_runner_,
+        base::BindRepeating(&PickRenderableFourcc),
+        BindToCurrentLoop(base::BindRepeating(&VideoDecoderPipeline::OnError,
+                                              decoder_weak_this_,
+                                              "ImageProcessor error")));
+  }
+
   if (!image_processor) {
     DVLOGF(2) << "Unable to find ImageProcessor to convert format";
-    return Status(StatusCode::kInvalidArgument);
+    // TODO(crbug/1103510): Make CreateWithInputCandidates return an Or type.
+    return CroStatus::Codes::kFailedToCreateImageProcessor;
   }
 
   if (need_aux_frame_pool) {
     // Initialize the auxiliary frame pool with the input format of the image
-    // processor. Note that we pass nullptr as the GpuMemoryBufferFactory. That
-    // way, the pool will allocate buffers using minigbm directly instead of
-    // going through Ozone which means it won't create DRM/KMS framebuffers for
-    // those buffers. This is good because these buffers don't end up as
-    // overlays anyway.
-    auxiliary_frame_pool_ = std::make_unique<PlatformVideoFramePool>(
-        /*gpu_memory_buffer_factory=*/nullptr);
+    // processor.
+    auxiliary_frame_pool_ = std::make_unique<PlatformVideoFramePool>();
+
     auxiliary_frame_pool_->set_parent_task_runner(decoder_task_runner_);
-    StatusOr<GpuBufferLayout> status_or_layout =
+    CroStatus::Or<GpuBufferLayout> status_or_layout =
         auxiliary_frame_pool_->Initialize(
             image_processor->input_config().fourcc,
             image_processor->input_config().size, decoder_visible_rect,
             decoder_natural_size, num_of_pictures, use_protected);
     if (status_or_layout.has_error()) {
       // A PlatformVideoFramePool should never abort initialization.
-      DCHECK_NE(status_or_layout.code(), StatusCode::kAborted);
+      DCHECK_NE(status_or_layout.code(), CroStatus::Codes::kResetRequired);
       DVLOGF(2) << "Could not initialize the auxiliary frame pool";
-      return Status(StatusCode::kInvalidArgument);
+      return std::move(status_or_layout).error();
     }
   }
-
   // Note that fourcc is specified in ImageProcessor's factory method.
   auto fourcc = image_processor->input_config().fourcc;
   auto size = image_processor->input_config().size;
 
   // Setup new pipeline.
+  // TODO(b/203240043): Verify that if we're using the image processor for tiled
+  // to linear transformation, that the created frame pool is of linear format.
+  // TODO(b/203240043): Add CHECKs to verify that the image processor is being
+  // created for only valid use cases. Writing to a linear output buffer, e.g.
   auto status_or_image_processor = ImageProcessorWithPool::Create(
       std::move(image_processor), main_frame_pool_.get(),
       kNumFramesForImageProcessor, use_protected, decoder_task_runner_);
@@ -686,7 +861,15 @@ VideoDecoderPipeline::PickDecoderOutputFormat(
   }
 
   image_processor_ = std::move(status_or_image_processor).value();
-  return std::make_pair(fourcc, size);
+
+  if (decoder_)
+    decoder_->SetDmaIncoherentV4L2(image_processor_->SupportsIncoherentBufs());
+
+  // TODO(b/203240043): Currently, the modifier is not read by any callers of
+  // this function. We can eventually provide it by making it available to fetch
+  // through the |image_processor|.
+  return PixelLayoutCandidate{fourcc, size,
+                              gfx::NativePixmapHandle::kNoModifier};
 }
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -697,7 +880,7 @@ void VideoDecoderPipeline::OnBufferTranscrypted(
   DCHECK(!has_error_);
   if (!transcrypted_buffer) {
     OnError("Error in buffer transcryption");
-    std::move(decode_callback).Run(DecodeStatus::DECODE_ERROR);
+    std::move(decode_callback).Run(DecoderStatus::Codes::kFailed);
     return;
   }
 

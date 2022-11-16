@@ -25,13 +25,8 @@ async function showGridView(rootPath, expectedSet) {
 
   // Open Files app on |rootPath|.
   const appId = await setupAndWaitUntilReady(rootPath);
-
-  // Dismiss the Drive banners so Grid View can display the all entries.
-  if (rootPath === RootPath.DRIVE) {
-    await remoteCall.waitAndClickElement(
-        appId, '.drive-welcome-wrapper .banner-close');
-    await remoteCall.waitAndClickElement(appId, '#offline-learn-more');
-  }
+  // Disable all banners.
+  await remoteCall.disableBannersForTesting(appId);
 
   // Click the grid view button.
   await remoteCall.waitForElement(appId, '#view-button');

@@ -14,8 +14,8 @@
 #include "ash/test/ash_test_base.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
-#include "chromeos/network/network_state_handler.h"
-#include "chromeos/network/network_state_test_helper.h"
+#include "chromeos/ash/components/network/network_state_handler.h"
+#include "chromeos/ash/components/network/network_state_test_helper.h"
 #include "chromeos/services/network_config/public/cpp/cros_network_config_test_helper.h"
 #include "third_party/cros_system_api/dbus/shill/dbus-constants.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -38,6 +38,10 @@ const char16_t kCellularNetworkGuid16[] = u"cellular_guid";
 class ActiveNetworkIconTest : public AshTestBase {
  public:
   ActiveNetworkIconTest() = default;
+
+  ActiveNetworkIconTest(const ActiveNetworkIconTest&) = delete;
+  ActiveNetworkIconTest& operator=(const ActiveNetworkIconTest&) = delete;
+
   ~ActiveNetworkIconTest() override = default;
 
   void SetUp() override {
@@ -174,8 +178,6 @@ class ActiveNetworkIconTest : public AshTestBase {
   network_icon::IconType icon_type_ = network_icon::ICON_TYPE_TRAY_REGULAR;
   // Counter to provide unique ids for reference networks.
   int reference_count_ = 0;
-
-  DISALLOW_COPY_AND_ASSIGN(ActiveNetworkIconTest);
 };
 
 TEST_F(ActiveNetworkIconTest, GetConnectionStatusStrings) {
@@ -271,6 +273,18 @@ TEST_F(ActiveNetworkIconTest, CellularScanning) {
       AreImagesEqual(image, ImageForNetwork(NetworkType::kCellular,
                                             ConnectionStateType::kConnecting)));
   EXPECT_TRUE(animating);
+
+  // Set scanning property to false, expect no network connections icon.
+  network_state_helper().device_test()->SetDeviceProperty(
+      kShillManagerClientStubCellularDevice, shill::kScanningProperty,
+      base::Value(false), true /* notify_changed */);
+  base::RunLoop().RunUntilIdle();
+
+  image = active_network_icon()->GetImage(ActiveNetworkIcon::Type::kSingle,
+                                          icon_type(), &animating);
+  EXPECT_TRUE(AreImagesEqual(
+      image, network_icon::GetImageForWiFiNoConnections(icon_type())));
+  EXPECT_FALSE(animating);
 }
 
 TEST_F(ActiveNetworkIconTest, CellularDisable) {

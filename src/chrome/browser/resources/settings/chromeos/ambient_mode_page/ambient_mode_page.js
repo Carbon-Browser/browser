@@ -6,124 +6,148 @@
  * @fileoverview 'settings-ambient-mode-page' is the settings page containing
  * ambient mode settings.
  */
-import '//resources/cr_elements/cr_radio_button/cr_radio_button.m.js';
-import '//resources/cr_elements/shared_style_css.m.js';
-import '//resources/cr_elements/shared_vars_css.m.js';
-import '//resources/polymer/v3_0/paper-spinner/paper-spinner-lite.js';
+import 'chrome://resources/cr_elements/cr_radio_button/cr_radio_button.m.js';
+import 'chrome://resources/cr_elements/shared_style_css.m.js';
+import 'chrome://resources/cr_elements/shared_vars_css.m.js';
+import 'chrome://resources/polymer/v3_0/paper-spinner/paper-spinner-lite.js';
 import './topic_source_list.js';
 import '../../prefs/prefs.js';
 import '../../controls/settings_radio_group.js';
 import '../../controls/settings_toggle_button.js';
-import '../../settings_shared_css.js';
+import '../../settings_shared.css.js';
 
-import {I18nBehavior} from '//resources/js/i18n_behavior.m.js';
-import {WebUIListenerBehavior} from '//resources/js/web_ui_listener_behavior.m.js';
-import {afterNextRender, flush, html, Polymer} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {I18nBehavior, I18nBehaviorInterface} from 'chrome://resources/js/i18n_behavior.m.js';
+import {WebUIListenerBehavior, WebUIListenerBehaviorInterface} from 'chrome://resources/js/web_ui_listener_behavior.m.js';
+import {afterNextRender, flush, html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {PrefsBehavior} from '../../prefs/prefs_behavior.js';
-import {Route, RouteObserverBehavior, Router} from '../../router.js';
-import {DeepLinkingBehavior} from '../deep_linking_behavior.m.js';
-import {routes} from '../os_route.m.js';
+import {Setting} from '../../mojom-webui/setting.mojom-webui.js';
+import {Route, Router} from '../../router.js';
+import {DeepLinkingBehavior, DeepLinkingBehaviorInterface} from '../deep_linking_behavior.js';
+import {routes} from '../os_route.js';
+import {PrefsBehavior, PrefsBehaviorInterface} from '../prefs_behavior.js';
+import {RouteObserverBehavior, RouteObserverBehaviorInterface} from '../route_observer_behavior.js';
 
 import {AmbientModeBrowserProxy, AmbientModeBrowserProxyImpl} from './ambient_mode_browser_proxy.js';
 import {AmbientModeTemperatureUnit, AmbientModeTopicSource, TopicSourceItem} from './constants.js';
 
-Polymer({
-  _template: html`{__html_template__}`,
-  is: 'settings-ambient-mode-page',
+/**
+ * @constructor
+ * @extends {PolymerElement}
+ * @implements {DeepLinkingBehaviorInterface}
+ * @implements {I18nBehaviorInterface}
+ * @implements {PrefsBehaviorInterface}
+ * @implements {RouteObserverBehaviorInterface}
+ * @implements {WebUIListenerBehaviorInterface}
+ */
+const SettingsAmbientModePageElementBase = mixinBehaviors(
+    [
+      DeepLinkingBehavior,
+      I18nBehavior,
+      PrefsBehavior,
+      RouteObserverBehavior,
+      WebUIListenerBehavior,
+    ],
+    PolymerElement);
 
-  behaviors: [
-    DeepLinkingBehavior, I18nBehavior, PrefsBehavior, RouteObserverBehavior,
-    WebUIListenerBehavior
-  ],
+/** @polymer */
+class SettingsAmbientModePageElement extends
+    SettingsAmbientModePageElementBase {
+  static get is() {
+    return 'settings-ambient-mode-page';
+  }
 
-  properties: {
-    /** Preferences state. */
-    prefs: Object,
+  static get template() {
+    return html`{__html_template__}`;
+  }
 
-    /**
-     * Used to refer to the enum values in the HTML.
-     * @private {!Object}
-     */
-    AmbientModeTopicSource: {
-      type: Object,
-      value: AmbientModeTopicSource,
-    },
+  static get properties() {
+    return {
+      /** Preferences state. */
+      prefs: Object,
 
-    /**
-     * Used to refer to the enum values in the HTML.
-     * @private {!Object<string, AmbientModeTemperatureUnit>}
-     */
-    AmbientModeTemperatureUnit_: {
-      type: Object,
-      value: AmbientModeTemperatureUnit,
-    },
+      /**
+       * Used to refer to the enum values in the HTML.
+       * @private {!Object}
+       */
+      AmbientModeTopicSource: {
+        type: Object,
+        value: AmbientModeTopicSource,
+      },
 
-    // TODO(b/160632748): Dynamically generate topic source of Google Photos.
-    /** @private {!Array<!AmbientModeTopicSource>} */
-    topicSources_: {
-      type: Array,
-      value: [
-        AmbientModeTopicSource.GOOGLE_PHOTOS, AmbientModeTopicSource.ART_GALLERY
-      ],
-    },
+      /**
+       * Used to refer to the enum values in the HTML.
+       * @private {!Object<string, AmbientModeTemperatureUnit>}
+       */
+      AmbientModeTemperatureUnit_: {
+        type: Object,
+        value: AmbientModeTemperatureUnit,
+      },
 
-    /** @private {!AmbientModeTopicSource} */
-    selectedTopicSource_: {
-      type: AmbientModeTopicSource,
-      value: AmbientModeTopicSource.UNKNOWN,
-    },
+      // TODO(b/160632748): Dynamically generate topic source of Google Photos.
+      /** @private {!Array<!AmbientModeTopicSource>} */
+      topicSources_: {
+        type: Array,
+        value: [
+          AmbientModeTopicSource.GOOGLE_PHOTOS,
+          AmbientModeTopicSource.ART_GALLERY,
+        ],
+      },
 
-    /** @private */
-    hasGooglePhotosAlbums_: Boolean,
+      /** @private {!AmbientModeTopicSource} */
+      selectedTopicSource_: {
+        type: AmbientModeTopicSource,
+        value: AmbientModeTopicSource.UNKNOWN,
+      },
 
-    /** @private {!AmbientModeTemperatureUnit} */
-    selectedTemperatureUnit_: {
-      type: AmbientModeTemperatureUnit,
-      value: AmbientModeTemperatureUnit.UNKNOWN,
-      observer: 'onSelectedTemperatureUnitChanged_'
-    },
+      /** @private */
+      hasGooglePhotosAlbums_: Boolean,
 
-    /**
-     * Used by DeepLinkingBehavior to focus this page's deep links.
-     * @type {!Set<!chromeos.settings.mojom.Setting>}
-     */
-    supportedSettingIds: {
-      type: Object,
-      value: () => new Set([
-        chromeos.settings.mojom.Setting.kAmbientModeOnOff,
-        chromeos.settings.mojom.Setting.kAmbientModeSource,
-      ]),
-    },
+      /** @private {!AmbientModeTemperatureUnit} */
+      selectedTemperatureUnit_: {
+        type: AmbientModeTemperatureUnit,
+        value: AmbientModeTemperatureUnit.UNKNOWN,
+        observer: 'onSelectedTemperatureUnitChanged_',
+      },
 
-    /** @private */
-    showSettings_: {
-      type: Boolean,
-      computed: 'computeShowSettings_(' +
-          'selectedTopicSource_, selectedTemperatureUnit_)',
-    },
+      /**
+       * Used by DeepLinkingBehavior to focus this page's deep links.
+       * @type {!Set<!Setting>}
+       */
+      supportedSettingIds: {
+        type: Object,
+        value: () => new Set([
+          Setting.kAmbientModeOnOff,
+          Setting.kAmbientModeSource,
+        ]),
+      },
 
-    /** @private */
-    disableSettings_: {
-      type: Boolean,
-      computed: 'computeDisableSettings_(prefs.settings.ambient_mode.*)',
-    }
-  },
+      /** @private */
+      showSettings_: {
+        type: Boolean,
+        computed: 'computeShowSettings_(' +
+            'selectedTopicSource_, selectedTemperatureUnit_)',
+      },
 
-  listeners: {
-    'show-albums': 'onShowAlbums_',
-  },
-
-  /** @private {?AmbientModeBrowserProxy} */
-  browserProxy_: null,
+      /** @private */
+      disableSettings_: {
+        type: Boolean,
+        computed: 'computeDisableSettings_(prefs.settings.ambient_mode.*)',
+      },
+    };
+  }
 
   /** @override */
-  created() {
+  constructor() {
+    super();
+
+    /** @private {!AmbientModeBrowserProxy} */
     this.browserProxy_ = AmbientModeBrowserProxyImpl.getInstance();
-  },
+  }
 
   /** @override */
   ready() {
+    super.ready();
+
     this.addWebUIListener(
         'topic-source-changed',
         (/** @type {!TopicSourceItem} */ topicSourceItem) => {
@@ -137,14 +161,16 @@ Polymer({
           this.selectedTemperatureUnit_ = temperatureUnit;
         },
     );
-  },
+
+    this.addEventListener('show-albums', this.onShowAlbums_);
+  }
 
   /**
    * Overridden from DeepLinkingBehavior.
-   * @param {!chromeos.settings.mojom.Setting} settingId
+   * @param {!Setting} settingId
    */
   beforeDeepLinkAttempt(settingId) {
-    if (settingId !== chromeos.settings.mojom.Setting.kAmbientModeSource) {
+    if (settingId !== Setting.kAmbientModeSource) {
       // Continue with deep link attempt.
       return true;
     }
@@ -153,8 +179,9 @@ Polymer({
     afterNextRender(this, () => {
       flush();
 
-      const topicList = this.$$('topic-source-list');
-      const listItem = topicList && topicList.$$('topic-source-item');
+      const topicList = this.shadowRoot.querySelector('topic-source-list');
+      const listItem =
+          topicList && topicList.shadowRoot.querySelector('topic-source-item');
       if (listItem) {
         this.showDeepLinkElement(listItem);
         return;
@@ -164,21 +191,22 @@ Polymer({
     });
     // Stop deep link attempt since we completed it manually.
     return false;
-  },
+  }
 
   /**
    * RouteObserverBehavior
    * @param {!Route} currentRoute
+   * @param {!Route=} prevRoute
    * @protected
    */
-  currentRouteChanged(currentRoute) {
+  currentRouteChanged(currentRoute, prevRoute) {
     if (currentRoute !== routes.AMBIENT_MODE) {
       return;
     }
 
     this.browserProxy_.requestSettings();
     this.attemptDeepLink();
-  },
+  }
 
   /**
    * @param {boolean} toggleValue
@@ -187,7 +215,7 @@ Polymer({
    */
   getAmbientModeOnOffLabel_(toggleValue) {
     return this.i18n(toggleValue ? 'ambientModeOn' : 'ambientModeOff');
-  },
+  }
 
   /**
    * @param {!AmbientModeTemperatureUnit} temperatureUnit
@@ -197,7 +225,7 @@ Polymer({
   isValidTemperatureUnit_(temperatureUnit) {
     return temperatureUnit === AmbientModeTemperatureUnit.FAHRENHEIT ||
         temperatureUnit === AmbientModeTemperatureUnit.CELSIUS;
-  },
+  }
 
   /**
    * @param {number} topicSource
@@ -206,7 +234,7 @@ Polymer({
    */
   isValidTopicSource_(topicSource) {
     return topicSource !== AmbientModeTopicSource.UNKNOWN;
-  },
+  }
 
   /**
    * @param {!AmbientModeTemperatureUnit} newValue
@@ -218,18 +246,19 @@ Polymer({
         newValue !== oldValue) {
       this.browserProxy_.setSelectedTemperatureUnit(newValue);
     }
-  },
+  }
 
   /**
    * Open ambientMode/photos subpage.
-   * @param {!CustomEvent<{item: !AmbientModeTopicSource}>} event
+   * @param {!Event} event
    * @private
    */
-  onShowAlbums_(event) {
+  onShowAlbums_(
+      /** @type {CustomEvent<{item: !AmbientModeTopicSource}>} */ event) {
     const params = new URLSearchParams();
     params.append('topicSource', JSON.stringify(event.detail));
     Router.getInstance().navigateTo(routes.AMBIENT_MODE_PHOTOS, params);
-  },
+  }
 
   /**
    * Whether to show settings.
@@ -239,7 +268,7 @@ Polymer({
   computeShowSettings_() {
     return this.isValidTopicSource_(this.selectedTopicSource_) &&
         this.isValidTemperatureUnit_(this.selectedTemperatureUnit_);
-  },
+  }
 
   /**
    * Whether to disable settings.
@@ -249,4 +278,7 @@ Polymer({
   computeDisableSettings_() {
     return !this.getPref('settings.ambient_mode.enabled').value;
   }
-});
+}
+
+customElements.define(
+    SettingsAmbientModePageElement.is, SettingsAmbientModePageElement);

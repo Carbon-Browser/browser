@@ -14,8 +14,9 @@
 #include <utility>
 
 #include "base/gtest_prod_util.h"
+#include "base/json/json_writer.h"
 #include "base/logging.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/thread_annotations.h"
 #include "build/build_config.h"
@@ -43,16 +44,18 @@ namespace media {
 class MEDIA_EXPORT MediaLog {
  public:
   static const char kEventKey[];
-  static const char kStatusText[];
 
 // Maximum limit for the total number of logs kept per renderer. At the time of
 // writing, 512 events of the kind: { "property": value } together consume ~88kb
 // of memory on linux.
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   static constexpr size_t kLogLimit = 128;
 #else
   static constexpr size_t kLogLimit = 512;
 #endif
+
+  MediaLog(const MediaLog&) = delete;
+  MediaLog& operator=(const MediaLog&) = delete;
 
   // Constructor is protected, see below.
   virtual ~MediaLog();
@@ -88,11 +91,16 @@ class MEDIA_EXPORT MediaLog {
     AddLogRecord(std::move(record));
   }
 
-  // TODO(tmathmeyer) replace with Status when that's ready.
-  void NotifyError(PipelineStatus status);
-
   // Notify a non-ok Status. This method Should _not_ be given an OK status.
-  void NotifyError(Status status);
+  template <typename T>
+  void NotifyError(const TypedStatus<T>& status) {
+    DCHECK(!status.is_ok());
+    std::unique_ptr<MediaLogRecord> record =
+        CreateRecord(MediaLogRecord::Type::kMediaStatus);
+    auto serialized = MediaSerialize(status);
+    record->params.MergeDictionary(&serialized);
+    AddLogRecord(std::move(record));
+  }
 
   // Notify the media log that the player is destroyed. Some implementations
   // will want to change event handling based on this.
@@ -122,6 +130,10 @@ class MEDIA_EXPORT MediaLog {
   // original log is closed by whoever owns it.  However, it's safe to use it
   // even if this occurs, in the "won't crash" sense.
   virtual std::unique_ptr<MediaLog> Clone();
+
+  // Can be used for stopping a MediaLog during a garbage-collected destruction
+  // sequence.
+  virtual void Stop();
 
  protected:
   // Ensures only subclasses and factories (e.g. Clone()) can create MediaLog.
@@ -163,6 +175,9 @@ class MEDIA_EXPORT MediaLog {
   struct ParentLogRecord : base::RefCountedThreadSafe<ParentLogRecord> {
     explicit ParentLogRecord(MediaLog* log);
 
+    ParentLogRecord(const ParentLogRecord&) = delete;
+    ParentLogRecord& operator=(const ParentLogRecord&) = delete;
+
     // A unique (to this process) id for this MediaLog.
     int32_t id;
 
@@ -170,13 +185,11 @@ class MEDIA_EXPORT MediaLog {
     base::Lock lock;
 
     // Original media log, or null.
-    MediaLog* media_log GUARDED_BY(lock) = nullptr;
+    raw_ptr<MediaLog> media_log GUARDED_BY(lock) = nullptr;
 
    protected:
     friend class base::RefCountedThreadSafe<ParentLogRecord>;
     virtual ~ParentLogRecord();
-
-    DISALLOW_COPY_AND_ASSIGN(ParentLogRecord);
   };
 
  private:
@@ -193,8 +206,6 @@ class MEDIA_EXPORT MediaLog {
 
   // The underlying media log.
   scoped_refptr<ParentLogRecord> parent_log_record_;
-
-  DISALLOW_COPY_AND_ASSIGN(MediaLog);
 };
 
 // Helper class to make it easier to use MediaLog like DVLOG().
@@ -209,7 +220,7 @@ class MEDIA_EXPORT LogHelper {
 
  private:
   const MediaLogMessageLevel level_;
-  MediaLog* const media_log_;
+  const raw_ptr<MediaLog> media_log_;
   std::stringstream stream_;
 };
 

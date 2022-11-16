@@ -13,6 +13,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -53,6 +54,7 @@ import org.chromium.content.browser.RenderCoordinatesImpl;
 import org.chromium.content.browser.RenderWidgetHostViewImpl;
 import org.chromium.content.browser.webcontents.WebContentsImpl;
 import org.chromium.content_public.browser.RenderFrameHost;
+import org.chromium.content_public.browser.SelectAroundCaretResult;
 import org.chromium.content_public.browser.SelectionClient;
 import org.chromium.content_public.browser.SelectionEventProcessor;
 import org.chromium.content_public.browser.SelectionPopupController;
@@ -107,7 +109,7 @@ public class SelectionPopupControllerTest {
         public void onSelectionEvent(int eventType, float posXPix, float poxYPix) {}
 
         @Override
-        public void selectWordAroundCaretAck(boolean didSelect, int startAdjust, int endAdjust) {}
+        public void selectAroundCaretAck(SelectAroundCaretResult result) {}
 
         @Override
         public boolean requestSelectionPopupUpdates(boolean shouldSuggest) {
@@ -218,8 +220,7 @@ public class SelectionPopupControllerTest {
                 .adjustSelectionByCharacterOffset(result.startAdjust, result.endAdjust, true);
         assertFalse(mController.isActionModeValid());
 
-        when(mView.startActionMode(any(FloatingActionModeCallback.class), anyInt()))
-                .thenReturn(mActionMode);
+        when(mView.startActionMode(any(), anyInt())).thenReturn(mActionMode);
 
         // Call showSelectionMenu again, which is adjustSelectionByCharacterOffset triggered.
         mController.showSelectionMenu(0, 0, 0, 0, 0, /* isEditable = */ true,
@@ -228,8 +229,7 @@ public class SelectionPopupControllerTest {
                 /* canRichlyEdit = */ true, /* shouldSuggest = */ true,
                 MenuSourceType.MENU_SOURCE_ADJUST_SELECTION, mRenderFrameHost);
 
-        order.verify(mView).startActionMode(
-                isA(FloatingActionModeCallback.class), eq(ActionMode.TYPE_FLOATING));
+        order.verify(mView).startActionMode(isNull(), eq(ActionMode.TYPE_FLOATING));
 
         SelectionClient.Result returnResult = mController.getClassificationResult();
         assertEquals(-5, returnResult.startAdjust);
@@ -275,8 +275,7 @@ public class SelectionPopupControllerTest {
                 .adjustSelectionByCharacterOffset(newResult.startAdjust, newResult.endAdjust, true);
         assertFalse(mController.isActionModeValid());
 
-        when(mView.startActionMode(any(FloatingActionModeCallback.class), anyInt()))
-                .thenReturn(mActionMode);
+        when(mView.startActionMode(any(), anyInt())).thenReturn(mActionMode);
 
         // First adjustSelectionByCharacterOffset() triggered.
         mController.showSelectionMenu(0, 0, 0, 0, 0, /* isEditable = */ true,
@@ -297,8 +296,7 @@ public class SelectionPopupControllerTest {
                 /* canRichlyEdit = */ true, /* shouldSuggest = */ true,
                 MenuSourceType.MENU_SOURCE_ADJUST_SELECTION, mRenderFrameHost);
 
-        order.verify(mView).startActionMode(
-                isA(FloatingActionModeCallback.class), eq(ActionMode.TYPE_FLOATING));
+        order.verify(mView).startActionMode(isNull(), eq(ActionMode.TYPE_FLOATING));
         assertTrue(mController.isActionModeValid());
     }
 
@@ -340,8 +338,7 @@ public class SelectionPopupControllerTest {
                 .adjustSelectionByCharacterOffset(newResult.startAdjust, newResult.endAdjust, true);
         assertFalse(mController.isActionModeValid());
 
-        when(mView.startActionMode(any(FloatingActionModeCallback.class), anyInt()))
-                .thenReturn(mActionMode);
+        when(mView.startActionMode(any(), anyInt())).thenReturn(mActionMode);
 
         // First adjustSelectionByCharacterOffset() triggered.
         mController.showSelectionMenu(0, 0, 0, 0, 0, /* isEditable = */ true,
@@ -362,8 +359,7 @@ public class SelectionPopupControllerTest {
                 /* canRichlyEdit = */ true, /* shouldSuggest = */ true,
                 MenuSourceType.MENU_SOURCE_ADJUST_SELECTION, mRenderFrameHost);
 
-        order.verify(mView).startActionMode(
-                isA(FloatingActionModeCallback.class), eq(ActionMode.TYPE_FLOATING));
+        order.verify(mView).startActionMode(isNull(), eq(ActionMode.TYPE_FLOATING));
         assertTrue(mController.isActionModeValid());
     }
 
@@ -387,8 +383,7 @@ public class SelectionPopupControllerTest {
                 /* canRichlyEdit = */ true, /* shouldSuggest = */ true,
                 MenuSourceType.MENU_SOURCE_LONG_PRESS, mRenderFrameHost);
 
-        when(mView.startActionMode(any(FloatingActionModeCallback.class), anyInt()))
-                .thenReturn(mActionMode);
+        when(mView.startActionMode(any(), anyInt())).thenReturn(mActionMode);
 
         order.verify(mLogger).onSelectionStarted(AMPHITHEATRE, 5, true);
 
@@ -441,7 +436,7 @@ public class SelectionPopupControllerTest {
                 /* canRichlyEdit = */ true, /* shouldSuggest = */ true,
                 MenuSourceType.MENU_SOURCE_LONG_PRESS, mRenderFrameHost);
 
-        when(mView.startActionMode(any(FloatingActionModeCallback.class), anyInt()))
+        when(mView.startActionMode(any(ActionMode.Callback2.class), anyInt()))
                 .thenReturn(mActionMode);
         order.verify(mLogger).onSelectionStarted(AMPHITHEATRE, 5, true);
 
@@ -588,8 +583,7 @@ public class SelectionPopupControllerTest {
     public void testSelectionWhenUnselectAndFocusedNodeChanged() {
         SelectionPopupControllerImpl spyController = Mockito.spy(mController);
 
-        when(mView.startActionMode(any(FloatingActionModeCallback.class), anyInt()))
-                .thenReturn(mActionMode);
+        when(mView.startActionMode(any(), anyInt())).thenReturn(mActionMode);
 
         // Long press triggered showSelectionMenu() call.
         spyController.showSelectionMenu(0, 0, 0, 0, 0, /* isEditable = */ true,
@@ -598,12 +592,12 @@ public class SelectionPopupControllerTest {
                 /* canRichlyEdit = */ true, /* shouldSuggest = */ true,
                 MenuSourceType.MENU_SOURCE_LONG_PRESS, mRenderFrameHost);
 
-        Mockito.verify(mView).startActionMode(
-                isA(FloatingActionModeCallback.class), eq(ActionMode.TYPE_FLOATING));
+        Mockito.verify(mView).startActionMode(isNull(), eq(ActionMode.TYPE_FLOATING));
         // showSelectionMenu() will invoke the first call to finishActionMode() in the
         // showActionModeOrClearOnFailure().
         Mockito.verify(spyController, times(1)).finishActionMode();
         assertTrue(spyController.isSelectActionBarShowing());
+        assertTrue(spyController.isSelectActionBarShowingSupplier().get());
 
         // Clear the selected text.
         spyController.onSelectionChanged("");
@@ -617,6 +611,7 @@ public class SelectionPopupControllerTest {
         spyController.onSelectionEvent(SelectionEventType.SELECTION_HANDLES_CLEARED, 0, 0, 1, 1);
 
         assertFalse(spyController.isSelectActionBarShowing());
+        assertFalse(spyController.isSelectActionBarShowingSupplier().get());
         Mockito.verify(spyController, times(3)).finishActionMode();
     }
 
@@ -625,8 +620,7 @@ public class SelectionPopupControllerTest {
     public void testSelectionWhenWindowIsNull() {
         SelectionPopupControllerImpl spyController = Mockito.spy(mController);
 
-        when(mView.startActionMode(any(FloatingActionModeCallback.class), anyInt()))
-                .thenReturn(mActionMode);
+        when(mView.startActionMode(any(), anyInt())).thenReturn(mActionMode);
 
         // Long press triggered showSelectionMenu() call.
         spyController.showSelectionMenu(0, 0, 0, 0, 0, /* isEditable = */ true,
@@ -635,12 +629,12 @@ public class SelectionPopupControllerTest {
                 /* canRichlyEdit = */ true, /* shouldSuggest = */ true,
                 MenuSourceType.MENU_SOURCE_LONG_PRESS, mRenderFrameHost);
 
-        Mockito.verify(mView).startActionMode(
-                isA(FloatingActionModeCallback.class), eq(ActionMode.TYPE_FLOATING));
+        Mockito.verify(mView).startActionMode(isNull(), eq(ActionMode.TYPE_FLOATING));
         // showSelectionMenu() will invoke the first call to finishActionMode() in the
         // showActionModeOrClearOnFailure().
         Mockito.verify(spyController, times(1)).finishActionMode();
         assertTrue(spyController.isSelectActionBarShowing());
+        assertTrue(spyController.isSelectActionBarShowingSupplier().get());
 
         // Setting the window to null should clear selections and reset the state.
         spyController.onWindowAndroidChanged(null);
@@ -654,6 +648,7 @@ public class SelectionPopupControllerTest {
         spyController.onSelectionEvent(SelectionEventType.SELECTION_HANDLES_CLEARED, 0, 0, 1, 1);
 
         assertFalse(spyController.isSelectActionBarShowing());
+        assertFalse(spyController.isSelectActionBarShowingSupplier().get());
         Mockito.verify(spyController, times(3)).finishActionMode();
     }
 

@@ -11,7 +11,6 @@
 #include "base/unguessable_token.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/features.h"
-#include "third_party/blink/public/mojom/frame/frame_owner_element_type.mojom-blink.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/public/platform/web_url_loader_client.h"
@@ -443,7 +442,6 @@ TEST_F(DocumentLoaderTest, NavigationToAboutBlank) {
   std::unique_ptr<WebNavigationParams> params =
       std::make_unique<WebNavigationParams>();
   params->url = about_blank_url;
-  params->sandbox_flags = network::mojom::WebSandboxFlags::kNone;
   params->requestor_origin = WebSecurityOrigin::Create(WebURL(requestor_url));
   LocalFrame* local_frame =
       To<LocalFrame>(web_view_impl->GetPage()->MainFrame());

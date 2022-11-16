@@ -111,7 +111,7 @@ SyncStatusLabels SetUpDistinctCase(
           test_environment->identity_manager()->GetPrimaryAccountId(
               signin::ConsentLevel::kSync);
       test_environment->SetRefreshTokenForPrimaryAccount();
-      service->SetAuthenticatedAccountInfo(
+      service->SetAccountInfo(
           test_environment->identity_manager()->GetPrimaryAccountInfo(
               signin::ConsentLevel::kSync));
       test_environment->UpdatePersistentErrorOfRefreshTokenForAccount(
@@ -331,7 +331,7 @@ TEST(SyncUIUtilTest, IgnoreSyncErrorForNonSyncAccount) {
   const AccountInfo primary_account_info =
       environment.MakePrimaryAccountAvailable(kTestUser,
                                               signin::ConsentLevel::kSync);
-  service.SetAuthenticatedAccountInfo(primary_account_info);
+  service.SetAccountInfo(primary_account_info);
   service.SetFirstSetupComplete(true);
 
   // Setup a secondary account.
@@ -369,9 +369,6 @@ TEST(SyncUIUtilTest, ShouldShowSyncPassphraseError) {
 TEST(SyncUIUtilTest, ShouldShowSyncPassphraseError_SyncDisabled) {
   syncer::TestSyncService service;
   service.SetFirstSetupComplete(false);
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  service.GetUserSettings()->SetOsSyncFeatureEnabled(false);
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
   service.SetPassphraseRequiredForPreferredDataTypes(true);
   EXPECT_FALSE(ShouldShowSyncPassphraseError(&service));
 }
@@ -382,17 +379,5 @@ TEST(SyncUIUtilTest, ShouldShowSyncPassphraseError_NotUsingPassphrase) {
   service.SetPassphraseRequiredForPreferredDataTypes(false);
   EXPECT_FALSE(ShouldShowSyncPassphraseError(&service));
 }
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-TEST(SyncUIUtilTest, ShouldShowSyncPassphraseError_OsSyncEnabled) {
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeature(chromeos::features::kSplitSettingsSync);
-  syncer::TestSyncService service;
-  service.SetPassphraseRequiredForPreferredDataTypes(true);
-  service.SetFirstSetupComplete(false);
-  service.GetUserSettings()->SetOsSyncFeatureEnabled(true);
-  EXPECT_TRUE(ShouldShowSyncPassphraseError(&service));
-}
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 }  // namespace

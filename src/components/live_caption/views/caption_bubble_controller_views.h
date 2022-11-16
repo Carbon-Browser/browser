@@ -9,7 +9,10 @@
 #include <string>
 #include <unordered_map>
 
+#include "base/memory/raw_ptr.h"
 #include "components/live_caption/caption_bubble_controller.h"
+#include "components/live_caption/views/caption_bubble.h"
+#include "media/mojo/mojom/speech_recognition.mojom.h"
 
 namespace views {
 class Widget;
@@ -27,7 +30,7 @@ class CaptionBubbleModel;
 //
 class CaptionBubbleControllerViews : public CaptionBubbleController {
  public:
-  CaptionBubbleControllerViews();
+  explicit CaptionBubbleControllerViews();
   ~CaptionBubbleControllerViews() override;
   CaptionBubbleControllerViews(const CaptionBubbleControllerViews&) = delete;
   CaptionBubbleControllerViews& operator=(const CaptionBubbleControllerViews&) =
@@ -40,7 +43,11 @@ class CaptionBubbleControllerViews : public CaptionBubbleController {
                        const media::SpeechRecognitionResult& result) override;
 
   // Called when the speech service has an error.
-  void OnError(CaptionBubbleContext* caption_bubble_context) override;
+  void OnError(
+      CaptionBubbleContext* caption_bubble_context,
+      CaptionBubbleErrorType error_type,
+      OnErrorClickedCallback error_clicked_callback,
+      OnDoNotShowAgainClickedCallback error_silenced_callback) override;
 
   // Called when the audio stream has ended.
   void OnAudioStreamEnd(CaptionBubbleContext* caption_bubble_context) override;
@@ -64,11 +71,11 @@ class CaptionBubbleControllerViews : public CaptionBubbleController {
   bool IsWidgetVisibleForTesting() override;
   std::string GetBubbleLabelTextForTesting() override;
 
-  CaptionBubble* caption_bubble_;
-  views::Widget* caption_widget_;
+  raw_ptr<CaptionBubble> caption_bubble_;
+  raw_ptr<views::Widget> caption_widget_;
 
   // A pointer to the currently active CaptionBubbleModel.
-  CaptionBubbleModel* active_model_ = nullptr;
+  raw_ptr<CaptionBubbleModel> active_model_ = nullptr;
 
   // A map of media player ids and their corresponding CaptionBubbleModel. New
   // entries are added to this map when a previously unseen media player id is

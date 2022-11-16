@@ -16,7 +16,7 @@
 #include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
-#include "chrome/browser/apps/app_service/app_platform_metrics.h"
+#include "chrome/browser/apps/app_service/metrics/app_platform_metrics.h"
 #include "chrome/browser/ash/crostini/crostini_features.h"
 #include "chrome/browser/ash/crostini/crostini_util.h"
 #include "chrome/browser/ash/file_manager/app_id.h"
@@ -30,6 +30,7 @@
 #include "chrome/browser/ash/plugin_vm/plugin_vm_files.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_util.h"
 #include "chrome/common/webui_url_constants.h"
+#include "components/services/app_service/public/cpp/app_launch_util.h"
 #include "extensions/browser/entry_info.h"
 #include "storage/browser/file_system/file_system_context.h"
 #include "storage/browser/file_system/file_system_url.h"
@@ -59,7 +60,8 @@ bool HasSupportedMimeType(
     const std::string& container_name,
     const guest_os::GuestOsMimeTypesService& mime_types_service,
     const extensions::EntryInfo& entry) {
-  if (supported_mime_types.find(entry.mime_type) !=
+  // Use lowercase for insensitive match.
+  if (supported_mime_types.find(base::ToLowerASCII(entry.mime_type)) !=
       supported_mime_types.end()) {
     return true;
   }
@@ -112,8 +114,8 @@ bool HasSupportedExtension(const std::set<std::string>& supported_extensions,
   const auto& extension = entry.path.Extension();
   if (extension.size() <= 1 || extension[0] != '.')
     return false;
-  // Strip the leading period.
-  return supported_extensions.find({extension.begin() + 1, extension.end()}) !=
+  // Strip the leading period, convert to lower case for insensitive match.
+  return supported_extensions.find(base::ToLowerASCII(extension.substr(1))) !=
          supported_extensions.end();
 }
 
@@ -144,13 +146,12 @@ auto ConvertLaunchPluginVmAppResultToTaskResult(
 
 }  // namespace
 
-void FindGuestOsApps(
-    Profile* profile,
-    const std::vector<extensions::EntryInfo>& entries,
-    const std::vector<GURL>& file_urls,
-    std::vector<std::string>* app_ids,
-    std::vector<std::string>* app_names,
-    std::vector<guest_os::GuestOsRegistryService::VmType>* vm_types) {
+void FindGuestOsApps(Profile* profile,
+                     const std::vector<extensions::EntryInfo>& entries,
+                     const std::vector<GURL>& file_urls,
+                     std::vector<std::string>* app_ids,
+                     std::vector<std::string>* app_names,
+                     std::vector<guest_os::VmType>* vm_types) {
   // Ensure all files can be shared with VMs.
   storage::FileSystemContext* file_system_context =
       util::GetFileManagerFileSystemContext(profile);
@@ -173,18 +174,16 @@ void FindGuestOsApps(
     const std::string& app_id = pair.first;
     const auto& registration = pair.second;
 
-    guest_os::GuestOsRegistryService::VmType vm_type = registration.VmType();
+    guest_os::VmType vm_type = registration.VmType();
     switch (vm_type) {
-      case guest_os::GuestOsRegistryService::VmType::
-          ApplicationList_VmType_TERMINA:
+      case guest_os::VmType::TERMINA:
         if (!AppSupportsMimeTypeOfAllEntries(*mime_types_service, entries,
                                              registration)) {
           continue;
         }
         break;
 
-      case guest_os::GuestOsRegistryService::VmType::
-          ApplicationList_VmType_PLUGIN_VM:
+      case guest_os::VmType::PLUGIN_VM:
         if (!AppSupportsExtensionOfAllEntries(entries, registration)) {
           continue;
         }
@@ -217,7 +216,7 @@ void FindGuestOsTasks(Profile* profile,
 
   std::vector<std::string> result_app_ids;
   std::vector<std::string> result_app_names;
-  std::vector<guest_os::GuestOsRegistryService::VmType> result_vm_types;
+  std::vector<guest_os::VmType> result_vm_types;
   FindGuestOsApps(profile, entries, file_urls, &result_app_ids,
                   &result_app_names, &result_vm_types);
 
@@ -230,12 +229,10 @@ void FindGuestOsTasks(Profile* profile,
   task_types.reserve(result_vm_types.size());
   for (auto vm_type : result_vm_types) {
     switch (vm_type) {
-      case guest_os::GuestOsRegistryService::VmType::
-          ApplicationList_VmType_TERMINA:
+      case guest_os::VmType::TERMINA:
         task_types.push_back(TASK_TYPE_CROSTINI_APP);
         break;
-      case guest_os::GuestOsRegistryService::VmType::
-          ApplicationList_VmType_PLUGIN_VM:
+      case guest_os::VmType::PLUGIN_VM:
         task_types.push_back(TASK_TYPE_PLUGIN_VM_APP);
         break;
       default:
@@ -281,14 +278,13 @@ void ExecuteGuestOsTask(
   for (const auto& url : file_system_urls) {
     args.emplace_back(url);
   }
-  guest_os::GuestOsRegistryService::VmType vm_type = registration->VmType();
+  guest_os::VmType vm_type = registration->VmType();
   switch (vm_type) {
-    case guest_os::GuestOsRegistryService::VmType::
-        ApplicationList_VmType_TERMINA:
+    case guest_os::VmType::TERMINA:
       apps::RecordAppLaunchMetrics(
-          profile, apps::mojom::AppType::kCrostini, task.app_id,
-          apps::mojom::LaunchSource::kFromFileManager,
-          apps::mojom::LaunchContainer::kLaunchContainerWindow);
+          profile, apps::AppType::kCrostini, task.app_id,
+          apps::LaunchSource::kFromFileManager,
+          apps::LaunchContainer::kLaunchContainerWindow);
       crostini::LaunchCrostiniApp(
           profile, task.app_id, display::kInvalidDisplayId, args,
           base::BindOnce(
@@ -308,12 +304,11 @@ void ExecuteGuestOsTask(
               },
               std::move(done)));
       return;
-    case guest_os::GuestOsRegistryService::VmType::
-        ApplicationList_VmType_PLUGIN_VM:
+    case guest_os::VmType::PLUGIN_VM:
       apps::RecordAppLaunchMetrics(
-          profile, apps::mojom::AppType::kPluginVm, task.app_id,
-          apps::mojom::LaunchSource::kFromFileManager,
-          apps::mojom::LaunchContainer::kLaunchContainerWindow);
+          profile, apps::AppType::kPluginVm, task.app_id,
+          apps::LaunchSource::kFromFileManager,
+          apps::LaunchContainer::kLaunchContainerWindow);
       DCHECK(plugin_vm::PluginVmFeatures::Get()->IsEnabled(profile));
       plugin_vm::LaunchPluginVmApp(
           profile, task.app_id, args,

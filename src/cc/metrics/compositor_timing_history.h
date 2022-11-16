@@ -8,6 +8,8 @@
 #include <memory>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
+#include "base/time/time.h"
 #include "cc/base/rolling_time_delta_history.h"
 #include "cc/cc_export.h"
 #include "cc/metrics/event_metrics.h"
@@ -96,6 +98,8 @@ class CC_EXPORT CompositorTimingHistory {
 
   void ClearHistory();
 
+  size_t CommitDurationSampleCountForTesting() const;
+
  protected:
   void DidBeginMainFrame(base::TimeTicks begin_main_frame_end_time);
 
@@ -108,7 +112,6 @@ class CC_EXPORT CompositorTimingHistory {
   bool enabled_;
 
   // Used to calculate frame rates of Main and Impl threads.
-  bool did_send_begin_main_frame_;
   bool compositor_drawing_continuously_;
   base::TimeTicks new_active_tree_draw_end_time_prev_;
   base::TimeTicks draw_end_time_prev_;
@@ -126,7 +129,30 @@ class CC_EXPORT CompositorTimingHistory {
   RollingTimeDeltaHistory activate_duration_history_;
   RollingTimeDeltaHistory draw_duration_history_;
 
-  bool begin_main_frame_on_critical_path_;
+  // Used for duration estimates when enabled. Without this feature, compositor
+  // timing history collects timing history of each stage and use sum of
+  // percentile for duration estimates. With this feature, we use percentile of
+  // sum instead.
+  bool duration_estimates_enabled_;
+  RollingTimeDeltaHistory bmf_start_to_ready_to_commit_critical_history_;
+  double bmf_start_to_ready_to_commit_critical_percentile_;
+  RollingTimeDeltaHistory bmf_start_to_ready_to_commit_not_critical_history_;
+  double bmf_start_to_ready_to_commit_not_critical_percentile_;
+  RollingTimeDeltaHistory bmf_queue_to_activate_critical_history_;
+  double bmf_queue_to_activate_critical_percentile_;
+
+  // The time between when BMF was posted to the main thread task queue, and the
+  // timestamp taken on the main thread when the BMF started running.
+  base::TimeDelta begin_main_frame_queue_duration_;
+  // The value of begin_main_frame_queue_duration_ that was measured for the
+  // pending tree.
+  base::TimeDelta pending_tree_bmf_queue_duration_;
+  // The time between when BMF was posted to the main thread task queue, and
+  // when the result of the BMF finished activation.
+  base::TimeDelta bmf_start_to_ready_to_activate_duration_;
+
+  bool begin_main_frame_on_critical_path_ = false;
+  bool pending_tree_on_critical_path_ = false;
   base::TimeTicks begin_main_frame_sent_time_;
   base::TimeTicks begin_main_frame_start_time_;
   base::TimeTicks commit_start_time_;
@@ -141,7 +167,7 @@ class CC_EXPORT CompositorTimingHistory {
   std::unique_ptr<UMAReporter> uma_reporter_;
 
   // Owned by LayerTreeHost and is destroyed when LayerTreeHost is destroyed.
-  RenderingStatsInstrumentation* rendering_stats_instrumentation_;
+  raw_ptr<RenderingStatsInstrumentation> rendering_stats_instrumentation_;
 
   // Used only for reporting animation targeted UMA.
   bool previous_frame_had_custom_property_animations_ = false;

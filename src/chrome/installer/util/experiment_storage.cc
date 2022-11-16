@@ -17,7 +17,6 @@
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/task/post_task.h"
 #include "base/task/task_traits.h"
 #include "base/time/time.h"
 #include "base/win/registry.h"
@@ -404,8 +403,7 @@ bool ExperimentStorage::StoreMetricsUnsafe(const ExperimentMetrics& metrics) {
   ExperimentLabels experiment_labels(value);
 
   experiment_labels.SetValueForLabel(kExperimentLabelName,
-                                     EncodeMetrics(metrics),
-                                     base::TimeDelta::FromDays(182));
+                                     EncodeMetrics(metrics), base::Days(182));
 
   return GoogleUpdateSettings::SetExperimentLabels(experiment_labels.value());
 }

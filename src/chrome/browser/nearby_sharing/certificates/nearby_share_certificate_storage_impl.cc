@@ -12,8 +12,7 @@
 #include "base/json/values_util.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_functions.h"
-#include "base/sequenced_task_runner.h"
-#include "base/task/post_task.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/sequenced_task_runner_handle.h"
 #include "base/values.h"
@@ -152,9 +151,8 @@ NearbyShareCertificateStorageImpl::ExpirationList MergeExpirations(
 }
 
 base::Time TimestampToTime(nearbyshare::proto::Timestamp timestamp) {
-  return base::Time::UnixEpoch() +
-         base::TimeDelta::FromSeconds(timestamp.seconds()) +
-         base::TimeDelta::FromNanoseconds(timestamp.nanos());
+  return base::Time::UnixEpoch() + base::Seconds(timestamp.seconds()) +
+         base::Nanoseconds(timestamp.nanos());
 }
 
 }  // namespace
@@ -437,10 +435,10 @@ void NearbyShareCertificateStorageImpl::GetPublicCertificates(
 
 absl::optional<std::vector<NearbySharePrivateCertificate>>
 NearbyShareCertificateStorageImpl::GetPrivateCertificates() const {
-  const base::Value* list =
-      pref_service_->Get(prefs::kNearbySharingPrivateCertificateListPrefName);
+  const base::Value& list = pref_service_->GetValue(
+      prefs::kNearbySharingPrivateCertificateListPrefName);
   std::vector<NearbySharePrivateCertificate> certs;
-  for (const base::Value& cert_dict : list->GetList()) {
+  for (const base::Value& cert_dict : list.GetListDeprecated()) {
     absl::optional<NearbySharePrivateCertificate> cert(
         NearbySharePrivateCertificate::FromDictionary(cert_dict));
     if (!cert)

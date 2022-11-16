@@ -6,6 +6,8 @@
 
 #include <memory>
 
+#include "components/omnibox/browser/omnibox_triggered_feature_service.h"
+
 MockAutocompleteProviderClient::MockAutocompleteProviderClient() {
   shared_factory_ =
       base::MakeRefCounted<network::WeakWrapperSharedURLLoaderFactory>(
@@ -15,10 +17,8 @@ MockAutocompleteProviderClient::MockAutocompleteProviderClient() {
       std::make_unique<RemoteSuggestionsService>(GetURLLoaderFactory());
   document_suggestions_service_ = std::make_unique<DocumentSuggestionsService>(
       /*identity_manager=*/nullptr, GetURLLoaderFactory());
-  pedal_provider_ = std::make_unique<OmniboxPedalProvider>(*this, true);
   omnibox_triggered_feature_service_ =
       std::make_unique<OmniboxTriggeredFeatureService>();
 }
 
-MockAutocompleteProviderClient::~MockAutocompleteProviderClient() {
-}
+MockAutocompleteProviderClient::~MockAutocompleteProviderClient() = default;

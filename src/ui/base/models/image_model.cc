@@ -7,14 +7,19 @@
 #include "base/callback.h"
 #include "ui/base/models/image_model.h"
 #include "ui/base/resource/resource_bundle.h"
+#include "ui/color/color_id.h"
 #include "ui/gfx/vector_icon_utils.h"
+
+#if !BUILDFLAG(IS_IOS)
+#include "ui/base/themed_vector_icon.h"
+#endif
 
 namespace ui {
 
 VectorIconModel::VectorIconModel() = default;
 
 VectorIconModel::VectorIconModel(const gfx::VectorIcon& vector_icon,
-                                 int color_id,
+                                 ColorId color_id,
                                  int icon_size,
                                  const gfx::VectorIcon* badge_icon)
     : vector_icon_(&vector_icon),
@@ -65,7 +70,7 @@ ImageModel& ImageModel::operator=(ImageModel&&) = default;
 
 // static
 ImageModel ImageModel::FromVectorIcon(const gfx::VectorIcon& vector_icon,
-                                      int color_id,
+                                      ColorId color_id,
                                       int icon_size,
                                       const gfx::VectorIcon* badge_icon) {
   if (!icon_size)
@@ -157,6 +162,26 @@ bool ImageModel::operator==(const ImageModel& other) const {
 
 bool ImageModel::operator!=(const ImageModel& other) const {
   return !(*this == other);
+}
+
+gfx::ImageSkia ImageModel::Rasterize(
+    const ui::ColorProvider* color_provider) const {
+  if (IsImage())
+    return GetImage().AsImageSkia();
+
+  if (IsVectorIcon()) {
+#if BUILDFLAG(IS_IOS)
+    CHECK(false);
+#else
+    DCHECK(color_provider);
+    return ThemedVectorIcon(GetVectorIcon()).GetImageSkia(color_provider);
+#endif
+  }
+
+  if (IsImageGenerator())
+    return GetImageGenerator().Run(color_provider);
+
+  return gfx::ImageSkia();
 }
 
 ImageModel::ImageGeneratorAndSize::ImageGeneratorAndSize(

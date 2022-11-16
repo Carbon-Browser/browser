@@ -25,7 +25,7 @@ namespace ash {
 namespace {
 
 constexpr base::TimeDelta kDefaultSeekTime =
-    base::TimeDelta::FromSeconds(media_session::mojom::kDefaultSeekTimeSeconds);
+    base::Seconds(media_session::mojom::kDefaultSeekTimeSeconds);
 
 bool IsMediaSessionActionEligibleForKeyControl(
     media_session::mojom::MediaSessionAction action) {
@@ -49,6 +49,8 @@ MediaControllerImpl::~MediaControllerImpl() = default;
 // static
 void MediaControllerImpl::RegisterProfilePrefs(PrefRegistrySimple* registry) {
   registry->RegisterBooleanPref(prefs::kLockScreenMediaControlsEnabled, true);
+  registry->RegisterBooleanPref(prefs::kUserCameraAllowed, true);
+  registry->RegisterBooleanPref(prefs::kUserMicrophoneAllowed, true);
 }
 
 bool MediaControllerImpl::AreLockScreenMediaKeysEnabled() const {

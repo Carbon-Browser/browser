@@ -15,10 +15,12 @@ config("find_bad_constructs") {
       "-add-plugin",
       "-Xclang",
       "find-bad-constructs",
-      "-Xclang",
-      "-plugin-arg-find-bad-constructs",
-      "-Xclang",
-      "raw-ptr-template-as-trivial-member",
+
+      # TODO(danakj): Enable this.
+      #"-Xclang",
+      #"-plugin-arg-find-bad-constructs",
+      # "-Xclang",
+      # "raw-ref-template-as-trivial-member",
     ]
 
     if (is_linux || is_chromeos || is_android || is_fuchsia) {
@@ -50,10 +52,5 @@ group("llvm-symbolizer_data") {
     data = [ "$clang_base_path/bin/llvm-symbolizer.exe" ]
   } else {
     data = [ "$clang_base_path/bin/llvm-symbolizer" ]
-
-    if (!is_apple) {
-      # llvm-symbolizer uses libstdc++ from the clang package.
-      data += [ "$clang_base_path/lib/libstdc++.so.6" ]
-    }
   }
 }

@@ -45,7 +45,7 @@
   }
 
   .warning {
-    color: red;
+    color: var(--cros-text-color-alert);
   }
 
   :host-context([dir='rtl']) .error-badge {
@@ -53,6 +53,10 @@
     right: 60%;
   }
 </style>
+
+<iron-media-query query="(prefers-color-scheme: dark)"
+  query-matches="{{isDarkModeActive_}}">
+</iron-media-query>
 
 <div class="settings-box first">
   <h2 class="first">
@@ -86,7 +90,7 @@
       <div class="account-icon"
           style="background-image: [[getIconImageSet_(item.pic)]]">
         <img class="error-badge" hidden$="[[item.isSignedIn]]"
-            src="chrome://os-settings/images/error_badge.svg">
+            src="[[getErrorBadgeIcon_(isDarkModeActive_)]]">
       </div>
 
       <div class="middle two-line no-min-width">

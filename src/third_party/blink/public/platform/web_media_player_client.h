@@ -38,6 +38,7 @@
 #include "ui/gfx/color_space.h"
 
 #include "third_party/blink/public/platform/web_texttrack_metadata.h"
+#include "third_party/blink/renderer/platform/wtf/vector.h"
 
 namespace cc {
 class Layer;
@@ -73,6 +74,14 @@ class BLINK_PLATFORM_EXPORT WebMediaPlayerClient {
     kAudioTrackKindMainDescriptions,
     kAudioTrackKindTranslation,
     kAudioTrackKindCommentary
+  };
+
+  // Reason for a PausePlayback call, for better diagnostic messages.
+  enum class PauseReason {
+    kUnknown,
+    kBackgroundVideoOptimization,
+    kSuspendedPlayerIdleTimeout,
+    kRemotePlayStateChange,
   };
 
   static const int kMediaRemotingStopNoText = -1;
@@ -139,7 +148,7 @@ class BLINK_PLATFORM_EXPORT WebMediaPlayerClient {
   virtual WebRemotePlaybackClient* RemotePlaybackClient() { return nullptr; }
 
   // Returns metadata for out-of-band text tracks declared as <track> elements.
-  virtual std::vector<TextTrackMetadata> GetTextTrackMetadata() = 0;
+  virtual Vector<TextTrackMetadata> GetTextTrackMetadata() = 0;
 
   // Returns the color space to render media into if.
   // Rendering media into this color space may avoid some conversions.
@@ -164,7 +173,7 @@ class BLINK_PLATFORM_EXPORT WebMediaPlayerClient {
   virtual void ResumePlayback() = 0;
 
   // Request the player to pause playback.
-  virtual void PausePlayback() = 0;
+  virtual void PausePlayback(PauseReason) = 0;
 
   // Notify the client that the media player started playing content.
   virtual void DidPlayerStartPlaying() = 0;
@@ -198,12 +207,6 @@ class BLINK_PLATFORM_EXPORT WebMediaPlayerClient {
   // TODO(crbug.com/1039252): Remove by merging this method into SizeChanged().
   virtual void DidPlayerSizeChange(const gfx::Size& size) = 0;
 
-  // Notify the client that a buffer underflow happened for the media player.
-  virtual void DidBufferUnderflow() = 0;
-
-  // Notify that a playback seek event happened for the media player.
-  virtual void DidSeek() = 0;
-
   // Notify the client that one of the state used by Picture-in-Picture has
   // changed. The client will then have to poll the states from the associated
   // WebMediaPlayer.
@@ -217,21 +220,6 @@ class BLINK_PLATFORM_EXPORT WebMediaPlayerClient {
   // request was initiated via WebMediaPlayer::RequestVideoFrameCallback().
   // See https://wicg.github.io/video-rvfc/.
   virtual void OnRequestVideoFrameCallback() {}
-
-  struct Features {
-    WebString id;
-    WebString width;
-    WebString parent_id;
-    WebString alt_text;
-    bool is_page_visible;
-    bool is_in_main_frame;
-    WebString url_host;
-    WebString url_path;
-  };
-
-  // Compute and return features for this media element for the media local
-  // learning experiment.
-  virtual Features GetFeatures() = 0;
 
  protected:
   ~WebMediaPlayerClient() = default;

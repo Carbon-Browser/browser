@@ -11,7 +11,6 @@
 #include <vector>
 
 #include "base/containers/queue.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "gpu/ipc/service/image_transport_surface.h"
 #include "gpu/ipc/service/image_transport_surface_delegate.h"
@@ -27,6 +26,11 @@ class PassThroughImageTransportSurface : public gl::GLSurfaceAdapter {
       base::WeakPtr<ImageTransportSurfaceDelegate> delegate,
       gl::GLSurface* surface,
       bool override_vsync_for_multi_window_swap);
+
+  PassThroughImageTransportSurface(const PassThroughImageTransportSurface&) =
+      delete;
+  PassThroughImageTransportSurface& operator=(
+      const PassThroughImageTransportSurface&) = delete;
 
   // GLSurface implementation.
   bool Initialize(gl::GLSurfaceFormat format) override;
@@ -89,8 +93,6 @@ class PassThroughImageTransportSurface : public gl::GLSurfaceAdapter {
 
   base::WeakPtrFactory<PassThroughImageTransportSurface> weak_ptr_factory_{
       this};
-
-  DISALLOW_COPY_AND_ASSIGN(PassThroughImageTransportSurface);
 };
 
 }  // namespace gpu

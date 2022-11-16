@@ -15,15 +15,15 @@
 #include "base/strings/stringprintf.h"
 #include "base/time/clock.h"
 #include "base/time/time.h"
+#include "chromeos/ash/components/network/network_configuration_handler.h"
+#include "chromeos/ash/components/network/network_event_log.h"
+#include "chromeos/ash/components/network/network_metadata_store.h"
 #include "chromeos/components/sync_wifi/local_network_collector.h"
 #include "chromeos/components/sync_wifi/network_identifier.h"
 #include "chromeos/components/sync_wifi/network_type_conversions.h"
 #include "chromeos/components/sync_wifi/synced_network_metrics_logger.h"
 #include "chromeos/components/sync_wifi/synced_network_updater.h"
 #include "chromeos/components/sync_wifi/timer_factory.h"
-#include "chromeos/network/network_configuration_handler.h"
-#include "chromeos/network/network_event_log.h"
-#include "chromeos/network/network_metadata_store.h"
 #include "components/device_event_log/device_event_log.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
@@ -54,8 +54,7 @@ std::unique_ptr<syncer::EntityData> GenerateWifiEntityData(
 // Delay before attempting to save a newly configured network to sync.  This
 // is to give time for an initial connection attempt to fail in case of a bad
 // password, which will prevent syncing.
-constexpr base::TimeDelta kSyncAfterCreatedTimeout =
-    base::TimeDelta::FromSeconds(20);
+constexpr base::TimeDelta kSyncAfterCreatedTimeout = base::Seconds(20);
 
 }  // namespace
 
@@ -185,10 +184,7 @@ void WifiConfigurationBridge::OnGetAllSyncableNetworksResult(
   std::unique_ptr<syncer::ModelTypeStore::WriteBatch> batch =
       store_->CreateWriteBatch();
   // Iterate through synced networks and update local stack where appropriate.
-  for (auto& kv : sync_networks) {
-    NetworkIdentifier& id = kv.first;
-    sync_pb::WifiConfigurationSpecifics& proto = kv.second;
-
+  for (const auto& [id, proto] : sync_networks) {
     if (local_networks.contains(id) &&
         local_networks[id].last_connected_timestamp() >
             proto.last_connected_timestamp()) {
@@ -280,8 +276,8 @@ void WifiConfigurationBridge::GetData(StorageKeyList storage_keys,
 
 void WifiConfigurationBridge::GetAllDataForDebugging(DataCallback callback) {
   auto batch = std::make_unique<syncer::MutableDataBatch>();
-  for (const auto& entry : entries_) {
-    batch->Put(entry.first, GenerateWifiEntityData(entry.second));
+  for (const auto& [storage_key, specifics] : entries_) {
+    batch->Put(storage_key, GenerateWifiEntityData(specifics));
   }
   std::move(callback).Run(std::move(batch));
 }
@@ -296,6 +292,27 @@ std::string WifiConfigurationBridge::GetStorageKey(
   return NetworkIdentifier::FromProto(
              entity_data.specifics.wifi_configuration())
       .SerializeToString();
+}
+
+void WifiConfigurationBridge::ApplyStopSyncChanges(
+    std::unique_ptr<syncer::MetadataChangeList> delete_metadata_change_list) {
+  if (!delete_metadata_change_list) {
+    return;
+  }
+
+  // Since bridge and ModelTypeStore state represents the synced networks state,
+  // while actual data is stored by Shill, it's appropriate to treat all data
+  // stored by bridge as metadata and clear it out when processor requests to
+  // clear metadata. MergeSyncData() will be called once sync is starting again.
+  entries_.clear();
+  pending_deletes_.clear();
+  network_guid_to_timer_map_.clear();
+  networks_to_sync_when_ready_.clear();
+  if (store_) {
+    store_->DeleteAllDataAndMetadata(base::DoNothing());
+  }
+  // Callbacks are no longer valid.
+  weak_ptr_factory_.InvalidateWeakPtrs();
 }
 
 void WifiConfigurationBridge::OnStoreCreated(
@@ -361,8 +378,8 @@ void WifiConfigurationBridge::FixAutoconnect() {
   // Temporary fix for networks which accidentally had autoconnect disabled.
   if (!pref_service_->GetBoolean(kHasFixedAutoconnect)) {
     std::vector<sync_pb::WifiConfigurationSpecifics> protos;
-    for (const auto& entry : entries_) {
-      protos.push_back(entry.second);
+    for (const auto& [storage_key, specifics] : entries_) {
+      protos.push_back(specifics);
     }
     local_network_collector_->FixAutoconnect(
         protos,
@@ -389,12 +406,12 @@ void WifiConfigurationBridge::OnReadAllMetadata(
   base::flat_map<std::string,
                  absl::optional<sync_pb::WifiConfigurationSpecifics>>
       updates = networks_to_sync_when_ready_;
-  for (auto const& it : updates) {
-    if (it.second) {
-      SaveNetworkToSync(it.second);
+  for (auto const& [storage_key, specifics] : updates) {
+    if (specifics) {
+      SaveNetworkToSync(specifics);
       continue;
     }
-    RemoveNetworkFromSync(it.first);
+    RemoveNetworkFromSync(storage_key);
   }
   networks_to_sync_when_ready_.clear();
 }
@@ -414,8 +431,8 @@ void WifiConfigurationBridge::Commit(
 
 std::vector<NetworkIdentifier> WifiConfigurationBridge::GetAllIdsForTesting() {
   std::vector<NetworkIdentifier> ids;
-  for (const auto& entry : entries_)
-    ids.push_back(NetworkIdentifier::FromProto(entry.second));
+  for (const auto& [storage_key, specifics] : entries_)
+    ids.push_back(NetworkIdentifier::FromProto(specifics));
 
   return ids;
 }

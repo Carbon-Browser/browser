@@ -11,9 +11,9 @@
 
 #include "base/android/scoped_java_ref.h"
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/memory/singleton.h"
 #include "base/scoped_multi_source_observation.h"
+#include "chrome/browser/download/android/download_open_source.h"
 #include "chrome/browser/download/download_manager_utils.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_observer.h"
@@ -49,6 +49,10 @@ class DownloadManagerService
       download::DownloadItem* item);
 
   DownloadManagerService();
+
+  DownloadManagerService(const DownloadManagerService&) = delete;
+  DownloadManagerService& operator=(const DownloadManagerService&) = delete;
+
   ~DownloadManagerService() override;
 
   // Called to Initialize this object. If |is_profile_added| is false,
@@ -70,17 +74,14 @@ class DownloadManagerService
                          int64_t system_download_id);
 
   // Called to open a given download item.
-  void OpenDownload(download::DownloadItem* download,
-                    int source,
-                    const JavaParamRef<jobject>& j_context);
+  void OpenDownload(download::DownloadItem* download, int source);
 
   // Called to open a download item whose GUID is equal to |jdownload_guid|.
   void OpenDownload(JNIEnv* env,
                     jobject obj,
                     const JavaParamRef<jstring>& jdownload_guid,
                     const JavaParamRef<jobject>& j_profile_key,
-                    jint source,
-                    const JavaParamRef<jobject>& j_context);
+                    jint source);
 
   // Called to resume downloading the item that has GUID equal to
   // |jdownload_guid|..
@@ -123,15 +124,6 @@ class DownloadManagerService
                       const JavaParamRef<jstring>& id,
                       const JavaParamRef<jstring>& name,
                       const JavaParamRef<jobject>& callback,
-                      const JavaParamRef<jobject>& j_profile_key);
-
-  // Called to change the download schedule of a download item that has GUID
-  // equal to |id|.
-  void ChangeSchedule(JNIEnv* env,
-                      const JavaParamRef<jobject>& obj,
-                      const JavaParamRef<jstring>& id,
-                      jboolean only_on_wifi,
-                      jlong start_time,
                       const JavaParamRef<jobject>& j_profile_key);
 
   // Returns whether or not the given download can be opened by the browser.
@@ -202,6 +194,11 @@ class DownloadManagerService
       const JavaParamRef<jobject>& obj,
       const JavaParamRef<jstring>& jdownload_guid,
       jboolean download_started);
+
+  // Open the download page the given profile, and the source of the opening
+  // action is |download_open_source|.
+  void OpenDownloadsPage(Profile* profile,
+                         DownloadOpenSource download_open_source);
 
  private:
   // For testing.
@@ -299,8 +296,6 @@ class DownloadManagerService
 
   std::map<ProfileKey*, download::SimpleDownloadManagerCoordinator*>
       coordinators_;
-
-  DISALLOW_COPY_AND_ASSIGN(DownloadManagerService);
 };
 
 #endif  // CHROME_BROWSER_DOWNLOAD_ANDROID_DOWNLOAD_MANAGER_SERVICE_H_

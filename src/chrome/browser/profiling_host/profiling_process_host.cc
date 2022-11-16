@@ -22,7 +22,6 @@
 #include "base/values.h"
 #include "build/build_config.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/tracing/crash_service_uploader.h"
 #include "components/heap_profiling/multi_process/supervisor.h"
 #include "components/services/heap_profiling/public/cpp/controller.h"
 #include "components/services/heap_profiling/public/cpp/settings.h"
@@ -33,7 +32,7 @@
 #include "third_party/zlib/zlib.h"
 #include "url/gurl.h"
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include <io.h>
 #endif
 
@@ -43,7 +42,7 @@ ProfilingProcessHost::ProfilingProcessHost() = default;
 ProfilingProcessHost::~ProfilingProcessHost() = default;
 
 void ProfilingProcessHost::Start() {
-  metrics_timer_.Start(FROM_HERE, base::TimeDelta::FromHours(24),
+  metrics_timer_.Start(FROM_HERE, base::Hours(24),
                        base::BindRepeating(&ProfilingProcessHost::ReportMetrics,
                                            base::Unretained(this)));
 }
@@ -90,7 +89,7 @@ void ProfilingProcessHost::SaveTraceToFileOnBlockingThread(
 
   // Pass ownership of the underlying fd/HANDLE to zlib.
   base::PlatformFile platform_file = file.TakePlatformFile();
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   // The underlying handle |platform_file| is also closed when |fd| is closed.
   int fd = _open_osfhandle(reinterpret_cast<intptr_t>(platform_file), 0);
 #else

@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "ash/grit/ash_sample_system_web_app_resources.h"
-#include "ash/grit/ash_sample_system_web_app_resources_map.h"
+#include "ash/webui/grit/ash_sample_system_web_app_resources.h"
+#include "ash/webui/grit/ash_sample_system_web_app_resources_map.h"
 #include "ash/webui/sample_system_web_app_ui/sample_page_handler.h"
 #include "ash/webui/sample_system_web_app_ui/url_constants.h"
 #include "base/memory/ptr_util.h"
@@ -22,18 +22,13 @@ namespace ash {
 
 SampleSystemWebAppUI::SampleSystemWebAppUI(content::WebUI* web_ui)
     : ui::MojoWebUIController(web_ui) {
-  auto trusted_source = base::WrapUnique(
-      content::WebUIDataSource::Create(kChromeUISampleSystemWebAppHost));
+  auto* browser_context = web_ui->GetWebContents()->GetBrowserContext();
+  content::WebUIDataSource* trusted_source =
+      content::WebUIDataSource::CreateAndAdd(browser_context,
+                                             kChromeUISampleSystemWebAppHost);
   trusted_source->AddResourcePath("", IDR_ASH_SAMPLE_SYSTEM_WEB_APP_INDEX_HTML);
   trusted_source->AddResourcePaths(base::make_span(
       kAshSampleSystemWebAppResources, kAshSampleSystemWebAppResourcesSize));
-
-  // TODO(https://crbug/1169829): Don't simply disable trusted types. Do the
-  // right thing.
-  trusted_source->DisableTrustedTypesCSP();
-  trusted_source->OverrideContentSecurityPolicy(
-      network::mojom::CSPDirectiveName::WorkerSrc,
-      std::string("worker-src 'self';"));
 
 #if !DCHECK_IS_ON()
   // If a user goes to an invalid url and non-DCHECK mode (DHECK = debug mode)
@@ -48,11 +43,13 @@ SampleSystemWebAppUI::SampleSystemWebAppUI(content::WebUI* web_ui)
       std::string("frame-src ") + kChromeUIUntrustedSampleSystemWebAppURL + ";";
   trusted_source->OverrideContentSecurityPolicy(
       network::mojom::CSPDirectiveName::FrameSrc, csp);
+
+  trusted_source->OverrideContentSecurityPolicy(
+      network::mojom::CSPDirectiveName::WorkerSrc,
+      std::string("worker-src 'self';"));
   trusted_source->OverrideContentSecurityPolicy(
       network::mojom::CSPDirectiveName::TrustedTypes,
-      "trusted-types lit-html;");
-  auto* browser_context = web_ui->GetWebContents()->GetBrowserContext();
-  content::WebUIDataSource::Add(browser_context, trusted_source.release());
+      "trusted-types lit-html worker-js-static;");
 
   // Add ability to request chrome-untrusted: URLs
   web_ui->AddRequestableScheme(content::kChromeUIUntrustedScheme);
@@ -88,8 +85,20 @@ void SampleSystemWebAppUI::CreatePageHandler(
     mojo::PendingReceiver<mojom::sample_swa::PageHandler> handler,
     mojo::PendingRemote<mojom::sample_swa::Page> page) {
   DCHECK(page.is_valid());
-  sample_page_handler_ =
-      std::make_unique<PageHandler>(std::move(handler), std::move(page));
+  sample_page_handler_->BindInterface(std::move(handler), std::move(page));
+}
+
+void SampleSystemWebAppUI::CreateParentPage(
+    mojo::PendingRemote<mojom::sample_swa::ChildUntrustedPage> child_page,
+    mojo::PendingReceiver<mojom::sample_swa::ParentTrustedPage> parent_page) {
+  sample_page_handler_->CreateParentPage(std::move(child_page),
+                                         std::move(parent_page));
+}
+
+void SampleSystemWebAppUI::WebUIPrimaryPageChanged(content::Page& page) {
+  // Create a new page handler for each document load. This avoids sharing
+  // states when WebUIController is reused for same-origin navigations.
+  sample_page_handler_ = std::make_unique<PageHandler>();
 }
 
 WEB_UI_CONTROLLER_TYPE_IMPL(SampleSystemWebAppUI)

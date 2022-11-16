@@ -7,9 +7,11 @@
 // Polymer BrowserTest fixture.
 GEN_INCLUDE(['//chrome/test/data/webui/polymer_interactive_ui_test.js']);
 
+GEN('#include "build/build_config.h"');
 GEN('#include "content/public/test/browser_test.h"');
 
-// eslint-disable-next-line no-var
+/* eslint-disable no-var */
+
 var CrElementsFocusTest = class extends PolymerInteractiveUITest {
   /** @override */
   get browsePreload() {
@@ -22,21 +24,10 @@ var CrElementsFocusTest = class extends PolymerInteractiveUITest {
   }
 };
 
-// eslint-disable-next-line no-var
 var CrElementsActionMenuTest = class extends CrElementsFocusTest {
   /** @override */
   get browsePreload() {
-    return 'chrome://test?module=cr_elements/cr_action_menu_test.js';
-  }
-
-  /** @override */
-  get extraLibraries() {
-    return [
-      // TODO(dpapad): Figure out why this test fails if test_loader.html is
-      // used instead.
-      '//third_party/mocha/mocha.js',
-      '//chrome/test/data/webui/mocha_adapter.js',
-    ];
+    return 'chrome://test/test_loader.html?module=cr_elements/cr_action_menu_test.js';
   }
 };
 
@@ -44,7 +35,6 @@ TEST_F('CrElementsActionMenuTest', 'All', function() {
   mocha.run();
 });
 
-// eslint-disable-next-line no-var
 var CrElementsCheckboxTest = class extends CrElementsFocusTest {
   /** @override */
   get browsePreload() {
@@ -56,7 +46,6 @@ TEST_F('CrElementsCheckboxTest', 'All', function() {
   mocha.run();
 });
 
-// eslint-disable-next-line no-var
 var CrElementsInputTest = class extends CrElementsFocusTest {
   /** @override */
   get browsePreload() {
@@ -65,7 +54,7 @@ var CrElementsInputTest = class extends CrElementsFocusTest {
 };
 
 // https://crbug.com/997943: Flaky on Mac
-GEN('#if defined(OS_MAC)');
+GEN('#if BUILDFLAG(IS_MAC)');
 GEN('#define MAYBE_All DISABLED_All');
 GEN('#else');
 GEN('#define MAYBE_All All');
@@ -74,7 +63,6 @@ TEST_F('CrElementsInputTest', 'MAYBE_All', function() {
   mocha.run();
 });
 
-// eslint-disable-next-line no-var
 var CrElementsProfileAvatarSelectorTest = class extends CrElementsFocusTest {
   /** @override */
   get browsePreload() {
@@ -86,7 +74,6 @@ TEST_F('CrElementsProfileAvatarSelectorTest', 'All', function() {
   mocha.run();
 });
 
-// eslint-disable-next-line no-var
 var CrElementsTabsTest = class extends CrElementsFocusTest {
   /** @override */
   get browsePreload() {
@@ -98,7 +85,6 @@ TEST_F('CrElementsTabsTest', 'All', function() {
   mocha.run();
 });
 
-// eslint-disable-next-line no-var
 var CrElementsToggleTest = class extends CrElementsFocusTest {
   /** @override */
   get browsePreload() {
@@ -110,7 +96,6 @@ TEST_F('CrElementsToggleTest', 'All', function() {
   mocha.run();
 });
 
-// eslint-disable-next-line no-var
 var CrElementsToolbarSearchFieldTest = class extends CrElementsFocusTest {
   /** @override */
   get browsePreload() {
@@ -123,7 +108,6 @@ TEST_F('CrElementsToolbarSearchFieldTest', 'All', function() {
 });
 
 
-// eslint-disable-next-line no-var
 var IronListFocusTest = class extends CrElementsFocusTest {
   /** @override */
   get browsePreload() {
@@ -136,7 +120,6 @@ TEST_F('IronListFocusTest', 'All', function() {
 });
 
 
-// eslint-disable-next-line no-var
 var CrElementsGridFocusTest = class extends CrElementsFocusTest {
   /** @override */
   get browsePreload() {
@@ -149,7 +132,6 @@ TEST_F('CrElementsGridFocusTest', 'All', function() {
 });
 
 
-// eslint-disable-next-line no-var
 var CrElementsMenuSelectorFocusTest = class extends CrElementsFocusTest {
   /** @override */
   get browsePreload() {
@@ -162,7 +144,6 @@ TEST_F('CrElementsMenuSelectorFocusTest', 'All', function() {
 });
 
 
-// eslint-disable-next-line no-var
 var CrElementsToolbarFocusTest = class extends CrElementsFocusTest {
   /** @override */
   get browsePreload() {

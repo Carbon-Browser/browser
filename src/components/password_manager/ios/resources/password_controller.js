@@ -11,11 +11,6 @@
  * be translated to struct FormData for further processing.
  */
 
-goog.provide('__crWeb.passwords');
-
-/* Beginning of anonymous object. */
-(function() {
-
 /**
  * Namespace for this file. It depends on |__gCrWeb| having already been
  * injected.
@@ -60,6 +55,21 @@ const hasPasswordField = function(win) {
 };
 
 /**
+ * Checks whether the two URLs are from the same origin.
+ * @param {string} url_one
+ * @param {string} url_two
+ * @return {boolean} Whether the two URLs have the same origin.
+ */
+function isSameOrigin_(url_one, url_two) {
+  if (!url_one || !url_two) {
+    // Attempting to create URL representations of an empty string throws an
+    // exception.
+    return false;
+  }
+  return new URL(url_one).origin == new URL(url_two).origin;
+}
+
+/**
  * Returns the contentWindow of all iframes that are from the the same origin
  * as the containing window.
  * @param {Window} win The window in which to look for frames.
@@ -70,7 +80,7 @@ const getSameOriginFrames = function(win) {
   const result = [];
   for (let i = 0; i < frames.length; i++) {
     try {
-      if (__gCrWeb.common.isSameOrigin(
+      if (isSameOrigin_(
               win.location.href, frames[i].contentWindow.location.href)) {
         result.push(frames[i].contentWindow);
       }
@@ -211,7 +221,7 @@ __gCrWeb.passwords['fillPasswordForm'] = function(
   const normalizedOrigin =
       __gCrWeb.common.removeQueryAndReferenceFromURL(window.location.href);
   const origin = /** @type {string} */ (formData['origin']);
-  if (!__gCrWeb.common.isSameOrigin(origin, normalizedOrigin)) {
+  if (!isSameOrigin_(origin, normalizedOrigin)) {
     return false;
   }
   return fillPasswordFormWithData(formData, username, password, window);
@@ -347,8 +357,7 @@ function fillUsernameAndPassword_(inputs, formData, username, password) {
   let usernameInput = null;
   if (usernameIdentifier !== Number(__gCrWeb.fill.RENDERER_ID_NOT_SET)) {
     usernameInput = findInputByUniqueFieldId(inputs, usernameIdentifier);
-    if (!usernameInput || !__gCrWeb.common.isTextField(usernameInput) ||
-        usernameInput.disabled) {
+    if (!usernameInput || !__gCrWeb.common.isTextField(usernameInput)) {
       return false;
     }
   }
@@ -358,19 +367,13 @@ function fillUsernameAndPassword_(inputs, formData, username, password) {
       passwordInput.readOnly || passwordInput.disabled) {
     return false;
   }
-  // If username was provided on a read-only field and it matches the
-  // requested username, fill the form.
-  if (usernameInput && usernameInput.readOnly) {
-    if (usernameInput.value === username) {
-      __gCrWeb.fill.setInputElementValue(password, passwordInput);
-      return true;
-    }
-  } else {
+  // If username was provided on a read-only or disabled field, fill the form.
+  if (!(usernameInput && (usernameInput.readOnly || usernameInput.disabled))) {
     __gCrWeb.fill.setInputElementValue(username, usernameInput);
-    __gCrWeb.fill.setInputElementValue(password, passwordInput);
-    return true;
   }
-  return false;
+
+  __gCrWeb.fill.setInputElementValue(password, passwordInput);
+  return true;
 }
 
 /**
@@ -418,7 +421,7 @@ __gCrWeb.passwords.getPasswordFormDataFromUnownedElements = function(window) {
   if (unownedControlElements.length === 0) {
     return;
   }
-  const unownedForm = new __gCrWeb['common'].JSONSafeObject;
+  const unownedForm = new __gCrWeb['common'].JSONSafeObject();
   const hasUnownedForm =
       __gCrWeb.fill.unownedFormElementsAndFieldSetsToFormData(
           window, fieldsets, unownedControlElements, extractMask, false,
@@ -441,5 +444,3 @@ __gCrWeb.passwords.getPasswordFormData = function(formElement, win) {
       null /* field */);
   return ok ? formData : null;
 };
-
-}());  // End of anonymous object

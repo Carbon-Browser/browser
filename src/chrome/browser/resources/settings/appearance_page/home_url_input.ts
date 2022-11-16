@@ -11,32 +11,32 @@ import 'chrome://resources/cr_elements/cr_input/cr_input.m.js';
 import 'chrome://resources/cr_elements/policy/cr_policy_pref_indicator.m.js';
 
 import {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.m.js';
-import {CrPolicyPrefBehavior, CrPolicyPrefBehaviorInterface} from 'chrome://resources/cr_elements/policy/cr_policy_pref_behavior.m.js';
-import {assert} from 'chrome://resources/js/assert.m.js';
-import {html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {assert} from 'chrome://resources/js/assert_ts.js';
+import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {PrefControlBehavior} from '../controls/pref_control_behavior.js';
+import {CrPolicyPrefMixin, CrPolicyPrefMixinInterface} from '../controls/cr_policy_pref_mixin.js';
+import {PrefControlMixin} from '../controls/pref_control_mixin.js';
 
 import {AppearanceBrowserProxy, AppearanceBrowserProxyImpl} from './appearance_browser_proxy.js';
+import {getTemplate} from './home_url_input.html.js';
 
-interface HomeUrlInputElement {
+export interface HomeUrlInputElement {
   $: {
     input: CrInputElement,
   };
 }
 
 const HomeUrlInputElementBase =
-    mixinBehaviors(
-        [CrPolicyPrefBehavior, PrefControlBehavior], PolymerElement) as
-    {new (): PolymerElement & CrPolicyPrefBehaviorInterface};
+    CrPolicyPrefMixin(PrefControlMixin(PolymerElement)) as
+    {new (): PolymerElement & CrPolicyPrefMixinInterface};
 
-class HomeUrlInputElement extends HomeUrlInputElementBase {
+export class HomeUrlInputElement extends HomeUrlInputElementBase {
   static get is() {
     return 'home-url-input';
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
   }
 
   static get properties() {
@@ -79,7 +79,7 @@ class HomeUrlInputElement extends HomeUrlInputElementBase {
   /**
    * Focuses the 'input' element.
    */
-  focus() {
+  override focus() {
     this.$.input.focus();
   }
 
@@ -162,6 +162,12 @@ class HomeUrlInputElement extends HomeUrlInputElementBase {
     this.browserProxy_.validateStartupPage(this.value).then(isValid => {
       this.invalid = !isValid;
     });
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'home-url-input': HomeUrlInputElement;
   }
 }
 

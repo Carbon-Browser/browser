@@ -7,7 +7,6 @@
 #include <algorithm>
 
 #include "base/bind.h"
-#include "base/macros.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
@@ -61,7 +60,7 @@ void KioskSessionPluginHandler::Observer::PluginHungStatusChanged(
   if (!hung_plugins_.empty()) {
     if (!hung_wait_timer_.IsRunning()) {
       hung_wait_timer_.Start(
-          FROM_HERE, base::TimeDelta::FromSeconds(kHungWaitSeconds), this,
+          FROM_HERE, base::Seconds(kHungWaitSeconds), this,
           &KioskSessionPluginHandler::Observer::OnHungWaitTimer);
     }
   } else {

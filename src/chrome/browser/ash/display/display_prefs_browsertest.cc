@@ -16,6 +16,10 @@
 class DisplayPrefsBrowserTest : public InProcessBrowserTest {
  public:
   DisplayPrefsBrowserTest() = default;
+
+  DisplayPrefsBrowserTest(const DisplayPrefsBrowserTest&) = delete;
+  DisplayPrefsBrowserTest& operator=(const DisplayPrefsBrowserTest&) = delete;
+
   ~DisplayPrefsBrowserTest() override = default;
 
   void SetUpOnMainThread() override {
@@ -26,7 +30,7 @@ class DisplayPrefsBrowserTest : public InProcessBrowserTest {
   const base::Value* GetDisplayProperties(int index) {
     int64_t display_id =
         ash::Shell::Get()->display_manager()->GetDisplayAt(index).id();
-    const base::DictionaryValue* display_properties =
+    const base::Value* display_properties =
         local_state_->GetDictionary(ash::prefs::kDisplayProperties);
     return display_properties ? display_properties->FindKeyOfType(
                                     base::NumberToString(display_id),
@@ -47,9 +51,6 @@ class DisplayPrefsBrowserTest : public InProcessBrowserTest {
   }
 
   PrefService* local_state_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(DisplayPrefsBrowserTest);
 };
 
 // Test that display prefs are registered in the browser local_state

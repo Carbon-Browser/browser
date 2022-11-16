@@ -12,9 +12,9 @@
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/message_loop/message_pump_for_io.h"
-#include "base/single_thread_task_runner.h"
 #include "base/task/current_thread.h"
-#include "base/task_runner.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/task/task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "net/base/io_buffer.h"
 #include "net/base/net_errors.h"
@@ -52,8 +52,7 @@ FileStream::Context::Context(base::File file,
   }
 }
 
-FileStream::Context::~Context() {
-}
+FileStream::Context::~Context() = default;
 
 int FileStream::Context::Read(IOBuffer* buf,
                               int buf_len,

@@ -9,8 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "base/compiler_specific.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "content/browser/background_fetch/background_fetch_test_browser_context.h"
@@ -35,6 +34,10 @@ class BackgroundFetchTestBase : public ::testing::Test {
   using TestResponseBuilder = MockBackgroundFetchDelegate::TestResponseBuilder;
 
   BackgroundFetchTestBase();
+
+  BackgroundFetchTestBase(const BackgroundFetchTestBase&) = delete;
+  BackgroundFetchTestBase& operator=(const BackgroundFetchTestBase&) = delete;
+
   ~BackgroundFetchTestBase() override;
 
   // ::testing::Test overrides.
@@ -94,7 +97,7 @@ class BackgroundFetchTestBase : public ::testing::Test {
  private:
   BackgroundFetchTestBrowserContext browser_context_;
 
-  MockBackgroundFetchDelegate* delegate_;
+  raw_ptr<MockBackgroundFetchDelegate> delegate_;
 
   EmbeddedWorkerTestHelper embedded_worker_test_helper_;
 
@@ -111,8 +114,6 @@ class BackgroundFetchTestBase : public ::testing::Test {
 
   bool set_up_called_ = false;
   bool tear_down_called_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(BackgroundFetchTestBase);
 };
 
 }  // namespace content

@@ -7,22 +7,24 @@
 
 #include <memory>
 
-#include "base/macros.h"
+#include "ash/services/cellular_setup/public/mojom/cellular_setup.mojom-forward.h"
+#include "ash/services/cellular_setup/public/mojom/esim_manager.mojom-forward.h"
+#include "ash/webui/personalization_app/search/search.mojom-forward.h"
 #include "base/time/time.h"
-#include "chrome/browser/ui/webui/app_management/app_management.mojom-forward.h"
+#include "chrome/browser/ui/webui/app_management/app_management_page_handler.h"
+#include "chrome/browser/ui/webui/app_management/app_management_page_handler_factory.h"
 #include "chrome/browser/ui/webui/nearby_share/nearby_share.mojom.h"
 #include "chrome/browser/ui/webui/nearby_share/public/mojom/nearby_share_settings.mojom.h"
-#include "chrome/browser/ui/webui/settings/chromeos/app_management/app_management_page_handler_factory.h"
-#include "chrome/browser/ui/webui/settings/chromeos/os_apps_page/mojom/app_notification_handler.mojom-forward.h"
-#include "chrome/browser/ui/webui/settings/chromeos/search/user_action_recorder.mojom-forward.h"
+#include "chrome/browser/ui/webui/settings/ash/os_apps_page/mojom/app_notification_handler.mojom-forward.h"
+#include "chrome/browser/ui/webui/settings/ash/search/user_action_recorder.mojom-forward.h"
 #include "chrome/browser/ui/webui/webui_load_timer.h"
+#include "chromeos/ash/services/auth_factor_config/public/mojom/auth_factor_config.mojom-forward.h"
 #include "chromeos/services/bluetooth_config/public/mojom/cros_bluetooth_config.mojom-forward.h"
-#include "chromeos/services/cellular_setup/public/mojom/cellular_setup.mojom-forward.h"
-#include "chromeos/services/cellular_setup/public/mojom/esim_manager.mojom-forward.h"
 #include "chromeos/services/network_config/public/mojom/cros_network_config.mojom-forward.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
 #include "ui/webui/mojo_web_ui_controller.h"
+#include "ui/webui/resources/cr_components/app_management/app_management.mojom-forward.h"
 
 namespace user_prefs {
 class PrefRegistrySyncable;
@@ -41,17 +43,22 @@ class OSSettingsUI : public ui::MojoWebUIController {
   static void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry);
 
   explicit OSSettingsUI(content::WebUI* web_ui);
+
+  OSSettingsUI(const OSSettingsUI&) = delete;
+  OSSettingsUI& operator=(const OSSettingsUI&) = delete;
+
   ~OSSettingsUI() override;
 
   // Instantiates implementor of the mojom::CellularSetup mojo interface
   // passing the pending receiver that will be internally bound.
   void BindInterface(
-      mojo::PendingReceiver<cellular_setup::mojom::CellularSetup> receiver);
+      mojo::PendingReceiver<ash::cellular_setup::mojom::CellularSetup>
+          receiver);
 
   // Instantiates implementor of the mojom::ESimManager mojo interface
   // passing the pending receiver that will be internally bound.
   void BindInterface(
-      mojo::PendingReceiver<cellular_setup::mojom::ESimManager> receiver);
+      mojo::PendingReceiver<ash::cellular_setup::mojom::ESimManager> receiver);
 
   // Instantiates implementor of the mojom::CrosNetworkConfig mojo interface
   // passing the pending receiver that will be internally bound.
@@ -65,6 +72,12 @@ class OSSettingsUI : public ui::MojoWebUIController {
   // Instantiates implementor of the mojom::SearchHandler mojo interface
   // passing the pending receiver that will be internally bound.
   void BindInterface(mojo::PendingReceiver<mojom::SearchHandler> receiver);
+
+  // Instantiates implementor of the personalization app mojom::SearchHandler
+  // mojo interface passing the pending receiver that will be internally bound.
+  void BindInterface(
+      mojo::PendingReceiver<::ash::personalization_app::mojom::SearchHandler>
+          receiver);
 
   // Instantiates implementor of the mojom::AppNotificationsHandler mojo
   // interface passing the pending receiver that will be internally bound.
@@ -98,6 +111,12 @@ class OSSettingsUI : public ui::MojoWebUIController {
       mojo::PendingReceiver<bluetooth_config::mojom::CrosBluetoothConfig>
           receiver);
 
+  // Binds to the cros authentication factor editing services.
+  void BindInterface(
+      mojo::PendingReceiver<ash::auth::mojom::AuthFactorConfig> receiver);
+  void BindInterface(
+      mojo::PendingReceiver<ash::auth::mojom::RecoveryFactorEditor> receiver);
+
  private:
   base::TimeTicks time_when_opened_;
 
@@ -108,8 +127,6 @@ class OSSettingsUI : public ui::MojoWebUIController {
       app_management_page_handler_factory_;
 
   WEB_UI_CONTROLLER_TYPE_DECL();
-
-  DISALLOW_COPY_AND_ASSIGN(OSSettingsUI);
 };
 
 }  // namespace settings

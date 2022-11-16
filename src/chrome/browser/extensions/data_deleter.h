@@ -6,7 +6,6 @@
 #define CHROME_BROWSER_EXTENSIONS_DATA_DELETER_H_
 
 #include "base/callback_forward.h"
-#include "base/macros.h"
 
 class Profile;
 
@@ -16,6 +15,9 @@ class Extension;
 
 class DataDeleter {
  public:
+  DataDeleter(const DataDeleter&) = delete;
+  DataDeleter& operator=(const DataDeleter&) = delete;
+
   // Starts removing data. The extension should not be running when this is
   // called. Cookies are deleted on the current thread, local storage and
   // databases/settings are deleted asynchronously on the webkit and file
@@ -25,9 +27,6 @@ class DataDeleter {
   static void StartDeleting(Profile* profile,
                             const Extension* extension,
                             base::OnceClosure done_callback);
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(DataDeleter);
 };
 
 }  // namespace extensions

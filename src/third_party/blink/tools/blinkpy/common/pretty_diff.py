@@ -126,7 +126,7 @@ class DiffFile(object):
     - Two binary hunks
     - Meta information
     """
-    LINK_BASE_URL = 'https://chromium.googlesource.com/chromium/src/+/master/'
+    LINK_BASE_URL = 'https://chromium.googlesource.com/chromium/src/+/main/'
 
     def __init__(self,
                  old_name,
@@ -522,7 +522,7 @@ class BinaryHunk(object):
             raise ValueError('No "literal <size>" or "delta <size>".')
         bin_type = match.group(1)
         size = int(match.group(2))
-        bin_data = ''
+        bin_data = b''
 
         lines = lines[1:]
         for i, line in enumerate(lines):
@@ -540,5 +540,8 @@ class BinaryHunk(object):
                                  'letter:{}, actual:{}, line:"{}"'.format(
                                      line_length * 5, (len(line) - 1) * 4,
                                      line))
-            bin_data += decode_base85(line[1:])[0:line_length]
+            if six.PY2:
+                bin_data += decode_base85(line[1:])[0:line_length]
+            else:
+                bin_data += base64.b85decode(line[1:].encode('utf8'))
         raise ValueError('No blank line terminating a binary hunk.')

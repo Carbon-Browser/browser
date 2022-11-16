@@ -25,8 +25,15 @@ Polymer({
       type: Boolean,
       reflectToAttribute: true,
       observer: 'disabledChanged_',
-      computed: 'computeDisabled_(deviceState, deviceState.inhibitReason)'
+      computed: 'computeDisabled_(deviceState, deviceState.inhibitReason,' +
+          'disableItem)',
     },
+
+    /**
+     * Set by network-list to force disable this network item.
+     * @type {boolean}
+     */
+    disableItem: Boolean,
 
     /** @type {!NetworkList.NetworkListItemType|undefined} */
     item: {
@@ -76,13 +83,6 @@ Polymer({
       computed: 'getButtonLabel_(item)',
     },
 
-    /** Expose the aria role attribute as "button". */
-    role: {
-      type: String,
-      reflectToAttribute: true,
-      value: 'button',
-    },
-
     /**
      * The cached ConnectionState for the network.
      * @type {!chromeos.networkConfig.mojom.ConnectionStateType|undefined}
@@ -110,6 +110,9 @@ Polymer({
 
     /** @private {?chromeos.networkConfig.mojom.ManagedProperties|undefined} */
     managedProperties_: Object,
+
+    /** @type {!chromeos.networkConfig.mojom.GlobalPolicy|undefined} */
+    globalPolicy: Object,
 
     /**
      * Title containing the item's name and subtitle.
@@ -186,6 +189,24 @@ Polymer({
       reflectToAttribute: true,
       value: false,
       computed: 'computeIsESimInstallingProfile_(item, item.customItemType)',
+    },
+
+    /** @private */
+    isESimUnactivatedProfile_: {
+      type: Boolean,
+      value: false,
+      computed: 'computeIsESimUnactivatedProfile_(managedProperties_)',
+    },
+
+    /**
+     * Indicates the network item is a blocked cellular network by policy.
+     * @private
+     */
+    isBlockedNetwork_: {
+      type: Boolean,
+      reflectToAttribute: true,
+      value: false,
+      computed: 'computeIsBlockedNetwork_(item, globalPolicy)',
     },
 
     /**@private {boolean} */
@@ -343,6 +364,9 @@ Polymer({
    * @private
    */
   computeDisabled_() {
+    if (this.disableItem) {
+      return true;
+    }
     if (!this.deviceState) {
       return false;
     }
@@ -412,6 +436,12 @@ Polymer({
                 index, total, this.getItemName_(), status,
                 this.item.typeState.cellular.signalStrength);
           }
+          if (this.isBlockedNetwork_) {
+            return this.i18n(
+                'networkListItemCellularBlockedWithConnectionStatusA11yLabel',
+                index, total, this.getItemName_(), status,
+                this.item.typeState.cellular.signalStrength);
+          }
           if (this.subtitle_) {
             return this.i18n(
                 'networkListItemLabelCellularWithConnectionStatusAndProviderName',
@@ -427,6 +457,12 @@ Polymer({
         if (this.isPSimPendingActivationNetwork_) {
           return this.i18n(
               'networkListItemLabelCellularUnactivated', index, total,
+              this.getItemName_(), this.item.typeState.cellular.signalStrength);
+        }
+
+        if (this.isBlockedNetwork_) {
+          return this.i18n(
+              'networkListItemCellularBlockedA11yLabel', index, total,
               this.getItemName_(), this.item.typeState.cellular.signalStrength);
         }
 
@@ -502,11 +538,26 @@ Polymer({
               this.item.typeState.wifi.signalStrength);
         }
         if (status) {
+          if (this.isBlockedNetwork_) {
+            return this.i18n(
+                'networkListItemWiFiBlockedWithConnectionStatusA11yLabel',
+                index, total, this.getItemName_(), secured, status,
+                this.item.typeState.wifi.signalStrength);
+          }
+
           return this.i18n(
               'networkListItemLabelWifiWithConnectionStatus', index, total,
               this.getItemName_(), secured, status,
               this.item.typeState.wifi.signalStrength);
         }
+
+        if (this.isBlockedNetwork_) {
+          return this.i18n(
+              'networkListItemWiFiBlockedA11yLabel', index, total,
+              this.getItemName_(), secured,
+              this.item.typeState.wifi.signalStrength);
+        }
+
         return this.i18n(
             'networkListItemLabelWifi', index, total, this.getItemName_(),
             secured, this.item.typeState.wifi.signalStrength);
@@ -558,7 +609,7 @@ Polymer({
       if (this.networkState.typeState.cellular.simLocked) {
         return this.i18n('networkListItemUpdatedCellularSimCardLocked');
       }
-      if (this.isPSimUnavailableNetwork_) {
+      if (this.isPSimUnavailableNetwork_ || this.isESimUnactivatedProfile_) {
         return this.i18n('networkListItemUnavailableSimNetwork');
       }
     }
@@ -586,7 +637,7 @@ Polymer({
         this.networkState.typeState.cellular.simLocked) {
       return 'warning';
     }
-    if (this.isPSimUnavailableNetwork_) {
+    if (this.isPSimUnavailableNetwork_ || this.isESimUnactivatedProfile_) {
       return 'warning';
     }
     return 'cr-secondary-text';
@@ -627,6 +678,9 @@ Polymer({
       return false;
     }
     if (this.shouldShowNotAvailableText_()) {
+      return false;
+    }
+    if (this.isESimUnactivatedProfile_) {
       return false;
     }
     return OncMojo.connectionStateIsConnected(
@@ -674,7 +728,8 @@ Polymer({
       this.fireShowDetails_(event);
     } else if (
         this.showButtons &&
-        (this.isPSimUnavailableNetwork_ || this.isPSimActivatingNetwork_)) {
+        (this.isPSimUnavailableNetwork_ || this.isPSimActivatingNetwork_ ||
+         this.isESimUnactivatedProfile_)) {
       this.fireShowDetails_(event);
     } else {
       this.fire('selected', this.item);
@@ -762,6 +817,25 @@ Polymer({
     return !!this.item && this.item.hasOwnProperty('customItemType') &&
         this.item.customItemType ===
         NetworkList.CustomItemType.ESIM_INSTALLING_PROFILE;
+  },
+
+  /**
+   * @param {?chromeos.networkConfig.mojom.ManagedProperties|undefined}
+   *     managedProperties
+   * @return {boolean}
+   * @private
+   */
+  computeIsESimUnactivatedProfile_(managedProperties) {
+    if (!managedProperties) {
+      return false;
+    }
+
+    const cellularProperties = managedProperties.typeProperties.cellular;
+    if (!cellularProperties || !cellularProperties.eid) {
+      return false;
+    }
+    return cellularProperties.activationState ===
+        chromeos.networkConfig.mojom.ActivationStateType.kNotActivated;
   },
 
   /**
@@ -864,6 +938,65 @@ Polymer({
     }
     return this.networkState.typeState.cellular.activationState ===
         chromeos.networkConfig.mojom.ActivationStateType.kActivating;
+  },
+
+  /**
+   * @return {boolean}
+   * @private
+   */
+  isBlockedWifiNetwork_() {
+    if (!this.item) {
+      return false;
+    }
+
+    const mojom = chromeos.networkConfig.mojom;
+    if (this.item.type !== mojom.NetworkType.kWiFi) {
+      return false;
+    }
+
+    if (!this.globalPolicy || this.isPolicySource(this.item.source)) {
+      return false;
+    }
+
+    if (this.globalPolicy.allowOnlyPolicyWifiNetworksToConnect) {
+      return true;
+    }
+
+    if (!!this.globalPolicy.allowOnlyPolicyWifiNetworksToConnectIfAvailable &&
+        !!this.deviceState && !!this.deviceState.managedNetworkAvailable) {
+      return true;
+    }
+
+    return !!this.globalPolicy.blockedHexSsids &&
+        this.globalPolicy.blockedHexSsids.includes(
+            this.item.typeState.wifi.hexSsid);
+  },
+
+  /**
+   * @return {boolean}
+   * @private
+   */
+  computeIsBlockedNetwork_() {
+    if (!this.item) {
+      return false;
+    }
+
+    // Only Cellular and WiFi networks can be blocked by administrators.
+    const mojom = chromeos.networkConfig.mojom;
+    if (this.item.type !== mojom.NetworkType.kCellular &&
+        this.item.type !== mojom.NetworkType.kWiFi) {
+      return false;
+    }
+
+    if (!this.globalPolicy || this.isPolicySource(this.item.source)) {
+      return false;
+    }
+
+    if (this.item.type === mojom.NetworkType.kCellular) {
+      return !!this.globalPolicy.allowOnlyPolicyCellularNetworks;
+    }
+
+    return this.isBlockedWifiNetwork_();
   },
 
   /**

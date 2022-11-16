@@ -97,6 +97,10 @@ absl::optional<AuthenticatorMakeCredentialResponse> ConvertCTAPResponse(
     }
   }
 
+  if (device->device_info() && device->device_info()->transports) {
+    response->transports = *device->device_info()->transports;
+  }
+
   return response;
 }
 
@@ -247,7 +251,8 @@ void MakeCredentialTask::MakeCredential() {
           device(), NextSilentRequest(),
           base::BindOnce(&MakeCredentialTask::HandleResponseToSilentSignRequest,
                          weak_factory_.GetWeakPtr()),
-          base::BindOnce(&ReadCTAPGetAssertionResponse),
+          base::BindOnce(&ReadCTAPGetAssertionResponse,
+                         device()->DeviceTransport()),
           /*string_fixup_predicate=*/nullptr);
   silent_sign_operation_->Start();
 }
@@ -301,7 +306,8 @@ void MakeCredentialTask::HandleResponseToSilentSignRequest(
         device(), NextSilentRequest(),
         base::BindOnce(&MakeCredentialTask::HandleResponseToSilentSignRequest,
                        weak_factory_.GetWeakPtr()),
-        base::BindOnce(&ReadCTAPGetAssertionResponse),
+        base::BindOnce(&ReadCTAPGetAssertionResponse,
+                       device()->DeviceTransport()),
         /*string_fixup_predicate=*/nullptr);
     silent_sign_operation_->Start();
     return;
@@ -391,7 +397,7 @@ FilterAndBatchCredentialDescriptors(
 
   for (const PublicKeyCredentialDescriptor& credential : in) {
     if (0 < max_credential_id_length &&
-        max_credential_id_length < credential.id().size()) {
+        max_credential_id_length < credential.id.size()) {
       continue;
     }
     if (result.back().size() == max_credential_count_in_list) {

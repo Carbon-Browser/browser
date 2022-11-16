@@ -7,7 +7,6 @@
 #include <memory>
 
 #include "base/check.h"
-#include "base/macros.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/utf_string_conversions.h"
 #include "components/subresource_filter/core/common/first_party_origin.h"
@@ -29,6 +28,11 @@ using url_pattern_index::UrlPattern;
 class SubresourceFilterIndexedRulesetTest : public ::testing::Test {
  public:
   SubresourceFilterIndexedRulesetTest() { Reset(); }
+
+  SubresourceFilterIndexedRulesetTest(
+      const SubresourceFilterIndexedRulesetTest&) = delete;
+  SubresourceFilterIndexedRulesetTest& operator=(
+      const SubresourceFilterIndexedRulesetTest&) = delete;
 
  protected:
   LoadPolicy GetLoadPolicy(base::StringPiece url,
@@ -98,9 +102,6 @@ class SubresourceFilterIndexedRulesetTest : public ::testing::Test {
 
   std::unique_ptr<RulesetIndexer> indexer_;
   std::unique_ptr<IndexedRulesetMatcher> matcher_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(SubresourceFilterIndexedRulesetTest);
 };
 
 TEST_F(SubresourceFilterIndexedRulesetTest, EmptyRuleset) {
@@ -225,12 +226,12 @@ TEST_F(SubresourceFilterIndexedRulesetTest, NonAsciiDomain) {
   std::string non_ascii_domain = base::WideToUTF8(L"\x0491\x0493.com");
 
   auto rule = MakeUrlRule(UrlPattern(kUrl, testing::kSubstring));
-  testing::AddDomains({non_ascii_domain}, &rule);
+  testing::AddInitiatorDomains({non_ascii_domain}, &rule);
   ASSERT_FALSE(AddUrlRule(rule));
 
   rule = MakeUrlRule(UrlPattern(kUrl, testing::kSubstring));
   std::string non_ascii_excluded_domain = "~" + non_ascii_domain;
-  testing::AddDomains({non_ascii_excluded_domain}, &rule);
+  testing::AddInitiatorDomains({non_ascii_excluded_domain}, &rule);
   ASSERT_FALSE(AddUrlRule(rule));
 
   Finish();
@@ -252,7 +253,7 @@ TEST_F(SubresourceFilterIndexedRulesetTest, PercentEncodedDomain) {
   std::string percent_encoded_host = "%2C.com";
 
   auto rule = MakeUrlRule(UrlPattern(kUrl, testing::kSubstring));
-  testing::AddDomains({percent_encoded_host}, &rule);
+  testing::AddInitiatorDomains({percent_encoded_host}, &rule);
   ASSERT_TRUE(AddUrlRule(rule));
   Finish();
 

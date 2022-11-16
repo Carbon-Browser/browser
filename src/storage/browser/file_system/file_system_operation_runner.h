@@ -12,9 +12,10 @@
 #include <set>
 #include <vector>
 
+#include "base/callback_helpers.h"
 #include "base/component_export.h"
 #include "base/containers/id_map.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/types/pass_key.h"
 #include "components/services/filesystem/public/mojom/types.mojom.h"
@@ -41,13 +42,16 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) FileSystemOperationRunner {
   using SnapshotFileCallback = FileSystemOperation::SnapshotFileCallback;
   using StatusCallback = FileSystemOperation::StatusCallback;
   using WriteCallback = FileSystemOperation::WriteCallback;
-  using OpenFileCallback = FileSystemOperation::OpenFileCallback;
+  // Implementers of FileSystemOperation::OpenFile() pass `on_close_callback` as
+  // a OnceClosure, but pass consumers a ScopedClosureRunner to ensure the
+  // callback is always run, and on the correct sequence (the I/O thread).
+  using OpenFileCallback =
+      base::OnceCallback<void(base::File file,
+                              base::ScopedClosureRunner on_close_callback)>;
   using ErrorBehavior = FileSystemOperation::ErrorBehavior;
-  using CopyOrMoveProgressCallback =
-      FileSystemOperation::CopyOrMoveProgressCallback;
   using CopyFileProgressCallback =
       FileSystemOperation::CopyFileProgressCallback;
-  using CopyOrMoveOption = FileSystemOperation::CopyOrMoveOption;
+  using CopyOrMoveOptionSet = FileSystemOperation::CopyOrMoveOptionSet;
   using GetMetadataField = FileSystemOperation::GetMetadataField;
 
   using OperationID = uint64_t;
@@ -59,6 +63,11 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) FileSystemOperationRunner {
       const scoped_refptr<FileSystemContext>& file_system_context);
   FileSystemOperationRunner(base::PassKey<FileSystemContext>,
                             FileSystemContext* file_system_context);
+
+  FileSystemOperationRunner(const FileSystemOperationRunner&) = delete;
+  FileSystemOperationRunner& operator=(const FileSystemOperationRunner&) =
+      delete;
+
   virtual ~FileSystemOperationRunner();
 
   // Cancels all inflight operations.
@@ -79,24 +88,27 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) FileSystemOperationRunner {
   // |src_url| is a directory, the contents of |src_url| are copied to
   // |dest_url| recursively. A new file or directory is created at
   // |dest_url| as needed.
-  // For |option| and |progress_callback|, see file_system_operation.h for
-  // details.
-  OperationID Copy(const FileSystemURL& src_url,
-                   const FileSystemURL& dest_url,
-                   CopyOrMoveOption option,
-                   ErrorBehavior error_behavior,
-                   const CopyOrMoveProgressCallback& progress_callback,
-                   StatusCallback callback);
+  // For |option| and |copy_or_move_hook_delegate|, see file_system_operation.h
+  // for details.
+  OperationID Copy(
+      const FileSystemURL& src_url,
+      const FileSystemURL& dest_url,
+      CopyOrMoveOptionSet options,
+      ErrorBehavior error_behavior,
+      std::unique_ptr<CopyOrMoveHookDelegate> copy_or_move_hook_delegate,
+      StatusCallback callback);
 
   // Moves a file or directory from |src_url| to |dest_url|. A new file
   // or directory is created at |dest_url| as needed.
-  // For |option|, see file_system_operation.h for details.
-  OperationID Move(const FileSystemURL& src_url,
-                   const FileSystemURL& dest_url,
-                   CopyOrMoveOption option,
-                   ErrorBehavior error_behavior,
-                   const CopyOrMoveProgressCallback& progress_callback,
-                   StatusCallback callback);
+  // For |option| and |copy_or_move_hook_delegate|, see file_system_operation.h
+  // for details.
+  OperationID Move(
+      const FileSystemURL& src_url,
+      const FileSystemURL& dest_url,
+      CopyOrMoveOptionSet options,
+      ErrorBehavior error_behavior,
+      std::unique_ptr<CopyOrMoveHookDelegate> copy_or_move_hook_delegate,
+      StatusCallback callback);
 
   // Checks if a directory is present at |url|.
   OperationID DirectoryExists(const FileSystemURL& url,
@@ -159,7 +171,7 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) FileSystemOperationRunner {
   // all situation e.g. it will always fail for the sandboxed system when in
   // Incognito mode.
   OperationID OpenFile(const FileSystemURL& url,
-                       int file_flags,
+                       uint32_t file_flags,
                        OpenFileCallback callback);
 
   // Creates a local snapshot file for a given |url| and returns the
@@ -222,7 +234,7 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) FileSystemOperationRunner {
   //
   OperationID CopyFileLocal(const FileSystemURL& src_url,
                             const FileSystemURL& dest_url,
-                            CopyOrMoveOption option,
+                            CopyOrMoveOptionSet options,
                             const CopyFileProgressCallback& progress_callback,
                             StatusCallback callback);
 
@@ -242,7 +254,7 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) FileSystemOperationRunner {
   //
   OperationID MoveFileLocal(const FileSystemURL& src_url,
                             const FileSystemURL& dest_url,
-                            CopyOrMoveOption option,
+                            CopyOrMoveOptionSet options,
                             StatusCallback callback);
 
   // This is called only by pepper plugin as of writing to synchronously get
@@ -282,13 +294,6 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) FileSystemOperationRunner {
                          const base::FilePath& platform_path,
                          scoped_refptr<ShareableFileReference> file_ref);
 
-  void OnCopyProgress(const OperationID id,
-                      const CopyOrMoveProgressCallback& callback,
-                      FileSystemOperation::CopyOrMoveProgressType type,
-                      const FileSystemURL& source_url,
-                      const FileSystemURL& dest_url,
-                      int64_t size);
-
   void PrepareForWrite(OperationID id, const FileSystemURL& url);
   void PrepareForRead(OperationID id, const FileSystemURL& url);
 
@@ -299,7 +304,7 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) FileSystemOperationRunner {
   void FinishOperation(OperationID id);
 
   // Not owned; whatever owns this has to make sure context outlives this.
-  FileSystemContext* file_system_context_;
+  raw_ptr<FileSystemContext> file_system_context_;
 
   using Operations =
       std::map<OperationID, std::unique_ptr<FileSystemOperation>>;
@@ -324,8 +329,6 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) FileSystemOperationRunner {
 
   base::WeakPtr<FileSystemOperationRunner> weak_ptr_;
   base::WeakPtrFactory<FileSystemOperationRunner> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(FileSystemOperationRunner);
 };
 
 }  // namespace storage

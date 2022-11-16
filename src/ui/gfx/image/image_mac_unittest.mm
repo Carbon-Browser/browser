@@ -6,11 +6,11 @@
 #include <stddef.h>
 
 #include "base/mac/scoped_nsobject.h"
-#include "base/macros.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/gfx/image/image.h"
 #include "ui/gfx/image/image_png_rep.h"
 #include "ui/gfx/image/image_skia.h"
+#include "ui/gfx/image/image_skia_rep.h"
 #include "ui/gfx/image/image_skia_util_mac.h"
 #include "ui/gfx/image/image_unittest_util.h"
 
@@ -79,8 +79,8 @@ class ImageMacTest : public testing::Test {
     gfx::ImageSkia::SetSupportedScales(gfx::test::Get1xAnd2xScales());
   }
 
- private:
-  DISALLOW_COPY_AND_ASSIGN(ImageMacTest);
+  ImageMacTest(const ImageMacTest&) = delete;
+  ImageMacTest& operator=(const ImageMacTest&) = delete;
 };
 
 namespace gt = gfx::test;

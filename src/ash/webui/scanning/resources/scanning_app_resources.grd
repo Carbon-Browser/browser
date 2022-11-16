@@ -15,6 +15,7 @@
       <!-- Privileged app host contents. -->
       <include name="IDR_SCANNING_APP_INDEX_HTML" file="index.html" type="BINDATA" />
       <include name="IDR_SCANNING_MOJO_LITE_JS" file="${root_gen_dir}/ash/webui/scanning/mojom/scanning.mojom-lite.js" resource_path="scanning.mojom-lite.js" use_base_dir="false" type="BINDATA" />
+      <include name="IDR_ACCESSIBILITY_FEATURES_MOJO_LITE_JS" file="${root_gen_dir}/ash/webui/common/mojom/accessibility_features.mojom-lite.js" resource_path="accessibility_features.mojom-lite.js" use_base_dir="false" type="BINDATA" />
       <include name="IDR_SCANNING_APP_FILE_PATH_MOJO_LITE_JS" file="${root_gen_dir}/mojo/public/mojom/base/file_path.mojom-lite.js" resource_path="file_path.mojom-lite.js" use_base_dir="false" type="BINDATA" />
       <include name="IDR_SCANNING_APP_JS" file="${root_gen_dir}/ash/webui/scanning/resources/scanning_app.js" resource_path="scanning_app.js" use_base_dir="false" type="BINDATA"/>
       <include name="IDR_SCANNING_APP_SCAN_TO_SELECT_HTML" file="scan_to_select.html" type="BINDATA"/>
@@ -54,8 +55,11 @@
       <include name="IDR_SCANNING_APP_ICON_192" file="scanning_app_icon_192.png" type="BINDATA" />
       <include name="IDR_SCANNING_APP_ICON_256" file="scanning_app_icon_256.png" type="BINDATA" />
       <include name="IDR_SCANNING_APP_SCANNERS_LOADING_SVG" file="svg/scanners_loading.svg" type="BINDATA" />
+      <include name="IDR_SCANNING_APP_SCANNERS_LOADING_DARK_SVG" file="svg/scanners_loading_dark.svg" type="BINDATA" />
       <include name="IDR_SCANNING_APP_NO_SCANNERS_SVG" file="svg/no_scanners.svg" type="BINDATA" />
+      <include name="IDR_SCANNING_APP_NO_SCANNERS_DARK_SVG" file="svg/no_scanners_dark.svg" type="BINDATA" />
       <include name="IDR_SCANNING_APP_READY_TO_SCAN_SVG" file="svg/ready_to_scan.svg" type="BINDATA" />
+      <include name="IDR_SCANNING_APP_READY_TO_SCAN_DARK_SVG" file="svg/ready_to_scan_dark.svg" type="BINDATA" />
       <include name="IDR_SCANNING_APP_REMOVE_PAGE_SVG" file="svg/remove_page.svg" type="BINDATA" />
       <include name="IDR_SCANNING_APP_RESCAN_PAGE_SVG" file="svg/rescan_page.svg" type="BINDATA" />
     </includes>

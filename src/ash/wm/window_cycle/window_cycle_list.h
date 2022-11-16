@@ -42,6 +42,8 @@ class ASH_EXPORT WindowCycleList : public aura::WindowObserver,
   WindowCycleList& operator=(const WindowCycleList&) = delete;
   ~WindowCycleList() override;
 
+  const WindowCycleView* cycle_view() const { return cycle_view_; }
+
   // Returns the |target_window_| from |cycle_view_|.
   aura::Window* GetTargetWindow();
 
@@ -85,6 +87,9 @@ class ASH_EXPORT WindowCycleList : public aura::WindowObserver,
   // if |event| not in cycle view or if |cycle_view_| does not exist.
   aura::Window* GetWindowAtPoint(const ui::LocatedEvent* event);
 
+  // Returns whether or not the event is located in tab slider container.
+  bool IsEventInTabSliderContainer(const ui::LocatedEvent* event);
+
   // Returns true if the window list overlay should be shown.
   bool ShouldShowUi();
 
@@ -95,13 +100,13 @@ class ASH_EXPORT WindowCycleList : public aura::WindowObserver,
     user_did_accept_ = user_did_accept;
   }
 
+  static void SetDisableInitialDelayForTesting(bool disabled);
+
  private:
   friend class ModeSelectionWindowCycleControllerTest;
   friend class MultiUserWindowCycleControllerTest;
   friend class WindowCycleListTestApi;
   friend class WindowCycleControllerTest;
-
-  static void DisableInitialDelayForTesting();
 
   // aura::WindowObserver:
   // There is a chance a window is destroyed, for example by JS code. We need to

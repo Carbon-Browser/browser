@@ -10,7 +10,6 @@
 
 #include "base/bind.h"
 #include "base/callback_helpers.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/trace_event/trace_event.h"
@@ -44,8 +43,7 @@ class TimeZoneMonitorWin : public TimeZoneMonitor {
       // the observers code while the computer is still suspended. The thread
       // controller is not dispatching delayed tasks uuntil the power resume
       // signal is received.
-      constexpr auto kMinimalPostTaskDelay =
-          base::TimeDelta::FromMilliseconds(1);
+      constexpr auto kMinimalPostTaskDelay = base::Milliseconds(1);
       base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
           FROM_HERE,
           base::BindOnce(&TimeZoneMonitorWin::OnWmTimechangeReceived,

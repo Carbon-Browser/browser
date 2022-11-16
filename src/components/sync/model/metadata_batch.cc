@@ -7,13 +7,15 @@
 #include <memory>
 #include <utility>
 
+#include "components/sync/protocol/entity_metadata.pb.h"
+
 namespace syncer {
 
-MetadataBatch::MetadataBatch() {}
+MetadataBatch::MetadataBatch() = default;
 
 MetadataBatch::MetadataBatch(MetadataBatch&& other) = default;
 
-MetadataBatch::~MetadataBatch() {}
+MetadataBatch::~MetadataBatch() = default;
 
 const EntityMetadataMap& MetadataBatch::GetAllMetadata() const {
   return metadata_map_;

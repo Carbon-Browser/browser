@@ -12,7 +12,7 @@
 #include <vector>
 
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/translate/core/browser/translate_metrics_logger.h"
@@ -42,6 +42,10 @@ class TranslateUIDelegate {
   TranslateUIDelegate(const base::WeakPtr<TranslateManager>& translate_manager,
                       const std::string& source_language,
                       const std::string& target_language);
+
+  TranslateUIDelegate(const TranslateUIDelegate&) = delete;
+  TranslateUIDelegate& operator=(const TranslateUIDelegate&) = delete;
+
   virtual ~TranslateUIDelegate();
 
   // Handles when an error message is shown.
@@ -149,9 +153,15 @@ class TranslateUIDelegate {
   // Records a high level UI interaction.
   void ReportUIInteraction(UIInteraction ui_interaction);
 
+  // Updates TranslateMetricsLogger state of whether Translate UI is currently
+  // shown.
+  void ReportUIChange(bool is_ui_shown);
+
   // If kContentLanguagesinLanguagePicker is on, build a vector of content
   // languages data.
   void MaybeSetContentLanguages();
+
+  static std::u16string GetUnknownLanguageDisplayName();
 
  private:
   FRIEND_TEST_ALL_PREFIXES(TranslateUIDelegateTest, GetPageHost);
@@ -161,7 +171,7 @@ class TranslateUIDelegate {
   // associated with the current page.
   std::string GetPageHost() const;
 
-  TranslateDriver* translate_driver_;
+  raw_ptr<TranslateDriver> translate_driver_;
   base::WeakPtr<TranslateManager> translate_manager_;
 
   // ISO code (en, fr...) -> displayable name in the current locale
@@ -193,8 +203,6 @@ class TranslateUIDelegate {
 
   // Listens to accept languages changes.
   PrefChangeRegistrar pref_change_registrar_;
-
-  DISALLOW_COPY_AND_ASSIGN(TranslateUIDelegate);
 };
 
 }  // namespace translate

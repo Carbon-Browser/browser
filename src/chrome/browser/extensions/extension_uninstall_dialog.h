@@ -8,7 +8,7 @@
 #include <memory>
 #include <string>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/threading/thread_checker.h"
@@ -72,6 +72,9 @@ class ExtensionUninstallDialog
   // platforms where that is not the native platform implementation.
   static std::unique_ptr<ExtensionUninstallDialog>
   CreateViews(Profile* profile, gfx::NativeWindow parent, Delegate* delegate);
+
+  ExtensionUninstallDialog(const ExtensionUninstallDialog&) = delete;
+  ExtensionUninstallDialog& operator=(const ExtensionUninstallDialog&) = delete;
 
   ~ExtensionUninstallDialog() override;
 
@@ -151,13 +154,13 @@ class ExtensionUninstallDialog
   virtual void Close() = 0;
 
   // Resets to nullptr when the Profile is deleted.
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
 
   // The dialog's parent window.
   gfx::NativeWindow parent_;
 
   // The delegate we will call Accepted/Canceled on after confirmation dialog.
-  Delegate* delegate_;
+  raw_ptr<Delegate> delegate_;
 
   // The extension we are showing the dialog for.
   scoped_refptr<const Extension> extension_;
@@ -177,9 +180,6 @@ class ExtensionUninstallDialog
   // True if a checkbox for reporting abuse is shown.
   bool show_report_abuse_checkbox_ = false;
 
-  // True if a checkbox for removing associated data is shown.
-  bool show_remove_data_checkbox_ = false;
-
   // Whether the extension was uninstalled before the user closed the dialog
   // (e.g. by another source).
   bool extension_uninstalled_early_ = false;
@@ -191,8 +191,6 @@ class ExtensionUninstallDialog
   base::ScopedObservation<Profile, ProfileObserver> profile_observation_{this};
 
   base::ThreadChecker thread_checker_;
-
-  DISALLOW_COPY_AND_ASSIGN(ExtensionUninstallDialog);
 };
 
 }  // namespace extensions

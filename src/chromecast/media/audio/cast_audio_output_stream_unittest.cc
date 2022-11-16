@@ -10,7 +10,6 @@
 #include <utility>
 
 #include "base/bind.h"
-#include "base/cxx17_backports.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
@@ -83,7 +82,7 @@ class NotifyPushBufferCompleteTask : public chromecast::TaskRunner::Task {
 
 class FakeAudioDecoder : public CmaBackend::AudioDecoder {
  public:
-  enum PipelineStatus {
+  enum TestingPipelineStatus {
     PIPELINE_STATUS_OK,
     PIPELINE_STATUS_BUSY,
     PIPELINE_STATUS_ERROR,
@@ -134,12 +133,15 @@ class FakeAudioDecoder : public CmaBackend::AudioDecoder {
     return true;
   }
   RenderingDelay GetRenderingDelay() override { return rendering_delay_; }
+  AudioTrackTimestamp GetAudioTrackTimestamp() override {
+    return AudioTrackTimestamp();
+  }
   bool RequiresDecryption() override { return false; }
   void SetObserver(CmaBackend::AudioDecoder::Observer* observer) override {}
 
   const AudioConfig& config() const { return config_; }
   float volume() const { return volume_; }
-  void set_pipeline_status(PipelineStatus status) {
+  void set_pipeline_status(TestingPipelineStatus status) {
     if (status == PIPELINE_STATUS_OK && pending_push_) {
       pending_push_ = false;
       params_.task_runner->PostTask(new NotifyPushBufferCompleteTask(delegate_),
@@ -158,7 +160,7 @@ class FakeAudioDecoder : public CmaBackend::AudioDecoder {
   AudioConfig config_;
   float volume_;
 
-  PipelineStatus pipeline_status_;
+  TestingPipelineStatus pipeline_status_;
   bool pending_push_;
   int pushed_buffer_count_;
   scoped_refptr<DecoderBufferBase> last_buffer_;
@@ -581,7 +583,7 @@ TEST_F(CastAudioOutputStreamTest, Format) {
   ::media::AudioParameters::Format format[] = {
       ::media::AudioParameters::AUDIO_PCM_LINEAR,
       ::media::AudioParameters::AUDIO_PCM_LOW_LATENCY};
-  for (size_t i = 0; i < base::size(format); ++i) {
+  for (size_t i = 0; i < std::size(format); ++i) {
     format_ = format[i];
     ::media::AudioOutputStream* stream = CreateStream();
     ASSERT_TRUE(stream);
@@ -602,7 +604,7 @@ TEST_F(CastAudioOutputStreamTest, Format) {
 TEST_F(CastAudioOutputStreamTest, ChannelLayout) {
   ::media::ChannelLayout layout[] = {::media::CHANNEL_LAYOUT_MONO,
                                      ::media::CHANNEL_LAYOUT_STEREO};
-  for (size_t i = 0; i < base::size(layout); ++i) {
+  for (size_t i = 0; i < std::size(layout); ++i) {
     channel_layout_ = layout[i];
     ::media::AudioOutputStream* stream = CreateStream();
     ASSERT_TRUE(stream);
@@ -902,7 +904,7 @@ TEST_F(CastAudioOutputStreamTest, AudioDelay) {
   audio_decoder->set_rendering_delay(
       CmaBackend::AudioDecoder::RenderingDelay(kDelayUs, MonotonicClockNow()));
   ::media::MockAudioSourceCallback source_callback;
-  const base::TimeDelta delay(base::TimeDelta::FromMicroseconds(kDelayUs));
+  const base::TimeDelta delay(base::Microseconds(kDelayUs));
   // OnMoreData can be called with a shorter delay than the rendering delay in
   // order to prefetch audio data faster.
   EXPECT_CALL(source_callback, OnMoreData(testing::Le(delay), _, _, _))
@@ -917,7 +919,7 @@ TEST_F(CastAudioOutputStreamTest, AudioDelay) {
 
 TEST_F(CastAudioOutputStreamTest, MultiroomInfo) {
   chromecast::mojom::MultiroomInfo info(true, AudioChannel::kAll,
-                                        base::TimeDelta::FromSeconds(3), "");
+                                        base::Seconds(3), "");
   multiroom_manager_.SetMultiroomInfo(info);
 
   ::media::AudioOutputStream* stream = CreateStream();
@@ -938,8 +940,7 @@ TEST_F(CastAudioOutputStreamTest, MultiroomInfo) {
   MediaPipelineDeviceParams params = cma_backend_->params();
   EXPECT_EQ(params.multiroom, true);
   EXPECT_EQ(params.audio_channel, AudioChannel::kAll);
-  EXPECT_EQ(params.output_delay_us,
-            base::TimeDelta::FromSeconds(3).InMicroseconds());
+  EXPECT_EQ(params.output_delay_us, base::Seconds(3).InMicroseconds());
 
   stream->Stop();
   stream->Close();

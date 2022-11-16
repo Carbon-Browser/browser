@@ -42,6 +42,11 @@ class TranslateManagerRenderViewHostAndroidTest
  public:
   TranslateManagerRenderViewHostAndroidTest() {}
 
+  TranslateManagerRenderViewHostAndroidTest(
+      const TranslateManagerRenderViewHostAndroidTest&) = delete;
+  TranslateManagerRenderViewHostAndroidTest& operator=(
+      const TranslateManagerRenderViewHostAndroidTest&) = delete;
+
   // Simulates navigating to a page and getting the page contents and language
   // for that navigation.
   void SimulateNavigation(const GURL& url,
@@ -77,7 +82,7 @@ class TranslateManagerRenderViewHostAndroidTest
                : NULL;
   }
 
-#if !defined(USE_AURA) && !defined(OS_MAC)
+#if !defined(USE_AURA) && !BUILDFLAG(IS_MAC)
   // If there is 1 infobar and it is a translate infobar, closes it and returns
   // true.  Returns false otherwise.
   bool CloseTranslateInfoBar() {
@@ -121,8 +126,6 @@ class TranslateManagerRenderViewHostAndroidTest
   std::set<infobars::InfoBarDelegate*> removed_infobars_;
 
   FakeTranslateAgent fake_agent_;
-
-  DISALLOW_COPY_AND_ASSIGN(TranslateManagerRenderViewHostAndroidTest);
 };
 
 TEST_F(TranslateManagerRenderViewHostAndroidTest,

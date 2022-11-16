@@ -28,7 +28,9 @@ async function waitForInitialIndexUpdate() {
     if (response && response.results && response.results.length > 0) {
       break;
     }
-    await new Promise(resolve => {setTimeout(resolve, 50)});
+    await new Promise(resolve => {
+      setTimeout(resolve, 50);
+    });
   }
   return delegate;
 }
@@ -67,7 +69,7 @@ GUEST_TEST('GuestCanSearchWithHeadings', async () => {
       body: 'Body text',
       mainCategoryName: 'Help',
       locale: 'en-US',
-    }
+    },
   ]);
 
   // Keep polling until the index finishes updating or too much time has passed.
@@ -80,7 +82,9 @@ GUEST_TEST('GuestCanSearchWithHeadings', async () => {
     if (response && response.results && response.results.length > 0) {
       break;
     }
-    await new Promise(resolve => {setTimeout(resolve, 50)});
+    await new Promise(resolve => {
+      setTimeout(resolve, 50);
+    });
   }
 
   assertDeepEquals(response.results, [
@@ -141,7 +145,7 @@ GUEST_TEST('GuestCanSearchWithCategories', async () => {
       body: 'Body text',
       mainCategoryName: 'Help',
       locale: 'en-US',
-    }
+    },
   ]);
 
   // Keep polling until the index finishes updating or too much time has passed.
@@ -154,7 +158,9 @@ GUEST_TEST('GuestCanSearchWithCategories', async () => {
     if (response && response.results && response.results.length > 0) {
       break;
     }
-    await new Promise(resolve => {setTimeout(resolve, 50)});
+    await new Promise(resolve => {
+      setTimeout(resolve, 50);
+    });
   }
 
   // Don't test the ordering of search results because they should have similar
@@ -184,24 +190,28 @@ GUEST_TEST('GuestCanSearchWithCategories', async () => {
 GUEST_TEST('GuestCanLimitMaxSearchResults', async () => {
   const delegate = await waitForInitialIndexUpdate();
 
-  await delegate.addOrUpdateSearchIndex([{
-    // Main category match. No subcategories.
-    id: 'test-id-1',
-    title: 'Title with of article',
-    body: 'Body text',
-    mainCategoryName: 'Verycomplicatedsearchtoken',
-    locale: 'en-US',
-  },{
-    // Subcategory match.
-    id: 'test-id-2',
-    title: 'Title 2',
-    subcategoryNames: [
-      'Subcategory 1', 'verycomplicatedsearchtoken in subcategory.'
-    ],
-    body: 'Body text',
-    mainCategoryName: 'Help',
-    locale: 'en-US',
-  }]);
+  await delegate.addOrUpdateSearchIndex([
+    {
+      // Main category match. No subcategories.
+      id: 'test-id-1',
+      title: 'Title with of article',
+      body: 'Body text',
+      mainCategoryName: 'Verycomplicatedsearchtoken',
+      locale: 'en-US',
+    },
+    {
+      // Subcategory match.
+      id: 'test-id-2',
+      title: 'Title 2',
+      subcategoryNames: [
+        'Subcategory 1',
+        'verycomplicatedsearchtoken in subcategory.',
+      ],
+      body: 'Body text',
+      mainCategoryName: 'Help',
+      locale: 'en-US',
+    },
+  ]);
 
   // Limit to 1 result. This search query was chosen because it is unlikely to
   // show any search results for the real app's data.

@@ -7,10 +7,11 @@
 #include "ash/public/cpp/network_config_service.h"
 #include "base/bind.h"
 #include "base/callback_helpers.h"
-#include "base/macros.h"
 #include "base/run_loop.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
+#include "chromeos/ash/components/network/network_handler.h"
+#include "chromeos/ash/components/network/network_metadata_store.h"
 #include "chromeos/components/sync_wifi/local_network_collector.h"
 #include "chromeos/components/sync_wifi/local_network_collector_impl.h"
 #include "chromeos/components/sync_wifi/network_identifier.h"
@@ -19,8 +20,6 @@
 #include "chromeos/components/sync_wifi/synced_network_metrics_logger.h"
 #include "chromeos/components/sync_wifi/test_data_generator.h"
 #include "chromeos/dbus/shill/fake_shill_simulated_result.h"
-#include "chromeos/network/network_handler.h"
-#include "chromeos/network/network_metadata_store.h"
 #include "chromeos/services/network_config/cros_network_config.h"
 #include "chromeos/services/network_config/in_process_instance.h"
 #include "chromeos/services/network_config/public/cpp/cros_network_config_test_helper.h"
@@ -57,6 +56,11 @@ class LocalNetworkCollectorImplTest : public testing::Test {
     ash::GetNetworkConfigService(
         remote_cros_network_config_.BindNewPipeAndPassReceiver());
   }
+
+  LocalNetworkCollectorImplTest(const LocalNetworkCollectorImplTest&) = delete;
+  LocalNetworkCollectorImplTest& operator=(
+      const LocalNetworkCollectorImplTest&) = delete;
+
   ~LocalNetworkCollectorImplTest() override = default;
 
   void SetUp() override {
@@ -137,8 +141,6 @@ class LocalNetworkCollectorImplTest : public testing::Test {
       remote_cros_network_config_;
 
   size_t on_get_all_syncable_networks_count_;
-
-  DISALLOW_COPY_AND_ASSIGN(LocalNetworkCollectorImplTest);
 };
 
 TEST_F(LocalNetworkCollectorImplTest, TestGetAllSyncableNetworks) {

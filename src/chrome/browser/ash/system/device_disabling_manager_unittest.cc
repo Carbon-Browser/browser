@@ -10,7 +10,6 @@
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/command_line.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
@@ -22,7 +21,7 @@
 #include "chrome/browser/browser_process_platform_part.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/testing_browser_process.h"
-#include "chromeos/dbus/session_manager/fake_session_manager_client.h"
+#include "chromeos/ash/components/dbus/session_manager/fake_session_manager_client.h"
 #include "chromeos/system/fake_statistics_provider.h"
 #include "components/ownership/mock_owner_key_util.h"
 #include "components/policy/core/common/cloud/cloud_policy_constants.h"
@@ -54,6 +53,11 @@ class DeviceDisablingManagerTestBase : public testing::Test,
  public:
   DeviceDisablingManagerTestBase();
 
+  DeviceDisablingManagerTestBase(const DeviceDisablingManagerTestBase&) =
+      delete;
+  DeviceDisablingManagerTestBase& operator=(
+      const DeviceDisablingManagerTestBase&) = delete;
+
   // testing::Test:
   void TearDown() override;
 
@@ -80,8 +84,6 @@ class DeviceDisablingManagerTestBase : public testing::Test,
   FakeChromeUserManager fake_user_manager_;
   std::unique_ptr<DeviceDisablingManager> device_disabling_manager_;
   chromeos::system::FakeStatisticsProvider statistics_provider_;
-
-  DISALLOW_COPY_AND_ASSIGN(DeviceDisablingManagerTestBase);
 };
 
 DeviceDisablingManagerTestBase::DeviceDisablingManagerTestBase() {
@@ -125,6 +127,11 @@ class DeviceDisablingManagerOOBETest : public DeviceDisablingManagerTestBase {
  public:
   DeviceDisablingManagerOOBETest();
 
+  DeviceDisablingManagerOOBETest(const DeviceDisablingManagerOOBETest&) =
+      delete;
+  DeviceDisablingManagerOOBETest& operator=(
+      const DeviceDisablingManagerOOBETest&) = delete;
+
   // DeviceDisablingManagerTestBase:
   void SetUp() override;
   void TearDown() override;
@@ -143,8 +150,6 @@ class DeviceDisablingManagerOOBETest : public DeviceDisablingManagerTestBase {
 
   base::RunLoop run_loop_;
   bool device_disabled_;
-
-  DISALLOW_COPY_AND_ASSIGN(DeviceDisablingManagerOOBETest);
 };
 
 DeviceDisablingManagerOOBETest::DeviceDisablingManagerOOBETest()
@@ -175,12 +180,13 @@ void DeviceDisablingManagerOOBETest::CheckWhetherDeviceDisabledDuringOOBE() {
 void DeviceDisablingManagerOOBETest::SetDeviceDisabled(bool disabled) {
   DictionaryPrefUpdate dict(&local_state_, prefs::kServerBackedDeviceState);
   if (disabled) {
-    dict->SetString(policy::kDeviceStateMode, policy::kDeviceStateModeDisabled);
+    dict->SetStringKey(policy::kDeviceStateMode,
+                       policy::kDeviceStateModeDisabled);
   } else {
     dict->RemoveKey(policy::kDeviceStateMode);
   }
-  dict->SetString(policy::kDeviceStateManagementDomain, kEnrollmentDomain);
-  dict->SetString(policy::kDeviceStateDisabledMessage, kDisabledMessage1);
+  dict->SetStringKey(policy::kDeviceStateManagementDomain, kEnrollmentDomain);
+  dict->SetStringKey(policy::kDeviceStateDisabledMessage, kDisabledMessage1);
 }
 
 void DeviceDisablingManagerOOBETest::OnDeviceDisabledChecked(
@@ -251,6 +257,10 @@ class DeviceDisablingManagerTest : public DeviceDisablingManagerTestBase,
  public:
   DeviceDisablingManagerTest();
 
+  DeviceDisablingManagerTest(const DeviceDisablingManagerTest&) = delete;
+  DeviceDisablingManagerTest& operator=(const DeviceDisablingManagerTest&) =
+      delete;
+
   // DeviceDisablingManagerTestBase:
   void TearDown() override;
   void CreateDeviceDisablingManager() override;
@@ -269,8 +279,6 @@ class DeviceDisablingManagerTest : public DeviceDisablingManagerTestBase,
 
   FakeSessionManagerClient session_manager_client_;
   policy::DevicePolicyBuilder device_policy_;
-
-  DISALLOW_COPY_AND_ASSIGN(DeviceDisablingManagerTest);
 };
 
 DeviceDisablingManagerTest::DeviceDisablingManagerTest() {

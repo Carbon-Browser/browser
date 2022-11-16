@@ -93,8 +93,7 @@ class PinRequestView::FocusableLabelButton : public views::LabelButton {
   FocusableLabelButton(PressedCallback callback, const std::u16string& text)
       : views::LabelButton(std::move(callback), text) {
     SetInstallFocusRingOnFocus(true);
-    views::FocusRing::Get(this)->SetColor(
-        ShelfConfig::Get()->shelf_focus_border_color());
+    views::FocusRing::Get(this)->SetColorId(ui::kColorAshFocusRing);
     SetFocusBehavior(FocusBehavior::ALWAYS);
   }
 
@@ -174,8 +173,8 @@ PinRequestView::PinRequestView(PinRequest request, Delegate* delegate)
   // Main view contains all other views aligned vertically and centered.
   auto layout = std::make_unique<views::BoxLayout>(
       views::BoxLayout::Orientation::kVertical,
-      gfx::Insets(kPinRequestViewVerticalInsetDp,
-                  kPinRequestViewHorizontalInsetDp),
+      gfx::Insets::VH(kPinRequestViewVerticalInsetDp,
+                      kPinRequestViewHorizontalInsetDp),
       0);
   layout->set_main_axis_alignment(views::BoxLayout::MainAxisAlignment::kStart);
   layout->set_cross_axis_alignment(

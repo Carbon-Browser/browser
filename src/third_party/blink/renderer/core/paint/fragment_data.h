@@ -6,16 +6,20 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_PAINT_FRAGMENT_DATA_H_
 
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/layout/geometry/physical_rect.h"
 #include "third_party/blink/renderer/core/paint/object_paint_properties.h"
 #include "third_party/blink/renderer/platform/graphics/paint/cull_rect.h"
 #include "third_party/blink/renderer/platform/graphics/paint/ref_counted_property_tree_state.h"
-#include "third_party/blink/renderer/platform/heap/handle.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
+#include "third_party/blink/renderer/platform/heap/visitor.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 
 namespace blink {
 
 class PaintLayer;
+struct StickyPositionScrollingConstraints;
 
 // Represents the data for a particular fragment of a LayoutObject.
 // See README.md.
@@ -53,6 +57,15 @@ class CORE_EXPORT FragmentData final : public GarbageCollected<FragmentData> {
   // depending on the return value of LayoutBoxModelObject::LayerTypeRequired().
   PaintLayer* Layer() const { return rare_data_ ? rare_data_->layer : nullptr; }
   void SetLayer(PaintLayer*);
+
+  StickyPositionScrollingConstraints* StickyConstraints() const {
+    return rare_data_ ? rare_data_->sticky_constraints : nullptr;
+  }
+  void SetStickyConstraints(StickyPositionScrollingConstraints* constraints) {
+    if (!rare_data_ && !constraints)
+      return;
+    EnsureRareData().sticky_constraints = constraints;
+  }
 
   // A fragment ID unique within the LayoutObject. In NG block fragmentation,
   // this is the fragmentainer index. In legacy block fragmentation, it's the
@@ -92,29 +105,6 @@ class CORE_EXPORT FragmentData final : public GarbageCollected<FragmentData> {
   void SetLegacyPaginationOffset(const PhysicalOffset& pagination_offset) {
     if (rare_data_ || pagination_offset != PhysicalOffset())
       EnsureRareData().legacy_pagination_offset = pagination_offset;
-  }
-
-  bool IsClipPathCacheValid() const {
-    return rare_data_ && rare_data_->is_clip_path_cache_valid;
-  }
-  void InvalidateClipPathCache();
-
-  absl::optional<IntRect> ClipPathBoundingBox() const {
-    DCHECK(IsClipPathCacheValid());
-    return rare_data_ ? rare_data_->clip_path_bounding_box : absl::nullopt;
-  }
-  const RefCountedPath* ClipPathPath() const {
-    DCHECK(IsClipPathCacheValid());
-    return rare_data_ ? rare_data_->clip_path_path.get() : nullptr;
-  }
-  void SetClipPathCache(const IntRect& bounding_box,
-                        scoped_refptr<const RefCountedPath>);
-  void ClearClipPathCache() {
-    if (rare_data_) {
-      rare_data_->is_clip_path_cache_valid = true;
-      rare_data_->clip_path_bounding_box = absl::nullopt;
-      rare_data_->clip_path_path = nullptr;
-    }
   }
 
   // Holds references to the paint property nodes created by this object.
@@ -169,7 +159,7 @@ class CORE_EXPORT FragmentData final : public GarbageCollected<FragmentData> {
     EnsureRareData();
     if (!rare_data_->local_border_box_properties) {
       rare_data_->local_border_box_properties =
-          std::make_unique<RefCountedPropertyTreeState>(state);
+          std::make_unique<RefCountedPropertyTreeStateOrAlias>(state);
     } else {
       *rare_data_->local_border_box_properties = state;
     }
@@ -209,12 +199,7 @@ class CORE_EXPORT FragmentData final : public GarbageCollected<FragmentData> {
   const ClipPaintPropertyNodeOrAlias& PreClip() const;
   const ClipPaintPropertyNodeOrAlias& PostOverflowClip() const;
   const EffectPaintPropertyNodeOrAlias& PreEffect() const;
-  const EffectPaintPropertyNodeOrAlias& PreFilter() const;
   const EffectPaintPropertyNodeOrAlias& PostIsolationEffect() const;
-
-  // Map a rect from |this|'s local border box space to |fragment|'s local
-  // border box space. Both fragments must have local border box properties.
-  void MapRectToFragment(const FragmentData& fragment, IntRect&) const;
 
   ~FragmentData() = default;
   void Trace(Visitor* visitor) const { visitor->Trace(rare_data_); }
@@ -237,16 +222,15 @@ class CORE_EXPORT FragmentData final : public GarbageCollected<FragmentData> {
     // The following data fields are not fragment specific. Placed here just to
     // avoid separate data structure for them.
     Member<PaintLayer> layer;
+    Member<StickyPositionScrollingConstraints> sticky_constraints;
     UniqueObjectId unique_id;
 
     // Fragment specific data.
     PhysicalOffset legacy_pagination_offset;
     wtf_size_t fragment_id = 0;
     std::unique_ptr<ObjectPaintProperties> paint_properties;
-    std::unique_ptr<RefCountedPropertyTreeState> local_border_box_properties;
-    bool is_clip_path_cache_valid = false;
-    absl::optional<IntRect> clip_path_bounding_box;
-    scoped_refptr<const RefCountedPath> clip_path_path;
+    std::unique_ptr<RefCountedPropertyTreeStateOrAlias>
+        local_border_box_properties;
     CullRect cull_rect_;
     CullRect contents_cull_rect_;
     Member<FragmentData> next_fragment_;

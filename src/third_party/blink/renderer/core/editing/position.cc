@@ -27,6 +27,8 @@
 
 #include <stdio.h>
 #include <ostream>  // NOLINT
+
+#include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/editing/editing_utilities.h"
 #include "third_party/blink/renderer/core/editing/text_affinity.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
@@ -761,11 +763,11 @@ template class CORE_TEMPLATE_EXPORT PositionTemplate<EditingInFlatTreeStrategy>;
 
 #if DCHECK_IS_ON()
 
-void showTree(const blink::Position& pos) {
+void ShowTree(const blink::Position& pos) {
   pos.ShowTreeForThis();
 }
 
-void showTree(const blink::Position* pos) {
+void ShowTree(const blink::Position* pos) {
   if (pos)
     pos->ShowTreeForThis();
   else

@@ -11,7 +11,6 @@
 #include "base/callback_forward.h"
 #include "base/containers/flat_set.h"
 #include "base/containers/span.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
@@ -36,6 +35,9 @@ class DeviceImpl : public mojom::UsbDevice, public device::UsbDevice::Observer {
                      mojo::PendingRemote<mojom::UsbDeviceClient> client,
                      base::span<const uint8_t> blocked_interface_classes,
                      bool allow_security_key_requests);
+
+  DeviceImpl(const DeviceImpl&) = delete;
+  DeviceImpl& operator=(const DeviceImpl&) = delete;
 
   ~DeviceImpl() override;
 
@@ -124,8 +126,6 @@ class DeviceImpl : public mojom::UsbDevice, public device::UsbDevice::Observer {
   mojo::SelfOwnedReceiverRef<mojom::UsbDevice> receiver_;
   mojo::Remote<device::mojom::UsbDeviceClient> client_;
   base::WeakPtrFactory<DeviceImpl> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(DeviceImpl);
 };
 
 }  // namespace usb

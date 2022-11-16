@@ -8,6 +8,8 @@
 #include "components/autofill_assistant/browser/actions/action.h"
 #include "components/autofill_assistant/browser/actions/action_delegate.h"
 #include "components/autofill_assistant/browser/client_status.h"
+#include "components/autofill_assistant/browser/wait_for_document_operation.h"
+#include "components/autofill_assistant/browser/wait_for_dom_operation.h"
 
 namespace autofill_assistant {
 
@@ -16,12 +18,16 @@ Action::Action(ActionDelegate* delegate, const ActionProto& proto)
 
 Action::~Action() {}
 
-bool Action::ShouldInterruptOnPause() const {
-  return false;
+Action::ActionData::ActionData() = default;
+Action::ActionData::~ActionData() = default;
+
+Action::ActionData& Action::GetActionData() {
+  return action_data_;
 }
 
 void Action::ProcessAction(ProcessActionCallback callback) {
   action_stopwatch_.StartActiveTime();
+  delegate_->GetLogInfo().Clear();
   processed_action_proto_ = std::make_unique<ProcessedActionProto>();
   InternalProcessAction(base::BindOnce(&Action::RecordActionTimes,
                                        weak_ptr_factory_.GetWeakPtr(),
@@ -52,6 +58,9 @@ void Action::UpdateProcessedAction(const ClientStatus& status) {
   // Safety check in case process action is run twice.
   *processed_action_proto_->mutable_action() = proto_;
   status.FillProto(processed_action_proto_.get());
+
+  auto& log_info = delegate_->GetLogInfo();
+  processed_action_proto_->mutable_status_details()->MergeFrom(log_info);
 }
 
 void Action::OnWaitForElementTimed(
@@ -116,9 +125,6 @@ std::ostream& operator<<(std::ostream& out,
       break;
     case ActionProto::ActionInfoCase::kShowProgressBar:
       out << "ShowProgressBar";
-      break;
-    case ActionProto::ActionInfoCase::kHighlightElement:
-      out << "HighlightElement";
       break;
     case ActionProto::ActionInfoCase::kShowDetails:
       out << "ShowDetails";
@@ -260,6 +266,27 @@ std::ostream& operator<<(std::ostream& out,
       break;
     case ActionProto::ActionInfoCase::kSaveSubmittedPassword:
       out << "SaveSubmittedPassword";
+      break;
+    case ActionProto::ActionInfoCase::kExecuteJs:
+      out << "ExecuteJs";
+      break;
+    case ActionProto::ActionInfoCase::kJsFlow:
+      out << "JsFlow";
+      break;
+    case ActionProto::ActionInfoCase::kExternalAction:
+      out << "ExternalAction";
+      break;
+    case ActionProto::ActionInfoCase::kRegisterPasswordResetRequest:
+      out << "RegisterPasswordResetRequest";
+      break;
+    case ActionProto::ActionInfoCase::kSetNativeValue:
+      out << "SetNativeValue";
+      break;
+    case ActionProto::ActionInfoCase::kSetNativeChecked:
+      out << "SetNativeChecked";
+      break;
+    case ActionProto::ActionInfoCase::kPromptQrCodeScan:
+      out << "PromptQrCodeScan";
       break;
     case ActionProto::ActionInfoCase::ACTION_INFO_NOT_SET:
       out << "ACTION_INFO_NOT_SET";

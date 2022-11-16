@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "components/download/internal/background_service/constants.h"
 #include "components/download/internal/background_service/log_sink.h"
@@ -29,6 +29,10 @@ struct Entry;
 class LoggerImpl : public Logger, public LogSink {
  public:
   LoggerImpl();
+
+  LoggerImpl(const LoggerImpl&) = delete;
+  LoggerImpl& operator=(const LoggerImpl&) = delete;
+
   ~LoggerImpl() override;
 
   void SetLogSource(LogSource* log_source);
@@ -50,10 +54,8 @@ class LoggerImpl : public Logger, public LogSink {
                             const std::string& guid,
                             DownloadParams::StartResult start_result) override;
 
-  LogSource* log_source_;
+  raw_ptr<LogSource> log_source_;
   base::ObserverList<Observer>::Unchecked observers_;
-
-  DISALLOW_COPY_AND_ASSIGN(LoggerImpl);
 };
 
 }  // namespace download

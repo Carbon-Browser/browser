@@ -48,7 +48,7 @@
 #include "net/test/embedded_test_server/http_response.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include "base/win/windows_version.h"
 #endif
 
@@ -98,7 +98,7 @@ class AudioWaitingExtensionTest : public ExtensionApiTest {
       base::RunLoop().RunUntilIdle();
       if (audio_playing)
         break;
-      base::PlatformThread::Sleep(base::TimeDelta::FromMilliseconds(100));
+      base::PlatformThread::Sleep(base::Milliseconds(100));
     }
     if (!audio_playing)
       FAIL() << "Audio did not start playing within ~5 seconds.";
@@ -117,10 +117,9 @@ class WebrtcAudioPrivateTest : public AudioWaitingExtensionTest {
 
  protected:
   void AppendTabIdToRequestInfo(base::ListValue* params, int tab_id) {
-    std::unique_ptr<base::DictionaryValue> request_info(
-        new base::DictionaryValue());
-    request_info->SetInteger("tabId", tab_id);
-    params->Append(std::move(request_info));
+    base::Value::Dict request_info;
+    request_info.Set("tabId", tab_id);
+    params->Append(base::Value(std::move(request_info)));
   }
 
   std::unique_ptr<base::Value> InvokeGetSinks() {
@@ -136,7 +135,7 @@ class WebrtcAudioPrivateTest : public AudioWaitingExtensionTest {
   GURL source_url_;
 };
 
-#if !defined(OS_MAC)
+#if !BUILDFLAG(IS_MAC)
 // http://crbug.com/334579
 IN_PROC_BROWSER_TEST_F(WebrtcAudioPrivateTest, GetSinks) {
   AudioDeviceDescriptions devices;
@@ -149,38 +148,41 @@ IN_PROC_BROWSER_TEST_F(WebrtcAudioPrivateTest, GetSinks) {
   JSONWriter::Write(*result, &result_string);
   VLOG(2) << result_string;
 
-  EXPECT_EQ(devices.size(), sink_list.GetList().size());
+  EXPECT_EQ(devices.size(), sink_list.GetListDeprecated().size());
 
   // Iterate through both lists in lockstep and compare. The order
   // should be identical.
   size_t ix = 0;
   AudioDeviceDescriptions::const_iterator it = devices.begin();
-  for (; ix < sink_list.GetList().size() && it != devices.end(); ++ix, ++it) {
-    const base::DictionaryValue* dict = NULL;
-    sink_list.GetDictionary(ix, &dict);
+  for (; ix < sink_list.GetListDeprecated().size() && it != devices.end();
+       ++ix, ++it) {
+    const base::Value& value = sink_list.GetListDeprecated()[ix];
+    EXPECT_TRUE(value.is_dict());
+    const base::DictionaryValue& dict = base::Value::AsDictionaryValue(value);
     std::string sink_id;
-    dict->GetString("sinkId", &sink_id);
+    dict.GetString("sinkId", &sink_id);
 
     std::string expected_id =
         media::AudioDeviceDescription::IsDefaultDevice(it->unique_id)
             ? media::AudioDeviceDescription::kDefaultDeviceId
             : content::GetHMACForMediaDeviceID(
                   profile()->GetMediaDeviceIDSalt(),
-                  url::Origin::Create(source_url_.GetOrigin()), it->unique_id);
+                  url::Origin::Create(source_url_.DeprecatedGetOriginAsURL()),
+                  it->unique_id);
 
     EXPECT_EQ(expected_id, sink_id);
     std::string sink_label;
-    dict->GetString("sinkLabel", &sink_label);
+    dict.GetString("sinkLabel", &sink_label);
     EXPECT_EQ(it->device_name, sink_label);
 
     // TODO(joi): Verify the contents of these once we start actually
     // filling them in.
-    EXPECT_TRUE(dict->HasKey("isDefault"));
-    EXPECT_TRUE(dict->HasKey("isReady"));
-    EXPECT_TRUE(dict->HasKey("sampleRate"));
+    EXPECT_TRUE(dict.FindKey("isDefault"));
+    EXPECT_TRUE(dict.FindKey("isReady"));
+    EXPECT_TRUE(dict.FindKey("sampleRate"));
   }
 }
-#endif  // OS_MAC
+#endif  // BUILDFLAG(IS_MAC)
 
 IN_PROC_BROWSER_TEST_F(WebrtcAudioPrivateTest, GetAssociatedSink) {
   // Get the list of input devices. We can cheat in the unit test and
@@ -197,7 +199,7 @@ IN_PROC_BROWSER_TEST_F(WebrtcAudioPrivateTest, GetAssociatedSink) {
 
     std::string raw_device_id = device.unique_id;
     VLOG(2) << "Trying to find associated sink for device " << raw_device_id;
-    GURL origin(GURL("http://www.google.com/").GetOrigin());
+    GURL origin(GURL("http://www.google.com/").DeprecatedGetOriginAsURL());
     std::string source_id_in_origin = content::GetHMACForMediaDeviceID(
         profile()->GetMediaDeviceIDSalt(), url::Origin::Create(origin),
         raw_device_id);

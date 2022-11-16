@@ -10,7 +10,6 @@
 #include <utility>
 #include <vector>
 
-#include "base/macros.h"
 #include "content/renderer/render_frame_impl.h"
 #include "content/web_test/common/web_test.mojom.h"
 #include "content/web_test/renderer/accessibility_controller.h"
@@ -37,6 +36,10 @@ class WebFrameTestProxy : public RenderFrameImpl,
  public:
   WebFrameTestProxy(RenderFrameImpl::CreateParams params,
                     TestRunner* test_runner);
+
+  WebFrameTestProxy(const WebFrameTestProxy&) = delete;
+  WebFrameTestProxy& operator=(const WebFrameTestProxy&) = delete;
+
   ~WebFrameTestProxy() override;
 
   // RenderFrameImpl overrides.
@@ -76,10 +79,10 @@ class WebFrameTestProxy : public RenderFrameImpl,
                        ForRedirect for_redirect) override;
   void BeginNavigation(std::unique_ptr<blink::WebNavigationInfo> info) override;
   void PostAccessibilityEvent(const ui::AXEvent& event) override;
-  void MarkWebAXObjectDirty(
-      const blink::WebAXObject& object,
-      bool subtree,
-      ax::mojom::Action event_from_action = ax::mojom::Action::kNone) override;
+  void MarkWebAXObjectDirty(const blink::WebAXObject& object,
+                            bool subtree,
+                            ax::mojom::EventFrom event_from,
+                            ax::mojom::Action event_from_action) override;
   void CheckIfAudioSinkExistsAndIsAuthorized(
       const blink::WebString& sink_id,
       blink::WebSetSinkIdCompleteCallback completion_callback) override;
@@ -115,8 +118,6 @@ class WebFrameTestProxy : public RenderFrameImpl,
 
   mojo::AssociatedReceiver<mojom::WebTestRenderFrame>
       web_test_render_frame_receiver_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(WebFrameTestProxy);
 };
 
 }  // namespace content

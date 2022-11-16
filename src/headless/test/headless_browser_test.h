@@ -8,6 +8,7 @@
 #include <memory>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "content/public/test/browser_test_base.h"
 #include "headless/public/devtools/domains/network.h"
@@ -31,6 +32,10 @@ class LoadObserver : public page::Observer, public network::Observer {
  public:
   LoadObserver(HeadlessDevToolsClient* devtools_client,
                base::OnceClosure callback);
+
+  LoadObserver(const LoadObserver&) = delete;
+  LoadObserver& operator=(const LoadObserver&) = delete;
+
   ~LoadObserver() override;
 
   // page::Observer implementation:
@@ -44,16 +49,17 @@ class LoadObserver : public page::Observer, public network::Observer {
 
  private:
   base::OnceClosure callback_;
-  HeadlessDevToolsClient* devtools_client_;  // Not owned.
+  raw_ptr<HeadlessDevToolsClient> devtools_client_;  // Not owned.
 
   bool navigation_succeeded_;
-
-  DISALLOW_COPY_AND_ASSIGN(LoadObserver);
 };
 
 // Base class for tests which require a full instance of the headless browser.
 class HeadlessBrowserTest : public content::BrowserTestBase {
  public:
+  HeadlessBrowserTest(const HeadlessBrowserTest&) = delete;
+  HeadlessBrowserTest& operator=(const HeadlessBrowserTest&) = delete;
+
   // Notify that an asynchronous test is now complete and the test runner should
   // exit.
   void FinishAsynchronousTest();
@@ -66,7 +72,7 @@ class HeadlessBrowserTest : public content::BrowserTestBase {
   void SetUp() override;
   void PreRunTestOnMainThread() override;
   void PostRunTestOnMainThread() override;
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   void CreatedBrowserMainParts(content::BrowserMainParts* parts) override;
 #endif
 
@@ -101,8 +107,6 @@ class HeadlessBrowserTest : public content::BrowserTestBase {
 
  private:
   std::unique_ptr<base::RunLoop> run_loop_;
-
-  DISALLOW_COPY_AND_ASSIGN(HeadlessBrowserTest);
 };
 
 // TODO(eseckler): Make macro more sheriff-friendly.
@@ -159,8 +163,8 @@ class HeadlessAsyncDevTooledBrowserTest : public HeadlessBrowserTest,
  protected:
   void RunTest();
 
-  HeadlessBrowserContext* browser_context_;  // Not owned.
-  HeadlessWebContents* web_contents_;
+  raw_ptr<HeadlessBrowserContext> browser_context_;  // Not owned.
+  raw_ptr<HeadlessWebContents> web_contents_;
   std::unique_ptr<HeadlessDevToolsClient> devtools_client_;
   std::unique_ptr<HeadlessDevToolsClient> browser_devtools_client_;
   bool render_process_exited_;

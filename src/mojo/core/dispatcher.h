@@ -12,7 +12,6 @@
 #include <ostream>
 #include <vector>
 
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/strings/string_piece.h"
 #include "base/synchronization/lock.h"
@@ -52,7 +51,7 @@ using DispatcherVector = std::vector<scoped_refptr<Dispatcher>>;
 class MOJO_SYSTEM_IMPL_EXPORT Dispatcher
     : public base::RefCountedThreadSafe<Dispatcher> {
  public:
-  struct DispatcherInTransit {
+  struct MOJO_SYSTEM_IMPL_EXPORT DispatcherInTransit {
     DispatcherInTransit();
     DispatcherInTransit(const DispatcherInTransit& other);
     ~DispatcherInTransit();
@@ -73,6 +72,9 @@ class MOJO_SYSTEM_IMPL_EXPORT Dispatcher
     // "Private" types (not exposed via the public interface):
     PLATFORM_HANDLE = -1,
   };
+
+  Dispatcher(const Dispatcher&) = delete;
+  Dispatcher& operator=(const Dispatcher&) = delete;
 
   // TODO(crbug.com/1229671): Remove these and all callers.
   //
@@ -297,8 +299,6 @@ class MOJO_SYSTEM_IMPL_EXPORT Dispatcher
 
   Dispatcher();
   virtual ~Dispatcher();
-
-  DISALLOW_COPY_AND_ASSIGN(Dispatcher);
 };
 
 // So logging macros and |DCHECK_EQ()|, etc. work.

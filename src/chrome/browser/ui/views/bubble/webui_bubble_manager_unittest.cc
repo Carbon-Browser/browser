@@ -5,6 +5,7 @@
 #include "chrome/browser/ui/views/bubble/webui_bubble_manager.h"
 
 #include "base/feature_list.h"
+#include "build/chromeos_buildflags.h"
 #include "chrome/browser/ui/ui_features.h"
 #include "chrome/browser/ui/views/bubble/bubble_contents_wrapper.h"
 #include "chrome/browser/ui/views/bubble/webui_bubble_dialog_view.h"
@@ -32,12 +33,13 @@ class BubbleContentsWrapperT<TestWebUIController>
   BubbleContentsWrapperT(const GURL& webui_url,
                          content::BrowserContext* browser_context,
                          int task_manager_string_id,
-                         bool enable_extension_apis = false,
-                         bool webui_resizes_host = true)
-      : BubbleContentsWrapper(browser_context,
+                         bool webui_resizes_host = true,
+                         bool esc_closes_ui = true)
+      : BubbleContentsWrapper(webui_url,
+                              browser_context,
                               task_manager_string_id,
-                              enable_extension_apis,
-                              webui_resizes_host) {}
+                              webui_resizes_host,
+                              esc_closes_ui) {}
   void ReloadWebContents() override {}
 };
 
@@ -51,8 +53,6 @@ class WebUIBubbleManagerTest : public ChromeViewsTestBase {
 
   // ChromeViewsTestBase:
   void SetUp() override {
-    scoped_feature_list_.InitWithFeatures(
-        {features::kWebUIBubblePerProfilePersistence}, {});
     ASSERT_TRUE(profile_manager_.SetUp());
     ChromeViewsTestBase::SetUp();
   }
@@ -60,14 +60,29 @@ class WebUIBubbleManagerTest : public ChromeViewsTestBase {
   TestingProfileManager* profile_manager() { return &profile_manager_; }
 
  private:
-  base::test::ScopedFeatureList scoped_feature_list_;
   TestingProfileManager profile_manager_;
 };
 
-TEST_F(WebUIBubbleManagerTest, UsesPersistentContentsWrapperPerProfile) {
+// Fixture for testing the persistent renderer functionality.
+class WebUIBubbleManagerPersistentRendererTest : public WebUIBubbleManagerTest {
+ public:
+  // WebUIBubbleManagerTest:
+  void SetUp() override {
+    scoped_feature_list_.InitWithFeatures(
+        {features::kWebUIBubblePerProfilePersistence}, {});
+    WebUIBubbleManagerTest::SetUp();
+  }
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
+TEST_F(WebUIBubbleManagerPersistentRendererTest,
+       UsesPersistentContentsWrapperPerProfile) {
   const char* kProfileName = "Person 1";
   auto* test_profile = profile_manager()->CreateTestingProfile(kProfileName);
 
+  // Owned by |test_profile|.
   auto* service =
       BubbleContentsWrapperServiceFactory::GetForProfile(test_profile, true);
   ASSERT_NE(nullptr, service);
@@ -76,12 +91,12 @@ TEST_F(WebUIBubbleManagerTest, UsesPersistentContentsWrapperPerProfile) {
       CreateTestWidget(views::Widget::InitParams::TYPE_WINDOW);
   auto bubble_manager =
       std::make_unique<WebUIBubbleManagerT<TestWebUIController>>(
-          anchor_widget->GetContentsView(), test_profile, GURL(kTestURL), 1,
-          false);
+          anchor_widget->GetContentsView(), test_profile, GURL(kTestURL), 1);
   bubble_manager->DisableCloseBubbleHelperForTesting();
 
-  // If using per-profile peristence the `contents_wrapper` should have been
+  // If using per-profile persistence the `contents_wrapper` should have been
   // created before the bubble has been invoked.
+  // Owned by |service|.
   BubbleContentsWrapper* contents_wrapper =
       service->GetBubbleContentsWrapperFromURL(GURL(kTestURL));
   EXPECT_NE(nullptr, contents_wrapper);
@@ -101,10 +116,11 @@ TEST_F(WebUIBubbleManagerTest, UsesPersistentContentsWrapperPerProfile) {
   EXPECT_EQ(contents_wrapper,
             service->GetBubbleContentsWrapperFromURL(GURL(kTestURL)));
 
+  service->Shutdown();  // Need to Shutdown() before the profile owning it.
   profile_manager()->DeleteTestingProfile(kProfileName);
 }
 
-TEST_F(WebUIBubbleManagerTest,
+TEST_F(WebUIBubbleManagerPersistentRendererTest,
        PerProfileContentsWrapperNotUsedForOffTheRecordProfile) {
   const char* kProfileName = "Person 1";
   auto* test_profile = profile_manager()->CreateTestingProfile(kProfileName);
@@ -116,8 +132,7 @@ TEST_F(WebUIBubbleManagerTest,
       CreateTestWidget(views::Widget::InitParams::TYPE_WINDOW);
   auto bubble_manager =
       std::make_unique<WebUIBubbleManagerT<TestWebUIController>>(
-          anchor_widget->GetContentsView(), otr_profile, GURL(kTestURL), 1,
-          false);
+          anchor_widget->GetContentsView(), otr_profile, GURL(kTestURL), 1);
   bubble_manager->DisableCloseBubbleHelperForTesting();
 
   // The service should not exist for off the record profiles.
@@ -142,9 +157,27 @@ TEST_F(WebUIBubbleManagerTest,
   profile_manager()->DeleteTestingProfile(kProfileName);
 }
 
+TEST_F(WebUIBubbleManagerTest, CreateWebUIBubbleDialogWithAnchorProvided) {
+  const char* kProfileName = "Person 1";
+  auto* test_profile = profile_manager()->CreateTestingProfile(kProfileName);
+
+  std::unique_ptr<views::Widget> anchor_widget =
+      CreateTestWidget(views::Widget::InitParams::TYPE_WINDOW);
+  auto bubble_manager =
+      std::make_unique<WebUIBubbleManagerT<TestWebUIController>>(
+          anchor_widget->GetContentsView(), test_profile, GURL(kTestURL), 1);
+  bubble_manager->DisableCloseBubbleHelperForTesting();
+
+  gfx::Rect anchor(666, 666, 0, 0);
+  bubble_manager->ShowBubble(anchor);
+  auto bubble_view = bubble_manager->bubble_view_for_testing();
+
+  EXPECT_EQ(bubble_view->GetAnchorRect(), anchor);
+}
+
 #if !BUILDFLAG(IS_CHROMEOS_ASH)  // No multi-profile on ChromeOS.
 
-TEST_F(WebUIBubbleManagerTest,
+TEST_F(WebUIBubbleManagerPersistentRendererTest,
        UsesPersistentContentsWrapperPerProfileMultiProfile) {
   const char* kProfileName1 = "Person 1";
   const char* kProfileName2 = "Person 2";
@@ -160,7 +193,7 @@ TEST_F(WebUIBubbleManagerTest,
       CreateTestWidget(views::Widget::InitParams::TYPE_WINDOW);
   auto create_manager = [&](Profile* profile) {
     auto manager = std::make_unique<WebUIBubbleManagerT<TestWebUIController>>(
-        anchor_widget->GetContentsView(), profile, GURL(kTestURL), 1, false);
+        anchor_widget->GetContentsView(), profile, GURL(kTestURL), 1);
     manager->DisableCloseBubbleHelperForTesting();
     return manager;
   };
@@ -204,6 +237,8 @@ TEST_F(WebUIBubbleManagerTest,
   test_manager(manager1.get(), service1, contents_wrapper_profile1);
   test_manager(manager2.get(), service1, contents_wrapper_profile1);
   test_manager(manager3.get(), service2, contents_wrapper_profile2);
+  service1->Shutdown();  // Need to Shutdown() before the profile owning it.
+  service2->Shutdown();  // Need to Shutdown() before the profile owning it.
   profile_manager()->DeleteTestingProfile(kProfileName1);
   profile_manager()->DeleteTestingProfile(kProfileName2);
 }

@@ -14,7 +14,6 @@
 #include "base/callback_helpers.h"
 #include "base/i18n/message_formatter.h"
 #include "base/logging.h"
-#include "base/macros.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
@@ -27,19 +26,21 @@ namespace remoting {
 namespace {
 
 // Time to wait before closing the dialog and cancelling the connection.
-constexpr base::TimeDelta kDialogTimeout = base::TimeDelta::FromMinutes(1);
+constexpr base::TimeDelta kDialogTimeout = base::Minutes(1);
 
 class It2MeConfirmationDialogWin : public It2MeConfirmationDialog {
  public:
   It2MeConfirmationDialogWin();
+
+  It2MeConfirmationDialogWin(const It2MeConfirmationDialogWin&) = delete;
+  It2MeConfirmationDialogWin& operator=(const It2MeConfirmationDialogWin&) =
+      delete;
+
   ~It2MeConfirmationDialogWin() override;
 
   // It2MeConfirmationDialog implementation.
   void Show(const std::string& remote_user_email,
             ResultCallback callback) override;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(It2MeConfirmationDialogWin);
 };
 
 It2MeConfirmationDialogWin::It2MeConfirmationDialogWin() = default;

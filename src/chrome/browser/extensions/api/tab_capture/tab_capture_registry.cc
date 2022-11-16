@@ -8,7 +8,7 @@
 #include <utility>
 
 #include "base/lazy_instance.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/values.h"
 #include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/sessions/content/session_tab_helper.h"
@@ -44,15 +44,17 @@ class TabCaptureRegistry::LiveRequest : public content::WebContentsObserver {
         registry_(registry),
         capture_state_(tab_capture::TAB_CAPTURE_STATE_NONE),
         is_verified_(false),
-        // TODO(miu): This initial value for |is_fullscreened_| is a faulty
-        // assumption.  http://crbug.com/350491
         is_fullscreened_(false),
         render_process_id_(
-            target_contents->GetMainFrame()->GetProcess()->GetID()),
-        render_frame_id_(target_contents->GetMainFrame()->GetRoutingID()) {
+            target_contents->GetPrimaryMainFrame()->GetProcess()->GetID()),
+        render_frame_id_(
+            target_contents->GetPrimaryMainFrame()->GetRoutingID()) {
     DCHECK(web_contents());
     DCHECK(registry_);
   }
+
+  LiveRequest(const LiveRequest&) = delete;
+  LiveRequest& operator=(const LiveRequest&) = delete;
 
   ~LiveRequest() override {}
 
@@ -105,7 +107,7 @@ class TabCaptureRegistry::LiveRequest : public content::WebContentsObserver {
  private:
   const std::string extension_id_;
   const bool is_anonymous_;
-  TabCaptureRegistry* const registry_;
+  const raw_ptr<TabCaptureRegistry> registry_;
   TabCaptureState capture_state_;
   bool is_verified_;
   bool is_fullscreened_;
@@ -115,8 +117,6 @@ class TabCaptureRegistry::LiveRequest : public content::WebContentsObserver {
   // calls to OnRequestUpdate() will always refer to this request by this ID.
   int render_process_id_;
   int render_frame_id_;
-
-  DISALLOW_COPY_AND_ASSIGN(LiveRequest);
 };
 
 TabCaptureRegistry::TabCaptureRegistry(content::BrowserContext* context)
@@ -146,17 +146,17 @@ TabCaptureRegistry::GetFactoryInstance() {
 
 void TabCaptureRegistry::GetCapturedTabs(
     const std::string& extension_id,
-    base::ListValue* list_of_capture_info) const {
+    base::Value::List* capture_info_list) const {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
-  DCHECK(list_of_capture_info);
-  list_of_capture_info->ClearList();
+  DCHECK(capture_info_list);
+  capture_info_list->clear();
   for (const std::unique_ptr<LiveRequest>& request : requests_) {
     if (request->is_anonymous() || !request->is_verified() ||
         request->extension_id() != extension_id)
       continue;
     tab_capture::CaptureInfo info;
     request->GetCaptureInfo(&info);
-    list_of_capture_info->Append(info.ToValue());
+    capture_info_list->Append(base::Value::FromUniquePtrValue(info.ToValue()));
   }
 }
 
@@ -199,7 +199,8 @@ std::string TabCaptureRegistry::AddRequest(
   requests_.push_back(std::make_unique<LiveRequest>(
       target_contents, extension_id, is_anonymous, this));
 
-  content::RenderFrameHost* const main_frame = caller_contents->GetMainFrame();
+  content::RenderFrameHost* const main_frame =
+      caller_contents->GetPrimaryMainFrame();
   if (main_frame) {
     device_id = content::DesktopStreamsRegistry::GetInstance()->RegisterStream(
         main_frame->GetProcess()->GetID(), main_frame->GetRoutingID(),
@@ -291,14 +292,13 @@ void TabCaptureRegistry::DispatchStatusChangeEvent(
   if (!router)
     return;
 
-  std::unique_ptr<base::ListValue> args(new base::ListValue());
+  base::Value::List args;
   tab_capture::CaptureInfo info;
   request->GetCaptureInfo(&info);
-  args->Append(info.ToValue());
-  auto event =
-      std::make_unique<Event>(events::TAB_CAPTURE_ON_STATUS_CHANGED,
-                              tab_capture::OnStatusChanged::kEventName,
-                              std::move(*args).TakeList(), browser_context_);
+  args.Append(base::Value::FromUniquePtrValue(info.ToValue()));
+  auto event = std::make_unique<Event>(events::TAB_CAPTURE_ON_STATUS_CHANGED,
+                                       tab_capture::OnStatusChanged::kEventName,
+                                       std::move(args), browser_context_);
 
   router->DispatchEventToExtension(request->extension_id(), std::move(event));
 }

@@ -5,13 +5,15 @@
 #ifndef WEBLAYER_BROWSER_COOKIE_MANAGER_IMPL_H_
 #define WEBLAYER_BROWSER_COOKIE_MANAGER_IMPL_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/run_loop.h"
 #include "build/build_config.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "services/network/public/mojom/cookie_manager.mojom.h"
 #include "weblayer/public/cookie_manager.h"
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #include <jni.h>
 #include "base/android/scoped_java_ref.h"
 #endif
@@ -35,12 +37,14 @@ class CookieManagerImpl : public CookieManager {
                  const std::string& value,
                  SetCookieCallback callback) override;
   void GetCookie(const GURL& url, GetCookieCallback callback) override;
+  void GetResponseCookies(const GURL& url,
+                          GetResponseCookiesCallback callback) override;
   base::CallbackListSubscription AddCookieChangedCallback(
       const GURL& url,
       const std::string* name,
       CookieChangedCallback callback) override;
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   bool SetCookie(JNIEnv* env,
                  const base::android::JavaParamRef<jstring>& url,
                  const base::android::JavaParamRef<jstring>& value,
@@ -48,6 +52,9 @@ class CookieManagerImpl : public CookieManager {
   void GetCookie(JNIEnv* env,
                  const base::android::JavaParamRef<jstring>& url,
                  const base::android::JavaParamRef<jobject>& callback);
+  void GetResponseCookies(JNIEnv* env,
+                          const base::android::JavaParamRef<jstring>& url,
+                          const base::android::JavaParamRef<jobject>& callback);
   int AddCookieChangedCallback(
       JNIEnv* env,
       const base::android::JavaParamRef<jstring>& url,
@@ -71,7 +78,7 @@ class CookieManagerImpl : public CookieManager {
   void OnCookieSet(SetCookieCallback callback, bool success);
   void OnFlushTimerFired();
 
-  content::BrowserContext* browser_context_;
+  raw_ptr<content::BrowserContext> browser_context_;
   mojo::ReceiverSet<network::mojom::CookieChangeListener,
                     std::unique_ptr<network::mojom::CookieChangeListener>>
       cookie_change_receivers_;

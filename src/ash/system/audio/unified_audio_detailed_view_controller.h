@@ -10,14 +10,10 @@
 #include "ash/ash_export.h"
 #include "ash/components/audio/cras_audio_handler.h"
 #include "ash/system/unified/detailed_view_controller.h"
-#include "base/macros.h"
 
 namespace ash {
 
-namespace tray {
 class AudioDetailedView;
-}  // namespace tray
-
 class DetailedViewDelegate;
 class UnifiedSystemTrayController;
 
@@ -28,6 +24,12 @@ class ASH_EXPORT UnifiedAudioDetailedViewController
  public:
   explicit UnifiedAudioDetailedViewController(
       UnifiedSystemTrayController* tray_controller);
+
+  UnifiedAudioDetailedViewController(
+      const UnifiedAudioDetailedViewController&) = delete;
+  UnifiedAudioDetailedViewController& operator=(
+      const UnifiedAudioDetailedViewController&) = delete;
+
   ~UnifiedAudioDetailedViewController() override;
 
   // DetailedViewControllerBase:
@@ -42,9 +44,7 @@ class ASH_EXPORT UnifiedAudioDetailedViewController
  private:
   const std::unique_ptr<DetailedViewDelegate> detailed_view_delegate_;
 
-  tray::AudioDetailedView* view_ = nullptr;
-
-  DISALLOW_COPY_AND_ASSIGN(UnifiedAudioDetailedViewController);
+  AudioDetailedView* view_ = nullptr;
 };
 
 }  // namespace ash

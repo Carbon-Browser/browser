@@ -4,6 +4,7 @@
 
 #include "chrome/browser/ui/views/hats/hats_next_web_dialog.h"
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/browser_dialogs.h"
 
 #include "base/base64url.h"
@@ -60,7 +61,7 @@ class HatsNextWebDialog::HatsWebView : public views::WebView {
   }
 
   // content::WebContentsDelegate:
-  bool HandleContextMenu(content::RenderFrameHost* render_frame_host,
+  bool HandleContextMenu(content::RenderFrameHost& render_frame_host,
                          const content::ContextMenuParams& params) override {
     // Ignores context menu.
     return true;
@@ -80,7 +81,7 @@ class HatsNextWebDialog::HatsWebView : public views::WebView {
       const GURL& opener_url,
       const std::string& frame_name,
       const GURL& target_url,
-      const content::StoragePartitionId& partition_id,
+      const content::StoragePartitionConfig& partition_config,
       content::SessionStorageNamespace* session_storage_namespace) override {
     // The HaTS Next WebDialog runs with a non-primary OTR profile. This profile
     // cannot open new browser windows, so they are instead opened in the
@@ -113,8 +114,8 @@ class HatsNextWebDialog::HatsWebView : public views::WebView {
   }
 
  private:
-  HatsNextWebDialog* dialog_;
-  Browser* browser_;
+  raw_ptr<HatsNextWebDialog> dialog_;
+  raw_ptr<Browser> browser_;
 };
 
 BEGIN_METADATA(HatsNextWebDialog, HatsWebView, views::WebView)
@@ -131,7 +132,7 @@ HatsNextWebDialog::HatsNextWebDialog(
           browser,
           trigger_id,
           GURL("https://storage.googleapis.com/chrome_hats_staging/index.html"),
-          base::TimeDelta::FromSeconds(10),
+          base::Seconds(10),
           std::move(success_callback),
           std::move(failure_callback),
           product_specific_bits_data,

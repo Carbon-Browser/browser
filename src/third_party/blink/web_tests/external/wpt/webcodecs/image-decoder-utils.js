@@ -1,5 +1,36 @@
-function toUInt32(pixelArray) {
+const kYellow = 0xFFFF00FF;
+const kRed = 0xFF0000FF;
+const kBlue = 0x0000FFFF;
+const kGreen = 0x00FF00FF;
+
+function getColorName(color) {
+  switch (color) {
+    case kYellow:
+      return "Yellow";
+    case kRed:
+      return "Red";
+    case kBlue:
+      return "Blue";
+    case kGreen:
+      return "Green";
+  }
+  return "#" + color.toString(16);
+}
+
+function toUInt32(pixelArray, roundForYuv) {
   let p = pixelArray.data;
+
+  // YUV to RGB conversion introduces some loss, so provide some leeway.
+  if (roundForYuv) {
+    const tolerance = 3;
+    for (var i = 0; i < p.length; ++i) {
+      if (p[i] >= 0xFF - tolerance)
+        p[i] = 0xFF;
+      if (p[i] <= 0x00 + tolerance)
+        p[i] = 0x00;
+    }
+  }
+
   return ((p[0] << 24) + (p[1] << 16) + (p[2] << 8) + p[3]) >>> 0;
 }
 
@@ -55,17 +86,20 @@ function testFourColorsDecodeBuffer(buffer, mimeType, options = {}) {
   });
 }
 
-function testFourColorDecodeWithExifOrientation(orientation, canvas) {
+function testFourColorDecodeWithExifOrientation(orientation, canvas, useYuv) {
   return ImageDecoder.isTypeSupported('image/jpeg').then(support => {
     assert_implements_optional(
         support, 'Optional codec image/jpeg not supported.');
-    return fetch('four-colors.jpg')
+    const testFile =
+        useYuv ? 'four-colors-limited-range-420-8bpc.jpg' : 'four-colors.jpg';
+    return fetch(testFile)
         .then(response => {
           return response.arrayBuffer();
         })
         .then(buffer => {
           let u8buffer = new Uint8Array(buffer);
-          u8buffer[0x1F] = orientation;  // Location derived via diff.
+          u8buffer[useYuv ? 0x31 : 0x1F] =
+              orientation;  // Location derived via diff.
           let decoder = new ImageDecoder({data: u8buffer, type: 'image/jpeg'});
           return decoder.decode();
         })
@@ -99,8 +133,8 @@ function testFourColorDecodeWithExifOrientation(orientation, canvas) {
           ctx.drawImage(result.image, 0, 0);
 
           let matrix = [
-            [0xFFFF00FF, 0xFF0000FF],  // yellow, red
-            [0x0000FFFF, 0x00FF00FF],  // blue, green
+            [kYellow, kRed],
+            [kBlue, kGreen],
           ];
           if (respectOrientation) {
             switch (orientation) {
@@ -136,16 +170,17 @@ function testFourColorDecodeWithExifOrientation(orientation, canvas) {
             };
           }
 
-          verifyFourColorsImage(expectedWidth, expectedHeight, ctx, matrix);
+          verifyFourColorsImage(
+              expectedWidth, expectedHeight, ctx, matrix, useYuv);
         });
   });
 }
 
-function verifyFourColorsImage(width, height, ctx, matrix) {
+function verifyFourColorsImage(width, height, ctx, matrix, isYuv) {
   if (!matrix) {
     matrix = [
-      [0xFFFF00FF, 0xFF0000FF],  // yellow, red
-      [0x0000FFFF, 0x00FF00FF],  // blue, green
+      [kYellow, kRed],
+      [kBlue, kGreen],
     ];
   }
 
@@ -154,13 +189,18 @@ function verifyFourColorsImage(width, height, ctx, matrix) {
   let expectedBottomLeft = matrix[1][0];
   let expectedBottomRight = matrix[1][1];
 
-  let topLeft = toUInt32(ctx.getImageData(0, 0, 1, 1));
-  let topRight = toUInt32(ctx.getImageData(width - 1, 0, 1, 1));
-  let bottomLeft = toUInt32(ctx.getImageData(0, height - 1, 1, 1));
-  let bottomRight = toUInt32(ctx.getImageData(width - 1, height - 1, 1, 1));
+  let topLeft = toUInt32(ctx.getImageData(0, 0, 1, 1), isYuv);
+  let topRight = toUInt32(ctx.getImageData(width - 1, 0, 1, 1), isYuv);
+  let bottomLeft = toUInt32(ctx.getImageData(0, height - 1, 1, 1), isYuv);
+  let bottomRight =
+      toUInt32(ctx.getImageData(width - 1, height - 1, 1, 1), isYuv);
 
-  assert_equals(topLeft, expectedTopLeft, 'top left corner');
-  assert_equals(topRight, expectedTopRight, 'top right corner');
-  assert_equals(bottomLeft, expectedBottomLeft, 'bottom left corner');
-  assert_equals(bottomRight, expectedBottomRight, 'bottom right corner');
+  assert_equals(getColorName(topLeft), getColorName(expectedTopLeft),
+                            'top left corner');
+  assert_equals(getColorName(topRight), getColorName(expectedTopRight),
+                            'top right corner');
+  assert_equals(getColorName(bottomLeft), getColorName(expectedBottomLeft),
+                            'bottom left corner');
+  assert_equals(getColorName(bottomRight), getColorName(expectedBottomRight),
+                            'bottom right corner');
 }

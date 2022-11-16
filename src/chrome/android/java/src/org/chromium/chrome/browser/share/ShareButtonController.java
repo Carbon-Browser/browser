@@ -16,7 +16,6 @@ import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.base.supplier.Supplier;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.ActivityTabProvider;
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.lifecycle.ActivityLifecycleDispatcher;
 import org.chromium.chrome.browser.lifecycle.ConfigurationChangedObserver;
 import org.chromium.chrome.browser.share.ShareDelegate.ShareOrigin;
@@ -32,6 +31,7 @@ import org.chromium.components.browser_ui.widget.highlight.ViewHighlighter.Highl
 import org.chromium.components.feature_engagement.EventConstants;
 import org.chromium.components.feature_engagement.FeatureConstants;
 import org.chromium.components.feature_engagement.Tracker;
+import org.chromium.components.ukm.UkmRecorder;
 import org.chromium.ui.modaldialog.ModalDialogManager;
 import org.chromium.ui.modaldialog.ModalDialogManager.ModalDialogManagerObserver;
 import org.chromium.ui.modelutil.PropertyModel;
@@ -41,11 +41,6 @@ import org.chromium.ui.modelutil.PropertyModel;
  * whether NTP is shown).
  */
 public class ShareButtonController implements ButtonDataProvider, ConfigurationChangedObserver {
-    /**
-     * Default minimum width to show the share button.
-     */
-    public static final int MIN_WIDTH_DP = 360;
-
     // Context is used for fetching resources and launching preferences page.
     private final Context mContext;
 
@@ -67,10 +62,7 @@ public class ShareButtonController implements ButtonDataProvider, ConfigurationC
     private ModalDialogManager mModalDialogManager;
     private ModalDialogManagerObserver mModalDialogManagerObserver;
 
-    private Integer mMinimumWidthDp;
     private int mScreenWidthDp;
-
-    private int mCurrentOrientation;
 
     /**
      * Creates ShareButtonController object.
@@ -112,6 +104,10 @@ public class ShareButtonController implements ButtonDataProvider, ConfigurationC
             if (tab == null) return;
             if (onShareRunnable != null) onShareRunnable.run();
             RecordUserAction.record("MobileTopToolbarShareButton");
+            if (tab.getWebContents() != null) {
+                new UkmRecorder.Bridge().recordEventWithBooleanMetric(
+                        tab.getWebContents(), "TopToolbar.Share", "HasOccurred");
+            }
             shareDelegate.share(tab, /*shareDirectly=*/false, ShareOrigin.TOP_TOOLBAR);
 
             if (mTrackerSupplier.hasValue()) {
@@ -185,30 +181,19 @@ public class ShareButtonController implements ButtonDataProvider, ConfigurationC
 
     private void updateButtonVisibility(Tab tab) {
         if (tab == null || tab.getWebContents() == null || mTabProvider == null
-                || mTabProvider.get() == null || !isFeatureEnabled()) {
+                || mTabProvider.get() == null) {
             mButtonData.setCanShow(false);
             return;
         }
 
-        if (mMinimumWidthDp == null) {
-            mMinimumWidthDp = ChromeFeatureList.getFieldTrialParamByFeatureAsInt(
-                    ChromeFeatureList.SHARE_BUTTON_IN_TOP_TOOLBAR, "minimum_width", MIN_WIDTH_DP);
-        }
-
-        final boolean isDeviceWideEnough = mScreenWidthDp >= mMinimumWidthDp;
+        final boolean isDeviceWideEnough =
+                mScreenWidthDp >= AdaptiveToolbarFeatures.getDeviceMinimumWidthForShowingButton();
         if (mShareDelegateSupplier.get() == null || !isDeviceWideEnough) {
             mButtonData.setCanShow(false);
             return;
         }
 
         mButtonData.setCanShow(mShareUtils.shouldEnableShare(tab));
-    }
-
-    private static boolean isFeatureEnabled() {
-        return (AdaptiveToolbarFeatures.isSingleVariantModeEnabled()
-                       && AdaptiveToolbarFeatures.getSingleVariantMode()
-                               == AdaptiveToolbarButtonVariant.SHARE)
-                || AdaptiveToolbarFeatures.isCustomizationEnabled();
     }
 
     private void notifyObservers(boolean hint) {
@@ -236,13 +221,6 @@ public class ShareButtonController implements ButtonDataProvider, ConfigurationC
                 /* stringId = */ R.string.adaptive_toolbar_button_share_iph,
                 /* accessibilityStringId = */ R.string.adaptive_toolbar_button_share_iph)
                                                       .setHighlightParams(params);
-
-        ButtonData.ButtonSpec currentSpec = mButtonData.getButtonSpec();
-        ButtonData.ButtonSpec newSpec = new ButtonData.ButtonSpec(currentSpec.getDrawable(),
-                currentSpec.getOnClickListener(), currentSpec.getContentDescriptionResId(),
-                currentSpec.getSupportsTinting(), iphCommandBuilder,
-                currentSpec.getButtonVariant());
-
-        mButtonData.setButtonSpec(newSpec);
+        mButtonData.updateIPHCommandBuilder(iphCommandBuilder);
     }
 }

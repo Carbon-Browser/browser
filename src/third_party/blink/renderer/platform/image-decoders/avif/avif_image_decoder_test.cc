@@ -192,7 +192,7 @@ StaticColorCheckParam kTestParams[] = {
      ImageDecoder::kAlphaNotPremultiplied,
      ColorBehavior::Tag(),
      ImageOrientationEnum::kOriginTopLeft,
-     1,
+     0,
      {
          {gfx::Point(0, 0), SkColorSetARGB(255, 255, 0, 0)},
          {gfx::Point(1, 1), SkColorSetARGB(255, 255, 0, 0)},
@@ -205,7 +205,7 @@ StaticColorCheckParam kTestParams[] = {
      ImageDecoder::kAlphaNotPremultiplied,
      ColorBehavior::Tag(),
      ImageOrientationEnum::kOriginTopLeft,
-     1,
+     0,
      {
          {gfx::Point(0, 0), SkColorSetARGB(255, 192, 192, 192)},
          {gfx::Point(1, 1), SkColorSetARGB(255, 192, 192, 192)},
@@ -291,7 +291,7 @@ StaticColorCheckParam kTestParams[] = {
      ImageDecoder::kAlphaNotPremultiplied,
      ColorBehavior::Tag(),
      ImageOrientationEnum::kOriginTopLeft,
-     1,
+     2,
      {
          {gfx::Point(0, 0), SkColorSetARGB(0, 255, 0, 0)},
          {gfx::Point(1, 1), SkColorSetARGB(128, 255, 0, 0)},
@@ -304,7 +304,7 @@ StaticColorCheckParam kTestParams[] = {
      ImageDecoder::kAlphaPremultiplied,
      ColorBehavior::TransformToSRGB(),
      ImageOrientationEnum::kOriginTopLeft,
-     1,
+     2,
      {
          {gfx::Point(0, 0), SkColorSetARGB(0, 0, 0, 0)},
          {gfx::Point(1, 1), SkColorSetARGB(128, 255, 0, 0)},
@@ -416,7 +416,7 @@ StaticColorCheckParam kTestParams[] = {
      ImageDecoder::kAlphaNotPremultiplied,
      ColorBehavior::Tag(),
      ImageOrientationEnum::kOriginTopLeft,
-     1,
+     0,
      {
          {gfx::Point(0, 0), SkColorSetARGB(255, 255, 0, 0)},
          {gfx::Point(1, 1), SkColorSetARGB(255, 255, 0, 0)},
@@ -489,7 +489,7 @@ StaticColorCheckParam kTestParams[] = {
      ImageDecoder::kAlphaNotPremultiplied,
      ColorBehavior::Tag(),
      ImageOrientationEnum::kOriginLeftBottom,
-     1,
+     0,
      {
          {gfx::Point(0, 0), SkColorSetARGB(255, 255, 0, 0)},
          {gfx::Point(1, 1), SkColorSetARGB(255, 255, 0, 0)},
@@ -502,7 +502,7 @@ StaticColorCheckParam kTestParams[] = {
      ImageDecoder::kAlphaNotPremultiplied,
      ColorBehavior::Tag(),
      ImageOrientationEnum::kOriginBottomLeft,
-     1,
+     0,
      {
          {gfx::Point(0, 0), SkColorSetARGB(255, 255, 0, 0)},
          {gfx::Point(1, 1), SkColorSetARGB(255, 255, 0, 0)},
@@ -515,7 +515,7 @@ StaticColorCheckParam kTestParams[] = {
      ImageDecoder::kAlphaNotPremultiplied,
      ColorBehavior::Tag(),
      ImageOrientationEnum::kOriginTopRight,
-     1,
+     0,
      {
          {gfx::Point(0, 0), SkColorSetARGB(255, 255, 0, 0)},
          {gfx::Point(1, 1), SkColorSetARGB(255, 255, 0, 0)},
@@ -528,7 +528,7 @@ StaticColorCheckParam kTestParams[] = {
      ImageDecoder::kAlphaNotPremultiplied,
      ColorBehavior::Tag(),
      ImageOrientationEnum::kOriginTopRight,
-     1,
+     0,
      {
          {gfx::Point(0, 0), SkColorSetARGB(255, 255, 0, 0)},
          {gfx::Point(1, 1), SkColorSetARGB(255, 255, 0, 0)},
@@ -541,7 +541,7 @@ StaticColorCheckParam kTestParams[] = {
      ImageDecoder::kAlphaNotPremultiplied,
      ColorBehavior::Tag(),
      ImageOrientationEnum::kOriginLeftTop,
-     1,
+     0,
      {
          {gfx::Point(0, 0), SkColorSetARGB(255, 255, 0, 0)},
          {gfx::Point(1, 1), SkColorSetARGB(255, 255, 0, 0)},
@@ -588,12 +588,12 @@ void TestInvalidStaticImage(const char* avif_file, ErrorPhase error_phase) {
 float HalfFloatToUnorm(uint16_t h) {
   const uint32_t f = ((h & 0x8000) << 16) | (((h & 0x7c00) + 0x1c000) << 13) |
                      ((h & 0x03ff) << 13);
-  return bit_cast<float>(f);
+  return base::bit_cast<float>(f);
 }
 
 void ReadYUV(const char* file_name,
-             const IntSize& expected_y_size,
-             const IntSize& expected_uv_size,
+             const gfx::Size& expected_y_size,
+             const gfx::Size& expected_uv_size,
              SkColorType color_type,
              int bit_depth,
              gfx::Point3F* rgb_pixel = nullptr) {
@@ -611,10 +611,10 @@ void ReadYUV(const char* file_name,
             SkYUVColorSpace::kIdentity_SkYUVColorSpace);
   EXPECT_EQ(decoder->GetYUVBitDepth(), bit_depth);
 
-  IntSize size = decoder->DecodedSize();
-  IntSize y_size = decoder->DecodedYUVSize(cc::YUVIndex::kY);
-  IntSize u_size = decoder->DecodedYUVSize(cc::YUVIndex::kU);
-  IntSize v_size = decoder->DecodedYUVSize(cc::YUVIndex::kV);
+  gfx::Size size = decoder->DecodedSize();
+  gfx::Size y_size = decoder->DecodedYUVSize(cc::YUVIndex::kY);
+  gfx::Size u_size = decoder->DecodedYUVSize(cc::YUVIndex::kU);
+  gfx::Size v_size = decoder->DecodedYUVSize(cc::YUVIndex::kV);
 
   EXPECT_EQ(size, y_size);
   EXPECT_EQ(u_size, v_size);
@@ -627,15 +627,15 @@ void ReadYUV(const char* file_name,
   row_bytes[1] = decoder->DecodedYUVWidthBytes(cc::YUVIndex::kU);
   row_bytes[2] = decoder->DecodedYUVWidthBytes(cc::YUVIndex::kV);
 
-  size_t planes_data_size = row_bytes[0] * y_size.Height() +
-                            row_bytes[1] * u_size.Height() +
-                            row_bytes[2] * v_size.Height();
+  size_t planes_data_size = row_bytes[0] * y_size.height() +
+                            row_bytes[1] * u_size.height() +
+                            row_bytes[2] * v_size.height();
   auto planes_data = std::make_unique<char[]>(planes_data_size);
 
   void* planes[3];
   planes[0] = planes_data.get();
-  planes[1] = static_cast<char*>(planes[0]) + row_bytes[0] * y_size.Height();
-  planes[2] = static_cast<char*>(planes[1]) + row_bytes[1] * u_size.Height();
+  planes[1] = static_cast<char*>(planes[0]) + row_bytes[0] * y_size.height();
+  planes[2] = static_cast<char*>(planes[1]) + row_bytes[1] * u_size.height();
 
   decoder->SetImagePlanes(
       std::make_unique<ImagePlanes>(planes, row_bytes, color_type));
@@ -646,10 +646,10 @@ void ReadYUV(const char* file_name,
 
   auto metadata = decoder->MakeMetadataForDecodeAcceleration();
   EXPECT_EQ(cc::ImageType::kAVIF, metadata.image_type);
-  EXPECT_EQ(gfx::Size(size), metadata.image_size);
+  EXPECT_EQ(size, metadata.image_size);
   if (expected_y_size == expected_uv_size)
     EXPECT_EQ(cc::YUVSubsampling::k444, metadata.yuv_subsampling);
-  else if (expected_y_size.Height() == expected_uv_size.Height())
+  else if (expected_y_size.height() == expected_uv_size.height())
     EXPECT_EQ(cc::YUVSubsampling::k422, metadata.yuv_subsampling);
   else
     EXPECT_EQ(cc::YUVSubsampling::k420, metadata.yuv_subsampling);
@@ -692,7 +692,7 @@ void ReadYUV(const char* file_name,
 }
 
 void TestYUVRed(const char* file_name,
-                const IntSize& expected_uv_size,
+                const gfx::Size& expected_uv_size,
                 SkColorType color_type = kGray_8_SkColorType,
                 int bit_depth = 8) {
 #if !defined(HAVE_AVIF_BIT_DEPTH_12_SUPPORT)
@@ -702,7 +702,7 @@ void TestYUVRed(const char* file_name,
   SCOPED_TRACE(base::StringPrintf("file_name=%s, color_type=%d", file_name,
                                   int{color_type}));
 
-  constexpr IntSize kRedYSize(3, 3);
+  constexpr gfx::Size kRedYSize(3, 3);
 
   gfx::Point3F decoded_pixel;
   ASSERT_NO_FATAL_FAILURE(ReadYUV(file_name, kRedYSize, expected_uv_size,
@@ -773,7 +773,7 @@ TEST(StaticAVIFTests, NoCrashWhenCheckingForMultipleSubImages) {
   std::unique_ptr<ImageDecoder> decoder = CreateAVIFDecoder();
   constexpr char kHeader[] = {0x00, 0x00, 0x00, 0x20, 0x66, 0x74, 0x79, 0x70};
   auto buffer = SharedBuffer::Create();
-  buffer->Append(kHeader, base::size(kHeader));
+  buffer->Append(kHeader, std::size(kHeader));
   decoder->SetData(buffer.get(), false);
   EXPECT_FALSE(decoder->ImageHasBothStillAndAnimatedSubImages());
 }
@@ -818,20 +818,32 @@ TEST(StaticAVIFTests, ValidImages) {
   TestByteByByteDecode(&CreateAVIFDecoder,
                        "/images/resources/avif/tiger_3layer_3res.avif", 1,
                        kAnimationNone);
+  TestByteByByteDecode(&CreateAVIFDecoder,
+                       "/images/resources/avif/tiger_420_8b_grid1x13.avif", 1,
+                       kAnimationNone);
+  TestByteByByteDecode(&CreateAVIFDecoder,
+                       "/images/resources/avif/dice_444_10b_grid4x3.avif", 1,
+                       kAnimationNone);
+#if defined(HAVE_AVIF_BIT_DEPTH_12_SUPPORT)
+  TestByteByByteDecode(
+      &CreateAVIFDecoder,
+      "/images/resources/avif/gracehopper_422_12b_grid2x4.avif", 1,
+      kAnimationNone);
+#endif
 }
 
 TEST(StaticAVIFTests, YUV) {
   // 3x3, YUV 4:2:0
-  constexpr IntSize kUVSize420(2, 2);
+  constexpr gfx::Size kUVSize420(2, 2);
   TestYUVRed("red-limited-range-420-8bpc.avif", kUVSize420);
   TestYUVRed("red-full-range-420-8bpc.avif", kUVSize420);
 
   // 3x3, YUV 4:2:2
-  constexpr IntSize kUVSize422(2, 3);
+  constexpr gfx::Size kUVSize422(2, 3);
   TestYUVRed("red-limited-range-422-8bpc.avif", kUVSize422);
 
   // 3x3, YUV 4:4:4
-  constexpr IntSize kUVSize444(3, 3);
+  constexpr gfx::Size kUVSize444(3, 3);
   TestYUVRed("red-limited-range-444-8bpc.avif", kUVSize444);
 
   // Full range BT709 color space is uncommon, but should be supported.
@@ -929,11 +941,84 @@ TEST(StaticAVIFTests, ProgressiveDecoding) {
   EXPECT_FALSE(decoder->Failed());
 }
 
+TEST(StaticAVIFTests, IncrementalDecoding) {
+  scoped_refptr<SharedBuffer> stream_buffer = WTF::SharedBuffer::Create();
+  scoped_refptr<SegmentReader> segment_reader =
+      SegmentReader::CreateFromSharedBuffer(stream_buffer);
+  std::unique_ptr<ImageDecoder> decoder = ImageDecoder::CreateByMimeType(
+      "image/avif", segment_reader, /*data_complete=*/false,
+      ImageDecoder::kAlphaPremultiplied, ImageDecoder::kDefaultBitDepth,
+      ColorBehavior::Tag(), SkISize::MakeEmpty(),
+      ImageDecoder::AnimationOption::kUnspecified);
+
+  scoped_refptr<SharedBuffer> data =
+      ReadFile("/images/resources/avif/tiger_420_8b_grid1x13.avif");
+  ASSERT_TRUE(data.get());
+
+  struct Step {
+    size_t size;  // In bytes.
+    ImageFrame::Status status;
+    int num_decoded_rows;  // In pixels.
+  };
+  // There are 13 tiles. Tiles are as wide as the image and 64 pixels tall.
+  // |num_decoded_rows| may be odd due to an output pixel row missing the
+  // following upsampled decoded chroma row (belonging to the next tile).
+  const Step steps[] = {
+      {2000, ImageFrame::kFrameEmpty, 0},
+      // Decoding half of the bytes gives 6 tile rows.
+      {data->size() / 2, ImageFrame::kFramePartial, 6 * 64 - 1},
+      // Decoding all bytes but one gives 12 tile rows.
+      {data->size() - 1, ImageFrame::kFramePartial, 12 * 64 - 1},
+      // Decoding all bytes gives all 13 tile rows.
+      {data->size(), ImageFrame::kFrameComplete, 13 * 64}};
+  size_t previous_size = 0;
+  for (const Step& step : steps) {
+    stream_buffer->Append(data->Data() + previous_size,
+                          step.size - previous_size);
+    decoder->SetData(stream_buffer, step.status == ImageFrame::kFrameComplete);
+
+    EXPECT_EQ(decoder->FrameCount(), 1u);
+    ImageFrame* frame = decoder->DecodeFrameBufferAtIndex(0);
+    ASSERT_TRUE(frame);
+    ASSERT_FALSE(decoder->Failed());
+    EXPECT_EQ(frame->GetStatus(), step.status);
+
+    const SkBitmap& bitmap = frame->Bitmap();
+    for (int y = 0; y < bitmap.height(); ++y) {
+      const uint32_t* row = bitmap.getAddr32(0, y);
+      const bool is_row_decoded = y < step.num_decoded_rows;
+      for (int x = 0; x < bitmap.width(); ++x) {
+        // The input image is opaque. Pixels outside the decoded area are fully
+        // transparent black pixels, with each channel value being 0.
+        const bool is_pixel_decoded = row[x] != 0x00000000u;
+        ASSERT_EQ(is_pixel_decoded, is_row_decoded);
+      }
+    }
+    previous_size = step.size;
+  }
+}
+
+TEST(StaticAVIFTests, AlphaHasNoIspeProperty) {
+  std::unique_ptr<ImageDecoder> decoder = CreateAVIFDecoder();
+  decoder->SetData(ReadFile("/images/resources/avif/green-no-alpha-ispe.avif"),
+                   true);
+  EXPECT_FALSE(decoder->IsSizeAvailable());
+  EXPECT_TRUE(decoder->Failed());
+}
+
+TEST(StaticAVIFTests, UnsupportedTransferFunctionInColrProperty) {
+  std::unique_ptr<ImageDecoder> decoder = CreateAVIFDecoder();
+  decoder->SetData(
+      ReadFile("/images/resources/avif/red-unsupported-transfer.avif"), true);
+  EXPECT_FALSE(decoder->IsSizeAvailable());
+  EXPECT_TRUE(decoder->Failed());
+}
+
 using StaticAVIFColorTests = ::testing::TestWithParam<StaticColorCheckParam>;
 
-INSTANTIATE_TEST_CASE_P(Parameterized,
-                        StaticAVIFColorTests,
-                        ::testing::ValuesIn(kTestParams));
+INSTANTIATE_TEST_SUITE_P(Parameterized,
+                         StaticAVIFColorTests,
+                         ::testing::ValuesIn(kTestParams));
 
 TEST_P(StaticAVIFColorTests, InspectImage) {
   const StaticColorCheckParam& param = GetParam();

@@ -6,6 +6,7 @@
 
 #include "base/bind.h"
 #include "base/memory/read_only_shared_memory_region.h"
+#include "base/memory/unsafe_shared_memory_region.h"
 #include "base/run_loop.h"
 #include "base/test/mock_callback.h"
 #include "base/test/task_environment.h"
@@ -51,6 +52,9 @@ class VideoCaptureClientTest : public ::testing::Test,
                                                    std::move(host));
   }
 
+  VideoCaptureClientTest(const VideoCaptureClientTest&) = delete;
+  VideoCaptureClientTest& operator=(const VideoCaptureClientTest&) = delete;
+
   ~VideoCaptureClientTest() override {
     if (client_) {
       base::RunLoop run_loop;
@@ -87,8 +91,8 @@ class VideoCaptureClientTest : public ::testing::Test,
     const bool use_shared_buffer = GetParam();
     if (use_shared_buffer) {
       client_->OnNewBuffer(
-          buffer_id, media::mojom::VideoBufferHandle::NewSharedBufferHandle(
-                         mojo::SharedBufferHandle::Create(buffer_size)));
+          buffer_id, media::mojom::VideoBufferHandle::NewUnsafeShmemRegion(
+                         base::UnsafeSharedMemoryRegion::Create(buffer_size)));
     } else {
       client_->OnNewBuffer(
           buffer_id,
@@ -118,8 +122,6 @@ class VideoCaptureClientTest : public ::testing::Test,
   base::MockCallback<base::OnceClosure> error_cb_;
   std::unique_ptr<FakeVideoCaptureHost> host_impl_;
   std::unique_ptr<VideoCaptureClient> client_;
-
-  DISALLOW_COPY_AND_ASSIGN(VideoCaptureClientTest);
 };
 
 TEST_P(VideoCaptureClientTest, Basic) {

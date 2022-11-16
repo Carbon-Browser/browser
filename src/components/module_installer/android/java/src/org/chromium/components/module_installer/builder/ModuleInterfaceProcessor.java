@@ -15,6 +15,8 @@ import com.squareup.javapoet.ParameterizedTypeName;
 import com.squareup.javapoet.TypeName;
 import com.squareup.javapoet.TypeSpec;
 
+import org.chromium.base.annotations.IdentifierNameString;
+
 import java.util.Set;
 
 import javax.annotation.processing.AbstractProcessor;
@@ -82,10 +84,17 @@ public class ModuleInterfaceProcessor extends AbstractProcessor {
         TypeName installEngineInterface =
                 ClassName.get("org.chromium.components.module_installer.engine", "InstallEngine");
 
+        FieldSpec classNameString =
+                FieldSpec.builder(ClassName.get(String.class), "sModuleClassString")
+                        .addModifiers(Modifier.PRIVATE, Modifier.STATIC)
+                        .addAnnotation(IdentifierNameString.class)
+                        .initializer("$S", implClassName)
+                        .build();
+
         FieldSpec module = FieldSpec.builder(moduleClassName, "sModule")
                                    .addModifiers(Modifier.PRIVATE, Modifier.STATIC, Modifier.FINAL)
-                                   .initializer("new $T($S, $T.class, $S)", moduleClassName,
-                                           moduleName, moduleInterface, implClassName)
+                                   .initializer("new $T($S, $T.class, sModuleClassString)",
+                                           moduleClassName, moduleName, moduleInterface)
                                    .build();
 
         MethodSpec isInstalled = MethodSpec.methodBuilder("isInstalled")
@@ -137,6 +146,7 @@ public class ModuleInterfaceProcessor extends AbstractProcessor {
 
         return TypeSpec.classBuilder(fooModuleClassName)
                 .addModifiers(Modifier.PUBLIC)
+                .addField(classNameString)
                 .addField(module)
                 .addMethod(constructor)
                 .addMethod(isInstalled)

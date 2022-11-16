@@ -4,13 +4,12 @@
 
 #include "chrome/services/file_util/safe_archive_analyzer.h"
 
-#include "base/macros.h"
 #include "build/build_config.h"
 #include "chrome/common/safe_browsing/archive_analyzer_results.h"
 #include "chrome/common/safe_browsing/rar_analyzer.h"
 #include "chrome/common/safe_browsing/zip_analyzer.h"
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 #include "chrome/utility/safe_browsing/mac/dmg_analyzer.h"
 #endif
 
@@ -32,7 +31,7 @@ void SafeArchiveAnalyzer::AnalyzeZipFile(base::File zip_file,
 
 void SafeArchiveAnalyzer::AnalyzeDmgFile(base::File dmg_file,
                                          AnalyzeDmgFileCallback callback) {
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   DCHECK(dmg_file.IsValid());
   safe_browsing::ArchiveAnalyzerResults results;
   safe_browsing::dmg::AnalyzeDMGFile(std::move(dmg_file), &results);

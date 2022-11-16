@@ -7,8 +7,6 @@
 
 #include <string>
 
-#include "base/macros.h"
-
 namespace content {
 class BrowserContext;
 }
@@ -23,6 +21,10 @@ class ShelfAppUpdater {
     virtual void OnAppUpdated(content::BrowserContext* browser_context,
                               const std::string& app_id,
                               bool reload_icon) {}
+    virtual void OnAppShowInShelfChanged(
+        content::BrowserContext* browser_context,
+        const std::string& app_id,
+        bool show_in_shelf) {}
     virtual void OnAppUninstalledPrepared(
         content::BrowserContext* browser_context,
         const std::string& app_id,
@@ -33,6 +35,9 @@ class ShelfAppUpdater {
    protected:
     virtual ~Delegate() {}
   };
+
+  ShelfAppUpdater(const ShelfAppUpdater&) = delete;
+  ShelfAppUpdater& operator=(const ShelfAppUpdater&) = delete;
 
   virtual ~ShelfAppUpdater();
 
@@ -47,8 +52,6 @@ class ShelfAppUpdater {
   // Unowned pointers
   Delegate* delegate_;
   content::BrowserContext* browser_context_;
-
-  DISALLOW_COPY_AND_ASSIGN(ShelfAppUpdater);
 };
 
 #endif  // CHROME_BROWSER_UI_ASH_SHELF_SHELF_APP_UPDATER_H_

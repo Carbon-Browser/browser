@@ -39,7 +39,7 @@ cr.define('cr.ui', function() {
     showBubble(content) {
       this.hideBubble();
 
-      bubble = new cr.ui.AutoCloseBubble;
+      bubble = new cr.ui.AutoCloseBubble();
       bubble.anchorNode = this.image;
       bubble.domSibling = this;
       bubble.arrowLocation = this.location;
@@ -122,7 +122,10 @@ cr.define('cr.ui', function() {
    *                        modified (Chrome OS only).
    * - unset:               The value is controlled by the user alone.
    */
-  cr.defineProperty(ControlledIndicator, 'controlledBy', cr.PropertyKind.ATTR);
+  ControlledIndicator.prototype.controlledBy;
+  Object.defineProperty(
+      ControlledIndicator.prototype, 'controlledBy',
+      cr.getPropertyDescriptor('controlledBy', cr.PropertyKind.BOOL_ATTR));
 
   return {ControlledIndicator: ControlledIndicator};
 });

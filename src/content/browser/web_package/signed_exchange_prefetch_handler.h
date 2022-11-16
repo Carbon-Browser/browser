@@ -8,7 +8,7 @@
 #include <string>
 
 #include "base/callback_forward.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/unguessable_token.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -59,6 +59,10 @@ class SignedExchangePrefetchHandler final
       const std::string& accept_langs,
       bool keep_entry_for_prefetch_cache);
 
+  SignedExchangePrefetchHandler(const SignedExchangePrefetchHandler&) = delete;
+  SignedExchangePrefetchHandler& operator=(
+      const SignedExchangePrefetchHandler&) = delete;
+
   ~SignedExchangePrefetchHandler() override;
 
   // This connects |loader_receiver| to the SignedExchangeLoader, and returns
@@ -78,7 +82,8 @@ class SignedExchangePrefetchHandler final
  private:
   // network::mojom::URLLoaderClient overrides:
   void OnReceiveEarlyHints(network::mojom::EarlyHintsPtr early_hints) override;
-  void OnReceiveResponse(network::mojom::URLResponseHeadPtr head) override;
+  void OnReceiveResponse(network::mojom::URLResponseHeadPtr head,
+                         mojo::ScopedDataPipeConsumerHandle body) override;
   void OnReceiveRedirect(const net::RedirectInfo& redirect_info,
                          network::mojom::URLResponseHeadPtr head) override;
   void OnUploadProgress(int64_t current_position,
@@ -86,17 +91,13 @@ class SignedExchangePrefetchHandler final
                         base::OnceCallback<void()> callback) override;
   void OnReceiveCachedMetadata(mojo_base::BigBuffer data) override;
   void OnTransferSizeUpdated(int32_t transfer_size_diff) override;
-  void OnStartLoadingResponseBody(
-      mojo::ScopedDataPipeConsumerHandle body) override;
   void OnComplete(const network::URLLoaderCompletionStatus& status) override;
 
   mojo::Receiver<network::mojom::URLLoaderClient> loader_client_receiver_{this};
 
   std::unique_ptr<SignedExchangeLoader> signed_exchange_loader_;
 
-  network::mojom::URLLoaderClient* forwarding_client_;
-
-  DISALLOW_COPY_AND_ASSIGN(SignedExchangePrefetchHandler);
+  raw_ptr<network::mojom::URLLoaderClient> forwarding_client_;
 };
 
 }  // namespace content

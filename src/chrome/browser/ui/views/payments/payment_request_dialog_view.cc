@@ -38,10 +38,11 @@
 #include "content/public/common/content_features.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/color/color_id.h"
 #include "ui/views/background.h"
 #include "ui/views/controls/label.h"
+#include "ui/views/layout/box_layout.h"
 #include "ui/views/layout/fill_layout.h"
-#include "ui/views/layout/grid_layout.h"
 #include "ui/views/layout/layout_provider.h"
 
 namespace payments {
@@ -91,9 +92,12 @@ void PaymentRequestDialogView::OnDialogClosed() {
   for (const auto& controller : controller_map_) {
     controller.second->Stop();
   }
-  RemoveChildViewT(view_stack_);
+  RemoveChildViewT(view_stack_.get());
   controller_map_.clear();
   request_->OnUserCancelled();
+
+  if (observer_for_testing_)
+    observer_for_testing_->OnDialogClosed();
 }
 
 bool PaymentRequestDialogView::ShouldShowCloseButton() const {
@@ -215,6 +219,11 @@ void PaymentRequestDialogView::RetryDialog() {
 
 void PaymentRequestDialogView::ConfirmPaymentForTesting() {
   Pay();
+}
+
+bool PaymentRequestDialogView::ClickOptOutForTesting() {
+  NOTIMPLEMENTED();
+  return false;
 }
 
 void PaymentRequestDialogView::OnStartUpdating(
@@ -366,7 +375,7 @@ void PaymentRequestDialogView::ShowCvcUnmaskPrompt(
     const autofill::CreditCard& credit_card,
     base::WeakPtr<autofill::payments::FullCardRequest::ResultDelegate>
         result_delegate,
-    content::WebContents* web_contents) {
+    content::RenderFrameHost* render_frame_host) {
   if (!request_->spec())
     return;
 
@@ -374,7 +383,7 @@ void PaymentRequestDialogView::ShowCvcUnmaskPrompt(
                         std::make_unique<CvcUnmaskViewController>(
                             request_->spec(), request_->state(),
                             weak_ptr_factory_.GetWeakPtr(), credit_card,
-                            result_delegate, web_contents),
+                            result_delegate, render_frame_host),
                         &controller_map_),
                     /* animate = */ true);
   if (observer_for_testing_)
@@ -507,8 +516,6 @@ PaymentRequestDialogView::PaymentRequestDialogView(
   }
 
   ShowInitialPaymentSheet();
-
-  chrome::RecordDialogCreation(chrome::DialogIdentifier::PAYMENT_REQUEST);
 }
 
 PaymentRequestDialogView::~PaymentRequestDialogView() = default;
@@ -516,19 +523,6 @@ PaymentRequestDialogView::~PaymentRequestDialogView() = default;
 void PaymentRequestDialogView::OnDialogOpened() {
   if (!request_->spec())
     return;
-
-  if (request_->spec()->request_shipping() &&
-      !request_->state()->selected_shipping_profile() &&
-      PaymentsExperimentalFeatures::IsEnabled(
-          features::kStrictHasEnrolledAutofillInstrument)) {
-    view_stack_->Push(
-        CreateViewAndInstallController(
-            ProfileListViewController::GetShippingProfileViewController(
-                request_->spec(), request_->state(),
-                weak_ptr_factory_.GetWeakPtr()),
-            &controller_map_),
-        /* animate = */ false);
-  }
 
   if (observer_for_testing_)
     observer_for_testing_->OnDialogOpened();
@@ -553,42 +547,26 @@ void PaymentRequestDialogView::ShowInitialPaymentSheet() {
 }
 
 void PaymentRequestDialogView::SetupSpinnerOverlay() {
-  auto throbber = std::make_unique<views::Throbber>();
-  auto throbber_overlay = std::make_unique<views::View>();
+  throbber_overlay_ = AddChildView(std::make_unique<views::View>());
 
-  throbber_overlay->SetPaintToLayer();
-  throbber_overlay->SetVisible(false);
+  throbber_overlay_->SetPaintToLayer();
+  throbber_overlay_->SetVisible(false);
   // The throbber overlay has to have a solid white background to hide whatever
   // would be under it.
-  throbber_overlay->SetBackground(views::CreateThemedSolidBackground(
-      throbber_overlay.get(), ui::NativeTheme::kColorId_DialogBackground));
+  throbber_overlay_->SetBackground(
+      views::CreateThemedSolidBackground(ui::kColorDialogBackground));
 
-  views::GridLayout* layout =
-      throbber_overlay->SetLayoutManager(std::make_unique<views::GridLayout>());
-  views::ColumnSet* throbber_columns = layout->AddColumnSet(0);
-  throbber_columns->AddPaddingColumn(0.5, 0);
-  throbber_columns->AddColumn(
-      views::GridLayout::Alignment::CENTER,
-      views::GridLayout::Alignment::TRAILING, views::GridLayout::kFixedSize,
-      views::GridLayout::ColumnSize::kUsePreferred, 0, 0);
-  throbber_columns->AddPaddingColumn(0.5, 0);
+  views::BoxLayout* layout =
+      throbber_overlay_->SetLayoutManager(std::make_unique<views::BoxLayout>(
+          views::BoxLayout::Orientation::kVertical));
+  layout->set_main_axis_alignment(views::BoxLayout::MainAxisAlignment::kCenter);
+  layout->set_cross_axis_alignment(
+      views::BoxLayout::CrossAxisAlignment::kCenter);
 
-  views::ColumnSet* label_columns = layout->AddColumnSet(1);
-  label_columns->AddPaddingColumn(0.5, 0);
-  label_columns->AddColumn(views::GridLayout::Alignment::CENTER,
-                           views::GridLayout::Alignment::LEADING,
-                           views::GridLayout::kFixedSize,
-                           views::GridLayout::ColumnSize::kUsePreferred, 0, 0);
-  label_columns->AddPaddingColumn(0.5, 0);
-
-  layout->StartRow(0.5, 0);
-  throbber_ = layout->AddView(std::move(throbber));
-
-  layout->StartRow(0.5, 1);
-  layout->AddView(std::make_unique<views::Label>(
+  throbber_ =
+      throbber_overlay_->AddChildView(std::make_unique<views::Throbber>());
+  throbber_overlay_->AddChildView(std::make_unique<views::Label>(
       l10n_util::GetStringUTF16(IDS_PAYMENTS_PROCESSING_MESSAGE)));
-
-  throbber_overlay_ = AddChildView(std::move(throbber_overlay));
 }
 
 gfx::Size PaymentRequestDialogView::CalculatePreferredSize() const {

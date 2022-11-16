@@ -8,19 +8,20 @@
 #include <utility>
 
 #include "base/callback_helpers.h"
+#include "base/containers/adapters.h"
 #include "base/containers/contains.h"
 #include "base/guid.h"
 #include "base/strings/stringprintf.h"
+#include "base/threading/thread_task_runner_handle.h"
 #include "content/browser/child_process_security_policy_impl.h"
-#include "content/browser/renderer_host/frame_tree_node.h"
 #include "content/browser/service_worker/service_worker_consts.h"
 #include "content/browser/service_worker/service_worker_context_core.h"
 #include "content/browser/service_worker/service_worker_context_wrapper.h"
 #include "content/browser/service_worker/service_worker_object_host.h"
 #include "content/browser/service_worker/service_worker_registration_object_host.h"
+#include "content/browser/service_worker/service_worker_security_utils.h"
 #include "content/browser/web_contents/web_contents_impl.h"
 #include "content/common/content_navigation_policy.h"
-#include "content/common/service_worker/service_worker_utils.h"
 #include "content/public/browser/global_routing_id.h"
 #include "content/public/common/content_client.h"
 #include "content/public/common/origin_util.h"
@@ -68,6 +69,9 @@ class ServiceWorkerContainerHost::PendingUpdateVersion {
     version_ = std::move(other.version_);
   }
 
+  PendingUpdateVersion(const PendingUpdateVersion&) = delete;
+  PendingUpdateVersion& operator=(const PendingUpdateVersion&) = delete;
+
   ~PendingUpdateVersion() {
     if (version_)
       version_->DecrementPendingUpdateHintCount();
@@ -85,7 +89,6 @@ class ServiceWorkerContainerHost::PendingUpdateVersion {
 
  private:
   scoped_refptr<ServiceWorkerVersion> version_;
-  DISALLOW_COPY_AND_ASSIGN(PendingUpdateVersion);
 };
 
 ServiceWorkerContainerHost::ServiceWorkerContainerHost(
@@ -106,7 +109,8 @@ ServiceWorkerContainerHost::ServiceWorkerContainerHost(
       client_uuid_(base::GenerateGUID()),
       is_parent_frame_secure_(is_parent_frame_secure),
       container_(std::move(container_remote)),
-      client_info_(frame_tree_node_id) {
+      client_info_(ServiceWorkerClientInfo()),
+      ongoing_navigation_frame_tree_node_id_(frame_tree_node_id) {
   DCHECK(IsContainerForWindowClient());
   DCHECK(context_);
   DCHECK(container_.is_bound());
@@ -141,8 +145,10 @@ ServiceWorkerContainerHost::~ServiceWorkerContainerHost() {
       rfh->RemoveServiceWorkerContainerHost(client_uuid());
   }
 
-  if (IsContainerForClient() && controller_)
+  if (controller_) {
+    DCHECK(IsContainerForClient());
     controller_->Uncontrol(client_uuid());
+  }
 
   // Remove |this| as an observer of ServiceWorkerRegistrations.
   // TODO(falken): Use base::ScopedObservation instead of this explicit call.
@@ -182,10 +188,23 @@ void ServiceWorkerContainerHost::Register(
   }
 
   std::vector<GURL> urls = {url_, options->scope, script_url};
-  if (!ServiceWorkerUtils::AllOriginsMatchAndCanAccessServiceWorkers(urls)) {
+  if (!service_worker_security_utils::AllOriginsMatchAndCanAccessServiceWorkers(
+          urls)) {
     mojo::ReportBadMessage(ServiceWorkerConsts::kBadMessageImproperOrigins);
-    // ReportBadMessage() will kill the renderer process, but Mojo complains if
-    // the callback is not run. Just run it with nonsense arguments.
+    // ReportBadMessage() will terminate the renderer process, but Mojo
+    // complains if the callback is not run. Just run it with nonsense
+    // arguments.
+    std::move(callback).Run(blink::mojom::ServiceWorkerErrorType::kUnknown,
+                            std::string(), nullptr);
+    return;
+  }
+
+  if (!service_worker_security_utils::
+          OriginCanRegisterServiceWorkerFromJavascript(url_)) {
+    mojo::ReportBadMessage(ServiceWorkerConsts::kBadMessageImproperOrigins);
+    // ReportBadMessage() will terminate the renderer process, but Mojo
+    // complains if the callback is not run. Just run it with nonsense
+    // arguments.
     std::move(callback).Run(blink::mojom::ServiceWorkerErrorType::kUnknown,
                             std::string(), nullptr);
     return;
@@ -379,10 +398,12 @@ void ServiceWorkerContainerHost::EnsureFileAccess(
     ChildProcessSecurityPolicyImpl* policy =
         ChildProcessSecurityPolicyImpl::GetInstance();
     for (const auto& file : file_paths) {
-      if (!policy->CanReadFile(GetProcessId(), file))
+      if (!policy->CanReadFile(GetProcessId(), file)) {
         mojo::ReportBadMessage(
             "The renderer doesn't have access to the file "
             "but it tried to grant access to the controller.");
+        return;
+      }
 
       if (!policy->CanReadFile(controller_process_id, file))
         policy->GrantReadFile(controller_process_id, file);
@@ -477,6 +498,7 @@ void ServiceWorkerContainerHost::AddMatchingRegistration(
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(blink::ServiceWorkerScopeMatches(registration->scope(),
                                           GetUrlForScopeMatch()));
+  DCHECK(registration->key() == key());
   if (!IsEligibleForServiceWorkerController())
     return;
   size_t key = registration->scope().spec().size();
@@ -503,13 +525,12 @@ void ServiceWorkerContainerHost::RemoveMatchingRegistration(
 ServiceWorkerRegistration* ServiceWorkerContainerHost::MatchRegistration()
     const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  auto it = matching_registrations_.rbegin();
-  for (; it != matching_registrations_.rend(); ++it) {
-    if (it->second->is_uninstalled())
+  for (const auto& registration : base::Reversed(matching_registrations_)) {
+    if (registration.second->is_uninstalled())
       continue;
-    if (it->second->is_uninstalling())
+    if (registration.second->is_uninstalling())
       return nullptr;
-    return it->second.get();
+    return registration.second.get();
   }
   return nullptr;
 }
@@ -789,6 +810,7 @@ void ServiceWorkerContainerHost::OnBeginNavigationCommit(
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(IsContainerForWindowClient());
 
+  ongoing_navigation_frame_tree_node_id_ = RenderFrameHost::kNoFrameTreeNodeId;
   client_info_->SetRenderFrameHostId(rfh_id);
 
   if (controller_)
@@ -812,7 +834,7 @@ void ServiceWorkerContainerHost::OnBeginNavigationCommit(
   }
 
   auto* rfh = RenderFrameHostImpl::FromID(rfh_id);
-  // |rfh| may be null in tests (but it should not happen in production).
+  // `rfh` may be null in tests (but it should not happen in production).
   if (rfh)
     rfh->AddServiceWorkerContainerHost(client_uuid(), GetWeakPtr());
 
@@ -861,18 +883,29 @@ void ServiceWorkerContainerHost::CompleteWebWorkerPreparation(
 
 void ServiceWorkerContainerHost::UpdateUrls(
     const GURL& url,
-    const net::SiteForCookies& site_for_cookies,
-    const absl::optional<url::Origin>& top_frame_origin) {
+    const absl::optional<url::Origin>& top_frame_origin,
+    const blink::StorageKey& storage_key) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   GURL previous_url = url_;
 
   DCHECK(!url.has_ref());
   url_ = url;
-  site_for_cookies_ = site_for_cookies;
   top_frame_origin_ = top_frame_origin;
-  key_ = IsContainerForClient()
-             ? blink::StorageKey(url::Origin::Create(GetOrigin()))
-             : blink::StorageKey(url::Origin::Create(url));
+  key_ = storage_key;
+
+#if DCHECK_IS_ON()
+  const url::Origin origin_to_dcheck = IsContainerForClient()
+                                           ? url::Origin::Create(GetOrigin())
+                                           : url::Origin::Create(url);
+  DCHECK((origin_to_dcheck.opaque() && key_.origin().opaque()) ||
+         // If GetUrlForScopeMatch() is a blob URL, GetOrigin() incorrectly
+         // returns an empty URL.
+         (IsContainerForClient() && GetUrlForScopeMatch().SchemeIsBlob()) ||
+         origin_to_dcheck.IsSameOriginWith(key_.origin()))
+      << origin_to_dcheck << " and " << key_.origin() << " should be equal.";
+  // TODO(https://crbug.com/1199077): Make `top_frame_origin` non-optional and
+  // DCHECK that it's value is compatible with storage key's top_frame_site.
+#endif
 
   // The remaining parts of this function don't make sense for service worker
   // execution contexts. Return early.
@@ -887,8 +920,6 @@ void ServiceWorkerContainerHost::UpdateUrls(
       fetch_request_window_id_ = base::UnguessableToken::Create();
   }
 
-  auto previous_origin = url::Origin::Create(previous_url);
-  auto new_origin = url::Origin::Create(url);
   // Update client id on cross origin redirects. This corresponds to the HTML
   // standard's "process a navigation fetch" algorithm's step for discarding
   // |reservedEnvironment|.
@@ -897,8 +928,7 @@ void ServiceWorkerContainerHost::UpdateUrls(
   // same as |reservedEnvironment|'s creation URL's origin, then:
   //    1. Run the environment discarding steps for |reservedEnvironment|.
   //    2. Set |reservedEnvironment| to null."
-  if (previous_url.is_valid() &&
-      !new_origin.IsSameOriginWith(previous_origin)) {
+  if (previous_url.is_valid() && !url::IsSameOriginWith(previous_url, url)) {
     // Remove old controller since we know the controller is definitely
     // changed. We need to remove |this| from |controller_|'s controllee before
     // updating UUID since ServiceWorkerVersion has a map from uuid to provider
@@ -1065,6 +1095,14 @@ int ServiceWorkerContainerHost::GetProcessId() const {
   return process_id_for_worker_client_;
 }
 
+int ServiceWorkerContainerHost::GetFrameTreeNodeIdForOngoingNavigation(
+    base::PassKey<StoragePartitionImpl>) const {
+  DCHECK(IsContainerForWindowClient());
+  DCHECK_NE(ongoing_navigation_frame_tree_node_id_,
+            RenderFrameHost::kNoFrameTreeNodeId);
+  return ongoing_navigation_frame_tree_node_id_;
+}
+
 const std::string& ServiceWorkerContainerHost::client_uuid() const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(IsContainerForClient());
@@ -1131,8 +1169,11 @@ void ServiceWorkerContainerHost::EvictFromBackForwardCache(
     BackForwardCacheMetrics::NotRestoredReason reason) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(IsBackForwardCacheEnabled());
-  DCHECK(IsContainerForWindowClient());
+  DCHECK(IsContainerForClient());
   is_in_back_forward_cache_ = false;
+
+  if (!IsContainerForWindowClient())
+    return;
 
   auto* rfh = RenderFrameHostImpl::FromID(GetRenderFrameHostId());
   // |rfh| could be evicted before this function is called.
@@ -1143,7 +1184,7 @@ void ServiceWorkerContainerHost::EvictFromBackForwardCache(
 void ServiceWorkerContainerHost::OnEnterBackForwardCache() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(IsBackForwardCacheEnabled());
-  DCHECK(IsContainerForWindowClient());
+  DCHECK(IsContainerForClient());
   if (controller_)
     controller_->MoveControlleeToBackForwardCacheMap(client_uuid());
   is_in_back_forward_cache_ = true;
@@ -1152,7 +1193,7 @@ void ServiceWorkerContainerHost::OnEnterBackForwardCache() {
 void ServiceWorkerContainerHost::OnRestoreFromBackForwardCache() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(IsBackForwardCacheEnabled());
-  DCHECK(IsContainerForWindowClient());
+  DCHECK(IsContainerForClient());
   if (controller_)
     controller_->RestoreControlleeFromBackForwardCacheMap(client_uuid());
   is_in_back_forward_cache_ = false;
@@ -1174,7 +1215,7 @@ void ServiceWorkerContainerHost::SyncMatchingRegistrations() {
   const auto& registrations = context_->GetLiveRegistrations();
   for (const auto& key_registration : registrations) {
     ServiceWorkerRegistration* registration = key_registration.second;
-    if (!registration->is_uninstalled() &&
+    if (!registration->is_uninstalled() && registration->key() == key() &&
         blink::ServiceWorkerScopeMatches(registration->scope(),
                                          GetUrlForScopeMatch())) {
       AddMatchingRegistration(registration);
@@ -1555,7 +1596,8 @@ bool ServiceWorkerContainerHost::IsValidGetRegistrationMessage(
     return false;
   }
   std::vector<GURL> urls = {url_, client_url};
-  if (!ServiceWorkerUtils::AllOriginsMatchAndCanAccessServiceWorkers(urls)) {
+  if (!service_worker_security_utils::AllOriginsMatchAndCanAccessServiceWorkers(
+          urls)) {
     *out_error = ServiceWorkerConsts::kBadMessageImproperOrigins;
     return false;
   }
@@ -1638,7 +1680,7 @@ bool ServiceWorkerContainerHost::CanServeContainerHostMethods(
 blink::StorageKey
 ServiceWorkerContainerHost::GetCorrectStorageKeyForWebSecurityState(
     const GURL& url) const {
-  if (ServiceWorkerUtils::IsWebSecurityDisabled()) {
+  if (service_worker_security_utils::IsWebSecurityDisabled()) {
     url::Origin other_origin = url::Origin::Create(url);
 
     if (key_.origin() != other_origin)
@@ -1652,7 +1694,7 @@ const GURL ServiceWorkerContainerHost::GetOrigin() const {
   // Ideally, the origins of GetUrlForScopeMatch() and url() should be the same
   // but GURL::GetOrigin() doesn't work with blob URL.
   // See https://crbug.com/1144717
-  return GetUrlForScopeMatch().GetOrigin();
+  return GetUrlForScopeMatch().DeprecatedGetOriginAsURL();
 }
 
 const GURL& ServiceWorkerContainerHost::GetUrlForScopeMatch() const {
@@ -1671,8 +1713,7 @@ void ServiceWorkerContainerHost::InheritControllerFrom(
             GetClientType());
   DCHECK(blob_url.SchemeIsBlob());
 
-  UpdateUrls(blob_url, net::SiteForCookies::FromUrl(blob_url),
-             creator_host.top_frame_origin());
+  UpdateUrls(blob_url, creator_host.top_frame_origin(), creator_host.key());
 
   // Let `scope_match_url_for_blob_client_` be the creator's url for scope match
   // because a client should be handled by the service worker of its creator.

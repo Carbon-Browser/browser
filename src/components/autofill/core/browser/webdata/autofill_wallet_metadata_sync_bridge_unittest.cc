@@ -32,10 +32,10 @@
 #include "components/os_crypt/os_crypt_mocker.h"
 #include "components/sync/base/client_tag_hash.h"
 #include "components/sync/engine/data_type_activation_response.h"
-#include "components/sync/engine/entity_data.h"
 #include "components/sync/model/client_tag_based_model_type_processor.h"
 #include "components/sync/model/data_batch.h"
 #include "components/sync/protocol/autofill_specifics.pb.h"
+#include "components/sync/protocol/entity_data.h"
 #include "components/sync/protocol/entity_metadata.pb.h"
 #include "components/sync/protocol/entity_specifics.pb.h"
 #include "components/sync/protocol/model_type_state.pb.h"
@@ -95,7 +95,7 @@ const char kDefaultCacheGuid[] = "CacheGuid";
 
 base::Time UseDateFromProtoValue(int64_t use_date_proto_value) {
   return base::Time::FromDeltaSinceWindowsEpoch(
-      base::TimeDelta::FromMicroseconds(use_date_proto_value));
+      base::Microseconds(use_date_proto_value));
 }
 
 const base::Time kDefaultTime = UseDateFromProtoValue(100);
@@ -287,6 +287,12 @@ MATCHER_P(HasSpecifics, expected, "") {
 class AutofillWalletMetadataSyncBridgeTest : public testing::Test {
  public:
   AutofillWalletMetadataSyncBridgeTest() {}
+
+  AutofillWalletMetadataSyncBridgeTest(
+      const AutofillWalletMetadataSyncBridgeTest&) = delete;
+  AutofillWalletMetadataSyncBridgeTest& operator=(
+      const AutofillWalletMetadataSyncBridgeTest&) = delete;
+
   ~AutofillWalletMetadataSyncBridgeTest() override {}
 
   void SetUp() override {
@@ -445,17 +451,15 @@ class AutofillWalletMetadataSyncBridgeTest : public testing::Test {
     AutofillTable* table = AutofillTable::FromWebDatabase(&db_);
     syncer::MetadataBatch batch;
     if (table->GetAllSyncMetadata(syncer::AUTOFILL_WALLET_METADATA, &batch)) {
-      for (const std::pair<const std::string,
-                           std::unique_ptr<sync_pb::EntityMetadata>>& entry :
-           batch.GetAllMetadata()) {
-        storage_keys.push_back(entry.first);
+      for (const auto& [storage_key, metadata] : batch.GetAllMetadata()) {
+        storage_keys.push_back(storage_key);
       }
     }
     return storage_keys;
   }
 
   void AdvanceTestClockByTwoYears() {
-    test_clock_.Advance(base::TimeDelta::FromDays(365 * 2));
+    test_clock_.Advance(base::Days(365 * 2));
   }
 
   AutofillWalletMetadataSyncBridge* bridge() { return bridge_.get(); }
@@ -483,8 +487,6 @@ class AutofillWalletMetadataSyncBridgeTest : public testing::Test {
   testing::NiceMock<MockModelTypeChangeProcessor> mock_processor_;
   std::unique_ptr<syncer::ClientTagBasedModelTypeProcessor> real_processor_;
   std::unique_ptr<AutofillWalletMetadataSyncBridge> bridge_;
-
-  DISALLOW_COPY_AND_ASSIGN(AutofillWalletMetadataSyncBridgeTest);
 };
 
 // The following 2 tests make sure client tags stay stable.
@@ -657,7 +659,7 @@ TEST_F(AutofillWalletMetadataSyncBridgeTest,
   CreditCard updated_card = CreateServerCreditCardWithDetails(
       kCard1ServerId, /*use_count=*/2, /*use_date=*/5);
 
-  EXPECT_CALL(mock_processor(), Put(_, _, _)).Times(0);
+  EXPECT_CALL(mock_processor(), Put).Times(0);
   // Local changes should not cause local DB writes.
   EXPECT_CALL(*backend(), CommitChanges()).Times(0);
   EXPECT_CALL(*backend(), NotifyOfMultipleAutofillChanges()).Times(0);
@@ -695,7 +697,7 @@ TEST_F(AutofillWalletMetadataSyncBridgeTest,
   CreditCard updated_card = CreateServerCreditCardWithDetails(
       kCard1ServerId, /*use_count=*/2, /*use_date=*/5);
 
-  EXPECT_CALL(mock_processor(), Put(_, _, _)).Times(0);
+  EXPECT_CALL(mock_processor(), Put).Times(0);
   // Local changes should not cause local DB writes.
   EXPECT_CALL(*backend(), CommitChanges()).Times(0);
   EXPECT_CALL(*backend(), NotifyOfMultipleAutofillChanges()).Times(0);
@@ -874,7 +876,7 @@ TEST_F(AutofillWalletMetadataSyncBridgeTest,
   // Check that there is no metadata, from start on.
   ASSERT_THAT(GetAllLocalDataInclRestart(), IsEmpty());
 
-  EXPECT_CALL(mock_processor(), Delete(_, _)).Times(0);
+  EXPECT_CALL(mock_processor(), Delete).Times(0);
   // Local changes should not cause local DB writes.
   EXPECT_CALL(*backend(), CommitChanges()).Times(0);
   EXPECT_CALL(*backend(), NotifyOfMultipleAutofillChanges()).Times(0);
@@ -991,7 +993,7 @@ TEST_F(AutofillWalletMetadataSyncBridgeTest,
   AdvanceTestClockByTwoYears();
 
   // Since the entities are non-oprhans, they should not get deleted.
-  EXPECT_CALL(mock_processor(), Delete(_, _)).Times(0);
+  EXPECT_CALL(mock_processor(), Delete).Times(0);
   EXPECT_CALL(*backend(), CommitChanges()).Times(0);
 
   ResetBridge();
@@ -1018,7 +1020,7 @@ TEST_F(AutofillWalletMetadataSyncBridgeTest,
       CreateServerCreditCardFromSpecifics(card).GetMetadata());
 
   // We do not advance time so the orphans are recent, should not get deleted.
-  EXPECT_CALL(mock_processor(), Delete(_, _)).Times(0);
+  EXPECT_CALL(mock_processor(), Delete).Times(0);
   EXPECT_CALL(*backend(), CommitChanges()).Times(0);
 
   ResetBridge();
@@ -1061,7 +1063,7 @@ TEST_F(AutofillWalletMetadataSyncBridgeTest,
               Put(kAddr1StorageKey, HasSpecifics(preexisting_profile), _));
   EXPECT_CALL(mock_processor(),
               Put(kCard1StorageKey, HasSpecifics(preexisting_card), _));
-  EXPECT_CALL(mock_processor(), Delete(_, _)).Times(0);
+  EXPECT_CALL(mock_processor(), Delete).Times(0);
   EXPECT_CALL(*backend(), CommitChanges());
   EXPECT_CALL(*backend(), NotifyOfMultipleAutofillChanges());
 
@@ -1106,7 +1108,7 @@ TEST_F(AutofillWalletMetadataSyncBridgeTest,
   // Upload _only_ the unique local data, only the card.
   EXPECT_CALL(mock_processor(),
               Put(kCard1StorageKey, HasSpecifics(preexisting_card), _));
-  EXPECT_CALL(mock_processor(), Delete(_, _)).Times(0);
+  EXPECT_CALL(mock_processor(), Delete).Times(0);
   EXPECT_CALL(*backend(), CommitChanges());
   EXPECT_CALL(*backend(), NotifyOfMultipleAutofillChanges());
 
@@ -1171,6 +1173,12 @@ class AutofillWalletMetadataSyncBridgeRemoteChangesTest
       public AutofillWalletMetadataSyncBridgeTest {
  public:
   AutofillWalletMetadataSyncBridgeRemoteChangesTest() {}
+
+  AutofillWalletMetadataSyncBridgeRemoteChangesTest(
+      const AutofillWalletMetadataSyncBridgeRemoteChangesTest&) = delete;
+  AutofillWalletMetadataSyncBridgeRemoteChangesTest& operator=(
+      const AutofillWalletMetadataSyncBridgeRemoteChangesTest&) = delete;
+
   ~AutofillWalletMetadataSyncBridgeRemoteChangesTest() override {}
 
   void ResetBridgeWithPotentialInitialSync(
@@ -1190,9 +1198,6 @@ class AutofillWalletMetadataSyncBridgeRemoteChangesTest
       ReceiveUpdates(remote_data);
     }
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(AutofillWalletMetadataSyncBridgeRemoteChangesTest);
 };
 
 // No upstream communication or local DB change happens if the server sends an
@@ -1200,8 +1205,8 @@ class AutofillWalletMetadataSyncBridgeRemoteChangesTest
 TEST_P(AutofillWalletMetadataSyncBridgeRemoteChangesTest, EmptyUpdateIgnored) {
   ResetBridgeWithPotentialInitialSync({});
 
-  EXPECT_CALL(mock_processor(), Delete(_, _)).Times(0);
-  EXPECT_CALL(mock_processor(), Put(_, _, _)).Times(0);
+  EXPECT_CALL(mock_processor(), Delete).Times(0);
+  EXPECT_CALL(mock_processor(), Put).Times(0);
   EXPECT_CALL(*backend(), NotifyOfMultipleAutofillChanges()).Times(0);
   // We still need to commit the updated progress marker.
   EXPECT_CALL(*backend(), CommitChanges());
@@ -1225,8 +1230,8 @@ TEST_P(AutofillWalletMetadataSyncBridgeRemoteChangesTest, SameDataIgnored) {
   table()->SetServerCreditCards({CreateServerCreditCardFromSpecifics(card)});
   ResetBridgeWithPotentialInitialSync({profile, card});
 
-  EXPECT_CALL(mock_processor(), Delete(_, _)).Times(0);
-  EXPECT_CALL(mock_processor(), Put(_, _, _)).Times(0);
+  EXPECT_CALL(mock_processor(), Delete).Times(0);
+  EXPECT_CALL(mock_processor(), Put).Times(0);
   EXPECT_CALL(*backend(), NotifyOfMultipleAutofillChanges()).Times(0);
   // We still need to commit the updated progress marker.
   EXPECT_CALL(*backend(), CommitChanges());
@@ -1260,8 +1265,8 @@ TEST_P(AutofillWalletMetadataSyncBridgeRemoteChangesTest,
       CreateWalletMetadataSpecificsForCardWithDetails(
           kCard1SpecificsId, /*use_count=*/30, /*use_date=*/60);
 
-  EXPECT_CALL(mock_processor(), Delete(_, _)).Times(0);
-  EXPECT_CALL(mock_processor(), Put(_, _, _)).Times(0);
+  EXPECT_CALL(mock_processor(), Delete).Times(0);
+  EXPECT_CALL(mock_processor(), Put).Times(0);
   EXPECT_CALL(*backend(), CommitChanges());
   EXPECT_CALL(*backend(), NotifyOfMultipleAutofillChanges());
 
@@ -1295,7 +1300,7 @@ TEST_P(AutofillWalletMetadataSyncBridgeRemoteChangesTest,
       CreateWalletMetadataSpecificsForCardWithDetails(
           kCard1SpecificsId, /*use_count=*/3, /*use_date=*/6);
 
-  EXPECT_CALL(mock_processor(), Delete(_, _)).Times(0);
+  EXPECT_CALL(mock_processor(), Delete).Times(0);
   EXPECT_CALL(mock_processor(),
               Put(kAddr1StorageKey, HasSpecifics(profile), _));
   EXPECT_CALL(mock_processor(), Put(kCard1StorageKey, HasSpecifics(card), _));
@@ -1340,7 +1345,7 @@ TEST_P(AutofillWalletMetadataSyncBridgeRemoteChangesTest,
       CreateWalletMetadataSpecificsForCardWithDetails(
           kCard1SpecificsId, /*use_count=*/30, /*use_date=*/60);
 
-  EXPECT_CALL(mock_processor(), Delete(_, _)).Times(0);
+  EXPECT_CALL(mock_processor(), Delete).Times(0);
   EXPECT_CALL(mock_processor(),
               Put(kAddr1StorageKey, HasSpecifics(merged_profile), _));
   EXPECT_CALL(mock_processor(),
@@ -1386,7 +1391,7 @@ TEST_P(AutofillWalletMetadataSyncBridgeRemoteChangesTest,
       CreateWalletMetadataSpecificsForCardWithDetails(
           kCard1SpecificsId, /*use_count=*/30, /*use_date=*/60);
 
-  EXPECT_CALL(mock_processor(), Delete(_, _)).Times(0);
+  EXPECT_CALL(mock_processor(), Delete).Times(0);
   EXPECT_CALL(mock_processor(),
               Put(kAddr1StorageKey, HasSpecifics(merged_profile), _));
   EXPECT_CALL(mock_processor(),
@@ -1424,8 +1429,8 @@ TEST_P(AutofillWalletMetadataSyncBridgeRemoteChangesTest,
       CreateWalletMetadataSpecificsForCardWithDetails(
           kCard1SpecificsId, /*use_count=*/30, /*use_date=*/6);
 
-  EXPECT_CALL(mock_processor(), Delete(_, _)).Times(0);
-  EXPECT_CALL(mock_processor(), Put(_, _, _)).Times(0);
+  EXPECT_CALL(mock_processor(), Delete).Times(0);
+  EXPECT_CALL(mock_processor(), Put).Times(0);
   EXPECT_CALL(*backend(), CommitChanges());
   EXPECT_CALL(*backend(), NotifyOfMultipleAutofillChanges());
 
@@ -1455,8 +1460,8 @@ TEST_P(AutofillWalletMetadataSyncBridgeRemoteChangesTest,
           kCard1SpecificsId, /*use_count=*/3, /*use_date=*/6,
           /*billing_address_id=*/kLocalAddr1ServerId);
 
-  EXPECT_CALL(mock_processor(), Delete(_, _)).Times(0);
-  EXPECT_CALL(mock_processor(), Put(_, _, _)).Times(0);
+  EXPECT_CALL(mock_processor(), Delete).Times(0);
+  EXPECT_CALL(mock_processor(), Put).Times(0);
   EXPECT_CALL(*backend(), CommitChanges());
   EXPECT_CALL(*backend(), NotifyOfMultipleAutofillChanges());
 
@@ -1484,7 +1489,7 @@ TEST_P(AutofillWalletMetadataSyncBridgeRemoteChangesTest,
           kCard1SpecificsId, /*use_count=*/3, /*use_date=*/6,
           /*billing_address_id=*/kAddr1ServerId);
 
-  EXPECT_CALL(mock_processor(), Delete(_, _)).Times(0);
+  EXPECT_CALL(mock_processor(), Delete).Times(0);
   EXPECT_CALL(mock_processor(), Put(kCard1StorageKey, HasSpecifics(card), _));
   EXPECT_CALL(*backend(), NotifyOfMultipleAutofillChanges()).Times(0);
   // We still need to commit the updated progress marker.
@@ -1514,8 +1519,8 @@ TEST_P(AutofillWalletMetadataSyncBridgeRemoteChangesTest,
           kCard1SpecificsId, /*use_count=*/3, /*use_date=*/60,
           /*billing_address_id=*/kLocalAddr2ServerId);
 
-  EXPECT_CALL(mock_processor(), Delete(_, _)).Times(0);
-  EXPECT_CALL(mock_processor(), Put(_, _, _)).Times(0);
+  EXPECT_CALL(mock_processor(), Delete).Times(0);
+  EXPECT_CALL(mock_processor(), Put).Times(0);
   EXPECT_CALL(*backend(), CommitChanges());
   EXPECT_CALL(*backend(), NotifyOfMultipleAutofillChanges());
 
@@ -1543,7 +1548,7 @@ TEST_P(AutofillWalletMetadataSyncBridgeRemoteChangesTest,
           kCard1SpecificsId, /*use_count=*/3, /*use_date=*/6,
           /*billing_address_id=*/kLocalAddr2ServerId);
 
-  EXPECT_CALL(mock_processor(), Delete(_, _)).Times(0);
+  EXPECT_CALL(mock_processor(), Delete).Times(0);
   EXPECT_CALL(mock_processor(), Put(kCard1StorageKey, HasSpecifics(card), _));
   EXPECT_CALL(*backend(), NotifyOfMultipleAutofillChanges()).Times(0);
   // We still need to commit the updated progress marker.
@@ -1573,8 +1578,8 @@ TEST_P(AutofillWalletMetadataSyncBridgeRemoteChangesTest,
           kCard1SpecificsId, /*use_count=*/3, /*use_date=*/60,
           /*billing_address_id=*/kAddr2ServerId);
 
-  EXPECT_CALL(mock_processor(), Delete(_, _)).Times(0);
-  EXPECT_CALL(mock_processor(), Put(_, _, _)).Times(0);
+  EXPECT_CALL(mock_processor(), Delete).Times(0);
+  EXPECT_CALL(mock_processor(), Put).Times(0);
   EXPECT_CALL(*backend(), CommitChanges());
   EXPECT_CALL(*backend(), NotifyOfMultipleAutofillChanges());
 
@@ -1602,7 +1607,7 @@ TEST_P(AutofillWalletMetadataSyncBridgeRemoteChangesTest,
           kCard1SpecificsId, /*use_count=*/3, /*use_date=*/6,
           /*billing_address_id=*/kAddr2ServerId);
 
-  EXPECT_CALL(mock_processor(), Delete(_, _)).Times(0);
+  EXPECT_CALL(mock_processor(), Delete).Times(0);
   EXPECT_CALL(mock_processor(), Put(kCard1StorageKey, HasSpecifics(card), _));
   EXPECT_CALL(*backend(), NotifyOfMultipleAutofillChanges()).Times(0);
   // We still need to commit the updated progress marker.
@@ -1640,7 +1645,7 @@ TEST_P(AutofillWalletMetadataSyncBridgeRemoteChangesTest,
           kCard1SpecificsId, /*use_count=*/30, /*use_date=*/60,
           /*billing_address_id=*/kAddr2ServerId);
 
-  EXPECT_CALL(mock_processor(), Delete(_, _)).Times(0);
+  EXPECT_CALL(mock_processor(), Delete).Times(0);
   EXPECT_CALL(mock_processor(),
               Put(kCard1StorageKey, HasSpecifics(merged_card), _));
   EXPECT_CALL(*backend(), CommitChanges());
@@ -1678,7 +1683,7 @@ TEST_P(AutofillWalletMetadataSyncBridgeRemoteChangesTest,
           kCard1SpecificsId, /*use_count=*/30, /*use_date=*/60,
           /*billing_address_id=*/kAddr1ServerId);
 
-  EXPECT_CALL(mock_processor(), Delete(_, _)).Times(0);
+  EXPECT_CALL(mock_processor(), Delete).Times(0);
   EXPECT_CALL(mock_processor(),
               Put(kCard1StorageKey, HasSpecifics(merged_card), _));
   EXPECT_CALL(*backend(), CommitChanges());
@@ -1708,8 +1713,8 @@ TEST_P(AutofillWalletMetadataSyncBridgeRemoteChangesTest,
           kAddr1SpecificsId, /*use_count=*/1, /*use_date=*/50,
           /*has_converted=*/true);
 
-  EXPECT_CALL(mock_processor(), Delete(_, _)).Times(0);
-  EXPECT_CALL(mock_processor(), Put(_, _, _)).Times(0);
+  EXPECT_CALL(mock_processor(), Delete).Times(0);
+  EXPECT_CALL(mock_processor(), Put).Times(0);
   EXPECT_CALL(*backend(), CommitChanges());
   EXPECT_CALL(*backend(), NotifyOfMultipleAutofillChanges());
 
@@ -1736,7 +1741,7 @@ TEST_P(AutofillWalletMetadataSyncBridgeRemoteChangesTest,
           kAddr1SpecificsId, /*use_count=*/1, /*use_date=*/50,
           /*has_converted=*/false);
 
-  EXPECT_CALL(mock_processor(), Delete(_, _)).Times(0);
+  EXPECT_CALL(mock_processor(), Delete).Times(0);
   EXPECT_CALL(mock_processor(),
               Put(kAddr1StorageKey, HasSpecifics(profile), _));
   EXPECT_CALL(*backend(), NotifyOfMultipleAutofillChanges()).Times(0);
@@ -1773,7 +1778,7 @@ TEST_P(AutofillWalletMetadataSyncBridgeRemoteChangesTest,
           kAddr1SpecificsId, /*use_count=*/10, /*use_date=*/50,
           /*has_converted=*/true);
 
-  EXPECT_CALL(mock_processor(), Delete(_, _)).Times(0);
+  EXPECT_CALL(mock_processor(), Delete).Times(0);
   EXPECT_CALL(mock_processor(),
               Put(kAddr1StorageKey, HasSpecifics(merged_profile), _));
   EXPECT_CALL(*backend(), CommitChanges());
@@ -1809,7 +1814,7 @@ TEST_P(AutofillWalletMetadataSyncBridgeRemoteChangesTest,
           kAddr1SpecificsId, /*use_count=*/10, /*use_date=*/50,
           /*has_converted=*/true);
 
-  EXPECT_CALL(mock_processor(), Delete(_, _)).Times(0);
+  EXPECT_CALL(mock_processor(), Delete).Times(0);
   EXPECT_CALL(mock_processor(),
               Put(kAddr1StorageKey, HasSpecifics(merged_profile), _));
   EXPECT_CALL(*backend(), CommitChanges());

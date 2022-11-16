@@ -10,11 +10,10 @@
 
 #include "base/bind.h"
 #include "base/callback_helpers.h"
-#include "base/cxx17_backports.h"
 #include "base/location.h"
 #include "base/run_loop.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/time/clock.h"
 #include "base/time/time.h"
@@ -33,7 +32,6 @@
 #include "net/http/http_transaction.h"
 #include "net/log/net_log.h"
 #include "net/log/net_log_source.h"
-#include "net/log/net_log_with_source.h"
 #include "net/ssl/ssl_private_key.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/gurl.h"
@@ -181,9 +179,9 @@ const MockTransaction* FindMockTransaction(const GURL& url) {
     return it->second;
 
   // look for builtins:
-  for (size_t i = 0; i < base::size(kBuiltinMockTransactions); ++i) {
-    if (url == GURL(kBuiltinMockTransactions[i]->url))
-      return kBuiltinMockTransactions[i];
+  for (const auto* transaction : kBuiltinMockTransactions) {
+    if (url == GURL(transaction->url))
+      return transaction;
   }
   return nullptr;
 }
@@ -206,7 +204,7 @@ MockHttpRequest::MockHttpRequest(const MockTransaction& t) {
 }
 
 std::string MockHttpRequest::CacheKey() {
-  return HttpCache::GenerateCacheKeyForTest(this);
+  return HttpCache::GenerateCacheKeyForRequest(this);
 }
 
 //-----------------------------------------------------------------------------
@@ -216,8 +214,7 @@ int TestTransactionConsumer::quit_counter_ = 0;
 
 TestTransactionConsumer::TestTransactionConsumer(
     RequestPriority priority,
-    HttpTransactionFactory* factory)
-    : state_(State::kIdle), error_(OK) {
+    HttpTransactionFactory* factory) {
   // Disregard the error code.
   factory->CreateTransaction(priority, &trans_);
   ++quit_counter_;
@@ -287,18 +284,7 @@ void TestTransactionConsumer::OnIOComplete(int result) {
 
 MockNetworkTransaction::MockNetworkTransaction(RequestPriority priority,
                                                MockNetworkLayer* factory)
-    : request_(nullptr),
-      data_cursor_(0),
-      content_length_(0),
-      priority_(priority),
-      read_handler_(nullptr),
-      websocket_handshake_stream_create_helper_(nullptr),
-      transaction_factory_(factory->AsWeakPtr()),
-      received_bytes_(0),
-      sent_bytes_(0),
-      socket_log_id_(NetLogSource::kInvalidId),
-      done_reading_called_(false),
-      reading_(false) {}
+    : priority_(priority), transaction_factory_(factory->AsWeakPtr()) {}
 
 MockNetworkTransaction::~MockNetworkTransaction() {
   // Use request_ as in ~HttpNetworkTransaction to make sure its valid and not
@@ -512,13 +498,15 @@ int MockNetworkTransaction::StartInternal(const HttpRequestInfo* request,
 
   response_.was_cached = false;
   response_.network_accessed = true;
+  response_.remote_endpoint = t->transport_info.endpoint;
+  response_.was_fetched_via_proxy =
+      t->transport_info.type == TransportType::kProxied;
 
   response_.response_time = transaction_factory_->Now();
   if (!t->response_time.is_null())
     response_.response_time = t->response_time;
 
-  response_.headers = new HttpResponseHeaders(header_data);
-  response_.vary_data.Init(*request, *response_.headers.get());
+  response_.headers = base::MakeRefCounted<HttpResponseHeaders>(header_data);
   response_.ssl_info.cert = t->cert;
   response_.ssl_info.cert_status = t->cert_status;
   response_.ssl_info.connection_status = t->ssl_connection_status;
@@ -552,8 +540,7 @@ int MockNetworkTransaction::StartInternal(const HttpRequestInfo* request,
 
   int result = OK;
   if (!connected_callback_.is_null()) {
-    result = connected_callback_.Run(t->transport_info,
-                                     base::DoNothing::Repeatedly<int>());
+    result = connected_callback_.Run(t->transport_info, base::DoNothing());
   }
 
   CallbackLater(std::move(callback), result);
@@ -576,9 +563,9 @@ int MockNetworkTransaction::ResumeNetworkStart() {
   return ERR_IO_PENDING;
 }
 
-void MockNetworkTransaction::GetConnectionAttempts(
-    ConnectionAttempts* out) const {
-  NOTIMPLEMENTED();
+ConnectionAttempts MockNetworkTransaction::GetConnectionAttempts() const {
+  // TODO(ricea): Replace this with a proper implementation if needed.
+  return {};
 }
 
 void MockNetworkTransaction::CloseConnectionOnDestruction() {
@@ -598,13 +585,7 @@ void MockNetworkTransaction::RunCallback(CompletionOnceCallback callback,
   std::move(callback).Run(result);
 }
 
-MockNetworkLayer::MockNetworkLayer()
-    : transaction_count_(0),
-      done_reading_called_(false),
-      stop_caching_called_(false),
-      last_create_transaction_priority_(DEFAULT_PRIORITY),
-      clock_(nullptr) {
-}
+MockNetworkLayer::MockNetworkLayer() = default;
 
 MockNetworkLayer::~MockNetworkLayer() = default;
 
@@ -626,8 +607,8 @@ int MockNetworkLayer::CreateTransaction(
     std::unique_ptr<HttpTransaction>* trans) {
   transaction_count_++;
   last_create_transaction_priority_ = priority;
-  std::unique_ptr<MockNetworkTransaction> mock_transaction(
-      new MockNetworkTransaction(priority, this));
+  auto mock_transaction =
+      std::make_unique<MockNetworkTransaction>(priority, this);
   last_transaction_ = mock_transaction->AsWeakPtr();
   *trans = std::move(mock_transaction);
   return OK;

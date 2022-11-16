@@ -19,7 +19,7 @@
 #include "base/no_destructor.h"
 #include "base/posix/safe_strerror.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/trace_event/trace_event.h"
+#include "base/trace_event/typed_macros.h"
 #include "media/base/bind_to_current_loop.h"
 #include "media/capture/mojom/image_capture_types.h"
 #include "media/capture/video/blob_utils.h"
@@ -28,6 +28,7 @@
 #include "media/capture/video/chromeos/camera_buffer_factory.h"
 #include "media/capture/video/chromeos/camera_hal_delegate.h"
 #include "media/capture/video/chromeos/camera_metadata_utils.h"
+#include "media/capture/video/chromeos/camera_trace_utils.h"
 #include "media/capture/video/chromeos/request_manager.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 
@@ -51,6 +52,10 @@ constexpr char kZoom[] = "com.google.control.zoom";
 constexpr char kZoomRange[] = "com.google.control.zoomRange";
 constexpr int32_t kColorTemperatureStep = 100;
 constexpr int32_t kMicroToNano = 1000;
+
+constexpr char kIntelPowerMode[] = "intel.vendorCamera.powerMode";
+constexpr uint8_t kIntelPowerModeLowPower = 0;
+constexpr uint8_t kIntelPowerModeHighQuality = 1;
 
 using AwbModeTemperatureMap = std::map<uint8_t, int32_t>;
 
@@ -276,10 +281,10 @@ ResultMetadata::~ResultMetadata() = default;
 
 CameraDeviceDelegate::CameraDeviceDelegate(
     VideoCaptureDeviceDescriptor device_descriptor,
-    scoped_refptr<CameraHalDelegate> camera_hal_delegate,
+    CameraHalDelegate* camera_hal_delegate,
     scoped_refptr<base::SingleThreadTaskRunner> ipc_task_runner)
     : device_descriptor_(device_descriptor),
-      camera_hal_delegate_(std::move(camera_hal_delegate)),
+      camera_hal_delegate_(camera_hal_delegate),
       ipc_task_runner_(std::move(ipc_task_runner)) {}
 
 CameraDeviceDelegate::~CameraDeviceDelegate() = default;
@@ -615,10 +620,9 @@ void CameraDeviceDelegate::ReconfigureStreams(
   DCHECK(ipc_task_runner_->BelongsToCurrentThread());
   chrome_capture_params_ = params;
   if (request_manager_) {
-    // ReconfigureStreams is used for video recording. It does not require
-    // photo.
-    request_manager_->StopPreview(base::BindOnce(
-        &CameraDeviceDelegate::OnFlushed, GetWeakPtr(), false, absl::nullopt));
+    request_manager_->StopPreview(
+        base::BindOnce(&CameraDeviceDelegate::OnFlushed, GetWeakPtr(),
+                       ShouldUseBlobVideoSnapshot(), absl::nullopt));
   }
 }
 
@@ -666,13 +670,27 @@ void CameraDeviceDelegate::TakePhotoImpl() {
                      GetWeakPtr(), StreamType::kJpegOutput);
 
   if (request_manager_->HasStreamsConfiguredForTakePhoto()) {
-    camera_3a_controller_->Stabilize3AForStillCapture(
-        std::move(construct_request_cb));
+    auto camera_app_device =
+        CameraAppDeviceBridgeImpl::GetInstance()->GetWeakCameraAppDevice(
+            device_descriptor_.device_id);
+
+    // Skip 3A stabilization when taking video snapshot to avoid disrupting the
+    // video recording.
+    bool should_skip_3a = ShouldUseBlobVideoSnapshot() && camera_app_device &&
+                          camera_app_device->GetCaptureIntent() ==
+                              cros::mojom::CaptureIntent::VIDEO_RECORD;
+    if (should_skip_3a) {
+      std::move(construct_request_cb).Run();
+    } else {
+      camera_3a_controller_->Stabilize3AForStillCapture(
+          std::move(construct_request_cb));
+    }
     return;
   }
 
-  // Trigger the reconfigure process if it not yet triggered.
-  if (on_reconfigured_callbacks_.empty()) {
+  // Trigger the reconfigure process if it is required and is not yet triggered.
+  if (current_blob_resolution_.IsEmpty() &&
+      on_reconfigured_callbacks_.empty()) {
     request_manager_->StopPreview(base::BindOnce(
         &CameraDeviceDelegate::OnFlushed, GetWeakPtr(), true, absl::nullopt));
   }
@@ -806,6 +824,20 @@ void CameraDeviceDelegate::Initialize() {
       std::move(callback_ops),
       base::BindOnce(&CameraDeviceDelegate::OnInitialized, GetWeakPtr()));
   request_manager_->AddResultMetadataObserver(this);
+
+  // For Intel IPU6 platform, set power mode to high quality for CCA and low
+  // power mode for others.
+  const VendorTagInfo* info =
+      camera_hal_delegate_->GetVendorTagInfoByName(kIntelPowerMode);
+  if (info != nullptr) {
+    bool is_cca =
+        CameraAppDeviceBridgeImpl::GetInstance()->GetWeakCameraAppDevice(
+            device_descriptor_.device_id) != nullptr;
+    uint8_t power_mode =
+        is_cca ? kIntelPowerModeHighQuality : kIntelPowerModeLowPower;
+    request_manager_->SetRepeatingCaptureMetadata(
+        info->tag, info->type, 1, std::vector<uint8_t>{power_mode});
+  }
 }
 
 void CameraDeviceDelegate::OnInitialized(int32_t result) {
@@ -825,6 +857,7 @@ void CameraDeviceDelegate::OnInitialized(int32_t result) {
             base::safe_strerror(-result));
     return;
   }
+
   device_context_->SetState(CameraDeviceContext::State::kInitialized);
   bool require_photo = [&] {
     auto camera_app_device =
@@ -840,9 +873,7 @@ void CameraDeviceDelegate::OnInitialized(int32_t result) {
       case cros::mojom::CaptureIntent::STILL_CAPTURE:
         return true;
       case cros::mojom::CaptureIntent::VIDEO_RECORD:
-        return false;
-      case cros::mojom::CaptureIntent::DOCUMENT:
-        return true;
+        return ShouldUseBlobVideoSnapshot();
       default:
         NOTREACHED() << "Unknown capture intent: " << capture_intent;
         return false;
@@ -857,21 +888,38 @@ void CameraDeviceDelegate::ConfigureStreams(
   DCHECK(ipc_task_runner_->BelongsToCurrentThread());
   DCHECK_EQ(device_context_->GetState(),
             CameraDeviceContext::State::kInitialized);
+  TRACE_EVENT_BEGIN("camera", "ConfigureStreams",
+                    GetTraceTrack(CameraTraceEvent::kConfigureStreams));
 
   cros::mojom::Camera3StreamConfigurationPtr stream_config =
       cros::mojom::Camera3StreamConfiguration::New();
+  auto camera_app_device =
+      CameraAppDeviceBridgeImpl::GetInstance()->GetWeakCameraAppDevice(
+          device_descriptor_.device_id);
   for (const auto& param : chrome_capture_params_) {
     // Set up context for preview stream and record stream.
     cros::mojom::Camera3StreamPtr stream = cros::mojom::Camera3Stream::New();
     StreamType stream_type = (param.first == ClientType::kPreviewClient)
                                  ? StreamType::kPreviewOutput
                                  : StreamType::kRecordingOutput;
-    // TODO(henryhsu): PreviewClient should remove HW_VIDEO_ENCODER usage when
-    // multiple streams enabled.
-    auto usage = (param.first == ClientType::kPreviewClient)
-                     ? (cros::mojom::GRALLOC_USAGE_HW_COMPOSER |
-                        cros::mojom::GRALLOC_USAGE_HW_VIDEO_ENCODER)
-                     : cros::mojom::GRALLOC_USAGE_HW_VIDEO_ENCODER;
+    uint32_t usage;
+    switch (param.first) {
+      case ClientType::kPreviewClient:
+        usage = cros::mojom::GRALLOC_USAGE_HW_COMPOSER;
+        if (camera_app_device &&
+            camera_app_device->GetCaptureIntent() ==
+                cros::mojom::CaptureIntent::VIDEO_RECORD &&
+            !camera_app_device->IsMultipleStreamsEnabled()) {
+          usage |= cros::mojom::GRALLOC_USAGE_HW_VIDEO_ENCODER;
+        }
+        break;
+      case ClientType::kVideoClient:
+        usage = cros::mojom::GRALLOC_USAGE_HW_VIDEO_ENCODER;
+        break;
+      default:
+        NOTREACHED() << "Unrecognized client type: "
+                     << static_cast<int>(param.first);
+    }
     stream->id = static_cast<uint64_t>(stream_type);
     stream->stream_type = cros::mojom::Camera3StreamType::CAMERA3_STREAM_OUTPUT;
     stream->width = param.second.requested_format.frame_size.width();
@@ -980,6 +1028,7 @@ void CameraDeviceDelegate::OnConfiguredStreams(
     int32_t result,
     cros::mojom::Camera3StreamConfigurationPtr updated_config) {
   DCHECK(ipc_task_runner_->BelongsToCurrentThread());
+  TRACE_EVENT_END("camera", GetTraceTrack(CameraTraceEvent::kConfigureStreams));
 
   if (device_context_->GetState() != CameraDeviceContext::State::kInitialized) {
     DCHECK_EQ(device_context_->GetState(),
@@ -1097,12 +1146,12 @@ void CameraDeviceDelegate::ConstructDefaultRequestSettings(
              CameraDeviceContext::State::kStreamConfigured ||
          device_context_->GetState() == CameraDeviceContext::State::kCapturing);
 
+  auto camera_app_device =
+      CameraAppDeviceBridgeImpl::GetInstance()->GetWeakCameraAppDevice(
+          device_descriptor_.device_id);
   if (stream_type == StreamType::kPreviewOutput) {
     // CCA uses the same stream for preview and video recording. Choose proper
     // template here so the underlying camera HAL can set 3A tuning accordingly.
-    auto camera_app_device =
-        CameraAppDeviceBridgeImpl::GetInstance()->GetWeakCameraAppDevice(
-            device_descriptor_.device_id);
     auto request_template =
         camera_app_device && camera_app_device->GetCaptureIntent() ==
                                  cros::mojom::CaptureIntent::VIDEO_RECORD
@@ -1114,8 +1163,15 @@ void CameraDeviceDelegate::ConstructDefaultRequestSettings(
             &CameraDeviceDelegate::OnConstructedDefaultPreviewRequestSettings,
             GetWeakPtr()));
   } else if (stream_type == StreamType::kJpegOutput) {
+    auto request_template =
+        camera_app_device && camera_app_device->GetCaptureIntent() ==
+                                 cros::mojom::CaptureIntent::VIDEO_RECORD
+            ? cros::mojom::Camera3RequestTemplate::
+                  CAMERA3_TEMPLATE_VIDEO_SNAPSHOT
+            : cros::mojom::Camera3RequestTemplate::
+                  CAMERA3_TEMPLATE_STILL_CAPTURE;
     device_ops_->ConstructDefaultRequestSettings(
-        cros::mojom::Camera3RequestTemplate::CAMERA3_TEMPLATE_STILL_CAPTURE,
+        request_template,
         base::BindOnce(&CameraDeviceDelegate::
                            OnConstructedDefaultStillCaptureRequestSettings,
                        GetWeakPtr()));
@@ -1165,8 +1221,7 @@ void CameraDeviceDelegate::OnConstructedDefaultPreviewRequestSettings(
             chromeos::features::kPreferConstantFrameRate) ||
         (camera_app_device && camera_app_device->GetCaptureIntent() ==
                                   cros::mojom::CaptureIntent::VIDEO_RECORD);
-    int32_t target_min, target_max;
-    std::tie(target_min, target_max) = GetTargetFrameRateRange(
+    auto [target_min, target_max] = GetTargetFrameRateRange(
         static_metadata_, requested_frame_rate, prefer_constant_frame_rate);
     if (target_min == 0 || target_max == 0) {
       device_context_->SetErrorState(
@@ -1255,9 +1310,17 @@ void CameraDeviceDelegate::ProcessCaptureRequest(
     cros::mojom::Camera3CaptureRequestPtr request,
     base::OnceCallback<void(int32_t)> callback) {
   DCHECK(ipc_task_runner_->BelongsToCurrentThread());
+  TRACE_EVENT_BEGIN(
+      "camera", "Capture Request",
+      GetTraceTrack(CameraTraceEvent::kCaptureRequest, request->frame_number),
+      "frame_number", request->frame_number);
   for (const auto& output_buffer : request->output_buffers) {
-    TRACE_EVENT2("camera", "Capture Request", "frame_number",
-                 request->frame_number, "stream_id", output_buffer->stream_id);
+    TRACE_EVENT_BEGIN(
+        "camera", "Capture Stream",
+        GetTraceTrack(CameraTraceEvent::kCaptureStream, request->frame_number,
+                      output_buffer->stream_id),
+        "frame_number", request->frame_number, "stream_id",
+        output_buffer->stream_id);
   }
   current_request_frame_number_ = request->frame_number;
 
@@ -1353,6 +1416,16 @@ mojom::RangePtr CameraDeviceDelegate::GetControlRangeByVendorTagName(
   range->current = current.value();
 
   return range;
+}
+
+bool CameraDeviceDelegate::ShouldUseBlobVideoSnapshot() {
+  auto level = GetMetadataEntryAsSpan<uint8_t>(
+      static_metadata_,
+      cros::mojom::CameraMetadataTag::ANDROID_INFO_SUPPORTED_HARDWARE_LEVEL);
+  DCHECK_EQ(level.size(), 1u);
+  return level[0] ==
+         static_cast<uint8_t>(cros::mojom::AndroidInfoSupportedHardwareLevel::
+                                  ANDROID_INFO_SUPPORTED_HARDWARE_LEVEL_FULL);
 }
 
 void CameraDeviceDelegate::OnResultMetadataAvailable(

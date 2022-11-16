@@ -12,11 +12,12 @@
 #include "base/check.h"
 #include "base/location.h"
 #include "base/logging.h"
-#include "base/sequenced_task_runner.h"
-#include "chromeos/services/libassistant/grpc/grpc_client_cq_tag.h"
+#include "base/task/sequenced_task_runner.h"
+#include "chromeos/assistant/internal/grpc_transport/grpc_client_cq_tag.h"
 #include "chromeos/services/libassistant/grpc/grpc_util.h"
 #include "third_party/grpc/src/include/grpcpp/client_context.h"
 #include "third_party/grpc/src/include/grpcpp/generic/generic_stub.h"
+#include "third_party/grpc/src/include/grpcpp/grpcpp.h"
 #include "third_party/grpc/src/include/grpcpp/impl/codegen/client_context.h"
 #include "third_party/grpc/src/include/grpcpp/support/status.h"
 
@@ -33,6 +34,8 @@ namespace libassistant {
 struct StateConfig {
   StateConfig() = default;
   ~StateConfig() = default;
+  StateConfig(int32_t retries, int64_t timeout_in_ms)
+      : max_retries(retries), timeout_in_ms(timeout_in_ms) {}
 
   // The maximum retry attempts for the client call if it failed.
   int32_t max_retries = 0;

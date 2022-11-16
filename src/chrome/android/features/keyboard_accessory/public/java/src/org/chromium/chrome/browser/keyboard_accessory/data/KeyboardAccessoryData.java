@@ -238,15 +238,15 @@ public class KeyboardAccessoryData {
         private final String mOrigin;
         private final GURL mIconUrl;
         private final List<UserInfoField> mFields = new ArrayList<>();
-        private final boolean mIsPslMatch;
+        private final boolean mIsExactMatch;
 
-        public UserInfo(String origin, boolean isPslMatch) {
-            this(origin, isPslMatch, null);
+        public UserInfo(String origin, boolean isExactMatch) {
+            this(origin, isExactMatch, null);
         }
 
-        public UserInfo(String origin, boolean isPslMatch, GURL iconUrl) {
+        public UserInfo(String origin, boolean isExactMatch, GURL iconUrl) {
             mOrigin = origin;
-            mIsPslMatch = isPslMatch;
+            mIsExactMatch = isExactMatch;
             mIconUrl = iconUrl;
         }
 
@@ -273,10 +273,11 @@ public class KeyboardAccessoryData {
         }
 
         /**
-         * @return True iff the user info originates from a PSL match and is not a first-party item.
+         * @return True iff the user info originates from a first-party item and not from a PSL or
+         *         affiliated match.
          */
-        public boolean isPslMatch() {
-            return mIsPslMatch;
+        public boolean isExactMatch() {
+            return mIsExactMatch;
         }
 
         /**
@@ -286,6 +287,32 @@ public class KeyboardAccessoryData {
          */
         public GURL getIconUrl() {
             return mIconUrl;
+        }
+    }
+
+    /**
+     * Represents a Promo Code Offer to be shown on the manual fallback UI.
+     */
+    public static final class PromoCodeInfo {
+        private UserInfoField mPromoCode;
+        private String mDetailsText;
+
+        public PromoCodeInfo() {}
+
+        public void setPromoCode(UserInfoField promoCode) {
+            mPromoCode = promoCode;
+        }
+
+        public void setDetailsText(String detailsText) {
+            mDetailsText = detailsText;
+        }
+
+        public UserInfoField getPromoCode() {
+            return mPromoCode;
+        }
+
+        public String getDetailsText() {
+            return mDetailsText;
         }
     }
 
@@ -332,6 +359,7 @@ public class KeyboardAccessoryData {
         private final @AccessoryTabType int mSheetType;
         private OptionToggle mToggle;
         private final List<UserInfo> mUserInfoList = new ArrayList<>();
+        private final List<PromoCodeInfo> mPromoCodeInfoList = new ArrayList<>();
         private final List<FooterCommand> mFooterCommands = new ArrayList<>();
 
         /**
@@ -378,6 +406,13 @@ public class KeyboardAccessoryData {
          */
         public List<UserInfo> getUserInfoList() {
             return mUserInfoList;
+        }
+
+        /**
+         * Returns the list of {@link PromoCodeInfo} to be shown on the accessory sheet.
+         */
+        public List<PromoCodeInfo> getPromoCodeInfoList() {
+            return mPromoCodeInfoList;
         }
 
         /**

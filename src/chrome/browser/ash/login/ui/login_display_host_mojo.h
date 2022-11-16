@@ -9,29 +9,22 @@
 #include <string>
 #include <vector>
 
+#include "ash/components/login/auth/auth_status_consumer.h"
+#include "ash/components/login/auth/public/challenge_response_key.h"
 #include "base/callback_forward.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/scoped_observation.h"
 #include "chrome/browser/ash/login/challenge_response_auth_keys_loader.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
-#include "chrome/browser/ash/login/existing_user_controller.h"
-// TODO(https://crbug.com/1164001): use forward declaration.
-#include "chrome/browser/ash/login/mojo_system_info_dispatcher.h"
 #include "chrome/browser/ash/login/screens/user_selection_screen.h"
-#include "chrome/browser/ash/login/security_token_pin_dialog_host_ash_impl.h"
+#include "chrome/browser/ash/login/security_token_pin_dialog_host_login_impl.h"
 #include "chrome/browser/ash/login/ui/login_display_host_common.h"
 #include "chrome/browser/ash/login/ui/oobe_ui_dialog_delegate.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
-#include "chrome/browser/ash/login/user_board_view_mojo.h"
-// TODO(https://crbug.com/1164001): use forward declaration.
-#include "chrome/browser/ash/login/wizard_controller.h"
 #include "chrome/browser/ui/ash/login_screen_client_impl.h"
 #include "chrome/browser/ui/webui/chromeos/login/oobe_ui.h"
-#include "chromeos/login/auth/auth_status_consumer.h"
-#include "chromeos/login/auth/challenge_response_key.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/base/user_activity/user_activity_detector.h"
+#include "ui/base/user_activity/user_activity_observer.h"
 #include "ui/views/view.h"
 #include "ui/views/view_observer.h"
 
@@ -40,8 +33,12 @@ class View;
 }  // namespace views
 
 namespace ash {
+class ExistingUserController;
 class LoginDisplayMojo;
+class MojoSystemInfoDispatcher;
 class OobeUIDialogDelegate;
+class UserBoardViewMojo;
+class WizardController;
 
 // A LoginDisplayHost instance that sends requests to the views-based signin
 // screen.
@@ -49,19 +46,20 @@ class LoginDisplayHostMojo : public LoginDisplayHostCommon,
                              public LoginScreenClientImpl::Delegate,
                              public AuthStatusConsumer,
                              public OobeUI::Observer,
-                             public views::ViewObserver {
+                             public views::ViewObserver,
+                             public ui::UserActivityObserver {
  public:
   explicit LoginDisplayHostMojo(DisplayedScreen displayed_screen);
+
+  LoginDisplayHostMojo(const LoginDisplayHostMojo&) = delete;
+  LoginDisplayHostMojo& operator=(const LoginDisplayHostMojo&) = delete;
+
   ~LoginDisplayHostMojo() override;
 
   // Called when the gaia dialog is destroyed.
   void OnDialogDestroyed(const OobeUIDialogDelegate* dialog);
 
   void SetUserCount(int user_count);
-
-  // Show allowlist check failed error. Happens after user completes online
-  // signin but allowlist check fails.
-  void ShowAllowlistCheckFailedError();
 
   UserSelectionScreen* user_selection_screen() {
     return user_selection_screen_.get();
@@ -71,6 +69,7 @@ class LoginDisplayHostMojo : public LoginDisplayHostCommon,
   LoginDisplay* GetLoginDisplay() override;
   ExistingUserController* GetExistingUserController() override;
   gfx::NativeWindow GetNativeWindow() const override;
+  views::Widget* GetLoginWindowWidget() const override;
   OobeUI* GetOobeUI() const override;
   content::WebContents* GetOobeWebContents() const override;
   WebUILoginView* GetWebUILoginView() const override;
@@ -81,12 +80,12 @@ class LoginDisplayHostMojo : public LoginDisplayHostCommon,
   void OnStartUserAdding() override;
   void CancelUserAdding() override;
   void OnStartSignInScreen() override;
-  void OnPreferencesChanged() override;
   void OnStartAppLaunch() override;
   void OnBrowserCreated() override;
   void ShowGaiaDialog(const AccountId& prefilled_account) override;
   void ShowOsInstallScreen() override;
-  void HideOobeDialog() override;
+  void ShowGuestTosScreen() override;
+  void HideOobeDialog(bool saml_page_closed = false) override;
   void SetShelfButtonsEnabled(bool enabled) override;
   void UpdateOobeDialogState(OobeDialogState state) override;
   void OnCancelPasswordChangedFlow() override;
@@ -105,6 +104,7 @@ class LoginDisplayHostMojo : public LoginDisplayHostCommon,
   bool IsWizardControllerCreated() const final;
   bool GetKeyboardRemappedPrefValue(const std::string& pref_name,
                                     int* value) const final;
+  bool IsWebUIStarted() const final;
 
   // LoginScreenClientImpl::Delegate:
   void HandleAuthenticateUserWithPasswordOrPin(
@@ -181,6 +181,11 @@ class LoginDisplayHostMojo : public LoginDisplayHostCommon,
   // login timer has expired for a focused user.
   void MaybeUpdateOfflineLoginLinkVisibility(const AccountId& account_id);
 
+  // ui::UserActivityObserver:
+  void OnUserActivity(const ui::Event* event) override;
+
+  void OnDeviceSettingsChanged();
+
   // State associated with a pending authentication attempt.
   struct AuthState {
     AuthState(AccountId account_id, base::OnceCallback<void(bool)> callback);
@@ -198,6 +203,8 @@ class LoginDisplayHostMojo : public LoginDisplayHostCommon,
   std::unique_ptr<UserBoardViewMojo> user_board_view_mojo_;
   std::unique_ptr<UserSelectionScreen> user_selection_screen_;
 
+  base::CallbackListSubscription allow_new_user_subscription_;
+
   std::unique_ptr<ExistingUserController> existing_user_controller_;
 
   // Called after host deletion.
@@ -205,8 +212,8 @@ class LoginDisplayHostMojo : public LoginDisplayHostCommon,
   OobeUIDialogDelegate* dialog_ = nullptr;  // Not owned.
   std::unique_ptr<WizardController> wizard_controller_;
 
-  // Number of users that are visible in the views login screen.
-  int user_count_ = 0;
+  // Whether or not there are users that are visible in the views login screen.
+  bool has_user_pods_ = false;
 
   // The account id of the user pod that's being focused.
   AccountId focused_pod_account_id_;
@@ -221,7 +228,8 @@ class LoginDisplayHostMojo : public LoginDisplayHostCommon,
 
   ChallengeResponseAuthKeysLoader challenge_response_auth_keys_loader_;
 
-  SecurityTokenPinDialogHostAshImpl security_token_pin_dialog_host_ash_impl_;
+  SecurityTokenPinDialogHostLoginImpl
+      security_token_pin_dialog_host_login_impl_;
 
   // Set if this has been added as a `OobeUI::Observer`.
   bool added_as_oobe_observer_ = false;
@@ -237,11 +245,12 @@ class LoginDisplayHostMojo : public LoginDisplayHostCommon,
   base::ScopedObservation<views::View, views::ViewObserver> scoped_observation_{
       this};
 
+  base::ScopedObservation<ui::UserActivityDetector, ui::UserActivityObserver>
+      scoped_activity_observation_{this};
+
   base::ObserverList<LoginDisplayHost::Observer> observers_;
 
   base::WeakPtrFactory<LoginDisplayHostMojo> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(LoginDisplayHostMojo);
 };
 
 }  // namespace ash

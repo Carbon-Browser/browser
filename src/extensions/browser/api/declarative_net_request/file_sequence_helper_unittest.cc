@@ -13,7 +13,6 @@
 #include "base/format_macros.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
-#include "base/task/post_task.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/threading/thread_restrictions.h"
 #include "components/crx_file/id_util.h"
@@ -68,6 +67,9 @@ ExtensionId GenerateDummyExtensionID() {
 class FileSequenceHelperTest : public ExtensionsTest {
  public:
   FileSequenceHelperTest() = default;
+
+  FileSequenceHelperTest(const FileSequenceHelperTest&) = delete;
+  FileSequenceHelperTest& operator=(const FileSequenceHelperTest&) = delete;
 
   // ExtensionsTest overrides:
   void SetUp() override {
@@ -207,8 +209,6 @@ class FileSequenceHelperTest : public ExtensionsTest {
 
   // Required to use DataDecoder's JSON parsing for re-indexing.
   data_decoder::test::InProcessDataDecoder in_process_data_decoder_;
-
-  DISALLOW_COPY_AND_ASSIGN(FileSequenceHelperTest);
 };
 
 TEST_F(FileSequenceHelperTest, NoRulesetsToLoad) {

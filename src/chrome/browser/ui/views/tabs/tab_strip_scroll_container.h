@@ -5,6 +5,7 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_TABS_TAB_STRIP_SCROLL_CONTAINER_H_
 #define CHROME_BROWSER_UI_VIEWS_TABS_TAB_STRIP_SCROLL_CONTAINER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/views/tabs/overflow_view.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/view.h"
@@ -30,6 +31,16 @@ class TabStripScrollContainer : public views::View, views::ViewObserver {
   // views::ViewObserver:
   void OnViewPreferredSizeChanged(View* view) override;
 
+  bool IsRectInWindowCaption(const gfx::Rect& rect);
+
+  raw_ptr<views::ImageButton> GetLeadingScrollButtonForTesting() {
+    return leading_scroll_button_;
+  }
+
+  raw_ptr<views::ImageButton> GetTrailingScrollButtonForTesting() {
+    return trailing_scroll_button_;
+  }
+
  private:
   int GetTabStripAvailableWidth() const;
 
@@ -46,20 +57,20 @@ class TabStripScrollContainer : public views::View, views::ViewObserver {
 
   // Manages the visibility of the scroll buttons based on whether |tab_strip_|
   // is currently overflowing.
-  OverflowView* overflow_view_;
+  raw_ptr<OverflowView> overflow_view_;
 
   // Actually scrolls |tab_strip_|.
-  views::ScrollView* scroll_view_;
-  TabStrip* tab_strip_;
+  raw_ptr<views::ScrollView> scroll_view_;
+  raw_ptr<TabStrip> tab_strip_;
 
   // The buttons that allow users to manually scroll |tab_strip_|.
-  views::ImageButton* leading_scroll_button_;
-  views::ImageButton* trailing_scroll_button_;
+  raw_ptr<views::ImageButton> leading_scroll_button_;
+  raw_ptr<views::ImageButton> trailing_scroll_button_;
 
   // The views, owned by |scroll_view_|, that indicate that there are more
   // tabs overflowing to the left or right.
-  views::View* left_overflow_indicator_;
-  views::View* right_overflow_indicator_;
+  raw_ptr<views::View> left_overflow_indicator_;
+  raw_ptr<views::View> right_overflow_indicator_;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_TABS_TAB_STRIP_SCROLL_CONTAINER_H_

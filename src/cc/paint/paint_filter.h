@@ -9,11 +9,9 @@
 
 #include "base/check_op.h"
 #include "base/containers/stack_container.h"
-#include "base/stl_util.h"
 #include "cc/paint/paint_export.h"
 #include "cc/paint/paint_image.h"
 #include "cc/paint/paint_shader.h"
-#include "cc/paint/scoped_raster_flags.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkBlendMode.h"
 #include "third_party/skia/include/core/SkImageFilter.h"
@@ -22,7 +20,6 @@
 #include "third_party/skia/include/effects/SkImageFilters.h"
 
 namespace viz {
-class GLRenderer;
 class SkiaRenderer;
 class SoftwareRenderer;
 }  // namespace viz
@@ -96,9 +93,7 @@ class CC_PAINT_EXPORT PaintFilter : public SkRefCnt {
       return 0;
     return cached_sk_filter_->countInputs();
   }
-  const CropRect* crop_rect() const {
-    return base::OptionalOrNullptr(crop_rect_);
-  }
+  const CropRect* GetCropRect() const;
 
   bool has_discardable_images() const { return has_discardable_images_; }
   ImageAnalysisState image_analysis_state() const {
@@ -150,7 +145,6 @@ class CC_PAINT_EXPORT PaintFilter : public SkRefCnt {
   // For cached skia filter access in SkPaint conversions. Mostly used during
   // raster.
   friend class PaintFlags;
-  friend class viz::GLRenderer;
   friend class viz::SkiaRenderer;
   friend class viz::SoftwareRenderer;
 
@@ -226,7 +220,7 @@ class CC_PAINT_EXPORT DropShadowPaintFilter final : public PaintFilter {
                         SkScalar dy,
                         SkScalar sigma_x,
                         SkScalar sigma_y,
-                        SkColor color,
+                        SkColor4f color,
                         ShadowMode shadow_mode,
                         sk_sp<PaintFilter> input,
                         const CropRect* crop_rect = nullptr);
@@ -236,7 +230,7 @@ class CC_PAINT_EXPORT DropShadowPaintFilter final : public PaintFilter {
   SkScalar dy() const { return dy_; }
   SkScalar sigma_x() const { return sigma_x_; }
   SkScalar sigma_y() const { return sigma_y_; }
-  SkColor color() const { return color_; }
+  SkColor4f color() const { return color_; }
   ShadowMode shadow_mode() const { return shadow_mode_; }
   const sk_sp<PaintFilter>& input() const { return input_; }
 
@@ -252,7 +246,7 @@ class CC_PAINT_EXPORT DropShadowPaintFilter final : public PaintFilter {
   SkScalar dy_;
   SkScalar sigma_x_;
   SkScalar sigma_y_;
-  SkColor color_;
+  SkColor4f color_;
   ShadowMode shadow_mode_;
   sk_sp<PaintFilter> input_;
 };
@@ -760,7 +754,7 @@ class CC_PAINT_EXPORT LightingDistantPaintFilter final : public PaintFilter {
   // For specular lighting type only, shininess denotes the specular exponent.
   LightingDistantPaintFilter(LightingType lighting_type,
                              const SkPoint3& direction,
-                             SkColor light_color,
+                             SkColor4f light_color,
                              SkScalar surface_scale,
                              SkScalar kconstant,
                              SkScalar shininess,
@@ -770,7 +764,7 @@ class CC_PAINT_EXPORT LightingDistantPaintFilter final : public PaintFilter {
 
   LightingType lighting_type() const { return lighting_type_; }
   const SkPoint3& direction() const { return direction_; }
-  SkColor light_color() const { return light_color_; }
+  SkColor4f light_color() const { return light_color_; }
   SkScalar surface_scale() const { return surface_scale_; }
   SkScalar kconstant() const { return kconstant_; }
   SkScalar shininess() const { return shininess_; }
@@ -786,7 +780,7 @@ class CC_PAINT_EXPORT LightingDistantPaintFilter final : public PaintFilter {
  private:
   LightingType lighting_type_;
   SkPoint3 direction_;
-  SkColor light_color_;
+  SkColor4f light_color_;
   SkScalar surface_scale_;
   SkScalar kconstant_;
   SkScalar shininess_;
@@ -801,7 +795,7 @@ class CC_PAINT_EXPORT LightingPointPaintFilter final : public PaintFilter {
   // For specular lighting type only, shininess denotes the specular exponent.
   LightingPointPaintFilter(LightingType lighting_type,
                            const SkPoint3& location,
-                           SkColor light_color,
+                           SkColor4f light_color,
                            SkScalar surface_scale,
                            SkScalar kconstant,
                            SkScalar shininess,
@@ -811,7 +805,7 @@ class CC_PAINT_EXPORT LightingPointPaintFilter final : public PaintFilter {
 
   LightingType lighting_type() const { return lighting_type_; }
   const SkPoint3& location() const { return location_; }
-  SkColor light_color() const { return light_color_; }
+  SkColor4f light_color() const { return light_color_; }
   SkScalar surface_scale() const { return surface_scale_; }
   SkScalar kconstant() const { return kconstant_; }
   SkScalar shininess() const { return shininess_; }
@@ -827,7 +821,7 @@ class CC_PAINT_EXPORT LightingPointPaintFilter final : public PaintFilter {
  private:
   LightingType lighting_type_;
   SkPoint3 location_;
-  SkColor light_color_;
+  SkColor4f light_color_;
   SkScalar surface_scale_;
   SkScalar kconstant_;
   SkScalar shininess_;
@@ -845,7 +839,7 @@ class CC_PAINT_EXPORT LightingSpotPaintFilter final : public PaintFilter {
                           const SkPoint3& target,
                           SkScalar specular_exponent,
                           SkScalar cutoff_angle,
-                          SkColor light_color,
+                          SkColor4f light_color,
                           SkScalar surface_scale,
                           SkScalar kconstant,
                           SkScalar shininess,
@@ -858,7 +852,7 @@ class CC_PAINT_EXPORT LightingSpotPaintFilter final : public PaintFilter {
   const SkPoint3& target() const { return target_; }
   SkScalar specular_exponent() const { return specular_exponent_; }
   SkScalar cutoff_angle() const { return cutoff_angle_; }
-  SkColor light_color() const { return light_color_; }
+  SkColor4f light_color() const { return light_color_; }
   SkScalar surface_scale() const { return surface_scale_; }
   SkScalar kconstant() const { return kconstant_; }
   SkScalar shininess() const { return shininess_; }
@@ -877,7 +871,7 @@ class CC_PAINT_EXPORT LightingSpotPaintFilter final : public PaintFilter {
   SkPoint3 target_;
   SkScalar specular_exponent_;
   SkScalar cutoff_angle_;
-  SkColor light_color_;
+  SkColor4f light_color_;
   SkScalar surface_scale_;
   SkScalar kconstant_;
   SkScalar shininess_;

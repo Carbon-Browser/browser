@@ -43,9 +43,10 @@
 #include "third_party/blink/public/common/thread_safe_browser_interface_broker_proxy.h"
 #include "third_party/blink/public/platform/web_runtime_features.h"
 #include "third_party/blink/renderer/platform/font_family_names.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/heap/heap_test_platform.h"
 #include "third_party/blink/renderer/platform/heap/heap_test_utilities.h"
+#include "third_party/blink/renderer/platform/heap/process_heap.h"
 #include "third_party/blink/renderer/platform/language.h"
 #include "third_party/blink/renderer/platform/loader/fetch/fetch_initiator_type_names.h"
 #include "third_party/blink/renderer/platform/network/http_names.h"
@@ -117,9 +118,9 @@ WebData TestingPlatformSupport::GetDataResource(
              : WebData();
 }
 
-WebData TestingPlatformSupport::UncompressDataResource(int resource_id) {
-  return old_platform_ ? old_platform_->UncompressDataResource(resource_id)
-                       : WebData();
+std::string TestingPlatformSupport::GetDataResourceString(int resource_id) {
+  return old_platform_ ? old_platform_->GetDataResourceString(resource_id)
+                       : std::string();
 }
 
 ThreadSafeBrowserInterfaceBrokerProxy*
@@ -127,14 +128,7 @@ TestingPlatformSupport::GetBrowserInterfaceBroker() {
   return interface_broker_.get();
 }
 
-cc::TaskGraphRunner* TestingPlatformSupport::GetTaskGraphRunner() {
-  // We want to ensure that if the underlying platform has a TaskGraphRunner
-  // that we continue to return its instance.
-  return old_platform_ ? old_platform_->GetTaskGraphRunner() : nullptr;
-}
-
 void TestingPlatformSupport::RunUntilIdle() {
-  HeapPointersOnStackScope scan_stack(ThreadState::Current());
   base::RunLoop().RunUntilIdle();
 }
 
@@ -144,14 +138,6 @@ bool TestingPlatformSupport::IsThreadedAnimationEnabled() {
 
 void TestingPlatformSupport::SetThreadedAnimationEnabled(bool enabled) {
   is_threaded_animation_enabled_ = enabled;
-}
-
-bool TestingPlatformSupport::IsUseZoomForDSFEnabled() {
-  return is_zoom_for_dsf_enabled_;
-}
-
-void TestingPlatformSupport::SetUseZoomForDSF(bool enabled) {
-  is_zoom_for_dsf_enabled_ = enabled;
 }
 
 ScopedUnittestsEnvironmentSetup::ScopedUnittestsEnvironmentSetup(int argc,
@@ -194,6 +180,7 @@ ScopedUnittestsEnvironmentSetup::ScopedUnittestsEnvironmentSetup(int argc,
   v8_platform_for_heap_testing_ =
       std::make_unique<HeapTestingPlatformAdapter>(gin::V8Platform::Get());
   ThreadState::AttachMainThreadForTesting(v8_platform_for_heap_testing_.get());
+  conservative_gc_scope_.emplace(ThreadState::Current());
   http_names::Init();
   fetch_initiator_type_names::Init();
 

@@ -5,6 +5,7 @@
 import("//build/config/chromeos/ui_mode.gni")
 import("//media/gpu/args.gni")
 import("//testing/test.gni")
+import("//third_party/protobuf/proto_library.gni")
 
 assert(use_v4l2_codec || use_vaapi)
 
@@ -24,6 +25,7 @@ source_set("chromeos") {
 
   deps = [
     "//base",
+    "//build/config/linux/libdrm",
     "//media",
     "//media/gpu:buildflags",
     "//media/gpu:command_buffer_helper",
@@ -46,6 +48,7 @@ source_set("chromeos") {
 source_set("common") {
   defines = [ "MEDIA_GPU_IMPLEMENTATION" ]
   sources = [
+    "chromeos_status.h",
     "dmabuf_video_frame_pool.cc",
     "dmabuf_video_frame_pool.h",
     "gpu_buffer_layout.cc",
@@ -61,6 +64,8 @@ source_set("common") {
     "libyuv_image_processor_backend.h",
     "mailbox_video_frame_converter.cc",
     "mailbox_video_frame_converter.h",
+    "oop_video_decoder.cc",
+    "oop_video_decoder.h",
     "platform_video_frame_pool.cc",
     "platform_video_frame_pool.h",
     "platform_video_frame_utils.cc",
@@ -75,18 +80,25 @@ source_set("common") {
   ]
 
   # TODO(crbug.com/1012587): Merge :fourcc to :common.
-  public_deps = [ ":fourcc" ]
+  public_deps = [
+    ":fourcc",
+    "//gpu/ipc/service",
+    "//media/mojo/mojom/stable:stable_video_decoder",
+  ]
 
   deps = [
     ":fourcc",
     "//base",
+    "//build:chromeos_buildflags",
     "//build/config/linux/libdrm",
     "//gpu/ipc/common:common",
     "//media",
+    "//media/gpu:buffer_validation",
     "//media/gpu:buildflags",
     "//media/gpu:command_buffer_helper",
     "//media/gpu:common",
     "//media/gpu:video_frame_mapper_common",
+    "//media/mojo/common:common",
     "//third_party/libyuv",
     "//ui/gfx:buffer_types",
     "//ui/gfx:memory_buffer",
@@ -100,8 +112,10 @@ source_set("common") {
       "decoder_buffer_transcryptor.cc",
       "decoder_buffer_transcryptor.h",
     ]
-    deps +=
-        [ "//chromeos/components/cdm_factory_daemon:cdm_factory_daemon_gpu" ]
+    deps += [
+      ":cdm-oemcrypto-proto",
+      "//chromeos/components/cdm_factory_daemon:cdm_factory_daemon_gpu",
+    ]
   }
 }
 
@@ -138,6 +152,15 @@ source_set("video_frame_mapper") {
     "//media/gpu:common",
     "//media/gpu:video_frame_mapper_common",
   ]
+}
+
+if (is_chromeos_ash) {
+  proto_library("cdm-oemcrypto-proto") {
+    sources = [
+      "//third_party/cros_system_api/dbus/cdm_oemcrypto/secure_buffer.proto",
+    ]
+    proto_out_dir = "media/gpu/chromeos"
+  }
 }
 
 source_set("unit_tests") {

@@ -8,8 +8,10 @@
 #include <string>
 #include <vector>
 
+#include "base/callback_forward.h"
 #include "base/time/time.h"
 #include "content/public/browser/desktop_media_id.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/image/image_skia.h"
 
 class DesktopMediaListObserver;
@@ -45,6 +47,10 @@ class DesktopMediaList {
 
   // Struct used to represent each entry in the list.
   struct Source {
+    Source();
+    Source(const Source& other_source);
+    ~Source();
+
     // Id of the source.
     content::DesktopMediaID id;
 
@@ -53,6 +59,10 @@ class DesktopMediaList {
 
     // The thumbnail for the source.
     gfx::ImageSkia thumbnail;
+
+    // A preview for this source, used when both a thumbnail and preview are
+    // used. Currently only the case in the tab_desktop_media_list.
+    gfx::ImageSkia preview;
   };
 
   using UpdateCallback = base::OnceClosure;
@@ -92,6 +102,11 @@ class DesktopMediaList {
   virtual const Source& GetSource(int index) const = 0;
 
   virtual Type GetMediaListType() const = 0;
+
+  // Set or clear the id of a single source which needs a preview image
+  // generating in addition to its thumbnail.
+  virtual void SetPreviewedSource(
+      const absl::optional<content::DesktopMediaID>& id) = 0;
 };
 
 #endif  // CHROME_BROWSER_MEDIA_WEBRTC_DESKTOP_MEDIA_LIST_H_

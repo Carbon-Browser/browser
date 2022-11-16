@@ -29,10 +29,11 @@ bool IsValuePatternSupported(AXPlatformNodeDelegate* delegate) {
   // https://www.w3.org/TR/html-aam-1.0/
   // The HTML AAM maps "href [a; area]" to UIA Value.Value
   return delegate->GetData().IsRangeValueSupported() ||
-         IsReadOnlySupported(delegate->GetRole()) ||
-         IsLink(delegate->GetRole()) ||
+         delegate->IsReadOnlySupported() || IsLink(delegate->GetRole()) ||
          delegate->GetRole() == ax::mojom::Role::kColorWell ||
-         delegate->IsCellOrHeaderOfARIAGrid() ||
+         delegate->IsCellOrHeaderOfAriaGrid() ||
+         (delegate->GetRole() == ax::mojom::Role::kButton &&
+          delegate->HasStringAttribute(ax::mojom::StringAttribute::kValue)) ||
          (IsPlatformDocument(delegate->GetRole()) &&
           delegate->GetRole() != ax::mojom::Role::kPdfRoot);
 }

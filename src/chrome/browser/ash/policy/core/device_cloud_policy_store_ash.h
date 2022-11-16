@@ -7,20 +7,18 @@
 
 #include <memory>
 
-#include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/policy/core/device_cloud_policy_validator.h"
 #include "chrome/browser/ash/settings/device_settings_service.h"
 #include "components/policy/core/common/cloud/cloud_policy_store.h"
 
-namespace base {
-class SequencedTaskRunner;
+namespace ash {
+class InstallAttributes;
 }
 
-namespace chromeos {
-class InstallAttributes;
+namespace base {
+class SequencedTaskRunner;
 }
 
 namespace enterprise_management {
@@ -37,8 +35,13 @@ class DeviceCloudPolicyStoreAsh : public CloudPolicyStore,
  public:
   DeviceCloudPolicyStoreAsh(
       ash::DeviceSettingsService* device_settings_service,
-      chromeos::InstallAttributes* install_attributes,
+      ash::InstallAttributes* install_attributes,
       scoped_refptr<base::SequencedTaskRunner> background_task_runner);
+
+  DeviceCloudPolicyStoreAsh(const DeviceCloudPolicyStoreAsh&) = delete;
+  DeviceCloudPolicyStoreAsh& operator=(const DeviceCloudPolicyStoreAsh&) =
+      delete;
+
   ~DeviceCloudPolicyStoreAsh() override;
 
   // CloudPolicyStore:
@@ -90,13 +93,11 @@ class DeviceCloudPolicyStoreAsh : public CloudPolicyStore,
   bool dm_token_checked_ = false;
 
   ash::DeviceSettingsService* device_settings_service_;
-  chromeos::InstallAttributes* install_attributes_;
+  ash::InstallAttributes* install_attributes_;
 
   scoped_refptr<base::SequencedTaskRunner> background_task_runner_;
 
   base::WeakPtrFactory<DeviceCloudPolicyStoreAsh> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(DeviceCloudPolicyStoreAsh);
 };
 
 }  // namespace policy

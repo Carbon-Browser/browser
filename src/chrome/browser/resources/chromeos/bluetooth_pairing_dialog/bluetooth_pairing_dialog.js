@@ -6,7 +6,7 @@ import 'chrome://resources/cr_components/chromeos/bluetooth/bluetooth_dialog.js'
 import 'chrome://resources/cr_components/chromeos/bluetooth/bluetooth_pairing_ui.js';
 import 'chrome://resources/cr_elements/shared_style_css.m.js';
 import 'chrome://resources/cr_elements/shared_vars_css.m.js';
-import 'chrome://resources/cr_elements/cr_page_host_style_css.js';
+import 'chrome://resources/cr_elements/cr_page_host_style.css.js';
 import './strings.m.js';
 
 import {loadTimeData} from '//resources/js/load_time_data.m.js';
@@ -42,17 +42,54 @@ Polymer({
       type: Boolean,
       value() {
         return loadTimeData.getBoolean('enableBluetoothRevamp');
-      }
+      },
+    },
+
+    /**
+     * The address, when set, of the specific device that will be attempted to
+     * be paired with by the pairing dialog. If null, no specific device will be
+     * paired with and the user will be allowed to select a device to pair with.
+     * This is set by the dialog arguments when |isBluetoothRevampEnabled_| is
+     * true.
+     * @private {?string}
+     */
+    deviceAddress_: {
+      type: String,
+      value: null,
+    },
+
+    /**
+     * Flag indicating whether links should be displayed or not. In some
+     * cases, such as the user being in OOBE or the login screen, links will
+     * not work and should not be displayed.
+     * This is set by the dialog arguments when |isBluetoothRevampEnabled_| is
+     * true.
+     */
+    shouldOmitLinks_: {
+      type: Boolean,
+      value: false,
     },
   },
 
   /** @override */
   attached() {
+    const dialogArgs = chrome.getVariableValue('dialogArguments');
+
     if (this.isBluetoothRevampEnabled_) {
+      if (!dialogArgs) {
+        return;
+      }
+
+      const parsedDialogArgs = JSON.parse(dialogArgs);
+      if (!parsedDialogArgs) {
+        return;
+      }
+
+      this.deviceAddress_ = parsedDialogArgs.address;
+      this.shouldOmitLinks_ = !!parsedDialogArgs.shouldOmitLinks;
       return;
     }
 
-    let dialogArgs = chrome.getVariableValue('dialogArguments');
     if (!dialogArgs) {
       // This situation currently only occurs if the user navigates to the debug
       // chrome://bluetooth-pairing.
@@ -63,7 +100,7 @@ Polymer({
       return;
     }
 
-    let parsedDialogArgs = JSON.parse(dialogArgs);
+    const parsedDialogArgs = JSON.parse(dialogArgs);
 
     // Wait for next render or deviceDialog has not been created yet.
     afterNextRender(this, () => this.connect_(parsedDialogArgs.address));
@@ -88,7 +125,7 @@ Polymer({
   },
 
   /** @private */
-  onDialogClose_() {
+  closeDialog_() {
     chrome.send('dialogClose');
   },
 });

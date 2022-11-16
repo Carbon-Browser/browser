@@ -42,7 +42,11 @@ class ScreenForShutdown : public display::Screen {
       : display_list_(screen_ash->GetAllDisplays()),
         primary_display_(screen_ash->GetPrimaryDisplay()) {
     SetDisplayForNewWindows(primary_display_.id());
+    set_shutdown(true);
   }
+
+  ScreenForShutdown(const ScreenForShutdown&) = delete;
+  ScreenForShutdown& operator=(const ScreenForShutdown&) = delete;
 
   // display::Screen overrides:
   gfx::Point GetCursorScreenPoint() override { return gfx::Point(); }
@@ -85,8 +89,6 @@ class ScreenForShutdown : public display::Screen {
  private:
   const std::vector<display::Display> display_list_;
   const display::Display primary_display_;
-
-  DISALLOW_COPY_AND_ASSIGN(ScreenForShutdown);
 };
 
 }  // namespace

@@ -8,7 +8,7 @@
 #include <memory>
 
 #include "base/memory/ref_counted.h"
-#include "base/sequenced_task_runner_helpers.h"
+#include "base/task/sequenced_task_runner_helpers.h"
 #include "ios/web/webui/url_data_manager_ios.h"
 #include "ui/base/template_expressions.h"
 
@@ -67,6 +67,10 @@ class URLDataSourceIOSImpl
 
   // Replacements for i18n or null if no replacements are desired.
   virtual const ui::TemplateReplacements* GetReplacements() const;
+
+  // Whether to perform i18n replacements in JS files (needed by WebUIs that are
+  // using Web Components).
+  virtual bool ShouldReplaceI18nInJS() const;
 
  protected:
   virtual ~URLDataSourceIOSImpl();

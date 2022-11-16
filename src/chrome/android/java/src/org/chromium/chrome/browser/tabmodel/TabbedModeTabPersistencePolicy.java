@@ -80,14 +80,15 @@ public class TabbedModeTabPersistencePolicy implements TabPersistencePolicy {
      *            tabbed mode files at startup.
      * @param tabMergingEnabled Whether tab merging operation should be done for multi-window/
      *            instance feature in general.
+     * @param maxSelectors Maximum number of tab model selectors.
      */
-    public TabbedModeTabPersistencePolicy(
-            int selectorIndex, boolean mergeTabsOnStartup, boolean tabMergingEnabled) {
+    public TabbedModeTabPersistencePolicy(int selectorIndex, boolean mergeTabsOnStartup,
+            boolean tabMergingEnabled, int maxSelectors) {
         mSelectorIndex = selectorIndex;
         mOtherSelectorIndex = selectorIndex == 0 ? 1 : 0;
         mMergeTabsOnStartup = mergeTabsOnStartup;
         mTabMergingEnabled = tabMergingEnabled;
-        mMaxSelectors = TabWindowManagerSingleton.getInstance().getMaxSimultaneousSelectors();
+        mMaxSelectors = maxSelectors;
     }
 
     @Override
@@ -390,13 +391,18 @@ public class TabbedModeTabPersistencePolicy implements TabPersistencePolicy {
 
     @Override
     public void notifyStateLoaded(int tabCountAtStartup) {
-        RecordHistogram.recordCountHistogram("Tabs.CountAtStartup", tabCountAtStartup);
+        RecordHistogram.recordCount1MHistogram("Tabs.CountAtStartup", tabCountAtStartup);
     }
 
     @Override
     public void destroy() {
         mTabContentManager = null;
         mDestroyed = true;
+    }
+
+    @Override
+    public boolean allowSkipLoadingTab() {
+        return true;
     }
 
     private class CleanUpTabStateDataTask extends AsyncTask<Void> {

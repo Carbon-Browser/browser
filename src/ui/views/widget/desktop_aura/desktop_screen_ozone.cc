@@ -25,9 +25,11 @@ gfx::NativeWindow DesktopScreenOzone::GetNativeWindowFromAcceleratedWidget(
       widget);
 }
 
-#if !defined(OS_LINUX) && !defined(OS_CHROMEOS)
+#if !BUILDFLAG(IS_LINUX)
 std::unique_ptr<display::Screen> CreateDesktopScreen() {
-  return std::make_unique<aura::ScreenOzone>();
+  auto screen = std::make_unique<DesktopScreenOzone>();
+  screen->Initialize();
+  return screen;
 }
 #endif
 

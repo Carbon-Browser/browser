@@ -9,6 +9,7 @@
 
 #include "base/bind.h"
 #include "base/callback.h"
+#include "base/containers/flat_map.h"
 #include "base/strings/strcat.h"
 #include "components/autofill_assistant/browser/actions/action_delegate.h"
 #include "components/autofill_assistant/browser/actions/action_delegate_util.h"
@@ -16,7 +17,7 @@
 #include "components/autofill_assistant/browser/client_status.h"
 #include "components/autofill_assistant/browser/field_formatter.h"
 #include "components/autofill_assistant/browser/web/element_action_util.h"
-#include "components/autofill_assistant/browser/web/element_finder.h"
+#include "components/autofill_assistant/browser/web/element_finder_result.h"
 #include "components/autofill_assistant/browser/web/web_controller.h"
 #include "third_party/re2/src/re2/re2.h"
 
@@ -73,7 +74,7 @@ ClientStatus& ErrorStatusWithDefault(ClientStatus& status) {
 
 ClientStatus GetRe2Value(
     const RequiredField& required_field,
-    const std::map<field_formatter::Key, std::string>& mappings,
+    const base::flat_map<field_formatter::Key, std::string>& mappings,
     bool use_contains,
     std::string* re2_value,
     bool* case_sensitive) {
@@ -125,7 +126,7 @@ RequiredFieldsFallbackHandler::~RequiredFieldsFallbackHandler() = default;
 
 RequiredFieldsFallbackHandler::RequiredFieldsFallbackHandler(
     const std::vector<RequiredField>& required_fields,
-    const std::map<field_formatter::Key, std::string>& fallback_values,
+    const base::flat_map<field_formatter::Key, std::string>& fallback_values,
     ActionDelegate* delegate)
     : required_fields_(required_fields),
       fallback_values_(fallback_values),
@@ -316,7 +317,7 @@ void RequiredFieldsFallbackHandler::OnFindElement(
     const RequiredField& required_field,
     base::OnceCallback<void()> set_next_field,
     const ClientStatus& element_status,
-    std::unique_ptr<ElementFinder::Result> element_result) {
+    std::unique_ptr<ElementFinderResult> element_result) {
   if (!element_status.ok()) {
     FillStatusDetailsWithError(required_field, element_status.proto_status(),
                                &client_status_);
@@ -333,7 +334,7 @@ void RequiredFieldsFallbackHandler::OnFindElement(
     return;
   }
 
-  const ElementFinder::Result* element_result_ptr = element_result.get();
+  const ElementFinderResult* element_result_ptr = element_result.get();
   action_delegate_->GetWebController()->GetElementTag(
       *element_result_ptr,
       base::BindOnce(
@@ -346,14 +347,14 @@ void RequiredFieldsFallbackHandler::OnGetFallbackFieldElementTag(
     const std::string& value,
     const RequiredField& required_field,
     base::OnceCallback<void()> set_next_field,
-    std::unique_ptr<ElementFinder::Result> element,
+    std::unique_ptr<ElementFinderResult> element,
     const ClientStatus& element_tag_status,
     const std::string& element_tag) {
   if (!element_tag_status.ok()) {
     DVLOG(3) << "Status for element tag was "
              << element_tag_status.proto_status();
   }
-  const ElementFinder::Result* element_ptr = element.get();
+  const ElementFinderResult* element_ptr = element.get();
   base::OnceCallback<void(const ClientStatus&)> on_set_field_value =
       base::BindOnce(&RequiredFieldsFallbackHandler::OnSetFallbackFieldValue,
                      weak_ptr_factory_.GetWeakPtr(), required_field,
@@ -447,9 +448,15 @@ void RequiredFieldsFallbackHandler::OnClickOrTapFallbackElement(
     FillStatusDetailsWithError(
         required_field, element_click_status.proto_status(), &client_status_);
 
-    // Fallback failed: we stop the script without checking the other fields.
-    std::move(status_update_callback_)
-        .Run(ErrorStatusWithDefault(client_status_));
+    // Main element to click does not exist. We either continue or stop the
+    // script without checking the other fields.
+    if (required_field.proto.is_optional() &&
+        element_click_status.proto_status() == ELEMENT_RESOLUTION_FAILED) {
+      std::move(set_next_field).Run();
+    } else {
+      std::move(status_update_callback_)
+          .Run(ErrorStatusWithDefault(client_status_));
+    }
     return;
   }
 
@@ -473,8 +480,14 @@ void RequiredFieldsFallbackHandler::OnShortWaitForElement(
     base::TimeDelta wait_time) {
   total_wait_time_ += wait_time;
   if (!find_element_status.ok()) {
+    // We're looking for the option element to click, if it cannot be found,
+    // change the error status to reflect that.
     FillStatusDetailsWithError(
-        required_field, find_element_status.proto_status(), &client_status_);
+        required_field,
+        find_element_status.proto_status() == ELEMENT_RESOLUTION_FAILED
+            ? OPTION_VALUE_NOT_FOUND
+            : find_element_status.proto_status(),
+        &client_status_);
 
     // Fallback failed: we stop the script without checking the other fields.
     std::move(status_update_callback_)
@@ -502,7 +515,7 @@ void RequiredFieldsFallbackHandler::OnShortWaitForElement(
 void RequiredFieldsFallbackHandler::OnSetFallbackFieldValue(
     const RequiredField& required_field,
     base::OnceCallback<void()> set_next_field,
-    std::unique_ptr<ElementFinder::Result> element,
+    std::unique_ptr<ElementFinderResult> element,
     const ClientStatus& set_field_status) {
   if (!set_field_status.ok()) {
     VLOG(1) << "Error setting value for required_field: "

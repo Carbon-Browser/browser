@@ -11,7 +11,7 @@
 #include <memory>
 #include <vector>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "components/domain_reliability/beacon.h"
@@ -55,6 +55,10 @@ class DOMAIN_RELIABILITY_EXPORT DomainReliabilityContext {
       DomainReliabilityDispatcher* dispatcher,
       DomainReliabilityUploader* uploader,
       std::unique_ptr<const DomainReliabilityConfig> config);
+
+  DomainReliabilityContext(const DomainReliabilityContext&) = delete;
+  DomainReliabilityContext& operator=(const DomainReliabilityContext&) = delete;
+
   ~DomainReliabilityContext();
 
   // Notifies the context of a beacon on its domain(s); may or may not save the
@@ -64,10 +68,6 @@ class DOMAIN_RELIABILITY_EXPORT DomainReliabilityContext {
 
   // Called to clear browsing data, since beacons are like browsing history.
   void ClearBeacons();
-
-  // Gets a Value containing data that can be formatted into a web page for
-  // debugging purposes.
-  base::Value GetWebUIData() const;
 
   // Gets the beacons queued for upload in this context. `*beacons_out` will be
   // cleared and filled with pointers to the beacons; the pointers remain valid
@@ -111,11 +111,11 @@ class DOMAIN_RELIABILITY_EXPORT DomainReliabilityContext {
   int GetMinBeaconUploadDepth() const;
 
   std::unique_ptr<const DomainReliabilityConfig> config_;
-  const MockableTime* time_;
+  raw_ptr<const MockableTime> time_;
   const std::string& upload_reporter_string_;
   DomainReliabilityScheduler scheduler_;
-  DomainReliabilityDispatcher* dispatcher_;
-  DomainReliabilityUploader* uploader_;
+  raw_ptr<DomainReliabilityDispatcher> dispatcher_;
+  raw_ptr<DomainReliabilityUploader> uploader_;
 
   std::list<std::unique_ptr<DomainReliabilityBeacon>> beacons_;
 
@@ -131,12 +131,10 @@ class DOMAIN_RELIABILITY_EXPORT DomainReliabilityContext {
   base::TimeTicks last_upload_time_;
   // The last network change time is not tracked per-context, so this is a
   // pointer to that value in a wider (e.g. per-Monitor or unittest) scope.
-  const base::TimeTicks* last_network_change_time_;
+  raw_ptr<const base::TimeTicks> last_network_change_time_;
   const UploadAllowedCallback& upload_allowed_callback_;
 
   base::WeakPtrFactory<DomainReliabilityContext> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(DomainReliabilityContext);
 };
 
 }  // namespace domain_reliability

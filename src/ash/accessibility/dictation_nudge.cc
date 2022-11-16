@@ -8,6 +8,7 @@
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/style/ash_color_provider.h"
+#include "ash/system/tray/system_nudge_label.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/compositor/layer.h"
 #include "ui/gfx/text_constants.h"
@@ -35,37 +36,30 @@ constexpr char kDictationNudgeName[] = "DictationOfflineContextualNudge";
 }  // namespace
 
 DictationNudge::DictationNudge(DictationNudgeController* controller)
-    : SystemNudge(kDictationNudgeName), controller_(controller) {}
+    : SystemNudge(kDictationNudgeName,
+                  kIconSize,
+                  kIconLabelSpacing,
+                  kNudgePadding),
+      controller_(controller) {}
 
 DictationNudge::~DictationNudge() = default;
 
-std::unique_ptr<views::View> DictationNudge::CreateLabelView() const {
-  std::unique_ptr<views::Label> label = std::make_unique<views::Label>();
-  label->SetPaintToLayer();
-  label->layer()->SetFillsBoundsOpaquely(false);
-  label->SetPosition(
-      gfx::Point(kNudgePadding + kIconSize + kIconLabelSpacing, kNudgePadding));
-
-  label->SetHorizontalAlignment(gfx::HorizontalAlignment::ALIGN_LEFT);
-  label->SetEnabledColor(AshColorProvider::Get()->GetContentLayerColor(
-      AshColorProvider::ContentLayerType::kTextColorPrimary));
-  label->SetAutoColorReadabilityEnabled(false);
-
-  const std::u16string language_name = l10n_util::GetDisplayNameForLocale(
-      controller_->dictation_locale(), controller_->application_locale(),
-      /*is_for_ui=*/true);
-
-  const std::u16string label_text = l10n_util::GetStringFUTF16(
-      IDS_ASH_DICTATION_LANGUAGE_SUPPORTED_OFFLINE_NUDGE, language_name);
-  label->SetText(label_text);
-  label->SetMultiLine(true);
-  label->SizeToFit(kMinLabelWidth);
-
-  return std::move(label);
+std::unique_ptr<SystemNudgeLabel> DictationNudge::CreateLabelView() const {
+  return std::make_unique<SystemNudgeLabel>(GetAccessibilityText(),
+                                            kMinLabelWidth);
 }
 
 const gfx::VectorIcon& DictationNudge::GetIcon() const {
   return kDictationOffNewuiIcon;
+}
+
+std::u16string DictationNudge::GetAccessibilityText() const {
+  const std::u16string language_name = l10n_util::GetDisplayNameForLocale(
+      controller_->dictation_locale(), controller_->application_locale(),
+      /*is_for_ui=*/true);
+
+  return l10n_util::GetStringFUTF16(
+      IDS_ASH_DICTATION_LANGUAGE_SUPPORTED_OFFLINE_NUDGE, language_name);
 }
 
 }  // namespace ash

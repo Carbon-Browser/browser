@@ -14,7 +14,6 @@
 #include "third_party/blink/renderer/modules/modules_export.h"
 #include "third_party/blink/renderer/modules/storage/storage_area_map.h"
 #include "third_party/blink/renderer/modules/storage/storage_namespace.h"
-#include "third_party/blink/renderer/platform/heap/heap_allocator.h"
 #include "third_party/blink/renderer/platform/heap/persistent.h"
 #include "third_party/blink/renderer/platform/storage/blink_storage_key.h"
 #include "third_party/blink/renderer/platform/wtf/deque.h"
@@ -71,6 +70,9 @@ class MODULES_EXPORT CachedStorageArea
       StorageNamespace* storage_namespace,
       bool is_session_storage_for_prerendering,
       mojo::PendingRemote<mojom::blink::StorageArea> storage_area = {});
+
+  CachedStorageArea(const CachedStorageArea&) = delete;
+  CachedStorageArea& operator=(const CachedStorageArea&) = delete;
 
   // These correspond to blink::Storage.
   unsigned GetLength();
@@ -239,8 +241,6 @@ class MODULES_EXPORT CachedStorageArea
   mojo::Receiver<mojom::blink::StorageAreaObserver> receiver_{this};
 
   Persistent<HeapHashMap<WeakMember<Source>, String>> areas_;
-
-  DISALLOW_COPY_AND_ASSIGN(CachedStorageArea);
 };
 
 }  // namespace blink

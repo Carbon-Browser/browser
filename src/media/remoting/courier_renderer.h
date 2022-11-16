@@ -11,11 +11,12 @@
 
 #include "base/callback.h"
 #include "base/containers/circular_deque.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
-#include "base/single_thread_task_runner.h"
 #include "base/synchronization/lock.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "media/base/pipeline_status.h"
 #include "media/base/renderer.h"
@@ -49,6 +50,10 @@ class CourierRenderer final : public Renderer {
   CourierRenderer(scoped_refptr<base::SingleThreadTaskRunner> media_task_runner,
                   const base::WeakPtr<RendererController>& controller,
                   VideoRendererSink* video_renderer_sink);
+
+  CourierRenderer(const CourierRenderer&) = delete;
+  CourierRenderer& operator=(const CourierRenderer&) = delete;
+
   ~CourierRenderer() final;
 
  private:
@@ -170,8 +175,8 @@ class CourierRenderer final : public Renderer {
   // lock because it can be accessed from both media and render main thread.
   base::Lock time_lock_;
 
-  MediaResource* media_resource_;
-  RendererClient* client_;
+  raw_ptr<MediaResource> media_resource_;
+  raw_ptr<RendererClient> client_;
   std::unique_ptr<DemuxerStreamAdapter> audio_demuxer_stream_adapter_;
   std::unique_ptr<DemuxerStreamAdapter> video_demuxer_stream_adapter_;
 
@@ -194,7 +199,8 @@ class CourierRenderer final : public Renderer {
   PipelineStatusCallback init_workflow_done_callback_;
   base::OnceClosure flush_cb_;
 
-  VideoRendererSink* const video_renderer_sink_;  // Outlives this class.
+  const raw_ptr<VideoRendererSink>
+      video_renderer_sink_;  // Outlives this class.
 
   // Current playback rate.
   double playback_rate_ = 0;
@@ -230,7 +236,7 @@ class CourierRenderer final : public Renderer {
   // Records events and measurements of interest.
   RendererMetricsRecorder metrics_recorder_;
 
-  const base::TickClock* clock_;
+  raw_ptr<const base::TickClock> clock_;
 
   // A timer that polls the DemuxerStreamAdapters periodically to measure
   // the data flow rates for metrics.
@@ -241,8 +247,6 @@ class CourierRenderer final : public Renderer {
   bool receiver_is_blocked_on_local_demuxers_ = true;
 
   base::WeakPtrFactory<CourierRenderer> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(CourierRenderer);
 };
 
 }  // namespace remoting

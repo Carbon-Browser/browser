@@ -9,13 +9,16 @@
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/check_op.h"
+#include "base/containers/cxx20_erase_vector.h"
 #include "base/guid.h"
 #include "base/memory/ptr_util.h"
+#include "base/observer_list.h"
 #include "base/strings/string_util.h"
 #include "base/time/clock.h"
 #include "base/time/time.h"
 #include "components/history/core/browser/history_service.h"
 #include "components/send_tab_to_self/features.h"
+#include "components/send_tab_to_self/metrics_util.h"
 #include "components/send_tab_to_self/proto/send_tab_to_self.pb.h"
 #include "components/send_tab_to_self/target_device_info.h"
 #include "components/sync/model/entity_change.h"
@@ -24,7 +27,6 @@
 #include "components/sync/model/model_type_change_processor.h"
 #include "components/sync/model/mutable_data_batch.h"
 #include "components/sync/protocol/model_type_state.pb.h"
-#include "components/sync_device_info/device_info_tracker.h"
 #include "components/sync_device_info/local_device_info_util.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -34,14 +36,13 @@ namespace {
 
 using syncer::ModelTypeStore;
 
-const base::TimeDelta kDedupeTime = base::TimeDelta::FromSeconds(5);
+const base::TimeDelta kDedupeTime = base::Seconds(5);
 
-const base::TimeDelta kDeviceExpiration = base::TimeDelta::FromDays(10);
+const base::TimeDelta kDeviceExpiration = base::Days(10);
 
 // Converts a time field from sync protobufs to a time object.
 base::Time ProtoTimeToTime(int64_t proto_t) {
-  return base::Time::FromDeltaSinceWindowsEpoch(
-      base::TimeDelta::FromMicroseconds(proto_t));
+  return base::Time::FromDeltaSinceWindowsEpoch(base::Microseconds(proto_t));
 }
 
 // Allocate a EntityData and copies |specifics| into it.
@@ -100,6 +101,9 @@ SendTabToSelfBridge::SendTabToSelfBridge(
   if (history_service) {
     history_service_observation_.Observe(history_service);
   }
+  device_info_tracker_observation_.Observe(device_info_tracker);
+
+  ComputeTargetDeviceInfoSortedList();
 
   std::move(create_store_callback)
       .Run(syncer::SEND_TAB_TO_SELF,
@@ -259,27 +263,6 @@ std::vector<std::string> SendTabToSelfBridge::GetAllGuids() const {
   return keys;
 }
 
-void SendTabToSelfBridge::DeleteAllEntries() {
-  if (!change_processor()->IsTrackingMetadata()) {
-    DCHECK_EQ(0ul, entries_.size());
-    return;
-  }
-
-  std::unique_ptr<ModelTypeStore::WriteBatch> batch =
-      store_->CreateWriteBatch();
-
-  std::vector<std::string> all_guids = GetAllGuids();
-
-  for (const auto& guid : all_guids) {
-    change_processor()->Delete(guid, batch->GetMetadataChangeList());
-    batch->DeleteData(guid);
-  }
-  entries_.clear();
-  mru_entry_ = nullptr;
-
-  NotifyRemoteSendTabToSelfEntryDeleted(all_guids);
-}
-
 const SendTabToSelfEntry* SendTabToSelfBridge::GetEntryByGUID(
     const std::string& guid) const {
   auto it = entries_.find(guid);
@@ -292,7 +275,6 @@ const SendTabToSelfEntry* SendTabToSelfBridge::GetEntryByGUID(
 const SendTabToSelfEntry* SendTabToSelfBridge::AddEntry(
     const GURL& url,
     const std::string& title,
-    base::Time navigation_time,
     const std::string& target_device_cache_guid) {
   if (!change_processor()->IsTrackingMetadata()) {
     // TODO(crbug.com/940512) handle failure case.
@@ -308,8 +290,8 @@ const SendTabToSelfEntry* SendTabToSelfBridge::AddEntry(
   // has the first sent tab in progress, and so we will not attempt to resend.
   base::Time shared_time = clock_->Now();
   if (mru_entry_ && url == mru_entry_->GetURL() &&
-      navigation_time == mru_entry_->GetOriginalNavigationTime() &&
       shared_time - mru_entry_->GetSharedTime() < kDedupeTime) {
+    send_tab_to_self::RecordNotificationThrottled();
     return mru_entry_;
   }
 
@@ -325,8 +307,8 @@ const SendTabToSelfEntry* SendTabToSelfBridge::AddEntry(
   }
 
   auto entry = std::make_unique<SendTabToSelfEntry>(
-      guid, url, trimmed_title, shared_time, navigation_time,
-      local_device_name_, target_device_cache_guid);
+      guid, url, trimmed_title, shared_time, local_device_name_,
+      target_device_cache_guid);
 
   std::unique_ptr<ModelTypeStore::WriteBatch> batch =
       store_->CreateWriteBatch();
@@ -434,23 +416,33 @@ void SendTabToSelfBridge::OnURLsDeleted(
   DeleteAllEntries();
 }
 
+void SendTabToSelfBridge::OnDeviceInfoChange() {
+  ComputeTargetDeviceInfoSortedList();
+}
+
 bool SendTabToSelfBridge::IsReady() {
   return change_processor()->IsTrackingMetadata();
 }
 
 bool SendTabToSelfBridge::HasValidTargetDevice() {
-  if (ShouldUpdateTargetDeviceInfoList()) {
-    SetTargetDeviceInfoList();
-  }
-  return target_device_name_to_cache_info_.size() > 0;
+  return GetTargetDeviceInfoSortedList().size() > 0;
 }
 
 std::vector<TargetDeviceInfo>
 SendTabToSelfBridge::GetTargetDeviceInfoSortedList() {
-  if (ShouldUpdateTargetDeviceInfoList()) {
-    SetTargetDeviceInfoList();
-  }
-  return target_device_name_to_cache_info_;
+  // Filter expired devices (some timestamps in the cached list may now be too
+  // old). |target_device_info_sorted_list_| is copied here to avoid mutations
+  // inside a getter.
+  // TODO(crbug.com/1257573): Consider having a timer that fires on the next
+  // expiry and removes the corresponding device(s) then.
+  std::vector<TargetDeviceInfo> non_expired_devices =
+      target_device_info_sorted_list_;
+  const base::Time now = clock_->Now();
+  base::EraseIf(non_expired_devices, [now](const TargetDeviceInfo& device) {
+    return now - device.last_updated_timestamp > kDeviceExpiration;
+  });
+
+  return non_expired_devices;
 }
 
 // static
@@ -458,10 +450,6 @@ std::unique_ptr<syncer::ModelTypeStore>
 SendTabToSelfBridge::DestroyAndStealStoreForTest(
     std::unique_ptr<SendTabToSelfBridge> bridge) {
   return std::move(bridge->store_);
-}
-
-bool SendTabToSelfBridge::ShouldUpdateTargetDeviceInfoListForTest() {
-  return ShouldUpdateTargetDeviceInfoList();
 }
 
 void SendTabToSelfBridge::SetLocalDeviceNameForTest(
@@ -608,6 +596,7 @@ void SendTabToSelfBridge::DoGarbageCollection() {
   auto entry = entries_.begin();
   while (entry != entries_.end()) {
     DCHECK_EQ(entry->first, entry->second->GetGUID());
+
     std::string guid = entry->first;
     bool expired = entry->second->IsExpired(clock_->Now());
     entry++;
@@ -619,28 +608,13 @@ void SendTabToSelfBridge::DoGarbageCollection() {
   NotifyRemoteSendTabToSelfEntryDeleted(removed);
 }
 
-bool SendTabToSelfBridge::ShouldUpdateTargetDeviceInfoList() const {
+void SendTabToSelfBridge::ComputeTargetDeviceInfoSortedList() {
   if (!device_info_tracker_->IsSyncing()) {
-    return false;
+    return;
   }
-
-  // The vector should be updated if any of these is true:
-  //   * The vector is empty.
-  //   * The number of total devices changed.
-  //   * The oldest non-expired entry in the vector is now expired.
-  return target_device_name_to_cache_info_.empty() ||
-         device_info_tracker_->GetAllDeviceInfo().size() !=
-             number_of_devices_ ||
-         clock_->Now() - oldest_non_expired_device_timestamp_ >
-             kDeviceExpiration;
-}
-
-void SendTabToSelfBridge::SetTargetDeviceInfoList() {
-  DCHECK(device_info_tracker_->IsSyncing());
 
   std::vector<std::unique_ptr<syncer::DeviceInfo>> all_devices =
       device_info_tracker_->GetAllDeviceInfo();
-  number_of_devices_ = all_devices.size();
 
   // Sort the DeviceInfo vector so the most recently modified devices are first.
   std::stable_sort(all_devices.begin(), all_devices.end(),
@@ -650,7 +624,7 @@ void SendTabToSelfBridge::SetTargetDeviceInfoList() {
                             device2->last_updated_timestamp();
                    });
 
-  target_device_name_to_cache_info_.clear();
+  target_device_info_sorted_list_.clear();
   std::set<std::string> unique_device_names;
   std::unordered_map<std::string, int> short_names_counter;
   for (const auto& device : all_devices) {
@@ -687,13 +661,12 @@ void SendTabToSelfBridge::SetTargetDeviceInfoList() {
       TargetDeviceInfo target_device_info(
           device_names.full_name, device_names.short_name, device->guid(),
           device->device_type(), device->last_updated_timestamp());
-      target_device_name_to_cache_info_.push_back(target_device_info);
-      oldest_non_expired_device_timestamp_ = device->last_updated_timestamp();
+      target_device_info_sorted_list_.push_back(target_device_info);
 
       short_names_counter[device_names.short_name]++;
     }
   }
-  for (auto& device_info : target_device_name_to_cache_info_) {
+  for (auto& device_info : target_device_info_sorted_list_) {
     bool unique_short_name = short_names_counter[device_info.short_name] == 1;
     device_info.device_name =
         (unique_short_name ? device_info.short_name : device_info.full_name);
@@ -726,7 +699,8 @@ void SendTabToSelfBridge::DeleteEntries(const std::vector<GURL>& urls) {
   for (const GURL& url : urls) {
     auto entry = entries_.begin();
     while (entry != entries_.end()) {
-      bool to_delete = (url == entry->second->GetURL());
+      bool to_delete =
+          (entry->second == nullptr || url == entry->second->GetURL());
 
       std::string guid = entry->first;
       entry++;
@@ -741,6 +715,27 @@ void SendTabToSelfBridge::DeleteEntries(const std::vector<GURL>& urls) {
   // entries have been removed. Regardless of if these entries were removed
   // "remotely".
   NotifyRemoteSendTabToSelfEntryDeleted(removed_guids);
+}
+
+void SendTabToSelfBridge::DeleteAllEntries() {
+  if (!change_processor()->IsTrackingMetadata()) {
+    DCHECK_EQ(0ul, entries_.size());
+    return;
+  }
+
+  std::unique_ptr<ModelTypeStore::WriteBatch> batch =
+      store_->CreateWriteBatch();
+
+  std::vector<std::string> all_guids = GetAllGuids();
+
+  for (const auto& guid : all_guids) {
+    change_processor()->Delete(guid, batch->GetMetadataChangeList());
+    batch->DeleteData(guid);
+  }
+  entries_.clear();
+  mru_entry_ = nullptr;
+
+  NotifyRemoteSendTabToSelfEntryDeleted(all_guids);
 }
 
 }  // namespace send_tab_to_self

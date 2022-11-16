@@ -43,6 +43,10 @@ const DisabledItemsTestData kDisabledTokensTests[] = {
 };
 
 class ChromeOriginTrialsTest : public InProcessBrowserTest {
+ public:
+  ChromeOriginTrialsTest(const ChromeOriginTrialsTest&) = delete;
+  ChromeOriginTrialsTest& operator=(const ChromeOriginTrialsTest&) = delete;
+
  protected:
   ChromeOriginTrialsTest() {}
 
@@ -53,29 +57,26 @@ class ChromeOriginTrialsTest : public InProcessBrowserTest {
   }
 
   void AddDisabledFeaturesToPrefs(const std::vector<std::string>& features) {
-    base::ListValue disabled_feature_list;
+    base::Value disabled_feature_list(base::Value::Type::LIST);
     for (const std::string& feature : features) {
       disabled_feature_list.Append(feature);
     }
     ListPrefUpdate update(
         local_state(), embedder_support::prefs::kOriginTrialDisabledFeatures);
-    update->Swap(&disabled_feature_list);
+    *update = std::move(disabled_feature_list);
   }
 
   void AddDisabledTokensToPrefs(const std::vector<std::string>& tokens) {
-    base::ListValue disabled_token_list;
+    base::Value disabled_token_list(base::Value::Type::LIST);
     for (const std::string& token : tokens) {
       disabled_token_list.Append(token);
     }
     ListPrefUpdate update(local_state(),
                           embedder_support::prefs::kOriginTrialDisabledTokens);
-    update->Swap(&disabled_token_list);
+    *update = std::move(disabled_token_list);
   }
 
   PrefService* local_state() { return g_browser_process->local_state(); }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ChromeOriginTrialsTest);
 };
 
 // Tests to verify that the command line is not set, when no prefs exist for

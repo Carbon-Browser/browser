@@ -10,6 +10,7 @@
 
 #include "base/containers/flat_map.h"
 #include "build/build_config.h"
+#include "printing/mojom/print.mojom.h"
 #include "printing/print_settings.h"
 #include "printing/printing_context.h"
 
@@ -30,7 +31,7 @@ class TestPrintingContextDelegate : public PrintingContext::Delegate {
 
 class TestPrintingContext : public PrintingContext {
  public:
-  explicit TestPrintingContext(Delegate* delegate);
+  TestPrintingContext(Delegate* delegate, bool skip_system_calls);
   TestPrintingContext(const TestPrintingContext&) = delete;
   TestPrintingContext& operator=(const TestPrintingContext&) = delete;
   ~TestPrintingContext() override;
@@ -42,30 +43,64 @@ class TestPrintingContext : public PrintingContext {
   void SetDeviceSettings(const std::string& device_name,
                          std::unique_ptr<PrintSettings> settings);
 
+  // Enables tests to fail with an access-denied error.
+  void SetNewDocumentBlockedByPermissions() {
+    new_document_blocked_by_permissions_ = true;
+  }
+#if BUILDFLAG(IS_WIN)
+  void SetOnRenderPageBlockedByPermissions() {
+    render_page_blocked_by_permissions_ = true;
+  }
+#endif
+  void SetOnRenderDocumentBlockedByPermissions() {
+    render_document_blocked_by_permissions_ = true;
+  }
+  void SetDocumentDoneBlockedByPermissions() {
+    document_done_blocked_by_permissions_ = true;
+  }
+
+  // Enables tests to fail with a failed error.
+  void SetUseDefaultSettingsFails() { use_default_settings_fails_ = true; }
+
+  // Enables tests to fail with a canceled error.
+  void SetAskUserForSettingsCanceled() { ask_user_for_settings_cancel_ = true; }
+
   // PrintingContext overrides:
   void AskUserForSettings(int max_pages,
                           bool has_selection,
                           bool is_scripted,
                           PrintSettingsCallback callback) override;
-  Result UseDefaultSettings() override;
+  mojom::ResultCode UseDefaultSettings() override;
   gfx::Size GetPdfPaperSizeDeviceUnits() override;
-  Result UpdatePrinterSettings(bool external_preview,
-                               bool show_system_dialog,
-                               int page_count) override;
-  Result NewDocument(const std::u16string& document_name) override;
-  Result NewPage() override;
-  Result PageDone() override;
-  Result DocumentDone() override;
+  mojom::ResultCode UpdatePrinterSettings(
+      const PrinterSettings& printer_settings) override;
+  mojom::ResultCode NewDocument(const std::u16string& document_name) override;
+#if BUILDFLAG(IS_WIN)
+  mojom::ResultCode RenderPage(const PrintedPage& page,
+                               const PageSetup& page_setup) override;
+#endif
+  mojom::ResultCode PrintDocument(const MetafilePlayer& metafile,
+                                  const PrintSettings& settings,
+                                  uint32_t num_pages) override;
+  mojom::ResultCode DocumentDone() override;
   void Cancel() override;
   void ReleaseContext() override;
   NativeDrawingContext context() const override;
-#if defined(OS_WIN)
-  Result InitWithSettingsForTest(
+#if BUILDFLAG(IS_WIN)
+  mojom::ResultCode InitWithSettingsForTest(
       std::unique_ptr<PrintSettings> settings) override;
 #endif
 
  private:
   base::flat_map<std::string, std::unique_ptr<PrintSettings>> device_settings_;
+  bool use_default_settings_fails_ = false;
+  bool ask_user_for_settings_cancel_ = false;
+  bool new_document_blocked_by_permissions_ = false;
+#if BUILDFLAG(IS_WIN)
+  bool render_page_blocked_by_permissions_ = false;
+#endif
+  bool render_document_blocked_by_permissions_ = false;
+  bool document_done_blocked_by_permissions_ = false;
 };
 
 }  // namespace printing

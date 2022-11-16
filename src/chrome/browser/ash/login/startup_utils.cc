@@ -6,13 +6,15 @@
 
 #include <utility>
 
+#include "ash/components/arc/arc_prefs.h"
+#include "ash/constants/ash_features.h"
+#include "ash/constants/ash_switches.h"
 #include "base/bind.h"
 #include "base/callback.h"
 #include "base/command_line.h"
 #include "base/files/file_util.h"
 #include "base/path_service.h"
 #include "base/system/sys_info.h"
-#include "base/task/post_task.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/time/time.h"
@@ -23,7 +25,6 @@
 #include "chrome/browser/browser_process_platform_part.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/common/pref_names.h"
-#include "components/arc/arc_prefs.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
@@ -31,6 +32,7 @@
 #include "components/web_resource/web_resource_pref_names.h"
 #include "ui/base/l10n/l10n_util.h"
 
+namespace ash {
 namespace {
 
 constexpr char kDisableHIDDetectionScreenForTests[] =
@@ -91,8 +93,6 @@ void CreateOobeCompleteFlagFile() {
 
 }  // namespace
 
-namespace chromeos {
-
 // static
 void StartupUtils::RegisterPrefs(PrefRegistrySimple* registry) {
   registry->RegisterBooleanPref(prefs::kOobeComplete, false);
@@ -101,6 +101,13 @@ void StartupUtils::RegisterPrefs(PrefRegistrySimple* registry) {
   registry->RegisterBooleanPref(::prefs::kEnrollmentRecoveryRequired, false);
   registry->RegisterStringPref(::prefs::kInitialLocale, "en-US");
   registry->RegisterBooleanPref(kDisableHIDDetectionScreenForTests, false);
+  registry->RegisterBooleanPref(prefs::kOobeGuestMetricsEnabled, false);
+  registry->RegisterBooleanPref(prefs::kOobeGuestAcceptedTos, false);
+  if (switches::IsRevenBranding()) {
+    registry->RegisterBooleanPref(prefs::kOobeRevenUpdatedToFlex, false);
+  }
+  registry->RegisterStringPref(prefs::kUrlParameterToAutofillSAMLUsername,
+                               std::string());
 }
 
 // static
@@ -119,7 +126,12 @@ void StartupUtils::RegisterOobeProfilePrefs(PrefRegistrySimple* registry) {
   // initialized along with `kOobeOnboardingTime`.
   registry->RegisterBooleanPref(
       arc::prefs::kArcPlayStoreLaunchMetricCanBeRecorded, false);
-  ash::OnboardingUserActivityCounter::RegisterProfilePrefs(registry);
+  if (switches::IsRevenBranding() &&
+      features::IsOobeConsolidatedConsentEnabled()) {
+    registry->RegisterBooleanPref(prefs::kRevenOobeConsolidatedConsentAccepted,
+                                  false);
+  }
+  OnboardingUserActivityCounter::RegisterProfilePrefs(registry);
 }
 
 // static
@@ -242,4 +254,4 @@ bool StartupUtils::IsDeviceOwned() {
          connector->IsDeviceEnterpriseManaged();
 }
 
-}  // namespace chromeos
+}  // namespace ash

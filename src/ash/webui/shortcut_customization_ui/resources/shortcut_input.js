@@ -12,14 +12,14 @@ const ModifierKeyCodes = [
   /*Ctrl=*/ 18,
   /*MetaLeft=*/ 91,
   /*MetaRight=*/ 92,
-]
+];
 
-    /**
-     * @fileoverview
-     * 'shortcut-input' is the shortcut input element that consumes user inputs
-     * and displays the shortcut.
-     */
-    export class ShortcutInputElement extends PolymerElement {
+/**
+ * @fileoverview
+ * 'shortcut-input' is the shortcut input element that consumes user inputs
+ * and displays the shortcut.
+ */
+export class ShortcutInputElement extends PolymerElement {
   static get is() {
     return 'shortcut-input';
   }
@@ -46,8 +46,8 @@ const ModifierKeyCodes = [
       capturing_: {
         type: Boolean,
         value: false,
-      }
-    }
+      },
+    };
   }
 
   ready() {

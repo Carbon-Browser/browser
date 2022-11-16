@@ -7,18 +7,17 @@
 
 #include <memory>
 
+#include "base/time/time.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/timing/window_performance.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 
 namespace blink {
 
-CORE_EXPORT extern const base::Feature kFirstInputDelayWithoutEventListener;
-
 class Event;
 
 // Event timing collects and records the event start time, processing start time
-// and processing end time of long-latency events, providing a tool to evalute
+// and processing end time of long-latency events, providing a tool to evaluate
 // input latency.
 // See also: https://github.com/wicg/event-timing
 class CORE_EXPORT EventTiming final {
@@ -40,7 +39,9 @@ class CORE_EXPORT EventTiming final {
   EventTiming(const EventTiming&) = delete;
   EventTiming& operator=(const EventTiming&) = delete;
 
-  static void HandleInputDelay(LocalDOMWindow* window, const Event& event);
+  static void HandleInputDelay(LocalDOMWindow* window,
+                               const Event& event,
+                               base::TimeTicks processing_start);
   // The caller owns the |clock| which must outlive the EventTiming.
   static void SetTickClockForTesting(const base::TickClock* clock);
 

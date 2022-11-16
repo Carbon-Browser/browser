@@ -6,7 +6,6 @@
 
 #include <string>
 
-#include "base/feature_list.h"
 #include "chrome/browser/ash/login/oobe_screen.h"
 #include "chrome/browser/ash/login/screen_manager.h"
 #include "chrome/browser/ash/login/ui/login_display_host.h"
@@ -15,7 +14,6 @@
 #include "chrome/browser/ash/login/wizard_context.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "chrome/browser/supervised_user/supervised_user_features/supervised_user_features.h"
 #include "chrome/browser/ui/webui/chromeos/login/oobe_ui.h"
 #include "chrome/browser/ui/webui/signin/inline_login_dialog_chromeos_onboarding.h"
 #include "ui/aura/window.h"
@@ -54,12 +52,8 @@ EduCoexistenceLoginScreen::EduCoexistenceLoginScreen(
 EduCoexistenceLoginScreen::~EduCoexistenceLoginScreen() {}
 
 bool EduCoexistenceLoginScreen::MaybeSkip(WizardContext* context) {
-  if (!base::FeatureList::IsEnabled(supervised_users::kEduCoexistenceFlowV2)) {
-    exit_callback_.Run(Result::SKIPPED);
-    return true;
-  }
-
-  if (!ProfileManager::GetActiveUserProfile()->IsChild()) {
+  if (context->skip_post_login_screens_for_tests ||
+      !ProfileManager::GetActiveUserProfile()->IsChild()) {
     exit_callback_.Run(Result::SKIPPED);
     return true;
   }

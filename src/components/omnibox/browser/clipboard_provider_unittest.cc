@@ -8,7 +8,6 @@
 #include <string>
 #include <utility>
 
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
@@ -79,10 +78,8 @@ class ClipboardProviderTest : public testing::Test,
  public:
   ClipboardProviderTest()
       : client_(new MockAutocompleteProviderClient()),
-        provider_(new ClipboardProvider(client_.get(),
-                                        this,
-                                        nullptr,
-                                        &clipboard_content_)) {
+        provider_(
+            new ClipboardProvider(client_.get(), this, &clipboard_content_)) {
     SetClipboardUrl(GURL(kClipboardURL));
   }
 
@@ -91,16 +88,15 @@ class ClipboardProviderTest : public testing::Test,
   void ClearClipboard() { clipboard_content_.SuppressClipboardContent(); }
 
   void SetClipboardUrl(const GURL& url) {
-    clipboard_content_.SetClipboardURL(url, base::TimeDelta::FromMinutes(9));
+    clipboard_content_.SetClipboardURL(url, base::Minutes(9));
   }
 
   void SetClipboardText(const std::u16string& text) {
-    clipboard_content_.SetClipboardText(text, base::TimeDelta::FromMinutes(9));
+    clipboard_content_.SetClipboardText(text, base::Minutes(9));
   }
 
   void SetClipboardImage(const gfx::Image& image) {
-    clipboard_content_.SetClipboardImage(image,
-                                         base::TimeDelta::FromMinutes(9));
+    clipboard_content_.SetClipboardImage(image, base::Minutes(9));
   }
 
   bool IsClipboardEmpty() {
@@ -123,7 +119,8 @@ class ClipboardProviderTest : public testing::Test,
 
  protected:
   // AutocompleteProviderListener:
-  void OnProviderUpdate(bool updated_matches) override;
+  void OnProviderUpdate(bool updated_matches,
+                        const AutocompleteProvider* provider) override;
 
   TestSchemeClassifier classifier_;
   FakeClipboardRecentContent clipboard_content_;
@@ -134,7 +131,9 @@ class ClipboardProviderTest : public testing::Test,
   base::test::TaskEnvironment task_environment_;
 };
 
-void ClipboardProviderTest::OnProviderUpdate(bool updated_matches) {
+void ClipboardProviderTest::OnProviderUpdate(
+    bool updated_matches,
+    const AutocompleteProvider* provider) {
   // No action required.
 }
 
@@ -152,7 +151,7 @@ TEST_F(ClipboardProviderTest, EmptyClipboard) {
   EXPECT_TRUE(provider_->matches().empty());
 }
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
 // The following tests do not apply to Android.
 // On Android, the Omnibox won't access the content of the system clipboard
 // before users click the reveal button, so the clipboard suggestions will be
@@ -215,7 +214,7 @@ TEST_F(ClipboardProviderTest, MatchesImage) {
   ASSERT_TRUE(matches_image_match_);
   EXPECT_EQ(AutocompleteMatchType::CLIPBOARD_IMAGE, matches_image_match_->type);
 }
-#endif  // !defined(OS_ANDROID)
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 TEST_F(ClipboardProviderTest, DeleteMatch) {
   auto template_url_service = std::make_unique<TemplateURLService>(
@@ -284,6 +283,28 @@ TEST_F(ClipboardProviderTest, CreateBlankImageMatchOnStart) {
   EXPECT_EQ(AutocompleteMatchType::CLIPBOARD_IMAGE,
             provider_->matches().back().type);
   EXPECT_FALSE(provider_->matches().back().post_content.get());
+}
+
+TEST_F(ClipboardProviderTest, SkipImageMatchGivenWantAsynchronousMatchesFalse) {
+  base::test::ScopedFeatureList feature_list;
+  base::Feature feature = omnibox::kClipboardSuggestionContentHidden;
+  feature_list.InitAndEnableFeature(feature);
+
+  auto template_url_service =
+      std::make_unique<TemplateURLService>(/*initializers=*/nullptr,
+                                           /*count=*/0);
+  client_->set_template_url_service(std::move(template_url_service));
+
+  gfx::Image test_image = gfx::test::CreateImage(/*width=*/10, /*height=*/10);
+  SetClipboardImage(test_image);
+  // When `input.omit_asynchronous_matches` is set to true, the clipboard
+  // provider should skip any asynchronous logic associated with creating an
+  // image match.
+  AutocompleteInput input = CreateAutocompleteInput(OmniboxFocusType::ON_FOCUS);
+  input.set_omit_asynchronous_matches(true);
+  provider_->Start(input, false);
+  ASSERT_TRUE(provider_->done());
+  ASSERT_TRUE(provider_->matches().empty());
 }
 
 TEST_F(ClipboardProviderTest, CreateURLMatchWithContent) {

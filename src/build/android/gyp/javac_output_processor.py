@@ -9,6 +9,7 @@ import os
 import pathlib
 import re
 import sys
+import traceback
 
 from util import build_utils
 
@@ -25,7 +26,9 @@ import lookup_dep
 
 class JavacOutputProcessor:
   def __init__(self, target_name):
-    self._target_name = target_name
+    self._target_name = self._RemoveSuffixesIfPresent(
+        ["__compile_java", "__errorprone", "__header"], target_name)
+    self._suggested_deps = set()
 
     # Example: ../../ui/android/java/src/org/chromium/ui/base/Clipboard.java:45:
     fileline_prefix = (
@@ -36,12 +39,6 @@ class JavacOutputProcessor:
     self._error_re = re.compile(fileline_prefix +
                                 r'(?P<full_message> (?P<message>.*))$')
     self._marker_re = re.compile(r'\s*(?P<marker>\^)\s*$')
-
-    # Matches output modification performed by _ElaborateLineForUnknownSymbol()
-    # so that it can be colorized.
-    # Example: org.chromium.base.Log found in dep //base:base_java.
-    self._please_add_dep_re = re.compile(
-        r'(?P<full_message>Please add //[\w/:]+ dep to //[\w/:]+.*)$')
 
     # First element in pair is bool which indicates whether the missing
     # class/package is part of the error message.
@@ -80,7 +77,19 @@ class JavacOutputProcessor:
       - Suggests GN dep to add for 'unresolved symbol in Java import' errors.
       """
     lines = self._ElaborateLinesForUnknownSymbol(iter(lines))
-    return (self._ApplyColors(l) for l in lines)
+    for line in lines:
+      yield self._ApplyColors(line)
+    if self._suggested_deps:
+
+      def yellow(text):
+        return colorama.Fore.YELLOW + text + colorama.Fore.RESET
+
+      # Show them in quotes so they can be copy/pasted into BUILD.gn files.
+      yield yellow('Hint:') + ' One or more errors due to missing GN deps.'
+      yield (yellow('Hint:') + ' Try adding the following to ' +
+             yellow(self._target_name))
+      for dep in sorted(self._suggested_deps):
+        yield '    "{}",'.format(dep)
 
   def _ElaborateLinesForUnknownSymbol(self, lines):
     """ Elaborates passed-in javac output for unresolved symbols.
@@ -99,11 +108,16 @@ class JavacOutputProcessor:
     previous_line = next(lines, None)
     line = next(lines, None)
     while previous_line != None:
-      elaborated_lines = self._ElaborateLineForUnknownSymbol(
-          previous_line, line)
-      for elaborated_line in elaborated_lines:
-        yield elaborated_line
+      try:
+        self._LookForUnknownSymbol(previous_line, line)
+      except Exception:
+        elaborated_lines = ['Error in _LookForUnknownSymbol ---']
+        elaborated_lines += traceback.format_exc().splitlines()
+        elaborated_lines += ['--- end _LookForUnknownSymbol error']
+        for elaborated_line in elaborated_lines:
+          yield elaborated_line
 
+      yield previous_line
       previous_line = line
       line = next(lines, None)
 
@@ -113,19 +127,17 @@ class JavacOutputProcessor:
       line = self._Colorize(line, self._warning_re, self._warning_color)
     elif self._error_re.match(line):
       line = self._Colorize(line, self._error_re, self._error_color)
-    elif self._please_add_dep_re.match(line):
-      line = self._Colorize(line, self._please_add_dep_re, self._error_color)
     elif self._marker_re.match(line):
       line = self._Colorize(line, self._marker_re, self._marker_color)
     return line
 
-  def _ElaborateLineForUnknownSymbol(self, line, next_line):
+  def _LookForUnknownSymbol(self, line, next_line):
     if not next_line:
-      return [line]
+      return
 
     import_re_match = self._import_re.match(next_line)
     if not import_re_match:
-      return [line]
+      return
 
     symbol_missing = False
     has_missing_symbol_in_error_msg = False
@@ -136,7 +148,7 @@ class JavacOutputProcessor:
         break
 
     if not symbol_missing:
-      return [line]
+      return
 
     class_to_lookup = import_re_match.group('imported_class')
     if self._class_lookup_index == None:
@@ -146,41 +158,34 @@ class JavacOutputProcessor:
     suggested_deps = self._class_lookup_index.match(class_to_lookup)
 
     if len(suggested_deps) != 1:
-      suggested_deps = self._FindFactoryDep(suggested_deps)
-      if len(suggested_deps) != 1:
-        return [line]
+      suggested_deps = self._DisambiguateDeps(suggested_deps)
 
-    suggested_target = suggested_deps[0].target
+    if len(suggested_deps) != 1:
+      suggested_target = ('one of: ' + ', '.join(s.target
+                                                 for s in suggested_deps))
+    else:
+      suggested_target = suggested_deps[0].target
 
-    target_name = self._RemoveSuffixesIfPresent(
-        ["__compile_java", "__errorprone", "__header"], self._target_name)
     if not has_missing_symbol_in_error_msg:
       line = "{} {}".format(line, class_to_lookup)
 
-    return [
-        line,
-        "Please add {} dep to {}. ".format(suggested_target, target_name) +
-        "File a crbug if this suggestion is incorrect.",
-    ]
+    self._suggested_deps.add(suggested_target)
 
   @staticmethod
-  def _FindFactoryDep(class_entries):
-    """Find the android_library_factory() GN target."""
-    if len(class_entries) != 2:
-      return []
+  def _DisambiguateDeps(class_entries):
+    # android_library_factory() targets set low_classpath_priority=true, and any
+    # target that is the "impl" side of a target that uses jar_excluded_patterns
+    # should use this as well.
+    # We should generally always suggest depending on the non-impl library
+    # target.
+    # TODO(crbug.com/1296711): Also use "visibility" a hint here.
+    low_entries = [x for x in class_entries if x.low_classpath_priority]
+    class_entries = low_entries or class_entries
 
-    # android_library_factory() targets set low_classpath_priority=true.
-    # This logic is correct if GN targets other than android_library_factory()
-    # set low_classpath_priority=true. low_classpath_priority=true indicates
-    # that the target is depended on (and overridden) by other targets which
-    # contain the same class. We want to recommend the leaf target.
-    if class_entries[0].low_classpath_priority == class_entries[
-        1].low_classpath_priority:
-      return []
-
-    if class_entries[0].low_classpath_priority:
-      return [class_entries[0]]
-    return [class_entries[1]]
+    # E.g. javax_annotation_jsr250_api_java.
+    jsr_entries = [x for x in class_entries if 'jsr' in x.target]
+    class_entries = jsr_entries or class_entries
+    return class_entries
 
   @staticmethod
   def _RemoveSuffixesIfPresent(suffixes, text):

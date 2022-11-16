@@ -13,7 +13,7 @@
 
 #include "base/bind.h"
 #include "base/files/scoped_temp_dir.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/sync_file_system/drive_backend/drive_backend_constants.h"
@@ -49,6 +49,11 @@ class SyncEngineInitializerTest : public testing::Test {
   };
 
   SyncEngineInitializerTest() {}
+
+  SyncEngineInitializerTest(const SyncEngineInitializerTest&) = delete;
+  SyncEngineInitializerTest& operator=(const SyncEngineInitializerTest&) =
+      delete;
+
   ~SyncEngineInitializerTest() override {}
 
   void SetUp() override {
@@ -210,9 +215,7 @@ class SyncEngineInitializerTest : public testing::Test {
   std::unique_ptr<MetadataDatabase> metadata_database_;
   std::unique_ptr<SyncTaskManager> sync_task_manager_;
   std::unique_ptr<SyncEngineContext> sync_context_;
-  drive::FakeDriveService* fake_drive_service_ = nullptr;
-
-  DISALLOW_COPY_AND_ASSIGN(SyncEngineInitializerTest);
+  raw_ptr<drive::FakeDriveService> fake_drive_service_ = nullptr;
 };
 
 TEST_F(SyncEngineInitializerTest, EmptyDatabase_NoRemoteSyncRoot) {

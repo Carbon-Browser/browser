@@ -7,6 +7,8 @@
 
 #include <type_traits>
 
+#include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "mojo/public/cpp/bindings/lib/array_internal.h"
 #include "mojo/public/cpp/bindings/lib/bindings_internal.h"
 #include "mojo/public/cpp/bindings/lib/serialization_forward.h"
@@ -36,8 +38,12 @@ class ArrayDataViewImpl<
   const T* data() const { return data_->storage(); }
 
  protected:
-  Data_* data_;
-  Message* message_;
+  // `data_` is not a raw_ptr<...> for performance reasons (based on analysis of
+  // sampling profiler data).
+  RAW_PTR_EXCLUSION raw_ptr<Data_> data_;
+  // `message_` is not a raw_ptr<...> for performance reasons (based on analysis
+  // of sampling profiler data).
+  RAW_PTR_EXCLUSION raw_ptr<Message> message_;
 };
 
 template <typename T>
@@ -54,8 +60,12 @@ class ArrayDataViewImpl<
   bool operator[](size_t index) const { return data_->at(index); }
 
  protected:
-  Data_* data_;
-  Message* message_;
+  // `data_` is not a raw_ptr<...> for performance reasons (based on analysis of
+  // sampling profiler data).
+  RAW_PTR_EXCLUSION raw_ptr<Data_> data_;
+  // `message_` is not a raw_ptr<...> for performance reasons (based on analysis
+  // of sampling profiler data).
+  RAW_PTR_EXCLUSION raw_ptr<Message> message_;
 };
 
 template <typename T>
@@ -82,8 +92,12 @@ class ArrayDataViewImpl<
   }
 
  protected:
-  Data_* data_;
-  Message* message_;
+  // `data_` is not a raw_ptr<...> for performance reasons (based on analysis of
+  // sampling profiler data).
+  RAW_PTR_EXCLUSION raw_ptr<Data_> data_;
+  // `message_` is not a raw_ptr<...> for performance reasons (based on analysis
+  // of sampling profiler data).
+  RAW_PTR_EXCLUSION raw_ptr<Message> message_;
 };
 
 template <typename T>
@@ -110,8 +124,12 @@ class ArrayDataViewImpl<
   }
 
  protected:
-  Data_* data_;
-  Message* message_;
+  // `data_` is not a raw_ptr<...> for performance reasons (based on analysis of
+  // sampling profiler data).
+  RAW_PTR_EXCLUSION raw_ptr<Data_> data_;
+  // `message_` is not a raw_ptr<...> for performance reasons (based on analysis
+  // of sampling profiler data).
+  RAW_PTR_EXCLUSION raw_ptr<Message> message_;
 };
 
 template <typename T>
@@ -133,8 +151,12 @@ class ArrayDataViewImpl<
   }
 
  protected:
-  Data_* data_;
-  Message* message_;
+  // `data_` is not a raw_ptr<...> for performance reasons (based on analysis of
+  // sampling profiler data).
+  RAW_PTR_EXCLUSION raw_ptr<Data_> data_;
+  // `message_` is not a raw_ptr<...> for performance reasons (based on analysis
+  // of sampling profiler data).
+  RAW_PTR_EXCLUSION raw_ptr<Message> message_;
 };
 
 template <typename T>
@@ -161,8 +183,12 @@ class ArrayDataViewImpl<
   }
 
  protected:
-  Data_* data_;
-  Message* message_;
+  // `data_` is not a raw_ptr<...> for performance reasons (based on analysis of
+  // sampling profiler data).
+  RAW_PTR_EXCLUSION raw_ptr<Data_> data_;
+  // `message_` is not a raw_ptr<...> for performance reasons (based on analysis
+  // of sampling profiler data).
+  RAW_PTR_EXCLUSION raw_ptr<Message> message_;
 };
 
 template <typename T>
@@ -186,8 +212,12 @@ class ArrayDataViewImpl<
   }
 
  protected:
-  Data_* data_;
-  Message* message_;
+  // `data_` is not a raw_ptr<...> for performance reasons (based on analysis of
+  // sampling profiler data).
+  RAW_PTR_EXCLUSION raw_ptr<Data_> data_;
+  // `message_` is not a raw_ptr<...> for performance reasons (based on analysis
+  // of sampling profiler data).
+  RAW_PTR_EXCLUSION raw_ptr<Message> message_;
 };
 
 }  // namespace internal

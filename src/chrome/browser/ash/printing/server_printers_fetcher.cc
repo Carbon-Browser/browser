@@ -11,15 +11,15 @@
 #include "base/logging.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
-#include "base/sequenced_task_runner.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/task/post_task.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "chrome/browser/net/system_network_context_manager.h"
 #include "chrome/browser/profiles/profile.h"
 #include "components/device_event_log/device_event_log.h"
 #include "net/base/load_flags.h"
+#include "net/traffic_annotation/network_traffic_annotation.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/cpp/simple_url_loader.h"
@@ -27,9 +27,35 @@
 #include "third_party/libipp/libipp/ipp.h"
 #include "url/gurl.h"
 
-namespace chromeos {
+namespace ash {
 
 namespace {
+
+constexpr net::NetworkTrafficAnnotationTag kServerPrintersFetcherNetworkTag =
+    net::DefineNetworkTrafficAnnotation("printing_server_printers_query", R"(
+    semantics {
+      sender: "ChromeOS Printers Manager"
+      description:
+        "Fetches the list of available printers from the Print Server."
+      trigger: "1. User asked for the list of available printers from "
+               "a chosen Print Server."
+               "2. ChromeOS automatically queries printers from Print "
+               "Servers whose addresses are set by the organization's "
+               "administrator at the Google admin console."
+      data: "None."
+      destination: OTHER
+      destination_other: "Print Server"
+    }
+    policy {
+      cookies_allowed: NO
+      setting:
+        "This feature is enabled as long as printing is enabled."
+      chrome_policy {
+        PrintingEnabled {
+            PrintingEnabled: false
+        }
+      }
+    })");
 
 std::string ServerPrinterId(const std::string& url) {
   base::MD5Context ctx;
@@ -65,6 +91,9 @@ class ServerPrintersFetcher::PrivateImplementation
                                   base::Unretained(this),
                                   profile->GetURLLoaderFactory()->Clone()));
   }
+
+  PrivateImplementation(const PrivateImplementation&) = delete;
+  PrivateImplementation& operator=(const PrivateImplementation&) = delete;
 
   ~PrivateImplementation() override = default;
 
@@ -166,7 +195,7 @@ class ServerPrintersFetcher::PrivateImplementation
     resource_request->credentials_mode = network::mojom::CredentialsMode::kOmit;
     // TODO(pawliczek): create a traffic annotation for printing network traffic
     simple_url_loader_ = network::SimpleURLLoader::Create(
-        std::move(resource_request), MISSING_TRAFFIC_ANNOTATION);
+        std::move(resource_request), kServerPrintersFetcherNetworkTag);
     std::string request_body(request_frame.begin(), request_frame.end());
     simple_url_loader_->AttachStringForUpload(request_body, "application/ipp");
     simple_url_loader_->DownloadAsStream(
@@ -183,7 +212,7 @@ class ServerPrintersFetcher::PrivateImplementation
 
   // Set an object |printer| to represent a server printer with a name |name|.
   // The printer is provided by the current print server.
-  void InitializePrinter(Printer* printer, const std::string& name) {
+  void InitializePrinter(chromeos::Printer* printer, const std::string& name) {
     // All server printers are configured with IPP Everywhere.
     printer->mutable_ppd_reference()->autoconf = true;
 
@@ -195,7 +224,7 @@ class ServerPrintersFetcher::PrivateImplementation
     // * http://myprinter:123/abc =>  ipp://myprinter:123/abc
     // * http://myprinter/abc     =>  ipp://myprinter:80/abc
     // * https://myprinter/abc    =>  ipps://myprinter:443/abc
-    Uri url;
+    chromeos::Uri url;
     if (server_url_.SchemeIs("https")) {
       url.SetScheme("ipps");
     } else {
@@ -227,7 +256,6 @@ class ServerPrintersFetcher::PrivateImplementation
 
   std::unique_ptr<network::SimpleURLLoader> simple_url_loader_;
   SEQUENCE_CHECKER(sequence_checker_);
-  DISALLOW_COPY_AND_ASSIGN(PrivateImplementation);
 };
 
 ServerPrintersFetcher::ServerPrintersFetcher(Profile* profile,
@@ -252,4 +280,4 @@ PrintServerQueryResult ServerPrintersFetcher::GetLastError() const {
   return pim_->last_error();
 }
 
-}  // namespace chromeos
+}  // namespace ash

@@ -10,34 +10,34 @@
 #include <string>
 #include <vector>
 
+#include "ash/components/login/auth/auth_status_consumer.h"
+#include "ash/components/login/auth/public/challenge_response_key.h"
+#include "ash/components/login/auth/public/user_context.h"
 #include "ash/public/cpp/login_types.h"
 #include "base/callback_forward.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
-#include "base/sequenced_task_runner_helpers.h"
+#include "base/task/sequenced_task_runner_helpers.h"
 #include "base/time/time.h"
 #include "base/timer/wall_clock_timer.h"
 #include "chrome/browser/ash/login/challenge_response_auth_keys_loader.h"
 #include "chrome/browser/ash/login/help_app_launcher.h"
-#include "chrome/browser/ash/login/security_token_pin_dialog_host_ash_impl.h"
+#include "chrome/browser/ash/login/security_token_pin_dialog_host_login_impl.h"
 #include "chrome/browser/ash/login/ui/login_display.h"
-#include "chromeos/login/auth/auth_status_consumer.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
-#include "chromeos/login/auth/authenticator.h"
-#include "chromeos/login/auth/challenge_response_key.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
-#include "chromeos/login/auth/extended_authenticator.h"
-#include "chromeos/login/auth/user_context.h"
 #include "components/user_manager/user.h"
 #include "components/user_manager/user_manager.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/device/public/mojom/fingerprint.mojom.h"
 #include "ui/base/accelerators/accelerator.h"
-#include "ui/base/ime/chromeos/input_method_manager.h"
+#include "ui/base/ime/ash/input_method_manager.h"
+
+class PrefChangeRegistrar;
 
 namespace ash {
+
+class Authenticator;
+class ExtendedAuthenticator;
 class ViewsScreenLocker;
 
 // ScreenLocker displays the lock UI and takes care of authenticating the user
@@ -52,6 +52,10 @@ class ScreenLocker
   class Delegate {
    public:
     Delegate();
+
+    Delegate(const Delegate&) = delete;
+    Delegate& operator=(const Delegate&) = delete;
+
     virtual ~Delegate();
 
     // Show the given error message.
@@ -63,14 +67,14 @@ class ScreenLocker
 
     // Called by ScreenLocker to notify that ash lock animation finishes.
     virtual void OnAshLockAnimationFinished() = 0;
-
-   private:
-    DISALLOW_COPY_AND_ASSIGN(Delegate);
   };
 
   using AuthenticateCallback = base::OnceCallback<void(bool auth_success)>;
 
   explicit ScreenLocker(const user_manager::UserList& users);
+
+  ScreenLocker(const ScreenLocker&) = delete;
+  ScreenLocker& operator=(const ScreenLocker&) = delete;
 
   // Returns the default instance if it has been created.
   static ScreenLocker* default_screen_locker() { return screen_locker_; }
@@ -82,7 +86,7 @@ class ScreenLocker
   void Init();
 
   // AuthStatusConsumer:
-  void OnAuthFailure(const chromeos::AuthFailure& error) override;
+  void OnAuthFailure(const AuthFailure& error) override;
   void OnAuthSuccess(const UserContext& user_context) override;
 
   // Called when an account password (not PIN/quick unlock) has been used to
@@ -136,7 +140,7 @@ class ScreenLocker
 
   // Allow a AuthStatusConsumer to listen for
   // the same login events that ScreenLocker does.
-  void SetLoginStatusConsumer(chromeos::AuthStatusConsumer* consumer);
+  void SetLoginStatusConsumer(AuthStatusConsumer* consumer);
 
   // Initialize or uninitialize the ScreenLocker class. It observes
   // SessionManager so that the screen locker accepts lock requests only after a
@@ -152,6 +156,17 @@ class ScreenLocker
 
   // Hide the screen locker.
   static void Hide();
+
+  // If the unlock animation was aborted (for instance, as a result of
+  // pressing the power button during the unlock animatoin), we  reset
+  // the state of UI elements (such as LoginAuthUserView::FingerprintView)
+  // which might have been altered as a result of a successful authentication
+  // attempt.
+  void ResetToLockedState();
+
+  // If the unlock animation was not aborted, changes session state to
+  // active and schedules `ScreenLocker` deletion.
+  static void OnUnlockAnimationFinished(bool aborted);
 
   // we should probably not call it anymore
   void RefreshPinAndFingerprintTimeout();
@@ -178,7 +193,7 @@ class ScreenLocker
                         bool is_complete,
                         int32_t percent_complete) override;
   void OnAuthScanDone(
-      device::mojom::ScanResult scan_result,
+      const device::mojom::FingerprintMessagePtr msg,
       const base::flat_map<std::string, std::vector<std::string>>& matches)
       override;
   void OnSessionFailed() override;
@@ -216,6 +231,8 @@ class ScreenLocker
   ~ScreenLocker() override;
 
   void OnFingerprintAuthFailure(const user_manager::User& user);
+
+  void StartFingerprintAuthSession(const user_manager::User* primary_user);
 
   // Called when the screen lock is ready.
   void ScreenLockReady();
@@ -255,6 +272,8 @@ class ScreenLocker
 
   void OnPinCanAuthenticate(const AccountId& account_id, bool can_authenticate);
 
+  void UpdateFingerprintStateForUser(const user_manager::User* user);
+
   // Delegate used to talk to the view.
   Delegate* delegate_ = nullptr;
 
@@ -278,8 +297,8 @@ class ScreenLocker
   bool locked_ = false;
 
   // True if the unlock process has started, or false otherwise.  This changes
-  // from false to true, but will never change from true to false. Instead,
-  // ScreenLocker object gets deleted when unlocked.
+  // from false to true, but will only change from true to false when unlock is
+  // aborted. Otherwise, ScreenLocker object gets deleted when unlocked.
   bool unlock_started_ = false;
 
   // Reference to the single instance of the screen locker object.
@@ -319,11 +338,12 @@ class ScreenLocker
 
   ChallengeResponseAuthKeysLoader challenge_response_auth_keys_loader_;
 
-  SecurityTokenPinDialogHostAshImpl security_token_pin_dialog_host_ash_impl_;
+  SecurityTokenPinDialogHostLoginImpl
+      security_token_pin_dialog_host_login_impl_;
+
+  std::unique_ptr<PrefChangeRegistrar> fingerprint_pref_change_registrar_;
 
   base::WeakPtrFactory<ScreenLocker> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ScreenLocker);
 };
 
 }  // namespace ash

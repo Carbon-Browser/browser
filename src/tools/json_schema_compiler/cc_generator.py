@@ -854,7 +854,7 @@ class _Generator(object):
 
   def _GenerateFunctionParamsCreate(self, function):
     """Generate function to create an instance of Params. The generated
-    function takes a base::Value::ConstListView of arguments.
+    function takes a const base::Value::List& of arguments.
 
     E.g for function "Bar", generate Bar::Params::Create()
     """
@@ -863,7 +863,7 @@ class _Generator(object):
     (c.Append('// static')
       .Sblock('std::unique_ptr<Params> Params::Create(%s) {' %
                   self._GenerateParams([
-                      'const base::Value::ConstListView& args']))
+                      'const base::Value::List& args']))
     )
     if self._generate_error_messages:
       c.Append('DCHECK(error);')
@@ -972,8 +972,7 @@ class _Generator(object):
           c.Append('%(dst_var)s = temp.value();')
     elif underlying_type.property_type == PropertyType.OBJECT:
       if is_ptr:
-        (c.Append('const base::DictionaryValue* dictionary = nullptr;')
-          .Sblock('if (!%(src_var)s.GetAsDictionary(&dictionary)) {')
+        (c.Sblock('if (!%(src_var)s.is_dict()) {')
           .Concat(self._AppendError16(
             'u"\'%%(key)s\': expected dictionary, got " + ' +
             self._util_cc_helper.GetValueTypeString('%%(src_var)s')))
@@ -983,7 +982,7 @@ class _Generator(object):
           .Sblock('else {')
           .Append('auto temp = std::make_unique<%(cpp_type)s>();')
           .Append('if (!%%(cpp_type)s::Populate(%s)) {' % self._GenerateArgs(
-            ('*dictionary', 'temp.get()')))
+            ('%(src_var)s', 'temp.get()')))
           .Append('  return %(failure_value)s;')
         )
         (c.Append('}')
@@ -992,15 +991,14 @@ class _Generator(object):
           .Eblock('}')
         )
       else:
-        (c.Append('const base::DictionaryValue* dictionary = nullptr;')
-          .Sblock('if (!%(src_var)s.GetAsDictionary(&dictionary)) {')
+        (c.Sblock('if (!%(src_var)s.is_dict()) {')
           .Concat(self._AppendError16(
             'u"\'%%(key)s\': expected dictionary, got " + ' +
             self._util_cc_helper.GetValueTypeString('%%(src_var)s')))
           .Append('return %(failure_value)s;')
           .Eblock('}')
           .Append('if (!%%(cpp_type)s::Populate(%s)) {' % self._GenerateArgs(
-            ('*dictionary', '&%(dst_var)s')))
+            ('%(src_var)s', '&%(dst_var)s')))
           .Append('  return %(failure_value)s;')
           .Append('}')
         )
@@ -1138,14 +1136,15 @@ class _Generator(object):
     cpp_type_namespace = ''
     if type_.namespace != self._namespace:
       cpp_type_namespace = '%s::' % type_.namespace.unix_name
-    (c.Append('std::string %s;' % enum_as_string)
-      .Sblock('if (!%s.GetAsString(&%s)) {' % (src_var, enum_as_string))
+    (c.Append('const std::string* %s = %s.GetIfString();' % (enum_as_string,
+                                                            src_var))
+      .Sblock('if (!%s) {' % enum_as_string)
       .Concat(self._AppendError16(
         'u"\'%%(key)s\': expected string, got " + ' +
         self._util_cc_helper.GetValueTypeString('%%(src_var)s')))
       .Append('return %s;' % failure_value)
       .Eblock('}')
-      .Append('%s = %sParse%s(%s);' % (dst_var,
+      .Append('%s = %sParse%s(*%s);' % (dst_var,
                                        cpp_type_namespace,
                                        cpp_util.Classname(type_.name),
                                        enum_as_string))
@@ -1157,7 +1156,7 @@ class _Generator(object):
         '\\" or \\"'.join(
             enum_value.name
             for enum_value in self._type_helper.FollowRef(type_).enum_values) +
-        '\\", got \\"" + UTF8ToUTF16(%s) + u"\\""' % enum_as_string))
+        '\\", got \\"" + UTF8ToUTF16(*%s) + u"\\""' % enum_as_string))
       .Append('return %s;' % failure_value)
       .Eblock('}')
       .Substitute({'src_var': src_var, 'key': type_.name})
@@ -1244,9 +1243,9 @@ class _Generator(object):
     c = Code()
     c.Concat(self._GeneratePropertyFunctions(function_scope, params))
 
-    (c.Sblock('std::vector<base::Value> %(function_scope)s'
+    (c.Sblock('base::Value::List %(function_scope)s'
                   'Create(%(declaration_list)s) {')
-      .Append('std::vector<base::Value> create_results;')
+      .Append('base::Value::List create_results;')
       .Append('create_results.reserve(%d);' % len(params) if len(params)
               else '')
     )
@@ -1255,7 +1254,7 @@ class _Generator(object):
       declaration_list.append(cpp_util.GetParameterDeclaration(
           param, self._type_helper.GetCppType(param.type_)))
       c.Cblock(self._CreateValueFromType(
-          'create_results.push_back(base::Value::FromUniquePtrValue(%s));',
+          'create_results.Append(base::Value::FromUniquePtrValue(%s));',
           param.name,
           param.type_,
           param.unix_name))

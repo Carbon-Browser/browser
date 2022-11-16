@@ -5,20 +5,22 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_PEERCONNECTION_PEER_CONNECTION_DEPENDENCY_FACTORY_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_PEERCONNECTION_PEER_CONNECTION_DEPENDENCY_FACTORY_H_
 
-#include "base/macros.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread.h"
 #include "base/threading/thread_checker.h"
 #include "base/types/pass_key.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context_lifecycle_observer.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
+#include "third_party/blink/renderer/modules/peerconnection/webrtc_video_perf_reporter.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
-#include "third_party/blink/renderer/platform/heap/thread_state.h"
+#include "third_party/blink/renderer/platform/heap/prefinalizer.h"
 #include "third_party/blink/renderer/platform/mojo/mojo_binding_context.h"
 #include "third_party/blink/renderer/platform/supplementable.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
+#include "third_party/blink/renderer/platform/wtf/vector.h"
 #include "third_party/webrtc/api/peer_connection_interface.h"
+#include "third_party/webrtc_overrides/metronome_source.h"
 
 namespace base {
 class WaitableEvent;
@@ -67,6 +69,12 @@ class MODULES_EXPORT PeerConnectionDependencyFactory
   PeerConnectionDependencyFactory(
       ExecutionContext& context,
       base::PassKey<PeerConnectionDependencyFactory>);
+
+  PeerConnectionDependencyFactory(const PeerConnectionDependencyFactory&) =
+      delete;
+  PeerConnectionDependencyFactory& operator=(
+      const PeerConnectionDependencyFactory&) = delete;
+
   ~PeerConnectionDependencyFactory() override;
 
   // Create a RTCPeerConnectionHandler object.
@@ -125,9 +133,12 @@ class MODULES_EXPORT PeerConnectionDependencyFactory
 
   void EnsureInitialized();
 
-  // Returns the SingleThreadTaskRunner suitable for running WebRTC networking.
-  // An rtc::Thread will have already been created.
-  scoped_refptr<base::SingleThreadTaskRunner> GetWebRtcNetworkTaskRunner();
+  // Returns the SingleThreadTaskRunner corresponding to the WebRTC worker or
+  // network threads (rtc::Thread), if they exist. These threads are ensured to
+  // exist after an RTCPeerConnectionHandler has been Initialized().
+  scoped_refptr<base::SingleThreadTaskRunner> GetWebRtcWorkerTaskRunner();
+  virtual scoped_refptr<base::SingleThreadTaskRunner>
+  GetWebRtcNetworkTaskRunner();
 
   virtual scoped_refptr<base::SingleThreadTaskRunner>
   GetWebRtcSignalingTaskRunner();
@@ -140,7 +151,7 @@ class MODULES_EXPORT PeerConnectionDependencyFactory
   // Ctor for tests.
   PeerConnectionDependencyFactory();
 
-  virtual const scoped_refptr<webrtc::PeerConnectionFactoryInterface>&
+  virtual const rtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface>&
   GetPcFactory();
   virtual bool PeerConnectionFactoryCreated();
 
@@ -163,7 +174,7 @@ class MODULES_EXPORT PeerConnectionDependencyFactory
       const gfx::ColorSpace& render_color_space,
       scoped_refptr<base::SequencedTaskRunner> media_task_runner,
       media::GpuVideoAcceleratorFactories* gpu_factories,
-      media::DecoderFactory* media_decoder_factory,
+      base::WeakPtr<media::DecoderFactory> media_decoder_factory,
       base::WaitableEvent* event);
 
   void CreateIpcNetworkManagerOnNetworkThread(
@@ -179,7 +190,8 @@ class MODULES_EXPORT PeerConnectionDependencyFactory
   std::unique_ptr<IpcNetworkManager> network_manager_;
   std::unique_ptr<IpcPacketSocketFactory> socket_factory_;
 
-  scoped_refptr<webrtc::PeerConnectionFactoryInterface> pc_factory_;
+  rtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface> pc_factory_;
+  scoped_refptr<MetronomeSource> metronome_source_;
 
   // Dispatches all P2P sockets.
   Member<P2PSocketDispatcher> p2p_socket_dispatcher_;
@@ -188,9 +200,11 @@ class MODULES_EXPORT PeerConnectionDependencyFactory
 
   media::GpuVideoAcceleratorFactories* gpu_factories_;
 
-  THREAD_CHECKER(thread_checker_);
+  WebrtcVideoPerfReporter webrtc_video_perf_reporter_;
 
-  DISALLOW_COPY_AND_ASSIGN(PeerConnectionDependencyFactory);
+  bool encode_decode_capabilities_reported_ = false;
+
+  THREAD_CHECKER(thread_checker_);
 };
 
 }  // namespace blink

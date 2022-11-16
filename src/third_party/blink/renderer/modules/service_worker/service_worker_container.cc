@@ -32,13 +32,11 @@
 #include <memory>
 #include <utility>
 
-#include "base/macros.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_error_type.mojom-blink.h"
 #include "third_party/blink/public/platform/web_fetch_client_settings_object.h"
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/public/platform/web_url.h"
-#include "third_party/blink/renderer/bindings/core/v8/callback_promise_adapter.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/core/v8/serialization/serialized_script_value.h"
@@ -49,7 +47,7 @@
 #include "third_party/blink/renderer/core/events/message_event.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/frame/csp/content_security_policy.h"
-#include "third_party/blink/renderer/core/frame/deprecation.h"
+#include "third_party/blink/renderer/core/frame/deprecation/deprecation.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/frame/local_frame_client.h"
@@ -65,7 +63,7 @@
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/bindings/v8_throw_exception.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_fetcher.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_fetcher_properties.h"
@@ -92,15 +90,16 @@ bool HasFiredDomContentLoaded(const Document& document) {
   return !document.GetTiming().DomContentLoadedEventStart().is_null();
 }
 
-mojom::ServiceWorkerUpdateViaCache ParseUpdateViaCache(const String& value) {
+mojom::blink::ServiceWorkerUpdateViaCache ParseUpdateViaCache(
+    const String& value) {
   if (value == "imports")
-    return mojom::ServiceWorkerUpdateViaCache::kImports;
+    return mojom::blink::ServiceWorkerUpdateViaCache::kImports;
   if (value == "all")
-    return mojom::ServiceWorkerUpdateViaCache::kAll;
+    return mojom::blink::ServiceWorkerUpdateViaCache::kAll;
   if (value == "none")
-    return mojom::ServiceWorkerUpdateViaCache::kNone;
+    return mojom::blink::ServiceWorkerUpdateViaCache::kNone;
   // Default value.
-  return mojom::ServiceWorkerUpdateViaCache::kImports;
+  return mojom::blink::ServiceWorkerUpdateViaCache::kImports;
 }
 
 class GetRegistrationCallback : public WebServiceWorkerProvider::
@@ -108,6 +107,10 @@ class GetRegistrationCallback : public WebServiceWorkerProvider::
  public:
   explicit GetRegistrationCallback(ScriptPromiseResolver* resolver)
       : resolver_(resolver) {}
+
+  GetRegistrationCallback(const GetRegistrationCallback&) = delete;
+  GetRegistrationCallback& operator=(const GetRegistrationCallback&) = delete;
+
   ~GetRegistrationCallback() override = default;
 
   void OnSuccess(WebServiceWorkerRegistrationObjectInfo info) override {
@@ -133,7 +136,6 @@ class GetRegistrationCallback : public WebServiceWorkerProvider::
 
  private:
   Persistent<ScriptPromiseResolver> resolver_;
-  DISALLOW_COPY_AND_ASSIGN(GetRegistrationCallback);
 };
 
 }  // namespace
@@ -219,18 +221,6 @@ ScriptPromise ServiceWorkerContainer::registerServiceWorker(
     const RegistrationOptions* options) {
   auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
   ScriptPromise promise = resolver->Promise();
-
-  // TODO(crbug.com/824647): Remove this check after module loading for
-  // ServiceWorker is enabled by default.
-  if (options->type() == script_type_names::kModule &&
-      !RuntimeEnabledFeatures::ModuleServiceWorkerEnabled()) {
-    resolver->Reject(MakeGarbageCollected<DOMException>(
-        DOMExceptionCode::kNotSupportedError,
-        "type 'module' in RegistrationOptions is not implemented yet."
-        "See https://crbug.com/824647 for details."));
-    return promise;
-  }
-
   auto callbacks = std::make_unique<CallbackPromiseAdapter<
       ServiceWorkerRegistration, ServiceWorkerErrorForUpdate>>(resolver);
 
@@ -341,7 +331,7 @@ ScriptPromise ServiceWorkerContainer::registerServiceWorker(
     }
   }
 
-  mojom::ServiceWorkerUpdateViaCache update_via_cache =
+  mojom::blink::ServiceWorkerUpdateViaCache update_via_cache =
       ParseUpdateViaCache(options->updateViaCache());
   absl::optional<mojom::blink::ScriptType> script_type =
       Script::ParseScriptType(options->type());
@@ -352,10 +342,40 @@ ScriptPromise ServiceWorkerContainer::registerServiceWorker(
           ->GetProperties()
           .GetFetchClientSettingsObject());
 
+  // Defer register() from a prerendered page until page activation.
+  // https://wicg.github.io/nav-speculation/prerendering.html#patch-service-workers
+  if (GetExecutionContext()->IsWindow()) {
+    Document* document = To<LocalDOMWindow>(GetExecutionContext())->document();
+    if (document->IsPrerendering()) {
+      document->AddPostPrerenderingActivationStep(WTF::Bind(
+          &ServiceWorkerContainer::RegisterServiceWorkerInternal,
+          WrapWeakPersistent(this), scope_url, script_url,
+          std::move(script_type), update_via_cache,
+          std::move(fetch_client_settings_object), std::move(callbacks)));
+      return promise;
+    }
+  }
+
+  RegisterServiceWorkerInternal(
+      scope_url, script_url, std::move(script_type), update_via_cache,
+      std::move(fetch_client_settings_object), std::move(callbacks));
+  return promise;
+}
+
+void ServiceWorkerContainer::RegisterServiceWorkerInternal(
+    const KURL& scope_url,
+    const KURL& script_url,
+    absl::optional<mojom::blink::ScriptType> script_type,
+    mojom::blink::ServiceWorkerUpdateViaCache update_via_cache,
+    WebFetchClientSettingsObject fetch_client_settings_object,
+    std::unique_ptr<CallbackPromiseAdapter<ServiceWorkerRegistration,
+                                           ServiceWorkerErrorForUpdate>>
+        callbacks) {
+  if (!provider_)
+    return;
   provider_->RegisterServiceWorker(
       scope_url, script_url, *script_type, update_via_cache,
       std::move(fetch_client_settings_object), std::move(callbacks));
-  return promise;
 }
 
 ScriptPromise ServiceWorkerContainer::getRegistration(
@@ -541,7 +561,7 @@ void ServiceWorkerContainer::ReceiveMessage(WebServiceWorkerObjectInfo source,
 void ServiceWorkerContainer::CountFeature(mojom::WebFeature feature) {
   if (!GetExecutionContext())
     return;
-  if (Deprecation::DeprecationMessage(feature).IsEmpty())
+  if (!Deprecation::IsDeprecated(feature))
     UseCounter::Count(GetExecutionContext(), feature);
   else
     Deprecation::CountDeprecation(GetExecutionContext(), feature);

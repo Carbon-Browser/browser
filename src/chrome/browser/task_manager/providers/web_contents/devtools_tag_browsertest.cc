@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/devtools/devtools_window_testing.h"
 #include "chrome/browser/task_manager/mock_web_contents_task_manager.h"
 #include "chrome/browser/task_manager/providers/web_contents/web_contents_tags_manager.h"
@@ -57,12 +58,12 @@ class DevToolsTagTest : public InProcessBrowserTest {
   }
 
  private:
-  DevToolsWindow* devtools_window_;
+  raw_ptr<DevToolsWindow> devtools_window_;
 };
 
 // Tests that opening a DevToolsWindow will result in tagging its main
 // WebContents and that tag will be recorded by the TagsManager.
-IN_PROC_BROWSER_TEST_F(DevToolsTagTest, TagsManagerRecordsATag) {
+IN_PROC_BROWSER_TEST_F(DevToolsTagTest, DISABLED_TagsManagerRecordsATag) {
   // Browser tests start with a single tab.
   EXPECT_EQ(1U, tags_manager()->tracked_tags().size());
 

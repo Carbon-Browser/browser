@@ -37,7 +37,7 @@ namespace {
 
 constexpr int kAudioDecoderLimit = std::numeric_limits<int>::max();
 constexpr int kVideoDecoderLimit = 1;
-constexpr base::TimeDelta kPowerSaveWaitTime = base::TimeDelta::FromSeconds(5);
+constexpr base::TimeDelta kPowerSaveWaitTime = base::Seconds(5);
 
 }  // namespace
 
@@ -82,6 +82,11 @@ std::unique_ptr<CmaBackend> MediaPipelineBackendManager::CreateBackend(
   DCHECK(media_task_runner_->BelongsToCurrentThread());
   return std::make_unique<MediaPipelineBackendWrapper>(params, this,
                                                        media_resource_tracker_);
+}
+
+scoped_refptr<base::SequencedTaskRunner>
+MediaPipelineBackendManager::GetMediaTaskRunner() {
+  return media_task_runner_;
 }
 
 void MediaPipelineBackendManager::BackendDestroyed(

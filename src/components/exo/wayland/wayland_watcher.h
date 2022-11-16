@@ -16,9 +16,19 @@ class Server;
 class WaylandWatcher : public base::MessagePumpForUI::FdWatcher {
  public:
   explicit WaylandWatcher(wayland::Server* server);
+
+  WaylandWatcher(const WaylandWatcher&) = delete;
+  WaylandWatcher& operator=(const WaylandWatcher&) = delete;
+
   ~WaylandWatcher() override;
 
+  // Start/Stop watching the fd for testing.
+  void StartForTesting();
+  void StopForTesting();
+
  private:
+  void Start();
+
   // base::MessagePumpForUI::FdWatcher:
   void OnFileCanReadWithoutBlocking(int fd) override;
 
@@ -26,8 +36,6 @@ class WaylandWatcher : public base::MessagePumpForUI::FdWatcher {
 
   base::MessagePumpForUI::FdWatchController controller_;
   wayland::Server* const server_;
-
-  DISALLOW_COPY_AND_ASSIGN(WaylandWatcher);
 };
 
 }  // namespace wayland

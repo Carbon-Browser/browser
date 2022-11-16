@@ -19,10 +19,13 @@
 // instances.
 class DesktopMediaPickerFactory {
  public:
+  DesktopMediaPickerFactory(const DesktopMediaPickerFactory&) = delete;
+  DesktopMediaPickerFactory& operator=(const DesktopMediaPickerFactory&) =
+      delete;
+
   virtual ~DesktopMediaPickerFactory();
 
-  virtual std::unique_ptr<DesktopMediaPicker> CreatePicker(
-      const content::MediaStreamRequest* request) = 0;
+  virtual std::unique_ptr<DesktopMediaPicker> CreatePicker() = 0;
 
   virtual std::vector<std::unique_ptr<DesktopMediaList>> CreateMediaList(
       const std::vector<DesktopMediaList::Type>& types,
@@ -31,9 +34,6 @@ class DesktopMediaPickerFactory {
 
  protected:
   DesktopMediaPickerFactory();
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(DesktopMediaPickerFactory);
 };
 
 #endif  // CHROME_BROWSER_MEDIA_WEBRTC_DESKTOP_MEDIA_PICKER_FACTORY_H_

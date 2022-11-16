@@ -13,15 +13,14 @@
 #include "ash/components/audio/audio_devices_pref_handler.h"
 #include "ash/components/audio/audio_devices_pref_handler_stub.h"
 #include "base/bind.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
 #include "base/system/system_monitor.h"
 #include "base/test/task_environment.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
-#include "chromeos/dbus/audio/audio_node.h"
-#include "chromeos/dbus/audio/fake_cras_audio_client.h"
+#include "chromeos/ash/components/dbus/audio/audio_node.h"
+#include "chromeos/ash/components/dbus/audio/fake_cras_audio_client.h"
 #include "media/base/video_facing.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
@@ -32,15 +31,14 @@
 namespace ash {
 namespace {
 
-using ::chromeos::AudioNode;
-using ::chromeos::AudioNodeList;
-using ::chromeos::CrasAudioClient;
-using ::chromeos::FakeCrasAudioClient;
-
 class FakeMediaControllerManager
     : public media_session::mojom::MediaControllerManagerInterceptorForTesting {
  public:
   FakeMediaControllerManager() = default;
+
+  FakeMediaControllerManager(const FakeMediaControllerManager&) = delete;
+  FakeMediaControllerManager& operator=(const FakeMediaControllerManager&) =
+      delete;
 
   mojo::PendingRemote<media_session::mojom::MediaControllerManager>
   MakeRemote() {
@@ -63,8 +61,6 @@ class FakeMediaControllerManager
   }
 
   mojo::ReceiverSet<media_session::mojom::MediaControllerManager> receivers_;
-
-  DISALLOW_COPY_AND_ASSIGN(FakeMediaControllerManager);
 };
 
 const uint64_t kInternalSpeakerId = 10001;
@@ -207,6 +203,9 @@ class TestObserver : public CrasAudioHandler::AudioObserver {
     return output_channel_remixing_changed_count_;
   }
 
+  TestObserver(const TestObserver&) = delete;
+  TestObserver& operator=(const TestObserver&) = delete;
+
   ~TestObserver() override = default;
 
  protected:
@@ -251,8 +250,6 @@ class TestObserver : public CrasAudioHandler::AudioObserver {
   int output_volume_changed_count_ = 0;
   int input_gain_changed_count_ = 0;
   int output_channel_remixing_changed_count_ = 0;
-
-  DISALLOW_COPY_AND_ASSIGN(TestObserver);
 };
 
 class SystemMonitorObserver
@@ -277,6 +274,10 @@ class SystemMonitorObserver
 class FakeVideoCaptureManager {
  public:
   FakeVideoCaptureManager() = default;
+
+  FakeVideoCaptureManager(const FakeVideoCaptureManager&) = delete;
+  FakeVideoCaptureManager& operator=(const FakeVideoCaptureManager&) = delete;
+
   virtual ~FakeVideoCaptureManager() = default;
 
   void AddObserver(media::VideoCaptureObserver* observer) {
@@ -297,7 +298,6 @@ class FakeVideoCaptureManager {
 
  private:
   base::ObserverList<media::VideoCaptureObserver>::Unchecked observers_;
-  DISALLOW_COPY_AND_ASSIGN(FakeVideoCaptureManager);
 };
 
 }  // namespace
@@ -308,6 +308,10 @@ class CrasAudioHandlerTest : public testing::TestWithParam<int> {
   CrasAudioHandlerTest()
       : task_environment_(
             base::test::SingleThreadTaskEnvironment::MainThreadType::UI) {}
+
+  CrasAudioHandlerTest(const CrasAudioHandlerTest&) = delete;
+  CrasAudioHandlerTest& operator=(const CrasAudioHandlerTest&) = delete;
+
   ~CrasAudioHandlerTest() override = default;
 
   void SetUp() override {
@@ -410,6 +414,25 @@ class CrasAudioHandlerTest : public testing::TestWithParam<int> {
     base::RunLoop().RunUntilIdle();
   }
 
+  void SetUpCrasAudioHandlerWithPrimaryActiveNodeAndNoiseCancellationState(
+      const AudioNodeList& audio_nodes,
+      const AudioNode& primary_active_node,
+      bool noise_cancellation_enabled) {
+    CrasAudioClient::InitializeFake();
+    fake_cras_audio_client()->SetAudioNodesForTesting(audio_nodes);
+    fake_cras_audio_client()->SetActiveOutputNode(primary_active_node.id);
+    fake_cras_audio_client()->SetNoiseCancellationSupported(
+        /*noise_cancellation_supported=*/true);
+    audio_pref_handler_ = new AudioDevicesPrefHandlerStub();
+    audio_pref_handler_->SetNoiseCancellationState(noise_cancellation_enabled);
+    CrasAudioHandler::Initialize(fake_manager_->MakeRemote(),
+                                 audio_pref_handler_);
+    cras_audio_handler_ = CrasAudioHandler::Get();
+    test_observer_ = std::make_unique<TestObserver>();
+    cras_audio_handler_->AddAudioObserver(test_observer_.get());
+    base::RunLoop().RunUntilIdle();
+  }
+
   void ChangeAudioNodes(const AudioNodeList& audio_nodes) {
     fake_cras_audio_client()->SetAudioNodesAndNotifyObserversForTesting(
         audio_nodes);
@@ -492,9 +515,6 @@ class CrasAudioHandlerTest : public testing::TestWithParam<int> {
   scoped_refptr<AudioDevicesPrefHandlerStub> audio_pref_handler_;
   std::unique_ptr<FakeMediaControllerManager> fake_manager_;
   std::unique_ptr<FakeVideoCaptureManager> video_capture_manager_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(CrasAudioHandlerTest);
 };
 
 class HDMIRediscoverWaiter {
@@ -504,11 +524,14 @@ class HDMIRediscoverWaiter {
       : cras_audio_handler_test_(cras_audio_handler_test),
         grace_period_duration_in_ms_(grace_period_duration_in_ms) {}
 
+  HDMIRediscoverWaiter(const HDMIRediscoverWaiter&) = delete;
+  HDMIRediscoverWaiter& operator=(const HDMIRediscoverWaiter&) = delete;
+
   void WaitUntilTimeOut(int wait_duration_in_ms) {
     base::RunLoop run_loop;
     base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
         FROM_HERE, run_loop.QuitClosure(),
-        base::TimeDelta::FromMilliseconds(wait_duration_in_ms));
+        base::Milliseconds(wait_duration_in_ms));
     run_loop.Run();
   }
 
@@ -521,7 +544,7 @@ class HDMIRediscoverWaiter {
         FROM_HERE,
         base::BindOnce(&HDMIRediscoverWaiter::CheckHDMIRediscoverGracePeriodEnd,
                        base::Unretained(this), std::move(quit_loop_func)),
-        base::TimeDelta::FromMilliseconds(grace_period_duration_in_ms_ / 4));
+        base::Milliseconds(grace_period_duration_in_ms_ / 4));
   }
 
   void WaitUntilHDMIRediscoverGracePeriodEnd() {
@@ -533,8 +556,6 @@ class HDMIRediscoverWaiter {
  private:
   CrasAudioHandlerTest* cras_audio_handler_test_;  // not owned
   int grace_period_duration_in_ms_;
-
-  DISALLOW_COPY_AND_ASSIGN(HDMIRediscoverWaiter);
 };
 
 INSTANTIATE_TEST_SUITE_P(StableIdV1, CrasAudioHandlerTest, testing::Values(1));
@@ -1351,6 +1372,67 @@ TEST_P(CrasAudioHandlerTest, OneActiveAudioOutputAfterLoginNewUserSession) {
     if (audio_devices[i].id != kHeadphone->id)
       EXPECT_FALSE(audio_devices[i].active);
   }
+}
+
+TEST_P(CrasAudioHandlerTest, NoiseCancellationRefreshPrefEnabledNoNC) {
+  AudioNodeList audio_nodes = GenerateAudioNodeList({});
+  // Set up initial audio devices, only with internal mic.
+  AudioNode internalMic = GenerateAudioNode(kInternalMic);
+  // Clear the audio effect, no Noise Cancellation supported.
+  internalMic.audio_effect = 0u;
+  audio_nodes.push_back(internalMic);
+  // Simulate enable pref for noise cancellation.
+  SetUpCrasAudioHandlerWithPrimaryActiveNodeAndNoiseCancellationState(
+      audio_nodes, internalMic, /*noise_cancellation_enabled=*/true);
+
+  // Noise cancellation should still be disabled despite the pref being enabled
+  // since the audio_effect of the internal mic is unavailable.
+  EXPECT_FALSE(fake_cras_audio_client()->noise_cancellation_enabled());
+}
+
+TEST_P(CrasAudioHandlerTest, NoiseCancellationRefreshPrefEnabledWithNC) {
+  AudioNodeList audio_nodes = GenerateAudioNodeList({});
+  // Set up initial audio devices, only with internal mic.
+  AudioNode internalMic = GenerateAudioNode(kInternalMic);
+  // Enable noise cancellation effect.
+  internalMic.audio_effect = cras::EFFECT_TYPE_NOISE_CANCELLATION;
+  audio_nodes.push_back(internalMic);
+  // Simulate enable pref for noise cancellation.
+  SetUpCrasAudioHandlerWithPrimaryActiveNodeAndNoiseCancellationState(
+      audio_nodes, internalMic, /*noise_cancellation_enabled=*/true);
+
+  // Noise Cancellation is enabled.
+  EXPECT_TRUE(fake_cras_audio_client()->noise_cancellation_enabled());
+}
+
+TEST_P(CrasAudioHandlerTest, NoiseCancellationRefreshPrefDisableNoNC) {
+  AudioNodeList audio_nodes = GenerateAudioNodeList({});
+  // Set up initial audio devices, only with internal mic.
+  AudioNode internalMic = GenerateAudioNode(kInternalMic);
+  // Clear audio effect, no noise cancellation.
+  internalMic.audio_effect = 0u;
+  audio_nodes.push_back(internalMic);
+  // Simulate enable pref for noise cancellation.
+  SetUpCrasAudioHandlerWithPrimaryActiveNodeAndNoiseCancellationState(
+      audio_nodes, internalMic, /*noise_cancellation_enabled=*/false);
+
+  // Noise cancellation should still be disabled since the pref is disabled.
+  EXPECT_FALSE(fake_cras_audio_client()->noise_cancellation_enabled());
+}
+
+TEST_P(CrasAudioHandlerTest, NoiseCancellationRefreshPrefDisableWithNC) {
+  AudioNodeList audio_nodes = GenerateAudioNodeList({});
+  // Set up initial audio devices, only with internal mic.
+  AudioNode internalMic = GenerateAudioNode(kInternalMic);
+  // Enable noise cancellation effect.
+  internalMic.audio_effect = cras::EFFECT_TYPE_NOISE_CANCELLATION;
+  audio_nodes.push_back(internalMic);
+  // Simulate enable pref for noise cancellation.
+  SetUpCrasAudioHandlerWithPrimaryActiveNodeAndNoiseCancellationState(
+      audio_nodes, internalMic, /*noise_cancellation_enabled=*/false);
+
+  // Noise cancellation should still be disabled since the pref is disabled.
+  EXPECT_FALSE(fake_cras_audio_client()->noise_cancellation_enabled());
 }
 
 TEST_P(CrasAudioHandlerTest, BluetoothSpeakerIdChangedOnFly) {

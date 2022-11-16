@@ -11,15 +11,14 @@
 
 #include "base/command_line.h"
 #include "base/cpu.h"
-#include "base/debug/alias.h"
 #include "base/debug/crash_logging.h"
 #include "base/files/file_util.h"
 #include "base/logging.h"
 #include "base/memory/discardable_memory_allocator.h"
 #include "base/rand_util.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/threading/platform_thread.h"
+#include "base/synchronization/waitable_event.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
@@ -31,7 +30,6 @@
 #include "content/public/common/content_client.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/common/pepper_plugin_info.h"
-#include "content/public/common/sandbox_init.h"
 #include "ipc/ipc_channel_handle.h"
 #include "ipc/ipc_platform_file.h"
 #include "ipc/ipc_sync_channel.h"
@@ -51,17 +49,17 @@
 #include "ui/base/ui_base_features.h"
 #include "ui/base/ui_base_switches.h"
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include "base/win/win_util.h"
 #include "content/child/font_warmup_win.h"
 #include "sandbox/win/src/sandbox.h"
 #endif
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 #include "sandbox/mac/seatbelt_exec.h"
 #endif
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 extern sandbox::TargetServices* g_target_services;
 
 // Warm up language subsystems before the sandbox is turned on.
@@ -136,8 +134,6 @@ bool PpapiThread::OnControlMessageReceived(const IPC::Message& msg) {
     IPC_MESSAGE_HANDLER(PpapiMsg_LoadPlugin, OnLoadPlugin)
     IPC_MESSAGE_HANDLER(PpapiMsg_CreateChannel, OnCreateChannel)
     IPC_MESSAGE_HANDLER(PpapiMsg_SetNetworkState, OnSetNetworkState)
-    IPC_MESSAGE_HANDLER(PpapiMsg_Crash, OnCrash)
-    IPC_MESSAGE_HANDLER(PpapiMsg_Hang, OnHang)
     IPC_MESSAGE_UNHANDLED(handled = false)
   IPC_END_MESSAGE_MAP()
   return handled;
@@ -298,7 +294,7 @@ void PpapiThread::OnLoadPlugin(const base::FilePath& path,
     }
   }
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   // If code subsequently tries to exit using abort(), force a crash (since
   // otherwise these would be silent terminations and fly under the radar).
   base::win::SetAbortBehaviorForCrashReporting();
@@ -353,24 +349,6 @@ void PpapiThread::OnSetNetworkState(bool online) {
       plugin_entry_points_.get_interface(PPP_NETWORK_STATE_DEV_INTERFACE));
   if (ns)
     ns->SetOnLine(PP_FromBool(online));
-}
-
-void PpapiThread::OnCrash() {
-  // Intentionally crash upon the request of the browser.
-  //
-  // Linker's ICF feature may merge this function with other functions with the
-  // same definition and it may confuse the crash report processing system.
-  static int static_variable_to_make_this_function_unique = 0;
-  base::debug::Alias(&static_variable_to_make_this_function_unique);
-
-  volatile int* null_pointer = nullptr;
-  *null_pointer = 0;
-}
-
-void PpapiThread::OnHang() {
-  // Intentionally hang upon the request of the browser.
-  for (;;)
-    base::PlatformThread::Sleep(base::TimeDelta::FromSeconds(1));
 }
 
 bool PpapiThread::SetupChannel(base::ProcessId renderer_pid,

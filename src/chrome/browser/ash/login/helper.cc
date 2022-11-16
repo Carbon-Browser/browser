@@ -6,12 +6,12 @@
 
 #include <memory>
 
+#include "ash/components/login/auth/public/user_context.h"
 #include "base/bind.h"
 #include "base/command_line.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/task/post_task.h"
 #include "base/time/default_clock.h"
 #include "chrome/browser/ash/login/signin_partition_manager.h"
 #include "chrome/browser/ash/login/ui/login_display_host.h"
@@ -20,14 +20,13 @@
 #include "chrome/browser/password_manager/password_reuse_manager_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/grit/generated_resources.h"
-#include "chromeos/login/auth/user_context.h"
-#include "chromeos/network/managed_network_configuration_handler.h"
-#include "chromeos/network/network_connection_handler.h"
-#include "chromeos/network/network_handler.h"
-#include "chromeos/network/network_handler_callbacks.h"
-#include "chromeos/network/network_state.h"
-#include "chromeos/network/network_state_handler.h"
-#include "chromeos/network/network_util.h"
+#include "chromeos/ash/components/network/managed_network_configuration_handler.h"
+#include "chromeos/ash/components/network/network_connection_handler.h"
+#include "chromeos/ash/components/network/network_handler.h"
+#include "chromeos/ash/components/network/network_handler_callbacks.h"
+#include "chromeos/ash/components/network/network_state.h"
+#include "chromeos/ash/components/network/network_state_handler.h"
+#include "chromeos/ash/components/network/network_util.h"
 #include "components/password_manager/core/browser/password_manager_metrics_util.h"
 #include "components/password_manager/core/browser/password_reuse_manager.h"
 #include "content/public/browser/browser_thread.h"
@@ -41,14 +40,14 @@
 #include "ui/display/screen.h"
 #include "ui/gfx/image/image_skia.h"
 
-namespace chromeos {
+namespace ash {
 
 gfx::Rect CalculateScreenBounds(const gfx::Size& size) {
   gfx::Rect bounds = display::Screen::GetScreen()->GetPrimaryDisplay().bounds();
   if (!size.IsEmpty()) {
     int horizontal_diff = bounds.width() - size.width();
     int vertical_diff = bounds.height() - size.height();
-    bounds.Inset(horizontal_diff / 2, vertical_diff / 2);
+    bounds.Inset(gfx::Insets::VH(vertical_diff / 2, horizontal_diff / 2));
   }
   return bounds;
 }
@@ -92,6 +91,13 @@ bool NetworkStateHelper::IsConnected() const {
       chromeos::NetworkHandler::Get()->network_state_handler();
   return nsh->ConnectedNetworkByType(chromeos::NetworkTypePattern::Default()) !=
          nullptr;
+}
+
+bool NetworkStateHelper::IsConnectedToEthernet() const {
+  chromeos::NetworkStateHandler* nsh =
+      chromeos::NetworkHandler::Get()->network_state_handler();
+  return nsh->ConnectedNetworkByType(
+             chromeos::NetworkTypePattern::Ethernet()) != nullptr;
 }
 
 bool NetworkStateHelper::IsConnecting() const {
@@ -166,5 +172,4 @@ base::TimeDelta TimeToOnlineSignIn(base::Time last_online_signin,
 }
 
 }  // namespace login
-
-}  // namespace chromeos
+}  // namespace ash

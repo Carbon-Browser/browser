@@ -6,6 +6,7 @@
 
 #include "base/bind.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/time/time.h"
 #include "components/web_package/web_bundle_utils.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/network/network_context.h"
@@ -87,7 +88,9 @@ WebBundleManager::CreateWebBundleURLLoaderFactory(
     const ResourceRequest::WebBundleTokenParams& web_bundle_token_params,
     int32_t process_id,
     mojo::PendingRemote<mojom::DevToolsObserver> devtools_observer,
-    absl::optional<std::string> devtools_request_id) {
+    absl::optional<std::string> devtools_request_id,
+    const CrossOriginEmbedderPolicy& cross_origin_embedder_policy,
+    mojom::CrossOriginEmbedderPolicyReporter* coep_reporter) {
   DCHECK(factories_.find({process_id, web_bundle_token_params.token}) ==
          factories_.end());
 
@@ -106,7 +109,8 @@ WebBundleManager::CreateWebBundleURLLoaderFactory(
       bundle_url, web_bundle_token_params, std::move(remote),
       std::make_unique<MemoryQuotaConsumer>(weak_ptr_factory_.GetWeakPtr(),
                                             process_id),
-      std::move(devtools_observer), std::move(devtools_request_id));
+      std::move(devtools_observer), std::move(devtools_request_id),
+      cross_origin_embedder_policy, coep_reporter);
 
   // Process pending subresource requests if there are.
   // These subresource requests arrived earlier than the request for the bundle.

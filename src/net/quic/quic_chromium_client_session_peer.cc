@@ -8,8 +8,7 @@
 #include "net/quic/quic_chromium_client_session.h"
 #include "net/traffic_annotation/network_traffic_annotation_test_helper.h"
 
-namespace net {
-namespace test {
+namespace net::test {
 // static
 void QuicChromiumClientSessionPeer::SetHostname(
     QuicChromiumClientSession* session,
@@ -17,8 +16,9 @@ void QuicChromiumClientSessionPeer::SetHostname(
   quic::QuicServerId server_id(hostname,
                                session->session_key_.server_id().port(),
                                session->session_key_.privacy_mode());
-  session->session_key_ = QuicSessionKey(
-      server_id, SocketTag(), NetworkIsolationKey(), SecureDnsPolicy::kAllow);
+  session->session_key_ =
+      QuicSessionKey(server_id, SocketTag(), NetworkIsolationKey(),
+                     SecureDnsPolicy::kAllow, /*require_dns_https_alpn=*/false);
 }
 
 // static
@@ -48,10 +48,4 @@ bool QuicChromiumClientSessionPeer::GetSessionGoingAway(
   return session->going_away_;
 }
 
-bool QuicChromiumClientSessionPeer::DoesSessionAllowPortMigration(
-    QuicChromiumClientSession* session) {
-  return session->allow_port_migration_;
-}
-
-}  // namespace test
-}  // namespace net
+}  // namespace net::test

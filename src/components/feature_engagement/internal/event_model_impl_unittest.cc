@@ -9,6 +9,7 @@
 #include "base/bind.h"
 #include "base/callback.h"
 #include "base/feature_list.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/test_simple_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "components/feature_engagement/internal/editable_configuration.h"
@@ -71,6 +72,10 @@ class TestEventStorageValidator : public EventStorageValidator {
  public:
   TestEventStorageValidator() : should_store_(true) {}
 
+  TestEventStorageValidator(const TestEventStorageValidator&) = delete;
+  TestEventStorageValidator& operator=(const TestEventStorageValidator&) =
+      delete;
+
   bool ShouldStore(const std::string& event_name) const override {
     return should_store_;
   }
@@ -94,8 +99,6 @@ class TestEventStorageValidator : public EventStorageValidator {
  private:
   bool should_store_;
   std::map<std::string, uint32_t> max_keep_ages_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestEventStorageValidator);
 };
 
 // Creates a TestInMemoryEventStore containing three hard coded events.
@@ -163,8 +166,8 @@ class EventModelImplTest : public ::testing::Test {
   base::ThreadTaskRunnerHandle handle_;
 
   std::unique_ptr<EventModelImpl> model_;
-  TestInMemoryEventStore* store_;
-  TestEventStorageValidator* storage_validator_;
+  raw_ptr<TestInMemoryEventStore> store_;
+  raw_ptr<TestEventStorageValidator> storage_validator_;
   bool got_initialize_callback_;
   bool initialize_callback_result_;
 };
@@ -462,8 +465,8 @@ TEST_F(EventModelImplTest, IncrementingSnoozeEvent) {
 
   // Verify that incrementing snooze across multiple days update the snooze
   // count and the last_snooze_time_us field.
-  base::Time snooze_time = base::Time::FromDeltaSinceWindowsEpoch(
-      base::TimeDelta::FromMicroseconds(5));
+  base::Time snooze_time =
+      base::Time::FromDeltaSinceWindowsEpoch(base::Microseconds(5));
   model_->IncrementEvent("snooze", 1u);
   model_->IncrementSnooze("snooze", 1u, base::Time());
   model_->IncrementEvent("snooze", 2u);
@@ -503,10 +506,10 @@ TEST_F(EventModelImplTest, GetLastSnoozeTimestamp) {
   EXPECT_TRUE(model_->IsReady());
 
   // Verify the correct last_snooze_time_us is returned.
-  base::Time snooze_time1 = base::Time::FromDeltaSinceWindowsEpoch(
-      base::TimeDelta::FromMicroseconds(4));
-  base::Time snooze_time2 = base::Time::FromDeltaSinceWindowsEpoch(
-      base::TimeDelta::FromMicroseconds(5));
+  base::Time snooze_time1 =
+      base::Time::FromDeltaSinceWindowsEpoch(base::Microseconds(4));
+  base::Time snooze_time2 =
+      base::Time::FromDeltaSinceWindowsEpoch(base::Microseconds(5));
 
   model_->IncrementSnooze("bar", 10u, snooze_time1);
   EXPECT_EQ(snooze_time1, model_->GetLastSnoozeTimestamp("bar"));

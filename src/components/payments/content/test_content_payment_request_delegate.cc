@@ -30,7 +30,7 @@ TestContentPaymentRequestDelegate::GetPaymentManifestWebDataService() const {
 
 PaymentRequestDisplayManager*
 TestContentPaymentRequestDelegate::GetDisplayManager() {
-  return nullptr;
+  return &payment_request_display_manager_;
 }
 
 void TestContentPaymentRequestDelegate::ShowDialog(
@@ -155,6 +155,8 @@ TestContentPaymentRequestDelegate::GetPaymentUIObserver() const {
 
 void TestContentPaymentRequestDelegate::ShowNoMatchingPaymentCredentialDialog(
     const std::u16string& merchant_name,
-    base::OnceClosure response_callback) {}
+    const std::string& rp_id,
+    base::OnceClosure response_callback,
+    base::OnceClosure opt_out_callback) {}
 
 }  // namespace payments

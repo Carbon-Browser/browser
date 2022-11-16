@@ -36,9 +36,8 @@ ShelfTooltipPreviewBubble::ShelfTooltipPreviewBubble(
     views::View* anchor,
     const std::vector<aura::Window*>& windows,
     ShelfTooltipManager* manager,
-    ShelfAlignment alignment,
-    SkColor background_color)
-    : ShelfBubble(anchor, alignment, background_color), manager_(manager) {
+    ShelfAlignment alignment)
+    : ShelfBubble(anchor, alignment), manager_(manager) {
   set_border_radius(kPreviewBubbleBorderRadius);
   SetCanActivate(false);
   set_close_on_deactivate(false);
@@ -50,14 +49,12 @@ ShelfTooltipPreviewBubble::ShelfTooltipPreviewBubble(
 
   SetLayoutManager(std::make_unique<views::BoxLayout>(
       views::BoxLayout::Orientation::kHorizontal,
-      gfx::Insets(kTooltipPaddingTop, kTooltipPaddingLeftRight,
-                  kTooltipPaddingBottom, kTooltipPaddingLeftRight),
+      gfx::Insets::TLBR(kTooltipPaddingTop, kTooltipPaddingLeftRight,
+                        kTooltipPaddingBottom, kTooltipPaddingLeftRight),
       kPreviewPadding));
 
-  const ui::NativeTheme* theme = anchor_widget()->GetNativeTheme();
-
   for (auto* window : windows) {
-    WindowPreview* preview = new WindowPreview(window, this, theme);
+    WindowPreview* preview = new WindowPreview(window, this);
     AddChildView(preview);
     previews_.push_back(preview);
   }
@@ -104,10 +101,10 @@ float ShelfTooltipPreviewBubble::GetMaxPreviewRatio() const {
 }
 
 void ShelfTooltipPreviewBubble::DismissAfterDelay() {
-  dismiss_timer_.Start(
-      FROM_HERE, base::TimeDelta::FromMilliseconds(kPreviewBubbleDismissDelay),
-      base::BindOnce(&ShelfTooltipPreviewBubble::Dismiss,
-                     base::Unretained(this)));
+  dismiss_timer_.Start(FROM_HERE,
+                       base::Milliseconds(kPreviewBubbleDismissDelay),
+                       base::BindOnce(&ShelfTooltipPreviewBubble::Dismiss,
+                                      base::Unretained(this)));
 }
 
 void ShelfTooltipPreviewBubble::Dismiss() {

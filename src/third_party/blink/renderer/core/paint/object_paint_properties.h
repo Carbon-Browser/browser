@@ -101,9 +101,39 @@ class CORE_EXPORT ObjectPaintProperties {
   // +-[ StickyTranslation ]
   //  /    This applies the sticky offset induced by position:sticky.
   // |
+  // +-[ AnchorScrollTranslation ]
+  //  /    This applies the scrolling offset induced by CSS anchor-scroll.
+  // |
+  // +-[ Translate ]
+  //   |   The transform from CSS 'translate' (including the effects of
+  //  /    'transform-origin').
+  // |
+  // +-[ Rotate ]
+  //   |   The transform from CSS 'rotate' (including the effects of
+  //  /    'transform-origin').
+  // |
+  // +-[ Scale ]
+  //   |   The transform from CSS 'scale' (including the effects of
+  //  /    'transform-origin').
+  // |
+  // +-[ Offset ]
+  //   |   The transform from the longhand properties that comprise the CSS
+  //  /    'offset' shorthand (including the effects of 'transform-origin').
+  // |
   // +-[ Transform ]
-  //   |   The space created by CSS transform. This is the local border box
-  //   |   space.
+  //   |   The transform from CSS 'transform' (including the effects of
+  //   |   'transform-origin').
+  //   |
+  //   |   For SVG, this also includes 'translate', 'rotate', 'scale',
+  //   |   'offset-*' (instead of the nodes above) and the effects of
+  //   |   some characteristics of the SVG viewport and the "SVG
+  //   |   additional translation" (for the x and y attributes on
+  //   |   svg:use).
+  //   |
+  //   |   This is the local border box space (see
+  //   |   FragmentData::LocalBorderBoxProperties); the nodes below influence
+  //   |   the transform for the children but not the LayoutObject itself.
+  //   |
   //   +-[ Perspective ]
   //     |   The space created by CSS perspective.
   //     +-[ ReplacedContentTransform ]
@@ -114,10 +144,8 @@ class CORE_EXPORT ObjectPaintProperties {
   //         The space created by overflow clip. The translation equals the
   //         offset between the scrolling contents and the scrollable area of
   //         the container, both originated from the top-left corner, so it is
-  //         the sum of scroll origin and scroll offset of the ScrollableArea.
-  //         To use any content offset based on ScrollOrigin() (e.g. LayoutBox
-  //         or InlineBox's PhysicalLocation()) in this space, we should add
-  //         ScrollOrigin() to the offset.
+  //         the sum of scroll position (instead of scroll offset) of the
+  //         ScrollableArea.
   //
   // ... +-[ TransformIsolationNode ]
   //         This serves as a parent to subtree transforms on an element with
@@ -127,8 +155,21 @@ class CORE_EXPORT ObjectPaintProperties {
   //
   // This hierarchy is related to the order of transform operations in
   // https://drafts.csswg.org/css-transforms-2/#accumulated-3d-transformation-matrix-computation
+ public:
+  bool HasTransformNode() const {
+    return paint_offset_translation_ || sticky_translation_ ||
+           anchor_scroll_translation_ || translate_ || rotate_ || scale_ ||
+           offset_ || transform_ || perspective_ ||
+           replaced_content_transform_ || scroll_translation_ ||
+           transform_isolation_node_;
+  }
   ADD_TRANSFORM(PaintOffsetTranslation, paint_offset_translation_);
   ADD_TRANSFORM(StickyTranslation, sticky_translation_);
+  ADD_TRANSFORM(AnchorScrollTranslation, anchor_scroll_translation_);
+  ADD_TRANSFORM(Translate, translate_);
+  ADD_TRANSFORM(Rotate, rotate_);
+  ADD_TRANSFORM(Scale, scale_);
+  ADD_TRANSFORM(Offset, offset_);
   ADD_TRANSFORM(Transform, transform_);
   ADD_TRANSFORM(Perspective, perspective_);
   ADD_TRANSFORM(ReplacedContentTransform, replaced_content_transform_);
@@ -162,6 +203,12 @@ class CORE_EXPORT ObjectPaintProperties {
   //       This serves as a parent to subtree effects on an element with paint
   //       containment, It is the deepest child of any effect tree on the
   //       contain: paint element.
+ public:
+  bool HasEffectNode() const {
+    return effect_ || filter_ || vertical_scrollbar_effect_ ||
+           horizontal_scrollbar_effect_ || mask_ || clip_path_mask_ ||
+           effect_isolation_node_;
+  }
   ADD_EFFECT(Effect, effect_);
   ADD_EFFECT(Filter, filter_);
   ADD_EFFECT(VerticalScrollbarEffect, vertical_scrollbar_effect_);
@@ -174,6 +221,10 @@ class CORE_EXPORT ObjectPaintProperties {
   // [ FragmentClip ]
   // |    Clips to a fragment's bounds.
   // |    This is only present for content under a fragmentation container.
+  // +-[ PixelMovingFilterClipExpander ]
+  //   | Clip created by pixel-moving filter. Instead of intersecting with the
+  //  /  current clip, this clip expands the current clip to include all pixels
+  // /   in the filtered content that may affect the pixels in the current clip.
   // +-[ ClipPathClip ]
   //   |  Clip created by path-based CSS clip-path. Only exists if the
   //  /   clip-path is "simple" that can be applied geometrically. This and
@@ -207,7 +258,15 @@ class CORE_EXPORT ObjectPaintProperties {
   //       This serves as a parent to subtree clips on an element with paint
   //       containment. It is the deepest child of any clip tree on the contain:
   //       paint element.
+ public:
+  bool HasClipNode() const {
+    return fragment_clip_ || pixel_moving_filter_clip_expaner_ ||
+           clip_path_clip_ || mask_clip_ || css_clip_ ||
+           overflow_controls_clip_ || inner_border_radius_clip_ ||
+           overflow_clip_ || clip_isolation_node_;
+  }
   ADD_CLIP(FragmentClip, fragment_clip_);
+  ADD_CLIP(PixelMovingFilterClipExpander, pixel_moving_filter_clip_expaner_);
   ADD_CLIP(ClipPathClip, clip_path_clip_);
   ADD_CLIP(MaskClip, mask_clip_);
   ADD_CLIP(CssClip, css_clip_);

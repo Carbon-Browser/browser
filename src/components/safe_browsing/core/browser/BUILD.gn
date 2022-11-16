@@ -11,12 +11,18 @@ source_set("browser") {
     "safe_browsing_url_checker_impl.cc",
     "safe_browsing_url_checker_impl.h",
     "url_checker_delegate.h",
+    "user_population.cc",
+    "user_population.h",
   ]
 
   public_deps = [ "//google_apis:google_apis" ]
 
   deps = [
     "//base",
+    "//components/keyed_service/core",
+    "//components/prefs",
+    "//components/safe_browsing/core/browser:sync_observer",
+    "//components/safe_browsing/core/browser:token_fetcher",
     "//components/safe_browsing/core/browser/db:database_manager",
     "//components/safe_browsing/core/browser/db:hit_report",
     "//components/safe_browsing/core/browser/db:util",
@@ -26,6 +32,8 @@ source_set("browser") {
     "//components/safe_browsing/core/common/proto:csd_proto",
     "//components/safe_browsing/core/common/proto:realtimeapi_proto",
     "//components/security_interstitials/core:unsafe_resource",
+    "//components/unified_consent",
+    "//components/version_info",
     "//net",
     "//net:extras",
     "//services/network/public/cpp",
@@ -83,6 +91,8 @@ source_set("verdict_cache_manager") {
     "//components/history/core/browser",
     "//components/keyed_service/core:core",
     "//components/password_manager/core/browser:browser",
+    "//components/prefs",
+    "//components/safe_browsing/core/browser:sync_observer",
     "//components/safe_browsing/core/browser/db:v4_protocol_manager_util",
     "//components/safe_browsing/core/common",
     "//components/safe_browsing/core/common/proto:csd_proto",
@@ -100,6 +110,8 @@ source_set("verdict_cache_manager_unittest") {
     "//base",
     "//base/test:test_support",
     "//components/content_settings/core/browser",
+    "//components/safe_browsing/core/browser:sync_observer",
+    "//components/safe_browsing/core/common:safe_browsing_prefs",
     "//components/safe_browsing/core/common/proto:csd_proto",
     "//components/safe_browsing/core/common/proto:realtimeapi_proto",
     "//components/sync_preferences:test_support",
@@ -112,6 +124,12 @@ source_set("referrer_chain_provider") {
     "//components/safe_browsing/core/common/proto:csd_proto",
     "//components/sessions",
   ]
+}
+
+source_set("sync_observer") {
+  sources = [ "safe_browsing_sync_observer.h" ]
+
+  deps = [ "//base" ]
 }
 
 source_set("token_fetcher") {
@@ -131,6 +149,71 @@ source_set("token_fetcher_unit_tests") {
   deps = [
     ":token_fetcher",
     "//base/test:test_support",
+    "//testing/gtest",
+  ]
+}
+
+source_set("token_fetcher_testing_helper") {
+  testonly = true
+  sources = [
+    "test_safe_browsing_token_fetcher.cc",
+    "test_safe_browsing_token_fetcher.h",
+  ]
+
+  deps = [
+    ":token_fetcher",
+    "//base",
+    "//testing/gmock",
+  ]
+}
+
+source_set("download_check_result") {
+  sources = [ "download_check_result.h" ]
+}
+
+source_set("safe_browsing_metrics_collector") {
+  sources = [
+    "safe_browsing_metrics_collector.cc",
+    "safe_browsing_metrics_collector.h",
+  ]
+  deps = [
+    "//base",
+    "//components/keyed_service/core",
+    "//components/prefs",
+    "//components/safe_browsing/core/browser/db:hit_report",
+    "//components/safe_browsing/core/common:safe_browsing_prefs",
+  ]
+}
+
+source_set("safe_browsing_metrics_collector_unittest") {
+  testonly = true
+  sources = [ "safe_browsing_metrics_collector_unittest.cc" ]
+  deps = [
+    ":safe_browsing_metrics_collector",
+    "//base",
+    "//base/test:test_support",
+    "//components/prefs",
+    "//components/prefs:test_support",
+    "//components/safe_browsing/core/common",
+    "//components/safe_browsing/core/common:safe_browsing_prefs",
+    "//testing/gtest",
+  ]
+}
+
+source_set("user_population_unittest") {
+  testonly = true
+  sources = [ "user_population_unittest.cc" ]
+  deps = [
+    ":browser",
+    "////components/safe_browsing/core/common",
+    "//base",
+    "//base/test:test_support",
+    "//components/prefs",
+    "//components/safe_browsing:buildflags",
+    "//components/safe_browsing/core/common:safe_browsing_prefs",
+    "//components/sync_preferences:test_support",
+    "//components/unified_consent:unified_consent",
+    "//components/version_info",
     "//testing/gtest",
   ]
 }

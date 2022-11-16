@@ -46,6 +46,7 @@
 
 #include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/numerics/checked_math.h"
 #include "base/strings/string_util.h"
 #include "net/base/features.h"
 #include "net/cookies/cookie_constants.h"
@@ -166,13 +167,13 @@ ParsedCookie::ParsedCookie(const std::string& cookie_line,
   if (status_out == nullptr) {
     status_out = &blank_status;
   }
+  *status_out = CookieInclusionStatus();
 
   if ((!base::FeatureList::IsEnabled(features::kExtraCookieValidityChecks)) &&
       cookie_line.size() > kMaxCookieSize) {
     DVLOG(1) << "Not parsing cookie, too large: " << cookie_line.size();
-    // TODO(crbug.com/1228815): Apply more specific exclusion reasons.
     status_out->AddExclusionReason(
-        CookieInclusionStatus::EXCLUDE_FAILURE_TO_STORE);
+        CookieInclusionStatus::EXCLUDE_NAME_VALUE_PAIR_EXCEEDS_MAX_SIZE);
     return;
   }
 
@@ -187,9 +188,6 @@ ParsedCookie::ParsedCookie(const std::string& cookie_line,
 
   // Status should indicate exclusion if the resulting ParsedCookie is invalid.
   DCHECK(IsValid() || !status_out->IsInclude());
-
-  if (IsValid())
-    RecordCookieAttributeValueLengthHistograms();
 }
 
 ParsedCookie::~ParsedCookie() = default;
@@ -563,9 +561,8 @@ bool ParsedCookie::IsValidCookieNameValuePair(
   if (!name_value_pair_size.IsValid() ||
       (name_value_pair_size.ValueOrDie() > kMaxCookieNamePlusValueSize)) {
     if (status_out != nullptr) {
-      // TODO(crbug.com/1228815): Apply more specific exclusion reasons.
       status_out->AddExclusionReason(
-          CookieInclusionStatus::EXCLUDE_FAILURE_TO_STORE);
+          CookieInclusionStatus::EXCLUDE_NAME_VALUE_PAIR_EXCEEDS_MAX_SIZE);
     }
     return false;
   }
@@ -596,6 +593,26 @@ void ParsedCookie::ParseTokenValuePairs(const std::string& cookie_line,
   // TODO(erikwright): Make sure we're stripping \r\n in the network code.
   // Then we can log any unexpected terminators.
   std::string::const_iterator end = FindFirstTerminator(cookie_line);
+
+  // For metrics on truncating character presence in the cookie line.
+  if (end < cookie_line.end()) {
+    switch (*end) {
+      case '\0':
+        truncating_char_in_cookie_string_type_ =
+            TruncatingCharacterInCookieStringType::kTruncatingCharNull;
+        break;
+      case '\r':
+        truncating_char_in_cookie_string_type_ =
+            TruncatingCharacterInCookieStringType::kTruncatingCharNewline;
+        break;
+      case '\n':
+        truncating_char_in_cookie_string_type_ =
+            TruncatingCharacterInCookieStringType::kTruncatingCharLineFeed;
+        break;
+      default:
+        NOTREACHED();
+    }
+  }
 
   // Exit early for an empty cookie string.
   if (it == end) {
@@ -683,9 +700,8 @@ void ParsedCookie::ParseTokenValuePairs(const std::string& cookie_line,
         if (!CookieAttributeValueHasValidSize(pair.second)) {
           // If the attribute value is too large, it should be ignored.
           ignore_pair = true;
-          // TODO(crbug.com/1243783): Warn the user that the attribute was
-          // ignored by creating a new WarningReason and adding it to
-          // `status_out`.
+          status_out.AddWarningReason(
+              CookieInclusionStatus::WARN_ATTRIBUTE_VALUE_EXCEEDS_MAX_SIZE);
         }
       }
 
@@ -749,7 +765,7 @@ void ParsedCookie::SetupAttributes() {
   for (size_t i = 1; i < pairs_.size(); ++i) {
     if (pairs_[i].first == kPathTokenName) {
       path_index_ = i;
-    } else if (pairs_[i].first == kDomainTokenName && pairs_[i].second != "") {
+    } else if (pairs_[i].first == kDomainTokenName) {
       domain_index_ = i;
     } else if (pairs_[i].first == kExpiresTokenName) {
       expires_index_ = i;
@@ -857,17 +873,6 @@ void ParsedCookie::ClearAttributePair(size_t index) {
       --(*attribute_index);
   }
   pairs_.erase(pairs_.begin() + index);
-}
-
-void ParsedCookie::RecordCookieAttributeValueLengthHistograms() const {
-  DCHECK(IsValid());
-  // These all max out at 4096 total. (See ParsedCookie::kMaxCookieSize.)
-  UMA_HISTOGRAM_COUNTS_10000("Cookie.Length.NameAndValue",
-                             Name().length() + Value().length());
-  UMA_HISTOGRAM_COUNTS_10000("Cookie.Length.Domain",
-                             HasDomain() ? Domain().length() : 0);
-  UMA_HISTOGRAM_COUNTS_10000("Cookie.Length.Path",
-                             HasPath() ? Path().length() : 0);
 }
 
 }  // namespace net

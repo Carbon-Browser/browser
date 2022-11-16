@@ -9,8 +9,8 @@
 
 #include "base/mac/foundation_util.h"
 #include "base/mac/scoped_nsobject.h"
-#include "base/sequenced_task_runner.h"
 #include "base/strings/sys_string_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "device/gamepad/gamepad_blocklist.h"
 #include "device/gamepad/gamepad_device_mac.h"
@@ -82,8 +82,8 @@ void GamepadPlatformDataFetcherMac::RegisterForNotifications() {
   IOHIDManagerScheduleWithRunLoop(hid_manager_ref_, CFRunLoopGetCurrent(),
                                   kCFRunLoopDefaultMode);
 
-  enabled_ = IOHIDManagerOpen(hid_manager_ref_, kIOHIDOptionsTypeNone) ==
-             kIOReturnSuccess;
+  const auto result = IOHIDManagerOpen(hid_manager_ref_, kIOHIDOptionsTypeNone);
+  enabled_ = (result == kIOReturnSuccess || result == kIOReturnExclusiveAccess);
 }
 
 void GamepadPlatformDataFetcherMac::UnregisterFromNotifications() {

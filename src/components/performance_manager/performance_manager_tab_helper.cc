@@ -10,6 +10,7 @@
 
 #include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/observer_list.h"
 #include "components/performance_manager/graph/frame_node_impl.h"
 #include "components/performance_manager/graph/page_node_impl.h"
 #include "components/performance_manager/graph/process_node_impl.h"
@@ -38,9 +39,12 @@ bool ConnectWindowOpenRelationshipIfExists(PerformanceManagerTabHelper* helper,
   if (!opener_rfh) {
     // If the child page is opened with "noopener" then the parent document
     // maintains the ability to close the child, but the child can't reach back
-    // and see it's parent. In this case there will be no "Opener", but there
-    // will be an "OriginalOpener".
-    opener_rfh = web_contents->GetOriginalOpener();
+    // and see it's parent. In this case there will be no "opener", but there
+    // will be an "original opener".
+    if (content::WebContents* original_opener_wc =
+            web_contents->GetFirstWebContentsInLiveOriginalOpenerChain()) {
+      opener_rfh = original_opener_wc->GetPrimaryMainFrame();
+    }
   }
 
   if (!opener_rfh)
@@ -77,14 +81,19 @@ PerformanceManagerTabHelper::PageData::~PageData() = default;
 
 PerformanceManagerTabHelper::PerformanceManagerTabHelper(
     content::WebContents* web_contents)
-    : content::WebContentsObserver(web_contents) {
+    : content::WebContentsObserver(web_contents),
+      content::WebContentsUserData<PerformanceManagerTabHelper>(*web_contents) {
   // We have an early WebContents creation hook so should see it when there is
   // only a single frame, and it is not yet created. We sanity check that here.
 #if DCHECK_IS_ON()
-  DCHECK(!web_contents->GetMainFrame()->IsRenderFrameCreated());
-  std::vector<content::RenderFrameHost*> frames = web_contents->GetAllFrames();
-  DCHECK_EQ(1u, frames.size());
-  DCHECK_EQ(web_contents->GetMainFrame(), frames[0]);
+  DCHECK(!web_contents->GetPrimaryMainFrame()->IsRenderFrameLive());
+  size_t frame_count = 0;
+  web_contents->ForEachRenderFrameHost(base::BindRepeating(
+      [](size_t* frame_count, content::RenderFrameHost* render_frame_host) {
+        (*frame_count)++;
+      },
+      &frame_count));
+  DCHECK_EQ(1u, frame_count);
 #endif
 
   // Create the page node.
@@ -97,7 +106,7 @@ PerformanceManagerTabHelper::PerformanceManagerTabHelper(
       web_contents->IsCurrentlyAudible(), web_contents->GetLastActiveTime(),
       // TODO(crbug.com/1211368): Support MPArch fully!
       PageNode::PageState::kActive);
-  content::RenderFrameHost* main_rfh = web_contents->GetMainFrame();
+  content::RenderFrameHost* main_rfh = web_contents->GetPrimaryMainFrame();
   DCHECK(main_rfh);
   page->main_frame_tree_node_id = main_rfh->GetFrameTreeNodeId();
   primary_page_ = page.get();
@@ -259,7 +268,7 @@ void PerformanceManagerTabHelper::RenderFrameHostChanged(
   if (it != frames_.end()) {
     new_frame = it->second.get();
   } else {
-    DCHECK(!new_host->IsRenderFrameCreated())
+    DCHECK(!new_host->IsRenderFrameLive())
         << "There shouldn't be a case where RenderFrameHostChanged is "
            "dispatched before RenderFrameCreated with a live RenderFrame\n";
   }
@@ -531,6 +540,6 @@ void PerformanceManagerTabHelper::OnMainFrameNavigation(int64_t navigation_id,
   primary_page_->first_time_favicon_set = false;
 }
 
-WEB_CONTENTS_USER_DATA_KEY_IMPL(PerformanceManagerTabHelper)
+WEB_CONTENTS_USER_DATA_KEY_IMPL(PerformanceManagerTabHelper);
 
 }  // namespace performance_manager

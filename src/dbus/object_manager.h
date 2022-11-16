@@ -9,7 +9,7 @@
 
 #include <map>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "dbus/object_path.h"
@@ -188,6 +188,9 @@ class CHROME_DBUS_EXPORT ObjectManager final
                                              const std::string& service_name,
                                              const ObjectPath& object_path);
 
+  ObjectManager(const ObjectManager&) = delete;
+  ObjectManager& operator=(const ObjectManager&) = delete;
+
   // Register a client implementation class |interface| for the given D-Bus
   // interface named in |interface_name|. That object's CreateProperties()
   // method will be used to create instances of dbus::PropertySet* when
@@ -325,12 +328,12 @@ class CHROME_DBUS_EXPORT ObjectManager final
   // |service_name_owner_|.
   void UpdateServiceNameOwner(const std::string& new_owner);
 
-  Bus* bus_;
+  raw_ptr<Bus> bus_;
   std::string service_name_;
   std::string service_name_owner_;
   std::string match_rule_;
   ObjectPath object_path_;
-  ObjectProxy* object_proxy_;
+  raw_ptr<ObjectProxy> object_proxy_;
   bool setup_success_;
   bool cleanup_called_;
 
@@ -346,7 +349,7 @@ class CHROME_DBUS_EXPORT ObjectManager final
     Object();
     ~Object();
 
-    ObjectProxy* object_proxy;
+    raw_ptr<ObjectProxy> object_proxy;
 
     // Maps the name of an interface to the specific PropertySet structure
     // of that interface's properties.
@@ -363,8 +366,6 @@ class CHROME_DBUS_EXPORT ObjectManager final
   // Note: This should remain the last member so it'll be destroyed and
   // invalidate its weak pointers before any other members are destroyed.
   base::WeakPtrFactory<ObjectManager> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ObjectManager);
 };
 
 }  // namespace dbus

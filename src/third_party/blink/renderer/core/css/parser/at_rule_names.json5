@@ -21,6 +21,9 @@
       name: "ascent-override",
     },
     {
+      name: "base-palette",
+    },
+    {
       name: "descent-override",
     },
     {
@@ -88,6 +91,9 @@
       name: "orientation",
     },
     {
+      name: "override-colors",
+    },
+    {
       name: "pad",
     },
     {
@@ -122,9 +128,6 @@
     },
     {
       name: "system",
-    },
-    {
-      name: "time-range",
     },
     {
       name: "unicode-range",

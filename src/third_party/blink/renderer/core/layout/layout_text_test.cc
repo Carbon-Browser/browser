@@ -4,6 +4,8 @@
 
 #include "third_party/blink/renderer/core/layout/layout_text.h"
 
+#include "base/test/scoped_feature_list.h"
+#include "build/build_config.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/renderer/core/dom/pseudo_element.h"
@@ -14,9 +16,12 @@
 #include "third_party/blink/renderer/core/layout/line/inline_text_box.h"
 #include "third_party/blink/renderer/core/testing/core_unit_test_helper.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
+#include "third_party/blink/renderer/platform/testing/font_test_helpers.h"
 #include "third_party/blink/renderer/platform/testing/runtime_enabled_features_test_helpers.h"
 
 namespace blink {
+
+using testing::ElementsAre;
 
 namespace {
 
@@ -215,6 +220,68 @@ TEST_F(LayoutTextTest, ContainsOnlyWhitespaceOrNbsp) {
   EXPECT_EQ(OnlyWhitespaceOrNbsp::kNo,
             GetBasicText()->ContainsOnlyWhitespaceOrNbsp());
 }
+
+#if BUILDFLAG(IS_WIN)
+TEST_F(LayoutTextTest, PrewarmFamily) {
+  base::test::ScopedFeatureList features(kAsyncFontAccess);
+  test::ScopedTestFontPrewarmer prewarmer;
+  SetBodyInnerHTML(R"HTML(
+    <style>
+    #container { font-family: testfont; }
+    </style>
+    <div id="container">text</div>
+  )HTML");
+  EXPECT_THAT(prewarmer.PrewarmedFamilyNames(), ElementsAre("testfont"));
+  LayoutObject* container = GetLayoutObjectByElementId("container");
+  EXPECT_TRUE(container->StyleRef()
+                  .GetFont()
+                  .GetFontDescription()
+                  .Family()
+                  .IsPrewarmed());
+}
+
+// Test `@font-face` fonts are NOT prewarmed.
+TEST_F(LayoutTextTest, PrewarmFontFace) {
+  base::test::ScopedFeatureList features(kAsyncFontAccess);
+  test::ScopedTestFontPrewarmer prewarmer;
+  SetBodyInnerHTML(R"HTML(
+    <style>
+    @font-face {
+      font-family: testfont;
+      src: local(Arial);
+    }
+    #container { font-family: testfont; }
+    </style>
+    <div id="container">text</div>
+  )HTML");
+  EXPECT_THAT(prewarmer.PrewarmedFamilyNames(), ElementsAre());
+  LayoutObject* container = GetLayoutObjectByElementId("container");
+  EXPECT_FALSE(container->StyleRef()
+                   .GetFont()
+                   .GetFontDescription()
+                   .Family()
+                   .IsPrewarmed());
+}
+
+TEST_F(LayoutTextTest, PrewarmGenericFamily) {
+  base::test::ScopedFeatureList features(kAsyncFontAccess);
+  test::ScopedTestFontPrewarmer prewarmer;
+  SetBodyInnerHTML(R"HTML(
+    <style>
+    #container { font-family: serif; }
+    </style>
+    <div id="container">text</div>
+  )HTML");
+  // No prewarms because |GenericFontFamilySettings| is empty.
+  EXPECT_THAT(prewarmer.PrewarmedFamilyNames(), ElementsAre());
+  LayoutObject* container = GetLayoutObjectByElementId("container");
+  EXPECT_TRUE(container->StyleRef()
+                  .GetFont()
+                  .GetFontDescription()
+                  .Family()
+                  .IsPrewarmed());
+}
+#endif
 
 struct NGOffsetMappingTestData {
   const char* text;
@@ -982,10 +1049,11 @@ TEST_P(ParameterizedLayoutTextTest, AbsoluteQuads) {
     <div>012<span id=target>345 67</span></div>
   )HTML");
   LayoutText* layout_text = GetLayoutTextById("target");
-  Vector<FloatQuad> quads;
+  Vector<gfx::QuadF> quads;
   layout_text->AbsoluteQuads(quads);
-  EXPECT_THAT(quads, testing::ElementsAre(FloatRect(30, 0, 30, 10),
-                                          FloatRect(0, 10, 20, 10)));
+  EXPECT_THAT(quads,
+              testing::ElementsAre(gfx::QuadF(gfx::RectF(30, 0, 30, 10)),
+                                   gfx::QuadF(gfx::RectF(0, 10, 20, 10))));
 }
 
 TEST_P(ParameterizedLayoutTextTest, AbsoluteQuadsVRL) {
@@ -1003,10 +1071,11 @@ TEST_P(ParameterizedLayoutTextTest, AbsoluteQuadsVRL) {
     <div>012<span id=target>345 67</span></div>
   )HTML");
   LayoutText* layout_text = GetLayoutTextById("target");
-  Vector<FloatQuad> quads;
+  Vector<gfx::QuadF> quads;
   layout_text->AbsoluteQuads(quads);
-  EXPECT_THAT(quads, testing::ElementsAre(FloatRect(90, 30, 10, 30),
-                                          FloatRect(80, 0, 10, 20)));
+  EXPECT_THAT(quads,
+              testing::ElementsAre(gfx::QuadF(gfx::RectF(90, 30, 10, 30)),
+                                   gfx::QuadF(gfx::RectF(80, 0, 10, 20))));
 }
 
 TEST_P(ParameterizedLayoutTextTest, PhysicalLinesBoundingBox) {
@@ -1054,7 +1123,7 @@ TEST_P(ParameterizedLayoutTextTest, PhysicalLinesBoundingBox) {
 }
 
 TEST_P(ParameterizedLayoutTextTest, PhysicalLinesBoundingBoxTextCombine) {
-  ScopedLayoutNGTextCombineForTest enable_layout_ng_text_combine(true);
+  ScopedLayoutNGForTest enable_layout_ng(true);
   LoadAhem();
   InsertStyleElement(
       "body { font: 100px/130px Ahem; }"
@@ -1080,15 +1149,10 @@ TEST_P(ParameterizedLayoutTextTest, PhysicalLinesBoundingBoxTextCombine) {
   //
 
   EXPECT_EQ(PhysicalRect(15, 0, 100, 100), text_a.PhysicalLinesBoundingBox());
-  if (text_01234.Parent()->IsLayoutNGTextCombine()) {
-    // Note: Width 110 comes from |100px * kTextCombineMargin| in
-    // |LayoutNGTextCombine::DesiredWidth()|.
-    EXPECT_EQ(PhysicalRect(-5, 0, 110, 100),
-              text_01234.PhysicalLinesBoundingBox());
-  } else {
-    EXPECT_EQ(PhysicalRect(15, 100, 100, 100),
-              text_01234.PhysicalLinesBoundingBox());
-  }
+  // Note: Width 110 comes from |100px * kTextCombineMargin| in
+  // |LayoutNGTextCombine::DesiredWidth()|.
+  EXPECT_EQ(PhysicalRect(-5, 0, 110, 100),
+            text_01234.PhysicalLinesBoundingBox());
   EXPECT_EQ(PhysicalRect(15, 200, 100, 100), text_b.PhysicalLinesBoundingBox());
 }
 

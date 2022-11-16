@@ -8,11 +8,12 @@
 #include "base/memory/scoped_refptr.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_property.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_gpu_texture_format.h"
 #include "third_party/blink/renderer/core/dom/events/event_target.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/modules/webgpu/dawn_object.h"
-#include "third_party/blink/renderer/platform/graphics/gpu/dawn_callback.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/graphics/gpu/webgpu_callback.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 
 namespace blink {
 
@@ -53,11 +54,12 @@ class GPUTexture;
 class GPUTextureDescriptor;
 class ScriptPromiseResolver;
 class ScriptState;
-
+class V8GPUErrorFilter;
 class GPUDevice final : public EventTargetWithInlineData,
                         public ExecutionContextClient,
                         public DawnObject<WGPUDevice> {
   DEFINE_WRAPPERTYPEINFO();
+  USING_PRE_FINALIZER(GPUDevice, Dispose);
 
  public:
   explicit GPUDevice(ExecutionContext* execution_context,
@@ -65,6 +67,10 @@ class GPUDevice final : public EventTargetWithInlineData,
                      GPUAdapter* adapter,
                      WGPUDevice dawn_device,
                      const GPUDeviceDescriptor* descriptor);
+
+  GPUDevice(const GPUDevice&) = delete;
+  GPUDevice& operator=(const GPUDevice&) = delete;
+
   ~GPUDevice() override;
 
   void Trace(Visitor* visitor) const override;
@@ -76,6 +82,8 @@ class GPUDevice final : public EventTargetWithInlineData,
   ScriptPromise lost(ScriptState* script_state);
 
   GPUQueue* queue();
+
+  void destroy(ScriptState* script_state);
 
   GPUBuffer* createBuffer(const GPUBufferDescriptor* descriptor);
   GPUTexture* createTexture(const GPUTextureDescriptor* descriptor,
@@ -115,11 +123,13 @@ class GPUDevice final : public EventTargetWithInlineData,
   GPUCommandEncoder* createCommandEncoder(
       const GPUCommandEncoderDescriptor* descriptor);
   GPURenderBundleEncoder* createRenderBundleEncoder(
-      const GPURenderBundleEncoderDescriptor* descriptor);
+      const GPURenderBundleEncoderDescriptor* descriptor,
+      ExceptionState& exception_state);
 
-  GPUQuerySet* createQuerySet(const GPUQuerySetDescriptor* descriptor);
+  GPUQuerySet* createQuerySet(const GPUQuerySetDescriptor* descriptor,
+                              ExceptionState& exception_state);
 
-  void pushErrorScope(const WTF::String& filter);
+  void pushErrorScope(const V8GPUErrorFilter& filter);
   ScriptPromise popErrorScope(ScriptState* script_state);
 
   DEFINE_ATTRIBUTE_EVENT_LISTENER(uncapturederror, kUncapturederror)
@@ -131,17 +141,34 @@ class GPUDevice final : public EventTargetWithInlineData,
   void InjectError(WGPUErrorType type, const char* message);
   void AddConsoleWarning(const char* message);
 
-  void EnsureExternalTextureDestroyed(GPUExternalTexture* externalTexture);
+  void AddActiveExternalTexture(GPUExternalTexture* external_texture);
+  void RemoveActiveExternalTexture(GPUExternalTexture* external_texture);
+
+  bool ValidateTextureFormatUsage(V8GPUTextureFormat format,
+                                  ExceptionState& exception_state);
+  std::string formattedLabel() const;
+
+  // Store the buffer in a weak hash set so we can unmap it when the
+  // device is destroyed.
+  void TrackMappableBuffer(GPUBuffer* buffer);
+  // Untrack the GPUBuffer. This is called eagerly when the buffer is
+  // destroyed.
+  void UntrackMappableBuffer(GPUBuffer* buffer);
 
  private:
   using LostProperty =
       ScriptPromiseProperty<Member<GPUDeviceLostInfo>, ToV8UndefinedGenerator>;
 
-  void DestroyExternalTexturesMicrotask();
+  // Used by USING_PRE_FINALIZER.
+  void Dispose();
+
+  void DestroyAllExternalTextures();
+
+  void UnmapAllMappableBuffers(ScriptState* script_state);
 
   void OnUncapturedError(WGPUErrorType errorType, const char* message);
   void OnLogging(WGPULoggingType loggingType, const char* message);
-  void OnDeviceLostError(const char* message);
+  void OnDeviceLostError(WGPUDeviceLostReason, const char* message);
 
   void OnPopErrorScopeCallback(ScriptPromiseResolver* resolver,
                                WGPUErrorType type,
@@ -157,28 +184,39 @@ class GPUDevice final : public EventTargetWithInlineData,
       WGPUComputePipeline compute_pipeline,
       const char* message);
 
+  void setLabelImpl(const String& value) override {
+    std::string utf8_label = value.Utf8();
+    GetProcs().deviceSetLabel(GetHandle(), utf8_label.c_str());
+  }
+
   Member<GPUAdapter> adapter_;
   Member<GPUSupportedFeatures> features_;
   Member<GPUSupportedLimits> limits_;
   Member<GPUQueue> queue_;
   Member<LostProperty> lost_property_;
-  std::unique_ptr<DawnRepeatingCallback<void(WGPUErrorType, const char*)>>
+  std::unique_ptr<WGPURepeatingCallback<void(WGPUErrorType, const char*)>>
       error_callback_;
-  std::unique_ptr<DawnRepeatingCallback<void(WGPULoggingType, const char*)>>
+  std::unique_ptr<WGPURepeatingCallback<void(WGPULoggingType, const char*)>>
       logging_callback_;
   // lost_callback_ is stored as a unique_ptr since it may never be called.
   // We need to be sure to free it on deletion of the device.
   // Inside OnDeviceLostError we'll release the unique_ptr to avoid a double
   // free.
-  std::unique_ptr<DawnRepeatingCallback<void(const char*)>> lost_callback_;
+  std::unique_ptr<
+      WGPURepeatingCallback<void(WGPUDeviceLostReason, const char*)>>
+      lost_callback_;
 
   static constexpr int kMaxAllowedConsoleWarnings = 500;
   int allowed_console_warnings_remaining_ = kMaxAllowedConsoleWarnings;
 
-  bool has_pending_microtask_ = false;
-  HeapVector<Member<GPUExternalTexture>> external_textures_pending_destroy_;
+  // Keep a list of all active GPUExternalTexture. Eagerly destroy them
+  // when the device is destroyed (via .destroy) to free the memory.
+  HeapHashSet<WeakMember<GPUExternalTexture>> active_external_textures_;
 
-  DISALLOW_COPY_AND_ASSIGN(GPUDevice);
+  HeapHashSet<WeakMember<GPUBuffer>> mappable_buffers_;
+
+  // This attribute records that whether GPUDevice is destroyed (via destroy()).
+  bool destroyed_ = false;
 };
 
 }  // namespace blink

@@ -12,6 +12,7 @@
 
 #include "base/callback.h"
 #include "base/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
@@ -21,10 +22,11 @@
 #include "media/base/encryption_scheme.h"
 #include "media/base/subsample_entry.h"
 #include "third_party/libva_protected_content/va_protected_content.h"
-#include "ui/gfx/geometry/rect.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chromeos/components/cdm_factory_daemon/chromeos_cdm_context.h"
+namespace chromeos {
+class ChromeOsCdmContext;
+}  // namespace chromeos
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 namespace media {
@@ -127,19 +129,11 @@ class VaapiVideoDecoderDelegate {
   // every successful protected decode.
   void ProtectedDecodedSucceeded();
 
-  // Fills *|proc_buffer| with the proper parameters for decode scaling and
-  // returns true if that buffer was filled in and should be submitted, false
-  // otherwise.
-  bool FillDecodeScalingIfNeeded(const gfx::Rect& decode_visible_rect,
-                                 VASurfaceID decode_surface_id,
-                                 scoped_refptr<VASurface> output_surface,
-                                 VAProcPipelineParameterBuffer* proc_buffer);
-
   // Returns the key_id string for the current DecryptConfig.
   std::string GetDecryptKeyId() const;
 
   // Both owned by caller.
-  DecodeSurfaceHandler<VASurface>* const vaapi_dec_;
+  const raw_ptr<DecodeSurfaceHandler<VASurface>> vaapi_dec_;
   scoped_refptr<VaapiWrapper> vaapi_wrapper_;
 
   SEQUENCE_CHECKER(sequence_checker_);
@@ -149,24 +143,20 @@ class VaapiVideoDecoderDelegate {
   void OnGetHwKeyData(const std::string& key_id,
                       Decryptor::Status status,
                       const std::vector<uint8_t>& key_data);
+  void RecoverProtectedSession();
 
   // All members below pertain to protected content playback.
   ProtectedSessionUpdateCB on_protected_session_update_cb_;
+  EncryptionScheme encryption_scheme_;
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   chromeos::ChromeOsCdmContext* chromeos_cdm_context_{nullptr};  // Not owned.
+  EncryptionScheme last_used_encryption_scheme_{EncryptionScheme::kUnencrypted};
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
-  EncryptionScheme encryption_scheme_;
   ProtectedSessionState protected_session_state_;
   std::unique_ptr<DecryptConfig> decrypt_config_;
   std::vector<uint8_t> hw_identifier_;
   std::map<std::string, std::vector<uint8_t>> hw_key_data_map_;
   base::TimeTicks last_key_retrieval_time_;
-  // We need to hold onto these across a call since the VABuffer will reference
-  // their pointers, so declare them here to allow for that. These are used in
-  // the decode scaling operation.
-  VARectangle src_region_;
-  VARectangle dst_region_;
-  VASurfaceID scaled_surface_id_;
 
   // This will only be true on AMD platforms where we support encrypted content
   // and the content is encrypted.

@@ -219,7 +219,7 @@ def bind_local_vars(code_node, cg_context):
            "${execution_context}->CrossOriginIsolatedCapability();")),
         S("is_direct_socket_enabled",
           ("const bool ${is_direct_socket_enabled} = "
-           "${execution_context}->DirectSocketCapability();")),
+           "${execution_context}->IsolatedApplicationCapability();")),
         S("is_in_secure_context",
           ("const bool ${is_in_secure_context} = "
            "${execution_context}->IsSecureContext();")),
@@ -1039,9 +1039,10 @@ def generate_dictionary(dictionary_identifier):
     # Assemble the parts.
     header_node.accumulator.add_class_decls(["ExceptionState"])
     header_node.accumulator.add_include_headers([
-        (PathManager(dictionary.inherited).api_path(ext="h")
-         if dictionary.inherited else
+        (PathManager(dictionary.inherited).api_path(
+            ext="h") if dictionary.inherited else
          "third_party/blink/renderer/platform/bindings/dictionary_base.h"),
+        "base/containers/span.h",
         component_export_header(api_component, for_testing),
     ])
     source_node.accumulator.add_include_headers([

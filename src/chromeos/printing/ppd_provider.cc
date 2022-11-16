@@ -15,7 +15,6 @@
 #include "base/memory/scoped_refptr.h"
 #include "base/notreached.h"
 #include "base/strings/strcat.h"
-#include "base/task/post_task.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
@@ -39,7 +38,7 @@ constexpr size_t kMethodDeferralLimit = 20;
 
 // Age limit for time-sensitive API calls. Typically denotes "Please
 // respond with data no older than kMaxDataAge." Arbitrarily chosen.
-constexpr base::TimeDelta kMaxDataAge = base::TimeDelta::FromMinutes(30LL);
+constexpr base::TimeDelta kMaxDataAge = base::Minutes(30LL);
 
 // Effective-make-and-model string that describes a printer capable of
 // using the generic Epson PPD.

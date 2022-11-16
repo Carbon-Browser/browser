@@ -11,7 +11,6 @@
 
 #include "base/bind.h"
 #include "base/logging.h"
-#include "base/macros.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
@@ -111,7 +110,7 @@ class SafeTemplateURLParser {
       const SearchTermsData* search_terms_data,
       const TemplateURLParser::ParameterFilter& parameter_filter,
       TemplateURLParser::ParseCallback callback)
-      : search_terms_data_(search_terms_data),
+      : search_terms_data_(SearchTermsData::MakeSnapshot(search_terms_data)),
         parameter_filter_(parameter_filter),
         callback_(std::move(callback)) {}
 
@@ -158,20 +157,23 @@ class SafeTemplateURLParser {
   // at least one element, if only the empty string.
   std::vector<std::string> namespaces_;
 
-  const SearchTermsData* search_terms_data_;
+  // We have to own our own snapshot, because the parse request may outlive the
+  // originally provided SearchTermsData lifetime.
+  std::unique_ptr<SearchTermsData> search_terms_data_;
+
   TemplateURLParser::ParameterFilter parameter_filter_;
   TemplateURLParser::ParseCallback callback_;
 };
 
 void SafeTemplateURLParser::OnXmlParseComplete(
     data_decoder::DataDecoder::ValueOrError value_or_error) {
-  if (value_or_error.error) {
-    DLOG(ERROR) << "Failed to parse XML: " << *value_or_error.error;
+  if (!value_or_error.has_value()) {
+    DLOG(ERROR) << "Failed to parse XML: " << value_or_error.error();
     std::move(callback_).Run(nullptr);
     return;
   }
 
-  const base::Value& root = *value_or_error.value;
+  const base::Value& root = *value_or_error;
 
   // Get the namespaces used in the XML document, which will be used
   // to access nodes by tag name in GetChildElementsByTag().
@@ -230,7 +232,7 @@ void SafeTemplateURLParser::ParseURLs(
         data_decoder::GetXmlElementAttribute(*url_value, kURLTemplateAttribute);
     std::string type =
         data_decoder::GetXmlElementAttribute(*url_value, kURLTypeAttribute);
-    bool is_post = base::LowerCaseEqualsASCII(
+    bool is_post = base::EqualsCaseInsensitiveASCII(
         data_decoder::GetXmlElementAttribute(*url_value, kParamMethodAttribute),
         "post");
     bool is_html_url = (type == kHTMLType);
@@ -432,8 +434,9 @@ void TemplateURLParser::Parse(const SearchTermsData* search_terms_data,
   auto safe_parser = std::make_unique<SafeTemplateURLParser>(
       search_terms_data, parameter_filter, std::move(completion_callback));
   data_decoder::DataDecoder::ParseXmlIsolated(
-      data, base::BindOnce(&SafeTemplateURLParser::OnXmlParseComplete,
-                           std::move(safe_parser)));
+      data, data_decoder::mojom::XmlParser::WhitespaceBehavior::kIgnore,
+      base::BindOnce(&SafeTemplateURLParser::OnXmlParseComplete,
+                     std::move(safe_parser)));
 }
 
 // static
@@ -446,6 +449,7 @@ void TemplateURLParser::ParseWithDataDecoder(
   auto safe_parser = std::make_unique<SafeTemplateURLParser>(
       search_terms_data, parameter_filter, std::move(completion_callback));
   data_decoder->ParseXml(
-      data, base::BindOnce(&SafeTemplateURLParser::OnXmlParseComplete,
-                           std::move(safe_parser)));
+      data, data_decoder::mojom::XmlParser::WhitespaceBehavior::kIgnore,
+      base::BindOnce(&SafeTemplateURLParser::OnXmlParseComplete,
+                     std::move(safe_parser)));
 }

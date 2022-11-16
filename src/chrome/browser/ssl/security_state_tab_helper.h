@@ -24,6 +24,9 @@ class SecurityStateTabHelper
     : public content::WebContentsObserver,
       public content::WebContentsUserData<SecurityStateTabHelper> {
  public:
+  SecurityStateTabHelper(const SecurityStateTabHelper&) = delete;
+  SecurityStateTabHelper& operator=(const SecurityStateTabHelper&) = delete;
+
   ~SecurityStateTabHelper() override;
 
   // See security_state::GetSecurityLevel.
@@ -34,9 +37,7 @@ class SecurityStateTabHelper
   // content::WebContentsObserver:
   void DidStartNavigation(
       content::NavigationHandle* navigation_handle) override;
-  void DidFinishNavigation(
-      content::NavigationHandle* navigation_handle) override;
-  void DidChangeVisibleSecurityState() override;
+  void PrimaryPageChanged(content::Page& page) override;
 
   // Used by tests to specify a callback to be called when
   // GetVisibleSecurityState() is called.
@@ -54,8 +55,6 @@ class SecurityStateTabHelper
   base::OnceClosure get_security_level_callback_for_tests_;
 
   WEB_CONTENTS_USER_DATA_KEY_DECL();
-
-  DISALLOW_COPY_AND_ASSIGN(SecurityStateTabHelper);
 };
 
 #endif  // CHROME_BROWSER_SSL_SECURITY_STATE_TAB_HELPER_H_

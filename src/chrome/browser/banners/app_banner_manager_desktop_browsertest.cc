@@ -7,7 +7,6 @@
 #include <utility>
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/bind.h"
@@ -28,17 +27,22 @@
 #include "chrome/browser/ui/web_applications/web_app_dialog_utils.h"
 #include "chrome/browser/web_applications/external_install_options.h"
 #include "chrome/browser/web_applications/externally_managed_app_manager.h"
-#include "chrome/browser/web_applications/web_app_constants.h"
+#include "chrome/browser/web_applications/user_display_mode.h"
 #include "chrome/browser/web_applications/web_app_helpers.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/webapps/browser/banners/app_banner_metrics.h"
 #include "components/webapps/browser/banners/app_banner_settings_helper.h"
+#include "components/webapps/browser/install_result_code.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "extensions/common/extension.h"
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "ash/constants/ash_features.h"
+#endif
 
 namespace webapps {
 
@@ -50,7 +54,8 @@ class AppBannerManagerDesktopBrowserTest
   AppBannerManagerDesktopBrowserTest() {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
     // With Lacros, web apps are not installed using the Ash browser.
-    scoped_feature_list_.InitAndDisableFeature(features::kWebAppsCrosapi);
+    scoped_feature_list_.InitWithFeatures(
+        {}, {features::kWebAppsCrosapi, chromeos::features::kLacrosPrimary});
 #endif
   }
 
@@ -142,8 +147,8 @@ IN_PROC_BROWSER_TEST_F(AppBannerManagerDesktopBrowserTest,
 
     web_app::SetInstalledCallbackForTesting(
         base::BindLambdaForTesting([&](const web_app::AppId& installed_app_id,
-                                       web_app::InstallResultCode code) {
-          EXPECT_EQ(web_app::InstallResultCode::kSuccessNewInstall, code);
+                                       webapps::InstallResultCode code) {
+          EXPECT_EQ(webapps::InstallResultCode::kSuccessNewInstall, code);
           EXPECT_EQ(installed_app_id,
                     web_app::GenerateAppId(/*manifest_id=*/absl::nullopt, url));
           callback_called = true;
@@ -163,7 +168,14 @@ IN_PROC_BROWSER_TEST_F(AppBannerManagerDesktopBrowserTest,
   EXPECT_EQ(title, watcher.WaitAndGetTitle());
 }
 
-IN_PROC_BROWSER_TEST_F(AppBannerManagerDesktopBrowserTest, DestroyWebContents) {
+// TODO(https://crbug.com/1289196): Flaky failures.
+#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
+#define MAYBE_DestroyWebContents DISABLED_DestroyWebContents
+#else
+#define MAYBE_DestroyWebContents DestroyWebContents
+#endif
+IN_PROC_BROWSER_TEST_F(AppBannerManagerDesktopBrowserTest,
+                       MAYBE_DestroyWebContents) {
   content::WebContents* web_contents =
       browser()->tab_strip_model()->GetActiveWebContents();
   auto* manager = TestAppBannerManagerDesktop::FromWebContents(web_contents);
@@ -185,8 +197,8 @@ IN_PROC_BROWSER_TEST_F(AppBannerManagerDesktopBrowserTest, DestroyWebContents) {
 
     web_app::SetInstalledCallbackForTesting(
         base::BindLambdaForTesting([&](const web_app::AppId& installed_app_id,
-                                       web_app::InstallResultCode code) {
-          EXPECT_EQ(web_app::InstallResultCode::kWebContentsDestroyed, code);
+                                       webapps::InstallResultCode code) {
+          EXPECT_EQ(webapps::InstallResultCode::kWebContentsDestroyed, code);
           callback_called = true;
           run_loop.Quit();
         }));
@@ -256,9 +268,8 @@ IN_PROC_BROWSER_TEST_F(AppBannerManagerDesktopBrowserTest,
 
   // Install the app via the menu instead of the banner.
   chrome::SetAutoAcceptPWAInstallConfirmationForTesting(true);
-  browser()
-      ->window()
-      ->ExecutePageActionIconForTesting(PageActionIconType::kPwaInstall);
+  browser()->window()->ExecutePageActionIconForTesting(
+      PageActionIconType::kPwaInstall);
   manager->AwaitAppInstall();
   chrome::SetAutoAcceptPWAInstallConfirmationForTesting(false);
 
@@ -278,7 +289,7 @@ IN_PROC_BROWSER_TEST_F(AppBannerManagerDesktopBrowserTest,
   web_app::ExternalInstallOptions options =
       web_app::CreateInstallOptions(GetBannerURL());
   options.install_source = web_app::ExternalInstallSource::kExternalPolicy;
-  options.user_display_mode = web_app::DisplayMode::kBrowser;
+  options.user_display_mode = web_app::UserDisplayMode::kBrowser;
   web_app::ExternallyManagedAppManagerInstall(browser()->profile(), options);
 
   // Run promotability check.
@@ -307,7 +318,7 @@ IN_PROC_BROWSER_TEST_F(AppBannerManagerDesktopBrowserTest,
   web_app::ExternalInstallOptions options =
       web_app::CreateInstallOptions(GetBannerURL());
   options.install_source = web_app::ExternalInstallSource::kExternalPolicy;
-  options.user_display_mode = web_app::DisplayMode::kBrowser;
+  options.user_display_mode = web_app::UserDisplayMode::kBrowser;
   web_app::ExternallyManagedAppManagerInstall(profile, options);
 
   // Uninstall web app by policy.
@@ -421,7 +432,7 @@ IN_PROC_BROWSER_TEST_F(AppBannerManagerDesktopBrowserTest,
       web_app::CreateInstallOptions(GetBannerURLWithManifest(
           "/banners/manifest_display_override_contains_browser.json"));
   options.install_source = web_app::ExternalInstallSource::kExternalPolicy;
-  options.user_display_mode = web_app::DisplayMode::kBrowser;
+  options.user_display_mode = web_app::UserDisplayMode::kBrowser;
   web_app::ExternallyManagedAppManagerInstall(browser()->profile(), options);
 
   // Run promotability check.

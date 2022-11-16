@@ -8,7 +8,6 @@
 #include <string>
 
 #include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/observer_list.h"
 #include "base/scoped_observation.h"
@@ -69,6 +68,9 @@ class CookieSettings : public CookieSettingsBase,
                  bool is_incognito,
                  const char* extension_scheme = kDummyExtensionScheme);
 
+  CookieSettings(const CookieSettings&) = delete;
+  CookieSettings& operator=(const CookieSettings&) = delete;
+
   // Returns the default content setting (CONTENT_SETTING_ALLOW,
   // CONTENT_SETTING_BLOCK, or CONTENT_SETTING_SESSION_ONLY) for cookies. If
   // |provider_id| is not nullptr, the id of the provider which provided the
@@ -78,11 +80,10 @@ class CookieSettings : public CookieSettingsBase,
   ContentSetting GetDefaultCookieSetting(std::string* provider_id) const;
 
   // Returns all patterns with a non-default cookie setting, mapped to their
-  // actual settings, in the precedence order of the setting rules. |settings|
-  // must be a non-nullptr outparam.
+  // actual settings, in the precedence order of the setting rules.
   //
   // This may be called on any thread.
-  void GetCookieSettings(ContentSettingsForOneType* settings) const;
+  ContentSettingsForOneType GetCookieSettings() const;
 
   // Sets the default content setting (CONTENT_SETTING_ALLOW,
   // CONTENT_SETTING_BLOCK, or CONTENT_SETTING_SESSION_ONLY) for cookies.
@@ -127,8 +128,8 @@ class CookieSettings : public CookieSettingsBase,
   virtual bool ShouldBlockThirdPartyCookies() const;
 
   // content_settings::CookieSettingsBase:
-  void GetSettingForLegacyCookieAccess(const std::string& cookie_domain,
-                                       ContentSetting* setting) const override;
+  ContentSetting GetSettingForLegacyCookieAccess(
+      const std::string& cookie_domain) const override;
   bool ShouldIgnoreSameSiteRestrictions(
       const GURL& url,
       const net::SiteForCookies& site_for_cookies) const override;
@@ -167,9 +168,10 @@ class CookieSettings : public CookieSettingsBase,
       content_settings::SettingSource* source) const override;
 
   // content_settings::Observer:
-  void OnContentSettingChanged(const ContentSettingsPattern& primary_pattern,
-                               const ContentSettingsPattern& secondary_pattern,
-                               ContentSettingsType content_type) override;
+  void OnContentSettingChanged(
+      const ContentSettingsPattern& primary_pattern,
+      const ContentSettingsPattern& secondary_pattern,
+      ContentSettingsTypeSet content_type_set) override;
 
   void OnCookiePreferencesChanged();
 
@@ -188,8 +190,6 @@ class CookieSettings : public CookieSettingsBase,
 
   mutable base::Lock lock_;
   bool block_third_party_cookies_ GUARDED_BY(lock_);
-
-  DISALLOW_COPY_AND_ASSIGN(CookieSettings);
 };
 
 }  // namespace content_settings

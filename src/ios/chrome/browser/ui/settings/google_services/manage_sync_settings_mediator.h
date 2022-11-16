@@ -36,9 +36,12 @@ class SyncService;
 @property(nonatomic, weak) id<SyncErrorSettingsCommandHandler> syncErrorHandler;
 // Returns YES if the encryption item should be enabled.
 @property(nonatomic, assign, readonly) BOOL shouldEncryptionItemBeEnabled;
+// YES if the forced sign-in policy is enabled which requires contextual
+// information.
+@property(nonatomic, assign) BOOL forcedSigninEnabled;
 
 // Designated initializer.
-// |syncService|: Sync service. Should not be null.
+// `syncService`: Sync service. Should not be null.
 - (instancetype)initWithSyncService:(syncer::SyncService*)syncService
                     userPrefService:(PrefService*)userPrefService
     NS_DESIGNATED_INITIALIZER;

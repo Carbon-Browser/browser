@@ -7,8 +7,9 @@
 #include <memory>
 #include <string>
 
+#include "base/callback.h"
 #include "base/command_line.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "build/build_config.h"
 #include "chrome/browser/background/background_contents.h"
@@ -49,6 +50,9 @@ class MockBackgroundContents : public BackgroundContents {
     service_->OnBackgroundContentsClosed(this);
   }
 
+  MockBackgroundContents(const MockBackgroundContents&) = delete;
+  MockBackgroundContents& operator=(const MockBackgroundContents&) = delete;
+
   ~MockBackgroundContents() override = default;
 
   BackgroundContentsService* service() { return service_; }
@@ -58,17 +62,20 @@ class MockBackgroundContents : public BackgroundContents {
  private:
   GURL url_;
 
-  BackgroundContentsService* service_;
+  raw_ptr<BackgroundContentsService> service_;
 
   // The ID of our parent application
   std::string appid_;
-
-  DISALLOW_COPY_AND_ASSIGN(MockBackgroundContents);
 };
 
 class BackgroundContentsServiceTest : public testing::Test {
  public:
   BackgroundContentsServiceTest() = default;
+
+  BackgroundContentsServiceTest(const BackgroundContentsServiceTest&) = delete;
+  BackgroundContentsServiceTest& operator=(
+      const BackgroundContentsServiceTest&) = delete;
+
   ~BackgroundContentsServiceTest() override = default;
 
   void SetUp() override {
@@ -81,20 +88,18 @@ class BackgroundContentsServiceTest : public testing::Test {
     BackgroundContentsService::DisableCloseBalloonForTesting(false);
   }
 
-  const base::DictionaryValue* GetPrefs(Profile* profile) {
+  const base::Value* GetPrefs(Profile* profile) {
     return profile->GetPrefs()->GetDictionary(
         prefs::kRegisteredBackgroundContents);
   }
 
   // Returns the stored pref URL for the passed app id.
   std::string GetPrefURLForApp(Profile* profile, const std::string& appid) {
-    const base::DictionaryValue* pref = GetPrefs(profile);
-    EXPECT_TRUE(pref->HasKey(appid));
-    const base::DictionaryValue* value;
-    pref->GetDictionaryWithoutPathExpansion(appid, &value);
-    std::string url;
-    value->GetString("url", &url);
-    return url;
+    const base::Value* pref = GetPrefs(profile);
+    const base::Value* value = pref->FindDictKey(appid);
+    EXPECT_TRUE(value);
+    const std::string* url = value->FindStringKey("url");
+    return url ? *url : std::string();
   }
 
   MockBackgroundContents* AddToService(
@@ -107,15 +112,18 @@ class BackgroundContentsServiceTest : public testing::Test {
 
   content::BrowserTaskEnvironment task_environment_;
   std::unique_ptr<base::CommandLine> command_line_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(BackgroundContentsServiceTest);
 };
 
 class BackgroundContentsServiceNotificationTest
     : public BrowserWithTestWindowTest {
  public:
   BackgroundContentsServiceNotificationTest() {}
+
+  BackgroundContentsServiceNotificationTest(
+      const BackgroundContentsServiceNotificationTest&) = delete;
+  BackgroundContentsServiceNotificationTest& operator=(
+      const BackgroundContentsServiceNotificationTest&) = delete;
+
   ~BackgroundContentsServiceNotificationTest() override {}
 
   // Overridden from testing::Test
@@ -142,9 +150,6 @@ class BackgroundContentsServiceNotificationTest
   }
 
   std::unique_ptr<NotificationDisplayServiceTester> display_service_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(BackgroundContentsServiceNotificationTest);
 };
 
 TEST_F(BackgroundContentsServiceTest, Create) {

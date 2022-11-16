@@ -5,7 +5,9 @@
 #include "base/barrier_closure.h"
 
 #include "base/bind.h"
+#include "base/callback.h"
 #include "base/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/bind.h"
 #include "base/test/gtest_util.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -52,7 +54,7 @@ class DestructionIndicator {
   void DoNothing() {}
 
  private:
-  bool* destructed_;
+  raw_ptr<bool> destructed_;
 };
 
 TEST(BarrierClosureTest, ReleasesDoneClosureWhenDone) {

@@ -13,7 +13,6 @@
 
 #include "base/compiler_specific.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
 #include "components/search_engines/template_url_id.h"
 #include "components/webdata/common/web_database_table.h"
 
@@ -71,11 +70,14 @@ class Statement;
 //                          added in version 82.
 //   is_active              See TemplateURLData::is_active. This was added
 //                          in version 97.
+//   starter_pack_id        See TemplateURLData::starter_pack_id.  This was
+//                          added in version 103.
 //
 // This class also manages some fields in the |meta| table:
 //
 // Default Search Provider ID        The id of the default search provider.
 // Builtin Keyword Version           The version of builtin keywords data.
+// Starter Pack Keyword Version      The version of starter pack data.
 //
 class KeywordTable : public WebDatabaseTable {
  public:
@@ -94,6 +96,10 @@ class KeywordTable : public WebDatabaseTable {
   static const char kDefaultSearchProviderKey[];
 
   KeywordTable();
+
+  KeywordTable(const KeywordTable&) = delete;
+  KeywordTable& operator=(const KeywordTable&) = delete;
+
   ~KeywordTable() override;
 
   // Retrieves the KeywordTable* owned by |database|.
@@ -123,6 +129,10 @@ class KeywordTable : public WebDatabaseTable {
   bool SetBuiltinKeywordVersion(int version);
   int GetBuiltinKeywordVersion();
 
+  // Version of built-in starter pack keywords (@bookmarks, @settings, etc.).
+  bool SetStarterPackKeywordVersion(int version);
+  int GetStarterPackKeywordVersion();
+
   // Returns a comma-separated list of the keyword columns for the current
   // version of the table.
   static std::string GetKeywordColumns();
@@ -136,6 +146,7 @@ class KeywordTable : public WebDatabaseTable {
   bool MigrateToVersion77IncreaseTimePrecision();
   bool MigrateToVersion82AddCreatedFromPlayApiColumn();
   bool MigrateToVersion97AddIsActiveColumn();
+  bool MigrateToVersion103AddStarterPackIdColumn();
 
  private:
   friend class KeywordTableTest;
@@ -168,8 +179,6 @@ class KeywordTable : public WebDatabaseTable {
   bool GetKeywordAsString(TemplateURLID id,
                           const std::string& table_name,
                           std::string* result);
-
-  DISALLOW_COPY_AND_ASSIGN(KeywordTable);
 };
 
 #endif  // COMPONENTS_SEARCH_ENGINES_KEYWORD_TABLE_H_

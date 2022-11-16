@@ -6,16 +6,14 @@
 #define MEDIA_BASE_AUDIO_DECODER_H_
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "media/base/audio_decoder_config.h"
 #include "media/base/channel_layout.h"
-#include "media/base/decode_status.h"
 #include "media/base/decoder.h"
 #include "media/base/decoder_buffer.h"
+#include "media/base/decoder_status.h"
 #include "media/base/media_export.h"
 #include "media/base/pipeline_status.h"
-#include "media/base/status.h"
 #include "media/base/waiting.h"
 
 namespace media {
@@ -26,7 +24,7 @@ class CdmContext;
 class MEDIA_EXPORT AudioDecoder : public Decoder {
  public:
   // Callback for Decoder initialization.
-  using InitCB = base::OnceCallback<void(Status)>;
+  using InitCB = base::OnceCallback<void(DecoderStatus)>;
 
   // Callback for AudioDecoder to return a decoded frame whenever it becomes
   // available. Only non-EOS frames should be returned via this callback.
@@ -38,9 +36,12 @@ class MEDIA_EXPORT AudioDecoder : public Decoder {
   // decode was aborted, which does not necessarily indicate an error.  For
   // example, a Reset() can trigger this.  Any other status code indicates that
   // the decoder encountered an error, and must be reset.
-  using DecodeCB = base::OnceCallback<void(Status)>;
+  using DecodeCB = base::OnceCallback<void(DecoderStatus)>;
 
   AudioDecoder();
+
+  AudioDecoder(const AudioDecoder&) = delete;
+  AudioDecoder& operator=(const AudioDecoder&) = delete;
 
   // Fires any pending callbacks, stops and destroys the decoder.
   // Note: Since this is a destructor, |this| will be destroyed after this call.
@@ -87,9 +88,6 @@ class MEDIA_EXPORT AudioDecoder : public Decoder {
 
   // Returns the type of the decoder for statistics recording purposes.
   virtual AudioDecoderType GetDecoderType() const = 0;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(AudioDecoder);
 };
 
 }  // namespace media

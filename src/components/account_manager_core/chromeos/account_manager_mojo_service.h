@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "base/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "chromeos/crosapi/mojom/account_manager.mojom.h"
 #include "components/account_manager_core/account.h"
 #include "components/account_manager_core/account_addition_result.h"
@@ -45,6 +46,9 @@ class COMPONENT_EXPORT(ACCOUNT_MANAGER_CORE) AccountManagerMojoService
   void SetAccountManagerUI(
       std::unique_ptr<account_manager::AccountManagerUI> account_manager_ui);
 
+  void OnAccountAdditionFinishedForTesting(
+      const account_manager::AccountAdditionResult& result);
+
   // crosapi::mojom::AccountManager:
   void IsInitialized(IsInitializedCallback callback) override;
   void AddObserver(AddObserverCallback callback) override;
@@ -52,7 +56,8 @@ class COMPONENT_EXPORT(ACCOUNT_MANAGER_CORE) AccountManagerMojoService
   void GetPersistentErrorForAccount(
       mojom::AccountKeyPtr mojo_account_key,
       GetPersistentErrorForAccountCallback callback) override;
-  void ShowAddAccountDialog(ShowAddAccountDialogCallback callback) override;
+  void ShowAddAccountDialog(mojom::AccountAdditionOptionsPtr options,
+                            ShowAddAccountDialogCallback callback) override;
   void ShowReauthAccountDialog(const std::string& email,
                                base::OnceClosure closure) override;
   void ShowManageAccountsSettings() override;
@@ -86,7 +91,7 @@ class COMPONENT_EXPORT(ACCOUNT_MANAGER_CORE) AccountManagerMojoService
 
   ShowAddAccountDialogCallback account_addition_callback_;
   bool account_addition_in_progress_ = false;
-  account_manager::AccountManager* const account_manager_;
+  const raw_ptr<account_manager::AccountManager> account_manager_;
   std::unique_ptr<account_manager::AccountManagerUI> account_manager_ui_;
   std::vector<std::unique_ptr<AccessTokenFetcher>>
       pending_access_token_requests_;

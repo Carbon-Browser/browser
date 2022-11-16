@@ -23,6 +23,7 @@
 #import "ios/chrome/browser/ui/alert_coordinator/action_sheet_coordinator.h"
 #import "ios/chrome/browser/ui/authentication/authentication_flow.h"
 #import "ios/chrome/browser/ui/authentication/authentication_ui_util.h"
+#import "ios/chrome/browser/ui/authentication/enterprise/enterprise_utils.h"
 #import "ios/chrome/browser/ui/authentication/signout_action_sheet_coordinator.h"
 #import "ios/chrome/browser/ui/commands/application_commands.h"
 #import "ios/chrome/browser/ui/commands/browsing_data_commands.h"
@@ -48,7 +49,8 @@ using signin_metrics::PromoAction;
 
 @interface GoogleServicesSettingsCoordinator () <
     GoogleServicesSettingsCommandHandler,
-    GoogleServicesSettingsViewControllerPresentationDelegate>
+    GoogleServicesSettingsViewControllerPresentationDelegate,
+    SignoutActionSheetCoordinatorDelegate>
 
 // Google services settings mediator.
 @property(nonatomic, strong) GoogleServicesSettingsMediator* mediator;
@@ -64,7 +66,7 @@ using signin_metrics::PromoAction;
 // Action sheets that provides options for sign out.
 @property(nonatomic, strong) ActionSheetCoordinator* signOutCoordinator;
 @property(nonatomic, strong)
-    SignoutActionSheetCoordinator* dataRetentionStrategyCoordinator;
+    SignoutActionSheetCoordinator* signoutActionSheetCoordinator;
 @end
 
 @implementation GoogleServicesSettingsCoordinator
@@ -85,6 +87,7 @@ using signin_metrics::PromoAction;
       [[GoogleServicesSettingsViewController alloc]
           initWithStyle:ChromeTableViewStyle()];
   viewController.presentationDelegate = self;
+  viewController.forcedSigninEnabled = IsForceSignInEnabled();
   self.viewController = viewController;
   self.mediator = [[GoogleServicesSettingsMediator alloc]
       initWithUserPrefService:self.browser->GetBrowserState()->GetPrefs()
@@ -150,8 +153,8 @@ using signin_metrics::PromoAction;
                          message:nil
                             rect:targetRect
                             view:self.viewController.view];
-  // Because setting |title| to nil automatically forces the title-style text on
-  // |message| in the UIAlertController, the attributed message below
+  // Because setting `title` to nil automatically forces the title-style text on
+  // `message` in the UIAlertController, the attributed message below
   // specifically denotes the font style to apply.
   if (isSyncConsentGiven) {
     self.signOutCoordinator.attributedMessage = [[NSAttributedString alloc]
@@ -200,24 +203,26 @@ using signin_metrics::PromoAction;
                                     completion:(signin_ui::CompletionCallback)
                                                    completion {
   DCHECK(completion);
-  self.dataRetentionStrategyCoordinator = [[SignoutActionSheetCoordinator alloc]
+  self.signoutActionSheetCoordinator = [[SignoutActionSheetCoordinator alloc]
       initWithBaseViewController:self.viewController
                          browser:self.browser
                             rect:targetRect
                             view:self.viewController.view];
   __weak GoogleServicesSettingsCoordinator* weakSelf = self;
-  self.dataRetentionStrategyCoordinator.completion = ^(BOOL success) {
-    completion(success);
-    [weakSelf.dataRetentionStrategyCoordinator stop];
-    weakSelf.dataRetentionStrategyCoordinator = nil;
+  self.signoutActionSheetCoordinator.delegate = self;
+  self.signoutActionSheetCoordinator.completion = ^(BOOL success) {
+    if (completion)
+      completion(success);
+    [weakSelf.signoutActionSheetCoordinator stop];
+    weakSelf.signoutActionSheetCoordinator = nil;
   };
-  [self.dataRetentionStrategyCoordinator start];
+  [self.signoutActionSheetCoordinator start];
 }
 
 // Signs the user out of Chrome, only clears data for managed accounts.
 - (void)signOutWithCompletion:(signin_ui::CompletionCallback)completion {
   DCHECK(completion);
-  [self.baseViewController.view setUserInteractionEnabled:NO];
+  [self.googleServicesSettingsViewController preventUserInteraction];
   __weak GoogleServicesSettingsCoordinator* weakSelf = self;
   self.authService->SignOut(
       signin_metrics::USER_CLICKED_SIGNOUT_SETTINGS,
@@ -225,7 +230,7 @@ using signin_metrics::PromoAction;
         if (!weakSelf) {
           return;
         }
-        weakSelf.baseViewController.view.userInteractionEnabled = YES;
+        [weakSelf.googleServicesSettingsViewController allowUserInteraction];
         completion(YES);
       });
 }
@@ -236,6 +241,18 @@ using signin_metrics::PromoAction;
     (GoogleServicesSettingsViewController*)controller {
   DCHECK_EQ(self.viewController, controller);
   [self.delegate googleServicesSettingsCoordinatorDidRemove:self];
+}
+
+#pragma mark - SignoutActionSheetCoordinatorDelegate
+
+- (void)signoutActionSheetCoordinatorPreventUserInteraction:
+    (SignoutActionSheetCoordinator*)coordinator {
+  [self.googleServicesSettingsViewController preventUserInteraction];
+}
+
+- (void)signoutActionSheetCoordinatorAllowUserInteraction:
+    (SignoutActionSheetCoordinator*)coordinator {
+  [self.googleServicesSettingsViewController allowUserInteraction];
 }
 
 @end

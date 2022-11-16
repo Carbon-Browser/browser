@@ -8,14 +8,15 @@
 
 #include "ash/clipboard/clipboard_history_item.h"
 #include "ash/metrics/histogram_macros.h"
-#include "ash/public/cpp/file_icon_util.h"
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
 #include "ash/style/ash_color_provider.h"
+#include "ash/style/dark_light_mode_controller_impl.h"
 #include "base/files/file_path.h"
 #include "base/strings/string_split.h"
 #include "base/strings/utf_string_conversions.h"
+#include "chromeos/ui/base/file_icon_util.h"
 #include "ui/base/clipboard/clipboard_data.h"
 #include "ui/base/clipboard/custom_data_helper.h"
 #include "ui/gfx/paint_vector_icon.h"
@@ -64,10 +65,11 @@ ClipboardHistoryDisplayFormat CalculateDisplayFormat(
     case ui::ClipboardInternalFormat::kText:
     case ui::ClipboardInternalFormat::kSvg:
     case ui::ClipboardInternalFormat::kRtf:
-    case ui::ClipboardInternalFormat::kFilenames:
     case ui::ClipboardInternalFormat::kBookmark:
     case ui::ClipboardInternalFormat::kWeb:
       return ClipboardHistoryDisplayFormat::kText;
+    case ui::ClipboardInternalFormat::kFilenames:
+      return ClipboardHistoryDisplayFormat::kFile;
     case ui::ClipboardInternalFormat::kCustom:
       return ContainsFileSystemData(data)
                  ? ClipboardHistoryDisplayFormat::kFile
@@ -129,6 +131,15 @@ size_t GetCountOfCopiedFiles(const ui::ClipboardData& data) {
 }
 
 std::u16string GetFileSystemSources(const ui::ClipboardData& data) {
+  // Outside of the Files app, file system sources are written as filenames.
+  if (ContainsFormat(data, ui::ClipboardInternalFormat::kFilenames)) {
+    std::vector<std::string> sources;
+    for (const ui::FileInfo& filename : data.filenames())
+      sources.push_back(filename.path.value());
+    return base::UTF8ToUTF16(base::JoinString(sources, "\n"));
+  }
+
+  // Within the Files app, file system sources are written as custom data.
   if (!ContainsFormat(data, ui::ClipboardInternalFormat::kCustom))
     return std::u16string();
 
@@ -188,8 +199,9 @@ gfx::ImageSkia GetIconForFileClipboardItem(const ClipboardHistoryItem& item,
   if (copied_files_count == 0)
     return gfx::ImageSkia();
   if (copied_files_count == 1) {
-    return GetIconForPath(base::FilePath(file_name),
-                          ash::AshColorProvider::Get()->IsDarkModeEnabled());
+    return chromeos::GetIconForPath(
+        base::FilePath(file_name),
+        ash::DarkLightModeControllerImpl::Get()->IsDarkModeEnabled());
   }
   constexpr std::array<const gfx::VectorIcon*, 9> icons = {
       &kTwoFilesIcon,   &kThreeFilesIcon, &kFourFilesIcon,

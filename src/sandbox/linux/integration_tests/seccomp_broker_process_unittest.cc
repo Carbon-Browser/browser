@@ -19,7 +19,7 @@
 #include "base/files/scoped_file.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/logging.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/posix/eintr_wrapper.h"
 #include "base/test/bind.h"
 #include "build/build_config.h"
@@ -45,6 +45,9 @@
 namespace sandbox {
 
 using bpf_dsl::Allow;
+using bpf_dsl::Arg;
+using bpf_dsl::Error;
+using bpf_dsl::If;
 using bpf_dsl::ResultExpr;
 using bpf_dsl::Trap;
 
@@ -65,16 +68,20 @@ class InitializedOpenBroker {
     std::vector<BrokerFilePermission> permissions = {
         BrokerFilePermission::ReadOnly("/proc/allowed"),
         BrokerFilePermission::ReadOnly("/proc/cpuinfo")};
-    broker_process_ = std::make_unique<BrokerProcess>(EPERM, command_set,
-                                                      permissions, broker_type);
-    BPF_ASSERT(broker_process_->Init(base::BindOnce([]() { return true; })));
+    broker_process_ = std::make_unique<BrokerProcess>(
+        syscall_broker::BrokerSandboxConfig(command_set, permissions, EPERM),
+        broker_type);
+    BPF_ASSERT(broker_process_->Fork(base::BindOnce(
+        [](const syscall_broker::BrokerSandboxConfig&) { return true; })));
   }
+
+  InitializedOpenBroker(const InitializedOpenBroker&) = delete;
+  InitializedOpenBroker& operator=(const InitializedOpenBroker&) = delete;
 
   BrokerProcess* broker_process() const { return broker_process_.get(); }
 
  private:
   std::unique_ptr<BrokerProcess> broker_process_;
-  DISALLOW_COPY_AND_ASSIGN(InitializedOpenBroker);
 };
 
 intptr_t BrokerOpenTrapHandler(const struct arch_seccomp_data& args,
@@ -116,6 +123,10 @@ intptr_t BrokerOpenTrapHandler(const struct arch_seccomp_data& args,
 class DenyOpenPolicy : public bpf_dsl::Policy {
  public:
   explicit DenyOpenPolicy(InitializedOpenBroker* iob) : iob_(iob) {}
+
+  DenyOpenPolicy(const DenyOpenPolicy&) = delete;
+  DenyOpenPolicy& operator=(const DenyOpenPolicy&) = delete;
+
   ~DenyOpenPolicy() override {}
 
   ResultExpr EvaluateSyscall(int sysno) const override {
@@ -140,9 +151,7 @@ class DenyOpenPolicy : public bpf_dsl::Policy {
   }
 
  private:
-  InitializedOpenBroker* iob_;
-
-  DISALLOW_COPY_AND_ASSIGN(DenyOpenPolicy);
+  raw_ptr<InitializedOpenBroker> iob_;
 };
 
 // We use a InitializedOpenBroker class, so that we can run unsandboxed
@@ -299,12 +308,13 @@ class IPCSyscaller : public Syscaller {
   }
 
  private:
-  BrokerProcess* broker_;
+  raw_ptr<BrokerProcess> broker_;
 };
 
 // Only use syscall(...) on x64 to avoid having to reimplement a libc-like
 // layer that uses different syscalls on different architectures.
-#if (defined(OS_LINUX) || defined(OS_CHROMEOS) || defined(OS_ANDROID)) && \
+#if (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || \
+     BUILDFLAG(IS_ANDROID)) &&                        \
     defined(__x86_64__)
 #define DIRECT_SYSCALLER_ENABLED
 #endif
@@ -493,22 +503,33 @@ class HandleFilesystemViaBrokerPolicy : public bpf_dsl::Policy {
   explicit HandleFilesystemViaBrokerPolicy(BrokerProcess* broker_process,
                                            int denied_errno)
       : broker_process_(broker_process), denied_errno_(denied_errno) {}
+
+  HandleFilesystemViaBrokerPolicy(const HandleFilesystemViaBrokerPolicy&) =
+      delete;
+  HandleFilesystemViaBrokerPolicy& operator=(
+      const HandleFilesystemViaBrokerPolicy&) = delete;
+
   ~HandleFilesystemViaBrokerPolicy() override = default;
 
   ResultExpr EvaluateSyscall(int sysno) const override {
     DCHECK(SandboxBPF::IsValidSyscallNumber(sysno));
     // Broker everything that we're supposed to broker.
     if (broker_process_->IsSyscallAllowed(sysno)) {
-      return sandbox::bpf_dsl::Trap(
-          sandbox::syscall_broker::BrokerClient::SIGSYS_Handler,
-          broker_process_->GetBrokerClientSignalBased());
+      return Trap(BrokerClient::SIGSYS_Handler,
+                  broker_process_->GetBrokerClientSignalBased());
     }
 
     // Otherwise, if this is a syscall that takes a pathname but isn't an
     // allowed command, deny it.
     if (broker_process_->IsSyscallBrokerable(sysno,
                                              /*fast_check_in_client=*/false)) {
-      return bpf_dsl::Error(denied_errno_);
+      return Error(denied_errno_);
+    }
+
+    if (sysno == __NR_statx) {
+      const Arg<int> mask(3);
+      return If(mask == STATX_BASIC_STATS, Error(ENOSYS))
+          .Else(Error(denied_errno_));
     }
 
     // Allow everything else that doesn't take a pathname.
@@ -516,10 +537,8 @@ class HandleFilesystemViaBrokerPolicy : public bpf_dsl::Policy {
   }
 
  private:
-  BrokerProcess* broker_process_;
+  raw_ptr<BrokerProcess> broker_process_;
   int denied_errno_;
-
-  DISALLOW_COPY_AND_ASSIGN(HandleFilesystemViaBrokerPolicy);
 };
 }  // namespace syscall_broker
 
@@ -541,10 +560,13 @@ class BPFTesterBrokerDelegate : public BPFTesterDelegate {
     BrokerTestDelegate::BrokerParams broker_params =
         broker_test_delegate_->ChildSetUpPreSandbox();
 
+    auto policy = absl::make_optional<syscall_broker::BrokerSandboxConfig>(
+        broker_params.allowed_command_set, broker_params.permissions,
+        broker_params.denied_errno);
     broker_process_ = std::make_unique<BrokerProcess>(
-        broker_params.denied_errno, broker_params.allowed_command_set,
-        broker_params.permissions, broker_type_, fast_check_in_client_);
-    BPF_ASSERT(broker_process_->Init(base::BindOnce([]() { return true; })));
+        std::move(policy), broker_type_, fast_check_in_client_);
+    BPF_ASSERT(broker_process_->Fork(base::BindOnce(
+        [](const syscall_broker::BrokerSandboxConfig&) { return true; })));
     broker_test_delegate_->OnBrokerStarted(broker_process_->broker_pid());
 
     BPF_ASSERT(TestUtils::CurrentProcessHasChildren());
@@ -582,7 +604,7 @@ class BPFTesterBrokerDelegate : public BPFTesterDelegate {
 
  private:
   bool fast_check_in_client_;
-  BrokerTestDelegate* broker_test_delegate_;
+  raw_ptr<BrokerTestDelegate> broker_test_delegate_;
   SyscallerType syscaller_type_;
   BrokerType broker_type_;
 

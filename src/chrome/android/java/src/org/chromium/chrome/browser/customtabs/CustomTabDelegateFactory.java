@@ -11,7 +11,6 @@ import android.app.ActivityManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.text.TextUtils;
 
@@ -20,17 +19,15 @@ import androidx.annotation.VisibleForTesting;
 import androidx.browser.trusted.TrustedWebActivityDisplayMode.ImmersiveMode;
 
 import org.chromium.base.ContextUtils;
-import org.chromium.base.IntentUtils;
-import org.chromium.base.PackageManagerUtils;
 import org.chromium.base.supplier.Supplier;
+import org.chromium.blink.mojom.DisplayMode;
 import org.chromium.cc.input.BrowserControlsState;
 import org.chromium.chrome.browser.ChromeTabbedActivity;
 import org.chromium.chrome.browser.app.tab_activity_glue.ActivityTabWebContentsDelegateAndroid;
 import org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider;
 import org.chromium.chrome.browser.browserservices.intents.BrowserServicesIntentDataProvider;
-import org.chromium.chrome.browser.browserservices.intents.WebDisplayMode;
 import org.chromium.chrome.browser.browserservices.intents.WebappExtras;
-import org.chromium.chrome.browser.browserservices.permissiondelegation.TrustedWebActivityPermissionManager;
+import org.chromium.chrome.browser.browserservices.permissiondelegation.InstalledWebappPermissionManager;
 import org.chromium.chrome.browser.browserservices.ui.controller.Verifier;
 import org.chromium.chrome.browser.compositor.CompositorViewHolder;
 import org.chromium.chrome.browser.compositor.bottombar.ephemeraltab.EphemeralTabCoordinator;
@@ -71,6 +68,8 @@ import org.chromium.ui.modaldialog.ModalDialogManager;
 import org.chromium.ui.mojom.WindowOpenDisposition;
 import org.chromium.url.GURL;
 
+import java.util.List;
+
 import javax.inject.Inject;
 import javax.inject.Named;
 
@@ -96,8 +95,6 @@ public class CustomTabDelegateFactory implements TabDelegateFactory {
         private final Verifier mVerifier;
         private final @ActivityType int mActivityType;
 
-        private boolean mHasActivityStarted;
-
         /**
          * Constructs a new instance of {@link CustomTabNavigationDelegate}.
          */
@@ -111,85 +108,33 @@ public class CustomTabDelegateFactory implements TabDelegateFactory {
         }
 
         @Override
-        public void didStartActivity(Intent intent) {
-            mHasActivityStarted = true;
-        }
-
-        @Override
-        public @StartActivityIfNeededResult int maybeHandleStartActivityIfNeeded(
-                Intent intent, boolean proxy) {
-            // Note: This method will not be called if shouldDisableExternalIntentRequestsForUrl()
-            // returns false.
-
-            // TODO(https://crbug.com/1194706): This should probably be using intent#getData
-            // instead.
-            boolean isExternalProtocol = !UrlUtilities.isAcceptedScheme(intent.toUri(0));
-            boolean hasDefaultHandler = hasDefaultHandler(intent);
-            try {
-                // For a URL chrome can handle and there is no default set, handle it ourselves.
-                if (!hasDefaultHandler) {
-                    if (!TextUtils.isEmpty(mClientPackageName)
-                            && isPackageSpecializedHandler(mClientPackageName, intent)) {
-                        intent.setPackage(mClientPackageName);
-                    } else if (!isExternalProtocol) {
-                        return StartActivityIfNeededResult.HANDLED_WITHOUT_ACTIVITY_START;
-                    }
-                }
-
-                if (proxy) {
-                    dispatchAuthenticatedIntent(intent);
-                    mHasActivityStarted = true;
-                    return StartActivityIfNeededResult.HANDLED_WITH_ACTIVITY_START;
-                } else {
-                    // If android fails to find a handler, handle it ourselves.
-                    Context context = getAvailableContext();
-                    if (context instanceof Activity
-                            && ((Activity) context).startActivityIfNeeded(intent, -1)) {
-                        mHasActivityStarted = true;
-                        return StartActivityIfNeededResult.HANDLED_WITH_ACTIVITY_START;
-                    }
-                }
-                return StartActivityIfNeededResult.HANDLED_WITHOUT_ACTIVITY_START;
-            } catch (SecurityException e) {
-                // https://crbug.com/808494: Handle the URL in Chrome if dispatching to another
-                // application fails with a SecurityException. This happens due to malformed
-                // manifests in another app.
-                return StartActivityIfNeededResult.HANDLED_WITHOUT_ACTIVITY_START;
-            } catch (RuntimeException e) {
-                IntentUtils.logTransactionTooLargeOrRethrow(e, intent);
-                return StartActivityIfNeededResult.HANDLED_WITHOUT_ACTIVITY_START;
+        public boolean maybeSetTargetPackage(
+                Intent intent, Supplier<List<ResolveInfo>> resolveInfoSupplier) {
+            // If the client app can handle the intent, set it as the receiver.
+            if (!TextUtils.isEmpty(mClientPackageName)
+                    && ExternalNavigationHandler.isPackageSpecializedHandler(
+                            mClientPackageName, resolveInfoSupplier.get())) {
+                intent.setSelector(null);
+                intent.setPackage(mClientPackageName);
+                return true;
             }
-        }
-
-        /**
-         * Resolve the default external handler of an intent.
-         * @return Whether the default external handler is found: if chrome turns out to be the
-         *         default handler, this method will return false.
-         */
-        private boolean hasDefaultHandler(Intent intent) {
-            ResolveInfo info =
-                    PackageManagerUtils.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY);
-            if (info == null) return false;
-
-            final String chromePackage = mApplicationContext.getPackageName();
-            // If a default handler is found and it is not chrome itself, fire the intent.
-            return info.match != 0 && !chromePackage.equals(info.activityInfo.packageName);
+            return false;
         }
 
         @Override
-        public boolean isIntentForTrustedCallingApp(Intent intent) {
+        public boolean shouldAvoidDisambiguationDialog(Intent intent) {
+            // Don't show the disambiguation dialog if Chrome could handle the intent.
+            return UrlUtilities.isAcceptedScheme(intent.toUri(0));
+        }
+
+        @Override
+        public boolean isIntentForTrustedCallingApp(
+                Intent intent, Supplier<List<ResolveInfo>> resolveInfoSupplier) {
             if (TextUtils.isEmpty(mClientPackageName)) return false;
             if (!mExternalAuthUtils.isGoogleSigned(mClientPackageName)) return false;
 
-            return isPackageSpecializedHandler(mClientPackageName, intent);
-        }
-
-        /**
-         * @return Whether an external activity has started to handle a url. For testing only.
-         */
-        @VisibleForTesting
-        public boolean hasExternalActivityStarted() {
-            return mHasActivityStarted;
+            return ExternalNavigationHandler.isPackageSpecializedHandler(
+                    mClientPackageName, resolveInfoSupplier.get());
         }
 
         @Override
@@ -208,7 +153,7 @@ public class CustomTabDelegateFactory implements TabDelegateFactory {
         private final Activity mActivity;
         private final @ActivityType int mActivityType;
         private final @Nullable String mWebApkScopeUrl;
-        private final @WebDisplayMode int mDisplayMode;
+        private final @DisplayMode.EnumType int mDisplayMode;
         private final MultiWindowUtils mMultiWindowUtils;
         private final boolean mShouldEnableEmbeddedMediaExperience;
 
@@ -217,7 +162,7 @@ public class CustomTabDelegateFactory implements TabDelegateFactory {
          */
         public CustomTabWebContentsDelegate(Tab tab, Activity activity,
                 @ActivityType int activityType, @Nullable String webApkScopeUrl,
-                @WebDisplayMode int displayMode, MultiWindowUtils multiWindowUtils,
+                @DisplayMode.EnumType int displayMode, MultiWindowUtils multiWindowUtils,
                 boolean shouldEnableEmbeddedMediaExperience,
                 ChromeActivityNativeDelegate chromeActivityNativeDelegate, boolean isCustomTab,
                 BrowserControlsStateProvider browserControlsStateProvider,
@@ -281,7 +226,7 @@ public class CustomTabDelegateFactory implements TabDelegateFactory {
         }
 
         @Override
-        public @WebDisplayMode int getDisplayMode() {
+        public @DisplayMode.EnumType int getDisplayMode() {
             return mDisplayMode;
         }
 
@@ -300,7 +245,7 @@ public class CustomTabDelegateFactory implements TabDelegateFactory {
             if ((mActivity instanceof CustomTabActivity)
                     && ((CustomTabActivity) mActivity).isInTwaMode()) {
                 // Whether the corresponding TWA client app enrolled in location delegation.
-                return TrustedWebActivityPermissionManager.hasAndroidLocationPermission(
+                return InstalledWebappPermissionManager.hasAndroidLocationPermission(
                                ((CustomTabActivity) mActivity).getTwaPackage())
                         != null;
             }
@@ -314,7 +259,7 @@ public class CustomTabDelegateFactory implements TabDelegateFactory {
     private final @ActivityType int mActivityType;
     @Nullable
     private final String mWebApkScopeUrl;
-    private final @WebDisplayMode int mDisplayMode;
+    private final @DisplayMode.EnumType int mDisplayMode;
     private final boolean mShouldEnableEmbeddedMediaExperience;
     private final BrowserControlsVisibilityDelegate mBrowserStateVisibilityDelegate;
     private final ExternalAuthUtils mExternalAuthUtils;
@@ -362,7 +307,7 @@ public class CustomTabDelegateFactory implements TabDelegateFactory {
      */
     private CustomTabDelegateFactory(Activity activity, boolean shouldHideBrowserControls,
             boolean isOpenedByChrome, @Nullable String webApkScopeUrl,
-            @WebDisplayMode int displayMode, boolean shouldEnableEmbeddedMediaExperience,
+            @DisplayMode.EnumType int displayMode, boolean shouldEnableEmbeddedMediaExperience,
             BrowserControlsVisibilityDelegate visibilityDelegate, ExternalAuthUtils authUtils,
             MultiWindowUtils multiWindowUtils, Verifier verifier,
             Lazy<EphemeralTabCoordinator> ephemeralTabCoordinator,
@@ -426,7 +371,7 @@ public class CustomTabDelegateFactory implements TabDelegateFactory {
      * be replaced when the hidden Tab becomes shown.
      */
     static CustomTabDelegateFactory createDummy() {
-        return new CustomTabDelegateFactory(null, false, false, null, WebDisplayMode.BROWSER, false,
+        return new CustomTabDelegateFactory(null, false, false, null, DisplayMode.BROWSER, false,
                 null, null, null, null,
                 ()
                         -> null,
@@ -516,6 +461,10 @@ public class CustomTabDelegateFactory implements TabDelegateFactory {
         return mWebContentsDelegateAndroid;
     }
 
+    public EphemeralTabCoordinator getEphemeralTabCoordinator() {
+        return mEphemeralTabCoordinator.get();
+    }
+
     /**
      * Gets the scope URL if the {@link BrowserServicesIntentDataProvider} is for a WebAPK. Returns
      * null otherwise.
@@ -529,19 +478,19 @@ public class CustomTabDelegateFactory implements TabDelegateFactory {
     }
 
     /**
-     * Returns the WebDisplayMode for the passed-in {@link BrowserServicesIntentDataProvider}.
+     * Returns the DisplayMode for the passed-in {@link BrowserServicesIntentDataProvider}.
      */
-    public static @WebDisplayMode int getDisplayMode(
+    public static @DisplayMode.EnumType int getDisplayMode(
             BrowserServicesIntentDataProvider intentDataProvider) {
         if (intentDataProvider.getTwaDisplayMode() instanceof ImmersiveMode) {
-            return WebDisplayMode.FULLSCREEN;
+            return DisplayMode.FULLSCREEN;
         }
         WebappExtras webappExtras = intentDataProvider.getWebappExtras();
         if (webappExtras != null) {
             return webappExtras.displayMode;
         }
-        return intentDataProvider.isTrustedWebActivity() ? WebDisplayMode.STANDALONE
-                                                         : WebDisplayMode.BROWSER;
+        return intentDataProvider.isTrustedWebActivity() ? DisplayMode.STANDALONE
+                                                         : DisplayMode.BROWSER;
     }
 
     private static boolean isWebappOrWebApk(@ActivityType int activityType) {

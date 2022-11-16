@@ -8,8 +8,7 @@
 #include <memory>
 #include <vector>
 
-#include "base/compiler_specific.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "content/common/content_export.h"
@@ -50,6 +49,10 @@ class PopupMenuHelper : public RenderWidgetHostObserver {
       Delegate* delegate,
       RenderFrameHost* render_frame_host,
       mojo::PendingRemote<blink::mojom::PopupMenuClient> popup_client);
+
+  PopupMenuHelper(const PopupMenuHelper&) = delete;
+  PopupMenuHelper& operator=(const PopupMenuHelper&) = delete;
+
   ~PopupMenuHelper() override;
   void Hide();
 
@@ -75,7 +78,7 @@ class PopupMenuHelper : public RenderWidgetHostObserver {
                                          bool became_visible) override;
   void RenderWidgetHostDestroyed(RenderWidgetHost* widget_host) override;
 
-  Delegate* delegate_;  // Weak. Owns |this|.
+  raw_ptr<Delegate> delegate_;  // Weak. Owns |this|.
 
   base::ScopedObservation<RenderWidgetHost, RenderWidgetHostObserver>
       observation_{this};
@@ -88,8 +91,6 @@ class PopupMenuHelper : public RenderWidgetHostObserver {
   std::unique_ptr<base::ScopedPumpMessagesInPrivateModes> pump_in_fade_;
 
   base::WeakPtrFactory<PopupMenuHelper> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(PopupMenuHelper);
 };
 
 }  // namespace content

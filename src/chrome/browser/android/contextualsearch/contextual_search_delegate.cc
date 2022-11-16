@@ -14,11 +14,11 @@
 #include "base/feature_list.h"
 #include "base/json/json_string_value_serializer.h"
 #include "base/json/json_writer.h"
+#include "base/strings/escape.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/android/contextualsearch/contextual_search_field_trial.h"
-#include "chrome/browser/android/contextualsearch/resolved_search_term.h"
 #include "chrome/browser/android/proto/client_discourse_context.pb.h"
 #include "chrome/browser/flags/android/chrome_feature_list.h"
 #include "chrome/browser/language/language_model_manager_factory.h"
@@ -26,6 +26,7 @@
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/translate/translate_service.h"
 #include "components/contextual_search/core/browser/public.h"
+#include "components/contextual_search/core/browser/resolved_search_term.h"
 #include "components/language/core/browser/language_model.h"
 #include "components/language/core/browser/language_model_manager.h"
 #include "components/language/core/browser/pref_names.h"
@@ -37,7 +38,6 @@
 #include "components/variations/variations_associated_data.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
-#include "net/base/escape.h"
 #include "net/http/http_status_code.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/cpp/simple_url_loader.h"
@@ -84,8 +84,6 @@ const char kXssiEscape[] = ")]}'\n";
 const char kDiscourseContextHeaderName[] = "X-Additional-Discourse-Context";
 const char kDoPreventPreloadValue[] = "1";
 
-const int kResponseCodeUninitialized = -1;
-
 }  // namespace
 
 // Handles tasks for the ContextualSearchManager in a separable, testable way.
@@ -104,7 +102,7 @@ ContextualSearchDelegate::~ContextualSearchDelegate() {
 }
 
 void ContextualSearchDelegate::GatherAndSaveSurroundingText(
-    base::WeakPtr<ContextualSearchContext> contextual_search_context,
+    base::WeakPtr<NativeContextualSearchContext> contextual_search_context,
     content::WebContents* web_contents) {
   DCHECK(web_contents);
   blink::mojom::LocalFrame::GetTextSurroundingSelectionCallback callback =
@@ -129,7 +127,7 @@ void ContextualSearchDelegate::GatherAndSaveSurroundingText(
 }
 
 void ContextualSearchDelegate::StartSearchTermResolutionRequest(
-    base::WeakPtr<ContextualSearchContext> contextual_search_context,
+    base::WeakPtr<NativeContextualSearchContext> contextual_search_context,
     content::WebContents* web_contents) {
   DCHECK(web_contents);
   if (context_ == nullptr)
@@ -144,7 +142,7 @@ void ContextualSearchDelegate::StartSearchTermResolutionRequest(
 
   // Decide if the URL should be sent with the context.
   if (context_->CanSendBasePageUrl())
-    context_->SetBasePageUrl(web_contents->GetURL());
+    context_->SetBasePageUrl(web_contents->GetLastCommittedURL());
 
   // Issue the resolve request.
   ResolveSearchTermFromContext();
@@ -177,7 +175,8 @@ void ContextualSearchDelegate::ResolveSearchTermFromContext() {
                "data to Google and the response identifies what to search for "
                "plus additional actionable information."
             trigger:
-              "Triggered by an unhandled tap on plain text on most pages."
+              "Triggered by an unhandled tap or touch and hold gesture on "
+              "plain text on most pages."
             data:
               "The URL and some page content from the current tab."
             destination: GOOGLE_OWNED_SERVICE
@@ -215,13 +214,13 @@ void ContextualSearchDelegate::OnUrlLoadComplete(
   if (!context_)
     return;
 
-  int response_code = kResponseCodeUninitialized;
+  int response_code = ResolvedSearchTerm::kResponseCodeUninitialized;
   if (url_loader_->ResponseInfo() && url_loader_->ResponseInfo()->headers) {
     response_code = url_loader_->ResponseInfo()->headers->response_code();
   }
 
-  std::unique_ptr<ResolvedSearchTerm> resolved_search_term(
-      new ResolvedSearchTerm(response_code));
+  std::unique_ptr<ResolvedSearchTerm> resolved_search_term =
+      std::make_unique<ResolvedSearchTerm>(response_code);
   if (response_body && response_code == net::HTTP_OK) {
     resolved_search_term =
         GetResolvedSearchTermFromJson(response_code, *response_body);
@@ -248,7 +247,6 @@ ContextualSearchDelegate::GetResolvedSearchTermFromJson(
   std::string caption;
   std::string quick_action_uri;
   QuickActionCategory quick_action_category = QUICK_ACTION_CATEGORY_NONE;
-  int64_t logged_event_id = 0;
   std::string search_url_full;
   std::string search_url_preload;
   int coca_card_tag = 0;
@@ -258,7 +256,7 @@ ContextualSearchDelegate::GetResolvedSearchTermFromJson(
       json_string, &search_term, &display_text, &alternate_term, &mid,
       &prevent_preload, &mention_start, &mention_end, &context_language,
       &thumbnail_url, &caption, &quick_action_uri, &quick_action_category,
-      &logged_event_id, &search_url_full, &search_url_preload, &coca_card_tag,
+      &search_url_full, &search_url_preload, &coca_card_tag,
       &related_searches_json);
   if (mention_start != 0 || mention_end != 0) {
     // Sanity check that our selection is non-zero and it is less than
@@ -276,17 +274,18 @@ ContextualSearchDelegate::GetResolvedSearchTermFromJson(
       end_adjust = mention_end - context_->GetEndOffset();
     }
   }
-  bool is_invalid = response_code == kResponseCodeUninitialized;
+  bool is_invalid =
+      response_code == ResolvedSearchTerm::kResponseCodeUninitialized;
   return std::make_unique<ResolvedSearchTerm>(
       is_invalid, response_code, search_term, display_text, alternate_term, mid,
       prevent_preload == kDoPreventPreloadValue, start_adjust, end_adjust,
       context_language, thumbnail_url, caption, quick_action_uri,
-      quick_action_category, logged_event_id, search_url_full,
-      search_url_preload, coca_card_tag, related_searches_json);
+      quick_action_category, search_url_full, search_url_preload, coca_card_tag,
+      related_searches_json);
 }
 
 std::string ContextualSearchDelegate::BuildRequestUrl(
-    ContextualSearchContext* context) {
+    NativeContextualSearchContext* context) {
   if (!template_url_service_ ||
       !template_url_service_->GetDefaultSearchProvider()) {
     return std::string();
@@ -368,6 +367,8 @@ void ContextualSearchDelegate::OnTextSurroundingSelectionAvailable(
 
   // Pin the start and end offsets to ensure they point within the string.
   uint32_t surrounding_length = surrounding_text.length();
+  // TODO(crbug.com/1343955): The case where end_offset < start_offset should be
+  // handled here as well.
   start_offset = std::min(surrounding_length, start_offset);
   end_offset = std::min(surrounding_length, end_offset);
 
@@ -392,7 +393,7 @@ void ContextualSearchDelegate::OnTextSurroundingSelectionAvailable(
 }
 
 const net::HttpRequestHeaders ContextualSearchDelegate::GetDiscourseContext(
-    const ContextualSearchContext& context) {
+    const NativeContextualSearchContext& context) {
   discourse_context::ClientDiscourseContext proto;
   discourse_context::Display* display = proto.add_display();
   display->set_uri(context.GetBasePageUrl().spec());
@@ -436,7 +437,6 @@ void ContextualSearchDelegate::DecodeSearchTermFromJsonResponse(
     std::string* caption,
     std::string* quick_action_uri,
     QuickActionCategory* quick_action_category,
-    int64_t* logged_event_id,
     std::string* search_url_full,
     std::string* search_url_preload,
     int* coca_card_tag,
@@ -467,13 +467,13 @@ void ContextualSearchDelegate::DecodeSearchTermFromJsonResponse(
 
   // Extract mentions for selection expansion.
   if (!field_trial_->IsDecodeMentionsDisabled()) {
-    base::Value* mentions_list =
+    const base::Value* mentions_list =
         dict->FindListKey(kContextualSearchMentionsKey);
     // Note that because we've deserialized the json and it's not used later, we
     // can just take the list without worrying about putting it back.
     if (mentions_list && mentions_list->GetList().size() >= 2)
-      ExtractMentionsStartEnd(std::move(*mentions_list).TakeList(),
-                              mention_start, mention_end);
+      ExtractMentionsStartEnd(mentions_list->GetList(), mention_start,
+                              mention_end);
   }
 
   // If either the selected text or the resolved term is not the search term,
@@ -523,7 +523,10 @@ void ContextualSearchDelegate::DecodeSearchTermFromJsonResponse(
   // Contextual Cards V5+ integration can provide the primary card tag, so
   // clients can tell what kind of card they have received.
   // TODO(donnd): make sure this works with a non-integer or missing value!
-  dict->GetInteger(kContextualSearchCardTag, coca_card_tag);
+  absl::optional<int> maybe_coca_card_tag =
+      dict->FindIntKey(kContextualSearchCardTag);
+  if (coca_card_tag && maybe_coca_card_tag)
+    *coca_card_tag = *maybe_coca_card_tag;
 
   // Any Contextual Cards integration.
   // For testing purposes check if there was a diagnostic from Contextual
@@ -538,34 +541,24 @@ void ContextualSearchDelegate::DecodeSearchTermFromJsonResponse(
     DVLOG(0) << contextual_cards_diagnostic;
   }
 
-  // Get the Event ID to use for sending event outcomes back to the server.
-  std::string logged_event_id_string;
-  dict->GetString("logged_event_id", &logged_event_id_string);
-  if (!logged_event_id_string.empty()) {
-    *logged_event_id = std::stoll(logged_event_id_string, nullptr);
-  }
-
   // Extract an arbitrary Related Searches payload as JSON and return to Java
   // for decoding.
   // TODO(donnd): remove soon (once the server is updated);
-  if (dict->HasKey(kRelatedSearchesSuggestions)) {
-    base::Value* rsearches_json_value = nullptr;
-    dict->Get(kRelatedSearchesSuggestions, &rsearches_json_value);
-    DCHECK(rsearches_json_value);
+  if (base::Value* rsearches_json_value =
+          dict->FindKey(kRelatedSearchesSuggestions))
     base::JSONWriter::Write(*rsearches_json_value, related_searches_json);
-  }
 }
 
 // Extract the Start/End of the mentions in the surrounding text
 // for selection-expansion.
 void ContextualSearchDelegate::ExtractMentionsStartEnd(
-    const std::vector<base::Value>& mentions_list,
-    int* startResult,
-    int* endResult) {
+    const base::Value::List& mentions_list,
+    int* start_result,
+    int* end_result) {
   if (mentions_list.size() >= 1 && mentions_list[0].is_int())
-    *startResult = std::max(0, mentions_list[0].GetInt());
+    *start_result = std::max(0, mentions_list[0].GetInt());
   if (mentions_list.size() >= 2 && mentions_list[1].is_int())
-    *endResult = std::max(0, mentions_list[1].GetInt());
+    *end_result = std::max(0, mentions_list[1].GetInt());
 }
 
 std::u16string ContextualSearchDelegate::SampleSurroundingText(

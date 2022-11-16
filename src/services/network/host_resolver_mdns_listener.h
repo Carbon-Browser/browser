@@ -10,7 +10,6 @@
 #include <vector>
 
 #include "base/callback_forward.h"
-#include "base/macros.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "net/base/ip_endpoint.h"
@@ -31,6 +30,10 @@ class HostResolverMdnsListener
   HostResolverMdnsListener(net::HostResolver* resolver,
                            const net::HostPortPair& host,
                            net::DnsQueryType query_type);
+
+  HostResolverMdnsListener(const HostResolverMdnsListener&) = delete;
+  HostResolverMdnsListener& operator=(const HostResolverMdnsListener&) = delete;
+
   ~HostResolverMdnsListener() override;
 
   int Start(mojo::PendingRemote<mojom::MdnsListenClient> response_client,
@@ -56,8 +59,6 @@ class HostResolverMdnsListener
   mojo::Remote<mojom::MdnsListenClient> response_client_;
 
   base::OnceClosure cancellation_callback_;
-
-  DISALLOW_COPY_AND_ASSIGN(HostResolverMdnsListener);
 };
 
 }  // namespace network

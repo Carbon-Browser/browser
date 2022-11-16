@@ -32,16 +32,17 @@ void LenientMockPageDiscarder::DiscardPageNodes(
   std::move(post_discard_cb).Run(result);
 }
 
-GraphTestHarnessWithMockDiscarder::GraphTestHarnessWithMockDiscarder() {
-  // Some tests depends on the existence of the PageAggregator.
-  graph()->PassToGraph(std::make_unique<PageAggregator>());
-}
+GraphTestHarnessWithMockDiscarder::GraphTestHarnessWithMockDiscarder()
+    : GraphTestHarness(base::test::TaskEnvironment::TimeSource::MOCK_TIME) {}
 
 GraphTestHarnessWithMockDiscarder::~GraphTestHarnessWithMockDiscarder() =
     default;
 
 void GraphTestHarnessWithMockDiscarder::SetUp() {
   GraphTestHarness::SetUp();
+
+  // Some tests depends on the existence of the PageAggregator.
+  graph()->PassToGraph(std::make_unique<PageAggregator>());
 
   // Make the policy use a mock PageDiscarder.
   auto mock_discarder = std::make_unique<MockPageDiscarder>();
@@ -82,7 +83,7 @@ void MakePageNodeDiscardable(PageNodeImpl* page_node,
   page_node->OnMainFrameNavigationCommitted(false, base::TimeTicks::Now(), 42,
                                             kUrl, "text/html");
   (*page_node->main_frame_nodes().begin())->OnNavigationCommitted(kUrl, false);
-  task_env.FastForwardBy(base::TimeDelta::FromMinutes(10));
+  task_env.FastForwardBy(base::Minutes(10));
   DCHECK(policies::PageDiscardingHelper::GetFromGraph(page_node->graph())
              ->CanUrgentlyDiscardForTesting(page_node));
 }

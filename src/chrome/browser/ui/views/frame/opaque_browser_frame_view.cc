@@ -12,6 +12,7 @@
 #include "build/buildflag.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/themes/theme_properties.h"
+#include "chrome/browser/ui/color/chrome_color_id.h"
 #include "chrome/browser/ui/layout_constants.h"
 #include "chrome/browser/ui/views/frame/browser_frame.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
@@ -36,6 +37,7 @@
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/models/image_model.h"
 #include "ui/base/theme_provider.h"
+#include "ui/color/color_provider.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/font_list.h"
 #include "ui/gfx/geometry/rect_conversions.h"
@@ -53,11 +55,11 @@
 #include "ui/views/window/vector_icons/vector_icons.h"
 #include "ui/views/window/window_shape.h"
 
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 #include "ui/views/controls/menu/menu_runner.h"
 #endif
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include "ui/display/win/screen_win.h"
 #endif
 
@@ -82,6 +84,11 @@ class CaptionButtonBackgroundImageSource : public gfx::CanvasImageSource {
         dest_height_(dest_height),
         draw_mirrored_(draw_mirrored) {}
 
+  CaptionButtonBackgroundImageSource(
+      const CaptionButtonBackgroundImageSource&) = delete;
+  CaptionButtonBackgroundImageSource& operator=(
+      const CaptionButtonBackgroundImageSource&) = delete;
+
   ~CaptionButtonBackgroundImageSource() override = default;
 
   void Draw(gfx::Canvas* canvas) override {
@@ -104,9 +111,12 @@ class CaptionButtonBackgroundImageSource : public gfx::CanvasImageSource {
   int source_x_, source_y_;
   int dest_width_, dest_height_;
   bool draw_mirrored_;
-
-  DISALLOW_COPY_AND_ASSIGN(CaptionButtonBackgroundImageSource);
 };
+
+bool HitTestCaptionButton(views::Button* button, const gfx::Point& point) {
+  return button && button->GetVisible() &&
+         button->GetMirroredBounds().Contains(point);
+}
 
 }  // namespace
 
@@ -213,7 +223,12 @@ void OpaqueBrowserFrameView::InitViews() {
   window_title_->SetSubpixelRenderingEnabled(false);
   window_title_->SetHorizontalAlignment(gfx::ALIGN_LEFT);
   window_title_->SetID(VIEW_ID_WINDOW_TITLE);
-  AddChildView(window_title_);
+  AddChildView(window_title_.get());
+
+#if BUILDFLAG(IS_WIN)
+  if (browser_view()->AppUsesWindowControlsOverlay())
+    UpdateCaptionButtonToolTipsForWindowControlsOverlay();
+#endif
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -246,9 +261,13 @@ void OpaqueBrowserFrameView::WindowControlsOverlayEnabledChanged() {
         AddChildView(std::make_unique<CaptionButtonPlaceholderContainer>());
     UpdateCaptionButtonPlaceholderContainerBackground();
   } else {
-    RemoveChildViewT(caption_button_placeholder_container_);
+    RemoveChildViewT(caption_button_placeholder_container_.get());
     caption_button_placeholder_container_ = nullptr;
   }
+
+#if BUILDFLAG(IS_WIN)
+  UpdateCaptionButtonToolTipsForWindowControlsOverlay();
+#endif
 
   web_app_frame_toolbar()->OnWindowControlsOverlayEnabledChanged();
   layout_->SetWindowControlsOverlayEnabled(enabled, this);
@@ -311,18 +330,25 @@ int OpaqueBrowserFrameView::NonClientHitTest(const gfx::Point& point) {
   if (frame_component != HTNOWHERE)
     return frame_component;
 
+  // BrowserView covers the frame view when Window Controls Overlay is enabled.
+  // The native window that encompasses Web Contents gets the mouse events meant
+  // for the caption buttons, so returning HTClient allows these buttons to be
+  // highlighted on hover.
+  if (browser_view()->IsWindowControlsOverlayEnabled() &&
+      (HitTestCaptionButton(minimize_button_, point) ||
+       HitTestCaptionButton(maximize_button_, point) ||
+       HitTestCaptionButton(restore_button_, point) ||
+       HitTestCaptionButton(close_button_, point)))
+    return HTCLIENT;
+
   // Then see if the point is within any of the window controls.
-  if (close_button_ && close_button_->GetVisible() &&
-      close_button_->GetMirroredBounds().Contains(point))
+  if (HitTestCaptionButton(close_button_, point))
     return HTCLOSE;
-  if (restore_button_ && restore_button_->GetVisible() &&
-      restore_button_->GetMirroredBounds().Contains(point))
+  if (HitTestCaptionButton(restore_button_, point))
     return HTMAXBUTTON;
-  if (maximize_button_ && maximize_button_->GetVisible() &&
-      maximize_button_->GetMirroredBounds().Contains(point))
+  if (HitTestCaptionButton(maximize_button_, point))
     return HTMAXBUTTON;
-  if (minimize_button_ && minimize_button_->GetVisible() &&
-      minimize_button_->GetMirroredBounds().Contains(point))
+  if (HitTestCaptionButton(minimize_button_, point))
     return HTMINBUTTON;
 
   if (browser_view()->IsWindowControlsOverlayEnabled() &&
@@ -343,8 +369,9 @@ int OpaqueBrowserFrameView::NonClientHitTest(const gfx::Point& point) {
   constexpr int kResizeAreaCornerSize = 16;
   auto resize_border = FrameBorderInsets(false);
   if (base::i18n::IsRTL()) {
-    resize_border = gfx::Insets(resize_border.top(), resize_border.right(),
-                                resize_border.bottom(), resize_border.left());
+    resize_border =
+        gfx::Insets::TLBR(resize_border.top(), resize_border.right(),
+                          resize_border.bottom(), resize_border.left());
   }
   // The top resize border has extra thickness.
   resize_border.set_top(FrameTopBorderThickness(false));
@@ -391,7 +418,8 @@ void OpaqueBrowserFrameView::SizeConstraintsChanged() {}
 // OpaqueBrowserFrameView, views::View overrides:
 
 void OpaqueBrowserFrameView::GetAccessibleNodeData(ui::AXNodeData* node_data) {
-  node_data->role = ax::mojom::Role::kTitleBar;
+  // Expose this view as a generic container as it contains/paints many things.
+  node_data->role = ax::mojom::Role::kPane;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -437,7 +465,7 @@ std::u16string OpaqueBrowserFrameView::GetWindowTitle() const {
 }
 
 int OpaqueBrowserFrameView::GetIconSize() const {
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   // This metric scales up if either the titlebar height or the titlebar font
   // size are increased.
   return display::win::ScreenWin::GetSystemMetricsInDIP(SM_CYSMICON);
@@ -458,6 +486,14 @@ bool OpaqueBrowserFrameView::ShouldShowCaptionButtons() const {
 
 bool OpaqueBrowserFrameView::IsRegularOrGuestSession() const {
   return browser_view()->GetRegularOrGuestSession();
+}
+
+bool OpaqueBrowserFrameView::CanMaximize() const {
+  return browser_view()->CanMaximize();
+}
+
+bool OpaqueBrowserFrameView::CanMinimize() const {
+  return browser_view()->CanMinimize();
 }
 
 bool OpaqueBrowserFrameView::IsMaximized() const {
@@ -516,7 +552,7 @@ OpaqueBrowserFrameView::FrameButtonStyle
 OpaqueBrowserFrameView::GetFrameButtonStyle() const {
 // TODO(crbug.com/1052397): Revisit the macro expression once build flag switch
 // of lacros-chrome is complete.
-#if defined(OS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
   return FrameButtonStyle::kMdButton;
 #else
   return FrameButtonStyle::kImageButton;
@@ -549,7 +585,7 @@ void OpaqueBrowserFrameView::OnPaint(gfx::Canvas* canvas) {
     return;  // Nothing is visible, so don't bother to paint.
 
   const bool active = ShouldPaintAsActive();
-  SkColor frame_color = GetFrameColor();
+  SkColor frame_color = GetFrameColor(BrowserFrameActiveState::kUseCurrent);
   window_title_->SetEnabledColor(
       GetCaptionColor(BrowserFrameActiveState::kUseCurrent));
   window_title_->SetBackgroundColor(frame_color);
@@ -637,7 +673,7 @@ views::Button* OpaqueBrowserFrameView::CreateImageButton(int normal_image_id,
     // (&processed_bg_image) to create a local copy, so it's safe for this
     // to be locally scoped.
     button->SetBackgroundImage(
-        tp->GetColor(ThemeProperties::COLOR_CONTROL_BUTTON_BACKGROUND),
+        frame()->GetColorProvider()->GetColor(kColorCaptionButtonBackground),
         (processed_bg_image.isNull() ? nullptr : &processed_bg_image),
         tp->GetImageSkiaNamed(mask_image_id));
   }
@@ -726,12 +762,12 @@ gfx::Rect OpaqueBrowserFrameView::GetIconBounds() const {
 }
 
 void OpaqueBrowserFrameView::WindowIconPressed() {
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
-  // TODO(pbos): Figure out / document why this is Linux only. This needs a
-  // comment.
-  views::MenuRunner menu_runner(frame()->GetSystemMenuModel(),
-                                views::MenuRunner::HAS_MNEMONICS);
-  menu_runner.RunMenuAt(
+#if BUILDFLAG(IS_LINUX)
+  // Chrome OS doesn't show the window icon, and Windows handles this on its own
+  // due to the hit test being HTSYSMENU.
+  menu_runner_ = std::make_unique<views::MenuRunner>(
+      frame()->GetSystemMenuModel(), views::MenuRunner::HAS_MNEMONICS);
+  menu_runner_->RunMenuAt(
       browser_view()->GetWidget(), window_icon_->button_controller(),
       window_icon_->GetBoundsInScreen(), views::MenuAnchorPosition::kTopLeft,
       ui::MENU_SOURCE_MOUSE);
@@ -798,7 +834,7 @@ void OpaqueBrowserFrameView::PaintClientEdge(gfx::Canvas* canvas) const {
 
   // For popup windows, draw location bar sides.
   const SkColor location_bar_border_color =
-      browser_view()->toolbar()->location_bar()->GetOpaqueBorderColor();
+      GetColorProvider()->GetColor(kColorLocationBarBorderOpaque);
   if (!tabstrip_visible && IsToolbarVisible()) {
     gfx::Rect side(client_bounds.x() - kClientEdgeThickness, y,
                    kClientEdgeThickness, toolbar_bounds.height());
@@ -812,9 +848,27 @@ void OpaqueBrowserFrameView::
     UpdateCaptionButtonPlaceholderContainerBackground() {
   if (caption_button_placeholder_container_) {
     caption_button_placeholder_container_->SetBackground(
-        views::CreateSolidBackground(GetFrameColor()));
+        views::CreateSolidBackground(
+            GetFrameColor(BrowserFrameActiveState::kUseCurrent)));
   }
 }
+
+#if BUILDFLAG(IS_WIN)
+void OpaqueBrowserFrameView::
+    UpdateCaptionButtonToolTipsForWindowControlsOverlay() {
+  if (browser_view()->IsWindowControlsOverlayEnabled()) {
+    minimize_button_->SetTooltipText(minimize_button_->GetAccessibleName());
+    maximize_button_->SetTooltipText(maximize_button_->GetAccessibleName());
+    restore_button_->SetTooltipText(restore_button_->GetAccessibleName());
+    close_button_->SetTooltipText(close_button_->GetAccessibleName());
+  } else {
+    minimize_button_->SetTooltipText(u"");
+    maximize_button_->SetTooltipText(u"");
+    restore_button_->SetTooltipText(u"");
+    close_button_->SetTooltipText(u"");
+  }
+}
+#endif
 
 BEGIN_METADATA(OpaqueBrowserFrameView, BrowserNonClientFrameView)
 ADD_READONLY_PROPERTY_METADATA(gfx::Rect, IconBounds)

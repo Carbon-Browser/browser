@@ -17,7 +17,7 @@
 <translation id="1516966594427080024">Otvorenie nového okna v režime inkognito</translation>
 <translation id="152892567002884378">Zvýšenie hlasitosti</translation>
 <translation id="1560480564179555003"><ph name="SHIFT" /><ph name="SEPARATOR1" /><ph name="ALT" /><ph name="SEPARATOR2" /><ph name="L" />, potom <ph name="ESC" /></translation>
-<translation id="1633761758045565086">Presuňte označenie na dialógové okno pomocníka</translation>
+<translation id="1586324912145647027">Prejdite na prvú až ôsmu plochu</translation>
 <translation id="1652741121070700329">Posunutie kurzora na začiatok predchádzajúceho slova</translation>
 <translation id="1679841710523778799">Zvýšenie jasu</translation>
 <translation id="168356808214100546">Pridržanie klávesa <ph name="ALT" />. Následné klepnutie na kláves <ph name="TAB" />, kým neprejdete na okno, ktoré chcete otvoriť. Následné uvoľnenie klávesa.</translation>
@@ -71,6 +71,7 @@
 <translation id="3140353188828248647">Zamerať na panel s adresou</translation>
 <translation id="3256109297135787951">Odstránenie zvýraznenia položky na poličke</translation>
 <translation id="3288816184963444640">Zavretie aktuálneho okna</translation>
+<translation id="3322797428033495633">Označí okno obrazu v obraze</translation>
 <translation id="3350805006883559974">Zobrazovať aktívne okno ako plávajúce nad ostatným obsahom</translation>
 <translation id="3407560819924487926">Zobrazenie správcu úloh</translation>
 <translation id="3417835166382867856">Vyhľadávanie kariet</translation>
@@ -130,6 +131,7 @@
 <translation id="5563050856984839829">Stlačenie klávesa <ph name="CTRL" /><ph name="SEPARATOR" /><ph name="SHIFT" /> a kliknutie na odkaz</translation>
 <translation id="561814908794220892">Otvorenie webovej stránky na novej karte</translation>
 <translation id="5620219513321115856">Presunúť aktívne okno na plochu vpravo</translation>
+<translation id="5699366815052349604">Prideľte aktívne okno všetkým plochám</translation>
 <translation id="5710621673935162997"><ph name="CTRL" /><ph name="SEPARATOR1" /><ph name="L" /> alebo <ph name="ALT" /><ph name="SEPARATOR2" /><ph name="D" /></translation>
 <translation id="5757111373163288447">Otvorenie odkazu na danej karte</translation>
 <translation id="5757474750054631686">Zníženie jasu klávesnice (iba v prípade podsvietených klávesníc)</translation>
@@ -156,6 +158,7 @@
 <translation id="6445033640292336367">Vrátenie karty do pôvodnej pozície</translation>
 <translation id="6474744297082284761">Oddialenie (pri vložení do doku ALEBO povolení lúp na celú obrazovku)</translation>
 <translation id="649811797655257835">Výber súboru a stlačenie klávesa <ph name="SPACE" /></translation>
+<translation id="6515089016094047210">Otvárať alebo zatvárať miniaplikáciu kalendára</translation>
 <translation id="6551886416582667425">Vytvorenie čiastočnej snímky obrazovky alebo nahrávky</translation>
 <translation id="6556040137485212400">Otvorenie okna, ktoré bolo najdlhšie nepoužívané</translation>
 <translation id="666343722268997814">Otvorenie ponuky prístupnej kliknutím pravým tlačidlom myši pre zvýraznenú položku</translation>
@@ -205,6 +208,7 @@
 <translation id="8644639153978066712">Zobrazenie skrytých súborov v aplikácii Súbory</translation>
 <translation id="8717459106217102612">Výber predchádzajúceho slova alebo písmena</translation>
 <translation id="8727232706774971183">Zobrazenie upozornení</translation>
+<translation id="8855548128280178372"><ph name="SHIFT" /><ph name="SEPARATOR1" /><ph name="SEARCH" /><ph name="SEPARATOR2" /> 1 až 8</translation>
 <translation id="8855885154700222542">Kláves celej obrazovky</translation>
 <translation id="8881584919399569791">Presunúť aktívne okno na plochu vľavo</translation>
 <translation id="88986195241502842">Posunúť stránku nadol</translation>

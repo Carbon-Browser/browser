@@ -11,7 +11,6 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/synchronization/lock.h"
@@ -26,7 +25,7 @@
 #include "chrome/browser/ash/settings/cros_settings.h"
 #include "chrome/browser/ash/settings/device_settings_service.h"
 // TODO(https://crbug.com/1164001): move to forward declaration when fixed.
-#include "chrome/browser/chromeos/session_length_limiter.h"
+#include "chrome/browser/ash/session_length_limiter.h"
 #include "chrome/browser/profiles/profile_manager_observer.h"
 #include "components/account_id/account_id.h"
 #include "components/session_manager/core/session_manager.h"
@@ -62,6 +61,9 @@ class ChromeUserManagerImpl
       public ProfileManagerObserver,
       public MultiProfileUserControllerDelegate {
  public:
+  ChromeUserManagerImpl(const ChromeUserManagerImpl&) = delete;
+  ChromeUserManagerImpl& operator=(const ChromeUserManagerImpl&) = delete;
+
   ~ChromeUserManagerImpl() override;
 
   // Creates ChromeUserManagerImpl instance.
@@ -97,6 +99,7 @@ class ChromeUserManagerImpl
   bool IsGuestSessionAllowed() const override;
   bool IsGaiaUserAllowed(const user_manager::User& user) const override;
   bool IsUserAllowed(const user_manager::User& user) const override;
+  bool AreEphemeralUsersEnabled() const override;
   const AccountId& GetGuestAccountId() const override;
   bool IsFirstExecAfterBoot() const override;
   void AsyncRemoveCryptohome(const AccountId& account_id) const override;
@@ -131,7 +134,6 @@ class ChromeUserManagerImpl
   void OnProfileAdded(Profile* profile) override;
 
   // UserManagerBase:
-  bool AreEphemeralUsersEnabled() const override;
   void OnUserRemoved(const AccountId& account_id) override;
 
   // ChromeUserManager:
@@ -144,6 +146,11 @@ class ChromeUserManagerImpl
       const user_manager::User& active_user) const override;
   bool IsFullManagementDisclosureNeeded(
       policy::DeviceLocalAccountPolicyBroker* broker) const override;
+  void CacheRemovedUser(const std::string& user_email,
+                        user_manager::UserRemovalReason) override;
+  std::vector<std::pair<std::string, user_manager::UserRemovalReason>>
+  GetRemovedUserCache() const override;
+  void MarkReporterInitialized() override;
 
  protected:
   const std::string& GetApplicationLocale() const override;
@@ -233,6 +240,8 @@ class ChromeUserManagerImpl
       const AccountId& account_id,
       const policy::DeviceLocalAccount::Type type) const;
 
+  void UpdateOwnerId();
+
   // Interface to the signed settings store.
   CrosSettings* cros_settings_;
 
@@ -264,6 +273,8 @@ class ChromeUserManagerImpl
   // Cros settings change subscriptions.
   base::CallbackListSubscription allow_guest_subscription_;
   base::CallbackListSubscription users_subscription_;
+  base::CallbackListSubscription family_link_accounts_subscription_;
+  base::CallbackListSubscription owner_subscription_;
 
   base::CallbackListSubscription local_accounts_subscription_;
 
@@ -272,9 +283,12 @@ class ChromeUserManagerImpl
   std::vector<std::unique_ptr<policy::CloudExternalDataPolicyHandler>>
       cloud_external_data_policy_handlers_;
 
-  base::WeakPtrFactory<ChromeUserManagerImpl> weak_factory_{this};
+  std::vector<std::pair<std::string, user_manager::UserRemovalReason>>
+      removed_user_cache_;
 
-  DISALLOW_COPY_AND_ASSIGN(ChromeUserManagerImpl);
+  bool user_added_removed_reporter_intialized_ = false;
+
+  base::WeakPtrFactory<ChromeUserManagerImpl> weak_factory_{this};
 };
 
 }  // namespace ash

@@ -10,7 +10,6 @@
 #include <memory>
 #include <set>
 
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "cc/animation/keyframe_model.h"
@@ -18,9 +17,10 @@
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/compositor/compositor_export.h"
 #include "ui/gfx/animation/tween.h"
+#include "ui/gfx/geometry/linear_gradient.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/rounded_corners_f.h"
-#include "ui/gfx/transform.h"
+#include "ui/gfx/geometry/transform.h"
 
 namespace ui {
 
@@ -43,10 +43,11 @@ class COMPOSITOR_EXPORT LayerAnimationElement {
     COLOR = (1 << 6),
     CLIP = (1 << 7),
     ROUNDED_CORNERS = (1 << 8),
+    GRADIENT_MASK = (1 << 9),
 
     // Used when iterating over properties.
     FIRST_PROPERTY = TRANSFORM,
-    SENTINEL = (1 << 9)
+    SENTINEL = (1 << 10)
   };
 
   static AnimatableProperty ToAnimatableProperty(
@@ -66,12 +67,15 @@ class COMPOSITOR_EXPORT LayerAnimationElement {
     SkColor color;
     gfx::Rect clip_rect;
     gfx::RoundedCornersF rounded_corners;
+    gfx::LinearGradient gradient_mask;
   };
 
   typedef uint32_t AnimatableProperties;
 
   LayerAnimationElement(AnimatableProperties properties,
                         base::TimeDelta duration);
+
+  LayerAnimationElement& operator=(const LayerAnimationElement&) = delete;
 
   virtual ~LayerAnimationElement();
 
@@ -148,6 +152,12 @@ class COMPOSITOR_EXPORT LayerAnimationElement {
   // given ones. The caller owns the return value.
   static std::unique_ptr<LayerAnimationElement> CreateRoundedCornersElement(
       const gfx::RoundedCornersF& rounded_corners,
+      base::TimeDelta duration);
+
+  // Creates an element that transitions the gradient mask to the
+  // given one. The caller owns the return value.
+  static std::unique_ptr<LayerAnimationElement> CreateGradientMaskElement(
+      const gfx::LinearGradient& gradient_mask,
       base::TimeDelta duration);
 
   // Sets the start time for the animation. This must be called before the first
@@ -254,8 +264,6 @@ class COMPOSITOR_EXPORT LayerAnimationElement {
   double last_progressed_fraction_;
 
   base::WeakPtrFactory<LayerAnimationElement> weak_ptr_factory_{this};
-
-  DISALLOW_ASSIGN(LayerAnimationElement);
 };
 
 }  // namespace ui

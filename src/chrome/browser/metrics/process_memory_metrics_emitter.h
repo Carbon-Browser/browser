@@ -45,6 +45,10 @@ class ProcessMemoryMetricsEmitter
   // Use this constructor to emit UKM from only a specified renderer's.
   explicit ProcessMemoryMetricsEmitter(base::ProcessId pid_scope);
 
+  ProcessMemoryMetricsEmitter(const ProcessMemoryMetricsEmitter&) = delete;
+  ProcessMemoryMetricsEmitter& operator=(const ProcessMemoryMetricsEmitter&) =
+      delete;
+
   // This must be called on the main thread of the browser process.
   void FetchAndEmitProcessMemoryMetrics();
 
@@ -73,9 +77,8 @@ class ProcessMemoryMetricsEmitter
 
   // Virtual for testing. Returns the process uptime of the given process. Does
   // not return a value when the process startup time is not set.
-  virtual absl::optional<base::TimeDelta> GetProcessUptime(
-      const base::Time& now,
-      base::ProcessId pid);
+  virtual absl::optional<base::TimeDelta> GetProcessUptime(base::TimeTicks now,
+                                                           base::ProcessId pid);
 
  private:
   friend class base::RefCountedThreadSafe<ProcessMemoryMetricsEmitter>;
@@ -103,8 +106,6 @@ class ProcessMemoryMetricsEmitter
   base::ProcessId pid_scope_ = base::kNullProcessId;
 
   SEQUENCE_CHECKER(sequence_checker_);
-
-  DISALLOW_COPY_AND_ASSIGN(ProcessMemoryMetricsEmitter);
 };
 
 // A |PageInfo| describes some metrics about a particular page with respect to
@@ -129,7 +130,7 @@ struct ProcessMemoryMetricsEmitter::ProcessInfo {
 
   base::ProcessId pid;
   std::vector<PageInfo> page_infos;
-  base::Time launch_time;
+  base::TimeTicks launch_time;
 };
 
 #endif  // CHROME_BROWSER_METRICS_PROCESS_MEMORY_METRICS_EMITTER_H_

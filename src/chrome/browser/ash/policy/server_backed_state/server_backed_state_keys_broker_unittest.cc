@@ -6,11 +6,10 @@
 
 #include "base/bind.h"
 #include "base/callback_helpers.h"
-#include "base/macros.h"
 #include "base/run_loop.h"
 #include "base/test/scoped_mock_time_message_loop_task_runner.h"
 #include "base/test/task_environment.h"
-#include "chromeos/dbus/session_manager/fake_session_manager_client.h"
+#include "chromeos/ash/components/dbus/session_manager/fake_session_manager_client.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace policy {
@@ -26,6 +25,12 @@ class ServerBackedStateKeysBrokerTest : public testing::Test {
     state_keys_.push_back("3");
     fake_session_manager_client_.set_server_backed_state_keys(state_keys_);
   }
+
+  ServerBackedStateKeysBrokerTest(const ServerBackedStateKeysBrokerTest&) =
+      delete;
+  ServerBackedStateKeysBrokerTest& operator=(
+      const ServerBackedStateKeysBrokerTest&) = delete;
+
   ~ServerBackedStateKeysBrokerTest() override {}
 
   void StateKeysUpdated() { updated_ = true; }
@@ -44,15 +49,12 @@ class ServerBackedStateKeysBrokerTest : public testing::Test {
  protected:
   base::test::SingleThreadTaskEnvironment task_environment_;
   base::ScopedMockTimeMessageLoopTaskRunner mocked_main_runner_;
-  chromeos::FakeSessionManagerClient fake_session_manager_client_;
+  ash::FakeSessionManagerClient fake_session_manager_client_;
   ServerBackedStateKeysBroker broker_;
   std::vector<std::string> state_keys_;
   bool updated_;
   std::vector<std::string> callback_state_keys_;
   bool callback_invoked_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ServerBackedStateKeysBrokerTest);
 };
 
 TEST_F(ServerBackedStateKeysBrokerTest, Load) {

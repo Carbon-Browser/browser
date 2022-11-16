@@ -7,7 +7,7 @@
 #include "third_party/blink/public/common/scheme_registry.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
-#include "third_party/blink/renderer/core/frame/deprecation.h"
+#include "third_party/blink/renderer/core/frame/deprecation/deprecation.h"
 #include "third_party/blink/renderer/platform/bindings/v8_per_isolate_data.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
 #include "third_party/blink/renderer/platform/weborigin/scheme_registry.h"
@@ -242,6 +242,15 @@ void UseCounterCallback(v8::Isolate* isolate,
     case v8::Isolate::kSharedArrayBufferConstructed: {
       ExecutionContext* current_execution_context =
           CurrentExecutionContext(isolate);
+      if (!current_execution_context) {
+        // This callback can be called in a setup where it is not possible to
+        // retrieve the current ExecutionContext, e.g. when a shared WebAssembly
+        // memory grew on a concurrent worker, and the interrupt that should
+        // take care of growing the WebAssembly memory on the current memory was
+        // triggered within the execution of a regular expression.
+        blink_feature = WebFeature::kV8SharedArrayBufferConstructed;
+        break;
+      }
       bool is_cross_origin_isolated =
           current_execution_context->CrossOriginIsolatedCapability();
       String protocol =
@@ -367,6 +376,12 @@ void UseCounterCallback(v8::Isolate* isolate,
       break;
     case v8::Isolate::kWasmExceptionHandling:
       blink_feature = WebFeature::kV8WasmExceptionHandling;
+      break;
+    case v8::Isolate::kFunctionPrototypeArguments:
+      blink_feature = WebFeature::kV8FunctionPrototypeArguments;
+      break;
+    case v8::Isolate::kFunctionPrototypeCaller:
+      blink_feature = WebFeature::kV8FunctionPrototypeCaller;
       break;
 
     default:

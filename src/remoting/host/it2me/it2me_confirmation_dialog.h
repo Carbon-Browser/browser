@@ -9,8 +9,6 @@
 #include <string>
 
 #include "base/callback_forward.h"
-#include "base/compiler_specific.h"
-#include "base/macros.h"
 
 namespace remoting {
 
@@ -40,16 +38,20 @@ class It2MeConfirmationDialogFactory {
   explicit It2MeConfirmationDialogFactory(
       It2MeConfirmationDialog::DialogStyle dialog_style)
       : dialog_style_(dialog_style) {}
+
+  It2MeConfirmationDialogFactory(const It2MeConfirmationDialogFactory&) =
+      delete;
+  It2MeConfirmationDialogFactory& operator=(
+      const It2MeConfirmationDialogFactory&) = delete;
+
   virtual ~It2MeConfirmationDialogFactory() = default;
 
   virtual std::unique_ptr<It2MeConfirmationDialog> Create();
 
  private:
   // This field is only used on ChromeOS.
-  ALLOW_UNUSED_TYPE It2MeConfirmationDialog::DialogStyle dialog_style_ =
+  [[maybe_unused]] It2MeConfirmationDialog::DialogStyle dialog_style_ =
       It2MeConfirmationDialog::DialogStyle::kConsumer;
-
-  DISALLOW_COPY_AND_ASSIGN(It2MeConfirmationDialogFactory);
 };
 
 }  // namespace remoting

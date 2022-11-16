@@ -10,7 +10,6 @@
 #include <memory>
 #include <string>
 
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "chromecast/media/api/cast_audio_decoder.h"
 #include "chromecast/public/media/media_pipeline_backend.h"
@@ -26,9 +25,16 @@ class AudioDecoderSoftwareWrapper
   using DecoderDelegate = MediaPipelineBackend::Decoder::Delegate;
   using RenderingDelay = MediaPipelineBackend::AudioDecoder::RenderingDelay;
   using Statistics = MediaPipelineBackend::AudioDecoder::Statistics;
+  using AudioTrackTimestamp =
+      MediaPipelineBackend::AudioDecoder::AudioTrackTimestamp;
 
   AudioDecoderSoftwareWrapper(
       MediaPipelineBackend::AudioDecoder* backend_decoder);
+
+  AudioDecoderSoftwareWrapper(const AudioDecoderSoftwareWrapper&) = delete;
+  AudioDecoderSoftwareWrapper& operator=(const AudioDecoderSoftwareWrapper&) =
+      delete;
+
   ~AudioDecoderSoftwareWrapper() override;
 
   void SetDelegate(DecoderDelegate* delegate);
@@ -37,6 +43,7 @@ class AudioDecoderSoftwareWrapper
   bool SetConfig(const AudioConfig& config);
   bool SetVolume(float multiplier);
   RenderingDelay GetRenderingDelay();
+  AudioTrackTimestamp GetAudioTrackTimestamp();
   bool IsUsingSoftwareDecoder();
 
  private:
@@ -60,8 +67,6 @@ class AudioDecoderSoftwareWrapper
   AudioConfig output_config_;
   scoped_refptr<DecoderBufferBase> pending_pushed_buffer_;
   bool decoder_error_;
-
-  DISALLOW_COPY_AND_ASSIGN(AudioDecoderSoftwareWrapper);
 };
 
 }  // namespace media

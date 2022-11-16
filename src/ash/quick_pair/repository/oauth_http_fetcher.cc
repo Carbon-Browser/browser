@@ -4,13 +4,15 @@
 
 #include "ash/quick_pair/repository/oauth_http_fetcher.h"
 
+#include "ash/quick_pair/common/fast_pair/fast_pair_http_result.h"
 #include "ash/quick_pair/common/logging.h"
 #include "ash/quick_pair/common/quick_pair_browser_delegate.h"
+#include "components/signin/public/base/consent_level.h"
 #include "components/signin/public/identity_manager/access_token_info.h"
-#include "components/signin/public/identity_manager/consent_level.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/signin/public/identity_manager/primary_account_access_token_fetcher.h"
 #include "google_apis/gaia/gaia_constants.h"
+#include "net/base/net_errors.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/cpp/simple_url_loader.h"
@@ -30,6 +32,26 @@ OAuthHttpFetcher::~OAuthHttpFetcher() = default;
 
 void OAuthHttpFetcher::ExecuteGetRequest(const GURL& url,
                                          FetchCompleteCallback callback) {
+  request_type_ = RequestType::GET;
+  StartRequest(url, std::move(callback));
+}
+
+void OAuthHttpFetcher::ExecutePostRequest(const GURL& url,
+                                          const std::string& body,
+                                          FetchCompleteCallback callback) {
+  request_type_ = RequestType::POST;
+  body_ = body;
+  StartRequest(url, std::move(callback));
+}
+
+void OAuthHttpFetcher::ExecuteDeleteRequest(const GURL& url,
+                                            FetchCompleteCallback callback) {
+  request_type_ = RequestType::DELETE;
+  StartRequest(url, std::move(callback));
+}
+
+void OAuthHttpFetcher::StartRequest(const GURL& url,
+                                    FetchCompleteCallback callback) {
   QP_LOG(VERBOSE) << __func__ << ": executing request to: " << url;
 
   if (has_call_started_) {
@@ -67,17 +89,15 @@ void OAuthHttpFetcher::OnAccessTokenFetched(
   if (error.state() != GoogleServiceAuthError::NONE) {
     QP_LOG(WARNING) << __func__ << ": Failed to retrieve access token. "
                     << error.ToString();
-    std::move(callback_).Run(nullptr);
-    Reset();
+    std::move(callback_).Run(nullptr, nullptr);
     return;
   }
 
   scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory =
       QuickPairBrowserDelegate::Get()->GetURLLoaderFactory();
   if (!url_loader_factory) {
-    QP_LOG(WARNING) << __func__ << ": No SharedURLLoaderFactory is available.";
-    std::move(callback_).Run(nullptr);
-    Reset();
+    QP_LOG(WARNING) << __func__ << ": URLLoaderFactory is not available.";
+    std::move(callback_).Run(nullptr, nullptr);
     return;
   }
 
@@ -87,26 +107,54 @@ void OAuthHttpFetcher::OnAccessTokenFetched(
                            access_token_info.token);
 }
 
-void OAuthHttpFetcher::Reset() {
-  url_ = GURL();
-  callback_.Reset();
-  has_call_started_ = false;
-}
-
 GURL OAuthHttpFetcher::CreateApiCallUrl() {
   return url_;
 }
 
 std::string OAuthHttpFetcher::CreateApiCallBody() {
-  return std::string();
+  switch (request_type_) {
+    case RequestType::GET:
+    case RequestType::DELETE:
+      return std::string();
+
+    case RequestType::POST:
+      return body_;
+  }
+}
+
+std::string OAuthHttpFetcher::CreateApiCallBodyContentType() {
+  switch (request_type_) {
+    case RequestType::GET:
+    case RequestType::DELETE:
+      return std::string();
+
+    case RequestType::POST:
+      return "application/x-protobuf";
+  }
+}
+
+std::string OAuthHttpFetcher::GetRequestTypeForBody(const std::string& body) {
+  switch (request_type_) {
+    case RequestType::GET:
+      return "GET";
+
+    case RequestType::POST:
+      return "POST";
+
+    case RequestType::DELETE:
+      return "DELETE";
+  }
 }
 
 void OAuthHttpFetcher::ProcessApiCallSuccess(
     const network::mojom::URLResponseHead* head,
     std::unique_ptr<std::string> body) {
   QP_LOG(INFO) << __func__;
-  std::move(callback_).Run(std::move(body));
-  Reset();
+
+  std::move(callback_).Run(
+      std::move(body),
+      std::make_unique<FastPairHttpResult>(/*net_error=*/net::OK,
+                                           /*head=*/head));
 }
 
 void OAuthHttpFetcher::ProcessApiCallFailure(
@@ -114,8 +162,10 @@ void OAuthHttpFetcher::ProcessApiCallFailure(
     const network::mojom::URLResponseHead* head,
     std::unique_ptr<std::string> body) {
   QP_LOG(WARNING) << __func__ << ": net_err=" << net_error;
-  std::move(callback_).Run(nullptr);
-  Reset();
+
+  std::move(callback_).Run(
+      nullptr, std::make_unique<FastPairHttpResult>(/*net_error=*/net_error,
+                                                    /*head=*/head));
 }
 
 net::PartialNetworkTrafficAnnotationTag

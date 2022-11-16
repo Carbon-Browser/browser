@@ -7,6 +7,7 @@
 #include "base/bind.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/test/browser_test_utils.h"
+#include "content/public/test/focus_changed_observer.h"
 #include "content/public/test/hit_test_region_observer.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -14,11 +15,12 @@ namespace pdf_extension_test_util {
 
 testing::AssertionResult EnsurePDFHasLoaded(
     const content::ToRenderFrameHost& frame,
-    bool wait_for_hit_test_data) {
+    bool wait_for_hit_test_data,
+    const std::string& pdf_element) {
   bool load_success = false;
   if (!content::ExecuteScriptAndExtractBool(
           frame,
-          R"(window.addEventListener('message', event => {
+          content::JsReplace(R"(window.addEventListener('message', event => {
             if (event.origin !==
                     'chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai') {
               return;
@@ -30,8 +32,9 @@ testing::AssertionResult EnsurePDFHasLoaded(
               window.domAutomationController.send(true);
             }
           });
-          document.getElementsByTagName('embed')[0].postMessage(
+          document.getElementsByTagName($1)[0].postMessage(
               {type: 'initialize'});)",
+                             pdf_element),
           &load_success)) {
     return testing::AssertionFailure()
            << "Cannot communicate with PDF extension.";
@@ -97,6 +100,15 @@ gfx::Point ConvertPageCoordToScreenCoord(content::WebContents* contents,
   }
 
   return {x, y};
+}
+
+void SetInputFocusOnPlugin(content::WebContents* guest_contents) {
+  content::FocusChangedObserver focus_observer(guest_contents);
+  content::SimulateMouseClickAt(
+      guest_contents, blink::WebInputEvent::kNoModifiers,
+      blink::WebMouseEvent::Button::kLeft,
+      ConvertPageCoordToScreenCoord(guest_contents, {1, 1}));
+  focus_observer.Wait();
 }
 
 }  // namespace pdf_extension_test_util

@@ -65,6 +65,7 @@ id<GREYMatcher> AddBookmarkButton() {
 
   [ChromeEarlGrey waitForBookmarksToFinishLoading];
   [ChromeEarlGrey clearBookmarks];
+  [BookmarkEarlGrey clearBookmarksPositionCache];
 }
 
 // Tear down called once per test.
@@ -377,12 +378,7 @@ id<GREYMatcher> AddBookmarkButton() {
       performAction:grey_tap()];
 
   // Verify general pasteboard has the URL copied.
-  ConditionBlock condition = ^{
-    return !![[UIPasteboard generalPasteboard].string
-        containsString:@"www.a.fr"];
-  };
-  GREYAssert(base::test::ios::WaitUntilConditionOrTimeout(10, condition),
-             @"Waiting for URL to be copied to pasteboard.");
+  [ChromeEarlGrey verifyStringCopied:@"www.a.fr"];
 
   // Verify edit mode is closed (context bar back to default state).
   [BookmarkEarlGreyUI verifyContextBarInDefaultStateWithSelectEnabled:YES
@@ -1111,6 +1107,11 @@ id<GREYMatcher> AddBookmarkButton() {
 - (void)testBookmarksSyncInMultiwindow {
   if (![ChromeEarlGrey areMultipleWindowsSupported])
     EARL_GREY_TEST_DISABLED(@"Multiple windows can't be opened.");
+
+  // TODO(crbug.com/1285974).
+  if ([ChromeEarlGrey isNewOverflowMenuEnabled])
+    EARL_GREY_TEST_DISABLED(
+        @"Earl Grey doesn't work properly with SwiftUI and multiwindow");
 
   GURL URL1 = web::test::HttpServer::MakeUrl(kURL1);
 

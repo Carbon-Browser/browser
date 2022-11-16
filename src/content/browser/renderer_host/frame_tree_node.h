@@ -9,28 +9,29 @@
 
 #include <memory>
 #include <string>
-#include <vector>
+#include <utility>
 
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/scoped_refptr.h"
+#include "base/observer_list.h"
 #include "content/browser/renderer_host/frame_tree.h"
-#include "content/browser/renderer_host/frame_tree_node_blame_context.h"
 #include "content/browser/renderer_host/navigator.h"
 #include "content/browser/renderer_host/render_frame_host_impl.h"
 #include "content/browser/renderer_host/render_frame_host_manager.h"
 #include "content/common/content_export.h"
+#include "content/public/browser/frame_type.h"
 #include "services/network/public/mojom/content_security_policy.mojom-forward.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/blink/public/common/frame/frame_owner_element_type.h"
 #include "third_party/blink/public/common/frame/frame_policy.h"
 #include "third_party/blink/public/common/frame/user_activation_state.h"
-#include "third_party/blink/public/mojom/frame/frame_owner_element_type.mojom.h"
 #include "third_party/blink/public/mojom/frame/frame_owner_properties.mojom.h"
 #include "third_party/blink/public/mojom/frame/frame_replication_state.mojom-forward.h"
 #include "third_party/blink/public/mojom/frame/tree_scope_type.mojom.h"
-#include "third_party/blink/public/mojom/frame/user_activation_update_types.mojom.h"
-#include "third_party/blink/public/mojom/security_context/insecure_request_policy.mojom-forward.h"
+#include "third_party/blink/public/mojom/frame/user_activation_update_types.mojom-forward.h"
 
+#include "base/time/time.h"
 #include "url/gurl.h"
 #include "url/origin.h"
 
@@ -62,6 +63,10 @@ class CONTENT_EXPORT FrameTreeNode {
     // Invoked when a FrameTreeNode becomes focused.
     virtual void OnFrameTreeNodeFocused(FrameTreeNode* node) {}
 
+    // Invoked when a FrameTreeNode moves to a different BrowsingInstance and
+    // the popups it opened should be disowned.
+    virtual void OnFrameTreeNodeDisownedOpenee(FrameTreeNode* node) {}
+
     virtual ~Observer() = default;
   };
 
@@ -81,20 +86,28 @@ class CONTENT_EXPORT FrameTreeNode {
       FrameTree* frame_tree,
       RenderFrameHostImpl* parent,
       blink::mojom::TreeScopeType tree_scope_type,
-      const std::string& name,
-      const std::string& unique_name,
       bool is_created_by_script,
       const base::UnguessableToken& devtools_frame_token,
       const blink::mojom::FrameOwnerProperties& frame_owner_properties,
-      blink::mojom::FrameOwnerElementType owner_type,
+      blink::FrameOwnerElementType owner_type,
       const blink::FramePolicy& frame_owner);
+
+  FrameTreeNode(const FrameTreeNode&) = delete;
+  FrameTreeNode& operator=(const FrameTreeNode&) = delete;
 
   ~FrameTreeNode();
 
   void AddObserver(Observer* observer);
   void RemoveObserver(Observer* observer);
 
+  // Frame trees may be nested so it can be the case that IsMainFrame() is true,
+  // but is not the outermost main frame. In particular, !IsMainFrame() cannot
+  // be used to check if the frame is an embedded frame -- use
+  // !IsOutermostMainFrame() instead. NB: this does not escape guest views;
+  // IsOutermostMainFrame will be true for the outermost main frame in an inner
+  // guest view.
   bool IsMainFrame() const;
+  bool IsOutermostMainFrame();
 
   // Clears any state in this node which was set by the document itself (CSP &
   // UserActivationState) and notifies proxies as appropriate. Invoked after
@@ -108,11 +121,16 @@ class CONTENT_EXPORT FrameTreeNode {
   Navigator& navigator() { return frame_tree()->navigator(); }
 
   RenderFrameHostManager* render_manager() { return &render_manager_; }
+  const RenderFrameHostManager* render_manager() const {
+    return &render_manager_;
+  }
   int frame_tree_node_id() const { return frame_tree_node_id_; }
-  const std::string& frame_name() const { return replication_state_->name; }
+  const std::string& frame_name() const {
+    return render_manager_.current_replication_state().name;
+  }
 
   const std::string& unique_name() const {
-    return replication_state_->unique_name;
+    return render_manager_.current_replication_state().unique_name;
   }
 
   // See comment on the member declaration.
@@ -124,17 +142,26 @@ class CONTENT_EXPORT FrameTreeNode {
 
   RenderFrameHostImpl* parent() const { return parent_; }
 
+  // See `RenderFrameHost::GetParentOrOuterDocument()` for
+  // documentation.
+  RenderFrameHostImpl* GetParentOrOuterDocument();
+
+  // See `RenderFrameHostImpl::GetParentOrOuterDocumentOrEmbedder()` for
+  // documentation.
+  RenderFrameHostImpl* GetParentOrOuterDocumentOrEmbedder();
+
   FrameTreeNode* opener() const { return opener_; }
 
-  FrameTreeNode* original_opener() const { return original_opener_; }
+  FrameTreeNode* first_live_main_frame_in_original_opener_chain() const {
+    return first_live_main_frame_in_original_opener_chain_;
+  }
 
   const absl::optional<base::UnguessableToken>& opener_devtools_frame_token() {
     return opener_devtools_frame_token_;
   }
 
-  // Gets the total number of descendants to this FrameTreeNode in addition to
-  // this node.
-  size_t GetFrameTreeSize() const;
+  // Returns the type of the frame. Refer to frame_type.h for the details.
+  FrameType GetFrameType() const;
 
   // Assigns a new opener for this node and, if |opener| is non-null, registers
   // an observer that will clear this node's opener if |opener| is ever
@@ -163,30 +190,25 @@ class CONTENT_EXPORT FrameTreeNode {
     return current_frame_host()->GetLastCommittedURL();
   }
 
-  // Sets the last committed URL for this frame and updates
-  // has_committed_real_load accordingly.
+  // Sets the last committed URL for this frame.
   void SetCurrentURL(const GURL& url);
 
-  // Returns true if SetCurrentURL has been called with a non-blank URL.
-  // TODO(https://crbug.com/1215096): Migrate most usage of
-  // has_committed_real_load() to call
-  // is_on_initial_empty_document_or_subsequent_empty_documents() instead.
-  bool has_committed_real_load() const { return has_committed_real_load_; }
+  // Sets `is_on_initial_empty_document_` to false.
+  void SetNotOnInitialEmptyDocument() { is_on_initial_empty_document_ = false; }
 
-  // Returns true if SetCurrentURL has been called with a non-blank URL or
-  // if the current document's input stream has been opened with
-  // document.open(). For more details, see the definition of
-  // `is_on_initial_empty_document_or_subsequent_empty_documents_`.
-  bool is_on_initial_empty_document_or_subsequent_empty_documents() const {
-    return is_on_initial_empty_document_or_subsequent_empty_documents_;
+  // Returns false if the frame has committed a document that is not the initial
+  // empty document, or if the current document's input stream has been opened
+  // with document.open(), causing the document to lose its "initial empty
+  // document" status. For more details, see the definition of
+  // `is_on_initial_empty_document_`.
+  bool is_on_initial_empty_document() const {
+    return is_on_initial_empty_document_;
   }
 
-  // Sets `is_on_initial_empty_document_or_subsequent_empty_documents_` to
+  // Sets `is_on_initial_empty_document_` to
   // false. Must only be called after the current document's input stream has
   // been opened with document.open().
-  void DidOpenDocumentInputStream() {
-    is_on_initial_empty_document_or_subsequent_empty_documents_ = false;
-  }
+  void DidOpenDocumentInputStream() { is_on_initial_empty_document_ = false; }
 
   // Returns whether the frame's owner element in the parent document is
   // collapsed, that is, removed from the layout as if it did not exist, as per
@@ -208,24 +230,8 @@ class CONTENT_EXPORT FrameTreeNode {
   // which will behave correctly even when the RenderFrameHost is not the
   // current one for this frame (such as when it's pending deletion).
   const url::Origin& current_origin() const {
-    return replication_state_->origin;
+    return render_manager_.current_replication_state().origin;
   }
-
-  // Set the current origin and notify proxies about the update.
-  void SetCurrentOrigin(const url::Origin& origin,
-                        bool is_potentially_trustworthy_unique_origin);
-
-  // Set the current name and notify proxies about the update.
-  void SetFrameName(const std::string& name, const std::string& unique_name);
-
-  // Sets the current insecure request policy, and notifies proxies about the
-  // update.
-  void SetInsecureRequestPolicy(blink::mojom::InsecureRequestPolicy policy);
-
-  // Sets the current set of insecure urls to upgrade, and notifies proxies
-  // about the update.
-  void SetInsecureNavigationsSet(
-      const std::vector<uint32_t>& insecure_navigations_set);
 
   // Returns the latest frame policy (sandbox flags and container policy) for
   // this frame. This includes flags inherited from parent frames and the latest
@@ -258,12 +264,8 @@ class CONTENT_EXPORT FrameTreeNode {
   // element attributes since the frame was last navigated; use
   // pending_frame_policy() for those.
   const blink::FramePolicy& effective_frame_policy() const {
-    return replication_state_->frame_policy;
+    return render_manager_.current_replication_state().frame_policy;
   }
-
-  // Set the frame_policy provided in function parameter as active frame policy,
-  // while leaving pending_frame_policy_ untouched.
-  bool CommitFramePolicy(const blink::FramePolicy& frame_policy);
 
   const blink::mojom::FrameOwnerProperties& frame_owner_properties() {
     return frame_owner_properties_;
@@ -286,28 +288,20 @@ class CONTENT_EXPORT FrameTreeNode {
   // Reflects the 'anonymous' attribute of the corresponding iframe html
   // element.
   bool anonymous() const { return anonymous_; }
-  void set_anonymous(bool anonymous) { anonymous_ = anonymous; }
+  void SetAnonymous(bool anonymous);
 
   bool HasSameOrigin(const FrameTreeNode& node) const {
-    return replication_state_->origin.IsSameOriginWith(
-        node.replication_state_->origin);
+    return render_manager_.current_replication_state().origin.IsSameOriginWith(
+        node.current_replication_state().origin);
   }
 
   const blink::mojom::FrameReplicationState& current_replication_state() const {
-    return *replication_state_;
+    return render_manager_.current_replication_state();
   }
 
   RenderFrameHostImpl* current_frame_host() const {
     return render_manager_.current_frame_host();
   }
-
-  // Return the node immediately preceding this node in its parent's children,
-  // or nullptr if there is no such node.
-  FrameTreeNode* PreviousSibling() const;
-
-  // Return the node immediately following this node in its parent's children,
-  // or nullptr if there is no such node.
-  FrameTreeNode* NextSibling() const;
 
   // Returns true if this node is in a loading state.
   bool IsLoading() const;
@@ -336,13 +330,15 @@ class CONTENT_EXPORT FrameTreeNode {
   void ResetNavigationRequest(bool keep_state);
 
   // A RenderFrameHost in this node started loading.
-  // |to_different_document| will be true unless the load is a fragment
-  // navigation, or triggered by history.pushState/replaceState.
+  // |should_show_loading_ui| indicates whether this navigation should be
+  // visible in the UI. True for cross-document navigations and navigations
+  // intercepted by the navigation API's transitionWhile().
   // |was_previously_loading| is false if the FrameTree was not loading before.
   // The caller is required to provide this boolean as the delegate should only
   // be notified if the FrameTree went from non-loading to loading state.
   // However, when it is called, the FrameTree should be in a loading state.
-  void DidStartLoading(bool to_different_document, bool was_previously_loading);
+  void DidStartLoading(bool should_show_loading_ui,
+                       bool was_previously_loading);
 
   // A RenderFrameHost in this node stopped loading.
   void DidStopLoading();
@@ -369,9 +365,6 @@ class CONTENT_EXPORT FrameTreeNode {
   // FrameTreeNode.
   void BeforeUnloadCanceled();
 
-  // Returns the BlameContext associated with this node.
-  FrameTreeNodeBlameContext& blame_context() { return blame_context_; }
-
   // Updates the user activation state in the browser frame tree and in the
   // frame trees in all renderer processes except the renderer for this node
   // (which initiated the update).  Returns |false| if the update tries to
@@ -384,8 +377,6 @@ class CONTENT_EXPORT FrameTreeNode {
       blink::mojom::UserActivationUpdateType update_type,
       blink::mojom::UserActivationNotificationType notification_type);
 
-  void OnSetHadStickyUserActivationBeforeNavigation(bool value);
-
   // Returns the sandbox flags currently in effect for this frame. This includes
   // flags inherited from parent frames, the currently active flags from the
   // <iframe> element hosting this frame, as well as any flags set from a
@@ -395,25 +386,14 @@ class CONTENT_EXPORT FrameTreeNode {
   // on navigation (which does not include the CSP-set flags), use
   // effective_frame_policy().
   network::mojom::WebSandboxFlags active_sandbox_flags() const {
-    return replication_state_->active_sandbox_flags;
+    return render_manager_.current_replication_state().active_sandbox_flags;
   }
-
-  // Updates the active sandbox flags in this frame, in response to a
-  // Content-Security-Policy header adding additional flags, in addition to
-  // those given to this frame by its parent, or in response to the
-  // Permissions-Policy header being set. Note that on navigation, these updates
-  // will be cleared, and the flags in the pending frame policy will be applied
-  // to the frame.
-  // Returns true iff this operation has changed state of either sandbox flags
-  // or permissions policy.
-  bool UpdateFramePolicyHeaders(
-      network::mojom::WebSandboxFlags sandbox_flags,
-      const blink::ParsedPermissionsPolicy& parsed_header);
 
   // Returns whether the frame received a user gesture on a previous navigation
   // on the same eTLD+1.
   bool has_received_user_gesture_before_nav() const {
-    return replication_state_->has_received_user_gesture_before_nav;
+    return render_manager_.current_replication_state()
+        .has_received_user_gesture_before_nav;
   }
 
   // When a tab is discarded, WebContents sets was_discarded on its
@@ -442,15 +422,13 @@ class CONTENT_EXPORT FrameTreeNode {
   // will never be reused - this saves memory.
   void PruneChildFrameNavigationEntries(NavigationEntryImpl* entry);
 
-  blink::mojom::FrameOwnerElementType frame_owner_element_type() const {
+  blink::FrameOwnerElementType frame_owner_element_type() const {
     return frame_owner_element_type_;
   }
 
   blink::mojom::TreeScopeType tree_scope_type() const {
     return tree_scope_type_;
   }
-
-  void SetIsAdSubframe(bool is_ad_subframe);
 
   // The initial popup URL for new window opened using:
   // `window.open(initial_popup_url)`.
@@ -477,16 +455,19 @@ class CONTENT_EXPORT FrameTreeNode {
   // tree.
   void SetFrameTree(FrameTree& frame_tree);
 
+  using TraceProto = perfetto::protos::pbzero::FrameTreeNodeInfo;
   // Write a representation of this object into a trace.
-  void WriteIntoTrace(perfetto::TracedValue context) const;
-  void WriteIntoTrace(
-      perfetto::TracedProto<perfetto::protos::pbzero::FrameTreeNodeInfo> proto);
+  void WriteIntoTrace(perfetto::TracedProto<TraceProto> proto) const;
 
   // Returns true the node is navigating, i.e. it has an associated
   // NavigationRequest.
   bool HasNavigation();
 
   // Fenced frames (meta-bug crbug.com/1111084):
+  // Note that these two functions cannot be invoked from a FrameTree's or
+  // its root node's constructor since they require the frame tree and the
+  // root node to be completely constructed.
+  //
   // Returns false if fenced frames are disabled. Returns true if the feature is
   // enabled and if |this| is a fenced frame. Returns false for
   // iframes embedded in a fenced frame. To clarify: for the MPArch
@@ -500,18 +481,88 @@ class CONTENT_EXPORT FrameTreeNode {
   // fenced frame.
   bool IsInFencedFrameTree() const;
 
+  // Returns a valid nonce if `IsInFencedFrameTree()` returns true for `this`.
+  // Returns nullopt otherwise. See comments on `fenced_frame_nonce_` for more
+  // details.
+  absl::optional<base::UnguessableToken> fenced_frame_nonce() {
+    return fenced_frame_nonce_;
+  }
+
+  // If applicable, set the fenced frame nonce. See comment on
+  // fenced_frame_nonce() for when it is set to a non-null value. Invoked
+  // by FrameTree::Init() or FrameTree::AddFrame().
+  void SetFencedFrameNonceIfNeeded();
+
+  // Returns the mode attribute set on the fenced frame root if this frame is
+  // in a fenced frame tree, otherwise returns `absl::nullopt`.
+  absl::optional<blink::mojom::FencedFrameMode> GetFencedFrameMode();
+
+  // Helper for GetParentOrOuterDocument/GetParentOrOuterDocumentOrEmbedder.
+  // Do not use directly.
+  RenderFrameHostImpl* GetParentOrOuterDocumentHelper(bool escape_guest_view);
+
   // Sets the unique_name and name fields on replication_state_. To be used in
   // prerender activation to make sure the FrameTreeNode replication state is
   // correct after the RenderFrameHost is moved between FrameTreeNodes. The
   // renderers should already have the correct value, so unlike
   // FrameTreeNode::SetFrameName, we do not notify them here.
-  // TODO(https://crbug.com/1237091): Remove this once the Browsing Instance
-  // Frame State is implemented.
+  // TODO(https://crbug.com/1237091): Remove this once the BrowsingContextState
+  //  is implemented to utilize the new path.
   void set_frame_name_for_activation(const std::string& unique_name,
                                      const std::string& name) {
-    replication_state_->unique_name = unique_name;
-    replication_state_->name = name;
+    current_frame_host()->browsing_context_state()->set_frame_name(unique_name,
+                                                                   name);
   }
+
+  // Returns true if error page isolation is enabled.
+  bool IsErrorPageIsolationEnabled() const;
+
+  // Functions to store and retrieve a frame's srcdoc value on this
+  // FrameTreeNode.
+  void SetSrcdocValue(const std::string& srcdoc_value);
+  const std::string& srcdoc_value() const { return srcdoc_value_; }
+
+  void set_shared_storage_budget_metadata(
+      FencedFrameURLMapping::SharedStorageBudgetMetadata*
+          shared_storage_budget_metadata) {
+    DCHECK_EQ(fenced_frame_status_,
+              RenderFrameHostImpl::FencedFrameStatus::kFencedFrameRoot);
+    shared_storage_budget_metadata_ = shared_storage_budget_metadata;
+  }
+
+  FencedFrameURLMapping::SharedStorageBudgetMetadata*
+  shared_storage_budget_metadata() const {
+    return shared_storage_budget_metadata_;
+  }
+
+  // Traverse up from this node. The `shared_storage_budget_metadata()` of the
+  // first seen node with a non-null budget metadata will be returned (i.e. this
+  // node inherits that budget metadata), and this node is expected to be an
+  // outermost fenced frame root. Return nullptr if not found (i.e. this node is
+  // not subjected to shared storage budgeting).
+  FencedFrameURLMapping::SharedStorageBudgetMetadata*
+  FindSharedStorageBudgetMetadata();
+
+  // Accessor to BrowsingContextState for subframes only. Only main frame
+  // navigations can change BrowsingInstances and BrowsingContextStates,
+  // therefore for subframes associated BrowsingContextState never changes. This
+  // helper method makes this more explicit and guards against calling this on
+  // main frames (there an appropriate BrowsingContextState should be obtained
+  // from RenderFrameHost or from RenderFrameProxyHost as e.g. during
+  // cross-BrowsingInstance navigations multiple BrowsingContextStates exist in
+  // the same frame).
+  const scoped_refptr<BrowsingContextState>&
+  GetBrowsingContextStateForSubframe() const;
+
+  // Clears the opener property of popups referencing this FrameTreeNode as
+  // their opener.
+  void ClearOpenerReferences();
+
+  // Calculates whether one of the ancestor frames or this frame has a CSPEE
+  // in place. This is eventually sent over to LocalFrame in the renderer where
+  // it will be used by HTMLFencedFrameElement::canLoadOpaqueURL for information
+  // it can't get on its own.
+  bool AncestorOrSelfHasCSPEE() const;
 
  private:
   FRIEND_TEST_ALL_PREFIXES(SitePerProcessPermissionsPolicyBrowserTest,
@@ -519,9 +570,11 @@ class CONTENT_EXPORT FrameTreeNode {
   FRIEND_TEST_ALL_PREFIXES(SitePerProcessPermissionsPolicyBrowserTest,
                            ContainerPolicySandboxDynamic);
 
-  class OpenerDestroyedObserver;
+  // Called by the destructor. When `this` is an outer dummy FrameTreeNode
+  // representing an inner FrameTree, this method destroys said inner FrameTree.
+  void DestroyInnerFrameTreeIfExists();
 
-  FrameTreeNode* GetSibling(int relative_offset) const;
+  class OpenerDestroyedObserver;
 
   // The |notification_type| parameter is used for histograms only.
   bool NotifyUserActivation(
@@ -542,7 +595,7 @@ class CONTENT_EXPORT FrameTreeNode {
   static int next_frame_tree_node_id_;
 
   // The FrameTree that owns us.
-  FrameTree* frame_tree_;  // not owned.
+  raw_ptr<FrameTree> frame_tree_;  // not owned.
 
   // A browser-global identifier for the frame in the page, which stays stable
   // even if the frame does a cross-process navigation.
@@ -550,12 +603,12 @@ class CONTENT_EXPORT FrameTreeNode {
 
   // The RenderFrameHost owning this FrameTreeNode, which cannot change for the
   // life of this FrameTreeNode. |nullptr| if this node is the root.
-  RenderFrameHostImpl* const parent_;
+  const raw_ptr<RenderFrameHostImpl> parent_;
 
   // The frame that opened this frame, if any.  Will be set to null if the
   // opener is closed, or if this frame disowns its opener by setting its
   // window.opener to null.
-  FrameTreeNode* opener_ = nullptr;
+  raw_ptr<FrameTreeNode> opener_ = nullptr;
 
   // An observer that clears this node's |opener_| if the opener is destroyed.
   // This observer is added to the |opener_|'s observer list when the |opener_|
@@ -564,16 +617,24 @@ class CONTENT_EXPORT FrameTreeNode {
   // is disowned.
   std::unique_ptr<OpenerDestroyedObserver> opener_observer_;
 
-  // The frame that opened this frame, if any. Contrary to opener_, this
-  // cannot be changed unless the original opener is destroyed.
-  FrameTreeNode* original_opener_ = nullptr;
+  // Unlike `opener_`, the "original opener chain" doesn't reflect
+  // window.opener, which can be suppressed or updated. The "original opener"
+  // is the main frame of the actual opener of this frame. This traces the all
+  // the way back, so if the original opener was closed (deleted or severed due
+  // to COOP), but _it_ had an original opener, this will return the original
+  // opener's original opener, etc. So this value will always be set as long as
+  // there is at least one live frame in the chain whose connection is not
+  // severed due to COOP.
+  raw_ptr<FrameTreeNode> first_live_main_frame_in_original_opener_chain_ =
+      nullptr;
 
   // The devtools frame token of the frame which opened this frame. This is
   // not cleared even if the opener is destroyed or disowns the frame.
   absl::optional<base::UnguessableToken> opener_devtools_frame_token_;
 
-  // An observer that clears this node's |original_opener_| if the opener is
-  // destroyed.
+  // An observer that updates this node's
+  // |first_live_main_frame_in_original_opener_chain_| to the next original
+  // opener in the chain if the original opener is destroyed.
   std::unique_ptr<OpenerDestroyedObserver> original_opener_observer_;
 
   // When created by an opener, the URL specified in window.open(url)
@@ -584,35 +645,36 @@ class CONTENT_EXPORT FrameTreeNode {
   // Please refer to {Get,Set}PopupCreatorOrigin() documentation.
   url::Origin popup_creator_origin_;
 
-  // Returns true iff SetCurrentURL has been called with a non-blank URL.
-  // TODO(https://crbug.com/1215096): Migrate all current usage of this to
-  // use `is_on_initial_empty_document_or_subsequent_empty_documents_` instead.
-  bool has_committed_real_load_ = false;
+  // If the url from the the last BeginNavigation is about:srcdoc, this value
+  // stores the srcdoc_attribute's value for re-use in history navigations.
+  std::string srcdoc_value_;
 
-  // Whether this frame is still on the initial about:blank document or any
-  // subsequent about:blank documents committed after the initial about:blank
-  // document. This will be false if either of these has happened:
-  // - SetCurrentUrl() has been called with a non about:blank URL.
-  // - The document's input stream has been opened with document.open().
-  // See:
-  // https://html.spec.whatwg.org/multipage/dynamic-markup-insertion.html#opening-the-input-stream:is-initial-about:blank
-  // TODO(https://crbug.com/1215096): Make this false after non-initial
-  // about:blank commits as well, making this only track whether the current
-  // document is the initial empty document or not. Currently we are still
-  // preserving most of the old behavior of `has_committed_real_load_` (except
-  // for the document.open() bit here) due to our current handling of initial
-  // empty document for session history and navigation (where we treat the
-  // the initial about:blank document and subsequent about:blank documents the
-  // same way).
-  bool is_on_initial_empty_document_or_subsequent_empty_documents_ = true;
+  // Whether this frame is still on the initial about:blank document or the
+  // synchronously committed about:blank document committed at frame creation,
+  // and its "initial empty document"-ness is still true.
+  // This will be false if either of these has happened:
+  // - SetCurrentUrl() was called after committing a document that is not the
+  //   initial about:blank document or the synchronously committed about:blank
+  //   document, per
+  //   https://html.spec.whatwg.org/multipage/browsers.html#creating-browsing-contexts:is-initial-about:blank
+  // - The document's input stream has been opened with document.open(), per
+  //   https://html.spec.whatwg.org/multipage/dynamic-markup-insertion.html#opening-the-input-stream:is-initial-about:blank
+  // NOTE: we treat both the "initial about:blank document" and the
+  // "synchronously committed about:blank document" as the initial empty
+  // document. In the future, we plan to remove the synchronous about:blank
+  // commit so that this state will only be true if the frame is on the
+  // "initial about:blank document". See also:
+  // - https://github.com/whatwg/html/issues/6863
+  // - https://crbug.com/1215096
+  bool is_on_initial_empty_document_ = true;
 
   // Whether the frame's owner element in the parent document is collapsed.
   bool is_collapsed_ = false;
 
   // The type of frame owner for this frame. This is only relevant for non-main
   // frames.
-  const blink::mojom::FrameOwnerElementType frame_owner_element_type_ =
-      blink::mojom::FrameOwnerElementType::kNone;
+  const blink::FrameOwnerElementType frame_owner_element_type_ =
+      blink::FrameOwnerElementType::kNone;
 
   // The tree scope type of frame owner element, i.e. whether the element is in
   // the document tree (https://dom.spec.whatwg.org/#document-trees) or the
@@ -621,15 +683,12 @@ class CONTENT_EXPORT FrameTreeNode {
   const blink::mojom::TreeScopeType tree_scope_type_ =
       blink::mojom::TreeScopeType::kDocument;
 
-  // Track information that needs to be replicated to processes that have
-  // proxies for this frame.
-  blink::mojom::FrameReplicationStatePtr replication_state_;
-
   // Track the pending sandbox flags and container policy for this frame. When a
   // parent frame dynamically updates 'sandbox', 'allow', 'allowfullscreen',
   // 'allowpaymentrequest' or 'src' attributes, the updated policy for the frame
-  // is stored here, and transferred into replication_state_->frame_policy when
-  // they take effect on the next frame navigation.
+  // is stored here, and transferred into
+  // render_manager_.current_replication_state().frame_policy when they take
+  // effect on the next frame navigation.
   blink::FramePolicy pending_frame_policy_;
 
   // Whether the frame was created by javascript.  This is useful to prune
@@ -677,10 +736,44 @@ class CONTENT_EXPORT FrameTreeNode {
   // for details on how this state is maintained.
   blink::UserActivationState user_activation_state_;
 
-  // A helper for tracing the snapshots of this FrameTreeNode and attributing
-  // browser process activities to this node (when possible).  It is unrelated
-  // to the core logic of FrameTreeNode.
-  FrameTreeNodeBlameContext blame_context_;
+  // Fenced Frames:
+  // Nonce used in the net::IsolationInfo and blink::StorageKey for a fenced
+  // frame and any iframes nested within it. Not set if this frame is not in a
+  // fenced frame's FrameTree. Note that this could be a field in FrameTree for
+  // the MPArch version but for the shadow DOM version we need to keep it here
+  // since the fenced frame root is not a main frame for the latter. The value
+  // of the nonce will be the same for all of the the iframes inside a fenced
+  // frame tree. If there is a nested fenced frame it will have a different
+  // nonce than its parent fenced frame. The nonce will stay the same across
+  // navigations initiated from the fenced frame tree because it is always used
+  // in conjunction with other fields of the keys and would be good to access
+  // the same storage across same-origin navigations. If the navigation is
+  // same-origin/site then the same network stack partition/storage will be
+  // reused and if it's cross-origin/site then other parts of the key will
+  // change and so, even with the same nonce, another partition will be used.
+  // But if the navigation is initiated from the embedder, the nonce will be
+  // reinitialized irrespective of same or cross origin such that there is no
+  // privacy leak via storage shared between two embedder initiated navigations.
+  // Note that this reinitialization is only implemented for MPArch.
+  absl::optional<base::UnguessableToken> fenced_frame_nonce_;
+
+  const RenderFrameHostImpl::FencedFrameStatus fenced_frame_status_ =
+      RenderFrameHostImpl::FencedFrameStatus::kNotNestedInFencedFrame;
+
+  // If this is a fenced frame resulting from a shared storage url selection
+  // operation, this contains the metadata for shared storage budget charging.
+  // This metadata will persist across self navigations, or be replaced by a new
+  // metadata if this gets navigated to another shared storage generated URN.
+  //
+  // This can only be possibly set for the outermost fenced frame root, because
+  // selectURL() is disallowed inside fenced frame, and the URN generated
+  // outside the a fenced frame cannot be recognized from inside, so a nested
+  // fenced frame can never navigate to a shared storage generated URN.
+  //
+  // This metadata is stored to the outermost page's FencedFrameURLMapping, thus
+  // `shared_storage_budget_metadata_` must outlive `this`.
+  raw_ptr<FencedFrameURLMapping::SharedStorageBudgetMetadata>
+      shared_storage_budget_metadata_ = nullptr;
 
   // Manages creation and swapping of RenderFrameHosts for this frame.
   //
@@ -693,8 +786,6 @@ class CONTENT_EXPORT FrameTreeNode {
   // before the RenderFrameHostManager's destructor runs.  See also
   // https://crbug.com/1157988.
   RenderFrameHostManager render_manager_;
-
-  DISALLOW_COPY_AND_ASSIGN(FrameTreeNode);
 };
 
 }  // namespace content

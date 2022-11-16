@@ -5,7 +5,6 @@
 #ifndef CHROME_BROWSER_ASH_APP_MODE_CERTIFICATE_MANAGER_DIALOG_H_
 #define CHROME_BROWSER_ASH_APP_MODE_CERTIFICATE_MANAGER_DIALOG_H_
 
-#include "base/macros.h"
 #include "chrome/browser/ash/login/ui/login_web_dialog.h"
 #include "ui/gfx/native_widget_types.h"
 
@@ -16,9 +15,7 @@ namespace ash {
 // This dialog is used to manage user certificates from the kiosk launch screen.
 class CertificateManagerDialog : public LoginWebDialog {
  public:
-  CertificateManagerDialog(Profile* profile,
-                           LoginWebDialog::Delegate* delegate,
-                           gfx::NativeWindow window);
+  CertificateManagerDialog(Profile* profile, gfx::NativeWindow window);
   CertificateManagerDialog(const CertificateManagerDialog&) = delete;
   CertificateManagerDialog& operator=(const CertificateManagerDialog&) = delete;
   ~CertificateManagerDialog() override;

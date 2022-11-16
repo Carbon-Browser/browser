@@ -81,12 +81,17 @@ public class CompositorView
     private boolean mIsSurfaceControlEnabled;
     private boolean mSelectionHandlesActive;
 
+    private boolean mRenderHostNeedsDidSwapBuffersCallback;
+
+    private boolean mHaveSwappedFramesSinceSurfaceCreated;
+
     // On P and above, toggling the screen off gets us in a state where the Surface is destroyed but
     // it is never recreated when it is turned on again. This is the only workaround that seems to
     // be working, see crbug.com/931195.
     class ScreenStateReceiverWorkaround extends BroadcastReceiver {
         // True indicates we should destroy and recreate the surface manager.
         private boolean mNeedsReset;
+        private Surface mLastDestroyedSurface;
 
         ScreenStateReceiverWorkaround() {
             IntentFilter filter = new IntentFilter(Intent.ACTION_SCREEN_OFF);
@@ -114,6 +119,17 @@ public class CompositorView
                 mCompositorSurfaceManager.shutDown();
                 createCompositorSurfaceManager();
             }
+        }
+
+        public void surfaceDestroyed(Surface surface) {
+            mLastDestroyedSurface = surface;
+        }
+
+        public void surfaceCreated(Surface surface) {
+            // If surface is created successfully when screen is on again, don't
+            // reset CompositorSurfaceManager.
+            mNeedsReset = mNeedsReset && (mLastDestroyedSurface != surface);
+            mLastDestroyedSurface = null;
         }
     }
 
@@ -396,8 +412,30 @@ public class CompositorView
     public void surfaceRedrawNeededAsync(Runnable drawingFinished) {
         // Do not hold onto more than one draw callback, to prevent deadlock.
         // See https://crbug.com/1174273 and https://crbug.com/1223299 for more details.
+        //
+        // `drawingFinished` can, and often will, be run before this returns, since we cannot hold
+        // onto more than one (android) callback without risking a deadlock in the framework.
+        //
+        // DO NOT ADD any more callbacks from inside chrome!  This is intended to implement
+        // (indirectly) the android SurfaceHolder callback.  It is not intended as a general-purpose
+        // mechanism for chromium to wait for a swap to occur.  In particular, we have workarounds
+        // for android framework behavior here, that would be unexpected to other callers.  Also,
+        // these behaviors can change without notice as new android versions show up.
+        //
+        // If you want to find out about a swap, please add a separate mechanism to this class to do
+        // so, with more predictable semantics.
         runDrawFinishedCallback();
         mDrawingFinishedCallback = drawingFinished;
+        if (mHaveSwappedFramesSinceSurfaceCreated) {
+            // Don't hold onto the draw callback, since it can deadlock with ViewRootImpl performing
+            // traversals in some cases.  Only wait if the surface is newly created.  Android allows
+            // us to run the callback before returning; the default implementation of this method
+            // does exactly that.  While there are a few calls into this method that are not from
+            // the android framework, these are currently okay with this behavior.  Please do not
+            // add any more, as described above.
+            runDrawFinishedCallback();
+        }
+        updateNeedsDidSwapBuffersCallback();
         if (mNativeCompositorView != 0) {
             CompositorViewJni.get().setNeedsComposite(mNativeCompositorView, CompositorView.this);
         }
@@ -416,8 +454,11 @@ public class CompositorView
     public void surfaceCreated(Surface surface) {
         if (mNativeCompositorView == 0) return;
 
-        CompositorViewJni.get().surfaceCreated(mNativeCompositorView, CompositorView.this);
+        if (mScreenStateReceiver != null) mScreenStateReceiver.surfaceCreated(surface);
         mFramesUntilHideBackground = 2;
+        mHaveSwappedFramesSinceSurfaceCreated = false;
+        updateNeedsDidSwapBuffersCallback();
+        CompositorViewJni.get().surfaceCreated(mNativeCompositorView, CompositorView.this);
         mRenderHost.onSurfaceCreated();
     }
 
@@ -436,6 +477,7 @@ public class CompositorView
         CompositorViewJni.get().surfaceDestroyed(mNativeCompositorView, CompositorView.this);
 
         if (mScreenStateReceiver != null) {
+            mScreenStateReceiver.surfaceDestroyed(surface);
             mScreenStateReceiver.maybeResetCompositorSurfaceManager();
         }
     }
@@ -504,6 +546,26 @@ public class CompositorView
         }
     }
 
+    /**
+     * Called by LayoutRenderHost to inform whether it needs `didSwapBuffers` calls.
+     * Note the implementation is asynchronous so it may miss already pending calls when enabled
+     * and can have a few trailing calls when disabled.
+     */
+    public void setRenderHostNeedsDidSwapBuffersCallback(boolean enable) {
+        if (mRenderHostNeedsDidSwapBuffersCallback == enable) return;
+        mRenderHostNeedsDidSwapBuffersCallback = enable;
+        updateNeedsDidSwapBuffersCallback();
+    }
+
+    // Should be called any time the inputs used to compute `needsSwapCallback` change.
+    private void updateNeedsDidSwapBuffersCallback() {
+        if (mNativeCompositorView == 0) return;
+        boolean needsSwapCallback = mRenderHostNeedsDidSwapBuffersCallback
+                || mFramesUntilHideBackground > 0 || mDrawingFinishedCallback != null;
+        CompositorViewJni.get().setDidSwapBuffersCallbackEnabled(
+                mNativeCompositorView, needsSwapCallback);
+    }
+
     @CalledByNative
     private void didSwapFrame(int pendingFrameCount) {
         mRenderHost.didSwapFrame(pendingFrameCount);
@@ -555,8 +617,11 @@ public class CompositorView
         if (swappedCurrentSize) {
             runDrawFinishedCallback();
         }
+        mHaveSwappedFramesSinceSurfaceCreated = true;
 
         mRenderHost.didSwapBuffers(swappedCurrentSize);
+
+        updateNeedsDidSwapBuffersCallback();
     }
 
     @CalledByNative
@@ -635,6 +700,7 @@ public class CompositorView
         if (runnable != null) {
             runnable.run();
         }
+        updateNeedsDidSwapBuffersCallback();
     }
 
     /**
@@ -718,5 +784,6 @@ public class CompositorView
         void evictCachedBackBuffer(long nativeCompositorView, CompositorView caller);
         void onTabChanged(long nativeCompositorView, CompositorView caller);
         void preserveChildSurfaceControls(long nativeCompositorView, CompositorView caller);
+        void setDidSwapBuffersCallbackEnabled(long nativeCompositorView, boolean enabled);
     }
 }

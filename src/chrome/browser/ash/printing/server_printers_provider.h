@@ -9,14 +9,13 @@
 #include <memory>
 #include <vector>
 
-#include "base/macros.h"
-#include "chrome/browser/chromeos/printing/print_server.h"
-#include "chrome/browser/chromeos/printing/printer_detector.h"
+#include "chrome/browser/ash/printing/print_server.h"
+#include "chrome/browser/ash/printing/printer_detector.h"
 #include "components/keyed_service/core/keyed_service.h"
 
 class Profile;
 
-namespace chromeos {
+namespace ash {
 
 // Given a list of external print servers, uses ServerPrintersFetcher to track
 // list of printers exposed by them. These printers are called server printers.
@@ -27,6 +26,10 @@ namespace chromeos {
 class ServerPrintersProvider {
  public:
   static std::unique_ptr<ServerPrintersProvider> Create(Profile* profile);
+
+  ServerPrintersProvider(const ServerPrintersProvider&) = delete;
+  ServerPrintersProvider& operator=(const ServerPrintersProvider&) = delete;
+
   virtual ~ServerPrintersProvider() = default;
 
   using OnPrintersUpdateCallback = base::RepeatingCallback<void(bool complete)>;
@@ -46,11 +49,8 @@ class ServerPrintersProvider {
 
  protected:
   ServerPrintersProvider() = default;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ServerPrintersProvider);
 };
 
-}  // namespace chromeos
+}  // namespace ash
 
 #endif  // CHROME_BROWSER_ASH_PRINTING_SERVER_PRINTERS_PROVIDER_H_

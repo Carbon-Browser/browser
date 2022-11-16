@@ -6,9 +6,9 @@
 #include "base/test/mock_callback.h"
 #include "base/test/scoped_feature_list.h"
 #include "chrome/browser/cart/fetch_discount_worker.h"
-#include "chrome/browser/endpoint_fetcher/endpoint_fetcher.h"
-#include "chrome/browser/persisted_state_db/profile_proto_db.h"
+#include "components/endpoint_fetcher/endpoint_fetcher.h"
 #include "components/search/ntp_features.h"
+#include "components/session_proto_db/session_proto_db.h"
 #include "content/public/test/browser_task_environment.h"
 #include "net/traffic_annotation/network_traffic_annotation_test_helper.h"
 #include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
@@ -33,7 +33,7 @@ cart_db::ChromeCartContentProto BuildProto(
   return proto;
 }
 using ShoppingCarts =
-    std::vector<ProfileProtoDB<cart_db::ChromeCartContentProto>::KeyAndValue>;
+    std::vector<SessionProtoDB<cart_db::ChromeCartContentProto>::KeyAndValue>;
 
 const char kMockMerchantA[] = "foo.com";
 const char kMockMerchantCartURLA[] = "https://www.foo.com/cart";
@@ -237,11 +237,10 @@ TEST(CartDiscountFetcherTest, TestRawMaerchantOffersIsOptional) {
       std::move(fake_responses));
 
   EXPECT_EQ(cart_discount_map.size(), 1u);
-  EXPECT_EQ(
-      cart_discount_map.at(kMockMerchantCartURLA).rule_discount_list.size(),
-      1u);
+  EXPECT_EQ(cart_discount_map.at(kMockMerchantCartURLA).rule_discounts.size(),
+            1u);
   EXPECT_TRUE(cart_discount_map.at(kMockMerchantCartURLA)
-                  .rule_discount_list[0]
+                  .rule_discounts[0]
                   .raw_merchant_offer_id()
                   .empty());
 }
@@ -286,11 +285,10 @@ TEST(CartDiscountFetcherTest, TestExternalTesterDiscount) {
       std::move(fake_responses));
 
   EXPECT_EQ(cart_discount_map.size(), 1u);
-  EXPECT_EQ(
-      cart_discount_map.at(kMockMerchantCartURLA).rule_discount_list.size(),
-      1u);
+  EXPECT_EQ(cart_discount_map.at(kMockMerchantCartURLA).rule_discounts.size(),
+            1u);
   EXPECT_TRUE(cart_discount_map.at(kMockMerchantCartURLA)
-                  .rule_discount_list[0]
+                  .rule_discounts[0]
                   .raw_merchant_offer_id()
                   .empty());
 }
@@ -325,9 +323,8 @@ TEST(CartDiscountFetcherTest, TestNoRuleDiscounts) {
       std::move(fake_responses));
 
   EXPECT_EQ(cart_discount_map.size(), 1u);
-  EXPECT_EQ(
-      cart_discount_map.at(kMockMerchantCartURLA).rule_discount_list.size(),
-      0u);
+  EXPECT_EQ(cart_discount_map.at(kMockMerchantCartURLA).rule_discounts.size(),
+            0u);
 }
 
 TEST(CartDiscountFetcherTest, TestOverallDiscountText) {

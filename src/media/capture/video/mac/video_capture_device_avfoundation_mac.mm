@@ -15,10 +15,10 @@
 #include "base/location.h"
 #include "base/mac/foundation_util.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/sequenced_task_runner.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/sys_string_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/crash/core/common/crash_key.h"
 #include "media/base/mac/color_space_util_mac.h"
 #include "media/base/media_switches.h"
@@ -48,12 +48,19 @@ constexpr int kTimeToWaitBeforeStoppingStillImageCaptureInSeconds = 60;
 constexpr FourCharCode kDefaultFourCCPixelFormat =
     kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange;  // NV12 (a.k.a. 420v)
 
+// Allowable epsilon when comparing the requested framerate against the
+// captures' min/max framerates, to handle float inaccuracies.
+// Framerates will be in the range of 1-100 or so, meaning under- or
+// overshooting by 0.001 fps will be negligable, but still handling float loss
+// of precision during manipulation.
+constexpr float kFrameRateEpsilon = 0.001;
+
 base::TimeDelta GetCMSampleBufferTimestamp(CMSampleBufferRef sampleBuffer) {
   const CMTime cm_timestamp =
       CMSampleBufferGetPresentationTimeStamp(sampleBuffer);
   const base::TimeDelta timestamp =
       CMTIME_IS_VALID(cm_timestamp)
-          ? base::TimeDelta::FromSecondsD(CMTimeGetSeconds(cm_timestamp))
+          ? base::Seconds(CMTimeGetSeconds(cm_timestamp))
           : media::kNoTimestamp;
   return timestamp;
 }
@@ -66,6 +73,10 @@ namespace media {
 
 const base::Feature kInCapturerScaling{"InCapturerScaling",
                                        base::FEATURE_DISABLED_BY_DEFAULT};
+
+// Uses the most recent advice from Apple for configuring and starting.
+const base::Feature kConfigureCaptureBeforeStart{
+    "ConfigureCaptureBeforeStart", base::FEATURE_ENABLED_BY_DEFAULT};
 
 AVCaptureDeviceFormat* FindBestCaptureFormat(
     NSArray<AVCaptureDeviceFormat*>* formats,
@@ -89,8 +100,9 @@ AVCaptureDeviceFormat* FindBestCaptureFormat(
     for (AVFrameRateRange* frameRateRange in
          [captureFormat videoSupportedFrameRateRanges]) {
       maxFrameRate = std::max(maxFrameRate, [frameRateRange maxFrameRate]);
-      matchesFrameRate |= [frameRateRange minFrameRate] <= frame_rate &&
-                          frame_rate <= [frameRateRange maxFrameRate];
+      matchesFrameRate |=
+          [frameRateRange minFrameRate] <= frame_rate + kFrameRateEpsilon &&
+          frame_rate - kFrameRateEpsilon <= [frameRateRange maxFrameRate];
     }
 
     // If the pixel format is unsupported by our code, then it is not useful.
@@ -407,12 +419,21 @@ AVCaptureDeviceFormat* FindBestCaptureFormat(
          selector:@selector(onVideoError:)
              name:AVCaptureSessionRuntimeErrorNotification
            object:_captureSession];
-  [_captureSession startRunning];
 
-  // Update the active capture format once the capture session is running.
-  // Setting it before the capture session is running has no effect.
-  if (_bestCaptureFormat) {
-    if ([_captureDevice lockForConfiguration:nil]) {
+  if (base::FeatureList::IsEnabled(media::kConfigureCaptureBeforeStart)) {
+    if (_bestCaptureFormat) {
+      [_captureSession beginConfiguration];
+      if ([_captureDevice lockForConfiguration:nil]) {
+        [_captureDevice setActiveFormat:_bestCaptureFormat];
+        [_captureDevice unlockForConfiguration];
+      }
+      [_captureSession commitConfiguration];
+    }
+
+    [_captureSession startRunning];
+  } else {
+    [_captureSession startRunning];
+    if (_bestCaptureFormat && [_captureDevice lockForConfiguration:nil]) {
       [_captureDevice setActiveFormat:_bestCaptureFormat];
       [_captureDevice unlockForConfiguration];
     }
@@ -489,7 +510,7 @@ AVCaptureDeviceFormat* FindBestCaptureFormat(
               [weakSelf.get() takePhotoInternal];
             },
             _weakPtrFactoryForTakePhoto->GetWeakPtr()),
-        base::TimeDelta::FromSeconds(3));
+        base::Seconds(3));
   }
 }
 
@@ -536,10 +557,15 @@ AVCaptureDeviceFormat* FindBestCaptureFormat(
 
             char* baseAddress = 0;
             size_t length = 0;
-            media::ExtractBaseAddressAndLength(&baseAddress, &length,
-                                               sampleBuffer);
-            _frameReceiver->OnPhotoTaken(
-                reinterpret_cast<uint8_t*>(baseAddress), length, "image/jpeg");
+            const bool sample_buffer_addressable =
+                media::ExtractBaseAddressAndLength(&baseAddress, &length,
+                                                   sampleBuffer);
+            DCHECK(sample_buffer_addressable);
+            if (sample_buffer_addressable) {
+              _frameReceiver->OnPhotoTaken(
+                  reinterpret_cast<uint8_t*>(baseAddress), length,
+                  "image/jpeg");
+            }
           }
         }
       }
@@ -580,8 +606,7 @@ AVCaptureDeviceFormat* FindBestCaptureFormat(
             [strongSelf stopStillImageOutput];
           },
           _weakPtrFactoryForTakePhoto->GetWeakPtr(), _takePhotoStartedCount),
-      base::TimeDelta::FromSeconds(
-          kTimeToWaitBeforeStoppingStillImageCaptureInSeconds));
+      base::Seconds(kTimeToWaitBeforeStoppingStillImageCaptureInSeconds));
 }
 
 - (void)stopStillImageOutput {
@@ -624,11 +649,22 @@ AVCaptureDeviceFormat* FindBestCaptureFormat(
   // Trust |_frameReceiver| to do decompression.
   char* baseAddress = 0;
   size_t frameSize = 0;
-  media::ExtractBaseAddressAndLength(&baseAddress, &frameSize, sampleBuffer);
   _lock.AssertAcquired();
-  _frameReceiver->ReceiveFrame(reinterpret_cast<const uint8_t*>(baseAddress),
-                               frameSize, captureFormat, colorSpace, 0, 0,
-                               timestamp);
+  const bool sample_buffer_addressable = media::ExtractBaseAddressAndLength(
+      &baseAddress, &frameSize, sampleBuffer);
+  DCHECK(sample_buffer_addressable);
+  if (sample_buffer_addressable) {
+    const bool safe_to_forward =
+        captureFormat.pixel_format == media::PIXEL_FORMAT_MJPEG ||
+        media::VideoFrame::AllocationSize(
+            captureFormat.pixel_format, captureFormat.frame_size) <= frameSize;
+    DCHECK(safe_to_forward);
+    if (safe_to_forward) {
+      _frameReceiver->ReceiveFrame(
+          reinterpret_cast<const uint8_t*>(baseAddress), frameSize,
+          captureFormat, colorSpace, 0, 0, timestamp);
+    }
+  }
 }
 
 - (BOOL)processPixelBufferPlanes:(CVImageBufferRef)pixelBuffer
@@ -813,7 +849,7 @@ AVCaptureDeviceFormat* FindBestCaptureFormat(
                                           (const gfx::ColorSpace&)colorSpace {
   DCHECK(ioSurface);
   gfx::GpuMemoryBufferHandle handle;
-  handle.id.id = -1;
+  handle.id = gfx::GpuMemoryBufferHandle::kInvalidId;
   handle.type = gfx::GpuMemoryBufferType::IO_SURFACE_BUFFER;
   handle.io_surface.reset(ioSurface, base::scoped_policy::RETAIN);
 
@@ -826,8 +862,7 @@ AVCaptureDeviceFormat* FindBestCaptureFormat(
   gfx::ColorSpace overriddenColorSpace = colorSpace;
   if (colorSpace == kColorSpaceRec709Apple) {
     overriddenColorSpace = gfx::ColorSpace(
-        gfx::ColorSpace::PrimaryID::BT709,
-        gfx::ColorSpace::TransferID::IEC61966_2_1,
+        gfx::ColorSpace::PrimaryID::BT709, gfx::ColorSpace::TransferID::SRGB,
         gfx::ColorSpace::MatrixID::BT709, gfx::ColorSpace::RangeID::LIMITED);
     IOSurfaceSetValue(ioSurface, CFSTR("IOSurfaceColorSpace"),
                       kCGColorSpaceSRGB);
@@ -868,8 +903,7 @@ AVCaptureDeviceFormat* FindBestCaptureFormat(
       _weakPtrFactoryForStallCheck = std::make_unique<
           base::WeakPtrFactory<VideoCaptureDeviceAVFoundation>>(self);
     }
-    constexpr base::TimeDelta kStallCheckInterval =
-        base::TimeDelta::FromSeconds(1);
+    constexpr base::TimeDelta kStallCheckInterval = base::Seconds(1);
     auto callback_lambda =
         [](base::WeakPtr<VideoCaptureDeviceAVFoundation> weakSelf,
            int failedCheckCount) {
@@ -909,7 +943,13 @@ AVCaptureDeviceFormat* FindBestCaptureFormat(
   if (!_frameReceiver)
     return;
 
-  const base::TimeDelta timestamp = GetCMSampleBufferTimestamp(sampleBuffer);
+  const base::TimeDelta pres_timestamp =
+      GetCMSampleBufferTimestamp(sampleBuffer);
+  if (start_timestamp_.is_zero()) {
+    start_timestamp_ = pres_timestamp;
+  }
+  const base::TimeDelta timestamp = pres_timestamp - start_timestamp_;
+
   bool logUma = !std::exchange(_capturedFirstFrame, true);
   if (logUma) {
     media::LogFirstCapturedVideoFrame(_bestCaptureFormat, sampleBuffer);

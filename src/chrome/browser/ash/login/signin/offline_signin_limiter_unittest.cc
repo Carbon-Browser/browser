@@ -8,7 +8,6 @@
 #include <utility>
 
 #include "ash/constants/ash_features.h"
-#include "base/macros.h"
 #include "base/memory/ptr_util.h"
 #include "base/test/power_monitor_test.h"
 #include "base/test/scoped_feature_list.h"
@@ -19,6 +18,7 @@
 #include "chrome/browser/ash/login/signin/offline_signin_limiter_factory.h"
 #include "chrome/browser/ash/login/users/mock_user_manager.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/test/base/scoped_testing_local_state.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
 #include "components/pref_registry/pref_registry_syncable.h"
@@ -44,6 +44,10 @@ const char kTestSAMLUser[] = "user@saml.example.com";
 }  // namespace
 
 class OfflineSigninLimiterTest : public testing::Test {
+ public:
+  OfflineSigninLimiterTest(const OfflineSigninLimiterTest&) = delete;
+  OfflineSigninLimiterTest& operator=(const OfflineSigninLimiterTest&) = delete;
+
  protected:
   OfflineSigninLimiterTest();
   ~OfflineSigninLimiterTest() override;
@@ -54,7 +58,6 @@ class OfflineSigninLimiterTest : public testing::Test {
   void DestroyLimiter();
   void CreateLimiter();
 
-  void SetUpUserManager();
   void AddGaiaUser();
   void AddSAMLUser();
 
@@ -62,8 +65,6 @@ class OfflineSigninLimiterTest : public testing::Test {
       AccountId::FromUserEmail(kTestGaiaUser);
   const AccountId test_saml_account_id_ =
       AccountId::FromUserEmail(kTestSAMLUser);
-
-  TestingPrefServiceSimple* GetTestingLocalState();
 
   content::BrowserTaskEnvironment task_environment_;
   extensions::QuotaService::ScopedDisablePurgeForTesting
@@ -73,25 +74,23 @@ class OfflineSigninLimiterTest : public testing::Test {
   user_manager::ScopedUserManager user_manager_enabler_;
 
   std::unique_ptr<TestingProfile> profile_;
-  base::WallClockTimer* timer_;  // Not owned.
+  base::WallClockTimer* timer_ = nullptr;  // Not owned.
 
-  OfflineSigninLimiter* limiter_;  // Owned.
+  OfflineSigninLimiter* limiter_ = nullptr;  // Owned.
   base::test::ScopedPowerMonitorTestSource test_power_monitor_source_;
 
-  TestingPrefServiceSimple testing_local_state_;
+  std::unique_ptr<ScopedTestingLocalState> local_state_;
   base::test::ScopedFeatureList feature_list_;
-
-  DISALLOW_COPY_AND_ASSIGN(OfflineSigninLimiterTest);
 };
 
 OfflineSigninLimiterTest::OfflineSigninLimiterTest()
     : task_environment_(base::test::TaskEnvironment::TimeSource::MOCK_TIME),
       user_manager_(new MockUserManager),
-      user_manager_enabler_(base::WrapUnique(user_manager_)),
-      timer_(nullptr),
-      limiter_(nullptr) {
+      user_manager_enabler_(base::WrapUnique(user_manager_)) {
   feature_list_.InitAndEnableFeature(
       features::kEnableSamlReauthenticationOnLockscreen);
+  local_state_ = std::make_unique<ScopedTestingLocalState>(
+      TestingBrowserProcess::GetGlobal());
 }
 
 OfflineSigninLimiterTest::~OfflineSigninLimiterTest() {
@@ -102,6 +101,7 @@ OfflineSigninLimiterTest::~OfflineSigninLimiterTest() {
   profile_ = nullptr;
   // Finish any pending tasks before deleting the TestingBrowserProcess.
   task_environment_.RunUntilIdle();
+  local_state_.reset();
   TestingBrowserProcess::DeleteInstance();
 }
 
@@ -121,11 +121,6 @@ void OfflineSigninLimiterTest::CreateLimiter() {
   timer_ = limiter_->GetTimerForTesting();
 }
 
-void OfflineSigninLimiterTest::SetUpUserManager() {
-  EXPECT_CALL(*user_manager_, GetLocalState())
-      .WillRepeatedly(Return(GetTestingLocalState()));
-}
-
 void OfflineSigninLimiterTest::SetUp() {
   profile_ = std::make_unique<TestingProfile>();
 }
@@ -133,21 +128,11 @@ void OfflineSigninLimiterTest::SetUp() {
 void OfflineSigninLimiterTest::AddGaiaUser() {
   user_manager_->AddUser(test_gaia_account_id_);
   profile_->set_profile_name(kTestGaiaUser);
-
-  user_manager_->RegisterPrefs(GetTestingLocalState()->registry());
-  SetUpUserManager();
 }
 
 void OfflineSigninLimiterTest::AddSAMLUser() {
   user_manager_->AddPublicAccountWithSAML(test_saml_account_id_);
   profile_->set_profile_name(kTestSAMLUser);
-
-  user_manager_->RegisterPrefs(GetTestingLocalState()->registry());
-  SetUpUserManager();
-}
-
-TestingPrefServiceSimple* OfflineSigninLimiterTest::GetTestingLocalState() {
-  return &testing_local_state_;
 }
 
 TEST_F(OfflineSigninLimiterTest, NoGaiaDefaultLimit) {
@@ -157,7 +142,6 @@ TEST_F(OfflineSigninLimiterTest, NoGaiaDefaultLimit) {
   // Authenticate offline. Verify that the flag enforcing online login is not
   // changed and the time of last login with SAML is not set.
   CreateLimiter();
-  SetUpUserManager();
   EXPECT_CALL(*user_manager_, SaveForceOnlineSignin(test_gaia_account_id_, _))
       .Times(0);
   limiter_->SignedIn(UserContext::AUTH_FLOW_OFFLINE);
@@ -181,7 +165,6 @@ TEST_F(OfflineSigninLimiterTest, NoGaiaNoLimit) {
   // Authenticate offline. Verify that the flag enforcing online login is not
   // changed and the time of last login with SAML is not set.
   CreateLimiter();
-  SetUpUserManager();
   EXPECT_CALL(*user_manager_, SaveForceOnlineSignin(test_gaia_account_id_, _))
       .Times(0);
   limiter_->SignedIn(UserContext::AUTH_FLOW_OFFLINE);
@@ -231,12 +214,11 @@ TEST_F(OfflineSigninLimiterTest, NoGaiaZeroLimitWhenOffline) {
   DestroyLimiter();
 
   // Advance clock by 1 hour.
-  task_environment_.FastForwardBy(base::TimeDelta::FromHours(1));
+  task_environment_.FastForwardBy(base::Hours(1));
 
   // Authenticate offline. Verify that the flag enforcing online login is not
   // changed.
   CreateLimiter();
-  SetUpUserManager();
   EXPECT_CALL(*user_manager_, SaveForceOnlineSignin(test_saml_account_id_, _))
       .Times(0);
   limiter_->SignedIn(UserContext::AUTH_FLOW_OFFLINE);
@@ -314,13 +296,12 @@ TEST_F(OfflineSigninLimiterTest, GaiaDefaultLimit) {
   DestroyLimiter();
 
   // Advance time by an hour.
-  task_environment_.FastForwardBy(base::TimeDelta::FromHours(1));
+  task_environment_.FastForwardBy(base::Hours(1));
 
   // Authenticate against Gaia without SAML. Verify that the flag enforcing
   // online login is cleared and the time of last login without SAML is updated.
   CreateLimiter();
   Mock::VerifyAndClearExpectations(user_manager_);
-  SetUpUserManager();
   EXPECT_CALL(*user_manager_,
               SaveForceOnlineSignin(test_gaia_account_id_, false))
       .Times(1);
@@ -340,13 +321,12 @@ TEST_F(OfflineSigninLimiterTest, GaiaDefaultLimit) {
 
   // Advance time by an hour.
   const base::Time gaia_signin_time = task_environment_.GetMockClock()->Now();
-  task_environment_.FastForwardBy(base::TimeDelta::FromHours(1));
+  task_environment_.FastForwardBy(base::Hours(1));
 
   // Authenticate offline. Verify that the flag enforcing online login and the
   // time of last login without SAML are not changed.
   CreateLimiter();
   Mock::VerifyAndClearExpectations(user_manager_);
-  SetUpUserManager();
   EXPECT_CALL(*user_manager_, SaveForceOnlineSignin(test_gaia_account_id_, _))
       .Times(0);
   limiter_->SignedIn(UserContext::AUTH_FLOW_OFFLINE);
@@ -387,13 +367,12 @@ TEST_F(OfflineSigninLimiterTest, GaiaNoLimit) {
   DestroyLimiter();
 
   // Advance time by an hour.
-  task_environment_.FastForwardBy(base::TimeDelta::FromHours(1));
+  task_environment_.FastForwardBy(base::Hours(1));
 
   // Authenticate against Gaia without SAML. Verify that the flag enforcing
   // online login is cleared and the time of last login without SAML is updated.
   CreateLimiter();
   Mock::VerifyAndClearExpectations(user_manager_);
-  SetUpUserManager();
   EXPECT_CALL(*user_manager_,
               SaveForceOnlineSignin(test_gaia_account_id_, false))
       .Times(1);
@@ -413,13 +392,12 @@ TEST_F(OfflineSigninLimiterTest, GaiaNoLimit) {
 
   // Advance time by an hour.
   const base::Time gaia_signin_time = task_environment_.GetMockClock()->Now();
-  task_environment_.FastForwardBy(base::TimeDelta::FromHours(1));
+  task_environment_.FastForwardBy(base::Hours(1));
 
   // Authenticate offline. Verify that the flag enforcing online login and the
   // time of last login without SAML are not changed.
   CreateLimiter();
   Mock::VerifyAndClearExpectations(user_manager_);
-  SetUpUserManager();
   EXPECT_CALL(*user_manager_, SaveForceOnlineSignin(test_gaia_account_id_, _))
       .Times(0);
   limiter_->SignedIn(UserContext::AUTH_FLOW_OFFLINE);
@@ -485,7 +463,6 @@ TEST_F(OfflineSigninLimiterTest, GaiaSetLimitWhileLoggedIn) {
 
   // Set a zero time limit. Verify that the flag enforcing online login is set.
   Mock::VerifyAndClearExpectations(user_manager_);
-  SetUpUserManager();
   EXPECT_CALL(*user_manager_,
               SaveForceOnlineSignin(test_gaia_account_id_, false))
       .Times(0);
@@ -527,7 +504,6 @@ TEST_F(OfflineSigninLimiterTest, GaiaRemoveLimit) {
 
   // Verify that the flag enforcing online login is not changed.
   Mock::VerifyAndClearExpectations(user_manager_);
-  SetUpUserManager();
   EXPECT_CALL(*user_manager_, SaveForceOnlineSignin(test_gaia_account_id_, _))
       .Times(0);
 }
@@ -542,7 +518,7 @@ TEST_F(OfflineSigninLimiterTest, GaiaLogInWithExpiredLimit) {
   prefs->SetInteger(prefs::kGaiaOfflineSigninTimeLimitDays, 7);  // 1 week.
 
   // Advance time by four weeks.
-  task_environment_.FastForwardBy(base::TimeDelta::FromDays(28));  // 4 weeks.
+  task_environment_.FastForwardBy(base::Days(28));  // 4 weeks.
 
   // Authenticate against Gaia without SAML. Verify that the flag enforcing
   // online login is cleared and the time of last login without SAML is updated.
@@ -574,7 +550,7 @@ TEST_F(OfflineSigninLimiterTest, GaiaLogInOfflineWithExpiredLimit) {
 
   // Advance time by four weeks.
   const base::Time gaia_signin_time = task_environment_.GetMockClock()->Now();
-  task_environment_.FastForwardBy(base::TimeDelta::FromDays(28));  // 4 weeks.
+  task_environment_.FastForwardBy(base::Days(28));  // 4 weeks.
 
   // Authenticate offline. Verify that the flag enforcing online login is
   // set and the time of last login without SAML is not changed.
@@ -620,7 +596,7 @@ TEST_F(OfflineSigninLimiterTest, GaiaLimitExpiredWhileSuspended) {
 
   // Suspend for 4 weeks.
   test_power_monitor_source_.Suspend();
-  task_environment_.AdvanceClock(base::TimeDelta::FromDays(28));  // 4 weeks.
+  task_environment_.AdvanceClock(base::Days(28));  // 4 weeks.
 
   // Resume power. Verify that the flag enforcing online login is set.
   Mock::VerifyAndClearExpectations(user_manager_);
@@ -647,7 +623,7 @@ TEST_F(OfflineSigninLimiterTest, GaiaLogInOfflineWithOnLockReauth) {
   prefs->SetBoolean(prefs::kLockScreenReauthenticationEnabled, true);
 
   // Advance time by four weeks.
-  task_environment_.FastForwardBy(base::TimeDelta::FromDays(28));  // 4 weeks.
+  task_environment_.FastForwardBy(base::Days(28));  // 4 weeks.
 
   // Authenticate offline and check if InSessionPasswordSyncManager is created.
   CreateLimiter();
@@ -692,7 +668,6 @@ TEST_F(OfflineSigninLimiterTest, GaiaNoLastOnlineSigninWithLimit) {
   // online login is cleared and the time of last login without SAML is set.
   CreateLimiter();
   Mock::VerifyAndClearExpectations(user_manager_);
-  SetUpUserManager();
   EXPECT_CALL(*user_manager_,
               SaveForceOnlineSignin(test_gaia_account_id_, false))
       .Times(1);
@@ -712,13 +687,12 @@ TEST_F(OfflineSigninLimiterTest, GaiaNoLastOnlineSigninWithLimit) {
 
   // Advance time by an hour.
   const base::Time gaia_signin_time = task_environment_.GetMockClock()->Now();
-  task_environment_.FastForwardBy(base::TimeDelta::FromHours(1));
+  task_environment_.FastForwardBy(base::Hours(1));
 
   // Authenticate offline. Verify that the flag enforcing online login and the
   // time of last login without SAML are not changed.
   CreateLimiter();
   Mock::VerifyAndClearExpectations(user_manager_);
-  SetUpUserManager();
   EXPECT_CALL(*user_manager_, SaveForceOnlineSignin(test_gaia_account_id_, _))
       .Times(0);
   limiter_->SignedIn(UserContext::AUTH_FLOW_OFFLINE);
@@ -763,7 +737,6 @@ TEST_F(OfflineSigninLimiterTest, NoSAMLDefaultLimit) {
   // changed and the time of last login with SAML is not set.
   CreateLimiter();
   Mock::VerifyAndClearExpectations(user_manager_);
-  SetUpUserManager();
   EXPECT_CALL(*user_manager_, SaveForceOnlineSignin(test_gaia_account_id_, _))
       .Times(0);
   limiter_->SignedIn(UserContext::AUTH_FLOW_OFFLINE);
@@ -813,7 +786,6 @@ TEST_F(OfflineSigninLimiterTest, NoSAMLNoLimit) {
   // changed and the time of last login with SAML is not set.
   CreateLimiter();
   Mock::VerifyAndClearExpectations(user_manager_);
-  SetUpUserManager();
   EXPECT_CALL(*user_manager_, SaveForceOnlineSignin(test_gaia_account_id_, _))
       .Times(0);
   limiter_->SignedIn(UserContext::AUTH_FLOW_OFFLINE);
@@ -863,7 +835,6 @@ TEST_F(OfflineSigninLimiterTest, NoSAMLZeroLimit) {
   // changed and the time of last login with SAML is not set.
   CreateLimiter();
   Mock::VerifyAndClearExpectations(user_manager_);
-  SetUpUserManager();
   EXPECT_CALL(*user_manager_, SaveForceOnlineSignin(test_gaia_account_id_, _))
       .Times(0);
   limiter_->SignedIn(UserContext::AUTH_FLOW_OFFLINE);
@@ -956,7 +927,7 @@ TEST_F(OfflineSigninLimiterTest, NoSAMLLogInWithExpiredLimit) {
                  task_environment_.GetMockClock()->Now());
 
   // Advance time by four weeks.
-  task_environment_.FastForwardBy(base::TimeDelta::FromDays(28));  // 4 weeks.
+  task_environment_.FastForwardBy(base::Days(28));  // 4 weeks.
 
   // Authenticate against GAIA without SAML. Verify that the flag enforcing
   // online login and the time of last login with SAML are cleared.
@@ -1004,13 +975,12 @@ TEST_F(OfflineSigninLimiterTest, SAMLDefaultLimit) {
   DestroyLimiter();
 
   // Advance time by an hour.
-  task_environment_.FastForwardBy(base::TimeDelta::FromHours(1));
+  task_environment_.FastForwardBy(base::Hours(1));
 
   // Authenticate against GAIA with SAML. Verify that the flag enforcing online
   // login is cleared and the time of last login with SAML is updated.
   CreateLimiter();
   Mock::VerifyAndClearExpectations(user_manager_);
-  SetUpUserManager();
   EXPECT_CALL(*user_manager_,
               SaveForceOnlineSignin(test_saml_account_id_, false))
       .Times(1);
@@ -1030,13 +1000,12 @@ TEST_F(OfflineSigninLimiterTest, SAMLDefaultLimit) {
 
   // Advance time by an hour.
   const base::Time gaia_signin_time = task_environment_.GetMockClock()->Now();
-  task_environment_.FastForwardBy(base::TimeDelta::FromHours(1));
+  task_environment_.FastForwardBy(base::Hours(1));
 
   // Authenticate offline. Verify that the flag enforcing online login and the
   // time of last login with SAML are not changed.
   CreateLimiter();
   Mock::VerifyAndClearExpectations(user_manager_);
-  SetUpUserManager();
   EXPECT_CALL(*user_manager_, SaveForceOnlineSignin(test_saml_account_id_, _))
       .Times(0);
   limiter_->SignedIn(UserContext::AUTH_FLOW_OFFLINE);
@@ -1050,7 +1019,6 @@ TEST_F(OfflineSigninLimiterTest, SAMLDefaultLimit) {
   Mock::VerifyAndClearExpectations(user_manager_);
   // Allow the timer to fire. Verify that the flag enforcing online login is
   // set
-  SetUpUserManager();
   EXPECT_CALL(*user_manager_,
               SaveForceOnlineSignin(test_saml_account_id_, false))
       .Times(0);
@@ -1058,7 +1026,7 @@ TEST_F(OfflineSigninLimiterTest, SAMLDefaultLimit) {
               SaveForceOnlineSignin(test_saml_account_id_, true))
       .Times(1);
   // Advance time by four weeks.
-  task_environment_.FastForwardBy(base::TimeDelta::FromDays(28));  // 4 weeks.
+  task_environment_.FastForwardBy(base::Days(28));  // 4 weeks.
 }
 
 TEST_F(OfflineSigninLimiterTest, SAMLNoLimit) {
@@ -1090,13 +1058,12 @@ TEST_F(OfflineSigninLimiterTest, SAMLNoLimit) {
   DestroyLimiter();
 
   // Advance time by an hour.
-  task_environment_.FastForwardBy(base::TimeDelta::FromHours(1));
+  task_environment_.FastForwardBy(base::Hours(1));
 
   // Authenticate against GAIA with SAML. Verify that the flag enforcing online
   // login is cleared and the time of last login with SAML is updated.
   CreateLimiter();
   Mock::VerifyAndClearExpectations(user_manager_);
-  SetUpUserManager();
   EXPECT_CALL(*user_manager_,
               SaveForceOnlineSignin(test_saml_account_id_, false))
       .Times(1);
@@ -1116,13 +1083,12 @@ TEST_F(OfflineSigninLimiterTest, SAMLNoLimit) {
 
   // Advance time by an hour.
   const base::Time gaia_signin_time = task_environment_.GetMockClock()->Now();
-  task_environment_.FastForwardBy(base::TimeDelta::FromHours(1));
+  task_environment_.FastForwardBy(base::Hours(1));
 
   // Authenticate offline. Verify that the flag enforcing online login and the
   // time of last login with SAML are not changed.
   CreateLimiter();
   Mock::VerifyAndClearExpectations(user_manager_);
-  SetUpUserManager();
   EXPECT_CALL(*user_manager_, SaveForceOnlineSignin(test_saml_account_id_, _))
       .Times(0);
   limiter_->SignedIn(UserContext::AUTH_FLOW_OFFLINE);
@@ -1188,7 +1154,6 @@ TEST_F(OfflineSigninLimiterTest, SAMLSetLimitWhileLoggedIn) {
 
   // Set a zero time limit. Verify that the flag enforcing online login is set.
   Mock::VerifyAndClearExpectations(user_manager_);
-  SetUpUserManager();
   EXPECT_CALL(*user_manager_,
               SaveForceOnlineSignin(test_saml_account_id_, false))
       .Times(0);
@@ -1226,7 +1191,6 @@ TEST_F(OfflineSigninLimiterTest, SAMLRemoveLimit) {
   // Verify that the flag enforcing online login is not
   // changed.
   Mock::VerifyAndClearExpectations(user_manager_);
-  SetUpUserManager();
   EXPECT_CALL(*user_manager_, SaveForceOnlineSignin(test_saml_account_id_, _))
       .Times(0);
 }
@@ -1240,7 +1204,7 @@ TEST_F(OfflineSigninLimiterTest, SAMLLogInWithExpiredLimit) {
                  task_environment_.GetMockClock()->Now());
 
   // Advance time by four weeks.
-  task_environment_.FastForwardBy(base::TimeDelta::FromDays(28));  // 4 weeks.
+  task_environment_.FastForwardBy(base::Days(28));  // 4 weeks.
 
   // Authenticate against GAIA with SAML. Verify that the flag enforcing online
   // login is cleared and the time of last login with SAML is updated.
@@ -1271,7 +1235,7 @@ TEST_F(OfflineSigninLimiterTest, SAMLLogInOfflineWithExpiredLimit) {
 
   // Advance time by four weeks.
   const base::Time gaia_signin_time = task_environment_.GetMockClock()->Now();
-  task_environment_.FastForwardBy(base::TimeDelta::FromDays(28));  // 4 weeks.
+  task_environment_.FastForwardBy(base::Days(28));  // 4 weeks.
 
   // Authenticate offline. Verify that the flag enforcing online login is
   // set and the time of last login with SAML is not changed.
@@ -1313,7 +1277,7 @@ TEST_F(OfflineSigninLimiterTest, SAMLLimitExpiredWhileSuspended) {
 
   // Suspend for 4 weeks.
   test_power_monitor_source_.Suspend();
-  task_environment_.AdvanceClock(base::TimeDelta::FromDays(28));  // 4 weeks.
+  task_environment_.AdvanceClock(base::Days(28));  // 4 weeks.
 
   // Resume power. Verify that the flag enforcing online login is set.
   Mock::VerifyAndClearExpectations(user_manager_);
@@ -1336,13 +1300,13 @@ TEST_F(OfflineSigninLimiterTest, SAMLLogInOfflineWithOnLockReauth) {
   prefs->SetTime(prefs::kSAMLLastGAIASignInTime,
                  task_environment_.GetMockClock()->Now());
   prefs->SetInteger(prefs::kSAMLOfflineSigninTimeLimit,
-                    base::TimeDelta::FromDays(1).InSeconds());  // 1 day.
+                    base::Days(1).InSeconds());  // 1 day.
 
   // Enable re-authentication on the lock screen.
   prefs->SetBoolean(prefs::kLockScreenReauthenticationEnabled, true);
 
   // Advance time by four weeks.
-  task_environment_.FastForwardBy(base::TimeDelta::FromDays(28));  // 4 weeks.
+  task_environment_.FastForwardBy(base::Days(28));  // 4 weeks.
 
   // Authenticate offline and check if InSessionPasswordSyncManager is created.
   CreateLimiter();

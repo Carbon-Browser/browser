@@ -12,14 +12,14 @@
 
 #include "base/base_export.h"
 #include "base/callback.h"
-#include "base/macros.h"
+#include "base/check.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/message_loop/timer_slack.h"
 #include "base/sequence_checker.h"
-#include "base/single_thread_task_runner.h"
 #include "base/synchronization/atomic_flag.h"
 #include "base/synchronization/lock.h"
 #include "base/synchronization/waitable_event.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/platform_thread.h"
 #include "build/build_config.h"
 
@@ -27,12 +27,9 @@ namespace base {
 
 class MessagePump;
 class RunLoop;
-namespace sequence_manager {
-class TimeDomain;
-}
 
 // IMPORTANT: Instead of creating a base::Thread, consider using
-// base::Create(Sequenced|SingleThread)TaskRunner().
+// base::ThreadPool::Create(Sequenced|SingleThread)TaskRunner().
 //
 // A simple thread abstraction that establishes a MessageLoop on a new thread.
 // The consumer uses the MessageLoop of the thread to cause code to execute on
@@ -79,6 +76,7 @@ class BASE_EXPORT Thread : PlatformThread::Delegate {
 
     Options();
     Options(MessagePumpType type, size_t size);
+    explicit Options(ThreadType thread_type);
     Options(Options&& other);
     Options& operator=(Options&& other);
     ~Options();
@@ -94,10 +92,6 @@ class BASE_EXPORT Thread : PlatformThread::Delegate {
     // Specifies timer slack for thread message loop.
     TimerSlack timer_slack = TIMER_SLACK_NONE;
 
-    // The time domain to be used by the task queue. This is not compatible with
-    // a non-null |delegate|.
-    sequence_manager::TimeDomain* task_queue_time_domain = nullptr;
-
     // Used to create the MessagePump for the MessageLoop. The callback is Run()
     // on the thread. If message_pump_factory.is_null(), then a MessagePump
     // appropriate for |message_pump_type| is created. Setting this forces the
@@ -110,8 +104,8 @@ class BASE_EXPORT Thread : PlatformThread::Delegate {
     // A value of 0 indicates that the default maximum should be used.
     size_t stack_size = 0;
 
-    // Specifies the initial thread priority.
-    ThreadPriority priority = ThreadPriority::NORMAL;
+    // Specifies the initial thread type.
+    ThreadType thread_type = ThreadType::kDefault;
 
     // If false, the thread will not be joined on destruction. This is intended
     // for threads that want TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN
@@ -133,6 +127,9 @@ class BASE_EXPORT Thread : PlatformThread::Delegate {
   // name is a display string to identify the thread.
   explicit Thread(const std::string& name);
 
+  Thread(const Thread&) = delete;
+  Thread& operator=(const Thread&) = delete;
+
   // Destroys the thread, stopping it if necessary.
   //
   // NOTE: ALL SUBCLASSES OF Thread MUST CALL Stop() IN THEIR DESTRUCTORS (or
@@ -143,7 +140,7 @@ class BASE_EXPORT Thread : PlatformThread::Delegate {
   // before it is destructed.
   ~Thread() override;
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   // Causes the thread to initialize COM.  This must be called before calling
   // Start() or StartWithOptions().  If |use_mta| is false, the thread is also
   // started with a TYPE_UI message loop.  It is an error to call
@@ -280,7 +277,7 @@ class BASE_EXPORT Thread : PlatformThread::Delegate {
   friend class MessageLoopTaskRunnerTest;
   friend class ScheduleWorkTest;
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   enum ComStatus {
     NONE,
     STA,
@@ -293,7 +290,7 @@ class BASE_EXPORT Thread : PlatformThread::Delegate {
 
   void ThreadQuitHelper();
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   // Whether this thread needs to initialize COM, and if so, in what mode.
   ComStatus com_status_ = NONE;
 #endif
@@ -339,8 +336,6 @@ class BASE_EXPORT Thread : PlatformThread::Delegate {
   // This class is not thread-safe, use this to verify access from the owning
   // sequence of the Thread.
   SequenceChecker owning_sequence_checker_;
-
-  DISALLOW_COPY_AND_ASSIGN(Thread);
 };
 
 }  // namespace base

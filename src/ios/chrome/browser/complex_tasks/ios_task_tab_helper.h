@@ -5,7 +5,7 @@
 #ifndef IOS_CHROME_BROWSER_COMPLEX_TASKS_IOS_TASK_TAB_HELPER_H_
 #define IOS_CHROME_BROWSER_COMPLEX_TASKS_IOS_TASK_TAB_HELPER_H_
 
-#include <map>
+#include <unordered_map>
 
 #import "ios/chrome/browser/complex_tasks/ios_content_record_task_id.h"
 #include "ios/web/public/web_state_observer.h"
@@ -22,6 +22,10 @@ class IOSTaskTabHelper : public web::WebStateObserver,
                          public web::WebStateUserData<IOSTaskTabHelper> {
  public:
   explicit IOSTaskTabHelper(web::WebState* web_state);
+
+  IOSTaskTabHelper(const IOSTaskTabHelper&) = delete;
+  IOSTaskTabHelper& operator=(const IOSTaskTabHelper&) = delete;
+
   ~IOSTaskTabHelper() override;
 
   // web::WebStateObserver
@@ -40,7 +44,5 @@ class IOSTaskTabHelper : public web::WebStateObserver,
   web::WebState* web_state_ = nullptr;
   int prev_item_unique_id_ = -1;
   WEB_STATE_USER_DATA_KEY_DECL();
-
-  DISALLOW_COPY_AND_ASSIGN(IOSTaskTabHelper);
 };
 #endif  // IOS_CHROME_BROWSER_COMPLEX_TASKS_IOS_TASK_TAB_HELPER_H_

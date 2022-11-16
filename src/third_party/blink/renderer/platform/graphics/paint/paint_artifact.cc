@@ -23,7 +23,7 @@ size_t PaintArtifact::ApproximateUnsharedMemoryUsage() const {
 sk_sp<PaintRecord> PaintArtifact::GetPaintRecord(
     const PropertyTreeState& replay_state) const {
   return PaintChunksToCcLayer::Convert(
-             PaintChunkSubset(this), replay_state, FloatPoint(),
+             PaintChunkSubset(this), replay_state, gfx::Vector2dF(),
              cc::DisplayItemList::kToBeReleasedAsPaintOpBuffer)
       ->ReleaseAsRecord();
 }
@@ -51,12 +51,15 @@ DOMNodeId PaintArtifact::ClientOwnerNodeId(
 
 String PaintArtifact::IdAsString(const DisplayItem::Id& id) const {
 #if DCHECK_IS_ON()
-  return String::Format(
-      "%s:%s:%d", ClientDebugName(id.client_id).Utf8().c_str(),
-      DisplayItem::TypeAsDebugString(id.type).Utf8().c_str(), id.fragment);
-#else
-  return id.ToString();
+  String debug_name = ClientDebugName(id.client_id);
+  if (!debug_name.IsEmpty()) {
+    return String::Format(
+        "%p:%s:%s:%d", reinterpret_cast<void*>(id.client_id),
+        ClientDebugName(id.client_id).Utf8().c_str(),
+        DisplayItem::TypeAsDebugString(id.type).Utf8().c_str(), id.fragment);
+  }
 #endif
+  return id.ToString();
 }
 
 }  // namespace blink

@@ -6,6 +6,7 @@
 
 #include "ash/constants/ash_features.h"
 #include "ash/constants/ash_pref_names.h"
+#include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "chromeos/dbus/dbus_thread_manager.h"
@@ -18,7 +19,10 @@
 
 namespace {
 const speech::LanguageCode kEnglishLocale = speech::LanguageCode::kEnUs;
-const base::TimeDelta kSodaUninstallTime = base::TimeDelta::FromDays(30);
+const base::TimeDelta kSodaUninstallTime = base::Days(30);
+
+constexpr char kSodaEnglishLanguageInstallationResult[] =
+    "SodaInstaller.Language.en-US.InstallationResult";
 }  // namespace
 
 namespace speech {
@@ -37,6 +41,10 @@ class SodaInstallerImplChromeOSTest : public testing::Test {
         ash::prefs::kAccessibilityDictationEnabled, true);
     pref_service_->registry()->RegisterBooleanPref(prefs::kLiveCaptionEnabled,
                                                    true);
+    pref_service_->registry()->RegisterBooleanPref(
+        ash::prefs::kProjectorCreationFlowEnabled, true);
+    pref_service_->registry()->RegisterStringPref(
+        ash::prefs::kProjectorCreationFlowLanguage, kUsEnglishLocale);
     pref_service_->registry()->RegisterStringPref(
         prefs::kLiveCaptionLanguageCode, kUsEnglishLocale);
 
@@ -66,7 +74,7 @@ class SodaInstallerImplChromeOSTest : public testing::Test {
   }
 
   bool IsAnyLanguagePackInstalled() {
-    return soda_installer_impl_->IsAnyLanguagePackInstalled();
+    return soda_installer_impl_->IsAnyLanguagePackInstalledForTesting();
   }
 
   bool IsSodaDownloading() {
@@ -106,6 +114,11 @@ class SodaInstallerImplChromeOSTest : public testing::Test {
                                   std::make_unique<base::Value>(enabled));
   }
 
+  void SetProjectorCreationFlowEnabled(bool enabled) {
+    pref_service_->SetManagedPref(ash::prefs::kProjectorCreationFlowEnabled,
+                                  std::make_unique<base::Value>(enabled));
+  }
+
   void SetSodaInstallerInitialized(bool initialized) {
     soda_installer_impl_->soda_installer_initialized_ = initialized;
   }
@@ -120,11 +133,23 @@ class SodaInstallerImplChromeOSTest : public testing::Test {
 };
 
 TEST_F(SodaInstallerImplChromeOSTest, IsSodaInstalled) {
+  base::HistogramTester histogram_tester;
+
   ASSERT_FALSE(IsSodaInstalled());
   Init();
   ASSERT_FALSE(IsSodaInstalled());
   RunUntilIdle();
   ASSERT_TRUE(IsSodaInstalled());
+
+  // SODA binary and english language installation never failed.
+  histogram_tester.ExpectBucketCount(kSodaBinaryInstallationResult, 0, 0);
+  histogram_tester.ExpectBucketCount(kSodaEnglishLanguageInstallationResult, 0,
+                                     0);
+
+  // SODA binary and english language installation succeeded once.
+  histogram_tester.ExpectBucketCount(kSodaBinaryInstallationResult, 1, 1);
+  histogram_tester.ExpectBucketCount(kSodaEnglishLanguageInstallationResult, 1,
+                                     1);
 }
 
 TEST_F(SodaInstallerImplChromeOSTest, IsDownloading) {
@@ -172,7 +197,13 @@ TEST_F(SodaInstallerImplChromeOSTest, InstallSodaForTesting) {
   ASSERT_FALSE(IsSodaDownloading());
   ASSERT_FALSE(IsLanguageInstalled(kEnglishLocale));
   ASSERT_FALSE(IsSodaDownloading());
+
+  // Install just the binary.
   GetInstance()->NotifySodaInstalledForTesting();
+  ASSERT_FALSE(IsSodaDownloading());
+
+  // Now install the language pack.
+  GetInstance()->NotifySodaInstalledForTesting(kEnglishLocale);
   ASSERT_TRUE(IsSodaInstalled());
   ASSERT_FALSE(IsSodaDownloading());
   ASSERT_TRUE(IsLanguageInstalled(kEnglishLocale));
@@ -194,7 +225,7 @@ TEST_F(SodaInstallerImplChromeOSTest, SodaProgressForTesting) {
   ASSERT_FALSE(IsSodaDownloading());
   ASSERT_FALSE(IsLanguageInstalled(kEnglishLocale));
   Init();
-  GetInstance()->NotifySodaDownloadProgressForTesting(50);
+  GetInstance()->NotifySodaProgressForTesting(50);
   ASSERT_FALSE(IsSodaInstalled());
   ASSERT_FALSE(IsAnyLanguagePackInstalled());
   ASSERT_TRUE(IsSodaDownloading());
@@ -207,10 +238,10 @@ TEST_F(SodaInstallerImplChromeOSTest, LanguagePackForTesting) {
   Init();
   RunUntilIdle();
   ASSERT_FALSE(IsLanguageInstalled(fr_fr));
-  GetInstance()->NotifyOnSodaLanguagePackProgressForTesting(50, fr_fr);
+  GetInstance()->NotifySodaProgressForTesting(50, fr_fr);
   ASSERT_TRUE(GetInstance()->IsSodaDownloading(fr_fr));
   ASSERT_FALSE(IsLanguageInstalled(fr_fr));
-  GetInstance()->NotifyOnSodaLanguagePackInstalledForTesting(fr_fr);
+  GetInstance()->NotifySodaInstalledForTesting(fr_fr);
   ASSERT_TRUE(IsLanguageInstalled(fr_fr));
 }
 
@@ -220,10 +251,10 @@ TEST_F(SodaInstallerImplChromeOSTest, LanguagePackErrorForTesting) {
   Init();
   RunUntilIdle();
   ASSERT_FALSE(IsLanguageInstalled(fr_fr));
-  GetInstance()->NotifyOnSodaLanguagePackProgressForTesting(50, fr_fr);
+  GetInstance()->NotifySodaProgressForTesting(50, fr_fr);
   ASSERT_TRUE(GetInstance()->IsSodaDownloading(fr_fr));
   ASSERT_FALSE(IsLanguageInstalled(fr_fr));
-  GetInstance()->NotifyOnSodaLanguagePackErrorForTesting(fr_fr);
+  GetInstance()->NotifySodaErrorForTesting(fr_fr);
   ASSERT_FALSE(IsLanguageInstalled(fr_fr));
   ASSERT_FALSE(GetInstance()->IsSodaDownloading(fr_fr));
 }
@@ -235,6 +266,7 @@ TEST_F(SodaInstallerImplChromeOSTest, UninstallSodaAfterThirtyDays) {
   // Turn off features that use SODA so that the uninstall timer can be set.
   SetDictationEnabled(false);
   SetLiveCaptionEnabled(false);
+  SetProjectorCreationFlowEnabled(false);
   SetUninstallTimer();
   ASSERT_TRUE(IsSodaInstalled());
   // If 30 days pass without the uninstall time being pushed, SODA will be
@@ -256,6 +288,7 @@ TEST_F(SodaInstallerImplChromeOSTest, ReinstallSoda) {
   // Turn off features that use SODA so that the uninstall timer can be set.
   SetDictationEnabled(false);
   SetLiveCaptionEnabled(false);
+  SetProjectorCreationFlowEnabled(false);
   SetUninstallTimer();
   ASSERT_TRUE(IsSodaInstalled());
   // If 30 days pass without the uninstall time being pushed, SODA will be

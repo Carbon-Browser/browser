@@ -41,23 +41,6 @@ std::unique_ptr<net::test_server::HttpResponse> HandleQueryTitle(
   return std::move(http_response);
 }
 
-// Returns a matcher that matches anything, but also fills |value| with the
-// accessbilityValue of the matched view.
-id<GREYMatcher> GetAccessibilityValue(__strong NSString** value) {
-  GREYMatchesBlock matches = ^BOOL(UIView* view) {
-    if (value) {
-      *value = view.accessibilityValue;
-    }
-    return YES;
-  };
-  GREYDescribeToBlock describe = ^void(id<GREYDescription> description) {
-    [description appendText:@"View is correct"];
-  };
-
-  return [[GREYElementMatcherBlock alloc] initWithMatchesBlock:matches
-                                              descriptionBlock:describe];
-}
-
 }  // namespace
 
 // Thumb Strip tests for Chrome.
@@ -86,11 +69,6 @@ id<GREYMatcher> GetAccessibilityValue(__strong NSString** value) {
 // this tests that the thumb strip is not partially covered when Smooth
 // Scrolling is on.
 - (void)testThumbStripVisibleInPeekedState {
-  // TODO(crbug.com/1220137): This test is failing on iOS 15.
-  if (@available(iOS 15, *)) {
-    EARL_GREY_TEST_DISABLED(@"Disabled on iOS 15 as it is failing.");
-  }
-
   // The feature only works on iPad.
   if (![ChromeEarlGrey isIPadIdiom]) {
     EARL_GREY_TEST_SKIPPED(@"Thumb strip is not enabled on iPhone");
@@ -118,11 +96,6 @@ id<GREYMatcher> GetAccessibilityValue(__strong NSString** value) {
 
 // Tests that the web content ends up covered when in revealed state.
 - (void)testWebContentCoveredInRevealedState {
-  // TODO(crbug.com/1220137): This test is failing on iOS 15.
-  if (@available(iOS 15, *)) {
-    EARL_GREY_TEST_DISABLED(@"Disabled on iOS 15 as it is failing.");
-  }
-
   // The feature only works on iPad.
   if (![ChromeEarlGrey isIPadIdiom]) {
     EARL_GREY_TEST_SKIPPED(@"Thumb strip is not enabled on iPhone");
@@ -135,46 +108,19 @@ id<GREYMatcher> GetAccessibilityValue(__strong NSString** value) {
   [ChromeEarlGrey loadURL:URL];
   [ChromeEarlGrey waitForWebStateContainingText:"Hello"];
 
-  // Save the text in the location bar because the hider view should have the
-  // same text.
-  NSString* locationBarAccessibilityValue;
-  [[EarlGrey
-      selectElementWithMatcher:grey_allOf(grey_kindOfClassName(
-                                              @"LocationBarSteadyButton"),
-                                          grey_minimumVisiblePercent(1), nil)]
-      assertWithMatcher:GetAccessibilityValue(&locationBarAccessibilityValue)];
-
   // Swipe down twice to reveal the thumb strip.
   [[EarlGrey selectElementWithMatcher:PrimaryToolbar()]
       performAction:grey_swipeSlowInDirection(kGREYDirectionDown)];
   [[EarlGrey selectElementWithMatcher:PrimaryToolbar()]
       performAction:grey_swipeSlowInDirection(kGREYDirectionDown)];
 
-  // Make sure that the hider view is visible, and the toolbar is not.
+  // Make sure that the toolbar is not visible.
   [[EarlGrey selectElementWithMatcher:grey_allOf(PrimaryToolbar(), nil)]
       assertWithMatcher:grey_notVisible()];
-  [[EarlGrey
-      selectElementWithMatcher:grey_accessibilityID(@"BrowserViewHiderView")]
-      assertWithMatcher:grey_notNil()];
-
-  // Make sure that the text on the hider view is the location bar text.
-  [[EarlGrey
-      selectElementWithMatcher:grey_allOf(
-                                   grey_kindOfClassName(
-                                       @"LocationBarSteadyView"),
-                                   grey_descendant(grey_accessibilityValue(
-                                       locationBarAccessibilityValue)),
-                                   grey_minimumVisiblePercent(1), nil)]
-      assertWithMatcher:grey_notNil()];
 }
 
 // Tests that scrolling the web content can open and close the thumb strip.
 - (void)testScrollingInWebContent {
-  // TODO(crbug.com/1220137): This test is failing on iOS 15.
-  if (@available(iOS 15, *)) {
-    EARL_GREY_TEST_DISABLED(@"Disabled on iOS 15 as it is failing.");
-  }
-
   // The feature only works on iPad.
   if (![ChromeEarlGrey isIPadIdiom]) {
     EARL_GREY_TEST_SKIPPED(@"Thumb strip is not enabled on iPhone");
@@ -213,11 +159,6 @@ id<GREYMatcher> GetAccessibilityValue(__strong NSString** value) {
 
 // Tests that scrolling the web content can open and close the thumb strip.
 - (void)testScrollingOnNTP {
-  // TODO(crbug.com/1220137): This test is failing on iOS 15.
-  if (@available(iOS 15, *)) {
-    EARL_GREY_TEST_DISABLED(@"Disabled on iOS 15 as it is failing.");
-  }
-
   // The feature only works on iPad.
   if (![ChromeEarlGrey isIPadIdiom]) {
     EARL_GREY_TEST_SKIPPED(@"Thumb strip is not enabled on iPhone");
@@ -249,11 +190,6 @@ id<GREYMatcher> GetAccessibilityValue(__strong NSString** value) {
 
 // Tests that switching tabs in the peeked state doesn't close the thumb strip.
 - (void)testSwitchTabInPeekedState {
-  // TODO(crbug.com/1220137): This test is failing on iOS 15.
-  if (@available(iOS 15, *)) {
-    EARL_GREY_TEST_DISABLED(@"Disabled on iOS 15 as it is failing.");
-  }
-
   // The feature only works on iPad.
   if (![ChromeEarlGrey isIPadIdiom]) {
     EARL_GREY_TEST_SKIPPED(@"Thumb strip is not enabled on iPhone");

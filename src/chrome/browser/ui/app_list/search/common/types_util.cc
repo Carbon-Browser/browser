@@ -4,6 +4,8 @@
 
 #include "chrome/browser/ui/app_list/search/common/types_util.h"
 
+#include "ash/public/cpp/app_list/app_list_types.h"
+
 namespace app_list {
 
 std::string ResultTypeToString(const ash::AppListSearchResultType result_type) {
@@ -46,10 +48,20 @@ std::string ResultTypeToString(const ash::AppListSearchResultType result_type) {
       return "Assistant text";
     case ash::AppListSearchResultType::kHelpApp:
       return "Help app";
+    case ash::AppListSearchResultType::kZeroStateHelpApp:
+      return "Help app - zero state";
     case ash::AppListSearchResultType::kFileSearch:
       return "File search";
     case ash::AppListSearchResultType::kDriveSearch:
       return "Drive search";
+    case ash::AppListSearchResultType::kKeyboardShortcut:
+      return "Keyboard shortcut";
+    case ash::AppListSearchResultType::kOpenTab:
+      return "Open tab";
+    case ash::AppListSearchResultType::kGames:
+      return "Games";
+    case ash::AppListSearchResultType::kPersonalization:
+      return "Personalization";
   }
   NOTREACHED();
 }
@@ -136,10 +148,10 @@ std::string MetricsTypeToString(const ash::SearchResultType metrics_type) {
       return "OMNIBOX_SEARCH_SUGGEST_ENTITY";
     case ash::SearchResultType::OMNIBOX_NAVSUGGEST:
       return "OMNIBOX_NAVSUGGEST";
-    case ash::SearchResultType::OMNIBOX_RICH_ENTITY_ANSWER:
-      return "OMNIBOX_RICH_ENTITY_ANSWER";
-    case ash::SearchResultType::OMNIBOX_RICH_ENTITY_IMAGE_ENTITY:
-      return "OMNIBOX_RICH_ENTITY_IMAGE_ENTITY";
+    case ash::SearchResultType::OMNIBOX_ANSWER:
+      return "OMNIBOX_ANSWER";
+    case ash::SearchResultType::OMNIBOX_CALCULATOR:
+      return "OMNIBOX_CALCULATOR";
     case ash::SearchResultType::FILE_SEARCH:
       return "FILE_SEARCH";
     case ash::SearchResultType::DRIVE_SEARCH:
@@ -148,6 +160,16 @@ std::string MetricsTypeToString(const ash::SearchResultType metrics_type) {
       return "HELP_APP_UPDATES";
     case ash::SearchResultType::HELP_APP_DISCOVER:
       return "HELP_APP_DISCOVER";
+    case ash::SearchResultType::KEYBOARD_SHORTCUT:
+      return "KEYBOARD_SHORTCUT";
+    case ash::SearchResultType::OPEN_TAB:
+      return "OPEN_TAB";
+    case ash::SearchResultType::NO_RESULT:
+      return "NO_RESULT";
+    case ash::SearchResultType::GAME_SEARCH:
+      return "GAME_SEARCH";
+    case ash::SearchResultType::PERSONALIZATION:
+      return "PERSONALIZATION";
     case ash::SearchResultType::SEARCH_RESULT_TYPE_BOUNDARY:
       return "SEARCH_RESULT_TYPE_BOUNDARY";
   }
@@ -164,10 +186,14 @@ std::string DisplayTypeToString(
       return "List";
     case ash::SearchResultDisplayType::kTile:
       return "Tile";
-    case ash::SearchResultDisplayType::kCard:
-      return "Card";
+    case ash::SearchResultDisplayType::kAnswerCard:
+      return "AnswerCard";
     case ash::SearchResultDisplayType::kChip:
       return "Chip";
+    case ash::SearchResultDisplayType::kContinue:
+      return "Continue";
+    case ash::SearchResultDisplayType::kRecentApps:
+      return "RecentApps";
   }
   NOTREACHED();
 }

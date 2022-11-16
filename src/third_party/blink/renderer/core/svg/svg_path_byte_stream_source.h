@@ -20,10 +20,11 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_SVG_SVG_PATH_BYTE_STREAM_SOURCE_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_SVG_SVG_PATH_BYTE_STREAM_SOURCE_H_
 
+#include "base/check_op.h"
 #include "build/build_config.h"
 #include "third_party/blink/renderer/core/svg/svg_path_byte_stream.h"
 #include "third_party/blink/renderer/core/svg/svg_path_data.h"
-#include "third_party/blink/renderer/platform/geometry/float_point.h"
+#include "ui/gfx/geometry/point_f.h"
 
 namespace blink {
 
@@ -56,10 +57,10 @@ class SVGPathByteStreamSource {
   bool ReadFlag() { return ReadType<bool>(); }
   float ReadFloat() { return ReadType<float>(); }
   uint16_t ReadSVGSegmentType() { return ReadType<uint16_t>(); }
-  FloatPoint ReadFloatPoint() {
+  gfx::PointF ReadPoint() {
     float x = ReadType<float>();
     float y = ReadType<float>();
-    return FloatPoint(x, y);
+    return gfx::PointF(x, y);
   }
 
   SVGPathByteStream::DataIterator stream_current_;

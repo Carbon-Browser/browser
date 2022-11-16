@@ -14,6 +14,8 @@ import("//device/vr/buildflags/buildflags.gni")
 import("//gpu/vulkan/features.gni")
 import("//media/media_options.gni")
 import("//mojo/public/tools/bindings/mojom.gni")
+import("//pdf/features.gni")
+import("//printing/buildflags/buildflags.gni")
 import("//tools/grit/grit_rule.gni")
 import("//tools/grit/repack.gni")
 import("//tools/v8_context_snapshot/v8_context_snapshot.gni")
@@ -45,6 +47,13 @@ if (is_android) {
   grit("generate_components_strings") {
     source = "../components/components_strings.grd"
 
+    defines = [
+      "enable_arcore=$enable_arcore",
+      "enable_pdf=$enable_pdf",
+      "enable_print_preview=$enable_print_preview",
+      "enable_vr=$enable_vr",
+    ]
+
     # components_strings contains strings from all components. WebLayer
     # will never display most of them, so we try to limit the included
     # strings.
@@ -57,7 +66,7 @@ if (is_android) {
     outputs =
         weblayer_components_strings_java_resources +
         [ "grit/components_strings.h" ] +
-        process_file_template(locales_with_pseudolocales,
+        process_file_template(all_chrome_locales,
                               [ "components_strings_{{source_name_part}}.pak" ])
   }
 
@@ -75,15 +84,16 @@ if (is_android) {
     ]
     outputs = [ "grit/components_chromium_strings.h" ] +
               process_file_template(
-                  locales_with_pseudolocales,
+                  all_chrome_locales,
                   [ "components_chromium_strings_{{source_name_part}}.pak" ])
   }
 
   repack_locales("weblayer_locales") {
-    input_locales = locales
-    output_locales = locales
+    input_locales = platform_pak_locales
+    output_locales = platform_pak_locales
     source_patterns = [
       "${root_gen_dir}/components/strings/components_locale_settings_",
+      "${root_gen_dir}/device/bluetooth/strings/bluetooth_strings_",
       "${root_gen_dir}/weblayer/components_chromium_strings_",
       "${root_gen_dir}/weblayer/components_strings_",
     ]
@@ -91,6 +101,7 @@ if (is_android) {
       ":generate_components_chromium_strings",
       ":generate_components_strings",
       "//components/strings:components_locale_settings",
+      "//device/bluetooth/strings",
     ]
     output_dir = "$root_out_dir/weblayer/locales"
   }
@@ -107,7 +118,7 @@ if (is_android) {
     disable_compression = true
     renaming_sources = []
     renaming_destinations = []
-    foreach(_locale, locales) {
+    foreach(_locale, platform_pak_locales) {
       renaming_sources += [ "$root_out_dir/weblayer/locales/$_locale.pak" ]
       renaming_destinations += [ "locales/$_locale.pak" ]
     }
@@ -142,6 +153,8 @@ source_set("weblayer_lib_base") {
     "app/content_main_delegate_impl.cc",
     "app/content_main_delegate_impl.h",
     "app/main.cc",
+    "browser/accept_languages_service_factory.cc",
+    "browser/accept_languages_service_factory.h",
     "browser/autofill_client_impl.cc",
     "browser/autofill_client_impl.h",
     "browser/background_download_service_factory.cc",
@@ -189,8 +202,6 @@ source_set("weblayer_lib_base") {
     "browser/cookie_manager_impl.h",
     "browser/cookie_settings_factory.cc",
     "browser/cookie_settings_factory.h",
-    "browser/default_search_engine.cc",
-    "browser/default_search_engine.h",
     "browser/download_impl.cc",
     "browser/download_impl.h",
     "browser/download_manager_delegate_impl.cc",
@@ -294,8 +305,6 @@ source_set("weblayer_lib_base") {
     "browser/system_network_context_manager.h",
     "browser/tab_impl.cc",
     "browser/tab_impl.h",
-    "browser/translate_accept_languages_factory.cc",
-    "browser/translate_accept_languages_factory.h",
     "browser/translate_client_impl.cc",
     "browser/translate_client_impl.h",
     "browser/translate_ranker_factory.cc",
@@ -325,6 +334,8 @@ source_set("weblayer_lib_base") {
     "browser/weblayer_speech_recognition_manager_delegate.h",
     "browser/weblayer_variations_service_client.cc",
     "browser/weblayer_variations_service_client.h",
+    "browser/webui/net_export_ui.cc",
+    "browser/webui/net_export_ui.h",
     "browser/webui/web_ui_controller_factory.cc",
     "browser/webui/web_ui_controller_factory.h",
     "browser/webui/weblayer_internals_ui.cc",
@@ -438,6 +449,8 @@ source_set("weblayer_lib_base") {
     "//components/language/core/browser",
     "//components/leveldb_proto",
     "//components/metrics",
+    "//components/metrics:content",
+    "//components/net_log",
     "//components/network_time",
     "//components/no_state_prefetch/browser",
     "//components/no_state_prefetch/common",
@@ -459,9 +472,11 @@ source_set("weblayer_lib_base") {
     "//components/profile_metrics",
     "//components/safe_browsing/content/browser",
     "//components/safe_browsing/content/browser:client_side_detection",
+    "//components/safe_browsing/content/browser/web_ui",
     "//components/safe_browsing/content/common:interfaces",
     "//components/safe_browsing/content/renderer:throttles",
     "//components/safe_browsing/content/renderer/phishing_classifier",
+    "//components/safe_browsing/core/browser:safe_browsing_metrics_collector",
     "//components/safe_browsing/core/browser/db:database_manager",
     "//components/safe_browsing/core/common",
     "//components/security_interstitials/content:security_interstitial_page",
@@ -471,6 +486,7 @@ source_set("weblayer_lib_base") {
     "//components/services/storage/public/mojom",
     "//components/sessions",
     "//components/signin/core/browser",
+    "//components/site_engagement/content",
     "//components/site_isolation",
     "//components/spellcheck:buildflags",
     "//components/ssl_errors",
@@ -503,7 +519,6 @@ source_set("weblayer_lib_base") {
     "//components/webrtc",
     "//content:content_resources",
     "//content:dev_ui_content_resources",
-    "//content/app/resources",
     "//content/public/app",
     "//content/public/browser",
     "//content/public/child",
@@ -583,14 +598,16 @@ source_set("weblayer_lib_base") {
       "browser/android/exception_filter.h",
       "browser/android/metrics/uma_utils.cc",
       "browser/android/metrics/uma_utils.h",
-      "browser/android/metrics/weblayer_metrics_navigation_throttle.cc",
-      "browser/android/metrics/weblayer_metrics_navigation_throttle.h",
       "browser/android/metrics/weblayer_metrics_service_client.cc",
       "browser/android/metrics/weblayer_metrics_service_client.h",
       "browser/android/permission_request_utils.cc",
       "browser/android/permission_request_utils.h",
       "browser/android/resource_mapper.cc",
       "browser/android/resource_mapper.h",
+      "browser/autofill_assistant/weblayer_assistant_field_trial_util.cc",
+      "browser/autofill_assistant/weblayer_assistant_field_trial_util.h",
+      "browser/autofill_assistant/weblayer_dependencies.cc",
+      "browser/autofill_assistant/weblayer_dependencies.h",
       "browser/bluetooth/weblayer_bluetooth_chooser_android_delegate.cc",
       "browser/bluetooth/weblayer_bluetooth_chooser_android_delegate.h",
       "browser/bluetooth/weblayer_bluetooth_scanning_prompt_android_delegate.cc",
@@ -602,6 +619,8 @@ source_set("weblayer_lib_base") {
       "browser/browser_controls_navigation_state_handler_delegate.h",
       "browser/browser_list_proxy.cc",
       "browser/browser_list_proxy.h",
+      "browser/component_updater/client_side_phishing_component_loader_policy.cc",
+      "browser/component_updater/client_side_phishing_component_loader_policy.h",
       "browser/component_updater/registration.cc",
       "browser/component_updater/registration.h",
       "browser/content_view_render_view.cc",
@@ -658,6 +677,8 @@ source_set("weblayer_lib_base") {
       "browser/safe_browsing/weblayer_client_side_detection_host_delegate.h",
       "browser/safe_browsing/weblayer_client_side_detection_service_delegate.cc",
       "browser/safe_browsing/weblayer_client_side_detection_service_delegate.h",
+      "browser/safe_browsing/weblayer_ping_manager_factory.cc",
+      "browser/safe_browsing/weblayer_ping_manager_factory.h",
       "browser/safe_browsing/weblayer_safe_browsing_blocking_page_factory.cc",
       "browser/safe_browsing/weblayer_safe_browsing_blocking_page_factory.h",
       "browser/safe_browsing/weblayer_safe_browsing_tab_observer_delegate.cc",
@@ -666,6 +687,8 @@ source_set("weblayer_lib_base") {
       "browser/safe_browsing/weblayer_ui_manager_delegate.h",
       "browser/safe_browsing/weblayer_user_population_helper.cc",
       "browser/safe_browsing/weblayer_user_population_helper.h",
+      "browser/site_engagement/site_engagement_service_factory.cc",
+      "browser/site_engagement/site_engagement_service_factory.h",
       "browser/tab_callback_proxy.cc",
       "browser/tab_callback_proxy.h",
       "browser/translate_compact_infobar.cc",
@@ -678,6 +701,14 @@ source_set("weblayer_lib_base") {
       "browser/url_bar/trusted_cdn_observer.h",
       "browser/verdict_cache_manager_factory.cc",
       "browser/verdict_cache_manager_factory.h",
+      "browser/webapps/webapk_install_scheduler.cc",
+      "browser/webapps/webapk_install_scheduler.h",
+      "browser/webapps/webapk_install_scheduler_bridge.cc",
+      "browser/webapps/webapk_install_scheduler_bridge.h",
+      "browser/webapps/webapps_utils.cc",
+      "browser/webapps/webapps_utils.h",
+      "browser/webapps/weblayer_app_banner_manager_android.cc",
+      "browser/webapps/weblayer_app_banner_manager_android.h",
       "browser/webapps/weblayer_webapps_client.cc",
       "browser/webapps/weblayer_webapps_client.h",
       "browser/weblayer_factory_impl_android.cc",
@@ -692,18 +723,22 @@ source_set("weblayer_lib_base") {
       "common/crash_reporter/crash_reporter_client.h",
     ]
     deps += [
-      "//android_webview:generate_aw_resources",
-      "//android_webview:generate_aw_strings",
       "//components/android_autofill/browser",
       "//components/android_autofill/browser:android",
       "//components/android_system_error_page",
+      "//components/autofill_assistant/browser",
+      "//components/autofill_assistant/browser/android:dependencies_android",
+      "//components/autofill_assistant/content/browser",
+      "//components/browser_ui/accessibility/android",
       "//components/browser_ui/client_certificate/android",
       "//components/browser_ui/contacts_picker/android",
       "//components/browser_ui/photo_picker/android",
+      "//components/browser_ui/share/android",
       "//components/browser_ui/site_settings/android",
       "//components/browser_ui/sms/android",
       "//components/cdm/browser",
       "//components/component_updater/android:embedded_component_loader",
+      "//components/component_updater/installer_policies",
       "//components/content_capture/android",
       "//components/content_settings/android",
       "//components/crash/android:crash_android",
@@ -714,6 +749,7 @@ source_set("weblayer_lib_base") {
       "//components/embedder_support/android/metrics",
       "//components/external_intents/android",
       "//components/favicon/android",
+      "//components/image_fetcher:android",
       "//components/infobars/android",
       "//components/installedapp/android",
       "//components/javascript_dialogs",
@@ -728,7 +764,7 @@ source_set("weblayer_lib_base") {
       "//components/resources:android_resources",
       "//components/safe_browsing/android:remote_database_manager",
       "//components/safe_browsing/android:safe_browsing_api_handler",
-      "//components/safe_browsing/content/browser:client_side_model_loader",
+      "//components/safe_browsing/content/browser/triggers",
       "//components/safe_browsing/core/browser",
       "//components/safe_browsing/core/browser:token_fetcher",
       "//components/safe_browsing/core/browser:verdict_cache_manager",
@@ -743,6 +779,7 @@ source_set("weblayer_lib_base") {
       "//components/security_interstitials/core:unsafe_resource",
       "//components/security_interstitials/core/",
       "//components/security_state/content/android",
+      "//components/site_engagement/content",
       "//components/subresource_filter/android",
       "//components/translate/content/android",
       "//components/version_info/android:channel_getter",
@@ -809,6 +846,7 @@ if (is_android) {
       ":weblayer_lib_base",
       "//base",
       "//base/test:test_support",
+      "//components/content_settings/core/browser",
       "//components/infobars/android",
       "//components/infobars/content",
       "//components/infobars/core",

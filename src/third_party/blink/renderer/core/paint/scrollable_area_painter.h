@@ -5,15 +5,17 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_PAINT_SCROLLABLE_AREA_PAINTER_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_PAINT_SCROLLABLE_AREA_PAINTER_H_
 
-#include "third_party/blink/renderer/platform/heap/handle.h"
+#include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
+
+namespace gfx {
+class Rect;
+class Vector2d;
+}
 
 namespace blink {
 
 class CullRect;
-class DisplayItemClient;
 class GraphicsContext;
-class IntPoint;
-class IntRect;
 class Scrollbar;
 struct PaintInfo;
 class PaintLayerScrollableArea;
@@ -29,16 +31,17 @@ class ScrollableAreaPainter {
   ScrollableAreaPainter(const ScrollableAreaPainter&) = delete;
   ScrollableAreaPainter& operator=(const ScrollableAreaPainter&) = delete;
 
-  void PaintOverflowControls(const PaintInfo&, const IntPoint& paint_offset);
+  void PaintOverflowControls(const PaintInfo&,
+                             const gfx::Vector2d& paint_offset);
   void PaintScrollbar(GraphicsContext&,
                       Scrollbar&,
-                      const IntPoint& paint_offset,
+                      const gfx::Vector2d& paint_offset,
                       const CullRect&);
   void PaintResizer(GraphicsContext&,
-                    const IntPoint& paint_offset,
+                    const gfx::Vector2d& paint_offset,
                     const CullRect&);
   void PaintScrollCorner(GraphicsContext&,
-                         const IntPoint& paint_offset,
+                         const gfx::Vector2d& paint_offset,
                          const CullRect&);
 
   // Records a scroll hit test data to force main thread handling of events
@@ -48,10 +51,13 @@ class ScrollableAreaPainter {
 
  private:
   void DrawPlatformResizerImage(GraphicsContext&,
-                                const IntRect& resizer_corner_rect);
+                                const gfx::Rect& resizer_corner_rect);
+
+  void PaintNativeScrollbar(GraphicsContext& context,
+                            Scrollbar& scrollbar,
+                            gfx::Rect visual_rect);
 
   PaintLayerScrollableArea& GetScrollableArea() const;
-  const DisplayItemClient& DisplayItemClientForCorner() const;
 
   PaintLayerScrollableArea* scrollable_area_;
 };

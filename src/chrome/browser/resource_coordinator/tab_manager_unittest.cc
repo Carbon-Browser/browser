@@ -13,8 +13,8 @@
 
 #include "base/bind.h"
 #include "base/check.h"
-#include "base/macros.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/field_trial.h"
 #include "base/notreached.h"
 #include "base/test/mock_entropy_provider.h"
@@ -67,7 +67,7 @@ class TabManagerTest : public ChromeRenderViewHostTestHarness {
       : ChromeRenderViewHostTestHarness(
             base::test::TaskEnvironment::TimeSource::MOCK_TIME) {
     // Start with a non-zero time.
-    task_environment()->FastForwardBy(base::TimeDelta::FromSeconds(42));
+    task_environment()->FastForwardBy(base::Seconds(42));
   }
 
   std::unique_ptr<WebContents> CreateWebContents() {
@@ -90,7 +90,7 @@ class TabManagerTest : public ChromeRenderViewHostTestHarness {
   }
 
  protected:
-  TabManager* tab_manager_ = nullptr;
+  raw_ptr<TabManager> tab_manager_ = nullptr;
 };
 
 // TODO(georgesak): Add tests for protection to tabs with form input and
@@ -118,8 +118,8 @@ TEST_F(TabManagerTest, IsInternalPage) {
 
 // Data race on Linux. http://crbug.com/787842
 // Flaky on Mac and Windows: https://crbug.com/995682
-#if defined(OS_LINUX) || defined(OS_CHROMEOS) || defined(OS_MAC) || \
-    defined(OS_WIN)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_MAC) || \
+    BUILDFLAG(IS_WIN)
 #define MAYBE_DiscardTabWithNonVisibleTabs DISABLED_DiscardTabWithNonVisibleTabs
 #else
 #define MAYBE_DiscardTabWithNonVisibleTabs DiscardTabWithNonVisibleTabs
@@ -205,7 +205,7 @@ TEST_F(TabManagerTest, GetSortedLifecycleUnits) {
 
   const int num_of_tabs_to_test = 20;
   for (int i = 0; i < num_of_tabs_to_test; ++i) {
-    task_environment()->FastForwardBy(base::TimeDelta::FromSeconds(10));
+    task_environment()->FastForwardBy(base::Seconds(10));
     tab_strip->AppendWebContents(CreateWebContents(), /*foreground=*/true);
   }
 

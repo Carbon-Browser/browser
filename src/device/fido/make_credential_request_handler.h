@@ -12,7 +12,7 @@
 
 #include "base/callback.h"
 #include "base/component_export.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "device/fido/auth_token_requester.h"
@@ -77,6 +77,11 @@ class COMPONENT_EXPORT(DEVICE_FIDO) MakeCredentialRequestHandler
       CtapMakeCredentialRequest request_parameter,
       const MakeCredentialOptions& options,
       CompletionCallback completion_callback);
+
+  MakeCredentialRequestHandler(const MakeCredentialRequestHandler&) = delete;
+  MakeCredentialRequestHandler& operator=(const MakeCredentialRequestHandler&) =
+      delete;
+
   ~MakeCredentialRequestHandler() override;
 
  private:
@@ -158,7 +163,8 @@ class COMPONENT_EXPORT(DEVICE_FIDO) MakeCredentialRequestHandler
   // that was tapped by the user while requesting a pinUvAuthToken from
   // connected authenticators. The object is owned by the underlying discovery
   // object and this pointer is cleared if it's removed during processing.
-  FidoAuthenticator* selected_authenticator_for_pin_uv_auth_token_ = nullptr;
+  raw_ptr<FidoAuthenticator> selected_authenticator_for_pin_uv_auth_token_ =
+      nullptr;
   absl::optional<pin::TokenResponse> token_;
   std::unique_ptr<BioEnroller> bio_enroller_;
 
@@ -170,8 +176,6 @@ class COMPONENT_EXPORT(DEVICE_FIDO) MakeCredentialRequestHandler
 
   SEQUENCE_CHECKER(my_sequence_checker_);
   base::WeakPtrFactory<MakeCredentialRequestHandler> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(MakeCredentialRequestHandler);
 };
 
 }  // namespace device

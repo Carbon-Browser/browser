@@ -11,7 +11,6 @@
 #include "components/signin/public/base/signin_metrics.h"
 #import "ios/chrome/browser/ui/authentication/cells/signin_promo_view_constants.h"
 #import "ios/chrome/browser/ui/authentication/cells/signin_promo_view_delegate.h"
-#import "ios/chrome/browser/ui/colors/MDCPalette+CrAdditions.h"
 #import "ios/chrome/browser/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
@@ -51,10 +50,15 @@ constexpr CGFloat kImageViewWidthHeight = 32;
 @interface SigninPromoView ()
 // Re-declare as readwrite.
 @property(nonatomic, strong, readwrite) UIImageView* imageView;
+@property(nonatomic, strong, readwrite) UILabel* titleLabel;
 @property(nonatomic, strong, readwrite) UILabel* textLabel;
 @property(nonatomic, strong, readwrite) UIButton* primaryButton;
 @property(nonatomic, strong, readwrite) UIButton* secondaryButton;
 @property(nonatomic, strong, readwrite) UIButton* closeButton;
+// Contains the two main sections of the promo (image and Text).
+@property(nonatomic, strong) UIStackView* contentStackView;
+// Contains all the text elements of the promo (title,body and buttons).
+@property(nonatomic, strong) UIStackView* textVerticalStackView;
 @end
 
 @implementation SigninPromoView {
@@ -75,6 +79,17 @@ constexpr CGFloat kImageViewWidthHeight = 32;
     _imageView.translatesAutoresizingMaskIntoConstraints = NO;
     _imageView.layer.masksToBounds = YES;
     _imageView.contentMode = UIViewContentModeScaleAspectFit;
+
+    // Create and setup title label.
+    _titleLabel = [[UILabel alloc] init];
+    _titleLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    _titleLabel.numberOfLines = 0;
+    _titleLabel.textAlignment = NSTextAlignmentCenter;
+    _titleLabel.lineBreakMode = NSLineBreakByWordWrapping;
+    _titleLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleTitle3];
+    _titleLabel.textColor = [UIColor colorNamed:kTextPrimaryColor];
+    // Title is hidden by default.
+    _titleLabel.hidden = YES;
 
     // Create and setup informative text label.
     _textLabel = [[UILabel alloc] init];
@@ -109,11 +124,9 @@ constexpr CGFloat kImageViewWidthHeight = 32;
                        action:@selector(onPrimaryButtonAction:)
              forControlEvents:UIControlEventTouchUpInside];
     _primaryButton.contentEdgeInsets = primaryButtonInsets;
-    if (@available(iOS 13.4, *)) {
-        _primaryButton.pointerInteractionEnabled = YES;
-        _primaryButton.pointerStyleProvider =
-            CreateOpaqueButtonPointerStyleProvider();
-    }
+    _primaryButton.pointerInteractionEnabled = YES;
+    _primaryButton.pointerStyleProvider =
+        CreateOpaqueButtonPointerStyleProvider();
 
     // Create and setup seconday button.
     _secondaryButton = [[UIButton alloc] init];
@@ -126,20 +139,25 @@ constexpr CGFloat kImageViewWidthHeight = 32;
     [_secondaryButton addTarget:self
                          action:@selector(onSecondaryButtonAction:)
                forControlEvents:UIControlEventTouchUpInside];
-    if (@available(iOS 13.4, *)) {
-        _secondaryButton.pointerInteractionEnabled = YES;
-    }
+    _secondaryButton.pointerInteractionEnabled = YES;
 
-    // Vertical stackView containing all previous view.
-    UIStackView* verticalStackView =
-        [[UIStackView alloc] initWithArrangedSubviews:@[
-          _imageView, _textLabel, _primaryButton, _secondaryButton
-        ]];
-    verticalStackView.alignment = UIStackViewAlignmentCenter;
-    verticalStackView.axis = UILayoutConstraintAxisVertical;
-    verticalStackView.translatesAutoresizingMaskIntoConstraints = NO;
-    verticalStackView.spacing = kStackViewSubViewSpacing;
-    [self addSubview:verticalStackView];
+    _textVerticalStackView = [[UIStackView alloc] initWithArrangedSubviews:@[
+      _titleLabel, _textLabel, _primaryButton, _secondaryButton
+    ]];
+
+    _textVerticalStackView.alignment = UIStackViewAlignmentCenter;
+    _textVerticalStackView.axis = UILayoutConstraintAxisVertical;
+    _textVerticalStackView.translatesAutoresizingMaskIntoConstraints = NO;
+    _textVerticalStackView.spacing = kStackViewSubViewSpacing;
+
+    _contentStackView = [[UIStackView alloc]
+        initWithArrangedSubviews:@[ _imageView, _textVerticalStackView ]];
+    _contentStackView.alignment = UIStackViewAlignmentCenter;
+    _contentStackView.axis = UILayoutConstraintAxisVertical;
+    _contentStackView.translatesAutoresizingMaskIntoConstraints = NO;
+    _contentStackView.spacing = kStackViewSubViewSpacing;
+
+    [self addSubview:_contentStackView];
 
     // Create close button and adds it directly to self.
     _closeButton = [[UIButton alloc] init];
@@ -151,23 +169,20 @@ constexpr CGFloat kImageViewWidthHeight = 32;
     [_closeButton setImage:[UIImage imageNamed:@"signin_promo_close_gray"]
                   forState:UIControlStateNormal];
     _closeButton.hidden = YES;
-    if (@available(iOS 13.4, *)) {
-        _closeButton.pointerInteractionEnabled = YES;
-    }
+    _closeButton.pointerInteractionEnabled = YES;
     [self addSubview:_closeButton];
 
     [NSLayoutConstraint activateConstraints:@[
-      // Vertical stack.
-      [verticalStackView.leadingAnchor
+      [_contentStackView.leadingAnchor
           constraintEqualToAnchor:self.leadingAnchor
                          constant:kStackViewHorizontalPadding],
-      [verticalStackView.trailingAnchor
+      [_contentStackView.trailingAnchor
           constraintEqualToAnchor:self.trailingAnchor
                          constant:-kStackViewHorizontalPadding],
-      [verticalStackView.topAnchor
+      [_contentStackView.topAnchor
           constraintEqualToAnchor:self.topAnchor
                          constant:kStackViewVerticalPadding],
-      [verticalStackView.bottomAnchor
+      [_contentStackView.bottomAnchor
           constraintEqualToAnchor:self.bottomAnchor
                          constant:-kStackViewVerticalPadding],
       // Image view.
@@ -183,6 +198,8 @@ constexpr CGFloat kImageViewWidthHeight = 32;
       [_closeButton.widthAnchor
           constraintEqualToConstant:kCloseButtonWidthHeight],
     ]];
+    // Default layout.
+    _compactLayout = NO;
     // Default mode.
     _mode = SigninPromoViewModeNoAccounts;
     [self activateNoAccountsMode];
@@ -243,6 +260,39 @@ constexpr CGFloat kImageViewWidthHeight = 32;
   self.imageView.image = CircularImageFromImage(image, kImageViewWidthHeight);
 }
 
+- (void)setNonProfileImage:(UIImage*)image {
+  DCHECK_EQ(_mode, SigninPromoViewModeNoAccounts);
+  DCHECK_EQ(kImageViewWidthHeight, image.size.width);
+  DCHECK_EQ(kImageViewWidthHeight, image.size.height);
+  self.imageView.image = image;
+}
+
+- (void)setCompactLayout:(BOOL)compactLayout {
+  if (compactLayout == _compactLayout)
+    return;
+  _compactLayout = compactLayout;
+  if (_compactLayout) {
+    _contentStackView.axis = UILayoutConstraintAxisVertical;
+    _textVerticalStackView.alignment = UIStackViewAlignmentLeading;
+    _textLabel.textAlignment = NSTextAlignmentNatural;
+    // In compact layout the primary button is plain.
+    _primaryButton.backgroundColor = nil;
+    [_primaryButton setTitleColor:[UIColor colorNamed:kBlueColor]
+                         forState:UIControlStateNormal];
+    _primaryButton.layer.cornerRadius = 0.0;
+    _primaryButton.clipsToBounds = NO;
+  } else {
+    _contentStackView.axis = UILayoutConstraintAxisHorizontal;
+    _textVerticalStackView.alignment = UIStackViewAlignmentCenter;
+    _textLabel.textAlignment = NSTextAlignmentCenter;
+    [_primaryButton setTitleColor:[UIColor colorNamed:kSolidButtonTextColor]
+                         forState:UIControlStateNormal];
+    _primaryButton.backgroundColor = [UIColor colorNamed:kBlueColor];
+    _primaryButton.layer.cornerRadius = kButtonCornerRadius;
+    _primaryButton.clipsToBounds = YES;
+  }
+}
+
 - (void)accessibilityPrimaryAction:(id)unused {
   [self.primaryButton sendActionsForControlEvents:UIControlEventTouchUpInside];
 }
@@ -281,6 +331,16 @@ constexpr CGFloat kImageViewWidthHeight = 32;
 }
 
 #pragma mark - NSObject(Accessibility)
+
+- (void)setAccessibilityLabel:(NSString*)accessibilityLabel {
+  NOTREACHED();
+}
+
+- (NSString*)accessibilityLabel {
+  return [NSString
+      stringWithFormat:@"%@ %@", self.textLabel.text,
+                       [self.primaryButton titleForState:UIControlStateNormal]];
+}
 
 - (BOOL)accessibilityActivate {
   [self accessibilityPrimaryAction:nil];

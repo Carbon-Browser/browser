@@ -8,7 +8,6 @@
 
 #include "base/bind.h"
 #include "base/files/file_path.h"
-#include "base/macros.h"
 #include "base/strings/utf_string_conversions.h"
 #include "content/public/renderer/renderer_ppapi_host.h"
 #include "content/renderer/pepper/pepper_file_ref_renderer_host.h"
@@ -33,6 +32,9 @@ class PepperFileChooserHost::CompletionHandler {
  public:
   explicit CompletionHandler(const base::WeakPtr<PepperFileChooserHost>& host)
       : host_(host) {}
+
+  CompletionHandler(const CompletionHandler&) = delete;
+  CompletionHandler& operator=(const CompletionHandler&) = delete;
 
   ~CompletionHandler() {}
 
@@ -85,8 +87,6 @@ class PepperFileChooserHost::CompletionHandler {
 
   base::WeakPtr<PepperFileChooserHost> host_;
   mojo::Remote<blink::mojom::FileChooser> file_chooser_;
-
-  DISALLOW_COPY_AND_ASSIGN(CompletionHandler);
 };
 
 PepperFileChooserHost::ChosenFileInfo::ChosenFileInfo(

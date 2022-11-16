@@ -13,13 +13,11 @@
 #include "base/callback.h"
 #include "base/containers/queue.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/time/time.h"
+#include "base/values.h"
 
 namespace base {
-class DictionaryValue;
-class ListValue;
 class Location;
 class SingleThreadTaskRunner;
 }  // namespace base
@@ -48,9 +46,9 @@ class PairingRegistry : public base::RefCountedThreadSafe<PairingRegistry> {
     ~Pairing();
 
     static Pairing Create(const std::string& client_name);
-    static Pairing CreateFromValue(const base::DictionaryValue& pairing);
+    static Pairing CreateFromValue(const base::Value::Dict& pairing);
 
-    std::unique_ptr<base::DictionaryValue> ToValue() const;
+    base::Value::Dict ToValue() const;
 
     bool operator==(const Pairing& other) const;
 
@@ -73,7 +71,7 @@ class PairingRegistry : public base::RefCountedThreadSafe<PairingRegistry> {
 
   // Delegate callbacks.
   typedef base::OnceCallback<void(bool success)> DoneCallback;
-  typedef base::OnceCallback<void(std::unique_ptr<base::ListValue> pairings)>
+  typedef base::OnceCallback<void(base::Value::List pairings)>
       GetAllPairingsCallback;
   typedef base::OnceCallback<void(Pairing pairing)> GetPairingCallback;
 
@@ -88,7 +86,7 @@ class PairingRegistry : public base::RefCountedThreadSafe<PairingRegistry> {
     virtual ~Delegate() {}
 
     // Retrieves all JSON-encoded pairings from persistent storage.
-    virtual std::unique_ptr<base::ListValue> LoadAll() = 0;
+    virtual base::Value::List LoadAll() = 0;
 
     // Deletes all pairings in persistent storage.
     virtual bool DeleteAll() = 0;
@@ -107,6 +105,9 @@ class PairingRegistry : public base::RefCountedThreadSafe<PairingRegistry> {
       scoped_refptr<base::SingleThreadTaskRunner> delegate_task_runner,
       std::unique_ptr<Delegate> delegate);
 
+  PairingRegistry(const PairingRegistry&) = delete;
+  PairingRegistry& operator=(const PairingRegistry&) = delete;
+
   // Creates a pairing for a new client and saves it to disk.
   //
   // TODO(jamiewalch): Plumb the Save callback into the RequestPairing flow
@@ -119,7 +120,7 @@ class PairingRegistry : public base::RefCountedThreadSafe<PairingRegistry> {
   // with an invalid Pairing.
   void GetPairing(const std::string& client_id, GetPairingCallback callback);
 
-  // Gets all pairings with the shared secrets removed as a base::ListValue.
+  // Gets all pairings with the shared secrets removed as a base::Value::List.
   void GetAllPairings(GetAllPairingsCallback callback);
 
   // Delete a pairing, identified by its client ID. |callback| is called with
@@ -161,11 +162,11 @@ class PairingRegistry : public base::RefCountedThreadSafe<PairingRegistry> {
                                                Pairing pairing);
   void InvokeGetAllPairingsCallbackAndScheduleNext(
       GetAllPairingsCallback callback,
-      std::unique_ptr<base::ListValue> pairings);
+      base::Value::List pairings);
 
   // Sanitize |pairings| by parsing each entry and removing the secret from it.
   void SanitizePairings(GetAllPairingsCallback callback,
-                        std::unique_ptr<base::ListValue> pairings);
+                        base::Value::List pairings);
 
   // Queue management methods.
   void ServiceOrQueueRequest(base::OnceClosure request);
@@ -182,8 +183,6 @@ class PairingRegistry : public base::RefCountedThreadSafe<PairingRegistry> {
   std::unique_ptr<Delegate> delegate_;
 
   base::queue<base::OnceClosure> pending_requests_;
-
-  DISALLOW_COPY_AND_ASSIGN(PairingRegistry);
 };
 
 }  // namespace protocol

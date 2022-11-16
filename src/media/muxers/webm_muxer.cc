@@ -54,7 +54,7 @@ constexpr uint8_t codec_private[4] = {
 
 // Force new clusters at a maximum rate of 10 Hz.
 constexpr base::TimeDelta kMinimumForcedClusterDuration =
-    base::TimeDelta::FromMilliseconds(100);
+    base::Milliseconds(100);
 
 void WriteOpusHeader(const media::AudioParameters& params, uint8_t* header) {
   // See https://wiki.xiph.org/OggOpus#ID_Header.
@@ -148,10 +148,10 @@ absl::optional<mkvmuxer::Colour> ColorFromColorSpace(
     case TransferID::BT709:
       transfer_characteristics = Colour::kIturBt709Tc;
       break;
-    case TransferID::IEC61966_2_1:
+    case TransferID::SRGB:
       transfer_characteristics = Colour::kIec6196621;
       break;
-    case TransferID::SMPTEST2084:
+    case TransferID::PQ:
       transfer_characteristics = Colour::kSmpteSt2084;
       break;
     default:

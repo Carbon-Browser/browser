@@ -18,7 +18,7 @@
 #include "third_party/blink/renderer/core/css/properties/css_property.h"
 #include "third_party/blink/renderer/core/style_property_shorthand.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 
 namespace blink {
 
@@ -81,7 +81,8 @@ const CSSValue* StyleValueToCSSValue(
       }
       break;
     }
-    case CSSPropertyID::kContain: {
+    case CSSPropertyID::kContain:
+    case CSSPropertyID::kContainerType: {
       // level 1 only accepts single values, which are stored internally
       // as a single element list.
       const auto* value = style_value.ToCSSValue();
@@ -132,18 +133,6 @@ const CSSValue* StyleValueToCSSValue(
         CSSValueList* list = CSSValueList::CreateSpaceSeparated();
         list->Append(*style_value.ToCSSValue());
         return list;
-      }
-      break;
-    }
-    case CSSPropertyID::kOverflowX:
-    case CSSPropertyID::kOverflowY: {
-      if (!RuntimeEnabledFeatures::OverflowClipEnabled()) {
-        auto* identifier_value =
-            DynamicTo<CSSIdentifierValue>(style_value.ToCSSValue());
-        if (identifier_value &&
-            identifier_value->GetValueID() == CSSValueID::kClip) {
-          return nullptr;
-        }
       }
       break;
     }

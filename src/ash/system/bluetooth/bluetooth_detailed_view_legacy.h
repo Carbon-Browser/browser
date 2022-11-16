@@ -21,8 +21,6 @@ namespace ash {
 class TriView;
 class TrayInfoLabel;
 
-namespace tray {
-
 // TODO(crbug.com/1234138): Remove this class when the
 // |ash::features::kBluetoothRevamp| feature flag is fully launched.
 class BluetoothDetailedViewLegacy : public TrayDetailedView {
@@ -32,6 +30,10 @@ class BluetoothDetailedViewLegacy : public TrayDetailedView {
 
   BluetoothDetailedViewLegacy(DetailedViewDelegate* delegate,
                               LoginStatus login);
+
+  BluetoothDetailedViewLegacy(const BluetoothDetailedViewLegacy&) = delete;
+  BluetoothDetailedViewLegacy& operator=(const BluetoothDetailedViewLegacy&) =
+      delete;
 
   ~BluetoothDetailedViewLegacy() override;
 
@@ -119,11 +121,8 @@ class BluetoothDetailedViewLegacy : public TrayDetailedView {
   // The container of the message "Bluetooth is disabled" and an icon. It should
   // be shown instead of Bluetooth device list when Bluetooth is disabled.
   views::View* disabled_panel_ = nullptr;
-
-  DISALLOW_COPY_AND_ASSIGN(BluetoothDetailedViewLegacy);
 };
 
-}  // namespace tray
 }  // namespace ash
 
 #endif  // ASH_SYSTEM_BLUETOOTH_BLUETOOTH_DETAILED_VIEW_LEGACY_H_

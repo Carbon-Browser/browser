@@ -4,9 +4,9 @@
 
 #include "components/autofill_assistant/browser/trigger_context.h"
 
-#include <map>
 #include <string>
 
+#include "base/containers/flat_map.h"
 #include "components/autofill_assistant/browser/service.pb.h"
 #include "components/autofill_assistant/browser/test_util.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -15,8 +15,6 @@ namespace autofill_assistant {
 
 using ::testing::Eq;
 using ::testing::IsEmpty;
-using ::testing::Pair;
-using ::testing::SizeIs;
 using ::testing::UnorderedElementsAreArray;
 
 TEST(TriggerContextTest, Empty) {
@@ -27,23 +25,27 @@ TEST(TriggerContextTest, Empty) {
 
 TEST(TriggerContextTest, Create) {
   TriggerContext context = {
-      std::make_unique<ScriptParameters>(std::map<std::string, std::string>{
-          {"key_a", "value_a"}, {"key_b", "value_b"}}),
+      std::make_unique<ScriptParameters>(
+          base::flat_map<std::string, std::string>{{"key_a", "value_a"},
+                                                   {"key_b", "value_b"}}),
       "exps",
       /* is_cct = */ true,
       /* onboarding_shown = */ true,
       /* is_direct_action = */ true,
       /* initial_url = */ "https://www.example.com",
-      /* is_in_chrome_triggered = */ true};
-  EXPECT_THAT(context.GetScriptParameters().ToProto(),
-              UnorderedElementsAreArray(std::map<std::string, std::string>(
-                  {{"key_a", "value_a"}, {"key_b", "value_b"}})));
+      /* is_in_chrome_triggered = */ true,
+      /* is_externally_triggered = */ true};
+  EXPECT_THAT(
+      context.GetScriptParameters().ToProto(),
+      UnorderedElementsAreArray(base::flat_map<std::string, std::string>(
+          {{"key_a", "value_a"}, {"key_b", "value_b"}})));
   EXPECT_EQ(context.GetExperimentIds(), "exps");
   EXPECT_TRUE(context.GetCCT());
   EXPECT_TRUE(context.GetOnboardingShown());
   EXPECT_TRUE(context.GetDirectAction());
   EXPECT_EQ(context.GetInitialUrl(), "https://www.example.com");
   EXPECT_TRUE(context.GetInChromeTriggered());
+  EXPECT_TRUE(context.GetIsExternallyTriggered());
   EXPECT_EQ(context.GetTriggerUIType(),
             TriggerScriptProto::UNSPECIFIED_TRIGGER_UI_TYPE);
 
@@ -72,13 +74,14 @@ TEST(TriggerContextTest, MergeEmptyWithNonEmpty) {
   options.experiment_ids = "exp1";
   TriggerContext context = {
       std::make_unique<ScriptParameters>(
-          std::map<std::string, std::string>{{"key_a", "value_a"}}),
+          base::flat_map<std::string, std::string>{{"key_a", "value_a"}}),
       options};
   TriggerContext empty;
   TriggerContext merged = {{&empty, &context}};
-  EXPECT_THAT(merged.GetScriptParameters().ToProto(),
-              UnorderedElementsAreArray(
-                  std::map<std::string, std::string>({{"key_a", "value_a"}})));
+  EXPECT_THAT(
+      merged.GetScriptParameters().ToProto(),
+      UnorderedElementsAreArray(
+          base::flat_map<std::string, std::string>({{"key_a", "value_a"}})));
   EXPECT_EQ(merged.GetExperimentIds(), "exp1");
   EXPECT_FALSE(merged.GetCCT());
   EXPECT_FALSE(merged.GetOnboardingShown());
@@ -93,32 +96,36 @@ TEST(TriggerContextTest, MergeNonEmptyWithNonEmpty) {
   options1.experiment_ids = "exp1";
   TriggerContext context1 = {
       std::make_unique<ScriptParameters>(
-          std::map<std::string, std::string>{{"key_a", "value_a"}}),
+          base::flat_map<std::string, std::string>{{"key_a", "value_a"}}),
       options1};
   TriggerContext context2 = {
-      std::make_unique<ScriptParameters>(std::map<std::string, std::string>{
-          {"key_a", "value_a_changed"}, {"key_b", "value_b"}}),
+      std::make_unique<ScriptParameters>(
+          base::flat_map<std::string, std::string>{{"key_a", "value_a_changed"},
+                                                   {"key_b", "value_b"}}),
       "exp2",
       /* is_cct = */ true,
       /* onboarding_shown = */ true,
       /* is_direct_action = */ true,
       /* initial_url = */ "https://www.example.com",
-      /* is_in_chrome_triggered = */ true};
+      /* is_in_chrome_triggered = */ true,
+      /* is_externally_triggered = */ true};
   context2.SetTriggerUIType(
       TriggerScriptProto::SHOPPING_CHECKOUT_FIRST_TIME_USER);
 
   // Adding empty to make sure empty contexts are properly skipped.
   TriggerContext empty;
   TriggerContext merged = {{&empty, &context1, &empty, &context2, &empty}};
-  EXPECT_THAT(merged.GetScriptParameters().ToProto(),
-              UnorderedElementsAreArray(std::map<std::string, std::string>(
-                  {{"key_a", "value_a"}, {"key_b", "value_b"}})));
+  EXPECT_THAT(
+      merged.GetScriptParameters().ToProto(),
+      UnorderedElementsAreArray(base::flat_map<std::string, std::string>(
+          {{"key_a", "value_a"}, {"key_b", "value_b"}})));
   EXPECT_EQ(merged.GetExperimentIds(), "exp1,exp2");
   EXPECT_TRUE(merged.GetCCT());
   EXPECT_TRUE(merged.GetOnboardingShown());
   EXPECT_TRUE(merged.GetDirectAction());
   EXPECT_EQ(merged.GetInitialUrl(), "https://www.example.com");
   EXPECT_TRUE(merged.GetInChromeTriggered());
+  EXPECT_TRUE(merged.GetIsExternallyTriggered());
   EXPECT_EQ(merged.GetTriggerUIType(),
             TriggerScriptProto::SHOPPING_CHECKOUT_FIRST_TIME_USER);
 }

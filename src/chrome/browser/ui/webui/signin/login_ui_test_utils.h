@@ -16,8 +16,7 @@ class Browser;
 
 namespace login_ui_test_utils {
 
-constexpr base::TimeDelta kSyncConfirmationDialogTimeout =
-    base::TimeDelta::FromSeconds(30);
+constexpr base::TimeDelta kSyncConfirmationDialogTimeout = base::Seconds(30);
 
 // Blocks until the login UI is available and ready for authorization.
 void WaitUntilUIReady(Browser* browser);
@@ -76,6 +75,13 @@ bool ConfirmReauthConfirmationDialog(Browser* browser, base::TimeDelta timeout);
 // javascript to click on cancel button. Returns false if dialog wasn't
 // dismissed before |timeout|.
 bool CancelReauthConfirmationDialog(Browser* browser, base::TimeDelta timeout);
+
+// Waits for profile customization dialog to get displayed, then executes
+// javascript to click on done button. Returns false if dialog wasn't
+// dismissed before |timeout|.
+bool CompleteProfileCustomizationDialog(
+    Browser* browser,
+    base::TimeDelta timeout = kSyncConfirmationDialogTimeout);
 
 }  // namespace login_ui_test_utils
 

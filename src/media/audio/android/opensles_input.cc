@@ -4,7 +4,6 @@
 
 #include "media/audio/android/opensles_input.h"
 
-#include "base/cxx17_backports.h"
 #include "base/logging.h"
 #include "base/trace_event/trace_event.h"
 #include "media/audio/android/audio_manager_android.h"
@@ -47,8 +46,8 @@ OpenSLESInputStream::OpenSLESInputStream(AudioManagerAndroid* audio_manager,
   format_.channelMask = ChannelCountToSLESChannelMask(params.channels());
 
   buffer_size_bytes_ = params.GetBytesPerBuffer(kSampleFormat);
-  hardware_delay_ = base::TimeDelta::FromSecondsD(
-      params.frames_per_buffer() / static_cast<double>(params.sample_rate()));
+  hardware_delay_ = base::Seconds(params.frames_per_buffer() /
+                                  static_cast<double>(params.sample_rate()));
 
   memset(&audio_data_, 0, sizeof(audio_data_));
 }
@@ -238,7 +237,7 @@ bool OpenSLESInputStream::CreateRecorder() {
   LOG_ON_FAILURE_AND_RETURN(
       (*engine)->CreateAudioRecorder(
           engine, recorder_object_.Receive(), &audio_source, &audio_sink,
-          base::size(interface_id), interface_id, interface_required),
+          std::size(interface_id), interface_id, interface_required),
       false);
 
   SLAndroidConfigurationItf recorder_config;

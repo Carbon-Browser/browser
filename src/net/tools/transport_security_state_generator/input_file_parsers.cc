@@ -16,6 +16,7 @@
 #include "base/strings/string_piece.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
+#include "base/time/time.h"
 #include "base/values.h"
 #include "net/tools/transport_security_state_generator/cert_util.h"
 #include "net/tools/transport_security_state_generator/pinset.h"
@@ -23,9 +24,7 @@
 #include "net/tools/transport_security_state_generator/spki_hash.h"
 #include "third_party/boringssl/src/include/openssl/x509v3.h"
 
-namespace net {
-
-namespace transport_security_state {
+namespace net::transport_security_state {
 
 namespace {
 
@@ -160,7 +159,8 @@ enum class CertificateParserState {
   PRE_NAME,
   POST_NAME,
   IN_CERTIFICATE,
-  IN_PUBLIC_KEY
+  IN_PUBLIC_KEY,
+  PRE_TIMESTAMP,
 };
 
 // Valid keys for entries in the input JSON. These fields will be included in
@@ -173,6 +173,7 @@ static const char kModeJSONKey[] = "mode";
 static const char kPinsJSONKey[] = "pins";
 static const char kExpectCTJSONKey[] = "expect_ct";
 static const char kExpectCTReportURIJSONKey[] = "expect_ct_report_uri";
+static const char kTimestampName[] = "PinsListTimestamp";
 
 // Additional valid keys for entries in the input JSON that will not be included
 // in the output and contain metadata (e.g., for list maintenance).
@@ -180,7 +181,9 @@ static const char kPolicyJSONKey[] = "policy";
 
 }  // namespace
 
-bool ParseCertificatesFile(base::StringPiece certs_input, Pinsets* pinsets) {
+bool ParseCertificatesFile(base::StringPiece certs_input,
+                           Pinsets* pinsets,
+                           base::Time* timestamp) {
   if (certs_input.find("\r\n") != base::StringPiece::npos) {
     LOG(ERROR) << "CRLF line-endings found in the pins file. All files must "
                   "use LF (unix style) line-endings.";
@@ -188,6 +191,7 @@ bool ParseCertificatesFile(base::StringPiece certs_input, Pinsets* pinsets) {
   }
 
   CertificateParserState current_state = CertificateParserState::PRE_NAME;
+  bool timestamp_parsed = false;
 
   const base::CompareCase& compare_mode = base::CompareCase::INSENSITIVE_ASCII;
   std::string name;
@@ -208,6 +212,10 @@ bool ParseCertificatesFile(base::StringPiece certs_input, Pinsets* pinsets) {
 
     switch (current_state) {
       case CertificateParserState::PRE_NAME:
+        if (line == kTimestampName) {
+          current_state = CertificateParserState::PRE_TIMESTAMP;
+          break;
+        }
         if (!IsValidName(line)) {
           LOG(ERROR) << "Invalid name in pins file: " << line;
           return false;
@@ -281,11 +289,30 @@ bool ParseCertificatesFile(base::StringPiece certs_input, Pinsets* pinsets) {
         pinsets->RegisterSPKIHash(name, hash);
         current_state = CertificateParserState::PRE_NAME;
         break;
+      case CertificateParserState::PRE_TIMESTAMP:
+        uint64_t timestamp_epoch;
+        if (!base::StringToUint64(line, &timestamp_epoch) ||
+            !base::IsValueInRangeForNumericType<time_t>(timestamp_epoch)) {
+          LOG(ERROR) << "Could not parse the timestamp value";
+          return false;
+        }
+        *timestamp = base::Time::FromTimeT(timestamp_epoch);
+        if (timestamp_parsed) {
+          LOG(ERROR) << "File contains multiple timestamps";
+          return false;
+        }
+        timestamp_parsed = true;
+        current_state = CertificateParserState::PRE_NAME;
+        break;
       default:
         DCHECK(false) << "Unknown parser state";
     }
   }
 
+  if (!timestamp_parsed) {
+    LOG(ERROR) << "Timestamp is missing";
+    return false;
+  }
   return true;
 }
 
@@ -319,7 +346,7 @@ bool ParseJSON(base::StringPiece json,
     return false;
   }
 
-  const auto preload_entries_list = preload_entries->GetList();
+  const auto preload_entries_list = preload_entries->GetListDeprecated();
   for (size_t i = 0; i < preload_entries_list.size(); ++i) {
     const base::Value& parsed = preload_entries_list[i];
     if (!parsed.is_dict()) {
@@ -328,8 +355,7 @@ bool ParseJSON(base::StringPiece json,
       return false;
     }
 
-    std::unique_ptr<TransportSecurityStateEntry> entry(
-        new TransportSecurityStateEntry());
+    auto entry = std::make_unique<TransportSecurityStateEntry>();
     const std::string* maybe_hostname = parsed.FindStringKey(kNameJSONKey);
     if (!maybe_hostname) {
       LOG(ERROR) << "Could not extract the hostname for entry "
@@ -391,7 +417,7 @@ bool ParseJSON(base::StringPiece json,
     return false;
   }
 
-  const auto pinsets_list = pinsets_value->GetList();
+  const auto pinsets_list = pinsets_value->GetListDeprecated();
   for (size_t i = 0; i < pinsets_list.size(); ++i) {
     const base::Value& parsed = pinsets_list[i];
     if (!parsed.is_dict()) {
@@ -412,12 +438,12 @@ bool ParseJSON(base::StringPiece json,
     std::string report_uri =
         maybe_report_uri ? *maybe_report_uri : std::string();
 
-    std::unique_ptr<Pinset> pinset(new Pinset(name, report_uri));
+    auto pinset = std::make_unique<Pinset>(name, report_uri);
 
     const base::Value* pinset_static_hashes_list =
         parsed.FindListKey("static_spki_hashes");
     if (pinset_static_hashes_list) {
-      for (const auto& hash : pinset_static_hashes_list->GetList()) {
+      for (const auto& hash : pinset_static_hashes_list->GetListDeprecated()) {
         if (!hash.is_string()) {
           LOG(ERROR) << "Could not parse static spki hash "
                      << hash.DebugString() << " in the input JSON";
@@ -430,7 +456,8 @@ bool ParseJSON(base::StringPiece json,
     const base::Value* pinset_bad_static_hashes_list =
         parsed.FindListKey("bad_static_spki_hashes");
     if (pinset_bad_static_hashes_list) {
-      for (const auto& hash : pinset_bad_static_hashes_list->GetList()) {
+      for (const auto& hash :
+           pinset_bad_static_hashes_list->GetListDeprecated()) {
         if (!hash.is_string()) {
           LOG(ERROR) << "Could not parse bad static spki hash "
                      << hash.DebugString() << " in the input JSON";
@@ -446,6 +473,4 @@ bool ParseJSON(base::StringPiece json,
   return true;
 }
 
-}  // namespace transport_security_state
-
-}  // namespace net
+}  // namespace net::transport_security_state

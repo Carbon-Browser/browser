@@ -16,6 +16,7 @@
 #include "ios/chrome/browser/browser_state/chrome_browser_state.h"
 #include "ios/chrome/browser/chrome_url_constants.h"
 #include "ios/chrome/browser/main/browser.h"
+#import "ios/chrome/browser/net/crurl.h"
 #import "ios/chrome/browser/signin/authentication_service.h"
 #include "ios/chrome/browser/signin/authentication_service_factory.h"
 #import "ios/chrome/browser/signin/chrome_account_manager_service.h"
@@ -26,11 +27,13 @@
 #import "ios/chrome/browser/ui/alert_coordinator/alert_coordinator.h"
 #import "ios/chrome/browser/ui/authentication/authentication_ui_util.h"
 #import "ios/chrome/browser/ui/authentication/cells/table_view_account_item.h"
+#import "ios/chrome/browser/ui/authentication/enterprise/enterprise_utils.h"
 #import "ios/chrome/browser/ui/authentication/signout_action_sheet_coordinator.h"
 #import "ios/chrome/browser/ui/commands/application_commands.h"
 #import "ios/chrome/browser/ui/commands/open_new_tab_command.h"
 #import "ios/chrome/browser/ui/commands/show_signin_command.h"
 #import "ios/chrome/browser/ui/icons/chrome_icon.h"
+#import "ios/chrome/browser/ui/icons/chrome_symbol.h"
 #import "ios/chrome/browser/ui/settings/google_services/accounts_table_view_controller_constants.h"
 #import "ios/chrome/browser/ui/settings/sync/utils/sync_util.h"
 #import "ios/chrome/browser/ui/table_view/cells/table_view_detail_text_item.h"
@@ -48,6 +51,7 @@
 #import "ios/public/provider/chrome/browser/signin/chrome_identity_service.h"
 #import "net/base/mac/url_conversions.h"
 #include "ui/base/l10n/l10n_util_mac.h"
+#include "url/gurl.h"
 
 #if !defined(__has_feature) || !__has_feature(objc_arc)
 #error "This file requires ARC support."
@@ -57,6 +61,9 @@ using signin_metrics::AccessPoint;
 using signin_metrics::PromoAction;
 
 namespace {
+
+// The size of the symbol image.
+const CGFloat kSymbolAddAccountPointSize = 20;
 
 typedef NS_ENUM(NSInteger, SectionIdentifier) {
   SectionIdentifierAccounts = kSectionIdentifierEnumZero,
@@ -69,7 +76,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
   // Sign in item.
   ItemTypeSignInHeader,
   ItemTypeAddAccount,
-  // Indication that some restricted accoints were removed from the list.
+  // Indicates that restricted accounts are removed from the list.
   ItemTypeRestrictedAccountsFooter,
   // Provides sign out items used only for non-managed accounts.
   ItemTypeSignOut,
@@ -128,8 +135,6 @@ typedef NS_ENUM(NSInteger, ItemType) {
 @end
 
 @implementation AccountsTableViewController
-
-@synthesize dispatcher = _dispatcher;
 
 - (instancetype)initWithBrowser:(Browser*)browser
       closeSettingsOnAddAccount:(BOOL)closeSettingsOnAddAccount {
@@ -264,7 +269,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
   [model addItem:[self addAccountItem]
       toSectionWithIdentifier:SectionIdentifierAccounts];
 
-  if (self.accountManagerService->HasRestrictedIdentities()) {
+  if (IsRestrictAccountsToPatternsEnabled()) {
     [model setFooter:[self restrictedIdentitiesFooterItem]
         forSectionWithIdentifier:SectionIdentifierAccounts];
   }
@@ -274,10 +279,21 @@ typedef NS_ENUM(NSInteger, ItemType) {
   [model addItem:[self signOutItem]
       toSectionWithIdentifier:SectionIdentifierSignOut];
   AuthenticationService* authService = [self authService];
-  if (authService->HasPrimaryIdentity(signin::ConsentLevel::kSync)) {
-    [model setFooter:[self signOutSyncingFooterItem]
-        forSectionWithIdentifier:SectionIdentifierSignOut];
+
+  BOOL hasSyncConsent =
+      authService->HasPrimaryIdentity(signin::ConsentLevel::kSync);
+  TableViewLinkHeaderFooterItem* footerItem = nil;
+  if (IsForceSignInEnabled()) {
+    if (authService->HasPrimaryIdentity(signin::ConsentLevel::kSignin)) {
+      footerItem =
+          [self signOutSyncingFooterItemForForcedSignin:hasSyncConsent];
+    }
+  } else if (hasSyncConsent) {
+    footerItem = [self signOutSyncingFooterItem];
   }
+
+  [model setFooter:footerItem
+      forSectionWithIdentifier:SectionIdentifierSignOut];
 }
 
 #pragma mark - Model objects
@@ -297,12 +313,35 @@ typedef NS_ENUM(NSInteger, ItemType) {
   return footer;
 }
 
+- (TableViewLinkHeaderFooterItem*)signOutSyncingFooterItemForForcedSignin:
+    (BOOL)syncConsent {
+  TableViewLinkHeaderFooterItem* footer = [[TableViewLinkHeaderFooterItem alloc]
+      initWithType:ItemTypeSignOutSyncingFooter];
+
+  if (syncConsent) {
+    NSString* text = l10n_util::GetNSString(
+        IDS_IOS_DISCONNECT_DIALOG_SYNCING_FOOTER_INFO_MOBILE);
+    text = [text stringByAppendingString:@"\n\n"];
+    text = [text
+        stringByAppendingString:
+            l10n_util::GetNSString(
+                IDS_IOS_ENTERPRISE_FORCED_SIGNIN_MESSAGE_WITH_LEARN_MORE)];
+    footer.text = text;
+  } else {
+    footer.text = l10n_util::GetNSString(
+        IDS_IOS_ENTERPRISE_FORCED_SIGNIN_MESSAGE_WITH_LEARN_MORE);
+  }
+
+  footer.urls = @[ [[CrURL alloc] initWithGURL:GURL(kChromeUIManagementURL)] ];
+  return footer;
+}
+
 - (TableViewLinkHeaderFooterItem*)restrictedIdentitiesFooterItem {
   TableViewLinkHeaderFooterItem* footer = [[TableViewLinkHeaderFooterItem alloc]
       initWithType:ItemTypeRestrictedAccountsFooter];
   footer.text =
       l10n_util::GetNSString(IDS_IOS_OPTIONS_ACCOUNTS_RESTRICTED_IDENTITIES);
-  footer.urls = std::vector<GURL>{GURL(kChromeUIManagementURL)};
+  footer.urls = @[ [[CrURL alloc] initWithGURL:GURL(kChromeUIManagementURL)] ];
   return footer;
 }
 
@@ -329,8 +368,12 @@ typedef NS_ENUM(NSInteger, ItemType) {
   item.text =
       l10n_util::GetNSString(IDS_IOS_OPTIONS_ACCOUNTS_ADD_ACCOUNT_BUTTON);
   item.accessibilityIdentifier = kSettingsAccountsTableViewAddAccountCellId;
-  item.image = [[UIImage imageNamed:@"settings_accounts_add_account"]
-      imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+  item.image =
+      UseSymbols()
+          ? CustomSymbolWithPointSize(kPlusCircleFillSymbol,
+                                      kSymbolAddAccountPointSize)
+          : [[UIImage imageNamed:@"settings_accounts_add_account"]
+                imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
   return item;
 }
 
@@ -351,15 +394,17 @@ typedef NS_ENUM(NSInteger, ItemType) {
     viewForFooterInSection:(NSInteger)section {
   UIView* view = [super tableView:tableView viewForFooterInSection:section];
   NSInteger sectionIdentifier =
-      [self.tableViewModel sectionIdentifierForSection:section];
+      [self.tableViewModel sectionIdentifierForSectionIndex:section];
   switch (sectionIdentifier) {
-    case SectionIdentifierAccounts: {
+    case SectionIdentifierAccounts:
+    case SectionIdentifierSignOut: {
       // Might be a different type of footer.
       TableViewLinkHeaderFooterView* linkView =
           base::mac::ObjCCast<TableViewLinkHeaderFooterView>(view);
       linkView.delegate = self;
-    } break;
-    default:
+      break;
+    }
+    case SectionIdentifierSync:
       break;
   }
   return view;
@@ -369,9 +414,9 @@ typedef NS_ENUM(NSInteger, ItemType) {
 
 - (void)tableView:(UITableView*)tableView
     didSelectRowAtIndexPath:(NSIndexPath*)indexPath {
-  // If there is an operation in process that does not allow selecting a cell
-  // exit without performing the selection.
-  if (self.uiDisabled) {
+  // If there is an operation in process that does not allow selecting a cell or
+  // if the settings will be dismissed, exit without performing the selection.
+  if (self.uiDisabled || !_browser) {
     return;
   }
 
@@ -429,23 +474,28 @@ typedef NS_ENUM(NSInteger, ItemType) {
   DCHECK(!self.removeOrMyGoogleChooserAlertCoordinator);
   _authenticationOperationInProgress = YES;
 
+  // TODO(crbug.com/1338990): Remove the following line when todo bug will be
+  // fixed.
+  [self preventUserInteraction];
   __weak __typeof(self) weakSelf = self;
   ShowSigninCommand* command = [[ShowSigninCommand alloc]
-      initWithOperation:AUTHENTICATION_OPERATION_ADD_ACCOUNT
+      initWithOperation:AuthenticationOperationAddAccount
                identity:nil
             accessPoint:AccessPoint::ACCESS_POINT_SETTINGS
             promoAction:PromoAction::PROMO_ACTION_NO_SIGNIN_PROMO
                callback:^(BOOL success) {
                  [weakSelf handleDidAddAccount:success];
                }];
-  DCHECK(self.dispatcher);
-  [self.dispatcher showSignin:command baseViewController:self];
+  [self.applicationCommandsHandler showSignin:command baseViewController:self];
 }
 
 - (void)handleDidAddAccount:(BOOL)success {
+  // TODO(crbug.com/1338990): Remove the following line when todo bug will be
+  // fixed.
+  [self allowUserInteraction];
   [self handleAuthenticationOperationDidFinish];
   if (success && _closeSettingsOnAddAccount) {
-    [self.dispatcher closeSettingsUI];
+    [self.applicationCommandsHandler closeSettingsUI];
   }
 }
 
@@ -484,11 +534,11 @@ typedef NS_ENUM(NSInteger, ItemType) {
 }
 
 // Handles the manage Google account action from
-// |self.removeOrMyGoogleChooserAlertCoordinator|. Action sheet created in
-// |showAccountDetails:itemView:|
+// `self.removeOrMyGoogleChooserAlertCoordinator`. Action sheet created in
+// `showAccountDetails:itemView:`
 - (void)handleManageGoogleAccountWithIdentity:(ChromeIdentity*)identity {
   DCHECK(self.removeOrMyGoogleChooserAlertCoordinator);
-  // |self.removeOrMyGoogleChooserAlertCoordinator| should not be stopped, since
+  // `self.removeOrMyGoogleChooserAlertCoordinator` should not be stopped, since
   // the coordinator has been confirmed.
   self.removeOrMyGoogleChooserAlertCoordinator = nil;
   self.dismissAccountDetailsViewControllerBlock =
@@ -499,11 +549,11 @@ typedef NS_ENUM(NSInteger, ItemType) {
 }
 
 // Handles the secondary account remove action from
-// |self.removeOrMyGoogleChooserAlertCoordinator|. Action sheet created in
-// |showAccountDetails:itemView:|
+// `self.removeOrMyGoogleChooserAlertCoordinator`. Action sheet created in
+// `showAccountDetails:itemView:`
 - (void)handleRemoveSecondaryAccountWithIdentity:(ChromeIdentity*)identity {
   DCHECK(self.removeOrMyGoogleChooserAlertCoordinator);
-  // |self.removeOrMyGoogleChooserAlertCoordinator| should not be stopped, since
+  // `self.removeOrMyGoogleChooserAlertCoordinator` should not be stopped, since
   // the coordinator has been confirmed.
   self.removeOrMyGoogleChooserAlertCoordinator = nil;
   DCHECK(!self.removeAccountCoordinator);
@@ -557,12 +607,6 @@ typedef NS_ENUM(NSInteger, ItemType) {
                             view:itemView];
   __weak AccountsTableViewController* weakSelf = self;
   self.signoutCoordinator.completion = ^(BOOL success) {
-    if (success) {
-      // Allow user interaction only didn't cancel the dialog.
-      // if -[<SignoutActionSheetCoordinatorDelegate>
-      // didSelectSignoutDataRetentionStrategy] has been called.
-      [weakSelf allowUserInteraction];
-    }
     [weakSelf.signoutCoordinator stop];
     weakSelf.signoutCoordinator = nil;
     if (success) {
@@ -577,7 +621,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
   if (!_browser)
     return;
 
-  // |self.removeOrMyGoogleChooserAlertCoordinator| should not be stopped, since
+  // `self.removeOrMyGoogleChooserAlertCoordinator` should not be stopped, since
   // the coordinator has been confirmed.
   DCHECK(self.removeOrMyGoogleChooserAlertCoordinator);
   self.removeOrMyGoogleChooserAlertCoordinator = nil;
@@ -590,7 +634,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
     authService->SignOut(
         signin_metrics::USER_CLICKED_SIGNOUT_SETTINGS, forceClearData, ^{
           // Metrics logging must occur before dismissing the currently
-          // presented view controller from |handleSignoutDidFinish|.
+          // presented view controller from `handleSignoutDidFinish`.
           [weakSelf logSignoutMetricsWithForceClearData:forceClearData];
           [weakSelf allowUserInteraction];
           [weakSelf handleAuthenticationOperationDidFinish];
@@ -615,15 +659,15 @@ typedef NS_ENUM(NSInteger, ItemType) {
   }
 }
 
-// Handles the cancel action for |self.removeOrMyGoogleChooserAlertCoordinator|.
+// Handles the cancel action for `self.removeOrMyGoogleChooserAlertCoordinator`.
 - (void)handleAlertCoordinatorCancel {
   DCHECK(self.removeOrMyGoogleChooserAlertCoordinator);
-  // |self.removeOrMyGoogleChooserAlertCoordinator| should not be stopped, since
+  // `self.removeOrMyGoogleChooserAlertCoordinator` should not be stopped, since
   // the coordinator has been cancelled.
   self.removeOrMyGoogleChooserAlertCoordinator = nil;
 }
 
-// Sets |_authenticationOperationInProgress| to NO and pops this accounts
+// Sets `_authenticationOperationInProgress` to NO and pops this accounts
 // table view controller if the user is signed out.
 - (void)handleAuthenticationOperationDidFinish {
   DCHECK(_authenticationOperationInProgress);
@@ -659,18 +703,18 @@ typedef NS_ENUM(NSInteger, ItemType) {
     DCHECK(!self.removeAccountCoordinator);
     DCHECK(!self.signoutCoordinator);
     // TODO(crbug.com/1221066): Need to add a completion block in
-    // |dismissAccountDetailsViewControllerBlock| callback, to trigger
-    // |popAccountsTableViewController()|.
-    // Once we have a completion block, we can set |animated| to YES.
+    // `dismissAccountDetailsViewControllerBlock` callback, to trigger
+    // `popAccountsTableViewController()`.
+    // Once we have a completion block, we can set `animated` to YES.
     self.dismissAccountDetailsViewControllerBlock(/*animated=*/NO);
     self.dismissAccountDetailsViewControllerBlock = nil;
     popAccountsTableViewController();
   } else if (self.removeOrMyGoogleChooserAlertCoordinator ||
              self.removeAccountCoordinator || self.signoutCoordinator) {
     DCHECK(self.presentedViewController);
-    // If |self| is presenting a view controller (like
-    // |self.removeOrMyGoogleChooserAlertCoordinator|,
-    // |self.removeAccountCoordinator|, it has to be dismissed before |self| can
+    // If `self` is presenting a view controller (like
+    // `self.removeOrMyGoogleChooserAlertCoordinator`,
+    // `self.removeAccountCoordinator`, it has to be dismissed before `self` can
     // be poped from the navigation controller.
     // This issue can be easily reproduced with EG tests, but not with Chrome
     // app itself.
@@ -689,7 +733,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
                            }];
   } else {
     DCHECK(!self.presentedViewController);
-    // Pops |self|.
+    // Pops `self`.
     popAccountsTableViewController();
   }
 }
@@ -726,9 +770,23 @@ typedef NS_ENUM(NSInteger, ItemType) {
 
 #pragma mark - SignoutActionSheetCoordinatorDelegate
 
-- (void)didSelectSignoutDataRetentionStrategy {
+- (void)signoutActionSheetCoordinatorPreventUserInteraction:
+    (SignoutActionSheetCoordinator*)coordinator {
   _authenticationOperationInProgress = YES;
   [self preventUserInteraction];
+}
+
+- (void)signoutActionSheetCoordinatorAllowUserInteraction:
+    (SignoutActionSheetCoordinator*)coordinator {
+  [self allowUserInteraction];
+}
+
+#pragma mark - TableViewLinkHeaderFooterItemDelegate
+
+- (void)view:(TableViewLinkHeaderFooterView*)view didTapLinkURL:(CrURL*)URL {
+  OpenNewTabCommand* command =
+      [OpenNewTabCommand commandWithURLFromChrome:URL.gurl];
+  [self.applicationCommandsHandler closeSettingsUIAndOpenURL:command];
 }
 
 @end

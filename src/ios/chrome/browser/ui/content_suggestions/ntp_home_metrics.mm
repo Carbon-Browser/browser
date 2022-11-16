@@ -5,6 +5,8 @@
 #import "ios/chrome/browser/ui/content_suggestions/ntp_home_metrics.h"
 
 #include "base/metrics/histogram_macros.h"
+#include "base/metrics/user_metrics.h"
+#include "base/metrics/user_metrics_action.h"
 
 #if !defined(__has_feature) || !__has_feature(objc_arc)
 #error "This file requires ARC support."
@@ -20,25 +22,33 @@ void RecordNTPImpression(IOSNTPImpression impression_type) {
 
 @interface NTPHomeMetrics ()
 @property(nonatomic, assign) ChromeBrowserState* browserState;
-@property(nonatomic, assign) web::WebState* webState;
 @end
 
 @implementation NTPHomeMetrics
 
 @synthesize browserState = _browserState;
 
-- (instancetype)initWithBrowserState:(ChromeBrowserState*)browserState
-                            webState:(web::WebState*)webState {
+- (instancetype)initWithBrowserState:(ChromeBrowserState*)browserState {
   self = [super init];
   if (self) {
     _browserState = browserState;
-    _webState = webState;
   }
   return self;
 }
 
 - (void)recordAction:(new_tab_page_uma::ActionType)action {
+  DCHECK(self.webState);
   new_tab_page_uma::RecordAction(self.browserState, self.webState, action);
+}
+
+- (void)recordContentSuggestionsActionForType:
+    (IOSContentSuggestionsActionType)type {
+  if (self.showingStartSurface) {
+    UMA_HISTOGRAM_ENUMERATION("IOS.ContentSuggestions.ActionOnStartSurface",
+                              type);
+  } else {
+    UMA_HISTOGRAM_ENUMERATION("IOS.ContentSuggestions.ActionOnNTP", type);
+  }
 }
 
 @end

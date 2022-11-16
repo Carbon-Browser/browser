@@ -8,12 +8,12 @@
 #include "base/guid.h"
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/histogram_macros.h"
-#include "chrome/browser/chromeos/printing/cups_print_job.h"
-#include "chrome/browser/chromeos/printing/history/print_job_info_proto_conversions.h"
+#include "chrome/browser/ash/printing/cups_print_job.h"
+#include "chrome/browser/ash/printing/history/print_job_info_proto_conversions.h"
 #include "chrome/browser/printing/print_job.h"
 #include "components/prefs/pref_service.h"
 
-namespace chromeos {
+namespace ash {
 
 PrintJobHistoryServiceImpl::PrintJobHistoryServiceImpl(
     std::unique_ptr<PrintJobDatabase> print_job_database,
@@ -114,4 +114,4 @@ void PrintJobHistoryServiceImpl::OnGetPrintJobsDone(
   std::move(callback).Run(success, entries);
 }
 
-}  // namespace chromeos
+}  // namespace ash

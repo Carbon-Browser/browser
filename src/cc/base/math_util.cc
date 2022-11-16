@@ -15,30 +15,34 @@
 #include "base/trace_event/traced_value.h"
 #include "base/values.h"
 #include "ui/gfx/geometry/angle_conversions.h"
+#include "ui/gfx/geometry/linear_gradient.h"
 #include "ui/gfx/geometry/quad_f.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/rect_conversions.h"
 #include "ui/gfx/geometry/rect_f.h"
+#include "ui/gfx/geometry/rrect_f.h"
+#include "ui/gfx/geometry/transform.h"
 #include "ui/gfx/geometry/vector2d_f.h"
 #include "ui/gfx/geometry/vector3d_f.h"
-#include "ui/gfx/rrect_f.h"
-#include "ui/gfx/transform.h"
 
 namespace cc {
 
 static HomogeneousCoordinate ProjectHomogeneousPoint(
     const gfx::Transform& transform,
     const gfx::PointF& p) {
-  SkScalar z =
-      -(transform.matrix().get(2, 0) * p.x() +
-        transform.matrix().get(2, 1) * p.y() + transform.matrix().get(2, 3)) /
-      transform.matrix().get(2, 2);
-
+  SkScalar m22 = transform.matrix().rc(2, 2);
   // In this case, the layer we are trying to project onto is perpendicular to
   // ray (point p and z-axis direction) that we are trying to project. This
   // happens when the layer is rotated so that it is infinitesimally thin, or
   // when it is co-planar with the camera origin -- i.e. when the layer is
   // invisible anyway.
+  if (!std::isnormal(m22))
+    return HomogeneousCoordinate(0.0, 0.0, 0.0, 1.0);
+  SkScalar z =
+      -(transform.matrix().rc(2, 0) * p.x() +
+        transform.matrix().rc(2, 1) * p.y() + transform.matrix().rc(2, 3)) /
+      m22;
+  // Same underlying condition as the previous early return.
   if (!std::isfinite(z))
     return HomogeneousCoordinate(0.0, 0.0, 0.0, 1.0);
 
@@ -269,8 +273,8 @@ gfx::Rect MathUtil::MapEnclosingClippedRectIgnoringError(
     const gfx::Rect& src_rect,
     float ignore_error) {
   if (transform.IsIdentityOrIntegerTranslation()) {
-    gfx::Vector2d offset(static_cast<int>(transform.matrix().getFloat(0, 3)),
-                         static_cast<int>(transform.matrix().getFloat(1, 3)));
+    gfx::Vector2d offset(static_cast<int>(transform.matrix().rc(0, 3)),
+                         static_cast<int>(transform.matrix().rc(1, 3)));
     return src_rect + offset;
   }
   gfx::RectF mapped_rect = MapClippedRect(transform, gfx::RectF(src_rect));
@@ -286,8 +290,8 @@ gfx::Rect MathUtil::MapEnclosingClippedRectIgnoringError(
 gfx::RectF MathUtil::MapClippedRect(const gfx::Transform& transform,
                                     const gfx::RectF& src_rect) {
   if (transform.IsIdentityOrTranslation()) {
-    gfx::Vector2dF offset(transform.matrix().getFloat(0, 3),
-                          transform.matrix().getFloat(1, 3));
+    gfx::Vector2dF offset(transform.matrix().rc(0, 3),
+                          transform.matrix().rc(1, 3));
     return src_rect + offset;
   }
 
@@ -316,8 +320,8 @@ gfx::RectF MathUtil::MapClippedRect(const gfx::Transform& transform,
 gfx::Rect MathUtil::ProjectEnclosingClippedRect(const gfx::Transform& transform,
                                                 const gfx::Rect& src_rect) {
   if (transform.IsIdentityOrIntegerTranslation()) {
-    gfx::Vector2d offset(static_cast<int>(transform.matrix().getFloat(0, 3)),
-                         static_cast<int>(transform.matrix().getFloat(1, 3)));
+    gfx::Vector2d offset(static_cast<int>(transform.matrix().rc(0, 3)),
+                         static_cast<int>(transform.matrix().rc(1, 3)));
     return src_rect + offset;
   }
   gfx::RectF projected_rect =
@@ -334,8 +338,8 @@ gfx::Rect MathUtil::ProjectEnclosingClippedRect(const gfx::Transform& transform,
 gfx::RectF MathUtil::ProjectClippedRect(const gfx::Transform& transform,
                                         const gfx::RectF& src_rect) {
   if (transform.IsIdentityOrTranslation()) {
-    gfx::Vector2dF offset(transform.matrix().getFloat(0, 3),
-                          transform.matrix().getFloat(1, 3));
+    gfx::Vector2dF offset(transform.matrix().rc(0, 3),
+                          transform.matrix().rc(1, 3));
     return src_rect + offset;
   }
 
@@ -370,17 +374,17 @@ gfx::Rect MathUtil::MapEnclosedRectWith2dAxisAlignedTransform(
     const gfx::Transform& transform,
     const gfx::Rect& rect) {
   DCHECK(transform.Preserves2dAxisAlignment());
-  DCHECK_GT(transform.matrix().get(3, 3), 0);
-  DCHECK(std::isnormal(transform.matrix().get(3, 3)));
+  DCHECK_GT(transform.matrix().rc(3, 3), 0);
+  DCHECK(std::isnormal(transform.matrix().rc(3, 3)));
 
   if (transform.IsIdentityOrIntegerTranslation()) {
-    gfx::Vector2d offset(static_cast<int>(transform.matrix().getFloat(0, 3)),
-                         static_cast<int>(transform.matrix().getFloat(1, 3)));
+    gfx::Vector2d offset(static_cast<int>(transform.matrix().rc(0, 3)),
+                         static_cast<int>(transform.matrix().rc(1, 3)));
     return rect + offset;
   }
   if (transform.IsIdentityOrTranslation()) {
-    gfx::Vector2dF offset(transform.matrix().getFloat(0, 3),
-                          transform.matrix().getFloat(1, 3));
+    gfx::Vector2dF offset(transform.matrix().rc(0, 3),
+                          transform.matrix().rc(1, 3));
     return gfx::ToEnclosedRect(gfx::RectF(rect) + offset);
   }
 
@@ -711,8 +715,8 @@ gfx::QuadF MathUtil::MapQuad(const gfx::Transform& transform,
                              bool* clipped) {
   if (transform.IsIdentityOrTranslation()) {
     gfx::QuadF mapped_quad(q);
-    mapped_quad += gfx::Vector2dF(transform.matrix().getFloat(0, 3),
-                                  transform.matrix().getFloat(1, 3));
+    mapped_quad += gfx::Vector2dF(transform.matrix().rc(0, 3),
+                                  transform.matrix().rc(1, 3));
     *clipped = false;
     return mapped_quad;
   }
@@ -798,10 +802,11 @@ gfx::RectF MathUtil::ScaleRectProportional(const gfx::RectF& input_outer_rect,
       scale_inner_rect.origin() - scale_outer_rect.origin();
   gfx::Vector2dF bottom_right_diff =
       scale_inner_rect.bottom_right() - scale_outer_rect.bottom_right();
-  output_inner_rect.Inset(top_left_diff.x() / scale_rect_to_input_scale_x,
-                          top_left_diff.y() / scale_rect_to_input_scale_y,
-                          -bottom_right_diff.x() / scale_rect_to_input_scale_x,
-                          -bottom_right_diff.y() / scale_rect_to_input_scale_y);
+  output_inner_rect.Inset(
+      gfx::InsetsF::TLBR(top_left_diff.y() / scale_rect_to_input_scale_y,
+                         top_left_diff.x() / scale_rect_to_input_scale_x,
+                         -bottom_right_diff.y() / scale_rect_to_input_scale_y,
+                         -bottom_right_diff.x() / scale_rect_to_input_scale_x));
   return output_inner_rect;
 }
 
@@ -825,7 +830,7 @@ bool MathUtil::FromValue(const base::Value* raw_value, gfx::Rect* out_rect) {
   if (!raw_value->is_list())
     return false;
 
-  base::Value::ConstListView list_view = raw_value->GetList();
+  base::Value::ConstListView list_view = raw_value->GetListDeprecated();
 
   if (list_view.size() != 4)
     return false;
@@ -921,15 +926,6 @@ void MathUtil::AddToTracedValue(const char* name,
 }
 
 void MathUtil::AddToTracedValue(const char* name,
-                                const gfx::ScrollOffset& v,
-                                base::trace_event::TracedValue* res) {
-  res->BeginArray(name);
-  res->AppendDouble(v.x());
-  res->AppendDouble(v.y());
-  res->EndArray();
-}
-
-void MathUtil::AddToTracedValue(const char* name,
                                 const gfx::QuadF& q,
                                 base::trace_event::TracedValue* res) {
   res->BeginArray(name);
@@ -959,10 +955,9 @@ void MathUtil::AddToTracedValue(const char* name,
                                 const gfx::Transform& transform,
                                 base::trace_event::TracedValue* res) {
   res->BeginArray(name);
-  const skia::Matrix44& m = transform.matrix();
   for (int row = 0; row < 4; ++row) {
     for (int col = 0; col < 4; ++col)
-      res->AppendDouble(m.getDouble(row, col));
+      res->AppendDouble(transform.matrix().rc(row, col));
   }
   res->EndArray();
 }
@@ -1015,6 +1010,19 @@ void MathUtil::AddCornerRadiiToTracedValue(
   res->EndArray();
 }
 
+void MathUtil::AddToTracedValue(const char* name,
+                                const gfx::LinearGradient& gradient,
+                                base::trace_event::TracedValue* res) {
+  res->BeginArray(name);
+  res->AppendInteger(gradient.angle());
+  res->AppendInteger(gradient.step_count());
+  for (size_t i = 0; i < gradient.step_count(); i++) {
+    res->AppendDouble(gradient.steps()[i].percent);
+    res->AppendInteger(gradient.steps()[i].alpha);
+  }
+  res->EndArray();
+}
+
 double MathUtil::AsDoubleSafely(double value) {
   return std::min(value, std::numeric_limits<double>::max());
 }
@@ -1024,15 +1032,15 @@ float MathUtil::AsFloatSafely(float value) {
 }
 
 gfx::Vector3dF MathUtil::GetXAxis(const gfx::Transform& transform) {
-  return gfx::Vector3dF(transform.matrix().getFloat(0, 0),
-                        transform.matrix().getFloat(1, 0),
-                        transform.matrix().getFloat(2, 0));
+  return gfx::Vector3dF(transform.matrix().rc(0, 0),
+                        transform.matrix().rc(1, 0),
+                        transform.matrix().rc(2, 0));
 }
 
 gfx::Vector3dF MathUtil::GetYAxis(const gfx::Transform& transform) {
-  return gfx::Vector3dF(transform.matrix().getFloat(0, 1),
-                        transform.matrix().getFloat(1, 1),
-                        transform.matrix().getFloat(2, 1));
+  return gfx::Vector3dF(transform.matrix().rc(0, 1),
+                        transform.matrix().rc(1, 1),
+                        transform.matrix().rc(2, 1));
 }
 
 ScopedSubnormalFloatDisabler::ScopedSubnormalFloatDisabler() {

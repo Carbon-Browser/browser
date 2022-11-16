@@ -6,12 +6,11 @@
 
 #include "base/strings/string_util.h"
 #include "base/test/task_environment.h"
-#include "net/third_party/quiche/src/quic/test_tools/crypto_test_utils.h"
-#include "net/third_party/quiche/src/quic/test_tools/quic_test_utils.h"
+#include "net/third_party/quiche/src/quiche/quic/test_tools/crypto_test_utils.h"
+#include "net/third_party/quiche/src/quiche/quic/test_tools/quic_test_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace net {
-namespace test {
+namespace net::test {
 
 TEST(QuicSimpleClientTest, Initialize) {
   base::test::TaskEnvironment task_environment;
@@ -24,5 +23,4 @@ TEST(QuicSimpleClientTest, Initialize) {
   EXPECT_TRUE(client.Initialize());
 }
 
-}  // namespace test
-}  // namespace net
+}  // namespace net::test

@@ -6,6 +6,7 @@
 
 #include <utility>
 
+#include "base/memory/raw_ptr_exclusion.h"
 #include "components/cbor/writer.h"
 #include "components/device_event_log/device_event_log.h"
 #include "device/fido/cbor_extract.h"
@@ -79,10 +80,13 @@ std::unique_ptr<PublicKey> P256PublicKey::ExtractFromCOSEKey(
     base::span<const uint8_t> cbor_bytes,
     const cbor::Value::MapValue& map) {
   struct COSEKey {
-    const int64_t* kty;
-    const int64_t* crv;
-    const std::vector<uint8_t>* x;
-    const std::vector<uint8_t>* y;
+    // All the fields below are not a raw_ptr<,,,>, because ELEMENT() treats the
+    // raw_ptr<T> as a void*, skipping AddRef() call and causing a ref-counting
+    // mismatch.
+    RAW_PTR_EXCLUSION const int64_t* kty;
+    RAW_PTR_EXCLUSION const int64_t* crv;
+    RAW_PTR_EXCLUSION const std::vector<uint8_t>* x;
+    RAW_PTR_EXCLUSION const std::vector<uint8_t>* y;
   } cose_key;
 
   static constexpr cbor_extract::StepOrByte<COSEKey> kSteps[] = {

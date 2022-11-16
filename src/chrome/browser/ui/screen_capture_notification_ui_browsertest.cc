@@ -8,7 +8,6 @@
 #include <string>
 
 #include "base/bind.h"
-#include "base/macros.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ui/test/test_browser_dialog.h"
@@ -18,6 +17,12 @@
 class ScreenCaptureNotificationUiBrowserTest : public DialogBrowserTest {
  public:
   ScreenCaptureNotificationUiBrowserTest() = default;
+
+  ScreenCaptureNotificationUiBrowserTest(
+      const ScreenCaptureNotificationUiBrowserTest&) = delete;
+  ScreenCaptureNotificationUiBrowserTest& operator=(
+      const ScreenCaptureNotificationUiBrowserTest&) = delete;
+
   ~ScreenCaptureNotificationUiBrowserTest() override = default;
 
   // TestBrowserUi:
@@ -65,8 +70,6 @@ class ScreenCaptureNotificationUiBrowserTest : public DialogBrowserTest {
   std::unique_ptr<ScreenCaptureNotificationUI> screen_capture_notification_ui_;
   gfx::NativeViewId on_started_result_;
   std::unique_ptr<base::RunLoop> run_loop_;
-
-  DISALLOW_COPY_AND_ASSIGN(ScreenCaptureNotificationUiBrowserTest);
 };
 
 IN_PROC_BROWSER_TEST_F(ScreenCaptureNotificationUiBrowserTest, InvokeUi) {

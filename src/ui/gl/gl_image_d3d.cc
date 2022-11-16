@@ -39,8 +39,8 @@ GLImageD3D::GLImageD3D(const gfx::Size& size,
 
 GLImageD3D::~GLImageD3D() {
   if (egl_image_ != EGL_NO_IMAGE_KHR) {
-    if (eglDestroyImageKHR(GLSurfaceEGL::GetHardwareDisplay(), egl_image_) ==
-        EGL_FALSE) {
+    if (eglDestroyImageKHR(GLSurfaceEGL::GetGLDisplayEGL()->GetDisplay(),
+                           egl_image_) == EGL_FALSE) {
       DLOG(ERROR) << "Error destroying EGLImage: "
                   << ui::GetLastEGLErrorString();
     }
@@ -57,8 +57,8 @@ bool GLImageD3D::Initialize() {
                             static_cast<EGLint>(plane_index_),
                             EGL_NONE};
   egl_image_ =
-      eglCreateImageKHR(GLSurfaceEGL::GetHardwareDisplay(), EGL_NO_CONTEXT,
-                        EGL_D3D11_TEXTURE_ANGLE,
+      eglCreateImageKHR(GLSurfaceEGL::GetGLDisplayEGL()->GetDisplay(),
+                        EGL_NO_CONTEXT, EGL_D3D11_TEXTURE_ANGLE,
                         static_cast<EGLClientBuffer>(texture_.Get()), attribs);
   if (egl_image_ == EGL_NO_IMAGE_KHR) {
     LOG(ERROR) << "Error creating EGLImage: " << ui::GetLastEGLErrorString();
@@ -80,6 +80,10 @@ GLImage::Type GLImageD3D::GetType() const {
 
 GLImage::BindOrCopy GLImageD3D::ShouldBindOrCopy() {
   return GLImage::BIND;
+}
+
+void* GLImageD3D::GetEGLImage() const {
+  return egl_image_;
 }
 
 gfx::Size GLImageD3D::GetSize() {
@@ -114,18 +118,6 @@ void GLImageD3D::OnMemoryDump(base::trace_event::ProcessMemoryDump* pmd,
                               uint64_t process_tracing_id,
                               const std::string& dump_name) {
   NOTIMPLEMENTED_LOG_ONCE();
-}
-
-bool GLImageD3D::ScheduleOverlayPlane(
-    gfx::AcceleratedWidget widget,
-    int z_order,
-    gfx::OverlayTransform transform,
-    const gfx::Rect& bounds_rect,
-    const gfx::RectF& crop_rect,
-    bool enable_blend,
-    std::unique_ptr<gfx::GpuFence> gpu_fence) {
-  NOTREACHED();
-  return false;
 }
 
 }  // namespace gl

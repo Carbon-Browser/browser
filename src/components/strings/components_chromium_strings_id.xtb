@@ -2,13 +2,12 @@
 <!DOCTYPE translationbundle>
 <translationbundle lang="id">
 <translation id="130631256467250065">Perubahan Anda akan diterapkan pada saat Anda nanti menyalakan ulang perangkat.</translation>
-<translation id="275588974610408078">Pelaporan kerusakan tidak tersedia di Carbon Browser Browser Browser.</translation>
-<translation id="3064346599913645280">Anda melihat halaman Carbon Browser Browser Browser yang aman</translation>
-<translation id="3550966579244642892">Google Chrome OS belum menyelesaikan penyiapan awal.</translation>
-<translation id="358997566136285270">Logo Carbon Browser Browser Browser</translation>
-<translation id="4365115785552740256">Carbon Browser Browser Browser tercipta berkat proyek sumber terbuka <ph name="BEGIN_LINK_CHROMIUM" />Carbon Browser Browser Browser<ph name="END_LINK_CHROMIUM" /> dan berbagai <ph name="BEGIN_LINK_OSS" />software sumber terbuka<ph name="END_LINK_OSS" /> lainnya.</translation>
+<translation id="275588974610408078">Pelaporan kerusakan tidak tersedia di Carbon Browser.</translation>
+<translation id="3064346599913645280">Anda melihat halaman Carbon Browser yang aman</translation>
+<translation id="358997566136285270">Logo Carbon Browser</translation>
+<translation id="4365115785552740256">Carbon Browser tercipta berkat proyek sumber terbuka <ph name="BEGIN_LINK_CHROMIUM" />Carbon Browser<ph name="END_LINK_CHROMIUM" /> dan berbagai <ph name="BEGIN_LINK_OSS" />software sumber terbuka<ph name="END_LINK_OSS" /> lainnya.</translation>
 <translation id="4559775032954821361">Buka
-          menu Carbon Browser Browser Browser &gt;
+          menu Carbon Browser &gt;
           <ph name="SETTINGS_TITLE" />
           &gt;
           <ph name="ADVANCED_TITLE" />
@@ -17,20 +16,21 @@
           &gt;
           Setelan LAN
           dan hapus pilihan pada kotak centang "Gunakan server proxy untuk LAN".</translation>
-<translation id="4622039161600275920">Halaman ini telah diblokir oleh Carbon Browser Browser Browser</translation>
-<translation id="48558539577516920">Izinkan Carbon Browser Browser Browser untuk mengakses jaringan di setelan firewall atau antivirus
+<translation id="4622039161600275920">Halaman ini telah diblokir oleh Carbon Browser</translation>
+<translation id="48558539577516920">Izinkan Carbon Browser untuk mengakses jaringan di setelan firewall atau antivirus
           Anda.</translation>
+<translation id="4918837013875648434">Carbon BrowserOS belum menyelesaikan penyiapan awal.</translation>
 <translation id="580822234363523061">Buka
-          menu Carbon Browser Browser Browser &gt;
+          menu Carbon Browser &gt;
           <ph name="SETTINGS_TITLE" />
           &gt;
           <ph name="ADVANCED_TITLE" />
           &gt;
           <ph name="PROXIES_TITLE" />
           dan pastikan konfigurasi Anda disetel ke "tanpa proxy" atau "langsung".</translation>
-<translation id="6613594504749178791">Perubahan Anda akan berlaku saat berikutnya Anda membuka Carbon Browser Browser Browser.</translation>
+<translation id="6613594504749178791">Perubahan Anda akan berlaku saat berikutnya Anda membuka Carbon Browser.</translation>
 <translation id="7861509383340276692">Buka
-          menu Carbon Browser Browser Browser &gt;
+          menu Carbon Browser &gt;
           <ph name="SETTINGS_TITLE" />
           &gt;
           <ph name="ADVANCED_TITLE" />
@@ -40,5 +40,5 @@
 <translation id="8187289872471304532">Buka
           Aplikasi &gt; Preferensi Sistem &gt; Jaringan &gt; Lanjutan &gt; Proxy
           dan hapus centang proxy apa pun yang telah dipilih.</translation>
-<translation id="8684913864886094367">Carbon Browser Browser Browser tidak menutup dengan benar.</translation>
+<translation id="8684913864886094367">Carbon Browser tidak menutup dengan benar.</translation>
 </translationbundle>

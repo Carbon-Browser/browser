@@ -18,6 +18,7 @@
 #include "base/strings/strcat.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/task_environment.h"
+#include "base/time/time.h"
 #include "chrome/browser/enterprise/connectors/file_system/box_api_call_test_helper.h"
 #include "net/base/net_errors.h"
 #include "net/http/http_status_code.h"
@@ -1172,7 +1173,7 @@ TEST_F(BoxCommitUploadSessionApiCallFlowTest, ProcessApiCallSuccess_Retry) {
   base::RunLoop().RunUntilIdle();
   ASSERT_TRUE(processed_success_);
   ASSERT_EQ(response_code_, net::HTTP_ACCEPTED);
-  ASSERT_EQ(retry_after_, base::TimeDelta::FromSeconds(120));
+  ASSERT_EQ(retry_after_, base::Seconds(120));
 }
 
 TEST_F(BoxCommitUploadSessionApiCallFlowTest, ProcessApiCallSuccess_Created) {
@@ -1187,7 +1188,7 @@ TEST_F(BoxCommitUploadSessionApiCallFlowTest, ProcessApiCallSuccess_Created) {
 
   ASSERT_TRUE(processed_success_);
   ASSERT_EQ(response_code_, net::HTTP_CREATED);
-  ASSERT_EQ(retry_after_, base::TimeDelta::FromSeconds(0));
+  ASSERT_EQ(retry_after_, base::Seconds(0));
   ASSERT_FALSE(file_id_.empty());
   ASSERT_EQ(BoxApiCallFlow::MakeUrlToShowFile(file_id_),
             GURL(kFileSystemBoxUploadResponseFileUrl));

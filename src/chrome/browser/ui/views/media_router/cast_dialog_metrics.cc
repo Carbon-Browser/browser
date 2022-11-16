@@ -19,11 +19,11 @@ using mojom::MediaRouteProviderId;
 namespace {
 
 DialogActivationLocationAndCastMode GetActivationLocationAndCastMode(
-    MediaRouterDialogOpenOrigin activation_location,
+    MediaRouterDialogActivationLocation activation_location,
     MediaCastMode cast_mode,
     bool is_icon_pinned) {
   switch (activation_location) {
-    case MediaRouterDialogOpenOrigin::TOOLBAR:
+    case MediaRouterDialogActivationLocation::TOOLBAR:
       if (is_icon_pinned) {
         switch (cast_mode) {
           case MediaCastMode::PRESENTATION:
@@ -34,8 +34,6 @@ DialogActivationLocationAndCastMode GetActivationLocationAndCastMode(
           case MediaCastMode::DESKTOP_MIRROR:
             return DialogActivationLocationAndCastMode::
                 kPinnedIconAndDesktopMirror;
-          case MediaCastMode::LOCAL_FILE:
-            return DialogActivationLocationAndCastMode::kPinnedIconAndLocalFile;
         }
       } else {
         switch (cast_mode) {
@@ -48,13 +46,10 @@ DialogActivationLocationAndCastMode GetActivationLocationAndCastMode(
           case MediaCastMode::DESKTOP_MIRROR:
             return DialogActivationLocationAndCastMode::
                 kEphemeralIconAndDesktopMirror;
-          case MediaCastMode::LOCAL_FILE:
-            return DialogActivationLocationAndCastMode::
-                kEphemeralIconAndLocalFile;
         }
       }
       break;
-    case MediaRouterDialogOpenOrigin::CONTEXTUAL_MENU:
+    case MediaRouterDialogActivationLocation::CONTEXTUAL_MENU:
       switch (cast_mode) {
         case MediaCastMode::PRESENTATION:
           return DialogActivationLocationAndCastMode::
@@ -64,11 +59,9 @@ DialogActivationLocationAndCastMode GetActivationLocationAndCastMode(
         case MediaCastMode::DESKTOP_MIRROR:
           return DialogActivationLocationAndCastMode::
               kContextMenuAndDesktopMirror;
-        case MediaCastMode::LOCAL_FILE:
-          return DialogActivationLocationAndCastMode::kContextMenuAndLocalFile;
       }
       break;
-    case MediaRouterDialogOpenOrigin::PAGE:
+    case MediaRouterDialogActivationLocation::PAGE:
       switch (cast_mode) {
         case MediaCastMode::PRESENTATION:
           return DialogActivationLocationAndCastMode::kPageAndPresentation;
@@ -76,11 +69,9 @@ DialogActivationLocationAndCastMode GetActivationLocationAndCastMode(
           return DialogActivationLocationAndCastMode::kPageAndTabMirror;
         case MediaCastMode::DESKTOP_MIRROR:
           return DialogActivationLocationAndCastMode::kPageAndDesktopMirror;
-        case MediaCastMode::LOCAL_FILE:
-          return DialogActivationLocationAndCastMode::kPageAndLocalFile;
       }
       break;
-    case MediaRouterDialogOpenOrigin::APP_MENU:
+    case MediaRouterDialogActivationLocation::APP_MENU:
       switch (cast_mode) {
         case MediaCastMode::PRESENTATION:
           return DialogActivationLocationAndCastMode::kAppMenuAndPresentation;
@@ -88,15 +79,25 @@ DialogActivationLocationAndCastMode GetActivationLocationAndCastMode(
           return DialogActivationLocationAndCastMode::kAppMenuAndTabMirror;
         case MediaCastMode::DESKTOP_MIRROR:
           return DialogActivationLocationAndCastMode::kAppMenuAndDesktopMirror;
-        case MediaCastMode::LOCAL_FILE:
-          return DialogActivationLocationAndCastMode::kAppMenuAndLocalFile;
+      }
+      break;
+    case MediaRouterDialogActivationLocation::SHARING_HUB:
+      switch (cast_mode) {
+        case MediaCastMode::PRESENTATION:
+          return DialogActivationLocationAndCastMode::
+              kSharingHubAndPresentation;
+        case MediaCastMode::TAB_MIRROR:
+          return DialogActivationLocationAndCastMode::kSharingHubAndTabMirror;
+        case MediaCastMode::DESKTOP_MIRROR:
+          return DialogActivationLocationAndCastMode::
+              kSharingHubAndDesktopMirror;
       }
       break;
     // |OVERFLOW_MENU| refers to extension icons hidden in the app menu. That
     // mode is no longer available for the Cast toolbar icon.
-    case MediaRouterDialogOpenOrigin::OVERFLOW_MENU:
-    case MediaRouterDialogOpenOrigin::SYSTEM_TRAY:
-    case MediaRouterDialogOpenOrigin::TOTAL_COUNT:
+    case MediaRouterDialogActivationLocation::OVERFLOW_MENU:
+    case MediaRouterDialogActivationLocation::SYSTEM_TRAY:
+    case MediaRouterDialogActivationLocation::TOTAL_COUNT:
       break;
   }
   NOTREACHED();
@@ -107,15 +108,13 @@ DialogActivationLocationAndCastMode GetActivationLocationAndCastMode(
 
 CastDialogMetrics::CastDialogMetrics(
     const base::Time& initialization_time,
-    MediaRouterDialogOpenOrigin activation_location,
+    MediaRouterDialogActivationLocation activation_location,
     Profile* profile)
     : initialization_time_(initialization_time),
       activation_location_(activation_location),
       is_icon_pinned_(
           profile->GetPrefs()->GetBoolean(::prefs::kShowCastIconInToolbar)) {
   MediaRouterMetrics::RecordIconStateAtDialogOpen(is_icon_pinned_);
-  MediaRouterMetrics::RecordCloudPrefAtDialogOpen(
-      profile->GetPrefs()->GetBoolean(prefs::kMediaRouterEnableCloudServices));
 }
 
 CastDialogMetrics::~CastDialogMetrics() = default;

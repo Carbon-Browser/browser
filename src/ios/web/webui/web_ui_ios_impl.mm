@@ -12,6 +12,7 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/values.h"
 #include "ios/web/public/js_messaging/web_frame.h"
+#import "ios/web/public/js_messaging/web_frame_util.h"
 #import "ios/web/public/web_client.h"
 #include "ios/web/public/webui/web_ui_ios_controller.h"
 #include "ios/web/public/webui/web_ui_ios_controller_factory.h"
@@ -113,12 +114,6 @@ void WebUIIOSImpl::RegisterMessageCallback(const std::string& message,
   message_callbacks_.emplace(message, std::move(callback));
 }
 
-void WebUIIOSImpl::RegisterDeprecatedMessageCallback(
-    const std::string& message,
-    const DeprecatedMessageCallback& callback) {
-  deprecated_message_callbacks_.emplace(message, callback);
-}
-
 void WebUIIOSImpl::OnJsMessage(const base::Value& message,
                                const GURL& page_url,
                                bool user_is_interacting,
@@ -153,19 +148,11 @@ void WebUIIOSImpl::ProcessWebUIIOSMessage(const GURL& source_url,
     return;
 
   // Look up the callback for this message.
-  MessageCallbackMap::const_iterator callback =
-      message_callbacks_.find(message);
-  if (callback != message_callbacks_.end()) {
+  auto message_callback_it = message_callbacks_.find(message);
+  if (message_callback_it != message_callbacks_.end()) {
     // Forward this message and content on.
-    callback->second.Run(args.GetList());
-  }
-
-  // Look up the deprecated callback for this message.
-  DeprecatedMessageCallbackMap::const_iterator deprecated_callback =
-      deprecated_message_callbacks_.find(message);
-  if (deprecated_callback != deprecated_message_callbacks_.end()) {
-    // Forward this message and content on.
-    deprecated_callback->second.Run(&base::Value::AsListValue(args));
+    message_callback_it->second.Run(args.GetList());
+    return;
   }
 }
 
@@ -181,7 +168,12 @@ void WebUIIOSImpl::AddMessageHandler(
 }
 
 void WebUIIOSImpl::ExecuteJavascript(const std::u16string& javascript) {
-  web_state_->ExecuteJavaScript(javascript);
+  web::WebFrame* main_frame = web::GetMainFrame(web_state_);
+  if (!main_frame) {
+    return;
+  }
+
+  main_frame->ExecuteJavaScript(javascript);
 }
 
 }  // namespace web

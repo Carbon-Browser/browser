@@ -15,15 +15,20 @@ GEN_INCLUDE([
  */
 ChromeVoxIntentHandlerTest = class extends ChromeVoxNextE2ETest {
   /** @override */
-  setUp() {
+  async setUpDeferred() {
+    await super.setUpDeferred();
+    await importModule(
+        'IntentHandler', '/chromevox/background/editing/intent_handler.js');
+    await importModule('Output', '/chromevox/background/output/output.js');
+    await importModule(
+        'OutputEventType', '/chromevox/background/output/output_types.js');
+
     window.Dir = constants.Dir;
     window.IntentTextBoundaryType = chrome.automation.IntentTextBoundaryType;
-    window.Movement = cursors.Movement;
-    window.Unit = cursors.Unit;
   }
 };
 
-SYNC_TEST_F('ChromeVoxIntentHandlerTest', 'MoveByCharacter', function() {
+AX_TEST_F('ChromeVoxIntentHandlerTest', 'MoveByCharacter', function() {
   let calls = [];
   const fakeLine = class {
     constructor(startOffset) {
@@ -44,7 +49,7 @@ SYNC_TEST_F('ChromeVoxIntentHandlerTest', 'MoveByCharacter', function() {
     }
   };
 
-  Output.prototype.withRichSpeechAndBraille = function(...args) {
+  Output.prototype.withRichSpeech = function(...args) {
     calls.push(['withRichSpeechAndBraille', ...args]);
     return this;
   };
@@ -74,16 +79,16 @@ SYNC_TEST_F('ChromeVoxIntentHandlerTest', 'MoveByCharacter', function() {
   assertArraysEquals(['go'], calls[3]);
 });
 
-SYNC_TEST_F('ChromeVoxIntentHandlerTest', 'MoveByWord', function() {
+AX_TEST_F('ChromeVoxIntentHandlerTest', 'MoveByWord', function() {
   let calls = [];
-  const fakeLine = new class {
+  const fakeLine = new (class {
     constructor() {}
 
     createWordRange(...args) {
       calls.push(['createWordRange', ...args]);
       return {};
     }
-  };
+  })();
 
   Output.prototype.withSpeech = function(...args) {
     calls.push(['withSpeech', ...args]);
@@ -117,8 +122,8 @@ SYNC_TEST_F('ChromeVoxIntentHandlerTest', 'MoveByWord', function() {
   assertEquals(0, calls.length);
 });
 
-SYNC_TEST_F('ChromeVoxIntentHandlerTest', 'MoveByLine', function() {
-  const fakeLine = new class {
+AX_TEST_F('ChromeVoxIntentHandlerTest', 'MoveByLine', function() {
+  const fakeLine = new (class {
     constructor() {
       this.speakLineCount = 0;
     }
@@ -128,11 +133,11 @@ SYNC_TEST_F('ChromeVoxIntentHandlerTest', 'MoveByLine', function() {
     }
 
     get start() {
-      return new class {
+      return new (class {
         move() {}
-      };
+      })();
     }
-  };
+  })();
 
   Output.prototype.withSpeech = function() {
     return this;

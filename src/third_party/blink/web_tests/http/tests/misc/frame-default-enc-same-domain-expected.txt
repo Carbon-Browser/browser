@@ -1,2 +1,0 @@
-CONSOLE MESSAGE: line 13: windows-1256
-

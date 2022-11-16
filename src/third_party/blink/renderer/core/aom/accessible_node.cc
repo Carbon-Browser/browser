@@ -8,6 +8,8 @@
 #include "third_party/blink/renderer/core/aom/accessible_node_list.h"
 #include "third_party/blink/renderer/core/dom/element.h"
 #include "third_party/blink/renderer/core/dom/qualified_name.h"
+#include "third_party/blink/renderer/core/event_target_names.h"
+#include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/frame/local_frame_view.h"
 #include "third_party/blink/renderer/core/frame/settings.h"
 #include "third_party/blink/renderer/core/html/custom/element_internals.h"
@@ -926,6 +928,13 @@ AccessibleNodeList* AccessibleNode::childNodes() {
 
 void AccessibleNode::appendChild(AccessibleNode* child,
                                  ExceptionState& exception_state) {
+  if (child == this) {
+    exception_state.ThrowDOMException(
+        DOMExceptionCode::kInvalidAccessError,
+        "An AccessibleNode cannot be a child of itself");
+    return;
+  }
+
   if (child->element()) {
     exception_state.ThrowDOMException(
         DOMExceptionCode::kInvalidAccessError,
@@ -940,6 +949,13 @@ void AccessibleNode::appendChild(AccessibleNode* child,
   }
   child->document_ = GetAncestorDocument();
   child->parent_ = this;
+
+  if (!GetExecutionContext()) {
+    exception_state.ThrowDOMException(
+        DOMExceptionCode::kInvalidAccessError,
+        "Trying to access an AccessibleNode in a detached window.");
+    return;
+  }
 
   if (!GetExecutionContext()->GetSecurityOrigin()->CanAccess(
           child->GetExecutionContext()->GetSecurityOrigin())) {
@@ -1032,6 +1048,8 @@ const AtomicString& AccessibleNode::InterfaceName() const {
 ExecutionContext* AccessibleNode::GetExecutionContext() const {
   if (element_)
     return element_->GetExecutionContext();
+  if (document_)
+    return document_->GetExecutionContext();
 
   if (parent_)
     return parent_->GetExecutionContext();

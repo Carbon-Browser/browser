@@ -24,7 +24,6 @@ action("precompile_templates") {
     "$mojom_generator_root/generators/cpp_templates/module-shared-message-ids.h.tmpl",
     "$mojom_generator_root/generators/cpp_templates/module-shared.cc.tmpl",
     "$mojom_generator_root/generators/cpp_templates/module-shared.h.tmpl",
-    "$mojom_generator_root/generators/cpp_templates/module-test-utils.cc.tmpl",
     "$mojom_generator_root/generators/cpp_templates/module-test-utils.h.tmpl",
     "$mojom_generator_root/generators/cpp_templates/module.cc.tmpl",
     "$mojom_generator_root/generators/cpp_templates/module.h.tmpl",
@@ -107,4 +106,17 @@ action("precompile_templates") {
     "--use_bundled_pylibs",
     "precompile",
   ]
+}
+
+group("tests") {
+  data = [
+    mojom_generator_script,
+    "checks/mojom_attributes_check_unittest.py",
+    "checks/mojom_restrictions_checks_unittest.py",
+    "mojom_bindings_generator_unittest.py",
+    "//tools/diagnosis/crbug_1001171.py",
+    "//third_party/markupsafe/",
+  ]
+  data += mojom_generator_sources
+  data += jinja2_sources
 }

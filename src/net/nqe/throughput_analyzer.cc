@@ -9,7 +9,7 @@
 #include "base/bind.h"
 #include "base/location.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/tick_clock.h"
 #include "net/base/host_port_pair.h"
 #include "net/base/network_activity_monitor.h"
@@ -38,9 +38,7 @@ bool ShouldDiscardRequest(const URLRequest& request) {
 
 }  // namespace
 
-namespace nqe {
-
-namespace internal {
+namespace nqe::internal {
 // The default content size of a HTML response body. It is set to the median
 // HTML response content size, i.e. 1.8kB.
 constexpr int64_t kDefaultContentSizeBytes = 1800;
@@ -59,10 +57,6 @@ ThroughputAnalyzer::ThroughputAnalyzer(
       tick_clock_(tick_clock),
       last_connection_change_(tick_clock_->NowTicks()),
       window_start_time_(base::TimeTicks()),
-      bits_received_at_window_start_(0),
-      total_response_content_size_(0),
-      disable_throughput_measurements_(false),
-      use_localhost_requests_for_tests_(false),
       net_log_(net_log) {
   DCHECK(tick_clock_);
   DCHECK(network_quality_estimator_);
@@ -278,9 +272,9 @@ bool ThroughputAnalyzer::IsHangingWindow(int64_t bits_received,
   // Scale the |duration| to one HTTP RTT, and compute the number of bits that
   // would be received over a duration of one HTTP RTT.
   size_t bits_received_over_one_http_rtt =
-      bits_received * (network_quality_estimator_->GetHttpRTT().value_or(
-                           base::TimeDelta::FromSeconds(10)) /
-                       duration);
+      bits_received *
+      (network_quality_estimator_->GetHttpRTT().value_or(base::Seconds(10)) /
+       duration);
 
   // If |is_hanging| is true, it implies that less than
   // kCwndSizeKilobytes were received over a period of 1 HTTP RTT. For a network
@@ -362,8 +356,8 @@ void ThroughputAnalyzer::OnConnectionTypeChanged() {
   // computation are now spanning a connection change event. These requests
   // would now degrade the throughput computation accuracy. So, move them to
   // |accuracy_degrading_requests_|.
-  for (auto it = requests_.begin(); it != requests_.end(); ++it) {
-    accuracy_degrading_requests_.insert(it->first);
+  for (const auto& request : requests_) {
+    accuracy_degrading_requests_.insert(request.first);
   }
   requests_.clear();
   BoundRequestsSize();
@@ -447,8 +441,7 @@ void ThroughputAnalyzer::EraseHangingRequests(const URLRequest& request) {
   const base::TimeTicks now = tick_clock_->NowTicks();
 
   const base::TimeDelta http_rtt =
-      network_quality_estimator_->GetHttpRTT().value_or(
-          base::TimeDelta::FromSeconds(60));
+      network_quality_estimator_->GetHttpRTT().value_or(base::Seconds(60));
 
   size_t count_request_erased = 0;
   auto request_it = requests_.find(&request);
@@ -464,7 +457,7 @@ void ThroughputAnalyzer::EraseHangingRequests(const URLRequest& request) {
     }
   }
 
-  if (now - last_hanging_request_check_ >= base::TimeDelta::FromSeconds(1)) {
+  if (now - last_hanging_request_check_ >= base::Seconds(1)) {
     // Hanging request check is done at most once per second.
     last_hanging_request_check_ = now;
 
@@ -491,8 +484,6 @@ void ThroughputAnalyzer::EraseHangingRequests(const URLRequest& request) {
   }
 }
 
-}  // namespace internal
-
-}  // namespace nqe
+}  // namespace nqe::internal
 
 }  // namespace net

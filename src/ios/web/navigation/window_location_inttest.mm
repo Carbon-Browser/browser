@@ -44,9 +44,9 @@ const char kWindowLocationSetToDOMStringID[] = "set-location-to-dom-string";
 
 // JavaScript functions on the window.location test page.
 NSString* const kUpdateURLScriptFormat = @"updateUrlToLoadText('%s')";
-NSString* const kGetURLScript = @"getUrl()";
-NSString* const kOnLoadCheckScript = @"isOnLoadTextVisible()";
-NSString* const kNoOpCheckScript = @"isNoOpTextVisible()";
+const char kGetURLScript[] = "getUrl()";
+const char kOnLoadCheckScript[] = "isOnLoadTextVisible()";
+const char kNoOpCheckScript[] = "isNoOpTextVisible()";
 
 // URL of a sample file-based page.
 const char kSampleFileBasedURL[] = "/chromium_logo_page.html";
@@ -80,9 +80,10 @@ class WindowLocationTest : public web::WebIntTest {
     std::string url_spec = url.possibly_invalid_spec();
     NSString* set_url_script =
         [NSString stringWithFormat:kUpdateURLScriptFormat, url_spec.c_str()];
-    ExecuteJavaScript(set_url_script);
+    web::test::ExecuteJavaScript(web_state(),
+                                 base::SysNSStringToUTF8(set_url_script));
     std::unique_ptr<base::Value> injected_url =
-        ExecuteJavaScript(kGetURLScript);
+        web::test::ExecuteJavaScript(web_state(), kGetURLScript);
     ASSERT_TRUE(injected_url->is_string());
     ASSERT_EQ(url_spec, injected_url->GetString());
   }
@@ -91,7 +92,7 @@ class WindowLocationTest : public web::WebIntTest {
   // |kOnLoadText| is visible.
   bool IsOnLoadTextVisible() {
     std::unique_ptr<base::Value> text_visible =
-        ExecuteJavaScript(kOnLoadCheckScript);
+        web::test::ExecuteJavaScript(web_state(), kOnLoadCheckScript);
     return text_visible->GetBool();
   }
 
@@ -100,7 +101,7 @@ class WindowLocationTest : public web::WebIntTest {
   // tapped, and can be used to verify that a navigation did not occur.
   bool IsNoOpTextVisible() {
     std::unique_ptr<base::Value> text_visible =
-        ExecuteJavaScript(kNoOpCheckScript);
+        web::test::ExecuteJavaScript(web_state(), kNoOpCheckScript);
     return text_visible->GetBool();
   }
 
@@ -137,21 +138,6 @@ TEST_F(WindowLocationTest, Assign) {
   EXPECT_EQ(NSNotFound, GetIndexOfNavigationItem(about_blank_item));
 }
 
-// Tests that calling window.location.assign() with an unresolvable URL loads
-// about:blank.
-TEST_F(WindowLocationTest, WindowLocationAssignUnresolvable) {
-  // Attempt to call window.location.assign() using an unresolvable URL.
-  GURL unresolvable_url("http:https:not a url");
-  SetWindowLocationUrl(unresolvable_url);
-  ASSERT_TRUE(
-      web::test::TapWebViewElementWithId(web_state(), kWindowLocationAssignID));
-
-  // Wait for the no-op text to appear.
-  base::test::ios::WaitUntilCondition(^bool {
-    return IsNoOpTextVisible();
-  });
-}
-
 // Tests that calling window.location.replace() doesn't create a new
 // NavigationItem.
 TEST_F(WindowLocationTest, Replace) {
@@ -181,26 +167,6 @@ TEST_F(WindowLocationTest, Replace) {
   EXPECT_EQ(sample_url, current_item->GetURL());
   EXPECT_EQ(GetIndexOfNavigationItem(current_item) + 1,
             GetIndexOfNavigationItem(about_blank_item));
-}
-
-// Tests that calling window.location.replace() with an unresolvable URL is a
-// no-op.
-TEST_F(WindowLocationTest, WindowLocationReplaceUnresolvable) {
-  if (@available(iOS 14, *)) {
-    // This is a syntax error in WebKit in iOS14.
-    return;
-  }
-
-  // Attempt to call window.location.assign() using an unresolvable URL.
-  GURL unresolvable_url("http:https:not a url");
-  SetWindowLocationUrl(unresolvable_url);
-  ASSERT_TRUE(web::test::TapWebViewElementWithId(web_state(),
-                                                 kWindowLocationReplaceID));
-
-  // Wait for the no-op text to appear.
-  base::test::ios::WaitUntilCondition(^bool {
-    return IsNoOpTextVisible();
-  });
 }
 
 // Tests that calling window.location.reload() causes an onload event to occur.

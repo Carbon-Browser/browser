@@ -143,12 +143,6 @@ class WebClient {
       WebState* web_state,
       mojo::GenericPendingReceiver receiver) {}
 
-  // Allows the embedder to specify legacy TLS enforcement on a per-host basis,
-  // for example to allow users to bypass interstitial warnings on affected
-  // hosts.
-  virtual bool IsLegacyTLSAllowedForHost(WebState* web_state,
-                                         const std::string& hostname);
-
   // Calls the given |callback| with the contents of an error page to display
   // when a navigation error occurs. |error| is always a valid pointer. The
   // string passed to |callback| will be nil if no error page should be
@@ -177,19 +171,26 @@ class WebClient {
   // Enables the logic to handle long press context menu with UIContextMenu.
   virtual bool EnableLongPressUIContextMenu() const;
 
-  // This method is used when the user didn't express any preference for the
-  // version of |url|. Returning true allows to make sure that for |url|, the
-  // mobile version will be used, unless the user explicitly requested the
-  // desktop version. This method can be overriden to avoid having specific URL
-  // being requested in desktop mode when the default mode is desktop.
-  virtual bool ForceMobileVersionByDefault(const GURL& url);
-
   // Returns the UserAgentType that should be used by default for the web
-  // content, based on the size class of |web_view| and the |url|.
-  virtual UserAgentType GetDefaultUserAgent(id<UITraitEnvironment> web_view,
-                                            const GURL& url);
+  // content, based on the |web_state|.
+  virtual UserAgentType GetDefaultUserAgent(web::WebState* web_state,
+                                            const GURL& url) const;
 
+  // Logs the default mode used (Mobile or Desktop). This is supposed to be
+  // called only if the user didn't force the mode.
+  virtual void LogDefaultUserAgent(web::WebState* web_state,
+                                   const GURL& url) const;
+
+  // Returns true if URL was restored via session restoration cache.
   virtual bool RestoreSessionFromCache(web::WebState* web_state) const;
+
+  // Correct missing NTP and reading list virtualURLs and titles. Native session
+  // restoration may not properly restore these items.
+  virtual void CleanupNativeRestoreURLs(web::WebState* web_state) const;
+
+  // Notify the embedder that |web_state| will display a prompt for the user.
+  virtual void WillDisplayMediaCapturePermissionPrompt(
+      web::WebState* web_state) const;
 };
 
 }  // namespace web

@@ -9,8 +9,7 @@
 #include "base/i18n/char_iterator.h"
 #include "content/browser/accessibility/browser_accessibility_android.h"
 #include "content/browser/accessibility/web_contents_accessibility_android.h"
-#include "content/common/render_accessibility.mojom.h"
-#include "content/public/common/use_zoom_for_dsf_policy.h"
+#include "third_party/blink/public/mojom/render_accessibility.mojom.h"
 #include "ui/accessibility/ax_role_properties.h"
 
 namespace content {
@@ -52,8 +51,12 @@ BrowserAccessibilityManagerAndroid::BrowserAccessibilityManagerAndroid(
     : BrowserAccessibilityManager(delegate),
       web_contents_accessibility_(std::move(web_contents_accessibility)),
       prune_tree_for_screen_reader_(true) {
-  // The Java layer handles the root scroll offset.
+  // The Java layer handles the root scroll offset and image descriptions.
   use_root_scroll_offsets_when_computing_bounds_ = false;
+  if (web_contents_accessibility_) {
+    allow_image_descriptions_ =
+        web_contents_accessibility_.get()->should_allow_image_descriptions();
+  }
 
   Initialize(initial_tree);
 }
@@ -146,6 +149,16 @@ void BrowserAccessibilityManagerAndroid::FireFocusEvent(
   WebContentsAccessibilityAndroid* wcax = GetWebContentsAXFromRootManager();
   if (!wcax)
     return;
+
+  // When focusing a node on Android, we want to ensure that we clear the
+  // Java-side cache for the previously focused node as well.
+  if (BrowserAccessibility* last_focused_node =
+          BrowserAccessibilityManager::GetLastFocusedNode()) {
+    BrowserAccessibilityAndroid* android_last_focused_node =
+        static_cast<BrowserAccessibilityAndroid*>(last_focused_node);
+    wcax->ClearNodeInfoCacheForGivenId(android_last_focused_node->unique_id());
+  }
+
   BrowserAccessibilityAndroid* android_node =
       static_cast<BrowserAccessibilityAndroid*>(node);
   wcax->HandleFocusChanged(android_node->unique_id());
@@ -164,8 +177,10 @@ void BrowserAccessibilityManagerAndroid::FireLocationChanged(
 
 void BrowserAccessibilityManagerAndroid::FireBlinkEvent(
     ax::mojom::Event event_type,
-    BrowserAccessibility* node) {
-  BrowserAccessibilityManager::FireBlinkEvent(event_type, node);
+    BrowserAccessibility* node,
+    int action_request_id) {
+  BrowserAccessibilityManager::FireBlinkEvent(event_type, node,
+                                              action_request_id);
   WebContentsAccessibilityAndroid* wcax = GetWebContentsAXFromRootManager();
   if (!wcax)
     return;
@@ -212,16 +227,21 @@ void BrowserAccessibilityManagerAndroid::FireGeneratedEvent(
     case ui::AXEventGenerator::Event::ALERT: {
       // When an alertdialog is shown, we will announce the hint, which
       // (should) contain the description set by the author. If it is
-      // empty, then we will try GetInnerText() as a fallback.
+      // empty, then we will try GetTextContentUTF16() as a fallback.
       std::u16string text = android_node->GetHint();
       if (text.empty())
-        text = android_node->GetInnerText();
+        text = android_node->GetTextContentUTF16();
 
       wcax->AnnounceLiveRegionText(text);
       break;
     }
     case ui::AXEventGenerator::Event::CHECKED_STATE_CHANGED:
       wcax->HandleCheckStateChanged(android_node->unique_id());
+      if (android_node->GetRole() == ax::mojom::Role::kToggleButton ||
+          android_node->GetRole() == ax::mojom::Role::kSwitch ||
+          android_node->GetRole() == ax::mojom::Role::kRadioButton) {
+        wcax->HandleStateDescriptionChanged(android_node->unique_id());
+      }
       break;
     case ui::AXEventGenerator::Event::DOCUMENT_SELECTION_CHANGED: {
       ui::AXNodeID focus_id =
@@ -235,7 +255,7 @@ void BrowserAccessibilityManagerAndroid::FireGeneratedEvent(
       break;
     }
     case ui::AXEventGenerator::Event::EXPANDED: {
-      if (android_node->IsCombobox() &&
+      if (ui::IsComboBox(android_node->GetRole()) &&
           GetFocus()->IsDescendantOf(android_node)) {
         wcax->AnnounceLiveRegionText(android_node->GetComboboxExpandedText());
       }
@@ -244,18 +264,21 @@ void BrowserAccessibilityManagerAndroid::FireGeneratedEvent(
     case ui::AXEventGenerator::Event::LIVE_REGION_NODE_CHANGED: {
       // This event is fired when an object appears in a live region.
       // Speak its text.
-      std::u16string text = android_node->GetInnerText();
+      std::u16string text = android_node->GetTextContentUTF16();
       wcax->AnnounceLiveRegionText(text);
       break;
     }
-    case ui::AXEventGenerator::Event::LOAD_COMPLETE:
-      if (node->manager() == GetRootManager()) {
-        auto* android_focused =
-            static_cast<BrowserAccessibilityAndroid*>(GetFocus());
-        if (android_focused)
-          wcax->HandlePageLoaded(android_focused->unique_id());
+    case ui::AXEventGenerator::Event::NAME_CHANGED: {
+      // Clear node from cache whenever the name changes to ensure fresh data.
+      wcax->ClearNodeInfoCacheForGivenId(android_node->unique_id());
+
+      // If this is a simple text element, also send an event to the framework.
+      if (ui::IsText(android_node->GetRole()) ||
+          android_node->IsAndroidTextView()) {
+        wcax->HandleTextContentChanged(android_node->unique_id());
       }
       break;
+    }
     case ui::AXEventGenerator::Event::RANGE_VALUE_CHANGED:
       DCHECK(android_node->GetData().IsRangeValueSupported());
       if (android_node->IsSlider())
@@ -275,8 +298,12 @@ void BrowserAccessibilityManagerAndroid::FireGeneratedEvent(
       break;
     }
     case ui::AXEventGenerator::Event::VALUE_IN_TEXT_FIELD_CHANGED:
-      DCHECK(android_node->IsTextField());
-      if (GetFocus() == node)
+      // Sometimes `RetargetForEvents` will walk up to the lowest platform leaf
+      // and fire the same event on that node. However, in some rare cases the
+      // leaf node might not be a text field. For example, in the unusual case
+      // when the text field is inside a button, the leaf node is the button not
+      // the text field.
+      if (android_node->IsTextField() && GetFocus() == node)
         wcax->HandleEditableTextChanged(android_node->unique_id());
       break;
 
@@ -318,13 +345,11 @@ void BrowserAccessibilityManagerAndroid::FireGeneratedEvent(
     case ui::AXEventGenerator::Event::LIVE_REGION_CREATED:
     case ui::AXEventGenerator::Event::LIVE_RELEVANT_CHANGED:
     case ui::AXEventGenerator::Event::LIVE_STATUS_CHANGED:
-    case ui::AXEventGenerator::Event::LOAD_START:
     case ui::AXEventGenerator::Event::MENU_POPUP_END:
     case ui::AXEventGenerator::Event::MENU_POPUP_START:
     case ui::AXEventGenerator::Event::MENU_ITEM_SELECTED:
     case ui::AXEventGenerator::Event::MULTILINE_STATE_CHANGED:
     case ui::AXEventGenerator::Event::MULTISELECTABLE_STATE_CHANGED:
-    case ui::AXEventGenerator::Event::NAME_CHANGED:
     case ui::AXEventGenerator::Event::OBJECT_ATTRIBUTE_CHANGED:
     case ui::AXEventGenerator::Event::OTHER_ATTRIBUTE_CHANGED:
     case ui::AXEventGenerator::Event::PARENT_CHANGED:
@@ -353,7 +378,7 @@ void BrowserAccessibilityManagerAndroid::FireGeneratedEvent(
 }
 
 void BrowserAccessibilityManagerAndroid::SendLocationChangeEvents(
-    const std::vector<mojom::LocationChangesPtr>& changes) {
+    const std::vector<blink::mojom::LocationChangesPtr>& changes) {
   // Android is not very efficient at handling notifications, and location
   // changes in particular are frequent and not time-critical. If a lot of
   // nodes changed location, just send a single notification after a short
@@ -376,7 +401,7 @@ bool BrowserAccessibilityManagerAndroid::NextAtGranularity(
     int32_t* end_index) {
   switch (granularity) {
     case ANDROID_ACCESSIBILITY_NODE_INFO_MOVEMENT_GRANULARITY_CHARACTER: {
-      std::u16string text = node->GetInnerText();
+      std::u16string text = node->GetTextContentUTF16();
       if (cursor_index >= static_cast<int32_t>(text.length()))
         return false;
       base::i18n::UTF16CharIterator iter(text);
@@ -425,7 +450,7 @@ bool BrowserAccessibilityManagerAndroid::PreviousAtGranularity(
     case ANDROID_ACCESSIBILITY_NODE_INFO_MOVEMENT_GRANULARITY_CHARACTER: {
       if (cursor_index <= 0)
         return false;
-      std::u16string text = node->GetInnerText();
+      std::u16string text = node->GetTextContentUTF16();
       base::i18n::UTF16CharIterator iter(text);
       int previous_index = 0;
       while (!iter.end() &&
@@ -496,27 +521,6 @@ void BrowserAccessibilityManagerAndroid::HandleHoverEvent(
     wcax->HandleHover(android_node->unique_id());
 }
 
-gfx::Rect BrowserAccessibilityManagerAndroid::GetViewBoundsInScreenCoordinates()
-    const {
-  // We have to take the device scale factor into account on Android.
-  BrowserAccessibilityDelegate* delegate = GetDelegateFromRootManager();
-  if (delegate) {
-    gfx::Rect bounds = delegate->AccessibilityGetViewBounds();
-
-    // http://www.chromium.org/developers/design-documents/blink-coordinate-spaces
-    // The bounds returned by the delegate are always in device-independent
-    // pixels (DIPs), meaning physical pixels divided by device scale factor
-    // (DSF). However, if UseZoomForDSF is enabled, then Blink does not apply
-    // DSF when going from physical to screen pixels. In that case, we need to
-    // multiply DSF back in to get to Blink's notion of "screen pixels."
-    if (IsUseZoomForDSFEnabled() && device_scale_factor() > 0.0 &&
-        device_scale_factor() != 1.0)
-      bounds = ScaleToEnclosingRect(bounds, device_scale_factor());
-    return bounds;
-  }
-  return gfx::Rect();
-}
-
 void BrowserAccessibilityManagerAndroid::OnNodeWillBeDeleted(ui::AXTree* tree,
                                                              ui::AXNode* node) {
   BrowserAccessibility* wrapper = GetFromAXNode(node);
@@ -524,6 +528,15 @@ void BrowserAccessibilityManagerAndroid::OnNodeWillBeDeleted(ui::AXTree* tree,
       static_cast<BrowserAccessibilityAndroid*>(wrapper);
 
   ClearNodeInfoCacheForGivenId(android_node->unique_id());
+
+  // When a node will be deleted, clear its parent from the cache as well, or
+  // the parent could erroneously report the cleared node as a child later on.
+  BrowserAccessibilityAndroid* parent_node =
+      static_cast<BrowserAccessibilityAndroid*>(
+          android_node->PlatformGetParent());
+  if (parent_node != nullptr) {
+    ClearNodeInfoCacheForGivenId(parent_node->unique_id());
+  }
 
   BrowserAccessibilityManager::OnNodeWillBeDeleted(tree, node);
 }
@@ -542,12 +555,15 @@ void BrowserAccessibilityManagerAndroid::OnAtomicUpdateFinished(
   // Reset content changed events counter every time we finish an atomic update.
   wcax->ResetContentChangedEventsCounter();
 
-  // Clear unordered_set of nodes cleared from the cache after atomic update.
+  // Clear set of nodes cleared from the cache after atomic update.
   nodes_already_cleared_.clear();
 
   if (root_changed) {
     wcax->HandleNavigate();
   }
+
+  // Update the maximum number of nodes in the cache after each atomic update.
+  wcax->UpdateMaxNodesInCache();
 }
 
 void BrowserAccessibilityManagerAndroid::OnNodeCreated(ui::AXTree* tree,
@@ -593,6 +609,16 @@ BrowserAccessibilityManagerAndroid::GetWebContentsAXFromRootManager() {
   auto* parent_manager =
       static_cast<BrowserAccessibilityManagerAndroid*>(parent_node->manager());
   return parent_manager->GetWebContentsAXFromRootManager();
+}
+
+std::u16string
+BrowserAccessibilityManagerAndroid::GenerateAccessibilityNodeInfoString(
+    int32_t unique_id) {
+  WebContentsAccessibilityAndroid* wcax = GetWebContentsAXFromRootManager();
+  if (!wcax)
+    return {};
+
+  return wcax->GenerateAccessibilityNodeInfoString(unique_id);
 }
 
 }  // namespace content

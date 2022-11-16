@@ -340,10 +340,10 @@ CommandSource::CommandResults AddTabsToGroupCommandsForGroupsMatching(
   }
   for (auto& match : GroupsMatchingInput(
            browser, input, IneligibleGroupForSelected(tab_strip_model))) {
-    auto item = match.ToCommandItem();
-    item->command =
+    auto command_item = match.ToCommandItem();
+    command_item->command =
         base::BindOnce(&AddTabsToGroup, browser->AsWeakPtr(), match.group);
-    results.push_back(std::move(item));
+    results.push_back(std::move(command_item));
   }
   return results;
 }
@@ -518,7 +518,7 @@ CommandSource::CommandResults TabCommandSource::GetCommands(
     results.push_back(std::move(item));
   }
 
-  if (send_tab_to_self::ShouldOfferFeature(
+  if (send_tab_to_self::ShouldDisplayEntryPoint(
           tab_strip_model->GetActiveWebContents())) {
     if (auto item = ItemForTitle(u"Send tab to self...", finder, &ranges)) {
       item->command = base::BindOnce(&chrome::SendTabToSelfFromPageAction,

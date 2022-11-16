@@ -8,8 +8,8 @@
 #include <utility>
 
 #include "base/command_line.h"
-#include "base/deferred_sequenced_task_runner.h"
 #include "base/memory/singleton.h"
+#include "base/task/deferred_sequenced_task_runner.h"
 #include "base/time/default_clock.h"
 #include "base/values.h"
 #include "build/build_config.h"
@@ -89,11 +89,11 @@ void ReadingListModelFactory::RegisterProfilePrefs(
   registry->RegisterBooleanPref(
       reading_list::prefs::kReadingListHasUnseenEntries, false,
       PrefRegistry::NO_REGISTRATION_FLAGS);
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
   registry->RegisterBooleanPref(
       reading_list::prefs::kReadingListDesktopFirstUseExperienceShown, false,
       PrefRegistry::NO_REGISTRATION_FLAGS);
-#endif  // !defined(OS_ANDROID)
+#endif  // !BUILDFLAG(IS_ANDROID)
 }
 
 content::BrowserContext* ReadingListModelFactory::GetBrowserContextToUse(

@@ -6,19 +6,24 @@
 
 #include <memory>
 
+#include "ash/constants/ash_features.h"
 #include "ash/keyboard/ui/keyboard_ui_controller.h"
 #include "ash/keyboard/ui/test/keyboard_test_util.h"
+#include "ash/public/cpp/app_list/app_list_controller.h"
 #include "ash/public/cpp/keyboard/keyboard_switches.h"
 #include "ash/root_window_controller.h"
 #include "ash/shelf/shelf.h"
 #include "ash/shell.h"
+#include "ash/system/message_center/ash_message_popup_collection.h"
 #include "ash/system/unified/unified_system_tray.h"
 #include "ash/test/ash_test_base.h"
 #include "ash/test/test_window_builder.h"
 #include "ash/wm/pip/pip_test_utils.h"
 #include "ash/wm/window_state.h"
 #include "ash/wm/wm_event.h"
+#include "ash/wm/work_area_insets.h"
 #include "base/callback_helpers.h"
+#include "base/test/scoped_feature_list.h"
 #include "ui/aura/window.h"
 #include "ui/display/scoped_display_for_new_windows.h"
 #include "ui/gfx/geometry/insets.h"
@@ -76,6 +81,49 @@ TEST_F(CollisionDetectionUtilsTest, AvoidObstaclesAvoidsUnifiedSystemTray) {
   // but also don't leave the PIP movement area.
   EXPECT_FALSE(moved_bounds.Intersects(bubble_bounds));
   EXPECT_TRUE(area.Contains(moved_bounds));
+}
+
+TEST_F(CollisionDetectionUtilsTest, AvoidObstaclesAvoidsPopupNotification) {
+  UpdateDisplay("1000x900");
+  auto* window = CreateTestWindowInShellWithId(kShellWindowId_ShelfContainer);
+  window->SetName(AshMessagePopupCollection::kMessagePopupWidgetName);
+  window->Show();
+
+  auto display = GetPrimaryDisplay();
+  gfx::Rect area = CollisionDetectionUtils::GetMovementArea(display);
+  gfx::Rect popup_bounds = window->GetBoundsInScreen();
+  gfx::Rect bounds = gfx::Rect(popup_bounds.x(), popup_bounds.y(), 100, 100);
+  gfx::Rect moved_bounds = CollisionDetectionUtils::GetRestingPosition(
+      display, bounds,
+      CollisionDetectionUtils::RelativePriority::kPictureInPicture);
+
+  // Expect that the returned bounds don't intersect the popup message window
+  // but also don't leave the PIP movement area.
+  EXPECT_FALSE(moved_bounds.Intersects(popup_bounds));
+  EXPECT_TRUE(area.Contains(moved_bounds));
+}
+
+TEST_F(CollisionDetectionUtilsTest, AvoidObstaclesAvoidsClamshellLauncher) {
+  base::test::ScopedFeatureList feature_list(features::kProductivityLauncher);
+
+  UpdateDisplay("1000x900");
+  AppListController* app_list_controller = AppListController::Get();
+  app_list_controller->ShowAppList();
+
+  display::Display display = GetPrimaryDisplay();
+  gfx::Rect movement_area = CollisionDetectionUtils::GetMovementArea(display);
+  gfx::Rect bubble_bounds =
+      app_list_controller->GetWindow()->GetBoundsInScreen();
+  // Start with bounds that overlap the bubble window.
+  gfx::Rect bounds = gfx::Rect(bubble_bounds.x(), bubble_bounds.y(), 100, 100);
+  gfx::Rect moved_bounds = CollisionDetectionUtils::GetRestingPosition(
+      display, bounds,
+      CollisionDetectionUtils::RelativePriority::kPictureInPicture);
+
+  // Expect that the returned bounds don't intersect the bubble window but also
+  // don't leave the PIP movement area.
+  EXPECT_FALSE(moved_bounds.Intersects(bubble_bounds));
+  EXPECT_TRUE(movement_area.Contains(moved_bounds));
 }
 
 class CollisionDetectionUtilsDisplayTest
@@ -139,8 +187,10 @@ class CollisionDetectionUtilsDisplayTest
 
   void UpdateWorkArea(const std::string& bounds) {
     UpdateDisplay(bounds);
-    for (aura::Window* root : Shell::GetAllRootWindows())
-      Shell::Get()->SetDisplayWorkAreaInsets(root, gfx::Insets());
+    for (aura::Window* root : Shell::GetAllRootWindows()) {
+      WorkAreaInsets::ForWindow(root)->UpdateWorkAreaInsetsForTest(
+          root, gfx::Rect(), gfx::Insets(), gfx::Insets());
+    }
   }
 
  private:
@@ -167,8 +217,8 @@ TEST_P(CollisionDetectionUtilsDisplayTest,
   keyboard_window->SetBounds(keyboard_bounds);
 
   gfx::Rect expected = gfx::Rect(GetDisplay().bounds().size());
-  expected.Inset(0, 0, 0, keyboard_height);
-  expected.Inset(8, 8);
+  expected.Inset(gfx::Insets::TLBR(0, 0, keyboard_height, 0));
+  expected.Inset(8);
 
   gfx::Rect area = CollisionDetectionUtils::GetMovementArea(GetDisplay());
   EXPECT_EQ(ConvertToScreen(expected), area);

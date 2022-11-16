@@ -14,9 +14,8 @@
 #include <vector>
 
 #include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "base/observer_list.h"
-#include "chromeos/dbus/dbus_method_call_status.h"
+#include "chromeos/dbus/common/dbus_method_call_status.h"
 #include "chromeos/dbus/debug_daemon/debug_daemon_client.h"
 
 namespace chromeos {
@@ -27,6 +26,10 @@ class COMPONENT_EXPORT(DEBUG_DAEMON) FakeDebugDaemonClient
     : public DebugDaemonClient {
  public:
   FakeDebugDaemonClient();
+
+  FakeDebugDaemonClient(const FakeDebugDaemonClient&) = delete;
+  FakeDebugDaemonClient& operator=(const FakeDebugDaemonClient&) = delete;
+
   ~FakeDebugDaemonClient() override;
 
   void Init(dbus::Bus* bus) override;
@@ -40,6 +43,20 @@ class COMPONENT_EXPORT(DEBUG_DAEMON) FakeDebugDaemonClient
   void SetSwapParameter(const std::string& parameter,
                         int32_t value,
                         DBusMethodCallback<std::string> callback) override;
+  void SwapZramEnableWriteback(
+      uint32_t size_mb,
+      DBusMethodCallback<std::string> callback) override;
+
+  void SwapZramSetWritebackLimit(
+      uint32_t limit_pages,
+      DBusMethodCallback<std::string> callback) override;
+
+  void SwapZramMarkIdle(uint32_t age_seconds,
+                        DBusMethodCallback<std::string> callback) override;
+
+  void InitiateSwapZramWriteback(
+      debugd::ZramWritebackMode mode,
+      DBusMethodCallback<std::string> callback) override;
   void StartAgentTracing(const base::trace_event::TraceConfig& trace_config,
                          StartAgentTracingCallback callback) override;
   void StopAgentTracing(StopAgentTracingCallback callback) override;
@@ -48,12 +65,13 @@ class COMPONENT_EXPORT(DEBUG_DAEMON) FakeDebugDaemonClient
   void GetRoutes(
       bool numeric,
       bool ipv6,
+      bool all_tables,
       DBusMethodCallback<std::vector<std::string>> callback) override;
   void SetKstaledRatio(uint8_t val, KstaledRatioCallback callback) override;
   void GetNetworkStatus(DBusMethodCallback<std::string> callback) override;
   void GetNetworkInterfaces(DBusMethodCallback<std::string> callback) override;
-  void GetPerfOutput(base::TimeDelta duration,
-                     const std::vector<std::string>& perf_args,
+  void GetPerfOutput(const std::vector<std::string>& quipper_args,
+                     bool disable_cpu_idle,
                      int file_descriptor,
                      DBusMethodCallback<uint64_t> callback) override;
   void StopPerf(uint64_t session_id, VoidDBusMethodCallback callback) override;
@@ -101,9 +119,6 @@ class COMPONENT_EXPORT(DEBUG_DAEMON) FakeDebugDaemonClient
   void SetU2fFlags(const std::set<std::string>& flags,
                    VoidDBusMethodCallback callback) override;
   void GetU2fFlags(DBusMethodCallback<std::set<std::string>> callback) override;
-  void GetKernelFeatureList(KernelFeatureListCallback callback) override;
-  void KernelFeatureEnable(const std::string& name,
-                           KernelFeatureEnableCallback callback) override;
 
   void AddObserver(Observer* observer) override;
   void RemoveObserver(Observer* observer) override;
@@ -119,6 +134,9 @@ class COMPONENT_EXPORT(DEBUG_DAEMON) FakeDebugDaemonClient
   // pending callbacks if is_available is true.
   void SetServiceIsAvailable(bool is_available);
 
+  // Sets routes that will be returned by GetRoutes() for testing.
+  void SetRoutesForTesting(std::vector<std::string> routes);
+
   const std::string& scheduler_configuration_name() const {
     return scheduler_configuration_name_;
   }
@@ -132,11 +150,10 @@ class COMPONENT_EXPORT(DEBUG_DAEMON) FakeDebugDaemonClient
   std::vector<WaitForServiceToBeAvailableCallback>
       pending_wait_for_service_to_be_available_callbacks_;
   std::set<std::string> printers_;
+  std::vector<std::string> routes_;
   std::string scheduler_configuration_name_;
   std::set<std::string> u2f_flags_;
   base::ObserverList<Observer> observers_;
-
-  DISALLOW_COPY_AND_ASSIGN(FakeDebugDaemonClient);
 };
 
 }  // namespace chromeos

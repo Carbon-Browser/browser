@@ -9,7 +9,7 @@
 #include <windows.foundation.h>
 #include <wrl/client.h>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/strings/string_piece_forward.h"
@@ -36,6 +36,9 @@ class BluetoothPairingWinrt {
           custom_pairing,
       ConnectCallback callback);
 
+  BluetoothPairingWinrt(const BluetoothPairingWinrt&) = delete;
+  BluetoothPairingWinrt& operator=(const BluetoothPairingWinrt&) = delete;
+
   ~BluetoothPairingWinrt();
 
   // Initiates the pairing procedure.
@@ -47,6 +50,9 @@ class BluetoothPairingWinrt {
 
   // Sends the PIN code |pin_code| to the remote device during pairing.
   void SetPinCode(base::StringPiece pin_code);
+
+  // User consented to continue pairing the remote device.
+  void ConfirmPairing();
 
   // Rejects a pairing or connection request from a remote device.
   void RejectPairing();
@@ -65,13 +71,18 @@ class BluetoothPairingWinrt {
               ABI::Windows::Devices::Enumeration::IDevicePairingResult>
                   pairing_result);
 
+  void OnSetPinCodeDeferralCompletion(HRESULT hr);
+  void OnConfirmPairingDeferralCompletion(HRESULT hr);
+  void OnRejectPairing(HRESULT hr);
+  void OnCancelPairing(HRESULT hr);
+
   // Weak. This is the device object that owns this pairing instance.
-  BluetoothDeviceWinrt* device_;
+  raw_ptr<BluetoothDeviceWinrt> device_;
 
   // Weak. This is the pairing delegate provided to BluetoothDevice::Pair.
   // Clients need to ensure the delegate stays alive during the pairing
   // procedure.
-  BluetoothDevice::PairingDelegate* pairing_delegate_;
+  raw_ptr<BluetoothDevice::PairingDelegate> pairing_delegate_;
 
   // Boolean indicating whether the device is currently pairing and expecting a
   // PIN Code to be returned.
@@ -89,11 +100,10 @@ class BluetoothPairingWinrt {
       ABI::Windows::Devices::Enumeration::IDevicePairingRequestedEventArgs>
       pairing_requested_;
 
+  bool was_cancelled_ = false;
   SEQUENCE_CHECKER(sequence_checker_);
 
   base::WeakPtrFactory<BluetoothPairingWinrt> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(BluetoothPairingWinrt);
 };
 
 }  // namespace device

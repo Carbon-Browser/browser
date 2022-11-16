@@ -32,11 +32,12 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_TIMING_PERFORMANCE_TIMING_H_
 
 #include "base/time/time.h"
+#include "third_party/blink/public/common/performance/largest_contentful_paint_type.h"
 #include "third_party/blink/public/web/web_performance.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context_lifecycle_observer.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
-#include "third_party/blink/renderer/platform/heap/handle.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/traced_value.h"
 
 namespace blink {
@@ -111,6 +112,13 @@ class CORE_EXPORT PerformanceTiming final : public ScriptWrappable,
   uint64_t FirstPaint() const;
   // The time the first paint operation for image was performed.
   uint64_t FirstImagePaint() const;
+  // The first 'contentful' paint as full-resolution monotonic time. This is
+  // the point at which blink painted the content for FCP; actual FCP is
+  // recorded as the time the generated content makes it to the screen (also
+  // known as presentation time). Intended to be used for correlation with other
+  // events internal to blink.
+  base::TimeTicks FirstContentfulPaintRenderedButNotPresentedAsMonotonicTime()
+      const;
   // The time of the first 'contentful' paint. A contentful paint is a paint
   // that includes content of some kind (for example, text or image content).
   uint64_t FirstContentfulPaint() const;
@@ -132,22 +140,17 @@ class CORE_EXPORT PerformanceTiming final : public ScriptWrappable,
   // are the time and size of it.
   uint64_t LargestImagePaint() const;
   uint64_t LargestImagePaintSize() const;
+  blink::LargestContentfulPaintType LargestContentfulPaintType() const;
   // The time of the first paint of the largest text within viewport.
   // Largest Text Paint is the first paint after the largest text within
   // viewport being painted. LargestTextPaint and LargestTextPaintSize
   // are the time and size of it.
+  double LargestContentfulPaintImageBPP() const;
   uint64_t LargestTextPaint() const;
   uint64_t LargestTextPaintSize() const;
   // Largest Contentful Paint is the either the largest text paint time or the
   // largest image paint time, whichever has the larger size.
   base::TimeTicks LargestContentfulPaintAsMonotonicTime() const;
-  // Experimental versions of the above metrics. Currently these are computed by
-  // considering the largest content seen so far, regardless of DOM node
-  // removal.
-  uint64_t ExperimentalLargestImagePaint() const;
-  uint64_t ExperimentalLargestImagePaintSize() const;
-  uint64_t ExperimentalLargestTextPaint() const;
-  uint64_t ExperimentalLargestTextPaintSize() const;
   // The time at which the frame is first eligible for painting due to not
   // being throttled. A zero value indicates throttling.
   uint64_t FirstEligibleToPaint() const;
@@ -160,6 +163,9 @@ class CORE_EXPORT PerformanceTiming final : public ScriptWrappable,
   absl::optional<base::TimeDelta> FirstInputDelay() const;
   // The timestamp of the event whose delay is reported by FirstInputDelay().
   absl::optional<base::TimeDelta> FirstInputTimestamp() const;
+  // The timestamp of the event whose delay is reported by FirstInputDelay().
+  // Intended to be used for correlation with other events internal to blink.
+  absl::optional<base::TimeTicks> FirstInputTimestampAsMonotonicTime() const;
   // The longest duration between the hardware timestamp and being queued on the
   // main thread for the click, tap, key press, cancellable touchstart, or
   // pointer down followed by a pointer up.

@@ -7,9 +7,11 @@
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/gmock_callback_support.h"
 #include "base/test/task_environment.h"
+#include "base/time/time.h"
 #include "media/gpu/accelerated_video_decoder.h"
 #include "media/gpu/vaapi/vaapi_picture.h"
 #include "media/gpu/vaapi/vaapi_picture_factory.h"
@@ -17,7 +19,6 @@
 #include "media/gpu/vaapi/vaapi_wrapper.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "ui/base/ui_base_features.h"
 
 using base::test::RunClosure;
 using ::testing::_;
@@ -108,7 +109,9 @@ class MockVaapiPicture : public VaapiPicture {
   ~MockVaapiPicture() override = default;
 
   // VaapiPicture implementation.
-  Status Allocate(gfx::BufferFormat format) override { return OkStatus(); }
+  VaapiStatus Allocate(gfx::BufferFormat format) override {
+    return VaapiStatus::Codes::kOk;
+  }
   bool ImportGpuMemoryBufferHandle(
       gfx::BufferFormat format,
       gfx::GpuMemoryBufferHandle gpu_memory_buffer_handle) override {
@@ -192,6 +195,12 @@ class VaapiVideoDecodeAcceleratorTest : public TestWithParam<TestParams>,
 
     vda_.state_ = VaapiVideoDecodeAccelerator::kIdle;
   }
+
+  VaapiVideoDecodeAcceleratorTest(const VaapiVideoDecodeAcceleratorTest&) =
+      delete;
+  VaapiVideoDecodeAcceleratorTest& operator=(
+      const VaapiVideoDecodeAcceleratorTest&) = delete;
+
   ~VaapiVideoDecodeAcceleratorTest() {}
 
   void SetUp() override {
@@ -270,9 +279,7 @@ class VaapiVideoDecodeAcceleratorTest : public TestWithParam<TestParams>,
                                       1, picture_size, _))
         .WillOnce(RunClosure(run_loop.QuitClosure()));
 
-    auto region = base::UnsafeSharedMemoryRegion::TakeHandleForSerialization(
-        in_shm_.Duplicate());
-    BitstreamBuffer bitstream_buffer(bitstream_id, std::move(region),
+    BitstreamBuffer bitstream_buffer(bitstream_id, in_shm_.Duplicate(),
                                      kInputSize);
 
     QueueInputBuffer(std::move(bitstream_buffer));
@@ -364,16 +371,14 @@ class VaapiVideoDecodeAcceleratorTest : public TestWithParam<TestParams>,
     EXPECT_CALL(*this, NotifyEndOfBitstreamBuffer(bitstream_id))
         .WillOnce(RunClosure(run_loop.QuitClosure()));
 
-    auto region = base::UnsafeSharedMemoryRegion::TakeHandleForSerialization(
-        in_shm_.Duplicate());
     QueueInputBuffer(
-        BitstreamBuffer(bitstream_id, std::move(region), kInputSize));
+        BitstreamBuffer(bitstream_id, in_shm_.Duplicate(), kInputSize));
 
     run_loop.Run();
   }
 
   // VideoDecodeAccelerator::Client methods.
-  MOCK_METHOD1(NotifyInitializationComplete, void(Status));
+  MOCK_METHOD1(NotifyInitializationComplete, void(DecoderStatus));
   MOCK_METHOD5(
       ProvidePictureBuffers,
       void(uint32_t, VideoPixelFormat, uint32_t, const gfx::Size&, uint32_t));
@@ -393,8 +398,8 @@ class VaapiVideoDecodeAcceleratorTest : public TestWithParam<TestParams>,
   base::Thread decoder_thread_;
 
   // Ownership passed to |vda_|, but we retain a pointer to it for MOCK checks.
-  MockAcceleratedVideoDecoder* mock_decoder_;
-  MockVaapiPictureFactory* mock_vaapi_picture_factory_;
+  raw_ptr<MockAcceleratedVideoDecoder> mock_decoder_;
+  raw_ptr<MockVaapiPictureFactory> mock_vaapi_picture_factory_;
 
   scoped_refptr<MockVaapiWrapper> mock_vaapi_wrapper_;
   scoped_refptr<MockVaapiWrapper> mock_vpp_vaapi_wrapper_;
@@ -403,8 +408,6 @@ class VaapiVideoDecodeAcceleratorTest : public TestWithParam<TestParams>,
 
  private:
   base::WeakPtrFactory<VaapiVideoDecodeAcceleratorTest> weak_ptr_factory_;
-
-  DISALLOW_COPY_AND_ASSIGN(VaapiVideoDecodeAcceleratorTest);
 };
 
 // Verify that it is possible to select DRM(egl) and TFP(glx) at runtime.
@@ -416,12 +419,17 @@ TEST_P(VaapiVideoDecodeAcceleratorTest, SupportedPlatforms) {
             mock_vaapi_picture_factory_->GetVaapiImplementation(
                 gl::kGLImplementationEGLGLES2));
 
-#if defined(USE_X11)
-  if (!features::IsUsingOzonePlatform()) {
-    EXPECT_EQ(VaapiPictureFactory::kVaapiImplementationX11,
-              mock_vaapi_picture_factory_->GetVaapiImplementation(
-                  gl::kGLImplementationDesktopGL));
-  }
+#if BUILDFLAG(USE_VAAPI_X11)
+  EXPECT_EQ(VaapiPictureFactory::kVaapiImplementationAngle,
+            mock_vaapi_picture_factory_->GetVaapiImplementation(
+                gl::kGLImplementationEGLANGLE));
+  EXPECT_EQ(VaapiPictureFactory::kVaapiImplementationX11,
+            mock_vaapi_picture_factory_->GetVaapiImplementation(
+                gl::kGLImplementationDesktopGL));
+#elif defined(USE_OZONE)
+  EXPECT_EQ(VaapiPictureFactory::kVaapiImplementationDrm,
+            mock_vaapi_picture_factory_->GetVaapiImplementation(
+                gl::kGLImplementationEGLANGLE));
 #endif
 }
 
@@ -430,9 +438,8 @@ TEST_P(VaapiVideoDecodeAcceleratorTest,
        QueueInputBufferAndErrorWhenVDAUninitialized) {
   SetVdaStateToUnitialized();
 
-  auto region = base::UnsafeSharedMemoryRegion::TakeHandleForSerialization(
-      in_shm_.Duplicate());
-  BitstreamBuffer bitstream_buffer(kBitstreamId, std::move(region), kInputSize);
+  BitstreamBuffer bitstream_buffer(kBitstreamId, in_shm_.Duplicate(),
+                                   kInputSize);
 
   EXPECT_CALL(*this,
               NotifyError(VaapiVideoDecodeAccelerator::PLATFORM_FAILURE));
@@ -441,9 +448,8 @@ TEST_P(VaapiVideoDecodeAcceleratorTest,
 
 // Verifies that Decode() returning kDecodeError ends up pinging NotifyError().
 TEST_P(VaapiVideoDecodeAcceleratorTest, QueueInputBufferAndDecodeError) {
-  auto region = base::UnsafeSharedMemoryRegion::TakeHandleForSerialization(
-      in_shm_.Duplicate());
-  BitstreamBuffer bitstream_buffer(kBitstreamId, std::move(region), kInputSize);
+  BitstreamBuffer bitstream_buffer(kBitstreamId, in_shm_.Duplicate(),
+                                   kInputSize);
 
   base::RunLoop run_loop;
   EXPECT_CALL(*mock_decoder_,
@@ -462,9 +468,8 @@ TEST_P(VaapiVideoDecodeAcceleratorTest, QueueVP9Profile2AndError) {
   if (GetParam().video_codec != VP9PROFILE_PROFILE2)
     GTEST_SKIP() << "The test parameter is not vp9 profile 2";
 
-  auto region = base::UnsafeSharedMemoryRegion::TakeHandleForSerialization(
-      in_shm_.Duplicate());
-  BitstreamBuffer bitstream_buffer(kBitstreamId, std::move(region), kInputSize);
+  BitstreamBuffer bitstream_buffer(kBitstreamId, in_shm_.Duplicate(),
+                                   kInputSize);
   base::RunLoop run_loop;
   EXPECT_CALL(*mock_decoder_,
               SetStream(_, IsExpectedDecoderBuffer(kInputSize, nullptr)))

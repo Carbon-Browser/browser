@@ -13,8 +13,8 @@
 #include "components/vector_icons/vector_icons.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/canvas.h"
+#include "ui/gfx/geometry/skia_conversions.h"
 #include "ui/gfx/paint_vector_icon.h"
-#include "ui/gfx/skia_util.h"
 #include "ui/views/background.h"
 #include "ui/views/border.h"
 #include "ui/views/controls/button/button.h"
@@ -75,7 +75,7 @@ class SettingsButton : public views::ImageButton {
     SetImage(views::Button::ButtonState::STATE_NORMAL,
              gfx::CreateVectorIcon(vector_icons::kSettingsIcon,
                                    kHUDSettingsIconSize, kHUDDefaultColor));
-    SetBorder(views::CreateEmptyBorder(gfx::Insets(kHUDSettingsIconBorder)));
+    SetBorder(views::CreateEmptyBorder(kHUDSettingsIconBorder));
     SetProperty(kHUDClickHandler, HTCLIENT);
 
     SetFocusBehavior(views::View::FocusBehavior::ACCESSIBLE_ONLY);
@@ -184,7 +184,7 @@ HUDHeaderView::HUDHeaderView(HUDDisplayView* hud) {
   // Header does not have margin between header and data.
   // Data has its top margin (kHUDGraphsInset).
   header_buttons->SetBorder(views::CreateEmptyBorder(
-      gfx::Insets(kHUDInset, kHUDInset, 0, kHUDInset)));
+      gfx::Insets::TLBR(kHUDInset, kHUDInset, 0, kHUDInset)));
 
   // Add buttons and tab strip.
   header_buttons

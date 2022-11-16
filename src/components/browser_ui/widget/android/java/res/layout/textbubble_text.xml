@@ -10,28 +10,34 @@
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
     android:orientation="horizontal"
-    android:padding="16dp"
     android:gravity="center" >
 
-     <TextView
+     <org.chromium.ui.widget.TextViewWithTightWrap
           android:id="@+id/message"
           android:layout_width="0dp"
           android:layout_height="wrap_content"
+          android:padding="16dp"
           android:layout_weight="1"
-          android:textAppearance="@style/TextAppearance.TextMediumThick.Primary.Baseline.Inverse" />
+          android:textAppearance="@style/TextAppearance.TextMediumThick.Primary.OnAccent1" />
 
      <org.chromium.ui.widget.ButtonCompat
           android:id="@+id/button_snooze"
           android:layout_width="wrap_content"
           android:layout_height="wrap_content"
+          android:focusable="true"
+          android:clickable="true"
           android:visibility="gone"
-          android:text="@string/iph_snooze" />
+          android:text="@string/iph_snooze"
+          style="@style/TextButton.OnAccent1.Snooze" />
 
      <org.chromium.ui.widget.ButtonCompat
           android:id="@+id/button_dismiss"
           android:layout_width="wrap_content"
           android:layout_height="wrap_content"
+          android:focusable="true"
+          android:clickable="true"
           android:visibility="gone"
-          android:text="@string/got_it" />
+          android:text="@string/got_it"
+          style="@style/TextButton.OnAccent1.Snooze" />
 
 </LinearLayout>

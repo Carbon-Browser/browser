@@ -4,7 +4,7 @@
 
 #include "content/browser/devtools/devtools_instrumentation.h"
 
-#include "base/strings/strcat.h"
+#include "base/containers/adapters.h"
 #include "base/strings/stringprintf.h"
 #include "base/trace_event/traced_value.h"
 #include "components/download/public/common/download_create_info.h"
@@ -24,8 +24,11 @@
 #include "content/browser/devtools/protocol/page_handler.h"
 #include "content/browser/devtools/protocol/security_handler.h"
 #include "content/browser/devtools/protocol/target_handler.h"
+#include "content/browser/devtools/protocol/tracing_handler.h"
 #include "content/browser/devtools/render_frame_devtools_agent_host.h"
 #include "content/browser/devtools/service_worker_devtools_agent_host.h"
+#include "content/browser/devtools/worker_devtools_agent_host.h"
+#include "content/browser/devtools/worker_devtools_manager.h"
 #include "content/browser/renderer_host/frame_tree_node.h"
 #include "content/browser/renderer_host/navigation_request.h"
 #include "content/browser/service_worker/service_worker_context_wrapper.h"
@@ -33,16 +36,15 @@
 #include "content/browser/web_contents/web_contents_impl.h"
 #include "content/browser/web_package/signed_exchange_envelope.h"
 #include "content/public/browser/browser_context.h"
+#include "devtools_instrumentation.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
 #include "net/base/load_flags.h"
 #include "net/cookies/canonical_cookie.h"
 #include "net/cookies/cookie_inclusion_status.h"
 #include "net/http/http_request_headers.h"
-#include "net/proxy_resolution/proxy_config.h"
 #include "net/quic/web_transport_error.h"
 #include "net/ssl/ssl_info.h"
-#include "net/traffic_annotation/network_traffic_annotation.h"
 #include "services/network/public/cpp/devtools_observer_util.h"
 #include "services/network/public/mojom/devtools_observer.mojom.h"
 #include "services/network/public/mojom/network_context.mojom.h"
@@ -158,6 +160,120 @@ std::unique_ptr<protocol::Audits::InspectorIssue> BuildTWAQualityIssue(
   return issue;
 }
 
+std::string FederatedAuthRequestResultToProtocol(
+    blink::mojom::FederatedAuthRequestResult result) {
+  using blink::mojom::FederatedAuthRequestResult;
+  namespace FederatedAuthRequestIssueReasonEnum =
+      protocol::Audits::FederatedAuthRequestIssueReasonEnum;
+  switch (result) {
+    case FederatedAuthRequestResult::kApprovalDeclined: {
+      return FederatedAuthRequestIssueReasonEnum::ApprovalDeclined;
+    }
+    case FederatedAuthRequestResult::kErrorDisabledInSettings: {
+      return FederatedAuthRequestIssueReasonEnum::DisabledInSettings;
+    }
+    case FederatedAuthRequestResult::kErrorTooManyRequests: {
+      return FederatedAuthRequestIssueReasonEnum::TooManyRequests;
+    }
+    case FederatedAuthRequestResult::kErrorFetchingManifestListHttpNotFound: {
+      return FederatedAuthRequestIssueReasonEnum::ManifestListHttpNotFound;
+    }
+    case FederatedAuthRequestResult::kErrorFetchingManifestListNoResponse: {
+      return FederatedAuthRequestIssueReasonEnum::ManifestListNoResponse;
+    }
+    case FederatedAuthRequestResult::
+        kErrorFetchingManifestListInvalidResponse: {
+      return FederatedAuthRequestIssueReasonEnum::ManifestListInvalidResponse;
+    }
+    case FederatedAuthRequestResult::kErrorManifestNotInManifestList: {
+      return FederatedAuthRequestIssueReasonEnum::ManifestNotInManifestList;
+    }
+    case FederatedAuthRequestResult::kErrorManifestListTooBig: {
+      return FederatedAuthRequestIssueReasonEnum::ManifestListTooBig;
+    }
+    case FederatedAuthRequestResult::kErrorFetchingManifestHttpNotFound: {
+      return FederatedAuthRequestIssueReasonEnum::ManifestHttpNotFound;
+    }
+    case FederatedAuthRequestResult::kErrorFetchingManifestNoResponse: {
+      return FederatedAuthRequestIssueReasonEnum::ManifestNoResponse;
+    }
+    case FederatedAuthRequestResult::kErrorFetchingManifestInvalidResponse: {
+      return FederatedAuthRequestIssueReasonEnum::ManifestInvalidResponse;
+    }
+    case FederatedAuthRequestResult::kErrorFetchingClientMetadataHttpNotFound: {
+      return FederatedAuthRequestIssueReasonEnum::ClientMetadataHttpNotFound;
+    }
+    case FederatedAuthRequestResult::kErrorFetchingClientMetadataNoResponse: {
+      return FederatedAuthRequestIssueReasonEnum::ClientMetadataNoResponse;
+    }
+    case FederatedAuthRequestResult::
+        kErrorFetchingClientMetadataInvalidResponse: {
+      return FederatedAuthRequestIssueReasonEnum::ClientMetadataInvalidResponse;
+    }
+    case FederatedAuthRequestResult::
+        kErrorClientMetadataMissingPrivacyPolicyUrl: {
+      return FederatedAuthRequestIssueReasonEnum::
+          ClientMetadataMissingPrivacyPolicyUrl;
+    }
+    case FederatedAuthRequestResult::kErrorFetchingAccountsHttpNotFound: {
+      return FederatedAuthRequestIssueReasonEnum::AccountsHttpNotFound;
+    }
+    case FederatedAuthRequestResult::kErrorFetchingAccountsNoResponse: {
+      return FederatedAuthRequestIssueReasonEnum::AccountsNoResponse;
+    }
+    case FederatedAuthRequestResult::kErrorFetchingAccountsInvalidResponse: {
+      return FederatedAuthRequestIssueReasonEnum::AccountsInvalidResponse;
+    }
+    case FederatedAuthRequestResult::kErrorFetchingIdTokenHttpNotFound: {
+      return FederatedAuthRequestIssueReasonEnum::IdTokenHttpNotFound;
+    }
+    case FederatedAuthRequestResult::kErrorFetchingIdTokenNoResponse: {
+      return FederatedAuthRequestIssueReasonEnum::IdTokenNoResponse;
+    }
+    case FederatedAuthRequestResult::kErrorFetchingIdTokenInvalidResponse: {
+      return FederatedAuthRequestIssueReasonEnum::IdTokenInvalidResponse;
+    }
+    case FederatedAuthRequestResult::kErrorFetchingIdTokenInvalidRequest: {
+      return FederatedAuthRequestIssueReasonEnum::IdTokenInvalidRequest;
+    }
+    case FederatedAuthRequestResult::kErrorCanceled: {
+      return FederatedAuthRequestIssueReasonEnum::Canceled;
+    }
+    case FederatedAuthRequestResult::kError: {
+      return FederatedAuthRequestIssueReasonEnum::ErrorIdToken;
+    }
+    case FederatedAuthRequestResult::kSuccess: {
+      DCHECK(false);
+      return "";
+    }
+  }
+}
+
+std::unique_ptr<protocol::Audits::InspectorIssue>
+BuildFederatedAuthRequestIssue(
+    const blink::mojom::FederatedAuthRequestIssueDetailsPtr& issue_details) {
+  protocol::String type_string =
+      FederatedAuthRequestResultToProtocol(issue_details->status);
+
+  auto federated_auth_request_details =
+      protocol::Audits::FederatedAuthRequestIssueDetails::Create()
+          .SetFederatedAuthRequestIssueReason(type_string)
+          .Build();
+
+  auto protocol_issue_details =
+      protocol::Audits::InspectorIssueDetails::Create()
+          .SetFederatedAuthRequestIssueDetails(
+              std::move(federated_auth_request_details))
+          .Build();
+
+  auto issue = protocol::Audits::InspectorIssue::Create()
+                   .SetCode(protocol::Audits::InspectorIssueCodeEnum::
+                                FederatedAuthRequestIssue)
+                   .SetDetails(std::move(protocol_issue_details))
+                   .Build();
+  return issue;
+}
+
 }  // namespace
 
 void OnResetNavigationRequest(NavigationRequest* navigation_request) {
@@ -191,14 +307,30 @@ void OnNavigationResponseReceived(const NavigationRequest& nav_request,
 
 void BackForwardCacheNotUsed(
     const NavigationRequest* nav_request,
-    const BackForwardCacheCanStoreDocumentResult* result) {
+    const BackForwardCacheCanStoreDocumentResult* result,
+    const BackForwardCacheCanStoreTreeResult* tree_result) {
   DCHECK(nav_request);
   FrameTreeNode* ftn = nav_request->frame_tree_node();
   DispatchToAgents(ftn, &protocol::PageHandler::BackForwardCacheNotUsed,
-                   nav_request, result);
+                   nav_request, result, tree_result);
+}
+
+void DidActivatePrerender(const NavigationRequest& nav_request) {
+  FrameTreeNode* ftn = nav_request.frame_tree_node();
+  DispatchToAgents(ftn, &protocol::PageHandler::DidActivatePrerender,
+                   nav_request);
+}
+
+void DidCancelPrerender(const GURL& prerendering_url,
+                        FrameTreeNode* ftn,
+                        PrerenderHost::FinalStatus status) {
+  std::string initiating_frame_id = ftn->devtools_frame_token().ToString();
+  DispatchToAgents(ftn, &protocol::PageHandler::DidCancelPrerender,
+                   prerendering_url, initiating_frame_id, status);
 }
 
 namespace {
+
 protocol::String BuildBlockedByResponseReason(
     network::mojom::BlockedByResponseReason reason) {
   switch (reason) {
@@ -220,6 +352,53 @@ protocol::String BuildBlockedByResponseReason(
       return protocol::Audits::BlockedByResponseReasonEnum::CorpNotSameSite;
   }
 }
+
+void ReportBlockedByResponseIssue(
+    const GURL& url,
+    std::string& requestId,
+    FrameTreeNode* ftn,
+    RenderFrameHostImpl* parent_frame,
+    const network::URLLoaderCompletionStatus& status) {
+  DCHECK(status.blocked_by_response_reason);
+
+  auto issueDetails = protocol::Audits::InspectorIssueDetails::Create();
+  auto request = protocol::Audits::AffectedRequest::Create()
+                     .SetRequestId(requestId)
+                     .SetUrl(url.spec())
+                     .Build();
+  auto blockedByResponseDetails =
+      protocol::Audits::BlockedByResponseIssueDetails::Create()
+          .SetRequest(std::move(request))
+          .SetReason(
+              BuildBlockedByResponseReason(*status.blocked_by_response_reason))
+          .Build();
+
+  blockedByResponseDetails->SetBlockedFrame(
+      protocol::Audits::AffectedFrame::Create()
+          .SetFrameId(ftn->devtools_frame_token().ToString())
+          .Build());
+  if (parent_frame) {
+    blockedByResponseDetails->SetParentFrame(
+        protocol::Audits::AffectedFrame::Create()
+            .SetFrameId(parent_frame->frame_tree_node()
+                            ->devtools_frame_token()
+                            .ToString())
+            .Build());
+  }
+
+  issueDetails.SetBlockedByResponseIssueDetails(
+      std::move(blockedByResponseDetails));
+
+  auto inspector_issue =
+      protocol::Audits::InspectorIssue::Create()
+          .SetCode(
+              protocol::Audits::InspectorIssueCodeEnum::BlockedByResponseIssue)
+          .SetDetails(issueDetails.Build())
+          .Build();
+
+  ReportBrowserInitiatedIssue(ftn->current_frame_host(), inspector_issue.get());
+}
+
 }  // namespace
 
 void OnNavigationRequestFailed(
@@ -229,52 +408,21 @@ void OnNavigationRequestFailed(
   std::string id = nav_request.devtools_navigation_token().ToString();
 
   if (status.blocked_by_response_reason) {
-    auto issueDetails = protocol::Audits::InspectorIssueDetails::Create();
-    auto request =
-        protocol::Audits::AffectedRequest::Create()
-            .SetRequestId(id)
-            .SetUrl(const_cast<NavigationRequest&>(nav_request).GetURL().spec())
-            .Build();
-    auto blockedByResponseDetails =
-        protocol::Audits::BlockedByResponseIssueDetails::Create()
-            .SetRequest(std::move(request))
-            .SetReason(BuildBlockedByResponseReason(
-                *status.blocked_by_response_reason))
-            .Build();
-
-    blockedByResponseDetails->SetBlockedFrame(
-        protocol::Audits::AffectedFrame::Create()
-            .SetFrameId(ftn->devtools_frame_token().ToString())
-            .Build());
-    if (ftn->parent()) {
-      blockedByResponseDetails->SetParentFrame(
-          protocol::Audits::AffectedFrame::Create()
-              .SetFrameId(ftn->parent()
-                              ->frame_tree_node()
-                              ->devtools_frame_token()
-                              .ToString())
-              .Build());
-    }
-    issueDetails.SetBlockedByResponseIssueDetails(
-        std::move(blockedByResponseDetails));
-
-    auto inspector_issue =
-        protocol::Audits::InspectorIssue::Create()
-            .SetCode(protocol::Audits::InspectorIssueCodeEnum::
-                         BlockedByResponseIssue)
-            .SetDetails(issueDetails.Build())
-            .Build();
-
-    ReportBrowserInitiatedIssue(ftn->current_frame_host(),
-                                inspector_issue.get());
+    ReportBlockedByResponseIssue(
+        const_cast<NavigationRequest&>(nav_request).GetURL(), id, ftn,
+        ftn->parent(), status);
   }
 
   // If a BFCache navigation fails, it will be restarted as a regular
   // navigation, so we don't want to report this failure.
-  // TODO(https://crbug.com/1195751): Stop reporting this for Prerender as well
-  // after it supports fallback to regular navigation on activation failures.
   if (nav_request.IsServedFromBackForwardCache())
     return;
+
+  // Activation of a prerender page is synchronous with its own activation flow
+  // (crrev.com/c/2992411); if the prerender is cancelled (e.g. speculation rule
+  // removed), the flow will fallback to a normal navigation, which is no longer
+  // considered as a page activation.
+  DCHECK(!nav_request.IsPageActivation());
 
   DispatchToAgents(ftn, &protocol::NetworkHandler::LoadingComplete, id,
                    protocol::Network::ResourceTypeEnum::Document, status);
@@ -393,7 +541,7 @@ void ThrottleForServiceWorkerAgentHost(
     scoped_refptr<DevToolsThrottleHandle> throttle_handle) {
   for (auto* target_handler :
        protocol::TargetHandler::ForAgentHost(requesting_agent_host)) {
-    target_handler->AddServiceWorkerThrottle(agent_host, throttle_handle);
+    target_handler->AddWorkerThrottle(agent_host, throttle_handle);
   }
 }
 
@@ -403,13 +551,15 @@ std::vector<std::unique_ptr<NavigationThrottle>> CreateNavigationThrottles(
       NavigationRequest::From(navigation_handle)->frame_tree_node();
   FrameTreeNode* parent = FrameTreeNode::From(frame_tree_node->parent());
   if (!parent) {
-    if (WebContentsImpl::FromFrameTreeNode(frame_tree_node)->IsPortal() &&
-        WebContentsImpl::FromFrameTreeNode(frame_tree_node)
-            ->GetOuterWebContents()) {
-      parent = WebContentsImpl::FromFrameTreeNode(frame_tree_node)
-                   ->GetOuterWebContents()
-                   ->GetFrameTree()
-                   ->root();
+    FrameTreeNode* outer_delegate_node =
+        frame_tree_node->render_manager()->GetOuterDelegateNode();
+    if (outer_delegate_node &&
+        (WebContentsImpl::FromFrameTreeNode(frame_tree_node)->IsPortal() ||
+         frame_tree_node->IsFencedFrameRoot())) {
+      parent = frame_tree_node->render_manager()
+                   ->GetOuterDelegateNode()
+                   ->parent()
+                   ->frame_tree_node();
     }
   }
 
@@ -429,7 +579,7 @@ std::vector<std::unique_ptr<NavigationThrottle>> CreateNavigationThrottles(
   return result;
 }
 
-void ThrottleMainScriptFetch(
+void ThrottleServiceWorkerMainScriptFetch(
     ServiceWorkerContextWrapper* wrapper,
     int64_t version_id,
     const GlobalRenderFrameHostId& requesting_frame_id,
@@ -465,6 +615,26 @@ void ThrottleMainScriptFetch(
                                     throttle_handle);
 }
 
+void ThrottleWorkerMainScriptFetch(
+    const base::UnguessableToken& devtools_worker_token,
+    const GlobalRenderFrameHostId& ancestor_render_frame_host_id,
+    scoped_refptr<DevToolsThrottleHandle> throttle_handle) {
+  WorkerDevToolsAgentHost* agent_host =
+      WorkerDevToolsManager::GetInstance().GetDevToolsHostFromToken(
+          devtools_worker_token);
+  if (!agent_host)
+    return;
+
+  RenderFrameHostImpl* rfh =
+      RenderFrameHostImpl::FromID(ancestor_render_frame_host_id);
+  if (!rfh)
+    return;
+
+  FrameTreeNode* ftn = rfh->frame_tree_node();
+  DispatchToAgents(ftn, &protocol::TargetHandler::AddWorkerThrottle, agent_host,
+                   std::move(throttle_handle));
+}
+
 bool ShouldWaitForDebuggerInWindowOpen() {
   for (auto* browser_agent_host : BrowserDevToolsAgentHost::Instances()) {
     for (auto* target_handler :
@@ -481,7 +651,9 @@ void ApplyNetworkRequestOverrides(
     blink::mojom::BeginNavigationParams* begin_params,
     bool* report_raw_headers,
     absl::optional<std::vector<net::SourceStream::SourceType>>*
-        devtools_accepted_stream_types) {
+        devtools_accepted_stream_types,
+    bool* devtools_user_agent_overridden) {
+  *devtools_user_agent_overridden = false;
   bool disable_cache = false;
   DevToolsAgentHostImpl* agent_host =
       RenderFrameDevToolsAgentHost::GetFor(frame_tree_node);
@@ -495,7 +667,7 @@ void ApplyNetworkRequestOverrides(
     DCHECK(!agent_host);
     agent_host = RenderFrameDevToolsAgentHost::GetFor(
         WebContentsImpl::FromFrameTreeNode(frame_tree_node)
-            ->GetMainFrame()
+            ->GetPrimaryMainFrame()
             ->frame_tree_node());
   }
   if (!agent_host)
@@ -510,8 +682,11 @@ void ApplyNetworkRequestOverrides(
                             &disable_cache, devtools_accepted_stream_types);
   }
 
-  for (auto* emulation : protocol::EmulationHandler::ForAgentHost(agent_host))
-    emulation->ApplyOverrides(&headers);
+  for (auto* emulation : protocol::EmulationHandler::ForAgentHost(agent_host)) {
+    bool ua_overridden = false;
+    emulation->ApplyOverrides(&headers, &ua_overridden);
+    *devtools_user_agent_overridden |= ua_overridden;
+  }
 
   if (disable_cache) {
     begin_params->load_flags &=
@@ -538,7 +713,7 @@ bool ApplyUserAgentMetadataOverrides(
     DCHECK(!agent_host);
     agent_host = RenderFrameDevToolsAgentHost::GetFor(
         WebContentsImpl::FromFrameTreeNode(frame_tree_node)
-            ->GetMainFrame()
+            ->GetPrimaryMainFrame()
             ->frame_tree_node());
   }
   if (!agent_host)
@@ -565,8 +740,8 @@ bool MaybeCreateProxyForInterception(
     return false;
   bool had_interceptors = false;
   const auto& handlers = HandlerType::ForAgentHost(agent_host);
-  for (auto it = handlers.rbegin(); it != handlers.rend(); ++it) {
-    had_interceptors = (*it)->MaybeCreateProxyForInterception(
+  for (const auto& handler : base::Reversed(handlers)) {
+    had_interceptors = handler->MaybeCreateProxyForInterception(
                            process_id, storage_partition, frame_token,
                            is_navigation, is_download, agent_override) ||
                        had_interceptors;
@@ -750,6 +925,39 @@ bool WillCreateURLLoaderFactory(
   return true;
 }
 
+void OnPrefetchRequestWillBeSent(FrameTreeNode* frame_tree_node,
+                                 const std::string& request_id,
+                                 const GURL& initiator,
+                                 const network::ResourceRequest& request) {
+  auto timestamp = base::TimeTicks::Now();
+  std::string frame_token = frame_tree_node->devtools_frame_token().ToString();
+  DispatchToAgents(frame_tree_node,
+                   &protocol::NetworkHandler::PrefetchRequestWillBeSent,
+                   request_id, request, initiator, frame_token, timestamp);
+}
+
+void OnPrefetchResponseReceived(FrameTreeNode* frame_tree_node,
+                                const std::string& request_id,
+                                const GURL& url,
+                                const network::mojom::URLResponseHead& head) {
+  std::string frame_token = frame_tree_node->devtools_frame_token().ToString();
+
+  network::mojom::URLResponseHeadDevToolsInfoPtr head_info =
+      network::ExtractDevToolsInfo(head);
+  DispatchToAgents(frame_tree_node, &protocol::NetworkHandler::ResponseReceived,
+                   request_id, request_id, url,
+                   protocol::Network::ResourceTypeEnum::Prefetch, *head_info,
+                   frame_token);
+}
+void OnPrefetchRequestComplete(
+    FrameTreeNode* frame_tree_node,
+    const std::string& request_id,
+    const network::URLLoaderCompletionStatus& status) {
+  DispatchToAgents(frame_tree_node, &protocol::NetworkHandler::LoadingComplete,
+                   request_id, protocol::Network::ResourceTypeEnum::Prefetch,
+                   status);
+}
+
 void OnNavigationRequestWillBeSent(
     const NavigationRequest& navigation_request) {
   // Note this intentionally deviates from the usual instrumentation signal
@@ -759,7 +967,7 @@ void OnNavigationRequestWillBeSent(
   // agent may navigate all of its subframes currently.
   for (RenderFrameHostImpl* rfh =
            navigation_request.frame_tree_node()->current_frame_host();
-       rfh; rfh = rfh->GetParent()) {
+       rfh; rfh = rfh->GetParentOrOuterDocument()) {
     // Only check frames that qualify as DevTools targets, i.e. (local)? roots.
     if (!RenderFrameDevToolsAgentHost::ShouldCreateDevToolsForHost(rfh))
       continue;
@@ -849,6 +1057,28 @@ void PortalActivated(RenderFrameHostImpl* render_frame_host_impl) {
   UpdatePortals(render_frame_host_impl);
 }
 
+void FencedFrameCreated(
+    base::SafeRef<RenderFrameHostImpl> owner_render_frame_host,
+    FencedFrame* fenced_frame) {
+  auto* agent_host = static_cast<RenderFrameDevToolsAgentHost*>(
+      RenderFrameDevToolsAgentHost::GetFor(
+          owner_render_frame_host->frame_tree_node()));
+  if (!agent_host)
+    return;
+  agent_host->DidCreateFencedFrame(fenced_frame);
+}
+
+void DidCreateProcessForAuctionWorklet(RenderFrameHostImpl* owner,
+                                       base::ProcessId pid) {
+  // TracingHandler lives on the very root, not local root.
+  // TODO(morlovich): This may not be right for fenced frames, though
+  // that should not currently matter.
+  FrameTreeNode* node = owner->GetMainFrame()->frame_tree_node();
+  if (!node)
+    return;
+  DispatchToAgents(node, &protocol::TracingHandler::AddProcess, pid);
+}
+
 void WillStartDragging(FrameTreeNode* main_frame_tree_node,
                        const blink::mojom::DragDataPtr drag_data,
                        blink::DragOperationsMask drag_operations_mask,
@@ -866,39 +1096,33 @@ std::unique_ptr<protocol::Array<protocol::String>> BuildExclusionReasons(
   if (status.HasExclusionReason(
           net::CookieInclusionStatus::
               EXCLUDE_SAMESITE_UNSPECIFIED_TREATED_AS_LAX)) {
-    exclusion_reasons->push_back(
-        protocol::Audits::SameSiteCookieExclusionReasonEnum::
-            ExcludeSameSiteUnspecifiedTreatedAsLax);
+    exclusion_reasons->push_back(protocol::Audits::CookieExclusionReasonEnum::
+                                     ExcludeSameSiteUnspecifiedTreatedAsLax);
   }
   if (status.HasExclusionReason(
           net::CookieInclusionStatus::EXCLUDE_SAMESITE_NONE_INSECURE)) {
-    exclusion_reasons->push_back(
-        protocol::Audits::SameSiteCookieExclusionReasonEnum::
-            ExcludeSameSiteNoneInsecure);
+    exclusion_reasons->push_back(protocol::Audits::CookieExclusionReasonEnum::
+                                     ExcludeSameSiteNoneInsecure);
   }
   if (status.HasExclusionReason(
           net::CookieInclusionStatus::EXCLUDE_SAMESITE_LAX)) {
     exclusion_reasons->push_back(
-        protocol::Audits::SameSiteCookieExclusionReasonEnum::
-            ExcludeSameSiteLax);
+        protocol::Audits::CookieExclusionReasonEnum::ExcludeSameSiteLax);
   }
   if (status.HasExclusionReason(
           net::CookieInclusionStatus::EXCLUDE_SAMESITE_STRICT)) {
     exclusion_reasons->push_back(
-        protocol::Audits::SameSiteCookieExclusionReasonEnum::
-            ExcludeSameSiteStrict);
+        protocol::Audits::CookieExclusionReasonEnum::ExcludeSameSiteStrict);
   }
   if (status.HasExclusionReason(
           net::CookieInclusionStatus::EXCLUDE_INVALID_SAMEPARTY)) {
     exclusion_reasons->push_back(
-        protocol::Audits::SameSiteCookieExclusionReasonEnum::
-            ExcludeInvalidSameParty);
+        protocol::Audits::CookieExclusionReasonEnum::ExcludeInvalidSameParty);
   }
   if (status.HasExclusionReason(
           net::CookieInclusionStatus::EXCLUDE_SAMEPARTY_CROSS_PARTY_CONTEXT)) {
-    exclusion_reasons->push_back(
-        protocol::Audits::SameSiteCookieExclusionReasonEnum::
-            ExcludeSamePartyCrossPartyContext);
+    exclusion_reasons->push_back(protocol::Audits::CookieExclusionReasonEnum::
+                                     ExcludeSamePartyCrossPartyContext);
   }
 
   return exclusion_reasons;
@@ -908,78 +1132,74 @@ std::unique_ptr<protocol::Array<protocol::String>> BuildWarningReasons(
     net::CookieInclusionStatus status) {
   auto warning_reasons = std::make_unique<protocol::Array<protocol::String>>();
   if (status.HasWarningReason(
+          net::CookieInclusionStatus::WARN_ATTRIBUTE_VALUE_EXCEEDS_MAX_SIZE)) {
+    warning_reasons->push_back(protocol::Audits::CookieWarningReasonEnum::
+                                   WarnAttributeValueExceedsMaxSize);
+  }
+  if (status.HasWarningReason(
           net::CookieInclusionStatus::
               WARN_SAMESITE_UNSPECIFIED_CROSS_SITE_CONTEXT)) {
-    warning_reasons->push_back(
-        protocol::Audits::SameSiteCookieWarningReasonEnum::
-            WarnSameSiteUnspecifiedCrossSiteContext);
+    warning_reasons->push_back(protocol::Audits::CookieWarningReasonEnum::
+                                   WarnSameSiteUnspecifiedCrossSiteContext);
   }
   if (status.HasWarningReason(
           net::CookieInclusionStatus::WARN_SAMESITE_NONE_INSECURE)) {
     warning_reasons->push_back(
-        protocol::Audits::SameSiteCookieWarningReasonEnum::
-            WarnSameSiteNoneInsecure);
+        protocol::Audits::CookieWarningReasonEnum::WarnSameSiteNoneInsecure);
   }
   if (status.HasWarningReason(net::CookieInclusionStatus::
                                   WARN_SAMESITE_UNSPECIFIED_LAX_ALLOW_UNSAFE)) {
-    warning_reasons->push_back(
-        protocol::Audits::SameSiteCookieWarningReasonEnum::
-            WarnSameSiteUnspecifiedLaxAllowUnsafe);
+    warning_reasons->push_back(protocol::Audits::CookieWarningReasonEnum::
+                                   WarnSameSiteUnspecifiedLaxAllowUnsafe);
   }
 
   // There can only be one of the following warnings.
   if (status.HasWarningReason(net::CookieInclusionStatus::
                                   WARN_STRICT_LAX_DOWNGRADE_STRICT_SAMESITE)) {
-    warning_reasons->push_back(
-        protocol::Audits::SameSiteCookieWarningReasonEnum::
-            WarnSameSiteStrictLaxDowngradeStrict);
+    warning_reasons->push_back(protocol::Audits::CookieWarningReasonEnum::
+                                   WarnSameSiteStrictLaxDowngradeStrict);
   } else if (status.HasWarningReason(
                  net::CookieInclusionStatus::
                      WARN_STRICT_CROSS_DOWNGRADE_STRICT_SAMESITE)) {
-    warning_reasons->push_back(
-        protocol::Audits::SameSiteCookieWarningReasonEnum::
-            WarnSameSiteStrictCrossDowngradeStrict);
+    warning_reasons->push_back(protocol::Audits::CookieWarningReasonEnum::
+                                   WarnSameSiteStrictCrossDowngradeStrict);
   } else if (status.HasWarningReason(
                  net::CookieInclusionStatus::
                      WARN_STRICT_CROSS_DOWNGRADE_LAX_SAMESITE)) {
-    warning_reasons->push_back(
-        protocol::Audits::SameSiteCookieWarningReasonEnum::
-            WarnSameSiteStrictCrossDowngradeLax);
+    warning_reasons->push_back(protocol::Audits::CookieWarningReasonEnum::
+                                   WarnSameSiteStrictCrossDowngradeLax);
   } else if (status.HasWarningReason(
                  net::CookieInclusionStatus::
                      WARN_LAX_CROSS_DOWNGRADE_STRICT_SAMESITE)) {
-    warning_reasons->push_back(
-        protocol::Audits::SameSiteCookieWarningReasonEnum::
-            WarnSameSiteLaxCrossDowngradeStrict);
+    warning_reasons->push_back(protocol::Audits::CookieWarningReasonEnum::
+                                   WarnSameSiteLaxCrossDowngradeStrict);
   } else if (status.HasWarningReason(
                  net::CookieInclusionStatus::
                      WARN_LAX_CROSS_DOWNGRADE_LAX_SAMESITE)) {
-    warning_reasons->push_back(
-        protocol::Audits::SameSiteCookieWarningReasonEnum::
-            WarnSameSiteLaxCrossDowngradeLax);
+    warning_reasons->push_back(protocol::Audits::CookieWarningReasonEnum::
+                                   WarnSameSiteLaxCrossDowngradeLax);
   }
 
   return warning_reasons;
 }
 
-protocol::String BuildCookieOperation(
-    blink::mojom::SameSiteCookieOperation operation) {
+protocol::String BuildCookieOperation(blink::mojom::CookieOperation operation) {
   switch (operation) {
-    case blink::mojom::SameSiteCookieOperation::kReadCookie:
-      return protocol::Audits::SameSiteCookieOperationEnum::ReadCookie;
-    case blink::mojom::SameSiteCookieOperation::kSetCookie:
-      return protocol::Audits::SameSiteCookieOperationEnum::SetCookie;
+    case blink::mojom::CookieOperation::kReadCookie:
+      return protocol::Audits::CookieOperationEnum::ReadCookie;
+    case blink::mojom::CookieOperation::kSetCookie:
+      return protocol::Audits::CookieOperationEnum::SetCookie;
   }
 }
 
 }  // namespace
 
-void ReportSameSiteCookieIssue(
+void ReportCookieIssue(
     RenderFrameHostImpl* render_frame_host_impl,
     const network::mojom::CookieOrLineWithAccessResultPtr& excluded_cookie,
     const GURL& url,
     const net::SiteForCookies& site_for_cookies,
-    blink::mojom::SameSiteCookieOperation operation,
+    blink::mojom::CookieOperation operation,
     const absl::optional<std::string>& devtools_request_id) {
   auto exclusion_reasons =
       BuildExclusionReasons(excluded_cookie->access_result.status);
@@ -1000,8 +1220,8 @@ void ReportSameSiteCookieIssue(
                            .Build();
   }
 
-  auto same_site_details =
-      protocol::Audits::SameSiteCookieIssueDetails::Create()
+  auto cookie_issue_details =
+      protocol::Audits::CookieIssueDetails::Create()
           .SetCookieExclusionReasons(std::move(exclusion_reasons))
           .SetCookieWarningReasons(std::move(warning_reasons))
           .SetOperation(BuildCookieOperation(operation))
@@ -1016,82 +1236,29 @@ void ReportSameSiteCookieIssue(
                                .SetPath(cookie.Path())
                                .SetDomain(cookie.Domain())
                                .Build();
-    same_site_details->SetCookie(std::move(affected_cookie));
+    cookie_issue_details->SetCookie(std::move(affected_cookie));
   } else {
     CHECK(excluded_cookie->cookie_or_line->is_cookie_string());
-    same_site_details->SetRawCookieLine(
+    cookie_issue_details->SetRawCookieLine(
         excluded_cookie->cookie_or_line->get_cookie_string());
   }
 
   if (!site_for_cookies.IsNull()) {
-    same_site_details->SetSiteForCookies(
+    cookie_issue_details->SetSiteForCookies(
         site_for_cookies.RepresentativeUrl().spec());
   }
 
-  auto details =
-      protocol::Audits::InspectorIssueDetails::Create()
-          .SetSameSiteCookieIssueDetails(std::move(same_site_details))
-          .Build();
+  auto details = protocol::Audits::InspectorIssueDetails::Create()
+                     .SetCookieIssueDetails(std::move(cookie_issue_details))
+                     .Build();
 
   auto issue =
       protocol::Audits::InspectorIssue::Create()
-          .SetCode(
-              protocol::Audits::InspectorIssueCodeEnum::SameSiteCookieIssue)
+          .SetCode(protocol::Audits::InspectorIssueCodeEnum::CookieIssue)
           .SetDetails(std::move(details))
           .Build();
 
   ReportBrowserInitiatedIssue(render_frame_host_impl, issue.get());
-}
-
-namespace {
-
-protocol::Audits::AttributionReportingIssueType
-BuildAttributionReportingIssueType(AttributionReportingIssueType issue_type) {
-  switch (issue_type) {
-    case AttributionReportingIssueType::kAttributionTriggerDataTooLarge:
-      return protocol::Audits::AttributionReportingIssueTypeEnum::
-          AttributionTriggerDataTooLarge;
-    case AttributionReportingIssueType::
-        kAttributionEventSourceTriggerDataTooLarge:
-      return protocol::Audits::AttributionReportingIssueTypeEnum::
-          AttributionEventSourceTriggerDataTooLarge;
-  }
-}
-
-}  // namespace
-
-void ReportAttributionReportingIssue(
-    RenderFrameHost* render_frame_host,
-    AttributionReportingIssueType issue_type,
-    const absl::optional<std::string>& request_id,
-    const absl::optional<std::string>& invalid_parameter) {
-  auto ar_details =
-      protocol::Audits::AttributionReportingIssueDetails::Create()
-          .SetViolationType(BuildAttributionReportingIssueType(issue_type))
-          .Build();
-
-  if (request_id) {
-    ar_details->SetRequest(protocol::Audits::AffectedRequest::Create()
-                               .SetRequestId(*request_id)
-                               .Build());
-  }
-
-  if (invalid_parameter) {
-    ar_details->SetInvalidParameter(*invalid_parameter);
-  }
-
-  auto details = protocol::Audits::InspectorIssueDetails::Create()
-                     .SetAttributionReportingIssueDetails(std::move(ar_details))
-                     .Build();
-
-  auto issue = protocol::Audits::InspectorIssue::Create()
-                   .SetCode(protocol::Audits::InspectorIssueCodeEnum::
-                                AttributionReportingIssue)
-                   .SetDetails(std::move(details))
-                   .Build();
-
-  ReportBrowserInitiatedIssue(
-      static_cast<RenderFrameHostImpl*>(render_frame_host), issue.get());
 }
 
 namespace {
@@ -1102,7 +1269,8 @@ void AddIssueToIssueStorage(
   // We only utilize a central storage on the page. Each issue is still
   // associated with the originating |RenderFrameHost| though.
   DevToolsIssueStorage* issue_storage =
-      DevToolsIssueStorage::GetOrCreateForPage(rfh->GetPage());
+      DevToolsIssueStorage::GetOrCreateForPage(
+          rfh->GetOutermostMainFrame()->GetPage());
 
   issue_storage->AddInspectorIssue(rfh, std::move(issue));
 }
@@ -1122,20 +1290,18 @@ void ReportBrowserInitiatedIssue(RenderFrameHostImpl* frame,
 void BuildAndReportBrowserInitiatedIssue(
     RenderFrameHostImpl* frame,
     blink::mojom::InspectorIssueInfoPtr info) {
-  // This method does not support other types for now.
-  CHECK(info && info->details &&
-        (info->code == blink::mojom::InspectorIssueCode::kHeavyAdIssue &&
-             info->details->heavy_ad_issue_details ||
-         info->code ==
-                 blink::mojom::InspectorIssueCode::kTrustedWebActivityIssue &&
-             info->details->twa_issue_details));
-
   std::unique_ptr<protocol::Audits::InspectorIssue> issue;
   if (info->code ==
       blink::mojom::InspectorIssueCode::kTrustedWebActivityIssue) {
     issue = BuildTWAQualityIssue(info->details->twa_issue_details);
-  } else {
+  } else if (info->code == blink::mojom::InspectorIssueCode::kHeavyAdIssue) {
     issue = BuildHeavyAdIssue(info->details->heavy_ad_issue_details);
+  } else if (info->code ==
+             blink::mojom::InspectorIssueCode::kFederatedAuthRequestIssue) {
+    issue = BuildFederatedAuthRequestIssue(
+        info->details->federated_auth_request_details);
+  } else {
+    NOTREACHED() << "Unsupported type of browser-initiated issue";
   }
   ReportBrowserInitiatedIssue(frame, issue.get());
 }
@@ -1165,7 +1331,15 @@ void OnWebTransportHandshakeFailed(
 
 void OnServiceWorkerMainScriptFetchingFailed(
     const GlobalRenderFrameHostId& requesting_frame_id,
-    const std::string& error) {
+    const ServiceWorkerContextWrapper* context_wrapper,
+    int64_t version_id,
+    const std::string& error,
+    const network::URLLoaderCompletionStatus& status,
+    const network::mojom::URLResponseHead* response_head,
+    const GURL& url) {
+  DCHECK(!error.empty());
+  DCHECK_NE(net::OK, status.error_code);
+
   // If we have a requesting_frame_id, we should have a frame and a frame tree
   // node. However since the lifetime of these objects can be complex, we check
   // at each step that we indeed can go reach all the way to the FrameTreeNode.
@@ -1188,21 +1362,158 @@ void OnServiceWorkerMainScriptFetchingFailed(
                    .SetTimestamp(base::Time::Now().ToDoubleT() * 1000.0)
                    .Build();
   DispatchToAgents(ftn, &protocol::LogHandler::EntryAdded, entry.get());
+
+  ServiceWorkerDevToolsAgentHost* agent_host =
+      ServiceWorkerDevToolsManager::GetInstance()
+          ->GetDevToolsAgentHostForNewInstallingWorker(context_wrapper,
+                                                       version_id);
+
+  if (response_head) {
+    DCHECK(agent_host);
+    network::mojom::URLResponseHeadDevToolsInfoPtr head_info =
+        network::ExtractDevToolsInfo(*response_head);
+    auto worker_token = agent_host->devtools_worker_token().ToString();
+    for (auto* network_handler :
+         protocol::NetworkHandler::ForAgentHost(agent_host)) {
+      network_handler->ResponseReceived(
+          worker_token, worker_token, url,
+          protocol::Network::ResourceTypeEnum::Other, *head_info,
+          ftn->devtools_frame_token().ToString());
+      network_handler->frontend()->LoadingFinished(
+          worker_token,
+          status.completion_time.ToInternalValue() /
+              static_cast<double>(base::Time::kMicrosecondsPerSecond),
+          status.encoded_data_length);
+    }
+  } else if (agent_host) {
+    for (auto* network_handler :
+         protocol::NetworkHandler::ForAgentHost(agent_host)) {
+      network_handler->LoadingComplete(
+          agent_host->devtools_worker_token().ToString(),
+          protocol::Network::ResourceTypeEnum::Other, status);
+    }
+  }
 }
 
-void LogWorkletError(RenderFrameHostImpl* frame_host,
-                     const std::string& error) {
-  FrameTreeNode* ftn = frame_host->frame_tree_node();
+void OnServiceWorkerMainScriptRequestWillBeSent(
+    const GlobalRenderFrameHostId& requesting_frame_id,
+    const ServiceWorkerContextWrapper* context_wrapper,
+    int64_t version_id,
+    network::ResourceRequest& request) {
+  // Currently, `requesting_frame_id` is invalid when payment apps and
+  // extensions register a service worker. See the callers of
+  // ServiceWorkerContextWrapper::RegisterServiceWorker().
+  if (!requesting_frame_id)
+    return;
+
+  RenderFrameHostImpl* requesting_frame =
+      RenderFrameHostImpl::FromID(requesting_frame_id);
+  if (!requesting_frame)
+    return;
+
+  auto timestamp = base::TimeTicks::Now();
+  network::mojom::URLRequestDevToolsInfoPtr request_info =
+      network::ExtractDevToolsInfo(request);
+
+  ServiceWorkerDevToolsAgentHost* agent_host =
+      ServiceWorkerDevToolsManager::GetInstance()
+          ->GetDevToolsAgentHostForNewInstallingWorker(context_wrapper,
+                                                       version_id);
+  DCHECK(agent_host);
+  request.devtools_request_id = agent_host->devtools_worker_token().ToString();
+  for (auto* network_handler :
+       protocol::NetworkHandler::ForAgentHost(agent_host)) {
+    network_handler->RequestSent(
+        request.devtools_request_id.value(),
+        /*loader_id=*/"", request.headers, *request_info,
+        protocol::Network::Initiator::TypeEnum::Other,
+        requesting_frame->GetLastCommittedURL(),
+        /*initiator_devtools_request_id=*/"", timestamp);
+  }
+}
+
+void OnWorkerMainScriptLoadingFailed(
+    const GURL& url,
+    const base::UnguessableToken& worker_token,
+    FrameTreeNode* ftn,
+    RenderFrameHostImpl* ancestor_rfh,
+    const network::URLLoaderCompletionStatus& status) {
+  DCHECK(ftn);
+
+  std::string id = worker_token.ToString();
+
+  if (status.blocked_by_response_reason)
+    ReportBlockedByResponseIssue(url, id, ftn, ancestor_rfh, status);
+
+  DispatchToAgents(ftn, &protocol::NetworkHandler::LoadingComplete, id,
+                   protocol::Network::ResourceTypeEnum::Other, status);
+}
+
+void OnWorkerMainScriptLoadingFinished(
+    FrameTreeNode* ftn,
+    const base::UnguessableToken& worker_token,
+    const network::URLLoaderCompletionStatus& status) {
+  DCHECK(ftn);
+  DispatchToAgents(ftn, &protocol::NetworkHandler::LoadingComplete,
+                   worker_token.ToString(),
+                   protocol::Network::ResourceTypeEnum::Other, status);
+}
+
+void OnWorkerMainScriptRequestWillBeSent(
+    FrameTreeNode* ftn,
+    const base::UnguessableToken& worker_token,
+    const network::ResourceRequest& request) {
+  DCHECK(ftn);
+
+  auto timestamp = base::TimeTicks::Now();
+  network::mojom::URLRequestDevToolsInfoPtr request_info =
+      network::ExtractDevToolsInfo(request);
+  DispatchToAgents(
+      ftn, &protocol::NetworkHandler::RequestSent, worker_token.ToString(),
+      /*loader_id=*/"", request.headers, *request_info,
+      protocol::Network::Initiator::TypeEnum::Other, ftn->current_url(),
+      /*initiator_devtools_request_id*/ "", timestamp);
+}
+
+void LogWorkletMessage(RenderFrameHostImpl& frame_host,
+                       blink::mojom::ConsoleMessageLevel log_level,
+                       const std::string& message) {
+  FrameTreeNode* ftn = frame_host.frame_tree_node();
   if (!ftn)
     return;
-  std::string text = base::StrCat({"Worklet error: ", error});
+
+  std::string log_level_string;
+  switch (log_level) {
+    case blink::mojom::ConsoleMessageLevel::kVerbose:
+      log_level_string = protocol::Log::LogEntry::LevelEnum::Verbose;
+      break;
+    case blink::mojom::ConsoleMessageLevel::kInfo:
+      log_level_string = protocol::Log::LogEntry::LevelEnum::Info;
+      break;
+    case blink::mojom::ConsoleMessageLevel::kWarning:
+      log_level_string = protocol::Log::LogEntry::LevelEnum::Warning;
+      break;
+    case blink::mojom::ConsoleMessageLevel::kError:
+      log_level_string = protocol::Log::LogEntry::LevelEnum::Error;
+      break;
+  }
+
+  DCHECK(!log_level_string.empty());
+
   auto entry = protocol::Log::LogEntry::Create()
                    .SetSource(protocol::Log::LogEntry::SourceEnum::Other)
-                   .SetLevel(protocol::Log::LogEntry::LevelEnum::Error)
-                   .SetText(text)
+                   .SetLevel(log_level_string)
+                   .SetText(message)
                    .SetTimestamp(base::Time::Now().ToDoubleT() * 1000.0)
                    .Build();
   DispatchToAgents(ftn, &protocol::LogHandler::EntryAdded, entry.get());
+
+  // Manually trigger RenderFrameHostImpl::DidAddMessageToConsole, so that the
+  // observer behavior aligns more with the observer behavior for the regular
+  // devtools logging path from the renderer.
+  frame_host.DidAddMessageToConsole(log_level, base::UTF8ToUTF16(message),
+                                    /*line_no=*/0, /*source_id=*/{},
+                                    /*untrusted_stack_trace=*/{});
 }
 
 void ApplyNetworkContextParamsOverrides(
@@ -1215,6 +1526,61 @@ void ApplyNetworkContextParamsOverrides(
                                                          context_params);
     }
   }
+}
+
+protocol::Audits::GenericIssueErrorType GenericIssueErrorTypeToProtocol(
+    blink::mojom::GenericIssueErrorType error_type) {
+  switch (error_type) {
+    case (blink::mojom::GenericIssueErrorType::
+              kCrossOriginPortalPostMessageError):
+      return protocol::Audits::GenericIssueErrorTypeEnum::
+          CrossOriginPortalPostMessageError;
+  }
+}
+
+namespace {
+struct GenericIssueInfo {
+  GenericIssueInfo() = default;
+  ~GenericIssueInfo() = default;
+  GenericIssueInfo(const GenericIssueInfo& info) = default;
+
+  blink::mojom::GenericIssueErrorType error_type;
+  absl::optional<std::string> frame_id;
+};
+
+void BuildAndReportGenericIssue(RenderFrameHostImpl* render_frame_host_impl,
+                                const GenericIssueInfo& issue_info) {
+  auto generic_issue_details =
+      protocol::Audits::GenericIssueDetails::Create()
+          .SetErrorType(GenericIssueErrorTypeToProtocol(issue_info.error_type))
+          .Build();
+
+  if (issue_info.frame_id) {
+    generic_issue_details->SetFrameId(*issue_info.frame_id);
+  }
+
+  auto issue =
+      protocol::Audits::InspectorIssue::Create()
+          .SetCode(protocol::Audits::InspectorIssueCodeEnum::GenericIssue)
+          .SetDetails(
+              protocol::Audits::InspectorIssueDetails::Create()
+                  .SetGenericIssueDetails(std::move(generic_issue_details))
+                  .Build())
+          .Build();
+
+  ReportBrowserInitiatedIssue(render_frame_host_impl, issue.get());
+}
+}  // namespace
+
+void DidRejectCrossOriginPortalMessage(
+    RenderFrameHostImpl* render_frame_host_impl) {
+  GenericIssueInfo issue_info;
+  issue_info.error_type =
+      blink::mojom::GenericIssueErrorType::kCrossOriginPortalPostMessageError;
+  issue_info.frame_id =
+      render_frame_host_impl->GetDevToolsFrameToken().ToString();
+
+  BuildAndReportGenericIssue(render_frame_host_impl, issue_info);
 }
 
 }  // namespace devtools_instrumentation

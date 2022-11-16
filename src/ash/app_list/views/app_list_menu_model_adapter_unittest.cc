@@ -5,6 +5,7 @@
 #include "ash/app_list/views/app_list_menu_model_adapter.h"
 
 #include "ash/public/cpp/app_menu_constants.h"
+#include "base/callback.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/views/test/views_test_base.h"
 
@@ -13,6 +14,11 @@ namespace ash {
 class AppListMenuModelAdapterTest : public views::ViewsTestBase {
  public:
   AppListMenuModelAdapterTest() {}
+
+  AppListMenuModelAdapterTest(const AppListMenuModelAdapterTest&) = delete;
+  AppListMenuModelAdapterTest& operator=(const AppListMenuModelAdapterTest&) =
+      delete;
+
   ~AppListMenuModelAdapterTest() override = default;
 
   void SetUp() override {
@@ -25,9 +31,6 @@ class AppListMenuModelAdapterTest : public views::ViewsTestBase {
   }
 
   std::unique_ptr<AppListMenuModelAdapter> app_list_menu_model_adapter_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(AppListMenuModelAdapterTest);
 };
 
 // Tests that NOTIFICATION_CONTAINER is enabled. This ensures that the

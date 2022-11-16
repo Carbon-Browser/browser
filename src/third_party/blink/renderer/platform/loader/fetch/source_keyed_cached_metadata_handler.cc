@@ -4,6 +4,9 @@
 
 #include "third_party/blink/renderer/platform/loader/fetch/source_keyed_cached_metadata_handler.h"
 
+#include <type_traits>
+
+#include "base/metrics/histogram_functions.h"
 #include "third_party/blink/renderer/platform/crypto.h"
 #include "third_party/blink/renderer/platform/loader/fetch/cached_metadata.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_hasher.h"
@@ -25,7 +28,7 @@ class SourceKeyedCachedMetadataHandler::SingleKeyHandler final
   SingleKeyHandler(SourceKeyedCachedMetadataHandler* parent, Key key)
       : parent_(parent), key_(key) {}
 
-  void SetCachedMetadata(blink::mojom::CodeCacheHost* code_cache_host,
+  void SetCachedMetadata(CodeCacheHost* code_cache_host,
                          uint32_t data_type_id,
                          const uint8_t* data,
                          size_t size) override {
@@ -36,7 +39,7 @@ class SourceKeyedCachedMetadataHandler::SingleKeyHandler final
       parent_->SendToPlatform(code_cache_host);
   }
 
-  void ClearCachedMetadata(blink::mojom::CodeCacheHost* code_cache_host,
+  void ClearCachedMetadata(CodeCacheHost* code_cache_host,
                            ClearCacheType cache_type) override {
     if (cache_type == kDiscardLocally)
       return;
@@ -72,23 +75,15 @@ class SourceKeyedCachedMetadataHandler::SingleKeyHandler final
     return 0;
   }
 
+  void DidUseCodeCache() override { parent_->did_use_code_cache_ = true; }
+
+  void WillProduceCodeCache() override {
+    parent_->will_generate_code_cache_ = true;
+  }
+
  private:
   Member<SourceKeyedCachedMetadataHandler> parent_;
   Key key_;
-};
-
-class SourceKeyedCachedMetadataHandler::KeyHash {
-  STATIC_ONLY(KeyHash);
-
- public:
-  static unsigned GetHash(const Key& key) {
-    return StringHasher::ComputeHash(key.data(),
-                                     static_cast<uint32_t>(key.size()));
-  }
-
-  static bool Equal(const Key& a, const Key& b) { return a == b; }
-
-  static const bool safe_to_compare_to_empty_or_deleted = true;
 };
 
 SingleCachedMetadataHandler* SourceKeyedCachedMetadataHandler::HandlerForSource(
@@ -108,7 +103,7 @@ SingleCachedMetadataHandler* SourceKeyedCachedMetadataHandler::HandlerForSource(
 }
 
 void SourceKeyedCachedMetadataHandler::ClearCachedMetadata(
-    blink::mojom::CodeCacheHost* code_cache_host,
+    CodeCacheHost* code_cache_host,
     CachedMetadataHandler::ClearCacheType cache_type) {
   if (cache_type == kDiscardLocally)
     return;
@@ -157,8 +152,7 @@ namespace {
 // but without the risk of undefined behaviour.
 template <typename T>
 T ReadVal(const uint8_t* data) {
-  static_assert(base::is_trivially_copyable<T>::value,
-                "ReadVal requires the value type to be copyable");
+  static_assert(std::is_trivially_copyable_v<T>);
   T ret;
   memcpy(&ret, data, sizeof(T));
   return ret;
@@ -167,13 +161,11 @@ T ReadVal(const uint8_t* data) {
 
 void SourceKeyedCachedMetadataHandler::SetSerializedCachedMetadata(
     mojo_base::BigBuffer data_buffer) {
+  // NOTE: Loading of the cache is async. This may be invoked after state has
+  // been set.
+
   const uint8_t* data = data_buffer.data();
   size_t size = data_buffer.size();
-
-  // We only expect to receive cached metadata from the platform once. If this
-  // triggers, it indicates an efficiency problem which is most likely
-  // unexpected in code designed to improve performance.
-  DCHECK(cached_metadata_map_.IsEmpty());
 
   // Ensure we have a marker.
   if (size < sizeof(uint32_t))
@@ -194,10 +186,14 @@ void SourceKeyedCachedMetadataHandler::SetSerializedCachedMetadata(
   data += sizeof(int);
   size -= sizeof(int);
 
+  // Make a copy of existing entries. Only add ones from `data_buffer` that
+  // do not already existed. If the data is successfully processed, the map
+  // is swapped at the end.
+  CachedMetadataMap result = cached_metadata_map_;
+
   for (int i = 0; i < num_entries; ++i) {
     // Ensure we have an entry key and size.
     if (size < kKeySize + sizeof(size_t)) {
-      cached_metadata_map_.clear();
       return;
     }
 
@@ -211,14 +207,17 @@ void SourceKeyedCachedMetadataHandler::SetSerializedCachedMetadata(
 
     // Ensure we have enough data for this entry.
     if (size < entry_size) {
-      cached_metadata_map_.clear();
       return;
     }
 
-    if (scoped_refptr<CachedMetadata> deserialized_entry =
-            CachedMetadata::CreateFromSerializedData(data, entry_size)) {
-      // Only insert the deserialized entry if it deserialized correctly.
-      cached_metadata_map_.insert(key, std::move(deserialized_entry));
+    if (!result.Contains(key)) {
+      if (scoped_refptr<CachedMetadata> deserialized_entry =
+              CachedMetadata::CreateFromSerializedData(data, entry_size)) {
+        // Only insert the deserialized entry if it deserialized correctly and
+        // it isn't already present (because loading is async, the key may have
+        // already been inserted).
+        result.insert(key, std::move(deserialized_entry));
+      }
     }
     data += entry_size;
     size -= entry_size;
@@ -226,12 +225,21 @@ void SourceKeyedCachedMetadataHandler::SetSerializedCachedMetadata(
 
   // Ensure we have no more data.
   if (size > 0) {
-    cached_metadata_map_.clear();
+    return;
   }
+
+  std::swap(result, cached_metadata_map_);
+}
+
+void SourceKeyedCachedMetadataHandler::LogUsageMetrics() {
+  base::UmaHistogramBoolean("V8.InlineCodeCache.UsedPreviouslyGeneratedCache",
+                            did_use_code_cache_);
+  base::UmaHistogramBoolean("V8.InlineCodeCache.WillGenerateCache",
+                            will_generate_code_cache_);
 }
 
 void SourceKeyedCachedMetadataHandler::SendToPlatform(
-    blink::mojom::CodeCacheHost* code_cache_host) {
+    CodeCacheHost* code_cache_host) {
   if (!sender_)
     return;
 

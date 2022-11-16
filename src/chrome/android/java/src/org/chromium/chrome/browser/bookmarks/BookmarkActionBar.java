@@ -15,6 +15,8 @@ import androidx.appcompat.widget.Toolbar.OnMenuItemClickListener;
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.metrics.RecordUserAction;
 import org.chromium.chrome.R;
+import org.chromium.chrome.browser.app.bookmarks.BookmarkAddEditFolderActivity;
+import org.chromium.chrome.browser.app.bookmarks.BookmarkFolderSelectActivity;
 import org.chromium.chrome.browser.bookmarks.BookmarkBridge.BookmarkItem;
 import org.chromium.chrome.browser.incognito.IncognitoUtils;
 import org.chromium.chrome.browser.tab.TabLaunchType;
@@ -30,7 +32,6 @@ import org.chromium.url.GURL;
 
 import java.util.List;
 
-import org.chromium.chrome.browser.monetization.VeveBridge;
 /**
  * Main action bar of bookmark UI. It is responsible for displaying title and buttons
  * associated with the current context.
@@ -38,6 +39,7 @@ import org.chromium.chrome.browser.monetization.VeveBridge;
 public class BookmarkActionBar extends SelectableListToolbar<BookmarkId>
         implements BookmarkUIObserver, OnMenuItemClickListener, OnClickListener,
                    DragReorderableListAdapter.DragListener {
+
     private BookmarkItem mCurrentFolder;
     private BookmarkDelegate mDelegate;
 
@@ -175,7 +177,6 @@ public class BookmarkActionBar extends SelectableListToolbar<BookmarkId>
     @Override
     public void onFolderStateSet(BookmarkId folder) {
         mCurrentFolder = mDelegate.getModel().getBookmarkById(folder);
-
         getMenu().findItem(R.id.search_menu_id).setVisible(true);
         getMenu().findItem(R.id.edit_menu_id).setVisible(mCurrentFolder.isEditable());
 
@@ -186,7 +187,10 @@ public class BookmarkActionBar extends SelectableListToolbar<BookmarkId>
             return;
         }
 
-        if (mDelegate.getModel().getTopLevelFolderParentIDs().contains(mCurrentFolder.getParentId())
+        if (folder.equals(BookmarkId.SHOPPING_FOLDER)) {
+            setTitle(R.string.price_tracking_bookmarks_filter_title);
+        } else if (mDelegate.getModel().getTopLevelFolderParentIDs().contains(
+                           mCurrentFolder.getParentId())
                 && TextUtils.isEmpty(mCurrentFolder.getTitle())) {
             setTitle(R.string.bookmarks);
         } else {
@@ -248,31 +252,13 @@ public class BookmarkActionBar extends SelectableListToolbar<BookmarkId>
     private static void openBookmarksInNewTabs(
             List<BookmarkId> bookmarks, TabDelegate tabDelegate, BookmarkModel model) {
         for (BookmarkId id : bookmarks) {
-
-            final GURL url = model.getBookmarkById(id).getUrl();
-            if (VeveBridge.getInstance().isUrlAbsolute(url)) {
-                VeveBridge.getInstance().getBookmarkUrl(url.getSpec().replaceFirst("^(http[s]?://www\\.|http[s]?://|www\\.)",""), new VeveBookmarkCommunicatorImpl(), tabDelegate);
-            } else {
-                tabDelegate.createNewTab(new LoadUrlParams(url),
-                        TabLaunchType.FROM_LONGPRESS_BACKGROUND, null);
+            if (id == null) continue;
+            GURL url = model.getBookmarkById(id).getUrl();
+            tabDelegate.createNewTab(
+                    new LoadUrlParams(url), TabLaunchType.FROM_LONGPRESS_BACKGROUND, null);
+            if (id.getType() == BookmarkType.READING_LIST) {
+                model.setReadStatusForReadingList(url, true);
             }
-        }
-    }
-
-    public static class VeveBookmarkCommunicatorImpl implements VeveBridge.VeveBookmarkCommunicator {
-        public VeveBookmarkCommunicatorImpl() {
-
-        }
-
-        @Override
-        public void onVeveBookmarkReceived(String url, TabDelegate tabDelegate) {
-            tabDelegate.createNewTab(new LoadUrlParams(new GURL(url)),
-                    TabLaunchType.FROM_LONGPRESS_BACKGROUND, null);
-        }
-
-        public void onReceiveVeveError(String url, TabDelegate tabDelegate) {
-            tabDelegate.createNewTab(new LoadUrlParams(new GURL("https://" + url)),
-                  TabLaunchType.FROM_LONGPRESS_BACKGROUND, null);
         }
     }
 

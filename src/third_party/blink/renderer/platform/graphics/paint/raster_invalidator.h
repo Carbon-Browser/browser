@@ -6,6 +6,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_GRAPHICS_PAINT_RASTER_INVALIDATOR_H_
 
 #include "base/callback.h"
+#include "base/check_op.h"
 #include "base/dcheck_is_on.h"
 #include "third_party/blink/renderer/platform/graphics/compositing/chunk_to_layer_mapper.h"
 #include "third_party/blink/renderer/platform/graphics/paint/float_clip_rect.h"
@@ -13,20 +14,19 @@
 #include "third_party/blink/renderer/platform/graphics/paint/paint_chunk_subset.h"
 #include "third_party/blink/renderer/platform/graphics/paint/raster_invalidation_tracking.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
-#include "third_party/blink/renderer/platform/wtf/hash_map.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
+#include "ui/gfx/geometry/rect.h"
 
 namespace blink {
 
 class PaintArtifact;
-class IntRect;
 
 class PLATFORM_EXPORT RasterInvalidator {
   USING_FAST_MALLOC(RasterInvalidator);
 
  public:
   using RasterInvalidationFunction =
-      base::RepeatingCallback<void(const IntRect&)>;
+      base::RepeatingCallback<void(const gfx::Rect&)>;
 
   RasterInvalidator() = default;
 
@@ -40,8 +40,8 @@ class PLATFORM_EXPORT RasterInvalidator {
   void Generate(
       RasterInvalidationFunction,
       const PaintChunkSubset&,
-      const FloatPoint& layer_offset,
-      const IntSize& layer_bounds,
+      const gfx::Vector2dF& layer_offset,
+      const gfx::Size& layer_bounds,
       const PropertyTreeState& layer_state,
       DisplayItemClientId layer_client_id = kInvalidDisplayItemClientId);
 
@@ -52,7 +52,7 @@ class PLATFORM_EXPORT RasterInvalidator {
   // PaintArtifactCompositor and pass it in Generate().
   void SetOldPaintArtifact(scoped_refptr<const PaintArtifact>);
 
-  const IntSize& LayerBounds() const { return layer_bounds_; }
+  const gfx::Size& LayerBounds() const { return layer_bounds_; }
 
   size_t ApproximateUnsharedMemoryUsage() const;
 
@@ -99,15 +99,15 @@ class PLATFORM_EXPORT RasterInvalidator {
     PaintChunk::Id id;
 #endif
 
-    IntRect bounds_in_layer;
+    gfx::Rect bounds_in_layer;
     FloatClipRect chunk_to_layer_clip;
     SkMatrix chunk_to_layer_transform;
   };
 
   void GenerateRasterInvalidations(RasterInvalidationFunction,
                                    const PaintChunkSubset&,
-                                   const PropertyTreeState& layer_state,
-                                   bool layer_offset_changed,
+                                   bool layer_offset_or_state_changed,
+                                   bool layer_effect_changed,
                                    Vector<PaintChunkInfo>& new_chunks_info);
 
   ALWAYS_INLINE const PaintChunk& GetOldChunk(wtf_size_t index) const;
@@ -124,7 +124,7 @@ class PLATFORM_EXPORT RasterInvalidator {
   // PaintArtifact, so we know which one can provide the client's debug name.
   enum ClientIsOldOrNew { kClientIsOld, kClientIsNew };
   void AddRasterInvalidation(RasterInvalidationFunction function,
-                             const IntRect& rect,
+                             const gfx::Rect& rect,
                              DisplayItemClientId client_id,
                              PaintInvalidationReason reason,
                              ClientIsOldOrNew old_or_new) {
@@ -134,7 +134,7 @@ class PLATFORM_EXPORT RasterInvalidator {
     if (tracking_)
       TrackRasterInvalidation(rect, client_id, reason, old_or_new);
   }
-  void TrackRasterInvalidation(const IntRect&,
+  void TrackRasterInvalidation(const gfx::Rect&,
                                DisplayItemClientId,
                                PaintInvalidationReason,
                                ClientIsOldOrNew);
@@ -149,12 +149,12 @@ class PLATFORM_EXPORT RasterInvalidator {
   // Clip a rect in the layer space by the layer bounds.
   template <typename Rect>
   Rect ClipByLayerBounds(const Rect& r) const {
-    return Intersection(
-        r, Rect(0, 0, layer_bounds_.Width(), layer_bounds_.Height()));
+    return IntersectRects(r, Rect(gfx::Rect(layer_bounds_)));
   }
 
-  FloatPoint layer_offset_;
-  IntSize layer_bounds_;
+  gfx::Vector2dF layer_offset_;
+  gfx::Size layer_bounds_;
+  PropertyTreeState layer_state_ = PropertyTreeState::Root();
   Vector<PaintChunkInfo> old_paint_chunks_info_;
   scoped_refptr<const PaintArtifact> current_paint_artifact_;
   scoped_refptr<const PaintArtifact> old_paint_artifact_;

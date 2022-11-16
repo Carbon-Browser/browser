@@ -6,6 +6,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
@@ -18,22 +19,27 @@
 namespace syncer {
 namespace {
 
-constexpr base::TimeDelta kSessionTime = base::TimeDelta::FromSeconds(10);
+constexpr base::TimeDelta kSessionTime = base::Seconds(10);
 
 class SyncSessionDurationsMetricsRecorderTest : public testing::Test {
  public:
   SyncSessionDurationsMetricsRecorderTest()
       : identity_test_env_(&test_url_loader_factory_) {
-    sync_service_.SetIsAuthenticatedAccountPrimary(false);
+    sync_service_.SetHasSyncConsent(false);
     sync_service_.SetDisableReasons(SyncService::DISABLE_REASON_NOT_SIGNED_IN);
   }
 
-  ~SyncSessionDurationsMetricsRecorderTest() override {}
+  SyncSessionDurationsMetricsRecorderTest(
+      const SyncSessionDurationsMetricsRecorderTest&) = delete;
+  SyncSessionDurationsMetricsRecorderTest& operator=(
+      const SyncSessionDurationsMetricsRecorderTest&) = delete;
+
+  ~SyncSessionDurationsMetricsRecorderTest() override = default;
 
   void EnableSync() {
     identity_test_env_.MakePrimaryAccountAvailable("foo@gmail.com",
                                                    signin::ConsentLevel::kSync);
-    sync_service_.SetIsAuthenticatedAccountPrimary(true);
+    sync_service_.SetHasSyncConsent(true);
     sync_service_.SetDisableReasons(SyncService::DisableReasonSet());
     sync_service_.FireStateChanged();
   }
@@ -63,7 +69,7 @@ class SyncSessionDurationsMetricsRecorderTest : public testing::Test {
       const base::HistogramTester& ht,
       const std::vector<std::string>& histogram_suffixes,
       const base::TimeDelta& expected_session_time) {
-    for (const auto& histogram_suffix : histogram_suffixes) {
+    for (const std::string& histogram_suffix : histogram_suffixes) {
       ht.ExpectTimeBucketCount(GetSessionHistogramName(histogram_suffix),
                                expected_session_time, 1);
     }
@@ -71,14 +77,14 @@ class SyncSessionDurationsMetricsRecorderTest : public testing::Test {
 
   void ExpectOneSession(const base::HistogramTester& ht,
                         const std::vector<std::string>& histogram_suffixes) {
-    for (const auto& histogram_suffix : histogram_suffixes) {
+    for (const std::string& histogram_suffix : histogram_suffixes) {
       ht.ExpectTotalCount(GetSessionHistogramName(histogram_suffix), 1);
     }
   }
 
   void ExpectNoSession(const base::HistogramTester& ht,
                        const std::vector<std::string>& histogram_suffixes) {
-    for (const auto& histogram_suffix : histogram_suffixes) {
+    for (const std::string& histogram_suffix : histogram_suffixes) {
       ht.ExpectTotalCount(GetSessionHistogramName(histogram_suffix), 0);
     }
   }
@@ -95,8 +101,6 @@ class SyncSessionDurationsMetricsRecorderTest : public testing::Test {
   network::TestURLLoaderFactory test_url_loader_factory_;
   signin::IdentityTestEnvironment identity_test_env_;
   TestSyncService sync_service_;
-
-  DISALLOW_COPY_AND_ASSIGN(SyncSessionDurationsMetricsRecorderTest);
 };
 
 TEST_F(SyncSessionDurationsMetricsRecorderTest, WebSignedOut) {
@@ -236,7 +240,8 @@ TEST_F(SyncSessionDurationsMetricsRecorderTest,
   EnableSync();
 
   // Simulate sync initializing (before first connection to the server).
-  auto active_sync_snapshot = sync_service_.GetLastCycleSnapshotForDebugging();
+  SyncCycleSnapshot active_sync_snapshot =
+      sync_service_.GetLastCycleSnapshotForDebugging();
   sync_service_.SetLastCycleSnapshot(syncer::SyncCycleSnapshot());
   ASSERT_TRUE(sync_service_.IsSyncFeatureActive());
   ASSERT_FALSE(sync_service_.HasCompletedSyncCycle());

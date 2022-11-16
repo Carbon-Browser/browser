@@ -177,12 +177,12 @@ class PerUserTopicSubscriptionManagerTest : public testing::Test {
       const std::string& private_topic = std::string(),
       const std::string& token = kFakeInstanceIdToken,
       int http_responce_code = net::HTTP_OK) {
-    std::unique_ptr<base::DictionaryValue> value(new base::DictionaryValue());
-    value->SetString("privateTopicName",
-                     private_topic.empty() ? "test-pr" : private_topic.c_str());
+    base::Value::Dict value;
+    value.Set("privateTopicName",
+              private_topic.empty() ? "test-pr" : private_topic.c_str());
     std::string serialized_response;
     JSONStringValueSerializer serializer(&serialized_response);
-    serializer.Serialize(*value);
+    serializer.Serialize(value);
     url_loader_factory()->AddResponse(
         FullSubscriptionUrl(token), CreateHeadersForTest(http_responce_code),
         serialized_response, CreateStatusForTest(net::OK, serialized_response));
@@ -332,7 +332,7 @@ TEST_F(PerUserTopicSubscriptionManagerTest, ShouldRepeatRequestsOnFailure) {
   // Initial backoff is 2 seconds with 20% jitter, so the minimum possible delay
   // is 1600ms. Advance time to just before that; nothing should have changed
   // yet.
-  FastForwardTimeBy(base::TimeDelta::FromMilliseconds(1500));
+  FastForwardTimeBy(base::Milliseconds(1500));
   EXPECT_TRUE(per_user_topic_subscription_manager->GetSubscribedTopicsForTest()
                   .empty());
   EXPECT_FALSE(
@@ -342,7 +342,7 @@ TEST_F(PerUserTopicSubscriptionManagerTest, ShouldRepeatRequestsOnFailure) {
   // Access token should be refreshed in order to avoid requests with expired
   // access token.
   EXPECT_CALL(identity_observer, OnAccessTokenRequested(_, _, _));
-  FastForwardTimeBy(base::TimeDelta::FromMilliseconds(600));
+  FastForwardTimeBy(base::Milliseconds(600));
   identity_test_env()->WaitForAccessTokenRequestIfNecessaryAndRespondWithToken(
       "access_token", base::Time::Max());
   base::RunLoop().RunUntilIdle();
@@ -415,13 +415,13 @@ TEST_F(PerUserTopicSubscriptionManagerTest,
   // UpdateSubscribedTopics() call shouldn't lead to backoff bypassing.
   per_user_topic_subscription_manager->UpdateSubscribedTopics(
       topics, kFakeInstanceIdToken);
-  FastForwardTimeBy(base::TimeDelta::FromMilliseconds(1500));
+  FastForwardTimeBy(base::Milliseconds(1500));
   testing::Mock::VerifyAndClearExpectations(&identity_observer);
 
   // The maximum backoff is 2 seconds; advance to just past that. Now access
   // token should be requested.
   EXPECT_CALL(identity_observer, OnAccessTokenRequested(_, _, _));
-  FastForwardTimeBy(base::TimeDelta::FromMilliseconds(600));
+  FastForwardTimeBy(base::Milliseconds(600));
   testing::Mock::VerifyAndClearExpectations(&identity_observer);
 
   // Add valid responses to access token and subscription requests and ensure

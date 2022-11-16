@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {RectUtil} from '../../common/rect_util.js';
 import {Navigator} from '../navigator.js';
 import {SAConstants, SwitchAccessMenuAction} from '../switch_access_constants.js';
 
@@ -130,5 +131,5 @@ class ActionableTabNode extends BasicNode {
 BasicNode.creators.push({
   predicate: baseNode => baseNode.role === chrome.automation.RoleType.TAB &&
       baseNode.root.role === chrome.automation.RoleType.DESKTOP,
-  creator: TabNode.create
+  creator: TabNode.create,
 });

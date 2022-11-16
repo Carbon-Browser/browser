@@ -5,14 +5,13 @@
 #ifndef SANDBOX_WIN_SRC_BROKER_SERVICES_H_
 #define SANDBOX_WIN_SRC_BROKER_SERVICES_H_
 
-#include <list>
 #include <map>
 #include <memory>
 #include <set>
 #include <utility>
 
 #include "base/compiler_specific.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/win/scoped_handle.h"
 #include "sandbox/win/src/crosscall_server.h"
@@ -36,14 +35,17 @@ class BrokerServicesBase final : public BrokerServices,
  public:
   BrokerServicesBase();
 
+  BrokerServicesBase(const BrokerServicesBase&) = delete;
+  BrokerServicesBase& operator=(const BrokerServicesBase&) = delete;
+
   ~BrokerServicesBase();
 
   // BrokerServices interface.
   ResultCode Init() override;
-  scoped_refptr<TargetPolicy> CreatePolicy() override;
+  std::unique_ptr<TargetPolicy> CreatePolicy() override;
   ResultCode SpawnTarget(const wchar_t* exe_path,
                          const wchar_t* command_line,
-                         scoped_refptr<TargetPolicy> policy,
+                         std::unique_ptr<TargetPolicy> policy,
                          ResultCode* last_warning,
                          DWORD* last_error,
                          PROCESS_INFORMATION* target) override;
@@ -65,9 +67,7 @@ class BrokerServicesBase final : public BrokerServices,
 
   // Provides a pool of threads that are used to wait on the IPC calls.
   // Owned by TargetEventsThread which is alive until our destructor.
-  ThreadPool* thread_pool_ = nullptr;
-
-  DISALLOW_COPY_AND_ASSIGN(BrokerServicesBase);
+  raw_ptr<ThreadPool> thread_pool_ = nullptr;
 };
 
 }  // namespace sandbox

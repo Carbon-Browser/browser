@@ -15,7 +15,6 @@
 #include "base/component_export.h"
 #include "base/threading/thread_id_name_manager.h"
 #include "base/time/time.h"
-#include "base/trace_event/thread_instruction_count.h"
 #include "base/trace_event/typed_macros.h"
 #include "base/trace_event/typed_macros_embedder_support.h"
 #include "services/tracing/public/cpp/perfetto/interning_index.h"
@@ -40,6 +39,12 @@ class COMPONENT_EXPORT(TRACING_CPP) TrackEventThreadLocalEventSink
       uint32_t session_id,
       bool disable_interning,
       bool proto_writer_filtering_enabled);
+
+  TrackEventThreadLocalEventSink(const TrackEventThreadLocalEventSink&) =
+      delete;
+  TrackEventThreadLocalEventSink& operator=(
+      const TrackEventThreadLocalEventSink&) = delete;
+
   ~TrackEventThreadLocalEventSink() override;
 
   // Resets emitted incremental state on all threads and causes incremental data
@@ -52,16 +57,15 @@ class COMPONENT_EXPORT(TRACING_CPP) TrackEventThreadLocalEventSink
   base::trace_event::TrackEventHandle AddTypedTraceEvent(
       base::trace_event::TraceEvent* trace_event);
   base::trace_event::TracePacketHandle AddTracePacket();
+  void AddEmptyPacket();
 
-  void UpdateDuration(
-      const unsigned char* category_group_enabled,
-      const char* name,
-      base::trace_event::TraceEventHandle handle,
-      int thread_id,
-      bool explicit_timestamps,
-      const base::TimeTicks& now,
-      const base::ThreadTicks& thread_now,
-      base::trace_event::ThreadInstructionCount thread_instruction_now);
+  void UpdateDuration(const unsigned char* category_group_enabled,
+                      const char* name,
+                      base::trace_event::TraceEventHandle handle,
+                      int thread_id,
+                      bool explicit_timestamps,
+                      const base::TimeTicks& now,
+                      const base::ThreadTicks& thread_now);
   void Flush();
 
   uint32_t session_id() const { return session_id_; }
@@ -77,6 +81,10 @@ class COMPONENT_EXPORT(TRACING_CPP) TrackEventThreadLocalEventSink
 
  private:
   static constexpr size_t kMaxCompleteEventDepth = 30;
+
+  enum class PacketType { kDefault, kEmpty };
+  perfetto::TraceWriter::TracePacketHandle NewTracePacket(
+      PacketType = PacketType::kDefault);
 
   // Emit any necessary descriptors that we haven't emitted yet and, if
   // required, perform an incremental state reset.
@@ -132,9 +140,8 @@ class COMPONENT_EXPORT(TRACING_CPP) TrackEventThreadLocalEventSink
   uint32_t last_incremental_state_reset_id_ = 0;
   base::TimeTicks last_timestamp_;
   base::ThreadTicks last_thread_time_;
-  base::trace_event::ThreadInstructionCount last_thread_instruction_count_;
-  int process_id_;
-  int thread_id_;
+  base::ProcessId process_id_;
+  base::PlatformThreadId thread_id_;
   std::string thread_name_;
   perfetto::protos::pbzero::ChromeThreadDescriptor::ThreadType thread_type_ =
       perfetto::protos::pbzero::ChromeThreadDescriptor::THREAD_UNSPECIFIED;
@@ -145,12 +152,11 @@ class COMPONENT_EXPORT(TRACING_CPP) TrackEventThreadLocalEventSink
   uint32_t session_id_;
   bool disable_interning_;
   uint32_t sink_id_;
+  bool last_packet_was_empty_ = true;
 
   // Stores the trace packet handle for a typed TrackEvent until the TrackEvent
   // was finalized after the code in //base filled its typed argument fields.
   perfetto::TraceWriter::TracePacketHandle pending_trace_packet_;
-
-  DISALLOW_COPY_AND_ASSIGN(TrackEventThreadLocalEventSink);
 };
 
 }  // namespace tracing

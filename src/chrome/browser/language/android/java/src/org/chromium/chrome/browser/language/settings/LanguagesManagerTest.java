@@ -8,6 +8,7 @@ import android.text.TextUtils;
 
 import androidx.test.filters.SmallTest;
 
+import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
@@ -15,14 +16,15 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.MockitoAnnotations;
 
+import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.JniMocker;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.language.AppLocaleUtils;
+import org.chromium.chrome.browser.language.LanguageTestUtils;
 import org.chromium.chrome.browser.translate.FakeTranslateBridgeJni;
 import org.chromium.chrome.browser.translate.TranslateBridge;
 import org.chromium.chrome.browser.translate.TranslateBridgeJni;
-import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -32,7 +34,7 @@ import java.util.stream.Collectors;
 /**
  * Tests for {@link LanguagesManager} which gets language lists from native.
  */
-@RunWith(ChromeJUnit4ClassRunner.class)
+@RunWith(BaseRobolectricTestRunner.class)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
 public class LanguagesManagerTest {
     @Rule
@@ -43,6 +45,7 @@ public class LanguagesManagerTest {
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
+        LanguageTestUtils.initializeResourceBundleForTesting();
         // Setup fake translate and language preferences.
         List<LanguageItem> chromeLanguages = FakeTranslateBridgeJni.getSimpleLanguageItemList();
         List<String> acceptLanguages = Arrays.asList("sw", "en", "en-US");
@@ -52,6 +55,11 @@ public class LanguagesManagerTest {
         mFakeTranslateBridge = new FakeTranslateBridgeJni(
                 chromeLanguages, acceptLanguages, neverLanguages, alwaysLanguages, targetLanguage);
         mJniMocker.mock(TranslateBridgeJni.TEST_HOOKS, mFakeTranslateBridge);
+    }
+
+    @After
+    public void tearDown() {
+        LanguageTestUtils.clearResourceBundleForTesting();
     }
 
     /**
@@ -112,18 +120,18 @@ public class LanguagesManagerTest {
         Assert.assertFalse(containsLanguage(items, "sw"));
 
         // Check that the first language is the system default language.
-        Assert.assertEquals(items.get(0).getCode(), AppLocaleUtils.SYSTEM_LANGUAGE_VALUE);
+        Assert.assertTrue(AppLocaleUtils.isFollowSystemLanguage(items.get(0).getCode()));
         // Check that the second language is "en-US" from the Accept-Languages.
         Assert.assertEquals(items.get(1).getCode(), "en-US");
 
         // Set UI Language to system default.
-        AppLocaleUtils.setAppLanguagePref(AppLocaleUtils.SYSTEM_LANGUAGE_VALUE);
+        AppLocaleUtils.setAppLanguagePref(AppLocaleUtils.APP_LOCALE_USE_SYSTEM_LANGUAGE);
 
         items = LanguagesManager.getInstance().getPotentialLanguages(
                 LanguagesManager.LanguageListType.UI_LANGUAGES);
 
         // Check that system default is not on the list and that German is.
-        Assert.assertFalse(containsLanguage(items, AppLocaleUtils.SYSTEM_LANGUAGE_VALUE));
+        Assert.assertFalse(containsLanguage(items, AppLocaleUtils.APP_LOCALE_USE_SYSTEM_LANGUAGE));
         // Check that the fist languages are from the Accept-Languages.
         Assert.assertEquals(items.get(0).getCode(), "sw");
         Assert.assertEquals(items.get(1).getCode(), "en-US");

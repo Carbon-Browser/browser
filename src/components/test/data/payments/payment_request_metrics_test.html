@@ -6,12 +6,15 @@ found in the LICENSE file.
 -->
 <html>
 <head>
+<script src="util.js"></script>
+<script src="metrics.js"></script>
 <title>Metrics Test</title>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=0.5, maximum-scale=0.5, minimum-scale=0.5">
 </head>
 <body>
 <div> <button onclick="ccBuy()" id="ccBuy">CC Buy Test</button> </div>
+<div> <button onclick="buyWithUrlMethods()" id="buyWithUrlMethods">Buy with URL Methods Test</button> </div>
 <div> <button onclick="androidPayBuy()" id="androidPayBuy">Android Pay Buy Test</button> </div>
 <div> <button onclick="androidPaySkipUiBuy()" id="androidPaySkipUiBuy">Android Pay Skip UI Buy Test</button> </div>
 <div> <button onclick="noSupported()" id="noSupported">No Supported Method Test</button> </div>
@@ -19,7 +22,5 @@ found in the LICENSE file.
 <div> <button onclick="contactInfoBuy()" id="contactInfoBuy">Contact Info Buy Test</button> </div>
 <button onclick="abort()" id="abort">Abort</button>
 <pre id="result"></pre>
-<script src="util.js"></script>
-<script src="metrics.js"></script>
 </body>
 </html>

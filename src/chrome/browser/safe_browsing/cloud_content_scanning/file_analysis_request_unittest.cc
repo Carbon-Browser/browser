@@ -14,6 +14,7 @@
 #include "build/build_config.h"
 #include "chrome/browser/enterprise/connectors/analysis/content_analysis_delegate.h"
 #include "chrome/browser/enterprise/connectors/common.h"
+#include "chrome/browser/enterprise/connectors/service_provider_config.h"
 #include "chrome/browser/safe_browsing/cloud_content_scanning/binary_upload_service.h"
 #include "chrome/common/chrome_paths.h"
 #include "content/public/test/browser_task_environment.h"
@@ -27,6 +28,11 @@ namespace {
 enterprise_connectors::AnalysisSettings settings(bool block_unsupported_types) {
   enterprise_connectors::AnalysisSettings settings;
   settings.block_unsupported_file_types = block_unsupported_types;
+  settings.tags["dlp"].supported_files =
+      enterprise_connectors::GetServiceProviderConfig()
+          ->at("google")
+          .analysis->supported_tags[1]
+          .supported_files;
   return settings;
 }
 
@@ -85,11 +91,11 @@ class FileAnalysisRequestTest : public testing::Test {
     request->GetRequestData(base::BindLambdaForTesting(
         [&run_loop, &called, &out_result, &out_data](
             BinaryUploadService::Result result,
-            const BinaryUploadService::Request::Data& data) {
+            BinaryUploadService::Request::Data data) {
           called = true;
           run_loop.Quit();
           *out_result = result;
-          *out_data = data;
+          *out_data = std::move(data);
         }));
     run_loop.Run();
 
@@ -116,7 +122,7 @@ TEST_F(FileAnalysisRequestTest, InvalidFiles) {
     base::RunLoop run_loop;
     request->GetRequestData(base::BindLambdaForTesting(
         [&run_loop, &called](BinaryUploadService::Result result,
-                             const BinaryUploadService::Request::Data& data) {
+                             BinaryUploadService::Request::Data data) {
           called = true;
           run_loop.Quit();
 
@@ -142,7 +148,7 @@ TEST_F(FileAnalysisRequestTest, InvalidFiles) {
     base::RunLoop run_loop;
     request->GetRequestData(base::BindLambdaForTesting(
         [&run_loop, &called](BinaryUploadService::Result result,
-                             const BinaryUploadService::Request::Data& data) {
+                             BinaryUploadService::Request::Data data) {
           called = true;
           run_loop.Quit();
 
@@ -168,7 +174,7 @@ TEST_F(FileAnalysisRequestTest, InvalidFiles) {
     base::RunLoop run_loop;
     request->GetRequestData(base::BindLambdaForTesting(
         [&run_loop, &called](BinaryUploadService::Result result,
-                             const BinaryUploadService::Request::Data& data) {
+                             BinaryUploadService::Request::Data data) {
           called = true;
           run_loop.Quit();
 
@@ -215,7 +221,7 @@ TEST_F(FileAnalysisRequestTest, NormalFiles) {
 }
 
 // Disabled due to flakiness on Mac https://crbug.com/1229051
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 #define MAYBE_LargeFiles DISABLED_LargeFiles
 #else
 #define MAYBE_LargeFiles LargeFiles
@@ -272,7 +278,7 @@ TEST_F(FileAnalysisRequestTest, PopulatesDigest) {
   base::RunLoop run_loop;
   request->GetRequestData(base::BindLambdaForTesting(
       [&run_loop](BinaryUploadService::Result result,
-                  const BinaryUploadService::Request::Data& data) {
+                  BinaryUploadService::Request::Data data) {
         run_loop.Quit();
       }));
   run_loop.Run();
@@ -300,7 +306,7 @@ TEST_F(FileAnalysisRequestTest, PopulatesFilename) {
   base::RunLoop run_loop;
   request->GetRequestData(base::BindLambdaForTesting(
       [&run_loop](BinaryUploadService::Result result,
-                  const BinaryUploadService::Request::Data& data) {
+                  BinaryUploadService::Request::Data data) {
         run_loop.Quit();
       }));
   run_loop.Run();
@@ -329,11 +335,11 @@ TEST_F(FileAnalysisRequestTest, CachesResults) {
   request->GetRequestData(base::BindLambdaForTesting(
       [&run_loop, &called, &async_result, &async_data](
           BinaryUploadService::Result result,
-          const BinaryUploadService::Request::Data& data) {
+          BinaryUploadService::Request::Data data) {
         called = true;
         run_loop.Quit();
         async_result = result;
-        async_data = data;
+        async_data = std::move(data);
       }));
   run_loop.Run();
 
@@ -341,14 +347,14 @@ TEST_F(FileAnalysisRequestTest, CachesResults) {
 
   BinaryUploadService::Result sync_result;
   BinaryUploadService::Request::Data sync_data;
-  request->GetRequestData(base::BindLambdaForTesting(
-      [&run_loop, &called, &sync_result, &sync_data](
-          BinaryUploadService::Result result,
-          const BinaryUploadService::Request::Data& data) {
+  request->GetRequestData(
+      base::BindLambdaForTesting([&run_loop, &called, &sync_result, &sync_data](
+                                     BinaryUploadService::Result result,
+                                     BinaryUploadService::Request::Data data) {
         called = true;
         run_loop.Quit();
         sync_result = result;
-        sync_data = data;
+        sync_data = std::move(data);
       }));
 
   EXPECT_EQ(sync_result, async_result);
@@ -379,11 +385,11 @@ TEST_F(FileAnalysisRequestTest, CachesResultsWithKnownMimetype) {
   request->GetRequestData(base::BindLambdaForTesting(
       [&run_loop, &called, &result, &data](
           BinaryUploadService::Result tmp_result,
-          const BinaryUploadService::Request::Data& tmp_data) {
+          BinaryUploadService::Request::Data tmp_data) {
         called = true;
         run_loop.Quit();
         result = tmp_result;
-        data = tmp_data;
+        data = std::move(tmp_data);
       }));
   run_loop.Run();
 
@@ -417,9 +423,8 @@ TEST_F(FileAnalysisRequestTest, DelayedFileOpening) {
 
   base::RunLoop run_loop;
   request->GetRequestData(base::BindLambdaForTesting(
-      [&run_loop, &file_contents](
-          BinaryUploadService::Result result,
-          const BinaryUploadService::Request::Data& data) {
+      [&run_loop, &file_contents](BinaryUploadService::Result result,
+                                  BinaryUploadService::Request::Data data) {
         run_loop.Quit();
 
         EXPECT_EQ(result, BinaryUploadService::Result::SUCCESS);
@@ -479,11 +484,11 @@ TEST_P(FileAnalysisRequestZipTest, Encrypted) {
   request->GetRequestData(base::BindLambdaForTesting(
       [&run_loop, &called, &result, &data](
           BinaryUploadService::Result tmp_result,
-          const BinaryUploadService::Request::Data& tmp_data) {
+          BinaryUploadService::Request::Data tmp_data) {
         called = true;
         run_loop.Quit();
         result = tmp_result;
-        data = tmp_data;
+        data = std::move(tmp_data);
       }));
   run_loop.Run();
 
@@ -526,11 +531,11 @@ TEST_F(FileAnalysisRequestTest, UnsupportedFileTypeBlock) {
   request->GetRequestData(base::BindLambdaForTesting(
       [&run_loop, &called, &result, &data](
           BinaryUploadService::Result tmp_result,
-          const BinaryUploadService::Request::Data& tmp_data) {
+          BinaryUploadService::Request::Data tmp_data) {
         called = true;
         run_loop.Quit();
         result = tmp_result;
-        data = tmp_data;
+        data = std::move(tmp_data);
       }));
   run_loop.Run();
 
@@ -571,11 +576,11 @@ TEST_F(FileAnalysisRequestTest, UnsupportedFileTypeNoBlock) {
   request->GetRequestData(base::BindLambdaForTesting(
       [&run_loop, &called, &result, &data](
           BinaryUploadService::Result tmp_result,
-          const BinaryUploadService::Request::Data& tmp_data) {
+          BinaryUploadService::Request::Data tmp_data) {
         called = true;
         run_loop.Quit();
         result = tmp_result;
-        data = tmp_data;
+        data = std::move(tmp_data);
       }));
   run_loop.Run();
 

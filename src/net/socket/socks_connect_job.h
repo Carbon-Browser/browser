@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/time/time.h"
 #include "net/base/completion_once_callback.h"
@@ -35,6 +35,9 @@ class NET_EXPORT_PRIVATE SOCKSSocketParams
                     const NetworkIsolationKey& network_isolation_key,
                     const NetworkTrafficAnnotationTag& traffic_annotation);
 
+  SOCKSSocketParams(const SOCKSSocketParams&) = delete;
+  SOCKSSocketParams& operator=(const SOCKSSocketParams&) = delete;
+
   const scoped_refptr<TransportSocketParams>& transport_params() const {
     return transport_params_;
   }
@@ -60,8 +63,6 @@ class NET_EXPORT_PRIVATE SOCKSSocketParams
   const NetworkIsolationKey network_isolation_key_;
 
   NetworkTrafficAnnotationTag traffic_annotation_;
-
-  DISALLOW_COPY_AND_ASSIGN(SOCKSSocketParams);
 };
 
 // SOCKSConnectJob handles establishing a connection to a SOCKS4 or SOCKS5 proxy
@@ -89,6 +90,10 @@ class NET_EXPORT_PRIVATE SOCKSConnectJob : public ConnectJob,
                   scoped_refptr<SOCKSSocketParams> socks_params,
                   ConnectJob::Delegate* delegate,
                   const NetLogWithSource* net_log);
+
+  SOCKSConnectJob(const SOCKSConnectJob&) = delete;
+  SOCKSConnectJob& operator=(const SOCKSConnectJob&) = delete;
+
   ~SOCKSConnectJob() override;
 
   // ConnectJob methods.
@@ -137,11 +142,9 @@ class NET_EXPORT_PRIVATE SOCKSConnectJob : public ConnectJob,
   State next_state_;
   std::unique_ptr<ConnectJob> transport_connect_job_;
   std::unique_ptr<StreamSocket> socket_;
-  SOCKSClientSocket* socks_socket_ptr_;
+  raw_ptr<SOCKSClientSocket> socks_socket_ptr_;
 
   ResolveErrorInfo resolve_error_info_;
-
-  DISALLOW_COPY_AND_ASSIGN(SOCKSConnectJob);
 };
 
 }  // namespace net

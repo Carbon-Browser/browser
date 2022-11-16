@@ -5,10 +5,12 @@
 #include "third_party/blink/renderer/core/html/html_image_element.h"
 
 #include <memory>
+
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/renderer/core/css/css_property_value_set.h"
 #include "third_party/blink/renderer/core/css/parser/css_parser.h"
 #include "third_party/blink/renderer/core/dom/document.h"
+#include "third_party/blink/renderer/core/execution_context/security_context.h"
 #include "third_party/blink/renderer/core/frame/local_frame_view.h"
 #include "third_party/blink/renderer/core/testing/page_test_base.h"
 
@@ -20,7 +22,7 @@ class HTMLImageElementTest : public PageTestBase {
   static constexpr int kViewportHeight = 600;
 
   void SetUp() override {
-    PageTestBase::SetUp(IntSize(kViewportWidth, kViewportHeight));
+    PageTestBase::SetUp(gfx::Size(kViewportWidth, kViewportHeight));
   }
 };
 

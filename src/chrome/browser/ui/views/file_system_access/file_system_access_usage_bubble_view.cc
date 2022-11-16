@@ -8,6 +8,7 @@
 #include "base/containers/cxx20_erase.h"
 #include "base/i18n/message_formatter.h"
 #include "base/i18n/unicodestring.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/user_metrics.h"
 #include "chrome/app/vector_icons/vector_icons.h"
 #include "chrome/browser/file_system_access/chrome_file_system_access_permission_context.h"
@@ -33,6 +34,8 @@
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/color/color_id.h"
+#include "ui/color/color_provider.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/views/controls/button/image_button.h"
 #include "ui/views/controls/button/image_button_factory.h"
@@ -134,7 +137,7 @@ class CollapsibleListView : public views::View {
     const views::LayoutProvider* provider = ChromeLayoutProvider::Get();
 
     SetLayoutManager(std::make_unique<views::BoxLayout>(
-        views::BoxLayout::Orientation::kVertical, gfx::Insets(0, 0),
+        views::BoxLayout::Orientation::kVertical, gfx::Insets(0),
         provider->GetDistanceMetric(views::DISTANCE_RELATED_CONTROL_VERTICAL)));
 
     auto label_container = std::make_unique<views::View>();
@@ -143,7 +146,7 @@ class CollapsibleListView : public views::View {
     auto* label_layout =
         label_container->SetLayoutManager(std::make_unique<views::BoxLayout>(
             views::BoxLayout::Orientation::kHorizontal,
-            gfx::Insets(/*vertical=*/0, indent),
+            gfx::Insets::VH(0, indent),
             provider->GetDistanceMetric(
                 views::DISTANCE_RELATED_LABEL_HORIZONTAL)));
     std::u16string label_text;
@@ -159,7 +162,8 @@ class CollapsibleListView : public views::View {
       label_text = base::i18n::MessageFormatter::FormatWithNumberedArgs(
           l10n_util::GetStringUTF16(
               IDS_FILE_SYSTEM_ACCESS_USAGE_BUBBLE_FILES_TEXT),
-          model->RowCount(), first_item, second_item);
+          base::checked_cast<int64_t>(model->RowCount()), first_item,
+          second_item);
     }
     auto* label = label_container->AddChildView(std::make_unique<views::Label>(
         label_text, CONTEXT_DIALOG_BODY_TEXT_SMALL,
@@ -202,14 +206,13 @@ class CollapsibleListView : public views::View {
   // views::View
   void OnThemeChanged() override {
     views::View::OnThemeChanged();
-    auto* theme = GetNativeTheme();
-    const SkColor icon_color =
-        theme->GetSystemColor(ui::NativeTheme::kColorId_DefaultIconColor);
+    const auto* color_provider = GetColorProvider();
+    const SkColor icon_color = color_provider->GetColor(ui::kColorIcon);
     const SkColor disabled_icon_color =
-        theme->GetSystemColor(ui::NativeTheme::kColorId_DisabledIconColor);
+        color_provider->GetColor(ui::kColorIconDisabled);
     views::SetImageFromVectorIconWithColor(
         expand_collapse_button_, vector_icons::kCaretDownIcon,
-        ui::TableModel::kIconSize, icon_color);
+        ui::TableModel::kIconSize, icon_color, disabled_icon_color);
     views::SetToggledImageFromVectorIconWithColor(
         expand_collapse_button_, vector_icons::kCaretUpIcon,
         ui::TableModel::kIconSize, icon_color, disabled_icon_color);
@@ -224,8 +227,8 @@ class CollapsibleListView : public views::View {
   }
 
   bool table_is_expanded_ = false;
-  views::ScrollView* table_view_parent_;
-  views::ToggleImageButton* expand_collapse_button_;
+  raw_ptr<views::ScrollView> table_view_parent_;
+  raw_ptr<views::ToggleImageButton> expand_collapse_button_;
 };
 
 BEGIN_METADATA(CollapsibleListView, views::View)
@@ -247,31 +250,30 @@ FileSystemAccessUsageBubbleView::FilePathListModel::FilePathListModel(
 FileSystemAccessUsageBubbleView::FilePathListModel::~FilePathListModel() =
     default;
 
-int FileSystemAccessUsageBubbleView::FilePathListModel::RowCount() {
+size_t FileSystemAccessUsageBubbleView::FilePathListModel::RowCount() {
   return files_.size() + directories_.size();
 }
 
 std::u16string FileSystemAccessUsageBubbleView::FilePathListModel::GetText(
-    int row,
+    size_t row,
     int column_id) {
-  if (static_cast<size_t>(row) < files_.size())
+  if (row < files_.size())
     return file_system_access_ui_helper::GetPathForDisplay(files_[row]);
   return file_system_access_ui_helper::GetPathForDisplay(
       directories_[row - files_.size()]);
 }
 
 ui::ImageModel FileSystemAccessUsageBubbleView::FilePathListModel::GetIcon(
-    int row) {
+    size_t row) {
   return ui::ImageModel::FromVectorIcon(
-      static_cast<size_t>(row) < files_.size()
-          ? vector_icons::kInsertDriveFileOutlineIcon
-          : vector_icons::kFolderOpenIcon,
-      ui::NativeTheme::kColorId_DefaultIconColor, kIconSize);
+      row < files_.size() ? vector_icons::kInsertDriveFileOutlineIcon
+                          : vector_icons::kFolderOpenIcon,
+      ui::kColorIcon, kIconSize);
 }
 
 std::u16string FileSystemAccessUsageBubbleView::FilePathListModel::GetTooltip(
-    int row) {
-  if (static_cast<size_t>(row) < files_.size())
+    size_t row) {
+  if (row < files_.size())
     return files_[row].LossyDisplayName();
   return directories_[row - files_.size()].LossyDisplayName();
 }
@@ -384,15 +386,15 @@ void FileSystemAccessUsageBubbleView::Init() {
       provider->GetInsetsMetric(views::InsetsMetric::INSETS_DIALOG);
   SetLayoutManager(std::make_unique<views::BoxLayout>(
       views::BoxLayout::Orientation::kVertical,
-      gfx::Insets(0, dialog_insets.left(), 0, dialog_insets.right()),
+      gfx::Insets::TLBR(0, dialog_insets.left(), 0, dialog_insets.right()),
       provider->GetDistanceMetric(views::DISTANCE_RELATED_CONTROL_VERTICAL)));
-  set_margins(
-      gfx::Insets(provider->GetDistanceMetric(
-                      views::DISTANCE_DIALOG_CONTENT_MARGIN_TOP_TEXT),
-                  0,
-                  provider->GetDistanceMetric(
-                      views::DISTANCE_DIALOG_CONTENT_MARGIN_BOTTOM_CONTROL),
-                  0));
+  set_margins(gfx::Insets::TLBR(
+      provider->GetDistanceMetric(
+          views::DISTANCE_DIALOG_CONTENT_MARGIN_TOP_TEXT),
+      0,
+      provider->GetDistanceMetric(
+          views::DISTANCE_DIALOG_CONTENT_MARGIN_BOTTOM_CONTROL),
+      0));
 
   base::FilePath embedded_path;
   int heading_message_id =

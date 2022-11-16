@@ -4,6 +4,7 @@
 
 #include "components/password_manager/core/browser/old_google_credentials_cleaner.h"
 
+#include "base/time/time.h"
 #include "components/password_manager/core/browser/password_form.h"
 #include "components/password_manager/core/browser/password_store_interface.h"
 #include "components/password_manager/core/common/password_manager_pref_names.h"
@@ -26,7 +27,7 @@ void OldGoogleCredentialCleaner::StartCleaning(Observer* observer) {
   DCHECK(observer);
   DCHECK(!observer_);
   observer_ = observer;
-  store_->GetAutofillableLogins(this);
+  store_->GetAutofillableLogins(weak_ptr_factory_.GetWeakPtr());
 }
 
 void OldGoogleCredentialCleaner::OnGetPasswordStoreResults(

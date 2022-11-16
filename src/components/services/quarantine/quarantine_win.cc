@@ -19,7 +19,6 @@
 #include "base/feature_list.h"
 #include "base/files/file_util.h"
 #include "base/guid.h"
-#include "base/macros.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/stringprintf.h"
@@ -30,7 +29,6 @@
 #include "base/win/windows_version.h"
 #include "components/services/quarantine/common.h"
 #include "components/services/quarantine/common_win.h"
-#include "components/services/quarantine/public/cpp/quarantine_features_win.h"
 #include "url/gurl.h"
 
 namespace quarantine {

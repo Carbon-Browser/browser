@@ -17,11 +17,11 @@
 namespace performance_manager {
 namespace features {
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 // Empty the working set of processes in which all frames are frozen.
 const base::Feature kEmptyWorkingSet{"EmptyWorkingSet",
                                      base::FEATURE_DISABLED_BY_DEFAULT};
-#endif  // defined(OS_WIN)
+#endif  // BUILDFLAG(IS_WIN)
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 
@@ -62,12 +62,10 @@ const base::FeatureParam<int> kArcProcessInactivityTimeSec = {
     &kTrimArcOnMemoryPressure, "ArcProcessInactivityTimeSec", 600};
 
 const base::FeatureParam<base::TimeDelta> kArcVmInactivityTimeMs = {
-    &kTrimArcVmOnMemoryPressure, "ArcVmInactivityTimeMs",
-    base::TimeDelta::FromSeconds(600)};
+    &kTrimArcVmOnMemoryPressure, "ArcVmInactivityTimeMs", base::Seconds(1200)};
 
 const base::FeatureParam<base::TimeDelta> kArcVmTrimBackoffTimeMs = {
-    &kTrimArcVmOnMemoryPressure, "ArcVmTrimBackoffTimeMs",
-    base::TimeDelta::FromSeconds(900)};
+    &kTrimArcVmOnMemoryPressure, "ArcVmTrimBackoffTimeMs", base::Seconds(1800)};
 
 const base::FeatureParam<bool> kTrimArcVmOnCriticalPressure = {
     &kTrimArcVmOnMemoryPressure, "TrimArcVmOnCriticalPressure", false};
@@ -75,6 +73,18 @@ const base::FeatureParam<bool> kTrimArcVmOnCriticalPressure = {
 const base::FeatureParam<bool> kTrimArcVmOnFirstMemoryPressureAfterArcVmBoot = {
     &kTrimArcVmOnMemoryPressure, "TrimArcVmOnFirstMemoryPressureAfterArcVmBoot",
     true};
+
+const base::FeatureParam<bool>
+    kOnlyDropCachesOnFirstMemoryPressureAfterArcVmBoot = {
+        &kTrimArcVmOnMemoryPressure,
+        "OnlyDropCachesOnFirstMemoryPressureAfterArcVmBoot", true};
+
+const base::FeatureParam<int> kTrimArcVmMaxPagesPerIteration = {
+    &kTrimArcVmOnMemoryPressure, "MaxPageLimit", arc::ArcSession::kNoPageLimit};
+
+const base::FeatureParam<int> kTrimArcVmPagesPerMinute = {
+    &kTrimArcVmOnMemoryPressure, "PagesPerMinute",
+    arc::ArcSession::kNoPageLimit};
 
 // Specifies the minimum amount of time a parent frame node must be invisible
 // before considering the process node for working set trim.
@@ -95,16 +105,14 @@ TrimOnMemoryPressureParams& TrimOnMemoryPressureParams::operator=(
 TrimOnMemoryPressureParams TrimOnMemoryPressureParams::GetParams() {
   TrimOnMemoryPressureParams params;
   params.graph_walk_backoff_time =
-      base::TimeDelta::FromSeconds(kGraphWalkBackoffTimeSec.Get());
-  params.node_invisible_time =
-      base::TimeDelta::FromSeconds(kNodeInvisibileTimeSec.Get());
-  params.node_trim_backoff_time =
-      base::TimeDelta::FromSeconds(kNodeTrimBackoffTimeSec.Get());
+      base::Seconds(kGraphWalkBackoffTimeSec.Get());
+  params.node_invisible_time = base::Seconds(kNodeInvisibileTimeSec.Get());
+  params.node_trim_backoff_time = base::Seconds(kNodeTrimBackoffTimeSec.Get());
 
   params.arc_process_trim_backoff_time =
-      base::TimeDelta::FromSeconds(kArcProcessTrimBackoffTimeSec.Get());
+      base::Seconds(kArcProcessTrimBackoffTimeSec.Get());
   params.arc_process_list_fetch_backoff_time =
-      base::TimeDelta::FromSeconds(kArcProcessListFetchBackoffTimeSec.Get());
+      base::Seconds(kArcProcessListFetchBackoffTimeSec.Get());
   params.trim_arc_system_processes = kTrimArcSystemProcesses.Get();
   params.trim_arc_app_processes = kTrimArcAppProcesses.Get();
   params.trim_arc_aggressive = kTrimArcAggressive.Get();
@@ -112,8 +120,7 @@ TrimOnMemoryPressureParams TrimOnMemoryPressureParams::GetParams() {
 
   const int arc_inactivity_time = kArcProcessInactivityTimeSec.Get();
   if (arc_inactivity_time > 0) {
-    params.arc_process_inactivity_time =
-        base::TimeDelta::FromSeconds(arc_inactivity_time);
+    params.arc_process_inactivity_time = base::Seconds(arc_inactivity_time);
   } else {
     // This causes us to ignore the last activity time if it was not configured.
     params.arc_process_inactivity_time = base::TimeDelta::Min();
@@ -124,25 +131,15 @@ TrimOnMemoryPressureParams TrimOnMemoryPressureParams::GetParams() {
   params.trim_arcvm_on_critical_pressure = kTrimArcVmOnCriticalPressure.Get();
   params.trim_arcvm_on_first_memory_pressure_after_arcvm_boot =
       kTrimArcVmOnFirstMemoryPressureAfterArcVmBoot.Get();
+  params.only_drop_caches_on_first_memory_pressure_after_arcvm_boot =
+      kOnlyDropCachesOnFirstMemoryPressureAfterArcVmBoot.Get();
+
+  params.trim_arcvm_max_pages_per_iteration =
+      kTrimArcVmMaxPagesPerIteration.Get();
+  params.trim_arcvm_pages_per_minute = kTrimArcVmPagesPerMinute.Get();
 
   return params;
 }
-
-#if BUILDFLAG(USE_TCMALLOC)
-// This flag will allow the browser process to adjust the tcmalloc tunables to
-// balance performance and memory utilization.
-const base::Feature kDynamicTcmallocTuning{"DynamicTcmallocTuning",
-                                           base::FEATURE_ENABLED_BY_DEFAULT};
-
-// The time between attempting to update tcmalloc tunables.
-const base::FeatureParam<int> kDynamicTuningTimeSec = {
-    &kDynamicTcmallocTuning, "DynamicTcmallocTuneTimeSec", 120};
-
-// The time a frame must be invisible before being additionally scaled. -1 will
-// disable invisible scaling.
-const base::FeatureParam<int> kDynamicTuningScaleInvisibleTimeSec = {
-    &kDynamicTcmallocTuning, "DynamicTcmallocScaleInvisibleTimeSec", -1};
-#endif  // BUILDFLAG(USE_TCMALLOC)
 
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 

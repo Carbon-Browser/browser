@@ -15,7 +15,7 @@
 #include "components/viz/common/resources/bitmap_allocation.h"
 #include "components/viz/common/resources/resource_sizes.h"
 #include "third_party/skia/include/core/SkBitmap.h"
-#include "ui/gfx/mask_filter_info.h"
+#include "ui/gfx/geometry/mask_filter_info.h"
 
 namespace viz {
 namespace {
@@ -66,6 +66,10 @@ gfx::Transform GetTransformFromProtobuf(
   return transform;
 }
 
+SkColor4f GetColorFromProtobuf(const proto::Color& color) {
+  return SkColor4f{color.r(), color.g(), color.b(), color.a()};
+}
+
 // Mutates a gfx::Rect to ensure width and height are both at least min_size.
 // Use in case e.g. a 0-width/height Rect would cause a validation error on
 // deserialization.
@@ -100,6 +104,11 @@ void ExpandToMinSize(gfx::Rect* rect, int min_size) {
 class FuzzedCompositorFrameBuilder {
  public:
   FuzzedCompositorFrameBuilder() = default;
+
+  FuzzedCompositorFrameBuilder(const FuzzedCompositorFrameBuilder&) = delete;
+  FuzzedCompositorFrameBuilder& operator=(const FuzzedCompositorFrameBuilder&) =
+      delete;
+
   ~FuzzedCompositorFrameBuilder() = default;
 
   FuzzedData Build(const proto::CompositorRenderPass& render_pass_spec);
@@ -140,7 +149,7 @@ class FuzzedCompositorFrameBuilder {
   // Allocate and map memory for a bitmap filled with |color| and appends it to
   // |allocated_bitmaps|. Performs no checks to ensure that the bitmap will fit
   // in memory (see TryReserveBitmapBytes).
-  FuzzedBitmap* AllocateFuzzedBitmap(const gfx::Size& size, SkColor color);
+  FuzzedBitmap* AllocateFuzzedBitmap(const gfx::Size& size, SkColor4f color);
 
   // Number of bytes that have already been reserved for the allocation of
   // specific bitmaps/textures.
@@ -150,8 +159,6 @@ class FuzzedCompositorFrameBuilder {
 
   // Frame and data being built.
   FuzzedData data_;
-
-  DISALLOW_COPY_AND_ASSIGN(FuzzedCompositorFrameBuilder);
 };
 
 FuzzedData FuzzedCompositorFrameBuilder::Build(
@@ -230,6 +237,7 @@ CompositorRenderPassId FuzzedCompositorFrameBuilder::AddRenderPass(
   return data_.frame.render_pass_list.back()->id;
 }
 
+// TODO(crbug.com/1308932): Move proto::DrawQuad to SkColor4f
 void FuzzedCompositorFrameBuilder::AddSolidColorDrawQuad(
     CompositorRenderPass* pass,
     const gfx::Rect& rect,
@@ -239,7 +247,7 @@ void FuzzedCompositorFrameBuilder::AddSolidColorDrawQuad(
   ConfigureSharedQuadState(shared_quad_state, quad_spec);
   auto* quad = pass->CreateAndAppendDrawQuad<SolidColorDrawQuad>();
   quad->SetNew(shared_quad_state, rect, visible_rect,
-               quad_spec.solid_color_quad().color(),
+               GetColorFromProtobuf(quad_spec.solid_color_quad().color()),
                quad_spec.solid_color_quad().force_anti_aliasing_off());
 }
 
@@ -260,8 +268,8 @@ void FuzzedCompositorFrameBuilder::TryAddTileDrawQuad(
     return;
   }
 
-  FuzzedBitmap* fuzzed_bitmap =
-      AllocateFuzzedBitmap(tile_size, quad_spec.tile_quad().texture_color());
+  FuzzedBitmap* fuzzed_bitmap = AllocateFuzzedBitmap(
+      tile_size, GetColorFromProtobuf(quad_spec.tile_quad().texture_color()));
   TransferableResource transferable_resource =
       TransferableResource::MakeSoftware(fuzzed_bitmap->id, fuzzed_bitmap->size,
                                          RGBA_8888);
@@ -388,7 +396,7 @@ bool FuzzedCompositorFrameBuilder::TryReserveBitmapBytes(
 
 FuzzedBitmap* FuzzedCompositorFrameBuilder::AllocateFuzzedBitmap(
     const gfx::Size& size,
-    SkColor color) {
+    SkColor4f color) {
   SharedBitmapId shared_bitmap_id = SharedBitmap::GenerateId();
   base::MappedReadOnlyRegion shm =
       bitmap_allocation::AllocateSharedBitmap(size, RGBA_8888);

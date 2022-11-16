@@ -12,7 +12,6 @@
 #include <vector>
 
 #include "base/bind.h"
-#include "base/macros.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "build/build_config.h"
@@ -187,7 +186,7 @@ class ProfileStatisticsBrowserTest : public InProcessBrowserTest {
 using ProfileStatisticsBrowserDeathTest = ProfileStatisticsBrowserTest;
 
 IN_PROC_BROWSER_TEST_F(ProfileStatisticsBrowserTest, GatherStatistics) {
-  Profile* profile = ProfileManager::GetActiveUserProfile();
+  Profile* profile = browser()->profile();
   ASSERT_TRUE(profile);
   ProfileStatistics* profile_stat =
       ProfileStatisticsFactory::GetForProfile(profile);
@@ -206,7 +205,7 @@ IN_PROC_BROWSER_TEST_F(ProfileStatisticsBrowserTest, GatherStatistics) {
 
 IN_PROC_BROWSER_TEST_F(ProfileStatisticsBrowserTest,
                        GatherStatisticsTwoCallbacks) {
-  Profile* profile = ProfileManager::GetActiveUserProfile();
+  Profile* profile = browser()->profile();
   ASSERT_TRUE(profile);
   ProfileStatistics* profile_stat =
       ProfileStatisticsFactory::GetForProfile(profile);

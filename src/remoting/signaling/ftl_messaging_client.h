@@ -8,7 +8,7 @@
 #include <memory>
 #include <string>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "remoting/signaling/message_tracker.h"
 #include "remoting/signaling/messaging_client.h"
@@ -46,6 +46,10 @@ class FtlMessagingClient final : public MessagingClient {
       scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
       RegistrationManager* registration_manager,
       SignalingTracker* signaling_tracker = nullptr);
+
+  FtlMessagingClient(const FtlMessagingClient&) = delete;
+  FtlMessagingClient& operator=(const FtlMessagingClient&) = delete;
+
   ~FtlMessagingClient() override;
 
   // MessagingClient implementations.
@@ -97,12 +101,10 @@ class FtlMessagingClient final : public MessagingClient {
   void OnMessageReceived(const ftl::InboxMessage& message);
 
   std::unique_ptr<ProtobufHttpClient> client_;
-  RegistrationManager* registration_manager_;
+  raw_ptr<RegistrationManager> registration_manager_;
   std::unique_ptr<MessageReceptionChannel> reception_channel_;
   MessageCallbackList callback_list_;
   MessageTracker message_tracker_;
-
-  DISALLOW_COPY_AND_ASSIGN(FtlMessagingClient);
 };
 
 }  // namespace remoting

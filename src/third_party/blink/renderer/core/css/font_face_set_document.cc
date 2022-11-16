@@ -46,7 +46,7 @@
 #include "third_party/blink/renderer/core/loader/document_loader.h"
 #include "third_party/blink/renderer/core/style/computed_style.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 
 namespace blink {
 
@@ -77,7 +77,7 @@ AtomicString FontFaceSetDocument::status() const {
 void FontFaceSetDocument::DidLayout() {
   if (!GetExecutionContext())
     return;
-  if (GetDocument()->GetFrame()->IsMainFrame() && loading_fonts_.IsEmpty())
+  if (GetDocument()->IsInOutermostMainFrame() && loading_fonts_.IsEmpty())
     font_load_histogram_.Record();
   if (!ShouldSignalReady())
     return;

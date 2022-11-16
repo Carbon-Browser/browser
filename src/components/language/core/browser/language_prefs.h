@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_piece.h"
 #include "components/prefs/pref_change_registrar.h"
 
@@ -34,6 +34,10 @@ class LanguagePrefs {
   static void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry);
 
   explicit LanguagePrefs(PrefService* user_prefs);
+
+  LanguagePrefs(const LanguagePrefs&) = delete;
+  LanguagePrefs& operator=(const LanguagePrefs&) = delete;
+
   ~LanguagePrefs();
 
   // Gets the language settings list containing combination of policy-forced and
@@ -67,10 +71,8 @@ class LanguagePrefs {
   // Used for deduplication and reordering of languages.
   std::set<std::string> forced_languages_set_;
 
-  PrefService* prefs_;  // Weak.
+  raw_ptr<PrefService> prefs_;  // Weak.
   PrefChangeRegistrar pref_change_registrar_;
-
-  DISALLOW_COPY_AND_ASSIGN(LanguagePrefs);
 };
 
 void ResetLanguagePrefs(PrefService* prefs);

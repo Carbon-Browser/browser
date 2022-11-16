@@ -5,7 +5,8 @@
 #ifndef CHROME_BROWSER_UI_TOOLBAR_TEST_TOOLBAR_ACTION_VIEW_CONTROLLER_H_
 #define CHROME_BROWSER_UI_TOOLBAR_TEST_TOOLBAR_ACTION_VIEW_CONTROLLER_H_
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
+#include "chrome/browser/extensions/extension_context_menu_model.h"
 #include "chrome/browser/ui/toolbar/toolbar_action_view_controller.h"
 
 // A minimalistic and configurable ToolbarActionViewController for use in
@@ -13,6 +14,12 @@
 class TestToolbarActionViewController : public ToolbarActionViewController {
  public:
   explicit TestToolbarActionViewController(const std::string& id);
+
+  TestToolbarActionViewController(const TestToolbarActionViewController&) =
+      delete;
+  TestToolbarActionViewController& operator=(
+      const TestToolbarActionViewController&) = delete;
+
   ~TestToolbarActionViewController() override;
 
   // ToolbarActionViewController:
@@ -26,12 +33,17 @@ class TestToolbarActionViewController : public ToolbarActionViewController {
   std::u16string GetTooltip(content::WebContents* web_contents) const override;
   bool IsEnabled(content::WebContents* web_contents) const override;
   bool IsShowingPopup() const override;
+  bool IsRequestingSiteAccess(
+      content::WebContents* web_contents) const override;
   void HidePopup() override;
   gfx::NativeView GetPopupNativeView() override;
-  ui::MenuModel* GetContextMenu() override;
-  bool ExecuteAction(bool by_user, InvocationSource source) override;
+  ui::MenuModel* GetContextMenu(
+      extensions::ExtensionContextMenuModel::ContextMenuSource
+          context_menu_source) override;
+  void ExecuteUserAction(InvocationSource source) override;
+  void TriggerPopupForAPI(ShowPopupCallback callback) override;
   void UpdateState() override;
-  PageInteractionStatus GetPageInteractionStatus(
+  extensions::SitePermissionsHelper::SiteInteraction GetSiteInteraction(
       content::WebContents* web_contents) const override;
 
   // Instruct the controller to fake showing a popup.
@@ -53,7 +65,7 @@ class TestToolbarActionViewController : public ToolbarActionViewController {
   std::string id_;
 
   // The delegate of the controller, if one exists.
-  ToolbarActionViewDelegate* delegate_ = nullptr;
+  raw_ptr<ToolbarActionViewDelegate> delegate_ = nullptr;
 
   // Action name for the controller.
   std::u16string action_name_;
@@ -70,8 +82,6 @@ class TestToolbarActionViewController : public ToolbarActionViewController {
 
   // True if a popup is (supposedly) currently showing.
   bool popup_showing_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(TestToolbarActionViewController);
 };
 
 #endif  // CHROME_BROWSER_UI_TOOLBAR_TEST_TOOLBAR_ACTION_VIEW_CONTROLLER_H_

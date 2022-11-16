@@ -12,10 +12,12 @@
 #include "base/callback.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
+#include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/user_metrics.h"
 #include "base/strings/string_util.h"
 #include "base/values.h"
+#include "chrome/browser/supervised_user/supervised_user_constants.h"
 #include "chrome/browser/supervised_user/supervised_user_url_filter.h"
 #include "chrome/common/chrome_constants.h"
 #include "components/prefs/json_pref_store.h"
@@ -53,6 +55,36 @@ namespace {
 bool SettingShouldApplyToPrefs(const std::string& name) {
   return !base::StartsWith(name, kSupervisedUserInternalItemPrefix,
                            base::CompareCase::INSENSITIVE_ASCII);
+}
+
+bool SyncChangeIsNewWebsiteApproval(const std::string& name,
+                                    SyncChange::SyncChangeType change_type,
+                                    base::Value* old_value,
+                                    base::Value* new_value) {
+  bool is_host_permission_change =
+      base::StartsWith(name, supervised_users::kContentPackManualBehaviorHosts,
+                       base::CompareCase::INSENSITIVE_ASCII);
+  if (!is_host_permission_change)
+    return false;
+  switch (change_type) {
+    case SyncChange::ACTION_ADD:
+    case SyncChange::ACTION_UPDATE: {
+      DCHECK(new_value && new_value->is_bool());
+      // The change is a new approval if the new value is true, i.e. a new host
+      // is manually allowlisted.
+      return new_value->GetIfBool().value_or(false);
+    }
+    case SyncChange::ACTION_DELETE: {
+      DCHECK(old_value && old_value->is_bool());
+      // The change is a new approval if the old value was false, i.e. a host
+      // that was manually blocked isn't anymore.
+      return !old_value->GetIfBool().value_or(true);
+    }
+    default: {
+      NOTREACHED();
+      return false;
+    }
+  }
 }
 
 }  // namespace
@@ -100,6 +132,23 @@ SupervisedUserSettingsService::SubscribeForSettingsChange(
 }
 
 base::CallbackListSubscription
+SupervisedUserSettingsService::SubscribeForNewWebsiteApproval(
+    const WebsiteApprovalCallback& callback) {
+  return website_approval_callback_list_.Add(callback);
+}
+
+void SupervisedUserSettingsService::RecordLocalWebsiteApproval(
+    const std::string& host) {
+  // Write the sync setting.
+  std::string setting_key = MakeSplitSettingKey(
+      supervised_users::kContentPackManualBehaviorHosts, host);
+  SaveItem(setting_key, std::make_unique<base::Value>(true));
+
+  // Now notify subscribers of the updates.
+  website_approval_callback_list_.Notify(setting_key);
+}
+
+base::CallbackListSubscription
 SupervisedUserSettingsService::SubscribeForShutdown(
     const ShutdownCallback& callback) {
   return shutdown_callback_list_.Add(callback);
@@ -107,6 +156,25 @@ SupervisedUserSettingsService::SubscribeForShutdown(
 
 void SupervisedUserSettingsService::SetActive(bool active) {
   active_ = active;
+
+  if (active_) {
+    // Child account supervised users must be signed in.
+    SetLocalSetting(supervised_users::kSigninAllowed,
+                    std::make_unique<base::Value>(true));
+
+    // Always allow cookies, to avoid website compatibility issues.
+    SetLocalSetting(supervised_users::kCookiesAlwaysAllowed,
+                    std::make_unique<base::Value>(true));
+
+    // SafeSearch and GeolocationDisabled are controlled at the account level,
+    // so don't override them client-side.
+  } else {
+    SetLocalSetting(supervised_users::kSigninAllowed, nullptr);
+    SetLocalSetting(supervised_users::kCookiesAlwaysAllowed, nullptr);
+    SetLocalSetting(supervised_users::kForceSafeSearch, nullptr);
+    SetLocalSetting(supervised_users::kGeolocationDisabled, nullptr);
+  }
+
   InformSubscribers();
 }
 
@@ -130,16 +198,10 @@ std::string SupervisedUserSettingsService::MakeSplitSettingKey(
   return prefix + kSplitSettingKeySeparator + key;
 }
 
-void SupervisedUserSettingsService::UploadItem(
+void SupervisedUserSettingsService::SaveItem(
     const std::string& key,
     std::unique_ptr<base::Value> value) {
-  DCHECK(!SettingShouldApplyToPrefs(key));
-  PushItemToSync(key, std::move(value));
-}
-
-void SupervisedUserSettingsService::PushItemToSync(
-    const std::string& key,
-    std::unique_ptr<base::Value> value) {
+  // Update the value in our local dict, and push the changes to sync.
   std::string key_suffix = key;
   base::Value* dict = nullptr;
   if (sync_processor_) {
@@ -162,6 +224,15 @@ void SupervisedUserSettingsService::PushItemToSync(
     dict = GetQueuedItems();
   }
   dict->SetKey(key_suffix, base::Value::FromUniquePtrValue(std::move(value)));
+
+  // Now notify subscribers of the updates.
+  // For simplicity and consistency with ProcessSyncChanges() we notify both
+  // settings keys.
+  store_->ReportValueChanged(kAtomicSettings,
+                             WriteablePrefStore::DEFAULT_PREF_WRITE_FLAGS);
+  store_->ReportValueChanged(kSplitSettings,
+                             WriteablePrefStore::DEFAULT_PREF_WRITE_FLAGS);
+  InformSubscribers();
 }
 
 void SupervisedUserSettingsService::SetLocalSetting(
@@ -325,28 +396,46 @@ SupervisedUserSettingsService::ProcessSyncChanges(
         data.GetSpecifics().managed_user_setting();
     std::string key = supervised_user_setting.name();
     base::Value* dict = GetDictionaryAndSplitKey(&key);
+    base::Value* old_value = dict->FindKey(key);
+    base::Value old_value_for_delete;
     SyncChange::SyncChangeType change_type = sync_change.change_type();
+    base::Value* new_value = nullptr;
+
     switch (change_type) {
       case SyncChange::ACTION_ADD:
       case SyncChange::ACTION_UPDATE: {
-        std::unique_ptr<base::Value> value =
-            JSONReader::ReadDeprecated(supervised_user_setting.value());
-        if (dict->FindKey(key)) {
+        absl::optional<base::Value> value =
+            JSONReader::Read(supervised_user_setting.value());
+        if (old_value) {
           DLOG_IF(WARNING, change_type == SyncChange::ACTION_ADD)
               << "Value for key " << key << " already exists";
         } else {
           DLOG_IF(WARNING, change_type == SyncChange::ACTION_UPDATE)
               << "Value for key " << key << " doesn't exist yet";
         }
-        dict->SetKey(key, base::Value::FromUniquePtrValue(std::move(value)));
+        DLOG_IF(WARNING, !value.has_value())
+            << "Invalid supervised_user_setting: "
+            << supervised_user_setting.value();
+        if (!value.has_value())
+          continue;
+        new_value = dict->SetKey(key, std::move(*value));
         break;
       }
       case SyncChange::ACTION_DELETE: {
-        DLOG_IF(WARNING, !dict->FindKey(key)) << "Trying to delete nonexistent "
-                                              << "key " << key;
+        DLOG_IF(WARNING, !old_value)
+            << "Trying to delete nonexistent key " << key;
+        if (!old_value)
+          continue;
+        old_value_for_delete = old_value->Clone();
+        old_value = &old_value_for_delete;
         dict->RemoveKey(key);
         break;
       }
+    }
+
+    if (SyncChangeIsNewWebsiteApproval(supervised_user_setting.name(),
+                                       change_type, old_value, new_value)) {
+      website_approval_callback_list_.Notify(key);
     }
   }
   store_->ReportValueChanged(kAtomicSettings,

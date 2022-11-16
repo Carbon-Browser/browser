@@ -3,14 +3,19 @@
 // found in the LICENSE file.
 
 #include "chrome/browser/picture_in_picture/picture_in_picture_window_manager.h"
+#include "base/memory/raw_ptr.h"
 
+#include "content/public/browser/document_picture_in_picture_window_controller.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/picture_in_picture_window_controller.h"
+#include "content/public/browser/video_picture_in_picture_window_controller.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_delegate.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "ui/gfx/geometry/size.h"
 
+// This is used only for video PiP. Document PiP is handled by the window
+// controller internally.
 class PictureInPictureWindowManager::ContentsObserver final
     : public content::WebContentsObserver {
  public:
@@ -20,16 +25,8 @@ class PictureInPictureWindowManager::ContentsObserver final
 
   ~ContentsObserver() final = default;
 
-  void DidFinishNavigation(content::NavigationHandle* navigation_handle) final {
+  void PrimaryPageChanged(content::Page& page) final {
     // Closes the active Picture-in-Picture window if user navigates away.
-    // TODO(https://crbug.com/1218946): With MPArch there may be multiple main
-    // frames. This caller was converted automatically to the primary main frame
-    // to preserve its semantics. Follow up to confirm correctness.
-    if (!navigation_handle->IsInPrimaryMainFrame() ||
-        !navigation_handle->HasCommitted() ||
-        navigation_handle->IsSameDocument()) {
-      return;
-    }
     owner_->CloseWindowInternal();
   }
 
@@ -37,7 +34,7 @@ class PictureInPictureWindowManager::ContentsObserver final
 
  private:
   // Owns |this|.
-  PictureInPictureWindowManager* owner_ = nullptr;
+  raw_ptr<PictureInPictureWindowManager> owner_ = nullptr;
 };
 
 PictureInPictureWindowManager* PictureInPictureWindowManager::GetInstance() {
@@ -56,17 +53,36 @@ void PictureInPictureWindowManager::EnterPictureInPictureWithController(
   pip_window_controller_->Show();
 }
 
+void PictureInPictureWindowManager::EnterDocumentPictureInPicture(
+    content::WebContents* parent_web_contents,
+    content::WebContents* child_web_contents) {
+  // If there was already a controller, close the existing window before
+  // creating the next one. This needs to happen before creating the new
+  // controller so that its precondition (no child_web_contents_) remains
+  // valid.
+  if (pip_window_controller_)
+    CloseWindowInternal();
+
+  auto* controller = content::PictureInPictureWindowController::
+      GetOrCreateDocumentPictureInPictureController(parent_web_contents);
+
+  controller->SetChildWebContents(child_web_contents);
+
+  // Show the new window. As a side effect, this also first closes any
+  // pre-existing PictureInPictureWindowController's window (if any).
+  EnterPictureInPictureWithController(controller);
+}
+
 content::PictureInPictureResult
-PictureInPictureWindowManager::EnterPictureInPicture(
-    content::WebContents* web_contents,
-    const viz::SurfaceId& surface_id,
-    const gfx::Size& natural_size) {
+PictureInPictureWindowManager::EnterVideoPictureInPicture(
+    content::WebContents* web_contents) {
   // Create or update |pip_window_controller_| for the current WebContents, if
-  // it is a WebContents based PIP.
+  // it is a WebContents based video PIP.
   if (!pip_window_controller_ ||
-      pip_window_controller_->GetWebContents() != web_contents) {
-    // If there was already a controller, close the existing window before
-    // creating the next one.
+      pip_window_controller_->GetWebContents() != web_contents ||
+      !pip_window_controller_->GetWebContents()->HasPictureInPictureVideo()) {
+    // If there was already a video PiP controller, close the existing window
+    // before creating the next one.
     if (pip_window_controller_)
       CloseWindowInternal();
 
@@ -91,9 +107,8 @@ content::WebContents* PictureInPictureWindowManager::GetWebContents() {
 void PictureInPictureWindowManager::CreateWindowInternal(
     content::WebContents* web_contents) {
   contents_observer_ = std::make_unique<ContentsObserver>(this, web_contents);
-  pip_window_controller_ =
-      content::PictureInPictureWindowController::GetOrCreateForWebContents(
-          web_contents);
+  pip_window_controller_ = content::PictureInPictureWindowController::
+      GetOrCreateVideoPictureInPictureController(web_contents);
 }
 
 void PictureInPictureWindowManager::CloseWindowInternal() {

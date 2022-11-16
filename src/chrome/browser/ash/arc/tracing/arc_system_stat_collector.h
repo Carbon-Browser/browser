@@ -9,8 +9,6 @@
 #include <string>
 #include <vector>
 
-#include "base/cxx17_backports.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/timer/timer.h"
@@ -70,6 +68,10 @@ class ArcSystemStatCollector {
   };
 
   ArcSystemStatCollector();
+
+  ArcSystemStatCollector(const ArcSystemStatCollector&) = delete;
+  ArcSystemStatCollector& operator=(const ArcSystemStatCollector&) = delete;
+
   ~ArcSystemStatCollector();
 
   // Starts sample collection, |max_interval| defines the maximum interval and
@@ -104,11 +106,11 @@ class ArcSystemStatCollector {
 
     base::TimeTicks timestamp;
     // read, written sectors and total time in milliseconds.
-    int64_t zram_stat[base::size(kZramStatColumns) - 1] = {0};
+    int64_t zram_stat[std::size(kZramStatColumns) - 1] = {0};
     // total, available.
-    int64_t mem_info[base::size(kMemInfoColumns) - 1] = {0};
+    int64_t mem_info[std::size(kMemInfoColumns) - 1] = {0};
     // objects, used bytes.
-    int64_t gem_info[base::size(kGemInfoColumns) - 1] = {0};
+    int64_t gem_info[std::size(kGemInfoColumns) - 1] = {0};
     // Temperature of CPU, Core 0.
     int64_t cpu_temperature = std::numeric_limits<int>::min();
     // CPU Frequency.
@@ -163,8 +165,6 @@ class ArcSystemStatCollector {
   std::unique_ptr<SystemReadersContext> context_;
 
   base::WeakPtrFactory<ArcSystemStatCollector> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ArcSystemStatCollector);
 };
 
 // Helper that reads and parses stat file containing decimal number separated by

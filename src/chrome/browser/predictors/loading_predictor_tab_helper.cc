@@ -17,7 +17,7 @@
 #include "chrome/browser/predictors/predictors_enums.h"
 #include "chrome/browser/predictors/predictors_features.h"
 #include "chrome/browser/predictors/predictors_switches.h"
-#include "chrome/browser/prefetch/no_state_prefetch/no_state_prefetch_manager_factory.h"
+#include "chrome/browser/preloading/prefetch/no_state_prefetch/no_state_prefetch_manager_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "components/google/core/common/google_util.h"
 #include "components/no_state_prefetch/browser/no_state_prefetch_manager.h"
@@ -69,6 +69,7 @@ net::RequestPriority GetRequestPriority(
     case network::mojom::RequestDestination::kWebBundle:
     case network::mojom::RequestDestination::kWorker:
     case network::mojom::RequestDestination::kXslt:
+    case network::mojom::RequestDestination::kFencedframe:
       return net::LOWEST;
   }
 }
@@ -80,7 +81,7 @@ bool IsHandledNavigation(content::NavigationHandle* navigation_handle) {
       prerender::NoStatePrefetchManagerFactory::GetForBrowserContext(
           web_contents->GetBrowserContext());
   if (no_state_prefetch_manager &&
-      no_state_prefetch_manager->IsWebContentsPrerendering(web_contents)) {
+      no_state_prefetch_manager->IsWebContentsPrefetching(web_contents)) {
     return false;
   }
 
@@ -203,21 +204,22 @@ void LoadingPredictorTabHelper::PageData::
 }
 
 LoadingPredictorTabHelper::DocumentPageDataHolder::DocumentPageDataHolder(
-    content::RenderFrameHost* render_frame_host)
-    : page_data_(base::MakeRefCounted<PageData>()),
-      render_frame_host_(render_frame_host) {}
+    content::RenderFrameHost* rfh)
+    : content::DocumentUserData<DocumentPageDataHolder>(rfh),
+      page_data_(base::MakeRefCounted<PageData>()) {}
 LoadingPredictorTabHelper::DocumentPageDataHolder::~DocumentPageDataHolder() =
     default;
 LoadingPredictorTabHelper::NavigationPageDataHolder::NavigationPageDataHolder(
     content::NavigationHandle& navigation_handle)
     : page_data_(base::MakeRefCounted<PageData>()),
-      navigation_handle_(navigation_handle) {}
+      navigation_handle_(navigation_handle.GetSafeRef()) {}
 LoadingPredictorTabHelper::NavigationPageDataHolder::
     ~NavigationPageDataHolder() = default;
 
 LoadingPredictorTabHelper::LoadingPredictorTabHelper(
     content::WebContents* web_contents)
-    : content::WebContentsObserver(web_contents) {
+    : content::WebContentsObserver(web_contents),
+      content::WebContentsUserData<LoadingPredictorTabHelper>(*web_contents) {
   Profile* profile =
       Profile::FromBrowserContext(web_contents->GetBrowserContext());
   auto* predictor = LoadingPredictorFactory::GetForProfile(profile);
@@ -395,13 +397,13 @@ void LoadingPredictorTabHelper::DidLoadResourceFromMemoryCache(
       page_data->navigation_id_, resource_load_info);
 }
 
-void LoadingPredictorTabHelper::DocumentOnLoadCompletedInMainFrame(
-    content::RenderFrameHost* render_frame_host) {
+void LoadingPredictorTabHelper::DocumentOnLoadCompletedInPrimaryMainFrame() {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   if (!predictor_)
     return;
 
-  auto* page_data = PageData::GetForDocument(*render_frame_host);
+  auto* page_data =
+      PageData::GetForDocument(*web_contents()->GetPrimaryMainFrame());
   if (!page_data)
     return;
 
@@ -443,7 +445,7 @@ void LoadingPredictorTabHelper::OnOptimizationGuideDecision(
 
   if (!page_data->has_committed_) {
     if (!page_data->navigation_page_data_holder_ ||
-        page_data->navigation_page_data_holder_->navigation_handle_.GetURL() !=
+        page_data->navigation_page_data_holder_->navigation_handle_->GetURL() !=
             main_frame_url) {
       // The current navigation has either redirected or a new one has started,
       // so return.
@@ -541,9 +543,8 @@ void LoadingPredictorTabHelper::OnOptimizationGuideDecision(
 }
 
 NAVIGATION_HANDLE_USER_DATA_KEY_IMPL(
-    LoadingPredictorTabHelper::NavigationPageDataHolder)
-RENDER_DOCUMENT_HOST_USER_DATA_KEY_IMPL(
-    LoadingPredictorTabHelper::DocumentPageDataHolder)
-WEB_CONTENTS_USER_DATA_KEY_IMPL(LoadingPredictorTabHelper)
+    LoadingPredictorTabHelper::NavigationPageDataHolder);
+DOCUMENT_USER_DATA_KEY_IMPL(LoadingPredictorTabHelper::DocumentPageDataHolder);
+WEB_CONTENTS_USER_DATA_KEY_IMPL(LoadingPredictorTabHelper);
 
 }  // namespace predictors

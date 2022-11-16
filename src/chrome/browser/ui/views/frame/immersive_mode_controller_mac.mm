@@ -8,6 +8,7 @@
 
 #include "base/mac/foundation_util.h"
 #include "base/mac/scoped_nsobject.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ui/cocoa/scoped_menu_bar_lock.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
@@ -152,15 +153,23 @@ class ImmersiveModeControllerMac : public ImmersiveModeController,
    public:
     RevealedLock(base::WeakPtr<ImmersiveModeControllerMac> controller,
                  AnimateReveal animate_reveal);
+
+    RevealedLock(const RevealedLock&) = delete;
+    RevealedLock& operator=(const RevealedLock&) = delete;
+
     ~RevealedLock() override;
 
    private:
     base::WeakPtr<ImmersiveModeControllerMac> controller_;
     AnimateReveal animate_reveal_;
-    DISALLOW_COPY_AND_ASSIGN(RevealedLock);
   };
 
   ImmersiveModeControllerMac();
+
+  ImmersiveModeControllerMac(const ImmersiveModeControllerMac&) = delete;
+  ImmersiveModeControllerMac& operator=(const ImmersiveModeControllerMac&) =
+      delete;
+
   ~ImmersiveModeControllerMac() override;
 
   // ImmersiveModeController overrides:
@@ -171,8 +180,8 @@ class ImmersiveModeControllerMac : public ImmersiveModeController,
   bool IsRevealed() const override;
   int GetTopContainerVerticalOffset(
       const gfx::Size& top_container_size) const override;
-  ImmersiveRevealedLock* GetRevealedLock(AnimateReveal animate_reveal) override
-      WARN_UNUSED_RESULT;
+  std::unique_ptr<ImmersiveRevealedLock> GetRevealedLock(
+      AnimateReveal animate_reveal) override;
   void OnFindBarVisibleBoundsChanged(
       const gfx::Rect& new_visible_bounds_in_screen) override;
   bool ShouldStayImmersiveAfterExitingFullscreen() override;
@@ -197,7 +206,7 @@ class ImmersiveModeControllerMac : public ImmersiveModeController,
   void LockDestroyed(AnimateReveal);
   void SetMenuRevealed(bool revealed);
 
-  BrowserView* browser_view_ = nullptr;  // weak
+  raw_ptr<BrowserView> browser_view_ = nullptr;  // weak
   std::unique_ptr<ImmersiveRevealedLock> focus_lock_;
   std::unique_ptr<ImmersiveRevealedLock> menu_lock_;
   bool enabled_ = false;
@@ -206,8 +215,6 @@ class ImmersiveModeControllerMac : public ImmersiveModeController,
   base::scoped_nsobject<NSObject> menu_reveal_monitor_;
 
   base::WeakPtrFactory<ImmersiveModeControllerMac> weak_ptr_factory_;
-
-  DISALLOW_COPY_AND_ASSIGN(ImmersiveModeControllerMac);
 };
 
 }  // namespace
@@ -236,7 +243,7 @@ void ImmersiveModeControllerMac::Init(BrowserView* browser_view) {
 void ImmersiveModeControllerMac::SetMenuRevealed(bool revealed) {
   if (revealed) {
     if (!menu_lock_)
-      menu_lock_.reset(GetRevealedLock(ANIMATE_REVEAL_YES));
+      menu_lock_ = GetRevealedLock(ANIMATE_REVEAL_YES);
     overlay_view_.get().menuBarLockingEnabled = YES;
   } else {
     if (menu_lock_)
@@ -293,12 +300,13 @@ int ImmersiveModeControllerMac::GetTopContainerVerticalOffset(
   return (enabled_ && !IsRevealed()) ? -top_container_size.height() : 0;
 }
 
-ImmersiveRevealedLock* ImmersiveModeControllerMac::GetRevealedLock(
-    AnimateReveal animate_reveal) {
+std::unique_ptr<ImmersiveRevealedLock>
+ImmersiveModeControllerMac::GetRevealedLock(AnimateReveal animate_reveal) {
   revealed_lock_count_++;
   if (enabled_ && revealed_lock_count_ == 1)
     browser_view_->OnImmersiveRevealStarted();
-  return new RevealedLock(weak_ptr_factory_.GetWeakPtr(), animate_reveal);
+  return std::make_unique<RevealedLock>(weak_ptr_factory_.GetWeakPtr(),
+                                        animate_reveal);
 }
 
 void ImmersiveModeControllerMac::OnFindBarVisibleBoundsChanged(
@@ -319,7 +327,7 @@ void ImmersiveModeControllerMac::OnDidChangeFocus(views::View* focused_before,
                                                   views::View* focused_now) {
   if (browser_view_->top_container()->Contains(focused_now)) {
     if (!focus_lock_)
-      focus_lock_.reset(GetRevealedLock(ANIMATE_REVEAL_YES));
+      focus_lock_ = GetRevealedLock(ANIMATE_REVEAL_YES);
   } else {
     focus_lock_.reset();
   }

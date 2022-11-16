@@ -8,7 +8,6 @@
 #include <string>
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "chrome/common/chrome_render_frame.mojom.h"
@@ -16,6 +15,7 @@
 #include "components/search_engines/template_url.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "content/public/browser/web_contents_user_data.h"
+#include "mojo/public/cpp/bindings/associated_remote.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/image/image.h"
 #include "url/gurl.h"
@@ -24,6 +24,9 @@
 class CoreTabHelper : public content::WebContentsObserver,
                       public content::WebContentsUserData<CoreTabHelper> {
  public:
+  CoreTabHelper(const CoreTabHelper&) = delete;
+  CoreTabHelper& operator=(const CoreTabHelper&) = delete;
+
   ~CoreTabHelper() override;
 
   // Initial title assigned to NavigationEntries from Navigate.
@@ -128,13 +131,11 @@ class CoreTabHelper : public content::WebContentsObserver,
 
   // Content restrictions, used to disable print/copy etc based on content's
   // (full-page plugins for now only) permissions.
-  int content_restrictions_;
+  int content_restrictions_ = 0;
 
   base::WeakPtrFactory<CoreTabHelper> weak_factory_{this};
 
   WEB_CONTENTS_USER_DATA_KEY_DECL();
-
-  DISALLOW_COPY_AND_ASSIGN(CoreTabHelper);
 };
 
 #endif  // CHROME_BROWSER_UI_TAB_CONTENTS_CORE_TAB_HELPER_H_

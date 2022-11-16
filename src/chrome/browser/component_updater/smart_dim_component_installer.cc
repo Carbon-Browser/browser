@@ -9,18 +9,19 @@
 
 #include "ash/constants/ash_features.h"
 #include "base/bind.h"
+#include "base/callback.h"
 #include "base/feature_list.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
 #include "base/metrics/field_trial_params.h"
-#include "base/task/post_task.h"
 #include "base/task/thread_pool.h"
 #include "base/version.h"
 #include "chrome/browser/ash/power/ml/smart_dim/metrics.h"
 #include "chrome/browser/ash/power/ml/smart_dim/ml_agent.h"
 #include "components/component_updater/component_updater_service.h"
+#include "components/crx_file/id_util.h"
 #include "content/public/browser/browser_thread.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -94,9 +95,14 @@ SmartDimComponentInstallerPolicy::SmartDimComponentInstallerPolicy(
 
 SmartDimComponentInstallerPolicy::~SmartDimComponentInstallerPolicy() = default;
 
+const std::string SmartDimComponentInstallerPolicy::GetExtensionId() {
+  return crx_file::id_util::GenerateIdFromHash(
+      kSmartDimPublicKeySHA256, sizeof(kSmartDimPublicKeySHA256));
+}
+
 bool SmartDimComponentInstallerPolicy::
     SupportsGroupPolicyEnabledComponentUpdates() const {
-  return false;
+  return true;
 }
 
 bool SmartDimComponentInstallerPolicy::RequiresNetworkEncryption() const {
@@ -105,7 +111,7 @@ bool SmartDimComponentInstallerPolicy::RequiresNetworkEncryption() const {
 
 update_client::CrxInstaller::Result
 SmartDimComponentInstallerPolicy::OnCustomInstall(
-    const base::DictionaryValue& manifest,
+    const base::Value& manifest,
     const base::FilePath& install_dir) {
   return update_client::CrxInstaller::Result(0);  // Nothing custom here.
 }
@@ -115,7 +121,7 @@ void SmartDimComponentInstallerPolicy::OnCustomUninstall() {}
 void SmartDimComponentInstallerPolicy::ComponentReady(
     const base::Version& version,
     const base::FilePath& install_dir,
-    std::unique_ptr<base::DictionaryValue> manifest) {
+    base::Value manifest) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   // If IsDownloadWorkerReady(), newly downloaded components will take effect
   // on next reboot. This makes sure the updating happens at most once.
@@ -139,14 +145,14 @@ void SmartDimComponentInstallerPolicy::ComponentReady(
 
 // Called during startup and installation before ComponentReady().
 bool SmartDimComponentInstallerPolicy::VerifyInstallation(
-    const base::DictionaryValue& manifest,
+    const base::Value& manifest,
     const base::FilePath& install_dir) const {
   // Get component version from manifest and compare to the expected_version_.
   // Note: versions should not be treated as simple strings, for example,
   // base::Version("2020.02.06") == base::Version("2020.2.6").
-  const auto* version_value = manifest.FindKey("version");
-  DCHECK(version_value);
-  const base::Version component_version(version_value->GetString());
+  const std::string* version_string = manifest.FindStringKey("version");
+  DCHECK(version_string);
+  const base::Version component_version(*version_string);
   const base::Version expected_version(expected_version_);
   if (component_version != expected_version) {
     DVLOG(1) << "Version " << component_version
@@ -169,7 +175,7 @@ void SmartDimComponentInstallerPolicy::GetHash(
     std::vector<uint8_t>* hash) const {
   DCHECK(hash);
   hash->assign(kSmartDimPublicKeySHA256,
-               kSmartDimPublicKeySHA256 + base::size(kSmartDimPublicKeySHA256));
+               kSmartDimPublicKeySHA256 + std::size(kSmartDimPublicKeySHA256));
 }
 
 std::string SmartDimComponentInstallerPolicy::GetName() const {

@@ -16,7 +16,6 @@
 #include "base/strings/stringprintf.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/time/time.h"
-#include "content/common/service_worker/service_worker_utils.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/renderer/service_worker/controller_service_worker_connector.h"
 #include "content/test/fake_network_url_loader_factory.h"
@@ -101,6 +100,11 @@ class FakeControllerServiceWorker
     : public blink::mojom::ControllerServiceWorker {
  public:
   FakeControllerServiceWorker() = default;
+
+  FakeControllerServiceWorker(const FakeControllerServiceWorker&) = delete;
+  FakeControllerServiceWorker& operator=(const FakeControllerServiceWorker&) =
+      delete;
+
   ~FakeControllerServiceWorker() override = default;
 
   static blink::mojom::FetchAPIResponsePtr OkResponse(
@@ -336,7 +340,8 @@ class FakeControllerServiceWorker
       }
 
       case ResponseMode::kFallbackResponse:
-        response_callback->OnFallback(std::move(timing));
+        response_callback->OnFallback(/*request_body=*/absl::nullopt,
+                                      std::move(timing));
         std::move(callback).Run(
             blink::mojom::ServiceWorkerEventStatus::COMPLETED);
         break;
@@ -422,8 +427,6 @@ class FakeControllerServiceWorker
 
   std::string cache_storage_cache_name_;
   base::Time response_time_;
-
-  DISALLOW_COPY_AND_ASSIGN(FakeControllerServiceWorker);
 };
 
 class FakeServiceWorkerContainerHost
@@ -432,6 +435,11 @@ class FakeServiceWorkerContainerHost
   explicit FakeServiceWorkerContainerHost(
       FakeControllerServiceWorker* fake_controller)
       : fake_controller_(fake_controller) {}
+
+  FakeServiceWorkerContainerHost(const FakeServiceWorkerContainerHost&) =
+      delete;
+  FakeServiceWorkerContainerHost& operator=(
+      const FakeServiceWorkerContainerHost&) = delete;
 
   ~FakeServiceWorkerContainerHost() override = default;
 
@@ -488,7 +496,6 @@ class FakeServiceWorkerContainerHost
   int get_controller_service_worker_count_ = 0;
   FakeControllerServiceWorker* fake_controller_;
   mojo::ReceiverSet<blink::mojom::ServiceWorkerContainerHost> receivers_;
-  DISALLOW_COPY_AND_ASSIGN(FakeServiceWorkerContainerHost);
 };
 
 // Returns an expected network::mojom::URLResponseHeadPtr which is used by
@@ -517,6 +524,12 @@ const char kHistogramSubresourceFetchEvent[] =
     "ServiceWorker.FetchEvent.Subresource.Status";
 
 class ServiceWorkerSubresourceLoaderTest : public ::testing::Test {
+ public:
+  ServiceWorkerSubresourceLoaderTest(
+      const ServiceWorkerSubresourceLoaderTest&) = delete;
+  ServiceWorkerSubresourceLoaderTest& operator=(
+      const ServiceWorkerSubresourceLoaderTest&) = delete;
+
  protected:
   ServiceWorkerSubresourceLoaderTest()
       : fake_container_host_(&fake_controller_) {}
@@ -548,9 +561,7 @@ class ServiceWorkerSubresourceLoaderTest : public ::testing::Test {
     ServiceWorkerSubresourceLoaderFactory::Create(
         connector_, loader_factory_,
         service_worker_url_loader_factory.BindNewPipeAndPassReceiver(),
-        blink::scheduler::GetSequencedTaskRunnerForTesting(),
-        blink::scheduler::GetSequencedTaskRunnerForTesting(),
-        base::DoNothing());
+        blink::scheduler::GetSequencedTaskRunnerForTesting());
     return service_worker_url_loader_factory;
   }
 
@@ -673,8 +684,6 @@ class ServiceWorkerSubresourceLoaderTest : public ::testing::Test {
   scoped_refptr<ControllerServiceWorkerConnector> connector_;
   FakeServiceWorkerContainerHost fake_container_host_;
   FakeControllerServiceWorker fake_controller_;
-
-  DISALLOW_COPY_AND_ASSIGN(ServiceWorkerSubresourceLoaderTest);
 };
 
 TEST_F(ServiceWorkerSubresourceLoaderTest, Basic) {
@@ -1112,6 +1121,10 @@ TEST_F(ServiceWorkerSubresourceLoaderTest, BlobResponse) {
   std::unique_ptr<network::TestURLLoaderClient> client;
   StartRequest(factory, request, &loader, &client);
   client->RunUntilResponseReceived();
+
+  // This needs to come after the response, not the before, as some consumers
+  // such as ScriptResource depend on that.
+  ASSERT_FALSE(client->has_received_cached_metadata());
 
   auto expected_info = CreateResponseInfoFromServiceWorker();
   auto& info = client->response_head();

@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/sync_file_system/drive_backend/sync_task.h"
 #include "chrome/browser/sync_file_system/sync_callbacks.h"
@@ -42,6 +42,10 @@ class ConflictResolver : public SyncTask {
   typedef std::vector<std::string> FileIDList;
 
   explicit ConflictResolver(SyncEngineContext* sync_context);
+
+  ConflictResolver(const ConflictResolver&) = delete;
+  ConflictResolver& operator=(const ConflictResolver&) = delete;
+
   ~ConflictResolver() override;
   void RunPreflight(std::unique_ptr<SyncTaskToken> token) override;
   void RunExclusive(std::unique_ptr<SyncTaskToken> token);
@@ -76,11 +80,9 @@ class ConflictResolver : public SyncTask {
   drive::DriveServiceInterface* drive_service();
   MetadataDatabase* metadata_database();
 
-  SyncEngineContext* sync_context_;  // Not owned.
+  raw_ptr<SyncEngineContext> sync_context_;  // Not owned.
 
   base::WeakPtrFactory<ConflictResolver> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ConflictResolver);
 };
 
 }  // namespace drive_backend

@@ -6,7 +6,7 @@
 
 #include <stddef.h>
 
-#include "base/cxx17_backports.h"
+#include "base/memory/raw_ptr.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace sandbox {
@@ -25,7 +25,7 @@ intptr_t TestTrapFuncTwo(const arch_seccomp_data& data, void* aux) {
 TEST(TestTrapRegistry, TrapIDs) {
   struct {
     TrapRegistry::TrapFnc fnc;
-    const void* aux;
+    raw_ptr<const void> aux;
   } funcs[] = {
       {TestTrapFuncOne, nullptr},
       {TestTrapFuncTwo, nullptr},
@@ -37,7 +37,7 @@ TEST(TestTrapRegistry, TrapIDs) {
 
   // Add traps twice to test that IDs are reused correctly.
   for (int i = 0; i < 2; ++i) {
-    for (size_t j = 0; j < base::size(funcs); ++j) {
+    for (size_t j = 0; j < std::size(funcs); ++j) {
       // Trap IDs start at 1.
       EXPECT_EQ(j + 1, traps.Add(funcs[j].fnc, funcs[j].aux, true));
     }

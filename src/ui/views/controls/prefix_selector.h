@@ -8,12 +8,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#if defined(OS_WIN)
 #include <string>
 #include <vector>
-#endif
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -34,6 +32,10 @@ class View;
 class VIEWS_EXPORT PrefixSelector : public ui::TextInputClient {
  public:
   PrefixSelector(PrefixDelegate* delegate, View* host_view);
+
+  PrefixSelector(const PrefixSelector&) = delete;
+  PrefixSelector& operator=(const PrefixSelector&) = delete;
+
   ~PrefixSelector() override;
 
   // Invoked from the view when it loses focus.
@@ -65,7 +67,9 @@ class VIEWS_EXPORT PrefixSelector : public ui::TextInputClient {
   bool GetCompositionTextRange(gfx::Range* range) const override;
   bool GetEditableSelectionRange(gfx::Range* range) const override;
   bool SetEditableSelectionRange(const gfx::Range& range) override;
+#if BUILDFLAG(IS_MAC)
   bool DeleteRange(const gfx::Range& range) override;
+#endif
   bool GetTextFromRange(const gfx::Range& range,
                         std::u16string* text) const override;
   void OnInputMethodChanged() override;
@@ -79,22 +83,25 @@ class VIEWS_EXPORT PrefixSelector : public ui::TextInputClient {
   ukm::SourceId GetClientSourceForMetrics() const override;
   bool ShouldDoLearning() override;
 
-#if defined(OS_WIN) || BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   bool SetCompositionFromExistingText(
       const gfx::Range& range,
       const std::vector<ui::ImeTextSpan>& ui_ime_text_spans) override;
 #endif
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   gfx::Range GetAutocorrectRange() const override;
   gfx::Rect GetAutocorrectCharacterBounds() const override;
   bool SetAutocorrectRange(const gfx::Range& range) override;
 #endif
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_CHROMEOS)
   void GetActiveTextInputControlLayoutBounds(
       absl::optional<gfx::Rect>* control_bounds,
       absl::optional<gfx::Rect>* selection_bounds) override;
+#endif
+
+#if BUILDFLAG(IS_WIN)
   void SetActiveCompositionForAccessibility(
       const gfx::Range& range,
       const std::u16string& active_composition_text,
@@ -110,14 +117,14 @@ class VIEWS_EXPORT PrefixSelector : public ui::TextInputClient {
   void OnTextInput(const std::u16string& text);
 
   // Returns true if the text of the node at |row| starts with |lower_text|.
-  bool TextAtRowMatchesText(int row, const std::u16string& lower_text);
+  bool TextAtRowMatchesText(size_t row, const std::u16string& lower_text);
 
   // Clears |current_text_| and resets |time_of_last_key_|.
   void ClearText();
 
-  PrefixDelegate* prefix_delegate_;
+  raw_ptr<PrefixDelegate> prefix_delegate_;
 
-  View* host_view_;
+  raw_ptr<View> host_view_;
 
   // Time OnTextInput() was last invoked.
   base::TimeTicks time_of_last_key_;
@@ -126,9 +133,7 @@ class VIEWS_EXPORT PrefixSelector : public ui::TextInputClient {
 
   // TickClock used for getting the time of the current keystroke, used for
   // continuing or restarting selections.
-  const base::TickClock* tick_clock_;
-
-  DISALLOW_COPY_AND_ASSIGN(PrefixSelector);
+  raw_ptr<const base::TickClock> tick_clock_;
 };
 
 }  // namespace views

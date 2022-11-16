@@ -28,8 +28,8 @@ TEST(JsonSchemaCompilerObjectsTest, ObjectParamParamsCreate) {
     info_value.SetIntPath("integer", 5);
     info_value.SetBoolPath("boolean", true);
 
-    std::vector<base::Value> params_value;
-    params_value.push_back(std::move(info_value));
+    base::Value::List params_value;
+    params_value.Append(std::move(info_value));
     std::unique_ptr<test::api::objects::ObjectParam::Params> params(
         test::api::objects::ObjectParam::Params::Create(params_value));
     EXPECT_TRUE(params.get());
@@ -47,8 +47,8 @@ TEST(JsonSchemaCompilerObjectsTest, ObjectParamParamsCreate) {
     info_value.SetKey("strings", std::move(strings));
     info_value.SetIntPath("integer", 5);
 
-    std::vector<base::Value> params_value;
-    params_value.push_back(std::move(info_value));
+    base::Value::List params_value;
+    params_value.Append(std::move(info_value));
     std::unique_ptr<test::api::objects::ObjectParam::Params> params(
         test::api::objects::ObjectParam::Params::Create(params_value));
     EXPECT_FALSE(params.get());
@@ -60,11 +60,11 @@ TEST(JsonSchemaCompilerObjectsTest, ReturnsObjectResultCreate) {
   info.state = test::api::objects::FIRST_STATE_FOO;
   base::Value results(test::api::objects::ReturnsObject::Results::Create(info));
   ASSERT_TRUE(results.is_list());
-  ASSERT_EQ(1u, results.GetList().size());
+  ASSERT_EQ(1u, results.GetListDeprecated().size());
 
   base::DictionaryValue expected;
   expected.SetString("state", "foo");
-  EXPECT_EQ(expected, results.GetList()[0]);
+  EXPECT_EQ(expected, results.GetListDeprecated()[0]);
 }
 
 TEST(JsonSchemaCompilerObjectsTest, OnObjectFiredCreate) {
@@ -72,11 +72,11 @@ TEST(JsonSchemaCompilerObjectsTest, OnObjectFiredCreate) {
   object.state = test::api::objects::FIRST_STATE_BAR;
   base::Value results(test::api::objects::OnObjectFired::Create(object));
   ASSERT_TRUE(results.is_list());
-  ASSERT_EQ(1u, results.GetList().size());
+  ASSERT_EQ(1u, results.GetListDeprecated().size());
 
   base::DictionaryValue expected;
   expected.SetString("state", "bar");
-  EXPECT_EQ(expected, results.GetList()[0]);
+  EXPECT_EQ(expected, results.GetListDeprecated()[0]);
 }
 
 TEST(JsonSchemaCompilerMovableObjectsTest, MovableObjectsTest) {

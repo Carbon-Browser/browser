@@ -8,7 +8,6 @@
 #include <stdint.h>
 #include <vector>
 
-#include "base/macros.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
@@ -31,6 +30,12 @@ class PrefetchProxyPageLoadMetricsObserver
     : public page_load_metrics::PageLoadMetricsObserver {
  public:
   PrefetchProxyPageLoadMetricsObserver();
+
+  PrefetchProxyPageLoadMetricsObserver(
+      const PrefetchProxyPageLoadMetricsObserver&) = delete;
+  PrefetchProxyPageLoadMetricsObserver& operator=(
+      const PrefetchProxyPageLoadMetricsObserver&) = delete;
+
   ~PrefetchProxyPageLoadMetricsObserver() override;
 
  protected:
@@ -54,10 +59,12 @@ class PrefetchProxyPageLoadMetricsObserver
   ObservePolicy OnStart(content::NavigationHandle* navigation_handle,
                         const GURL& currently_committed_url,
                         bool started_in_foreground) override;
+  ObservePolicy OnFencedFramesStart(
+      content::NavigationHandle* navigation_handle,
+      const GURL& currently_committed_url) override;
   ObservePolicy OnRedirect(
       content::NavigationHandle* navigation_handle) override;
-  ObservePolicy OnCommit(content::NavigationHandle* navigation_handle,
-                         ukm::SourceId source_id) override;
+  ObservePolicy OnCommit(content::NavigationHandle* navigation_handle) override;
   void OnDidInternalNavigationAbort(
       content::NavigationHandle* navigation_handle) override;
   ObservePolicy FlushMetricsOnAppEnterBackground(
@@ -75,9 +82,6 @@ class PrefetchProxyPageLoadMetricsObserver
   // The time that the navigation started. Used to timebox the history service
   // query on commit.
   base::Time navigation_start_;
-
-  size_t loaded_css_js_from_cache_before_fcp_ = 0;
-  size_t loaded_css_js_from_network_before_fcp_ = 0;
 
   // The minimum number of days since the last visit, as reported by
   // HistoryService, to any origin in the redirect chain. Set to -1 if there is
@@ -99,8 +103,6 @@ class PrefetchProxyPageLoadMetricsObserver
 
   base::WeakPtrFactory<PrefetchProxyPageLoadMetricsObserver> weak_factory_{
       this};
-
-  DISALLOW_COPY_AND_ASSIGN(PrefetchProxyPageLoadMetricsObserver);
 };
 
 #endif  // CHROME_BROWSER_PAGE_LOAD_METRICS_OBSERVERS_PREFETCH_PROXY_PAGE_LOAD_METRICS_OBSERVER_H_

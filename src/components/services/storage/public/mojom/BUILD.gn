@@ -9,8 +9,6 @@ mojom("mojom") {
     "blob_storage_context.mojom",
     "cache_storage_control.mojom",
     "file_system_access_context.mojom",
-    "indexed_db_control.mojom",
-    "indexed_db_control_test.mojom",
     "local_storage_control.mojom",
     "origin_context.mojom",
     "partition.mojom",
@@ -54,7 +52,10 @@ mojom("test_api") {
 
 source_set("tests") {
   testonly = true
-  sources = [ "buckets/bucket_id_mojom_traits_unittest.cc" ]
+  sources = [
+    "buckets/bucket_id_mojom_traits_unittest.cc",
+    "buckets/bucket_locator_mojom_traits_unittest.cc",
+  ]
   deps = [
     "//components/services/storage/public/cpp/buckets",
     "//components/services/storage/public/mojom/buckets",

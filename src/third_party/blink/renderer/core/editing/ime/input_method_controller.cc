@@ -26,7 +26,8 @@
 
 #include "third_party/blink/renderer/core/editing/ime/input_method_controller.h"
 
-#include "base/macros.h"
+#include <tuple>
+
 #include "third_party/blink/public/mojom/input/focus_type.mojom-blink.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/dom_node_ids.h"
@@ -92,7 +93,7 @@ AtomicString GetInputModeAttribute(Element* element) {
     query_attribute = true;
   } else {
     element->GetDocument().UpdateStyleAndLayoutTree();
-    if (HasEditableStyle(*element))
+    if (IsEditable(*element))
       query_attribute = true;
   }
 
@@ -115,7 +116,7 @@ AtomicString GetEnterKeyHintAttribute(Element* element) {
     query_attribute = true;
   } else {
     element->GetDocument().UpdateStyleAndLayoutTree();
-    if (HasEditableStyle(*element))
+    if (IsEditable(*element))
       query_attribute = true;
   }
 
@@ -275,13 +276,19 @@ int ComputeAutocapitalizeFlags(const Element* element) {
     flags |= kWebTextInputFlagAutocapitalizeCharacters;
   } else if (autocapitalize == words) {
     flags |= kWebTextInputFlagAutocapitalizeWords;
-  } else if (autocapitalize == sentences || autocapitalize == "") {
-    // Note: we tell the IME to enable autocapitalization for both the default
-    // state ("") and the sentences states. We could potentially treat these
-    // differently if we had a platform that supported autocapitalization but
-    // didn't want to enable it unless explicitly requested by a web page, but
-    // this so far has not been necessary.
+  } else if (autocapitalize == sentences) {
     flags |= kWebTextInputFlagAutocapitalizeSentences;
+  } else if (autocapitalize == g_empty_atom) {
+    // https://html.spec.whatwg.org/multipage/interaction.html#autocapitalization
+    // If autocapitalize is empty, the UA can decide on an appropriate behavior
+    // depending on context. We use the presence of the autocomplete attribute
+    // with an email/url/password type as a hint to disable autocapitalization.
+    if (auto* form_control = DynamicTo<HTMLFormControlElement>(html_element);
+        form_control && form_control->IsAutocompleteEmailUrlOrPassword()) {
+      flags |= kWebTextInputFlagAutocapitalizeNone;
+    } else {
+      flags |= kWebTextInputFlagAutocapitalizeSentences;
+    }
   } else {
     NOTREACHED();
   }
@@ -396,9 +403,12 @@ void InputMethodController::DispatchBeforeInputFromComposition(
     return;
   // TODO(editing-dev): Pass appropriate |ranges| after it's defined on spec.
   // http://w3c.github.io/editing/input-events.html#dom-inputevent-inputtype
+  const StaticRangeVector* ranges = nullptr;
+  if (auto* node = target->ToNode())
+    ranges = TargetRangesForInputEvent(*node);
   InputEvent* before_input_event = InputEvent::CreateBeforeInput(
       input_type, data, InputTypeIsCancelable(input_type),
-      InputEvent::EventIsComposing::kIsComposing, nullptr);
+      InputEvent::EventIsComposing::kIsComposing, ranges);
   target->DispatchEvent(*before_input_event);
 }
 
@@ -597,7 +607,7 @@ bool InputMethodController::FinishComposingText(
     RevealSelectionScope reveal_selection_scope(GetFrame());
 
     if (is_too_long) {
-      ignore_result(ReplaceComposition(ComposingText()));
+      std::ignore = ReplaceComposition(ComposingText());
     } else {
       Clear();
       DispatchCompositionEndEvent(GetFrame(), composing);
@@ -764,6 +774,18 @@ void InputMethodController::AddImeTextSpans(
             !SpellChecker::IsSpellCheckingEnabledAt(
                 ephemeral_line_range.StartPosition()))
           continue;
+
+        // Do not add the grammar marker if it overlaps with existing spellcheck
+        // markers.
+        if (suggestion_type == SuggestionMarker::SuggestionType::kGrammar &&
+            !GetDocument()
+                 .Markers()
+                 .MarkersIntersectingRange(
+                     ToEphemeralRangeInFlatTree(ephemeral_line_range),
+                     DocumentMarker::MarkerTypes::Spelling())
+                 .IsEmpty()) {
+          continue;
+        }
 
         GetDocument().Markers().AddSuggestionMarker(
             ephemeral_line_range,
@@ -1399,7 +1421,7 @@ void InputMethodController::ExtendSelectionAndDelete(int before, int after) {
                                    .End() &&
            before <= static_cast<int>(selection_offsets.Start()));
   // TODO(editing-dev): Find a way to distinguish Forward and Backward.
-  ignore_result(DeleteSelection());
+  std::ignore = DeleteSelection();
 }
 
 // TODO(ctzsm): We should reduce the number of selectionchange events.
@@ -1568,7 +1590,8 @@ WebTextInputInfo InputMethodController::TextInputInfo() const {
 
   // TODO(editing-dev): The use of UpdateStyleAndLayout
   // needs to be audited.  see http://crbug.com/590369 for more details.
-  GetDocument().UpdateStyleAndLayout(DocumentUpdateReason::kEditing);
+  const EphemeralRange& first_range = FirstEphemeralRangeOf(
+      GetFrame().Selection().ComputeVisibleSelectionInDOMTreeDeprecated());
 
   DocumentLifecycle::DisallowTransitionScope disallow_transition(
       GetDocument().Lifecycle());
@@ -1581,8 +1604,6 @@ WebTextInputInfo InputMethodController::TextInputInfo() const {
   if (info.value.IsEmpty())
     return info;
 
-  const EphemeralRange& first_range = FirstEphemeralRangeOf(
-      GetFrame().Selection().ComputeVisibleSelectionInDOMTreeDeprecated());
   const PlainTextRange& selection_plain_text_range =
       cached_text_input_info_.GetSelection(first_range);
   if (selection_plain_text_range.IsNotNull()) {
@@ -1653,11 +1674,11 @@ int InputMethodController::ComputeWebTextInputNextPreviousFlags() const {
     return kWebTextInputFlagNone;
 
   int flags = kWebTextInputFlagNone;
-  if (page->GetFocusController().NextFocusableElementInForm(
+  if (page->GetFocusController().NextFocusableElementForIME(
           element, mojom::blink::FocusType::kForward))
     flags |= kWebTextInputFlagHaveNextFocusableElement;
 
-  if (page->GetFocusController().NextFocusableElementInForm(
+  if (page->GetFocusController().NextFocusableElementForIME(
           element, mojom::blink::FocusType::kBackward))
     flags |= kWebTextInputFlagHavePreviousFocusableElement;
 
@@ -1665,9 +1686,6 @@ int InputMethodController::ComputeWebTextInputNextPreviousFlags() const {
 }
 
 ui::TextInputAction InputMethodController::InputActionOfFocusedElement() const {
-  if (!RuntimeEnabledFeatures::EnterKeyHintAttributeEnabled())
-    return ui::TextInputAction::kDefault;
-
   AtomicString action =
       GetEnterKeyHintAttribute(GetDocument().FocusedElement());
 
@@ -1799,7 +1817,7 @@ WebTextInputType InputMethodController::TextInputType() const {
   }
 
   GetDocument().UpdateStyleAndLayoutTree();
-  if (HasEditableStyle(*element))
+  if (IsEditable(*element))
     return kWebTextInputTypeContentEditable;
 
   return kWebTextInputTypeNone;

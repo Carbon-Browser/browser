@@ -10,9 +10,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/macros.h"
-#include "components/ui_devtools/DOM.h"
 #include "components/ui_devtools/devtools_export.h"
+#include "components/ui_devtools/dom.h"
+#include "ui/base/interaction/element_identifier.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/native_widget_types.h"
 
@@ -66,7 +66,6 @@ class UI_DEVTOOLS_EXPORT UIElement {
   const UIElements& children() const { return children_; }
   bool is_updating() const { return is_updating_; }
   void set_is_updating(bool is_updating) { is_updating_ = is_updating; }
-  void set_owns_children(bool owns_children) { owns_children_ = owns_children; }
   int GetBaseStylesheetId() const { return base_stylesheet_id_; }
   void SetBaseStylesheetId(int id) { base_stylesheet_id_ = id; }
 
@@ -88,8 +87,7 @@ class UI_DEVTOOLS_EXPORT UIElement {
                        ElementCompare compare,
                        bool notify_delegate = true);
 
-  // Removes all elements from |children_|. Caller is responsible for destroying
-  // children.
+  // Removes and deletes all elements from |children_|.
   void ClearChildren();
 
   // Removes |child| out of |children_| without destroying |child|. The caller
@@ -140,6 +138,11 @@ class UI_DEVTOOLS_EXPORT UIElement {
   // Get the sources for the element.
   std::vector<Source> GetSources();
 
+  // Whether the Element Identifier matches the backing UI element.
+  // This is used to locate a UIElement by Element Identifier set
+  // on the browser side and different than node_id().
+  virtual bool FindMatchByElementID(const ui::ElementIdentifier& identifier);
+
   virtual bool DispatchMouseEvent(protocol::DOM::MouseEvent* event);
 
   virtual bool DispatchKeyEvent(protocol::DOM::KeyEvent* event);
@@ -157,7 +160,6 @@ class UI_DEVTOOLS_EXPORT UIElement {
   UIElement* parent_;
   UIElementDelegate* delegate_;
   bool is_updating_ = false;
-  bool owns_children_ = true;
   int base_stylesheet_id_;
   bool header_sent_ = false;
   std::vector<Source> sources_;

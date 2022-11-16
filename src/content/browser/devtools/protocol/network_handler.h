@@ -10,7 +10,6 @@
 
 #include "base/containers/flat_set.h"
 #include "base/containers/unique_ptr_adapters.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/unguessable_token.h"
 #include "content/browser/devtools/protocol/devtools_domain_handler.h"
@@ -28,7 +27,7 @@
 #include "third_party/blink/public/mojom/loader/resource_load_info.mojom-shared.h"
 
 #if BUILDFLAG(ENABLE_REPORTING)
-#include "services/network/public/mojom/reporting_report.mojom.h"
+#include "services/network/public/mojom/reporting_service.mojom.h"
 #endif  // BUILDFLAG(ENABLE_REPORTING)
 
 namespace net {
@@ -38,6 +37,7 @@ class X509Certificate;
 }  // namespace net
 
 namespace network {
+struct CorsErrorStatus;
 struct ResourceRequest;
 struct URLLoaderCompletionStatus;
 namespace mojom {
@@ -70,7 +70,12 @@ class NetworkHandler : public DevToolsDomainHandler,
   NetworkHandler(const std::string& host_id,
                  const base::UnguessableToken& devtools_token,
                  DevToolsIOContext* io_context,
-                 base::RepeatingClosure update_loader_factories_callback);
+                 base::RepeatingClosure update_loader_factories_callback,
+                 bool allow_file_access);
+
+  NetworkHandler(const NetworkHandler&) = delete;
+  NetworkHandler& operator=(const NetworkHandler&) = delete;
+
   ~NetworkHandler() override;
 
   static std::vector<NetworkHandler*> ForAgentHost(DevToolsAgentHostImpl* host);
@@ -103,6 +108,12 @@ class NetworkHandler : public DevToolsDomainHandler,
 #if BUILDFLAG(ENABLE_REPORTING)
   void OnReportAdded(const net::ReportingReport& report) override;
   void OnReportUpdated(const net::ReportingReport& report) override;
+  void OnEndpointsUpdatedForOrigin(
+      const std::vector<net::ReportingEndpoint>& endpoints) override;
+  std::unique_ptr<protocol::Network::ReportingApiReport> BuildProtocolReport(
+      const net::ReportingReport& report);
+  std::unique_ptr<protocol::Network::ReportingApiEndpoint>
+  BuildProtocolEndpoint(const net::ReportingEndpoint& endpoint);
 #endif  // BUILDFLAG(ENABLE_REPORTING)
 
   Response EnableReportingApi(bool enable) override;
@@ -141,6 +152,7 @@ class NetworkHandler : public DevToolsDomainHandler,
                  Maybe<bool> same_party,
                  Maybe<std::string> source_scheme,
                  Maybe<int> source_port,
+                 Maybe<std::string> partition_key,
                  std::unique_ptr<SetCookieCallback> callback) override;
   void SetCookies(
       std::unique_ptr<protocol::Array<Network::CookieParam>> cookies,
@@ -198,6 +210,11 @@ class NetworkHandler : public DevToolsDomainHandler,
       bool* disable_cache,
       absl::optional<std::vector<net::SourceStream::SourceType>>*
           accepted_stream_types);
+  void PrefetchRequestWillBeSent(const std::string& request_id,
+                                 const network::ResourceRequest& request,
+                                 const GURL& initiator_url,
+                                 Maybe<std::string> frame_token,
+                                 base::TimeTicks timestamp);
   void NavigationRequestWillBeSent(const NavigationRequest& nav_request,
                                    base::TimeTicks timestamp);
   void RequestSent(const std::string& request_id,
@@ -304,8 +321,6 @@ class NetworkHandler : public DevToolsDomainHandler,
       Response response,
       mojo::ScopedDataPipeConsumerHandle pipe,
       const std::string& mime_type);
-  std::unique_ptr<protocol::Network::ReportingApiReport> BuildProtocolReport(
-      const net::ReportingReport& report);
 
   // TODO(dgozman): Remove this.
   const std::string host_id_;
@@ -333,9 +348,8 @@ class NetworkHandler : public DevToolsDomainHandler,
       loaders_;
   absl::optional<std::set<net::SourceStream::SourceType>>
       accepted_stream_types_;
+  const bool allow_file_access_;
   base::WeakPtrFactory<NetworkHandler> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(NetworkHandler);
 };
 
 }  // namespace protocol

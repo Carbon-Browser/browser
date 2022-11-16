@@ -15,7 +15,7 @@
 
 namespace payments {
 
-struct SecurePaymentConfirmationInstrument;
+struct SecurePaymentConfirmationCredential;
 
 class SecurePaymentConfirmationAppFactory
     : public PaymentAppFactory,
@@ -45,27 +45,24 @@ class SecurePaymentConfirmationAppFactory
   void RenderFrameDeleted(content::RenderFrameHost* render_frame_host) override;
 
   void OnIsUserVerifyingPlatformAuthenticatorAvailable(
-      base::WeakPtr<PaymentAppFactory::Delegate> delegate,
-      mojom::SecurePaymentConfirmationRequestPtr request,
+      std::unique_ptr<Request> request,
       bool is_available);
 
   void OnAppIcon(
-      std::unique_ptr<SecurePaymentConfirmationInstrument> instrument,
+      std::unique_ptr<SecurePaymentConfirmationCredential> credential,
       std::unique_ptr<Request> request,
       const SkBitmap& icon);
 
   // Called after downloading the icon whose URL was passed into PaymentRequest
   // API.
   void DidDownloadIcon(
-      std::unique_ptr<SecurePaymentConfirmationInstrument> instrument,
+      std::unique_ptr<SecurePaymentConfirmationCredential> credential,
       std::unique_ptr<Request> request,
       int request_id,
       int unused_http_status_code,
       const GURL& unused_image_url,
       const std::vector<SkBitmap>& bitmaps,
       const std::vector<gfx::Size>& unused_sizes);
-
-  std::unique_ptr<webauthn::InternalAuthenticator> authenticator_;
 
   std::map<WebDataServiceBase::Handle, std::unique_ptr<Request>> requests_;
   base::WeakPtrFactory<SecurePaymentConfirmationAppFactory> weak_ptr_factory_{

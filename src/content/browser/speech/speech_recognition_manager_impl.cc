@@ -13,8 +13,8 @@
 #include "base/callback.h"
 #include "base/location.h"
 #include "base/memory/ref_counted_delete_on_sequence.h"
-#include "base/sequenced_task_runner.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "content/browser/browser_main_loop.h"
@@ -22,11 +22,10 @@
 #include "content/browser/renderer_host/media/media_stream_ui_proxy.h"
 #include "content/browser/speech/speech_recognition_engine.h"
 #include "content/browser/speech/speech_recognizer_impl.h"
-#include "content/browser/storage_partition_impl.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/content_browser_client.h"
-#include "content/public/browser/render_document_host_user_data.h"
+#include "content/public/browser/document_user_data.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/resource_context.h"
 #include "content/public/browser/speech_recognition_event_listener.h"
@@ -42,7 +41,7 @@
 #include "url/gurl.h"
 #include "url/origin.h"
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #include "content/browser/speech/speech_recognizer_impl_android.h"
 #endif
 
@@ -59,7 +58,7 @@ SpeechRecognitionManagerImpl* g_speech_recognition_manager_impl;
 int SpeechRecognitionManagerImpl::next_requester_id_ = 0;
 
 class FrameSessionTracker
-    : public content::RenderDocumentHostUserData<FrameSessionTracker> {
+    : public content::DocumentUserData<FrameSessionTracker> {
  public:
   using FrameDeletedCallback =
       base::RepeatingCallback<void(int /* session_id */)>;
@@ -110,10 +109,11 @@ class FrameSessionTracker
   }
 
  private:
-  explicit FrameSessionTracker(content::RenderFrameHost* rfh) {}
+  explicit FrameSessionTracker(content::RenderFrameHost* rfh)
+      : DocumentUserData<FrameSessionTracker>(rfh) {}
 
-  friend class content::RenderDocumentHostUserData<FrameSessionTracker>;
-  RENDER_DOCUMENT_HOST_USER_DATA_KEY_DECL();
+  friend class content::DocumentUserData<FrameSessionTracker>;
+  DOCUMENT_USER_DATA_KEY_DECL();
 
   void AddSession(int session_id) { sessions_.insert(session_id); }
 
@@ -127,7 +127,7 @@ class FrameSessionTracker
   std::set<int> sessions_;
 };
 
-RENDER_DOCUMENT_HOST_USER_DATA_KEY_IMPL(FrameSessionTracker)
+DOCUMENT_USER_DATA_KEY_IMPL(FrameSessionTracker);
 
 SpeechRecognitionManager* SpeechRecognitionManager::GetInstance() {
   if (manager_for_tests_)
@@ -180,7 +180,7 @@ int SpeechRecognitionManagerImpl::CreateSession(
   session->config = config;
   session->context = config.initial_context;
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
   // A SpeechRecognitionEngine (and corresponding Config) is required only
   // when using SpeechRecognizerImpl, which performs the audio capture and
   // endpointing in the browser. This is not the case of Android where, not
@@ -295,7 +295,7 @@ void SpeechRecognitionManagerImpl::RecognitionAllowedCallback(int session_id,
 
 void SpeechRecognitionManagerImpl::MediaRequestPermissionCallback(
     int session_id,
-    const blink::MediaStreamDevices& devices,
+    const blink::mojom::StreamDevicesSet& stream_devices_set,
     std::unique_ptr<MediaStreamUIProxy> stream_ui) {
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
 
@@ -303,10 +303,18 @@ void SpeechRecognitionManagerImpl::MediaRequestPermissionCallback(
   if (iter == sessions_.end())
     return;
 
-  bool is_allowed = !devices.empty();
+  // The SpeechRecognictionManager is not used with multiple streams
+  // which is only supported in combination with the getDisplayMediaSet API.
+  // The |stream_devices| vector can be empty e.g. if the permission
+  // was denied.
+  DCHECK_LE(stream_devices_set.stream_devices.size(), 1u);
+
+  blink::MediaStreamDevices devices_list =
+      blink::ToMediaStreamDevicesList(stream_devices_set);
+  const bool is_allowed = !devices_list.empty();
   if (is_allowed) {
     // Copy the approved devices array to the context for UI indication.
-    iter->second->context.devices = devices;
+    iter->second->context.devices = devices_list;
 
     // Save the UI object.
     iter->second->ui = std::move(stream_ui);

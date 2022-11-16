@@ -12,12 +12,15 @@
 #include <utility>
 #include <vector>
 
+#include "ash/components/arc/arc_browser_context_keyed_service_factory_base.h"
+#include "ash/components/arc/session/arc_bridge_service.h"
 #include "base/bind.h"
-#include "base/bind_post_task.h"
 #include "base/logging.h"
 #include "base/memory/singleton.h"
 #include "base/posix/eintr_wrapper.h"
+#include "base/strings/escape.h"
 #include "base/system/sys_info.h"
+#include "base/task/bind_post_task.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "chrome/browser/ash/arc/fileapi/arc_select_files_handler.h"
@@ -29,10 +32,7 @@
 #include "chrome/browser/ash/file_manager/path_util.h"
 #include "chrome/browser/chromeos/fileapi/external_file_url_util.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
-#include "chromeos/dbus/virtual_file_provider/virtual_file_provider_client.h"
-#include "components/arc/arc_browser_context_keyed_service_factory_base.h"
-#include "components/arc/session/arc_bridge_service.h"
+#include "chromeos/ash/components/dbus/virtual_file_provider/virtual_file_provider_client.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/storage_partition.h"
@@ -40,7 +40,6 @@
 #include "extensions/browser/api/file_handlers/mime_util.h"
 #include "mojo/public/cpp/platform/platform_handle.h"
 #include "mojo/public/cpp/system/platform_handle.h"
-#include "net/base/escape.h"
 #include "storage/browser/file_system/external_mount_points.h"
 #include "storage/browser/file_system/file_system_context.h"
 #include "url/gurl.h"
@@ -69,10 +68,9 @@ bool IsTestImageBuild() {
 
 // Returns FileSystemContext.
 scoped_refptr<storage::FileSystemContext> GetFileSystemContext(
-    content::BrowserContext* context,
-    const GURL& url) {
+    content::BrowserContext* context) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  content::StoragePartition* storage = context->GetStoragePartitionForUrl(url);
+  content::StoragePartition* storage = context->GetDefaultStoragePartition();
   return storage->GetFileSystemContext();
 }
 
@@ -189,9 +187,9 @@ void ArcFileSystemBridge::GetFileName(const std::string& url,
   // It's generally not safe to unescape path separators in strings to be used
   // in file paths.
   if (url_decoded.is_empty() || !IsUrlAllowed(url_decoded) ||
-      !net::UnescapeBinaryURLComponentSafe(url_decoded.ExtractFileName(),
-                                           true /* fail_on_path_separators */,
-                                           &unescaped_file_name)) {
+      !base::UnescapeBinaryURLComponentSafe(url_decoded.ExtractFileName(),
+                                            true /* fail_on_path_separators */,
+                                            &unescaped_file_name)) {
     LOG(ERROR) << "Invalid URL: " << url << " " << url_decoded;
     std::move(callback).Run(absl::nullopt);
     return;
@@ -254,7 +252,7 @@ void ArcFileSystemBridge::GetMetadata(
     int flags,
     storage::FileSystemOperation::GetMetadataCallback callback) {
   scoped_refptr<storage::FileSystemContext> context =
-      GetFileSystemContext(profile_, url_decoded);
+      GetFileSystemContext(profile_);
   file_manager::util::FileSystemURLAndHandle file_system_url_and_handle =
       GetFileSystemURL(*context, url_decoded);
   content::GetIOThreadTaskRunner({})->PostTask(
@@ -286,7 +284,7 @@ void ArcFileSystemBridge::GetFileType(const std::string& url,
     return;
   }
   scoped_refptr<storage::FileSystemContext> context =
-      GetFileSystemContext(profile_, url_decoded);
+      GetFileSystemContext(profile_);
   file_manager::util::FileSystemURLAndHandle file_system_url_and_handle =
       GetFileSystemURL(*context, url_decoded);
   extensions::app_file_handler_util::GetMimeTypeForLocalPath(
@@ -402,12 +400,10 @@ void ArcFileSystemBridge::GenerateVirtualFileId(
     std::move(callback).Run(absl::nullopt);
     return;
   }
-  chromeos::DBusThreadManager::Get()
-      ->GetVirtualFileProviderClient()
-      ->GenerateVirtualFileId(
-          size, base::BindOnce(&ArcFileSystemBridge::OnGenerateVirtualFileId,
-                               weak_ptr_factory_.GetWeakPtr(), url_decoded,
-                               std::move(callback)));
+  ash::VirtualFileProviderClient::Get()->GenerateVirtualFileId(
+      size, base::BindOnce(&ArcFileSystemBridge::OnGenerateVirtualFileId,
+                           weak_ptr_factory_.GetWeakPtr(), url_decoded,
+                           std::move(callback)));
 }
 
 void ArcFileSystemBridge::OnGenerateVirtualFileId(
@@ -432,12 +428,10 @@ void ArcFileSystemBridge::OpenFileById(const GURL& url_decoded,
     return;
   }
 
-  chromeos::DBusThreadManager::Get()
-      ->GetVirtualFileProviderClient()
-      ->OpenFileById(id.value(),
-                     base::BindOnce(&ArcFileSystemBridge::OnOpenFileById,
-                                    weak_ptr_factory_.GetWeakPtr(), url_decoded,
-                                    std::move(callback), id.value()));
+  ash::VirtualFileProviderClient::Get()->OpenFileById(
+      id.value(), base::BindOnce(&ArcFileSystemBridge::OnOpenFileById,
+                                 weak_ptr_factory_.GetWeakPtr(), url_decoded,
+                                 std::move(callback), id.value()));
 }
 
 void ArcFileSystemBridge::OnOpenFileById(const GURL& url_decoded,
@@ -484,7 +478,7 @@ bool ArcFileSystemBridge::HandleReadRequest(const std::string& id,
 
   const GURL& url = it_url->second;
   scoped_refptr<storage::FileSystemContext> context =
-      GetFileSystemContext(profile_, url);
+      GetFileSystemContext(profile_);
   file_manager::util::FileSystemURLAndHandle file_system_url_and_handle =
       GetFileSystemURL(*context, url);
   *it_forwarder = FileStreamForwarderPtr(new FileStreamForwarder(

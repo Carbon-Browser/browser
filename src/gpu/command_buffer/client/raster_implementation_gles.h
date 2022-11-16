@@ -5,7 +5,7 @@
 #ifndef GPU_COMMAND_BUFFER_CLIENT_RASTER_IMPLEMENTATION_GLES_H_
 #define GPU_COMMAND_BUFFER_CLIENT_RASTER_IMPLEMENTATION_GLES_H_
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "gpu/command_buffer/client/client_font_manager.h"
 #include "gpu/command_buffer/client/gles2_interface.h"
 #include "gpu/command_buffer/client/raster_interface.h"
@@ -25,6 +25,10 @@ class RASTER_EXPORT RasterImplementationGLES : public RasterInterface {
  public:
   explicit RasterImplementationGLES(gles2::GLES2Interface* gl,
                                     ContextSupport* context_support);
+
+  RasterImplementationGLES(const RasterImplementationGLES&) = delete;
+  RasterImplementationGLES& operator=(const RasterImplementationGLES&) = delete;
+
   ~RasterImplementationGLES() override;
 
   // Command buffer Flush / Finish.
@@ -86,11 +90,12 @@ class RASTER_EXPORT RasterImplementationGLES : public RasterInterface {
                                   const gpu::Mailbox& source_mailbox) override;
 
   // OOP-Raster
-  void BeginRasterCHROMIUM(GLuint sk_color,
+  void BeginRasterCHROMIUM(SkColor4f sk_color_4f,
                            GLboolean needs_clear,
                            GLuint msaa_sample_count,
                            MsaaMode msaa_mode,
                            GLboolean can_use_lcd_text,
+                           GLboolean visible,
                            const gfx::ColorSpace& color_space,
                            const GLbyte* mailbox) override;
   void RasterCHROMIUM(const cc::DisplayItemList* list,
@@ -101,7 +106,8 @@ class RASTER_EXPORT RasterImplementationGLES : public RasterInterface {
                       const gfx::Vector2dF& post_translate,
                       const gfx::Vector2dF& post_scale,
                       bool requires_clear,
-                      size_t* max_op_size_hint) override;
+                      size_t* max_op_size_hint,
+                      bool preserve_recording = true) override;
   void EndRasterCHROMIUM() override;
 
   // Image decode acceleration.
@@ -183,12 +189,10 @@ class RASTER_EXPORT RasterImplementationGLES : public RasterInterface {
   void OnReleaseMailbox(GLuint shared_texture_id,
                         base::OnceCallback<void()> release_mailbox);
 
-  gles2::GLES2Interface* gl_;
-  ContextSupport* context_support_;
+  raw_ptr<gles2::GLES2Interface> gl_;
+  raw_ptr<ContextSupport> context_support_;
   std::unique_ptr<GLHelper> gl_helper_;
   base::WeakPtrFactory<RasterImplementationGLES> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(RasterImplementationGLES);
 };
 
 }  // namespace raster

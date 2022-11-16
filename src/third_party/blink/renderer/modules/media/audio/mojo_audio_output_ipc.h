@@ -8,9 +8,8 @@
 #include <string>
 
 #include "base/callback_helpers.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "media/audio/audio_output_ipc.h"
 #include "media/mojo/mojom/audio_data_pipe.mojom-blink.h"
@@ -19,7 +18,6 @@
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/media/renderer_audio_output_stream_factory.mojom-blink.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
 
@@ -41,16 +39,17 @@ class MODULES_EXPORT MojoAudioOutputIPC
       FactoryAccessorCB factory_accessor,
       scoped_refptr<base::SingleThreadTaskRunner> io_task_runner);
 
+  MojoAudioOutputIPC(const MojoAudioOutputIPC&) = delete;
+  MojoAudioOutputIPC& operator=(const MojoAudioOutputIPC&) = delete;
+
   ~MojoAudioOutputIPC() override;
 
   // AudioOutputIPC implementation.
   void RequestDeviceAuthorization(media::AudioOutputIPCDelegate* delegate,
                                   const base::UnguessableToken& session_id,
                                   const std::string& device_id) override;
-  void CreateStream(
-      media::AudioOutputIPCDelegate* delegate,
-      const media::AudioParameters& params,
-      const absl::optional<base::UnguessableToken>& processing_id) override;
+  void CreateStream(media::AudioOutputIPCDelegate* delegate,
+                    const media::AudioParameters& params) override;
   void PlayStream() override;
   void PauseStream() override;
   void FlushStream() override;
@@ -107,8 +106,6 @@ class MODULES_EXPORT MojoAudioOutputIPC
   // To make sure we don't send an "authorization completed" callback for a
   // stream after it's closed, we use this weak factory.
   base::WeakPtrFactory<MojoAudioOutputIPC> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(MojoAudioOutputIPC);
 };
 
 }  // namespace blink

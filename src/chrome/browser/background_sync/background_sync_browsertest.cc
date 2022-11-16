@@ -32,6 +32,11 @@ const char kSuccessfulOperationPrefix[] = "ok - ";
 class BackgroundSyncBrowserTest : public InProcessBrowserTest {
  public:
   BackgroundSyncBrowserTest() = default;
+
+  BackgroundSyncBrowserTest(const BackgroundSyncBrowserTest&) = delete;
+  BackgroundSyncBrowserTest& operator=(const BackgroundSyncBrowserTest&) =
+      delete;
+
   ~BackgroundSyncBrowserTest() override = default;
 
   void SetUpOnMainThread() override {
@@ -64,9 +69,11 @@ class BackgroundSyncBrowserTest : public InProcessBrowserTest {
 
   // Runs the |script| in the current tab and writes the output to |*result|.
   bool RunScript(const std::string& script, std::string* result) {
-    return content::ExecuteScriptAndExtractString(
-        browser()->tab_strip_model()->GetActiveWebContents()->GetMainFrame(),
-        script, result);
+    return content::ExecuteScriptAndExtractString(browser()
+                                                      ->tab_strip_model()
+                                                      ->GetActiveWebContents()
+                                                      ->GetPrimaryMainFrame(),
+                                                  script, result);
   }
 
   // Intercepts all requests.
@@ -102,7 +109,6 @@ class BackgroundSyncBrowserTest : public InProcessBrowserTest {
 
  private:
   std::unique_ptr<net::EmbeddedTestServer> https_server_;
-  DISALLOW_COPY_AND_ASSIGN(BackgroundSyncBrowserTest);
 };
 
 IN_PROC_BROWSER_TEST_F(BackgroundSyncBrowserTest, VerifyShutdownBehavior) {

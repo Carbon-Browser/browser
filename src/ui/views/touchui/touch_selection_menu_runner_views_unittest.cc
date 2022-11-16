@@ -4,7 +4,6 @@
 
 #include "ui/views/touchui/touch_selection_menu_runner_views.h"
 
-#include "base/macros.h"
 #include "ui/events/event_utils.h"
 #include "ui/touch_selection/touch_selection_menu_runner.h"
 #include "ui/views/controls/button/label_button.h"
@@ -27,6 +26,12 @@ class TouchSelectionMenuRunnerViewsTest : public ViewsTestBase,
                                           public ui::TouchSelectionMenuClient {
  public:
   TouchSelectionMenuRunnerViewsTest() = default;
+
+  TouchSelectionMenuRunnerViewsTest(const TouchSelectionMenuRunnerViewsTest&) =
+      delete;
+  TouchSelectionMenuRunnerViewsTest& operator=(
+      const TouchSelectionMenuRunnerViewsTest&) = delete;
+
   ~TouchSelectionMenuRunnerViewsTest() override = default;
 
  protected:
@@ -63,8 +68,6 @@ class TouchSelectionMenuRunnerViewsTest : public ViewsTestBase,
   bool no_command_available_ = false;
 
   int last_executed_command_id_ = 0;
-
-  DISALLOW_COPY_AND_ASSIGN(TouchSelectionMenuRunnerViewsTest);
 };
 
 // Tests that the default touch selection menu runner is installed and opening
@@ -112,7 +115,7 @@ TEST_F(TouchSelectionMenuRunnerViewsTest, QuickMenuAdjustsAnchorRect) {
   gfx::Rect anchor_rect(0, 0, quick_menu_width + handle_size.width() - 10, 20);
   ui::TouchSelectionMenuRunner::GetInstance()->OpenMenu(
       this, anchor_rect, handle_size, GetContext());
-  anchor_rect.Inset(0, 0, 0, -handle_size.height());
+  anchor_rect.Inset(gfx::Insets::TLBR(0, 0, -handle_size.height(), 0));
   EXPECT_EQ(anchor_rect, test_api.GetAnchorRect());
 
   // Set anchor rect's width a bit greater than the quick menu width plus handle

@@ -31,6 +31,7 @@
 #include "content/public/test/test_storage_partition.h"
 #include "services/network/test/test_cookie_manager.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/blink/public/common/storage_key/storage_key.h"
 
 namespace {
 
@@ -237,7 +238,7 @@ TEST_F(AccessContextAuditServiceTest, CookieRecords) {
                             kAccessTime1, records);
 
   // Check that a repeated access correctly updates associated timestamp.
-  clock()->Advance(base::TimeDelta::FromHours(1));
+  clock()->Advance(base::Hours(1));
   const base::Time kAccessTime2 = clock()->Now();
   service()->RecordCookieAccess({*test_cookie, *test_non_persistent_cookie},
                                 kTopFrameOrigin);
@@ -381,7 +382,7 @@ TEST_F(AccessContextAuditServiceTest, OriginKeyedStorageDeleted) {
   const auto kTestStorageType1 =
       AccessContextAuditDatabase::StorageAPIType::kWebDatabase;
   const auto kTestStorageType2 =
-      AccessContextAuditDatabase::StorageAPIType::kAppCache;
+      AccessContextAuditDatabase::StorageAPIType::kIndexedDB;
   const url::Origin kTestOrigin1 =
       url::Origin::Create(GURL("https://example.com"));
   const url::Origin kTestOrigin2 =
@@ -551,14 +552,12 @@ TEST_F(AccessContextAuditServiceTest, TimeRangeHistoryDeletion) {
   const auto kTestStorageType1 =
       AccessContextAuditDatabase::StorageAPIType::kWebDatabase;
   const auto kTestStorageType2 =
-      AccessContextAuditDatabase::StorageAPIType::kAppCache;
+      AccessContextAuditDatabase::StorageAPIType::kIndexedDB;
 
   clock()->SetNow(base::Time::Now());
   service()->SetClockForTesting(clock());
-  const base::Time kInsideTimeRange =
-      clock()->Now() + base::TimeDelta::FromHours(1);
-  const base::Time kOutsideTimeRange =
-      clock()->Now() + base::TimeDelta::FromHours(3);
+  const base::Time kInsideTimeRange = clock()->Now() + base::Hours(1);
+  const base::Time kOutsideTimeRange = clock()->Now() + base::Hours(3);
 
   history_service()->AddPageWithDetails(kURL1, u"Test1", 1, 1, kInsideTimeRange,
                                         false, history::SOURCE_BROWSED);
@@ -597,8 +596,8 @@ TEST_F(AccessContextAuditServiceTest, TimeRangeHistoryDeletion) {
   base::RunLoop run_loop;
   base::CancelableTaskTracker task_tracker;
   history_service()->ExpireHistoryBetween(
-      std::set<GURL>(), kInsideTimeRange - base::TimeDelta::FromMinutes(10),
-      kInsideTimeRange + base::TimeDelta::FromMinutes(10),
+      std::set<GURL>(), kInsideTimeRange - base::Minutes(10),
+      kInsideTimeRange + base::Minutes(10),
       /*user_initiated*/ true, run_loop.QuitClosure(), &task_tracker);
   run_loop.Run();
 
@@ -692,9 +691,9 @@ TEST_F(AccessContextAuditServiceTest, SessionOnlyRecords) {
   ASSERT_EQ(0u, records.size());
 }
 
-TEST_F(AccessContextAuditServiceTest, OnOriginDataCleared) {
+TEST_F(AccessContextAuditServiceTest, OnStorageKeyDataCleared) {
   // Check that providing parameters with varying levels of specificity to the
-  // OnOriginDataCleared function all clear data correctly.
+  // OnStorageKeyDataCleared function all clear data correctly.
   auto kTopFrameOrigin = url::Origin::Create(GURL("https://example.com"));
   auto kTestOrigin1 = url::Origin::Create(GURL("https://test1.com"));
   auto kTestOrigin2 = url::Origin::Create(GURL("https://test2.com"));
@@ -705,33 +704,34 @@ TEST_F(AccessContextAuditServiceTest, OnOriginDataCleared) {
   const auto kTestStorageType2 =
       AccessContextAuditDatabase::StorageAPIType::kIndexedDB;
   const auto kTestStorageType3 =
-      AccessContextAuditDatabase::StorageAPIType::kAppCache;
+      AccessContextAuditDatabase::StorageAPIType::kCacheStorage;
 
   clock()->SetNow(base::Time());
   service()->SetClockForTesting(clock());
 
-  clock()->Advance(base::TimeDelta::FromHours(1));
+  clock()->Advance(base::Hours(1));
   service()->RecordStorageAPIAccess(kTestOrigin1, kTestStorageType1,
                                     kTopFrameOrigin);
 
-  clock()->Advance(base::TimeDelta::FromHours(1));
+  clock()->Advance(base::Hours(1));
   const base::Time kAccessTime1 = clock()->Now();
   service()->RecordStorageAPIAccess(kTestOrigin2, kTestStorageType2,
                                     kTopFrameOrigin);
 
-  clock()->Advance(base::TimeDelta::FromHours(1));
+  clock()->Advance(base::Hours(1));
   const base::Time kAccessTime2 = clock()->Now();
   service()->RecordStorageAPIAccess(kTestOrigin3, kTestStorageType3,
                                     kTopFrameOrigin);
   EXPECT_EQ(3U, GetAllAccessRecords().size());
 
   // Provide all parameters such that TestOrigin1's record is removed.
-  auto origin_matcher = base::BindLambdaForTesting(
-      [&](const url::Origin& origin) { return origin == kTestOrigin1; });
-  service()->OnOriginDataCleared(
-      content::StoragePartition::REMOVE_DATA_MASK_WEBSQL, origin_matcher,
-      base::Time() + base::TimeDelta::FromMinutes(50),
-      base::Time() + base::TimeDelta::FromMinutes(80));
+  auto storage_key_matcher =
+      base::BindLambdaForTesting([&](const blink::StorageKey& storage_key) {
+        return storage_key == blink::StorageKey(kTestOrigin1);
+      });
+  service()->OnStorageKeyDataCleared(
+      content::StoragePartition::REMOVE_DATA_MASK_WEBSQL, storage_key_matcher,
+      base::Time() + base::Minutes(50), base::Time() + base::Minutes(80));
 
   auto records = GetAllAccessRecords();
   ASSERT_EQ(2U, records.size());
@@ -741,10 +741,9 @@ TEST_F(AccessContextAuditServiceTest, OnOriginDataCleared) {
                                 kTopFrameOrigin, kAccessTime2, records);
 
   // Provide more generalised parameters that target TestOrigin2's record.
-  service()->OnOriginDataCleared(
+  service()->OnStorageKeyDataCleared(
       content::StoragePartition::REMOVE_DATA_MASK_ALL, base::NullCallback(),
-      base::Time() + base::TimeDelta::FromMinutes(80),
-      base::Time() + base::TimeDelta::FromMinutes(130));
+      base::Time() + base::Minutes(80), base::Time() + base::Minutes(130));
 
   records = GetAllAccessRecords();
   ASSERT_EQ(1U, records.size());
@@ -753,7 +752,7 @@ TEST_F(AccessContextAuditServiceTest, OnOriginDataCleared) {
 
   // Provide broadest possible parameters which should result in the final
   // record being removed.
-  service()->OnOriginDataCleared(
+  service()->OnStorageKeyDataCleared(
       content::StoragePartition::REMOVE_DATA_MASK_ALL, base::NullCallback(),
       base::Time(), base::Time::Max());
 
@@ -797,8 +796,7 @@ TEST_F(AccessContextAuditServiceTest, CookieAccessHelper) {
   helper->RecordCookieAccess({*test_cookie}, kTopFrameOrigin);
 
   // Reaccess the cookie at a later time.
-  const base::Time kAccessTime2 =
-      clock()->Now() + base::TimeDelta::FromMinutes(1);
+  const base::Time kAccessTime2 = clock()->Now() + base::Minutes(1);
   clock()->SetNow(kAccessTime2);
   helper->RecordCookieAccess({*test_cookie}, kTopFrameOrigin);
 
@@ -822,8 +820,7 @@ TEST_F(AccessContextAuditServiceTest, CookieAccessHelper) {
 
   // Record a cookie access and delete the helper, the access should be flushed
   // to the service.
-  const base::Time kAccessTime3 =
-      clock()->Now() + base::TimeDelta::FromMinutes(1);
+  const base::Time kAccessTime3 = clock()->Now() + base::Minutes(1);
   clock()->SetNow(kAccessTime3);
   helper->RecordCookieAccess({*test_cookie}, kTopFrameOrigin);
 
@@ -947,10 +944,8 @@ TEST_F(AccessContextAuditThirdPartyDataClearingTest, TimeRangeHistoryDeletion) {
 
   clock()->SetNow(base::Time::Now());
   service()->SetClockForTesting(clock());
-  const base::Time kInsideTimeRange =
-      clock()->Now() + base::TimeDelta::FromHours(1);
-  const base::Time kOutsideTimeRange =
-      clock()->Now() + base::TimeDelta::FromHours(3);
+  const base::Time kInsideTimeRange = clock()->Now() + base::Hours(1);
+  const base::Time kOutsideTimeRange = clock()->Now() + base::Hours(3);
 
   clock()->SetNow(kOutsideTimeRange);
   // A cookie record outside the time range should not be modified.
@@ -997,8 +992,8 @@ TEST_F(AccessContextAuditThirdPartyDataClearingTest, TimeRangeHistoryDeletion) {
   base::RunLoop run_loop;
   base::CancelableTaskTracker task_tracker;
   history_service()->ExpireHistoryBetween(
-      std::set<GURL>(), kInsideTimeRange - base::TimeDelta::FromMinutes(10),
-      kInsideTimeRange + base::TimeDelta::FromMinutes(10),
+      std::set<GURL>(), kInsideTimeRange - base::Minutes(10),
+      kInsideTimeRange + base::Minutes(10),
       /*user_initiated*/ true, run_loop.QuitClosure(), &task_tracker);
   run_loop.Run();
 

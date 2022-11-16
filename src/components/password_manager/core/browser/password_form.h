@@ -62,6 +62,35 @@ struct InsecurityMetadata {
 
 bool operator==(const InsecurityMetadata& lhs, const InsecurityMetadata& rhs);
 
+// Represents a note attached to a particular credential.
+struct PasswordNote {
+  PasswordNote();
+  PasswordNote(std::u16string value, base::Time date_created);
+  PasswordNote(std::u16string unique_display_name,
+               std::u16string value,
+               base::Time date_created,
+               bool hide_by_default);
+  PasswordNote(const PasswordNote& rhs);
+  PasswordNote(PasswordNote&& rhs);
+  PasswordNote& operator=(const PasswordNote& rhs);
+  PasswordNote& operator=(PasswordNote&& rhs);
+  ~PasswordNote();
+
+  // The name displayed in the UI labeling this note. Currently unused and added
+  // for future compatibility.
+  std::u16string unique_display_name;
+  // The value of the note.
+  std::u16string value;
+  // The date when the note was created.
+  base::Time date_created;
+  // Whether the value of the note will be hidden by default in the UI similar
+  // to password values. Currently unused and added for future compatibility.
+  bool hide_by_default = false;
+};
+
+bool operator==(const PasswordNote& lhs, const PasswordNote& rhs);
+bool operator!=(const PasswordNote& lhs, const PasswordNote& rhs);
+
 // The PasswordForm struct encapsulates information about a login form,
 // which can be an HTML form or a dialog with username/password text fields.
 //
@@ -98,17 +127,19 @@ struct PasswordForm {
   };
 
   // Enum to differentiate between manually filled forms, forms with auto-
-  // generated passwords, and forms generated from the DOM API.
+  // generated passwords, forms generated from the Credential Management
+  // API and credentials manually added from setting.
   //
   // Always append new types at the end. This enum is converted to int and
   // stored in password store backends, so it is important to keep each
   // value assigned to the same integer.
   enum class Type {
-    kManual,
-    kGenerated,
-    kApi,
-    kMinValue = kManual,
-    kMaxValue = kApi,
+    kFormSubmission = 0,
+    kGenerated = 1,
+    kApi = 2,
+    kManuallyAdded = 3,
+    kMinValue = kFormSubmission,
+    kMaxValue = kManuallyAdded,
   };
 
   // Enum to keep track of what information has been sent to the server about
@@ -139,9 +170,9 @@ struct PasswordForm {
   // This should not be empty except for Android based credentials.
   GURL url;
 
-  // The action target of the form; like |origin| URL consists of the scheme,
-  // host, port and path; the rest is stripped. This is the primary data used by
-  // the PasswordManager for form autofill; that is, the action of the saved
+  // The action target of the form; like |url|, consists of the scheme, host,
+  // port and path; the rest is stripped. This is the primary data used by the
+  // PasswordManager for form autofill; that is, the action of the saved
   // credentials must match the action of the form on the page to be autofilled.
   // If this is empty / not available, it will result in a "restricted" IE-like
   // autofill policy, where we wait for the user to type in their username
@@ -279,7 +310,7 @@ struct PasswordForm {
   bool blocked_by_user = false;
 
   // The form type.
-  Type type = Type::kManual;
+  Type type = Type::kFormSubmission;
 
   // The number of times that this username/password has been used to
   // authenticate the user.
@@ -338,7 +369,7 @@ struct PasswordForm {
   bool only_for_fallback = false;
 
   // True iff the new password field was found with server hints or autocomplete
-  // attributes or the kTreatNewPasswordHeuristicsAsReliable feature is enabled.
+  // attributes.
   // Only set on form parsing for filling, and not persisted. Used as signal for
   // password generation eligibility.
   bool is_new_password_reliable = false;
@@ -374,6 +405,18 @@ struct PasswordForm {
   // A mapping from the credential insecurity type (e.g. leaked, phished),
   // to its metadata (e.g. time it was discovered, whether alerts are muted).
   base::flat_map<InsecureType, InsecurityMetadata> password_issues;
+
+  // Attached notes to the credential.
+  std::vector<PasswordNote> notes;
+
+  // Email address of the last sync account this password was associated with.
+  // This field is non empty only if the password is NOT currently associated
+  // with a syncing account AND it was associated with one in the past.
+  std::string previously_associated_sync_account_email;
+
+  // Return true if we consider this form to be a signup form. It's based on
+  // local heuristics and may be inaccurate.
+  bool IsLikelySignupForm() const;
 
   // Return true if we consider this form to be a change password form and not
   // a signup form. It's based on local heuristics and may be inaccurate.
@@ -418,7 +461,11 @@ struct PasswordForm {
 };
 
 // True if the unique keys for the forms are the same. The unique key is
-// (origin, username_element, username_value, password_element, signon_realm).
+// (url, username_element, username_value, password_element, signon_realm).
+inline auto PasswordFormUniqueKey(const PasswordForm& f) {
+  return std::tie(f.signon_realm, f.url, f.username_element, f.username_value,
+                  f.password_element);
+}
 bool ArePasswordFormUniqueKeysEqual(const PasswordForm& left,
                                     const PasswordForm& right);
 

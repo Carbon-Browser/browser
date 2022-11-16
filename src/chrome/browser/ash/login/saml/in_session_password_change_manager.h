@@ -8,16 +8,12 @@
 #include <memory>
 #include <string>
 
+#include "ash/components/login/auth/auth_status_consumer.h"
 #include "ash/public/cpp/session/session_activation_observer.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/observer_list.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/login/saml/password_sync_token_fetcher.h"
-#include "chromeos/login/auth/auth_status_consumer.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
-#include "chromeos/login/auth/cryptohome_authenticator.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
-#include "chromeos/login/auth/user_context.h"
 
 class Profile;
 
@@ -27,6 +23,9 @@ class User;
 
 namespace ash {
 
+class CryptohomeAuthenticator;
+class UserContext;
+
 // There is at most one instance of this task, which is part of the
 // InSessionPasswordChangeManager singleton. Having a separate class means that
 // pointers to this class can be invalidated without affecting the manager.
@@ -34,6 +33,11 @@ namespace ash {
 // rerunning the task or posting the task to be re-run, which means that there
 // is only ever one of task that is scheduled to be run.
 class RecheckPasswordExpiryTask {
+ public:
+  RecheckPasswordExpiryTask(const RecheckPasswordExpiryTask&) = delete;
+  RecheckPasswordExpiryTask& operator=(const RecheckPasswordExpiryTask&) =
+      delete;
+
  private:
   RecheckPasswordExpiryTask();
   ~RecheckPasswordExpiryTask();
@@ -51,8 +55,6 @@ class RecheckPasswordExpiryTask {
 
   // Only InSessionPasswordChangeManager can use this class.
   friend class InSessionPasswordChangeManager;
-
-  DISALLOW_COPY_AND_ASSIGN(RecheckPasswordExpiryTask);
 };
 
 // Manages the flow of changing a password in-session - handles user
@@ -105,6 +107,12 @@ class InSessionPasswordChangeManager
   static InSessionPasswordChangeManager* Get();
 
   explicit InSessionPasswordChangeManager(Profile* primary_profile);
+
+  InSessionPasswordChangeManager(const InSessionPasswordChangeManager&) =
+      delete;
+  InSessionPasswordChangeManager& operator=(
+      const InSessionPasswordChangeManager&) = delete;
+
   ~InSessionPasswordChangeManager() override;
 
   // Sets the given instance as the singleton for testing.
@@ -191,8 +199,6 @@ class InSessionPasswordChangeManager
   std::unique_ptr<PasswordSyncTokenFetcher> password_sync_token_fetcher_;
 
   friend class InSessionPasswordChangeManagerTest;
-
-  DISALLOW_COPY_AND_ASSIGN(InSessionPasswordChangeManager);
 };
 
 }  // namespace ash

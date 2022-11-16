@@ -5,21 +5,48 @@
 #include "ash/capture_mode/test_capture_mode_delegate.h"
 
 #include "ash/capture_mode/capture_mode_types.h"
+#include "ash/capture_mode/fake_video_source_provider.h"
+#include "ash/public/cpp/capture_mode/recording_overlay_view.h"
 #include "ash/services/recording/public/mojom/recording_service.mojom.h"
 #include "ash/services/recording/recording_service_test_api.h"
+#include "ash/session/session_controller_impl.h"
+#include "ash/shell.h"
 #include "base/files/file_util.h"
 #include "base/threading/thread_restrictions.h"
 
 namespace ash {
 
-TestCaptureModeDelegate::TestCaptureModeDelegate() {
+namespace {
+
+class TestRecordingOverlayView : public RecordingOverlayView {
+ public:
+  TestRecordingOverlayView() = default;
+  TestRecordingOverlayView(const TestRecordingOverlayView&) = delete;
+  TestRecordingOverlayView& operator=(const TestRecordingOverlayView&) = delete;
+  ~TestRecordingOverlayView() override = default;
+};
+
+}  // namespace
+
+TestCaptureModeDelegate::TestCaptureModeDelegate()
+    : video_source_provider_(std::make_unique<FakeVideoSourceProvider>()) {
   base::ScopedAllowBlockingForTesting allow_blocking;
-  const bool result =
-      base::CreateNewTempDirectory(/*prefix=*/"", &fake_downloads_dir_);
-  DCHECK(result);
+  bool created_dir = fake_downloads_dir_.CreateUniqueTempDir();
+  DCHECK(created_dir);
+  created_dir = fake_drive_fs_mount_path_.CreateUniqueTempDir();
+  DCHECK(created_dir);
+  created_dir = fake_android_files_path_.CreateUniqueTempDir();
+  DCHECK(created_dir);
+  created_dir = fake_linux_files_path_.CreateUniqueTempDir();
+  DCHECK(created_dir);
 }
 
 TestCaptureModeDelegate::~TestCaptureModeDelegate() = default;
+
+void TestCaptureModeDelegate::ResetAllowancesToDefault() {
+  is_allowed_by_dlp_ = true;
+  is_allowed_by_policy_ = true;
+}
 
 viz::FrameSinkId TestCaptureModeDelegate::GetCurrentFrameSinkId() const {
   return recording_service_ ? recording_service_->GetCurrentFrameSinkId()
@@ -48,8 +75,10 @@ void TestCaptureModeDelegate::RequestAndWaitForVideoFrame() {
   recording_service_->RequestAndWaitForVideoFrame();
 }
 
-base::FilePath TestCaptureModeDelegate::GetScreenCaptureDir() const {
-  return fake_downloads_dir_;
+base::FilePath TestCaptureModeDelegate::GetUserDefaultDownloadsFolder() const {
+  DCHECK(Shell::Get()->session_controller()->IsActiveUserSessionStarted());
+
+  return fake_downloads_dir_.GetPath();
 }
 
 void TestCaptureModeDelegate::ShowScreenCaptureItemInFolder(
@@ -62,26 +91,40 @@ bool TestCaptureModeDelegate::Uses24HourFormat() const {
   return false;
 }
 
-bool TestCaptureModeDelegate::IsCaptureModeInitRestrictedByDlp() const {
-  return false;
+void TestCaptureModeDelegate::CheckCaptureModeInitRestrictionByDlp(
+    OnCaptureModeDlpRestrictionChecked callback) {
+  std::move(callback).Run(/*proceed=*/is_allowed_by_dlp_);
 }
 
-bool TestCaptureModeDelegate::IsCaptureAllowedByDlp(const aura::Window* window,
-                                                    const gfx::Rect& bounds,
-                                                    bool for_video) const {
-  return true;
+void TestCaptureModeDelegate::CheckCaptureOperationRestrictionByDlp(
+    const aura::Window* window,
+    const gfx::Rect& bounds,
+    OnCaptureModeDlpRestrictionChecked callback) {
+  std::move(callback).Run(/*proceed=*/is_allowed_by_dlp_);
 }
 
 bool TestCaptureModeDelegate::IsCaptureAllowedByPolicy() const {
-  return true;
+  return is_allowed_by_policy_;
 }
 
 void TestCaptureModeDelegate::StartObservingRestrictedContent(
     const aura::Window* window,
     const gfx::Rect& bounds,
-    base::OnceClosure stop_callback) {}
+    base::OnceClosure stop_callback) {
+  // This is called at the last stage of recording initialization to signal that
+  // recording has actually started.
+  if (on_recording_started_callback_)
+    std::move(on_recording_started_callback_).Run();
+}
 
-void TestCaptureModeDelegate::StopObservingRestrictedContent() {}
+void TestCaptureModeDelegate::StopObservingRestrictedContent(
+    OnCaptureModeDlpRestrictionChecked callback) {
+  DCHECK(callback);
+  std::move(callback).Run(should_save_after_dlp_check_);
+}
+
+void TestCaptureModeDelegate::OnCaptureImageAttempted(aura::Window const*,
+                                                      gfx::Rect const&) {}
 
 mojo::Remote<recording::mojom::RecordingService>
 TestCaptureModeDelegate::LaunchRecordingService() {
@@ -94,13 +137,49 @@ TestCaptureModeDelegate::LaunchRecordingService() {
 void TestCaptureModeDelegate::BindAudioStreamFactory(
     mojo::PendingReceiver<media::mojom::AudioStreamFactory> receiver) {}
 
-void TestCaptureModeDelegate::OnSessionStateChanged(bool started) {}
+void TestCaptureModeDelegate::OnSessionStateChanged(bool started) {
+  if (on_session_state_changed_callback_)
+    std::move(on_session_state_changed_callback_).Run();
+}
 
 void TestCaptureModeDelegate::OnServiceRemoteReset() {
   // We simulate what the ServiceProcessHost does when the service remote is
   // reset (on which it shuts down the service process). Here since the service
   // is running in-process with ash_unittests, we just delete the instance.
   recording_service_.reset();
+}
+
+bool TestCaptureModeDelegate::GetDriveFsMountPointPath(
+    base::FilePath* result) const {
+  *result = fake_drive_fs_mount_path_.GetPath();
+  return true;
+}
+
+base::FilePath TestCaptureModeDelegate::GetAndroidFilesPath() const {
+  return fake_android_files_path_.GetPath();
+}
+
+base::FilePath TestCaptureModeDelegate::GetLinuxFilesPath() const {
+  return fake_linux_files_path_.GetPath();
+}
+
+std::unique_ptr<RecordingOverlayView>
+TestCaptureModeDelegate::CreateRecordingOverlayView() const {
+  return std::make_unique<TestRecordingOverlayView>();
+}
+
+void TestCaptureModeDelegate::ConnectToVideoSourceProvider(
+    mojo::PendingReceiver<video_capture::mojom::VideoSourceProvider> receiver) {
+  video_source_provider_->Bind(std::move(receiver));
+}
+
+void TestCaptureModeDelegate::GetDriveFsFreeSpaceBytes(
+    OnGotDriveFsFreeSpace callback) {
+  std::move(callback).Run(fake_drive_fs_free_bytes_);
+}
+
+bool TestCaptureModeDelegate::IsCameraDisabledByPolicy() const {
+  return is_camera_disabled_by_policy_;
 }
 
 }  // namespace ash

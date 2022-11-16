@@ -64,6 +64,11 @@ class ServiceWorkerPaymentAppFinderBrowserTest : public InProcessBrowserTest {
         {});
   }
 
+  ServiceWorkerPaymentAppFinderBrowserTest(
+      const ServiceWorkerPaymentAppFinderBrowserTest&) = delete;
+  ServiceWorkerPaymentAppFinderBrowserTest& operator=(
+      const ServiceWorkerPaymentAppFinderBrowserTest&) = delete;
+
   ~ServiceWorkerPaymentAppFinderBrowserTest() override {}
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
@@ -179,7 +184,10 @@ class ServiceWorkerPaymentAppFinderBrowserTest : public InProcessBrowserTest {
         browser(), alicepay_.GetURL("chromium.org", "/")));
 
     auto* finder = ServiceWorkerPaymentAppFinder::GetOrCreateForCurrentDocument(
-        browser()->tab_strip_model()->GetActiveWebContents()->GetMainFrame());
+        browser()
+            ->tab_strip_model()
+            ->GetActiveWebContents()
+            ->GetPrimaryMainFrame());
     finder->SetDownloaderAndIgnorePortInOriginComparisonForTesting(
         std::move(downloader));
 
@@ -250,7 +258,7 @@ class ServiceWorkerPaymentAppFinderBrowserTest : public InProcessBrowserTest {
     WebAppInstallationInfo* app = nullptr;
 
     const GURL expected_scope(scope);
-    url::Replacements<char> clear_port;
+    GURL::Replacements clear_port;
     clear_port.ClearPort();
 
     for (const auto& it : installable_apps()) {
@@ -358,8 +366,6 @@ class ServiceWorkerPaymentAppFinderBrowserTest : public InProcessBrowserTest {
   std::string error_message_;
 
   base::test::ScopedFeatureList scoped_feature_list_;
-
-  DISALLOW_COPY_AND_ASSIGN(ServiceWorkerPaymentAppFinderBrowserTest);
 };
 
 // A payment app has to be installed first.

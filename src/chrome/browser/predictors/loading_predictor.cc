@@ -17,10 +17,10 @@
 #include "net/base/network_isolation_key.h"
 #include "url/origin.h"
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #include "base/android/radio_utils.h"
 #include "base/power_monitor/power_monitor.h"
-#endif  // defined(OS_ANDROID)
+#endif  // BUILDFLAG(IS_ANDROID)
 
 namespace features {
 
@@ -36,10 +36,8 @@ namespace predictors {
 
 namespace {
 
-const base::TimeDelta kMinDelayBetweenPreresolveRequests =
-    base::TimeDelta::FromSeconds(60);
-const base::TimeDelta kMinDelayBetweenPreconnectRequests =
-    base::TimeDelta::FromSeconds(10);
+const base::TimeDelta kMinDelayBetweenPreresolveRequests = base::Seconds(60);
+const base::TimeDelta kMinDelayBetweenPreconnectRequests = base::Seconds(10);
 
 // Returns true iff |prediction| is not empty.
 bool AddInitialUrlToPreconnectPrediction(const GURL& initial_url,
@@ -67,7 +65,7 @@ bool AddInitialUrlToPreconnectPrediction(const GURL& initial_url,
 }
 
 bool IsPreconnectExpensive() {
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   // Preconnecting is expensive while on battery power and cellular data and
   // the radio signal is weak.
   if ((base::PowerMonitor::IsInitialized() &&
@@ -259,7 +257,7 @@ void LoadingPredictor::CleanupAbandonedHintsAndNavigations(
     NavigationId navigation_id) {
   base::TimeTicks time_now = base::TimeTicks::Now();
   const base::TimeDelta max_navigation_age =
-      base::TimeDelta::FromSeconds(config_.max_navigation_lifetime_seconds);
+      base::Seconds(config_.max_navigation_lifetime_seconds);
 
   // Hints.
   for (auto it = active_hints_.begin(); it != active_hints_.end();) {

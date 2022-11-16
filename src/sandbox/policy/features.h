@@ -13,24 +13,23 @@
 #include "build/chromeos_buildflags.h"
 #include "sandbox/policy/export.h"
 
-namespace sandbox {
-namespace policy {
-namespace features {
+namespace sandbox::policy::features {
 
-#if !defined(OS_MAC) && !defined(OS_FUCHSIA)
+#if !BUILDFLAG(IS_MAC) && !BUILDFLAG(IS_FUCHSIA)
 SANDBOX_POLICY_EXPORT extern const base::Feature kNetworkServiceSandbox;
 #endif
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 SANDBOX_POLICY_EXPORT extern const base::Feature kWinSboxDisableKtmComponent;
 SANDBOX_POLICY_EXPORT extern const base::Feature kWinSboxDisableExtensionPoints;
 SANDBOX_POLICY_EXPORT extern const base::Feature kGpuAppContainer;
 SANDBOX_POLICY_EXPORT extern const base::Feature kGpuLPAC;
-#endif  // defined(OS_WIN)
+SANDBOX_POLICY_EXPORT extern const base::Feature kRendererAppContainer;
+#endif  // BUILDFLAG(IS_WIN)
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
 SANDBOX_POLICY_EXPORT extern const base::Feature kXRSandbox;
-#endif  // !defined(OS_ANDROID)
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 SANDBOX_POLICY_EXPORT extern const base::Feature kSpectreVariant2Mitigation;
@@ -38,15 +37,11 @@ SANDBOX_POLICY_EXPORT extern const base::Feature
     kForceSpectreVariant2Mitigation;
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
-#if defined(OS_WIN)
-// Returns whether the Network Service LPAC Sandbox is supported by the current
-// Windows platform.
-SANDBOX_POLICY_EXPORT bool IsNetworkServiceSandboxLPACSupported();
-// Returns whether Network Service Sandbox is enabled in LPAC mode.
-SANDBOX_POLICY_EXPORT bool IsNetworkServiceSandboxLPACEnabled();
-#endif
-}  // namespace features
-}  // namespace policy
-}  // namespace sandbox
+// Returns whether the network sandbox is enabled for the current platform
+// configuration. This might be overridden by the content embedder so prefer
+// calling ContentBrowserClient::ShouldSandboxNetworkService().
+SANDBOX_POLICY_EXPORT bool IsNetworkSandboxEnabled();
+
+}  // namespace sandbox::policy::features
 
 #endif  // SANDBOX_POLICY_FEATURES_H_

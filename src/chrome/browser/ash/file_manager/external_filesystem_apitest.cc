@@ -12,19 +12,20 @@
 #include "base/path_service.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
+#include "base/time/time.h"
 #include "chrome/browser/ash/drive/drive_integration_service.h"
 #include "chrome/browser/ash/drive/drivefs_test_support.h"
 #include "chrome/browser/ash/file_manager/file_manager_test_util.h"
 #include "chrome/browser/ash/file_manager/mount_test_util.h"
 #include "chrome/browser/ash/file_manager/volume_manager.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
+#include "chrome/browser/ash/system_web_apps/system_web_app_manager.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/extensions/extension_apitest.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/ash/cast_config_controller_media_router.h"
 #include "chrome/browser/ui/browser.h"
-#include "chrome/browser/web_applications/system_web_apps/system_web_app_manager.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/common/chrome_constants.h"
 #include "chrome/common/chrome_paths.h"
@@ -36,7 +37,8 @@
 #include "content/public/test/browser_test.h"
 #include "content/public/test/test_navigation_observer.h"
 #include "content/public/test/test_utils.h"
-#include "extensions/browser/notification_types.h"
+#include "extensions/browser/extension_host_test_helper.h"
+#include "extensions/common/mojom/view_type.mojom.h"
 #include "extensions/test/result_catcher.h"
 #include "google_apis/common/test_util.h"
 #include "storage/browser/file_system/external_mount_points.h"
@@ -258,28 +260,6 @@ bool InitializeLocalFileSystem(std::string mount_point_name,
   return TouchFile(test_dir, kTestDir.mtime, kTestDir.atime);
 }
 
-// Helper class to wait for a background page to load or close again.
-class BackgroundObserver {
- public:
-  BackgroundObserver()
-      : page_created_(extensions::NOTIFICATION_EXTENSION_BACKGROUND_PAGE_READY,
-                      content::NotificationService::AllSources()),
-        page_closed_(extensions::NOTIFICATION_EXTENSION_HOST_DESTROYED,
-                     content::NotificationService::AllSources()) {}
-
-  void WaitUntilLoaded() {
-    page_created_.Wait();
-  }
-
-  void WaitUntilClosed() {
-    page_closed_.Wait();
-  }
-
- private:
-  content::WindowedNotificationObserver page_created_;
-  content::WindowedNotificationObserver page_closed_;
-};
-
 // Base class for FileSystemExtensionApi tests.
 class FileSystemExtensionApiTestBase : public extensions::ExtensionApiTest {
  public:
@@ -290,6 +270,12 @@ class FileSystemExtensionApiTestBase : public extensions::ExtensionApiTest {
   };
 
   FileSystemExtensionApiTestBase() = default;
+
+  FileSystemExtensionApiTestBase(const FileSystemExtensionApiTestBase&) =
+      delete;
+  FileSystemExtensionApiTestBase& operator=(
+      const FileSystemExtensionApiTestBase&) = delete;
+
   ~FileSystemExtensionApiTestBase() override = default;
 
   virtual std::vector<TestDirConfig> GetTestDirContents() {
@@ -354,7 +340,9 @@ class FileSystemExtensionApiTestBase : public extensions::ExtensionApiTest {
         extensions::ProcessManager::SetEventPageIdleTimeForTesting(1);
       }
 
-      BackgroundObserver page_complete;
+      extensions::ExtensionHostTestHelper host_helper(profile());
+      host_helper.RestrictToType(
+          extensions::mojom::ViewType::kExtensionBackgroundPage);
       const Extension* file_handler =
           LoadExtension(test_data_dir_.AppendASCII(filehandler_path));
       if (!file_handler) {
@@ -363,9 +351,9 @@ class FileSystemExtensionApiTestBase : public extensions::ExtensionApiTest {
       }
 
       if (flags & FLAGS_LAZY_FILE_HANDLER) {
-        page_complete.WaitUntilClosed();
+        host_helper.WaitForHostDestroyed();
       } else {
-        page_complete.WaitUntilLoaded();
+        host_helper.WaitForDocumentElementAvailable();
       }
     }
 
@@ -405,8 +393,6 @@ class FileSystemExtensionApiTestBase : public extensions::ExtensionApiTest {
 
  private:
   std::unique_ptr<media_router::MockMediaRouter> media_router_;
-
-  DISALLOW_COPY_AND_ASSIGN(FileSystemExtensionApiTestBase);
 };
 
 // Tests for a native local file system.
@@ -506,9 +492,9 @@ class DriveFileSystemExtensionApiTest : public FileSystemExtensionApiTestBase {
   drive::DriveIntegrationService* CreateDriveIntegrationService(
       Profile* profile) {
     // Ignore signin and lock screen apps profile.
-    if (profile->GetPath() == chromeos::ProfileHelper::GetSigninProfileDir() ||
+    if (profile->GetPath() == ash::ProfileHelper::GetSigninProfileDir() ||
         profile->GetPath() ==
-            chromeos::ProfileHelper::GetLockScreenAppProfilePath()) {
+            ash::ProfileHelper::GetLockScreenAppProfilePath()) {
       return nullptr;
     }
 
@@ -544,7 +530,7 @@ class MultiProfileDriveFileSystemExtensionApiTest :
     // Don't require policy for our sessions - this is required because
     // this test creates a secondary profile synchronously, so we need to
     // let the policy code know not to expect cached policy.
-    command_line->AppendSwitchASCII(chromeos::switches::kProfileRequiresPolicy,
+    command_line->AppendSwitchASCII(ash::switches::kProfileRequiresPolicy,
                                     "false");
   }
 
@@ -556,10 +542,8 @@ class MultiProfileDriveFileSystemExtensionApiTest :
                                        kSecondProfileGiaId),
         kSecondProfileHash, false);
     // Set up the secondary profile.
-    base::FilePath profile_dir =
-        user_data_directory.Append(
-            chromeos::ProfileHelper::GetUserProfileDir(
-                kSecondProfileHash).BaseName());
+    base::FilePath profile_dir = user_data_directory.Append(
+        ash::ProfileHelper::GetUserProfileDir(kSecondProfileHash).BaseName());
     second_profile_ =
         g_browser_process->profile_manager()->GetProfile(profile_dir);
 
@@ -589,9 +573,9 @@ class MultiProfileDriveFileSystemExtensionApiTest :
   drive::DriveIntegrationService* CreateDriveIntegrationService(
       Profile* profile) {
     // Ignore signin and lock screen apps profile.
-    if (profile->GetPath() == chromeos::ProfileHelper::GetSigninProfileDir() ||
+    if (profile->GetPath() == ash::ProfileHelper::GetSigninProfileDir() ||
         profile->GetPath() ==
-            chromeos::ProfileHelper::GetLockScreenAppProfilePath()) {
+            ash::ProfileHelper::GetLockScreenAppProfilePath()) {
       return nullptr;
     }
 
@@ -675,9 +659,9 @@ class LocalAndDriveFileSystemExtensionApiTest
   drive::DriveIntegrationService* CreateDriveIntegrationService(
       Profile* profile) {
     // Ignore signin and lock screen apps profile.
-    if (profile->GetPath() == chromeos::ProfileHelper::GetSigninProfileDir() ||
+    if (profile->GetPath() == ash::ProfileHelper::GetSigninProfileDir() ||
         profile->GetPath() ==
-            chromeos::ProfileHelper::GetLockScreenAppProfilePath()) {
+            ash::ProfileHelper::GetLockScreenAppProfilePath()) {
       return nullptr;
     }
 
@@ -720,9 +704,8 @@ class FileSystemExtensionApiTestWithApps
   void SetUpOnMainThread() override {
     Profile* profile = browser()->profile();
     file_manager::test::AddDefaultComponentExtensionsOnMainThread(profile);
-    web_app::WebAppProvider::GetForTest(profile)
-        ->system_web_app_manager()
-        .InstallSystemAppsForTesting();
+    ash::SystemWebAppManager::GetForTest(profile)
+        ->InstallSystemAppsForTesting();
     LocalFileSystemExtensionApiTest::SetUpOnMainThread();
   }
 
@@ -758,8 +741,7 @@ IN_PROC_BROWSER_TEST_F(FileSystemExtensionApiTestWithApps, OpenGalleryForPng) {
 // LocalFileSystemExtensionApiTests.
 //
 
-IN_PROC_BROWSER_TEST_F(LocalFileSystemExtensionApiTest,
-                       DISABLED_FileSystemOperations) {
+IN_PROC_BROWSER_TEST_F(LocalFileSystemExtensionApiTest, FileSystemOperations) {
   EXPECT_TRUE(RunFileSystemExtensionApiTest(
       "file_browser/filesystem_operations_test",
       FILE_PATH_LITERAL("manifest.json"),
@@ -767,7 +749,8 @@ IN_PROC_BROWSER_TEST_F(LocalFileSystemExtensionApiTest,
       FLAGS_NONE)) << message_;
 }
 
-IN_PROC_BROWSER_TEST_F(LocalFileSystemExtensionApiTest, FileWatch) {
+// TODO(crbug.com/1296001): Test is flaky.
+IN_PROC_BROWSER_TEST_F(LocalFileSystemExtensionApiTest, DISABLED_FileWatch) {
   EXPECT_TRUE(RunFileSystemExtensionApiTest(
       "file_browser/file_watcher_test",
       FILE_PATH_LITERAL("manifest.json"),
@@ -832,7 +815,7 @@ IN_PROC_BROWSER_TEST_F(DriveFileSystemExtensionApiTest,
       FLAGS_NONE)) << message_;
 }
 
-IN_PROC_BROWSER_TEST_F(DriveFileSystemExtensionApiTest, FileWatch) {
+IN_PROC_BROWSER_TEST_F(DriveFileSystemExtensionApiTest, DISABLED_FileWatch) {
   EXPECT_TRUE(RunFileSystemExtensionApiTest(
       "file_browser/file_watcher_test",
       FILE_PATH_LITERAL("manifest.json"),

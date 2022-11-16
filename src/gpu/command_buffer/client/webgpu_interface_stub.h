@@ -26,18 +26,11 @@ class WebGPUInterfaceStub : public WebGPUInterface {
   // WebGPUInterface implementation
   scoped_refptr<APIChannel> GetAPIChannel() const override;
   void FlushCommands() override;
-  void EnsureAwaitingFlush(bool* needs_flush) override;
+  bool EnsureAwaitingFlush() override;
   void FlushAwaitingCommands() override;
-  ReservedTexture ReserveTexture(WGPUDevice device) override;
-  void RequestAdapterAsync(
-      PowerPreference power_preference,
-      base::OnceCallback<void(int32_t,
-                              const WGPUDeviceProperties&,
-                              const char*)> request_adapter_callback) override;
-  void RequestDeviceAsync(
-      uint32_t adapter_service_id,
-      const WGPUDeviceProperties& requested_device_properties,
-      base::OnceCallback<void(WGPUDevice)> request_device_callback) override;
+  ReservedTexture ReserveTexture(
+      WGPUDevice device,
+      const WGPUTextureDescriptor* optionalDesc) override;
 
   WGPUDevice DeprecatedEnsureDefaultDeviceSync() override;
 

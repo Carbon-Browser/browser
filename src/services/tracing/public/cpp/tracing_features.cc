@@ -14,21 +14,16 @@
 #include "build/chromecast_buildflags.h"
 #include "components/tracing/common/tracing_switches.h"
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #include "base/android/build_info.h"  // nogncheck
 #endif
 
 namespace features {
 
-// Causes the BackgroundTracingManager to upload proto messages via UMA,
-// rather than JSON via the crash frontend.
-const base::Feature kBackgroundTracingProtoOutput{
-    "BackgroundTracingProtoOutput", base::FEATURE_ENABLED_BY_DEFAULT};
-
 // Runs the tracing service as an in-process browser service.
 const base::Feature kTracingServiceInProcess {
   "TracingServiceInProcess",
-#if defined(OS_ANDROID) || BUILDFLAG(IS_CHROMECAST)
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_CASTOS)
       base::FEATURE_ENABLED_BY_DEFAULT
 #else
       base::FEATURE_DISABLED_BY_DEFAULT
@@ -37,7 +32,7 @@ const base::Feature kTracingServiceInProcess {
 
 const base::Feature kEnablePerfettoSystemTracing{
   "EnablePerfettoSystemTracing",
-#if defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_CHROMEOS)
       base::FEATURE_ENABLED_BY_DEFAULT
 #else
       base::FEATURE_DISABLED_BY_DEFAULT
@@ -60,11 +55,11 @@ const base::Feature kEnablePerfettoClientApiProducer {
 namespace tracing {
 
 bool ShouldSetupSystemTracing() {
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   if (base::android::BuildInfo::GetInstance()->is_debug_android()) {
     return true;
   }
-#endif  // defined(OS_ANDROID)
+#endif  // BUILDFLAG(IS_ANDROID)
   if (base::FeatureList::GetInstance()) {
     return base::FeatureList::IsEnabled(features::kEnablePerfettoSystemTracing);
   }

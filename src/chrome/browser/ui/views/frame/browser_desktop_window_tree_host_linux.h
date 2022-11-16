@@ -5,11 +5,11 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_FRAME_BROWSER_DESKTOP_WINDOW_TREE_HOST_LINUX_H_
 #define CHROME_BROWSER_UI_VIEWS_FRAME_BROWSER_DESKTOP_WINDOW_TREE_HOST_LINUX_H_
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "chrome/browser/ui/views/frame/browser_desktop_window_tree_host.h"
-#include "ui/views/linux_ui/device_scale_factor_observer.h"
-#include "ui/views/linux_ui/linux_ui.h"
+#include "ui/linux/device_scale_factor_observer.h"
+#include "ui/linux/linux_ui.h"
 #include "ui/views/widget/desktop_aura/desktop_window_tree_host_linux.h"  // nogncheck
 
 #if defined(USE_DBUS_MENU)
@@ -19,7 +19,6 @@
 class BrowserFrame;
 class BrowserView;
 class DesktopBrowserFrameAuraLinux;
-class DesktopBrowserFrameLacros;
 enum class TabDragKind;
 
 namespace views {
@@ -30,13 +29,19 @@ class BrowserDesktopWindowTreeHostLinux
     : public BrowserDesktopWindowTreeHost,
       public views::DesktopWindowTreeHostLinux,
       ui::NativeThemeObserver,
-      views::DeviceScaleFactorObserver {
+      ui::DeviceScaleFactorObserver {
  public:
   BrowserDesktopWindowTreeHostLinux(
       views::internal::NativeWidgetDelegate* native_widget_delegate,
       views::DesktopNativeWidgetAura* desktop_native_widget_aura,
       BrowserView* browser_view,
       BrowserFrame* browser_frame);
+
+  BrowserDesktopWindowTreeHostLinux(const BrowserDesktopWindowTreeHostLinux&) =
+      delete;
+  BrowserDesktopWindowTreeHostLinux& operator=(
+      const BrowserDesktopWindowTreeHostLinux&) = delete;
+
   ~BrowserDesktopWindowTreeHostLinux() override;
 
   // Called when the tab drag status changes for this window.
@@ -64,6 +69,8 @@ class BrowserDesktopWindowTreeHostLinux
   void Init(const views::Widget::InitParams& params) override;
   void OnWidgetInitDone() override;
   void CloseNow() override;
+  void Show(ui::WindowShowState show_state,
+            const gfx::Rect& restore_bounds) override;
   bool SupportsMouseLock() override;
   void LockMouse(aura::Window* window) override;
   void UnlockMouse(aura::Window* window) override;
@@ -82,19 +89,9 @@ class BrowserDesktopWindowTreeHostLinux
   // views::OnDeviceScaleFactorChanged:
   void OnDeviceScaleFactorChanged() override;
 
-  BrowserView* browser_view_ = nullptr;
-  BrowserFrame* browser_frame_ = nullptr;
-
-// TODO(crbug.com/1221374): Separate Lacros specific code into
-// browser_desktop_window_tree_host_lacros.cc.
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  using DesktopBrowserFrameAuraPlatform = DesktopBrowserFrameLacros;
-#elif defined(OS_LINUX)
-  using DesktopBrowserFrameAuraPlatform = DesktopBrowserFrameAuraLinux;
-#else
-#error Unknown platform
-#endif
-  DesktopBrowserFrameAuraPlatform* native_frame_ = nullptr;
+  raw_ptr<BrowserView> browser_view_ = nullptr;
+  raw_ptr<BrowserFrame> browser_frame_ = nullptr;
+  raw_ptr<DesktopBrowserFrameAuraLinux> native_frame_ = nullptr;
 
 #if defined(USE_DBUS_MENU)
   // Each browser frame maintains its own menu bar object because the lower
@@ -105,13 +102,11 @@ class BrowserDesktopWindowTreeHostLinux
 
   base::ScopedObservation<ui::NativeTheme, ui::NativeThemeObserver>
       theme_observation_{this};
-  base::ScopedObservation<views::LinuxUI,
-                          views::DeviceScaleFactorObserver,
-                          &views::LinuxUI::AddDeviceScaleFactorObserver,
-                          &views::LinuxUI::RemoveDeviceScaleFactorObserver>
+  base::ScopedObservation<ui::LinuxUi,
+                          ui::DeviceScaleFactorObserver,
+                          &ui::LinuxUi::AddDeviceScaleFactorObserver,
+                          &ui::LinuxUi::RemoveDeviceScaleFactorObserver>
       scale_observation_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(BrowserDesktopWindowTreeHostLinux);
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_FRAME_BROWSER_DESKTOP_WINDOW_TREE_HOST_LINUX_H_

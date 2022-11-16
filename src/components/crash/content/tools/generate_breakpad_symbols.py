@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # Copyright 2013 The Chromium Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -9,21 +9,19 @@ Currently, the tool only supports Linux, Android, and Mac. Support for other
 platforms is planned.
 """
 
-from __future__ import print_function
 import collections
 import errno
 import glob
 import multiprocessing
 import optparse
 import os
+import queue
 import re
 import shutil
-import six.moves.queue
 import subprocess
 import sys
 import threading
 import traceback
-
 
 CONCURRENT_TASKS=multiprocessing.cpu_count()
 if sys.platform == 'win32':
@@ -71,7 +69,7 @@ def GetSharedLibraryDependenciesLinux(binary):
   """Return absolute paths to all shared library dependencies of the binary.
 
   This implementation assumes that we're running on a Linux system."""
-  ldd = subprocess.check_output(['ldd', binary])
+  ldd = subprocess.check_output(['ldd', binary]).decode('utf-8')
   lib_re = re.compile('\t.* => (.+) \(.*\)$')
   result = []
   for line in ldd.splitlines():
@@ -89,7 +87,7 @@ def _GetSharedLibraryDependenciesAndroidOrChromeOS(binary):
   readelf plays nice with mixed host/device architectures (e.g. x86-64 host,
   arm64 device), so use that.
   """
-  readelf = subprocess.check_output(['readelf', '-d', binary])
+  readelf = subprocess.check_output(['readelf', '-d', binary]).decode('utf-8')
   lib_re = re.compile('Shared library: \[(.+)\]$')
   result = []
   binary_path = os.path.dirname(os.path.abspath(binary))
@@ -124,7 +122,7 @@ def GetDeveloperDirMac():
   if 'DEVELOPER_DIR' in os.environ:
     candidate_paths.append(os.environ['DEVELOPER_DIR'])
   candidate_paths.extend([
-    subprocess.check_output(['xcode-select', '-p']).strip(),
+    subprocess.check_output(['xcode-select', '-p']).decode('utf-8').strip(),
     # Most Mac 10.1[0-2] bots have at least one Xcode installed.
     '/Applications/Xcode.app',
     '/Applications/Xcode9.0.app',
@@ -168,7 +166,7 @@ def GetSharedLibraryDependenciesMac(binary, exe_path):
     otool_path = 'otool'
 
   otool = subprocess.check_output(
-      [otool_path, '-lm', binary], env=env).splitlines()
+      [otool_path, '-lm', binary], env=env).decode('utf-8').splitlines()
   rpaths = []
   dylib_id = None
   for idx, line in enumerate(otool):
@@ -188,7 +186,7 @@ def GetSharedLibraryDependenciesMac(binary, exe_path):
   # the loading executables.
 
   otool = subprocess.check_output(
-      [otool_path, '-Lm', binary], env=env).splitlines()
+      [otool_path, '-Lm', binary], env=env).decode('utf-8').splitlines()
   lib_re = re.compile('\t(.*) \(compatibility .*\)$')
   deps = []
   for line in otool:
@@ -221,7 +219,7 @@ def GetSharedLibraryDependenciesChromeOS(binary):
 def GetSharedLibraryDependencies(options, binary, exe_path):
   """Return absolute paths to all shared library dependencies of the binary."""
   deps = []
-  if options.platform == 'linux2':
+  if options.platform == 'linux':
     deps = GetSharedLibraryDependenciesLinux(binary)
   elif options.platform == 'android':
     deps = GetSharedLibraryDependenciesAndroid(binary)
@@ -247,7 +245,7 @@ def GetTransitiveDependencies(options):
      dependencies of the binary, along with the binary itself."""
   binary = os.path.abspath(options.binary)
   exe_path = os.path.dirname(binary)
-  if options.platform == 'linux2':
+  if options.platform == 'linux':
     # 'ldd' returns all transitive dependencies for us.
     deps = set(GetSharedLibraryDependencies(options, binary, exe_path))
     deps.add(binary)
@@ -255,12 +253,12 @@ def GetTransitiveDependencies(options):
   elif (options.platform == 'darwin' or options.platform == 'android' or
         options.platform == 'chromeos'):
     binaries = set([binary])
-    queue = [binary]
-    while queue:
-      deps = GetSharedLibraryDependencies(options, queue.pop(0), exe_path)
+    q = [binary]
+    while q:
+      deps = GetSharedLibraryDependencies(options, q.pop(0), exe_path)
       new_deps = set(deps) - binaries
       binaries |= new_deps
-      queue.extend(list(new_deps))
+      q.extend(list(new_deps))
     return binaries
   print("Platform not supported.")
   sys.exit(1)
@@ -289,7 +287,7 @@ def CreateSymbolDir(options, output_dir, relative_hash_dir):
   """Create the directory to store breakpad symbols in. On Android/Linux, we
      also create a symlink in case the hash in the binary is missing."""
   mkdir_p(output_dir)
-  if options.platform == 'android' or options.platform == "linux2":
+  if options.platform == 'android' or options.platform == 'linux':
     try:
       os.symlink(relative_hash_dir, os.path.join(os.path.dirname(output_dir),
                  '000000000000000000000000000000000'))
@@ -300,7 +298,7 @@ def CreateSymbolDir(options, output_dir, relative_hash_dir):
 def GenerateSymbols(options, binaries):
   """Dumps the symbols of binary and places them in the given directory."""
 
-  queue = six.moves.queue.Queue()
+  q = queue.Queue()
   exceptions = []
   print_lock = threading.Lock()
   exceptions_lock = threading.Lock()
@@ -311,7 +309,7 @@ def GenerateSymbols(options, binaries):
       try:
         should_dump_syms = True
         reason = "no reason"
-        binary = queue.get()
+        binary = q.get()
 
         run_once = True
         while run_once:
@@ -322,9 +320,10 @@ def GenerateSymbols(options, binaries):
             reason = "Could not locate dump_syms executable."
             break
 
-          binary_info = GetBinaryInfoFromHeaderInfo(
-              subprocess.check_output(
-                  [dump_syms, '-i', binary]).splitlines()[0])
+          dump_syms_output = subprocess.check_output(
+              [dump_syms, '-i', binary]).decode('utf-8')
+          header_info = dump_syms_output.splitlines()[0]
+          binary_info = GetBinaryInfoFromHeaderInfo(header_info)
           if not binary_info:
             should_dump_syms = False
             reason = "Could not obtain binary information."
@@ -368,17 +367,17 @@ def GenerateSymbols(options, binaries):
         with exceptions_lock:
           exceptions.append(traceback.format_exc())
       finally:
-        queue.task_done()
+        q.task_done()
 
   for binary in binaries:
-    queue.put(binary)
+    q.put(binary)
 
   for _ in range(options.jobs):
     t = threading.Thread(target=_Worker)
     t.daemon = True
     t.start()
 
-  queue.join()
+  q.join()
   if exceptions:
     exception_str = ('One or more exceptions occurred while generating '
                      'symbols:\n')

@@ -8,6 +8,8 @@
 #include "ash/public/cpp/system_tray_test_api.h"
 #include "base/callback.h"
 #include "base/run_loop.h"
+#include "base/test/scoped_feature_list.h"
+#include "build/build_config.h"
 #include "chrome/browser/ash/accessibility/accessibility_manager.h"
 #include "chrome/browser/ash/accessibility/magnification_manager.h"
 #include "chrome/browser/ash/login/helper.h"
@@ -31,6 +33,7 @@
 #include "components/user_manager/user_manager.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/test_utils.h"
+#include "media/base/media_switches.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/compositor/scoped_animation_duration_scale_mode.h"
 #include "ui/views/controls/button/button.h"
@@ -107,6 +110,11 @@ void EnableLargeCursor(bool enabled) {
   base::RunLoop().RunUntilIdle();
 }
 
+void EnableLiveCaption(bool enabled) {
+  AccessibilityManager::Get()->EnableLiveCaption(enabled);
+  base::RunLoop().RunUntilIdle();
+}
+
 void EnableMonoAudio(bool enabled) {
   AccessibilityManager::Get()->EnableMonoAudio(enabled);
   base::RunLoop().RunUntilIdle();
@@ -142,7 +150,10 @@ class TrayAccessibilityTest
  public:
   TrayAccessibilityTest()
       : disable_animations_(
-            ui::ScopedAnimationDurationScaleMode::ZERO_DURATION) {}
+            ui::ScopedAnimationDurationScaleMode::ZERO_DURATION) {
+    scoped_feature_list_.InitWithFeatures(
+        {media::kLiveCaption, media::kLiveCaptionSystemWideOnChromeOS}, {});
+  }
   ~TrayAccessibilityTest() override = default;
 
   // The profile which should be used by these tests.
@@ -207,15 +218,10 @@ class TrayAccessibilityTest
 
   testing::NiceMock<policy::MockConfigurationPolicyProvider> provider_;
   std::unique_ptr<ash::SystemTrayTestApi> tray_test_api_;
+  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
-// Fails on linux-chromeos-dbg see crbug/1027919.
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
-#define MAYBE_ShowMenu DISABLED_ShowMenu
-#else
-#define MAYBE_ShowMenu ShowMenu
-#endif
-IN_PROC_BROWSER_TEST_P(TrayAccessibilityTest, MAYBE_ShowMenu) {
+IN_PROC_BROWSER_TEST_P(TrayAccessibilityTest, DISABLED_ShowMenu) {
   SetShowAccessibilityOptionsInSystemTrayMenu(false);
 
   // Confirms that the menu is hidden.
@@ -261,6 +267,12 @@ IN_PROC_BROWSER_TEST_P(TrayAccessibilityTest, MAYBE_ShowMenu) {
   EnableLargeCursor(true);
   EXPECT_TRUE(IsMenuButtonVisible());
   EnableLargeCursor(false);
+  EXPECT_FALSE(IsMenuButtonVisible());
+
+  // Toggling Live Caption changes the visibility of the menu.
+  EnableLiveCaption(true);
+  EXPECT_TRUE(IsMenuButtonVisible());
+  EnableLiveCaption(false);
   EXPECT_FALSE(IsMenuButtonVisible());
 
   // Toggling mono audio changes the visibility of the menu.
@@ -332,6 +344,8 @@ IN_PROC_BROWSER_TEST_P(TrayAccessibilityTest, MAYBE_ShowMenu) {
   EXPECT_TRUE(IsMenuButtonVisible());
   EnableLargeCursor(true);
   EXPECT_TRUE(IsMenuButtonVisible());
+  EnableLiveCaption(true);
+  EXPECT_TRUE(IsMenuButtonVisible());
   EnableMonoAudio(true);
   EXPECT_TRUE(IsMenuButtonVisible());
   SetCaretHighlightEnabled(true);
@@ -362,6 +376,8 @@ IN_PROC_BROWSER_TEST_P(TrayAccessibilityTest, MAYBE_ShowMenu) {
   EXPECT_TRUE(IsMenuButtonVisible());
   EnableLargeCursor(false);
   EXPECT_TRUE(IsMenuButtonVisible());
+  EnableLiveCaption(false);
+  EXPECT_TRUE(IsMenuButtonVisible());
   EnableMonoAudio(false);
   EXPECT_TRUE(IsMenuButtonVisible());
   SetCaretHighlightEnabled(false);
@@ -375,12 +391,8 @@ IN_PROC_BROWSER_TEST_P(TrayAccessibilityTest, MAYBE_ShowMenu) {
 }
 
 // Fails on linux-chromeos-dbg see crbug/1027919.
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
-#define MAYBE_ShowMenuWithShowMenuOption DISABLED_ShowMenuWithShowMenuOption
-#else
-#define MAYBE_ShowMenuWithShowMenuOption ShowMenuWithShowMenuOption
-#endif
-IN_PROC_BROWSER_TEST_P(TrayAccessibilityTest, MAYBE_ShowMenuWithShowMenuOption) {
+IN_PROC_BROWSER_TEST_P(TrayAccessibilityTest,
+                       DISABLED_ShowMenuWithShowMenuOption) {
   SetShowAccessibilityOptionsInSystemTrayMenu(true);
 
   // Confirms that the menu is visible.
@@ -426,6 +438,12 @@ IN_PROC_BROWSER_TEST_P(TrayAccessibilityTest, MAYBE_ShowMenuWithShowMenuOption) 
   EnableLargeCursor(true);
   EXPECT_TRUE(IsMenuButtonVisible());
   EnableLargeCursor(false);
+  EXPECT_TRUE(IsMenuButtonVisible());
+
+  // The menu remains visible regardless of toggling Live Caption.
+  EnableLiveCaption(true);
+  EXPECT_TRUE(IsMenuButtonVisible());
+  EnableLiveCaption(false);
   EXPECT_TRUE(IsMenuButtonVisible());
 
   // The menu remains visible regardless of toggling mono audio.
@@ -497,6 +515,8 @@ IN_PROC_BROWSER_TEST_P(TrayAccessibilityTest, MAYBE_ShowMenuWithShowMenuOption) 
   EXPECT_TRUE(IsMenuButtonVisible());
   EnableLargeCursor(true);
   EXPECT_TRUE(IsMenuButtonVisible());
+  EnableLiveCaption(true);
+  EXPECT_TRUE(IsMenuButtonVisible());
   EnableMonoAudio(true);
   EXPECT_TRUE(IsMenuButtonVisible());
   SetCaretHighlightEnabled(true);
@@ -526,6 +546,8 @@ IN_PROC_BROWSER_TEST_P(TrayAccessibilityTest, MAYBE_ShowMenuWithShowMenuOption) 
   SetDockedMagnifierEnabled(false);
   EXPECT_TRUE(IsMenuButtonVisible());
   EnableLargeCursor(false);
+  EXPECT_TRUE(IsMenuButtonVisible());
+  EnableLiveCaption(false);
   EXPECT_TRUE(IsMenuButtonVisible());
   EnableMonoAudio(false);
   EXPECT_TRUE(IsMenuButtonVisible());
@@ -590,6 +612,11 @@ IN_PROC_BROWSER_TEST_P(TrayAccessibilityTest, DetailMenuRemainsOpen) {
 class TrayAccessibilityLoginTest : public TrayAccessibilityTest {
  public:
   TrayAccessibilityLoginTest() = default;
+
+  TrayAccessibilityLoginTest(const TrayAccessibilityLoginTest&) = delete;
+  TrayAccessibilityLoginTest& operator=(const TrayAccessibilityLoginTest&) =
+      delete;
+
   ~TrayAccessibilityLoginTest() = default;
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
@@ -597,9 +624,6 @@ class TrayAccessibilityLoginTest : public TrayAccessibilityTest {
     command_line->AppendSwitch(switches::kLoginManager);
     command_line->AppendSwitch(switches::kForceLoginManagerInTests);
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(TrayAccessibilityLoginTest);
 };
 
 IN_PROC_BROWSER_TEST_P(TrayAccessibilityLoginTest,
@@ -663,6 +687,12 @@ IN_PROC_BROWSER_TEST_P(TrayAccessibilityLoginTest,
   EnableLargeCursor(false);
   EXPECT_TRUE(IsMenuButtonVisible());
 
+  // The menu remains visible regardless of toggling Live Caption.
+  EnableLiveCaption(true);
+  EXPECT_TRUE(IsMenuButtonVisible());
+  EnableLiveCaption(false);
+  EXPECT_TRUE(IsMenuButtonVisible());
+
   // The menu remains visible regardless of toggling mono audio.
   EnableMonoAudio(true);
   EXPECT_TRUE(IsMenuButtonVisible());
@@ -712,6 +742,8 @@ IN_PROC_BROWSER_TEST_P(TrayAccessibilityLoginTest,
   EXPECT_TRUE(IsMenuButtonVisible());
   EnableLargeCursor(true);
   EXPECT_TRUE(IsMenuButtonVisible());
+  EnableLiveCaption(true);
+  EXPECT_TRUE(IsMenuButtonVisible());
   EnableMonoAudio(true);
   EXPECT_TRUE(IsMenuButtonVisible());
   SetCaretHighlightEnabled(true);
@@ -737,6 +769,8 @@ IN_PROC_BROWSER_TEST_P(TrayAccessibilityLoginTest,
   SetScreenMagnifierEnabled(false);
   EXPECT_TRUE(IsMenuButtonVisible());
   EnableLargeCursor(false);
+  EXPECT_TRUE(IsMenuButtonVisible());
+  EnableLiveCaption(false);
   EXPECT_TRUE(IsMenuButtonVisible());
   EnableMonoAudio(false);
   EXPECT_TRUE(IsMenuButtonVisible());

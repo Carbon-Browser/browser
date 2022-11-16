@@ -9,7 +9,6 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/ref_counted_delete_on_sequence.h"
 #include "base/observer_list.h"
@@ -32,6 +31,7 @@ namespace autofill {
 class AutofillProfile;
 class AutofillWebDataServiceObserverOnDBSequence;
 class CreditCard;
+class Iban;
 
 // Backend implementation for the AutofillWebDataService. This class runs on the
 // DB sequence, as it handles reads and writes to the WebDatabase, and functions
@@ -58,12 +58,13 @@ class AutofillWebDataBackendImpl
       const base::RepeatingCallback<void(syncer::ModelType)>&
           on_sync_started_callback);
 
+  AutofillWebDataBackendImpl(const AutofillWebDataBackendImpl&) = delete;
+  AutofillWebDataBackendImpl& operator=(const AutofillWebDataBackendImpl&) =
+      delete;
+
   void SetAutofillProfileChangedCallback(
       base::RepeatingCallback<void(const AutofillProfileDeepChange&)>
           change_cb);
-  void SetCardArtImagesChangedCallback(
-      base::RepeatingCallback<void(const std::vector<std::string>&)>
-          on_card_art_image_change_callback);
 
   // AutofillWebDataBackend implementation.
   void AddObserver(
@@ -77,8 +78,6 @@ class AutofillWebDataBackendImpl
   void NotifyOfMultipleAutofillChanges() override;
   void NotifyOfAddressConversionCompleted() override;
   void NotifyThatSyncHasStarted(syncer::ModelType model_type) override;
-  void NotifyOfCreditCardArtImagesChanged(
-      const std::vector<std::string>& server_ids) override;
   void CommitChanges() override;
 
   // Returns a SupportsUserData object that may be used to store data accessible
@@ -157,7 +156,7 @@ class AutofillWebDataBackendImpl
 
   // Updates Autofill entries in the web database.
   WebDatabase::State UpdateAutofillEntries(
-      const std::vector<autofill::AutofillEntry>& autofill_entries,
+      const std::vector<AutofillEntry>& autofill_entries,
       WebDatabase* db);
 
   // Adds a credit card to the web database. Valid only for local cards.
@@ -178,6 +177,18 @@ class AutofillWebDataBackendImpl
   // Returns a vector of local/server credit cards from the web database.
   std::unique_ptr<WDTypedResult> GetCreditCards(WebDatabase* db);
   std::unique_ptr<WDTypedResult> GetServerCreditCards(WebDatabase* db);
+
+  // Returns a vector of local Ibans from the web database.
+  std::unique_ptr<WDTypedResult> GetIbans(WebDatabase* db);
+
+  // Adds an Iban to the web database. Valid only for local ibans.
+  WebDatabase::State AddIban(const Iban& iban, WebDatabase* db);
+
+  // Updates an Iban in the web database. Valid only for local ibans.
+  WebDatabase::State UpdateIban(const Iban& iban, WebDatabase* db);
+
+  // Removes an Iban from the web database. Valid only for local ibans.
+  WebDatabase::State RemoveIban(const std::string& guid, WebDatabase* db);
 
   // Server credit cards can be masked (only last 4 digits stored) or unmasked
   // (all data stored). These toggle between the two states.
@@ -241,10 +252,12 @@ class AutofillWebDataBackendImpl
   class SupportsUserDataAggregatable : public base::SupportsUserData {
    public:
     SupportsUserDataAggregatable() {}
-    ~SupportsUserDataAggregatable() override {}
 
-   private:
-    DISALLOW_COPY_AND_ASSIGN(SupportsUserDataAggregatable);
+    SupportsUserDataAggregatable(const SupportsUserDataAggregatable&) = delete;
+    SupportsUserDataAggregatable& operator=(
+        const SupportsUserDataAggregatable&) = delete;
+
+    ~SupportsUserDataAggregatable() override {}
   };
 
   // The task runner that this class uses for its UI tasks.
@@ -267,10 +280,6 @@ class AutofillWebDataBackendImpl
   base::RepeatingCallback<void(syncer::ModelType)> on_sync_started_callback_;
   base::RepeatingCallback<void(const AutofillProfileDeepChange&)>
       on_autofill_profile_changed_cb_;
-  base::RepeatingCallback<void(const std::vector<std::string>&)>
-      on_card_art_image_change_callback_;
-
-  DISALLOW_COPY_AND_ASSIGN(AutofillWebDataBackendImpl);
 };
 
 }  // namespace autofill

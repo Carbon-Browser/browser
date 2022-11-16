@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "components/sync/base/model_type.h"
 #include "components/sync/base/passphrase_enums.h"
@@ -39,6 +39,10 @@ class ModelTypeRegistry : public ModelTypeConnector,
   ModelTypeRegistry(NudgeHandler* nudge_handler,
                     CancelationSignal* cancelation_signal,
                     SyncEncryptionHandler* sync_encryption_handler);
+
+  ModelTypeRegistry(const ModelTypeRegistry&) = delete;
+  ModelTypeRegistry& operator=(const ModelTypeRegistry&) = delete;
+
   ~ModelTypeRegistry() override;
 
   // Implementation of ModelTypeConnector.
@@ -55,8 +59,6 @@ class ModelTypeRegistry : public ModelTypeConnector,
   void OnPassphraseAccepted() override;
   void OnTrustedVaultKeyRequired() override;
   void OnTrustedVaultKeyAccepted() override;
-  void OnBootstrapTokenUpdated(const std::string& bootstrap_token,
-                               BootstrapTokenType type) override;
   void OnEncryptedTypesChanged(ModelTypeSet encrypted_types,
                                bool encrypt_everything) override;
   void OnCryptographerStateChanged(Cryptographer* cryptographer,
@@ -99,17 +101,15 @@ class ModelTypeRegistry : public ModelTypeConnector,
   UpdateHandlerMap update_handler_map_;
   CommitContributorMap commit_contributor_map_;
 
-  NudgeHandler* const nudge_handler_;
+  const raw_ptr<NudgeHandler> nudge_handler_;
 
   // CancelationSignal is signalled on engine shutdown. It is passed to
   // ModelTypeWorker to cancel blocking operation.
-  CancelationSignal* const cancelation_signal_;
+  const raw_ptr<CancelationSignal> cancelation_signal_;
 
-  SyncEncryptionHandler* const sync_encryption_handler_;
+  const raw_ptr<SyncEncryptionHandler> sync_encryption_handler_;
 
   base::WeakPtrFactory<ModelTypeRegistry> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ModelTypeRegistry);
 };
 
 }  // namespace syncer

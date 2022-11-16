@@ -43,7 +43,7 @@ class AndroidGranularityMovementBrowserTest : public ContentBrowserTest {
                                            ui::kAXModeComplete,
                                            ax::mojom::Event::kLoadComplete);
     EXPECT_TRUE(NavigateToURL(shell(), url));
-    waiter.WaitForNotification();
+    EXPECT_TRUE(waiter.WaitForNotification());
 
     // Get the BrowserAccessibilityManager.
     WebContentsImpl* web_contents =
@@ -72,7 +72,7 @@ class AndroidGranularityMovementBrowserTest : public ContentBrowserTest {
                                            ui::kAXModeComplete,
                                            ax::mojom::Event::kTreeChanged);
     node->manager()->LoadInlineTextBoxes(*node);
-    waiter.WaitForNotification();
+    EXPECT_TRUE(waiter.WaitForNotification());
 
     int start_index = -1;
     int end_index = -1;
@@ -80,7 +80,7 @@ class AndroidGranularityMovementBrowserTest : public ContentBrowserTest {
         static_cast<BrowserAccessibilityAndroid*>(node);
     BrowserAccessibilityManagerAndroid* manager =
         static_cast<BrowserAccessibilityManagerAndroid*>(node->manager());
-    std::u16string text = android_node->GetInnerText();
+    std::u16string text = android_node->GetTextContentUTF16();
     std::u16string concatenated;
     int previous_end_index = -1;
     while (manager->NextAtGranularity(granularity, end_index, android_node,

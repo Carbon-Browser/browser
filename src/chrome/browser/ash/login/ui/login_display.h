@@ -6,11 +6,8 @@
 #define CHROME_BROWSER_ASH_LOGIN_UI_LOGIN_DISPLAY_H_
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "chrome/browser/ash/login/help_app_launcher.h"
 #include "chrome/browser/ash/login/signin_specifics.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
-#include "chromeos/login/auth/user_context.h"
 #include "components/user_manager/user.h"
 #include "components/user_manager/user_manager.h"
 #include "ui/gfx/geometry/rect.h"
@@ -18,6 +15,8 @@
 #include "ui/gfx/native_widget_types.h"
 
 namespace ash {
+
+class UserContext;
 
 // TODO(nkostylev): Extract interface, create a BaseLoginDisplay class.
 // An abstract class that defines login UI implementation.
@@ -33,17 +32,8 @@ class LoginDisplay {
     // Returns true if sign in is in progress.
     virtual bool IsSigninInProgress() const = 0;
 
-    // Notify the delegate when the sign-in UI is finished loading.
-    virtual void OnSigninScreenReady() = 0;
-
-    // Called when the user requests enterprise enrollment.
-    virtual void OnStartEnterpriseEnrollment() = 0;
-
     // Called when the user requests kiosk enable screen.
     virtual void OnStartKioskEnableScreen() = 0;
-
-    // Called when the owner permission for kiosk app auto launch is requested.
-    virtual void OnStartKioskAutolaunchScreen() = 0;
 
     // Restarts the auto-login timer if it is running.
     virtual void ResetAutoLoginTimer() = 0;
@@ -53,28 +43,18 @@ class LoginDisplay {
   };
 
   LoginDisplay();
-  virtual ~LoginDisplay();
 
-  // Clears and enables fields on user pod or GAIA frame.
-  virtual void ClearAndEnablePassword() = 0;
+  LoginDisplay(const LoginDisplay&) = delete;
+  LoginDisplay& operator=(const LoginDisplay&) = delete;
+
+  virtual ~LoginDisplay();
 
   // Initializes login UI with the user pods based on list of known users and
   // guest, new user pods if those are enabled.
-  virtual void Init(const user_manager::UserList& users,
-                    bool show_guest,
-                    bool show_users,
-                    bool show_new_user) = 0;
-
-  // Notifies the login UI that the preferences defining how to visualize it to
-  // the user have changed and it needs to refresh.
-  virtual void OnPreferencesChanged() = 0;
+  virtual void Init(const user_manager::UserList& users, bool show_guest) = 0;
 
   // Changes enabled state of the UI.
   virtual void SetUIEnabled(bool is_enabled) = 0;
-
-  // Show allowlist check failed error. Happens after user completes online
-  // signin but allowlist check fails.
-  virtual void ShowAllowlistCheckFailedError() = 0;
 
   Delegate* delegate() { return delegate_; }
   void set_delegate(Delegate* delegate) { delegate_ = delegate; }
@@ -91,8 +71,6 @@ class LoginDisplay {
   // in redesigned login stack.
   // Login stack (and this object) will be recreated for next user sign in.
   bool is_signin_completed_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(LoginDisplay);
 };
 
 }  // namespace ash

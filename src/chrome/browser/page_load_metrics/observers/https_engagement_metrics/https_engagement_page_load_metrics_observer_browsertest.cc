@@ -6,10 +6,10 @@
 
 #include <memory>
 
-#include "base/macros.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/threading/platform_thread.h"
 #include "base/time/time.h"
+#include "build/build_config.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/metrics/https_engagement_metrics_provider.h"
 #include "chrome/browser/ui/browser.h"
@@ -29,6 +29,12 @@ class HttpsEngagementPageLoadMetricsBrowserTest : public InProcessBrowserTest {
  public:
   HttpsEngagementPageLoadMetricsBrowserTest()
       : metrics_provider_(new HttpsEngagementMetricsProvider()) {}
+
+  HttpsEngagementPageLoadMetricsBrowserTest(
+      const HttpsEngagementPageLoadMetricsBrowserTest&) = delete;
+  HttpsEngagementPageLoadMetricsBrowserTest& operator=(
+      const HttpsEngagementPageLoadMetricsBrowserTest&) = delete;
+
   ~HttpsEngagementPageLoadMetricsBrowserTest() override {}
 
   void StartHttpsServer(bool cert_error) {
@@ -90,8 +96,9 @@ class HttpsEngagementPageLoadMetricsBrowserTest : public InProcessBrowserTest {
     // Make sure the correct tab is in the foreground.
     TabStripModel* tab_strip_model = browser()->tab_strip_model();
     EXPECT_EQ(2, tab_strip_model->count());
-    EXPECT_EQ(url, tab_strip_model->GetWebContentsAt(0)->GetURL());
-    EXPECT_NE(url, tab_strip_model->GetActiveWebContents()->GetURL());
+    EXPECT_EQ(url, tab_strip_model->GetWebContentsAt(0)->GetLastCommittedURL());
+    EXPECT_NE(url,
+              tab_strip_model->GetActiveWebContents()->GetLastCommittedURL());
 
     content::WebContentsDestroyedWatcher destroyed_watcher(
         tab_strip_model->GetWebContentsAt(0));
@@ -113,8 +120,9 @@ class HttpsEngagementPageLoadMetricsBrowserTest : public InProcessBrowserTest {
     // Make sure the correct tab is in the foreground.
     TabStripModel* tab_strip_model = browser()->tab_strip_model();
     EXPECT_EQ(2, tab_strip_model->count());
-    EXPECT_EQ(url, tab_strip_model->GetWebContentsAt(1)->GetURL());
-    EXPECT_NE(url, tab_strip_model->GetActiveWebContents()->GetURL());
+    EXPECT_EQ(url, tab_strip_model->GetWebContentsAt(1)->GetLastCommittedURL());
+    EXPECT_NE(url,
+              tab_strip_model->GetActiveWebContents()->GetLastCommittedURL());
 
     content::WebContentsDestroyedWatcher destroyed_watcher(
         tab_strip_model->GetWebContentsAt(1));
@@ -135,8 +143,9 @@ class HttpsEngagementPageLoadMetricsBrowserTest : public InProcessBrowserTest {
     // Make sure the correct tab is in the foreground.
     TabStripModel* tab_strip_model = browser()->tab_strip_model();
     EXPECT_EQ(2, tab_strip_model->count());
-    EXPECT_EQ(url, tab_strip_model->GetWebContentsAt(1)->GetURL());
-    EXPECT_NE(url, tab_strip_model->GetActiveWebContents()->GetURL());
+    EXPECT_EQ(url, tab_strip_model->GetWebContentsAt(1)->GetLastCommittedURL());
+    EXPECT_NE(url,
+              tab_strip_model->GetActiveWebContents()->GetLastCommittedURL());
 
     // Close the foreground tab.
     base::TimeTicks start = base::TimeTicks::Now();
@@ -147,7 +156,8 @@ class HttpsEngagementPageLoadMetricsBrowserTest : public InProcessBrowserTest {
 
     // Now the background tab should have moved to the foreground.
     EXPECT_EQ(1, tab_strip_model->count());
-    EXPECT_EQ(url, tab_strip_model->GetActiveWebContents()->GetURL());
+    EXPECT_EQ(url,
+              tab_strip_model->GetActiveWebContents()->GetLastCommittedURL());
 
     content::WebContentsDestroyedWatcher second_watcher(
         tab_strip_model->GetActiveWebContents());
@@ -166,8 +176,6 @@ class HttpsEngagementPageLoadMetricsBrowserTest : public InProcessBrowserTest {
   std::unique_ptr<net::EmbeddedTestServer> https_test_server_;
   std::unique_ptr<net::EmbeddedTestServer> http_test_server_;
   std::unique_ptr<HttpsEngagementMetricsProvider> metrics_provider_;
-
-  DISALLOW_COPY_AND_ASSIGN(HttpsEngagementPageLoadMetricsBrowserTest);
 };
 
 IN_PROC_BROWSER_TEST_F(HttpsEngagementPageLoadMetricsBrowserTest,
@@ -470,7 +478,7 @@ IN_PROC_BROWSER_TEST_F(HttpsEngagementPageLoadMetricsBrowserTest,
 
 
 // Flaky on linux-chromeos-rel. crbug/1215539
-#if defined(NDEBUG) && defined(OS_CHROMEOS)
+#if defined(NDEBUG) && BUILDFLAG(IS_CHROMEOS)
 #define MAYBE_AlwaysInBackground DISABLED_AlwaysInBackground
 #else
 #define MAYBE_AlwaysInBackground AlwaysInBackground

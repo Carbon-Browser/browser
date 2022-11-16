@@ -12,7 +12,6 @@
 #include <string>
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/threading/thread_checker.h"
 #include "components/metrics/file_metrics_provider.h"
@@ -21,6 +20,7 @@
 #include "components/omnibox/browser/omnibox_event_global_tracker.h"
 #include "components/ukm/observers/history_delete_observer.h"
 #include "components/ukm/observers/ukm_consent_state_observer.h"
+#include "components/variations/synthetic_trial_registry.h"
 #import "ios/chrome/browser/metrics/incognito_web_state_observer.h"
 #include "ios/web/public/deprecated/global_web_state_observer.h"
 
@@ -45,6 +45,10 @@ class IOSChromeMetricsServiceClient : public IncognitoWebStateObserver,
                                       public ukm::UkmConsentStateObserver,
                                       public web::GlobalWebStateObserver {
  public:
+  IOSChromeMetricsServiceClient(const IOSChromeMetricsServiceClient&) = delete;
+  IOSChromeMetricsServiceClient& operator=(
+      const IOSChromeMetricsServiceClient&) = delete;
+
   ~IOSChromeMetricsServiceClient() override;
 
   // Factory function.
@@ -55,11 +59,13 @@ class IOSChromeMetricsServiceClient : public IncognitoWebStateObserver,
   static void RegisterPrefs(PrefRegistrySimple* registry);
 
   // metrics::MetricsServiceClient:
+  variations::SyntheticTrialRegistry* GetSyntheticTrialRegistry() override;
   metrics::MetricsService* GetMetricsService() override;
   ukm::UkmService* GetUkmService() override;
   void SetMetricsClientId(const std::string& client_id) override;
   int32_t GetProduct() override;
   std::string GetApplicationLocale() override;
+  const network_time::NetworkTimeTracker* GetNetworkTimeTracker() override;
   bool GetBrand(std::string* brand_code) override;
   metrics::SystemProfileProto::Channel GetChannel() override;
   bool IsExtendedStableChannel() override;
@@ -138,6 +144,9 @@ class IOSChromeMetricsServiceClient : public IncognitoWebStateObserver,
   // Weak pointer to the MetricsStateManager.
   metrics::MetricsStateManager* metrics_state_manager_;
 
+  // The synthetic trial registry shared by metrics_service_ and ukm_service_.
+  std::unique_ptr<variations::SyntheticTrialRegistry> synthetic_trial_registry_;
+
   // The MetricsService that |this| is a client of.
   std::unique_ptr<metrics::MetricsService> metrics_service_;
 
@@ -162,8 +171,6 @@ class IOSChromeMetricsServiceClient : public IncognitoWebStateObserver,
   base::CallbackListSubscription omnibox_url_opened_subscription_;
 
   base::WeakPtrFactory<IOSChromeMetricsServiceClient> weak_ptr_factory_;
-
-  DISALLOW_COPY_AND_ASSIGN(IOSChromeMetricsServiceClient);
 };
 
 #endif  // IOS_CHROME_BROWSER_METRICS_IOS_CHROME_METRICS_SERVICE_CLIENT_H_

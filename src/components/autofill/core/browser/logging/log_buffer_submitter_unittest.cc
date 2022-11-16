@@ -4,6 +4,8 @@
 
 #include "components/autofill/core/browser/logging/log_buffer_submitter.h"
 
+#include <tuple>
+
 #include "base/callback.h"
 #include "base/callback_helpers.h"
 #include "base/values.h"
@@ -28,7 +30,7 @@ TEST(LogBufferSubmitter, VerifySubmissionOnDestruction) {
 
   MockLogReceiver receiver;
   LogRouter router;
-  ignore_result(router.RegisterReceiver(&receiver));
+  router.RegisterReceiver(&receiver);
   std::unique_ptr<LogManager> log_manager =
       LogManager::Create(&router, base::NullCallback());
 
@@ -41,7 +43,7 @@ TEST(LogBufferSubmitter, VerifySubmissionOnDestruction) {
 TEST(LogBufferSubmitter, NoEmptySubmission) {
   MockLogReceiver receiver;
   LogRouter router;
-  ignore_result(router.RegisterReceiver(&receiver));
+  router.RegisterReceiver(&receiver);
   std::unique_ptr<LogManager> log_manager =
       LogManager::Create(&router, base::NullCallback());
 
@@ -58,7 +60,7 @@ TEST(LogBufferSubmitter, CorrectActivation) {
 
   LogRouter router;
   MockLogReceiver receiver;
-  ignore_result(router.RegisterReceiver(&receiver));
+  router.RegisterReceiver(&receiver);
   std::unique_ptr<LogManager> log_manager_2 =
       LogManager::Create(&router, base::NullCallback());
   EXPECT_TRUE(log_manager_2->Log().buffer().active());

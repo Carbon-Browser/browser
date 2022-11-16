@@ -11,15 +11,16 @@
 #include "base/feature_list.h"
 #include "base/i18n/rtl.h"
 #include "base/memory/ptr_util.h"
-#include "base/supports_user_data.h"
 #include "components/safe_browsing/content/browser/base_blocking_page.h"
 #include "components/safe_browsing/core/common/features.h"
+#include "components/security_interstitials/content/security_interstitial_tab_helper.h"
 #include "components/security_interstitials/content/unsafe_resource_util.h"
 #include "components/security_interstitials/core/unsafe_resource.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/web_contents.h"
+#include "content/public/browser/web_contents_user_data.h"
 
 using content::BrowserThread;
 using content::NavigationEntry;
@@ -29,17 +30,18 @@ using safe_browsing::SBThreatType;
 
 namespace {
 
-const void* const kAllowlistKey = &kAllowlistKey;
-
 // A AllowlistUrlSet holds the set of URLs that have been allowlisted
 // for a specific WebContents, along with pending entries that are still
 // undecided. Each URL is associated with the first SBThreatType that
 // was seen for that URL. The URLs in this set should come from
 // GetAllowlistUrl() or GetMainFrameAllowlistUrlForResource() (in
 // SafeBrowsingUIManager)
-class AllowlistUrlSet : public base::SupportsUserData::Data {
+class AllowlistUrlSet : public content::WebContentsUserData<AllowlistUrlSet> {
  public:
-  AllowlistUrlSet() {}
+  ~AllowlistUrlSet() override = default;
+  AllowlistUrlSet(const AllowlistUrlSet&) = delete;
+  AllowlistUrlSet& operator=(const AllowlistUrlSet&) = delete;
+
   bool Contains(const GURL& url, SBThreatType* threat_type) {
     auto found = map_.find(url);
     if (found == map_.end())
@@ -77,19 +79,25 @@ class AllowlistUrlSet : public base::SupportsUserData::Data {
     pending_[url] = {threat_type, 1};
   }
 
- protected:
+ private:
+  friend class content::WebContentsUserData<AllowlistUrlSet>;
+  WEB_CONTENTS_USER_DATA_KEY_DECL();
+
+  explicit AllowlistUrlSet(content::WebContents* web_contents)
+      : content::WebContentsUserData<AllowlistUrlSet>(*web_contents) {}
+
   // Method to remove all the instances of a website in the pending list
   // disregarding the count. Used when adding a site to the permanent list.
   void RemoveAllPending(const GURL& url) { pending_.erase(url); }
 
- private:
   std::map<GURL, SBThreatType> map_;
   // Keep a count of how many times a site has been added to the pending list
   // in order to solve a problem where upon reloading an interstitial, a site
   // would be re-added to and removed from the allowlist in the wrong order.
   std::map<GURL, std::pair<SBThreatType, int>> pending_;
-  DISALLOW_COPY_AND_ASSIGN(AllowlistUrlSet);
 };
+
+WEB_CONTENTS_USER_DATA_KEY_IMPL(AllowlistUrlSet);
 
 // Returns the URL that should be used in a AllowlistUrlSet for the
 // resource loaded from |url| on a navigation |entry|.
@@ -104,23 +112,13 @@ GURL GetAllowlistUrl(const GURL& url,
   return url.GetWithEmptyPath();
 }
 
-AllowlistUrlSet* GetOrCreateAllowlist(WebContents* web_contents) {
-  AllowlistUrlSet* site_list =
-      static_cast<AllowlistUrlSet*>(web_contents->GetUserData(kAllowlistKey));
-  if (!site_list) {
-    site_list = new AllowlistUrlSet;
-    web_contents->SetUserData(kAllowlistKey, base::WrapUnique(site_list));
-  }
-  return site_list;
-}
-
 }  // namespace
 
 namespace safe_browsing {
 
-BaseUIManager::BaseUIManager() {}
+BaseUIManager::BaseUIManager() = default;
 
-BaseUIManager::~BaseUIManager() {}
+BaseUIManager::~BaseUIManager() = default;
 
 bool BaseUIManager::IsAllowlisted(const UnsafeResource& resource) {
   NavigationEntry* entry = nullptr;
@@ -128,8 +126,9 @@ bool BaseUIManager::IsAllowlisted(const UnsafeResource& resource) {
     entry = GetNavigationEntryForResource(resource);
   }
 
-  WebContents* web_contents = resource.web_contents_getter.Run();
-  // |web_contents_getter| can return null after RenderFrameHost is destroyed.
+  content::WebContents* web_contents =
+      security_interstitials::GetWebContentsForResource(resource);
+  // |web_contents| can be null after RenderFrameHost is destroyed.
   if (!web_contents)
     return false;
 
@@ -154,8 +153,7 @@ bool BaseUIManager::IsUrlAllowlistedOrPendingForWebContents(
   if (lookup_url.is_empty())
     return false;
 
-  AllowlistUrlSet* site_list =
-      static_cast<AllowlistUrlSet*>(web_contents->GetUserData(kAllowlistKey));
+  AllowlistUrlSet* site_list = AllowlistUrlSet::FromWebContents(web_contents);
   if (!site_list)
     return false;
 
@@ -227,7 +225,8 @@ void BaseUIManager::DisplayBlockingPage(const UnsafeResource& resource) {
 
   // The tab might have been closed. If it was closed, just act as if "Don't
   // Proceed" had been chosen.
-  WebContents* web_contents = resource.web_contents_getter.Run();
+  content::WebContents* web_contents =
+      security_interstitials::GetWebContentsForResource(resource);
   if (!web_contents) {
     OnBlockingPageDone(std::vector<UnsafeResource>{resource},
                        false /* proceed */, web_contents,
@@ -261,6 +260,8 @@ void BaseUIManager::DisplayBlockingPage(const UnsafeResource& resource) {
 
   // If unsafe content is loaded in a portal, we treat its embedder as
   // dangerous.
+  // TODO(https://crbug.com/1254770): This will have to be updated for Portals
+  // on MPArch.
   content::WebContents* outermost_contents =
       GetEmbeddingWebContentsForInterstitial(web_contents);
 
@@ -272,15 +273,31 @@ void BaseUIManager::DisplayBlockingPage(const UnsafeResource& resource) {
   } else if (entry && !resource.IsMainPageLoadBlocked()) {
     unsafe_url = entry->GetURL();
   }
-  AddUnsafeResource(unsafe_url, resource);
-  // If the delayed warnings experiment is not enabled, with committed
-  // interstitials we just cancel the load from here, the actual interstitial
-  // will be shown from the SafeBrowsingNavigationThrottle.
-  // showed_interstitial is set to false for subresources since this
+
+  // In top-document navigation cases, we just mark the resource unsafe and
+  // cancel the load from here, the actual interstitial will be shown from the
+  // SafeBrowsingNavigationThrottle when the navigation fails.
+  //
+  // In other cases, the error interstitial is manually loaded here, after the
+  // load is canceled:
+  // - Subresources: since only documents load using a navigation, these
+  //   won't hit the throttle.
+  // - Nested frames and WebContents: The interstitial should be shown in the
+  //   top, outer-most frame but the navigation is occurring in a nested
+  //   context.
+  // - Delayed Warning Experiment: When enabled, this method is only called
+  //   after the navigation completes and a user action occurs so the throttle
+  //   cannot be used.
+  const bool load_post_commit_error_page = !resource.IsMainPageLoadBlocked() ||
+                                           resource.is_delayed_warning ||
+                                           outermost_contents != web_contents;
+  if (!load_post_commit_error_page) {
+    AddUnsafeResource(unsafe_url, resource);
+  }
+
+  // `showed_interstitial` is set to false for subresources since this
   // cancellation doesn't correspond to the navigation that triggers the error
   // page (the call to LoadPostCommitErrorPage creates another navigation).
-  //
-  // If the experiment is enabled, the interstitial is shown below.
   resource.DispatchCallback(
       FROM_HERE, false /* proceed */,
       resource.IsMainPageLoadBlocked() /* showed_interstitial */);
@@ -289,29 +306,29 @@ void BaseUIManager::DisplayBlockingPage(const UnsafeResource& resource) {
     DCHECK(!resource.is_delayed_warning);
   }
 
-  if (!resource.IsMainPageLoadBlocked() || resource.is_delayed_warning ||
-      outermost_contents != web_contents) {
+  if (load_post_commit_error_page) {
     DCHECK(!IsAllowlisted(resource));
-    // For subresource triggered interstitials, we trigger the error page
-    // navigation from here since there will be no navigation to intercept
-    // in the throttle.
-    //
-    // Blocking pages handle both user interaction, and generation of the
-    // interstitial HTML. In the case of subresources, we need the HTML
-    // content prior to (and in a different process than when) installing the
-    // command handlers. For this reason we create a blocking page here just
-    // to generate the HTML, and immediately delete it.
+    // In some cases the interstitial must be loaded here since there will be
+    // no navigation to intercept in the throttle.
     std::unique_ptr<BaseBlockingPage> blocking_page =
         base::WrapUnique(CreateBlockingPageForSubresource(
             outermost_contents, unsafe_url, resource));
-    outermost_contents->GetController().LoadPostCommitErrorPage(
-        outermost_contents->GetMainFrame(), unsafe_url,
-        blocking_page->GetHTMLContents(), net::ERR_BLOCKED_BY_CLIENT);
+    base::WeakPtr<content::NavigationHandle> error_page_navigation_handle =
+        outermost_contents->GetController().LoadPostCommitErrorPage(
+            outermost_contents->GetPrimaryMainFrame(), unsafe_url,
+            blocking_page->GetHTMLContents(), net::ERR_BLOCKED_BY_CLIENT);
+    if (error_page_navigation_handle) {
+      blocking_page->CreatedPostCommitErrorPageNavigation(
+          error_page_navigation_handle.get());
+      security_interstitials::SecurityInterstitialTabHelper::
+          AssociateBlockingPage(error_page_navigation_handle.get(),
+                                std::move(blocking_page));
+    }
   }
 }
 
 void BaseUIManager::EnsureAllowlistCreated(WebContents* web_contents) {
-  GetOrCreateAllowlist(web_contents);
+  AllowlistUrlSet::CreateForWebContents(web_contents);
 }
 
 void BaseUIManager::CreateAndSendHitReport(const UnsafeResource& resource) {}
@@ -340,9 +357,9 @@ void BaseUIManager::MaybeReportSafeBrowsingHit(
 
 // If the user had opted-in to send ThreatDetails, this gets called
 // when the report is ready.
-void BaseUIManager::SendSerializedThreatDetails(
+void BaseUIManager::SendThreatDetails(
     content::BrowserContext* browser_context,
-    const std::string& serialized) {
+    std::unique_ptr<ClientSafeBrowsingReportRequest> report) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   return;
 }
@@ -360,7 +377,8 @@ void BaseUIManager::AddToAllowlistUrlSet(const GURL& allowlist_url,
   if (!web_contents)
     return;
 
-  AllowlistUrlSet* site_list = GetOrCreateAllowlist(web_contents);
+  AllowlistUrlSet::CreateForWebContents(web_contents);
+  AllowlistUrlSet* site_list = AllowlistUrlSet::FromWebContents(web_contents);
 
   if (allowlist_url.is_empty())
     return;
@@ -421,8 +439,7 @@ void BaseUIManager::RemoveAllowlistUrlSet(const GURL& allowlist_url,
   // here. By this point, a "Back" navigation could have already been
   // committed, so the page loading |resource| might be gone and
   // |web_contents_getter| may no longer be valid.
-  AllowlistUrlSet* site_list =
-      static_cast<AllowlistUrlSet*>(web_contents->GetUserData(kAllowlistKey));
+  AllowlistUrlSet* site_list = AllowlistUrlSet::FromWebContents(web_contents);
 
   if (allowlist_url.is_empty())
     return;
@@ -454,13 +471,10 @@ void BaseUIManager::RemoveAllowlistUrlSet(const GURL& allowlist_url,
 // static
 GURL BaseUIManager::GetMainFrameAllowlistUrlForResource(
     const security_interstitials::UnsafeResource& resource) {
-  if (resource.is_subresource) {
-    NavigationEntry* entry = GetNavigationEntryForResource(resource);
-    if (!entry)
-      return GURL();
-    return entry->GetURL().GetWithEmptyPath();
-  }
-  return resource.url.GetWithEmptyPath();
+  return GetAllowlistUrl(resource.url, resource.is_subresource,
+                         resource.is_subresource
+                             ? GetNavigationEntryForResource(resource)
+                             : nullptr);
 }
 
 }  // namespace safe_browsing

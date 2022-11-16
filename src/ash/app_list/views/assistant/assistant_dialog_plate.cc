@@ -24,6 +24,7 @@
 #include "base/bind.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chromeos/ui/vector_icons/vector_icons.h"
+#include "components/vector_icons/vector_icons.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/compositor/callback_layer_animation_observer.h"
@@ -51,14 +52,11 @@ constexpr int kPaddingHorizontalDip = 16;
 constexpr int kPaddingTopDip = 12;
 
 // Animation.
-constexpr base::TimeDelta kAnimationFadeInDelay =
-    base::TimeDelta::FromMilliseconds(83);
-constexpr base::TimeDelta kAnimationFadeInDuration =
-    base::TimeDelta::FromMilliseconds(100);
-constexpr base::TimeDelta kAnimationFadeOutDuration =
-    base::TimeDelta::FromMilliseconds(83);
+constexpr base::TimeDelta kAnimationFadeInDelay = base::Milliseconds(83);
+constexpr base::TimeDelta kAnimationFadeInDuration = base::Milliseconds(100);
+constexpr base::TimeDelta kAnimationFadeOutDuration = base::Milliseconds(83);
 constexpr base::TimeDelta kAnimationTransformInDuration =
-    base::TimeDelta::FromMilliseconds(333);
+    base::Milliseconds(333);
 constexpr int kAnimationTranslationDip = 30;
 
 using keyboard::KeyboardUIController;
@@ -299,7 +297,7 @@ void AssistantDialogPlate::RequestFocus() {
 void AssistantDialogPlate::OnThemeChanged() {
   views::View::OnThemeChanged();
 
-  ScopedLightModeAsDefault scoped_light_mode_as_default;
+  ScopedAssistantLightModeAsDefault scoped_light_mode_as_default;
 
   textfield_->SetTextColor(ColorProvider::Get()->GetContentLayerColor(
       ColorProvider::ContentLayerType::kTextColorPrimary));
@@ -322,8 +320,8 @@ void AssistantDialogPlate::InitLayout() {
   views::BoxLayout* layout_manager =
       SetLayoutManager(std::make_unique<views::BoxLayout>(
           views::BoxLayout::Orientation::kHorizontal,
-          gfx::Insets(kPaddingTopDip, kPaddingHorizontalDip, kPaddingBottomDip,
-                      kPaddingHorizontalDip)));
+          gfx::Insets::TLBR(kPaddingTopDip, kPaddingHorizontalDip,
+                            kPaddingBottomDip, kPaddingHorizontalDip)));
 
   layout_manager->set_cross_axis_alignment(
       views::BoxLayout::CrossAxisAlignment::kCenter);
@@ -364,7 +362,7 @@ void AssistantDialogPlate::InitKeyboardLayoutContainer() {
       keyboard_layout_container->SetLayoutManager(
           std::make_unique<views::BoxLayout>(
               views::BoxLayout::Orientation::kHorizontal,
-              gfx::Insets(0, kLeftPaddingDip, 0, 0)));
+              gfx::Insets::TLBR(0, kLeftPaddingDip, 0, 0)));
 
   layout_manager->set_cross_axis_alignment(
       views::BoxLayout::CrossAxisAlignment::kCenter);
@@ -450,11 +448,13 @@ void AssistantDialogPlate::InitVoiceLayoutContainer() {
   AssistantButton::InitParams params;
   params.size_in_dip = kButtonSizeDip;
   params.icon_size_in_dip = kIconSizeDip;
+  params.icon_color_type = ColorProvider::ContentLayerType::kIconColorPrimary;
   params.accessible_name_id = IDS_ASH_ASSISTANT_DIALOG_PLATE_KEYBOARD_ACCNAME;
   params.tooltip_id = IDS_ASH_ASSISTANT_DIALOG_PLATE_KEYBOARD_TOOLTIP;
   keyboard_input_toggle_ =
       voice_layout_container->AddChildView(AssistantButton::Create(
-          this, kKeyboardIcon, AssistantButtonId::kKeyboardInputToggle,
+          this, vector_icons::kKeyboardIcon,
+          AssistantButtonId::kKeyboardInputToggle,
           std::move(params)));
   keyboard_input_toggle_->SetID(AssistantViewID::kKeyboardInputToggle);
 

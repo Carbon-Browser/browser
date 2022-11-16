@@ -1,4 +1,4 @@
-#!/usr/bin/env vpython
+#!/usr/bin/env vpython3
 # Copyright 2018 The Chromium Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -48,12 +48,13 @@ class XCodebuildRunnerTest(test_runner_test.TestCase):
               'fill_xctest_run', lambda _1, _2: 'xctestrun')
     self.mock(iossim_util, 'get_simulator', lambda _1, _2: 'sim-UUID')
     self.mock(test_apps, 'get_bundle_id', lambda _: "fake-bundle-id")
+    self.mock(test_apps, 'is_running_rosetta', lambda: False)
     self.mock(test_apps.plistlib, 'writePlist', lambda _1, _2: '')
     self.mock(test_runner.SimulatorTestRunner, 'tear_down', lambda _: None)
     self.mock(test_runner.DeviceTestRunner, 'tear_down', lambda _: None)
     self.mock(xcodebuild_runner.subprocess,
               'Popen', lambda cmd, env, stdout, stderr: 'fake-out')
-    self.mock(test_runner, 'print_process_output', lambda _: [])
+    self.mock(test_runner, 'print_process_output', lambda _, timeout: [])
 
   def tearDown(self):
     super(XCodebuildRunnerTest, self).tearDown()
@@ -71,7 +72,7 @@ class XCodebuildRunnerTest(test_runner_test.TestCase):
         ])
     ]
     launch_command = xcodebuild_runner.LaunchCommand(
-        egtests, _DESTINATION, shards=1, retries=3)
+        egtests, _DESTINATION, shards=1, retries=3, readline_timeout=180)
     overall_result = launch_command.launch()
     self.assertFalse(overall_result.crashed)
     self.assertEqual(len(overall_result.all_test_names()), 2)
@@ -87,9 +88,10 @@ class XCodebuildRunnerTest(test_runner_test.TestCase):
     ])
     mock_collect_results.side_effect = [collection]
     launch_command = xcodebuild_runner.LaunchCommand(
-        egtests, _DESTINATION, shards=1, retries=3)
+        egtests, _DESTINATION, shards=1, retries=3, readline_timeout=180)
     launch_command.launch()
-    xcodebuild_runner.LaunchCommand(egtests, _DESTINATION, shards=1, retries=3)
+    xcodebuild_runner.LaunchCommand(
+        egtests, _DESTINATION, shards=1, retries=3, readline_timeout=180)
     self.assertEqual(1, len(mock_collect_results.mock_calls))
 
   @mock.patch('xcode_log_parser.Xcode11LogParser.collect_test_results')
@@ -106,7 +108,7 @@ class XCodebuildRunnerTest(test_runner_test.TestCase):
         ])
     ]
     launch_command = xcodebuild_runner.LaunchCommand(
-        egtests, _DESTINATION, shards=1, retries=3)
+        egtests, _DESTINATION, shards=1, retries=3, readline_timeout=180)
     overall_result = launch_command.launch()
     self.assertEqual(len(overall_result.all_test_names()), 2)
     self.assertEqual(overall_result.expected_tests(),
@@ -121,7 +123,7 @@ class XCodebuildRunnerTest(test_runner_test.TestCase):
     crashed_collection.crashed = True
     mock_collect_results.return_value = crashed_collection
     launch_command = xcodebuild_runner.LaunchCommand(
-        egtests, _DESTINATION, shards=1, retries=3)
+        egtests, _DESTINATION, shards=1, retries=3, readline_timeout=180)
     overall_result = launch_command.launch()
     self.assertEqual(len(overall_result.all_test_names()), 0)
     self.assertEqual(overall_result.expected_tests(), set([]))
@@ -140,8 +142,8 @@ class DeviceXcodeTestRunnerTest(test_runner_test.TestCase):
 
     self.mock(result_sink_util.ResultSinkClient,
               'post', lambda *args, **kwargs: None)
-    self.mock(test_runner.subprocess, 'check_output', lambda _: 'fake-output')
-    self.mock(test_runner.subprocess, 'check_call', lambda _: 'fake-out')
+    self.mock(test_runner.subprocess, 'check_output', lambda _: b'fake-output')
+    self.mock(test_runner.subprocess, 'check_call', lambda _: b'fake-out')
     self.mock(test_runner.subprocess,
               'Popen', lambda cmd, env, stdout, stderr: 'fake-out')
     self.mock(test_runner.TestRunner, 'set_sigterm_handler',
@@ -149,7 +151,7 @@ class DeviceXcodeTestRunnerTest(test_runner_test.TestCase):
     self.mock(os, 'listdir', lambda _: [])
     self.mock(xcodebuild_runner.subprocess,
               'Popen', lambda cmd, env, stdout, stderr: 'fake-out')
-    self.mock(test_runner, 'print_process_output', lambda _: [])
+    self.mock(test_runner, 'print_process_output', lambda _, timeout: [])
     self.mock(test_runner.TestRunner, 'start_proc', lambda self, cmd: 0)
     self.mock(test_runner.DeviceTestRunner, 'get_installed_packages',
               lambda self: [])
@@ -189,9 +191,8 @@ class DeviceXcodeTestRunnerTest(test_runner_test.TestCase):
     crashed_collection.crashed = True
     mock_result.return_value = crashed_collection
     self.assertFalse(tr.launch())
-    self.assertEqual(len(tr.test_results['tests']), 3)
+    self.assertEqual(len(tr.test_results['tests']), 2)
     tests = tr.test_results['tests']
-    self.assertEqual(tests['BUILD_INTERRUPTED']['actual'], 'CRASH')
     self.assertEqual(tests['Class1/passedTest1']['actual'], 'PASS')
     self.assertEqual(tests['Class1/passedTest2']['actual'], 'SKIP')
     self.assertEqual(tests['Class1/passedTest2']['expected'], 'PASS')
@@ -207,10 +208,10 @@ class DeviceXcodeTestRunnerTest(test_runner_test.TestCase):
                                                  "fake-host-app-path",
                                                  "fake-out-dir")
     self.assertFalse(tr.launch())
-    self.assertEqual(len(tr.test_results['tests']), 2)
+    self.assertEqual(len(tr.test_results['tests']), 1)
     tests = tr.test_results['tests']
-    self.assertEqual(tests['BUILD_INTERRUPTED']['actual'], 'CRASH')
     self.assertEqual(tests['Class1/passedTest1']['actual'], 'PASS')
+    # Class1/passedTest2 doesn't appear in test results.
 
   @mock.patch('xcodebuild_runner.isinstance', return_value=True)
   @mock.patch('xcode_log_parser.Xcode11LogParser.collect_test_results')

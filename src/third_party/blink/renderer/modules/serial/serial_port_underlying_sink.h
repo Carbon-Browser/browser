@@ -15,6 +15,7 @@ namespace blink {
 class ExceptionState;
 class ScriptPromiseResolver;
 class SerialPort;
+class WritableStreamDefaultController;
 
 class SerialPortUnderlyingSink final : public UnderlyingSinkBase {
  public:
@@ -33,13 +34,12 @@ class SerialPortUnderlyingSink final : public UnderlyingSinkBase {
                       ScriptValue reason,
                       ExceptionState&) override;
 
-  // After |data_pipe_| has closed calls to write() will return a Promise
-  // rejected with this DOMException.
-  void SignalErrorOnClose(DOMException*);
+  void SignalError(DOMException*);
 
   void Trace(Visitor*) const override;
 
  private:
+  void OnAborted();
   void OnHandleReady(MojoResult, const mojo::HandleSignalsState&);
   void OnFlushOrDrain();
   void WriteData();
@@ -48,10 +48,11 @@ class SerialPortUnderlyingSink final : public UnderlyingSinkBase {
   mojo::ScopedDataPipeProducerHandle data_pipe_;
   mojo::SimpleWatcher watcher_;
   Member<SerialPort> serial_port_;
-  Member<DOMException> pending_exception_;
+  Member<ScriptState> script_state_;
+  Member<WritableStreamDefaultController> controller_;
 
   Member<V8BufferSource> buffer_source_;
-  uint32_t offset_ = 0;
+  size_t offset_ = 0;
 
   // Only one outstanding call to write(), close() or abort() is allowed at a
   // time. This holds the ScriptPromiseResolver for the Promise returned by any

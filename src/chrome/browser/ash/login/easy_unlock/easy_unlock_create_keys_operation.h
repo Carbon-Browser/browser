@@ -10,12 +10,11 @@
 #include <memory>
 #include <string>
 
+#include "ash/components/login/auth/public/user_context.h"
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/login/easy_unlock/easy_unlock_types.h"
 #include "chromeos/dbus/cryptohome/UserDataAuth.pb.h"
-#include "chromeos/login/auth/user_context.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
@@ -29,6 +28,11 @@ class EasyUnlockCreateKeysOperation {
                                 const std::string& tpm_public_key,
                                 const EasyUnlockDeviceKeyDataList& devices,
                                 CreateKeysCallback callback);
+
+  EasyUnlockCreateKeysOperation(const EasyUnlockCreateKeysOperation&) = delete;
+  EasyUnlockCreateKeysOperation& operator=(
+      const EasyUnlockCreateKeysOperation&) = delete;
+
   ~EasyUnlockCreateKeysOperation();
 
   void Start();
@@ -58,8 +62,6 @@ class EasyUnlockCreateKeysOperation {
   std::unique_ptr<ChallengeCreator> challenge_creator_;
 
   base::WeakPtrFactory<EasyUnlockCreateKeysOperation> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(EasyUnlockCreateKeysOperation);
 };
 
 }  // namespace ash

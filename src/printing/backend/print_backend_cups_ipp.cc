@@ -23,16 +23,14 @@
 namespace printing {
 
 PrintBackendCupsIpp::PrintBackendCupsIpp(
-    std::unique_ptr<CupsConnection> cups_connection,
-    const std::string& locale)
-    : PrintBackend(locale), cups_connection_(std::move(cups_connection)) {}
+    std::unique_ptr<CupsConnection> cups_connection)
+    : cups_connection_(std::move(cups_connection)) {}
 
 PrintBackendCupsIpp::~PrintBackendCupsIpp() = default;
 
 mojom::ResultCode PrintBackendCupsIpp::EnumeratePrinters(
-    PrinterList* printer_list) {
-  DCHECK(printer_list);
-  printer_list->clear();
+    PrinterList& printer_list) {
+  DCHECK(printer_list.empty());
 
   std::vector<std::unique_ptr<CupsPrinter>> printers;
   if (!cups_connection_->GetDests(printers)) {
@@ -48,7 +46,7 @@ mojom::ResultCode PrintBackendCupsIpp::EnumeratePrinters(
   for (const auto& printer : printers) {
     PrinterBasicInfo basic_info;
     if (printer->ToPrinterInfo(&basic_info)) {
-      printer_list->push_back(basic_info);
+      printer_list.push_back(basic_info);
     }
   }
 

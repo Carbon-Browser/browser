@@ -22,6 +22,10 @@ constexpr size_t kMinRequiredFieldsForHeuristics = 3;
 constexpr size_t kMinRequiredFieldsForQuery = 1;
 constexpr size_t kMinRequiredFieldsForUpload = 1;
 
+// Set a conservative upper bound on the number of forms we are willing to
+// cache, simply to prevent unbounded memory consumption.
+constexpr size_t kAutofillManagerMaxFormCacheSize = 100;
+
 // The maximum number of form fields we are willing to parse, due to
 // computational costs. Several examples of forms with lots of fields that are
 // not relevant to Autofill: (1) the Netflix queue; (2) the Amazon wishlist;
@@ -30,26 +34,9 @@ constexpr size_t kMinRequiredFieldsForUpload = 1;
 // Copied to components/autofill/ios/form_util/resources/fill.js.
 constexpr size_t kMaxParseableFields = 200;
 
-// The maximum number of frames we are willing to parse, due to computational
-// costs.
-constexpr size_t MaxParseableChildFrames(size_t frame_depth) {
-  switch (frame_depth) {
-    case 0:
-      return 20;
-    case 1:
-      return 10;
-    case 2:
-      return 5;
-    default:
-      return 0;
-  }
-}
-
-// The maximum number of frames in an entire frame tree we are willing to parse,
-// due to computational costs.
-constexpr size_t kMaxParseableFramesInTree =
-    MaxParseableChildFrames(0) *
-    (1 + MaxParseableChildFrames(1) * (1 + MaxParseableChildFrames(2)));
+// The maximum number of form fields we are willing to parse, due to
+// computational costs.
+constexpr size_t kMaxParseableChildFrames = 20;
 
 // The maximum number of allowed calls to CreditCard::GetMatchingTypes() and
 // AutofillProfile::GetMatchingTypeAndValidities().
@@ -74,14 +61,17 @@ constexpr int kCrossFrameFill = -2;
 // Options bitmask values for AutofillHostMsg_ShowPasswordSuggestions IPC
 enum ShowPasswordSuggestionsOptions {
   SHOW_ALL = 1 << 0 /* show all credentials, not just ones matching username */,
-  IS_PASSWORD_FIELD = 1 << 1 /* input field is a password field */
+  IS_PASSWORD_FIELD = 1 << 1 /* input field is a password field */,
+  ACCEPTS_WEBAUTHN_CREDENTIALS =
+      1 << 2 /* input field is marked to accept webauthn credentials */,
 };
 
+// A refill happens only within `kLimitBeforeRefill` of the original fill.
+constexpr base::TimeDelta kLimitBeforeRefill = base::Seconds(1);
+
 // Constants for the soft/hard deletion of Autofill data.
-constexpr base::TimeDelta kDisusedDataModelTimeDelta =
-    base::TimeDelta::FromDays(180);
-constexpr base::TimeDelta kDisusedDataModelDeletionTimeDelta =
-    base::TimeDelta::FromDays(395);
+constexpr base::TimeDelta kDisusedDataModelTimeDelta = base::Days(180);
+constexpr base::TimeDelta kDisusedDataModelDeletionTimeDelta = base::Days(395);
 
 // Returns if the entry with the given |use_date| is deletable? (i.e. has not
 // been used for a long time).
@@ -89,7 +79,8 @@ bool IsAutofillEntryWithUseDateDeletable(const base::Time& use_date);
 
 // The period after which autocomplete entries should be cleaned-up in days.
 // Equivalent to roughly 14 months.
-const int64_t kAutocompleteRetentionPolicyPeriodInDays = 14 * 31;
+constexpr base::TimeDelta kAutocompleteRetentionPolicyPeriod =
+    base::Days(14 * 31);
 
 // Limits the number of times the value of a specific type can be filled into a
 // form.

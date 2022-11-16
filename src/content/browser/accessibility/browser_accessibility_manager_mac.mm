@@ -21,6 +21,7 @@
 #include "ui/accelerated_widget_mac/accelerated_widget_mac.h"
 #include "ui/accessibility/ax_role_properties.h"
 #include "ui/accessibility/platform/ax_private_webkit_constants_mac.h"
+#include "ui/base/cocoa/remote_accessibility_api.h"
 
 namespace {
 
@@ -57,7 +58,7 @@ BrowserAccessibilityManagerMac::BrowserAccessibilityManagerMac(
   Initialize(initial_tree);
 }
 
-BrowserAccessibilityManagerMac::~BrowserAccessibilityManagerMac() {}
+BrowserAccessibilityManagerMac::~BrowserAccessibilityManagerMac() = default;
 
 // static
 ui::AXTreeUpdate BrowserAccessibilityManagerMac::GetEmptyDocument() {
@@ -82,14 +83,20 @@ void BrowserAccessibilityManagerMac::FireFocusEvent(
                             node);
 }
 
-void BrowserAccessibilityManagerMac::FireBlinkEvent(
-    ax::mojom::Event event_type,
-    BrowserAccessibility* node) {
-  BrowserAccessibilityManager::FireBlinkEvent(event_type, node);
+void BrowserAccessibilityManagerMac::FireBlinkEvent(ax::mojom::Event event_type,
+                                                    BrowserAccessibility* node,
+                                                    int action_request_id) {
+  BrowserAccessibilityManager::FireBlinkEvent(event_type, node,
+                                              action_request_id);
   NSString* mac_notification = nullptr;
   switch (event_type) {
     case ax::mojom::Event::kAutocorrectionOccured:
       mac_notification = ui::NSAccessibilityAutocorrectionOccurredNotification;
+      break;
+    case ax::mojom::Event::kLoadComplete:
+      if (!ShouldFireLoadCompleteNotification())
+        return;
+      mac_notification = ui::NSAccessibilityLoadCompleteNotification;
       break;
     default:
       return;
@@ -125,7 +132,7 @@ void BrowserAccessibilityManagerMac::FireGeneratedEvent(
     ui::AXEventGenerator::Event event_type,
     BrowserAccessibility* node) {
   BrowserAccessibilityManager::FireGeneratedEvent(event_type, node);
-  auto native_node = ToBrowserAccessibilityCocoa(node);
+  BrowserAccessibilityCocoa* native_node = node->GetNativeViewAccessible();
   DCHECK(native_node);
 
   // Refer to |AXObjectCache::postPlatformNotification| in WebKit source code.
@@ -159,6 +166,9 @@ void BrowserAccessibilityManagerMac::FireGeneratedEvent(
       // There currently is none:
       // https://www.w3.org/TR/core-aam-1.2/#details-id-186
       return;
+    case ui::AXEventGenerator::Event::BUSY_CHANGED:
+      mac_notification = ui::NSAccessibilityElementBusyChangedNotification;
+      break;
     case ui::AXEventGenerator::Event::CHECKED_STATE_CHANGED:
       mac_notification = NSAccessibilityValueChangedNotification;
       break;
@@ -188,9 +198,9 @@ void BrowserAccessibilityManagerMac::FireGeneratedEvent(
         return;
 
       NSAccessibilityPostNotificationWithUserInfo(
-          ToBrowserAccessibilityCocoa(focus), mac_notification, user_info);
+          focus->GetNativeViewAccessible(), mac_notification, user_info);
       NSAccessibilityPostNotificationWithUserInfo(
-          ToBrowserAccessibilityCocoa(root), mac_notification, user_info);
+          root->GetNativeViewAccessible(), mac_notification, user_info);
       return;
     }
     case ui::AXEventGenerator::Event::EXPANDED:
@@ -215,7 +225,7 @@ void BrowserAccessibilityManagerMac::FireGeneratedEvent(
         return;
       }
 
-      if (base::mac::IsAtMostOS10_13()) {
+      if (base::mac::IsOS10_13()) {
         // Use the announcement API to get around OS <= 10.13 VoiceOver bug
         // where it stops announcing live regions after the first time focus
         // leaves any content area.
@@ -239,32 +249,11 @@ void BrowserAccessibilityManagerMac::FireGeneratedEvent(
                 }
               },
               std::move(retained_node)),
-          base::TimeDelta::FromMilliseconds(kLiveRegionChangeIntervalMS));
+          base::Milliseconds(kLiveRegionChangeIntervalMS));
       return;
     }
     case ui::AXEventGenerator::Event::LIVE_REGION_CREATED:
       mac_notification = ui::NSAccessibilityLiveRegionCreatedNotification;
-      break;
-    case ui::AXEventGenerator::Event::LOAD_COMPLETE:
-      // On MacOS 10.15, firing AXLoadComplete causes focus to move to the
-      // webpage and read content, despite the "Automatically speak the webpage"
-      // checkbox in Voiceover utility being unchecked. The checkbox is
-      // unchecked by default in 10.15 so we don't fire AXLoadComplete events to
-      // support the default behavior.
-      if (base::mac::IsOS10_15())
-        return;
-
-      // |NSAccessibilityLoadCompleteNotification| should only be fired on the
-      // top document and when the document is not Chrome's new tab page.
-      if (IsRootTree() && !IsChromeNewTabPage()) {
-        mac_notification = ui::NSAccessibilityLoadCompleteNotification;
-      } else {
-        // Voiceover moves focus to the web content when it receives an
-        // AXLoadComplete event. On Chrome's new tab page, focus should stay
-        // in the omnibox, so we purposefully do not fire the AXLoadComplete
-        // event in this case.
-        return;
-      }
       break;
     case ui::AXEventGenerator::Event::MENU_POPUP_END:
       // Calling NSAccessibilityPostNotification on a menu which is about to be
@@ -354,7 +343,7 @@ void BrowserAccessibilityManagerMac::FireGeneratedEvent(
         NSAccessibilityPostNotificationWithUserInfo(
             native_node, mac_notification, user_info);
         NSAccessibilityPostNotificationWithUserInfo(
-            ToBrowserAccessibilityCocoa(root), mac_notification, user_info);
+            root->GetNativeViewAccessible(), mac_notification, user_info);
         return;
       }
       break;
@@ -367,7 +356,6 @@ void BrowserAccessibilityManagerMac::FireGeneratedEvent(
     case ui::AXEventGenerator::Event::ATK_TEXT_OBJECT_ATTRIBUTE_CHANGED:
     case ui::AXEventGenerator::Event::ATOMIC_CHANGED:
     case ui::AXEventGenerator::Event::AUTO_COMPLETE_CHANGED:
-    case ui::AXEventGenerator::Event::BUSY_CHANGED:
     case ui::AXEventGenerator::Event::CARET_BOUNDS_CHANGED:
     case ui::AXEventGenerator::Event::CHECKED_STATE_DESCRIPTION_CHANGED:
     case ui::AXEventGenerator::Event::CHILDREN_CHANGED:
@@ -395,7 +383,6 @@ void BrowserAccessibilityManagerMac::FireGeneratedEvent(
     case ui::AXEventGenerator::Event::LIVE_REGION_NODE_CHANGED:
     case ui::AXEventGenerator::Event::LIVE_RELEVANT_CHANGED:
     case ui::AXEventGenerator::Event::LIVE_STATUS_CHANGED:
-    case ui::AXEventGenerator::Event::LOAD_START:
     case ui::AXEventGenerator::Event::MULTILINE_STATE_CHANGED:
     case ui::AXEventGenerator::Event::MULTISELECTABLE_STATE_CHANGED:
     case ui::AXEventGenerator::Event::OBJECT_ATTRIBUTE_CHANGED:
@@ -431,7 +418,7 @@ void BrowserAccessibilityManagerMac::FireNativeMacNotification(
     NSString* mac_notification,
     BrowserAccessibility* node) {
   DCHECK(mac_notification);
-  auto native_node = ToBrowserAccessibilityCocoa(node);
+  BrowserAccessibilityCocoa* native_node = node->GetNativeViewAccessible();
   DCHECK(native_node);
   NSAccessibilityPostNotification(native_node, mac_notification);
 }
@@ -451,12 +438,15 @@ void BrowserAccessibilityManagerMac::OnAtomicUpdateFinished(
 
   std::set<const BrowserAccessibilityCocoa*> changed_editable_roots;
   for (const auto& change : changes) {
-    const BrowserAccessibility* obj = GetFromAXNode(change.node);
-    if (obj && obj->HasState(ax::mojom::State::kEditable)) {
-      const BrowserAccessibilityCocoa* editable_root =
-          [ToBrowserAccessibilityCocoa(obj) editableAncestor];
-      if (editable_root && [editable_root instanceActive])
-        changed_editable_roots.insert(editable_root);
+    if (change.node->HasState(ax::mojom::State::kEditable)) {
+      auto* ancestor = change.node->GetTextFieldAncestor();
+      if (ancestor) {
+        BrowserAccessibility* obj = GetFromAXNode(ancestor);
+        const BrowserAccessibilityCocoa* editable_root =
+            obj->GetNativeViewAccessible();
+        if ([editable_root instanceActive])
+          changed_editable_roots.insert(editable_root);
+      }
     }
   }
 
@@ -498,7 +488,8 @@ NSDictionary* BrowserAccessibilityManagerMac::
   }
 
   focus_object = focus_object->PlatformGetLowestPlatformAncestor();
-  auto native_focus_object = ToBrowserAccessibilityCocoa(focus_object);
+  BrowserAccessibilityCocoa* native_focus_object =
+      focus_object->GetNativeViewAccessible();
   if (native_focus_object && [native_focus_object instanceActive]) {
     [user_info setObject:native_focus_object
                   forKey:ui::NSAccessibilityTextChangeElement];
@@ -584,6 +575,68 @@ bool BrowserAccessibilityManagerMac::IsChromeNewTabPage() {
   return url == GURL("chrome://newtab/") ||
          url == GURL("chrome://new-tab-page") ||
          url == GURL("chrome-search://local-ntp/local-ntp.html");
+}
+
+bool BrowserAccessibilityManagerMac::ShouldFireLoadCompleteNotification() {
+  // If it's not the top-level document, we shouldn't fire AXLoadComplete.
+  if (!IsRootTree())
+    return false;
+
+  // On MacOS 10.15, firing AXLoadComplete causes focus to move to the
+  // webpage and read content, despite the "Automatically speak the webpage"
+  // checkbox in Voiceover utility being unchecked. The checkbox is
+  // unchecked by default in 10.15 so we don't fire AXLoadComplete events to
+  // support the default behavior.
+  if (base::mac::IsOS10_15())
+    return false;
+
+  // Voiceover moves focus to the web content when it receives an
+  // AXLoadComplete event. On Chrome's new tab page, focus should stay
+  // in the omnibox, so we purposefully do not fire the AXLoadComplete
+  // event in this case.
+  if (IsChromeNewTabPage())
+    return false;
+
+  // We also check that the window is focused because VoiceOver responds
+  // to this notification by changing focus and possibly reading the entire
+  // page contents, sometimes even when the window is minimized or another
+  // Chrome window is active/focused.
+  id window = GetWindow();
+  if (!window)
+    return false;
+
+  if ([NSApp isActive])
+    return window == [NSApp accessibilityFocusedWindow];
+
+  // TODO(accessibility): We need a solution to the problem described below.
+  // If the window is NSAccessibilityRemoteUIElement, there are some challenges:
+  // 1. NSApp is the browser which spawned the PWA, and what it considers the
+  //    accessibilityFocusedWindow is the last browser window which was focused
+  //    prior to the PWA gaining focus; not the potentially-focused PWA window.
+  // 2. Unlike the BrowserNativeWidgetWindow, NSAccessibilityRemoteUIElement is
+  //    not an NSWindow and doesn't respond to the selector isKeyWindow. So we
+  //    cannot simply verify we have the key window for the currently running
+  //    application.
+  // 3. NSAccessibilityRemoteUIElement does not conform to the NSAccessibility
+  //    protocol, so we cannot ask it for any properties that might let us
+  //    verify this window is focused.
+  // 4. AppKit does not allow us to access the actual NSWindow instances of
+  //    other NSRunningApplications (i.e. the shim process); just window
+  //    information, which does not appear to include details regarding what
+  //    is active/focused.
+  // 5. Attempting to get at the accessibility tree of the shim process via
+  //    AXUIElementCreateApplication is possible, but the objects retrieved
+  //    in that fashion do not conform to the NSAccessibility protocol.
+  // For now we'll return true to preserve current behavior. Note, however,
+  // that this does not necessarily mean the event will be presented by
+  // VoiceOver in the same way it would present a normal browser window.
+  // This may be due to the issues described above, or the fact that one
+  // cannot ascend the accessibility tree all the way to the parent window
+  // from within the app shim content.
+  if ([window isKindOfClass:[NSAccessibilityRemoteUIElement class]])
+    return true;
+
+  return false;
 }
 
 }  // namespace content

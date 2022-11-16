@@ -6,6 +6,7 @@
 
 #include <memory>
 
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_keyboard_event_init.h"
 #include "third_party/blink/renderer/core/dom/document.h"
@@ -21,10 +22,26 @@
 #include "third_party/blink/renderer/core/html/html_body_element.h"
 #include "third_party/blink/renderer/core/html/html_html_element.h"
 #include "third_party/blink/renderer/core/layout/layout_object.h"
+#include "third_party/blink/renderer/core/loader/empty_clients.h"
+#include "third_party/blink/renderer/core/testing/null_execution_context.h"
 #include "third_party/blink/renderer/core/testing/page_test_base.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+
+using ::testing::Truly;
 
 namespace blink {
+
+namespace {
+
+class MockChromeClient : public EmptyChromeClient {
+ public:
+  MOCK_METHOD(void,
+              PasswordFieldReset,
+              (HTMLInputElement & element),
+              (override));
+};
+
+}  // namespace
 
 class HTMLInputElementTest : public PageTestBase {
  protected:
@@ -123,7 +140,7 @@ TEST_F(HTMLInputElementTest, create) {
   input = MakeGarbageCollected<HTMLInputElement>(
       GetDocument(), CreateElementFlags::ByParser(&GetDocument()));
   EXPECT_EQ(nullptr, input->UserAgentShadowRoot());
-  input->ParserSetAttributes(Vector<Attribute>());
+  input->ParserSetAttributes(Vector<Attribute, kAttributePrealloc>());
   EXPECT_NE(nullptr, input->UserAgentShadowRoot());
 }
 
@@ -190,7 +207,7 @@ TEST_F(HTMLInputElementTest, RadioKeyDownDCHECKFailure) {
       "<input type=radio name=g><input type=radio name=g>");
   auto& radio1 = To<HTMLInputElement>(*GetDocument().body()->firstChild());
   auto& radio2 = To<HTMLInputElement>(*radio1.nextSibling());
-  radio1.focus();
+  radio1.Focus();
   // Make layout-dirty.
   radio2.setAttribute(html_names::kStyleAttr, "position:fixed");
   KeyboardEventInit* init = KeyboardEventInit::Create();
@@ -212,7 +229,7 @@ TEST_F(HTMLInputElementTest, DateTimeChooserSizeParamRespectsScale) {
   bool success = input->SetupDateTimeChooserParameters(params);
   EXPECT_TRUE(success);
   EXPECT_EQ("date", params.type);
-  EXPECT_EQ(IntRect(16, 16, 400, 100), params.anchor_rect_in_screen);
+  EXPECT_EQ(gfx::Rect(16, 16, 400, 100), params.anchor_rect_in_screen);
 }
 
 TEST_F(HTMLInputElementTest, StepDownOverflow) {
@@ -247,7 +264,9 @@ TEST_F(HTMLInputElementTest, RepaintAfterClearingFile) {
   FileChooserFileInfoList files;
   files.push_back(CreateFileChooserFileInfoNative("/native/path/native-file",
                                                   "display-name"));
-  FileList* list = FileInputType::CreateFileList(files, base::FilePath());
+  auto* execution_context = MakeGarbageCollected<NullExecutionContext>();
+  FileList* list = FileInputType::CreateFileList(*execution_context, files,
+                                                 base::FilePath());
   ASSERT_TRUE(list);
   EXPECT_EQ(1u, list->length());
 
@@ -257,11 +276,12 @@ TEST_F(HTMLInputElementTest, RepaintAfterClearingFile) {
   ASSERT_TRUE(input->GetLayoutObject());
   EXPECT_FALSE(input->GetLayoutObject()->ShouldCheckForPaintInvalidation());
 
-  input->setValue("");
+  input->SetValue("");
   GetDocument().UpdateStyleAndLayoutTree();
 
   ASSERT_TRUE(input->GetLayoutObject());
   EXPECT_TRUE(input->GetLayoutObject()->ShouldCheckForPaintInvalidation());
+  execution_context->NotifyContextDestroyed();
 }
 
 TEST_F(HTMLInputElementTest, UpdateTypeDcheck) {
@@ -270,10 +290,61 @@ TEST_F(HTMLInputElementTest, UpdateTypeDcheck) {
   doc.body()->remove();
   Element* input = doc.CreateRawElement(html_names::kInputTag);
   doc.documentElement()->appendChild(input);
-  input->focus();
+  input->Focus();
   input->setAttribute(html_names::kTypeAttr, AtomicString("radio"));
   // Test succeeds if the above setAttribute() didn't trigger a DCHECK failure
   // in Document::UpdateFocusAppearanceAfterLayout().
 }
+
+struct PasswordFieldResetParam {
+  const char* new_type;
+  const char* temporary_value;
+  bool expected_call = true;
+};
+
+class HTMLInputElementPasswordFieldResetTest
+    : public HTMLInputElementTest,
+      public ::testing::WithParamInterface<PasswordFieldResetParam> {
+ protected:
+  void SetUp() override {
+    chrome_client_ = MakeGarbageCollected<MockChromeClient>();
+    SetupPageWithClients(chrome_client_);
+  }
+
+  MockChromeClient& chrome_client() { return *chrome_client_; }
+
+ private:
+  Persistent<MockChromeClient> chrome_client_;
+};
+
+// Tests that PasswordFieldReset() is (only) called for empty fields. This is
+// particularly relevant for field types where setValue("") does not imply
+// value().IsEmpty(), such as <input type="range"> (see crbug.com/1265130).
+TEST_P(HTMLInputElementPasswordFieldResetTest, PasswordFieldReset) {
+  GetDocument().documentElement()->setInnerHTML(
+      "<input id=test type=password>");
+  GetDocument().UpdateStyleAndLayoutTree();
+
+  TestElement().setType(GetParam().new_type);
+  GetDocument().UpdateStyleAndLayoutTree();
+
+  TestElement().SetValue(GetParam().temporary_value);
+  GetDocument().UpdateStyleAndLayoutTree();
+
+  EXPECT_CALL(chrome_client(),
+              PasswordFieldReset(Truly([this](const HTMLInputElement& e) {
+                return e.isSameNode(&TestElement()) && e.Value().IsEmpty();
+              })))
+      .Times(GetParam().expected_call ? 1 : 0);
+  TestElement().SetValue("");
+  GetDocument().UpdateStyleAndLayoutTree();
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    HTMLInputElementTest,
+    HTMLInputElementPasswordFieldResetTest,
+    ::testing::Values(PasswordFieldResetParam{"password", "some_value", true},
+                      PasswordFieldResetParam{"text", "some_value", true},
+                      PasswordFieldResetParam{"range", "51", false}));
 
 }  // namespace blink

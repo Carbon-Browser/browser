@@ -70,7 +70,7 @@
 #include "third_party/blink/renderer/core/layout/layout_theme.h"
 #include "third_party/blink/renderer/core/page/page.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/json/json_values.h"
 #include "third_party/blink/renderer/platform/text/platform_locale.h"
 #include "third_party/blink/renderer/platform/text/text_break_iterator.h"
@@ -154,7 +154,7 @@ bool InputType::IsFormDataAppendable() const {
 }
 
 void InputType::AppendToFormData(FormData& form_data) const {
-  form_data.AppendFromElement(GetElement().GetName(), GetElement().value());
+  form_data.AppendFromElement(GetElement().GetName(), GetElement().Value());
 }
 
 String InputType::ResultForDialogSubmit() const {
@@ -187,7 +187,7 @@ void InputType::SetValueAsDouble(double double_value,
 void InputType::SetValueAsDecimal(const Decimal& new_value,
                                   TextFieldEventBehavior event_behavior,
                                   ExceptionState&) const {
-  GetElement().setValue(Serialize(new_value), event_behavior);
+  GetElement().SetValue(Serialize(new_value), event_behavior);
 }
 
 void InputType::ReadingChecked() const {}
@@ -372,7 +372,7 @@ String InputType::ValueMissingText() const {
 
 std::pair<String, String> InputType::ValidationMessage(
     const InputTypeView& input_type_view) const {
-  const String value = GetElement().value();
+  const String value = GetElement().Value();
 
   // The order of the following checks is meaningful. e.g. We'd like to show the
   // badInput message even if the control has other validation errors.
@@ -603,7 +603,7 @@ String InputType::LocalizeValue(const String& proposed_value) const {
 }
 
 String InputType::VisibleValue() const {
-  return GetElement().value();
+  return GetElement().Value();
 }
 
 String InputType::SanitizeValue(const String& proposed_value) const {
@@ -656,6 +656,11 @@ bool InputType::IsCheckable() {
 
 bool InputType::IsSteppable() const {
   return false;
+}
+
+HTMLFormControlElement::PopupTriggerSupport InputType::SupportsPopupTriggering()
+    const {
+  return HTMLFormControlElement::PopupTriggerSupport::kNone;
 }
 
 bool InputType::ShouldRespectHeightAndWidthAttributes() {
@@ -836,7 +841,7 @@ void InputType::StepUp(double n, ExceptionState& exception_state) {
                                       "This form element is not steppable.");
     return;
   }
-  const Decimal current = ParseToNumber(GetElement().value(), 0);
+  const Decimal current = ParseToNumber(GetElement().Value(), 0);
   ApplyStep(current, n, kRejectAny, TextFieldEventBehavior::kDispatchNoEvent,
             exception_state);
 }
@@ -900,7 +905,7 @@ void InputType::StepUpFromLayoutObject(int n) {
   else
     sign = 0;
 
-  Decimal current = ParseToNumberOrNaN(GetElement().value());
+  Decimal current = ParseToNumberOrNaN(GetElement().Value());
   if (!current.IsFinite()) {
     current = DefaultValueForStepUp();
     const Decimal next_diff = step * n;

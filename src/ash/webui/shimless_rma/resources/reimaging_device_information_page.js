@@ -2,23 +2,37 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import './shimless_rma_fonts_css.js';
 import './shimless_rma_shared_css.js';
 import './base_page.js';
 import './icons.js';
 import 'chrome://resources/cr_elements/icons.m.js';
 import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
 
-import {html, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {I18nBehavior, I18nBehaviorInterface} from 'chrome://resources/js/i18n_behavior.m.js';
+import {afterNextRender, html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {getShimlessRmaService} from './mojo_interface_provider.js';
 import {ShimlessRmaServiceInterface, StateResult} from './shimless_rma_types.js';
+import {disableNextButton, enableNextButton} from './shimless_rma_util.js';
 
 /**
  * @fileoverview
  * 'reimaging-device-information-page' allows the user to update important
  * device information if necessary.
  */
-export class ReimagingDeviceInformationPageElement extends PolymerElement {
+
+/**
+ * @constructor
+ * @extends {PolymerElement}
+ * @implements {I18nBehaviorInterface}
+ */
+const ReimagingDeviceInformationPageBase =
+    mixinBehaviors([I18nBehavior], PolymerElement);
+
+/** @polymer */
+export class ReimagingDeviceInformationPage extends
+    ReimagingDeviceInformationPageBase {
   static get is() {
     return 'reimaging-device-information-page';
   }
@@ -27,40 +41,63 @@ export class ReimagingDeviceInformationPageElement extends PolymerElement {
     return html`{__html_template__}`;
   }
 
+  static get observers() {
+    return [
+      'updateNextButtonDisabledState_(serialNumber_, skuIndex_, regionIndex_)',
+    ];
+  }
+
   static get properties() {
     return {
-      /** @private {ShimlessRmaServiceInterface} */
-      shimlessRmaService_: {
-        type: Object,
-        value: {},
-      },
 
-      /** @protected {boolean} */
+      /**
+       * Set by shimless_rma.js.
+       * @type {boolean}
+       */
+      allButtonsDisabled: Boolean,
+
+      /** @protected */
       disableResetSerialNumber_: {
         type: Boolean,
-        computed:
-            'getDisableResetSerialNumber_(originalSerialNumber_, serialNumber_)',
+        computed: 'getDisableResetSerialNumber_(originalSerialNumber_,' +
+            'serialNumber_, allButtonsDisabled)',
       },
 
-      /** @protected {boolean} */
+      /** @protected */
       disableResetRegion_: {
         type: Boolean,
-        computed: 'getDisableResetRegion_(originalRegionIndex_, regionIndex_)',
+        computed: 'getDisableResetRegion_(originalRegionIndex_, regionIndex_,' +
+            'allButtonsDisabled)',
       },
 
-      /** @protected {boolean} */
+      /** @protected */
       disableResetSku_: {
         type: Boolean,
-        computed: 'getDisableResetSku_(originalSkuIndex_, skuIndex_)',
+        computed: 'getDisableResetSku_(originalSkuIndex_, skuIndex_,' +
+            'allButtonsDisabled)',
       },
 
-      /** @protected {string} */
+      /** @protected */
+      disableResetWhiteLabel_: {
+        type: Boolean,
+        computed: 'getDisableResetWhiteLabel_(' +
+            'originalWhiteLabelIndex_, whiteLabelIndex_, allButtonsDisabled)',
+      },
+
+      /** @protected */
+      disableResetDramPartNumber_: {
+        type: Boolean,
+        computed: 'getDisableResetDramPartNumber_(' +
+            'originalDramPartNumber_, dramPartNumber_, allButtonsDisabled)',
+      },
+
+      /** @protected */
       originalSerialNumber_: {
         type: String,
         value: '',
       },
 
-      /** @protected {string} */
+      /** @protected */
       serialNumber_: {
         type: String,
         value: '',
@@ -72,16 +109,16 @@ export class ReimagingDeviceInformationPageElement extends PolymerElement {
         value: () => [],
       },
 
-      /** @protected {number} */
+      /** @protected */
       originalRegionIndex_: {
         type: Number,
-        value: 0,
+        value: -1,
       },
 
-      /** @protected {number} */
+      /** @protected */
       regionIndex_: {
         type: Number,
-        value: 0,
+        value: -1,
       },
 
       /** @protected {!Array<string>} */
@@ -90,28 +127,80 @@ export class ReimagingDeviceInformationPageElement extends PolymerElement {
         value: () => [],
       },
 
-      /** @protected {number} */
+      /** @protected */
       originalSkuIndex_: {
         type: Number,
-        value: 0,
+        value: -1,
       },
 
-      /** @protected {number} */
+      /** @protected */
       skuIndex_: {
+        type: Number,
+        value: -1,
+      },
+
+      /** @protected {!Array<string>} */
+      whiteLabels_: {
+        type: Array,
+        value: () => [],
+      },
+
+      /** @protected */
+      originalWhiteLabelIndex_: {
         type: Number,
         value: 0,
       },
 
+      /** @protected */
+      whiteLabelIndex_: {
+        type: Number,
+        value: 0,
+      },
+
+      /** @protected */
+      originalDramPartNumber_: {
+        type: String,
+        value: '',
+      },
+
+      /** @protected */
+      dramPartNumber_: {
+        type: String,
+        value: '',
+      },
     };
+  }
+
+  constructor() {
+    super();
+    /** @private {ShimlessRmaServiceInterface} */
+    this.shimlessRmaService_ = getShimlessRmaService();
   }
 
   /** @override */
   ready() {
     super.ready();
-    this.shimlessRmaService_ = getShimlessRmaService();
     this.getOriginalSerialNumber_();
     this.getOriginalRegionAndRegionList_();
     this.getOriginalSkuAndSkuList_();
+    this.getOriginalWhiteLabelAndWhiteLabelList_();
+    this.getOriginalDramPartNumber_();
+  }
+
+  /** @private */
+  allInformationIsValid_() {
+    return (this.serialNumber_ !== '') && (this.skuIndex_ >= 0) &&
+        (this.regionIndex_ >= 0);
+  }
+
+  /** @private */
+  updateNextButtonDisabledState_() {
+    const disabled = !this.allInformationIsValid_();
+    if (disabled) {
+      disableNextButton(this);
+    } else {
+      enableNextButton(this);
+    }
   }
 
   /** @private */
@@ -132,9 +221,13 @@ export class ReimagingDeviceInformationPageElement extends PolymerElement {
         .then((result) => {
           this.regions_ = result.regions;
           this.regionIndex_ = this.originalRegionIndex_;
-          // TODO(gavindodd) This does not work. Find a way to bind the list.
-          this.shadowRoot.querySelector('#regionSelect').selectedIndex =
-              this.regionIndex_;
+
+          // Need to wait for the select options to render before setting the
+          // selected index.
+          afterNextRender(this, () => {
+            this.shadowRoot.querySelector('#regionSelect').selectedIndex =
+                this.regionIndex_;
+          });
         });
   }
 
@@ -148,25 +241,79 @@ export class ReimagingDeviceInformationPageElement extends PolymerElement {
         .then((result) => {
           this.skus_ = result.skus;
           this.skuIndex_ = this.originalSkuIndex_;
-          // TODO(gavindodd) This does not work. Find a way to bind the list.
-          this.shadowRoot.querySelector('#skuSelect').selectedIndex =
-              this.skuIndex_;
+
+          // Need to wait for the select options to render before setting the
+          // selected index.
+          afterNextRender(this, () => {
+            this.shadowRoot.querySelector('#skuSelect').selectedIndex =
+                this.skuIndex_;
+          });
         });
+  }
+
+  /** @private */
+  getOriginalWhiteLabelAndWhiteLabelList_() {
+    this.shimlessRmaService_.getOriginalWhiteLabel()
+        .then((result) => {
+          this.originalWhiteLabelIndex_ = result.whiteLabelIndex;
+          return this.shimlessRmaService_.getWhiteLabelList();
+        })
+        .then((result) => {
+          this.whiteLabels_ = result.whiteLabels;
+          const blankIndex = this.whiteLabels_.indexOf('');
+          if (blankIndex >= 0) {
+            this.whiteLabels_[blankIndex] =
+                this.i18n('confirmDeviceInfoEmptyWhiteLabelLabel');
+            if (this.originalWhiteLabelIndex_ < 0) {
+              this.originalWhiteLabelIndex_ = blankIndex;
+            }
+          }
+          this.whiteLabelIndex_ = this.originalWhiteLabelIndex_;
+
+          // Need to wait for the select options to render before setting the
+          // selected index.
+          afterNextRender(this, () => {
+            this.shadowRoot.querySelector('#whiteLabelSelect').selectedIndex =
+                this.whiteLabelIndex_;
+          });
+        });
+  }
+
+  /** @private */
+  getOriginalDramPartNumber_() {
+    this.shimlessRmaService_.getOriginalDramPartNumber().then((result) => {
+      this.originalDramPartNumber_ = result.dramPartNumber;
+      this.dramPartNumber_ = this.originalDramPartNumber_;
+    });
   }
 
   /** @protected */
   getDisableResetSerialNumber_() {
-    return this.originalSerialNumber_ === this.serialNumber_;
+    return this.originalSerialNumber_ === this.serialNumber_ ||
+        this.allButtonsDisabled;
   }
 
   /** @protected */
   getDisableResetRegion_() {
-    return this.originalRegionIndex_ === this.regionIndex_;
+    return this.originalRegionIndex_ === this.regionIndex_ ||
+        this.allButtonsDisabled;
   }
 
   /** @protected */
   getDisableResetSku_() {
-    return this.originalSkuIndex_ === this.skuIndex_;
+    return this.originalSkuIndex_ === this.skuIndex_ || this.allButtonsDisabled;
+  }
+
+  /** @protected */
+  getDisableResetWhiteLabel_() {
+    return this.originalWhiteLabelIndex_ === this.whiteLabelIndex_ ||
+        this.allButtonsDisabled;
+  }
+
+  /** @protected */
+  getDisableResetDramPartNumber_() {
+    return this.originalDramPartNumber_ === this.dramPartNumber_ ||
+        this.allButtonsDisabled;
   }
 
   /** @protected */
@@ -178,6 +325,12 @@ export class ReimagingDeviceInformationPageElement extends PolymerElement {
   /** @protected */
   onSelectedSkuChange_(event) {
     this.skuIndex_ = this.shadowRoot.querySelector('#skuSelect').selectedIndex;
+  }
+
+  /** @protected */
+  onSelectedWhiteLabelChange_(event) {
+    this.whiteLabelIndex_ =
+        this.shadowRoot.querySelector('#whiteLabelSelect').selectedIndex;
   }
 
   /** @protected */
@@ -198,17 +351,29 @@ export class ReimagingDeviceInformationPageElement extends PolymerElement {
     this.shadowRoot.querySelector('#skuSelect').selectedIndex = this.skuIndex_;
   }
 
-  /** @return {!Promise<!StateResult>} */
+  /** @protected */
+  onResetWhiteLabelButtonClicked_(event) {
+    this.whiteLabelIndex_ = this.originalWhiteLabelIndex_;
+    this.shadowRoot.querySelector('#whiteLabelSelect').selectedIndex =
+        this.whiteLabelIndex_;
+  }
+
+  /** @protected */
+  onResetDramPartNumberButtonClicked_(event) {
+    this.dramPartNumber_ = this.originalDramPartNumber_;
+  }
+
+  /** @return {!Promise<!{stateResult: !StateResult}>} */
   onNextButtonClick() {
-    if (this.serialNumber_ === '') {
-      return Promise.reject(new Error('Serial number not set'));
+    if (!this.allInformationIsValid_()) {
+      return Promise.reject(new Error('Some required information is not set'));
     } else {
       return this.shimlessRmaService_.setDeviceInformation(
-          this.serialNumber_, this.regionIndex_, this.skuIndex_);
+          this.serialNumber_, this.regionIndex_, this.skuIndex_,
+          this.whiteLabelIndex_, this.dramPartNumber_);
     }
   }
-};
+}
 
 customElements.define(
-    ReimagingDeviceInformationPageElement.is,
-    ReimagingDeviceInformationPageElement);
+    ReimagingDeviceInformationPage.is, ReimagingDeviceInformationPage);

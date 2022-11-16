@@ -12,7 +12,7 @@
 
 namespace segmentation_platform {
 
-SelectedSegment::SelectedSegment(OptimizationTarget segment_id)
+SelectedSegment::SelectedSegment(SegmentId segment_id)
     : segment_id(segment_id), in_use(false) {}
 
 SelectedSegment::~SelectedSegment() = default;
@@ -24,7 +24,7 @@ void SegmentationResultPrefs::SaveSegmentationResultToPref(
     const std::string& result_key,
     const absl::optional<SelectedSegment>& selected_segment) {
   DictionaryPrefUpdate update(prefs_, kSegmentationResultPref);
-  base::DictionaryValue* dictionary = update.Get();
+  base::Value* dictionary = update.Get();
   if (!selected_segment.has_value()) {
     dictionary->RemoveKey(result_key);
     return;
@@ -41,11 +41,10 @@ void SegmentationResultPrefs::SaveSegmentationResultToPref(
 absl::optional<SelectedSegment>
 SegmentationResultPrefs::ReadSegmentationResultFromPref(
     const std::string& result_key) {
-  const base::DictionaryValue* dictionary =
-      prefs_->GetDictionary(kSegmentationResultPref);
-  DCHECK(dictionary);
+  const base::Value::Dict& dictionary =
+      prefs_->GetValueDict(kSegmentationResultPref);
 
-  const base::Value* value = dictionary->FindKey(result_key);
+  const base::Value* value = dictionary.Find(result_key);
   if (!value)
     return absl::nullopt;
 
@@ -57,8 +56,7 @@ SegmentationResultPrefs::ReadSegmentationResultFromPref(
   absl::optional<base::Time> selection_time =
       base::ValueToTime(segmentation_result.FindPath("selection_time"));
 
-  SelectedSegment selected_segment(
-      static_cast<OptimizationTarget>(segment_id.value()));
+  SelectedSegment selected_segment(static_cast<SegmentId>(segment_id.value()));
   if (in_use.has_value())
     selected_segment.in_use = in_use.value();
   if (selection_time.has_value())

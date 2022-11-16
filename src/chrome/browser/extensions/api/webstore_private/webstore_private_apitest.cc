@@ -7,7 +7,6 @@
 
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
-#include "base/macros.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
@@ -49,20 +48,23 @@
 #include "ui/gl/gl_switches.h"
 
 #if BUILDFLAG(ENABLE_SUPERVISED_USERS)
-// TODO(https://crbug.com/1060801): Here and elsewhere, possibly switch build
-// flag to #if defined(OS_CHROMEOS)
+
+#if !BUILDFLAG(IS_CHROMEOS_LACROS)
+// TODO(https://crbug.com/1218633): Fix the mixin and enable extensions tests on
+// LaCrOS.
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/metrics/user_action_tester.h"
 #include "chrome/browser/ash/login/test/logged_in_user_mixin.h"
 #include "chrome/browser/supervised_user/supervised_user_constants.h"
 #include "chrome/browser/supervised_user/supervised_user_service.h"
 #include "chrome/browser/supervised_user/supervised_user_service_factory.h"
-#include "chrome/browser/supervised_user/supervised_user_test_util.h"
+#include "chrome/browser/supervised_user/supervised_user_test_util.h"  // nogncheck
 #include "chrome/browser/ui/supervised_user/parent_permission_dialog.h"
 #include "chrome/browser/ui/views/supervised_user/parent_permission_dialog_view.h"
 #include "components/account_id/account_id.h"
 #include "components/signin/public/identity_manager/identity_test_environment.h"
 #include "extensions/common/extension_builder.h"
+#endif  // !BUILDFLAG(IS_CHROMEOS_LACROS)
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "ash/constants/ash_switches.h"
@@ -137,6 +139,12 @@ class WebstoreInstallListener : public WebstoreInstaller::Delegate {
 class ExtensionWebstorePrivateApiTest : public MixinBasedExtensionApiTest {
  public:
   ExtensionWebstorePrivateApiTest() {}
+
+  ExtensionWebstorePrivateApiTest(const ExtensionWebstorePrivateApiTest&) =
+      delete;
+  ExtensionWebstorePrivateApiTest& operator=(
+      const ExtensionWebstorePrivateApiTest&) = delete;
+
   ~ExtensionWebstorePrivateApiTest() override {}
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
@@ -208,8 +216,6 @@ class ExtensionWebstorePrivateApiTest : public MixinBasedExtensionApiTest {
   base::FilePath webstore_install_dir_copy_;
 
   std::unique_ptr<ScopedTestDialogAutoConfirm> auto_confirm_install_;
-
-  DISALLOW_COPY_AND_ASSIGN(ExtensionWebstorePrivateApiTest);
 };
 
 // Test cases for webstore origin frame blocking.
@@ -226,7 +232,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebstorePrivateApiTest,
   ASSERT_TRUE(content::ExecuteScript(web_contents, "dropFrame()"));
   EXPECT_TRUE(WaitForLoadStop(web_contents));
   content::RenderFrameHost* subframe =
-      content::ChildFrameAt(web_contents->GetMainFrame(), 0);
+      content::ChildFrameAt(web_contents->GetPrimaryMainFrame(), 0);
   ASSERT_TRUE(subframe);
 
   // The subframe load should fail due to XFO.
@@ -249,7 +255,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebstorePrivateApiTest, FrameErrorPageBlocked) {
   ASSERT_TRUE(content::ExecuteScript(web_contents, "dropFrame()"));
   EXPECT_TRUE(WaitForLoadStop(web_contents));
   content::RenderFrameHost* subframe =
-      content::ChildFrameAt(web_contents->GetMainFrame(), 0);
+      content::ChildFrameAt(web_contents->GetPrimaryMainFrame(), 0);
   ASSERT_TRUE(subframe);
 
   // The subframe load should fail due to XFO.
@@ -366,7 +372,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebstorePrivateApiTest, EmptyCrx) {
   ASSERT_TRUE(RunInstallTest("empty.html", "empty.crx"));
 }
 
-#if BUILDFLAG(ENABLE_SUPERVISED_USERS)
+#if BUILDFLAG(ENABLE_SUPERVISED_USERS) && !BUILDFLAG(IS_CHROMEOS_LACROS)
 static constexpr char kTestChildEmail[] = "test_child_user@google.com";
 static constexpr char kTestChildGaiaId[] = "8u8tuw09sufncmnaos";
 
@@ -389,7 +395,7 @@ class ExtensionWebstorePrivateApiTestChild
         embedded_test_server_(std::make_unique<net::EmbeddedTestServer>()),
         logged_in_user_mixin_(
             &mixin_host_,
-            chromeos::LoggedInUserMixin::LogInType::kChild,
+            ash::LoggedInUserMixin::LogInType::kChild,
             embedded_test_server_.get(),
             this,
             true /* should_launch_browser */,
@@ -433,7 +439,7 @@ class ExtensionWebstorePrivateApiTestChild
         true);
   }
 
-  chromeos::LoggedInUserMixin* GetLoggedInUserMixin() {
+  ash::LoggedInUserMixin* GetLoggedInUserMixin() {
     return &logged_in_user_mixin_;
   }
 
@@ -473,7 +479,7 @@ class ExtensionWebstorePrivateApiTestChild
  private:
   // Create another embedded test server to avoid starting the same one twice.
   std::unique_ptr<net::EmbeddedTestServer> embedded_test_server_;
-  chromeos::LoggedInUserMixin logged_in_user_mixin_;
+  ash::LoggedInUserMixin logged_in_user_mixin_;
   absl::optional<NextDialogAction> next_dialog_action_;
 };
 
@@ -566,7 +572,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebstorePrivateApiTestChild,
           SupervisedUserExtensionsMetricsRecorder::kFailedToEnableActionName));
 }
 
-#endif  // BUILDFLAG(ENABLE_SUPERVISED_USERS)
+#endif  // BUILDFLAG(ENABLE_SUPERVISED_USERS) && !BUILDFLAG(IS_CHROMEOS_LACROS)
 
 class ExtensionWebstoreGetWebGLStatusTest : public InProcessBrowserTest {
  protected:
@@ -592,7 +598,13 @@ class ExtensionWebstoreGetWebGLStatusTest : public InProcessBrowserTest {
 };
 
 // Tests getWebGLStatus function when WebGL is allowed.
-IN_PROC_BROWSER_TEST_F(ExtensionWebstoreGetWebGLStatusTest, Allowed) {
+// Flaky on Mac. https://crbug.com/1346413.
+#if BUILDFLAG(IS_MAC)
+#define MAYBE_Allowed DISABLED_Allowed
+#else
+#define MAYBE_Allowed Allowed
+#endif
+IN_PROC_BROWSER_TEST_F(ExtensionWebstoreGetWebGLStatusTest, MAYBE_Allowed) {
   bool webgl_allowed = true;
   RunTest(webgl_allowed);
 }

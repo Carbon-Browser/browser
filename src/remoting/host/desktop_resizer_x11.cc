@@ -4,11 +4,11 @@
 
 #include "remoting/host/desktop_resizer_x11.h"
 
-#include <string.h>
+#include <memory>
+#include <string>
 
 #include "base/command_line.h"
 #include "base/cxx17_backports.h"
-#include "base/macros.h"
 #include "base/memory/ptr_util.h"
 #include "remoting/base/logging.h"
 #include "remoting/host/linux/x11_util.h"
@@ -124,7 +124,8 @@ DesktopResizerX11::DesktopResizerX11()
 
 DesktopResizerX11::~DesktopResizerX11() = default;
 
-ScreenResolution DesktopResizerX11::GetCurrentResolution() {
+ScreenResolution DesktopResizerX11::GetCurrentResolution(
+    webrtc::ScreenId screen_id) {
   // Process pending events so that the connection setup data is updated
   // with the correct display metrics.
   if (has_randr_)
@@ -138,7 +139,8 @@ ScreenResolution DesktopResizerX11::GetCurrentResolution() {
 }
 
 std::list<ScreenResolution> DesktopResizerX11::GetSupportedResolutions(
-    const ScreenResolution& preferred) {
+    const ScreenResolution& preferred,
+    webrtc::ScreenId screen_id) {
   std::list<ScreenResolution> result;
   if (!has_randr_)
     return result;
@@ -170,7 +172,8 @@ std::list<ScreenResolution> DesktopResizerX11::GetSupportedResolutions(
   return result;
 }
 
-void DesktopResizerX11::SetResolution(const ScreenResolution& resolution) {
+void DesktopResizerX11::SetResolution(const ScreenResolution& resolution,
+                                      webrtc::ScreenId screen_id) {
   if (!has_randr_)
     return;
 
@@ -190,8 +193,9 @@ void DesktopResizerX11::SetResolution(const ScreenResolution& resolution) {
     SetResolutionExistingMode(resolution);
 }
 
-void DesktopResizerX11::RestoreResolution(const ScreenResolution& original) {
-  SetResolution(original);
+void DesktopResizerX11::RestoreResolution(const ScreenResolution& original,
+                                          webrtc::ScreenId screen_id) {
+  SetResolution(original, screen_id);
 }
 
 void DesktopResizerX11::SetResolutionNewMode(
@@ -298,6 +302,11 @@ void DesktopResizerX11::SwitchToMode(const char* name) {
       .rotation = x11::RandR::Rotation::Rotate_0,
       .outputs = outputs,
   });
+}
+
+// static
+std::unique_ptr<DesktopResizer> DesktopResizer::Create() {
+  return std::make_unique<DesktopResizerX11>();
 }
 
 }  // namespace remoting

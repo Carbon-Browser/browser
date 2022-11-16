@@ -19,6 +19,7 @@
 #include "ash/wm/overview/overview_controller.h"
 #include "ash/wm/overview/overview_session.h"
 #include "ash/wm/overview/overview_utils.h"
+#include "ash/wm/splitview/split_view_constants.h"
 #include "ash/wm/splitview/split_view_controller.h"
 #include "ash/wm/splitview/split_view_utils.h"
 #include "ash/wm/tablet_mode/scoped_skip_user_session_blocked_check.h"
@@ -37,6 +38,7 @@
 #include "ui/aura/client/aura_constants.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_animation_element.h"
+#include "ui/compositor/layer_animator.h"
 #include "ui/display/screen.h"
 
 namespace ash {
@@ -118,6 +120,11 @@ class ScopedObserveWindowAnimation {
           window_);
     }
   }
+
+  ScopedObserveWindowAnimation(const ScopedObserveWindowAnimation&) = delete;
+  ScopedObserveWindowAnimation& operator=(const ScopedObserveWindowAnimation&) =
+      delete;
+
   ~ScopedObserveWindowAnimation() {
     // May be null on shutdown.
     if (!Shell::Get()->tablet_mode_controller())
@@ -146,7 +153,6 @@ class ScopedObserveWindowAnimation {
   aura::Window* window_;
   TabletModeWindowManager* manager_;
   bool exiting_tablet_mode_;
-  DISALLOW_COPY_AND_ASSIGN(ScopedObserveWindowAnimation);
 };
 
 TabletModeWindowManager::TabletModeWindowManager() = default;
@@ -226,12 +232,12 @@ void TabletModeWindowManager::Shutdown() {
                                  was_in_overview);
 }
 
-int TabletModeWindowManager::GetNumberOfManagedWindows() {
-  return window_state_map_.size();
-}
-
 bool TabletModeWindowManager::IsTrackingWindow(aura::Window* window) {
   return base::Contains(window_state_map_, window);
+}
+
+int TabletModeWindowManager::GetNumberOfManagedWindows() {
+  return window_state_map_.size();
 }
 
 void TabletModeWindowManager::AddWindow(aura::Window* window) {
@@ -301,10 +307,12 @@ void TabletModeWindowManager::OnSplitViewStateChanged(
 
   if (state != SplitViewController::State::kNoSnap)
     return;
-  switch (
-      SplitViewController::Get(Shell::GetPrimaryRootWindow())->end_reason()) {
+
+  aura::Window* primary_root = Shell::GetPrimaryRootWindow();
+  switch (SplitViewController::Get(primary_root)->end_reason()) {
     case SplitViewController::EndReason::kNormal:
     case SplitViewController::EndReason::kUnsnappableWindowActivated:
+    case SplitViewController::EndReason::kRootWindowDestroyed:
       break;
     case SplitViewController::EndReason::kHomeLauncherPressed:
     case SplitViewController::EndReason::kActiveUserChanged:
@@ -326,8 +334,17 @@ void TabletModeWindowManager::OnSplitViewStateChanged(
   const MruWindowTracker::WindowList windows =
       Shell::Get()->mru_window_tracker()->BuildWindowListIgnoreModal(
           kActiveDesk);
-  for (auto* window : windows)
+  for (auto* window : windows) {
+    // Please notice, if there're multi displays in tablet mode, we should just
+    // maximize snapped `window` which belongs to the primary root window.
+    // Maximizing snapped `window` on the second display can trigger
+    // `EndSplitView` which can trigger activating the overview focus widget,
+    // but the pending activable window could be the window on the primary
+    // display.
+    if (window->GetRootWindow() != primary_root)
+      continue;
     MaximizeIfSnapped(window);
+  }
 }
 
 void TabletModeWindowManager::OnWindowDestroying(aura::Window* window) {
@@ -396,8 +413,8 @@ void TabletModeWindowManager::OnWindowBoundsChanged(
 
   // Reposition all non maximizeable windows.
   for (auto& pair : window_state_map_) {
-    pair.second->UpdateWindowPosition(WindowState::Get(pair.first),
-                                      /*animate=*/false);
+    TabletModeWindowState::UpdateWindowPosition(WindowState::Get(pair.first),
+                                                /*animate=*/false);
   }
   if (session)
     session->ResumeReposition();
@@ -555,21 +572,32 @@ int TabletModeWindowManager::CalculateCarryOverDividerPosition(
 
   const bool horizontal = SplitViewController::IsLayoutHorizontal(display);
   const bool primary = SplitViewController::IsLayoutPrimary(display);
+
+  // We need to expand (or shrink) the width of the snapped windows by the half
+  // of the divider width when to-clamshell (or to-tablet) transition happens
+  // accordingly, because in tablet mode the "center" of the split view should
+  // be the center of the divider.
+  const int divider_padding =
+      (clamshell_to_tablet ? -1 : 1) * kSplitviewDividerShortSideLength / 2;
   if (horizontal) {
     if (primary) {
-      return left_window ? left_window_bounds.width()
-                         : work_area.width() - right_window_bounds.width();
+      return left_window ? left_window_bounds.width() + divider_padding
+                         : work_area.width() - right_window_bounds.width() -
+                               divider_padding;
     } else {
-      return left_window ? work_area.width() - left_window_bounds.width()
-                         : right_window_bounds.width();
+      return left_window ? work_area.width() - left_window_bounds.width() -
+                               divider_padding
+                         : right_window_bounds.width() + divider_padding;
     }
   } else {
     if (primary) {
-      return left_window ? left_window_bounds.height()
-                         : work_area.height() - right_window_bounds.height();
+      return left_window ? left_window_bounds.height() + divider_padding
+                         : work_area.height() - right_window_bounds.height() -
+                               divider_padding;
     } else {
-      return left_window ? work_area.height() - left_window_bounds.height()
-                         : right_window_bounds.height();
+      return left_window ? work_area.height() - left_window_bounds.height() -
+                               divider_padding
+                         : right_window_bounds.height() + divider_padding;
     }
   }
 }

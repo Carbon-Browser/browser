@@ -12,6 +12,7 @@
 #include "third_party/blink/renderer/core/dom/element.h"
 #include "third_party/blink/renderer/core/frame/local_frame_view.h"
 #include "third_party/blink/renderer/core/page/page.h"
+#include "third_party/blink/renderer/core/page/page_animator.h"
 
 namespace blink {
 
@@ -69,19 +70,6 @@ V8CSSNumberish* AnimationTimeline::duration() {
   return nullptr;
 }
 
-String AnimationTimeline::phase() {
-  switch (CurrentPhaseAndTime().phase) {
-    case TimelinePhase::kInactive:
-      return "inactive";
-    case TimelinePhase::kBefore:
-      return "before";
-    case TimelinePhase::kActive:
-      return "active";
-    case TimelinePhase::kAfter:
-      return "after";
-  }
-}
-
 void AnimationTimeline::ClearOutdatedAnimation(Animation* animation) {
   DCHECK(!animation->Outdated());
   outdated_animation_count_--;
@@ -90,10 +78,13 @@ void AnimationTimeline::ClearOutdatedAnimation(Animation* animation) {
 wtf_size_t AnimationTimeline::AnimationsNeedingUpdateCount() const {
   wtf_size_t count = 0;
   for (const auto& animation : animations_needing_update_) {
-    // This function is for frame sequence tracking for animations. Exclude
-    // no-effect animations which don't generate frames.
-    if (!animation->AnimationHasNoEffect())
-      count++;
+    // Exclude animations which are not actively generating frames.
+    if ((!animation->CompositorPending() && !animation->Playing() &&
+         !IsScrollTimeline()) ||
+        animation->AnimationHasNoEffect()) {
+      continue;
+    }
+    count++;
   }
   return count;
 }
@@ -177,8 +168,10 @@ void AnimationTimeline::SetOutdatedAnimation(Animation* animation) {
   DCHECK(animation->Outdated());
   outdated_animation_count_++;
   animations_needing_update_.insert(animation);
-  if (IsActive() && !document_->GetPage()->Animator().IsServicingAnimations())
+  if (IsActive() && document_->GetPage() &&
+      !document_->GetPage()->Animator().IsServicingAnimations()) {
     ScheduleServiceOnNextFrame();
+  }
 }
 
 void AnimationTimeline::ScheduleServiceOnNextFrame() {
@@ -186,12 +179,14 @@ void AnimationTimeline::ScheduleServiceOnNextFrame() {
     document_->View()->ScheduleAnimation();
 }
 
-Animation* AnimationTimeline::Play(AnimationEffect* child) {
-  Animation* animation = Animation::Create(child, this);
-  DCHECK(animations_.Contains(animation));
-
-  animation->play();
-  DCHECK(animations_needing_update_.Contains(animation));
+Animation* AnimationTimeline::Play(AnimationEffect* child,
+                                   ExceptionState& exception_state) {
+  Animation* animation = Animation::Create(child, this, exception_state);
+  if (animation) {
+    DCHECK(animations_.Contains(animation));
+    animation->play();
+    DCHECK(animations_needing_update_.Contains(animation));
+  }
 
   return animation;
 }

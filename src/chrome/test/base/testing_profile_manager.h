@@ -9,10 +9,11 @@
 #include <memory>
 #include <string>
 
-#include "base/compiler_specific.h"
 #include "base/files/file_path.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_multi_source_observation.h"
 #include "base/test/scoped_path_override.h"
+#include "build/chromeos_buildflags.h"
 #include "chrome/browser/profiles/profile_observer.h"
 #include "chrome/test/base/scoped_testing_local_state.h"
 #include "chrome/test/base/testing_profile.h"
@@ -25,6 +26,10 @@ class TestingBrowserProcess;
 namespace sync_preferences {
 class PrefServiceSyncable;
 }
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+class AccountProfileMapper;
+#endif
 
 // The TestingProfileManager is a TestingProfile factory for a multi-profile
 // environment. It will bring up a full ProfileManager and attach it to the
@@ -49,25 +54,25 @@ class TestingProfileManager : public ProfileObserver {
   // |profiles_dir| is the path in which new directories would be placed.
   // If empty, one will be created (and deleted upon destruction of |this|).
   // If not empty, it will be used, but ownership is maintained by the caller.
-  bool SetUp(const base::FilePath& profiles_path = base::FilePath())
-      WARN_UNUSED_RESULT;
+  [[nodiscard]] bool SetUp(
+      const base::FilePath& profiles_path = base::FilePath());
 
   // Creates a new TestingProfile whose data lives in a directory related to
   // profile_name, which is a non-user-visible key for the test environment.
   // |prefs| is the PrefService used by the profile. If it is NULL, the profile
   // creates a PrefService on demand.
-  // |user_name|, |avatar_id| and |supervised_user_id| are passed along to the
-  // ProfileAttributesStorage and provide the user-visible profile metadata.
-  // This will register the TestingProfile with the profile subsystem as well.
-  // The subsystem owns the Profile and returns a weak pointer.
+  // |user_name|, |avatar_id| and |is_supervised_profile| status are passed
+  // along to the ProfileAttributesStorage and provide the user-visible profile
+  // metadata. This will register the TestingProfile with the profile subsystem
+  // as well. The subsystem owns the Profile and returns a weak pointer.
   // |factories| contains BCKSs to use with the newly created profile.
   TestingProfile* CreateTestingProfile(
       const std::string& profile_name,
       std::unique_ptr<sync_preferences::PrefServiceSyncable> prefs,
       const std::u16string& user_name,
       int avatar_id,
-      const std::string& supervised_user_id,
       TestingProfile::TestingFactories testing_factories,
+      bool is_supervised_profile = false,
       absl::optional<bool> is_new_profile = absl::nullopt,
       absl::optional<std::unique_ptr<policy::PolicyService>> policy_service =
           absl::nullopt);
@@ -85,12 +90,14 @@ class TestingProfileManager : public ProfileObserver {
   // The subsystem owns the Profile and returns a weak pointer.
   TestingProfile* CreateGuestProfile();
 
+#if !BUILDFLAG(IS_CHROMEOS_ASH) && !BUILDFLAG(IS_ANDROID)
   // Creates a new system TestingProfile whose data lives in the system profile
   // test environment directory, as specified by the profile manager.
   // This profile will not be added to the ProfileAttributesStorage. This will
   // register the TestingProfile with the profile subsystem as well.
   // The subsystem owns the Profile and returns a weak pointer.
   TestingProfile* CreateSystemProfile();
+#endif  // !BUILDFLAG(IS_CHROMEOS_ASH) && !BUILDFLAG(IS_ANDROID)
 
   // Deletes a TestingProfile from the profile subsystem.
   void DeleteTestingProfile(const std::string& profile_name);
@@ -102,8 +109,10 @@ class TestingProfileManager : public ProfileObserver {
   // Deletes a guest TestingProfile from the profile manager.
   void DeleteGuestProfile();
 
+#if !BUILDFLAG(IS_CHROMEOS_ASH) && !BUILDFLAG(IS_ANDROID)
   // Deletes a system TestingProfile from the profile manager.
   void DeleteSystemProfile();
+#endif  // !BUILDFLAG(IS_CHROMEOS_ASH) && !BUILDFLAG(IS_ANDROID)
 
   // Deletes the storage instance. This is useful for testing that the storage
   // is properly persisting data.
@@ -111,6 +120,10 @@ class TestingProfileManager : public ProfileObserver {
 
   // Sets the last used profile; also sets the active time to now.
   void UpdateLastUser(Profile* last_active);
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  void SetAccountProfileMapper(std::unique_ptr<AccountProfileMapper> mapper);
+#endif
 
   // Helper accessors.
   const base::FilePath& profiles_dir();
@@ -146,16 +159,16 @@ class TestingProfileManager : public ProfileObserver {
   std::unique_ptr<base::ScopedPathOverride> user_data_dir_override_;
 
   // Weak reference to the browser process on which the ProfileManager is set.
-  TestingBrowserProcess* browser_process_;
+  raw_ptr<TestingBrowserProcess> browser_process_;
 
   // Local state in which all the profiles are registered.
-  ScopedTestingLocalState* local_state_;
+  raw_ptr<ScopedTestingLocalState> local_state_;
 
   // Owned local state for when it's not provided in the constructor.
   std::unique_ptr<ScopedTestingLocalState> owned_local_state_;
 
   // Weak reference to the profile manager.
-  ProfileManager* profile_manager_;
+  raw_ptr<ProfileManager> profile_manager_;
 
   // Map of profile_name to TestingProfile* from CreateTestingProfile().
   TestingProfilesMap testing_profiles_;

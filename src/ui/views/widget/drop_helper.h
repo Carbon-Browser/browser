@@ -8,7 +8,7 @@
 #include <memory>
 
 #include "base/callback_forward.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/dragdrop/mojom/drag_drop_types.mojom-forward.h"
 #include "ui/views/view.h"
 #include "ui/views/views_export.h"
@@ -33,12 +33,17 @@ class RootView;
 // then either OnDragExit or OnDrop when the drop is done.
 class VIEWS_EXPORT DropHelper {
  public:
+  // This is expected to match the signature of
+  // aura::client::DragDropDelegate::DropCallback.
   using DropCallback =
-      base::OnceCallback<void(const ui::DropTargetEvent& event,
-                              std::unique_ptr<ui::OSExchangeData> data,
+      base::OnceCallback<void(std::unique_ptr<ui::OSExchangeData> data,
                               ui::mojom::DragOperation& output_drag_op)>;
 
   explicit DropHelper(View* root_view);
+
+  DropHelper(const DropHelper&) = delete;
+  DropHelper& operator=(const DropHelper&) = delete;
+
   ~DropHelper();
 
   // Sets a callback that is run any time a drag enters |view|.  Only exposed
@@ -74,8 +79,6 @@ class VIEWS_EXPORT DropHelper {
   //
   // NOTE: implementations must invoke OnDragOver before invoking this,
   // supplying the return value from OnDragOver as the drag_operation.
-  // TODO(crbug.com/1175682): Remove OnPerformDrop and switch to GetDropCallback
-  // instead.
   ui::mojom::DragOperation OnDrop(const OSExchangeData& data,
                                   const gfx::Point& root_view_location,
                                   int drag_operation);
@@ -114,15 +117,13 @@ class VIEWS_EXPORT DropHelper {
   void NotifyDragExit();
 
   // RootView we were created for.
-  View* root_view_;
+  raw_ptr<View, DanglingUntriaged> root_view_;
 
   // View we're targeting events at.
-  View* target_view_;
+  raw_ptr<View> target_view_;
 
   // The deepest view under the current drop coordinate.
   View* deepest_view_;
-
-  DISALLOW_COPY_AND_ASSIGN(DropHelper);
 };
 
 }  // namespace views

@@ -33,14 +33,15 @@ import org.chromium.chrome.browser.omnibox.suggestions.base.BaseSuggestionView;
 import org.chromium.chrome.browser.omnibox.suggestions.base.BaseSuggestionViewBinder;
 import org.chromium.chrome.browser.omnibox.suggestions.basic.BasicSuggestionProcessor.BookmarkState;
 import org.chromium.chrome.browser.omnibox.suggestions.basic.SuggestionViewViewBinder;
+import org.chromium.chrome.browser.omnibox.suggestions.carousel.BaseCarouselSuggestionItemViewBuilder;
 import org.chromium.chrome.browser.omnibox.suggestions.carousel.BaseCarouselSuggestionViewBinder;
 import org.chromium.chrome.browser.omnibox.suggestions.editurl.EditUrlSuggestionView;
 import org.chromium.chrome.browser.omnibox.suggestions.editurl.EditUrlSuggestionViewBinder;
 import org.chromium.chrome.browser.omnibox.suggestions.entity.EntitySuggestionViewBinder;
 import org.chromium.chrome.browser.omnibox.suggestions.header.HeaderView;
 import org.chromium.chrome.browser.omnibox.suggestions.header.HeaderViewBinder;
-import org.chromium.chrome.browser.omnibox.suggestions.mostvisited.ExploreIconProvider;
-import org.chromium.chrome.browser.omnibox.suggestions.mostvisited.MostVisitedTilesProcessor;
+import org.chromium.chrome.browser.omnibox.suggestions.pedal.PedalSuggestionView;
+import org.chromium.chrome.browser.omnibox.suggestions.pedal.PedalSuggestionViewBinder;
 import org.chromium.chrome.browser.omnibox.suggestions.tail.TailSuggestionView;
 import org.chromium.chrome.browser.omnibox.suggestions.tail.TailSuggestionViewBinder;
 import org.chromium.chrome.browser.omnibox.voice.VoiceRecognitionHandler;
@@ -48,9 +49,9 @@ import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.share.ShareDelegate;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tabmodel.TabWindowManager;
+import org.chromium.chrome.browser.ui.theme.BrandedColorScheme;
 import org.chromium.chrome.browser.util.KeyNavigationUtil;
 import org.chromium.components.omnibox.AutocompleteMatch;
-import org.chromium.components.query_tiles.QueryTile;
 import org.chromium.ui.ViewProvider;
 import org.chromium.ui.modaldialog.ModalDialogManager;
 import org.chromium.ui.modelutil.LazyConstructionPropertyMcp;
@@ -68,8 +69,8 @@ public class AutocompleteCoordinator implements UrlFocusChangeListener, UrlTextC
     private final @NonNull ViewGroup mParent;
     private final @NonNull ObservableSupplier<Profile> mProfileSupplier;
     private final @NonNull Callback<Profile> mProfileChangeCallback;
-    private final @NonNull OmniboxQueryTileCoordinator mQueryTileCoordinator;
     private final @NonNull AutocompleteMediator mMediator;
+    private final @NonNull Supplier<ModalDialogManager> mModalDialogManagerSupplier;
     private @Nullable OmniboxSuggestionsDropdown mDropdown;
 
     public AutocompleteCoordinator(@NonNull ViewGroup parent,
@@ -84,8 +85,9 @@ public class AutocompleteCoordinator implements UrlFocusChangeListener, UrlTextC
             @NonNull Callback<Tab> bringToForegroundCallback,
             @NonNull Supplier<TabWindowManager> tabWindowManagerSupplier,
             @NonNull BookmarkState bookmarkState, @NonNull JankTracker jankTracker,
-            @NonNull ExploreIconProvider exploreIconProvider) {
+            @NonNull OmniboxPedalDelegate omniboxPedalDelegate) {
         mParent = parent;
+        mModalDialogManagerSupplier = modalDialogManagerSupplier;
         Context context = parent.getContext();
 
         PropertyModel listModel = new PropertyModel(SuggestionListProperties.ALL_KEYS);
@@ -95,12 +97,11 @@ public class AutocompleteCoordinator implements UrlFocusChangeListener, UrlTextC
         listModel.set(SuggestionListProperties.VISIBLE, false);
         listModel.set(SuggestionListProperties.SUGGESTION_MODELS, listItems);
 
-        mQueryTileCoordinator = new OmniboxQueryTileCoordinator(context, this::onTileSelected);
         mMediator = new AutocompleteMediator(context, delegate, urlBarEditingTextProvider,
                 listModel, new Handler(), modalDialogManagerSupplier, activityTabSupplier,
                 shareDelegateSupplier, locationBarDataProvider, bringToForegroundCallback,
-                tabWindowManagerSupplier, bookmarkState, jankTracker, exploreIconProvider);
-        mMediator.initDefaultProcessors(mQueryTileCoordinator::setTiles);
+                tabWindowManagerSupplier, bookmarkState, jankTracker, omniboxPedalDelegate);
+        mMediator.initDefaultProcessors();
 
         listModel.set(SuggestionListProperties.OBSERVER, mMediator);
 
@@ -123,7 +124,6 @@ public class AutocompleteCoordinator implements UrlFocusChangeListener, UrlTextC
      */
     public void destroy() {
         mProfileSupplier.removeObserver(mProfileChangeCallback);
-        mQueryTileCoordinator.destroy();
         mMediator.destroy();
         if (mDropdown != null) {
             mDropdown.destroy();
@@ -152,7 +152,6 @@ public class AutocompleteCoordinator implements UrlFocusChangeListener, UrlTextC
                 OmniboxSuggestionsDropdownAdapter adapter =
                         new OmniboxSuggestionsDropdownAdapter(modelList);
                 dropdown.setAdapter(adapter);
-                mMediator.setAdapter(adapter);
 
                 // Note: clang-format does a bad job formatting lambdas so we turn it off here.
                 // clang-format off
@@ -194,19 +193,20 @@ public class AutocompleteCoordinator implements UrlFocusChangeListener, UrlTextC
                         new BaseSuggestionViewBinder<View>(SuggestionViewViewBinder::bind));
 
                 adapter.registerType(
-                        OmniboxSuggestionUiType.TILE_SUGGESTION,
-                        parent -> mQueryTileCoordinator.createView(parent.getContext()),
-                        mQueryTileCoordinator::bind);
-
-                adapter.registerType(
                         OmniboxSuggestionUiType.TILE_NAVSUGGEST,
-                        MostVisitedTilesProcessor::createView,
+                        BaseCarouselSuggestionItemViewBuilder::createView,
                         BaseCarouselSuggestionViewBinder::bind);
 
                 adapter.registerType(
                         OmniboxSuggestionUiType.HEADER,
                         parent -> new HeaderView(parent.getContext()),
                         HeaderViewBinder::bind);
+
+                adapter.registerType(
+                        OmniboxSuggestionUiType.PEDAL_SUGGESTION,
+                        parent -> new PedalSuggestionView<View>(
+                                parent.getContext(), R.layout.omnibox_basic_suggestion),
+                        new PedalSuggestionViewBinder<View>(SuggestionViewViewBinder::bind));
                 // clang-format on
 
                 ViewGroup container = (ViewGroup) ((ViewStub) mParent.getRootView().findViewById(
@@ -248,7 +248,6 @@ public class AutocompleteCoordinator implements UrlFocusChangeListener, UrlTextC
     @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
     public void setAutocompleteProfile(Profile profile) {
         mMediator.setAutocompleteProfile(profile);
-        mQueryTileCoordinator.setProfile(profile);
     }
 
     /**
@@ -308,11 +307,10 @@ public class AutocompleteCoordinator implements UrlFocusChangeListener, UrlTextC
 
     /**
      * Update the visuals of the autocomplete UI.
-     * @param useDarkColors Whether dark colors should be applied to the UI.
-     * @param isIncognito Whether the UI is for incognito mode or not.
+     * @param brandedColorScheme The {@link @BrandedColorScheme}.
      */
-    public void updateVisualsForState(boolean useDarkColors, boolean isIncognito) {
-        mMediator.updateVisualsForState(useDarkColors, isIncognito);
+    public void updateVisualsForState(@BrandedColorScheme int brandedColorScheme) {
+        mMediator.updateVisualsForState(brandedColorScheme);
     }
 
     /**
@@ -332,14 +330,19 @@ public class AutocompleteCoordinator implements UrlFocusChangeListener, UrlTextC
      * @return Whether the key event was handled.
      */
     public boolean handleKeyEvent(int keyCode, KeyEvent event) {
-        boolean isShowingList = mDropdown != null && mDropdown.getViewGroup().isShown();
+        // Note: this method receives key events for key presses and key releases.
+        // Make sure we focus only on key press events alone.
+        if (!KeyNavigationUtil.isActionDown(event)) {
+            return false;
+        }
 
+        boolean isShowingList = mDropdown != null && mDropdown.getViewGroup().isShown();
         boolean isAnyDirection = KeyNavigationUtil.isGoAnyDirection(event);
+
         if (isShowingList && mMediator.getSuggestionCount() > 0 && isAnyDirection) {
             mMediator.allowPendingItemSelection();
         }
-        boolean isValidListKey = isAnyDirection || KeyNavigationUtil.isEnter(event);
-        if (isShowingList && isValidListKey && mDropdown.getViewGroup().onKeyDown(keyCode, event)) {
+        if (isShowingList && mDropdown.getViewGroup().onKeyDown(keyCode, event)) {
             return true;
         }
         if (KeyNavigationUtil.isEnter(event) && mParent.getVisibility() == View.VISIBLE) {
@@ -392,7 +395,7 @@ public class AutocompleteCoordinator implements UrlFocusChangeListener, UrlTextC
      * Sends a zero suggest request to the server in order to pre-populate the result cache.
      */
     public void prefetchZeroSuggestResults() {
-        AutocompleteControllerJni.get().prefetchZeroSuggestResults();
+        mMediator.startPrefetch();
     }
 
     /** @return Suggestions Dropdown view, showing the list of suggestions. */
@@ -413,7 +416,14 @@ public class AutocompleteCoordinator implements UrlFocusChangeListener, UrlTextC
         return mMediator.getSuggestionModelListForTest();
     }
 
-    private void onTileSelected(QueryTile queryTile) {
-        mMediator.onQueryTileSelected(queryTile);
+    @VisibleForTesting
+    public @NonNull ModalDialogManager getModalDialogManagerForTest() {
+        assert mModalDialogManagerSupplier.hasValue();
+        return mModalDialogManagerSupplier.get();
+    }
+
+    @VisibleForTesting
+    public void stopAutocompleteForTest(boolean clearResults) {
+        mMediator.stopAutocomplete(clearResults);
     }
 }

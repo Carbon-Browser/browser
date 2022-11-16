@@ -30,11 +30,9 @@ class HistoryBackendNotifier {
   virtual void NotifyFaviconsChanged(const std::set<GURL>& page_urls,
                                      const GURL& icon_url) = 0;
 
-  // Sends notification that `transition` to `row` occurred at `visit_time`
-  // following `redirects` (empty if there is no redirects).
+  // Sends notification that `transition` to `row` occurred at `visit_time`.
   virtual void NotifyURLVisited(ui::PageTransition transition,
                                 const URLRow& row,
-                                const RedirectList& redirects,
                                 base::Time visit_time) = 0;
 
   // Sends notification that `changed_urls` have been changed or added.
@@ -45,6 +43,9 @@ class HistoryBackendNotifier {
   // deleted.
   // `deletion_info` describes the urls that have been removed from history.
   virtual void NotifyURLsDeleted(DeletionInfo deletion_info) = 0;
+
+  // Called after a visit has been updated.
+  virtual void NotifyVisitUpdated(const VisitRow& visit) = 0;
 
   // Called after a visit has been deleted.
   virtual void NotifyVisitDeleted(const VisitRow& visit) = 0;

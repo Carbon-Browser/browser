@@ -1,44 +1,68 @@
-# This pipeline has several workflows that build and test ABP Chromium. It
+# This file is part of eyeo Chromium SDK,
+# Copyright (C) 2006-present eyeo GmbH
+# eyeo Chromium SDK is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 3 as
+# published by the Free Software Foundation.
+# eyeo Chromium SDK is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# You should have received a copy of the GNU General Public License
+# along with eyeo Chromium SDK.  If not, see <http://www.gnu.org/licenses/>.
+
+# This pipeline has several workflows that build and test eyeo Chromium SDK. It
 # tries to minimize the number of builds, while guaranteeing testability.
 #
 # A workflow is chosen based on the event that triggered the pipeline.
 # Creation of merge request and subsequent commits
 # 1. Publish to public git repo
-# 2. Build and test on x86
+# 2. Build and test on Android (x86)
 # 3a. Run Appium tests
 # 3b. Manual trigger of ARM release (for debugging purposes)
 # 3c. Manual trigger of ARM debug (for debugging purposes)
+# 4. Manual trigger of eyeo Chromium SDK Sanity Check performance tests (PLT with default config for 8 urls and Memory with all configs for 1 URL)
+# 5. Manual trigger of build and test desktop
 #
 # Committing or merging to a main development branch
 # 1. Publish to public git repo
-# 2. Build and test on x86
+# 2. Build and test on Android (x86)
 # 3a. Run Appium tests
 # 3b. Build ARM release
 # 3c. Manual trigger of ARM debug (for debugging purposes)
-# 4a. For committing only: Manual trigger of Vanilla complete performance tests (52 urls for PLT and 8 urls for Memory)
-# 4b. For committing only: Manual trigger of ABP Chromium Sanity Check performance tests (8 urls for PLT and Memory)
+# 4. Manual trigger of build and test desktop
 #
 # Committing to a beta branch
 # 1. Publish to public git repo
-# 2. Build and test on x86
+# 2. Build and test on Android (x86)
 # 3a. Run Appium Full Test Suite
 # 3b. Build ARM release
 # 3c. Manual trigger of ARM debug (for debugging purposes)
-# 4a. Manual trigger of Vanilla complete performance tests (52 urls for PLT and 8 urls for Memory)
-# 4b. Manual trigger of ABP Chromium complete performance tests for default config (52 urls for PLT and 8 urls for Memory)
+# 4. Manual trigger of build and test desktop
 #
 # Committing to vanilla Chromium branch
 # 1. Publish to public git repo
-# 2. Build ARM release
+# 2. Build and test on desktop (x64)
+# 3. Build ARM release
+# 4. Automatic trigger of eyeo Chromium SDK complete performance test suite (PLT with default config for 52 urls and Memory with all configs for 1 URL)
 #
 # Tagging a commit
 # 1. Publish to public git repo
 # 2. Build ARM release
-# 3. For rc tags, run ABP Chromium Sanity Check Perfromance tests (8 urls for PLT and Memory)
+# 3. For rc tags, automatic trigger of eyeo Chromium SDK Sanity Check performance tests
+# 3. For beta tags, automatic trigger of eyeo Chromium SDK complete performance test suite
 #
-# Scheduled run
-# 1. Code coverage on x86
+# Schedule (Default Run)
+# 1. Publish to public git repo
+# 2. Build and test on Android (x86)
+# 3. Build ARM release
+# 4. Run Appium Full Test Suite
+# 5. Performance tests (Sanity Check)
+# 6. Build and test desktop
+#
+# Schedule (Verify Fb blocking and Code Coverage)
+# 1. Code coverage on desktop (x64)
 # 2. Publish results on Mattermost
+# 3. Verify if flatbuffer-based ad-blocking delivers same result as libadblockplus
 #
 # Note: Workflows aren't executed against feature branches that are not linked
 # to a MR. Manual runs can be forced using the FORCE_DEFAULT_RUN flag.
@@ -54,127 +78,100 @@ workflow:
     - if: '$FORCE_DEFAULT_RUN == "true"'
 
 stages:
-  - publish_git
-  - build_x86
-  - qa
-  - performance
+  - build_linux
+  - build_x86_android
+  - build_arm_android
+  - end_to_end_tests
+  - performance_tests
+  - build_linux_optional
+  - build_windows
   - upload
 
 #### Chromium job template configuration ####
 
+.reset_dir_ownership_to_root: &reset_dir_ownership_to_root
+  - chown -R root:root /opt/ ${GIT_CACHE_PATH} .. ~
+
+#TODO: Set this up in a new docker image version
+.use_non_root_user: &use_non_root_user
+  # Add non-root user and make it part of sudo group
+  - useradd -ms /bin/bash non_root
+  - usermod -aG sudo non_root
+  # Make it possible to use sudo witout tty
+  - echo "Defaults:non_root !requiretty" >> /etc/sudoers
+  - chown -R non_root:non_root /opt/ /gclient_git_cache .. ~
+
+.configure_linux_gclient: &configure_linux_gclient
+  - cp gclient/.gclient_ci_linux ../.gclient
+
+.configure_android_gclient: &configure_android_gclient
+  - cp gclient/.gclient_ci_android ../.gclient
+
+.configure_windows_gclient: &configure_windows_gclient
+  - cp gclient/.gclient_ci_windows ../.gclient
+
 .common_build_chromium_before: &common_build_chromium_before
+  - *use_non_root_user
   - source .ci-scripts/install_packages.sh
   # Setup depot tools path. Export in Dockerfile using .bashrc does not work, hence it is added here before 1st use.
   - export PATH=$PATH:$DEPOT_TOOLS
-  # Copy gclient initial config.
-  - cp docker/.gclient ..
-  # Pull the Android dependencies in root directory and return to the src folder.
-  - cd ..; time gclient sync --with_branch_heads --force --delete_unversioned_trees --reset | grep -v '==' ; cd src
-  # Starting in Chromium 94, we hit a compile error due to v8 warnings.
-  # This block temporarily suppresses it. See DPD-794
-  - |
-    if [ -f .ci-scripts/v8.patch ]; then
-        cd v8
-        git reset --hard
-        git apply ../.ci-scripts/v8.patch
-        cd ..
-    fi
-  # Zero ccache stats (and make sure its actually installed)
-  # Also ensure the max size is correct
-  - ccache --zero-stats --max-size=${CCACHE_MAX_SIZE}
+  # Needed to use goma
+  - apt install lsof
+  - runuser -p -u non_root -- time goma_ctl ensure_start
+  # Pull the dependencies in root directory and return to the src folder.
+  - cd ..; runuser -p -u non_root -- time gclient sync --force --reset --delete_unversioned_trees | grep -v '==' ; cd src
   - export PATH=`pwd`/third_party/llvm-build/Release+Asserts/bin:$PATH
-  - source .ci-scripts/setup_icecc.sh
   # Populate some info shown in chrome://version
   - |
     LAST_CHANGE="${CI_COMMIT_SHORT_SHA}-${CI_JOB_NAME}-${CI_JOB_ID}"
-    if [ "${EXTRA_GN_ARGS}" ]; then
-      ESCAPED_EXTRA_GN_ARGS=$(echo "${EXTRA_GN_ARGS}" | sed -e 's/\\/\\\\/g' | sed -e 's/"/\\"/g')
-      LAST_CHANGE="${LAST_CHANGE}-(${ESCAPED_EXTRA_GN_ARGS})"
-    fi
   - echo LASTCHANGE="${LAST_CHANGE}" > build/util/LASTCHANGE
-    # Display experimental build flags on console and .txt file
-  - |
-    if [ "${EXTRA_GN_ARGS}" ]; then
-      echo "EXTRA_GN_ARGS is: ${EXTRA_GN_ARGS}"
-      echo 'EXTRA_GN_ARGS is:'${EXTRA_GN_ARGS} >> parameter_info.txt
-    fi
 
 .job_template: &common_build_chromium
-  image: "registry.gitlab.com/eyeo/docker/abpchromium_gitlab-runner:202109.1"
+  image: "registry.gitlab.com/eyeo/docker/abpchromium_gitlab-runner:202203.1"
   tags:
     - "distpartners-build-server-1-abpchromium-builder"
   interruptible: true
   variables:
-    EXTRA_GN_ARGS: ""
-    GIT_CLONE_PATH: $CI_BUILDS_DIR/abpchromium/src
+    GIT_CLONE_PATH: $CI_BUILDS_DIR/chromium-sdk/src
     GIT_CACHE_PATH: "/gclient_git_cache"
-    GIT_CLEAN_FLAGS: "-ffdx -e /third_party/"
-    CCACHE_DIR: "/ccache"
-    CCACHE_MAX_SIZE: "100G"
-    CCACHE_COMPRESS: "1"
-    CCACHE_CPP2: "yes"
-    CCACHE_SLOPPINESS: "time_macros,include_file_mtime,include_file_ctime"
-    CCACHE_COMPILERCHECK: "content"
-    CCACHE_BASEDIR: "/opt/ci"
-    # ICECC_SCHEDULER should be set to the IP/hostname of an icecc scheduler node.
-    # If its empty or set to 'DISABLED' then ICECC functionality is disabled.
-    ICECC_SCHEDULER: "10.44.50.101"
-    # Some useful variables which can be set through the gitlab UI:
-    # Set `CCACHE_DISABLE: "true"` to completely disable ccache
-    # Set `CCACHE_RECACHE: "true"` to rebuild the cache without using it in the current build
+    GOMA_SERVER_PORT: 443
+    GOMACTL_USE_PROXY: "false"
+    DEPOT_TOOLS_WIN_TOOLCHAIN: 1
+    NUMJOBS: 150
   before_script:
+    - *reset_dir_ownership_to_root
+    - *configure_android_gclient
     - *common_build_chromium_before
   after_script:
-    - ccache --show-stats
     # archive to minio
     - git clone https://gitlab.com/eyeo/distpartners/artifact-archiver.git && artifact-archiver/bootstrap.sh
 
 
 #### Jobs definition ####
 
-# Syncs our internal git repo to its public mirror which our partners use:
-#   https://git.distpartners.eyeo.com/cgit/abpchromium.git
-# This job syncs the entire repo (not just the branch being built)
-# Script provided by eyeo/devops/ansible-playbooks.git
-# Provision-public-git-web-servers.yml
-publish_git:
-  interruptible: true
-  stage: "publish_git"
-  tags:
-    - "git-distpartners-1.uplink.eyeo.it"
-  variables:
-    PUBLISH_DOMAIN: "git.distpartners.eyeo.com"
-    GIT_STRATEGY: none
-  script:
-    - "/usr/local/sbin/deploy_public_git_web /srv/$PUBLISH_DOMAIN/web/abpchromium.git"
-
 build_and_test_x86_debug:
   <<: *common_build_chromium
-  stage: build_x86
+  stage: build_x86_android
+  tags:
+    - android-tests
   script:
-    - time gn gen --check --args="${EXTRA_GN_ARGS} ${GN_EXTRA_ARGS_INTERNAL}"' cc_wrapper="ccache" target_cpu="x86" target_os="android" is_debug=true proprietary_codecs=true ffmpeg_branding="Chrome"' out/Debug
-    - time ninja -j${NUMJOBS:-$(nproc)} -C out/Debug chrome_public_apk unit_tests components_unittests chrome_public_test_apk
-    - time ./out/Debug/bin/run_unit_tests --avd-config tools/android/avd/proto/generic_android28.textpb -f "*Abp*:*Adblock*"
-    - time ./out/Debug/bin/run_components_unittests --avd-config tools/android/avd/proto/generic_android28.textpb -f "*Abp*:*Adblock*"
+    - runuser -p -u non_root -- time gn gen --check --args='disable_fieldtrial_testing_config=true target_cpu="x86" use_goma=true enable_nacl=false target_os="android" is_debug=true proprietary_codecs=true ffmpeg_branding="Chrome" '"eyeo_telemetry_activeping_auth_token=\"${TELEMETRY_DEFAULT_SERVER_ACTIVEPING_AUTH_TOKEN}\" ${GN_EXTRA_ARGS_INTERNAL} ${GN_EXTRA_ARGS}" out/Debug
+    - runuser -p -u non_root -- time ninja -j${NUMJOBS} -C out/Debug chrome_public_apk unit_tests components_unittests chrome_public_test_apk components_perftests verify_flatbuffer_adblocking
+    - runuser -p -u non_root -- time goma_ctl stat
+    - time ./out/Debug/bin/run_unit_tests --avd-config tools/android/avd/proto/generic_android28.textpb -v -f "*Abp*:*Adblock*" --gtest_output="xml:/data/user/0/org.chromium.native_test/unit_tests_report.xml" --app-data-file-dir out/Debug/ --app-data-file unit_tests_report.xml
+    - time ./out/Debug/bin/run_components_unittests --avd-config tools/android/avd/proto/generic_android28.textpb -v -f "*Abp*:*Adblock*" --gtest_output="xml:/data/user/0/org.chromium.native_test/components_unittests_report.xml" --app-data-file-dir out/Debug/ --app-data-file components_unittests_report.xml
     - time ./out/Debug/bin/run_chrome_public_test_apk --avd-config tools/android/avd/proto/generic_android28.textpb -v -f "*TestPages*:*Adblock*"
   after_script:
-    - ccache --show-stats
-    # Grab some test metrics since we dont have junit output
-    - echo -n "device_unit_tests_passed " > metrics.txt
-    - grep -A 1 "suite-table-summary-column-1" $(ls -1rt $(find out/ -name test_results_presentation.html)) | head -1 | grep -o '[0-9]\+' >> metrics.txt
-    - echo -n "device_unit_tests_failed " >> metrics.txt
-    - grep -A 1 "suite-table-summary-column-2" $(ls -1rt $(find out/ -name test_results_presentation.html))  | head -1 | grep -o '[0-9]\+' >> metrics.txt
-    - echo -n "instrumentation_tests_passed " >> metrics.txt
-    - grep -A 1 "suite-table-summary-column-1" $(ls -1rt $(find out/ -name test_results_presentation.html)) | tail -1 | grep -o '[0-9]\+' >> metrics.txt
-    - echo -n "instrumentation_tests_failed " >> metrics.txt
-    - grep -A 1 "suite-table-summary-column-2" $(ls -1rt $(find out/ -name test_results_presentation.html))  | tail -1 | grep -o '[0-9]\+' >> metrics.txt
-    # archive to minio
+    # Archive artifacts in Minio
     - git clone https://gitlab.com/eyeo/distpartners/artifact-archiver.git && artifact-archiver/bootstrap.sh
-
   rules:
     - if: $CI_COMMIT_TAG
       when: never
     - if: '$CI_COMMIT_BRANCH =~ /-vanilla-automated$/'
+      when: never
+    - if: '$RUN_SCHEDULE_DEFAULT_PIPELINE == "true"'
+      when: on_success
+    - if: '$RUN_SCHEDULE_DEFAULT_PIPELINE == "false"'
       when: never
     - when: always
   artifacts:
@@ -183,30 +180,187 @@ build_and_test_x86_debug:
       - "./out/Debug/apks/ChromePublic.apk"
       - "out/Debug/TEST_RESULTS*"
     reports:
-      metrics: metrics.txt
+      junit:
+        - "out/Debug/emulator-*/unit_tests_report.xml"
+        - "out/Debug/emulator-*/components_unittests_report.xml"
     when: always
+
+build_and_test_desktop_release:
+  <<: *common_build_chromium
+  stage: build_linux
+  needs: []
+  before_script:
+    - *reset_dir_ownership_to_root
+    - *configure_linux_gclient
+    - *common_build_chromium_before
+    - apt-get update
+    - apt-get install -qy python3-pip
+    - pip3 install python-gitlab
+  script:
+    - runuser -p -u non_root -- time gn gen --check --args='disable_fieldtrial_testing_config=true is_debug=false use_goma=true enable_nacl=false  proprietary_codecs=true ffmpeg_branding="Chrome" '"eyeo_telemetry_activeping_auth_token=\"${TELEMETRY_DEFAULT_SERVER_ACTIVEPING_AUTH_TOKEN}\" ${GN_EXTRA_ARGS_INTERNAL} ${GN_EXTRA_ARGS}" out/Release
+    - runuser -p -u non_root -- time ninja -j${NUMJOBS} -C out/Release chrome unit_tests components_unittests browser_tests verify_flatbuffer_adblocking
+    - runuser -p -u non_root -- time goma_ctl stat
+    # Verify adblocking logic against reference results on a very small set
+    # of URLs as a sanity check. See verify_flatbuffer_adblocking stage for
+    # full test.
+    - time ./out/Release/verify_flatbuffer_adblocking
+
+    # Get artifacts from vanilla branch with same major version number
+    - VERSION=`./out/Release/chrome --product-version`
+    - DOWNLOAD_DIR="test_reports"
+    - |
+      python3 ${GIT_CLONE_PATH}/.ci-scripts/get_vanilla_job_test_report.py \
+      ${VERSION} ${DOWNLOAD_DIR}
+
+    # Exclude unit tests that failed in vanilla. Run all tests normally if none
+    # failed or no report is available (exclusion filters slow runs a bit).
+    - |
+      if [ -s "${DOWNLOAD_DIR}/out/Release/unit_tests_failed.txt" ]; then
+        EXCLUSION_FILTER=`python3 ${GIT_CLONE_PATH}/.ci-scripts/get_gtest_exclusion_filter.py ${DOWNLOAD_DIR}/out/Release/unit_tests_failed.txt`
+        runuser -p -u non_root -- time xvfb-run ./out/Release/bin/run_unit_tests \
+        --gtest_output="xml:out/Release/unit_tests_report.xml" \
+        --gtest_filter="${EXCLUSION_FILTER}"
+      else
+        runuser -p -u non_root -- time xvfb-run ./out/Release/bin/run_unit_tests \
+        --gtest_output="xml:out/Release/unit_tests_report.xml"
+      fi
+
+    - |
+      if [ -s "${DOWNLOAD_DIR}/out/Release/components_unittests_failed.txt" ]; then
+        EXCLUSION_FILTER=`python3 ${GIT_CLONE_PATH}/.ci-scripts/get_gtest_exclusion_filter.py ${DOWNLOAD_DIR}/out/Release/components_unittests_failed.txt`
+        runuser -p -u non_root -- time xvfb-run ./out/Release/bin/run_components_unittests \
+        --gtest_output="xml:out/Release/components_unittests_report.xml" \
+        --gtest_filter="${EXCLUSION_FILTER}"
+      else
+        runuser -p -u non_root -- time xvfb-run ./out/Release/bin/run_components_unittests \
+        --gtest_output="xml:out/Release/components_unittests_report.xml"
+      fi
+
+  after_script:
+    # Archive artifacts in Minio
+    - git clone https://gitlab.com/eyeo/distpartners/artifact-archiver.git && artifact-archiver/bootstrap.sh
+  rules:
+    - if: '$RUN_SCHEDULE_DEFAULT_PIPELINE == "false"'
+      when: never
+    - if: '$CI_COMMIT_BRANCH =~ /-vanilla-automated$/'
+      when: never
+    - if: $CI_COMMIT_TAG
+      when: never
+    - when: always
+  artifacts:
+    expire_in: 1 week
+    reports:
+      junit:
+        - "out/Release/unit_tests_report.xml"
+        - "out/Release/components_unittests_report.xml"
+    when: always
+
+build_and_browsertest_desktop_release:
+  <<: *common_build_chromium
+  stage: build_linux_optional
+  needs: []
+  before_script:
+    - *reset_dir_ownership_to_root
+    - *configure_linux_gclient
+    - *common_build_chromium_before
+    - apt-get update
+    - apt-get install -qy python3-pip
+    - pip3 install python-gitlab
+  script:
+    - runuser -p -u non_root -- time gn gen --check --args='disable_fieldtrial_testing_config=true is_debug=false use_goma=true enable_nacl=false proprietary_codecs=true ffmpeg_branding="Chrome" '"eyeo_telemetry_activeping_auth_token=\"${TELEMETRY_DEFAULT_SERVER_ACTIVEPING_AUTH_TOKEN}\" ${GN_EXTRA_ARGS_INTERNAL} ${GN_EXTRA_ARGS}" out/Release
+    - runuser -p -u non_root -- time ninja -j${NUMJOBS} -C out/Release chrome browser_tests
+    - runuser -p -u non_root -- time goma_ctl stat
+    # Get artifacts from vanilla branch with same major version number
+    - VERSION=`./out/Release/chrome --product-version`
+    - DOWNLOAD_DIR="test_reports"
+    - |
+      python3 ${GIT_CLONE_PATH}/.ci-scripts/get_vanilla_job_test_report.py \
+      ${VERSION} ${DOWNLOAD_DIR}
+
+    - EXCLUSION_FILTER=`python3 ${GIT_CLONE_PATH}/.ci-scripts/get_gtest_exclusion_filter.py ${DOWNLOAD_DIR}/out/Release/browser_tests_failed.txt`
+    - runuser -p -u non_root -- time xvfb-run -s "-screen 0 1024x768x24" out/Release/bin/run_browser_tests \
+      --gtest_output="xml:out/Release/browser_tests_report.xml" \
+      --test-launcher-jobs=48 \
+      --no-sandbox \
+      --gtest_filter="${EXCLUSION_FILTER}"
+
+  after_script:
+    # Archive artifacts in Minio
+    - git clone https://gitlab.com/eyeo/distpartners/artifact-archiver.git && artifact-archiver/bootstrap.sh
+  rules:
+    # Schedules are our periodic sanity check and no failures should be allowed
+    - if: '$RUN_SCHEDULE_DEFAULT_PIPELINE == "true"'
+      when: always
+    - if: '$RUN_SCHEDULE_DEFAULT_PIPELINE == "false"'
+      when: never
+    - if: '$CI_COMMIT_BRANCH =~ /-vanilla-automated$/'
+      when: never
+    - if: $CI_COMMIT_TAG
+      when: never
+    # A regular pipeline will be blocked if the manual job isn't allowed to fail
+    - when: manual
+      allow_failure: true
+  artifacts:
+    expire_in: 1 week
+    reports:
+      junit:
+        - "out/Release/browser_tests_report.xml"
+    when: always
+
+build_linux_installer_release:
+  <<: *common_build_chromium
+  stage: build_linux
+  needs: []
+  before_script:
+    - *reset_dir_ownership_to_root
+    - *configure_linux_gclient
+    - *common_build_chromium_before
+    - apt-get update
+    - apt-get install -qy python3-pip
+    - pip3 install python-gitlab
+  script:
+    - runuser -p -u non_root -- time gn gen --check --args='disable_fieldtrial_testing_config=true proprietary_codecs=true ffmpeg_branding="Chrome" use_goma=true enable_nacl=false is_component_build=false is_debug=false '"eyeo_telemetry_activeping_auth_token=\"${TELEMETRY_DEFAULT_SERVER_ACTIVEPING_AUTH_TOKEN}\" ${GN_EXTRA_ARGS_INTERNAL} ${GN_EXTRA_ARGS}" out/Release
+    - runuser -p -u non_root -- time ninja -j${NUMJOBS} -C out/Release chrome/installer/linux:unstable_deb
+    - runuser -p -u non_root -- time goma_ctl stat
+  after_script:
+    # Archive artifacts in Minio
+    - git clone https://gitlab.com/eyeo/distpartners/artifact-archiver.git && artifact-archiver/bootstrap.sh
+  rules:
+    - if: '$RUN_SCHEDULE_DEFAULT_PIPELINE == "false"'
+      when: never
+    - if: '$CI_COMMIT_BRANCH =~ /-vanilla-automated$/'
+      when: never
+    - when: always
+  artifacts:
+    expire_in: 1 day
+    paths:
+      - "out/Release/*.deb"
 
 code_coverage:
   <<: *common_build_chromium
-  stage: build_x86
+  stage: build_linux
   before_script:
+    - *reset_dir_ownership_to_root
+    - *configure_linux_gclient
+    # Disable local idle compiling to avoid issues when building
+    - export GOMA_USE_LOCAL="false"
     - *common_build_chromium_before
     # Install package required to report code coverage
     - apt install html-xml-utils
   script:
     # Run build with code coverage support only for our adblock component
-    - time gn gen --args='use_clang_coverage=true is_component_build=false dcheck_always_on=true is_debug=false' out/coverage
-    - time xvfb-run python tools/code_coverage/coverage.py components_unittests -b out/coverage -o out/report -c 'out/coverage/components_unittests --gtest_filter=*Abp*:*Adblock*' -f components/adblock/
-
+    - runuser -p -u non_root -- time gn gen --args='disable_fieldtrial_testing_config=true use_clang_coverage=true use_goma=true enable_nacl=false is_component_build=false dcheck_always_on=true is_debug=false' out/coverage
+    - runuser -p -u non_root -- time xvfb-run python3 tools/code_coverage/coverage.py components_unittests -j${NUMJOBS} -b out/coverage -o out/report -c 'out/coverage/components_unittests --gtest_filter=*Abp*:*Adblock*' -f components/adblock/
+    - runuser -p -u non_root -- time goma_ctl stat
     # Extract the different coverage percentages for the whole adblock component from the HTML report
-    - line_cov=`hxnormalize -l 480 -x out/report/linux/opt/ci/abpchromium/src/components/report.html | hxselect -c 'tbody > tr:nth-child(3) > td:nth-child(2) > pre' | cut -f1 -d '%' | xargs`
-    - func_cov=`hxnormalize -l 480 -x out/report/linux/opt/ci/abpchromium/src/components/report.html | hxselect -c 'tbody > tr:nth-child(3) > td:nth-child(3) > pre' | cut -f1 -d '%' | xargs`
-    - regn_cov=`hxnormalize -l 480 -x out/report/linux/opt/ci/abpchromium/src/components/report.html | hxselect -c 'tbody > tr:nth-child(3) > td:nth-child(4) > pre' | cut -f1 -d '%' | xargs`
+    - line_cov=`hxnormalize -l 480 -x out/report/linux/opt/ci/chromium-sdk/src/components/report.html | hxselect -c 'tbody > tr:nth-child(3) > td:nth-child(2) > pre' | cut -f1 -d '%' | xargs`
+    - func_cov=`hxnormalize -l 480 -x out/report/linux/opt/ci/chromium-sdk/src/components/report.html | hxselect -c 'tbody > tr:nth-child(3) > td:nth-child(3) > pre' | cut -f1 -d '%' | xargs`
+    - regn_cov=`hxnormalize -l 480 -x out/report/linux/opt/ci/chromium-sdk/src/components/report.html | hxselect -c 'tbody > tr:nth-child(3) > td:nth-child(4) > pre' | cut -f1 -d '%' | xargs`
     - echo 'line_coverage' ${line_cov} > metrics.txt
     - echo 'function_coverage' ${func_cov} >> metrics.txt
     - echo 'region_coverage' ${regn_cov} >> metrics.txt
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$RUN_CODE_COVERAGE == "true"'
       when: always
     - when: never
   artifacts:
@@ -218,35 +372,164 @@ code_coverage:
       metrics: metrics.txt
     when: always
 
-appium_device_tests:
-  stage: qa
+# For each test suite, obtain the list of failing tests. These will be excluded when running against eyeo Chromium SDK,
+# because we aren't the reason they fail.
+# In order for the whole job to run to completion even with failing tests, the exit code for each test command must be ignored.
+vanilla_build_and_test_desktop_release:
+  <<: *common_build_chromium
+  stage: build_linux
+  before_script:
+    - *reset_dir_ownership_to_root
+    - *configure_linux_gclient
+    - *common_build_chromium_before
+    - apt-get update
+    - apt-get install -qy python3-pip
+    - pip3 install lxml
+  script:
+    - runuser -p -u non_root -- time gn gen --check --args='disable_fieldtrial_testing_config=true is_debug=false use_goma=true enable_nacl=false proprietary_codecs=true ffmpeg_branding="Chrome" '"eyeo_telemetry_activeping_auth_token=\"${TELEMETRY_DEFAULT_SERVER_ACTIVEPING_AUTH_TOKEN}\" ${GN_EXTRA_ARGS_INTERNAL} ${GN_EXTRA_ARGS}" out/Release
+    - runuser -p -u non_root -- time ninja -j${NUMJOBS} -C out/Release unit_tests components_unittests components_perftests browser_tests
+    - runuser -p -u non_root -- time goma_ctl stat
+    - runuser -p -u non_root -- time xvfb-run ./out/Release/bin/run_unit_tests --gtest_output="xml:out/Release/unit_tests_report.xml" > out/Release/unit_tests.log || true
+    # Check if there are any failed tests, if there is none, create an empty file.
+    - |
+      if grep -q "test.* failed" out/Release/unit_tests.log
+      then
+        num_unit_tests_failed=`grep "test.* failed" out/Release/unit_tests.log | awk '{print $1;}'`
+        grep -A ${num_unit_tests_failed} "test.* failed" out/Release/unit_tests.log | tail -n +2 | awk '{print $1;}' > out/Release/unit_tests_failed.txt
+      else
+        echo "" > out/Release/unit_tests_failed.txt
+      fi
+    - runuser -p -u non_root -- time xvfb-run ./out/Release/bin/run_components_unittests --gtest_output="xml:out/Release/components_unittests_report.xml" > out/Release/components_unittests.log || true
+    - |
+      if grep -q "test.* failed" out/Release/components_unittests.log
+      then
+        num_components_failed=`grep "test.* failed" out/Release/components_unittests.log | awk '{print $1;}'`
+        grep -A ${num_components_failed} "test.* failed" out/Release/components_unittests.log | tail -n +2 | awk '{print $1;}' > out/Release/components_unittests_failed.txt
+      else
+        echo "" > out/Release/components_unittests_failed.txt
+      fi
+    # Run browser tests to generate report to get failing testcases from
+    - runuser -p -u non_root -- time xvfb-run -s "-screen 0 1024x768x24" out/Release/bin/run_browser_tests \
+      --gtest_output="xml:out/Release/browser_tests_report.xml" \
+      --test-launcher-jobs=48 \
+      --no-sandbox > out/Release/browser_tests.log || true
+    - |
+      if grep -q "test.* failed" out/Release/browser_tests.log
+      then
+        python3 ${GIT_CLONE_PATH}/.ci-scripts/get_failing_browser_tests.py out/Release/browser_tests_report.xml > out/Release/browser_tests_failed.txt
+        num_browser_tests_failed=`wc -l out/Release/browser_tests_failed.txt`
+      else
+        echo "" > out/Release/browser_tests_failed.txt
+      fi
+
+    # If any of the tests failed, exit with a custom code so a warning is shown
+    - if [[ -v ${num_unit_tests_failed} || -v ${num_components_failed} || -v ${num_browser_tests_failed} ]]; then exit 200; fi
+  rules:
+    - if: '$CI_COMMIT_BRANCH =~ /-vanilla-automated$/'
+      when: always
+    - when: never
+  allow_failure:
+    exit_codes: 200
+  artifacts:
+    expire_in: 3 months
+    paths:
+      - "out/Release/unit_tests_failed.txt"
+      - "out/Release/components_unittests_failed.txt"
+      - "out/Release/browser_tests_failed.txt"
+    reports:
+      junit:
+        - "out/Release/unit_tests_report.xml"
+        - "out/Release/components_unittests_report.xml"
+        - "out/Release/browser_tests_report.xml"
+    when: always
+
+vanilla_build_linux_installer_release:
+  <<: *common_build_chromium
+  stage: build_linux
+  before_script:
+    - *reset_dir_ownership_to_root
+    - *configure_linux_gclient
+    - *common_build_chromium_before
+    - apt-get update
+    - apt-get install -qy python3-pip
+  script:
+    - runuser -p -u non_root -- time gn gen --check --args='disable_fieldtrial_testing_config=true is_debug=false use_goma=true enable_nacl=false proprietary_codecs=true ffmpeg_branding="Chrome" is_component_build=false '"eyeo_telemetry_activeping_auth_token=\"${TELEMETRY_DEFAULT_SERVER_ACTIVEPING_AUTH_TOKEN}\" ${GN_EXTRA_ARGS_INTERNAL} ${GN_EXTRA_ARGS}" out/Release
+    - runuser -p -u non_root -- time ninja -j${NUMJOBS} -C out/Release chrome/installer/linux:unstable_deb
+    - runuser -p -u non_root -- time goma_ctl stat
+  rules:
+    - if: '$CI_COMMIT_BRANCH =~ /-vanilla-automated$/'
+      when: always
+    - when: never
+  artifacts:
+    expire_in: 3 months
+    paths:
+      - "out/Release/*.deb"
+    when: always
+
+verify_flatbuffer_adblocking:
+  <<: *common_build_chromium
+  stage: build_linux
+  before_script:
+    - *reset_dir_ownership_to_root
+    - *configure_linux_gclient
+    - *common_build_chromium_before
+    - pip3 install minio
+  script:
+    - |
+      python3 ${GIT_CLONE_PATH}/.ci-scripts/minio_download_files.py \
+      chromium-sdk-test-assets random_shuf_100000.tsv.sql
+    # Build the verify_flatbuffer_adblocking target and run it with the downloaded input database
+    - runuser -p -u non_root -- time gn gen --args='disable_fieldtrial_testing_config=true is_debug=false use_goma=true enable_nacl=false symbol_level=1 proprietary_codecs=true ffmpeg_branding="Chrome" clang_use_default_sample_profile = false is_cfi = false' out/Release_desktop
+    - runuser -p -u non_root -- ninja -C out/Release_desktop/ verify_flatbuffer_adblocking
+    - runuser -p -u non_root -- time goma_ctl stat
+    - time ./out/Release_desktop/verify_flatbuffer_adblocking --input=random_shuf_100000.tsv.sql 2>&1 | tee verification_result.txt
+  rules:
+    - if: '$RUN_VERIFY_FLATBUFFER_ADBLOCKING == "true"'
+      when: always
+    - when: never
+  artifacts:
+    expire_in: 1 week
+    paths:
+      - "verification_result.txt"
+    reports:
+      metrics: verification_result.txt
+
+selenium_desktop_tests:
+  stage: end_to_end_tests
+  needs: ["build_linux_installer_release"]
+  dependencies: ["build_linux_installer_release"]
   tags:
     - docker
-  # https://gitlab.com/finestructure/pipeline-trigger
-  image: "registry.gitlab.com/finestructure/pipeline-trigger:2.7.0"
+  image: "registry.gitlab.com/eyeo/docker/pipeline-trigger:2.7.1"
   variables:
     GIT_STRATEGY: "none"
-    TESTING_BRANCH: "new-arch-tests"
-    TESTING_PROJECT_ID: "14347317" # https://gitlab.com/eyeo/distpartners/abp-chromium-test-automation
-    RUN_FULL_SUITE: "false"
+    TESTING_BRANCH: "master"
+    TESTING_PROJECT_ID: "34109517" #https://gitlab.com/eyeo/distpartners/eyeo-chromium-desktop-test-automation
   before_script:
     - apk update
     # Install jq to parse the API response later
     - apk add jq
     # Update wget to prevent issues with TLS handshake (DPD-830)
     - apk add wget
+    - pip3 install minio
   script:
-    # Get URL for the x86 APK
-    - "export BUILD_JOB_ID=$(wget  --header \"PRIVATE-TOKEN: ${CHROMIUM_GITLAB_TOKEN}\" -O - ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/pipelines/${CI_PIPELINE_ID}/jobs | jq -c '.[] | select(.name == (\"build_and_test_x86_debug\")) | .id' | sort | tail -1)"
-    - export APK_X86="${MINIO_HOST}/${CI_PROJECT_NAME}/${CI_PROJECT_PATH}/${CI_PIPELINE_ID}/${BUILD_JOB_ID}/out/Debug/apks/ChromePublic.apk"
-
+    # Get eyeo Chromium SDK file name
+    - cd out/Release ; CHROMIUM_FILENAME=$(ls *deb) ; cd $CI_PROJECT_DIR
+    - echo "Testing $CHROMIUM_FILENAME"
+    # Download script to get pre-signed URL for artifacts used in the test
+    - wget $CI_PROJECT_URL/raw/$CI_COMMIT_SHA/.ci-scripts/minio_get_presigned_url.py
+    # Get URL for the linux installer
+    - "export BUILD_JOB_ID=$(wget  --header \"PRIVATE-TOKEN: ${CHROMIUM_GITLAB_COM_TOKEN}\" -O - ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/pipelines/${CI_PIPELINE_ID}/jobs | jq -c '.[] | select(.name == (\"build_linux_installer_release\")) | .id' | sort | tail -1)"
+    - export MINIO_OBJECT="${CI_PROJECT_PATH}/${CI_PIPELINE_ID}/${BUILD_JOB_ID}/out/Release/${CHROMIUM_FILENAME}"
+    - "export CHROMIUM_FILE_URL=$(python3 minio_get_presigned_url.py ${CI_PROJECT_NAME} ${MINIO_OBJECT})"
+    - echo "Pre-signed URL with 1 day expiration is ${CHROMIUM_FILE_URL}"
     # Start the pipeline and wait for it to finish
     - |
       trigger --api-token ${GITLAB_COM_TOKEN} \
-          --pipeline-token ${DOWNSTREAM_TESTING_TOKEN} \
+          --pipeline-token ${DOWNSTREAM_DESKTOP_TESTING_TOKEN} \
           --target-ref $TESTING_BRANCH \
-          --env APK_X86=${APK_X86} \
-          --env APK_GIT_SHA=${CI_COMMIT_SHORT_SHA} \
+          --env CHROMIUM_FILE=${CHROMIUM_FILE_URL} \
+          --env CHROMIUM_GIT_SHA=${CI_COMMIT_SHORT_SHA} \
           --env RUN_FULL_SUITE=${RUN_FULL_SUITE} \
           ${TESTING_PROJECT_ID} | tee pipeline
     # Use the API to download and extract the junit test results
@@ -259,13 +542,81 @@ appium_device_tests:
       when: never
     - if: '$CI_COMMIT_BRANCH =~ /-vanilla-automated$/'
       when: never
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$SKIP_TESTS == "true"'
+      when: never
+    - if: '$CI_COMMIT_BRANCH =~ /-rc$|-beta$/'
+      variables:
+          RUN_FULL_SUITE: "true"
+    - if: '$RUN_SCHEDULE_DEFAULT_PIPELINE == "true"'
+      when: on_success
+    - if: '$RUN_SCHEDULE_DEFAULT_PIPELINE == "false"'
+      when: never
+    - when: on_success
+  artifacts:
+    expire_in: 6 months
+    reports:
+      junit: "$CI_PROJECT_DIR/target/cucumber-reports/*.xml"
+
+appium_device_tests:
+  stage: end_to_end_tests
+  needs: ["build_and_test_x86_debug"]
+  tags:
+    - docker
+  image: "registry.gitlab.com/eyeo/docker/pipeline-trigger:2.7.1"
+  variables:
+    GIT_STRATEGY: "none"
+    TESTING_BRANCH: "new-arch-tests"
+    TESTING_PROJECT_ID: "14347317" # https://gitlab.com/eyeo/distpartners/eyeo-chromium-test-automation
+    RUN_FULL_SUITE: "false"
+    # This is used by testing project to pick correct test set and data for a particular version
+    TEST_SET_VERSION: "flatbuffer-core"
+  before_script:
+    - apk update
+    # Install jq to parse the API response later
+    - apk add jq
+    # Update wget to prevent issues with TLS handshake (DPD-830)
+    - apk add wget
+    # Remove files to make sure volumes are cleaned before starting the tests
+    - rm -rf *
+    - pip3 install minio
+  script:
+    # Download script to get pre-signed URL for artifacts used in the test
+    - wget $CI_PROJECT_URL/raw/$CI_COMMIT_SHA/.ci-scripts/minio_get_presigned_url.py
+    # Get URL for the x86 APK
+    - "export BUILD_JOB_ID=$(wget  --header \"PRIVATE-TOKEN: ${CHROMIUM_GITLAB_COM_TOKEN}\" -O - ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/pipelines/${CI_PIPELINE_ID}/jobs | jq -c '.[] | select(.name == (\"build_and_test_x86_debug\")) | .id' | sort | tail -1)"
+    - export MINIO_OBJECT="${CI_PROJECT_PATH}/${CI_PIPELINE_ID}/${BUILD_JOB_ID}/out/Debug/apks/ChromePublic.apk"
+    - "export APK_X86=$(python3 minio_get_presigned_url.py ${CI_PROJECT_NAME} ${MINIO_OBJECT})"
+    - echo "Pre-signed URL with 1 day expiration is ${APK_X86}"
+
+    # Start the pipeline and wait for it to finish
+    - |
+      trigger --api-token ${GITLAB_COM_TOKEN} \
+          --pipeline-token ${DOWNSTREAM_TESTING_TOKEN} \
+          --target-ref $TESTING_BRANCH \
+          --env APK_X86=${APK_X86} \
+          --env APK_GIT_SHA=${CI_COMMIT_SHORT_SHA} \
+          --env TEST_SET_VERSION=${TEST_SET_VERSION} \
+          --env RUN_FULL_SUITE=${RUN_FULL_SUITE} \
+          ${TESTING_PROJECT_ID} | tee pipeline
+    # Use the API to download and extract the junit test results
+    - "export PIPELINE_ID=$(grep 'Pipeline created (id:' pipeline  | sed 's/[^0-9]*//g')"
+    - "export JOB_ID=$(wget --header \"PRIVATE-TOKEN: ${GITLAB_COM_TOKEN}\" -O - https://gitlab.com/api/v4/projects/${TESTING_PROJECT_ID}/pipelines/${PIPELINE_ID}/jobs | jq .[0].id)"
+    - "wget --header \"PRIVATE-TOKEN: ${GITLAB_COM_TOKEN}\" https://gitlab.com/api/v4/projects/${TESTING_PROJECT_ID}/jobs/${JOB_ID}/artifacts"
+    - "unzip artifacts"
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - if: '$CI_COMMIT_BRANCH =~ /-vanilla-automated$/'
       when: never
     - if: '$SKIP_TESTS == "true"'
       when: never
     - if: '$CI_COMMIT_BRANCH =~ /-rc$|-beta$/'
       variables:
           RUN_FULL_SUITE: "true"
+    - if: '$RUN_SCHEDULE_DEFAULT_PIPELINE == "true"'
+      when: on_success
+    - if: '$RUN_SCHEDULE_DEFAULT_PIPELINE == "false"'
+      when: never
     - when: on_success
   artifacts:
     expire_in: 6 months
@@ -274,42 +625,97 @@ appium_device_tests:
 
 build_arm_release:
   <<: *common_build_chromium
+  stage: build_arm_android
   dependencies: []
-  stage: qa
+  needs: []
   script:
-    - gn gen --check --args="${EXTRA_GN_ARGS} ${GN_EXTRA_ARGS_INTERNAL}"' cc_wrapper="ccache" target_os="android" proprietary_codecs=true is_official_build=true is_debug=false ffmpeg_branding="Chrome" symbol_level=1' out/Release
-    - ninja -j${NUMJOBS:-$(nproc)} -C out/Release chrome_public_apk
+    - runuser -p -u non_root -- time gn gen --check --args='disable_fieldtrial_testing_config=true target_os="android" proprietary_codecs=true is_official_build=true use_goma=true enable_nacl=false is_debug=false ffmpeg_branding="Chrome" symbol_level=1 '"eyeo_telemetry_activeping_auth_token=\"${TELEMETRY_DEFAULT_SERVER_ACTIVEPING_AUTH_TOKEN}\" ${GN_EXTRA_ARGS_INTERNAL} ${GN_EXTRA_ARGS}" out/Release
+    - runuser -p -u non_root -- time ninja -j${NUMJOBS} -C out/Release chrome_public_apk
+    - runuser -p -u non_root -- time goma_ctl stat
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
-      when: never
     # Run manually on MR branches. A pipeline can succeed even without building this APK
     - if: $CI_MERGE_REQUEST_IID
       when: manual
       allow_failure: true
+    - if: '$RUN_SCHEDULE_DEFAULT_PIPELINE == "true"'
+      when: always
+    - if: '$RUN_SCHEDULE_DEFAULT_PIPELINE == "false"'
+      when: never
     # Run automatically on main branches. A pipeline will NOT succeed without building this APK
     - when: always
   artifacts:
     expire_in: 1 day
     paths:
       - ./out/Release/apks/ChromePublic.apk
-      - parameter_info.txt
 
 build_arm_debug:
   <<: *common_build_chromium
+  stage: build_arm_android
   dependencies: []
-  stage: qa
   script:
-    - gn gen --check --args="${EXTRA_GN_ARGS} ${GN_EXTRA_ARGS_INTERNAL}"' cc_wrapper="ccache" target_os="android" is_debug=true proprietary_codecs=true ffmpeg_branding="Chrome"' out/Debug
-    - ninja -j${NUMJOBS:-$(nproc)} -C out/Debug chrome_public_apk
-  when: manual
+    - runuser -p -u non_root -- time gn gen --check --args='disable_fieldtrial_testing_config=true target_os="android" is_debug=true proprietary_codecs=true use_goma=true enable_nacl=false ffmpeg_branding="Chrome" '"eyeo_telemetry_activeping_auth_token=\"${TELEMETRY_DEFAULT_SERVER_ACTIVEPING_AUTH_TOKEN}\" ${GN_EXTRA_ARGS_INTERNAL} ${GN_EXTRA_ARGS}" out/Debug
+    - runuser -p -u non_root -- time ninja -j${NUMJOBS} -C out/Debug chrome_public_apk
+    - runuser -p -u non_root -- time goma_ctl stat
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - when: manual
+      allow_failure: true
   artifacts:
     expire_in: 1 day
     paths:
       - ./out/Debug/apks/ChromePublic.apk
-      - parameter_info.txt
+
+build_windows_release:
+  <<: *common_build_chromium
+  stage: build_windows
+  needs: []
+  dependencies: []
+  before_script:
+    - pip3 install minio
+    # Download currently required toolchain
+    - |
+      python3 ${GIT_CLONE_PATH}/.ci-scripts/minio_download_files.py \
+      chromium-sdk-win-toolchains a6765bffc9.zip
+    - export GYP_MSVS_HASH_1023ce2e82=a6765bffc9
+    # Chromium Windows Vars
+    - export DEPOT_TOOLS_WIN_TOOLCHAIN_BASE_URL=`pwd`
+    - apt-get update
+    - apt-get install fuse
+    - *reset_dir_ownership_to_root
+    - *configure_windows_gclient
+    # Disable local idle compiling to avoid issues when building
+    - export GOMA_USE_LOCAL="false"
+    - *common_build_chromium_before
+    # Hardcode value missing by lack of git history
+    - echo 1647554189 > build/util/LASTCHANGE.committime
+  script:
+    - runuser -p -u non_root -- time gn gen --check --args="is_debug=false disable_fieldtrial_testing_config=true proprietary_codecs=true ffmpeg_branding=\"Chrome\" clang_use_default_sample_profile=false is_cfi=false use_goma=true enable_nacl=false symbol_level=0 blink_symbol_level=0 dcheck_always_on=false target_os=\"win\"" out/Win
+    - runuser -p -u non_root -- time ninja -j${NUMJOBS} -C out/Win chrome mini_installer unit_tests components_unittests components_perftests verify_flatbuffer_adblocking
+    - runuser -p -u non_root -- time goma_ctl stat
+  after_script:
+    # Archive artifacts in Minio
+    - git clone https://gitlab.com/eyeo/distpartners/artifact-archiver.git && artifact-archiver/bootstrap.sh
+  rules:
+    # Schedules are our periodic sanity check and no failures should be allowed
+    - if: '$RUN_SCHEDULE_DEFAULT_PIPELINE == "true"'
+      when: always
+    - if: '$RUN_SCHEDULE_DEFAULT_PIPELINE == "false"'
+      when: never
+    - if: '$CI_COMMIT_BRANCH =~ /-vanilla-automated$/'
+      when: never
+    # A regular pipeline will be blocked if the manual job isn't allowed to fail
+    - when: manual
+      allow_failure: true
+  artifacts:
+    expire_in: 1 day
+    paths:
+      - "out/Win/mini_installer.exe"
+    when: always
+
 
 performance_telemetry_tests:
-  stage: performance
+  stage: performance_tests
   dependencies: ["build_arm_release"]
   tags:
     - docker
@@ -325,7 +731,7 @@ performance_telemetry_tests:
     - apt-get install -qy jq
   script:
       # Get URL for the Arm release APK
-    - "export BUILD_JOB_ID=$(wget  --header \"PRIVATE-TOKEN: ${CHROMIUM_GITLAB_TOKEN}\" -O - ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/pipelines/${CI_PIPELINE_ID}/jobs | jq -c '.[] | select(.name == (\"build_arm_release\")) | .id' | sort | tail -1)"
+    - "export BUILD_JOB_ID=$(wget  --header \"PRIVATE-TOKEN: ${CHROMIUM_GITLAB_COM_TOKEN}\" -O - ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/pipelines/${CI_PIPELINE_ID}/jobs | jq -c '.[] | select(.name == (\"build_arm_release\")) | .id' | sort | tail -1)"
     - export APK_ARM="${MINIO_HOST}/${CI_PROJECT_NAME}/${CI_PROJECT_PATH}/${CI_PIPELINE_ID}/${BUILD_JOB_ID}/out/Release/apks/ChromePublic.apk"
     # Start the pipeline
     - echo "Triggering pipeline for ref ${TESTING_BRANCH} and project ID ${TESTING_PROJECT_ID}"
@@ -345,29 +751,35 @@ performance_telemetry_tests:
       fi
     # Display pipeline URL
     - echo "$(echo "See pipeline at ")" "$(cat response.json | jq -r ".web_url")"
-
+  # Due to a bug in gitlab, it's necessary to explicitly set allow_failure as true to avoid having the pipeline set as blocked
   rules:
-    # Always run on RC tags
-    - if: '$CI_COMMIT_TAG =~ /^eyeo-abp-rc/'
+    # Always run sanity check on RC tags
+    - if: '$CI_COMMIT_TAG =~ /^eyeo-rc/'
       variables:
           BRANCH_FOR_REPORT: ${$CI_COMMIT_TAG}
-      when: always
-    # Don't create job for Merge Requests Pipelines
-    - if: $CI_MERGE_REQUEST_IID
-      when: never
-    # For beta branches, trigger all plt page sets tests
-    - if: '$CI_COMMIT_BRANCH =~ /-beta$/'
+      when: on_success
+    # Always run full test suite on beta tags
+    - if: '$CI_COMMIT_TAG =~ /^eyeo-beta/'
       variables:
+          BRANCH_FOR_REPORT: ${$CI_COMMIT_TAG}
           RUN_ALL_PLT_TEST_CASES: "true"
+      when: on_success
+    - if: '$RUN_SCHEDULE_DEFAULT_PIPELINE == "true"'
+      when: on_success
+    - if: '$RUN_SCHEDULE_DEFAULT_PIPELINE == "false"'
+      when: never
+    # For merge requests pipelines, report the source branch
+    - if: '$CI_MERGE_REQUEST_IID'
+      variables:
+          BRANCH_FOR_REPORT: ${CI_MERGE_REQUEST_SOURCE_BRANCH_NAME}
       when: manual
       allow_failure: true
-    - when: manual
-      allow_failure: true
+    - when: never
 
 vanilla_performance_tests:
-  stage: performance
+  stage: performance_tests
   # APK is needed in order to retrieve chromium version number, and pick correct vanilla branch
-  dependencies: ["build_and_test_x86_debug"]
+  dependencies: ["build_arm_release"]
   tags:
     - docker
   image: "openjdk:11"
@@ -377,13 +789,16 @@ vanilla_performance_tests:
     TESTING_PROJECT_ID: "19526376" # https://gitlab.com/eyeo/distpartners/perf_test_automation
     # For vanilla, always trigger all plt page sets tests
     RUN_ALL_PLT_TEST_CASES: "true"
+    # For vanilla, always run with disable_adblock configuration
+    ADBLOCKING_CONFIG: "disable_adblock"
+    MEMORY_TEST_CASES: "eyeo.memory_full_filter_list_pageset_small_disable_adblock"
   before_script:
     # aapt is needed to get version Name from apk
     - apt-get update
     - apt-get install -qy aapt jq
   script:
     # Get correct vanilla version branch
-    - export VERSION_NUMBER=$(aapt dump badging ./out/Debug/apks/ChromePublic.apk | grep "versionName" | sed -e "s/.*versionName='//" -e "s/' .*//")
+    - export VERSION_NUMBER=$(aapt dump badging ./out/Release/apks/ChromePublic.apk | grep "versionName" | sed -e "s/.*versionName='//" -e "s/' .*//")
     - export VANILLA_BRANCH="chromium-${VERSION_NUMBER}-vanilla-automated"
     - echo "Vanilla branch name is ${VANILLA_BRANCH}"
     # Start the pipeline
@@ -393,6 +808,8 @@ vanilla_performance_tests:
       --form token=${DOWNSTREAM_PERF_TESTING_TOKEN} \
       --form ref=${TESTING_BRANCH} \
       --form "variables[BRANCH_OR_TAG]=${VANILLA_BRANCH}" \
+      --form "variables[ADBLOCKING_CONFIG]=${ADBLOCKING_CONFIG}" \
+      --form "variables[MEMORY_TEST_CASES]=${MEMORY_TEST_CASES}" \
       --form "variables[RUN_ALL_PLT_TEST_CASES]=${RUN_ALL_PLT_TEST_CASES}" \
       "https://gitlab.com/api/v4/projects/${TESTING_PROJECT_ID}/trigger/pipeline" > response.json
     # If pipeline was not triggered, job fails immediately
@@ -404,11 +821,15 @@ vanilla_performance_tests:
     # Display pipeline URL
     - echo "$(echo "See pipeline at ")" "$(cat response.json | jq -r ".web_url")"
   rules:
-    # Don't create job for mr and tag pipelines
-    - if: $CI_MERGE_REQUEST_IID || $CI_COMMIT_TAG
-      when: never
-    - when: manual
+    # Trigger job automatically whenever TRIGGER_PERF_TEST is set to true, if is set to false create a manual job
+    # This variable will be set to true by vanilla builder whenever it builds first branch of a new major version
+    - if: '$TRIGGER_PERF_TEST == "true" && $CI_COMMIT_BRANCH =~ /-vanilla-automated$/'
+      when: on_success
+    # If TRIGGER_PERF_TEST is set to false then job is available to be manualy triggered
+    - if: '$TRIGGER_PERF_TEST == "false" && $CI_COMMIT_BRANCH =~ /-vanilla-automated$/'
+      when: manual
       allow_failure: true
+    - when: never
 
 code_coverage_to_mattermost:
   # Using the Chromium template is necessary to have the clone and variables
@@ -417,6 +838,8 @@ code_coverage_to_mattermost:
   # available in Chromium-oriented images
   image: python:3.9
   stage: upload
+  needs:
+    - code_coverage
   dependencies:
     - code_coverage
   before_script:
@@ -426,6 +849,6 @@ code_coverage_to_mattermost:
   after_script:
     - ''
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$RUN_CODE_COVERAGE == "true"'
       when: always
     - when: never

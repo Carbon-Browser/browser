@@ -6,6 +6,7 @@
 
 #include <memory>
 
+#include "base/command_line.h"
 #include "base/feature_list.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/user_metrics.h"
@@ -18,6 +19,8 @@
 #include "components/password_manager/core/browser/insecure_credentials_helper.h"
 #include "components/password_manager/core/browser/ui/password_check_referrer.h"
 #include "components/prefs/pref_service.h"
+#include "components/safe_browsing/core/browser/safe_browsing_metrics_collector.h"
+#include "components/safe_browsing/core/browser/user_population.h"
 #include "components/safe_browsing/core/browser/verdict_cache_manager.h"
 #include "components/safe_browsing/core/common/features.h"
 #include "components/safe_browsing/core/common/safe_browsing_prefs.h"
@@ -35,12 +38,12 @@
 #include "ios/chrome/browser/browser_state/chrome_browser_state.h"
 #include "ios/chrome/browser/history/history_service_factory.h"
 #include "ios/chrome/browser/passwords/ios_chrome_password_store_factory.h"
-#import "ios/chrome/browser/safe_browsing/safe_browsing_service.h"
-#include "ios/chrome/browser/safe_browsing/user_population.h"
+#include "ios/chrome/browser/safe_browsing/user_population_helper.h"
 #import "ios/chrome/browser/safe_browsing/verdict_cache_manager_factory.h"
 #include "ios/chrome/browser/signin/identity_manager_factory.h"
 #include "ios/chrome/browser/sync/ios_user_event_service_factory.h"
 #include "ios/chrome/browser/sync/sync_service_factory.h"
+#import "ios/components/security_interstitials/safe_browsing/safe_browsing_service.h"
 #include "ios/web/public/navigation/navigation_item.h"
 #include "ios/web/public/navigation/navigation_manager.h"
 #include "ios/web/public/thread/web_thread.h"
@@ -137,19 +140,21 @@ std::unique_ptr<UserEventSpecifics> GetUserEventSpecifics(
 ChromePasswordProtectionService::ChromePasswordProtectionService(
     SafeBrowsingService* sb_service,
     ChromeBrowserState* browser_state,
+    history::HistoryService* history_service,
+    safe_browsing::SafeBrowsingMetricsCollector*
+        safe_browsing_metrics_collector,
     ChangePhishedCredentialsCallback add_phished_credentials,
     ChangePhishedCredentialsCallback remove_phished_credentials)
     : safe_browsing::PasswordProtectionService(
           sb_service->GetDatabaseManager(),
           sb_service->GetURLLoaderFactory(),
-          ios::HistoryServiceFactory::GetForBrowserState(
-              browser_state,
-              ServiceAccessType::EXPLICIT_ACCESS),
+          history_service,
           /*pref_service=*/nullptr,
           /*token_fetcher=*/nullptr,
           browser_state->IsOffTheRecord(),
           /*identity_manager=*/nullptr,
-          /*try_token_fetch=*/false),
+          /*try_token_fetch=*/false,
+          safe_browsing_metrics_collector),
       browser_state_(browser_state),
       add_phished_credentials_(std::move(add_phished_credentials)),
       remove_phished_credentials_(std::move(remove_phished_credentials)) {}
@@ -184,9 +189,8 @@ void ChromePasswordProtectionService::ShowModalWarning(
     ReusedPasswordAccountType reused_password_account_type =
         GetPasswordProtectionReusedPasswordAccountType(request->password_type(),
                                                        request->username());
-    std::vector<size_t> placeholder_offsets;
-    const std::u16string warning_text = GetWarningDetailText(
-        reused_password_account_type, &placeholder_offsets);
+    const std::u16string warning_text =
+        GetWarningDetailText(reused_password_account_type);
     // Partial bind WebState and password_type.
     auto completion_callback = base::BindOnce(
         &ChromePasswordProtectionService::OnUserAction,
@@ -233,7 +237,8 @@ void ChromePasswordProtectionService::MaybeReportPasswordReuseDetected(
     safe_browsing::PasswordProtectionRequest* request,
     const std::string& username,
     PasswordType password_type,
-    bool is_phishing_url) {
+    bool is_phishing_url,
+    bool warning_shown) {
   // Enterprise reporting extension not yet supported in iOS.
 }
 
@@ -376,6 +381,11 @@ AccountInfo ChromePasswordProtectionService::GetAccountInfo() const {
     return AccountInfo();
   return identity_manager->FindExtendedAccountInfo(
       identity_manager->GetPrimaryAccountInfo(signin::ConsentLevel::kSync));
+}
+
+safe_browsing::ChromeUserPopulation::UserPopulation
+ChromePasswordProtectionService::GetUserPopulationPref() const {
+  return safe_browsing::GetUserPopulationPref(browser_state_->GetPrefs());
 }
 
 AccountInfo ChromePasswordProtectionService::GetAccountInfoForUsername(
@@ -593,98 +603,10 @@ void ChromePasswordProtectionService::MaybeLogPasswordReuseDialogInteraction(
 }
 
 std::u16string ChromePasswordProtectionService::GetWarningDetailText(
-    ReusedPasswordAccountType password_type,
-    std::vector<size_t>* placeholder_offsets) const {
+    ReusedPasswordAccountType password_type) const {
   DCHECK(password_type.account_type() ==
          ReusedPasswordAccountType::SAVED_PASSWORD);
-  return GetWarningDetailTextForSavedPasswords(placeholder_offsets);
-}
-std::u16string
-ChromePasswordProtectionService::GetWarningDetailTextForSavedPasswords(
-    std::vector<size_t>* placeholder_offsets) const {
-  std::vector<std::u16string> placeholders =
-      GetPlaceholdersForSavedPasswordWarningText();
-  // The default text is a complete sentence without placeholders.
-  return placeholders.empty()
-             ? l10n_util::GetStringUTF16(
-                   IDS_PAGE_INFO_CHANGE_PASSWORD_DETAILS_SAVED)
-             : GetWarningDetailTextToCheckSavedPasswords(placeholder_offsets);
-}
-
-std::u16string
-ChromePasswordProtectionService::GetWarningDetailTextToCheckSavedPasswords(
-    std::vector<size_t>* placeholder_offsets) const {
-  std::vector<std::u16string> placeholders =
-      GetPlaceholdersForSavedPasswordWarningText();
-  if (placeholders.size() == 1) {
-    return l10n_util::GetStringFUTF16(
-        IDS_PAGE_INFO_CHECK_PASSWORD_DETAILS_SAVED_1_DOMAIN, placeholders,
-        placeholder_offsets);
-  } else if (placeholders.size() == 2) {
-    return l10n_util::GetStringFUTF16(
-        IDS_PAGE_INFO_CHECK_PASSWORD_DETAILS_SAVED_2_DOMAIN, placeholders,
-        placeholder_offsets);
-  } else {
-    return l10n_util::GetStringFUTF16(
-        IDS_PAGE_INFO_CHECK_PASSWORD_DETAILS_SAVED_3_DOMAIN, placeholders,
-        placeholder_offsets);
-  }
-}
-
-std::vector<std::u16string>
-ChromePasswordProtectionService::GetPlaceholdersForSavedPasswordWarningText()
-    const {
-  const std::vector<std::string>& matching_domains =
-      saved_passwords_matching_domains();
-  const std::list<std::string>& spoofed_domains = common_spoofed_domains();
-
-  // Show most commonly spoofed domains first.
-  // This looks through the top priority spoofed domains and then checks to see
-  // if it's in the matching domains.
-  std::vector<std::u16string> placeholders;
-  for (auto priority_domain_iter = spoofed_domains.begin();
-       priority_domain_iter != spoofed_domains.end(); ++priority_domain_iter) {
-    std::string matching_domain;
-
-    // Check if any of the matching domains is equal or a suffix to the current
-    // priority domain.
-    if (std::find_if(matching_domains.begin(), matching_domains.end(),
-                     [priority_domain_iter,
-                      &matching_domain](const std::string& domain) {
-                       // Assigns the matching_domain to add into the priority
-                       // placeholders. This value is only used if the return
-                       // value of this function is true.
-                       matching_domain = domain;
-                       const base::StringPiece domainStringPiece(domain);
-                       // Checks for two cases:
-                       // 1. if the matching domain is equal to the current
-                       // priority domain or
-                       // 2. if "," + the current priority is a suffix of the
-                       // matching domain The second case covers eTLD+1.
-                       return (domain == *priority_domain_iter) ||
-                              base::EndsWith(domainStringPiece,
-                                             "." + *priority_domain_iter);
-                     }) != matching_domains.end()) {
-      placeholders.push_back(base::UTF8ToUTF16(matching_domain));
-    }
-  }
-
-  // If there are less than 3 saved default domains, check the saved
-  //  password domains to see if there are more that can be added to the
-  //  warning text.
-  int domains_idx = placeholders.size();
-  for (size_t idx = 0; idx < matching_domains.size() && domains_idx < 3;
-       idx++) {
-    // Do not add duplicate domains if it was already in the default domains.
-    if (std::find(placeholders.begin(), placeholders.end(),
-                  base::UTF8ToUTF16(matching_domains[idx])) !=
-        placeholders.end()) {
-      continue;
-    }
-    placeholders.push_back(base::UTF8ToUTF16(matching_domains[idx]));
-    domains_idx++;
-  }
-  return placeholders;
+  return l10n_util::GetStringUTF16(IDS_PAGE_INFO_CHANGE_PASSWORD_DETAILS_SAVED);
 }
 
 void ChromePasswordProtectionService::StartRequest(
@@ -760,8 +682,28 @@ void ChromePasswordProtectionService::RemoveWarningRequestsByWebState(
 }
 
 void ChromePasswordProtectionService::FillUserPopulation(
+    const GURL& main_frame_url,
     LoginReputationClientRequest* request_proto) {
-  *request_proto->mutable_population() = GetUserPopulation(browser_state_);
+  *request_proto->mutable_population() =
+      GetUserPopulationForBrowserState(browser_state_);
+
+  if (!base::FeatureList::IsEnabled(
+          safe_browsing::kSafeBrowsingPageLoadToken)) {
+    return;
+  }
+
+  safe_browsing::VerdictCacheManager* cache_manager =
+      VerdictCacheManagerFactory::GetForBrowserState(browser_state_);
+  ChromeUserPopulation::PageLoadToken token =
+      cache_manager->GetPageLoadToken(main_frame_url);
+  // It's possible that the token is not found because real time URL check is
+  // not performed for this navigation. Create a new page load token in this
+  // case.
+  if (!token.has_token_value()) {
+    token = cache_manager->CreatePageLoadToken(main_frame_url);
+  }
+  request_proto->mutable_population()->mutable_page_load_tokens()->Add()->Swap(
+      &token);
 }
 
 password_manager::PasswordStoreInterface*
@@ -779,7 +721,7 @@ password_manager::PasswordStoreInterface*
 ChromePasswordProtectionService::GetProfilePasswordStore() const {
   // Always use EXPLICIT_ACCESS as the password manager checks IsIncognito
   // itself when it shouldn't access the PasswordStore.
-  return IOSChromePasswordStoreFactory::GetInterfaceForBrowserState(
+  return IOSChromePasswordStoreFactory::GetForBrowserState(
              browser_state_, ServiceAccessType::EXPLICIT_ACCESS)
       .get();
 }

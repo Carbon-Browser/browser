@@ -84,7 +84,7 @@ void SharingServiceOperation::Share(
             FROM_HERE,
             base::BindOnce(std::move(callback_),
                            blink::mojom::ShareError::CANCELED),
-            base::TimeDelta::FromSecondsD(delay_seconds));
+            base::Seconds(delay_seconds));
     return;
   }
 
@@ -123,9 +123,9 @@ void SharingServiceOperation::OnPrepareDirectory(
   }
 
   for (const auto& file : shared_files_) {
-    std::string file_name = file->name;
-    // Protecting against including paths in a file name.
-    base::ReplaceSubstringsAfterOffset(&file_name, 0, "/", "_");
+    // SafeBaseName protects against including paths in a file name.
+    std::string file_name = file->name.path().value();
+    DCHECK_EQ(file_name.find('/'), std::string::npos);
     base::i18n::ReplaceIllegalCharactersInPath(&file_name, '_');
     file_paths_.push_back(
         GenerateUniqueSubDirectory(directory_).Append(file_name));
@@ -157,8 +157,8 @@ void SharingServiceOperation::OnPrepareSubDirectory(
 
 void SharingServiceOperation::OnStoreFiles(blink::mojom::ShareError error) {
   if (!web_contents_ || error != blink::mojom::ShareError::OK) {
-    PrepareDirectoryTask::ScheduleSharedFileDeletion(
-        std::move(file_paths_), base::TimeDelta::FromMinutes(0));
+    PrepareDirectoryTask::ScheduleSharedFileDeletion(std::move(file_paths_),
+                                                     base::Minutes(0));
     std::move(callback_).Run(error);
     return;
   }
@@ -172,8 +172,8 @@ void SharingServiceOperation::OnStoreFiles(blink::mojom::ShareError error) {
 void SharingServiceOperation::OnShowSharePicker(
     blink::mojom::ShareError error) {
   if (file_paths_.size() > 0) {
-    PrepareDirectoryTask::ScheduleSharedFileDeletion(
-        std::move(file_paths_), base::TimeDelta::FromMinutes(0));
+    PrepareDirectoryTask::ScheduleSharedFileDeletion(std::move(file_paths_),
+                                                     base::Minutes(0));
   }
   std::move(callback_).Run(error);
 }

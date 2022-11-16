@@ -7,7 +7,6 @@
 #include <utility>
 
 #include "base/bind.h"
-#include "base/feature_list.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/time/time.h"
 #include "components/signin/public/identity_manager/access_token_fetcher.h"
@@ -15,7 +14,6 @@
 #include "components/signin/public/identity_manager/scope_set.h"
 #include "components/sync/base/stop_source.h"
 #include "components/sync/base/sync_prefs.h"
-#include "components/sync/driver/sync_driver_switches.h"
 #include "components/sync/engine/sync_credentials.h"
 #include "google_apis/gaia/gaia_constants.h"
 
@@ -25,35 +23,6 @@ namespace {
 
 constexpr char kSyncOAuthConsumerName[] = "sync";
 
-constexpr net::BackoffEntry::Policy kRequestAccessTokenBackoffPolicy = {
-    // Number of initial errors (in sequence) to ignore before applying
-    // exponential back-off rules.
-    0,
-
-    // Initial delay for exponential back-off in ms.
-    2000,
-
-    // Factor by which the waiting time will be multiplied.
-    2,
-
-    // Fuzzing percentage. ex: 10% will spread requests randomly
-    // between 90%-100% of the calculated time.
-    0.2,  // 20%
-
-    // Maximum amount of time we are willing to delay our request in ms.
-    // TODO(crbug.com/246686): We should retry RequestAccessToken on connection
-    // state change after backoff.
-    1000 * 3600 * 4,  // 4 hours.
-
-    // Time to keep an entry from being discarded even when it
-    // has no significant state, -1 to never discard.
-    -1,
-
-    // Don't use initial delay unless the last request was an error.
-    false,
-};
-
-// Used when SyncRetryFirstTokenFetchAttemptImmediately is enabled.
 constexpr net::BackoffEntry::Policy
     kIgnoreFirstErrorRequestAccessTokenBackoffPolicy = {
         // Number of initial errors (in sequence) to ignore before applying
@@ -85,17 +54,6 @@ constexpr net::BackoffEntry::Policy
 
 }  // namespace
 
-// Enables the retry of the token fetch without backoff on the first fetch
-// cancellation.
-const base::Feature kSyncRetryFirstCanceledTokenFetch = {
-    "SyncRetryFirstCanceledTokenFetch", base::FEATURE_ENABLED_BY_DEFAULT};
-
-// Enables the retry of the token fetch without backoff after the first failure.
-// TODO(crbug.com/1097054): remove once rolled out.
-const base::Feature kSyncRetryFirstTokenFetchAttemptImmediately = {
-    "SyncRetryFirstTokenFetchAttemptImmediately",
-    base::FEATURE_ENABLED_BY_DEFAULT};
-
 SyncAuthManager::SyncAuthManager(
     signin::IdentityManager* identity_manager,
     const AccountStateChangedCallback& account_state_changed,
@@ -104,10 +62,7 @@ SyncAuthManager::SyncAuthManager(
       account_state_changed_callback_(account_state_changed),
       credentials_changed_callback_(credentials_changed),
       request_access_token_backoff_(
-          base::FeatureList::IsEnabled(
-              kSyncRetryFirstTokenFetchAttemptImmediately)
-              ? &kIgnoreFirstErrorRequestAccessTokenBackoffPolicy
-              : &kRequestAccessTokenBackoffPolicy) {
+          &kIgnoreFirstErrorRequestAccessTokenBackoffPolicy) {
   // |identity_manager_| can be null if local Sync is enabled.
 }
 
@@ -421,6 +376,10 @@ void SyncAuthManager::OnRefreshTokenRemovedForAccount(
       sync_account_.account_info.account_id,
       identity_manager_->GetPrimaryAccountId(signin::ConsentLevel::kSignin));
 
+  // Note: It's possible that we're in the middle of a signout, and the "refresh
+  // token removed" event just arrived before the "signout" event. In that case,
+  // OnPrimaryAccountChanged() will get called momentarily and stop sync.
+
   // TODO(crbug.com/839834): REQUEST_CANCELED doesn't seem like the right auth
   // error to use here. Maybe INVALID_GAIA_CREDENTIALS?
   SetLastAuthError(
@@ -468,12 +427,13 @@ bool SyncAuthManager::UpdateSyncAccountIfNecessary() {
   if (new_account.account_info.account_id ==
       sync_account_.account_info.account_id) {
     // We're already using this account (or there was and is no account to use).
-    // If the |is_primary| bit hasn't changed either, then there's nothing to
-    // do.
-    if (new_account.is_primary == sync_account_.is_primary) {
+    // If the |is_sync_consented| bit hasn't changed either, then there's
+    // nothing to do.
+    if (new_account.is_sync_consented == sync_account_.is_sync_consented) {
       return false;
     }
-    // The |is_primary| bit *has* changed, so update our state and notify.
+    // The |is_sync_consented| bit *has* changed, so update our state and
+    // notify.
     sync_account_ = new_account;
     account_state_changed_callback_.Run();
     return true;
@@ -550,8 +510,7 @@ void SyncAuthManager::AccessTokenFetched(
   // Retry without backoff when the request is canceled for the first time. For
   // more details, see inline comments of
   // PrimaryAccountAccessTokenFetcher::OnAccessTokenFetchComplete.
-  if (base::FeatureList::IsEnabled(kSyncRetryFirstCanceledTokenFetch) &&
-      error.state() == GoogleServiceAuthError::REQUEST_CANCELED &&
+  if (error.state() == GoogleServiceAuthError::REQUEST_CANCELED &&
       !access_token_retried_) {
     access_token_retried_ = true;
     RequestAccessToken();
@@ -585,6 +544,7 @@ void SyncAuthManager::AccessTokenFetched(
       break;
     case GoogleServiceAuthError::USER_NOT_SIGNED_UP:
     case GoogleServiceAuthError::UNEXPECTED_SERVICE_RESPONSE:
+    case GoogleServiceAuthError::SCOPE_LIMITED_UNRECOVERABLE_ERROR:
       DLOG(ERROR) << "Unexpected persistent error: " << error.ToString();
       SetLastAuthError(error);
       break;

@@ -23,8 +23,6 @@
 #include "base/gtest_prod_util.h"
 #include "base/json/json_writer.h"
 #include "base/logging.h"
-#include "base/macros.h"
-#include "base/memory/platform_shared_memory_region.h"
 #include "base/memory/shared_memory_mapping.h"
 #include "base/memory/unsafe_shared_memory_region.h"
 #include "base/numerics/safe_conversions.h"
@@ -525,6 +523,10 @@ class JpegClient : public MjpegDecodeAccelerator::Client {
       std::unique_ptr<media::test::ClientStateNotification<ClientState>> note,
       bool use_dmabuf,
       bool skip_result_checking);
+
+  JpegClient(const JpegClient&) = delete;
+  JpegClient& operator=(const JpegClient&) = delete;
+
   ~JpegClient() override;
   void CreateJpegDecoder();
   void StartDecode(int32_t task_id, bool do_prepare_memory);
@@ -598,8 +600,6 @@ class JpegClient : public MjpegDecodeAccelerator::Client {
   std::vector<base::TimeDelta> decode_map_times_;
 
   base::WeakPtrFactory<JpegClient> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(JpegClient);
 };
 
 JpegClient::JpegClient(
@@ -850,11 +850,8 @@ void JpegClient::StartDecode(int32_t task_id, bool do_prepare_memory) {
                      task.image->data_str.size(), 0 /* src_offset */,
                      hw_out_dmabuf_frame_);
   } else {
-    base::subtle::PlatformSharedMemoryRegion dup_region =
-        base::UnsafeSharedMemoryRegion::TakeHandleForSerialization(
-            in_shm_.Duplicate());
-    ASSERT_EQ(dup_region.GetSize(), task.image->data_str.size());
-    media::BitstreamBuffer bitstream_buffer(task_id, std::move(dup_region),
+    ASSERT_EQ(in_shm_.GetSize(), task.image->data_str.size());
+    media::BitstreamBuffer bitstream_buffer(task_id, in_shm_.Duplicate(),
                                             task.image->data_str.size());
     decoder_->Decode(std::move(bitstream_buffer), hw_out_frame_);
   }
@@ -949,6 +946,10 @@ class ScopedJpegClient {
   ScopedJpegClient(scoped_refptr<base::SingleThreadTaskRunner> task_runner,
                    std::unique_ptr<JpegClient> client)
       : task_runner_(task_runner), client_(std::move(client)) {}
+
+  ScopedJpegClient(const ScopedJpegClient&) = delete;
+  ScopedJpegClient& operator=(const ScopedJpegClient&) = delete;
+
   ~ScopedJpegClient() {
     task_runner_->DeleteSoon(FROM_HERE, std::move(client_));
   }
@@ -957,11 +958,14 @@ class ScopedJpegClient {
  private:
   scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
   std::unique_ptr<JpegClient> client_;
-
-  DISALLOW_COPY_AND_ASSIGN(ScopedJpegClient);
 };
 
 class MjpegDecodeAcceleratorTest : public ::testing::TestWithParam<bool> {
+ public:
+  MjpegDecodeAcceleratorTest(const MjpegDecodeAcceleratorTest&) = delete;
+  MjpegDecodeAcceleratorTest& operator=(const MjpegDecodeAcceleratorTest&) =
+      delete;
+
  protected:
   MjpegDecodeAcceleratorTest() = default;
 
@@ -970,9 +974,6 @@ class MjpegDecodeAcceleratorTest : public ::testing::TestWithParam<bool> {
                   size_t num_concurrent_decoders = 1);
   void PerfDecodeByJDA(int decode_times, const std::vector<DecodeTask>& tasks);
   void PerfDecodeBySW(int decode_times, const std::vector<DecodeTask>& tasks);
-
- protected:
-  DISALLOW_COPY_AND_ASSIGN(MjpegDecodeAcceleratorTest);
 };
 
 void MjpegDecodeAcceleratorTest::TestDecode(

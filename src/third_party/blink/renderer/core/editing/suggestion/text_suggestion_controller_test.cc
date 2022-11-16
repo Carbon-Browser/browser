@@ -84,12 +84,12 @@ TEST_F(TextSuggestionControllerTest, ApplySpellCheckSuggestion) {
 }
 
 // Flaky on Android: http://crbug.com/1104700
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #define MAYBE_ApplyTextSuggestion DISABLED_ApplyTextSuggestion
 #else
 #define MAYBE_ApplyTextSuggestion ApplyTextSuggestion
 #endif
-TEST_F(TextSuggestionControllerTest, ApplyTextSuggestion) {
+TEST_F(TextSuggestionControllerTest, MAYBE_ApplyTextSuggestion) {
   SetBodyContent(
       "<div contenteditable>"
       "word1 word2 word3 word4"
@@ -460,8 +460,7 @@ TEST_F(TextSuggestionControllerTest,
   EXPECT_NE(nullptr, GetDocument()
                          .GetFrame()
                          ->GetSpellChecker()
-                         .GetSpellCheckMarkerUnderSelection()
-                         .first);
+                         .GetSpellCheckMarkerGroupUnderSelection());
 
   // Add "embiggen" to the dictionary
   GetDocument()
@@ -472,8 +471,7 @@ TEST_F(TextSuggestionControllerTest,
   EXPECT_EQ(nullptr, GetDocument()
                          .GetFrame()
                          ->GetSpellChecker()
-                         .GetSpellCheckMarkerUnderSelection()
-                         .first);
+                         .GetSpellCheckMarkerGroupUnderSelection());
 }
 
 TEST_F(TextSuggestionControllerTest, CallbackHappensAfterDocumentDestroyed) {

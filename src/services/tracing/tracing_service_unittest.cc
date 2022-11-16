@@ -8,13 +8,13 @@
 #include "base/bind.h"
 #include "base/files/file_util.h"
 #include "base/json/json_reader.h"
-#include "base/macros.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/test_simple_task_runner.h"
 #include "base/threading/thread.h"
+#include "base/threading/thread_restrictions.h"
 #include "base/trace_event/trace_config.h"
 #include "build/build_config.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -44,6 +44,9 @@ namespace tracing {
 class TracingServiceTest : public TracingUnitTest {
  public:
   TracingServiceTest() : service_(&perfetto_service_) {}
+
+  TracingServiceTest(const TracingServiceTest&) = delete;
+  TracingServiceTest& operator=(const TracingServiceTest&) = delete;
 
   void SetUp() override {
     TracingUnitTest::SetUp();
@@ -117,8 +120,6 @@ class TracingServiceTest : public TracingUnitTest {
 
   std::unique_ptr<mojo::Receiver<tracing::mojom::TracedProcess>>
       traced_process_receiver_;
-
-  DISALLOW_COPY_AND_ASSIGN(TracingServiceTest);
 };
 
 class TestTracingClient : public mojom::TracingSessionClient {
@@ -272,9 +273,9 @@ TEST_F(TracingServiceTest, PerfettoClientConsumerLegacyJson) {
   wait_for_data_loop.Run();
   DCHECK(!tokenizer.has_more());
 
-  auto result = base::DictionaryValue::From(
-      base::Value::ToUniquePtrValue(*base::JSONReader::Read(json)));
-  EXPECT_TRUE(result->HasKey("traceEvents"));
+  absl::optional<base::Value> result = base::JSONReader::Read(json);
+  ASSERT_TRUE(result.has_value());
+  EXPECT_TRUE(result->FindKey("traceEvents"));
 }
 
 class CustomDataSource : public perfetto::DataSource<CustomDataSource> {
@@ -371,7 +372,7 @@ TEST_F(TracingServiceTest, PerfettoClientProducer) {
   EXPECT_EQ(kNumPackets, ReadAndCountTestPackets(*session));
 }
 
-#if !defined(OS_WIN)
+#if !BUILDFLAG(IS_WIN)
 // TODO(crbug.com/1158482): Support tracing to file on Windows.
 TEST_F(TracingServiceTest, TraceToFile) {
   // Set up API bindings.

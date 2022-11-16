@@ -53,7 +53,6 @@ const ThreatSeverity kLeastSeverity =
 // This map contain pairs of the old and the new name for certain .store files.
 constexpr auto kStoreFilesToRename =
     base::MakeFixedFlatMap<base::StringPiece, base::StringPiece>({
-        {"CertCsdDownloadWhitelist.store", "CertCsdDownloadAllowlist.store"},
         {"UrlCsdDownloadWhitelist.store", "UrlCsdDownloadAllowlist.store"},
         {"UrlCsdWhitelist.store", "UrlCsdAllowlist.store"},
     });
@@ -68,7 +67,7 @@ ListInfos GetListInfos() {
   // - The list doesn't have hash prefixes to match. All requests lead to full
   //   hash checks. For instance: GetChromeUrlApiId()
 
-#if defined(OS_IOS)
+#if BUILDFLAG(IS_IOS)
   const bool kSyncOnIos = true;
 #else
   const bool kSyncOnIos = false;
@@ -102,8 +101,6 @@ ListInfos GetListInfos() {
                SB_THREAT_TYPE_URL_BINARY_MALWARE),
       ListInfo(kSyncOnDesktopBuilds, "ChromeExtMalware.store",
                GetChromeExtMalwareId(), SB_THREAT_TYPE_EXTENSION),
-      ListInfo(kSyncOnChromeDesktopBuilds, "CertCsdDownloadAllowlist.store",
-               GetCertCsdDownloadAllowlistId(), SB_THREAT_TYPE_UNUSED),
       ListInfo(kSyncOnChromeDesktopBuilds, "ChromeUrlClientIncident.store",
                GetChromeUrlClientIncidentId(),
                SB_THREAT_TYPE_BLOCKLISTED_RESOURCE),
@@ -376,7 +373,10 @@ V4LocalDatabaseManager::V4LocalDatabaseManager(
                        ? task_runner_for_tests
                        : base::ThreadPool::CreateSequencedTaskRunner(
                              {base::MayBlock(),
-                              base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN})) {
+                              base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN})),
+      v4_database_(std::unique_ptr<V4Database, base::OnTaskRunnerDeleter>(
+          nullptr,
+          base::OnTaskRunnerDeleter(nullptr))) {
   DCHECK(this->ui_task_runner()->RunsTasksInCurrentSequence());
 
   task_runner_->PostTask(
@@ -601,21 +601,6 @@ AsyncMatch V4LocalDatabaseManager::CheckCsdAllowlistUrl(const GURL& url,
   return HandleAllowlistCheck(std::move(check));
 }
 
-bool V4LocalDatabaseManager::MatchDownloadAllowlistString(
-    const std::string& str) {
-  DCHECK(io_task_runner()->RunsTasksInCurrentSequence());
-
-  StoresToCheck stores_to_check({GetCertCsdDownloadAllowlistId()});
-  if (!AreAllStoresAvailableNow(stores_to_check)) {
-    // Fail close: Allowlist nothing. This may generate download-protection
-    // pings for allowlisted binaries, but that's fine.
-    return false;
-  }
-
-  return HandleHashSynchronously(crypto::SHA256HashString(str),
-                                 stores_to_check);
-}
-
 bool V4LocalDatabaseManager::MatchDownloadAllowlistUrl(const GURL& url) {
   DCHECK(io_task_runner()->RunsTasksInCurrentSequence());
 
@@ -654,10 +639,6 @@ bool V4LocalDatabaseManager::IsDownloadProtectionEnabled() const {
   return true;
 }
 
-bool V4LocalDatabaseManager::IsSupported() const {
-  return true;
-}
-
 void V4LocalDatabaseManager::StartOnIOThread(
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
     const V4ProtocolConfig& config) {
@@ -688,13 +669,17 @@ void V4LocalDatabaseManager::StopOnIOThread(bool shutdown) {
   // Delete the V4Database. Any pending writes to disk are completed.
   // This operation happens on the task_runner on which v4_database_ operates
   // and doesn't block the IO thread.
-  V4Database::Destroy(std::move(v4_database_));
+  if (v4_database_)
+    v4_database_->StopOnIO();
+  v4_database_.reset();
 
   // Delete the V4UpdateProtocolManager.
   // This cancels any in-flight update request.
   v4_update_protocol_manager_.reset();
 
   db_updated_callback_.Reset();
+
+  weak_factory_.InvalidateWeakPtrs();
 
   SafeBrowsingDatabaseManager::StopOnIOThread(shutdown);
 }
@@ -704,7 +689,7 @@ void V4LocalDatabaseManager::StopOnIOThread(bool shutdown) {
 //
 
 void V4LocalDatabaseManager::DatabaseReadyForChecks(
-    std::unique_ptr<V4Database> v4_database) {
+    std::unique_ptr<V4Database, base::OnTaskRunnerDeleter> v4_database) {
   DCHECK(io_task_runner()->RunsTasksInCurrentSequence());
 
   v4_database->InitializeOnIOSequence();
@@ -712,7 +697,6 @@ void V4LocalDatabaseManager::DatabaseReadyForChecks(
   // The following check is needed because it is possible that by the time the
   // database is ready, StopOnIOThread has been called.
   if (enabled_) {
-    V4Database::Destroy(std::move(v4_database_));
     v4_database_ = std::move(v4_database);
 
     v4_database_->RecordFileSizeHistograms();
@@ -730,7 +714,7 @@ void V4LocalDatabaseManager::DatabaseReadyForChecks(
     ProcessQueuedChecks();
   } else {
     // Schedule the deletion of v4_database off IO thread.
-    V4Database::Destroy(std::move(v4_database));
+    v4_database.reset();
   }
 }
 
@@ -933,8 +917,8 @@ void V4LocalDatabaseManager::ScheduleFullHashCheck(
          check->artificial_full_hash_to_store_and_hash_prefixes) {
       for (const auto& store_and_prefix : entry.second) {
         ListIdentifier list_id = store_and_prefix.list_id;
-        base::Time next = base::Time::Now() + base::TimeDelta::FromMinutes(
-                                                  kFullHashExpiryTimeInMinutes);
+        base::Time next =
+            base::Time::Now() + base::Minutes(kFullHashExpiryTimeInMinutes);
         full_hash_infos.emplace_back(entry.first, list_id, next);
       }
     }
@@ -1004,15 +988,18 @@ void V4LocalDatabaseManager::PerformFullHashCheck(
     std::unique_ptr<PendingCheck> check) {
   DCHECK(io_task_runner()->RunsTasksInCurrentSequence());
 
-  DCHECK(enabled_);
   DCHECK(!check->full_hash_to_store_and_hash_prefixes.empty());
 
-  FullHashToStoreAndHashPrefixesMap full_hash_to_store_and_hash_prefixes =
-      check->full_hash_to_store_and_hash_prefixes;
-  v4_get_hash_protocol_manager_->GetFullHashes(
-      full_hash_to_store_and_hash_prefixes, list_client_states_,
-      base::BindOnce(&V4LocalDatabaseManager::OnFullHashResponse,
-                     weak_factory_.GetWeakPtr(), std::move(check)));
+  // If we're not enabled, we're in the middle of shutdown, so silently drop the
+  // check.
+  if (enabled_) {
+    FullHashToStoreAndHashPrefixesMap full_hash_to_store_and_hash_prefixes =
+        check->full_hash_to_store_and_hash_prefixes;
+    v4_get_hash_protocol_manager_->GetFullHashes(
+        full_hash_to_store_and_hash_prefixes, list_client_states_,
+        base::BindOnce(&V4LocalDatabaseManager::OnFullHashResponse,
+                       weak_factory_.GetWeakPtr(), std::move(check)));
+  }
 }
 
 void V4LocalDatabaseManager::ProcessQueuedChecks() {

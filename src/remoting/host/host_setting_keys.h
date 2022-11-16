@@ -5,7 +5,7 @@
 #ifndef REMOTING_HOST_HOST_SETTING_KEYS_H_
 #define REMOTING_HOST_HOST_SETTING_KEYS_H_
 
-#include "remoting/host/host_settings.h"
+#include "remoting/base/host_settings.h"
 
 namespace remoting {
 
@@ -19,6 +19,9 @@ constexpr HostSettingKey kLinuxPreviousDefaultWebBrowserXfce =
 
 constexpr HostSettingKey kLinuxPreviousDefaultWebBrowserCinnamon =
     "previous_default_browser_cinnamon";
+
+constexpr HostSettingKey kLinuxPreviousDefaultWebBrowserGnome =
+    "previous_default_browser_gnome";
 
 constexpr HostSettingKey kLinuxPreviousDefaultWebBrowserGeneric =
     "previous_default_browser_generic";

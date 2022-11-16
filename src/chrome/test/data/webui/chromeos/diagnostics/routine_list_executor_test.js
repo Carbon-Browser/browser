@@ -32,8 +32,8 @@ export function fakeRoutineListExecutorTestSuite() {
    * @param {!Array<!RoutineResultInfo>} routines
    */
   function runRoutinesAndAssertResults(routines) {
-    let expectedCallbacks = [];
-    let routineTypes = [];
+    const expectedCallbacks = [];
+    const routineTypes = [];
     routines.forEach((routine) => {
       // Set the result into the fake.
       assertNotEquals(undefined, routine);
@@ -75,7 +75,7 @@ export function fakeRoutineListExecutorTestSuite() {
     let upto = 0;
 
     /** @type {!function(!ResultStatusItem)} */
-    let statusCallback = (status) => {
+    const statusCallback = (status) => {
       assertTrue(upto < expectedCallbacks.length);
       assertEquals(expectedCallbacks[upto].routine, status.routine);
       assertEquals(expectedCallbacks[upto].progress, status.progress);
@@ -106,7 +106,7 @@ export function fakeRoutineListExecutorTestSuite() {
     /** @type {!Array<!RoutineResultInfo>} */
     const routines = [{
       type: RoutineType.kCpuStress,
-      result: {simpleResult: StandardRoutineResult.kTestFailed}
+      result: {simpleResult: StandardRoutineResult.kTestFailed},
     }];
     return runRoutinesAndAssertResults(routines);
   });
@@ -116,19 +116,19 @@ export function fakeRoutineListExecutorTestSuite() {
     const routines = [
       {
         type: RoutineType.kCpuStress,
-        result: {simpleResult: StandardRoutineResult.kTestPassed}
+        result: {simpleResult: StandardRoutineResult.kTestPassed},
       },
       {
         type: RoutineType.kCpuCache,
-        result: {simpleResult: StandardRoutineResult.kTestFailed}
+        result: {simpleResult: StandardRoutineResult.kTestFailed},
       },
       {
         type: RoutineType.kCpuFloatingPoint,
-        result: {simpleResult: StandardRoutineResult.kTestPassed}
+        result: {simpleResult: StandardRoutineResult.kTestPassed},
       },
       {
         type: RoutineType.kCpuPrime,
-        result: {simpleResult: StandardRoutineResult.kTestFailed}
+        result: {simpleResult: StandardRoutineResult.kTestFailed},
       },
       {
         type: RoutineType.kBatteryCharge,
@@ -137,9 +137,9 @@ export function fakeRoutineListExecutorTestSuite() {
             simpleResult: StandardRoutineResult.kTestFailed,
             isCharging: true,
             percentDelta: 10,
-            timeDeltaSeconds: 10
-          }
-        }
+            timeDeltaSeconds: 10,
+          },
+        },
       },
     ];
 

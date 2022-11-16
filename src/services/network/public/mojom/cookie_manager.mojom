@@ -6,7 +6,7 @@ module network.mojom;
 
 import "components/content_settings/core/common/content_settings.mojom";
 import "mojo/public/mojom/base/time.mojom";
-import "services/network/public/mojom/schemeful_site.mojom";
+import "services/network/public/mojom/cookie_partition_key.mojom";
 import "url/mojom/url.mojom";
 
 // Parameters for constructing a cookie manager.
@@ -103,9 +103,18 @@ enum CookieSameSiteContextMetadataDowngradeType {
   kLaxToCross,
 };
 
+enum ContextRedirectTypeBug1221316 {
+  kUnset,
+  kNoRedirect,
+  kCrossSiteRedirect,
+  kPartialSameSiteRedirect,
+  kAllSameSiteRedirect,
+};
+
 // Keep defaults here in sync with net/cookies/cookie_options.h.
 struct CookieSameSiteContextMetadata {
   CookieSameSiteContextMetadataDowngradeType cross_site_redirect_downgrade = kNoDowngrade;
+  ContextRedirectTypeBug1221316 redirect_type_bug_1221316 = kUnset;
 };
 
 // Keep defaults here in sync with net/cookies/cookie_options.h.
@@ -149,10 +158,6 @@ struct CookieOptions {
   bool is_in_nontrivial_first_party_set = false;
 };
 
-struct CookiePartitionKey {
-  SchemefulSite site;
-};
-
 // See net/cookies/canonical_cookie.{h,cc} for documentation.
 // Keep defaults here in sync with those files.
 struct CanonicalCookie {
@@ -163,6 +168,7 @@ struct CanonicalCookie {
   mojo_base.mojom.Time creation;
   mojo_base.mojom.Time expiry;
   mojo_base.mojom.Time last_access;
+  mojo_base.mojom.Time last_update;
   bool secure = false;
   bool httponly = false;
   CookieSameSite site_restrictions = NO_RESTRICTION;
@@ -175,12 +181,15 @@ struct CanonicalCookie {
   int32 source_port = -1;
 };
 
+// Indicates reasons why a cookie may be excluded in a get or set
+// operation and if it should be warned about.
+// TODO(crbug.com/1310444): Improve serialization validation comments.
 struct CookieInclusionStatus {
   // Bitfield. Is defined in
   // net::CookieInclusionStatus::ExclusionReason.
-  // net::CookieInclusionStatus::WarningReason.
   uint32 exclusion_reasons;
   // Bitfield. Is defined in
+  // net::CookieInclusionStatus::WarningReason.
   uint32 warning_reasons;
 };
 
@@ -311,6 +320,11 @@ struct CookieDeletionFilter {
 
   // Delete session/persistent cookies.
   CookieDeletionSessionControl session_control = IGNORE_CONTROL;
+
+  // Only delete partitioned cookies contained in this
+  // CookiePartitionKeyCollection.
+  // See net/cookies/cookie_partition_key_collection.h for documentation.
+  CookiePartitionKeyCollection cookie_partition_key_collection;
 };
 
 interface CookieChangeListener {
@@ -345,12 +359,16 @@ interface CookieManager {
           array<CookieAccessSemantics> access_semantics_list);
 
   // Get all cookies for the specified URL and cookie options.
+  // Will also return any partitioned cookies whose partition key are in
+  // |cookie_partition_key_collection|.
   // Returned cookie list is sorted first by path length (longest first)
   // and second by creation time. If the |return_excluded_cookies| option is set
   // in the options, |excluded_cookies| with be a list of cookies that were
   // blocked from being sent along with the reason each cookie was blocked. By
   // default, that option is not set and |excluded_cookies| is an empty list.
-  GetCookieList(url.mojom.Url url, CookieOptions cookie_options)
+  GetCookieList(url.mojom.Url url,
+                CookieOptions cookie_options,
+                CookiePartitionKeyCollection cookie_partition_key_collection)
       => (array<CookieWithAccessResult> cookies,
           array<CookieWithAccessResult> excluded_cookies);
 
@@ -440,4 +458,8 @@ interface CookieManager {
   // the caller with a callback when settings have been updated.
   SetStorageAccessGrantSettings(
       array<content_settings.mojom.ContentSettingPatternSource> settings) => ();
+
+  // TODO(crbug.com/1296161): Delete this method when the partitioned cookies
+  // Origin Trial is over.
+  ConvertPartitionedCookiesToUnpartitioned(url.mojom.Url url);
 };

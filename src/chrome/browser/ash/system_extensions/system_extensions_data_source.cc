@@ -9,12 +9,14 @@
 #include "base/memory/ref_counted_memory.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
-#include "chrome/browser/ash/system_extensions/system_extensions_provider.h"
+#include "chrome/browser/ash/system_extensions/system_extensions_profile_utils.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/buildflags.h"
 #include "content/public/browser/url_data_source.h"
 #include "content/public/browser/web_contents.h"
 #include "net/base/mime_util.h"
+
+namespace ash {
 
 namespace {
 
@@ -71,9 +73,7 @@ void SystemExtensionsDataSource::StartDataRequest(
   // Skip first '/' in path.
   std::string relative_path = url.path().substr(1);
   base::FilePath path =
-      profile_->GetPath()
-          .Append(kSystemExtensionsProfileDirectory)
-          .Append(SystemExtension::IdToString(system_extension_id_))
+      GetDirectoryForSystemExtension(*profile_, system_extension_id_)
           .Append(relative_path);
 
   base::ThreadPool::PostTask(
@@ -81,9 +81,9 @@ void SystemExtensionsDataSource::StartDataRequest(
       base::BindOnce(&ReadFile, path, std::move(callback)));
 }
 
-std::string SystemExtensionsDataSource::GetMimeType(const std::string& path) {
+std::string SystemExtensionsDataSource::GetMimeType(const GURL& url) {
   std::string mime_type(kDefaultMime);
-  std::string ext = base::FilePath(path).Extension();
+  std::string ext = base::FilePath(url.path_piece()).Extension();
   if (!ext.empty())
     net::GetWellKnownMimeTypeFromExtension(ext.substr(1), &mime_type);
   return mime_type;
@@ -101,3 +101,5 @@ std::string SystemExtensionsDataSource::GetContentSecurityPolicy(
     network::mojom::CSPDirectiveName directive) {
   return content::URLDataSource::GetContentSecurityPolicy(directive);
 }
+
+}  // namespace ash

@@ -5,6 +5,7 @@
 #ifndef UI_OZONE_PLATFORM_WAYLAND_HOST_WAYLAND_ZWP_RELATIVE_POINTER_MANAGER_H_
 #define UI_OZONE_PLATFORM_WAYLAND_HOST_WAYLAND_ZWP_RELATIVE_POINTER_MANAGER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "ui/ozone/platform/wayland/common/wayland_object.h"
 
 namespace gfx {
@@ -19,10 +20,12 @@ class WaylandConnection;
 class WaylandZwpRelativePointerManager
     : public wl::GlobalObjectRegistrar<WaylandZwpRelativePointerManager> {
  public:
-  static void Register(WaylandConnection* connection);
+  static constexpr char kInterfaceName[] = "zwp_relative_pointer_manager_v1";
+
   static void Instantiate(WaylandConnection* connection,
                           wl_registry* registry,
                           uint32_t name,
+                          const std::string& interface,
                           uint32_t version);
 
   class Delegate;
@@ -53,8 +56,8 @@ class WaylandZwpRelativePointerManager
 
   wl::Object<zwp_relative_pointer_manager_v1> obj_;
   wl::Object<zwp_relative_pointer_v1> relative_pointer_;
-  WaylandConnection* const connection_;
-  Delegate* const delegate_;
+  const raw_ptr<WaylandConnection> connection_;
+  const raw_ptr<Delegate> delegate_;
 };
 
 class WaylandZwpRelativePointerManager::Delegate {

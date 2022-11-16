@@ -13,6 +13,7 @@
 #include "third_party/blink/public/common/privacy_budget/identifiability_study_settings.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/task_type.h"
+#include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
@@ -21,7 +22,7 @@
 #include "third_party/blink/renderer/platform/graphics/image_data_buffer.h"
 #include "third_party/blink/renderer/platform/graphics/skia/skia_utils.h"
 #include "third_party/blink/renderer/platform/graphics/unaccelerated_static_bitmap_image.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/image-encoders/image_encoder_utils.h"
 #include "third_party/blink/renderer/platform/scheduler/public/post_cross_thread_task.h"
 #include "third_party/blink/renderer/platform/scheduler/public/thread.h"
@@ -38,13 +39,13 @@ namespace {
 
 // small slack period between deadline and current time for safety
 constexpr base::TimeDelta kCreateBlobSlackBeforeDeadline =
-    base::TimeDelta::FromMilliseconds(1);
+    base::Milliseconds(1);
 constexpr base::TimeDelta kEncodeRowSlackBeforeDeadline =
-    base::TimeDelta::FromMicroseconds(100);
+    base::Microseconds(100);
 
 /* The value is based on user statistics on Nov 2017. */
-#if (defined(OS_LINUX) || defined(OS_CHROMEOS) || defined(OS_MAC) || \
-     defined(OS_WIN))
+#if (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_MAC) || \
+     BUILDFLAG(IS_WIN))
 const double kIdleTaskStartTimeoutDelayMs = 1000.0;
 #else
 const double kIdleTaskStartTimeoutDelayMs = 4000.0;  // For ChromeOS, Mobile
@@ -53,7 +54,7 @@ const double kIdleTaskStartTimeoutDelayMs = 4000.0;  // For ChromeOS, Mobile
 /* The value is based on user statistics on May 2018. */
 // We should be more lenient on completion timeout delay to ensure that the
 // switch from idle to main thread only happens to a minority of toBlob calls
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
 // Png image encoding on 4k by 4k canvas on Mac HDD takes 5.7+ seconds
 // We see that 99% users require less than 5 seconds.
 const double kIdleTaskCompleteTimeoutDelayMs = 5700.0;
@@ -74,7 +75,7 @@ bool IsEncodeRowDeadlineNearOrPassed(base::TimeTicks deadline,
   int row_encode_time_us = 1000 * (kIdleTaskCompleteTimeoutDelayMs / 4000.0) *
                            (image_width / 4000.0);
   base::TimeDelta row_encode_time_delta =
-      base::TimeDelta::FromMicroseconds(row_encode_time_us);
+      base::Microseconds(row_encode_time_us);
   return base::TimeTicks::Now() >=
          deadline - row_encode_time_delta - kEncodeRowSlackBeforeDeadline;
 }
@@ -471,7 +472,7 @@ void CanvasAsyncBlobCreator::CreateBlobAndReturnResult() {
                                 base::TimeTicks::Now() - start_time_,
                                 image_->width(), image_->height());
 
-  if (IdentifiabilityStudySettings::Get()->IsTypeAllowed(
+  if (IdentifiabilityStudySettings::Get()->ShouldSampleType(
           blink::IdentifiableSurface::Type::kCanvasReadback)) {
     // Creating this ImageDataBuffer has some overhead, namely getting the
     // SkImage and computing the pixmap. We need the StaticBitmapImage to be
@@ -499,7 +500,7 @@ void CanvasAsyncBlobCreator::RecordIdentifiabilityMetric() {
 
   if (data_buffer) {
     blink::IdentifiabilityMetricBuilder(context_->UkmSourceID())
-        .Set(blink::IdentifiableSurface::FromTypeAndToken(
+        .Add(blink::IdentifiableSurface::FromTypeAndToken(
                  blink::IdentifiableSurface::Type::kCanvasReadback,
                  input_digest_),
              blink::IdentifiabilityDigestOfBytes(base::make_span(
@@ -638,7 +639,7 @@ void CanvasAsyncBlobCreator::PostDelayedTaskToCurrentThread(
     double delay_ms) {
   context_->GetTaskRunner(TaskType::kCanvasBlobSerialization)
       ->PostDelayedTask(location, std::move(task),
-                        base::TimeDelta::FromMillisecondsD(delay_ms));
+                        base::Milliseconds(delay_ms));
 }
 
 void CanvasAsyncBlobCreator::Trace(Visitor* visitor) const {

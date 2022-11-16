@@ -72,16 +72,14 @@ function setupEvents() {
   const lookalike = interstitialType === 'LOOKALIKE';
   const billing =
       interstitialType === 'SAFEBROWSING' && loadTimeData.getBoolean('billing');
-  const originPolicy = interstitialType === 'ORIGIN_POLICY';
   const blockedInterception = interstitialType === 'BLOCKED_INTERCEPTION';
-  const legacyTls = interstitialType == 'LEGACY_TLS';
   const insecureForm = interstitialType == 'INSECURE_FORM';
   const httpsOnly = interstitialType == 'HTTPS_ONLY';
   const hidePrimaryButton = loadTimeData.getBoolean('hide_primary_button');
   const showRecurrentErrorParagraph = loadTimeData.getBoolean(
     'show_recurrent_error_paragraph');
 
-  if (ssl || originPolicy || blockedInterception || legacyTls) {
+  if (ssl || blockedInterception) {
     $('body').classList.add(badClock ? 'bad-clock' : 'ssl');
     if (loadTimeData.valueExists('errorCode')) {
       $('error-code').textContent = loadTimeData.getString('errorCode');
@@ -106,10 +104,6 @@ function setupEvents() {
 
   $('icon').classList.add('icon');
 
-  if (legacyTls) {
-    $('icon').classList.add('legacy-tls');
-  }
-
   if (hidePrimaryButton) {
     $('primary-button').classList.add(HIDDEN_CLASS);
   } else {
@@ -120,7 +114,6 @@ function setupEvents() {
           break;
 
         case 'SSL':
-        case 'LEGACY_TLS':
           if (badClock) {
             sendCommand(SecurityInterstitialCommandId.CMD_OPEN_DATE_SETTINGS);
           } else if (overridable) {
@@ -141,7 +134,7 @@ function setupEvents() {
           break;
 
         default:
-          throw 'Invalid interstitial type';
+          throw new Error('Invalid interstitial type');
       }
     });
   }
@@ -240,7 +233,7 @@ function setupEvents() {
   }
 
   if (lookalike) {
-    console.log(
+    console.warn(
         'Chrome has determined that ' +
         loadTimeData.getString('lookalikeRequestHostname') +
         ' could be fake or fraudulent.\n\n' +

@@ -33,6 +33,10 @@ class PasswordStoreConsumerHelper : public PasswordStoreConsumer {
  public:
   PasswordStoreConsumerHelper() {}
 
+  PasswordStoreConsumerHelper(const PasswordStoreConsumerHelper&) = delete;
+  PasswordStoreConsumerHelper& operator=(const PasswordStoreConsumerHelper&) =
+      delete;
+
   void OnGetPasswordStoreResults(
       std::vector<std::unique_ptr<PasswordForm>> results) override {
     result_.swap(results);
@@ -46,10 +50,13 @@ class PasswordStoreConsumerHelper : public PasswordStoreConsumer {
     return std::move(result_);
   }
 
+  base::WeakPtr<PasswordStoreConsumer> GetWeakPtr() {
+    return weak_ptr_factory_.GetWeakPtr();
+  }
+
  private:
   std::vector<std::unique_ptr<PasswordForm>> result_;
-
-  DISALLOW_COPY_AND_ASSIGN(PasswordStoreConsumerHelper);
+  base::WeakPtrFactory<PasswordStoreConsumerHelper> weak_ptr_factory_{this};
 };
 
 @implementation PasswordManagerAppInterface
@@ -59,7 +66,7 @@ class PasswordStoreConsumerHelper : public PasswordStoreConsumer {
                                     URL:(NSURL*)URL {
   // Obtain a PasswordStore.
   scoped_refptr<password_manager::PasswordStoreInterface> passwordStore =
-      IOSChromePasswordStoreFactory::GetInterfaceForBrowserState(
+      IOSChromePasswordStoreFactory::GetForBrowserState(
           chrome_test_util::GetOriginalBrowserState(),
           ServiceAccessType::IMPLICIT_ACCESS)
           .get();
@@ -72,7 +79,8 @@ class PasswordStoreConsumerHelper : public PasswordStoreConsumer {
   password_manager::PasswordForm passwordCredentialForm;
   passwordCredentialForm.username_value = base::SysNSStringToUTF16(username);
   passwordCredentialForm.password_value = base::SysNSStringToUTF16(password);
-  passwordCredentialForm.url = net::GURLWithNSURL(URL).GetOrigin();
+  passwordCredentialForm.url =
+      net::GURLWithNSURL(URL).DeprecatedGetOriginAsURL();
   passwordCredentialForm.signon_realm = passwordCredentialForm.url.spec();
   passwordCredentialForm.scheme = password_manager::PasswordForm::Scheme::kHtml;
   passwordStore->AddLogin(passwordCredentialForm);
@@ -91,7 +99,7 @@ class PasswordStoreConsumerHelper : public PasswordStoreConsumer {
 
 + (void)clearCredentials {
   scoped_refptr<password_manager::PasswordStoreInterface> passwordStore =
-      IOSChromePasswordStoreFactory::GetInterfaceForBrowserState(
+      IOSChromePasswordStoreFactory::GetForBrowserState(
           chrome_test_util::GetOriginalBrowserState(),
           ServiceAccessType::IMPLICIT_ACCESS)
           .get();
@@ -103,13 +111,13 @@ class PasswordStoreConsumerHelper : public PasswordStoreConsumer {
 + (int)storedCredentialsCount {
   // Obtain a PasswordStore.
   scoped_refptr<PasswordStoreInterface> passwordStore =
-      IOSChromePasswordStoreFactory::GetInterfaceForBrowserState(
+      IOSChromePasswordStoreFactory::GetForBrowserState(
           chrome_test_util::GetOriginalBrowserState(),
           ServiceAccessType::IMPLICIT_ACCESS)
           .get();
 
   PasswordStoreConsumerHelper consumer;
-  passwordStore->GetAllLogins(&consumer);
+  passwordStore->GetAllLogins(consumer.GetWeakPtr());
 
   std::vector<std::unique_ptr<PasswordForm>> credentials =
       consumer.WaitForResult();

@@ -17,6 +17,7 @@
 #include "ash/keyboard/ui/keyboard_ui_controller.h"
 #include "ash/keyboard/ui/keyboard_util.h"
 #include "ash/keyboard/ui/test/keyboard_test_util.h"
+#include "ash/public/cpp/app_list/app_list_controller.h"
 #include "ash/public/cpp/app_list/app_list_features.h"
 #include "ash/public/cpp/keyboard/keyboard_switches.h"
 #include "ash/public/cpp/shelf_config.h"
@@ -40,6 +41,7 @@
 #include "ash/wm/desks/desks_util.h"
 #include "ash/wm/fullscreen_window_finder.h"
 #include "ash/wm/overview/overview_controller.h"
+#include "ash/wm/overview/overview_grid.h"
 #include "ash/wm/overview/rounded_label_widget.h"
 #include "ash/wm/splitview/split_view_controller.h"
 #include "ash/wm/tablet_mode/tablet_mode_controller.h"
@@ -47,11 +49,13 @@
 #include "ash/wm/window_state.h"
 #include "ash/wm/window_util.h"
 #include "ash/wm/wm_event.h"
+#include "ash/wm/work_area_insets.h"
 #include "ash/wm/workspace/backdrop_controller.h"
 #include "ash/wm/workspace/workspace_window_resizer.h"
 #include "ash/wm/workspace_controller_test_api.h"
 #include "base/callback_helpers.h"
 #include "base/run_loop.h"
+#include "base/test/scoped_feature_list.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/aura/client/focus_client.h"
@@ -62,6 +66,7 @@
 #include "ui/base/ui_base_switches.h"
 #include "ui/base/ui_base_types.h"
 #include "ui/compositor/layer.h"
+#include "ui/compositor/layer_animator.h"
 #include "ui/compositor/layer_type.h"
 #include "ui/compositor/scoped_animation_duration_scale_mode.h"
 #include "ui/display/display.h"
@@ -71,6 +76,7 @@
 #include "ui/events/base_event_utils.h"
 #include "ui/events/test/event_generator.h"
 #include "ui/gfx/geometry/insets.h"
+#include "ui/gfx/geometry/rect.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/widget/widget_delegate.h"
 #include "ui/wm/core/window_util.h"
@@ -84,6 +90,10 @@ class MaximizeDelegateView : public views::WidgetDelegateView {
  public:
   explicit MaximizeDelegateView(const gfx::Rect& initial_bounds)
       : initial_bounds_(initial_bounds) {}
+
+  MaximizeDelegateView(const MaximizeDelegateView&) = delete;
+  MaximizeDelegateView& operator=(const MaximizeDelegateView&) = delete;
+
   ~MaximizeDelegateView() override = default;
 
   bool GetSavedWindowPlacement(const views::Widget* widget,
@@ -96,8 +106,6 @@ class MaximizeDelegateView : public views::WidgetDelegateView {
 
  private:
   const gfx::Rect initial_bounds_;
-
-  DISALLOW_COPY_AND_ASSIGN(MaximizeDelegateView);
 };
 
 class TestShellObserver : public ShellObserver {
@@ -105,6 +113,9 @@ class TestShellObserver : public ShellObserver {
   TestShellObserver() : call_count_(0), is_fullscreen_(false) {
     Shell::Get()->AddShellObserver(this);
   }
+
+  TestShellObserver(const TestShellObserver&) = delete;
+  TestShellObserver& operator=(const TestShellObserver&) = delete;
 
   ~TestShellObserver() override { Shell::Get()->RemoveShellObserver(this); }
 
@@ -121,8 +132,6 @@ class TestShellObserver : public ShellObserver {
  private:
   int call_count_;
   bool is_fullscreen_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestShellObserver);
 };
 
 display::Display GetDisplayNearestWindow(aura::Window* window) {
@@ -137,6 +146,10 @@ class ScopedStickyKeyboardEnabler {
     accessibility_controller_->virtual_keyboard().SetEnabled(true);
   }
 
+  ScopedStickyKeyboardEnabler(const ScopedStickyKeyboardEnabler&) = delete;
+  ScopedStickyKeyboardEnabler& operator=(const ScopedStickyKeyboardEnabler&) =
+      delete;
+
   ~ScopedStickyKeyboardEnabler() {
     accessibility_controller_->virtual_keyboard().SetEnabled(enabled_);
   }
@@ -144,8 +157,6 @@ class ScopedStickyKeyboardEnabler {
  private:
   AccessibilityControllerImpl* accessibility_controller_;
   const bool enabled_;
-
-  DISALLOW_COPY_AND_ASSIGN(ScopedStickyKeyboardEnabler);
 };
 
 }  // namespace
@@ -353,6 +364,11 @@ class DontClobberRestoreBoundsWindowObserver : public aura::WindowObserver {
  public:
   DontClobberRestoreBoundsWindowObserver() : window_(nullptr) {}
 
+  DontClobberRestoreBoundsWindowObserver(
+      const DontClobberRestoreBoundsWindowObserver&) = delete;
+  DontClobberRestoreBoundsWindowObserver& operator=(
+      const DontClobberRestoreBoundsWindowObserver&) = delete;
+
   void set_window(aura::Window* window) { window_ = window; }
 
   // aura::WindowObserver:
@@ -375,8 +391,6 @@ class DontClobberRestoreBoundsWindowObserver : public aura::WindowObserver {
 
  private:
   aura::Window* window_;
-
-  DISALLOW_COPY_AND_ASSIGN(DontClobberRestoreBoundsWindowObserver);
 };
 
 // Creates a window, maximized the window and from within the maximized
@@ -567,9 +581,10 @@ TEST_F(WorkspaceLayoutManagerTest,
   std::unique_ptr<aura::Window> window(
       CreateTestWindow(gfx::Rect(10, 20, 100, 200)));
   WindowState* window_state = WindowState::Get(window.get());
-  gfx::Insets insets(0, 0, 56, 0);
-  Shell::Get()->SetDisplayWorkAreaInsets(window.get(), insets);
-  const WMEvent snap_left(WM_EVENT_SNAP_PRIMARY);
+  auto insets = gfx::Insets::TLBR(0, 0, 56, 0);
+  WorkAreaInsets::ForWindow(window.get())
+      ->UpdateWorkAreaInsetsForTest(window.get(), gfx::Rect(), insets, insets);
+  const WindowSnapWMEvent snap_left(WM_EVENT_SNAP_PRIMARY);
   window_state->OnWMEvent(&snap_left);
   EXPECT_EQ(WindowStateType::kPrimarySnapped, window_state->GetStateType());
   const gfx::Rect kWorkAreaBounds = GetPrimaryDisplay().work_area();
@@ -580,13 +595,16 @@ TEST_F(WorkspaceLayoutManagerTest,
 
   ui::ScopedAnimationDurationScaleMode test_duration_mode(
       ui::ScopedAnimationDurationScaleMode::NON_ZERO_DURATION);
-  // The following two SetDisplayWorkAreaInsets calls simulate the case of
+  // The following two `UpdateWorkAreaInsetsForTest` calls simulate the case of
   // crbug.com/673803 that work area first becomes fullscreen and then returns
   // to the original state.
-  Shell::Get()->SetDisplayWorkAreaInsets(window.get(), gfx::Insets(0, 0, 0, 0));
+  WorkAreaInsets::ForWindow(window.get())
+      ->UpdateWorkAreaInsetsForTest(window.get(), gfx::Rect(), gfx::Insets(),
+                                    gfx::Insets());
   ui::LayerAnimator* animator = window->layer()->GetAnimator();
   EXPECT_TRUE(animator->is_animating());
-  Shell::Get()->SetDisplayWorkAreaInsets(window.get(), insets);
+  WorkAreaInsets::ForWindow(window.get())
+      ->UpdateWorkAreaInsetsForTest(window.get(), gfx::Rect(), insets, insets);
   animator->StopAnimating();
   EXPECT_FALSE(animator->is_animating());
   EXPECT_EQ(expected_bounds.ToString(), window->bounds().ToString());
@@ -601,7 +619,7 @@ TEST_F(WorkspaceLayoutManagerTest, AdjustSnappedBoundsWidth) {
   std::unique_ptr<aura::Window> window1(
       CreateTestWindow(gfx::Rect(10, 20, 100, 200)));
   WindowState* window1_state = WindowState::Get(window1.get());
-  const WMEvent snap_left(WM_EVENT_SNAP_PRIMARY);
+  const WindowSnapWMEvent snap_left(WM_EVENT_SNAP_PRIMARY);
   window1_state->OnWMEvent(&snap_left);
   const gfx::Rect work_area =
       display::Screen::GetScreen()->GetPrimaryDisplay().work_area();
@@ -612,7 +630,7 @@ TEST_F(WorkspaceLayoutManagerTest, AdjustSnappedBoundsWidth) {
   std::unique_ptr<aura::Window> window2(
       CreateTestWindow(gfx::Rect(10, 20, 100, 200)));
   WindowState* window2_state = WindowState::Get(window2.get());
-  const WMEvent snap_right(WM_EVENT_SNAP_SECONDARY);
+  const WindowSnapWMEvent snap_right(WM_EVENT_SNAP_SECONDARY);
   window2_state->OnWMEvent(&snap_right);
   const gfx::Rect expected_right_snapped_bounds =
       gfx::Rect(work_area.right() - work_area.width() / 2, work_area.y(),
@@ -659,8 +677,10 @@ TEST_F(WorkspaceLayoutManagerTest,
   window2->Show();
 
   gfx::Rect expected_bounds = window2->bounds();
-  Shell::Get()->SetDisplayWorkAreaInsets(window.get(),
-                                         gfx::Insets(50, 0, 0, 0));
+  WorkAreaInsets::ForWindow(window.get())
+      ->UpdateWorkAreaInsetsForTest(window.get(), gfx::Rect(),
+                                    gfx::Insets::TLBR(50, 0, 0, 0),
+                                    gfx::Insets::TLBR(50, 0, 0, 0));
   EXPECT_EQ(expected_bounds.ToString(), window2->bounds().ToString());
 }
 
@@ -673,6 +693,25 @@ TEST_F(WorkspaceLayoutManagerTest, EnsureWindowStateInOverlay) {
           kShellWindowId_OverlayContainer);
   overlay_container->AddChild(window.get());
   EXPECT_TRUE(window->GetProperty(kWindowStateKey));
+}
+
+// Make sure window bounds is correct with session state lock/unlock.
+TEST_F(WorkspaceLayoutManagerTest, WindowBoundsWithSessionState) {
+  TestSessionControllerClient* client = GetSessionControllerClient();
+  Shelf* shelf = GetPrimaryShelf();
+  shelf->SetAlignment(ShelfAlignment::kLeft);
+  ASSERT_EQ(ShelfAlignment::kLeft, shelf->alignment());
+
+  const gfx::Rect bounds =
+      WorkAreaInsets::ForWindow(Shell::GetPrimaryRootWindow())
+          ->ComputeStableWorkArea();
+  std::unique_ptr<aura::Window> window = CreateTestWindow(bounds);
+  EXPECT_EQ(bounds, window->bounds());
+
+  client->SetSessionState(session_manager::SessionState::LOCKED);
+  EXPECT_EQ(bounds, window->bounds());
+  client->SetSessionState(session_manager::SessionState::ACTIVE);
+  EXPECT_EQ(bounds, window->bounds());
 }
 
 // Following "Solo" tests were originally written for BaseLayoutManager.
@@ -723,6 +762,12 @@ class FocusDuringUnminimizeWindowObserver : public aura::WindowObserver {
  public:
   FocusDuringUnminimizeWindowObserver()
       : window_(nullptr), show_state_(ui::SHOW_STATE_END) {}
+
+  FocusDuringUnminimizeWindowObserver(
+      const FocusDuringUnminimizeWindowObserver&) = delete;
+  FocusDuringUnminimizeWindowObserver& operator=(
+      const FocusDuringUnminimizeWindowObserver&) = delete;
+
   ~FocusDuringUnminimizeWindowObserver() override { SetWindow(nullptr); }
 
   void SetWindow(aura::Window* window) {
@@ -751,8 +796,6 @@ class FocusDuringUnminimizeWindowObserver : public aura::WindowObserver {
  private:
   aura::Window* window_;
   ui::WindowShowState show_state_;
-
-  DISALLOW_COPY_AND_ASSIGN(FocusDuringUnminimizeWindowObserver);
 };
 
 // Make sure that the window's show state is correct in
@@ -1120,6 +1163,12 @@ WorkspaceLayoutManager* GetWorkspaceLayoutManager(aura::Window* container) {
 class WorkspaceLayoutManagerBackdropTest : public AshTestBase {
  public:
   WorkspaceLayoutManagerBackdropTest() : default_container_(nullptr) {}
+
+  WorkspaceLayoutManagerBackdropTest(
+      const WorkspaceLayoutManagerBackdropTest&) = delete;
+  WorkspaceLayoutManagerBackdropTest& operator=(
+      const WorkspaceLayoutManagerBackdropTest&) = delete;
+
   ~WorkspaceLayoutManagerBackdropTest() override = default;
 
   void SetUp() override {
@@ -1181,8 +1230,6 @@ class WorkspaceLayoutManagerBackdropTest : public AshTestBase {
  private:
   // The default container.
   aura::Window* default_container_;
-
-  DISALLOW_COPY_AND_ASSIGN(WorkspaceLayoutManagerBackdropTest);
 };
 
 constexpr absl::optional<Sound> kNoSoundKey = absl::nullopt;
@@ -1613,6 +1660,12 @@ TEST_F(WorkspaceLayoutManagerBackdropTest, SpokenFeedbackForArc) {
 class WorkspaceLayoutManagerKeyboardTest : public AshTestBase {
  public:
   WorkspaceLayoutManagerKeyboardTest() : layout_manager_(nullptr) {}
+
+  WorkspaceLayoutManagerKeyboardTest(
+      const WorkspaceLayoutManagerKeyboardTest&) = delete;
+  WorkspaceLayoutManagerKeyboardTest& operator=(
+      const WorkspaceLayoutManagerKeyboardTest&) = delete;
+
   ~WorkspaceLayoutManagerKeyboardTest() override = default;
 
   void SetUp() override {
@@ -1626,15 +1679,32 @@ class WorkspaceLayoutManagerKeyboardTest : public AshTestBase {
 
   void ShowKeyboard() {
     layout_manager_->OnKeyboardDisplacingBoundsChanged(keyboard_bounds_);
-    restore_work_area_insets_ = GetPrimaryDisplay().GetWorkAreaInsets();
-    Shell::Get()->SetDisplayWorkAreaInsets(
-        Shell::GetPrimaryRootWindow(),
-        gfx::Insets(0, 0, keyboard_bounds_.height(), 0));
+
+    aura::Window* root = Shell::GetPrimaryRootWindow();
+    WorkAreaInsets* work_area_insets = WorkAreaInsets::ForWindow(root);
+
+    restore_work_area_insets_ =
+        work_area_insets->in_session_user_work_area_insets();
+
+    gfx::Insets insets = gfx::Insets::TLBR(0, 0, keyboard_bounds_.height(), 0);
+    work_area_insets->UpdateWorkAreaInsetsForTest(root, gfx::Rect(),
+                                                  gfx::Insets(), insets);
+
+    ash::KeyboardStateDescriptor state{true, keyboard_bounds_, keyboard_bounds_,
+                                       keyboard_bounds_};
+    work_area_insets->OnKeyboardAppearanceChanged(state);
   }
 
   void HideKeyboard() {
-    Shell::Get()->SetDisplayWorkAreaInsets(Shell::GetPrimaryRootWindow(),
-                                           restore_work_area_insets_);
+    aura::Window* root = Shell::GetPrimaryRootWindow();
+    WorkAreaInsets* work_area_insets = WorkAreaInsets::ForWindow(root);
+    work_area_insets->UpdateWorkAreaInsetsForTest(
+        root, gfx::Rect(), gfx::Insets(), restore_work_area_insets_);
+
+    ash::KeyboardStateDescriptor state{true, gfx::Rect(), gfx::Rect(),
+                                       gfx::Rect()};
+    work_area_insets->OnKeyboardAppearanceChanged(state);
+
     layout_manager_->OnKeyboardDisplacingBoundsChanged(gfx::Rect());
   }
 
@@ -1652,8 +1722,6 @@ class WorkspaceLayoutManagerKeyboardTest : public AshTestBase {
   gfx::Insets restore_work_area_insets_;
   gfx::Rect keyboard_bounds_;
   WorkspaceLayoutManager* layout_manager_;
-
-  DISALLOW_COPY_AND_ASSIGN(WorkspaceLayoutManagerKeyboardTest);
 };
 
 // Tests that when a child window gains focus the top level window containing it
@@ -1834,12 +1902,12 @@ TEST_F(WorkspaceLayoutManagerBackdropTest, BackdropForSplitScreenTest) {
   aura::Window::Windows children = default_container()->children();
   children.erase(std::remove_if(children.begin(), children.end(),
                                 [](aura::Window* window) {
-                                  return window ==
-                                         Shell::Get()
-                                             ->overview_controller()
-                                             ->overview_session()
-                                             ->no_windows_widget_for_testing()
-                                             ->GetNativeWindow();
+                                  return window == Shell::Get()
+                                                       ->overview_controller()
+                                                       ->overview_session()
+                                                       ->grid_list()[0]
+                                                       ->no_windows_widget()
+                                                       ->GetNativeWindow();
                                 }),
                  children.end());
   EXPECT_EQ(2U, children.size());
@@ -1885,6 +1953,10 @@ namespace {
 class TestState : public WindowState::State {
  public:
   TestState() = default;
+
+  TestState(const TestState&) = delete;
+  TestState& operator=(const TestState&) = delete;
+
   ~TestState() override = default;
 
   // WindowState::State overrides:
@@ -1903,8 +1975,6 @@ class TestState : public WindowState::State {
 
  private:
   int num_system_ui_area_changes_ = 0;
-
-  DISALLOW_COPY_AND_ASSIGN(TestState);
 };
 
 }  // namespace
@@ -1912,6 +1982,12 @@ class TestState : public WindowState::State {
 class WorkspaceLayoutManagerSystemUiAreaTest : public AshTestBase {
  public:
   WorkspaceLayoutManagerSystemUiAreaTest() = default;
+
+  WorkspaceLayoutManagerSystemUiAreaTest(
+      const WorkspaceLayoutManagerSystemUiAreaTest&) = delete;
+  WorkspaceLayoutManagerSystemUiAreaTest& operator=(
+      const WorkspaceLayoutManagerSystemUiAreaTest&) = delete;
+
   ~WorkspaceLayoutManagerSystemUiAreaTest() override = default;
 
   // AshTestBase:
@@ -1938,8 +2014,6 @@ class WorkspaceLayoutManagerSystemUiAreaTest : public AshTestBase {
  private:
   aura::Window* window_ = nullptr;
   TestState* test_state_ = nullptr;
-
-  DISALLOW_COPY_AND_ASSIGN(WorkspaceLayoutManagerSystemUiAreaTest);
 };
 
 // Expect that showing and hiding the unified system tray triggers a system ui
@@ -1955,6 +2029,22 @@ TEST_F(WorkspaceLayoutManagerSystemUiAreaTest,
   test_state()->reset_num_system_ui_area_changes();
 
   unified_system_tray->CloseBubble();
+  EXPECT_GE(test_state()->num_system_ui_area_changes(), 1);
+}
+
+// Expect that showing the clamshell bubble launcher triggers as system UI area
+// change event.
+TEST_F(WorkspaceLayoutManagerSystemUiAreaTest,
+       SystemUiAreaChangeOnClamshellLauncherVisibilityChange) {
+  base::test::ScopedFeatureList feature_list(features::kProductivityLauncher);
+  ASSERT_FALSE(Shell::Get()->IsInTabletMode());
+
+  AppListController* app_list_controller = AppListController::Get();
+  app_list_controller->ShowAppList();
+  EXPECT_GE(test_state()->num_system_ui_area_changes(), 1);
+  test_state()->reset_num_system_ui_area_changes();
+
+  app_list_controller->DismissAppList();
   EXPECT_GE(test_state()->num_system_ui_area_changes(), 1);
 }
 

@@ -102,7 +102,7 @@ class BASE_EXPORT TraceConfig {
     void Merge(const ProcessFilterConfig&);
 
     void InitializeFromConfigDict(const Value&);
-    void ToDict(Value*) const;
+    void ToDict(Value::Dict& dict) const;
 
     bool IsEnabled(base::ProcessId) const;
     const std::unordered_set<base::ProcessId>& included_process_ids() const {
@@ -130,7 +130,7 @@ class BASE_EXPORT TraceConfig {
 
     void SetCategoryFilter(const TraceConfigCategoryFilter& category_filter);
 
-    void ToDict(Value* filter_dict) const;
+    void ToDict(Value::Dict& filter_dict) const;
 
     bool GetArgAsSet(const char* key, std::unordered_set<std::string>*) const;
 
@@ -292,6 +292,16 @@ class BASE_EXPORT TraceConfig {
     event_filters_ = filter_configs;
   }
 
+  // Returns true if event names should not contain package names.
+  bool IsEventPackageNameFilterEnabled() const {
+    return enable_event_package_name_filter_;
+  }
+
+  // If `enabled` is true, event names will not contain package names.
+  void SetEventPackageNameFilterEnabled(bool enabled) {
+    enable_event_package_name_filter_ = enabled;
+  }
+
   const std::unordered_set<std::string>& systrace_events() const {
     return systrace_events_;
   }
@@ -340,6 +350,7 @@ class BASE_EXPORT TraceConfig {
   ProcessFilterConfig process_filter_config_;
 
   EventFilters event_filters_;
+  bool enable_event_package_name_filter_ : 1;
   std::unordered_set<std::string> histogram_names_;
   std::unordered_set<std::string> systrace_events_;
 };

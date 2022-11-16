@@ -17,6 +17,7 @@
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/permissions/request_type.h"
 #include "components/permissions/test/mock_permission_request.h"
+#include "components/services/app_service/public/cpp/app_launch_util.h"
 #include "components/strings/grit/components_strings.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "url/gurl.h"
@@ -38,8 +39,31 @@ GURL TestPermissionBubbleViewDelegate::GetEmbeddingOrigin() const {
   return GURL("https://embedder.example.com");
 }
 
+absl::optional<permissions::PermissionUiSelector::QuietUiReason>
+TestPermissionBubbleViewDelegate::ReasonForUsingQuietUi() const {
+  return absl::nullopt;
+}
+
+bool TestPermissionBubbleViewDelegate::ShouldCurrentRequestUseQuietUI() const {
+  return false;
+}
+
+bool TestPermissionBubbleViewDelegate::
+    ShouldDropCurrentRequestIfCannotShowQuietly() const {
+  return false;
+}
+
 bool TestPermissionBubbleViewDelegate::WasCurrentRequestAlreadyDisplayed() {
   return false;
+}
+
+bool TestPermissionBubbleViewDelegate::RecreateView() {
+  return false;
+}
+
+base::WeakPtr<permissions::PermissionPrompt::Delegate>
+TestPermissionBubbleViewDelegate::GetWeakPtr() {
+  return weak_factory_.GetWeakPtr();
 }
 
 PermissionBubbleBrowserTest::PermissionBubbleBrowserTest() = default;
@@ -64,15 +88,13 @@ content::WebContents* PermissionBubbleBrowserTest::OpenExtensionAppWindow() {
   CHECK(extension);
 
   apps::AppLaunchParams params(
-      extension->id(),
-      apps::mojom::LaunchContainer::kLaunchContainerPanelDeprecated,
-      WindowOpenDisposition::NEW_WINDOW,
-      apps::mojom::AppLaunchSource::kSourceTest);
+      extension->id(), apps::LaunchContainer::kLaunchContainerPanelDeprecated,
+      WindowOpenDisposition::NEW_WINDOW, apps::LaunchSource::kFromTest);
 
   content::WebContents* app_contents =
       apps::AppServiceProxyFactory::GetForProfile(browser()->profile())
           ->BrowserAppLauncher()
-          ->LaunchAppWithParams(std::move(params));
+          ->LaunchAppWithParamsForTesting(std::move(params));
   CHECK(app_contents);
   return app_contents;
 }

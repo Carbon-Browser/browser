@@ -30,8 +30,7 @@ StatusAreaOverflowButtonTray::IconView::IconView()
     : slide_animation_(std::make_unique<gfx::SlideAnimation>(this)) {
   slide_animation_->Reset(1.0);
   slide_animation_->SetTweenType(gfx::Tween::EASE_OUT);
-  slide_animation_->SetSlideDuration(
-      base::TimeDelta::FromMilliseconds(kAnimationDurationMs));
+  slide_animation_->SetSlideDuration(base::Milliseconds(kAnimationDurationMs));
 
   SetPaintToLayer();
   layer()->SetFillsBoundsOpaquely(false);
@@ -45,7 +44,7 @@ StatusAreaOverflowButtonTray::IconView::IconView()
   const int vertical_padding = (kTrayHeight - image.height()) / 2;
   const int horizontal_padding = (kTrayWidth - image.width()) / 2;
   SetBorder(views::CreateEmptyBorder(
-      gfx::Insets(vertical_padding, horizontal_padding)));
+      gfx::Insets::VH(vertical_padding, horizontal_padding)));
 
   UpdateRotation();
 }

@@ -5,6 +5,7 @@
 #ifndef MEDIA_TEST_FAKE_ENCRYPTED_MEDIA_H_
 #define MEDIA_TEST_FAKE_ENCRYPTED_MEDIA_H_
 
+#include "base/memory/raw_ptr.h"
 #include "media/base/cdm_context.h"
 #include "media/base/content_decryption_module.h"
 
@@ -42,6 +43,10 @@ class FakeEncryptedMedia {
   };
 
   FakeEncryptedMedia(AppBase* app);
+
+  FakeEncryptedMedia(const FakeEncryptedMedia&) = delete;
+  FakeEncryptedMedia& operator=(const FakeEncryptedMedia&) = delete;
+
   ~FakeEncryptedMedia();
   CdmContext* GetCdmContext();
 
@@ -66,14 +71,12 @@ class FakeEncryptedMedia {
     Decryptor* GetDecryptor() final;
 
    private:
-    Decryptor* decryptor_;
+    raw_ptr<Decryptor> decryptor_;
   };
 
   scoped_refptr<AesDecryptor> decryptor_;
   TestCdmContext cdm_context_;
   std::unique_ptr<AppBase> app_;
-
-  DISALLOW_COPY_AND_ASSIGN(FakeEncryptedMedia);
 };
 
 }  // namespace media

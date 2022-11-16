@@ -26,6 +26,7 @@
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "ash/keyboard/ui/resources/keyboard_resource_util.h"
+#include "ash/webui/file_manager/untrusted_resources/grit/file_manager_untrusted_resources_map.h"
 #include "base/command_line.h"
 #include "chrome/browser/ash/file_manager/file_manager_string_util.h"
 #include "chrome/browser/browser_process.h"
@@ -103,13 +104,26 @@ ChromeComponentExtensionResourceManager::Data::Data() {
   AddComponentResourceEntries(kComponentExtensionResources,
                               kComponentExtensionResourcesSize);
   AddComponentResourceEntries(kExtraComponentExtensionResources,
-                              base::size(kExtraComponentExtensionResources));
+                              std::size(kExtraComponentExtensionResources));
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   // Add Files app JS modules resources.
   AddComponentResourceEntries(kFileManagerResources, kFileManagerResourcesSize);
   AddComponentResourceEntries(kFileManagerGenResources,
                               kFileManagerGenResourcesSize);
+
+  // Add Files app resources to display untrusted content in <webview> frames.
+  // Files app extension's resource paths need to be prefixed by
+  // "file_manager/".
+  for (size_t i = 0; i < kFileManagerUntrustedResourcesSize; ++i) {
+    base::FilePath resource_path =
+        base::FilePath("file_manager")
+            .AppendASCII(kFileManagerUntrustedResources[i].path);
+    resource_path = resource_path.NormalizePathSeparators();
+
+    DCHECK(!base::Contains(path_to_resource_id_, resource_path));
+    path_to_resource_id_[resource_path] = kFileManagerUntrustedResources[i].id;
+  }
 
   // ResourceBundle and g_browser_process are not always initialized in unit
   // tests.
@@ -138,8 +152,8 @@ ChromeComponentExtensionResourceManager::Data::Data() {
     pdf_extension_util::AddAdditionalData(/*enable_annotations=*/true, &dict);
 
     ui::TemplateReplacements pdf_viewer_replacements;
-    ui::TemplateReplacementsFromDictionaryValue(
-        base::Value::AsDictionaryValue(dict), &pdf_viewer_replacements);
+    ui::TemplateReplacementsFromDictionaryValue(dict.GetDict(),
+                                                &pdf_viewer_replacements);
     template_replacements_[extension_misc::kPdfExtensionId] =
         std::move(pdf_viewer_replacements);
   }

@@ -21,6 +21,9 @@ class GPUComputePassEncoder : public DawnObject<WGPUComputePassEncoder>,
   explicit GPUComputePassEncoder(GPUDevice* device,
                                  WGPUComputePassEncoder compute_pass_encoder);
 
+  GPUComputePassEncoder(const GPUComputePassEncoder&) = delete;
+  GPUComputePassEncoder& operator=(const GPUComputePassEncoder&) = delete;
+
   // gpu_compute_pass_encoder.idl
   void setBindGroup(uint32_t index,
                     const DawnObject<WGPUBindGroup>* bindGroup) {
@@ -51,23 +54,34 @@ class GPUComputePassEncoder : public DawnObject<WGPUComputePassEncoder>,
     GetProcs().computePassEncoderSetPipeline(GetHandle(),
                                              pipeline->GetHandle());
   }
-  void dispatch(uint32_t x, uint32_t y, uint32_t z) {
-    GetProcs().computePassEncoderDispatch(GetHandle(), x, y, z);
+  void dispatchWorkgroups(uint32_t workgroup_count_x,
+                          uint32_t workgroup_count_y,
+                          uint32_t workgroup_count_z) {
+    GetProcs().computePassEncoderDispatchWorkgroups(
+        GetHandle(), workgroup_count_x, workgroup_count_y, workgroup_count_z);
   }
-  void dispatchIndirect(const DawnObject<WGPUBuffer>* indirectBuffer,
-                        uint64_t indirectOffset) {
-    GetProcs().computePassEncoderDispatchIndirect(
+  void dispatchWorkgroupsIndirect(const DawnObject<WGPUBuffer>* indirectBuffer,
+                                  uint64_t indirectOffset) {
+    GetProcs().computePassEncoderDispatchWorkgroupsIndirect(
         GetHandle(), indirectBuffer->GetHandle(), indirectOffset);
   }
+  void dispatch(uint32_t workgroup_count_x,
+                uint32_t workgroup_count_y,
+                uint32_t workgroup_count_z);
+  void dispatchIndirect(const DawnObject<WGPUBuffer>* indirectBuffer,
+                        uint64_t indirectOffset);
   void writeTimestamp(const DawnObject<WGPUQuerySet>* querySet,
                       uint32_t queryIndex) {
     GetProcs().computePassEncoderWriteTimestamp(
         GetHandle(), querySet->GetHandle(), queryIndex);
   }
-  void endPass() { GetProcs().computePassEncoderEndPass(GetHandle()); }
+  void end() { GetProcs().computePassEncoderEnd(GetHandle()); }
+  void endPass();
 
- private:
-  DISALLOW_COPY_AND_ASSIGN(GPUComputePassEncoder);
+  void setLabelImpl(const String& value) override {
+    std::string utf8_label = value.Utf8();
+    GetProcs().computePassEncoderSetLabel(GetHandle(), utf8_label.c_str());
+  }
 };
 
 }  // namespace blink

@@ -9,17 +9,16 @@ enum URLPatternComponent { "protocol", "username", "password", "hostname",
 
 // https://wicg.github.io/urlpattern/
 [
-  Exposed=(Window,Worker),
-  RuntimeEnabled=URLPattern
+  Exposed=(Window,Worker)
 ] interface URLPattern {
   [RaisesException, Measure]
-  constructor(URLPatternInput input, optional USVString baseURL);
+  constructor(optional URLPatternInput input = {}, optional USVString baseURL);
 
-  [RaisesException, Measure]
-  boolean test(URLPatternInput input, optional USVString baseURL);
+  [RaisesException, CallWith=ScriptState, Measure]
+  boolean test(optional URLPatternInput input = {}, optional USVString baseURL);
 
-  [RaisesException, Measure]
-  URLPatternResult? exec(URLPatternInput input, optional USVString baseURL);
+  [RaisesException, CallWith=ScriptState, Measure]
+  URLPatternResult? exec(optional URLPatternInput input = {}, optional USVString baseURL);
 
   readonly attribute USVString protocol;
   readonly attribute USVString username;

@@ -1,14 +1,14 @@
-<style include="diagnostics-shared diagnostics-fonts">
+<style include="diagnostics-shared">
   a[href] {
-    color: var(--cr-link-color);
+    color: var(--cros-link-color);
     text-decoration: none;
   }
 
   #settingsIcon {
     --iron-icon-height: 20px;
     --iron-icon-width: 20px;
-    fill: var(--google-grey-700);
-    margin-right: 6px;
+    fill: var(--cros-icon-color-secondary);
+    margin-inline-end: 6px;
     top: 1px;
   }
 
@@ -22,7 +22,10 @@
   }
 
   #settingsLink {
-    @apply --diagnostics-settings-link-font;
+    color: var(--cros-text-color-secondary);
+    font-family: var(--diagnostics-roboto-font-family);
+    font-size: 14px;
+    font-weight: var(--diagnostics-regular-font-weight);
     line-height: 20px;
   }
 
@@ -33,8 +36,8 @@
     padding-bottom: 40px;
   }
 </style>
-<div id="networkListContainer">
-  <div class="diagnostics-cards-container">
+<div id="networkListContainer" class="diagnostics-network-list-container" tabindex="0">
+  <div class="diagnostics-cards-container-nav">
     <template is="dom-if" if="[[activeGuid_]]" restamp>
       <connectivity-card class="card-width" active-guid="[[activeGuid_]]"
           test-suite-status="{{testSuiteStatus}}"
@@ -48,8 +51,8 @@
       </template>
     </dom-repeat>
   </div>
-  <div class="settings-link-container">
-    <iron-icon icon="cr:settings_icon" id="settingsIcon"></iron-icon>
+  <div class="settings-link-container" hidden$="[[!isLoggedIn_]]">
+    <iron-icon icon="diagnostics:settings" id="settingsIcon"></iron-icon>
     <div id="settingsLink" inner-h-t-m-l="[[getSettingsString_()]]"></div>
   </div>
 </div>

@@ -30,11 +30,12 @@
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/forward.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_uchar.h"
-
-typedef uint32_t SkColor;
+#include "third_party/skia/include/core/SkColor.h"
 
 namespace blink {
 
+// TODO(crbug.com/1308932): Blink classes should use SkColor4f directly,
+// ulitmately this class should be deleted.
 class Color;
 
 typedef unsigned RGBA32;  // RGBA quadruplet
@@ -44,6 +45,7 @@ PLATFORM_EXPORT RGBA32 MakeRGBA(int r, int g, int b, int a);
 
 PLATFORM_EXPORT RGBA32 MakeRGBA32FromFloats(float r, float g, float b, float a);
 PLATFORM_EXPORT RGBA32 MakeRGBAFromHSLA(double h, double s, double l, double a);
+PLATFORM_EXPORT RGBA32 MakeRGBAFromHWBA(double h, double w, double b, double a);
 PLATFORM_EXPORT RGBA32
 MakeRGBAFromCMYKA(float c, float m, float y, float k, float a);
 
@@ -94,6 +96,12 @@ class PLATFORM_EXPORT Color {
     RGBA32 color = a << 24 | r << 16 | g << 8 | b;
     return Color(color);
   }
+  // TODO(crbug.com/1308932): These two functions are just helpers for while
+  // we're converting platform/graphics to float color
+  static Color FromSkColor4f(SkColor4f fc) {
+    return MakeRGBA32FromFloats(fc.fR, fc.fG, fc.fB, fc.fA);
+  }
+  SkColor4f toSkColor4f();
 
   // Returns the color serialized according to HTML5:
   // http://www.whatwg.org/specs/web-apps/current-work/#serialization-of-a-color
@@ -121,6 +129,7 @@ class PLATFORM_EXPORT Color {
   void GetRGBA(float& r, float& g, float& b, float& a) const;
   void GetRGBA(double& r, double& g, double& b, double& a) const;
   void GetHSL(double& h, double& s, double& l) const;
+  void GetHWB(double& h, double& w, double& b) const;
 
   explicit operator SkColor() const;
 
@@ -145,6 +154,8 @@ class PLATFORM_EXPORT Color {
   static const RGBA32 kTransparent = 0x00000000;
 
  private:
+  void GetHueMaxMin(double&, double&, double&) const;
+
   RGBA32 color_;
 };
 

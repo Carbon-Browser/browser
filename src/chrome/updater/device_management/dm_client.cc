@@ -32,10 +32,12 @@
 #include "components/update_client/network.h"
 #include "url/gurl.h"
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include "chrome/updater/win/net/network.h"
-#elif defined(OS_MAC)
+#elif BUILDFLAG(IS_MAC)
 #include "chrome/updater/mac/net/network.h"
+#elif BUILDFLAG(IS_LINUX)
+#include "chrome/updater/linux/net/network.h"
 #endif
 
 namespace updater {
@@ -278,9 +280,15 @@ void DMFetch::OnRequestComplete(std::unique_ptr<std::string> response_body,
     VLOG(1) << "DM request failed due to net error: " << net_error;
     result = DMClient::RequestResult::kNetworkError;
   } else if (http_status_code_ == kHTTPStatusGone) {
-    VLOG(1) << "Device is now de-registered.";
-    storage_->DeregisterDevice();
-    result = DMClient::RequestResult::kDeregistered;
+    if (ShouldDeleteDmToken(*response_body)) {
+      storage_->DeleteDMToken();
+      result = DMClient::RequestResult::kNoDMToken;
+      VLOG(1) << "Device is now de-registered by deleting the DM token.";
+    } else {
+      storage_->InvalidateDMToken();
+      result = DMClient::RequestResult::kDeregistered;
+      VLOG(1) << "Device is now de-registered by invalidating the DM token.";
+    }
   } else if (http_status_code_ != kHTTPStatusOK) {
     VLOG(1) << "DM request failed due to HTTP error: " << http_status_code_;
     result = DMClient::RequestResult::kHttpError;

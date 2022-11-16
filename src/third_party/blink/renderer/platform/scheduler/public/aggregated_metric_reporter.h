@@ -7,6 +7,7 @@
 
 #include <array>
 
+#include "base/check_op.h"
 #include "base/gtest_prod_util.h"
 #include "base/metrics/histogram.h"
 #include "base/threading/thread_checker.h"
@@ -36,7 +37,7 @@ class AggregatedMetricReporter {
   // to histogram and modifies the passed value.
   // Example: aggregate(time) {
   //   return time.InMilliseconds();
-  //   time %= base::TimeDelta::FromMilliseconds(1);
+  //   time %= base::Milliseconds(1);
   // }
   using AggregatorFuncPtr = int (*)(ValueType&);
 

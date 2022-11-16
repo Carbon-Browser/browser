@@ -7,53 +7,99 @@
  * details of an incoming share request and allows the user to confirm or
  * reject the request
  */
-Polymer({
-  is: 'nearby-share-confirm-page',
 
-  behaviors: [I18nBehavior],
+import 'chrome://resources/cr_elements/cr_lottie/cr_lottie.m.js';
+import '../../shared/nearby_page_template.js';
+import '../../shared/nearby_device.js';
+import '../../shared/nearby_preview.js';
+import '../../shared/nearby_progress.js';
 
-  properties: {
-    /** @type {?nearbyShare.mojom.ShareTarget} */
-    shareTarget: {
-      type: Object,
-      value: null,
-    },
+import {I18nBehavior, I18nBehaviorInterface} from 'chrome://resources/js/i18n_behavior.m.js';
+import {html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-    /** @type {?string} */
-    connectionToken: {
-      type: String,
-      value: null,
-    },
+/**
+ * The progress bar asset URL for light mode.
+ * @type {string}
+ */
+const PROGRESS_BAR_URL_LIGHT = 'nearby_share_progress_bar_light.json';
 
-    /**
-     * @type {?nearbyShare.mojom.TransferStatus}
-     */
-    transferStatus: {
-      type: nearbyShare.mojom.TransferStatus,
-      value: null,
-      observer: 'onTransferStatusChanged_',
-    },
+/**
+ * The progress bar asset URL for dark mode.
+ * @type {string}
+ */
+const PROGRESS_BAR_URL_DARK = 'nearby_share_progress_bar_dark.json';
 
-    /**
-     * Header text for error. Controls error display on the confirm page.
-     * The error section is not displayed if this is falsey.
-     * @private {?string}
-     */
-    errorTitle_: {
-      type: String,
-      value: null,
-    },
+/**
+ * @constructor
+ * @extends {PolymerElement}
+ * @implements {I18nBehaviorInterface}
+ */
+const NearbyShareConfirmPageElementBase =
+    mixinBehaviors([I18nBehavior], PolymerElement);
 
-    /**
-     * Description text for error display on confirm page, displayed under the
-     * error title.
-     * @private {?string}
-     */
-    errorDescription_: {
-      type: String,
-      value: null,
-    },
-  },
+/** @polymer */
+class NearbyShareConfirmPageElement extends NearbyShareConfirmPageElementBase {
+  static get is() {
+    return 'nearby-share-confirm-page';
+  }
+
+  static get template() {
+    return html`{__html_template__}`;
+  }
+
+  static get properties() {
+    return {
+      /** @type {?nearbyShare.mojom.ShareTarget} */
+      shareTarget: {
+        type: Object,
+        value: null,
+      },
+
+      /** @type {?string} */
+      connectionToken: {
+        type: String,
+        value: null,
+      },
+
+      /**
+       * @type {?nearbyShare.mojom.TransferStatus}
+       */
+      transferStatus: {
+        type: nearbyShare.mojom.TransferStatus,
+        value: null,
+        observer: 'onTransferStatusChanged_',
+      },
+
+      /**
+       * Header text for error. Controls error display on the confirm page.
+       * The error section is not displayed if this is falsey.
+       * @private {?string}
+       */
+      errorTitle_: {
+        type: String,
+        value: null,
+      },
+
+      /**
+       * Description text for error display on confirm page, displayed under the
+       * error title.
+       * @private {?string}
+       */
+      errorDescription_: {
+        type: String,
+        value: null,
+      },
+
+      /**
+       * Whether the confirm page is being rendered in dark mode.
+       * @private {boolean}
+       */
+      isDarkModeActive_: {
+        type: Boolean,
+        value: false,
+      },
+    };
+  }
 
   /**
    * Update the |errorTitle_| and the |errorDescription_| when the transfer
@@ -102,7 +148,7 @@ Polymer({
         this.errorTitle_ = null;
         this.errorDescription_ = null;
     }
-  },
+  }
 
   /**
    * @return {string}
@@ -113,5 +159,19 @@ Polymer({
         this.i18n(
             'nearbyShareReceiveConfirmPageConnectionId', this.connectionToken) :
         '';
-  },
-});
+  }
+
+  /**
+   * Returns the URL for the asset that defines a file transfer's animated
+   * progress bar.
+   * @return {string}
+   * @private
+   */
+  getAnimationUrl_() {
+    return this.isDarkModeActive_ ? PROGRESS_BAR_URL_DARK :
+                                    PROGRESS_BAR_URL_LIGHT;
+  }
+}
+
+customElements.define(
+    NearbyShareConfirmPageElement.is, NearbyShareConfirmPageElement);

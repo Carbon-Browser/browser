@@ -12,18 +12,17 @@ import 'chrome://resources/cr_elements/shared_style_css.m.js';
 import 'chrome://resources/polymer/v3_0/iron-flex-layout/iron-flex-layout-classes.js';
 import '../controls/controlled_button.js';
 import '../controls/settings_toggle_button.js';
-import '../settings_shared_css.js';
+import '../settings_shared.css.js';
 
-import {assert} from 'chrome://resources/js/assert.m.js';
 import {focusWithoutInk} from 'chrome://resources/js/cr/ui/focus_without_ink.m.js';
 import {listenOnce} from 'chrome://resources/js/util.m.js';
-import {WebUIListenerBehavior} from 'chrome://resources/js/web_ui_listener_behavior.m.js';
-import {afterNextRender, html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {WebUIListenerMixin} from 'chrome://resources/js/web_ui_listener_mixin.js';
+import {afterNextRender, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {PrefsBehavior} from '../prefs/prefs_behavior.js';
-import {PrefsBehaviorInterface} from '../prefs/prefs_behavior_ts.js';
+import {PrefsMixin} from '../prefs/prefs_mixin.js';
 
 import {DownloadsBrowserProxy, DownloadsBrowserProxyImpl} from './downloads_browser_proxy.js';
+import {getTemplate} from './downloads_page.html.js';
 
 type AccountInfo = {
   linked: boolean,
@@ -32,17 +31,16 @@ type AccountInfo = {
 };
 
 const SettingsDownloadsPageElementBase =
-    mixinBehaviors([WebUIListenerBehavior, PrefsBehavior], PolymerElement) as
-    {new (): PolymerElement & WebUIListenerBehavior & PrefsBehaviorInterface};
+    WebUIListenerMixin(PrefsMixin(PolymerElement));
 
-/** @polymer */
-class SettingsDownloadsPageElement extends SettingsDownloadsPageElementBase {
+export class SettingsDownloadsPageElement extends
+    SettingsDownloadsPageElementBase {
   static get is() {
     return 'settings-downloads-page';
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
   }
 
   static get properties() {
@@ -86,7 +84,7 @@ class SettingsDownloadsPageElement extends SettingsDownloadsPageElementBase {
         value: false,
       },
 
-      // <if expr="chromeos">
+      // <if expr="chromeos_ash">
       /**
        * The download location string that is suitable to display in the UI.
        */
@@ -95,10 +93,10 @@ class SettingsDownloadsPageElement extends SettingsDownloadsPageElementBase {
     };
   }
 
-  // <if expr="chromeos">
+  // <if expr="chromeos_ash">
   static get observers() {
     return [
-      'handleDownloadLocationChanged_(prefs.download.default_directory.value)'
+      'handleDownloadLocationChanged_(prefs.download.default_directory.value)',
     ];
   }
   // </if>
@@ -110,14 +108,14 @@ class SettingsDownloadsPageElement extends SettingsDownloadsPageElementBase {
   private connectionSetupInProgress_: boolean;
   private autoOpenDownloads_: boolean;
 
-  // <if expr="chromeos">
+  // <if expr="chromeos_ash">
   private downloadLocation_: string;
   // </if>
 
   private browserProxy_: DownloadsBrowserProxy =
       DownloadsBrowserProxyImpl.getInstance();
 
-  ready() {
+  override ready() {
     super.ready();
 
     this.addWebUIListener(
@@ -164,7 +162,7 @@ class SettingsDownloadsPageElement extends SettingsDownloadsPageElementBase {
     });
   }
 
-  // <if expr="chromeos">
+  // <if expr="chromeos_ash">
   private handleDownloadLocationChanged_() {
     this.browserProxy_
         .getDownloadLocationText(
@@ -177,6 +175,12 @@ class SettingsDownloadsPageElement extends SettingsDownloadsPageElementBase {
 
   private onClearAutoOpenFileTypesTap_() {
     this.browserProxy_.resetAutoOpenFileTypes();
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'settings-downloads-page': SettingsDownloadsPageElement;
   }
 }
 

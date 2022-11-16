@@ -38,14 +38,19 @@ export class DeviceHandler extends EventTarget {
      */
     this.mountStatus_ = {};
 
-    chrome.fileManagerPrivate.onDeviceChanged.addListener(
-        this.onDeviceChanged_.bind(this));
-    chrome.fileManagerPrivate.onMountCompleted.addListener(
-        this.onMountCompleted_.bind(this));
-    xfm.notifications.onClicked.addListener(
-        this.onNotificationClicked_.bind(this));
-    xfm.notifications.onButtonClicked.addListener(
-        this.onNotificationButtonClicked_.bind(this));
+    // Notifications in a SWA context are handled by the
+    // system_notification_manager.cc and thus we don't want this code
+    // duplicated in the background page.
+    if (!window.isSWA) {
+      chrome.fileManagerPrivate.onDeviceChanged.addListener(
+          this.onDeviceChanged_.bind(this));
+      chrome.fileManagerPrivate.onMountCompleted.addListener(
+          this.onMountCompleted_.bind(this));
+      xfm.notifications.onClicked.addListener(
+          this.onNotificationClicked_.bind(this));
+      xfm.notifications.onButtonClicked.addListener(
+          this.onNotificationButtonClicked_.bind(this));
+    }
   }
 
   /**
@@ -54,6 +59,9 @@ export class DeviceHandler extends EventTarget {
    * @private
    */
   onDeviceChanged_(event) {
+    if (util.isSwaEnabled()) {
+      return;
+    }
     util.doIfPrimaryContext(() => {
       this.onDeviceChangedInternal_(event);
     });
@@ -189,6 +197,9 @@ export class DeviceHandler extends EventTarget {
    * @private
    */
   onMountCompleted_(event) {
+    if (util.isSwaEnabled()) {
+      return;
+    }
     util.doIfPrimaryContext(() => {
       this.onMountCompletedInternal_(event);
     });
@@ -342,19 +353,8 @@ export class DeviceHandler extends EventTarget {
                * @param {!DirectoryEntry} directory
                */
               directory => {
-                return importer.isPhotosAppImportEnabled().then(
-                    /**
-                     * @param {boolean} appEnabled
-                     */
-                    appEnabled => {
-                      // We don't want to auto-open two windows when a user
-                      // inserts a removable device.  Only open Files app if
-                      // auto-import is disabled in Photos app.
-                      if (!appEnabled) {
-                        this.openMediaDirectory_(
-                            metadata.volumeId, null, directory.fullPath);
-                      }
-                    });
+                this.openMediaDirectory_(
+                    metadata.volumeId, null, directory.fullPath);
               })
         .catch(error => {
           if (metadata.deviceType && metadata.devicePath) {
@@ -392,6 +392,9 @@ export class DeviceHandler extends EventTarget {
    * @private
    */
   onNotificationClicked_(id) {
+    if (util.isSwaEnabled()) {
+      return;
+    }
     util.doIfPrimaryContext(() => {
       this.onNotificationClickedInternal_(id, -1 /* index */);
     });
@@ -404,6 +407,9 @@ export class DeviceHandler extends EventTarget {
    * @private
    */
   onNotificationButtonClicked_(id, index) {
+    if (util.isSwaEnabled()) {
+      return;
+    }
     util.doIfPrimaryContext(() => {
       this.onNotificationClickedInternal_(id, index);
     });
@@ -496,7 +502,7 @@ DeviceHandler.MountStatus = {
   // There is one child error.
   CHILD_ERROR: 'childError',
   // There is multiple child results and at least one is failure.
-  MULTIPART_ERROR: 'multipartError'
+  MULTIPART_ERROR: 'multipartError',
 };
 Object.freeze(DeviceHandler.MountStatus);
 
@@ -645,7 +651,7 @@ DeviceHandler.Notification = class {
           message: message || (str(this.message) + additionalMessage),
           iconUrl: getFilesAppIconURL().toString(),
           buttons: buttons,
-          isClickable: this.isClickable
+          isClickable: this.isClickable,
         },
         callback);
     metrics.recordEnum(

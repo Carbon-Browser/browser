@@ -5,12 +5,12 @@
 #import "ios/chrome/browser/ui/ntp/notification_promo_whats_new.h"
 
 #include <stdint.h>
+
 #include <algorithm>
 #include <memory>
 #include <vector>
 
 #include "base/check.h"
-#include "base/cxx17_backports.h"
 #include "base/ios/ios_util.h"
 #include "base/json/json_reader.h"
 #include "base/metrics/field_trial.h"
@@ -40,7 +40,7 @@ namespace {
 
 struct PromoStringToIdsMapEntry {
   const char* promo_text_str;
-  // Use |nonlocalized_message| instead of |message_id| if non-nullptr.
+  // Use `nonlocalized_message` instead of `message_id` if non-nullptr.
   const char* nonlocalized_message;
   int message_id;
 };
@@ -53,10 +53,10 @@ const PromoStringToIdsMapEntry kPromoStringToIdsMap[] = {
     {"setChromeDefaultBrowser", nullptr, IDS_IOS_SET_DEFAULT_BROWSER},
 };
 
-// Returns a localized version of |promo_text| if it has an entry in the
-// |kPromoStringToIdsMap|. If there is no entry, an empty string is returned.
+// Returns a localized version of `promo_text` if it has an entry in the
+// `kPromoStringToIdsMap`. If there is no entry, an empty string is returned.
 std::string GetLocalizedPromoText(const std::string& promo_text) {
-  for (size_t i = 0; i < base::size(kPromoStringToIdsMap); ++i) {
+  for (size_t i = 0; i < std::size(kPromoStringToIdsMap); ++i) {
     auto& entry = kPromoStringToIdsMap[i];
     if (entry.promo_text_str == promo_text) {
       return entry.nonlocalized_message
@@ -168,21 +168,14 @@ bool NotificationPromoWhatsNew::CanShow() const {
     return false;
   }
 
-  // Current NTP default browser promo should only be shown for users on iOS14.
-  if (!base::ios::IsRunningOnIOS14OrLater() &&
-      command_ == kSetDefaultBrowserCommand) {
-    return false;
-  }
-
   // Check optional restrictions.
 
   if (seconds_since_install_ > 0) {
     // Do not show the promo if the app's installation did not occur more than
-    // |seconds_since_install_| seconds ago.
+    // `seconds_since_install_` seconds ago.
     int64_t install_date = local_state_->GetInt64(metrics::prefs::kInstallDate);
-    const base::Time first_view_time =
-        base::Time::FromTimeT(install_date) +
-        base::TimeDelta::FromSeconds(seconds_since_install_);
+    const base::Time first_view_time = base::Time::FromTimeT(install_date) +
+                                       base::Seconds(seconds_since_install_);
     if (first_view_time > base::Time::Now()) {
       return false;
     }
@@ -190,11 +183,10 @@ bool NotificationPromoWhatsNew::CanShow() const {
 
   if (max_seconds_since_install_ > 0) {
     // Do not show the promo if the app's installation occurred more than
-    // |max_seconds_since_install_| seconds ago.
+    // `max_seconds_since_install_` seconds ago.
     int64_t install_date = local_state_->GetInt64(metrics::prefs::kInstallDate);
-    const base::Time last_view_time =
-        base::Time::FromTimeT(install_date) +
-        base::TimeDelta::FromSeconds(max_seconds_since_install_);
+    const base::Time last_view_time = base::Time::FromTimeT(install_date) +
+                                      base::Seconds(max_seconds_since_install_);
     if (last_view_time < base::Time::Now()) {
       return false;
     }
@@ -277,7 +269,7 @@ bool NotificationPromoWhatsNew::InitFromNotificationPromo() {
         command_ != kSetDefaultBrowserCommand) {
       return valid_;
     }
-  } else {  // If |promo_type_| is not set to URL or Command, return early.
+  } else {  // If `promo_type_` is not set to URL or Command, return early.
     return valid_;
   }
 

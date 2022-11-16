@@ -8,7 +8,6 @@
 #include <memory>
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/threading/thread_checker.h"
 #include "base/time/time.h"
@@ -39,6 +38,10 @@ class ThreadHealthChecker {
       base::TimeDelta interval,
       base::TimeDelta timeout,
       base::RepeatingClosure on_failure);
+
+  ThreadHealthChecker(const ThreadHealthChecker&) = delete;
+  ThreadHealthChecker& operator=(const ThreadHealthChecker&) = delete;
+
   ~ThreadHealthChecker();
 
  private:
@@ -72,8 +75,6 @@ class ThreadHealthChecker {
 
   scoped_refptr<base::SequencedTaskRunner> doctor_task_runner_;
   scoped_refptr<Internal> internal_;
-
-  DISALLOW_COPY_AND_ASSIGN(ThreadHealthChecker);
 };
 
 }  // namespace chromecast

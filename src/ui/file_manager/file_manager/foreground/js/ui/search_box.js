@@ -312,6 +312,12 @@ export class SearchBox extends EventTarget {
   onClearButtonClick_() {
     this.inputElement.value = '';
     this.onInput_();
+    // The search box will be collapsed after Clear, so the search button will
+    // animate to a new position, we need to call focus() after the animation
+    // to make sure the tooltip shows at the correct position.
+    this.inputElement.addEventListener('transitionend', () => {
+      this.searchButton.focus();
+    }, {once: true});
   }
 }
 
@@ -323,7 +329,7 @@ SearchBox.EventType = {
   // Dispatched when the text in the search box is changed.
   TEXT_CHANGE: 'textchange',
   // Dispatched when the item in the auto complete list is selected.
-  ITEM_SELECT: 'itemselect'
+  ITEM_SELECT: 'itemselect',
 };
 
 /**

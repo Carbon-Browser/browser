@@ -7,14 +7,16 @@
 #include "base/command_line.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/media/webrtc/desktop_media_list.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
+#include "chrome/common/chrome_switches.h"
 #include "chrome/test/base/fake_profile_manager.h"
 #include "chrome/test/base/scoped_testing_local_state.h"
 #include "chrome/test/base/test_browser_window.h"
@@ -41,18 +43,16 @@ using testing::StrictMock;
 
 namespace {
 
-const base::TimeDelta kUpdatePeriod = base::TimeDelta::FromMilliseconds(1000);
+const base::TimeDelta kUpdatePeriod = base::Milliseconds(1000);
 
 class MockObserver : public DesktopMediaListObserver {
  public:
-  MOCK_METHOD2(OnSourceAdded, void(DesktopMediaList* list, int index));
-  MOCK_METHOD2(OnSourceRemoved, void(DesktopMediaList* list, int index));
-  MOCK_METHOD3(OnSourceMoved,
-               void(DesktopMediaList* list, int old_index, int new_index));
-  MOCK_METHOD2(OnSourceNameChanged, void(DesktopMediaList* list, int index));
-  MOCK_METHOD2(OnSourceThumbnailChanged,
-               void(DesktopMediaList* list, int index));
-  MOCK_METHOD1(OnAllSourcesFound, void(DesktopMediaList* list));
+  MOCK_METHOD1(OnSourceAdded, void(int index));
+  MOCK_METHOD1(OnSourceRemoved, void(int index));
+  MOCK_METHOD2(OnSourceMoved, void(int old_index, int new_index));
+  MOCK_METHOD1(OnSourceNameChanged, void(int index));
+  MOCK_METHOD1(OnSourceThumbnailChanged, void(int index));
+  MOCK_METHOD1(OnSourcePreviewChanged, void(size_t index));
 };
 
 }  // namespace
@@ -66,6 +66,11 @@ class CurrentTabDesktopMediaListTest : public testing::Test {
   CurrentTabDesktopMediaListTest()
       : local_state_(TestingBrowserProcess::GetGlobal()) {}
 
+  CurrentTabDesktopMediaListTest(const CurrentTabDesktopMediaListTest&) =
+      delete;
+  CurrentTabDesktopMediaListTest& operator=(
+      const CurrentTabDesktopMediaListTest&) = delete;
+
   void SetUp() override {
     rvh_test_enabler_ = std::make_unique<content::RenderViewHostTestEnabler>();
 
@@ -73,8 +78,9 @@ class CurrentTabDesktopMediaListTest : public testing::Test {
     TestingBrowserProcess::GetGlobal()->SetProfileManager(
         std::make_unique<FakeProfileManager>(temp_dir_.GetPath()));
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
     base::CommandLine* cl = base::CommandLine::ForCurrentProcess();
+    cl->AppendSwitch(switches::kNoFirstRun);
+#if BUILDFLAG(IS_CHROMEOS_ASH)
     cl->AppendSwitch(switches::kTestType);
 #endif
 
@@ -158,7 +164,7 @@ class CurrentTabDesktopMediaListTest : public testing::Test {
   ScopedTestingLocalState local_state_;
 
   std::unique_ptr<content::RenderViewHostTestEnabler> rvh_test_enabler_;
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
   std::unique_ptr<Browser> browser_;
 
   StrictMock<MockObserver> observer_;
@@ -175,14 +181,12 @@ class CurrentTabDesktopMediaListTest : public testing::Test {
   ash::ScopedCrosSettingsTestHelper cros_settings_test_helper_;
   ash::ScopedTestUserManager test_user_manager_;
 #endif
-
-  DISALLOW_COPY_AND_ASSIGN(CurrentTabDesktopMediaListTest);
 };
 
 TEST_F(CurrentTabDesktopMediaListTest, UpdateSourcesListCalledWithCurrentTab) {
   constexpr size_t kMainTab = 3;
-  EXPECT_CALL(observer_, OnSourceAdded(_, 0)).Times(1);
-  EXPECT_CALL(observer_, OnSourceThumbnailChanged(_, 0))
+  EXPECT_CALL(observer_, OnSourceAdded(0)).Times(1);
+  EXPECT_CALL(observer_, OnSourceThumbnailChanged(0))
       .Times(1)
       .WillOnce(QuitMessageLoop(run_loop_.get()));
   list_ = CreateCurrentTabDesktopMediaList(all_web_contents_[kMainTab]);
@@ -193,15 +197,15 @@ TEST_F(CurrentTabDesktopMediaListTest,
        UpdateSourcesListNotCalledIfSourceAdded) {
   // Setup.
   constexpr size_t kMainTab = 3;
-  EXPECT_CALL(observer_, OnSourceAdded(_, 0)).Times(1);
-  EXPECT_CALL(observer_, OnSourceThumbnailChanged(_, 0))
+  EXPECT_CALL(observer_, OnSourceAdded(0)).Times(1);
+  EXPECT_CALL(observer_, OnSourceThumbnailChanged(0))
       .Times(1)
       .WillOnce(QuitMessageLoop(run_loop_.get()));
   list_ = CreateCurrentTabDesktopMediaList(all_web_contents_[kMainTab]);
   run_loop_->Run();
 
   // Test focus.
-  EXPECT_CALL(observer_, OnSourceAdded(_, _)).Times(0);  // Not called.
+  EXPECT_CALL(observer_, OnSourceAdded(_)).Times(0);  // Not called.
   CreateWebContents();
 }
 
@@ -209,30 +213,30 @@ TEST_F(CurrentTabDesktopMediaListTest,
        UpdateSourcesListNotCalledIfSourceRemoved) {
   // Setup.
   constexpr size_t kMainTab = 3;
-  EXPECT_CALL(observer_, OnSourceAdded(_, 0)).Times(1);
-  EXPECT_CALL(observer_, OnSourceThumbnailChanged(_, 0))
+  EXPECT_CALL(observer_, OnSourceAdded(0)).Times(1);
+  EXPECT_CALL(observer_, OnSourceThumbnailChanged(0))
       .Times(1)
       .WillOnce(QuitMessageLoop(run_loop_.get()));
   list_ = CreateCurrentTabDesktopMediaList(all_web_contents_[kMainTab]);
   run_loop_->Run();
 
   // Test focus.
-  EXPECT_CALL(observer_, OnSourceRemoved(_, _)).Times(0);  // Not called.
+  EXPECT_CALL(observer_, OnSourceRemoved(_)).Times(0);  // Not called.
   RemoveWebContents(all_web_contents_[kMainTab + 1]);
 }
 
 TEST_F(CurrentTabDesktopMediaListTest, OnSourceThumbnailCalledIfNewThumbnail) {
   // Setup.
   constexpr size_t kMainTab = 3;
-  EXPECT_CALL(observer_, OnSourceAdded(_, 0)).Times(1);
-  EXPECT_CALL(observer_, OnSourceThumbnailChanged(_, 0))
+  EXPECT_CALL(observer_, OnSourceAdded(0)).Times(1);
+  EXPECT_CALL(observer_, OnSourceThumbnailChanged(0))
       .Times(1)
       .WillOnce(QuitMessageLoop(run_loop_.get()));
   list_ = CreateCurrentTabDesktopMediaList(all_web_contents_[kMainTab]);
   Wait();
 
   // Test focus.
-  EXPECT_CALL(observer_, OnSourceThumbnailChanged(_, _))
+  EXPECT_CALL(observer_, OnSourceThumbnailChanged(_))
       .Times(1)
       .WillOnce(QuitMessageLoop(run_loop_.get()));
   ResetLastHash();  // Simulates the next frame being new.
@@ -244,15 +248,15 @@ TEST_F(CurrentTabDesktopMediaListTest,
        OnSourceThumbnailNotCalledIfIfOldThumbnail) {
   // Setup.
   constexpr size_t kMainTab = 3;
-  EXPECT_CALL(observer_, OnSourceAdded(_, 0)).Times(1);
-  EXPECT_CALL(observer_, OnSourceThumbnailChanged(_, 0))
+  EXPECT_CALL(observer_, OnSourceAdded(0)).Times(1);
+  EXPECT_CALL(observer_, OnSourceThumbnailChanged(0))
       .Times(1)
       .WillOnce(QuitMessageLoop(run_loop_.get()));
   list_ = CreateCurrentTabDesktopMediaList(all_web_contents_[kMainTab]);
   Wait();
 
   // Test focus.
-  EXPECT_CALL(observer_, OnSourceThumbnailChanged(_, _)).Times(0);
+  EXPECT_CALL(observer_, OnSourceThumbnailChanged(_)).Times(0);
   task_environment_.AdvanceClock(kUpdatePeriod);
 }
 
@@ -261,8 +265,8 @@ TEST_F(CurrentTabDesktopMediaListTest, CallingRefreshAfterTabFreedIsSafe) {
   WebContents* const web_contents = all_web_contents_[kMainTab];
 
   // Setup.
-  EXPECT_CALL(observer_, OnSourceAdded(_, 0)).Times(1);
-  EXPECT_CALL(observer_, OnSourceThumbnailChanged(_, 0))
+  EXPECT_CALL(observer_, OnSourceAdded(0)).Times(1);
+  EXPECT_CALL(observer_, OnSourceThumbnailChanged(0))
       .Times(1)
       .WillOnce(QuitMessageLoop(run_loop_.get()));
   list_ = CreateCurrentTabDesktopMediaList(web_contents);

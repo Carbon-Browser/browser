@@ -27,11 +27,11 @@
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include <utility>
 
+#include "ash/components/settings/cros_settings_names.h"
 #include "ash/constants/ash_switches.h"
 #include "base/metrics/histogram_macros.h"
 #include "chrome/browser/ash/settings/cros_settings.h"
 #include "chromeos/dbus/constants/dbus_switches.h"  // nogncheck
-#include "chromeos/settings/cros_settings_names.h"
 #include "components/permissions/permission_request.h"
 #include "components/permissions/permission_uma_util.h"
 #include "components/permissions/request_type.h"
@@ -39,7 +39,7 @@
 #include "components/user_prefs/user_prefs.h"
 #endif
 
-#if !(defined(OS_ANDROID) || defined(OS_WIN) || defined(OS_CHROMEOS))
+#if !(BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_CHROMEOS))
 #error This file currently only supports Chrome OS, Android and Windows.
 #endif
 
@@ -72,7 +72,7 @@ ProtectedMediaIdentifierPermissionContext::GetPermissionStatusInternal(
       permissions::PermissionContextBase::GetPermissionStatusInternal(
           render_frame_host, requesting_origin, embedding_origin);
   DCHECK(content_setting == CONTENT_SETTING_ALLOW ||
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
          content_setting == CONTENT_SETTING_ASK ||
 #endif
          content_setting == CONTENT_SETTING_BLOCK);
@@ -118,7 +118,7 @@ void ProtectedMediaIdentifierPermissionContext::UpdateTabContext(
           id.render_process_id(), id.render_frame_id());
   if (content_settings) {
     content_settings->OnProtectedMediaIdentifierPermissionSet(
-        requesting_frame.GetOrigin(), allowed);
+        requesting_frame.DeprecatedGetOriginAsURL(), allowed);
   }
 }
 
@@ -134,7 +134,7 @@ bool ProtectedMediaIdentifierPermissionContext::IsRestrictedToSecureOrigins()
 // across platforms.
 bool ProtectedMediaIdentifierPermissionContext::
     IsProtectedMediaIdentifierEnabled() const {
-#if BUILDFLAG(IS_CHROMEOS_ASH) || defined(OS_WIN)
+#if BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_WIN)
   Profile* profile = Profile::FromBrowserContext(browser_context());
   // Identifier is not allowed in incognito or guest mode.
   if (profile->IsOffTheRecord() || profile->IsGuestSession()) {
@@ -146,7 +146,7 @@ bool ProtectedMediaIdentifierPermissionContext::
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
   if (command_line->HasSwitch(chromeos::switches::kSystemDevMode) &&
-      !command_line->HasSwitch(chromeos::switches::kAllowRAInDevMode)) {
+      !command_line->HasSwitch(ash::switches::kAllowRAInDevMode)) {
     DVLOG(1) << "Protected media identifier disabled in dev mode.";
     return false;
   }
@@ -155,15 +155,14 @@ bool ProtectedMediaIdentifierPermissionContext::
   // settings.
   bool enabled_for_device = false;
   if (!ash::CrosSettings::Get()->GetBoolean(
-          chromeos::kAttestationForContentProtectionEnabled,
-          &enabled_for_device) ||
+          ash::kAttestationForContentProtectionEnabled, &enabled_for_device) ||
       !enabled_for_device) {
     DVLOG(1) << "Protected media identifier disabled by the user or by device "
                 "policy.";
     return false;
   }
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH) || defined(OS_WIN)
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_WIN)
 
   return true;
 }

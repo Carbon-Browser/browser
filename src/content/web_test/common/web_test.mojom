@@ -134,7 +134,8 @@ interface WebTestRenderThread {
   // 1) broadcasting change happening in one renderer to all other renderers, or
   // 2) sending accumulated changes to a single new renderer.
   ReplicateWebTestRuntimeFlagsChanges(
-      mojo_base.mojom.DictionaryValue changed_layout_test_runtime_flags);
+      mojo_base.mojom.DictionaryValue
+      changed_layout_test_runtime_flags);
 
   // Called on the renderer process with the main window's local main frame to
   // conclude the test. Used to bounce this request from another renderer.
@@ -156,7 +157,8 @@ interface WebTestRenderThread {
   ProcessWorkItem(WorkItem work_item);
 
   // Syncs the work queue states to the new renderer.
-  ReplicateWorkQueueStates(mojo_base.mojom.DictionaryValue work_queue_states);
+  ReplicateWorkQueueStates(
+      mojo_base.mojom.DictionaryValue work_queue_states);
 };
 
 // Web test messages sent from the renderer process to the browser. This
@@ -320,4 +322,15 @@ interface WebTestControlHost {
   // Notifies the browser that the work queue states changed.
   WorkQueueStatesChanged(
       mojo_base.mojom.DictionaryValue changed_work_queue_states);
+
+  // Set Accept Languages via RendererPreferences on the WebContents.
+  SetAcceptLanguages(string accept_languages);
+
+  // Enable Auto Resize mode. This will cause a layout of the content and
+  // the new size will be determined by the renderer after it dispatches
+  // the resize event.
+  EnableAutoResize(gfx.mojom.Size min_size, gfx.mojom.Size max_size);
+
+  // Disable Auto Resize mode, resizing the contents to `new_size`.
+  DisableAutoResize(gfx.mojom.Size new_size);
 };

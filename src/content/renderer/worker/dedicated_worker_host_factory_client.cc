@@ -41,8 +41,25 @@ DedicatedWorkerHostFactoryClient::~DedicatedWorkerHostFactoryClient() = default;
 void DedicatedWorkerHostFactoryClient::CreateWorkerHostDeprecated(
     const blink::DedicatedWorkerToken& dedicated_worker_token,
     const blink::WebURL& script_url,
-    base::OnceCallback<void(const network::CrossOriginEmbedderPolicy&)>
-        callback) {
+    CreateWorkerHostCallback callback) {
+  // The callback of mojom::CreateWorkerHost() requires mojo::PendingRemote as
+  // the second param, but the passed callback requires
+  // blink::CrossVariantMojoRemote. To bridge them, wrap the passed callback.
+  using MojoCreateWorkerHostCallback = base::OnceCallback<void(
+      const network::CrossOriginEmbedderPolicy&,
+      mojo::PendingRemote<blink::mojom::BackForwardCacheControllerHost>)>;
+  MojoCreateWorkerHostCallback adapter_callback = base::BindOnce(
+      [](CreateWorkerHostCallback callback,
+         const network::CrossOriginEmbedderPolicy& policy,
+         mojo::PendingRemote<blink::mojom::BackForwardCacheControllerHost>
+             back_forward_cache_controller_host) {
+        blink::CrossVariantMojoRemote<
+            blink::mojom::BackForwardCacheControllerHostInterfaceBase>
+            pending_remote = std::move(back_forward_cache_controller_host);
+        std::move(callback).Run(policy, std::move(pending_remote));
+      },
+      std::move(callback));
+
   DCHECK(!base::FeatureList::IsEnabled(blink::features::kPlzDedicatedWorker));
   mojo::PendingRemote<blink::mojom::BrowserInterfaceBroker>
       browser_interface_broker;
@@ -51,7 +68,7 @@ void DedicatedWorkerHostFactoryClient::CreateWorkerHostDeprecated(
       dedicated_worker_token, script_url,
       browser_interface_broker.InitWithNewPipeAndPassReceiver(),
       dedicated_worker_host.InitWithNewPipeAndPassReceiver(),
-      std::move(callback));
+      std::move(adapter_callback));
   OnWorkerHostCreated(std::move(browser_interface_broker),
                       std::move(dedicated_worker_host));
 }
@@ -83,8 +100,7 @@ DedicatedWorkerHostFactoryClient::CloneWorkerFetchContext(
             ->CloneForNestedWorker(
                 service_worker_provider_context_.get(),
                 subresource_loader_factory_bundle_->Clone(),
-                subresource_loader_factory_bundle_
-                    ->CloneWithoutAppCacheFactory(),
+                subresource_loader_factory_bundle_->Clone(),
                 std::move(pending_subresource_loader_updater_),
                 std::move(task_runner));
   } else {
@@ -119,7 +135,7 @@ DedicatedWorkerHostFactoryClient::CreateWorkerFetchContext(
               service_worker_provider_context_.get(), renderer_preference,
               std::move(watcher_receiver),
               subresource_loader_factory_bundle_->Clone(),
-              subresource_loader_factory_bundle_->CloneWithoutAppCacheFactory(),
+              subresource_loader_factory_bundle_->Clone(),
               std::move(pending_subresource_loader_updater_),
               web_cors_exempt_header_list,
               std::move(pending_resource_load_info_notifier));
@@ -143,7 +159,9 @@ void DedicatedWorkerHostFactoryClient::OnScriptLoadStarted(
         pending_subresource_loader_factory_bundle,
     mojo::PendingReceiver<blink::mojom::SubresourceLoaderUpdater>
         subresource_loader_updater,
-    blink::mojom::ControllerServiceWorkerInfoPtr controller_info) {
+    blink::mojom::ControllerServiceWorkerInfoPtr controller_info,
+    mojo::PendingRemote<blink::mojom::BackForwardCacheControllerHost>
+        back_forward_cache_controller_host) {
   DCHECK(base::FeatureList::IsEnabled(blink::features::kPlzDedicatedWorker));
   DCHECK(main_script_load_params);
   DCHECK(pending_subresource_loader_factory_bundle);
@@ -184,7 +202,8 @@ void DedicatedWorkerHostFactoryClient::OnScriptLoadStarted(
       main_script_load_params->redirect_infos;
   worker_main_script_load_params->url_loader_client_endpoints =
       std::move(main_script_load_params->url_loader_client_endpoints);
-  worker_->OnScriptLoadStarted(std::move(worker_main_script_load_params));
+  worker_->OnScriptLoadStarted(std::move(worker_main_script_load_params),
+                               std::move(back_forward_cache_controller_host));
 }
 
 void DedicatedWorkerHostFactoryClient::OnScriptLoadStartFailed() {

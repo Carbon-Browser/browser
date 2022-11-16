@@ -45,7 +45,6 @@ class FakeSendTabToSelfModel : public send_tab_to_self::TestSendTabToSelfModel {
   const SendTabToSelfEntry* AddEntry(
       const GURL& url,
       const std::string& title,
-      base::Time navigation_time,
       const std::string& target_device_cache_guid) override {
     last_entry_ = SendTabToSelfEntry::FromRequiredFields(
         "test-guid", url, target_device_cache_guid);
@@ -159,19 +158,6 @@ class SendTabToSelfBrowserAgentTest : public PlatformTest {
   // All infobar managers created during tests, for ease of clean-up.
   std::vector<infobars::InfoBarManager*> infobar_managers_;
 };
-
-TEST_F(SendTabToSelfBrowserAgentTest, TestSimpleSendCurrentTab) {
-  AppendNewWebState(GURL("http://www.test.com/test-1"));
-  agent_->SendCurrentTabToDevice(@"device1");
-  EXPECT_EQ(GURL("http://www.test.com/test-1"),
-            model_->GetLastEntry()->GetURL());
-  EXPECT_EQ("device1", model_->GetLastEntry()->GetTargetDeviceSyncCacheGuid());
-}
-
-TEST_F(SendTabToSelfBrowserAgentTest, TestNoActiveWebState) {
-  agent_->SendCurrentTabToDevice(@"device1");
-  EXPECT_EQ(nullptr, model_->GetLastEntry());
-}
 
 TEST_F(SendTabToSelfBrowserAgentTest, TestRemoteAddSimple) {
   web::WebState* web_state = AppendNewWebState(GURL("http://www.blank.com"));

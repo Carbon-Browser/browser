@@ -15,6 +15,8 @@
 #include <vector>
 
 #include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr.h"
+#include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -136,6 +138,8 @@ class DelegatedInkPointRendererGpu {
     NOTREACHED();
     return kMaximumNumberOfPointerIds;
   }
+
+  void SetNeedsDcompPropertiesUpdate() const { NOTREACHED(); }
 };
 
 // This class will call the OS delegated ink trail APIs when they become
@@ -247,9 +251,11 @@ class DelegatedInkPointRendererGpu<InkTrailDevice,
 
   void SetDelegatedInkTrailStartPoint(
       std::unique_ptr<gfx::DelegatedInkMetadata> metadata) {
-    TRACE_EVENT1("gpu",
-                 "DelegatedInkPointRendererGpu::SetDelegatedInkTrailStartPoint",
-                 "metadata", metadata->ToString());
+    TRACE_EVENT_WITH_FLOW1(
+        "delegated_ink_trails",
+        "DelegatedInkPointRendererGpu::SetDelegatedInkTrailStartPoint",
+        TRACE_ID_GLOBAL(metadata_->trace_id()), TRACE_EVENT_FLAG_FLOW_IN,
+        "metadata", metadata_->ToString());
 
     DCHECK(ink_visual_);
     DCHECK(delegated_ink_trail_);
@@ -261,14 +267,18 @@ class DelegatedInkPointRendererGpu<InkTrailDevice,
     //     |pointer_id_| exist.
     //  2. The current |metadata_| and |metadata| both have the same color, so
     //     the color of the trail does not need to change.
+    //  3. |needs_dcomp_properties_update_| isn't forcing an update of the DCOMP
+    //     resources: |ink_visual_|, |delegated_ink_trail_|. This happens after
+    //     a swap chain recreation.
     // (continued below)
-    if (metadata_ && metadata->color() == metadata_->color() && pointer_id_) {
+    if (!needs_dcomp_properties_update_ && metadata_ &&
+        metadata->color() == metadata_->color() && pointer_id_) {
       DelegatedInkPointTokenMap& token_map =
           delegated_ink_points_[pointer_id_.value()];
       auto point_matching_metadata_it = token_map.find(
           gfx::DelegatedInkPoint(metadata->point(), metadata->timestamp()));
       // (continued from above)
-      //  3. We have a DelegatedInkPoint with a timestamp equal to or greater
+      //  4. We have a DelegatedInkPoint with a timestamp equal to or greater
       //     than |metadata|'s timestamp in the token map associated with
       //     |pointer_id_|.
       // (continued below)
@@ -277,10 +287,10 @@ class DelegatedInkPointRendererGpu<InkTrailDevice,
             point_matching_metadata_it->first;
         absl::optional<unsigned int> token = point_matching_metadata_it->second;
         // (continued from above)
-        //  4. The DelegatedInkPoint retrieved above matches |metadata| - this
+        //  5. The DelegatedInkPoint retrieved above matches |metadata| - this
         //     means that the timestamp is an exact match and the point is
         //     acceptably close.
-        //  5. The token associated with this DelegatedInkPoint is valid,
+        //  6. The token associated with this DelegatedInkPoint is valid,
         //     meaning that the point has previously been drawn as part of a
         //     trail.
         //
@@ -295,7 +305,7 @@ class DelegatedInkPointRendererGpu<InkTrailDevice,
               "DelegatedInkPointRendererGpu::SetDelegatedInkTrailStartPoint - "
               "Failed to remove trail points.");
           if (!remove_trail_points_failed &&
-              UpdateVisualClip(metadata->presentation_area())) {
+              UpdateVisualClip(metadata->presentation_area(), false)) {
             // Remove all points up to and including the point that matches
             // |metadata|. No need to hold on to the point that matches metadata
             // because we've already added it to AddTrailPoints previously, and
@@ -309,7 +319,8 @@ class DelegatedInkPointRendererGpu<InkTrailDevice,
       }
     }
 
-    if (!UpdateVisualClip(metadata->presentation_area()))
+    if (!UpdateVisualClip(metadata->presentation_area(),
+                          needs_dcomp_properties_update_))
       return;
 
     D2D1_COLOR_F d2d1_color;
@@ -328,11 +339,16 @@ class DelegatedInkPointRendererGpu<InkTrailDevice,
     wait_for_new_trail_to_draw_ = false;
     metadata_ = std::move(metadata);
     DrawSavedTrailPoints();
+    needs_dcomp_properties_update_ = false;
   }
 
   void StoreDelegatedInkPoint(const gfx::DelegatedInkPoint& point) override {
-    TRACE_EVENT1("gpu", "DelegatedInkPointRendererGpu::StoreDelegatedInkPoint",
-                 "delegated ink point", point.ToString());
+    TRACE_EVENT_WITH_FLOW1(
+        "delegated_ink_trails",
+        "DelegatedInkPointRendererGpu::StoreDelegatedInkPoint",
+        TRACE_ID_GLOBAL(point.trace_id()),
+        TRACE_EVENT_FLAG_FLOW_IN | TRACE_EVENT_FLAG_FLOW_OUT, "point",
+        point.ToString());
 
     const int32_t pointer_id = point.pointer_id();
 
@@ -412,6 +428,15 @@ class DelegatedInkPointRendererGpu<InkTrailDevice,
     return kMaximumNumberOfPointerIds;
   }
 
+  void SetNeedsDcompPropertiesUpdate() {
+    // This should be set from an external event that invalidates our DCOMP
+    // resources: |ink_visual_|, |delegated_ink_trail_|. This will be checked in
+    // the next call to |SetDelegatedInkTrailStartPoint| - the entry point for
+    // using these resources to render a new trail. That code optimizes based on
+    // the consideration that properties persist after being set.
+    needs_dcomp_properties_update_ = true;
+  }
+
  private:
   // Note that this returns true if the HRESULT is anything other than S_OK,
   // meaning that it returns true when an event is traced (because of a
@@ -420,12 +445,15 @@ class DelegatedInkPointRendererGpu<InkTrailDevice,
     if (SUCCEEDED(hr))
       return false;
 
-    TRACE_EVENT_INSTANT1("gpu", name, TRACE_EVENT_SCOPE_THREAD, "hr", hr);
+    TRACE_EVENT_INSTANT1("delegated_ink_trails", name, TRACE_EVENT_SCOPE_THREAD,
+                         "hr", hr);
     return true;
   }
 
-  bool UpdateVisualClip(const gfx::RectF& new_presentation_area) {
-    if (metadata_ && metadata_->presentation_area() == new_presentation_area)
+  bool UpdateVisualClip(const gfx::RectF& new_presentation_area,
+                        bool force_update) {
+    if (!force_update && metadata_ &&
+        metadata_->presentation_area() == new_presentation_area)
       return true;
 
     // If (0,0) of a visual is clipped out, it can result in delegated ink not
@@ -527,7 +555,7 @@ class DelegatedInkPointRendererGpu<InkTrailDevice,
 
   void DrawSavedTrailPoints() {
     DCHECK(metadata_);
-    TRACE_EVENT0("gpu", "DrawSavedTrailPoints");
+    TRACE_EVENT0("delegated_ink_trails", "DrawSavedTrailPoints");
 
     // Remove all points that have a timestamp earlier than |metadata_|'s, since
     // we know that we won't need to draw them. This is subtly different than
@@ -569,7 +597,8 @@ class DelegatedInkPointRendererGpu<InkTrailDevice,
         }
       }
     } else {
-      TRACE_EVENT_INSTANT0("gpu", "DrawSavedTrailPoints failed - no pointer id",
+      TRACE_EVENT_INSTANT0("delegated_ink_trails",
+                           "DrawSavedTrailPoints failed - no pointer id",
                            TRACE_EVENT_SCOPE_THREAD);
     }
   }
@@ -609,10 +638,12 @@ class DelegatedInkPointRendererGpu<InkTrailDevice,
       return false;
     }
 
-    TRACE_EVENT_INSTANT1("gpu",
-                         "DelegatedInkPointRendererGpu::DrawDelegatedInkPoint "
-                         "- Point added to trail",
-                         TRACE_EVENT_SCOPE_THREAD, "point", point.ToString());
+    TRACE_EVENT_WITH_FLOW1(
+        "delegated_ink_trails",
+        "DelegatedInkPointRendererGpu::DrawDelegatedInkPoint "
+        "- Point added to trail",
+        TRACE_ID_GLOBAL(point.trace_id()), TRACE_EVENT_FLAG_FLOW_IN, "point",
+        point.ToString());
     delegated_ink_points_[point.pointer_id()][point] = token;
     return true;
   }
@@ -628,8 +659,8 @@ class DelegatedInkPointRendererGpu<InkTrailDevice,
   // Remember the dcomp device and swap chain used to create
   // |delegated_ink_trail_| and |ink_visual_| so that we can avoid recreating
   // them when it isn't necessary.
-  IDCompositionDevice2* dcomp_device_ = nullptr;
-  IDXGISwapChain1* swap_chain_ = nullptr;
+  raw_ptr<IDCompositionDevice2> dcomp_device_ = nullptr;
+  raw_ptr<IDXGISwapChain1> swap_chain_ = nullptr;
 
   // The most recent metadata received. The metadata marks the last point of
   // the app rendered stroke, which corresponds to the first point of the
@@ -665,6 +696,11 @@ class DelegatedInkPointRendererGpu<InkTrailDevice,
   // new trail is started and we try to draw everything in
   // |delegated_ink_points_|.
   bool wait_for_new_trail_to_draw_ = true;
+
+  // When the visual tree was updated, all properties we've set on DCOMP are
+  // outdated, and need to be re-set (i.e. from |ink_visual_| and
+  // |delegated_ink_trail_|). This is done at |SetDelegatedInkTrailStartPoint|.
+  bool needs_dcomp_properties_update_ = false;
 
   mojo::Receiver<gfx::mojom::DelegatedInkPointRenderer> receiver_{this};
 };

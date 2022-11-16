@@ -13,11 +13,13 @@
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/resource/resource_bundle.h"
+#include "ui/color/color_id.h"
+#include "ui/color/color_provider.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/color_palette.h"
 #include "ui/gfx/color_utils.h"
+#include "ui/gfx/geometry/skia_conversions.h"
 #include "ui/gfx/paint_vector_icon.h"
-#include "ui/gfx/skia_util.h"
 #include "ui/native_theme/native_theme.h"
 #include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/animation/ink_drop.h"
@@ -137,6 +139,10 @@ void Checkbox::SetAssociatedLabel(View* labelling_view) {
       node_data.GetString16Attribute(ax::mojom::StringAttribute::kName));
 }
 
+void Checkbox::SetCheckedIconImageColor(SkColor color) {
+  checked_icon_image_color_ = color;
+}
+
 void Checkbox::GetAccessibleNodeData(ui::AXNodeData* node_data) {
   LabelButton::GetAccessibleNodeData(node_data);
   node_data->role = ax::mojom::Role::kCheckBox;
@@ -177,16 +183,20 @@ void Checkbox::OnThemeChanged() {
 SkPath Checkbox::GetFocusRingPath() const {
   SkPath path;
   gfx::Rect bounds = image()->GetMirroredContentsBounds();
-  bounds.Inset(1, 1);
+  bounds.Inset(1);
   path.addRect(RectToSkRect(bounds));
   return path;
 }
 
 SkColor Checkbox::GetIconImageColor(int icon_state) const {
-  const SkColor active_color = GetNativeTheme()->GetSystemColor(
-      (icon_state & IconState::CHECKED)
-          ? ui::NativeTheme::kColorId_ButtonCheckedColor
-          : ui::NativeTheme::kColorId_ButtonUncheckedColor);
+  SkColor active_color = GetColorProvider()->GetColor(
+      (icon_state & IconState::CHECKED) ? ui::kColorButtonForegroundChecked
+                                        : ui::kColorButtonForegroundUnchecked);
+
+  // Use the overridden checked icon image color instead if set.
+  if (icon_state & IconState::CHECKED && checked_icon_image_color_.has_value())
+    active_color = checked_icon_image_color_.value();
+
   return (icon_state & IconState::ENABLED)
              ? active_color
              : color_utils::BlendTowardMaxContrast(active_color,

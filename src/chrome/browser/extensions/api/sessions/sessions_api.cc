@@ -19,6 +19,7 @@
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/extensions/api/sessions/session_id.h"
 #include "chrome/browser/extensions/api/tab_groups/tab_groups_util.h"
+#include "chrome/browser/extensions/api/tabs/tabs_constants.h"
 #include "chrome/browser/extensions/api/tabs/windows_util.h"
 #include "chrome/browser/extensions/extension_tab_util.h"
 #include "chrome/browser/extensions/window_controller.h"
@@ -234,6 +235,7 @@ ExtensionFunction::ResponseAction SessionsGetRecentlyClosedFunction::Run() {
   // List of entries. They are ordered from most to least recent.
   // We prune the list to contain max 25 entries at any time and removes
   // uninteresting entries.
+  int counter = 0;
   for (const auto& entry : tab_restore_service->entries()) {
     // TODO(crbug.com/1192309): Support group entries in the Sessions API,
     // rather than sharding the group out into individual tabs.
@@ -241,9 +243,15 @@ ExtensionFunction::ResponseAction SessionsGetRecentlyClosedFunction::Run() {
       auto& group =
           static_cast<const sessions::TabRestoreService::Group&>(*entry);
       for (const auto& tab : group.tabs)
-        result.push_back(std::move(*CreateSessionModel(*tab)));
+        if (counter++ < max_results)
+          result.push_back(std::move(*CreateSessionModel(*tab)));
+        else
+          break;
     } else {
-      result.push_back(std::move(*CreateSessionModel(*entry)));
+      if (counter++ < max_results)
+        result.push_back(std::move(*CreateSessionModel(*entry)));
+      else
+        break;
     }
   }
 
@@ -598,6 +606,9 @@ ExtensionFunction::ResponseAction SessionsRestoreFunction::Run() {
   if (profile != profile->GetOriginalProfile())
     return RespondNow(Error(kRestoreInIncognitoError));
 
+  if (!ExtensionTabUtil::IsTabStripEditable())
+    return RespondNow(Error(tabs_constants::kTabStripNotEditableError));
+
   if (!params->session_id)
     return RespondNow(RestoreMostRecentlyClosed(browser));
 
@@ -630,7 +641,7 @@ void SessionsEventRouter::TabRestoreServiceChanged(
     sessions::TabRestoreService* service) {
   EventRouter::Get(profile_)->BroadcastEvent(std::make_unique<Event>(
       events::SESSIONS_ON_CHANGED, api::sessions::OnChanged::kEventName,
-      std::vector<base::Value>()));
+      base::Value::List()));
 }
 
 void SessionsEventRouter::TabRestoreServiceDestroyed(

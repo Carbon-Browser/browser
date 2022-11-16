@@ -9,6 +9,7 @@
 #include "base/bind.h"
 #include "base/debug/alias.h"
 #include "base/strings/utf_string_conversions.h"
+#include "build/build_config.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/base/class_property.h"
@@ -171,6 +172,10 @@ std::u16string Button::GetTooltipText() const {
   return tooltip_text_;
 }
 
+void Button::SetCallback(PressedCallback callback) {
+  callback_ = std::move(callback);
+}
+
 void Button::SetAccessibleName(const std::u16string& name) {
   if (name == accessible_name_)
     return;
@@ -216,6 +221,17 @@ void Button::SetState(ButtonState state) {
   OnPropertyChanged(&state_, kPropertyEffectsPaint);
 }
 
+int Button::GetTag() const {
+  return tag_;
+}
+
+void Button::SetTag(int tag) {
+  if (tag_ == tag)
+    return;
+  tag_ = tag;
+  OnPropertyChanged(&tag_, kPropertyEffectsNone);
+}
+
 void Button::StartThrobbing(int cycles_til_stop) {
   if (!animate_on_state_change_)
     return;
@@ -248,7 +264,7 @@ int Button::GetTriggerableEventFlags() const {
 void Button::SetRequestFocusOnPress(bool value) {
 // On Mac, buttons should not request focus on a mouse press. Hence keep the
 // default value i.e. false.
-#if !defined(OS_MAC)
+#if !BUILDFLAG(IS_MAC)
   if (request_focus_on_press_ == value)
     return;
   request_focus_on_press_ = value;
@@ -592,7 +608,7 @@ Button::Button(PressedCallback callback)
 
   SetFocusBehavior(PlatformStyle::kDefaultFocusBehavior);
   SetProperty(kIsButtonProperty, true);
-  hover_animation_.SetSlideDuration(base::TimeDelta::FromMilliseconds(150));
+  hover_animation_.SetSlideDuration(base::Milliseconds(150));
   SetInstallFocusRingOnFocus(true);
   button_controller_ = std::make_unique<ButtonController>(
       this, std::make_unique<DefaultButtonControllerDelegate>(this));
@@ -709,6 +725,7 @@ ADD_PROPERTY_METADATA(bool, HideInkDropWhenShowingContextMenu)
 ADD_PROPERTY_METADATA(bool, InstallFocusRingOnFocus)
 ADD_PROPERTY_METADATA(bool, RequestFocusOnPress)
 ADD_PROPERTY_METADATA(ButtonState, State)
+ADD_PROPERTY_METADATA(int, Tag)
 ADD_PROPERTY_METADATA(std::u16string, TooltipText)
 ADD_PROPERTY_METADATA(int, TriggerableEventFlags)
 END_METADATA

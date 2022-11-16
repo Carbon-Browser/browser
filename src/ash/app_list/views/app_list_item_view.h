@@ -9,6 +9,7 @@
 #include <string>
 #include <utility>
 
+#include "ash/app_list/grid_index.h"
 #include "ash/app_list/model/app_icon_load_helper.h"
 #include "ash/app_list/model/app_list_item_observer.h"
 #include "ash/ash_export.h"
@@ -35,13 +36,14 @@ class Label;
 
 namespace ash {
 
+class AppsGridContextMenu;
 class AppListConfig;
 class AppListItem;
 class AppListMenuModelAdapter;
 class AppListViewDelegate;
 
 namespace test {
-class AppsGridViewDragAndDropTestBase;
+class AppsGridViewTest;
 class AppListMainViewTest;
 }  // namespace test
 
@@ -54,6 +56,15 @@ class ASH_EXPORT AppListItemView : public views::Button,
                                    public ui::ImplicitAnimationObserver {
  public:
   METADATA_HEADER(AppListItemView);
+
+  // The types of context where the app list item view is shown.
+  enum class Context {
+    // The item is shown in an AppsGridView.
+    kAppsGridView,
+
+    // The item is shown in the RecentAppsView.
+    kRecentAppsView
+  };
 
   // The parent apps grid (AppsGridView) or a stub. Not named "Delegate" to
   // differentiate it from AppListViewDelegate.
@@ -98,24 +109,32 @@ class ASH_EXPORT AppListItemView : public views::Button,
     // press/click/return key.
     virtual void OnAppListItemViewActivated(AppListItemView* pressed_item_view,
                                             const ui::Event& event) = 0;
-
-    // TODO(crbug.com/1211592): Eliminate this method.
-    virtual const AppListConfig& GetAppListConfig() const = 0;
   };
 
-  AppListItemView(GridDelegate* grid_delegate,
+  AppListItemView(const AppListConfig* app_list_config,
+                  GridDelegate* grid_delegate,
                   AppListItem* item,
-                  AppListViewDelegate* view_delegate);
+                  AppListViewDelegate* view_delegate,
+                  Context context);
   AppListItemView(const AppListItemView&) = delete;
   AppListItemView& operator=(const AppListItemView&) = delete;
   ~AppListItemView() override;
 
+  // Initializes icon loader. Should be called after the view has been added to
+  // the apps grid view model - otherwise, if icon gets updated synchronously,
+  // it may update the item metadata before the view gets added to the view
+  // model. If the metadata update causes a position change, attempts to move
+  // the item in the view model could crash.
+  void InitializeIconLoader();
+
+  // Sets the app list config that should be used to size the app list icon, and
+  // margins within the app list item view. The owner should ensure the
+  // `AppListItemView` does not outlive the object referenced by
+  // `app_list_config_`.
+  void UpdateAppListConfig(const AppListConfig* app_list_config);
+
   // Sets the icon of this image.
   void SetIcon(const gfx::ImageSkia& icon);
-
-  // Updates the current item icon to match the current model and app list
-  // config state.
-  void RefreshIcon();
 
   void SetItemName(const std::u16string& display_name,
                    const std::u16string& full_name);
@@ -131,9 +150,8 @@ class ASH_EXPORT AppListItemView : public views::Button,
   // Sets focus without a11y announcements or focus ring.
   void SilentlyRequestFocus();
 
-  // Helper for getting current app list config from the parents in the app list
-  // view hierarchy.
-  const AppListConfig& GetAppListConfig() const;
+  // Ensures that the item view is selected by `grid_delegate_`.
+  void EnsureSelected();
 
   AppListItem* item() const { return item_weak_; }
 
@@ -163,7 +181,7 @@ class ASH_EXPORT AppListItemView : public views::Button,
   // and given |icon_size| and the |icon_scale| if the icon was scaled from the
   // original display size.
   static gfx::Rect GetIconBoundsForTargetViewBounds(
-      const AppListConfig& config,
+      const AppListConfig* config,
       const gfx::Rect& target_bounds,
       const gfx::Size& icon_size,
       float icon_scale);
@@ -172,7 +190,7 @@ class ASH_EXPORT AppListItemView : public views::Button,
   // view and given |title_size| and the |icon_scale| if the icon was scaled
   // from the original display size.
   static gfx::Rect GetTitleBoundsForTargetViewBounds(
-      const AppListConfig& config,
+      const AppListConfig* config,
       const gfx::Rect& target_bounds,
       const gfx::Size& title_size,
       float icon_scale);
@@ -202,14 +220,41 @@ class ASH_EXPORT AppListItemView : public views::Button,
 
   bool FireTouchDragTimerForTest();
 
+  // Whether the context menu on a non-folder app item view is showing.
+  bool IsShowingAppMenu() const;
+
   bool is_folder() const { return is_folder_; }
 
   bool IsNotificationIndicatorShownForTest() const;
   GridDelegate* grid_delegate_for_test() { return grid_delegate_; }
 
+  AppListMenuModelAdapter* item_menu_model_adapter() const {
+    return item_menu_model_adapter_.get();
+  }
+  AppsGridContextMenu* context_menu_for_folder() const {
+    return context_menu_for_folder_.get();
+  }
+
+  // Sets the callback which will run after the context menu is shown.
+  void SetContextMenuShownCallbackForTest(base::RepeatingClosure closure);
+
+  // Returns the bounds that would be used for the title if there was no blue
+  // dot for new install.
+  gfx::Rect GetDefaultTitleBoundsForTest();
+
+  // Sets the most recent grid index for this item view. Also sets
+  // `has_pending_row_change_` based on whether the grid index change is
+  // considered a row change for the purposes of animating item views between
+  // rows.
+  void SetMostRecentGridIndex(GridIndex new_grid_index, int columns);
+
+  bool has_pending_row_change() { return has_pending_row_change_; }
+  void reset_has_pending_row_change() { has_pending_row_change_ = false; }
+
  private:
-  friend class test::AppsGridViewDragAndDropTestBase;
-  friend class test::AppListMainViewTest;
+  friend class AppListItemViewTest;
+  friend class AppListMainViewTest;
+  friend class test::AppsGridViewTest;
 
   class IconImageView;
   class AppNotificationIndicatorView;
@@ -317,6 +362,7 @@ class ASH_EXPORT AppListItemView : public views::Button,
   void ItemNameChanged() override;
   void ItemBadgeVisibilityChanged() override;
   void ItemBadgeColorChanged() override;
+  void ItemIsNewInstallChanged() override;
   void ItemBeingDestroyed() override;
 
   // ui::ImplicitAnimationObserver:
@@ -335,6 +381,11 @@ class ASH_EXPORT AppListItemView : public views::Button,
   // normal size icon.
   gfx::Transform GetScaleTransform(float icon_scale);
 
+  // The app list config used to layout this view. The initial values is set
+  // during view construction, but can be changed by calling
+  // `UpdateAppListConfig()`.
+  const AppListConfig* app_list_config_;
+
   const bool is_folder_;
 
   // Whether context menu options have been requested. Prevents multiple
@@ -350,10 +401,18 @@ class ASH_EXPORT AppListItemView : public views::Button,
   // AppListControllerImpl by another name.
   AppListViewDelegate* const view_delegate_;
 
-  IconImageView* icon_ = nullptr;               // Strongly typed child view.
-  views::Label* title_ = nullptr;               // Strongly typed child view.
+  IconImageView* icon_ = nullptr;  // Strongly typed child view.
+  views::Label* title_ = nullptr;  // Strongly typed child view.
 
-  std::unique_ptr<AppListMenuModelAdapter> context_menu_;
+  // Draws a dot next to the title for newly installed apps. Only exists when
+  // ProductivityLauncher is enabled.
+  views::View* new_install_dot_ = nullptr;
+
+  // The context menu model adapter used for app item view.
+  std::unique_ptr<AppListMenuModelAdapter> item_menu_model_adapter_;
+
+  // The context menu controller used for folder item view.
+  std::unique_ptr<AppsGridContextMenu> context_menu_for_folder_;
 
   UIState ui_state_ = UI_STATE_NORMAL;
 
@@ -376,11 +435,11 @@ class ASH_EXPORT AppListItemView : public views::Button,
   // The radius of preview circle for non-folder item.
   int preview_circle_radius_ = 0;
 
-  // Whether |context_menu_| was cancelled as the result of a continuous drag
-  // gesture.
+  // Whether `item_menu_model_adapter_` was cancelled as the result of a
+  // continuous drag gesture.
   bool menu_close_initiated_from_drag_ = false;
 
-  // Whether |context_menu_| was shown via key event.
+  // Whether `item_menu_model_adapter_` was shown via key event.
   bool menu_show_initiated_from_key_ = false;
 
   std::u16string tooltip_text_;
@@ -389,9 +448,6 @@ class ASH_EXPORT AppListItemView : public views::Button,
   base::OneShotTimer mouse_drag_timer_;
   // A timer to defer showing drag UI when the app item is touch pressed.
   base::OneShotTimer touch_drag_timer_;
-
-  // The shadow margins added to the app list item title.
-  gfx::Insets title_shadow_margins_;
 
   // The bitmap image for this app list item.
   gfx::ImageSkia icon_image_;
@@ -406,11 +462,21 @@ class ASH_EXPORT AppListItemView : public views::Button,
   // active notification.
   AppNotificationIndicatorView* notification_indicator_ = nullptr;
 
-  // Whether the notification indicator flag is enabled.
-  const bool is_notification_indicator_enabled_;
+  // Indicates the context in which this view is shown.
+  const Context context_;
 
   // Helper to trigger icon load.
   absl::optional<AppIconLoadHelper> icon_load_helper_;
+
+  // Called when the context menu is shown.
+  base::RepeatingClosure context_menu_shown_callback_;
+
+  // The most recent location of this item within the app grid.
+  GridIndex most_recent_grid_index_;
+
+  // Whether the last grid index update was a change in position between rows.
+  // Used to determine whether the animation between rows should be used.
+  bool has_pending_row_change_ = false;
 
   base::WeakPtrFactory<AppListItemView> weak_ptr_factory_{this};
 };

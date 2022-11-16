@@ -6,22 +6,22 @@
 
 #include <utility>
 
+#include "ash/components/cryptohome/cryptohome_parameters.h"
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/debug/dump_without_crashing.h"
 #include "base/logging.h"
 #include "base/sequence_checker.h"
-#include "base/sequenced_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/ash/crosapi/browser_manager.h"
 #include "chrome/browser/ash/policy/core/cached_policy_key_loader.h"
 #include "chrome/browser/ash/policy/value_validation/onc_user_policy_value_validator.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
-#include "chromeos/cryptohome/cryptohome_parameters.h"
 #include "components/policy/proto/device_management_backend.pb.h"
 #include "google_apis/gaia/gaia_auth_util.h"
 
 using RetrievePolicyResponseType =
-    chromeos::SessionManagerClient::RetrievePolicyResponseType;
+    ash::SessionManagerClient::RetrievePolicyResponseType;
 
 namespace em = enterprise_management;
 
@@ -37,8 +37,8 @@ std::string ExtractDomain(const std::string& username) {
 }  // namespace
 
 UserCloudPolicyStoreAsh::UserCloudPolicyStoreAsh(
-    chromeos::CryptohomeMiscClient* cryptohome_misc_client,
-    chromeos::SessionManagerClient* session_manager_client,
+    ash::CryptohomeMiscClient* cryptohome_misc_client,
+    ash::SessionManagerClient* session_manager_client,
     scoped_refptr<base::SequencedTaskRunner> background_task_runner,
     const AccountId& account_id,
     const base::FilePath& user_policy_key_dir,
@@ -225,8 +225,8 @@ void UserCloudPolicyStoreAsh::OnPolicyRetrieved(
   if (policy_blob.empty()) {
     // session_manager doesn't have policy. Adjust internal state and notify
     // the world about the policy update.
+    ResetPolicy();
     policy_map_.Clear();
-    policy_.reset();
     policy_signature_public_key_.clear();
     NotifyStoreLoaded();
     return;
@@ -267,8 +267,8 @@ void UserCloudPolicyStoreAsh::OnRetrievedPolicyValidated(
     return;
   }
 
-  policy_fetch_response_ = std::move(validator->policy());
-  InstallPolicy(std::move(validator->policy_data()),
+  InstallPolicy(std::move(validator->policy()),
+                std::move(validator->policy_data()),
                 std::move(validator->payload()),
                 cached_policy_key_loader_->cached_policy_key());
   status_ = STATUS_OK;

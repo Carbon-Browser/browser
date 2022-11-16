@@ -101,6 +101,14 @@ std::string ShellExtensionsBrowserClient::GetUserIdHashFromContext(
 }
 #endif
 
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+bool ShellExtensionsBrowserClient::IsFromMainProfile(
+    content::BrowserContext* context) {
+  // AppShell only supports single context.
+  return true;
+}
+#endif
+
 bool ShellExtensionsBrowserClient::IsGuestSession(
     BrowserContext* context) const {
   return false;
@@ -232,7 +240,7 @@ ShellExtensionsBrowserClient::GetComponentExtensionResourceManager() {
 void ShellExtensionsBrowserClient::BroadcastEventToRenderers(
     events::HistogramValue histogram_value,
     const std::string& event_name,
-    std::unique_ptr<base::ListValue> args,
+    base::Value::List args,
     bool dispatch_to_off_the_record_profiles) {
   if (!BrowserThread::CurrentlyOn(BrowserThread::UI)) {
     content::GetUIThreadTaskRunner({})->PostTask(
@@ -243,8 +251,8 @@ void ShellExtensionsBrowserClient::BroadcastEventToRenderers(
     return;
   }
 
-  std::unique_ptr<Event> event(
-      new Event(histogram_value, event_name, std::move(*args).TakeList()));
+  auto event =
+      std::make_unique<Event>(histogram_value, event_name, std::move(args));
   EventRouter::Get(browser_context_)->BroadcastEvent(std::move(event));
 }
 

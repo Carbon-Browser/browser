@@ -16,7 +16,6 @@
 #include "base/command_line.h"
 #include "base/format_macros.h"
 #include "base/logging.h"
-#include "base/macros.h"
 #include "base/observer_list.h"
 #include "base/power_monitor/power_monitor.h"
 #include "base/power_monitor/power_monitor_device_source.h"
@@ -170,6 +169,9 @@ class PowerManagerClientImpl : public PowerManagerClient {
  public:
   PowerManagerClientImpl()
       : origin_thread_id_(base::PlatformThread::CurrentId()) {}
+
+  PowerManagerClientImpl(const PowerManagerClientImpl&) = delete;
+  PowerManagerClientImpl& operator=(const PowerManagerClientImpl&) = delete;
 
   ~PowerManagerClientImpl() override {
     // Here we should unregister suspend notifications from powerd,
@@ -487,6 +489,28 @@ class PowerManagerClientImpl : public PowerManagerClient {
                        weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
   }
 
+  void SetKeyboardBacklightToggledOff(bool toggled_off) override {
+    dbus::MethodCall method_call(
+        power_manager::kPowerManagerInterface,
+        power_manager::kSetKeyboardBacklightToggledOffMethod);
+    dbus::MessageWriter(&method_call).AppendBool(toggled_off);
+    power_manager_proxy_->CallMethod(&method_call,
+                                     dbus::ObjectProxy::TIMEOUT_USE_DEFAULT,
+                                     base::DoNothing());
+  }
+
+  void GetKeyboardBacklightToggledOff(
+      DBusMethodCallback<bool> callback) override {
+    dbus::MethodCall method_call(
+        power_manager::kPowerManagerInterface,
+        power_manager::kGetKeyboardBacklightToggledOffMethod);
+    power_manager_proxy_->CallMethod(
+        &method_call, dbus::ObjectProxy::TIMEOUT_USE_DEFAULT,
+        base::BindOnce(
+            &PowerManagerClientImpl::OnGetKeyboardBacklightToggledOff,
+            weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
+  }
+
   void GetSwitchStates(DBusMethodCallback<SwitchStates> callback) override {
     dbus::MethodCall method_call(power_manager::kPowerManagerInterface,
                                  power_manager::kGetSwitchStatesMethod);
@@ -633,6 +657,15 @@ class PowerManagerClientImpl : public PowerManagerClient {
         base::BindOnce(
             &PowerManagerClientImpl::OnGetExternalDisplayALSBrightness,
             weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
+  }
+
+  void ChargeNowForAdaptiveCharging() override {
+    dbus::MethodCall method_call(
+        power_manager::kPowerManagerInterface,
+        power_manager::kChargeNowForAdaptiveChargingMethod);
+    power_manager_proxy_->CallMethod(&method_call,
+                                     dbus::ObjectProxy::TIMEOUT_USE_DEFAULT,
+                                     base::DoNothing());
   }
 
  private:
@@ -890,6 +923,25 @@ class PowerManagerClientImpl : public PowerManagerClient {
     std::move(callback).Run(state);
   }
 
+  void OnGetKeyboardBacklightToggledOff(DBusMethodCallback<bool> callback,
+                                        dbus::Response* response) {
+    if (!response) {
+      POWER_LOG(ERROR) << "Error calling "
+                       << power_manager::kGetKeyboardBacklightToggledOffMethod;
+      std::move(callback).Run(absl::nullopt);
+      return;
+    }
+    dbus::MessageReader reader(response);
+    bool toggled_off = false;
+    if (!reader.PopBool(&toggled_off)) {
+      POWER_LOG(ERROR) << "Error reading response from powerd: "
+                       << response->ToString();
+      std::move(callback).Run(absl::nullopt);
+      return;
+    }
+    std::move(callback).Run(toggled_off);
+  }
+
   void CheckAmbientColorSupport() {
     dbus::MethodCall method_call(power_manager::kPowerManagerInterface,
                                  power_manager::kHasAmbientColorDeviceMethod);
@@ -1011,7 +1063,7 @@ class PowerManagerClientImpl : public PowerManagerClient {
       // Set |max_dark_suspend_delay_timeout_| to the minimum time power manager
       // guarantees before resuspending.
       max_dark_suspend_delay_timeout_ =
-          base::TimeDelta::FromMilliseconds(protobuf.min_delay_timeout_ms());
+          base::Milliseconds(protobuf.min_delay_timeout_ms());
 
       POWER_LOG(EVENT) << "Registered dark suspend delay "
                        << dark_suspend_delay_id_;
@@ -1251,8 +1303,7 @@ class PowerManagerClientImpl : public PowerManagerClient {
     has_dark_suspend_delay_id_ = false;
 
     power_manager::RegisterSuspendDelayRequest protobuf_request;
-    base::TimeDelta timeout =
-        base::TimeDelta::FromMilliseconds(kSuspendDelayTimeoutMs);
+    base::TimeDelta timeout = base::Milliseconds(kSuspendDelayTimeoutMs);
     protobuf_request.set_timeout(timeout.ToInternalValue());
     protobuf_request.set_description(kSuspendDelayDescription);
 
@@ -1385,8 +1436,6 @@ class PowerManagerClientImpl : public PowerManagerClient {
   // Note: This should remain the last member so it'll be destroyed and
   // invalidate its weak pointers before any other members are destroyed.
   base::WeakPtrFactory<PowerManagerClientImpl> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(PowerManagerClientImpl);
 };
 
 PowerManagerClient::PowerManagerClient() {

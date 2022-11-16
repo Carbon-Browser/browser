@@ -31,6 +31,7 @@ cc_component("base") {
     "list_container_helper.h",
     "math_util.cc",
     "math_util.h",
+    "protected_sequence_synchronizer.h",
     "region.cc",
     "region.h",
     "reverse_spiral_iterator.cc",
@@ -55,9 +56,10 @@ cc_component("base") {
     "//base",
     "//base/third_party/dynamic_annotations",
     "//skia",
-    "//ui/gfx:geometry_skia",
+    "//ui/base:features",
     "//ui/gfx/animation",
     "//ui/gfx/geometry",
+    "//ui/gfx/geometry:geometry_skia",
   ]
 
   defines = [ "CC_BASE_IMPLEMENTATION=1" ]

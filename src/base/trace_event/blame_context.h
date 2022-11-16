@@ -8,7 +8,6 @@
 #include <inttypes.h>
 
 #include "base/base_export.h"
-#include "base/macros.h"
 #include "base/threading/thread_checker.h"
 #include "base/trace_event/trace_log.h"
 #include "third_party/perfetto/include/perfetto/tracing/traced_value_forward.h"
@@ -68,8 +67,12 @@ class BASE_EXPORT BlameContext
                const char* name,
                const char* type,
                const char* scope,
-               int64_t id,
+               uint64_t id,
                const BlameContext* parent_context);
+
+  BlameContext(const BlameContext&) = delete;
+  BlameContext& operator=(const BlameContext&) = delete;
+
   ~BlameContext() override;
 
   // Initialize the blame context, automatically taking a snapshot if tracing is
@@ -99,7 +102,7 @@ class BASE_EXPORT BlameContext
   const char* name() const { return name_; }
   const char* type() const { return type_; }
   const char* scope() const { return scope_; }
-  int64_t id() const { return id_; }
+  uint64_t id() const { return id_; }
 
   // trace_event::TraceLog::EnabledStateObserver implementation:
   void OnTraceLogEnabled() override;
@@ -123,17 +126,15 @@ class BASE_EXPORT BlameContext
   const char* name_;
   const char* type_;
   const char* scope_;
-  const int64_t id_;
+  const uint64_t id_;
 
   const char* parent_scope_;
-  const int64_t parent_id_;
+  const uint64_t parent_id_;
 
   const unsigned char* category_group_enabled_;
 
   ThreadChecker thread_checker_;
   WeakPtrFactory<BlameContext> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(BlameContext);
 };
 
 }  // namespace trace_event

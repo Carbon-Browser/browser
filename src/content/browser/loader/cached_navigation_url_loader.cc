@@ -84,9 +84,13 @@ void CachedNavigationURLLoader::Start() {
 void CachedNavigationURLLoader::FollowRedirect(
     const std::vector<std::string>& removed_headers,
     const net::HttpRequestHeaders& modified_headers,
-    const net::HttpRequestHeaders& modified_cors_exempt_headers,
-    blink::PreviewsState new_previews_state) {
+    const net::HttpRequestHeaders& modified_cors_exempt_headers) {
   NOTREACHED();
+}
+
+bool CachedNavigationURLLoader::SetNavigationTimeout(base::TimeDelta timeout) {
+  // `false` here means that no timeout was started.
+  return false;
 }
 
 }  // namespace content

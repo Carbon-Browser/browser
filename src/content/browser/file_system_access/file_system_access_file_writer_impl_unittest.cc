@@ -14,10 +14,11 @@
 #include "base/containers/contains.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/guid.h"
-#include "base/strings/string_number_conversions.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/bind.h"
 #include "base/test/gmock_callback_support.h"
 #include "base/test/task_environment.h"
+#include "base/test/test_future.h"
 #include "content/browser/file_system_access/file_system_access_write_lock_manager.h"
 #include "content/browser/file_system_access/fixed_file_system_access_permission_grant.h"
 #include "content/browser/file_system_access/mock_file_system_access_permission_context.h"
@@ -95,10 +96,6 @@ class TestFileSystemBackend : public storage::TestFileSystemBackend {
 
 }  // namespace
 
-std::string GetHexEncodedString(const std::string& input) {
-  return base::HexEncode(base::as_bytes(base::make_span(input)));
-}
-
 class FileSystemAccessFileWriterImplTest : public testing::Test {
  public:
   FileSystemAccessFileWriterImplTest()
@@ -158,12 +155,12 @@ class FileSystemAccessFileWriterImplTest : public testing::Test {
     auto lock = manager_->TakeWriteLock(
         test_file_url_,
         FileSystemAccessWriteLockManager::WriteLockType::kShared);
-    ASSERT_TRUE(lock.has_value());
+    ASSERT_TRUE(lock);
 
     handle_ = manager_->CreateFileWriter(
         FileSystemAccessManagerImpl::BindingContext(kTestStorageKey, kTestURL,
                                                     kFrameId),
-        test_file_url_, test_swap_url_, std::move(lock.value()),
+        test_file_url_, test_swap_url_, std::move(lock),
         FileSystemAccessManagerImpl::SharedHandleState(permission_grant_,
                                                        permission_grant_),
         remote_.InitWithNewPipeAndPassReceiver(),
@@ -198,8 +195,7 @@ class FileSystemAccessFileWriterImplTest : public testing::Test {
             contents, mojo::StringDataSource::AsyncWritingMode::
                           STRING_MAY_BE_INVALIDATED_BEFORE_COMPLETION),
         base::BindOnce(
-            base::DoNothing::Once<std::unique_ptr<mojo::DataPipeProducer>,
-                                  MojoResult>(),
+            [](std::unique_ptr<mojo::DataPipeProducer>, MojoResult) {},
             std::move(producer)));
     return consumer_handle;
   }
@@ -228,55 +224,30 @@ class FileSystemAccessFileWriterImplTest : public testing::Test {
       uint64_t position,
       mojo::ScopedDataPipeConsumerHandle data_pipe,
       uint64_t* bytes_written_out) {
-    base::RunLoop loop;
-    FileSystemAccessStatus result_out;
-    handle_->Write(position, std::move(data_pipe),
-                   base::BindLambdaForTesting(
-                       [&](blink::mojom::FileSystemAccessErrorPtr result,
-                           uint64_t bytes_written) {
-                         result_out = result->status;
-                         *bytes_written_out = bytes_written;
-                         loop.Quit();
-                       }));
-    loop.Run();
-    return result_out;
+    base::test::TestFuture<blink::mojom::FileSystemAccessErrorPtr, uint64_t>
+        future;
+    handle_->Write(position, std::move(data_pipe), future.GetCallback());
+    blink::mojom::FileSystemAccessErrorPtr result;
+    std::tie(result, *bytes_written_out) = future.Take();
+    return result->status;
   }
 
   FileSystemAccessStatus TruncateSync(uint64_t length) {
-    base::RunLoop loop;
-    FileSystemAccessStatus result_out;
-    handle_->Truncate(length,
-                      base::BindLambdaForTesting(
-                          [&](blink::mojom::FileSystemAccessErrorPtr result) {
-                            result_out = result->status;
-                            loop.Quit();
-                          }));
-    loop.Run();
-    return result_out;
+    base::test::TestFuture<blink::mojom::FileSystemAccessErrorPtr> future;
+    handle_->Truncate(length, future.GetCallback());
+    return future.Get()->status;
   }
 
   FileSystemAccessStatus CloseSync() {
-    base::RunLoop loop;
-    FileSystemAccessStatus result_out;
-    handle_->Close(base::BindLambdaForTesting(
-        [&](blink::mojom::FileSystemAccessErrorPtr result) {
-          result_out = result->status;
-          loop.Quit();
-        }));
-    loop.Run();
-    return result_out;
+    base::test::TestFuture<blink::mojom::FileSystemAccessErrorPtr> future;
+    handle_->Close(future.GetCallback());
+    return future.Get()->status;
   }
 
   FileSystemAccessStatus AbortSync() {
-    base::RunLoop loop;
-    FileSystemAccessStatus result_out;
-    handle_->Abort(base::BindLambdaForTesting(
-        [&](blink::mojom::FileSystemAccessErrorPtr result) {
-          result_out = result->status;
-          loop.Quit();
-        }));
-    loop.Run();
-    return result_out;
+    base::test::TestFuture<blink::mojom::FileSystemAccessErrorPtr> future;
+    handle_->Abort(future.GetCallback());
+    return future.Get()->status;
   }
 
   FileSystemAccessStatus WriteSync(uint64_t position,
@@ -296,9 +267,9 @@ class FileSystemAccessFileWriterImplTest : public testing::Test {
 
   base::ScopedTempDir dir_;
   scoped_refptr<storage::FileSystemContext> file_system_context_;
-  TestFileSystemBackend* test_file_system_backend_;
+  raw_ptr<TestFileSystemBackend> test_file_system_backend_;
   scoped_refptr<ChromeBlobStorageContext> chrome_blob_context_;
-  storage::BlobStorageContext* blob_context_;
+  raw_ptr<storage::BlobStorageContext> blob_context_;
   scoped_refptr<FileSystemAccessManagerImpl> manager_;
 
   FileSystemURL test_file_url_;
@@ -316,77 +287,6 @@ class FileSystemAccessFileWriterImplTest : public testing::Test {
   mojo::PendingRemote<blink::mojom::FileSystemAccessFileWriter> remote_;
   base::WeakPtr<FileSystemAccessFileWriterImpl> handle_;
 };
-
-TEST_F(FileSystemAccessFileWriterImplTest, HashSimpleOK) {
-  uint64_t bytes_written;
-  FileSystemAccessStatus result = WriteSync(0, "abc", &bytes_written);
-  EXPECT_EQ(result, FileSystemAccessStatus::kOk);
-  EXPECT_EQ(bytes_written, 3u);
-
-  base::RunLoop loop;
-  handle_->ComputeHashForSwapFileForTesting(base::BindLambdaForTesting(
-      [&](base::File::Error result, const std::string& hash_value,
-          int64_t size) {
-        EXPECT_EQ(base::File::FILE_OK, result);
-        EXPECT_EQ(
-            "BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD",
-            GetHexEncodedString(hash_value));
-        EXPECT_EQ(3, size);
-        loop.Quit();
-      }));
-  loop.Run();
-}
-
-TEST_F(FileSystemAccessFileWriterImplTest, HashEmptyOK) {
-  base::RunLoop loop;
-  handle_->ComputeHashForSwapFileForTesting(base::BindLambdaForTesting(
-      [&](base::File::Error result, const std::string& hash_value,
-          int64_t size) {
-        EXPECT_EQ(base::File::FILE_OK, result);
-        EXPECT_EQ(
-            "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
-            GetHexEncodedString(hash_value));
-        EXPECT_EQ(0, size);
-        loop.Quit();
-      }));
-  loop.Run();
-}
-
-TEST_F(FileSystemAccessFileWriterImplTest, HashNonExistingFileFails) {
-  ASSERT_EQ(base::File::FILE_OK, storage::AsyncFileTestHelper::Remove(
-                                     file_system_context_.get(),
-                                     handle_->swap_url(), /*recursive=*/false));
-  base::RunLoop loop;
-  handle_->ComputeHashForSwapFileForTesting(base::BindLambdaForTesting(
-      [&](base::File::Error result, const std::string& hash_value,
-          int64_t size) {
-        EXPECT_EQ(base::File::FILE_ERROR_NOT_FOUND, result);
-        loop.Quit();
-      }));
-  loop.Run();
-}
-
-TEST_F(FileSystemAccessFileWriterImplTest, HashLargerFileOK) {
-  size_t target_size = 9 * 1024u;
-  std::string file_data(target_size, '0');
-  uint64_t bytes_written;
-  FileSystemAccessStatus result = WriteSync(0, file_data, &bytes_written);
-  EXPECT_EQ(result, FileSystemAccessStatus::kOk);
-  EXPECT_EQ(bytes_written, target_size);
-
-  base::RunLoop loop;
-  handle_->ComputeHashForSwapFileForTesting(base::BindLambdaForTesting(
-      [&](base::File::Error result, const std::string& hash_value,
-          int64_t size) {
-        EXPECT_EQ(base::File::FILE_OK, result);
-        EXPECT_EQ(
-            "34A82D28CB1E0BA92CADC4BE8497DC9EEA9AC4F63B9C445A9E52D298990AC491",
-            GetHexEncodedString(hash_value));
-        EXPECT_EQ(static_cast<int64_t>(target_size), size);
-        loop.Quit();
-      }));
-  loop.Run();
-}
 
 TEST_F(FileSystemAccessFileWriterImplTest, WriteValidEmptyString) {
   uint64_t bytes_written;
@@ -690,13 +590,13 @@ TEST_F(FileSystemAccessFileWriterAfterWriteChecksTest,
 
   auto lock = manager_->TakeWriteLock(
       test_file_url_, FileSystemAccessWriteLockManager::WriteLockType::kShared);
-  ASSERT_TRUE(lock.has_value());
+  ASSERT_TRUE(lock);
 
   mojo::PendingRemote<blink::mojom::FileSystemAccessFileWriter> remote;
   handle_ = manager_->CreateFileWriter(
       FileSystemAccessManagerImpl::BindingContext(kTestStorageKey, kTestURL,
                                                   kFrameId),
-      test_file_url_, test_swap_url_, std::move(lock.value()),
+      test_file_url_, test_swap_url_, std::move(lock),
       FileSystemAccessManagerImpl::SharedHandleState(permission_grant_,
                                                      permission_grant_),
       remote.InitWithNewPipeAndPassReceiver(),
@@ -725,13 +625,11 @@ TEST_F(FileSystemAccessFileWriterAfterWriteChecksTest,
   std::move(sb_callback)
       .Run(FileSystemAccessPermissionContext::AfterWriteCheckResult::kAllow);
 
-  base::RunLoop move_loop;
+  base::test::TestFuture<storage::FileSystemURL> future;
   test_file_system_backend_->SetOperationCreatedCallback(
-      base::BindLambdaForTesting([&](const storage::FileSystemURL& url) {
-        EXPECT_EQ(url, test_swap_url_);
-        move_loop.Quit();
-      }));
-  move_loop.Run();
+      future.GetCallback<const storage::FileSystemURL&>());
+  EXPECT_EQ(future.Get(), test_file_url_);
+
   // About to start the move operation. Now destroy the writer. The
   // move will still complete, but make sure that quarantine was also
   // applied to the resulting file.

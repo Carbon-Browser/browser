@@ -26,8 +26,9 @@
 #include <memory>
 #include <vector>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
+#include "base/time/time.h"
 #include "media/base/audio_buffer.h"
 #include "media/base/audio_buffer_queue.h"
 #include "media/base/audio_parameters.h"
@@ -44,6 +45,10 @@ class MEDIA_EXPORT AudioRendererAlgorithm {
   AudioRendererAlgorithm(MediaLog* media_log);
   AudioRendererAlgorithm(MediaLog* media_log,
                          AudioRendererAlgorithmParameters params);
+
+  AudioRendererAlgorithm(const AudioRendererAlgorithm&) = delete;
+  AudioRendererAlgorithm& operator=(const AudioRendererAlgorithm&) = delete;
+
   ~AudioRendererAlgorithm();
 
   // Initializes this object with information about the audio stream.
@@ -199,7 +204,7 @@ class MEDIA_EXPORT AudioRendererAlgorithm {
   // Called by |resampler_| to get more audio data.
   void OnResamplerRead(int frame_delay, AudioBus* audio_bus);
 
-  MediaLog* media_log_;
+  raw_ptr<MediaLog> media_log_;
 
   // Parameters.
   AudioRendererAlgorithmParameters audio_renderer_algorithm_params_;
@@ -322,8 +327,6 @@ class MEDIA_EXPORT AudioRendererAlgorithm {
   int64_t max_capacity_;
 
   FillBufferMode last_mode_ = FillBufferMode::kPassthrough;
-
-  DISALLOW_COPY_AND_ASSIGN(AudioRendererAlgorithm);
 };
 
 }  // namespace media

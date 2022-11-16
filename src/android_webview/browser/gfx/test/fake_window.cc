@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "android_webview/browser/gfx/test/fake_window.h"
+#include "base/memory/raw_ptr.h"
 
 #include "android_webview/browser/gfx/browser_view_renderer.h"
 #include "android_webview/browser/gfx/child_frame.h"
@@ -36,13 +37,13 @@ class FakeWindow::ScopedMakeCurrent {
     // Release the underlying EGLContext. This is required because the real
     // GLContextEGL may no longer be current here and to satisfy DCHECK in
     // GLContextEGL::IsCurrent.
-    eglMakeCurrent(view_root_->surface_->GetDisplay(), EGL_NO_SURFACE,
-                   EGL_NO_SURFACE, EGL_NO_CONTEXT);
+    eglMakeCurrent(view_root_->surface_->GetGLDisplay()->GetDisplay(),
+                   EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
     view_root_->context_->ReleaseCurrent(view_root_->surface_.get());
   }
 
  private:
-  FakeWindow* view_root_;
+  raw_ptr<FakeWindow> view_root_;
 };
 
 FakeWindow::FakeWindow(BrowserViewRenderer* view,
@@ -126,7 +127,7 @@ void FakeWindow::OnDrawHardware() {
   DCHECK(on_draw_hardware_pending_);
   on_draw_hardware_pending_ = false;
 
-  view_->PrepareToDraw(gfx::Vector2d(), location_);
+  view_->PrepareToDraw(gfx::Point(), location_);
   hooks_->WillOnDraw();
   bool success = view_->OnDrawHardware();
   hooks_->DidOnDraw(success);

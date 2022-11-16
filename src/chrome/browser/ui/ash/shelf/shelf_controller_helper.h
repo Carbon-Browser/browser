@@ -9,7 +9,6 @@
 #include <string>
 
 #include "ash/public/cpp/shelf_types.h"
-#include "base/macros.h"
 #include "chrome/browser/ui/extensions/extension_enable_flow_delegate.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -25,6 +24,10 @@ class WebContents;
 class ShelfControllerHelper : public ExtensionEnableFlowDelegate {
  public:
   explicit ShelfControllerHelper(Profile* profile);
+
+  ShelfControllerHelper(const ShelfControllerHelper&) = delete;
+  ShelfControllerHelper& operator=(const ShelfControllerHelper&) = delete;
+
   ~ShelfControllerHelper() override;
 
   // Helper function to return the title associated with |app_id|.
@@ -37,6 +40,10 @@ class ShelfControllerHelper : public ExtensionEnableFlowDelegate {
   // paused, return AppStatus::kPaused. Otherwise, return AppStatus::kReady.
   static ash::AppStatus GetAppStatus(Profile* profile,
                                      const std::string& app_id);
+
+  // Helper function to return whether the app with `app_id` should explicitly
+  // be hidden from shelf, as indicated by `AppUpdate::ShowInShelf()` app state.
+  static bool IsAppHiddenFromShelf(Profile* profile, const std::string& app_id);
 
   // Returns the app id of the specified tab, or an empty string if there is
   // no app. All known profiles will be queried for this.
@@ -73,8 +80,6 @@ class ShelfControllerHelper : public ExtensionEnableFlowDelegate {
   // The currently active profile for the usage of |GetAppID|.
   Profile* profile_;
   std::unique_ptr<ExtensionEnableFlow> extension_enable_flow_;
-
-  DISALLOW_COPY_AND_ASSIGN(ShelfControllerHelper);
 };
 
 #endif  // CHROME_BROWSER_UI_ASH_SHELF_SHELF_CONTROLLER_HELPER_H_

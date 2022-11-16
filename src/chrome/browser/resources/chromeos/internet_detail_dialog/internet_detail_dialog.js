@@ -13,7 +13,7 @@ import 'chrome://resources/cr_components/chromeos/network/network_proxy.m.js';
 import 'chrome://resources/cr_components/chromeos/network/network_shared_css.m.js';
 import 'chrome://resources/cr_components/chromeos/network/network_siminfo.m.js';
 import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import 'chrome://resources/cr_elements/cr_page_host_style_css.js';
+import 'chrome://resources/cr_elements/cr_page_host_style.css.js';
 import 'chrome://resources/cr_elements/icons.m.js';
 import 'chrome://resources/cr_elements/shared_style_css.m.js';
 import './strings.m.js';
@@ -27,6 +27,7 @@ import {assert} from 'chrome://resources/js/assert.m.js';
 import {I18nBehavior} from 'chrome://resources/js/i18n_behavior.m.js';
 import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
 import {html, Polymer} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+
 import {InternetDetailDialogBrowserProxy, InternetDetailDialogBrowserProxyImpl} from './internet_detail_dialog_browser_proxy.js';
 
 /**
@@ -71,7 +72,7 @@ Polymer({
       value() {
         return loadTimeData.valueExists('showTechnologyBadge') &&
             loadTimeData.getBoolean('showTechnologyBadge');
-      }
+      },
     },
 
     /**
@@ -93,8 +94,11 @@ Polymer({
     disabled_: {
       type: Boolean,
       value: false,
-      computed: 'computeDisabled_(deviceState_.*)'
+      computed: 'computeDisabled_(deviceState_.*)',
     },
+
+    /** @private {!chromeos.networkConfig.mojom.GlobalPolicy|undefined} */
+    globalPolicy_: Object,
   },
 
   /**
@@ -126,7 +130,8 @@ Polymer({
   attached() {
     this.browserProxy_ = InternetDetailDialogBrowserProxyImpl.getInstance();
     const dialogArgs = this.browserProxy_.getDialogArguments();
-    let type, name;
+    let type;
+    let name;
     if (dialogArgs) {
       const args = JSON.parse(dialogArgs);
       this.guid = args.guid || '';
@@ -151,6 +156,9 @@ Polymer({
     this.managedProperties_ = OncMojo.getDefaultManagedProperties(
         OncMojo.getNetworkTypeFromString(type), this.guid, name);
     this.getNetworkDetails_();
+
+    // Fetch global policies.
+    this.onPoliciesApplied(/*userhash=*/ '');
   },
 
   /** @private */
@@ -171,6 +179,16 @@ Polymer({
   /** @private */
   close_() {
     this.browserProxy_.closeDialog();
+  },
+
+  /**
+   * CrosNetworkConfigObserver impl
+   * @param {!string} userhash
+   */
+  onPoliciesApplied(userhash) {
+    this.networkConfig_.getGlobalPolicy().then(response => {
+      this.globalPolicy_ = response.result;
+    });
   },
 
   /**
@@ -650,5 +668,5 @@ Polymer({
     // If this is a cellular device and inhibited, state cannot be changed, so
     // the dialog's inputs should be disabled.
     return OncMojo.deviceIsInhibited(this.deviceState_);
-  }
+  },
 });

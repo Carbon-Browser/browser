@@ -4,6 +4,7 @@
 
 #include "ash/system/accessibility/autoclick_menu_bubble_controller.h"
 
+#include "ash/bubble/bubble_constants.h"
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/shelf/shelf.h"
 #include "ash/shell.h"
@@ -55,8 +56,7 @@ void AutoclickMenuBubbleController::SetEventType(AutoclickEventType type) {
           std::make_unique<AutoclickScrollBubbleController>();
     }
     gfx::Rect anchor_rect = bubble_view_->GetBoundsInScreen();
-    anchor_rect.Inset(-kCollisionWindowWorkAreaInsetsDp,
-                      -kCollisionWindowWorkAreaInsetsDp);
+    anchor_rect.Inset(-kCollisionWindowWorkAreaInsetsDp);
     scroll_bubble_controller_->ShowBubble(
         anchor_rect, GetAnchorAlignmentForFloatingMenuPosition(position_));
   } else if (scroll_bubble_controller_) {
@@ -99,9 +99,9 @@ void AutoclickMenuBubbleController::SetPosition(
 
   // Un-inset the bounds to get the widget's bounds, which includes the drop
   // shadow.
-  resting_bounds.Inset(-kCollisionWindowWorkAreaInsetsDp, 0,
-                       -kCollisionWindowWorkAreaInsetsDp,
-                       -kCollisionWindowWorkAreaInsetsDp);
+  resting_bounds.Inset(gfx::Insets::TLBR(0, -kCollisionWindowWorkAreaInsetsDp,
+                                         -kCollisionWindowWorkAreaInsetsDp,
+                                         -kCollisionWindowWorkAreaInsetsDp));
   if (bubble_widget_->GetWindowBoundsInScreen() == resting_bounds)
     return;
 
@@ -109,8 +109,7 @@ void AutoclickMenuBubbleController::SetPosition(
       bubble_widget_->GetLayer()->GetAnimator());
   settings.SetPreemptionStrategy(
       ui::LayerAnimator::IMMEDIATELY_ANIMATE_TO_NEW_TARGET);
-  settings.SetTransitionDuration(
-      base::TimeDelta::FromMilliseconds(kAnimationDurationMs));
+  settings.SetTransitionDuration(base::Milliseconds(kAnimationDurationMs));
   settings.SetTweenType(gfx::Tween::EASE_OUT);
   bubble_widget_->SetBounds(resting_bounds);
 
@@ -140,7 +139,7 @@ void AutoclickMenuBubbleController::ShowBubble(AutoclickEventType type,
   DCHECK(!bubble_view_);
 
   TrayBubbleView::InitParams init_params;
-  init_params.delegate = this;
+  init_params.delegate = GetWeakPtr();
   // Anchor within the overlay container.
   init_params.parent_window =
       Shell::GetContainer(Shell::GetPrimaryRootWindow(),
@@ -152,18 +151,16 @@ void AutoclickMenuBubbleController::ShowBubble(AutoclickEventType type,
   // the scroll view is drawn at kCollisionWindowWorkAreaInsetsDp above the
   // bubble menu when the position is at the bottom of the screen. The space
   // between the bubbles belongs to the scroll view bubble's shadow.
-  init_params.insets = gfx::Insets(0, kCollisionWindowWorkAreaInsetsDp,
-                                   kCollisionWindowWorkAreaInsetsDp,
-                                   kCollisionWindowWorkAreaInsetsDp);
+  init_params.insets = gfx::Insets::TLBR(0, kCollisionWindowWorkAreaInsetsDp,
+                                         kCollisionWindowWorkAreaInsetsDp,
+                                         kCollisionWindowWorkAreaInsetsDp);
   init_params.preferred_width = kAutoclickMenuWidth;
-  init_params.corner_radius = kUnifiedTrayCornerRadius;
-  init_params.has_shadow = false;
   init_params.translucent = true;
   bubble_view_ = new TrayBubbleView(init_params);
 
   menu_view_ = new AutoclickMenuView(type, position);
-  menu_view_->SetBorder(
-      views::CreateEmptyBorder(kUnifiedTopShortcutSpacing, 0, 0, 0));
+  menu_view_->SetBorder(views::CreateEmptyBorder(
+      gfx::Insets::TLBR(kUnifiedTopShortcutSpacing, 0, 0, 0)));
   bubble_view_->AddChildView(menu_view_);
 
   menu_view_->SetPaintToLayer();

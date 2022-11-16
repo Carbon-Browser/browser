@@ -23,6 +23,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_HTML_HTML_META_ELEMENT_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_HTML_HTML_META_ELEMENT_H_
 
+#include "services/network/public/cpp/client_hints.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/html/html_element.h"
 #include "third_party/blink/renderer/core/page/viewport_description.h"
@@ -49,7 +50,12 @@ class CORE_EXPORT HTMLMetaElement final : public HTMLElement {
       Document*,
       bool viewport_meta_zero_values_quirk);
 
-  explicit HTMLMetaElement(Document&);
+  static void ProcessMetaCH(Document&,
+                            const AtomicString& content,
+                            network::MetaCHType type,
+                            bool is_doc_preloader_or_sync_parser);
+
+  explicit HTMLMetaElement(Document&, const CreateElementFlags);
 
   // Encoding computed from processing the http-equiv, charset and content
   // attributes.
@@ -59,6 +65,8 @@ class CORE_EXPORT HTMLMetaElement final : public HTMLElement {
   const AtomicString& HttpEquiv() const;
   const AtomicString& Media() const;
   const AtomicString& GetName() const;
+  const AtomicString& Property() const;
+  const AtomicString& Itemprop() const;
 
  private:
   static void ProcessViewportKeyValuePair(Document*,
@@ -119,6 +127,11 @@ class CORE_EXPORT HTMLMetaElement final : public HTMLElement {
   void ProcessViewportContentAttribute(const String& content,
                                        ViewportDescription::Type origin);
   void ProcessColorScheme(const AtomicString& content);
+  void FinishParsingChildren() final;
+
+  // ClientHintsPreferences::UpdateFromMetaCH needs to know if the synchronous
+  // parser was used as otherwise the value may be discarded.
+  bool is_sync_parser_;
 };
 
 }  // namespace blink

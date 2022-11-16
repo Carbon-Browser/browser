@@ -8,7 +8,6 @@
 #include "ash/components/drivefs/mojom/fake_drivefs_launcher.mojom.h"
 #include "base/component_export.h"
 #include "base/files/file_path.h"
-#include "base/macros.h"
 #include "base/no_destructor.h"
 #include "mojo/public/cpp/bindings/remote.h"
 
@@ -19,6 +18,10 @@ class FakeDriveFsLauncherClient {
   COMPONENT_EXPORT(DRIVEFS)
   static void Init(const base::FilePath& socket_path,
                    const base::FilePath& chroot_path);
+
+  FakeDriveFsLauncherClient(const FakeDriveFsLauncherClient&) = delete;
+  FakeDriveFsLauncherClient& operator=(const FakeDriveFsLauncherClient&) =
+      delete;
 
  private:
   friend class base::NoDestructor<FakeDriveFsLauncherClient>;
@@ -35,8 +38,6 @@ class FakeDriveFsLauncherClient {
   const base::FilePath socket_path_;
 
   mojo::Remote<mojom::FakeDriveFsLauncher> launcher_;
-
-  DISALLOW_COPY_AND_ASSIGN(FakeDriveFsLauncherClient);
 };
 
 }  // namespace drivefs

@@ -5,7 +5,6 @@
 #include "chrome/browser/ui/app_list/arc/arc_app_dialog.h"
 
 #include "base/bind.h"
-#include "base/macros.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/app_list/app_list_controller_delegate.h"
@@ -13,7 +12,6 @@
 #include "chrome/browser/ui/app_list/arc/arc_app_list_prefs.h"
 #include "chrome/browser/ui/app_list/arc/arc_app_utils.h"
 #include "chrome/browser/ui/app_list/arc/arc_usb_host_permission_manager.h"
-#include "chrome/browser/ui/browser_dialogs.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/constrained_window/constrained_window_views.h"
@@ -144,8 +142,6 @@ ArcAppDialogView::ArcAppDialogView(Profile* profile,
   gfx::NativeWindow parent =
       controller ? controller->GetAppListWindow() : nullptr;
   constrained_window::CreateBrowserModalDialogViews(this, parent)->Show();
-
-  chrome::RecordDialogCreation(chrome::DialogIdentifier::ARC_APP);
 }
 
 ArcAppDialogView::~ArcAppDialogView() {

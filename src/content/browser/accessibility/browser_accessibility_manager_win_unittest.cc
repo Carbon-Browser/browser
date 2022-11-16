@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "base/command_line.h"
+#include "base/memory/raw_ptr.h"
 #include "content/browser/accessibility/browser_accessibility.h"
 #include "content/browser/accessibility/browser_accessibility_manager.h"
 #include "content/browser/accessibility/test_browser_accessibility_delegate.h"
@@ -32,12 +33,18 @@ class TestFragmentRootDelegate : public ui::AXFragmentRootDelegateWin {
 
   bool IsAXFragmentRootAControlElement() override { return true; }
 
-  BrowserAccessibilityManager* browser_accessibility_manager_;
+  raw_ptr<BrowserAccessibilityManager> browser_accessibility_manager_;
 };
 
 class BrowserAccessibilityManagerWinTest : public testing::Test {
  public:
   BrowserAccessibilityManagerWinTest() = default;
+
+  BrowserAccessibilityManagerWinTest(
+      const BrowserAccessibilityManagerWinTest&) = delete;
+  BrowserAccessibilityManagerWinTest& operator=(
+      const BrowserAccessibilityManagerWinTest&) = delete;
+
   ~BrowserAccessibilityManagerWinTest() override = default;
 
  protected:
@@ -46,8 +53,6 @@ class BrowserAccessibilityManagerWinTest : public testing::Test {
 
  private:
   void SetUp() override;
-
-  DISALLOW_COPY_AND_ASSIGN(BrowserAccessibilityManagerWinTest);
 };
 
 void BrowserAccessibilityManagerWinTest::SetUp() {
@@ -80,7 +85,7 @@ TEST_F(BrowserAccessibilityManagerWinTest, DynamicallyAddedIFrame) {
       std::make_unique<ui::AXFragmentRootWin>(gfx::kMockAcceleratedWidget,
                                               &test_fragment_root_delegate);
 
-  EXPECT_EQ(fragment_root->GetChildCount(), 1);
+  EXPECT_EQ(fragment_root->GetChildCount(), 1u);
   EXPECT_EQ(fragment_root->ChildAtIndex(0),
             root_document_root_node->GetNativeViewAccessible());
 
@@ -97,7 +102,7 @@ TEST_F(BrowserAccessibilityManagerWinTest, DynamicallyAddedIFrame) {
 
   // The new frame is not a root frame, so the fragment root's lone child should
   // still be the same as before.
-  EXPECT_EQ(fragment_root->GetChildCount(), 1);
+  EXPECT_EQ(fragment_root->GetChildCount(), 1u);
   EXPECT_EQ(fragment_root->ChildAtIndex(0),
             root_document_root_node->GetNativeViewAccessible());
 }
@@ -137,21 +142,21 @@ TEST_F(BrowserAccessibilityManagerWinTest, ChildTree) {
       std::make_unique<ui::AXFragmentRootWin>(gfx::kMockAcceleratedWidget,
                                               &test_fragment_root_delegate);
 
-  EXPECT_EQ(fragment_root->GetChildCount(), 1);
+  EXPECT_EQ(fragment_root->GetChildCount(), 1u);
   EXPECT_EQ(fragment_root->ChildAtIndex(0),
             root_document_root_node->GetNativeViewAccessible());
 
   // Add the child tree.
   std::unique_ptr<TestBrowserAccessibilityDelegate> child_tree_delegate =
       std::make_unique<TestBrowserAccessibilityDelegate>();
-  child_tree_delegate->is_root_frame_ = true;
+  child_tree_delegate->is_root_frame_ = false;
   child_tree_delegate->accelerated_widget_ = gfx::kMockAcceleratedWidget;
   std::unique_ptr<BrowserAccessibilityManager> child_manager(
       BrowserAccessibilityManager::Create(child_tree_update,
                                           child_tree_delegate.get()));
 
   // The fragment root's lone child should still be the same as before.
-  EXPECT_EQ(fragment_root->GetChildCount(), 1);
+  EXPECT_EQ(fragment_root->GetChildCount(), 1u);
   EXPECT_EQ(fragment_root->ChildAtIndex(0),
             root_document_root_node->GetNativeViewAccessible());
 }

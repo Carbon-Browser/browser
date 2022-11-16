@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/platform/scheduler/public/dummy_schedulers.h"
 
+#include "base/threading/thread_task_runner_handle.h"
 #include "third_party/blink/public/common/browser_interface_broker_proxy.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/main_thread_scheduler_impl.h"
 #include "third_party/blink/renderer/platform/scheduler/public/agent_group_scheduler.h"
@@ -13,12 +14,48 @@
 #include "third_party/blink/renderer/platform/scheduler/public/thread_scheduler.h"
 #include "third_party/blink/renderer/platform/scheduler/public/web_scheduling_priority.h"
 #include "third_party/blink/renderer/platform/scheduler/public/web_scheduling_task_queue.h"
+#include "third_party/blink/renderer/platform/scheduler/public/widget_scheduler.h"
 #include "third_party/blink/renderer/platform/wtf/wtf.h"
 
 namespace blink {
-namespace scheduler {
 
+class VirtualTimeController;
+
+namespace scheduler {
 namespace {
+
+class DummyWidgetScheduler final : public WidgetScheduler {
+ public:
+  DummyWidgetScheduler() = default;
+  DummyWidgetScheduler(const DummyWidgetScheduler&) = delete;
+  DummyWidgetScheduler& operator=(const DummyWidgetScheduler&) = delete;
+  ~DummyWidgetScheduler() override = default;
+
+  void Shutdown() override {}
+  // Returns the input task runner.
+  scoped_refptr<base::SingleThreadTaskRunner> InputTaskRunner() override {
+    return base::ThreadTaskRunnerHandle::Get();
+  }
+  void WillBeginFrame(const viz::BeginFrameArgs& args) override {}
+  void BeginFrameNotExpectedSoon() override {}
+  void BeginMainFrameNotExpectedUntil(base::TimeTicks time) override {}
+  void DidCommitFrameToCompositor() override {}
+  void DidHandleInputEventOnCompositorThread(
+      const WebInputEvent& web_input_event,
+      InputEventState event_state) override {}
+  void WillPostInputEventToMainThread(
+      WebInputEvent::Type web_input_event_type,
+      const WebInputEventAttribution& web_input_event_attribution) override {}
+  void WillHandleInputEventOnMainThread(
+      WebInputEvent::Type web_input_event_type,
+      const WebInputEventAttribution& web_input_event_attribution) override {}
+  void DidHandleInputEventOnMainThread(const WebInputEvent& web_input_event,
+                                       WebInputEventResult result) override {}
+  void DidAnimateForInputOnCompositorThread() override {}
+  void DidRunBeginMainFrame() override {}
+  void SetHidden(bool hidden) override {}
+  void SetHasTouchHandler(bool has_touch_handler) override {}
+};
 
 class DummyFrameScheduler : public FrameScheduler {
  public:
@@ -46,10 +83,11 @@ class DummyFrameScheduler : public FrameScheduler {
   bool IsPageVisible() const override { return true; }
   void SetPaused(bool) override {}
   void SetShouldReportPostedTasksWhenDisabled(bool) override {}
-  void SetCrossOriginToMainFrame(bool) override {}
-  bool IsCrossOriginToMainFrame() const override { return false; }
+  void SetCrossOriginToNearestMainFrame(bool) override {}
+  bool IsCrossOriginToNearestMainFrame() const override { return false; }
   void SetIsAdFrame(bool is_ad_frame) override {}
   bool IsAdFrame() const override { return false; }
+  bool IsInEmbeddedFrameTree() const override { return false; }
   void TraceUrlChange(const String&) override {}
   void AddTaskTime(base::TimeDelta) override {}
   FrameType GetFrameType() const override { return FrameType::kMainFrame; }
@@ -58,7 +96,7 @@ class DummyFrameScheduler : public FrameScheduler {
       WebScopedVirtualTimePauser::VirtualTaskDuration) override {
     return WebScopedVirtualTimePauser();
   }
-  void DidStartProvisionalLoad(bool is_main_frame) override {}
+  void DidStartProvisionalLoad() override {}
   void DidCommitProvisionalLoad(bool, FrameScheduler::NavigationType) override {
   }
   void OnFirstContentfulPaintInMainFrame() override {}
@@ -89,6 +127,10 @@ class DummyFrameScheduler : public FrameScheduler {
                              const SchedulingPolicy& policy) override {}
   void OnStoppedUsingFeature(SchedulingPolicy::Feature feature,
                              const SchedulingPolicy& policy) override {}
+  base::WeakPtr<FrameOrWorkerScheduler> GetSchedulingAffectingFeatureWeakPtr()
+      override {
+    return weak_ptr_factory_.GetWeakPtr();
+  }
   WTF::HashSet<SchedulingPolicy::Feature>
   GetActiveFeaturesTrackedForBackForwardCacheMetrics() override {
     return WTF::HashSet<SchedulingPolicy::Feature>();
@@ -115,6 +157,7 @@ class DummyPageScheduler : public PageScheduler {
   std::unique_ptr<FrameScheduler> CreateFrameScheduler(
       FrameScheduler::Delegate* delegate,
       BlameContext*,
+      bool is_in_embedded_frame_tree,
       FrameScheduler::FrameType) override {
     return CreateDummyFrameScheduler();
   }
@@ -125,14 +168,6 @@ class DummyPageScheduler : public PageScheduler {
   void SetPageBackForwardCached(bool) override {}
   bool IsMainFrameLocal() const override { return true; }
   void SetIsMainFrameLocal(bool) override {}
-  void OnLocalMainFrameNetworkAlmostIdle() override {}
-  base::TimeTicks EnableVirtualTime() override { return base::TimeTicks(); }
-  void DisableVirtualTimeForTesting() override {}
-  bool VirtualTimeAllowedToAdvance() const override { return true; }
-  void SetInitialVirtualTime(base::Time) override {}
-  void SetVirtualTimePolicy(VirtualTimePolicy) override {}
-  void GrantVirtualTimeBudget(base::TimeDelta, base::OnceClosure) override {}
-  void SetMaxVirtualTimeTaskStarvationCount(int) override {}
   void AudioStateChanged(bool is_audio_playing) override {}
   bool IsAudioPlaying() const override { return false; }
   bool IsExemptFromBudgetBasedThrottling() const override { return false; }
@@ -141,13 +176,12 @@ class DummyPageScheduler : public PageScheduler {
   }
   bool IsInBackForwardCache() const override { return false; }
   bool RequestBeginMainFrameNotExpected(bool) override { return false; }
-  WebScopedVirtualTimePauser CreateWebScopedVirtualTimePauser(
-      const String& name,
-      WebScopedVirtualTimePauser::VirtualTaskDuration) override {
-    return WebScopedVirtualTimePauser();
-  }
   WebAgentGroupScheduler& GetAgentGroupScheduler() override {
     return *agent_group_scheduler_;
+  }
+  VirtualTimeController* GetVirtualTimeController() override { return nullptr; }
+  scoped_refptr<WidgetScheduler> CreateWidgetScheduler() override {
+    return base::MakeRefCounted<DummyWidgetScheduler>();
   }
 
  private:
@@ -275,11 +309,6 @@ class DummyWebThreadScheduler : public WebThreadScheduler,
 
   // WebThreadScheduler implementation:
   void Shutdown() override {}
-
-  scoped_refptr<base::SingleThreadTaskRunner> DefaultTaskRunner() override {
-    DCHECK(WTF::IsMainThread());
-    return base::ThreadTaskRunnerHandle::Get();
-  }
 
   scoped_refptr<base::SingleThreadTaskRunner> DeprecatedDefaultTaskRunner()
       override {

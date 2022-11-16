@@ -8,11 +8,11 @@
 #include <stddef.h>
 
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "base/containers/flat_set.h"
-#include "base/macros.h"
 #include "components/bookmarks/browser/titled_url_node_sorter.h"
 #include "components/query_parser/query_parser.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -37,6 +37,10 @@ class TitledUrlIndex {
   // returned unsorted.
   explicit TitledUrlIndex(
       std::unique_ptr<TitledUrlNodeSorter> sorter = nullptr);
+
+  TitledUrlIndex(const TitledUrlIndex&) = delete;
+  TitledUrlIndex& operator=(const TitledUrlIndex&) = delete;
+
   ~TitledUrlIndex();
 
   void SetNodeSorter(std::unique_ptr<TitledUrlNodeSorter> sorter);
@@ -67,8 +71,9 @@ class TitledUrlIndex {
   // For testing only.
   TitledUrlNodeSet RetrieveNodesMatchingAnyTermsForTesting(
       const std::vector<std::u16string>& terms,
-      query_parser::MatchingAlgorithm matching_algorithm) const {
-    return RetrieveNodesMatchingAnyTerms(terms, matching_algorithm);
+      query_parser::MatchingAlgorithm matching_algorithm,
+      size_t max_nodes) const {
+    return RetrieveNodesMatchingAnyTerms(terms, matching_algorithm, max_nodes);
   }
 
  private:
@@ -79,6 +84,14 @@ class TitledUrlIndex {
   // them.
   void SortMatches(const TitledUrlNodeSet& matches,
                    TitledUrlNodes* sorted_nodes) const;
+
+  // For each node, calls `MatchTitledUrlNodeWithQuery()` and returns the
+  // aggregated `TitledUrlMatch`s.
+  std::vector<TitledUrlMatch> MatchTitledUrlNodesWithQuery(
+      const TitledUrlNodes& nodes,
+      const query_parser::QueryNodeVector& query_nodes,
+      size_t max_count,
+      bool match_ancestor_titles);
 
   // Finds |query_nodes| matches in |node| and returns a TitledUrlMatch
   // containing |node| and the matches.
@@ -93,9 +106,16 @@ class TitledUrlIndex {
       const std::vector<std::u16string>& terms,
       query_parser::MatchingAlgorithm matching_algorithm) const;
 
+  // Return matches for the specified `terms`. This is approximately a union of
+  // each term's match, with some limitations to avoid too many nodes being
+  // returned: terms shorter than `term_min_length` or matching more than
+  // `max_nodes_per_term` nodes won't have their nodes accumulated by union; and
+  // accumulation is capped to `max_nodes`. Guaranteed to include any node
+  // `RetrieveNodesMatchingAllTerms()` includes.
   TitledUrlNodeSet RetrieveNodesMatchingAnyTerms(
       const std::vector<std::u16string>& terms,
-      query_parser::MatchingAlgorithm matching_algorithm) const;
+      query_parser::MatchingAlgorithm matching_algorithm,
+      size_t max_nodes) const;
 
   // Return matches for the specified |term|. May return duplicates.
   TitledUrlNodes RetrieveNodesMatchingTerm(
@@ -119,8 +139,6 @@ class TitledUrlIndex {
   Index index_;
 
   std::unique_ptr<TitledUrlNodeSorter> sorter_;
-
-  DISALLOW_COPY_AND_ASSIGN(TitledUrlIndex);
 };
 
 }  // namespace bookmarks

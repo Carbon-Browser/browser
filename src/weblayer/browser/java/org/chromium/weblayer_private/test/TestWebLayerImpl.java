@@ -17,6 +17,7 @@ import org.chromium.base.annotations.JNINamespace;
 import org.chromium.base.annotations.NativeMethods;
 import org.chromium.base.annotations.UsedByReflection;
 import org.chromium.components.autofill.AutofillProviderTestHelper;
+import org.chromium.components.browser_ui.accessibility.FontSizePrefs;
 import org.chromium.components.infobars.InfoBarAnimationListener;
 import org.chromium.components.infobars.InfoBarUiItem;
 import org.chromium.components.location.LocationUtils;
@@ -331,11 +332,30 @@ public final class TestWebLayerImpl extends ITestWebLayer.Stub {
         profileImpl.fireOnAccessTokenIdentifiedAsInvalidForTesting(scopes, token);
     }
 
+    @Override
+    public void grantLocationPermission(String url) {
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> { TestWebLayerImplJni.get().grantLocationPermission(url); });
+    }
+
+    @Override
+    public void setTextScaling(IProfile profile, float value) {
+        ProfileImpl profileImpl = (ProfileImpl) profile;
+        FontSizePrefs.getInstance(profileImpl).setUserFontScaleFactor(value);
+    }
+
+    @Override
+    public boolean getForceEnableZoom(IProfile profile) {
+        ProfileImpl profileImpl = (ProfileImpl) profile;
+        return FontSizePrefs.getInstance(profileImpl).getForceEnableZoom();
+    }
+
     @NativeMethods
     interface Natives {
         void waitForBrowserControlsMetadataState(
                 long tabImpl, int top, int bottom, Runnable runnable);
         void setIgnoreMissingKeyForTranslateManager(boolean ignore);
         void expediteDownloadService();
+        void grantLocationPermission(String url);
     }
 }

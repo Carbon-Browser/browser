@@ -7,7 +7,6 @@
 
 #include <memory>
 
-#include "base/macros.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/threading/thread_checker.h"
 #include "build/build_config.h"
@@ -19,6 +18,7 @@
 #include "third_party/blink/renderer/modules/mediastream/user_media_processor.h"
 #include "third_party/blink/renderer/modules/mediastream/user_media_request.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_deque.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_component.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_remote.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_wrapper_mode.h"
@@ -48,6 +48,10 @@ class MODULES_EXPORT UserMediaClient
   UserMediaClient(LocalFrame* frame,
                   UserMediaProcessor* user_media_processor,
                   scoped_refptr<base::SingleThreadTaskRunner> task_runner);
+
+  UserMediaClient(const UserMediaClient&) = delete;
+  UserMediaClient& operator=(const UserMediaClient&) = delete;
+
   virtual ~UserMediaClient();
 
   void RequestUserMedia(UserMediaRequest* user_media_request);
@@ -58,7 +62,7 @@ class MODULES_EXPORT UserMediaClient
 
   bool IsCapturing();
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
   void FocusCapturedSurface(const String& label, bool focus);
 #endif
 
@@ -74,6 +78,10 @@ class MODULES_EXPORT UserMediaClient
     explicit Request(UserMediaRequest* request);
     explicit Request(blink::ApplyConstraintsRequest* request);
     explicit Request(MediaStreamComponent* request);
+
+    Request(const Request&) = delete;
+    Request& operator=(const Request&) = delete;
+
     ~Request();
 
     UserMediaRequest* MoveUserMediaRequest();
@@ -98,8 +106,6 @@ class MODULES_EXPORT UserMediaClient
     Member<UserMediaRequest> user_media_request_;
     Member<blink::ApplyConstraintsRequest> apply_constraints_request_;
     Member<MediaStreamComponent> track_to_stop_;
-
-    DISALLOW_COPY_AND_ASSIGN(Request);
   };
 
   void MaybeProcessNextRequestInfo();
@@ -131,8 +137,6 @@ class MODULES_EXPORT UserMediaClient
   HeapDeque<Member<Request>> pending_request_infos_;
 
   THREAD_CHECKER(thread_checker_);
-
-  DISALLOW_COPY_AND_ASSIGN(UserMediaClient);
 };
 
 }  // namespace blink

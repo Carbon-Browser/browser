@@ -9,7 +9,6 @@
 
 #include "base/files/file_path.h"
 #include "base/logging.h"
-#include "base/macros.h"
 #include "base/scoped_native_library.h"
 #include "base/win/registry.h"
 
@@ -33,6 +32,10 @@ typedef void(NTAPI* SendSASFunction)(BOOL);
 class ScopedSoftwareSasPolicy {
  public:
   ScopedSoftwareSasPolicy();
+
+  ScopedSoftwareSasPolicy(const ScopedSoftwareSasPolicy&) = delete;
+  ScopedSoftwareSasPolicy& operator=(const ScopedSoftwareSasPolicy&) = delete;
+
   ~ScopedSoftwareSasPolicy();
 
   bool Apply();
@@ -43,8 +46,6 @@ class ScopedSoftwareSasPolicy {
 
   // True if the policy needs to be restored.
   bool restore_policy_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(ScopedSoftwareSasPolicy);
 };
 
 ScopedSoftwareSasPolicy::ScopedSoftwareSasPolicy() = default;

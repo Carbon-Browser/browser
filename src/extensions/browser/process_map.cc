@@ -24,6 +24,9 @@ struct ProcessMap::Item {
         process_id(process_id),
         site_instance_id(site_instance_id) {}
 
+  Item(const Item&) = delete;
+  Item& operator=(const Item&) = delete;
+
   ~Item() {
   }
 
@@ -39,9 +42,6 @@ struct ProcessMap::Item {
   std::string extension_id;
   int process_id = 0;
   content::SiteInstanceId site_instance_id;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(Item);
 };
 
 
@@ -145,6 +145,18 @@ Feature::Context ProcessMap::GetMostLikelyContextType(
       extension->location() != mojom::ManifestLocation::kComponent) {
     return Feature::BLESSED_WEB_PAGE_CONTEXT;
   }
+
+  // TODO(https://crbug.com/1339382): Currently, offscreen document contexts
+  // are misclassified as BLESSED_EXTENSION_CONTEXTs. This is not ideal
+  // because there is a mismatch between the browser and the renderer), but it's
+  // not a security issue because, while offscreen documents have fewer
+  // capabilities, this is an API distinction, and not a security enforcement.
+  // Offscreen documents run in the same process as the rest of the extension
+  // and can message the extension, so could easily - though indirectly -
+  // access all the same features.
+  // Even so, we should fix this to properly classify offscreen documents (and
+  // this would be a problem if offscreen documents ever have access to APIs
+  // that BLESSED_EXTENSION_CONTEXTs don't).
 
   return is_lock_screen_context_ ? Feature::LOCK_SCREEN_EXTENSION_CONTEXT
                                  : Feature::BLESSED_EXTENSION_CONTEXT;

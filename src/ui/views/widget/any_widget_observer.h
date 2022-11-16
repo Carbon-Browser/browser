@@ -8,6 +8,7 @@
 #include <string>
 
 #include "base/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list_types.h"
 #include "base/run_loop.h"
 #include "ui/views/views_export.h"
@@ -59,7 +60,7 @@ class Widget;
 // like this:
 //
 //    NamedWidgetShownWaiter waiter(
-//        "MyWidget", views::test::AnyWidgetTestPasskey{});
+//        views::test::AnyWidgetTestPasskey{}, "MyWidget");
 //    ThingThatCreatesAndShowsWidget();
 //    Widget* widget = waiter.WaitIfNeededAndGet();
 //
@@ -173,7 +174,7 @@ class VIEWS_EXPORT NamedWidgetShownWaiter {
   void OnAnyWidgetShown(Widget* widget);
 
   AnyWidgetObserver observer_;
-  Widget* widget_ = nullptr;
+  raw_ptr<Widget> widget_ = nullptr;
   base::RunLoop run_loop_;
   const std::string name_;
 };

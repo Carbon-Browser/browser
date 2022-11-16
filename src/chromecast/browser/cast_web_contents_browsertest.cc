@@ -14,7 +14,6 @@
 #include "base/command_line.h"
 #include "base/containers/flat_set.h"
 #include "base/files/file_util.h"
-#include "base/macros.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/strings/strcat.h"
@@ -104,21 +103,19 @@ std::unique_ptr<net::test_server::HttpResponse> DefaultHandler(
 class MockCastWebContentsObserver : public CastWebContentsObserver {
  public:
   MockCastWebContentsObserver() {}
+
+  MockCastWebContentsObserver(const MockCastWebContentsObserver&) = delete;
+  MockCastWebContentsObserver& operator=(const MockCastWebContentsObserver&) =
+      delete;
+
   ~MockCastWebContentsObserver() override = default;
 
   MOCK_METHOD1(PageStateChanged, void(PageState page_state));
   MOCK_METHOD2(PageStopped, void(PageState page_state, int error_code));
-  MOCK_METHOD3(RenderFrameCreated,
-               void(int render_process_id,
-                    int render_frame_id,
-                    mojo::PendingAssociatedRemote<
-                        chromecast::mojom::IdentificationSettingsManager>
-                        settings_manager));
+  MOCK_METHOD2(RenderFrameCreated,
+               void(int render_process_id, int render_frame_id));
   MOCK_METHOD0(ResourceLoadFailed, void());
   MOCK_METHOD1(UpdateTitle, void(const std::string& title));
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(MockCastWebContentsObserver);
 };
 
 class MockWebContentsDelegate : public content::WebContentsDelegate {
@@ -132,6 +129,10 @@ class MockWebContentsDelegate : public content::WebContentsDelegate {
 class TitleChangeObserver : public CastWebContentsObserver {
  public:
   TitleChangeObserver() = default;
+
+  TitleChangeObserver(const TitleChangeObserver&) = delete;
+  TitleChangeObserver& operator=(const TitleChangeObserver&) = delete;
+
   ~TitleChangeObserver() override = default;
 
   // Spins a Runloop until the title of the page matches the |expected_title|
@@ -163,13 +164,15 @@ class TitleChangeObserver : public CastWebContentsObserver {
   std::string expected_title_;
 
   base::OnceClosure quit_closure_;
-
-  DISALLOW_COPY_AND_ASSIGN(TitleChangeObserver);
 };
 
 class TestMessageReceiver : public blink::WebMessagePort::MessageReceiver {
  public:
   TestMessageReceiver() = default;
+
+  TestMessageReceiver(const TestMessageReceiver&) = delete;
+  TestMessageReceiver& operator=(const TestMessageReceiver&) = delete;
+
   ~TestMessageReceiver() override = default;
 
   void WaitForNextIncomingMessage(
@@ -218,8 +221,6 @@ class TestMessageReceiver : public blink::WebMessagePort::MessageReceiver {
       message_received_callback_;
 
   base::OnceCallback<void()> on_pipe_error_callback_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestMessageReceiver);
 };
 
 }  // namespace
@@ -229,6 +230,11 @@ class TestMessageReceiver : public blink::WebMessagePort::MessageReceiver {
 // =============================================================================
 class CastWebContentsBrowserTest : public content::BrowserTestBase,
                                    public content::WebContentsObserver {
+ public:
+  CastWebContentsBrowserTest(const CastWebContentsBrowserTest&) = delete;
+  CastWebContentsBrowserTest& operator=(const CastWebContentsBrowserTest&) =
+      delete;
+
  protected:
   CastWebContentsBrowserTest() = default;
   ~CastWebContentsBrowserTest() override = default;
@@ -294,9 +300,6 @@ class CastWebContentsBrowserTest : public content::BrowserTestBase,
   std::unique_ptr<base::RunLoop> run_loop_;
 
   base::flat_set<content::RenderFrameHost*> render_frames_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(CastWebContentsBrowserTest);
 };
 
 MATCHER_P2(CheckPageState, cwc_ptr, expected_state, "") {
@@ -470,11 +473,11 @@ IN_PROC_BROWSER_TEST_F(CastWebContentsBrowserTest, ErrorLoadFailSubFrames) {
   ASSERT_TRUE(ExecJs(web_contents_.get(), script));
 
   ASSERT_EQ(2, (int)render_frames_.size());
-  auto it =
-      std::find_if(render_frames_.begin(), render_frames_.end(),
-                   [this](content::RenderFrameHost* frame) {
-                     return frame->GetParent() == web_contents_->GetMainFrame();
-                   });
+  auto it = std::find_if(render_frames_.begin(), render_frames_.end(),
+                         [this](content::RenderFrameHost* frame) {
+                           return frame->GetParent() ==
+                                  web_contents_->GetPrimaryMainFrame();
+                         });
   ASSERT_NE(render_frames_.end(), it);
   content::RenderFrameHost* sub_frame = *it;
   ASSERT_NE(nullptr, sub_frame);
@@ -487,8 +490,9 @@ IN_PROC_BROWSER_TEST_F(CastWebContentsBrowserTest, ErrorLoadFailSubFrames) {
   EXPECT_CALL(mock_cast_wc_observer_, PageStateChanged(_)).Times(0);
   EXPECT_CALL(mock_cast_wc_observer_, PageStopped(_, _)).Times(0);
   cast_web_contents_->DidFailLoad(
-      web_contents_->GetMainFrame(),
-      web_contents_->GetMainFrame()->GetLastCommittedURL(), net::ERR_ABORTED);
+      web_contents_->GetPrimaryMainFrame(),
+      web_contents_->GetPrimaryMainFrame()->GetLastCommittedURL(),
+      net::ERR_ABORTED);
 
   // ===========================================================================
   // Test: If main frame fails to load, page should enter ERROR state.
@@ -498,8 +502,9 @@ IN_PROC_BROWSER_TEST_F(CastWebContentsBrowserTest, ErrorLoadFailSubFrames) {
               PageStopped(PageState::ERROR, net::ERR_FAILED))
       .WillOnce(InvokeWithoutArgs([&]() { QuitRunLoop(); }));
   cast_web_contents_->DidFailLoad(
-      web_contents_->GetMainFrame(),
-      web_contents_->GetMainFrame()->GetLastCommittedURL(), net::ERR_FAILED);
+      web_contents_->GetPrimaryMainFrame(),
+      web_contents_->GetPrimaryMainFrame()->GetLastCommittedURL(),
+      net::ERR_FAILED);
   run_loop_->Run();
 }
 
@@ -769,7 +774,7 @@ IN_PROC_BROWSER_TEST_F(CastWebContentsBrowserTest, PostMessageToMainFrame) {
   title_change_observer_.RunUntilTitleEquals(kOriginalTitle);
 
   cast_web_contents_->PostMessageToMainFrame(
-      gurl.GetOrigin().spec(), kPage1Path,
+      gurl.DeprecatedGetOriginAsURL().spec(), kPage1Path,
       std::vector<blink::WebMessagePort>());
   title_change_observer_.RunUntilTitleEquals(kPage1Title);
 }
@@ -817,7 +822,8 @@ IN_PROC_BROWSER_TEST_F(CastWebContentsBrowserTest, PostMessagePassMessagePort) {
     std::vector<blink::WebMessagePort> message_ports;
     message_ports.push_back(std::move(page_port));
     cast_web_contents_->PostMessageToMainFrame(
-        gurl.GetOrigin().spec(), kHelloMsg, std::move(message_ports));
+        gurl.DeprecatedGetOriginAsURL().spec(), kHelloMsg,
+        std::move(message_ports));
     run_loop.Run();
   }
   // Test whether we could receive the right response from the page after we
@@ -883,7 +889,8 @@ IN_PROC_BROWSER_TEST_F(CastWebContentsBrowserTest,
     std::vector<blink::WebMessagePort> message_ports;
     message_ports.push_back(std::move(page_port));
     cast_web_contents_->PostMessageToMainFrame(
-        gurl.GetOrigin().spec(), kHelloMsg, std::move(message_ports));
+        gurl.DeprecatedGetOriginAsURL().spec(), kHelloMsg,
+        std::move(message_ports));
     run_loop.Run();
   }
   // Navigating off-page should tear down the MessageChannel, native side
@@ -1051,25 +1058,15 @@ IN_PROC_BROWSER_TEST_F(CastWebContentsBrowserTest,
 }
 
 // Helper for the test below. This exposes two interfaces, TestAdder and
-// TestDoubler. TestAdder is exposed only through a binder (see MakeAdderBinder)
-// which the test will register in the CastWebContents' binder_registry().
-// TestDoubler is exposed only through an InterfaceProvider, registered with the
-// CastWebContents using RegisterInterfaceProvider.
-class TestInterfaceProvider : public service_manager::mojom::InterfaceProvider,
-                              public mojom::TestAdder,
+// TestDoubler.
+class TestInterfaceProvider : public mojom::TestAdder,
                               public mojom::TestDoubler {
  public:
-  TestInterfaceProvider()
-      : provider_(receiver_.BindNewPipeAndPassRemote(),
-                  base::SequencedTaskRunnerHandle::Get()) {}
+  TestInterfaceProvider() = default;
   ~TestInterfaceProvider() override = default;
 
   size_t num_adders() const { return adders_.size(); }
   size_t num_doublers() const { return doublers_.size(); }
-
-  service_manager::InterfaceProvider* interface_provider() {
-    return &provider_;
-  }
 
   base::RepeatingCallback<void(mojo::PendingReceiver<mojom::TestAdder>)>
   MakeAdderBinder() {
@@ -1080,21 +1077,20 @@ class TestInterfaceProvider : public service_manager::mojom::InterfaceProvider,
         });
   }
 
+  base::RepeatingCallback<void(mojo::PendingReceiver<mojom::TestDoubler>)>
+  MakeDoublerBinder() {
+    return base::BindLambdaForTesting(
+        [this](mojo::PendingReceiver<mojom::TestDoubler> receiver) {
+          doublers_.Add(this, std::move(receiver));
+          OnRequestHandled();
+        });
+  }
+
   // Waits for some number of new interface binding requests to be dispatched
   // and then invokes `callback`.
   void WaitForRequests(size_t n, base::OnceClosure callback) {
     wait_callback_ = std::move(callback);
     num_requests_to_wait_for_ = n;
-  }
-
-  // service_manager::mojom::InterfaceProvider:
-  void GetInterface(const std::string& interface_name,
-                    mojo::ScopedMessagePipeHandle interface_pipe) override {
-    if (interface_name == mojom::TestDoubler::Name_) {
-      doublers_.Add(this, mojo::PendingReceiver<mojom::TestDoubler>(
-                              std::move(interface_pipe)));
-      OnRequestHandled();
-    }
   }
 
   // mojom::TestAdder:
@@ -1116,8 +1112,6 @@ class TestInterfaceProvider : public service_manager::mojom::InterfaceProvider,
       std::move(wait_callback_).Run();
   }
 
-  mojo::Receiver<service_manager::mojom::InterfaceProvider> receiver_{this};
-  service_manager::InterfaceProvider provider_;
   mojo::ReceiverSet<mojom::TestAdder> adders_;
   mojo::ReceiverSet<mojom::TestDoubler> doublers_;
   size_t num_requests_to_wait_for_ = 0;
@@ -1134,10 +1128,8 @@ IN_PROC_BROWSER_TEST_F(CastWebContentsBrowserTest, InterfaceBinding) {
   TestInterfaceProvider provider;
   InterfaceBundle bundle_;
   bundle_.AddBinder(provider.MakeAdderBinder());
+  bundle_.AddBinder(provider.MakeDoublerBinder());
   cast_web_contents_->SetInterfacesForRenderer(bundle_.CreateRemote());
-  cast_web_contents_->RegisterInterfaceProvider(
-      CastWebContents::InterfaceSet{mojom::TestDoubler::Name_},
-      provider.interface_provider());
 
   // First verify that both interfaces are reachable using the deprecated
   // WebContents path, which is triggered only by renderer-side use of

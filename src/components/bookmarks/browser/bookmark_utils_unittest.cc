@@ -10,7 +10,6 @@
 #include <utility>
 #include <vector>
 
-#include "base/cxx17_backports.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/task_environment.h"
 #include "build/build_config.h"
@@ -37,14 +36,17 @@ class BookmarkUtilsTest : public testing::Test,
         grouped_changes_beginning_count_(0),
         grouped_changes_ended_count_(0) {}
 
+  BookmarkUtilsTest(const BookmarkUtilsTest&) = delete;
+  BookmarkUtilsTest& operator=(const BookmarkUtilsTest&) = delete;
+
   ~BookmarkUtilsTest() override {}
 
 // Copy and paste is not yet supported on iOS. http://crbug.com/228147
-#if !defined(OS_IOS)
+#if !BUILDFLAG(IS_IOS)
   void TearDown() override {
     ui::Clipboard::DestroyClipboardForCurrentThread();
   }
-#endif  // !defined(OS_IOS)
+#endif  // !BUILDFLAG(IS_IOS)
 
   // Certain user actions require multiple changes to the bookmark model,
   // however these modifications need to be atomic for the undo framework. The
@@ -55,7 +57,7 @@ class BookmarkUtilsTest : public testing::Test,
                                 int expected_ended_count) {
     // The undo framework is not used under Android.  Thus the group change
     // events will not be fired and so should not be tested for Android.
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
     EXPECT_EQ(grouped_changes_beginning_count_, expected_beginning_count);
     EXPECT_EQ(grouped_changes_ended_count_, expected_ended_count);
 #endif
@@ -78,8 +80,6 @@ class BookmarkUtilsTest : public testing::Test,
 
   int grouped_changes_beginning_count_;
   int grouped_changes_ended_count_;
-
-  DISALLOW_COPY_AND_ASSIGN(BookmarkUtilsTest);
 };
 
 TEST_F(BookmarkUtilsTest, GetBookmarksMatchingPropertiesWordPhraseQuery) {
@@ -224,7 +224,7 @@ TEST_F(BookmarkUtilsTest, GetBookmarksMatchingPropertiesConjunction) {
                                                &query.url, &query.title};
 
   // Test two fields matching.
-  for (size_t i = 0; i < base::size(fields); i++) {
+  for (size_t i = 0; i < std::size(fields); i++) {
     std::unique_ptr<std::u16string> original_value(fields[i]->release());
     GetBookmarksMatchingProperties(model.get(), query, 100, &nodes);
     ASSERT_EQ(1U, nodes.size());
@@ -234,7 +234,7 @@ TEST_F(BookmarkUtilsTest, GetBookmarksMatchingPropertiesConjunction) {
   }
 
   // Test two fields matching with one non-matching field.
-  for (size_t i = 0; i < base::size(fields); i++) {
+  for (size_t i = 0; i < std::size(fields); i++) {
     std::unique_ptr<std::u16string> original_value(fields[i]->release());
     *fields[i] = std::make_unique<std::u16string>(u"fjdkslafjkldsa");
     GetBookmarksMatchingProperties(model.get(), query, 100, &nodes);
@@ -245,7 +245,7 @@ TEST_F(BookmarkUtilsTest, GetBookmarksMatchingPropertiesConjunction) {
 }
 
 // Copy and paste is not yet supported on iOS. http://crbug.com/228147
-#if !defined(OS_IOS)
+#if !BUILDFLAG(IS_IOS)
 TEST_F(BookmarkUtilsTest, DISABLED_PasteBookmarkFromURL) {
   std::unique_ptr<BookmarkModel> model(TestBookmarkClient::CreateModel());
   const std::u16string url_text = u"http://www.google.com/";
@@ -277,7 +277,7 @@ TEST_F(BookmarkUtilsTest, DISABLED_PasteBookmarkFromURL) {
 }
 
 // TODO(https://crbug.com/1010182): Fix flakes and re-enable this test.
-#if defined(OS_WIN) || defined(OS_MAC)
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
 #define MAYBE_CopyPaste DISABLED_CopyPaste
 #else
 #define MAYBE_CopyPaste CopyPaste
@@ -373,7 +373,7 @@ TEST_F(BookmarkUtilsTest, DISABLED_CopyPasteMetaInfo) {
   EXPECT_EQ("someothervalue", value);
 }
 
-#if defined(OS_LINUX) || defined(OS_CHROMEOS) || defined(OS_MAC)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_MAC)
 // http://crbug.com/396472
 #define MAYBE_CutToClipboard DISABLED_CutToClipboard
 #else
@@ -405,7 +405,7 @@ TEST_F(BookmarkUtilsTest, MAYBE_CutToClipboard) {
 }
 
 // Test is flaky on Mac and LaCros: crbug.com/1236362
-#if defined(OS_MAC) || BUILDFLAG(IS_CHROMEOS_LACROS)
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_CHROMEOS_LACROS)
 #define MAYBE_PasteNonEditableNodes DISABLED_PasteNonEditableNodes
 #else
 #define MAYBE_PasteNonEditableNodes PasteNonEditableNodes
@@ -433,7 +433,7 @@ TEST_F(BookmarkUtilsTest, MAYBE_PasteNonEditableNodes) {
   EXPECT_FALSE(upcast->CanBeEditedByUser(managed_node));
   EXPECT_FALSE(CanPasteFromClipboard(model.get(), managed_node));
 }
-#endif  // !defined(OS_IOS)
+#endif  // !BUILDFLAG(IS_IOS)
 
 TEST_F(BookmarkUtilsTest, GetParentForNewNodes) {
   std::unique_ptr<BookmarkModel> model(TestBookmarkClient::CreateModel());

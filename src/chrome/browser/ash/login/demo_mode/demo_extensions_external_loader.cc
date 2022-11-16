@@ -11,7 +11,6 @@
 #include "base/json/json_reader.h"
 #include "base/location.h"
 #include "base/logging.h"
-#include "base/task/post_task.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/values.h"
@@ -47,8 +46,7 @@ absl::optional<base::Value> LoadPrefsFromDisk(
     return absl::nullopt;
   }
 
-  std::unique_ptr<base::Value> prefs_value =
-      base::JSONReader::ReadDeprecated(prefs_str);
+  absl::optional<base::Value> prefs_value = base::JSONReader::Read(prefs_str);
   if (!prefs_value) {
     LOG(ERROR) << "Unable to parse demo extensions prefs.";
     return absl::nullopt;
@@ -59,7 +57,7 @@ absl::optional<base::Value> LoadPrefsFromDisk(
     return absl::nullopt;
   }
 
-  return base::Value::FromUniquePtrValue(std::move(prefs_value));
+  return prefs_value;
 }
 
 }  // namespace
@@ -95,7 +93,8 @@ void DemoExtensionsExternalLoader::LoadApp(const std::string& app_id) {
         cache_dir_, g_browser_process->shared_url_loader_factory(),
         extensions::GetExtensionFileTaskRunner(), this,
         true /* always_check_updates */,
-        false /* wait_for_cache_initialization */);
+        false /* wait_for_cache_initialization */,
+        false /* allow_scheduled_updates */);
   }
 
   // TODO(crbug.com/991453): In offline Demo Mode, this would overwrite the
@@ -107,7 +106,7 @@ void DemoExtensionsExternalLoader::LoadApp(const std::string& app_id) {
 }
 
 void DemoExtensionsExternalLoader::StartLoading() {
-  DemoSession::Get()->EnsureOfflineResourcesLoaded(base::BindOnce(
+  DemoSession::Get()->EnsureResourcesLoaded(base::BindOnce(
       &DemoExtensionsExternalLoader::StartLoadingFromOfflineDemoResources,
       weak_ptr_factory_.GetWeakPtr()));
 }

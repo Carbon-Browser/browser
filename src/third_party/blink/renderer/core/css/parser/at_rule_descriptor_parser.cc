@@ -156,13 +156,6 @@ CSSValue* ConsumeScrollTimelineOrientation(CSSParserTokenRange& range) {
       CSSValueID::kHorizontal, CSSValueID::kVertical>(range);
 }
 
-CSSValue* ConsumeTimeRange(CSSParserTokenRange& range,
-                           const CSSParserContext& context) {
-  if (auto* value = css_parsing_utils::ConsumeIdent<CSSValueID::kAuto>(range))
-    return value;
-  return css_parsing_utils::ConsumeTime(range, context, kValueRangeAll);
-}
-
 CSSValue* ConsumeDescriptor(StyleRule::RuleType rule_type,
                             AtRuleDescriptorID id,
                             const CSSTokenizedValue& tokenized_value,
@@ -173,6 +166,8 @@ CSSValue* ConsumeDescriptor(StyleRule::RuleType rule_type,
   switch (rule_type) {
     case StyleRule::kFontFace:
       return Parser::ParseFontFaceDescriptor(id, range, context);
+    case StyleRule::kFontPaletteValues:
+      return Parser::ParseAtFontPaletteValuesDescriptor(id, range, context);
     case StyleRule::kProperty:
       return Parser::ParseAtPropertyDescriptor(id, tokenized_value, context);
     case StyleRule::kCounterStyle:
@@ -190,8 +185,11 @@ CSSValue* ConsumeDescriptor(StyleRule::RuleType rule_type,
     case StyleRule::kLayerBlock:
     case StyleRule::kLayerStatement:
     case StyleRule::kNamespace:
+    case StyleRule::kScope:
     case StyleRule::kSupports:
     case StyleRule::kViewport:
+    case StyleRule::kPositionFallback:
+    case StyleRule::kTry:
       // TODO(andruud): Handle other descriptor types here.
       NOTREACHED();
       return nullptr;
@@ -204,8 +202,8 @@ CSSValue* ConsumeFontMetricOverride(CSSParserTokenRange& range,
           css_parsing_utils::ConsumeIdent<CSSValueID::kNormal>(range)) {
     return normal;
   }
-  return css_parsing_utils::ConsumePercent(range, context,
-                                           kValueRangeNonNegative);
+  return css_parsing_utils::ConsumePercent(
+      range, context, CSSPrimitiveValue::ValueRange::kNonNegative);
 }
 
 }  // namespace
@@ -268,10 +266,8 @@ CSSValue* AtRuleDescriptorParser::ParseFontFaceDescriptor(
       parsed_value = ConsumeFontMetricOverride(range, context);
       break;
     case AtRuleDescriptorID::SizeAdjust:
-      if (RuntimeEnabledFeatures::CSSFontFaceSizeAdjustEnabled()) {
-        parsed_value = css_parsing_utils::ConsumePercent(
-            range, context, kValueRangeNonNegative);
-      }
+      parsed_value = css_parsing_utils::ConsumePercent(
+          range, context, CSSPrimitiveValue::ValueRange::kNonNegative);
       break;
     default:
       break;
@@ -356,9 +352,6 @@ CSSValue* AtRuleDescriptorParser::ParseAtScrollTimelineDescriptor(
     case AtRuleDescriptorID::End:
       parsed_value = css_parsing_utils::ConsumeScrollOffset(range, context);
       break;
-    case AtRuleDescriptorID::TimeRange:
-      parsed_value = ConsumeTimeRange(range, context);
-      break;
     default:
       break;
   }
@@ -374,7 +367,7 @@ bool AtRuleDescriptorParser::ParseAtRule(
     AtRuleDescriptorID id,
     const CSSTokenizedValue& tokenized_value,
     const CSSParserContext& context,
-    HeapVector<CSSPropertyValue, 256>& parsed_descriptors) {
+    HeapVector<CSSPropertyValue, 64>& parsed_descriptors) {
   CSSValue* result = ConsumeDescriptor(rule_type, id, tokenized_value, context);
 
   if (!result)

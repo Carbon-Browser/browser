@@ -11,6 +11,7 @@
 #include "base/observer_list.h"
 #include "base/synchronization/lock.h"
 #include "base/threading/thread_checker.h"
+#include "base/time/time.h"
 #include "remoting/proto/audio.pb.h"
 #include "remoting/protocol/audio_source.h"
 
@@ -21,8 +22,7 @@ static const int kChannels = 2;
 static const int kBytesPerSample = 2;
 
 // Frame size expected by webrtc::AudioTrackSinkInterface.
-static constexpr base::TimeDelta kAudioFrameDuration =
-    base::TimeDelta::FromMilliseconds(10);
+static constexpr base::TimeDelta kAudioFrameDuration = base::Milliseconds(10);
 
 class WebrtcAudioSourceAdapter::Core {
  public:

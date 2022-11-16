@@ -6,26 +6,28 @@
 
 #include <iterator>
 #include <map>
+#include <memory>
 #include <vector>
 
-#include "base/cxx17_backports.h"
+#include "ash/components/arc/arc_prefs.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/json/json_string_value_serializer.h"
-#include "base/sequenced_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/gmock_move_support.h"
 #include "base/test/scoped_mock_time_message_loop_task_runner.h"
 #include "base/test/test_mock_time_task_runner.h"
 #include "base/test/test_simple_task_runner.h"
+#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/tick_clock.h"
 #include "base/time/time.h"
 #include "base/values.h"
 #include "chrome/browser/ash/policy/reporting/extension_install_event_log.h"
+#include "chrome/browser/ash/policy/reporting/extension_install_event_log_uploader.h"
 #include "chrome/browser/ash/policy/reporting/install_event_log_util.h"
 #include "chrome/browser/profiles/reporting_util.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chromeos/system/fake_statistics_provider.h"
-#include "components/arc/arc_prefs.h"
 #include "components/policy/core/common/cloud/realtime_reporting_job_configuration.h"
 #include "components/policy/proto/device_management_backend.pb.h"
 #include "components/prefs/pref_service.h"
@@ -53,11 +55,10 @@ namespace {
 
 constexpr base::FilePath::CharType kLogFileName[] =
     FILE_PATH_LITERAL("extension_install_log");
-constexpr base::TimeDelta kStoreDelay = base::TimeDelta::FromSeconds(5);
-constexpr base::TimeDelta kUploadInterval = base::TimeDelta::FromHours(3);
-constexpr base::TimeDelta kExpeditedUploadDelay =
-    base::TimeDelta::FromMinutes(15);
-constexpr base::TimeDelta kOneMs = base::TimeDelta::FromMilliseconds(1);
+constexpr base::TimeDelta kStoreDelay = base::Seconds(5);
+constexpr base::TimeDelta kUploadInterval = base::Hours(3);
+constexpr base::TimeDelta kExpeditedUploadDelay = base::Minutes(15);
+constexpr base::TimeDelta kOneMs = base::Milliseconds(1);
 
 constexpr int kTotalSizeExpeditedUploadThreshold = 2048;
 constexpr int kMaxSizeExpeditedUploadThreshold = 512;
@@ -103,16 +104,15 @@ bool ContainsSameEvents(const Events& expected,
   return true;
 }
 
-base::Value ConvertEventsToValue(const Events& events, Profile* profile) {
-  base::Value context = reporting::GetContext(profile);
-  base::Value event_list(base::Value::Type::LIST);
+base::Value::List ConvertEventsToValue(const Events& events, Profile* profile) {
+  base::Value::Dict context = reporting::GetContext(profile);
+  base::Value::List event_list;
 
   for (auto it = events.begin(); it != events.end(); ++it) {
     const extensions::ExtensionId& extension_id = (*it).first;
     for (const em::ExtensionInstallReportLogEvent&
              extension_install_report_log_event : (*it).second) {
-      base::Value wrapper;
-      wrapper = ConvertExtensionEventToValue(
+      base::Value::Dict wrapper = ConvertExtensionEventToValue(
           extension_id, extension_install_report_log_event, context);
       event_list.Append(std::move(wrapper));
     }
@@ -155,20 +155,22 @@ class TestLogTaskRunnerWrapper
 class ExtensionInstallEventLogManagerTest : public testing::Test {
  protected:
   ExtensionInstallEventLogManagerTest()
-      : uploader_(/*profile=*/nullptr),
-        log_task_runner_(log_task_runner_wrapper_.test_task_runner()),
+      : log_task_runner_(log_task_runner_wrapper_.test_task_runner()),
         log_file_path_(profile_.GetPath().Append(kLogFileName)),
         extension_ids_{std::begin(kExtensionIds), std::end(kExtensionIds)},
-        events_value_(base::Value::Type::DICTIONARY),
         scoped_fake_statistics_provider_(
             std::make_unique<
                 chromeos::system::ScopedFakeStatisticsProvider>()) {}
 
   // testing::Test:
   void SetUp() override {
-    auto mock_report_queue = std::make_unique<reporting::MockReportQueue>();
+    auto mock_report_queue = std::unique_ptr<::reporting::MockReportQueue,
+                                             base::OnTaskRunnerDeleter>(
+        new ::reporting::MockReportQueue(),
+        base::OnTaskRunnerDeleter(base::SequencedTaskRunnerHandle::Get()));
     mock_report_queue_ = mock_report_queue.get();
-    uploader_.SetReportQueue(std::move(mock_report_queue));
+    uploader_ = ExtensionInstallEventLogUploader::CreateForTest(
+        /*profile=*/nullptr, std::move(mock_report_queue));
     event_.set_timestamp(0);
     event_.set_event_type(em::ExtensionInstallReportLogEvent::SUCCESS);
 
@@ -189,13 +191,13 @@ class ExtensionInstallEventLogManagerTest : public testing::Test {
 
   void CreateManager() {
     manager_ = std::make_unique<ExtensionInstallEventLogManager>(
-        &log_task_runner_wrapper_, &uploader_, &profile_);
+        &log_task_runner_wrapper_, uploader_.get(), &profile_);
     FlushNonDelayedTasks();
   }
 
   void AddLogEntry(int extension_index) {
     ASSERT_GE(extension_index, 0);
-    ASSERT_LT(extension_index, static_cast<int>(base::size(kExtensionIds)));
+    ASSERT_LT(extension_index, static_cast<int>(std::size(kExtensionIds)));
     const extensions::ExtensionId extension_id = kExtensionIds[extension_index];
     events_[extension_id].push_back(event_);
     manager_->Add({kExtensionIds[extension_index]}, event_);
@@ -217,17 +219,10 @@ class ExtensionInstallEventLogManagerTest : public testing::Test {
     AddLogEntryForsetOfExtensions(extension_ids_);
   }
 
-  void ClearEventsDict() {
-    base::DictionaryValue* mutable_dict;
-    if (events_value_.GetAsDictionary(&mutable_dict))
-      mutable_dict->Clear();
-    else
-      NOTREACHED();
-  }
-
   void BuildReport() {
-    base::Value event_list = ConvertEventsToValue(events_, /*profile=*/nullptr);
-    base::Value context = reporting::GetContext(/*profile=*/nullptr);
+    base::Value::List event_list =
+        ConvertEventsToValue(events_, /*profile=*/nullptr);
+    base::Value::Dict context = reporting::GetContext(/*profile=*/nullptr);
 
     events_value_ = RealtimeReportingJobConfiguration::BuildReport(
         std::move(event_list), std::move(context));
@@ -235,7 +230,7 @@ class ExtensionInstallEventLogManagerTest : public testing::Test {
 
   void ExpectUploadAndCaptureCallback(
       reporting::MockReportQueue::EnqueueCallback* callback) {
-    ClearEventsDict();
+    events_value_.clear();
     BuildReport();
 
     EXPECT_CALL(*mock_report_queue_,
@@ -255,7 +250,7 @@ class ExtensionInstallEventLogManagerTest : public testing::Test {
   }
 
   void ExpectAndCompleteUpload() {
-    ClearEventsDict();
+    events_value_.clear();
     BuildReport();
 
     EXPECT_CALL(*mock_report_queue_,
@@ -309,7 +304,7 @@ class ExtensionInstallEventLogManagerTest : public testing::Test {
       disable_purge_for_testing_;
   TestingProfile profile_;
   reporting::MockReportQueue* mock_report_queue_;
-  ExtensionInstallEventLogUploader uploader_;
+  std::unique_ptr<ExtensionInstallEventLogUploader> uploader_;
   std::unique_ptr<base::ScopedMockTimeMessageLoopTaskRunner>
       scoped_main_task_runner_;
 
@@ -318,7 +313,7 @@ class ExtensionInstallEventLogManagerTest : public testing::Test {
 
   const base::FilePath log_file_path_;
   const std::set<extensions::ExtensionId> extension_ids_;
-  base::Value events_value_;
+  base::Value::Dict events_value_;
   std::unique_ptr<chromeos::system::ScopedFakeStatisticsProvider>
       scoped_fake_statistics_provider_;
 
@@ -370,7 +365,7 @@ TEST_F(ExtensionInstallEventLogManagerTest, CreateNonEmpty) {
 TEST_F(ExtensionInstallEventLogManagerTest, AddBeforeInitialUpload) {
   CreateManager();
 
-  const base::TimeDelta offset = base::TimeDelta::FromMinutes(2);
+  const base::TimeDelta offset = base::Minutes(2);
   FastForwardTo(offset);
   AddLogEntry(0 /* extension_index */);
 
@@ -400,14 +395,14 @@ TEST_F(ExtensionInstallEventLogManagerTest, AddBeforeInitialUpload) {
 TEST_F(ExtensionInstallEventLogManagerTest, Add) {
   CreateManager();
 
-  const base::TimeDelta offset = base::TimeDelta::FromMinutes(20);
+  const base::TimeDelta offset = base::Minutes(20);
   FastForwardTo(offset);
   AddLogEntry(0 /* extension_index */);
 
-  FastForwardTo(offset + base::TimeDelta::FromSeconds(2));
+  FastForwardTo(offset + base::Seconds(2));
   AddLogEntry(0 /* extension_index */);
 
-  FastForwardTo(offset + base::TimeDelta::FromSeconds(4));
+  FastForwardTo(offset + base::Seconds(4));
   AddLogEntry(0 /* extension_index */);
 
   FastForwardTo(offset + kStoreDelay - kOneMs);
@@ -416,14 +411,13 @@ TEST_F(ExtensionInstallEventLogManagerTest, Add) {
   FastForwardTo(offset + kStoreDelay);
   VerifyAndDeleteLogFile();
 
-  FastForwardTo(offset + base::TimeDelta::FromSeconds(6));
+  FastForwardTo(offset + base::Seconds(6));
   AddLogEntry(0 /* extension_index */);
 
-  FastForwardTo(offset + base::TimeDelta::FromSeconds(6) + kStoreDelay -
-                kOneMs);
+  FastForwardTo(offset + base::Seconds(6) + kStoreDelay - kOneMs);
   EXPECT_FALSE(base::PathExists(log_file_path_));
 
-  FastForwardTo(offset + base::TimeDelta::FromSeconds(6) + kStoreDelay);
+  FastForwardTo(offset + base::Seconds(6) + kStoreDelay);
   VerifyAndDeleteLogFile();
 
   FastForwardTo(offset + kUploadInterval - kOneMs);
@@ -446,7 +440,7 @@ TEST_F(ExtensionInstallEventLogManagerTest, Add) {
 TEST_F(ExtensionInstallEventLogManagerTest, AddForMultipleExtensions) {
   CreateManager();
 
-  const base::TimeDelta offset = base::TimeDelta::FromMinutes(20);
+  const base::TimeDelta offset = base::Minutes(20);
   FastForwardTo(offset);
   AddLogEntryForAllExtensions();
 
@@ -475,7 +469,7 @@ TEST_F(ExtensionInstallEventLogManagerTest, AddForMultipleExtensions) {
 TEST_F(ExtensionInstallEventLogManagerTest, AddForZeroExtensions) {
   CreateManager();
 
-  const base::TimeDelta offset = base::TimeDelta::FromMinutes(20);
+  const base::TimeDelta offset = base::Minutes(20);
   FastForwardTo(offset);
   AddLogEntryForsetOfExtensions({});
 
@@ -489,7 +483,7 @@ TEST_F(ExtensionInstallEventLogManagerTest, AddForZeroExtensions) {
 TEST_F(ExtensionInstallEventLogManagerTest, AddToTriggerMaxSizeExpedited) {
   CreateManager();
 
-  const base::TimeDelta offset = base::TimeDelta::FromMinutes(20);
+  const base::TimeDelta offset = base::Minutes(20);
   FastForwardTo(offset);
   for (int i = 0; i <= kMaxSizeExpeditedUploadThreshold; ++i) {
     AddLogEntry(0 /* extension_index */);
@@ -521,11 +515,11 @@ TEST_F(ExtensionInstallEventLogManagerTest, AddToTriggerMaxSizeExpedited) {
 TEST_F(ExtensionInstallEventLogManagerTest, AddToTriggerTotalSizeExpedited) {
   CreateManager();
 
-  const base::TimeDelta offset = base::TimeDelta::FromMinutes(20);
+  const base::TimeDelta offset = base::Minutes(20);
   FastForwardTo(offset);
   int i = 0;
   while (i <= kTotalSizeExpeditedUploadThreshold) {
-    for (int j = 0; j < static_cast<int>(base::size(kExtensionIds)); ++i, ++j) {
+    for (int j = 0; j < static_cast<int>(std::size(kExtensionIds)); ++i, ++j) {
       AddLogEntry(j /* extension_index */);
     }
   }
@@ -558,10 +552,10 @@ TEST_F(ExtensionInstallEventLogManagerTest,
        AddForMultipleExtensionsToTriggerTotalSizeExpedited) {
   CreateManager();
 
-  const base::TimeDelta offset = base::TimeDelta::FromMinutes(20);
+  const base::TimeDelta offset = base::Minutes(20);
   FastForwardTo(offset);
   for (int i = 0; i <= kTotalSizeExpeditedUploadThreshold;
-       i += base::size(kExtensionIds)) {
+       i += std::size(kExtensionIds)) {
     AddLogEntryForAllExtensions();
   }
 
@@ -680,7 +674,7 @@ TEST_F(ExtensionInstallEventLogManagerTest, RequestUploadAddExpeditedUpload) {
 TEST_F(ExtensionInstallEventLogManagerTest, RequestExpeditedUploadAddUpload) {
   CreateManager();
 
-  const base::TimeDelta offset = base::TimeDelta::FromMinutes(20);
+  const base::TimeDelta offset = base::Minutes(20);
   FastForwardTo(offset);
   for (int i = 0; i <= kMaxSizeExpeditedUploadThreshold; ++i) {
     AddLogEntry(0 /* extension_index */);

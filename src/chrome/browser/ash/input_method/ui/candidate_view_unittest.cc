@@ -7,7 +7,6 @@
 #include <stddef.h>
 
 #include "base/check.h"
-#include "base/cxx17_backports.h"
 #include "base/strings/utf_string_conversions.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/accessibility/ax_node_data.h"
@@ -36,6 +35,10 @@ const char* const kDummyCandidates[] = {
 class CandidateViewTest : public views::ViewsTestBase {
  public:
   CandidateViewTest() = default;
+
+  CandidateViewTest(const CandidateViewTest&) = delete;
+  CandidateViewTest& operator=(const CandidateViewTest&) = delete;
+
   ~CandidateViewTest() override = default;
 
   void SetUp() override {
@@ -49,7 +52,7 @@ class CandidateViewTest : public views::ViewsTestBase {
     container_ = init_params.delegate->GetContentsView();
     container_->SetLayoutManager(std::make_unique<views::BoxLayout>(
         views::BoxLayout::Orientation::kVertical));
-    for (size_t i = 0; i < base::size(kDummyCandidates); ++i) {
+    for (size_t i = 0; i < std::size(kDummyCandidates); ++i) {
       CandidateView* candidate = new CandidateView(
           views::Button::PressedCallback(), ui::CandidateWindow::VERTICAL);
       ui::CandidateWindow::Entry entry;
@@ -99,8 +102,6 @@ class CandidateViewTest : public views::ViewsTestBase {
   views::Widget* widget_ = nullptr;
   views::View* container_ = nullptr;
   std::unique_ptr<ui::test::EventGenerator> event_generator_;
-
-  DISALLOW_COPY_AND_ASSIGN(CandidateViewTest);
 };
 
 TEST_F(CandidateViewTest, MouseHovers) {

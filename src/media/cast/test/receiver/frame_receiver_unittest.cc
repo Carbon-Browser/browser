@@ -12,16 +12,18 @@
 
 #include "base/bind.h"
 #include "base/containers/circular_deque.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/test/simple_test_tick_clock.h"
+#include "base/time/time.h"
 #include "media/base/fake_single_thread_task_runner.h"
 #include "media/cast/cast_environment.h"
+#include "media/cast/common/encoded_frame.h"
+#include "media/cast/common/openscreen_conversion_helpers.h"
 #include "media/cast/logging/simple_event_subscriber.h"
 #include "media/cast/net/cast_transport_impl.h"
 #include "media/cast/net/rtcp/rtcp_utility.h"
-#include "media/cast/net/rtcp/test_rtcp_packet_builder.h"
 #include "media/cast/test/mock_cast_transport.h"
+#include "media/cast/test/test_rtcp_packet_builder.h"
 #include "media/cast/test/utility/default_config.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
@@ -42,6 +44,10 @@ FrameId GetFirstTestFrameId() {
 class FakeFrameClient {
  public:
   FakeFrameClient() : num_called_(0) {}
+
+  FakeFrameClient(const FakeFrameClient&) = delete;
+  FakeFrameClient& operator=(const FakeFrameClient&) = delete;
+
   virtual ~FakeFrameClient() = default;
 
   void AddExpectedResult(FrameId expected_frame_id,
@@ -66,12 +72,14 @@ class FakeFrameClient {
  private:
   base::circular_deque<std::pair<FrameId, base::TimeTicks>> expected_results_;
   int num_called_;
-
-  DISALLOW_COPY_AND_ASSIGN(FakeFrameClient);
 };
 }  // namespace
 
 class FrameReceiverTest : public ::testing::Test {
+ public:
+  FrameReceiverTest(const FrameReceiverTest&) = delete;
+  FrameReceiverTest& operator=(const FrameReceiverTest&) = delete;
+
  protected:
   FrameReceiverTest() {
     testing_clock_.Advance(base::TimeTicks::Now() - base::TimeTicks());
@@ -123,7 +131,7 @@ class FrameReceiverTest : public ::testing::Test {
   void FeedLipSyncInfoIntoReceiver() {
     const base::TimeTicks now = testing_clock_.NowTicks();
     const RtpTimeTicks rtp_timestamp =
-        RtpTimeTicks::FromTimeDelta(now - start_time_, config_.rtp_timebase);
+        ToRtpTimeTicks(now - start_time_, config_.rtp_timebase);
     CHECK_LE(RtpTimeTicks(), rtp_timestamp);
     uint32_t ntp_seconds;
     uint32_t ntp_fraction;
@@ -147,9 +155,6 @@ class FrameReceiverTest : public ::testing::Test {
   // Important for the FrameReceiver to be declared last, since its dependencies
   // must remain alive until after its destruction.
   std::unique_ptr<FrameReceiver> receiver_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(FrameReceiverTest);
 };
 
 TEST_F(FrameReceiverTest, RejectsUnparsablePackets) {
@@ -204,7 +209,7 @@ TEST_F(FrameReceiverTest, ReceivesOneFrame) {
 
   // Deliver one frame to the receiver and expect to get one frame back.
   const base::TimeDelta target_playout_delay =
-      base::TimeDelta::FromMilliseconds(kPlayoutDelayMillis);
+      base::Milliseconds(kPlayoutDelayMillis);
   frame_client_.AddExpectedResult(
       GetFirstTestFrameId(), testing_clock_.NowTicks() + target_playout_delay);
   FeedOneFrameIntoReceiver();
@@ -242,9 +247,9 @@ TEST_F(FrameReceiverTest, ReceivesFramesSkippingWhenAppropriate) {
       .WillRepeatedly(testing::Return());
 
   const base::TimeDelta time_advance_per_frame =
-      base::TimeDelta::FromSeconds(1) / config_.target_frame_rate;
+      base::Seconds(1) / config_.target_frame_rate;
   const RtpTimeDelta rtp_advance_per_frame =
-      RtpTimeDelta::FromTimeDelta(time_advance_per_frame, config_.rtp_timebase);
+      ToRtpTimeDelta(time_advance_per_frame, config_.rtp_timebase);
 
   // Feed and process lip sync in receiver.
   FeedLipSyncInfoIntoReceiver();
@@ -259,7 +264,7 @@ TEST_F(FrameReceiverTest, ReceivesFramesSkippingWhenAppropriate) {
 
   // Receive one frame and expect to see the first request satisfied.
   const base::TimeDelta target_playout_delay =
-      base::TimeDelta::FromMilliseconds(kPlayoutDelayMillis);
+      base::Milliseconds(kPlayoutDelayMillis);
   frame_client_.AddExpectedResult(
       GetFirstTestFrameId(), first_frame_capture_time + target_playout_delay);
   rtp_header_.rtp_timestamp = RtpTimeTicks();
@@ -356,9 +361,9 @@ TEST_F(FrameReceiverTest, ReceivesFramesRefusingToSkipAny) {
       .WillRepeatedly(testing::Return());
 
   const base::TimeDelta time_advance_per_frame =
-      base::TimeDelta::FromSeconds(1) / config_.target_frame_rate;
+      base::Seconds(1) / config_.target_frame_rate;
   const RtpTimeDelta rtp_advance_per_frame =
-      RtpTimeDelta::FromTimeDelta(time_advance_per_frame, config_.rtp_timebase);
+      ToRtpTimeDelta(time_advance_per_frame, config_.rtp_timebase);
 
   // Feed and process lip sync in receiver.
   FeedLipSyncInfoIntoReceiver();
@@ -373,7 +378,7 @@ TEST_F(FrameReceiverTest, ReceivesFramesRefusingToSkipAny) {
 
   // Receive one frame and expect to see the first request satisfied.
   const base::TimeDelta target_playout_delay =
-      base::TimeDelta::FromMilliseconds(kPlayoutDelayMillis);
+      base::Milliseconds(kPlayoutDelayMillis);
   frame_client_.AddExpectedResult(
       GetFirstTestFrameId(), first_frame_capture_time + target_playout_delay);
   rtp_header_.rtp_timestamp = RtpTimeTicks();

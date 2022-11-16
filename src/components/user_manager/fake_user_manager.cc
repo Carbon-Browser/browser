@@ -11,8 +11,8 @@
 #include "base/callback.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
-#include "base/single_thread_task_runner.h"
 #include "base/system/sys_info.h"
+#include "base/task/single_thread_task_runner.h"
 #include "components/user_manager/user_names.h"
 #include "components/user_manager/user_type.h"
 
@@ -60,6 +60,14 @@ const User* FakeUserManager::AddChildUser(const AccountId& account_id) {
 
 const User* FakeUserManager::AddGuestUser(const AccountId& account_id) {
   User* user = User::CreateGuestUser(account_id);
+  users_.push_back(user);
+  return user;
+}
+
+const User* FakeUserManager::AddKioskAppUser(const AccountId& account_id) {
+  User* user = User::CreateKioskAppUser(account_id);
+  // TODO: Merge with ProfileHelper::GetUserIdHashByUserIdForTesting.
+  user->set_username_hash(account_id.GetUserEmail() + "-hash");
   users_.push_back(user);
   return user;
 }
@@ -275,7 +283,8 @@ bool FakeUserManager::IsLoggedInAsPublicAccount() const {
 }
 
 bool FakeUserManager::IsLoggedInAsGuest() const {
-  return false;
+  const User* active_user = GetActiveUser();
+  return active_user && active_user->GetType() == USER_TYPE_GUEST;
 }
 
 bool FakeUserManager::IsLoggedInAsKioskApp() const {
@@ -373,7 +382,7 @@ const AccountId& FakeUserManager::GetGuestAccountId() const {
 
 bool FakeUserManager::IsFirstExecAfterBoot() const {
   return base::CommandLine::ForCurrentProcess()->HasSwitch(
-      chromeos::switches::kFirstExecAfterBoot);
+      ash::switches::kFirstExecAfterBoot);
 }
 
 void FakeUserManager::AsyncRemoveCryptohome(const AccountId& account_id) const {
@@ -396,7 +405,7 @@ bool FakeUserManager::IsDeprecatedSupervisedAccountId(
 bool FakeUserManager::HasBrowserRestarted() const {
   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
   return base::SysInfo::IsRunningOnChromeOS() &&
-         command_line->HasSwitch(chromeos::switches::kLoginUser);
+         command_line->HasSwitch(ash::switches::kLoginUser);
 }
 
 const gfx::ImageSkia& FakeUserManager::GetResourceImagekiaNamed(int id) const {

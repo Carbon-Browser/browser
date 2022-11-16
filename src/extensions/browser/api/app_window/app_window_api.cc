@@ -9,7 +9,6 @@
 
 #include "base/bind.h"
 #include "base/command_line.h"
-#include "base/cxx17_backports.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/time/time.h"
@@ -21,6 +20,7 @@
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/web_contents.h"
+#include "content/public/common/color_parser.h"
 #include "content/public/common/url_constants.h"
 #include "extensions/browser/app_window/app_window.h"
 #include "extensions/browser/app_window/app_window_client.h"
@@ -148,15 +148,16 @@ ExtensionFunction::ResponseAction AppWindowCreateFunction::Run() {
   EXTENSION_FUNCTION_VALIDATE(params.get());
 
   GURL url = extension()->GetResourceURL(params->url);
-  // Allow absolute URLs for component apps, otherwise prepend the extension
-  // path.
-  // TODO(devlin): Investigate if this is still used. If not, kill it dead!
+  // URLs normally must be relative to the extension. We make an exception
+  // to allow component apps to open chrome URLs (e.g. for the settings page
+  // on ChromeOS).
   GURL absolute = GURL(params->url);
   if (absolute.has_scheme()) {
-    if (extension()->location() == mojom::ManifestLocation::kComponent) {
+    if (extension()->location() == mojom::ManifestLocation::kComponent &&
+        absolute.SchemeIs(content::kChromeUIScheme)) {
       url = absolute;
     } else {
-      // Show error when url passed isn't local.
+      // Show error when url passed isn't valid.
       return RespondNow(Error(app_window_constants::kInvalidUrlParameter));
     }
   }
@@ -189,7 +190,7 @@ ExtensionFunction::ResponseAction AppWindowCreateFunction::Run() {
                                            create_params.window_key);
         if (existing_window) {
           content::RenderFrameHost* existing_frame =
-              existing_window->web_contents()->GetMainFrame();
+              existing_window->web_contents()->GetPrimaryMainFrame();
           int frame_id = MSG_ROUTING_NONE;
           if (source_process_id() == existing_frame->GetProcess()->GetID()) {
             frame_id = existing_frame->GetRoutingID();
@@ -202,23 +203,20 @@ ExtensionFunction::ResponseAction AppWindowCreateFunction::Run() {
               existing_window->Show(AppWindow::SHOW_ACTIVE);
           }
 
-          std::unique_ptr<base::DictionaryValue> result(
-              new base::DictionaryValue);
-          result->SetInteger("frameId", frame_id);
-          existing_window->GetSerializedState(result.get());
-          result->SetBoolean("existingWindow", true);
+          base::Value result(base::Value::Type::DICTIONARY);
+          result.SetIntKey("frameId", frame_id);
+          existing_window->GetSerializedState(&result);
+          result.SetBoolKey("existingWindow", true);
           // We should not return the window until that window is properly
           // initialized. Hence, adding a callback for window first navigation
           // completion.
           if (existing_window->DidFinishFirstNavigation())
-            return RespondNow(OneArgument(
-                base::Value::FromUniquePtrValue(std::move(result))));
+            return RespondNow(OneArgument(std::move(result)));
 
-          existing_window->AddOnDidFinishFirstNavigationCallback(base::BindOnce(
-              &AppWindowCreateFunction::
-                  OnAppWindowFinishedFirstNavigationOrClosed,
-              this,
-              OneArgument(base::Value::FromUniquePtrValue(std::move(result)))));
+          existing_window->AddOnDidFinishFirstNavigationCallback(
+              base::BindOnce(&AppWindowCreateFunction::
+                                 OnAppWindowFinishedFirstNavigationOrClosed,
+                             this, OneArgument(std::move(result))));
           return RespondLater();
         }
       }
@@ -237,7 +235,7 @@ ExtensionFunction::ResponseAction AppWindowCreateFunction::Run() {
       return RespondNow(Error(std::move(error)));
 
     if (extension()->GetType() == Manifest::TYPE_EXTENSION) {
-      // Whitelisted IME extensions are allowed to use this API to create IME
+      // Allowlisted IME extensions are allowed to use this API to create IME
       // specific windows to show accented characters or suggestions.
       if (!extension()->permissions_data()->HasAPIPermission(
               mojom::APIPermissionID::kImeWindowEnabled)) {
@@ -268,7 +266,7 @@ ExtensionFunction::ResponseAction AppWindowCreateFunction::Run() {
     }
 
     if (options->alpha_enabled.get()) {
-      const char* const kWhitelist[] = {
+      const char* const kAllowlist[] = {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
         "B58B99751225318C7EB8CF4688B5434661083E07",  // http://crbug.com/410550
         "06BE211D5F014BAB34BC22D9DDA09C63A81D828E",  // http://crbug.com/425539
@@ -286,8 +284,8 @@ ExtensionFunction::ResponseAction AppWindowCreateFunction::Run() {
         "0F585FB1D0FDFBEBCE1FEB5E9DFFB6DA476B8C9B"
       };
       if (AppWindowClient::Get()->IsCurrentChannelOlderThanDev() &&
-          !SimpleFeature::IsIdInArray(extension_id(), kWhitelist,
-                                      base::size(kWhitelist))) {
+          !SimpleFeature::IsIdInArray(extension_id(), kAllowlist,
+                                      std::size(kAllowlist))) {
         return RespondNow(
             Error(app_window_constants::kAlphaEnabledWrongChannel));
       }
@@ -412,17 +410,16 @@ ExtensionFunction::ResponseAction AppWindowCreateFunction::Run() {
   }
 
   content::RenderFrameHost* created_frame =
-      app_window->web_contents()->GetMainFrame();
+      app_window->web_contents()->GetPrimaryMainFrame();
   int frame_id = MSG_ROUTING_NONE;
   if (create_params.creator_process_id == created_frame->GetProcess()->GetID())
     frame_id = created_frame->GetRoutingID();
 
-  std::unique_ptr<base::DictionaryValue> result(new base::DictionaryValue);
-  result->SetInteger("frameId", frame_id);
-  result->SetString("id", app_window->window_key());
-  app_window->GetSerializedState(result.get());
-  ResponseValue result_arg =
-      OneArgument(base::Value::FromUniquePtrValue(std::move(result)));
+  base::Value result(base::Value::Type::DICTIONARY);
+  result.SetIntKey("frameId", frame_id);
+  result.SetStringKey("id", app_window->window_key());
+  app_window->GetSerializedState(&result);
+  ResponseValue result_arg = OneArgument(std::move(result));
 
   if (AppWindowRegistry::Get(browser_context())
           ->HadDevToolsAttached(app_window->web_contents())) {
@@ -599,9 +596,8 @@ bool AppWindowCreateFunction::GetFrameOptions(
       return false;
     }
 
-    if (!image_util::ParseHexColorString(
-            *options.frame->as_frame_options->color,
-            &create_params->active_frame_color)) {
+    if (!content::ParseHexColorString(*options.frame->as_frame_options->color,
+                                      &create_params->active_frame_color)) {
       *error = app_window_constants::kInvalidColorSpecification;
       return false;
     }
@@ -610,7 +606,7 @@ bool AppWindowCreateFunction::GetFrameOptions(
     create_params->inactive_frame_color = create_params->active_frame_color;
 
     if (options.frame->as_frame_options->inactive_color.get()) {
-      if (!image_util::ParseHexColorString(
+      if (!content::ParseHexColorString(
               *options.frame->as_frame_options->inactive_color,
               &create_params->inactive_frame_color)) {
         *error = app_window_constants::kInvalidColorSpecification;

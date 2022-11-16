@@ -8,6 +8,7 @@
 #include <memory>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "base/values.h"
 #include "chrome/browser/enterprise/connectors/common.h"
 #include "chrome/browser/enterprise/connectors/service_provider_config.h"
@@ -36,6 +37,7 @@ class AnalysisServiceSettings {
   // settings are invalid or if the message/URL are empty.
   absl::optional<std::u16string> GetCustomMessage(const std::string& tag);
   absl::optional<GURL> GetLearnMoreUrl(const std::string& tag);
+  bool GetBypassJustificationRequired(const std::string& tag);
 
   std::string service_provider_name() const { return service_provider_name_; }
 
@@ -55,12 +57,12 @@ class AnalysisServiceSettings {
 
   // Map from an ID representing a specific matched pattern to its settings.
   using PatternSettings =
-      std::map<url_matcher::URLMatcherConditionSet::ID, URLPatternSettings>;
+      std::map<base::MatcherStringPattern::ID, URLPatternSettings>;
 
   // Accessors for the pattern setting maps.
   static absl::optional<URLPatternSettings> GetPatternSettings(
       const PatternSettings& patterns,
-      url_matcher::URLMatcherConditionSet::ID match);
+      base::MatcherStringPattern::ID match);
 
   // Returns true if the settings were initialized correctly. If this returns
   // false, then GetAnalysisSettings will always return absl::nullopt.
@@ -70,17 +72,17 @@ class AnalysisServiceSettings {
   // |disabled_patterns_settings_| from a policy value.
   void AddUrlPatternSettings(const base::Value& url_settings_value,
                              bool enabled,
-                             url_matcher::URLMatcherConditionSet::ID* id);
+                             base::MatcherStringPattern::ID* id);
 
   // Return tags found in |enabled_patterns_settings| corresponding to the
   // matches while excluding the ones in |disable_patterns_settings|.
-  std::set<std::string> GetTags(
-      const std::set<url_matcher::URLMatcherConditionSet::ID>& matches) const;
+  std::map<std::string, TagSettings> GetTags(
+      const std::set<base::MatcherStringPattern::ID>& matches) const;
 
   // The service provider matching the name given in a Connector policy. nullptr
   // implies that a corresponding service provider doesn't exist and that these
   // settings are not valid.
-  const ServiceProviderConfig::ServiceProvider* service_provider_ = nullptr;
+  raw_ptr<const AnalysisConfig> analysis_config_ = nullptr;
 
   // The URL matcher created from the patterns set in the analysis policy. The
   // condition set IDs returned after matching against a URL can be used to
@@ -100,15 +102,19 @@ class AnalysisServiceSettings {
   PatternSettings enabled_patterns_settings_;
   PatternSettings disabled_patterns_settings_;
 
-  BlockUntilVerdict block_until_verdict_ = BlockUntilVerdict::NO_BLOCK;
+  BlockUntilVerdict block_until_verdict_ = BlockUntilVerdict::kNoBlock;
   bool block_password_protected_files_ = false;
   bool block_large_files_ = false;
   bool block_unsupported_file_types_ = false;
   size_t minimum_data_size_ = 100;
-  // A map from tag (dlp, malware, etc) to the custom message and "learn more"
-  // link associated with it.
-  std::map<std::string, CustomMessageData> custom_message_data_;
+  // A map from tag (dlp, malware, etc) to the custom message, "learn more" link
+  // and other settings associated to a specific tag.
+  std::map<std::string, TagSettings> tags_;
   std::string service_provider_name_;
+
+  // Arrays of base64 encoded signing key signatures used to verify the
+  // authenticity of the service provider.
+  std::vector<std::string> verification_signatures_;
 };
 
 }  // namespace enterprise_connectors

@@ -25,7 +25,7 @@ UrlBlockingPolicyTest::~UrlBlockingPolicyTest() = default;
 void UrlBlockingPolicyTest::CheckURLIsBlockedInWebContents(
     content::WebContents* web_contents,
     const GURL& url) {
-  EXPECT_EQ(url, web_contents->GetURL());
+  EXPECT_EQ(url, web_contents->GetLastCommittedURL());
 
   std::u16string blocked_page_title;
   if (url.has_host()) {
@@ -51,6 +51,17 @@ void UrlBlockingPolicyTest::CheckURLIsBlocked(Browser* browser,
                                               const std::string& spec) {
   GURL url(spec);
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser, url));
+  content::WebContents* contents =
+      browser->tab_strip_model()->GetActiveWebContents();
+  CheckURLIsBlockedInWebContents(contents, url);
+}
+
+void UrlBlockingPolicyTest::CheckViewSourceURLIsBlocked(
+    Browser* browser,
+    const std::string& spec) {
+  GURL url(spec);
+  GURL view_source_url("view-source:" + spec);
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser, view_source_url));
   content::WebContents* contents =
       browser->tab_strip_model()->GetActiveWebContents();
   CheckURLIsBlockedInWebContents(contents, url);

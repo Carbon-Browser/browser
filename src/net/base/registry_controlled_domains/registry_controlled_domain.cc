@@ -45,6 +45,8 @@
 
 #include "net/base/registry_controlled_domains/registry_controlled_domain.h"
 
+#include <ostream>
+
 #include "base/check_op.h"
 #include "base/notreached.h"
 #include "base/strings/string_piece.h"
@@ -58,8 +60,7 @@
 #include "url/third_party/mozilla/url_parse.h"
 #include "url/url_util.h"
 
-namespace net {
-namespace registry_controlled_domains {
+namespace net::registry_controlled_domains {
 
 namespace {
 #include "net/base/registry_controlled_domains/effective_tld_names-reversed-inc.cc"
@@ -455,17 +456,16 @@ size_t PermissiveGetHostRegistryLength(base::StringPiece16 host,
                                            private_filter);
 }
 
-void SetFindDomainGraph() {
+void ResetFindDomainGraphForTesting() {
   g_graph = kDafsa;
   g_graph_length = sizeof(kDafsa);
 }
 
-void SetFindDomainGraph(const unsigned char* domains, size_t length) {
+void SetFindDomainGraphForTesting(const unsigned char* domains, size_t length) {
   CHECK(domains);
   CHECK_NE(length, 0u);
   g_graph = domains;
   g_graph_length = length;
 }
 
-}  // namespace registry_controlled_domains
-}  // namespace net
+}  // namespace net::registry_controlled_domains

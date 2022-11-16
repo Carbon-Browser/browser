@@ -1,69 +1,65 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/buckets/bucket_context.h"
 
-#include "base/location.h"
-#include "base/memory/scoped_refptr.h"
-#include "content/browser/buckets/bucket_manager.h"
-#include "content/browser/buckets/bucket_manager_host.h"
-#include "content/public/browser/browser_task_traits.h"
-#include "content/public/browser/browser_thread.h"
+#include "content/browser/storage_partition_impl.h"
+#include "content/public/browser/browser_context.h"
+#include "content/public/browser/permission_controller.h"
+#include "content/public/browser/render_frame_host.h"
+#include "content/public/browser/render_process_host.h"
 
 namespace content {
 
-BucketContext::BucketContext()
-    : base::RefCountedDeleteOnSequence<BucketContext>(
-          GetIOThreadTaskRunner({})) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+BucketContext::BucketContext(
+    const GlobalRenderFrameHostId& render_frame_host_id,
+    const url::Origin& origin)
+    : id_(render_frame_host_id), origin_(origin) {}
+
+BucketContext::BucketContext(int render_process_id, const url::Origin& origin)
+    : id_(render_process_id), origin_(origin) {}
+
+BucketContext::BucketContext(const BucketContext& other) = default;
+
+BucketContext::~BucketContext() = default;
+
+StoragePartitionImpl* BucketContext::GetStoragePartition() const {
+  if (absl::holds_alternative<int>(id_)) {
+    RenderProcessHost* rph = RenderProcessHost::FromID(absl::get<int>(id_));
+    if (!rph)
+      return nullptr;
+    return static_cast<StoragePartitionImpl*>(rph->GetStoragePartition());
+  }
+
+  RenderFrameHost* rfh =
+      RenderFrameHost::FromID(absl::get<GlobalRenderFrameHostId>(id_));
+  if (!rfh)
+    return nullptr;
+  return static_cast<StoragePartitionImpl*>(rfh->GetStoragePartition());
 }
 
-BucketContext::~BucketContext() {
-  // The destructor must be called on IO thread, because it runs
-  // BucketManagerHost's destructor which can only be access by the IO thread.
-  DCHECK_CURRENTLY_ON(BrowserThread::IO);
-}
+blink::mojom::PermissionStatus BucketContext::GetPermissionStatus(
+    blink::PermissionType permission_type) const {
+  if (permission_status_for_test_)
+    return *permission_status_for_test_;
 
-void BucketContext::Initialize() {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-#if DCHECK_IS_ON()
-  DCHECK(!initialize_called_) << __func__ << " called twice";
-  initialize_called_ = true;
-#endif  // DCHECK_IS_ON()
-  content::GetIOThreadTaskRunner({})->PostTask(
-      FROM_HERE, base::BindOnce(&BucketContext::InitializeOnIOThread, this));
-}
+  if (absl::holds_alternative<int>(id_)) {
+    RenderProcessHost* rph = RenderProcessHost::FromID(absl::get<int>(id_));
+    if (!rph)
+      return blink::mojom::PermissionStatus::DENIED;
+    return rph->GetBrowserContext()
+        ->GetPermissionController()
+        ->GetPermissionStatusForWorker(permission_type, rph, origin_);
+  }
 
-void BucketContext::BindBucketManagerHost(
-    const url::Origin& origin,
-    mojo::PendingReceiver<blink::mojom::BucketManagerHost> receiver) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-#if DCHECK_IS_ON()
-  DCHECK(initialize_called_) << __func__ << " called before Initialize()";
-#endif  // DCHECK_IS_ON()
-
-  content::GetIOThreadTaskRunner({})->PostTask(
-      FROM_HERE,
-      base::BindOnce(&BucketContext::BindBucketManagerHostOnIOThread,
-                     scoped_refptr<BucketContext>(this), origin,
-                     std::move(receiver), mojo::GetBadMessageCallback()));
-}
-
-void BucketContext::InitializeOnIOThread() {
-  DCHECK_CURRENTLY_ON(BrowserThread::IO);
-  DCHECK(!bucket_manager_) << __func__ << "  called more than once";
-
-  bucket_manager_ = std::make_unique<BucketManager>();
-}
-
-void BucketContext::BindBucketManagerHostOnIOThread(
-    const url::Origin& origin,
-    mojo::PendingReceiver<blink::mojom::BucketManagerHost> receiver,
-    mojo::ReportBadMessageCallback bad_message_callback) {
-  DCHECK_CURRENTLY_ON(BrowserThread::IO);
-  bucket_manager_->BindReceiver(origin, std::move(receiver),
-                                std::move(bad_message_callback));
+  RenderFrameHost* rfh =
+      RenderFrameHost::FromID(absl::get<GlobalRenderFrameHostId>(id_));
+  if (!rfh)
+    return blink::mojom::PermissionStatus::DENIED;
+  return rfh->GetBrowserContext()
+      ->GetPermissionController()
+      ->GetPermissionStatusForCurrentDocument(permission_type, rfh);
 }
 
 }  // namespace content

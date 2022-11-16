@@ -9,6 +9,7 @@
 #include <memory>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "extensions/browser/api/declarative_net_request/extension_url_pattern_index_matcher.h"
 #include "extensions/browser/api/declarative_net_request/flat/extension_ruleset_generated.h"
 #include "extensions/browser/api/declarative_net_request/regex_rules_matcher.h"
@@ -41,6 +42,10 @@ class RulesetMatcher {
   RulesetMatcher(std::string ruleset_data,
                  RulesetID id,
                  const ExtensionId& extension_id);
+
+  RulesetMatcher(const RulesetMatcher&) = delete;
+  RulesetMatcher& operator=(const RulesetMatcher&) = delete;
+
   ~RulesetMatcher();
 
   absl::optional<RequestAction> GetBeforeRequestAction(
@@ -73,7 +78,7 @@ class RulesetMatcher {
  private:
   const std::string ruleset_data_;
 
-  const flat::ExtensionIndexedRuleset* const root_;
+  const raw_ptr<const flat::ExtensionIndexedRuleset> root_;
 
   const RulesetID id_;
 
@@ -83,8 +88,6 @@ class RulesetMatcher {
 
   // Underlying matcher for regex rules.
   RegexRulesMatcher regex_matcher_;
-
-  DISALLOW_COPY_AND_ASSIGN(RulesetMatcher);
 };
 
 }  // namespace declarative_net_request

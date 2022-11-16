@@ -29,10 +29,9 @@ class ScrollTree;
 enum class ScrollbarOrientation;
 
 // This is the interface that LayerTreeHostImpl and the "graphics" side of the
-// compositor uses to talk to the compositor ThreadedInputHandler. This
-// interface is two-way; it's used used both to communicate state changes from
-// the LayerTree to the input handler and also to query and update state in the
-// input handler.
+// compositor uses to talk to the compositor InputHandler. This interface is
+// two-way; it's used used both to communicate state changes from the LayerTree
+// to the input handler and also to query and update state in the input handler.
 class InputDelegateForCompositor {
  public:
   virtual ~InputDelegateForCompositor() = default;
@@ -56,6 +55,10 @@ class InputDelegateForCompositor {
   // scroll limits, page scale, page scale limits.
   virtual void RootLayerStateMayHaveChanged() = 0;
 
+  // Called to let the input handler know that a scrollbar for the given
+  // elementId has been added.
+  virtual void DidRegisterScrollbar(ElementId scroll_element_id,
+                                    ScrollbarOrientation orientation) = 0;
   // Called to let the input handler know that a scrollbar for the given
   // elementId has been removed.
   virtual void DidUnregisterScrollbar(ElementId scroll_element_id,
@@ -98,6 +101,7 @@ class CompositorDelegateForInput {
   virtual bool HasAnimatedScrollbars() const = 0;
   virtual void SetNeedsCommit() = 0;
   virtual void SetNeedsFullViewportRedraw() = 0;
+  virtual void SetDeferBeginMainFrame(bool defer_begin_main_frame) const = 0;
   virtual void DidUpdateScrollAnimationCurve() = 0;
   virtual void AccumulateScrollDeltaForTracing(const gfx::Vector2dF& delta) = 0;
   virtual void DidStartPinchZoom() = 0;

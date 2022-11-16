@@ -4,8 +4,6 @@
 
 #include "ash/system/audio/unified_volume_slider_controller.h"
 
-#include "ash/metrics/user_metrics_action.h"
-#include "ash/metrics/user_metrics_recorder.h"
 #include "ash/shell.h"
 #include "ash/system/audio/unified_volume_view.h"
 #include "ash/system/machine_learning/user_settings_event_logger.h"
@@ -14,17 +12,20 @@
 
 namespace ash {
 
+UnifiedVolumeSliderController::Delegate::Delegate() = default;
+
+UnifiedVolumeSliderController::Delegate::~Delegate() = default;
+
 UnifiedVolumeSliderController::UnifiedVolumeSliderController(
-    UnifiedVolumeSliderController::Delegate* delegate,
-    bool in_bubble)
-    : delegate_(delegate), in_bubble_(in_bubble) {
+    UnifiedVolumeSliderController::Delegate* delegate)
+    : delegate_(delegate) {
   DCHECK(delegate);
 }
 
 UnifiedVolumeSliderController::~UnifiedVolumeSliderController() = default;
 
 views::View* UnifiedVolumeSliderController::CreateView() {
-  return new UnifiedVolumeView(this, delegate_, in_bubble_);
+  return new UnifiedVolumeView(this, delegate_);
 }
 
 void UnifiedVolumeSliderController::SliderValueChanged(
@@ -38,8 +39,8 @@ void UnifiedVolumeSliderController::SliderValueChanged(
   const int level = value * 100;
 
   if (level != CrasAudioHandler::Get()->GetOutputVolumePercent()) {
-    Shell::Get()->metrics()->RecordUserMetricsAction(
-        UMA_STATUS_AREA_CHANGED_VOLUME_MENU);
+    base::RecordAction(
+        base::UserMetricsAction("StatusArea_Volume_ChangedMenu"));
   }
 
   CrasAudioHandler::Get()->SetOutputVolumePercent(level);

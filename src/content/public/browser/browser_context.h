@@ -18,6 +18,7 @@
 #include "base/memory/weak_ptr.h"
 #include "base/supports_user_data.h"
 #include "content/common/content_export.h"
+#include "content/public/browser/zoom_level_delegate.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "services/network/public/mojom/network_context.mojom-forward.h"
@@ -26,10 +27,6 @@
 #include "third_party/blink/public/mojom/push_messaging/push_messaging.mojom-forward.h"
 #include "third_party/blink/public/mojom/push_messaging/push_messaging_status.mojom-forward.h"
 #include "third_party/perfetto/include/perfetto/tracing/traced_value_forward.h"
-
-#if !defined(OS_ANDROID)
-#include "content/public/browser/zoom_level_delegate.h"
-#endif
 
 class GURL;
 
@@ -47,6 +44,7 @@ class ExternalMountPoints;
 
 namespace media {
 class VideoDecodePerfHistory;
+class WebrtcVideoPerfHistory;
 namespace learning {
 class LearningSession;
 }
@@ -77,15 +75,16 @@ namespace content {
 class BackgroundFetchDelegate;
 class BackgroundSyncController;
 class BlobHandle;
+class BrowserContextImpl;
 class BrowserPluginGuestManager;
 class BrowsingDataRemover;
 class BrowsingDataRemoverDelegate;
-class DownloadManager;
 class ClientHintsControllerDelegate;
 class ContentIndexProvider;
+class DownloadManager;
 class DownloadManagerDelegate;
 class FederatedIdentityActiveSessionPermissionContextDelegate;
-class FederatedIdentityRequestPermissionContextDelegate;
+class FederatedIdentityApiPermissionContextDelegate;
 class FederatedIdentitySharingPermissionContextDelegate;
 class FileSystemAccessPermissionContext;
 class PermissionController;
@@ -93,12 +92,12 @@ class PermissionControllerDelegate;
 class PlatformNotificationService;
 class PushMessagingService;
 class ResourceContext;
+class SSLHostStateDelegate;
 class SharedCorsOriginAccessList;
 class SiteInstance;
 class StorageNotificationService;
 class StoragePartition;
 class StoragePartitionConfig;
-class SSLHostStateDelegate;
 
 // This class holds the context needed for a browsing session.
 // It lives on the UI thread. All these methods must only be called on the UI
@@ -114,7 +113,7 @@ class CONTENT_EXPORT BrowserContext : public base::SupportsUserData {
   // non-virtual instance methods.
   //
   // TODO(https://crbug.com/1179776): Consider moving these methods to
-  // BrowserContext::Impl or (in the future) BrowserContextImpl class.
+  // BrowserContextImpl.
 
   BrowserContext();
   ~BrowserContext() override;
@@ -158,6 +157,12 @@ class CONTENT_EXPORT BrowserContext : public base::SupportsUserData {
   using StoragePartitionCallback =
       base::RepeatingCallback<void(StoragePartition*)>;
   void ForEachStoragePartition(StoragePartitionCallback callback);
+
+  // Disposes the given StoragePartition. Only in-memory storage partition
+  // disposal is supported. Caller needs to be careful that no outstanding
+  // references are left to access the disposed storage partition.
+  void DisposeStoragePartition(StoragePartition* storage_partition);
+
   // Returns the number of StoragePartitions that exist for `this`
   // BrowserContext.
   size_t GetStoragePartitionCount();
@@ -169,10 +174,14 @@ class CONTENT_EXPORT BrowserContext : public base::SupportsUserData {
                                        base::OnceClosure on_gc_required,
                                        base::OnceClosure done_callback);
 
-  // This function clears the contents of |active_paths| but does not take
-  // ownership of the pointer.
+  // Examines the on-disk storage and removes any entries that are not listed
+  // in the `active_paths`, or in use by current entries in the storage
+  // partition.
+  //
+  // The `done` closure is executed on the calling thread when garbage
+  // collection is complete.
   void GarbageCollectStoragePartitions(
-      std::unique_ptr<std::unordered_set<base::FilePath>> active_paths,
+      std::unordered_set<base::FilePath> active_paths,
       base::OnceClosure done);
 
   StoragePartition* GetDefaultStoragePartition();
@@ -267,6 +276,12 @@ class CONTENT_EXPORT BrowserContext : public base::SupportsUserData {
   // directly, so privacy is not compromised.
   media::VideoDecodePerfHistory* GetVideoDecodePerfHistory();
 
+  // Gets media service for storing/retrieving WebRTC video performance stats.
+  // Exposed here rather than StoragePartition because all SiteInstances should
+  // have similar encode/decode performance and stats are not exposed to the web
+  // directly, so privacy is not compromised.
+  media::WebrtcVideoPerfHistory* GetWebrtcVideoPerfHistory();
+
   // Returns a LearningSession associated with |this|. Used as the central
   // source from which to retrieve LearningTaskControllers for media machine
   // learning.
@@ -285,13 +300,11 @@ class CONTENT_EXPORT BrowserContext : public base::SupportsUserData {
   // 2) The embedder saves its salt across restarts.
   static std::string CreateRandomMediaDeviceIDSalt();
 
-  // Write a representation of this object into a trace.
-  void WriteIntoTrace(perfetto::TracedValue context);
-
+  using TraceProto = perfetto::protos::pbzero::ChromeBrowserContext;
   // Write a representation of this object into tracing proto.
-  void WriteIntoTrace(
-      perfetto::TracedProto<perfetto::protos::pbzero::ChromeBrowserContext>
-          context);
+  // rvalue ensure that the this method can be called without having access
+  // to the declaration of ChromeBrowserContext proto.
+  void WriteIntoTrace(perfetto::TracedProto<TraceProto> context) const;
 
   //////////////////////////////////////////////////////////////////////////////
   // The //content embedder can override the methods below to change or extend
@@ -304,12 +317,10 @@ class CONTENT_EXPORT BrowserContext : public base::SupportsUserData {
   // TODO(https://crbug.com/1179776): Migrate method declarations from this
   // section into a separate BrowserContextDelegate class.
 
-#if !defined(OS_ANDROID)
   // Creates a delegate to initialize a HostZoomMap and persist its information.
   // This is called during creation of each StoragePartition.
   virtual std::unique_ptr<ZoomLevelDelegate> CreateZoomLevelDelegate(
       const base::FilePath& partition_path) = 0;
-#endif
 
   // Returns the path of the directory where this context's data is stored.
   virtual base::FilePath GetPath() = 0;
@@ -412,15 +423,15 @@ class CONTENT_EXPORT BrowserContext : public base::SupportsUserData {
   virtual std::unique_ptr<media::VideoDecodePerfHistory>
   CreateVideoDecodePerfHistory();
 
+  // Gets the permission context for determining whether the FedCM API is
+  // enabled in site settings.
+  virtual FederatedIdentityApiPermissionContextDelegate*
+  GetFederatedIdentityApiPermissionContext();
   // Gets the permission context for allowing session management capabilities
   // between an identity provider and a relying party if one exists, or
   // nullptr otherwise.
   virtual FederatedIdentityActiveSessionPermissionContextDelegate*
   GetFederatedIdentityActiveSessionPermissionContext();
-  // Gets the permission context for issuing WebID requests if one exists, or
-  // nullptr otherwise.
-  virtual FederatedIdentityRequestPermissionContextDelegate*
-  GetFederatedIdentityRequestPermissionContext();
   // Gets the permission context for WebID identity token sharing if one
   // exists, or nullptr otherwise.
   virtual FederatedIdentitySharingPermissionContextDelegate*
@@ -433,14 +444,14 @@ class CONTENT_EXPORT BrowserContext : public base::SupportsUserData {
   // methods and no fields), but currently BrowserContext and BrowserContextImpl
   // and BrowserContextDelegate are kind of mixed together in a single class.
   //
-  // TODO(https://crbug.com/1179776): Evolve the Impl class into a
-  // BrowserContextImpl in //content/browser/browser_context_impl.h / .cc
-  // (Removing afterwards the Impl fwd-declaration, `impl_` field, `friend`
-  // declaration and `impl` accessor below).
-  class Impl;
-  std::unique_ptr<Impl> impl_;
-  friend class BackgroundSyncScheduler;
-  Impl* impl() { return impl_.get(); }
+  // TODO(https://crbug.com/1179776): Make BrowserContextImpl to implement
+  // BrowserContext instead (Removing afterwards the BrowserContextImpl,
+  // fwd-declaration, `impl_` field, `friend` declaration and `impl` accessor
+  // below).
+  friend class BrowserContextImpl;
+  std::unique_ptr<BrowserContextImpl> impl_;
+  BrowserContextImpl* impl() { return impl_.get(); }
+  const BrowserContextImpl* impl() const { return impl_.get(); }
 };
 
 }  // namespace content

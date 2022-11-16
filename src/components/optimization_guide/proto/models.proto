@@ -135,14 +135,6 @@ message Int32Value {
   optional int32 value = 1;
 }
 
-// Wrapper message for `string`.
-//
-// The JSON representation for `StringValue` is JSON string.
-message StringValue {
-  // The string value.
-  optional string value = 1;
-}
-
 // Wrapper message for `double`.
 //
 // The JSON representation for `DoubleValue` is JSON number.
@@ -153,7 +145,7 @@ message DoubleValue {
 
 // Requests prediction models to be used for a set of optimization targets.
 message GetModelsRequest {
-  reserved 2;
+  reserved 2, 4;
 
   // Information about the requested models.
   repeated ModelInfo requested_models = 1;
@@ -163,8 +155,6 @@ message GetModelsRequest {
   // CONTEXT_PAGE_NAVIGATION), then no model updates will be returned for the
   // requested models.
   optional RequestContext request_context = 3;
-  // The field trials that are currently active when this request is made.
-  repeated FieldTrial active_field_trials = 4;
   // The locale to associate with this request.
   //
   // It is the IETF language tag, defined in BCP 47. The region subtag is not
@@ -208,7 +198,7 @@ message AdditionalModelFile {
 
 // Metadata for a prediction model for a specific optimization target.
 //
-// Next ID: 8
+// Next ID: 10
 message ModelInfo {
   reserved 3;
 
@@ -216,8 +206,9 @@ message ModelInfo {
   optional OptimizationTarget optimization_target = 1;
   // The version of the model, which is specific to the optimization target.
   optional int64 version = 2;
-  // The set of model types the requesting client can use to make predictions.
-  repeated ModelType supported_model_types = 4;
+  // The set of model engine versions the requesting client can use to do model
+  // inference.
+  repeated ModelEngineVersion supported_model_engine_versions = 4;
   // The set of host model features that are referenced by the model.
   //
   // Note that this should only be populated if part of the response.
@@ -230,6 +221,11 @@ message ModelInfo {
   // This does not need to be sent to the server in the request for an update to
   // this model. The server will ignore this if sent.
   repeated AdditionalModelFile additional_files = 7;
+  // How long the model will remain valid in client storage. If
+  // |keep_beyond_valid_duration| is true, will be ignored.
+  optional Duration valid_duration = 8;
+  // Whether to delete the model once valid_duration has passed.
+  optional bool keep_beyond_valid_duration = 9;
   // Mechanism used for model owners to attach metadata to the request or
   // response.
   //
@@ -259,29 +255,63 @@ enum OptimizationTarget {
   OPTIMIZATION_TARGET_MODEL_VALIDATION = 7;
   // Target for determining entities present on a page.
   OPTIMIZATION_TARGET_PAGE_ENTITIES = 8;
+  // Target for Chrome Permissions Suggestions Service: Notification permission.
+  OPTIMIZATION_TARGET_NOTIFICATION_PERMISSION_PREDICTIONS = 9;
+  // Target that enables data collection on client side for various experiments.
+  OPTIMIZATION_TARGET_SEGMENTATION_DUMMY = 10;
+  // Target for segmentation: Chrome Android Start user.
+  OPTIMIZATION_TARGET_SEGMENTATION_CHROME_START_ANDROID = 11;
+  // Target for segmentation: Query Tiles user.
+  OPTIMIZATION_TARGET_SEGMENTATION_QUERY_TILES = 12;
+  // Target for determining the UI visibility of a page.
+  OPTIMIZATION_TARGET_PAGE_VISIBILITY = 13;
+  // Target for supplying the Autofill Assistant annotate DOM model via the
+  // model downloader.
+  OPTIMIZATION_TARGET_AUTOFILL_ASSISTANT = 14;
+  // Target for determining topics present on a page.
+  // TODO(crbug/1266504): Remove PAGE_TOPICS in favor of this target.
+  OPTIMIZATION_TARGET_PAGE_TOPICS_V2 = 15;
+  // Target for segmentation: Determine users with low engagement with chrome.
+  OPTIMIZATION_TARGET_SEGMENTATION_CHROME_LOW_USER_ENGAGEMENT = 16;
+  // Target for segmentation: Determine users who prefer to use Feed.
+  OPTIMIZATION_TARGET_SEGMENTATION_FEED_USER = 17;
+  // Target for segmentation: Determine whether price tracking should be shown
+  // as a contextual page action.
+  OPTIMIZATION_TARGET_CONTEXTUAL_PAGE_ACTION_PRICE_TRACKING = 18;
+  // Target for smart text selection and entity extraction.
+  OPTIMIZATION_TARGET_TEXT_CLASSIFIER = 19;
 }
 
-// The types of models that can be evaluated.
+// The model engine versions that can be used to do model inference.
 //
 // Please only update these enums when a new major version of TFLite rolls.
 //
 // For example: v1.2.3
 //                 ^
 //                 Change when this number increments.
-enum ModelType {
-  MODEL_TYPE_UNKNOWN = 0;
+enum ModelEngineVersion {
+  MODEL_ENGINE_VERSION_UNKNOWN = 0;
   // A decision tree.
-  MODEL_TYPE_DECISION_TREE = 1;
+  MODEL_ENGINE_VERSION_DECISION_TREE = 1;
   // A model using only operations that are supported by TensorflowLite 2.3.0.
-  MODEL_TYPE_TFLITE_2_3_0 = 2;
+  MODEL_ENGINE_VERSION_TFLITE_2_3_0 = 2;
   // A model using only operations that are supported by TensorflowLite 2.3.0
   // with updated FULLY_CONNECTED and BATCH_MUL versions for quantized models.
-  MODEL_TYPE_TFLITE_2_3_0_1 = 3;
+  MODEL_ENGINE_VERSION_TFLITE_2_3_0_1 = 3;
   // TensorflowLite version 2.4.2, and a bit more up to internal rev number
   // 381280669.
-  MODEL_TYPE_TFLITE_2_4 = 4;
+  MODEL_ENGINE_VERSION_TFLITE_2_4 = 4;
   // TensorflowLite version 2.7.*. This is where regular ~HEAD rolls started.
-  MODEL_TYPE_TFLITE_2_7 = 5;
+  MODEL_ENGINE_VERSION_TFLITE_2_7 = 5;
+  // A model using only operations that are supported by TensorflowLite 2.8.0.
+  MODEL_ENGINE_VERSION_TFLITE_2_8 = 6;
+  // A model using only operations that are supported by TensorflowLite 2.9.0.
+  MODEL_ENGINE_VERSION_TFLITE_2_9 = 7;
+  // A model using only operations that are supported by TensorflowLite 2.9.0.
+  // This adds GELU to the supported ops in Optimiziation Guide.
+  MODEL_ENGINE_VERSION_TFLITE_2_9_0_1 = 8;
+  // A model using only operations that are supported by TensorflowLite 2.10.0.
+  MODEL_ENGINE_VERSION_TFLITE_2_10 = 9;
 }
 
 // A set of model features and the host that it applies to.

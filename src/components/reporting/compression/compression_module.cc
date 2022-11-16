@@ -3,15 +3,19 @@
 // found in the LICENSE file.
 #include "components/reporting/compression/compression_module.h"
 
-#include "base/feature_list.h"
+#include <string>
+#include <utility>
 
 #include "base/bind.h"
 #include "base/callback.h"
+#include "base/feature_list.h"
 #include "base/memory/ref_counted.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/string_piece.h"
 #include "base/task/thread_pool.h"
-#include "components/reporting/proto/record.pb.h"
+#include "components/reporting/proto/synced/record.pb.h"
+#include "components/reporting/resources/resource_interface.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/snappy/src/snappy.h"
 
 namespace reporting {
@@ -45,14 +49,15 @@ constexpr char kSnappyCompressedRecordSizeMetricsName[] =
 
 // static
 scoped_refptr<CompressionModule> CompressionModule::Create(
-    uint64_t compression_threshold_,
-    CompressionInformation::CompressionAlgorithm compression_type_) {
+    uint64_t compression_threshold,
+    CompressionInformation::CompressionAlgorithm compression_type) {
   return base::WrapRefCounted(
-      new CompressionModule(compression_threshold_, compression_type_));
+      new CompressionModule(compression_threshold, compression_type));
 }
 
 void CompressionModule::CompressRecord(
     std::string record,
+    scoped_refptr<ResourceInterface> memory_resource,
     base::OnceCallback<void(std::string,
                             absl::optional<CompressionInformation>)> cb) const {
   if (!is_enabled()) {
@@ -78,7 +83,6 @@ void CompressionModule::CompressRecord(
         base::UmaHistogramEnumeration(
             kCompressionThresholdCountMetricsName,
             CompressedRecordThresholdMetricEvent::kNotCompressed);
-
         CompressionInformation compression_information;
         compression_information.set_compression_algorithm(
             CompressionInformation::COMPRESSION_NONE);
@@ -86,6 +90,21 @@ void CompressionModule::CompressRecord(
                           std::move(compression_information));
         return;
       }
+      // Before doing compression, we must make sure there is enough memory - we
+      // are going to temporarily double the record.
+      ScopedReservation scoped_reservation(record.size(), memory_resource);
+      if (!scoped_reservation.reserved()) {
+        base::UmaHistogramEnumeration(
+            kCompressionThresholdCountMetricsName,
+            CompressedRecordThresholdMetricEvent::kNotCompressed);
+        CompressionInformation compression_information;
+        compression_information.set_compression_algorithm(
+            CompressionInformation::COMPRESSION_NONE);
+        std::move(cb).Run(std::move(record),
+                          std::move(compression_information));
+        return;
+      }
+      // Perform compression.
       base::UmaHistogramEnumeration(
           kCompressionThresholdCountMetricsName,
           CompressedRecordThresholdMetricEvent::kCompressed);

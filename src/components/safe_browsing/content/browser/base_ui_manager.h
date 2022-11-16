@@ -10,8 +10,8 @@
 #include <vector>
 
 #include "base/callback_helpers.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
+#include "components/safe_browsing/core/common/proto/csd.pb.h"
 #include "components/security_interstitials/core/unsafe_resource.h"
 
 class GURL;
@@ -37,6 +37,9 @@ class BaseUIManager : public base::RefCountedThreadSafe<BaseUIManager> {
 
   BaseUIManager();
 
+  BaseUIManager(const BaseUIManager&) = delete;
+  BaseUIManager& operator=(const BaseUIManager&) = delete;
+
   // Called on the UI thread to display an interstitial page.
   // |resource| is the unsafe resource that triggered the interstitial.
   // With committed interstitials:
@@ -47,11 +50,10 @@ class BaseUIManager : public base::RefCountedThreadSafe<BaseUIManager> {
   virtual void DisplayBlockingPage(const UnsafeResource& resource);
 
   // This is a no-op in the base class, but should be overridden to send threat
-  // details. Called on the UI thread by the ThreatDetails with the serialized
-  // protocol buffer.
-  virtual void SendSerializedThreatDetails(
+  // details. Called on the UI thread by the ThreatDetails with the report.
+  virtual void SendThreatDetails(
       content::BrowserContext* browser_context,
-      const std::string& serialized);
+      std::unique_ptr<ClientSafeBrowsingReportRequest> report);
 
   // Updates the allowlist URL set for |web_contents|. Called on the UI thread.
   void AddToAllowlistUrlSet(const GURL& allowlist_url,
@@ -164,8 +166,6 @@ class BaseUIManager : public base::RefCountedThreadSafe<BaseUIManager> {
   // most of the time it will be empty or contain a single element.
   std::vector<std::pair<GURL, security_interstitials::UnsafeResource>>
       unsafe_resources_;
-
-  DISALLOW_COPY_AND_ASSIGN(BaseUIManager);
 };
 
 }  // namespace safe_browsing

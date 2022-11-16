@@ -8,9 +8,11 @@
 #include <utility>
 
 #include "base/bind.h"
+#include "base/callback.h"
 #include "base/containers/unique_ptr_adapters.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/strings/strcat.h"
@@ -28,6 +30,7 @@
 #include "content/public/test/mock_render_process_host.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
+#include "net/cookies/parsed_cookie.h"
 #include "net/http/http_util.h"
 #include "net/test/embedded_test_server/request_handler_util.h"
 #include "services/network/public/cpp/features.h"
@@ -60,6 +63,10 @@ class URLLoaderInterceptor::IOState
                                         BrowserThread::DeleteOnIOThread> {
  public:
   explicit IOState(URLLoaderInterceptor* parent) : parent_(parent) {}
+
+  IOState(const IOState&) = delete;
+  IOState& operator=(const IOState&) = delete;
+
   void Initialize(
       const URLLoaderCompletionStatusCallback& completion_status_callback,
       base::OnceClosure closure);
@@ -137,7 +144,7 @@ class URLLoaderInterceptor::IOState
   // This lock guarantees that when URLLoaderInterceptor is destroyed,
   // no intercept callbacks will be called.
   base::Lock intercept_lock_;
-  URLLoaderInterceptor* parent_ GUARDED_BY(intercept_lock_);
+  raw_ptr<URLLoaderInterceptor> parent_ GUARDED_BY(intercept_lock_);
 
   URLLoaderCompletionStatusCallback completion_status_callback_;
 
@@ -152,8 +159,6 @@ class URLLoaderInterceptor::IOState
       subresource_wrappers_;
   std::set<std::unique_ptr<URLLoaderFactoryNavigationWrapper>>
       navigation_wrappers_;
-
-  DISALLOW_COPY_AND_ASSIGN(IOState);
 };
 
 class URLLoaderClientInterceptor : public network::mojom::URLLoaderClient {
@@ -179,8 +184,9 @@ class URLLoaderClientInterceptor : public network::mojom::URLLoaderClient {
     original_client_->OnReceiveEarlyHints(std::move(early_hints));
   }
 
-  void OnReceiveResponse(network::mojom::URLResponseHeadPtr head) override {
-    original_client_->OnReceiveResponse(std::move(head));
+  void OnReceiveResponse(network::mojom::URLResponseHeadPtr head,
+                         mojo::ScopedDataPipeConsumerHandle body) override {
+    original_client_->OnReceiveResponse(std::move(head), std::move(body));
   }
 
   void OnReceiveRedirect(const net::RedirectInfo& redirect_info,
@@ -201,11 +207,6 @@ class URLLoaderClientInterceptor : public network::mojom::URLLoaderClient {
 
   void OnTransferSizeUpdated(int32_t transfer_size_diff) override {
     original_client_->OnTransferSizeUpdated(transfer_size_diff);
-  }
-
-  void OnStartLoadingResponseBody(
-      mojo::ScopedDataPipeConsumerHandle body) override {
-    original_client_->OnStartLoadingResponseBody(std::move(body));
   }
 
   void OnComplete(const network::URLLoaderCompletionStatus& status) override {
@@ -239,6 +240,9 @@ class URLLoaderInterceptor::Interceptor
     receivers_.set_disconnect_handler(base::BindRepeating(
         &Interceptor::OnConnectionError, base::Unretained(this)));
   }
+
+  Interceptor(const Interceptor&) = delete;
+  Interceptor& operator=(const Interceptor&) = delete;
 
   ~Interceptor() override {}
 
@@ -289,15 +293,13 @@ class URLLoaderInterceptor::Interceptor
       std::move(error_handler_).Run();
   }
 
-  URLLoaderInterceptor::IOState* parent_;
+  raw_ptr<URLLoaderInterceptor::IOState> parent_;
   ProcessIdGetter process_id_getter_;
   OriginalFactoryGetter original_factory_getter_;
   mojo::ReceiverSet<network::mojom::URLLoaderFactory> receivers_;
   base::OnceClosure error_handler_;
   std::vector<std::unique_ptr<URLLoaderClientInterceptor>>
       url_loader_client_interceptors_;
-
-  DISALLOW_COPY_AND_ASSIGN(Interceptor);
 };
 
 // This class intercepts calls to each StoragePartition's URLLoaderFactoryGetter
@@ -367,6 +369,9 @@ class URLLoaderInterceptor::BrowserProcessWrapper {
     interceptor_.BindReceiver(std::move(factory_receiver));
   }
 
+  BrowserProcessWrapper(const BrowserProcessWrapper&) = delete;
+  BrowserProcessWrapper& operator=(const BrowserProcessWrapper&) = delete;
+
   ~BrowserProcessWrapper() {}
 
  private:
@@ -376,8 +381,6 @@ class URLLoaderInterceptor::BrowserProcessWrapper {
 
   Interceptor interceptor_;
   mojo::Remote<network::mojom::URLLoaderFactory> original_factory_;
-
-  DISALLOW_COPY_AND_ASSIGN(BrowserProcessWrapper);
 };
 
 // This class is used (e.g. sent in a RenderFrame commit message, or used to
@@ -404,6 +407,9 @@ class URLLoaderInterceptor::RenderProcessHostWrapper {
         base::Unretained(parent), this));
   }
 
+  RenderProcessHostWrapper(const RenderProcessHostWrapper&) = delete;
+  RenderProcessHostWrapper& operator=(const RenderProcessHostWrapper&) = delete;
+
   ~RenderProcessHostWrapper() {}
 
  private:
@@ -413,8 +419,6 @@ class URLLoaderInterceptor::RenderProcessHostWrapper {
 
   Interceptor interceptor_;
   mojo::Remote<network::mojom::URLLoaderFactory> original_factory_;
-
-  DISALLOW_COPY_AND_ASSIGN(RenderProcessHostWrapper);
 };
 
 URLLoaderInterceptor::RequestParams::RequestParams() = default;
@@ -424,14 +428,11 @@ URLLoaderInterceptor::RequestParams::RequestParams(RequestParams&& other) =
 URLLoaderInterceptor::RequestParams& URLLoaderInterceptor::RequestParams::
 operator=(RequestParams&& other) = default;
 
-URLLoaderInterceptor::URLLoaderInterceptor(InterceptCallback callback)
-    : URLLoaderInterceptor(std::move(callback), {}, {}) {}
-
 URLLoaderInterceptor::URLLoaderInterceptor(
-    InterceptCallback callback,
+    InterceptCallback intercept_callback,
     const URLLoaderCompletionStatusCallback& completion_status_callback,
     base::OnceClosure ready_callback)
-    : callback_(std::move(callback)),
+    : callback_(std::move(intercept_callback)),
       io_thread_(base::MakeRefCounted<IOState>(this)) {
   DCHECK(!BrowserThread::IsThreadInitialized(BrowserThread::UI) ||
          BrowserThread::CurrentlyOn(BrowserThread::UI));
@@ -542,7 +543,8 @@ URLLoaderInterceptor::ServeFilesFromDirectoryAtOrigin(
   return std::make_unique<URLLoaderInterceptor>(base::BindLambdaForTesting(
       [=](content::URLLoaderInterceptor::RequestParams* params) -> bool {
         // Ignore requests for other origins.
-        if (params->url_request.url.GetOrigin() != origin.GetOrigin())
+        if (params->url_request.url.DeprecatedGetOriginAsURL() !=
+            origin.DeprecatedGetOriginAsURL())
           return false;
 
         // Remove the leading slash from the url path, so that it can be
@@ -584,9 +586,39 @@ void URLLoaderInterceptor::WriteResponse(
         network::PopulateParsedHeaders(response->headers.get(), *url);
   }
   response->ssl_info = std::move(ssl_info);
-  client->OnReceiveResponse(std::move(response));
+  size_t iter = 0;
+  std::string cookie_line;
+  while (info.headers->EnumerateHeader(&iter, "Set-Cookie", &cookie_line)) {
+    if (net::ParsedCookie(cookie_line).IsPartitioned()) {
+      response->has_partitioned_cookie = true;
+      break;
+    }
+  }
 
-  CHECK_EQ(WriteResponseBody(body, client), MOJO_RESULT_OK);
+  mojo::ScopedDataPipeProducerHandle producer_handle;
+  mojo::ScopedDataPipeConsumerHandle consumer_handle;
+
+  MojoCreateDataPipeOptions options;
+  options.struct_size = sizeof(MojoCreateDataPipeOptions);
+  options.flags = MOJO_CREATE_DATA_PIPE_FLAG_NONE;
+  options.element_num_bytes = 1;
+  options.capacity_num_bytes = body.size();
+
+  MojoResult result =
+      CreateDataPipe(&options, producer_handle, consumer_handle);
+  CHECK_EQ(result, MOJO_RESULT_OK);
+
+  uint32_t bytes_written = body.size();
+  result = producer_handle->WriteData(body.data(), &bytes_written,
+                                      MOJO_WRITE_DATA_FLAG_ALL_OR_NONE);
+  CHECK_EQ(result, MOJO_RESULT_OK);
+
+  client->OnReceiveResponse(std::move(response), std::move(consumer_handle));
+
+  network::URLLoaderCompletionStatus status;
+  status.decoded_body_length = body.size();
+  status.error_code = net::OK;
+  client->OnComplete(status);
 }
 
 void URLLoaderInterceptor::WriteResponse(
@@ -621,41 +653,6 @@ void URLLoaderInterceptor::WriteResponse(
   }
   WriteResponse(headers_str, ReadFile(file_path), client, std::move(ssl_info),
                 std::move(url));
-}
-
-MojoResult URLLoaderInterceptor::WriteResponseBody(
-    base::StringPiece body,
-    network::mojom::URLLoaderClient* client) {
-  mojo::ScopedDataPipeProducerHandle producer_handle;
-  mojo::ScopedDataPipeConsumerHandle consumer_handle;
-
-  MojoCreateDataPipeOptions options;
-  options.struct_size = sizeof(MojoCreateDataPipeOptions);
-  options.flags = MOJO_CREATE_DATA_PIPE_FLAG_NONE;
-  options.element_num_bytes = 1;
-  options.capacity_num_bytes = body.size();
-
-  MojoResult result =
-      CreateDataPipe(&options, producer_handle, consumer_handle);
-  if (result != MOJO_RESULT_OK) {
-    return result;
-  }
-
-  uint32_t bytes_written = body.size();
-  result = producer_handle->WriteData(body.data(), &bytes_written,
-                                      MOJO_WRITE_DATA_FLAG_ALL_OR_NONE);
-  if (result != MOJO_RESULT_OK) {
-    return result;
-  }
-
-  client->OnStartLoadingResponseBody(std::move(consumer_handle));
-
-  network::URLLoaderCompletionStatus status;
-  status.decoded_body_length = body.size();
-  status.error_code = net::OK;
-  client->OnComplete(status);
-
-  return MOJO_RESULT_OK;
 }
 
 void URLLoaderInterceptor::CreateURLLoaderFactoryForRenderProcessHost(

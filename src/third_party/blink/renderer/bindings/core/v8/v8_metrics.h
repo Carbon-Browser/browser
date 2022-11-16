@@ -11,8 +11,6 @@
 
 namespace blink {
 
-class Document;
-
 // Implements a V8 metrics recorder for gathering events generated
 // within the V8 engine. This is used for some UMA and all UKM
 // metrics. All event handling methods in here are run in the main
@@ -49,10 +47,22 @@ class CORE_EXPORT V8MetricsRecorder : public v8::metrics::Recorder {
       const v8::metrics::GarbageCollectionFullMainThreadBatchedIncrementalSweep&
           event,
       ContextId context_id) override;
+  void AddMainThreadEvent(const v8::metrics::GarbageCollectionYoungCycle& event,
+                          ContextId context_id) override;
 
   void NotifyIsolateDisposal() override;
 
  private:
+  template <typename EventType>
+  void AddMainThreadBatchedEvents(
+      const v8::metrics::GarbageCollectionBatchedEvents<EventType>&
+          batched_events,
+      ContextId context_id) {
+    for (auto event : batched_events.events) {
+      AddMainThreadEvent(event, context_id);
+    }
+  }
+
   struct UkmRecorderAndSourceId {
     ukm::UkmRecorder* recorder;
     ukm::SourceId source_id;
@@ -61,7 +71,6 @@ class CORE_EXPORT V8MetricsRecorder : public v8::metrics::Recorder {
         : recorder(ukm_recorder), source_id(ukm_source_id) {}
   };
 
-  Document* GetDocument(ContextId context_id);
   absl::optional<UkmRecorderAndSourceId> GetUkmRecorderAndSourceId(
       ContextId context_id);
 

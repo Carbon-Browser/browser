@@ -14,11 +14,11 @@
 #include "ui/display/display_observer.h"
 #include "ui/events/platform/x11/x11_event_source.h"
 #include "ui/gfx/font_render_params.h"
+#include "ui/ozone/platform/x11/x11_window.h"
+#include "ui/ozone/platform/x11/x11_window_manager.h"
 #include "ui/ozone/test/mock_platform_window_delegate.h"
 #include "ui/platform_window/platform_window_delegate.h"
 #include "ui/platform_window/platform_window_init_properties.h"
-#include "ui/platform_window/x11/x11_window.h"
-#include "ui/platform_window/x11/x11_window_manager.h"
 
 using ::testing::_;
 
@@ -58,6 +58,10 @@ class X11ScreenOzoneTest : public testing::Test {
   X11ScreenOzoneTest()
       : task_env_(std::make_unique<base::test::TaskEnvironment>(
             base::test::TaskEnvironment::MainThreadType::UI)) {}
+
+  X11ScreenOzoneTest(const X11ScreenOzoneTest&) = delete;
+  X11ScreenOzoneTest& operator=(const X11ScreenOzoneTest&) = delete;
+
   ~X11ScreenOzoneTest() override = default;
 
   void SetUp() override {
@@ -120,8 +124,6 @@ class X11ScreenOzoneTest : public testing::Test {
   std::unique_ptr<X11ScreenOzone> screen_;
   std::unique_ptr<X11EventSource> event_source_;
   std::unique_ptr<base::test::TaskEnvironment> task_env_;
-
-  DISALLOW_COPY_AND_ASSIGN(X11ScreenOzoneTest);
 };
 
 // This test case ensures that PlatformScreen correctly provides the display
@@ -180,7 +182,7 @@ TEST_F(X11ScreenOzoneTest, GetDisplayForWidgetTwoDisplays) {
   EXPECT_EQ(*display_2, screen()->GetDisplayForAcceleratedWidget(widget));
 
   EXPECT_CALL(delegate, OnBoundsChanged(_)).Times(1);
-  window->SetBounds(
+  window->SetBoundsInPixels(
       gfx::Rect(kPrimaryDisplayBounds.width() - 250, 0, 400, 300));
   EXPECT_EQ(primary_display(),
             screen()->GetDisplayForAcceleratedWidget(widget));

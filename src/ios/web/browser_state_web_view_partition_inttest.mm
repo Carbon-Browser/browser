@@ -7,7 +7,6 @@
 #include <memory>
 #include <string>
 
-#include "base/compiler_specific.h"
 #include "base/mac/foundation_util.h"
 #import "base/test/ios/wait_util.h"
 #import "ios/web/common/web_view_creation_util.h"
@@ -52,6 +51,12 @@ namespace web {
 class BrowserStateWebViewPartitionTest : public WebIntTest {
  protected:
   BrowserStateWebViewPartitionTest() = default;
+
+  BrowserStateWebViewPartitionTest(const BrowserStateWebViewPartitionTest&) =
+      delete;
+  BrowserStateWebViewPartitionTest& operator=(
+      const BrowserStateWebViewPartitionTest&) = delete;
+
   void SetUp() override {
     WebIntTest::SetUp();
 
@@ -96,7 +101,7 @@ class BrowserStateWebViewPartitionTest : public WebIntTest {
 
   // Loads a test web page (that contains a small string) in |web_view| and
   // waits until the web view has finished the navigation.
-  bool LoadTestWebPage(WKWebView* web_view) WARN_UNUSED_RESULT {
+  [[nodiscard]] bool LoadTestWebPage(WKWebView* web_view) {
     FakeNavigationDelegate* navigation_delegate =
         [[FakeNavigationDelegate alloc] init];
 
@@ -118,8 +123,6 @@ class BrowserStateWebViewPartitionTest : public WebIntTest {
  protected:
   net::EmbeddedTestServer server_;
   FakeBrowserState otr_browser_state_;
-
-  DISALLOW_COPY_AND_ASSIGN(BrowserStateWebViewPartitionTest);
 };
 
 // Tests that cookies are partitioned between web views created with a

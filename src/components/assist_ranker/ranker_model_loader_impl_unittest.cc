@@ -13,7 +13,6 @@
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/memory/ref_counted.h"
-#include "base/task/post_task.h"
 #include "base/test/task_environment.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "components/assist_ranker/proto/ranker_model.pb.h"
@@ -35,6 +34,11 @@ const char kInvalidModelData[] = "not a valid model";
 const int kInvalidModelSize = sizeof(kInvalidModelData) - 1;
 
 class RankerModelLoaderImplTest : public ::testing::Test {
+ public:
+  RankerModelLoaderImplTest(const RankerModelLoaderImplTest&) = delete;
+  RankerModelLoaderImplTest& operator=(const RankerModelLoaderImplTest&) =
+      delete;
+
  protected:
   RankerModelLoaderImplTest();
 
@@ -108,9 +112,6 @@ class RankerModelLoaderImplTest : public ::testing::Test {
   RankerModel remote_model_;
   RankerModel local_model_;
   RankerModel expired_model_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(RankerModelLoaderImplTest);
 };
 
 RankerModelLoaderImplTest::RankerModelLoaderImplTest() {
@@ -191,11 +192,10 @@ void RankerModelLoaderImplTest::InitRemoteModels() {
 }
 
 void RankerModelLoaderImplTest::InitLocalModels() {
-  InitModel(remote_model_url_, base::Time::Now(), base::TimeDelta::FromDays(30),
+  InitModel(remote_model_url_, base::Time::Now(), base::Days(30),
             &local_model_);
-  InitModel(remote_model_url_,
-            base::Time::Now() - base::TimeDelta::FromDays(60),
-            base::TimeDelta::FromDays(30), &expired_model_);
+  InitModel(remote_model_url_, base::Time::Now() - base::Days(60),
+            base::Days(30), &expired_model_);
   SaveModel(local_model_, local_model_path_);
   SaveModel(expired_model_, expired_model_path_);
   ASSERT_EQ(base::WriteFile(invalid_model_path_, kInvalidModelData,

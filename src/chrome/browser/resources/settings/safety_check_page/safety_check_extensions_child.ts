@@ -7,16 +7,17 @@
  * 'settings-safety-extensions-child' is the settings page containing the
  * safety check child showing the extension status.
  */
-import {assertNotReached} from 'chrome://resources/js/assert.m.js';
-import {I18nBehavior} from 'chrome://resources/js/i18n_behavior.m.js';
-import {WebUIListenerBehavior} from 'chrome://resources/js/web_ui_listener_behavior.m.js';
-import {html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {assertNotReached} from 'chrome://resources/js/assert_ts.js';
+import {I18nMixin} from 'chrome://resources/js/i18n_mixin.js';
+import {WebUIListenerMixin} from 'chrome://resources/js/web_ui_listener_mixin.js';
+import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {MetricsBrowserProxy, MetricsBrowserProxyImpl, SafetyCheckInteractions} from '../metrics_browser_proxy.js';
 import {OpenWindowProxyImpl} from '../open_window_proxy.js';
 
 import {SafetyCheckCallbackConstants, SafetyCheckExtensionsStatus} from './safety_check_browser_proxy.js';
 import {SafetyCheckIconStatus} from './safety_check_child.js';
+import {getTemplate} from './safety_check_extensions_child.html.js';
 
 type ExtensionsChangedEvent = {
   newState: SafetyCheckExtensionsStatus,
@@ -24,8 +25,7 @@ type ExtensionsChangedEvent = {
 };
 
 const SettingsSafetyCheckExtensionsChildElementBase =
-    mixinBehaviors([I18nBehavior, WebUIListenerBehavior], PolymerElement) as
-    {new (): PolymerElement & I18nBehavior & WebUIListenerBehavior};
+    WebUIListenerMixin(I18nMixin(PolymerElement));
 
 export class SettingsSafetyCheckExtensionsChildElement extends
     SettingsSafetyCheckExtensionsChildElementBase {
@@ -34,7 +34,7 @@ export class SettingsSafetyCheckExtensionsChildElement extends
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
   }
 
   static get properties() {
@@ -74,7 +74,7 @@ export class SettingsSafetyCheckExtensionsChildElement extends
   private metricsBrowserProxy_: MetricsBrowserProxy =
       MetricsBrowserProxyImpl.getInstance();
 
-  connectedCallback() {
+  override connectedCallback() {
     super.connectedCallback();
 
     // Register for safety check status updates.
@@ -103,7 +103,6 @@ export class SettingsSafetyCheckExtensionsChildElement extends
         return SafetyCheckIconStatus.WARNING;
       default:
         assertNotReached();
-        return SafetyCheckIconStatus.WARNING;
     }
   }
 
@@ -152,6 +151,13 @@ export class SettingsSafetyCheckExtensionsChildElement extends
 
   private openExtensionsPage_() {
     OpenWindowProxyImpl.getInstance().openURL('chrome://extensions');
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'settings-safety-check-extensions-child':
+        SettingsSafetyCheckExtensionsChildElement;
   }
 }
 

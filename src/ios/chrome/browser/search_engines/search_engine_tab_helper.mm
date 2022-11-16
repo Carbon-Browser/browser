@@ -25,13 +25,6 @@
 
 namespace {
 
-const char kCommandPrefix[] = "searchEngine";
-const char kCommandOpenSearch[] = "searchEngine.openSearch";
-const char kOpenSearchPageUrlKey[] = "pageUrl";
-const char kOpenSearchOsddUrlKey[] = "osddUrl";
-const char kCommandSearchableUrl[] = "searchEngine.searchableUrl";
-const char kSearchableUrlUrlKey[] = "url";
-
 // Returns true if the |item|'s transition type is FORM_SUBMIT.
 bool IsFormSubmit(const web::NavigationItem* item) {
   return ui::PageTransitionCoreTypeIs(item->GetTransitionType(),
@@ -77,10 +70,6 @@ SearchEngineTabHelper::~SearchEngineTabHelper() {}
 SearchEngineTabHelper::SearchEngineTabHelper(web::WebState* web_state)
     : web_state_(web_state) {
   web_state->AddObserver(this);
-  subscription_ = web_state->AddScriptCommandCallback(
-      base::BindRepeating(&SearchEngineTabHelper::OnJsMessage,
-                          base::Unretained(this)),
-      kCommandPrefix);
   DCHECK(favicon::WebFaviconDriver::FromWebState(web_state));
   favicon_driver_observation_.Observe(
       favicon::WebFaviconDriver::FromWebState(web_state));
@@ -124,33 +113,8 @@ void SearchEngineTabHelper::DidFinishNavigation(
   }
 }
 
-void SearchEngineTabHelper::OnJsMessage(const base::Value& message,
-                                        const GURL& page_url,
-                                        bool user_is_interacting,
-                                        web::WebFrame* sender_frame) {
-  const base::Value* cmd = message.FindKey("command");
-  if (!cmd || !cmd->is_string()) {
-    return;
-  }
-  std::string cmd_str = cmd->GetString();
-  if (cmd_str == kCommandOpenSearch) {
-    const base::Value* document_url = message.FindKey(kOpenSearchPageUrlKey);
-    if (!document_url || !document_url->is_string())
-      return;
-    const base::Value* osdd_url = message.FindKey(kOpenSearchOsddUrlKey);
-    if (!osdd_url || !osdd_url->is_string())
-      return;
-    AddTemplateURLByOSDD(GURL(document_url->GetString()),
-                         GURL(osdd_url->GetString()));
-  } else if (cmd_str == kCommandSearchableUrl) {
-    const base::Value* url = message.FindKey(kSearchableUrlUrlKey);
-    if (!url || !url->is_string())
-      return;
-    // Save |url| to |searchable_url_| when generated from <form> submission,
-    // and create the TemplateURL when the submission did lead to a successful
-    // navigation.
-    searchable_url_ = GURL(url->GetString());
-  }
+void SearchEngineTabHelper::SetSearchableUrl(GURL searchable_url) {
+  searchable_url_ = searchable_url;
 }
 
 // Creates a new TemplateURL by OSDD. The TemplateURL will be added to
@@ -200,7 +164,7 @@ void SearchEngineTabHelper::AddTemplateURLByOSDD(const GURL& page_url,
   // it to be the default value defined here:
   //   https://cs.chromium.org/chromium/src/services/network/public/cpp/resource_request.h?rcl=39c6fbea496641a6514e34c0ab689871d14e6d52&l=194;
   ios::TemplateURLFetcherFactory::GetForBrowserState(browser_state)
-      ->ScheduleDownload(keyword, osdd_url, item->GetFavicon().url,
+      ->ScheduleDownload(keyword, osdd_url, item->GetFaviconStatus().url,
                          url::Origin::Create(web_state_->GetLastCommittedURL()),
                          browser_state->GetURLLoaderFactory(),
                          /* render_frame_id */ MSG_ROUTING_NONE,
@@ -259,8 +223,10 @@ void SearchEngineTabHelper::AddTemplateURLBySearchableURL(
   //   1. Get from FaviconStatus of previous NavigationItem;
   //   2. Create by current NavigationItem's referrer if valid;
   //   3. Create by previous NavigationItem's URL if valid;
-  if (previous_item->GetFavicon().url.is_valid()) {
-    data.favicon_url = previous_item->GetFavicon().url;
+  const web::FaviconStatus& previous_item_favicon_status =
+      previous_item->GetFaviconStatus();
+  if (previous_item_favicon_status.url.is_valid()) {
+    data.favicon_url = previous_item_favicon_status.url;
   } else if (current_item->GetReferrer().url.is_valid()) {
     data.favicon_url =
         TemplateURL::GenerateFaviconURL(current_item->GetReferrer().url);

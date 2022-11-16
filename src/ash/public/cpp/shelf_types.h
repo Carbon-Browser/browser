@@ -6,6 +6,7 @@
 #define ASH_PUBLIC_CPP_SHELF_TYPES_H_
 
 #include <cstdint>
+#include <ostream>
 #include <string>
 
 #include "ash/public/cpp/ash_public_export.h"
@@ -59,6 +60,9 @@ enum ShelfAutoHideState {
   SHELF_AUTO_HIDE_HIDDEN,
 };
 
+ASH_PUBLIC_EXPORT std::ostream& operator<<(std::ostream& out,
+                                           ShelfAutoHideState state);
+
 enum ShelfVisibilityState {
   // Always visible.
   SHELF_VISIBLE,
@@ -106,6 +110,9 @@ enum class ShelfBackgroundType {
   kInApp,
 };
 
+ASH_PUBLIC_EXPORT std::ostream& operator<<(std::ostream& out,
+                                           ShelfBackgroundType type);
+
 // Source of the launch or activation request, for tracking.
 enum ShelfLaunchSource {
   // The item was launched from an unknown source.
@@ -122,6 +129,9 @@ enum ShelfLaunchSource {
 
   // The item was launched from the shelf itself.
   LAUNCH_FROM_SHELF,
+
+  // The item was launched internally, for example from test.
+  LAUNCH_FROM_INTERNAL,
 };
 
 // The actions that may be performed when a shelf item is selected.

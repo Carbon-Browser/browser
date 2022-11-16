@@ -10,8 +10,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/cxx17_backports.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "remoting/codec/audio_encoder.h"
@@ -42,6 +42,10 @@ std::unique_ptr<AudioPacket> MakeAudioPacket(int channel_count = 2) {
 class FakeAudioEncoder : public AudioEncoder {
  public:
   FakeAudioEncoder() = default;
+
+  FakeAudioEncoder(const FakeAudioEncoder&) = delete;
+  FakeAudioEncoder& operator=(const FakeAudioEncoder&) = delete;
+
   ~FakeAudioEncoder() override = default;
 
   std::unique_ptr<AudioPacket> Encode(
@@ -54,14 +58,14 @@ class FakeAudioEncoder : public AudioEncoder {
     return packet;
   }
   int GetBitrate() override { return 160000; }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(FakeAudioEncoder);
 };
 
 class AudioPumpTest : public testing::Test, public protocol::AudioStub {
  public:
   AudioPumpTest() = default;
+
+  AudioPumpTest(const AudioPumpTest&) = delete;
+  AudioPumpTest& operator=(const AudioPumpTest&) = delete;
 
   void SetUp() override;
   void TearDown() override;
@@ -74,24 +78,21 @@ class AudioPumpTest : public testing::Test, public protocol::AudioStub {
   base::test::SingleThreadTaskEnvironment task_environment_;
 
   // |source_| and |encoder_| are owned by the |pump_|.
-  FakeAudioSource* source_;
-  FakeAudioEncoder* encoder_;
+  raw_ptr<FakeAudioSource> source_;
+  raw_ptr<FakeAudioEncoder> encoder_;
 
   std::unique_ptr<AudioPump> pump_;
 
   std::vector<std::unique_ptr<AudioPacket>> sent_packets_;
   std::vector<base::OnceClosure> done_closures_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(AudioPumpTest);
 };
 
 void AudioPumpTest::SetUp() {
   source_ = new FakeAudioSource();
   encoder_ = new FakeAudioEncoder();
   pump_ = std::make_unique<AudioPump>(
-      task_environment_.GetMainThreadTaskRunner(), base::WrapUnique(source_),
-      base::WrapUnique(encoder_), this);
+      task_environment_.GetMainThreadTaskRunner(),
+      base::WrapUnique(source_.get()), base::WrapUnique(encoder_.get()), this);
 }
 
 void AudioPumpTest::TearDown() {
@@ -170,7 +171,7 @@ TEST_F(AudioPumpTest, DownmixAudioPacket) {
     AudioPacket::CHANNELS_MONO,
   };
 
-  for (size_t i = 0; i < base::size(kChannels); i++) {
+  for (size_t i = 0; i < std::size(kChannels); i++) {
     source_->callback().Run(MakeAudioPacket(kChannels[i]));
     // Run message loop to let the pump processes the audio packet and send it
     // to the encoder.
@@ -182,7 +183,7 @@ TEST_F(AudioPumpTest, DownmixAudioPacket) {
     base::RunLoop().RunUntilIdle();
   }
 
-  ASSERT_EQ(sent_packets_.size(), base::size(kChannels));
+  ASSERT_EQ(sent_packets_.size(), std::size(kChannels));
 }
 
 }  // namespace protocol

@@ -7,14 +7,13 @@
 
 #include <memory>
 
-#include "base/macros.h"
 #include "base/threading/thread.h"
 #include "base/threading/thread_checker.h"
 #include "build/build_config.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/browser_thread.h"
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 namespace base {
 namespace win {
 class ScopedCOMInitializer;
@@ -23,6 +22,7 @@ class ScopedCOMInitializer;
 #endif
 
 namespace content {
+class BrowserThreadImpl;
 class NotificationService;
 }
 
@@ -38,6 +38,10 @@ class CONTENT_EXPORT BrowserProcessIOThread : public base::Thread {
  public:
   // Constructs a BrowserProcessIOThread.
   BrowserProcessIOThread();
+
+  BrowserProcessIOThread(const BrowserProcessIOThread&) = delete;
+  BrowserProcessIOThread& operator=(const BrowserProcessIOThread&) = delete;
+
   ~BrowserProcessIOThread() override;
 
   // Registers this thread to represent the IO thread in the browser_thread.h
@@ -67,9 +71,6 @@ class CONTENT_EXPORT BrowserProcessIOThread : public base::Thread {
 
   void IOThreadRun(base::RunLoop* run_loop);
 
-  // This method encapsulates cleanup that needs to happen on the IO thread.
-  void IOThreadCleanUp();
-
   // BrowserThreads are not allowed to do file I/O nor wait on synchronization
   // primivives except when explicitly allowed in tests.
   bool is_blocking_allowed_for_testing_ = false;
@@ -78,7 +79,7 @@ class CONTENT_EXPORT BrowserProcessIOThread : public base::Thread {
   // RegisterAsBrowserThread().
   std::unique_ptr<BrowserThreadImpl> browser_thread_;
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   std::unique_ptr<base::win::ScopedCOMInitializer> com_initializer_;
 #endif
 
@@ -86,8 +87,6 @@ class CONTENT_EXPORT BrowserProcessIOThread : public base::Thread {
   std::unique_ptr<NotificationService> notification_service_;
 
   THREAD_CHECKER(browser_thread_checker_);
-
-  DISALLOW_COPY_AND_ASSIGN(BrowserProcessIOThread);
 };
 
 }  // namespace content

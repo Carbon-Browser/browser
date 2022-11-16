@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "content/browser/media/audio_stream_broker.h"
 #include "content/common/content_export.h"
@@ -42,9 +42,13 @@ class CONTENT_EXPORT AudioInputStreamBroker final
       uint32_t shared_memory_count,
       media::UserInputMonitorBase* user_input_monitor,
       bool enable_agc,
+      media::mojom::AudioProcessingConfigPtr processing_config,
       AudioStreamBroker::DeleterCallback deleter,
       mojo::PendingRemote<blink::mojom::RendererAudioInputStreamFactoryClient>
           renderer_factory_client);
+
+  AudioInputStreamBroker(const AudioInputStreamBroker&) = delete;
+  AudioInputStreamBroker& operator=(const AudioInputStreamBroker&) = delete;
 
   ~AudioInputStreamBroker() final;
 
@@ -67,7 +71,7 @@ class CONTENT_EXPORT AudioInputStreamBroker final
   const std::string device_id_;
   media::AudioParameters params_;
   const uint32_t shared_memory_count_;
-  media::UserInputMonitorBase* const user_input_monitor_;
+  const raw_ptr<media::UserInputMonitorBase> user_input_monitor_;
   const bool enable_agc_;
 
   // Indicates that CreateStream has been called, but not StreamCreated.
@@ -75,6 +79,7 @@ class CONTENT_EXPORT AudioInputStreamBroker final
 
   DeleterCallback deleter_;
 
+  media::mojom::AudioProcessingConfigPtr processing_config_;
   mojo::Remote<blink::mojom::RendererAudioInputStreamFactoryClient>
       renderer_factory_client_;
   mojo::Receiver<AudioInputStreamObserver> observer_receiver_{this};
@@ -86,8 +91,6 @@ class CONTENT_EXPORT AudioInputStreamBroker final
           kDocumentDestroyed;
 
   base::WeakPtrFactory<AudioInputStreamBroker> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(AudioInputStreamBroker);
 };
 
 }  // namespace content

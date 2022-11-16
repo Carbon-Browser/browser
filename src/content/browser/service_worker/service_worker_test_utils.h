@@ -41,26 +41,6 @@ class ServiceWorkerRegistry;
 class ServiceWorkerStorage;
 class ServiceWorkerVersion;
 
-template <typename Arg>
-void ReceiveResult(BrowserThread::ID run_quit_thread,
-                   base::OnceClosure quit,
-                   absl::optional<Arg>* out,
-                   Arg actual) {
-  *out = actual;
-  if (!quit.is_null()) {
-    BrowserThread::GetTaskRunnerForThread(run_quit_thread)
-        ->PostTask(FROM_HERE, std::move(quit));
-  }
-}
-
-template <typename Arg>
-base::OnceCallback<void(Arg)> CreateReceiver(BrowserThread::ID run_quit_thread,
-                                             base::OnceClosure quit,
-                                             absl::optional<Arg>* out) {
-  return base::BindOnce(&ReceiveResult<Arg>, run_quit_thread, std::move(quit),
-                        out);
-}
-
 base::OnceCallback<void(blink::ServiceWorkerStatusCode)>
 ReceiveServiceWorkerStatus(absl::optional<blink::ServiceWorkerStatusCode>* out,
                            base::OnceClosure quit_closure);
@@ -77,6 +57,12 @@ class ServiceWorkerRemoteContainerEndpoint {
   ServiceWorkerRemoteContainerEndpoint();
   ServiceWorkerRemoteContainerEndpoint(
       ServiceWorkerRemoteContainerEndpoint&& other);
+
+  ServiceWorkerRemoteContainerEndpoint(
+      const ServiceWorkerRemoteContainerEndpoint&) = delete;
+  ServiceWorkerRemoteContainerEndpoint& operator=(
+      const ServiceWorkerRemoteContainerEndpoint&) = delete;
+
   ~ServiceWorkerRemoteContainerEndpoint();
 
   void BindForWindow(blink::mojom::ServiceWorkerContainerInfoForClientPtr info);
@@ -109,20 +95,22 @@ class ServiceWorkerRemoteContainerEndpoint {
   // content::ServiceWorkerContainerHost.
   mojo::PendingAssociatedReceiver<blink::mojom::ServiceWorkerContainer>
       client_receiver_;
-
-  DISALLOW_COPY_AND_ASSIGN(ServiceWorkerRemoteContainerEndpoint);
 };
 
 struct ServiceWorkerContainerHostAndInfo {
   ServiceWorkerContainerHostAndInfo(
       base::WeakPtr<ServiceWorkerContainerHost> host,
       blink::mojom::ServiceWorkerContainerInfoForClientPtr);
+
+  ServiceWorkerContainerHostAndInfo(const ServiceWorkerContainerHostAndInfo&) =
+      delete;
+  ServiceWorkerContainerHostAndInfo& operator=(
+      const ServiceWorkerContainerHostAndInfo&) = delete;
+
   ~ServiceWorkerContainerHostAndInfo();
 
   base::WeakPtr<ServiceWorkerContainerHost> host;
   blink::mojom::ServiceWorkerContainerInfoForClientPtr info;
-
-  DISALLOW_COPY_AND_ASSIGN(ServiceWorkerContainerHostAndInfo);
 };
 
 // Creates a container host that finished navigation. Test code can typically
@@ -232,6 +220,12 @@ class MockServiceWorkerResourceReader
     : public storage::mojom::ServiceWorkerResourceReader {
  public:
   MockServiceWorkerResourceReader();
+
+  MockServiceWorkerResourceReader(const MockServiceWorkerResourceReader&) =
+      delete;
+  MockServiceWorkerResourceReader& operator=(
+      const MockServiceWorkerResourceReader&) = delete;
+
   ~MockServiceWorkerResourceReader() override;
 
   mojo::PendingRemote<storage::mojom::ServiceWorkerResourceReader>
@@ -300,8 +294,6 @@ class MockServiceWorkerResourceReader
   storage::mojom::ServiceWorkerResourceReader::ReadDataCallback
       pending_read_data_callback_;
   mojo::ScopedDataPipeProducerHandle body_;
-
-  DISALLOW_COPY_AND_ASSIGN(MockServiceWorkerResourceReader);
 };
 
 // A test implementation of ServiceWorkerResourceWriter.
@@ -328,6 +320,12 @@ class MockServiceWorkerResourceWriter
     : public storage::mojom::ServiceWorkerResourceWriter {
  public:
   MockServiceWorkerResourceWriter();
+
+  MockServiceWorkerResourceWriter(const MockServiceWorkerResourceWriter&) =
+      delete;
+  MockServiceWorkerResourceWriter& operator=(
+      const MockServiceWorkerResourceWriter&) = delete;
+
   ~MockServiceWorkerResourceWriter() override;
 
   mojo::PendingRemote<storage::mojom::ServiceWorkerResourceWriter>
@@ -370,8 +368,6 @@ class MockServiceWorkerResourceWriter
   net::CompletionOnceCallback pending_callback_;
 
   mojo::Receiver<storage::mojom::ServiceWorkerResourceWriter> receiver_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(MockServiceWorkerResourceWriter);
 };
 
 // A test implementation of ServiceWorkerDataPipeStateNotifier.

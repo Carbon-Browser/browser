@@ -63,7 +63,7 @@ public class NTPNewsRecyclerAdapter extends RecyclerView.Adapter<NTPNewsRecycler
 
     private boolean blockImageRefresh = false;
 
-    private static final String ARTICLE_IMAGE_URL_BASE = 
+    private static final String ARTICLE_IMAGE_URL_BASE = "https://trycarbon.io/android-resources/article-image-getter/?key=ergnpiqg95pbwfewnfqewfk42939&url=";
 
     // data is passed into the constructor
     public NTPNewsRecyclerAdapter(Context context) {

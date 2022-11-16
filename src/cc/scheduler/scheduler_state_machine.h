@@ -136,6 +136,7 @@ class CC_EXPORT SchedulerStateMachine {
     NONE,
     SEND_BEGIN_MAIN_FRAME,
     COMMIT,
+    POST_COMMIT,
     ACTIVATE_SYNC_TREE,
     PERFORM_IMPL_SIDE_INVALIDATION,
     DRAW_IF_POSSIBLE,
@@ -158,6 +159,8 @@ class CC_EXPORT SchedulerStateMachine {
   void WillNotifyBeginMainFrameNotExpectedUntil();
   void WillNotifyBeginMainFrameNotExpectedSoon();
   void WillCommit(bool commit_had_no_updates);
+  void DidCommit();
+  void DidPostCommit();
   void WillActivate();
   void WillDraw();
   void WillBeginLayerTreeFrameSinkCreation();
@@ -287,6 +290,7 @@ class CC_EXPORT SchedulerStateMachine {
   // the notification received updated the state for the current pending tree,
   // if any.
   bool NotifyReadyToActivate();
+  bool IsReadyToActivate();
 
   // Indicates the active tree's visible tiles are ready to be drawn.
   void NotifyReadyToDraw();
@@ -349,11 +353,16 @@ class CC_EXPORT SchedulerStateMachine {
   bool should_defer_invalidation_for_fast_main_frame() const {
     return should_defer_invalidation_for_fast_main_frame_;
   }
-  bool did_commit_during_frame() const { return did_commit_during_frame_; }
 
   int aborted_begin_main_frame_count() const {
     return aborted_begin_main_frame_count_;
   }
+
+  bool pending_tree_is_ready_for_activation() const {
+    return pending_tree_is_ready_for_activation_;
+  }
+
+  bool resourceless_draw() const { return resourceless_draw_; }
 
  protected:
   bool BeginFrameRequiredForAction() const;
@@ -381,6 +390,7 @@ class CC_EXPORT SchedulerStateMachine {
   bool ShouldActivateSyncTree() const;
   bool ShouldSendBeginMainFrame() const;
   bool ShouldCommit() const;
+  bool ShouldRunPostCommit() const;
   bool ShouldPrepareTiles() const;
   bool ShouldInvalidateLayerTreeFrameSink() const;
   bool ShouldNotifyBeginMainFrameNotExpectedUntil() const;
@@ -441,6 +451,7 @@ class CC_EXPORT SchedulerStateMachine {
   bool needs_prepare_tiles_ = false;
   bool needs_begin_main_frame_ = false;
   bool needs_one_begin_impl_frame_ = false;
+  bool needs_post_commit_ = false;
   bool visible_ = false;
   bool begin_frame_source_paused_ = false;
   bool resourceless_draw_ = false;

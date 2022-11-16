@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 
 namespace base {
 namespace win {
@@ -39,6 +39,10 @@ class ScopedOSInfoOverride {
   };
 
   explicit ScopedOSInfoOverride(Type type);
+
+  ScopedOSInfoOverride(const ScopedOSInfoOverride&) = delete;
+  ScopedOSInfoOverride& operator=(const ScopedOSInfoOverride&) = delete;
+
   ~ScopedOSInfoOverride();
 
  private:
@@ -49,7 +53,7 @@ class ScopedOSInfoOverride {
 
   // The OSInfo taken by this instance at construction and restored at
   // destruction.
-  base::win::OSInfo* original_info_;
+  raw_ptr<base::win::OSInfo> original_info_;
 
   // The OSInfo owned by this scoped object and which overrides
   // base::win::OSInfo::GetIntance() for the lifespan of the object.
@@ -58,8 +62,6 @@ class ScopedOSInfoOverride {
   // Because the dtor of OSInfo is private, a custom deleter is needed to use
   // unique_ptr.
   static void deleter(base::win::OSInfo* info);
-
-  DISALLOW_COPY_AND_ASSIGN(ScopedOSInfoOverride);
 };
 
 }  // namespace test

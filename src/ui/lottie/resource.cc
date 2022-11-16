@@ -4,81 +4,144 @@
 
 #include "ui/lottie/resource.h"
 
-#include <map>
+#include <memory>
+#include <utility>
+#include <vector>
 
-#include "base/metrics/histogram_macros.h"
-#include "base/no_destructor.h"
-#include "base/trace_event/trace_event.h"
-#include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
+#include "base/bind.h"
+#include "base/memory/ref_counted_memory.h"
+#include "cc/paint/display_item_list.h"
+#include "cc/paint/record_paint_canvas.h"
+#include "cc/paint/skottie_color_map.h"
 #include "cc/paint/skottie_wrapper.h"
-#include "third_party/zlib/google/compression_utils.h"
-#include "ui/base/resource/resource_bundle.h"
+#include "third_party/skia/include/core/SkColor.h"
+#include "ui/gfx/canvas.h"
+#include "ui/gfx/geometry/size.h"
+#include "ui/gfx/image/image_skia.h"
+#include "ui/gfx/image/image_skia_rep.h"
+#include "ui/gfx/image/image_skia_source.h"
 #include "ui/lottie/animation.h"
 
-#if defined(OS_WIN)
-#include "ui/display/win/dpi.h"
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "ui/base/models/image_model.h"  // nogncheck
+#include "ui/color/color_id.h"           // nogncheck
+#include "ui/color/color_provider.h"     // nogncheck
 #endif
 
 namespace lottie {
+
 namespace {
 
-// Cached vector graphics. Each resource is loaded and unzipped only once.
-// TODO(malaykeshav): Investigate if this needs to be an MRU cache with a size
-// limit as the usage increases.
-using VectorAssetCache = std::map<int, scoped_refptr<cc::SkottieWrapper>>;
-VectorAssetCache& GetVectorAssetCache() {
-  static base::NoDestructor<VectorAssetCache> vector_graphic_cache;
-  return *vector_graphic_cache;
+// A descendant of |gfx::ImageSkiaSource| that simply uses one
+// |gfx::ImageSkiaRep| for all scales.
+class LottieImageSource : public gfx::ImageSkiaSource {
+ public:
+  explicit LottieImageSource(const gfx::ImageSkiaRep& rep) : rep_(rep) {}
+  LottieImageSource(const LottieImageSource&) = delete;
+  LottieImageSource& operator=(const LottieImageSource&) = delete;
+  ~LottieImageSource() override = default;
+
+  // gfx::ImageSkiaSource overrides:
+  gfx::ImageSkiaRep GetImageForScale(float scale) override { return rep_; }
+  bool HasRepresentationAtAllScales() const override { return true; }
+
+ private:
+  gfx::ImageSkiaRep rep_;
+};
+
+// Uses |LottieImageSource| to create a |gfx::ImageSkia| from an |Animation|.
+gfx::ImageSkia CreateImageSkia(Animation* content) {
+  const gfx::Size size = content->GetOriginalSize();
+
+  scoped_refptr<cc::DisplayItemList> display_item_list =
+      base::MakeRefCounted<cc::DisplayItemList>(
+          cc::DisplayItemList::kToBeReleasedAsPaintOpBuffer);
+  display_item_list->StartPaint();
+
+  cc::RecordPaintCanvas record_canvas(
+      display_item_list.get(), SkRect::MakeWH(SkFloatToScalar(size.width()),
+                                              SkFloatToScalar(size.height())));
+  gfx::Canvas canvas(&record_canvas, 1.0);
+#if DCHECK_IS_ON()
+  gfx::Rect clip_rect;
+  DCHECK(canvas.GetClipBounds(&clip_rect));
+  DCHECK(clip_rect.Contains(gfx::Rect(size)));
+#endif
+  content->PaintFrame(&canvas, 0.f, size);
+
+  display_item_list->EndPaintOfPairedEnd();
+  display_item_list->Finalize();
+  const gfx::ImageSkiaRep rep(display_item_list->ReleaseAsRecord(), size, 0.f);
+  return gfx::ImageSkia(std::make_unique<LottieImageSource>(rep),
+                        rep.pixel_size());
+}
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+// Creates a |cc::SkottieColorMap| with theme colors from a |ui::ColorProvider|.
+cc::SkottieColorMap CreateColorMap(const ui::ColorProvider* color_provider) {
+  return {
+      cc::SkottieMapColor("_CrOS_Color1",
+                          color_provider->GetColor(ui::kColorNativeColor1)),
+      cc::SkottieMapColor(
+          "_CrOS_Color1Shade1",
+          color_provider->GetColor(ui::kColorNativeColor1Shade1)),
+      cc::SkottieMapColor(
+          "_CrOS_Color1Shade2",
+          color_provider->GetColor(ui::kColorNativeColor1Shade2)),
+      cc::SkottieMapColor("_CrOS_Color2",
+                          color_provider->GetColor(ui::kColorNativeColor2)),
+      cc::SkottieMapColor("_CrOS_Color3",
+                          color_provider->GetColor(ui::kColorNativeColor3)),
+      cc::SkottieMapColor("_CrOS_Color4",
+                          color_provider->GetColor(ui::kColorNativeColor4)),
+      cc::SkottieMapColor("_CrOS_Color5",
+                          color_provider->GetColor(ui::kColorNativeColor5)),
+      cc::SkottieMapColor("_CrOS_Color6",
+                          color_provider->GetColor(ui::kColorNativeColor6)),
+      cc::SkottieMapColor("_CrOS_BaseColor",
+                          color_provider->GetColor(ui::kColorNativeBaseColor)),
+      cc::SkottieMapColor(
+          "_CrOS_SecondaryColor",
+          color_provider->GetColor(ui::kColorNativeSecondaryColor))};
+}
+
+// Used for a |ui::ImageModel::ImageGenerator|.
+gfx::ImageSkia CreateImageSkiaWithCurrentTheme(
+    std::vector<uint8_t> bytes,
+    const ui::ColorProvider* color_provider) {
+  auto content = std::make_unique<Animation>(
+      cc::SkottieWrapper::CreateSerializable(std::move(bytes)),
+      CreateColorMap(color_provider));
+  return CreateImageSkia(content.get());
+}
+#endif
+
+// Converts from |std::string| to |std::vector<uint8_t>|.
+std::vector<uint8_t> StringToBytes(const std::string& bytes_string) {
+  const uint8_t* bytes_pointer =
+      reinterpret_cast<const uint8_t*>(bytes_string.data());
+  return std::vector<uint8_t>(bytes_pointer,
+                              bytes_pointer + bytes_string.size());
 }
 
 }  // namespace
 
-std::unique_ptr<Animation> GetVectorAnimationNamed(int resource_id) {
-  auto found = GetVectorAssetCache().find(resource_id);
-  if (found != GetVectorAssetCache().end())
-    return std::make_unique<Animation>(found->second);
-
-  auto& rb = ui::ResourceBundle::GetSharedInstance();
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  ui::ResourceScaleFactor scale_factor_to_load = rb.GetMaxResourceScaleFactor();
-#elif defined(OS_WIN)
-  ui::ResourceScaleFactor scale_factor_to_load =
-      display::win::GetDPIScale() > 1.25 ? rb.GetMaxResourceScaleFactor()
-                                         : ui::k100Percent;
-#else
-  ui::ResourceScaleFactor scale_factor_to_load = ui::k100Percent;
-#endif
-  // Clamp the scale factor to 2x. At most we will only be needing 2 versions
-  // for a given file.
-  if (scale_factor_to_load > ui::k200Percent)
-    scale_factor_to_load = ui::k200Percent;
-
-  auto compressed_raw_data =
-      rb.GetRawDataResourceForScale(resource_id, scale_factor_to_load);
-  std::vector<uint8_t> uncompressed_bytes(
-      compression::GetUncompressedSize(compressed_raw_data));
-  base::StringPiece uncompressed_str_piece(
-      reinterpret_cast<char*>(uncompressed_bytes.data()),
-      uncompressed_bytes.size());
-
-  TRACE_EVENT1("ui", "GetVectorAnimationNamed uncompress and parse",
-               "zip size bytes", uncompressed_bytes.size());
-  base::TimeTicks start_timestamp = base::TimeTicks::Now();
-  CHECK(
-      compression::GzipUncompress(compressed_raw_data, uncompressed_str_piece));
-
-  auto skottie =
-      cc::SkottieWrapper::CreateSerializable(std::move(uncompressed_bytes));
-
-  UMA_HISTOGRAM_CUSTOM_MICROSECONDS_TIMES(
-      "UncompressAndParseSkiaVectorAsset",
-      base::TimeTicks::Now() - start_timestamp,
-      base::TimeDelta::FromMicroseconds(1),
-      base::TimeDelta::FromMilliseconds(50), 100);
-  auto inserted = GetVectorAssetCache().emplace(resource_id, skottie);
-  DCHECK(inserted.second);
-  return std::make_unique<Animation>(inserted.first->second);
+gfx::ImageSkia ParseLottieAsStillImage(const std::string& bytes_string) {
+  auto content = std::make_unique<Animation>(
+      cc::SkottieWrapper::CreateSerializable(StringToBytes(bytes_string)));
+  return CreateImageSkia(content.get());
 }
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+ui::ImageModel ParseLottieAsThemedStillImage(const std::string& bytes_string) {
+  std::vector<uint8_t> bytes = StringToBytes(bytes_string);
+  const gfx::Size size =
+      std::make_unique<Animation>(cc::SkottieWrapper::CreateSerializable(bytes))
+          ->GetOriginalSize();
+  return ui::ImageModel::FromImageGenerator(
+      base::BindRepeating(&CreateImageSkiaWithCurrentTheme, std::move(bytes)),
+      size);
+}
+#endif
 
 }  // namespace lottie

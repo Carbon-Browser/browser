@@ -14,9 +14,10 @@
 #include "base/bind.h"
 #include "base/compiler_specific.h"
 #include "base/location.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "base/threading/thread.h"
 #include "base/time/time.h"
@@ -52,7 +53,7 @@ class Listener : public WebSocketListener {
 
  private:
   std::vector<std::string> messages_;
-  base::RunLoop* run_loop_;
+  raw_ptr<base::RunLoop> run_loop_;
 };
 
 class CloseListener : public WebSocketListener {
@@ -71,7 +72,7 @@ class CloseListener : public WebSocketListener {
   }
 
  private:
-  base::RunLoop* run_loop_;
+  raw_ptr<base::RunLoop> run_loop_;
 };
 
 class MessageReceivedListener : public WebSocketListener {
@@ -111,7 +112,7 @@ class WebSocketTest : public testing::Test {
     base::RunLoop run_loop;
     sock->Connect(base::BindOnce(&OnConnectFinished, &run_loop, &error));
     task_environment_.GetMainThreadTaskRunner()->PostDelayedTask(
-        FROM_HERE, run_loop.QuitClosure(), base::TimeDelta::FromSeconds(10));
+        FROM_HERE, run_loop.QuitClosure(), base::Seconds(10));
     run_loop.Run();
     if (error == net::OK)
       return sock;
@@ -132,7 +133,7 @@ class WebSocketTest : public testing::Test {
       ASSERT_TRUE(sock->Send(messages[i]));
     }
     task_environment_.GetMainThreadTaskRunner()->PostDelayedTask(
-        FROM_HERE, run_loop.QuitClosure(), base::TimeDelta::FromSeconds(10));
+        FROM_HERE, run_loop.QuitClosure(), base::Seconds(10));
     run_loop.Run();
   }
 
@@ -185,7 +186,7 @@ TEST_F(WebSocketTest, CloseOnReceive) {
   ASSERT_TRUE(sock);
   ASSERT_TRUE(sock->Send("hi"));
   task_environment_.GetMainThreadTaskRunner()->PostDelayedTask(
-      FROM_HERE, run_loop.QuitClosure(), base::TimeDelta::FromSeconds(10));
+      FROM_HERE, run_loop.QuitClosure(), base::Seconds(10));
   run_loop.Run();
 }
 
@@ -198,7 +199,7 @@ TEST_F(WebSocketTest, CloseOnSend) {
 
   sock->Send("hi");
   task_environment_.GetMainThreadTaskRunner()->PostDelayedTask(
-      FROM_HERE, run_loop.QuitClosure(), base::TimeDelta::FromSeconds(10));
+      FROM_HERE, run_loop.QuitClosure(), base::Seconds(10));
   run_loop.Run();
   ASSERT_FALSE(sock->Send("hi"));
 }
@@ -253,7 +254,7 @@ TEST_F(WebSocketTest, VerifyTextFramelsProcessed) {
 
   EXPECT_EQ(listener.Messages().size(), 0u);
   task_environment_.GetMainThreadTaskRunner()->PostDelayedTask(
-      FROM_HERE, run_loop.QuitClosure(), base::TimeDelta::FromSeconds(10));
+      FROM_HERE, run_loop.QuitClosure(), base::Seconds(10));
   run_loop.Run();
   EXPECT_THAT(listener.Messages(), testing::ElementsAre(kOriginalMessage));
 }
@@ -278,7 +279,7 @@ TEST_F(WebSocketTest, VerifyBinaryFramelsNotProcessed) {
   EXPECT_EQ(listener.Messages().size(), 0u);
 
   task_environment_.GetMainThreadTaskRunner()->PostDelayedTask(
-      FROM_HERE, run_loop.QuitClosure(), base::TimeDelta::FromSeconds(10));
+      FROM_HERE, run_loop.QuitClosure(), base::Seconds(10));
   run_loop.Run();
   EXPECT_EQ(listener.Messages().size(), 0u);
 }
@@ -301,7 +302,7 @@ TEST_F(WebSocketTest, VerifyCloseFramelsNotProcessed) {
   EXPECT_EQ(listener.Messages().size(), 0u);
 
   task_environment_.GetMainThreadTaskRunner()->PostDelayedTask(
-      FROM_HERE, run_loop.QuitClosure(), base::TimeDelta::FromSeconds(10));
+      FROM_HERE, run_loop.QuitClosure(), base::Seconds(10));
   run_loop.Run();
   EXPECT_EQ(listener.Messages().size(), 0u);
 }

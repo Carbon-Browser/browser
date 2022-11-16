@@ -53,12 +53,11 @@ unsigned int GetFormatForProfile(VAProfile profile) {
 Vp9Decoder::Vp9Decoder(std::unique_ptr<IvfParser> ivf_parser,
                        const VaapiDevice& va_device,
                        SharedVASurface::FetchPolicy fetch_policy)
-    : VideoDecoder::VideoDecoder(std::move(ivf_parser),
-                                 va_device,
-                                 fetch_policy),
+    : VideoDecoder::VideoDecoder(va_device, fetch_policy),
       vp9_parser_(
           std::make_unique<Vp9Parser>(/*parsing_compressed_header=*/false)),
-      ref_frames_(kVp9NumRefFrames) {}
+      ref_frames_(kVp9NumRefFrames),
+      ivf_parser_(std::move(ivf_parser)) {}
 
 Vp9Decoder::~Vp9Decoder() {
   // We destroy the VA handles explicitly to ensure the correct order.
@@ -164,9 +163,9 @@ VideoDecoder::Result Vp9Decoder::DecodeNextFrame() {
 
   pic_param.frame_width = base::checked_cast<uint16_t>(frame_hdr.frame_width);
   pic_param.frame_height = base::checked_cast<uint16_t>(frame_hdr.frame_height);
-  CHECK_EQ(kVp9NumRefFrames, base::size(pic_param.reference_frames));
+  CHECK_EQ(kVp9NumRefFrames, std::size(pic_param.reference_frames));
   CHECK_EQ(kVp9NumRefFrames, ref_frames_.size());
-  for (size_t i = 0; i < base::size(pic_param.reference_frames); ++i) {
+  for (size_t i = 0; i < std::size(pic_param.reference_frames); ++i) {
     pic_param.reference_frames[i] =
         ref_frames_[i] ? ref_frames_[i]->id() : VA_INVALID_SURFACE;
   }
@@ -230,7 +229,7 @@ VideoDecoder::Result Vp9Decoder::DecodeNextFrame() {
   slice_param.slice_data_offset = 0;
   slice_param.slice_data_flag = VA_SLICE_DATA_FLAG_ALL;
 
-  for (size_t i = 0; i < base::size(slice_param.seg_param); ++i) {
+  for (size_t i = 0; i < std::size(slice_param.seg_param); ++i) {
     VASegmentParameterVP9& seg_param = slice_param.seg_param[i];
 #define SEG_TO_SP_SF(a, b) seg_param.segment_flags.fields.a = b
     SEG_TO_SP_SF(

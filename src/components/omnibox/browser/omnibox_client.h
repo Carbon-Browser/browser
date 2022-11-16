@@ -11,11 +11,13 @@
 #include "components/omnibox/browser/autocomplete_provider_client.h"
 #include "components/omnibox/browser/omnibox_navigation_observer.h"
 #include "components/omnibox/common/omnibox_focus_state.h"
+#include "third_party/skia/include/core/SkColor.h"
 #include "ui/base/window_open_disposition.h"
 
 class AutocompleteResult;
 class GURL;
 class SessionID;
+class SkBitmap;
 class TemplateURL;
 class TemplateURLService;
 struct AutocompleteMatch;
@@ -27,6 +29,7 @@ class BookmarkModel;
 
 namespace gfx {
 class Image;
+struct VectorIcon;
 }
 
 class OmniboxControllerEmitter;
@@ -40,20 +43,13 @@ using FaviconFetchedCallback =
 // (e.g., getting information about the current page, retrieving objects
 // associated with the current tab, or performing operations that rely on such
 // objects under the hood).
-class OmniboxClient : public OmniboxAction::Client {
+class OmniboxClient {
  public:
   virtual ~OmniboxClient() {}
 
   // Returns an AutocompleteProviderClient specific to the embedder context.
   virtual std::unique_ptr<AutocompleteProviderClient>
   CreateAutocompleteProviderClient() = 0;
-
-  // Returns an OmniboxNavigationObserver specific to the embedder context. May
-  // return null if the embedder has no need to observe omnibox navigations.
-  virtual std::unique_ptr<OmniboxNavigationObserver>
-  CreateOmniboxNavigationObserver(const std::u16string& text,
-                                  const AutocompleteMatch& match,
-                                  const AutocompleteMatch& alternate_nav_match);
 
   // Returns whether there is any associated current page.  For example, during
   // startup or shutdown, the omnibox may exist but have no attached page.
@@ -80,6 +76,12 @@ class OmniboxClient : public OmniboxAction::Client {
   // Returns the session ID of the current page.
   virtual const SessionID& GetSessionID() const = 0;
 
+  // Called when the user changes the selected |index| in the result list.
+  // |match| is the suggestion corresponding to that index. Currently
+  // experimental and only called from select omnibox implementations.
+  virtual void OnSelectedMatchChanged(size_t index,
+                                      const AutocompleteMatch& match) {}
+
   virtual bookmarks::BookmarkModel* GetBookmarkModel();
   virtual OmniboxControllerEmitter* GetOmniboxControllerEmitter();
   virtual TemplateURLService* GetTemplateURLService();
@@ -93,6 +95,11 @@ class OmniboxClient : public OmniboxAction::Client {
   // TODO(crbug.com/1168371): Remove when URLLoaderInterceptor can simulate
   // redirects.
   virtual int GetHttpsPortForTesting() const = 0;
+
+  // If true, indicates that the tests are using a faux-HTTPS server which is
+  // actually an HTTP server that pretends to serve HTTPS responses. Should only
+  // be true on iOS.
+  virtual bool IsUsingFakeHttpsForHttpsUpgradeTesting() const = 0;
 
   // Returns the icon corresponding to |match| if match is an extension match
   // and an empty icon otherwise.
@@ -112,10 +119,10 @@ class OmniboxClient : public OmniboxAction::Client {
   // that was created by CreateOmniboxNavigationObserver() for |match|; in some
   // embedding contexts, processing an extension keyword involves invoking
   // action on this observer.
-  virtual bool ProcessExtensionKeyword(const TemplateURL* template_url,
+  virtual bool ProcessExtensionKeyword(const std::u16string& text,
+                                       const TemplateURL* template_url,
                                        const AutocompleteMatch& match,
-                                       WindowOpenDisposition disposition,
-                                       OmniboxNavigationObserver* observer);
+                                       WindowOpenDisposition disposition);
 
   // Called to notify clients that the omnibox input state has changed.
   virtual void OnInputStateChanged() {}
@@ -124,11 +131,14 @@ class OmniboxClient : public OmniboxAction::Client {
   virtual void OnFocusChanged(OmniboxFocusState state,
                               OmniboxFocusChangeReason reason) {}
 
-  // Called when the autocomplete result has changed. If the embedder supports
-  // fetching of bitmaps for URLs (not all embedders do), |on_bitmap_fetched|
-  // will be called when the bitmap has been fetched.
+  // Called when the autocomplete result has changed. Implementations that
+  // support preloading (currently, prefetching or prerendering) of search
+  // results pages should preload only if `should_preload` is true. If the
+  // implementation supports fetching of bitmaps for URLs (not all embedders
+  // do), `on_bitmap_fetched` will be called when the bitmap has been fetched.
   virtual void OnResultChanged(const AutocompleteResult& result,
                                bool default_match_changed,
+                               bool should_preload,
                                const BitmapFetchedCallback& on_bitmap_fetched) {
   }
 
@@ -171,23 +181,8 @@ class OmniboxClient : public OmniboxAction::Client {
   // Presents prompt to update Chrome.
   virtual void OpenUpdateChromeDialog() {}
 
-  // OmniboxAction::Client:
-
-  // Opens the Sharing Hub as if the "Share this page" airplane button
-  // were clicked.
-  void OpenSharingHub() override {}
-
-  // Opens and shows a new incognito browser window.
-  void NewIncognitoWindow() override {}
-
-  // Opens an Incognito clear browsing data dialog.
-  void OpenIncognitoClearBrowsingDataDialog() override {}
-
-  // Closes incognito browser windows.
-  void CloseIncognitoWindows() override {}
-
-  // Presents translation prompt for current tab web contents.
-  void PromptPageTranslation() override {}
+  // Focuses the `WebContents`, i.e. the web page of the current tab.
+  virtual void FocusWebContents() {}
 };
 
 #endif  // COMPONENTS_OMNIBOX_BROWSER_OMNIBOX_CLIENT_H_

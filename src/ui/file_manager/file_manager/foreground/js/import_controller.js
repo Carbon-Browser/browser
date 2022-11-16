@@ -27,7 +27,7 @@ importer.ActivityState = {
   INSUFFICIENT_CLOUD_SPACE: 'insufficient-cloud-space',
   INSUFFICIENT_LOCAL_SPACE: 'insufficient-local-space',
   NO_MEDIA: 'no-media',
-  SCANNING: 'scanning'
+  SCANNING: 'scanning',
 };
 
 /**
@@ -322,6 +322,11 @@ importer.ImportController = class {
    * @private
    */
   checkState_(opt_scan) {
+    if (window.isSWA) {
+      // Disables the Cloud Import for SWA.
+      return;
+    }
+
     // If there is no Google Drive mount, Drive may be disabled
     // or the machine may be running in guest mode.
     if (!this.environment_.isGoogleDriveMounted()) {
@@ -443,6 +448,10 @@ importer.ImportController = class {
    * @private
    */
   isCurrentDirectoryScannable_() {
+    if (window.isSWA) {
+      // Disables the Cloud Import for SWA.
+      return false;
+    }
     const directory = this.environment_.getCurrentDirectory();
     return !!directory &&
         importer.isMediaDirectory(directory, this.environment_.volumeManager);
@@ -534,7 +543,7 @@ importer.ClickSource = {
   DESTINATION: 'destination',
   IMPORT: 'import',
   MAIN: 'main',
-  SIDE: 'side'
+  SIDE: 'side',
 };
 
 /**

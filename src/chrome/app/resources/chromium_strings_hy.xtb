@@ -1,301 +1,375 @@
 <?xml version="1.0" ?>
 <!DOCTYPE translationbundle>
 <translationbundle lang="hy">
+<translation id="1026101648481255140">Վերսկսել տեղադրումը</translation>
+<translation id="1029669172902658969">Վերագործարկել՝ &amp;Carbon Browser BrowserOS-ը թարմացնելու համար</translation>
 <translation id="1065672644894730302">Ձեր նախասիրությունները չի հաջողվում ստանալ:
 
 Որոշ գործառույթներ կարող են մատչելի չլինել: Նախընտրանքների փոփոխությունները չեն պահպանվի:</translation>
-<translation id="1098170124587656448">Carbon Browser Browser Browser Browser Browser Browser-ը կարող է պաշտպանել տվյալների արտահոսքից, վնասաբեր ընդլայնումներից և այլ խնդիրներից</translation>
-<translation id="1104942323762546749">Carbon Browser Browser Browser Browser Browser Browser-ն ուզում է արտահանել ձեր գաղտնաբառերը: Թույլատրելու համար մուտքագրեք Windows-ի ձեր գաղտնաբառը:</translation>
-<translation id="113122355610423240">Carbon Browser Browser Browser Browser Browser Browser-ը ձեր կանխադրված դիտարկիչն է</translation>
-<translation id="1131805035311359397">Որպեսզի պաշտպանեք ձեր գաղտնաբառերը տվյալների արտահոսքից և խուսափեք անվտանգության հետ կապված այլ խնդիրներից, <ph name="BEGIN_LINK" />մտեք հաշիվ Carbon Browser Browser Browser Browser Browser Browser դիտարկիչում<ph name="END_LINK" />։</translation>
-<translation id="1185134272377778587">Carbon Browser Browser Browser Browser Browser Browser-ի մասին</translation>
-<translation id="1315551408014407711">Կարգավորեք Carbon Browser Browser Browser Browser Browser Browser-ի ձեր նոր պրոֆիլը</translation>
-<translation id="1396446129537741364">Carbon Browser Browser Browser Browser Browser Browser-ը փորձում է ցուցադրել գաղտնաբառերը:</translation>
-<translation id="1414495520565016063">Դուք մուտք եք գործել Carbon Browser Browser Browser Browser Browser Browser:</translation>
-<translation id="151962892725702025">Google Chrome OS-ը չկարողացավ համաժամացնել ձեր տվյալները, քանի որ Sync-ը մատչելի չէ ձեր տիրույթի համար:</translation>
-<translation id="1524282610922162960">Կիսվեք Carbon Browser Browser Browser Browser Browser Browser-ի ներդիրով</translation>
-<translation id="1553461853655228091">Carbon Browser Browser Browser Browser Browser Browser-ին անհրաժեշտ է տեսախցիկն օգտագործելու թույլտվություն՝ ձեր շրջակայքի եռաչափ քարտեզը ստեղծելու համար։</translation>
-<translation id="1607715478322902680">{COUNT,plural, =0{Թարմացումը կիրառելու համար ադմինիստրատորը պահանջում է վերագործարկել Carbon Browser Browser Browser Browser Browser Browser-ը}=1{Թարմացումը կիրառելու համար ադմինիստրատորը պահանջում է վերագործարկել Carbon Browser Browser Browser Browser Browser Browser-ը։ Ձեր ինկոգնիտո պատուհանը նորից չի բացվի։}one{Թարմացումը կիրառելու համար ադմինիստրատորը պահանջում է վերագործարկել Carbon Browser Browser Browser Browser Browser Browser-ը։ Ձեր # ինկոգնիտո պատուհանը նորից չի բացվի։}other{Թարմացումը կիրառելու համար ադմինիստրատորը պահանջում է վերագործարկել Carbon Browser Browser Browser Browser Browser Browser-ը։ Ձեր # ինկոգնիտո պատուհանները նորից չեն բացվի։}}</translation>
-<translation id="1667812772085710766">Երբ դուք փակում եք Carbon Browser Browser Browser Browser Browser Browser-ը, բոլոր քուքիներն ու ձեր այցելած կայքերի տվյալներն ավտոմատ ջնջվում են</translation>
-<translation id="1708666629004767631">Մատչելի է Carbon Browser Browser Browser Browser Browser Browser-ի նոր, ավելի ապահով տարբերակ:</translation>
-<translation id="1774152462503052664">Թույլ տալ Carbon Browser Browser Browser Browser Browser Browser-ին աշխատել հետնաշերտում</translation>
-<translation id="1779356040007214683">Carbon Browser Browser Browser Browser Browser Browser-ն ավելի ապահով դարձնելու համար որոշ ընդլայնումներ, որոնք նշված չեն <ph name="IDS_EXTENSION_WEB_STORE_TITLE" />-ում և կարող են ավելացվել առանց ձեր իմացության, անջատվել են։</translation>
-<translation id="1808667845054772817">Նորից տեղադրել Carbon Browser Browser Browser Browser Browser Browser-ը</translation>
-<translation id="185970820835152459">Դուք կարող եք կառավարել ձեր Google հաշիվները, որոնցում մուտք եք գործել։ Դրանք օգտագործվում են Carbon Browser Browser Browser Browser Browser Browser դիտարկիչում, Play Խանութում, Gmail-ում և այլ ծառայություններում։ Եթե ուզում եք ընտանեկան խմբի անդամի կամ մեկ ուրիշի համար հաշիվ ավելացնել, <ph name="DEVICE_TYPE" /> սարքում ավելացրեք նոր օգտատեր։ <ph name="LINK_BEGIN" />Իմանալ ավելին<ph name="LINK_END" /></translation>
-<translation id="1881322772814446296">Դուք մուտք եք գործում վերահսկվող հաշիվ` թույլ տալով ադմինիստրատորին վերահսկել ձեր Carbon Browser Browser Browser Browser Browser Browser պրոֆիլը: Ձեր Carbon Browser Browser Browser Browser Browser Browser տվյալները, ինչպես օրինակ՝ հավելվածները, էջանիշները, պատմությունը, գաղտնաբառերը և այլ կարգավորումները մշտապես կկցվեն <ph name="USER_NAME" />-ին: Դուք կարող եք ջնջել այս տվյալները Google Dashboard-ի միջոցով, սակայն չեք կարող համակցել այս տվյալները այլ հաշվի հետ: Կարող եք ստեղծել նոր պրոֆիլ՝ ձեր առկա Carbon Browser Browser Browser Browser Browser Browser տվյալներն առանձին պահելու համար: <ph name="LEARN_MORE" /></translation>
-<translation id="1911763535808217981">Անջատելով այս գործառույթը՝ դուք կարող եք մտնել հաշիվ Google-ի կայքերում, օրինակ՝ Gmail, առանց մուտք գործելու Carbon Browser Browser Browser Browser Browser Browser:</translation>
-<translation id="1929939181775079593">Carbon Browser Browser Browser Browser Browser Browser-ը չի պատասխանում: Վերագործարկե՞լ:</translation>
-<translation id="1966382378801805537">Carbon Browser Browser Browser Browser Browser Browser-ը չի կարողանում որոշել կամ սահմանել կանխադրված դիտարկիչը</translation>
-<translation id="1981611865800294956">Վերագործարկել՝ &amp;Google Chrome OS-ը թարմացնելու համար</translation>
-<translation id="2008474315282236005">1 տարր կջնջվի այս սարքից: Հետագայում ձեր տվյալներն առբերելու համար մուտք գործեք Carbon Browser Browser Browser Browser Browser Browser <ph name="USER_EMAIL" /> հաշվով:</translation>
-<translation id="2020032459870799438">Որպեսզի պաշտպանեք ձեր մյուս գաղտնաբառերը տվյալների արտահոսքից և խուսափեք անվտանգության հետ կապված այլ խնդիրներից, <ph name="BEGIN_LINK" />մտեք հաշիվ Carbon Browser Browser Browser Browser Browser Browser դիտարկիչում<ph name="END_LINK" />։</translation>
-<translation id="2174178932569897599">Անհատականացնել Carbon Browser Browser Browser Browser Browser Browser-ը</translation>
-<translation id="2185166961232948079">Carbon Browser Browser Browser Browser Browser Browser – Ցանցի մուտք – <ph name="PAGE_TITLE" /></translation>
-<translation id="2241627712206172106">Եթե ձեզնից բացի որևէ այլ մեկն օգտվում է այս համակարգչից, օրինակ ձեր ընկերները կամ հարազատները, ապա նրանք կարող են առանձին աշխատել և կարգավորել Carbon Browser Browser Browser Browser Browser Browser-ն իրենց ուզած ձևով:</translation>
-<translation id="2294245788148774212">Ըստ ցանկության. օգնեք ավելի լավը դարձնել Google Chrome OS-ի գործառույթներն ու աշխատանքը՝ Google-ին ավտոմատ ուղարկելով օգտագործման և դիագնոստիկ տվյալները։</translation>
-<translation id="2343156876103232566">Հեռախոսահամարն այստեղից ձեր Android հեռախոսին ուղարկելու համար երկու սարքերի Carbon Browser Browser Browser Browser Browser Browser դիտարկիչներում մտեք հաշիվ։</translation>
-<translation id="2347108572062610441">Այս ընդլայնումը փոխել է Carbon Browser Browser Browser Browser Browser Browser-ի մեկնարկի ժամանակ ցուցադրվող էջը:</translation>
-<translation id="2396765026452590966">«<ph name="EXTENSION_NAME" />» ընդլայնումը փոխել է Carbon Browser Browser Browser Browser Browser Browser-ի մեկնարկի ժամանակ ցուցադրվող էջը:</translation>
-<translation id="2401032172288869980">Այս կայքի համար Carbon Browser Browser Browser Browser Browser Browser-ին անհրաժեշտ է խոսափողն ու տեսախցիկն օգտագործելու թույլտվություն</translation>
-<translation id="2483889755041906834">Carbon Browser Browser Browser Browser Browser Browser-ի մեջ</translation>
+<translation id="1098170124587656448">Carbon Browser Browser-ը կարող է պաշտպանել տվյալների արտահոսքից, վնասաբեր ընդլայնումներից և այլ խնդիրներից</translation>
+<translation id="1104942323762546749">Carbon Browser Browser-ն ուզում է արտահանել ձեր գաղտնաբառերը: Թույլատրելու համար մուտքագրեք Windows-ի ձեր գաղտնաբառը:</translation>
+<translation id="113122355610423240">Carbon Browser Browser-ը ձեր կանխադրված դիտարկիչն է</translation>
+<translation id="1131805035311359397">Որպեսզի պաշտպանեք ձեր գաղտնաբառերը տվյալների արտահոսքից և խուսափեք անվտանգության հետ կապված այլ խնդիրներից, <ph name="BEGIN_LINK" />մտեք հաշիվ Carbon Browser Browser դիտարկիչում<ph name="END_LINK" />։</translation>
+<translation id="1185134272377778587">Carbon Browser Browser-ի մասին</translation>
+<translation id="1203500561924088507">Շնորհակալություն տեղադրելու համար։ Նախքան <ph name="BUNDLE_NAME" />-ն օգտագործելը դուք պետք է վերագործարկեք ձեր դիտարկիչը։</translation>
+<translation id="1315551408014407711">Կարգավորեք Carbon Browser Browser-ի ձեր նոր պրոֆիլը</translation>
+<translation id="1385859895174722837">Google Օգնականը Carbon Browser Browser-ում</translation>
+<translation id="1396446129537741364">Carbon Browser Browser-ը փորձում է ցուցադրել գաղտնաբառերը:</translation>
+<translation id="1414495520565016063">Դուք մուտք եք գործել Carbon Browser Browser:</translation>
+<translation id="1524282610922162960">Կիսվեք Carbon Browser Browser-ի ներդիրով</translation>
+<translation id="1553461853655228091">Carbon Browser Browser-ին անհրաժեշտ է տեսախցիկն օգտագործելու թույլտվություն՝ ձեր շրջակայքի եռաչափ քարտեզը ստեղծելու համար։</translation>
+<translation id="1607715478322902680">{COUNT,plural, =0{Թարմացումը կիրառելու համար ադմինիստրատորը պահանջում է վերագործարկել Carbon Browser Browser-ը}=1{Թարմացումը կիրառելու համար ադմինիստրատորը պահանջում է վերագործարկել Carbon Browser Browser-ը։ Ձեր ինկոգնիտո պատուհանը նորից չի բացվի։}one{Թարմացումը կիրառելու համար ադմինիստրատորը պահանջում է վերագործարկել Carbon Browser Browser-ը։ Ձեր # ինկոգնիտո պատուհանը նորից չի բացվի։}other{Թարմացումը կիրառելու համար ադմինիստրատորը պահանջում է վերագործարկել Carbon Browser Browser-ը։ Ձեր # ինկոգնիտո պատուհանները նորից չեն բացվի։}}</translation>
+<translation id="1625909126243026060">Դիտեք գաղտնիության և անվտանգության հիմնական կառավարման տարրերը Carbon Browser Browser-ում։</translation>
+<translation id="1632539827495546968">Եթե ուզում եք այս հաշիվն օգտագործել միայն մեկ անգամ, միացրեք <ph name="GUEST_LINK_BEGIN" />հյուրի ռեժիմը<ph name="GUEST_LINK_END" /> Carbon Browser Browser դիտարկիչում։ Եթե ուզում եք հաշիվ ավելացնել մեկ ուրիշի համար, <ph name="LINK_BEGIN" />ավելացրեք նոր օգտատեր<ph name="LINK_END" /> ձեր <ph name="DEVICE_TYPE" /> սարքում։
+
+Թույլտվությունները, որոնք տրամադրել եք կայքերին և հավելվածներին, կարող են կիրառվել այս հաշվի նկատմամբ։ Ձեր Google հաշիվները կարող եք կառավարել <ph name="SETTINGS_LINK_BEGIN" />Կարգավորումներում<ph name="SETTINGS_LINK_END" />։</translation>
+<translation id="1640672724030957280">Ներբեռնում…</translation>
+<translation id="1708666629004767631">Մատչելի է Carbon Browser Browser-ի նոր, ավելի ապահով տարբերակ:</translation>
+<translation id="17264556997921157">Դուք կարող եք տեսնել և հեռացնել հետաքրքրությունները, որոնք կայքերն օգտագործում են՝ ձեզ գովազդ ցուցադրելու համար։ Carbon Browser Browser-ը որոշում է ձեր հետաքրքրությունները ձեր վերջին այցելությունների պատմության հիման վրա։</translation>
+<translation id="1774152462503052664">Թույլ տալ Carbon Browser Browser-ին աշխատել հետնաշերտում</translation>
+<translation id="1779356040007214683">Carbon Browser Browser-ն ավելի ապահով դարձնելու համար որոշ ընդլայնումներ, որոնք նշված չեն <ph name="IDS_EXTENSION_WEB_STORE_TITLE" />-ում և կարող են ավելացվել առանց ձեր իմացության, անջատվել են։</translation>
+<translation id="1808667845054772817">Նորից տեղադրել Carbon Browser Browser-ը</translation>
+<translation id="185970820835152459">Դուք կարող եք կառավարել ձեր Google հաշիվները, որոնցում մուտք եք գործել։ Դրանք օգտագործվում են Carbon Browser Browser դիտարկիչում, Play Խանութում, Gmail-ում և այլ ծառայություններում։ Եթե ուզում եք ընտանեկան խմբի անդամի կամ մեկ ուրիշի համար հաշիվ ավելացնել, <ph name="DEVICE_TYPE" /> սարքում ավելացրեք նոր օգտատեր։ <ph name="LINK_BEGIN" />Իմանալ ավելին<ph name="LINK_END" /></translation>
+<translation id="1863308913976887472">Կայքերը կարող են ձեր հետաքրքրությունների մասին տեղեկություններ պահել Carbon Browser Browser-ում։ Օրինակ, եթե դուք այցելել եք ինչ-որ կայք՝ մարաթոնի համար վազքի կոշիկներ գնելու, այդ կայքը կորոշի, որ ձեզ հետաքրքրում է մարաթոնյան վազքը։ Ավելի ուշ, երբ դուք այցելեք մեկ այլ կայք՝ մրցավազքի համար գրանցվելու, այնտեղ կարող է վազքի կոշիկների գովազդ ցուցադրվել։</translation>
+<translation id="1881322772814446296">Դուք մուտք եք գործում վերահսկվող հաշիվ` թույլ տալով ադմինիստրատորին վերահսկել ձեր Carbon Browser Browser պրոֆիլը: Ձեր Carbon Browser Browser տվյալները, ինչպես օրինակ՝ հավելվածները, էջանիշները, պատմությունը, գաղտնաբառերը և այլ կարգավորումները մշտապես կկցվեն <ph name="USER_NAME" />-ին: Դուք կարող եք ջնջել այս տվյալները Google Dashboard-ի միջոցով, սակայն չեք կարող համակցել այս տվյալները այլ հաշվի հետ: Կարող եք ստեղծել նոր պրոֆիլ՝ ձեր առկա Carbon Browser Browser տվյալներն առանձին պահելու համար: <ph name="LEARN_MORE" /></translation>
+<translation id="1911763535808217981">Անջատելով այս գործառույթը՝ դուք կարող եք մտնել հաշիվ Google-ի կայքերում, օրինակ՝ Gmail, առանց մուտք գործելու Carbon Browser Browser:</translation>
+<translation id="1929939181775079593">Carbon Browser Browser-ը չի պատասխանում: Վերագործարկե՞լ:</translation>
+<translation id="193439633299369377">Թարմացումը կիրառելու համար հարկավոր է վերագործարկել Carbon Browser BrowserOS-ը։</translation>
+<translation id="1940680973325097484">Եթե ուզում եք այս հաշիվն օգտագործել միայն մեկ անգամ, միացրեք հյուրի ռեժիմը Carbon Browser Browser դիտարկիչում։ Եթե ուզում եք հաշիվ ավելացնել մեկ ուրիշի համար, <ph name="LINK_BEGIN" />ավելացրեք նոր օգտատեր<ph name="LINK_END" /> ձեր <ph name="DEVICE_TYPE" /> սարքում։
+
+Թույլտվությունները, որոնք տրամադրել եք կայքերին և հավելվածներին, կարող են կիրառվել այս հաշվի նկատմամբ։ Ձեր Google հաշիվները կարող եք կառավարել <ph name="SETTINGS_LINK_BEGIN" />Կարգավորումներում<ph name="SETTINGS_LINK_END" />։</translation>
+<translation id="1953553007165777902">Ներբեռնում… Մնաց <ph name="MINUTE" /> րոպե</translation>
+<translation id="1966382378801805537">Carbon Browser Browser-ը չի կարողանում որոշել կամ սահմանել կանխադրված դիտարկիչը</translation>
+<translation id="2008474315282236005">1 տարր կջնջվի այս սարքից: Հետագայում ձեր տվյալներն առբերելու համար մուտք գործեք Carbon Browser Browser <ph name="USER_EMAIL" /> հաշվով:</translation>
+<translation id="2018879682492276940">Չհաջողվեց տեղադրել։ Նորից փորձեք։</translation>
+<translation id="2020032459870799438">Որպեսզի պաշտպանեք ձեր մյուս գաղտնաբառերը տվյալների արտահոսքից և խուսափեք անվտանգության հետ կապված այլ խնդիրներից, <ph name="BEGIN_LINK" />մտեք հաշիվ Carbon Browser Browser դիտարկիչում<ph name="END_LINK" />։</translation>
+<translation id="2049376729098081731">Ընտրեք, թե արդյոք ներառել Carbon Browser Browser-ի պատմությունը՝ Google-ի ծառայությունների ավելի անհատականացված օգտագործման համար։</translation>
+<translation id="2088953378266246249">Տեղեկություններ այն մասին, թե ինչպես է Carbon Browser Browser-ը կառավարում իր արմատային հավաստագրերը</translation>
+<translation id="2174178932569897599">Անհատականացնել Carbon Browser Browser-ը</translation>
+<translation id="2174917724755363426">Տեղադրումը չի ավարտվել։ Իսկապե՞ս ուզում եք չեղարկել։</translation>
+<translation id="2185166961232948079">Carbon Browser Browser – Ցանցի մուտք – <ph name="PAGE_TITLE" /></translation>
+<translation id="2241627712206172106">Եթե ձեզնից բացի որևէ այլ մեկն օգտվում է այս համակարգչից, օրինակ ձեր ընկերները կամ հարազատները, ապա նրանք կարող են առանձին աշխատել և կարգավորել Carbon Browser Browser-ն իրենց ուզած ձևով:</translation>
+<translation id="2313870531055795960">Ստուգում է URL-ները Carbon Browser Browser-ում պահված վտանգավոր կայքերի ցանկի միջոցով։ Եթե կայքը փորձում է գողանալ ձեր գաղտնաբառը, կամ երբ վնասակար ֆայլ եք ներբեռնում, Carbon Browser Browser-ը կարող է ուղարկել URL-ն ու էջի բովանդակությունը՝ անվտանգ դիտարկման միջոցով ստուգելու համար։</translation>
+<translation id="2343156876103232566">Հեռախոսահամարն այստեղից ձեր Android հեռախոսին ուղարկելու համար երկու սարքերի Carbon Browser Browser դիտարկիչներում մտեք հաշիվ։</translation>
+<translation id="2347108572062610441">Այս ընդլայնումը փոխել է Carbon Browser Browser-ի մեկնարկի ժամանակ ցուցադրվող էջը:</translation>
+<translation id="2359808026110333948">Շարունակել</translation>
+<translation id="2384373936468275798">Carbon Browser BrowserOS-ին չհաջողվեց համաժամացնել տվյալները, քանի որ ձեր հաշվի մուտքի տվյալները հնացած են։</translation>
+<translation id="2396765026452590966">«<ph name="EXTENSION_NAME" />» ընդլայնումը փոխել է Carbon Browser Browser-ի մեկնարկի ժամանակ ցուցադրվող էջը:</translation>
+<translation id="2401032172288869980">Այս կայքի համար Carbon Browser Browser-ին անհրաժեշտ է խոսափողն ու տեսախցիկն օգտագործելու թույլտվություն</translation>
+<translation id="2483889755041906834">Carbon Browser Browser-ի մեջ</translation>
 <translation id="2485422356828889247">Ապատեղադրել</translation>
-<translation id="2535480412977113886">Google Chrome OS-ին չհաջողվեց համաժամացնել ձեր տվյալները, քանի որ ձեր հաշվի տվյալները հնացել են:</translation>
-<translation id="2560420686485554789">Ֆայլեր ներբեռնելու համար Carbon Browser Browser Browser Browser Browser Browser-ին անհրաժեշտ է պահեստի օգտագործման թույլտվություն</translation>
-<translation id="2572494885440352020">Carbon Browser Browser Browser Browser Browser Browser օգնական</translation>
-<translation id="2577788541081224677">Carbon Browser Browser Browser Browser Browser Browser-ի ձեր տվյալները բոլոր սարքերում օգտագործելու համար մուտք գործեք և միացրեք համաժամացումը։</translation>
-<translation id="2580426763510374355">Տեղադրել Google Chrome OS-ը</translation>
-<translation id="2583187216237139145">Աշխատանքային պրոֆիլի ադմինիստրատորը կարող է ջնջել Carbon Browser Browser Browser Browser Browser Browser-ի բոլոր տվյալները, որոնք ստեղծվում են այս պրոֆիլի օգտագործման ընթացքում (օրինակ՝ էջանիշներ, պատմություն, գաղտնաբառեր և այլ կարգավորումներ)։ <ph name="LEARN_MORE" /></translation>
-<translation id="2587578672395088481">Թարմացումը կիրառելու համար հարկավոր է վերագործարկել Google Chrome OS-ը:</translation>
-<translation id="2648074677641340862">Տեղադրման ժամանակ օպերացիոն համակարգի սխալ տեղի ունեցավ: Նորից տեղադրեք Carbon Browser Browser Browser Browser Browser Browser-ը:</translation>
-<translation id="2661879430930417727">Եթե ձեզնից բացի որևէ այլ օգտատեր օգտվում է այս սարքից (օրինակ՝ ձեր ընկերները կամ հարազատները), ապա նրանք կարող են առանձին աշխատել և անհատականացնել Carbon Browser Browser Browser Browser Browser Browser-ը</translation>
-<translation id="2711502716910134313">Carbon Browser Browser Browser Browser Browser Browser-ի ներդիր</translation>
-<translation id="2718390899429598676">Լրացուցիչ անվտանգության համար Carbon Browser Browser Browser Browser Browser Browser-ը կգաղտնագրի ձեր տվյալները:</translation>
+<translation id="2560420686485554789">Ֆայլեր ներբեռնելու համար Carbon Browser Browser-ին անհրաժեշտ է պահեստի օգտագործման թույլտվություն</translation>
+<translation id="2572494885440352020">Carbon Browser Browser օգնական</translation>
+<translation id="2583187216237139145">Աշխատանքային պրոֆիլի ադմինիստրատորը կարող է ջնջել Carbon Browser Browser-ի բոլոր տվյալները, որոնք ստեղծվում են այս պրոֆիլի օգտագործման ընթացքում (օրինակ՝ էջանիշներ, պատմություն, գաղտնաբառեր և այլ կարգավորումներ)։ <ph name="LEARN_MORE" /></translation>
+<translation id="2648074677641340862">Տեղադրման ժամանակ օպերացիոն համակարգի սխալ տեղի ունեցավ: Նորից տեղադրեք Carbon Browser Browser-ը:</translation>
+<translation id="2661879430930417727">Եթե ձեզնից բացի որևէ այլ օգտատեր օգտվում է այս սարքից (օրինակ՝ ձեր ընկերները կամ հարազատները), ապա նրանք կարող են առանձին աշխատել և անհատականացնել Carbon Browser Browser-ը</translation>
+<translation id="268602741124540128">Բարի գալուստ Carbon Browser Browser, <ph name="ACCOUNT_FIRST_NAME" /></translation>
+<translation id="2711502716910134313">Carbon Browser Browser-ի ներդիր</translation>
+<translation id="2718390899429598676">Լրացուցիչ անվտանգության համար Carbon Browser Browser-ը կգաղտնագրի ձեր տվյալները:</translation>
 <translation id="2770231113462710648">Կանխադրված դիտարկիչը դարձնել՝</translation>
 <translation id="2799223571221894425">Վերագործարկել</translation>
-<translation id="2837693172913560447"><ph name="USER_EMAIL_ADDRESS" /> օգտատիրոջ համար կստեղծվի Carbon Browser Browser Browser Browser Browser Browser-ի նոր պրոֆիլ։</translation>
-<translation id="2847479871509788944">Հեռացնել Carbon Browser Browser Browser Browser Browser Browser-ից...</translation>
+<translation id="2837693172913560447"><ph name="USER_EMAIL_ADDRESS" /> օգտատիրոջ համար կստեղծվի Carbon Browser Browser-ի նոր պրոֆիլ։</translation>
+<translation id="2847479871509788944">Հեռացնել Carbon Browser Browser-ից...</translation>
+<translation id="2850691299438350830">Ապահովում է ձեր անվտանգությունը Carbon Browser Browser-ում և Google հավելվածներում, երբ մտել եք ձեր հաշիվ։</translation>
 <translation id="2885378588091291677">Task Manager</translation>
-<translation id="2910007522516064972">&amp;Carbon Browser Browser Browser Browser Browser Browser-ի մասին</translation>
-<translation id="2944515913673001130"><ph name="BEGIN_PARAGRAPH1" />Վերջին հիշեցում․ տեղադրման արդյունքում <ph name="BEGIN_BOLD" />ձեր կոշտ սկավառակում առկա բոլոր տվյալները կջնջվեն<ph name="END_BOLD" />։ Համոզվեք, որ պահուստավորել եք ձեզ անհրաժեշտ տվյալները։<ph name="END_PARAGRAPH1" />
-          <ph name="BEGIN_PARAGRAPH2" />Հենց որ տեղադրումը սկսվի, այն հնարավոր չի լինի չեղարկել։<ph name="END_PARAGRAPH2" /></translation>
-<translation id="2977470724722393594">Carbon Browser Browser Browser Browser Browser Browser-ը թարմացված է</translation>
-<translation id="2983934633046890458">Carbon Browser Browser Browser Browser Browser Browser-ը փորձում է փոխել գաղտնաբառերը:</translation>
-<translation id="3032706164202344641">Carbon Browser Browser Browser Browser Browser Browser-ը չի կարող ստուգել ձեր գաղտնաբառերը։ Փորձեք ավելի ուշ։</translation>
-<translation id="3032787606318309379">Ավելացվում է Carbon Browser Browser Browser Browser Browser Browser-ին…</translation>
-<translation id="3068515742935458733">Օգնեք բարելավել Carbon Browser Browser Browser Browser Browser Browser-ը՝ Google-ին ուղարկելով խափանման մասին հաշվետվությունները և <ph name="UMA_LINK" />ը</translation>
-<translation id="3103660991484857065">Տեղադրիչը չկարողացավ բացել արխիվը: Նորից ներբեռնեք Carbon Browser Browser Browser Browser Browser Browser-ը:</translation>
-<translation id="3130323860337406239">Carbon Browser Browser Browser Browser Browser Browser-ն օգտագործում է ձեր խոսափողը:</translation>
-<translation id="3155163173539279776">Carbon Browser Browser Browser Browser Browser Browser-ի վերագործարկում</translation>
-<translation id="3179665906251668410">Բացել հղումը Carbon Browser Browser Browser Browser Browser Browser-ի ինկ&amp;ոգնիտո պատուհանում</translation>
-<translation id="3185330573522821672">Կարգավորեք Carbon Browser Browser Browser Browser Browser Browser-ի նոր պրոֆիլը</translation>
-<translation id="3190315855212034486">Carbon Browser Browser Browser Browser Browser Browser-ը խափանվեց: Վերագործարկե՞լ:</translation>
-<translation id="3229526316128325841">Carbon Browser Browser Browser Browser Browser Browser-ն ուզում է արտահանել ձեր գաղտնաբառերը:</translation>
-<translation id="3258596308407688501">Carbon Browser Browser Browser Browser Browser Browser-ը չի կարող կարդալ և գրել իր տվյալների գրացուցակում՝
+<translation id="2910007522516064972">&amp;Carbon Browser Browser-ի մասին</translation>
+<translation id="2915996080311180594">Վերագործարկել ավելի ուշ</translation>
+<translation id="2928420929544864228">Տեղադրումն ավարտված է։</translation>
+<translation id="2977470724722393594">Carbon Browser Browser-ը թարմացված է</translation>
+<translation id="2977506796191543575">Եթե կայքը փորձում է գողանալ ձեր գաղտնաբառը, կամ երբ վնասակար ֆայլ եք ներբեռնում, Carbon Browser Browser-ը կարող է ուղարկել URL-ն ու էջի բովանդակությունը՝ Ապահով դիտարկման միջոցով ստուգելու համար։</translation>
+<translation id="2983934633046890458">Carbon Browser Browser-ը փորձում է փոխել գաղտնաբառերը:</translation>
+<translation id="3032706164202344641">Carbon Browser Browser-ը չի կարող ստուգել ձեր գաղտնաբառերը։ Փորձեք ավելի ուշ։</translation>
+<translation id="3032787606318309379">Ավելացվում է Carbon Browser Browser-ին…</translation>
+<translation id="3038232873781883849">Սպասում ենք տեղադրմանը…</translation>
+<translation id="3068515742935458733">Օգնեք բարելավել Carbon Browser Browser-ը՝ Google-ին ուղարկելով խափանման մասին հաշվետվությունները և <ph name="UMA_LINK" />ը</translation>
+<translation id="3101560983689755071">Ձեր այցելությունների պատմությունն ազդում է ձեզ ցուցադրվող գովազդի և ստորև ներկայացված հետաքրքրությունների վրա։ Ձեր գաղտնիությունը պաշտպանելու նպատակով Carbon Browser Browser-ն ամեն ամիս ավտոմատ ջնջում է ձեր հետաքրքրությունները։ Հետաքրքրությունները կարող են թարմացվել, եթե դրանք չհեռացնեք։</translation>
+<translation id="3103660991484857065">Տեղադրիչը չկարողացավ բացել արխիվը: Նորից ներբեռնեք Carbon Browser Browser-ը:</translation>
+<translation id="3130323860337406239">Carbon Browser Browser-ն օգտագործում է ձեր խոսափողը:</translation>
+<translation id="3155163173539279776">Carbon Browser Browser-ի վերագործարկում</translation>
+<translation id="3179665906251668410">Բացել հղումը Carbon Browser Browser-ի ինկ&amp;ոգնիտո պատուհանում</translation>
+<translation id="3185330573522821672">Կարգավորեք Carbon Browser Browser-ի նոր պրոֆիլը</translation>
+<translation id="3190315855212034486">Carbon Browser Browser-ը խափանվեց: Վերագործարկե՞լ:</translation>
+<translation id="3229526316128325841">Carbon Browser Browser-ն ուզում է արտահանել ձեր գաղտնաբառերը:</translation>
+<translation id="3258596308407688501">Carbon Browser Browser-ը չի կարող կարդալ և գրել իր տվյալների գրացուցակում՝
 
 <ph name="USER_DATA_DIRECTORY" /></translation>
-<translation id="3283186697780795848">Տեղադրված է Carbon Browser Browser Browser Browser Browser Browser-ի <ph name="PRODUCT_VERSION" /> տարբերակը</translation>
-<translation id="328888136576916638">Google API-ի բանալիները չկան: Carbon Browser Browser Browser Browser Browser Browser-ի որոշ գործառույթներ կանջատվեն:</translation>
-<translation id="3296368748942286671">Շարունակել հետնաշերտի հավելվածների աշխատանքը, երբ Carbon Browser Browser Browser Browser Browser Browser-ը փակված է</translation>
-<translation id="331951419404882060">Google Chrome OS-ը չկարողացավ համաժամացնել ձեր տվյալները՝ մուտքի սխալի պատճառով:</translation>
-<translation id="3349211344363550267">Carbon Browser Browser Browser Browser Browser Browser-ը խորհուրդ է տալիս ձեզ չներբեռնել և չբացել այս ֆայլը</translation>
-<translation id="3350761136195634146">Այս հաշվի հետ կապված Carbon Browser Browser Browser Browser Browser Browser-ի պրոֆիլ արդեն գոյություն ունի</translation>
-<translation id="3406848076815591792">Անցնե՞լ Carbon Browser Browser Browser Browser Browser Browser-ի ընթացիկ պրոֆիլ</translation>
-<translation id="3430503420100763906">Carbon Browser Browser Browser Browser Browser Browser պրոֆիլների միջոցով դուք կարող եք օգտագործել դիտարկիչն առանձին այլ օտատերերից։ Ստեղծեք պրոֆիլներ ձեր ընկերների և ընտանիքի անդամների, կամ գործնական և անձնական նպատակների համար։</translation>
-<translation id="3433271666494956603">Google Chrome OS-ը տեղադրվում է</translation>
-<translation id="347328004046849135">Carbon Browser Browser Browser Browser Browser Browser-ը կտեղեկացնի ձեզ, երբ կոտրված գաղտնաբառ օգտագործեք։</translation>
-<translation id="3474745554856756813"><ph name="ITEMS_COUNT" /> տարր կջնջվի այս սարքից: Հետագայում ձեր տվյալներն առբերելու համար մուտք գործեք Carbon Browser Browser Browser Browser Browser Browser <ph name="USER_EMAIL" /> հաշվով:</translation>
-<translation id="3497319089134299931">Carbon Browser Browser Browser Browser Browser Browser-ի այլ պրոֆիլի կարող եք անցնել <ph name="SHORTCUT" /> ստեղների համադրության միջոցով</translation>
-<translation id="3509308970982693815">Փակեք Carbon Browser Browser Browser Browser Browser Browser-ի բոլոր պատուհանները և կրկին փորձեք:</translation>
-<translation id="3575459661164320785">Ձեր համակարգչում վնասաբեր ծրագիր է հայտնաբերվել։ Ձեր դիտարկիչի կայուն աշխատանքը վերականգնելու համար Carbon Browser Browser Browser Browser Browser Browser-ը կարող է ջնջել ծրագիրը և վերականգնել ձեր կարգավորումները։</translation>
-<translation id="3639635944603682591">Այս օգտատիրոջ այցելությունների պատմությունը կհեռացվի այս սարքից։ Տվյալները վերականգնելու համար <ph name="USER_EMAIL" /> հաշվով մուտք գործեք Carbon Browser Browser Browser Browser Browser Browser-ում։</translation>
-<translation id="364817392622123556">{COUNT,plural, =0{Carbon Browser Browser Browser Browser Browser Browser-ի այս տարբերակի համար առկա է թարմացում: Այն կտեղադրվի, երբ դիտարկիչը վերագործարկվի։}=1{Carbon Browser Browser Browser Browser Browser Browser-ի այս տարբերակի համար առկա է թարմացում: Այն կտեղադրվի, երբ դիտարկիչը վերագործարկվի։ Ձեր ինկոգնիտո պատուհանը նորից չի բացվի։}one{Carbon Browser Browser Browser Browser Browser Browser-ի այս տարբերակի համար առկա է թարմացում: Այն կտեղադրվի, երբ դիտարկիչը վերագործարկվի։ Ձեր # ինկոգնիտո պատուհանը նորից չի բացվի։}other{Carbon Browser Browser Browser Browser Browser Browser-ի այս տարբերակի համար առկա է թարմացում: Այն կտեղադրվի, երբ դիտարկիչը վերագործարկվի։ Ձեր # ինկոգնիտո պատուհանները նորից չեն բացվի։}}</translation>
-<translation id="3651803019964686660">Հեռախոսահամարը <ph name="ORIGIN" /> կայքից ձեր Android հեռախոսին ուղարկելու համար երկու սարքերի Carbon Browser Browser Browser Browser Browser Browser դիտարկիչներում մտեք հաշիվ։</translation>
-<translation id="3685209450716071127">Carbon Browser Browser Browser Browser Browser Browser-ը չի կարող ստուգել ձեր գաղտնաբառերը։ Ստուգեք ինտերնետ կապը։</translation>
-<translation id="370962675267501463">{COUNT,plural, =0{Այս թարմացումը կիրառելու համար ադմինիստրատորը խնդրում է վերագործարկել Carbon Browser Browser Browser Browser Browser Browser-ը}=1{Այս թարմացումը կիրառելու համար ադմինիստրատորը խնդրում է վերագործարկել Carbon Browser Browser Browser Browser Browser Browser-ը։ Ձեր ինկոգնիտո պատուհանը նորից չի բացվի։}one{Այս թարմացումը կիրառելու համար ադմինիստրատորը խնդրում է վերագործարկել Carbon Browser Browser Browser Browser Browser Browser-ը։ Ձեր # ինկոգնիտո պատուհանը նորից չի բացվի։}other{Այս թարմացումը կիրառելու համար ադմինիստրատորը խնդրում է վերագործարկել Carbon Browser Browser Browser Browser Browser Browser-ը։ Ձեր # ինկոգնիտո պատուհանները նորից չեն բացվի։}}</translation>
-<translation id="3713809861844741608">Բացել հղումը Carbon Browser Browser Browser Browser Browser Browser-ի նոր &amp;ներդիրում</translation>
-<translation id="3728336900324680424">Carbon Browser Browser Browser Browser Browser Browser-ը կօգտագործի ձեր Drive-ը՝ հասցեագոտում հուշումներ ցուցադրելու համար</translation>
-<translation id="378917192836375108">Carbon Browser Browser Browser Browser Browser Browser-ը թույլ է տալիս սեղմել համացանցում գտնվող հեռախոսահամարի վրա և զանգահարել Skype-ով:</translation>
-<translation id="3848258323044014972"><ph name="PAGE_TITLE" /> - Carbon Browser Browser Browser Browser Browser Browser</translation>
-<translation id="388648406173476553">Carbon Browser Browser Browser Browser Browser Browser-ի կարգավորման և կառավարման համար անհրաժեշտ է ձեր ուշադրությունը։ Սեղմեք՝ մանրամասներին ծանոթանալու համար։</translation>
-<translation id="3889543394854987837">Սեղմեք ձեր անվան վրա՝ Carbon Browser Browser Browser Browser Browser Browser-ը բացելու համար:</translation>
-<translation id="390528597099634151"><ph name="EXISTING_USER" />-ն արդեն մուտք է գործել Carbon Browser Browser Browser Browser Browser Browser-ի այս պրոֆիլը։ Ձեր դիտարկումների պատմությունն առանձին պահելու համար կարող եք Carbon Browser Browser Browser Browser Browser Browser-ի առանձին պրոֆիլ ստեղծել։</translation>
-<translation id="3945058413678539331">Carbon Browser Browser Browser Browser Browser Browser-ը փորձում է պատճենել գաղտնաբառերը: Թույլատրելու համար մուտքագրեք Windows-ի ձեր գաղտնաբառը:</translation>
-<translation id="4036079820698952681">Օգնեք կատարելագործել Carbon Browser Browser Browser Browser Browser Browser-ը՝ հաղորդելով <ph name="BEGIN_LINK" />ընթացիկ կարգավորումների<ph name="END_LINK" /> մասին</translation>
+<translation id="3283186697780795848">Տեղադրված է Carbon Browser Browser-ի <ph name="PRODUCT_VERSION" /> տարբերակը</translation>
+<translation id="3286538390144397061">Վերագործարկել հիմա</translation>
+<translation id="328888136576916638">Google API-ի բանալիները չկան: Carbon Browser Browser-ի որոշ գործառույթներ կանջատվեն:</translation>
+<translation id="3296368748942286671">Շարունակել հետնաշերտի հավելվածների աշխատանքը, երբ Carbon Browser Browser-ը փակված է</translation>
+<translation id="3350761136195634146">Այս հաշվի հետ կապված Carbon Browser Browser-ի պրոֆիլ արդեն գոյություն ունի</translation>
+<translation id="3387527074123400161">Carbon Browser BrowserOS</translation>
+<translation id="3406848076815591792">Անցնե՞լ Carbon Browser Browser-ի ընթացիկ պրոֆիլ</translation>
+<translation id="3412460710772753638">Այս սարքի Գաղտնաբառերի կառավարիչում</translation>
+<translation id="3430503420100763906">Carbon Browser Browser պրոֆիլների միջոցով դուք կարող եք օգտագործել դիտարկիչն առանձին այլ օտատերերից։ Ստեղծեք պրոֆիլներ ձեր ընկերների և ընտանիքի անդամների, կամ գործնական և անձնական նպատակների համար։</translation>
+<translation id="347328004046849135">Carbon Browser Browser-ը կտեղեկացնի ձեզ, երբ կոտրված գաղտնաբառ օգտագործեք։</translation>
+<translation id="3474745554856756813"><ph name="ITEMS_COUNT" /> տարր կջնջվի այս սարքից: Հետագայում ձեր տվյալներն առբերելու համար մուտք գործեք Carbon Browser Browser <ph name="USER_EMAIL" /> հաշվով:</translation>
+<translation id="3497319089134299931">Carbon Browser Browser-ի այլ պրոֆիլի կարող եք անցնել <ph name="SHORTCUT" /> ստեղների համադրության միջոցով</translation>
+<translation id="3509308970982693815">Փակեք Carbon Browser Browser-ի բոլոր պատուհանները և կրկին փորձեք:</translation>
+<translation id="3518180795744733843">Google Օգնականը Carbon Browser Browser-ում կարող է կայքերի հետ կապված գործողություններ կատարել</translation>
+<translation id="3533435340678213462">Ձեր գաղտնիությունը պաշտպանելու նպատակով մենք 4 շաբաթից ավտոմատ ջնջում ենք ձեր հետաքրքրությունները։ Երբ դուք շարունակում եք դիտել վեբ էջեր, համապատասխան հետաքրքրությունը կարող է նորից հայտնվել ցանկում։ Որպեսզի Carbon Browser Browser-ը հաշվի չառնի որոշակի հետաքրքրությունները, կարող եք դրանք հեռացնել։</translation>
+<translation id="3567254597502212821">Ձեր այցելությունների պատմությունը այն կայքերի ցանկն է, որոնք դուք այցելել եք Carbon Browser Browser-ի միջոցով այս սարքում։</translation>
+<translation id="3575459661164320785">Ձեր համակարգչում վնասաբեր ծրագիր է հայտնաբերվել։ Ձեր դիտարկիչի կայուն աշխատանքը վերականգնելու համար Carbon Browser Browser-ը կարող է ջնջել ծրագիրը և վերականգնել ձեր կարգավորումները։</translation>
+<translation id="3593091352817399191">Դուք արդեն մեկ այլ հաշիվ եք մտել։ Ձեր դիտարկումների պատմությունն առանձին պահելու համար կարող եք Carbon Browser Browser-ի առանձին պրոֆիլ ստեղծել։</translation>
+<translation id="3639635944603682591">Այս օգտատիրոջ այցելությունների պատմությունը կհեռացվի այս սարքից։ Տվյալները վերականգնելու համար <ph name="USER_EMAIL" /> հաշվով մուտք գործեք Carbon Browser Browser-ում։</translation>
+<translation id="364817392622123556">{COUNT,plural, =0{Carbon Browser Browser-ի այս տարբերակի համար առկա է թարմացում: Այն կտեղադրվի, երբ դիտարկիչը վերագործարկվի։}=1{Carbon Browser Browser-ի այս տարբերակի համար առկա է թարմացում: Այն կտեղադրվի, երբ դիտարկիչը վերագործարկվի։ Ձեր ինկոգնիտո պատուհանը նորից չի բացվի։}one{Carbon Browser Browser-ի այս տարբերակի համար առկա է թարմացում: Այն կտեղադրվի, երբ դիտարկիչը վերագործարկվի։ Ձեր # ինկոգնիտո պատուհանը նորից չի բացվի։}other{Carbon Browser Browser-ի այս տարբերակի համար առկա է թարմացում: Այն կտեղադրվի, երբ դիտարկիչը վերագործարկվի։ Ձեր # ինկոգնիտո պատուհանները նորից չեն բացվի։}}</translation>
+<translation id="3651803019964686660">Հեռախոսահամարը <ph name="ORIGIN" /> կայքից ձեր Android հեռախոսին ուղարկելու համար երկու սարքերի Carbon Browser Browser դիտարկիչներում մտեք հաշիվ։</translation>
+<translation id="3685209450716071127">Carbon Browser Browser-ը չի կարող ստուգել ձեր գաղտնաբառերը։ Ստուգեք ինտերնետ կապը։</translation>
+<translation id="3702352323269013324">Իմանալ ավելին Carbon Browser Browser-ում գովազդի անհատականացման մասին</translation>
+<translation id="370962675267501463">{COUNT,plural, =0{Այս թարմացումը կիրառելու համար ադմինիստրատորը խնդրում է վերագործարկել Carbon Browser Browser-ը}=1{Այս թարմացումը կիրառելու համար ադմինիստրատորը խնդրում է վերագործարկել Carbon Browser Browser-ը։ Ձեր ինկոգնիտո պատուհանը նորից չի բացվի։}one{Այս թարմացումը կիրառելու համար ադմինիստրատորը խնդրում է վերագործարկել Carbon Browser Browser-ը։ Ձեր # ինկոգնիտո պատուհանը նորից չի բացվի։}other{Այս թարմացումը կիրառելու համար ադմինիստրատորը խնդրում է վերագործարկել Carbon Browser Browser-ը։ Ձեր # ինկոգնիտո պատուհանները նորից չեն բացվի։}}</translation>
+<translation id="3713809861844741608">Բացել հղումը Carbon Browser Browser-ի նոր &amp;ներդիրում</translation>
+<translation id="3728336900324680424">Carbon Browser Browser-ը կօգտագործի ձեր Drive-ը՝ հասցեագոտում հուշումներ ցուցադրելու համար</translation>
+<translation id="378917192836375108">Carbon Browser Browser-ը թույլ է տալիս սեղմել համացանցում գտնվող հեռախոսահամարի վրա և զանգահարել Skype-ով:</translation>
+<translation id="3830894615770080216">Carbon Browser BrowserOS համակարգ</translation>
+<translation id="3848258323044014972"><ph name="PAGE_TITLE" /> - Carbon Browser Browser</translation>
+<translation id="386822487697155367">Carbon Browser BrowserOS-ի օգնության էջ</translation>
+<translation id="3871664619793219264">Բացեք Carbon Browser Browser դիտարկիչի ձեր տվյալները <ph name="ACCOUNT_EMAIL" /> հաշվից</translation>
+<translation id="388648406173476553">Carbon Browser Browser-ի կարգավորման և կառավարման համար անհրաժեշտ է ձեր ուշադրությունը։ Սեղմեք՝ մանրամասներին ծանոթանալու համար։</translation>
+<translation id="3889543394854987837">Սեղմեք ձեր անվան վրա՝ Carbon Browser Browser-ը բացելու համար:</translation>
+<translation id="390528597099634151"><ph name="EXISTING_USER" />-ն արդեն մուտք է գործել Carbon Browser Browser-ի այս պրոֆիլը։ Ձեր դիտարկումների պատմությունն առանձին պահելու համար կարող եք Carbon Browser Browser-ի առանձին պրոֆիլ ստեղծել։</translation>
+<translation id="391789666908693569">Ձեր հաշիվը պատկանում է <ph name="MANAGER_NAME" /> տիրույթին: Ձեր ադմինիստրատորը կարող է տեսնել և խմբագրել Carbon Browser Browser դիտարկիչի այս պրոֆիլը և դրա տվյալները, օրինակ՝ էջանիշները, պատմությունը և գաղտնաբառերը։</translation>
+<translation id="3945058413678539331">Carbon Browser Browser-ը փորձում է պատճենել գաղտնաբառերը: Թույլատրելու համար մուտքագրեք Windows-ի ձեր գաղտնաբառը:</translation>
+<translation id="3962623956404948996">Carbon Browser Browser-ը խորհուրդ է տալիս ստուգել այս ֆայլը, քանի որ այն կարող է վտանգավոր լինել</translation>
+<translation id="3997429360543082038">Carbon Browser BrowserOS-ի մասին</translation>
+<translation id="4019629340646866719">Carbon Browser BrowserOS-ը ստեղծվել է <ph name="BEGIN_LINK_CROS_OSS" />բաց կոդով ծրագրակազմի<ph name="END_LINK_CROS_OSS" /> հիման վրա, ինչպիսին է <ph name="BEGIN_LINK_LINUX_OSS" />Լինուքսի մշակման միջավայրը<ph name="END_LINK_LINUX_OSS" />։</translation>
+<translation id="4036079820698952681">Օգնեք կատարելագործել Carbon Browser Browser-ը՝ հաղորդելով <ph name="BEGIN_LINK" />ընթացիկ կարգավորումների<ph name="END_LINK" /> մասին</translation>
 <translation id="4050175100176540509">Վերջին տարբերակում առկա են անվտանգության կարևոր բարելավումներ և նոր գործառույթներ:</translation>
-<translation id="419998258129752635"><ph name="PAGE_TITLE" /> – Ցանցի մուտքի էջ – Carbon Browser Browser Browser Browser Browser Browser</translation>
-<translation id="421369550622382712">Հավելվածների, խաղերի, ընդլայնումների և թեմաների լայն ընտրանի Carbon Browser Browser Browser Browser Browser Browser-ի համար:</translation>
-<translation id="4216212958613226427">Այս լեզուն օգտագործվում է որպես Carbon Browser Browser Browser Browser Browser Browser-ի միջերեսի լեզու</translation>
-<translation id="4230135487732243613">Կապել Carbon Browser Browser Browser Browser Browser Browser-ի տվյալներն այս հաշվի հետ:</translation>
-<translation id="4264410486868823224">Կայքը (<ph name="MANAGER" />) պահանջում է, որ դուք նախքան սարքն օգտագործելը կարդաք և ընդունեք հետևյալ Օգտագործման պայմանները։ Այս պայմանները չեն ընդլայնում, փոփոխում կամ սահմանափակում Google Google Chrome OS-ի պայմանները։</translation>
-<translation id="4271805377592243930">Carbon Browser Browser Browser Browser Browser Browser-ի օգնության էջ</translation>
-<translation id="4285930937574705105">Անհայտ սխալի պատճառով տեղադրումը չհաջողվեց: Եթե Carbon Browser Browser Browser Browser Browser Browser-ը բաց է, փակեք այն և կրկին փորձեք:</translation>
-<translation id="429583012151745428">Տեղադրումը դեռ չի ավարտվել։ Չանջատեք սարքը։ Պետք է որ քսան րոպեից ավել չտևի։ Տեղադրումից հետո համակարգիչն ավտոմատ կանջատվի։</translation>
-<translation id="4407044323746248786">Փակե՞լ Carbon Browser Browser Browser Browser Browser Browser-ը։</translation>
-<translation id="4415566066719264597">Թույլատրել Carbon Browser Browser Browser Browser Browser Browser-ին աշխատել ֆոնային ռեժիմում</translation>
-<translation id="4423735387467980091">Հարմարեցնել և վերահսկել Carbon Browser Browser Browser Browser Browser Browser-ը</translation>
-<translation id="452711251841752011">Բարի գալուստ Carbon Browser Browser Browser Browser Browser Browser․ բացված է դիտարկիչի նոր պատուհան</translation>
-<translation id="4544142686420020088">Անհայտ սխալի պատճառով չհաջողվեց թարմացնել Carbon Browser Browser Browser Browser Browser Browser-ը։ <ph name="BEGIN_LINK" />Շտկել Carbon Browser Browser Browser Browser Browser Browser-ի թարմացման հետ կապված խնդիրները<ph name="END_LINK" /></translation>
-<translation id="454579500955453258">Շարունակե՞լ Carbon Browser Browser Browser Browser Browser Browser-ի նոր պրոֆիլով</translation>
+<translation id="4148957013307229264">Տեղադրում…</translation>
+<translation id="419998258129752635"><ph name="PAGE_TITLE" /> – Ցանցի մուտքի էջ – Carbon Browser Browser</translation>
+<translation id="421369550622382712">Հավելվածների, խաղերի, ընդլայնումների և թեմաների լայն ընտրանի Carbon Browser Browser-ի համար:</translation>
+<translation id="4216212958613226427">Այս լեզուն օգտագործվում է որպես Carbon Browser Browser-ի միջերեսի լեզու</translation>
+<translation id="4222932583846282852">Չեղարկվում է…</translation>
+<translation id="4230135487732243613">Կապել Carbon Browser Browser-ի տվյալներն այս հաշվի հետ:</translation>
+<translation id="4271805377592243930">Carbon Browser Browser-ի օգնության էջ</translation>
+<translation id="4285930937574705105">Անհայտ սխալի պատճառով տեղադրումը չհաջողվեց: Եթե Carbon Browser Browser-ը բաց է, փակեք այն և կրկին փորձեք:</translation>
+<translation id="4304713468139749426">Գաղտնաբառերի կառավարիչ</translation>
+<translation id="4334294535648607276">Ներբեռնումն ավարտվեց:</translation>
+<translation id="439358628917130594">Ադմինիստրատորը (<ph name="MANAGER" />) պահանջում է, որ դուք նախքան սարքն օգտագործելը կարդաք և ընդունեք հետևյալ Օգտագործման պայմանները։ Այս պայմանները չեն ընդլայնում, փոփոխում կամ սահմանափակում Google Carbon Browser BrowserOS-ի պայմանները։</translation>
+<translation id="4407044323746248786">Փակե՞լ Carbon Browser Browser-ը։</translation>
+<translation id="4415566066719264597">Թույլատրել Carbon Browser Browser-ին աշխատել ֆոնային ռեժիմում</translation>
+<translation id="4423735387467980091">Հարմարեցնել և վերահսկել Carbon Browser Browser-ը</translation>
+<translation id="4427306783828095590">Լրացուցիչ պաշտպանությունն օգնում է խուսափել ֆիշինգից և արգելափակել վնասաբեր ծրագրերը</translation>
+<translation id="4440114195512068100">Սարքի ծրագրակազմի տարբերակը տեսնելու համար անցեք <ph name="LINK_BEGIN" />Carbon Browser BrowserOS-ի կարգավորումներ<ph name="LINK_END" /></translation>
+<translation id="452711251841752011">Բարի գալուստ Carbon Browser Browser․ բացված է դիտարկիչի նոր պատուհան</translation>
+<translation id="4544142686420020088">Անհայտ սխալի պատճառով չհաջողվեց թարմացնել Carbon Browser Browser-ը։ <ph name="BEGIN_LINK" />Շտկել Carbon Browser Browser-ի թարմացման հետ կապված խնդիրները<ph name="END_LINK" /></translation>
+<translation id="454579500955453258">Շարունակե՞լ Carbon Browser Browser-ի նոր պրոֆիլով</translation>
 <translation id="4567424176335768812">Դուք մուտք եք գործել որպես <ph name="USER_EMAIL_ADDRESS" />: Այժմ կարող եք օգտագործել ձեր էջանիշները, պատմությունը և այլ կարգավորումները ձեր բոլոր մուտք գործած սարքերում:</translation>
-<translation id="459535195905078186">Carbon Browser Browser Browser Browser Browser Browser հավելվածներ</translation>
-<translation id="4665829708273112819">Ուշադրություն․ Carbon Browser Browser Browser Browser Browser Browser-ը չի կարող արգելել ընդլայնումներին գրանցել ձեր այցելությունների պատմությունը։ Ընդլայնումն ինկոգնիտո ռեժիմում անջատելու համար ապանշեք այս պարամետրը։</translation>
-<translation id="4677944499843243528">Կարծես թե պրոֆիլն օգտագործվում է Carbon Browser Browser Browser Browser Browser Browser-ի այլ գործընթացի կողմից (<ph name="PROCESS_ID" />) այլ համակարգչում (<ph name="HOST_NAME" />): Carbon Browser Browser Browser Browser Browser Browser-ը կողպել է պրոֆիլը, որպեսզի այն չվնասվի: Եթե համոզված եք, որ պրոֆիլը չի օգտագործվում այլ գործընթացների կողմից, կարող եք ապակողպել պրոֆիլը և նորից գործարկել Carbon Browser Browser Browser Browser Browser Browser-ը:</translation>
-<translation id="469338717132742108">Google Chrome OS-ի օգնության էջ</translation>
-<translation id="4708774505295300557">Ինչ-որ մեկն այս համակարգչում <ph name="ACCOUNT_EMAIL_LAST" /> հասցեով մուտք է գործել Carbon Browser Browser Browser Browser Browser Browser: Ստեղծեք Carbon Browser Browser Browser Browser Browser Browser-ի նոր պրոֆիլ` ձեր տվյալներն առանձին պահելու համար:</translation>
-<translation id="4746050847053251315">Փակե՞լ Carbon Browser Browser Browser Browser Browser Browser-ը։</translation>
-<translation id="4748217263233248895">Carbon Browser Browser Browser Browser Browser Browser-ի անվտանգության կարգավորումները հենց նոր թարմացվել են: Վերագործարկեք Carbon Browser Browser Browser Browser Browser Browser-ը, և ձեր ներդիրները կվերականգնվեն:</translation>
-<translation id="4750035648288509542">Գրեթե պատրաստ է։ Թարմացումն ավարտելու համար վերագործարկեք Carbon Browser Browser Browser Browser Browser Browser-ը։ Ինկոգնիտո պատուհանները նորից չեն բացվի։</translation>
-<translation id="4788777615168560705">Carbon Browser Browser Browser Browser Browser Browser-ը չի կարող ստուգել ձեր գաղտնաբառերը։ 24 ժամ հետո նորից փորձեք կամ <ph name="BEGIN_LINK" />ստուգեք ձեր Google հաշվի գաղտնաբառերը<ph name="END_LINK" />։</translation>
+<translation id="4594305310729380060">Այս սարքի Գաղտնաբառերի կառավարիչում</translation>
+<translation id="459535195905078186">Carbon Browser Browser հավելվածներ</translation>
+<translation id="4613863813562375431">Carbon Browser BrowserOS-ի տարբերակը</translation>
+<translation id="4621240073146040695">Գրեթե պատրաստ է: Վերագործարկեք Carbon Browser Browser-ը՝ թարմացումն ավարտելու համար:</translation>
+<translation id="4665829708273112819">Ուշադրություն․ Carbon Browser Browser-ը չի կարող արգելել ընդլայնումներին գրանցել ձեր այցելությունների պատմությունը։ Ընդլայնումն ինկոգնիտո ռեժիմում անջատելու համար ապանշեք այս պարամետրը։</translation>
+<translation id="4673151026126227699">Եթե դուք նաև ուղարկում եք Carbon Browser Browser-ի օգտագործման մասին հաշվետվություններ, դրանցում կներառվեն ձեր այցելած URL-ները։</translation>
+<translation id="4677944499843243528">Կարծես թե պրոֆիլն օգտագործվում է Carbon Browser Browser-ի այլ գործընթացի կողմից (<ph name="PROCESS_ID" />) այլ համակարգչում (<ph name="HOST_NAME" />): Carbon Browser Browser-ը կողպել է պրոֆիլը, որպեսզի այն չվնասվի: Եթե համոզված եք, որ պրոֆիլը չի օգտագործվում այլ գործընթացների կողմից, կարող եք ապակողպել պրոֆիլը և նորից գործարկել Carbon Browser Browser-ը:</translation>
+<translation id="4680828127924988555">Չեղարկել տեղադրումը</translation>
+<translation id="4708774505295300557">Ինչ-որ մեկն այս համակարգչում <ph name="ACCOUNT_EMAIL_LAST" /> հասցեով մուտք է գործել Carbon Browser Browser: Ստեղծեք Carbon Browser Browser-ի նոր պրոֆիլ` ձեր տվյալներն առանձին պահելու համար:</translation>
+<translation id="4746050847053251315">Փակե՞լ Carbon Browser Browser-ը։</translation>
+<translation id="4748217263233248895">Carbon Browser Browser-ի անվտանգության կարգավորումները հենց նոր թարմացվել են: Վերագործարկեք Carbon Browser Browser-ը, և ձեր ներդիրները կվերականգնվեն:</translation>
+<translation id="4765210420921718862">Դուք ցանկացած ժամանակ Carbon Browser Browser-ի կարգավորումներում կարող եք փոխել ձեր ընտրությունը։ Փորձարկումներն ընթանում են գովազդի ցուցադրման ընթացիկ ռեժիմին զուգահեռ, ինչի արդյունքում փոփոխություններն անմիջապես տեսանելի չեն լինի ձեզ։</translation>
+<translation id="4788777615168560705">Carbon Browser Browser-ը չի կարող ստուգել ձեր գաղտնաբառերը։ 24 ժամ հետո նորից փորձեք կամ <ph name="BEGIN_LINK" />ստուգեք ձեր Google հաշվի գաղտնաբառերը<ph name="END_LINK" />։</translation>
 <translation id="479167709087336770">Օգտագործվում է միևնույն ուղղագրիչը, ինչ Google Որոնման մեջ: Դիտարկիչում մուտքագրված տեքստերն ուղարկվում են Google-ին: Սա կարող եք փոխել կարգավորումներում։</translation>
-<translation id="4888717733111232871">Թույլատրել Carbon Browser Browser Browser Browser Browser Browser-ում տվյալների մուտքային հոսքի փոխանցումը mDNS հաղորդակարգով:</translation>
-<translation id="4893347770495441059">Վերագործարկել՝ &amp;Carbon Browser Browser Browser Browser Browser Browser-ը թարմացնելու համար</translation>
-<translation id="4943838377383847465">Carbon Browser Browser Browser Browser Browser Browser-ն աշխատում է ֆոնային ռեժիմում:</translation>
-<translation id="4987820182225656817">Օգտագործելով Carbon Browser Browser Browser Browser Browser Browser-ը հյուրի ռեժիմում՝ դուք ոչ մի հետք չեք թողնում:</translation>
-<translation id="4994636714258228724">Ավելացրեք ձեր հաշիվը Carbon Browser Browser Browser Browser Browser Browser-ին</translation>
-<translation id="5224391634244552924">Պահված գաղտնաբառեր չկան։ Carbon Browser Browser Browser Browser Browser Browser-ը կարող է ստուգել ձեր գաղտնաբառերը, երբ պահում եք դրանք։</translation>
-<translation id="5252179775517634216"><ph name="EXISTING_USER" />-ն արդեն մուտք է գործել Carbon Browser Browser Browser Browser Browser Browser-ի այս պրոֆիլը։ <ph name="USER_EMAIL_ADDRESS" /> օգտատիրոջ համար կստեղծվի Carbon Browser Browser Browser Browser Browser Browser-ի նոր պրոֆիլ։</translation>
-<translation id="5277894862589591112">Փոփոխությունները կիրառելու համար վերագործարկեք Carbon Browser Browser Browser Browser Browser Browser-ը</translation>
-<translation id="5358375970380395591">Դուք մուտք եք գործում վերահսկվող հաշիվ՝ թույլ տալով ադմինիստրատորին կառավարել ձեր Carbon Browser Browser Browser Browser Browser Browser պրոֆիլը: Ձեր Carbon Browser Browser Browser Browser Browser Browser-ի տվյալները, ինչպես օրինակ՝ հավելվածները, էջանիշները, պատմությունը, գաղտնաբառերը և այլ կարգավորումները, մշտապես կկապվեն <ph name="USER_NAME" />-ի հետ: Դուք կկարողանաք ջնջել այս տվյալները Google Dashboard-ի միջոցով, սակայն չեք կարողանա համակցել դրանք այլ հաշվի հետ: <ph name="LEARN_MORE" /></translation>
-<translation id="5386450000063123300">Carbon Browser Browser Browser Browser Browser Browser-ի թարմացում (<ph name="PROGRESS_PERCENT" />)</translation>
-<translation id="538767207339317086">Թույլատրել մուտքը Carbon Browser Browser Browser Browser Browser Browser-ում</translation>
-<translation id="5398878173008909840">Մատչելի է Carbon Browser Browser Browser Browser Browser Browser-ի նոր տարբերակը:</translation>
-<translation id="5416696090975899932">Carbon Browser Browser Browser Browser Browser Browser-ը չի կարող ցույց տալ տպման նախադիտումը՝ առանց PDF-ի ներկառուցված դիտակի:</translation>
-<translation id="5427571867875391349">Դարձնել Carbon Browser Browser Browser Browser Browser Browser-ը կանխադրված դիտարկիչը</translation>
-<translation id="5438241569118040789"><ph name="PAGE_TITLE" /> – Carbon Browser Browser Browser Browser Browser Browser բետա</translation>
-<translation id="5479196819031988440">Google Chrome OS-ը չի կարող բացել այս էջը:</translation>
-<translation id="5480860683791598150">Carbon Browser Browser Browser Browser Browser Browser-ին այս կայքի համար անհրաժեշտ է ձեզ տեղորոշելու թույլտվություն</translation>
-<translation id="549669000822060376">Սպասեք` մինչ Carbon Browser Browser Browser Browser Browser Browser-ը տեղադրում է համակարգի նորագույն թարմացումները:</translation>
-<translation id="5496810170689441661">Carbon Browser Browser Browser Browser Browser Browser-ը փորձում է փոխել գաղտնաբառերը: Թույլատրելու համար մուտքագրեք Windows-ի ձեր գաղտնաբառը:</translation>
-<translation id="5527463683072221100">Բացել PDF ֆայլեր Carbon Browser Browser Browser Browser Browser Browser-ում</translation>
-<translation id="5623402015214259806">{0,plural, =0{Հասանելի է Carbon Browser Browser Browser Browser Browser Browser-ի նոր տարբերակը}=1{Հասանելի է Carbon Browser Browser Browser Browser Browser Browser-ի նոր տարբերակը}one{Carbon Browser Browser Browser Browser Browser Browser-ի նոր տարբերակը # օր է հասանելի է}other{Carbon Browser Browser Browser Browser Browser Browser-ի նոր տարբերակը # օր է հասանելի է}}</translation>
-<translation id="5634636535844844681">Carbon Browser Browser Browser Browser Browser Browser-ի համար հարկավոր է Windows 7 կամ ավելի նոր տարբերակ:</translation>
-<translation id="5653831366781983928">Վերագործարկեք Carbon Browser Browser Browser Browser Browser Browser-ը</translation>
-<translation id="5698481217667032250">Carbon Browser Browser Browser Browser Browser Browser-ը ցուցադրել այս լեզվով</translation>
-<translation id="5820394555380036790">Google Chrome OS</translation>
-<translation id="5854740544000584380">Google Chrome OS-ը ստեղծվել է <ph name="BEGIN_LINK_CROS_OSS" />բաց կոդով ծրագրակազմի<ph name="END_LINK_CROS_OSS" /> հիման վրա, ինչպիսին է <ph name="BEGIN_LINK_LINUX_OSS" />Լինուքսի մշակման միջավայրը<ph name="END_LINK_LINUX_OSS" />։</translation>
-<translation id="5862307444128926510">Բարի գալուստ Carbon Browser Browser Browser Browser Browser Browser</translation>
-<translation id="5883558403894052917">Carbon Browser Browser Browser Browser Browser Browser-ը այս տարրերում վնասագիր է հայտնաբերել՝</translation>
+<translation id="4888717733111232871">Թույլատրել Carbon Browser Browser-ում տվյալների մուտքային հոսքի փոխանցումը mDNS հաղորդակարգով:</translation>
+<translation id="4893347770495441059">Վերագործարկել՝ &amp;Carbon Browser Browser-ը թարմացնելու համար</translation>
+<translation id="4943838377383847465">Carbon Browser Browser-ն աշխատում է ֆոնային ռեժիմում:</translation>
+<translation id="4987820182225656817">Օգտագործելով Carbon Browser Browser-ը հյուրի ռեժիմում՝ դուք ոչ մի հետք չեք թողնում:</translation>
+<translation id="4994636714258228724">Ավելացրեք ձեր հաշիվը Carbon Browser Browser-ին</translation>
+<translation id="5114678101347489141">Carbon Browser Browser-ն ուսումնասիրում է նոր գործառույթները, որոնք կայքերին թույլ են տալիս տրամադրել դիտարկման նույն հնարավորությունները՝ ձեր մասին ավելի քիչ տեղեկություններ օգտագործելով։</translation>
+<translation id="5224391634244552924">Պահված գաղտնաբառեր չկան։ Carbon Browser Browser-ը կարող է ստուգել ձեր գաղտնաբառերը, երբ պահում եք դրանք։</translation>
+<translation id="5252179775517634216"><ph name="EXISTING_USER" />-ն արդեն մուտք է գործել Carbon Browser Browser-ի այս պրոֆիլը։ <ph name="USER_EMAIL_ADDRESS" /> օգտատիրոջ համար կստեղծվի Carbon Browser Browser-ի նոր պրոֆիլ։</translation>
+<translation id="5277894862589591112">Փոփոխությունները կիրառելու համար վերագործարկեք Carbon Browser Browser-ը</translation>
+<translation id="5296845517486664001">Եթե փորձնական գործառույթները միացված են, և Carbon Browser Browser-ը պատահականության սկզբունքով ձեզ ընտրում է ակտիվ փորձարկմանը մասնակցության համար, ձեր այցելությունների պատմությունն ազդում է ձեզ ցուցադրվող գովազդի և ստորև ներկայացված հետաքրքրությունների վրա։ Ձեր գաղտնիությունը պաշտպանելու նպատակով Carbon Browser Browser-ը ամեն ամիս ջնջում է ձեր հետաքրքրությունները։</translation>
+<translation id="5358375970380395591">Դուք մուտք եք գործում վերահսկվող հաշիվ՝ թույլ տալով ադմինիստրատորին կառավարել ձեր Carbon Browser Browser պրոֆիլը: Ձեր Carbon Browser Browser-ի տվյալները, ինչպես օրինակ՝ հավելվածները, էջանիշները, պատմությունը, գաղտնաբառերը և այլ կարգավորումները, մշտապես կկապվեն <ph name="USER_NAME" />-ի հետ: Դուք կկարողանաք ջնջել այս տվյալները Google Dashboard-ի միջոցով, սակայն չեք կարողանա համակցել դրանք այլ հաշվի հետ: <ph name="LEARN_MORE" /></translation>
+<translation id="5386450000063123300">Carbon Browser Browser-ի թարմացում (<ph name="PROGRESS_PERCENT" />)</translation>
+<translation id="538767207339317086">Թույլատրել մուտքը Carbon Browser Browser-ում</translation>
+<translation id="5398878173008909840">Մատչելի է Carbon Browser Browser-ի նոր տարբերակը:</translation>
+<translation id="5427571867875391349">Դարձնել Carbon Browser Browser-ը կանխադրված դիտարկիչը</translation>
+<translation id="5438241569118040789"><ph name="PAGE_TITLE" /> – Carbon Browser Browser բետա</translation>
+<translation id="5473971139929175403">Carbon Browser Browser-ը հնարավոր է չաշխատի ինչպես հարկն է, քանի որ այն այլևս չի աջակցվում Լինուքսի այս բաշխման մեջ։</translation>
+<translation id="5480860683791598150">Carbon Browser Browser-ին այս կայքի համար անհրաժեշտ է ձեզ տեղորոշելու թույլտվություն</translation>
+<translation id="5487574057737591516">Ձեր գաղտնիությունը պաշտպանելու նպատակով մենք 4 շաբաթից ավտոմատ ջնջում ենք ձեր հետաքրքրությունները։ Երբ դուք շարունակում եք դիտել վեբ էջեր, համապատասխան հետաքրքրությունը կարող է նորից հայտնվել ցանկում։ Եթե Carbon Browser Browser-ը սխալ է որոշել ձեր հետաքրքրությունը, կամ դուք չեք ուզում տեսնել որոշակի գովազդներ, կարող եք հեռացնել հետաքրքրությունը։</translation>
+<translation id="549669000822060376">Սպասեք` մինչ Carbon Browser Browser-ը տեղադրում է համակարգի նորագույն թարմացումները:</translation>
+<translation id="5496810170689441661">Carbon Browser Browser-ը փորձում է փոխել գաղտնաբառերը: Թույլատրելու համար մուտքագրեք Windows-ի ձեր գաղտնաբառը:</translation>
+<translation id="5527463683072221100">Բացել PDF ֆայլեր Carbon Browser Browser-ում</translation>
+<translation id="5614091477838198795">Երբ այս կարգավորումը միացված է, դուք նաև դուրս կգրվեք Carbon Browser Browser-ից</translation>
+<translation id="5623402015214259806">{0,plural, =0{Հասանելի է Carbon Browser Browser-ի նոր տարբերակը}=1{Հասանելի է Carbon Browser Browser-ի նոր տարբերակը}one{Carbon Browser Browser-ի նոր տարբերակը # օր է հասանելի է}other{Carbon Browser Browser-ի նոր տարբերակը # օր է հասանելի է}}</translation>
+<translation id="5634636535844844681">Carbon Browser Browser-ի համար հարկավոր է Windows 7 կամ ավելի նոր տարբերակ:</translation>
+<translation id="5653831366781983928">Վերագործարկեք Carbon Browser Browser-ը</translation>
+<translation id="5698481217667032250">Carbon Browser Browser-ը ցուցադրել այս լեզվով</translation>
+<translation id="5862307444128926510">Բարի գալուստ Carbon Browser Browser</translation>
+<translation id="5883558403894052917">Carbon Browser Browser-ը այս տարրերում վնասագիր է հայտնաբերել՝</translation>
 <translation id="5895138241574237353">Վերագործարկել</translation>
 <translation id="5903106910045431592"><ph name="PAGE_TITLE" /> – Ցանցի մուտք</translation>
-<translation id="5987687638152509985">Թարմացրեք Carbon Browser Browser Browser Browser Browser Browser-ը՝ համաժամացումը սկսելու համար</translation>
-<translation id="6039377483953237732">Google Chrome OS-ի տարբերակը</translation>
-<translation id="6055895534982063517">Մատչելի է Carbon Browser Browser Browser Browser Browser Browser-ի նոր տարբերակ, որը շատ ավելի արագ է:</translation>
-<translation id="6063093106622310249">&amp;Բացել Carbon Browser Browser Browser Browser Browser Browser-ում</translation>
-<translation id="6072279588547424923">«<ph name="EXTENSION_NAME" />» ընդլայնումն ավելացվել է Carbon Browser Browser Browser Browser Browser Browser-ին</translation>
+<translation id="5924017743176219022">Միացում համացանցին…</translation>
+<translation id="5941711191222866238">Նվազեցնել</translation>
+<translation id="5972142260211327093">Եթե Carbon Browser Browser-ը պատահականության սկզբունքով ձեզ ընտրում է ակտիվ փորձարկմանը մասնակցության համար, ձեր այցելությունների պատմությունն ազդում է ձեզ ցուցադրվող գովազդի և ստորև ներկայացված հետաքրքրությունների վրա։ Ձեր գաղտնիությունը պաշտպանելու նպատակով Carbon Browser Browser-ը ամեն ամիս ջնջում է ձեր հետաքրքրությունները։ Հետաքրքրությունները թարմացվում են, եթե դրանք չեք հեռացնում։</translation>
+<translation id="5987687638152509985">Թարմացրեք Carbon Browser Browser-ը՝ համաժամացումը սկսելու համար</translation>
+<translation id="5988505247484123880">Սովորաբար կայքերը, որոնք դուք այցելում եք, հիշում են, թե ձեզ ինչն է հետաքրքրում, որպեսզի անհատականացնեն գովազդը ձեզ համար։ Կայքերը կարող են նաև ձեր հետաքրքրությունների մասին տեղեկություններ պահել Carbon Browser Browser-ում։</translation>
+<translation id="6003112304606738118">Ներբեռնում… Մնաց <ph name="HOURS" /> ժամ</translation>
+<translation id="6040143037577758943">Փակել</translation>
+<translation id="6055895534982063517">Մատչելի է Carbon Browser Browser-ի նոր տարբերակ, որը շատ ավելի արագ է:</translation>
+<translation id="6063093106622310249">&amp;Բացել Carbon Browser Browser-ում</translation>
+<translation id="6072279588547424923">«<ph name="EXTENSION_NAME" />» ընդլայնումն ավելացվել է Carbon Browser Browser-ին</translation>
 <translation id="608006075545470555">Աշխատանքային պրոֆիլի ավելացում այս դիտարկիչում</translation>
-<translation id="608189560609172163">Carbon Browser Browser Browser Browser Browser Browser-ին չհաջողվեց համաժամացնել ձեր տվյալները՝ մուտք գործելիս առաջացած սխալի պատճառով:</translation>
-<translation id="6096348254544841612">Հասանելի է Carbon Browser Browser Browser Browser Browser Browser-ի նոր տարբերակը։</translation>
-<translation id="6120345080069858279">Carbon Browser Browser Browser Browser Browser Browser-ը կպահի այս գաղտնաբառը ձեր Google հաշվում: Գաղտնաբառը հիշելու կարիք չի լինի:</translation>
-<translation id="6129621093834146363"><ph name="FILE_NAME" /> ֆայլը վտանգավոր է, և Carbon Browser Browser Browser Browser Browser Browser-ն արգելափակել է այն։</translation>
-<translation id="6134968993075716475">Անվտանգ դիտարկումն անջատված է։ Carbon Browser Browser Browser Browser Browser Browser-ը խորհուրդ է տալիս միացնել այն։</translation>
-<translation id="6145820983052037069">Այստեղ կարող եք անցնել Carbon Browser Browser Browser Browser Browser Browser-ի այլ պրոֆիլի</translation>
-<translation id="6183079672144801177">Համոզվեք, որ մուտք եք գործել հաշիվ <ph name="TARGET_DEVICE_NAME" /> սարքի Carbon Browser Browser Browser Browser Browser Browser դիտարկիչում և փորձեք նորից ուղարկել։</translation>
-<translation id="6212496753309875659">Այս համակարգչում արդեն տեղադրված է Carbon Browser Browser Browser Browser Browser Browser-ի ավելի նոր տարբերակը: Եթե ծրագրակազմը չի աշխատում, ապատեղադրեք Carbon Browser Browser Browser Browser Browser Browser-ը և նորից փորձեք:</translation>
-<translation id="6219195342503754812">{0,plural, =0{Carbon Browser Browser Browser Browser Browser Browser-ը հիմա կվերագործարկվի}=1{Carbon Browser Browser Browser Browser Browser Browser-ը կվերագործարկվի 1 վայրկյանից}one{Carbon Browser Browser Browser Browser Browser Browser-ը կվերագործարկվի # վայրկյանից}other{Carbon Browser Browser Browser Browser Browser Browser-ը կվերագործարկվի # վայրկյանից}}</translation>
-<translation id="6241367896540709610">Ֆայլեր ներբեռնելու համար Carbon Browser Browser Browser Browser Browser Browser-ին անհրաժեշտ է հիշողությունն օգտագործելու թույլտվություն</translation>
-<translation id="6248213926982192922">Դարձնել Carbon Browser Browser Browser Browser Browser Browser-ը կանխադրված դիտարկիչ</translation>
-<translation id="6266342355635466082">Carbon Browser Browser Browser Browser Browser Browser-ը չի կարող ստուգել թարմացումների առկայությունը։ Ստուգեք ինտերնետ կապը։</translation>
-<translation id="6268381023930128611">Դուրս գա՞լ Carbon Browser Browser Browser Browser Browser Browser-ից:</translation>
-<translation id="6281746429495226318">Անհատականացնել Carbon Browser Browser Browser Browser Browser Browser-ի պրոֆիլը</translation>
-<translation id="6290827346642914212">Անվանեք ձեր Carbon Browser Browser Browser Browser Browser Browser պրոֆիլը</translation>
-<translation id="6295779123002464101"><ph name="FILE_NAME" /> ֆայլը կարող է վտանգավոր լինել, և Carbon Browser Browser Browser Browser Browser Browser-ն արգելափակել է այն։</translation>
-<translation id="6309712487085796862">Carbon Browser Browser Browser Browser Browser Browser-ն օգտագործում է ձեր տեսախցիկը:</translation>
-<translation id="6333502561965082103">Carbon Browser Browser Browser Browser Browser Browser-ում տեղադրման մեկ այլ գործողություն ընթացքի մեջ է: Փորձեք ավելի ուշ:</translation>
-<translation id="6334986366598267305">Այժմ ավելի հեշտ է օգտագործել Carbon Browser Browser Browser Browser Browser Browser-ը ձեր Google հաշվի հետ, այդ թվում նաև համօգտագործվող համակարգիչներով:</translation>
-<translation id="6373523479360886564">Հեռացնե՞լ Carbon Browser Browser Browser Browser Browser Browser-ը:</translation>
-<translation id="6403826409255603130">Carbon Browser Browser Browser Browser Browser Browser-ը վեբ դիտարկիչ է, որը կայծակի արագությամբ է բացում վեբէջերն ու հավելվածները: Այն արագ է, կայուն և պարզ՝ օգտագործման մեջ: Ավելի ապահով աշխատեք համացանցում՝ վնասագրերի և խաբկայքերի դեմ ներկառուցված պաշտպանության շնորհիվ:</translation>
-<translation id="6434250628340475518">Google Chrome OS համակարգ</translation>
-<translation id="6455857529632101747">Բարի գալուստ Carbon Browser Browser Browser Browser Browser Browser պրոֆիլներ</translation>
-<translation id="6457450909262716557">{SECONDS,plural, =1{Carbon Browser Browser Browser Browser Browser Browser-ը կվերագործարկվի 1 վայրկյանից}one{Carbon Browser Browser Browser Browser Browser Browser-ը կվերագործարկվի # վայրկյանից}other{Carbon Browser Browser Browser Browser Browser Browser-ը կվերագործարկվի # վայրկյանից}}</translation>
-<translation id="6475912303565314141">Այն նաև վերահսկում է, թե որ էջը ցուցադրվի Carbon Browser Browser Browser Browser Browser Browser-ը մեկնարկելիս:</translation>
-<translation id="6510925080656968729">Ապատեղադրել Carbon Browser Browser Browser Browser Browser Browser-ը</translation>
-<translation id="6542839706527980775">Յուրաքանչյուր պրոֆիլում առանձին պահվում են Carbon Browser Browser Browser Browser Browser Browser-ի օգտատերերի տվյալները, օրինակ՝ էջանիշները, պատմությունը, գաղտնաբառերը և այլն</translation>
-<translation id="6570579332384693436">Ուղղագրական սխալները շտկելու համար Carbon Browser Browser Browser Browser Browser Browser-ը Google-ին է ուղարկում տեքստային դաշտերում ձեր մուտքագրած տեքստը</translation>
-<translation id="6598877126913850652">Անցնել Carbon Browser Browser Browser Browser Browser Browser-ի ծանուցումների կարգավորումներ</translation>
-<translation id="6613594504749178791">Փոփոխություններն ուժի մեջ կմտնեն Carbon Browser Browser Browser Browser Browser Browser-ը հաջորդ անգամ գործարկելիս:</translation>
-<translation id="665732753414869868">Ձեր շրջակայքի եռաչափ քարտեզը ստեղծելու համար Carbon Browser Browser Browser Browser Browser Browser-ին անհրաժեշտ է տեսախցիկն օգտագործելու թույլտվություն</translation>
+<translation id="6096348254544841612">Հասանելի է Carbon Browser Browser-ի նոր տարբերակը։</translation>
+<translation id="6120345080069858279">Carbon Browser Browser-ը կպահի այս գաղտնաբառը ձեր Google հաշվում: Գաղտնաբառը հիշելու կարիք չի լինի:</translation>
+<translation id="6129621093834146363"><ph name="FILE_NAME" /> ֆայլը վտանգավոր է, և Carbon Browser Browser-ն արգելափակել է այն։</translation>
+<translation id="6134968993075716475">Անվտանգ դիտարկումն անջատված է։ Carbon Browser Browser-ը խորհուրդ է տալիս միացնել այն։</translation>
+<translation id="6145820983052037069">Այստեղ կարող եք անցնել Carbon Browser Browser-ի այլ պրոֆիլի</translation>
+<translation id="6183079672144801177">Համոզվեք, որ մուտք եք գործել հաշիվ <ph name="TARGET_DEVICE_NAME" /> սարքի Carbon Browser Browser դիտարկիչում և փորձեք նորից ուղարկել։</translation>
+<translation id="6212496753309875659">Այս համակարգչում արդեն տեղադրված է Carbon Browser Browser-ի ավելի նոր տարբերակը: Եթե ծրագրակազմը չի աշխատում, ապատեղադրեք Carbon Browser Browser-ը և նորից փորձեք:</translation>
+<translation id="6219195342503754812">{0,plural, =0{Carbon Browser Browser-ը հիմա կվերագործարկվի}=1{Carbon Browser Browser-ը կվերագործարկվի 1 վայրկյանից}one{Carbon Browser Browser-ը կվերագործարկվի # վայրկյանից}other{Carbon Browser Browser-ը կվերագործարկվի # վայրկյանից}}</translation>
+<translation id="6241367896540709610">Ֆայլեր ներբեռնելու համար Carbon Browser Browser-ին անհրաժեշտ է հիշողությունն օգտագործելու թույլտվություն</translation>
+<translation id="6245734527075554892">Ստուգում է URL-ները Carbon Browser Browser-ում պահված վտանգավոր կայքերի ցանկի միջոցով։</translation>
+<translation id="6248213926982192922">Դարձնել Carbon Browser Browser-ը կանխադրված դիտարկիչ</translation>
+<translation id="6266342355635466082">Carbon Browser Browser-ը չի կարող ստուգել թարմացումների առկայությունը։ Ստուգեք ինտերնետ կապը։</translation>
+<translation id="6268381023930128611">Դուրս գա՞լ Carbon Browser Browser-ից:</translation>
+<translation id="6273793429163604305">Նախապատրաստում…</translation>
+<translation id="6281746429495226318">Անհատականացնել Carbon Browser Browser-ի պրոֆիլը</translation>
+<translation id="6290827346642914212">Անվանեք ձեր Carbon Browser Browser պրոֆիլը</translation>
+<translation id="6295779123002464101"><ph name="FILE_NAME" /> ֆայլը կարող է վտանգավոր լինել, և Carbon Browser Browser-ն արգելափակել է այն։</translation>
+<translation id="6309712487085796862">Carbon Browser Browser-ն օգտագործում է ձեր տեսախցիկը:</translation>
+<translation id="632355235628111698">Carbon Browser Browser-ն արգելափակել է այս ֆայլը, քանի որ այն վտանգավոր է</translation>
+<translation id="6327105987658262776">Հասանելի թարմացումներ չկան։</translation>
+<translation id="6333502561965082103">Carbon Browser Browser-ում տեղադրման մեկ այլ գործողություն ընթացքի մեջ է: Փորձեք ավելի ուշ:</translation>
+<translation id="6334986366598267305">Այժմ ավելի հեշտ է օգտագործել Carbon Browser Browser-ը ձեր Google հաշվի հետ, այդ թվում նաև համօգտագործվող համակարգիչներով:</translation>
+<translation id="6373523479360886564">Հեռացնե՞լ Carbon Browser Browser-ը:</translation>
+<translation id="6384011394608460044"><ph name="BEGIN_BOLD" />Ինչպես ենք մենք օգտագործում այս տվյալները.<ph name="END_BOLD" /> Carbon Browser Browser-ը կարող է որոշել ձեր հետաքրքրությունները։ Ավելի ուշ կայքը, որն այցելում եք, կարող է Carbon Browser Browser-ից ձեր հետաքրքրությունները տեսնելու թույլտվություն խնդրել՝ ձեզ ցուցադրվող գովազդն անհատականացնելու նպատակով։</translation>
+<translation id="6403826409255603130">Carbon Browser Browser-ը վեբ դիտարկիչ է, որը կայծակի արագությամբ է բացում վեբէջերն ու հավելվածները: Այն արագ է, կայուն և պարզ՝ օգտագործման մեջ: Ավելի ապահով աշխատեք համացանցում՝ վնասագրերի և խաբկայքերի դեմ ներկառուցված պաշտպանության շնորհիվ:</translation>
+<translation id="6442900851116057561">Վերագործարկեք Carbon Browser BrowserOS-ը</translation>
+<translation id="6455857529632101747">Բարի գալուստ Carbon Browser Browser պրոֆիլներ</translation>
+<translation id="6457450909262716557">{SECONDS,plural, =1{Carbon Browser Browser-ը կվերագործարկվի 1 վայրկյանից}one{Carbon Browser Browser-ը կվերագործարկվի # վայրկյանից}other{Carbon Browser Browser-ը կվերագործարկվի # վայրկյանից}}</translation>
+<translation id="6475912303565314141">Այն նաև վերահսկում է, թե որ էջը ցուցադրվի Carbon Browser Browser-ը մեկնարկելիս:</translation>
+<translation id="6510925080656968729">Ապատեղադրել Carbon Browser Browser-ը</translation>
+<translation id="6542839706527980775">Յուրաքանչյուր պրոֆիլում առանձին պահվում են Carbon Browser Browser-ի օգտատերերի տվյալները, օրինակ՝ էջանիշները, պատմությունը, գաղտնաբառերը և այլն</translation>
+<translation id="6570579332384693436">Ուղղագրական սխալները շտկելու համար Carbon Browser Browser-ը Google-ին է ուղարկում տեքստային դաշտերում ձեր մուտքագրած տեքստը</translation>
+<translation id="6598877126913850652">Անցնել Carbon Browser Browser-ի ծանուցումների կարգավորումներ</translation>
+<translation id="6613594504749178791">Փոփոխություններն ուժի մեջ կմտնեն Carbon Browser Browser-ը հաջորդ անգամ գործարկելիս:</translation>
+<translation id="665732753414869868">Ձեր շրջակայքի եռաչափ քարտեզը ստեղծելու համար Carbon Browser Browser-ին անհրաժեշտ է տեսախցիկն օգտագործելու թույլտվություն</translation>
 <translation id="6676384891291319759">Մտնել համացանց</translation>
-<translation id="6709350901466051922">Այս կայքի համար Carbon Browser Browser Browser Browser Browser Browser-ին անհրաժեշտ է խոսափողն օգտագործելու թույլտվություն</translation>
-<translation id="6717134281241384636">Դուք չեք կարող օգտագործել ձեր պրոֆիլը, քանի որ այն Carbon Browser Browser Browser Browser Browser Browser-ի նոր տարբերակից է:
+<translation id="668175097507315160">Մուտքի սխալի պատճառով Carbon Browser BrowserOS-ը չկարողացավ համաժամացնել ձեր տվյալները։</translation>
+<translation id="6709350901466051922">Այս կայքի համար Carbon Browser Browser-ին անհրաժեշտ է խոսափողն օգտագործելու թույլտվություն</translation>
+<translation id="6717134281241384636">Դուք չեք կարող օգտագործել ձեր պրոֆիլը, քանի որ այն Carbon Browser Browser-ի նոր տարբերակից է:
 
-Որոշ գործառույթներ մատչելի չեն լինի: Հատկորոշեք այլ պրոֆիլի գրացուցակ կամ օգտվեք Carbon Browser Browser Browser Browser Browser Browser-ի ավելի նոր տարբերակից:</translation>
-<translation id="6734080038664603509">Թարմացնել &amp;Carbon Browser Browser Browser Browser Browser Browser-ը</translation>
-<translation id="6734291798041940871">Carbon Browser Browser Browser Browser Browser Browser-ն արդեն տեղադրված է ձեր համակարգչում բոլոր օգտատերերի համար:</translation>
-<translation id="673636774878526923">Carbon Browser Browser Browser Browser Browser Browser-ի ձեր տվյալները ձեր բոլոր սարքերում օգտագործելու համար մուտք գործեք և միացրեք համաժամացումը։</translation>
-<translation id="6774082503108938489">Ձեր ծնողն անջատել է «Թույլտվություններ կայքերի, հավելվածների և ընդլայնումների համար» պարամետրը Carbon Browser Browser Browser Browser Browser Browser-ում։ Այս <ph name="EXTENSION_TYPE_PARAMETER" />ն արգելափակված է և չի կարող միացվել։</translation>
-<translation id="6827182711503025204">Google Chrome OS-ը տեղադրելու դեպքում ձեր սարքում առկա բոլոր տվյալները կվրագրվեն։</translation>
-<translation id="6847869444787758381">Carbon Browser Browser Browser Browser Browser Browser-ը ձեզ տեղյակ կպահի, եթե ձեր գաղտնաբառերի անվտագությանը սպառնալիք լինի</translation>
-<translation id="6857782730669500492">Carbon Browser Browser Browser Browser Browser Browser – <ph name="PAGE_TITLE" /></translation>
-<translation id="6863361426438995919">Google Pay (պատճենվել է Carbon Browser Browser Browser Browser Browser Browser-ում)</translation>
-<translation id="6873893289264747459">Carbon Browser Browser Browser Browser Browser Browser-ը «<ph name="EXTENSION_NAME" />» ընդլայնման մեջ վնասագիր է հայտնաբերել</translation>
-<translation id="6893813176749746474">Carbon Browser Browser Browser Browser Browser Browser-ը թարմացվել է, սակայն դուք չեք օգտագործել այն առնվազն 30 օր:</translation>
-<translation id="691026815377248078">Զուգակցումը շարունակելու համար Carbon Browser Browser Browser Browser Browser Browser-ին հասանելի դարձրեք Bluetooth-ը։ <ph name="IDS_BLUETOOTH_DEVICE_CHOOSER_AUTHORIZE_BLUETOOTH_LINK" /></translation>
-<translation id="6964305034639999644">Բացել հղումը Carbon Browser Browser Browser Browser Browser Browser-ի ինկ&amp;ոգնիտո պատուհանում</translation>
-<translation id="6978145336957848883">Թույլ գաղտնաբառերը հեշտ է գուշակել։ Թույլատրեք Carbon Browser Browser Browser Browser Browser Browser-ին <ph name="BEGIN_LINK" />գաղտնաբառեր ստեղծել և պահել ձեզ համար<ph name="END_LINK" />։</translation>
-<translation id="6990124437352146030">Carbon Browser Browser Browser Browser Browser Browser-ին այս կայքի համար անհրաժեշտ է ձեր խոսափողն օգտագործելու թույլտվություն</translation>
-<translation id="705851970750939768">Թարմացնել Carbon Browser Browser Browser Browser Browser Browser-ը</translation>
-<translation id="7067091210845072982">Եթե պատկերն օգտակար նկարագրություն չունի, Carbon Browser Browser Browser Browser Browser Browser-ը կփորձի նոր նկարագրություն տրամադրել: Պատկերներն ուղարկվում են Google-ին՝ նկարագրություններ ստեղծելու համար։</translation>
-<translation id="718435575166326686">Այս կայքի համար Carbon Browser Browser Browser Browser Browser Browser-ին անհրաժեշտ է տեսախցիկն օգտագործելու թույլտվություն</translation>
-<translation id="7196312274710523067">Չհաջողվեց գործարկել Carbon Browser Browser Browser Browser Browser Browser-ը։ Նորից փորձեք։</translation>
-<translation id="7197677400338048821">Carbon Browser Browser Browser Browser Browser Browser-ը չի կարող ստուգել ձեր գաղտնաբառերը։ 24 ժամ հետո նորից փորձեք։</translation>
-<translation id="7223968959479464213">Խնդիրների կառավարիչ - Carbon Browser Browser Browser Browser Browser Browser</translation>
-<translation id="731644333568559921">Թարմացնել &amp;Google Chrome OS-ը</translation>
-<translation id="731795002583552498">Carbon Browser Browser Browser Browser Browser Browser-ը թարմացվում է</translation>
+Որոշ գործառույթներ մատչելի չեն լինի: Հատկորոշեք այլ պրոֆիլի գրացուցակ կամ օգտվեք Carbon Browser Browser-ի ավելի նոր տարբերակից:</translation>
+<translation id="6734291798041940871">Carbon Browser Browser-ն արդեն տեղադրված է ձեր համակարգչում բոլոր օգտատերերի համար:</translation>
+<translation id="673636774878526923">Carbon Browser Browser-ի ձեր տվյալները ձեր բոլոր սարքերում օգտագործելու համար մուտք գործեք և միացրեք համաժամացումը։</translation>
+<translation id="6774082503108938489">Ձեր ծնողն անջատել է «Թույլտվություններ կայքերի, հավելվածների և ընդլայնումների համար» պարամետրը Carbon Browser Browser-ում։ Այս <ph name="EXTENSION_TYPE_PARAMETER" />ն արգելափակված է և չի կարող միացվել։</translation>
+<translation id="6779406956731413166">Carbon Browser BrowserOS-ը ստեղծվել է <ph name="BEGIN_LINK_CROS_OSS" />բաց կոդով ծրագրակազմի<ph name="END_LINK_CROS_OSS" /> հիման վրա։</translation>
+<translation id="6847869444787758381">Carbon Browser Browser-ը ձեզ տեղյակ կպահի, եթե ձեր գաղտնաբառերի անվտագությանը սպառնալիք լինի</translation>
+<translation id="6852530923436401894">Carbon Browser Browser-ն արգելափակել է այս ֆայլը, քանի որ այն վնասագիր է պարունակում</translation>
+<translation id="6857782730669500492">Carbon Browser Browser – <ph name="PAGE_TITLE" /></translation>
+<translation id="6863361426438995919">Google Pay (պատճենվել է Carbon Browser Browser-ում)</translation>
+<translation id="6873893289264747459">Carbon Browser Browser-ը «<ph name="EXTENSION_NAME" />» ընդլայնման մեջ վնասագիր է հայտնաբերել</translation>
+<translation id="6893813176749746474">Carbon Browser Browser-ը թարմացվել է, սակայն դուք չեք օգտագործել այն առնվազն 30 օր:</translation>
+<translation id="691026815377248078">Զուգակցումը շարունակելու համար Carbon Browser Browser-ին հասանելի դարձրեք Bluetooth-ը։ <ph name="IDS_BLUETOOTH_DEVICE_CHOOSER_AUTHORIZE_BLUETOOTH_LINK" /></translation>
+<translation id="6929417474050522668">Երբ փորձաշրջանները միացված են, գովազդի արդյունավետության գնահատումը թույլ է տալիս ձեր այցելած կայքերին ստանալ Carbon Browser Browser-ից տեղեկություններ, որոնք օգնում են չափել այդ կայքերում ցուցադրվող գովազդի արդյունավետությունը։ Գովազդի արդյունավետության գնահատումը սահմանափակում է օգտատերերի գործողությունների միջկայքային հետագծումը՝ նվազագույնի հասցնելով կայքերի միջև տեղեկությունների փոխանցումը։</translation>
+<translation id="6940431691900807093">Ավելի ուշ կայքը, որն այցելում եք, կարող է Carbon Browser Browser-ից ձեր հետաքրքրությունները տեսնելու թույլտվություն խնդրել՝ ձեզ ցուցադրվող գովազդն անհատականացնելու նպատակով։ Carbon Browser Browser-ը կարող է հասանելի դարձնել ձեր մինչև 3 հետաքրքրությունների մասին տեղեկությունները։</translation>
+<translation id="6964305034639999644">Բացել հղումը Carbon Browser Browser-ի ինկ&amp;ոգնիտո պատուհանում</translation>
+<translation id="6978145336957848883">Թույլ գաղտնաբառերը հեշտ է գուշակել։ Թույլատրեք Carbon Browser Browser-ին <ph name="BEGIN_LINK" />գաղտնաբառեր ստեղծել և պահել ձեզ համար<ph name="END_LINK" />։</translation>
+<translation id="6985329841647292029">Carbon Browser BrowserOS-ի պայմաններ</translation>
+<translation id="6990124437352146030">Carbon Browser Browser-ին այս կայքի համար անհրաժեշտ է ձեր խոսափողն օգտագործելու թույլտվություն</translation>
+<translation id="7025789849649390912">Տեղադրումը կանգնեցվել է։</translation>
+<translation id="705851970750939768">Թարմացնել Carbon Browser Browser-ը</translation>
+<translation id="7067091210845072982">Եթե պատկերն օգտակար նկարագրություն չունի, Carbon Browser Browser-ը կփորձի նոր նկարագրություն տրամադրել: Պատկերներն ուղարկվում են Google-ին՝ նկարագրություններ ստեղծելու համար։</translation>
+<translation id="718435575166326686">Այս կայքի համար Carbon Browser Browser-ին անհրաժեշտ է տեսախցիկն օգտագործելու թույլտվություն</translation>
+<translation id="7196312274710523067">Չհաջողվեց գործարկել Carbon Browser Browser-ը։ Նորից փորձեք։</translation>
+<translation id="7197677400338048821">Carbon Browser Browser-ը չի կարող ստուգել ձեր գաղտնաբառերը։ 24 ժամ հետո նորից փորձեք։</translation>
+<translation id="7218568399872925918">Ձեր տվյալները կպահվեն այցելած կայքերում այնքան ժամանակ, մինչև կփակեք Carbon Browser Browser-ը։</translation>
+<translation id="7223968959479464213">Խնդիրների կառավարիչ - Carbon Browser Browser</translation>
+<translation id="7246575524853130370">Ձեր հետաքրքրությունները (ըստ Carbon Browser Browser-ի)</translation>
+<translation id="7309928523159922338">Գովազդի արդյունավետության գնահատումը թույլ է տալիս ձեր այցելած կայքերին ստանալ Carbon Browser Browser-ից տեղեկություններ, որոնք օգնում են չափել այդ կայքերում ցուցադրվող գովազդի արդյունավետությունը։ Գովազդի արդյունավետության գնահատումը սահմանափակում է օգտատերերի գործողությունների միջկայքային հետագծումը՝ նվազագույնի հասցնելով կայքերի միջև տեղեկությունների փոխանցումը։</translation>
+<translation id="731795002583552498">Carbon Browser Browser-ը թարմացվում է</translation>
 <translation id="7318036098707714271">Ձեր նախընտրանքների ֆայլը վնասված է կամ անվավեր:
 
-Carbon Browser Browser Browser Browser Browser Browser-ին չհաջողվեց վերականգնել ձեր կարգավորումները:</translation>
-<translation id="7337881442233988129">Carbon Browser Browser Browser Browser Browser Browser</translation>
+Carbon Browser Browser-ին չհաջողվեց վերականգնել ձեր կարգավորումները:</translation>
+<translation id="7337881442233988129">Carbon Browser Browser</translation>
 <translation id="7339898014177206373">Նոր պատուհան</translation>
-<translation id="734373864078049451">Բոլոր վեբէջերը, էջանիշները և Carbon Browser Browser Browser Browser Browser Browser-ի այլ տվյալները պահվում են այստեղ:</translation>
-<translation id="7349591376906416160">Ձեր համակարգի ադմինիստրատորն այնպես է կարգավորել Carbon Browser Browser Browser Browser Browser Browser-ը, որ <ph name="TARGET_URL_HOSTNAME" /> կայքը բացվի <ph name="ALTERNATIVE_BROWSER_NAME" /> դիտարկիչով։</translation>
-<translation id="7448255348454382571">Վերագործարկեք Google Chrome OS-ը</translation>
-<translation id="7449453770951226939"><ph name="PAGE_TITLE" /> – Carbon Browser Browser Browser Browser Browser Browser Dev</translation>
-<translation id="7451052299415159299">Carbon Browser Browser Browser Browser Browser Browser-ին այս կայքի համար անհրաժեշտ է ձեր տեսախցիկն օգտագործելու թույլտվություն</translation>
-<translation id="7483335560992089831">Հնարավոր չէ տեղադրել Carbon Browser Browser Browser Browser Browser Browser-ի նույն տարբերակը, որն այժմ գործարկվում է: Փակեք Carbon Browser Browser Browser Browser Browser Browser-ը և նորից փորձեք:</translation>
-<translation id="753534427205733210">{0,plural, =1{Carbon Browser Browser Browser Browser Browser Browser-ը կվերագործարկվի 1 րոպեից}one{Carbon Browser Browser Browser Browser Browser Browser-ը կվերագործարկվի # րոպեից}other{Carbon Browser Browser Browser Browser Browser Browser-ը կվերագործարկվի # րոպեից}}</translation>
-<translation id="7549178288319965365">Google Chrome OS-ի մասին</translation>
-<translation id="7561906087460245826">Ջնջել նաև Carbon Browser Browser Browser Browser Browser Browser-ի տվյալները (<ph name="URL" />)</translation>
-<translation id="7585853947355360626">Եթե որևէ կարգավորում չտեսնեք այս էջում, փնտրեք այն ձեր <ph name="LINK_BEGIN" />
-      Google Chrome OS-ի կարգավորումներում<ph name="LINK_END" /></translation>
-<translation id="761356813943268536">Carbon Browser Browser Browser Browser Browser Browser-ն օգտագործում է ձեր տեսախցիկն ու խոսափողը:</translation>
-<translation id="7617377681829253106">Carbon Browser Browser Browser Browser Browser Browser-ը կատարելագործվել է</translation>
-<translation id="7627575518938382525"><ph name="BEGIN_PARAGRAPH1" />Մինչև տեղադրելը համոզվեք, որ ձեր բոլոր տվյալների համար ստեղծվել են պահուստավորված կրկնօրինակներ։ Եթե տեղադրեք Google Chrome OS-ը, կոշտ սկավառակում առկա ձեր բոլոր տվյալները կվրագրվեն։<ph name="END_PARAGRAPH1" />
-          <ph name="BEGIN_PARAGRAPH2" />Google-ը պատասխանատվություն չի կրում տվյալների կորստի համար և չի երաշխավորում, որ Google Chrome OS-ը կաշխատի չհավաստագրված մոդելներում։ Այցելեք [TBD]՝ հավաստագրված մոդելների մասին ավելին իմանալու համար։<ph name="END_PARAGRAPH2" />
-          <ph name="BEGIN_PARAGRAPH3" />Իմացեք ավելին Google Chrome OS-ի տեղադրման և տվյալների հեռացման մասին այստեղ՝ [TBD URL]<ph name="END_PARAGRAPH3" />
-          <ph name="BEGIN_PARAGRAPH4" />Եթե ամեն ինչ պատրաստ է, սեղմեք «Տեղադրել Google Chrome OS-ը» և հետևեք էկրանին ցուցադրվող քայլերին։ Դուք կունենաք տեղադրումը հաստատելու ևս մեկ հնարավորություն, քանի դեռ մենք փոփոխություններ չենք կատարել ձեր համակարգչում։<ph name="END_PARAGRAPH4" /></translation>
-<translation id="7686590090926151193">Carbon Browser Browser Browser Browser Browser Browser-ը ձեր կանխադրված դիտարկիչը չէ</translation>
-<translation id="7689606757190482937">Համաժամացրեք և անհատականացրեք Carbon Browser Browser Browser Browser Browser Browser-ը ձեր բոլոր սարքերում</translation>
-<translation id="7729447699958282447">Carbon Browser Browser Browser Browser Browser Browser-ը չկարողացավ համաժամացնել ձեր տվյալները, քանի որ համաժամացումը մատչելի չէ ձեր տիրույթի համար:</translation>
-<translation id="7745317241717453663">Ձեր այցելությունների պատմությունը կջնջվի այս սարքից: Հետագայում ձեր տվյալներն առբերելու համար մուտք գործեք Carbon Browser Browser Browser Browser Browser Browser <ph name="USER_EMAIL" /> հաշվով:</translation>
+<translation id="734373864078049451">Բոլոր վեբէջերը, էջանիշները և Carbon Browser Browser-ի այլ տվյալները պահվում են այստեղ:</translation>
+<translation id="7349591376906416160">Ձեր համակարգի ադմինիստրատորն այնպես է կարգավորել Carbon Browser Browser-ը, որ <ph name="TARGET_URL_HOSTNAME" /> կայքը բացվի <ph name="ALTERNATIVE_BROWSER_NAME" /> դիտարկիչով։</translation>
+<translation id="7398989605938454041">Carbon Browser Browser պրոֆիլների միջոցով դուք կարող եք օգտագործել դիտարկիչն առանձին այլ օգտատերերից։Այդպես ավելի հեշտ է տարանջատել գործնական և անձնական նպատակներով օգտագործումը։</translation>
+<translation id="7449453770951226939"><ph name="PAGE_TITLE" /> – Carbon Browser Browser Dev</translation>
+<translation id="7451052299415159299">Carbon Browser Browser-ին այս կայքի համար անհրաժեշտ է ձեր տեսախցիկն օգտագործելու թույլտվություն</translation>
+<translation id="7467949745582939695">Վերագործարկե՞լ Carbon Browser Browser-ը</translation>
+<translation id="7483335560992089831">Հնարավոր չէ տեղադրել Carbon Browser Browser-ի նույն տարբերակը, որն այժմ գործարկվում է: Փակեք Carbon Browser Browser-ը և նորից փորձեք:</translation>
+<translation id="753534427205733210">{0,plural, =1{Carbon Browser Browser-ը կվերագործարկվի 1 րոպեից}one{Carbon Browser Browser-ը կվերագործարկվի # րոպեից}other{Carbon Browser Browser-ը կվերագործարկվի # րոպեից}}</translation>
+<translation id="7561906087460245826">Ջնջել նաև Carbon Browser Browser-ի տվյալները (<ph name="URL" />)</translation>
+<translation id="7582945390259497898">Carbon Browser Browser-ը կարող է որոշել ձեր հետաքրքրությունները։ Ավելի ուշ կայքը, որն այցելում եք, կարող է Carbon Browser Browser-ից ձեր հետաքրքրությունները տեսնելու թույլտվություն խնդրել՝ ձեզ ցուցադրվող գովազդն անհատականացնելու նպատակով։</translation>
+<translation id="7583399374488819119"><ph name="COMPANY_NAME" />-ի տեղադրիչ</translation>
+<translation id="7597596667193879455">Դուք ձեր հաշվում միացրել եք բարելավված Ապահով դիտարկումը։ Այժմ միացրեք այն Carbon Browser Browser-ի համար։</translation>
+<translation id="761356813943268536">Carbon Browser Browser-ն օգտագործում է ձեր տեսախցիկն ու խոսափողը:</translation>
+<translation id="7617377681829253106">Carbon Browser Browser-ը կատարելագործվել է</translation>
+<translation id="7649070708921625228">Օգնություն</translation>
+<translation id="7682213815243802460">Ավելին այս գործառույթների մասին կարող եք իմանալ Carbon Browser Browser-ի կարգավորումներում։</translation>
+<translation id="7682601070171973634">Carbon Browser Browser-ը ներկայացնում է նոր գործառույթներ, որոնք կայքերին թույլ են տալիս տրամադրել դիտարկման միևնույն հնարավորությունները՝ ձեր մասին ավելի քիչ տվյալներ օգտագործելով։</translation>
+<translation id="7686590090926151193">Carbon Browser Browser-ը ձեր կանխադրված դիտարկիչը չէ</translation>
+<translation id="7689606757190482937">Համաժամացրեք և անհատականացրեք Carbon Browser Browser-ը ձեր բոլոր սարքերում</translation>
+<translation id="7745317241717453663">Ձեր այցելությունների պատմությունը կջնջվի այս սարքից: Հետագայում ձեր տվյալներն առբերելու համար մուտք գործեք Carbon Browser Browser <ph name="USER_EMAIL" /> հաշվով:</translation>
 <translation id="7747138024166251722">Տեղադրիչը չկարողացավ ստեղծել ժամանակավոր գրացուցակ: Ստուգեք սկավառակում ազատ տարածքի առկայությունը և ծրագրակազմը տեղադրելու թույլտվությունը:</translation>
-<translation id="7790626492778995050"><ph name="PAGE_TITLE" /> – Carbon Browser Browser Browser Browser Browser Browser Canary</translation>
-<translation id="7828947555739565424">Այս հաշվի հետ կապված Carbon Browser Browser Browser Browser Browser Browser-ի պրոֆիլ արդեն գոյություն ունի այս սարքում</translation>
-<translation id="7857220146454061152">Carbon Browser Browser Browser Browser Browser Browser-ի հետագա թարմացումները ստանալու համար ձեզ անհրաժեշտ է OS X 10.11 կամ ավելի նոր տարբերակ։ Այս համակարգիչն օգտագործում է OS X 10.10 տարբերակը։</translation>
-<translation id="7867198900892795913">Չհաջողվեց տեղադրել Carbon Browser Browser Browser Browser Browser Browser-ի վերջին տարբերակը, որը թարմացվել է նոր գործառույթներով և անվտանգության բարելավումներով:</translation>
-<translation id="7898472181347242998">Սարքի ծրագրակազմի տարբերակը տեսնելու համար անցեք <ph name="LINK_BEGIN" />Google Chrome OS-ի կարգավորումներ<ph name="LINK_END" /></translation>
-<translation id="7937630085815544518">Դուք մուտք եք գործել Carbon Browser Browser Browser Browser Browser Browser որպես <ph name="USER_EMAIL_ADDRESS" />: Նորից մուտք գործելու համար օգտագործեք նույն հաշիվը:</translation>
-<translation id="7975919845073681630">Սա Carbon Browser Browser Browser Browser Browser Browser-ի երկրորդային տեղադրումն է: Այն չի կարող դառնալ ձեր կանխադրված դիտարկիչը:</translation>
-<translation id="8013436988911883588">Երբ Carbon Browser Browser Browser Browser Browser Browser-ը հասանելիություն ստանա, կայքերը կկարողանան ձեզնից հասանելիություն խնդրել։</translation>
-<translation id="8045118833343856403">Հետևյալ հաշիվներով ոչ մի Carbon Browser Browser Browser Browser Browser Browser պրոֆիլ մուտք չի կատարվել։ Հաշիվը մեկ այլ պրոֆիլում օգտագործելու համար նախ հեռացրեք այս պրոֆիլը։</translation>
-<translation id="8105840573057009683">Այս կայքի համար Carbon Browser Browser Browser Browser Browser Browser-ին անհրաժեշտ է տեղորոշումն օգտագործելու թույլտվություն</translation>
-<translation id="81770708095080097">Այս ֆայլը վտանգավոր է, և Carbon Browser Browser Browser Browser Browser Browser-ն արգելափակել է այն։</translation>
-<translation id="8248265253516264921">Եթե պատկերն օգտակար նկարագրություն չունի, Carbon Browser Browser Browser Browser Browser Browser-ը կփորձի նոր նկարագրություն տրամադրել: Պատկերներն ուղարկվում են Google-ին՝ նկարագրություններ ստեղծելու համար։ Ցանկացած պահի կարգավորումներում կարող եք անջատել սա:</translation>
-<translation id="8266560134891435528">Carbon Browser Browser Browser Browser Browser Browser-ը չի կարող ստուգել ձեր գաղտնաբառերը, քանի որ դուք հաշիվ չեք մտել։</translation>
-<translation id="8276522524898344151">Carbon Browser Browser Browser Browser Browser Browser-ը փորձում է պատճենել գաղտնաբառերը։</translation>
-<translation id="8290862415967981663">Այս ֆայլը կարող է վտանգավոր լինել, և Carbon Browser Browser Browser Browser Browser Browser-ն արգելափակել է այն։</translation>
-<translation id="8330519371938183845">Մտեք հաշիվ՝ Carbon Browser Browser Browser Browser Browser Browser-ը ձեր բոլոր սարքերում անհատականացնելու համար</translation>
-<translation id="8340674089072921962"><ph name="USER_EMAIL_ADDRESS" />-ը նախկինում Carbon Browser Browser Browser Browser Browser Browser է օգտագործել</translation>
-<translation id="8417404458978023919">{0,plural, =1{Վերագործարկեք Carbon Browser Browser Browser Browser Browser Browser-ը մեկ օրվա ընթացքում}one{Վերագործարկեք Carbon Browser Browser Browser Browser Browser Browser-ը # օրվա ընթացքում}other{Վերագործարկեք Carbon Browser Browser Browser Browser Browser Browser-ը # օրվա ընթացքում}}</translation>
-<translation id="8453117565092476964">Տեղադրիչի արխիվը վնասված է կամ անվավեր: Նորից ներբեռնեք Carbon Browser Browser Browser Browser Browser Browser-ը:</translation>
-<translation id="8493179195440786826">Carbon Browser Browser Browser Browser Browser Browser-ը հնացած է</translation>
+<translation id="7790626492778995050"><ph name="PAGE_TITLE" /> – Carbon Browser Browser Canary</translation>
+<translation id="7828947555739565424">Այս հաշվի հետ կապված Carbon Browser Browser-ի պրոֆիլ արդեն գոյություն ունի այս սարքում</translation>
+<translation id="7845233973568007926">Շնորհակալություն տեղադրելու համար։ Նախքան <ph name="BUNDLE_NAME" />-ն օգտագործելը դուք պետք է վերագործարկեք ձեր համակարգիչը։</translation>
+<translation id="7867198900892795913">Չհաջողվեց տեղադրել Carbon Browser Browser-ի վերջին տարբերակը, որը թարմացվել է նոր գործառույթներով և անվտանգության բարելավումներով:</translation>
+<translation id="7872446069773932638">Ներբեռնում… Մնաց <ph name="SECONDS" /> վայրկյան</translation>
+<translation id="7877292582355102282"><ph name="BEGIN_BOLD" />Ինչպես կարող եք կառավարել ձեր տվյալները.<ph name="END_BOLD" /> ձեր գաղտնիությունը պաշտպանելու նպատակով մենք 4 շաբաթից ավտոմատ ջնջում ենք ձեր հետաքրքրությունները։ Երբ դուք շարունակում եք դիտել վեբ էջեր, համապատասխան հետաքրքրությունը կարող է նորից հայտնվել ցանկում։ Որպեսզի Carbon Browser Browser-ը հաշվի չառնի որոշակի հետաքրքրությունները, կարող եք դրանք հեռացնել։</translation>
+<translation id="7937630085815544518">Դուք մուտք եք գործել Carbon Browser Browser որպես <ph name="USER_EMAIL_ADDRESS" />: Նորից մուտք գործելու համար օգտագործեք նույն հաշիվը:</translation>
+<translation id="7975919845073681630">Սա Carbon Browser Browser-ի երկրորդային տեղադրումն է: Այն չի կարող դառնալ ձեր կանխադրված դիտարկիչը:</translation>
+<translation id="7982481011030453202">Եթե որևէ կարգավորում չտեսնեք այս էջում, փնտրեք այն ձեր <ph name="LINK_BEGIN" />Carbon Browser BrowserOS-ի կարգավորումներում<ph name="LINK_END" /></translation>
+<translation id="7997934263947464652">Անհայտ աղբյուրներից ընդլայնումները, հավելվածներն ու թեմաները կարող են վնասել ձեր սարքը։ Carbon Browser Browser-ը խորհուրդ է տալիս դրանք տեղադրել միայն <ph name="IDS_EXTENSION_WEB_STORE_TITLE" />-ից։</translation>
+<translation id="8013436988911883588">Երբ Carbon Browser Browser-ը հասանելիություն ստանա, կայքերը կկարողանան ձեզնից հասանելիություն խնդրել։</translation>
+<translation id="80471789339884597">Շնորհակալություն տեղադրելու համար։ Նախքան <ph name="BUNDLE_NAME" />-ն օգտագործելը դուք պետք է վերագործարկեք ձեր բոլոր դիտարկիչները։</translation>
+<translation id="8105840573057009683">Այս կայքի համար Carbon Browser Browser-ին անհրաժեշտ է տեղորոշումն օգտագործելու թույլտվություն</translation>
+<translation id="8133124826068723441">Carbon Browser BrowserOS-ին չհաջողվեց համաժամացնել տվյալները, քանի որ այդ գործառույթը հասանելի չէ ձեր տիրույթի համար։</translation>
+<translation id="813913629614996137">Նախապատրաստվում է...</translation>
+<translation id="81770708095080097">Այս ֆայլը վտանգավոր է, և Carbon Browser Browser-ն արգելափակել է այն։</translation>
+<translation id="8213374284266571500">Carbon Browser Browser-ն արգելափակել է այս ֆայլը, քանի որ ֆայլի այս տեսակը վտանգավոր է։</translation>
+<translation id="8248265253516264921">Եթե պատկերն օգտակար նկարագրություն չունի, Carbon Browser Browser-ը կփորձի նոր նկարագրություն տրամադրել: Պատկերներն ուղարկվում են Google-ին՝ նկարագրություններ ստեղծելու համար։ Ցանկացած պահի կարգավորումներում կարող եք անջատել սա:</translation>
+<translation id="8266560134891435528">Carbon Browser Browser-ը չի կարող ստուգել ձեր գաղտնաբառերը, քանի որ դուք հաշիվ չեք մտել։</translation>
+<translation id="8276522524898344151">Carbon Browser Browser-ը փորձում է պատճենել գաղտնաբառերը։</translation>
+<translation id="8290862415967981663">Այս ֆայլը կարող է վտանգավոր լինել, և Carbon Browser Browser-ն արգելափակել է այն։</translation>
+<translation id="8330519371938183845">Մտեք հաշիվ՝ Carbon Browser Browser-ը ձեր բոլոր սարքերում անհատականացնելու համար</translation>
+<translation id="8340674089072921962"><ph name="USER_EMAIL_ADDRESS" />-ը նախկինում Carbon Browser Browser է օգտագործել</translation>
+<translation id="8357820681460164151">Carbon Browser Browser դիտարկիչի ձեր տվյալները ձեր բոլոր սարքերում օգտագործելու համար մուտք գործեք և միացրեք համաժամացումը</translation>
+<translation id="8417404458978023919">{0,plural, =1{Վերագործարկեք Carbon Browser Browser-ը մեկ օրվա ընթացքում}one{Վերագործարկեք Carbon Browser Browser-ը # օրվա ընթացքում}other{Վերագործարկեք Carbon Browser Browser-ը # օրվա ընթացքում}}</translation>
+<translation id="8453117565092476964">Տեղադրիչի արխիվը վնասված է կամ անվավեր: Նորից ներբեռնեք Carbon Browser Browser-ը:</translation>
+<translation id="8463672209299734063">Ըստ ցանկության. օգնեք բարելավել Carbon Browser BrowserOS-ի գործառույթներն ու աշխատանքը՝ Google-ին ավտոմատ կերպով ուղարկելով օգտագործման և դիագնոստիկ տվյալները։</translation>
+<translation id="8493179195440786826">Carbon Browser Browser-ը հնացած է</translation>
 <translation id="8550334526674375523">Այս աշխատանքային պրոֆիլն ամբողջովին առանձնացված է ձեր անձնական պրոֆիլից։</translation>
-<translation id="8558383651099478961">Ձեր ծնողն անջատել է «Թույլտվություններ կայքերի, հավելվածների և ընդլայնումների համար» պարամետրը Carbon Browser Browser Browser Browser Browser Browser-ում։ Այս <ph name="EXTENSION_TYPE_PARAMETER" />ն արգելափակված է և չի կարող ավելացվել։</translation>
-<translation id="8568283329061645092">Carbon Browser Browser Browser Browser Browser Browser-ը կարող է ստուգել ձեր գաղտնաբառերը, երբ մտնեք ձեր Google հաշիվ։</translation>
-<translation id="8586442755830160949">© <ph name="YEAR" /> Carbon Browser Browser Browser X Labs: Բոլոր իրավունքները պահպանված են:</translation>
-<translation id="8619360774459241877">Carbon Browser Browser Browser Browser Browser Browser-ի գործարկում...</translation>
-<translation id="8621669128220841554">Անհայտ սխալի պատճառով տեղադրումը չհաջողվեց: Նորից ներբեռնեք Carbon Browser Browser Browser Browser Browser Browser-ը:</translation>
-<translation id="8697124171261953979">Այն նաև վերահսկում է Carbon Browser Browser Browser Browser Browser Browser-ի մեկնարկի կամ Omnibox-ից որոնում կատարելու ժամանակ ցուցադրվող էջը:</translation>
-<translation id="8704119203788522458">Սա ձեր Carbon Browser Browser Browser Browser Browser Browser-ն է</translation>
-<translation id="8796602469536043152">Carbon Browser Browser Browser Browser Browser Browser-ին այս կայքի համար անհրաժեշտ է ձեր տեսախցիկն ու խոսափողը օգտագործելու թույլտվություն</translation>
-<translation id="8803635938069941624">Google Chrome OS-ի պայմաններ</translation>
-<translation id="8821041990367117597">Carbon Browser Browser Browser Browser Browser Browser-ը չկարողացավ համաժամացնել ձեր տվյալները, քանի որ ձեր հաշվի մուտքի տվյալները հնացած են:</translation>
+<translation id="8558383651099478961">Ձեր ծնողն անջատել է «Թույլտվություններ կայքերի, հավելվածների և ընդլայնումների համար» պարամետրը Carbon Browser Browser-ում։ Այս <ph name="EXTENSION_TYPE_PARAMETER" />ն արգելափակված է և չի կարող ավելացվել։</translation>
+<translation id="8561285221328166383">Carbon Browser Browser-ի հետագա թարմացումները ստանալու համար ձեզ անհրաժեշտ է macOS 10.13 կամ ավելի նոր տարբերակ։ Այս համակարգիչն օգտագործում է macOS 10.12 տարբերակը։</translation>
+<translation id="8568283329061645092">Carbon Browser Browser-ը կարող է ստուգել ձեր գաղտնաբառերը, երբ մտնեք ձեր Google հաշիվ։</translation>
+<translation id="8586442755830160949">© <ph name="YEAR" /> Carbon Browser Browser X Labs: Բոլոր իրավունքները պահպանված են:</translation>
+<translation id="8608079656141766906"><ph name="BEGIN_BOLD" />Ինչպես ենք մենք օգտագործում այս տվյալները.<ph name="END_BOLD" /> կայքերը կարող են ձեր հետաքրքրությունների մասին տեղեկություններ պահել Carbon Browser Browser-ում։ Օրինակ, եթե դուք այցելել եք ինչ-որ կայք՝ մարաթոնի համար վազքի կոշիկներ գնելու, այդ կայքը կորոշի, որ ձեզ հետաքրքրում է մարաթոնյան վազքը։ Ավելի ուշ, երբ դուք այցելեք մեկ այլ կայք՝ մրցավազքի համար գրանցվելու, այնտեղ կարող է վազքի կոշիկների գովազդ ցուցադրվել։</translation>
+<translation id="8619360774459241877">Carbon Browser Browser-ի գործարկում...</translation>
+<translation id="8621669128220841554">Անհայտ սխալի պատճառով տեղադրումը չհաջողվեց: Նորից ներբեռնեք Carbon Browser Browser-ը:</translation>
+<translation id="8697124171261953979">Այն նաև վերահսկում է Carbon Browser Browser-ի մեկնարկի կամ Omnibox-ից որոնում կատարելու ժամանակ ցուցադրվող էջը:</translation>
+<translation id="8704119203788522458">Սա ձեր Carbon Browser Browser-ն է</translation>
+<translation id="8713679423359107094">Երբ փակեք Carbon Browser Browser-ի բոլոր պատուհանները, քուքիները և կայքերի տվյալներն ավտոմատ կմաքրվեն։</translation>
+<translation id="8796443464227412154">Երբ փակեք Carbon Browser Browser-ը, դուք <ph name="BEGIN_BOLD" />դուրս կգաք կայքերի մեծամասնությունից<ph name="END_BOLD" />։ Եթե համաժամացումն անջատված է, դուք նաև <ph name="BEGIN_BOLD" />դուրս կգաք Google-ի ծառայություններից և Carbon Browser Browser-ից<ph name="END_BOLD" />։</translation>
+<translation id="8796602469536043152">Carbon Browser Browser-ին այս կայքի համար անհրաժեշտ է ձեր տեսախցիկն ու խոսափողը օգտագործելու թույլտվություն</translation>
+<translation id="8833697763442816810">Carbon Browser BrowserOS համակարգ</translation>
+<translation id="8846118132221683440"><ph name="BEGIN_BOLD" />Ինչ տվյալներ են օգտագործվում.<ph name="END_BOLD" /> ձեր այցելությունների պատմությունը այն կայքերի ցանկն է, որոնք դուք այցելել եք Carbon Browser Browser-ի միջոցով այս սարքում։</translation>
 <translation id="8862326446509486874">Դուք չունեք համապատասխան իրավունքներ՝ համակարգի մակարդակով տեղադրում կատարելու համար: Փորձեք տեղադրումը կատարել որպես Ադմինիստրատոր:</translation>
-<translation id="8880203542552872219">Եթե այո, ապա փոխեք ձեր պահված գաղտնաբառը Carbon Browser Browser Browser Browser Browser Browser-ում, որպեսզի այն համապատասխանի ձեր նոր գաղտնաբառին։</translation>
-<translation id="8897323336392112261">Այն նաև վերահսկում է Carbon Browser Browser Browser Browser Browser Browser-ը մեկնարկելիս և Սկիզբ կոճակը սեղմելիս ցուցադրվող էջերը:</translation>
-<translation id="8907580949721785412">Carbon Browser Browser Browser Browser Browser Browser-ը փորձում է ցուցադրել գաղտնաբառերը: Մուտքագրեք ձեր Windows-ի գաղտնաբառը՝ այս գործողությունը թույլ տալու համար:</translation>
-<translation id="8941642502866065432">Չհաջողվեց թարմացնել Carbon Browser Browser Browser Browser Browser Browser-ը</translation>
-<translation id="8974095189086268230">Google Chrome OS-ը մատչելի է լրացուցիչ <ph name="BEGIN_LINK_CROS_OSS" />բաց կոդով ծրագրակազմի<ph name="END_LINK_CROS_OSS" /> շնորհիվ:</translation>
+<translation id="8880203542552872219">Եթե այո, ապա փոխեք ձեր պահված գաղտնաբառը Carbon Browser Browser-ում, որպեսզի այն համապատասխանի ձեր նոր գաղտնաբառին։</translation>
+<translation id="8897323336392112261">Այն նաև վերահսկում է Carbon Browser Browser-ը մեկնարկելիս և Սկիզբ կոճակը սեղմելիս ցուցադրվող էջերը:</translation>
+<translation id="8907580949721785412">Carbon Browser Browser-ը փորձում է ցուցադրել գաղտնաբառերը: Մուտքագրեք ձեր Windows-ի գաղտնաբառը՝ այս գործողությունը թույլ տալու համար:</translation>
+<translation id="8931379085695076764">Carbon Browser Browser-ը որոշում է ձեր հետաքրքրությունները վերջին մի քանի շաբաթվա ընթացքում ձեր այցելությունների պատմության հիման վրա։ Այս տեղեկությունները չեն փոխանցվում ձեր սարքից։</translation>
+<translation id="8941642502866065432">Չհաջողվեց թարմացնել Carbon Browser Browser-ը</translation>
+<translation id="897581876605952338">Carbon Browser Browser Enterprise-ի լոգո</translation>
 <translation id="8986207147630327271">Դուք ավելացնում եք աշխատանքային պրոֆիլ այս դիտարկիչում և միայն դրա վերահսկողությունը տրամադրում ադմինիստրատորին։</translation>
-<translation id="9019929317751753759">Carbon Browser Browser Browser Browser Browser Browser-ն ավելի ապահով դարձնելու համար հետևյալ ընդլայնումներն անջատվել են, որոնք նշված չեն <ph name="IDS_EXTENSION_WEB_STORE_TITLE" />-ում և կարող են ավելացված լինել առանց ձեր իմացության։</translation>
-<translation id="9089354809943900324">Carbon Browser Browser Browser Browser Browser Browser-ը հնացել է</translation>
-<translation id="9093206154853821181">{0,plural, =1{Carbon Browser Browser Browser Browser Browser Browser-ը կվերագործարկվի մեկ ժամից}one{Carbon Browser Browser Browser Browser Browser Browser-ը կվերագործարկվի # ժամից}other{Carbon Browser Browser Browser Browser Browser Browser-ը կվերագործարկվի # ժամից}}</translation>
-<translation id="91086099826398415">Բացել հղումը Carbon Browser Browser Browser Browser Browser Browser-ի նոր &amp;ներդիրում</translation>
+<translation id="9019929317751753759">Carbon Browser Browser-ն ավելի ապահով դարձնելու համար հետևյալ ընդլայնումներն անջատվել են, որոնք նշված չեն <ph name="IDS_EXTENSION_WEB_STORE_TITLE" />-ում և կարող են ավելացված լինել առանց ձեր իմացության։</translation>
+<translation id="9022552996538154597">Մուտք գործել Carbon Browser Browser</translation>
+<translation id="9089354809943900324">Carbon Browser Browser-ը հնացել է</translation>
+<translation id="9093206154853821181">{0,plural, =1{Carbon Browser Browser-ը կվերագործարկվի մեկ ժամից}one{Carbon Browser Browser-ը կվերագործարկվի # ժամից}other{Carbon Browser Browser-ը կվերագործարկվի # ժամից}}</translation>
+<translation id="91086099826398415">Բացել հղումը Carbon Browser Browser-ի նոր &amp;ներդիրում</translation>
 <translation id="911206726377975832">Ջնջե՞լ նաև ձեր դիտարկումների տվյալները:</translation>
-<translation id="9158494823179993217">Ձեր համակարգի ադմինիստրատորն այնպես է կարգավորել Carbon Browser Browser Browser Browser Browser Browser-ը, որ <ph name="TARGET_URL_HOSTNAME" /> կայքը բացվի մեկ այլ դիտարկիչով:</translation>
-<translation id="9185526690718004400">Վերագործարկել՝ &amp;Carbon Browser Browser Browser Browser Browser Browser-ը թարմացնելու համար</translation>
-<translation id="9190841055450128916">Carbon Browser Browser Browser Browser Browser Browser (mDNS-In)</translation>
-<translation id="9214764063801632699">Google Chrome OS համակարգ</translation>
-<translation id="93478295209880648">Carbon Browser Browser Browser Browser Browser Browser-ը հնարավոր է չաշխատի ինչպես հարկն է, քանի որ այն այլևս չի աջակցվում Windows XP և Windows Vista համակարգերում</translation>
-<translation id="965162752251293939">Ո՞վ է օգտագործում Carbon Browser Browser Browser Browser Browser Browser-ը</translation>
-<translation id="985602178874221306">Carbon Browser Browser Browser X Labs</translation>
+<translation id="9144490074902256427">Փորձարկումների ընթացքում դուք կարող եք տեսնել և հեռացնել հետաքրքրությունները, որոնք կայքերն օգտագործում են ձեզ գովազդ ցուցադրելու համար։ Carbon Browser Browser-ը որոշում է ձեր հետաքրքրությունները ձեր վերջին այցելությունների պատմության հիման վրա։</translation>
+<translation id="9158494823179993217">Ձեր համակարգի ադմինիստրատորն այնպես է կարգավորել Carbon Browser Browser-ը, որ <ph name="TARGET_URL_HOSTNAME" /> կայքը բացվի մեկ այլ դիտարկիչով:</translation>
+<translation id="9185526690718004400">Վերագործարկել՝ &amp;Carbon Browser Browser-ը թարմացնելու համար</translation>
+<translation id="9190841055450128916">Carbon Browser Browser (mDNS-In)</translation>
+<translation id="93478295209880648">Carbon Browser Browser-ը հնարավոր է չաշխատի ինչպես հարկն է, քանի որ այն այլևս չի աջակցվում Windows XP և Windows Vista համակարգերում</translation>
+<translation id="942598560705308788">Carbon Browser Browser-ի կողմից կառավարվող հավաստագրեր</translation>
+<translation id="945990405696787151">Carbon Browser Browser-ի հետագա թարմացումները ստանալու համար ձեզ անհրաժեշտ է macOS 10.13 կամ ավելի նոր տարբերակ։ Այս համակարգիչն օգտագործում է OS X 10.11 տարբերակը։</translation>
+<translation id="965162752251293939">Ո՞վ է օգտագործում Carbon Browser Browser-ը</translation>
+<translation id="967427899662692980">Ուժեղացրեք Carbon Browser Browser-ի անվտանգությունը</translation>
+<translation id="985602178874221306">Carbon Browser Browser X Labs</translation>
 </translationbundle>

@@ -9,10 +9,11 @@
 
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "remoting/base/logging.h"
 #include "remoting/host/action_executor.h"
+#include "remoting/host/base/screen_controls.h"
 #include "remoting/host/client_session_control.h"
 #include "remoting/host/curtain_mode.h"
 #include "remoting/host/desktop_resizer.h"
@@ -20,20 +21,20 @@
 #include "remoting/host/host_window_proxy.h"
 #include "remoting/host/input_injector.h"
 #include "remoting/host/input_monitor/local_input_monitor.h"
+#include "remoting/host/remote_open_url/remote_open_url_util.h"
 #include "remoting/host/resizing_host_observer.h"
-#include "remoting/host/screen_controls.h"
 #include "remoting/protocol/capability_names.h"
 #include "third_party/webrtc/modules/desktop_capture/desktop_capture_options.h"
 #include "third_party/webrtc/modules/desktop_capture/desktop_capturer.h"
 
-#if defined(OS_POSIX)
+#if BUILDFLAG(IS_POSIX)
 #include <sys/types.h>
 #include <unistd.h>
-#endif  // defined(OS_POSIX)
+#endif  // BUILDFLAG(IS_POSIX)
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include "base/win/windows_version.h"
-#endif  // defined(OS_WIN)
+#endif  // BUILDFLAG(IS_WIN)
 
 namespace remoting {
 
@@ -57,12 +58,17 @@ Me2MeDesktopEnvironment::CreateScreenControls() {
   // they disconnect and reconnect. Both OS X and Windows will restore the
   // resolution automatically when the user logs back in on the console, and on
   // Linux the curtain-mode uses a separate session.
-  return base::WrapUnique(new ResizingHostObserver(DesktopResizer::Create(),
-                                                   curtain_ == nullptr));
+  auto resizer = std::make_unique<ResizingHostObserver>(
+      DesktopResizer::Create(), curtain_ == nullptr);
+  resizer->RegisterForDisplayChanges(*GetDisplayInfoMonitor());
+  return resizer;
 }
 
 std::string Me2MeDesktopEnvironment::GetCapabilities() const {
-  std::string capabilities;
+  std::string capabilities = BasicDesktopEnvironment::GetCapabilities();
+  if (!capabilities.empty()) {
+    capabilities += " ";
+  }
   capabilities += protocol::kRateLimitResizeRequests;
 
   if (InputInjector::SupportsTouchEvents()) {
@@ -75,7 +81,7 @@ std::string Me2MeDesktopEnvironment::GetCapabilities() const {
     capabilities += protocol::kFileTransferCapability;
   }
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   capabilities += " ";
   capabilities += protocol::kSendAttentionSequenceAction;
 
@@ -84,11 +90,17 @@ std::string Me2MeDesktopEnvironment::GetCapabilities() const {
     capabilities += " ";
     capabilities += protocol::kLockWorkstationAction;
   }
-#endif  // defined(OS_WIN)
+#endif  // BUILDFLAG(IS_WIN)
 
-  if (desktop_environment_options().enable_remote_open_url()) {
+  if (desktop_environment_options().enable_remote_open_url() &&
+      IsRemoteOpenUrlSupported()) {
     capabilities += " ";
     capabilities += protocol::kRemoteOpenUrlCapability;
+  }
+
+  if (desktop_environment_options().enable_remote_webauthn()) {
+    capabilities += " ";
+    capabilities += protocol::kRemoteWebAuthnCapability;
   }
 
   return capabilities;
@@ -136,9 +148,9 @@ bool Me2MeDesktopEnvironment::InitializeSecurity(
 
   // Otherwise, if the session is shared with the local user start monitoring
   // the local input and create the in-session UI.
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   bool want_user_interface = false;
-#elif defined(OS_APPLE)
+#elif BUILDFLAG(IS_APPLE)
   // Don't try to display any UI on top of the system's login screen as this
   // is rejected by the Window Server on OS X 10.7.4, and prevents the
   // capturer from working (http://crbug.com/140984).
@@ -160,7 +172,7 @@ bool Me2MeDesktopEnvironment::InitializeSecurity(
         client_session_control);
 
     // Create the disconnect window.
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
     disconnect_window_ =
         HostWindow::CreateAutoHidingDisconnectWindow(LocalInputMonitor::Create(
             caller_task_runner(), input_task_runner(), ui_task_runner()));
@@ -190,6 +202,7 @@ Me2MeDesktopEnvironmentFactory::~Me2MeDesktopEnvironmentFactory() {
 
 std::unique_ptr<DesktopEnvironment> Me2MeDesktopEnvironmentFactory::Create(
     base::WeakPtr<ClientSessionControl> client_session_control,
+    base::WeakPtr<ClientSessionEvents> client_session_events,
     const DesktopEnvironmentOptions& options) {
   DCHECK(caller_task_runner()->BelongsToCurrentThread());
 

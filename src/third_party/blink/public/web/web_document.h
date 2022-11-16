@@ -28,6 +28,10 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+// This source code is a part of eyeo Chromium SDK.
+// Use of this source code is governed by the GPLv3 that can be found in the
+// components/adblock/LICENSE file.
+
 #ifndef THIRD_PARTY_BLINK_PUBLIC_WEB_WEB_DOCUMENT_H_
 #define THIRD_PARTY_BLINK_PUBLIC_WEB_WEB_DOCUMENT_H_
 
@@ -36,8 +40,10 @@
 #include "services/network/public/mojom/referrer_policy.mojom-shared.h"
 #include "services/network/public/mojom/restricted_cookie_manager.mojom-shared.h"
 #include "third_party/blink/public/platform/cross_variant_mojo_util.h"
+#include "third_party/blink/public/platform/web_common.h"
 #include "third_party/blink/public/platform/web_security_origin.h"
 #include "third_party/blink/public/platform/web_vector.h"
+#include "third_party/blink/public/web/web_css_origin.h"
 #include "third_party/blink/public/web/web_draggable_region.h"
 #include "third_party/blink/public/web/web_frame.h"
 #include "third_party/blink/public/web/web_node.h"
@@ -66,8 +72,6 @@ enum class BackForwardCacheAware { kAllow, kPossiblyDisallow };
 // Provides readonly access to some properties of a DOM document.
 class WebDocument : public WebNode {
  public:
-  enum CSSOrigin { kAuthorOrigin, kUserOrigin };
-
   WebDocument() = default;
   WebDocument(const WebDocument& e) = default;
 
@@ -124,13 +128,22 @@ class WebDocument : public WebNode {
   BLINK_EXPORT WebStyleSheetKey
   InsertStyleSheet(const WebString& source_code,
                    const WebStyleSheetKey* = nullptr,
-                   CSSOrigin = kAuthorOrigin,
+                   WebCssOrigin = WebCssOrigin::kAuthor,
                    BackForwardCacheAware = BackForwardCacheAware::kAllow);
+
+  // Inserts the given CSS source code as a style sheet in the document and
+  // validates it have only expected rules.
+  BLINK_EXPORT WebStyleSheetKey InsertAbpElemhideStylesheet(
+      const WebString& source_code,
+      const WebStyleSheetKey* = nullptr,
+      WebCssOrigin = WebCssOrigin::kAuthor,
+      BackForwardCacheAware = BackForwardCacheAware::kAllow);
 
   // Removes the CSS which was previously inserted by a call to
   // InsertStyleSheet().
-  BLINK_EXPORT void RemoveInsertedStyleSheet(const WebStyleSheetKey&,
-                                             CSSOrigin = kAuthorOrigin);
+  BLINK_EXPORT void RemoveInsertedStyleSheet(
+      const WebStyleSheetKey&,
+      WebCssOrigin = WebCssOrigin::kAuthor);
 
   // Arranges to call WebLocalFrameClient::didMatchCSS(frame(), ...) when one of
   // the selectors matches or stops matching an element in this document.
@@ -138,8 +151,6 @@ class WebDocument : public WebNode {
   BLINK_EXPORT void WatchCSSSelectors(const WebVector<WebString>& selectors);
 
   BLINK_EXPORT WebVector<WebDraggableRegion> DraggableRegions() const;
-
-  BLINK_EXPORT WebURL CanonicalUrlForSharing() const;
 
   BLINK_EXPORT WebDistillabilityFeatures DistillabilityFeatures();
 
@@ -157,7 +168,7 @@ class WebDocument : public WebNode {
   BLINK_EXPORT bool IsAccessibilityEnabled();
 
   // Adds `callback` to the post-prerendering activation steps.
-  // https://jeremyroman.github.io/alternate-loading-modes/#document-post-prerendering-activation-steps-list
+  // https://wicg.github.io/nav-speculation/prerendering.html#document-post-prerendering-activation-steps-list
   BLINK_EXPORT void AddPostPrerenderingActivationStep(
       base::OnceClosure callback);
 
@@ -165,6 +176,16 @@ class WebDocument : public WebNode {
   BLINK_EXPORT void SetCookieManager(
       CrossVariantMojoRemote<
           network::mojom::RestrictedCookieManagerInterfaceBase> cookie_manager);
+
+  // Get an element that's a descendent of this document by the stable Devtools'
+  // node id.
+  // https://chromedevtools.github.io/devtools-protocol/tot/DOM/#type-BackendNodeId
+  // Returns a null WebElement if any of the following are true:
+  // * the `node_id` does not identify any Node
+  // * the Node identified by `node_id` is not an Element
+  // * the Element is not a descendant of this WebDocument or any shadow
+  //   document contained within it
+  BLINK_EXPORT WebElement GetElementByDevToolsNodeId(int node_id);
 
 #if INSIDE_BLINK
   BLINK_EXPORT WebDocument(Document*);

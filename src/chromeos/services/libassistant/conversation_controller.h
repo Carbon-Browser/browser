@@ -10,9 +10,9 @@
 #include "base/cancelable_callback.h"
 #include "base/component_export.h"
 #include "base/sequence_checker.h"
+#include "chromeos/ash/services/assistant/public/cpp/conversation_observer.h"
 #include "chromeos/assistant/internal/action/assistant_action_observer.h"
-#include "chromeos/services/assistant/public/cpp/conversation_observer.h"
-#include "chromeos/services/libassistant/assistant_client_observer.h"
+#include "chromeos/services/libassistant/grpc/assistant_client_observer.h"
 #include "chromeos/services/libassistant/public/cpp/assistant_notification.h"
 #include "chromeos/services/libassistant/public/mojom/authentication_state_observer.mojom.h"
 #include "chromeos/services/libassistant/public/mojom/conversation_controller.mojom.h"
@@ -20,11 +20,6 @@
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote_set.h"
-
-namespace assistant_client {
-class AssistantManager;
-class AssistantManagerInternal;
-}  // namespace assistant_client
 
 namespace chromeos {
 namespace assistant {
@@ -34,6 +29,8 @@ class CrosActionModule;
 }  // namespace assistant
 
 namespace libassistant {
+
+class AssistantClient;
 
 class COMPONENT_EXPORT(LIBASSISTANT_SERVICE) ConversationController
     : public mojom::ConversationController,
@@ -113,13 +110,9 @@ class COMPONENT_EXPORT(LIBASSISTANT_SERVICE) ConversationController
   }
 
  private:
-  class AssistantManagerDelegateImpl;
+  class GrpcEventsObserver;
 
   void MaybeStopPreviousInteraction();
-
-  void SendVoicelessInteraction(const std::string& interaction,
-                                const std::string& description,
-                                bool is_user_initiated);
 
   mojo::Receiver<mojom::ConversationController> receiver_;
   mojo::RemoteSet<mojom::ConversationObserver> observers_;
@@ -127,19 +120,20 @@ class COMPONENT_EXPORT(LIBASSISTANT_SERVICE) ConversationController
       authentication_state_observers_;
   mojo::Remote<mojom::NotificationDelegate> notification_delegate_;
 
-  assistant_client::AssistantManager* assistant_manager_ = nullptr;
-  assistant_client::AssistantManagerInternal* assistant_manager_internal_ =
-      nullptr;
+  // Owned by ServiceController.
+  // Set in `OnAssistantClientCreated()` and unset in
+  // `OnDestroyingAssistantClient()`.
+  AssistantClient* assistant_client_ = nullptr;
+
   // False until libassistant is running for the first time.
   // Any request that comes in before that is an error and will be DCHECK'ed.
   bool requests_are_allowed_ = false;
 
-  std::unique_ptr<AssistantManagerDelegateImpl> assistant_manager_delegate_;
+  std::unique_ptr<GrpcEventsObserver> events_observer_;
   std::unique_ptr<assistant::action::CrosActionModule> action_module_;
 
   std::unique_ptr<base::CancelableOnceClosure> stop_interaction_closure_;
-  base::TimeDelta stop_interaction_delay_ =
-      base::TimeDelta::FromMilliseconds(500);
+  base::TimeDelta stop_interaction_delay_ = base::Milliseconds(500);
 
   scoped_refptr<base::SequencedTaskRunner> mojom_task_runner_;
   base::WeakPtrFactory<ConversationController> weak_factory_{this};

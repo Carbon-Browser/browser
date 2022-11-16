@@ -24,7 +24,6 @@
 #include "base/path_service.h"
 #include "base/process/process_metrics.h"
 #include "base/rand_util.h"
-#include "base/task/post_task.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/platform_thread.h"
 #include "components/crash/core/common/crash_keys.h"
@@ -36,6 +35,8 @@
 #include "components/metrics/drive_metrics_provider.h"
 #include "components/metrics/entropy_state_provider.h"
 #include "components/metrics/field_trials_provider.h"
+#include "components/metrics/form_factor_metrics_provider.h"
+#include "components/metrics/metrics_data_validation.h"
 #include "components/metrics/metrics_log_uploader.h"
 #include "components/metrics/metrics_pref_names.h"
 #include "components/metrics/metrics_reporting_default_state.h"
@@ -52,7 +53,6 @@
 #include "components/omnibox/browser/omnibox_metrics_provider.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
-#include "components/signin/core/browser/signin_status_metrics_provider.h"
 #include "components/sync/driver/sync_service.h"
 #include "components/sync_device_info/device_count_metrics_provider.h"
 #include "components/ukm/ukm_service.h"
@@ -69,10 +69,11 @@
 #import "ios/chrome/browser/main/browser_list_factory.h"
 #include "ios/chrome/browser/metrics/chrome_browser_state_client.h"
 #import "ios/chrome/browser/metrics/ios_chrome_default_browser_metrics_provider.h"
+#include "ios/chrome/browser/metrics/ios_chrome_signin_and_sync_status_metrics_provider.h"
 #include "ios/chrome/browser/metrics/ios_chrome_stability_metrics_provider.h"
+#import "ios/chrome/browser/metrics/ios_feed_enabled_metrics_provider.h"
 #include "ios/chrome/browser/metrics/ios_profile_session_metrics_provider.h"
 #include "ios/chrome/browser/metrics/mobile_session_shutdown_metrics_provider.h"
-#include "ios/chrome/browser/signin/ios_chrome_signin_status_metrics_provider_delegate.h"
 #include "ios/chrome/browser/sync/device_info_sync_service_factory.h"
 #include "ios/chrome/browser/sync/sync_service_factory.h"
 #include "ios/chrome/browser/tabs/tab_parenting_global_observer.h"
@@ -127,8 +128,8 @@ std::unique_ptr<metrics::FileMetricsProvider> CreateFileMetricsProvider(
           FROM_HERE,
           {base::MayBlock(), base::TaskPriority::BEST_EFFORT,
            base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN},
-          base::BindOnce(base::GetDeletePathRecursivelyCallback(),
-                         std::move(browser_metrics_upload_dir)));
+          base::GetDeletePathRecursivelyCallback(
+              std::move(browser_metrics_upload_dir)));
     }
   }
   return file_metrics_provider;
@@ -176,6 +177,11 @@ void IOSChromeMetricsServiceClient::RegisterPrefs(
   ukm::UkmService::RegisterPrefs(registry);
 }
 
+variations::SyntheticTrialRegistry*
+IOSChromeMetricsServiceClient::GetSyntheticTrialRegistry() {
+  return synthetic_trial_registry_.get();
+}
+
 metrics::MetricsService* IOSChromeMetricsServiceClient::GetMetricsService() {
   return metrics_service_.get();
 }
@@ -195,6 +201,11 @@ int32_t IOSChromeMetricsServiceClient::GetProduct() {
 
 std::string IOSChromeMetricsServiceClient::GetApplicationLocale() {
   return GetApplicationContext()->GetApplicationLocale();
+}
+
+const network_time::NetworkTimeTracker*
+IOSChromeMetricsServiceClient::GetNetworkTimeTracker() {
+  return GetApplicationContext()->GetNetworkTimeTracker();
 }
 
 bool IOSChromeMetricsServiceClient::GetBrand(std::string* brand_code) {
@@ -251,6 +262,11 @@ void IOSChromeMetricsServiceClient::WebStateDidStopLoading(
 
 void IOSChromeMetricsServiceClient::Initialize() {
   PrefService* local_state = GetApplicationContext()->GetLocalState();
+
+  synthetic_trial_registry_ =
+      std::make_unique<variations::SyntheticTrialRegistry>(
+          IsExternalExperimentAllowlistEnabled());
+
   metrics_service_ = std::make_unique<metrics::MetricsService>(
       metrics_state_manager_, this, local_state);
   RegisterMetricsServiceProviders();
@@ -296,6 +312,9 @@ void IOSChromeMetricsServiceClient::RegisterMetricsServiceProviders() {
         std::make_unique<metrics::EntropyStateProvider>(local_state));
 
   metrics_service_->RegisterMetricsProvider(
+      std::make_unique<metrics::FormFactorMetricsProvider>());
+
+  metrics_service_->RegisterMetricsProvider(
       std::make_unique<metrics::ScreenInfoMetricsProvider>());
 
   metrics_service_->RegisterMetricsProvider(
@@ -305,8 +324,7 @@ void IOSChromeMetricsServiceClient::RegisterMetricsServiceProviders() {
       std::make_unique<metrics::CallStackProfileMetricsProvider>());
 
   metrics_service_->RegisterMetricsProvider(
-      SigninStatusMetricsProvider::CreateInstance(
-          std::make_unique<IOSChromeSigninStatusMetricsProviderDelegate>()));
+      std::make_unique<IOSChromeSigninAndSyncStatusMetricsProvider>());
 
   metrics_service_->RegisterMetricsProvider(
       std::make_unique<MobileSessionShutdownMetricsProvider>(
@@ -326,6 +344,13 @@ void IOSChromeMetricsServiceClient::RegisterMetricsServiceProviders() {
 
   metrics_service_->RegisterMetricsProvider(
       CreateIOSProfileSessionMetricsProvider());
+
+  ChromeBrowserState* browser_state = GetApplicationContext()
+                                          ->GetChromeBrowserStateManager()
+                                          ->GetLastUsedBrowserState();
+  metrics_service_->RegisterMetricsProvider(
+      std::make_unique<IOSFeedEnabledMetricsProvider>(
+          browser_state->GetPrefs()));
 }
 
 void IOSChromeMetricsServiceClient::RegisterUKMProviders() {
@@ -333,12 +358,14 @@ void IOSChromeMetricsServiceClient::RegisterUKMProviders() {
       std::make_unique<metrics::CPUMetricsProvider>());
 
   ukm_service_->RegisterMetricsProvider(
+      std::make_unique<metrics::FormFactorMetricsProvider>());
+
+  ukm_service_->RegisterMetricsProvider(
       std::make_unique<metrics::ScreenInfoMetricsProvider>());
 
-  // TODO(crbug.com/754877): Support synthetic trials for UKM.
   ukm_service_->RegisterMetricsProvider(
-      std::make_unique<variations::FieldTrialsProvider>(nullptr,
-                                                        kUKMFieldTrialSuffix));
+      std::make_unique<variations::FieldTrialsProvider>(
+          synthetic_trial_registry_.get(), kUKMFieldTrialSuffix));
 
   metrics_service_->RegisterMetricsProvider(
       std::make_unique<IOSChromeDefaultBrowserMetricsProvider>(
@@ -357,6 +384,12 @@ void IOSChromeMetricsServiceClient::CollectFinalHistograms() {
     mach_vm_size_t footprint_mb = task_info_data.phys_footprint / 1024 / 1024;
     base::UmaHistogramMemoryLargeMB("Memory.Browser.MemoryFootprint",
                                     footprint_mb);
+    // The pseudo metric of Memory.Browser.MemoryFootprint. Only used to
+    // assess field trial data quality.
+    base::UmaHistogramMemoryLargeMB(
+        "UMA.Pseudo.Memory.Browser.MemoryFootprint",
+        metrics::GetPseudoMetricsSample(
+            static_cast<double>(task_info_data.phys_footprint) / 1024 / 1024));
 
     switch (UIApplication.sharedApplication.applicationState) {
       case UIApplicationStateActive:
@@ -426,6 +459,10 @@ bool IOSChromeMetricsServiceClient::RegisterForNotifications() {
           ->GetChromeBrowserStateManager()
           ->GetLoadedBrowserStates();
   bool all_profiles_succeeded = true;
+
+  // If this function is called too early (before browser_state is fully
+  // initialized), the event listener will not be registered correctly.
+  DCHECK_GT(loaded_browser_states.size(), 0u);
   for (ChromeBrowserState* browser_state : loaded_browser_states) {
     if (!RegisterForBrowserStateEvents(browser_state)) {
       all_profiles_succeeded = false;

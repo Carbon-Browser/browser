@@ -5,8 +5,11 @@
 #ifndef CHROME_BROWSER_ASH_LOGIN_QUICK_UNLOCK_FINGERPRINT_STORAGE_H_
 #define CHROME_BROWSER_ASH_LOGIN_QUICK_UNLOCK_FINGERPRINT_STORAGE_H_
 
-#include "base/macros.h"
-#include "chromeos/components/feature_usage/feature_usage_metrics.h"
+#include "base/time/time.h"
+#include "chrome/browser/ash/login/quick_unlock/fingerprint_power_button_race_detector.h"
+#include "chrome/browser/ash/login/quick_unlock/quick_unlock_utils.h"
+#include "chromeos/ash/components/feature_usage/feature_usage_metrics.h"
+#include "chromeos/dbus/power/power_manager_client.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/device/public/mojom/fingerprint.mojom.h"
 
@@ -15,7 +18,6 @@ class Profile;
 
 namespace ash {
 namespace quick_unlock {
-class FingerprintMetricsReporter;
 
 // The result of fingerprint auth attempt on the lock screen. These values are
 // persisted to logs. Entries should not be renumbered and numeric values
@@ -33,7 +35,8 @@ enum class FingerprintUnlockResult {
 // with the actual fingerprint records state. The class also reports fingerprint
 // metrics.
 class FingerprintStorage final
-    : public feature_usage::FeatureUsageMetrics::Delegate {
+    : public feature_usage::FeatureUsageMetrics::Delegate,
+      public device::mojom::FingerprintObserver {
  public:
   static const int kMaximumUnlockAttempts = 5;
 
@@ -41,19 +44,28 @@ class FingerprintStorage final
   static void RegisterProfilePrefs(PrefRegistrySimple* registry);
 
   explicit FingerprintStorage(Profile* profile);
+
+  FingerprintStorage(const FingerprintStorage&) = delete;
+  FingerprintStorage& operator=(const FingerprintStorage&) = delete;
+
   ~FingerprintStorage() override;
+
+  // Get actual records to update cached prefs::kQuickUnlockFingerprintRecord.
+  void GetRecordsForUser();
 
   // feature_usage::FeatureUsageMetrics::Delegate:
   bool IsEligible() const override;
+  absl::optional<bool> IsAccessible() const override;
   bool IsEnabled() const override;
 
   // Called after a fingerprint unlock attempt to record the result.
   // `num_attempts`:  Only valid when auth success to record number of attempts.
   void RecordFingerprintUnlockResult(FingerprintUnlockResult result);
 
-  // Returns true if fingerprint unlock is currently available.
-  // This does not check if strong auth is available.
-  bool IsFingerprintAvailable() const;
+  // Returns true if fingerprint unlock is currently available to be used for
+  // the specified purpose. When purpose is kAny, it checks if any purpose is
+  // enabled. This does not check if strong auth is available.
+  bool IsFingerprintAvailable(Purpose purpose) const;
 
   // Returns true if the user has fingerprint record registered.
   bool HasRecord() const;
@@ -69,6 +81,17 @@ class FingerprintStorage final
 
   int unlock_attempt_count() const { return unlock_attempt_count_; }
 
+  // device::mojom::FingerprintObserver:
+  void OnRestarted() override;
+  void OnEnrollScanDone(device::mojom::ScanResult scan_result,
+                        bool is_complete,
+                        int32_t percent_complete) override;
+  void OnAuthScanDone(
+      const device::mojom::FingerprintMessagePtr msg,
+      const base::flat_map<std::string, std::vector<std::string>>& matches)
+      override;
+  void OnSessionFailed() override;
+
  private:
   void OnGetRecords(const base::flat_map<std::string, std::string>&
                         fingerprints_list_mapping);
@@ -82,13 +105,16 @@ class FingerprintStorage final
 
   mojo::Remote<device::mojom::Fingerprint> fp_service_;
 
-  std::unique_ptr<FingerprintMetricsReporter> metrics_reporter_;
+  mojo::Receiver<device::mojom::FingerprintObserver>
+      fingerprint_observer_receiver_{this};
+
   std::unique_ptr<feature_usage::FeatureUsageMetrics>
       feature_usage_metrics_service_;
 
-  base::WeakPtrFactory<FingerprintStorage> weak_factory_{this};
+  std::unique_ptr<FingerprintPowerButtonRaceDetector>
+      fingerprint_power_button_race_detector_;
 
-  DISALLOW_COPY_AND_ASSIGN(FingerprintStorage);
+  base::WeakPtrFactory<FingerprintStorage> weak_factory_{this};
 };
 
 }  // namespace quick_unlock

@@ -3,8 +3,6 @@
     "args_file": "//build/args/chromeos/amd64-generic-crostoolchain.gni",
     "gn_args": {
       "chromeos_is_browser_only": true,
-      "cros_host_sysroot": "//build/linux/debian_sid_amd64-sysroot",
-      "cros_v8_snapshot_sysroot": "//build/linux/debian_sid_amd64-sysroot",
       "dcheck_always_on": false,
       "is_chromeos_device": true,
       "is_debug": false,
@@ -21,7 +19,7 @@
       "use_goma": true
     }
   },
-  "linux-chrome-finch-fyi": {
+  "linux-finch-smoke-chrome": {
     "gn_args": {
       "is_chrome_branded": true,
       "is_official_build": true,
@@ -45,6 +43,15 @@
       "proprietary_codecs": true,
       "symbol_level": 1,
       "target_os": "android",
+      "use_goma": true
+    }
+  },
+  "mac-arm64-finch-smoke-chrome": {
+    "gn_args": {
+      "ignore_missing_widevine_signing_cert": true,
+      "is_chrome_branded": true,
+      "is_official_build": true,
+      "target_cpu": "arm64",
       "use_goma": true
     }
   },
@@ -75,7 +82,7 @@
       "use_goma": true
     }
   },
-  "win-chrome-finch-fyi": {
+  "win-finch-smoke-chrome": {
     "gn_args": {
       "is_chrome_branded": true,
       "is_official_build": true,

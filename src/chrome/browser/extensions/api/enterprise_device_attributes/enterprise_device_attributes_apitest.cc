@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "ash/constants/ash_features.h"
 #include "base/files/file_path.h"
 #include "base/values.h"
 #include "chrome/browser/ash/policy/affiliation/affiliation_mixin.h"
@@ -10,7 +11,7 @@
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/extensions/api/force_installed_affiliated_extension_apitest.h"
 #include "chrome/browser/extensions/extension_apitest.h"
-#include "chromeos/dbus/session_manager/fake_session_manager_client.h"
+#include "chromeos/ash/components/dbus/session_manager/fake_session_manager_client.h"
 #include "chromeos/system/fake_statistics_provider.h"
 #include "chromeos/system/statistics_provider.h"
 #include "components/user_manager/user_manager.h"
@@ -56,10 +57,11 @@ namespace extensions {
 
 class EnterpriseDeviceAttributesTest
     : public ForceInstalledAffiliatedExtensionApiTest,
-      public ::testing::WithParamInterface<bool> {
+      public ::testing::WithParamInterface<std::tuple<bool, bool>> {
  public:
   EnterpriseDeviceAttributesTest()
-      : ForceInstalledAffiliatedExtensionApiTest(GetParam()) {
+      : ForceInstalledAffiliatedExtensionApiTest(std::get<0>(GetParam()),
+                                                 std::get<1>(GetParam())) {
     fake_statistics_provider_.SetMachineStatistic(
         chromeos::system::kSerialNumberKeyForTest, kSerialNumber);
   }
@@ -81,9 +83,9 @@ class EnterpriseDeviceAttributesTest
     proto->set_device_hostname_template(kHostname);
     device_policy->Build();
 
-    chromeos::FakeSessionManagerClient::Get()->set_device_policy(
+    ash::FakeSessionManagerClient::Get()->set_device_policy(
         device_policy->GetBlob());
-    chromeos::FakeSessionManagerClient::Get()->OnPropertyChangeComplete(true);
+    ash::FakeSessionManagerClient::Get()->OnPropertyChangeComplete(true);
   }
 
  private:
@@ -95,7 +97,7 @@ IN_PROC_BROWSER_TEST_P(EnterpriseDeviceAttributesTest, PRE_Success) {
 }
 
 IN_PROC_BROWSER_TEST_P(EnterpriseDeviceAttributesTest, Success) {
-  const bool is_affiliated = GetParam();
+  const bool is_affiliated = std::get<0>(GetParam());
   EXPECT_EQ(is_affiliated, user_manager::UserManager::Get()
                                ->FindUser(affiliation_mixin_.account_id())
                                ->IsAffiliated());
@@ -120,7 +122,8 @@ IN_PROC_BROWSER_TEST_P(EnterpriseDeviceAttributesTest, Success) {
 // Both cases of affiliated and non-affiliated users are tested.
 INSTANTIATE_TEST_SUITE_P(AffiliationCheck,
                          EnterpriseDeviceAttributesTest,
-                         ::testing::Bool());
+                         ::testing::Combine(::testing::Bool(),
+                                            ::testing::Bool()));
 
 // Ensure that extensions that are not pre-installed by policy throw an install
 // warning if they request the enterprise.deviceAttributes permission in the

@@ -9,10 +9,10 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
+#include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/timer/timer.h"
-#include "chromeos/services/assistant/public/cpp/assistant_service.h"
+#include "chromeos/ash/services/assistant/public/cpp/assistant_service.h"
 #include "chromeos/services/libassistant/public/mojom/notification_delegate.mojom-forward.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -38,6 +38,10 @@ class InteractionResponse {
   class Response;
 
   InteractionResponse();
+
+  InteractionResponse(const InteractionResponse&) = delete;
+  InteractionResponse& operator=(const InteractionResponse&) = delete;
+
   ~InteractionResponse();
 
   // A simple textual response.
@@ -54,8 +58,6 @@ class InteractionResponse {
   void AddResponse(std::unique_ptr<Response> responses);
 
   std::vector<std::unique_ptr<Response>> responses_;
-
-  DISALLOW_COPY_AND_ASSIGN(InteractionResponse);
 };
 
 // Fake implementation of the Assistant service.
@@ -72,6 +74,10 @@ class InteractionResponse {
 class TestAssistantService : public chromeos::assistant::Assistant {
  public:
   TestAssistantService();
+
+  TestAssistantService(const TestAssistantService&) = delete;
+  TestAssistantService& operator=(const TestAssistantService&) = delete;
+
   ~TestAssistantService() override;
 
   // Set the response that will be invoked when the next interaction starts.
@@ -84,7 +90,6 @@ class TestAssistantService : public chromeos::assistant::Assistant {
   // Assistant overrides:
   void StartEditReminderInteraction(const std::string& client_id) override;
   void StartScreenContextInteraction(
-      ax::mojom::AssistantStructurePtr assistant_structure,
       const std::vector<uint8_t>& assistant_screenshot) override;
   void StartTextInteraction(const std::string& query,
                             chromeos::assistant::AssistantQuerySource source,
@@ -121,6 +126,9 @@ class TestAssistantService : public chromeos::assistant::Assistant {
       chromeos::assistant::AssistantQuerySource source =
           chromeos::assistant::AssistantQuerySource::kUnspecified,
       const std::string& query = std::string());
+  void InteractionStarted(chromeos::assistant::AssistantInteractionType type,
+                          chromeos::assistant::AssistantQuerySource source,
+                          const std::string& query);
   void SendInteractionResponse();
 
   std::unique_ptr<LibassistantContractChecker> libassistant_contract_checker_;
@@ -133,7 +141,7 @@ class TestAssistantService : public chromeos::assistant::Assistant {
       interaction_subscribers_;
   bool running_active_interaction_ = false;
 
-  DISALLOW_COPY_AND_ASSIGN(TestAssistantService);
+  base::WeakPtrFactory<TestAssistantService> weak_factory_{this};
 };
 
 }  // namespace ash

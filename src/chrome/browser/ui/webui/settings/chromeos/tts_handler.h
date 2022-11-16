@@ -17,11 +17,15 @@ class TtsHandler : public SettingsPageUIHandler,
                    public content::UtteranceEventDelegate {
  public:
   TtsHandler();
+
+  TtsHandler(const TtsHandler&) = delete;
+  TtsHandler& operator=(const TtsHandler&) = delete;
+
   ~TtsHandler() override;
 
-  void HandleGetAllTtsVoiceData(const base::ListValue* args);
-  void HandleGetTtsExtensions(const base::ListValue* args);
-  void HandlePreviewTtsVoice(const base::ListValue* args);
+  void HandleGetAllTtsVoiceData(const base::Value::List& args);
+  void HandleGetTtsExtensions(const base::Value::List& args);
+  void HandlePreviewTtsVoice(const base::Value::List& args);
 
   // SettingsPageUIHandler implementation.
   void RegisterMessages() override;
@@ -39,15 +43,14 @@ class TtsHandler : public SettingsPageUIHandler,
                   const std::string& error_message) override;
 
  private:
-  void WakeTtsEngine(const base::ListValue* args);
+  void WakeTtsEngine(const base::Value::List& args);
   void OnTtsEngineAwake(bool success);
+  void RefreshTtsVoices(const base::Value::List& args);
   int GetVoiceLangMatchScore(const content::VoiceData* voice,
                              const std::string& app_locale);
   void RemoveTtsControllerDelegates();
 
   base::WeakPtrFactory<TtsHandler> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(TtsHandler);
 };
 
 }  // namespace settings

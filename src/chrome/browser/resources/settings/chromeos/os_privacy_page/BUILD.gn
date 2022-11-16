@@ -12,23 +12,34 @@ js_type_check("closure_compile_module") {
   deps = [
     ":os_privacy_page",
     ":peripheral_data_access_protection_dialog",
-    "../../privacy_page:secure_dns",
-    "../../privacy_page:secure_dns_input",
+    ":privacy_hub_browser_proxy",
+    ":privacy_hub_page",
+    ":smart_privacy_page",
   ]
 }
 
 js_library("os_privacy_page") {
   deps = [
+    ":metrics_consent_browser_proxy",
     ":peripheral_data_access_browser_proxy",
     ":peripheral_data_access_protection_dialog",
-    "..:deep_linking_behavior.m",
-    "..:os_route.m",
+    ":privacy_hub_browser_proxy",
+    "..:deep_linking_behavior",
+    "..:os_route",
+    "..:route_observer_behavior",
     "../..:router",
-    "../../privacy_page:privacy_page_browser_proxy",
-    "../os_people_page:lock_screen.m",
-    "../os_people_page:lock_state_behavior.m",
+    "../os_people_page:lock_screen",
+    "../os_people_page:lock_state_behavior",
     "//third_party/polymer/v3_0/components-chromium/polymer:polymer_bundled",
     "//ui/webui/resources/js:load_time_data.m",
+  ]
+  externs_list = chrome_extension_public_externs
+}
+
+js_library("metrics_consent_browser_proxy") {
+  deps = [
+    "//third_party/polymer/v3_0/components-chromium/polymer:polymer_bundled",
+    "//ui/webui/resources/js:cr.m",
   ]
 }
 
@@ -41,9 +52,33 @@ js_library("peripheral_data_access_browser_proxy") {
 
 js_library("peripheral_data_access_protection_dialog") {
   deps = [
-    "../../prefs:prefs_behavior",
+    "..:prefs_behavior",
     "//third_party/polymer/v3_0/components-chromium/polymer:polymer_bundled",
     "//ui/webui/resources/js:load_time_data.m",
+  ]
+}
+
+js_library("smart_privacy_page") {
+  deps = [
+    "..:prefs_behavior",
+    "//third_party/polymer/v3_0/components-chromium/polymer:polymer_bundled",
+    "//ui/webui/resources/js:cr.m",
+    "//ui/webui/resources/js:load_time_data.m",
+  ]
+}
+
+js_library("privacy_hub_page") {
+  deps = [
+    ":privacy_hub_browser_proxy",
+    "//third_party/polymer/v3_0/components-chromium/polymer:polymer_bundled",
+    "//ui/webui/resources/js:load_time_data.m",
+  ]
+}
+
+js_library("privacy_hub_browser_proxy") {
+  deps = [
+    "//third_party/polymer/v3_0/components-chromium/polymer:polymer_bundled",
+    "//ui/webui/resources/js:cr.m",
   ]
 }
 
@@ -51,5 +86,7 @@ html_to_js("web_components") {
   js_files = [
     "os_privacy_page.js",
     "peripheral_data_access_protection_dialog.js",
+    "privacy_hub_page.js",
+    "smart_privacy_page.js",
   ]
 }

@@ -7,6 +7,7 @@
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
+#include "build/chromeos_buildflags.h"
 #include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/test/base/browser_with_test_window_test.h"
@@ -19,7 +20,54 @@
 #include "chrome/browser/ui/tabs/tab_menu_model_delegate.h"
 #endif
 
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+#include "ui/views/widget/desktop_aura/desktop_native_widget_aura.h"
+#include "ui/views/widget/widget.h"
+#endif
+
 namespace {
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+class TestBrowserWindowViewsWithDesktopNativeWidgetAura
+    : public TestBrowserWindow {
+ public:
+  explicit TestBrowserWindowViewsWithDesktopNativeWidgetAura(
+      bool popup = false);
+  TestBrowserWindowViewsWithDesktopNativeWidgetAura(
+      const TestBrowserWindowViewsWithDesktopNativeWidgetAura&) = delete;
+  TestBrowserWindowViewsWithDesktopNativeWidgetAura& operator=(
+      const TestBrowserWindowViewsWithDesktopNativeWidgetAura&) = delete;
+  ~TestBrowserWindowViewsWithDesktopNativeWidgetAura() override;
+
+ private:
+  std::unique_ptr<views::Widget> CreateDesktopWidget(bool popup);
+
+  std::unique_ptr<views::Widget> widget_;
+};
+
+TestBrowserWindowViewsWithDesktopNativeWidgetAura::
+    TestBrowserWindowViewsWithDesktopNativeWidgetAura(bool popup) {
+  widget_ = CreateDesktopWidget(popup);
+  SetNativeWindow(widget_->GetNativeWindow());
+}
+
+TestBrowserWindowViewsWithDesktopNativeWidgetAura::
+    ~TestBrowserWindowViewsWithDesktopNativeWidgetAura() = default;
+
+std::unique_ptr<views::Widget>
+TestBrowserWindowViewsWithDesktopNativeWidgetAura::CreateDesktopWidget(
+    bool popup) {
+  auto widget = std::make_unique<views::Widget>();
+  views::Widget::InitParams params;
+  params.type = popup ? views::Widget::InitParams::TYPE_POPUP
+                      : views::Widget::InitParams::TYPE_WINDOW;
+  params.ownership = views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
+  params.native_widget = new views::DesktopNativeWidgetAura(widget.get());
+  params.bounds = gfx::Rect(0, 0, 20, 20);
+  widget->Init(std::move(params));
+  return widget;
+}
+#endif
 
 class ExistingWindowSubMenuModelTest : public BrowserWithTestWindowTest {
  public:
@@ -40,7 +88,12 @@ class ExistingWindowSubMenuModelTest : public BrowserWithTestWindowTest {
 std::unique_ptr<Browser> ExistingWindowSubMenuModelTest::CreateTestBrowser(
     bool incognito,
     bool popup) {
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  TestBrowserWindow* window =
+      new TestBrowserWindowViewsWithDesktopNativeWidgetAura(popup);
+#else
   TestBrowserWindow* window = new TestBrowserWindow;
+#endif
   new TestBrowserWindowOwner(window);
   Profile* profile = incognito ? browser()->profile()->GetPrimaryOTRProfile(
                                      /*create_if_needed=*/true)
@@ -180,7 +233,7 @@ TEST_F(ExistingWindowSubMenuModelTest, BuildSubmenuOrder) {
   auto menu1 = ExistingWindowSubMenuModel::Create(
       nullptr, browser()->tab_menu_model_delegate(),
       browser()->tab_strip_model(), 0);
-  ASSERT_EQ(5, menu1->GetItemCount());
+  ASSERT_EQ(5u, menu1->GetItemCount());
   CheckBrowserTitle(menu1->GetLabelAt(2), kLongTabTitleExample, 3);
   CheckBrowserTitle(menu1->GetLabelAt(3), "Browser 3 Tab 2", 2);
   CheckBrowserTitle(menu1->GetLabelAt(4), kLongTabTitleExample, 1);
@@ -189,7 +242,7 @@ TEST_F(ExistingWindowSubMenuModelTest, BuildSubmenuOrder) {
   auto menu2 = ExistingWindowSubMenuModel::Create(
       nullptr, browser_2->tab_menu_model_delegate(),
       browser_2->tab_strip_model(), 0);
-  ASSERT_EQ(5, menu2->GetItemCount());
+  ASSERT_EQ(5u, menu2->GetItemCount());
   CheckBrowserTitle(menu2->GetLabelAt(2), kLongTabTitleExample, 3);
   CheckBrowserTitle(menu2->GetLabelAt(3), "Browser 3 Tab 2", 2);
   CheckBrowserTitle(menu2->GetLabelAt(4), "Browser 1", 1);
@@ -201,7 +254,7 @@ TEST_F(ExistingWindowSubMenuModelTest, BuildSubmenuOrder) {
   auto menu3 = ExistingWindowSubMenuModel::Create(
       nullptr, browser_3->tab_menu_model_delegate(),
       browser_3->tab_strip_model(), 0);
-  ASSERT_EQ(5, menu3->GetItemCount());
+  ASSERT_EQ(5u, menu3->GetItemCount());
   CheckBrowserTitle(menu3->GetLabelAt(2), kLongTabTitleExample, 1);
   CheckBrowserTitle(menu3->GetLabelAt(3), "Browser 1", 1);
   CheckBrowserTitle(menu3->GetLabelAt(4), kLongTabTitleExample, 3);
@@ -238,7 +291,7 @@ TEST_F(ExistingWindowSubMenuModelTest, BuildSubmenuIncognito) {
   auto menu = ExistingWindowSubMenuModel::Create(
       nullptr, browser()->tab_menu_model_delegate(),
       browser()->tab_strip_model(), 0);
-  ASSERT_EQ(4, menu->GetItemCount());
+  ASSERT_EQ(4u, menu->GetItemCount());
   ASSERT_EQ(kBrowser3ExpectedTitle, menu->GetLabelAt(2));
   ASSERT_EQ(kBrowser2ExpectedTitle, menu->GetLabelAt(3));
 
@@ -246,7 +299,7 @@ TEST_F(ExistingWindowSubMenuModelTest, BuildSubmenuIncognito) {
   auto menu_incognito = ExistingWindowSubMenuModel::Create(
       nullptr, incognito_browser_1->tab_menu_model_delegate(),
       incognito_browser_1->tab_strip_model(), 0);
-  ASSERT_EQ(3, menu_incognito->GetItemCount());
+  ASSERT_EQ(3u, menu_incognito->GetItemCount());
   ASSERT_EQ(kIncognitoBrowser2ExpectedTitle, menu_incognito->GetLabelAt(2));
 
   // Clean up.
@@ -276,7 +329,7 @@ TEST_F(ExistingWindowSubMenuModelTest, BuildSubmenuPopups) {
   auto menu = ExistingWindowSubMenuModel::Create(
       nullptr, browser()->tab_menu_model_delegate(),
       browser()->tab_strip_model(), 0);
-  ASSERT_EQ(4, menu->GetItemCount());
+  ASSERT_EQ(4u, menu->GetItemCount());
   ASSERT_EQ(kBrowser3ExpectedTitle, menu->GetLabelAt(2));
   ASSERT_EQ(kBrowser2ExpectedTitle, menu->GetLabelAt(3));
 
@@ -344,8 +397,8 @@ TEST_F(ExistingWindowSubMenuModelTest, BuildSubmenuGroupedByDesks) {
   auto menu1 = ExistingWindowSubMenuModel::Create(
       nullptr, browser()->tab_menu_model_delegate(),
       browser()->tab_strip_model(), 0);
-  ASSERT_EQ(15, menu1->GetItemCount());
-  EXPECT_EQ(u"Desk 1", menu1->GetLabelAt(2));
+  ASSERT_EQ(15u, menu1->GetItemCount());
+  EXPECT_EQ(u"Desk 1 (Current)", menu1->GetLabelAt(2));
   CheckBrowserTitle(menu1->GetLabelAt(3), kBrowser2TabTitle, 1);
   EXPECT_EQ(ui::SPACING_SEPARATOR, menu1->GetSeparatorTypeAt(4));
   EXPECT_EQ(u"Desk 2", menu1->GetLabelAt(5));

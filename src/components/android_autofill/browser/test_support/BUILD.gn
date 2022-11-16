@@ -14,9 +14,9 @@ android_library("component_autofill_provider_java_test_support") {
     "java/src/org/chromium/components/autofill/AutofillProviderTestHelper.java",
   ]
   deps = [
-    "//base:base_java",
     "//base:base_java_test_support",
     "//base:jni_java",
+    "//build/android:build_java",
     "//components/android_autofill/browser:autofill_aidl",
     "//components/android_autofill/browser:java",
     "//content/public/android:content_java",
@@ -35,6 +35,7 @@ source_set("component_autofill_provider_native_test_support") {
     ":jni_headers",
     "//base",
     "//components/android_autofill/browser:android",
+    "//components/autofill/content/browser:test_support",
     "//components/autofill/core/browser:test_support",
     "//content/public/browser",
   ]

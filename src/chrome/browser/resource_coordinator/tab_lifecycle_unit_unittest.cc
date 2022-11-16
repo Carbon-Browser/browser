@@ -9,7 +9,8 @@
 
 #include "base/auto_reset.h"
 #include "base/bind.h"
-#include "base/macros.h"
+#include "base/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/test/simple_test_tick_clock.h"
 #include "base/time/time.h"
@@ -50,6 +51,7 @@
 #include "services/device/public/cpp/test/fake_usb_device_manager.h"
 #include "services/device/public/mojom/usb_manager.mojom.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/blink/public/mojom/mediastream/media_stream.mojom.h"
 #include "third_party/blink/public/mojom/usb/web_usb_service.mojom.h"
 
 namespace resource_coordinator {
@@ -58,11 +60,14 @@ namespace {
 
 using LoadingState = TabLoadTracker::LoadingState;
 
-constexpr base::TimeDelta kShortDelay = base::TimeDelta::FromSeconds(1);
+constexpr base::TimeDelta kShortDelay = base::Seconds(1);
 
 class MockTabLifecycleObserver : public TabLifecycleObserver {
  public:
   MockTabLifecycleObserver() = default;
+
+  MockTabLifecycleObserver(const MockTabLifecycleObserver&) = delete;
+  MockTabLifecycleObserver& operator=(const MockTabLifecycleObserver&) = delete;
 
   MOCK_METHOD3(OnDiscardedStateChange,
                void(content::WebContents* contents,
@@ -70,9 +75,6 @@ class MockTabLifecycleObserver : public TabLifecycleObserver {
                     bool is_discarded));
   MOCK_METHOD2(OnAutoDiscardableStateChange,
                void(content::WebContents* contents, bool is_auto_discardable));
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(MockTabLifecycleObserver);
 };
 
 }  // namespace
@@ -81,6 +83,10 @@ class MockLifecycleUnitObserver : public LifecycleUnitObserver {
  public:
   MockLifecycleUnitObserver() = default;
 
+  MockLifecycleUnitObserver(const MockLifecycleUnitObserver&) = delete;
+  MockLifecycleUnitObserver& operator=(const MockLifecycleUnitObserver&) =
+      delete;
+
   MOCK_METHOD3(OnLifecycleUnitStateChanged,
                void(LifecycleUnit*,
                     LifecycleUnitState,
@@ -88,9 +94,6 @@ class MockLifecycleUnitObserver : public LifecycleUnitObserver {
   MOCK_METHOD1(OnLifecycleUnitDestroyed, void(LifecycleUnit*));
   MOCK_METHOD2(OnLifecycleUnitVisibilityChanged,
                void(LifecycleUnit*, content::Visibility));
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(MockLifecycleUnitObserver);
 };
 
 class TabLifecycleUnitTest : public ChromeRenderViewHostTestHarness {
@@ -103,9 +106,12 @@ class TabLifecycleUnitTest : public ChromeRenderViewHostTestHarness {
 
   TabLifecycleUnitTest() : scoped_set_tick_clock_for_testing_(&test_clock_) {
     // Advance the clock so that it doesn't yield null time ticks.
-    test_clock_.Advance(base::TimeDelta::FromSeconds(1));
+    test_clock_.Advance(base::Seconds(1));
     observers_.AddObserver(&observer_);
   }
+
+  TabLifecycleUnitTest(const TabLifecycleUnitTest&) = delete;
+  TabLifecycleUnitTest& operator=(const TabLifecycleUnitTest&) = delete;
 
   void SetUp() override {
     ChromeRenderViewHostTestHarness::SetUp();
@@ -165,7 +171,7 @@ class TabLifecycleUnitTest : public ChromeRenderViewHostTestHarness {
 
   ::testing::StrictMock<MockTabLifecycleObserver> observer_;
   base::ObserverList<TabLifecycleObserver>::Unchecked observers_;
-  content::WebContents* web_contents_;  // Owned by tab_strip_model_.
+  raw_ptr<content::WebContents> web_contents_;  // Owned by tab_strip_model_.
   std::unique_ptr<TabStripModel> tab_strip_model_;
   base::SimpleTestTickClock test_clock_;
   std::unique_ptr<UsageClock> usage_clock_;
@@ -174,8 +180,6 @@ class TabLifecycleUnitTest : public ChromeRenderViewHostTestHarness {
   // So that the main thread looks like the UI thread as expected.
   TestTabStripModelDelegate tab_strip_model_delegate_;
   ScopedSetTickClockForTesting scoped_set_tick_clock_for_testing_;
-
-  DISALLOW_COPY_AND_ASSIGN(TabLifecycleUnitTest);
 };
 
 class TabLifecycleUnitTest::ScopedEnterpriseOptOut {
@@ -240,7 +244,8 @@ TEST_F(TabLifecycleUnitTest, AutoDiscardable) {
   EXPECT_TRUE(tab_lifecycle_unit.IsAutoDiscardable());
   ExpectCanDiscardTrueAllReasons(&tab_lifecycle_unit);
 
-  EXPECT_CALL(observer_, OnAutoDiscardableStateChange(web_contents_, false));
+  EXPECT_CALL(observer_,
+              OnAutoDiscardableStateChange(web_contents_.get(), false));
   tab_lifecycle_unit.SetAutoDiscardable(false);
   ::testing::Mock::VerifyAndClear(&observer_);
   EXPECT_FALSE(tab_lifecycle_unit.IsAutoDiscardable());
@@ -248,7 +253,8 @@ TEST_F(TabLifecycleUnitTest, AutoDiscardable) {
       &tab_lifecycle_unit,
       DecisionFailureReason::LIVE_STATE_EXTENSION_DISALLOWED);
 
-  EXPECT_CALL(observer_, OnAutoDiscardableStateChange(web_contents_, true));
+  EXPECT_CALL(observer_,
+              OnAutoDiscardableStateChange(web_contents_.get(), true));
   tab_lifecycle_unit.SetAutoDiscardable(true);
   ::testing::Mock::VerifyAndClear(&observer_);
   EXPECT_TRUE(tab_lifecycle_unit.IsAutoDiscardable());
@@ -349,14 +355,17 @@ TEST_F(TabLifecycleUnitTest, CannotDiscardVideoCapture) {
   test_clock_.Advance(kBackgroundUrgentProtectionTime);
   ExpectCanDiscardTrueAllReasons(&tab_lifecycle_unit);
 
-  blink::MediaStreamDevices video_devices{blink::MediaStreamDevice(
+  blink::mojom::StreamDevices devices;
+  devices.video_device = blink::MediaStreamDevice(
       blink::mojom::MediaStreamType::DEVICE_VIDEO_CAPTURE, "fake_media_device",
-      "fake_media_device")};
+      "fake_media_device");
+
   std::unique_ptr<content::MediaStreamUI> ui =
       MediaCaptureDevicesDispatcher::GetInstance()
           ->GetMediaStreamCaptureIndicator()
-          ->RegisterMediaStream(web_contents_, video_devices);
-  ui->OnStarted(base::OnceClosure(), content::MediaStreamUI::SourceCallback(),
+          ->RegisterMediaStream(web_contents_, devices);
+  ui->OnStarted(base::RepeatingClosure(),
+                content::MediaStreamUI::SourceCallback(),
                 /*label=*/std::string(), /*screen_capture_ids=*/{},
                 content::MediaStreamUI::StateChangeCallback());
   ExpectCanDiscardFalseAllReasons(&tab_lifecycle_unit,
@@ -393,14 +402,16 @@ TEST_F(TabLifecycleUnitTest, CannotDiscardDesktopCapture) {
   test_clock_.Advance(kBackgroundUrgentProtectionTime);
   ExpectCanDiscardTrueAllReasons(&tab_lifecycle_unit);
 
-  blink::MediaStreamDevices desktop_capture_devices{blink::MediaStreamDevice(
+  blink::mojom::StreamDevices devices;
+  devices.video_device = blink::MediaStreamDevice(
       blink::mojom::MediaStreamType::GUM_DESKTOP_VIDEO_CAPTURE,
-      "fake_media_device", "fake_media_device")};
+      "fake_media_device", "fake_media_device");
   std::unique_ptr<content::MediaStreamUI> ui =
       MediaCaptureDevicesDispatcher::GetInstance()
           ->GetMediaStreamCaptureIndicator()
-          ->RegisterMediaStream(web_contents_, desktop_capture_devices);
-  ui->OnStarted(base::OnceClosure(), content::MediaStreamUI::SourceCallback(),
+          ->RegisterMediaStream(web_contents_, devices);
+  ui->OnStarted(base::RepeatingClosure(),
+                content::MediaStreamUI::SourceCallback(),
                 /*label=*/std::string(), /*screen_capture_ids=*/{},
                 content::MediaStreamUI::StateChangeCallback());
   ExpectCanDiscardFalseAllReasons(

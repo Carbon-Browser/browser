@@ -8,12 +8,11 @@
 #include <memory>
 
 #include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "base/test/task_environment.h"
 #include "build/build_config.h"
 
 namespace base {
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 namespace win {
 class ScopedCOMInitializer;
 }  // namespace win
@@ -101,7 +100,7 @@ class TestBrowserThread;
 //     template <typename... TaskEnvironmentTraits>
 //     explicit FooBase(TaskEnvironmentTraits&&... traits)
 //         : task_environment_(
-//               base::in_place,
+//               absl::in_place,
 //               std::forward<TaskEnvironmentTraits>(traits)...) {}
 //
 //     // Alternatively a subclass may pass this tag to ask this FooBase not to
@@ -169,6 +168,9 @@ class BrowserTaskEnvironment : public base::test::TaskEnvironment {
   // RunLoop+QuitClosure() to await an async condition.
   void RunIOThreadUntilIdle();
 
+  BrowserTaskEnvironment(const BrowserTaskEnvironment&) = delete;
+  BrowserTaskEnvironment& operator=(const BrowserTaskEnvironment&) = delete;
+
   ~BrowserTaskEnvironment() override;
 
  private:
@@ -193,11 +195,9 @@ class BrowserTaskEnvironment : public base::test::TaskEnvironment {
   std::unique_ptr<TestBrowserThread> ui_thread_;
   std::unique_ptr<TestBrowserThread> io_thread_;
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   std::unique_ptr<base::win::ScopedCOMInitializer> com_initializer_;
 #endif
-
-  DISALLOW_COPY_AND_ASSIGN(BrowserTaskEnvironment);
 };
 
 }  // namespace content

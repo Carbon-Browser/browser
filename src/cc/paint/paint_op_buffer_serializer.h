@@ -8,9 +8,11 @@
 #include <memory>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "cc/paint/paint_op_buffer.h"
 
-#include "third_party/skia/src/core/SkRemoteGlyphCache.h"
+#include "third_party/skia/include/core/SkColor.h"
+#include "third_party/skia/include/private/chromium/SkChromeRemoteGlyphCache.h"
 #include "ui/gfx/geometry/rect_f.h"
 
 namespace cc {
@@ -47,7 +49,7 @@ class CC_PAINT_EXPORT PaintOpBufferSerializer {
     // potentially being partially transparent, if post scaled).
     bool requires_clear = true;
     // If clearing is needed, the color to clear to.
-    SkColor background_color = SK_ColorTRANSPARENT;
+    SkColor4f background_color = SkColors::kTransparent;
   };
   // Serialize the buffer with a preamble. This function wraps the buffer in a
   // save/restore and includes any translations, scales, and clearing as
@@ -56,6 +58,11 @@ class CC_PAINT_EXPORT PaintOpBufferSerializer {
   void Serialize(const PaintOpBuffer* buffer,
                  const std::vector<size_t>* offsets,
                  const Preamble& preamble);
+  // Sereialize the buffer as |Serialize| with a preamble. This function also
+  // destroys the PaintOps in |buffer| after serialization.
+  void SerializeAndDestroy(PaintOpBuffer* buffer,
+                           const std::vector<size_t>* offsets,
+                           const Preamble& preamble);
   // Serialize the buffer without a preamble. This function serializes the whole
   // buffer without any extra ops added.  No clearing is done.  This should
   // generally be used for internal PaintOpBuffers that want to be sent as-is.
@@ -79,6 +86,15 @@ class CC_PAINT_EXPORT PaintOpBufferSerializer {
   void SerializeBuffer(SkCanvas* canvas,
                        const PaintOpBuffer* buffer,
                        const std::vector<size_t>* offsets);
+  void SerializeBufferAndDestroy(SkCanvas* canvas,
+                                 PaintOpBuffer* buffer,
+                                 const std::vector<size_t>* offsets);
+  // Returns whether searilization of |op| succeeded and we need to serialize
+  // the next PaintOp in the PaintOpBuffer.
+  bool WillSerializeNextOp(const PaintOp* op,
+                           SkCanvas* canvas,
+                           PlaybackParams params,
+                           uint8_t alpha);
   bool SerializeOpWithFlags(SkCanvas* canvas,
                             const PaintOpWithFlags* flags_op,
                             const PlaybackParams& params,
@@ -122,7 +138,7 @@ class CC_PAINT_EXPORT SimpleBufferSerializer : public PaintOpBufferSerializer {
                            const SkM44& current_ctm,
                            const SkM44& original_ctm);
 
-  void* memory_;
+  raw_ptr<void> memory_;
   const size_t total_;
   size_t written_ = 0u;
 };

@@ -35,8 +35,8 @@ include_rules = [
   "+components/security_state/content/android/java/src/org/chromium/components/security_state/SecurityStateModel.java",
   "+components/sync/android/java/src/org/chromium/components/sync",
   "+components/sync/test/android/javatests/src/org/chromium/components/sync/test/util",
+  "+components/ukm/android",
 
   "-content/public/android/java",
   "+content/public/android/java/src/org/chromium/content_public",
-  "+content/public/android/java/src/org/chromium/content/browser/ContentFeatureListImpl.java",
 ]

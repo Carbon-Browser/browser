@@ -55,7 +55,12 @@ class CrostiniExportImportNotificationController
                                              ExportImportType type,
                                              const std::string& notification_id,
                                              base::FilePath path,
-                                             ContainerId container_id);
+                                             guest_os::GuestId container_id);
+
+  CrostiniExportImportNotificationController(
+      const CrostiniExportImportNotificationController&) = delete;
+  CrostiniExportImportNotificationController& operator=(
+      const CrostiniExportImportNotificationController&) = delete;
 
   ~CrostiniExportImportNotificationController() override;
 
@@ -83,7 +88,7 @@ class CrostiniExportImportNotificationController
   void on_notification_closed() { hidden_ = true; }
 
   Profile* profile_;  // Not owned.
-  ContainerId container_id_;
+  guest_os::GuestId container_id_;
   // |delegate_| is responsible for handling click events. It is separate from
   // the controller because it needs to live as long as the notification is in
   // the UI, but the controller's lifetime ends once the notification is in a
@@ -99,8 +104,6 @@ class CrostiniExportImportNotificationController
   bool hidden_ = false;
   base::WeakPtrFactory<CrostiniExportImportNotificationController>
       weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(CrostiniExportImportNotificationController);
 };
 
 }  // namespace crostini

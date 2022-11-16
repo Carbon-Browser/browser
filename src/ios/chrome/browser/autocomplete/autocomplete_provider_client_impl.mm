@@ -7,9 +7,13 @@
 #include "base/notreached.h"
 #include "base/strings/utf_string_conversions.h"
 #include "components/history/core/browser/history_service.h"
+#include "components/history/core/browser/top_sites.h"
 #include "components/keyed_service/core/service_access_type.h"
 #include "components/language/core/browser/pref_names.h"
+#include "components/omnibox/browser/actions/omnibox_pedal_provider.h"
 #include "components/omnibox/browser/autocomplete_classifier.h"
+#include "components/omnibox/browser/omnibox_triggered_feature_service.h"
+#include "components/omnibox/browser/shortcuts_backend.h"
 #include "components/prefs/pref_service.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/sync/driver/sync_service.h"
@@ -17,8 +21,10 @@
 #include "ios/chrome/browser/application_context.h"
 #include "ios/chrome/browser/autocomplete/autocomplete_classifier_factory.h"
 #include "ios/chrome/browser/autocomplete/in_memory_url_index_factory.h"
+#import "ios/chrome/browser/autocomplete/omnibox_pedal_implementation.h"
 #include "ios/chrome/browser/autocomplete/remote_suggestions_service_factory.h"
 #include "ios/chrome/browser/autocomplete/shortcuts_backend_factory.h"
+#include "ios/chrome/browser/autocomplete/tab_matcher_impl.h"
 #include "ios/chrome/browser/bookmarks/bookmark_model_factory.h"
 #include "ios/chrome/browser/browser_state/chrome_browser_state.h"
 #include "ios/chrome/browser/chrome_url_constants.h"
@@ -47,7 +53,11 @@ AutocompleteProviderClientImpl::AutocompleteProviderClientImpl(
               NewPersonalizedDataCollectionConsentHelper(
                   SyncServiceFactory::GetForBrowserState(browser_state_))),
       omnibox_triggered_feature_service_(
-          std::make_unique<OmniboxTriggeredFeatureService>()) {}
+          std::make_unique<OmniboxTriggeredFeatureService>()),
+      tab_matcher_(browser_state_) {
+  pedal_provider_ = std::make_unique<OmniboxPedalProvider>(
+      *this, GetPedalImplementations(IsOffTheRecord(), false));
+}
 
 AutocompleteProviderClientImpl::~AutocompleteProviderClientImpl() {}
 
@@ -62,6 +72,10 @@ PrefService* AutocompleteProviderClientImpl::GetPrefs() const {
 
 PrefService* AutocompleteProviderClientImpl::GetLocalState() {
   return GetApplicationContext()->GetLocalState();
+}
+
+std::string AutocompleteProviderClientImpl::GetApplicationLocale() const {
+  return GetApplicationContext()->GetApplicationLocale();
 }
 
 const AutocompleteSchemeClassifier&
@@ -121,7 +135,7 @@ AutocompleteProviderClientImpl::GetDocumentSuggestionsService(
 }
 
 OmniboxPedalProvider* AutocompleteProviderClientImpl::GetPedalProvider() const {
-  return nullptr;
+  return pedal_provider_.get();
 }
 
 scoped_refptr<ShortcutsBackend>
@@ -235,19 +249,6 @@ void AutocompleteProviderClientImpl::DeleteMatchingURLsForKeywordFromHistory(
 
 void AutocompleteProviderClientImpl::PrefetchImage(const GURL& url) {}
 
-bool AutocompleteProviderClientImpl::IsTabOpenWithURL(
-    const GURL& url,
-    const AutocompleteInput* input) {
-  BrowserList* browser_list =
-      BrowserListFactory::GetForBrowserState(browser_state_);
-  std::set<Browser*> browsers = browser_state_->IsOffTheRecord()
-                                    ? browser_list->AllIncognitoBrowsers()
-                                    : browser_list->AllRegularBrowsers();
-  for (Browser* browser : browsers) {
-    if (browser->GetWebStateList()->GetIndexOfInactiveWebStateWithURL(url) !=
-        WebStateList::kInvalidIndex) {
-      return true;
-    }
-  }
-  return false;
+const TabMatcher& AutocompleteProviderClientImpl::GetTabMatcher() const {
+  return tab_matcher_;
 }

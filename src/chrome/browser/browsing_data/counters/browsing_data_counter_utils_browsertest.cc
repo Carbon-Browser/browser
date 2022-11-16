@@ -4,6 +4,7 @@
 
 #include "chrome/browser/browsing_data/counters/browsing_data_counter_utils.h"
 
+#include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/sync/sync_service_factory.h"
 #include "chrome/browser/sync/test/integration/sync_service_impl_harness.h"
@@ -26,61 +27,47 @@ namespace browsing_data_counter_utils {
 class BrowsingDataCounterUtilsBrowserTest : public SyncTest {
  public:
   BrowsingDataCounterUtilsBrowserTest() : SyncTest(SINGLE_CLIENT) {}
-  ~BrowsingDataCounterUtilsBrowserTest() override = default;
 
- private:
-  DISALLOW_COPY_AND_ASSIGN(BrowsingDataCounterUtilsBrowserTest);
+  BrowsingDataCounterUtilsBrowserTest(
+      const BrowsingDataCounterUtilsBrowserTest&) = delete;
+  BrowsingDataCounterUtilsBrowserTest& operator=(
+      const BrowsingDataCounterUtilsBrowserTest&) = delete;
+
+  ~BrowsingDataCounterUtilsBrowserTest() override = default;
 };
 
 IN_PROC_BROWSER_TEST_F(BrowsingDataCounterUtilsBrowserTest,
                        ShouldShowCookieException) {
-  Profile* profile = browser()->profile();
-
-  syncer::SyncServiceImpl* sync_service =
-      SyncServiceFactory::GetAsSyncServiceImplForProfile(profile);
-
-  sync_service->OverrideNetworkForTest(
-      fake_server::CreateFakeServerHttpPostProviderFactory(
-          GetFakeServer()->AsWeakPtr()));
-
-  std::string username;
-
-  if (username.empty())
-    username = "user@gmail.com";
-
-  std::unique_ptr<SyncServiceImplHarness> harness =
-      SyncServiceImplHarness::Create(
-          profile, username, "unused" /* password */,
-          SyncServiceImplHarness::SigninType::FAKE_SIGNIN);
+  ASSERT_TRUE(SetupClients());
 
   // By default, a fresh profile is not signed in, nor syncing, so no cookie
   // exception should be shown.
-  EXPECT_FALSE(ShouldShowCookieException(profile));
+  EXPECT_FALSE(ShouldShowCookieException(GetProfile(0)));
 
   // Sign the profile in.
-  EXPECT_TRUE(harness->SignInPrimaryAccount());
+  EXPECT_TRUE(GetClient(0)->SignInPrimaryAccount());
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   // On Chrome OS sync in turned on by default.
-  EXPECT_TRUE(ShouldShowCookieException(profile));
+  EXPECT_TRUE(ShouldShowCookieException(GetProfile(0)));
 #else
   // Sign-in alone shouldn't lead to a cookie exception.
-  EXPECT_FALSE(ShouldShowCookieException(profile));
+  EXPECT_FALSE(ShouldShowCookieException(GetProfile(0)));
 #endif
 
   // Enable sync.
-  EXPECT_TRUE(harness->SetupSync());
+  EXPECT_TRUE(GetClient(0)->SetupSync());
 
   // Now that we're syncing, we should offer to retain the cookie.
-  EXPECT_TRUE(ShouldShowCookieException(profile));
+  EXPECT_TRUE(ShouldShowCookieException(GetProfile(0)));
 
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
+#if !BUILDFLAG(IS_CHROMEOS)
   // Pause sync.
-  harness->SignOutPrimaryAccount();
+  GetClient(0)->SignOutPrimaryAccount();
 
   // There's no point in showing the cookie exception.
-  EXPECT_FALSE(ShouldShowCookieException(profile));
-#endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
+  EXPECT_FALSE(ShouldShowCookieException(GetProfile(0)));
+#endif  // !BUILDFLAG(IS_CHROMEOS)
 }
 
 }  // namespace browsing_data_counter_utils

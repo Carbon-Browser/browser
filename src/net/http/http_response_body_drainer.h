@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/timer/timer.h"
 #include "net/base/net_export.h"
@@ -54,10 +55,10 @@ class NET_EXPORT_PRIVATE HttpResponseBodyDrainer {
 
   scoped_refptr<IOBuffer> read_buf_;
   const std::unique_ptr<HttpStream> stream_;
-  State next_state_;
-  int total_read_;
+  State next_state_ = STATE_NONE;
+  int total_read_ = 0;
   base::OneShotTimer timer_;
-  HttpNetworkSession* session_;
+  raw_ptr<HttpNetworkSession> session_ = nullptr;
 };
 
 }  // namespace net

@@ -71,13 +71,12 @@ absl::optional<TimeLimitOverride> TimeLimitOverride::FromDictionary(
       *action_string == kOverrideActionLock ? Action::kLock : Action::kUnlock;
 
   base::Time creation_time =
-      base::Time::UnixEpoch() +
-      base::TimeDelta::FromMilliseconds(creation_time_millis);
+      base::Time::UnixEpoch() + base::Milliseconds(creation_time_millis);
 
   const base::Value* duration_value = dict->FindPath(
       {kOverrideActionSpecificData, kOverrideActionDurationMins});
   absl::optional<base::TimeDelta> duration =
-      duration_value ? base::TimeDelta::FromMinutes(duration_value->GetInt())
+      duration_value ? base::Minutes(duration_value->GetInt())
                      : absl::optional<base::TimeDelta>();
 
   return TimeLimitOverride(action, creation_time, duration);
@@ -93,7 +92,7 @@ absl::optional<TimeLimitOverride> TimeLimitOverride::MostRecentFromList(
 
   // The most recent override created.
   absl::optional<TimeLimitOverride> last_override;
-  for (const base::Value& override_value : list->GetList()) {
+  for (const base::Value& override_value : list->GetListDeprecated()) {
     absl::optional<TimeLimitOverride> current_override =
         FromDictionary(&override_value);
     if (!current_override.has_value()) {

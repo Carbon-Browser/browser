@@ -21,8 +21,6 @@ const char* TaskTypeNames::TaskTypeToString(TaskType task_type) {
       return "UserInteraction";
     case TaskType::kNetworking:
       return "Networking";
-    case TaskType::kNetworkingWithURLLoaderAnnotation:
-      return "NetworkingWithURLLoaderAnnotation";
     case TaskType::kNetworkingUnfreezable:
       return "NetworkingUnfreezable";
     case TaskType::kNetworkingControl:
@@ -133,10 +131,12 @@ const char* TaskTypeNames::TaskTypeToString(TaskType task_type) {
       return "InternalNavigationAssociated";
     case TaskType::kInternalNavigationAssociatedUnfreezable:
       return "InternalNavigationAssociatedUnfreezable";
+    case TaskType::kInternalNavigationCancellation:
+      return "InternalNavigationCancellation";
     case TaskType::kInternalContinueScriptLoading:
       return "InternalContinueScriptLoading";
-    case TaskType::kExperimentalWebScheduling:
-      return "ExperimentalWebScheduling";
+    case TaskType::kWebSchedulingPostedTask:
+      return "WebSchedulingPostedTask";
     case TaskType::kInternalFrameLifecycleControl:
       return "InternalFrameLifecycleControl";
     case TaskType::kInternalFindInPage:

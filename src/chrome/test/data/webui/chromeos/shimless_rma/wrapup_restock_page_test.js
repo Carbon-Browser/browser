@@ -5,44 +5,62 @@
 import {PromiseResolver} from 'chrome://resources/js/promise_resolver.m.js';
 import {FakeShimlessRmaService} from 'chrome://shimless-rma/fake_shimless_rma_service.js';
 import {setShimlessRmaServiceForTesting} from 'chrome://shimless-rma/mojo_interface_provider.js';
-import {WrapupRestockPageElement} from 'chrome://shimless-rma/wrapup_restock_page.js';
+import {ShimlessRma} from 'chrome://shimless-rma/shimless_rma.js';
+import {WrapupRestockPage} from 'chrome://shimless-rma/wrapup_restock_page.js';
 
 import {assertDeepEquals, assertEquals, assertFalse, assertTrue} from '../../chai_assert.js';
-import {flushTasks} from '../../test_util.m.js';
+import {flushTasks} from '../../test_util.js';
 
 export function wrapupRestockPageTest() {
-  /** @type {?WrapupRestockPageElement} */
+  /**
+   * ShimlessRma is needed to handle the 'transition-state' event used by
+   * the shutdown button.
+   * @type {?ShimlessRma}
+   */
+  let shimless_rma_component = null;
+
+  /** @type {?WrapupRestockPage} */
   let component = null;
 
   /** @type {?FakeShimlessRmaService} */
   let service = null;
 
-  suiteSetup(() => {
-    service = new FakeShimlessRmaService();
-    setShimlessRmaServiceForTesting(service);
-  });
-
   setup(() => {
     document.body.innerHTML = '';
+    service = new FakeShimlessRmaService();
+    setShimlessRmaServiceForTesting(service);
   });
 
   teardown(() => {
     component.remove();
     component = null;
+    shimless_rma_component.remove();
+    shimless_rma_component = null;
     service.reset();
   });
 
-  /**
-   * @return {!Promise}
-   */
+  /** @return {!Promise} */
   function initializeRestockPage() {
     assertFalse(!!component);
 
-    component = /** @type {!WrapupRestockPageElement} */ (
+    shimless_rma_component =
+        /** @type {!ShimlessRma} */ (document.createElement('shimless-rma'));
+    assertTrue(!!shimless_rma_component);
+    document.body.appendChild(shimless_rma_component);
+
+    component = /** @type {!WrapupRestockPage} */ (
         document.createElement('wrapup-restock-page'));
     assertTrue(!!component);
     document.body.appendChild(component);
 
+    return flushTasks();
+  }
+
+  /** @return {!Promise} */
+  function clickShutdownButton() {
+    const shutdownComponent = component.shadowRoot.querySelector('#shutdown');
+    assertTrue(!!shutdownComponent);
+    shutdownComponent.click();
     return flushTasks();
   }
 
@@ -63,34 +81,35 @@ export function wrapupRestockPageTest() {
       return resolver.promise;
     };
 
-    let expectedResult = {foo: 'bar'};
-    let savedResult;
-    component.onNextButtonClick().then((result) => savedResult = result);
-    // Resolve to a distinct result to confirm it was not modified.
-    resolver.resolve(expectedResult);
-    await flushTasks();
+    component.shadowRoot.querySelector('#continue').click();
+    await resolver;
 
-    assertEquals(callCounter, 1);
-    assertDeepEquals(savedResult, expectedResult);
+    assertEquals(1, callCounter);
   });
 
   test('RestockPageOnShutdownCallsShutdownForRestock', async () => {
     const resolver = new PromiseResolver();
     await initializeRestockPage();
-    let callCounter = 0;
+    let restockCallCounter = 0;
     service.shutdownForRestock = () => {
-      callCounter++;
+      restockCallCounter++;
       return resolver.promise;
     };
 
-    let expectedResult = {foo: 'bar'};
-    let savedResult;
-    component.onNextButtonClick().then((result) => savedResult = result);
-    // Resolve to a distinct result to confirm it was not modified.
-    resolver.resolve(expectedResult);
-    await flushTasks();
+    await clickShutdownButton();
 
-    assertEquals(callCounter, 1);
-    assertDeepEquals(savedResult, expectedResult);
+    assertEquals(1, restockCallCounter);
+  });
+
+  test('RestockPageButtonsDisabled', async () => {
+    await initializeRestockPage();
+
+    const continueButton = component.shadowRoot.querySelector('#continue');
+    const shutdownButton = component.shadowRoot.querySelector('#shutdown');
+    assertFalse(continueButton.disabled);
+    assertFalse(shutdownButton.disabled);
+    component.allButtonsDisabled = true;
+    assertTrue(continueButton.disabled);
+    assertTrue(shutdownButton.disabled);
   });
 }

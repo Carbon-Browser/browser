@@ -37,7 +37,8 @@ class TtsPlatformImplChromeOs : public content::TtsPlatform {
   void ClearError() override;
   void SetError(const std::string& error) override;
   bool IsSpeaking() override;
-  bool PreferEngineDelegateVoices() override;
+  void FinalizeVoiceOrdering(std::vector<content::VoiceData>& voices) override;
+  void RefreshVoices() override;
 
   // Unimplemented.
   void Pause() override {}
@@ -46,14 +47,19 @@ class TtsPlatformImplChromeOs : public content::TtsPlatform {
       content::TtsUtterance* utterance,
       const content::VoiceData& voice_data) override {}
   void Shutdown() override {}
+  void GetVoicesForBrowserContext(
+      content::BrowserContext* browser_context,
+      const GURL& source_url,
+      std::vector<content::VoiceData>* out_voices) override {}
 
   // Get the single instance of this class.
   static TtsPlatformImplChromeOs* GetInstance();
 
  private:
   friend base::NoDestructor<TtsPlatformImplChromeOs>;
+  friend class TtsChromeosTest;
   TtsPlatformImplChromeOs();
-  ~TtsPlatformImplChromeOs();
+  virtual ~TtsPlatformImplChromeOs();
 
   void ProcessSpeech(int utterance_id,
                      const std::string& lang,

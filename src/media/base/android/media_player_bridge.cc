@@ -121,7 +121,7 @@ MediaPlayerBridge::~MediaPlayerBridge() {
 
 void MediaPlayerBridge::Initialize() {
   cookies_.clear();
-  if (url_.SchemeIsBlob()) {
+  if (url_.SchemeIsBlob() || url_.SchemeIsFileSystem()) {
     NOTREACHED();
     return;
   }
@@ -169,6 +169,11 @@ void MediaPlayerBridge::SetVideoSurface(gl::ScopedJavaSurface surface) {
 }
 
 void MediaPlayerBridge::SetPlaybackRate(double playback_rate) {
+  if (!prepared_) {
+    pending_playback_rate_ = playback_rate;
+    return;
+  }
+
   if (j_media_player_bridge_.is_null())
     return;
 
@@ -182,19 +187,12 @@ void MediaPlayerBridge::SetPlaybackRate(double playback_rate) {
 void MediaPlayerBridge::Prepare() {
   DCHECK(j_media_player_bridge_.is_null());
 
-  if (url_.SchemeIsBlob()) {
+  if (url_.SchemeIsBlob() || url_.SchemeIsFileSystem()) {
     NOTREACHED();
     return;
   }
 
   CreateJavaMediaPlayerBridge();
-
-  if (url_.SchemeIsFileSystem()) {
-    client_->GetMediaResourceGetter()->GetPlatformPathFromURL(
-        url_, base::BindOnce(&MediaPlayerBridge::SetDataSource,
-                             weak_factory_.GetWeakPtr()));
-    return;
-  }
 
   SetDataSource(url_.spec());
 }
@@ -384,7 +382,7 @@ base::TimeDelta MediaPlayerBridge::GetCurrentTime() {
   if (!prepared_)
     return pending_seek_;
   JNIEnv* env = base::android::AttachCurrentThread();
-  return base::TimeDelta::FromMilliseconds(
+  return base::Milliseconds(
       Java_MediaPlayerBridge_getCurrentPosition(env, j_media_player_bridge_));
 }
 
@@ -395,7 +393,7 @@ base::TimeDelta MediaPlayerBridge::GetDuration() {
   const int duration_ms =
       Java_MediaPlayerBridge_getDuration(env, j_media_player_bridge_);
   return duration_ms < 0 ? media::kInfiniteDuration
-                         : base::TimeDelta::FromMilliseconds(duration_ms);
+                         : base::Milliseconds(duration_ms);
 }
 
 void MediaPlayerBridge::Release() {
@@ -477,7 +475,7 @@ void MediaPlayerBridge::OnMediaPrepared() {
   // events.
   if (should_seek_on_prepare_) {
     SeekInternal(pending_seek_);
-    pending_seek_ = base::TimeDelta::FromMilliseconds(0);
+    pending_seek_ = base::Milliseconds(0);
     should_seek_on_prepare_ = false;
   }
 
@@ -487,6 +485,11 @@ void MediaPlayerBridge::OnMediaPrepared() {
   if (pending_play_) {
     StartInternal();
     pending_play_ = false;
+  }
+
+  if (pending_playback_rate_) {
+    SetPlaybackRate(pending_playback_rate_.value());
+    pending_playback_rate_.reset();
   }
 }
 
@@ -550,7 +553,7 @@ void MediaPlayerBridge::SeekInternal(base::TimeDelta time) {
 
   // Seeking to an invalid position may cause media player to stuck in an
   // error state.
-  if (time < base::TimeDelta()) {
+  if (time.is_negative()) {
     DCHECK_EQ(-1.0, time.InMillisecondsF());
     return;
   }

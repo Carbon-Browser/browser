@@ -10,6 +10,7 @@
 
 #include "ash/components/drivefs/drivefs_bootstrap.h"
 #include "ash/components/drivefs/drivefs_host_observer.h"
+#include "ash/components/drivefs/drivefs_http_client.h"
 #include "ash/components/drivefs/drivefs_search.h"
 #include "ash/constants/ash_features.h"
 #include "base/bind.h"
@@ -55,7 +56,15 @@ class DriveFsHost::MountState : public DriveFsSession,
         bool{host->account_token_delegate_->GetCachedAccessToken()};
     search_ = std::make_unique<DriveFsSearch>(
         drivefs_interface(), host_->network_connection_tracker_, host_->clock_);
+    if (base::FeatureList::IsEnabled(
+            chromeos::features::kDriveFsChromeNetworking)) {
+      http_client_ = std::make_unique<DriveFsHttpClient>(
+          host_->delegate_->GetURLLoaderFactory());
+    }
   }
+
+  MountState(const MountState&) = delete;
+  MountState& operator=(const MountState&) = delete;
 
   ~MountState() override {
     DCHECK_CALLED_ON_VALID_SEQUENCE(host_->sequence_checker_);
@@ -75,13 +84,16 @@ class DriveFsHost::MountState : public DriveFsSession,
       DriveFsHost::Delegate* delegate) {
     auto access_token = auth_delegate->GetCachedAccessToken();
     mojom::DriveFsConfigurationPtr config = {
-        base::in_place,
+        absl::in_place,
         auth_delegate->GetAccountId().GetUserEmail(),
         std::move(access_token),
         auth_delegate->IsMetricsCollectionEnabled(),
         delegate->GetLostAndFoundDirectoryName(),
         base::FeatureList::IsEnabled(chromeos::features::kDriveFsMirroring),
-        delegate->IsVerboseLoggingEnabled()};
+        delegate->IsVerboseLoggingEnabled(),
+        base::FeatureList::IsEnabled(
+            chromeos::features::kDriveFsChromeNetworking),
+    };
     return DriveFsConnection::Create(delegate->CreateMojoListener(),
                                      std::move(config));
   }
@@ -107,6 +119,12 @@ class DriveFsHost::MountState : public DriveFsSession,
   void OnSyncingStatusUpdate(mojom::SyncingStatusPtr status) override {
     for (auto& observer : host_->observers_) {
       observer.OnSyncingStatusUpdate(*status);
+    }
+  }
+
+  void OnMirrorSyncingStatusUpdate(mojom::SyncingStatusPtr status) override {
+    for (auto& observer : host_->observers_) {
+      observer.OnMirrorSyncingStatusUpdate(*status);
     }
   }
 
@@ -175,13 +193,40 @@ class DriveFsHost::MountState : public DriveFsSession,
                     std::move(callback), mojom::DialogResult::kNotDisplayed));
   }
 
+  void ExecuteHttpRequest(
+      mojom::HttpRequestPtr request,
+      mojo::PendingRemote<mojom::HttpDelegate> delegate) override {
+    if (!http_client_) {
+      // The Chrome Network Service <-> DriveFS bridge is not enabled. Ignore
+      // the request and allow the |delegate| to close itself. DriveFS will
+      // pick up on the |delegate| closure and fallback to cURL.
+      return;
+    }
+    http_client_->ExecuteHttpRequest(std::move(request), std::move(delegate));
+  }
+
+  void GetMachineRootID(GetMachineRootIDCallback callback) override {
+    if (!chromeos::features::IsDriveFsMirroringEnabled()) {
+      std::move(callback).Run({});
+      return;
+    }
+    std::move(callback).Run(host_->delegate_->GetMachineRootID());
+  }
+
+  void PersistMachineRootID(const std::string& id) override {
+    if (!chromeos::features::IsDriveFsMirroringEnabled()) {
+      return;
+    }
+    host_->delegate_->PersistMachineRootID(std::move(id));
+  }
+
   // DriveNotificationObserver overrides:
   void OnNotificationReceived(
       const std::map<std::string, int64_t>& invalidations) override {
     std::vector<mojom::FetchChangeLogOptionsPtr> options;
     options.reserve(invalidations.size());
     for (const auto& invalidation : invalidations) {
-      options.emplace_back(base::in_place, invalidation.second,
+      options.emplace_back(absl::in_place, invalidation.second,
                            invalidation.first);
     }
     drivefs_interface()->FetchChangeLog(std::move(options));
@@ -195,11 +240,10 @@ class DriveFsHost::MountState : public DriveFsSession,
   DriveFsHost* const host_;
 
   std::unique_ptr<DriveFsSearch> search_;
+  std::unique_ptr<DriveFsHttpClient> http_client_;
 
   bool token_fetch_attempted_ = false;
   bool team_drives_fetched_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(MountState);
 };
 
 DriveFsHost::DriveFsHost(
@@ -208,7 +252,7 @@ DriveFsHost::DriveFsHost(
     DriveFsHost::MountObserver* mount_observer,
     network::NetworkConnectionTracker* network_connection_tracker,
     const base::Clock* clock,
-    chromeos::disks::DiskMountManager* disk_mount_manager,
+    ash::disks::DiskMountManager* disk_mount_manager,
     std::unique_ptr<base::OneShotTimer> timer)
     : profile_path_(profile_path),
       delegate_(delegate),

@@ -73,15 +73,20 @@ export class QuickViewUma {
     metrics.recordEnum(
         'QuickView.WayToOpen', wayToOpen, QuickViewUma.WayToOpenValues_);
 
-    const volumeType = this.volumeManager_.getVolumeInfo(entry).volumeType;
-    if (QuickViewUma.VolumeType.includes(assert(volumeType))) {
-      metrics.recordEnum(
-          'QuickView.VolumeType', volumeType, QuickViewUma.VolumeType);
+    const volumeInfo = this.volumeManager_.getVolumeInfo(entry);
+    const volumeType = volumeInfo && volumeInfo.volumeType;
+    if (volumeType) {
+      if (QuickViewUma.VolumeType.includes(volumeType)) {
+        metrics.recordEnum(
+            'QuickView.VolumeType', volumeType, QuickViewUma.VolumeType);
+      } else {
+        console.warn('Unknown volume type: ' + volumeType);
+      }
     } else {
-      console.error('Unknown volume type: ' + volumeType);
+      console.warn('Missing volume type');
     }
     // Record stats of dialog types. It must be in sync with
-    // FileDialogType enum in tools/metrics/histograms/histogram.xml.
+    // FileDialogType enum in tools/metrics/histograms/enums.xml.
     metrics.recordEnum('QuickView.DialogType', this.dialogType_, [
       DialogType.SELECT_FOLDER,
       DialogType.SELECT_UPLOAD_FOLDER,
@@ -105,7 +110,7 @@ QuickViewUma.WayToOpen = {
 };
 
 /**
- * The order should be consistnet with the definition  in histograms.xml.
+ * The order should be consistent with the definition in histograms.xml.
  *
  * @const {!Array<QuickViewUma.WayToOpen>}
  * @private
@@ -118,7 +123,7 @@ QuickViewUma.WayToOpenValues_ = [
 
 /**
  * Keep the order of this in sync with FileManagerVolumeType in
- * tools/metrics/histograms/histograms.xml.
+ * tools/metrics/histograms/enums.xml.
  *
  * @type {!Array<VolumeManagerCommon.VolumeType>}
  * @const
@@ -135,4 +140,6 @@ QuickViewUma.VolumeType = [
   VolumeManagerCommon.VolumeType.ANDROID_FILES,
   VolumeManagerCommon.VolumeType.DOCUMENTS_PROVIDER,
   VolumeManagerCommon.VolumeType.SMB,
+  VolumeManagerCommon.VolumeType.SYSTEM_INTERNAL,
+  VolumeManagerCommon.VolumeType.GUEST_OS,
 ];

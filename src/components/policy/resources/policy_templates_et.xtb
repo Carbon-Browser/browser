@@ -127,13 +127,13 @@
       Määrab vahemiku, mille möödudes kuvatakse jaemüügirežiimis seadmete sisselogimiskuval ekraanisäästja.
 
       Määrake reegli väärtus millisekundites.</translation>
-<translation id="1141767714195601945">Reegel juhib Internet Exploreris Carbon Browser Browser Browser'i jaoks mõeldud käsureaparameetreid.
+<translation id="1141767714195601945">Reegel juhib Internet Exploreris Carbon Browser'i jaoks mõeldud käsureaparameetreid.
 
       Kui Internet Exploreri pistikprogramm „Pärandbrauserite tugi” ei ole installitud, ei ole reeglil mingit mõju.
 
-      Kui reegel on määramata, saadab Internet Explorer Carbon Browser Browser Browser'ile käsurea parameetrina ainult URL-i.
+      Kui reegel on määramata, saadab Internet Explorer Carbon Browser'ile käsurea parameetrina ainult URL-i.
 
-      Kui reegli väärtuseks on määratud stringide loend, ühendatakse stringid tühikutega ja saadetakse Carbon Browser Browser Browser'ile käsureaparameetritena.
+      Kui reegli väärtuseks on määratud stringide loend, ühendatakse stringid tühikutega ja saadetakse Carbon Browser'ile käsureaparameetritena.
 
       Kui element sisaldab parameetrit ${url}, asendatakse see avatava lehe URL-iga.
 
@@ -273,7 +273,7 @@ loendist, desinstallib rakendus <ph name="PRODUCT_NAME" /> selle automaatselt.
 
       Reegli iga loendiüksus on string, mis sisaldab laienduse ID-d ja värskenduse URL-i, mis on eraldatud semikooloniga (<ph name="SEMICOLON" />). Laienduse ID on 32-täheline string, mille leiab näiteks saidilt <ph name="CHROME_EXTENSIONS_LINK" />, kui olete arendaja režiimis. Värskenduse URL peab viitama XML-dokumendi värskendusmanifestile, nagu on kirjeldatud jaotises <ph name="LINK_TO_EXTENSION_DOC1" />. Pange tähele, et reeglis määratud „värskenduse” URL-i kasutatakse vaid algsel installimisel ja laienduse tulevased värskendused kasutavad laienduse manifestis märgitud värskenduse URL-i.
 
-      Näiteks reegel <ph name="EXTENSION_POLICY_EXAMPLE" /> installib rakenduse <ph name="EXTENSION_POLICY_EXAMPLE_EXTENSION_NAME" /> standardselt Carbon Browser Browser Browser’i veebipoe värskenduse URL-ilt. Lisateavet hostimise laienduste kohta leiate siit: <ph name="LINK_TO_EXTENSION_DOC2" />.</translation>
+      Näiteks reegel <ph name="EXTENSION_POLICY_EXAMPLE" /> installib rakenduse <ph name="EXTENSION_POLICY_EXAMPLE_EXTENSION_NAME" /> standardselt Carbon Browser’i veebipoe värskenduse URL-ilt. Lisateavet hostimise laienduste kohta leiate siit: <ph name="LINK_TO_EXTENSION_DOC2" />.</translation>
 <translation id="1435659902881071157">Seadme tasemel võrgukonfigureerimine</translation>
 <translation id="1438739959477268107">Võtmete loomise vaikeseade</translation>
 <translation id="1454846751303307294">Võimaldab teil määrata URL-i mustrite loendi, mis määrab saidid, millel on keelatud JavaScripti käitada.
@@ -434,11 +434,11 @@ loendist, desinstallib rakendus <ph name="PRODUCT_NAME" /> selle automaatselt.
 
       Kui reegel on määramata, ei ole rakenduse <ph name="TPM_FIRMWARE_UPDATE_TPM" /> püsivaravärskenduse funktsioon saadaval.</translation>
 <translation id="1708496595873025510">Piirangu määramine variatsioonide lähteväärtuse toomisele</translation>
-<translation id="1717817358640580294">Kui reegel on määramata ja Carbon Browser Browser Browser Cleanup tuvastab soovimatu tarkvara, võib teenus edastada skanni metaandmed Google'ile, järgides atribuudiga SafeBrowsingExtendedReportingEnabled määratud reeglit. Carbon Browser Browser Browser Cleanup küsib seejärel kasutajalt, kas ta soovib tuvastatud tarkvara eemaldada. Seejärel võib kasutaja jagada puhastuse tulemusi Google'iga, et täiustada soovimatu tarkvara tuvastamise funktsiooni. Tulemused sisaldavad faili metaandmeid, automaatselt installitud laiendusi ja registrivõtmeid, mida kirjeldatakse Carbon Browser Browser Browser'i privaatsuse juhendis.
+<translation id="1717817358640580294">Kui reegel on määramata ja Carbon Browser Cleanup tuvastab soovimatu tarkvara, võib teenus edastada skanni metaandmed Google'ile, järgides atribuudiga SafeBrowsingExtendedReportingEnabled määratud reeglit. Carbon Browser Cleanup küsib seejärel kasutajalt, kas ta soovib tuvastatud tarkvara eemaldada. Seejärel võib kasutaja jagada puhastuse tulemusi Google'iga, et täiustada soovimatu tarkvara tuvastamise funktsiooni. Tulemused sisaldavad faili metaandmeid, automaatselt installitud laiendusi ja registrivõtmeid, mida kirjeldatakse Carbon Browser'i privaatsuse juhendis.
 
-      Kui reegel on keelatud ja Carbon Browser Browser Browser Cleanup tuvastab soovimatu tarkvara, ei edasta teenus skanni metaandmeid Google'ile, alistades atribuudiga SafeBrowsingExtendedReportingEnabled määratud reegli. Carbon Browser Browser Browser Cleanup küsib kasutajalt, kas ta soovib tuvastatud tarkvara eemaldada.  Puhastuse tulemusi ei edastata Google'ile ja kasutajale ei esitata sellekohast valikut.
+      Kui reegel on keelatud ja Carbon Browser Cleanup tuvastab soovimatu tarkvara, ei edasta teenus skanni metaandmeid Google'ile, alistades atribuudiga SafeBrowsingExtendedReportingEnabled määratud reegli. Carbon Browser Cleanup küsib kasutajalt, kas ta soovib tuvastatud tarkvara eemaldada.  Puhastuse tulemusi ei edastata Google'ile ja kasutajale ei esitata sellekohast valikut.
 
-      Kui reegel on lubatud ja Carbon Browser Browser Browser Cleanup tuvastab soovimatu tarkvara, võib teenus edastada skanni metaandmed Google'ile, järgides atribuudiga SafeBrowsingExtendedReportingEnabled määratud reeglit. Carbon Browser Browser Browser Cleanup küsib kasutajalt, kas ta soovib tuvastatud tarkvara eemaldada.  Puhastuse tulemused edastatakse Google'ile ja kasutaja ei saa seda takistada.
+      Kui reegel on lubatud ja Carbon Browser Cleanup tuvastab soovimatu tarkvara, võib teenus edastada skanni metaandmed Google'ile, järgides atribuudiga SafeBrowsingExtendedReportingEnabled määratud reeglit. Carbon Browser Cleanup küsib kasutajalt, kas ta soovib tuvastatud tarkvara eemaldada.  Puhastuse tulemused edastatakse Google'ile ja kasutaja ei saa seda takistada.
 
       Reegel on saadaval ainult Windowsi eksemplarides, mis on liidetud domeeniga <ph name="MS_AD_NAME" />, ja Windows 10 Pro või Enterprise'i eksemplaridega, mis on registreeritud seadmehalduse teenuses.</translation>
 <translation id="172374442286684480">Luba kõikidel saitidel kohalike andmete määramine</translation>
@@ -634,7 +634,7 @@ loendist, desinstallib rakendus <ph name="PRODUCT_NAME" /> selle automaatselt.
 <translation id="2073552873076775140">Teenusesse <ph name="PRODUCT_NAME" /> sisselogimise lubamine</translation>
 <translation id="2077129598763517140">Kasuta võimaluse korral riistvaralist kiirendust</translation>
 <translation id="2077273864382355561">Ekraani väljalülitamise viiteaeg akutoite kasutamisel</translation>
-<translation id="2082205219176343977">Seadmes kõige vanema lubatud Carbon Browser Browser Browser'i versiooni seadistamine.</translation>
+<translation id="2082205219176343977">Seadmes kõige vanema lubatud Carbon Browser'i versiooni seadistamine.</translation>
 <translation id="209586405398070749">Stabiilne kanal</translation>
 <translation id="2098658257603918882">Luba kasutus- ja krahhiandmete aruandlus</translation>
 <translation id="2104418465060359056">Laienduste ja pistikprogrammide teabe edastamine</translation>
@@ -679,7 +679,7 @@ loendist, desinstallib rakendus <ph name="PRODUCT_NAME" /> selle automaatselt.
       Kui keelate selle seadevõi jätate selle määramata, kuvatakse kõik hõiveportaali autentimislehed (tavapärasel) brauseri uuel vahelehel, kasutades praeguse kasutaja puhverserveri seadeid.</translation>
 <translation id="21394354835637379">Võimaldab määrata, millised URL-id tohivad installida laiendusi, rakendusi ja teemasid.
 
-          Alates rakenduse <ph name="PRODUCT_NAME" /> versioonist 21 on väljaspoolt Carbon Browser Browser Browser'i veebipoodi hangitud laienduste, rakenduste ja kasutajaskriptide installimine keerulisem. Varem said kasutajad klõpsata *.crx-faili lingil ja <ph name="PRODUCT_NAME" /> pakkus pärast paari hoiatust võimaluse fail installida. Alates rakenduse <ph name="PRODUCT_NAME" /> versioonist 21 tuleb sellised failid alla laadida ja lohistada rakenduse <ph name="PRODUCT_NAME" /> seadete lehele. Seade võimaldab teatud URL-ide puhul ka vana ja lihtsamat installivoogu.
+          Alates rakenduse <ph name="PRODUCT_NAME" /> versioonist 21 on väljaspoolt Carbon Browser'i veebipoodi hangitud laienduste, rakenduste ja kasutajaskriptide installimine keerulisem. Varem said kasutajad klõpsata *.crx-faili lingil ja <ph name="PRODUCT_NAME" /> pakkus pärast paari hoiatust võimaluse fail installida. Alates rakenduse <ph name="PRODUCT_NAME" /> versioonist 21 tuleb sellised failid alla laadida ja lohistada rakenduse <ph name="PRODUCT_NAME" /> seadete lehele. Seade võimaldab teatud URL-ide puhul ka vana ja lihtsamat installivoogu.
 
           Kõik loendis olevad üksused on laiendusstiilis vastendusmustrid (vt https://developer.chrome.com/extensions/match_patterns). Kasutajad saavad üksused hõlpsasti installida mis tahes URL-ilt, mis vastab loendis olevale üksusele. Need mustrid peavad lubama nii *.crx-faili asukoha kui ka lehe, millelt allalaadimine käivitatakse (st viitaja).
 
@@ -755,7 +755,7 @@ loendist, desinstallib rakendus <ph name="PRODUCT_NAME" /> selle automaatselt.
 
       Kui reegel on keelatud või määramata, ei saa tehniliste andmete põhjal lehed mahalaadimise ajal hüpikaknaid kuvada (https://html.spec.whatwg.org/#apis-for-creating-and-navigating-browsing-contexts-by-name).
 
-      See reegel eemaldatakse Carbon Browser Browser Browser'i versioonis 82.
+      See reegel eemaldatakse Carbon Browser'i versioonis 82.
 
       Vt https://www.chromestatus.com/feature/5989473649164288 .</translation>
 <translation id="2269319728625047531">Sisselogimisel sünkroonimise nõusoleku kuvamise lubamine</translation>
@@ -829,9 +829,9 @@ loendist, desinstallib rakendus <ph name="PRODUCT_NAME" /> selle automaatselt.
 <translation id="2463034609187171371">TLS-is DHE šifreerimiskomplektide lubamine</translation>
 <translation id="2463365186486772703">Rakenduse lokaat</translation>
 <translation id="2466131534462628618">Hõiveportaali autentimisel puhverserveri eiramine</translation>
-<translation id="2471748297300970300">Reegli keelamisel takistab see turvahoiatuste kuvamist, kui Carbon Browser Browser Browser käivitatakse koos potentsiaalselt kahjulike käsureamärgistustega.
+<translation id="2471748297300970300">Reegli keelamisel takistab see turvahoiatuste kuvamist, kui Carbon Browser käivitatakse koos potentsiaalselt kahjulike käsureamärgistustega.
 
-          Reegli lubamisel või määramata jätmisel kuvatakse turvahoiatused, kui Carbon Browser Browser Browser’i käivitamisel kasutatakse mõnda käsureamärgistust.
+          Reegli lubamisel või määramata jätmisel kuvatakse turvahoiatused, kui Carbon Browser’i käivitamisel kasutatakse mõnda käsureamärgistust.
 
           Windowsis on see reegel saadaval ainult eksemplarides, mis on liidetud domeeniga <ph name="MS_AD_NAME" />, või Windows 10 Pro või Enterprise'i eksemplarides, mis on registreeritud seadmehalduse teenuses.</translation>
 <translation id="2482676533225429905">Omasõnumside</translation>
@@ -954,7 +954,7 @@ loendist, desinstallib rakendus <ph name="PRODUCT_NAME" /> selle automaatselt.
           Google'i otsingu URL-iks võib määrata: <ph name="GOOGLE_SEARCH_URL" />
 
           Valik tuleb määrata ja seda rakendatakse vaid juhul, kui reegel „DefaultSearchProviderEnabled” on lubatud.</translation>
-<translation id="2659019163577049044">Kui seade on lubatud, võivad kasutajad seadmetes seadistada SMS-ide sünkroonimise telefoni ja Carbon Browser Browser Browserbooki vahel. Pange tähele, et kui reegel on lubatud, peavad kasutajad funktsiooni selgesõnaliselt lubama, viies lõpule seadistusvoo. Pärast seadistusvoo lõppu saavad kasutajad Carbon Browser Browser Browserbookis SMS-e saata ja vastu võtta.
+<translation id="2659019163577049044">Kui seade on lubatud, võivad kasutajad seadmetes seadistada SMS-ide sünkroonimise telefoni ja Carbon Browserbooki vahel. Pange tähele, et kui reegel on lubatud, peavad kasutajad funktsiooni selgesõnaliselt lubama, viies lõpule seadistusvoo. Pärast seadistusvoo lõppu saavad kasutajad Carbon Browserbookis SMS-e saata ja vastu võtta.
 
       Kui seade on keelatud, ei ole kasutajatel lubatud SMS-ide sünkroonimist seadistada.
 
@@ -972,7 +972,7 @@ loendist, desinstallib rakendus <ph name="PRODUCT_NAME" /> selle automaatselt.
 <translation id="2706708761587205154">Printimise lubamine ainult PIN-koodiga</translation>
 <translation id="2710534340210290498">Kui selle reegli väärtuseks määratakse Väär, ei saa kasutajad ekraani lukustada (võimalik on ainult kasutajaseansist väljalogimine). Kui seade väärtuseks määratakse Tõene või väärtust ei määrata, saavad parooliga autentinud kasutajad ekraani lukustada.</translation>
 <translation id="2731627323327011390">Keela ARC-rakenduste jaoks operatsioonisüsteemi <ph name="PRODUCT_OS_NAME" /> sertifikaatide kasutamine</translation>
-<translation id="2742843273354638707">Peitke Carbon Browser Browser Browser'i veebipoe rakendus ja jaluse link uuel vahelehel ja operatsioonisüsteemi <ph name="PRODUCT_OS_NAME" /> rakenduse käivitajas.
+<translation id="2742843273354638707">Peitke Carbon Browser'i veebipoe rakendus ja jaluse link uuel vahelehel ja operatsioonisüsteemi <ph name="PRODUCT_OS_NAME" /> rakenduse käivitajas.
 
       Kui selle reegli olekuks määratakse Tõene, siis ikoonid peidetakse.
 
@@ -1035,12 +1035,12 @@ loendist, desinstallib rakendus <ph name="PRODUCT_NAME" /> selle automaatselt.
       Kui selle reegli väärtuseks on määratud mis tahes ajavahemikud, toimub järgmine.
       Seadmed ei saa nendel konkreetsetel ajavahemikel automaatselt värskendusi kontrollida. See reegel ei mõjuta võimalike turvaohtude tõttu seadmeid, mis tuleb viia vanemale versioonile või mis kasutavad vanemat kui minimaalset nõutavat versiooni <ph name="PRODUCT_OS_NAME" />. Peale selle ei blokeeri see reegel kasutajate või administraatorite taotletud värskenduste kontrolle.
       Kui see reegel on määramata või ei sisalda ajavahemikke, toimub järgmine.
-      See reegel ei blokeeri automaatseid värskenduste kontrolle, kuid muud reeglid võivad seda teha. See funktsioon on lubatud ainult Carbon Browser Browser Browser’i seadetes, mis on seadistatud kui automaatselt käivituvad kioskid. Teisi seadmeid need eeskirjad ei piira.</translation>
+      See reegel ei blokeeri automaatseid värskenduste kontrolle, kuid muud reeglid võivad seda teha. See funktsioon on lubatud ainult Carbon Browser’i seadetes, mis on seadistatud kui automaatselt käivituvad kioskid. Teisi seadmeid need eeskirjad ei piira.</translation>
 <translation id="2823870601012066791">Windowsi registri asukoht operatsioonisüsteemiga <ph name="PRODUCT_OS_NAME" /> klientide puhul:</translation>
 <translation id="2824715612115726353">Luba inkognitorežiim</translation>
 <translation id="2836621397261130126">Juhib, kas KDC reegli kinnitamist järgitakse, et otsustada, kas volitada üksuse <ph name="KERBEROS" /> piletid.
 
-          Kui reegel on seatud väärtusele Tõene, järgib HTTP autentimine KDC reegli kinnitamist, st: Carbon Browser Browser Browser volitab mandaate ainult juhul, kui KDC määrab teenusepiletile olekuks <ph name="OK_AS_DELEGATE" />. Lisateavet leiate saidilt https://tools.ietf.org/html/rfc5896.html . Teenus peaks järgima ka reeglit „AuthNegotiateDelegateWhitelist”.
+          Kui reegel on seatud väärtusele Tõene, järgib HTTP autentimine KDC reegli kinnitamist, st: Carbon Browser volitab mandaate ainult juhul, kui KDC määrab teenusepiletile olekuks <ph name="OK_AS_DELEGATE" />. Lisateavet leiate saidilt https://tools.ietf.org/html/rfc5896.html . Teenus peaks järgima ka reeglit „AuthNegotiateDelegateWhitelist”.
 
           Kui reegel on määramata või seatud väärtusele Väär, eiratakse toetatud platvormidel KDC reeglit ja järgitakse ainult reeglit „AuthNegotiateDelegateWhitelist”.
 
@@ -1188,7 +1188,7 @@ loendist, desinstallib rakendus <ph name="PRODUCT_NAME" /> selle automaatselt.
           Kui jätate selle reegli määramata, siis kasutatakse reeglit „AllowJavaScript” ja kasutaja saab seda muuta.</translation>
 <translation id="3038323923255997294">Jätka taustarakenduste käitamist pärast rakenduse <ph name="PRODUCT_NAME" /> sulgemist</translation>
 <translation id="3046192273793919231">Veebioleku jälgimiseks võrgupakettide haldusserverisse saatmine</translation>
-<translation id="3047732214002457234">Määrab, kuidas Carbon Browser Browser Browser Cleanup edastab andmeid Google'ile</translation>
+<translation id="3047732214002457234">Määrab, kuidas Carbon Browser Cleanup edastab andmeid Google'ile</translation>
 <translation id="304775240152542058">Reegel juhib alternatiivse brauseri käivitamiseks mõeldud käsureaparameetreid.
 
       Kui reegel on määramata, edastatakse ainult URL käsureaparameetritena.
@@ -1260,9 +1260,9 @@ loendist, desinstallib rakendus <ph name="PRODUCT_NAME" /> selle automaatselt.
       Kui reegel on määramata või selle väärtuseks on määratud Väär, ei ole DHE šifreerimiskomplektid TLS-is lubatud. Selle väärtuseks võib olla määratud ka Tõene, et lubada DHE šifreerimiskomplektid ja et säilitada ühilduvus aegunud serveriga. See on ajutine meede ja server tuleks ümber seadistada.
 
       Serverid on soovitatav üle viia ECDHE šifreerimiskomplektidele. Kui need ei ole saadaval, lubage kindlasti RSA võtmevahetust kasutav šifreerimiskomplekt.</translation>
-<translation id="3117706142826400449">Kui reegel on keelatud, on Carbon Browser Browser Browser Cleanupil keelatud süsteemi soovimatu tarkvara suhtes skannida ja puhastada. Carbon Browser Browser Browser Cleanupi käsitsi käivitamine aadressil chrome://settings/cleanup on keelatud.
+<translation id="3117706142826400449">Kui reegel on keelatud, on Carbon Browser Cleanupil keelatud süsteemi soovimatu tarkvara suhtes skannida ja puhastada. Carbon Browser Cleanupi käsitsi käivitamine aadressil chrome://settings/cleanup on keelatud.
 
-      Kui reegel on lubatud või määramata, skannib Carbon Browser Browser Browser Cleanup regulaarselt süsteemi soovimatu tarkvara suhtes. Soovimatu tarkvara leidmisel küsitakse kasutajalt, kas ta soovib selle eemaldada. Carbon Browser Browser Browser Cleanupi käsitsi käivitamine aadressil chrome://settings on lubatud.
+      Kui reegel on lubatud või määramata, skannib Carbon Browser Cleanup regulaarselt süsteemi soovimatu tarkvara suhtes. Soovimatu tarkvara leidmisel küsitakse kasutajalt, kas ta soovib selle eemaldada. Carbon Browser Cleanupi käsitsi käivitamine aadressil chrome://settings on lubatud.
 
       Reegel on saadaval ainult Windowsi eksemplarides, mis on liidetud domeeniga <ph name="MS_AD_NAME" />, ja Windows 10 Pro või Enterprise'i eksemplaridega, mis on registreeritud seadmehalduse teenuses.</translation>
 <translation id="3152425128389603870">Muudab ühendatud töölaud kättesaadavaks ja lülitab selle vaikimisi sisse</translation>
@@ -1373,7 +1373,7 @@ loendist, desinstallib rakendus <ph name="PRODUCT_NAME" /> selle automaatselt.
       Kui selle seade väärtuseks on määratud Väljas või väärtust pole määratud, siis teenus <ph name="PRODUCT_NAME" /> piiratud režiimi YouTube'is ei jõusta. Välised eeskirjad (nt YouTube'i eeskirjad) võivad piiratud režiimi siiski jõustada.</translation>
 <translation id="3428247105888806363">Luba võrgu prognoos</translation>
 <translation id="3432863169147125747">Haldab printimisseadeid.</translation>
-<translation id="3434932177006334880">Enne Carbon Browser Browser Browser'i versiooni 42 oli selle seade nimi EnableWebBasedSignin ja selle tugi eemaldatakse täielikult Carbon Browser Browser Browser'i versioonis 43.
+<translation id="3434932177006334880">Enne Carbon Browser'i versiooni 42 oli selle seade nimi EnableWebBasedSignin ja selle tugi eemaldatakse täielikult Carbon Browser'i versioonis 43.
 
       See seade on kasulik ettevõtte klientidele, kes kasutavad SSO lahendusi, mis ei ühildu veel uue tekstisisese sisselogimisvooga.
       Kui lubate seade, kasutatakse vana veebipõhist sisselogimisvoogu.
@@ -1470,9 +1470,9 @@ loendist, desinstallib rakendus <ph name="PRODUCT_NAME" /> selle automaatselt.
 <translation id="3646859102161347133">Ekraaniluubi tüübi määramine</translation>
 <translation id="3653237928288822292">Vaikeotsingupakkuja ikoon</translation>
 <translation id="3660510274595679517">
-        Kui selle reegli väärtuseks määratakse Tõene, on pilvehalduses registreerumine kohustuslik. Kui tingimus pole täidetud, blokeeritakse Carbon Browser Browser Browser'i käivitamise protsess.
+        Kui selle reegli väärtuseks määratakse Tõene, on pilvehalduses registreerumine kohustuslik. Kui tingimus pole täidetud, blokeeritakse Carbon Browser'i käivitamise protsess.
 
-        Kui selle reegli väärtuseks määratakse Väär või see jäetakse määramata, on pilvehalduses registreerumine valikuline. Kui tingimus pole täidetud, siis Carbon Browser Browser Browser'i käivitamise protsessi ei blokeerita.
+        Kui selle reegli väärtuseks määratakse Väär või see jäetakse määramata, on pilvehalduses registreerumine valikuline. Kui tingimus pole täidetud, siis Carbon Browser'i käivitamise protsessi ei blokeerita.
 
         Seda reeglit kasutatakse arvutites seadme ulatuses pilvereegli registreerimiseks ja selle saab määrata failiga Registry või GPO Windowsis, failiga plist Macis ja JSON-i reeglifailiga Linuxis.</translation>
 <translation id="3660562134618097814">SAML IdP küpsisefailide ülekandmine sisselogimisel</translation>
@@ -1667,11 +1667,11 @@ loendist, desinstallib rakendus <ph name="PRODUCT_NAME" /> selle automaatselt.
 <translation id="3984028218719007910">Määrab, kas <ph name="PRODUCT_OS_NAME" /> säilitab kohaliku konto andmed pärast väljalogimist. Selle reegli lubamisel ei säilita <ph name="PRODUCT_OS_NAME" /> kontode andmeid ja kasutaja seansi kõik andmed eemaldatakse pärast väljalogimist. Kui keelate selle reegli või jätate määramata, siis võib seade säilitada kohaliku kasutaja andmeid (krüptitult).</translation>
 <translation id="398475542699441679">See reegel kontrollib, kas lubada pärandbrauserite tugi.
 
-      Kui see reegel on seadistamata või keelatud, ei ürita Carbon Browser Browser Browser alternatiivses brauseris määratud URLe avada.
+      Kui see reegel on seadistamata või keelatud, ei ürita Carbon Browser alternatiivses brauseris määratud URLe avada.
 
-      Kui see reegel on lubatud, üritab Carbon Browser Browser Browser osasid URLe alternatiivses brauseris avada (näiteks Internet Expolrer). See funktsioon on seadistatud, kasutades reegleid grupis <ph name="LEGACY_BROWSER_SUPPORT_POLICY_GROUP" />.
+      Kui see reegel on lubatud, üritab Carbon Browser osasid URLe alternatiivses brauseris avada (näiteks Internet Expolrer). See funktsioon on seadistatud, kasutades reegleid grupis <ph name="LEGACY_BROWSER_SUPPORT_POLICY_GROUP" />.
 
-      See funktsioon on laienduse <ph name="LEGACY_BROWSER_SUPPORT_EXTENSION_NAME" /> asendus. Laienduse konfiguratsioonid lisatakse sellesse funktsiooni, aga tungivalt soovituslik on siiski Carbon Browser Browser Browser’i reegleid kasutada. See tagab parema ühilduvuse tulevikus.</translation>
+      See funktsioon on laienduse <ph name="LEGACY_BROWSER_SUPPORT_EXTENSION_NAME" /> asendus. Laienduse konfiguratsioonid lisatakse sellesse funktsiooni, aga tungivalt soovituslik on siiski Carbon Browser’i reegleid kasutada. See tagab parema ühilduvuse tulevikus.</translation>
 <translation id="3997519162482760140">URL-id, millele antakse SAML-i sisselogimislehtedel juurdepääs videosalvestusseadmetele</translation>
 <translation id="4001275826058808087">Ettevõtte seadmete IT-administraatorid saavad selle märgistuse abil juhtida, kas lubada kasutajatel pakkumisi lunastada Chrome OS-i registreerimise abil.
 
@@ -1689,13 +1689,13 @@ loendist, desinstallib rakendus <ph name="PRODUCT_NAME" /> selle automaatselt.
 
           See reegel seatakse ettepoole potentsiaalselt konfliktsest reeglist <ph name="EXTENSION_INSTALL_BLACKLIST_POLICY_NAME" />. Kui varem sundinstallitud rakendus või laiendus sellest loendist eemaldatakse, desinstallib teenus <ph name="PRODUCT_NAME" /> selle automaatselt.
 
-          Windowsi eksemplaride puhul, mis ei ole ühendatud domeeniga <ph name="MS_AD_NAME" />, saab sundinstallida vaid Carbon Browser Browser Browser’i veebipoes olevaid rakendusi ja laiendusi.
+          Windowsi eksemplaride puhul, mis ei ole ühendatud domeeniga <ph name="MS_AD_NAME" />, saab sundinstallida vaid Carbon Browser’i veebipoes olevaid rakendusi ja laiendusi.
 
           Pange tähele, et arendaja tööriistadega saavad kasutajad muuta iga laienduse lähtekoodi (mis võib põhjustada laienduse väärtalitlust). Kui see on probleem, tuleb määrata reegel <ph name="DEVELOPER_TOOLS_POLICY_NAME" />.
 
-          Reegli iga loendiüksus on string, mis sisaldab laienduse ID-d ja „värskenduse” URL-i, mis on eraldatud semikooloniga (<ph name="SEMICOLON" />). Laienduse ID on 32-täheline string, mis kuvatakse näiteks arendajarežiimis aadressil <ph name="CHROME_EXTENSIONS_LINK" />. Värskenduse URL peab viitama XML-dokumendi värskendusmanifestile, nagu on kirjeldatud jaotises <ph name="LINK_TO_EXTENSION_DOC1" />. Vaikimisi kasutatakse Carbon Browser Browser Browser'i veebipoe värskenduse URL-i (praegu „https://clients2.google.com/service/update2/crx”). Pange tähele, et reeglis määratud värskenduse URL-i kasutatakse vaid algsel installimisel ja laienduse tulevased värskendused kasutavad laienduse manifestis märgitud värskenduse URL-i. Samuti pange tähele, et selgesõnalise värskenduse URL-i määramine oli kuni rakenduse <ph name="PRODUCT_NAME" /> 67. versioonini kohustuslik.
+          Reegli iga loendiüksus on string, mis sisaldab laienduse ID-d ja „värskenduse” URL-i, mis on eraldatud semikooloniga (<ph name="SEMICOLON" />). Laienduse ID on 32-täheline string, mis kuvatakse näiteks arendajarežiimis aadressil <ph name="CHROME_EXTENSIONS_LINK" />. Värskenduse URL peab viitama XML-dokumendi värskendusmanifestile, nagu on kirjeldatud jaotises <ph name="LINK_TO_EXTENSION_DOC1" />. Vaikimisi kasutatakse Carbon Browser'i veebipoe värskenduse URL-i (praegu „https://clients2.google.com/service/update2/crx”). Pange tähele, et reeglis määratud värskenduse URL-i kasutatakse vaid algsel installimisel ja laienduse tulevased värskendused kasutavad laienduse manifestis märgitud värskenduse URL-i. Samuti pange tähele, et selgesõnalise värskenduse URL-i määramine oli kuni rakenduse <ph name="PRODUCT_NAME" /> 67. versioonini kohustuslik.
 
-          Näiteks reegel <ph name="EXTENSION_POLICY_EXAMPLE" /> installib laienduse ID-ga <ph name="EXTENSION_ID_SAMPLE" /> standardselt Carbon Browser Browser Browser'i veebipoe värskenduse URL-ilt. Lisateavet laienduste hostimise kohta leiate siit: <ph name="LINK_TO_EXTENSION_DOC2" />.
+          Näiteks reegel <ph name="EXTENSION_POLICY_EXAMPLE" /> installib laienduse ID-ga <ph name="EXTENSION_ID_SAMPLE" /> standardselt Carbon Browser'i veebipoe värskenduse URL-ilt. Lisateavet laienduste hostimise kohta leiate siit: <ph name="LINK_TO_EXTENSION_DOC2" />.
 
           Kui see reegel jäetakse määramata, ei installita automaatselt ühtki rakendust ega laiendust ja kasutaja saab iga rakenduse või laienduse desinstallida teenuses <ph name="PRODUCT_NAME" />.
 
@@ -1802,7 +1802,7 @@ loendist, desinstallib rakendus <ph name="PRODUCT_NAME" /> selle automaatselt.
           Kui määrate reegli, ei saa kasutajad seda muuta ega alistada.
 
           Kui reegel on määramata, on nakkeklahvid algselt keelatud, kuid kasutaja võib need igal ajal lubada.</translation>
-<translation id="4171331498167688968">Kui reegel on määratud väärtusele Väär, on kolmanda osapoole tarkvaral lubatud sisestada Carbon Browser Browser Browser'i protsessidesse täitmiskoodi. Kui reegel on määramata või seatud väärtusele Tõene, on kolmandal osapoolel keelatud täitmiskoodi Carbon Browser Browser Browser'i protsessidesse sisestada.
+<translation id="4171331498167688968">Kui reegel on määratud väärtusele Väär, on kolmanda osapoole tarkvaral lubatud sisestada Carbon Browser'i protsessidesse täitmiskoodi. Kui reegel on määramata või seatud väärtusele Tõene, on kolmandal osapoolel keelatud täitmiskoodi Carbon Browser'i protsessidesse sisestada.
 
       Olenemata selle reegli väärtusest ei blokeeri brauser praegu kolmanda osapoole tarkvara puhul täitmiskoodi sisestamist selle protsessidesse seadmes, mis on liitunud üksuse <ph name="MS_AD_NAME" /> domeeniga.</translation>
 <translation id="4183229833636799228">Pistikprogrammi <ph name="FLASH_PLUGIN_NAME" /> vaikeseade</translation>
@@ -1870,11 +1870,11 @@ loendist, desinstallib rakendus <ph name="PRODUCT_NAME" /> selle automaatselt.
 <translation id="4298509794364745131">Määratakse loend rakendustest, mille saab operatsioonisüsteemi <ph name="PRODUCT_OS_NAME" /> lukustuskuval lubada märkmete tegemise rakendustena.
 
       Kui eelistatud märkmete tegemise rakendus on lukustuskuval lubatud, sisaldab lukustuskuva kasutajaliidese elementi eelistatud märkmete tegemise rakenduse käivitamiseks.
-      Rakendus saab käivitamisel lukustuskuva peale luua rakenduse akna ja lukustuskuva kontekstis luua andmeüksusi (märkmeid). Rakendus saab loodud märkmed importida peamise kasutaja seanssi, kui see avatakse. Praegu toetatakse lukustuskuval ainult Carbon Browser Browser Browser'i märkmete tegemise rakendusi.
+      Rakendus saab käivitamisel lukustuskuva peale luua rakenduse akna ja lukustuskuva kontekstis luua andmeüksusi (märkmeid). Rakendus saab loodud märkmed importida peamise kasutaja seanssi, kui see avatakse. Praegu toetatakse lukustuskuval ainult Carbon Browser'i märkmete tegemise rakendusi.
 
       Kui see reegel on määratud, saab kasutaja rakenduse lukustuskuval lubada ainult siis, kui rakenduse laienduse ID on reeglite loendis olevas väärtuses olemas.
       Seega, kui reegli väärtuseks määratakse tühi loend, keelatakse märkmete tegemine lukustuskuval täielikult.
-      Pange tähele, et reegel, mis sisaldab rakenduse ID-d, ei tähenda alati seda, et kasutaja saab rakenduse lubada lukustuskuval märkmete tegemise rakendusena. Näiteks Carbon Browser Browser Browser'i versioonis 61 on saadaolevate rakenduste kogumi täiendavalt piiranud ka platvorm.
+      Pange tähele, et reegel, mis sisaldab rakenduse ID-d, ei tähenda alati seda, et kasutaja saab rakenduse lubada lukustuskuval märkmete tegemise rakendusena. Näiteks Carbon Browser'i versioonis 61 on saadaolevate rakenduste kogumi täiendavalt piiranud ka platvorm.
 
       Kui reegel jäetakse määramata, puuduvad piirangud rakenduste kogumile, mille kasutaja saab lukustuskuval reegliga lubada.</translation>
 <translation id="4313767483634435271">Seadme jaoks määratud doki MAC-aadress</translation>
@@ -2031,7 +2031,7 @@ loendist, desinstallib rakendus <ph name="PRODUCT_NAME" /> selle automaatselt.
 <translation id="467236746355332046">Toetatud funktsioonid:</translation>
 <translation id="4674167212832291997">Kohandab loendit URL-i mustritest, mida renderdatakse alati rakendusega <ph name="PRODUCT_FRAME_NAME" />.
 
-          Kui jätate selle reegli määramata, kasutatakse kõikide saitide puhul vaikerenderdajat, mis on määratud reegliga „Carbon Browser Browser BrowserFrameRendererSettings”.
+          Kui jätate selle reegli määramata, kasutatakse kõikide saitide puhul vaikerenderdajat, mis on määratud reegliga „Carbon BrowserFrameRendererSettings”.
 
           Vaadake näidismustreid aadressilt http://www.chromium.org/developers/how-tos/chrome-frame-getting-started.</translation>
 <translation id="467449052039111439">Ava URL-ide loend</translation>
@@ -2130,10 +2130,10 @@ loendist, desinstallib rakendus <ph name="PRODUCT_NAME" /> selle automaatselt.
 
       Kui selle reegli väärtuseks määratakse Väär, ei luba teenus <ph name="PRODUCT_NAME" /> kasutajahalduris uusi profiile luua.</translation>
 <translation id="4970855112942626932">Brauserisse sisselogimise keelamine</translation>
-<translation id="4978405676361550165">Kui reegel „OffHours” on määratud, siis eiratakse määratud ajavahemikes seadmereegleid (kasutage nende reeglite vaikeseadeid). Carbon Browser Browser Browser rakendab seadmereegleid uuesti iga sündmuse puhul, kui ajavahemik „OffHours” algab või lõpeb. Kui ajavahemik „OffHours” lõpeb ja seadmereeglite seadeid muudetakse, teavitatakse sellest kasutajat ning ta logitakse välja (näiteks kui kasutaja pole sisse logitud lubatud kontoga).</translation>
+<translation id="4978405676361550165">Kui reegel „OffHours” on määratud, siis eiratakse määratud ajavahemikes seadmereegleid (kasutage nende reeglite vaikeseadeid). Carbon Browser rakendab seadmereegleid uuesti iga sündmuse puhul, kui ajavahemik „OffHours” algab või lõpeb. Kui ajavahemik „OffHours” lõpeb ja seadmereeglite seadeid muudetakse, teavitatakse sellest kasutajat ning ta logitakse välja (näiteks kui kasutaja pole sisse logitud lubatud kontoga).</translation>
 <translation id="4980635395568992380">Andmetüüp:</translation>
 <translation id="4983201894483989687">Luba vananenud pistikprogrammide käitamine</translation>
-<translation id="4986560318567565414">Carbon Browser Browser Browser'i tee alternatiivselt brauserilt üleminemiseks.</translation>
+<translation id="4986560318567565414">Carbon Browser'i tee alternatiivselt brauserilt üleminemiseks.</translation>
 <translation id="4988291787868618635">Tehtav toiming, kui möödub jõudeoleku viiteaeg</translation>
 <translation id="5034604678285451405">Aku läve määramine protsentides elektrikasutuse nihutamisele tarbimise tippajast.
 
@@ -2207,11 +2207,11 @@ loendist, desinstallib rakendus <ph name="PRODUCT_NAME" /> selle automaatselt.
       Kui reegli väärtuseks on määratud 0, on seadme konto parooli muutmine keelatud.
 
       Pange tähele, et paroolid võivad saada vanemaks kui määratud päevade arv, kui klient on pikemat aega võrgust väljas olnud.</translation>
-<translation id="510196893779239086">See reegel määrab, kas sulgeda Carbon Browser Browser Browser täielikult pärast seda, kui viimane vaheleht avaneb mõnes muus brauseris.
+<translation id="510196893779239086">See reegel määrab, kas sulgeda Carbon Browser täielikult pärast seda, kui viimane vaheleht avaneb mõnes muus brauseris.
 
-      Kui see reegel on määramata või on seatud väärtusele Tõene, jätab Carbon Browser Browser Browser lahti vähemalt ühe vahelehe pärast alternatiivses brauseris avamist.
+      Kui see reegel on määramata või on seatud väärtusele Tõene, jätab Carbon Browser lahti vähemalt ühe vahelehe pärast alternatiivses brauseris avamist.
 
-      Kui see reegel on seatud väärtusele Väär, sulgeb Carbon Browser Browser Browser vahelehe peale alternatiivses brauseris avanemist, isegi siis, kui see on viimane vaheleht. See tähendab, et Carbon Browser Browser Browser sulgub täielikult.</translation>
+      Kui see reegel on seatud väärtusele Väär, sulgeb Carbon Browser vahelehe peale alternatiivses brauseris avanemist, isegi siis, kui see on viimane vaheleht. See tähendab, et Carbon Browser sulgub täielikult.</translation>
 <translation id="5102203758995933166">Võimaldab võrguseadistuse seadmes <ph name="PRODUCT_OS_NAME" /> kasutajapõhiselt jõustada. Võrguseadistus on JSON-i vormingus string, mille määrab vorming Open Network Configuration.</translation>
 <translation id="5105313908130842249">Ekraani lukustamise viiteaeg akutoite kasutamisel</translation>
 <translation id="5108031557082757679">Ettevõtte seadmete jaoks keelatud printerid</translation>
@@ -2226,7 +2226,7 @@ loendist, desinstallib rakendus <ph name="PRODUCT_NAME" /> selle automaatselt.
 <translation id="5148753489738115745">Võimaldab teil määrata täiendavad parameetrid, mida kasutatakse siis, kui <ph name="PRODUCT_FRAME_NAME" /> käivitab rakenduse <ph name="PRODUCT_NAME" />.
 
           Kui jätate eeskirjad määramata, siis kasutatakse vaikekäsurida.</translation>
-<translation id="5152787786897382519">Nii Carbon Browser Browser Browser kui ka Carbon Browser Browser Browser'il on teatud reeglite grupid, mis funktsiooni üle kontrolli pakkumiseks üksteisest sõltuvad. Neid komplekte esindavad järgmised reeglite grupid. Arvestades, et reeglitel võib olla mitu allikat, rakendatakse ainult kõige kõrgema prioriteediga allikast pärinevad väärtused. Sama grupi madalama prioriteediga allikast pärinevaid väärtusi eiratakse. Prioriteetsuse järjestuse leiate siit: <ph name="POLICY_PRIORITY_DOC_URL" />.</translation>
+<translation id="5152787786897382519">Nii Carbon Browser kui ka Carbon Browser'il on teatud reeglite grupid, mis funktsiooni üle kontrolli pakkumiseks üksteisest sõltuvad. Neid komplekte esindavad järgmised reeglite grupid. Arvestades, et reeglitel võib olla mitu allikat, rakendatakse ainult kõige kõrgema prioriteediga allikast pärinevad väärtused. Sama grupi madalama prioriteediga allikast pärinevaid väärtusi eiratakse. Prioriteetsuse järjestuse leiate siit: <ph name="POLICY_PRIORITY_DOC_URL" />.</translation>
 <translation id="5159469559091666409">Jälgitavate võrgupakettide saatmise sagedus (millisekundites).
 
       Kui see reegel on määramata, on vaikeintervall kolm minutit. Minimaalne
@@ -2337,7 +2337,7 @@ loendist, desinstallib rakendus <ph name="PRODUCT_NAME" /> selle automaatselt.
           Musta nimekirja väärtus '*' tähendab, et kõik omasõnumside hostid on mustas nimekirjas, kui nad pole lisatud konkreetselt lubatud üksuste loendisse.
 
           Kui seda reeglit ei määrata, laadib <ph name="PRODUCT_NAME" /> kõik installitud omasõnumside hostid.</translation>
-<translation id="5272684451155669299">Kui selle väärtuseks on määratud Tõene, saab kasutaja kasutada Carbon Browser Browser Browser'i seadmete riistvara, et tõendada enda isikut distantsilt privaatsuse CA abil API <ph name="ENTERPRISE_PLATFORM_KEYS_API" /> kaudu, kasutades funktsiooni <ph name="CHALLENGE_USER_KEY_FUNCTION" />.
+<translation id="5272684451155669299">Kui selle väärtuseks on määratud Tõene, saab kasutaja kasutada Carbon Browser'i seadmete riistvara, et tõendada enda isikut distantsilt privaatsuse CA abil API <ph name="ENTERPRISE_PLATFORM_KEYS_API" /> kaudu, kasutades funktsiooni <ph name="CHALLENGE_USER_KEY_FUNCTION" />.
 
           Kui selle väärtuseks on määratud Väär või väärtus on määramata, siis kõned API-le ebaõnnestuvad ja saate vastuseks veakoodi.</translation>
 <translation id="5277806246014825877">Lubab sellel kasutajal Crostinit käitada.
@@ -2554,7 +2554,7 @@ loendist, desinstallib rakendus <ph name="PRODUCT_NAME" /> selle automaatselt.
         Kui reegel on seatud väärtusele Väär, ei saa kasutajad Google'ile tagasisidet saata.
 
         Kui reegel on määramata või seatud väärtusele Tõene, saavad kasutajad Google'ile tagasisidet saata valikutega Menüü -&gt; Abi -&gt; Probleemist teavitamine või klahvikombinatsiooniga.</translation>
-<translation id="5581292529942108810">Võimaldab seadistada Carbon Browser Browser Browser'i aruandluse laiendusega seotud reeglid.
+<translation id="5581292529942108810">Võimaldab seadistada Carbon Browser'i aruandluse laiendusega seotud reeglid.
 
       Reegel kehtib ainult juhul, kui <ph name="CHROME_REPORTING_EXTENSION_NAME" /> on lubatud ja seade on reeglis <ph name="MACHINE_LEVEL_USER_CLOUD_POLICY_ENROLLMENT_TOKEN_POLICY_NAME" /> registreeritud.</translation>
 <translation id="5583806683960333345">Kui seade on lubatud, on kasutajate jaoks saadaval automaatse jagamise funktsioon, mis võimaldab nende Google'i telefonil mobiilset andmesidet seadmega jagada.
@@ -2583,7 +2583,7 @@ loendist, desinstallib rakendus <ph name="PRODUCT_NAME" /> selle automaatselt.
 
       MÄRKUS. Androidis on saidi isoleerimine katseline. Aja jooksul täiustatakse tuge, kuid praegu võib see toimivuses probleeme põhjustada.
 
-      MÄRKUS. Reegel kehtib ainult Carbon Browser Browser Browser'i Androidi versiooni puhul seadmetes, millel on rohkem kui 1 GB muutmälu. Androidi-välistel platvormidel reegli kehtestamiseks kasutage reeglit IsolateOrigins.
+      MÄRKUS. Reegel kehtib ainult Carbon Browser'i Androidi versiooni puhul seadmetes, millel on rohkem kui 1 GB muutmälu. Androidi-välistel platvormidel reegli kehtestamiseks kasutage reeglit IsolateOrigins.
       </translation>
 <translation id="5599461642204007579">Üksuse <ph name="MS_AD_NAME" /> haldamise seaded</translation>
 <translation id="5610104657949692379">Kui see reegel on määratud, määrab see operatsioonisüsteemi <ph name="PRODUCT_OS_NAME" /> toimingu, kui kasutaja on jõudeoleku viiteaja vältel tegevusetu (selle saab seadistada eraldi).
@@ -2591,7 +2591,7 @@ loendist, desinstallib rakendus <ph name="PRODUCT_NAME" /> selle automaatselt.
           Kui jätate selle reegli määramata, tehakse vaiketoiming (peatamine).
 
           Kui toiming on peatamine, saab operatsioonisüsteemi <ph name="PRODUCT_OS_NAME" /> eraldi seadistada enne peatamist ekraani lukustama või seda mitte tegema.</translation>
-<translation id="5618398258385745432">Seotud seadet kasutati enne, kui uuesti autentimine paroolide vaatamisel kasutusele võeti. Alates sellest ei mõjutanud see seade ja sellest tulenevalt ka see reegel käitumist Carbon Browser Browser Browser'is. Carbon Browser Browser Browser'i praegune käitumine on sama, nagu keelaks see reegel paroolide kuvamise tavatekstina paroolihalduri seadete lehel. See tähendab, et seadete leht sisaldab ainult kohahoidjat ja Carbon Browser Browser Browser kuvab parooli ainult siis, kui kasutaja klõpsab käsul „Kuva” (ning autendib uuesti, kui see on kohaldatav). Allpool on reegli algne kirjeldus.
+<translation id="5618398258385745432">Seotud seadet kasutati enne, kui uuesti autentimine paroolide vaatamisel kasutusele võeti. Alates sellest ei mõjutanud see seade ja sellest tulenevalt ka see reegel käitumist Carbon Browser'is. Carbon Browser'i praegune käitumine on sama, nagu keelaks see reegel paroolide kuvamise tavatekstina paroolihalduri seadete lehel. See tähendab, et seadete leht sisaldab ainult kohahoidjat ja Carbon Browser kuvab parooli ainult siis, kui kasutaja klõpsab käsul „Kuva” (ning autendib uuesti, kui see on kohaldatav). Allpool on reegli algne kirjeldus.
 
           Juhib seda, kas kasutaja võib paroolihalduris paroole tavatekstina kuvada.
 
@@ -2698,7 +2698,7 @@ loendist, desinstallib rakendus <ph name="PRODUCT_NAME" /> selle automaatselt.
       Kui reegel on seadistamata, saab kasutaja seda seadet muuta.
       </translation>
 <translation id="5832274826894536455">Katkestatud toega reeglid</translation>
-<translation id="5835124959204887277">Määrab URL-id ja domeenid, mille puhul viipa ei kuvata, kui turvavõtmetelt nõutakse atesteerimise sertifikaate. Lisaks saadetakse turvavõtmele signaal, mis näitab, et kasutada võib individuaalset atesteerimist. Ilma selleta esitatakse kasutajatele Carbon Browser Browser Browser'i versioonis 65 ja uuemates versioonides viip, kui saidid nõuavad turvavõtmete atesteerimist.
+<translation id="5835124959204887277">Määrab URL-id ja domeenid, mille puhul viipa ei kuvata, kui turvavõtmetelt nõutakse atesteerimise sertifikaate. Lisaks saadetakse turvavõtmele signaal, mis näitab, et kasutada võib individuaalset atesteerimist. Ilma selleta esitatakse kasutajatele Carbon Browser'i versioonis 65 ja uuemates versioonides viip, kui saidid nõuavad turvavõtmete atesteerimist.
 
       URL-id (nt https://example.com/mingi/tee) vastendatakse ainul U2F appID-dega. Domeenid (nt example.com) vastendatakse ainult webauthn RP ID-dena. Seega antud saidil nii U2F-i kui ka webauthn API-de kasutamiseks tuleb loendisse lisada nii appID URL kui ka domeen.</translation>
 <translation id="5836064773277134605">Piira kaugjuurdepääsuhosti kasutatavate UDP-portide vahemikku</translation>
@@ -2833,7 +2833,7 @@ loendist, desinstallib rakendus <ph name="PRODUCT_NAME" /> selle automaatselt.
 
       Kui reegel on määramata või seatud väärtusele Väär, ei koguta ega laadita üles mingeid andmeid.
       Kui reegel on seatud väärtusele Tõene, kogutakse andmeid ja laaditakse need üles Google'i administraatorikonsoolile.
-      Kui soovite juhtida, millised andmed üles laaditakse, kasutage grupi laienduse Carbon Browser Browser Browser Reporting Extension reegleid.
+      Kui soovite juhtida, millised andmed üles laaditakse, kasutage grupi laienduse Carbon Browser Reporting Extension reegleid.
 
       See reegel kehtib vaid siis, kui seade on registreeritud reeglis <ph name="MACHINE_LEVEL_USER_CLOUD_POLICY_ENROLLMENT_TOKEN_POLICY_NAME" />.
 
@@ -2919,7 +2919,7 @@ loendist, desinstallib rakendus <ph name="PRODUCT_NAME" /> selle automaatselt.
 <translation id="6282799760374509080">Heli jäädvustamise lubamine või keelamine</translation>
 <translation id="6284362063448764300">TLS 1.1</translation>
 <translation id="6310223829319187614">Domeeni nime automaatse täitmise lubamine kasutaja sisselogimise ajal</translation>
-<translation id="6315673513957120120">Carbon Browser Browser Browser kuvab hoiatuslehe, kui kasutajad liiguvad SSL-i vigadega saitidele. Vaikimisi või siis, kui selle reegli väärtuseks määratakse Tõene, lubatakse kasutajatel nendelt hoiatuslehtedelt kliki abil edasi liikuda.
+<translation id="6315673513957120120">Carbon Browser kuvab hoiatuslehe, kui kasutajad liiguvad SSL-i vigadega saitidele. Vaikimisi või siis, kui selle reegli väärtuseks määratakse Tõene, lubatakse kasutajatel nendelt hoiatuslehtedelt kliki abil edasi liikuda.
       Kui selle reegli väärtuseks määratakse Väär, ei lubata kasutajatel hoiatuslehelt kliki abil edasi liikuda.</translation>
 <translation id="6319198883324703402">Määrake esimene taaskäivitusmärguande aeg</translation>
 <translation id="6352543686437322588">Seadme kohalik konto, kuhu pärast viivitust automaatselt sisse logida.
@@ -2961,7 +2961,7 @@ loendist, desinstallib rakendus <ph name="PRODUCT_NAME" /> selle automaatselt.
           Kui otsustate puhverserveri automaatselt tuvastada, esitatakse Androidi rakendustele URL „http://wpad/wpad.dat”. Ühtegi teist puhverserveri automaatse tuvastamise protokolli osa ei kasutata.
 
           Kui otsustate kasutada puhverserveri skripti .pac, esitatakse Androidi rakendustele skripti URL.</translation>
-<translation id="6430366557948788869">Carbon Browser Browser Browser'i aruandluse laiendus</translation>
+<translation id="6430366557948788869">Carbon Browser'i aruandluse laiendus</translation>
 <translation id="6440051664870270040">Saitidel samaaegse navigeerimise ja hüpikakende avamise lubamine</translation>
 <translation id="6447948611083700881">Varundamine ja taastamine on keelatud</translation>
 <translation id="6449476513004303784">Kasutajatel sertifikaatide haldamise keelamine</translation>
@@ -3019,9 +3019,9 @@ loendist, desinstallib rakendus <ph name="PRODUCT_NAME" /> selle automaatselt.
 <translation id="6536600139108165863">Automaatne taaskäivitamine seadme väljalülitamisel</translation>
 <translation id="6539246272469751178">See reegel ei mõjuta Androidi rakendusi. Androidi rakendused kasutavad alati allalaadimiste vaikekataloogi ega pääse juurde ühelegi failile, mille operatsioonisüsteem <ph name="PRODUCT_OS_NAME" /> on alla laadinud kataloogi, mis pole allalaadimiste vaikekataloog.</translation>
 <translation id="654303922206238013">Süsteemi eCryptfs üleviimisstrateegia</translation>
-<translation id="6544897973797372144">Kui reeglile on määratud olek True ja reeglit Carbon Browser Browser BrowserOsReleaseChannel pole määratud, siis on registreerumisdomeeni kanali kasutajatel lubatud seadme versiooni kanalit muuta. Kui reeglile on määratud olek False, siis lukustatakse seade mis tahes viimati määratud kanalil.
+<translation id="6544897973797372144">Kui reeglile on määratud olek True ja reeglit Carbon BrowserOsReleaseChannel pole määratud, siis on registreerumisdomeeni kanali kasutajatel lubatud seadme versiooni kanalit muuta. Kui reeglile on määratud olek False, siis lukustatakse seade mis tahes viimati määratud kanalil.
 
-      Kasutaja valitud kanali alistab reegel Carbon Browser Browser BrowserOsReleaseChannel. Kui aga reegli kanal on stabiilsem kui seadmesse installitud kanal, siis lülitub see sisse alles pärast seda, kui stabiilsem kanal jõuab seadmesse installitud kanalist kõrgema versiooninumbrini.</translation>
+      Kasutaja valitud kanali alistab reegel Carbon BrowserOsReleaseChannel. Kui aga reegli kanal on stabiilsem kui seadmesse installitud kanal, siis lülitub see sisse alles pärast seda, kui stabiilsem kanal jõuab seadmesse installitud kanalist kõrgema versiooninumbrini.</translation>
 <translation id="6553143066970470539">Ekraani ereduse protsent</translation>
 <translation id="6559057113164934677">Keela kõikidel saitidel juurdepääs kaamerale ja mikrofonile</translation>
 <translation id="6561396069801924653">Juurdepääsuvalikute kuvamine süsteemisalve menüüs</translation>
@@ -3100,7 +3100,7 @@ loendist, desinstallib rakendus <ph name="PRODUCT_NAME" /> selle automaatselt.
 <translation id="6698632841807204978">Mustvalge printimise lubamine</translation>
 <translation id="6699880231565102694">Kahetasandilise autentimise lubamine kaugjuurdepääsu hostidele</translation>
 <translation id="6731757988219967594">Filtreeri täiskasvanutele mõeldud sisuga ülataseme saidid (kuid mitte manustatud iframe'id)</translation>
-<translation id="6734521799274931721">Juhib Network File Shares for Carbon Browser Browser BrowserOS saadavalolekut</translation>
+<translation id="6734521799274931721">Juhib Network File Shares for Carbon BrowserOS saadavalolekut</translation>
 <translation id="6735701345096330595">Õigekirjakontrolli keelte sundlubamine</translation>
 <translation id="673699536430961464">Seade võimaldab kasutajatel pärast operatsioonisüsteemiga <ph name="PRODUCT_OS_NAME" /> seadmesse sisselogimist vahetada Google'i kontosid brauseriakna sisualal.
 
@@ -3108,7 +3108,7 @@ loendist, desinstallib rakendus <ph name="PRODUCT_NAME" /> selle automaatselt.
 
       Kui reegel on määratama või seatud väärtusele Tõene, kasutatakse vaikekäitumist: brauseri sisualal on lubatud sisse logida muule kontole, v.a tütarkontode puhul, mille jaoks on funktsioon mitte-inkognito sisualal blokeeritud.
 
-      Kui inkognito režiimi kaudu muule kontole sisselogimine peab olema keelatud, kaaluge režiimi blokeerimist reegliga PrivateModeAvailability.
+      Kui inkognito režiimi kaudu muule kontole sisselogimine peab olema keelatud, kaaluge režiimi blokeerimist reegliga privateModeAvailability.
 
       Pange tähele, et kasutajad võivad küpsised blokeerida, et saada juurdepääs autentimata olekus Google'i teenustele.</translation>
 <translation id="6757438632136860443">Võimaldab määrata URL-i mustrite loendi, mis määrab saidid, millel on lubatud pistikprogrammi <ph name="FLASH_PLUGIN_NAME" /> käitada.
@@ -3145,7 +3145,7 @@ loendist, desinstallib rakendus <ph name="PRODUCT_NAME" /> selle automaatselt.
 
       Kui reegel on keelatud, siis ei kasutata sisseehitatud DNS-i klienti kunagi.
 
-      Kui reegel on määramata, on sisseehitatud DNS-i klient MacOS-is, Androidis (kui nii privaatne DNS kui ka VPN ei ole lubatud) ja Carbon Browser Browser BrowserOS-is vaikimisi lubatud ning kasutajad saavad otsustada, kas rakendus kasutab sisseehitatud DNS-i klienti, muutes atribuuti chrome://flags või määrates käsurea lipu.</translation>
+      Kui reegel on määramata, on sisseehitatud DNS-i klient MacOS-is, Androidis (kui nii privaatne DNS kui ka VPN ei ole lubatud) ja Carbon BrowserOS-is vaikimisi lubatud ning kasutajad saavad otsustada, kas rakendus kasutab sisseehitatud DNS-i klienti, muutes atribuuti chrome://flags või määrates käsurea lipu.</translation>
 <translation id="6843296367238757293">Selle reegli tugi on katkestatud. Seda ei ole soovitatav kasutada Vaadake lisateavet aadressilt https://support.google.com/chrome/a/answer/7643500</translation>
 <translation id="684856667300805181">Reegel eemaldati operatsioonisüsteemist <ph name="PRODUCT_NAME" /> 68 ja see asendati reegliga <ph name="ARC_GLS_POLICY_NAME" />.</translation>
 <translation id="6856743875250214792">Selle reegli tugi on katkestatud ja see on versioonist M66 eemaldatud, kuna seda kasutati ainult sisetestides ja see sisaldab turvaauku.
@@ -3188,7 +3188,7 @@ loendist, desinstallib rakendus <ph name="PRODUCT_NAME" /> selle automaatselt.
 
       MÄRKUS. Androidis on saidi isoleerimine katseline. Aja jooksul täiustatakse tuge, kuid praegu võib see toimivuses probleeme põhjustada.
 
-      MÄRKUS. See reegel kehtib ainult Carbon Browser Browser Browser'i Androidi versiooni puhul seadmetes, millel on rohkem kui 1 GB muutmälu. Reegli rakendamiseks muudel platvormidel kasutage seadet SitePerProcess.
+      MÄRKUS. See reegel kehtib ainult Carbon Browser'i Androidi versiooni puhul seadmetes, millel on rohkem kui 1 GB muutmälu. Reegli rakendamiseks muudel platvormidel kasutage seadet SitePerProcess.
       </translation>
 <translation id="6922884955650325312">Pistikprogrammi <ph name="FLASH_PLUGIN_NAME" /> blokeerimine</translation>
 <translation id="6923366716660828830">Määrab vaikeotsingupakkuja nime. Kui see jäetakse tühjaks või määramata, siis kasutatakse otsingu URL-i määratud hosti nime.
@@ -3286,9 +3286,9 @@ loendist, desinstallib rakendus <ph name="PRODUCT_NAME" /> selle automaatselt.
 
       Kui reegli väärtuseks määratakse Väär või jäetakse see määramata, ei tohi <ph name="PRODUCT_NAME" /> logisid koguda ega üles laadida.
 
-      Need logid sisaldavad diagnostikateavet, mis on kasulik Carbon Browser Browser Browser'i hääl- või videokõnedega seotud probleemide silumisel. See hõlmab näiteks saadetud ja vastuvõetud RTP-pakettide kellaaja ja suuruse teavet, tagasisidet võrgu ummistuste kohta ja metaandmeid heli- ja videokaadrite aja ja kvaliteedi kohta. Logid ei sisalda kõne hääl- ega videosisu.
+      Need logid sisaldavad diagnostikateavet, mis on kasulik Carbon Browser'i hääl- või videokõnedega seotud probleemide silumisel. See hõlmab näiteks saadetud ja vastuvõetud RTP-pakettide kellaaja ja suuruse teavet, tagasisidet võrgu ummistuste kohta ja metaandmeid heli- ja videokaadrite aja ja kvaliteedi kohta. Logid ei sisalda kõne hääl- ega videosisu.
 
-      Carbon Browser Browser Browser'is saavad andmete kogumise käivitada ainult Google'i veebiteenused, nt Google Hangouts või Google Meet.
+      Carbon Browser'is saavad andmete kogumise käivitada ainult Google'i veebiteenused, nt Google Hangouts või Google Meet.
       Google võib seansi ID alusel seostada logid muude logidega, mida Google'i teenus kogub. Selle eesmärk on hõlbustada silumist.
       </translation>
 <translation id="706669471845501145">Luba saitidel töölauateatiste näitamine</translation>
@@ -3382,12 +3382,12 @@ Kui jätate selle reegli määramata, ei ole kasutajate sisselogimine piiratud. 
 <translation id="7185078796915954712">TLS 1.3</translation>
 <translation id="718956142899066210">Värskenduste jaoks lubatud ühenduse tüübid</translation>
 <translation id="7194407337890404814">Vaikeotsingupakkuja nimi</translation>
-<translation id="7199304109870655950">Seadistage Carbon Browser Browser Browser Remote Desktopi hostis kaugjuurdepääsu valikud.
+<translation id="7199304109870655950">Seadistage Carbon Browser Remote Desktopi hostis kaugjuurdepääsu valikud.
 
-      Carbon Browser Browser Browser Remote Desktopi host on omateenus, mida käitatakse sihtseadmes, millega kasutaja saab Carbon Browser Browser Browser Remote Desktopi rakenduse kaudu ühenduse luua. Omateenus on brauserist <ph name="PRODUCT_NAME" /> erinevas paketis ja see käivitatakse eraldi.
+      Carbon Browser Remote Desktopi host on omateenus, mida käitatakse sihtseadmes, millega kasutaja saab Carbon Browser Remote Desktopi rakenduse kaudu ühenduse luua. Omateenus on brauserist <ph name="PRODUCT_NAME" /> erinevas paketis ja see käivitatakse eraldi.
 
       Neid reegleid eiratakse, kui
-      Carbon Browser Browser Browser Remote Desktopi host pole installitud.</translation>
+      Carbon Browser Remote Desktopi host pole installitud.</translation>
 <translation id="7202925763179776247">Luba allalaadimise piirangud</translation>
 <translation id="7207095846245296855">Google SafeSearchi jõustamine</translation>
 <translation id="7211368186050418507">Ajavööndit ei tuvastata kunagi automaatselt</translation>
@@ -3489,9 +3489,9 @@ Kui jätate selle reegli määramata, ei ole kasutajate sisselogimine piiratud. 
 <translation id="7329968046053403405">Määrab üksuse <ph name="HTTP_NEGOTIATE" /> autentimist (nt Kerberose autentimine) toetava Androidi autentimisrakenduse kontode tüübi. See teave on saadaval autentimisrakenduse pakkuja kaudu. Vaadake lisateavet aadressilt https://goo.gl/hajyfN.
 
           Kui seadet ei määrata, on üksuse <ph name="HTTP_NEGOTIATE" /> autentimine Androidis keelatud.</translation>
-<translation id="7331962793961469250">Kui valite „Tõene”, siis ei ilmu Carbon Browser Browser Browser'i veebipoe rakenduste reklaamid uuel vahelehel.
+<translation id="7331962793961469250">Kui valite „Tõene”, siis ei ilmu Carbon Browser'i veebipoe rakenduste reklaamid uuel vahelehel.
 
-      Kui valite „Väär” või jätate seade määramata, siis ilmuvad uuel vahelehel Carbon Browser Browser Browser'i veebipoe rakenduste reklaamid</translation>
+      Kui valite „Väär” või jätate seade määramata, siis ilmuvad uuel vahelehel Carbon Browser'i veebipoe rakenduste reklaamid</translation>
 <translation id="7332963785317884918">Reegel on peatatud. <ph name="PRODUCT_OS_NAME" /> kasutab alati puhastusstrateegiat „RemoveLRU”.
 
       Juhib automaatset puhastamist operatsioonisüsteemiga <ph name="PRODUCT_OS_NAME" /> seadmetes. Automaatne puhastamine käivitatakse osaliseks kettaruumi vabastamiseks, kui vaba kettaruumi hulk on jõudnud kriitilise tasemeni.
@@ -3551,7 +3551,7 @@ Kui jätate selle reegli määramata, ei ole kasutajate sisselogimine piiratud. 
       </translation>
 <translation id="7506269062143646163">Allkirjastatud HTTP-andmevahetuse (SXG) toe lubamine.
 
-          Kui see reegel on määramata või selle väärtuseks määratakse Lubatud, aktsepteerib Carbon Browser Browser Browser allkirjastatud HTTP-andmevahetusena esitatud veebisisu.
+          Kui see reegel on määramata või selle väärtuseks määratakse Lubatud, aktsepteerib Carbon Browser allkirjastatud HTTP-andmevahetusena esitatud veebisisu.
 
           Kui reegli väärtuseks määratakse Keelatud, siis ei saa allkirjastatud HTTP-andmevahetusi laadida.</translation>
 <translation id="7511361072385293666">Kui reegli väärtuseks määratakse Tõene või seda ei määrata, on QUIC-protokolli kasutamine teenuses <ph name="PRODUCT_NAME" /> lubatud.
@@ -3592,7 +3592,7 @@ Kui jätate selle reegli määramata, ei ole kasutajate sisselogimine piiratud. 
 
       Kui reegel on määramata või seatud väärtusele 0, avatakse määratud URL-i sisestamisel see kohe alternatiivses brauseris.
 
-      Kui reegli väärtuseks on määratud muu millisekundite arv, kuvab Carbon Browser Browser Browser selle aja jooksul sõnumi ja seejärel avab alternatiivse brauseri.</translation>
+      Kui reegli väärtuseks on määratud muu millisekundite arv, kuvab Carbon Browser selle aja jooksul sõnumi ja seejärel avab alternatiivse brauseri.</translation>
 <translation id="7593523670408385997">Seadistab vahemälu mahu, mida <ph name="PRODUCT_NAME" /> kasutab vahemällu salvestatud failide kettale salvestamiseks.
 
       Kui kasutate seda reeglit, kasutab <ph name="PRODUCT_NAME" /> olemasolevat vahemälu mahtu sellest olenemata, kas kasutaja on määranud märgendi „--ketta-vahemälu-maht” või mitte. Selle reegliga määratud väärtus pole kindel limiit, vaid pigem soovitus vahemälusüsteemile. Mõnest megabaidist väiksem väärtus on liiga väike ja see ümardatakse mõistliku miinimumini.
@@ -3777,7 +3777,7 @@ Kui jätate selle reegli määramata, ei ole kasutajate sisselogimine piiratud. 
 
       MÄRKUS. Versioonini 45 toetati seda reeglit ainult kioskirežiimis.</translation>
 <translation id="7912255076272890813">Seadista lubatud rakenduste/laienduste tüübid</translation>
-<translation id="7922358664346625612">Carbon Browser Browser Browser’is viimase vahelehe avatuna jätmine.</translation>
+<translation id="7922358664346625612">Carbon Browser’is viimase vahelehe avatuna jätmine.</translation>
 <translation id="793134539373873765">Määrab, kas OS-i värskendamise lastide jaoks kasutatakse p2p-võrgustikku. Kui väärtuseks on seatud Tõene, siis seade jagab ja proovib tarbida värskendamise laste LAN-is, vähendades potentsiaalselt Interneti-ribalaiuse kasutamist ja ummistumist. Kui värskendamise last pole LAN-is saadaval, naaseb seade allalaadimise juurde värskendusserverist. Kui väärtuseks on seatud Vale või see pole määratud, siis p2p-võrgustikku ei kasutata.</translation>
 <translation id="7933141401888114454">Järelevalvega kasutajate loomise lubamine</translation>
 <translation id="793473937901685727">Sertifikaatide saadavuse määramine ARC-rakenduste jaoks</translation>
@@ -3940,7 +3940,7 @@ Vaadake ka reegleid „CookiesAllowedForUrls” ja „CookiesSessionOnlyForUrls�
       Kui jätate reegli määramata, kasutab <ph name="PRODUCT_OS_NAME" /> sisselogimiskuval seadmepõhise konto meilikonto ID-d kuvatava nimena.
 
       Tavapäraste kasutajakontode puhul eiratakse seda reeglit.</translation>
-<translation id="8259375588339409826">Nii Carbon Browser Browser Browser kui ka Carbon Browser Browser Browser toetavad sama reeglite komplekti. Pange tähele, et see dokument võib sisaldada avaldamata reegleid (seega kirje „toetatud versioonis” viitab rakenduse <ph name="PRODUCT_NAME" /> veel avaldamata versioonile) ja sellised reeglid võivad ette teatamata muutuda või need võidakse eemaldada ning nende puhul ei pakuta mingeid garantiisid (sh turvalisuse ja privaatsusega seotud garantiid).
+<translation id="8259375588339409826">Nii Carbon Browser kui ka Carbon Browser toetavad sama reeglite komplekti. Pange tähele, et see dokument võib sisaldada avaldamata reegleid (seega kirje „toetatud versioonis” viitab rakenduse <ph name="PRODUCT_NAME" /> veel avaldamata versioonile) ja sellised reeglid võivad ette teatamata muutuda või need võidakse eemaldada ning nende puhul ei pakuta mingeid garantiisid (sh turvalisuse ja privaatsusega seotud garantiid).
 
 
 Need reeglid on mõeldud ainult teie organisatsioonisiseste teenuse <ph name="PRODUCT_NAME" /> eksemplaride seadistamiseks. Nende reeglite kasutamist väljaspool organisatsiooni (nt avalikult levitatavas programmis) loetakse pahavaraks ja tõenäoliselt märgivad selle pahavaraks ka Google ja viirusetõrjepakkujad.
@@ -3958,7 +3958,7 @@ Soovituslik viis selle reegli seadistamiseks Windowsis on GPO kaudu, kuigi reegl
 
       Kui reegli väärtuseks on määratud Väär, siis statistikat ei saadeta.
       Kui reegli väärtuseks on määratud Tõene või see on määramata, siis saadetakse statistikat.</translation>
-<translation id="8294750666104911727">Tavaliselt renderdatakse lehed, mille metasilt X-UA-Compatible on seatud väärtusele chrome=1 teenuses <ph name="PRODUCT_FRAME_NAME" />, olenemata reeglist „Carbon Browser Browser BrowserFrameRendererSettings”.
+<translation id="8294750666104911727">Tavaliselt renderdatakse lehed, mille metasilt X-UA-Compatible on seatud väärtusele chrome=1 teenuses <ph name="PRODUCT_FRAME_NAME" />, olenemata reeglist „Carbon BrowserFrameRendererSettings”.
 
           Kui lubate selle seade, siis lehti metasiltide osas ei skannita.
 
@@ -3984,7 +3984,7 @@ Soovituslik viis selle reegli seadistamiseks Windowsis on GPO kaudu, kuigi reegl
 <translation id="8344454543174932833">Impordi järjehoidjad vaikebrauserist esmakordsel käitamisel</translation>
 <translation id="8357681633047935212">Kasutaja seansi pikkuse piiramine</translation>
 <translation id="8359734107661430198">Luba ExampleDeprecatedFeature API kuni 02.09.2008</translation>
-<translation id="8367209241899435947">Carbon Browser Browser Browser Cleanupi lubamine Windowsis</translation>
+<translation id="8367209241899435947">Carbon Browser Cleanupi lubamine Windowsis</translation>
 <translation id="8369602308428138533">Ekraani väljalülitamise viiteaeg võrgutoite kasutamisel</translation>
 <translation id="8371178326720637170">Lubab hallatud laiendustel kasutada ettevõtte riistvara platvormi API-t</translation>
 <translation id="8374747520743832795">Saatke toitega seotud riistvara statistikat ja identifikaatoreid.
@@ -4056,13 +4056,13 @@ Soovituslik viis selle reegli seadistamiseks Windowsis on GPO kaudu, kuigi reegl
       Reegel eemaldatakse versioonis M75.</translation>
 <translation id="8484458986062090479">Kohandab loendit URL-i mustritest, mille peab alati renderdama hostbrauser.
 
-          Kui seda reeglit ei määrata, kasutatakse kõikide saitide puhul vaikerenderdajat, mis on määratud reegliga „Carbon Browser Browser BrowserFrameRendererSettings”.
+          Kui seda reeglit ei määrata, kasutatakse kõikide saitide puhul vaikerenderdajat, mis on määratud reegliga „Carbon BrowserFrameRendererSettings”.
 
           Vaadake näidismustreid aadressilt http://www.chromium.org/developers/how-tos/chrome-frame-getting-started.</translation>
 <translation id="8489964335640955763">PluginVm</translation>
 <translation id="8493645415242333585">Keela brauseri ajaloo salvestamine</translation>
 <translation id="8499172469244085141">Vaikeseaded (kasutajad saavad alistada)</translation>
-<translation id="849962487677588458">Selle reegli tugi on katkestatud ja see eemaldatakse Carbon Browser Browser Browser'i versioonis 78 (asendust ei pakuta).
+<translation id="849962487677588458">Selle reegli tugi on katkestatud ja see eemaldatakse Carbon Browser'i versioonis 78 (asendust ei pakuta).
 
       See reegel lubab HTTP/0.9 portides, mis ei ole HTTP puhul 80 ja HTTPS-i puhul 443.
 
@@ -4090,7 +4090,7 @@ Soovituslik viis selle reegli seadistamiseks Windowsis on GPO kaudu, kuigi reegl
 
       Siin võib „versioon” tähendada nii täpset versiooninumbrit „61.0.3163.120” kui ka versiooni eesliidet „61.0”  </translation>
 <translation id="8544375438507658205">Rakenduse <ph name="PRODUCT_FRAME_NAME" /> HTML-i vaikerenderdaja</translation>
-<translation id="8544465954173828789">SMS-ide sünkroonimise lubamine telefoni ja Carbon Browser Browser Browserbooki vahel</translation>
+<translation id="8544465954173828789">SMS-ide sünkroonimise lubamine telefoni ja Carbon Browserbooki vahel</translation>
 <translation id="8548832052135586762">Lubab ainult värvilise või mustvalge printimise või eemaldab värvirežiimi piirangu. Määramata reeglit käsitletakse piirangu puudumisena.</translation>
 <translation id="8549772397068118889">Hoiatamine sisupakettidest väljaspool olevate saitide külastamisel</translation>
 <translation id="8566729013138025202">Määrab reeglite kogumi, mis edastatakse ARC käitusajale. Väärtus peab olema sobiv JSON.
@@ -4305,7 +4305,7 @@ Soovituslik viis selle reegli seadistamiseks Windowsis on GPO kaudu, kuigi reegl
 
           Reegel vastendab laienduse ID või värskenduse URL-i seadistusega. Laienduse ID-ga rakendatakse seadistus ainult määratud laiendusele. Spetsiaalse ID <ph name="DEFAULT_SCOPE" /> jaoks saab määrata vaikeseadistuse, mis kehtib kõikide laienduste puhul, millele ei ole reeglis määratud kohandatud seadistust. Värskenduse URL-iga rakendatakse seadistus kõikidele laiendustele, mille täpne värskenduse URL on märgitud laienduse manifesti, nagu on kirjeldatud jaotises <ph name="LINK_TO_EXTENSION_DOC1" />.
 
-          Windowsi eksemplaride puhul, mis ei ole ühendatud domeeniga <ph name="MS_AD_NAME" />, saab sundinstallida vaid Carbon Browser Browser Browser’i veebipoes olevaid rakendusi ja laiendusi.
+          Windowsi eksemplaride puhul, mis ei ole ühendatud domeeniga <ph name="MS_AD_NAME" />, saab sundinstallida vaid Carbon Browser’i veebipoes olevaid rakendusi ja laiendusi.
           </translation>
 <translation id="8947415621777543415">Esita seadme asukoht</translation>
 <translation id="8951350807133946005">Vahemälu kataloogi seadmine</translation>
@@ -4396,7 +4396,7 @@ Soovituslik viis selle reegli seadistamiseks Windowsis on GPO kaudu, kuigi reegl
 
       Kui reegel seatakse väärtusele Tõene, saadetakse süsteemilogid serverisse. Kui reegel seatakse
       väärtusele Väär või jäetakse määramata, ei saadeta süsteemilogisid.</translation>
-<translation id="9150416707757015439">Reegel on aegunud. Kasutage selle asemel reeglit PrivateModeAvailability.
+<translation id="9150416707757015439">Reegel on aegunud. Kasutage selle asemel reeglit privateModeAvailability.
       Lubab inkognito režiimi rakenduses <ph name="PRODUCT_NAME" />.
 
       Kui seade on lubatud või seadistamata, siis saavad kasutajad avada veebilehti inkognito režiimis.
@@ -4443,7 +4443,7 @@ Soovituslik viis selle reegli seadistamiseks Windowsis on GPO kaudu, kuigi reegl
 
       Kui reegel on määratud ja käivitate Internet Exploreri kaudu rakenduse<ph name="PRODUCT_NAME" />, kasutatakse seda rakenduse <ph name="PRODUCT_NAME" /> käivitamisel.
 
-      Reegli väärtuseks võib määrata faili täitmistee või ${chrome}, et tuvastada Carbon Browser Browser Browser'i installimise asukoht automaatselt.</translation>
+      Reegli väärtuseks võib määrata faili täitmistee või ${chrome}, et tuvastada Carbon Browser'i installimise asukoht automaatselt.</translation>
 <translation id="930930237275114205">Määra rakenduse <ph name="PRODUCT_FRAME_NAME" /> kasutaja andmekataloog</translation>
 <translation id="943865157632139008">Võimaldab seadistada HTML-i vaikerenderdusmootori, kui <ph name="PRODUCT_FRAME_NAME" /> on installitud. Vaikeseadena lubatakse hostbrauseril renderdada, kuid võite selle soovi korral alistada ja lasta rakendusel <ph name="PRODUCT_FRAME_NAME" /> HTML-lehti vaikimisi renderdada.</translation>
 <translation id="944817693306670849">Ketta vahemälu mahu määramine</translation>

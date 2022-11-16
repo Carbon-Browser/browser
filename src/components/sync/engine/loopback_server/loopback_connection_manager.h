@@ -19,18 +19,22 @@ namespace syncer {
 class LoopbackConnectionManager : public ServerConnectionManager {
  public:
   explicit LoopbackConnectionManager(const base::FilePath& persistent_file);
+
+  LoopbackConnectionManager(const LoopbackConnectionManager&) = delete;
+  LoopbackConnectionManager& operator=(const LoopbackConnectionManager&) =
+      delete;
+
   ~LoopbackConnectionManager() override;
 
  private:
   // Overridden ServerConnectionManager functions.
   HttpResponse PostBuffer(const std::string& buffer_in,
                           const std::string& access_token,
+                          bool allow_batching,
                           std::string* buffer_out) override;
 
   // The loopback server that will handle the requests locally.
   LoopbackServer loopback_server_;
-
-  DISALLOW_COPY_AND_ASSIGN(LoopbackConnectionManager);
 };
 
 }  // namespace syncer

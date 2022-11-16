@@ -6,21 +6,20 @@
 
 #include <memory>
 
-#include "ash/constants/devicetype.h"
 #include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/important_file_writer.h"
 #include "base/location.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/task/post_task.h"
+#include "base/task/task_runner_util.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
-#include "base/task_runner_util.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "chrome/browser/ash/power/ml/recent_events_counter.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
+#include "chromeos/constants/devicetype.h"
 #include "chromeos/dbus/power_manager/backlight.pb.h"
 #include "components/session_manager/core/session_manager.h"
 #include "components/session_manager/core/session_manager_observer.h"
@@ -36,11 +35,11 @@ namespace {
 constexpr int kBucketSize = 15;
 
 // Interval at which data should be logged.
-constexpr auto kLoggingInterval = base::TimeDelta::FromMinutes(30);
+constexpr auto kLoggingInterval = base::Minutes(30);
 
 // Count number of key, mouse, touch events or duration of audio/video playing
 // in the past 30 minutes.
-constexpr auto kUserActivityDuration = base::TimeDelta::FromMinutes(30);
+constexpr auto kUserActivityDuration = base::Minutes(30);
 
 // Granularity of input events is per minute.
 constexpr int kNumUserInputEventsBuckets = kUserActivityDuration.InMinutes();
@@ -203,7 +202,7 @@ std::unique_ptr<SmartChargingManager> SmartChargingManager::CreateInstance() {
   // TODO(crbug.com/1028853): we are collecting data from Chromebook only. Since
   // this action is discouraged, we will modify the condition latter using dbus
   // calls.
-  if (GetDeviceType() != DeviceType::kChromebook)
+  if (chromeos::GetDeviceType() != chromeos::DeviceType::kChromebook)
     return nullptr;
 
   ui::UserActivityDetector* const detector = ui::UserActivityDetector::Get();
@@ -502,7 +501,7 @@ base::TimeDelta SmartChargingManager::DurationRecentVideoPlaying() {
   }
 
   // Calculates total time.
-  base::TimeDelta total_time = base::TimeDelta::FromSeconds(0);
+  base::TimeDelta total_time = base::Seconds(0);
   for (const auto& event : recent_video_usage_) {
     total_time += std::min(event.end_time - event.start_time,
                            event.end_time - start_of_duration);

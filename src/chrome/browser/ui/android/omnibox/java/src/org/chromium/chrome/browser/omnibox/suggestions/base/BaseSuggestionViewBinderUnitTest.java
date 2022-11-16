@@ -28,11 +28,11 @@ import org.mockito.MockitoAnnotations;
 import org.robolectric.Robolectric;
 import org.robolectric.annotation.Config;
 
+import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.chrome.R;
-import org.chromium.chrome.browser.omnibox.styles.OmniboxTheme;
 import org.chromium.chrome.browser.omnibox.suggestions.SuggestionCommonProperties;
 import org.chromium.chrome.browser.omnibox.suggestions.base.BaseSuggestionViewProperties.Action;
-import org.chromium.testing.local.LocalRobolectricTestRunner;
+import org.chromium.chrome.browser.ui.theme.BrandedColorScheme;
 import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.ui.modelutil.PropertyModelChangeProcessor;
 
@@ -42,7 +42,7 @@ import java.util.List;
 /**
  * Tests for {@link BaseSuggestionViewBinder}.
  */
-@RunWith(LocalRobolectricTestRunner.class)
+@RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class BaseSuggestionViewBinderUnitTest {
     @Mock
@@ -68,7 +68,6 @@ public class BaseSuggestionViewBinderUnitTest {
         mActivity = Robolectric.buildActivity(Activity.class).setup().get();
         // First set the app theme, then apply the feed theme overlay.
         mActivity.setTheme(R.style.Theme_BrowserUI_DayNight);
-        mActivity.setTheme(R.style.ThemeOverlay_Feed_Light);
         mResources = mActivity.getResources();
 
         when(mContentView.getContext()).thenReturn(mActivity);
@@ -224,7 +223,7 @@ public class BaseSuggestionViewBinderUnitTest {
         Assert.assertNull(mModel.get(BaseSuggestionViewProperties.ACTIONS));
         mBaseView.setActionButtonsCount(1);
         // Change in color scheme happening ahead of setting action could cause a crash.
-        mModel.set(SuggestionCommonProperties.OMNIBOX_THEME, OmniboxTheme.LIGHT_THEME);
+        mModel.set(SuggestionCommonProperties.COLOR_SCHEME, BrandedColorScheme.LIGHT_BRANDED_THEME);
     }
 
     @Test
@@ -252,21 +251,9 @@ public class BaseSuggestionViewBinderUnitTest {
     }
 
     @Test
-    public void suggestionDensity_comfortableMode() {
-        mModel.set(BaseSuggestionViewProperties.DENSITY,
-                BaseSuggestionViewProperties.Density.COMFORTABLE);
-        final int expectedPadding =
-                mResources.getDimensionPixelSize(R.dimen.omnibox_suggestion_comfortable_padding);
-        final int expectedHeight =
-                mResources.getDimensionPixelSize(R.dimen.omnibox_suggestion_comfortable_height);
-        verify(mContentView).setPaddingRelative(0, expectedPadding, 0, expectedPadding);
-        verify(mContentView).setMinimumHeight(expectedHeight);
-    }
-
-    @Test
-    public void suggestionDensity_semiCompactMode() {
-        mModel.set(BaseSuggestionViewProperties.DENSITY,
-                BaseSuggestionViewProperties.Density.SEMICOMPACT);
+    public void suggestionDensity_defaultMode() {
+        mModel.set(
+                BaseSuggestionViewProperties.DENSITY, BaseSuggestionViewProperties.Density.DEFAULT);
         final int expectedPadding =
                 mResources.getDimensionPixelSize(R.dimen.omnibox_suggestion_semicompact_padding);
         final int expectedHeight =

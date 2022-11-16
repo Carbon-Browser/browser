@@ -12,43 +12,41 @@ Polymer({
       type: String,
     },
 
+    titleLabelKey: {
+      type: String,
+    },
+
     subtitleKey: {
       type: String,
       value: '',
     },
 
-    isNewLayout_: {
+    /*
+     * If true loading step can be canceled by pressing a cancel button.
+     */
+    canCancel: {
       type: Boolean,
-      value() {
-        return loadTimeData.valueExists('newLayoutEnabled') &&
-            loadTimeData.getBoolean('newLayoutEnabled');
-      },
-      readOnly: true,
-    }
+      value: false,
+    },
   },
 
   onBeforeShow() {
-    if (this.isNewLayout_) {
-      this.$.dialog.onBeforeShow();
-      this.$.spinner.setPlay(true);
-    } else {
-      this.$.dialogOld.onBeforeShow();
-    }
+    this.$.spinner.playing = true;
   },
 
   onBeforeHide() {
-    if (this.isNewLayout_) {
-      this.$.spinner.setPlay(false);
-    }
+    this.$.spinner.playing = false;
   },
 
-  /**
-   * Localize subtitle message
-   * @private
-   * @param {string} locale  i18n locale data
-   * @param {string} messageId
-   */
-  localizeSubtitle_(locale, messageId) {
-    return messageId ? this.i18nDynamic(locale, messageId) : '';
+  // Returns either the passed 'title-label-key', or uses the 'title-key'.
+  getAriaLabel(locale, titleLabelKey, titleKey) {
+    assert(this.titleLabelKey || this.titleKey,
+           'OOBE Loading dialog requires a title or a label for a11y!');
+    return (titleLabelKey) ? this.i18n(titleLabelKey) : this.i18n(titleKey);
+  },
+
+  cancel() {
+    assert(this.canCancel);
+    this.fire('cancel-loading');
   },
 });

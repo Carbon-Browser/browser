@@ -9,7 +9,6 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "components/autofill/core/browser/autocomplete_history_manager.h"
 #include "components/autofill/core/browser/autofill_client.h"
@@ -43,6 +42,10 @@ class WebViewAutofillClientIOS : public AutofillClient {
       StrikeDatabase* strike_database,
       syncer::SyncService* sync_service,
       std::unique_ptr<autofill::LogManager> log_manager);
+
+  WebViewAutofillClientIOS(const WebViewAutofillClientIOS&) = delete;
+  WebViewAutofillClientIOS& operator=(const WebViewAutofillClientIOS&) = delete;
+
   ~WebViewAutofillClientIOS() override;
 
   // AutofillClient:
@@ -92,6 +95,10 @@ class WebViewAutofillClientIOS : public AutofillClient {
       AddressProfileSavePromptCallback callback) override;
   bool HasCreditCardScanFeature() override;
   void ScanCreditCard(CreditCardScanCallback callback) override;
+  bool IsTouchToFillCreditCardSupported() override;
+  bool ShowTouchToFillCreditCard(
+      base::WeakPtr<TouchToFillDelegate> delegate) override;
+  void HideTouchToFillCreditCard() override;
   void ShowAutofillPopup(
       const AutofillClient::PopupOpenArgs& open_args,
       base::WeakPtr<AutofillPopupDelegate> delegate) override;
@@ -105,8 +112,9 @@ class WebViewAutofillClientIOS : public AutofillClient {
                    PopupType popup_type) override;
   void HideAutofillPopup(PopupHidingReason reason) override;
   bool IsAutocompleteEnabled() override;
+  bool IsPasswordManagerEnabled() override;
   void PropagateAutofillPredictions(
-      content::RenderFrameHost* rfh,
+      AutofillDriver* driver,
       const std::vector<FormStructure*>& forms) override;
   void DidFillOrPreviewField(const std::u16string& autofilled_value,
                              const std::u16string& profile_full_name) override;
@@ -114,6 +122,7 @@ class WebViewAutofillClientIOS : public AutofillClient {
   bool ShouldShowSigninPromo() override;
   bool AreServerCardsSupported() const override;
   void ExecuteCommand(int id) override;
+  void OpenPromoCodeOfferDetailsURL(const GURL& url) override;
 
   // RiskDataLoader:
   void LoadRiskData(
@@ -137,8 +146,6 @@ class WebViewAutofillClientIOS : public AutofillClient {
   StrikeDatabase* strike_database_;
   syncer::SyncService* sync_service_ = nullptr;
   std::unique_ptr<LogManager> log_manager_;
-
-  DISALLOW_COPY_AND_ASSIGN(WebViewAutofillClientIOS);
 };
 
 }  // namespace autofill

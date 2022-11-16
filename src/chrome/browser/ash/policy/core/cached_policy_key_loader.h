@@ -10,7 +10,6 @@
 
 #include "base/callback_forward.h"
 #include "base/files/file_path.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
@@ -18,12 +17,12 @@
 #include "components/account_id/account_id.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
-namespace base {
-class SequencedTaskRunner;
+namespace ash {
+class CryptohomeMiscClient;
 }
 
-namespace chromeos {
-class CryptohomeMiscClient;
+namespace base {
+class SequencedTaskRunner;
 }
 
 namespace policy {
@@ -31,10 +30,14 @@ namespace policy {
 // Loads policy key cached by session_manager.
 class CachedPolicyKeyLoader {
  public:
-  CachedPolicyKeyLoader(chromeos::CryptohomeMiscClient* cryptohome_misc_client,
+  CachedPolicyKeyLoader(ash::CryptohomeMiscClient* cryptohome_misc_client,
                         scoped_refptr<base::SequencedTaskRunner> task_runner,
                         const AccountId& account_id,
                         const base::FilePath& user_policy_key_dir);
+
+  CachedPolicyKeyLoader(const CachedPolicyKeyLoader&) = delete;
+  CachedPolicyKeyLoader& operator=(const CachedPolicyKeyLoader&) = delete;
+
   ~CachedPolicyKeyLoader();
 
   // Invokes |callback| after loading |policy_key_|, if it hasn't been loaded
@@ -72,7 +75,7 @@ class CachedPolicyKeyLoader {
   // Task runner for background file operations.
   scoped_refptr<base::SequencedTaskRunner> task_runner_;
 
-  chromeos::CryptohomeMiscClient* const cryptohome_misc_client_;
+  ash::CryptohomeMiscClient* const cryptohome_misc_client_;
   const AccountId account_id_;
   const base::FilePath user_policy_key_dir_;
   base::FilePath cached_policy_key_path_;
@@ -97,8 +100,6 @@ class CachedPolicyKeyLoader {
 
   // Must be the last memeber.
   base::WeakPtrFactory<CachedPolicyKeyLoader> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(CachedPolicyKeyLoader);
 };
 
 }  // namespace policy

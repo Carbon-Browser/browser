@@ -12,8 +12,8 @@
 #include "base/files/file_path.h"
 #include "base/json/json_string_value_serializer.h"
 #include "base/mac/scoped_cftyperef.h"
-#include "base/sequenced_task_runner.h"
 #include "base/strings/sys_string_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/test_simple_task_runner.h"
 #include "base/values.h"
 #include "components/policy/core/common/async_policy_provider.h"
@@ -132,7 +132,17 @@ void TestHarness::InstallStringListPolicy(const std::string& policy_name,
   NSString* key = base::SysUTF8ToNSString(policy_name);
   base::ScopedCFTypeRef<CFPropertyListRef> value(
       ValueToProperty(*policy_value));
-  AddPolicies(@{key : (__bridge NSArray*)(value.get())});
+
+  if (encode_complex_data_as_json_) {
+    // Convert |policy_value| to a JSON-encoded string.
+    std::string json_string;
+    JSONStringValueSerializer serializer(&json_string);
+    ASSERT_TRUE(serializer.Serialize(*policy_value));
+
+    AddPolicies(@{key : base::SysUTF8ToNSString(json_string)});
+  } else {
+    AddPolicies(@{key : (__bridge NSArray*)(value.get())});
+  }
 }
 
 void TestHarness::InstallDictionaryPolicy(const std::string& policy_name,

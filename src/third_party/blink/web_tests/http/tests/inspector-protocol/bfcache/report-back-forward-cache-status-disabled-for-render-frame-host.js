@@ -6,14 +6,10 @@
 
   // Navigate to Page A.
   await page.navigate(
-      'https://devtools.test:8443/inspector-protocol/resources/empty.html');
-
-  // Request media playback.
-  await session.evaluate("navigator.mediaSession.playbackState = 'playing'");
+      'http://localhost:8000/inspector-protocol/bfcache/resources/page-with-embed.html');
 
   // Navigate to Page B.
-  await page.navigate(
-      'https://devtools.test:8000/inspector-protocol/resources/empty.html');
+  await page.navigate('chrome://version');
 
   const {result: history} = await dp.Page.getNavigationHistory();
 

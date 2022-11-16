@@ -6,12 +6,15 @@
 #define CC_TEST_STUB_LAYER_TREE_HOST_CLIENT_H_
 
 #include <memory>
+#include <vector>
 
 #include "cc/paint/element_id.h"
 #include "cc/trees/layer_tree_host_client.h"
 #include "cc/trees/paint_holding_reason.h"
 
 namespace cc {
+
+struct CommitState;
 
 class StubLayerTreeHostClient : public LayerTreeHostClient {
  public:
@@ -24,7 +27,10 @@ class StubLayerTreeHostClient : public LayerTreeHostClient {
   void DidUpdateLayers() override {}
   void BeginMainFrame(const viz::BeginFrameArgs& args) override {}
   void OnDeferMainFrameUpdatesChanged(bool) override {}
-  void OnDeferCommitsChanged(bool, PaintHoldingReason) override {}
+  void OnDeferCommitsChanged(
+      bool,
+      PaintHoldingReason,
+      absl::optional<PaintHoldingCommitTrigger>) override {}
   void RecordStartOfFrameMetrics() override {}
   void RecordEndOfFrameMetrics(base::TimeTicks,
                                ActiveFrameSequenceTrackers) override {}
@@ -40,8 +46,8 @@ class StubLayerTreeHostClient : public LayerTreeHostClient {
   void RequestNewLayerTreeFrameSink() override {}
   void DidInitializeLayerTreeFrameSink() override {}
   void DidFailToInitializeLayerTreeFrameSink() override {}
-  void WillCommit() override {}
-  void DidCommit(base::TimeTicks) override {}
+  void WillCommit(const CommitState&) override {}
+  void DidCommit(base::TimeTicks, base::TimeTicks) override {}
   void DidCommitAndDrawFrame() override {}
   void DidObserveFirstScrollDelay(
       base::TimeDelta first_scroll_delay,
@@ -51,6 +57,8 @@ class StubLayerTreeHostClient : public LayerTreeHostClient {
   void DidPresentCompositorFrame(
       uint32_t frame_token,
       const gfx::PresentationFeedback& feedback) override {}
+  void ReportEventLatency(
+      std::vector<EventLatencyTracker::LatencyData> latencies) override {}
 };
 
 }  // namespace cc

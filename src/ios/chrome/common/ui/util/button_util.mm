@@ -11,7 +11,7 @@
 #error "This file requires ARC support."
 #endif
 
-const CGFloat kButtonVerticalInsets = 17;
+const CGFloat kButtonVerticalInsets = 14.5;
 const CGFloat kPrimaryButtonCornerRadius = 15;
 
 UIButton* PrimaryActionButton(BOOL pointer_interaction_enabled) {
@@ -27,6 +27,8 @@ UIButton* PrimaryActionButton(BOOL pointer_interaction_enabled) {
   primary_blue_button.titleLabel.adjustsFontForContentSizeCategory = NO;
   primary_blue_button.translatesAutoresizingMaskIntoConstraints = NO;
 
+  // TODO(crbug.com/1129483): Remove once minimum supported version for
+  // extensions is at least 14
   if (@available(iOS 13.4, *)) {
     if (pointer_interaction_enabled) {
       primary_blue_button.pointerInteractionEnabled = YES;

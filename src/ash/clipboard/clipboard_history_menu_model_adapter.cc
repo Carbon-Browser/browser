@@ -103,7 +103,7 @@ void ClipboardHistoryMenuModelAdapter::Run(
       l10n_util::GetStringUTF16(IDS_CLIPBOARD_HISTORY_MENU_TITLE));
   menu_runner_ = std::make_unique<views::MenuRunner>(
       root_view_, views::MenuRunner::CONTEXT_MENU |
-                      views::MenuRunner::USE_TOUCHABLE_LAYOUT |
+                      views::MenuRunner::USE_ASH_SYS_UI_LAYOUT |
                       views::MenuRunner::FIXED_ANCHOR);
   menu_runner_->RunMenuAt(
       /*widget_owner=*/nullptr, /*menu_button_controller=*/nullptr, anchor_rect,
@@ -137,7 +137,7 @@ ClipboardHistoryMenuModelAdapter::GetItemFromCommandId(int command_id) const {
   return iter->second;
 }
 
-int ClipboardHistoryMenuModelAdapter::GetMenuItemsCount() const {
+size_t ClipboardHistoryMenuModelAdapter::GetMenuItemsCount() const {
   // We should not use `root_view_` to retrieve the item count. Because the
   // menu item view is removed from `root_view_` asynchronously.
   return item_views_by_command_id_.size();
@@ -272,13 +272,13 @@ gfx::Rect ClipboardHistoryMenuModelAdapter::GetMenuBoundsInScreenForTest()
 }
 
 const views::MenuItemView*
-ClipboardHistoryMenuModelAdapter::GetMenuItemViewAtForTest(int index) const {
+ClipboardHistoryMenuModelAdapter::GetMenuItemViewAtForTest(size_t index) const {
   DCHECK(root_view_);
   return root_view_->GetSubmenu()->GetMenuItemAt(index);
 }
 
 views::MenuItemView* ClipboardHistoryMenuModelAdapter::GetMenuItemViewAtForTest(
-    int index) {
+    size_t index) {
   return const_cast<views::MenuItemView*>(
       const_cast<const ClipboardHistoryMenuModelAdapter*>(this)
           ->GetMenuItemViewAtForTest(index));
@@ -364,7 +364,7 @@ void ClipboardHistoryMenuModelAdapter::RemoveItemView(int command_id) {
 
   // The menu item view and its corresponding command should be removed at the
   // same time. Otherwise, it may run into check errors.
-  model_->RemoveItemAt(model_->GetIndexOfCommandId(command_id));
+  model_->RemoveItemAt(model_->GetIndexOfCommandId(command_id).value());
   root_view_->RemoveMenuItem(root_view_->GetMenuItemByID(command_id));
   root_view_->ChildrenChanged();
 
@@ -378,15 +378,12 @@ void ClipboardHistoryMenuModelAdapter::RemoveItemView(int command_id) {
   // `ChildrenChanged()` clears the selection. So restore the selection.
   if (original_selected_command_id.has_value())
     SelectMenuItemWithCommandId(*original_selected_command_id);
-
-  if (item_removal_callback_for_test_)
-    item_removal_callback_for_test_.Run();
 }
 
 views::MenuItemView* ClipboardHistoryMenuModelAdapter::AppendMenuItem(
     views::MenuItemView* menu,
     ui::MenuModel* model,
-    int index) {
+    size_t index) {
   const int command_id = model->GetCommandIdAt(index);
 
   views::MenuItemView* container = menu->AppendMenuItem(command_id);

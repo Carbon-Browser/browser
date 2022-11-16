@@ -40,7 +40,7 @@ const char kConsumedSalts[] = "consumed_salts";
 // Generates a random validity bound offset in the interval
 // [0, kNearbyShareMaxPrivateCertificateValidityBoundOffset).
 base::TimeDelta GenerateRandomOffset() {
-  return base::TimeDelta::FromMicroseconds(base::RandGenerator(
+  return base::Microseconds(base::RandGenerator(
       kNearbyShareMaxPrivateCertificateValidityBoundOffset.InMicroseconds()));
 }
 
@@ -293,6 +293,9 @@ NearbySharePrivateCertificate::ToPublicCertificate() const {
   public_certificate.set_metadata_encryption_key_tag(
       std::string(metadata_encryption_key_tag->begin(),
                   metadata_encryption_key_tag->end()));
+
+  // Note: The |for_self_share| field is not set by clients but is set by the
+  // server for all downloaded public certificates.
 
   return public_certificate;
 }

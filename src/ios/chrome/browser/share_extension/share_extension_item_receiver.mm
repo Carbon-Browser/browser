@@ -11,10 +11,9 @@
 #include "base/mac/foundation_util.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/user_metrics_action.h"
-#include "base/sequenced_task_runner.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/task/post_task.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "components/bookmarks/browser/bookmark_model.h"
@@ -182,9 +181,10 @@ void LogHistogramReceivedItem(ShareExtensionItemReceived type) {
   }
 
   __weak ShareExtensionItemReceiver* weakSelf = self;
-  base::PostTask(FROM_HERE, {web::WebThread::UI}, base::BindOnce(^{
-                   [weakSelf readingListFolderCreated];
-                 }));
+  web::GetUIThreadTaskRunner({})->PostTask(
+      FROM_HERE, base::BindOnce(^{
+        [weakSelf readingListFolderCreated];
+      }));
 }
 
 - (void)readingListFolderCreated {
@@ -250,21 +250,22 @@ void LogHistogramReceivedItem(ShareExtensionItemReceived type) {
     return NO;
   }
 
-  UMA_HISTOGRAM_TIMES("IOS.ShareExtension.ReceivedEntryDelay",
-                      base::TimeDelta::FromSecondsD(
-                          [[NSDate date] timeIntervalSinceDate:entryDate]));
+  UMA_HISTOGRAM_TIMES(
+      "IOS.ShareExtension.ReceivedEntryDelay",
+      base::Seconds([[NSDate date] timeIntervalSinceDate:entryDate]));
 
   UMA_HISTOGRAM_ENUMERATION("IOS.ShareExtension.Source",
                             SourceIDFromSource(entrySource),
                             SHARE_EXTENSION_SOURCE_COUNT);
 
   __weak ShareExtensionItemReceiver* weakSelf = self;
-  base::PostTask(FROM_HERE, {web::WebThread::UI}, base::BindOnce(^{
-                   [weakSelf processEntryWithType:entryType
-                                            title:entryTitle
-                                              URL:entryURL
-                                       completion:completion];
-                 }));
+  web::GetUIThreadTaskRunner({})->PostTask(
+      FROM_HERE, base::BindOnce(^{
+        [weakSelf processEntryWithType:entryType
+                                 title:entryTitle
+                                   URL:entryURL
+                            completion:completion];
+      }));
   return YES;
 }
 
@@ -405,9 +406,9 @@ void LogHistogramReceivedItem(ShareExtensionItemReceived type) {
 
   if ([files count]) {
     __weak ShareExtensionItemReceiver* weakSelf = self;
-    base::PostTask(FROM_HERE, {web::WebThread::UI}, base::BindOnce(^{
-                     [weakSelf entriesReceived:files];
-                   }));
+    web::GetUIThreadTaskRunner({})->PostTask(FROM_HERE, base::BindOnce(^{
+                                               [weakSelf entriesReceived:files];
+                                             }));
   }
 }
 
@@ -422,14 +423,14 @@ void LogHistogramReceivedItem(ShareExtensionItemReceived type) {
     __block std::unique_ptr<ReadingListModel::ScopedReadingListBatchUpdate>
         batchToken(_readingListModel->BeginBatchUpdates());
     _taskRunner->PostTask(FROM_HERE, base::BindOnce(^{
-                            [weakSelf handleFileAtURL:fileURL
-                                       withCompletion:^{
-                                         base::PostTask(FROM_HERE,
-                                                        {web::WebThread::UI},
-                                                        base::BindOnce(^{
-                                                          batchToken.reset();
-                                                        }));
-                                       }];
+                            [weakSelf
+                                handleFileAtURL:fileURL
+                                 withCompletion:^{
+                                   web::GetUIThreadTaskRunner({})->PostTask(
+                                       FROM_HERE, base::BindOnce(^{
+                                         batchToken.reset();
+                                       }));
+                                 }];
                           }));
   }
 }

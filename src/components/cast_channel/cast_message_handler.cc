@@ -10,6 +10,7 @@
 
 #include "base/bind.h"
 #include "base/containers/cxx20_erase.h"
+#include "base/observer_list.h"
 #include "base/rand_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/time/default_tick_clock.h"
@@ -21,7 +22,7 @@ namespace cast_channel {
 namespace {
 
 // The max launch timeout amount for session launch requests.
-constexpr base::TimeDelta kLaunchMaxTimeout = base::TimeDelta::FromMinutes(2);
+constexpr base::TimeDelta kLaunchMaxTimeout = base::Minutes(2);
 
 // The max size of Cast Message is 64KB.
 constexpr int kMaxCastMessagePayload = 64 * 1024;
@@ -352,10 +353,10 @@ void CastMessageHandler::OnError(const CastSocket& socket,
 void CastMessageHandler::OnMessage(const CastSocket& socket,
                                    const CastMessage& message) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  // TODO(jrw): Splitting internal messages into a separate code path with a
-  // separate data type is pretty questionable, because it causes duplicated
-  // code paths in the downstream logic (manifested as separate OnAppMessage and
-  // OnInternalMessage methods).
+  // TODO(crbug.com/1291736): Splitting internal messages into a separate code
+  // path with a separate data type is pretty questionable, because it causes
+  // duplicated code paths in the downstream logic (manifested as separate
+  // OnAppMessage and OnInternalMessage methods).
   if (IsCastReservedNamespace(message.namespace_())) {
     if (message.payload_type() ==
         cast::channel::CastMessage_PayloadType_STRING) {
@@ -390,12 +391,12 @@ void CastMessageHandler::HandleCastInternalMessage(
     const std::string& destination_id,
     const std::string& namespace_,
     data_decoder::DataDecoder::ValueOrError parse_result) {
-  if (!parse_result.value) {
-    ReportParseError(*parse_result.error);
+  if (!parse_result.has_value()) {
+    ReportParseError(parse_result.error());
     return;
   }
 
-  base::Value& payload = *parse_result.value;
+  base::Value& payload = *parse_result;
   if (!payload.is_dict()) {
     ReportParseError("Parsed message not a dictionary");
     return;

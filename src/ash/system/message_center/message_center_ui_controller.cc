@@ -18,8 +18,7 @@ namespace ash {
 namespace {
 // The duration used to log the number of notifications shown
 // right after a user logs in.
-constexpr base::TimeDelta kLoginNotificationLogDuration =
-    base::TimeDelta::FromMinutes(1);
+constexpr base::TimeDelta kLoginNotificationLogDuration = base::Minutes(1);
 }  // namespace
 
 MessageCenterUiController::MessageCenterUiController(
@@ -169,6 +168,14 @@ void MessageCenterUiController::OnNotificationPopupShown(
   // Timed out popup notifications are not marked as read.
   if (!mark_notification_as_read)
     metrics_utils::LogPopupExpiredToTray(notification_id);
+}
+
+void MessageCenterUiController::OnMessageViewHovered(
+    const std::string& notification_id) {
+  // Note: we use |message_center_visible_| instead of |popups_visible_| here
+  // due to timing issues when dismissing the last popup notification.
+  bool is_popup = !message_center_visible_;
+  metrics_utils::LogHover(notification_id, is_popup);
 }
 
 void MessageCenterUiController::OnFirstSessionStarted() {

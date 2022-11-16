@@ -7,7 +7,6 @@
 #include <memory>
 #include <set>
 
-#include "ash/constants/ash_features.h"
 #include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/path_service.h"
@@ -29,12 +28,13 @@
 #include "chrome/browser/ui/webui/chromeos/login/gaia_screen_handler.h"
 #include "chrome/browser/ui/webui/chromeos/login/oobe_ui.h"
 #include "chrome/common/chrome_paths.h"
-#include "chromeos/services/assistant/public/cpp/assistant_prefs.h"
-#include "chromeos/services/assistant/public/cpp/assistant_settings.h"
-#include "chromeos/services/assistant/public/cpp/features.h"
-#include "chromeos/services/assistant/public/proto/get_settings_ui.pb.h"
-#include "chromeos/services/assistant/public/proto/settings_ui.pb.h"
-#include "chromeos/services/assistant/service.h"
+#include "chromeos/ash/services/assistant/public/cpp/assistant_prefs.h"
+#include "chromeos/ash/services/assistant/public/cpp/assistant_settings.h"
+#include "chromeos/ash/services/assistant/public/cpp/features.h"
+#include "chromeos/ash/services/assistant/public/proto/activity_control_settings_common.pb.h"
+#include "chromeos/ash/services/assistant/public/proto/get_settings_ui.pb.h"
+#include "chromeos/ash/services/assistant/public/proto/settings_ui.pb.h"
+#include "chromeos/ash/services/assistant/service.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/test/browser_test.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -133,6 +133,9 @@ class ScopedAssistantSettings : public chromeos::assistant::AssistantSettings {
   };
 
   ScopedAssistantSettings() = default;
+
+  ScopedAssistantSettings(const ScopedAssistantSettings&) = delete;
+  ScopedAssistantSettings& operator=(const ScopedAssistantSettings&) = delete;
 
   ~ScopedAssistantSettings() override = default;
 
@@ -257,6 +260,7 @@ class ScopedAssistantSettings : public chromeos::assistant::AssistantSettings {
     setting->add_additional_info_paragraph();
     setting->set_additional_info_paragraph(0, "And it's really cool");
     setting->set_icon_uri("assistant_icon");
+    setting->set_setting_set_id(chromeos::assistant::SettingSetId::WAA);
   }
 
   void UpdateSettings(const std::string& update,
@@ -331,8 +335,6 @@ class ScopedAssistantSettings : public chromeos::assistant::AssistantSettings {
 
   int setting_zippy_size_ = 1;
   bool is_minor_user_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(ScopedAssistantSettings);
 };
 
 class AssistantOptInFlowTest : public OobeBaseTest {
@@ -928,10 +930,7 @@ IN_PROC_BROWSER_TEST_F(AssistantOptInFlowTest, AssistantSkippedNoLib) {
 
 class AssistantOptInFlowMinorModeTest : public AssistantOptInFlowTest {
  public:
-  AssistantOptInFlowMinorModeTest() {
-    scoped_feature_list_.Reset();
-    scoped_feature_list_.InitAndEnableFeature(features::kMinorModeRestriction);
-  }
+  AssistantOptInFlowMinorModeTest() = default;
 
   void SetUpOnMainThread() override {
     AssistantOptInFlowTest::SetUpOnMainThread();

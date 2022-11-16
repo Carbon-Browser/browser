@@ -15,7 +15,10 @@
 #include "base/bind.h"
 #include "base/callback_forward.h"
 #include "base/callback_internal.h"
+#include "base/check.h"
 #include "base/notreached.h"
+#include "base/types/always_false.h"
+#include "third_party/abseil-cpp/absl/functional/function_ref.h"
 
 // -----------------------------------------------------------------------------
 // Usage documentation
@@ -53,6 +56,20 @@
 
 namespace base {
 
+namespace internal {
+
+struct NullCallbackTag {
+  template <typename Signature>
+  struct WithSignature {};
+};
+
+struct DoNothingCallbackTag {
+  template <typename Signature>
+  struct WithSignature {};
+};
+
+}  // namespace internal
+
 template <typename R, typename... Args>
 class OnceCallback<R(Args...)> : public internal::CallbackBase {
  public:
@@ -63,6 +80,35 @@ class OnceCallback<R(Args...)> : public internal::CallbackBase {
 
   constexpr OnceCallback() = default;
   OnceCallback(std::nullptr_t) = delete;
+
+  constexpr OnceCallback(internal::NullCallbackTag) : OnceCallback() {}
+  constexpr OnceCallback& operator=(internal::NullCallbackTag) {
+    *this = OnceCallback();
+    return *this;
+  }
+
+  constexpr OnceCallback(internal::NullCallbackTag::WithSignature<RunType>)
+      : OnceCallback(internal::NullCallbackTag()) {}
+  constexpr OnceCallback& operator=(
+      internal::NullCallbackTag::WithSignature<RunType>) {
+    *this = internal::NullCallbackTag();
+    return *this;
+  }
+
+  constexpr OnceCallback(internal::DoNothingCallbackTag)
+      : OnceCallback(BindOnce([](Args... args) {})) {}
+  constexpr OnceCallback& operator=(internal::DoNothingCallbackTag) {
+    *this = BindOnce([](Args... args) {});
+    return *this;
+  }
+
+  constexpr OnceCallback(internal::DoNothingCallbackTag::WithSignature<RunType>)
+      : OnceCallback(internal::DoNothingCallbackTag()) {}
+  constexpr OnceCallback& operator=(
+      internal::DoNothingCallbackTag::WithSignature<RunType>) {
+    *this = internal::DoNothingCallbackTag();
+    return *this;
+  }
 
   explicit OnceCallback(internal::BindStateBase* bind_state)
       : internal::CallbackBase(bind_state) {}
@@ -131,6 +177,25 @@ class OnceCallback<R(Args...)> : public internal::CallbackBase {
             RepeatingCallback<ThenR(ThenArgs...)>>::CreateTrampoline(),
         std::move(*this), std::move(then));
   }
+
+  template <typename Signature>
+  // NOLINTNEXTLINE(google-explicit-constructor)
+  operator absl::FunctionRef<Signature>() & {
+    static_assert(
+        AlwaysFalse<Signature>,
+        "need to convert a base::OnceCallback to absl::FunctionRef? "
+        "Please bring up this use case on #cxx (Slack) or cxx@chromium.org.");
+  }
+
+  template <typename Signature>
+  // NOLINTNEXTLINE(google-explicit-constructor)
+  operator absl::FunctionRef<Signature>() && {
+    static_assert(
+        AlwaysFalse<Signature>,
+        "using base::BindOnce() is not necessary with absl::FunctionRef; is it "
+        "possible to use a capturing lambda directly? If not, please bring up "
+        "this use case on #cxx (Slack) or cxx@chromium.org.");
+  }
 };
 
 template <typename R, typename... Args>
@@ -143,6 +208,37 @@ class RepeatingCallback<R(Args...)> : public internal::CallbackBaseCopyable {
 
   constexpr RepeatingCallback() = default;
   RepeatingCallback(std::nullptr_t) = delete;
+
+  constexpr RepeatingCallback(internal::NullCallbackTag)
+      : RepeatingCallback() {}
+  constexpr RepeatingCallback& operator=(internal::NullCallbackTag) {
+    *this = RepeatingCallback();
+    return *this;
+  }
+
+  constexpr RepeatingCallback(internal::NullCallbackTag::WithSignature<RunType>)
+      : RepeatingCallback(internal::NullCallbackTag()) {}
+  constexpr RepeatingCallback& operator=(
+      internal::NullCallbackTag::WithSignature<RunType>) {
+    *this = internal::NullCallbackTag();
+    return *this;
+  }
+
+  constexpr RepeatingCallback(internal::DoNothingCallbackTag)
+      : RepeatingCallback(BindRepeating([](Args... args) {})) {}
+  constexpr RepeatingCallback& operator=(internal::DoNothingCallbackTag) {
+    *this = BindRepeating([](Args... args) {});
+    return *this;
+  }
+
+  constexpr RepeatingCallback(
+      internal::DoNothingCallbackTag::WithSignature<RunType>)
+      : RepeatingCallback(internal::DoNothingCallbackTag()) {}
+  constexpr RepeatingCallback& operator=(
+      internal::DoNothingCallbackTag::WithSignature<RunType>) {
+    *this = internal::DoNothingCallbackTag();
+    return *this;
+  }
 
   explicit RepeatingCallback(internal::BindStateBase* bind_state)
       : internal::CallbackBaseCopyable(bind_state) {}
@@ -210,6 +306,25 @@ class RepeatingCallback<R(Args...)> : public internal::CallbackBaseCopyable {
             RepeatingCallback,
             RepeatingCallback<ThenR(ThenArgs...)>>::CreateTrampoline(),
         std::move(*this), std::move(then));
+  }
+
+  template <typename Signature>
+  // NOLINTNEXTLINE(google-explicit-constructor)
+  operator absl::FunctionRef<Signature>() & {
+    static_assert(
+        AlwaysFalse<Signature>,
+        "need to convert a base::RepeatingCallback to absl::FunctionRef? "
+        "Please bring up this use case on #cxx (Slack) or cxx@chromium.org.");
+  }
+
+  template <typename Signature>
+  // NOLINTNEXTLINE(google-explicit-constructor)
+  operator absl::FunctionRef<Signature>() && {
+    static_assert(
+        AlwaysFalse<Signature>,
+        "using base::BindRepeating() is not necessary with absl::FunctionRef; "
+        "is it possible to use a capturing lambda directly? If not, please "
+        "bring up this use case on #cxx (Slack) or cxx@chromium.org.");
   }
 };
 

@@ -8,9 +8,9 @@
 #include <memory>
 #include <string>
 
-#include "chrome/browser/chromeos/printing/print_server.h"
-#include "chrome/browser/chromeos/printing/print_servers_provider.h"
-#include "chrome/browser/chromeos/printing/print_servers_provider_factory.h"
+#include "chrome/browser/ash/printing/print_server.h"
+#include "chrome/browser/ash/printing/print_servers_provider.h"
+#include "chrome/browser/ash/printing/print_servers_provider_factory.h"
 #include "chrome/test/base/scoped_testing_local_state.h"
 #include "chrome/test/base/testing_profile.h"
 #include "components/policy/proto/chrome_device_policy.pb.h"
@@ -23,14 +23,16 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/libipp/libipp/ipp.h"
 
+namespace ash {
+
+namespace {
+
+using ::chromeos::Printer;
+using ::chromeos::Uri;
 using ::testing::AllOf;
 using ::testing::Property;
 using ::testing::ResultOf;
 using ::testing::UnorderedElementsAre;
-
-namespace chromeos {
-
-namespace {
 
 class TestingProfileWithURLLoaderFactory : public TestingProfile {
  public:
@@ -46,15 +48,15 @@ class TestingProfileWithURLLoaderFactory : public TestingProfile {
   scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory_;
 };
 
-chromeos::PrintServer PrintServer1() {
+PrintServer PrintServer1() {
   GURL url("http://192.168.1.5/printer");
-  chromeos::PrintServer print_server("id1", url, "LexaPrint");
+  PrintServer print_server("id1", url, "LexaPrint");
   return print_server;
 }
 
-chromeos::PrintServer PrintServer2() {
+PrintServer PrintServer2() {
   GURL url("https://print-server.intranet.example.com:443/ipp/cl2k4");
-  chromeos::PrintServer print_server("id2", url, "Color Laser");
+  PrintServer print_server("id2", url, "Color Laser");
   return print_server;
 }
 
@@ -121,8 +123,8 @@ class ServerPrintersProviderTest : public ::testing::Test {
   }
 
   void OnServersChanged(bool is_complete,
-                        std::vector<chromeos::PrintServer> print_servers) {
-    std::map<GURL, chromeos::PrintServer> new_print_servers;
+                        std::vector<PrintServer> print_servers) {
+    std::map<GURL, PrintServer> new_print_servers;
     for (auto& print_server : print_servers) {
       new_print_servers.emplace(print_server.GetUrl(), print_server);
     }
@@ -162,4 +164,4 @@ TEST_F(ServerPrintersProviderTest, GetPrinters) {
                                    PrinterMatcher(Printer2())));
 }
 
-}  // namespace chromeos
+}  // namespace ash

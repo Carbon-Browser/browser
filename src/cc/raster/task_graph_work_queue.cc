@@ -13,6 +13,7 @@
 #include <utility>
 
 #include "base/containers/contains.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/trace_event/trace_event.h"
 
 namespace cc {
@@ -94,10 +95,16 @@ class DependentIterator {
   operator bool() const { return current_index_ < graph_->edges.size(); }
 
  private:
-  TaskGraph* graph_;
-  const Task* task_;
+  // `graph_` and `task_` are not a raw_ptr<...> for performance reasons (based
+  // on analysis of sampling profiler data and tab_search:top100:2020).
+  RAW_PTR_EXCLUSION TaskGraph* graph_;
+  RAW_PTR_EXCLUSION const Task* task_;
+
   size_t current_index_;
-  TaskGraph::Node* current_node_;
+
+  // `current_node_` is not a raw_ptr<...> for performance reasons (based on
+  // analysis of sampling profiler data and tab_search:top100:2020).
+  RAW_PTR_EXCLUSION TaskGraph::Node* current_node_;
 };
 
 }  // namespace

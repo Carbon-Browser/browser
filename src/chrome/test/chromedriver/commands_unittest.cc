@@ -17,8 +17,8 @@
 #include "base/files/file_path.h"
 #include "base/location.h"
 #include "base/run_loop.h"
-#include "base/single_thread_task_runner.h"
 #include "base/synchronization/lock.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "base/threading/thread.h"
 #include "base/values.h"
@@ -88,8 +88,7 @@ void OnGetSessions(const Status& status,
                    bool w3c_compliant) {
   ASSERT_EQ(kOk, status.code());
   ASSERT_TRUE(value.get());
-  std::vector<base::Value> sessions_list =
-      base::Value::FromUniquePtrValue(std::move(value)).TakeList();
+  const base::Value::List& sessions_list = value->GetList();
   ASSERT_EQ(static_cast<size_t>(2), sessions_list.size());
 
   const base::Value& session1 = sessions_list[0];
@@ -210,8 +209,8 @@ Status ExecuteSimpleCommand(const std::string& expected_id,
                             std::unique_ptr<base::Value>* return_value) {
   EXPECT_TRUE(expected_params->is_dict());
   EXPECT_EQ(expected_id, session->id);
-  EXPECT_TRUE(expected_params->Equals(&params));
-  return_value->reset(value->DeepCopy());
+  EXPECT_EQ(*expected_params, params);
+  *return_value = base::Value::ToUniquePtrValue(value->Clone());
   session->quit = true;
   return Status(kOk);
 }
@@ -224,7 +223,7 @@ void OnSimpleCommand(base::RunLoop* run_loop,
                      const std::string& session_id,
                      bool w3c_compliant) {
   ASSERT_EQ(kOk, status.code());
-  ASSERT_TRUE(expected_value->Equals(value.get()));
+  ASSERT_EQ(*expected_value, *value);
   ASSERT_EQ(expected_session_id, session_id);
   run_loop->Quit();
 }
@@ -392,9 +391,9 @@ class FindElementWebView : public StubWebView {
       function = webdriver::atoms::asString(webdriver::atoms::FIND_ELEMENTS);
     EXPECT_EQ(function, function_);
     ASSERT_TRUE(args_.get());
-    EXPECT_TRUE(expected_args->Equals(args_.get()));
+    EXPECT_EQ(*expected_args, *args_);
     ASSERT_TRUE(actual_result);
-    EXPECT_TRUE(result_->Equals(actual_result));
+    EXPECT_EQ(*result_, *actual_result);
   }
 
   // Overridden from WebView:
@@ -449,7 +448,7 @@ class FindElementWebView : public StubWebView {
 TEST(CommandsTest, SuccessfulFindElement) {
   FindElementWebView web_view(true, kElementExistsQueryTwice);
   Session session("id");
-  session.implicit_wait = base::TimeDelta::FromSeconds(1);
+  session.implicit_wait = base::Seconds(1);
   session.SwitchToSubFrame("frame_id1", std::string());
   base::Value params(base::Value::Type::DICTIONARY);
   params.SetStringKey("using", "css selector");
@@ -483,7 +482,7 @@ TEST(CommandsTest, FailedFindElement) {
 TEST(CommandsTest, SuccessfulFindElements) {
   FindElementWebView web_view(false, kElementExistsQueryTwice);
   Session session("id");
-  session.implicit_wait = base::TimeDelta::FromSeconds(1);
+  session.implicit_wait = base::Seconds(1);
   session.SwitchToSubFrame("frame_id2", std::string());
   base::Value params(base::Value::Type::DICTIONARY);
   params.SetStringKey("using", "css selector");
@@ -518,7 +517,7 @@ TEST(CommandsTest, FailedFindElements) {
 TEST(CommandsTest, SuccessfulFindChildElement) {
   FindElementWebView web_view(true, kElementExistsQueryTwice);
   Session session("id");
-  session.implicit_wait = base::TimeDelta::FromSeconds(1);
+  session.implicit_wait = base::Seconds(1);
   session.SwitchToSubFrame("frame_id3", std::string());
   base::Value params(base::Value::Type::DICTIONARY);
   params.SetStringKey("using", "css selector");
@@ -556,7 +555,7 @@ TEST(CommandsTest, FailedFindChildElement) {
 TEST(CommandsTest, SuccessfulFindChildElements) {
   FindElementWebView web_view(false, kElementExistsQueryTwice);
   Session session("id");
-  session.implicit_wait = base::TimeDelta::FromSeconds(1);
+  session.implicit_wait = base::Seconds(1);
   session.SwitchToSubFrame("frame_id4", std::string());
   base::Value params(base::Value::Type::DICTIONARY);
   params.SetStringKey("using", "css selector");
@@ -596,7 +595,7 @@ TEST(CommandsTest, FailedFindChildElements) {
 TEST(CommandsTest, TimeoutInFindElement) {
   Session session("id");
   FindElementWebView web_view(true, kElementExistsTimeout);
-  session.implicit_wait = base::TimeDelta::FromMilliseconds(2);
+  session.implicit_wait = base::Milliseconds(2);
   base::Value params(base::Value::Type::DICTIONARY);
   params.SetStringKey("using", "css selector");
   params.SetStringKey("value", "#a");

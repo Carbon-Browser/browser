@@ -11,7 +11,7 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/sync/sync_service_factory.h"
 #include "chrome/browser/ui/android/infobars/update_password_infobar.h"
-#include "chrome/browser/ui/passwords/manage_passwords_view_utils.h"
+#include "chrome/browser/ui/passwords/ui_utils.h"
 #include "chrome/grit/chromium_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/infobars/content/content_infobar_manager.h"
@@ -33,7 +33,7 @@ void UpdatePasswordInfoBarDelegate::Create(
   // is_smartlock_branding_enabled indicates whether the user is syncing
   // passwords to their Google Account.
   const bool is_smartlock_branding_enabled =
-      password_bubble_experiment::IsSmartLockUser(
+      password_bubble_experiment::HasChosenToSyncPasswords(
           SyncServiceFactory::GetForProfile(
               Profile::FromBrowserContext(web_contents->GetBrowserContext())));
   infobars::ContentInfoBarManager::FromWebContents(web_contents)
@@ -46,7 +46,10 @@ void UpdatePasswordInfoBarDelegate::Create(
 }
 
 UpdatePasswordInfoBarDelegate::~UpdatePasswordInfoBarDelegate() {
-  password_manager::metrics_util::LogUpdateUIDismissalReason(infobar_response_);
+  auto submission_event =
+      passwords_state_.form_manager()->GetPendingCredentials().submission_event;
+  password_manager::metrics_util::LogUpdateUIDismissalReason(infobar_response_,
+                                                             submission_event);
   if (auto* recorder = passwords_state_.form_manager()->GetMetricsRecorder()) {
     recorder->RecordUIDismissalReason(infobar_response_);
   }

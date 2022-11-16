@@ -10,7 +10,7 @@
 
 #include "base/callback.h"
 #include "base/callback_list.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "components/password_manager/core/browser/password_hash_data.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -25,6 +25,10 @@ class HashPasswordManager {
  public:
   HashPasswordManager();
   explicit HashPasswordManager(PrefService* prefs);
+
+  HashPasswordManager(const HashPasswordManager&) = delete;
+  HashPasswordManager& operator=(const HashPasswordManager&) = delete;
+
   ~HashPasswordManager();
 
   bool SavePasswordHash(const std::string username,
@@ -67,7 +71,7 @@ class HashPasswordManager {
   // Encrypts and saves |password_hash_data| to prefs. Returns true on success.
   bool EncryptAndSave(const PasswordHashData& password_hash_data);
 
-  PrefService* prefs_ = nullptr;
+  raw_ptr<PrefService> prefs_ = nullptr;
 
   // Callbacks when |kPasswordHashDataList| might have changed.
   // Should only be accessed on the UI thread. The callback is only called when
@@ -75,8 +79,6 @@ class HashPasswordManager {
   // saving the password hash actually succeeded.
   base::RepeatingCallbackList<void(const std::string& username)>
       state_callback_list_;
-
-  DISALLOW_COPY_AND_ASSIGN(HashPasswordManager);
 };
 
 }  // namespace password_manager

@@ -12,29 +12,29 @@ import 'chrome://resources/cr_elements/icons.m.js';
 import 'chrome://resources/cr_elements/shared_style_css.m.js';
 import 'chrome://resources/polymer/v3_0/iron-flex-layout/iron-flex-layout-classes.js';
 import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
-import '../settings_shared_css.js';
+import '../settings_shared.css.js';
 import './incompatible_application_item.js';
 
-import {assert} from 'chrome://resources/js/assert.m.js';
-import {WebUIListenerBehavior} from 'chrome://resources/js/web_ui_listener_behavior.m.js';
-import {html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {assert} from 'chrome://resources/js/assert_ts.js';
+import {WebUIListenerMixin} from 'chrome://resources/js/web_ui_listener_mixin.js';
+import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {loadTimeData} from '../i18n_setup.js';
 
 import {IncompatibleApplication, IncompatibleApplicationsBrowserProxyImpl} from './incompatible_applications_browser_proxy.js';
+import {getTemplate} from './incompatible_applications_page.html.js';
 
 const SettingsIncompatibleApplicationsPageElementBase =
-    mixinBehaviors([WebUIListenerBehavior], PolymerElement) as
-    {new (): PolymerElement & WebUIListenerBehavior};
+    WebUIListenerMixin(PolymerElement);
 
-class SettingsIncompatibleApplicationsPageElement extends
+export class SettingsIncompatibleApplicationsPageElement extends
     SettingsIncompatibleApplicationsPageElementBase {
   static get is() {
     return 'settings-incompatible-applications-page';
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
   }
 
   static get properties() {
@@ -90,13 +90,13 @@ class SettingsIncompatibleApplicationsPageElement extends
   }
 
   private hasAdminRights_: boolean;
-  private applications_: Array<IncompatibleApplication>;
+  private applications_: IncompatibleApplication[];
   private isDone_: boolean;
   private subtitleText_: string;
   private subtitleNoAdminRightsText_: string;
   private listTitleText_: string;
 
-  ready() {
+  override ready() {
     super.ready();
 
     this.addWebUIListener(
@@ -154,6 +154,13 @@ class SettingsIncompatibleApplicationsPageElement extends
           this.subtitleNoAdminRightsText_ = strings[1];
           this.listTitleText_ = strings[2];
         });
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'settings-incompatible-applications-page':
+        SettingsIncompatibleApplicationsPageElement;
   }
 }
 

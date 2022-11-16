@@ -15,7 +15,6 @@
 #include "chrome/browser/media/offscreen_tab.h"
 #include "components/media_router/common/media_route.h"
 #include "components/media_router/common/mojom/media_router.mojom.h"
-#include "content/public/test/browser_test_utils.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -48,14 +47,6 @@ class TestMediaRouteProvider : public mojom::MediaRouteProvider,
                  base::TimeDelta timeout,
                  bool incognito,
                  JoinRouteCallback callback) override;
-  void ConnectRouteByRouteId(const std::string& media_source,
-                             const std::string& route_id,
-                             const std::string& presentation_id,
-                             const url::Origin& origin,
-                             int32_t tab_id,
-                             base::TimeDelta timeout,
-                             bool incognito,
-                             ConnectRouteByRouteIdCallback callback) override;
   void TerminateRoute(const std::string& route_id,
                       TerminateRouteCallback callback) override;
   void SendRouteMessage(const std::string& media_route_id,
@@ -64,8 +55,7 @@ class TestMediaRouteProvider : public mojom::MediaRouteProvider,
                               const std::vector<uint8_t>& data) override;
   void StartObservingMediaSinks(const std::string& media_source) override;
   void StopObservingMediaSinks(const std::string& media_source) override;
-  void StartObservingMediaRoutes(const std::string& media_source) override;
-  void StopObservingMediaRoutes(const std::string& media_source) override;
+  void StartObservingMediaRoutes() override;
   void StartListeningForRouteMessages(const std::string& route_id) override;
   void StopListeningForRouteMessages(const std::string& route_id) override;
   void DetachRoute(const std::string& route_id) override;
@@ -107,6 +97,9 @@ class TestMediaRouteProvider : public mojom::MediaRouteProvider,
   void CaptureOffScreenTab(content::WebContents* web_contents,
                            GURL source_urn,
                            std::string& presentation_id);
+
+  bool HasRoutes() const;
+
   void TearDown();
 
  private:
@@ -122,7 +115,7 @@ class TestMediaRouteProvider : public mojom::MediaRouteProvider,
   void CreateRouteTimeOut(CreateRouteCallback callback);
 
   bool close_route_with_error_on_send_ = false;
-  base::TimeDelta delay_ = base::TimeDelta::FromSeconds(0);
+  base::TimeDelta delay_ = base::Seconds(0);
   std::string route_error_message_;
   std::map<std::string, MediaRoute> presentation_ids_to_routes_;
   std::map<MediaRoute::Id, MediaRoute> routes_;

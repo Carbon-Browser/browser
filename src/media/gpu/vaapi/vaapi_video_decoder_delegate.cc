@@ -17,13 +17,16 @@
 #include "media/gpu/vaapi/vaapi_wrapper.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chromeos/components/cdm_factory_daemon/chromeos_cdm_factory.h"
+// gn check does not account for BUILDFLAG(), so including these headers will
+// make gn check fail for builds other than ash-chrome. See gn help nogncheck
+// for more information.
+#include "chromeos/components/cdm_factory_daemon/chromeos_cdm_context.h"  // nogncheck
+#include "chromeos/components/cdm_factory_daemon/chromeos_cdm_factory.h"  // nogncheck
 
 namespace {
 // During playback of protected content, we need to request the keys at an
 // interval no greater than this. This allows updating of key usage data.
-constexpr base::TimeDelta kKeyRetrievalMaxPeriod =
-    base::TimeDelta::FromMinutes(1);
+constexpr base::TimeDelta kKeyRetrievalMaxPeriod = base::Minutes(1);
 // This increments the lower 64 bit counter of an 128 bit IV.
 void ctr128_inc64(uint8_t* counter) {
   uint32_t n = 16;
@@ -50,7 +53,6 @@ VaapiVideoDecoderDelegate::VaapiVideoDecoderDelegate(
           std::move(on_protected_session_update_cb)),
       encryption_scheme_(encryption_scheme),
       protected_session_state_(ProtectedSessionState::kNotCreated),
-      scaled_surface_id_(VA_INVALID_ID),
       performing_recovery_(false) {
   DCHECK(vaapi_wrapper_);
   DCHECK(vaapi_dec_);
@@ -59,8 +61,6 @@ VaapiVideoDecoderDelegate::VaapiVideoDecoderDelegate(
   if (cdm_context)
     chromeos_cdm_context_ = cdm_context->GetChromeOsCdmContext();
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
-  memset(&src_region_, 0, sizeof(src_region_));
-  memset(&dst_region_, 0, sizeof(dst_region_));
   transcryption_ = cdm_context && VaapiWrapper::GetImplementationType() ==
                                       VAImplementation::kMesaGallium;
 }
@@ -97,19 +97,11 @@ bool VaapiVideoDecoderDelegate::HasInitiatedProtectedRecovery() {
 bool VaapiVideoDecoderDelegate::SetDecryptConfig(
     std::unique_ptr<DecryptConfig> decrypt_config) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  // It is possible to switch between clear and encrypted (and vice versa), but
-  // we should not be changing encryption schemes across encrypted portions.
+  // It is possible to switch between clear and encrypted (and vice versa).
   if (!decrypt_config)
     return true;
-  // TODO(jkardatzke): Handle changing encryption modes midstream, the latest
-  // OEMCrypto spec allows this, although we won't hit it in reality for now.
-  // Check to make sure they are compatible.
-  if (!transcryption_ &&
-      decrypt_config->encryption_scheme() != encryption_scheme_) {
-    LOG(ERROR) << "Cannot change encryption modes midstream";
-    return false;
-  }
   decrypt_config_ = std::move(decrypt_config);
+  encryption_scheme_ = decrypt_config_->encryption_scheme();
   return true;
 }
 
@@ -180,6 +172,18 @@ VaapiVideoDecoderDelegate::SetupDecryptDecode(
     return protected_session_state_;
   }
 
+  // On Intel if we change encryption modes after we have started decrypting
+  // then we need to rebuild the protected session.
+  if (!IsTranscrypted() &&
+      last_used_encryption_scheme_ != EncryptionScheme::kUnencrypted &&
+      last_used_encryption_scheme_ != encryption_scheme_) {
+    LOG(WARNING) << "Forcing rebuild since encryption mode changed midstream";
+    RecoverProtectedSession();
+    last_used_encryption_scheme_ = EncryptionScheme::kUnencrypted;
+    return protected_session_state_;
+  }
+
+  last_used_encryption_scheme_ = encryption_scheme_;
   DCHECK(decrypt_config_);
   // We also need to make sure we have the key data for the active
   // DecryptConfig now that the protected session exists.
@@ -267,50 +271,12 @@ bool VaapiVideoDecoderDelegate::NeedsProtectedSessionRecovery() {
     return false;
   }
 
-  LOG(WARNING) << "Protected session loss detected, initiating recovery";
-  protected_session_state_ = ProtectedSessionState::kNeedsRecovery;
-  hw_key_data_map_.clear();
-  hw_identifier_.clear();
-  vaapi_wrapper_->DestroyProtectedSession();
+  RecoverProtectedSession();
   return true;
 }
 
 void VaapiVideoDecoderDelegate::ProtectedDecodedSucceeded() {
   performing_recovery_ = false;
-}
-
-bool VaapiVideoDecoderDelegate::FillDecodeScalingIfNeeded(
-    const gfx::Rect& decode_visible_rect,
-    VASurfaceID decode_surface_id,
-    scoped_refptr<VASurface> output_surface,
-    VAProcPipelineParameterBuffer* proc_buffer) {
-  if (!vaapi_dec_->IsScalingDecode())
-    return false;
-
-  // Submit the buffer for the inline decode scaling.
-  memset(proc_buffer, 0, sizeof(*proc_buffer));
-  src_region_.x = base::checked_cast<int16_t>(decode_visible_rect.x());
-  src_region_.y = base::checked_cast<int16_t>(decode_visible_rect.y());
-  src_region_.width = base::checked_cast<uint16_t>(decode_visible_rect.width());
-  src_region_.height =
-      base::checked_cast<uint16_t>(decode_visible_rect.height());
-
-  gfx::Rect scaled_visible_rect = vaapi_dec_->GetOutputVisibleRect(
-      decode_visible_rect, output_surface->size());
-  dst_region_.x = base::checked_cast<int16_t>(scaled_visible_rect.x());
-  dst_region_.y = base::checked_cast<int16_t>(scaled_visible_rect.y());
-  dst_region_.width = base::checked_cast<uint16_t>(scaled_visible_rect.width());
-  dst_region_.height =
-      base::checked_cast<uint16_t>(scaled_visible_rect.height());
-
-  proc_buffer->surface_region = &src_region_;
-  proc_buffer->output_region = &dst_region_;
-
-  scaled_surface_id_ = output_surface->id();
-  proc_buffer->additional_outputs = &scaled_surface_id_;
-  proc_buffer->num_additional_outputs = 1;
-  proc_buffer->surface = decode_surface_id;
-  return true;
 }
 
 std::string VaapiVideoDecoderDelegate::GetDecryptKeyId() const {
@@ -379,6 +345,24 @@ void VaapiVideoDecoderDelegate::OnGetHwKeyData(
   }
   hw_key_data_map_[key_id] = key_data;
   on_protected_session_update_cb_.Run(true);
+}
+
+void VaapiVideoDecoderDelegate::RecoverProtectedSession() {
+  LOG(WARNING) << "Protected session loss detected, initiating recovery";
+  protected_session_state_ = ProtectedSessionState::kNeedsRecovery;
+  hw_key_data_map_.clear();
+  hw_identifier_.clear();
+  vaapi_wrapper_->DestroyProtectedSession();
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  if (chromeos_cdm_context_ && chromeos_cdm_context_->UsingArcCdm()) {
+    // The ARC decoder doesn't handle the WaitingCB that'll get invoked so we
+    // need to trigger a protected update ourselves in order to get decoding
+    // running again.
+    base::SequencedTaskRunnerHandle::Get()->PostTask(
+        FROM_HERE,
+        base::BindRepeating(on_protected_session_update_cb_, true));
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 }
 
 }  // namespace media

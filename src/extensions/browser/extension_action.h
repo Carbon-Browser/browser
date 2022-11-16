@@ -11,7 +11,6 @@
 #include <vector>
 
 #include "base/containers/contains.h"
-#include "base/macros.h"
 #include "extensions/common/api/extension_action/action_info.h"
 #include "extensions/common/constants.h"
 #include "third_party/skia/include/core/SkColor.h"
@@ -58,6 +57,10 @@ class ExtensionAction {
   static const int kDefaultTabId;
 
   ExtensionAction(const Extension& extension, const ActionInfo& manifest_data);
+
+  ExtensionAction(const ExtensionAction&) = delete;
+  ExtensionAction& operator=(const ExtensionAction&) = delete;
+
   ~ExtensionAction();
 
   // extension id
@@ -184,17 +187,11 @@ class ExtensionAction {
   // leak information about hosts the extension doesn't have permission to
   // access.
   bool GetIsVisible(int tab_id) const {
-    if (const bool* tab_is_visible = FindOrNull(&is_visible_, tab_id))
-      return *tab_is_visible;
+    return GetIsVisibleInternal(tab_id, /*include_declarative=*/true);
+  }
 
-    if (base::Contains(declarative_show_count_, tab_id))
-      return true;
-
-    if (const bool* default_is_visible =
-            FindOrNull(&is_visible_, kDefaultTabId))
-      return *default_is_visible;
-
-    return false;
+  bool GetIsVisibleIgnoringDeclarative(int tab_id) const {
+    return GetIsVisibleInternal(tab_id, /*include_declarative=*/false);
   }
 
   // Remove all tab-specific state.
@@ -234,6 +231,13 @@ class ExtensionAction {
   // TODO(tbarzic): The icon selection is done in ExtensionActionIconFactory.
   // We should probably move this there too.
   int GetIconWidth(int tab_id) const;
+
+  // Returns whether the icon is visible on the given `tab`.
+  // `include_declarative` indicates whether this method should take into
+  // account declaratively-shown icons; this should only be true when the result
+  // of this function is not delivered (directly or indirectly) to the
+  // extension, since it can leak data about the page in the tab.
+  bool GetIsVisibleInternal(int tab_id, bool include_declarative) const;
 
   template <class T>
   struct ValueTraits {
@@ -325,8 +329,6 @@ class ExtensionAction {
   // The id for the ExtensionAction, for example: "RssPageAction". This is
   // needed for compat with an older version of the page actions API.
   std::string id_;
-
-  DISALLOW_COPY_AND_ASSIGN(ExtensionAction);
 };
 
 template <>

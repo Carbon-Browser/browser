@@ -12,20 +12,19 @@
 #include <utility>
 
 #include "base/callback.h"
-#include "base/check_op.h"
-#include "base/compiler_specific.h"
 #include "base/component_export.h"
+#include "base/dcheck_is_on.h"
 #include "base/location.h"
-#include "base/macros.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
-#include "base/sequenced_task_runner.h"
+#include "base/strings/string_piece_forward.h"
 #include "base/synchronization/lock.h"
-#include "base/synchronization/waitable_event.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/thread_annotations.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
-#include "mojo/public/cpp/bindings/associated_group.h"
 #include "mojo/public/cpp/bindings/connection_error_callback.h"
 #include "mojo/public/cpp/bindings/connection_group.h"
 #include "mojo/public/cpp/bindings/disconnect_reason.h"
@@ -33,6 +32,7 @@
 #include "mojo/public/cpp/bindings/lib/control_message_proxy.h"
 #include "mojo/public/cpp/bindings/message.h"
 #include "mojo/public/cpp/bindings/message_dispatcher.h"
+#include "mojo/public/cpp/bindings/message_metadata_helpers.h"
 #include "mojo/public/cpp/bindings/scoped_interface_endpoint_handle.h"
 #include "mojo/public/cpp/bindings/thread_safe_proxy.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -59,7 +59,13 @@ class COMPONENT_EXPORT(MOJO_CPP_BINDINGS) InterfaceEndpointClient
                           bool expect_sync_requests,
                           scoped_refptr<base::SequencedTaskRunner> task_runner,
                           uint32_t interface_version,
-                          const char* interface_name);
+                          const char* interface_name,
+                          MessageToMethodInfoCallback method_info_callback,
+                          MessageToMethodNameCallback method_name_callback);
+
+  InterfaceEndpointClient(const InterfaceEndpointClient&) = delete;
+  InterfaceEndpointClient& operator=(const InterfaceEndpointClient&) = delete;
+
   ~InterfaceEndpointClient() override;
 
   // Sets the error handler to receive notifications when an error is
@@ -106,7 +112,7 @@ class COMPONENT_EXPORT(MOJO_CPP_BINDINGS) InterfaceEndpointClient
   // and notifies all interfaces running on this pipe.
   void RaiseError();
 
-  void CloseWithReason(uint32_t custom_reason, const std::string& description);
+  void CloseWithReason(uint32_t custom_reason, base::StringPiece description);
 
   // Used by ControlMessageProxy to send messages through this endpoint.
   void SendControlMessage(Message* message);
@@ -187,6 +193,12 @@ class COMPONENT_EXPORT(MOJO_CPP_BINDINGS) InterfaceEndpointClient
   void MaybeSendNotifyIdle();
 
   const char* interface_name() const { return interface_name_; }
+  MessageToMethodInfoCallback method_info_callback() const {
+    return method_info_callback_;
+  }
+  MessageToMethodNameCallback method_name_callback() const {
+    return method_name_callback_;
+  }
 
 #if DCHECK_IS_ON()
   void SetNextCallLocation(const base::Location& location) {
@@ -217,15 +229,16 @@ class COMPONENT_EXPORT(MOJO_CPP_BINDINGS) InterfaceEndpointClient
   struct SyncResponseInfo {
    public:
     explicit SyncResponseInfo(bool* in_response_received);
+
+    SyncResponseInfo(const SyncResponseInfo&) = delete;
+    SyncResponseInfo& operator=(const SyncResponseInfo&) = delete;
+
     ~SyncResponseInfo();
 
     Message response;
 
     // Points to a stack-allocated variable.
-    bool* response_received;
-
-   private:
-    DISALLOW_COPY_AND_ASSIGN(SyncResponseInfo);
+    raw_ptr<bool> response_received;
   };
 
   using SyncResponseMap = std::map<uint64_t, std::unique_ptr<SyncResponseInfo>>;
@@ -235,15 +248,18 @@ class COMPONENT_EXPORT(MOJO_CPP_BINDINGS) InterfaceEndpointClient
   class HandleIncomingMessageThunk : public MessageReceiver {
    public:
     explicit HandleIncomingMessageThunk(InterfaceEndpointClient* owner);
+
+    HandleIncomingMessageThunk(const HandleIncomingMessageThunk&) = delete;
+    HandleIncomingMessageThunk& operator=(const HandleIncomingMessageThunk&) =
+        delete;
+
     ~HandleIncomingMessageThunk() override;
 
     // MessageReceiver implementation:
     bool Accept(Message* message) override;
 
    private:
-    InterfaceEndpointClient* const owner_;
-
-    DISALLOW_COPY_AND_ASSIGN(HandleIncomingMessageThunk);
+    const raw_ptr<InterfaceEndpointClient> owner_;
   };
 
   void InitControllerIfNecessary();
@@ -285,9 +301,14 @@ class COMPONENT_EXPORT(MOJO_CPP_BINDINGS) InterfaceEndpointClient
 
   ScopedInterfaceEndpointHandle handle_;
   std::unique_ptr<AssociatedGroup> associated_group_;
-  InterfaceEndpointController* controller_ = nullptr;
+  // `controller_` is not a raw_ptr<...> for performance reasons (based on
+  // analysis of sampling profiler data).
+  RAW_PTR_EXCLUSION InterfaceEndpointController* controller_ = nullptr;
 
-  MessageReceiverWithResponderStatus* const incoming_receiver_ = nullptr;
+  // `incoming_receiver_` is not a raw_ptr<...> for performance reasons (based
+  // on analysis of sampling profiler data).
+  RAW_PTR_EXCLUSION MessageReceiverWithResponderStatus* const
+      incoming_receiver_ = nullptr;
   HandleIncomingMessageThunk thunk_{this};
   MessageDispatcher dispatcher_;
 
@@ -306,6 +327,8 @@ class COMPONENT_EXPORT(MOJO_CPP_BINDINGS) InterfaceEndpointClient
   internal::ControlMessageProxy control_message_proxy_{this};
   internal::ControlMessageHandler control_message_handler_;
   const char* interface_name_;
+  const MessageToMethodInfoCallback method_info_callback_;
+  const MessageToMethodNameCallback method_name_callback_;
 
 #if DCHECK_IS_ON()
   // The code location of the the most recent call into a method on this
@@ -317,8 +340,6 @@ class COMPONENT_EXPORT(MOJO_CPP_BINDINGS) InterfaceEndpointClient
   SEQUENCE_CHECKER(sequence_checker_);
 
   base::WeakPtrFactory<InterfaceEndpointClient> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(InterfaceEndpointClient);
 };
 
 }  // namespace mojo

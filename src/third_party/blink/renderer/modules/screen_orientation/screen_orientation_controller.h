@@ -7,7 +7,6 @@
 
 #include <memory>
 
-#include "base/macros.h"
 #include "services/device/public/mojom/screen_orientation.mojom-blink.h"
 #include "services/device/public/mojom/screen_orientation_lock_types.mojom-shared.h"
 #include "third_party/blink/renderer/core/dom/document.h"
@@ -32,6 +31,11 @@ class MODULES_EXPORT ScreenOrientationController final
       public Supplement<LocalDOMWindow> {
  public:
   explicit ScreenOrientationController(LocalDOMWindow&);
+
+  ScreenOrientationController(const ScreenOrientationController&) = delete;
+  ScreenOrientationController& operator=(const ScreenOrientationController&) =
+      delete;
+
   ~ScreenOrientationController() override;
 
   void SetOrientation(ScreenOrientation*);
@@ -67,6 +71,12 @@ class MODULES_EXPORT ScreenOrientationController final
 
   void UpdateOrientation();
 
+  // Sends binding requests to the browser for
+  // device::mojom::blink::ScreenOrientation. This method can be called when:
+  // * `this` is created in non-prerendering context.
+  // * The corresponding prerendering context is activated.
+  void BuildMojoConnection();
+
   bool IsActiveAndVisible() const;
 
   void OnLockOrientationResult(int, ScreenOrientationLockResult);
@@ -84,8 +94,6 @@ class MODULES_EXPORT ScreenOrientationController final
       screen_orientation_service_;
   std::unique_ptr<WebLockOrientationCallback> pending_callback_;
   int request_id_ = 0;
-
-  DISALLOW_COPY_AND_ASSIGN(ScreenOrientationController);
 };
 
 }  // namespace blink

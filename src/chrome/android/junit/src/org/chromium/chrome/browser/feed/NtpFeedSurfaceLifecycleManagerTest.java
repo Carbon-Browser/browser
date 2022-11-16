@@ -35,7 +35,6 @@ import org.robolectric.annotation.Config;
 import org.chromium.base.ActivityState;
 import org.chromium.base.ApplicationStatus;
 import org.chromium.base.test.BaseRobolectricTestRunner;
-import org.chromium.chrome.browser.feed.shared.stream.Stream;
 import org.chromium.chrome.browser.preferences.Pref;
 import org.chromium.chrome.browser.tab.TabHidingType;
 import org.chromium.chrome.browser.tab.TabImpl;
@@ -55,6 +54,10 @@ public class NtpFeedSurfaceLifecycleManagerTest {
     private Stream mStream;
     @Mock
     private PrefService mPrefService;
+    @Mock
+    private FeedSurfaceCoordinator mCoordinator;
+    @Mock
+    private FeedReliabilityLogger mFeedReliabilityLogger;
 
     private NtpFeedSurfaceLifecycleManager mNtpStreamLifecycleManager;
 
@@ -66,9 +69,11 @@ public class NtpFeedSurfaceLifecycleManagerTest {
         when(mPrefService.getBoolean(anyString())).thenReturn(true);
         doNothing().when(mPrefService).setBoolean(anyString(), anyBoolean());
         NtpFeedSurfaceLifecycleManager.setPrefServiceForTesting(mPrefService);
+        when(mCoordinator.getFeedReliabilityLogger()).thenReturn(mFeedReliabilityLogger);
 
         ApplicationStatus.onStateChangeForTesting(mActivity, ActivityState.CREATED);
-        mNtpStreamLifecycleManager = new NtpFeedSurfaceLifecycleManager(mActivity, mTab, null);
+        mNtpStreamLifecycleManager =
+                new NtpFeedSurfaceLifecycleManager(mActivity, mTab, mCoordinator);
         verify(mStream, times(1)).onCreate(or(any(String.class), isNull()));
     }
 
@@ -290,5 +295,12 @@ public class NtpFeedSurfaceLifecycleManagerTest {
         inOrder.verify(mStream).onDestroy();
         verify(mStream, times(2)).onHide();
         verify(mStream, times(1)).onDestroy();
+    }
+
+    @Test
+    @SmallTest
+    public void testPaused() {
+        ApplicationStatus.onStateChangeForTesting(mActivity, ActivityState.PAUSED);
+        verify(mCoordinator).onActivityPaused();
     }
 }

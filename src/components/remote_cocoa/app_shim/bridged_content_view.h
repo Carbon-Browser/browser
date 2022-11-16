@@ -75,6 +75,11 @@ REMOTE_COCOA_APP_SHIM_EXPORT
 // or not.
 - (void)updateFullKeyboardAccess;
 
+// Update the cursor tracking area in response to the parent window's level
+// changing.
+// https://crbug.com/1214013
+- (void)updateCursorTrackingArea;
+
 // The TextInputClient of the currently focused views::View.
 // TODO(ccameron): This cannot be relied on across processes.
 - (ui::TextInputClient*)textInputClient;
@@ -82,6 +87,9 @@ REMOTE_COCOA_APP_SHIM_EXPORT
 // Returns true if it is needed to call -[NSApp updateWindows] while updating
 // the text input client.
 - (bool)needsUpdateWindows;
+
+// Action for Cmd-E
+- (void)copyToFindPboard:(id)sender;
 
 @end
 

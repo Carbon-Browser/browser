@@ -20,6 +20,10 @@ namespace base {
 class DictionaryValue;
 }  // namespace base
 
+namespace cros_styles {
+enum class ColorName;
+}  // namespace cros_styles
+
 namespace ash {
 
 class HoldingSpaceImage;
@@ -42,7 +46,8 @@ class ASH_PUBLIC_EXPORT HoldingSpaceItem {
     kDiagnosticsLog = 7,
     kLacrosDownload = 8,
     kScan = 9,
-    kMaxValue = kScan,
+    kPhoneHubCameraRoll = 10,
+    kMaxValue = kPhoneHubCameraRoll,
   };
 
   HoldingSpaceItem(const HoldingSpaceItem&) = delete;
@@ -120,7 +125,23 @@ class ASH_PUBLIC_EXPORT HoldingSpaceItem {
 
   // Sets the secondary text that should be shown for the item, returning `true`
   // if a change occurred or `false` to indicate no-op.
-  bool SetSecondaryText(const absl::optional<std::u16string>& text);
+  bool SetSecondaryText(const absl::optional<std::u16string>& secondary_text);
+
+  // Sets the color for the secondary text that should be shown for the item,
+  // returning `true` if a change occurred or `false` to indicate no-op. If
+  // `absl::nullopt` is provided, secondary text color will fallback to default.
+  bool SetSecondaryTextColor(
+      const absl::optional<cros_styles::ColorName>& secondary_text_color);
+
+  // Returns `accessible_name_`, falling back to a concatenation of primary
+  // and secondary text if absent.
+  std::u16string GetAccessibleName() const;
+
+  // Sets the accessible name that should be used for the item, returning `true`
+  // if a change occurred or `false` to indicate no-op. Note that if the
+  // accessible name is absent, `GetAccessibleName()` will fallback to a
+  // concatenation of primary and secondary text.
+  bool SetAccessibleName(const absl::optional<std::u16string>& accessible_name);
 
   // Sets the `progress_` of the item, returning `true` if a change occurred or
   // `false` to indicate no-op.
@@ -149,6 +170,10 @@ class ASH_PUBLIC_EXPORT HoldingSpaceItem {
 
   const absl::optional<std::u16string>& secondary_text() const {
     return secondary_text_;
+  }
+
+  const absl::optional<cros_styles::ColorName>& secondary_text_color() const {
+    return secondary_text_color_;
   }
 
   const HoldingSpaceImage& image() const { return *image_; }
@@ -186,6 +211,12 @@ class ASH_PUBLIC_EXPORT HoldingSpaceItem {
 
   // If set, the secondary text that should be shown for the item.
   absl::optional<std::u16string> secondary_text_;
+
+  // If set, the color for the secondary text that should be shown for the item.
+  absl::optional<cros_styles::ColorName> secondary_text_color_;
+
+  // If set, the accessible name that should be used for the item.
+  absl::optional<std::u16string> accessible_name_;
 
   // The image representation of the item.
   std::unique_ptr<HoldingSpaceImage> image_;

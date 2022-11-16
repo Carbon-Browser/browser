@@ -9,12 +9,10 @@
 #include <string>
 
 #include "base/callback.h"
-#include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/settings/device_settings_service.h"
-#include "chromeos/dbus/session_manager/session_manager_client.h"
+#include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
 #include "components/policy/core/common/cloud/cloud_policy_validator.h"
 #include "components/policy/core/common/cloud/user_cloud_policy_store_base.h"
 
@@ -34,9 +32,14 @@ class DeviceLocalAccountPolicyStore : public UserCloudPolicyStoreBase {
  public:
   DeviceLocalAccountPolicyStore(
       const std::string& account_id,
-      chromeos::SessionManagerClient* client,
+      ash::SessionManagerClient* client,
       ash::DeviceSettingsService* device_settings_service,
       scoped_refptr<base::SequencedTaskRunner> background_task_runner);
+
+  DeviceLocalAccountPolicyStore(const DeviceLocalAccountPolicyStore&) = delete;
+  DeviceLocalAccountPolicyStore& operator=(
+      const DeviceLocalAccountPolicyStore&) = delete;
+
   ~DeviceLocalAccountPolicyStore() override;
 
   const std::string& account_id() const {
@@ -67,7 +70,7 @@ class DeviceLocalAccountPolicyStore : public UserCloudPolicyStoreBase {
   // success and triggers policy validation.
   void ValidateLoadedPolicyBlob(
       bool validate_in_background,
-      chromeos::SessionManagerClient::RetrievePolicyResponseType response_type,
+      ash::SessionManagerClient::RetrievePolicyResponseType response_type,
       const std::string& policy_blob);
 
   // Updates state after validation and notifies observers.
@@ -99,12 +102,10 @@ class DeviceLocalAccountPolicyStore : public UserCloudPolicyStoreBase {
       ash::DeviceSettingsService::OwnershipStatus ownership_status);
 
   const std::string account_id_;
-  chromeos::SessionManagerClient* session_manager_client_;
+  ash::SessionManagerClient* session_manager_client_;
   ash::DeviceSettingsService* device_settings_service_;
 
   base::WeakPtrFactory<DeviceLocalAccountPolicyStore> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(DeviceLocalAccountPolicyStore);
 };
 
 }  // namespace policy

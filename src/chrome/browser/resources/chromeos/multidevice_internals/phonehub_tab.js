@@ -7,6 +7,7 @@ import 'chrome://resources/cr_elements/cr_toggle/cr_toggle.m.js';
 import 'chrome://resources/cr_elements/md_select_css.m.js';
 import 'chrome://resources/cr_elements/shared_style_css.m.js';
 import './browser_tabs_model_form.js';
+import './camera_roll_manager_form.js';
 import './i18n_setup.js';
 import './phone_name_form.js';
 import './phone_status_model_form.js';
@@ -14,11 +15,11 @@ import './notification_manager.js';
 import './shared_style.js';
 import './quick_action_controller_form.js';
 
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
-import {WebUIListenerBehavior} from 'chrome://resources/js/web_ui_listener_behavior.m.js';
-import {flush, html, Polymer} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-import {MultidevicePhoneHubBrowserProxy} from './multidevice_phonehub_browser_proxy.js';
-import {FeatureStatus} from './types.js';
+import { loadTimeData } from 'chrome://resources/js/load_time_data.m.js';
+import { WebUIListenerBehavior } from 'chrome://resources/js/web_ui_listener_behavior.m.js';
+import { flush, html, Polymer } from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import { MultidevicePhoneHubBrowserProxy } from './multidevice_phonehub_browser_proxy.js';
+import { FeatureStatus } from './types.js';
 
 /**
  * Maps a FeatureStatus to it's title label in the dropdown.
@@ -28,11 +29,11 @@ const featureStatusToStringMap = new Map([
   [FeatureStatus.NOT_ELIGIBLE_FOR_FEATURE, 'Not eligible for feature'],
   [
     FeatureStatus.ELIGIBLE_PHONE_BUT_NOT_SETUP,
-    'Eligible for phone but not setup'
+    'Eligible for phone but not setup',
   ],
   [
     FeatureStatus.PHONE_SELECTED_AND_PENDING_SETUP,
-    'Phone selected and pending setup'
+    'Phone selected and pending setup',
   ],
   [FeatureStatus.DISABLED, 'Disabled'],
   [FeatureStatus.UNAVAILABLE_BLUETOOTH_OFF, 'Unavailable bluetooth off'],
@@ -62,14 +63,14 @@ Polymer({
     shouldEnableFakePhoneHubManager_: {
       type: Boolean,
       value: false,
-      observer: 'onShouldEnableFakePhoneHubManagerChanged_'
+      observer: 'onShouldEnableFakePhoneHubManagerChanged_',
     },
 
     /** @private */
     shouldShowOnboardingFlow_: {
       type: Boolean,
       value: false,
-      observer: 'onShouldShowOnboardingFlowChanged_'
+      observer: 'onShouldShowOnboardingFlowChanged_',
     },
 
     /**
@@ -129,8 +130,8 @@ Polymer({
   /** @override */
   attached() {
     this.addWebUIListener(
-        'should-show-onboarding-ui-changed',
-        this.onShouldShowOnboardingUiChanged_.bind(this));
+      'should-show-onboarding-ui-changed',
+      this.onShouldShowOnboardingUiChanged_.bind(this));
   },
 
   /**
@@ -139,7 +140,7 @@ Polymer({
    */
   canOnboardingFlowBeShownComputed_() {
     if (this.featureStatus_ === FeatureStatus.DISABLED ||
-        this.featureStatus_ === FeatureStatus.ELIGIBLE_PHONE_BUT_NOT_SETUP) {
+      this.featureStatus_ === FeatureStatus.ELIGIBLE_PHONE_BUT_NOT_SETUP) {
       return true;
     }
     return false;
@@ -151,7 +152,7 @@ Polymer({
    */
   isPhoneSetUpComputed_() {
     if (this.featureStatus_ === FeatureStatus.NOT_ELIGIBLE_FOR_FEATURE ||
-        this.featureStatus_ === FeatureStatus.ELIGIBLE_PHONE_BUT_NOT_SETUP) {
+      this.featureStatus_ === FeatureStatus.ELIGIBLE_PHONE_BUT_NOT_SETUP) {
       return false;
     }
 
@@ -169,7 +170,7 @@ Polymer({
   /** @private */
   onShouldEnableFakePhoneHubManagerChanged_() {
     this.browserProxy_.setFakePhoneHubManagerEnabled(
-        this.shouldEnableFakePhoneHubManager_);
+      this.shouldEnableFakePhoneHubManager_);
 
     if (!this.shouldEnableFakePhoneHubManager_) {
       return;
@@ -184,7 +185,7 @@ Polymer({
   /** @private */
   onFeatureStatusSelected_() {
     const select = /** @type {!HTMLSelectElement} */
-        (this.$$('#featureStatusList'));
+      (this.$$('#featureStatusList'));
     this.featureStatus_ = this.featureStatusList_[select.selectedIndex];
     this.browserProxy_.setFeatureStatus(this.featureStatus_);
   },
@@ -213,13 +214,18 @@ Polymer({
   },
 
   /** @private */
-  onResetHasNotificationSetupUiBeenDismissedButtonClick_() {
-    this.browserProxy_.resetHasNotificationSetupUiBeenDismissed();
+  onResetHasMultideviceFeatureSetupUiBeenDismissedButtonClick_() {
+    this.browserProxy_.resetHasMultideviceFeatureSetupUiBeenDismissed();
   },
 
   /** @private */
   onResetShouldShowOnboardingUiButtonClick_() {
     this.browserProxy_.resetShouldShowOnboardingUi();
+  },
+
+  /** @private */
+  onResetCameraRollOnboardingUiDismissedButtonClick_() {
+    this.browserProxy_.resetCameraRollOnboardingUiDismissed();
   },
 
   /** @private */

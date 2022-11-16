@@ -5,7 +5,6 @@
 #ifndef CHROME_BROWSER_AUTOFILL_MANUAL_FILLING_CONTROLLER_H_
 #define CHROME_BROWSER_AUTOFILL_MANUAL_FILLING_CONTROLLER_H_
 
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "components/autofill/core/browser/ui/accessory_sheet_data.h"
 #include "components/autofill/core/common/mojom/autofill_types.mojom-forward.h"
@@ -46,6 +45,10 @@ class ManualFillingController {
   };
 
   ManualFillingController() = default;
+
+  ManualFillingController(const ManualFillingController&) = delete;
+  ManualFillingController& operator=(const ManualFillingController&) = delete;
+
   virtual ~ManualFillingController() = default;
 
   // Returns a weak pointer to the unique ManualFillingController instance
@@ -136,9 +139,6 @@ class ManualFillingController {
 
   // The web page view containing the focused field.
   virtual gfx::NativeView container_view() const = 0;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ManualFillingController);
 };
 
 #endif  // CHROME_BROWSER_AUTOFILL_MANUAL_FILLING_CONTROLLER_H_

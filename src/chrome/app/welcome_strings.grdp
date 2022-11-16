@@ -22,8 +22,8 @@
   <message name="IDS_WELCOME_BOOKMARKS_REMOVED" desc="String read for accessibility to inform the user that several bookmarks were removed.">
     Bookmarks removed
   </message>
-  <message name="IDS_DEFAULT_BROWSER_CHANGED" desc="text notifying users that their default browser is successfully changed to Carbon Browser Browser Browser">
-    Carbon Browser Browser Browser is your default browser
+  <message name="IDS_DEFAULT_BROWSER_CHANGED" desc="text notifying users that their default browser is successfully changed to Carbon Browser">
+    Carbon Browser is your default browser
   </message>
 
   <!-- Google apps selection module -->
@@ -84,33 +84,33 @@
   </message>
 
   <!-- set default module -->
-  <message name="IDS_WELCOME_SET_AS_DEFAULT_HEADER" desc="Header for the page that prompts user to set Carbon Browser Browser Browser as their default browser.">
-    Set Carbon Browser Browser Browser as your default browser
+  <message name="IDS_WELCOME_SET_AS_DEFAULT_HEADER" desc="Header for the page that prompts user to set Carbon Browser as their default browser.">
+    Set Carbon Browser as your default browser
   </message>
-  <message name="IDS_WELCOME_SET_AS_DEFAULT_SUB_HEADER" desc="Sub-header for the page that prompts user to set Carbon Browser Browser Browser as their default browser.">
+  <message name="IDS_WELCOME_SET_AS_DEFAULT_SUB_HEADER" desc="Sub-header for the page that prompts user to set Carbon Browser as their default browser.">
     Get Google Search and Google smarts everytime you browse
   </message>
-  <message name="IDS_WELCOME_SET_AS_DEFAULT_SET_AS_DEFAULT" desc="The label for a button to confirm setting Carbon Browser Browser Browser as their default browser.">
+  <message name="IDS_WELCOME_SET_AS_DEFAULT_SET_AS_DEFAULT" desc="The label for a button to confirm setting Carbon Browser as their default browser.">
     Set as default
   </message>
 
   <!-- Landing view -->
-  <message name="IDS_WELCOME_LANDING_TITLE" desc="Title for the page that prompts user to start setting up their new Carbon Browser Browser Browser.">
-    Make Carbon Browser Browser Browser your own
+  <message name="IDS_WELCOME_LANDING_TITLE" desc="Title for the page that prompts user to start setting up their new Carbon Browser.">
+    Make Carbon Browser your own
   </message>
-  <message name="IDS_WELCOME_LANDING_DESCRIPTION" desc="Description for the page that prompts user to start setting up their new Carbon Browser Browser Browser.">
+  <message name="IDS_WELCOME_LANDING_DESCRIPTION" desc="Description for the page that prompts user to start setting up their new Carbon Browser.">
     Set up your browser in a few simple steps
   </message>
-  <message name="IDS_WELCOME_LANDING_NEW_USER" desc="Label for a button that prompts new users to start setting up their new Carbon Browser Browser Browser.">
+  <message name="IDS_WELCOME_LANDING_NEW_USER" desc="Label for a button that prompts new users to start setting up their new Carbon Browser.">
     Get Started
   </message>
   <message name="IDS_WELCOME_LANDING_EXISTING_USER" desc="Label for a button that prompts existing users to sign in.">
-    Already a Carbon Browser Browser Browser user? Sign in
+    Already a Carbon Browser user? Sign in
   </message>
 
   <!-- Sign-in view -->
   <message name="IDS_WELCOME_SIGNIN_VIEW_HEADER" desc="Header for the page that prompts user to sign in to chrome.">
-    Your Carbon Browser Browser Browser, Everywhere
+    Your Carbon Browser, Everywhere
   </message>
   <message name="IDS_WELCOME_SIGNIN_VIEW_SUB_HEADER" desc="Sub-header for the page that prompts user to sign in to chrome.">
     Sign in and turn on sync to get your bookmarks, passwords and more on all devices

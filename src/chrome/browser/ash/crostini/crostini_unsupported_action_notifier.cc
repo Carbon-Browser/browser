@@ -7,18 +7,18 @@
 #include <utility>
 
 #include "ash/constants/app_types.h"
+#include "ash/constants/notifier_catalogs.h"
 #include "ash/public/cpp/keyboard/keyboard_controller.h"
+#include "ash/public/cpp/system/toast_manager.h"
 #include "ash/public/cpp/tablet_mode.h"
-#include "ash/public/cpp/toast_manager.h"
 #include "base/check.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ash/accessibility/magnification_manager.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/exo/wm_helper.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/aura/client/aura_constants.h"
-#include "ui/base/ime/chromeos/input_method_util.h"
+#include "ui/base/ime/ash/input_method_util.h"
 #include "ui/base/l10n/l10n_util.h"
 
 namespace {
@@ -67,7 +67,7 @@ CrostiniUnsupportedActionNotifier::~CrostiniUnsupportedActionNotifier() {
 // Testing on using Debian/stretch on Eve shows Crostini supports all tested xkb
 // IMEs but no non-xkb IMEs.
 bool CrostiniUnsupportedActionNotifier::IsIMESupportedByCrostini(
-    const chromeos::input_method::InputMethodDescriptor& method) {
+    const ash::input_method::InputMethodDescriptor& method) {
   return method.id().find("xkb:") != std::string::npos;
 }
 
@@ -83,7 +83,7 @@ void CrostiniUnsupportedActionNotifier::OnWindowFocused(
 }
 
 void CrostiniUnsupportedActionNotifier::InputMethodChanged(
-    chromeos::input_method::InputMethodManager* manager,
+    ash::input_method::InputMethodManager* manager,
     Profile* profile,
     bool show_message) {
   ShowIMEUnsupportedNotificationIfNeeded();
@@ -113,10 +113,10 @@ void CrostiniUnsupportedActionNotifier::
   if (!virtual_keyboard_unsupported_message_shown_) {
     ash::ToastData data = {
         /*id=*/"VKUnsupportedInCrostini",
+        ash::ToastCatalogName::kCrostiniUnsupportedVirtualKeyboard,
         /*text=*/
         l10n_util::GetStringUTF16(IDS_CROSTINI_UNSUPPORTED_VIRTUAL_KEYBOARD),
-        /*timeout_ms=*/delegate_->ToastTimeoutMs(),
-        /*dismiss_text=*/absl::nullopt};
+        delegate_->ToastTimeout()};
     delegate_->ShowToast(data);
     virtual_keyboard_unsupported_message_shown_ = true;
     EmitMetricReasonShown(reason);
@@ -136,10 +136,10 @@ void CrostiniUnsupportedActionNotifier::
         base::UTF8ToUTF16(delegate_->GetLocalizedDisplayName(method));
     ash::ToastData data = {
         /*id=*/"IMEUnsupportedInCrostini",
+        ash::ToastCatalogName::kCrostiniUnsupportedIME,
         /*text=*/
         l10n_util::GetStringFUTF16(IDS_CROSTINI_UNSUPPORTED_IME, ime_name),
-        /*timeout_ms=*/delegate_->ToastTimeoutMs(),
-        /*dismiss_text=*/absl::nullopt};
+        delegate_->ToastTimeout()};
     delegate_->ShowToast(data);
     ime_unsupported_message_shown_ = true;
     EmitMetricReasonShown(NotificationReason::kUnsupportedIME);
@@ -164,9 +164,9 @@ bool CrostiniUnsupportedActionNotifier::Delegate::IsFocusedWindowCrostini() {
           static_cast<int>(ash::AppType::CROSTINI_APP));
 }
 
-chromeos::input_method::InputMethodDescriptor
+ash::input_method::InputMethodDescriptor
 CrostiniUnsupportedActionNotifier::Delegate::GetCurrentInputMethod() {
-  return chromeos::input_method::InputMethodManager::Get()
+  return ash::input_method::InputMethodManager::Get()
       ->GetActiveIMEState()
       ->GetCurrentInputMethod();
 }
@@ -182,19 +182,19 @@ void CrostiniUnsupportedActionNotifier::Delegate::ShowToast(
 
 std::string
 CrostiniUnsupportedActionNotifier::Delegate::GetLocalizedDisplayName(
-    const chromeos::input_method::InputMethodDescriptor& descriptor) {
-  return chromeos::input_method::InputMethodManager::Get()
+    const ash::input_method::InputMethodDescriptor& descriptor) {
+  return ash::input_method::InputMethodManager::Get()
       ->GetInputMethodUtil()
       ->GetLocalizedDisplayName(descriptor);
 }
 
-int CrostiniUnsupportedActionNotifier::Delegate::ToastTimeoutMs() {
+base::TimeDelta CrostiniUnsupportedActionNotifier::Delegate::ToastTimeout() {
   auto* manager = ash::MagnificationManager::Get();
   if (manager &&
       (manager->IsMagnifierEnabled() || manager->IsDockedMagnifierEnabled())) {
-    return 60 * 1000;
+    return base::Seconds(60);
   } else {
-    return 5 * 1000;
+    return ash::ToastData::kDefaultToastDuration;
   }
 }
 
@@ -227,13 +227,13 @@ void CrostiniUnsupportedActionNotifier::Delegate::RemoveTabletModeObserver(
 }
 
 void CrostiniUnsupportedActionNotifier::Delegate::AddInputMethodObserver(
-    chromeos::input_method::InputMethodManager::Observer* observer) {
-  chromeos::input_method::InputMethodManager::Get()->AddObserver(observer);
+    ash::input_method::InputMethodManager::Observer* observer) {
+  ash::input_method::InputMethodManager::Get()->AddObserver(observer);
 }
 
 void CrostiniUnsupportedActionNotifier::Delegate::RemoveInputMethodObserver(
-    chromeos::input_method::InputMethodManager::Observer* observer) {
-  chromeos::input_method::InputMethodManager::Get()->RemoveObserver(observer);
+    ash::input_method::InputMethodManager::Observer* observer) {
+  ash::input_method::InputMethodManager::Get()->RemoveObserver(observer);
 }
 
 void CrostiniUnsupportedActionNotifier::Delegate::AddKeyboardControllerObserver(

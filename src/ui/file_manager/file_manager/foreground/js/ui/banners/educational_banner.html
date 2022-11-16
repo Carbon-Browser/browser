@@ -12,7 +12,7 @@
     width: 100%;
   }
 
-  .educational-text-group {
+  #educational-text-group {
     align-items: flex-start;
     display: flex;
     flex-direction: column;
@@ -31,8 +31,8 @@
     background-size: 32px 32px;
     flex: none;
     height: 32px;
-    margin: 0 0 0 16px;
     margin-inline-end: 20px;
+    margin-inline-start: 16px;
     width: 32px;
   }
 
@@ -66,23 +66,34 @@
   }
 
   ::slotted(cr-button),
-  .dismiss-button {
-    border: 0;
+  #dismiss-button {
+    --active-bg: var(--cros-button-background-color-secondary-hover);
+    --hover-bg-color: var(--cros-button-background-color-secondary-hover);
+    --ink-color: rgba(var(--cros-button-ripple-color-secondary-rgb), var(--cros-button-secondary-ripple-opacity));
+    --paper-ripple-opacity: 100%;
+    --text-color: var(--cros-button-label-color-secondary);
+    border: none;
     box-shadow: none;
     height: 32px;
-    padding-inline-end: 16px;
-    padding-inline-start: 16px;
+    margin-inline: 4px;
+    padding-inline: 16px;
     position: relative;
+  }
+
+  :host-context(.focus-outline-visible) ::slotted(cr-button:focus),
+  :host-context(.focus-outline-visible) #dismiss-button:focus {
+    outline: 2px solid var(--cros-focus-ring-color);
+    outline-offset: 2px;
   }
 </style>
 <div class="educational-banner">
   <div class="educational-text-icon">
     <div class="feature-icon"></div>
-    <div class="educational-text-group" tabindex="0">
+    <div id="educational-text-group">
       <div class="title headline2">
         <slot name="title"></slot>
       </div>
-      <div class="subtitle body2-primary" tabindex="0">
+      <div class="subtitle body2-primary">
         <slot name="subtitle"></slot>
       </div>
     </div>
@@ -90,7 +101,7 @@
   <div class="button-group">
     <slot name="extra-button"></slot>
     <slot name="dismiss-button">
-      <cr-button class="dismiss-button">
+      <cr-button id="dismiss-button">
         $i18n{DRIVE_WELCOME_DISMISS}
       </cr-button>
     </slot>

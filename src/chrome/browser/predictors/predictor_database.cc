@@ -11,8 +11,7 @@
 #include "base/check.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
-#include "base/macros.h"
-#include "base/sequenced_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/predictors/autocomplete_action_predictor_table.h"
 #include "chrome/browser/predictors/loading_predictor_config.h"
 #include "chrome/browser/predictors/resource_prefetch_predictor.h"
@@ -38,6 +37,11 @@ namespace predictors {
 // for all methods performing database access.
 class PredictorDatabaseInternal
     : public base::RefCountedThreadSafe<PredictorDatabaseInternal> {
+ public:
+  PredictorDatabaseInternal(const PredictorDatabaseInternal&) = delete;
+  PredictorDatabaseInternal& operator=(const PredictorDatabaseInternal&) =
+      delete;
+
  private:
   friend class base::RefCountedThreadSafe<PredictorDatabaseInternal>;
   friend class PredictorDatabase;
@@ -65,8 +69,6 @@ class PredictorDatabaseInternal
   // to using a WeakPtr instead.
   scoped_refptr<AutocompleteActionPredictorTable> autocomplete_table_;
   scoped_refptr<ResourcePrefetchPredictorTables> resource_prefetch_tables_;
-
-  DISALLOW_COPY_AND_ASSIGN(PredictorDatabaseInternal);
 };
 
 PredictorDatabaseInternal::PredictorDatabaseInternal(
@@ -114,10 +116,6 @@ void PredictorDatabaseInternal::Initialize() {
 
   autocomplete_table_->Initialize(db_.get());
   resource_prefetch_tables_->Initialize(db_.get());
-
-  // The logged_in_predictor table is obsolete as of Chrome 44.
-  // TODO(davidben): Remove this after April 16, 2016.
-  ignore_result(db_->Execute("DROP TABLE IF EXISTS logged_in_predictor"));
 
   LogDatabaseStats();
 }

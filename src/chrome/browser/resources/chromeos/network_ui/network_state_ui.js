@@ -34,10 +34,18 @@ Polymer({
    * @const
    */
   NETWORK_STATE_FIELDS: [
-    'guid', 'name', 'type', 'connectionState', 'connectable', 'errorState',
-    'wifi.security', ['cellular.networkTechnology', 'EAP.EAP'],
-    'cellular.activationState', 'cellular.roaming', 'wifi.frequency',
-    'wifi.signalStrength'
+    'guid',
+    'name',
+    'type',
+    'connectionState',
+    'connectable',
+    'errorState',
+    'wifi.security',
+    ['cellular.networkTechnology', 'EAP.EAP'],
+    'cellular.activationState',
+    'cellular.roaming',
+    'wifi.frequency',
+    'wifi.signalStrength',
   ],
 
   /** @const */
@@ -128,8 +136,9 @@ Polymer({
     while (keys.length > 1) {
       const k = keys.shift();
       dict = dict[k];
-      if (!dict || typeof dict != 'object')
+      if (!dict || typeof dict != 'object') {
         return undefined;
+      }
     }
     const k = keys.shift();
     return this.getOncTypeString_(k, dict[k]);
@@ -207,12 +216,14 @@ Polymer({
       } else {
         for (let j = 0; j < field.length; ++j) {
           value = this.getOncProperty_(state, field[j]);
-          if (value != undefined)
+          if (value != undefined) {
             break;
+          }
         }
       }
-      if (field == 'guid')
+      if (field == 'guid') {
         value = value.slice(0, 8);
+      }
       row.appendChild(this.createStateTableCell_(value));
     }
     return row;
@@ -228,8 +239,9 @@ Polymer({
   createStateTable_(tablename, stateFields, states) {
     const table = this.$$('#' + tablename);
     const oldRows = table.querySelectorAll('.state-table-row');
-    for (let i = 0; i < oldRows.length; ++i)
+    for (let i = 0; i < oldRows.length; ++i) {
       table.removeChild(oldRows[i]);
+    }
     states.forEach((state) => {
       table.appendChild(this.createStateTableRow_(stateFields, state));
     });
@@ -345,10 +357,11 @@ Polymer({
     detailCell.className = 'state-table-expanded-cell';
     detailCell.colSpan = baseRow.childNodes.length - 1;
     expandedRow.appendChild(detailCell);
-    if (guid)
+    if (guid) {
       this.handleNetworkDetail_(guid, this.getSelectedFormat_(), detailCell);
-    else
+    } else {
       this.handleDeviceDetail_(state, this.getSelectedFormat_(), detailCell);
+    }
     return expandedRow;
   },
 
@@ -463,10 +476,11 @@ Polymer({
       return;
     }
 
-    if (properties['ShillError'])
+    if (properties['ShillError']) {
       detailCell.textContent = properties['ShillError'];
-    else
+    } else {
       detailCell.textContent = JSON.stringify(properties, null, '\t');
+    }
   },
 
   /**
@@ -489,10 +503,11 @@ Polymer({
       return;
     }
 
-    if (properties['ShillError'])
+    if (properties['ShillError']) {
       detailCell.textContent = properties['ShillError'];
-    else
+    } else {
       detailCell.textContent = JSON.stringify(properties, null, '\t');
+    }
   },
 
   /**

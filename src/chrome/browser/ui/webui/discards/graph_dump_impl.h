@@ -5,12 +5,14 @@
 #ifndef CHROME_BROWSER_UI_WEBUI_DISCARDS_GRAPH_DUMP_IMPL_H_
 #define CHROME_BROWSER_UI_WEBUI_DISCARDS_GRAPH_DUMP_IMPL_H_
 
-#include <memory>
-
+#include "base/callback_forward.h"
 #include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted_memory.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
+#include "base/threading/sequence_bound.h"
 #include "base/types/id_type.h"
 #include "chrome/browser/ui/webui/discards/discards.mojom.h"
 #include "components/performance_manager/public/graph/frame_node.h"
@@ -31,6 +33,10 @@ class DiscardsGraphDumpImpl : public discards::mojom::GraphDump,
                               public performance_manager::WorkerNodeObserver {
  public:
   DiscardsGraphDumpImpl();
+
+  DiscardsGraphDumpImpl(const DiscardsGraphDumpImpl&) = delete;
+  DiscardsGraphDumpImpl& operator=(const DiscardsGraphDumpImpl&) = delete;
+
   ~DiscardsGraphDumpImpl() override;
 
   // Creates a new DiscardsGraphDumpImpl to service |receiver| and passes its
@@ -121,6 +127,8 @@ class DiscardsGraphDumpImpl : public discards::mojom::GraphDump,
       const performance_manager::FrameNode* previous_embedder,
       EmbeddingType previous_embedding_type) override;
   // Ignored.
+  void OnTypeChanged(const performance_manager::PageNode* page_node) override {}
+  // Ignored.
   void OnIsVisibleChanged(
       const performance_manager::PageNode* page_node) override {}
   // Ignored.
@@ -128,7 +136,8 @@ class DiscardsGraphDumpImpl : public discards::mojom::GraphDump,
       const performance_manager::PageNode* page_node) override {}
   // Ignored.
   void OnLoadingStateChanged(
-      const performance_manager::PageNode* page_node) override {}
+      const performance_manager::PageNode* page_node,
+      performance_manager::PageNode::LoadingState previous_state) override {}
   // Ignored.
   void OnUkmSourceIdChanged(
       const performance_manager::PageNode* page_node) override {}
@@ -207,6 +216,9 @@ class DiscardsGraphDumpImpl : public discards::mojom::GraphDump,
   // The favicon requests happen on the UI thread. This helper class
   // maintains the state required to do that.
   class FaviconRequestHelper;
+  using FaviconAvailableCallback =
+      base::OnceCallback<void(scoped_refptr<base::RefCountedMemory>)>;
+
   using NodeId = base::IdType64<class NodeIdTag>;
 
   void AddNode(const performance_manager::Node* node);
@@ -214,7 +226,12 @@ class DiscardsGraphDumpImpl : public discards::mojom::GraphDump,
   bool HasNode(const performance_manager::Node* node) const;
   int64_t GetNodeId(const performance_manager::Node* node) const;
 
-  FaviconRequestHelper* EnsureFaviconRequestHelper();
+  base::SequenceBound<FaviconRequestHelper>& EnsureFaviconRequestHelper();
+
+  // Returns a callback that will invoke SendFaviconNotification on the graph
+  // sequence with the given `serialization_id`.
+  FaviconAvailableCallback GetFaviconAvailableCallback(
+      int64_t serialization_id);
 
   void StartPageFaviconRequest(const performance_manager::PageNode* page_node);
   void StartFrameFaviconRequest(
@@ -236,9 +253,13 @@ class DiscardsGraphDumpImpl : public discards::mojom::GraphDump,
 
   static void OnConnectionError(DiscardsGraphDumpImpl* impl);
 
-  performance_manager::Graph* graph_ = nullptr;
+  raw_ptr<performance_manager::Graph> graph_ = nullptr;
 
-  std::unique_ptr<FaviconRequestHelper> favicon_request_helper_;
+  // Helper that requests favicons on the UI thread. Initialized to null to
+  // avoid posting an initialization task to the UI thread during startup.
+  // Access this through EnsureFaviconRequestHelper to initialize it on first
+  // use.
+  base::SequenceBound<FaviconRequestHelper> favicon_request_helper_;
 
   // The live nodes and their IDs.
   base::flat_map<const performance_manager::Node*, NodeId> node_ids_;
@@ -254,8 +275,6 @@ class DiscardsGraphDumpImpl : public discards::mojom::GraphDump,
   SEQUENCE_CHECKER(sequence_checker_);
 
   base::WeakPtrFactory<DiscardsGraphDumpImpl> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(DiscardsGraphDumpImpl);
 };
 
 #endif  // CHROME_BROWSER_UI_WEBUI_DISCARDS_GRAPH_DUMP_IMPL_H_

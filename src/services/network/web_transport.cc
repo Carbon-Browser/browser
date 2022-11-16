@@ -6,16 +6,16 @@
 
 #include "base/auto_reset.h"
 #include "base/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
+#include "base/strings/string_util.h"
 #include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/time.h"
 #include "net/base/io_buffer.h"
-#include "net/quic/platform/impl/quic_mem_slice_impl.h"
-#include "net/third_party/quiche/src/quic/core/quic_session.h"
-#include "net/third_party/quiche/src/quic/core/quic_time.h"
-#include "net/third_party/quiche/src/quic/core/quic_types.h"
-#include "net/third_party/quiche/src/quic/platform/api/quic_mem_slice.h"
-#include "net/third_party/quiche/src/quic/quic_transport/quic_transport_stream.h"
+#include "net/third_party/quiche/src/quiche/common/platform/api/quiche_mem_slice.h"
+#include "net/third_party/quiche/src/quiche/quic/core/quic_session.h"
+#include "net/third_party/quiche/src/quiche/quic/core/quic_time.h"
+#include "net/third_party/quiche/src/quiche/quic/core/quic_types.h"
 #include "services/network/network_context.h"
 #include "services/network/public/mojom/web_transport.mojom.h"
 
@@ -27,7 +27,7 @@ net::WebTransportParameters CreateParameters(
     const std::vector<mojom::WebTransportCertificateFingerprintPtr>&
         fingerprints) {
   net::WebTransportParameters params;
-  params.enable_quic_transport = true;
+  params.enable_quic_transport = false;
   params.enable_web_transport_http3 = true;
 
   for (const auto& fingerprint : fingerprints) {
@@ -47,22 +47,26 @@ class WebTransport::Stream final {
     explicit StreamVisitor(Stream* stream)
         : stream_(stream->weak_factory_.GetWeakPtr()) {}
     ~StreamVisitor() override {
-      if (stream_) {
-        if (stream_->incoming_) {
-          stream_->writable_watcher_.Cancel();
-          stream_->writable_.reset();
-          stream_->transport_->client_->OnIncomingStreamClosed(
-              stream_->id_,
-              /*fin_received=*/false);
-          stream_->incoming_ = nullptr;
-        }
-        if (stream_->outgoing_) {
-          stream_->readable_watcher_.Cancel();
-          stream_->readable_.reset();
-          stream_->outgoing_ = nullptr;
-        }
-        stream_->MayDisposeLater();
+      Stream* stream = stream_.get();
+      if (!stream) {
+        return;
       }
+      if (stream->incoming_) {
+        stream->writable_watcher_.Cancel();
+        stream->writable_.reset();
+        if (stream->transport_->client_) {
+          stream->transport_->client_->OnIncomingStreamClosed(
+              stream->id_,
+              /*fin_received=*/false);
+        }
+        stream->incoming_ = nullptr;
+      }
+      if (stream->outgoing_) {
+        stream->readable_watcher_.Cancel();
+        stream->readable_.reset();
+        stream->outgoing_ = nullptr;
+      }
+      stream->MayDisposeLater();
     }
 
     // Visitor implementation:
@@ -73,6 +77,21 @@ class WebTransport::Stream final {
     void OnCanWrite() override {
       base::SequencedTaskRunnerHandle::Get()->PostTask(
           FROM_HERE, base::BindOnce(&Stream::Send, stream_));
+    }
+    void OnResetStreamReceived(quic::WebTransportStreamError error) override {
+      if (auto* stream = stream_.get()) {
+        stream->OnResetStreamReceived(error);
+      }
+    }
+    void OnStopSendingReceived(quic::WebTransportStreamError error) override {
+      if (auto* stream = stream_.get()) {
+        stream->OnStopSendingReceived(error);
+      }
+    }
+    void OnWriteSideInDataRecvdState() override {
+      if (auto* stream = stream_.get()) {
+        stream->OnWriteSideInDataRecvdState();
+      }
     }
 
    private:
@@ -135,17 +154,10 @@ class WebTransport::Stream final {
   }
 
   void Abort(uint8_t code) {
-    // The type QuicRstStreamErrorCode is too small for the code once it has
-    // been translated into the WebTransport error space, so just used a fixed
-    // code instead.
-    // TODO(ricea): Use a different type once quiche supports it.
-    const auto quic_code = quic::QUIC_STREAM_UNKNOWN_APPLICATION_ERROR_CODE;
-    auto* stream = incoming_ ? incoming_ : outgoing_;
-    if (!stream) {
+    if (!outgoing_) {
       return;
     }
-    stream->ResetWithUserCode(quic_code);
-    incoming_ = nullptr;
+    outgoing_->ResetWithUserCode(code);
     outgoing_ = nullptr;
     readable_watcher_.Cancel();
     readable_.reset();
@@ -156,13 +168,15 @@ class WebTransport::Stream final {
     if (!incoming_) {
       return;
     }
-    NOTIMPLEMENTED() << "TODO(ricea): Pass this to Quiche";
+    incoming_->SendStopSending(code);
     incoming_ = nullptr;
+    writable_watcher_.Cancel();
+    writable_.reset();
     MayDisposeLater();
   }
 
   ~Stream() {
-    auto* stream = incoming_ ? incoming_ : outgoing_;
+    auto* stream = incoming_ ? incoming_.get() : outgoing_.get();
     if (!stream) {
       return;
     }
@@ -244,10 +258,9 @@ class WebTransport::Stream final {
       return;
     }
     if (outgoing_->SendFin()) {
-      outgoing_ = nullptr;
+      // We don't reset `outgoing_` as we want to wait for the ACK signal.
       readable_watcher_.Cancel();
       readable_.reset();
-      MayDisposeLater();
     }
     // Otherwise, retry in Send().
   }
@@ -296,10 +309,42 @@ class WebTransport::Stream final {
     }
   }
 
+  void OnResetStreamReceived(quic::WebTransportStreamError error) {
+    if (transport_->client_) {
+      transport_->client_->OnReceivedResetStream(id_, error);
+    }
+    incoming_ = nullptr;
+    writable_watcher_.Cancel();
+    writable_.reset();
+    MayDisposeLater();
+  }
+
+  void OnStopSendingReceived(quic::WebTransportStreamError error) {
+    if (transport_->client_) {
+      transport_->client_->OnReceivedStopSending(id_, error);
+    }
+    outgoing_ = nullptr;
+    readable_watcher_.Cancel();
+    readable_.reset();
+    MayDisposeLater();
+  }
+
+  void OnWriteSideInDataRecvdState() {
+    if (transport_->client_) {
+      transport_->client_->OnOutgoingStreamClosed(id_);
+    }
+
+    outgoing_ = nullptr;
+    readable_watcher_.Cancel();
+    readable_.reset();
+    MayDisposeLater();
+  }
+
   void Dispose() {
     transport_->streams_.erase(id_);
     // Deletes |this|.
   }
+
   void MayDisposeLater() {
     if (outgoing_ || incoming_) {
       return;
@@ -310,14 +355,14 @@ class WebTransport::Stream final {
         base::BindOnce(&Stream::Dispose, weak_factory_.GetWeakPtr()));
   }
 
-  WebTransport* const transport_;  // outlives |this|.
+  const raw_ptr<WebTransport> transport_;  // outlives |this|.
   const uint32_t id_;
   // |outgoing_| and |incoming_| point to the same stream when this is a
   // bidirectional stream. They are owned by |transport_| (via
   // quic::QuicSession), and the properties will be null-set when the streams
   // are gone (via StreamVisitor).
-  quic::WebTransportStream* outgoing_ = nullptr;
-  quic::WebTransportStream* incoming_ = nullptr;
+  raw_ptr<quic::WebTransportStream> outgoing_ = nullptr;
+  raw_ptr<quic::WebTransportStream> incoming_ = nullptr;
   mojo::ScopedDataPipeConsumerHandle readable_;  // for |outgoing|
   mojo::ScopedDataPipeProducerHandle writable_;  // for |incoming|
 
@@ -329,7 +374,7 @@ class WebTransport::Stream final {
 
   // This must be the last member.
   base::WeakPtrFactory<Stream> weak_factory_{this};
-};  // namespace network
+};
 
 WebTransport::WebTransport(
     const GURL& url,
@@ -362,10 +407,10 @@ void WebTransport::SendDatagram(base::span<const uint8_t> data,
 
   datagram_callbacks_.emplace(std::move(callback));
 
-  auto buffer = base::MakeRefCounted<net::IOBuffer>(data.size());
-  memcpy(buffer->data(), data.data(), data.size());
-  quic::QuicMemSlice slice(
-      quic::QuicMemSliceImpl(std::move(buffer), data.size()));
+  quiche::QuicheBuffer buffer(quiche::SimpleBufferAllocator::Get(),
+                              data.size());
+  memcpy(buffer.data(), data.data(), data.size());
+  quiche::QuicheMemSlice slice(std::move(buffer));
   transport_->session()->SendOrQueueDatagram(std::move(slice));
 }
 
@@ -460,7 +505,7 @@ void WebTransport::StopSending(uint32_t stream, uint8_t code) {
 
 void WebTransport::SetOutgoingDatagramExpirationDuration(
     base::TimeDelta duration) {
-  if (torn_down_) {
+  if (torn_down_ || closing_) {
     return;
   }
 
@@ -468,8 +513,39 @@ void WebTransport::SetOutgoingDatagramExpirationDuration(
       quic::QuicTime::Delta::FromMicroseconds(duration.InMicroseconds()));
 }
 
-void WebTransport::OnConnected() {
-  if (torn_down_) {
+void WebTransport::Close(mojom::WebTransportCloseInfoPtr close_info) {
+  if (torn_down_ || closing_) {
+    return;
+  }
+  closing_ = true;
+
+  receiver_.reset();
+  handshake_client_.reset();
+  client_.reset();
+
+  absl::optional<net::WebTransportCloseInfo> close_info_to_pass;
+  if (close_info) {
+    close_info_to_pass =
+        absl::make_optional<net::WebTransportCloseInfo>(close_info->code, "");
+
+    // As described at
+    // https://w3c.github.io/webtransport/#dom-webtransport-close,
+    // the size of the reason string must not exceed 1024.
+    constexpr size_t kMaxSize = 1024;
+    if (close_info->reason.size() > kMaxSize) {
+      base::TruncateUTF8ToByteSize(close_info->reason, kMaxSize,
+                                   &close_info_to_pass->reason);
+    } else {
+      close_info_to_pass->reason = std::move(close_info->reason);
+    }
+  }
+
+  transport_->Close(close_info_to_pass);
+}
+
+void WebTransport::OnConnected(
+    scoped_refptr<net::HttpResponseHeaders> response_headers) {
+  if (torn_down_ || closing_) {
     return;
   }
 
@@ -477,15 +553,18 @@ void WebTransport::OnConnected() {
 
   handshake_client_->OnConnectionEstablished(
       receiver_.BindNewPipeAndPassRemote(),
-      client_.BindNewPipeAndPassReceiver());
+      client_.BindNewPipeAndPassReceiver(), std::move(response_headers));
 
   handshake_client_.reset();
-  client_.set_disconnect_handler(
+  // We set the disconnect handler for `receiver_`, not `client_`, in order
+  // to make the closing sequence consistent: The client calls Close() and
+  // then resets the mojo endpoints.
+  receiver_.set_disconnect_handler(
       base::BindOnce(&WebTransport::Dispose, base::Unretained(this)));
 }
 
-void WebTransport::OnConnectionFailed() {
-  if (torn_down_) {
+void WebTransport::OnConnectionFailed(const net::WebTransportError& error) {
+  if (torn_down_ || closing_) {
     return;
   }
 
@@ -493,24 +572,39 @@ void WebTransport::OnConnectionFailed() {
 
   // Here we assume that the error is not going to handed to the
   // initiator renderer.
-  handshake_client_->OnHandshakeFailed(transport_->error());
+  handshake_client_->OnHandshakeFailed(error);
 
   TearDown();
 }
 
-void WebTransport::OnClosed() {
+void WebTransport::OnClosed(
+    const absl::optional<net::WebTransportCloseInfo>& close_info) {
   if (torn_down_) {
     return;
   }
 
   DCHECK(!handshake_client_);
+  if (closing_) {
+    closing_ = false;
+  } else {
+    mojom::WebTransportCloseInfoPtr close_info_to_pass;
+    if (close_info) {
+      close_info_to_pass = mojom::WebTransportCloseInfo::New(
+          close_info->code, close_info->reason);
+    }
+    client_->OnClosed(std::move(close_info_to_pass));
+  }
 
   TearDown();
 }
 
-void WebTransport::OnError() {
+void WebTransport::OnError(const net::WebTransportError& error) {
   if (torn_down_) {
     return;
+  }
+
+  if (closing_) {
+    closing_ = false;
   }
 
   DCHECK(!handshake_client_);
@@ -519,6 +613,10 @@ void WebTransport::OnError() {
 }
 
 void WebTransport::OnIncomingBidirectionalStreamAvailable() {
+  if (torn_down_ || closing_) {
+    return;
+  }
+
   DCHECK(!handshake_client_);
   DCHECK(client_);
 
@@ -561,6 +659,10 @@ void WebTransport::OnIncomingBidirectionalStreamAvailable() {
 }
 
 void WebTransport::OnIncomingUnidirectionalStreamAvailable() {
+  if (torn_down_ || closing_) {
+    return;
+  }
+
   DCHECK(!handshake_client_);
   DCHECK(client_);
 
@@ -595,7 +697,7 @@ void WebTransport::OnIncomingUnidirectionalStreamAvailable() {
 }
 
 void WebTransport::OnDatagramReceived(base::StringPiece datagram) {
-  if (torn_down_) {
+  if (torn_down_ || closing_) {
     return;
   }
 

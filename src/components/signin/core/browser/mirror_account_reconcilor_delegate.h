@@ -7,7 +7,7 @@
 
 #include <vector>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "components/signin/core/browser/account_reconcilor_delegate.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 
@@ -18,6 +18,12 @@ class MirrorAccountReconcilorDelegate : public AccountReconcilorDelegate,
                                         public IdentityManager::Observer {
  public:
   explicit MirrorAccountReconcilorDelegate(IdentityManager* identity_manager);
+
+  MirrorAccountReconcilorDelegate(const MirrorAccountReconcilorDelegate&) =
+      delete;
+  MirrorAccountReconcilorDelegate& operator=(
+      const MirrorAccountReconcilorDelegate&) = delete;
+
   ~MirrorAccountReconcilorDelegate() override;
 
  protected:
@@ -33,12 +39,6 @@ class MirrorAccountReconcilorDelegate : public AccountReconcilorDelegate,
   gaia::GaiaSource GetGaiaApiSource() const override;
   bool ShouldAbortReconcileIfPrimaryHasError() const override;
   ConsentLevel GetConsentLevelForPrimaryAccount() const override;
-  CoreAccountId GetFirstGaiaAccountForReconcile(
-      const std::vector<CoreAccountId>& chrome_accounts,
-      const std::vector<gaia::ListedAccount>& gaia_accounts,
-      const CoreAccountId& primary_account,
-      bool first_execution,
-      bool will_logout) const override;
   std::vector<CoreAccountId> GetChromeAccountsForReconcile(
       const std::vector<CoreAccountId>& chrome_accounts,
       const CoreAccountId& primary_account,
@@ -50,12 +50,8 @@ class MirrorAccountReconcilorDelegate : public AccountReconcilorDelegate,
   // IdentityManager::Observer:
   void OnPrimaryAccountChanged(const PrimaryAccountChangeEvent& event) override;
 
-  void UpdateReconcilorStatus();
-
-  IdentityManager* identity_manager_;
+  raw_ptr<IdentityManager> identity_manager_;
   bool reconcile_enabled_;
-
-  DISALLOW_COPY_AND_ASSIGN(MirrorAccountReconcilorDelegate);
 };
 
 }  // namespace signin

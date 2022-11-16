@@ -28,6 +28,7 @@ import "components/sync/protocol/extension_specifics.proto";
 import "components/sync/protocol/favicon_image_specifics.proto";
 import "components/sync/protocol/favicon_tracking_specifics.proto";
 import "components/sync/protocol/history_delete_directive_specifics.proto";
+import "components/sync/protocol/history_specifics.proto";
 import "components/sync/protocol/managed_user_setting_specifics.proto";
 import "components/sync/protocol/managed_user_shared_setting_specifics.proto";
 import "components/sync/protocol/managed_user_specifics.proto";
@@ -37,8 +38,10 @@ import "components/sync/protocol/os_priority_preference_specifics.proto";
 import "components/sync/protocol/password_specifics.proto";
 import "components/sync/protocol/preference_specifics.proto";
 import "components/sync/protocol/printer_specifics.proto";
+import "components/sync/protocol/printers_authorization_server_specifics.proto";
 import "components/sync/protocol/priority_preference_specifics.proto";
 import "components/sync/protocol/reading_list_specifics.proto";
+import "components/sync/protocol/saved_tab_group_specifics.proto";
 import "components/sync/protocol/search_engine_specifics.proto";
 import "components/sync/protocol/security_event_specifics.proto";
 import "components/sync/protocol/send_tab_to_self_specifics.proto";
@@ -153,6 +156,9 @@ message EntitySpecifics {
     // This is not included in model_type.h because it's currently only used by
     // the server and by Play Services. (crbug.com/1223853)
     WebauthnCredentialSpecifics webauthn_credential = 895275;
+    HistorySpecifics history = 963985;
+    PrintersAuthorizationServerSpecifics printers_authorization_server = 974304;
+    SavedTabGroupSpecifics saved_tab_group = 1004874;
   }
   reserved 218175;
   reserved "wifi_credential";

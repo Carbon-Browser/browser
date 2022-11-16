@@ -8,7 +8,6 @@
 
 #include <memory>
 
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/time/time.h"
 #include "base/values.h"
@@ -49,12 +48,9 @@ class ExtensionPrefValueMapTestBase : public BASECLASS {
 
   // Returns an empty string if the key is not set.
   std::string GetValue(const char * key, bool incognito) const {
-    const base::Value *value =
+    const base::Value* value =
         epvm_.GetEffectivePrefValue(key, incognito, NULL);
-    std::string string_value;
-    if (value)
-      value->GetAsString(&string_value);
-    return string_value;
+    return (value && value->is_string()) ? value->GetString() : std::string();
   }
 
   // Registers the extension as enabled but without incognito permission.
@@ -77,14 +73,17 @@ class ExtensionPrefValueMapObserverMock
     : public ExtensionPrefValueMap::Observer {
  public:
   ExtensionPrefValueMapObserverMock() {}
+
+  ExtensionPrefValueMapObserverMock(const ExtensionPrefValueMapObserverMock&) =
+      delete;
+  ExtensionPrefValueMapObserverMock& operator=(
+      const ExtensionPrefValueMapObserverMock&) = delete;
+
   ~ExtensionPrefValueMapObserverMock() override {}
 
   MOCK_METHOD1(OnPrefValueChanged, void(const std::string&));
   MOCK_METHOD0(OnInitializationCompleted, void());
   MOCK_METHOD0(OnExtensionPrefValueMapDestruction, void());
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ExtensionPrefValueMapObserverMock);
 };
 
 TEST_F(ExtensionPrefValueMapTest, SetAndGetPrefValue) {

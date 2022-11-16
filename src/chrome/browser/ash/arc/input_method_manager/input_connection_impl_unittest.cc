@@ -9,21 +9,27 @@
 #include "chrome/browser/ash/arc/input_method_manager/test_input_method_manager_bridge.h"
 #include "chrome/browser/ui/ash/keyboard/chrome_keyboard_controller_client_test_helper.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "ui/base/ime/chromeos/ime_bridge.h"
-#include "ui/base/ime/chromeos/mock_ime_input_context_handler.h"
-#include "ui/base/ime/chromeos/mock_input_method_manager.h"
+#include "ui/base/ime/ash/ime_bridge.h"
+#include "ui/base/ime/ash/mock_ime_input_context_handler.h"
+#include "ui/base/ime/ash/mock_input_method_manager.h"
 #include "ui/base/ime/dummy_text_input_client.h"
 #include "ui/base/ime/mock_input_method.h"
-#include "ui/events/keycodes/dom/dom_codes.h"
+#include "ui/events/keycodes/dom/dom_code.h"
 
 namespace arc {
 
 namespace {
 
 class DummyInputMethodEngineObserver
-    : public ash::input_method::InputMethodEngineBase::Observer {
+    : public ash::input_method::InputMethodEngineObserver {
  public:
   DummyInputMethodEngineObserver() = default;
+
+  DummyInputMethodEngineObserver(const DummyInputMethodEngineObserver&) =
+      delete;
+  DummyInputMethodEngineObserver& operator=(
+      const DummyInputMethodEngineObserver&) = delete;
+
   ~DummyInputMethodEngineObserver() override = default;
 
   void OnActivate(const std::string& engine_id) override {}
@@ -31,6 +37,7 @@ class DummyInputMethodEngineObserver
       const std::string& engine_id,
       int context_id,
       const ui::IMEEngineHandlerInterface::InputContext& context) override {}
+  void OnTouch(ui::EventPointerType pointerType) override {}
   void OnBlur(const std::string& engine_id, int context_id) override {}
   void OnKeyEvent(
       const std::string& engine_id,
@@ -40,33 +47,32 @@ class DummyInputMethodEngineObserver
   void OnDeactivated(const std::string& engine_id) override {}
   void OnCompositionBoundsChanged(
       const std::vector<gfx::Rect>& bounds) override {}
+  void OnCaretBoundsChanged(const gfx::Rect& caret_bounds) override {}
   void OnSurroundingTextChanged(const std::string& engine_id,
                                 const std::u16string& text,
                                 int cursor_pos,
                                 int anchor_pos,
                                 int offset_pos) override {}
-  void OnCandidateClicked(
-      const std::string& component_id,
-      int candidate_id,
-      ash::input_method::InputMethodEngineBase::MouseButtonEvent button)
-      override {}
+  void OnCandidateClicked(const std::string& component_id,
+                          int candidate_id,
+                          ash::input_method::MouseButtonEvent button) override {
+  }
   void OnMenuItemActivated(const std::string& component_id,
                            const std::string& menu_id) override {}
   void OnScreenProjectionChanged(bool is_projected) override {}
   void OnSuggestionsChanged(
       const std::vector<std::string>& suggestions) override {}
   void OnInputMethodOptionsChanged(const std::string& engine_id) override {}
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(DummyInputMethodEngineObserver);
 };
 
 class TestInputMethodManager
-    : public chromeos::input_method::MockInputMethodManager {
+    : public ash::input_method::MockInputMethodManager {
  public:
   TestInputMethodManager()
       : state_(base::MakeRefCounted<
-               chromeos::input_method::MockInputMethodManager::State>()) {}
+               ash::input_method::MockInputMethodManager::State>()) {}
+  TestInputMethodManager(const TestInputMethodManager&) = delete;
+  TestInputMethodManager& operator=(const TestInputMethodManager&) = delete;
   ~TestInputMethodManager() override = default;
 
   scoped_refptr<InputMethodManager::State> GetActiveIMEState() override {
@@ -75,14 +81,17 @@ class TestInputMethodManager
 
  private:
   scoped_refptr<State> state_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestInputMethodManager);
 };
 
 class TestIMEInputContextHandler : public ui::MockIMEInputContextHandler {
  public:
   explicit TestIMEInputContextHandler(ui::InputMethod* input_method)
       : input_method_(input_method) {}
+
+  TestIMEInputContextHandler(const TestIMEInputContextHandler&) = delete;
+  TestIMEInputContextHandler& operator=(const TestIMEInputContextHandler&) =
+      delete;
+
   ~TestIMEInputContextHandler() override = default;
 
   ui::InputMethod* GetInputMethod() override { return input_method_; }
@@ -118,8 +127,6 @@ class TestIMEInputContextHandler : public ui::MockIMEInputContextHandler {
 
   int send_key_event_call_count_ = 0;
   std::vector<std::tuple<int, int>> composition_range_history_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestIMEInputContextHandler);
 };
 
 class MockTextInputClient : public ui::DummyTextInputClient {
@@ -162,6 +169,10 @@ class MockTextInputClient : public ui::DummyTextInputClient {
 class InputConnectionImplTest : public testing::Test {
  public:
   InputConnectionImplTest() = default;
+
+  InputConnectionImplTest(const InputConnectionImplTest&) = delete;
+  InputConnectionImplTest& operator=(const InputConnectionImplTest&) = delete;
+
   ~InputConnectionImplTest() override = default;
 
   std::unique_ptr<InputConnectionImpl> CreateNewConnection(int context_id) {
@@ -185,8 +196,7 @@ class InputConnectionImplTest : public testing::Test {
   }
 
   void SetUp() override {
-    ui::IMEBridge::Initialize();
-    chromeos::input_method::InputMethodManager::Initialize(
+    ash::input_method::InputMethodManager::Initialize(
         new TestInputMethodManager);
     bridge_ = std::make_unique<TestInputMethodManagerBridge>();
     engine_ = std::make_unique<ash::input_method::InputMethodEngine>();
@@ -206,8 +216,7 @@ class InputConnectionImplTest : public testing::Test {
     ui::IMEBridge::Get()->SetInputContextHandler(nullptr);
     engine_.reset();
     bridge_.reset();
-    chromeos::input_method::InputMethodManager::Shutdown();
-    ui::IMEBridge::Shutdown();
+    ash::input_method::InputMethodManager::Shutdown();
   }
 
  private:
@@ -219,8 +228,6 @@ class InputConnectionImplTest : public testing::Test {
   TestIMEInputContextHandler context_handler_{&input_method_};
   std::unique_ptr<ChromeKeyboardControllerClientTestHelper>
       chrome_keyboard_controller_client_test_helper_;
-
-  DISALLOW_COPY_AND_ASSIGN(InputConnectionImplTest);
 };
 
 }  // anonymous namespace

@@ -10,10 +10,10 @@
 #include "base/format_macros.h"
 #include "base/location.h"
 #include "base/logging.h"
-#include "base/macros.h"
-#include "base/single_thread_task_runner.h"
+#include "base/numerics/checked_math.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "net/base/interval.h"
@@ -68,13 +68,16 @@ class ChildrenDeleter
       public disk_cache::FileIOCallback {
  public:
   ChildrenDeleter(disk_cache::BackendImpl* backend, const std::string& name)
-      : backend_(backend->GetWeakPtr()), name_(name), signature_(0) {}
+      : backend_(backend->GetWeakPtr()), name_(name) {}
+
+  ChildrenDeleter(const ChildrenDeleter&) = delete;
+  ChildrenDeleter& operator=(const ChildrenDeleter&) = delete;
 
   void OnFileIOComplete(int bytes_copied) override;
 
   // Two ways of deleting the children: if we have the children map, use Start()
   // directly, otherwise pass the data address to ReadData().
-  void Start(char* buffer, int len);
+  void Start(std::unique_ptr<char[]> buffer, int len);
   void ReadData(disk_cache::Addr address, int len);
 
  private:
@@ -86,26 +89,24 @@ class ChildrenDeleter
   base::WeakPtr<disk_cache::BackendImpl> backend_;
   std::string name_;
   disk_cache::Bitmap children_map_;
-  int64_t signature_;
+  int64_t signature_ = 0;
   std::unique_ptr<char[]> buffer_;
-  DISALLOW_COPY_AND_ASSIGN(ChildrenDeleter);
 };
 
 // This is the callback of the file operation.
 void ChildrenDeleter::OnFileIOComplete(int bytes_copied) {
-  char* buffer = buffer_.release();
-  Start(buffer, bytes_copied);
+  Start(std::move(buffer_), bytes_copied);
 }
 
-void ChildrenDeleter::Start(char* buffer, int len) {
-  buffer_.reset(buffer);
+void ChildrenDeleter::Start(std::unique_ptr<char[]> buffer, int len) {
+  buffer_ = std::move(buffer);
   if (len < static_cast<int>(sizeof(disk_cache::SparseData)))
     return Release();
 
   // Just copy the information from |buffer|, delete |buffer| and start deleting
   // the child entries.
   disk_cache::SparseData* data =
-      reinterpret_cast<disk_cache::SparseData*>(buffer);
+      reinterpret_cast<disk_cache::SparseData*>(buffer_.get());
   signature_ = data->header.signature;
 
   int num_bits = (len - sizeof(disk_cache::SparseHeader)) * 8;
@@ -128,7 +129,7 @@ void ChildrenDeleter::ReadData(disk_cache::Addr address, int len) {
   size_t file_offset = address.start_block() * address.BlockSize() +
                        disk_cache::kBlockHeaderSize;
 
-  buffer_.reset(new char[len]);
+  buffer_ = std::make_unique<char[]>(len);
   bool completed;
   if (!file->Read(buffer_.get(), len, file_offset, this, &completed))
     return Release();
@@ -200,19 +201,7 @@ namespace disk_cache {
 
 SparseControl::SparseControl(EntryImpl* entry)
     : entry_(entry),
-      child_(nullptr),
-      operation_(kNoOperation),
-      pending_(false),
-      finished_(false),
-      init_(false),
-      range_found_(false),
-      abort_(false),
-      child_map_(child_data_.bitmap, kNumSparseBits, kNumSparseBits / 32),
-      offset_(0),
-      buf_len_(0),
-      child_offset_(0),
-      child_len_(0),
-      result_(0) {
+      child_map_(child_data_.bitmap, kNumSparseBits, kNumSparseBits / 32) {
   memset(&sparse_header_, 0, sizeof(sparse_header_));
   memset(&child_data_, 0, sizeof(child_data_));
 }
@@ -385,7 +374,7 @@ void SparseControl::DeleteChildren(EntryImpl* entry) {
   if (map_len > kMaxMapSize || map_len % 4)
     return;
 
-  char* buffer;
+  std::unique_ptr<char[]> buffer;
   Addr address;
   entry->GetData(kSparseIndex, &buffer, &address);
   if (!buffer && !address.is_initialized())
@@ -401,8 +390,8 @@ void SparseControl::DeleteChildren(EntryImpl* entry) {
 
   if (buffer) {
     base::ThreadTaskRunnerHandle::Get()->PostTask(
-        FROM_HERE,
-        base::BindOnce(&ChildrenDeleter::Start, deleter, buffer, data_len));
+        FROM_HERE, base::BindOnce(&ChildrenDeleter::Start, deleter,
+                                  std::move(buffer), data_len));
   } else {
     base::ThreadTaskRunnerHandle::Get()->PostTask(
         FROM_HERE,

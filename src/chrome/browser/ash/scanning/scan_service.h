@@ -17,7 +17,7 @@
 #include "base/time/time.h"
 #include "base/unguessable_token.h"
 #include "chrome/browser/ash/scanning/scanning_file_path_helper.h"
-#include "chromeos/dbus/lorgnette/lorgnette_service.pb.h"
+#include "chromeos/ash/components/dbus/lorgnette/lorgnette_service.pb.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -120,7 +120,8 @@ class ScanService : public scanning::mojom::ScanService,
   // Processes the final result of calling LorgnetteScannerManager::Scan().
   // |failure_mode| is set to SCAN_FAILURE_MODE_NO_FAILURE when the scan
   // succeeds; otherwise, its value indicates what caused the scan to fail.
-  void OnScanCompleted(lorgnette::ScanFailureMode failure_mode);
+  void OnScanCompleted(bool is_multi_page_scan,
+                       lorgnette::ScanFailureMode failure_mode);
 
   // For a multi-page scan, when a page scan completes, report a failure if it
   // exists.
@@ -210,9 +211,16 @@ class ScanService : public scanning::mojom::ScanService,
   // scanner that flips them.
   bool rotate_alternate_pages_;
 
+  // Stores the dots per inch (DPI) of the requested scan.
+  absl::optional<int> scan_dpi_;
+
   // The time at which GetScanners() is called. Used to record the time between
   // a user launching the Scan app and being able to interact with it.
   base::TimeTicks get_scanners_time_;
+
+  // The time a multi-page scan session starts. Used to record the duration of a
+  // multi-page scan session.
+  base::TimeTicks multi_page_start_time_;
 
   // Helper class for for file path manipulation and verification.
   ScanningFilePathHelper file_path_helper_;

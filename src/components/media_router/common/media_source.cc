@@ -66,8 +66,6 @@ bool IsAutoJoinPresentationId(const std::string& presentation_id) {
   return presentation_id == kAutoJoinPresentationId;
 }
 
-MediaSource::MediaSource() = default;
-
 MediaSource::MediaSource(const MediaSource::Id& source_id) : id_(source_id) {
   GURL url(source_id);
   if (IsValidPresentationUrl(url))
@@ -187,7 +185,7 @@ std::string MediaSource::AppNameFromDialSource() const {
 }
 
 std::string MediaSource::TruncateForLogging(size_t max_length) const {
-  const std::string origin = url_.GetOrigin().spec();
+  const std::string origin = url_.DeprecatedGetOriginAsURL().spec();
   if (!origin.empty())
     return origin.substr(0, max_length);
   // TODO(takumif): Keep the query string by redacting PII. The query string may

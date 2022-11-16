@@ -8,9 +8,11 @@
 #include <utility>
 
 #include "base/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
+#include "base/time/time.h"
 #include "components/query_tiles/internal/tile_config.h"
 #include "components/query_tiles/internal/tile_store.h"
 #include "components/query_tiles/switches.h"
@@ -185,7 +187,7 @@ class TileManagerTest : public testing::Test {
  private:
   base::test::TaskEnvironment task_environment_;
   std::unique_ptr<TileManager> manager_;
-  MockTileStore* tile_store_;
+  raw_ptr<MockTileStore> tile_store_;
   base::Time current_time_;
 };
 
@@ -203,7 +205,7 @@ TEST_F(TileManagerTest, InitWithEmptyDb) {
 TEST_F(TileManagerTest, InitAndLoadWithInvalidGroup) {
   // Create an expired group.
   auto expired_group = CreateValidGroup("expired_group_id", "tile_id");
-  expired_group.last_updated_ts = current_time() - base::TimeDelta::FromDays(3);
+  expired_group.last_updated_ts = current_time() - base::Days(3);
 
   // Locale mismatch group.
   auto locale_mismatch_group =
@@ -219,7 +221,7 @@ TEST_F(TileManagerTest, InitAndLoadWithInvalidGroup) {
 TEST_F(TileManagerTest, InitAndLoadSuccess) {
   // Two valid groups are loaded, the most recent one will be selected.
   auto group1 = CreateValidGroup("group_id_1", "tile_id_1");
-  group1.last_updated_ts -= base::TimeDelta::FromMinutes(5);
+  group1.last_updated_ts -= base::Minutes(5);
   auto group2 = CreateValidGroup("group_id_2", "tile_id_2");
   const Tile expected = *group2.tiles[0];
 
@@ -452,7 +454,6 @@ TEST_F(TileManagerTest, TrendingTopTilesRemovedAfterShown) {
 
   // Click the 2nd tile.
   OnTileClicked("trending_2");
-  GetTiles(expected);
 
   // Both the first and the second tile will be removed.
   expected.erase(expected.begin(), expected.begin() + 2);
@@ -462,7 +463,6 @@ TEST_F(TileManagerTest, TrendingTopTilesRemovedAfterShown) {
                           MockTileStore::UpdateCallback callback) {
         std::move(callback).Run(true);
       }));
-  GetTiles(expected);
   GetTiles(expected);
 
   // The 3rd tile will be removed due to max impression threshold.
@@ -545,10 +545,6 @@ TEST_F(TileManagerTest, GetSingleTileAfterOnTileClicked) {
   OnTileClicked("parent");
   GetSingleTile("parent", get_single_tile_expected);
 
-  // Click the parent tile to show the subtiles.
-  OnTileClicked("parent");
-  GetSingleTile("parent", get_single_tile_expected);
-
   // Click a trending tile will not reset its impression.
   OnTileClicked("trending_1");
 
@@ -565,9 +561,6 @@ TEST_F(TileManagerTest, GetSingleTileAfterOnTileClicked) {
   get_single_tile_expected->sub_tiles.clear();
   get_single_tile_expected->sub_tiles.emplace_back(
       std::make_unique<Tile>(std::move(trending_3)));
-  OnTileClicked("parent");
-  GetSingleTile("parent", get_single_tile_expected);
-
   OnTileClicked("parent");
   GetSingleTile("parent", get_single_tile_expected);
 

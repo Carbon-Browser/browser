@@ -8,7 +8,6 @@
 #include <memory>
 #include <string>
 
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/threading/thread_checker.h"
 #include "ios/chrome/browser/application_context.h"
@@ -19,11 +18,10 @@ class SequencedTaskRunner;
 }
 
 namespace breadcrumbs {
-class BreadcrumbManager;
 class BreadcrumbPersistentStorageManager;
 }
 
-class ApplicationBreadcrumbsLoggerIOS;
+class ApplicationBreadcrumbsLogger;
 
 namespace network {
 class NetworkChangeManager;
@@ -34,6 +32,10 @@ class ApplicationContextImpl : public ApplicationContext {
   ApplicationContextImpl(base::SequencedTaskRunner* local_state_task_runner,
                          const base::CommandLine& command_line,
                          const std::string& locale);
+
+  ApplicationContextImpl(const ApplicationContextImpl&) = delete;
+  ApplicationContextImpl& operator=(const ApplicationContextImpl&) = delete;
+
   ~ApplicationContextImpl() override;
 
   // Called before the browser threads are created.
@@ -78,6 +80,9 @@ class ApplicationContextImpl : public ApplicationContext {
   BrowserPolicyConnectorIOS* GetBrowserPolicyConnector() override;
   breadcrumbs::BreadcrumbPersistentStorageManager*
   GetBreadcrumbPersistentStorageManager() override;
+  id<SingleSignOnService> GetSSOService() override;
+  segmentation_platform::OTRWebStateObserver*
+  GetSegmentationOTRWebStateObserver() override;
 
  private:
   // Sets the locale used by the application.
@@ -91,13 +96,9 @@ class ApplicationContextImpl : public ApplicationContext {
 
   base::ThreadChecker thread_checker_;
 
-  // Breadcrumb manager used to store application wide breadcrumb events. Will
-  // be null if breadcrumbs feature is not enabled.
-  std::unique_ptr<breadcrumbs::BreadcrumbManager> breadcrumb_manager_;
-  // Logger which observers and logs application wide events to
-  // |breadcrumb_manager_|. Will be null if breadcrumbs feature is not enabled.
-  std::unique_ptr<ApplicationBreadcrumbsLoggerIOS>
-      application_breadcrumbs_logger_;
+  // Logger which observers and logs application wide events to breadcrumbs.
+  // Will be null if breadcrumbs feature is not enabled.
+  std::unique_ptr<ApplicationBreadcrumbsLogger> application_breadcrumbs_logger_;
 
   // Must be destroyed after |local_state_|. BrowserStatePolicyConnector isn't a
   // keyed service because the pref service, which isn't a keyed service, has a
@@ -125,7 +126,10 @@ class ApplicationContextImpl : public ApplicationContext {
 
   scoped_refptr<SafeBrowsingService> safe_browsing_service_;
 
-  DISALLOW_COPY_AND_ASSIGN(ApplicationContextImpl);
+  __strong id<SingleSignOnService> single_sign_on_service_ = nil;
+
+  std::unique_ptr<segmentation_platform::OTRWebStateObserver>
+      segmentation_otr_web_state_observer_;
 };
 
 #endif  // IOS_CHROME_BROWSER_APPLICATION_CONTEXT_IMPL_H_

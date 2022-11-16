@@ -45,7 +45,6 @@ import java.util.concurrent.TimeoutException;
  */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @Batch(TranslateAssistContentTest.TRANSLATE_BATCH_NAME)
-@Batch.SplitByFeature
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
 public class TranslateIntentTest {
     @ClassRule
@@ -69,7 +68,7 @@ public class TranslateIntentTest {
      * the changes to make the translate service mockable and remove the internet requirement.
      */
     private boolean shouldSkipDueToNetworkService() {
-        return !ChromeFeatureList.isEnabled("NetworkServiceInProcess");
+        return !ChromeFeatureList.isEnabled("NetworkServiceInProcess2");
     }
 
     /**
@@ -105,7 +104,8 @@ public class TranslateIntentTest {
     @Test
     @MediumTest
     @Restriction(Restriction.RESTRICTION_TYPE_INTERNET)
-    @Features.DisableFeatures({ChromeFeatureList.TRANSLATE_INTENT})
+    @Features.
+    DisableFeatures({ChromeFeatureList.TRANSLATE_INTENT, ChromeFeatureList.TRANSLATE_TFLITE})
     public void testTranslateIntentDisabled() throws TimeoutException {
         if (shouldSkipDueToNetworkService()) return;
         final String url = sActivityTestRule.getTestServer().getURL(TRANSLATE_PAGE);
@@ -123,6 +123,7 @@ public class TranslateIntentTest {
     @MediumTest
     @Restriction(Restriction.RESTRICTION_TYPE_INTERNET)
     @Features.EnableFeatures({ChromeFeatureList.TRANSLATE_INTENT})
+    @Features.DisableFeatures({ChromeFeatureList.TRANSLATE_TFLITE})
     public void testTranslateIntentOnTranslatePage() throws TimeoutException {
         if (shouldSkipDueToNetworkService()) return;
         final String url = sActivityTestRule.getTestServer().getURL(TRANSLATE_PAGE);
@@ -227,6 +228,7 @@ public class TranslateIntentTest {
     @MediumTest
     @Restriction(Restriction.RESTRICTION_TYPE_INTERNET)
     @Features.EnableFeatures({ChromeFeatureList.TRANSLATE_INTENT})
+    @Features.DisableFeatures({ChromeFeatureList.TRANSLATE_TFLITE})
     public void testTranslateIntentOnIncognito() throws TimeoutException {
         if (shouldSkipDueToNetworkService()) return;
         final String url = sActivityTestRule.getTestServer().getURL(TRANSLATE_PAGE);
@@ -250,6 +252,7 @@ public class TranslateIntentTest {
     @MediumTest
     @Restriction(Restriction.RESTRICTION_TYPE_INTERNET)
     @Features.EnableFeatures({ChromeFeatureList.TRANSLATE_INTENT})
+    @Features.DisableFeatures({ChromeFeatureList.TRANSLATE_TFLITE})
     public void testTranslateIntentWithUrlMismatch() throws TimeoutException {
         if (shouldSkipDueToNetworkService()) return;
         final String url = sActivityTestRule.getTestServer().getURL(TRANSLATE_PAGE);
@@ -267,6 +270,7 @@ public class TranslateIntentTest {
     @MediumTest
     @Restriction(Restriction.RESTRICTION_TYPE_INTERNET)
     @Features.EnableFeatures({ChromeFeatureList.TRANSLATE_INTENT})
+    @Features.DisableFeatures({ChromeFeatureList.TRANSLATE_TFLITE})
     public void testTranslateIntentWithoutExpectedUrl() throws TimeoutException {
         if (shouldSkipDueToNetworkService()) return;
         final String url = sActivityTestRule.getTestServer().getURL(TRANSLATE_PAGE);
@@ -284,6 +288,7 @@ public class TranslateIntentTest {
     @MediumTest
     @Restriction(Restriction.RESTRICTION_TYPE_INTERNET)
     @Features.EnableFeatures({ChromeFeatureList.TRANSLATE_INTENT})
+    @Features.DisableFeatures({ChromeFeatureList.TRANSLATE_TFLITE})
     public void testTranslateIntentVerifyComponent() throws TimeoutException {
         if (shouldSkipDueToNetworkService()) return;
         final String url = sActivityTestRule.getTestServer().getURL(TRANSLATE_PAGE);
@@ -308,6 +313,7 @@ public class TranslateIntentTest {
     @MediumTest
     @Restriction(Restriction.RESTRICTION_TYPE_INTERNET)
     @Features.EnableFeatures({ChromeFeatureList.TRANSLATE_INTENT})
+    @Features.DisableFeatures({ChromeFeatureList.TRANSLATE_TFLITE})
     public void testTranslateIntentIncorrectComponent() throws TimeoutException {
         if (shouldSkipDueToNetworkService()) return;
         final String url = sActivityTestRule.getTestServer().getURL(TRANSLATE_PAGE);

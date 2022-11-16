@@ -31,11 +31,12 @@
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/browsing_data_remover_test_util.h"
+#include "content/public/test/fenced_frame_test_util.h"
 #include "net/dns/mock_host_resolver.h"
 #include "net/test/embedded_test_server/request_handler_util.h"
 #include "services/network/public/mojom/cookie_manager.mojom.h"
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/ui/android/tab_model/tab_model.h"
 #include "chrome/browser/ui/android/tab_model/tab_model_list.h"
 #include "chrome/test/base/android/android_browser_test.h"
@@ -121,30 +122,37 @@ void CheckContainsOriginStorageRecords(
     const url::Origin& top_frame_origin,
     bool compare_host_only = false) {
   for (auto type : types) {
-    EXPECT_NE(std::find_if(
-                  record_list.begin(), record_list.end(),
-                  [=](const AccessContextAuditDatabase::AccessRecord& record) {
-                    return record.type == type &&
-                           (compare_host_only
-                                ? record.top_frame_origin.host() ==
-                                          top_frame_origin.host() &&
-                                      record.origin.host() == origin.host()
-                                : record.top_frame_origin == top_frame_origin &&
-                                      record.origin == origin);
-                  }),
-              record_list.end());
+    auto it = std::find_if(
+        record_list.begin(), record_list.end(),
+        [=](const AccessContextAuditDatabase::AccessRecord& record) {
+          return record.type == type &&
+                 (compare_host_only
+                      ? record.top_frame_origin.host() ==
+                                top_frame_origin.host() &&
+                            record.origin.host() == origin.host()
+                      : record.top_frame_origin == top_frame_origin &&
+                            record.origin == origin);
+        });
+    if (origin != top_frame_origin &&
+        type == AccessContextAuditDatabase::StorageAPIType::kWebDatabase) {
+      // WebSQL in third-party contexts is disabled as of M97.
+      EXPECT_EQ(it, record_list.end());
+    } else {
+      EXPECT_NE(it, record_list.end());
+    }
   }
 }
 
 // Calls the accessStorage javascript function and awaits its completion for
 // each frame in the active web contents for |browser|.
 void EnsurePageAccessedStorage(content::WebContents* web_contents) {
-  auto frames = web_contents->GetAllFrames();
-  for (auto* frame : frames) {
-    ASSERT_TRUE(content::EvalJs(
-                    frame, "(async () => { return await accessStorage();})()")
-                    .value.GetBool());
-  }
+  web_contents->GetPrimaryMainFrame()->ForEachRenderFrameHost(
+      base::BindRepeating([](content::RenderFrameHost* frame) {
+        EXPECT_TRUE(
+            content::EvalJs(frame,
+                            "(async () => { return await accessStorage();})()")
+                .value.GetBool());
+      }));
 }
 
 }  // namespace
@@ -279,7 +287,8 @@ IN_PROC_BROWSER_TEST_F(AccessContextAuditBrowserTest, PRE_PRE_RemoveRecords) {
   // acceesed in one.
   unsigned expected_cookie_records =
       2 * kEmbeddedPageCookieCount + kTopLevelPageCookieCount;
-  unsigned expected_origin_storage_records = 3 * kOriginStorageTypes.size();
+  // Subtract 1 as third-party context WebSQL is disabled as of M97.
+  unsigned expected_origin_storage_records = 3 * kOriginStorageTypes.size() - 1;
   EXPECT_EQ(records.size(),
             expected_cookie_records + expected_origin_storage_records);
   EXPECT_EQ(cookies.size(),
@@ -315,7 +324,8 @@ IN_PROC_BROWSER_TEST_F(AccessContextAuditBrowserTest, PRE_RemoveRecords) {
   // removed.
   unsigned expected_cookie_records =
       2 * (kEmbeddedPageCookieCount - 1) + kTopLevelPageCookieCount;
-  unsigned expected_origin_storage_records = 3 * kOriginStorageTypes.size();
+  // Subtract 1 as third-party context WebSQL is disabled as of M97.
+  unsigned expected_origin_storage_records = 3 * kOriginStorageTypes.size() - 1;
   EXPECT_EQ(records.size(),
             expected_cookie_records + expected_origin_storage_records);
   EXPECT_EQ(cookies.size(),
@@ -376,7 +386,8 @@ IN_PROC_BROWSER_TEST_F(AccessContextAuditBrowserTest, PRE_CheckSessionOnly) {
   auto cookies = GetAllCookies();
   unsigned expected_cookie_records =
       2 * kEmbeddedPageCookieCount + kTopLevelPageCookieCount;
-  unsigned expected_origin_storage_records = 3 * kOriginStorageTypes.size();
+  // Subtract 1 as third-party context WebSQL is disabled as of M97.
+  unsigned expected_origin_storage_records = 3 * kOriginStorageTypes.size() - 1;
   EXPECT_EQ(records.size(),
             expected_cookie_records + expected_origin_storage_records);
   EXPECT_EQ(cookies.size(),
@@ -401,7 +412,8 @@ IN_PROC_BROWSER_TEST_F(AccessContextAuditBrowserTest, RemoveHistory) {
   auto cookies = GetAllCookies();
   unsigned expected_cookie_records =
       2 * kEmbeddedPageCookieCount + kTopLevelPageCookieCount;
-  unsigned expected_origin_storage_records = 3 * kOriginStorageTypes.size();
+  // Subtract 1 as third-party context WebSQL is disabled as of M97.
+  unsigned expected_origin_storage_records = 3 * kOriginStorageTypes.size() - 1;
   EXPECT_EQ(records.size(),
             expected_cookie_records + expected_origin_storage_records);
   EXPECT_EQ(cookies.size(),
@@ -455,17 +467,21 @@ IN_PROC_BROWSER_TEST_F(AccessContextAuditBrowserTest, TreeModelDeletion) {
   auto records = GetAllAccessRecords();
   unsigned expected_cookie_records =
       2 * kEmbeddedPageCookieCount + kTopLevelPageCookieCount;
-  unsigned expected_origin_storage_records = 3 * kOriginStorageTypes.size();
+  // Subtract 1 as third-party context WebSQL is disabled as of M97.
+  unsigned expected_origin_storage_records = 3 * kOriginStorageTypes.size() - 1;
   EXPECT_EQ(records.size(),
             expected_cookie_records + expected_origin_storage_records);
   EXPECT_EQ(cookies.size(),
             kEmbeddedPageCookieCount + kTopLevelPageCookieCount);
 
-  auto tree_model =
-      CookiesTreeModel::CreateForProfile(chrome_test_utils::GetProfile(this));
-  CookiesTreeObserver observer;
-  tree_model->AddCookiesTreeObserver(&observer);
-  observer.AwaitTreeModelEndBatch();
+  auto tree_model = CookiesTreeModel::CreateForProfileDeprecated(
+      chrome_test_utils::GetProfile(this));
+  {
+    CookiesTreeObserver observer;
+    tree_model->AddCookiesTreeObserver(&observer);
+    observer.AwaitTreeModelEndBatch();
+    tree_model->RemoveCookiesTreeObserver(&observer);
+  }
 
   tree_model->DeleteAllStoredObjects();
 
@@ -504,7 +520,7 @@ IN_PROC_BROWSER_TEST_F(AccessContextAuditBrowserTest, MultipleAccesses) {
 
   // Renavigate to the same pages, this should update the access times on all
   // records.
-  clock.Advance(base::TimeDelta::FromHours(1));
+  clock.Advance(base::Hours(1));
   NavigateToTopLevelPage();
   NavigateToEmbeddedPage();
 
@@ -521,12 +537,12 @@ IN_PROC_BROWSER_TEST_F(AccessContextAuditBrowserTest, TabClosed) {
 
   // Close the previous tab, keeping the browser active if required to ensure
   // the profile does not begin destruction.
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   TabModel* tab_model = TabModelList::GetTabModelForWebContents(
       chrome_test_utils::GetActiveWebContents(this));
   tab_model->CloseTabAt(tab_model->GetActiveIndex());
 #else
-  AddTabAtIndex(1, GURL("about:blank"), ui::PAGE_TRANSITION_TYPED);
+  ASSERT_TRUE(AddTabAtIndex(1, GURL("about:blank"), ui::PAGE_TRANSITION_TYPED));
   browser()->tab_strip_model()->CloseWebContentsAt(0,
                                                    TabStripModel::CLOSE_NONE);
 #endif  // defined (OS_ANDROID)
@@ -535,7 +551,8 @@ IN_PROC_BROWSER_TEST_F(AccessContextAuditBrowserTest, TabClosed) {
   auto cookies = GetAllCookies();
   unsigned expected_cookie_records =
       2 * kEmbeddedPageCookieCount + kTopLevelPageCookieCount;
-  unsigned expected_origin_storage_records = 3 * kOriginStorageTypes.size();
+  // Subtract 1 as third-party context WebSQL is disabled as of M97.
+  unsigned expected_origin_storage_records = 3 * kOriginStorageTypes.size() - 1;
   EXPECT_EQ(records.size(),
             expected_cookie_records + expected_origin_storage_records);
 
@@ -569,7 +586,7 @@ IN_PROC_BROWSER_TEST_F(AccessContextAuditBrowserTest, TabClosed) {
 // when the browser restarts. Android has a superficially similar behavior where
 // tabs are re-opened after close, but non-persistent cookies are not preserved,
 // making this test only applicable to desktop.
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
 class AccessContextAuditSessionRestoreBrowserTest
     : public AccessContextAuditBrowserTest {
  public:
@@ -594,7 +611,8 @@ IN_PROC_BROWSER_TEST_F(AccessContextAuditSessionRestoreBrowserTest,
 
   unsigned expected_cookie_records =
       2 * kEmbeddedPageCookieCount + kTopLevelPageCookieCount;
-  unsigned expected_origin_storage_records = 3 * kOriginStorageTypes.size();
+  // Subtract 1 as third-party context WebSQL is disabled as of M97.
+  unsigned expected_origin_storage_records = 3 * kOriginStorageTypes.size() - 1;
   EXPECT_EQ(records.size(),
             expected_cookie_records + expected_origin_storage_records);
   EXPECT_EQ(cookies.size(),
@@ -609,7 +627,8 @@ IN_PROC_BROWSER_TEST_F(AccessContextAuditSessionRestoreBrowserTest,
 
   unsigned expected_cookie_records =
       2 * kEmbeddedPageCookieCount + kTopLevelPageCookieCount;
-  unsigned expected_origin_storage_records = 3 * kOriginStorageTypes.size();
+  // Subtract 1 as third-party context WebSQL is disabled as of M97.
+  unsigned expected_origin_storage_records = 3 * kOriginStorageTypes.size() - 1;
   EXPECT_EQ(records.size(),
             expected_cookie_records + expected_origin_storage_records);
   EXPECT_EQ(cookies.size(),
@@ -640,4 +659,37 @@ IN_PROC_BROWSER_TEST_F(AccessContextAuditSessionRestoreBrowserTest,
                                     embedded_origin(), embedded_origin(),
                                     /* compare_host_only */ true);
 }
-#endif  // !defined(OS_ANDROID)
+#endif  // !BUILDFLAG(IS_ANDROID)
+
+class AccessContextAuditFencedFrameBrowserTest
+    : public AccessContextAuditBrowserTest {
+ public:
+  AccessContextAuditFencedFrameBrowserTest() = default;
+  ~AccessContextAuditFencedFrameBrowserTest() override = default;
+
+  content::test::FencedFrameTestHelper& fenced_frame_test_helper() {
+    return fenced_frame_test_helper_;
+  }
+
+  content::WebContents* GetWebContents() {
+    return chrome_test_utils::GetActiveWebContents(this);
+  }
+
+ private:
+  content::test::FencedFrameTestHelper fenced_frame_test_helper_;
+};
+
+IN_PROC_BROWSER_TEST_F(AccessContextAuditFencedFrameBrowserTest,
+                       AccessShouldNotBeRecorded) {
+  ASSERT_TRUE(content::NavigateToURL(
+      GetWebContents(), top_level_.GetURL(kTopLevelHost, "/empty.html")));
+  content::RenderFrameHost* ff = fenced_frame_test_helper().CreateFencedFrame(
+      GetWebContents()->GetPrimaryMainFrame(), embedded_url());
+
+  EXPECT_TRUE(
+      content::EvalJs(ff, "(async () => { return await accessStorage();})()")
+          .value.GetBool());
+
+  auto records = GetAllAccessRecords();
+  EXPECT_EQ(records.size(), 0u);
+}

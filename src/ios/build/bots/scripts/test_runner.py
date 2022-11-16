@@ -17,6 +17,7 @@ import subprocess
 import threading
 import time
 
+import constants
 import file_util
 import gtest_utils
 import iossim_util
@@ -29,7 +30,6 @@ import xctest_utils
 
 LOGGER = logging.getLogger(__name__)
 DERIVED_DATA = os.path.expanduser('~/Library/Developer/Xcode/DerivedData')
-READLINE_TIMEOUT = 180
 
 
 # TODO(crbug.com/1077277): Move commonly used error classes to
@@ -148,9 +148,9 @@ def get_device_ios_version(udid):
   Returns:
     Device UDID.
   """
-  return subprocess.check_output(['ideviceinfo',
-                                  '--udid', udid,
-                                  '-k', 'ProductVersion']).strip()
+  return subprocess.check_output(
+      ['ideviceinfo', '--udid', udid, '-k',
+       'ProductVersion']).decode('utf-8').strip()
 
 
 def defaults_write(d, key, value):
@@ -220,7 +220,7 @@ def terminate_process(proc, proc_name):
 def print_process_output(proc,
                          proc_name=None,
                          parser=None,
-                         timeout=READLINE_TIMEOUT):
+                         timeout=constants.READLINE_TIMEOUT):
   """Logs process messages in console and waits until process is done.
 
   Method waits until no output message and if no message for timeout seconds,
@@ -254,6 +254,10 @@ def print_process_output(proc,
       timer.cancel()
     if not line:
       break
+    # |line| will be bytes on python3, and therefore must be decoded prior
+    # to rstrip.
+    if sys.version_info.major == 3:
+      line = line.decode('utf-8')
     line = line.rstrip()
     out.append(line)
     if parser:
@@ -263,9 +267,6 @@ def print_process_output(proc,
 
   if parser:
     parser.Finalize()
-  if sys.version_info.major == 3:
-    for index in range(len(out)):
-      out[index] = out[index].decode('utf-8')
   LOGGER.debug('Finished print_process_output.')
   return out
 
@@ -280,9 +281,11 @@ def get_current_xcode_info():
       'build': The Xcode build version.
   """
   try:
-    out = subprocess.check_output(['xcodebuild', '-version']).splitlines()
+    out = subprocess.check_output(['xcodebuild',
+                                   '-version']).decode('utf-8').splitlines()
     version, build_version = out[0].split(' ')[-1], out[1].split(' ')[-1]
-    path = subprocess.check_output(['xcode-select', '--print-path']).rstrip()
+    path = subprocess.check_output(['xcode-select',
+                                    '--print-path']).decode('utf-8').rstrip()
   except subprocess.CalledProcessError:
     version = build_version = path = None
 
@@ -304,6 +307,8 @@ class TestRunner(object):
       out_dir: Directory to emit test data into.
       (Following are potential args in **kwargs)
       env_vars: List of environment variables to pass to the test itself.
+      readline_timeout: (int) Timeout to kill a test process when it doesn't
+        have output (in seconds).
       repeat_count: Number of times to run each test case (passed to test app).
       retries: Number of times to retry failed test cases in test runner.
       test_args: List of strings to pass as arguments to the test when
@@ -344,6 +349,8 @@ class TestRunner(object):
     self.test_cases = kwargs.get('test_cases') or []
     self.xctest_path = ''
     self.xctest = kwargs.get('xctest') or False
+    self.readline_timeout = (
+        kwargs.get('readline_timeout') or constants.READLINE_TIMEOUT)
 
     self.test_results = {}
     self.test_results['version'] = 3
@@ -368,7 +375,8 @@ class TestRunner(object):
     """removes any proxy settings which may remain from a previous run."""
     LOGGER.info('Removing any proxy settings.')
     network_services = subprocess.check_output(
-        ['networksetup', '-listallnetworkservices']).strip().split('\n')
+        ['networksetup',
+         '-listallnetworkservices']).decode('utf-8').strip().split('\n')
     if len(network_services) > 1:
       # We ignore the first line as it is a description of the command's output.
       network_services = network_services[1:]
@@ -434,13 +442,6 @@ class TestRunner(object):
   def tear_down(self):
     """Performs cleanup actions which must occur after every test launch."""
     raise NotImplementedError
-
-  def screenshot_desktop(self):
-    """Saves a screenshot of the desktop in the output directory."""
-    subprocess.check_call([
-        'screencapture',
-        os.path.join(self.out_dir, 'desktop_%s.png' % time.time()),
-    ])
 
   def retrieve_derived_data(self):
     """Retrieves the contents of DerivedData"""
@@ -544,7 +545,8 @@ class TestRunner(object):
     proc = self.start_proc(cmd)
     old_handler = self.set_sigterm_handler(
         lambda _signum, _frame: self.handle_sigterm(proc))
-    print_process_output(proc, 'xcodebuild', parser)
+    print_process_output(
+        proc, 'xcodebuild', parser, timeout=self.readline_timeout)
     LOGGER.info('Waiting for test process to terminate.')
     proc.wait()
     LOGGER.info('Test process terminated.')
@@ -594,12 +596,15 @@ class TestRunner(object):
           LOGGER.warning('Crashed during %s, resuming...\n',
                          list(result.crashed_tests()))
           test_app.excluded_tests = list(overall_result.all_test_names())
+          # Changing test filter will change selected gtests in this shard.
+          # Thus, sharding env vars have to be cleared to ensure needed tests
+          # are run. This means there might be duplicate same tests across
+          # the shards.
+          test_app.remove_gtest_sharding_env_vars()
           retry_out_dir = os.path.join(
               self.out_dir, 'retry_after_crash_%d' % int(time.time()))
           result = self._run(
-              self.get_launch_command(
-                  test_app, os.path.join(retry_out_dir, str(int(time.time()))),
-                  destination))
+              self.get_launch_command(test_app, retry_out_dir, destination))
           result.report_to_result_sink()
           # Only keep the last crash status in crash retries in overall crash
           # status.
@@ -617,13 +622,17 @@ class TestRunner(object):
       if self.retries and never_expected_tests:
         LOGGER.warning('%s tests failed and will be retried.\n',
                        len(never_expected_tests))
-        for i in xrange(self.retries):
+        for i in range(self.retries):
           tests_to_retry = list(overall_result.never_expected_tests())
           for test in tests_to_retry:
             LOGGER.info('Retry #%s for %s.\n', i + 1, test)
             test_app.included_tests = [test]
-            retry_out_dir = os.path.join(self.out_dir, test + '_failed',
-                                         'retry_%d' % i)
+            # Changing test filter will change selected gtests in this shard.
+            # Thus, sharding env vars have to be cleared to ensure the test
+            # runs when it's the only test in gtest_filter.
+            test_app.remove_gtest_sharding_env_vars()
+            test_retry_sub_dir = '%s_retry_%d' % (test.replace('/', '_'), i)
+            retry_out_dir = os.path.join(self.out_dir, test_retry_sub_dir)
             retry_result = self._run(
                 self.get_launch_command(test_app, retry_out_dir, destination))
 
@@ -643,7 +652,7 @@ class TestRunner(object):
       interrupted = overall_result.crashed
 
       if interrupted:
-        overall_result.add_and_report_crash(
+        overall_result.set_crashed_with_prefix(
             crash_message_prefix_line='Test application crashed when running '
             'tests which might have caused some tests never ran or finished.')
 
@@ -768,9 +777,10 @@ class SimulatorTestRunner(TestRunner):
         if os.path.exists(docs_dir) and os.path.exists(metadata_plist):
           cfbundleid = subprocess.check_output([
               '/usr/libexec/PlistBuddy',
-              '-c', 'Print:MCMMetadataIdentifier',
+              '-c',
+              'Print:MCMMetadataIdentifier',
               metadata_plist,
-          ]).rstrip()
+          ]).decode('utf-8').rstrip()
           if cfbundleid == self.cfbundleid:
             shutil.copytree(docs_dir, os.path.join(self.out_dir, 'Documents'))
             return
@@ -807,8 +817,6 @@ class SimulatorTestRunner(TestRunner):
     self.retrieve_derived_data()
     LOGGER.debug('Processing xcresult folder.')
     self.process_xcresult_dir()
-    LOGGER.debug('Making desktop screenshots.')
-    self.screenshot_desktop()
     LOGGER.debug('Killing simulators.')
     self.kill_simulators()
     LOGGER.debug('Wiping simulator.')
@@ -831,8 +839,11 @@ class SimulatorTestRunner(TestRunner):
       returncode: (int) Return code of subprocess.
     """
     proc = self.start_proc(cmd)
-    out = print_process_output(proc, 'xcodebuild',
-                               xctest_utils.XCTestLogParser())
+    out = print_process_output(
+        proc,
+        'xcodebuild',
+        xctest_utils.XCTestLogParser(),
+        timeout=self.readline_timeout)
     self.deleteSimulator(self.udid)
     return (out, proc.returncode)
 
@@ -926,7 +937,8 @@ class DeviceTestRunner(TestRunner):
     """
     super(DeviceTestRunner, self).__init__(app_path, out_dir, **kwargs)
 
-    self.udid = subprocess.check_output(['idevice_id', '--list']).rstrip()
+    self.udid = subprocess.check_output(['idevice_id',
+                                         '--list']).decode('utf-8').rstrip()
     if len(self.udid.splitlines()) != 1:
       raise DeviceDetectionError(self.udid)
 
@@ -1004,7 +1016,6 @@ class DeviceTestRunner(TestRunner):
 
   def tear_down(self):
     """Performs cleanup actions which must occur after every test launch."""
-    self.screenshot_desktop()
     self.retrieve_derived_data()
     self.extract_test_data()
     self.process_xcresult_dir()
@@ -1032,16 +1043,10 @@ class DeviceTestRunner(TestRunner):
       '--start', self.cfbundleid,
     ]
     args = []
-    gtest_filter = []
 
-    if test_app.included_tests:
+    if test_app.included_tests or test_app.excluded_tests:
       gtest_filter = test_apps.get_gtest_filter(test_app.included_tests,
-                                                invert=False)
-    elif test_app.excluded_tests:
-      gtest_filter = test_apps.get_gtest_filter(test_app.excluded_tests,
-                                                invert=True)
-
-    if gtest_filter:
+                                                test_app.excluded_tests)
       args.append('--gtest_filter=%s' % gtest_filter)
 
     for env_var in self.env_vars:

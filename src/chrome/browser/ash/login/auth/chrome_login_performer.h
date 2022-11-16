@@ -8,14 +8,14 @@
 #include <memory>
 #include <string>
 
-#include "base/macros.h"
+#include "ash/components/login/auth/auth_status_consumer.h"
+#include "ash/components/login/auth/authenticator.h"
+#include "ash/components/login/auth/extended_authenticator.h"
+#include "ash/components/login/auth/login_performer.h"
+#include "ash/components/login/auth/metrics_recorder.h"
+#include "ash/components/login/auth/public/user_context.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/policy/login/wildcard_login_checker.h"
-#include "chromeos/login/auth/auth_status_consumer.h"
-#include "chromeos/login/auth/authenticator.h"
-#include "chromeos/login/auth/extended_authenticator.h"
-#include "chromeos/login/auth/login_performer.h"
-#include "chromeos/login/auth/user_context.h"
 #include "components/user_manager/user_type.h"
 #include "content/public/browser/notification_observer.h"
 #include "content/public/browser/notification_registrar.h"
@@ -34,7 +34,12 @@ namespace ash {
 
 class ChromeLoginPerformer : public LoginPerformer {
  public:
-  explicit ChromeLoginPerformer(Delegate* delegate);
+  explicit ChromeLoginPerformer(Delegate* delegate,
+                                MetricsRecorder* metrics_recorder);
+
+  ChromeLoginPerformer(const ChromeLoginPerformer&) = delete;
+  ChromeLoginPerformer& operator=(const ChromeLoginPerformer&) = delete;
+
   ~ChromeLoginPerformer() override;
 
   // LoginPerformer:
@@ -72,8 +77,6 @@ class ChromeLoginPerformer : public LoginPerformer {
   // Used to verify logins that matched wildcard on the login allowlist.
   std::unique_ptr<policy::WildcardLoginChecker> wildcard_login_checker_;
   base::WeakPtrFactory<ChromeLoginPerformer> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ChromeLoginPerformer);
 };
 
 }  // namespace ash

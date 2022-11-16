@@ -4,6 +4,7 @@
 
 #include "components/password_manager/core/browser/site_affiliation/affiliation_service_impl.h"
 
+#include "base/barrier_closure.h"
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/containers/contains.h"
@@ -11,9 +12,8 @@
 #include "base/files/file_path.h"
 #include "base/location.h"
 #include "base/metrics/histogram_functions.h"
-#include "base/no_destructor.h"
 #include "base/ranges/algorithm.h"
-#include "base/sequenced_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/default_clock.h"
@@ -126,7 +126,7 @@ void AffiliationServiceImpl::Init(
 void AffiliationServiceImpl::Shutdown() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (backend_) {
-    backend_task_runner_->DeleteSoon(FROM_HERE, backend_);
+    backend_task_runner_->DeleteSoon(FROM_HERE, backend_.get());
     backend_ = nullptr;
   }
 }
@@ -255,12 +255,104 @@ void AffiliationServiceImpl::CancelPrefetch(
                      base::Unretained(backend_), facet_uri, keep_fresh_until));
 }
 
+void AffiliationServiceImpl::KeepPrefetchForFacets(
+    std::vector<FacetURI> facet_uris) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  DCHECK(backend_);
+  backend_task_runner_->PostTask(
+      FROM_HERE,
+      base::BindOnce(&AffiliationBackend::KeepPrefetchForFacets,
+                     base::Unretained(backend_), std::move(facet_uris)));
+}
+
 void AffiliationServiceImpl::TrimCacheForFacetURI(const FacetURI& facet_uri) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(backend_);
   backend_task_runner_->PostTask(
       FROM_HERE, base::BindOnce(&AffiliationBackend::TrimCacheForFacetURI,
                                 base::Unretained(backend_), facet_uri));
+}
+
+void AffiliationServiceImpl::TrimUnusedCache(std::vector<FacetURI> facet_uris) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  DCHECK(backend_);
+  backend_task_runner_->PostTask(
+      FROM_HERE,
+      base::BindOnce(&AffiliationBackend::TrimUnusedCache,
+                     base::Unretained(backend_), std::move(facet_uris)));
+}
+
+void AffiliationServiceImpl::InjectAffiliationAndBrandingInformation(
+    std::vector<std::unique_ptr<PasswordForm>> forms,
+    AffiliationService::StrategyOnCacheMiss strategy_on_cache_miss,
+    PasswordFormsCallback result_callback) {
+  std::vector<PasswordForm*> android_credentials;
+  for (const auto& form : forms) {
+    if (IsValidAndroidCredential(PasswordFormDigest(*form)))
+      android_credentials.push_back(form.get());
+  }
+
+  // Create a closure that runs after affiliations are injected and
+  // CompleteInjectAffiliationAndBrandingInformation is called for
+  // all forms in |android_credentials|.
+  base::OnceClosure on_get_all_realms(
+      base::BindOnce(std::move(result_callback), std::move(forms)));
+  base::RepeatingClosure barrier_closure = base::BarrierClosure(
+      android_credentials.size(), std::move(on_get_all_realms));
+
+  for (auto* form : android_credentials) {
+    // |forms| are not destroyed until the |barrier_closure| executes,
+    // making it safe to use base::Unretained(form) below.
+    GetAffiliationsAndBranding(
+        FacetURI::FromPotentiallyInvalidSpec(form->signon_realm),
+        strategy_on_cache_miss,
+        base::BindOnce(&AffiliationServiceImpl::
+                           CompleteInjectAffiliationAndBrandingInformation,
+                       weak_ptr_factory_.GetWeakPtr(), base::Unretained(form),
+                       barrier_closure));
+  }
+}
+
+void AffiliationServiceImpl::CompleteInjectAffiliationAndBrandingInformation(
+    PasswordForm* form,
+    base::OnceClosure barrier_closure,
+    const AffiliatedFacets& results,
+    bool success) {
+  const FacetURI facet_uri(
+      FacetURI::FromPotentiallyInvalidSpec(form->signon_realm));
+
+  // Facet can also be web URI, in this case we do nothing.
+  if (!success || !facet_uri.IsValidAndroidFacetURI()) {
+    std::move(barrier_closure).Run();
+    return;
+  }
+
+  // Inject branding information into the form (e.g. the Play Store name and
+  // icon URL). We expect to always find a matching facet URI in the results.
+  auto facet = base::ranges::find(results, facet_uri, &Facet::uri);
+
+  DCHECK(facet != results.end());
+  form->app_display_name = facet->branding_info.name;
+  form->app_icon_url = facet->branding_info.icon_url;
+
+  // Inject the affiliated web realm into the form, if available. In case
+  // multiple web realms are available, this will always choose the first
+  // available web realm for injection.
+  auto affiliated_facet = std::find_if(
+      results.begin(), results.end(), [](const Facet& affiliated_facet) {
+        return affiliated_facet.uri.IsValidWebFacetURI();
+      });
+  if (affiliated_facet != results.end())
+    form->affiliated_web_realm = affiliated_facet->uri.canonical_spec() + "/";
+
+  std::move(barrier_closure).Run();
+}
+
+// static
+bool AffiliationServiceImpl::IsValidAndroidCredential(
+    const PasswordFormDigest& form) {
+  return form.scheme == PasswordForm::Scheme::kHtml &&
+         IsValidAndroidFacetURI(form.signon_realm);
 }
 
 }  // namespace password_manager

@@ -4,6 +4,7 @@
 
 #include "sandbox/win/src/sandbox_policy_diagnostic.h"
 
+#include <Windows.h>
 #include <stddef.h>
 
 #include <cinttypes>
@@ -34,6 +35,7 @@ const char kAppContainerCapabilities[] = "appContainerCapabilities";
 const char kAppContainerInitialCapabilities[] =
     "appContainerInitialCapabilities";
 const char kAppContainerSid[] = "appContainerSid";
+const char kComponentFilters[] = "componentFilters";
 const char kDesiredIntegrityLevel[] = "desiredIntegrityLevel";
 const char kDesiredMitigations[] = "desiredMitigations";
 const char kDisconnectCsrss[] = "disconnectCsrss";
@@ -43,19 +45,11 @@ const char kLockdownLevel[] = "lockdownLevel";
 const char kLowboxSid[] = "lowboxSid";
 const char kPlatformMitigations[] = "platformMitigations";
 const char kPolicyRules[] = "policyRules";
-const char kProcessIds[] = "processIds";
+const char kProcessId[] = "processId";
 
 // Values in snapshots of Policies.
 const char kDisabled[] = "disabled";
 const char kEnabled[] = "enabled";
-
-base::Value ProcessIdList(std::vector<uint32_t> process_ids) {
-  base::Value results(base::Value::Type::LIST);
-  for (const auto pid : process_ids) {
-    results.Append(base::strict_cast<double>(pid));
-  }
-  return results;
-}
 
 std::string GetTokenLevelInEnglish(TokenLevel token) {
   switch (token) {
@@ -67,12 +61,10 @@ std::string GetTokenLevelInEnglish(TokenLevel token) {
       return "Limited";
     case USER_INTERACTIVE:
       return "Interactive";
-    case USER_NON_ADMIN:
-      return "Non Admin";
     case USER_RESTRICTED_SAME_ACCESS:
       return "Restricted Same Access";
     case USER_UNPROTECTED:
-      return "Unprotected";
+      return "None";
     case USER_RESTRICTED_NON_ADMIN:
       return "Restricted Non Admin";
     case USER_LAST:
@@ -83,17 +75,15 @@ std::string GetTokenLevelInEnglish(TokenLevel token) {
 
 std::string GetJobLevelInEnglish(JobLevel job) {
   switch (job) {
-    case JOB_LOCKDOWN:
+    case JobLevel::kLockdown:
       return "Lockdown";
-    case JOB_RESTRICTED:
-      return "Restricted";
-    case JOB_LIMITED_USER:
+    case JobLevel::kLimitedUser:
       return "Limited User";
-    case JOB_INTERACTIVE:
+    case JobLevel::kInteractive:
       return "Interactive";
-    case JOB_UNPROTECTED:
+    case JobLevel::kUnprotected:
       return "Unprotected";
-    case JOB_NONE:
+    case JobLevel::kNone:
       return "None";
   }
 }
@@ -119,11 +109,13 @@ std::string GetIntegrityLevelInEnglish(IntegrityLevel integrity) {
   }
 }
 
-std::wstring GetSidAsString(const Sid* sid) {
-  std::wstring result;
-  if (!sid->ToSddlString(&result))
+std::wstring GetSidAsString(const base::win::Sid& sid) {
+  absl::optional<std::wstring> result = sid.ToSddlString();
+  if (!result) {
     DCHECK(false) << "Failed to make sddl string";
-  return result;
+    return L"";
+  }
+  return *result;
 }
 
 std::string GetMitigationsAsHex(MitigationFlags mitigations) {
@@ -142,6 +134,12 @@ std::string GetPlatformMitigationsAsHex(MitigationFlags mitigations) {
     return base::StringPrintf("%016" PRIx64 "%016" PRIx64, platform_flags[0],
                               platform_flags[1]);
   return base::StringPrintf("%016" PRIx64, platform_flags[0]);
+}
+
+std::string GetComponentFilterAsHex(MitigationFlags mitigations) {
+  COMPONENT_FILTER filter;
+  sandbox::ConvertProcessMitigationsToComponentFilter(mitigations, &filter);
+  return base::StringPrintf("%08lx", filter.ComponentFlags);
 }
 
 std::string GetIpcTagAsString(IpcTag service) {
@@ -173,16 +171,6 @@ std::string GetIpcTagAsString(IpcTag service) {
       return "NtOpenProcessToken";
     case IpcTag::NTOPENPROCESSTOKENEX:
       return "NtOpenProcessTokenEx";
-    case IpcTag::CREATEPROCESSW:
-      return "CreateProcessW";
-    case IpcTag::CREATEEVENT:
-      return "CreateEvent";
-    case IpcTag::OPENEVENT:
-      return "OpenEvent";
-    case IpcTag::NTCREATEKEY:
-      return "NtCreateKey";
-    case IpcTag::NTOPENKEY:
-      return "NtOpenKey";
     case IpcTag::GDI_GDIDLLINITIALIZE:
       return "GdiDllInitialize";
     case IpcTag::GDI_GETSTOCKOBJECT:
@@ -322,8 +310,9 @@ std::string GetPolicyOpcode(const PolicyOpcode* opcode, bool continuation) {
 }
 
 // Uses |service| to index into |policy_rules| returning a list of opcodes.
-base::Value GetPolicyOpcodes(const PolicyGlobal* policy_rules, IpcTag service) {
-  base::Value entry(base::Value::Type::LIST);
+base::Value::List GetPolicyOpcodes(const PolicyGlobal* policy_rules,
+                                   IpcTag service) {
+  base::Value::List entry;
   PolicyBuffer* policy_buffer =
       policy_rules->entry[static_cast<size_t>(service)];
   // Build up rules and emit when we hit an action.
@@ -345,31 +334,31 @@ base::Value GetPolicyOpcodes(const PolicyGlobal* policy_rules, IpcTag service) {
   return entry;
 }
 
-base::Value GetPolicyRules(const PolicyGlobal* policy_rules) {
+base::Value::Dict GetPolicyRules(const PolicyGlobal* policy_rules) {
   DCHECK(policy_rules);
-  base::Value results(base::Value::Type::DICTIONARY);
+  base::Value::Dict results;
 
   for (size_t i = 0; i < kMaxServiceCount; i++) {
     if (!policy_rules->entry[i])
       continue;
     IpcTag service = static_cast<IpcTag>(i);
-    results.SetKey(GetIpcTagAsString(service),
-                   GetPolicyOpcodes(policy_rules, service));
+    results.Set(GetIpcTagAsString(service),
+                GetPolicyOpcodes(policy_rules, service));
   }
 
   return results;
 }
 
 // HandleMap is just wstrings, nested sets could be empty.
-base::Value GetHandlesToClose(const HandleMap& handle_map) {
-  base::Value results(base::Value::Type::DICTIONARY);
+base::Value::Dict GetHandlesToClose(const HandleMap& handle_map) {
+  base::Value::Dict results;
   for (const auto& kv : handle_map) {
-    base::Value entries(base::Value::Type::LIST);
+    base::Value::List entries;
     // kv.second may be an empty map.
     for (const auto& entry : kv.second) {
       entries.Append(base::AsStringPiece16(entry));
     }
-    results.SetKey(base::WideToUTF8(kv.first), std::move(entries));
+    results.Set(base::WideToUTF8(kv.first), std::move(entries));
   }
   return results;
 }
@@ -381,13 +370,7 @@ base::Value GetHandlesToClose(const HandleMap& handle_map) {
 PolicyDiagnostic::PolicyDiagnostic(PolicyBase* policy) {
   DCHECK(policy);
   // TODO(crbug/997273) Add more fields once webui plumbing is complete.
-  {
-    AutoLock lock(&policy->lock_);
-    for (auto&& target_process : policy->targets_) {
-      process_ids_.push_back(
-          base::strict_cast<uint32_t>(target_process->ProcessId()));
-    }
-  }
+  process_id_ = base::strict_cast<uint32_t>(policy->target_->ProcessId());
   lockdown_level_ = policy->lockdown_level_;
   job_level_ = policy->job_level_;
 
@@ -400,14 +383,13 @@ PolicyDiagnostic::PolicyDiagnostic(PolicyBase* policy) {
   desired_mitigations_ = policy->mitigations_ | policy->delayed_mitigations_;
 
   if (policy->app_container_) {
-    app_container_sid_ =
-        std::make_unique<Sid>(policy->app_container_->GetPackageSid());
+    app_container_sid_.emplace(policy->app_container_->GetPackageSid().Clone());
     for (const auto& sid : policy->app_container_->GetCapabilities()) {
-      capabilities_.push_back(sid);
+      capabilities_.push_back(sid.Clone());
     }
     for (const auto& sid :
          policy->app_container_->GetImpersonationCapabilities()) {
-      initial_capabilities_.push_back(sid);
+      initial_capabilities_.push_back(sid.Clone());
     }
 
     app_container_type_ = policy->app_container_->GetAppContainerType();
@@ -442,58 +424,52 @@ const char* PolicyDiagnostic::JsonString() {
   if (json_string_)
     return json_string_->c_str();
 
-  base::Value value(base::Value::Type::DICTIONARY);
-  value.SetKey(kProcessIds, ProcessIdList(process_ids_));
-  value.SetKey(kLockdownLevel,
-               base::Value(GetTokenLevelInEnglish(lockdown_level_)));
-  value.SetKey(kJobLevel, base::Value(GetJobLevelInEnglish(job_level_)));
-  value.SetKey(
-      kDesiredIntegrityLevel,
-      base::Value(GetIntegrityLevelInEnglish(desired_integrity_level_)));
-  value.SetKey(kDesiredMitigations,
-               base::Value(GetMitigationsAsHex(desired_mitigations_)));
-  value.SetKey(kPlatformMitigations,
-               base::Value(GetPlatformMitigationsAsHex(desired_mitigations_)));
+  base::Value::Dict dict;
+  dict.Set(kProcessId, base::strict_cast<double>(process_id_));
+  dict.Set(kLockdownLevel, GetTokenLevelInEnglish(lockdown_level_));
+  dict.Set(kJobLevel, GetJobLevelInEnglish(job_level_));
+  dict.Set(kDesiredIntegrityLevel,
+           GetIntegrityLevelInEnglish(desired_integrity_level_));
+  dict.Set(kDesiredMitigations, GetMitigationsAsHex(desired_mitigations_));
+  dict.Set(kPlatformMitigations,
+           GetPlatformMitigationsAsHex(desired_mitigations_));
+  dict.Set(kComponentFilters, GetComponentFilterAsHex(desired_mitigations_));
 
   if (app_container_sid_) {
-    value.SetStringKey(
-        kAppContainerSid,
-        base::AsStringPiece16(GetSidAsString(app_container_sid_.get())));
-    std::vector<base::Value> caps;
-    for (auto sid : capabilities_) {
-      auto sid_value = base::Value(base::AsStringPiece16(GetSidAsString(&sid)));
-      caps.push_back(std::move(sid_value));
+    dict.Set(kAppContainerSid,
+             base::AsStringPiece16(GetSidAsString(*app_container_sid_)));
+    base::Value::List caps;
+    for (const auto& sid : capabilities_) {
+      auto sid_value = base::AsStringPiece16(GetSidAsString(sid));
+      caps.Append(std::move(sid_value));
     }
     if (!caps.empty()) {
-      value.SetKey(kAppContainerCapabilities, base::Value(std::move(caps)));
+      dict.Set(kAppContainerCapabilities, std::move(caps));
     }
-    std::vector<base::Value> imp_caps;
-    for (auto sid : initial_capabilities_) {
-      auto sid_value = base::Value(base::AsStringPiece16(GetSidAsString(&sid)));
-      imp_caps.push_back(std::move(sid_value));
+    base::Value::List imp_caps;
+    for (const auto& sid : initial_capabilities_) {
+      auto sid_value = base::AsStringPiece16(GetSidAsString(sid));
+      imp_caps.Append(std::move(sid_value));
     }
     if (!imp_caps.empty()) {
-      value.SetKey(kAppContainerInitialCapabilities,
-                   base::Value(std::move(imp_caps)));
+      dict.Set(kAppContainerInitialCapabilities, std::move(imp_caps));
     }
 
     if (app_container_type_ == AppContainerType::kLowbox)
-      value.SetStringKey(
-          kLowboxSid,
-          base::AsStringPiece16(GetSidAsString(app_container_sid_.get())));
+      dict.Set(kLowboxSid,
+               base::AsStringPiece16(GetSidAsString(*app_container_sid_)));
   }
 
   if (policy_rules_)
-    value.SetKey(kPolicyRules, GetPolicyRules(policy_rules_.get()));
+    dict.Set(kPolicyRules, GetPolicyRules(policy_rules_.get()));
 
-  value.SetStringKey(kDisconnectCsrss,
-                     is_csrss_connected_ ? kDisabled : kEnabled);
+  dict.Set(kDisconnectCsrss, is_csrss_connected_ ? kDisabled : kEnabled);
   if (!handles_to_close_.empty())
-    value.SetKey(kHandlesToClose, GetHandlesToClose(handles_to_close_));
+    dict.Set(kHandlesToClose, GetHandlesToClose(handles_to_close_));
 
   auto json_string = std::make_unique<std::string>();
   JSONStringValueSerializer to_json(json_string.get());
-  CHECK(to_json.Serialize(value));
+  CHECK(to_json.Serialize(dict));
   json_string_ = std::move(json_string);
   return json_string_->c_str();
 }

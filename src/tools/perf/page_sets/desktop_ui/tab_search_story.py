@@ -5,15 +5,22 @@
 import logging
 import py_utils
 
+from page_sets.desktop_ui.browser_element_identifiers import \
+    kTabSearchButtonElementId
 from page_sets.desktop_ui.custom_metric_utils import SetMetricNames
 from page_sets.desktop_ui.js_utils import MEASURE_JS_MEMORY
 from page_sets.desktop_ui.multitab_story import MultiTabStory
 from page_sets.desktop_ui.ui_devtools_utils import ClickOn
 from page_sets.desktop_ui.url_list import TOP_URL
 from page_sets.desktop_ui.webui_utils import Inspect
+from page_sets.desktop_ui import story_tags
 
 TAB_SEARCH_BENCHMARK_UMA = [
     'Tabs.TabSearch.CloseAction',
+    'Tabs.TabSearch.Mojo.SwitchToTab',
+    'Tabs.TabSearch.Mojo.SwitchToTab.IsOverlap',
+    'Tabs.TabSearch.Mojo.TabUpdated',
+    'Tabs.TabSearch.Mojo.TabUpdated.IsOverlap',
     'Tabs.TabSearch.NumTabsClosedPerInstance',
     'Tabs.TabSearch.NumTabsOnOpen',
     'Tabs.TabSearch.NumWindowsOnOpen',
@@ -22,7 +29,10 @@ TAB_SEARCH_BENCHMARK_UMA = [
     'Tabs.TabSearch.WebUI.InitialTabsRenderTime',
     'Tabs.TabSearch.WebUI.LoadCompletedTime',
     'Tabs.TabSearch.WebUI.LoadDocumentTime',
+    'Tabs.TabSearch.WebUI.SearchAlgorithmDuration',
     'Tabs.TabSearch.WebUI.TabListDataReceived',
+    'Tabs.TabSearch.WebUI.TabListDataReceived2',
+    'Tabs.TabSearch.WebUI.TabListDataReceived2.IsOverlap',
     'Tabs.TabSearch.WebUI.TabSwitchAction',
     'Tabs.TabSearch.WindowDisplayedDuration2',
     'Tabs.TabSearch.WindowTimeToShowCachedWebView',
@@ -51,7 +61,7 @@ class TabSearchStory(MultiTabStory):
                                     'tab_search:used_js_heap_size_end')
 
   def ToggleTabSearch(self, index=0):
-    ClickOn(self._devtools, 'TabSearchButton', index)
+    ClickOn(self._devtools, element_id=kTabSearchButtonElementId, index=index)
 
   def InteractWithPage(self, action_runner):
     self.ScrollTabs(action_runner)
@@ -239,6 +249,7 @@ class TabSearchStoryCleanSlate(TabSearchStory):
   URL_LIST = []
   URL = 'about:blank'
   WAIT_FOR_NETWORK_QUIESCENCE = False
+  TAGS = [story_tags.SMOKE_TEST]
 
   def InteractWithPage(self, action_runner):
     action_runner.Wait(1)

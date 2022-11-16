@@ -12,7 +12,7 @@
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/modules/background_fetch/background_fetch_bridge.h"
 #include "third_party/blink/renderer/modules/manifest/image_resource_type_converters.h"
-#include "third_party/blink/renderer/platform/heap/heap_allocator.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_request.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_impl.h"
@@ -23,7 +23,7 @@ namespace blink {
 
 namespace {
 
-constexpr base::TimeDelta kIconFetchTimeout = base::TimeDelta::FromSeconds(30);
+constexpr base::TimeDelta kIconFetchTimeout = base::Seconds(30);
 constexpr int kMinimumIconSizeInPx = 0;
 
 }  // namespace
@@ -76,6 +76,8 @@ void BackgroundFetchIconLoader::DidGetIconDisplaySizeIfSoLoadIcon(
   resource_request.SetPriority(ResourceLoadPriority::kMedium);
   resource_request.SetKeepalive(true);
   resource_request.SetMode(network::mojom::RequestMode::kNoCors);
+  resource_request.SetTargetAddressSpace(
+      network::mojom::IPAddressSpace::kUnknown);
   resource_request.SetCredentialsMode(
       network::mojom::CredentialsMode::kInclude);
   resource_request.SetSkipServiceWorker(true);

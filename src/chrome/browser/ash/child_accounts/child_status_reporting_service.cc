@@ -26,8 +26,7 @@ namespace ash {
 namespace {
 
 // Default frequency for uploading status reports.
-constexpr base::TimeDelta kStatusUploadFrequency =
-    base::TimeDelta::FromMinutes(10);
+constexpr base::TimeDelta kStatusUploadFrequency = base::Minutes(10);
 
 }  // namespace
 
@@ -66,7 +65,7 @@ ChildStatusReportingService::~ChildStatusReportingService() = default;
 
 void ChildStatusReportingService::CreateStatusUploaderIfNeeded(
     policy::CloudPolicyClient* client) {
-  const base::DictionaryValue* time_limit =
+  const base::Value* time_limit =
       pref_change_registrar_->prefs()->GetDictionary(prefs::kUsageTimeLimit);
   const base::TimeDelta new_day_reset_time =
       usage_time_limit::GetTimeUsageLimitResetTime(*time_limit);

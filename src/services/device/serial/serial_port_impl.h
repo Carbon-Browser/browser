@@ -5,7 +5,6 @@
 #ifndef SERVICES_DEVICE_SERIAL_SERIAL_PORT_IMPL_H_
 #define SERVICES_DEVICE_SERIAL_SERIAL_PORT_IMPL_H_
 
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -48,6 +47,9 @@ class SerialPortImpl : public mojom::SerialPort {
       mojo::PendingRemote<mojom::SerialPortConnectionWatcher> watcher,
       OpenCallback callback);
 
+  SerialPortImpl(const SerialPortImpl&) = delete;
+  SerialPortImpl& operator=(const SerialPortImpl&) = delete;
+
  private:
   SerialPortImpl(
       scoped_refptr<SerialIoHandler> io_handler,
@@ -66,7 +68,7 @@ class SerialPortImpl : public mojom::SerialPort {
   void ConfigurePort(mojom::SerialConnectionOptionsPtr options,
                      ConfigurePortCallback callback) override;
   void GetPortInfo(GetPortInfoCallback callback) override;
-  void Close(CloseCallback callback) override;
+  void Close(bool flush, CloseCallback callback) override;
 
   void OpenPort(const mojom::SerialConnectionOptions& options,
                 OpenCallback callback);
@@ -102,7 +104,6 @@ class SerialPortImpl : public mojom::SerialPort {
   DrainCallback drain_callback_;
 
   base::WeakPtrFactory<SerialPortImpl> weak_factory_{this};
-  DISALLOW_COPY_AND_ASSIGN(SerialPortImpl);
 };
 
 }  // namespace device

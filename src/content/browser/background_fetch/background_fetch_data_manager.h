@@ -15,7 +15,6 @@
 #include "base/callback_forward.h"
 #include "base/containers/queue.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
@@ -87,6 +86,10 @@ class CONTENT_EXPORT BackgroundFetchDataManager
       scoped_refptr<ServiceWorkerContextWrapper> service_worker_context,
       scoped_refptr<storage::QuotaManagerProxy> quota_manager_proxy);
 
+  BackgroundFetchDataManager(const BackgroundFetchDataManager&) = delete;
+  BackgroundFetchDataManager& operator=(const BackgroundFetchDataManager&) =
+      delete;
+
   ~BackgroundFetchDataManager() override;
 
   // Grabs a reference to CacheStorageManager.
@@ -98,7 +101,7 @@ class CONTENT_EXPORT BackgroundFetchDataManager
 
   // Gets the required data to initialize BackgroundFetchContext with the
   // appropriate JobControllers. This will be called when BackgroundFetchContext
-  // is being initialized on the service worker core thread.
+  // is being initialized.
   void GetInitializationData(GetInitializationDataCallback callback);
 
   // Creates and stores a new registration with the given properties. Will
@@ -110,6 +113,7 @@ class CONTENT_EXPORT BackgroundFetchDataManager
       blink::mojom::BackgroundFetchOptionsPtr options,
       const SkBitmap& icon,
       bool start_paused,
+      const net::IsolationInfo& isolation_info,
       CreateRegistrationCallback callback);
 
   // Get the BackgroundFetchRegistration.
@@ -200,8 +204,8 @@ class CONTENT_EXPORT BackgroundFetchDataManager
   ChromeBlobStorageContext* blob_storage_context() const {
     return blob_storage_context_.get();
   }
-  storage::QuotaManagerProxy* quota_manager_proxy() const {
-    return quota_manager_proxy_.get();
+  const scoped_refptr<storage::QuotaManagerProxy>& quota_manager_proxy() const {
+    return quota_manager_proxy_;
   }
 
   void AddDatabaseTask(std::unique_ptr<background_fetch::DatabaseTask> task);
@@ -273,8 +277,6 @@ class CONTENT_EXPORT BackgroundFetchDataManager
   SEQUENCE_CHECKER(sequence_checker_);
 
   base::WeakPtrFactory<BackgroundFetchDataManager> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(BackgroundFetchDataManager);
 };
 
 }  // namespace content

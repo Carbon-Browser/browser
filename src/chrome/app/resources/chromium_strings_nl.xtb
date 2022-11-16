@@ -1,300 +1,375 @@
 <?xml version="1.0" ?>
 <!DOCTYPE translationbundle>
 <translationbundle lang="nl">
+<translation id="1026101648481255140">Installatie hervatten</translation>
+<translation id="1029669172902658969">Opnieuw opstarten om &amp;Carbon Browser Browser OS te updaten</translation>
 <translation id="1065672644894730302">Je voorkeuren kunnen niet worden gelezen.
 
 Sommige functies zijn wellicht niet beschikbaar en wijzigingen in voorkeuren worden niet opgeslagen.</translation>
-<translation id="1098170124587656448">Carbon Browser Browser Browser Browser Browser Browser kan je beschermen tegen gegevenslekken, schadelijke extensies en meer</translation>
-<translation id="1104942323762546749">Carbon Browser Browser Browser Browser Browser Browser wil je wachtwoorden exporteren. Geef je Windows-wachtwoord op om dit toe te staan.</translation>
-<translation id="113122355610423240">Carbon Browser Browser Browser Browser Browser Browser is je standaardbrowser</translation>
-<translation id="1131805035311359397">Als je wilt checken of je wachtwoorden zijn beveiligd tegen gegevenslekken en andere beveiligingsproblemen, <ph name="BEGIN_LINK" />log je in bij Carbon Browser Browser Browser Browser Browser Browser<ph name="END_LINK" />.</translation>
-<translation id="1185134272377778587">Over Carbon Browser Browser Browser Browser Browser Browser</translation>
-<translation id="1315551408014407711">Je nieuwe Carbon Browser Browser Browser Browser Browser Browser-profiel instellen</translation>
-<translation id="1396446129537741364">Carbon Browser Browser Browser Browser Browser Browser probeert wachtwoorden te tonen.</translation>
-<translation id="1414495520565016063">Je bent ingelogd bij Carbon Browser Browser Browser Browser Browser Browser.</translation>
-<translation id="151962892725702025">Google Chrome OS kan je gegevens niet synchroniseren omdat synchronisatie niet beschikbaar is voor je domein.</translation>
-<translation id="1524282610922162960">Een Carbon Browser Browser Browser Browser Browser Browser-tabblad delen</translation>
-<translation id="1553461853655228091">Carbon Browser Browser Browser Browser Browser Browser heeft toegangsrechten voor de camera nodig om een 3D-kaart van je omgeving te maken</translation>
-<translation id="1607715478322902680">{COUNT,plural, =0{Je beheerder vereist dat je Carbon Browser Browser Browser Browser Browser Browser opnieuw start om een update uit te voeren.}=1{Je beheerder vereist dat je Carbon Browser Browser Browser Browser Browser Browser opnieuw start om een update uit te voeren. Je privatevenster kan niet opnieuw worden geopend.}other{Je beheerder vereist dat je Carbon Browser Browser Browser Browser Browser Browser opnieuw start om een update uit te voeren. Je # privatevensters kunnen niet opnieuw worden geopend.}}</translation>
-<translation id="1667812772085710766">Als je Carbon Browser Browser Browser Browser Browser Browser sluit, wist de browser automatisch cookies en sitegegevens van de pagina's die je hebt bezocht</translation>
-<translation id="1708666629004767631">Er is een nieuwe, veiligere versie van Carbon Browser Browser Browser Browser Browser Browser beschikbaar.</translation>
-<translation id="1774152462503052664">Carbon Browser Browser Browser Browser Browser Browser laten uitvoeren op de achtergrond</translation>
-<translation id="1779356040007214683">Om Carbon Browser Browser Browser Browser Browser Browser veiliger te maken, hebben we een aantal extensies uitgezet die niet worden vermeld in de <ph name="IDS_EXTENSION_WEB_STORE_TITLE" /> en mogelijk zonder je medeweten zijn geïnstalleerd.</translation>
-<translation id="1808667845054772817">Carbon Browser Browser Browser Browser Browser Browser opnieuw installeren</translation>
-<translation id="185970820835152459">Je kunt je ingelogde Google-accounts beheren. Je Google-accounts worden gebruikt voor onder andere de Carbon Browser Browser Browser Browser Browser Browser-browser, Play Store, en Gmail. Als je een account wilt toevoegen voor iemand anders, bijvoorbeeld een gezinslid, voeg je een nieuw persoon toe aan je <ph name="DEVICE_TYPE" />. <ph name="LINK_BEGIN" />Meer informatie<ph name="LINK_END" /></translation>
-<translation id="1881322772814446296">Je logt in op een beheerd account waarmee de eigenaar van dat account beheer krijgt over je Carbon Browser Browser Browser Browser Browser Browser-profiel. Je Carbon Browser Browser Browser Browser Browser Browser-gegevens zoals je apps, bookmarks, geschiedenis, wachtwoorden en andere instellingen worden permanent gekoppeld aan <ph name="USER_NAME" />. Je kunt deze gegevens verwijderen via het Google Accounts Dashboard, maar je kunt deze gegevens niet koppelen aan een ander account. Je kunt een nieuw profiel maken om je bestaande Carbon Browser Browser Browser Browser Browser Browser-gegevens apart te houden. <ph name="LEARN_MORE" /></translation>
-<translation id="1911763535808217981">Als je dit uitzet, kun je inloggen bij Google-sites zoals Gmail zonder in te loggen bij Carbon Browser Browser Browser Browser Browser Browser</translation>
-<translation id="1929939181775079593">Carbon Browser Browser Browser Browser Browser Browser reageert niet. Nu opnieuw starten?</translation>
-<translation id="1966382378801805537">Carbon Browser Browser Browser Browser Browser Browser kan de standaardbrowser niet bepalen of instellen</translation>
-<translation id="1981611865800294956">Opnieuw opstarten om &amp;Carbon Browser Browser Browser Browser Browser Browser OS te updaten</translation>
-<translation id="2008474315282236005">Hiermee wordt 1 item verwijderd van dit apparaat. Als je je gegevens later wilt terughalen, log je in bij Carbon Browser Browser Browser Browser Browser Browser als <ph name="USER_EMAIL" />.</translation>
-<translation id="2020032459870799438">Als je wilt checken of je andere wachtwoorden zijn beveiligd tegen gegevenslekken en andere beveiligingsproblemen, <ph name="BEGIN_LINK" />log je in bij Carbon Browser Browser Browser Browser Browser Browser<ph name="END_LINK" />.</translation>
-<translation id="2174178932569897599">Carbon Browser Browser Browser Browser Browser Browser aanpassen</translation>
-<translation id="2185166961232948079">Carbon Browser Browser Browser Browser Browser Browser - Inloggen bij netwerk - <ph name="PAGE_TITLE" /></translation>
-<translation id="2241627712206172106">Als je een computer deelt, kunnen vrienden en familie afzonderlijk surfen en Carbon Browser Browser Browser Browser Browser Browser configureren zoals zij dat willen.</translation>
-<translation id="2294245788148774212">Optioneel: Help de functies en prestaties van Google Chrome OS te verbeteren door automatisch diagnostische en gebruiksgegevens naar Google te sturen.</translation>
-<translation id="2343156876103232566">Als je een nummer hier vandaan naar je Android-telefoon wilt sturen, log je in bij Carbon Browser Browser Browser Browser Browser Browser op beide apparaten.</translation>
-<translation id="2347108572062610441">Deze extensie heeft gewijzigd welke pagina wordt getoond wanneer je Carbon Browser Browser Browser Browser Browser Browser start.</translation>
-<translation id="2396765026452590966">De extensie <ph name="EXTENSION_NAME" /> heeft gewijzigd welke pagina je ziet als je Carbon Browser Browser Browser Browser Browser Browser start.</translation>
-<translation id="2401032172288869980">Carbon Browser Browser Browser Browser Browser Browser heeft camera- en microfoonrechten nodig voor deze site</translation>
-<translation id="2483889755041906834">In Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="1098170124587656448">Carbon Browser Browser kan je beschermen tegen gegevenslekken, schadelijke extensies en meer</translation>
+<translation id="1104942323762546749">Carbon Browser Browser wil je wachtwoorden exporteren. Geef je Windows-wachtwoord op om dit toe te staan.</translation>
+<translation id="113122355610423240">Carbon Browser Browser is je standaardbrowser</translation>
+<translation id="1131805035311359397">Als je wilt checken of je wachtwoorden zijn beveiligd tegen gegevenslekken en andere beveiligingsproblemen, <ph name="BEGIN_LINK" />log je in bij Carbon Browser Browser<ph name="END_LINK" />.</translation>
+<translation id="1185134272377778587">Over Carbon Browser Browser</translation>
+<translation id="1203500561924088507">Bedankt voor het installeren. Je moet de browser opnieuw opstarten voordat je <ph name="BUNDLE_NAME" /> kunt gebruiken.</translation>
+<translation id="1315551408014407711">Je nieuwe Carbon Browser Browser-profiel instellen</translation>
+<translation id="1385859895174722837">De Google Assistent in Carbon Browser Browser</translation>
+<translation id="1396446129537741364">Carbon Browser Browser probeert wachtwoorden te bekijken.</translation>
+<translation id="1414495520565016063">Je bent ingelogd bij Carbon Browser Browser.</translation>
+<translation id="1524282610922162960">Een Carbon Browser Browser-tabblad delen</translation>
+<translation id="1553461853655228091">Carbon Browser Browser heeft toegangsrechten voor de camera nodig om een 3D-kaart van je omgeving te maken</translation>
+<translation id="1607715478322902680">{COUNT,plural, =0{Je beheerder vereist dat je Carbon Browser Browser opnieuw start om een update uit te voeren.}=1{Je beheerder vereist dat je Carbon Browser Browser opnieuw start om een update uit te voeren. Je privatevenster kan niet opnieuw worden geopend.}other{Je beheerder vereist dat je Carbon Browser Browser opnieuw start om een update uit te voeren. Je # privatevensters kunnen niet opnieuw worden geopend.}}</translation>
+<translation id="1625909126243026060">Neem belangrijke privacy- en beveiligingsopties in Carbon Browser Browser door</translation>
+<translation id="1632539827495546968">Als je dit account maar één keer wilt gebruiken, kun je de <ph name="GUEST_LINK_BEGIN" />gastmodus<ph name="GUEST_LINK_END" /> gebruiken in de Carbon Browser Browser-browser. Als je een account voor iemand anders wilt toevoegen, kun je <ph name="LINK_BEGIN" />een nieuwe persoon toevoegen<ph name="LINK_END" /> aan je <ph name="DEVICE_TYPE" />.
+
+Rechten die je al hebt gegeven aan websites en apps, kunnen van toepassing zijn op dit account. Je kunt je Google-accounts beheren via <ph name="SETTINGS_LINK_BEGIN" />Instellingen<ph name="SETTINGS_LINK_END" />.</translation>
+<translation id="1640672724030957280">Bezig met downloaden...</translation>
+<translation id="1708666629004767631">Er is een nieuwe, veiligere versie van Carbon Browser Browser beschikbaar.</translation>
+<translation id="17264556997921157">Je kunt interessante onderwerpen bekijken en verwijderen die sites hebben gebruikt om je advertenties te laten zien. Carbon Browser Browser schat je interesses op basis van je recente browsegeschiedenis</translation>
+<translation id="1774152462503052664">Carbon Browser Browser laten uitvoeren op de achtergrond</translation>
+<translation id="1779356040007214683">Om Carbon Browser Browser veiliger te maken, hebben we een aantal extensies uitgezet die niet worden vermeld in de <ph name="IDS_EXTENSION_WEB_STORE_TITLE" /> en mogelijk zonder je medeweten zijn geïnstalleerd.</translation>
+<translation id="1808667845054772817">Carbon Browser Browser opnieuw installeren</translation>
+<translation id="185970820835152459">Je kunt je ingelogde Google-accounts beheren. Je Google-accounts worden gebruikt voor onder andere de Carbon Browser Browser-browser, Play Store, en Gmail. Als je een account wilt toevoegen voor iemand anders, bijvoorbeeld een gezinslid, voeg je een nieuw persoon toe aan je <ph name="DEVICE_TYPE" />. <ph name="LINK_BEGIN" />Meer informatie<ph name="LINK_END" /></translation>
+<translation id="1863308913976887472">Sites kunnen informatie over je interesses in Carbon Browser Browser opslaan. Als je bijvoorbeeld een site bezoekt om schoenen voor een marathon te kopen, kan de site je interesse definiëren als 'deelname aan marathons'. Als je later een andere site bezoekt om je aan te melden voor een race, kan die site je een advertentie voor hardloopschoenen laten zien op basis van je interesses.</translation>
+<translation id="1881322772814446296">Je logt in op een beheerd account waarmee de eigenaar van dat account beheer krijgt over je Carbon Browser Browser-profiel. Je Carbon Browser Browser-gegevens zoals je apps, bookmarks, geschiedenis, wachtwoorden en andere instellingen worden permanent gekoppeld aan <ph name="USER_NAME" />. Je kunt deze gegevens verwijderen via het Google Accounts Dashboard, maar je kunt deze gegevens niet koppelen aan een ander account. Je kunt een nieuw profiel maken om je bestaande Carbon Browser Browser-gegevens apart te houden. <ph name="LEARN_MORE" /></translation>
+<translation id="1911763535808217981">Als je dit uitzet, kun je inloggen bij Google-sites zoals Gmail zonder in te loggen bij Carbon Browser Browser</translation>
+<translation id="1929939181775079593">Carbon Browser Browser reageert niet. Nu opnieuw starten?</translation>
+<translation id="193439633299369377">Carbon Browser Browser OS moet opnieuw worden gestart om de update uit te voeren.</translation>
+<translation id="1940680973325097484">Als je dit account maar één keer wilt gebruiken, kun je de gastmodus gebruiken in de Carbon Browser Browser-browser. Als je een account voor iemand anders wilt toevoegen, kun je <ph name="LINK_BEGIN" />een nieuwe persoon toevoegen<ph name="LINK_END" /> aan je <ph name="DEVICE_TYPE" />.
+
+Rechten die je al hebt gegeven aan websites en apps, kunnen van toepassing zijn op dit account. Je kunt je Google-accounts beheren via <ph name="SETTINGS_LINK_BEGIN" />Instellingen<ph name="SETTINGS_LINK_END" />.</translation>
+<translation id="1953553007165777902">Downloaden... Nog <ph name="MINUTE" /> minuten</translation>
+<translation id="1966382378801805537">Carbon Browser Browser kan de standaardbrowser niet bepalen of instellen</translation>
+<translation id="2008474315282236005">Hiermee wordt 1 item verwijderd van dit apparaat. Als je je gegevens later wilt terughalen, log je in bij Carbon Browser Browser als <ph name="USER_EMAIL" />.</translation>
+<translation id="2018879682492276940">Installatie mislukt. Probeer het opnieuw.</translation>
+<translation id="2020032459870799438">Als je wilt checken of je andere wachtwoorden zijn beveiligd tegen gegevenslekken en andere beveiligingsproblemen, <ph name="BEGIN_LINK" />log je in bij Carbon Browser Browser<ph name="END_LINK" />.</translation>
+<translation id="2049376729098081731">Kies of je de Carbon Browser Browser-geschiedenis wilt opnemen voor meer gepersonaliseerde functies in Google-services</translation>
+<translation id="2088953378266246249">Informatie over hoe Carbon Browser Browser rootcertificaten beheert</translation>
+<translation id="2174178932569897599">Carbon Browser Browser aanpassen</translation>
+<translation id="2174917724755363426">Installatie niet afgerond. Weet je zeker dat je wilt annuleren?</translation>
+<translation id="2185166961232948079">Carbon Browser Browser - Inloggen bij netwerk - <ph name="PAGE_TITLE" /></translation>
+<translation id="2241627712206172106">Als je een computer deelt, kunnen vrienden en familie afzonderlijk surfen en Carbon Browser Browser configureren zoals zij dat willen.</translation>
+<translation id="2313870531055795960">Checkt URL's aan de hand van een lijst met onveilige sites die is opgeslagen in Carbon Browser Browser. Als een site je wachtwoord probeert te stelen of als je een schadelijk bestand downloadt, kan Carbon Browser Browser ook URL's, inclusief delen van de paginacontent, naar Safe Browsing sturen.</translation>
+<translation id="2343156876103232566">Als je een nummer hier vandaan naar je Android-telefoon wilt sturen, log je in bij Carbon Browser Browser op beide apparaten.</translation>
+<translation id="2347108572062610441">Deze extensie heeft gewijzigd welke pagina wordt getoond wanneer je Carbon Browser Browser start.</translation>
+<translation id="2359808026110333948">Doorgaan</translation>
+<translation id="2384373936468275798">Carbon Browser Browser OS kan je gegevens niet synchroniseren, omdat de inloggegevens voor je account zijn verouderd.</translation>
+<translation id="2396765026452590966">De extensie <ph name="EXTENSION_NAME" /> heeft gewijzigd welke pagina je ziet als je Carbon Browser Browser start.</translation>
+<translation id="2401032172288869980">Carbon Browser Browser heeft camera- en microfoonrechten nodig voor deze site</translation>
+<translation id="2483889755041906834">In Carbon Browser Browser</translation>
 <translation id="2485422356828889247">Installatie ongedaan maken</translation>
-<translation id="2535480412977113886">Google Chrome OS kan je gegevens niet synchroniseren omdat de inloggegevens voor je account zijn verouderd.</translation>
-<translation id="2560420686485554789">Carbon Browser Browser Browser Browser Browser Browser heeft toegang tot de opslag nodig om bestanden te downloaden</translation>
-<translation id="2572494885440352020">Carbon Browser Browser Browser Browser Browser Browser Helper</translation>
-<translation id="2577788541081224677">Als je toegang tot je Carbon Browser Browser Browser Browser Browser Browser-gegevens wilt, log je in zodat je synchronisatie kunt aanzetten.</translation>
-<translation id="2580426763510374355">Carbon Browser Browser Browser Browser Browser Browser OS installeren</translation>
-<translation id="2583187216237139145">Alle Carbon Browser Browser Browser Browser Browser Browser-gegevens die worden gegenereerd bij het gebruik van dit profiel (zoals bookmarks, geschiedenis, wachtwoorden en andere instellingen) kunnen worden verwijderd door de beheerder van het werkprofiel. <ph name="LEARN_MORE" /></translation>
-<translation id="2587578672395088481">Google Chrome OS moet opnieuw worden gestart om de update uit te voeren.</translation>
-<translation id="2648074677641340862">Er is tijdens de installatie een fout opgetreden in het besturingssysteem. Download Carbon Browser Browser Browser Browser Browser Browser opnieuw.</translation>
-<translation id="2661879430930417727">Als je een apparaat deelt, kunnen vrienden en familie afzonderlijk surfen en Carbon Browser Browser Browser Browser Browser Browser instellen zoals zij dat willen.</translation>
-<translation id="2711502716910134313">Carbon Browser Browser Browser Browser Browser Browser-tabblad</translation>
-<translation id="2718390899429598676">Je gegevens worden voor extra beveiliging door Carbon Browser Browser Browser Browser Browser Browser gecodeerd.</translation>
+<translation id="2560420686485554789">Carbon Browser Browser heeft toegang tot de opslag nodig om bestanden te downloaden</translation>
+<translation id="2572494885440352020">Carbon Browser Browser Helper</translation>
+<translation id="2583187216237139145">Alle Carbon Browser Browser-gegevens die worden gegenereerd bij het gebruik van dit profiel (zoals bookmarks, geschiedenis, wachtwoorden en andere instellingen) kunnen worden verwijderd door de beheerder van het werkprofiel. <ph name="LEARN_MORE" /></translation>
+<translation id="2648074677641340862">Er is tijdens de installatie een fout opgetreden in het besturingssysteem. Download Carbon Browser Browser opnieuw.</translation>
+<translation id="2661879430930417727">Als je een apparaat deelt, kunnen vrienden en familie afzonderlijk surfen en Carbon Browser Browser instellen zoals zij dat willen.</translation>
+<translation id="268602741124540128">Welkom bij Carbon Browser Browser, <ph name="ACCOUNT_FIRST_NAME" /></translation>
+<translation id="2711502716910134313">Carbon Browser Browser-tabblad</translation>
+<translation id="2718390899429598676">Je gegevens worden voor extra beveiliging door Carbon Browser Browser gecodeerd.</translation>
 <translation id="2770231113462710648">Standaardbrowser wijzigen in:</translation>
 <translation id="2799223571221894425">Opnieuw starten</translation>
-<translation id="2837693172913560447">Hiermee maak je een nieuw Carbon Browser Browser Browser Browser Browser Browser-profiel voor <ph name="USER_EMAIL_ADDRESS" />.</translation>
-<translation id="2847479871509788944">Verwijderen uit Carbon Browser Browser Browser Browser Browser Browser…</translation>
+<translation id="2837693172913560447">Hiermee maak je een nieuw Carbon Browser Browser-profiel voor <ph name="USER_EMAIL_ADDRESS" />.</translation>
+<translation id="2847479871509788944">Verwijderen uit Carbon Browser Browser…</translation>
+<translation id="2850691299438350830">Beschermt je op Carbon Browser Browser en kan worden gebruikt om de beveiliging in andere Google-apps te verbeteren als je bent ingelogd.</translation>
 <translation id="2885378588091291677">Taakbeheer</translation>
-<translation id="2910007522516064972">Over &amp;Carbon Browser Browser Browser Browser Browser Browser</translation>
-<translation id="2944515913673001130"><ph name="BEGIN_PARAGRAPH1" />Een laatste herinnering: tijdens de installatie <ph name="BEGIN_BOLD" />wordt de hele harde schijf gewist<ph name="END_BOLD" />. Zorg dat je een back-up hebt gemaakt van belangrijke gegevens.<ph name="END_PARAGRAPH1" />
-          <ph name="BEGIN_PARAGRAPH2" />Nadat de installatie is gestart, kun je deze niet meer annuleren.<ph name="END_PARAGRAPH2" /></translation>
-<translation id="2977470724722393594">Carbon Browser Browser Browser Browser Browser Browser is up-to-date</translation>
-<translation id="2983934633046890458">Carbon Browser Browser Browser Browser Browser Browser probeert wachtwoorden te bewerken.</translation>
-<translation id="3032706164202344641">Carbon Browser Browser Browser Browser Browser Browser kan je wachtwoorden niet checken. Probeer het later opnieuw.</translation>
-<translation id="3032787606318309379">Toevoegen aan Carbon Browser Browser Browser Browser Browser Browser...</translation>
-<translation id="3068515742935458733">Help ons Carbon Browser Browser Browser Browser Browser Browser te verbeteren door crashrapporten en <ph name="UMA_LINK" /> naar Google te verzenden</translation>
-<translation id="3103660991484857065">Het installatieprogramma kan het archief niet uitpakken. Download Carbon Browser Browser Browser Browser Browser Browser opnieuw.</translation>
-<translation id="3130323860337406239">Carbon Browser Browser Browser Browser Browser Browser gebruikt je microfoon.</translation>
-<translation id="3155163173539279776">Carbon Browser Browser Browser Browser Browser Browser opnieuw starten</translation>
-<translation id="3179665906251668410">Link openen in een Carbon Browser Browser Browser Browser Browser Browser-inco&amp;gnitovenster</translation>
-<translation id="3185330573522821672">Je nieuwe Carbon Browser Browser Browser Browser Browser Browser-profiel aanpassen</translation>
-<translation id="3190315855212034486">Carbon Browser Browser Browser Browser Browser Browser is gecrasht. Nu opnieuw starten?</translation>
-<translation id="3229526316128325841">Carbon Browser Browser Browser Browser Browser Browser wil je wachtwoorden exporteren.</translation>
-<translation id="3258596308407688501">Carbon Browser Browser Browser Browser Browser Browser kan niet lezen van en schrijven naar de eigen gegevensdirectory :
+<translation id="2910007522516064972">Over &amp;Carbon Browser Browser</translation>
+<translation id="2915996080311180594">Later opnieuw opstarten</translation>
+<translation id="2928420929544864228">Installatie afgerond.</translation>
+<translation id="2977470724722393594">Carbon Browser Browser is up-to-date</translation>
+<translation id="2977506796191543575">Als een site je wachtwoord probeert te stelen of als je een schadelijk bestand downloadt, kan Carbon Browser Browser ook URL's, inclusief delen van de paginacontent, naar Safe Browsing sturen</translation>
+<translation id="2983934633046890458">Carbon Browser Browser probeert wachtwoorden te bewerken.</translation>
+<translation id="3032706164202344641">Carbon Browser Browser kan je wachtwoorden niet checken. Probeer het later opnieuw.</translation>
+<translation id="3032787606318309379">Toevoegen aan Carbon Browser Browser...</translation>
+<translation id="3038232873781883849">Wachten op installatie...</translation>
+<translation id="3068515742935458733">Help ons Carbon Browser Browser te verbeteren door crashrapporten en <ph name="UMA_LINK" /> naar Google te verzenden</translation>
+<translation id="3101560983689755071">Je browsegeschiedenis heeft invloed op de advertenties die je ziet en je interesses. Hieronder staat een schatting. Ter bescherming van je privacy verwijdert Carbon Browser Browser je interesses automatisch elke maand op voortschrijdende basis. Interesses kunnen worden vernieuwd, tenzij je ze verwijdert.</translation>
+<translation id="3103660991484857065">Het installatieprogramma kan het archief niet uitpakken. Download Carbon Browser Browser opnieuw.</translation>
+<translation id="3130323860337406239">Carbon Browser Browser gebruikt je microfoon.</translation>
+<translation id="3155163173539279776">Carbon Browser Browser opnieuw starten</translation>
+<translation id="3179665906251668410">Link openen in een Carbon Browser Browser-inco&amp;gnitovenster</translation>
+<translation id="3185330573522821672">Je nieuwe Carbon Browser Browser-profiel aanpassen</translation>
+<translation id="3190315855212034486">Carbon Browser Browser is gecrasht. Nu opnieuw starten?</translation>
+<translation id="3229526316128325841">Carbon Browser Browser wil je wachtwoorden exporteren.</translation>
+<translation id="3258596308407688501">Carbon Browser Browser kan niet lezen van en schrijven naar de eigen gegevensdirectory :
 
 <ph name="USER_DATA_DIRECTORY" /></translation>
-<translation id="3283186697780795848">Carbon Browser Browser Browser Browser Browser Browser-versie <ph name="PRODUCT_VERSION" /> is geïnstalleerd</translation>
-<translation id="328888136576916638">Google API-sleutels ontbreken. Sommige functies van Carbon Browser Browser Browser Browser Browser Browser worden uitgezet.</translation>
-<translation id="3296368748942286671">Achtergrondapps actief houden als Carbon Browser Browser Browser Browser Browser Browser is gesloten</translation>
-<translation id="331951419404882060">Google Chrome OS kan je gegevens niet synchroniseren door een fout tijdens het inloggen.</translation>
-<translation id="3349211344363550267">Carbon Browser Browser Browser Browser Browser Browser raadt je aan dit bestand niet te downloaden of te openen</translation>
-<translation id="3350761136195634146">Er bestaat al een Carbon Browser Browser Browser Browser Browser Browser-profiel voor dit account</translation>
-<translation id="3406848076815591792">Overschakelen naar bestaand Carbon Browser Browser Browser Browser Browser Browser-profiel?</translation>
-<translation id="3430503420100763906">Met Carbon Browser Browser Browser Browser Browser Browser-profielen kun je alle Carbon Browser Browser Browser Browser Browser Browser-gegevens gescheiden houden. Maak profielen voor vrienden en familie of maak onderscheid tussen werk en privé.</translation>
-<translation id="3433271666494956603">Carbon Browser Browser Browser Browser Browser Browser OS wordt geïnstalleerd</translation>
-<translation id="347328004046849135">Carbon Browser Browser Browser Browser Browser Browser laat het je weten als je inlogt met een gehackt wachtwoord</translation>
-<translation id="3474745554856756813">Hiermee worden <ph name="ITEMS_COUNT" /> items verwijderd van dit apparaat. Als je je gegevens later wilt terughalen, log je in bij Carbon Browser Browser Browser Browser Browser Browser als <ph name="USER_EMAIL" />.</translation>
-<translation id="3497319089134299931"><ph name="SHORTCUT" /> kan schakelen tussen Carbon Browser Browser Browser Browser Browser Browser-profielen</translation>
-<translation id="3509308970982693815">Sluit alle Carbon Browser Browser Browser Browser Browser Browser-vensters en probeer het opnieuw.</translation>
-<translation id="3575459661164320785">Je hebt schadelijke software op je computer. Carbon Browser Browser Browser Browser Browser Browser kan deze verwijderen, je instellingen herstellen en extensies uitzetten, zodat je browser weer normaal werkt.</translation>
-<translation id="3639635944603682591">De browsegegevens van deze persoon worden verwijderd van dit apparaat. Als je de gegevens wilt herstellen, log je in bij Carbon Browser Browser Browser Browser Browser Browser als <ph name="USER_EMAIL" />.</translation>
-<translation id="364817392622123556">{COUNT,plural, =0{Er is een nieuwe update voor Carbon Browser Browser Browser Browser Browser Browser beschikbaar die wordt uitgevoerd zodra je het programma opnieuw start.}=1{Er is een nieuwe update voor Carbon Browser Browser Browser Browser Browser Browser beschikbaar die wordt uitgevoerd zodra je het programma opnieuw start. Je privatevenster kan niet opnieuw worden geopend.}other{Er is een nieuwe update voor Carbon Browser Browser Browser Browser Browser Browser beschikbaar die wordt uitgevoerd zodra je het programma opnieuw start. Je # privatevensters kunnen niet opnieuw worden geopend.}}</translation>
-<translation id="3651803019964686660">Als je een nummer vanaf <ph name="ORIGIN" /> naar je Android-telefoon wilt sturen, log je in bij Carbon Browser Browser Browser Browser Browser Browser op beide apparaten.</translation>
-<translation id="3685209450716071127">Carbon Browser Browser Browser Browser Browser Browser kan je wachtwoorden niet checken. Check de internetverbinding.</translation>
-<translation id="370962675267501463">{COUNT,plural, =0{Je beheerder vraagt je Carbon Browser Browser Browser Browser Browser Browser opnieuw te starten om deze update uit te voeren.}=1{Je beheerder vraagt je Carbon Browser Browser Browser Browser Browser Browser opnieuw te starten om deze update uit te voeren. Je privatevenster kan niet opnieuw worden geopend.}other{Je beheerder vraagt je Carbon Browser Browser Browser Browser Browser Browser opnieuw te starten om deze update uit te voeren. Je # privatevensters kunnen niet opnieuw worden geopend.}}</translation>
-<translation id="3713809861844741608">Link openen op een nieuw Carbon Browser Browser Browser Browser Browser Browser-&amp;tabblad</translation>
-<translation id="3728336900324680424">Carbon Browser Browser Browser Browser Browser Browser gebruikt de toegang tot je Drive om suggesties te doen in de adresbalk</translation>
-<translation id="378917192836375108">Met Carbon Browser Browser Browser Browser Browser Browser kun je klikken op een telefoonnummer op internet om dit via Skype te bellen!</translation>
-<translation id="3848258323044014972"><ph name="PAGE_TITLE" /> - Carbon Browser Browser Browser Browser Browser Browser</translation>
-<translation id="388648406173476553">Pas Carbon Browser Browser Browser Browser Browser Browser aan en beheer de instellingen. Je aandacht is vereist. Klik voor meer informatie.</translation>
-<translation id="3889543394854987837">Klik op je naam om Carbon Browser Browser Browser Browser Browser Browser te openen en begin met surfen.</translation>
-<translation id="390528597099634151"><ph name="EXISTING_USER" /> is al ingelogd bij dit Carbon Browser Browser Browser Browser Browser Browser-profiel. Als je je browsegegevens gescheiden wilt houden, kan Carbon Browser Browser Browser Browser Browser Browser een eigen profiel voor je maken.</translation>
-<translation id="3945058413678539331">Carbon Browser Browser Browser Browser Browser Browser probeert wachtwoorden te kopiëren. Geef je Windows-wachtwoord op om dit toe te staan.</translation>
-<translation id="4036079820698952681">Help Carbon Browser Browser Browser Browser Browser Browser beter te maken door de <ph name="BEGIN_LINK" />huidige instellingen<ph name="END_LINK" /> te melden</translation>
+<translation id="3283186697780795848">Carbon Browser Browser-versie <ph name="PRODUCT_VERSION" /> is geïnstalleerd</translation>
+<translation id="3286538390144397061">Nu herstarten</translation>
+<translation id="328888136576916638">Google API-sleutels ontbreken. Sommige functies van Carbon Browser Browser worden uitgezet.</translation>
+<translation id="3296368748942286671">Achtergrondapps actief houden als Carbon Browser Browser is gesloten</translation>
+<translation id="3350761136195634146">Er bestaat al een Carbon Browser Browser-profiel voor dit account</translation>
+<translation id="3387527074123400161">Carbon Browser Browser OS</translation>
+<translation id="3406848076815591792">Overschakelen naar bestaand Carbon Browser Browser-profiel?</translation>
+<translation id="3412460710772753638">In Wachtwoordmanager op dit apparaat</translation>
+<translation id="3430503420100763906">Met Carbon Browser Browser-profielen kun je alle Carbon Browser Browser-gegevens gescheiden houden. Maak profielen voor vrienden en familie of maak onderscheid tussen werk en privé.</translation>
+<translation id="347328004046849135">Carbon Browser Browser laat het je weten als je inlogt met een gehackt wachtwoord</translation>
+<translation id="3474745554856756813">Hiermee worden <ph name="ITEMS_COUNT" /> items verwijderd van dit apparaat. Als je je gegevens later wilt terughalen, log je in bij Carbon Browser Browser als <ph name="USER_EMAIL" />.</translation>
+<translation id="3497319089134299931"><ph name="SHORTCUT" /> kan schakelen tussen Carbon Browser Browser-profielen</translation>
+<translation id="3509308970982693815">Sluit alle Carbon Browser Browser-vensters en probeer het opnieuw.</translation>
+<translation id="3518180795744733843">De Google Assistent in Carbon Browser Browser kan acties voor je voltooien op websites</translation>
+<translation id="3533435340678213462">Ter bescherming van je privacy verwijderen we automatisch interesses die ouder zijn dan 4 weken. Het kan gebeuren dat een interesse weer in de lijst komt te staan als je blijft browsen. Je kunt ook interesses verwijderen waarvan je niet wilt dat Carbon Browser Browser deze overweegt.</translation>
+<translation id="3567254597502212821">Je browsegeschiedenis, een lijst van de sites die je via Carbon Browser Browser op dit apparaat hebt bezocht.</translation>
+<translation id="3575459661164320785">Je hebt schadelijke software op je computer. Carbon Browser Browser kan deze verwijderen, je instellingen herstellen en extensies uitzetten, zodat je browser weer normaal werkt.</translation>
+<translation id="3593091352817399191">Er is al een ander account ingelogd. Als je je browsegegevens gescheiden wilt houden, kan Carbon Browser Browser een eigen profiel voor je maken.</translation>
+<translation id="3639635944603682591">De browsegegevens van deze persoon worden verwijderd van dit apparaat. Als je de gegevens wilt herstellen, log je in bij Carbon Browser Browser als <ph name="USER_EMAIL" />.</translation>
+<translation id="364817392622123556">{COUNT,plural, =0{Er is een nieuwe update voor Carbon Browser Browser beschikbaar die wordt uitgevoerd zodra je het programma opnieuw start.}=1{Er is een nieuwe update voor Carbon Browser Browser beschikbaar die wordt uitgevoerd zodra je het programma opnieuw start. Je privatevenster kan niet opnieuw worden geopend.}other{Er is een nieuwe update voor Carbon Browser Browser beschikbaar die wordt uitgevoerd zodra je het programma opnieuw start. Je # privatevensters kunnen niet opnieuw worden geopend.}}</translation>
+<translation id="3651803019964686660">Als je een nummer vanaf <ph name="ORIGIN" /> naar je Android-telefoon wilt sturen, log je in bij Carbon Browser Browser op beide apparaten.</translation>
+<translation id="3685209450716071127">Carbon Browser Browser kan je wachtwoorden niet checken. Check de internetverbinding.</translation>
+<translation id="3702352323269013324">Meer informatie over advertentiepersonalisatie in Carbon Browser Browser</translation>
+<translation id="370962675267501463">{COUNT,plural, =0{Je beheerder vraagt je Carbon Browser Browser opnieuw te starten om deze update uit te voeren.}=1{Je beheerder vraagt je Carbon Browser Browser opnieuw te starten om deze update uit te voeren. Je privatevenster kan niet opnieuw worden geopend.}other{Je beheerder vraagt je Carbon Browser Browser opnieuw te starten om deze update uit te voeren. Je # privatevensters kunnen niet opnieuw worden geopend.}}</translation>
+<translation id="3713809861844741608">Link openen op een nieuw Carbon Browser Browser-&amp;tabblad</translation>
+<translation id="3728336900324680424">Carbon Browser Browser gebruikt de toegang tot je Drive om suggesties te doen in de adresbalk</translation>
+<translation id="378917192836375108">Met Carbon Browser Browser kun je klikken op een telefoonnummer op internet om dit via Skype te bellen!</translation>
+<translation id="3830894615770080216">Carbon Browser Browser OS-systeem</translation>
+<translation id="3848258323044014972"><ph name="PAGE_TITLE" /> - Carbon Browser Browser</translation>
+<translation id="386822487697155367">Hulp bij Carbon Browser Browser OS</translation>
+<translation id="3871664619793219264">Haal je Carbon Browser Browser-browsergegevens op via <ph name="ACCOUNT_EMAIL" /></translation>
+<translation id="388648406173476553">Pas Carbon Browser Browser aan en beheer de instellingen. Je aandacht is vereist. Klik voor meer informatie.</translation>
+<translation id="3889543394854987837">Klik op je naam om Carbon Browser Browser te openen en begin met surfen.</translation>
+<translation id="390528597099634151"><ph name="EXISTING_USER" /> is al ingelogd bij dit Carbon Browser Browser-profiel. Als je je browsegegevens gescheiden wilt houden, kan Carbon Browser Browser een eigen profiel voor je maken.</translation>
+<translation id="391789666908693569">Je account wordt beheerd door <ph name="MANAGER_NAME" />. Je beheerder kan dit Carbon Browser Browser-browserprofiel en de bijbehorende gegevens (zoals bookmarks, geschiedenis en wachtwoorden) bekijken en bewerken.</translation>
+<translation id="3945058413678539331">Carbon Browser Browser probeert wachtwoorden te kopiëren. Geef je Windows-wachtwoord op om dit toe te staan.</translation>
+<translation id="3962623956404948996">Carbon Browser Browser raadt aan dit bestand te scannen omdat het misschien gevaarlijk is</translation>
+<translation id="3997429360543082038">Over Carbon Browser Browser OS</translation>
+<translation id="4019629340646866719">Carbon Browser Browser OS wordt mogelijk gemaakt door aanvullende <ph name="BEGIN_LINK_CROS_OSS" />opensource-software<ph name="END_LINK_CROS_OSS" />, net als de <ph name="BEGIN_LINK_LINUX_OSS" />Linux-ontwikkelomgeving<ph name="END_LINK_LINUX_OSS" />.</translation>
+<translation id="4036079820698952681">Help Carbon Browser Browser beter te maken door de <ph name="BEGIN_LINK" />huidige instellingen<ph name="END_LINK" /> te melden</translation>
 <translation id="4050175100176540509">Er zijn belangrijke beveiligingsverbeteringen en nieuwe functies beschikbaar in de nieuwste versie.</translation>
-<translation id="419998258129752635"><ph name="PAGE_TITLE" /> - Inloggen bij netwerk - Carbon Browser Browser Browser Browser Browser Browser</translation>
-<translation id="421369550622382712">Ontdek fantastische apps, games, extensies en thema's voor Carbon Browser Browser Browser Browser Browser Browser.</translation>
-<translation id="4216212958613226427">Deze taal wordt gebruikt om de Carbon Browser Browser Browser Browser Browser Browser-UI weer te geven</translation>
-<translation id="4230135487732243613">Wil je je Carbon Browser Browser Browser Browser Browser Browser-gegevens aan dit account koppelen?</translation>
-<translation id="4264410486868823224"><ph name="MANAGER" /> vereist dat je de volgende Servicevoorwaarden leest en accepteert voordat je dit apparaat gebruikt. Deze voorwaarden zijn geen uitbreiding, aanpassing of beperking van de Voorwaarden van Carbon Browser Browser Browser Browser Browser Browser OS.</translation>
-<translation id="4271805377592243930">Hulp bij Carbon Browser Browser Browser Browser Browser Browser</translation>
-<translation id="4285930937574705105">De installatie is mislukt wegens een onbekende fout. Als Carbon Browser Browser Browser Browser Browser Browser momenteel actief is, moet je Carbon Browser Browser Browser Browser Browser Browser sluiten en het opnieuw proberen.</translation>
-<translation id="429583012151745428">De installatie wordt uitgevoerd. Zet het apparaat niet uit. De installatie duurt niet langer dan 20 minuten. De machine gaat automatisch uit na de installatie.</translation>
-<translation id="4407044323746248786">Carbon Browser Browser Browser Browser Browser Browser toch sluiten?</translation>
-<translation id="4415566066719264597">Carbon Browser Browser Browser Browser Browser Browser laten uitvoeren op de achtergrond</translation>
-<translation id="4423735387467980091">Carbon Browser Browser Browser Browser Browser Browser aanpassen en beheren</translation>
-<translation id="452711251841752011">Welkom bij Carbon Browser Browser Browser Browser Browser Browser, nieuw browservenster geopend</translation>
-<translation id="4544142686420020088">Carbon Browser Browser Browser Browser Browser Browser is niet geüpdatet. Er is een fout opgetreden. <ph name="BEGIN_LINK" />Updateproblemen en mislukte updates voor Carbon Browser Browser Browser Browser Browser Browser verhelpen<ph name="END_LINK" /></translation>
-<translation id="454579500955453258">Doorgaan met een nieuw Carbon Browser Browser Browser Browser Browser Browser-profiel?</translation>
+<translation id="4148957013307229264">Installeren...</translation>
+<translation id="419998258129752635"><ph name="PAGE_TITLE" /> - Inloggen bij netwerk - Carbon Browser Browser</translation>
+<translation id="421369550622382712">Ontdek fantastische apps, games, extensies en thema's voor Carbon Browser Browser.</translation>
+<translation id="4216212958613226427">Deze taal wordt gebruikt om de Carbon Browser Browser-UI weer te geven</translation>
+<translation id="4222932583846282852">Annuleren…</translation>
+<translation id="4230135487732243613">Wil je je Carbon Browser Browser-gegevens aan dit account koppelen?</translation>
+<translation id="4271805377592243930">Hulp bij Carbon Browser Browser</translation>
+<translation id="4285930937574705105">De installatie is mislukt wegens een onbekende fout. Als Carbon Browser Browser momenteel actief is, moet je Carbon Browser Browser sluiten en het opnieuw proberen.</translation>
+<translation id="4304713468139749426">Wachtwoordmanager</translation>
+<translation id="4334294535648607276">Downloaden voltooid.</translation>
+<translation id="439358628917130594"><ph name="MANAGER" /> vereist dat je de volgende Servicevoorwaarden leest en accepteert voordat je dit apparaat gebruikt. Deze voorwaarden zijn geen uitbreiding, aanpassing of beperking van de Voorwaarden van Carbon Browser Browser OS.</translation>
+<translation id="4407044323746248786">Carbon Browser Browser toch sluiten?</translation>
+<translation id="4415566066719264597">Carbon Browser Browser laten uitvoeren op de achtergrond</translation>
+<translation id="4423735387467980091">Carbon Browser Browser aanpassen en beheren</translation>
+<translation id="4427306783828095590">Geoptimaliseerde beveiliging die je nog beter beschermt tegen phishing en malware</translation>
+<translation id="4440114195512068100">Ga naar de <ph name="LINK_BEGIN" />instellingen van Carbon Browser Browser OS<ph name="LINK_END" /> om te kijken of je apparaat up-to-date is</translation>
+<translation id="452711251841752011">Welkom bij Carbon Browser Browser, nieuw browservenster geopend</translation>
+<translation id="4544142686420020088">Carbon Browser Browser is niet geüpdatet. Er is een fout opgetreden. <ph name="BEGIN_LINK" />Updateproblemen en mislukte updates voor Carbon Browser Browser verhelpen<ph name="END_LINK" /></translation>
+<translation id="454579500955453258">Doorgaan met een nieuw Carbon Browser Browser-profiel?</translation>
 <translation id="4567424176335768812">Je bent ingelogd als <ph name="USER_EMAIL_ADDRESS" />. Je hebt nu toegang tot je bookmarks, geschiedenis en andere instellingen op al je apparaten waarop je bent ingelogd.</translation>
-<translation id="459535195905078186">Carbon Browser Browser Browser Browser Browser Browser-apps</translation>
-<translation id="4665829708273112819">Waarschuwing: Carbon Browser Browser Browser Browser Browser Browser kan niet voorkomen dat extensies je browsegeschiedenis registreren. Als je deze extensie in de privatemodus wilt uitzetten, vink je deze optie uit.</translation>
-<translation id="4677944499843243528">Het profiel lijkt te worden gebruikt door een ander proces in Carbon Browser Browser Browser Browser Browser Browser (<ph name="PROCESS_ID" />) op een andere computer (<ph name="HOST_NAME" />). Het profiel is vergrendeld zodat het niet wordt beschadigd. Als je zeker weet dat dit profiel niet door andere processen wordt gebruikt, kun je het profiel ontgrendelen en Carbon Browser Browser Browser Browser Browser Browser opnieuw starten.</translation>
-<translation id="469338717132742108">Hulp bij Google Chrome OS</translation>
-<translation id="4708774505295300557">Iemand heeft eerder bij Carbon Browser Browser Browser Browser Browser Browser op deze computer ingelogd als <ph name="ACCOUNT_EMAIL_LAST" />. Maak een nieuwe Carbon Browser Browser Browser Browser Browser Browser-gebruiker om je informatie gescheiden te houden.</translation>
-<translation id="4746050847053251315">Carbon Browser Browser Browser Browser Browser Browser toch sluiten?</translation>
-<translation id="4748217263233248895">Er is zojuist een speciale beveiligingsupdate voor Carbon Browser Browser Browser Browser Browser Browser toegepast. Start nu opnieuw op. Je tabbladen worden hersteld.</translation>
-<translation id="4750035648288509542">Bijna klaar met updaten. Start Carbon Browser Browser Browser Browser Browser Browser opnieuw om de update te voltooien. Privatevensters worden niet opnieuw geopend.</translation>
-<translation id="4788777615168560705">Carbon Browser Browser Browser Browser Browser Browser kan je wachtwoorden niet checken. Probeer het over 24 uur opnieuw of <ph name="BEGIN_LINK" />check de wachtwoorden in je Google-account<ph name="END_LINK" />.</translation>
+<translation id="4594305310729380060">Naar Wachtwoordmanager op dit apparaat</translation>
+<translation id="459535195905078186">Carbon Browser Browser-apps</translation>
+<translation id="4613863813562375431">Carbon Browser Browser OS-versie</translation>
+<translation id="4621240073146040695">Updaten bijna voltooid. Start Carbon Browser Browser opnieuw op om de update te voltooien.</translation>
+<translation id="4665829708273112819">Waarschuwing: Carbon Browser Browser kan niet voorkomen dat extensies je browsegeschiedenis registreren. Als je deze extensie in de privatemodus wilt uitzetten, vink je deze optie uit.</translation>
+<translation id="4673151026126227699">Als je ook Carbon Browser Browser-gebruiksrapporten deelt, bevatten die rapporten de URL's die je bezoekt</translation>
+<translation id="4677944499843243528">Het profiel lijkt te worden gebruikt door een ander proces in Carbon Browser Browser (<ph name="PROCESS_ID" />) op een andere computer (<ph name="HOST_NAME" />). Het profiel is vergrendeld zodat het niet wordt beschadigd. Als je zeker weet dat dit profiel niet door andere processen wordt gebruikt, kun je het profiel ontgrendelen en Carbon Browser Browser opnieuw starten.</translation>
+<translation id="4680828127924988555">Installatie annuleren</translation>
+<translation id="4708774505295300557">Iemand heeft eerder bij Carbon Browser Browser op deze computer ingelogd als <ph name="ACCOUNT_EMAIL_LAST" />. Maak een nieuwe Carbon Browser Browser-gebruiker om je informatie gescheiden te houden.</translation>
+<translation id="4746050847053251315">Carbon Browser Browser toch sluiten?</translation>
+<translation id="4748217263233248895">Er is zojuist een speciale beveiligingsupdate voor Carbon Browser Browser toegepast. Start nu opnieuw op. Je tabbladen worden hersteld.</translation>
+<translation id="4765210420921718862">Je kunt dit altijd wijzigen via de Carbon Browser Browser-instellingen. De proeven worden uitgevoerd in combinatie met de huidige manier waarop advertenties worden weergegeven, dus je ziet de wijzigingen niet meteen.</translation>
+<translation id="4788777615168560705">Carbon Browser Browser kan je wachtwoorden niet checken. Probeer het over 24 uur opnieuw of <ph name="BEGIN_LINK" />check de wachtwoorden in je Google-account<ph name="END_LINK" />.</translation>
 <translation id="479167709087336770">Hiervoor wordt dezelfde spellingcontrole gebruikt als voor Google Zoeken. Tekst die je in de browser typt, wordt naar Google gestuurd. Je kunt dit altijd wijzigen in de instellingen.</translation>
-<translation id="4888717733111232871">Inkomende regel zodat Carbon Browser Browser Browser Browser Browser Browser mDNS-verkeer toestaat.</translation>
-<translation id="4893347770495441059">Opnieuw starten om &amp;Carbon Browser Browser Browser Browser Browser Browser te updaten</translation>
-<translation id="4943838377383847465">Carbon Browser Browser Browser Browser Browser Browser bevindt zich in de achtergrondmodus.</translation>
-<translation id="4987820182225656817">Gasten kunnen Carbon Browser Browser Browser Browser Browser Browser gebruiken zonder iets achter te laten.</translation>
-<translation id="4994636714258228724">Jezelf toevoegen aan Carbon Browser Browser Browser Browser Browser Browser</translation>
-<translation id="5224391634244552924">Geen opgeslagen wachtwoorden. Carbon Browser Browser Browser Browser Browser Browser kan je wachtwoorden checken als je deze hebt opgeslagen.</translation>
-<translation id="5252179775517634216"><ph name="EXISTING_USER" /> is al ingelogd bij dit Carbon Browser Browser Browser Browser Browser Browser-profiel. Hiermee maak je een nieuw Carbon Browser Browser Browser Browser Browser Browser-profiel voor <ph name="USER_EMAIL_ADDRESS" />.</translation>
-<translation id="5277894862589591112">Als je de wijzigingen wilt toepassen, start je Carbon Browser Browser Browser Browser Browser Browser opnieuw</translation>
-<translation id="5358375970380395591">Je logt in op een beheerd account waarmee de eigenaar van dat account beheer krijgt over je Carbon Browser Browser Browser Browser Browser Browser-profiel. Je Carbon Browser Browser Browser Browser Browser Browser-gegevens zoals je apps, bookmarks, geschiedenis, wachtwoorden en andere instellingen worden permanent gekoppeld aan <ph name="USER_NAME" />. Je kunt deze gegevens verwijderen via het Google Accounts Dashboard, maar je kunt deze gegevens niet koppelen aan een ander account.<ph name="LEARN_MORE" /></translation>
-<translation id="5386450000063123300">Carbon Browser Browser Browser Browser Browser Browser updaten (<ph name="PROGRESS_PERCENT" />)</translation>
-<translation id="538767207339317086">Inloggen bij Carbon Browser Browser Browser Browser Browser Browser toestaan</translation>
-<translation id="5398878173008909840">Er is een nieuwe versie van Carbon Browser Browser Browser Browser Browser Browser beschikbaar.</translation>
-<translation id="5416696090975899932">Carbon Browser Browser Browser Browser Browser Browser kan het afdrukvoorbeeld niet tonen wanneer de ingebouwde pdf-viewer ontbreekt.</translation>
-<translation id="5427571867875391349">Carbon Browser Browser Browser Browser Browser Browser instellen als je standaardbrowser</translation>
-<translation id="5438241569118040789"><ph name="PAGE_TITLE" /> - Carbon Browser Browser Browser Browser Browser Browser bèta</translation>
-<translation id="5479196819031988440">Google Chrome OS kan deze pagina niet openen.</translation>
-<translation id="5480860683791598150">Carbon Browser Browser Browser Browser Browser Browser heeft toegang tot je locatie nodig om je locatie met deze site te delen</translation>
-<translation id="549669000822060376">Wacht terwijl Carbon Browser Browser Browser Browser Browser Browser de nieuwste systeemupdates installeert.</translation>
-<translation id="5496810170689441661">Carbon Browser Browser Browser Browser Browser Browser probeert wachtwoorden te bewerken. Geef je Windows-wachtwoord op om dit toe te staan.</translation>
-<translation id="5527463683072221100">Pdf's openen in Carbon Browser Browser Browser Browser Browser Browser</translation>
-<translation id="5623402015214259806">{0,plural, =0{Er is een Carbon Browser Browser Browser Browser Browser Browser-update beschikbaar}=1{Er is een Carbon Browser Browser Browser Browser Browser Browser-update beschikbaar}other{Er is al # dagen een Carbon Browser Browser Browser Browser Browser Browser-update beschikbaar}}</translation>
-<translation id="5634636535844844681">Voor Carbon Browser Browser Browser Browser Browser Browser is Windows 7 of hoger vereist.</translation>
-<translation id="5653831366781983928">Carbon Browser Browser Browser Browser Browser Browser nu opnieuw opstarten</translation>
-<translation id="5698481217667032250">Carbon Browser Browser Browser Browser Browser Browser weergeven in deze taal</translation>
-<translation id="5820394555380036790">Google Chrome OS</translation>
-<translation id="5854740544000584380">Carbon Browser Browser Browser Browser Browser Browser OS wordt mogelijk gemaakt door aanvullende <ph name="BEGIN_LINK_CROS_OSS" />opensource-software<ph name="END_LINK_CROS_OSS" />, net als de <ph name="BEGIN_LINK_LINUX_OSS" />Linux-ontwikkelomgeving<ph name="END_LINK_LINUX_OSS" />.</translation>
-<translation id="5862307444128926510">Welkom bij Carbon Browser Browser Browser Browser Browser Browser</translation>
-<translation id="5883558403894052917">Carbon Browser Browser Browser Browser Browser Browser heeft vastgesteld dat deze items malware bevatten:</translation>
+<translation id="4888717733111232871">Inkomende regel zodat Carbon Browser Browser mDNS-verkeer toestaat.</translation>
+<translation id="4893347770495441059">Opnieuw starten om &amp;Carbon Browser Browser te updaten</translation>
+<translation id="4943838377383847465">Carbon Browser Browser bevindt zich in de achtergrondmodus.</translation>
+<translation id="4987820182225656817">Gasten kunnen Carbon Browser Browser gebruiken zonder iets achter te laten.</translation>
+<translation id="4994636714258228724">Jezelf toevoegen aan Carbon Browser Browser</translation>
+<translation id="5114678101347489141">Carbon Browser Browser bevat nieuwe functies waarmee sites dezelfde browsefunctionaliteit kunnen leveren terwijl er minder van je gegevens worden gebruikt</translation>
+<translation id="5224391634244552924">Geen opgeslagen wachtwoorden. Carbon Browser Browser kan je wachtwoorden checken als je deze hebt opgeslagen.</translation>
+<translation id="5252179775517634216"><ph name="EXISTING_USER" /> is al ingelogd bij dit Carbon Browser Browser-profiel. Hiermee maak je een nieuw Carbon Browser Browser-profiel voor <ph name="USER_EMAIL_ADDRESS" />.</translation>
+<translation id="5277894862589591112">Als je de wijzigingen wilt toepassen, start je Carbon Browser Browser opnieuw</translation>
+<translation id="5296845517486664001">Tijdens actieve proeven en als Carbon Browser Browser je willekeurig in een actieve proef heeft geplaatst, heeft je browsegeschiedenis invloed op de advertenties die je te zien krijgt en de interesses zoals hieronder geschat. Ter bescherming van je privacy verwijdert Carbon Browser Browser je interesses elke maand op voortschrijdende basis.</translation>
+<translation id="5358375970380395591">Je logt in op een beheerd account waarmee de eigenaar van dat account beheer krijgt over je Carbon Browser Browser-profiel. Je Carbon Browser Browser-gegevens zoals je apps, bookmarks, geschiedenis, wachtwoorden en andere instellingen worden permanent gekoppeld aan <ph name="USER_NAME" />. Je kunt deze gegevens verwijderen via het Google Accounts Dashboard, maar je kunt deze gegevens niet koppelen aan een ander account.<ph name="LEARN_MORE" /></translation>
+<translation id="5386450000063123300">Carbon Browser Browser updaten (<ph name="PROGRESS_PERCENT" />)</translation>
+<translation id="538767207339317086">Inloggen bij Carbon Browser Browser toestaan</translation>
+<translation id="5398878173008909840">Er is een nieuwe versie van Carbon Browser Browser beschikbaar.</translation>
+<translation id="5427571867875391349">Carbon Browser Browser instellen als je standaardbrowser</translation>
+<translation id="5438241569118040789"><ph name="PAGE_TITLE" /> - Carbon Browser Browser bèta</translation>
+<translation id="5473971139929175403">Carbon Browser Browser werkt misschien niet goed omdat dit niet meer wordt ondersteund op deze Linux-distributie</translation>
+<translation id="5480860683791598150">Carbon Browser Browser heeft toegang tot je locatie nodig om je locatie met deze site te delen</translation>
+<translation id="5487574057737591516">Ter bescherming van je privacy verwijderen we automatisch interesses die ouder zijn dan 4 weken. Het kan gebeuren dat een interesse weer in de lijst komt te staan als je blijft browsen. En als Carbon Browser Browser het verkeerd inschat of als je bepaalde advertenties niet wilt zien, kun je een interesse verwijderen.</translation>
+<translation id="549669000822060376">Wacht terwijl Carbon Browser Browser de nieuwste systeemupdates installeert.</translation>
+<translation id="5496810170689441661">Carbon Browser Browser probeert wachtwoorden te bewerken. Geef je Windows-wachtwoord op om dit toe te staan.</translation>
+<translation id="5527463683072221100">Pdf's openen in Carbon Browser Browser</translation>
+<translation id="5614091477838198795">Als de schakelaar aanstaat, word je ook uitgelogd van Carbon Browser Browser</translation>
+<translation id="5623402015214259806">{0,plural, =0{Er is een Carbon Browser Browser-update beschikbaar}=1{Er is een Carbon Browser Browser-update beschikbaar}other{Er is al # dagen een Carbon Browser Browser-update beschikbaar}}</translation>
+<translation id="5634636535844844681">Voor Carbon Browser Browser is Windows 7 of hoger vereist.</translation>
+<translation id="5653831366781983928">Carbon Browser Browser nu opnieuw opstarten</translation>
+<translation id="5698481217667032250">Carbon Browser Browser bekijken in deze taal</translation>
+<translation id="5862307444128926510">Welkom bij Carbon Browser Browser</translation>
+<translation id="5883558403894052917">Carbon Browser Browser heeft vastgesteld dat deze items malware bevatten:</translation>
 <translation id="5895138241574237353">Opnieuw starten</translation>
 <translation id="5903106910045431592"><ph name="PAGE_TITLE" /> - Inloggen bij netwerk</translation>
-<translation id="5987687638152509985">Carbon Browser Browser Browser Browser Browser Browser updaten om de synchronisatie te starten</translation>
-<translation id="6039377483953237732">Google Chrome OS-versie</translation>
-<translation id="6055895534982063517">Er is een nieuwe versie van Carbon Browser Browser Browser Browser Browser Browser beschikbaar, en deze is sneller dan ooit.</translation>
-<translation id="6063093106622310249">&amp;Openen in Carbon Browser Browser Browser Browser Browser Browser</translation>
-<translation id="6072279588547424923"><ph name="EXTENSION_NAME" /> is toegevoegd aan Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="5924017743176219022">Verbinding maken met internet...</translation>
+<translation id="5941711191222866238">Minimaliseren</translation>
+<translation id="5972142260211327093">Als Carbon Browser Browser je willekeurig in een actieve proef heeft geplaatst, heeft je browsegeschiedenis invloed op de advertenties die je te zien krijgt en de interesses zoals hieronder geschat. Ter bescherming van je privacy verwijdert Carbon Browser Browser je interesses elke maand op voortschrijdende basis. Interesses worden vernieuwd, tenzij je ze verwijdert.</translation>
+<translation id="5987687638152509985">Carbon Browser Browser updaten om de synchronisatie te starten</translation>
+<translation id="5988505247484123880">Door jou bezochte sites onthouden over het algemeen informatie over je interesses om zo de functionaliteit te personaliseren. Sites kunnen ook informatie over je interesses in Carbon Browser Browser opslaan.</translation>
+<translation id="6003112304606738118">Downloaden... Nog <ph name="HOURS" /> uur</translation>
+<translation id="6040143037577758943">Sluiten</translation>
+<translation id="6055895534982063517">Er is een nieuwe versie van Carbon Browser Browser beschikbaar, en deze is sneller dan ooit.</translation>
+<translation id="6063093106622310249">&amp;Openen in Carbon Browser Browser</translation>
+<translation id="6072279588547424923"><ph name="EXTENSION_NAME" /> is toegevoegd aan Carbon Browser Browser</translation>
 <translation id="608006075545470555">Werkprofiel toevoegen aan deze browser</translation>
-<translation id="608189560609172163">Carbon Browser Browser Browser Browser Browser Browser kan je gegevens niet synchroniseren door een fout tijdens het inloggen.</translation>
-<translation id="6096348254544841612">Carbon Browser Browser Browser Browser Browser Browser aanpassen en beheren. Update is beschikbaar</translation>
-<translation id="6120345080069858279">Carbon Browser Browser Browser Browser Browser Browser slaat dit wachtwoord op in je Google-account. Je hoeft het niet te onthouden.</translation>
-<translation id="6129621093834146363"><ph name="FILE_NAME" /> is gevaarlijk en is daarom door Carbon Browser Browser Browser Browser Browser Browser geblokkeerd.</translation>
-<translation id="6134968993075716475">Safe Browsing staat uit. Carbon Browser Browser Browser Browser Browser Browser raadt je aan deze functie aan te zetten.</translation>
-<translation id="6145820983052037069">Je kunt hier schakelen tussen verschillende Carbon Browser Browser Browser Browser Browser Browser-profielen</translation>
-<translation id="6183079672144801177">Zorg dat je bent ingelogd bij Carbon Browser Browser Browser Browser Browser Browser op je <ph name="TARGET_DEVICE_NAME" /> en probeer opnieuw te sturen.</translation>
-<translation id="6212496753309875659">Deze computer beschikt al over een recentere versie van Carbon Browser Browser Browser Browser Browser Browser. Als de software niet werkt, moet je Carbon Browser Browser Browser Browser Browser Browser verwijderen en het opnieuw proberen.</translation>
-<translation id="6219195342503754812">{0,plural, =0{Carbon Browser Browser Browser Browser Browser Browser wordt nu opnieuw gestart}=1{Carbon Browser Browser Browser Browser Browser Browser wordt over één seconde opnieuw gestart}other{Carbon Browser Browser Browser Browser Browser Browser wordt over # seconden opnieuw gestart}}</translation>
-<translation id="6241367896540709610">Carbon Browser Browser Browser Browser Browser Browser heeft toegang tot de opslag nodig om bestanden te downloaden</translation>
-<translation id="6248213926982192922">Carbon Browser Browser Browser Browser Browser Browser als standaardbrowser instellen</translation>
-<translation id="6266342355635466082">Carbon Browser Browser Browser Browser Browser Browser kan niet checken op updates. Check de internetverbinding.</translation>
-<translation id="6268381023930128611">Uitloggen bij Carbon Browser Browser Browser Browser Browser Browser?</translation>
-<translation id="6281746429495226318">Je Carbon Browser Browser Browser Browser Browser Browser-profiel aanpassen</translation>
-<translation id="6290827346642914212">Je Carbon Browser Browser Browser Browser Browser Browser-profiel een naam geven</translation>
-<translation id="6295779123002464101"><ph name="FILE_NAME" /> kan gevaarlijk zijn en is daarom door Carbon Browser Browser Browser Browser Browser Browser geblokkeerd.</translation>
-<translation id="6309712487085796862">Carbon Browser Browser Browser Browser Browser Browser gebruikt je camera.</translation>
-<translation id="6333502561965082103">Er wordt een andere bewerking in Carbon Browser Browser Browser Browser Browser Browser uitgevoerd. Probeer het later opnieuw.</translation>
-<translation id="6334986366598267305">Het is nu gemakkelijker om Carbon Browser Browser Browser Browser Browser Browser met je Google-account en op gedeelde computers te gebruiken.</translation>
-<translation id="6373523479360886564">Weet je zeker dat je Carbon Browser Browser Browser Browser Browser Browser wilt verwijderen?</translation>
-<translation id="6403826409255603130">Carbon Browser Browser Browser Browser Browser Browser is een webbrowser die webpagina's en applicaties bliksemsnel uitvoert. Carbon Browser Browser Browser Browser Browser Browser is snel, stabiel en eenvoudig in gebruik. Surf veiliger op internet met de in Carbon Browser Browser Browser Browser Browser Browser ingebouwde beveiliging tegen malware en phishing.</translation>
-<translation id="6434250628340475518">Google Chrome OS-systeem</translation>
-<translation id="6455857529632101747">Welkom bij Carbon Browser Browser Browser Browser Browser Browser-profielen</translation>
-<translation id="6457450909262716557">{SECONDS,plural, =1{Carbon Browser Browser Browser Browser Browser Browser wordt over één seconde opnieuw gestart}other{Carbon Browser Browser Browser Browser Browser Browser wordt over # seconden opnieuw gestart}}</translation>
-<translation id="6475912303565314141">Hiermee wordt ook gecontroleerd welke pagina wordt getoond wanneer je Carbon Browser Browser Browser Browser Browser Browser start.</translation>
-<translation id="6510925080656968729">Carbon Browser Browser Browser Browser Browser Browser verwijderen</translation>
-<translation id="6542839706527980775">Elk profiel heeft eigen Carbon Browser Browser Browser Browser Browser Browser-informatie, zoals bookmarks, geschiedenis en wachtwoorden</translation>
-<translation id="6570579332384693436">Carbon Browser Browser Browser Browser Browser Browser verzendt de tekst die je in tekstvelden typt naar Google om spelfouten te corrigeren</translation>
-<translation id="6598877126913850652">Ga naar instellingen voor Carbon Browser Browser Browser Browser Browser Browser-meldingen</translation>
-<translation id="6613594504749178791">Je wijzigingen worden toegepast wanneer je Carbon Browser Browser Browser Browser Browser Browser opnieuw start.</translation>
-<translation id="665732753414869868">Carbon Browser Browser Browser Browser Browser Browser heeft camerarechten nodig om een 3D-kaart van je omgeving te maken</translation>
+<translation id="6096348254544841612">Carbon Browser Browser aanpassen en beheren. Update is beschikbaar</translation>
+<translation id="6120345080069858279">Carbon Browser Browser slaat dit wachtwoord op in je Google-account. Je hoeft het niet te onthouden.</translation>
+<translation id="6129621093834146363"><ph name="FILE_NAME" /> is gevaarlijk en is daarom door Carbon Browser Browser geblokkeerd.</translation>
+<translation id="6134968993075716475">Safe Browsing staat uit. Carbon Browser Browser raadt je aan deze functie aan te zetten.</translation>
+<translation id="6145820983052037069">Je kunt hier schakelen tussen verschillende Carbon Browser Browser-profielen</translation>
+<translation id="6183079672144801177">Zorg dat je bent ingelogd bij Carbon Browser Browser op je <ph name="TARGET_DEVICE_NAME" /> en probeer opnieuw te sturen.</translation>
+<translation id="6212496753309875659">Deze computer beschikt al over een recentere versie van Carbon Browser Browser. Als de software niet werkt, moet je Carbon Browser Browser verwijderen en het opnieuw proberen.</translation>
+<translation id="6219195342503754812">{0,plural, =0{Carbon Browser Browser wordt nu opnieuw gestart}=1{Carbon Browser Browser wordt over één seconde opnieuw gestart}other{Carbon Browser Browser wordt over # seconden opnieuw gestart}}</translation>
+<translation id="6241367896540709610">Carbon Browser Browser heeft toegang tot de opslag nodig om bestanden te downloaden</translation>
+<translation id="6245734527075554892">Checkt URL's aan de hand van een lijst met onveilige sites die is opgeslagen in Carbon Browser Browser</translation>
+<translation id="6248213926982192922">Carbon Browser Browser als standaardbrowser instellen</translation>
+<translation id="6266342355635466082">Carbon Browser Browser kan niet checken op updates. Check de internetverbinding.</translation>
+<translation id="6268381023930128611">Uitloggen bij Carbon Browser Browser?</translation>
+<translation id="6273793429163604305">Op je plaats...</translation>
+<translation id="6281746429495226318">Je Carbon Browser Browser-profiel aanpassen</translation>
+<translation id="6290827346642914212">Je Carbon Browser Browser-profiel een naam geven</translation>
+<translation id="6295779123002464101"><ph name="FILE_NAME" /> kan gevaarlijk zijn en is daarom door Carbon Browser Browser geblokkeerd.</translation>
+<translation id="6309712487085796862">Carbon Browser Browser gebruikt je camera.</translation>
+<translation id="632355235628111698">Carbon Browser Browser heeft dit bestand geblokkeerd omdat het gevaarlijk is</translation>
+<translation id="6327105987658262776">Er is geen update beschikbaar.</translation>
+<translation id="6333502561965082103">Er wordt een andere bewerking in Carbon Browser Browser uitgevoerd. Probeer het later opnieuw.</translation>
+<translation id="6334986366598267305">Het is nu gemakkelijker om Carbon Browser Browser met je Google-account en op gedeelde computers te gebruiken.</translation>
+<translation id="6373523479360886564">Weet je zeker dat je Carbon Browser Browser wilt verwijderen?</translation>
+<translation id="6384011394608460044"><ph name="BEGIN_BOLD" />Hoe we deze gegevens gebruiken:<ph name="END_BOLD" /> Carbon Browser Browser kan een schatting van je interesses maken. Later kan een site die je bezoekt Carbon Browser Browser vragen om je interesses te bekijken zodat de advertenties die je ziet, kunnen worden gepersonaliseerd.</translation>
+<translation id="6403826409255603130">Carbon Browser Browser is een webbrowser die webpagina's en applicaties bliksemsnel uitvoert. Carbon Browser Browser is snel, stabiel en eenvoudig in gebruik. Surf veiliger op internet met de in Carbon Browser Browser ingebouwde beveiliging tegen malware en phishing.</translation>
+<translation id="6442900851116057561">Carbon Browser Browser OS opnieuw opstarten</translation>
+<translation id="6455857529632101747">Welkom bij Carbon Browser Browser-profielen</translation>
+<translation id="6457450909262716557">{SECONDS,plural, =1{Carbon Browser Browser wordt over één seconde opnieuw gestart}other{Carbon Browser Browser wordt over # seconden opnieuw gestart}}</translation>
+<translation id="6475912303565314141">Hiermee wordt ook gecontroleerd welke pagina wordt getoond wanneer je Carbon Browser Browser start.</translation>
+<translation id="6510925080656968729">Carbon Browser Browser verwijderen</translation>
+<translation id="6542839706527980775">Elk profiel heeft eigen Carbon Browser Browser-informatie, zoals bookmarks, geschiedenis en wachtwoorden</translation>
+<translation id="6570579332384693436">Carbon Browser Browser verzendt de tekst die je in tekstvelden typt naar Google om spelfouten te corrigeren</translation>
+<translation id="6598877126913850652">Ga naar instellingen voor Carbon Browser Browser-meldingen</translation>
+<translation id="6613594504749178791">Je wijzigingen worden toegepast wanneer je Carbon Browser Browser opnieuw start.</translation>
+<translation id="665732753414869868">Carbon Browser Browser heeft camerarechten nodig om een 3D-kaart van je omgeving te maken</translation>
 <translation id="6676384891291319759">Verbinding maken met internet</translation>
-<translation id="6709350901466051922">Carbon Browser Browser Browser Browser Browser Browser heeft microfoonrechten nodig voor deze site</translation>
-<translation id="6717134281241384636">Je profiel kan niet worden gebruikt, omdat dit is gemaakt in een recentere versie van Carbon Browser Browser Browser Browser Browser Browser.
+<translation id="668175097507315160">Carbon Browser Browser OS kan je gegevens niet synchroniseren vanwege een fout tijdens het inloggen.</translation>
+<translation id="6709350901466051922">Carbon Browser Browser heeft microfoonrechten nodig voor deze site</translation>
+<translation id="6717134281241384636">Je profiel kan niet worden gebruikt, omdat dit is gemaakt in een recentere versie van Carbon Browser Browser.
 
-Sommige functies zijn mogelijk niet beschikbaar. Geef een andere profieldirectory op of gebruik een recentere versie van Carbon Browser Browser Browser Browser Browser Browser.</translation>
-<translation id="6734080038664603509">&amp;Carbon Browser Browser Browser Browser Browser Browser updaten</translation>
-<translation id="6734291798041940871">Carbon Browser Browser Browser Browser Browser Browser is al geïnstalleerd voor alle gebruikers op je computer.</translation>
-<translation id="673636774878526923">Log in en zet synchronisatie aan voor toegang tot je Carbon Browser Browser Browser Browser Browser Browser-gegevens op al je apparaten</translation>
-<translation id="6774082503108938489">Je ouder heeft 'Rechten voor sites, apps en extensies' uitgezet voor Carbon Browser Browser Browser Browser Browser Browser. Je mag deze <ph name="EXTENSION_TYPE_PARAMETER" /> niet aanzetten.</translation>
-<translation id="6827182711503025204">Als je Carbon Browser Browser Browser Browser Browser Browser OS installeert, worden alle gegevens op je apparaat overschreven.</translation>
-<translation id="6847869444787758381">Carbon Browser Browser Browser Browser Browser Browser laat het je weten als je wachtwoorden mogelijk niet veilig meer zijn</translation>
-<translation id="6857782730669500492">Carbon Browser Browser Browser Browser Browser Browser - <ph name="PAGE_TITLE" /></translation>
-<translation id="6863361426438995919">Google Pay (gekopieerd naar Carbon Browser Browser Browser Browser Browser Browser)</translation>
-<translation id="6873893289264747459">Carbon Browser Browser Browser Browser Browser Browser heeft vastgesteld dat <ph name="EXTENSION_NAME" /> malware bevat</translation>
-<translation id="6893813176749746474">Carbon Browser Browser Browser Browser Browser Browser is bijgewerkt, maar je hebt het programma minstens 30 dagen niet gebruikt.</translation>
-<translation id="691026815377248078">Carbon Browser Browser Browser Browser Browser Browser heeft bluetooth-toegang nodig om door te gaan met koppelen. <ph name="IDS_BLUETOOTH_DEVICE_CHOOSER_AUTHORIZE_BLUETOOTH_LINK" /></translation>
-<translation id="6964305034639999644">Link openen in een Carbon Browser Browser Browser Browser Browser Browser-inco&amp;gnitovenster</translation>
-<translation id="6978145336957848883">Zwakke wachtwoorden zijn makkelijk te raden. Laat Carbon Browser Browser Browser Browser Browser Browser <ph name="BEGIN_LINK" />sterke wachtwoorden voor je instellen en onthouden<ph name="END_LINK" />.</translation>
-<translation id="6990124437352146030">Carbon Browser Browser Browser Browser Browser Browser heeft toegangsrechten voor je microfoon nodig voor deze site</translation>
-<translation id="705851970750939768">Carbon Browser Browser Browser Browser Browser Browser updaten</translation>
-<translation id="7067091210845072982">Als een afbeelding geen nuttige beschrijving bevat, probeert Carbon Browser Browser Browser Browser Browser Browser je er een te geven. Afbeeldingen worden naar Google verzonden om beschrijvingen te maken.</translation>
-<translation id="718435575166326686">Carbon Browser Browser Browser Browser Browser Browser heeft camerarechten nodig voor deze site</translation>
-<translation id="7196312274710523067">Kan Carbon Browser Browser Browser Browser Browser Browser niet starten. Probeer het opnieuw.</translation>
-<translation id="7197677400338048821">Carbon Browser Browser Browser Browser Browser Browser kan je wachtwoorden niet checken. Probeer het over 24 uur opnieuw.</translation>
-<translation id="7223968959479464213">Taakbeheer - Carbon Browser Browser Browser Browser Browser Browser</translation>
-<translation id="731644333568559921">&amp;Google Chrome OS updaten</translation>
-<translation id="731795002583552498">Carbon Browser Browser Browser Browser Browser Browser updaten</translation>
+Sommige functies zijn mogelijk niet beschikbaar. Geef een andere profieldirectory op of gebruik een recentere versie van Carbon Browser Browser.</translation>
+<translation id="6734291798041940871">Carbon Browser Browser is al geïnstalleerd voor alle gebruikers op je computer.</translation>
+<translation id="673636774878526923">Log in en zet synchronisatie aan voor toegang tot je Carbon Browser Browser-gegevens op al je apparaten</translation>
+<translation id="6774082503108938489">Je ouder heeft 'Rechten voor sites, apps en extensies' uitgezet voor Carbon Browser Browser. Je mag deze <ph name="EXTENSION_TYPE_PARAMETER" /> niet aanzetten.</translation>
+<translation id="6779406956731413166">Carbon Browser Browser OS wordt mogelijk gemaakt door aanvullende <ph name="BEGIN_LINK_CROS_OSS" />opensource-software<ph name="END_LINK_CROS_OSS" />.</translation>
+<translation id="6847869444787758381">Carbon Browser Browser laat het je weten als je wachtwoorden mogelijk niet veilig meer zijn</translation>
+<translation id="6852530923436401894">Carbon Browser Browser heeft dit bestand geblokkeerd omdat het malware bevat</translation>
+<translation id="6857782730669500492">Carbon Browser Browser - <ph name="PAGE_TITLE" /></translation>
+<translation id="6863361426438995919">Google Pay (gekopieerd naar Carbon Browser Browser)</translation>
+<translation id="6873893289264747459">Carbon Browser Browser heeft vastgesteld dat <ph name="EXTENSION_NAME" /> malware bevat</translation>
+<translation id="6893813176749746474">Carbon Browser Browser is bijgewerkt, maar je hebt het programma minstens 30 dagen niet gebruikt.</translation>
+<translation id="691026815377248078">Carbon Browser Browser heeft bluetooth-toegang nodig om door te gaan met koppelen. <ph name="IDS_BLUETOOTH_DEVICE_CHOOSER_AUTHORIZE_BLUETOOTH_LINK" /></translation>
+<translation id="6929417474050522668">Tijdens actieve proeven kunnen sites die je bezoekt Carbon Browser Browser via Advertentiemeting om informatie vragen zodat ze de prestaties van hun advertenties kunnen meten. Advertentiemeting beperkt tracking op meerdere sites door zo min mogelijk informatie over te dragen tussen sites.</translation>
+<translation id="6940431691900807093">Later kan een site die je bezoekt Carbon Browser Browser vragen om je interesses te bekijken zodat de advertenties die je ziet, kunnen worden gepersonaliseerd. Carbon Browser Browser kan maximaal 3 interesses delen.</translation>
+<translation id="6964305034639999644">Link openen in een Carbon Browser Browser-inco&amp;gnitovenster</translation>
+<translation id="6978145336957848883">Zwakke wachtwoorden zijn makkelijk te raden. Laat Carbon Browser Browser <ph name="BEGIN_LINK" />sterke wachtwoorden voor je instellen en onthouden<ph name="END_LINK" />.</translation>
+<translation id="6985329841647292029">Voorwaarden van Carbon Browser Browser OS</translation>
+<translation id="6990124437352146030">Carbon Browser Browser heeft toegangsrechten voor je microfoon nodig voor deze site</translation>
+<translation id="7025789849649390912">Installatie gestopt.</translation>
+<translation id="705851970750939768">Carbon Browser Browser updaten</translation>
+<translation id="7067091210845072982">Als een afbeelding geen nuttige beschrijving bevat, probeert Carbon Browser Browser je er een te geven. Afbeeldingen worden naar Google verzonden om beschrijvingen te maken.</translation>
+<translation id="718435575166326686">Carbon Browser Browser heeft camerarechten nodig voor deze site</translation>
+<translation id="7196312274710523067">Kan Carbon Browser Browser niet starten. Probeer het opnieuw.</translation>
+<translation id="7197677400338048821">Carbon Browser Browser kan je wachtwoorden niet checken. Probeer het over 24 uur opnieuw.</translation>
+<translation id="7218568399872925918">Sites die je bezoekt, onthouden je informatie totdat je Carbon Browser Browser sluit</translation>
+<translation id="7223968959479464213">Taakbeheer - Carbon Browser Browser</translation>
+<translation id="7246575524853130370">Je interesses volgens schattingen van Carbon Browser Browser</translation>
+<translation id="7309928523159922338">Via Advertentiemeting kunnen sites die je bezoekt Carbon Browser Browser om informatie vragen zodat ze de prestaties van hun advertenties kunnen meten. Advertentiemeting beperkt tracking op meerdere sites door zo min mogelijk informatie over te dragen tussen sites.</translation>
+<translation id="731795002583552498">Carbon Browser Browser updaten</translation>
 <translation id="7318036098707714271">Je bestand met voorkeuren is beschadigd of ongeldig.
 
-Carbon Browser Browser Browser Browser Browser Browser kan je instellingen niet herstellen.</translation>
-<translation id="7337881442233988129">Carbon Browser Browser Browser Browser Browser Browser</translation>
+Carbon Browser Browser kan je instellingen niet herstellen.</translation>
+<translation id="7337881442233988129">Carbon Browser Browser</translation>
 <translation id="7339898014177206373">Nieuw venster</translation>
-<translation id="734373864078049451">Hier vind je internet, bookmarks en andere Carbon Browser Browser Browser Browser Browser Browser-instellingen.</translation>
-<translation id="7349591376906416160">Je systeembeheerder heeft Carbon Browser Browser Browser Browser Browser Browser geconfigureerd om <ph name="ALTERNATIVE_BROWSER_NAME" /> te openen voor toegang tot <ph name="TARGET_URL_HOSTNAME" />.</translation>
-<translation id="7448255348454382571">Google Chrome OS opnieuw opstarten</translation>
-<translation id="7449453770951226939"><ph name="PAGE_TITLE" /> - Carbon Browser Browser Browser Browser Browser Browser voor ontwikkelaars</translation>
-<translation id="7451052299415159299">Carbon Browser Browser Browser Browser Browser Browser heeft toegangsrechten voor je camera nodig voor deze site</translation>
-<translation id="7483335560992089831">Kan niet dezelfde Carbon Browser Browser Browser Browser Browser Browser-versie installeren, omdat deze versie nu actief is. Sluit Carbon Browser Browser Browser Browser Browser Browser en probeer het opnieuw.</translation>
-<translation id="753534427205733210">{0,plural, =1{Carbon Browser Browser Browser Browser Browser Browser wordt over één minuut opnieuw gestart}other{Carbon Browser Browser Browser Browser Browser Browser wordt over # minuten opnieuw gestart}}</translation>
-<translation id="7549178288319965365">Over Google Chrome OS</translation>
-<translation id="7561906087460245826">Ook gegevens van Carbon Browser Browser Browser Browser Browser Browser wissen (<ph name="URL" />)</translation>
-<translation id="7585853947355360626">Kijk je in de <ph name="LINK_BEGIN" />Google Chrome OS-instellingen<ph name="LINK_END" />als je een instelling niet ziet op deze pagina.</translation>
-<translation id="761356813943268536">Carbon Browser Browser Browser Browser Browser Browser gebruikt je camera en microfoon.</translation>
-<translation id="7617377681829253106">Carbon Browser Browser Browser Browser Browser Browser is nu nog beter</translation>
-<translation id="7627575518938382525"><ph name="BEGIN_PARAGRAPH1" />Zorg dat je een actuele back-up van je gegevens hebt voordat we beginnen. Als je Carbon Browser Browser Browser Browser Browser Browser OS installeert, worden namelijk alle gegevens op de harde schijf overschreven.<ph name="END_PARAGRAPH1" />
-          <ph name="BEGIN_PARAGRAPH2" />Google is niet verantwoordelijk voor verlies van gegevens en biedt geen garantie dat Carbon Browser Browser Browser Browser Browser Browser OS werkt op niet-gecertificeerde modellen. Ga naar [TBD] voor meer informatie over gecertificeerde modellen.<ph name="END_PARAGRAPH2" />
-          <ph name="BEGIN_PARAGRAPH3" />Meer informatie over de installatie van Carbon Browser Browser Browser Browser Browser Browser OS en het wissen van gegevens: [TBD URL]<ph name="END_PARAGRAPH3" />
-<ph name="BEGIN_PARAGRAPH4" />Als je wilt doorgaan, klik je op Carbon Browser Browser Browser Browser Browser Browser OS installeren. We leiden je in een paar makkelijke stappen door de installatie. Je krijgt nog een kans om te bevestigen voordat we wijzigingen aanbrengen op je computer.<ph name="END_PARAGRAPH4" /></translation>
-<translation id="7686590090926151193">Carbon Browser Browser Browser Browser Browser Browser is niet je standaardbrowser</translation>
-<translation id="7689606757190482937">Carbon Browser Browser Browser Browser Browser Browser synchroniseren en personaliseren op al je apparaten</translation>
-<translation id="7729447699958282447">Carbon Browser Browser Browser Browser Browser Browser kan je gegevens niet synchroniseren, omdat synchronisatie niet beschikbaar is voor je domein.</translation>
-<translation id="7745317241717453663">Hiermee worden je browsegegevens verwijderd van dit apparaat. Als je je gegevens later wilt terughalen, log je in bij Carbon Browser Browser Browser Browser Browser Browser als <ph name="USER_EMAIL" />.</translation>
+<translation id="734373864078049451">Hier vind je internet, bookmarks en andere Carbon Browser Browser-instellingen.</translation>
+<translation id="7349591376906416160">Je systeembeheerder heeft Carbon Browser Browser geconfigureerd om <ph name="ALTERNATIVE_BROWSER_NAME" /> te openen voor toegang tot <ph name="TARGET_URL_HOSTNAME" />.</translation>
+<translation id="7398989605938454041">Met Carbon Browser Browser-profielen kun je alle Carbon Browser Browser-gegevens gescheiden houden. Zo kun je makkelijker onderscheid maken tussen werk en privé.</translation>
+<translation id="7449453770951226939"><ph name="PAGE_TITLE" /> - Carbon Browser Browser voor ontwikkelaars</translation>
+<translation id="7451052299415159299">Carbon Browser Browser heeft toegangsrechten voor je camera nodig voor deze site</translation>
+<translation id="7467949745582939695">Carbon Browser Browser opnieuw starten?</translation>
+<translation id="7483335560992089831">Kan niet dezelfde Carbon Browser Browser-versie installeren, omdat deze versie nu actief is. Sluit Carbon Browser Browser en probeer het opnieuw.</translation>
+<translation id="753534427205733210">{0,plural, =1{Carbon Browser Browser wordt over één minuut opnieuw gestart}other{Carbon Browser Browser wordt over # minuten opnieuw gestart}}</translation>
+<translation id="7561906087460245826">Ook gegevens van Carbon Browser Browser wissen (<ph name="URL" />)</translation>
+<translation id="7582945390259497898">Carbon Browser Browser kan een schatting van je interesses maken. Later kan een site die je bezoekt Carbon Browser Browser vragen om je interesses te bekijken zodat de advertenties die je ziet, kunnen worden gepersonaliseerd.</translation>
+<translation id="7583399374488819119"><ph name="COMPANY_NAME" />-installatieprogramma</translation>
+<translation id="7597596667193879455">Je hebt de uitgebreide versie van Safe Browsing aangezet in je account. Zet deze functie nu ook aan voor Carbon Browser Browser.</translation>
+<translation id="761356813943268536">Carbon Browser Browser gebruikt je camera en microfoon.</translation>
+<translation id="7617377681829253106">Carbon Browser Browser is nu nog beter</translation>
+<translation id="7649070708921625228">Hulp</translation>
+<translation id="7682213815243802460">Bekijk meer informatie over deze functies in de Carbon Browser Browser-instellingen.</translation>
+<translation id="7682601070171973634">Carbon Browser Browser bevat nieuwe experimentele functies waarmee sites dezelfde browsefunctionaliteit kunnen leveren terwijl er minder van je gegevens worden gebruikt</translation>
+<translation id="7686590090926151193">Carbon Browser Browser is niet je standaardbrowser</translation>
+<translation id="7689606757190482937">Carbon Browser Browser synchroniseren en personaliseren op al je apparaten</translation>
+<translation id="7745317241717453663">Hiermee worden je browsegegevens verwijderd van dit apparaat. Als je je gegevens later wilt terughalen, log je in bij Carbon Browser Browser als <ph name="USER_EMAIL" />.</translation>
 <translation id="7747138024166251722">Het installatieprogramma kan geen tijdelijke directory maken. Controleer of je nog schijfruimte hebt en of je rechten hebt om software te installeren.</translation>
-<translation id="7790626492778995050"><ph name="PAGE_TITLE" /> - Carbon Browser Browser Browser Browser Browser Browser Canary</translation>
-<translation id="7828947555739565424">Er bestaat op dit apparaat al een Carbon Browser Browser Browser Browser Browser Browser-profiel met dit account</translation>
-<translation id="7857220146454061152">Als je toekomstige Carbon Browser Browser Browser Browser Browser Browser-updates wilt ontvangen, heb je OS X 10.11 of hoger nodig. Deze computer gebruikt OS X 10.10.</translation>
-<translation id="7867198900892795913">Carbon Browser Browser Browser Browser Browser Browser kan niet worden geüpdatet naar de nieuwste versie, dus je loopt nieuwe functies en beveiligingsoplossingen mis.</translation>
-<translation id="7898472181347242998">Ga naar de <ph name="LINK_BEGIN" />instellingen van Google Chrome OS<ph name="LINK_END" /> om te kijken of je apparaat up-to-date is</translation>
-<translation id="7937630085815544518">Je bent ingelogd bij Carbon Browser Browser Browser Browser Browser Browser als <ph name="USER_EMAIL_ADDRESS" />. Gebruik hetzelfde account om opnieuw in te loggen.</translation>
-<translation id="7975919845073681630">Dit is een tweede installatie van Carbon Browser Browser Browser Browser Browser Browser en kan niet als standaardbrowser worden ingesteld.</translation>
-<translation id="8013436988911883588">Zodra Carbon Browser Browser Browser Browser Browser Browser toegang heeft, kunnen websites je om toegang vragen.</translation>
-<translation id="8045118833343856403">De volgende accounts zijn niet ingelogd bij Carbon Browser Browser Browser Browser Browser Browser-profielen. Als je een account wilt gebruiken in een ander profiel, verwijder je eerst dat profiel.</translation>
-<translation id="8105840573057009683">Carbon Browser Browser Browser Browser Browser Browser heeft locatierechten nodig voor deze site</translation>
-<translation id="81770708095080097">Dit bestand is gevaarlijk en is daarom door Carbon Browser Browser Browser Browser Browser Browser geblokkeerd.</translation>
-<translation id="8248265253516264921">Als een afbeelding geen nuttige beschrijving bevat, probeert Carbon Browser Browser Browser Browser Browser Browser je er een te geven. Afbeeldingen worden naar Google gestuurd om beschrijvingen te maken. Je kunt dit op elk gewenst moment uitzetten in Instellingen.</translation>
-<translation id="8266560134891435528">Carbon Browser Browser Browser Browser Browser Browser kan je wachtwoorden niet checken omdat je niet bent ingelogd.</translation>
-<translation id="8276522524898344151">Carbon Browser Browser Browser Browser Browser Browser probeert wachtwoorden te kopiëren.</translation>
-<translation id="8290862415967981663">Dit bestand kan gevaarlijk zijn en is daarom door Carbon Browser Browser Browser Browser Browser Browser geblokkeerd.</translation>
-<translation id="8330519371938183845">Log in om Carbon Browser Browser Browser Browser Browser Browser op al je apparaten te synchroniseren en te personaliseren</translation>
-<translation id="8340674089072921962"><ph name="USER_EMAIL_ADDRESS" /> maakte eerder gebruik van Carbon Browser Browser Browser Browser Browser Browser</translation>
-<translation id="8417404458978023919">{0,plural, =1{Start Carbon Browser Browser Browser Browser Browser Browser binnen een dag opnieuw}other{Start Carbon Browser Browser Browser Browser Browser Browser binnen # dagen opnieuw}}</translation>
-<translation id="8453117565092476964">Het archief van het installatieprogramma is beschadigd of ongeldig. Download Carbon Browser Browser Browser Browser Browser Browser opnieuw.</translation>
-<translation id="8493179195440786826">Carbon Browser Browser Browser Browser Browser Browser is verouderd</translation>
+<translation id="7790626492778995050"><ph name="PAGE_TITLE" /> - Carbon Browser Browser Canary</translation>
+<translation id="7828947555739565424">Er bestaat op dit apparaat al een Carbon Browser Browser-profiel met dit account</translation>
+<translation id="7845233973568007926">Bedankt voor het installeren. Je moet de computer opnieuw opstarten voordat je <ph name="BUNDLE_NAME" /> kunt gebruiken.</translation>
+<translation id="7867198900892795913">Carbon Browser Browser kan niet worden geüpdatet naar de nieuwste versie, dus je loopt nieuwe functies en beveiligingsoplossingen mis.</translation>
+<translation id="7872446069773932638">Downloaden... Nog <ph name="SECONDS" /> seconden</translation>
+<translation id="7877292582355102282"><ph name="BEGIN_BOLD" />Hoe je je gegevens kunt beheren:<ph name="END_BOLD" /> Ter bescherming van je privacy verwijderen we automatisch interesses die ouder zijn dan 4 weken. Het kan gebeuren dat een interesse weer in de lijst komt te staan als je blijft browsen. Je kunt ook interesses verwijderen waarvan je niet wilt dat Carbon Browser Browser deze overweegt.</translation>
+<translation id="7937630085815544518">Je bent ingelogd bij Carbon Browser Browser als <ph name="USER_EMAIL_ADDRESS" />. Gebruik hetzelfde account om opnieuw in te loggen.</translation>
+<translation id="7975919845073681630">Dit is een tweede installatie van Carbon Browser Browser en kan niet als standaardbrowser worden ingesteld.</translation>
+<translation id="7982481011030453202">Kijk in de <ph name="LINK_BEGIN" />Carbon Browser Browser OS-instellingen<ph name="LINK_END" /> als je een instelling niet ziet op deze pagina.</translation>
+<translation id="7997934263947464652">Extensies, apps en thema's van onbekende bronnen kunnen schadelijk zijn voor je apparaat. Carbon Browser Browser raadt je aan ze alleen te installeren vanuit de <ph name="IDS_EXTENSION_WEB_STORE_TITLE" />.</translation>
+<translation id="8013436988911883588">Zodra Carbon Browser Browser toegang heeft, kunnen websites je om toegang vragen.</translation>
+<translation id="80471789339884597">Bedankt voor het installeren. Je moet alle browsers opnieuw opstarten voordat je <ph name="BUNDLE_NAME" /> kunt gebruiken.</translation>
+<translation id="8105840573057009683">Carbon Browser Browser heeft locatierechten nodig voor deze site</translation>
+<translation id="8133124826068723441">Carbon Browser Browser OS kan je gegevens niet synchroniseren, omdat synchronisatie niet beschikbaar is voor je domein.</translation>
+<translation id="813913629614996137">Starten...</translation>
+<translation id="81770708095080097">Dit bestand is gevaarlijk en is daarom door Carbon Browser Browser geblokkeerd.</translation>
+<translation id="8213374284266571500">Carbon Browser Browser heeft dit bestand geblokkeerd omdat dit type bestand gevaarlijk is</translation>
+<translation id="8248265253516264921">Als een afbeelding geen nuttige beschrijving bevat, probeert Carbon Browser Browser je er een te geven. Afbeeldingen worden naar Google gestuurd om beschrijvingen te maken. Je kunt dit op elk gewenst moment uitzetten in Instellingen.</translation>
+<translation id="8266560134891435528">Carbon Browser Browser kan je wachtwoorden niet checken omdat je niet bent ingelogd.</translation>
+<translation id="8276522524898344151">Carbon Browser Browser probeert wachtwoorden te kopiëren.</translation>
+<translation id="8290862415967981663">Dit bestand kan gevaarlijk zijn en is daarom door Carbon Browser Browser geblokkeerd.</translation>
+<translation id="8330519371938183845">Log in om Carbon Browser Browser op al je apparaten te synchroniseren en te personaliseren</translation>
+<translation id="8340674089072921962"><ph name="USER_EMAIL_ADDRESS" /> maakte eerder gebruik van Carbon Browser Browser</translation>
+<translation id="8357820681460164151">Log in en zet synchronisatie aan voor toegang tot je Carbon Browser Browser-browsergegevens op al je apparaten</translation>
+<translation id="8417404458978023919">{0,plural, =1{Start Carbon Browser Browser binnen een dag opnieuw}other{Start Carbon Browser Browser binnen # dagen opnieuw}}</translation>
+<translation id="8453117565092476964">Het archief van het installatieprogramma is beschadigd of ongeldig. Download Carbon Browser Browser opnieuw.</translation>
+<translation id="8463672209299734063">Optioneel: Help de functies en prestaties van Carbon Browser Browser OS te verbeteren door automatisch diagnostische en gebruiksgegevens naar Google te sturen.</translation>
+<translation id="8493179195440786826">Carbon Browser Browser is verouderd</translation>
 <translation id="8550334526674375523">Dit werkprofiel is volledig gescheiden van je persoonlijke profiel.</translation>
-<translation id="8558383651099478961">Je ouder heeft Rechten voor sites, apps en extensies uitgezet voor Carbon Browser Browser Browser Browser Browser Browser. Je mag deze <ph name="EXTENSION_TYPE_PARAMETER" /> niet toevoegen.</translation>
-<translation id="8568283329061645092">Carbon Browser Browser Browser Browser Browser Browser kan je wachtwoorden checken als je inlogt met je Google-account</translation>
-<translation id="8586442755830160949">Copyright <ph name="YEAR" /> De auteurs van Carbon Browser Browser Browser Browser Browser Browser. Alle rechten voorbehouden.</translation>
-<translation id="8619360774459241877">Carbon Browser Browser Browser Browser Browser Browser starten…</translation>
-<translation id="8621669128220841554">De installatie is mislukt wegens een onbekende fout. Download Carbon Browser Browser Browser Browser Browser Browser opnieuw.</translation>
-<translation id="8697124171261953979">Hiermee wordt ook gecontroleerd welke pagina wordt getoond wanneer je Carbon Browser Browser Browser Browser Browser Browser start of vanuit de omnibox zoekt.</translation>
-<translation id="8704119203788522458">Personaliseer jouw Carbon Browser Browser Browser Browser Browser Browser</translation>
-<translation id="8796602469536043152">Carbon Browser Browser Browser Browser Browser Browser heeft toegangsrechten voor je camera en microfoon nodig voor deze site</translation>
-<translation id="8803635938069941624">Voorwaarden van Google Chrome OS</translation>
-<translation id="8821041990367117597">Carbon Browser Browser Browser Browser Browser Browser kan je gegevens niet synchroniseren, omdat de inloggegevens voor je account zijn verouderd.</translation>
+<translation id="8558383651099478961">Je ouder heeft Rechten voor sites, apps en extensies uitgezet voor Carbon Browser Browser. Je mag deze <ph name="EXTENSION_TYPE_PARAMETER" /> niet toevoegen.</translation>
+<translation id="8561285221328166383">Als je toekomstige Carbon Browser Browser-updates wilt krijgen, heb je macOS 10.13 of hoger nodig. Deze computer gebruikt macOS 10.12.</translation>
+<translation id="8568283329061645092">Carbon Browser Browser kan je wachtwoorden checken als je inlogt met je Google-account</translation>
+<translation id="8586442755830160949">Copyright <ph name="YEAR" /> De auteurs van Carbon Browser Browser. Alle rechten voorbehouden.</translation>
+<translation id="8608079656141766906"><ph name="BEGIN_BOLD" />Hoe we deze gegevens gebruiken:<ph name="END_BOLD" /> Sites kunnen informatie over je interesses in Carbon Browser Browser opslaan. Als je bijvoorbeeld een site bezoekt om schoenen voor een marathon te kopen, kan de site je interesse definiëren als 'deelname aan marathons'. Als je later een andere site bezoekt om je aan te melden voor een race, kan die site je een advertentie voor hardloopschoenen laten zien op basis van je interesses.</translation>
+<translation id="8619360774459241877">Carbon Browser Browser starten…</translation>
+<translation id="8621669128220841554">De installatie is mislukt wegens een onbekende fout. Download Carbon Browser Browser opnieuw.</translation>
+<translation id="8697124171261953979">Hiermee wordt ook gecontroleerd welke pagina wordt getoond wanneer je Carbon Browser Browser start of vanuit de omnibox zoekt.</translation>
+<translation id="8704119203788522458">Personaliseer jouw Carbon Browser Browser</translation>
+<translation id="8713679423359107094">Als je alle Carbon Browser Browser-vensters sluit, worden de cookies en sitegegevens automatisch gewist</translation>
+<translation id="8796443464227412154">Je wordt <ph name="BEGIN_BOLD" />uitgelogd van de meeste sites<ph name="END_BOLD" /> als je Carbon Browser Browser sluit. Als synchronisatie uitstaat, word je ook <ph name="BEGIN_BOLD" />uitgelogd van Google-services en Carbon Browser Browser<ph name="END_BOLD" />.</translation>
+<translation id="8796602469536043152">Carbon Browser Browser heeft toegangsrechten voor je camera en microfoon nodig voor deze site</translation>
+<translation id="8833697763442816810">Carbon Browser Browser OS-systeem</translation>
+<translation id="8846118132221683440"><ph name="BEGIN_BOLD" />Welke gegevens worden gebruikt:<ph name="END_BOLD" /> Je browsegeschiedenis, een lijst van de sites die je via Carbon Browser Browser op dit apparaat hebt bezocht.</translation>
 <translation id="8862326446509486874">Je hebt geen rechten om op systeemniveau te installeren. Meld je aan als beheerder en voer het installatieprogramma opnieuw uit.</translation>
-<translation id="8880203542552872219">Als dit het geval is, bewerk je het opgeslagen wachtwoord in Carbon Browser Browser Browser Browser Browser Browser, zodat het overeenkomt met je nieuwe wachtwoord.</translation>
-<translation id="8897323336392112261">Hiermee wordt ook gecontroleerd welke pagina wordt getoond wanneer je Carbon Browser Browser Browser Browser Browser Browser start of op de Homepage-knop klikt.</translation>
-<translation id="8907580949721785412">Carbon Browser Browser Browser Browser Browser Browser probeert wachtwoorden te tonen. Geef je Windows-wachtwoord op om dit toe te staan.</translation>
-<translation id="8941642502866065432">Kan Carbon Browser Browser Browser Browser Browser Browser niet updaten</translation>
-<translation id="8974095189086268230">Google Chrome OS wordt mogelijk gemaakt door aanvullende <ph name="BEGIN_LINK_CROS_OSS" />opensource-software<ph name="END_LINK_CROS_OSS" />.</translation>
+<translation id="8880203542552872219">Als dit het geval is, bewerk je het opgeslagen wachtwoord in Carbon Browser Browser, zodat het overeenkomt met je nieuwe wachtwoord.</translation>
+<translation id="8897323336392112261">Hiermee wordt ook gecontroleerd welke pagina wordt getoond wanneer je Carbon Browser Browser start of op de Homepage-knop klikt.</translation>
+<translation id="8907580949721785412">Carbon Browser Browser probeert wachtwoorden te bekijken. Geef je Windows-wachtwoord op om dit toe te staan.</translation>
+<translation id="8931379085695076764">Carbon Browser Browser kan een schatting van je interesses maken op basis van je browsegeschiedenis van de afgelopen weken. Deze informatie blijft op je apparaat staan.</translation>
+<translation id="8941642502866065432">Kan Carbon Browser Browser niet updaten</translation>
+<translation id="897581876605952338">Carbon Browser Browser Enterprise-logo</translation>
 <translation id="8986207147630327271">Je voegt een werkprofiel toe aan deze browser en geeft je beheerder alleen de controle over het werkprofiel.</translation>
-<translation id="9019929317751753759">We hebben de volgende extensie uitgezet die niet wordt vermeld in de <ph name="IDS_EXTENSION_WEB_STORE_TITLE" /> en mogelijk zonder je medeweten is toegevoegd. We doen dit om Carbon Browser Browser Browser Browser Browser Browser veiliger te maken.</translation>
-<translation id="9089354809943900324">Carbon Browser Browser Browser Browser Browser Browser is verouderd</translation>
-<translation id="9093206154853821181">{0,plural, =1{Carbon Browser Browser Browser Browser Browser Browser wordt over een uur opnieuw gestart}other{Carbon Browser Browser Browser Browser Browser Browser wordt over # uur opnieuw gestart}}</translation>
-<translation id="91086099826398415">Link openen op een nieuw Carbon Browser Browser Browser Browser Browser Browser-&amp;tabblad</translation>
+<translation id="9019929317751753759">We hebben de volgende extensie uitgezet die niet wordt vermeld in de <ph name="IDS_EXTENSION_WEB_STORE_TITLE" /> en mogelijk zonder je medeweten is toegevoegd. We doen dit om Carbon Browser Browser veiliger te maken.</translation>
+<translation id="9022552996538154597">Inloggen bij Carbon Browser Browser</translation>
+<translation id="9089354809943900324">Carbon Browser Browser is verouderd</translation>
+<translation id="9093206154853821181">{0,plural, =1{Carbon Browser Browser wordt over een uur opnieuw gestart}other{Carbon Browser Browser wordt over # uur opnieuw gestart}}</translation>
+<translation id="91086099826398415">Link openen op een nieuw Carbon Browser Browser-&amp;tabblad</translation>
 <translation id="911206726377975832">Ook browsegegevens wissen?</translation>
-<translation id="9158494823179993217">Je systeembeheerder heeft geconfigureerd dat Carbon Browser Browser Browser Browser Browser Browser een alternatieve browser opent voor toegang tot <ph name="TARGET_URL_HOSTNAME" />.</translation>
-<translation id="9185526690718004400">Opnieuw starten om &amp;Carbon Browser Browser Browser Browser Browser Browser te updaten</translation>
-<translation id="9190841055450128916">Carbon Browser Browser Browser Browser Browser Browser (mDNS-In)</translation>
-<translation id="9214764063801632699">Carbon Browser Browser Browser Browser Browser Browser OS-systeem</translation>
-<translation id="93478295209880648">Carbon Browser Browser Browser Browser Browser Browser werkt mogelijk niet naar behoren omdat dit niet langer wordt ondersteund op Windows XP en Windows Vista</translation>
-<translation id="965162752251293939">Wie gebruikt Carbon Browser Browser Browser Browser Browser Browser?</translation>
-<translation id="985602178874221306">De auteurs van Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="9144490074902256427">Tijdens de proeven kun je interessante onderwerpen bekijken en verwijderen die sites hebben gebruikt om je advertenties te laten zien. Carbon Browser Browser schat je interesses op basis van je recente browsegeschiedenis</translation>
+<translation id="9158494823179993217">Je systeembeheerder heeft geconfigureerd dat Carbon Browser Browser een alternatieve browser opent voor toegang tot <ph name="TARGET_URL_HOSTNAME" />.</translation>
+<translation id="9185526690718004400">Opnieuw starten om &amp;Carbon Browser Browser te updaten</translation>
+<translation id="9190841055450128916">Carbon Browser Browser (mDNS-In)</translation>
+<translation id="93478295209880648">Carbon Browser Browser werkt mogelijk niet naar behoren omdat dit niet langer wordt ondersteund op Windows XP en Windows Vista</translation>
+<translation id="942598560705308788">Certificaten beheerd door Carbon Browser Browser</translation>
+<translation id="945990405696787151">Als je toekomstige Carbon Browser Browser-updates wilt krijgen, heb je macOS 10.13 of hoger nodig. Deze computer gebruikt OS X 10.11.</translation>
+<translation id="965162752251293939">Wie gebruikt Carbon Browser Browser?</translation>
+<translation id="967427899662692980">Gebruik het hoogste beveiligingsniveau van Carbon Browser Browser</translation>
+<translation id="985602178874221306">De auteurs van Carbon Browser Browser</translation>
 </translationbundle>

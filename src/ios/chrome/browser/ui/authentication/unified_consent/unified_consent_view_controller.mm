@@ -8,17 +8,19 @@
 
 #include "base/check_op.h"
 #include "base/ios/ns_range.h"
+#include "base/notreached.h"
 #include "components/google/core/common/google_util.h"
 #include "ios/chrome/browser/application_context.h"
+#include "ios/chrome/browser/chrome_url_constants.h"
 #import "ios/chrome/browser/ui/authentication/authentication_constants.h"
 #import "ios/chrome/browser/ui/authentication/unified_consent/unified_consent_constants.h"
 #import "ios/chrome/browser/ui/authentication/unified_consent/unified_consent_view_controller_delegate.h"
 #import "ios/chrome/browser/ui/authentication/views/identity_button_control.h"
-#import "ios/chrome/browser/ui/colors/MDCPalette+CrAdditions.h"
 #import "ios/chrome/browser/ui/util/uikit_ui_util.h"
 #include "ios/chrome/common/string_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
+#import "ios/chrome/common/ui/util/text_view_util.h"
 #include "ios/chrome/grit/ios_chromium_strings.h"
 #include "ios/chrome/grit/ios_strings.h"
 #import "net/base/mac/url_conversions.h"
@@ -67,6 +69,8 @@ const char* const kSettingsSyncURL = "internal://settings-sync";
 @property(nonatomic, strong) NSLayoutConstraint* headerViewMaxHeightConstraint;
 // Text description that may show link to advanced Sync settings.
 @property(nonatomic, strong) UITextView* syncSettingsTextView;
+// Text description that show a link to open the management help page.
+@property(nonatomic, strong) UITextView* managementNoticeTextView;
 
 @end
 
@@ -169,8 +173,11 @@ const char* const kSettingsSyncURL = "internal://settings-sync";
   [container addSubview:self.identityButtonControl];
 
   // Sync title and subtitle.
+  int stringId = self.delegate.unifiedConsentCoordinatorHasManagedSyncDataType
+                     ? IDS_IOS_ACCOUNT_UNIFIED_CONSENT_SYNC_MANAGED_TITLE
+                     : IDS_IOS_ACCOUNT_UNIFIED_CONSENT_SYNC_TITLE;
   UILabel* syncTitleLabel =
-      [self addLabelWithStringId:IDS_IOS_ACCOUNT_UNIFIED_CONSENT_SYNC_TITLE
+      [self addLabelWithStringId:stringId
                        fontStyle:kAuthenticationTextFontStyle
                        textColor:[UIColor colorNamed:kTextPrimaryColor]
                       parentView:container];
@@ -188,7 +195,7 @@ const char* const kSettingsSyncURL = "internal://settings-sync";
   [container addSubview:separator];
 
   // Sync settings description.
-  self.syncSettingsTextView = [[UITextView alloc] init];
+  self.syncSettingsTextView = CreateUITextViewWithTextKit1();
   self.syncSettingsTextView.scrollEnabled = NO;
   self.syncSettingsTextView.editable = NO;
   self.syncSettingsTextView.delegate = self;
@@ -199,7 +206,10 @@ const char* const kSettingsSyncURL = "internal://settings-sync";
   self.syncSettingsTextView.translatesAutoresizingMaskIntoConstraints = NO;
   [container addSubview:self.syncSettingsTextView];
 
-  self.openSettingsStringId = IDS_IOS_ACCOUNT_UNIFIED_CONSENT_SETTINGS;
+  self.openSettingsStringId =
+      self.delegate.unifiedConsentCoordinatorHasManagedSyncDataType
+          ? IDS_IOS_ACCOUNT_UNIFIED_CONSENT_SYNC_MANAGED_SETTINGS
+          : IDS_IOS_ACCOUNT_UNIFIED_CONSENT_SETTINGS;
 
   // Layouts
   NSDictionary* views = @{
@@ -237,16 +247,33 @@ const char* const kSettingsSyncURL = "internal://settings-sync";
     @"V:|[container]|",
     @"V:|[header]-(HeaderTitleMargin)-[title]-(TitlePickerMargin)-[picker]",
     @"V:[synctitle]-[syncsubtitle]-(VBetweenText)-[separator]",
-    @"V:[separator]-(VSeparatorText)-[customizesync]-(VTextMargin)-|",
+    @"V:[separator]-(VSeparatorText)-[customizesync]-(>=VTextMargin)-|",
     // Size constraints.
     @"V:[separator(SeparatorHeight)]",
   ];
   ApplyVisualConstraintsWithMetrics(constraints, views, metrics);
 
+  if (self.delegate.unifiedConsentCoordinatorHasAccountRestrictions ||
+      self.delegate.unifiedConsentCoordinatorHasManagedSyncDataType) {
+    // Manage settings description.
+    [container addSubview:self.managementNoticeTextView];
+    [NSLayoutConstraint activateConstraints:@[
+      [self.managementNoticeTextView.leadingAnchor
+          constraintEqualToAnchor:self.syncSettingsTextView.leadingAnchor],
+      [self.managementNoticeTextView.trailingAnchor
+          constraintEqualToAnchor:self.syncSettingsTextView.trailingAnchor],
+      [self.managementNoticeTextView.topAnchor
+          constraintEqualToAnchor:self.syncSettingsTextView.bottomAnchor],
+      [self.managementNoticeTextView.bottomAnchor
+          constraintLessThanOrEqualToAnchor:container.bottomAnchor
+                                   constant:-kVerticalTextMargin],
+    ]];
+  }
+
   // Adding constraints for header image.
   AddSameCenterXConstraint(self.view, headerImageView);
-  // |headerView| fills 20% of |view|, capped at
-  // |kAuthenticationHeaderImageHeight|.
+  // `headerView` fills 20% of `view`, capped at
+  // `kAuthenticationHeaderImageHeight`.
   [headerImageView.heightAnchor
       constraintLessThanOrEqualToAnchor:self.view.heightAnchor
                              multiplier:0.2]
@@ -269,7 +296,7 @@ const char* const kSettingsSyncURL = "internal://settings-sync";
   [container.widthAnchor constraintEqualToAnchor:safeArea.widthAnchor].active =
       YES;
 
-  // Adding constraints for |imageBackgroundView|.
+  // Adding constraints for `imageBackgroundView`.
   AddSameCenterXConstraint(self.view, imageBackgroundView);
   [imageBackgroundView.widthAnchor
       constraintEqualToAnchor:self.view.widthAnchor]
@@ -344,7 +371,38 @@ const char* const kSettingsSyncURL = "internal://settings-sync";
 
 #pragma mark - Private
 
-// Adds label with title |stringId| into |parentView|.
+- (UITextView*)managementNoticeTextView {
+  if (_managementNoticeTextView)
+    return _managementNoticeTextView;
+
+  _managementNoticeTextView = CreateUITextViewWithTextKit1();
+  _managementNoticeTextView.scrollEnabled = NO;
+  _managementNoticeTextView.editable = NO;
+  _managementNoticeTextView.delegate = self;
+  _managementNoticeTextView.adjustsFontForContentSizeCategory = YES;
+  _managementNoticeTextView.translatesAutoresizingMaskIntoConstraints = NO;
+  _managementNoticeTextView.backgroundColor = UIColor.clearColor;
+
+  NSString* fullText =
+      l10n_util::GetNSString(IDS_IOS_ENTERPRISE_MANAGED_SIGNIN_LEARN_MORE);
+  NSDictionary* textAttributes = @{
+    NSForegroundColorAttributeName : [UIColor colorNamed:kTextSecondaryColor],
+    NSFontAttributeName :
+        [UIFont preferredFontForTextStyle:kAuthenticationTextFontStyle]
+  };
+  NSDictionary* linkAttributes = @{
+    NSForegroundColorAttributeName : [UIColor colorNamed:kBlueColor],
+    NSLinkAttributeName : net::NSURLWithGURL(GURL(kChromeUIManagementURL)),
+    NSFontAttributeName :
+        [UIFont preferredFontForTextStyle:kAuthenticationTextFontStyle]
+  };
+  _managementNoticeTextView.attributedText = AttributedStringFromStringWithLink(
+      fullText, textAttributes, linkAttributes);
+
+  return _managementNoticeTextView;
+}
+
+// Adds label with title `stringId` into `parentView`.
 - (UILabel*)addLabelWithStringId:(int)stringId
                        fontStyle:(UIFontTextStyle)fontStyle
                        textColor:(UIColor*)textColor
@@ -376,17 +434,13 @@ const char* const kSettingsSyncURL = "internal://settings-sync";
 
   NSDictionary* linkAttributes = nil;
   if (showLink) {
-    NSURL* URL = net::NSURLWithGURL(google_util::AppendGoogleLocaleParam(
-        GURL(kSettingsSyncURL),
-        GetApplicationContext()->GetApplicationLocale()));
     linkAttributes = @{
       NSForegroundColorAttributeName : [UIColor colorNamed:kBlueColor],
       NSFontAttributeName :
           [UIFont preferredFontForTextStyle:kAuthenticationTextFontStyle],
-      NSLinkAttributeName : URL,
+      NSLinkAttributeName : net::NSURLWithGURL(GURL(kSettingsSyncURL)),
     };
   }
-
   self.syncSettingsTextView.attributedText =
       AttributedStringFromStringWithLink(text, textAttributes, linkAttributes);
 }
@@ -397,16 +451,21 @@ const char* const kSettingsSyncURL = "internal://settings-sync";
     shouldInteractWithURL:(NSURL*)URL
                   inRange:(NSRange)characterRange
               interaction:(UITextItemInteraction)interaction {
-  DCHECK(self.syncSettingsTextView == textView);
-  DCHECK(URL);
-  [self.delegate unifiedConsentViewControllerDidTapSettingsLink:self];
-
+  if (textView == self.syncSettingsTextView) {
+    DCHECK([URL isEqual:net::NSURLWithGURL(GURL(kSettingsSyncURL))]);
+    [self.delegate unifiedConsentViewControllerDidTapSettingsLink:self];
+  } else if (textView == self.managementNoticeTextView) {
+    DCHECK([URL isEqual:net::NSURLWithGURL(GURL(kChromeUIManagementURL))]);
+    [self.delegate unifiedConsentViewControllerDidTapLearnMoreLink:self];
+  } else {
+    NOTREACHED();
+  }
   // Returns NO as the app is handling the opening of the URL.
   return NO;
 }
 
-// Updates constraints and content insets for the |scrollView| and
-// |imageBackgroundView| related to non-safe area.
+// Updates constraints and content insets for the `scrollView` and
+// `imageBackgroundView` related to non-safe area.
 - (void)updateScrollViewAndImageBackgroundView {
   self.scrollView.contentInset = self.view.safeAreaInsets;
   self.imageBackgroundViewHeightConstraint.constant =
@@ -426,7 +485,7 @@ const char* const kSettingsSyncURL = "internal://settings-sync";
 }
 
 // Updates the header view constraints based on the height class traits of
-// |view|.
+// `view`.
 - (void)updateHeaderViewConstraints {
   if (IsCompactHeight(self)) {
     self.headerViewMaxHeightConstraint.constant = 0;

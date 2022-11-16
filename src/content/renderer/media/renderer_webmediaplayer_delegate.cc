@@ -10,6 +10,7 @@
 #include "base/bind.h"
 #include "base/metrics/user_metrics_action.h"
 #include "base/system/sys_info.h"
+#include "base/threading/thread_task_runner_handle.h"
 #include "content/public/common/content_client.h"
 #include "content/public/renderer/content_renderer_client.h"
 #include "content/public/renderer/render_frame.h"
@@ -36,17 +37,12 @@ RendererWebMediaPlayerDelegate::RendererWebMediaPlayerDelegate(
       allow_idle_cleanup_(
           content::GetContentClient()->renderer()->IsIdleMediaSuspendEnabled()),
       tick_clock_(base::DefaultTickClock::GetInstance()) {
-  idle_cleanup_interval_ = base::TimeDelta::FromSeconds(5);
-  idle_timeout_ = base::TimeDelta::FromSeconds(15);
+  idle_cleanup_interval_ = base::Seconds(5);
+  idle_timeout_ = base::Seconds(15);
 
   is_low_end_ = base::SysInfo::IsLowEndDevice();
   idle_cleanup_timer_.SetTaskRunner(
       render_frame->GetTaskRunner(blink::TaskType::kInternalMedia));
-
-  // This corresponds to UMA_HISTOGRAM_COUNTS_1000.
-  peak_player_count_uma_ =
-      base::SingleSampleMetricsFactory::Get()->CreateCustomCountsMetric(
-          "Media.PeakWebMediaPlayerCount", 0, 1000, 50);
 }
 
 RendererWebMediaPlayerDelegate::~RendererWebMediaPlayerDelegate() {}
@@ -59,12 +55,7 @@ bool RendererWebMediaPlayerDelegate::IsFrameHidden() {
 }
 
 int RendererWebMediaPlayerDelegate::AddObserver(Observer* observer) {
-  const auto result = id_map_.Add(observer);
-  if (id_map_.size() > peak_player_count_) {
-    peak_player_count_ = id_map_.size();
-    peak_player_count_uma_->SetSample(peak_player_count_);
-  }
-  return result;
+  return id_map_.Add(observer);
 }
 
 void RendererWebMediaPlayerDelegate::RemoveObserver(int player_id) {
@@ -294,6 +285,12 @@ void RendererWebMediaPlayerDelegate::CleanUpIdlePlayers(
 }
 
 void RendererWebMediaPlayerDelegate::OnDestruct() {
+  // All WebMediaPlayer instances should have been destructed by this point.
+  CHECK(id_map_.IsEmpty());
+  CHECK(idle_player_map_.empty());
+  CHECK(stale_players_.empty());
+  CHECK(players_with_video_.empty());
+  CHECK(playing_videos_.empty());
   delete this;
 }
 

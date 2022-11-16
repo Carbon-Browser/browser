@@ -23,7 +23,7 @@
 // Class for Autofill suggestion in the customized keyboard.
 @interface FormSuggestionLabel : UIView
 
-// Designated initializer. Initializes with |delegate| for |suggestion|.
+// Designated initializer. Initializes with `delegate` for `suggestion`.
 - (instancetype)initWithSuggestion:(FormSuggestion*)suggestion
                              index:(NSUInteger)index
                     numSuggestions:(NSUInteger)numSuggestions
@@ -33,6 +33,10 @@
 - (instancetype)initWithFrame:(CGRect)frame NS_UNAVAILABLE;
 
 - (instancetype)initWithCoder:(NSCoder*)aDecoder NS_UNAVAILABLE;
+
+// Animates the view using a highlight effect.
+- (void)animateWithHighlight;
+
 @end
 
 #endif  // IOS_CHROME_BROWSER_AUTOFILL_FORM_SUGGESTION_LABEL_H_

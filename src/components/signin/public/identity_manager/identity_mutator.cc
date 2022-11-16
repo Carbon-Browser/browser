@@ -4,13 +4,14 @@
 
 #include "components/signin/public/identity_manager/identity_mutator.h"
 
+#include "build/build_config.h"
+#include "components/signin/public/base/consent_level.h"
 #include "components/signin/public/identity_manager/accounts_cookie_mutator.h"
 #include "components/signin/public/identity_manager/accounts_mutator.h"
-#include "components/signin/public/identity_manager/consent_level.h"
 #include "components/signin/public/identity_manager/device_accounts_synchronizer.h"
 #include "components/signin/public/identity_manager/primary_account_mutator.h"
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #include "base/android/jni_string.h"
 #include "components/signin/public/android/jni_headers/IdentityMutator_jni.h"
 #include "components/signin/public/identity_manager/account_info.h"
@@ -18,7 +19,7 @@
 
 namespace signin {
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 JniIdentityMutator::JniIdentityMutator(IdentityMutator* identity_mutator)
     : identity_mutator_(identity_mutator) {}
 
@@ -30,9 +31,11 @@ bool JniIdentityMutator::SetPrimaryAccount(
       identity_mutator_->GetPrimaryAccountMutator();
   DCHECK(primary_account_mutator);
 
-  return primary_account_mutator->SetPrimaryAccount(
-      ConvertFromJavaCoreAccountId(env, primary_account_id),
-      static_cast<ConsentLevel>(j_consent_level));
+  PrimaryAccountMutator::PrimaryAccountError error =
+      primary_account_mutator->SetPrimaryAccount(
+          ConvertFromJavaCoreAccountId(env, primary_account_id),
+          static_cast<ConsentLevel>(j_consent_level));
+  return error == PrimaryAccountMutator::PrimaryAccountError::kNoError;
 }
 
 bool JniIdentityMutator::ClearPrimaryAccount(JNIEnv* env,
@@ -42,6 +45,17 @@ bool JniIdentityMutator::ClearPrimaryAccount(JNIEnv* env,
       identity_mutator_->GetPrimaryAccountMutator();
   DCHECK(primary_account_mutator);
   return primary_account_mutator->ClearPrimaryAccount(
+      static_cast<signin_metrics::ProfileSignout>(source_metric),
+      static_cast<signin_metrics::SignoutDelete>(delete_metric));
+}
+
+void JniIdentityMutator::RevokeSyncConsent(JNIEnv* env,
+                                           jint source_metric,
+                                           jint delete_metric) {
+  PrimaryAccountMutator* primary_account_mutator =
+      identity_mutator_->GetPrimaryAccountMutator();
+  DCHECK(primary_account_mutator);
+  return primary_account_mutator->RevokeSyncConsent(
       static_cast<signin_metrics::ProfileSignout>(source_metric),
       static_cast<signin_metrics::SignoutDelete>(delete_metric));
 }
@@ -60,7 +74,7 @@ void JniIdentityMutator::ReloadAllAccountsFromSystemWithPrimaryAccount(
   device_accounts_synchronizer->ReloadAllAccountsFromSystemWithPrimaryAccount(
       primary_account_id);
 }
-#endif  // defined(OS_ANDROID)
+#endif  // BUILDFLAG(IS_ANDROID)
 
 IdentityMutator::IdentityMutator(
     std::unique_ptr<PrimaryAccountMutator> primary_account_mutator,
@@ -75,7 +89,7 @@ IdentityMutator::IdentityMutator(
   DCHECK(!accounts_mutator_ || !device_accounts_synchronizer_)
       << "Cannot have both an AccountsMutator and a DeviceAccountsSynchronizer";
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   jni_identity_mutator_.reset(new JniIdentityMutator(this));
   java_identity_mutator_ = Java_IdentityMutator_Constructor(
       base::android::AttachCurrentThread(),
@@ -84,14 +98,14 @@ IdentityMutator::IdentityMutator(
 }
 
 IdentityMutator::~IdentityMutator() {
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   if (java_identity_mutator_)
     Java_IdentityMutator_destroy(base::android::AttachCurrentThread(),
                                  java_identity_mutator_);
 #endif
 }
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 base::android::ScopedJavaLocalRef<jobject> IdentityMutator::GetJavaObject() {
   DCHECK(java_identity_mutator_);
   return base::android::ScopedJavaLocalRef<jobject>(java_identity_mutator_);

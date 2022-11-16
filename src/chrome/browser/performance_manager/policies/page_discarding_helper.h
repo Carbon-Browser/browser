@@ -7,6 +7,7 @@
 
 #include "base/callback_forward.h"
 #include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "components/performance_manager/public/decorators/page_live_state_decorator.h"
@@ -16,6 +17,10 @@
 #include "components/performance_manager/public/graph/node_data_describer.h"
 #include "components/performance_manager/public/graph/page_node.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+
+namespace url_matcher {
+class URLMatcher;
+}  // namespace url_matcher
 
 namespace performance_manager {
 
@@ -56,14 +61,23 @@ class PageDiscardingHelper : public GraphOwned,
       bool discard_protected_tabs,
       base::OnceCallback<void(bool)> post_discard_cb);
 
+  void ImmediatelyDiscardSpecificPage(const PageNode* page_node);
+
   // PageNodeObserver:
   void OnBeforePageNodeRemoved(const PageNode* page_node) override;
   void OnIsAudibleChanged(const PageNode* page_node) override;
 
+  void SetNoDiscardPatternsForProfile(const std::string& browser_context_id,
+                                      const std::vector<std::string>& patterns);
+  void ClearNoDiscardPatternsForProfile(const std::string& browser_context_id);
+
   void SetMockDiscarderForTesting(
       std::unique_ptr<mechanism::PageDiscarder> discarder);
-  bool CanUrgentlyDiscardForTesting(const PageNode* page_node) const {
-    return CanUrgentlyDiscard(page_node) == CanUrgentlyDiscardResult::kEligible;
+  bool CanUrgentlyDiscardForTesting(
+      const PageNode* page_node,
+      bool consider_minimum_protection_time = true) const {
+    return CanUrgentlyDiscard(page_node, consider_minimum_protection_time) ==
+           CanUrgentlyDiscardResult::kEligible;
   }
   void SetGraphForTesting(Graph* graph) { graph_ = graph; }
   static void AddDiscardAttemptMarkerForTesting(PageNode* page_node);
@@ -88,8 +102,17 @@ class PageDiscardingHelper : public GraphOwned,
     kMarked,
   };
 
-  // Indicates if a PageNode can be urgently discarded.
-  CanUrgentlyDiscardResult CanUrgentlyDiscard(const PageNode* page_node) const;
+  // Indicates if a PageNode can be urgently discarded. If
+  // `consider_minimum_protection_time` is false, the check that ensures the
+  // page hasn't been visible recently is ignored. This is to support cases
+  // where the time before a tab is discarded is known and shorter than the
+  // grace period.
+  CanUrgentlyDiscardResult CanUrgentlyDiscard(
+      const PageNode* page_node,
+      bool consider_minimum_protection_time = true) const;
+
+  bool IsPageOptedOutOfDiscarding(const std::string& browser_context_id,
+                                  const GURL& url) const;
 
   // NodeDataDescriber implementation:
   base::Value DescribePageNodeData(const PageNode* node) const override;
@@ -114,7 +137,10 @@ class PageDiscardingHelper : public GraphOwned,
   std::unique_ptr<performance_manager::mechanism::PageDiscarder>
       page_discarder_;
 
-  Graph* graph_ = nullptr;
+  std::map<std::string, std::unique_ptr<url_matcher::URLMatcher>>
+      profiles_no_discard_patterns_;
+
+  raw_ptr<Graph> graph_ = nullptr;
 
   SEQUENCE_CHECKER(sequence_checker_);
 

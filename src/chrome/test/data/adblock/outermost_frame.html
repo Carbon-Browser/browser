@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <script>
+    // Innermost frame has a script that sends us whether subresource
+    // is visible. This variable is inspected from C++.
+    var subresource_visible = null;
+
+    window.onmessage = function (event) {
+      subresource_visible = event.data
+    }
+  </script>
+</head>
+
+<body>
+  <iframe id='middle_frame' src='/cross-site/middle.com/middle_frame.html' width='400'></iframe>
+</body>
+
+</html>

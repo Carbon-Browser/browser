@@ -62,6 +62,9 @@ class UpgradeInfoBarDelegate : public ConfirmInfoBarDelegate {
  public:
   UpgradeInfoBarDelegate() : trigger_upgrade_(false) {}
 
+  UpgradeInfoBarDelegate(const UpgradeInfoBarDelegate&) = delete;
+  UpgradeInfoBarDelegate& operator=(const UpgradeInfoBarDelegate&) = delete;
+
   ~UpgradeInfoBarDelegate() override {}
 
   // Returns true is the infobar was closed by pressing the accept button.
@@ -82,11 +85,11 @@ class UpgradeInfoBarDelegate : public ConfirmInfoBarDelegate {
     return false;
   }
 
-  gfx::Image GetIcon() const override {
+  ui::ImageModel GetIcon() const override {
     if (icon_.IsEmpty()) {
       icon_ = gfx::Image([UIImage imageNamed:@"infobar_update"]);
     }
-    return icon_;
+    return ui::ImageModel::FromImage(icon_);
   }
 
   std::u16string GetMessageText() const override {
@@ -107,8 +110,6 @@ class UpgradeInfoBarDelegate : public ConfirmInfoBarDelegate {
 
   mutable gfx::Image icon_;
   bool trigger_upgrade_;
-
-  DISALLOW_COPY_AND_ASSIGN(UpgradeInfoBarDelegate);
 };
 
 // The InfoBarDelegate unfortunately is not called at all when an infoBar is
@@ -120,6 +121,10 @@ class UpgradeInfoBarDismissObserver
  public:
   UpgradeInfoBarDismissObserver()
       : infobar_delegate_(nullptr), dismiss_delegate_(nil) {}
+
+  UpgradeInfoBarDismissObserver(const UpgradeInfoBarDismissObserver&) = delete;
+  UpgradeInfoBarDismissObserver& operator=(
+      const UpgradeInfoBarDismissObserver&) = delete;
 
   ~UpgradeInfoBarDismissObserver() override {}
 
@@ -156,8 +161,6 @@ class UpgradeInfoBarDismissObserver
   base::ScopedObservation<infobars::InfoBarManager,
                           infobars::InfoBarManager::Observer>
       scoped_observation_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(UpgradeInfoBarDismissObserver);
 };
 
 }  // namespace

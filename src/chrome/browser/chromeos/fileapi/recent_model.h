@@ -11,7 +11,6 @@
 
 #include "base/callback_forward.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
@@ -43,6 +42,9 @@ class RecentModel : public KeyedService {
       base::OnceCallback<void(const std::vector<RecentFile>& files)>;
   using FileType = RecentSource::FileType;
 
+  RecentModel(const RecentModel&) = delete;
+  RecentModel& operator=(const RecentModel&) = delete;
+
   ~RecentModel() override;
 
   // Returns an instance for the given profile.
@@ -58,6 +60,7 @@ class RecentModel : public KeyedService {
   void GetRecentFiles(storage::FileSystemContext* file_system_context,
                       const GURL& origin,
                       FileType file_type,
+                      bool invalidate_cache,
                       GetRecentFilesCallback callback);
 
   // KeyedService overrides:
@@ -66,7 +69,10 @@ class RecentModel : public KeyedService {
  private:
   friend class RecentModelFactory;
   friend class RecentModelTest;
+  friend class RecentModelCacheTest;
   FRIEND_TEST_ALL_PREFIXES(RecentModelTest, GetRecentFiles_UmaStats);
+  FRIEND_TEST_ALL_PREFIXES(RecentModelCacheTest,
+                           GetRecentFiles_InvalidateCache);
 
   static const char kLoadHistogramName[];
 
@@ -117,8 +123,6 @@ class RecentModel : public KeyedService {
       intermediate_files_;
 
   base::WeakPtrFactory<RecentModel> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(RecentModel);
 };
 
 }  // namespace chromeos

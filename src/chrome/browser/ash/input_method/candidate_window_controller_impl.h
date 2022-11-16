@@ -7,11 +7,10 @@
 
 #include <memory>
 
-#include "base/macros.h"
 #include "base/observer_list.h"
 #include "chrome/browser/ash/input_method/candidate_window_controller.h"
 #include "chrome/browser/ash/input_method/ui/candidate_window_view.h"
-#include "ui/base/ime/chromeos/ime_candidate_window_handler_interface.h"
+#include "ui/base/ime/ash/ime_candidate_window_handler_interface.h"
 #include "ui/base/ime/infolist_entry.h"
 #include "ui/views/widget/widget_observer.h"
 
@@ -39,6 +38,11 @@ class CandidateWindowControllerImpl
       public IMECandidateWindowHandlerInterface {
  public:
   CandidateWindowControllerImpl();
+
+  CandidateWindowControllerImpl(const CandidateWindowControllerImpl&) = delete;
+  CandidateWindowControllerImpl& operator=(
+      const CandidateWindowControllerImpl&) = delete;
+
   ~CandidateWindowControllerImpl() override;
 
   // CandidateWindowController overrides:
@@ -63,8 +67,8 @@ class CandidateWindowControllerImpl
   void SetCursorBounds(const gfx::Rect& cursor_bounds,
                        const gfx::Rect& composition_head) override;
   gfx::Rect GetCursorBounds() const override;
-  void UpdateLookupTable(const ui::CandidateWindow& candidate_window,
-                         bool visible) override;
+  void HideLookupTable() override;
+  void UpdateLookupTable(const ui::CandidateWindow& candidate_window) override;
   void UpdatePreeditText(const std::u16string& text,
                          unsigned int cursor,
                          bool visible) override;
@@ -88,8 +92,6 @@ class CandidateWindowControllerImpl
   std::vector<ui::InfolistEntry> latest_infolist_entries_;
 
   base::ObserverList<CandidateWindowController::Observer>::Unchecked observers_;
-
-  DISALLOW_COPY_AND_ASSIGN(CandidateWindowControllerImpl);
 };
 
 }  // namespace input_method

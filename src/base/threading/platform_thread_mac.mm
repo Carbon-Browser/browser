@@ -8,6 +8,7 @@
 #include <mach/mach.h>
 #include <mach/mach_time.h>
 #include <mach/thread_policy.h>
+#include <mach/thread_switch.h>
 #include <stddef.h>
 #include <sys/resource.h>
 
@@ -28,7 +29,7 @@
 namespace base {
 
 namespace {
-NSString* const kThreadPriorityKey = @"CrThreadPriorityKey";
+NSString* const kThreadPriorityForTestKey = @"CrThreadPriorityForTestKey";
 NSString* const kRealtimePeriodNsKey = @"CrRealtimePeriodNsKey";
 }  // namespace
 
@@ -53,6 +54,21 @@ void InitThreading() {
   }
 }
 
+TimeDelta PlatformThread::Delegate::GetRealtimePeriod() {
+  return TimeDelta();
+}
+
+// static
+void PlatformThread::YieldCurrentThread() {
+  // Don't use sched_yield(), as it can lead to 10ms delays.
+  //
+  // This only depresses the thread priority for 1ms, which is more in line
+  // with what calling code likely wants. See this bug in webkit for context:
+  // https://bugs.webkit.org/show_bug.cgi?id=204871
+  mach_msg_timeout_t timeout_ms = 1;
+  thread_switch(MACH_PORT_NULL, SWITCH_OPTION_DEPRESS, timeout_ms);
+}
+
 // static
 void PlatformThread::SetName(const std::string& name) {
   ThreadIdNameManager::GetInstance()->SetName(name);
@@ -69,7 +85,7 @@ void PlatformThread::SetName(const std::string& name) {
 // Whether optimized realt-time thread config should be used for audio.
 const Feature kOptimizedRealtimeThreadingMac {
   "OptimizedRealtimeThreadingMac",
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
       FEATURE_ENABLED_BY_DEFAULT
 #else
       FEATURE_DISABLED_BY_DEFAULT
@@ -79,7 +95,7 @@ const Feature kOptimizedRealtimeThreadingMac {
 namespace {
 
 bool IsOptimizedRealtimeThreadingMacEnabled() {
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   // There is some platform bug on 10.14.
   if (mac::IsOS10_14())
     return false;
@@ -155,8 +171,7 @@ TimeDelta GetCurrentThreadRealtimePeriod() {
   NSNumber* period = mac::ObjCCast<NSNumber>(
       [[NSThread currentThread] threadDictionary][kRealtimePeriodNsKey]);
 
-  return period ? TimeDelta::FromNanoseconds(period.longLongValue)
-                : TimeDelta();
+  return period ? Nanoseconds(period.longLongValue) : TimeDelta();
 }
 
 // Calculates time constrints for THREAD_TIME_CONSTRAINT_POLICY.
@@ -267,12 +282,12 @@ void SetPriorityRealtimeAudio(TimeDelta realtime_period) {
 
   UmaHistogramCustomMicrosecondsTimes(
       "PlatformThread.Mac.AttemptedRealtimePeriod", realtime_period,
-      base::TimeDelta(), base::TimeDelta::FromMilliseconds(100), 100);
+      base::TimeDelta(), base::Milliseconds(100), 100);
 
   if (result == KERN_SUCCESS) {
     UmaHistogramCustomMicrosecondsTimes(
         "PlatformThread.Mac.SucceededRealtimePeriod", realtime_period,
-        base::TimeDelta(), base::TimeDelta::FromMilliseconds(100), 100);
+        base::TimeDelta(), base::Milliseconds(100), 100);
   }
   return;
 }
@@ -280,28 +295,42 @@ void SetPriorityRealtimeAudio(TimeDelta realtime_period) {
 }  // anonymous namespace
 
 // static
-bool PlatformThread::CanIncreaseThreadPriority(ThreadPriority priority) {
+bool PlatformThread::CanChangeThreadType(ThreadType from, ThreadType to) {
   return true;
 }
 
-// static
-void PlatformThread::SetCurrentThreadPriorityImpl(ThreadPriority priority) {
+namespace internal {
+
+void SetCurrentThreadTypeImpl(ThreadType thread_type,
+                              MessagePumpType pump_type_hint) {
   // Changing the priority of the main thread causes performance regressions.
   // https://crbug.com/601270
-  DCHECK(![[NSThread currentThread] isMainThread]);
+  if ([[NSThread currentThread] isMainThread]) {
+    DCHECK(thread_type == ThreadType::kDefault ||
+           thread_type == ThreadType::kCompositing);
+    return;
+  }
 
-  switch (priority) {
-    case ThreadPriority::BACKGROUND:
+  ThreadPriorityForTest priority = ThreadPriorityForTest::kNormal;
+  switch (thread_type) {
+    case ThreadType::kBackground:
+      priority = ThreadPriorityForTest::kBackground;
       [[NSThread currentThread] setThreadPriority:0];
       break;
-    case ThreadPriority::NORMAL:
+    case ThreadType::kDefault:
+      // TODO(1329208): Experiment with prioritizing kCompositing on Mac like on
+      // other platforms.
+      [[fallthrough]];
+    case ThreadType::kCompositing:
+      priority = ThreadPriorityForTest::kNormal;
       [[NSThread currentThread] setThreadPriority:0.5];
       break;
-    case ThreadPriority::DISPLAY: {
+    case ThreadType::kDisplayCritical: {
       // Apple has suggested that insufficient priority may be the reason for
       // Metal shader compilation hangs. A priority of 50 is higher than user
       // input.
       // https://crbug.com/974219.
+      priority = ThreadPriorityForTest::kDisplay;
       [[NSThread currentThread] setThreadPriority:1.0];
       sched_param param;
       int policy;
@@ -312,40 +341,36 @@ void PlatformThread::SetCurrentThreadPriorityImpl(ThreadPriority priority) {
       }
       break;
     }
-    case ThreadPriority::REALTIME_AUDIO:
+    case ThreadType::kRealtimeAudio:
+      priority = ThreadPriorityForTest::kRealtimeAudio;
       SetPriorityRealtimeAudio(GetCurrentThreadRealtimePeriod());
       DCHECK_EQ([[NSThread currentThread] threadPriority], 1.0);
       break;
   }
 
-  [[NSThread currentThread] threadDictionary][kThreadPriorityKey] =
+  [[NSThread currentThread] threadDictionary][kThreadPriorityForTestKey] =
       @(static_cast<int>(priority));
 }
 
+}  // namespace internal
+
 // static
-ThreadPriority PlatformThread::GetCurrentThreadPriority() {
+ThreadPriorityForTest PlatformThread::GetCurrentThreadPriorityForTest() {
   NSNumber* priority = base::mac::ObjCCast<NSNumber>(
-      [[NSThread currentThread] threadDictionary][kThreadPriorityKey]);
+      [[NSThread currentThread] threadDictionary][kThreadPriorityForTestKey]);
 
   if (!priority)
-    return ThreadPriority::NORMAL;
+    return ThreadPriorityForTest::kNormal;
 
-  ThreadPriority thread_priority =
-      static_cast<ThreadPriority>(priority.intValue);
-  switch (thread_priority) {
-    case ThreadPriority::BACKGROUND:
-    case ThreadPriority::NORMAL:
-    case ThreadPriority::DISPLAY:
-    case ThreadPriority::REALTIME_AUDIO:
-      return thread_priority;
-    default:
-      NOTREACHED() << "Unknown priority.";
-      return ThreadPriority::NORMAL;
-  }
+  ThreadPriorityForTest thread_priority =
+      static_cast<ThreadPriorityForTest>(priority.intValue);
+  DCHECK_GE(thread_priority, ThreadPriorityForTest::kBackground);
+  DCHECK_LE(thread_priority, ThreadPriorityForTest::kMaxValue);
+  return thread_priority;
 }
 
 size_t GetDefaultThreadStackSize(const pthread_attr_t& attributes) {
-#if defined(OS_IOS)
+#if BUILDFLAG(IS_IOS)
   return 0;
 #else
   // The Mac OS X default for a pthread stack size is 512kB.

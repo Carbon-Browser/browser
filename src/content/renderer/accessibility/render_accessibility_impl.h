@@ -9,16 +9,15 @@
 #include <memory>
 #include <vector>
 
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "content/common/content_export.h"
-#include "content/common/render_accessibility.mojom.h"
 #include "content/public/renderer/plugin_ax_tree_source.h"
 #include "content/public/renderer/render_accessibility.h"
 #include "content/public/renderer/render_frame.h"
 #include "content/public/renderer/render_frame_observer.h"
 #include "content/renderer/accessibility/blink_ax_tree_source.h"
+#include "third_party/blink/public/mojom/render_accessibility.mojom.h"
 #include "third_party/blink/public/web/web_ax_context.h"
 #include "third_party/blink/public/web/web_ax_object.h"
 #include "ui/accessibility/ax_event.h"
@@ -95,6 +94,10 @@ class CONTENT_EXPORT RenderAccessibilityImpl : public RenderAccessibility,
       RenderAccessibilityManager* const render_accessibility_manager,
       RenderFrameImpl* const render_frame,
       ui::AXMode mode);
+
+  RenderAccessibilityImpl(const RenderAccessibilityImpl&) = delete;
+  RenderAccessibilityImpl& operator=(const RenderAccessibilityImpl&) = delete;
+
   ~RenderAccessibilityImpl() override;
 
   ui::AXMode GetAccessibilityMode() {
@@ -115,7 +118,7 @@ class CONTENT_EXPORT RenderAccessibilityImpl : public RenderAccessibility,
   void HitTest(const gfx::Point& point,
                ax::mojom::Event event_to_fire,
                int request_id,
-               mojom::RenderAccessibility::HitTestCallback callback);
+               blink::mojom::RenderAccessibility::HitTestCallback callback);
   void PerformAction(const ui::AXActionData& data);
   void Reset(int32_t reset_token);
 
@@ -124,6 +127,7 @@ class CONTENT_EXPORT RenderAccessibilityImpl : public RenderAccessibility,
   void MarkWebAXObjectDirty(
       const blink::WebAXObject& obj,
       bool subtree,
+      ax::mojom::EventFrom event_from = ax::mojom::EventFrom::kNone,
       ax::mojom::Action event_from_action = ax::mojom::Action::kNone,
       std::vector<ui::AXEventIntent> event_intents = {},
       ax::mojom::Event event_type = ax::mojom::Event::kNone);
@@ -227,6 +231,10 @@ class CONTENT_EXPORT RenderAccessibilityImpl : public RenderAccessibility,
   // Returns the document for the active popup if any.
   blink::WebDocument GetPopupDocument();
 
+  // Returns the bounds of the popup (if there's one) relative to the main
+  // document.
+  absl::optional<gfx::RectF> GetPopupBounds();
+
   // Searches the accessibility tree for plugin's root object and returns it.
   // Returns an empty WebAXObject if no root object is present.
   blink::WebAXObject GetPluginRoot();
@@ -322,7 +330,6 @@ class CONTENT_EXPORT RenderAccessibilityImpl : public RenderAccessibility,
   // slowest_serialization_ms_. We report UKM before the user navigates
   // away, or every few minutes.
   ukm::SourceId last_ukm_source_id_;
-  std::string last_ukm_url_;
 
   // So we can queue up tasks to be executed later.
   base::WeakPtrFactory<RenderAccessibilityImpl>
@@ -332,8 +339,6 @@ class CONTENT_EXPORT RenderAccessibilityImpl : public RenderAccessibility,
   friend class PluginActionHandlingTest;
   friend class RenderAccessibilityImplTest;
   friend class RenderAccessibilityImplUKMTest;
-
-  DISALLOW_COPY_AND_ASSIGN(RenderAccessibilityImpl);
 };
 
 }  // namespace content

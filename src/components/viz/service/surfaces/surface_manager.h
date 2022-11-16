@@ -15,7 +15,7 @@
 #include "base/check_op.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/threading/thread_checker.h"
@@ -44,11 +44,17 @@ class SurfaceManagerDelegate;
 class SurfaceRange;
 struct BeginFrameAck;
 struct BeginFrameArgs;
+struct BeginFrameId;
 
 class VIZ_SERVICE_EXPORT SurfaceManager {
  public:
   SurfaceManager(SurfaceManagerDelegate* delegate,
-                 absl::optional<uint32_t> activation_deadline_in_frames);
+                 absl::optional<uint32_t> activation_deadline_in_frames,
+                 size_t max_uncommitted_frames);
+
+  SurfaceManager(const SurfaceManager&) = delete;
+  SurfaceManager& operator=(const SurfaceManager&) = delete;
+
   ~SurfaceManager();
 
 #if DCHECK_IS_ON()
@@ -103,6 +109,9 @@ class VIZ_SERVICE_EXPORT SurfaceManager {
 
   // Called when a surface has an active frame for the first time.
   void FirstSurfaceActivation(const SurfaceInfo& surface_info);
+
+  // Called when there is new frame in uncommitted queue of the surface.
+  void OnSurfaceHasNewUncommittedFrame(Surface* surface);
 
   // Called when a CompositorFrame within |surface| has activated.
   void SurfaceActivated(Surface* surface);
@@ -196,6 +205,15 @@ class VIZ_SERVICE_EXPORT SurfaceManager {
   // changed since the previous aggregation.
   void AggregatedFrameSinksChanged();
 
+  using CommitPredicate =
+      base::RepeatingCallback<bool(const SurfaceId&, const BeginFrameId&)>;
+  // Commits all surfaces in range and their referenced surfaces. For each
+  // surface processed calls `predicate` for each uncommitted frame from oldest
+  // to newest. If predicate returns true, surface is committed. If not the
+  // surface processing stops and we go to the next surface.
+  void CommitFramesInRangeRecursively(const SurfaceRange& range,
+                                      const CommitPredicate& predicate);
+
  private:
   friend class CompositorFrameSinkSupportTest;
   friend class FrameSinkManagerTest;
@@ -267,7 +285,7 @@ class VIZ_SERVICE_EXPORT SurfaceManager {
   void MaybeGarbageCollectAllocationGroups();
 
   // Can be nullptr.
-  SurfaceManagerDelegate* const delegate_;
+  const raw_ptr<SurfaceManagerDelegate> delegate_;
 
   absl::optional<uint32_t> activation_deadline_in_frames_;
 
@@ -291,7 +309,7 @@ class VIZ_SERVICE_EXPORT SurfaceManager {
   const base::flat_set<SurfaceId> empty_surface_id_set_;
 
   // Used for setting deadlines for surface synchronization.
-  const base::TickClock* tick_clock_;
+  raw_ptr<const base::TickClock> tick_clock_;
 
   // Keeps track of surface references for a surface. The graph of references is
   // stored in parent to child direction. i.e the map stores all direct children
@@ -322,9 +340,11 @@ class VIZ_SERVICE_EXPORT SurfaceManager {
 
   bool allocation_groups_need_garbage_collection_ = false;
 
-  base::WeakPtrFactory<SurfaceManager> weak_factory_{this};
+  // Maximum length of uncommitted queue, zero means all frames are committed
+  // automatically.
+  const size_t max_uncommitted_frames_;
 
-  DISALLOW_COPY_AND_ASSIGN(SurfaceManager);
+  base::WeakPtrFactory<SurfaceManager> weak_factory_{this};
 };
 
 }  // namespace viz

@@ -14,11 +14,15 @@
 #include "third_party/blink/renderer/core/css/parser/css_parser_token_stream.h"
 #include "third_party/blink/renderer/core/css/style_sheet_contents.h"
 #include "third_party/blink/renderer/core/dom/pseudo_element.h"
-#include "third_party/blink/renderer/core/frame/deprecation.h"
+#include "third_party/blink/renderer/core/frame/deprecation/deprecation.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 
 namespace blink {
+
+static void RecordUsageAndDeprecationsOneSelector(
+    const CSSSelector* selector,
+    const CSSParserContext* context);
 
 namespace {
 
@@ -43,30 +47,50 @@ bool AtEndIgnoringWhitespace(CSSParserTokenRange range) {
 }  // namespace
 
 // static
-CSSSelectorList CSSSelectorParser::ParseSelector(
+CSSSelectorVector CSSSelectorParser::ParseSelector(
     CSSParserTokenRange range,
     const CSSParserContext* context,
     StyleSheetContents* style_sheet) {
   CSSSelectorParser parser(context, style_sheet);
   range.ConsumeWhitespace();
-  CSSSelectorList result = parser.ConsumeComplexSelectorList(range);
+  CSSSelectorVector result = parser.ConsumeComplexSelectorList(range);
   if (!range.AtEnd())
-    return CSSSelectorList();
+    return {};
 
   parser.RecordUsageAndDeprecations(result);
   return result;
 }
 
 // static
-CSSSelectorList CSSSelectorParser::ConsumeSelector(
+CSSSelectorVector CSSSelectorParser::ConsumeSelector(
     CSSParserTokenStream& stream,
     const CSSParserContext* context,
     StyleSheetContents* style_sheet,
     CSSParserObserver* observer) {
   CSSSelectorParser parser(context, style_sheet);
   stream.ConsumeWhitespace();
-  CSSSelectorList result = parser.ConsumeComplexSelectorList(stream, observer);
+  CSSSelectorVector result =
+      parser.ConsumeComplexSelectorList(stream, observer);
   parser.RecordUsageAndDeprecations(result);
+  return result;
+}
+
+// static
+absl::optional<CSSSelectorList> CSSSelectorParser::ParseScopeBoundary(
+    CSSParserTokenRange range,
+    const CSSParserContext* context,
+    StyleSheetContents* style_sheet) {
+  CSSSelectorParser parser(context, style_sheet);
+  DisallowPseudoElementsScope disallow_pseudo_elements(&parser);
+
+  range.ConsumeWhitespace();
+  CSSSelectorList result = parser.ConsumeForgivingComplexSelectorList(range);
+  if (!range.AtEnd())
+    return absl::nullopt;
+  for (const CSSSelector* current = result.First(); current;
+       current = current->TagHistory()) {
+    RecordUsageAndDeprecationsOneSelector(current, context);
+  }
   return result;
 }
 
@@ -90,31 +114,31 @@ CSSSelectorParser::CSSSelectorParser(const CSSParserContext* context,
                                      StyleSheetContents* style_sheet)
     : context_(context), style_sheet_(style_sheet) {}
 
-CSSSelectorList CSSSelectorParser::ConsumeComplexSelectorList(
+CSSSelectorVector CSSSelectorParser::ConsumeComplexSelectorList(
     CSSParserTokenRange& range) {
-  Vector<std::unique_ptr<CSSParserSelector>> selector_list;
+  CSSSelectorVector selector_list;
   std::unique_ptr<CSSParserSelector> selector = ConsumeComplexSelector(range);
   if (!selector)
-    return CSSSelectorList();
+    return {};
   selector_list.push_back(std::move(selector));
   while (!range.AtEnd() && range.Peek().GetType() == kCommaToken) {
     range.ConsumeIncludingWhitespace();
     selector = ConsumeComplexSelector(range);
     if (!selector)
-      return CSSSelectorList();
+      return {};
     selector_list.push_back(std::move(selector));
   }
 
   if (failed_parsing_)
-    return CSSSelectorList();
+    return {};
 
-  return CSSSelectorList::AdoptSelectorVector(selector_list);
+  return selector_list;
 }
 
-CSSSelectorList CSSSelectorParser::ConsumeComplexSelectorList(
+CSSSelectorVector CSSSelectorParser::ConsumeComplexSelectorList(
     CSSParserTokenStream& stream,
     CSSParserObserver* observer) {
-  Vector<std::unique_ptr<CSSParserSelector>> selector_list;
+  CSSSelectorVector selector_list;
 
   while (true) {
     const wtf_size_t selector_offset_start = stream.LookAheadOffset();
@@ -123,12 +147,12 @@ CSSSelectorList CSSSelectorParser::ConsumeComplexSelectorList(
     const wtf_size_t selector_offset_end = stream.LookAheadOffset();
 
     if (stream.UncheckedAtEnd())
-      return CSSSelectorList();
+      return {};
 
     std::unique_ptr<CSSParserSelector> selector =
         ConsumeComplexSelector(complex_selector);
     if (!selector || failed_parsing_ || !complex_selector.AtEnd())
-      return CSSSelectorList();
+      return {};
 
     if (observer)
       observer->ObserveSelector(selector_offset_start, selector_offset_end);
@@ -141,12 +165,12 @@ CSSSelectorList CSSSelectorParser::ConsumeComplexSelectorList(
     stream.ConsumeIncludingWhitespace();
   }
 
-  return CSSSelectorList::AdoptSelectorVector(selector_list);
+  return selector_list;
 }
 
 CSSSelectorList CSSSelectorParser::ConsumeCompoundSelectorList(
     CSSParserTokenRange& range) {
-  Vector<std::unique_ptr<CSSParserSelector>> selector_list;
+  CSSSelectorVector selector_list;
   std::unique_ptr<CSSParserSelector> selector = ConsumeCompoundSelector(range);
   range.ConsumeWhitespace();
   if (!selector)
@@ -171,7 +195,10 @@ CSSSelectorList CSSSelectorParser::ConsumeNestedSelectorList(
     CSSParserTokenRange& range) {
   if (inside_compound_pseudo_)
     return ConsumeCompoundSelectorList(range);
-  return ConsumeComplexSelectorList(range);
+  CSSSelectorVector result = ConsumeComplexSelectorList(range);
+  if (result.IsEmpty())
+    return {};
+  return CSSSelectorList::AdoptSelectorVector(result);
 }
 
 CSSSelectorList CSSSelectorParser::ConsumeForgivingNestedSelectorList(
@@ -183,7 +210,7 @@ CSSSelectorList CSSSelectorParser::ConsumeForgivingNestedSelectorList(
 
 CSSSelectorList CSSSelectorParser::ConsumeForgivingComplexSelectorList(
     CSSParserTokenRange& range) {
-  Vector<std::unique_ptr<CSSParserSelector>> selector_list;
+  CSSSelectorVector selector_list;
 
   while (!range.AtEnd()) {
     base::AutoReset<bool> reset_failure(&failed_parsing_, false);
@@ -205,7 +232,7 @@ CSSSelectorList CSSSelectorParser::ConsumeForgivingComplexSelectorList(
 
 CSSSelectorList CSSSelectorParser::ConsumeForgivingCompoundSelectorList(
     CSSParserTokenRange& range) {
-  Vector<std::unique_ptr<CSSParserSelector>> selector_list;
+  CSSSelectorVector selector_list;
 
   while (!range.AtEnd()) {
     base::AutoReset<bool> reset_failure(&failed_parsing_, false);
@@ -226,23 +253,30 @@ CSSSelectorList CSSSelectorParser::ConsumeForgivingCompoundSelectorList(
   return CSSSelectorList::AdoptSelectorVector(selector_list);
 }
 
-CSSSelectorList CSSSelectorParser::ConsumeRelativeSelectorList(
+CSSSelectorList CSSSelectorParser::ConsumeForgivingRelativeSelectorList(
     CSSParserTokenRange& range) {
-  Vector<std::unique_ptr<CSSParserSelector>> selector_list;
-  std::unique_ptr<CSSParserSelector> selector = ConsumeRelativeSelector(range);
-  if (!selector)
-    return CSSSelectorList();
-  selector_list.push_back(std::move(selector));
-  while (!range.AtEnd() && range.Peek().GetType() == kCommaToken) {
+  CSSSelectorVector selector_list;
+
+  while (!range.AtEnd()) {
+    base::AutoReset<bool> reset_failure(&failed_parsing_, false);
+    CSSParserTokenRange argument = ConsumeNestedArgument(range);
+    std::unique_ptr<CSSParserSelector> selector =
+        ConsumeRelativeSelector(argument);
+    if (selector && !failed_parsing_ && argument.AtEnd())
+      selector_list.push_back(std::move(selector));
+    if (range.Peek().GetType() != kCommaToken)
+      break;
     range.ConsumeIncludingWhitespace();
-    selector = ConsumeRelativeSelector(range);
-    if (!selector)
-      return CSSSelectorList();
-    selector_list.push_back(std::move(selector));
   }
 
-  if (failed_parsing_)
+  // :has() is not allowed in the pseudos accepting only compound selectors, or
+  // not allowed after pseudo elements.
+  // (e.g. '::slotted(:has(.a))', '::part(foo):has(:hover)')
+  if (inside_compound_pseudo_ ||
+      restricting_pseudo_element_ != CSSSelector::kPseudoUnknown ||
+      selector_list.IsEmpty()) {
     return CSSSelectorList();
+  }
 
   return CSSSelectorList::AdoptSelectorVector(selector_list);
 }
@@ -275,9 +309,9 @@ std::unique_ptr<CSSParserSelector> CSSSelectorParser::ConsumeRelativeSelector(
   std::unique_ptr<CSSParserSelector> selector =
       std::make_unique<CSSParserSelector>();
   selector->SetMatch(CSSSelector::kPseudoClass);
-  selector->UpdatePseudoType("-internal-relative-leftmost", *context_,
+  selector->UpdatePseudoType("-internal-relative-anchor", *context_,
                              false /*has_arguments*/, context_->Mode());
-  DCHECK_EQ(selector->GetPseudoType(), CSSSelector::kPseudoRelativeLeftmost);
+  DCHECK_EQ(selector->GetPseudoType(), CSSSelector::kPseudoRelativeAnchor);
 
   CSSSelector::RelationType combinator = ConsumeCombinator(range);
   switch (combinator) {
@@ -318,6 +352,10 @@ std::unique_ptr<CSSParserSelector> CSSSelectorParser::ConsumeComplexSelector(
     previous_compound_flags |= ExtractCompoundFlags(*simple, context_->Mode());
 
   if (CSSSelector::RelationType combinator = ConsumeCombinator(range)) {
+    if (is_inside_has_argument_ &&
+        is_inside_logical_combination_in_has_argument_) {
+      found_complex_logical_combinations_in_has_argument_ = true;
+    }
     return ConsumePartialComplexSelector(range, combinator, std::move(selector),
                                          previous_compound_flags);
   }
@@ -367,8 +405,7 @@ CSSSelector::PseudoType CSSSelectorParser::ParsePseudoType(
     return CSSSelector::PseudoType::kPseudoWebKitCustomElement;
   if (name.StartsWith("-internal-"))
     return CSSSelector::PseudoType::kPseudoBlinkInternalElement;
-  if (RuntimeEnabledFeatures::CustomStatePseudoClassEnabled() &&
-      name.StartsWith("--"))
+  if (name.StartsWith("--"))
     return CSSSelector::PseudoType::kPseudoState;
 
   return CSSSelector::PseudoType::kPseudoUnknown;
@@ -535,6 +572,17 @@ bool IsSimpleSelectorValidAfterPseudoElement(
       break;
   }
   return IsPseudoClassValidAfterPseudoElement(pseudo, compound_pseudo_element);
+}
+
+bool IsPseudoClassValidWithinHasArgument(CSSParserSelector& selector) {
+  DCHECK_EQ(selector.Match(), CSSSelector::kPseudoClass);
+  switch (selector.GetPseudoType()) {
+    // Limited nested :has() to avoid increasing :has() invalidation complexity.
+    case CSSSelector::kPseudoHas:
+      return false;
+    default:
+      return true;
+  }
 }
 
 }  // namespace
@@ -803,6 +851,13 @@ std::unique_ptr<CSSParserSelector> CSSSelectorParser::ConsumePseudo(
       disallow_pseudo_elements_)
     return nullptr;
 
+  if (is_inside_has_argument_) {
+    DCHECK(disallow_pseudo_elements_);
+    if (!IsPseudoClassValidWithinHasArgument(*selector))
+      return nullptr;
+    found_pseudo_in_has_argument_ = true;
+  }
+
   if (token.GetType() == kIdentToken) {
     range.Consume();
     if (selector->GetPseudoType() == CSSSelector::kPseudoUnknown)
@@ -819,6 +874,9 @@ std::unique_ptr<CSSParserSelector> CSSSelectorParser::ConsumePseudo(
     case CSSSelector::kPseudoIs: {
       DisallowPseudoElementsScope scope(this);
       base::AutoReset<bool> resist_namespace(&resist_default_namespace_, true);
+      base::AutoReset<bool> is_inside_logical_combination_in_has_argument(
+          &is_inside_logical_combination_in_has_argument_,
+          is_inside_has_argument_);
 
       std::unique_ptr<CSSSelectorList> selector_list =
           std::make_unique<CSSSelectorList>();
@@ -831,6 +889,9 @@ std::unique_ptr<CSSParserSelector> CSSSelectorParser::ConsumePseudo(
     case CSSSelector::kPseudoWhere: {
       DisallowPseudoElementsScope scope(this);
       base::AutoReset<bool> resist_namespace(&resist_default_namespace_, true);
+      base::AutoReset<bool> is_inside_logical_combination_in_has_argument(
+          &is_inside_logical_combination_in_has_argument_,
+          is_inside_has_argument_);
 
       std::unique_ptr<CSSSelectorList> selector_list =
           std::make_unique<CSSSelectorList>();
@@ -868,27 +929,38 @@ std::unique_ptr<CSSParserSelector> CSSSelectorParser::ConsumePseudo(
       return selector;
     }
     case CSSSelector::kPseudoHas: {
-      if (!RuntimeEnabledFeatures::CSSPseudoHasInSnapshotProfileEnabled() ||
-          (context_->IsLiveProfile() &&
-           !RuntimeEnabledFeatures::CSSPseudoHasEnabled())) {
+      if (!RuntimeEnabledFeatures::CSSPseudoHasEnabled())
         return nullptr;
-      }
 
       DisallowPseudoElementsScope scope(this);
       base::AutoReset<bool> resist_namespace(&resist_default_namespace_, true);
 
+      base::AutoReset<bool> is_inside_has_argument(&is_inside_has_argument_,
+                                                   true);
+      base::AutoReset<bool> found_pseudo_in_has_argument(
+          &found_pseudo_in_has_argument_, false);
+      base::AutoReset<bool> found_complex_logical_combinations_in_has_argument(
+          &found_complex_logical_combinations_in_has_argument_, false);
+
       std::unique_ptr<CSSSelectorList> selector_list =
           std::make_unique<CSSSelectorList>();
-      *selector_list = ConsumeRelativeSelectorList(block);
-      if (!selector_list->IsValid() || !block.AtEnd())
+      *selector_list = ConsumeForgivingRelativeSelectorList(block);
+      if (!block.AtEnd())
         return nullptr;
 
       selector->SetSelectorList(std::move(selector_list));
+      if (found_pseudo_in_has_argument_)
+        selector->SetContainsPseudoInsideHasPseudoClass();
+      if (found_complex_logical_combinations_in_has_argument_)
+        selector->SetContainsComplexLogicalCombinationsInsideHasPseudoClass();
       return selector;
     }
     case CSSSelector::kPseudoNot: {
       DisallowPseudoElementsScope scope(this);
       base::AutoReset<bool> resist_namespace(&resist_default_namespace_, true);
+      base::AutoReset<bool> is_inside_logical_combination_in_has_argument(
+          &is_inside_logical_combination_in_has_argument_,
+          is_inside_has_argument_);
 
       std::unique_ptr<CSSSelectorList> selector_list =
           std::make_unique<CSSSelectorList>();
@@ -917,6 +989,26 @@ std::unique_ptr<CSSParserSelector> CSSSelectorParser::ConsumePseudo(
       selector->SetPartNames(std::make_unique<Vector<AtomicString>>(parts));
       return selector;
     }
+    case CSSSelector::kPseudoPageTransitionContainer:
+    case CSSSelector::kPseudoPageTransitionImageWrapper:
+    case CSSSelector::kPseudoPageTransitionOutgoingImage:
+    case CSSSelector::kPseudoPageTransitionIncomingImage: {
+      const CSSParserToken& ident = block.ConsumeIncludingWhitespace();
+      if (!block.AtEnd())
+        return nullptr;
+
+      absl::optional<AtomicString> argument;
+      if (ident.GetType() == kIdentToken)
+        argument = ident.Value().ToAtomicString();
+      else if (ident.GetType() == kDelimiterToken && ident.Delimiter() == '*')
+        argument = CSSSelector::UniversalSelectorAtom();
+
+      if (!argument)
+        return nullptr;
+
+      selector->SetArgument(*argument);
+      return selector;
+    }
     case CSSSelector::kPseudoSlotted: {
       DisallowPseudoElementsScope scope(this);
       base::AutoReset<bool> inside_compound(&inside_compound_pseudo_, true);
@@ -926,7 +1018,7 @@ std::unique_ptr<CSSParserSelector> CSSSelectorParser::ConsumePseudo(
       block.ConsumeWhitespace();
       if (!inner_selector || !block.AtEnd())
         return nullptr;
-      Vector<std::unique_ptr<CSSParserSelector>> selector_vector;
+      CSSSelectorVector selector_vector;
       selector_vector.push_back(std::move(inner_selector));
       selector->AdoptSelectorVector(selector_vector);
       return selector;
@@ -1013,7 +1105,7 @@ CSSSelector::MatchType CSSSelectorParser::ConsumeAttributeMatch(
     case kDelimiterToken:
       if (token.Delimiter() == '=')
         return CSSSelector::kAttributeExact;
-      FALLTHROUGH;
+      [[fallthrough]];
     default:
       failed_parsing_ = true;
       return CSSSelector::kAttributeExact;
@@ -1039,7 +1131,7 @@ bool CSSSelectorParser::ConsumeANPlusB(CSSParserTokenRange& range,
   const CSSParserToken& token = range.Consume();
   if (token.GetType() == kNumberToken &&
       token.GetNumericValueType() == kIntegerValueType) {
-    result = std::make_pair(0, clampTo<int>(token.NumericValue()));
+    result = std::make_pair(0, ClampTo<int>(token.NumericValue()));
     return true;
   }
   if (token.GetType() == kIdentToken) {
@@ -1063,7 +1155,7 @@ bool CSSSelectorParser::ConsumeANPlusB(CSSParserTokenRange& range,
     n_string = range.Consume().Value().ToString();
   } else if (token.GetType() == kDimensionToken &&
              token.GetNumericValueType() == kIntegerValueType) {
-    result.first = clampTo<int>(token.NumericValue());
+    result.first = ClampTo<int>(token.NumericValue());
     n_string = token.Value().ToString();
   } else if (token.GetType() == kIdentToken) {
     if (token.Value()[0] == '-') {
@@ -1110,7 +1202,7 @@ bool CSSSelectorParser::ConsumeANPlusB(CSSParserTokenRange& range,
     return false;
   if ((b.GetNumericSign() == kNoSign) == (sign == kNoSign))
     return false;
-  result.second = clampTo<int>(b.NumericValue());
+  result.second = ClampTo<int>(b.NumericValue());
   if (sign == kMinusSign) {
     // Negating minimum integer returns itself, instead return max integer.
     if (UNLIKELY(result.second == std::numeric_limits<int>::min()))
@@ -1373,103 +1465,108 @@ WebFeature FeatureForWebKitCustomPseudoElement(const AtomicString& name) {
 
 }  // namespace
 
+static void RecordUsageAndDeprecationsOneSelector(
+    const CSSSelector* selector,
+    const CSSParserContext* context) {
+  WebFeature feature = WebFeature::kNumberOfFeatures;
+  switch (selector->GetPseudoType()) {
+    case CSSSelector::kPseudoAny:
+      feature = WebFeature::kCSSSelectorPseudoAny;
+      break;
+    case CSSSelector::kPseudoIs:
+      feature = WebFeature::kCSSSelectorPseudoIs;
+      break;
+    case CSSSelector::kPseudoFocusVisible:
+      DCHECK(RuntimeEnabledFeatures::CSSFocusVisibleEnabled());
+      feature = WebFeature::kCSSSelectorPseudoFocusVisible;
+      break;
+    case CSSSelector::kPseudoFocus:
+      feature = WebFeature::kCSSSelectorPseudoFocus;
+      break;
+    case CSSSelector::kPseudoAnyLink:
+      feature = WebFeature::kCSSSelectorPseudoAnyLink;
+      break;
+    case CSSSelector::kPseudoWebkitAnyLink:
+      feature = WebFeature::kCSSSelectorPseudoWebkitAnyLink;
+      break;
+    case CSSSelector::kPseudoWhere:
+      feature = WebFeature::kCSSSelectorPseudoWhere;
+      break;
+    case CSSSelector::kPseudoDefined:
+      feature = WebFeature::kCSSSelectorPseudoDefined;
+      break;
+    case CSSSelector::kPseudoSlotted:
+      feature = WebFeature::kCSSSelectorPseudoSlotted;
+      break;
+    case CSSSelector::kPseudoHost:
+      feature = WebFeature::kCSSSelectorPseudoHost;
+      break;
+    case CSSSelector::kPseudoHostContext:
+      feature = WebFeature::kCSSSelectorPseudoHostContext;
+      break;
+    case CSSSelector::kPseudoFullScreenAncestor:
+      feature = WebFeature::kCSSSelectorPseudoFullScreenAncestor;
+      break;
+    case CSSSelector::kPseudoFullScreen:
+      feature = WebFeature::kCSSSelectorPseudoFullScreen;
+      break;
+    case CSSSelector::kPseudoListBox:
+      feature = WebFeature::kCSSSelectorInternalPseudoListBox;
+      break;
+    case CSSSelector::kPseudoWebKitCustomElement:
+      feature = FeatureForWebKitCustomPseudoElement(selector->Value());
+      break;
+    case CSSSelector::kPseudoSpatialNavigationFocus:
+      feature = WebFeature::kCSSSelectorInternalPseudoSpatialNavigationFocus;
+      break;
+    case CSSSelector::kPseudoReadOnly:
+      feature = WebFeature::kCSSSelectorPseudoReadOnly;
+      break;
+    case CSSSelector::kPseudoReadWrite:
+      feature = WebFeature::kCSSSelectorPseudoReadWrite;
+      break;
+    case CSSSelector::kPseudoDir:
+      DCHECK(RuntimeEnabledFeatures::CSSPseudoDirEnabled());
+      feature = WebFeature::kCSSSelectorPseudoDir;
+      break;
+    case CSSSelector::kPseudoHas:
+      DCHECK(RuntimeEnabledFeatures::CSSPseudoHasEnabled());
+      if (context->IsLiveProfile())
+        feature = WebFeature::kCSSSelectorPseudoHasInLiveProfile;
+      else
+        feature = WebFeature::kCSSSelectorPseudoHasInSnapshotProfile;
+      break;
+    default:
+      break;
+  }
+  if (feature != WebFeature::kNumberOfFeatures) {
+    if (Deprecation::IsDeprecated(feature)) {
+      context->CountDeprecation(feature);
+    } else {
+      context->Count(feature);
+    }
+  }
+  if (selector->Relation() == CSSSelector::kIndirectAdjacent)
+    context->Count(WebFeature::kCSSSelectorIndirectAdjacent);
+  if (selector->SelectorList()) {
+    for (const CSSSelector* current = selector->SelectorList()->First();
+         current; current = current->TagHistory()) {
+      RecordUsageAndDeprecationsOneSelector(current, context);
+    }
+  }
+}
+
 void CSSSelectorParser::RecordUsageAndDeprecations(
-    const CSSSelectorList& selector_list) {
+    const CSSSelectorVector& selector_vector) {
   if (!context_->IsUseCounterRecordingEnabled())
     return;
   if (context_->Mode() == kUASheetMode)
     return;
 
-  for (const CSSSelector* selector = selector_list.FirstForCSSOM(); selector;
-       selector = CSSSelectorList::Next(*selector)) {
-    for (const CSSSelector* current = selector; current;
+  for (const std::unique_ptr<CSSParserSelector>& selector : selector_vector) {
+    for (const CSSParserSelector* current = selector.get(); current;
          current = current->TagHistory()) {
-      WebFeature feature = WebFeature::kNumberOfFeatures;
-      switch (current->GetPseudoType()) {
-        case CSSSelector::kPseudoAny:
-          feature = WebFeature::kCSSSelectorPseudoAny;
-          break;
-        case CSSSelector::kPseudoIs:
-          feature = WebFeature::kCSSSelectorPseudoIs;
-          break;
-        case CSSSelector::kPseudoFocusVisible:
-          DCHECK(RuntimeEnabledFeatures::CSSFocusVisibleEnabled());
-          feature = WebFeature::kCSSSelectorPseudoFocusVisible;
-          break;
-        case CSSSelector::kPseudoFocus:
-          feature = WebFeature::kCSSSelectorPseudoFocus;
-          break;
-        case CSSSelector::kPseudoAnyLink:
-          feature = WebFeature::kCSSSelectorPseudoAnyLink;
-          break;
-        case CSSSelector::kPseudoWebkitAnyLink:
-          feature = WebFeature::kCSSSelectorPseudoWebkitAnyLink;
-          break;
-        case CSSSelector::kPseudoWhere:
-          feature = WebFeature::kCSSSelectorPseudoWhere;
-          break;
-        case CSSSelector::kPseudoDefined:
-          feature = WebFeature::kCSSSelectorPseudoDefined;
-          break;
-        case CSSSelector::kPseudoSlotted:
-          feature = WebFeature::kCSSSelectorPseudoSlotted;
-          break;
-        case CSSSelector::kPseudoHost:
-          feature = WebFeature::kCSSSelectorPseudoHost;
-          break;
-        case CSSSelector::kPseudoHostContext:
-          feature = WebFeature::kCSSSelectorPseudoHostContext;
-          break;
-        case CSSSelector::kPseudoFullScreenAncestor:
-          feature = WebFeature::kCSSSelectorPseudoFullScreenAncestor;
-          break;
-        case CSSSelector::kPseudoFullScreen:
-          feature = WebFeature::kCSSSelectorPseudoFullScreen;
-          break;
-        case CSSSelector::kPseudoListBox:
-          feature = WebFeature::kCSSSelectorInternalPseudoListBox;
-          break;
-        case CSSSelector::kPseudoWebKitCustomElement:
-          feature = FeatureForWebKitCustomPseudoElement(current->Value());
-          break;
-        case CSSSelector::kPseudoSpatialNavigationFocus:
-          feature =
-              WebFeature::kCSSSelectorInternalPseudoSpatialNavigationFocus;
-          break;
-        case CSSSelector::kPseudoReadOnly:
-          feature = WebFeature::kCSSSelectorPseudoReadOnly;
-          break;
-        case CSSSelector::kPseudoReadWrite:
-          feature = WebFeature::kCSSSelectorPseudoReadWrite;
-          break;
-        case CSSSelector::kPseudoDir:
-          DCHECK(RuntimeEnabledFeatures::CSSPseudoDirEnabled());
-          feature = WebFeature::kCSSSelectorPseudoDir;
-          break;
-        case CSSSelector::kPseudoHas:
-          if (context_->IsLiveProfile()) {
-            DCHECK(RuntimeEnabledFeatures::CSSPseudoHasEnabled());
-            feature = WebFeature::kCSSSelectorPseudoHasInLiveProfile;
-          } else {
-            DCHECK(
-                RuntimeEnabledFeatures::CSSPseudoHasInSnapshotProfileEnabled());
-            feature = WebFeature::kCSSSelectorPseudoHasInSnapshotProfile;
-          }
-          break;
-        default:
-          break;
-      }
-      if (feature != WebFeature::kNumberOfFeatures) {
-        if (!Deprecation::DeprecationMessage(feature).IsEmpty()) {
-          context_->CountDeprecation(feature);
-        } else {
-          context_->Count(feature);
-        }
-      }
-      if (current->Relation() == CSSSelector::kIndirectAdjacent)
-        context_->Count(WebFeature::kCSSSelectorIndirectAdjacent);
-      if (current->SelectorList())
-        RecordUsageAndDeprecations(*current->SelectorList());
+      RecordUsageAndDeprecationsOneSelector(current->GetSelector(), context_);
     }
   }
 }

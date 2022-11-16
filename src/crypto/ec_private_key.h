@@ -13,7 +13,6 @@
 #include <vector>
 
 #include "base/containers/span.h"
-#include "base/macros.h"
 #include "build/build_config.h"
 #include "crypto/crypto_export.h"
 #include "third_party/boringssl/src/include/openssl/base.h"
@@ -27,6 +26,9 @@ namespace crypto {
 // tricky.)
 class CRYPTO_EXPORT ECPrivateKey {
  public:
+  ECPrivateKey(const ECPrivateKey&) = delete;
+  ECPrivateKey& operator=(const ECPrivateKey&) = delete;
+
   ~ECPrivateKey();
 
   // Creates a new random instance. Can return nullptr if initialization fails.
@@ -78,8 +80,6 @@ class CRYPTO_EXPORT ECPrivateKey {
   ECPrivateKey();
 
   bssl::UniquePtr<EVP_PKEY> key_;
-
-  DISALLOW_COPY_AND_ASSIGN(ECPrivateKey);
 };
 
 }  // namespace crypto

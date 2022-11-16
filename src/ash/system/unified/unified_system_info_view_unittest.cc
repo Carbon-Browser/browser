@@ -5,6 +5,7 @@
 #include "ash/system/unified/unified_system_info_view.h"
 
 #include "ash/constants/ash_features.h"
+#include "ash/public/cpp/login_types.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/session/test_session_controller_client.h"
 #include "ash/shell.h"
@@ -13,6 +14,7 @@
 #include "ash/system/unified/unified_system_tray_controller.h"
 #include "ash/system/unified/unified_system_tray_model.h"
 #include "ash/test/ash_test_base.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/test/scoped_feature_list.h"
 
 namespace ash {
@@ -33,7 +35,7 @@ class UnifiedSystemInfoViewTest : public AshTestBase,
     scoped_feature_list_->InitWithFeatureState(
         features::kManagedDeviceUIRedesign, IsManagedDeviceUIRedesignEnabled());
 
-    model_ = std::make_unique<UnifiedSystemTrayModel>(nullptr);
+    model_ = base::MakeRefCounted<UnifiedSystemTrayModel>(nullptr);
     controller_ = std::make_unique<UnifiedSystemTrayController>(model_.get());
     info_view_ = std::make_unique<UnifiedSystemInfoView>(controller_.get());
   }
@@ -55,7 +57,7 @@ class UnifiedSystemInfoViewTest : public AshTestBase,
   }
 
  private:
-  std::unique_ptr<UnifiedSystemTrayModel> model_;
+  scoped_refptr<UnifiedSystemTrayModel> model_;
   std::unique_ptr<UnifiedSystemTrayController> controller_;
   std::unique_ptr<UnifiedSystemInfoView> info_view_;
   std::unique_ptr<base::test::ScopedFeatureList> scoped_feature_list_;
@@ -71,8 +73,9 @@ TEST_P(UnifiedSystemInfoViewTest, EnterpriseManagedVisible) {
   EXPECT_FALSE(info_view()->enterprise_managed_->GetVisible());
 
   // Simulate enterprise information becoming available.
-  enterprise_domain()->SetEnterpriseDomainInfo(
-      "example.com", /*active_directory_managed=*/false);
+  enterprise_domain()->SetDeviceEnterpriseInfo(
+      DeviceEnterpriseInfo{"example.com", /*active_directory_managed=*/false,
+                           ManagementDeviceMode::kChromeEnterprise});
 
   // EnterpriseManagedView should be shown.
   EXPECT_TRUE(info_view()->enterprise_managed_->GetVisible());
@@ -81,8 +84,9 @@ TEST_P(UnifiedSystemInfoViewTest, EnterpriseManagedVisible) {
 TEST_P(UnifiedSystemInfoViewTest, EnterpriseManagedVisibleForActiveDirectory) {
   // Active directory information becoming available.
   const std::string empty_domain;
-  enterprise_domain()->SetEnterpriseDomainInfo(
-      empty_domain, /*active_directory_managed=*/true);
+  enterprise_domain()->SetDeviceEnterpriseInfo(
+      DeviceEnterpriseInfo{empty_domain, /*active_directory_managed=*/true,
+                           ManagementDeviceMode::kChromeEnterprise});
 
   // EnterpriseManagedView should be shown.
   EXPECT_TRUE(info_view()->enterprise_managed_->GetVisible());
@@ -105,7 +109,7 @@ using UnifiedSystemInfoViewNoSessionTest = NoSessionAshTestBase;
 TEST_F(UnifiedSystemInfoViewNoSessionTest, ChildVisible) {
   base::test::ScopedFeatureList scoped_feature_list;
   scoped_feature_list.InitAndDisableFeature(features::kManagedDeviceUIRedesign);
-  auto model = std::make_unique<UnifiedSystemTrayModel>(nullptr);
+  auto model = base::MakeRefCounted<UnifiedSystemTrayModel>(nullptr);
   auto controller = std::make_unique<UnifiedSystemTrayController>(model.get());
 
   SessionControllerImpl* session = Shell::Get()->session_controller();

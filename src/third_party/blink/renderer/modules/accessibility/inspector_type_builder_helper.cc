@@ -20,6 +20,8 @@ std::unique_ptr<AXProperty> CreateProperty(const String& name,
 
 String IgnoredReasonName(AXIgnoredReason reason) {
   switch (reason) {
+    case kAXActiveFullscreenElement:
+      return "activeFullscreenElement";
     case kAXActiveModalDialog:
       return "activeModalDialog";
     case kAXAriaModalDialog:
@@ -120,7 +122,10 @@ std::unique_ptr<AXValue> CreateRelatedNodeListValue(const AXObject& ax_object,
                                                     String* name,
                                                     const String& value_type) {
   auto related_nodes = std::make_unique<protocol::Array<AXRelatedNode>>();
-  related_nodes->emplace_back(RelatedNodeForAXObject(ax_object, name));
+  std::unique_ptr<AXRelatedNode> related_node =
+      RelatedNodeForAXObject(ax_object, name);
+  if (related_node)
+    related_nodes->emplace_back(std::move(related_node));
   return AXValue::create()
       .setType(value_type)
       .setRelatedNodes(std::move(related_nodes))
@@ -182,12 +187,12 @@ String ValueSourceType(ax::mojom::NameFrom name_from) {
   }
 }
 
-String NativeSourceType(AXTextFromNativeHTML native_source) {
+String NativeSourceType(AXTextSource native_source) {
   namespace SourceType = protocol::Accessibility::AXValueNativeSourceTypeEnum;
 
   switch (native_source) {
-    case kAXTextFromNativeHTMLFigcaption:
-      return SourceType::Figcaption;
+    case kAXTextFromNativeSVGDescElement:
+      return SourceType::Description;
     case kAXTextFromNativeHTMLLabel:
       return SourceType::Label;
     case kAXTextFromNativeHTMLLabelFor:
@@ -200,7 +205,7 @@ String NativeSourceType(AXTextFromNativeHTML native_source) {
       return SourceType::Tablecaption;
     case kAXTextFromNativeHTMLLegend:
       return SourceType::Legend;
-    case kAXTextFromNativeHTMLTitleElement:
+    case kAXTextFromNativeTitleElement:
       return SourceType::Title;
     default:
       return SourceType::Other;
@@ -236,7 +241,7 @@ std::unique_ptr<AXValueSource> CreateValueSource(NameSource& name_source) {
     value_source->setSuperseded(true);
   if (name_source.invalid)
     value_source->setInvalid(true);
-  if (name_source.native_source != kAXTextFromNativeHTMLUninitialized)
+  if (name_source.native_source != kAXTextFromNativeSourceUninitialized)
     value_source->setNativeSource(NativeSourceType(name_source.native_source));
   return value_source;
 }

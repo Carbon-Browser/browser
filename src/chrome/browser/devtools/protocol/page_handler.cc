@@ -6,6 +6,7 @@
 
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/web_applications/web_app_helpers.h"
+#include "components/payments/content/payment_request_web_contents_manager.h"
 #include "components/subresource_filter/content/browser/devtools_interaction_tracker.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/manifest/manifest_util.h"
@@ -30,7 +31,7 @@ PageHandler::PageHandler(scoped_refptr<content::DevToolsAgentHost> agent_host,
 }
 
 PageHandler::~PageHandler() {
-  ToggleAdBlocking(/* enabled= */ false);
+  Disable();
 }
 
 void PageHandler::ToggleAdBlocking(bool enabled) {
@@ -57,6 +58,7 @@ protocol::Response PageHandler::Enable() {
 protocol::Response PageHandler::Disable() {
   enabled_ = false;
   ToggleAdBlocking(false /* enable */);
+  SetSPCTransactionMode(protocol::Page::SetSPCTransactionMode::ModeEnum::None);
   // Do not mark the command as handled. Let it fall through instead, so that
   // the handler in content gets a chance to process the command.
   return protocol::Response::FallThrough();
@@ -66,6 +68,28 @@ protocol::Response PageHandler::SetAdBlockingEnabled(bool enabled) {
   if (!enabled_)
     return protocol::Response::ServerError("Page domain is disabled.");
   ToggleAdBlocking(enabled);
+  return protocol::Response::Success();
+}
+
+protocol::Response PageHandler::SetSPCTransactionMode(
+    const protocol::String& mode) {
+  if (!web_contents_)
+    return protocol::Response::ServerError("No web contents to host a dialog.");
+
+  payments::SPCTransactionMode spc_mode = payments::SPCTransactionMode::NONE;
+  if (mode == protocol::Page::SetSPCTransactionMode::ModeEnum::Autoaccept) {
+    spc_mode = payments::SPCTransactionMode::AUTOACCEPT;
+  } else if (mode ==
+             protocol::Page::SetSPCTransactionMode::ModeEnum::Autoreject) {
+    spc_mode = payments::SPCTransactionMode::AUTOREJECT;
+  } else if (mode != protocol::Page::SetSPCTransactionMode::ModeEnum::None) {
+    return protocol::Response::ServerError("Unrecognized mode value");
+  }
+
+  auto* payment_request_manager =
+      payments::PaymentRequestWebContentsManager::GetOrCreateForWebContents(
+          *web_contents_);
+  payment_request_manager->SetSPCTransactionMode(spc_mode);
   return protocol::Response::Success();
 }
 
@@ -152,7 +176,6 @@ void PageHandler::PrintToPDF(protocol::Maybe<bool> landscape,
                              protocol::Maybe<double> margin_left,
                              protocol::Maybe<double> margin_right,
                              protocol::Maybe<protocol::String> page_ranges,
-                             protocol::Maybe<bool> ignore_invalid_page_ranges,
                              protocol::Maybe<protocol::String> header_template,
                              protocol::Maybe<protocol::String> footer_template,
                              protocol::Maybe<bool> prefer_css_page_size,
@@ -169,7 +192,7 @@ void PageHandler::PrintToPDF(protocol::Maybe<bool> landscape,
 
   absl::variant<printing::mojom::PrintPagesParamsPtr, std::string>
       print_pages_params = print_to_pdf::GetPrintPagesParams(
-          web_contents_->GetMainFrame()->GetLastCommittedURL(),
+          web_contents_->GetPrimaryMainFrame()->GetLastCommittedURL(),
           OptionalFromMaybe<bool>(landscape),
           OptionalFromMaybe<bool>(display_header_footer),
           OptionalFromMaybe<bool>(print_background),
@@ -196,11 +219,10 @@ void PageHandler::PrintToPDF(protocol::Maybe<bool> landscape,
       transfer_mode.fromMaybe("") ==
       protocol::Page::PrintToPDF::TransferModeEnum::ReturnAsStream;
 
-  if (auto* print_manager =
-          print_to_pdf::PdfPrintManager::FromWebContents(web_contents_.get())) {
+  if (auto* print_manager = headless::HeadlessPrintManager::FromWebContents(
+          web_contents_.get())) {
     print_manager->PrintToPdf(
-        web_contents_->GetMainFrame(), page_ranges.fromMaybe(""),
-        ignore_invalid_page_ranges.fromMaybe(false),
+        web_contents_->GetPrimaryMainFrame(), page_ranges.fromMaybe(""),
         std::move(absl::get<printing::mojom::PrintPagesParamsPtr>(
             print_pages_params)),
         base::BindOnce(&PageHandler::OnPDFCreated,
@@ -238,7 +260,8 @@ void PageHandler::OnDidGetManifest(std::unique_ptr<GetAppIdCallback> callback,
                                    const webapps::InstallableData& data) {
   if (blink::IsEmptyManifest(data.manifest) ||
       !base::FeatureList::IsEnabled(blink::features::kWebAppEnableManifestId)) {
-    callback->sendSuccess(protocol::Maybe<protocol::String>());
+    callback->sendSuccess(protocol::Maybe<protocol::String>(),
+                          protocol::Maybe<protocol::String>());
     return;
   }
   absl::optional<std::string> id;
@@ -246,18 +269,18 @@ void PageHandler::OnDidGetManifest(std::unique_ptr<GetAppIdCallback> callback,
     id = base::UTF16ToUTF8(data.manifest.id.value());
   }
   callback->sendSuccess(
-      web_app::GenerateAppIdUnhashed(id, data.manifest.start_url));
+      web_app::GenerateAppIdUnhashed(id, data.manifest.start_url),
+      web_app::GenerateRecommendedId(data.manifest.start_url));
 }
 
 #if BUILDFLAG(ENABLE_PRINTING)
-void PageHandler::OnPDFCreated(
-    bool return_as_stream,
-    std::unique_ptr<PrintToPDFCallback> callback,
-    print_to_pdf::PdfPrintManager::PrintResult print_result,
-    scoped_refptr<base::RefCountedMemory> data) {
-  if (print_result != print_to_pdf::PdfPrintManager::PRINT_SUCCESS) {
+void PageHandler::OnPDFCreated(bool return_as_stream,
+                               std::unique_ptr<PrintToPDFCallback> callback,
+                               print_to_pdf::PdfPrintResult print_result,
+                               scoped_refptr<base::RefCountedMemory> data) {
+  if (print_result != print_to_pdf::PdfPrintResult::PRINT_SUCCESS) {
     callback->sendFailure(protocol::Response::ServerError(
-        print_to_pdf::PdfPrintManager::PrintResultToString(print_result)));
+        print_to_pdf::PdfPrintResultToString(print_result)));
     return;
   }
 

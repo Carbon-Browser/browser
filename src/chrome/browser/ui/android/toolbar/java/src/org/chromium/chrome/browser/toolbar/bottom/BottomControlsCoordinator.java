@@ -12,11 +12,14 @@ import android.view.ViewGroup;
 import androidx.annotation.Nullable;
 
 import org.chromium.base.supplier.ObservableSupplier;
+import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.chrome.browser.browser_controls.BrowserControlsSizer;
 import org.chromium.chrome.browser.fullscreen.FullscreenManager;
 import org.chromium.chrome.browser.layouts.LayoutManager;
+import org.chromium.chrome.browser.layouts.LayoutStateProvider;
 import org.chromium.chrome.browser.toolbar.R;
 import org.chromium.chrome.browser.toolbar.bottom.BottomControlsViewBinder.ViewHolder;
+import org.chromium.components.browser_ui.widget.gesture.BackPressHandler;
 import org.chromium.ui.base.WindowAndroid;
 import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.ui.modelutil.PropertyModelChangeProcessor;
@@ -31,7 +34,10 @@ import org.chromium.chrome.browser.layouts.LayoutType;
 import org.chromium.chrome.browser.toolbar.top.ToggleTabStackButton;
 import org.chromium.chrome.browser.toolbar.bottom.BottomToolbarThemeCommunicator;
 import org.chromium.base.ApiCompatibilityUtils;
+import android.graphics.Color;
 import android.content.res.ColorStateList;
+import org.chromium.chrome.browser.ui.theme.BrandedColorScheme;
+import org.chromium.chrome.browser.theme.ThemeUtils;
 
 /**
  * The root coordinator for the bottom controls component. This component is intended for use with
@@ -40,15 +46,13 @@ import android.content.res.ColorStateList;
  * when the controls are being scrolled off-screen. The Android version does not draw unless the
  * controls offset is 0.
  */
-public class BottomControlsCoordinator implements BottomToolbarVisibilityController, BottomToolbarThemeCommunicator {
+public class BottomControlsCoordinator implements BackPressHandler, BottomToolbarVisibilityController, BottomToolbarThemeCommunicator {
     /**
      * Interface for the BottomControls component to hide and show itself.
      */
     public interface BottomControlsVisibilityController {
         void setBottomControlsVisible(boolean isVisible);
     }
-
-    private TabModelSelector mTabModelSelector;
 
     /** The mediator that handles events from outside the bottom controls. */
     private final BottomControlsMediator mMediator;
@@ -58,16 +62,16 @@ public class BottomControlsCoordinator implements BottomToolbarVisibilityControl
 
     private View mBottomToolbarWrapper;
     private View mContainer;
-
     private ChromeImageButton mSearchAccelerator;
     // private ChromeImageButton mSpeedDialButton;
     private ChromeImageButton mHomeButton;
     private ChromeImageButton mRewardsButton;
     private ToggleTabStackButton mTabSwitcherButton;
-
     /** Used to know the Layout state. */
     private LayoutStateProvider mLayoutStateProvider;
     private final LayoutStateProvider.LayoutStateObserver mLayoutStateObserver;
+
+    private TabModelSelector mTabModelSelector;
 
     /**
      * Build the coordinator that manages the bottom controls.
@@ -101,10 +105,11 @@ public class BottomControlsCoordinator implements BottomToolbarVisibilityControl
                 model, sceneLayer, BottomControlsViewBinder::bindCompositorMCP);
         int bottomControlsHeightId = R.dimen.bottom_controls_height_new;
 
+        // View container = root.findViewById(R.id.bottom_container_slot);
+        // ViewGroup.LayoutParams params = container.getLayoutParams();
+        // params.height = root.getResources().getDimensionPixelOffset(bottomControlsHeightId);
         mBottomToolbarWrapper = root.findViewById(R.id.bottom_toolbar_wrapper);
         mContainer = root.findViewById(R.id.bottom_container_slot);
-        // ViewGroup.LayoutParams params = mBottomToolbarWrapper.getLayoutParams();
-        // params.height = root.getResources().getDimensionPixelOffset(bottomControlsHeightId);
         mMediator =
                 new BottomControlsMediator(windowAndroid, model, controlsSizer, fullscreenManager,
                         root.getResources().getDimensionPixelOffset(bottomControlsHeightId),
@@ -117,19 +122,22 @@ public class BottomControlsCoordinator implements BottomToolbarVisibilityControl
         Toast.setGlobalExtraYOffset(
                 root.getResources().getDimensionPixelSize(bottomControlsHeightId));
 
+        // Set the visibility of BottomControls to false by default. Components within
+        // BottomControls should update the visibility explicitly if needed.
+        setBottomToolbarVisible(true);
+
+        sceneLayer.setIsVisible(mMediator.isCompositedViewVisible());
+        layoutManager.addSceneOverlay(sceneLayer);
+
+        if (mContentDelegate != null) {
+            mContentDelegate.initializeWithNative(activity, mMediator::setBottomControlsVisible);
+        }
+
         mTabSwitcherButton = root.findViewById(R.id.tab_switcher_button_bottom);
         if (mTabSwitcherButton != null) {
             mTabSwitcherButton.setOnClickListener(tabSwitcherClickHandler);
             mTabSwitcherButton.setTabCountProvider(tabCountProvider);
         }
-
-        // mSpeedDialButton = root.findViewById(R.id.bottom_speed_dial_button);
-        // mSpeedDialButton.setOnClickListener(new View.OnClickListener() {
-        //     @Override
-        //     public void onClick(View v) {
-        //         BottomToolbarCoordinator.openSpeedDialPopup(v);
-        //     }
-        // });
 
         mHomeButton = root.findViewById(R.id.bottom_home_button);
         mHomeButton.setOnClickListener(new View.OnClickListener() {
@@ -161,14 +169,6 @@ public class BottomControlsCoordinator implements BottomToolbarVisibilityControl
 
         // Set the visibility of BottomControls to false by default. Components within
         // BottomControls should update the visibility explicitly if needed.
-        setBottomToolbarVisible(true);
-
-        sceneLayer.setIsVisible(mMediator.isCompositedViewVisible());
-        layoutManager.addSceneOverlay(sceneLayer);
-
-        if (mContentDelegate != null) {
-            mContentDelegate.initializeWithNative(activity, mMediator::setBottomControlsVisible);
-        }
 
         mLayoutStateObserver = new LayoutStateProvider.LayoutStateObserver() {
             @Override
@@ -198,26 +198,40 @@ public class BottomControlsCoordinator implements BottomToolbarVisibilityControl
         mLayoutStateProvider.addObserver(mLayoutStateObserver);
     }
 
+    /**
+     * @param isVisible Whether the bottom control is visible.
+     */
     public void setBottomControlsVisible(boolean isVisible) {
-      // without this for initializeWithNative then it breaks everything
+        // mMediator.setBottomControlsVisible(isVisible);
     }
 
     public void setBottomToolbarVisible(boolean isVisible) {
         mMediator.setBottomToolbarVisible(isVisible);
     }
 
+    private boolean isColorDark(int color){
+        double darkness = 1-(0.299*Color.red(color) + 0.587*Color.green(color) + 0.114*Color.blue(color))/255;
+        if(darkness<0.5){
+            return false; // It's a light color
+        }else{
+            return true; // It's a dark color
+        }
+    }
+
     @Override
-    public void onTintChanged(ColorStateList tint, boolean isDarkTheme) {
+    public void onTintChanged(ColorStateList tint, @BrandedColorScheme int brandedColorScheme) {
 
-        ApiCompatibilityUtils.setImageTintList(mSearchAccelerator, tint);
-        // ApiCompatibilityUtils.setImageTintList(mSpeedDialButton, tint);
-        ApiCompatibilityUtils.setImageTintList(mHomeButton, tint);
-
-        mTabSwitcherButton.setUseLightDrawables(isDarkTheme);
-
-        mBottomToolbarWrapper.setBackgroundColor(isDarkTheme ?
+        int color = isColorDark(brandedColorScheme) ?
             ApiCompatibilityUtils.getColor(mBottomToolbarWrapper.getResources(), R.color.toolbar_background_primary_dark) :
-            ApiCompatibilityUtils.getColor(mBottomToolbarWrapper.getResources(), android.R.color.white));
+            ApiCompatibilityUtils.getColor(mBottomToolbarWrapper.getResources(), android.R.color.white);
+
+        ApiCompatibilityUtils.setImageTintList(mSearchAccelerator, ThemeUtils.getThemedToolbarIconTint(mSearchAccelerator.getContext(), color));
+        // ApiCompatibilityUtils.setImageTintList(mSpeedDialButton, tint);
+        ApiCompatibilityUtils.setImageTintList(mHomeButton, ThemeUtils.getThemedToolbarIconTint(mHomeButton.getContext(), color));
+
+        mTabSwitcherButton.setBrandedColorScheme(color);
+
+        mBottomToolbarWrapper.setBackgroundColor(color);
     }
 
     @Override
@@ -247,6 +261,17 @@ public class BottomControlsCoordinator implements BottomToolbarVisibilityControl
         return mContentDelegate != null && mContentDelegate.onBackPressed();
     }
 
+    @Override
+    public void handleBackPress() {
+        if (mContentDelegate != null) mContentDelegate.handleBackPress();
+    }
+
+    @Override
+    public ObservableSupplier<Boolean> getHandleBackPressChangedSupplier() {
+        if (mContentDelegate == null) return new ObservableSupplierImpl<>();
+        return mContentDelegate.getHandleBackPressChangedSupplier();
+    }
+
     /**
      * Clean up any state when the bottom controls component is destroyed.
      */
@@ -254,9 +279,7 @@ public class BottomControlsCoordinator implements BottomToolbarVisibilityControl
         if (mContentDelegate != null) mContentDelegate.destroy();
 
         if (mBottomToolbarWrapper != null) mBottomToolbarWrapper = null;
-
         if (mContainer != null) mContainer = null;
-
         if (mLayoutStateProvider != null) {
             mLayoutStateProvider.removeObserver(mLayoutStateObserver);
             mLayoutStateProvider = null;

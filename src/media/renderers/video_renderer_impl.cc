@@ -15,8 +15,8 @@
 #include "base/location.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_conversions.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/string_util.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/default_tick_clock.h"
 #include "base/trace_event/trace_event.h"
 #include "media/base/bind_to_current_loop.h"
@@ -42,7 +42,7 @@ constexpr int kAbsoluteMaxFrames = 24;
 
 bool ShouldUseLowDelayMode(DemuxerStream* stream) {
   return base::FeatureList::IsEnabled(kLowDelayVideoRenderingOnLiveStream) &&
-         stream->liveness() == DemuxerStream::LIVENESS_LIVE;
+         stream->liveness() == StreamLiveness::kLive;
 }
 
 }  // namespace
@@ -181,6 +181,8 @@ void VideoRendererImpl::Initialize(
       task_runner_, create_video_decoders_cb_, media_log_);
   video_decoder_stream_->set_config_change_observer(base::BindRepeating(
       &VideoRendererImpl::OnConfigChange, weak_factory_.GetWeakPtr()));
+  video_decoder_stream_->set_fallback_observer(base::BindRepeating(
+      &VideoRendererImpl::OnFallback, weak_factory_.GetWeakPtr()));
   if (gpu_memory_buffer_pool_) {
     video_decoder_stream_->SetPrepareCB(base::BindRepeating(
         &GpuMemoryBufferVideoFramePool::MaybeCreateHardwareFrame,
@@ -385,6 +387,11 @@ void VideoRendererImpl::OnConfigChange(const VideoDecoderConfig& config) {
   }
 }
 
+void VideoRendererImpl::OnFallback(PipelineStatus status) {
+  DCHECK(task_runner_->BelongsToCurrentThread());
+  client_->OnFallback(std::move(status).AddHere());
+}
+
 void VideoRendererImpl::SetTickClockForTesting(
     const base::TickClock* tick_clock) {
   tick_clock_ = tick_clock;
@@ -565,20 +572,26 @@ void VideoRendererImpl::FrameReady(VideoDecoderStream::ReadResult result) {
 
   // Can happen when demuxers are preparing for a new Seek().
   switch (result.code()) {
-    case StatusCode::kOk:
+    case DecoderStatus::Codes::kOk:
       break;
-    case StatusCode::kAborted:
+    case DecoderStatus::Codes::kAborted:
       // TODO(liberato): This used to check specifically for the value
       // DEMUXER_READ_ABORTED, which was more specific than |kAborted|.
       // However, since it's a dcheck, this seems okay.
       return;
     default:
-      DCHECK(result.has_error());
       // Anything other than `kOk` or `kAborted` is treated as an error.
+      DCHECK(result.has_error());
+
+      PipelineStatus::Codes code =
+          result.code() == DecoderStatus::Codes::kDisconnected
+              ? PIPELINE_ERROR_DISCONNECTED
+              : PIPELINE_ERROR_DECODE;
+      PipelineStatus status = {code, std::move(result).error()};
       task_runner_->PostTask(
           FROM_HERE,
           base::BindOnce(&VideoRendererImpl::OnPlaybackError,
-                         weak_factory_.GetWeakPtr(), PIPELINE_ERROR_DECODE));
+                         weak_factory_.GetWeakPtr(), std::move(status)));
       return;
   }
 
@@ -657,8 +670,7 @@ void VideoRendererImpl::FrameReady(VideoDecoderStream::ReadResult result) {
 
   // Update average frame duration.
   base::TimeDelta frame_duration = algorithm_->average_frame_duration();
-  if (frame_duration != kNoTimestamp &&
-      frame_duration != base::TimeDelta::FromSeconds(0)) {
+  if (frame_duration != kNoTimestamp && frame_duration != base::Seconds(0)) {
     fps_estimator_.AddSample(frame_duration);
   } else {
     fps_estimator_.Reset();

@@ -7,7 +7,7 @@
 #include <utility>
 
 #include "base/bind.h"
-#include "base/sequenced_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 #include "content/browser/indexed_db/indexed_db_callbacks.h"
 #include "content/browser/indexed_db/indexed_db_cursor.h"
 #include "content/browser/indexed_db/indexed_db_dispatcher_host.h"
@@ -15,11 +15,11 @@
 namespace content {
 
 CursorImpl::CursorImpl(std::unique_ptr<IndexedDBCursor> cursor,
-                       const blink::StorageKey& storage_key,
+                       const storage::BucketLocator& bucket_locator,
                        IndexedDBDispatcherHost* dispatcher_host,
                        scoped_refptr<base::SequencedTaskRunner> idb_runner)
     : dispatcher_host_(dispatcher_host),
-      storage_key_(storage_key),
+      bucket_locator_(bucket_locator),
       idb_runner_(std::move(idb_runner)),
       cursor_(std::move(cursor)) {
   DCHECK(idb_runner_);

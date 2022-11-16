@@ -7,17 +7,13 @@
 namespace lookalikes {
 namespace features {
 
-// Note: this flag is ignored on iOS. See lookalike_url_util.cc.
-const base::Feature kDetectTargetEmbeddingLookalikes{
-    "TargetEmbeddingLookalikes", base::FEATURE_ENABLED_BY_DEFAULT};
-
-const base::Feature kLookalikeInterstitialForPunycode{
-    "LookalikeInterstitialForPunycode", base::FEATURE_ENABLED_BY_DEFAULT};
-
 const base::Feature kLookalikeDigitalAssetLinks{
     "LookalikeDigitalAssetLinks", base::FEATURE_DISABLED_BY_DEFAULT};
 
 const char kLookalikeDigitalAssetLinksTimeoutParameter[] = "timeout";
+
+const base::Feature kDetectComboSquattingLookalikes{
+    "ComboSquattingLookalikes", base::FEATURE_DISABLED_BY_DEFAULT};
 
 }  // namespace features
 }  // namespace lookalikes

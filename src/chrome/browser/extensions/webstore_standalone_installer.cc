@@ -245,22 +245,28 @@ void WebstoreStandaloneInstaller::OnWebstoreResponseParseSuccess(
     return;
   }
 
-  std::string error;
+  absl::optional<double> average_rating_setting =
+      webstore_data->FindDoubleKey(kAverageRatingKey);
+  absl::optional<int> rating_count_setting =
+      webstore_data->FindIntKey(kRatingCountKey);
 
   // Manifest, number of users, average rating and rating count are required.
   std::string manifest;
   if (!webstore_data->GetString(kManifestKey, &manifest) ||
       !webstore_data->GetString(kUsersKey, &localized_user_count_) ||
-      !webstore_data->GetDouble(kAverageRatingKey, &average_rating_) ||
-      !webstore_data->GetInteger(kRatingCountKey, &rating_count_)) {
+      !average_rating_setting || !rating_count_setting) {
     CompleteInstall(webstore_install::INVALID_WEBSTORE_RESPONSE,
                     webstore_install::kInvalidWebstoreResponseError);
     return;
   }
 
-  // Optional.
-  show_user_count_ = true;
-  webstore_data->GetBoolean(kShowUserCountKey, &show_user_count_);
+  average_rating_ = *average_rating_setting;
+  rating_count_ = *rating_count_setting;
+
+  // Showing user count is optional.
+  absl::optional<bool> show_user_count_opt =
+      webstore_data->FindBoolKey(kShowUserCountKey);
+  show_user_count_ = show_user_count_opt.value_or(true);
 
   if (average_rating_ < ExtensionInstallPrompt::kMinExtensionRating ||
       average_rating_ > ExtensionInstallPrompt::kMaxExtensionRating) {
@@ -270,11 +276,24 @@ void WebstoreStandaloneInstaller::OnWebstoreResponseParseSuccess(
   }
 
   // Localized name and description are optional.
-  if ((webstore_data->HasKey(kLocalizedNameKey) &&
-      !webstore_data->GetString(kLocalizedNameKey, &localized_name_)) ||
-      (webstore_data->HasKey(kLocalizedDescriptionKey) &&
-      !webstore_data->GetString(
-          kLocalizedDescriptionKey, &localized_description_))) {
+  bool ok = true;
+  if (const base::Value* localized_name_in =
+          webstore_data->FindKey(kLocalizedNameKey)) {
+    if (localized_name_in->is_string())
+      localized_name_ = localized_name_in->GetString();
+    else
+      ok = false;
+  }
+
+  if (const base::Value* localized_description_in =
+          webstore_data->FindKey(kLocalizedDescriptionKey)) {
+    if (localized_description_in->is_string())
+      localized_description_ = localized_description_in->GetString();
+    else
+      ok = false;
+  }
+
+  if (!ok) {
     CompleteInstall(webstore_install::INVALID_WEBSTORE_RESPONSE,
                     webstore_install::kInvalidWebstoreResponseError);
     return;
@@ -282,14 +301,14 @@ void WebstoreStandaloneInstaller::OnWebstoreResponseParseSuccess(
 
   // Icon URL is optional.
   GURL icon_url;
-  if (webstore_data->HasKey(kIconUrlKey)) {
-    std::string icon_url_string;
-    if (!webstore_data->GetString(kIconUrlKey, &icon_url_string)) {
+  if (const base::Value* icon_url_val = webstore_data->FindKey(kIconUrlKey)) {
+    const std::string* icon_url_string = icon_url_val->GetIfString();
+    if (!icon_url_string) {
       CompleteInstall(webstore_install::INVALID_WEBSTORE_RESPONSE,
                       webstore_install::kInvalidWebstoreResponseError);
       return;
     }
-    icon_url = extension_urls::GetWebstoreLaunchURL().Resolve(icon_url_string);
+    icon_url = extension_urls::GetWebstoreLaunchURL().Resolve(*icon_url_string);
     if (!icon_url.is_valid()) {
       CompleteInstall(webstore_install::INVALID_WEBSTORE_RESPONSE,
                       webstore_install::kInvalidWebstoreResponseError);

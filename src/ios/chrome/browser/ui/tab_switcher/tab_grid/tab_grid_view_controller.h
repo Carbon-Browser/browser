@@ -19,6 +19,7 @@
 @protocol GridCommands;
 @protocol GridDragDropHandler;
 @protocol GridImageDataSource;
+@protocol PriceCardDataSource;
 @protocol GridShareableItemsProvider;
 class GURL;
 @protocol IncognitoReauthCommands;
@@ -44,9 +45,9 @@ enum class TabGridPageConfiguration {
 // Delegate protocol for an object that can handle presenting ("opening") tabs
 // from the tab grid.
 @protocol TabPresentationDelegate <NSObject>
-// Show the active tab in |page|, presented on top of the tab grid.  The
-// omnibox will be focused after the animation if |focusOmnibox| is YES. If
-// |closeTabGrid| is NO, then the tab grid will not be closed, and the active
+// Show the active tab in `page`, presented on top of the tab grid.  The
+// omnibox will be focused after the animation if `focusOmnibox` is YES. If
+// `closeTabGrid` is NO, then the tab grid will not be closed, and the active
 // tab will simply be displayed in its current position.
 // This last parameter is used for the thumb strip, where the
 // BVCContainerViewController is never dismissed.
@@ -68,6 +69,19 @@ enum class TabGridPageConfiguration {
 
 // Opens a link when the user clicks on the in-text link.
 - (void)openLinkWithURL:(const GURL&)URL;
+
+// BVC is completely hidden, detach it from view (for thumbstrip mode).
+- (void)dismissBVC;
+
+// Asks the delegate to open history modal with results filtered by
+// `searchText`.
+- (void)showHistoryFilteredBySearchText:(NSString*)searchText;
+
+// Asks the delegate to open a new tab page with a web search for `searchText`.
+- (void)openSearchResultsPageForSearchText:(NSString*)searchText;
+
+// Sets BVC accessibilityViewIsModal to `modal` (for thumbstrip mode).
+- (void)setBVCAccessibilityViewModal:(BOOL)modal;
 
 @end
 
@@ -112,6 +126,9 @@ enum class TabGridPageConfiguration {
 // Data sources provide lazy access to heavy-weight resources.
 @property(nonatomic, weak) id<GridImageDataSource> regularTabsImageDataSource;
 @property(nonatomic, weak) id<GridImageDataSource> incognitoTabsImageDataSource;
+
+// Data source for acquiring data which power the PriceCardView
+@property(nonatomic, weak) id<PriceCardDataSource> priceCardDataSource;
 
 @property(nonatomic, weak) id<GridShareableItemsProvider>
     regularTabsShareableItemsProvider;
@@ -164,6 +181,10 @@ enum class TabGridPageConfiguration {
 
 // Dismisses any modal UI which may be presented.
 - (void)dismissModals;
+
+// Sets both the current page and page control's selected page to `page`.
+// Animation is used if `animated` is YES.
+- (void)setCurrentPageAndPageControl:(TabGridPage)page animated:(BOOL)animated;
 
 @end
 

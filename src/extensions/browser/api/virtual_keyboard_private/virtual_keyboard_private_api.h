@@ -6,12 +6,11 @@
 #define EXTENSIONS_BROWSER_API_VIRTUAL_KEYBOARD_PRIVATE_VIRTUAL_KEYBOARD_PRIVATE_API_H_
 
 #include "base/compiler_specific.h"
+#include "base/memory/raw_ptr.h"
+#include "base/values.h"
 #include "extensions/browser/browser_context_keyed_api_factory.h"
 #include "extensions/browser/extension_function.h"
-
-namespace base {
-class DictionaryValue;
-}
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace content {
 class BrowserContext;
@@ -30,7 +29,7 @@ class VirtualKeyboardPrivateFunction : public ExtensionFunction {
   ~VirtualKeyboardPrivateFunction() override;
 
  private:
-  VirtualKeyboardDelegate* delegate_ = nullptr;
+  raw_ptr<VirtualKeyboardDelegate> delegate_ = nullptr;
 };
 
 class VirtualKeyboardPrivateInsertTextFunction
@@ -124,7 +123,7 @@ class VirtualKeyboardPrivateGetKeyboardConfigFunction
   ResponseAction Run() override;
 
  private:
-  void OnKeyboardConfig(std::unique_ptr<base::DictionaryValue> results);
+  void OnKeyboardConfig(absl::optional<base::Value::Dict> results);
 };
 
 class VirtualKeyboardPrivateOpenSettingsFunction

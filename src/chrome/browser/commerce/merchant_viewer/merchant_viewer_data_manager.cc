@@ -9,14 +9,14 @@
 #include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/histogram_macros_local.h"
-#include "chrome/browser/commerce/commerce_feature_list.h"
-#include "chrome/browser/persisted_state_db/profile_proto_db.h"
-#include "chrome/browser/persisted_state_db/profile_proto_db_factory.h"
+#include "chrome/browser/persisted_state_db/session_proto_db_factory.h"
+#include "components/commerce/core/commerce_feature_list.h"
+#include "components/session_proto_db/session_proto_db.h"
 #include "content/public/browser/android/browser_context_handle.h"
 
 MerchantViewerDataManager::MerchantViewerDataManager(
     content::BrowserContext* browser_context)
-    : proto_db_(ProfileProtoDBFactory<MerchantSignalProto>::GetInstance()
+    : proto_db_(SessionProtoDBFactory<MerchantSignalProto>::GetInstance()
                     ->GetForProfile(browser_context)) {}
 
 MerchantViewerDataManager::~MerchantViewerDataManager() = default;
@@ -98,16 +98,12 @@ void MerchantViewerDataManager::DeleteMerchantViewerDataForOrigins(
     LOCAL_HISTOGRAM_BOOLEAN(
         "MerchantViewer.DataManager.ForceClearMerchantsForOrigins", true);
   } else {
-    std::vector<std::string> deleted_hostnames;
-    std::transform(deleted_origins.begin(), deleted_origins.end(),
-                   std::back_inserter(deleted_hostnames),
-                   [](const auto& item) { return item.host(); });
-
+    auto deleted_hostnames =
+        base::MakeFlatSet<std::string>(deleted_origins, {}, &GURL::host);
     LOG(ERROR) << "Clearing " << deleted_hostnames.size() << " merchants.";
     proto_db_->LoadAllEntries(base::BindOnce(
         &MerchantViewerDataManager::OnLoadAllEntriesForOriginsCallback,
-        weak_ptr_factory_.GetWeakPtr(),
-        base::flat_set<std::string>(std::move(deleted_hostnames))));
+        weak_ptr_factory_.GetWeakPtr(), std::move(deleted_hostnames)));
   }
 }
 
@@ -143,7 +139,7 @@ bool MerchantViewerDataManager::HasValidDB() {
   return proto_db_ != nullptr;
 }
 
-ProfileProtoDB<merchant_signal_db::MerchantSignalContentProto>*
+SessionProtoDB<merchant_signal_db::MerchantSignalContentProto>*
 MerchantViewerDataManager::GetDB() {
   return proto_db_;
 }

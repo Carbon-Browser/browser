@@ -1,4 +1,4 @@
-#!/usr/bin/env vpython
+#!/usr/bin/env vpython3
 # Copyright (c) 2013 The Chromium Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -12,7 +12,6 @@
 
 import calendar
 import datetime
-import httplib
 import json
 import os
 import subprocess
@@ -21,9 +20,16 @@ import time
 import traceback
 import zlib
 import logging
+
+import six
 import six.moves.urllib.error  # pylint: disable=import-error
 import six.moves.urllib.parse  # pylint: disable=import-error
 import six.moves.urllib.request  # pylint: disable=import-error
+
+if six.PY2:
+  import httplib  # pylint: disable=wrong-import-order,import-error
+else:
+  import http.client as httplib  # pylint: disable=import-error
 
 # TODO(crbug.com/996778): Figure out how to get httplib2 hermetically.
 import httplib2  # pylint: disable=import-error
@@ -56,11 +62,10 @@ def LuciAuthTokenGeneratorCallback():
   args = ['luci-auth', 'token']
   p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
   if p.wait() == 0:
-    return p.stdout.read()
-  else:
-    raise RuntimeError(
-        'Error generating authentication token.\nStdout: %s\nStder:%s' %
-        (p.stdout.read(), p.stderr.read()))
+    return p.stdout.read().strip()
+  raise RuntimeError(
+      'Error generating authentication token.\nStdout: %s\nStder:%s' %
+      (p.stdout.read(), p.stderr.read()))
 
 
 def SendResults(data, data_label, url, send_as_histograms=False,
@@ -352,10 +357,12 @@ def _RevisionNumberColumns(data, prefix):
       # branch in the chromium/src repo.
       revision_supplemental_columns[prefix + 'commit_pos'] = revision
   except ValueError:
+    logging.warning('Revision has non-integer value: "%s".', data['rev'])
     # The dashboard requires ordered integer revision numbers. If the revision
-    # is not an integer, assume it's a git hash and send a timestamp.
+    # is not an integer or None, assume it's a git hash and send a timestamp.
     revision = _GetTimestamp()
-    revision_supplemental_columns[prefix + 'chromium'] = data['rev']
+    if data['rev'] is not None:
+      revision_supplemental_columns[prefix + 'chromium'] = data['rev']
 
   # An explicit data['point_id'] overrides the default behavior.
   if 'point_id' in data:
@@ -367,7 +374,7 @@ def _RevisionNumberColumns(data, prefix):
       revision_supplemental_columns[prefix + key] = data[key]
 
   # If possible, also send the git hash.
-  if 'git_revision' in data and data['git_revision'] != 'undefined':
+  if 'git_revision' in data and data['git_revision'] not in [None, 'undefined']:
     revision_supplemental_columns[prefix + 'chromium'] = data['git_revision']
 
   return revision, revision_supplemental_columns
@@ -455,7 +462,7 @@ def _SendHistogramJson(url, histogramset_json, token_generator_callback):
   try:
     oauth_token = token_generator_callback()
 
-    data = zlib.compress(histogramset_json)
+    data = zlib.compress(histogramset_json.encode('utf-8'))
     headers = {
         'Authorization': 'Bearer %s' % oauth_token,
         'User-Agent': 'perf-uploader/1.0'
@@ -472,7 +479,7 @@ def _SendHistogramJson(url, histogramset_json, token_generator_callback):
     if response.status in (403, 500):
       raise SendResultsRetryException('HTTP Response %d: %s' % (
           response.status, response.reason))
-    elif response.status != 200:
+    if response.status != 200:
       raise SendResultsFatalException('HTTP Response %d: %s' % (
           response.status, response.reason))
 
@@ -484,9 +491,9 @@ def _SendHistogramJson(url, histogramset_json, token_generator_callback):
   try:
     token = json.loads(content).get('token')
     if not token:
-      logging.warn(
+      logging.warning(
           'Error fetching upload completion token: Badly formatted token dict.')
     else:
       logging.info('Upload completion token created. Token id: %s' % token)
   except Exception as e:  # pylint: disable=broad-except
-    logging.warn('Error fetching upload completion token: %r' % e.message)
+    logging.warning('Error fetching upload completion token: %s' % e)

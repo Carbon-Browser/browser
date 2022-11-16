@@ -17,6 +17,7 @@
 #include "media/base/vector_math.h"
 #include "mojo/public/cpp/system/buffer.h"
 #include "mojo/public/cpp/system/platform_handle.h"
+#include "third_party/abseil-cpp/absl/utility/utility.h"
 
 namespace audio {
 
@@ -24,8 +25,7 @@ namespace {
 
 // Start with a conservative, but reasonable capture delay that should work for
 // most platforms (i.e., not needing an increase during a loopback session).
-constexpr base::TimeDelta kInitialCaptureDelay =
-    base::TimeDelta::FromMilliseconds(20);
+constexpr base::TimeDelta kInitialCaptureDelay = base::Milliseconds(20);
 
 }  // namespace
 
@@ -79,7 +79,7 @@ LoopbackStream::LoopbackStream(
       socket_handle = mojo::PlatformHandle(foreign_socket.Take());
       if (socket_handle.is_valid()) {
         std::move(created_callback)
-            .Run({base::in_place, std::move(shared_memory_region),
+            .Run({absl::in_place, std::move(shared_memory_region),
                   std::move(socket_handle)});
         network_.reset(new FlowNetwork(std::move(flow_task_runner), params,
                                        std::move(writer)));
@@ -276,7 +276,7 @@ void LoopbackStream::FlowNetwork::Start() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(control_sequence_);
   DCHECK(!is_started());
 
-  timer_.emplace(clock_);
+  timer_.emplace();
   // Note: GenerateMoreAudio() will schedule the timer.
 
   first_generate_time_ = clock_->NowTicks();
@@ -375,13 +375,12 @@ void LoopbackStream::FlowNetwork::GenerateMoreAudio() {
   frames_elapsed_ += frames_per_buffer;
   next_generate_time_ =
       first_generate_time_ +
-      base::TimeDelta::FromMicroseconds(frames_elapsed_ *
-                                        base::Time::kMicrosecondsPerSecond /
-                                        output_params_.sample_rate());
+      base::Microseconds(frames_elapsed_ * base::Time::kMicrosecondsPerSecond /
+                         output_params_.sample_rate());
   const base::TimeTicks now = clock_->NowTicks();
   if (next_generate_time_ < now) {
     TRACE_EVENT_INSTANT1("audio", "GenerateMoreAudio Is Behind",
-                         TRACE_EVENT_SCOPE_THREAD, u8"µsec_behind",
+                         TRACE_EVENT_SCOPE_THREAD, "µsec_behind",
                          (now - next_generate_time_).InMicroseconds());
     // Audio generation has fallen behind. Skip-ahead the frame counter so that
     // audio generation will resume for the next buffer after the one that
@@ -393,17 +392,17 @@ void LoopbackStream::FlowNetwork::GenerateMoreAudio() {
         (target_frame_count / frames_per_buffer + 1) * frames_per_buffer;
     next_generate_time_ =
         first_generate_time_ +
-        base::TimeDelta::FromMicroseconds(frames_elapsed_ *
-                                          base::Time::kMicrosecondsPerSecond /
-                                          output_params_.sample_rate());
+        base::Microseconds(frames_elapsed_ *
+                           base::Time::kMicrosecondsPerSecond /
+                           output_params_.sample_rate());
   }
 
   // Note: It's acceptable for |next_generate_time_| to be slightly before |now|
   // due to integer truncation behaviors in the math above. The timer task
   // started below will just run immediately and there will be no harmful
   // effects in the next GenerateMoreAudio() call. http://crbug.com/847487
-  timer_->Start(FROM_HERE, next_generate_time_ - now, this,
-                &FlowNetwork::GenerateMoreAudio);
+  timer_->Start(FROM_HERE, next_generate_time_, this,
+                &FlowNetwork::GenerateMoreAudio, base::ExactDeadline(true));
 }
 
 }  // namespace audio

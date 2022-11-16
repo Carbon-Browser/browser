@@ -20,7 +20,7 @@ enum Pages {
   LOAD_SIGNIN = 3,
   LOAD_FORCE_SIGNIN = 4,
   PROFILE_SWITCH = 5,
-  // <if expr="lacros">
+  // <if expr="chromeos_lacros">
   ACCOUNT_SELECTION_LACROS = 6,
   // </if>
 }
@@ -32,7 +32,7 @@ export enum Routes {
   MAIN = 'main-view',
   NEW_PROFILE = 'new-profile',
   PROFILE_SWITCH = 'profile-switch',
-  // <if expr="lacros">
+  // <if expr="chromeos_lacros">
   ACCOUNT_SELECTION_LACROS = 'account-selection-lacros',
   // </if>
 }
@@ -62,7 +62,7 @@ function computeStep(route: Routes): string {
       return ProfileCreationSteps.PROFILE_TYPE_CHOICE;
     case Routes.PROFILE_SWITCH:
       return 'profileSwitch';
-    // <if expr="lacros">
+    // <if expr="chromeos_lacros">
     case Routes.ACCOUNT_SELECTION_LACROS:
       return 'accountSelectionLacros';
     // </if>
@@ -90,17 +90,17 @@ if (!history.state || !history.state.route || !history.state.step) {
           {
             route: Routes.PROFILE_SWITCH,
             step: computeStep(Routes.PROFILE_SWITCH),
-            isFirst: true
+            isFirst: true,
           },
           '', path);
       break;
-    // <if expr="lacros">
+    // <if expr="chromeos_lacros">
     case `/${Routes.ACCOUNT_SELECTION_LACROS}`:
       history.replaceState(
           {
             route: Routes.ACCOUNT_SELECTION_LACROS,
             step: computeStep(Routes.ACCOUNT_SELECTION_LACROS),
-            isFirst: true
+            isFirst: true,
           },
           '', path);
       break;
@@ -134,7 +134,7 @@ export function recordPageVisited(step: string) {
     case 'profileSwitch':
       page = Pages.PROFILE_SWITCH;
       break;
-    // <if expr="lacros">
+    // <if expr="chromeos_lacros">
     case 'accountSelectionLacros':
       page = Pages.ACCOUNT_SELECTION_LACROS;
       break;
@@ -161,10 +161,12 @@ window.addEventListener('popstate', notifyObservers);
 
 export function navigateTo(route: Routes) {
   assert([
-    // <if expr="lacros">
+    // <if expr="chromeos_lacros">
     Routes.ACCOUNT_SELECTION_LACROS,
     // </if>
-    Routes.MAIN, Routes.NEW_PROFILE, Routes.PROFILE_SWITCH
+    Routes.MAIN,
+    Routes.NEW_PROFILE,
+    Routes.PROFILE_SWITCH,
   ].includes(route));
   navigateToStep(route, computeStep(route));
 }
@@ -174,13 +176,21 @@ export function navigateTo(route: Routes) {
  * otherwise to the main route.
  */
 export function navigateToPreviousRoute() {
-  // This can happen if the profile creation flow is opened directly from the
-  // profile menu.
-  if (history.state.isFirst) {
-    navigateTo(Routes.MAIN);
-  } else {
+  if (hasPreviousRoute()) {
     window.history.back();
+  } else {
+    // This can happen if the profile creation flow is opened directly from the
+    // profile menu.
+    navigateTo(Routes.MAIN);
   }
+}
+
+/**
+ * Returns whether there's a previous route. This is true iff some navigation
+ * within the app already took place.
+ */
+export function hasPreviousRoute() {
+  return !history.state.isFirst;
 }
 
 export function navigateToStep(route: Routes, step: string) {
@@ -200,7 +210,7 @@ export const NavigationMixin = dedupingMixin(
     <T extends Constructor<PolymerElement>>(superClass: T): T&
     Constructor<NavigationMixinInterface> => {
       class NavigationMixin extends superClass {
-        connectedCallback() {
+        override connectedCallback() {
           super.connectedCallback();
 
           assert(!routeObservers.has(this));
@@ -211,7 +221,7 @@ export const NavigationMixin = dedupingMixin(
           this.onRouteChange(history.state.route, history.state.step);
         }
 
-        disconnectedCallback() {
+        override disconnectedCallback() {
           super.disconnectedCallback();
 
           assert(routeObservers.delete(this));

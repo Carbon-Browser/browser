@@ -9,10 +9,10 @@
 #include <string>
 #include <vector>
 
-#include "base/compiler_specific.h"
 #include "chrome/test/chromedriver/chrome/chrome_impl.h"
 
 class Device;
+struct DeviceMetrics;
 class DevToolsClient;
 class DevToolsHttpClient;
 
@@ -22,6 +22,8 @@ class ChromeAndroidImpl : public ChromeImpl {
                     std::unique_ptr<DevToolsClient> websocket_client,
                     std::vector<std::unique_ptr<DevToolsEventListener>>
                         devtools_event_listeners,
+                    std::unique_ptr<DeviceMetrics> device_metrics,
+                    SyncWebSocketFactory socket_factory,
                     std::string page_load_strategy,
                     std::unique_ptr<Device> device);
   ~ChromeAndroidImpl() override;

@@ -69,15 +69,15 @@ class AutofillProfileSaveStrikeDatabaseTest : public ::testing::Test {
 TEST_F(AutofillProfileSaveStrikeDatabaseTest, AddAndRemoveStrikes) {
   strike_database_->AddStrike(test_host1);
   EXPECT_EQ(strike_database_->GetStrikes(test_host1), 1);
-  EXPECT_FALSE(strike_database_->IsMaxStrikesLimitReached(test_host1));
+  EXPECT_FALSE(strike_database_->ShouldBlockFeature(test_host1));
 
   strike_database_->AddStrikes(2, test_host1);
   EXPECT_EQ(strike_database_->GetStrikes(test_host1), 3);
-  EXPECT_TRUE(strike_database_->IsMaxStrikesLimitReached(test_host1));
+  EXPECT_TRUE(strike_database_->ShouldBlockFeature(test_host1));
 
   strike_database_->RemoveStrike(test_host1);
   EXPECT_EQ(strike_database_->GetStrikes(test_host1), 2);
-  EXPECT_FALSE(strike_database_->IsMaxStrikesLimitReached(test_host1));
+  EXPECT_FALSE(strike_database_->ShouldBlockFeature(test_host1));
 }
 
 TEST_F(AutofillProfileSaveStrikeDatabaseTest,
@@ -119,9 +119,9 @@ TEST_F(AutofillProfileSaveStrikeDatabaseTest,
 
   base::Time start_time = AutofillClock::Now();
   strike_database_->AddStrike(test_host1);
-  test_autofill_clock.Advance(base::TimeDelta::FromMinutes(1));
+  test_autofill_clock.Advance(base::Minutes(1));
   base::Time end_time = AutofillClock::Now();
-  test_autofill_clock.Advance(base::TimeDelta::FromMinutes(1));
+  test_autofill_clock.Advance(base::Minutes(1));
 
   // Now update the time stamp of this entry by adding another strike.
   // By this, the entry should not be deleted.
@@ -139,10 +139,10 @@ TEST_F(AutofillProfileSaveStrikeDatabaseTest,
   test_autofill_clock.SetNow(AutofillClock::Now());
 
   strike_database_->AddStrike(test_host1);
-  test_autofill_clock.Advance(base::TimeDelta::FromMinutes(1));
+  test_autofill_clock.Advance(base::Minutes(1));
 
   base::Time start_time = AutofillClock::Now();
-  test_autofill_clock.Advance(base::TimeDelta::FromMinutes(1));
+  test_autofill_clock.Advance(base::Minutes(1));
   base::Time end_time = AutofillClock::Now();
 
   strike_database_->ClearStrikesByOriginAndTimeInternal(delete_all_hosts_set,

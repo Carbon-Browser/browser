@@ -89,7 +89,7 @@ void DownloadShelf::Unhide() {
 }
 
 base::TimeDelta DownloadShelf::GetTransientDownloadShowDelay() const {
-  return base::TimeDelta::FromSeconds(2);
+  return base::Seconds(2);
 }
 
 void DownloadShelf::ShowDownload(DownloadUIModel::DownloadUIModelPtr download) {
@@ -98,7 +98,7 @@ void DownloadShelf::ShowDownload(DownloadUIModel::DownloadUIModelPtr download) {
     return;
 
   if (!DownloadCoreServiceFactory::GetForBrowserContext(download->profile())
-           ->IsShelfEnabled())
+           ->IsDownloadUiEnabled())
     return;
 
   Unhide();

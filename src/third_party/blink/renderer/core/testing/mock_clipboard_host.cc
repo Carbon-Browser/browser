@@ -10,6 +10,7 @@
 #include "third_party/blink/public/common/tokens/tokens.h"
 #include "third_party/blink/renderer/platform/graphics/color_behavior.h"
 #include "third_party/blink/renderer/platform/image-encoders/image_encoder.h"
+#include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 
 namespace blink {
@@ -29,7 +30,6 @@ void MockClipboardHost::Reset() {
   svg_text_ = g_empty_string;
   url_ = KURL();
   png_.clear();
-  image_.reset();
   custom_data_.clear();
   write_smart_paste_ = false;
   needs_reset_ = false;
@@ -41,9 +41,7 @@ void MockClipboardHost::GetSequenceNumber(
   std::move(callback).Run(sequence_number_);
 }
 
-void MockClipboardHost::ReadAvailableTypes(
-    mojom::ClipboardBuffer clipboard_buffer,
-    ReadAvailableTypesCallback callback) {
+Vector<String> MockClipboardHost::ReadStandardFormatNames() {
   Vector<String> types;
   if (!plain_text_.IsEmpty())
     types.push_back("text/plain");
@@ -51,13 +49,20 @@ void MockClipboardHost::ReadAvailableTypes(
     types.push_back("text/html");
   if (!svg_text_.IsEmpty())
     types.push_back("image/svg+xml");
-  if (!png_.IsEmpty() || !image_.isNull())
+  if (!png_.IsEmpty())
     types.push_back("image/png");
   for (auto& it : custom_data_) {
     CHECK(!base::Contains(types, it.key));
     types.push_back(it.key);
   }
-  std::move(callback).Run(types);
+  return types;
+}
+
+void MockClipboardHost::ReadAvailableTypes(
+    mojom::ClipboardBuffer clipboard_buffer,
+    ReadAvailableTypesCallback callback) {
+  Vector<String> types = ReadStandardFormatNames();
+  std::move(callback).Run(std::move(types));
 }
 
 void MockClipboardHost::IsFormatAvailable(
@@ -76,9 +81,6 @@ void MockClipboardHost::IsFormatAvailable(
       result = write_smart_paste_;
       break;
     case mojom::ClipboardFormat::kBookmark:
-      result = false;
-      break;
-    case mojom::ClipboardFormat::kRtf:
       result = false;
       break;
   }
@@ -108,11 +110,6 @@ void MockClipboardHost::ReadRtf(mojom::ClipboardBuffer clipboard_buffer,
 void MockClipboardHost::ReadPng(mojom::ClipboardBuffer clipboard_buffer,
                                 ReadPngCallback callback) {
   std::move(callback).Run(mojo_base::BigBuffer(png_));
-}
-
-void MockClipboardHost::ReadImage(mojom::ClipboardBuffer clipboard_buffer,
-                                  ReadImageCallback callback) {
-  std::move(callback).Run(image_);
 }
 
 void MockClipboardHost::ReadFiles(mojom::ClipboardBuffer clipboard_buffer,
@@ -165,10 +162,6 @@ void MockClipboardHost::WriteBookmark(const String& url, const String& title) {}
 void MockClipboardHost::WriteImage(const SkBitmap& bitmap) {
   if (needs_reset_)
     Reset();
-  // TODO(crbug.com/1223254): Consider removing `image_` in favor of `png_`.
-  // For now, write to each.
-  image_ = bitmap;
-
   SkPixmap pixmap;
   bitmap.peekPixels(&pixmap);
   // Set encoding options to favor speed over size.
@@ -186,10 +179,10 @@ void MockClipboardHost::CommitWrite() {
 
 void MockClipboardHost::ReadAvailableCustomAndStandardFormats(
     ReadAvailableCustomAndStandardFormatsCallback callback) {
-  Vector<String> format_names;
+  Vector<String> format_names = ReadStandardFormatNames();
   for (const auto& item : unsanitized_custom_data_map_)
     format_names.emplace_back(item.key);
-  std::move(callback).Run(format_names);
+  std::move(callback).Run(std::move(format_names));
 }
 
 void MockClipboardHost::ReadUnsanitizedCustomFormat(
@@ -212,10 +205,12 @@ void MockClipboardHost::WriteUnsanitizedCustomFormat(
   // Simulate the underlying platform copying this data.
   Vector<uint8_t> data_copy(base::saturated_cast<wtf_size_t>(data.size()),
                             *data.data());
-  unsanitized_custom_data_map_.Set(format, data_copy);
+  // Append the "web " prefix since it is removed by the clipboard writer during
+  // write.
+  unsanitized_custom_data_map_.Set("web " + format, std::move(data_copy));
 }
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 void MockClipboardHost::WriteStringToFindPboard(const String& text) {}
 #endif
 

@@ -26,30 +26,64 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_HTML_CANVAS_CANVAS_RENDERING_CONTEXT_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_HTML_CANVAS_CANVAS_RENDERING_CONTEXT_H_
 
+#include "base/callback_forward.h"
+#include "base/containers/span.h"
+#include "base/memory/scoped_refptr.h"
+#include "base/notreached.h"
+#include "cc/paint/paint_flags.h"
 #include "third_party/blink/public/common/privacy_budget/identifiable_token.h"
 #include "third_party/blink/renderer/bindings/core/v8/active_script_wrappable.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/html/canvas/canvas_context_creation_attributes_core.h"
 #include "third_party/blink/renderer/core/html/canvas/canvas_performance_monitor.h"
-#include "third_party/blink/renderer/core/html/canvas/html_canvas_element.h"
-#include "third_party/blink/renderer/core/layout/hit_test_canvas_result.h"
-#include "third_party/blink/renderer/core/offscreencanvas/offscreen_canvas.h"
+#include "third_party/blink/renderer/core/html/canvas/canvas_rendering_context_host.h"
+#include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 #include "third_party/blink/renderer/platform/graphics/canvas_color_params.h"
-#include "third_party/blink/renderer/platform/graphics/color_behavior.h"
+#include "third_party/blink/renderer/platform/graphics/graphics_types_3d.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
+#include "third_party/blink/renderer/platform/heap/prefinalizer.h"
+#include "third_party/blink/renderer/platform/heap/visitor.h"
 #include "third_party/blink/renderer/platform/scheduler/public/thread.h"
-#include "third_party/skia/include/core/SkColorSpace.h"
 #include "third_party/skia/include/core/SkData.h"
 #include "third_party/skia/include/core/SkImageInfo.h"
+#include "third_party/skia/include/core/SkRect.h"
+#include "third_party/skia/include/core/SkRefCnt.h"
+#include "ui/gfx/geometry/size.h"
+
+namespace base {
+struct PendingTask;
+}  // namespace base
+
+namespace cc {
+class Layer;
+class PaintCanvas;
+}  // namespace cc
+
+namespace gfx {
+class ColorSpace;
+}  // namespace gfx
+
+namespace media {
+class VideoFrame;
+}  // namespace media
 
 namespace blink {
 
 class CanvasImageSource;
-class HTMLCanvasElement;
+class CanvasResourceProvider;
+class ComputedStyle;
+class Document;
+class Element;
+class ExecutionContext;
 class ImageBitmap;
+class NoAllocDirectCallHost;
+class ScriptState;
+class StaticBitmapImage;
 class
     V8UnionCanvasRenderingContext2DOrGPUCanvasContextOrImageBitmapRenderingContextOrWebGL2RenderingContextOrWebGLRenderingContext;
 class
     V8UnionGPUCanvasContextOrImageBitmapRenderingContextOrOffscreenCanvasRenderingContext2DOrWebGL2RenderingContextOrWebGLRenderingContext;
+class WebGraphicsContext3DVideoFramePool;
 
 class CORE_EXPORT CanvasRenderingContext
     : public ScriptWrappable,
@@ -62,33 +96,20 @@ class CORE_EXPORT CanvasRenderingContext
   CanvasRenderingContext& operator=(const CanvasRenderingContext&) = delete;
   ~CanvasRenderingContext() override = default;
 
-  // A Canvas can either be "2D" or "webgl" but never both. Requesting a context
-  // with a type different from an existing will destroy the latter.
-  enum ContextType {
-    // These values are mirrored in tools/metrics/histograms/enums.xml. Do
-    // not change assigned numbers of existing items and add new features to the
-    // end of the list.
-    kContext2D = 0,
-    kContextExperimentalWebgl = 2,
-    kContextWebgl = 3,
-    kContextWebgl2 = 4,
-    kContextImageBitmap = 5,
-    kContextXRPresent = 6,
-    // WebGL2Compute used to be 7.
-    kContextWebGPU = 8,  // WebGPU
-    kContextTypeUnknown = 9,
-    kMaxValue = kContextTypeUnknown,
-  };
-
   // Correspond to CanvasRenderingAPI defined in
   // tools/metrics/histograms/enums.xml
   enum class CanvasRenderingAPI {
+    kUnknown = -1,  // Not used by histogram.
     k2D = 0,
     kWebgl = 1,
     kWebgl2 = 2,
     kBitmaprenderer = 3,
     kWebgpu = 4,
+
+    kMaxValue = kWebgpu,
   };
+
+  CanvasRenderingAPI GetRenderingAPI() const { return canvas_rendering_type_; }
 
   bool IsRenderingContext2D() const {
     return canvas_rendering_type_ == CanvasRenderingAPI::k2D;
@@ -107,6 +128,8 @@ class CORE_EXPORT CanvasRenderingContext
     return canvas_rendering_type_ == CanvasRenderingAPI::kWebgpu;
   }
 
+  virtual NoAllocDirectCallHost* AsNoAllocDirectCallHost();
+
   // ActiveScriptWrappable
   // As this class inherits from ActiveScriptWrappable, as long as
   // HasPendingActivity returns true, we can ensure that the Garbage Collector
@@ -120,25 +143,19 @@ class CORE_EXPORT CanvasRenderingContext
   }
 
   void RecordUKMCanvasRenderingAPI();
+  void RecordUMACanvasRenderingAPI();
 
   // This is only used in WebGL
   void RecordUKMCanvasDrawnToRenderingAPI();
 
-  static ContextType ContextTypeFromId(
+  static CanvasRenderingAPI RenderingAPIFromId(
       const String& id,
       const ExecutionContext* execution_context);
-  static ContextType ResolveContextTypeAliases(ContextType);
 
   CanvasRenderingContextHost* Host() const { return host_; }
-
-  // TODO(https://crbug.com/1208480): This function applies only to 2D rendering
-  // contexts, and should be removed.
-  virtual CanvasColorParams CanvasRenderingContextColorParams() const {
-    return CanvasColorParams();
-  }
+  virtual SkColorInfo CanvasRenderingContextSkColorInfo() const;
 
   virtual scoped_refptr<StaticBitmapImage> GetImage() = 0;
-  virtual ContextType GetContextType() const = 0;
   virtual bool IsComposited() const = 0;
   virtual bool IsAccelerated() const = 0;
   virtual bool IsOriginTopLeft() const {
@@ -189,6 +206,21 @@ class CORE_EXPORT CanvasRenderingContext
     return false;
   }
 
+  // Copy the contents of the rendering context to a media::VideoFrame created
+  // using `frame_pool`, with color space specified by `dst_color_space`. If
+  // successful, take (using std::move) `callback` and issue it with the
+  // resulting frame, once the copy is completed. On failure, do not take
+  // `callback`.
+  using VideoFrameCopyCompletedCallback =
+      base::OnceCallback<void(scoped_refptr<media::VideoFrame>)>;
+  virtual bool CopyRenderingResultsToVideoFrame(
+      WebGraphicsContext3DVideoFramePool* frame_pool,
+      SourceDrawingBuffer,
+      const gfx::ColorSpace& dst_color_space,
+      VideoFrameCopyCompletedCallback callback) {
+    return false;
+  }
+
   virtual cc::Layer* CcLayer() const { return nullptr; }
 
   enum LostContextMode {
@@ -209,7 +241,7 @@ class CORE_EXPORT CanvasRenderingContext
   // This method gets called at the end of script tasks that modified
   // the contents of the canvas (called didDraw). It marks the completion
   // of a presentable frame.
-  virtual void FinalizeFrame() {}
+  virtual void FinalizeFrame(bool printing = false) {}
 
   // Thread::TaskObserver implementation
   void DidProcessTask(const base::PendingTask&) override;
@@ -221,34 +253,30 @@ class CORE_EXPORT CanvasRenderingContext
   virtual void ClearRect(double x, double y, double width, double height) {}
   virtual void DidSetSurfaceSize() {}
   virtual void SetShouldAntialias(bool) {}
-  virtual unsigned HitRegionsCount() const { return 0; }
   virtual void setFont(const String&) {}
   virtual void StyleDidChange(const ComputedStyle* old_style,
                               const ComputedStyle& new_style) {}
-  virtual HitTestCanvasResult* GetControlAndIdIfHitRegionExists(
-      const PhysicalOffset& location) {
-    NOTREACHED();
-    return MakeGarbageCollected<HitTestCanvasResult>(String(), nullptr);
-  }
   virtual String GetIdFromControl(const Element* element) { return String(); }
   virtual void ResetUsageTracking() {}
 
   // WebGL-specific interface
   virtual bool UsingSwapChain() const { return false; }
-  virtual void SetFilterQuality(cc::PaintFlags::FilterQuality) { NOTREACHED(); }
-  virtual void Reshape(int width, int height) {}
   virtual void MarkLayerComposited() { NOTREACHED(); }
   virtual sk_sp<SkData> PaintRenderingResultsToDataArray(SourceDrawingBuffer) {
     NOTREACHED();
     return nullptr;
   }
+  virtual gfx::Size DrawingBufferSize() const {
+    NOTREACHED();
+    return gfx::Size(0, 0);
+  }
+
+  // WebGL & WebGPU-specific interface
+  virtual void SetFilterQuality(cc::PaintFlags::FilterQuality) { NOTREACHED(); }
+  virtual void Reshape(int width, int height) {}
   virtual int ExternallyAllocatedBufferCountPerPixel() {
     NOTREACHED();
     return 0;
-  }
-  virtual IntSize DrawingBufferSize() const {
-    NOTREACHED();
-    return IntSize(0, 0);
   }
 
   // OffscreenCanvas-specific methods.
@@ -288,15 +316,16 @@ class CORE_EXPORT CanvasRenderingContext
                          const CanvasContextCreationAttributesCore&,
                          CanvasRenderingAPI);
 
- private:
-  void Dispose();
+  virtual void Dispose();
 
+ private:
   Member<CanvasRenderingContextHost> host_;
   CanvasColorParams color_params_;
   CanvasContextCreationAttributesCore creation_attributes_;
 
   void RenderTaskEnded();
   bool did_draw_in_current_task_ = false;
+  bool did_print_in_current_task_ = false;
 
   const CanvasRenderingAPI canvas_rendering_type_;
 };

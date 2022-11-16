@@ -4,12 +4,13 @@
 
 #include "chrome/renderer/chrome_content_settings_agent_delegate.h"
 
+#include "build/chromeos_buildflags.h"
+
 // TODO(b/197163596): Remove File Manager constants
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "ash/webui/file_manager/url_constants.h"
 #endif
 #include "base/containers/contains.h"
-#include "chrome/common/ssl_insecure_content.h"
 #include "content/public/common/url_constants.h"
 #include "content/public/renderer/render_frame.h"
 #include "third_party/blink/public/web/web_local_frame.h"
@@ -117,14 +118,6 @@ absl::optional<bool> ChromeContentSettingsAgentDelegate::AllowMutationEvents() {
   if (IsPlatformApp())
     return false;
   return absl::nullopt;
-}
-
-void ChromeContentSettingsAgentDelegate::PassiveInsecureContentFound(
-    const blink::WebURL& resource_url) {
-  // Note: this implementation is a mirror of
-  // Browser::PassiveInsecureContentFound.
-  ReportInsecureContent(SslInsecureContentType::DISPLAY);
-  FilteredReportInsecureContentDisplayed(GURL(resource_url));
 }
 
 void ChromeContentSettingsAgentDelegate::DidCommitProvisionalLoad(

@@ -5,6 +5,7 @@
 #ifndef UI_OZONE_PLATFORM_WAYLAND_HOST_WAYLAND_ZWP_POINTER_CONSTRAINTS_H_
 #define UI_OZONE_PLATFORM_WAYLAND_HOST_WAYLAND_ZWP_POINTER_CONSTRAINTS_H_
 
+#include "base/memory/raw_ptr.h"
 #include "ui/ozone/platform/wayland/common/wayland_object.h"
 
 namespace ui {
@@ -16,10 +17,12 @@ class WaylandSurface;
 class WaylandZwpPointerConstraints
     : public wl::GlobalObjectRegistrar<WaylandZwpPointerConstraints> {
  public:
-  static void Register(WaylandConnection* connection);
+  static constexpr char kInterfaceName[] = "zwp_pointer_constraints_v1";
+
   static void Instantiate(WaylandConnection* connection,
                           wl_registry* registry,
                           uint32_t name,
+                          const std::string& interface,
                           uint32_t version);
 
   WaylandZwpPointerConstraints(zwp_pointer_constraints_v1* pointer_constraints,
@@ -42,7 +45,7 @@ class WaylandZwpPointerConstraints
 
   wl::Object<zwp_pointer_constraints_v1> obj_;
   wl::Object<zwp_locked_pointer_v1> locked_pointer_;
-  WaylandConnection* const connection_;
+  const raw_ptr<WaylandConnection> connection_;
 };
 
 }  // namespace ui

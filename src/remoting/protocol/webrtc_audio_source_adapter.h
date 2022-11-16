@@ -7,9 +7,8 @@
 
 #include <memory>
 
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/webrtc/api/media_stream_interface.h"
 
 namespace webrtc {
@@ -26,6 +25,10 @@ class WebrtcAudioSourceAdapter : public webrtc::AudioSourceInterface {
  public:
   explicit WebrtcAudioSourceAdapter(
       scoped_refptr<base::SingleThreadTaskRunner> audio_task_runner);
+
+  WebrtcAudioSourceAdapter(const WebrtcAudioSourceAdapter&) = delete;
+  WebrtcAudioSourceAdapter& operator=(const WebrtcAudioSourceAdapter&) = delete;
+
   ~WebrtcAudioSourceAdapter() override;
 
   void Start(std::unique_ptr<AudioSource> audio_source);
@@ -50,8 +53,6 @@ class WebrtcAudioSourceAdapter : public webrtc::AudioSourceInterface {
 
   // Core running on |audio_task_runner_|.
   std::unique_ptr<Core> core_;
-
-  DISALLOW_COPY_AND_ASSIGN(WebrtcAudioSourceAdapter);
 };
 
 }  // namespace protocol

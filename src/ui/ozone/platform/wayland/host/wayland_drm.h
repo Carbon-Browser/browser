@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "base/files/scoped_file.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/ozone/platform/wayland/common/wayland_object.h"
 #include "ui/ozone/platform/wayland/common/wayland_util.h"
 
@@ -29,13 +29,19 @@ class WaylandConnection;
 // |wl_buffer|s backed by dmabuf prime file descriptors.
 class WaylandDrm : public wl::GlobalObjectRegistrar<WaylandDrm> {
  public:
-  static void Register(WaylandConnection* connection);
+  static constexpr char kInterfaceName[] = "wl_drm";
+
   static void Instantiate(WaylandConnection* connection,
                           wl_registry* registry,
                           uint32_t name,
+                          const std::string& interface,
                           uint32_t version);
 
   WaylandDrm(wl_drm* drm, WaylandConnection* connection);
+
+  WaylandDrm(const WaylandDrm&) = delete;
+  WaylandDrm& operator=(const WaylandDrm&) = delete;
+
   ~WaylandDrm();
 
   // Says if can create dmabuf based wl_buffers.
@@ -45,7 +51,7 @@ class WaylandDrm : public wl::GlobalObjectRegistrar<WaylandDrm> {
   // The result is sent back via the |callback|. If buffer creation failed,
   // nullptr is sent back via the callback. Otherwise, a pointer to the
   // |wl_buffer| is sent.
-  void CreateBuffer(base::ScopedFD fd,
+  void CreateBuffer(const base::ScopedFD& fd,
                     const gfx::Size& size,
                     const std::vector<uint32_t>& strides,
                     const std::vector<uint32_t>& offsets,
@@ -58,6 +64,9 @@ class WaylandDrm : public wl::GlobalObjectRegistrar<WaylandDrm> {
   wl::BufferFormatsWithModifiersMap supported_buffer_formats() const {
     return supported_buffer_formats_;
   }
+
+  // Says if a new buffer can be created immediately.
+  bool CanCreateBufferImmed() const;
 
  private:
   // Resets the |wl_drm| and prints the error.
@@ -87,7 +96,7 @@ class WaylandDrm : public wl::GlobalObjectRegistrar<WaylandDrm> {
   wl::Object<wl_drm> wl_drm_;
 
   // Non-owned.
-  WaylandConnection* const connection_;
+  const raw_ptr<WaylandConnection> connection_;
 
   // Holds supported DRM formats translated to gfx::BufferFormat. Note that
   // |wl_drm| neither announces modifiers nor allows to create buffers with
@@ -97,8 +106,6 @@ class WaylandDrm : public wl::GlobalObjectRegistrar<WaylandDrm> {
   // Says if the drm device passed by the Wayland compositor authenticates this
   // client.
   bool authenticated_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(WaylandDrm);
 };
 
 }  // namespace ui

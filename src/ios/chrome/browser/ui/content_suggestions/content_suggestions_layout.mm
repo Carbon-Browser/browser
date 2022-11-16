@@ -5,6 +5,7 @@
 #import "ios/chrome/browser/ui/content_suggestions/content_suggestions_layout.h"
 
 #import "ios/chrome/browser/ui/content_suggestions/content_suggestions_collection_utils.h"
+#import "ios/chrome/browser/ui/content_suggestions/content_suggestions_feature.h"
 #import "ios/chrome/browser/ui/ntp/new_tab_page_header_constants.h"
 #import "ios/chrome/browser/ui/ntp/new_tab_page_omnibox_positioning.h"
 #import "ios/chrome/browser/ui/toolbar/public/toolbar_utils.h"
@@ -15,32 +16,10 @@
 #error "This file requires ARC support."
 #endif
 
-@interface ContentSuggestionsLayout ()
-
-// YES if the Discover Feed is currently visible.
-@property(nonatomic, assign, getter=isRefactoredFeedVisible)
-    BOOL refactoredFeedVisible;
-
-@end
-
 @implementation ContentSuggestionsLayout
 
-- (instancetype)initWithOffset:(CGFloat)offset
-         refactoredFeedVisible:(BOOL)visible {
-  if (self = [super init]) {
-    _refactoredFeedVisible = visible;
-    _offset = offset;
-  }
-  return self;
-}
-
-- (CGSize)collectionViewContentSize {
-  if ([self isRefactoredFeedVisible]) {
-    // In the refactored NTP and when the Feed is visible, we don't want to
-    // extend the view height beyond its content.
-    return [super collectionViewContentSize];
-  }
-  CGFloat collectionViewHeight = self.collectionView.bounds.size.height;
+- (CGFloat)minimumNTPHeight {
+  CGFloat collectionViewHeight = self.parentCollectionView.bounds.size.height;
   CGFloat headerHeight = [self firstHeaderHeight];
 
   // The minimum height for the collection view content should be the height of
@@ -48,10 +27,9 @@
   // NTP bottom bar. This allows the Most Visited cells to be scrolled up to the
   // top of the screen. Also computes the total NTP scrolling height for
   // Discover infinite feed.
-  self.ntpHeight = collectionViewHeight + headerHeight;
+  CGFloat ntpHeight = collectionViewHeight + headerHeight;
   CGFloat minimumHeight =
-      self.ntpHeight - ntp_header::kScrolledToTopOmniboxBottomMargin;
-  CGFloat topSafeArea = self.collectionView.safeAreaInsets.top;
+      ntpHeight - ntp_header::kScrolledToTopOmniboxBottomMargin;
   if (!IsRegularXRegularSizeClass(self.collectionView)) {
     CGFloat toolbarHeight =
         IsSplitToolbarMode(self.collectionView)
@@ -59,25 +37,16 @@
                                         .preferredContentSizeCategory)
             : 0;
     CGFloat additionalHeight =
-        toolbarHeight + topSafeArea + self.collectionView.contentInset.bottom;
+        toolbarHeight + self.collectionView.contentInset.bottom;
     minimumHeight -= additionalHeight;
-    self.ntpHeight += additionalHeight;
   }
 
-  CGSize contentSize = [super collectionViewContentSize];
-  if (contentSize.height < minimumHeight) {
-    contentSize.height = minimumHeight;
-    // Increases the minimum height to allow the page to scroll to the cached
-    // position.
-    if (self.offset > 0) {
-      contentSize.height += self.offset;
-    }
-  }
-  return contentSize;
+  return minimumHeight;
 }
 
 - (NSArray*)layoutAttributesForElementsInRect:(CGRect)rect {
-  if (IsRegularXRegularSizeClass(self.collectionView))
+  if (IsRegularXRegularSizeClass(self.collectionView) ||
+      IsContentSuggestionsHeaderMigrationEnabled())
     return [super layoutAttributesForElementsInRect:rect];
 
   NSMutableArray* layoutAttributes =
@@ -100,7 +69,7 @@
   }
 
   // The fixed header's attributes are not updated if the header's default frame
-  // is far enough away from |rect|, which can occur when the NTP is scrolled
+  // is far enough away from `rect`, which can occur when the NTP is scrolled
   // up.
   if (!fixedHeaderAttributes) {
     UICollectionViewLayoutAttributes* fixedHeaderAttributes =
@@ -119,18 +88,14 @@ layoutAttributesForSupplementaryViewOfKind:(NSString*)kind
   UICollectionViewLayoutAttributes* attributes =
       [super layoutAttributesForSupplementaryViewOfKind:kind
                                             atIndexPath:indexPath];
-  if (!IsSplitToolbarMode(self.collectionView))
+  if (!IsSplitToolbarMode(self.collectionView) ||
+      IsContentSuggestionsHeaderMigrationEnabled())
     return attributes;
 
   if ([kind isEqualToString:UICollectionElementKindSectionHeader] &&
       indexPath.section == 0) {
-    CGFloat contentOffset;
-    if ([self isRefactoredFeedVisible]) {
-      contentOffset = self.parentCollectionView.contentOffset.y +
-                      self.collectionView.contentSize.height;
-    } else {
-      contentOffset = self.collectionView.contentOffset.y;
-    }
+    CGFloat contentOffset = self.parentCollectionView.contentOffset.y +
+                            self.collectionView.contentSize.height;
 
     CGFloat headerHeight = CGRectGetHeight(attributes.frame);
     CGPoint origin = attributes.frame.origin;
@@ -146,13 +111,10 @@ layoutAttributesForSupplementaryViewOfKind:(NSString*)kind
             [UIApplication sharedApplication].preferredContentSizeCategory) -
         self.collectionView.safeAreaInsets.top;
 
-    if ([self isRefactoredFeedVisible]) {
-      minY = [self.omniboxPositioner stickyOmniboxHeight];
-    }
+    minY = [self.omniboxPositioner stickyOmniboxHeight];
     // TODO(crbug.com/1114792): Remove mentioned of "refactored" from the
     // variable name once this launches.
-    BOOL hasScrolledIntoRefactoredDiscoverFeed =
-        [self isRefactoredFeedVisible] && self.isScrolledIntoFeed;
+    BOOL hasScrolledIntoRefactoredDiscoverFeed = self.isScrolledIntoFeed;
     if (contentOffset > minY && !hasScrolledIntoRefactoredDiscoverFeed) {
       origin.y = contentOffset - minY;
     }

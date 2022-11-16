@@ -13,7 +13,7 @@
 #include <vector>
 
 #include "base/callback_forward.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
@@ -68,18 +68,24 @@ class BluetoothLowEnergyEventRouter
                           Delegate::ErrorCallback error_callback);
     AttributeValueRequest(base::OnceClosure success_callback,
                           Delegate::ErrorCallback error_callback);
+
+    AttributeValueRequest(const AttributeValueRequest&) = delete;
+    AttributeValueRequest& operator=(const AttributeValueRequest&) = delete;
+
     ~AttributeValueRequest();
 
     RequestType type;
     Delegate::ValueCallback value_callback;
     base::OnceClosure success_callback;
     Delegate::ErrorCallback error_callback;
-
-   private:
-    DISALLOW_COPY_AND_ASSIGN(AttributeValueRequest);
   };
 
   explicit BluetoothLowEnergyEventRouter(content::BrowserContext* context);
+
+  BluetoothLowEnergyEventRouter(const BluetoothLowEnergyEventRouter&) = delete;
+  BluetoothLowEnergyEventRouter& operator=(
+      const BluetoothLowEnergyEventRouter&) = delete;
+
   ~BluetoothLowEnergyEventRouter() override;
 
   // Possible ways that an API method can fail or succeed.
@@ -402,12 +408,12 @@ class BluetoothLowEnergyEventRouter
       const std::string& event_name,
       const device::BluetoothUUID& uuid,
       const std::string& characteristic_id,
-      std::vector<base::Value> args);
+      base::Value::List args);
 
   void DispatchEventToExtension(const std::string& extension_id,
                                 events::HistogramValue histogram_value,
                                 const std::string& event_name,
-                                std::vector<base::Value> args);
+                                base::Value::List args);
 
   // Returns a BluetoothRemoteGattService by its instance ID |instance_id|.
   // Returns
@@ -572,7 +578,7 @@ class BluetoothLowEnergyEventRouter
   std::map<std::string, std::vector<std::string>> app_id_to_service_ids_;
 
   // BrowserContext passed during initialization.
-  content::BrowserContext* browser_context_;
+  raw_ptr<content::BrowserContext> browser_context_;
 
   // Listen to extension unloaded notification.
   base::ScopedObservation<ExtensionRegistry, ExtensionRegistryObserver>
@@ -581,8 +587,6 @@ class BluetoothLowEnergyEventRouter
   // Note: This should remain the last member so it'll be destroyed and
   // invalidate its weak pointers before any other members are destroyed.
   base::WeakPtrFactory<BluetoothLowEnergyEventRouter> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(BluetoothLowEnergyEventRouter);
 };
 
 }  // namespace extensions

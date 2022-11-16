@@ -67,6 +67,12 @@ class ViewTreeHostRootView::LayerTreeViewTreeFrameSinkHolder
       : view_(view), frame_sink_(std::move(frame_sink)) {
     frame_sink_->BindToClient(this);
   }
+
+  LayerTreeViewTreeFrameSinkHolder(const LayerTreeViewTreeFrameSinkHolder&) =
+      delete;
+  LayerTreeViewTreeFrameSinkHolder& operator=(
+      const LayerTreeViewTreeFrameSinkHolder&) = delete;
+
   ~LayerTreeViewTreeFrameSinkHolder() override {
     if (frame_sink_)
       frame_sink_->DetachFromClient();
@@ -102,8 +108,7 @@ class ViewTreeHostRootView::LayerTreeViewTreeFrameSinkHolder
                  gfx::Transform());
     frame.render_pass_list.push_back(std::move(pass));
     holder->frame_sink_->SubmitCompositorFrame(std::move(frame),
-                                               /*hit_test_data_changed=*/true,
-                                               /*show_hit_test_borders=*/false);
+                                               /*hit_test_data_changed=*/true);
 
     // Delete sink holder immediately if not waiting for exported resources to
     // be reclaimed.
@@ -134,8 +139,7 @@ class ViewTreeHostRootView::LayerTreeViewTreeFrameSinkHolder
     last_frame_device_scale_factor_ = frame.metadata.device_scale_factor;
     frame.metadata.frame_token = ++next_frame_token_;
     frame_sink_->SubmitCompositorFrame(std::move(frame),
-                                       /*hit_test_data_changed=*/true,
-                                       /*show_hit_test_borders=*/false);
+                                       /*hit_test_data_changed=*/true);
   }
 
   void DamageExportedResources() {
@@ -216,8 +220,6 @@ class ViewTreeHostRootView::LayerTreeViewTreeFrameSinkHolder
   float last_frame_device_scale_factor_ = 1.0f;
   aura::Window* root_window_ = nullptr;
   bool delete_pending_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(LayerTreeViewTreeFrameSinkHolder);
 };
 
 ViewTreeHostRootView::ViewTreeHostRootView(views::Widget* widget)
@@ -342,7 +344,7 @@ void ViewTreeHostRootView::Paint() {
   int stride = resource->gpu_memory_buffer->stride(0);
   std::unique_ptr<SkCanvas> canvas =
       SkCanvas::MakeRasterDirect(info, data, stride);
-  canvas->setMatrix(static_cast<SkMatrix>(rotate_transform_.matrix()));
+  canvas->setMatrix(rotate_transform_.matrix().asM33());
   display_item_list->Raster(canvas.get());
 
   {
@@ -488,7 +490,7 @@ void ViewTreeHostRootView::SubmitCompositorFrame() {
       quad_state, quad_rect, quad_rect,
       /*needs_blending=*/true, transferable_resource.id,
       /*premultiplied_alpha=*/true, uv_crop.origin(), uv_crop.bottom_right(),
-      SK_ColorTRANSPARENT, vertex_opacity,
+      SkColors::kTransparent, vertex_opacity,
       /*y_flipped=*/false,
       /*nearest_neighbor=*/false,
       /*secure_output_only=*/false, gfx::ProtectedVideoType::kClear);

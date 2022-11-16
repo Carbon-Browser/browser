@@ -5,7 +5,7 @@
 #ifndef CHROME_BROWSER_APPS_APP_SERVICE_WEBAPK_WEBAPK_METRICS_H_
 #define CHROME_BROWSER_APPS_APP_SERVICE_WEBAPK_WEBAPK_METRICS_H_
 
-#include "components/arc/mojom/webapk.mojom-forward.h"
+#include "ash/components/arc/mojom/webapk.mojom-forward.h"
 
 namespace apps {
 
@@ -31,6 +31,18 @@ enum class WebApkInstallStatus {
   // Installation through Google Play failed.
   kGooglePlayError = 7,
   kMaxValue = kGooglePlayError,
+};
+
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+enum class WebApkUninstallSource {
+  // The WebAPK was uninstalled on the Ash side (e.g. uninstalling the web app
+  // through App Management).
+  kAsh = 0,
+  // The WebAPK was uninstalled on the ARC side (e.g. uninstalling the app
+  // through Android settings).
+  kArc = 1,
+  kMaxValue = kArc,
 };
 
 extern const char kWebApkInstallResultHistogram[];

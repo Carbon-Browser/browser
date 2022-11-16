@@ -34,13 +34,17 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/loader/referrer_utils.h"
+#include "third_party/blink/public/mojom/devtools/console_message.mojom-blink-forward.h"
 #include "third_party/blink/renderer/bindings/core/v8/isolated_world_csp.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
 #include "third_party/blink/renderer/core/execution_context/agent.h"
 #include "third_party/blink/renderer/core/frame/csp/content_security_policy.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
+#include "third_party/blink/renderer/core/inspector/console_message.h"
+#include "third_party/blink/renderer/core/inspector/console_message_storage.h"
+#include "third_party/blink/renderer/core/testing/mock_policy_container_host.h"
 #include "third_party/blink/renderer/core/testing/page_test_base.h"
-#include "third_party/blink/renderer/platform/heap/handle.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/scheduler/public/event_loop.h"
 #include "third_party/blink/renderer/platform/testing/runtime_enabled_features_test_helpers.h"
@@ -61,7 +65,11 @@ class LocalDOMWindowTest : public PageTestBase {
       WebSandboxFlags sandbox_flags = WebSandboxFlags::kAll) {
     auto params = WebNavigationParams::CreateWithHTMLStringForTesting(
         /*html=*/"", url);
-    params->sandbox_flags = sandbox_flags;
+    MockPolicyContainerHost mock_policy_container_host;
+    params->policy_container = std::make_unique<blink::WebPolicyContainer>(
+        blink::WebPolicyContainerPolicies(),
+        mock_policy_container_host.BindNewEndpointAndPassDedicatedRemote());
+    params->policy_container->policies.sandbox_flags = sandbox_flags;
     GetFrame().Loader().CommitNavigation(std::move(params),
                                          /*extra_data=*/nullptr);
     test::RunPendingTasks();
@@ -228,13 +236,18 @@ TEST_F(LocalDOMWindowTest, EnforceSandboxFlags) {
   }
 }
 
-TEST_F(LocalDOMWindowTest, ReducedUserAgent) {
+TEST_F(LocalDOMWindowTest, UserAgent) {
   EXPECT_EQ(GetFrame().DomWindow()->UserAgent(),
             GetFrame().Loader().UserAgent());
   {
     ScopedUserAgentReductionForTest s1(true);
     EXPECT_EQ(GetFrame().DomWindow()->UserAgent(),
               GetFrame().Loader().ReducedUserAgent());
+  }
+  {
+    ScopedSendFullUserAgentAfterReductionForTest s1(true);
+    EXPECT_EQ(GetFrame().DomWindow()->UserAgent(),
+              GetFrame().Loader().FullUserAgent());
   }
 }
 
@@ -303,6 +316,23 @@ TEST_F(PageTestBase, CSPForWorld) {
     ScriptState::Scope scope(isolated_world_with_csp_script_state);
     // We use the isolated world's CSP if it specified one.
     EXPECT_EQ(get_csp()[0]->header->header_value, kIsolatedWorldCSP);
+  }
+}
+
+TEST_F(LocalDOMWindowTest, ConsoleMessageCategory) {
+  auto unknown_location = SourceLocation::Capture(String(), 0, 0);
+  auto* console_message = MakeGarbageCollected<ConsoleMessage>(
+      mojom::blink::ConsoleMessageSource::kJavaScript,
+      mojom::blink::ConsoleMessageLevel::kError, "Kaboom!",
+      std::move(unknown_location));
+  console_message->SetCategory(mojom::blink::ConsoleMessageCategory::Cors);
+  auto* window = GetFrame().DomWindow();
+  window->AddConsoleMessageImpl(console_message, false);
+  auto* message_storage = &GetFrame().GetPage()->GetConsoleMessageStorage();
+  EXPECT_EQ(1u, message_storage->size());
+  for (WTF::wtf_size_t i = 0; i < message_storage->size(); ++i) {
+    EXPECT_EQ(mojom::blink::ConsoleMessageCategory::Cors,
+              *message_storage->at(i)->Category());
   }
 }
 

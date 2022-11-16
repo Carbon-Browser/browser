@@ -34,6 +34,7 @@
 #include <memory>
 
 #include "base/numerics/checked_math.h"
+#include "base/numerics/safe_conversions.h"
 #include "base/sys_byteorder.h"
 #include "third_party/blink/public/web/web_serialized_script_value_version.h"
 #include "third_party/blink/renderer/bindings/core/v8/idl_types.h"
@@ -56,9 +57,8 @@
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/blob/blob_data.h"
-#include "third_party/blink/renderer/platform/heap/handle.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/wtf/shared_buffer.h"
-#include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_buffer.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_hash.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
@@ -299,7 +299,7 @@ String SerializedScriptValue::ToWireString() const {
   // This requires direct use of uninitialized strings, though.
   UChar* destination;
   wtf_size_t string_size_bytes =
-      SafeCast<wtf_size_t>((data_buffer_size_ + 1) & ~1);
+      base::checked_cast<wtf_size_t>((data_buffer_size_ + 1) & ~1);
   String wire_string =
       String::CreateUninitialized(string_size_bytes / 2, destination);
   memcpy(destination, data_buffer_.get(), data_buffer_size_);
@@ -530,16 +530,19 @@ bool SerializedScriptValue::ExtractTransferables(
     v8::Local<v8::Value> value = script_value.V8Value();
     // Validation of non-null objects, per HTML5 spec 10.3.3.
     if (IsUndefinedOrNull(value)) {
-      exception_state.ThrowTypeError(
+      exception_state.ThrowDOMException(
+          DOMExceptionCode::kDataCloneError,
           "Value at index " + String::Number(i) + " is an untransferable " +
-          (value->IsUndefined() ? "'undefined'" : "'null'") + " value.");
+              (value->IsUndefined() ? "'undefined'" : "'null'") + " value.");
       return false;
     }
     if (!factory.ExtractTransferable(isolate, value, i, transferables,
                                      exception_state)) {
       if (!exception_state.HadException()) {
-        exception_state.ThrowTypeError("Value at index " + String::Number(i) +
-                                       " does not have a transferable type.");
+        exception_state.ThrowDOMException(
+            DOMExceptionCode::kDataCloneError,
+            "Value at index " + String::Number(i) +
+                " does not have a transferable type.");
       }
       return false;
     }
@@ -621,7 +624,12 @@ SerializedScriptValue::TransferArrayBufferContents(
       DOMArrayBuffer* array_buffer =
           static_cast<DOMArrayBuffer*>(array_buffer_base);
 
-      if (!array_buffer->Transfer(isolate, contents.at(index))) {
+      if (!array_buffer->IsDetachable(isolate)) {
+        exception_state.ThrowTypeError(
+            "ArrayBuffer at index " + String::Number(index) +
+            " is not detachable and could not be transferred.");
+        return ArrayBufferContentsArray();
+      } else if (!array_buffer->Transfer(isolate, contents.at(index))) {
         exception_state.ThrowDOMException(DOMExceptionCode::kDataCloneError,
                                           "ArrayBuffer at index " +
                                               String::Number(index) +
@@ -661,10 +669,7 @@ static_assert(kSerializedScriptValueVersion ==
               "Update WebSerializedScriptValueVersion.h.");
 
 bool SerializedScriptValue::IsOriginCheckRequired() const {
-  return file_system_access_tokens_.size() > 0 ||
-         (!RuntimeEnabledFeatures::
-              CrossOriginWebAssemblyModuleSharingAllowedEnabled() &&
-          wasm_modules_.size() > 0);
+  return file_system_access_tokens_.size() > 0 || wasm_modules_.size() > 0;
 }
 
 }  // namespace blink

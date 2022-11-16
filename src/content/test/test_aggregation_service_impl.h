@@ -5,43 +5,66 @@
 #ifndef CONTENT_TEST_TEST_AGGREGATION_SERVICE_IMPL_H_
 #define CONTENT_TEST_TEST_AGGREGATION_SERVICE_IMPL_H_
 
-#include "base/callback.h"
+#include <memory>
+#include <vector>
+
+#include "base/callback_forward.h"
 #include "base/threading/sequence_bound.h"
-#include "content/browser/aggregation_service/aggregatable_report_manager.h"
-#include "content/browser/aggregation_service/aggregation_service_key_storage.h"
-#include "content/browser/aggregation_service/public_key.h"
+#include "content/browser/aggregation_service/aggregation_service_storage_context.h"
 #include "content/public/test/test_aggregation_service.h"
-#include "url/origin.h"
+
+namespace base {
+class Clock;
+}  // namespace base
 
 namespace content {
 
+class AggregatableReportSender;
+class AggregatableReportAssembler;
+class AggregationServiceStorage;
+
+struct PublicKey;
+
 // Implementation class of a test aggregation service.
-class TestAggregationServiceImpl : public AggregatableReportManager,
+class TestAggregationServiceImpl : public AggregationServiceStorageContext,
                                    public TestAggregationService {
  public:
-  TestAggregationServiceImpl();
+  // `clock` must be a non-null pointer that is valid as long as this object.
+  TestAggregationServiceImpl(
+      const base::Clock* clock,
+      scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory);
   TestAggregationServiceImpl(const TestAggregationServiceImpl& other) = delete;
   TestAggregationServiceImpl& operator=(
       const TestAggregationServiceImpl& other) = delete;
   ~TestAggregationServiceImpl() override;
 
-  // AggregatableReportManager:
-  const base::SequenceBound<AggregationServiceKeyStorage>& GetKeyStorage()
-      override;
+  // AggregationServiceStorageContext:
+  const base::SequenceBound<AggregationServiceStorage>& GetStorage() override;
 
   // TestAggregationService:
-  void SetPublicKeys(const url::Origin& origin,
-                     const std::string& json_string,
+  void SetDisablePayloadEncryption(bool should_disable) override;
+  void SetPublicKeys(const GURL& url,
+                     const base::FilePath& json_file,
                      base::OnceCallback<void(bool)> callback) override;
+  void AssembleReport(
+      AssembleRequest request,
+      base::OnceCallback<void(base::Value::Dict)> callback) override;
+  void SendReport(const GURL& url,
+                  const base::Value& contents,
+                  base::OnceCallback<void(bool)> callback) override;
 
   void GetPublicKeys(
-      const url::Origin& origin,
-      base::OnceCallback<void(PublicKeysForOrigin)> callback) const;
+      const GURL& url,
+      base::OnceCallback<void(std::vector<PublicKey>)> callback) const;
 
  private:
-  base::SequenceBound<AggregationServiceKeyStorage> storage_;
+  const base::Clock& clock_;
+
+  base::SequenceBound<AggregationServiceStorage> storage_;
+  std::unique_ptr<AggregatableReportSender> sender_;
+  std::unique_ptr<AggregatableReportAssembler> assembler_;
 };
 
 }  // namespace content
 
-#endif  // CONTENT_TEST_TEST_AGGREGATION_SERVICE_IMPL_H_
+#endif  // CONTENT_TEST_TEST_AGGREGATION_SERVICE_MANAGER_H_

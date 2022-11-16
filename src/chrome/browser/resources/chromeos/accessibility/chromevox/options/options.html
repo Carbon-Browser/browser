@@ -12,6 +12,8 @@
 <script type="text/javascript" src="options_loader.js"></script>
 <script type="text/javascript" src="../chromeVoxChromeOptionsScript.js">
 </script>
+<script type="module" src="options.js"></script>
+
 <script type="module"
     src="chrome://resources/cr_elements/cr_expand_button/cr_expand_button.m.js">
 </script>
@@ -57,10 +59,8 @@
 
   <div class="option" id="usePitchChangesOption">
     <label id="usePitchChangesLabel" class="i18n"
-          msgid="options_use_pitch_changes_checkbox_label" hidden>
-    </label>
-    <label>
-      Use pitch changes
+          msgid="options_use_pitch_changes_checkbox_label">
+          Change pitch when speaking element types and formatted text
     </label>
     <input id="usePitchChanges" type="checkbox"
              class="checkbox pref" name="usePitchChanges"

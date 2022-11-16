@@ -6,6 +6,7 @@
 
 #include <memory>
 #include <utility>
+#include <vector>
 
 #include "base/bind.h"
 #include "base/files/file_util.h"
@@ -17,8 +18,8 @@
 #include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/task/post_task.h"
 #include "base/task/thread_pool.h"
+#include "build/chromeos_buildflags.h"
 #include "components/exo/data_device.h"
 #include "components/exo/data_exchange_delegate.h"
 #include "components/exo/data_offer_delegate.h"
@@ -32,6 +33,7 @@
 #include "ui/base/clipboard/clipboard_constants.h"
 #include "ui/base/clipboard/file_info.h"
 #include "ui/base/data_transfer_policy/data_transfer_endpoint.h"
+#include "ui/base/data_transfer_policy/data_transfer_endpoint_serializer.h"
 #include "ui/base/dragdrop/os_exchange_data.h"
 #include "url/gurl.h"
 
@@ -90,6 +92,29 @@ DataOffer::AsyncSendDataCallback AsyncEncodeAsRefCountedString(
       text, charset);
 }
 
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+void ReadDataTransferEndpointFromClipboard(
+    const std::string& charset,
+    const ui::DataTransferEndpoint data_dst,
+    DataOffer::SendDataCallback callback) {
+  const ui::DataTransferEndpoint* data_src =
+      ui::Clipboard::GetForCurrentThread()->GetSource(
+          ui::ClipboardBuffer::kCopyPaste);
+
+  std::u16string encoded_endpoint;
+  if (data_src) {
+    encoded_endpoint =
+        base::UTF8ToUTF16(ui::ConvertDataTransferEndpointToJson(*data_src));
+  } else {
+    DCHECK(data_src) << "Clipboard source DataTransferEndpoint has changed "
+                        "after initial MIME advertising. If you see this "
+                        "please file a bug and contact the chromeos-dlp team.";
+  }
+
+  std::move(callback).Run(EncodeAsRefCountedString(encoded_endpoint, charset));
+}
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
 void ReadTextFromClipboard(const std::string& charset,
                            const ui::DataTransferEndpoint data_dst,
                            DataOffer::SendDataCallback callback) {
@@ -118,36 +143,16 @@ void ReadRTFFromClipboard(const ui::DataTransferEndpoint data_dst,
   std::move(callback).Run(base::RefCountedString::TakeString(&text));
 }
 
-scoped_refptr<base::RefCountedMemory> EncodePNGOnWorkerThread(
-    const SkBitmap& sk_bitmap) {
-  SkDynamicMemoryWStream data_stream;
-  if (SkEncodeImage(&data_stream, sk_bitmap.pixmap(),
-                    SkEncodedImageFormat::kPNG, 100)) {
-    std::vector<uint8_t> data(data_stream.bytesWritten());
-    data_stream.copyToAndReset(data.data());
-    return base::RefCountedBytes::TakeVector(&data);
-  } else {
-    LOG(ERROR) << "Couldn't encode image as PNG";
-    return nullptr;
-  }
-}
-
 void OnReceivePNGFromClipboard(DataOffer::SendDataCallback callback,
-                               const SkBitmap& sk_bitmap) {
-  base::ThreadPool::PostTaskAndReplyWithResult(
-      FROM_HERE, {base::MayBlock(), base::TaskPriority::USER_BLOCKING},
-      base::BindOnce(&EncodePNGOnWorkerThread, std::move(sk_bitmap)),
-      base::BindOnce(
-          [](DataOffer::SendDataCallback callback,
-             scoped_refptr<base::RefCountedMemory> data) {
-            std::move(callback).Run(data);
-          },
-          std::move(callback)));
+                               const std::vector<uint8_t>& png) {
+  scoped_refptr<base::RefCountedMemory> rc_mem =
+      base::MakeRefCounted<base::RefCountedBytes>(png);
+  std::move(callback).Run(std::move(rc_mem));
 }
 
 void ReadPNGFromClipboard(const ui::DataTransferEndpoint data_dst,
                           DataOffer::SendDataCallback callback) {
-  ui::Clipboard::GetForCurrentThread()->ReadImage(
+  ui::Clipboard::GetForCurrentThread()->ReadPng(
       ui::ClipboardBuffer::kCopyPaste, &data_dst,
       base::BindOnce(&OnReceivePNGFromClipboard, std::move(callback)));
 }
@@ -236,6 +241,20 @@ void DataOffer::SetDropData(DataExchangeDelegate* data_exchange_delegate,
 
   ui::EndpointType endpoint_type =
       data_exchange_delegate->GetDataTransferEndpointType(target);
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  // Drag & Drop source metadata (if any) is synced between Ash and Lacros by
+  // encoding the metadata into a custom MIME type.
+  if (endpoint_type == ui::EndpointType::kLacros && data.GetSource()) {
+    std::u16string encoded_endpoint = base::UTF8ToUTF16(
+        ui::ConvertDataTransferEndpointToJson(*data.GetSource()));
+    data_callbacks_.emplace(
+        ui::kMimeTypeDataTransferEndpoint,
+        AsyncEncodeAsRefCountedString(encoded_endpoint, kUTF8));
+    delegate_->OnOffer(ui::kMimeTypeDataTransferEndpoint);
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
   const std::string uri_list_mime_type =
       data_exchange_delegate->GetMimeTypeForUriList(endpoint_type);
   // We accept the filenames pickle from FilesApp, or
@@ -332,6 +351,20 @@ void DataOffer::SetClipboardData(DataExchangeDelegate* data_exchange_delegate,
                                  ui::EndpointType endpoint_type) {
   DCHECK_EQ(0u, data_callbacks_.size());
   const ui::DataTransferEndpoint data_dst(endpoint_type);
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  // Clipboard source metadata (if any) is synced between Ash and Lacros by
+  // encoding the metadata into a custom MIME type.
+  if (endpoint_type == ui::EndpointType::kLacros &&
+      data.GetSource(ui::ClipboardBuffer::kCopyPaste)) {
+    delegate_->OnOffer(std::string(ui::kMimeTypeDataTransferEndpoint));
+    data_callbacks_.emplace(
+        std::string(ui::kMimeTypeDataTransferEndpoint),
+        base::BindOnce(&ReadDataTransferEndpointFromClipboard,
+                       std::string(kUTF8), data_dst));
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
   if (data.IsFormatAvailable(ui::ClipboardFormatType::PlainTextType(),
                              ui::ClipboardBuffer::kCopyPaste, &data_dst)) {
     auto utf8_callback = base::BindRepeating(&ReadTextFromClipboard,

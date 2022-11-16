@@ -15,6 +15,7 @@
 #include "base/callback_helpers.h"
 #include "base/memory/discardable_shared_memory.h"
 #include "base/memory/page_size.h"
+#include "base/time/time.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "testing/perf/perf_result_reporter.h"
 
@@ -61,7 +62,7 @@ TEST(DiscardableSharedMemoryHeapTest, SearchFreeLists) {
   std::vector<std::unique_ptr<base::ScopedClosureRunner>> spans;
 
   base::TimeTicks start = base::TimeTicks::Now();
-  base::TimeTicks end = start + base::TimeDelta::FromMilliseconds(kTimeLimitMs);
+  base::TimeTicks end = start + base::Milliseconds(kTimeLimitMs);
   base::TimeDelta accumulator;
   int count = 0;
   while (start < end) {

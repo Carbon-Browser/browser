@@ -8,14 +8,14 @@
 
 #include "base/bind.h"
 #include "base/callback.h"
-#include "base/sequenced_task_runner.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace feature_engagement {
 
-NeverAvailabilityModel::NeverAvailabilityModel() : ready_(false) {}
+NeverAvailabilityModel::NeverAvailabilityModel() = default;
 
 NeverAvailabilityModel::~NeverAvailabilityModel() = default;
 
@@ -24,7 +24,7 @@ void NeverAvailabilityModel::Initialize(OnInitializedCallback callback,
   base::ThreadTaskRunnerHandle::Get()->PostTask(
       FROM_HERE,
       base::BindOnce(&NeverAvailabilityModel::ForwardedOnInitializedCallback,
-                     base::Unretained(this), std::move(callback)));
+                     weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
 }
 
 bool NeverAvailabilityModel::IsReady() const {

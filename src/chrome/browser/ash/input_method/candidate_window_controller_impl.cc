@@ -12,7 +12,7 @@
 #include "ash/wm/window_util.h"
 #include "base/logging.h"
 #include "chrome/browser/ash/input_method/ui/infolist_window.h"
-#include "ui/base/ime/chromeos/ime_bridge.h"
+#include "ui/base/ime/ash/ime_bridge.h"
 #include "ui/views/widget/widget.h"
 
 namespace ash {
@@ -38,12 +38,11 @@ void CandidateWindowControllerImpl::InitCandidateWindowView() {
   gfx::NativeView parent = nullptr;
 
   aura::Window* active_window = ash::window_util::GetActiveWindow();
-  // Use VirtualKeyboardContainer so that it works even with a system modal
-  // dialog.
+  // Use MenuContainer so that it works even with a system modal dialog.
   parent = ash::Shell::GetContainer(
       active_window ? active_window->GetRootWindow()
                     : ash::Shell::GetRootWindowForNewWindows(),
-      ash::kShellWindowId_VirtualKeyboardContainer);
+      ash::kShellWindowId_MenuContainer);
   candidate_window_view_ = new ui::ime::CandidateWindowView(parent);
   candidate_window_view_->AddObserver(this);
   candidate_window_view_->SetCursorBounds(cursor_bounds_, composition_head_);
@@ -96,20 +95,18 @@ void CandidateWindowControllerImpl::FocusStateChanged(bool is_focused) {
     candidate_window_view_->HidePreeditText();
 }
 
-void CandidateWindowControllerImpl::UpdateLookupTable(
-    const ui::CandidateWindow& candidate_window,
-    bool visible) {
+void CandidateWindowControllerImpl::HideLookupTable() {
   // If it's not visible, hide the lookup table and return.
-  if (!visible) {
-    if (candidate_window_view_)
-      candidate_window_view_->HideLookupTable();
-    if (infolist_window_)
-      infolist_window_->HideImmediately();
-    // TODO(nona): Introduce unittests for crbug.com/170036.
-    latest_infolist_entries_.clear();
-    return;
-  }
+  if (candidate_window_view_)
+    candidate_window_view_->HideLookupTable();
+  if (infolist_window_)
+    infolist_window_->HideImmediately();
+  // TODO(nona): Introduce unittests for crbug.com/170036.
+  latest_infolist_entries_.clear();
+}
 
+void CandidateWindowControllerImpl::UpdateLookupTable(
+    const ui::CandidateWindow& candidate_window) {
   if (!candidate_window_view_)
     InitCandidateWindowView();
   candidate_window_view_->UpdateCandidates(candidate_window);

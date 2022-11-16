@@ -31,35 +31,34 @@ std::u16string GetTimeLimitMessage(base::TimeDelta time_limit) {
 
 std::string GetWebTimeLimitErrorPage(
     std::u16string block_header,
-    std::u16string block_message,
+    const std::u16string& block_message,
     base::TimeDelta time_limit,
     const std::string& app_locale,
     const absl::optional<std::u16string>& title) {
-  base::DictionaryValue strings;
+  base::Value::Dict strings;
 
   if (!title.has_value()) {
-    strings.SetString("blockPageTitle",
-                      l10n_util::GetStringFUTF16(
-                          IDS_WEB_TIME_LIMIT_ERROR_PAGE_TITLE,
-                          l10n_util::GetStringUTF16(IDS_SHORT_PRODUCT_NAME)));
+    strings.Set("blockPageTitle",
+                l10n_util::GetStringFUTF16(
+                    IDS_WEB_TIME_LIMIT_ERROR_PAGE_TITLE,
+                    l10n_util::GetStringUTF16(IDS_SHORT_PRODUCT_NAME)));
   } else {
-    strings.SetString("blockPageTitle", title.value());
+    strings.Set("blockPageTitle", title.value());
   }
 
-  strings.SetString("blockPageHeader", block_header);
-  strings.SetString(
-      "blockPageMessage",
-      base::StrCat({block_message, u" ",
-                    l10n_util::GetStringFUTF16(
-                        IDS_WEB_TIME_LIMIT_ERROR_PAGE_NEXT_ACCESS_TIME,
-                        GetTimeLimitMessage(time_limit))}));
+  strings.Set("blockPageHeader", std::move(block_header));
+  strings.Set("blockPageMessage",
+              base::StrCat({block_message, u" ",
+                            l10n_util::GetStringFUTF16(
+                                IDS_WEB_TIME_LIMIT_ERROR_PAGE_NEXT_ACCESS_TIME,
+                                GetTimeLimitMessage(time_limit))}));
 
   webui::SetLoadTimeDataDefaults(app_locale, &strings);
   std::string html =
       ui::ResourceBundle::GetSharedInstance().LoadDataResourceString(
           IDR_WEB_TIME_LIMIT_ERROR_PAGE_HTML);
   webui::AppendWebUiCssTextDefaults(&html);
-  std::string error_html = webui::GetI18nTemplateHtml(html, &strings);
+  std::string error_html = webui::GetI18nTemplateHtml(html, strings);
   return error_html;
 }
 

@@ -7,9 +7,9 @@
 
 #include <memory>
 
-#include "base/macros.h"
-#include "base/sequenced_task_runner.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/download/download_commands.h"
 #include "chrome/browser/download/download_ui_model.h"
 #include "chrome/browser/image_decoder/image_decoder.h"
@@ -33,13 +33,14 @@ class Notification;
 // Handles the notification on ChromeOS for one download item.
 class DownloadItemNotification : public ImageDecoder::ImageRequest,
                                  public message_center::NotificationObserver,
-                                 public DownloadUIModel::Observer {
+                                 public DownloadUIModel::Delegate {
  public:
-  using DownloadItemNotificationPtr =
-      std::unique_ptr<DownloadItemNotification, base::OnTaskRunnerDeleter>;
-
   DownloadItemNotification(Profile* profile,
                            DownloadUIModel::DownloadUIModelPtr item);
+
+  DownloadItemNotification(const DownloadItemNotification&) = delete;
+  DownloadItemNotification& operator=(const DownloadItemNotification&) = delete;
+
   ~DownloadItemNotification() override;
 
   // Observer for this notification.
@@ -53,9 +54,9 @@ class DownloadItemNotification : public ImageDecoder::ImageRequest,
 
   DownloadUIModel* GetDownload();
 
-  // DownloadUIModel::Observer overrides.
+  // DownloadUIModel::Delegate overrides.
   void OnDownloadUpdated() override;
-  void OnDownloadDestroyed() override;
+  void OnDownloadDestroyed(const ContentId& id) override;
 
   // Disables popup by setting low priority.
   void DisablePopup();
@@ -64,8 +65,6 @@ class DownloadItemNotification : public ImageDecoder::ImageRequest,
   void Close(bool by_user) override;
   void Click(const absl::optional<int>& button_index,
              const absl::optional<std::u16string>& reply) override;
-
-  void ShutDown();
 
  private:
   friend class test::DownloadItemNotificationTest;
@@ -86,7 +85,7 @@ class DownloadItemNotification : public ImageDecoder::ImageRequest,
   SkColor GetNotificationIconColor();
 
   // Set preview image of the notification. Must be called on IO thread.
-  void OnImageLoaded(const std::string& image_data);
+  void OnImageLoaded(std::string image_data);
   void OnImageCropped(const SkBitmap& image);
 
   // ImageDecoder::ImageRequest overrides:
@@ -125,10 +124,10 @@ class DownloadItemNotification : public ImageDecoder::ImageRequest,
       const;
 
   // The profile associated with this notification.
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
 
   // Observer of this notification.
-  Observer* observer_;
+  raw_ptr<Observer> observer_;
 
   // Flag to show the notification on next update. If true, the notification
   // goes visible. The initial value is true so it gets shown on initial update.
@@ -145,6 +144,11 @@ class DownloadItemNotification : public ImageDecoder::ImageRequest,
   // download in-progress notifications.
   bool suppressed_ = false;
 
+  // Flag to indicate that a review dialog is open for the user to accept or
+  // bypass an enterprise warning on the download. If this is true, the "Review"
+  // button should be removed from the notification.
+  bool in_review_ = false;
+
   download::DownloadItem::DownloadState previous_download_state_ =
       download::DownloadItem::MAX_DOWNLOAD_STATE;  // As uninitialized state
   bool previous_dangerous_state_ = false;
@@ -158,8 +162,6 @@ class DownloadItemNotification : public ImageDecoder::ImageRequest,
   ImageDecodeStatus image_decode_status_ = NOT_STARTED;
 
   base::WeakPtrFactory<DownloadItemNotification> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(DownloadItemNotification);
 };
 
 #endif  // CHROME_BROWSER_DOWNLOAD_NOTIFICATION_DOWNLOAD_ITEM_NOTIFICATION_H_

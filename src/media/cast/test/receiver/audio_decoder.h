@@ -6,15 +6,16 @@
 #define MEDIA_CAST_TEST_RECEIVER_AUDIO_DECODER_H_
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "media/base/audio_bus.h"
+#include "media/cast/cast_config.h"
 #include "media/cast/cast_environment.h"
 #include "media/cast/constants.h"
-#include "media/cast/net/cast_transport_config.h"
 
 namespace media {
 namespace cast {
+
+struct EncodedFrame;
 
 class AudioDecoder {
  public:
@@ -32,6 +33,10 @@ class AudioDecoder {
                int channels,
                int sampling_rate,
                Codec codec);
+
+  AudioDecoder(const AudioDecoder&) = delete;
+  AudioDecoder& operator=(const AudioDecoder&) = delete;
+
   virtual ~AudioDecoder();
 
   // Returns STATUS_INITIALIZED if the decoder was successfully constructed.  If
@@ -56,8 +61,6 @@ class AudioDecoder {
 
   const scoped_refptr<CastEnvironment> cast_environment_;
   scoped_refptr<ImplBase> impl_;
-
-  DISALLOW_COPY_AND_ASSIGN(AudioDecoder);
 };
 
 }  // namespace cast

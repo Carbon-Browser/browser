@@ -8,13 +8,14 @@
 #include <utility>
 
 #include "base/bind.h"
+#include "base/observer_list.h"
+#include "chrome/browser/ui/color/chrome_color_id.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/browser/ui/views/chrome_typography.h"
 #include "chrome/browser/ui/views/page_info/chosen_object_view_observer.h"
 #include "chrome/browser/ui/views/page_info/page_info_bubble_view.h"
 #include "chrome/browser/ui/views/page_info/page_info_row_view.h"
 #include "chrome/browser/ui/views/page_info/page_info_view_factory.h"
-#include "components/page_info/features.h"
 #include "components/page_info/page_info_delegate.h"
 #include "components/vector_icons/vector_icons.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -45,10 +46,7 @@ ChosenObjectView::ChosenObjectView(
   delete_button->SetRequestFocusOnPress(true);
   delete_button->SetTooltipText(
       l10n_util::GetStringUTF16(info_->ui_info.delete_tooltip_string_id));
-  // In page info v2, all image buttons have circle highlight path.
-  if (base::FeatureList::IsEnabled(page_info::kPageInfoV2Desktop)) {
-    views::InstallCircleHighlightPathGenerator(delete_button.get());
-  }
+  views::InstallCircleHighlightPathGenerator(delete_button.get());
 
   // Disable the delete button for policy controlled objects and display the
   // allowed by policy string below for |secondary_label|.
@@ -79,10 +77,11 @@ void ChosenObjectView::AddObserver(ChosenObjectViewObserver* observer) {
 
 void ChosenObjectView::OnThemeChanged() {
   views::View::OnThemeChanged();
-  views::SetImageFromVectorIcon(
+  const ui::ColorProvider* cp = GetColorProvider();
+  views::SetImageFromVectorIconWithColor(
       delete_button_, vector_icons::kCloseRoundedIcon,
-      views::style::GetColor(*this, views::style::CONTEXT_DIALOG_BODY_TEXT,
-                             views::style::STYLE_PRIMARY));
+      cp->GetColor(kColorPageInfoChosenObjectDeleteButtonIcon),
+      cp->GetColor(kColorPageInfoChosenObjectDeleteButtonIconDisabled));
 }
 
 ChosenObjectView::~ChosenObjectView() = default;
@@ -109,10 +108,8 @@ void ChosenObjectView::ExecuteDeleteCommand() {
   DCHECK(delete_button_->GetVisible());
   delete_button_->SetVisible(false);
 
-  // In the page info v2, hide the row after revoking access.
-  if (base::FeatureList::IsEnabled(page_info::kPageInfoV2Desktop)) {
-    SetVisible(false);
-  }
+  // Hide the row after revoking access.
+  SetVisible(false);
 
   for (ChosenObjectViewObserver& observer : observer_list_) {
     observer.OnChosenObjectDeleted(*info_);

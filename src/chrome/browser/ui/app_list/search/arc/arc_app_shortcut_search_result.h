@@ -8,11 +8,10 @@
 #include <memory>
 #include <string>
 
+#include "ash/components/arc/mojom/app.mojom.h"
 #include "ash/public/cpp/app_list/app_list_metrics.h"
-#include "base/macros.h"
 #include "chrome/browser/ui/app_icon_loader_delegate.h"
 #include "chrome/browser/ui/app_list/search/chrome_search_result.h"
-#include "components/arc/mojom/app.mojom.h"
 #include "ui/gfx/image/image_skia.h"
 
 class AppListControllerDelegate;
@@ -35,7 +34,13 @@ class ArcAppShortcutSearchResult : public ChromeSearchResult,
                              Profile* profile,
                              AppListControllerDelegate* list_controller,
                              bool is_recommendation,
-                             const std::u16string& query);
+                             const std::u16string& query,
+                             const std::string& details);
+
+  ArcAppShortcutSearchResult(const ArcAppShortcutSearchResult&) = delete;
+  ArcAppShortcutSearchResult& operator=(const ArcAppShortcutSearchResult&) =
+      delete;
+
   ~ArcAppShortcutSearchResult() override;
 
   // ChromeSearchResult:
@@ -64,8 +69,6 @@ class ArcAppShortcutSearchResult : public ChromeSearchResult,
   AppListControllerDelegate* const list_controller_;  // Owned by AppListClient.
 
   base::WeakPtrFactory<ArcAppShortcutSearchResult> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ArcAppShortcutSearchResult);
 };
 
 }  // namespace app_list

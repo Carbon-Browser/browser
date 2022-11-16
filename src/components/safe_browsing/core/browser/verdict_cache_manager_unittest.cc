@@ -10,27 +10,58 @@
 #include "base/test/task_environment.h"
 #include "base/values.h"
 #include "components/content_settings/core/browser/host_content_settings_map.h"
+#include "components/safe_browsing/core/browser/safe_browsing_sync_observer.h"
 #include "components/safe_browsing/core/common/proto/csd.pb.h"
 #include "components/safe_browsing/core/common/proto/realtimeapi.pb.h"
+#include "components/safe_browsing/core/common/safe_browsing_prefs.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace safe_browsing {
+
+namespace {
+
+class MockSafeBrowsingSyncObserver : public SafeBrowsingSyncObserver {
+ public:
+  MockSafeBrowsingSyncObserver() : SafeBrowsingSyncObserver() {}
+
+  ~MockSafeBrowsingSyncObserver() override = default;
+
+  void ObserveSyncStateChanged(
+      SafeBrowsingSyncObserver::Callback callback) override {
+    callback_ = std::move(callback);
+  }
+
+  void OnSyncStateChanged() { callback_.Run(); }
+
+ private:
+  Callback callback_;
+};
+
+}  // namespace
 
 class VerdictCacheManagerTest : public ::testing::Test {
  public:
   VerdictCacheManagerTest() {}
 
   void SetUp() override {
+    test_pref_service_.registry()->RegisterBooleanPref(
+        prefs::kSafeBrowsingEnabled, true);
+    test_pref_service_.registry()->RegisterBooleanPref(
+        prefs::kSafeBrowsingEnhanced, false);
     HostContentSettingsMap::RegisterProfilePrefs(test_pref_service_.registry());
     content_setting_map_ = new HostContentSettingsMap(
         &test_pref_service_, false /* is_off_the_record */,
         false /* store_last_modified */, false /* restore_session */);
+    auto sync_observer = std::make_unique<MockSafeBrowsingSyncObserver>();
+    raw_sync_observer_ = sync_observer.get();
     cache_manager_ = std::make_unique<VerdictCacheManager>(
-        nullptr, content_setting_map_.get());
+        nullptr, content_setting_map_.get(), &test_pref_service_,
+        std::move(sync_observer));
   }
 
   void TearDown() override {
+    cache_manager_->Shutdown();
     cache_manager_.reset();
     content_setting_map_->ShutdownOnUIThread();
   }
@@ -68,14 +99,24 @@ class VerdictCacheManagerTest : public ::testing::Test {
         cache_expression_match_type);
   }
 
+  ChromeUserPopulation::PageLoadToken CreatePageLoadToken(
+      int token_time_msec,
+      std::string token_value) {
+    ChromeUserPopulation::PageLoadToken token;
+    token.set_token_source(
+        ChromeUserPopulation::PageLoadToken::CLIENT_GENERATION);
+    token.set_token_time_msec(token_time_msec);
+    token.set_token_value(token_value);
+    return token;
+  }
+
  protected:
   std::unique_ptr<VerdictCacheManager> cache_manager_;
   scoped_refptr<HostContentSettingsMap> content_setting_map_;
   base::test::TaskEnvironment task_environment_{
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
-
- private:
   sync_preferences::TestingPrefServiceSyncable test_pref_service_;
+  raw_ptr<MockSafeBrowsingSyncObserver> raw_sync_observer_ = nullptr;
 };
 
 TEST_F(VerdictCacheManagerTest, TestCanRetrieveCachedVerdict) {
@@ -198,7 +239,8 @@ TEST_F(VerdictCacheManagerTest, TestParseInvalidVerdictEntry) {
 
   content_setting_map_->SetWebsiteSettingDefaultScope(
       GURL("http://www.google.com/"), GURL(),
-      ContentSettingsType::PASSWORD_PROTECTION, std::move(cache_dictionary));
+      ContentSettingsType::PASSWORD_PROTECTION,
+      base::Value::FromUniquePtrValue(std::move(cache_dictionary)));
 
   ReusedPasswordAccountType password_type;
   password_type.set_account_type(ReusedPasswordAccountType::GSUITE);
@@ -287,7 +329,13 @@ TEST_F(VerdictCacheManagerTest, TestRemoveCachedVerdictOnURLsDeleted) {
                     LoginReputationClientRequest::UNFAMILIAR_LOGIN_PAGE));
 }
 
-TEST_F(VerdictCacheManagerTest, TestCleanUpExpiredVerdict) {
+// TODO(crbug.com/1264925): This test is flaky on device.
+#if TARGET_IPHONE_SIMULATOR
+#define MAYBE_TestCleanUpExpiredVerdict TestCleanUpExpiredVerdict
+#else
+#define MAYBE_TestCleanUpExpiredVerdict DISABLED_TestCleanUpExpiredVerdict
+#endif
+TEST_F(VerdictCacheManagerTest, MAYBE_TestCleanUpExpiredVerdict) {
   // Prepare 4 verdicts for PASSWORD_REUSE_EVENT with SIGN_IN_PASSWORD type:
   // (1) "foo.com/abc/" valid
   // (2) "foo.com/def/" expired
@@ -339,6 +387,16 @@ TEST_F(VerdictCacheManagerTest, TestCleanUpExpiredVerdict) {
   cache_manager_->CacheRealTimeUrlVerdict(GURL("https://www.example.com/"),
                                           response, base::Time::Now());
   ASSERT_EQ(2u, cache_manager_->GetStoredRealTimeUrlCheckVerdictCount());
+
+  // Prepare 2 page load tokens:
+  // (1) "www.example.com" expired
+  // (2) "www.example1.com" valid
+  cache_manager_->SetPageLoadTokenForTesting(
+      GURL("https://www.example.com"),
+      CreatePageLoadToken((now - base::Hours(1)).ToJavaTime(), "token1"));
+  cache_manager_->SetPageLoadTokenForTesting(
+      GURL("https://www.example1.com"),
+      CreatePageLoadToken(now.ToJavaTime(), "token2"));
 
   cache_manager_->CleanUpExpiredVerdicts();
 
@@ -400,6 +458,15 @@ TEST_F(VerdictCacheManagerTest, TestCleanUpExpiredVerdict) {
       RTLookupResponse::ThreatInfo::DANGEROUS,
       cache_manager_->GetCachedRealTimeUrlVerdict(
           GURL("https://www.example.com/path"), &actual_real_time_threat_info));
+
+  // token1 is cleaned up.
+  EXPECT_FALSE(
+      cache_manager_->GetPageLoadToken(GURL("https://www.example.com/"))
+          .has_token_value());
+  // token2 will be returned for www.example1.com.
+  EXPECT_EQ("token2",
+            cache_manager_->GetPageLoadToken(GURL("https://www.example1.com/"))
+                .token_value());
 }
 
 TEST_F(VerdictCacheManagerTest, TestCleanUpExpiredVerdictWithInvalidEntry) {
@@ -423,7 +490,8 @@ TEST_F(VerdictCacheManagerTest, TestCleanUpExpiredVerdictWithInvalidEntry) {
 
   content_setting_map_->SetWebsiteSettingDefaultScope(
       GURL("http://www.google.com/"), GURL(),
-      ContentSettingsType::PASSWORD_PROTECTION, std::move(cache_dictionary));
+      ContentSettingsType::PASSWORD_PROTECTION,
+      base::Value::FromUniquePtrValue(std::move(cache_dictionary)));
 
   ReusedPasswordAccountType password_type;
   password_type.set_account_type(ReusedPasswordAccountType::GSUITE);
@@ -437,7 +505,7 @@ TEST_F(VerdictCacheManagerTest, TestCleanUpExpiredVerdictWithInvalidEntry) {
                     ->GetWebsiteSetting(
                         GURL("http://www.google.com/"), GURL(),
                         ContentSettingsType::PASSWORD_PROTECTION, nullptr)
-                    ->FindDictKey("1")
+                    .FindDictKey("1")
                     ->DictSize());
 
   cache_manager_->CleanUpExpiredVerdicts();
@@ -447,7 +515,7 @@ TEST_F(VerdictCacheManagerTest, TestCleanUpExpiredVerdictWithInvalidEntry) {
                     ->GetWebsiteSetting(
                         GURL("http://www.google.com/"), GURL(),
                         ContentSettingsType::PASSWORD_PROTECTION, nullptr)
-                    ->FindDictKey("1")
+                    .FindDictKey("1")
                     ->DictSize());
 }
 
@@ -679,28 +747,28 @@ TEST_F(VerdictCacheManagerTest, TestCleanUpExpiredVerdictInBackground) {
   cache_manager_->CacheRealTimeUrlVerdict(GURL("https://www.example.com/"),
                                           response, base::Time::Now());
   ASSERT_EQ(1u, cache_manager_->GetStoredRealTimeUrlCheckVerdictCount());
-  task_environment_.FastForwardBy(base::TimeDelta::FromSeconds(119));
+  task_environment_.FastForwardBy(base::Seconds(119));
   ASSERT_EQ(1u, cache_manager_->GetStoredRealTimeUrlCheckVerdictCount());
   // The first cleanup task should happen at 120 seconds after construction.
-  task_environment_.FastForwardBy(base::TimeDelta::FromSeconds(2));
+  task_environment_.FastForwardBy(base::Seconds(2));
   ASSERT_EQ(0u, cache_manager_->GetStoredRealTimeUrlCheckVerdictCount());
 
   cache_manager_->CacheRealTimeUrlVerdict(GURL("https://www.example.com/"),
                                           response, base::Time::Now());
-  task_environment_.FastForwardBy(base::TimeDelta::FromSeconds(1798));
+  task_environment_.FastForwardBy(base::Seconds(1798));
   ASSERT_EQ(1u, cache_manager_->GetStoredRealTimeUrlCheckVerdictCount());
   // The second cleanup task should happen at 120 + 1800 seconds after
   // construction.
-  task_environment_.FastForwardBy(base::TimeDelta::FromSeconds(2));
+  task_environment_.FastForwardBy(base::Seconds(2));
   ASSERT_EQ(0u, cache_manager_->GetStoredRealTimeUrlCheckVerdictCount());
 
   cache_manager_->CacheRealTimeUrlVerdict(GURL("https://www.example.com/"),
                                           response, base::Time::Now());
-  task_environment_.FastForwardBy(base::TimeDelta::FromSeconds(1798));
+  task_environment_.FastForwardBy(base::Seconds(1798));
   ASSERT_EQ(1u, cache_manager_->GetStoredRealTimeUrlCheckVerdictCount());
   // The third cleanup task should happen at 120 + 1800 + 1800 seconds after
   // construction.
-  task_environment_.FastForwardBy(base::TimeDelta::FromSeconds(2));
+  task_environment_.FastForwardBy(base::Seconds(2));
   ASSERT_EQ(0u, cache_manager_->GetStoredRealTimeUrlCheckVerdictCount());
 }
 
@@ -717,11 +785,102 @@ TEST_F(VerdictCacheManagerTest, TestCleanUpVerdictOlderThanUpperBound) {
                                           response, base::Time::Now());
   ASSERT_EQ(1u, cache_manager_->GetStoredRealTimeUrlCheckVerdictCount());
   // Fast forward by 8 days.
-  task_environment_.FastForwardBy(
-      base::TimeDelta::FromSeconds(8 * 24 * 60 * 60));
+  task_environment_.FastForwardBy(base::Seconds(8 * 24 * 60 * 60));
   // Although the cache duration is set to 20 days, it is stored longer than the
   // upper bound(7 days). The cache should be cleaned up.
   ASSERT_EQ(0u, cache_manager_->GetStoredRealTimeUrlCheckVerdictCount());
+}
+
+TEST_F(VerdictCacheManagerTest, TestGetPageLoadToken) {
+  GURL url1("https://www.example.com/path1");
+  GURL url2("http://www.example.com/path2");  // different scheme and path
+  GURL url3("https://www.example1.com/path1");
+  cache_manager_->CreatePageLoadToken(url1);
+  ChromeUserPopulation::PageLoadToken token1 =
+      cache_manager_->GetPageLoadToken(url1);
+  ChromeUserPopulation::PageLoadToken token2 =
+      cache_manager_->GetPageLoadToken(url2);
+  // token1 and token2 are the same, because the hostname is the same.
+  ASSERT_TRUE(token1.has_token_value());
+  ASSERT_TRUE(token2.has_token_value());
+  ASSERT_EQ(token1.token_value(), token2.token_value());
+
+  cache_manager_->CreatePageLoadToken(url1);
+  ChromeUserPopulation::PageLoadToken token3 =
+      cache_manager_->GetPageLoadToken(url1);
+  // token1 and token3 are different, because CreatePageLoadToken should
+  // create a new token for the hostname.
+  ASSERT_TRUE(token3.has_token_value());
+  ASSERT_NE(token1.token_value(), token3.token_value());
+  ChromeUserPopulation::PageLoadToken token4 =
+      cache_manager_->GetPageLoadToken(url3);
+  // token4 should be empty, because url3 has a different hostname.
+  ASSERT_FALSE(token4.has_token_value());
+}
+
+TEST_F(VerdictCacheManagerTest, TestGetExpiredPageLoadToken) {
+  GURL url("https://www.example.com/path");
+  cache_manager_->CreatePageLoadToken(url);
+  ChromeUserPopulation::PageLoadToken token =
+      cache_manager_->GetPageLoadToken(url);
+  ASSERT_TRUE(token.has_token_value());
+
+  task_environment_.FastForwardBy(base::Minutes(11));
+  token = cache_manager_->GetPageLoadToken(url);
+  // Token is not found because it has already expired.
+  ASSERT_FALSE(token.has_token_value());
+}
+
+TEST_F(VerdictCacheManagerTest, TestClearTokenOnSafeBrowsingStateChanged) {
+  SetSafeBrowsingState(&test_pref_service_,
+                       SafeBrowsingState::STANDARD_PROTECTION);
+  GURL url("https://www.example.com/path");
+  cache_manager_->CreatePageLoadToken(url);
+  ChromeUserPopulation::PageLoadToken token =
+      cache_manager_->GetPageLoadToken(url);
+  ASSERT_TRUE(token.has_token_value());
+
+  SetSafeBrowsingState(&test_pref_service_,
+                       SafeBrowsingState::NO_SAFE_BROWSING);
+  token = cache_manager_->GetPageLoadToken(url);
+  // Token is not found because the Safe Browsing state has changed.
+  ASSERT_FALSE(token.has_token_value());
+}
+
+TEST_F(VerdictCacheManagerTest, TestClearTokenOnSyncStateChanged) {
+  GURL url("https://www.example.com/path");
+  cache_manager_->CreatePageLoadToken(url);
+  ChromeUserPopulation::PageLoadToken token =
+      cache_manager_->GetPageLoadToken(url);
+  ASSERT_TRUE(token.has_token_value());
+
+  raw_sync_observer_->OnSyncStateChanged();
+  token = cache_manager_->GetPageLoadToken(url);
+  // Token is not found because the sync state has changed.
+  ASSERT_FALSE(token.has_token_value());
+}
+
+TEST_F(VerdictCacheManagerTest, TestShutdown) {
+  cache_manager_->Shutdown();
+  RTLookupResponse rt_response;
+  // Call to cache_manager after shutdown should not cause a crash.
+  cache_manager_->CacheRealTimeUrlVerdict(GURL("https://www.example.com/"),
+                                          rt_response, base::Time::Now());
+  RTLookupResponse::ThreatInfo out_rt_verdict;
+  cache_manager_->GetCachedRealTimeUrlVerdict(
+      GURL("https://www.example.com/path"), &out_rt_verdict);
+  LoginReputationClientResponse pg_response;
+  ReusedPasswordAccountType password_type;
+  cache_manager_->CachePhishGuardVerdict(
+      LoginReputationClientRequest::UNFAMILIAR_LOGIN_PAGE, password_type,
+      pg_response, base::Time::Now());
+  cache_manager_->GetStoredPhishGuardVerdictCount(
+      LoginReputationClientRequest::UNFAMILIAR_LOGIN_PAGE);
+  LoginReputationClientResponse out_pg_verdict;
+  cache_manager_->GetCachedPhishGuardVerdict(
+      GURL("https://www.example.com/path"),
+      LoginReputationClientRequest::UNFAMILIAR_LOGIN_PAGE, password_type,
+      &out_pg_verdict);
 }
 
 }  // namespace safe_browsing

@@ -7,8 +7,9 @@
 
 #include "base/run_loop.h"
 #include "chrome/browser/ash/login/screens/welcome_screen.h"
+#include "chrome/browser/ui/webui/chromeos/login/oobe_ui.h"
 
-namespace chromeos {
+namespace ash {
 namespace test {
 
 // TODO(rsorokin): Move all these functions into a Mixin.
@@ -33,6 +34,8 @@ void WaitForEulaScreen();
 void TapEulaAccept();
 void WaitForSyncConsentScreen();
 void ExitScreenSyncConsent();
+void WaitForConsolidatedConsentScreen();
+void TapConsolidatedConsentAccept();
 
 void ClickSignInFatalScreenActionButton();
 
@@ -56,21 +59,59 @@ class LanguageReloadObserver : public WelcomeScreen::Observer {
   base::RunLoop run_loop_;
 };
 
+class OobeUiDestroyedWaiter : public OobeUI::Observer {
+ public:
+  explicit OobeUiDestroyedWaiter(OobeUI*);
+  OobeUiDestroyedWaiter(const OobeUiDestroyedWaiter&) = delete;
+  ~OobeUiDestroyedWaiter() override;
+
+  void Wait();
+
+ private:
+  // OobeUI::Observer
+  void OnDestroyingOobeUI() override;
+  void OnCurrentScreenChanged(OobeScreenId current_screen,
+                              OobeScreenId new_screen) override {}
+
+  bool was_destroyed_ = false;
+  base::ScopedObservation<OobeUI, OobeUI::Observer> oobe_ui_observation_{this};
+  std::unique_ptr<base::RunLoop> run_loop_;
+};
+
+// Use this method when clicking/tapping on something that leads to the
+// destruction of the OobeUI. Currently used when clicking on things that
+// trigger a device restart/reset.
+void TapOnPathAndWaitForOobeToBeDestroyed(
+    std::initializer_list<base::StringPiece> element_ids);
+
 }  // namespace test
-}  // namespace chromeos
+}  // namespace ash
 
 // TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
 // source migration is finished.
-namespace ash {
+namespace chromeos {
 namespace test {
-using ::chromeos::test::LanguageReloadObserver;
-using ::chromeos::test::SkipToEnrollmentOnRecovery;
-using ::chromeos::test::TapEulaAccept;
-using ::chromeos::test::TapWelcomeNext;
-using ::chromeos::test::WaitForEulaScreen;
-using ::chromeos::test::WaitForNetworkSelectionScreen;
-using ::chromeos::test::WaitForWelcomeScreen;
+using ::ash::test::ClickSignInFatalScreenActionButton;
+using ::ash::test::ExitFingerprintPinSetupScreen;
+using ::ash::test::ExitPinSetupScreen;
+using ::ash::test::ExitScreenSyncConsent;
+using ::ash::test::ExitUpdateScreenNoUpdate;
+using ::ash::test::IsScanningRequestedOnErrorScreen;
+using ::ash::test::IsScanningRequestedOnNetworkScreen;
+using ::ash::test::TapEulaAccept;
+using ::ash::test::TapNetworkSelectionNext;
+using ::ash::test::TapUserCreationNext;
+using ::ash::test::TapWelcomeNext;
+using ::ash::test::WaitForEnrollmentScreen;
+using ::ash::test::WaitForEulaScreen;
+using ::ash::test::WaitForFingerprintScreen;
+using ::ash::test::WaitForNetworkSelectionScreen;
+using ::ash::test::WaitForPinSetupScreen;
+using ::ash::test::WaitForSyncConsentScreen;
+using ::ash::test::WaitForUpdateScreen;
+using ::ash::test::WaitForUserCreationScreen;
+using ::ash::test::WaitForWelcomeScreen;
 }  // namespace test
-}  // namespace ash
+}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_TEST_OOBE_SCREENS_UTILS_H_

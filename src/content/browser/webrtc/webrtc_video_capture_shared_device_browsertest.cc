@@ -46,15 +46,15 @@ struct TestParams {
   media::mojom::VideoBufferHandle::Tag GetExpectedBufferHandleTag() const {
     switch (buffer_type_to_request) {
       case media::VideoCaptureBufferType::kSharedMemory:
-        return media::mojom::VideoBufferHandle::Tag::SHARED_BUFFER_HANDLE;
+        return media::mojom::VideoBufferHandle::Tag::kUnsafeShmemRegion;
       case media::VideoCaptureBufferType::kSharedMemoryViaRawFileDescriptor:
         return media::mojom::VideoBufferHandle::Tag::
-            SHARED_MEMORY_VIA_RAW_FILE_DESCRIPTOR;
+            kSharedMemoryViaRawFileDescriptor;
       case media::VideoCaptureBufferType::kMailboxHolder:
         NOTREACHED();
-        return media::mojom::VideoBufferHandle::Tag::SHARED_BUFFER_HANDLE;
+        return media::mojom::VideoBufferHandle::Tag::kUnsafeShmemRegion;
       case media::VideoCaptureBufferType::kGpuMemoryBuffer:
-        return media::mojom::VideoBufferHandle::Tag::GPU_MEMORY_BUFFER_HANDLE;
+        return media::mojom::VideoBufferHandle::Tag::kGpuMemoryBufferHandle;
     }
   }
 };
@@ -78,6 +78,11 @@ class WebRtcVideoCaptureSharedDeviceBrowserTest
   WebRtcVideoCaptureSharedDeviceBrowserTest() {
     scoped_feature_list_.InitAndEnableFeature(features::kMojoVideoCapture);
   }
+
+  WebRtcVideoCaptureSharedDeviceBrowserTest(
+      const WebRtcVideoCaptureSharedDeviceBrowserTest&) = delete;
+  WebRtcVideoCaptureSharedDeviceBrowserTest& operator=(
+      const WebRtcVideoCaptureSharedDeviceBrowserTest&) = delete;
 
   ~WebRtcVideoCaptureSharedDeviceBrowserTest() override {}
 
@@ -151,9 +156,8 @@ class WebRtcVideoCaptureSharedDeviceBrowserTest
   void OnCreateDeviceCallback(
       const std::vector<media::VideoCaptureDeviceInfo>& infos,
       media::VideoCaptureBufferType buffer_type_to_request,
-      video_capture::mojom::DeviceAccessResultCode result_code) {
-    ASSERT_EQ(video_capture::mojom::DeviceAccessResultCode::SUCCESS,
-              result_code);
+      media::VideoCaptureError result_code) {
+    ASSERT_EQ(media::VideoCaptureError::kNone, result_code);
 
     media::VideoCaptureParams requestable_settings;
     ASSERT_FALSE(infos[0].supported_formats.empty());
@@ -188,10 +192,9 @@ class WebRtcVideoCaptureSharedDeviceBrowserTest
   }
 
   void OnCreatePushSubscriptionCallback(
-      video_capture::mojom::CreatePushSubscriptionResultCode result_code,
+      video_capture::mojom::CreatePushSubscriptionResultCodePtr result_code,
       const media::VideoCaptureParams& params) {
-    ASSERT_NE(video_capture::mojom::CreatePushSubscriptionResultCode::kFailed,
-              result_code);
+    ASSERT_TRUE(result_code->is_success_code());
     subscription_->Activate();
   }
 
@@ -210,8 +213,6 @@ class WebRtcVideoCaptureSharedDeviceBrowserTest
   mojo::PendingRemote<video_capture::mojom::VideoFrameHandler> subscriber_;
   base::WeakPtrFactory<WebRtcVideoCaptureSharedDeviceBrowserTest> weak_factory_{
       this};
-
-  DISALLOW_COPY_AND_ASSIGN(WebRtcVideoCaptureSharedDeviceBrowserTest);
 };
 
 // Tests that a single fake video capture device can be opened via JavaScript
@@ -283,7 +284,7 @@ INSTANTIATE_TEST_SUITE_P(
         TestParams {
           ServiceApi::kMultiClient, media::VideoCaptureBufferType::kSharedMemory
         }
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
         ,
         TestParams{
             ServiceApi::kSingleClient,
@@ -292,7 +293,7 @@ INSTANTIATE_TEST_SUITE_P(
           ServiceApi::kMultiClient,
               media::VideoCaptureBufferType::kSharedMemoryViaRawFileDescriptor
         }
-#endif  // defined(OS_LINUX) || defined(OS_CHROMEOS)
+#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
         ));
 
 }  // namespace content

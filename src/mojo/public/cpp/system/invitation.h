@@ -10,7 +10,6 @@
 
 #include "base/callback.h"
 #include "base/component_export.h"
-#include "base/macros.h"
 #include "base/process/process_handle.h"
 #include "base/strings/string_piece.h"
 #include "mojo/public/c/system/invitation.h"
@@ -56,6 +55,10 @@ class MOJO_CPP_SYSTEM_EXPORT OutgoingInvitation {
  public:
   OutgoingInvitation();
   OutgoingInvitation(OutgoingInvitation&& other);
+
+  OutgoingInvitation(const OutgoingInvitation&) = delete;
+  OutgoingInvitation& operator=(const OutgoingInvitation&) = delete;
+
   ~OutgoingInvitation();
 
   OutgoingInvitation& operator=(OutgoingInvitation&& other);
@@ -147,8 +150,6 @@ class MOJO_CPP_SYSTEM_EXPORT OutgoingInvitation {
 
  private:
   ScopedInvitationHandle handle_;
-
-  DISALLOW_COPY_AND_ASSIGN(OutgoingInvitation);
 };
 
 // An IncomingInvitation can be accepted by an invited process by calling
@@ -159,6 +160,10 @@ class MOJO_CPP_SYSTEM_EXPORT IncomingInvitation {
   IncomingInvitation();
   IncomingInvitation(IncomingInvitation&& other);
   explicit IncomingInvitation(ScopedInvitationHandle handle);
+
+  IncomingInvitation(const IncomingInvitation&) = delete;
+  IncomingInvitation& operator=(const IncomingInvitation&) = delete;
+
   ~IncomingInvitation();
 
   IncomingInvitation& operator=(IncomingInvitation&& other);
@@ -197,8 +202,6 @@ class MOJO_CPP_SYSTEM_EXPORT IncomingInvitation {
 
  private:
   ScopedInvitationHandle handle_;
-
-  DISALLOW_COPY_AND_ASSIGN(IncomingInvitation);
 };
 
 }  // namespace mojo

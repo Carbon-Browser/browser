@@ -11,10 +11,11 @@ along with a detailed description for each histogram.
 For best practices on writing histogram descriptions, see
 https://chromium.googlesource.com/chromium/src.git/+/HEAD/tools/metrics/histograms/README.md
 
-Please send CLs to chromium-metrics-reviews@google.com rather than to specific
-individuals. These CLs will be automatically reassigned to a reviewer within
-about 5 minutes. This approach helps the metrics team to load-balance incoming
-reviews. Googlers can read more about this at go/gwsq-gerrit.
+Please follow the instructions in the OWNERS file in this directory to find a
+reviewer. If no OWNERS file exists, please consider signing up at
+go/reviewing-metrics (Googlers only), as all subdirectories are expected to
+have an OWNERS file. As a last resort you can send the CL to
+chromium-metrics-reviews@google.com.
 -->
 
 <histogram-configuration>
@@ -27,9 +28,20 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
   <owner>etienneb@chromium.org</owner>
   <summary>
     The number of iterations that was required to initialize Direct Write. This
-    metric is taken by the browser process at startup. The value -1 is reported
-    when the initialization failed. The fallback path using GDI is used instead
-    of DWrite.
+    metric is recorded by the browser process at startup. The value -1 is
+    reported when the initialization failed. The fallback path using GDI is used
+    instead of DWrite.
+  </summary>
+</histogram>
+
+<histogram name="DirectWrite.Fonts.Gfx.InitializeTime" units="ms"
+    expires_after="2022-10-15">
+  <owner>etienneb@chromium.org</owner>
+  <owner>gab@chromium.org</owner>
+  <summary>
+    Time it takes to initialize GFX fonts. This metric is taken by the browser
+    process at startup. It includes the time required to initialize Direct
+    Write. This metric is recorded only on Windows.
   </summary>
 </histogram>
 
@@ -41,7 +53,7 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="DirectWrite.Fonts.Proxy.EmptyFamilyResultsRatio"
-    units="percentage of empty family results" expires_after="2022-10-15">
+    units="percentage of empty family results" expires_after="2022-12-18">
   <owner>drott@chromium.org</owner>
   <owner>layout-dev@chromium.org</owner>
   <summary>
@@ -143,7 +155,7 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="DirectWrite.Fonts.Proxy.LoaderType"
-    enum="DirectWriteFontLoaderType" expires_after="2022-10-15">
+    enum="DirectWriteFontLoaderType" expires_after="2022-12-18">
   <owner>drott@chromium.org</owner>
   <owner>layout-dev@chromium.org</owner>
   <summary>
@@ -165,7 +177,7 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="DirectWrite.Fonts.Proxy.LoadFamilyTime" units="ms"
-    expires_after="2022-10-15">
+    expires_after="2022-12-18">
   <owner>drott@chromium.org</owner>
   <owner>layout-dev@chromium.org</owner>
   <summary>
@@ -187,7 +199,7 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="DirectWrite.Fonts.Proxy.LookupTableDiskCacheHit"
-    units="BooleanSuccess" expires_after="2022-10-15">
+    enum="BooleanSuccess" expires_after="2022-10-15">
   <owner>drott@chromium.org</owner>
   <owner>layout-dev@chromium.org</owner>
   <summary>
@@ -199,7 +211,7 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="DirectWrite.Fonts.Proxy.LookupTablePersistSuccess"
-    units="BooleanSuccess" expires_after="2022-10-15">
+    enum="BooleanSuccess" expires_after="2022-10-15">
   <owner>drott@chromium.org</owner>
   <owner>layout-dev@chromium.org</owner>
   <summary>

@@ -9,6 +9,7 @@
 #include "base/containers/flat_map.h"
 #include "base/memory/weak_ptr.h"
 #include "base/supports_user_data.h"
+#include "build/build_config.h"
 #include "chrome/browser/share/proto/share_ranking_message.pb.h"
 #include "chrome/browser/share/share_history.h"
 #include "components/leveldb_proto/public/proto_database.h"
@@ -46,6 +47,7 @@ class ShareRanking : public base::SupportsUserData::Data {
   void Rank(ShareHistory* history,
             const std::string& type,
             const std::vector<std::string>& available_on_system,
+            unsigned int fold,
             unsigned int length,
             bool persist_update,
             GetRankingCallback callback);
@@ -65,6 +67,7 @@ class ShareRanking : public base::SupportsUserData::Data {
       const std::map<std::string, int>& recent_share_history,
       const Ranking& old_ranking,
       const std::vector<std::string>& available_on_system,
+      unsigned int fold,
       unsigned int length,
       Ranking* display_ranking,
       Ranking* persisted_ranking);
@@ -86,6 +89,7 @@ class ShareRanking : public base::SupportsUserData::Data {
     // These members mirror the parameters passed in to Rank().
     std::string type;
     std::vector<std::string> available_on_system;
+    unsigned int fold;
     unsigned int length;
     bool persist_update;
     GetRankingCallback callback;

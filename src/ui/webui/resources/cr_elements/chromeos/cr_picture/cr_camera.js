@@ -7,31 +7,21 @@
  * 'cr-camera' is a Polymer element used to take a picture from the
  * user webcam to use as a Chrome OS profile picture.
  */
-(function() {
+import '../../shared_style_css.m.js';
+import '../../cr_icon_button/cr_icon_button.m.js';
+import '//resources/polymer/v3_0/iron-a11y-keys/iron-a11y-keys.js';
+import '//resources/polymer/v3_0/paper-spinner/paper-spinner-lite.js';
+import './icons.html.js';
 
-/**
- * Dimensions for camera capture.
- * @const
- */
-const CAPTURE_SIZE = {
-  width: 576,
-  height: 576
-};
+import {html, Polymer} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-/**
- * Interval between frames for camera capture (milliseconds).
- * @const
- */
-const CAPTURE_INTERVAL_MS = 1000 / 10;
-
-/**
- * Duration of camera capture (milliseconds).
- * @const
- */
-const CAPTURE_DURATION_MS = 1000;
+import {getTemplate} from './cr_camera.html.js';
+import * as webcamUtils from './webcam_utils.js';
 
 Polymer({
   is: 'cr-camera',
+
+  _template: getTemplate(),
 
   properties: {
     /** Strings provided by host */
@@ -100,49 +90,30 @@ Polymer({
    * will be fired as soon as captured photo is available, with the
    * 'photoDataURL' property containing the photo encoded as a data URL.
    */
-  takePhoto() {
+  async takePhoto() {
     if (!this.cameraOnline_ || this.cameraCaptureInProgress_) {
       return;
     }
     this.cameraCaptureInProgress_ = true;
-
-    /** Pre-allocate all frames needed for capture. */
-    const frames = [];
-    if (this.videomode) {
-      /** Reduce capture size when in video mode. */
-      const captureSize = {
-        width: CAPTURE_SIZE.width / 2,
-        height: CAPTURE_SIZE.height / 2
-      };
-      const captureFrameCount = CAPTURE_DURATION_MS / CAPTURE_INTERVAL_MS;
-      while (frames.length < captureFrameCount) {
-        frames.push(this.allocateFrame_(captureSize));
-      }
-    } else {
-      frames.push(this.allocateFrame_(CAPTURE_SIZE));
-    }
-
-    /** Start capturing frames at an interval. */
-    const capturedFrames = [];
     this.$.userImageStreamCrop.classList.remove('preview');
     this.$.userImageStreamCrop.classList.add('capture');
-    const interval = setInterval(() => {
-      /** Stop capturing frames when all allocated frames have been consumed. */
-      if (frames.length) {
-        capturedFrames.push(this.captureFrame_(
-            /**
-             * @type {!HTMLVideoElement}
-             */
-            (this.$.cameraVideo), frames.pop()));
-      } else {
-        clearInterval(interval);
-        this.fire(
-            'photo-taken',
-            {photoDataUrl: this.convertFramesToPng_(capturedFrames)});
-        this.$.userImageStreamCrop.classList.remove('capture');
-        this.cameraCaptureInProgress_ = false;
-      }
-    }, CAPTURE_INTERVAL_MS);
+
+    const numFrames = this.videomode ?
+        webcamUtils.CAPTURE_DURATION_MS / webcamUtils.CAPTURE_INTERVAL_MS :
+        1;
+
+    try {
+      const frames = await webcamUtils.captureFrames(
+          /** @type {!HTMLVideoElement} */ (this.$.cameraVideo),
+          this.getCaptureSize_(), webcamUtils.CAPTURE_INTERVAL_MS, numFrames);
+
+      const photoDataUrl = webcamUtils.convertFramesToPng(frames);
+      this.fire('photo-taken', {photoDataUrl});
+    } catch (e) {
+      console.error(e);
+    }
+    this.$.userImageStreamCrop.classList.remove('capture');
+    this.cameraCaptureInProgress_ = false;
   },
 
   /** Tries to start the camera stream capture. */
@@ -155,7 +126,7 @@ Polymer({
         this.$.cameraVideo.srcObject = stream;
         this.cameraStream_ = stream;
       } else {
-        this.stopVideoTracks_(stream);
+        webcamUtils.stopMediaTracks(stream);
       }
       this.cameraStartInProgress_ = false;
     }.bind(this);
@@ -165,14 +136,9 @@ Polymer({
       this.cameraStartInProgress_ = false;
     }.bind(this);
 
-    const videoConstraints = {
-      facingMode: 'user',
-      width: {ideal: CAPTURE_SIZE.width},
-      height: {ideal: CAPTURE_SIZE.height},
-      resizeMode: 'none',
-    };
     navigator.webkitGetUserMedia(
-        {video: videoConstraints}, successCallback, errorCallback);
+        {video: webcamUtils.kDefaultVideoConstraints}, successCallback,
+        errorCallback);
   },
 
   /** Stops the camera stream capture if it's currently active. */
@@ -180,24 +146,26 @@ Polymer({
     this.$.userImageStreamCrop.classList.remove('preview');
     this.cameraOnline_ = false;
     this.$.cameraVideo.srcObject = null;
-    if (this.cameraStream_) {
-      this.stopVideoTracks_(this.cameraStream_);
-      this.cameraStream_ = null;
-    }
+    webcamUtils.stopMediaTracks(this.cameraStream_);
+    this.cameraStream_ = null;
     // Cancel any pending getUserMedia() checks.
     this.cameraStartInProgress_ = false;
   },
 
   /**
-   * Stops all video tracks associated with a MediaStream object.
-   * @param {!MediaStream} stream
+   * Get the correct capture size for single photo or video mode.
+   * @return {{height: number, width: number}}
    * @private
    */
-  stopVideoTracks_(stream) {
-    const tracks = stream.getVideoTracks();
-    for (let i = 0; i < tracks.length; i++) {
-      tracks[i].stop();
+  getCaptureSize_() {
+    if (this.videomode) {
+      /** Reduce capture size when in video mode. */
+      return {
+        width: webcamUtils.CAPTURE_SIZE.width / 2,
+        height: webcamUtils.CAPTURE_SIZE.height / 2,
+      };
     }
+    return webcamUtils.CAPTURE_SIZE;
   },
 
   /**
@@ -207,86 +175,6 @@ Polymer({
   onTapSwitchMode_() {
     this.videomode = !this.videomode;
     this.fire('switch-mode', this.videomode);
-  },
-
-  /**
-   * Allocates a canvas for capturing a single still frame at a specific size.
-   * @param {{width: number, height: number}} size Frame size.
-   * @return {!HTMLCanvasElement} The allocated canvas.
-   * @private
-   */
-  allocateFrame_(size) {
-    const canvas =
-        /** @type {!HTMLCanvasElement} */ (document.createElement('canvas'));
-    canvas.width = size.width;
-    canvas.height = size.height;
-    const ctx = /** @type {!CanvasRenderingContext2D} */ (
-        canvas.getContext('2d', {alpha: false}));
-    // Flip frame horizontally.
-    ctx.translate(size.width, 0);
-    ctx.scale(-1.0, 1.0);
-    return canvas;
-  },
-
-  /**
-   * Captures a single still frame from a <video> element, placing it at the
-   * current drawing origin of a canvas context.
-   * @param {!HTMLVideoElement} video Video element to capture from.
-   * @param {!HTMLCanvasElement} canvas Canvas to save frame in.
-   * @return {!HTMLCanvasElement} The canvas frame was saved in.
-   * @private
-   */
-  captureFrame_(video, canvas) {
-    const ctx =
-        /** @type {!CanvasRenderingContext2D} */ (
-            canvas.getContext('2d', {alpha: false}));
-    const width = video.videoWidth;
-    const height = video.videoHeight;
-    if (width < canvas.width || height < canvas.height) {
-      console.error(
-          'Video capture size too small: ' + width + 'x' + height + '!');
-    }
-    const src = {};
-    if (width / canvas.width > height / canvas.height) {
-      // Full height, crop left/right.
-      src.height = height;
-      src.width = height * canvas.width / canvas.height;
-    } else {
-      // Full width, crop top/bottom.
-      src.width = width;
-      src.height = width * canvas.height / canvas.width;
-    }
-    src.x = (width - src.width) / 2;
-    src.y = (height - src.height) / 2;
-    ctx.drawImage(
-        video, src.x, src.y, src.width, src.height, 0, 0, canvas.width,
-        canvas.height);
-    return canvas;
-  },
-
-  /**
-   * Encode frames and convert to animated PNG image.
-   * @param {!Array<!HTMLCanvasElement>} frames The frames to convert to image.
-   * @return {!string} The data URL for image.
-   * @private
-   */
-  convertFramesToPng_(frames) {
-    /** Encode captured frames. */
-    const encodedImages = frames.map(function(frame) {
-      return frame.toDataURL('image/png');
-    });
-
-    /** No need for further processing if single frame. */
-    if (encodedImages.length === 1) {
-      return encodedImages[0];
-    }
-
-    /** Create forward/backward image sequence. */
-    const forwardBackwardImageSequence =
-        encodedImages.concat(encodedImages.slice(1, -1).reverse());
-
-    /** Convert image sequence to animated PNG. */
-    return cr.png.convertImageSequenceToPng(forwardBackwardImageSequence);
   },
 
   /**
@@ -325,5 +213,3 @@ Polymer({
     return videomode ? cameraLabel : videoLabel;
   },
 });
-/* #ignore */ console.warn('crbug/1173575, non-JS module files deprecated.');
-})();

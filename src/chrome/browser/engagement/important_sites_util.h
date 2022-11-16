@@ -9,7 +9,6 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
 #include "build/build_config.h"
 #include "components/browsing_data/core/browsing_data_utils.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -27,7 +26,7 @@ namespace site_engagement {
 // All methods should be used on the UI thread.
 class ImportantSitesUtil {
  public:
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   static const int kMaxImportantSites = 5;
 #else
   static const int kMaxImportantSites = 10;
@@ -58,6 +57,10 @@ class ImportantSitesUtil {
     REASON_BOUNDARY
   };
 
+  ImportantSitesUtil() = delete;
+  ImportantSitesUtil(const ImportantSitesUtil&) = delete;
+  ImportantSitesUtil& operator=(const ImportantSitesUtil&) = delete;
+
   static std::string GetRegisterableDomainOrIP(const GURL& url);
 
   static std::string GetRegisterableDomainOrIPFromHost(base::StringPiece host);
@@ -76,7 +79,7 @@ class ImportantSitesUtil {
       Profile* profile,
       size_t max_results);
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
   // Return the top |<=max_results| important registrable domains that have an
   // associated installed app. |max_results| is assumed to be small.
   static std::vector<ImportantDomainInfo> GetInstalledRegisterableDomains(
@@ -105,9 +108,6 @@ class ImportantSitesUtil {
   // testing.
   static void MarkOriginAsImportantForTesting(Profile* profile,
                                               const GURL& origin);
-
- private:
-  DISALLOW_IMPLICIT_CONSTRUCTORS(ImportantSitesUtil);
 };
 
 }  // namespace site_engagement

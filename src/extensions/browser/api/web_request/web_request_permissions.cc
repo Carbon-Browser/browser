@@ -4,7 +4,6 @@
 
 #include "extensions/browser/api/web_request/web_request_permissions.h"
 
-#include "base/cxx17_backports.h"
 #include "base/debug/crash_logging.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/string_piece.h"
@@ -47,7 +46,7 @@ bool HasWebRequestScheme(const GURL& url) {
           url.SchemeIs(url::kFileSystemScheme) ||
           url.SchemeIs(url::kFtpScheme) || url.SchemeIsHTTPOrHTTPS() ||
           url.SchemeIs(extensions::kExtensionScheme) || url.SchemeIsWSOrWSS() ||
-          url.SchemeIs(url::kUrnScheme));
+          url.SchemeIs(url::kUuidInPackageScheme));
 }
 
 bool g_allow_all_extension_locations_in_public_session = false;
@@ -198,8 +197,8 @@ bool IsSensitiveGoogleClientUrl(const extensions::WebRequestInfo& request) {
   // PermissionsData::CanAccessPage into one function.
   static constexpr char kGoogleCom[] = "google.com";
   static constexpr char kClient[] = "clients";
-  constexpr size_t kGoogleComLength = base::size(kGoogleCom) - 1;
-  constexpr size_t kClientLength = base::size(kClient) - 1;
+  constexpr size_t kGoogleComLength = std::size(kGoogleCom) - 1;
+  constexpr size_t kClientLength = std::size(kClient) - 1;
 
   if (!url.DomainIs(kGoogleCom))
     return false;
@@ -334,7 +333,7 @@ bool WebRequestPermissions::HideRequest(
   // Safebrowsing and Chrome Webstore URLs are always protected, i.e. also
   // for requests from common renderers.
   if (extension_urls::IsWebstoreUpdateUrl(url) ||
-      extension_urls::IsBlacklistUpdateUrl(url) ||
+      extension_urls::IsBlocklistUpdateUrl(url) ||
       extension_urls::IsSafeBrowsingUrl(url::Origin::Create(url),
                                         url.path_piece()) ||
       (url.DomainIs("chrome.google.com") &&

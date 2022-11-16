@@ -10,8 +10,7 @@
 
 #include "base/callback.h"
 #include "base/component_export.h"
-#include "base/macros.h"
-#include "chromeos/dbus/dbus_client.h"
+#include "chromeos/dbus/common/dbus_client.h"
 
 namespace chromeos {
 
@@ -37,8 +36,6 @@ class COMPONENT_EXPORT(CHROMEOS_DBUS_EASY_UNLOCK) EasyUnlockClient
   // Callback for D-Bus calls returning byte arrays as strings.
   // On error, |data| is empty.
   using DataCallback = base::OnceCallback<void(const std::string& data)>;
-
-  ~EasyUnlockClient() override;
 
   // Parameters used to create a secure message.
   struct CreateSecureMessageOptions {
@@ -101,6 +98,18 @@ class COMPONENT_EXPORT(CHROMEOS_DBUS_EASY_UNLOCK) EasyUnlockClient
     std::string signature_type;
   };
 
+  // Returns the global instance if initialized. May return null.
+  static EasyUnlockClient* Get();
+
+  // Creates and initializes the global instance. |bus| must not be null.
+  static void Initialize(dbus::Bus* bus);
+
+  // Creates and initializes a fake global instance.
+  static void InitializeFake();
+
+  // Destroys the global instance if it has been initialized.
+  static void Shutdown();
+
   // Generates ECDSA key pair using P256 curve.
   // The created keys should only be used with this client.
   virtual void GenerateEcP256KeyPair(KeyPairCallback callback) = 0;
@@ -144,15 +153,12 @@ class COMPONENT_EXPORT(CHROMEOS_DBUS_EASY_UNLOCK) EasyUnlockClient
                                    const UnwrapSecureMessageOptions& options,
                                    DataCallback callback) = 0;
 
-  // Factory function, creates a new instance and returns ownership.
-  // For normal usage, access the singleton via DBusThreadManager::Get().
-  static std::unique_ptr<EasyUnlockClient> Create();
-
  protected:
-  // Create() should be used instead.
+  // Initialize() should be used instead.
   EasyUnlockClient();
   EasyUnlockClient(const EasyUnlockClient&) = delete;
   EasyUnlockClient& operator=(const EasyUnlockClient&) = delete;
+  ~EasyUnlockClient() override;
 };
 
 }  // namespace chromeos

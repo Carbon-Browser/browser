@@ -5,17 +5,20 @@
 #include "media/gpu/test/video_encoder/video_encoder_test_environment.h"
 
 #include <algorithm>
+#include <iterator>
 #include <utility>
 
+#include "base/containers/flat_set.h"
 #include "base/strings/pattern.h"
 #include "base/system/sys_info.h"
 #include "build/build_config.h"
 #include "build/buildflag.h"
 #include "build/chromeos_buildflags.h"
 #include "gpu/ipc/service/gpu_memory_buffer_factory.h"
+#include "media/base/bitrate.h"
 #include "media/base/media_switches.h"
-#include "media/base/video_bitrate_allocation.h"
 #include "media/gpu/buildflags.h"
+#include "media/gpu/gpu_video_encode_accelerator_helpers.h"
 #include "media/gpu/macros.h"
 #include "media/gpu/test/video.h"
 
@@ -34,79 +37,10 @@ struct CodecParamToProfile {
     {"vp9", VP9PROFILE_PROFILE0},
 };
 
-constexpr double kSpatialLayersBitrateScaleFactors[][3] = {
-    {1.00, 0.00, 0.00},  // For one spatial layer.
-    {0.30, 0.70, 0.00},  // For two spatial layers.
-    {0.07, 0.23, 0.70},  // For three spatial layers.
-};
-constexpr double kTemporalLayersBitrateScaleFactors[][3] = {
-    {1.00, 0.00, 0.00},  // For one temporal layer.
-    {0.55, 0.45, 0.00},  // For two temporal layers.
-    {0.50, 0.20, 0.30},  // For three temporal layers.
-};
-constexpr int kSpatialLayersResolutionScaleDenom[][3] = {
-    {1, 0, 0},  // For one spatial layer.
-    {2, 1, 0},  // For two spatial layers.
-    {4, 2, 1},  // For three spatial layers.
-};
-
-const std::vector<base::Feature> kEnabledFeaturesForVideoEncoderTest = {
-#if BUILDFLAG(USE_VAAPI)
-    // TODO(crbug.com/828482): remove once enabled by default.
-    media::kVaapiLowPowerEncoderGen9x,
-    // TODO(crbug.com/811912): remove once enabled by default.
-    kVaapiVP9Encoder,
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-    // TODO(crbug.com/1186051): remove once enabled by default.
-    kVaapiVp9kSVCHWEncoding,
-#endif
-#endif
-};
-
-const std::vector<base::Feature> kDisabledFeaturesForVideoEncoderTest = {
-    // FFmpegVideoDecoder is used for vp8 stream whose alpha mode is opaque in
-    // chromium browser. However, VpxVideoDecoder will be used to decode any vp8
-    // stream for the rightness (b/138840822), and currently be experimented
-    // with this feature flag. We disable the feature to use VpxVideoDecoder to
-    // decode any vp8 stream in BitstreamValidator.
-    kFFmpegDecodeOpaqueVP8,
-#if BUILDFLAG(USE_VAAPI)
-    // Disable this feature so that the encoder test can test a resolution
-    // which is denied for the sake of performance. See crbug.com/1008491.
-    kVaapiEnforceVideoMinMaxResolution,
-#endif
-};
-
 uint32_t GetDefaultTargetBitrate(const gfx::Size& resolution,
                                  const uint32_t framerate) {
-  constexpr uint32_t Mbps = 1000 * 1000;
-  // Following bitrates are based on the video bitrates recommended by YouTube
-  // for 16:9 SDR 30fps video.
-  // (https://support.google.com/youtube/answer/1722171).
-  // The bitrates don't scale linearly so we use the following lookup table as a
-  // base for computing a reasonable bitrate for the specified resolution and
-  // framerate.
-  constexpr struct {
-    gfx::Size resolution;
-    uint32_t bitrate;
-  } kDefaultTargetBitrates[] = {
-      {gfx::Size(640, 360), 1 * Mbps},    {gfx::Size(854, 480), 5 * Mbps / 2},
-      {gfx::Size(1280, 720), 5 * Mbps},   {gfx::Size(1920, 1080), 8 * Mbps},
-      {gfx::Size(3840, 2160), 18 * Mbps},
-  };
-
-  const auto* it = std::find_if(
-      std::cbegin(kDefaultTargetBitrates), std::cend(kDefaultTargetBitrates),
-      [resolution](const auto& target_bitrate) {
-        return resolution.GetArea() <= target_bitrate.resolution.GetArea();
-      });
-  LOG_ASSERT(it != std::cend(kDefaultTargetBitrates))
-      << "Target bitrate for the resolution is not found, resolution="
-      << resolution.ToString();
-  const double resolution_ratio =
-      (resolution.GetArea() / static_cast<double>(it->resolution.GetArea()));
-  const double framerate_ratio = framerate > 30 ? 1.5 : 1.0;
-  return it->bitrate * resolution_ratio * framerate_ratio;
+  // This calculation is based on tinyurl.com/cros-platform-video-encoding.
+  return resolution.GetArea() * 0.1 * framerate;
 }
 
 std::vector<VideoEncodeAccelerator::Config::SpatialLayer>
@@ -118,6 +52,12 @@ GetDefaultSpatialLayers(const VideoBitrateAllocation& bitrate,
   // equivalent to a simple stream.
   if (num_temporal_layers == 1u && num_spatial_layers == 1u)
     return {};
+
+  constexpr int kSpatialLayersResolutionScaleDenom[][3] = {
+      {1, 0, 0},  // For one spatial layer.
+      {2, 1, 0},  // For two spatial layers.
+      {4, 2, 1},  // For three spatial layers.
+  };
 
   std::vector<VideoEncodeAccelerator::Config::SpatialLayer> spatial_layers;
   for (size_t sid = 0; sid < num_spatial_layers; ++sid) {
@@ -157,8 +97,11 @@ VideoEncoderTestEnvironment* VideoEncoderTestEnvironment::Create(
     size_t num_spatial_layers,
     bool save_output_bitstream,
     absl::optional<uint32_t> encode_bitrate,
+    Bitrate::Mode bitrate_mode,
     bool reverse,
-    const FrameOutputConfig& frame_output_config) {
+    const FrameOutputConfig& frame_output_config,
+    const std::vector<base::Feature>& enabled_features,
+    const std::vector<base::Feature>& disabled_features) {
   if (video_path.empty()) {
     LOG(ERROR) << "No video specified";
     return nullptr;
@@ -197,20 +140,62 @@ VideoEncoderTestEnvironment* VideoEncoderTestEnvironment::Create(
   }
 
   const VideoCodecProfile profile = it->profile;
-  if ((num_temporal_layers > 1u || num_spatial_layers > 1u) &&
-      profile != VP9PROFILE_PROFILE0 &&
-      !(profile >= H264PROFILE_MIN && profile <= H264PROFILE_HIGH)) {
-    LOG(ERROR) << "SVC encoding supported "
-               << "only if output profile is h264 or vp9";
+  if (num_spatial_layers > 1u && profile != VP9PROFILE_PROFILE0) {
+    LOG(ERROR) << "Spatial layer encoding is supported only if output profile "
+               << "is vp9";
     return nullptr;
   }
 
-  const uint32_t bitrate = encode_bitrate.value_or(
+  // TODO(b/182008564) Add checks to make sure no features are duplicated, and
+  // there is no intersection between the enabled and disabled set.
+  std::vector<base::Feature> combined_enabled_features(enabled_features);
+  std::vector<base::Feature> combined_disabled_features(disabled_features);
+  combined_disabled_features.push_back(media::kFFmpegDecodeOpaqueVP8);
+#if BUILDFLAG(USE_VAAPI)
+  // TODO(crbug.com/828482): remove once enabled by default.
+  combined_enabled_features.push_back(media::kVaapiLowPowerEncoderGen9x);
+  // TODO(crbug.com/811912): remove once enabled by default.
+  combined_enabled_features.push_back(media::kVaapiVP9Encoder);
+
+  // Disable this feature so that the encoder test can test a resolution
+  // which is denied for the sake of performance. See crbug.com/1008491.
+  combined_disabled_features.push_back(
+      media::kVaapiEnforceVideoMinMaxResolution);
+#endif
+
+#if BUILDFLAG(IS_CHROMEOS) && BUILDFLAG(USE_VAAPI)
+  // TODO(crbug.com/1186051): remove once enabled by default.
+  combined_enabled_features.push_back(media::kVaapiVp9kSVCHWEncoding);
+  // TODO(b/202926617): remove once enabled by default.
+  combined_enabled_features.push_back(media::kVaapiVp8TemporalLayerHWEncoding);
+#endif
+
+#if BUILDFLAG(IS_LINUX) && BUILDFLAG(USE_VAAPI)
+  combined_enabled_features.push_back(media::kVaapiVideoEncodeLinux);
+#endif
+
+#if BUILDFLAG(USE_CHROMEOS_MEDIA_ACCELERATION)
+  combined_enabled_features.push_back(media::kChromeOSHWVBREncoding);
+#endif
+
+  const uint32_t target_bitrate = encode_bitrate.value_or(
       GetDefaultTargetBitrate(video->Resolution(), video->FrameRate()));
+  // TODO(b/181797390): Reconsider if this peak bitrate is reasonable.
+  const media::Bitrate bitrate =
+      bitrate_mode == media::Bitrate::Mode::kVariable
+          ? media::Bitrate::VariableBitrate(target_bitrate,
+                                            /*peak_bps=*/target_bitrate * 2)
+          : media::Bitrate::ConstantBitrate(target_bitrate);
+  if (bitrate.mode() == media::Bitrate::Mode::kVariable &&
+      VideoCodecProfileToVideoCodec(profile) != VideoCodec::kH264) {
+    LOG(ERROR) << "VBR is only supported for H264 encoding";
+    return nullptr;
+  }
   return new VideoEncoderTestEnvironment(
       std::move(video), enable_bitstream_validator, output_folder, profile,
       num_temporal_layers, num_spatial_layers, bitrate, save_output_bitstream,
-      reverse, frame_output_config);
+      reverse, frame_output_config, combined_enabled_features,
+      combined_disabled_features);
 }
 
 VideoEncoderTestEnvironment::VideoEncoderTestEnvironment(
@@ -220,19 +205,22 @@ VideoEncoderTestEnvironment::VideoEncoderTestEnvironment(
     VideoCodecProfile profile,
     size_t num_temporal_layers,
     size_t num_spatial_layers,
-    uint32_t bitrate,
+    const Bitrate& bitrate,
     bool save_output_bitstream,
     bool reverse,
-    const FrameOutputConfig& frame_output_config)
-    : VideoTestEnvironment(kEnabledFeaturesForVideoEncoderTest,
-                           kDisabledFeaturesForVideoEncoderTest),
+    const FrameOutputConfig& frame_output_config,
+    const std::vector<base::Feature>& enabled_features,
+    const std::vector<base::Feature>& disabled_features)
+    : VideoTestEnvironment(enabled_features, disabled_features),
       video_(std::move(video)),
       enable_bitstream_validator_(enable_bitstream_validator),
       output_folder_(output_folder),
       profile_(profile),
       num_temporal_layers_(num_temporal_layers),
       num_spatial_layers_(num_spatial_layers),
-      bitrate_(GetDefaultVideoBitrateAllocation(bitrate)),
+      bitrate_(AllocateDefaultBitrateForTesting(num_spatial_layers_,
+                                                num_temporal_layers_,
+                                                bitrate)),
       spatial_layers_(GetDefaultSpatialLayers(bitrate_,
                                               video_.get(),
                                               num_spatial_layers_,
@@ -274,34 +262,8 @@ VideoEncoderTestEnvironment::SpatialLayers() const {
   return spatial_layers_;
 }
 
-VideoBitrateAllocation
-VideoEncoderTestEnvironment::GetDefaultVideoBitrateAllocation(
-    uint32_t bitrate) const {
-  VideoBitrateAllocation bitrate_allocation;
-  DCHECK_LE(num_spatial_layers_, 3u);
-  DCHECK_LE(num_temporal_layers_, 3u);
-  if (num_spatial_layers_ == 1u && num_temporal_layers_ == 1u) {
-    bitrate_allocation.SetBitrate(0, 0, bitrate);
-    return bitrate_allocation;
-  }
-
-  for (size_t sid = 0; sid < num_spatial_layers_; ++sid) {
-    const double bitrate_factor =
-        kSpatialLayersBitrateScaleFactors[num_spatial_layers_ - 1][sid];
-    uint32_t sl_bitrate = bitrate * bitrate_factor;
-
-    for (size_t tl_idx = 0; tl_idx < num_temporal_layers_; ++tl_idx) {
-      const double factor =
-          kTemporalLayersBitrateScaleFactors[num_temporal_layers_ - 1][tl_idx];
-      bitrate_allocation.SetBitrate(
-          sid, tl_idx, base::checked_cast<int>(sl_bitrate * factor));
-    }
-  }
-
-  return bitrate_allocation;
-}
-
-VideoBitrateAllocation VideoEncoderTestEnvironment::Bitrate() const {
+const VideoBitrateAllocation& VideoEncoderTestEnvironment::BitrateAllocation()
+    const {
   return bitrate_;
 }
 

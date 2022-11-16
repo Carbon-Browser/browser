@@ -7,30 +7,40 @@
 
 #include <memory>
 
-#include "base/macros.h"
 #include "base/metrics/field_trial.h"
 #include "build/build_config.h"
 #include "content/public/browser/browser_main_parts.h"
-#include "content/public/common/main_function_params.h"
 #include "content/shell/browser/shell_browser_context.h"
 
 namespace performance_manager {
 class PerformanceManagerLifetime;
 }  // namespace performance_manager
 
+#if BUILDFLAG(IS_ANDROID)
+namespace crash_reporter {
+class ChildExitObserver;
+}
+#endif
+
 namespace content {
 class ShellPlatformDelegate;
 
 class ShellBrowserMainParts : public BrowserMainParts {
  public:
-  explicit ShellBrowserMainParts(const MainFunctionParams& parameters);
+  ShellBrowserMainParts();
+
+  ShellBrowserMainParts(const ShellBrowserMainParts&) = delete;
+  ShellBrowserMainParts& operator=(const ShellBrowserMainParts&) = delete;
+
   ~ShellBrowserMainParts() override;
 
   // BrowserMainParts overrides.
   int PreEarlyInitialization() override;
   int PreCreateThreads() override;
-  void PostCreateThreads() override;
+#if BUILDFLAG(IS_MAC)
   void PreCreateMainMessageLoop() override;
+#endif
+  void PostCreateThreads() override;
   void PostCreateMainMessageLoop() override;
   void ToolkitInitialized() override;
   int PreMainMessageLoopRun() override;
@@ -62,14 +72,11 @@ class ShellBrowserMainParts : public BrowserMainParts {
   std::unique_ptr<ShellBrowserContext> browser_context_;
   std::unique_ptr<ShellBrowserContext> off_the_record_browser_context_;
 
-  // For running content_browsertests.
-  const MainFunctionParams parameters_;
-  bool run_message_loop_;
-
   std::unique_ptr<performance_manager::PerformanceManagerLifetime>
       performance_manager_lifetime_;
-
-  DISALLOW_COPY_AND_ASSIGN(ShellBrowserMainParts);
+#if BUILDFLAG(IS_ANDROID)
+  std::unique_ptr<crash_reporter::ChildExitObserver> child_exit_observer_;
+#endif
 };
 
 }  // namespace content

@@ -9,7 +9,13 @@
 #include <memory>
 #include <string>
 
+#include "ash/components/arc/session/arc_bridge_service.h"
+#include "ash/components/arc/session/arc_service_manager.h"
+#include "ash/components/arc/test/connection_holder_util.h"
+#include "ash/components/arc/test/fake_file_system_instance.h"
+#include "ash/constants/ash_switches.h"
 #include "base/bind.h"
+#include "base/command_line.h"
 #include "base/location.h"
 #include "base/run_loop.h"
 #include "base/threading/thread_task_runner_handle.h"
@@ -17,10 +23,6 @@
 #include "chrome/browser/ash/arc/fileapi/arc_file_system_operation_runner.h"
 #include "chrome/browser/chromeos/fileapi/external_file_url_util.h"
 #include "chrome/test/base/testing_profile.h"
-#include "components/arc/arc_service_manager.h"
-#include "components/arc/session/arc_bridge_service.h"
-#include "components/arc/test/connection_holder_util.h"
-#include "components/arc/test/fake_file_system_instance.h"
 #include "components/keyed_service/content/browser_context_keyed_service_factory.h"
 #include "content/public/test/browser_task_environment.h"
 #include "storage/browser/file_system/file_system_url.h"
@@ -47,11 +49,17 @@ std::unique_ptr<KeyedService> CreateArcFileSystemOperationRunnerForTesting(
 class ArcContentFileSystemAsyncFileUtilTest : public testing::Test {
  public:
   ArcContentFileSystemAsyncFileUtilTest() = default;
+
+  ArcContentFileSystemAsyncFileUtilTest(
+      const ArcContentFileSystemAsyncFileUtilTest&) = delete;
+  ArcContentFileSystemAsyncFileUtilTest& operator=(
+      const ArcContentFileSystemAsyncFileUtilTest&) = delete;
+
   ~ArcContentFileSystemAsyncFileUtilTest() override = default;
 
   void SetUp() override {
     fake_file_system_.AddFile(
-        File(kArcUrl, kData, kMimeType, File::Seekable::NO));
+        File(kArcUrl, kData, kMimeType, File::Seekable::YES));
 
     arc_service_manager_ = std::make_unique<ArcServiceManager>();
     profile_ = std::make_unique<TestingProfile>();
@@ -68,6 +76,10 @@ class ArcContentFileSystemAsyncFileUtilTest : public testing::Test {
   }
 
   void TearDown() override {
+    // Before destroying objects, flush tasks posted to run
+    // ArcFileSystemOperationRunner::CloseFileSession().
+    task_environment_.RunUntilIdle();
+
     arc_service_manager_->arc_bridge_service()->file_system()->CloseInstance(
         &fake_file_system_);
   }
@@ -75,7 +87,7 @@ class ArcContentFileSystemAsyncFileUtilTest : public testing::Test {
  protected:
   storage::FileSystemURL ExternalFileURLToFileSystemURL(const GURL& url) {
     base::FilePath mount_point_virtual_path =
-        base::FilePath::FromUTF8Unsafe(kContentFileSystemMountPointName);
+        base::FilePath::FromASCII(kContentFileSystemMountPointName);
     base::FilePath virtual_path = chromeos::ExternalFileURLToVirtualPath(url);
     base::FilePath path(kContentFileSystemMountPointPath);
     EXPECT_TRUE(
@@ -88,13 +100,10 @@ class ArcContentFileSystemAsyncFileUtilTest : public testing::Test {
   FakeFileSystemInstance fake_file_system_;
 
   // Use the same initialization/destruction order as
-  // ChromeBrowserMainPartsChromeos.
+  // `ChromeBrowserMainPartsAsh`.
   std::unique_ptr<ArcServiceManager> arc_service_manager_;
   std::unique_ptr<TestingProfile> profile_;
   std::unique_ptr<ArcContentFileSystemAsyncFileUtil> async_file_util_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ArcContentFileSystemAsyncFileUtilTest);
 };
 
 }  // namespace
@@ -116,6 +125,31 @@ TEST_F(ArcContentFileSystemAsyncFileUtilTest, GetFileInfo) {
           },
           &run_loop));
   run_loop.Run();
+}
+
+TEST_F(ArcContentFileSystemAsyncFileUtilTest, Truncate) {
+  // Currently, truncate() is disabled if ARCVM is not enabled.
+  // For this test, just pretend ARCVM is enabled.
+  // TODO(b/223247850) Fix this.
+  base::CommandLine::ForCurrentProcess()->AppendSwitch(
+      ash::switches::kEnableArcVm);
+
+  GURL externalfile_url = ArcUrlToExternalFileUrl(GURL(kArcUrl));
+  const int64_t kLength = strlen(kData) / 2;
+
+  base::RunLoop run_loop;
+  async_file_util_->Truncate(
+      std::unique_ptr<storage::FileSystemOperationContext>(),
+      ExternalFileURLToFileSystemURL(externalfile_url), kLength,
+      base::BindOnce(
+          [](base::RunLoop* run_loop, base::File::Error error) {
+            EXPECT_EQ(base::File::FILE_OK, error);
+            run_loop->Quit();
+          },
+          &run_loop));
+  run_loop.Run();
+
+  EXPECT_EQ(fake_file_system_.GetFileContent(kArcUrl).size(), kLength);
 }
 
 }  // namespace arc

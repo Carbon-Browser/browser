@@ -9,17 +9,16 @@
 #include <vector>
 
 #include "base/callback.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "gpu/command_buffer/common/activity_flags.h"
 #include "gpu/command_buffer/common/sync_token.h"
 #include "gpu/command_buffer/service/framebuffer_completeness_cache.h"
-#include "gpu/command_buffer/service/image_manager.h"
 #include "gpu/command_buffer/service/passthrough_discardable_manager.h"
 #include "gpu/command_buffer/service/sequence_id.h"
 #include "gpu/command_buffer/service/service_discardable_manager.h"
 #include "gpu/command_buffer/service/shader_translator_cache.h"
 #include "gpu/command_buffer/service/shared_context_state.h"
-#include "gpu/command_buffer/service/shared_image_manager.h"
+#include "gpu/command_buffer/service/shared_image/shared_image_manager.h"
 #include "gpu/config/gpu_feature_info.h"
 #include "gpu/config/gpu_preferences.h"
 #include "gpu/ipc/gl_in_process_context_export.h"
@@ -41,6 +40,8 @@ class ProgramCache;
 
 // Provides accessors for GPU service objects and the serializer interface to
 // the GPU thread used by InProcessCommandBuffer.
+// TODO(crbug.com/1247756): This class should be revisited as lots of
+// functionality isn't needed anymore with GLRenderer deleted.
 class GL_IN_PROCESS_CONTEXT_EXPORT CommandBufferTaskExecutor {
  public:
   CommandBufferTaskExecutor(const GpuPreferences& gpu_preferences,
@@ -50,6 +51,11 @@ class GL_IN_PROCESS_CONTEXT_EXPORT CommandBufferTaskExecutor {
                             gl::GLSurfaceFormat share_group_surface_format,
                             SharedImageManager* shared_image_manager,
                             gles2::ProgramCache* program_cache);
+
+  CommandBufferTaskExecutor(const CommandBufferTaskExecutor&) = delete;
+  CommandBufferTaskExecutor& operator=(const CommandBufferTaskExecutor&) =
+      delete;
+
   virtual ~CommandBufferTaskExecutor();
 
   // Always use virtualized GL contexts if this returns true.
@@ -85,7 +91,6 @@ class GL_IN_PROCESS_CONTEXT_EXPORT CommandBufferTaskExecutor {
   MailboxManager* mailbox_manager() const { return mailbox_manager_; }
 
   // Not const because these return inner pointers.
-  gles2::ImageManager* image_manager() { return &image_manager_; }
   ServiceDiscardableManager* discardable_manager() {
     return &discardable_manager_;
   }
@@ -107,23 +112,20 @@ class GL_IN_PROCESS_CONTEXT_EXPORT CommandBufferTaskExecutor {
  private:
   const GpuPreferences gpu_preferences_;
   const GpuFeatureInfo gpu_feature_info_;
-  SyncPointManager* sync_point_manager_;
-  MailboxManager* mailbox_manager_;
+  raw_ptr<SyncPointManager> sync_point_manager_;
+  raw_ptr<MailboxManager> mailbox_manager_;
   std::unique_ptr<gles2::Outputter> outputter_;
   gl::GLSurfaceFormat share_group_surface_format_;
   std::unique_ptr<gles2::ProgramCache> owned_program_cache_;
-  gles2::ProgramCache* program_cache_;
-  gles2::ImageManager image_manager_;
+  raw_ptr<gles2::ProgramCache> program_cache_;
   ServiceDiscardableManager discardable_manager_;
   PassthroughDiscardableManager passthrough_discardable_manager_;
   gles2::ShaderTranslatorCache shader_translator_cache_;
   gles2::FramebufferCompletenessCache framebuffer_completeness_cache_;
-  SharedImageManager* shared_image_manager_;
+  raw_ptr<SharedImageManager> shared_image_manager_;
 
   // No-op default initialization is used in in-process mode.
   GpuProcessActivityFlags activity_flags_;
-
-  DISALLOW_COPY_AND_ASSIGN(CommandBufferTaskExecutor);
 };
 
 }  // namespace gpu

@@ -12,8 +12,8 @@
 #include "base/bind.h"
 #include "base/logging.h"
 #include "base/run_loop.h"
-#include "base/single_thread_task_runner.h"
 #include "base/task/current_thread.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "ui/base/x/x11_pointer_grab.h"
 #include "ui/base/x/x11_util.h"
@@ -148,7 +148,8 @@ bool X11WholeScreenMoveLoop::RunMoveLoop(
   // restored when the move loop finishes.
   initial_cursor_ = old_cursor;
 
-  CreateDragInputWindow(x11::Connection::Get());
+  auto* connection = x11::Connection::Get();
+  CreateDragInputWindow(connection);
 
   // Only grab mouse capture of |grab_input_window_| if |can_grab_pointer| is
   // true aka the source that initiated the move loop doesn't have explicit

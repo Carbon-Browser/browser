@@ -7,9 +7,7 @@
 #include <memory>
 #include <type_traits>
 
-#include "base/bind.h"
 #include "base/time/time.h"
-#include "chrome/browser/ash/crostini/crostini_simple_types.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/views/test/widget_test.h"
@@ -75,7 +73,7 @@ TEST_F(CrostiniForceCloseWatcherTest, CallsForceCloseAfterSecondCloseAttempt) {
   EXPECT_CALL(delegate_ref, GetClosableWidget).WillOnce(Return(widget.get()));
   EXPECT_CALL(delegate_ref, Watched)
       .WillOnce(testing::Invoke([](ForceCloseWatcher* watcher) {
-        watcher->OverrideDelayForTesting(base::TimeDelta::FromSeconds(0));
+        watcher->OverrideDelayForTesting(base::Seconds(0));
         watcher->OnCloseRequested();
         watcher->OnCloseRequested();
       }));

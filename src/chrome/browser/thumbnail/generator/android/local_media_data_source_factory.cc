@@ -39,7 +39,7 @@ void ReadFile(const base::FilePath& file_path,
               scoped_refptr<base::SequencedTaskRunner> main_task_runner,
               ReadFileCallback cb) {
   base::File file;
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   if (file_path.IsContentUri()) {
     file = base::OpenContentUriForRead(file_path);
     if (!file.IsValid()) {
@@ -48,7 +48,7 @@ void ReadFile(const base::FilePath& file_path,
       return;
     }
   }
-#endif  // defined(OS_ANDROID)
+#endif  // BUILDFLAG(IS_ANDROID)
   if (!file.IsValid())
     file = base::File(file_path, base::File::FLAG_OPEN | base::File::FLAG_READ);
   if (!file.IsValid()) {
@@ -86,6 +86,10 @@ class LocalMediaDataSource : public chrome::mojom::MediaDataSource {
         file_task_runner_(file_task_runner),
         media_data_callback_(media_data_callback),
         receiver_(this, std::move(receiver)) {}
+
+  LocalMediaDataSource(const LocalMediaDataSource&) = delete;
+  LocalMediaDataSource& operator=(const LocalMediaDataSource&) = delete;
+
   ~LocalMediaDataSource() override = default;
 
  private:
@@ -125,8 +129,6 @@ class LocalMediaDataSource : public chrome::mojom::MediaDataSource {
 
   mojo::Receiver<chrome::mojom::MediaDataSource> receiver_;
   base::WeakPtrFactory<LocalMediaDataSource> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(LocalMediaDataSource);
 };
 
 }  // namespace

@@ -5,6 +5,7 @@
 #include "ui/ozone/platform/wayland/host/wayland_pointer.h"
 
 #include <linux/input.h>
+#include <stylus-unstable-v2-client-protocol.h>
 
 #include "ui/events/event.h"
 #include "ui/events/types/event_type.h"
@@ -26,6 +27,8 @@ WaylandPointer::WaylandPointer(wl_pointer* pointer,
       &Frame, &AxisSource, &AxisStop, &AxisDiscrete};
 
   wl_pointer_add_listener(obj_.get(), &listener, this);
+
+  SetupStylus();
 }
 
 WaylandPointer::~WaylandPointer() {
@@ -51,7 +54,9 @@ void WaylandPointer::Enter(void* data,
   WaylandWindow* window = wl::RootWindowFromWlSurface(surface);
   gfx::PointF location{static_cast<float>(wl_fixed_to_double(surface_x)),
                        static_cast<float>(wl_fixed_to_double(surface_y))};
-  pointer->delegate_->OnPointerFocusChanged(window, location);
+
+  pointer->delegate_->OnPointerFocusChanged(
+      window, pointer->connection_->MaybeConvertLocation(location, window));
 }
 
 // static
@@ -77,7 +82,10 @@ void WaylandPointer::Motion(void* data,
   WaylandPointer* pointer = static_cast<WaylandPointer*>(data);
   gfx::PointF location(wl_fixed_to_double(surface_x),
                        wl_fixed_to_double(surface_y));
-  pointer->delegate_->OnPointerMotionEvent(location);
+  const WaylandWindow* target = pointer->delegate_->GetPointerTarget();
+
+  pointer->delegate_->OnPointerMotionEvent(
+      pointer->connection_->MaybeConvertLocation(location, target));
 }
 
 // static
@@ -143,12 +151,22 @@ void WaylandPointer::Axis(void* data,
   } else {
     return;
   }
+  // If we did not receive the axis event source explicitly, set it to the mouse
+  // wheel so far.  Should this be a part of some complex event coming from the
+  // different source, the compositor will let us know sooner or later.
+  if (!pointer->axis_source_received_)
+    pointer->delegate_->OnPointerAxisSourceEvent(WL_POINTER_AXIS_SOURCE_WHEEL);
   pointer->delegate_->OnPointerAxisEvent(offset);
 }
+
+// ---- Version 5 ----
 
 // static
 void WaylandPointer::Frame(void* data, wl_pointer* obj) {
   WaylandPointer* pointer = static_cast<WaylandPointer*>(data);
+  // The frame event ends the sequence of pointer events.  Clear the flag.  The
+  // next frame will set it when necessary.
+  pointer->axis_source_received_ = false;
   pointer->delegate_->OnPointerFrameEvent();
 }
 
@@ -157,6 +175,7 @@ void WaylandPointer::AxisSource(void* data,
                                 wl_pointer* obj,
                                 uint32_t axis_source) {
   WaylandPointer* pointer = static_cast<WaylandPointer*>(data);
+  pointer->axis_source_received_ = true;
   pointer->delegate_->OnPointerAxisSourceEvent(axis_source);
 }
 
@@ -176,6 +195,61 @@ void WaylandPointer::AxisDiscrete(void* data,
                                   int32_t discrete) {
   // TODO(fukino): Use this events for better handling of mouse wheel events.
   // crbug.com/1129259.
+  NOTIMPLEMENTED_LOG_ONCE();
+}
+
+void WaylandPointer::SetupStylus() {
+  auto* stylus_v2 = connection_->stylus_v2();
+  if (!stylus_v2)
+    return;
+
+  zcr_pointer_stylus_v2_.reset(
+      zcr_stylus_v2_get_pointer_stylus(stylus_v2, obj_.get()));
+
+  static zcr_pointer_stylus_v2_listener kPointerStylusV2Listener = {
+      &Tool, &Force, &Tilt};
+  zcr_pointer_stylus_v2_add_listener(zcr_pointer_stylus_v2_.get(),
+                                     &kPointerStylusV2Listener, this);
+}
+
+// static
+void WaylandPointer::Tool(void* data,
+                          struct zcr_pointer_stylus_v2* x,
+                          uint32_t wl_pointer_type) {
+  auto* pointer = static_cast<WaylandPointer*>(data);
+
+  ui::EventPointerType pointer_type = ui::EventPointerType::kMouse;
+  switch (wl_pointer_type) {
+    case (ZCR_POINTER_STYLUS_V2_TOOL_TYPE_PEN):
+      pointer_type = EventPointerType::kPen;
+      break;
+    case (ZCR_POINTER_STYLUS_V2_TOOL_TYPE_ERASER):
+      pointer_type = ui::EventPointerType::kEraser;
+      break;
+    case (ZCR_POINTER_STYLUS_V2_TOOL_TYPE_TOUCH):
+      pointer_type = EventPointerType::kTouch;
+      break;
+    case (ZCR_POINTER_STYLUS_V2_TOOL_TYPE_NONE):
+      break;
+  }
+
+  pointer->delegate_->OnPointerStylusToolChanged(pointer_type);
+}
+
+// static
+void WaylandPointer::Force(void* data,
+                           struct zcr_pointer_stylus_v2* x,
+                           uint32_t y,
+                           wl_fixed_t z) {
+  NOTIMPLEMENTED_LOG_ONCE();
+}
+
+// static
+void WaylandPointer::Tilt(void* data,
+                          struct zcr_pointer_stylus_v2* x,
+                          uint32_t y,
+                          wl_fixed_t z,
+                          wl_fixed_t a) {
   NOTIMPLEMENTED_LOG_ONCE();
 }
 

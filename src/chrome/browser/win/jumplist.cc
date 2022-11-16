@@ -12,17 +12,15 @@
 #include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/containers/flat_set.h"
-#include "base/cxx17_backports.h"
 #include "base/files/file_util.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/path_service.h"
-#include "base/sequenced_task_runner.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/task/post_task.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/thread.h"
@@ -79,29 +77,25 @@ constexpr int kNotificationsToSkipUnderHeavyLoad = 2;
 // The delay before updating the JumpList for users who haven't used it in a
 // session. A delay of 2000 ms is chosen to coalesce more updates when tabs are
 // closed rapidly.
-constexpr base::TimeDelta kLongDelayForUpdate =
-    base::TimeDelta::FromMilliseconds(2000);
+constexpr base::TimeDelta kLongDelayForUpdate = base::Milliseconds(2000);
 
 // The delay before updating the JumpList for users who have used it in a
 // session. A delay of 500 ms is used to not only make the update happen almost
 // immediately, but also prevent update storms when tabs are closed rapidly via
 // Ctrl-W.
-constexpr base::TimeDelta kShortDelayForUpdate =
-    base::TimeDelta::FromMilliseconds(500);
+constexpr base::TimeDelta kShortDelayForUpdate = base::Milliseconds(500);
 
 // The maximum allowed time for JumpListUpdater::BeginUpdate. Updates taking
 // longer than this are discarded to prevent bogging down slow machines.
-constexpr base::TimeDelta kTimeOutForBeginUpdate =
-    base::TimeDelta::FromMilliseconds(500);
+constexpr base::TimeDelta kTimeOutForBeginUpdate = base::Milliseconds(500);
 
 // The maximum allowed time for adding most visited pages custom category via
 // JumpListUpdater::AddCustomCategory.
 constexpr base::TimeDelta kTimeOutForAddCustomCategory =
-    base::TimeDelta::FromMilliseconds(320);
+    base::Milliseconds(320);
 
 // The maximum allowed time for JumpListUpdater::CommitUpdate.
-constexpr base::TimeDelta kTimeOutForCommitUpdate =
-    base::TimeDelta::FromMilliseconds(1000);
+constexpr base::TimeDelta kTimeOutForCommitUpdate = base::Milliseconds(1000);
 
 // Appends the common switches to each shell link.
 void AppendCommonSwitches(const base::FilePath& cmd_line_profile_dir,
@@ -110,7 +104,7 @@ void AppendCommonSwitches(const base::FilePath& cmd_line_profile_dir,
   const base::CommandLine& command_line =
       *base::CommandLine::ForCurrentProcess();
   shell_link->GetCommandLine()->CopySwitchesFrom(command_line, kSwitchNames,
-                                                 base::size(kSwitchNames));
+                                                 std::size(kSwitchNames));
   if (!cmd_line_profile_dir.empty()) {
     shell_link->GetCommandLine()->AppendSwitchPath(switches::kProfileDirectory,
                                                    cmd_line_profile_dir);
@@ -180,7 +174,7 @@ bool UpdateTaskCategory(JumpListUpdater* jumplist_updater,
   // collection. We use our application icon as the icon for this item.
   // We remove '&' characters from this string so we can share it with our
   // system menu.
-  if (incognito_availability != IncognitoModePrefs::FORCED) {
+  if (incognito_availability != IncognitoModePrefs::Availability::kForced) {
     scoped_refptr<ShellLinkItem> chrome = CreateShellLink(cmd_line_profile_dir);
     std::u16string chrome_title = l10n_util::GetStringUTF16(IDS_NEW_WINDOW);
     base::ReplaceSubstringsAfterOffset(&chrome_title, 0, u"&",
@@ -192,7 +186,7 @@ bool UpdateTaskCategory(JumpListUpdater* jumplist_updater,
 
   // Create an IShellLink object which launches Chrome in incognito mode, and
   // add it to the collection.
-  if (incognito_availability != IncognitoModePrefs::DISABLED) {
+  if (incognito_availability != IncognitoModePrefs::Availability::kDisabled) {
     scoped_refptr<ShellLinkItem> incognito =
         CreateShellLink(cmd_line_profile_dir);
     incognito->GetCommandLine()->AppendSwitch(switches::kIncognito);

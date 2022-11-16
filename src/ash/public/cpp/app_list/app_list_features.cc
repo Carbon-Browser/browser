@@ -4,6 +4,7 @@
 
 #include "ash/public/cpp/app_list/app_list_features.h"
 
+#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/app_list/app_list_switches.h"
 #include "base/feature_list.h"
 #include "base/metrics/field_trial_params.h"
@@ -14,25 +15,14 @@ const base::Feature kEnableAppRanker{"EnableAppRanker",
                                      base::FEATURE_ENABLED_BY_DEFAULT};
 const base::Feature kEnableZeroStateAppsRanker{
     "EnableZeroStateAppsRanker", base::FEATURE_ENABLED_BY_DEFAULT};
-const base::Feature kEnableQueryBasedMixedTypesRanker{
-    "EnableQueryBasedMixedTypesRanker", base::FEATURE_DISABLED_BY_DEFAULT};
 const base::Feature kEnableZeroStateMixedTypesRanker{
     "EnableZeroStateMixedTypesRanker", base::FEATURE_ENABLED_BY_DEFAULT};
 const base::Feature kEnableAppReinstallZeroState{
     "EnableAppReinstallZeroState", base::FEATURE_DISABLED_BY_DEFAULT};
 const base::Feature kEnableSuggestedFiles{"EnableSuggestedFiles",
                                           base::FEATURE_DISABLED_BY_DEFAULT};
-const base::Feature kEnableSuggestedDriveFiles{
-    "EnableSuggestedDriveFiles", base::FEATURE_DISABLED_BY_DEFAULT};
-
-// "EnableEmbeddedAssistantUI" is used in finch experiment therefore we cannot
-// change it until fully launched. It is used to redirect Launcher search to
-// Assistant search.
-const base::Feature kEnableAssistantSearch{"EnableEmbeddedAssistantUI",
-                                           base::FEATURE_ENABLED_BY_DEFAULT};
-
-const base::Feature kEnableAppGridGhost{"EnableAppGridGhost",
-                                        base::FEATURE_DISABLED_BY_DEFAULT};
+const base::Feature kEnableSuggestedLocalFiles{
+    "EnableSuggestedLocalFiles", base::FEATURE_DISABLED_BY_DEFAULT};
 const base::Feature kEnableAppListLaunchRecording{
     "EnableAppListLaunchRecording", base::FEATURE_DISABLED_BY_DEFAULT};
 const base::Feature kLauncherSettingsSearch{"LauncherSettingsSearch",
@@ -41,18 +31,21 @@ const base::Feature kEnableFuzzyAppSearch{"EnableFuzzyAppSearch",
                                           base::FEATURE_ENABLED_BY_DEFAULT};
 const base::Feature kEnableExactMatchForNonLatinLocale{
     "EnableExactMatchForNonLatinLocale", base::FEATURE_ENABLED_BY_DEFAULT};
-const base::Feature kEnableAggregatedMlSearchRanking{
-    "EnableAggregatedMlSearchRanking", base::FEATURE_DISABLED_BY_DEFAULT};
-const base::Feature kNewDragSpecInLauncher{"NewDragSpecInLauncher",
-                                           base::FEATURE_ENABLED_BY_DEFAULT};
-const base::Feature kEnableOmniboxRichEntities{
-    "EnableOmniboxRichEntities", base::FEATURE_ENABLED_BY_DEFAULT};
-const base::Feature kEnableLauncherSearchNormalization{
-    "EnableLauncherSearchNormalization", base::FEATURE_DISABLED_BY_DEFAULT};
 const base::Feature kCategoricalSearch{"CategoricalSearch",
                                        base::FEATURE_DISABLED_BY_DEFAULT};
-const base::Feature kLauncherQueryHighlighting{
-    "LauncherQueryHighlighting", base::FEATURE_ENABLED_BY_DEFAULT};
+// DO NOT REMOVE: Tast integration tests use this feature. (See crbug/1340267)
+const base::Feature kForceShowContinueSection{
+    "ForceShowContinueSection", base::FEATURE_DISABLED_BY_DEFAULT};
+const base::Feature kSearchResultInlineIcon{"SearchResultInlineIcon",
+                                            base::FEATURE_ENABLED_BY_DEFAULT};
+const base::Feature kDynamicSearchUpdateAnimation{
+    "DynamicSearchUpdateAnimation", base::FEATURE_ENABLED_BY_DEFAULT};
+const base::Feature kLauncherLacrosIntegration{
+    "LauncherLacrosIntegration", base::FEATURE_DISABLED_BY_DEFAULT};
+const base::Feature kCompactBubbleLauncher{"CompactBubbleLauncher",
+                                           base::FEATURE_ENABLED_BY_DEFAULT};
+const base::Feature kLauncherPlayStoreSearch{"LauncherPlayStoreSearch",
+                                             base::FEATURE_ENABLED_BY_DEFAULT};
 
 bool IsAppRankerEnabled() {
   return base::FeatureList::IsEnabled(kEnableAppRanker);
@@ -60,10 +53,6 @@ bool IsAppRankerEnabled() {
 
 bool IsZeroStateAppsRankerEnabled() {
   return base::FeatureList::IsEnabled(kEnableZeroStateAppsRanker);
-}
-
-bool IsQueryBasedMixedTypesRankerEnabled() {
-  return base::FeatureList::IsEnabled(kEnableQueryBasedMixedTypesRanker);
 }
 
 bool IsZeroStateMixedTypesRankerEnabled() {
@@ -78,16 +67,8 @@ bool IsSuggestedFilesEnabled() {
   return base::FeatureList::IsEnabled(kEnableSuggestedFiles);
 }
 
-bool IsSuggestedDriveFilesEnabled() {
-  return base::FeatureList::IsEnabled(kEnableSuggestedDriveFiles);
-}
-
-bool IsAssistantSearchEnabled() {
-  return base::FeatureList::IsEnabled(kEnableAssistantSearch);
-}
-
-bool IsAppGridGhostEnabled() {
-  return base::FeatureList::IsEnabled(kEnableAppGridGhost);
+bool IsSuggestedLocalFilesEnabled() {
+  return base::FeatureList::IsEnabled(kEnableSuggestedLocalFiles);
 }
 
 bool IsLauncherSettingsSearchEnabled() {
@@ -100,22 +81,6 @@ bool IsFuzzyAppSearchEnabled() {
 
 bool IsExactMatchForNonLatinLocaleEnabled() {
   return base::FeatureList::IsEnabled(kEnableExactMatchForNonLatinLocale);
-}
-
-bool IsAggregatedMlSearchRankingEnabled() {
-  return base::FeatureList::IsEnabled(kEnableAggregatedMlSearchRanking);
-}
-
-bool IsNewDragSpecInLauncherEnabled() {
-  return base::FeatureList::IsEnabled(kNewDragSpecInLauncher);
-}
-
-bool IsOmniboxRichEntitiesEnabled() {
-  return base::FeatureList::IsEnabled(kEnableOmniboxRichEntities);
-}
-
-bool IsLauncherSearchNormalizationEnabled() {
-  return base::FeatureList::IsEnabled(kEnableLauncherSearchNormalization);
 }
 
 std::string AppSearchResultRankerPredictorName() {
@@ -131,15 +96,49 @@ bool IsAppListLaunchRecordingEnabled() {
 }
 
 bool IsCategoricalSearchEnabled() {
-  return base::FeatureList::IsEnabled(kCategoricalSearch);
+  // Force categorical search for the latest version of the launcher.
+  return ash::features::IsProductivityLauncherEnabled() ||
+         base::FeatureList::IsEnabled(kCategoricalSearch);
 }
 
-bool IsLauncherQueryHighlightingEnabled() {
-  return base::FeatureList::IsEnabled(kLauncherQueryHighlighting);
+bool IsSearchResultInlineIconEnabled() {
+  // Inline Icons are only supported for categorical search.
+  return IsCategoricalSearchEnabled() &&
+         base::FeatureList::IsEnabled(kSearchResultInlineIcon);
+}
+
+bool IsDynamicSearchUpdateAnimationEnabled() {
+  // Search update animations are only supported for categorical search.
+  return IsCategoricalSearchEnabled() &&
+         base::FeatureList::IsEnabled(kDynamicSearchUpdateAnimation);
+}
+
+bool IsLauncherLacrosIntegrationEnabled() {
+  return base::FeatureList::IsEnabled(chromeos::features::kLacrosSupport) &&
+         base::FeatureList::IsEnabled(kLauncherLacrosIntegration);
 }
 
 std::string CategoricalSearchType() {
   return GetFieldTrialParamValueByFeature(kCategoricalSearch, "ranking");
+}
+
+base::TimeDelta DynamicSearchUpdateAnimationDuration() {
+  int ms = base::GetFieldTrialParamByFeatureAsInt(
+      kDynamicSearchUpdateAnimation, "animation_time", /*default value =*/100);
+  return base::TimeDelta(base::Milliseconds(ms));
+}
+
+bool IsForceShowContinueSectionEnabled() {
+  return base::FeatureList::IsEnabled(kForceShowContinueSection);
+}
+
+bool IsCompactBubbleLauncherEnabled() {
+  return base::FeatureList::IsEnabled(kCompactBubbleLauncher);
+}
+
+bool IsLauncherPlayStoreSearchEnabled() {
+  return ash::features::IsProductivityLauncherEnabled() &&
+         base::FeatureList::IsEnabled(kLauncherPlayStoreSearch);
 }
 
 }  // namespace app_list_features

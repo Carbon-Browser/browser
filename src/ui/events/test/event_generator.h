@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "base/callback.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "build/chromeos_buildflags.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -129,6 +129,9 @@ class EventGenerator {
   // |target_window|.
   EventGenerator(gfx::NativeWindow root_window,
                  gfx::NativeWindow target_window);
+
+  EventGenerator(const EventGenerator&) = delete;
+  EventGenerator& operator=(const EventGenerator&) = delete;
 
   virtual ~EventGenerator();
 
@@ -471,7 +474,7 @@ class EventGenerator {
 
   std::unique_ptr<EventGeneratorDelegate> delegate_;
   gfx::Point current_screen_location_;
-  EventTarget* current_target_ = nullptr;
+  raw_ptr<EventTarget> current_target_ = nullptr;
   int flags_ = 0;
   bool grab_ = false;
 
@@ -480,8 +483,6 @@ class EventGenerator {
   Target target_ = Target::WIDGET;
 
   std::unique_ptr<TestTickClock> tick_clock_;
-
-  DISALLOW_COPY_AND_ASSIGN(EventGenerator);
 };
 
 }  // namespace test

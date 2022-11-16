@@ -24,10 +24,10 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <iterator>
 #include <utility>
 
 #include "base/check_op.h"
-#include "base/cxx17_backports.h"
 #include "base/logging.h"
 #include "base/mac/mach_logging.h"
 #include "base/mac/scoped_mach_port.h"
@@ -51,6 +51,10 @@ namespace {
 class ChildPortHandshakeServer final : public ChildPortServer::Interface {
  public:
   ChildPortHandshakeServer();
+
+  ChildPortHandshakeServer(const ChildPortHandshakeServer&) = delete;
+  ChildPortHandshakeServer& operator=(const ChildPortHandshakeServer&) = delete;
+
   ~ChildPortHandshakeServer();
 
   mach_port_t RunServer(base::ScopedFD server_write_fd,
@@ -69,8 +73,6 @@ class ChildPortHandshakeServer final : public ChildPortServer::Interface {
   mach_port_t port_;
   mach_msg_type_name_t right_type_;
   bool checked_in_;
-
-  DISALLOW_COPY_AND_ASSIGN(ChildPortHandshakeServer);
 };
 
 ChildPortHandshakeServer::ChildPortHandshakeServer()
@@ -165,8 +167,8 @@ mach_port_t ChildPortHandshakeServer::RunServer(
          0,
          0,
          nullptr);
-  int rv = HANDLE_EINTR(kevent(
-      kq.get(), changelist, base::size(changelist), nullptr, 0, nullptr));
+  int rv = HANDLE_EINTR(
+      kevent(kq.get(), changelist, std::size(changelist), nullptr, 0, nullptr));
   PCHECK(rv != -1) << "kevent";
 
   ChildPortServer child_port_server(this);

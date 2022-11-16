@@ -11,12 +11,11 @@
 #include "base/values.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chromeos/dbus/session_manager/session_manager_client.h"
+#include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
 #include "components/prefs/pref_service.h"
 #include "extensions/browser/pref_names.h"
 
-namespace chromeos {
-
+namespace ash {
 namespace {
 
 const char kPersistentDataKeyPrefix[] = "persistent_data_";
@@ -84,4 +83,4 @@ void LoginScreenExtensionsStorageCleaner::
   }
 }
 
-}  // namespace chromeos
+}  // namespace ash

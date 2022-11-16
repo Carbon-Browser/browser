@@ -7,7 +7,6 @@
 #include "components/continuous_search/common/public/mojom/continuous_search.mojom.h"
 #include "components/continuous_search/renderer/search_result_extractor_impl.h"
 #include "content/public/renderer/render_frame.h"
-#include "content/public/renderer/render_view.h"
 #include "content/public/test/render_view_test.h"
 #include "third_party/blink/public/web/web_document.h"
 #include "third_party/blink/public/web/web_local_frame.h"
@@ -57,142 +56,6 @@ class SearchResultExtractorImplRenderViewTest : public content::RenderViewTest {
     EXPECT_TRUE(expected_results.Equals(out_results));
   }
 };
-
-TEST_F(SearchResultExtractorImplRenderViewTest, TestExtractAdsOnly) {
-  auto result1 = mojom::SearchResult::New();
-  result1->link = GURL("https://www.example.com/");
-  result1->title = u"Hello";
-
-  auto result2 = mojom::SearchResult::New();
-  result2->link = GURL("https://www.example1.com/");
-  result2->title = u"World";
-
-  auto ad_group = mojom::ResultGroup::New();
-  ad_group->type = mojom::ResultType::kAds;
-  ad_group->results.push_back(std::move(result1));
-  ad_group->results.push_back(std::move(result2));
-
-  auto expected_results = mojom::CategoryResults::New();
-  expected_results->groups.push_back(std::move(ad_group));
-
-  LoadHtmlAndExpectExtractedOutput(
-      R"(<!doctype html>
-         <body>
-           <div id="tads">
-             <div class="mnr-c foo">
-               <a href="https://www.example.com/">
-                 <div role="heading">
-                   <span>Hello</span>
-                 </div>
-               </a>
-               <a href="https://www.skipped_url.com/">
-                 <div role="heading">
-                   <span>Skipped</span>
-                 </div>
-               </a>
-             </div>
-             <div class="mnr-c bar">
-               <a href="https://www.example1.com/">
-                 <div role="heading">
-                   <span>World</span>
-                 </div>
-               </a>
-             </div>
-           </div>
-         </body>)",
-      {mojom::ResultType::kAds}, mojom::SearchResultExtractor::Status::kSuccess,
-      std::move(expected_results));
-}
-
-TEST_F(SearchResultExtractorImplRenderViewTest, TestExtractNoAds) {
-  // If only ads are requested but ads are not present, the status still reports
-  // success because extracting ads is not a requirement.
-  LoadHtmlAndExpectExtractedOutput(
-      R"(<!doctype html>
-         <body>
-           <div>
-           </div>
-         </body>)",
-      {mojom::ResultType::kAds}, mojom::SearchResultExtractor::Status::kSuccess,
-      mojom::CategoryResults::New());
-}
-
-TEST_F(SearchResultExtractorImplRenderViewTest, TestExtractAdsAndResults) {
-  auto ad_result = mojom::SearchResult::New();
-  ad_result->link = GURL("https://www.example.com/");
-  ad_result->title = u"Hello";
-
-  auto ad_group = mojom::ResultGroup::New();
-  ad_group->type = mojom::ResultType::kAds;
-  ad_group->results.push_back(std::move(ad_result));
-
-  auto result1 = mojom::SearchResult::New();
-  result1->link = GURL("https://www.foo.com/");
-  result1->title = u"Foo";
-
-  auto result2 = mojom::SearchResult::New();
-  result2->link = GURL("https://www.bar.com/");
-  result2->title = u"Bar";
-
-  auto result_group = mojom::ResultGroup::New();
-  result_group->type = mojom::ResultType::kSearchResults;
-  result_group->results.push_back(std::move(result1));
-  result_group->results.push_back(std::move(result2));
-
-  auto expected_results = mojom::CategoryResults::New();
-  expected_results->category_type = mojom::Category::kOrganic;
-  expected_results->groups.push_back(std::move(ad_group));
-  expected_results->groups.push_back(std::move(result_group));
-  LoadHtmlAndExpectExtractedOutput(
-      R"(<!doctype html>
-         <body>
-           <div>
-             <div></div>
-             <div id="tads">
-               <div>
-                 <div class="mnr-c foo">
-                   <a href="https://www.example.com/">
-                     <div></div>
-                     <div role="heading">
-                       <div>Hello</div>
-                     </div>
-                   </a>
-                 </div>
-               </div>
-             </div>
-             <div id="rso">
-               <div class="mnr-c">
-                 <div></div>
-                 <div>
-                   <a href="https://www.foo.com/">
-                     <div role="heading">Foo </div>
-                   </a>
-                 </div>
-               </div>
-               <div class="mnr-c">
-                 <div></div>
-                 <div>
-                   <a href="https://www.bar.com/">
-                     <div role="heading">Bar
-                     </div>
-                   </a>
-                 </div>
-               </div>
-               <div class="alpha">
-                 <div></div>
-                 <div>
-                   <a href="https://www.beta.com/">
-                     <div role="heading">Beta</div>
-                   </a>
-                 </div>
-               </div>
-             </div>
-           </div>
-         </body>)",
-      {mojom::ResultType::kAds, mojom::ResultType::kSearchResults},
-      mojom::SearchResultExtractor::Status::kSuccess,
-      std::move(expected_results));
-}
 
 TEST_F(SearchResultExtractorImplRenderViewTest, TestExtractResultsOnly) {
   auto result1 = mojom::SearchResult::New();
@@ -281,23 +144,24 @@ TEST_F(SearchResultExtractorImplRenderViewTest, TestExtractRelatedSearches) {
   expected_results->groups.push_back(std::move(related_searches_group));
 
   LoadHtmlAndExpectExtractedOutput(
-      R"(<!doctype html>
+      base::StringPrintf(
+          R"(<!doctype html>
          <body>
-           <div id="w3bYAd">
+           <div id="%s">
              <div class="foo">
-               <a href="https://www.example1.com/" class="k8XOCe bar">
-                 <div class="s75CSd bar">
+               <a href="https://www.example1.com/" class="%s bar">
+                 <div class="%s bar">
                    <span>Related 1</span>
                  </div>
                </a>
-               <a href="https://www.example2.com/" class="k8XOCe baz">
-                 <div class="s75CSd baz">
+               <a href="https://www.example2.com/" class="%s baz">
+                 <div class="%s baz">
                    <span>Related 2</span>
                  </div>
                </a>
              </div>
              <div class="mnr-c bar">
-               <a href="https://www.example1.com/" class="k8XOCe buz">
+               <a href="https://www.example1.com/" class="%s buz">
                  <div>
                    <span>Skipped</span>
                  </div>
@@ -305,6 +169,9 @@ TEST_F(SearchResultExtractorImplRenderViewTest, TestExtractRelatedSearches) {
              </div>
            </div>
          </body>)",
+          kRelatedSearchesId, kRelatedSearchesAnchorClassname,
+          kRelatedSearchesTitleClassname, kRelatedSearchesAnchorClassname,
+          kRelatedSearchesTitleClassname, kRelatedSearchesTitleClassname),
       {mojom::ResultType::kRelatedSearches},
       mojom::SearchResultExtractor::Status::kSuccess,
       std::move(expected_results));

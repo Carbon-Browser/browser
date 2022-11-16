@@ -5,6 +5,7 @@
 #ifndef CONTENT_BROWSER_RENDERER_HOST_INPUT_MOCK_INPUT_ROUTER_H_
 #define CONTENT_BROWSER_RENDERER_HOST_INPUT_MOCK_INPUT_ROUTER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "content/browser/renderer_host/input/input_router.h"
 
 #include "cc/input/touch_action.h"
@@ -26,6 +27,10 @@ class MockInputRouter : public InputRouter {
         send_touch_event_not_cancelled_(false),
         has_handlers_(false),
         client_(client) {}
+
+  MockInputRouter(const MockInputRouter&) = delete;
+  MockInputRouter& operator=(const MockInputRouter&) = delete;
+
   ~MockInputRouter() override {}
 
   // InputRouter:
@@ -61,9 +66,7 @@ class MockInputRouter : public InputRouter {
   bool has_handlers_;
 
  private:
-  InputRouterClient* client_;
-
-  DISALLOW_COPY_AND_ASSIGN(MockInputRouter);
+  raw_ptr<InputRouterClient> client_;
 };
 
 }  // namespace content

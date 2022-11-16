@@ -6,7 +6,6 @@ package org.chromium.components.page_info;
 
 import android.content.Context;
 import android.content.Intent;
-import android.content.res.ColorStateList;
 import android.provider.Browser;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
@@ -18,6 +17,9 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+
+import androidx.appcompat.content.res.AppCompatResources;
+import androidx.appcompat.widget.AppCompatTextView;
 
 import org.chromium.base.ApiCompatibilityUtils;
 import org.chromium.base.Log;
@@ -126,7 +128,7 @@ public class ConnectionInfoView implements OnClickListener {
         ImageView i = section.findViewById(R.id.connection_info_icon);
         i.setImageResource(iconId);
         ApiCompatibilityUtils.setImageTintList(
-                i, ColorStateList.valueOf(mContext.getResources().getColor(iconColorId)));
+                i, AppCompatResources.getColorStateList(mContext, iconColorId));
 
         TextView d = section.findViewById(R.id.connection_info_description);
         d.setText(description);
@@ -138,10 +140,10 @@ public class ConnectionInfoView implements OnClickListener {
 
     private void setCertificateViewer(String label) {
         assert mCertificateViewerTextView == null;
-        mCertificateViewerTextView = new TextView(mContext);
+        mCertificateViewerTextView = new AppCompatTextView(mContext);
         mCertificateViewerTextView.setText(label);
         ApiCompatibilityUtils.setTextAppearance(
-                mCertificateViewerTextView, R.style.TextAppearance_TextSmall_Blue);
+                mCertificateViewerTextView, R.style.TextAppearance_TextSmall_Link);
         mCertificateViewerTextView.setOnClickListener(this);
         mCertificateViewerTextView.setPadding(0, mPaddingVertical, 0, 0);
         mCertificateLayout.addView(mCertificateViewerTextView);
@@ -164,11 +166,11 @@ public class ConnectionInfoView implements OnClickListener {
 
     @CalledByNative
     private void addMoreInfoLink(String linkText) {
-        mMoreInfoLink = new TextView(mContext);
+        mMoreInfoLink = new AppCompatTextView(mContext);
         mLinkUrl = HELP_URL;
         mMoreInfoLink.setText(linkText);
         ApiCompatibilityUtils.setTextAppearance(
-                mMoreInfoLink, R.style.TextAppearance_TextSmall_Blue);
+                mMoreInfoLink, R.style.TextAppearance_TextSmall_Link);
         mMoreInfoLink.setPadding(0, mPaddingVertical, 0, 0);
         mMoreInfoLink.setOnClickListener(this);
         mDescriptionLayout.addView(mMoreInfoLink);

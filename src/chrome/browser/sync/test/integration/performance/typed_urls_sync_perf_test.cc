@@ -2,7 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/macros.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
 #include "chrome/browser/sync/test/integration/performance/sync_timing_helper.h"
@@ -12,10 +11,10 @@
 #include "content/public/test/browser_test.h"
 #include "testing/perf/perf_result_reporter.h"
 
+using sync_timing_helper::TimeMutualSyncCycle;
 using typed_urls_helper::AddUrlToHistory;
 using typed_urls_helper::DeleteUrlsFromHistory;
 using typed_urls_helper::GetTypedUrlsFromClient;
-using sync_timing_helper::TimeMutualSyncCycle;
 // This number should be as far away from a multiple of
 // kDefaultMaxCommitBatchSize as possible, so that sync cycle counts
 // for batch operations stay the same even if some batches end up not
@@ -26,8 +25,8 @@ static const int kNumUrls = 163;
 static_assert(
     ((kNumUrls % syncer::kDefaultMaxCommitBatchSize) >=
      (syncer::kDefaultMaxCommitBatchSize / 2)) &&
-    ((kNumUrls % syncer::kDefaultMaxCommitBatchSize) <=
-     ((syncer::kDefaultMaxCommitBatchSize + 1) / 2)),
+        ((kNumUrls % syncer::kDefaultMaxCommitBatchSize) <=
+         ((syncer::kDefaultMaxCommitBatchSize + 1) / 2)),
     "kNumUrls should be between two multiples of kDefaultMaxCommitBatchSize");
 
 namespace {
@@ -49,9 +48,10 @@ perf_test::PerfResultReporter SetUpReporter(const std::string& story) {
 
 class TypedUrlsSyncPerfTest : public SyncTest {
  public:
-  TypedUrlsSyncPerfTest()
-      : SyncTest(TWO_CLIENT),
-        url_number_(0) {}
+  TypedUrlsSyncPerfTest() : SyncTest(TWO_CLIENT) {}
+
+  TypedUrlsSyncPerfTest(const TypedUrlsSyncPerfTest&) = delete;
+  TypedUrlsSyncPerfTest& operator=(const TypedUrlsSyncPerfTest&) = delete;
 
   // Adds |num_urls| new unique typed urls to |profile|.
   void AddURLs(int profile, int num_urls);
@@ -72,8 +72,7 @@ class TypedUrlsSyncPerfTest : public SyncTest {
   // Returns a unique URL according to the integer |n|.
   GURL IntToURL(int n);
 
-  int url_number_;
-  DISALLOW_COPY_AND_ASSIGN(TypedUrlsSyncPerfTest);
+  int url_number_ = 0;
 };
 
 void TypedUrlsSyncPerfTest::AddURLs(int profile, int num_urls) {
@@ -93,8 +92,8 @@ void TypedUrlsSyncPerfTest::UpdateURLs(int profile) {
 void TypedUrlsSyncPerfTest::RemoveURLs(int profile) {
   const history::URLRows& urls = GetTypedUrlsFromClient(profile);
   std::vector<GURL> gurls;
-  for (auto it = urls.begin(); it != urls.end(); ++it) {
-    gurls.push_back(it->url());
+  for (const history::URLRow& url_row : urls) {
+    gurls.push_back(url_row.url());
   }
   DeleteUrlsFromHistory(profile, gurls);
 }
@@ -114,7 +113,8 @@ GURL TypedUrlsSyncPerfTest::IntToURL(int n) {
 IN_PROC_BROWSER_TEST_F(TypedUrlsSyncPerfTest, P0) {
   ASSERT_TRUE(SetupSync()) << "SetupSync() failed.";
 
-  auto reporter = SetUpReporter(base::NumberToString(kNumUrls) + "_urls");
+  perf_test::PerfResultReporter reporter =
+      SetUpReporter(base::NumberToString(kNumUrls) + "_urls");
   AddURLs(0, kNumUrls);
   base::TimeDelta dt = TimeMutualSyncCycle(GetClient(0), GetClient(1));
   ASSERT_EQ(kNumUrls, GetURLCount(1));

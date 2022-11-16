@@ -95,9 +95,7 @@ std::unique_ptr<net::test_server::HttpResponse> GetResponse(
 
 // Tests that Chrome PassKit dialog is shown for sucessfully downloaded pkpass
 // file.
-//
-// Flaky https://crbug.com/1109131.
-- (void)DISABLED_testPassKitDownload {
+- (void)testPassKitDownload {
   if ([ChromeEarlGrey isIPadIdiom]) {
     EARL_GREY_TEST_SKIPPED(@"Wallet app is not supported on iPads.");
   }
@@ -112,11 +110,7 @@ std::unique_ptr<net::test_server::HttpResponse> GetResponse(
   // presentation.
   XCUIApplication* app = [[XCUIApplication alloc] init];
   XCUIElement* title = nil;
-  if (@available(iOS 13, *)) {
-    title = app.staticTexts[@"Toy Town Membership"];
-  } else {
-    title = app.otherElements[@"Toy Town Membership"];
-  }
+  title = app.staticTexts[@"Toy Town Membership"];
   GREYAssert([title waitForExistenceWithTimeout:kWaitForDownloadTimeout],
              @"PassKit dialog UI was not presented");
 }

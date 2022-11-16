@@ -29,6 +29,8 @@ class LinkHeader {
   const String& HeaderIntegrity() const { return header_integrity_; }
   const String& Variants() const { return variants_; }
   const String& VariantKey() const { return variant_key_; }
+  const String& Blocking() const { return blocking_; }
+  const String& ReferrerPolicy() const { return referrer_policy_; }
   const absl::optional<String>& Anchor() const { return anchor_; }
   bool Valid() const { return is_valid_; }
   bool IsViewportDependent() const {
@@ -55,6 +57,8 @@ class LinkHeader {
     kLinkParameterHeaderIntegrity,
     kLinkParameterVariants,
     kLinkParameterVariantKey,
+    kLinkParameterBlocking,
+    kLinkParameterReferrerPolicy,
   };
 
  private:
@@ -77,6 +81,8 @@ class LinkHeader {
   String header_integrity_;
   String variants_;
   String variant_key_;
+  String blocking_;
+  String referrer_policy_;
   absl::optional<String> anchor_;
   bool is_valid_;
 };

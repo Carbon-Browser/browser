@@ -16,9 +16,7 @@
 #include "net/test/ct_test_util.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace net {
-
-namespace ct {
+namespace net::ct {
 
 TEST(CTLogResponseParserTest, ParsesValidJsonSTH) {
   absl::optional<base::Value> sample_sth_json =
@@ -100,8 +98,7 @@ TEST(CTLogResponseParserTest, ParsesJsonSTHWithLargeTimestamp) {
   ASSERT_TRUE(FillSignedTreeHead(*large_timestamp_json, &tree_head));
 
   base::Time expected_time =
-      base::Time::UnixEpoch() +
-      base::TimeDelta::FromMilliseconds(INT64_C(1) << 34);
+      base::Time::UnixEpoch() + base::Milliseconds(INT64_C(1) << 34);
 
   EXPECT_EQ(tree_head.timestamp, expected_time);
 }
@@ -155,6 +152,4 @@ TEST(CTLogResponseParserTest, ParsesProofJsonWithExtraFields) {
   EXPECT_TRUE(FillConsistencyProof(*badly_encoded, &output));
 }
 
-}  // namespace ct
-
-}  // namespace net
+}  // namespace net::ct

@@ -12,13 +12,14 @@
 #include "base/bind.h"
 #include "base/callback.h"
 #include "base/callback_helpers.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
+#include "base/memory/weak_ptr.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/process/process.h"
 #include "base/process/process_handle.h"
 #include "base/run_loop.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/gmock_callback_support.h"
 #include "base/test/mock_callback.h"
 #include "base/test/task_environment.h"
@@ -29,10 +30,10 @@
 #include "ipc/ipc_listener.h"
 #include "ipc/ipc_message.h"
 #include "ipc/ipc_platform_file.h"
+#include "mojo/public/cpp/system/message_pipe.h"
 #include "remoting/base/auto_thread.h"
 #include "remoting/base/auto_thread_task_runner.h"
 #include "remoting/base/constants.h"
-#include "remoting/host/chromoting_messages.h"
 #include "remoting/host/desktop_process.h"
 #include "remoting/host/desktop_session.h"
 #include "remoting/host/desktop_session_connector.h"
@@ -40,7 +41,7 @@
 #include "remoting/host/fake_keyboard_layout_monitor.h"
 #include "remoting/host/fake_mouse_cursor_monitor.h"
 #include "remoting/host/host_mock_objects.h"
-#include "remoting/proto/url_forwarder_control.pb.h"
+#include "remoting/host/mojom/desktop_session.mojom.h"
 #include "remoting/protocol/fake_desktop_capturer.h"
 #include "remoting/protocol/protocol_mock_objects.h"
 #include "remoting/protocol/test_event_matchers.h"
@@ -77,86 +78,106 @@ namespace {
 class MockScreenCapturerCallback : public webrtc::DesktopCapturer::Callback {
  public:
   MockScreenCapturerCallback() = default;
+
+  MockScreenCapturerCallback(const MockScreenCapturerCallback&) = delete;
+  MockScreenCapturerCallback& operator=(const MockScreenCapturerCallback&) =
+      delete;
+
   ~MockScreenCapturerCallback() override = default;
 
-  MOCK_METHOD2(OnCaptureResultPtr,
-               void(webrtc::DesktopCapturer::Result result,
-                    std::unique_ptr<webrtc::DesktopFrame>* frame));
+  MOCK_METHOD(void,
+              OnCaptureResultPtr,
+              (webrtc::DesktopCapturer::Result,
+               std::unique_ptr<webrtc::DesktopFrame>*));
   void OnCaptureResult(webrtc::DesktopCapturer::Result result,
                        std::unique_ptr<webrtc::DesktopFrame> frame) override {
     OnCaptureResultPtr(result, &frame);
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(MockScreenCapturerCallback);
-};
-
-// Receives messages sent from the network process to the daemon.
-class FakeDaemonSender : public IPC::Sender {
- public:
-  FakeDaemonSender() = default;
-  ~FakeDaemonSender() override = default;
-
-  // IPC::Sender implementation.
-  bool Send(IPC::Message* message) override;
-
-  MOCK_METHOD3(ConnectTerminal, void(int, const ScreenResolution&, bool));
-  MOCK_METHOD1(DisconnectTerminal, void(int));
-  MOCK_METHOD2(SetScreenResolution, void(int, const ScreenResolution&));
-
- private:
-  void OnMessageReceived(const IPC::Message& message);
-
-  DISALLOW_COPY_AND_ASSIGN(FakeDaemonSender);
 };
 
 // Receives messages sent from the desktop process to the daemon.
-class MockDaemonListener : public IPC::Listener {
+class MockDaemonListener : public IPC::Listener,
+                           public mojom::DesktopSessionRequestHandler {
  public:
   MockDaemonListener() = default;
+
+  MockDaemonListener(const MockDaemonListener&) = delete;
+  MockDaemonListener& operator=(const MockDaemonListener&) = delete;
+
   ~MockDaemonListener() override = default;
 
   bool OnMessageReceived(const IPC::Message& message) override;
+  void OnAssociatedInterfaceRequest(
+      const std::string& interface_name,
+      mojo::ScopedInterfaceEndpointHandle handle) override;
 
-  MOCK_METHOD1(OnDesktopAttached, void(const IPC::ChannelHandle&));
-  MOCK_METHOD1(OnChannelConnected, void(int32_t));
-  MOCK_METHOD0(OnChannelError, void());
+  MOCK_METHOD(void,
+              ConnectDesktopChannel,
+              (mojo::ScopedMessagePipeHandle handle),
+              (override));
+  MOCK_METHOD(void, InjectSecureAttentionSequence, (), (override));
+  MOCK_METHOD(void, CrashNetworkProcess, (), (override));
+  MOCK_METHOD(void, OnChannelConnected, (int32_t), (override));
+  MOCK_METHOD(void, OnChannelError, (), (override));
+
+  void Disconnect();
 
  private:
-  DISALLOW_COPY_AND_ASSIGN(MockDaemonListener);
+  mojo::AssociatedReceiver<mojom::DesktopSessionRequestHandler>
+      desktop_session_request_handler_{this};
 };
 
-bool FakeDaemonSender::Send(IPC::Message* message) {
-  OnMessageReceived(*message);
-  delete message;
-  return true;
-}
-
-void FakeDaemonSender::OnMessageReceived(const IPC::Message& message) {
-  bool handled = true;
-  IPC_BEGIN_MESSAGE_MAP(FakeDaemonSender, message)
-    IPC_MESSAGE_HANDLER(ChromotingNetworkHostMsg_ConnectTerminal,
-                        ConnectTerminal)
-    IPC_MESSAGE_HANDLER(ChromotingNetworkHostMsg_DisconnectTerminal,
-                        DisconnectTerminal)
-    IPC_MESSAGE_HANDLER(ChromotingNetworkDaemonMsg_SetScreenResolution,
-                        SetScreenResolution)
-    IPC_MESSAGE_UNHANDLED(handled = false)
-  IPC_END_MESSAGE_MAP()
-
-  EXPECT_TRUE(handled);
-}
-
 bool MockDaemonListener::OnMessageReceived(const IPC::Message& message) {
-  bool handled = true;
-  IPC_BEGIN_MESSAGE_MAP(MockDaemonListener, message)
-    IPC_MESSAGE_HANDLER(ChromotingDesktopDaemonMsg_DesktopAttached,
-                        OnDesktopAttached)
-    IPC_MESSAGE_UNHANDLED(handled = false)
-  IPC_END_MESSAGE_MAP()
+  ADD_FAILURE() << "Unexpected call to OnMessageReceived()";
+  return false;
+}
 
-  EXPECT_TRUE(handled);
-  return handled;
+void MockDaemonListener::OnAssociatedInterfaceRequest(
+    const std::string& interface_name,
+    mojo::ScopedInterfaceEndpointHandle handle) {
+  EXPECT_EQ(mojom::DesktopSessionRequestHandler::Name_, interface_name);
+  mojo::PendingAssociatedReceiver<mojom::DesktopSessionRequestHandler>
+      pending_receiver(std::move(handle));
+  desktop_session_request_handler_.Bind(std::move(pending_receiver));
+}
+
+void MockDaemonListener::Disconnect() {
+  desktop_session_request_handler_.reset();
+}
+
+class MockDesktopSessionManager : public mojom::DesktopSessionManager {
+ public:
+  MockDesktopSessionManager() = default;
+  ~MockDesktopSessionManager() override = default;
+
+  void BindNewReceiver(
+      mojo::PendingAssociatedReceiver<mojom::DesktopSessionManager> receiver);
+
+  // mojom::DesktopSessionManager implementation.
+  MOCK_METHOD(void,
+              CreateDesktopSession,
+              (int, const ScreenResolution&, bool),
+              (override));
+  MOCK_METHOD(void, CloseDesktopSession, (int), (override));
+  MOCK_METHOD(void,
+              SetScreenResolution,
+              (int, const ScreenResolution&),
+              (override));
+
+ private:
+  mojo::AssociatedReceiver<mojom::DesktopSessionManager>
+      desktop_session_manager_{this};
+};
+
+void MockDesktopSessionManager::BindNewReceiver(
+    mojo::PendingAssociatedReceiver<mojom::DesktopSessionManager> receiver) {
+  desktop_session_manager_.reset();
+
+  // EnableUnassociatedUsage() sets up a private message pipe for the remote /
+  // receiver pair used in this test which simplifies our test setup and
+  // doesn't change any behaviors being tested.
+  receiver.EnableUnassociatedUsage();
+  desktop_session_manager_.Bind(std::move(receiver));
 }
 
 }  // namespace
@@ -169,31 +190,18 @@ class IpcDesktopEnvironmentTest : public testing::Test {
   void SetUp() override;
   void TearDown() override;
 
-  void ConnectTerminal(int terminal_id,
-                       const ScreenResolution& resolution,
-                       bool virtual_terminal);
-  void DisconnectTerminal(int terminal_id);
+  void CreateDesktopSession(int terminal_id,
+                            const ScreenResolution& resolution,
+                            bool virtual_terminal);
+  void CloseDesktopSession(int terminal_id);
 
   // Creates a DesktopEnvironment with a fake webrtc::DesktopCapturer, to mock
   // DesktopEnvironmentFactory::Create().
-  DesktopEnvironment* CreateDesktopEnvironment();
+  std::unique_ptr<DesktopEnvironment> CreateDesktopEnvironment();
 
-  // Creates a dummy InputInjector, to mock
+  // Creates a fake InputInjector, to mock
   // DesktopEnvironment::CreateInputInjector().
-  InputInjector* CreateInputInjector();
-
-  // Creates a fake webrtc::DesktopCapturer, to mock
-  // DesktopEnvironment::CreateVideoCapturer().
-  webrtc::DesktopCapturer* CreateVideoCapturer();
-
-  // Creates a MockMouseCursorMonitor, to mock
-  // DesktopEnvironment::CreateMouseCursorMonitor
-  webrtc::MouseCursorMonitor* CreateMouseCursorMonitor();
-
-  // Creates a FakeKeyboardLayoutMonitor to mock
-  // DesktopEnvironment::CreateKeyboardLayoutMonitor
-  KeyboardLayoutMonitor* CreateKeyboardLayoutMonitor(
-      base::RepeatingCallback<void(const protocol::KeyboardLayout&)> callback);
+  std::unique_ptr<InputInjector> CreateInputInjector();
 
   void DeleteDesktopEnvironment();
 
@@ -205,20 +213,23 @@ class IpcDesktopEnvironmentTest : public testing::Test {
   void CreateDesktopProcess();
 
   // Destroys the desktop process object created by CreateDesktopProcess().
-  void DestoyDesktopProcess();
+  void DestroyDesktopProcess();
 
   // Creates a new remote URL forwarder configurator for the desktop process.
   void ResetRemoteUrlForwarderConfigurator();
 
   void OnDisconnectCallback();
 
-  // Invoked when ChromotingDesktopDaemonMsg_DesktopAttached message is
-  // received.
-  void OnDesktopAttached(const IPC::ChannelHandle& desktop_pipe);
+  // Invoked when ConnectDesktopChannel() is called over IPC.
+  void ConnectDesktopChannel(mojo::ScopedMessagePipeHandle desktop_pipe);
 
   // Runs until there are no references to |task_runner_|. Calls after the main
   // loop has been run are no-op.
   void RunMainLoopUntilDone();
+
+  // Some tests require |setup_run_loop_| to be reset so we need a method which
+  // can be bound that will quit the current run loop.
+  void QuitSetupRunLoop();
 
   base::test::TaskEnvironment task_environment_{
       base::test::TaskEnvironment::MainThreadType::UI};
@@ -232,15 +243,15 @@ class IpcDesktopEnvironmentTest : public testing::Test {
   std::string client_jid_;
 
   // Clipboard stub that receives clipboard events from the desktop process.
-  protocol::ClipboardStub* clipboard_stub_;
+  raw_ptr<protocol::ClipboardStub> clipboard_stub_;
 
   // The daemons's end of the daemon-to-desktop channel.
   std::unique_ptr<IPC::ChannelProxy> desktop_channel_;
 
+  MockDesktopSessionManager mock_desktop_session_manager_;
+
   // Delegate that is passed to |desktop_channel_|.
   MockDaemonListener desktop_listener_;
-
-  FakeDaemonSender daemon_channel_;
 
   std::unique_ptr<IpcDesktopEnvironmentFactory> desktop_environment_factory_;
   std::unique_ptr<DesktopEnvironment> desktop_environment_;
@@ -258,7 +269,7 @@ class IpcDesktopEnvironmentTest : public testing::Test {
   std::unique_ptr<DesktopProcess> desktop_process_;
 
   // Input injector owned by |desktop_process_|.
-  MockInputInjector* remote_input_injector_;
+  raw_ptr<MockInputInjector> remote_input_injector_;
 
   // Will be transferred to the caller of
   // MockDesktopEnvironment::CreateUrlForwarderConfigurator().
@@ -267,7 +278,7 @@ class IpcDesktopEnvironmentTest : public testing::Test {
   // used.
   std::unique_ptr<MockUrlForwarderConfigurator>
       owned_remote_url_forwarder_configurator_;
-  MockUrlForwarderConfigurator* remote_url_forwarder_configurator_;
+  raw_ptr<MockUrlForwarderConfigurator> remote_url_forwarder_configurator_;
   std::unique_ptr<UrlForwarderConfigurator> url_forwarder_configurator_;
 
   // The last |terminal_id| passed to ConnectTermina();
@@ -277,6 +288,10 @@ class IpcDesktopEnvironmentTest : public testing::Test {
 
   MockClientSessionControl client_session_control_;
   base::WeakPtrFactory<ClientSessionControl> client_session_control_factory_;
+
+  MockClientSessionEvents client_session_events_;
+  base::WeakPtrFactory<MockClientSessionEvents> client_session_events_factory_{
+      &client_session_events_};
 
  private:
   // Runs until there are no references to |task_runner_|.
@@ -308,24 +323,25 @@ void IpcDesktopEnvironmentTest::SetUp() {
   // once it is ready.
   EXPECT_CALL(desktop_listener_, OnChannelConnected(_))
       .Times(AnyNumber());
-  EXPECT_CALL(desktop_listener_, OnDesktopAttached(_))
+  EXPECT_CALL(desktop_listener_, ConnectDesktopChannel(_))
       .Times(AnyNumber())
-      .WillRepeatedly(Invoke(this,
-                             &IpcDesktopEnvironmentTest::OnDesktopAttached));
+      .WillRepeatedly([&](mojo::ScopedMessagePipeHandle desktop_pipe) {
+        ConnectDesktopChannel(std::move(desktop_pipe));
+      });
   EXPECT_CALL(desktop_listener_, OnChannelError())
       .Times(AnyNumber())
-      .WillOnce(Invoke(this,
-                       &IpcDesktopEnvironmentTest::DestoyDesktopProcess));
+      .WillOnce(
+          Invoke(this, &IpcDesktopEnvironmentTest::DestroyDesktopProcess));
 
   // Intercept requests to connect and disconnect a terminal.
-  EXPECT_CALL(daemon_channel_, ConnectTerminal(_, _, _))
+  EXPECT_CALL(mock_desktop_session_manager_, CreateDesktopSession(_, _, _))
       .Times(AnyNumber())
-      .WillRepeatedly(Invoke(this,
-                             &IpcDesktopEnvironmentTest::ConnectTerminal));
-  EXPECT_CALL(daemon_channel_, DisconnectTerminal(_))
+      .WillRepeatedly(
+          Invoke(this, &IpcDesktopEnvironmentTest::CreateDesktopSession));
+  EXPECT_CALL(mock_desktop_session_manager_, CloseDesktopSession(_))
       .Times(AnyNumber())
-      .WillRepeatedly(Invoke(this,
-                             &IpcDesktopEnvironmentTest::DisconnectTerminal));
+      .WillRepeatedly(
+          Invoke(this, &IpcDesktopEnvironmentTest::CloseDesktopSession));
 
   EXPECT_CALL(client_session_control_, client_jid())
       .Times(AnyNumber())
@@ -338,12 +354,22 @@ void IpcDesktopEnvironmentTest::SetUp() {
   EXPECT_CALL(client_session_control_, SetDisableInputs(_))
       .Times(0);
 
+  // Most tests will only call this once but reattach will call multiple times.
+  EXPECT_CALL(client_session_events_, OnDesktopAttached(_))
+      .Times(AnyNumber())
+      .WillRepeatedly(InvokeWithoutArgs(
+          this, &IpcDesktopEnvironmentTest::QuitSetupRunLoop));
+  EXPECT_CALL(client_session_events_, OnDesktopDetached()).Times(AnyNumber());
+
   // Create a desktop environment instance.
+  mojo::AssociatedRemote<mojom::DesktopSessionManager> remote;
+  mock_desktop_session_manager_.BindNewReceiver(
+      remote.BindNewEndpointAndPassReceiver());
   desktop_environment_factory_ = std::make_unique<IpcDesktopEnvironmentFactory>(
-      task_runner_, task_runner_, io_task_runner_, &daemon_channel_);
+      task_runner_, task_runner_, io_task_runner_, std::move(remote));
   desktop_environment_ = desktop_environment_factory_->Create(
       client_session_control_factory_.GetWeakPtr(),
-      DesktopEnvironmentOptions());
+      client_session_events_factory_.GetWeakPtr(), DesktopEnvironmentOptions());
 
   screen_controls_ = desktop_environment_->CreateScreenControls();
 
@@ -351,8 +377,7 @@ void IpcDesktopEnvironmentTest::SetUp() {
   input_injector_ = desktop_environment_->CreateInputInjector();
 
   // Create the screen capturer.
-  video_capturer_ =
-      desktop_environment_->CreateVideoCapturer();
+  video_capturer_ = desktop_environment_->CreateVideoCapturer();
 
   desktop_environment_->SetCapabilities(std::string());
 
@@ -365,7 +390,7 @@ void IpcDesktopEnvironmentTest::TearDown() {
   RunMainLoopUntilDone();
 }
 
-void IpcDesktopEnvironmentTest::ConnectTerminal(
+void IpcDesktopEnvironmentTest::CreateDesktopSession(
     int terminal_id,
     const ScreenResolution& resolution,
     bool virtual_terminal) {
@@ -375,7 +400,7 @@ void IpcDesktopEnvironmentTest::ConnectTerminal(
   CreateDesktopProcess();
 }
 
-void IpcDesktopEnvironmentTest::DisconnectTerminal(int terminal_id) {
+void IpcDesktopEnvironmentTest::CloseDesktopSession(int terminal_id) {
   EXPECT_EQ(terminal_id_, terminal_id);
 
   // The IPC desktop environment is fully destroyed now. Release the remaining
@@ -383,28 +408,26 @@ void IpcDesktopEnvironmentTest::DisconnectTerminal(int terminal_id) {
   desktop_environment_factory_.reset();
 }
 
-DesktopEnvironment* IpcDesktopEnvironmentTest::CreateDesktopEnvironment() {
-  MockDesktopEnvironment* desktop_environment = new MockDesktopEnvironment();
-  EXPECT_CALL(*desktop_environment, CreateAudioCapturerPtr())
-      .Times(0);
-  EXPECT_CALL(*desktop_environment, CreateInputInjectorPtr())
+std::unique_ptr<DesktopEnvironment>
+IpcDesktopEnvironmentTest::CreateDesktopEnvironment() {
+  auto desktop_environment = std::make_unique<MockDesktopEnvironment>();
+  EXPECT_CALL(*desktop_environment, CreateAudioCapturer()).Times(0);
+  EXPECT_CALL(*desktop_environment, CreateInputInjector())
       .Times(AtMost(1))
-      .WillOnce(Invoke(
-          this, &IpcDesktopEnvironmentTest::CreateInputInjector));
-  EXPECT_CALL(*desktop_environment, CreateScreenControlsPtr())
-      .Times(AtMost(1));
-  EXPECT_CALL(*desktop_environment, CreateVideoCapturerPtr())
+      .WillOnce(Invoke(this, &IpcDesktopEnvironmentTest::CreateInputInjector));
+  EXPECT_CALL(*desktop_environment, CreateScreenControls()).Times(AtMost(1));
+  EXPECT_CALL(*desktop_environment, CreateVideoCapturer())
       .Times(AtMost(1))
-      .WillOnce(Invoke(
-          this, &IpcDesktopEnvironmentTest::CreateVideoCapturer));
-  EXPECT_CALL(*desktop_environment, CreateMouseCursorMonitorPtr())
+      .WillOnce(
+          Return(ByMove(std::make_unique<protocol::FakeDesktopCapturer>())));
+  EXPECT_CALL(*desktop_environment, CreateActionExecutor()).Times(AtMost(1));
+  EXPECT_CALL(*desktop_environment, CreateFileOperations()).Times(AtMost(1));
+  EXPECT_CALL(*desktop_environment, CreateMouseCursorMonitor())
       .Times(AtMost(1))
-      .WillOnce(Invoke(
-          this, &IpcDesktopEnvironmentTest::CreateMouseCursorMonitor));
-  EXPECT_CALL(*desktop_environment, CreateKeyboardLayoutMonitorPtr(_))
+      .WillOnce(Return(ByMove(std::make_unique<FakeMouseCursorMonitor>())));
+  EXPECT_CALL(*desktop_environment, CreateKeyboardLayoutMonitor(_))
       .Times(AtMost(1))
-      .WillOnce(Invoke(
-          this, &IpcDesktopEnvironmentTest::CreateKeyboardLayoutMonitor));
+      .WillOnce(Return(ByMove(std::make_unique<FakeKeyboardLayoutMonitor>())));
   EXPECT_CALL(*desktop_environment, GetCapabilities())
       .Times(AtMost(1));
   EXPECT_CALL(*desktop_environment, SetCapabilities(_))
@@ -415,33 +438,18 @@ DesktopEnvironment* IpcDesktopEnvironmentTest::CreateDesktopEnvironment() {
       .WillOnce(
           Return(ByMove(std::move(owned_remote_url_forwarder_configurator_))));
 
-  // Let tests know that the remote desktop environment is created.
-  task_environment_.GetMainThreadTaskRunner()->PostTask(
-      FROM_HERE, setup_run_loop_->QuitClosure());
-
   return desktop_environment;
 }
 
-InputInjector* IpcDesktopEnvironmentTest::CreateInputInjector() {
+std::unique_ptr<InputInjector>
+IpcDesktopEnvironmentTest::CreateInputInjector() {
+  auto remote_input_injector =
+      std::make_unique<testing::StrictMock<MockInputInjector>>();
   EXPECT_TRUE(remote_input_injector_ == nullptr);
-  remote_input_injector_ = new testing::StrictMock<MockInputInjector>();
+  remote_input_injector_ = remote_input_injector.get();
 
-  EXPECT_CALL(*remote_input_injector_, StartPtr(_));
-  return remote_input_injector_;
-}
-
-webrtc::DesktopCapturer* IpcDesktopEnvironmentTest::CreateVideoCapturer() {
-  return new protocol::FakeDesktopCapturer();
-}
-
-webrtc::MouseCursorMonitor*
-IpcDesktopEnvironmentTest::CreateMouseCursorMonitor() {
-  return new FakeMouseCursorMonitor();
-}
-
-KeyboardLayoutMonitor* IpcDesktopEnvironmentTest::CreateKeyboardLayoutMonitor(
-    base::RepeatingCallback<void(const protocol::KeyboardLayout&)> callback) {
-  return new FakeKeyboardLayoutMonitor();
+  EXPECT_CALL(*remote_input_injector_, Start(_));
+  return remote_input_injector;
 }
 
 void IpcDesktopEnvironmentTest::DeleteDesktopEnvironment() {
@@ -450,7 +458,7 @@ void IpcDesktopEnvironmentTest::DeleteDesktopEnvironment() {
   video_capturer_.reset();
   url_forwarder_configurator_.reset();
 
-  // Trigger DisconnectTerminal().
+  // Trigger CloseDesktopSession().
   desktop_environment_.reset();
 }
 
@@ -475,10 +483,10 @@ void IpcDesktopEnvironmentTest::CreateDesktopProcess() {
 
   std::unique_ptr<MockDesktopEnvironmentFactory> desktop_environment_factory(
       new MockDesktopEnvironmentFactory());
-  EXPECT_CALL(*desktop_environment_factory, CreatePtr())
+  EXPECT_CALL(*desktop_environment_factory, Create(_, _, _))
       .Times(AnyNumber())
-      .WillRepeatedly(Invoke(
-          this, &IpcDesktopEnvironmentTest::CreateDesktopEnvironment));
+      .WillRepeatedly(
+          Invoke(this, &IpcDesktopEnvironmentTest::CreateDesktopEnvironment));
   EXPECT_CALL(*desktop_environment_factory, SupportsAudioCapture())
       .Times(AnyNumber())
       .WillRepeatedly(Return(false));
@@ -486,12 +494,13 @@ void IpcDesktopEnvironmentTest::CreateDesktopProcess() {
   EXPECT_TRUE(desktop_process_->Start(std::move(desktop_environment_factory)));
 }
 
-void IpcDesktopEnvironmentTest::DestoyDesktopProcess() {
+void IpcDesktopEnvironmentTest::DestroyDesktopProcess() {
   desktop_channel_.reset();
   if (desktop_process_) {
     desktop_process_->OnChannelError();
     desktop_process_.reset();
   }
+  desktop_listener_.Disconnect();
   remote_input_injector_ = nullptr;
 }
 
@@ -508,11 +517,11 @@ void IpcDesktopEnvironmentTest::OnDisconnectCallback() {
   DeleteDesktopEnvironment();
 }
 
-void IpcDesktopEnvironmentTest::OnDesktopAttached(
-    const IPC::ChannelHandle& desktop_pipe) {
+void IpcDesktopEnvironmentTest::ConnectDesktopChannel(
+    mojo::ScopedMessagePipeHandle desktop_pipe) {
   // Instruct DesktopSessionProxy to connect to the network-to-desktop pipe.
   desktop_environment_factory_->OnDesktopSessionAgentAttached(
-      terminal_id_, /*session_id=*/0, desktop_pipe);
+      terminal_id_, /*session_id=*/0, std::move(desktop_pipe));
 }
 
 void IpcDesktopEnvironmentTest::RunMainLoopUntilDone() {
@@ -522,6 +531,10 @@ void IpcDesktopEnvironmentTest::RunMainLoopUntilDone() {
   if (should_run_loop) {
     main_run_loop_.Run();
   }
+}
+
+void IpcDesktopEnvironmentTest::QuitSetupRunLoop() {
+  setup_run_loop_->Quit();
 }
 
 // Runs until the desktop is attached and exits immediately after that.
@@ -547,7 +560,7 @@ TEST_F(IpcDesktopEnvironmentTest, TouchEventsCapabilities) {
   // Create an environment with multi touch enabled.
   desktop_environment_ = desktop_environment_factory_->Create(
       client_session_control_factory_.GetWeakPtr(),
-      DesktopEnvironmentOptions());
+      client_session_events_factory_.GetWeakPtr(), DesktopEnvironmentOptions());
 
   std::unique_ptr<protocol::MockClipboardStub> clipboard_stub(
       new protocol::MockClipboardStub());
@@ -609,7 +622,7 @@ TEST_F(IpcDesktopEnvironmentTest, Reattach) {
 
   // Create and start a new desktop process object.
   setup_run_loop_ = std::make_unique<base::RunLoop>();
-  DestoyDesktopProcess();
+  DestroyDesktopProcess();
   ResetRemoteUrlForwarderConfigurator();
   CreateDesktopProcess();
   setup_run_loop_->Run();
@@ -786,15 +799,16 @@ TEST_F(IpcDesktopEnvironmentTest, SetScreenResolution) {
   // Run the message loop until the desktop is attached.
   setup_run_loop_->Run();
 
-  EXPECT_CALL(daemon_channel_, SetScreenResolution(_, _))
+  EXPECT_CALL(mock_desktop_session_manager_, SetScreenResolution(_, _))
       .Times(1)
       .WillOnce(InvokeWithoutArgs(
           this, &IpcDesktopEnvironmentTest::DeleteDesktopEnvironment));
 
   // Change the desktop resolution.
-  screen_controls_->SetScreenResolution(ScreenResolution(
-      webrtc::DesktopSize(100, 100),
-      webrtc::DesktopVector(96, 96)));
+  screen_controls_->SetScreenResolution(
+      ScreenResolution(webrtc::DesktopSize(100, 100),
+                       webrtc::DesktopVector(96, 96)),
+      absl::nullopt);
 }
 
 TEST_F(IpcDesktopEnvironmentTest, CheckUrlForwarderState) {
@@ -810,10 +824,10 @@ TEST_F(IpcDesktopEnvironmentTest, CheckUrlForwarderState) {
       .WillOnce(InvokeWithoutArgs(
           this, &IpcDesktopEnvironmentTest::DeleteDesktopEnvironment));
 
-  url_forwarder_configurator_->IsUrlForwarderSetUp(callback.Get());
-
   // Run the message loop until the desktop is attached.
   setup_run_loop_->Run();
+
+  url_forwarder_configurator_->IsUrlForwarderSetUp(callback.Get());
 
   // Run now rather than in TearDown() so that we can verify |callback|.
   RunMainLoopUntilDone();
@@ -856,10 +870,10 @@ TEST_F(IpcDesktopEnvironmentTest, SetUpUrlForwarderHappyPath) {
             this, &IpcDesktopEnvironmentTest::DeleteDesktopEnvironment));
   }
 
-  url_forwarder_configurator_->IsUrlForwarderSetUp(is_set_up_callback.Get());
-
   // Run the message loop until the desktop is attached.
   setup_run_loop_->Run();
+
+  url_forwarder_configurator_->IsUrlForwarderSetUp(is_set_up_callback.Get());
 
   // Run now rather than in TearDown() so that we can verify |callback|.
   RunMainLoopUntilDone();
@@ -896,10 +910,10 @@ TEST_F(IpcDesktopEnvironmentTest, SetUpUrlForwarderFailed) {
             this, &IpcDesktopEnvironmentTest::DeleteDesktopEnvironment));
   }
 
-  url_forwarder_configurator_->IsUrlForwarderSetUp(is_set_up_callback.Get());
-
   // Run the message loop until the desktop is attached.
   setup_run_loop_->Run();
+
+  url_forwarder_configurator_->IsUrlForwarderSetUp(is_set_up_callback.Get());
 
   // Run now rather than in TearDown() so that we can verify |callback|.
   RunMainLoopUntilDone();

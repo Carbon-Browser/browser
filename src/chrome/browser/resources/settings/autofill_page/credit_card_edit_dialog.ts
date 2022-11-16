@@ -13,14 +13,17 @@ import 'chrome://resources/cr_elements/cr_input/cr_input.m.js';
 import 'chrome://resources/cr_elements/shared_style_css.m.js';
 import 'chrome://resources/cr_elements/shared_vars_css.m.js';
 import 'chrome://resources/cr_elements/md_select_css.m.js';
-import '../settings_shared_css.js';
-import '../settings_vars_css.js';
+import '../settings_shared.css.js';
+import '../settings_vars.css.js';
+import '../i18n_setup.js';
 
+import {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
 import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
-import {I18nBehavior} from 'chrome://resources/js/i18n_behavior.m.js';
-import {html, microTask, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.m.js';
+import {I18nMixin} from 'chrome://resources/js/i18n_mixin.js';
+import {microTask, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {loadTimeData} from '../i18n_setup.js';
+import {getTemplate} from './credit_card_edit_dialog.html.js';
 
 /**
  * Regular expression for invalid nickname. Nickname containing any digits will
@@ -34,26 +37,30 @@ declare global {
   }
 }
 
-interface SettingsCreditCardEditDialogElement {
+export interface SettingsCreditCardEditDialogElement {
   $: {
+    cancelButton: CrButtonElement,
     dialog: CrDialogElement,
+    expiredError: HTMLElement,
     month: HTMLSelectElement,
+    nameInput: CrInputElement,
+    nicknameInput: CrInputElement,
+    numberInput: CrInputElement,
+    saveButton: CrButtonElement,
     year: HTMLSelectElement,
   };
 }
 
-const SettingsCreditCardEditDialogElementBase =
-    mixinBehaviors([I18nBehavior], PolymerElement) as
-    {new (): PolymerElement & I18nBehavior};
+const SettingsCreditCardEditDialogElementBase = I18nMixin(PolymerElement);
 
-class SettingsCreditCardEditDialogElement extends
+export class SettingsCreditCardEditDialogElement extends
     SettingsCreditCardEditDialogElementBase {
   static get is() {
     return 'settings-credit-card-edit-dialog';
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
   }
 
   static get properties() {
@@ -75,7 +82,18 @@ class SettingsCreditCardEditDialogElement extends
       monthList_: {
         type: Array,
         value: [
-          '01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'
+          '01',
+          '02',
+          '03',
+          '04',
+          '05',
+          '06',
+          '07',
+          '08',
+          '09',
+          '10',
+          '11',
+          '12',
         ],
       },
 
@@ -102,8 +120,8 @@ class SettingsCreditCardEditDialogElement extends
 
   creditCard: chrome.autofillPrivate.CreditCardEntry;
   private title_: string;
-  private monthList_: Array<string>;
-  private yearList_: Array<string>;
+  private monthList_: string[];
+  private yearList_: string[];
   private expirationYear_?: string;
   private expirationMonth_?: string;
   private nicknameInvalid_: boolean;
@@ -127,7 +145,7 @@ class SettingsCreditCardEditDialogElement extends
          expirationMonth <= now.getMonth()));
   }
 
-  connectedCallback() {
+  override connectedCallback() {
     super.connectedCallback();
 
     this.title_ = this.i18n(
@@ -217,8 +235,8 @@ class SettingsCreditCardEditDialogElement extends
    * Handles a11y error announcement the same way as in cr-input.
    */
   private onExpiredChanged_() {
-    const ERROR_ID = 'expired-error';
-    const errorElement = this.shadowRoot!.querySelector(`#${ERROR_ID}`)!;
+    const errorElement = this.$.expiredError;
+    const ERROR_ID = errorElement.id;
     // Readding attributes is needed for consistent announcement by VoiceOver
     if (this.expired_) {
       errorElement.setAttribute('role', 'alert');
@@ -273,6 +291,12 @@ class SettingsCreditCardEditDialogElement extends
     if (this.creditCard.nickname) {
       this.creditCard.nickname = this.creditCard.nickname.trim();
     }
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'settings-credit-card-edit-dialog': SettingsCreditCardEditDialogElement;
   }
 }
 

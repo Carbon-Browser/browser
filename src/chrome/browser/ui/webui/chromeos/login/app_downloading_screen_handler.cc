@@ -4,11 +4,9 @@
 
 #include "chrome/browser/ui/webui/chromeos/login/app_downloading_screen_handler.h"
 
-#include "ash/constants/ash_features.h"
-#include "chrome/browser/ash/login/screens/app_downloading_screen.h"
+#include "ash/components/arc/arc_prefs.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/grit/generated_resources.h"
-#include "components/arc/arc_prefs.h"
 #include "components/login/localized_values_builder.h"
 #include "components/prefs/pref_service.h"
 #include "ui/base/resource/resource_bundle.h"
@@ -21,7 +19,7 @@ int GetNumberOfUserSelectedApps() {
   const PrefService* pref_service = profile->GetPrefs();
   return static_cast<int>(
       pref_service->Get(arc::prefs::kArcFastAppReinstallPackages)
-          ->GetList()
+          ->GetListDeprecated()
           .size());
 }
 
@@ -29,15 +27,10 @@ int GetNumberOfUserSelectedApps() {
 
 namespace chromeos {
 
-constexpr StaticOobeScreenId AppDownloadingScreenView::kScreenId;
+AppDownloadingScreenHandler::AppDownloadingScreenHandler()
+    : BaseScreenHandler(kScreenId) {}
 
-AppDownloadingScreenHandler::AppDownloadingScreenHandler(
-    JSCallsContainer* js_calls_container)
-    : BaseScreenHandler(kScreenId, js_calls_container) {
-  set_user_acted_method_path("login.AppDownloadingScreen.userActed");
-}
-
-AppDownloadingScreenHandler::~AppDownloadingScreenHandler() {}
+AppDownloadingScreenHandler::~AppDownloadingScreenHandler() = default;
 
 void AppDownloadingScreenHandler::DeclareLocalizedValues(
     ::login::LocalizedValuesBuilder* builder) {
@@ -48,29 +41,12 @@ void AppDownloadingScreenHandler::DeclareLocalizedValues(
                IDS_LOGIN_APP_DOWNLOADING_SCREEN_NEXT);
   builder->Add("appDownloadingScreenTitle",
                IDS_LOGIN_APP_DOWNLOADING_SCREEN_TITLE);
-  builder->Add("appDownloadingScreenTitleSingular",
-               IDS_LOGIN_APP_DOWNLOADING_SCREEN_TITLE_SINGULAR);
-  builder->Add("appDownloadingScreenTitlePlural",
-               IDS_LOGIN_APP_DOWNLOADING_SCREEN_TITLE_PLURAL);
-}
-
-void AppDownloadingScreenHandler::RegisterMessages() {
-  BaseScreenHandler::RegisterMessages();
-}
-
-void AppDownloadingScreenHandler::Bind(AppDownloadingScreen* screen) {
-  screen_ = screen;
-  BaseScreenHandler::SetBaseScreen(screen);
 }
 
 void AppDownloadingScreenHandler::Show() {
-  base::DictionaryValue data;
-  data.SetKey("numOfApps", base::Value(GetNumberOfUserSelectedApps()));
-  ShowScreenWithData(kScreenId, &data);
+  base::Value::Dict data;
+  data.Set("numOfApps", GetNumberOfUserSelectedApps());
+  ShowInWebUI(std::move(data));
 }
-
-void AppDownloadingScreenHandler::Hide() {}
-
-void AppDownloadingScreenHandler::Initialize() {}
 
 }  // namespace chromeos

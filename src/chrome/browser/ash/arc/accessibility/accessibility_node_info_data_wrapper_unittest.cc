@@ -8,12 +8,12 @@
 #include <memory>
 #include <utility>
 
+#include "ash/components/arc/mojom/accessibility_helper.mojom.h"
 #include "chrome/browser/ash/arc/accessibility/accessibility_window_info_data_wrapper.h"
 #include "chrome/browser/ash/arc/accessibility/arc_accessibility_test_util.h"
 #include "chrome/browser/ash/arc/accessibility/arc_accessibility_util.h"
 #include "chrome/browser/ash/arc/accessibility/ax_tree_source_arc.h"
 #include "chrome/grit/generated_resources.h"
-#include "components/arc/mojom/accessibility_helper.mojom.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/accessibility/ax_action_data.h"
 #include "ui/accessibility/ax_enums.mojom.h"
@@ -313,6 +313,7 @@ TEST_F(AccessibilityNodeInfoDataWrapperTest, NameFromTextProperties) {
   SetProperty(child1, AXStringProperty::CONTENT_DESCRIPTION,
               "content_description");
   SetProperty(child1, AXStringProperty::STATE_DESCRIPTION, "state_description");
+  SetProperty(child1, AXBooleanProperty::IMPORTANCE, true);
 
   AccessibilityNodeInfoDataWrapper wrapper(tree_source(), &root);
 
@@ -338,6 +339,14 @@ TEST_F(AccessibilityNodeInfoDataWrapperTest, NameFromTextProperties) {
   ASSERT_TRUE(
       data.GetStringAttribute(ax::mojom::StringAttribute::kName, &name));
   ASSERT_EQ("state_description", name);
+
+  // Don't use any text if the node doesn't have importance.
+  SetProperty(child1, AXBooleanProperty::IMPORTANCE, false);
+  SetProperty(child1, AXStringProperty::TEXT, "text");
+  SetProperty(child1, AXStringProperty::CONTENT_DESCRIPTION,
+              "content_description");
+  data = CallSerialize(wrapper);
+  ASSERT_FALSE(data.HasStringAttribute(ax::mojom::StringAttribute::kName));
 }
 
 TEST_F(AccessibilityNodeInfoDataWrapperTest, TextFieldNameAndValue) {

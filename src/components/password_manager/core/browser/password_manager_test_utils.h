@@ -29,7 +29,7 @@ namespace password_manager {
 template <class Context, class Store>
 scoped_refptr<RefcountedKeyedService> BuildPasswordStore(Context* context) {
   scoped_refptr<password_manager::PasswordStore> store(new Store);
-  if (!store->Init(nullptr))
+  if (!store->Init(/*prefs=*/nullptr, /*affiliated_match_helper=*/nullptr))
     return nullptr;
   return store;
 }
@@ -51,7 +51,7 @@ scoped_refptr<RefcountedKeyedService> BuildPasswordStoreWithArgs(
     Context* context) {
   scoped_refptr<password_manager::PasswordStore> store(
       new Store(std::forward<Args>(args)...));
-  if (!store->Init(nullptr))
+  if (!store->Init(/*prefs=*/nullptr, /*affiliated_match_helper=*/nullptr))
     return nullptr;
   return store;
 }
@@ -119,6 +119,15 @@ MATCHER_P(UnorderedPasswordFormElementsAre, expectations, "") {
                                              result_listener->stream());
 }
 
+MATCHER_P(LoginsResultsOrErrorAre, expectations, "") {
+  if (absl::holds_alternative<PasswordStoreBackendError>(arg))
+    return false;
+
+  return ContainsEqualPasswordFormsUnordered(
+      *expectations, std::move(absl::get<LoginsResult>(arg)),
+      result_listener->stream());
+}
+
 class MockPasswordStoreObserver : public PasswordStoreInterface::Observer {
  public:
   MockPasswordStoreObserver();
@@ -156,6 +165,10 @@ class PasswordHashDataMatcher
     : public ::testing::MatcherInterface<absl::optional<PasswordHashData>> {
  public:
   explicit PasswordHashDataMatcher(absl::optional<PasswordHashData> expected);
+
+  PasswordHashDataMatcher(const PasswordHashDataMatcher&) = delete;
+  PasswordHashDataMatcher& operator=(const PasswordHashDataMatcher&) = delete;
+
   ~PasswordHashDataMatcher() override = default;
 
   // ::testing::MatcherInterface overrides
@@ -166,8 +179,6 @@ class PasswordHashDataMatcher
 
  private:
   const absl::optional<PasswordHashData> expected_;
-
-  DISALLOW_COPY_AND_ASSIGN(PasswordHashDataMatcher);
 };
 
 ::testing::Matcher<absl::optional<PasswordHashData>> Matches(

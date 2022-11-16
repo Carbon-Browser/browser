@@ -10,10 +10,10 @@
 
 #include "base/android/content_uri_utils.h"
 #include "base/bind.h"
+#include "base/command_line.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
-#include "base/macros.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
@@ -109,6 +109,9 @@ class ContentURLLoader : public network::mojom::URLLoader {
     content_url_loader->Start(request, std::move(loader),
                               std::move(client_remote));
   }
+
+  ContentURLLoader(const ContentURLLoader&) = delete;
+  ContentURLLoader& operator=(const ContentURLLoader&) = delete;
 
   // network::mojom::URLLoader:
   void FollowRedirect(
@@ -226,8 +229,7 @@ class ContentURLLoader : public network::mojom::URLLoader {
                                head->mime_type);
     }
 
-    client->OnReceiveResponse(std::move(head));
-    client->OnStartLoadingResponseBody(std::move(consumer_handle));
+    client->OnReceiveResponse(std::move(head), std::move(consumer_handle));
     client_ = std::move(client);
 
     if (total_bytes_to_send == 0) {
@@ -292,8 +294,6 @@ class ContentURLLoader : public network::mojom::URLLoader {
   // It is used to set some of the URLLoaderCompletionStatus data passed back
   // to the URLLoaderClients (eg SimpleURLLoader).
   size_t total_bytes_written_ = 0;
-
-  DISALLOW_COPY_AND_ASSIGN(ContentURLLoader);
 };
 
 }  // namespace

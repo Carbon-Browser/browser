@@ -13,15 +13,33 @@ using ExtensionManifestChromeOSSystemExtensionTest = ChromeManifestTest;
 
 TEST_F(ExtensionManifestChromeOSSystemExtensionTest,
        InvalidChromeOSSystemExtension) {
-  LoadAndExpectError("chromeos_system_extension_invalid.json",
-                     chromeos::kInvalidChromeOSSystemExtensionDeclaration);
+  LoadAndExpectWarning(
+      "chromeos_system_extension_invalid.json",
+      "'chromeos_system_extension' is not allowed for specified extension ID.");
 }
 
 TEST_F(ExtensionManifestChromeOSSystemExtensionTest,
-       ValidChromeOSSystemExtension) {
+       ValidChromeOSSystemExtension_Allowlisted_Google) {
   scoped_refptr<extensions::Extension> extension(
-      LoadAndExpectSuccess("chromeos_system_extension.json"));
+      LoadAndExpectSuccess("chromeos_system_extension_google.json"));
   EXPECT_TRUE(extension->is_chromeos_system_extension());
+  EXPECT_TRUE(extension->install_warnings().empty());
+}
+
+TEST_F(ExtensionManifestChromeOSSystemExtensionTest,
+       ValidChromeOSSystemExtension_Allowlisted_HP) {
+  scoped_refptr<extensions::Extension> extension(
+      LoadAndExpectSuccess("chromeos_system_extension_hp.json"));
+  EXPECT_TRUE(extension->is_chromeos_system_extension());
+  EXPECT_TRUE(extension->install_warnings().empty());
+}
+
+TEST_F(ExtensionManifestChromeOSSystemExtensionTest,
+       ValidChromeOSSystemExtension_Allowlisted_ASUS) {
+  scoped_refptr<extensions::Extension> extension(
+      LoadAndExpectSuccess("chromeos_system_extension_asus.json"));
+  EXPECT_TRUE(extension->is_chromeos_system_extension());
+  EXPECT_TRUE(extension->install_warnings().empty());
 }
 
 TEST_F(ExtensionManifestChromeOSSystemExtensionTest,
@@ -31,4 +49,53 @@ TEST_F(ExtensionManifestChromeOSSystemExtensionTest,
   EXPECT_FALSE(extension->is_chromeos_system_extension());
 }
 
+TEST_F(ExtensionManifestChromeOSSystemExtensionTest,
+       InvalidExternallyConnectableEmpty) {
+  LoadAndExpectError(
+      "chromeos_system_extension_invalid_externally_connectable_empty.json",
+      chromeos::kInvalidExternallyConnectableDeclaration);
+}
+
+TEST_F(ExtensionManifestChromeOSSystemExtensionTest,
+       InvalidExternallyConnectableIds) {
+  LoadAndExpectError(
+      "chromeos_system_extension_invalid_externally_connectable_ids.json",
+      chromeos::kInvalidExternallyConnectableDeclaration);
+}
+
+TEST_F(ExtensionManifestChromeOSSystemExtensionTest,
+       InvalidExternallyConnectableTls) {
+  LoadAndExpectError(
+      "chromeos_system_extension_invalid_externally_connectable_tls.json",
+      chromeos::kInvalidExternallyConnectableDeclaration);
+}
+
+TEST_F(ExtensionManifestChromeOSSystemExtensionTest,
+       InvalidExternallyConnectableMatchesMoreThanOne) {
+  LoadAndExpectError(
+      "chromeos_system_extension_invalid_externally_connectable_2_origins.json",
+      chromeos::kInvalidExternallyConnectableDeclaration);
+}
+
+TEST_F(ExtensionManifestChromeOSSystemExtensionTest,
+       InvalidExternallyConnectableMatchesEmpty) {
+  LoadAndExpectError(
+      "chromeos_system_extension_invalid_externally_connectable_matches_empty."
+      "json",
+      chromeos::kInvalidExternallyConnectableDeclaration);
+}
+
+TEST_F(ExtensionManifestChromeOSSystemExtensionTest,
+       InvalidExternallyConnectableMatchesDisallowedOrigin) {
+  LoadAndExpectError(
+      "chromeos_system_extension_invalid_externally_connectable_1_origin.json",
+      chromeos::kInvalidExternallyConnectableDeclaration);
+}
+
+TEST_F(ExtensionManifestChromeOSSystemExtensionTest,
+       InvalidExternallyConnectableNotExist) {
+  LoadAndExpectError(
+      "chromeos_system_extension_invalid_externally_connectable_not_exist.json",
+      chromeos::kInvalidExternallyConnectableDeclaration);
+}
 }  // namespace chromeos

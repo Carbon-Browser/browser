@@ -22,14 +22,23 @@ source_set("allow_list") {
 # be added here.
 source_set("unit_tests") {
   testonly = true
+  sources = [ "safe_browsing_url_allow_list_unittest.mm" ]
   deps = [
+    ":allow_list",
     "//components/safe_browsing/core/browser",
     "//components/safe_browsing/core/browser:ping_manager_unittest",
     "//components/safe_browsing/core/browser:safe_browsing_url_checker_unittest",
+    "//components/safe_browsing/core/browser:user_population_unittest",
     "//components/safe_browsing/core/browser:verdict_cache_manager_unittest",
     "//components/safe_browsing/core/browser/db:unit_tests_local_db",
     "//components/safe_browsing/core/browser/realtime:unit_tests",
     "//components/safe_browsing/core/common",
     "//components/safe_browsing/core/common:unit_tests",
+    "//ios/web/public",
+    "//ios/web/public/test",
+    "//testing/gmock",
+    "//testing/gtest",
   ]
+
+  configs += [ "//build/config/compiler:enable_arc" ]
 }

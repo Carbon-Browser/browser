@@ -6,10 +6,13 @@
 
 #include "base/json/json_reader.h"
 #include "base/no_destructor.h"
+#include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
+#include "chrome/browser/enterprise/connectors/analysis/analysis_settings.h"
 #include "chrome/browser/enterprise/connectors/connectors_service.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/abseil-cpp/absl/types/variant.h"
 
 namespace enterprise_connectors {
 
@@ -29,7 +32,8 @@ struct TestParam {
 };
 
 constexpr char kNormalSettings[] = R"({
-  "service_provider": "google",
+  "service_provider": "%s",
+  %s
   "enable": [
     {"url_list": ["*"], "tags": ["dlp", "malware"]},
   ],
@@ -47,13 +51,19 @@ constexpr char kNormalSettings[] = R"({
 })";
 
 constexpr char kOnlyEnabledPatternsSettings[] = R"({
-  "service_provider": "google",
+  "service_provider": "%s",
+  %s
   "enable": [
     {"url_list": ["scan1.com", "scan2.com"], "tags": ["dlp"]},
   ],
 })";
 
+// This string has a dummy field so that the service provider name is filled
+// in there and does not get set in the "service_provider" field.  This is
+// needed for the base::StringPrintf() in settings_value() to work correctly.
 constexpr char kNoProviderSettings[] = R"({
+  "dummy": "%s",
+  %s
   "enable": [
     {"url_list": ["*"], "tags": ["dlp", "malware"]},
   ],
@@ -71,7 +81,8 @@ constexpr char kNoProviderSettings[] = R"({
 })";
 
 constexpr char kNoEnabledPatternsSettings[] = R"({
-  "service_provider": "google",
+  "service_provider": "%s",
+  %s
   "disable": [
     {"url_list": ["no.dlp.com", "no.dlp.or.malware.ca"], "tags": ["dlp"]},
     {"url_list": ["no.malware.com", "no.dlp.or.malware.ca"],
@@ -85,7 +96,8 @@ constexpr char kNoEnabledPatternsSettings[] = R"({
 })";
 
 constexpr char kNormalSettingsWithCustomMessage[] = R"({
-  "service_provider": "google",
+  "service_provider": "%s",
+  %s
   "enable": [
     {"url_list": ["*"], "tags": ["dlp", "malware"]},
   ],
@@ -114,6 +126,26 @@ constexpr char kNormalSettingsWithCustomMessage[] = R"({
   ],
 })";
 
+constexpr char kNormalSettingsDlpRequiresBypassJustification[] = R"({
+  "service_provider": "%s",
+  %s
+  "enable": [
+    {"url_list": ["*"], "tags": ["dlp", "malware"]},
+  ],
+  "disable": [
+    {"url_list": ["no.dlp.com", "no.dlp.or.malware.ca"], "tags": ["dlp"]},
+    {"url_list": ["no.malware.com", "no.dlp.or.malware.ca"],
+         "tags": ["malware"]},
+    {"url_list": ["scan2.com"], "tags": ["dlp", "malware"]},
+  ],
+  "block_until_verdict": 1,
+  "block_password_protected": true,
+  "block_large_files": true,
+  "block_unsupported_file_types": true,
+  "minimum_data_size": 123,
+  "require_justification_tags": ["dlp"],
+})";
+
 constexpr char kScan1DotCom[] = "https://scan1.com";
 constexpr char kScan2DotCom[] = "https://scan2.com";
 constexpr char kNoDlpDotCom[] = "https://no.dlp.com";
@@ -130,16 +162,17 @@ const std::map<std::string, std::string> kExpectedLearnMoreUrlSpecs{
 AnalysisSettings* OnlyEnabledSettings() {
   static base::NoDestructor<AnalysisSettings> settings([]() {
     AnalysisSettings settings;
-    settings.tags = {"dlp"};
+    settings.tags = {{"dlp", TagSettings()}};
     return settings;
   }());
   return settings.get();
 }
 
-AnalysisSettings NormalSettingsWithTags(std::set<std::string> tags) {
+AnalysisSettings NormalSettingsWithTags(
+    std::map<std::string, TagSettings> tags) {
   AnalysisSettings settings;
-  settings.tags = tags;
-  settings.block_until_verdict = BlockUntilVerdict::BLOCK;
+  settings.tags = std::move(tags);
+  settings.block_until_verdict = BlockUntilVerdict::kBlock;
   settings.block_password_protected_files = true;
   settings.block_large_files = true;
   settings.block_unsupported_file_types = true;
@@ -149,27 +182,60 @@ AnalysisSettings NormalSettingsWithTags(std::set<std::string> tags) {
 
 AnalysisSettings* NormalDlpSettings() {
   static base::NoDestructor<AnalysisSettings> settings(
-      NormalSettingsWithTags({"dlp"}));
+      NormalSettingsWithTags({{"dlp", TagSettings()}}));
   return settings.get();
 }
 
 AnalysisSettings* NormalMalwareSettings() {
   static base::NoDestructor<AnalysisSettings> settings(
-      NormalSettingsWithTags({"malware"}));
+      NormalSettingsWithTags({{"malware", TagSettings()}}));
   return settings.get();
 }
 
 AnalysisSettings* NormalDlpAndMalwareSettings() {
-  static base::NoDestructor<AnalysisSettings> settings(
-      NormalSettingsWithTags({"dlp", "malware"}));
+  static base::NoDestructor<AnalysisSettings> settings(NormalSettingsWithTags(
+      {{"dlp", TagSettings()}, {"malware", TagSettings()}}));
   return settings.get();
 }
 
 AnalysisSettings* NormalSettingsWithCustomMessage() {
   static base::NoDestructor<AnalysisSettings> settings([]() {
-    AnalysisSettings settings = NormalSettingsWithTags({"dlp", "malware"});
-    settings.custom_message_data["dlp"].message = u"dlpabcèéç";
-    settings.custom_message_data["malware"].message = u"malwareabcèéç";
+    AnalysisSettings settings = NormalSettingsWithTags({
+        {
+            "dlp",
+            {
+                .custom_message =
+                    {
+                        .message = u"dlpabcèéç",
+                    },
+            },
+        },
+        {
+            "malware",
+            {
+                .custom_message =
+                    {
+                        .message = u"malwareabcèéç",
+                    },
+            },
+        },
+    });
+    return settings;
+  }());
+  return settings.get();
+}
+
+AnalysisSettings* NormalSettingsDlpRequiresBypassJustification() {
+  static base::NoDestructor<AnalysisSettings> settings([]() {
+    AnalysisSettings settings = NormalSettingsWithTags({
+        {
+            "dlp",
+            {
+                .requires_justification = true,
+            },
+        },
+        {"malware", TagSettings()},
+    });
     return settings;
   }());
   return settings.get();
@@ -184,33 +250,70 @@ AnalysisSettings* NoSettings() {
 class AnalysisServiceSettingsTest : public testing::TestWithParam<TestParam> {
  public:
   GURL url() const { return GURL(GetParam().url); }
-  const char* settings_value() const { return GetParam().settings_value; }
+  std::string settings_value() const {
+    const char* verification = is_cloud_ ? "" : R"(
+      "verification": {
+        "linux": ["key"],
+        "mac": ["key"],
+        "windows": ["key"]
+      },
+    )";
+
+    return base::StringPrintf(GetParam().settings_value,
+                              is_cloud_ ? "google" : "local_test",
+                              verification);
+  }
   AnalysisSettings* expected_settings() const {
     // Set the GURL field dynamically to avoid static initialization issues.
-    if (GetParam().expected_settings != NoSettings() &&
-        !GetParam().expected_settings->analysis_url.is_valid()) {
-      GetParam().expected_settings->analysis_url =
+    if (GetParam().expected_settings != NoSettings() && is_cloud_ &&
+        !GetParam()
+             .expected_settings->cloud_or_local_settings.analysis_url()
+             .is_valid()) {
+      absl::get<CloudAnalysisSettings>(
+          GetParam().expected_settings->cloud_or_local_settings)
+          .analysis_url =
           GURL("https://safebrowsing.google.com/safebrowsing/uploads/scan");
+      CloudAnalysisSettings cloud_settings;
+      cloud_settings.analysis_url =
+          GURL("https://safebrowsing.google.com/safebrowsing/uploads/scan");
+      GetParam().expected_settings->cloud_or_local_settings =
+          CloudOrLocalAnalysisSettings(std::move(cloud_settings));
     }
+    if (GetParam().expected_settings != NoSettings() && !is_cloud_) {
+      LocalAnalysisSettings local_settings;
+      local_settings.local_path = "test_path";
+      local_settings.user_specific = true;
+      local_settings.verification_signatures.push_back("key");
+      GetParam().expected_settings->cloud_or_local_settings =
+          CloudOrLocalAnalysisSettings(std::move(local_settings));
+
+      // The "local_test" analysis provider only supports the "dlp" tag, so
+      // it is expected that the malware tag is absent from final settings even
+      // when it is included in the policy.
+      GetParam().expected_settings->tags.erase("malware");
+      if (GetParam().expected_settings->tags.empty())
+        return NoSettings();
+    }
+
     return GetParam().expected_settings;
   }
 
- private:
+ protected:
+  bool is_cloud_ = true;
   content::BrowserTaskEnvironment task_environment_;
 };
 
-TEST_P(AnalysisServiceSettingsTest, Test) {
+TEST_P(AnalysisServiceSettingsTest, CloudTest) {
   auto settings = base::JSONReader::Read(settings_value(),
                                          base::JSON_ALLOW_TRAILING_COMMAS);
   ASSERT_TRUE(settings.has_value());
 
-  ServiceProviderConfig config(kServiceProviderConfig);
-  AnalysisServiceSettings service_settings(settings.value(), config);
+  AnalysisServiceSettings service_settings(settings.value(),
+                                           *GetServiceProviderConfig());
 
   auto analysis_settings = service_settings.GetAnalysisSettings(url());
   ASSERT_EQ((expected_settings() != nullptr), analysis_settings.has_value());
   if (analysis_settings.has_value()) {
-    ASSERT_EQ(analysis_settings.value().tags, expected_settings()->tags);
     ASSERT_EQ(analysis_settings.value().block_until_verdict,
               expected_settings()->block_until_verdict);
     ASSERT_EQ(analysis_settings.value().block_password_protected_files,
@@ -219,28 +322,84 @@ TEST_P(AnalysisServiceSettingsTest, Test) {
               expected_settings()->block_large_files);
     ASSERT_EQ(analysis_settings.value().block_unsupported_file_types,
               expected_settings()->block_unsupported_file_types);
-    ASSERT_EQ(analysis_settings.value().analysis_url,
-              expected_settings()->analysis_url);
+    ASSERT_TRUE(
+        analysis_settings.value().cloud_or_local_settings.is_cloud_analysis());
+    ASSERT_EQ(analysis_settings.value().cloud_or_local_settings.analysis_url(),
+              expected_settings()->cloud_or_local_settings.analysis_url());
     ASSERT_EQ(analysis_settings.value().minimum_data_size,
               expected_settings()->minimum_data_size);
-    for (const auto& entry : expected_settings()->custom_message_data) {
-      ASSERT_EQ(
-          entry.second.message,
-          analysis_settings.value().custom_message_data[entry.first].message);
-      ASSERT_EQ(kExpectedLearnMoreUrlSpecs.at(entry.first),
-                analysis_settings.value()
-                    .custom_message_data[entry.first]
-                    .learn_more_url.spec());
-
-      ASSERT_EQ(entry.second.message,
-                service_settings.GetCustomMessage(entry.first).value());
-      ASSERT_EQ(kExpectedLearnMoreUrlSpecs.at(entry.first),
-                service_settings.GetLearnMoreUrl(entry.first).value().spec());
+    for (const auto& entry : expected_settings()->tags) {
+      const std::string& tag = entry.first;
+      ASSERT_TRUE(analysis_settings.value().tags.count(entry.first));
+      ASSERT_EQ(analysis_settings.value().tags[tag].custom_message.message,
+                entry.second.custom_message.message);
+      if (!analysis_settings.value()
+               .tags[tag]
+               .custom_message.learn_more_url.is_empty()) {
+        ASSERT_EQ(kExpectedLearnMoreUrlSpecs.at(tag),
+                  analysis_settings.value()
+                      .tags[tag]
+                      .custom_message.learn_more_url.spec());
+        ASSERT_EQ(kExpectedLearnMoreUrlSpecs.at(tag),
+                  service_settings.GetLearnMoreUrl(tag).value().spec());
+      }
+      ASSERT_EQ(analysis_settings.value().tags[tag].requires_justification,
+                entry.second.requires_justification);
     }
   }
 }
 
-INSTANTIATE_TEST_CASE_P(
+TEST_P(AnalysisServiceSettingsTest, LocalTest) {
+  is_cloud_ = false;
+  std::string json_string = settings_value();
+  auto settings =
+      base::JSONReader::Read(json_string, base::JSON_ALLOW_TRAILING_COMMAS);
+  ASSERT_TRUE(settings.has_value());
+
+  AnalysisServiceSettings service_settings(settings.value(),
+                                           *GetServiceProviderConfig());
+
+  auto analysis_settings = service_settings.GetAnalysisSettings(url());
+  ASSERT_EQ((expected_settings() != nullptr), analysis_settings.has_value());
+  if (analysis_settings.has_value()) {
+    ASSERT_EQ(analysis_settings.value().block_until_verdict,
+              expected_settings()->block_until_verdict);
+    ASSERT_EQ(analysis_settings.value().block_password_protected_files,
+              expected_settings()->block_password_protected_files);
+    ASSERT_EQ(analysis_settings.value().block_large_files,
+              expected_settings()->block_large_files);
+    ASSERT_EQ(analysis_settings.value().block_unsupported_file_types,
+              expected_settings()->block_unsupported_file_types);
+    ASSERT_TRUE(
+        analysis_settings.value().cloud_or_local_settings.is_local_analysis());
+    ASSERT_EQ(analysis_settings.value().cloud_or_local_settings.local_path(),
+              expected_settings()->cloud_or_local_settings.local_path());
+    ASSERT_EQ(analysis_settings.value().cloud_or_local_settings.user_specific(),
+              expected_settings()->cloud_or_local_settings.user_specific());
+    ASSERT_EQ(analysis_settings.value().minimum_data_size,
+              expected_settings()->minimum_data_size);
+    for (const auto& entry : expected_settings()->tags) {
+      const std::string& tag = entry.first;
+      ASSERT_TRUE(analysis_settings.value().tags.count(entry.first));
+      ASSERT_EQ(analysis_settings.value().tags[tag].custom_message.message,
+                entry.second.custom_message.message);
+      if (!analysis_settings.value()
+               .tags[tag]
+               .custom_message.learn_more_url.is_empty()) {
+        ASSERT_EQ(kExpectedLearnMoreUrlSpecs.at(tag),
+                  analysis_settings.value()
+                      .tags[tag]
+                      .custom_message.learn_more_url.spec());
+        ASSERT_EQ(kExpectedLearnMoreUrlSpecs.at(tag),
+                  service_settings.GetLearnMoreUrl(tag).value().spec());
+      }
+      ASSERT_EQ(analysis_settings.value().tags[tag].requires_justification,
+                entry.second.requires_justification);
+    }
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(
     ,
     AnalysisServiceSettingsTest,
     testing::Values(
@@ -281,6 +440,9 @@ INSTANTIATE_TEST_CASE_P(
                   NoSettings()),
         TestParam(kScan1DotCom,
                   kNormalSettingsWithCustomMessage,
-                  NormalSettingsWithCustomMessage())));
+                  NormalSettingsWithCustomMessage()),
+        TestParam(kScan1DotCom,
+                  kNormalSettingsDlpRequiresBypassJustification,
+                  NormalSettingsDlpRequiresBypassJustification())));
 
 }  // namespace enterprise_connectors

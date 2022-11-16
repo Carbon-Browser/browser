@@ -7,10 +7,10 @@
 #include <memory>
 
 #include "chrome/browser/ash/borealis/testing/callback_factory.h"
-#include "chrome/browser/ash/borealis/testing/dbus.h"
+#include "chrome/browser/ash/guest_os/dbus_test_helper.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/test/base/testing_profile.h"
-#include "chromeos/dbus/cicerone/fake_cicerone_client.h"
+#include "chromeos/ash/components/dbus/cicerone/fake_cicerone_client.h"
 #include "chromeos/dbus/dbus_thread_manager.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -22,7 +22,7 @@ using CallbackFactory =
     StrictCallbackFactory<void(absl::optional<std::string>)>;
 
 class BorealisLaunchWatcherTest : public testing::Test,
-                                  protected FakeVmServicesHelper {
+                                  protected guest_os::FakeVmServicesHelper {
  protected:
   content::BrowserTaskEnvironment task_environment_;
   // This test doesn't actually need the profile for anything meaningful,
@@ -34,8 +34,7 @@ TEST_F(BorealisLaunchWatcherTest, VmStartsCallbackRan) {
   CallbackFactory callback_expectation;
   BorealisLaunchWatcher watcher(profile_, "FooVm");
   vm_tools::cicerone::ContainerStartedSignal signal;
-  signal.set_owner_id(
-      chromeos::ProfileHelper::GetUserIdHashFromProfile(profile_));
+  signal.set_owner_id(ash::ProfileHelper::GetUserIdHashFromProfile(profile_));
   signal.set_vm_name("FooVm");
   signal.set_container_name("FooContainer");
 
@@ -50,7 +49,7 @@ TEST_F(BorealisLaunchWatcherTest, VmStartsCallbackRan) {
 TEST_F(BorealisLaunchWatcherTest, VmTimesOutCallbackRan) {
   CallbackFactory callback_expectation;
   BorealisLaunchWatcher watcher(profile_, "FooVm");
-  watcher.SetTimeoutForTesting(base::TimeDelta::FromMilliseconds(0));
+  watcher.SetTimeoutForTesting(base::Milliseconds(0));
 
   EXPECT_CALL(callback_expectation,
               Call(absl::optional<std::string>(absl::nullopt)));
@@ -63,8 +62,7 @@ TEST_F(BorealisLaunchWatcherTest, VmAlreadyStartedCallbackRan) {
   CallbackFactory callback_expectation;
   BorealisLaunchWatcher watcher(profile_, "FooVm");
   vm_tools::cicerone::ContainerStartedSignal signal;
-  signal.set_owner_id(
-      chromeos::ProfileHelper::GetUserIdHashFromProfile(profile_));
+  signal.set_owner_id(ash::ProfileHelper::GetUserIdHashFromProfile(profile_));
   signal.set_vm_name("FooVm");
   signal.set_container_name("FooContainer");
 
@@ -80,8 +78,7 @@ TEST_F(BorealisLaunchWatcherTest, VmStartsMultipleCallbacksRan) {
   CallbackFactory callback_expectation;
   BorealisLaunchWatcher watcher(profile_, "FooVm");
   vm_tools::cicerone::ContainerStartedSignal signal;
-  signal.set_owner_id(
-      chromeos::ProfileHelper::GetUserIdHashFromProfile(profile_));
+  signal.set_owner_id(ash::ProfileHelper::GetUserIdHashFromProfile(profile_));
   signal.set_vm_name("FooVm");
   signal.set_container_name("FooContainer");
 
@@ -98,7 +95,7 @@ TEST_F(BorealisLaunchWatcherTest, VmStartsMultipleCallbacksRan) {
 TEST_F(BorealisLaunchWatcherTest, VmTimesOutMultipleCallbacksRan) {
   CallbackFactory callback_expectation;
   BorealisLaunchWatcher watcher(profile_, "FooVm");
-  watcher.SetTimeoutForTesting(base::TimeDelta::FromMilliseconds(0));
+  watcher.SetTimeoutForTesting(base::Milliseconds(0));
 
   EXPECT_CALL(callback_expectation,
               Call(absl::optional<std::string>(absl::nullopt)))
@@ -112,13 +109,12 @@ TEST_F(BorealisLaunchWatcherTest, VmTimesOutMultipleCallbacksRan) {
 TEST_F(BorealisLaunchWatcherTest, OtherVmsStartBorealisTimesOutCallbackRan) {
   CallbackFactory callback_expectation;
   BorealisLaunchWatcher watcher(profile_, "FooVm");
-  watcher.SetTimeoutForTesting(base::TimeDelta::FromMilliseconds(0));
+  watcher.SetTimeoutForTesting(base::Milliseconds(0));
   vm_tools::cicerone::ContainerStartedSignal signal1;
   signal1.set_owner_id("not-the-owner");
   signal1.set_vm_name("FooVm");
   vm_tools::cicerone::ContainerStartedSignal signal2;
-  signal2.set_owner_id(
-      chromeos::ProfileHelper::GetUserIdHashFromProfile(profile_));
+  signal2.set_owner_id(ash::ProfileHelper::GetUserIdHashFromProfile(profile_));
   signal2.set_vm_name("not-FooVm");
 
   EXPECT_CALL(callback_expectation,

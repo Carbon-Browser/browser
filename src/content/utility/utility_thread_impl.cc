@@ -16,7 +16,8 @@
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/no_destructor.h"
-#include "base/sequenced_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/threading/thread_task_runner_handle.h"
 #include "base/trace_event/trace_log.h"
 #include "build/build_config.h"
 #include "content/child/child_process.h"
@@ -39,6 +40,10 @@ class ServiceBinderImpl {
   explicit ServiceBinderImpl(
       scoped_refptr<base::SequencedTaskRunner> main_thread_task_runner)
       : main_thread_task_runner_(std::move(main_thread_task_runner)) {}
+
+  ServiceBinderImpl(const ServiceBinderImpl&) = delete;
+  ServiceBinderImpl& operator=(const ServiceBinderImpl&) = delete;
+
   ~ServiceBinderImpl() = default;
 
   void BindServiceInterface(mojo::GenericPendingReceiver* receiver) {
@@ -131,8 +136,6 @@ class ServiceBinderImpl {
   std::unique_ptr<mojo::ServiceFactory> io_thread_services_;
 
   base::WeakPtrFactory<ServiceBinderImpl> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ServiceBinderImpl);
 };
 
 ChildThreadImpl::Options::ServiceBinder GetServiceBinder() {
@@ -196,7 +199,7 @@ void UtilityThreadImpl::EnsureBlinkInitialized() {
   EnsureBlinkInitializedInternal(/*sandbox_support=*/false);
 }
 
-#if defined(OS_POSIX) && !defined(OS_ANDROID)
+#if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_ANDROID)
 void UtilityThreadImpl::EnsureBlinkInitializedWithSandboxSupport() {
   EnsureBlinkInitializedInternal(/*sandbox_support=*/true);
 }

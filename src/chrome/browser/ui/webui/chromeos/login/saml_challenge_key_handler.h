@@ -17,8 +17,6 @@
 
 namespace chromeos {
 
-extern const char kSamlChallengeKeyHandlerResultMetric[];
-
 // This class handles "samlChallengeMachineKey" request for GaiaScreenHandler.
 // It calculates response for a challenge from Verified Access server for remote
 // attestation during SAML authentication.
@@ -57,8 +55,7 @@ class SamlChallengeKeyHandler final {
   CallbackType callback_;
 
   // Timeout for `tpm_key_challenger_` to response.
-  const base::TimeDelta default_tpm_response_timeout_ =
-      base::TimeDelta::FromSeconds(15);
+  const base::TimeDelta default_tpm_response_timeout_ = base::Seconds(15);
   absl::optional<base::TimeDelta> tpm_response_timeout_for_testing_;
 
   // Performs attestation flow.
@@ -72,7 +69,6 @@ class SamlChallengeKeyHandler final {
 // TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
 // source migration is finished.
 namespace ash {
-using ::chromeos::kSamlChallengeKeyHandlerResultMetric;
 using ::chromeos::SamlChallengeKeyHandler;
 }  // namespace ash
 

@@ -8,9 +8,8 @@
 #include "base/containers/contains.h"
 #include "base/containers/flat_set.h"
 #include "base/run_loop.h"
-#include "base/task/post_task.h"
+#include "base/task/task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/gtest_util.h"
 #include "base/test/task_environment.h"
@@ -75,8 +74,8 @@ class ConditionVariableTest : public testing::Test {
   base::flat_set<base::UnguessableToken> successful_run_attempts_;
 };
 
-// Speculatively disabled on ChromeOS MSAN bots due to https://crbug.com/1186166
-#if defined(OS_CHROMEOS) && defined(MEMORY_SANITIZER)
+// Speculatively disabled on ChromeOS bots due to https://crbug.com/1186166
+#if BUILDFLAG(IS_CHROMEOS)
 #define MAYBE_SingleSequence_BlocksOnWaitAndUnblocksOnNotify \
   DISABLED_SingleSequence_BlocksOnWaitAndUnblocksOnNotify
 #else

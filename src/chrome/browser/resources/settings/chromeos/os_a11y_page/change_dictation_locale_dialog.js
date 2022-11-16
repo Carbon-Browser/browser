@@ -15,19 +15,21 @@ import 'chrome://resources/cr_elements/shared_style_css.m.js';
 import 'chrome://resources/polymer/v3_0/iron-flex-layout/iron-flex-layout-classes.js';
 import 'chrome://resources/polymer/v3_0/iron-list/iron-list.js';
 import 'chrome://resources/polymer/v3_0/paper-ripple/paper-ripple.js';
-import '../../settings_shared_css.js';
+import '../../settings_shared.css.js';
 
-import {I18nBehavior, I18nBehaviorInterface} from '//resources/js/i18n_behavior.m.js';
-import {afterNextRender, html, mixinBehaviors, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {I18nBehavior, I18nBehaviorInterface} from 'chrome://resources/js/i18n_behavior.m.js';
+import {afterNextRender, html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 /**
  * A locale option for Dictation, including the human-readable name, the
- * locale value (like en-US), whether it works offline, and whether it should
- * be highlighted as recommended to the user.
+ * locale value (like en-US), whether it works offline, whether the language
+ * pack for the locale is installed, and whether it should be highlighted as
+ * recommended to the user.
  * @typedef {{
  *   name: string,
  *   value: string,
- *   offline: boolean,
+ *   worksOffline: boolean,
+ *   installed: boolean,
  *   recommended: boolean,
  * }}
  */
@@ -266,7 +268,7 @@ export class ChangeDictationLocaleDialog extends
    * @private
    */
   getAriaLabelForItem_(item, selected) {
-    const longName = item.offline ?
+    const longName = item.worksOffline ?
         this.i18n(
             'dictationChangeLanguageDialogOfflineDescription', item.name) :
         item.name;

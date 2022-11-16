@@ -296,7 +296,7 @@ TEST_F(FileTransferMessageHandlerTest, ErrorsOnNewMetadata) {
   fake_pipe_->ClosePipe();
 
   const base::queue<std::string>& sent_messages = fake_pipe_->sent_messages();
-  // First is the sucess message, second should be a protocol error.
+  // First is the success message, second should be a protocol error.
   ASSERT_EQ(2ul, sent_messages.size());
   protocol::FileTransfer response;
   response.ParseFromString(sent_messages.back());
@@ -348,7 +348,7 @@ TEST_F(FileTransferMessageHandlerTest, ReadsFile) {
   auto file_operations = std::make_unique<FakeFileOperations>(&test_io);
 
   test_io.input_file = FakeFileOperations::InputFile(
-      base::FilePath::FromUTF8Unsafe(kTestFilename),
+      base::FilePath::FromASCII(kTestFilename),
       ByteArrayFrom(kTestDataOne, kTestDataTwo, kTestDataThree), absl::nullopt);
 
   // This will delete itself when fake_pipe_->ClosePipe() is called.
@@ -409,7 +409,7 @@ TEST_F(FileTransferMessageHandlerTest, ForwardsReadError) {
   auto file_operations = std::make_unique<FakeFileOperations>(&test_io);
 
   test_io.input_file = FakeFileOperations::InputFile(
-      base::FilePath::FromUTF8Unsafe(kTestFilename),
+      base::FilePath::FromASCII(kTestFilename),
       ByteArrayFrom(kTestDataOne, kTestDataTwo, kTestDataThree),
       protocol::MakeFileTransferError(
           FROM_HERE, protocol::FileTransfer_Error_Type_IO_ERROR));

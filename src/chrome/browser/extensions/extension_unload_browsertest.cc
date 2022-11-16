@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "base/feature_list.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "build/build_config.h"
 #include "chrome/browser/extensions/extension_browsertest.h"
@@ -40,6 +41,11 @@ class TestTabStripModelObserver : public TabStripModelObserver {
       : model_(model), desired_count_(0) {
     model->AddObserver(this);
   }
+
+  TestTabStripModelObserver(const TestTabStripModelObserver&) = delete;
+  TestTabStripModelObserver& operator=(const TestTabStripModelObserver&) =
+      delete;
+
   ~TestTabStripModelObserver() override = default;
 
   void WaitForTabCount(int count) {
@@ -59,11 +65,9 @@ class TestTabStripModelObserver : public TabStripModelObserver {
       run_loop_.Quit();
   }
 
-  TabStripModel* model_;
+  raw_ptr<TabStripModel> model_;
   int desired_count_;
   base::RunLoop run_loop_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestTabStripModelObserver);
 };
 
 }  // namespace
@@ -142,7 +146,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionUnloadBrowserTest, UnloadWithContentScripts) {
   EXPECT_TRUE(browser()
                   ->tab_strip_model()
                   ->GetActiveWebContents()
-                  ->GetMainFrame()
+                  ->GetPrimaryMainFrame()
                   ->IsRenderFrameLive());
 }
 
@@ -175,7 +179,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionUnloadBrowserTest, OpenedOpaqueWindows) {
       browser()->tab_strip_model()->GetActiveWebContents();
   EXPECT_EQ(about_blank, web_contents->GetLastCommittedURL());
   url::Origin frame_origin =
-      web_contents->GetMainFrame()->GetLastCommittedOrigin();
+      web_contents->GetPrimaryMainFrame()->GetLastCommittedOrigin();
   url::SchemeHostPort precursor_tuple =
       frame_origin.GetTupleOrPrecursorTupleIfOpaque();
   EXPECT_EQ(kExtensionScheme, precursor_tuple.scheme());
@@ -216,7 +220,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionUnloadBrowserTest, CrashedTabs) {
 
   {
     content::ScopedAllowRendererCrashes allow_renderer_crashes(
-        active_tab->GetMainFrame()->GetProcess());
+        active_tab->GetPrimaryMainFrame()->GetProcess());
     ui_test_utils::NavigateToURLWithDisposition(
         browser(), GURL("chrome://crash"), WindowOpenDisposition::CURRENT_TAB,
         ui_test_utils::BROWSER_TEST_WAIT_FOR_LOAD_STOP);
@@ -239,11 +243,12 @@ IN_PROC_BROWSER_TEST_F(ExtensionUnloadBrowserTest, CrashedTabs) {
   test_tab_strip_model_observer.WaitForTabCount(1);
 
   EXPECT_EQ(1, browser()->tab_strip_model()->count());
-  EXPECT_NE(extension->url().GetOrigin(), browser()
-                                              ->tab_strip_model()
-                                              ->GetActiveWebContents()
-                                              ->GetLastCommittedURL()
-                                              .GetOrigin());
+  EXPECT_NE(extension->url().DeprecatedGetOriginAsURL(),
+            browser()
+                ->tab_strip_model()
+                ->GetActiveWebContents()
+                ->GetLastCommittedURL()
+                .DeprecatedGetOriginAsURL());
 }
 
 // TODO(devlin): Investigate what to do for embedded iframes.

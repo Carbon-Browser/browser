@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <memory>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -14,7 +15,7 @@
 #include "base/files/file_path.h"
 #include "base/lazy_instance.h"
 #include "base/location.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "extensions/browser/api/api_resource_manager.h"
 #include "extensions/browser/api/serial/serial_port_manager.h"
@@ -427,7 +428,7 @@ void SerialConnection::Send(const std::vector<uint8_t>& data,
                                             weak_factory_.GetWeakPtr()));
     base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
         FROM_HERE, send_timeout_task_.callback(),
-        base::TimeDelta::FromMilliseconds(send_timeout_));
+        base::Milliseconds(send_timeout_));
   }
 }
 
@@ -525,11 +526,12 @@ void SerialConnection::SetControlSignals(
 void SerialConnection::Close(base::OnceClosure callback) {
   DCHECK(serial_port_);
   serial_port_->Close(
+      /*flush=*/false,
       mojo::WrapCallbackWithDefaultInvokeIfNotRun(std::move(callback)));
 }
 
 void SerialConnection::InitSerialPortForTesting() {
-  ignore_result(serial_port_.BindNewPipeAndPassReceiver());
+  std::ignore = serial_port_.BindNewPipeAndPassReceiver();
 }
 
 void SerialConnection::SetTimeoutCallback() {
@@ -538,7 +540,7 @@ void SerialConnection::SetTimeoutCallback() {
         &SerialConnection::OnReceiveTimeout, weak_factory_.GetWeakPtr()));
     base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
         FROM_HERE, receive_timeout_task_.callback(),
-        base::TimeDelta::FromMilliseconds(receive_timeout_));
+        base::Milliseconds(receive_timeout_));
   }
 }
 

@@ -31,7 +31,7 @@ const CSSValue* DeclaredStylePropertyMap::GetProperty(
 }
 
 const CSSValue* DeclaredStylePropertyMap::GetCustomProperty(
-    AtomicString property_name) const {
+    const AtomicString& property_name) const {
   if (!GetStyleRule())
     return nullptr;
   return GetStyleRule()->Properties().GetPropertyCSSValue(property_name);
@@ -54,7 +54,7 @@ bool DeclaredStylePropertyMap::SetShorthandProperty(
   CSSStyleSheet::RuleMutationScope mutation_scope(owner_rule_);
   const auto result = GetStyleRule()->MutableProperties().SetProperty(
       property_id, value, false /* important */, secure_context_mode);
-  return result.did_parse;
+  return result != MutableCSSPropertyValueSet::kParseError;
 }
 
 void DeclaredStylePropertyMap::SetCustomProperty(

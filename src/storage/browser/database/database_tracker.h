@@ -21,8 +21,8 @@
 #include "base/memory/ref_counted.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/observer_list.h"
-#include "base/sequenced_task_runner.h"
 #include "base/strings/string_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "base/types/pass_key.h"
 #include "components/services/storage/public/mojom/quota_client.mojom.h"
@@ -148,8 +148,8 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) DatabaseTracker
   virtual bool GetAllOriginsInfo(std::vector<OriginInfo>* origins_info);
 
   // Thread-safe getter.
-  QuotaManagerProxy* quota_manager_proxy() const {
-    return quota_manager_proxy_.get();
+  const scoped_refptr<QuotaManagerProxy>& quota_manager_proxy() const {
+    return quota_manager_proxy_;
   }
 
   bool IsDatabaseScheduledForDeletion(const std::string& origin_identifier,

@@ -8,10 +8,10 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/common/available_offline_content.mojom.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
+#include "mojo/public/cpp/bindings/self_owned_receiver.h"
 
 class Profile;
 
@@ -28,6 +28,12 @@ class AvailableOfflineContentProvider
  public:
   // Public for testing.
   explicit AvailableOfflineContentProvider(int render_process_host_id);
+
+  AvailableOfflineContentProvider(const AvailableOfflineContentProvider&) =
+      delete;
+  AvailableOfflineContentProvider& operator=(
+      const AvailableOfflineContentProvider&) = delete;
+
   ~AvailableOfflineContentProvider() override;
 
   // chrome::mojom::AvailableOfflineContentProvider methods.
@@ -50,11 +56,16 @@ class AvailableOfflineContentProvider
 
   Profile* GetProfile();
 
+  void SetSelfOwnedReceiver(const mojo::SelfOwnedReceiverRef<
+                            chrome::mojom::AvailableOfflineContentProvider>&
+                                provider_self_owned_receiver);
+  void CloseSelfOwnedReceiverIfNeeded();
+
   const int render_process_host_id_;
+  mojo::SelfOwnedReceiverRef<chrome::mojom::AvailableOfflineContentProvider>
+      provider_self_owned_receiver_;
 
   base::WeakPtrFactory<AvailableOfflineContentProvider> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(AvailableOfflineContentProvider);
 };
 
 }  // namespace android

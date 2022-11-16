@@ -8,9 +8,8 @@
 
 #include "base/bind.h"
 #include "base/callback_helpers.h"
-#include "base/sequenced_task_runner.h"
 #include "base/synchronization/atomic_flag.h"
-#include "base/task/post_task.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "media/base/bind_to_current_loop.h"
 #include "media/base/decoder_buffer.h"
@@ -26,13 +25,16 @@ class CancellationHelper {
       : cancellation_flag_(std::make_unique<base::AtomicFlag>()),
         decoder_(std::move(decoder)) {}
 
+  CancellationHelper(const CancellationHelper&) = delete;
+  CancellationHelper& operator=(const CancellationHelper&) = delete;
+
   // Safe to call from any thread.
   void Cancel() { cancellation_flag_->Set(); }
 
   void Decode(scoped_refptr<DecoderBuffer> buffer,
               VideoDecoder::DecodeCB decode_cb) {
     if (cancellation_flag_->IsSet()) {
-      std::move(decode_cb).Run(DecodeStatus::ABORTED);
+      std::move(decode_cb).Run(DecoderStatus::Codes::kAborted);
       return;
     }
 
@@ -54,8 +56,6 @@ class CancellationHelper {
  private:
   std::unique_ptr<base::AtomicFlag> cancellation_flag_;
   std::unique_ptr<OffloadableVideoDecoder> decoder_;
-
-  DISALLOW_COPY_AND_ASSIGN(CancellationHelper);
 };
 
 OffloadingVideoDecoder::OffloadingVideoDecoder(
@@ -75,10 +75,6 @@ OffloadingVideoDecoder::~OffloadingVideoDecoder() {
   // we may still have tasks posted to it.
   if (offload_task_runner_)
     offload_task_runner_->DeleteSoon(FROM_HERE, std::move(helper_));
-}
-
-bool OffloadingVideoDecoder::IsOptimizedForRTC() const {
-  return helper_->decoder()->IsOptimizedForRTC();
 }
 
 VideoDecoderType OffloadingVideoDecoder::GetDecoderType() const {

@@ -30,6 +30,7 @@
 
 #include "third_party/blink/renderer/core/css/resolver/style_adjuster.h"
 
+#include "third_party/blink/public/common/features.h"
 #include "third_party/blink/renderer/core/css/resolver/style_resolver.h"
 #include "third_party/blink/renderer/core/css/resolver/style_resolver_state.h"
 #include "third_party/blink/renderer/core/css/style_change_reason.h"
@@ -38,15 +39,19 @@
 #include "third_party/blink/renderer/core/dom/element.h"
 #include "third_party/blink/renderer/core/dom/flat_tree_traversal.h"
 #include "third_party/blink/renderer/core/dom/node_computed_style.h"
+#include "third_party/blink/renderer/core/dom/pseudo_element.h"
 #include "third_party/blink/renderer/core/dom/shadow_root.h"
 #include "third_party/blink/renderer/core/frame/event_handler_registry.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/frame/local_frame_view.h"
 #include "third_party/blink/renderer/core/frame/settings.h"
 #include "third_party/blink/renderer/core/frame/web_feature.h"
+#include "third_party/blink/renderer/core/fullscreen/fullscreen.h"
+#include "third_party/blink/renderer/core/html/fenced_frame/html_fenced_frame_element.h"
 #include "third_party/blink/renderer/core/html/forms/html_input_element.h"
 #include "third_party/blink/renderer/core/html/forms/html_text_area_element.h"
 #include "third_party/blink/renderer/core/html/html_body_element.h"
+#include "third_party/blink/renderer/core/html/html_dialog_element.h"
 #include "third_party/blink/renderer/core/html/html_iframe_element.h"
 #include "third_party/blink/renderer/core/html/html_image_element.h"
 #include "third_party/blink/renderer/core/html/html_plugin_element.h"
@@ -58,6 +63,7 @@
 #include "third_party/blink/renderer/core/layout/layout_theme.h"
 #include "third_party/blink/renderer/core/layout/list_marker.h"
 #include "third_party/blink/renderer/core/layout/ng/inline/layout_ng_text_combine.h"
+#include "third_party/blink/renderer/core/mathml/mathml_element.h"
 #include "third_party/blink/renderer/core/style/computed_style.h"
 #include "third_party/blink/renderer/core/style/computed_style_constants.h"
 #include "third_party/blink/renderer/core/style/style_intrinsic_length.h"
@@ -77,22 +83,6 @@ bool IsOverflowClipOrVisible(EOverflow overflow) {
   return overflow == EOverflow::kClip || overflow == EOverflow::kVisible;
 }
 
-bool IsEditableElement(Element* element, const ComputedStyle& style) {
-  if (style.UserModify() != EUserModify::kReadOnly)
-    return true;
-
-  if (!element)
-    return false;
-
-  if (auto* textarea = DynamicTo<HTMLTextAreaElement>(*element))
-    return !textarea->IsDisabledOrReadOnly();
-
-  if (auto* input = DynamicTo<HTMLInputElement>(*element))
-    return !input->IsDisabledOrReadOnly() && input->IsTextField();
-
-  return false;
-}
-
 TouchAction AdjustTouchActionForElement(TouchAction touch_action,
                                         const ComputedStyle& style,
                                         const ComputedStyle& parent_style,
@@ -103,17 +93,19 @@ TouchAction AdjustTouchActionForElement(TouchAction touch_action,
     // Body scrolls overflow if html root overflow is not visible or the
     // propagation of overflow is stopped by containment.
     if (parent_style.IsOverflowVisibleAlongBothAxes()) {
-      if (!RuntimeEnabledFeatures::CSSContainedBodyPropagationEnabled() ||
-          (!parent_style.ShouldApplyAnyContainment(*document_element) &&
-           !style.ShouldApplyAnyContainment(*element))) {
+      if (!parent_style.ShouldApplyAnyContainment(*document_element) &&
+          !style.ShouldApplyAnyContainment(*element)) {
         scrolls_overflow = false;
       }
     }
   }
   bool is_child_document = element && element == document_element &&
                            element->GetDocument().LocalOwner();
-  if (scrolls_overflow || is_child_document)
-    return touch_action | TouchAction::kPan | TouchAction::kInternalPanXScrolls;
+  if (scrolls_overflow || is_child_document) {
+    return touch_action | TouchAction::kPan |
+           TouchAction::kInternalPanXScrolls |
+           TouchAction::kInternalNotWritable;
+  }
   return touch_action;
 }
 
@@ -125,6 +117,100 @@ bool HostIsInputFile(const Element* element) {
       return input->type() == input_type_names::kFile;
   }
   return false;
+}
+
+void AdjustStyleForSvgElement(const SVGElement& element, ComputedStyle& style) {
+  // Disable some of text decoration properties.
+  //
+  // Note that SetFooBar() is more efficient than ResetFooBar() if the current
+  // value is same as the reset value.
+  style.SetTextDecorationSkipInk(ETextDecorationSkipInk::kAuto);
+  style.SetTextDecorationStyle(
+      ETextDecorationStyle::kSolid);  // crbug.com/1246719
+  style.SetTextDecorationThickness(TextDecorationThickness(Length::Auto()));
+  style.SetTextEmphasisMark(TextEmphasisMark::kNone);
+  style.SetTextUnderlineOffset(Length());  // crbug.com/1247912
+  style.SetTextUnderlinePosition(kTextUnderlinePositionAuto);
+}
+
+// Adjust style for anchor() and anchor-size() queries.
+void AdjustAnchorQueryStyles(ComputedStyle& style) {
+  if (!RuntimeEnabledFeatures::CSSAnchorPositioningEnabled())
+    return;
+
+  // anchor() and anchor-size() can only be used on absolutely positioned
+  // elements.
+  if (style.GetPosition() != EPosition::kAbsolute &&
+      style.GetPosition() != EPosition::kFixed) {
+    if (style.Left().HasAnchorQueries())
+      style.SetLeft(Length::Auto());
+    if (style.Right().HasAnchorQueries())
+      style.SetRight(Length::Auto());
+    if (style.Top().HasAnchorQueries())
+      style.SetTop(Length::Auto());
+    if (style.Bottom().HasAnchorQueries())
+      style.SetBottom(Length::Auto());
+    if (style.Width().HasAnchorQueries())
+      style.SetWidth(Length::Auto());
+    if (style.MinWidth().HasAnchorQueries())
+      style.SetMinWidth(Length::Auto());
+    if (style.MaxWidth().HasAnchorQueries())
+      style.SetMaxWidth(Length::Auto());
+    if (style.Height().HasAnchorQueries())
+      style.SetHeight(Length::Auto());
+    if (style.MinHeight().HasAnchorQueries())
+      style.SetMinHeight(Length::Auto());
+    if (style.MaxHeight().HasAnchorQueries())
+      style.SetMaxHeight(Length::Auto());
+  }
+}
+
+// Returns the `<display-outside>` for a `EDisplay` value.
+// https://drafts.csswg.org/css-display-3/#propdef-display
+EDisplay DisplayOutside(EDisplay display) {
+  switch (display) {
+    case EDisplay::kBlock:
+    case EDisplay::kTable:
+    case EDisplay::kWebkitBox:
+    case EDisplay::kFlex:
+    case EDisplay::kGrid:
+    case EDisplay::kBlockMath:
+    case EDisplay::kListItem:
+    case EDisplay::kFlowRoot:
+    case EDisplay::kLayoutCustom:
+    case EDisplay::kTableRowGroup:
+    case EDisplay::kTableHeaderGroup:
+    case EDisplay::kTableFooterGroup:
+    case EDisplay::kTableRow:
+    case EDisplay::kTableColumnGroup:
+    case EDisplay::kTableColumn:
+    case EDisplay::kTableCell:
+    case EDisplay::kTableCaption:
+      return EDisplay::kBlock;
+    case EDisplay::kInline:
+    case EDisplay::kInlineBlock:
+    case EDisplay::kInlineTable:
+    case EDisplay::kWebkitInlineBox:
+    case EDisplay::kInlineFlex:
+    case EDisplay::kInlineGrid:
+    case EDisplay::kInlineLayoutCustom:
+    case EDisplay::kMath:
+      return EDisplay::kInline;
+    case EDisplay::kNone:
+    case EDisplay::kContents:
+      // These values don't have `<display-outside>`.
+      // Returns the original value.
+      return display;
+  }
+  NOTREACHED();
+  return EDisplay::kBlock;
+}
+
+inline bool HasFullNGFragmentationSupport() {
+  return RuntimeEnabledFeatures::LayoutNGPrintingEnabled() &&
+         RuntimeEnabledFeatures::LayoutNGFlexFragmentationEnabled() &&
+         RuntimeEnabledFeatures::LayoutNGGridFragmentationEnabled() &&
+         RuntimeEnabledFeatures::LayoutNGTableFragmentationEnabled();
 }
 
 }  // namespace
@@ -265,7 +351,7 @@ void StyleAdjuster::AdjustStyleForCombinedText(ComputedStyle& style) {
   style.ResetTextCombine();
   style.SetLetterSpacing(0.0f);
   style.SetTextAlign(ETextAlign::kCenter);
-  style.SetTextDecoration(TextDecoration::kNone);
+  style.SetTextDecorationLine(TextDecorationLine::kNone);
   style.SetTextEmphasisMark(TextEmphasisMark::kNone);
   style.SetVerticalAlign(EVerticalAlign ::kMiddle);
   style.SetWordBreak(EWordBreak::kKeepAll);
@@ -329,19 +415,6 @@ static void AdjustStyleForHTMLElement(ComputedStyle& style,
   if (IsA<HTMLDivElement>(element) || IsA<HTMLSpanElement>(element))
     return;
 
-  if (IsA<HTMLTableCellElement>(element)) {
-    if (style.WhiteSpace() == EWhiteSpace::kWebkitNowrap) {
-      // Figure out if we are really nowrapping or if we should just
-      // use normal instead. If the width of the cell is fixed, then
-      // we don't actually use NOWRAP.
-      if (style.Width().IsFixed())
-        style.SetWhiteSpace(EWhiteSpace::kNormal);
-      else
-        style.SetWhiteSpace(EWhiteSpace::kNowrap);
-    }
-    return;
-  }
-
   if (auto* image = DynamicTo<HTMLImageElement>(element)) {
     if (image->IsCollapsed() || style.Display() == EDisplay::kContents)
       style.SetDisplay(EDisplay::kNone);
@@ -373,11 +446,35 @@ static void AdjustStyleForHTMLElement(ComputedStyle& style,
       style.SetDisplay(EDisplay::kNone);
       return;
     }
-    // Frames cannot overflow (they are always the size we ask them to be).
-    // Some compositing code paths may try to draw scrollbars anyhow.
-    style.SetOverflowX(EOverflow::kVisible);
-    style.SetOverflowY(EOverflow::kVisible);
     return;
+  }
+
+  if (IsA<HTMLFencedFrameElement>(element)) {
+    // Force the CSS style `zoom` property to 1 so that the embedder cannot
+    // communicate into the fenced frame by adjusting it, but still include
+    // the page zoom factor in the effective zoom, which is safe because it
+    // comes from user intervention. crbug.com/1285327
+    style.SetEffectiveZoom(
+        element.GetDocument().GetStyleResolver().InitialZoom());
+
+    if (!features::IsFencedFramesMPArchBased()) {
+      // Force the inside-display to `flow`, but honors the outside-display.
+      switch (DisplayOutside(style.Display())) {
+        case EDisplay::kInline:
+        case EDisplay::kContents:
+          style.SetDisplay(EDisplay::kInlineBlock);
+          break;
+        case EDisplay::kBlock:
+          style.SetDisplay(EDisplay::kBlock);
+          break;
+        case EDisplay::kNone:
+          break;
+        default:
+          NOTREACHED();
+          style.SetDisplay(EDisplay::kInlineBlock);
+          break;
+      }
+    }
   }
 
   if (IsA<HTMLRTElement>(element)) {
@@ -445,13 +542,21 @@ static void AdjustStyleForHTMLElement(ComputedStyle& style,
       style.SetDisplay(EDisplay::kNone);
     }
   }
+
+  if (IsA<HTMLBodyElement>(element) &&
+      element.GetDocument().FirstBodyElement() != element) {
+    style.SetIsSecondaryBodyElement();
+  }
 }
 
 void StyleAdjuster::AdjustOverflow(ComputedStyle& style, Element* element) {
   DCHECK(style.OverflowX() != EOverflow::kVisible ||
          style.OverflowY() != EOverflow::kVisible);
 
-  if (style.IsDisplayTableBox()) {
+  bool overflow_is_clip_or_visible =
+      IsOverflowClipOrVisible(style.OverflowY()) &&
+      IsOverflowClipOrVisible(style.OverflowX());
+  if (!overflow_is_clip_or_visible && style.IsDisplayTableBox()) {
     // Tables only support overflow:hidden and overflow:visible and ignore
     // anything else, see https://drafts.csswg.org/css2/visufx.html#overflow. As
     // a table is not a block container box the rules for resolving conflicting
@@ -464,7 +569,6 @@ void StyleAdjuster::AdjustOverflow(ComputedStyle& style, Element* element) {
     // If we are left with conflicting overflow values for the x and y axes on a
     // table then resolve both to OverflowVisible. This is interoperable
     // behaviour but is not specced anywhere.
-    // TODO(https://crbug.com/966283): figure out how 'clip' should be handled.
     if (style.OverflowX() == EOverflow::kVisible)
       style.SetOverflowY(EOverflow::kVisible);
     else if (style.OverflowY() == EOverflow::kVisible)
@@ -484,8 +588,10 @@ void StyleAdjuster::AdjustOverflow(ComputedStyle& style, Element* element) {
     else if (style.OverflowY() == EOverflow::kClip)
       style.SetOverflowY(EOverflow::kHidden);
   }
-  if (element && (style.OverflowX() == EOverflow::kClip ||
-                  style.OverflowY() == EOverflow::kClip)) {
+
+  if (element && !element->IsPseudoElement() &&
+      (style.OverflowX() == EOverflow::kClip ||
+       style.OverflowY() == EOverflow::kClip)) {
     UseCounter::Count(element->GetDocument(),
                       WebFeature::kOverflowClipAlongEitherAxis);
   }
@@ -507,10 +613,7 @@ static void AdjustStyleForDisplay(ComputedStyle& style,
       style.SetIsFlexOrGridItem();
   }
 
-  if (style.Display() == EDisplay::kBlock && !style.IsFloating())
-    return;
-
-  if (style.Display() == EDisplay::kContents)
+  if (style.Display() == EDisplay::kBlock)
     return;
 
   // FIXME: Don't support this mutation for pseudo styles like first-letter or
@@ -531,44 +634,43 @@ static void AdjustStyleForDisplay(ComputedStyle& style,
       style.Display() == EDisplay::kTableRow ||
       style.Display() == EDisplay::kTableRowGroup) {
     style.SetWritingMode(layout_parent_style.GetWritingMode());
+    style.SetTextOrientation(layout_parent_style.GetTextOrientation());
     style.UpdateFontOrientation();
-  }
-
-  // FIXME: Since we don't support block-flow on flexible boxes yet, disallow
-  // setting of block-flow to anything other than TopToBottomWritingMode.
-  // https://bugs.webkit.org/show_bug.cgi?id=46418 - Flexible box support.
-  if (style.GetWritingMode() != WritingMode::kHorizontalTb &&
-      style.IsDeprecatedWebkitBox()) {
-    style.SetWritingMode(WritingMode::kHorizontalTb);
-    style.UpdateFontOrientation();
-  }
-
-  // Disable editing custom layout elements, until EditingNG is ready.
-  if (!RuntimeEnabledFeatures::EditingNGEnabled() &&
-      (style.Display() == EDisplay::kLayoutCustom ||
-       style.Display() == EDisplay::kInlineLayoutCustom))
-    style.SetUserModify(EUserModify::kReadOnly);
-
-  if (layout_parent_style.IsDisplayFlexibleOrGridBox()) {
-    // We want to count vertical percentage paddings/margins on flex items
-    // because our current behavior is different from the spec and we want to
-    // gather compatibility data.
-    if (style.PaddingBefore().IsPercentOrCalc() ||
-        style.PaddingAfter().IsPercentOrCalc()) {
-      UseCounter::Count(document,
-                        WebFeature::kFlexboxPercentagePaddingVertical);
-    }
-    if (style.MarginBefore().IsPercentOrCalc() ||
-        style.MarginAfter().IsPercentOrCalc()) {
-      UseCounter::Count(document, WebFeature::kFlexboxPercentageMarginVertical);
-    }
   }
 }
 
-static void AdjustEffectiveTouchAction(ComputedStyle& style,
-                                       const ComputedStyle& parent_style,
-                                       Element* element,
-                                       bool is_svg_root) {
+bool StyleAdjuster::IsEditableElement(Element* element,
+                                      const ComputedStyle& style) {
+  if (style.UserModify() != EUserModify::kReadOnly)
+    return true;
+
+  if (!element)
+    return false;
+
+  if (auto* textarea = DynamicTo<HTMLTextAreaElement>(*element))
+    return !textarea->IsDisabledOrReadOnly();
+
+  if (auto* input = DynamicTo<HTMLInputElement>(*element))
+    return !input->IsDisabledOrReadOnly() && input->IsTextField();
+
+  return false;
+}
+
+bool StyleAdjuster::IsPasswordFieldWithUnrevealedPassword(Element* element) {
+  if (!element)
+    return false;
+  if (auto* input = DynamicTo<HTMLInputElement>(element)) {
+    return (input->type() == input_type_names::kPassword) &&
+           !input->ShouldRevealPassword();
+  }
+  return false;
+}
+
+void StyleAdjuster::AdjustEffectiveTouchAction(
+    ComputedStyle& style,
+    const ComputedStyle& parent_style,
+    Element* element,
+    bool is_svg_root) {
   TouchAction inherited_action = parent_style.GetEffectiveTouchAction();
 
   bool is_replaced_canvas = element && IsA<HTMLCanvasElement>(element) &&
@@ -596,6 +698,12 @@ static void AdjustEffectiveTouchAction(ComputedStyle& style,
     if ((element_touch_action & TouchAction::kPanX) != TouchAction::kNone) {
       element_touch_action |= TouchAction::kInternalPanXScrolls;
     }
+
+    // kInternalNotWritable is only for internal usage, GetTouchAction()
+    // doesn't contain this bit. We set this bit when kPan is set so it can be
+    // cleared for eligible non-password editable areas later on.
+    if ((element_touch_action & TouchAction::kPan) != TouchAction::kNone)
+      element_touch_action |= TouchAction::kInternalNotWritable;
   }
 
   if (!element) {
@@ -609,6 +717,7 @@ static void AdjustEffectiveTouchAction(ComputedStyle& style,
   if (is_child_document && element->GetDocument().GetFrame()) {
     inherited_action &=
         TouchAction::kPan | TouchAction::kInternalPanXScrolls |
+        TouchAction::kInternalNotWritable |
         element->GetDocument().GetFrame()->InheritedEffectiveTouchAction();
   }
 
@@ -630,6 +739,16 @@ static void AdjustEffectiveTouchAction(ComputedStyle& style,
     element_touch_action &= ~TouchAction::kInternalPanXScrolls;
   }
 
+  // TODO(crbug.com/1346169): Full style invalidation is needed when this
+  // feature status changes at runtime as it affects the computed style.
+  if (base::FeatureList::IsEnabled(blink::features::kStylusWritingToInput) &&
+      RuntimeEnabledFeatures::StylusHandwritingEnabled() &&
+      (element_touch_action & TouchAction::kPan) == TouchAction::kPan &&
+      IsEditableElement(element, style) &&
+      !IsPasswordFieldWithUnrevealedPassword(element)) {
+    element_touch_action &= ~TouchAction::kInternalNotWritable;
+  }
+
   // Apply the adjusted parent effective touch actions.
   style.SetEffectiveTouchAction((element_touch_action & inherited_action) |
                                 enforced_by_policy);
@@ -644,27 +763,32 @@ static void AdjustEffectiveTouchAction(ComputedStyle& style,
   }
 }
 
-static void AdjustStateForContentVisibility(ComputedStyle& style,
-                                            Element* element) {
+static void AdjustStyleForInert(ComputedStyle& style, Element* element) {
   if (!element)
     return;
-  auto* context = element->GetDisplayLockContext();
-  // The common case for most elements is that we don't have a context and have
-  // the default (visible) content-visibility value.
-  if (LIKELY(!context &&
-             style.ContentVisibility() == EContentVisibility::kVisible)) {
+
+  if (element->IsInertRoot()) {
+    style.SetIsInert(true);
     return;
   }
 
-  if (!context)
-    context = &element->EnsureDisplayLockContext();
-  context->SetRequestedState(style.ContentVisibility());
-  context->AdjustElementStyle(&style);
+  Document& document = element->GetDocument();
+  const Element* modal_element = document.ActiveModalDialog();
+  if (!modal_element)
+    modal_element = Fullscreen::FullscreenElementFrom(document);
+  if (modal_element == element) {
+    style.SetIsInert(false);
+    return;
+  }
+  if (modal_element && element == document.documentElement()) {
+    style.SetIsInert(true);
+    return;
+  }
 }
 
 void StyleAdjuster::AdjustForForcedColorsMode(ComputedStyle& style) {
   if (!style.InForcedColorsMode() ||
-      style.ForcedColorAdjust() == EForcedColorAdjust::kNone)
+      style.ForcedColorAdjust() != EForcedColorAdjust::kAuto)
     return;
 
   style.SetTextShadow(ComputedStyleInitialValues::InitialTextShadow());
@@ -689,7 +813,16 @@ void StyleAdjuster::AdjustComputedStyle(StyleResolverState& state,
                        element->LayoutObjectIsNeeded(style))) {
     AdjustStyleForHTMLElement(style, *html_element);
   }
+
+  auto* svg_element = DynamicTo<SVGElement>(element);
+
+  bool is_mathml_element = RuntimeEnabledFeatures::MathMLCoreEnabled() &&
+                           IsA<MathMLElement>(element);
+
   if (style.Display() != EDisplay::kNone) {
+    if (svg_element)
+      AdjustStyleForSvgElement(*svg_element, style);
+
     bool is_document_element =
         element && element->GetDocument().documentElement() == element;
     // Per the spec, position 'static' and 'relative' in the top layer compute
@@ -701,9 +834,7 @@ void StyleAdjuster::AdjustComputedStyle(StyleResolverState& state,
           style.GetPosition() == EPosition::kRelative) {
         style.SetPosition(EPosition::kAbsolute);
       }
-      if (style.Display() == EDisplay::kContents &&
-          (IsA<HTMLDialogElement>(element) ||
-           style.StyleType() == kPseudoIdBackdrop)) {
+      if (style.Display() == EDisplay::kContents) {
         // See crbug.com/1240701 for more details.
         // https://fullscreen.spec.whatwg.org/#new-stacking-layer
         // If its specified display property is contents, it computes to block.
@@ -722,8 +853,9 @@ void StyleAdjuster::AdjustComputedStyle(StyleResolverState& state,
 
     // math display values on non-MathML elements compute to flow display
     // values.
-    if ((!element || !element->IsMathMLElement()) &&
+    if ((!element || !is_mathml_element) &&
         style.IsDisplayMathBox(style.Display())) {
+      DCHECK(RuntimeEnabledFeatures::MathMLCoreEnabled());
       style.SetDisplay(style.Display() == EDisplay::kBlockMath
                            ? EDisplay::kBlock
                            : EDisplay::kInline);
@@ -753,9 +885,6 @@ void StyleAdjuster::AdjustComputedStyle(StyleResolverState& state,
     AdjustStyleForFirstLetter(style);
   }
 
-  if (RuntimeEnabledFeatures::CSSContentVisibilityEnabled())
-    AdjustStateForContentVisibility(style, element);
-
   // Make sure our z-index value is only applied if the object is positioned.
   if (style.GetPosition() == EPosition::kStatic &&
       !LayoutParentStyleForcesZIndexToCreateStackingContext(
@@ -769,23 +898,27 @@ void StyleAdjuster::AdjustComputedStyle(StyleResolverState& state,
 
   if (style.OverflowX() != EOverflow::kVisible ||
       style.OverflowY() != EOverflow::kVisible)
-    AdjustOverflow(style, element);
+    AdjustOverflow(style, element ? element : state.GetPseudoElement());
 
-  // overflow-clip-margin only applies if 'overflow: clip' is set along both
-  // axis or 'contain: paint'.
-  if (!style.ContainsPaint() && !(style.OverflowX() == EOverflow::kClip &&
-                                  style.OverflowY() == EOverflow::kClip)) {
-    style.SetOverflowClipMargin(
-        ComputedStyleInitialValues::InitialOverflowClipMargin());
-  }
-
-  if (StopPropagateTextDecorations(style, element))
+  // Highlight pseudos propagate decorations with inheritance only.
+  if (StopPropagateTextDecorations(style, element) || state.IsForHighlight())
     style.ClearAppliedTextDecorations();
   else
-    style.RestoreParentTextDecorations(parent_style);
-  style.ApplyTextDecorations(
-      parent_style.VisitedDependentColor(GetCSSPropertyTextDecorationColor()),
-      OverridesTextDecorationColors(element));
+    style.RestoreParentTextDecorations(layout_parent_style);
+
+  // The computed value of currentColor for highlight pseudos is the
+  // color that would have been used if no highlights were applied,
+  // i.e. the originating element's color.
+  if (state.UsesHighlightPseudoInheritance() && style.ColorIsCurrentColor() &&
+      state.OriginatingElementStyle()) {
+    style.SetColor(state.OriginatingElementStyle()->GetColor());
+  }
+
+  if (style.Display() != EDisplay::kContents) {
+    style.ApplyTextDecorations(
+        parent_style.VisitedDependentColor(GetCSSPropertyTextDecorationColor()),
+        OverridesTextDecorationColors(element));
+  }
 
   // Cull out any useless layers and also repeat patterns into additional
   // layers.
@@ -799,10 +932,11 @@ void StyleAdjuster::AdjustComputedStyle(StyleResolverState& state,
   // Let the theme also have a crack at adjusting the style.
   LayoutTheme::GetTheme().AdjustStyle(element, style);
 
+  AdjustStyleForInert(style, element);
+
   AdjustStyleForEditing(style);
 
   bool is_svg_root = false;
-  auto* svg_element = DynamicTo<SVGElement>(element);
 
   if (svg_element) {
     is_svg_root = svg_element->IsOutermostSVGSVGElement();
@@ -847,7 +981,8 @@ void StyleAdjuster::AdjustComputedStyle(StyleResolverState& state,
       baseline = layout_parent_style.CssDominantBaseline();
     }
     style.SetCssDominantBaseline(baseline);
-  } else if (element && element->IsMathMLElement()) {
+
+  } else if (is_mathml_element) {
     if (style.Display() == EDisplay::kContents) {
       // https://drafts.csswg.org/css-display/#unbox-mathml
       style.SetDisplay(EDisplay::kNone);
@@ -906,16 +1041,19 @@ void StyleAdjuster::AdjustComputedStyle(StyleResolverState& state,
     }
   }
 
-  if (RuntimeEnabledFeatures::LayoutNGBlockFragmentationEnabled()) {
+  AdjustAnchorQueryStyles(style);
+
+  if (!HasFullNGFragmentationSupport()) {
     // When establishing a block fragmentation context for LayoutNG, we require
     // that everything fragmentable inside can be laid out by NG natively, since
     // NG and legacy layout cannot cooperate within the same fragmentation
-    // context. Set a flag, so that we can quickly determine whether we need to
-    // check that an element is compatible with the NG block fragmentation
-    // machinery.
+    // context. And vice versa (everything inside a legacy fragmentation context
+    // needs to be legacy objects, in order to be fragmentable). Set a flag, so
+    // that we can quickly determine whether we need to check that an element is
+    // compatible with the block fragmentation implementation being used.
     if (style.SpecifiesColumns() ||
         (element && element->GetDocument().Printing()))
-      style.SetInsideNGFragmentationContext(true);
+      style.SetInsideFragmentationContextWithNondeterministicEngine(true);
   }
 }
 }  // namespace blink

@@ -14,12 +14,11 @@
 #include "base/callback.h"
 #include "base/containers/queue.h"
 #include "base/files/scoped_file.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/pickle.h"
 #include "base/synchronization/condition_variable.h"
 #include "base/synchronization/lock.h"
-#include "base/task_runner.h"
+#include "base/task/task_runner.h"
 #include "build/build_config.h"
 #include "ipc/ipc_listener.h"
 #include "ipc/ipc_platform_file.h"
@@ -113,6 +112,9 @@ class NaClIPCAdapter : public base::RefCountedThreadSafe<NaClIPCAdapter>,
   // purposes. This function will take ownership of the given channel.
   NaClIPCAdapter(std::unique_ptr<IPC::Channel> channel,
                  base::TaskRunner* runner);
+
+  NaClIPCAdapter(const NaClIPCAdapter&) = delete;
+  NaClIPCAdapter& operator=(const NaClIPCAdapter&) = delete;
 
   // Connect the channel. This must be called after the constructor that accepts
   // an IPC::ChannelHandle, and causes the Channel to be connected on the IO
@@ -225,8 +227,6 @@ class NaClIPCAdapter : public base::RefCountedThreadSafe<NaClIPCAdapter>,
 
   // To be accessed on the I/O thread (via task runner) only.
   IOThreadData io_thread_data_;
-
-  DISALLOW_COPY_AND_ASSIGN(NaClIPCAdapter);
 };
 
 // Export TranslatePepperFileReadWriteOpenFlags for testing.

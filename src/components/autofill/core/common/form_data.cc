@@ -8,6 +8,7 @@
 #include <tuple>
 
 #include "base/base64.h"
+#include "base/metrics/histogram_macros.h"
 #include "base/pickle.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
@@ -143,35 +144,25 @@ bool FormData::DynamicallySameFormAs(const FormData& form) const {
   return true;
 }
 
-bool FormData::IdentityComparator::operator()(const FormData& a,
-                                              const FormData& b) const {
-  // |unique_renderer_id| uniquely identifies the form, if and only if it is
-  // set; the other members compared below together uniquely identify the form
-  // as well.
-  auto tie = [](const FormData& f) {
-    return std::tie(f.host_frame, f.unique_renderer_id, f.name, f.id_attribute,
-                    f.name_attribute, f.url, f.action, f.is_form_tag);
-  };
-  if (tie(a) < tie(b))
-    return true;
-  if (tie(b) < tie(a))
+// static
+bool FormData::DeepEqual(const FormData& a, const FormData& b) {
+  // We compare all unique identifiers first, including the field renderer IDs,
+  // because we expect most inequalities to be due to them.
+  if (a.unique_renderer_id != b.unique_renderer_id ||
+      a.child_frames != b.child_frames ||
+      !base::ranges::equal(a.fields, b.fields, {},
+                           &FormFieldData::unique_renderer_id,
+                           &FormFieldData::unique_renderer_id)) {
     return false;
-  // A less-than relation on FormData::child_frames.
-  auto less_child_frames =
-      [](const std::vector<FrameTokenWithPredecessor>& as,
-         const std::vector<FrameTokenWithPredecessor>& bs) {
-        return base::ranges::lexicographical_compare(
-            as, bs, [](const auto& a, const auto& b) {
-              return std::tie(a.token, a.predecessor) <
-                     std::tie(b.token, b.predecessor);
-            });
-      };
-  if (less_child_frames(a.child_frames, b.child_frames))
-    return true;
-  if (less_child_frames(b.child_frames, a.child_frames))
+  }
+
+  if (a.name != b.name || a.id_attribute != b.id_attribute ||
+      a.name_attribute != b.name_attribute || a.url != b.url ||
+      a.action != b.action || a.is_form_tag != b.is_form_tag ||
+      !base::ranges::equal(a.fields, b.fields, &FormFieldData::DeepEqual)) {
     return false;
-  return base::ranges::lexicographical_compare(
-      a.fields, b.fields, FormFieldData::IdentityComparator());
+  }
+  return true;
 }
 
 bool FormHasNonEmptyPasswordField(const FormData& form) {
@@ -293,11 +284,6 @@ LogBuffer& operator<<(LogBuffer& buffer, const FormData& form) {
   buffer << CTag{"table"};
   buffer << CTag{"div"};
   return buffer;
-}
-
-bool FormDataEqualForTesting(const FormData& lhs, const FormData& rhs) {
-  FormData::IdentityComparator less;
-  return !less(lhs, rhs) && !less(rhs, lhs);
 }
 
 }  // namespace autofill

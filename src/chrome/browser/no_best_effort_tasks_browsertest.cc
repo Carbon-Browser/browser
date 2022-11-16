@@ -5,7 +5,6 @@
 #include "base/base_switches.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
-#include "base/macros.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/strings/string_piece.h"
@@ -43,6 +42,10 @@ class RunLoopUntilLoadedAndPainted : public content::WebContentsObserver {
   explicit RunLoopUntilLoadedAndPainted(content::WebContents* web_contents)
       : content::WebContentsObserver(web_contents) {}
 
+  RunLoopUntilLoadedAndPainted(const RunLoopUntilLoadedAndPainted&) = delete;
+  RunLoopUntilLoadedAndPainted& operator=(const RunLoopUntilLoadedAndPainted&) =
+      delete;
+
   ~RunLoopUntilLoadedAndPainted() override = default;
 
   // Runs a RunLoop on the main thread until the first non-empty frame is
@@ -72,11 +75,13 @@ class RunLoopUntilLoadedAndPainted : public content::WebContentsObserver {
   }
 
   base::RunLoop run_loop_;
-
-  DISALLOW_COPY_AND_ASSIGN(RunLoopUntilLoadedAndPainted);
 };
 
 class NoBestEffortTasksTest : public InProcessBrowserTest {
+ public:
+  NoBestEffortTasksTest(const NoBestEffortTasksTest&) = delete;
+  NoBestEffortTasksTest& operator=(const NoBestEffortTasksTest&) = delete;
+
  protected:
   NoBestEffortTasksTest() = default;
   ~NoBestEffortTasksTest() override = default;
@@ -92,14 +97,11 @@ class NoBestEffortTasksTest : public InProcessBrowserTest {
     host_resolver()->AddRule("*", "127.0.0.1");
     InProcessBrowserTest::SetUpOnMainThread();
   }
-
-  DISALLOW_COPY_AND_ASSIGN(NoBestEffortTasksTest);
 };
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 constexpr base::StringPiece kExtensionId = "ddchlicdkolnonkihahngkmmmjnjlkkf";
-constexpr base::TimeDelta kSendMessageRetryPeriod =
-    base::TimeDelta::FromMilliseconds(250);
+constexpr base::TimeDelta kSendMessageRetryPeriod = base::Milliseconds(250);
 #endif
 
 }  // namespace

@@ -15,10 +15,23 @@ void MockEnrollmentScreen::ExitScreen(Result screen_result) {
   exit_callback()->Run(screen_result);
 }
 
-MockEnrollmentScreen::~MockEnrollmentScreen() {}
+MockEnrollmentScreen::~MockEnrollmentScreen() = default;
 
-MockEnrollmentScreenView::MockEnrollmentScreenView() {}
+MockEnrollmentScreenView::MockEnrollmentScreenView() = default;
 
-MockEnrollmentScreenView::~MockEnrollmentScreenView() {}
+MockEnrollmentScreenView::~MockEnrollmentScreenView() {
+  if (screen_)
+    screen_->OnViewDestroyed(this);
+}
+
+void MockEnrollmentScreenView::Bind(EnrollmentScreen* screen) {
+  screen_ = screen;
+  MockBind(screen);
+}
+
+void MockEnrollmentScreenView::Unbind() {
+  screen_ = nullptr;
+  MockUnbind();
+}
 
 }  // namespace ash

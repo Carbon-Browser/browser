@@ -22,12 +22,12 @@
 #include "net/base/ip_address.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace chromeos {
+namespace ash {
 namespace {
 
-using local_discovery::FakeServiceDiscoveryDeviceLister;
-using local_discovery::ServiceDescription;
-using local_discovery::ServiceDiscoveryDeviceLister;
+using ::local_discovery::FakeServiceDiscoveryDeviceLister;
+using ::local_discovery::ServiceDescription;
+using ::local_discovery::ServiceDiscoveryDeviceLister;
 
 // Determine basic printer attributes deterministically but pseudorandomly based
 // on the printer name.  The exact values returned here are not really
@@ -73,7 +73,7 @@ enum class ServiceType {
 PrinterDetector::DetectedPrinter MakeExpectedPrinter(const std::string& name,
                                                      ServiceType service_type) {
   PrinterDetector::DetectedPrinter detected;
-  Printer& printer = detected.printer;
+  chromeos::Printer& printer = detected.printer;
   net::IPAddress ip_address = GetIPAddressFor(name);
   int port = GetPortFor(name);
   std::string scheme;
@@ -591,4 +591,4 @@ TEST_F(ZeroconfPrinterDetectorTest, DestroyedWithTasksPending) {
 }
 
 }  // namespace
-}  // namespace chromeos
+}  // namespace ash

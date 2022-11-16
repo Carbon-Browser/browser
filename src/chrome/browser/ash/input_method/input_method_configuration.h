@@ -5,29 +5,24 @@
 #ifndef CHROME_BROWSER_ASH_INPUT_METHOD_INPUT_METHOD_CONFIGURATION_H_
 #define CHROME_BROWSER_ASH_INPUT_METHOD_INPUT_METHOD_CONFIGURATION_H_
 
-#include "base/sequenced_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 // TODO(https://crbug.com/1164001): remove and use forward declaration.
-#include "ui/base/ime/chromeos/input_method_manager.h"
+#include "ui/base/ime/ash/input_method_manager.h"
 
 namespace ash {
 namespace input_method {
 
-// Initializes the InputMethodManager. Must be called before any calls to
-// GetInstance(). We explicitly initialize and shut down the global instance,
-// rather than making it a Singleton, to ensure clean startup and shutdown.
 void Initialize();
 
-// Similar to Initialize(), but can inject an alternative
-// InputMethodManager such as MockInputMethodManager for testing.
-// The injected object will be owned by the internal pointer and deleted
-// by Shutdown().
+// Similar to Initialize(), but can inject an alternative InputMethodManager
+// such as MockInputMethodManager for testing. The injected object will be
+// owned by the internal pointer and deleted by Shutdown().
 // TODO(nona): Remove this and use InputMethodManager::Initialize instead.
 void InitializeForTesting(InputMethodManager* mock_manager);
 
 // Disables the IME extension loading (e.g. for browser tests).
 void DisableExtensionLoading();
 
-// Destroys the global InputMethodManager instance.
 void Shutdown();
 
 }  // namespace input_method

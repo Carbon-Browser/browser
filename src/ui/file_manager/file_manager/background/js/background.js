@@ -126,11 +126,6 @@ class FileBrowserBackgroundImpl extends BackgroundBaseImpl {
     this.stringData = null;
 
     if (!window.isSWA) {
-      // Initialize listener for importer.handlePhotosAppMessage messages to
-      // the files app back-end. FIXME: Files SWA needs to support photos
-      // import workflow.
-      chrome.runtime.onMessageExternal.addListener(
-          this.onExternalMessageReceived_.bind(this));
       // FIXME: chrome.contextMenus not enabled for Files SWA yet. See service
       // onContextMenuClicked_ for adding "New Window" item to the OS shelf.
       chrome.contextMenus.onClicked.addListener(
@@ -140,7 +135,9 @@ class FileBrowserBackgroundImpl extends BackgroundBaseImpl {
     // Initialize string and volume manager related stuffs.
     this.initializationPromise_.then(strings => {
       this.stringData = strings;
-      this.initContextMenu_();
+      if (!window.isSWA) {
+        this.initContextMenu_();
+      }
       this.crostini.initEnabled();
 
       // Force disable of system notifications if the SWA feature flag is on.
@@ -244,7 +241,8 @@ class FileBrowserBackgroundImpl extends BackgroundBaseImpl {
             if (volume) {
               this.navigateToVolumeRoot_(volume, event.filePath);
             } else {
-              console.error('Got view event with invalid volume id.');
+              console.warn(
+                  `Got view event with invalid volume id: ${event.devicePath}`);
             }
           } else if (event.volumeId) {
             if (event.type === VolumeManagerCommon.VOLUME_ALREADY_MOUNTED) {
@@ -254,7 +252,7 @@ class FileBrowserBackgroundImpl extends BackgroundBaseImpl {
               this.navigateToVolumeWhenReady_(event.volumeId, event.filePath);
             }
           } else {
-            console.error('Got view event with no actionable destination.');
+            console.warn('Got view event with no actionable destination.');
           }
         });
   }
@@ -273,7 +271,7 @@ class FileBrowserBackgroundImpl extends BackgroundBaseImpl {
           */
          (volumeManager) => {
            return volumeManager.whenVolumeInfoReady(volumeId).catch((e) => {
-             console.error(
+             console.warn(
                  'Unable to find volume for id: ' + volumeId +
                  '. Error: ' + e.message);
            });
@@ -373,8 +371,9 @@ class FileBrowserBackgroundImpl extends BackgroundBaseImpl {
    * @private
    * @override
    */
-  onLaunched_(launchData) {
+  async onLaunched_(launchData) {
     metrics.startInterval('Load.BackgroundLaunch');
+    console.warn('onLaunched: ' + (launchData ? launchData.source : ''));
     if (!launchData || !launchData.items || launchData.items.length == 0) {
       this.launch_(undefined);
       return;
@@ -411,18 +410,6 @@ class FileBrowserBackgroundImpl extends BackgroundBaseImpl {
         metrics.recordInterval('Load.BackgroundLaunch');
       });
     });
-  }
-
-  /**
-   * Handles a message received via chrome.runtime.sendMessageExternal.
-   *
-   * @param {*} message
-   * @param {MessageSender} sender
-   */
-  onExternalMessageReceived_(message, sender) {
-    if ('origin' in sender && sender.origin === GPLUS_PHOTOS_APP_ORIGIN) {
-      importer.handlePhotosAppMessage(message);
-    }
   }
 
   /**
@@ -473,12 +460,12 @@ class FileBrowserBackgroundImpl extends BackgroundBaseImpl {
               // Do not clone the selection url, only the current directory.
               currentDirectoryURL:
                   window.appWindows[key]
-                      .contentWindow.appState.currentDirectoryURL
+                      .contentWindow.appState.currentDirectoryURL,
             };
             launcher.launchFileManager(appState);
           })
           .catch(error => {
-            console.error(error.stack || error);
+            console.warn(error.stack || error);
           });
     }
   }
@@ -539,7 +526,7 @@ class FileBrowserBackgroundImpl extends BackgroundBaseImpl {
           }
         })
         .catch(error => {
-          console.error(error.stack || error);
+          console.warn(error.stack || error);
         });
   }
 
@@ -566,7 +553,7 @@ class FileBrowserBackgroundImpl extends BackgroundBaseImpl {
     chrome.contextMenus.create({
       id: 'new-window',
       contexts: ['launcher'],
-      title: str('NEW_WINDOW_BUTTON_LABEL')
+      title: str('NEW_WINDOW_BUTTON_LABEL'),
     });
   }
 }
@@ -583,10 +570,6 @@ const DIALOG_ID_PREFIX = 'dialog#';
  * @type {number}
  */
 let nextFileManagerDialogID = 0;
-
-/** @const {!string} */
-const GPLUS_PHOTOS_APP_ORIGIN =
-    'chrome-extension://efjnaogkjbogokcnohkmnjdojkikgobo';
 
 /**
  * Singleton instance of Background object.

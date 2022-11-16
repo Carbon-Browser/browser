@@ -30,7 +30,7 @@
 #include "services/resource_coordinator/public/mojom/memory_instrumentation/constants.mojom.h"
 #include "services/resource_coordinator/public/mojom/memory_instrumentation/memory_instrumentation.mojom.h"
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 #include "base/mac/mac_util.h"
 #endif
 
@@ -44,7 +44,7 @@ namespace {
 
 memory_instrumentation::CoordinatorImpl* g_coordinator_impl;
 
-constexpr base::TimeDelta kHeapDumpTimeout = base::TimeDelta::FromSeconds(60);
+constexpr base::TimeDelta kHeapDumpTimeout = base::Seconds(60);
 
 // A wrapper classes that allows a string to be exported as JSON in a trace
 // event.
@@ -63,7 +63,7 @@ class StringWrapper : public base::trace_event::ConvertableToTraceFormat {
 
 CoordinatorImpl::CoordinatorImpl()
     : next_dump_id_(0),
-      client_process_timeout_(base::TimeDelta::FromSeconds(15)),
+      client_process_timeout_(base::Seconds(15)),
       use_proto_writer_(!base::CommandLine::ForCurrentProcess()->HasSwitch(
           switches::kUseMemoryTrackingJsonWriter)),
       write_proto_heap_profile_(

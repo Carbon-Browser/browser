@@ -6,7 +6,6 @@
 
 #include "ash/public/cpp/login_screen_test_api.h"
 #include "ash/shell.h"
-#include "base/macros.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/values.h"
 #include "chrome/browser/ash/login/test/session_manager_state_waiter.h"
@@ -18,6 +17,7 @@
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/browser_window.h"
 #include "components/policy/policy_constants.h"
+#include "components/policy/proto/cloud_policy.pb.h"
 #include "components/user_manager/user.h"
 #include "components/user_manager/user_manager.h"
 #include "content/public/browser/notification_service.h"
@@ -28,12 +28,19 @@
 
 namespace policy {
 
+// TODO(crbug.com/1110548): Enable and modify for lacros.
 class ForceMaximizeOnFirstRunTest : public LoginPolicyTestBase {
+ public:
+  ForceMaximizeOnFirstRunTest(const ForceMaximizeOnFirstRunTest&) = delete;
+  ForceMaximizeOnFirstRunTest& operator=(const ForceMaximizeOnFirstRunTest&) =
+      delete;
+
  protected:
   ForceMaximizeOnFirstRunTest() {}
 
-  void GetMandatoryPoliciesValue(base::DictionaryValue* policy) const override {
-    policy->SetBoolean(key::kForceMaximizeOnFirstRun, true);
+  void GetPolicySettings(
+      enterprise_management::CloudPolicySettings* policy) const override {
+    policy->mutable_forcemaximizeonfirstrun()->set_value(true);
   }
 
   void SetUpResolution() {
@@ -47,13 +54,9 @@ class ForceMaximizeOnFirstRunTest : public LoginPolicyTestBase {
   const Browser* OpenNewBrowserWindow() {
     const user_manager::User* const user =
         user_manager::UserManager::Get()->GetActiveUser();
-    Profile* const profile =
-        chromeos::ProfileHelper::Get()->GetProfileByUser(user);
+    Profile* const profile = ash::ProfileHelper::Get()->GetProfileByUser(user);
     return CreateBrowser(profile);
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ForceMaximizeOnFirstRunTest);
 };
 
 IN_PROC_BROWSER_TEST_F(ForceMaximizeOnFirstRunTest, PRE_TwoRuns) {
@@ -83,7 +86,7 @@ IN_PROC_BROWSER_TEST_F(ForceMaximizeOnFirstRunTest, TwoRuns) {
   SetUpResolution();
   ash::LoginScreenTestApi::SubmitPassword(account_id(), "123456",
                                           true /* check_if_submittable */);
-  chromeos::test::WaitForPrimaryUserSessionStart();
+  ash::test::WaitForPrimaryUserSessionStart();
 
   const Browser* const browser = OpenNewBrowserWindow();
   ASSERT_TRUE(browser);
@@ -91,15 +94,18 @@ IN_PROC_BROWSER_TEST_F(ForceMaximizeOnFirstRunTest, TwoRuns) {
 }
 
 class ForceMaximizePolicyFalseTest : public ForceMaximizeOnFirstRunTest {
+ public:
+  ForceMaximizePolicyFalseTest(const ForceMaximizePolicyFalseTest&) = delete;
+  ForceMaximizePolicyFalseTest& operator=(const ForceMaximizePolicyFalseTest&) =
+      delete;
+
  protected:
   ForceMaximizePolicyFalseTest() : ForceMaximizeOnFirstRunTest() {}
 
-  void GetMandatoryPoliciesValue(base::DictionaryValue* policy) const override {
-    policy->SetBoolean(key::kForceMaximizeOnFirstRun, false);
+  void GetPolicySettings(
+      enterprise_management::CloudPolicySettings* policy) const override {
+    policy->mutable_forcemaximizeonfirstrun()->set_value(false);
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ForceMaximizePolicyFalseTest);
 };
 
 IN_PROC_BROWSER_TEST_F(ForceMaximizePolicyFalseTest, GeneralFirstRun) {

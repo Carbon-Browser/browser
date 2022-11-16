@@ -16,6 +16,7 @@
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
+#include "build/chromeos_buildflags.h"
 #include "ui/base/clipboard/clipboard_constants.h"
 #include "ui/base/clipboard/clipboard_format_type.h"
 #include "ui/base/clipboard/file_info.h"
@@ -27,39 +28,16 @@
 #include "url/url_canon.h"
 #include "url/url_util.h"
 
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+#include "ui/base/data_transfer_policy/data_transfer_endpoint_serializer.h"
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+
 namespace ui {
 
 namespace {
 
 constexpr FilenameToURLPolicy kFilenameToURLPolicy =
     FilenameToURLPolicy::CONVERT_FILENAMES;
-
-// TODO(crbug.com/1236708): This duplicates logic in tab_strip_ui::IsDraggedTab.
-// Check if it is really needed to extract app-specific types from pickled data
-// and, if yes, factor it out to a common place and reuse it here instead.
-void AddTabDragMimeTypes(const base::Pickle& pickle,
-                         std::vector<std::string>* mime_types) {
-  DCHECK(mime_types);
-  base::PickleIterator iter(pickle);
-  uint32_t entry_count = 0;
-  if (iter.ReadUInt32(&entry_count)) {
-    for (uint32_t i = 0; i < entry_count; ++i) {
-      base::StringPiece16 type;
-      base::StringPiece16 data;
-      if (!iter.ReadStringPiece16(&type) || !iter.ReadStringPiece16(&data))
-        break;
-      const std::u16string kWebUITabIdDataType =
-          u"application/vnd.chromium.tab";
-      const std::u16string kWebUITabGroupIdDataType =
-          u"application/vnd.chromium.tabgroup";
-      if (type == kWebUITabIdDataType) {
-        mime_types->push_back(base::UTF16ToASCII(kWebUITabIdDataType));
-      } else if (type == kWebUITabGroupIdDataType) {
-        mime_types->push_back(base::UTF16ToASCII(kWebUITabIdDataType));
-      }
-    }
-  }
-}
 
 // Converts mime type string to OSExchangeData::Format, if supported, otherwise
 // 0 is returned.
@@ -74,6 +52,12 @@ int MimeTypeToFormat(const std::string& mime_type) {
     return OSExchangeData::HTML;
   if (base::StartsWith(mime_type, ui::kMimeTypeOctetStream))
     return OSExchangeData::FILE_CONTENTS;
+  if (mime_type == ui::kMimeTypeWebCustomData)
+    return OSExchangeData::PICKLED_DATA;
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  if (mime_type == ui::kMimeTypeDataTransferEndpoint)
+    return OSExchangeData::DATA_TRANSFER_ENDPOINT;
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
   return 0;
 }
 
@@ -179,6 +163,20 @@ void AddUrl(PlatformClipboard::Data data, OSExchangeDataProvider* provider) {
   provider->SetURL(url, lines[1]);
 }
 
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+// Parses |data| as if it was an encoded custom mime type DataTransferEndpoint.
+// Used to synchronize the drag source metadata between Ash and Lacros.
+void AddSource(PlatformClipboard::Data data, OSExchangeDataProvider* provider) {
+  DCHECK(provider);
+
+  if (data->data().empty())
+    return;
+
+  std::string source_dte = BytesTo<std::string>(data);
+  provider->SetSource(ConvertJsonToDataTransferEndpoint(source_dte));
+}
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+
 }  // namespace
 
 WaylandExchangeDataProvider::WaylandExchangeDataProvider() = default;
@@ -212,6 +210,7 @@ std::vector<std::string> WaylandExchangeDataProvider::BuildMimeTypesList()
     mime_types.push_back(ui::kMimeTypeTextUtf8);
     mime_types.push_back(ui::kMimeTypeText);
   }
+
   if (HasFileContents()) {
     base::FilePath file_contents_filename;
     std::string file_contents;
@@ -225,13 +224,14 @@ std::vector<std::string> WaylandExchangeDataProvider::BuildMimeTypesList()
     mime_types.push_back(mime_type);
   }
 
-  for (auto item : pickle_data()) {
-    if (item.first == ClipboardFormatType::WebCustomDataType()) {
-      AddTabDragMimeTypes(item.second, &mime_types);
-      continue;
-    }
-    mime_types.push_back(item.first.GetName());
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  if (GetSource() != nullptr) {
+    mime_types.push_back(ui::kMimeTypeDataTransferEndpoint);
   }
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+
+  for (auto item : pickle_data())
+    mime_types.push_back(item.first.GetName());
 
   return mime_types;
 }
@@ -255,6 +255,11 @@ void WaylandExchangeDataProvider::AddData(PlatformClipboard::Data data,
     case OSExchangeData::FILE_NAME:
       AddFiles(data, this);
       break;
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+    case OSExchangeData::DATA_TRANSFER_ENDPOINT:
+      AddSource(data, this);
+      break;
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
   }
 }
 
@@ -285,6 +290,25 @@ bool WaylandExchangeDataProvider::ExtractData(const std::string& mime_type,
     out_content->append(file_contents);
     return true;
   }
+  if (HasCustomFormat(ui::ClipboardFormatType::WebCustomDataType())) {
+    base::Pickle pickle;
+    GetPickledData(ui::ClipboardFormatType::WebCustomDataType(), &pickle);
+    *out_content = std::string(reinterpret_cast<const char*>(pickle.data()),
+                               pickle.size());
+    return true;
+  }
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  if (mime_type == ui::kMimeTypeDataTransferEndpoint &&
+      GetSource() != nullptr) {
+    DataTransferEndpoint* data_src = GetSource();
+    out_content->append(ConvertDataTransferEndpointToJson(*data_src));
+    return true;
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+  // Lastly, attempt to extract string data. Note: Keep this as the last
+  // condition otherwise, for data maps that contain both string and custom
+  // data, for example, it may result in subtle issues, such as,
+  // https://crbug.com/1271311.
   if (HasString()) {
     std::u16string data;
     GetString(&data);

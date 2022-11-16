@@ -17,7 +17,7 @@ namespace {
 constexpr char kType[] = "coep";
 
 GURL StripUsernameAndPassword(const GURL& url) {
-  url::Replacements<char> replacements;
+  GURL::Replacements replacements;
   replacements.ClearUsername();
   replacements.ClearPassword();
   return url.ReplaceComponents(replacements);
@@ -26,13 +26,13 @@ GURL StripUsernameAndPassword(const GURL& url) {
 }  // namespace
 
 CrossOriginEmbedderPolicyReporter::CrossOriginEmbedderPolicyReporter(
-    StoragePartition* storage_partition,
+    base::WeakPtr<StoragePartition> storage_partition,
     const GURL& context_url,
     const absl::optional<std::string>& endpoint,
     const absl::optional<std::string>& report_only_endpoint,
     const base::UnguessableToken& reporting_source,
     const net::NetworkIsolationKey& network_isolation_key)
-    : storage_partition_(storage_partition),
+    : storage_partition_(std::move(storage_partition)),
       context_url_(context_url),
       endpoint_(endpoint),
       report_only_endpoint_(report_only_endpoint),
@@ -44,6 +44,11 @@ CrossOriginEmbedderPolicyReporter::CrossOriginEmbedderPolicyReporter(
 
 CrossOriginEmbedderPolicyReporter::~CrossOriginEmbedderPolicyReporter() =
     default;
+
+void CrossOriginEmbedderPolicyReporter::set_reporting_source(
+    const base::UnguessableToken& reporting_source) {
+  reporting_source_ = reporting_source;
+}
 
 void CrossOriginEmbedderPolicyReporter::QueueCorpViolationReport(
     const GURL& blocked_url,
@@ -107,16 +112,18 @@ void CrossOriginEmbedderPolicyReporter::QueueAndNotify(
         kType, context_url_, blink::mojom::ReportBody::New(std::move(list))));
   }
   if (endpoint) {
-    base::DictionaryValue body_to_pass;
+    base::Value::Dict body_to_pass;
     for (const auto& pair : body) {
-      body_to_pass.SetString(pair.first, pair.second);
+      body_to_pass.Set(pair.first, pair.second);
     }
-    body_to_pass.SetString("disposition", disposition);
+    body_to_pass.Set("disposition", disposition);
 
-    storage_partition_->GetNetworkContext()->QueueReport(
-        kType, *endpoint, context_url_, reporting_source_,
-        network_isolation_key_,
-        /*user_agent=*/absl::nullopt, std::move(body_to_pass));
+    if (auto* storage_partition = storage_partition_.get()) {
+      storage_partition->GetNetworkContext()->QueueReport(
+          kType, *endpoint, context_url_, reporting_source_,
+          network_isolation_key_,
+          /*user_agent=*/absl::nullopt, std::move(body_to_pass));
+    }
   }
 }
 

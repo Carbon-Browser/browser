@@ -5,13 +5,19 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_BOOKMARKS_BOOKMARK_BAR_VIEW_TEST_HELPER_H_
 #define CHROME_BROWSER_UI_VIEWS_BOOKMARKS_BOOKMARK_BAR_VIEW_TEST_HELPER_H_
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/views/bookmarks/bookmark_bar_view.h"
+#include "chrome/browser/ui/views/bookmarks/saved_tab_groups/saved_tab_group_bar.h"
 
 // Used to access private state of BookmarkBarView for testing.
 class BookmarkBarViewTestHelper {
  public:
   explicit BookmarkBarViewTestHelper(BookmarkBarView* bbv) : bbv_(bbv) {}
+
+  BookmarkBarViewTestHelper(const BookmarkBarViewTestHelper&) = delete;
+  BookmarkBarViewTestHelper& operator=(const BookmarkBarViewTestHelper&) =
+      delete;
+
   ~BookmarkBarViewTestHelper() {}
 
   size_t GetBookmarkButtonCount() { return bbv_->bookmark_buttons_.size(); }
@@ -28,14 +34,14 @@ class BookmarkBarViewTestHelper {
     return bbv_->managed_bookmarks_button_;
   }
 
+  SavedTabGroupBar* saved_tab_group_bar() { return bbv_->saved_tab_group_bar_; }
+
   int GetDropLocationModelIndexForTesting() {
     return bbv_->GetDropLocationModelIndexForTesting();
   }
 
  private:
-  BookmarkBarView* bbv_;
-
-  DISALLOW_COPY_AND_ASSIGN(BookmarkBarViewTestHelper);
+  raw_ptr<BookmarkBarView> bbv_;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_BOOKMARKS_BOOKMARK_BAR_VIEW_TEST_HELPER_H_

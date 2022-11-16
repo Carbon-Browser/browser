@@ -13,7 +13,7 @@
 #include "base/timer/timer.h"
 #include "chrome/browser/ash/smb_client/discovery/host_locator.h"
 #include "chrome/browser/ash/smb_client/discovery/netbios_client_interface.h"
-#include "chromeos/dbus/smbprovider/smb_provider_client.h"
+#include "chromeos/ash/components/dbus/smbprovider/smb_provider_client.h"
 #include "net/base/network_interfaces.h"
 
 namespace ash {
@@ -42,6 +42,9 @@ class NetBiosHostLocator : public HostLocator,
                      NetBiosClientFactory client_factory,
                      SmbProviderClient* smb_provider_client,
                      std::unique_ptr<base::OneShotTimer> timer);
+
+  NetBiosHostLocator(const NetBiosHostLocator&) = delete;
+  NetBiosHostLocator& operator=(const NetBiosHostLocator&) = delete;
 
   ~NetBiosHostLocator() override;
 
@@ -108,8 +111,6 @@ class NetBiosHostLocator : public HostLocator,
   // scope. One NetBiosClient exists for each network interface on the device.
   std::list<std::unique_ptr<NetBiosClientInterface>> netbios_clients_;
   std::unique_ptr<base::OneShotTimer> timer_;
-
-  DISALLOW_COPY_AND_ASSIGN(NetBiosHostLocator);
 };
 
 }  // namespace smb_client

@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <memory>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -34,10 +35,11 @@ namespace {
 gfx::Insets ConvertInsets(
     float device_pixel_ratio,
     const fuchsia::ui::gfx::ViewProperties& view_properties) {
-  return gfx::Insets(device_pixel_ratio * view_properties.inset_from_min.y,
-                     device_pixel_ratio * view_properties.inset_from_min.x,
-                     device_pixel_ratio * view_properties.inset_from_max.y,
-                     device_pixel_ratio * view_properties.inset_from_max.x);
+  return gfx::Insets::TLBR(
+      device_pixel_ratio * view_properties.inset_from_min.y,
+      device_pixel_ratio * view_properties.inset_from_min.x,
+      device_pixel_ratio * view_properties.inset_from_max.y,
+      device_pixel_ratio * view_properties.inset_from_max.x);
 }
 
 }  // namespace
@@ -50,12 +52,12 @@ ScenicWindow::ScenicWindow(ScenicWindowManager* window_manager,
       scenic_window_delegate_(properties.scenic_window_delegate),
       window_id_(manager_->AddWindow(this)),
       view_ref_(std::move(properties.view_ref_pair.view_ref)),
+      view_controller_(std::move(properties.view_controller)),
       event_dispatcher_(this),
       scenic_session_(manager_->GetScenic()),
       safe_presenter_(&scenic_session_),
       view_(&scenic_session_,
-            fuchsia::ui::views::ViewToken(
-                {zx::eventpair(std::move(properties.view_token))}),
+            std::move(std::move(properties.view_token)),
             std::move(properties.view_ref_pair.control_ref),
             CloneViewRef(),
             "chromium window"),
@@ -63,6 +65,11 @@ ScenicWindow::ScenicWindow(ScenicWindowManager* window_manager,
       input_node_(&scenic_session_),
       render_node_(&scenic_session_),
       bounds_(properties.bounds) {
+  if (view_controller_) {
+    view_controller_.set_error_handler(
+        fit::bind_member(this, &ScenicWindow::OnViewControllerDisconnected));
+  }
+
   scenic_session_.set_error_handler(
       fit::bind_member(this, &ScenicWindow::OnScenicError));
   scenic_session_.set_event_handler(
@@ -70,13 +77,11 @@ ScenicWindow::ScenicWindow(ScenicWindowManager* window_manager,
   scenic_session_.SetDebugName("Chromium ScenicWindow");
 
   // Subscribe to metrics events from the node. These events are used to
-  // get the device pixel ratio for the screen.
+  // get the device pixel ratio for the screen. In order to receive metrics
+  // events on this node, we must also attach it to the scene graph.
   node_.SetEventMask(fuchsia::ui::gfx::kMetricsEventMask);
-
-  // Add input shape.
-  node_.AddChild(input_node_);
-
-  node_.AddChild(render_node_);
+  view_.AddChild(node_);
+  safe_presenter_.QueuePresent();
 
   delegate_->OnAcceleratedWidgetAvailable(window_id_);
 
@@ -107,13 +112,22 @@ fuchsia::ui::views::ViewRef ScenicWindow::CloneViewRef() {
   return dup;
 }
 
-gfx::Rect ScenicWindow::GetBounds() const {
+gfx::Rect ScenicWindow::GetBoundsInPixels() const {
   return bounds_;
 }
 
-void ScenicWindow::SetBounds(const gfx::Rect& bounds) {
+void ScenicWindow::SetBoundsInPixels(const gfx::Rect& bounds) {
   // This path should only be reached in tests.
   bounds_ = bounds;
+}
+
+gfx::Rect ScenicWindow::GetBoundsInDIP() const {
+  return delegate_->ConvertRectToDIP(bounds_);
+}
+
+void ScenicWindow::SetBoundsInDIP(const gfx::Rect& bounds) {
+  // This path should only be reached in tests.
+  bounds_ = delegate_->ConvertRectToPixels(bounds);
 }
 
 void ScenicWindow::SetTitle(const std::u16string& title) {
@@ -143,6 +157,10 @@ void ScenicWindow::Hide() {
 }
 
 void ScenicWindow::Close() {
+  if (view_controller_) {
+    view_controller_->Dismiss();
+    view_controller_ = nullptr;
+  }
   Hide();
   delegate_->OnClosed();
 }
@@ -156,16 +174,21 @@ void ScenicWindow::PrepareForShutdown() {
 }
 
 void ScenicWindow::SetCapture() {
+  // TODO(crbug.com/1231516): Use Scenic capture APIs.
   NOTIMPLEMENTED_LOG_ONCE();
+  has_capture_ = true;
 }
 
 void ScenicWindow::ReleaseCapture() {
+  // TODO(crbug.com/1231516): Use Scenic capture APIs.
   NOTIMPLEMENTED_LOG_ONCE();
+  has_capture_ = false;
 }
 
 bool ScenicWindow::HasCapture() const {
+  // TODO(crbug.com/1231516): Use Scenic capture APIs.
   NOTIMPLEMENTED_LOG_ONCE();
-  return false;
+  return has_capture_;
 }
 
 void ScenicWindow::ToggleFullscreen() {
@@ -191,7 +214,11 @@ PlatformWindowState ScenicWindow::GetPlatformWindowState() const {
     return PlatformWindowState::kFullScreen;
   if (!is_view_attached_)
     return PlatformWindowState::kMinimized;
-  return PlatformWindowState::kNormal;
+
+  // TODO(crbug.com/1241868): We cannot tell what portion of the screen is
+  // occupied by the View, so report is as maximized to reduce the space used
+  // by any browser chrome.
+  return PlatformWindowState::kMaximized;
 }
 
 void ScenicWindow::Activate() {
@@ -221,11 +248,11 @@ void ScenicWindow::ConfineCursorToBounds(const gfx::Rect& bounds) {
   NOTIMPLEMENTED_LOG_ONCE();
 }
 
-void ScenicWindow::SetRestoredBoundsInPixels(const gfx::Rect& bounds) {
+void ScenicWindow::SetRestoredBoundsInDIP(const gfx::Rect& bounds) {
   NOTIMPLEMENTED_LOG_ONCE();
 }
 
-gfx::Rect ScenicWindow::GetRestoredBoundsInPixels() const {
+gfx::Rect ScenicWindow::GetRestoredBoundsInDIP() const {
   NOTIMPLEMENTED_LOG_ONCE();
   return gfx::Rect();
 }
@@ -271,7 +298,7 @@ void ScenicWindow::DispatchEvent(ui::Event* event) {
 
 void ScenicWindow::OnScenicError(zx_status_t status) {
   LOG(ERROR) << "scenic::Session failed with code " << status << ".";
-  delegate_->OnClosed();
+  delegate_->OnCloseRequest();
 }
 
 void ScenicWindow::OnScenicEvents(
@@ -298,6 +325,21 @@ void ScenicWindow::OnScenicEvents(
         case fuchsia::ui::gfx::Event::kViewDetachedFromScene: {
           DCHECK(event.gfx().view_detached_from_scene().view_id == view_.id());
           OnViewAttachedChanged(false);
+
+          // Detach the surface view. This is necessary to ensure that the
+          // current content doesn't become visible when the view is attached
+          // again.
+          render_node_.DetachChildren();
+          surface_view_holder_.reset();
+          safe_presenter_.QueuePresent();
+
+          // Destroy and recreate AcceleratedWidget. This will force the
+          // compositor drop the current LayerTreeFrameSink together with the
+          // corresponding ScenicSurface. They will be created again only after
+          // the window becomes visible again.
+          delegate_->OnAcceleratedWidgetDestroyed();
+          delegate_->OnAcceleratedWidgetAvailable(window_id_);
+
           break;
         }
         default:
@@ -340,7 +382,7 @@ void ScenicWindow::OnInputEvent(const fuchsia::ui::input::InputEvent& event) {
   } else {
     // Scenic doesn't care if the input event was handled, so ignore the
     // "handled" status.
-    ignore_result(event_dispatcher_.ProcessEvent(event));
+    std::ignore = event_dispatcher_.ProcessEvent(event);
   }
 }
 
@@ -355,11 +397,6 @@ void ScenicWindow::UpdateSize() {
 
   bounds_ = gfx::Rect(ceilf(width * device_pixel_ratio_),
                       ceilf(height * device_pixel_ratio_));
-
-  // Update this window's Screen's dimensions to match the new size.
-  ScenicScreen* screen = manager_->screen();
-  if (screen)
-    screen->OnWindowBoundsChanged(window_id_, bounds_);
 
   // Update the root node to be shown, or hidden, based on the View state.
   // If the root node is not visible then skip resizing content, etc.
@@ -392,12 +429,20 @@ bool ScenicWindow::UpdateRootNodeVisibility() {
   bool should_show_root_node = is_visible_ && !is_zero_sized();
   if (should_show_root_node != is_root_node_shown_) {
     is_root_node_shown_ = should_show_root_node;
-    if (should_show_root_node)
-      view_.AddChild(node_);
-    else
-      node_.Detach();
+    if (should_show_root_node) {
+      // Attach nodes to render content and receive input.
+      node_.AddChild(input_node_);
+      node_.AddChild(render_node_);
+    } else {
+      node_.DetachChildren();
+    }
   }
   return is_root_node_shown_;
+}
+
+void ScenicWindow::OnViewControllerDisconnected(zx_status_t status) {
+  view_controller_ = nullptr;
+  delegate_->OnCloseRequest();
 }
 
 }  // namespace ui

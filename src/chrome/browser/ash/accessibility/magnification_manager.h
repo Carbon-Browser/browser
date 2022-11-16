@@ -6,9 +6,9 @@
 #define CHROME_BROWSER_ASH_ACCESSIBILITY_MAGNIFICATION_MANAGER_H_
 
 #include "ash/public/cpp/accessibility_controller_enums.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
+#include "base/time/time.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_observer.h"
 #include "components/session_manager/core/session_manager.h"
@@ -18,6 +18,11 @@
 #include "ui/views/accessibility/ax_event_observer.h"
 
 class PrefChangeRegistrar;
+
+namespace gfx {
+class Point;
+class Rect;
+}
 
 namespace ash {
 
@@ -37,6 +42,9 @@ class MagnificationManager
       public ui::EventHandler,
       public views::AXEventObserver {
  public:
+  MagnificationManager(const MagnificationManager&) = delete;
+  MagnificationManager& operator=(const MagnificationManager&) = delete;
+
   // Creates an instance of MagnificationManager. This should be called once.
   static void Initialize();
 
@@ -119,8 +127,6 @@ class MagnificationManager
 
   std::unique_ptr<PrefChangeRegistrar> pref_change_registrar_;
   base::WeakPtrFactory<MagnificationManager> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(MagnificationManager);
 };
 
 }  // namespace ash

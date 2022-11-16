@@ -13,6 +13,7 @@
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
 #include "base/threading/thread_task_runner_handle.h"
+#include "base/time/time.h"
 #include "components/autofill/core/browser/proto/strike_data.pb.h"
 #include "components/leveldb_proto/public/proto_database.h"
 #include "components/leveldb_proto/public/proto_database_provider.h"
@@ -33,6 +34,9 @@ class TestStrikeDatabase : public StrikeDatabase {
     database_initialized_ = true;
   }
 
+  TestStrikeDatabase(const TestStrikeDatabase&) = delete;
+  TestStrikeDatabase& operator=(const TestStrikeDatabase&) = delete;
+
   void AddProtoEntries(
       std::vector<std::pair<std::string, StrikeData>> entries_to_add,
       const SetValueCallback& callback) {
@@ -46,9 +50,6 @@ class TestStrikeDatabase : public StrikeDatabase {
         /*keys_to_remove=*/std::make_unique<std::vector<std::string>>(),
         callback);
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(TestStrikeDatabase);
 };
 
 }  // anonymous namespace
@@ -296,6 +297,22 @@ TEST_F(StrikeDatabaseTest, ClearStrikesForKeys) {
   expected_keys.emplace_back(key3);
   EXPECT_EQ(strike_database_->GetAllStrikeKeysForProject("otherproject"),
             expected_keys);
+  ClearAllProtoStrikes();
+}
+
+// Test to ensure that the timestamp of strike being added is logged and
+// retrieved correctly.
+TEST_F(StrikeDatabaseTest, LastUpdateTimestamp) {
+  strike_database_->AddStrikes(1, "fake key");
+  base::Time strike_added_timestamp =
+      base::Time::FromDeltaSinceWindowsEpoch(base::Microseconds(
+          strike_database_->GetLastUpdatedTimestamp("fake key")));
+  EXPECT_FALSE(strike_added_timestamp.is_null());
+
+  strike_database_->AddStrikes(1, "fake key");
+  EXPECT_LT(strike_added_timestamp,
+            base::Time::FromDeltaSinceWindowsEpoch(base::Microseconds(
+                strike_database_->GetLastUpdatedTimestamp("fake key"))));
   ClearAllProtoStrikes();
 }
 

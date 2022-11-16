@@ -22,7 +22,7 @@
 #include "services/network/public/cpp/web_sandbox_flags.h"
 #include "services/network/public/mojom/web_sandbox_flags.mojom-shared.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_provider.h"
-#include "third_party/blink/public/mojom/frame/frame_owner_element_type.mojom.h"
+#include "third_party/blink/public/common/frame/frame_owner_element_type.h"
 
 namespace extensions {
 
@@ -94,22 +94,30 @@ void MimeHandlerViewEmbedder::ReadyToCommitNavigation(
     content::NavigationHandle* handle) {
   if (handle->GetFrameTreeNodeId() != frame_tree_node_id_)
     return;
+  if (render_frame_host_)
+    return;
+
+  // It's possible for the navigation to the template HTML document to fail
+  // (e.g. attempting to load a PDF in a fenced frame).
+  if (handle->GetNetErrorCode() != net::OK) {
+    DestroySelf();
+    return;
+  }
+
   // We should've deleted the MimeHandlerViewEmbedder at this point if the frame
   // is sandboxed.
   DCHECK_EQ(network::mojom::WebSandboxFlags::kNone,
             handle->SandboxFlagsToCommit() &
                 network::mojom::WebSandboxFlags::kPlugins);
 
-  if (!render_frame_host_) {
-    render_frame_host_ = handle->GetRenderFrameHost();
-    GetContainerManager()->SetInternalId(internal_id_);
-  }
+  render_frame_host_ = handle->GetRenderFrameHost();
+  GetContainerManager()->SetInternalId(internal_id_);
 }
 
 void MimeHandlerViewEmbedder::DidFinishNavigation(
     content::NavigationHandle* handle) {
   if (!handle->HasCommitted() ||
-      frame_tree_node_id_ != handle->GetFrameTreeNodeId()) {
+      render_frame_host_ != handle->GetRenderFrameHost()) {
     return;
   }
   // We should've deleted the MimeHandlerViewEmbedder at this point if the frame
@@ -129,7 +137,7 @@ void MimeHandlerViewEmbedder::RenderFrameCreated(
       render_frame_host_ != render_frame_host->GetParent() ||
       render_frame_host_->GetLastCommittedURL() != resource_url_ ||
       render_frame_host->GetFrameOwnerElementType() !=
-          blink::mojom::FrameOwnerElementType::kEmbed ||
+          blink::FrameOwnerElementType::kEmbed ||
       render_frame_host->GetFrameName() != internal_id_) {
     return;
   }
@@ -179,8 +187,8 @@ void MimeHandlerViewEmbedder::CreateMimeHandlerViewGuest(
         ExtensionsAPIClient::Get()->CreateGuestViewManagerDelegate(
             browser_context));
   }
-  base::DictionaryValue create_params;
-  create_params.SetString(mime_handler_view::kViewId, stream_id_);
+  base::Value::Dict create_params;
+  create_params.Set(mime_handler_view::kStreamId, stream_id_);
   manager->CreateGuest(
       MimeHandlerViewGuest::Type, web_contents(), create_params,
       base::BindOnce(&MimeHandlerViewEmbedder::DidCreateMimeHandlerViewGuest,
@@ -216,12 +224,13 @@ void MimeHandlerViewEmbedder::DidCreateMimeHandlerViewGuest(
       web_contents()->GetBrowserContext())
       ->AttachGuest(embedder_frame_process_id, element_instance_id,
                     guest_instance_id,
-                    base::DictionaryValue() /* unused attach_params */);
+                    base::Value::Dict() /* unused attach_params */);
   // Full page plugin refers to <iframe> or main frame navigations to a
   // MimeHandlerView resource. In such cases MHVG does not have a frame
   // container.
-  bool is_full_page = !guest_view->maybe_has_frame_container() &&
-                      !guest_view->GetEmbedderFrame()->GetParent();
+  bool is_full_page =
+      !guest_view->maybe_has_frame_container() &&
+      !guest_view->GetEmbedderFrame()->GetParentOrOuterDocument();
   MimeHandlerViewAttachHelper::Get(embedder_frame_process_id)
       ->AttachToOuterWebContents(guest_view, embedder_frame_process_id,
                                  outer_contents_rfh_, element_instance_id,

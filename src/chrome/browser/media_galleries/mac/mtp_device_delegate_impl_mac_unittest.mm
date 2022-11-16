@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/memory/raw_ptr.h"
+
 #import <Foundation/Foundation.h>
 #import <ImageCaptureCore/ImageCaptureCore.h>
 
@@ -11,7 +13,6 @@
 #include "base/files/scoped_temp_dir.h"
 #include "base/mac/foundation_util.h"
 #include "base/mac/scoped_nsobject.h"
-#include "base/macros.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/synchronization/waitable_event.h"
 #include "chrome/browser/media_galleries/mac/mtp_device_delegate_impl_mac.h"
@@ -154,7 +155,11 @@ const char kTestFileContents[] = "test";
 
 class MTPDeviceDelegateImplMacTest : public testing::Test {
  public:
-  MTPDeviceDelegateImplMacTest() : camera_(NULL), delegate_(NULL) {}
+  MTPDeviceDelegateImplMacTest() : camera_(NULL), delegate_(nullptr) {}
+
+  MTPDeviceDelegateImplMacTest(const MTPDeviceDelegateImplMacTest&) = delete;
+  MTPDeviceDelegateImplMacTest& operator=(const MTPDeviceDelegateImplMacTest&) =
+      delete;
 
   void SetUp() override {
     storage_monitor::TestStorageMonitor* monitor =
@@ -278,7 +283,7 @@ class MTPDeviceDelegateImplMacTest : public testing::Test {
   MockMTPICCameraDevice* camera_;
 
   // This object needs special deletion inside the above |task_runner_|.
-  MTPDeviceDelegateImplMac* delegate_;
+  raw_ptr<MTPDeviceDelegateImplMac> delegate_;
 
   base::File::Error error_;
   base::File::Info info_;
@@ -286,9 +291,6 @@ class MTPDeviceDelegateImplMacTest : public testing::Test {
 
   base::File::Error overlapped_error_;
   storage::AsyncFileUtil::EntryList overlapped_file_list_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(MTPDeviceDelegateImplMacTest);
 };
 
 TEST_F(MTPDeviceDelegateImplMacTest, TestGetRootFileInfo) {

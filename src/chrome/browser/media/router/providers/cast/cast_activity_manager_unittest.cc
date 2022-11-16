@@ -13,6 +13,7 @@
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/json/json_reader.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/strcat.h"
 #include "base/test/bind.h"
@@ -40,6 +41,7 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/openscreen/src/cast/common/public/cast_streaming_app_ids.h"
 
 using base::test::IsJson;
 using base::test::ParseJson;
@@ -113,7 +115,7 @@ class MockLaunchSessionCallback {
               (const absl::optional<MediaRoute>& route,
                mojom::RoutePresentationConnectionPtr presentation_connections,
                const absl::optional<std::string>& error_message,
-               media_router::RouteRequestResult::ResultCode result_code));
+               media_router::mojom::RouteRequestResultCode result_code));
 };
 
 class MockMirroringActivity : public MirroringActivity {
@@ -149,7 +151,9 @@ class CastActivityManagerTest : public testing::Test,
  public:
   CastActivityManagerTest()
       : socket_service_(content::GetUIThreadTaskRunner({})),
-        message_handler_(&socket_service_) {
+        message_handler_(&socket_service_),
+        cast_streaming_app_id_(
+            openscreen::cast::GetCastStreamingAudioVideoAppId()) {
     media_sink_service_.AddOrUpdateSink(sink_);
     socket_.set_id(kChannelId);
   }
@@ -175,9 +179,6 @@ class CastActivityManagerTest : public testing::Test,
         }));
 
     RunUntilIdle();
-
-    // Make sure we get route updates.
-    manager_->AddRouteQuery(route_query_);
   }
 
   void TearDown() override {
@@ -224,7 +225,7 @@ class CastActivityManagerTest : public testing::Test,
       const absl::optional<MediaRoute>& route,
       mojom::RoutePresentationConnectionPtr presentation_connections,
       const absl::optional<std::string>&,
-      media_router::RouteRequestResult::ResultCode) {
+      media_router::mojom::RouteRequestResultCode) {
     ASSERT_TRUE(route);
     route_ = std::make_unique<MediaRoute>(*route);
     presentation_connections_ = std::move(presentation_connections);
@@ -234,7 +235,7 @@ class CastActivityManagerTest : public testing::Test,
       const absl::optional<MediaRoute>& route,
       mojom::RoutePresentationConnectionPtr presentation_connections,
       const absl::optional<std::string>& error_message,
-      media_router::RouteRequestResult::ResultCode result_code) {
+      media_router::mojom::RouteRequestResultCode result_code) {
     ASSERT_FALSE(route);
     LaunchSessionFailed();
   }
@@ -273,7 +274,7 @@ class CastActivityManagerTest : public testing::Test,
                                 const std::string& client_id = kClientId) {
     app_activity_callback_ =
         base::BindLambdaForTesting([this](MockAppActivity* activity) {
-          // TODO(jrw): Check parameters.
+          // TODO(crbug.com/1291744): Check parameters.
           EXPECT_CALL(*activity, AddClient);
           EXPECT_CALL(*activity, SendMessageToClient).Times(2);
           EXPECT_CALL(*activity, OnSessionSet).WillOnce([this]() {
@@ -342,14 +343,14 @@ class CastActivityManagerTest : public testing::Test,
     if (times == 0) {
       EXPECT_CALL(message_handler_, StopSession).Times(0);
     } else {
-      // TODO(jrw): Check other parameters
+      // TODO(crbug.com/1291744): Check other parameters
       EXPECT_CALL(message_handler_, StopSession(kChannelId, _, _, _))
           .Times(times);
     }
   }
 
   void LaunchNonSdkMirroringSession() {
-    CallLaunchSessionSuccess(kCastStreamingAppId, /* app_params */ "",
+    CallLaunchSessionSuccess(cast_streaming_app_id_, /* app_params */ "",
                              /* client_id */ "");
     mirroring_activity_callback_ =
         base::BindLambdaForTesting([this](MockMirroringActivity* activity) {
@@ -363,7 +364,7 @@ class CastActivityManagerTest : public testing::Test,
   }
 
   void LaunchCastSdkMirroringSession() {
-    CallLaunchSessionSuccess(kCastStreamingAppId, kAppParams, kClientId);
+    CallLaunchSessionSuccess(cast_streaming_app_id_, kAppParams, kClientId);
     mirroring_activity_callback_ =
         base::BindLambdaForTesting([this](MockMirroringActivity* activity) {
           EXPECT_CALL(*activity, OnSessionSet).WillOnce([this]() {
@@ -397,7 +398,7 @@ class CastActivityManagerTest : public testing::Test,
 
   void AddRemoteMirroringSession() {
     auto session =
-        CastSession::From(sink2_, MakeReceiverStatus(kCastStreamingAppId));
+        CastSession::From(sink2_, MakeReceiverStatus(cast_streaming_app_id_));
     manager_->OnSessionAddedOrUpdated(sink2_, *session);
     SetSessionForTest(sink2_.id(), std::move(session));
     DCHECK(mirroring_activity_);
@@ -426,13 +427,13 @@ class CastActivityManagerTest : public testing::Test,
       bool expect_success) {
     return base::BindLambdaForTesting(
         [expect_success](const absl::optional<std::string>& error_text,
-                         RouteRequestResult::ResultCode result_code) {
+                         mojom::RouteRequestResultCode result_code) {
           if (expect_success) {
             EXPECT_FALSE(error_text.has_value());
-            EXPECT_EQ(RouteRequestResult::OK, result_code);
+            EXPECT_EQ(mojom::RouteRequestResultCode::OK, result_code);
           } else {
             EXPECT_TRUE(error_text.has_value());
-            EXPECT_NE(RouteRequestResult::OK, result_code);
+            EXPECT_NE(mojom::RouteRequestResultCode::OK, result_code);
           }
         });
   }
@@ -441,9 +442,8 @@ class CastActivityManagerTest : public testing::Test,
   // optionally be saved in the variable pointed to by |route_ptr|.
   void ExpectSingleRouteUpdate() {
     updated_route_ = absl::nullopt;
-    EXPECT_CALL(mock_router_,
-                OnRoutesUpdated(mojom::MediaRouteProviderId::CAST,
-                                ElementsAre(_), route_query_, IsEmpty()))
+    EXPECT_CALL(mock_router_, OnRoutesUpdated(mojom::MediaRouteProviderId::CAST,
+                                              ElementsAre(_)))
         .WillOnce(WithArg<1>(
             [this](const auto& routes) { updated_route_ = routes[0]; }));
   }
@@ -452,8 +452,7 @@ class CastActivityManagerTest : public testing::Test,
   void ExpectEmptyRouteUpdate() {
     updated_route_ = absl::nullopt;
     EXPECT_CALL(mock_router_,
-                OnRoutesUpdated(mojom::MediaRouteProviderId::CAST, IsEmpty(),
-                                route_query_, IsEmpty()))
+                OnRoutesUpdated(mojom::MediaRouteProviderId::CAST, IsEmpty()))
         .Times(1);
   }
 
@@ -492,8 +491,8 @@ class CastActivityManagerTest : public testing::Test,
   MockCastAppDiscoveryService app_discovery_service_;
   std::unique_ptr<CastActivityManager> manager_;
   std::unique_ptr<CastSessionTracker> session_tracker_;
-  MockAppActivity* app_activity_ = nullptr;
-  MockMirroringActivity* mirroring_activity_ = nullptr;
+  raw_ptr<MockAppActivity> app_activity_ = nullptr;
+  raw_ptr<MockMirroringActivity> mirroring_activity_ = nullptr;
   MockAppActivityCallback app_activity_callback_ = base::DoNothing();
   MockMirroringActivityCallback mirroring_activity_callback_ =
       base::DoNothing();
@@ -503,6 +502,7 @@ class CastActivityManagerTest : public testing::Test,
   cast_channel::Result stop_session_callback_arg_ = cast_channel::Result::kOk;
   NiceMock<MockLogger> logger_;
   mojom::RoutePresentationConnectionPtr presentation_connections_;
+  const std::string cast_streaming_app_id_;
 };
 
 TEST_F(CastActivityManagerTest, LaunchAppSession) {
@@ -528,9 +528,9 @@ TEST_F(CastActivityManagerTest, LaunchMirroringSessionViaCastSdk) {
 TEST_F(CastActivityManagerTest, LaunchSiteInitiatedMirroringSession) {
   // For a session initiated by a website with the mirroring source we should be
   // establishing a presentation connection, even if the client ID isn't set.
-  CallLaunchSessionSuccess(kCastStreamingAppId, /*app_params*/ "",
+  CallLaunchSessionSuccess(cast_streaming_app_id_, /*app_params*/ "",
                            /*client_id*/ "");
-  ReceiveLaunchSuccessResponseFromReceiver(kCastStreamingAppId);
+  ReceiveLaunchSuccessResponseFromReceiver(cast_streaming_app_id_);
   EXPECT_FALSE(presentation_connections_.is_null());
   EXPECT_EQ(RouteControllerType::kMirroring, route_->controller_type());
 }
@@ -614,7 +614,7 @@ TEST_F(CastActivityManagerTest, LaunchSessionTerminatesExistingSessionOnSink) {
   // Use LaunchSessionParsed() instead of LaunchSession() here because
   // LaunchSessionParsed() is called asynchronously and will fail the test.
   manager_->LaunchSessionParsed(
-      // TODO(jrw): Verify that presentation ID is used correctly.
+      // TODO(crbug.com/1291744): Verify that presentation ID is used correctly.
       *source, sink_, kPresentationId2, origin_, kTabId2, /*incognito*/
       false,
       base::BindOnce(&CastActivityManagerTest::ExpectLaunchSessionSuccess,
@@ -638,6 +638,23 @@ TEST_F(CastActivityManagerTest, LaunchSessionTerminatesExistingSessionOnSink) {
 TEST_F(CastActivityManagerTest, LaunchSessionTerminatesExistingSessionFromTab) {
   LaunchAppSession();
   ExpectAppActivityStoppedTimes(1);
+
+  // Launch a new session from the same tab on a different sink.
+  auto source = CastMediaSource::FromMediaSourceId(MakeSourceId(kAppId2));
+  // Use LaunchSessionParsed() instead of LaunchSession() here because
+  // LaunchSessionParsed() is called asynchronously and will fail the test.
+  manager_->LaunchSessionParsed(
+      *source, sink2_, kPresentationId2, origin_, kTabId, /*incognito*/
+      false,
+      base::BindOnce(&CastActivityManagerTest::ExpectLaunchSessionSuccess,
+                     base::Unretained(this)),
+      data_decoder::DataDecoder::ValueOrError());
+}
+
+TEST_F(CastActivityManagerTest, LaunchSessionTerminatesPendingLaunchFromTab) {
+  CallLaunchSessionFailure();
+  // Stop session message not sent because session has not launched yet.
+  ExpectAppActivityStoppedTimes(0);
 
   // Launch a new session from the same tab on a different sink.
   auto source = CastMediaSource::FromMediaSourceId(MakeSourceId(kAppId2));
@@ -684,7 +701,7 @@ TEST_F(CastActivityManagerTest, UpdateNewlyCreatedMirroringSession) {
   LaunchCastSdkMirroringSession();
 
   ASSERT_TRUE(mirroring_activity_);
-  auto session = MakeSession(kCastStreamingAppId);
+  auto session = MakeSession(cast_streaming_app_id_);
   ExpectSingleRouteUpdate();
   manager_->OnSessionAddedOrUpdated(sink_, *session);
   RunUntilIdle();
@@ -782,8 +799,8 @@ TEST_F(CastActivityManagerTest, SecondPendingRequestCancelsTheFirst) {
   // The first request gets queued, then cancelled when the second request
   // replaces it.
   EXPECT_CALL(callback, Run)
-      .WillOnce(WithArg<3>([](RouteRequestResult::ResultCode code) {
-        EXPECT_EQ(RouteRequestResult::ResultCode::CANCELLED, code);
+      .WillOnce(WithArg<3>([](mojom::RouteRequestResultCode code) {
+        EXPECT_EQ(mojom::RouteRequestResultCode::CANCELLED, code);
       }));
   for (int i = 0; i < 2; i++) {
     manager_->LaunchSession(*source, sink_, kPresentationId, origin_, kTabId,

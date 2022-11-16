@@ -6,7 +6,8 @@
 
 #include "base/bind.h"
 #include "base/values.h"
-#include "chromeos/network/network_event_log.h"
+#include "chrome/browser/ash/quick_pair/fast_pair_support_utils.h"
+#include "chromeos/ash/components/network/network_event_log.h"
 #include "content/public/browser/web_ui.h"
 #include "device/bluetooth/bluetooth_adapter_factory.h"
 
@@ -14,6 +15,8 @@ namespace chromeos {
 namespace {
 
 const char kIsDeviceBlockedByPolicy[] = "isDeviceBlockedByPolicy";
+const char kRequestFastPairDeviceSupport[] =
+    "requestFastPairDeviceSupportStatus";
 
 }  // namespace
 
@@ -28,9 +31,13 @@ BluetoothHandler::BluetoothHandler() {
 BluetoothHandler::~BluetoothHandler() {}
 
 void BluetoothHandler::RegisterMessages() {
-  web_ui()->RegisterDeprecatedMessageCallback(
+  web_ui()->RegisterMessageCallback(
       kIsDeviceBlockedByPolicy,
       base::BindRepeating(&BluetoothHandler::HandleIsDeviceBlockedByPolicy,
+                          base::Unretained(this)));
+  web_ui()->RegisterMessageCallback(
+      kRequestFastPairDeviceSupport,
+      base::BindRepeating(&BluetoothHandler::HandleRequestFastPairDeviceSupport,
                           base::Unretained(this)));
 }
 
@@ -45,13 +52,11 @@ void BluetoothHandler::BluetoothDeviceAdapterReady(
 }
 
 void BluetoothHandler::HandleIsDeviceBlockedByPolicy(
-    const base::ListValue* args) {
+    const base::Value::List& args) {
   AllowJavascript();
-  std::string callback_id;
-  std::string address;
-  CHECK_EQ(2U, args->GetList().size());
-  CHECK(args->GetString(0, &callback_id));
-  CHECK(args->GetString(1, &address));
+  CHECK_EQ(2U, args.size());
+  const std::string& callback_id = args[0].GetString();
+  const std::string& address = args[1].GetString();
 
   if (!bluetooth_adapter_) {
     BLUETOOTH_LOG(EVENT) << "Bluetooth adapter not available.";
@@ -68,6 +73,15 @@ void BluetoothHandler::HandleIsDeviceBlockedByPolicy(
 
   ResolveJavascriptCallback(base::Value(callback_id),
                             base::Value(device->IsBlockedByPolicy()));
+}
+
+void BluetoothHandler::HandleRequestFastPairDeviceSupport(
+    const base::Value::List& args) {
+  AllowJavascript();
+
+  base::Value is_supported(
+      ash::quick_pair::IsFastPairSupported(bluetooth_adapter_));
+  FireWebUIListener("fast-pair-device-supported-status", is_supported);
 }
 
 }  // namespace settings

@@ -7,12 +7,16 @@
 #include <utility>
 #include <vector>
 
+#include "ash/components/arc/session/arc_bridge_service.h"
+#include "ash/components/arc/test/connection_holder_util.h"
+#include "ash/components/arc/test/fake_file_system_instance.h"
 #include "base/bind.h"
 #include "base/files/file.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/time/time.h"
 #include "chrome/browser/ash/arc/fileapi/chrome_content_provider_url_util.h"
 #include "chrome/browser/ash/file_manager/path_util.h"
 #include "chrome/browser/ash/file_system_provider/fake_extension_provider.h"
@@ -22,12 +26,9 @@
 #include "chrome/browser/chromeos/fileapi/file_system_backend.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile_manager.h"
-#include "chromeos/dbus/concierge/concierge_client.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
-#include "chromeos/dbus/virtual_file_provider/fake_virtual_file_provider_client.h"
-#include "components/arc/session/arc_bridge_service.h"
-#include "components/arc/test/connection_holder_util.h"
-#include "components/arc/test/fake_file_system_instance.h"
+#include "chromeos/ash/components/dbus/concierge/concierge_client.h"
+#include "chromeos/ash/components/dbus/virtual_file_provider/fake_virtual_file_provider_client.h"
+#include "chromeos/ash/components/dbus/virtual_file_provider/virtual_file_provider_client.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/test_utils.h"
 #include "storage/browser/file_system/external_mount_points.h"
@@ -56,8 +57,8 @@ class ArcFileSystemBridgeTest : public testing::Test {
 
   void SetUp() override {
     ASSERT_TRUE(temp_dir_.CreateUniqueTempDir());
-    chromeos::DBusThreadManager::Initialize();
-    chromeos::ConciergeClient::InitializeFake(/*fake_cicerone_client=*/nullptr);
+    ash::ConciergeClient::InitializeFake(/*fake_cicerone_client=*/nullptr);
+    ash::VirtualFileProviderClient::InitializeFake();
     profile_manager_ = std::make_unique<TestingProfileManager>(
         TestingBrowserProcess::GetGlobal());
     ASSERT_TRUE(profile_manager_->SetUp());
@@ -81,8 +82,8 @@ class ArcFileSystemBridgeTest : public testing::Test {
     arc_bridge_service_.file_system()->CloseInstance(&fake_file_system_);
     arc_file_system_bridge_.reset();
     profile_manager_.reset();
-    chromeos::ConciergeClient::Shutdown();
-    chromeos::DBusThreadManager::Shutdown();
+    ash::VirtualFileProviderClient::Shutdown();
+    ash::ConciergeClient::Shutdown();
   }
 
  protected:
@@ -132,7 +133,7 @@ TEST_F(ArcFileSystemBridgeTest, GetFileNameNonASCII) {
   run_loop.Run();
 }
 
-// net::UnescapeURLComponent() leaves UTF-8 lock icons escaped, but they're
+// base::UnescapeURLComponent() leaves UTF-8 lock icons escaped, but they're
 // valid file names, so shouldn't be left escaped here.
 TEST_F(ArcFileSystemBridgeTest, GetFileNameLockIcon) {
   const GURL url("externalfile:abc:test-filesystem:/%F0%9F%94%92");
@@ -217,8 +218,8 @@ TEST_F(ArcFileSystemBridgeTest, GetFileType) {
 TEST_F(ArcFileSystemBridgeTest, GetVirtualFileId) {
   // Set up fake virtual file provider client.
   constexpr char kId[] = "testfile";
-  auto* fake_client = static_cast<chromeos::FakeVirtualFileProviderClient*>(
-      chromeos::DBusThreadManager::Get()->GetVirtualFileProviderClient());
+  auto* fake_client = static_cast<ash::FakeVirtualFileProviderClient*>(
+      ash::VirtualFileProviderClient::Get());
   fake_client->set_expected_size(kTestFileSize);
   fake_client->set_result_id(kId);
 
@@ -251,8 +252,8 @@ TEST_F(ArcFileSystemBridgeTest, OpenFileToRead) {
   ASSERT_TRUE(temp_file.IsValid());
 
   constexpr char kId[] = "testfile";
-  auto* fake_client = static_cast<chromeos::FakeVirtualFileProviderClient*>(
-      chromeos::DBusThreadManager::Get()->GetVirtualFileProviderClient());
+  auto* fake_client = static_cast<ash::FakeVirtualFileProviderClient*>(
+      ash::VirtualFileProviderClient::Get());
   fake_client->set_expected_size(kTestFileSize);
   fake_client->set_result_id(kId);
   fake_client->set_result_fd(base::ScopedFD(temp_file.TakePlatformFile()));

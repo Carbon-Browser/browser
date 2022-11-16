@@ -8,7 +8,6 @@
 #include <memory>
 #include <string>
 
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "chromecast/public/media/media_pipeline_backend.h"
 #include "chromecast/public/media/media_pipeline_device_params.h"
@@ -29,8 +28,14 @@ class VideoDecoderNull;
 class MediaPipelineBackendAndroid : public MediaPipelineBackend {
  public:
   using RenderingDelay = AudioDecoder::RenderingDelay;
+  using AudioTrackTimestamp = AudioDecoder::AudioTrackTimestamp;
 
   explicit MediaPipelineBackendAndroid(const MediaPipelineDeviceParams& params);
+
+  MediaPipelineBackendAndroid(const MediaPipelineBackendAndroid&) = delete;
+  MediaPipelineBackendAndroid& operator=(const MediaPipelineBackendAndroid&) =
+      delete;
+
   ~MediaPipelineBackendAndroid() override;
 
   // MediaPipelineBackend implementation:
@@ -63,8 +68,6 @@ class MediaPipelineBackendAndroid : public MediaPipelineBackend {
   const MediaPipelineDeviceParams params_;
   std::unique_ptr<VideoDecoderNull> video_decoder_;
   std::unique_ptr<AudioDecoderAndroid> audio_decoder_;
-
-  DISALLOW_COPY_AND_ASSIGN(MediaPipelineBackendAndroid);
 };
 
 }  // namespace media

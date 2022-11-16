@@ -69,6 +69,11 @@ struct StructTraits<
     return element.config;
   }
 
+  static viz::SharedElementResourceId shared_element_resource_id(
+      const viz::CompositorFrameTransitionDirective::SharedElement& element) {
+    return element.shared_element_resource_id;
+  }
+
   static bool Read(
       viz::mojom::CompositorFrameTransitionDirectiveSharedElementDataView data,
       viz::CompositorFrameTransitionDirective::SharedElement* out);
@@ -85,6 +90,11 @@ struct StructTraits<viz::mojom::CompositorFrameTransitionDirectiveDataView,
   static viz::CompositorFrameTransitionDirective::Type type(
       const viz::CompositorFrameTransitionDirective& directive) {
     return directive.type();
+  }
+
+  static bool is_renderer_driven_animation(
+      const viz::CompositorFrameTransitionDirective& directive) {
+    return directive.is_renderer_driven_animation();
   }
 
   static viz::CompositorFrameTransitionDirective::Effect effect(

@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "base/compiler_specific.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "components/autofill/content/common/mojom/autofill_agent.mojom.h"
 #include "components/autofill/content/common/mojom/autofill_driver.mojom.h"
 #include "components/autofill/core/common/password_form_generation_data.h"
@@ -40,6 +40,11 @@ class ContentPasswordManagerDriver
   ContentPasswordManagerDriver(content::RenderFrameHost* render_frame_host,
                                PasswordManagerClient* client,
                                autofill::AutofillClient* autofill_client);
+
+  ContentPasswordManagerDriver(const ContentPasswordManagerDriver&) = delete;
+  ContentPasswordManagerDriver& operator=(const ContentPasswordManagerDriver&) =
+      delete;
+
   ~ContentPasswordManagerDriver() override;
 
   // Gets the driver for |render_frame_host|.
@@ -49,6 +54,7 @@ class ContentPasswordManagerDriver
   void BindPendingReceiver(
       mojo::PendingAssociatedReceiver<autofill::mojom::PasswordManagerDriver>
           pending_receiver);
+  void UnbindReceiver();
 
   // PasswordManagerDriver implementation.
   int GetId() const override;
@@ -63,11 +69,14 @@ class ContentPasswordManagerDriver
       const autofill::FormData& form_data,
       autofill::FieldRendererId generation_element_id,
       const std::u16string& password) override;
-  void TouchToFillClosed(ShowVirtualKeyboard show_virtual_keyboard) override;
   void FillSuggestion(const std::u16string& username,
                       const std::u16string& password) override;
   void FillIntoFocusedField(bool is_password,
                             const std::u16string& credential) override;
+#if BUILDFLAG(IS_ANDROID)
+  void TouchToFillClosed(ShowVirtualKeyboard show_virtual_keyboard) override;
+  void TriggerFormSubmission() override;
+#endif
   void PreviewSuggestion(const std::u16string& username,
                          const std::u16string& password) override;
   void ClearPreviewedForm() override;
@@ -131,7 +140,10 @@ class ContentPasswordManagerDriver
                                const std::u16string& typed_username,
                                int options,
                                const gfx::RectF& bounds) override;
-  void ShowTouchToFill() override;
+#if BUILDFLAG(IS_ANDROID)
+  void ShowTouchToFill(
+      autofill::mojom::SubmissionReadinessState submission_readiness) override;
+#endif
   void CheckSafeBrowsingReputation(const GURL& form_action,
                                    const GURL& frame_url) override;
   void FocusedInputChanged(
@@ -150,8 +162,8 @@ class ContentPasswordManagerDriver
   const mojo::AssociatedRemote<autofill::mojom::PasswordGenerationAgent>&
   GetPasswordGenerationAgent();
 
-  content::RenderFrameHost* render_frame_host_;
-  PasswordManagerClient* client_;
+  raw_ptr<content::RenderFrameHost> render_frame_host_;
+  raw_ptr<PasswordManagerClient> client_;
   PasswordGenerationFrameHelper password_generation_helper_;
   PasswordAutofillManager password_autofill_manager_;
 
@@ -169,8 +181,6 @@ class ContentPasswordManagerDriver
   content::RenderWidgetHost::KeyPressEventCallback key_press_handler_;
 
   base::WeakPtrFactory<ContentPasswordManagerDriver> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ContentPasswordManagerDriver);
 };
 
 }  // namespace password_manager

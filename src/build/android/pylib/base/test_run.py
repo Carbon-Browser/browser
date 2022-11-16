@@ -3,7 +3,7 @@
 # found in the LICENSE file.
 
 
-class TestRun(object):
+class TestRun:
   """An execution of a particular test on a particular device.
 
   This is expected to handle all logic that is specific to the combination of
@@ -27,12 +27,13 @@ class TestRun(object):
   def SetUp(self):
     raise NotImplementedError
 
-  def RunTests(self, results):
+  def RunTests(self, results, raw_logs_fh=None):
     """Runs Tests and populates |results|.
 
     Args:
       results: An array that should be populated with
                |base_test_result.TestRunResults| objects.
+      raw_logs_fh: An optional file handle to write raw logs to.
     """
     raise NotImplementedError
 

@@ -2,8 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {DialogType} from '../../common/js/dialog_type.js';
-
+import {DialogType} from './dialog_type.js';
 import {AllowedPaths} from './volume_manager_types.js';
 
 /**
@@ -88,5 +87,16 @@ export class FilesAppState {
      * @public {boolean|undefined}
      */
     this.showAndroidPickerApps;
+
+    /**
+     * Array of Files app mode dependent volume filter names. Defaults to an
+     * empty Array when undefined, and is the normal case (no filters).
+     *
+     * See filtered_volume_manager.js for details about the available volume
+     * filter names and their volume filter effects.
+     *
+     * @public {!Array<string>|undefined}
+     */
+    this.volumeFilter;
   }
 }

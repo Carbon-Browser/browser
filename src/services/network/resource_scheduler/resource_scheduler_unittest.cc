@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "base/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
@@ -21,16 +22,22 @@
 #include "base/test/simple_test_tick_clock.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_mock_time_task_runner.h"
+#include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "net/base/features.h"
 #include "net/base/host_port_pair.h"
 #include "net/base/isolation_info.h"
+#include "net/base/load_flags.h"
 #include "net/base/load_timing_info.h"
 #include "net/base/request_priority.h"
+#include "net/base/test_completion_callback.h"
+#include "net/disk_cache/disk_cache_test_util.h"
 #include "net/nqe/network_quality_estimator_test_util.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "net/traffic_annotation/network_traffic_annotation_test_helper.h"
 #include "net/url_request/url_request.h"
+#include "net/url_request/url_request_context.h"
+#include "net/url_request/url_request_context_builder.h"
 #include "net/url_request/url_request_test_util.h"
 #include "services/network/public/cpp/features.h"
 #include "services/network/public/mojom/network_context.mojom.h"
@@ -77,18 +84,15 @@ void ExpectSampleIsAtLeastSpecifiedValue(
 
 class TestRequestFactory;
 
-const int kChildId = 30;
-const int kRouteId = 75;
-const int kChildId2 = 43;
-const int kRouteId2 = 67;
-const int kChildId3 = 100;
-const int kRouteId3 = 100;
-const int kBackgroundChildId = 35;
-const int kBackgroundRouteId = 43;
-const int kBrowserChildId = mojom::kBrowserProcessId;
-const int kBrowserRouteId = 1;
-
 const size_t kNumResourceSchedulerClients = 20;
+
+using ClientId = ResourceScheduler::ClientId;
+constexpr ClientId kClientId1(30);
+constexpr ClientId kClientId2(60);
+constexpr ClientId kClientId3(90);
+constexpr ClientId kTrustedClientId(120);
+constexpr ClientId kBackgroundClientId(150);
+
 const size_t kMaxNumDelayableRequestsPerHostPerClient = 6;
 
 class TestRequest {
@@ -127,12 +131,18 @@ class TestRequest {
 
   virtual void Resume() { started_ = true; }
 
+  void SetMethod(const std::string& method) {
+    url_request_->set_method(method);
+  }
+
+  void SetLoadFlags(int flags) { url_request_->SetLoadFlags(flags); }
+
  private:
   bool started_;
   std::unique_ptr<net::URLRequest> url_request_;
   std::unique_ptr<ResourceScheduler::ScheduledResourceRequest>
       scheduled_request_;
-  ResourceScheduler* scheduler_;
+  raw_ptr<ResourceScheduler> scheduler_;
 };
 
 class CancelingTestRequest : public TestRequest {
@@ -167,9 +177,9 @@ class ResourceSchedulerTest : public testing::Test {
         net::features::kPartitionHttpServerPropertiesByNetworkIsolationKey);
     // This has to be done after initializing the feature list, since the value
     // of the feature is cached.
-    context_ = std::make_unique<net::TestURLRequestContext>(true);
-    context_->set_network_quality_estimator(&network_quality_estimator_);
-    context_->Init();
+    auto context_builder = net::CreateTestURLRequestContextBuilder();
+    context_builder->set_network_quality_estimator(&network_quality_estimator_);
+    context_ = context_builder->Build();
 
     InitializeScheduler();
   }
@@ -187,11 +197,11 @@ class ResourceSchedulerTest : public testing::Test {
     scheduler()->SetResourceSchedulerParamsManagerForTests(
         resource_scheduler_params_manager_);
 
-    scheduler_->OnClientCreated(kChildId, kRouteId,
+    scheduler_->OnClientCreated(kClientId1, IsBrowserInitiated(false),
                                 &network_quality_estimator_);
-    scheduler_->OnClientCreated(kBackgroundChildId, kBackgroundRouteId,
+    scheduler_->OnClientCreated(kBackgroundClientId, IsBrowserInitiated(false),
                                 &network_quality_estimator_);
-    scheduler_->OnClientCreated(kBrowserChildId, kBrowserRouteId,
+    scheduler_->OnClientCreated(kTrustedClientId, IsBrowserInitiated(true),
                                 &network_quality_estimator_);
   }
 
@@ -214,18 +224,16 @@ class ResourceSchedulerTest : public testing::Test {
 
   void CleanupScheduler() {
     if (scheduler_) {
-      scheduler_->OnClientDeleted(kChildId, kRouteId);
-      scheduler_->OnClientDeleted(kBackgroundChildId, kBackgroundRouteId);
-      scheduler_->OnClientDeleted(kBrowserChildId, kBrowserRouteId);
+      scheduler_->OnClientDeleted(kClientId1);
+      scheduler_->OnClientDeleted(kBackgroundClientId);
+      scheduler_->OnClientDeleted(kTrustedClientId);
     }
   }
 
-  std::unique_ptr<net::URLRequest> NewURLRequestWithChildAndRoute(
+  std::unique_ptr<net::URLRequest> NewURLRequest(
       const char* url,
       net::RequestPriority priority,
-      const net::NetworkTrafficAnnotationTag& traffic_annotation,
-      int child_id,
-      int route_id) {
+      const net::NetworkTrafficAnnotationTag& traffic_annotation) {
     std::unique_ptr<net::URLRequest> url_request(context_->CreateRequest(
         GURL(url), priority, nullptr, traffic_annotation));
     return url_request;
@@ -234,72 +242,59 @@ class ResourceSchedulerTest : public testing::Test {
   std::unique_ptr<net::URLRequest> NewURLRequest(
       const char* url,
       net::RequestPriority priority) {
-    return NewURLRequestWithChildAndRoute(
-        url, priority, TRAFFIC_ANNOTATION_FOR_TESTS, kChildId, kRouteId);
+    return NewURLRequest(url, priority, TRAFFIC_ANNOTATION_FOR_TESTS);
   }
 
-  std::unique_ptr<TestRequest> NewRequestWithRoute(
+  std::unique_ptr<TestRequest> NewRequestWithClientId(
       const char* url,
       net::RequestPriority priority,
-      int route_id) {
-    return NewRequestWithChildAndRoute(url, priority, kChildId, route_id);
-  }
-
-  std::unique_ptr<TestRequest> NewRequestWithChildAndRoute(
-      const char* url,
-      net::RequestPriority priority,
-      int child_id,
-      int route_id) {
+      ClientId client_id) {
     return GetNewTestRequest(url, priority, TRAFFIC_ANNOTATION_FOR_TESTS,
-                             child_id, route_id, true, net::IsolationInfo());
+                             client_id, true, net::IsolationInfo());
   }
 
   std::unique_ptr<TestRequest> NewRequest(const char* url,
                                           net::RequestPriority priority) {
-    return NewRequestWithChildAndRoute(url, priority, kChildId, kRouteId);
+    return NewRequestWithClientId(url, priority, kClientId1);
   }
 
   std::unique_ptr<TestRequest> NewBackgroundRequest(
       const char* url,
       net::RequestPriority priority) {
-    return NewRequestWithChildAndRoute(url, priority, kBackgroundChildId,
-                                       kBackgroundRouteId);
+    return NewRequestWithClientId(url, priority, kBackgroundClientId);
   }
 
-  std::unique_ptr<TestRequest> NewBrowserRequest(
+  std::unique_ptr<TestRequest> NewTrustedRequest(
       const char* url,
       net::RequestPriority priority) {
-    return NewRequestWithChildAndRoute(url, priority, kBrowserChildId,
-                                       kBrowserRouteId);
+    return NewRequestWithClientId(url, priority, kTrustedClientId);
   }
 
-  std::unique_ptr<TestRequest> NewBrowserRequestWithAnnotationTag(
+  std::unique_ptr<TestRequest> NewTrustedRequest(
       const char* url,
       net::RequestPriority priority,
       const net::NetworkTrafficAnnotationTag& traffic_annotation) {
-    return GetNewTestRequest(url, priority, traffic_annotation, kBrowserChildId,
-                             kBrowserRouteId, true, net::IsolationInfo());
+    return GetNewTestRequest(url, priority, traffic_annotation,
+                             kTrustedClientId, true, net::IsolationInfo());
   }
 
   std::unique_ptr<TestRequest> NewSyncRequest(const char* url,
                                               net::RequestPriority priority) {
-    return NewSyncRequestWithChildAndRoute(url, priority, kChildId, kRouteId);
+    return NewSyncRequestWithClientId(url, priority, kClientId1);
   }
 
   std::unique_ptr<TestRequest> NewBackgroundSyncRequest(
       const char* url,
       net::RequestPriority priority) {
-    return NewSyncRequestWithChildAndRoute(url, priority, kBackgroundChildId,
-                                           kBackgroundRouteId);
+    return NewSyncRequestWithClientId(url, priority, kBackgroundClientId);
   }
 
-  std::unique_ptr<TestRequest> NewSyncRequestWithChildAndRoute(
+  std::unique_ptr<TestRequest> NewSyncRequestWithClientId(
       const char* url,
       net::RequestPriority priority,
-      int child_id,
-      int route_id) {
+      ClientId client_id) {
     return GetNewTestRequest(url, priority, TRAFFIC_ANNOTATION_FOR_TESTS,
-                             child_id, route_id, false, net::IsolationInfo());
+                             client_id, false, net::IsolationInfo());
   }
 
   std::unique_ptr<TestRequest> NewRequestWithIsolationInfo(
@@ -307,23 +302,22 @@ class ResourceSchedulerTest : public testing::Test {
       net::RequestPriority priority,
       const net::IsolationInfo& isolation_info) {
     return GetNewTestRequest(url, priority, TRAFFIC_ANNOTATION_FOR_TESTS,
-                             kChildId, kRouteId, true, isolation_info);
+                             kClientId1, true, isolation_info);
   }
 
   std::unique_ptr<TestRequest> GetNewTestRequest(
       const char* url,
       net::RequestPriority priority,
       const net::NetworkTrafficAnnotationTag& traffic_annotation,
-      int child_id,
-      int route_id,
+      ClientId client_id,
       bool is_async,
       const net::IsolationInfo& isolation_info) {
-    std::unique_ptr<net::URLRequest> url_request(NewURLRequestWithChildAndRoute(
-        url, priority, traffic_annotation, child_id, route_id));
+    std::unique_ptr<net::URLRequest> url_request(
+        NewURLRequest(url, priority, traffic_annotation));
     url_request->set_isolation_info(isolation_info);
 
-    auto scheduled_request = scheduler_->ScheduleRequest(
-        child_id, route_id, is_async, url_request.get());
+    auto scheduled_request =
+        scheduler_->ScheduleRequest(client_id, is_async, url_request.get());
     auto request = std::make_unique<TestRequest>(
         std::move(url_request), std::move(scheduled_request), scheduler());
     request->Start();
@@ -513,12 +507,36 @@ class ResourceSchedulerTest : public testing::Test {
     InitializeScheduler();
   }
 
+  void CreateResourceEntryInCache(base::StringPiece url) {
+    auto* transaction_factory = context_->http_transaction_factory();
+    net::HttpCache* http_cache = transaction_factory->GetCache();
+    disk_cache::Backend* backend = nullptr;
+    net::TestCompletionCallback get_backend_callback;
+    int return_value =
+        http_cache->GetBackend(&backend, get_backend_callback.callback());
+    EXPECT_EQ(net::OK, get_backend_callback.GetResult(return_value));
+
+    net::HttpRequestInfo request_info;
+    request_info.url = GURL(url);
+    request_info.method = net::HttpRequestHeaders::kGetMethod;
+    request_info.network_isolation_key =
+        net::IsolationInfo().network_isolation_key();
+    request_info.is_subframe_document_resource = false;
+    std::string key = net::HttpCache::GenerateCacheKeyForRequest(&request_info);
+
+    TestEntryResultCompletionCallback create_entry_callback;
+    disk_cache::EntryResult result = backend->OpenOrCreateEntry(
+        key, net::RequestPriority::LOWEST, create_entry_callback.callback());
+    EXPECT_EQ(net::OK,
+              create_entry_callback.GetResult(std::move(result)).net_error());
+  }
+
   ResourceScheduler* scheduler() { return scheduler_.get(); }
 
   base::test::TaskEnvironment task_environment_;
   std::unique_ptr<ResourceScheduler> scheduler_;
   net::TestNetworkQualityEstimator network_quality_estimator_;
-  std::unique_ptr<net::TestURLRequestContext> context_;
+  std::unique_ptr<net::URLRequestContext> context_;
   ResourceSchedulerParamsManager resource_scheduler_params_manager_;
   base::SimpleTestTickClock tick_clock_;
 };
@@ -623,9 +641,8 @@ TEST_F(ResourceSchedulerTest,
 }
 
 TEST_F(ResourceSchedulerTest, BackgroundRequestStartsImmediately) {
-  const int route_id = 0;  // Indicates a background request.
   std::unique_ptr<TestRequest> request(
-      NewRequestWithRoute("http://host/1", net::LOWEST, route_id));
+      NewBackgroundRequest("http://host/1", net::LOWEST));
   EXPECT_TRUE(request->started());
 }
 
@@ -640,7 +657,7 @@ TEST_F(ResourceSchedulerTest, CancelOtherRequestsWhileResuming) {
   std::unique_ptr<net::URLRequest> url_request(
       NewURLRequest("http://host/low2", net::LOWEST));
   auto scheduled_request =
-      scheduler()->ScheduleRequest(kChildId, kRouteId, true, url_request.get());
+      scheduler()->ScheduleRequest(kClientId1, true, url_request.get());
   std::unique_ptr<CancelingTestRequest> low2(new CancelingTestRequest(
       std::move(url_request), std::move(scheduled_request), scheduler()));
   low2->Start();
@@ -803,14 +820,14 @@ TEST_F(ResourceSchedulerTest, LowerPriorityBrowserRequestsNotThrottled) {
   SetMaxDelayableRequests(1);
   // Dummies to enforce scheduling.
   std::unique_ptr<TestRequest> high(
-      NewBrowserRequest("http://host/high", net::HIGHEST));
+      NewTrustedRequest("http://host/high", net::HIGHEST));
   std::unique_ptr<TestRequest> low(
-      NewBrowserRequest("http://host/low", net::LOWEST));
+      NewTrustedRequest("http://host/low", net::LOWEST));
 
   std::unique_ptr<TestRequest> request(
-      NewBrowserRequest("http://host/req", net::LOWEST));
+      NewTrustedRequest("http://host/req", net::LOWEST));
   std::unique_ptr<TestRequest> idle(
-      NewBrowserRequest("http://host/idle", net::IDLE));
+      NewTrustedRequest("http://host/idle", net::IDLE));
   EXPECT_TRUE(request->started());
   EXPECT_TRUE(idle->started());
 
@@ -822,7 +839,7 @@ TEST_F(ResourceSchedulerTest, LowerPriorityBrowserRequestsNotThrottled) {
   std::vector<std::unique_ptr<TestRequest>> lows;
   for (int i = 0; i < kDefaultMaxNumDelayableRequestsPerClient + 1; ++i) {
     string url = "http://host" + base::NumberToString(i) + "/low";
-    lows.push_back(NewBrowserRequest(url.c_str(), net::LOWEST));
+    lows.push_back(NewTrustedRequest(url.c_str(), net::LOWEST));
     EXPECT_TRUE(lows.back()->started());
   }
 }
@@ -909,7 +926,7 @@ TEST_F(ResourceSchedulerTest,
         "metrics_report_uma",
         "Traffic annotation for unit, browser and other tests");
     // (COMPUTE_NETWORK_TRAFFIC_ANNOTATION_ID_HASH(""));
-    std::unique_ptr<TestRequest> lows = (NewBrowserRequestWithAnnotationTag(
+    std::unique_ptr<TestRequest> lows = (NewTrustedRequest(
         url.c_str(), net::LOWEST, tag));  //"metrics_report_uma"));
     EXPECT_EQ(test.expected_browser_initiated_traffic_started, lows->started())
         << " test_case=" << test.test_case;
@@ -954,7 +971,7 @@ TEST_F(ResourceSchedulerTest, P2PConnectionWentAway) {
         "metrics_report_uma",
         "Traffic annotation for unit, browser and other tests");
     // (COMPUTE_NETWORK_TRAFFIC_ANNOTATION_ID_HASH(""));
-    std::unique_ptr<TestRequest> lows = (NewBrowserRequestWithAnnotationTag(
+    std::unique_ptr<TestRequest> lows = (NewTrustedRequest(
         url.c_str(), net::LOWEST, tag));  //"metrics_report_uma"));
     EXPECT_FALSE(lows->started());
 
@@ -999,7 +1016,7 @@ TEST_F(ResourceSchedulerTest,
       "metrics_report_uma",
       "Traffic annotation for unit, browser and other tests");
   // (COMPUTE_NETWORK_TRAFFIC_ANNOTATION_ID_HASH(""));
-  std::unique_ptr<TestRequest> lows = (NewBrowserRequestWithAnnotationTag(
+  std::unique_ptr<TestRequest> lows = (NewTrustedRequest(
       url.c_str(), net::LOWEST, tag));  //"metrics_report_uma"));
   EXPECT_FALSE(lows->started());
 
@@ -1203,17 +1220,17 @@ TEST_F(ResourceSchedulerTest,
 // async revalidations to the same URL from being issued.
 TEST_F(ResourceSchedulerTest, RequestStartedAfterClientDeleted) {
   SetMaxDelayableRequests(1);
-  scheduler_->OnClientCreated(kChildId2, kRouteId2,
+  scheduler_->OnClientCreated(kClientId2, IsBrowserInitiated(false),
                               &network_quality_estimator_);
-  std::unique_ptr<TestRequest> high(NewRequestWithChildAndRoute(
-      "http://host/high", net::HIGHEST, kChildId2, kRouteId2));
-  std::unique_ptr<TestRequest> lowest1(NewRequestWithChildAndRoute(
-      "http://host/lowest", net::LOWEST, kChildId2, kRouteId2));
-  std::unique_ptr<TestRequest> lowest2(NewRequestWithChildAndRoute(
-      "http://host/lowest", net::LOWEST, kChildId2, kRouteId2));
+  std::unique_ptr<TestRequest> high(
+      NewRequestWithClientId("http://host/high", net::HIGHEST, kClientId2));
+  std::unique_ptr<TestRequest> lowest1(
+      NewRequestWithClientId("http://host/lowest", net::LOWEST, kClientId2));
+  std::unique_ptr<TestRequest> lowest2(
+      NewRequestWithClientId("http://host/lowest", net::LOWEST, kClientId2));
   EXPECT_FALSE(lowest2->started());
 
-  scheduler_->OnClientDeleted(kChildId2, kRouteId2);
+  scheduler_->OnClientDeleted(kClientId2);
   high.reset();
   lowest1.reset();
   base::RunLoop().RunUntilIdle();
@@ -1225,21 +1242,21 @@ TEST_F(ResourceSchedulerTest, RequestStartedAfterClientDeleted) {
 // This test is to verify that requests will be started at some point
 // even if they were not started by the destructor.
 TEST_F(ResourceSchedulerTest, RequestStartedAfterClientDeletedManyDelayable) {
-  scheduler_->OnClientCreated(kChildId2, kRouteId2,
+  scheduler_->OnClientCreated(kClientId2, IsBrowserInitiated(false),
                               &network_quality_estimator_);
-  std::unique_ptr<TestRequest> high(NewRequestWithChildAndRoute(
-      "http://host/high", net::HIGHEST, kChildId2, kRouteId2));
+  std::unique_ptr<TestRequest> high(
+      NewRequestWithClientId("http://host/high", net::HIGHEST, kClientId2));
   const int kDefaultMaxNumDelayableRequestsPerClient = 10;
   std::vector<std::unique_ptr<TestRequest>> delayable_requests;
   for (int i = 0; i < kDefaultMaxNumDelayableRequestsPerClient + 1; ++i) {
-    delayable_requests.push_back(NewRequestWithChildAndRoute(
-        "http://host/lowest", net::LOWEST, kChildId2, kRouteId2));
+    delayable_requests.push_back(
+        NewRequestWithClientId("http://host/lowest", net::LOWEST, kClientId2));
   }
-  std::unique_ptr<TestRequest> lowest(NewRequestWithChildAndRoute(
-      "http://host/lowest", net::LOWEST, kChildId2, kRouteId2));
+  std::unique_ptr<TestRequest> lowest(
+      NewRequestWithClientId("http://host/lowest", net::LOWEST, kClientId2));
   EXPECT_FALSE(lowest->started());
 
-  scheduler_->OnClientDeleted(kChildId2, kRouteId2);
+  scheduler_->OnClientDeleted(kClientId2);
   high.reset();
   delayable_requests.clear();
   base::RunLoop().RunUntilIdle();
@@ -1548,7 +1565,7 @@ TEST_F(ResourceSchedulerTest, NumActiveResourceSchedulerClientsUMA) {
       new base::HistogramTester);
   // Check that 0 is recorded when a new client is created and there are no
   // active scheduler clients in the background.
-  scheduler_->OnClientCreated(kChildId2, kRouteId2,
+  scheduler_->OnClientCreated(kClientId2, IsBrowserInitiated(false),
                               &network_quality_estimator_);
   histogram_tester->ExpectTotalCount(
       "ResourceScheduler.ActiveSchedulerClientsCount", 1);
@@ -1566,24 +1583,25 @@ TEST_F(ResourceSchedulerTest, NumActiveResourceSchedulerClientsUMA) {
   // Test that UMA data is recorded when a new client starts. Check that the
   // total number of samples is 2. Also, check that 1 active resource scheduler
   // client is recorded.
-  scheduler_->OnClientCreated(kChildId3, kRouteId3,
+  scheduler_->OnClientCreated(kClientId3, IsBrowserInitiated(false),
                               &network_quality_estimator_);
   histogram_tester->ExpectTotalCount(
       "ResourceScheduler.ActiveSchedulerClientsCount", 2);
   histogram_tester->ExpectBucketCount(
       "ResourceScheduler.ActiveSchedulerClientsCount", 1, 1);
-  scheduler_->OnClientDeleted(kChildId3, kRouteId3);
-  scheduler_->OnClientDeleted(kChildId2, kRouteId2);
+  scheduler_->OnClientDeleted(kClientId3);
+  scheduler_->OnClientDeleted(kClientId2);
   histogram_tester = std::make_unique<base::HistogramTester>();
 
   // Test that UMA counts are recorded correctly when multiple scheduler clients
   // are created in sequence. There are at most 20 active clients.
   std::vector<std::unique_ptr<TestRequest>> requests;
   for (size_t i = 0; i < kNumResourceSchedulerClients; ++i) {
-    scheduler_->OnClientCreated(kChildId3 + i, kRouteId3 + i,
+    scheduler_->OnClientCreated(kClientId3.AddForTesting(i),
+                                IsBrowserInitiated(false),
                                 &network_quality_estimator_);
-    requests.push_back(NewRequestWithChildAndRoute(
-        "http://host/medium", net::LOWEST, kChildId3 + i, kRouteId3 + i));
+    requests.push_back(NewRequestWithClientId("http://host/medium", net::LOWEST,
+                                              kClientId3.AddForTesting(i)));
     EXPECT_TRUE(requests[i]->started());
     histogram_tester->ExpectTotalCount(
         "ResourceScheduler.ActiveSchedulerClientsCount", 1 + i);
@@ -1596,12 +1614,12 @@ TEST_F(ResourceSchedulerTest, NumActiveResourceSchedulerClientsUMA) {
   // scheduler clients are deleted in sequence. Note: Create a new client
   // each time in order to update the UMA counts.
   for (size_t i = 0; i < kNumResourceSchedulerClients; ++i) {
-    scheduler_->OnClientDeleted(kChildId3 + 19 - i, kRouteId3 + 19 - i);
-    scheduler_->OnClientCreated(kChildId2, kRouteId2,
+    scheduler_->OnClientDeleted(kClientId3.AddForTesting(19 - i));
+    scheduler_->OnClientCreated(kClientId2, IsBrowserInitiated(false),
                                 &network_quality_estimator_);
     histogram_tester->ExpectBucketCount(
         "ResourceScheduler.ActiveSchedulerClientsCount", 20 - i, 1);
-    scheduler_->OnClientDeleted(kChildId2, kRouteId2);
+    scheduler_->OnClientDeleted(kClientId2);
   }
 }
 
@@ -1688,26 +1706,25 @@ TEST_F(ResourceSchedulerTest, MultipleInstances_1) {
 TEST_F(ResourceSchedulerTest, MultipleInstances_2) {
   SetMaxDelayableRequests(1);
   ResourceScheduler another_scheduler(base::DefaultTickClock::GetInstance());
-  another_scheduler.OnClientCreated(kChildId, kRouteId,
+  another_scheduler.OnClientCreated(kClientId1, IsBrowserInitiated(false),
                                     &network_quality_estimator_);
 
   std::unique_ptr<TestRequest> high(
       NewRequest("http://host/high", net::HIGHEST));
   std::unique_ptr<TestRequest> low(NewRequest("http://host/req", net::LOWEST));
 
-  std::unique_ptr<TestRequest> request(NewRequestWithChildAndRoute(
-      "http://host/req", net::LOWEST, kChildId, kRouteId));
+  std::unique_ptr<TestRequest> request(
+      NewRequestWithClientId("http://host/req", net::LOWEST, kClientId1));
 
   EXPECT_FALSE(request->started());
 
   {
     another_scheduler.SetResourceSchedulerParamsManagerForTests(
         FixedParamsManager(1));
-    std::unique_ptr<net::URLRequest> url_request(NewURLRequestWithChildAndRoute(
-        "http://host/another", net::LOWEST, TRAFFIC_ANNOTATION_FOR_TESTS,
-        kChildId, kRouteId));
-    auto scheduled_request = another_scheduler.ScheduleRequest(
-        kChildId, kRouteId, true, url_request.get());
+    std::unique_ptr<net::URLRequest> url_request(NewURLRequest(
+        "http://host/another", net::LOWEST, TRAFFIC_ANNOTATION_FOR_TESTS));
+    auto scheduled_request =
+        another_scheduler.ScheduleRequest(kClientId1, true, url_request.get());
     auto another_request = std::make_unique<TestRequest>(
         std::move(url_request), std::move(scheduled_request),
         &another_scheduler);
@@ -1717,7 +1734,7 @@ TEST_F(ResourceSchedulerTest, MultipleInstances_2) {
     EXPECT_TRUE(another_request->started());
   }
 
-  another_scheduler.OnClientDeleted(kChildId, kRouteId);
+  another_scheduler.OnClientDeleted(kClientId1);
 }
 
 // Verify that when |delay_requests_on_multiplexed_connections| is true, spdy
@@ -1925,7 +1942,7 @@ TEST_F(ResourceSchedulerTest,
 // duration are dispatched to the network.
 TEST_F(ResourceSchedulerTest, MaxQueuingDelaySet) {
   base::HistogramTester histogram_tester;
-  base::TimeDelta max_queuing_time = base::TimeDelta::FromSeconds(15);
+  base::TimeDelta max_queuing_time = base::Seconds(15);
   InitializeMaxQueuingDelayExperiment(max_queuing_time);
   network_quality_estimator_.SetAndNotifyObserversOfEffectiveConnectionType(
       net::EFFECTIVE_CONNECTION_TYPE_SLOW_2G);
@@ -1957,7 +1974,7 @@ TEST_F(ResourceSchedulerTest, MaxQueuingDelaySet) {
 
   // Advance the clock by more than |max_queuing_time|.
   tick_clock_.SetNowTicks(base::DefaultTickClock::GetInstance()->NowTicks() +
-                          max_queuing_time + base::TimeDelta::FromSeconds(1));
+                          max_queuing_time + base::Seconds(1));
 
   // Since the requests have been queued for too long, they should now be
   // dispatched. Trigger the calculation of queuing time by Triggering the
@@ -1990,7 +2007,7 @@ TEST_F(ResourceSchedulerTest, MaxQueuingDelaySet) {
 // Verify that when |max_queuing_time| is not set, requests queued for too long
 // duration are not dispatched to the network.
 TEST_F(ResourceSchedulerTest, MaxQueuingDelayNotSet) {
-  base::TimeDelta max_queuing_time = base::TimeDelta::FromSeconds(15);
+  base::TimeDelta max_queuing_time = base::Seconds(15);
   network_quality_estimator_.SetAndNotifyObserversOfEffectiveConnectionType(
       net::EFFECTIVE_CONNECTION_TYPE_SLOW_2G);
 
@@ -2021,7 +2038,7 @@ TEST_F(ResourceSchedulerTest, MaxQueuingDelayNotSet) {
 
   // Advance the clock by more than |max_queuing_time|.
   tick_clock_.SetNowTicks(base::DefaultTickClock::GetInstance()->NowTicks() +
-                          max_queuing_time + base::TimeDelta::FromSeconds(1));
+                          max_queuing_time + base::Seconds(1));
 
   // Triggering the finish of a single request should not trigger dispatch of
   // requests that have been queued for too long.
@@ -2038,7 +2055,7 @@ TEST_F(ResourceSchedulerTest, MaxQueuingDelayNotSet) {
 // Verify that when the timer for dispatching long queued requests is fired,
 // then the long queued requests are dispatched to the network.
 TEST_F(ResourceSchedulerTest, MaxQueuingDelayTimerFires) {
-  base::TimeDelta max_queuing_time = base::TimeDelta::FromSeconds(15);
+  base::TimeDelta max_queuing_time = base::Seconds(15);
   InitializeMaxQueuingDelayExperiment(max_queuing_time);
   network_quality_estimator_.SetAndNotifyObserversOfEffectiveConnectionType(
       net::EFFECTIVE_CONNECTION_TYPE_SLOW_2G);
@@ -2070,7 +2087,7 @@ TEST_F(ResourceSchedulerTest, MaxQueuingDelayTimerFires) {
 
   // Advance the clock by more than |max_queuing_time|.
   tick_clock_.SetNowTicks(base::DefaultTickClock::GetInstance()->NowTicks() +
-                          max_queuing_time + base::TimeDelta::FromSeconds(1));
+                          max_queuing_time + base::Seconds(1));
 
   // Since the requests have been queued for too long, they should now be
   // dispatched. Trigger the calculation of queuing time by calling
@@ -2086,7 +2103,7 @@ TEST_F(ResourceSchedulerTest, MaxQueuingDelayTimerFires) {
 // Verify that when the timer for dispatching long queued requests is not fired,
 // then the long queued requests are not dispatched to the network.
 TEST_F(ResourceSchedulerTest, MaxQueuingDelayTimerNotFired) {
-  base::TimeDelta max_queuing_time = base::TimeDelta::FromSeconds(15);
+  base::TimeDelta max_queuing_time = base::Seconds(15);
   InitializeMaxQueuingDelayExperiment(max_queuing_time);
   network_quality_estimator_.SetAndNotifyObserversOfEffectiveConnectionType(
       net::EFFECTIVE_CONNECTION_TYPE_SLOW_2G);
@@ -2118,7 +2135,7 @@ TEST_F(ResourceSchedulerTest, MaxQueuingDelayTimerNotFired) {
 
   // Advance the clock by more than |max_queuing_time|.
   tick_clock_.SetNowTicks(base::DefaultTickClock::GetInstance()->NowTicks() +
-                          max_queuing_time + base::TimeDelta::FromSeconds(1));
+                          max_queuing_time + base::Seconds(1));
 
   // Since the requests have been queued for too long, they are now eligible for
   // disptaching. However, since the timer is not fired, the requests would not
@@ -2135,7 +2152,7 @@ TEST_F(ResourceSchedulerTest, MaxQueuingDelayTimerNotFired) {
 // Verify that the timer to dispatch long queued requests starts only when there
 // are requests in-flight.
 TEST_F(ResourceSchedulerTest, MaxQueuingDelayTimerRunsOnRequestSchedule) {
-  base::TimeDelta max_queuing_time = base::TimeDelta::FromSeconds(15);
+  base::TimeDelta max_queuing_time = base::Seconds(15);
   InitializeMaxQueuingDelayExperiment(max_queuing_time);
   network_quality_estimator_.SetAndNotifyObserversOfEffectiveConnectionType(
       net::EFFECTIVE_CONNECTION_TYPE_SLOW_2G);
@@ -2203,7 +2220,7 @@ TEST_F(ResourceSchedulerTest, MaxQueuingDelayTimerRunsOnRequestSchedule) {
 TEST_F(ResourceSchedulerTest, NonDelayableRequestArrivesAfterDelayableStarts) {
   base::HistogramTester histogram_tester;
 
-  base::TimeDelta max_queuing_time = base::TimeDelta::FromSeconds(15);
+  base::TimeDelta max_queuing_time = base::Seconds(15);
   InitializeMaxQueuingDelayExperiment(max_queuing_time);
 
   InitializeScheduler();
@@ -2213,7 +2230,7 @@ TEST_F(ResourceSchedulerTest, NonDelayableRequestArrivesAfterDelayableStarts) {
   std::unique_ptr<TestRequest> low(NewRequest("http://host/low", net::LOWEST));
   EXPECT_TRUE(low->started());
 
-  const base::TimeDelta delay = base::TimeDelta::FromSeconds(5);
+  const base::TimeDelta delay = base::Seconds(5);
   tick_clock_.SetNowTicks(base::TimeTicks::Now() + delay);
 
   // Start a high priority request before |low| finishes.
@@ -2241,7 +2258,7 @@ TEST_F(ResourceSchedulerTest, NonDelayableRequestArrivesAfterDelayableStarts) {
 TEST_F(ResourceSchedulerTest, NonDelayableToNonDelayableMetrics) {
   base::HistogramTester histogram_tester_1;
 
-  base::TimeDelta max_queuing_time = base::TimeDelta::FromSeconds(15);
+  base::TimeDelta max_queuing_time = base::Seconds(15);
   InitializeMaxQueuingDelayExperiment(max_queuing_time);
 
   InitializeScheduler();
@@ -2252,8 +2269,7 @@ TEST_F(ResourceSchedulerTest, NonDelayableToNonDelayableMetrics) {
       NewRequest("http://host/high_1", net::HIGHEST));
   EXPECT_TRUE(high_1->started());
 
-  const base::TimeDelta high1_start_to_high2_start =
-      base::TimeDelta::FromSeconds(5);
+  const base::TimeDelta high1_start_to_high2_start = base::Seconds(5);
   tick_clock_.SetNowTicks(base::TimeTicks::Now() + high1_start_to_high2_start);
 
   // Start a high priority request before |high_1| finishes.
@@ -2281,8 +2297,7 @@ TEST_F(ResourceSchedulerTest, NonDelayableToNonDelayableMetrics) {
   histogram_tester_1.ExpectTotalCount(
       "ResourceScheduler.NonDelayableLastEndToNonDelayableStart", 0);
 
-  const base::TimeDelta high2_start_to_high2_end =
-      base::TimeDelta::FromSeconds(7);
+  const base::TimeDelta high2_start_to_high2_end = base::Seconds(7);
   tick_clock_.Advance(high2_start_to_high2_end);
 
   high_1.reset();
@@ -2290,8 +2305,7 @@ TEST_F(ResourceSchedulerTest, NonDelayableToNonDelayableMetrics) {
 
   base::HistogramTester histogram_tester_2;
 
-  const base::TimeDelta high2_end_to_high3_start =
-      base::TimeDelta::FromSeconds(2);
+  const base::TimeDelta high2_end_to_high3_start = base::Seconds(2);
   tick_clock_.Advance(high2_end_to_high3_start);
   // Start a high priority request after |high_1| and |high_2| finishes.
   std::unique_ptr<TestRequest> high_3(
@@ -2338,7 +2352,7 @@ TEST_F(ResourceSchedulerTest, ProactiveThrottlingExperiment) {
 
   for (const auto& test : tests) {
     double http_rtt_multiplier_for_proactive_throttling = 5;
-    base::TimeDelta http_rtt = base::TimeDelta::FromSeconds(1);
+    base::TimeDelta http_rtt = base::Seconds(1);
 
     if (test.enable_http_rtt_multiplier_for_proactive_throttling) {
       ConfigureProactiveThrottlingExperimentFor2G(
@@ -2368,7 +2382,7 @@ TEST_F(ResourceSchedulerTest, ProactiveThrottlingExperiment) {
     // |threshold_requests_anticipation| should not cause low priority requests
     // to start.
     tick_clock_.Advance(threshold_requests_anticipation -
-                        base::TimeDelta::FromMilliseconds(1));
+                        base::Milliseconds(1));
     std::unique_ptr<TestRequest> low_2(
         NewRequest("http://host/low_2", net::LOWEST));
     EXPECT_NE(test.enable_http_rtt_multiplier_for_proactive_throttling,
@@ -2376,7 +2390,7 @@ TEST_F(ResourceSchedulerTest, ProactiveThrottlingExperiment) {
 
     // Advancing the clock by |threshold_requests_anticipation| should cause low
     // priority requests to start.
-    tick_clock_.Advance(base::TimeDelta::FromMilliseconds(100));
+    tick_clock_.Advance(base::Milliseconds(100));
     std::unique_ptr<TestRequest> low_3(
         NewRequest("http://host/low_3", net::LOWEST));
     EXPECT_TRUE(low_3->started());
@@ -2396,7 +2410,7 @@ TEST_F(ResourceSchedulerTest,
   ConfigureProactiveThrottlingExperimentFor2G(
       http_rtt_multiplier_for_proactive_throttling);
 
-  base::TimeDelta http_rtt = base::TimeDelta::FromSeconds(1);
+  base::TimeDelta http_rtt = base::Seconds(1);
 
   network_quality_estimator_.SetStartTimeNullHttpRtt(http_rtt);
   base::RunLoop().RunUntilIdle();
@@ -2416,8 +2430,7 @@ TEST_F(ResourceSchedulerTest,
   // Advancing the clock by a duration less than
   // |threshold_requests_anticipation| should not cause low priority requests
   // to start.
-  tick_clock_.Advance(threshold_requests_anticipation -
-                      base::TimeDelta::FromMilliseconds(1));
+  tick_clock_.Advance(threshold_requests_anticipation - base::Milliseconds(1));
   std::unique_ptr<TestRequest> low_2(
       NewRequest("http://host/low_2", net::LOWEST));
   EXPECT_FALSE(low_2->started());
@@ -2465,7 +2478,7 @@ TEST_F(ResourceSchedulerTest, ProactiveThrottling_UnthrottledOnTimerFired) {
   ConfigureProactiveThrottlingExperimentFor2G(
       http_rtt_multiplier_for_proactive_throttling);
 
-  base::TimeDelta http_rtt = base::TimeDelta::FromSeconds(1);
+  base::TimeDelta http_rtt = base::Seconds(1);
 
   network_quality_estimator_.SetStartTimeNullHttpRtt(http_rtt);
   base::RunLoop().RunUntilIdle();
@@ -2485,8 +2498,7 @@ TEST_F(ResourceSchedulerTest, ProactiveThrottling_UnthrottledOnTimerFired) {
   // Advancing the clock by a duration less than
   // |threshold_requests_anticipation| should not cause low priority requests
   // to start.
-  tick_clock_.Advance(threshold_requests_anticipation +
-                      base::TimeDelta::FromMilliseconds(1));
+  tick_clock_.Advance(threshold_requests_anticipation + base::Milliseconds(1));
 
   // Since the requests have been queued for too long, they should now be
   // dispatched. Trigger the scheduling of the queued requests by calling
@@ -2494,6 +2506,108 @@ TEST_F(ResourceSchedulerTest, ProactiveThrottling_UnthrottledOnTimerFired) {
   scheduler()->DispatchLongQueuedRequestsForTesting();
   base::RunLoop().RunUntilIdle();
   EXPECT_TRUE(low_1->started());
+}
+
+// Verify that when the cache check timer is fired, those already cached and
+// long queued requests will be started. Non-cached, Non-GET, and requests with
+// load flags for bypassing cache or requiring validation won't be started.
+TEST_F(ResourceSchedulerTest, CheckCacheForQueuedRequests) {
+  network_quality_estimator_.SetAndNotifyObserversOfEffectiveConnectionType(
+      net::EFFECTIVE_CONNECTION_TYPE_SLOW_2G);
+
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeature(
+      features::kCheckCacheForQueuedRequests);
+  InitializeScheduler();
+
+  const char* cached_resource_url =
+      "http://cache-check/already-cached-resource";
+  const char* not_cached_resource_url =
+      "http://cache-check/not-cached-resource";
+  const char* cached_resource_for_post_url =
+      "http://cache-check/already-cached-resource-for-post";
+  const char* cached_resource_with_load_flags_url =
+      "http://cache-check/already-cached-resource-with-load-flags";
+
+  // Prepare the cache for already cached requests.
+  CreateResourceEntryInCache(cached_resource_url);
+  CreateResourceEntryInCache(cached_resource_for_post_url);
+
+  int non_cache_check_load_flags[] = {
+      net::LOAD_DISABLE_CACHE,
+      net::LOAD_BYPASS_CACHE,
+      net::LOAD_VALIDATE_CACHE,
+  };
+
+  for (int flag : non_cache_check_load_flags) {
+    std::string url =
+        cached_resource_with_load_flags_url + base::NumberToString(flag);
+    CreateResourceEntryInCache(url);
+  }
+
+  // Create some low priority requests which are all started.
+  std::vector<std::unique_ptr<TestRequest>> test_requests;
+  // Should be in sync with resource_scheduler.cc for effective connection type
+  // (ECT) 2G. For ECT of 2G, number of low priority requests allowed are:
+  // 8 - 3 * count of high priority requests in flight. That expression computes
+  // to 8 - 0  = 8.
+  // Queue up to the maximum limit. Use different host names to prevent the
+  // per host limit from kicking in.
+  const int max_low_priority_requests_allowed = 8;
+  for (int i = 0; i < max_low_priority_requests_allowed; ++i) {
+    // Keep unique hostnames to prevent the per host limit from kicking in.
+    std::string url = "http://host" + base::NumberToString(i) + "/low";
+    test_requests.push_back(NewRequest(url.c_str(), net::LOWEST));
+    EXPECT_TRUE(test_requests[i]->started());
+  }
+
+  // Newly created requests will be pending.
+  std::unique_ptr<TestRequest> cached_request(
+      NewRequest(cached_resource_url, net::LOWEST));
+  EXPECT_FALSE(cached_request->started());
+
+  std::unique_ptr<TestRequest> not_cached_request(
+      NewRequest(not_cached_resource_url, net::LOWEST));
+  EXPECT_FALSE(not_cached_request->started());
+
+  std::unique_ptr<TestRequest> post_cached_request(
+      NewRequest(cached_resource_for_post_url, net::LOWEST));
+  post_cached_request->SetMethod(net::HttpRequestHeaders::kPostMethod);
+  EXPECT_FALSE(post_cached_request->started());
+
+  std::vector<std::unique_ptr<TestRequest>> cached_requests_with_load_flags;
+  for (int flag : non_cache_check_load_flags) {
+    std::unique_ptr<TestRequest> request(NewRequest(
+        (cached_resource_with_load_flags_url + base::NumberToString(flag))
+            .c_str(),
+        net::LOWEST));
+    request->SetLoadFlags(request->url_request()->load_flags() | flag);
+    EXPECT_FALSE(request->started());
+    cached_requests_with_load_flags.push_back(std::move(request));
+  }
+
+  // Advance the clock by more than
+  // |features::kQueuedRequestsCacheCheckTimeThreshold|.
+  tick_clock_.SetNowTicks(
+      base::DefaultTickClock::GetInstance()->NowTicks() +
+      network::features::kQueuedRequestsCacheCheckTimeThreshold.Get() +
+      base::Milliseconds(1));
+
+  // Trigger the cache check timer. Cache check will be performed.
+  scheduler()->FireQueuedRequestsCacheCheckTimerForTesting();
+  base::RunLoop().RunUntilIdle();
+
+  // Long queued cached request is started.
+  EXPECT_TRUE(cached_request->started());
+  // Not cached request is still pending.
+  EXPECT_FALSE(not_cached_request->started());
+  // Cached request with 'POST' method is still pending.
+  EXPECT_FALSE(post_cached_request->started());
+  // Cached requests with load flags in |non_cache_check_load_flags| are still
+  // pending.
+  for (auto& request : cached_requests_with_load_flags) {
+    EXPECT_FALSE(request->started());
+  }
 }
 
 }  // unnamed namespace

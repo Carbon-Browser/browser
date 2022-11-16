@@ -9,7 +9,7 @@
 
 #include "base/bind.h"
 #include "base/callback.h"
-#include "base/cxx17_backports.h"
+#include "base/containers/fixed_flat_set.h"
 #include "base/json/string_escape.h"
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
@@ -74,7 +74,7 @@ Status ParseTimeDelta(base::TimeDelta* to_set,
     return Status(kInvalidArgument, "must be an integer");
   if (option.GetInt() < 0)
     return Status(kInvalidArgument, "must be positive or zero");
-  *to_set = base::TimeDelta::FromMilliseconds(option.GetInt());
+  *to_set = base::Milliseconds(option.GetInt());
   return Status(kOk);
 }
 
@@ -158,16 +158,17 @@ Status ParseMobileEmulation(const base::Value& option,
     if (!mobile_emulation->GetDictionary("deviceMetrics", &metrics))
       return Status(kInvalidArgument, "'deviceMetrics' must be a dictionary");
 
-    int width = 0;
-    int height = 0;
-    bool touch = true;
-    bool mobile = true;
-
-    if (metrics->FindKey("width") && !metrics->GetInteger("width", &width))
+    const base::Value* width_value = metrics->FindKey("width");
+    if (width_value && !width_value->is_int())
       return Status(kInvalidArgument, "'width' must be an integer");
 
-    if (metrics->FindKey("height") && !metrics->GetInteger("height", &height))
+    int width = width_value ? width_value->GetInt() : 0;
+
+    const base::Value* height_value = metrics->FindKey("height");
+    if (height_value && !height_value->is_int())
       return Status(kInvalidArgument, "'height' must be an integer");
+
+    int height = height_value ? height_value->GetInt() : 0;
 
     absl::optional<double> maybe_device_scale_factor =
         metrics->FindDoubleKey("pixelRatio");
@@ -175,14 +176,17 @@ Status ParseMobileEmulation(const base::Value& option,
         !maybe_device_scale_factor.has_value())
       return Status(kInvalidArgument, "'pixelRatio' must be a double");
 
-    if (metrics->FindKey("touch") && !metrics->GetBoolean("touch", &touch))
+    absl::optional<bool> touch = metrics->FindBoolKey("touch");
+    if (metrics->FindKey("touch") && !touch.has_value())
       return Status(kInvalidArgument, "'touch' must be a boolean");
 
-    if (metrics->FindKey("mobile") && !metrics->GetBoolean("mobile", &mobile))
+    absl::optional<bool> mobile = metrics->FindBoolKey("mobile");
+    if (metrics->FindKey("mobile") && !mobile.has_value())
       return Status(kInvalidArgument, "'mobile' must be a boolean");
 
-    DeviceMetrics* device_metrics = new DeviceMetrics(
-        width, height, maybe_device_scale_factor.value_or(0), touch, mobile);
+    DeviceMetrics* device_metrics =
+        new DeviceMetrics(width, height, maybe_device_scale_factor.value_or(0),
+                          touch.value_or(true), mobile.value_or(true));
     capabilities->device_metrics =
         std::unique_ptr<DeviceMetrics>(device_metrics);
   }
@@ -244,7 +248,7 @@ Status ParseTimeouts(const base::Value& option, Capabilities* capabilities) {
           timeout_ms_int64 < 0)
         return Status(kInvalidArgument, "value must be a non-negative integer");
       else
-        timeout = base::TimeDelta::FromMilliseconds(timeout_ms_int64);
+        timeout = base::Milliseconds(timeout_ms_int64);
     }
     if (type == "script") {
       capabilities->script_timeout = timeout;
@@ -316,11 +320,11 @@ Status ParseProxy(bool w3c_compliant,
         {"ftpProxy", "ftp"}, {"httpProxy", "http"}, {"sslProxy", "https"},
         {"socksProxy", "socks"}};
     const std::string kSocksProxy = "socksProxy";
-    const base::Value* option_value = NULL;
+    const base::Value* option_value = nullptr;
     std::string proxy_servers;
-    for (size_t i = 0; i < base::size(proxy_servers_options); ++i) {
-      if (!proxy_dict->Get(proxy_servers_options[i][0], &option_value) ||
-          option_value->is_none()) {
+    for (size_t i = 0; i < std::size(proxy_servers_options); ++i) {
+      option_value = proxy_dict->FindPath(proxy_servers_options[i][0]);
+      if (option_value == nullptr || option_value->is_none()) {
         continue;
       }
       if (!option_value->is_string()) {
@@ -331,11 +335,7 @@ Status ParseProxy(bool w3c_compliant,
       }
       std::string value = option_value->GetString();
       if (proxy_servers_options[i][0] == kSocksProxy) {
-        int socksVersion;
-        if (!proxy_dict->GetInteger("socksVersion", &socksVersion))
-          return Status(
-              kInvalidArgument,
-              "Specifying 'socksProxy' requires an integer for 'socksVersion'");
+        int socksVersion = proxy_dict->FindIntKey("socksVersion").value_or(-1);
         if (socksVersion < 0 || socksVersion > 255)
           return Status(
               kInvalidArgument,
@@ -351,7 +351,8 @@ Status ParseProxy(bool w3c_compliant,
     }
 
     std::string proxy_bypass_list;
-    if (proxy_dict->Get("noProxy", &option_value) && !option_value->is_none()) {
+    option_value = proxy_dict->FindPath("noProxy");
+    if (option_value != nullptr && !option_value->is_none()) {
       // W3C requires noProxy to be a list of strings, while legacy protocol
       // requires noProxy to be a string of comma-separated items.
       // In practice, library implementations are not always consistent,
@@ -584,6 +585,8 @@ Status ParseChromeOptions(
         base::BindRepeating(&ParseString, &capabilities->android_device_socket);
     parser_map["androidUseRunningApp"] = base::BindRepeating(
         &ParseBoolean, &capabilities->android_use_running_app);
+    parser_map["androidKeepAppDataDir"] = base::BindRepeating(
+        &ParseBoolean, &capabilities->android_keep_app_data_dir);
     parser_map["androidDevToolsPort"] = base::BindRepeating(
         &ParsePortNumber, &capabilities->android_devtools_port);
     parser_map["args"] = base::BindRepeating(&ParseSwitches);
@@ -672,7 +675,7 @@ void Switches::SetSwitch(const std::string& name) {
 }
 
 void Switches::SetSwitch(const std::string& name, const std::string& value) {
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   switch_map_[name] = base::UTF8ToWide(value);
 #else
   switch_map_[name] = value;
@@ -683,12 +686,34 @@ void Switches::SetSwitch(const std::string& name, const base::FilePath& value) {
   switch_map_[name] = value.value();
 }
 
+void Switches::SetMultivaluedSwitch(const std::string& name,
+                                    const std::string& value) {
+#if BUILDFLAG(IS_WIN)
+  auto native_value = base::UTF8ToWide(value);
+  auto delimiter = L',';
+#else
+  const auto& native_value = value;
+  const auto delimiter = ',';
+#endif
+  NativeString& switch_value = switch_map_[name];
+  if (switch_value.size() > 0 && switch_value.back() != delimiter) {
+    switch_value += delimiter;
+  }
+  switch_value += native_value;
+}
+
 void Switches::SetFromSwitches(const Switches& switches) {
   for (auto iter = switches.switch_map_.begin();
        iter != switches.switch_map_.end(); ++iter) {
     switch_map_[iter->first] = iter->second;
   }
 }
+
+namespace {
+constexpr auto kMultivaluedSwitches = base::MakeFixedFlatSet<base::StringPiece>(
+    {"enable-blink-features", "disable-blink-features", "enable-features",
+     "disable-features"});
+}  // namespace
 
 void Switches::SetUnparsedSwitch(const std::string& unparsed_switch) {
   std::string value;
@@ -702,7 +727,10 @@ void Switches::SetUnparsedSwitch(const std::string& unparsed_switch) {
     start_index = 2;
   name = unparsed_switch.substr(start_index, equals_index - start_index);
 
-  SetSwitch(name, value);
+  if (kMultivaluedSwitches.contains(name))
+    SetMultivaluedSwitch(name, value);
+  else
+    SetSwitch(name, value);
 }
 
 void Switches::RemoveSwitch(const std::string& name) {
@@ -715,7 +743,7 @@ bool Switches::HasSwitch(const std::string& name) const {
 
 std::string Switches::GetSwitchValue(const std::string& name) const {
   NativeString value = GetSwitchValueNative(name);
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   return base::WideToUTF8(value);
 #else
   return value;
@@ -773,7 +801,7 @@ Capabilities::Capabilities()
       strict_file_interactability(false),
       android_use_running_app(false),
       detach(false),
-      extension_load_timeout(base::TimeDelta::FromSeconds(10)),
+      extension_load_timeout(base::Seconds(10)),
       network_emulation_enabled(false) {}
 
 Capabilities::~Capabilities() {}

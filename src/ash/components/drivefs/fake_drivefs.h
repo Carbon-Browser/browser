@@ -14,7 +14,6 @@
 #include "ash/components/drivefs/drivefs_host.h"
 #include "ash/components/drivefs/mojom/drivefs.mojom.h"
 #include "base/files/file_path.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -27,6 +26,11 @@ class FakeDriveFsBootstrapListener : public DriveFsBootstrapListener {
  public:
   explicit FakeDriveFsBootstrapListener(
       mojo::PendingRemote<drivefs::mojom::DriveFsBootstrap> bootstrap);
+
+  FakeDriveFsBootstrapListener(const FakeDriveFsBootstrapListener&) = delete;
+  FakeDriveFsBootstrapListener& operator=(const FakeDriveFsBootstrapListener&) =
+      delete;
+
   ~FakeDriveFsBootstrapListener() override;
 
  private:
@@ -34,14 +38,16 @@ class FakeDriveFsBootstrapListener : public DriveFsBootstrapListener {
   mojo::PendingRemote<mojom::DriveFsBootstrap> bootstrap() override;
 
   mojo::PendingRemote<drivefs::mojom::DriveFsBootstrap> bootstrap_;
-
-  DISALLOW_COPY_AND_ASSIGN(FakeDriveFsBootstrapListener);
 };
 
 class FakeDriveFs : public drivefs::mojom::DriveFs,
                     public drivefs::mojom::DriveFsBootstrap {
  public:
   explicit FakeDriveFs(const base::FilePath& mount_path);
+
+  FakeDriveFs(const FakeDriveFs&) = delete;
+  FakeDriveFs& operator=(const FakeDriveFs&) = delete;
+
   ~FakeDriveFs() override;
 
   void RegisterMountingForAccountId(
@@ -56,7 +62,8 @@ class FakeDriveFs : public drivefs::mojom::DriveFs,
                    bool shared,
                    const mojom::Capabilities& capabilities,
                    const mojom::FolderFeature& folder_feature,
-                   const std::string& doc_id);
+                   const std::string& doc_id,
+                   const std::string& alternate_url);
 
   void DisplayConfirmDialog(
       drivefs::mojom::DialogReasonPtr reason,
@@ -135,6 +142,26 @@ class FakeDriveFs : public drivefs::mojom::DriveFs,
       const std::vector<std::string>& item_ids,
       drivefs::mojom::DriveFs::LocateFilesByItemIdsCallback callback) override;
 
+  void GetQuotaUsage(
+      drivefs::mojom::DriveFs::GetQuotaUsageCallback callback) override;
+
+  void GetPooledQuotaUsage(
+      drivefs::mojom::DriveFs::GetPooledQuotaUsageCallback callback) override;
+
+  void ToggleMirroring(
+      bool enabled,
+      drivefs::mojom::DriveFs::ToggleMirroringCallback callback) override;
+
+  void ToggleSyncForPath(
+      const base::FilePath& path,
+      drivefs::mojom::MirrorPathStatus status,
+      drivefs::mojom::DriveFs::ToggleSyncForPathCallback callback) override;
+
+  void GetSyncingPaths(
+      drivefs::mojom::DriveFs::GetSyncingPathsCallback callback) override;
+
+  void PollHostedFilePinStates() override;
+
   const base::FilePath mount_path_;
   int64_t next_stable_id_ = 1;
 
@@ -146,9 +173,9 @@ class FakeDriveFs : public drivefs::mojom::DriveFs,
   mojo::PendingReceiver<drivefs::mojom::DriveFsDelegate>
       pending_delegate_receiver_;
 
-  base::WeakPtrFactory<FakeDriveFs> weak_factory_{this};
+  std::vector<base::FilePath> syncing_paths_;
 
-  DISALLOW_COPY_AND_ASSIGN(FakeDriveFs);
+  base::WeakPtrFactory<FakeDriveFs> weak_factory_{this};
 };
 
 }  // namespace drivefs

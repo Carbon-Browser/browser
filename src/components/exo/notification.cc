@@ -25,6 +25,9 @@ class NotificationDelegate : public message_center::NotificationDelegate {
           click_callback)
       : close_callback_(close_callback), click_callback_(click_callback) {}
 
+  NotificationDelegate(const NotificationDelegate&) = delete;
+  NotificationDelegate& operator=(const NotificationDelegate&) = delete;
+
   // message_center::NotificationDelegate:
   void Close(bool by_user) override {
     if (!close_callback_)
@@ -46,8 +49,6 @@ class NotificationDelegate : public message_center::NotificationDelegate {
   const base::RepeatingCallback<void(bool)> close_callback_;
   const base::RepeatingCallback<void(const absl::optional<int>&)>
       click_callback_;
-
-  DISALLOW_COPY_AND_ASSIGN(NotificationDelegate);
 };
 
 }  // namespace
@@ -79,7 +80,7 @@ Notification::Notification(
 
   auto notification = std::make_unique<message_center::Notification>(
       message_center::NOTIFICATION_TYPE_SIMPLE, notification_id,
-      base::UTF8ToUTF16(title), base::UTF8ToUTF16(message), gfx::Image(),
+      base::UTF8ToUTF16(title), base::UTF8ToUTF16(message), ui::ImageModel(),
       base::UTF8ToUTF16(display_source), GURL(), notifier, data,
       base::MakeRefCounted<NotificationDelegate>(close_callback,
                                                  click_callback));

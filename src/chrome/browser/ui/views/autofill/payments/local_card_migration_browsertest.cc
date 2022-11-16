@@ -11,7 +11,7 @@
 #include "base/bind.h"
 #include "base/callback_list.h"
 #include "base/command_line.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
@@ -28,9 +28,11 @@
 #include "chrome/browser/ui/autofill/payments/local_card_migration_dialog_controller_impl.h"
 #include "chrome/browser/ui/autofill/payments/save_card_bubble_controller_impl.h"
 #include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/location_bar/location_bar.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
+#include "chrome/browser/ui/test/test_browser_dialog.h"
 #include "chrome/browser/ui/views/autofill/payments/dialog_view_ids.h"
 #include "chrome/browser/ui/views/autofill/payments/local_card_migration_bubble_views.h"
 #include "chrome/browser/ui/views/autofill/payments/local_card_migration_dialog_view.h"
@@ -74,7 +76,6 @@
 #include "content/public/test/mock_navigation_handle.h"
 #include "content/public/test/test_navigation_observer.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
-#include "net/url_request/test_url_fetcher_factory.h"
 #include "services/device/public/cpp/test/scoped_geolocation_overrider.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
@@ -113,6 +114,12 @@ constexpr char kResponseGetUploadDetailsSuccess[] =
     "link: "
     "{0}.\",\"template_parameter\":[{\"display_text\":\"Link\",\"url\":\"https:"
     "//www.example.com/\"}]}]},\"context_token\":\"dummy_context_token\"}";
+constexpr char kResponseGetUploadDetailsSuccessLong[] =
+    "{\"legal_message\":{\"line\":[{\"template\":\"Long message 1 long message "
+    "2 long message 3 long message 4 long message 5 long message 6 long "
+    "message 7 long message 8 long message 9 long message 10 long message 11 "
+    "long message 12 long message 13 long message "
+    "14\"}]},\"context_token\":\"dummy_context_token\"}";
 constexpr char kResponseGetUploadDetailsFailure[] =
     "{\"error\":{\"code\":\"FAILED_PRECONDITION\",\"user_error_message\":\"An "
     "unexpected error has occurred. Please try again later.\"}}";
@@ -146,6 +153,11 @@ class PersonalDataLoadedObserverMock : public PersonalDataManagerObserver {
 class LocalCardMigrationBrowserTest
     : public SyncTest,
       public LocalCardMigrationManager::ObserverForTest {
+ public:
+  LocalCardMigrationBrowserTest(const LocalCardMigrationBrowserTest&) = delete;
+  LocalCardMigrationBrowserTest& operator=(
+      const LocalCardMigrationBrowserTest&) = delete;
+
  protected:
   // Various events that can be waited on by the DialogEventWaiter.
   enum class DialogEvent : int {
@@ -168,25 +180,8 @@ class LocalCardMigrationBrowserTest
         "components/test/data/autofill");
     embedded_test_server()->StartAcceptingConnections();
 
-    SyncServiceFactory::GetAsSyncServiceImplForProfile(browser()->profile())
-        ->OverrideNetworkForTest(
-            fake_server::CreateFakeServerHttpPostProviderFactory(
-                GetFakeServer()->AsWeakPtr()));
-    std::string username;
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-    // In ChromeOS browser tests, the profile may already by authenticated with
-    // stub account |user_manager::kStubUserEmail|.
-    CoreAccountInfo info =
-        IdentityManagerFactory::GetForProfile(browser()->profile())
-            ->GetPrimaryAccountInfo(signin::ConsentLevel::kSync);
-    username = info.email;
-#endif
-    if (username.empty())
-      username = "user@gmail.com";
-
-    harness_ = SyncServiceImplHarness::Create(
-        browser()->profile(), username, "password",
-        SyncServiceImplHarness::SigninType::FAKE_SIGNIN);
+    ASSERT_TRUE(SetupClients());
+    chrome::NewTab(GetBrowser(0));
 
     // Set up the URL loader factory for the payments client so we can intercept
     // those network requests too.
@@ -194,8 +189,8 @@ class LocalCardMigrationBrowserTest
         base::MakeRefCounted<network::WeakWrapperSharedURLLoaderFactory>(
             &test_url_loader_factory_);
     ContentAutofillDriver::GetForRenderFrameHost(
-        GetActiveWebContents()->GetMainFrame())
-        ->browser_autofill_manager()
+        GetActiveWebContents()->GetPrimaryMainFrame())
+        ->autofill_manager()
         ->client()
         ->GetPaymentsClient()
         ->set_url_loader_factory_for_testing(test_shared_loader_factory_);
@@ -203,26 +198,25 @@ class LocalCardMigrationBrowserTest
     // Set up this class as the ObserverForTest implementation.
     local_card_migration_manager_ =
         ContentAutofillDriver::GetForRenderFrameHost(
-            GetActiveWebContents()->GetMainFrame())
-            ->browser_autofill_manager()
+            GetActiveWebContents()->GetPrimaryMainFrame())
+            ->autofill_manager()
             ->client()
             ->GetFormDataImporter()
             ->local_card_migration_manager_.get();
 
     local_card_migration_manager_->SetEventObserverForTesting(this);
-    personal_data_ =
-        PersonalDataManagerFactory::GetForProfile(browser()->profile());
+    personal_data_ = PersonalDataManagerFactory::GetForProfile(GetProfile(0));
 
     // Wait for Personal Data Manager to be fully loaded to prevent that
     // spurious notifications deceive the tests.
-    WaitForPersonalDataManagerToBeLoaded(browser()->profile());
+    WaitForPersonalDataManagerToBeLoaded(GetProfile(0));
 
     // Set up the fake geolocation data.
     geolocation_overrider_ =
         std::make_unique<device::ScopedGeolocationOverrider>(
             kFakeGeolocationLatitude, kFakeGeolocationLongitude);
 
-    ASSERT_TRUE(harness_->SetupSync());
+    ASSERT_TRUE(SetupSync());
 
     // Set the billing_customer_number to designate existence of a Payments
     // account.
@@ -245,7 +239,7 @@ class LocalCardMigrationBrowserTest
   void SetPaymentsCustomerData(const PaymentsCustomerData& customer_data) {
     scoped_refptr<AutofillWebDataService> wds =
         WebDataServiceFactory::GetAutofillWebDataForProfile(
-            browser()->profile(), ServiceAccessType::EXPLICIT_ACCESS);
+            GetProfile(0), ServiceAccessType::EXPLICIT_ACCESS);
     base::RunLoop loop;
     wds->GetDBTaskRunner()->PostTaskAndReply(
         FROM_HERE,
@@ -271,9 +265,9 @@ class LocalCardMigrationBrowserTest
 
   void NavigateTo(const std::string& file_path) {
     ASSERT_TRUE(ui_test_utils::NavigateToURL(
-        browser(), file_path.find("data:") == 0U
-                       ? GURL(file_path)
-                       : embedded_test_server()->GetURL(file_path)));
+        GetBrowser(0), file_path.find("data:") == 0U
+                           ? GURL(file_path)
+                           : embedded_test_server()->GetURL(file_path)));
   }
 
   void OnDecideToRequestLocalCardMigration() override {
@@ -310,7 +304,7 @@ class LocalCardMigrationBrowserTest
     if (set_nickname)
       local_card.SetNickname(u"card nickname");
 
-    AddTestCreditCard(browser()->profile(), local_card);
+    AddTestCreditCard(GetProfile(0), local_card);
     return local_card;
   }
 
@@ -322,7 +316,7 @@ class LocalCardMigrationBrowserTest
                          card_number.substr(0, 12));
     server_card.set_record_type(CreditCard::FULL_SERVER_CARD);
     server_card.set_server_id("full_id_" + card_number);
-    AddTestServerCreditCard(browser()->profile(), server_card);
+    AddTestServerCreditCard(GetProfile(0), server_card);
     return server_card;
   }
 
@@ -464,7 +458,7 @@ class LocalCardMigrationBrowserTest
 
   PageActionIconView* GetLocalCardMigrationIconView() {
     BrowserView* browser_view =
-        BrowserView::GetBrowserViewForBrowser(browser());
+        BrowserView::GetBrowserViewForBrowser(GetBrowser(0));
     PageActionIconView* icon =
         browser_view->toolbar_button_provider()->GetPageActionIconView(
             PageActionIconType::kLocalCardMigration);
@@ -495,7 +489,7 @@ class LocalCardMigrationBrowserTest
   }
 
   content::WebContents* GetActiveWebContents() {
-    return browser()->tab_strip_model()->GetActiveWebContents();
+    return GetBrowser(0)->tab_strip_model()->GetActiveWebContents();
   }
 
   void ResetEventWaiterForSequence(std::list<DialogEvent> event_sequence) {
@@ -509,35 +503,28 @@ class LocalCardMigrationBrowserTest
     return &test_url_loader_factory_;
   }
 
-  void WaitForCardDeletion() {
-    WaitForPersonalDataChange(browser()->profile());
-  }
+  void WaitForCardDeletion() { WaitForPersonalDataChange(GetProfile(0)); }
 
   void WaitForAnimationToComplete() {
     if (base::FeatureList::IsEnabled(
             features::kAutofillEnableToolbarStatusChip)) {
       views::test::WaitForAnimatingLayoutManager(
-          BrowserView::GetBrowserViewForBrowser(browser())
+          BrowserView::GetBrowserViewForBrowser(GetBrowser(0))
               ->toolbar()
               ->toolbar_account_icon_container());
     }
   }
 
-  LocalCardMigrationManager* local_card_migration_manager_;
+  raw_ptr<LocalCardMigrationManager> local_card_migration_manager_;
 
-  PersonalDataManager* personal_data_;
+  raw_ptr<PersonalDataManager> personal_data_;
   PersonalDataLoadedObserverMock personal_data_observer_;
-
-  std::unique_ptr<SyncServiceImplHarness> harness_;
 
  private:
   std::unique_ptr<autofill::EventWaiter<DialogEvent>> event_waiter_;
-  std::unique_ptr<net::FakeURLFetcherFactory> url_fetcher_factory_;
   network::TestURLLoaderFactory test_url_loader_factory_;
   scoped_refptr<network::SharedURLLoaderFactory> test_shared_loader_factory_;
   std::unique_ptr<device::ScopedGeolocationOverrider> geolocation_overrider_;
-
-  DISALLOW_COPY_AND_ASSIGN(LocalCardMigrationBrowserTest);
 };
 
 // TODO(crbug.com/932818): Remove this class after experiment flag is cleaned
@@ -559,6 +546,29 @@ class LocalCardMigrationBrowserTestForStatusChip
 
  private:
   base::test::ScopedFeatureList feature_list_;
+};
+
+class LocalCardMigrationBrowserUiTest
+    : public SupportsTestDialog<LocalCardMigrationBrowserTest> {
+ public:
+  LocalCardMigrationBrowserUiTest(const LocalCardMigrationBrowserUiTest&) =
+      delete;
+  LocalCardMigrationBrowserUiTest& operator=(
+      const LocalCardMigrationBrowserUiTest&) = delete;
+
+ protected:
+  LocalCardMigrationBrowserUiTest() = default;
+  ~LocalCardMigrationBrowserUiTest() override = default;
+
+  // SupportsTestDialog:
+  void ShowUi(const std::string& name) override {
+    test_url_loader_factory()->AddResponse(
+        kURLGetUploadDetailsRequest, kResponseGetUploadDetailsSuccessLong);
+    SaveLocalCard(kFirstCardNumber);
+    SaveLocalCard(kSecondCardNumber);
+    UseCardAndWaitForMigrationOffer(kFirstCardNumber);
+    ClickOnOkButton(GetLocalCardMigrationOfferBubbleViews());
+  }
 };
 
 // Ensures that migration is not offered when user saves a new card.
@@ -1013,7 +1023,7 @@ IN_PROC_BROWSER_TEST_F(LocalCardMigrationBrowserTestForStatusChip,
 }
 
 // TODO(crbug.com/999510): Crashes flakily on Linux.
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 #define MAYBE_ClickingOmniboxIconReshowsBubble \
   DISABLED_ClickingOmniboxIconReshowsBubble
 #else
@@ -1050,7 +1060,7 @@ IN_PROC_BROWSER_TEST_F(LocalCardMigrationBrowserTestForStatusChip,
           Bucket(AutofillMetrics::LOCAL_CARD_MIGRATION_BUBBLE_SHOWN, 1)));
 }
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 // TODO(crbug.com/823543): Widget activation doesn't work on Mac.
 #define MAYBE_ActivateFirstInactiveBubbleForAccessibility \
   DISABLED_ActivateFirstInactiveBubbleForAccessibility
@@ -1060,7 +1070,8 @@ IN_PROC_BROWSER_TEST_F(LocalCardMigrationBrowserTestForStatusChip,
 #endif
 IN_PROC_BROWSER_TEST_F(LocalCardMigrationBrowserTestForStatusChip,
                        MAYBE_ActivateFirstInactiveBubbleForAccessibility) {
-  BrowserView* browser_view = BrowserView::GetBrowserViewForBrowser(browser());
+  BrowserView* browser_view =
+      BrowserView::GetBrowserViewForBrowser(GetBrowser(0));
   ToolbarView* toolbar_view = browser_view->toolbar();
   EXPECT_FALSE(toolbar_view->toolbar_account_icon_container()
                    ->page_action_icon_controller()
@@ -1100,16 +1111,22 @@ IN_PROC_BROWSER_TEST_F(LocalCardMigrationBrowserTestForStatusChip,
   EXPECT_TRUE(GetLocalCardMigrationIconView()->GetVisible());
   EXPECT_TRUE(GetLocalCardMigrationOfferBubbleViews()->GetVisible());
 
-  AddTabAtIndex(1, GURL("http://example.com/"), ui::PAGE_TRANSITION_TYPED);
-  TabStripModel* tab_model = browser()->tab_strip_model();
-  tab_model->ActivateTabAt(1, {TabStripModel::GestureType::kOther});
+  ASSERT_TRUE(AddTabAtIndexToBrowser(GetBrowser(0), 1, GURL("about:blank"),
+                                     ui::PAGE_TRANSITION_TYPED,
+                                     /*check_navigation_success=*/true));
+  TabStripModel* tab_model = GetBrowser(0)->tab_strip_model();
+  tab_model->ActivateTabAt(
+      1, TabStripUserGestureDetails(
+             TabStripUserGestureDetails::GestureType::kOther));
   WaitForAnimationToComplete();
 
   // Ensures bubble and icon go away if user navigates to another tab.
   EXPECT_FALSE(GetLocalCardMigrationIconView()->GetVisible());
   EXPECT_FALSE(GetLocalCardMigrationOfferBubbleViews());
 
-  tab_model->ActivateTabAt(0, {TabStripModel::GestureType::kOther});
+  tab_model->ActivateTabAt(
+      0, TabStripUserGestureDetails(
+             TabStripUserGestureDetails::GestureType::kOther));
   WaitForAnimationToComplete();
 
   // If the user navigates back, shows only the icon not the bubble.
@@ -1194,7 +1211,7 @@ IN_PROC_BROWSER_TEST_F(LocalCardMigrationBrowserTest,
   UseCardAndWaitForMigrationOffer(kFirstCardNumber);
   views::test::WidgetDestroyedWaiter destroyed_waiter(
       GetLocalCardMigrationOfferBubbleViews()->GetWidget());
-  browser()->tab_strip_model()->CloseAllTabs();
+  GetBrowser(0)->tab_strip_model()->CloseAllTabs();
   destroyed_waiter.Wait();
 
   histogram_tester.ExpectUniqueSample(
@@ -1243,6 +1260,10 @@ IN_PROC_BROWSER_TEST_F(LocalCardMigrationBrowserTest, CardIdentifierString) {
   EXPECT_EQ(static_cast<MigratableCardView*>(card_list_view->children()[1])
                 ->GetCardIdentifierString(),
             first_card.NicknameAndLastFourDigitsForTesting());
+}
+
+IN_PROC_BROWSER_TEST_F(LocalCardMigrationBrowserUiTest, InvokeUi_default) {
+  ShowAndVerifyUi();
 }
 
 // TODO(crbug.com/897998):

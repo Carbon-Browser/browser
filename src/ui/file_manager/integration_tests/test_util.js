@@ -220,15 +220,17 @@ export function waitForAppWindow(windowUrl) {
 
 /**
  * Get all the browser windows.
+ * @param {number} expectedInitialCount The number of windows expected before
+ *     opening a new one.
  * @return {Object} Object returned from chrome.windows.getAll().
  */
-export async function getBrowserWindows() {
+export async function getBrowserWindows(expectedInitialCount = 0) {
   const caller = getCaller();
   return repeatUntil(async () => {
     const result = await new Promise(function(fulfill) {
       chrome.windows.getAll({'populate': true}, fulfill);
     });
-    if (result.length == 0) {
+    if (result.length === expectedInitialCount) {
       return pending(caller, 'getBrowserWindows ' + result.length);
     }
     return result;
@@ -276,7 +278,7 @@ export const EntryType = {
   DIRECTORY: 'directory',
   LINK: 'link',
   SHARED_DRIVE: 'team_drive',
-  COMPUTER: 'Computer'
+  COMPUTER: 'Computer',
 };
 Object.freeze(EntryType);
 
@@ -380,6 +382,10 @@ export let TestEntryFolderFeature;
  * folderFeature: Folder features of this file. Defaults to all features
  * disabled.
  *
+ * pinned: Drive pinned status of this file. Defaults to false.
+ *
+ * alternateUrl: File's Drive alternate URL. Defaults to an empty string.
+ *
  * @typedef {{
  *    type: EntryType,
  *    sourceFileName: (string|undefined),
@@ -394,6 +400,8 @@ export let TestEntryFolderFeature;
  *    typeText: (string|undefined),
  *    capabilities: (TestEntryCapabilities|undefined),
  *    folderFeature: (TestEntryFolderFeature|undefined),
+ *    pinned: (boolean|undefined),
+ *    alternateUrl: (string|undefined),
  * }}
  */
 export let TestEntryInfoOptions;
@@ -425,9 +433,15 @@ export class TestEntryInfo {
     this.capabilities = options.capabilities;
     this.folderFeature = options.folderFeature;
     this.pinned = !!options.pinned;
+    this.alternateUrl = options.alternateUrl || '';
     Object.freeze(this);
   }
 
+  /**
+   * Obtains the expected row contents for each file.
+   * @param {!Array<!TestEntryInfo>} entries
+   * @return {!Array<!Array<string>>}
+   */
   static getExpectedRows(entries) {
     return entries.map(function(entry) {
       return entry.getExpectedRow();
@@ -436,9 +450,43 @@ export class TestEntryInfo {
 
   /**
    * Obtains a expected row contents of the file in the file list.
+   * @return {!Array<string>}
    */
   getExpectedRow() {
     return [this.nameText, this.sizeText, this.typeText, this.lastModifiedTime];
+  }
+
+  /**
+   * Clone the existing TestEntryInfo object to a new TestEntryInfo object but
+   * with modified lastModifiedTime field. This is especially useful for
+   * constructing TestEntryInfo for Recents view.
+   *
+   * @param {string} newDate the new modified date time
+   * @return {!TestEntryInfo}
+   */
+  cloneWithModifiedDate(newDate) {
+    const updatedOptions =
+        /** @type {TestEntryInfoOptions} */ (Object.assign({}, this, {
+          lastModifiedTime: newDate,
+        }));
+    return new TestEntryInfo(updatedOptions);
+  }
+
+  /**
+   * Clone the existing TestEntryInfo object to a new TestEntryInfo object but
+   * with modified targetPath field. This is especially useful for testing
+   * rename functionality.
+   *
+   * @param {string} newName the new modified name
+   * @return {!TestEntryInfo}
+   */
+  cloneWithNewName(newName) {
+    const updatedOptions =
+        /** @type {TestEntryInfoOptions} */ (Object.assign({}, this, {
+          targetPath: newName,
+          nameText: newName,
+        }));
+    return new TestEntryInfo(updatedOptions);
   }
 }
 
@@ -448,7 +496,7 @@ export class TestEntryInfo {
  * 'expectedNameText', 'expectedSizeText' and 'expectedTypeText' to reflect that
  * they are the expected values for those columns in the file manager.
  *
- * @type {Object<TestEntryInfo>}
+ * @type {!Object<string, TestEntryInfo>}
  * @const
  */
 export const ENTRIES = {
@@ -460,7 +508,7 @@ export const ENTRIES = {
     lastModifiedTime: 'Sep 4, 1998, 12:34 PM',
     nameText: 'hello.txt',
     sizeText: '51 bytes',
-    typeText: 'Plain text'
+    typeText: 'Plain text',
   }),
 
   world: new TestEntryInfo({
@@ -472,7 +520,7 @@ export const ENTRIES = {
     lastModifiedTime: 'Jul 4, 2012, 10:35 AM',
     nameText: 'world.ogv',
     sizeText: '59 KB',
-    typeText: 'OGG video'
+    typeText: 'OGG video',
   }),
 
   webm: new TestEntryInfo({
@@ -483,7 +531,7 @@ export const ENTRIES = {
     lastModifiedTime: 'Jul 4, 2012, 10:35 AM',
     nameText: 'world.webm',
     sizeText: '17 KB',
-    typeText: 'WebM video'
+    typeText: 'WebM video',
   }),
 
   video: new TestEntryInfo({
@@ -494,7 +542,7 @@ export const ENTRIES = {
     lastModifiedTime: 'Jan 14, 2019, 16:01 PM',
     nameText: 'video_long.ogv',
     sizeText: '166 KB',
-    typeText: 'OGG video'
+    typeText: 'OGG video',
   }),
 
   subtitle: new TestEntryInfo({
@@ -505,7 +553,7 @@ export const ENTRIES = {
     lastModifiedTime: 'Feb 7, 2019, 15:03 PM',
     nameText: 'world.vtt',
     sizeText: '46 bytes',
-    typeText: 'VTT text'
+    typeText: 'VTT text',
   }),
 
   unsupported: new TestEntryInfo({
@@ -516,7 +564,7 @@ export const ENTRIES = {
     lastModifiedTime: 'Jul 4, 2012, 10:36 AM',
     nameText: 'unsupported.foo',
     sizeText: '8 KB',
-    typeText: 'FOO file'
+    typeText: 'FOO file',
   }),
 
   desktop: new TestEntryInfo({
@@ -528,7 +576,7 @@ export const ENTRIES = {
     lastModifiedTime: 'Jan 18, 2038, 1:02 AM',
     nameText: 'My Desktop Background.png',
     sizeText: '272 bytes',
-    typeText: 'PNG image'
+    typeText: 'PNG image',
   }),
 
   image2: new TestEntryInfo({
@@ -540,7 +588,7 @@ export const ENTRIES = {
     lastModifiedTime: 'Jan 18, 2038, 1:02 AM',
     nameText: 'image2',
     sizeText: '4 KB',
-    typeText: 'PNG image'
+    typeText: 'PNG image',
   }),
 
   image3: new TestEntryInfo({
@@ -551,7 +599,7 @@ export const ENTRIES = {
     lastModifiedTime: 'Jan 18, 2038, 1:02 AM',
     nameText: 'image3.jpg',
     sizeText: '3 KB',
-    typeText: 'JPEG image'
+    typeText: 'JPEG image',
   }),
 
   smallJpeg: new TestEntryInfo({
@@ -562,7 +610,7 @@ export const ENTRIES = {
     lastModifiedTime: 'Jan 18, 2038, 1:02 AM',
     nameText: 'small.jpg',
     sizeText: '1 KB',
-    typeText: 'JPEG image'
+    typeText: 'JPEG image',
   }),
 
   // Used to differentiate between .jpg and .jpeg handling.
@@ -574,7 +622,7 @@ export const ENTRIES = {
     lastModifiedTime: 'Jan 18, 2038, 1:02 AM',
     nameText: 'sample.jpeg',
     sizeText: '1 KB',
-    typeText: 'JPEG image'
+    typeText: 'JPEG image',
   }),
 
   brokenJpeg: new TestEntryInfo({
@@ -585,7 +633,7 @@ export const ENTRIES = {
     lastModifiedTime: 'Jan 18, 2038, 1:02 AM',
     nameText: 'broken.jpg',
     sizeText: '1 byte',
-    typeText: 'JPEG image'
+    typeText: 'JPEG image',
   }),
 
   exifImage: new TestEntryInfo({
@@ -596,7 +644,18 @@ export const ENTRIES = {
     lastModifiedTime: 'Jan 18, 2038, 1:02 AM',
     nameText: 'exif.jpg',
     sizeText: '31 KB',
-    typeText: 'JPEG image'
+    typeText: 'JPEG image',
+  }),
+
+  webpImage: new TestEntryInfo({
+    type: EntryType.FILE,
+    sourceFileName: 'image.webp',
+    // No mime type.
+    targetPath: 'image.webp',
+    lastModifiedTime: 'Jan 19, 2021, 1:10 PM',
+    nameText: 'image.webp',
+    sizeText: '5 KB',
+    typeText: 'WebP image',
   }),
 
   rawImage: new TestEntryInfo({
@@ -607,7 +666,7 @@ export const ENTRIES = {
     lastModifiedTime: 'May 20, 2019, 10:10 AM',
     nameText: 'raw.orf',
     sizeText: '214 KB',
-    typeText: 'ORF image'
+    typeText: 'ORF image',
   }),
 
   nefImage: new TestEntryInfo({
@@ -618,7 +677,7 @@ export const ENTRIES = {
     lastModifiedTime: 'May 9, 2015, 11:16 PM',
     nameText: 'raw.nef',
     sizeText: '92 KB',
-    typeText: 'NEF image'
+    typeText: 'NEF image',
   }),
 
   beautiful: new TestEntryInfo({
@@ -629,7 +688,29 @@ export const ENTRIES = {
     lastModifiedTime: 'Nov 12, 2086, 12:00 PM',
     nameText: 'Beautiful Song.ogg',
     sizeText: '14 KB',
-    typeText: 'OGG audio'
+    typeText: 'OGG audio',
+  }),
+
+  movFile: new TestEntryInfo({
+    type: EntryType.FILE,
+    sourceFileName: 'video.mov',
+    targetPath: 'mac.mov',
+    lastModifiedTime: 'Jul 4, 2012, 10:35 AM',
+    nameText: 'mac.mov',
+    sizeText: '875 bytes',
+    typeText: 'QuickTime video',
+  }),
+
+  docxFile: new TestEntryInfo({
+    type: EntryType.FILE,
+    sourceFileName: 'text.docx',
+    targetPath: 'word.docx',
+    mimeType: 'application/vnd.openxmlformats-officedocument' +
+        '.wordprocessingml.document',
+    lastModifiedTime: 'Jul 4, 2038, 10:35 AM',
+    nameText: 'word.docx',
+    sizeText: '9 KB',
+    typeText: 'Word document',
   }),
 
   photos: new TestEntryInfo({
@@ -638,7 +719,7 @@ export const ENTRIES = {
     lastModifiedTime: 'Jan 1, 1980, 11:59 PM',
     nameText: 'photos',
     sizeText: '--',
-    typeText: 'Folder'
+    typeText: 'Folder',
   }),
 
   testDocument: new TestEntryInfo({
@@ -648,7 +729,7 @@ export const ENTRIES = {
     lastModifiedTime: 'Apr 10, 2013, 4:20 PM',
     nameText: 'Test Document.gdoc',
     sizeText: '--',
-    typeText: 'Google document'
+    typeText: 'Google document',
   }),
 
   testSharedDocument: new TestEntryInfo({
@@ -659,7 +740,7 @@ export const ENTRIES = {
     lastModifiedTime: 'Mar 20, 2013, 10:40 PM',
     nameText: 'Test Shared Document.gdoc',
     sizeText: '--',
-    typeText: 'Google document'
+    typeText: 'Google document',
   }),
 
   testSharedFile: new TestEntryInfo({
@@ -672,7 +753,7 @@ export const ENTRIES = {
     nameText: 'test.txt',
     sizeText: '51 bytes',
     typeText: 'Plain text',
-    pinned: true
+    pinned: true,
   }),
 
   sharedDirectory: new TestEntryInfo({
@@ -682,7 +763,7 @@ export const ENTRIES = {
     lastModifiedTime: 'Jan 1, 2000, 1:00 AM',
     nameText: 'Shared',
     sizeText: '--',
-    typeText: 'Folder'
+    typeText: 'Folder',
   }),
 
   sharedDirectoryFile: new TestEntryInfo({
@@ -694,7 +775,7 @@ export const ENTRIES = {
     lastModifiedTime: 'Jan 1, 2000, 1:00 AM',
     nameText: 'file.txt',
     sizeText: '51 bytes',
-    typeText: 'Plain text'
+    typeText: 'Plain text',
   }),
 
   newlyAdded: new TestEntryInfo({
@@ -705,7 +786,7 @@ export const ENTRIES = {
     lastModifiedTime: 'Sep 4, 1998, 12:00 AM',
     nameText: 'newly added file.ogg',
     sizeText: '14 KB',
-    typeText: 'OGG audio'
+    typeText: 'OGG audio',
   }),
 
   tallText: new TestEntryInfo({
@@ -793,7 +874,79 @@ export const ENTRIES = {
     lastModifiedTime: 'Jul 4, 2012, 10:35 AM',
     nameText: 'imgpdf',
     sizeText: '1608 bytes',
-    typeText: 'PDF document'
+    typeText: 'PDF document',
+  }),
+
+  smallDocx: new TestEntryInfo({
+    type: EntryType.FILE,
+    sourceFileName: 'text.docx',
+    targetPath: 'text.docx',
+    mimeType: 'application/vnd.openxmlformats-officedocument' +
+        '.wordprocessingml.document',
+    lastModifiedTime: 'Jan 4, 2019, 10:57 AM',
+    nameText: 'text.docx',
+    sizeText: '8.7 KB',
+    typeText: 'Office document',
+    alternateUrl: 'https://drive.google.com/open?id=smalldocxid&usp=drive_fs',
+  }),
+
+  smallDocxHosted: new TestEntryInfo({
+    type: EntryType.FILE,
+    sourceFileName: 'text.docx',
+    targetPath: 'synced.docx',
+    mimeType: 'application/vnd.openxmlformats-officedocument' +
+        '.wordprocessingml.document',
+    lastModifiedTime: 'Jan 4, 2019, 10:57 AM',
+    nameText: 'synced.docx',
+    sizeText: '8.7 KB',
+    typeText: 'Office document',
+    alternateUrl: 'https://docs.google.com/document/d/smalldocxid' +
+        '?rtpof=true&usp=drive_fs',
+  }),
+
+  smallDocxPinned: new TestEntryInfo({
+    type: EntryType.FILE,
+    sourceFileName: 'text.docx',
+    targetPath: 'pinned.docx',
+    mimeType: 'application/vnd.openxmlformats-officedocument' +
+        '.wordprocessingml.document',
+    lastModifiedTime: 'Jan 4, 2019, 10:57 AM',
+    nameText: 'pinned.docx',
+    sizeText: '8.7 KB',
+    typeText: 'Office document',
+    pinned: true,
+    alternateUrl: 'https://docs.google.com/document/d/pinneddocxid' +
+        '?rtpof=true&usp=drive_fs',
+  }),
+
+  smallXlsxPinned: new TestEntryInfo({
+    type: EntryType.FILE,
+    sourceFileName: 'sheet.xlsx',
+    targetPath: 'pinned.xlsx',
+    mimeType: 'application/vnd.openxmlformats-officedocument' +
+        '.spreadsheetml.sheet',
+    lastModifiedTime: 'Jan 10, 2020, 11:58 PM',
+    nameText: 'pinned.xlsx',
+    sizeText: '5.7 KB',
+    typeText: 'Office spreadsheet',
+    pinned: true,
+    alternateUrl: 'https://docs.google.com/document/d/pinnedxlsxid' +
+        '?rtpof=true&usp=drive_fs',
+  }),
+
+  smallPptxPinned: new TestEntryInfo({
+    type: EntryType.FILE,
+    sourceFileName: 'presentation.pptx',
+    targetPath: 'pinned.pptx',
+    mimeType: 'application/vnd.openxmlformats-officedocument' +
+        '.presentationml.presentation',
+    lastModifiedTime: 'Jan 14, 2020, 10:15 AM',
+    nameText: 'pinned.pptx',
+    sizeText: '35.2 KB',
+    typeText: 'Office document',
+    pinned: true,
+    alternateUrl: 'https://docs.google.com/document/d/pinnedpptxid' +
+        '?rtpof=true&usp=drive_fs',
   }),
 
   pinned: new TestEntryInfo({
@@ -814,7 +967,7 @@ export const ENTRIES = {
     lastModifiedTime: 'Jan 1, 2000, 1:00 AM',
     nameText: 'A',
     sizeText: '--',
-    typeText: 'Folder'
+    typeText: 'Folder',
   }),
 
   directoryB: new TestEntryInfo({
@@ -823,7 +976,7 @@ export const ENTRIES = {
     lastModifiedTime: 'Jan 1, 2000, 1:00 AM',
     nameText: 'B',
     sizeText: '--',
-    typeText: 'Folder'
+    typeText: 'Folder',
   }),
 
   directoryC: new TestEntryInfo({
@@ -832,7 +985,7 @@ export const ENTRIES = {
     lastModifiedTime: 'Jan 1, 2000, 1:00 AM',
     nameText: 'C',
     sizeText: '--',
-    typeText: 'Folder'
+    typeText: 'Folder',
   }),
 
   directoryD: new TestEntryInfo({
@@ -841,7 +994,7 @@ export const ENTRIES = {
     lastModifiedTime: 'Jan 1, 2000, 1:00 AM',
     nameText: 'D',
     sizeText: '--',
-    typeText: 'Folder'
+    typeText: 'Folder',
   }),
 
   directoryE: new TestEntryInfo({
@@ -850,7 +1003,7 @@ export const ENTRIES = {
     lastModifiedTime: 'Jan 1, 2000, 1:00 AM',
     nameText: 'E',
     sizeText: '--',
-    typeText: 'Folder'
+    typeText: 'Folder',
   }),
 
   directoryF: new TestEntryInfo({
@@ -859,7 +1012,7 @@ export const ENTRIES = {
     lastModifiedTime: 'Jan 1, 2000, 1:00 AM',
     nameText: 'F',
     sizeText: '--',
-    typeText: 'Folder'
+    typeText: 'Folder',
   }),
 
   dotTrash: new TestEntryInfo({
@@ -868,7 +1021,7 @@ export const ENTRIES = {
     lastModifiedTime: 'Jan 1, 2000, 1:00 AM',
     nameText: '.Trash',
     sizeText: '--',
-    typeText: 'Folder'
+    typeText: 'Folder',
   }),
 
   deeplyBurriedSmallJpeg: new TestEntryInfo({
@@ -879,7 +1032,7 @@ export const ENTRIES = {
     lastModifiedTime: 'Jan 18, 2038, 1:02 AM',
     nameText: 'deep.jpg',
     sizeText: '886 bytes',
-    typeText: 'JPEG image'
+    typeText: 'JPEG image',
   }),
 
   linkGtoB: new TestEntryInfo({
@@ -889,7 +1042,7 @@ export const ENTRIES = {
     lastModifiedTime: 'Jan 1, 2000, 1:00 AM',
     nameText: 'G',
     sizeText: '--',
-    typeText: 'Folder'
+    typeText: 'Folder',
   }),
 
   linkHtoFile: new TestEntryInfo({
@@ -900,7 +1053,7 @@ export const ENTRIES = {
     lastModifiedTime: 'Jan 18, 2038, 1:02 AM',
     nameText: 'H.jpg',
     sizeText: '886 bytes',
-    typeText: 'JPEG image'
+    typeText: 'JPEG image',
   }),
 
   linkTtoTransitiveDirectory: new TestEntryInfo({
@@ -910,7 +1063,7 @@ export const ENTRIES = {
     lastModifiedTime: 'Jan 1, 2000, 1:00 AM',
     nameText: 'T',
     sizeText: '--',
-    typeText: 'Folder'
+    typeText: 'Folder',
   }),
 
   zipArchive: new TestEntryInfo({
@@ -921,51 +1074,29 @@ export const ENTRIES = {
     lastModifiedTime: 'Jan 1, 2014, 1:00 AM',
     nameText: 'archive.zip',
     sizeText: '743 bytes',
-    typeText: 'Zip archive'
+    typeText: 'ZIP archive',
   }),
 
-  zipArchiveSJIS: new TestEntryInfo({
+  zipSJISArchive: new TestEntryInfo({
     type: EntryType.FILE,
-    sourceFileName: 'archive_sjis.zip',
-    targetPath: 'archive_sjis.zip',
+    sourceFileName: 'sjis.zip',
+    targetPath: 'sjis.zip',
     mimeType: 'application/x-zip',
-    lastModifiedTime: 'Dec 21, 2018, 12:21 PM',
-    nameText: 'archive_sjis.zip',
-    sizeText: '160 bytes',
-    typeText: 'Zip archive'
+    lastModifiedTime: 'Apr 6, 2022, 1:00 AM',
+    nameText: 'sjis.zip',
+    sizeText: '479 bytes',
+    typeText: 'ZIP archive',
   }),
 
-  zipArchiveMacOs: new TestEntryInfo({
+  zipExtArchive: new TestEntryInfo({
     type: EntryType.FILE,
-    sourceFileName: 'archive_macos.zip',
-    targetPath: 'archive_macos.zip',
+    sourceFileName: 'tera.zip',
+    targetPath: 'tera.zip',
     mimeType: 'application/x-zip',
-    lastModifiedTime: 'Dec 21, 2018, 12:21 PM',
-    nameText: 'archive_macos.zip',
-    sizeText: '190 bytes',
-    typeText: 'Zip archive'
-  }),
-
-  zipArchiveWithAbsolutePaths: new TestEntryInfo({
-    type: EntryType.FILE,
-    sourceFileName: 'absolute_paths.zip',
-    targetPath: 'absolute_paths.zip',
-    mimeType: 'application/x-zip',
-    lastModifiedTime: 'Jan 1, 2014, 1:00 AM',
-    nameText: 'absolute_paths.zip',
-    sizeText: '400 bytes',
-    typeText: 'Zip archive'
-  }),
-
-  zipArchiveEncrypted: new TestEntryInfo({
-    type: EntryType.FILE,
-    sourceFileName: 'encrypted.zip',
-    targetPath: 'encrypted.zip',
-    mimeType: 'application/x-zip',
-    lastModifiedTime: 'Jan 1, 2014, 1:00 AM',
-    nameText: 'encrypted.zip',
-    sizeText: '589 bytes',
-    typeText: 'Zip archive'
+    lastModifiedTime: 'Apr 6, 2022, 1:00 AM',
+    nameText: 'tera.zip',
+    sizeText: '250 bytes',
+    typeText: 'ZIP archive',
   }),
 
   debPackage: new TestEntryInfo({
@@ -976,7 +1107,7 @@ export const ENTRIES = {
     lastModifiedTime: 'Jan 1, 2014, 1:00 AM',
     nameText: 'package.deb',
     sizeText: '724 bytes',
-    typeText: 'DEB file'
+    typeText: 'DEB file',
   }),
 
   tiniFile: new TestEntryInfo({
@@ -987,7 +1118,7 @@ export const ENTRIES = {
     lastModifiedTime: 'Jan 1, 2014, 1:00 AM',
     nameText: 'test.tini',
     sizeText: '439 bytes',
-    typeText: 'Crostini image file'
+    typeText: 'Crostini image file',
   }),
 
   hiddenFile: new TestEntryInfo({
@@ -998,7 +1129,7 @@ export const ENTRIES = {
     lastModifiedTime: 'Sep 30, 2014, 3:30 PM',
     nameText: '.hiddenfile.txt',
     sizeText: '51 bytes',
-    typeText: 'Plain text'
+    typeText: 'Plain text',
   }),
 
   // Team-drive entries.
@@ -1144,7 +1275,7 @@ export const ENTRIES = {
     computerName: 'Computer A',
     nameText: 'A',
     sizeText: '--',
-    typeText: 'Folder'
+    typeText: 'Folder',
   }),
 
   // Read-only and write-restricted entries.
@@ -1165,7 +1296,7 @@ export const ENTRIES = {
       canAddChildren: false,
       canRename: false,
       canDelete: false,
-      canShare: true
+      canShare: true,
     },
   }),
 
@@ -1184,7 +1315,7 @@ export const ENTRIES = {
       canAddChildren: false,
       canRename: false,
       canDelete: false,
-      canShare: true
+      canShare: true,
     },
   }),
 
@@ -1202,7 +1333,7 @@ export const ENTRIES = {
       canAddChildren: false,
       canRename: false,
       canDelete: false,
-      canShare: false
+      canShare: false,
     },
   }),
 
@@ -1222,7 +1353,28 @@ export const ENTRIES = {
       canAddChildren: false,
       canRename: false,
       canDelete: false,
-      canShare: true
+      canShare: true,
+    },
+  }),
+
+  // A ZIP file that can't be renamed or deleted, but can be copied and
+  // shared.
+  readOnlyZipFile: new TestEntryInfo({
+    type: EntryType.FILE,
+    sourceFileName: 'archive.zip',
+    targetPath: 'archive.zip',
+    mimeType: 'application/x-zip',
+    lastModifiedTime: 'Jan 1, 2014, 1:00 AM',
+    nameText: 'archive.zip',
+    sharedOption: SharedOption.SHARED,
+    sizeText: '743 bytes',
+    typeText: 'ZIP archive',
+    capabilities: {
+      canCopy: true,
+      canAddChildren: false,
+      canRename: false,
+      canDelete: false,
+      canShare: true,
     },
   }),
 
@@ -1240,7 +1392,7 @@ export const ENTRIES = {
       canCopy: true,
       canAddChildren: false,
       canRename: false,
-      canDelete: true
+      canDelete: true,
     },
   }),
 
@@ -1258,7 +1410,7 @@ export const ENTRIES = {
       canCopy: true,
       canAddChildren: false,
       canRename: true,
-      canDelete: false
+      canDelete: false,
     },
   }),
 
@@ -1275,7 +1427,7 @@ export const ENTRIES = {
       canAddChildren: true,
       canRename: false,
       canDelete: false,
-      canShare: true
+      canShare: true,
     },
   }),
 
@@ -1291,7 +1443,7 @@ export const ENTRIES = {
       canAddChildren: true,
       canRename: false,
       canDelete: false,
-      canShare: true
+      canShare: true,
     },
   }),
 
@@ -1307,7 +1459,7 @@ export const ENTRIES = {
       canAddChildren: true,
       canRename: false,
       canDelete: false,
-      canShare: true
+      canShare: true,
     },
   }),
 
@@ -1323,10 +1475,11 @@ export const ENTRIES = {
       canAddChildren: true,
       canRename: false,
       canDelete: false,
-      canShare: true
+      canShare: true,
     },
   }),
 
+  // Android test files.
   documentsText: new TestEntryInfo({
     type: EntryType.FILE,
     sourceFileName: 'text.txt',
@@ -1338,6 +1491,39 @@ export const ENTRIES = {
     typeText: 'Plain text',
   }),
 
+  moviesVideo: new TestEntryInfo({
+    type: EntryType.FILE,
+    sourceFileName: 'world.webm',
+    targetPath: 'Movies/android.webm',
+    mimeType: 'video/webm',
+    lastModifiedTime: 'Jul 4, 2012, 10:35 AM',
+    nameText: 'android.webm',
+    sizeText: '17 KB',
+    typeText: 'WebM video',
+  }),
+
+  musicAudio: new TestEntryInfo({
+    type: EntryType.FILE,
+    sourceFileName: 'music.ogg',
+    targetPath: 'Music/android.ogg',
+    mimeType: 'audio/ogg',
+    lastModifiedTime: 'Sep 4, 1998, 12:00 AM',
+    nameText: 'android.ogg',
+    sizeText: '14 KB',
+    typeText: 'OGG audio',
+  }),
+
+  picturesImage: new TestEntryInfo({
+    type: EntryType.FILE,
+    sourceFileName: 'image3.jpg',
+    targetPath: 'Pictures/android.jpg',
+    mimeType: 'image/jpeg',
+    lastModifiedTime: 'Jan 18, 2012, 1:02 AM',
+    nameText: 'android.jpg',
+    sizeText: '3 KB',
+    typeText: 'JPEG image',
+  }),
+
   neverSync: new TestEntryInfo({
     type: EntryType.FILE,
     sourceFileName: 'text.txt',
@@ -1346,7 +1532,7 @@ export const ENTRIES = {
     lastModifiedTime: 'Sep 4, 1998, 12:34 PM',
     nameText: 'never-sync.txt',
     sizeText: '51 bytes',
-    typeText: 'Plain text'
+    typeText: 'Plain text',
   }),
 
   sharedWithMeDirectory: new TestEntryInfo({
@@ -1356,7 +1542,7 @@ export const ENTRIES = {
     lastModifiedTime: 'Jan 1, 2000, 1:00 AM',
     nameText: 'Shared Directory',
     sizeText: '--',
-    typeText: 'Folder'
+    typeText: 'Folder',
   }),
 
   sharedWithMeDirectoryFile: new TestEntryInfo({
@@ -1368,7 +1554,7 @@ export const ENTRIES = {
     lastModifiedTime: 'Jan 1, 2000, 1:00 AM',
     nameText: 'file.txt',
     sizeText: '51 bytes',
-    typeText: 'Plain text'
+    typeText: 'Plain text',
   }),
 
   crdownload: new TestEntryInfo({
@@ -1379,7 +1565,7 @@ export const ENTRIES = {
     lastModifiedTime: 'Sep 4, 1998, 12:34 PM',
     nameText: 'hello.crdownload',
     sizeText: '51 bytes',
-    typeText: 'CRDOWNLOAD file'
+    typeText: 'CRDOWNLOAD file',
   }),
 
   pluginVm: new TestEntryInfo({
@@ -1388,9 +1574,40 @@ export const ENTRIES = {
     lastModifiedTime: 'Jan 1, 1980, 11:59 PM',
     nameText: 'Windows Files',
     sizeText: '--',
-    typeText: 'Folder'
+    typeText: 'Folder',
+  }),
+
+  invalidLastModifiedDate: new TestEntryInfo({
+    type: EntryType.FILE,
+    sourceFileName: 'text.txt',
+    targetPath: 'invalidLastModifiedDate.txt',
+    mimeType: 'text/plain',
+    nameText: 'invalidLastModifiedDate.txt',
+    sizeText: '51 bytes',
+    typeText: 'Plain text',
   }),
 };
+
+
+/**
+ * Creates a test file, which can be inside folders, however parent folders
+ * have to be created by the caller using |createTestFolder|.
+ * @param {string} path File path to be created,
+ * @return {TestEntryInfo}
+ */
+export function createTestFile(path) {
+  const name = path.split('/').pop();
+  return new TestEntryInfo({
+    targetPath: path,
+    nameText: name,
+    type: EntryType.FILE,
+    lastModifiedTime: 'Sep 4, 1998, 12:34 PM',
+    sizeText: '51 bytes',
+    typeText: 'Plain text',
+    sourceFileName: 'text.txt',
+    mimeType: 'text/plain',
+  });
+}
 
 /**
  * Returns the count for |value| for the histogram |name|.
@@ -1408,6 +1625,32 @@ export async function getHistogramCount(name, value) {
 }
 
 /**
+ * Returns the sum for for the histogram |name|.
+ * @param {string} name The histogram to be queried.
+ * @return {!Promise<number>} A promise fulfilled with the sum.
+ */
+export async function getHistogramSum(name) {
+  const result = await sendTestMessage({
+    'name': 'getHistogramSum',
+    'histogramName': name,
+  });
+  return /** @type {number} */ (parseInt(JSON.parse(result), 10));
+}
+
+/**
+ * Checks the expected total count for the histogram |name|.
+ * @param {string} name The histogram to be queried.
+ * @param {number} count The expected sample count.
+ */
+export async function expectHistogramTotalCount(name, count) {
+  await sendTestMessage({
+    'name': 'expectHistogramTotalCount',
+    'histogramName': name,
+    'count': count,
+  });
+}
+
+/**
  * Returns the count for the user action |name|.
  * @param {string} name The user action to be queried.
  * @return {!Promise<number>} A promise fulfilled with the count.
@@ -1418,4 +1661,25 @@ export async function getUserActionCount(name) {
     'userActionName': name,
   });
   return /** @type {number} */ (JSON.parse(result));
+}
+
+/**
+ * Returns a date time string with diff days. This can be used as the
+ * lastModifiedTime field of TestEntryInfo object, which is useful to construct
+ * a recent file.
+ * @param {number} diffDays how many days in diff
+ * @return {string}
+ */
+export function getDateWithDayDiff(diffDays) {
+  const nowDate = new Date();
+  nowDate.setDate(nowDate.getDate() - diffDays);
+  // Format: "May 2, 2021, 11:25 AM"
+  return nowDate.toLocaleString('default', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour12: true,
+    hour: 'numeric',
+    minute: 'numeric',
+  });
 }

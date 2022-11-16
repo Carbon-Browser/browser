@@ -77,10 +77,11 @@ bool IsJavaScriptExecutionProhibitedError(NSError* error) {
   NSString* script = [web::GetPageScript(@"window_id")
       stringByReplacingOccurrencesOfString:@"$(WINDOW_ID)"
                                 withString:_windowID];
-  // WKUserScript may not be injected yet. Make windowID script return boolean
-  // indicating whether the injection was successful.
+  // WKUserScript for message API may not be injected yet. Make windowID script
+  // return boolean indicating whether the injection was successful.
   NSString* scriptWithResult = [NSString
-      stringWithFormat:@"if (!window.__gCrWeb) {false; } else { %@; true; }",
+      stringWithFormat:@"if (!window.__gCrWeb || !window.__gCrWeb.message) "
+                       @"{false; } else { %@; true; }",
                        script];
 
   __weak CRWJSWindowIDManager* weakSelf = self;
@@ -91,11 +92,14 @@ bool IsJavaScriptExecutionProhibitedError(NSError* error) {
                  return;
                if (error) {
 #if DCHECK_IS_ON()
-                 DCHECK(error.code == WKErrorWebViewInvalidated ||
-                        error.code == WKErrorWebContentProcessTerminated ||
-                        IsJavaScriptExecutionProhibitedError(error))
-                     << scriptWithResult << " failed with error "
-                     << base::SysNSStringToUTF8(error.description);
+                 BOOL isExpectedError =
+                     error.code == WKErrorWebViewInvalidated ||
+                     error.code == WKErrorWebContentProcessTerminated ||
+                     IsJavaScriptExecutionProhibitedError(error);
+                 DCHECK(isExpectedError)
+                     << base::SysNSStringToUTF8(error.domain) << "-"
+                     << error.code << " "
+                     << base::SysNSStringToUTF16(scriptWithResult);
 #endif
                  return;
                }

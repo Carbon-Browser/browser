@@ -8,9 +8,9 @@
 #include "base/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
-#include "base/sequenced_task_runner.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "media/base/bind_to_current_loop.h"
 #include "media/base/cdm_context.h"
@@ -133,7 +133,7 @@ DemuxerStream::Type DecryptingDemuxerStream::type() const {
   return demuxer_stream_->type();
 }
 
-DemuxerStream::Liveness DecryptingDemuxerStream::liveness() const {
+StreamLiveness DecryptingDemuxerStream::liveness() const {
   DCHECK(state_ != kUninitialized) << state_;
   return demuxer_stream_->liveness();
 }

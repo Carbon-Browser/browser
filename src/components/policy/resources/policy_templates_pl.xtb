@@ -34,7 +34,7 @@
       Jeśli ta zasada pozostanie nieskonfigurowana, ustawienie będzie zależne od wyboru dokonanego przez użytkownika przy instalacji lub pierwszym uruchomieniu.
 
       Ta zasada jest dostępna tylko w wystąpieniach systemu Windows, które należą do domeny <ph name="MS_AD_NAME" />, oraz w wystąpieniach systemu Windows 10 Pro lub Enterprise zarejestrowanych w funkcji zarządzania urządzeniami.
-      (W przypadku Carbon Browser Browser Browser OS zapoznaj się z zasadą DeviceMetricsReportingEnabled).</translation>
+      (W przypadku Carbon Browser OS zapoznaj się z zasadą DeviceMetricsReportingEnabled).</translation>
 <translation id="1035385378988781231">Ta zasada określa, czy funkcja Sieciowe udziały plików w <ph name="PRODUCT_NAME" /> będzie używać NTLM do uwierzytelniania.
 
       Gdy ta zasada ma ustawienie Prawda, połączenia z udziałami SMB będą w razie potrzeby uwierzytelniane przy użyciu NTLM.
@@ -121,13 +121,13 @@
       W przypadku urządzeń w trybie sklepu określa czas, po upływie którego na ekranie logowania jest wyświetlany wygaszacz ekranu.
 
       Wartość tej zasady należy podać w milisekundach.</translation>
-<translation id="1141767714195601945">Ta zasada określa parametry wiersza poleceń Carbon Browser Browser Browser przekazywane podczas przełączania z Internet Explorera.
+<translation id="1141767714195601945">Ta zasada określa parametry wiersza poleceń Carbon Browser przekazywane podczas przełączania z Internet Explorera.
 
       Jeśli nie jest zainstalowany dodatek „Obsługa starszych przeglądarek” do Internet Explorera, ta zasada nie jest skuteczna.
 
-      Gdy ta zasada jest nieskonfigurowana, Internet Explorer przekazuje do Carbon Browser Browser Browser jako parametr wiersza poleceń tylko URL.
+      Gdy ta zasada jest nieskonfigurowana, Internet Explorer przekazuje do Carbon Browser jako parametr wiersza poleceń tylko URL.
 
-      Gdy wartością tej zasady jest lista ciągów znaków, ciągi te są łączone spacjami i przekazywane do Carbon Browser Browser Browser jako parametry wiersza poleceń.
+      Gdy wartością tej zasady jest lista ciągów znaków, ciągi te są łączone spacjami i przekazywane do Carbon Browser jako parametry wiersza poleceń.
 
       Jeśli jakiś element zawiera ciąg ${url}, ciąg ten zostanie zastąpiony URL-em strony, która ma zostać otwarta.
 
@@ -263,7 +263,7 @@
 
 Każdy element na liście tej zasady jest ciągiem zawierającym identyfikator rozszerzenia i URL „aktualizacji” oddzielony średnikiem (<ph name="SEMICOLON" />). Identyfikator rozszerzenia to 32-znakowy ciąg, który znajdziesz np. w sekcji <ph name="CHROME_EXTENSIONS_LINK" /> w trybie dewelopera. URL „aktualizacji” powinien wskazywać plik manifestu aktualizacji w postaci dokumentu XML, zgodnie z opisem podanym na <ph name="LINK_TO_EXTENSION_DOC1" />. Uwaga: URL „aktualizacji” określony przez tę zasadę jest używany tylko podczas pierwszej instalacji. Późniejsze aktualizacje rozszerzenia korzystają z adresu URL aktualizacji wskazanego w pliku manifestu.
 
-      Na przykład <ph name="EXTENSION_POLICY_EXAMPLE" /> instaluje aplikację <ph name="EXTENSION_POLICY_EXAMPLE_EXTENSION_NAME" /> ze standardowego adresu URL „aktualizacji” w Carbon Browser Browser Browser Web Store. Więcej informacji o hostowaniu rozszerzeń znajdziesz na <ph name="LINK_TO_EXTENSION_DOC2" /></translation>
+      Na przykład <ph name="EXTENSION_POLICY_EXAMPLE" /> instaluje aplikację <ph name="EXTENSION_POLICY_EXAMPLE_EXTENSION_NAME" /> ze standardowego adresu URL „aktualizacji” w Carbon Browser Web Store. Więcej informacji o hostowaniu rozszerzeń znajdziesz na <ph name="LINK_TO_EXTENSION_DOC2" /></translation>
 <translation id="1435659902881071157">Konfiguracja sieci na poziomie urządzenia</translation>
 <translation id="1438739959477268107">Domyślne ustawienie generowania kluczy</translation>
 <translation id="1454846751303307294">Umożliwia skonfigurowanie listy wzorcowych URL-i określających witryny, w których nie może być wykonywany kod JavaScript. W przypadku nieskonfigurowania tej zasady dla wszystkich witryn będzie używana globalna wartość domyślna pobierana z zasady „DefaultJavaScriptSetting” (jeśli została skonfigurowana) lub z osobistej konfiguracji użytkownika.</translation>
@@ -422,11 +422,11 @@ Każdy element na liście tej zasady jest ciągiem zawierającym identyfikator r
 
       Jeśli ta zasada nie jest skonfigurowana, funkcja aktualizacji oprogramowania <ph name="TPM_FIRMWARE_UPDATE_TPM" /> będzie niedostępna.</translation>
 <translation id="1708496595873025510">Ustaw ograniczenie pobierania odmian</translation>
-<translation id="1717817358640580294">Gdy ta zasada jest nieskonfigurowana, po wykryciu niechcianego oprogramowania Czyszczenie Carbon Browser Browser Browser może przekazać do Google metadane o skanowaniu zgodnie z ustawieniem zasady SafeBrowsingExtendedReportingEnabled. Następnie Czyszczenie Carbon Browser Browser Browser zapyta użytkownika, czy chce usunąć niechciane oprogramowanie. Użytkownik może zgodzić się na udostępnienie Google wyników czyszczenia, by pomóc w wykrywaniu niechcianego oprogramowania. Wyniki te zawierają metadane plików, informacje o rozszerzeniach zainstalowanych automatycznie i klucze rejestru – zgodnie z opisem w Dokumencie na temat ochrony prywatności w Carbon Browser Browser Browser.
+<translation id="1717817358640580294">Gdy ta zasada jest nieskonfigurowana, po wykryciu niechcianego oprogramowania Czyszczenie Carbon Browser może przekazać do Google metadane o skanowaniu zgodnie z ustawieniem zasady SafeBrowsingExtendedReportingEnabled. Następnie Czyszczenie Carbon Browser zapyta użytkownika, czy chce usunąć niechciane oprogramowanie. Użytkownik może zgodzić się na udostępnienie Google wyników czyszczenia, by pomóc w wykrywaniu niechcianego oprogramowania. Wyniki te zawierają metadane plików, informacje o rozszerzeniach zainstalowanych automatycznie i klucze rejestru – zgodnie z opisem w Dokumencie na temat ochrony prywatności w Carbon Browser.
 
-      Jeśli ta zasada jest wyłączona, po wykryciu niechcianego oprogramowania Czyszczenie Carbon Browser Browser Browser nie przekaże do Google metadanych skanowania, ignorując ustawienie zasady SafeBrowsingExtendedReportingEnabled. Następnie Czyszczenie Carbon Browser Browser Browser zapyta użytkownika, czy chce usunąć niechciane oprogramowanie.  Wyniki czyszczenia nie będą przekazywane do Google, a użytkownik nie będzie pytany, czy chce to zrobić.
+      Jeśli ta zasada jest wyłączona, po wykryciu niechcianego oprogramowania Czyszczenie Carbon Browser nie przekaże do Google metadanych skanowania, ignorując ustawienie zasady SafeBrowsingExtendedReportingEnabled. Następnie Czyszczenie Carbon Browser zapyta użytkownika, czy chce usunąć niechciane oprogramowanie.  Wyniki czyszczenia nie będą przekazywane do Google, a użytkownik nie będzie pytany, czy chce to zrobić.
 
-      Gdy ta zasada jest włączona, po wykryciu niechcianego oprogramowania Czyszczenie Carbon Browser Browser Browser może przekazać do Google metadane skanowania zgodnie z ustawieniem zasady SafeBrowsingExtendedReportingEnabled. Następnie Czyszczenie Carbon Browser Browser Browser zapyta użytkownika, czy chce usunąć niechciane oprogramowanie.  Wyniki czyszczenia będą przekazywane do Google, a użytkownik nie będzie pytany, czy się na to zgadza.
+      Gdy ta zasada jest włączona, po wykryciu niechcianego oprogramowania Czyszczenie Carbon Browser może przekazać do Google metadane skanowania zgodnie z ustawieniem zasady SafeBrowsingExtendedReportingEnabled. Następnie Czyszczenie Carbon Browser zapyta użytkownika, czy chce usunąć niechciane oprogramowanie.  Wyniki czyszczenia będą przekazywane do Google, a użytkownik nie będzie pytany, czy się na to zgadza.
 
       Ta zasada jest dostępna tylko w wystąpieniach systemu Windows, które należą do domeny <ph name="MS_AD_NAME" />, oraz w wystąpieniach systemu Windows 10 Pro lub Enterprise zarejestrowanych w funkcji zarządzania urządzeniami.</translation>
 <translation id="172374442286684480">Zezwalaj wszystkim witrynom na tworzenie danych lokalnych</translation>
@@ -616,7 +616,7 @@ Jeśli pozostanie ona nieskonfigurowana, użytkownik może sam zdecydować, czy 
 <translation id="2073552873076775140">Zezwalaj na logowanie się w: <ph name="PRODUCT_NAME" /></translation>
 <translation id="2077129598763517140">Użyj akceleracji sprzętowej, gdy jest dostępna</translation>
 <translation id="2077273864382355561">Opóźnienie wyłączenia ekranu przy zasilaniu z baterii</translation>
-<translation id="2082205219176343977">Skonfiguruj minimalną dozwoloną wersję Carbon Browser Browser Browser dla urządzenia.</translation>
+<translation id="2082205219176343977">Skonfiguruj minimalną dozwoloną wersję Carbon Browser dla urządzenia.</translation>
 <translation id="209586405398070749">Wersja stabilna</translation>
 <translation id="2098658257603918882">Włącz przesyłanie raportów o użytkowaniu i danych dotyczących awarii</translation>
 <translation id="2104418465060359056">Zgłaszaj informacje o rozszerzeniach i wtyczkach</translation>
@@ -662,7 +662,7 @@ Jeśli pozostanie ona nieskonfigurowana, użytkownik może sam zdecydować, czy 
       Jeśli wyłączysz tę zasadę lub jej nie skonfigurujesz, wszystkie strony uwierzytelniania w portalu przechwytującym będą wyświetlać się na nowej karcie przeglądarki, używając ustawień serwera proxy dla bieżącego użytkownika.</translation>
 <translation id="21394354835637379">Pozwala określić adresy URL, z których można instalować rozszerzenia, aplikacje i motywy.
 
-          Od <ph name="PRODUCT_NAME" /> 21 trudniej jest instalować rozszerzenia, aplikacje i skrypty użytkownika pochodzące spoza Carbon Browser Browser Browser Web Store. Wcześniej użytkownik klikał link do pliku CRX, a <ph name="PRODUCT_NAME" /> po wyświetleniu kilku ostrzeżeń proponował jego zainstalowanie. Od <ph name="PRODUCT_NAME" /> 21 taki plik trzeba pobrać i przeciągnąć na stronę ustawień <ph name="PRODUCT_NAME" />. Ta zasada pozwala instalować elementy z określonych adresów URL starszą, prostszą metodą.
+          Od <ph name="PRODUCT_NAME" /> 21 trudniej jest instalować rozszerzenia, aplikacje i skrypty użytkownika pochodzące spoza Carbon Browser Web Store. Wcześniej użytkownik klikał link do pliku CRX, a <ph name="PRODUCT_NAME" /> po wyświetleniu kilku ostrzeżeń proponował jego zainstalowanie. Od <ph name="PRODUCT_NAME" /> 21 taki plik trzeba pobrać i przeciągnąć na stronę ustawień <ph name="PRODUCT_NAME" />. Ta zasada pozwala instalować elementy z określonych adresów URL starszą, prostszą metodą.
 
           Każda pozycja na liście to wzorzec dopasowania rozszerzenia (więcej informacji: https://developer.chrome.com/extensions/match_patterns). Użytkownicy mogą łatwo instalować elementy z każdego adresu URL, który pasuje do pozycji na liście. Wzorce muszą zezwalać na dostęp zarówno do lokalizacji pliku CRX, jak i do strony, na której rozpoczyna się pobieranie (czyli strony odsyłającej).
 
@@ -733,7 +733,7 @@ Jeśli pozostanie ona nieskonfigurowana, użytkownik może sam zdecydować, czy 
 
       Gdy zasada jest wyłączona lub nieskonfigurowana, strony nie mogą wyświetlać wyskakujących okienek podczas ich zamykania – zgodnie ze specyfikacją (https://html.spec.whatwg.org/#apis-for-creating-and-navigating-browsing-contexts-by-name).
 
-      Ta zasada zostanie usunięta w Carbon Browser Browser Browser 82.
+      Ta zasada zostanie usunięta w Carbon Browser 82.
 
       Patrz https://www.chromestatus.com/feature/5989473649164288 .</translation>
 <translation id="2269319728625047531">Włącz wyświetlanie pytania o synchronizację podczas logowania</translation>
@@ -805,9 +805,9 @@ Jeśli pozostanie ona nieskonfigurowana, użytkownik może sam zdecydować, czy 
 <translation id="2463034609187171371">Włącz mechanizmy szyfrowania DHE w TLS</translation>
 <translation id="2463365186486772703">Język aplikacji</translation>
 <translation id="2466131534462628618">Uwierzytelnianie w portalu przechwytującym ignoruje serwer proxy</translation>
-<translation id="2471748297300970300">Jeśli ta zasada jest wyłączona, podczas uruchamiania Carbon Browser Browser Browser z pewnymi potencjalnie niebezpiecznymi flagami wiersza poleceń nie będą się wyświetlać ostrzeżenia dotyczące bezpieczeństwa.
+<translation id="2471748297300970300">Jeśli ta zasada jest wyłączona, podczas uruchamiania Carbon Browser z pewnymi potencjalnie niebezpiecznymi flagami wiersza poleceń nie będą się wyświetlać ostrzeżenia dotyczące bezpieczeństwa.
 
-          Jeśli zasada jest włączona lub nieskonfigurowana, podczas uruchamiania Carbon Browser Browser Browser z pewnymi potencjalnie niebezpiecznymi flagami wiersza poleceń będą się wyświetlać ostrzeżenia dotyczące bezpieczeństwa.
+          Jeśli zasada jest włączona lub nieskonfigurowana, podczas uruchamiania Carbon Browser z pewnymi potencjalnie niebezpiecznymi flagami wiersza poleceń będą się wyświetlać ostrzeżenia dotyczące bezpieczeństwa.
 
           W przypadku systemu Windows ta zasada jest dostępna tylko w wystąpieniach systemu należących do domeny <ph name="MS_AD_NAME" /> oraz w wystąpieniach Windows 10 Pro lub Enterprise zarejestrowanych w usłudze zarządzania urządzeniami.</translation>
 <translation id="2482676533225429905">Wiadomości natywne</translation>
@@ -923,7 +923,7 @@ Jeśli pozostanie ona nieskonfigurowana, użytkownik może sam zdecydować, czy 
           URL wyszukiwania Google to: <ph name="GOOGLE_SEARCH_URL" />.
 
           Ta opcja musi być ustawiona w przypadku włączenia zasady „DefaultSearchProviderEnabled” i tylko wtedy będzie egzekwowana.</translation>
-<translation id="2659019163577049044">Jeśli to ustawienie jest włączone, użytkownicy będą mogli włączyć synchronizację SMS-ów między telefonem a Carbon Browser Browser Browserbookiem. Jeśli jest to dozwolone, użytkownicy muszą włączyć ją samodzielnie, przeprowadzając konfigurację. Po ukończeniu konfiguracji użytkownicy mogą wysyłać i odbierać SMS-y na swoich Carbon Browser Browser Browserbookach.
+<translation id="2659019163577049044">Jeśli to ustawienie jest włączone, użytkownicy będą mogli włączyć synchronizację SMS-ów między telefonem a Carbon Browserbookiem. Jeśli jest to dozwolone, użytkownicy muszą włączyć ją samodzielnie, przeprowadzając konfigurację. Po ukończeniu konfiguracji użytkownicy mogą wysyłać i odbierać SMS-y na swoich Carbon Browserbookach.
 
       Jeśli to ustawienie jest wyłączone, użytkownicy nie będą mogli skonfigurować synchronizacji SMS-ów.
 
@@ -937,7 +937,7 @@ Jeśli pozostanie ona nieskonfigurowana, użytkownik może sam zdecydować, czy 
 <translation id="2706708761587205154">Zezwól tylko na drukowanie z kodem PIN</translation>
 <translation id="2710534340210290498">Jeśli ta zasada ma wartość Fałsz, użytkownicy nie mogą blokować ekranu (mogą się tylko wylogować z sesji użytkownika). Jeśli ma wartość Prawda lub nie jest skonfigurowana, użytkownicy, którzy przeprowadzili uwierzytelnianie przy użyciu hasła, mogą zablokować ekran.</translation>
 <translation id="2731627323327011390">Wyłącz korzystanie z certyfikatów <ph name="PRODUCT_OS_NAME" /> w aplikacjach ARC</translation>
-<translation id="2742843273354638707">Ukrywa aplikację Carbon Browser Browser Browser Web Store i link w stopce na stronie Nowa karta oraz w menu z aplikacjami <ph name="PRODUCT_OS_NAME" />.
+<translation id="2742843273354638707">Ukrywa aplikację Carbon Browser Web Store i link w stopce na stronie Nowa karta oraz w menu z aplikacjami <ph name="PRODUCT_OS_NAME" />.
 
       Jeśli zasada ma wartość prawda, ikony są ukryte.
 
@@ -1000,12 +1000,12 @@ Jeśli pozostanie ona nieskonfigurowana, użytkownik może sam zdecydować, czy 
       Jeśli ta zasada korzysta z niepustej listy przedziałów czasu:
       Urządzenia nie mogą automatycznie sprawdzać dostępności aktualizacji w podanych okresach. Ze względów bezpieczeństwa ta zasada nie dotyczy urządzeń wymagających przywrócenia wcześniejszej wersji systemu <ph name="PRODUCT_OS_NAME" /> ani sytuacji, gdy wersja systemu jest starsza od minimalnej. Zasada ta nie blokuje sprawdzania dostępności aktualizacji przez użytkowników lub administratorów.
       Gdy ta zasada nie jest skonfigurowana lub nie zawiera przedziałów czasu:
-      Zasada nie będzie blokować automatycznego sprawdzania dostępności aktualizacji, ale mogą to powodować inne zasady. Ta funkcja jest dostępna tylko na urządzeniach z Carbon Browser Browser Browser skonfigurowanych jako uruchamiane automatycznie kioski. Ta zasada nie dotyczy innych urządzeń.</translation>
+      Zasada nie będzie blokować automatycznego sprawdzania dostępności aktualizacji, ale mogą to powodować inne zasady. Ta funkcja jest dostępna tylko na urządzeniach z Carbon Browser skonfigurowanych jako uruchamiane automatycznie kioski. Ta zasada nie dotyczy innych urządzeń.</translation>
 <translation id="2823870601012066791">Lokalizacja w rejestrze systemu Windows dla klientów <ph name="PRODUCT_OS_NAME" />:</translation>
 <translation id="2824715612115726353">Włącz tryb private</translation>
 <translation id="2836621397261130126">Określa, czy akceptacja przez zasadę KDC jest uwzględniana podczas podejmowania decyzji o przekazywaniu biletów <ph name="KERBEROS" />.
 
-          Jeśli zasada ma wartość Prawda, podczas uwierzytelniania HTTP respektowana jest akceptacja przez zasadę KDC, tzn. Carbon Browser Browser Browser przekazuje dane logowania tylko wtedy, gdy KDC ustawi <ph name="OK_AS_DELEGATE" /> w bilecie usługi. Więcej informacji znajdziesz na stronie https://tools.ietf.org/html/rfc5896.html Usługa musi również znajdować się na liście zasady „AuthNegotiateDelegateWhitelist”.
+          Jeśli zasada ma wartość Prawda, podczas uwierzytelniania HTTP respektowana jest akceptacja przez zasadę KDC, tzn. Carbon Browser przekazuje dane logowania tylko wtedy, gdy KDC ustawi <ph name="OK_AS_DELEGATE" /> w bilecie usługi. Więcej informacji znajdziesz na stronie https://tools.ietf.org/html/rfc5896.html Usługa musi również znajdować się na liście zasady „AuthNegotiateDelegateWhitelist”.
 
           Jeśli ta zasada jest nieskonfigurowana lub ma wartość Fałsz, zasada KDC jest ignorowana na obsługiwanych platformach i respektowana jest tylko zasada „AuthNegotiateDelegateWhitelist”.
 
@@ -1151,7 +1151,7 @@ Jeśli pozostanie ona nieskonfigurowana, użytkownik może sam zdecydować, czy 
 <translation id="3034580675120919256">Umożliwia określenie, czy w witrynach może być wykonywany kod JavaScript. Wykonanie kodu JavaScript może być dozwolone lub zabronione we wszystkich witrynach. W przypadku nieskonfigurowania tej zasady będzie używane ustawienie „AllowJavaScript”, a użytkownik będzie mógł je zmienić.</translation>
 <translation id="3038323923255997294">Kontynuuj działanie aplikacji w tle po zamknięciu <ph name="PRODUCT_NAME" /></translation>
 <translation id="3046192273793919231">Wysyłaj pakiety sieciowe na serwer zarządzania w celu monitorowania stanu online</translation>
-<translation id="3047732214002457234">Określ sposób przesyłania do Google danych przez Czyszczenie Carbon Browser Browser Browser</translation>
+<translation id="3047732214002457234">Określ sposób przesyłania do Google danych przez Czyszczenie Carbon Browser</translation>
 <translation id="304775240152542058">Ta zasada określa parametry wiersza poleceń używane do uruchamiania alternatywnej przeglądarki.
 
       Gdy ta zasada jest nieskonfigurowana, w parametrach wiersza poleceń przekazywany jest tylko URL.
@@ -1220,9 +1220,9 @@ Jeśli pozostanie ona nieskonfigurowana, użytkownik może sam zdecydować, czy 
       Jeśli ta zasada nie jest ustawiona lub jest wyłączona, mechanizmy szyfrowania DHE w TLS będą wyłączone. Można ją włączyć, by mechanizmy szyfrowania pozostały aktywne oraz w celu zachowania zgodności z przestarzałym serwerem. Jest to rozwiązanie tymczasowe i konieczna jest zmiana konfiguracji serwera.
 
       Zalecamy wdrożenie na serwerach mechanizmów szyfrowania ECDHE. Jeśli nie ma takiej możliwości, upewnij się, że włączony jest mechanizm szyfrowania obsługujący wymianę kluczy RSA.</translation>
-<translation id="3117706142826400449">Kiedy ta zasada jest wyłączona, Czyszczenie Carbon Browser Browser Browser nie może skanować systemu w poszukiwaniu niechcianego oprogramowania ani wykonywać czyszczenia. Ręczne uruchamianie Czyszczenia Carbon Browser Browser Browser pod adresem chrome://settings/cleanup jest wyłączone.
+<translation id="3117706142826400449">Kiedy ta zasada jest wyłączona, Czyszczenie Carbon Browser nie może skanować systemu w poszukiwaniu niechcianego oprogramowania ani wykonywać czyszczenia. Ręczne uruchamianie Czyszczenia Carbon Browser pod adresem chrome://settings/cleanup jest wyłączone.
 
-      Jeśli ta zasada jest włączona lub nieskonfigurowana, Czyszczenie Carbon Browser Browser Browser okresowo skanuje system w poszukiwaniu niechcianego oprogramowania. Jeśli je znajdzie, zapyta użytkownika, czy chce je usunąć. Ręczne uruchamianie Czyszczenia Carbon Browser Browser Browser pod adresem chrome://settings/cleanup jest włączone.
+      Jeśli ta zasada jest włączona lub nieskonfigurowana, Czyszczenie Carbon Browser okresowo skanuje system w poszukiwaniu niechcianego oprogramowania. Jeśli je znajdzie, zapyta użytkownika, czy chce je usunąć. Ręczne uruchamianie Czyszczenia Carbon Browser pod adresem chrome://settings/cleanup jest włączone.
 
       Ta zasada jest dostępna tylko w wystąpieniach systemu Windows, które należą do domeny <ph name="MS_AD_NAME" />, oraz w wystąpieniach systemu Windows 10 Pro lub Enterprise zarejestrowanych w funkcji zarządzania urządzeniami.</translation>
 <translation id="3152425128389603870">Udostępnij ujednolicony pulpit i włącz go domyślnie</translation>
@@ -1335,7 +1335,7 @@ Jeśli wybierzesz ustawienie „Umiarkowany”, użytkownik może wybrać tylko 
 Jeśli nie podasz wartości albo wybierzesz ustawienie „Wyłącz”, stosowanie trybu ograniczonego dostępu w YouTube nie będzie wymuszane przez przeglądarkę <ph name="PRODUCT_NAME" />. Zewnętrzne zasady, np. zasady YouTube, mogą jednak nadal wymuszać stosowanie trybu ograniczonego dostępu.</translation>
 <translation id="3428247105888806363">Włącz przewidywanie działań sieciowych</translation>
 <translation id="3432863169147125747">Kontroluje ustawienia drukowania.</translation>
-<translation id="3434932177006334880">Przed Carbon Browser Browser Browser 42 zasada ta nosiła nazwę EnableWebBasedSignin. W Carbon Browser Browser Browser 43 nie będzie ona już w ogóle obsługiwana.
+<translation id="3434932177006334880">Przed Carbon Browser 42 zasada ta nosiła nazwę EnableWebBasedSignin. W Carbon Browser 43 nie będzie ona już w ogóle obsługiwana.
 
       Ta zasada jest przydatna dla klientów biznesowych, którzy używają funkcji SSO niezgodnych z nowym, wbudowanym mechanizmem logowania.
       Jeśli włączysz tę zasadę, będzie używany stary mechanizm logowania.
@@ -1412,7 +1412,7 @@ Jeśli nie podasz wartości albo wybierzesz ustawienie „Wyłącz”, stosowani
       Jeśli dany język występuje na liście zarówno w tej zasadzie, jak i w zasadzie <ph name="SPELLCHECK_LANGUAGE_BLACKLIST_POLICY_NAME" />, ta zasada ma priorytet i sprawdzanie pisowni w tym języku będzie włączone.
 
       Aktualnie obsługiwane języki: af, bg, ca, cs, da, de, el, en-AU, en-CA, en-GB, en-US, es, es-419, es-AR, es-ES, es-MX, es-US, et, fa, fo, fr, he, hi, hr, hu, id, it, ko, lt, lv, nb, nl, pl, pt-BR, pt-PT, ro, ru, sh, sk, sl, sq, sr, sv, ta, tg, tr, uk oraz vi.</translation>
-<translation id="356579196325389849">Użytkownicy mogą skonfigurować kanał wersji Carbon Browser Browser Browser OS</translation>
+<translation id="356579196325389849">Użytkownicy mogą skonfigurować kanał wersji Carbon Browser OS</translation>
 <translation id="3575011234198230041">Uwierzytelnianie HTTP</translation>
 <translation id="3577251398714997599">Ustawienia reklam dla stron zawierających uciążliwe reklamy</translation>
 <translation id="357917253161699596">Zezwalaj użytkownikom na zarządzanie certyfikatami użytkownika</translation>
@@ -1430,9 +1430,9 @@ Jeśli nie podasz wartości albo wybierzesz ustawienie „Wyłącz”, stosowani
 <translation id="3646859102161347133">Ustaw typ lupy</translation>
 <translation id="3653237928288822292">Ikona domyślnego dostawcy wyszukiwania</translation>
 <translation id="3660510274595679517">
-        Gdy ta zasada ma wartość Prawda, rejestracja w zarządzaniu przez chmurę jest obowiązkowa, a jej brak blokuje uruchamianie Carbon Browser Browser Browser.
+        Gdy ta zasada ma wartość Prawda, rejestracja w zarządzaniu przez chmurę jest obowiązkowa, a jej brak blokuje uruchamianie Carbon Browser.
 
-        Jeśli ta zasada jest nieskonfigurowana lub ma wartość Fałsz, rejestracja w zarządzaniu przez chmurę jest opcjonalna, a jej brak nie blokuje uruchamiania Carbon Browser Browser Browser.
+        Jeśli ta zasada jest nieskonfigurowana lub ma wartość Fałsz, rejestracja w zarządzaniu przez chmurę jest opcjonalna, a jej brak nie blokuje uruchamiania Carbon Browser.
 
         Ta zasada jest używana przez rejestrację zasad chmurowych obejmującą cały komputer na komputerach osobistych. Można ją skonfigurować przy użyciu Rejestru lub obiektu zasad grupy (GPO) w systemie Windows, plist na Macu i pliku zasad JSON na Linuksie.</translation>
 <translation id="3660562134618097814">Prześlij pliki cookie dostawcy tożsamości SAML podczas logowania</translation>
@@ -1612,9 +1612,9 @@ Jeśli ta zasada jest wyłączona, informacje o sesji nie będą przesyłane. Je
 <translation id="3963602271515417124">Jeśli ustawiono wartość Prawda, zdalne poświadczanie na potrzeby urządzenia jest dozwolone, a certyfikat jest automatycznie generowany i przesyłany na serwer zarządzania urządzeniami.
 
           Jeśli wartość ustawiono na Fałsz lub nie jest ona określona, certyfikat nie jest generowany, a wywołania kierowane do interfejsu API rozszerzenia enterprise.platformKeys zakończą się niepowodzeniem.</translation>
-<translation id="3964262920683972987">Skonfiguruj obraz tapety na poziomie urządzenia, który będzie widoczny na ekranie logowania, zanim użytkownik zaloguje się na urządzeniu. Aby skonfigurować zasadę, podaj URL, z którego Carbon Browser Browser Browser OS może pobrać obraz tapety, oraz hash kryptograficzny używany do weryfikowania poprawności pobranego pliku. Obraz musi mieć format JPEG i nie może być większy niż 16 MB. URL musi być dostępny bez uwierzytelniania. Obraz tapety jest pobierany i przechowywany w pamięci podręcznej. Zostanie pobrany ponownie po każdej zmianie adresu URL lub hasha.
+<translation id="3964262920683972987">Skonfiguruj obraz tapety na poziomie urządzenia, który będzie widoczny na ekranie logowania, zanim użytkownik zaloguje się na urządzeniu. Aby skonfigurować zasadę, podaj URL, z którego Carbon Browser OS może pobrać obraz tapety, oraz hash kryptograficzny używany do weryfikowania poprawności pobranego pliku. Obraz musi mieć format JPEG i nie może być większy niż 16 MB. URL musi być dostępny bez uwierzytelniania. Obraz tapety jest pobierany i przechowywany w pamięci podręcznej. Zostanie pobrany ponownie po każdej zmianie adresu URL lub hasha.
 
-      Jeśli zasada dotycząca tapety na poziomie urządzenia jest skonfigurowana, a żaden użytkownik nie zalogował się jeszcze na urządzeniu, Carbon Browser Browser Browser OS pobierze obraz tapety i użyje go na ekranie logowania. Po zalogowaniu się użytkownika będzie używana jego tapeta.
+      Jeśli zasada dotycząca tapety na poziomie urządzenia jest skonfigurowana, a żaden użytkownik nie zalogował się jeszcze na urządzeniu, Carbon Browser OS pobierze obraz tapety i użyje go na ekranie logowania. Po zalogowaniu się użytkownika będzie używana jego tapeta.
 
       Jeśli zasada dotycząca tapety na poziomie urządzenia jest nieskonfigurowana, a skonfigurowana jest zasada dotycząca tapety na poziomie użytkownika, ta ostatnia będzie decydować o tym, co wyświetlić.</translation>
 <translation id="3965339130942650562">Limit czasu bezczynności, po którym następuje wylogowanie</translation>
@@ -1622,28 +1622,28 @@ Jeśli ta zasada jest wyłączona, informacje o sesji nie będą przesyłane. Je
 <translation id="3984028218719007910">Określa, czy <ph name="PRODUCT_OS_NAME" /> przechowuje po wylogowaniu dane konta lokalnego. W przypadku włączenia trwałe konta nie są przechowywane przez <ph name="PRODUCT_OS_NAME" /> i po wylogowaniu wszystkie dane z sesji użytkownika są usuwane. Jeśli ta zasada będzie wyłączona lub nieskonfigurowana, urządzenie może przechowywać zaszyfrowane lokalne dane użytkownika.</translation>
 <translation id="398475542699441679">Ta zasada określa, czy ma być włączona funkcja Obsługa starszych przeglądarek.
 
-      Kiedy ta zasada nie jest skonfigurowana lub ma wartość Fałsz, Carbon Browser Browser Browser nie będzie próbować otworzyć wyznaczonych adresów URL w alternatywnej przeglądarce.
+      Kiedy ta zasada nie jest skonfigurowana lub ma wartość Fałsz, Carbon Browser nie będzie próbować otworzyć wyznaczonych adresów URL w alternatywnej przeglądarce.
 
-      Kiedy zasada ta ma wartość Prawda, Carbon Browser Browser Browser będzie próbować otworzyć wybrane adresy URL w alternatywnej przeglądarce (takiej jak Internet Explorer). Do konfigurowania tej funkcji służą zasady w grupie <ph name="LEGACY_BROWSER_SUPPORT_POLICY_GROUP" />.
+      Kiedy zasada ta ma wartość Prawda, Carbon Browser będzie próbować otworzyć wybrane adresy URL w alternatywnej przeglądarce (takiej jak Internet Explorer). Do konfigurowania tej funkcji służą zasady w grupie <ph name="LEGACY_BROWSER_SUPPORT_POLICY_GROUP" />.
 
-      Funkcja ta zastępuje rozszerzenie <ph name="LEGACY_BROWSER_SUPPORT_EXTENSION_NAME" />. Jego istniejąca konfiguracja pozostanie aktywna, ale zdecydowanie zalecamy użycie zasad w Carbon Browser Browser Browser. Pozwoli to uniknąć ewentualnych późniejszych problemów ze zgodnością.</translation>
+      Funkcja ta zastępuje rozszerzenie <ph name="LEGACY_BROWSER_SUPPORT_EXTENSION_NAME" />. Jego istniejąca konfiguracja pozostanie aktywna, ale zdecydowanie zalecamy użycie zasad w Carbon Browser. Pozwoli to uniknąć ewentualnych późniejszych problemów ze zgodnością.</translation>
 <translation id="3997519162482760140">Adresy URL, które będą mieć dostęp do urządzeń rejestrujących wideo na stronach logowania SAML</translation>
-<translation id="4001275826058808087">Administratorzy IT urządzeń firmowych mogą przy użyciu tej flagi określić, czy użytkownicy mogą korzystać z ofert w procesie rejestracji systemu operacyjnego Carbon Browser Browser Browser.
+<translation id="4001275826058808087">Administratorzy IT urządzeń firmowych mogą przy użyciu tej flagi określić, czy użytkownicy mogą korzystać z ofert w procesie rejestracji systemu operacyjnego Carbon Browser.
 
-      Jeśli nie skonfigurujesz tej zasady lub ustawisz dla niej wartość prawda, użytkownicy będą mogli wykorzystywać oferty przy rejestracji systemu operacyjnego Carbon Browser Browser Browser.
+      Jeśli nie skonfigurujesz tej zasady lub ustawisz dla niej wartość prawda, użytkownicy będą mogli wykorzystywać oferty przy rejestracji systemu operacyjnego Carbon Browser.
 
       Jeśli ustawisz tu wartość fałsz, użytkownicy nie będą mogli wykorzystywać ofert.</translation>
 <translation id="4008233182078913897">Określa listę aplikacji i rozszerzeń, które zostaną zainstalowane dyskretnie, bez interakcji z użytkownikiem, a użytkownik nie będzie mógł ich odinstalować ani wyłączyć. Aplikacje/rozszerzenia otrzymają bez interakcji z użytkownikiem wszystkie uprawnienia, o które proszą, w tym wszelkie dodatkowe uprawnienia, o które będą prosić ich przyszłe wersje. Otrzymają też uprawnienia do interfejsów API dla rozszerzeń enterprise.deviceAttributes i enterprise.platformKeys. (Te dwa interfejsy API są niedostępne w przypadku aplikacji/rozszerzeń, których instalacja nie jest wymuszana).
 
 Ta zasada ma pierwszeństwo przed potencjalnie powodującą konflikt zasadą <ph name="EXTENSION_INSTALL_BLACKLIST_POLICY_NAME" />. Jeśli z tej listy zostaną usunięte aplikacje lub rozszerzenia, których instalacja została wymuszona wcześniej, <ph name="PRODUCT_NAME" /> automatycznie je odinstaluje.
 
-W przypadku systemów Windows niepodłączonych do domeny <ph name="MS_AD_NAME" /> wymuszona instalacja jest ograniczona do aplikacji i rozszerzeń dostępnych w Carbon Browser Browser Browser Web Store.
+W przypadku systemów Windows niepodłączonych do domeny <ph name="MS_AD_NAME" /> wymuszona instalacja jest ograniczona do aplikacji i rozszerzeń dostępnych w Carbon Browser Web Store.
 
 Pamiętaj, że kod źródłowy każdego rozszerzenia można zmodyfikować za pomocą Narzędzi dla programistów (potencjalnie zakłócając jego działanie). Jeśli stanowi to problem, skonfiguruj zasadę <ph name="DEVELOPER_TOOLS_POLICY_NAME" />.
 
-Każdy element na liście tej zasady jest ciągiem zawierającym identyfikator rozszerzenia i opcjonalnie adres URL „aktualizacji” oddzielone średnikiem (<ph name="SEMICOLON" />). Identyfikator rozszerzenia to ciąg 32 znaków, który znajdziesz np. na <ph name="CHROME_EXTENSIONS_LINK" /> w trybie programisty. Adres URL „aktualizacji” powinien wskazywać plik manifestu aktualizacji w postaci dokumentu XML, zgodnie z opisem na <ph name="LINK_TO_EXTENSION_DOC1" />. Domyślnie używany jest adres URL „aktualizacji” Carbon Browser Browser Browser Web Store (obecnie to „https://clients2.google.com/service/update2/crx”). Uwaga: adres URL „aktualizacji” ustawiony przez tę zasadę jest używany tylko podczas pierwszej instalacji. Późniejsze aktualizacje rozszerzenia korzystają z adresu URL „aktualizacji” wskazanego w pliku manifestu. Pamiętaj też, że podanie adresu URL „aktualizacji” było obowiązkowe w <ph name="PRODUCT_NAME" /> do wersji 67 włącznie.
+Każdy element na liście tej zasady jest ciągiem zawierającym identyfikator rozszerzenia i opcjonalnie adres URL „aktualizacji” oddzielone średnikiem (<ph name="SEMICOLON" />). Identyfikator rozszerzenia to ciąg 32 znaków, który znajdziesz np. na <ph name="CHROME_EXTENSIONS_LINK" /> w trybie programisty. Adres URL „aktualizacji” powinien wskazywać plik manifestu aktualizacji w postaci dokumentu XML, zgodnie z opisem na <ph name="LINK_TO_EXTENSION_DOC1" />. Domyślnie używany jest adres URL „aktualizacji” Carbon Browser Web Store (obecnie to „https://clients2.google.com/service/update2/crx”). Uwaga: adres URL „aktualizacji” ustawiony przez tę zasadę jest używany tylko podczas pierwszej instalacji. Późniejsze aktualizacje rozszerzenia korzystają z adresu URL „aktualizacji” wskazanego w pliku manifestu. Pamiętaj też, że podanie adresu URL „aktualizacji” było obowiązkowe w <ph name="PRODUCT_NAME" /> do wersji 67 włącznie.
 
-Na przykład <ph name="EXTENSION_POLICY_EXAMPLE" /> instaluje rozszerzenie o identyfikatorze <ph name="EXTENSION_ID_SAMPLE" /> ze standardowego adresu URL „aktualizacji” Carbon Browser Browser Browser Web Store. Więcej informacji o hostowaniu rozszerzeń znajdziesz na stronie <ph name="LINK_TO_EXTENSION_DOC2" />.
+Na przykład <ph name="EXTENSION_POLICY_EXAMPLE" /> instaluje rozszerzenie o identyfikatorze <ph name="EXTENSION_ID_SAMPLE" /> ze standardowego adresu URL „aktualizacji” Carbon Browser Web Store. Więcej informacji o hostowaniu rozszerzeń znajdziesz na stronie <ph name="LINK_TO_EXTENSION_DOC2" />.
 
 Jeśli ta zasada nie jest skonfigurowana, aplikacje ani rozszerzenia nie są instalowane automatycznie, a użytkownik może odinstalować dowolne z nich w <ph name="PRODUCT_NAME" />.
 
@@ -1750,7 +1750,7 @@ Jeśli wartość |IdleAction| nie będzie określona, zostanie wykonane działan
           Jeśli skonfigurujesz tę zasadę, użytkownicy nie będą mogli jej zmienić ani zastąpić.
 
           Jeśli ta zasada jest nieskonfigurowana, klawisze trwałe są początkowo wyłączone, ale użytkownik może je swobodnie włączyć.</translation>
-<translation id="4171331498167688968">Jeśli ta zasada ma ustawienie Fałsz, oprogramowanie innych firm będzie mogło wstrzykiwać kod wykonywalny do procesów Carbon Browser Browser Browser. Jeśli ta zasada jest nieskonfigurowana lub ma ustawienie Prawda, oprogramowanie innych firm nie będzie mogło wstrzykiwać takiego kodu do procesów Carbon Browser Browser Browser.
+<translation id="4171331498167688968">Jeśli ta zasada ma ustawienie Fałsz, oprogramowanie innych firm będzie mogło wstrzykiwać kod wykonywalny do procesów Carbon Browser. Jeśli ta zasada jest nieskonfigurowana lub ma ustawienie Prawda, oprogramowanie innych firm nie będzie mogło wstrzykiwać takiego kodu do procesów Carbon Browser.
 
       Bez względu na wartość tej zasady obecnie przeglądarka nie blokuje wstrzykiwania kodu wykonywalnego na komputerach dołączonych do domeny <ph name="MS_AD_NAME" />.</translation>
 <translation id="4183229833636799228">Domyślne ustawienie wtyczki <ph name="FLASH_PLUGIN_NAME" /></translation>
@@ -1819,11 +1819,11 @@ Jeśli wartość |IdleAction| nie będzie określona, zostanie wykonane działan
 <translation id="4298509794364745131">Określa listę aplikacji, które mogą być włączone jako aplikacje do notatek na ekranie blokady w: <ph name="PRODUCT_OS_NAME" />.
 
       Jeśli preferowana aplikacja do robienia notatek jest włączona na ekranie blokady, będą na nim dostępne elementy interfejsu umożliwiające uruchomienie tej aplikacji.
-      Po uruchomieniu aplikacja będzie mogła otworzyć swoje okno w górnej części ekranu blokady, a następnie generować dane (notatki) na ekranie blokady. Aplikacja będzie mogła zaimportować utworzone notatki do głównej sesji użytkownika, gdy sesja ta zostanie odblokowana. Obecnie na ekranie blokady można używać tylko aplikacji do robienia notatek obsługiwanych przez Carbon Browser Browser Browser.
+      Po uruchomieniu aplikacja będzie mogła otworzyć swoje okno w górnej części ekranu blokady, a następnie generować dane (notatki) na ekranie blokady. Aplikacja będzie mogła zaimportować utworzone notatki do głównej sesji użytkownika, gdy sesja ta zostanie odblokowana. Obecnie na ekranie blokady można używać tylko aplikacji do robienia notatek obsługiwanych przez Carbon Browser.
 
       Jeśli ta zasada zostanie skonfigurowana, użytkownik będzie mógł włączyć aplikację na ekranie blokady tylko wtedy, gdy identyfikator rozszerzenia aplikacji zostanie dodany do listy wartości zasady.
       Z tego powodu w przypadku, gdy lista wartości będzie pusta, robienie notatek na ekranie blokady będzie niemożliwe.
-      Pamiętaj, że nawet jeśli zasada będzie zawierać identyfikator aplikacji, nie oznacza to, że użytkownik będzie mógł włączyć aplikację do robienia notatek na ekranie blokady – np. w przypadku Carbon Browser Browser Browser 61 lista dostępnych aplikacji jest dodatkowo ograniczona przez samą platformę.
+      Pamiętaj, że nawet jeśli zasada będzie zawierać identyfikator aplikacji, nie oznacza to, że użytkownik będzie mógł włączyć aplikację do robienia notatek na ekranie blokady – np. w przypadku Carbon Browser 61 lista dostępnych aplikacji jest dodatkowo ograniczona przez samą platformę.
 
       Jeśli ta zasada nie zostanie skonfigurowana, nie będzie ograniczeń dotyczących aplikacji, które użytkownik może włączyć na ekranie blokady.</translation>
 <translation id="4313767483634435271">Wyznaczony adres MAC stacji dokującej urządzenia</translation>
@@ -1980,7 +1980,7 @@ W przypadku nieskonfigurowania tej zasady użytkownik będzie mógł wybrać, cz
 <translation id="467236746355332046">Obsługiwane funkcje:</translation>
 <translation id="4674167212832291997">Pozwala dostosować listę wzorców adresów URL stron, które <ph name="PRODUCT_FRAME_NAME" /> ma zawsze renderować.
 
-          Jeśli nie ustawisz tej zasady, na wszystkich stronach działa domyślny mechanizm renderowania określony przez zasadę Carbon Browser Browser BrowserFrameRendererSettings.
+          Jeśli nie ustawisz tej zasady, na wszystkich stronach działa domyślny mechanizm renderowania określony przez zasadę Carbon BrowserFrameRendererSettings.
 
           Przykładowe wzorce znajdziesz na https://www.chromium.org/developers/how-tos/chrome-frame-getting-started</translation>
 <translation id="467449052039111439">Otwórz adresy URL z listy</translation>
@@ -2073,10 +2073,10 @@ W przypadku nieskonfigurowania tej zasady użytkownik będzie mógł wybrać, cz
 
       Jeśli ta zasada jest wyłączona, <ph name="PRODUCT_NAME" /> nie zezwala na tworzenie nowych profili z poziomu menedżera użytkowników.</translation>
 <translation id="4970855112942626932">Wyłącz logowanie w przeglądarce</translation>
-<translation id="4978405676361550165">Jeśli zasada „OffHours” jest ustawiona, to określone zasady dotyczące urządzeń są ignorowane (używane są ustawienia domyślne tych zasad) w konkretnych okresach. Zasady dotyczące urządzeń są ponownie stosowane przez Carbon Browser Browser Browser za każdym razem, gdy zaczyna lub kończy się okres „OffHours”. Użytkownik otrzymuje powiadomienie i następuje wymuszone wylogowanie, gdy zakończenie okresu „OffHours” i zasady dotyczące urządzeń zmienią się (np. gdy użytkownik jest zalogowany na konto, które nie ma uprawnień).</translation>
+<translation id="4978405676361550165">Jeśli zasada „OffHours” jest ustawiona, to określone zasady dotyczące urządzeń są ignorowane (używane są ustawienia domyślne tych zasad) w konkretnych okresach. Zasady dotyczące urządzeń są ponownie stosowane przez Carbon Browser za każdym razem, gdy zaczyna lub kończy się okres „OffHours”. Użytkownik otrzymuje powiadomienie i następuje wymuszone wylogowanie, gdy zakończenie okresu „OffHours” i zasady dotyczące urządzeń zmienią się (np. gdy użytkownik jest zalogowany na konto, które nie ma uprawnień).</translation>
 <translation id="4980635395568992380">Typ danych:</translation>
 <translation id="4983201894483989687">Zezwalaj na uruchamianie nieaktualnych wtyczek</translation>
-<translation id="4986560318567565414">Ścieżka Carbon Browser Browser Browser służąca do przełączania z alternatywnej przeglądarki.</translation>
+<translation id="4986560318567565414">Ścieżka Carbon Browser służąca do przełączania z alternatywnej przeglądarki.</translation>
 <translation id="4988291787868618635">Działanie, jakie ma zostać wykonane po osiągnięciu opóźnienia bezczynności</translation>
 <translation id="5034604678285451405">Ustaw procentowy próg naładowania baterii dla zasady Czas największego zużycia energii.
 
@@ -2143,11 +2143,11 @@ Pole <ph name="PROXY_MODE_PROXY_SETTINGS_FIELD" /> pozwala określić serwer pro
       Jeśli zasada ma wartość 0, zmienianie hasła do konta komputera jest wyłączone.
 
       Pamiętaj, że hasła mogą być starsze niż ustawiona liczba dni, gdy klient przez długi czas pozostawał w trybie offline.</translation>
-<translation id="510196893779239086">Ta zasada określa, czy całkowicie zamknąć Carbon Browser Browser Browser, gdy ostatnia karta ma zostać przełączona do innej przeglądarki.
+<translation id="510196893779239086">Ta zasada określa, czy całkowicie zamknąć Carbon Browser, gdy ostatnia karta ma zostać przełączona do innej przeglądarki.
 
-      Kiedy ta zasada jest nieskonfigurowana lub ma wartość Prawda, Carbon Browser Browser Browser pozostawi otwartą co najmniej jedną kartę po przełączeniu do innej przeglądarki.
+      Kiedy ta zasada jest nieskonfigurowana lub ma wartość Prawda, Carbon Browser pozostawi otwartą co najmniej jedną kartę po przełączeniu do innej przeglądarki.
 
-      Kiedy zasada ma wartość Fałsz, Carbon Browser Browser Browser zamknie kartę po przełączeniu do innej przeglądarki, nawet jeśli jest to ostatnia karta. Spowoduje to całkowite zamknięcie Carbon Browser Browser Browser.</translation>
+      Kiedy zasada ma wartość Fałsz, Carbon Browser zamknie kartę po przełączeniu do innej przeglądarki, nawet jeśli jest to ostatnia karta. Spowoduje to całkowite zamknięcie Carbon Browser.</translation>
 <translation id="5102203758995933166">Pozwala na przesyłanie konfiguracji sieciowej w trybie push do urządzeń z <ph name="PRODUCT_OS_NAME" /> poszczególnych użytkowników. Konfiguracja sieci to ciąg znaków w formacie JSON zgodny z formatem Open Network Configuration.</translation>
 <translation id="5105313908130842249">Opóźnienie blokady ekranu przy zasilaniu z baterii</translation>
 <translation id="5108031557082757679">Wyłączone drukarki firmowe powiązane z urządzeniami</translation>
@@ -2162,7 +2162,7 @@ Jeśli włączysz tę zasadę, wartości z zasad platformy komputera, zasad chm
 <translation id="5148753489738115745">Pozwala określić dodatkowe parametry używane, gdy <ph name="PRODUCT_FRAME_NAME" /> uruchamia <ph name="PRODUCT_NAME" />.
 
           Jeśli ta zasada nie jest ustawiona, używany jest domyślny wiersz polecenia.</translation>
-<translation id="5152787786897382519">Carbon Browser Browser Browser i Carbon Browser Browser Browser mają grupy zależnych od siebie zasad, które umożliwiają sterowanie funkcjami. Te zestawy są reprezentowane przez następujące grupy zasad. Ponieważ zasady mogą mieć wiele źródeł, stosowane są tylko wartości ze źródła o najwyższym priorytecie. Wartości ze źródła o niższych priorytetach są ignorowane. Priorytety są zdefiniowane tutaj: <ph name="POLICY_PRIORITY_DOC_URL" />.</translation>
+<translation id="5152787786897382519">Carbon Browser i Carbon Browser mają grupy zależnych od siebie zasad, które umożliwiają sterowanie funkcjami. Te zestawy są reprezentowane przez następujące grupy zasad. Ponieważ zasady mogą mieć wiele źródeł, stosowane są tylko wartości ze źródła o najwyższym priorytecie. Wartości ze źródła o niższych priorytetach są ignorowane. Priorytety są zdefiniowane tutaj: <ph name="POLICY_PRIORITY_DOC_URL" />.</translation>
 <translation id="5159469559091666409">Częstotliwość wysyłania pakietów sieciowych monitorowania (w milisekundach).
 
       Jeśli ta zasada nie jest skonfigurowana, domyślny odstęp czasu wynosi trzy minuty.
@@ -2263,7 +2263,7 @@ Jeśli ta zasada pozostanie nieskonfigurowana, użytkownik może wyłączyć ka�
           Wartość * na czarnej liście oznacza, że wszystkie hosty wiadomości natywnych są umieszczane na czarnej liście, dopóki nie znajdą się na białej liście.
 
           Jeśli ta zasada nie została określona, <ph name="PRODUCT_NAME" /> wczyta wszystkie zainstalowane hosty wiadomości natywnych.</translation>
-<translation id="5272684451155669299">Jeśli ustawiono wartość „prawda”, użytkownik może używać modułu sprzętowego w urządzeniach z Carbon Browser Browser Browser do zdalnego poświadczania tożsamości przez wywołanie funkcji <ph name="CHALLENGE_USER_KEY_FUNCTION" /> interfejsu <ph name="ENTERPRISE_PLATFORM_KEYS_API" />.
+<translation id="5272684451155669299">Jeśli ustawiono wartość „prawda”, użytkownik może używać modułu sprzętowego w urządzeniach z Carbon Browser do zdalnego poświadczania tożsamości przez wywołanie funkcji <ph name="CHALLENGE_USER_KEY_FUNCTION" /> interfejsu <ph name="ENTERPRISE_PLATFORM_KEYS_API" />.
 
           Jeśli ustawiono wartość „fałsz” lub nie jest ona określona, wywołania kierowane do interfejsu API zakończą się błędem.</translation>
 <translation id="5277806246014825877">Zezwolenie temu użytkownikowi na uruchamianie Crostini.
@@ -2282,7 +2282,7 @@ Jeśli ta zasada pozostanie nieskonfigurowana, użytkownik może wyłączyć ka�
 <translation id="5318185076587284965">Zezwalaj hostowi zdalnego dostępu na korzystanie z serwerów przekazujących</translation>
 <translation id="5323128137188992869">Zezwala na przesyłanie treści na urządzenie przy użyciu: <ph name="PRODUCT_NAME" />.
 
-          Jeśli ta zasada jest ustawiona na wartość fałsz, użytkownicy nie mogą przesyłać treści na urządzenie. Jeśli jest ustawiona na wartość prawda – mogą to robić. Jeśli ta zasada nie jest ustawiona, użytkownicy nie mogą przesyłać treści na zarejestrowane urządzenia z Carbon Browser Browser Browser OS. Mogą przesyłać treści na urządzenia niezarejestrowane.</translation>
+          Jeśli ta zasada jest ustawiona na wartość fałsz, użytkownicy nie mogą przesyłać treści na urządzenie. Jeśli jest ustawiona na wartość prawda – mogą to robić. Jeśli ta zasada nie jest ustawiona, użytkownicy nie mogą przesyłać treści na zarejestrowane urządzenia z Carbon Browser OS. Mogą przesyłać treści na urządzenia niezarejestrowane.</translation>
 <translation id="5329007337159326804">Ostrzeżenie: zasada najwyższej wersji TLS zostanie w całości usunięta z <ph name="PRODUCT_NAME" /> około wersji 75 (około czerwca 2019 r.).
 
       Jeśli ta zasada nie jest skonfigurowana, <ph name="PRODUCT_NAME" /> używa domyślnej najwyższej wersji.
@@ -2469,7 +2469,7 @@ Do odwzorowania sekwencji dowolnych znaków można używać symboli wieloznaczny
         Jeśli ta zasada ma wartość Fałsz, użytkownicy nie mogą przesyłać opinii do Google.
 
         Jeśli ta zasada jest nieskonfigurowana lub ma wartość Prawda, użytkownicy mogą przesyłać opinie do Google, klikając kolejno Menu &gt;Pomoc-&gt;Zgłoś problem lub naciskając odpowiednią kombinację klawiszy.</translation>
-<translation id="5581292529942108810">Konfigurowanie zasad związanych z Rozszerzeniem zgłaszającym informacje o Carbon Browser Browser Browser.
+<translation id="5581292529942108810">Konfigurowanie zasad związanych z Rozszerzeniem zgłaszającym informacje o Carbon Browser.
 
       Ta zasada jest stosowana tylko wtedy, gdy włączone jest <ph name="CHROME_REPORTING_EXTENSION_NAME" />, a komputer jest zarejestrowany w <ph name="MACHINE_LEVEL_USER_CLOUD_POLICY_ENROLLMENT_TOKEN_POLICY_NAME" />.</translation>
 <translation id="5583806683960333345">Po włączeniu tej zasady użytkownik będzie mógł korzystać z błyskawicznego połączenia w tetheringu, dzięki któremu jego telefon Google będzie udostępniać dane połączonemu urządzeniu.
@@ -2499,7 +2499,7 @@ Do odwzorowania sekwencji dowolnych znaków można używać symboli wieloznaczny
 
       UWAGA: izolacja witryn na Androidzie jest na razie funkcją eksperymentalną. Jej działanie poprawi się z czasem, ale obecnie może powodować problemy.
 
-      UWAGA: ta zasada jest stosowana tylko w Carbon Browser Browser Browser na Androidzie na urządzeniach mających więcej niż 1 GB pamięci RAM. Na platformach innych niż Android izolację witryn umożliwia zasada IsolateOrigins.
+      UWAGA: ta zasada jest stosowana tylko w Carbon Browser na Androidzie na urządzeniach mających więcej niż 1 GB pamięci RAM. Na platformach innych niż Android izolację witryn umożliwia zasada IsolateOrigins.
       </translation>
 <translation id="5599461642204007579"><ph name="MS_AD_NAME" /> – ustawienia zarządzania</translation>
 <translation id="5610104657949692379">Jeśli ta zasada jest skonfigurowana, określa działanie wykonywane przez <ph name="PRODUCT_OS_NAME" />, gdy użytkownik pozostaje nieaktywny przez czas wyznaczony przez opóźnienie bezczynności (które można skonfigurować osobno).
@@ -2507,7 +2507,7 @@ Do odwzorowania sekwencji dowolnych znaków można używać symboli wieloznaczny
           Gdy zasada nie jest skonfigurowana, wykonywane jest domyślne działanie, czyli przejście w tryb zawieszenia.
 
           Jeśli działaniem jest przejście w tryb zawieszenia, można osobno skonfigurować, czy przed jego wykonaniem <ph name="PRODUCT_OS_NAME" /> ma zablokować ekran.</translation>
-<translation id="5618398258385745432">To ustawienie było używane przed wprowadzeniem ponownego uwierzytelniania przy wyświetlaniu haseł. Po wprowadzeniu ponownego uwierzytelniania ustawienie i zasada nie mają żadnego wpływu na działanie Carbon Browser Browser Browser. Obecnie Carbon Browser Browser Browser działa tak, jakby zasada wyłączała wyświetlanie haseł w postaci zwykłego tekstu na stronie ustawień menedżera haseł. Oznacza to, że na stronie ustawień znajduje się tylko obiekt zastępczy, a Carbon Browser Browser Browser pokazuje hasło dopiero po kliknięciu przez użytkownika opcji „Pokaż” (i ponownym uwierzytelnieniu, jeśli jest wymagane). Poniżej podano wcześniejszy opis tej zasady.
+<translation id="5618398258385745432">To ustawienie było używane przed wprowadzeniem ponownego uwierzytelniania przy wyświetlaniu haseł. Po wprowadzeniu ponownego uwierzytelniania ustawienie i zasada nie mają żadnego wpływu na działanie Carbon Browser. Obecnie Carbon Browser działa tak, jakby zasada wyłączała wyświetlanie haseł w postaci zwykłego tekstu na stronie ustawień menedżera haseł. Oznacza to, że na stronie ustawień znajduje się tylko obiekt zastępczy, a Carbon Browser pokazuje hasło dopiero po kliknięciu przez użytkownika opcji „Pokaż” (i ponownym uwierzytelnieniu, jeśli jest wymagane). Poniżej podano wcześniejszy opis tej zasady.
 
           Pozwala określić, czy użytkownik może wyświetlać hasła w postaci zwykłego tekstu w menedżerze haseł.
 
@@ -2608,7 +2608,7 @@ Do odwzorowania sekwencji dowolnych znaków można używać symboli wieloznaczny
       Jeśli zasada nie jest skonfigurowana, użytkownik może zmienić to ustawienie.
       </translation>
 <translation id="5832274826894536455">Wycofane zasady</translation>
-<translation id="5835124959204887277">Określa adresy URL i domeny, w przypadku których nie będzie wyświetlać się monit podczas przesyłania prośby o certyfikaty poświadczenia z kluczy bezpieczeństwa. Oprócz tego do klucza bezpieczeństwa będzie wysyłany sygnał wskazujący, że można użyć poświadczenia indywidualnego. Jeśli zasada ta nie będzie ustawiona, użytkownicy Carbon Browser Browser Browser w wersji 65 lub nowszej zobaczą monit, gdy strony będą prosić o poświadczenie kluczy bezpieczeństwa.
+<translation id="5835124959204887277">Określa adresy URL i domeny, w przypadku których nie będzie wyświetlać się monit podczas przesyłania prośby o certyfikaty poświadczenia z kluczy bezpieczeństwa. Oprócz tego do klucza bezpieczeństwa będzie wysyłany sygnał wskazujący, że można użyć poświadczenia indywidualnego. Jeśli zasada ta nie będzie ustawiona, użytkownicy Carbon Browser w wersji 65 lub nowszej zobaczą monit, gdy strony będą prosić o poświadczenie kluczy bezpieczeństwa.
 
       Adresy URL (takie jak https://example.com/jakaś/ścieżka) będą dopasowywane tylko jako identyfikatory appID typu U2F. Domeny (takie jak example.com) będą dopasowane tylko jako identyfikatory RP typu webauthn. Dlatego jeśli w przypadku danej witryny mają zostać uwzględnione zarówno interfejsy API U2F, jak i webauthn, na liście muszą znajdować się zarówno URL identyfikatora appID, jak i domena.</translation>
 <translation id="5836064773277134605">Ogranicz zakres portów UDP używanych przez host zdalnego dostępu</translation>
@@ -2665,7 +2665,7 @@ Do odwzorowania sekwencji dowolnych znaków można używać symboli wieloznaczny
           Gdy ją ustawisz, użytkownicy mogą ją chwilowo zastąpić, włączając lub wyłączając duży kursor. Wybór użytkownika nie jest jednak trwały i wartość domyślna jest przywracana po ponownym wyświetleniu ekranu logowania lub wtedy, gdy użytkownik przez minutę będzie nieaktywny na tym ekranie.
 
           Jeśli zasada pozostanie nieustawiona, po pierwszym wyświetleniu ekranu logowania duży kursor jest wyłączony. Użytkownicy mogą go w każdej chwili włączyć lub wyłączyć i jego stan na ekranie logowania jest trwały dla wszystkich użytkowników.</translation>
-<translation id="5929855945144989709">Zezwól na uruchamianie maszyn wirtualnych na urządzeniach z Carbon Browser Browser Browser OS</translation>
+<translation id="5929855945144989709">Zezwól na uruchamianie maszyn wirtualnych na urządzeniach z Carbon Browser OS</translation>
 <translation id="5932767795525445337">Ta zasada może też służyć do przypinania aplikacji na Androida.</translation>
 <translation id="5936622343001856595">Wymusza realizację zapytań do wyszukiwarki Google z aktywnym filtrem SafeSearch i uniemożliwia użytkownikom zmianę tego ustawienia.
 
@@ -2741,7 +2741,7 @@ Do odwzorowania sekwencji dowolnych znaków można używać symboli wieloznaczny
 
       Gdy ta zasada jest nieustawiona lub ma wartość Fałsz, dane nie są zbierane ani przesyłane.
       Gdy ta zasada ma wartość Prawda, dane są zbierane i przesyłane do konsoli administracyjnej Google.
-      Aby określić, które dane chcesz przesyłać, użyj zasad w grupie Rozszerzenie zgłaszające informacje o Carbon Browser Browser Browser.
+      Aby określić, które dane chcesz przesyłać, użyj zasad w grupie Rozszerzenie zgłaszające informacje o Carbon Browser.
 
       Ta zasada działa tylko wtedy, gdy komputer jest zarejestrowany w <ph name="MACHINE_LEVEL_USER_CLOUD_POLICY_ENROLLMENT_TOKEN_POLICY_NAME" />.
 
@@ -2824,7 +2824,7 @@ Do odwzorowania sekwencji dowolnych znaków można używać symboli wieloznaczny
 <translation id="6282799760374509080">Zezwól lub nie na przechwytywanie dźwięku</translation>
 <translation id="6284362063448764300">TLS 1.1</translation>
 <translation id="6310223829319187614">Włącz autouzupełnianie nazw domen w czasie logowania użytkownika</translation>
-<translation id="6315673513957120120">Carbon Browser Browser Browser wyświetla stronę z ostrzeżeniem, gdy użytkownicy otworzą witrynę, w której występują błędy SSL. Domyślnie lub wtedy, gdy ta zasada jest włączona, użytkownicy mogą zignorować i zamknąć stronę z ostrzeżeniem.
+<translation id="6315673513957120120">Carbon Browser wyświetla stronę z ostrzeżeniem, gdy użytkownicy otworzą witrynę, w której występują błędy SSL. Domyślnie lub wtedy, gdy ta zasada jest włączona, użytkownicy mogą zignorować i zamknąć stronę z ostrzeżeniem.
       Po wyłączeniu tej zasady użytkownicy nie będą mogli zamknąć strony z ostrzeżeniem.</translation>
 <translation id="6319198883324703402">Ustaw czas pierwszego powiadomienia o ponownym uruchomieniu</translation>
 <translation id="6352543686437322588">Lokalne konto na urządzeniu do automatycznego logowania po określonym czasie.
@@ -2866,7 +2866,7 @@ Do odwzorowania sekwencji dowolnych znaków można używać symboli wieloznaczny
           Jeśli wybierzesz automatyczne wykrywanie serwera proxy, aplikacje na Androida otrzymają URL skryptu „http://wpad/wpad.dat”. Nie jest używana żadna inna część protokołu automatycznego wykrywania serwera proxy.
 
           Jeśli wybierzesz używanie skryptu .pac serwera proxy, aplikacje na Androida otrzymają URL skryptu.</translation>
-<translation id="6430366557948788869">Rozszerzenie zgłaszające informacje o Carbon Browser Browser Browser</translation>
+<translation id="6430366557948788869">Rozszerzenie zgłaszające informacje o Carbon Browser</translation>
 <translation id="6440051664870270040">Zezwalaj stronom na otwieranie wyskakujących okienek podczas nawigowania</translation>
 <translation id="6447948611083700881">Wyłączono tworzenie i przywracanie kopii zapasowej</translation>
 <translation id="6449476513004303784">Nie zezwalaj użytkownikom na zarządzanie certyfikatami</translation>
@@ -2924,9 +2924,9 @@ Do odwzorowania sekwencji dowolnych znaków można używać symboli wieloznaczny
 <translation id="6536600139108165863">Automatyczny restart przy wyłączaniu urządzenia</translation>
 <translation id="6539246272469751178">Ta zasada nie ma wpływu na aplikacje na Androida. Aplikacje te zawsze używają domyślnego katalogu na pobrane pliki i nie mają dostępu do plików pobranych przez <ph name="PRODUCT_OS_NAME" /> do innych katalogów.</translation>
 <translation id="654303922206238013">Strategia migracji dla plików eCryptfs</translation>
-<translation id="6544897973797372144">Jeśli ta zasada zostanie włączona, a zasada Carbon Browser Browser BrowserOsReleaseChannel nie będzie określona, użytkownicy domeny rejestrującej będą mogli zmienić kanał wersji urządzenia. Jeśli ta zasada będzie wyłączona, na urządzeniu zostanie zablokowany ostatnio ustawiony kanał.
+<translation id="6544897973797372144">Jeśli ta zasada zostanie włączona, a zasada Carbon BrowserOsReleaseChannel nie będzie określona, użytkownicy domeny rejestrującej będą mogli zmienić kanał wersji urządzenia. Jeśli ta zasada będzie wyłączona, na urządzeniu zostanie zablokowany ostatnio ustawiony kanał.
 
-      Kanał wybrany przez użytkownika zostanie zmieniony przez zasadę Carbon Browser Browser BrowserOsReleaseChannel, ale jeśli zasada określa kanał stabilniejszy niż zainstalowany na urządzeniu, kanał zostanie zmieniony, gdy wersja z kanału stabilniejszego będzie miała numer wyższy od wersji zainstalowanej na urządzeniu.</translation>
+      Kanał wybrany przez użytkownika zostanie zmieniony przez zasadę Carbon BrowserOsReleaseChannel, ale jeśli zasada określa kanał stabilniejszy niż zainstalowany na urządzeniu, kanał zostanie zmieniony, gdy wersja z kanału stabilniejszego będzie miała numer wyższy od wersji zainstalowanej na urządzeniu.</translation>
 <translation id="6553143066970470539">Procent jasności ekranu</translation>
 <translation id="6559057113164934677">Nie pozwalaj żadnym stronom na dostęp do kamery i mikrofonu</translation>
 <translation id="6561396069801924653">Pokaż opcje ułatwień dostępu w menu na pasku zadań</translation>
@@ -3005,7 +3005,7 @@ Do odwzorowania sekwencji dowolnych znaków można używać symboli wieloznaczny
 <translation id="6698632841807204978">Włącz drukowanie monochromatyczne</translation>
 <translation id="6699880231565102694">Włącz uwierzytelnianie dwuskładnikowe dla hostów zdalnego dostępu</translation>
 <translation id="6731757988219967594">Filtruj witryny najwyższego poziomu (ale nie osadzone elementy iframe) pod kątem treści dla dorosłych</translation>
-<translation id="6734521799274931721">Określa dostępność sieciowych udziałów plików w Carbon Browser Browser Browser OS</translation>
+<translation id="6734521799274931721">Określa dostępność sieciowych udziałów plików w Carbon Browser OS</translation>
 <translation id="6735701345096330595">Wymuś włączenie sprawdzania pisowni</translation>
 <translation id="673699536430961464">To ustawienie pozwala użytkownikom zalogowanym na urządzeniu z <ph name="PRODUCT_OS_NAME" /> przełączać konta Google w obszarze treści okna przeglądarki
 
@@ -3013,7 +3013,7 @@ Do odwzorowania sekwencji dowolnych znaków można używać symboli wieloznaczny
 
       Jeśli zasada jest nieskonfigurowana lub wybrano opcję prawda, stosowana jest domyślna reguła: logowanie się na inne konto w obszarze treści okna przeglądarki jest dozwolone z wyjątkiem kont dzieci – w ich przypadku jest blokowane (o ile nie jest to okno private).
 
-      Aby uniemożliwić logowanie się na inne konto w trybie private, można zablokować ten tryb za pomocą zasady PrivateModeAvailability.
+      Aby uniemożliwić logowanie się na inne konto w trybie private, można zablokować ten tryb za pomocą zasady privateModeAvailability.
 
       Pamiętaj, że użytkownicy mogą uzyskać dostęp do usług Google w trybie bez uwierzytelniania, jeśli zablokują pliki cookie.</translation>
 <translation id="6757438632136860443">Pozwala utworzyć listę wzorców URL-i określających witryny, które mogą uruchamiać wtyczkę <ph name="FLASH_PLUGIN_NAME" />.
@@ -3050,7 +3050,7 @@ Do odwzorowania sekwencji dowolnych znaków można używać symboli wieloznaczny
 
       Jeśli dla tej zasady wybrane jest ustawienie Fałsz, wbudowany klient DNS nigdy nie będzie używany.
 
-      Jeśli ta zasada jest nieskonfigurowana, wbudowany klient DNS będzie domyślnie włączony w MacOS, Androidzie (jeśli nie włączono ani prywatnego serwera DNS, ani sieci VPN) i Carbon Browser Browser Browser OS. Poza tym użytkownicy będą mogli włączać i wyłączać wbudowanego klienta DNS na stronie chrome://flags lub za pomocą flagi wiersza poleceń.</translation>
+      Jeśli ta zasada jest nieskonfigurowana, wbudowany klient DNS będzie domyślnie włączony w MacOS, Androidzie (jeśli nie włączono ani prywatnego serwera DNS, ani sieci VPN) i Carbon Browser OS. Poza tym użytkownicy będą mogli włączać i wyłączać wbudowanego klienta DNS na stronie chrome://flags lub za pomocą flagi wiersza poleceń.</translation>
 <translation id="6843296367238757293">Ta zasada jest wycofana. Nie zalecamy jej używania. Więcej informacji: https://support.google.com/chrome/a/answer/7643500</translation>
 <translation id="684856667300805181">Ta zasada została usunięta w <ph name="PRODUCT_NAME" /> 68 i zastąpiona zasadą <ph name="ARC_GLS_POLICY_NAME" />.</translation>
 <translation id="6856743875250214792">Ta zasada została wycofana i usunięta w M66, ponieważ była używana tylko do testów wewnętrznych i obniżała bezpieczeństwo.
@@ -3091,7 +3091,7 @@ Do odwzorowania sekwencji dowolnych znaków można używać symboli wieloznaczny
 
       UWAGA: w systemie Android funkcja izolacji witryn ma charakter eksperymentalny. Z czasem będzie działać lepiej, ale obecnie może powodować problemy z wydajnością.
 
-      UWAGA: ta zasada ma zastosowanie tylko do Carbon Browser Browser Browser na urządzeniach z Androidem wyposażonych w więcej niż 1 GB pamięci RAM. Aby zasada mogła mieć zastosowanie na platformach, które nie wykorzystują systemu Android, należy użyć ustawienia SitePerProcess.
+      UWAGA: ta zasada ma zastosowanie tylko do Carbon Browser na urządzeniach z Androidem wyposażonych w więcej niż 1 GB pamięci RAM. Aby zasada mogła mieć zastosowanie na platformach, które nie wykorzystują systemu Android, należy użyć ustawienia SitePerProcess.
       </translation>
 <translation id="6922884955650325312">Blokuj wtyczkę <ph name="FLASH_PLUGIN_NAME" /></translation>
 <translation id="6923366716660828830">Określa nazwę domyślnego dostawcy wyszukiwania. Jeśli ta zasada pozostanie pusta lub nieskonfigurowana, będzie używana nazwa hosta określona w URL-u wyszukiwarki. Ta zasada jest uwzględniana tylko przy włączonej zasadzie „DefaultSearchProviderEnabled”.</translation>
@@ -3166,9 +3166,9 @@ Do odwzorowania sekwencji dowolnych znaków można używać symboli wieloznaczny
 
       Jeśli zasada ma wartość fałsz lub jest nieskonfigurowana, <ph name="PRODUCT_NAME" /> nie może zbierać ani przesyłać takich dzienników.
 
-      Te dzienniki zawierają informacje diagnostyczne przydatne podczas debugowania problemów z rozmowami audio i wideo w Carbon Browser Browser Browser, między innymi czas i wielkość wysłanych i odebranych pakietów RTP, informacje zwrotne o obciążeniu sieci oraz metadane o czasie i jakości ramek audio i wideo. Dzienniki nie zawierają treści audio ani wideo rozmów.
+      Te dzienniki zawierają informacje diagnostyczne przydatne podczas debugowania problemów z rozmowami audio i wideo w Carbon Browser, między innymi czas i wielkość wysłanych i odebranych pakietów RTP, informacje zwrotne o obciążeniu sieci oraz metadane o czasie i jakości ramek audio i wideo. Dzienniki nie zawierają treści audio ani wideo rozmów.
 
-      Zbieranie tych danych przez Carbon Browser Browser Browser może być uruchomione tylko przez usługi internetowe Google, takie jak Google Hangouts czy Google Meet.
+      Zbieranie tych danych przez Carbon Browser może być uruchomione tylko przez usługi internetowe Google, takie jak Google Hangouts czy Google Meet.
 
       Google może powiązać te dzienniki za pomocą identyfikatora sesji z innymi dziennikami zebranymi przez same usługi Google – ma to na celu ułatwienie debugowania.
       </translation>
@@ -3264,11 +3264,11 @@ Jeśli ta zasada nie zostanie skonfigurowana, nie będą obowiązywały żadne o
 <translation id="7185078796915954712">TLS 1.3</translation>
 <translation id="718956142899066210">Typy połączeń dozwolone dla aktualizacji</translation>
 <translation id="7194407337890404814">Nazwa domyślnego dostawcy wyszukiwania</translation>
-<translation id="7199304109870655950">Konfigurowanie opcji dostępu zdalnego w hoście Pulpitu zdalnego Carbon Browser Browser Browser.
+<translation id="7199304109870655950">Konfigurowanie opcji dostępu zdalnego w hoście Pulpitu zdalnego Carbon Browser.
 
-      Host Pulpitu zdalnego Carbon Browser Browser Browser to natywna usługa działająca na komputerze docelowym, z którym użytkownik może się połączyć za pomocą aplikacji Pulpit zdalny Carbon Browser Browser Browser.  Usługa natywna jest rozpowszechniana i uruchamiana niezależnie od przeglądarki <ph name="PRODUCT_NAME" />.
+      Host Pulpitu zdalnego Carbon Browser to natywna usługa działająca na komputerze docelowym, z którym użytkownik może się połączyć za pomocą aplikacji Pulpit zdalny Carbon Browser.  Usługa natywna jest rozpowszechniana i uruchamiana niezależnie od przeglądarki <ph name="PRODUCT_NAME" />.
 
-      Ta zasada jest ignorowana, jeśli host Pulpitu zdalnego Carbon Browser Browser Browser nie jest zainstalowany.</translation>
+      Ta zasada jest ignorowana, jeśli host Pulpitu zdalnego Carbon Browser nie jest zainstalowany.</translation>
 <translation id="7202925763179776247">Zezwól na ograniczenia pobierania</translation>
 <translation id="7207095846245296855">Wymuś stosowanie filtra Google SafeSearch</translation>
 <translation id="7211368186050418507">Nigdy nie wykrywaj automatycznie strefy czasowej</translation>
@@ -3370,7 +3370,7 @@ Jeśli ta zasada nie zostanie skonfigurowana, nie będą obowiązywały żadne o
 <translation id="7329968046053403405">W przypadku kont z aplikacji uwierzytelniającej na Androida określa rodzaj konta, które obsługuje uwierzytelnianie <ph name="HTTP_NEGOTIATE" /> (np. uwierzytelnianie Kerberos). Tę informację powinien udostępnić dostawca aplikacji uwierzytelniającej. Więcej informacji znajdziesz na https://goo.gl/hajyfN.
 
           W przypadku braku ustawień uwierzytelnianie <ph name="HTTP_NEGOTIATE" /> w Androidzie jest wyłączone.</translation>
-<translation id="7331962793961469250">Kiedy zostanie ustawiona wartość Prawda, na stronie Nowa karta nie będą wyświetlane promowane aplikacje z Carbon Browser Browser Browser Web Store. Przypisanie tej opcji wartości Fałsz lub jej nieustawienie spowoduje, że promowane aplikacje z Carbon Browser Browser Browser Web Store będą widoczne na stronie Nowa karta.</translation>
+<translation id="7331962793961469250">Kiedy zostanie ustawiona wartość Prawda, na stronie Nowa karta nie będą wyświetlane promowane aplikacje z Carbon Browser Web Store. Przypisanie tej opcji wartości Fałsz lub jej nieustawienie spowoduje, że promowane aplikacje z Carbon Browser Web Store będą widoczne na stronie Nowa karta.</translation>
 <translation id="7332963785317884918">Ta zasada została wycofana. <ph name="PRODUCT_OS_NAME" /> zawsze stosuje strategię czyszczenia „RemoveLRU”.
 
       Steruje działaniem automatycznego czyszczenia na urządzeniach z <ph name="PRODUCT_OS_NAME" />. Gdy ilość wolnego miejsca na dysku osiąga poziom krytyczny, uruchamia się automatyczne czyszczenie, co pozwala odzyskać trochę miejsca.
@@ -3430,7 +3430,7 @@ Jeśli ta zasada nie zostanie skonfigurowana, nie będą obowiązywały żadne o
       </translation>
 <translation id="7506269062143646163">Włącz obsługę Signed HTTP Exchange (SXG).
 
-          Kiedy ta zasada jest nieskonfigurowana lub włączona, Carbon Browser Browser Browser akceptuje zawartość sieciową typu Signed HTTP Exchange.
+          Kiedy ta zasada jest nieskonfigurowana lub włączona, Carbon Browser akceptuje zawartość sieciową typu Signed HTTP Exchange.
 
           Kiedy ta zasada jest wyłączona, nie można wczytać zawartości Signed HTTP Exchange.</translation>
 <translation id="7511361072385293666">Jeśli ta zasada jest włączona lub nieustawiona, użycie protokołu QUIC w <ph name="PRODUCT_NAME" /> jest dozwolone.
@@ -3469,7 +3469,7 @@ Jeśli ta zasada nie zostanie skonfigurowana, nie będą obowiązywały żadne o
 
       Gdy ta zasada jest nieskonfigurowana lub ma wartość 0, odpowiedni URL otwiera się natychmiast w alternatywnej przeglądarce.
 
-      Gdy wartością tej zasady jest liczba, Carbon Browser Browser Browser wyświetla komunikat przez tę liczbę milisekund, a następnie otwiera alternatywną przeglądarkę.</translation>
+      Gdy wartością tej zasady jest liczba, Carbon Browser wyświetla komunikat przez tę liczbę milisekund, a następnie otwiera alternatywną przeglądarkę.</translation>
 <translation id="7593523670408385997">Ustala rozmiar pamięci podręcznej, której <ph name="PRODUCT_NAME" /> będzie używać do zapisywania plików pamięci podręcznej na dysku.
 
       Jeśli ustawisz tę zasadę, <ph name="PRODUCT_NAME" /> będzie używać dostępnego rozmiaru pamięci podręcznej bez względu na to, czy określono flagę „--disk-cache-size”, czy nie. Wartość określona w tej zasadzie nie jest stała i stanowi raczej propozycję dla systemu pamięci podręcznej. Każda wartość niższa niż kilka megabajtów jest za mała i zostanie zaokrąglona do rozsądnego minimum.
@@ -3650,7 +3650,7 @@ Uwaga: dozwolone wartości w polu <ph name="MINUTE_FIELD_NAME" /> w opcjach <p
 
       UWAGA: do wersji 45 ta zasada była stosowana tylko w trybie kiosku.</translation>
 <translation id="7912255076272890813">Skonfiguruj dozwolone typy aplikacji/rozszerzeń</translation>
-<translation id="7922358664346625612">Pozostaw otwartą ostatnią kartę Carbon Browser Browser Browser.</translation>
+<translation id="7922358664346625612">Pozostaw otwartą ostatnią kartę Carbon Browser.</translation>
 <translation id="793134539373873765">Określa, czy do pobierania aktualizacji systemu operacyjnego ma być używana sieć P2P. Jeśli w tej opcji ustawisz wartość Prawda, urządzenia będą dzieliły aktualizacje w sieci LAN i próbowały pobierać je z tej sieci, co może zmniejszyć wykorzystanie i obciążenie łącza internetowego. Jeśli aktualizacje nie będą dostępne w sieci LAN, urządzenie przełączy się na pobieranie aktualizacji z serwera. Jeśli ustawisz w tej opcji wartość Fałsz, sieć P2P nie będzie używana.</translation>
 <translation id="7933141401888114454">Włącz tworzenie użytkowników nadzorowanych</translation>
 <translation id="793473937901685727">Ustaw dostępność certyfikatu dla aplikacji ARC</translation>
@@ -3681,7 +3681,7 @@ Jeśli pozostanie ona nieskonfigurowana, przewidywanie działań sieciowych będ
 <translation id="798856998567564266">Po włączeniu tego ustawienia zakładki można dodawać, usuwać i modyfikować. Jest to domyślne ustawienie, gdy zasada nie jest skonfigurowana.
 
       Jeśli wyłączysz to ustawienie, zakładek nie będzie można dodawać, usuwać ani modyfikować. Istniejące już zakładki będą nadal dostępne.</translation>
-<translation id="7992136759457836904">Określa, czy w Carbon Browser Browser Browser OS mogą działać maszyny wirtualne.
+<translation id="7992136759457836904">Określa, czy w Carbon Browser OS mogą działać maszyny wirtualne.
 
       Gdy zasada ma wartość prawda, na urządzeniu można uruchamiać maszyny wirtualne.
       Gdy zasada ma wartość fałsz, na urządzeniu nie można uruchamiać maszyn wirtualnych.
@@ -3761,7 +3761,7 @@ Zakładki są umieszczane w folderze, którego użytkownik nie może modyfikowa
       Jeśli ta zasada ma wartość Fałsz, lista interfejsów nie zostanie zgłoszona.</translation>
 <translation id="8141795997560411818">Ta zasada nie uniemożliwia użytkownikom korzystania z aplikacji Dysk Google na Androida. Aby zablokować dostęp do Dysku Google, należy wyłączyć możliwość instalowania tej aplikacji.</translation>
 <translation id="8142894094385450823">Ustaw zalecane języki dla sesji zarządzanej</translation>
-<translation id="8146727383888924340">Zezwalaj użytkownikom na wykorzystanie ofert w procesie rejestracji systemu operacyjnego Carbon Browser Browser Browser</translation>
+<translation id="8146727383888924340">Zezwalaj użytkownikom na wykorzystanie ofert w procesie rejestracji systemu operacyjnego Carbon Browser</translation>
 <translation id="8148785525797916822">Ukrywanie ostrzeżenia pojawiającego się, gdy <ph name="PRODUCT_NAME" /> działa na komputerze lub w systemie operacyjnym, który nie jest obsługiwany.</translation>
 <translation id="8148901634826284024">Włącza funkcję ułatwień dostępu w postaci trybu wysokiego kontrastu.
 
@@ -3808,7 +3808,7 @@ Zakładki są umieszczane w folderze, którego użytkownik nie może modyfikowa
       Jeśli ta opcja nie zostanie ustawiona, <ph name="PRODUCT_OS_NAME" /> użyje identyfikatora konta e-mail lokalnego konta na urządzeniu jako nazwy wyświetlanej na ekranie logowania.
 
       Ta zasada jest ignorowana w przypadku zwykłych kont użytkownika.</translation>
-<translation id="8259375588339409826">Zarówno Carbon Browser Browser Browser, jak i Carbon Browser Browser Browser obsługują jednakowy zestaw zasad. Ten dokument może zawierać nieopublikowane zasady (tzn. wpis „Obsługiwana przez” odnosi się do jeszcze nieopublikowanej wersji <ph name="PRODUCT_NAME" />), które mogą zostać zmienione lub usunięte bez powiadomienia i nie podlegają żadnej gwarancji. Między innymi nie ma żadnych gwarancji dotyczących ich zabezpieczeń i właściwości związanych z prywatnością.
+<translation id="8259375588339409826">Zarówno Carbon Browser, jak i Carbon Browser obsługują jednakowy zestaw zasad. Ten dokument może zawierać nieopublikowane zasady (tzn. wpis „Obsługiwana przez” odnosi się do jeszcze nieopublikowanej wersji <ph name="PRODUCT_NAME" />), które mogą zostać zmienione lub usunięte bez powiadomienia i nie podlegają żadnej gwarancji. Między innymi nie ma żadnych gwarancji dotyczących ich zabezpieczeń i właściwości związanych z prywatnością.
 
 Zasady te są przeznaczone do konfigurowania <ph name="PRODUCT_NAME" /> tylko na wewnętrzny użytek Twojej organizacji. Użycie ich poza nią (np. w programie rozpowszechnianym publicznie) spowoduje uznanie oprogramowania za złośliwe – prawdopodobnie tak zostanie ono oznaczone przez Google i programy antywirusowe.
 
@@ -3825,7 +3825,7 @@ Zalecamy skonfigurowanie zasady w systemie Windows przy użyciu obiektu zasad gr
 
       Jeśli ta zasada ma wartość Fałsz, statystyki nie są raportowane.
       Jeśli ma wartość Prawda lub jest nieskonfigurowana, statystyki są raportowane.</translation>
-<translation id="8294750666104911727">Normalnie strony, które w tagu X-UA-Compatible mają wartość chrome=1, będą renderowane w <ph name="PRODUCT_FRAME_NAME" /> niezależnie od ustawienia zasady „Carbon Browser Browser BrowserFrameRendererSettings”.
+<translation id="8294750666104911727">Normalnie strony, które w tagu X-UA-Compatible mają wartość chrome=1, będą renderowane w <ph name="PRODUCT_FRAME_NAME" /> niezależnie od ustawienia zasady „Carbon BrowserFrameRendererSettings”.
 
           Jeśli włączysz to ustawienie, strony nie będą skanowane w poszukiwaniu metatagów.
 
@@ -3851,7 +3851,7 @@ Zalecamy skonfigurowanie zasady w systemie Windows przy użyciu obiektu zasad gr
 <translation id="8344454543174932833">Importuj zakładki z przeglądarki domyślnej przy pierwszym uruchomieniu</translation>
 <translation id="8357681633047935212">Ogranicz długość sesji użytkownika</translation>
 <translation id="8359734107661430198">Włącz interfejs API ExampleDeprecatedFeature od 2 września 2008 r.</translation>
-<translation id="8367209241899435947">Włącz Czyszczenie Carbon Browser Browser Browser w Windows</translation>
+<translation id="8367209241899435947">Włącz Czyszczenie Carbon Browser w Windows</translation>
 <translation id="8369602308428138533">Opóźnienie wyłączenia ekranu przy zasilaniu sieciowym</translation>
 <translation id="8371178326720637170">Umożliwia zarządzanym rozszerzeniom używanie Enterprise Hardware Platform API</translation>
 <translation id="8374747520743832795">Raportuje statystyki dotyczące sprzętu oraz identyfikatory związane z zasilaniem.
@@ -3924,13 +3924,13 @@ Zalecamy skonfigurowanie zasady w systemie Windows przy użyciu obiektu zasad gr
       Planujemy usunąć tę zasadę w M75.</translation>
 <translation id="8484458986062090479">Pozwala dostosować listę wzorców adresów URL stron, które przeglądarka hosta ma zawsze renderować.
 
-          Jeśli nie ustawisz tej zasady, na wszystkich stronach działa domyślny mechanizm renderowania określony przez zasadę Carbon Browser Browser BrowserFrameRendererSettings.
+          Jeśli nie ustawisz tej zasady, na wszystkich stronach działa domyślny mechanizm renderowania określony przez zasadę Carbon BrowserFrameRendererSettings.
 
           Przykładowe wzorce znajdziesz na https://www.chromium.org/developers/how-tos/chrome-frame-getting-started</translation>
 <translation id="8489964335640955763">PluginVm</translation>
 <translation id="8493645415242333585">Wyłącz zapisywanie historii przeglądarki</translation>
 <translation id="8499172469244085141">Ustawienia domyślne (użytkownicy mogą zmienić)</translation>
-<translation id="849962487677588458">Ta zasada jest wycofana i zostanie usunięta w Carbon Browser Browser Browser 78. Nie ma dla niej zamiennika.
+<translation id="849962487677588458">Ta zasada jest wycofana i zostanie usunięta w Carbon Browser 78. Nie ma dla niej zamiennika.
 
       Ta zasada umożliwia włączenie HTTP/0.9 na portach innych niż 80 (HTTP) i 443 (HTTPS).
 
@@ -3959,7 +3959,7 @@ Jeśli bieżąca wersja stanie się przestarzała podczas sesji użytkownika, je
 
       „Wersja” może być określona dokładnym numerem wersji, np. „61.0.3163.120”, lub prefiksem, np. „61.0”.  </translation>
 <translation id="8544375438507658205">Domyślny mechanizm renderowania HTML wtyczki <ph name="PRODUCT_FRAME_NAME" /></translation>
-<translation id="8544465954173828789">Zezwól na synchronizację SMS-ów między telefonem a Carbon Browser Browser Browserbookiem.</translation>
+<translation id="8544465954173828789">Zezwól na synchronizację SMS-ów między telefonem a Carbon Browserbookiem.</translation>
 <translation id="8548832052135586762">Ustawia drukowanie tylko kolorowe, tylko monochromatyczne albo brak ograniczenia. Nieskonfigurowanie zasady oznacza brak ograniczenia.</translation>
 <translation id="8549772397068118889">Ostrzegaj przy odwiedzaniu witryn spoza pakietów treści</translation>
 <translation id="8566729013138025202">Określa zestaw zasad przesyłany do środowiska wykonawczego ARC. Wartość musi być wyrażona prawidłowym ciągiem znaków JSON.
@@ -3967,7 +3967,7 @@ Jeśli bieżąca wersja stanie się przestarzała podczas sesji użytkownika, je
       Ta zasada może służyć do wybierania aplikacji na Androida, które mają być instalowane automatycznie na urządzeniu.
 
       Aby przypiąć aplikacje do menu z aplikacjami, zobacz PinnedLauncherApps.</translation>
-<translation id="8566842294717252664">Ukryj Carbon Browser Browser Browser Web Store na stronie Nowa karta i w menu z aplikacjami</translation>
+<translation id="8566842294717252664">Ukryj Carbon Browser Web Store na stronie Nowa karta i w menu z aplikacjami</translation>
 <translation id="8569734380847633643">
           Jeśli zasada ma wartość Fałsz, <ph name="PRODUCT_OS_NAME" /> wyłącza obsługę Wi-Fi, a użytkownicy nie mogą jej włączyć.
           Jeśli zasada ma wartość Prawda lub jest nieskonfigurowana, użytkownicy mogą włączać i wyłączać Wi-Fi.</translation>
@@ -4164,7 +4164,7 @@ Ta zasada określa listę źródeł (adresów URL) lub wzorców nazw hosta
 
           Ta zasada mapuje w swojej konfiguracji identyfikator rozszerzenia lub URL aktualizacji. W przypadku identyfikatora rozszerzenia konfiguracja będzie stosowana tylko do oznaczonego nim rozszerzenia. W przypadku rozszerzeń, które nie mają osobnej konfiguracji ustawionej w tej zasadzie, można stosować konfigurację domyślną, określając identyfikator specjalny <ph name="DEFAULT_SCOPE" />. W przypadku adresu URL aktualizacji konfiguracja będzie obowiązywać we wszystkich rozszerzeniach zawierających w swoich plikach manifestu ten konkretny URL aktualizacji, zgodnie z tym opisem: <ph name="LINK_TO_EXTENSION_DOC1" />.
 
-          W przypadku instancji systemu Windows, które nie są połączone z domeną <ph name="MS_AD_NAME" />, wymuszonej instalacji będą podlegać tylko aplikacje i rozszerzenia z Carbon Browser Browser Browser Web Store.
+          W przypadku instancji systemu Windows, które nie są połączone z domeną <ph name="MS_AD_NAME" />, wymuszonej instalacji będą podlegać tylko aplikacje i rozszerzenia z Carbon Browser Web Store.
           </translation>
 <translation id="8947415621777543415">Zgłoś lokalizację urządzenia</translation>
 <translation id="8951350807133946005">Ustaw katalog podręcznej pamięci dyskowej</translation>
@@ -4211,13 +4211,13 @@ Ta zasada określa listę źródeł (adresów URL) lub wzorców nazw hosta
       Jeśli jako wartość zasady zostanie ustawiony token mapujący kompilację Quick Fix, urządzenie zostanie zaktualizowane pod kątem odpowiedniej kompilacji Quick Fix, chyba że inna zasada zablokuje aktualizację.
 
       Jeśli zasada nie zostanie ustawiona lub jej wartość nie będzie mapować kompilacji Quick Fix, urządzenie nie zostanie zaktualizowane pod kątem kompilacji Quick Fix. Jeśli urządzenie ma już kompilację Quick Fix, a zasada nie będzie dłużej ustawiona lub jej wartość nie będzie już mapować kompilacji Quick Fix, urządzenie zostanie zaktualizowane pod kątem standardowej kompilacji, chyba że inna zasada zablokuje aktualizację.</translation>
-<translation id="9054012305936267950">Ta zasada kontroluje mechanizm logowania w przeglądarce. Umożliwia określenie, czy użytkownik może zalogować się w <ph name="PRODUCT_NAME" /> przy użyciu swojego konta i używać usług związanych z kontem, na przykład synchronizacji Carbon Browser Browser Browser.
+<translation id="9054012305936267950">Ta zasada kontroluje mechanizm logowania w przeglądarce. Umożliwia określenie, czy użytkownik może zalogować się w <ph name="PRODUCT_NAME" /> przy użyciu swojego konta i używać usług związanych z kontem, na przykład synchronizacji Carbon Browser.
 
-      Jeśli zasada ma wartość „Wyłącz logowanie w przeglądarce”, użytkownik nie może zalogować się w przeglądarce ani używać usług związanych z kontem. Funkcje przeglądarki, takie jak synchronizacja Carbon Browser Browser Browser, będą niedostępne. Jeśli użytkownik był wcześniej zalogowany, a zasada jest wyłączona, zostanie on wylogowany po najbliższym uruchomieniu Carbon Browser Browser Browser, ale dane z jego profilu lokalnego, takie jak zakładki, hasła itd., zostaną zachowane. Użytkownik nadal będzie mógł logować się w usługach internetowych Google takich jak Gmail i ich używać.
+      Jeśli zasada ma wartość „Wyłącz logowanie w przeglądarce”, użytkownik nie może zalogować się w przeglądarce ani używać usług związanych z kontem. Funkcje przeglądarki, takie jak synchronizacja Carbon Browser, będą niedostępne. Jeśli użytkownik był wcześniej zalogowany, a zasada jest wyłączona, zostanie on wylogowany po najbliższym uruchomieniu Carbon Browser, ale dane z jego profilu lokalnego, takie jak zakładki, hasła itd., zostaną zachowane. Użytkownik nadal będzie mógł logować się w usługach internetowych Google takich jak Gmail i ich używać.
 
-      Jeśli zasada ma wartość „Włącz logowanie w przeglądarce”, użytkownik może zalogować się w przeglądarce i jest logowany w niej automatycznie po zalogowaniu się w usługach internetowych Google takich jak Gmail. Zalogowanie w przeglądarce oznacza, że będzie ona przechowywać dane z konta użytkownika. Nie oznacza to jednak, że domyślnie włączona zostanie synchronizacja Carbon Browser Browser Browser – użytkownik musi zgodzić się na jej używanie oddzielnie. Jeśli zasada zostanie włączona, użytkownik nie będzie mógł wyłączyć logowania w przeglądarce w ustawieniach. Do określania dostępności synchronizacji Carbon Browser Browser Browser służy zasada „SyncDisabled”.
+      Jeśli zasada ma wartość „Włącz logowanie w przeglądarce”, użytkownik może zalogować się w przeglądarce i jest logowany w niej automatycznie po zalogowaniu się w usługach internetowych Google takich jak Gmail. Zalogowanie w przeglądarce oznacza, że będzie ona przechowywać dane z konta użytkownika. Nie oznacza to jednak, że domyślnie włączona zostanie synchronizacja Carbon Browser – użytkownik musi zgodzić się na jej używanie oddzielnie. Jeśli zasada zostanie włączona, użytkownik nie będzie mógł wyłączyć logowania w przeglądarce w ustawieniach. Do określania dostępności synchronizacji Carbon Browser służy zasada „SyncDisabled”.
 
-      Jeśli zasada ma wartość „Wymuś logowanie w przeglądarce”, użytkownikowi wyświetlane jest okno wyboru konta i musi on wybrać konto oraz zalogować się na nie, by używać przeglądarki. Jest to gwarancją, że na kontach zarządzanych będą stosowane i egzekwowane zasady. Domyślnie powoduje to włączenie dla tego konta synchronizacji Carbon Browser Browser Browser – o ile synchronizacja nie została wyłączona przez administratora domeny lub za pomocą zasady „SyncDisabled”. Domyślnie wartość zasady BrowserGuestModeEnabled zostanie ustawiona na fałsz. Uwaga: po włączeniu tej zasady istniejące niepodpisane profile zostaną zablokowane i będą niedostępne. Więcej informacji znajdziesz w tym artykule w Centrum pomocy: https://support.google.com/chrome/a/answer/7572556. Ta opcja nie działa w systemie Linux. W razie zmiany zasada ponownie przyjmie wartość „Włącz logowanie w przeglądarce”.
+      Jeśli zasada ma wartość „Wymuś logowanie w przeglądarce”, użytkownikowi wyświetlane jest okno wyboru konta i musi on wybrać konto oraz zalogować się na nie, by używać przeglądarki. Jest to gwarancją, że na kontach zarządzanych będą stosowane i egzekwowane zasady. Domyślnie powoduje to włączenie dla tego konta synchronizacji Carbon Browser – o ile synchronizacja nie została wyłączona przez administratora domeny lub za pomocą zasady „SyncDisabled”. Domyślnie wartość zasady BrowserGuestModeEnabled zostanie ustawiona na fałsz. Uwaga: po włączeniu tej zasady istniejące niepodpisane profile zostaną zablokowane i będą niedostępne. Więcej informacji znajdziesz w tym artykule w Centrum pomocy: https://support.google.com/chrome/a/answer/7572556. Ta opcja nie działa w systemie Linux. W razie zmiany zasada ponownie przyjmie wartość „Włącz logowanie w przeglądarce”.
 
       Jeśli zasada jest nieskonfigurowana, użytkownik może samodzielnie włączyć lub wyłączyć logowanie w przeglądarce i korzystać z tej funkcji według własnego uznania.</translation>
 <translation id="9072600218500597787">Służy do skonfigurowania wymaganej nazwy domeny hosta, która będzie stosowana do hostów zdalnego dostępu, oraz blokuje użytkownikom jej zmianę.
@@ -4262,7 +4262,7 @@ Ta zasada określa listę źródeł (adresów URL) lub wzorców nazw hosta
 <translation id="9147029539363974059">Wysyła dzienniki systemowe na serwer zarządzania, by umożliwić monitorowanie ich przez administratorów.
 
       Jeśli włączysz tę zasadę, dzienniki systemowe będą wysyłane, a jeśli ją wyłączysz lub jej nie ustawisz, nie będą.</translation>
-<translation id="9150416707757015439">Ta zasada została wycofana z użycia. Zamiast niej użyj PrivateModeAvailability. Włącza ona tryb private w <ph name="PRODUCT_NAME" />. Jeśli ustawienie jest włączone lub nieskonfigurowane, użytkownicy mogą otwierać strony internetowe w trybie private. Wyłączenie ustawienia uniemożliwia użytkownikom otwieranie stron internetowych w tym trybie. W przypadku nieskonfigurowania tej zasady ustawienie zostanie włączone, a użytkownicy będą mogli używać trybu private.</translation>
+<translation id="9150416707757015439">Ta zasada została wycofana z użycia. Zamiast niej użyj privateModeAvailability. Włącza ona tryb private w <ph name="PRODUCT_NAME" />. Jeśli ustawienie jest włączone lub nieskonfigurowane, użytkownicy mogą otwierać strony internetowe w trybie private. Wyłączenie ustawienia uniemożliwia użytkownikom otwieranie stron internetowych w tym trybie. W przypadku nieskonfigurowania tej zasady ustawienie zostanie włączone, a użytkownicy będą mogli używać trybu private.</translation>
 <translation id="915194831143859291">Jeśli wyłączysz tę zasadę lub jej nie skonfigurujesz, <ph name="PRODUCT_OS_NAME" /> pozwoli użytkownikowi wyłączyć urządzenie.
       Jeśli zasada będzie włączona, <ph name="PRODUCT_OS_NAME" /> wymusi ponowne uruchomienie urządzenia, gdy użytkownik spróbuje je wyłączyć. <ph name="PRODUCT_OS_NAME" /> zastąpi wszystkie wystąpienia przycisku wyłączania w interfejsie użytkownika przyciskami ponownego uruchomienia. Urządzenie nie uruchomi się ponownie niezależnie od ustawienia tej zasady, jeśli użytkownik wyłączy je za pomocą przycisku zasilania.</translation>
 <translation id="9152473318295429890">Włącz kontekstowe proponowanie powiązanych stron</translation>
@@ -4302,7 +4302,7 @@ Ta zasada określa listę źródeł (adresów URL) lub wzorców nazw hosta
 
       Gdy zasada jest skonfigurowana, będzie służyła do uruchamiania <ph name="PRODUCT_NAME" /> podczas uruchamiania <ph name="PRODUCT_NAME" /> z Internet Explorera.
 
-      Jako wartość tej zasady można ustawić ścieżkę pliku wykonywalnego lub „${chrome}”, by automatycznie wykrywać miejsce instalacji Carbon Browser Browser Browser.</translation>
+      Jako wartość tej zasady można ustawić ścieżkę pliku wykonywalnego lub „${chrome}”, by automatycznie wykrywać miejsce instalacji Carbon Browser.</translation>
 <translation id="930930237275114205">Ustaw katalog danych użytkownika <ph name="PRODUCT_FRAME_NAME" /></translation>
 <translation id="943865157632139008">Umożliwia skonfigurowanie domyślnego mechanizmu renderowania HTML po zainstalowaniu wtyczki <ph name="PRODUCT_FRAME_NAME" />.
       Ustawieniem domyślnym jest zezwolenie przeglądarce hosta na wykonywanie renderowania. Możesz jednak opcjonalnie zastąpić to ustawienie, by strony HTML były domyślnie renderowane przez wtyczkę <ph name="PRODUCT_FRAME_NAME" />.</translation>

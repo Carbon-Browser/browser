@@ -6,6 +6,7 @@
 
 #include <stddef.h>
 
+#include "base/observer_list.h"
 #include "chrome/browser/autofill/strike_database_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/autofill/autofill_bubble_base.h"
@@ -14,7 +15,7 @@
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/browser_window.h"
-#include "components/autofill/core/browser/autofill_metrics.h"
+#include "components/autofill/core/browser/metrics/autofill_metrics.h"
 #include "components/autofill/core/browser/payments/local_card_migration_strike_database.h"
 #include "components/autofill/core/browser/strike_database.h"
 #include "components/autofill/core/common/autofill_clock.h"
@@ -28,7 +29,9 @@ namespace autofill {
 
 LocalCardMigrationBubbleControllerImpl::LocalCardMigrationBubbleControllerImpl(
     content::WebContents* web_contents)
-    : AutofillBubbleControllerBase(web_contents) {}
+    : AutofillBubbleControllerBase(web_contents),
+      content::WebContentsUserData<LocalCardMigrationBubbleControllerImpl>(
+          *web_contents) {}
 
 LocalCardMigrationBubbleControllerImpl::
     ~LocalCardMigrationBubbleControllerImpl() = default;
@@ -144,6 +147,6 @@ void LocalCardMigrationBubbleControllerImpl::AddStrikesForBubbleClose() {
       LocalCardMigrationStrikeDatabase::kStrikesToAddWhenBubbleClosed);
 }
 
-WEB_CONTENTS_USER_DATA_KEY_IMPL(LocalCardMigrationBubbleControllerImpl)
+WEB_CONTENTS_USER_DATA_KEY_IMPL(LocalCardMigrationBubbleControllerImpl);
 
 }  // namespace autofill

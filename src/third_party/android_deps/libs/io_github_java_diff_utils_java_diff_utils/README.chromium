@@ -2,8 +2,9 @@ Name: java-diff-utils
 Short Name: java-diff-utils
 URL: https://github.com/java-diff-utils/java-diff-utils
 Version: 4.0
-License: 
+License: Apache Version 2.0
 License File: NOT_SHIPPED
+CPEPrefix: unknown
 Security Critical: no
 
 Description:

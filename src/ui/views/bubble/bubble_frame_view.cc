@@ -15,15 +15,16 @@
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/resource/resource_bundle.h"
+#include "ui/color/color_id.h"
+#include "ui/color/color_provider.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/paint_recorder.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
 #include "ui/gfx/color_palette.h"
 #include "ui/gfx/geometry/rounded_corners_f.h"
+#include "ui/gfx/geometry/skia_conversions.h"
 #include "ui/gfx/geometry/vector2d.h"
-#include "ui/gfx/skia_util.h"
-#include "ui/native_theme/native_theme.h"
 #include "ui/resources/grit/ui_resources.h"
 #include "ui/strings/grit/ui_strings.h"
 #include "ui/views/accessibility/view_accessibility.h"
@@ -33,7 +34,6 @@
 #include "ui/views/controls/button/image_button_factory.h"
 #include "ui/views/controls/highlight_path_generator.h"
 #include "ui/views/controls/image_view.h"
-#include "ui/views/image_model_utils.h"
 #include "ui/views/layout/box_layout.h"
 #include "ui/views/layout/layout_provider.h"
 #include "ui/views/paint_info.h"
@@ -85,10 +85,10 @@ BubbleFrameView::BubbleFrameView(const gfx::Insets& title_margins,
       footnote_margins_(content_margins_),
       title_icon_(new views::ImageView()),
       default_title_(CreateDefaultTitleLabel(std::u16string()).release()) {
-  AddChildView(title_icon_);
+  AddChildView(title_icon_.get());
 
   default_title_->SetVisible(false);
-  AddChildView(default_title_);
+  AddChildView(default_title_.get());
 
   auto close = CreateCloseButton(base::BindRepeating(
       [](BubbleFrameView* view, const ui::Event& event) {
@@ -99,7 +99,7 @@ BubbleFrameView::BubbleFrameView(const gfx::Insets& title_margins,
       },
       this));
   close->SetVisible(false);
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   // Windows will automatically create a tooltip for the close button based on
   // the HTCLOSE result from NonClientHitTest().
   close->SetTooltipText(std::u16string());
@@ -116,7 +116,7 @@ BubbleFrameView::BubbleFrameView(const gfx::Insets& title_margins,
       },
       this));
   minimize->SetVisible(false);
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   minimize->SetTooltipText(std::u16string());
   minimize->SetAccessibleName(
       l10n_util::GetStringUTF16(IDS_APP_ACCNAME_MINIMIZE));
@@ -285,16 +285,26 @@ void BubbleFrameView::GetWindowMask(const gfx::Size& size,
 }
 
 void BubbleFrameView::ResetWindowControls() {
-  close_->SetVisible(GetWidget()->widget_delegate()->ShouldShowCloseButton());
-  minimize_->SetVisible(GetWidget()->widget_delegate()->CanMinimize());
+  // If the close button is not visible, marking it as "ignored" will cause it
+  // to be removed from the accessibility tree.
+  bool close_is_visible =
+      GetWidget()->widget_delegate()->ShouldShowCloseButton();
+  close_->SetVisible(close_is_visible);
+  close_->GetViewAccessibility().OverrideIsIgnored(!close_is_visible);
+
+  // If the minimize button is not visible, marking it as "ignored" will cause
+  // it to be removed from the accessibility tree.
+  bool minimize_is_visible = GetWidget()->widget_delegate()->CanMinimize();
+  minimize_->SetVisible(minimize_is_visible);
+  minimize_->GetViewAccessibility().OverrideIsIgnored(!minimize_is_visible);
 }
 
 void BubbleFrameView::UpdateWindowIcon() {
   DCHECK(GetWidget());
   gfx::ImageSkia image;
   if (GetWidget()->widget_delegate()->ShouldShowWindowIcon()) {
-    image = GetImageSkiaFromImageModel(
-        GetWidget()->widget_delegate()->GetWindowIcon(), GetNativeTheme());
+    image = GetWidget()->widget_delegate()->GetWindowIcon().Rasterize(
+        GetColorProvider());
   }
   title_icon_->SetImage(&image);
 }
@@ -357,14 +367,14 @@ gfx::Size BubbleFrameView::GetMinimumSize() const {
 }
 
 gfx::Size BubbleFrameView::GetMaximumSize() const {
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   // On Windows, this causes problems, so do not set a maximum size (it doesn't
   // take the drop shadow area into account, resulting in a too-small window;
   // see http://crbug.com/506206). This isn't necessary on Windows anyway, since
   // the OS doesn't give the user controls to resize a bubble.
   return gfx::Size();
 #else
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   // Allow BubbleFrameView dialogs to be resizable on Mac.
   if (GetWidget()->widget_delegate()->CanResize()) {
     gfx::Size client_size = GetWidget()->client_view()->GetMaximumSize();
@@ -372,7 +382,7 @@ gfx::Size BubbleFrameView::GetMaximumSize() const {
       return client_size;
     return GetWindowBoundsForClientBounds(gfx::Rect(client_size)).size();
   }
-#endif  // OS_MAC
+#endif  // BUILDFLAG(IS_MAC)
   // Non-dialog bubbles should be non-resizable, so its max size is its
   // preferred size.
   return GetPreferredSize();
@@ -399,7 +409,7 @@ void BubbleFrameView::Layout() {
   if (header_height > 0) {
     header_view_->SetBounds(contents_bounds.x(), contents_bounds.y(),
                             contents_bounds.width(), header_height);
-    bounds.Inset(0, header_height, 0, 0);
+    bounds.Inset(gfx::Insets::TLBR(header_height, 0, 0, 0));
     header_bottom = header_view_->bounds().bottom();
   }
 
@@ -472,13 +482,8 @@ void BubbleFrameView::OnThemeChanged() {
   UpdateWindowTitle();
   ResetWindowControls();
   UpdateWindowIcon();
-
-  if (bubble_border_ && bubble_border_->use_theme_background_color()) {
-    bubble_border_->set_background_color(GetNativeTheme()->GetSystemColor(
-        ui::NativeTheme::kColorId_DialogBackground));
-    UpdateClientViewBackground();
-    SchedulePaint();
-  }
+  UpdateClientViewBackground();
+  SchedulePaint();
 }
 
 void BubbleFrameView::ViewHierarchyChanged(
@@ -535,6 +540,7 @@ void BubbleFrameView::SetBubbleBorder(std::unique_ptr<BubbleBorder> border) {
   // Update the background, which relies on the border.
   SetBackground(std::make_unique<views::BubbleBackground>(bubble_border_));
 }
+
 void BubbleFrameView::SetContentMargins(const gfx::Insets& content_margins) {
   content_margins_ = content_margins;
   OnPropertyChanged(&content_margins_, kPropertyEffectsPreferredSizeChanged);
@@ -624,13 +630,13 @@ bool BubbleFrameView::GetDisplayVisibleArrow() const {
 }
 
 void BubbleFrameView::SetBackgroundColor(SkColor color) {
-  bubble_border_->set_background_color(color);
+  bubble_border_->SetColor(color);
   UpdateClientViewBackground();
   SchedulePaint();
 }
 
 SkColor BubbleFrameView::GetBackgroundColor() const {
-  return bubble_border_->background_color();
+  return bubble_border_->color();
 }
 
 void BubbleFrameView::UpdateClientViewBackground() {
@@ -887,7 +893,7 @@ gfx::Insets BubbleFrameView::GetTitleLabelInsetsFromFrame() const {
   }
 
   if (!HasTitle())
-    return gfx::Insets(header_height, 0, 0, insets_right);
+    return gfx::Insets::TLBR(header_height, 0, 0, insets_right);
 
   insets_right = std::max(insets_right, title_margins_.right());
   const gfx::Size title_icon_pref_size = title_icon_->GetPreferredSize();
@@ -895,8 +901,8 @@ gfx::Insets BubbleFrameView::GetTitleLabelInsetsFromFrame() const {
       title_icon_pref_size.width() > 0 ? title_margins_.left() : 0;
   const int insets_left =
       title_margins_.left() + title_icon_pref_size.width() + title_icon_padding;
-  return gfx::Insets(header_height + title_margins_.top(), insets_left,
-                     title_margins_.bottom(), insets_right);
+  return gfx::Insets::TLBR(header_height + title_margins_.top(), insets_left,
+                           title_margins_.bottom(), insets_right);
 }
 
 gfx::Insets BubbleFrameView::GetClientInsetsForFrameWidth(
@@ -913,7 +919,7 @@ gfx::Insets BubbleFrameView::GetClientInsetsForFrameWidth(
 
   if (!HasTitle()) {
     return content_margins_ +
-           gfx::Insets(std::max(header_height, close_height), 0, 0, 0);
+           gfx::Insets::TLBR(std::max(header_height, close_height), 0, 0, 0);
   }
 
   const int icon_height = title_icon_->GetPreferredSize().height();
@@ -922,8 +928,8 @@ gfx::Insets BubbleFrameView::GetClientInsetsForFrameWidth(
   const int title_height =
       std::max(icon_height, label_height) + title_margins_.height();
   return content_margins_ +
-         gfx::Insets(std::max(title_height + header_height, close_height), 0, 0,
-                     0);
+         gfx::Insets::TLBR(std::max(title_height + header_height, close_height),
+                           0, 0, 0);
 }
 
 int BubbleFrameView::GetHeaderHeightForFrameWidth(int frame_width) const {

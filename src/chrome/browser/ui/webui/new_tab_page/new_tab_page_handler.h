@@ -8,7 +8,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/time/time.h"
@@ -65,9 +65,12 @@ class NewTabPageHandler : public new_tab_page::mojom::PageHandler,
                     NtpCustomBackgroundService* ntp_custom_background_service,
                     ThemeService* theme_service,
                     search_provider_logos::LogoService* logo_service,
-                    const ui::ThemeProvider* theme_provider,
                     content::WebContents* web_contents,
                     const base::Time& ntp_navigation_start_time);
+
+  NewTabPageHandler(const NewTabPageHandler&) = delete;
+  NewTabPageHandler& operator=(const NewTabPageHandler&) = delete;
+
   ~NewTabPageHandler() override;
 
   // Histograms being recorded when a module is dismissed or restored.
@@ -85,6 +88,8 @@ class NewTabPageHandler : public new_tab_page::mojom::PageHandler,
                           const GURL& image_url) override;
   void SetDailyRefreshCollectionId(const std::string& collection_id) override;
   void SetNoBackgroundImage() override;
+  void RevertBackgroundChanges() override;
+  void ConfirmBackgroundChanges() override;
   void GetBackgroundCollections(
       GetBackgroundCollectionsCallback callback) override;
   void GetBackgroundImages(const std::string& collection_id,
@@ -101,6 +106,11 @@ class NewTabPageHandler : public new_tab_page::mojom::PageHandler,
   void OnModulesLoadedWithData() override;
   void SetModulesOrder(const std::vector<std::string>& module_ids) override;
   void GetModulesOrder(GetModulesOrderCallback callback) override;
+  void IncrementModulesShownCount() override;
+  void SetModulesFreVisible(bool visible) override;
+  void UpdateModulesFreVisibility() override;
+  void LogModulesFreOptInStatus(
+      new_tab_page::mojom::OptInStatus opt_in_status) override;
   void OnAppRendered(double time) override;
   void OnOneGoogleBarRendered(double time) override;
   void OnPromoRendered(double time,
@@ -167,11 +177,11 @@ class NewTabPageHandler : public new_tab_page::mojom::PageHandler,
   bool IsShortcutsVisible() const;
 
   ChooseLocalCustomBackgroundCallback choose_local_custom_background_callback_;
-  NtpBackgroundService* ntp_background_service_;
-  NtpCustomBackgroundService* ntp_custom_background_service_;
-  search_provider_logos::LogoService* logo_service_;
-  const ui::ThemeProvider* theme_provider_;
-  ThemeService* theme_service_;
+  raw_ptr<NtpBackgroundService> ntp_background_service_;
+  raw_ptr<NtpCustomBackgroundService> ntp_custom_background_service_;
+  raw_ptr<search_provider_logos::LogoService> logo_service_;
+  raw_ptr<const ui::ThemeProvider> theme_provider_;
+  raw_ptr<ThemeService> theme_service_;
   GURL last_blocklisted_;
   GetBackgroundCollectionsCallback background_collections_callback_;
   base::TimeTicks background_collections_request_start_time_;
@@ -179,16 +189,16 @@ class NewTabPageHandler : public new_tab_page::mojom::PageHandler,
   GetBackgroundImagesCallback background_images_callback_;
   base::TimeTicks background_images_request_start_time_;
   absl::optional<base::TimeTicks> one_google_bar_load_start_time_;
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
   scoped_refptr<ui::SelectFileDialog> select_file_dialog_;
-  content::WebContents* web_contents_;
+  raw_ptr<content::WebContents> web_contents_;
   base::Time ntp_navigation_start_time_;
   NTPUserDataLogger logger_;
   std::unordered_map<const network::SimpleURLLoader*,
                      std::unique_ptr<network::SimpleURLLoader>>
       loader_map_;
   std::vector<GetPromoCallback> promo_callbacks_;
-  PromoService* promo_service_;
+  raw_ptr<PromoService> promo_service_;
   base::ScopedObservation<ui::NativeTheme, ui::NativeThemeObserver>
       native_theme_observation_{this};
   base::ScopedObservation<ThemeService, ThemeServiceObserver>
@@ -206,8 +216,6 @@ class NewTabPageHandler : public new_tab_page::mojom::PageHandler,
   mojo::Receiver<new_tab_page::mojom::PageHandler> receiver_;
 
   base::WeakPtrFactory<NewTabPageHandler> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(NewTabPageHandler);
 };
 
 #endif  // CHROME_BROWSER_UI_WEBUI_NEW_TAB_PAGE_NEW_TAB_PAGE_HANDLER_H_

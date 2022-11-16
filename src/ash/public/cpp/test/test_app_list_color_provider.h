@@ -36,19 +36,22 @@ class TestAppListColorProvider : public AppListColorProvider {
   SkColor GetFolderHintTextColor() const override;
   SkColor GetFolderNameBorderColor(bool active) const override;
   SkColor GetFolderNameSelectionColor() const override;
+  SkColor GetFolderNotificationBadgeColor() const override;
   SkColor GetContentsBackgroundColor() const override;
   SkColor GetGridBackgroundCardActiveColor() const override;
   SkColor GetGridBackgroundCardInactiveColor() const override;
-  SkColor GetSeparatorColor() const override;
+  ui::ColorId GetSeparatorColorId() const override;
   SkColor GetFocusRingColor() const override;
-  float GetFolderBackgrounBlurSigma() const override;
-  SkColor GetRippleAttributesBaseColor(
+  SkColor GetInkDropBaseColor(
       SkColor bg_color = gfx::kPlaceholderColor) const override;
-  float GetRippleAttributesInkDropOpacity(
+  float GetInkDropOpacity(
       SkColor bg_color = gfx::kPlaceholderColor) const override;
-  float GetRippleAttributesHighlightOpacity(
+  SkColor GetInvertedInkDropBaseColor(
+      SkColor bg_color = gfx::kPlaceholderColor) const override;
+  float GetInvertedInkDropOpacity(
       SkColor bg_color = gfx::kPlaceholderColor) const override;
   SkColor GetSearchResultViewHighlightColor() const override;
+  SkColor GetTextColorURL() const override;
 };
 
 }  // namespace ash

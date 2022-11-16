@@ -12,7 +12,6 @@
 #include "base/callback.h"
 #include "base/check_op.h"
 #include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "base/no_destructor.h"
 #include "base/notreached.h"
 #include "base/sequence_checker.h"
@@ -115,7 +114,7 @@ BrowserThreadImpl::BrowserThreadImpl(
   globals.task_runners[identifier_] = std::move(task_runner);
 
   if (identifier_ == BrowserThread::ID::UI) {
-#if defined(OS_POSIX)
+#if BUILDFLAG(IS_POSIX)
     // Allow usage of the FileDescriptorWatcher API on the UI thread, using the
     // IO thread to watch the file descriptors.
     //

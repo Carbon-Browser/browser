@@ -6,10 +6,12 @@
 
 #include "base/containers/cxx20_erase.h"
 #include "base/logging.h"  // DCHECK
+#include "chromeos/ui/base/display_util.h"
 #include "chromeos/ui/frame/caption_buttons/caption_button_model.h"
 #include "chromeos/ui/frame/caption_buttons/frame_caption_button_container_view.h"
 #include "chromeos/ui/frame/frame_utils.h"
 #include "chromeos/ui/vector_icons/vector_icons.h"
+#include "chromeos/ui/wm/features.h"
 #include "ui/base/class_property.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
@@ -17,6 +19,7 @@
 #include "ui/compositor/layer_animation_observer.h"
 #include "ui/compositor/layer_tree_owner.h"
 #include "ui/compositor/scoped_layer_animation_settings.h"
+#include "ui/display/screen.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/color_utils.h"
 #include "ui/gfx/font_list.h"
@@ -37,7 +40,7 @@ namespace chromeos {
 namespace {
 
 constexpr base::TimeDelta kFrameActivationAnimationDuration =
-    base::TimeDelta::FromMilliseconds(200);
+    base::Milliseconds(200);
 
 DEFINE_UI_CLASS_PROPERTY_KEY(FrameHeader*, kFrameHeaderKey, nullptr)
 
@@ -198,6 +201,11 @@ views::View::Views FrameHeader::GetAdjustedChildrenInZOrder(
 }
 
 FrameHeader::~FrameHeader() {
+  if (center_button_ && !center_button_->parent()) {
+    delete center_button_;
+    center_button_ = nullptr;
+  }
+
   auto* target_window = target_widget_->GetNativeView();
   if (target_window && target_window->GetProperty(kFrameHeaderKey) == this)
     target_window->ClearProperty(kFrameHeaderKey);
@@ -221,6 +229,10 @@ void FrameHeader::LayoutHeader() {
   // Default to the header height; owning code may override via
   // SetHeaderHeightForPainting().
   painted_height_ = GetHeaderHeight();
+}
+
+void FrameHeader::InvalidateLayout() {
+  view_->InvalidateLayout();
 }
 
 int FrameHeader::GetHeaderHeight() const {
@@ -282,6 +294,7 @@ void FrameHeader::SetBackButton(views::FrameCaptionButton* back_button) {
 }
 
 void FrameHeader::SetCenterButton(chromeos::FrameCenterButton* center_button) {
+  DCHECK(!center_button_);
   center_button_ = center_button;
   if (center_button_)
     center_button_->SetBackgroundColor(GetCurrentFrameColor());
@@ -362,15 +375,12 @@ void FrameHeader::SetCaptionButtonContainer(
   caption_button_container_->SetButtonImage(views::CAPTION_BUTTON_ICON_MINIMIZE,
                                             views::kWindowControlMinimizeIcon);
   caption_button_container_->SetButtonImage(views::CAPTION_BUTTON_ICON_MENU,
-                                            chromeos::kWindowControlMenuIcon);
+                                            chromeos::kFloatWindowIcon);
   caption_button_container_->SetButtonImage(views::CAPTION_BUTTON_ICON_CLOSE,
                                             views::kWindowControlCloseIcon);
-  caption_button_container_->SetButtonImage(
-      views::CAPTION_BUTTON_ICON_LEFT_SNAPPED,
-      chromeos::kWindowControlLeftSnappedIcon);
-  caption_button_container_->SetButtonImage(
-      views::CAPTION_BUTTON_ICON_RIGHT_SNAPPED,
-      chromeos::kWindowControlRightSnappedIcon);
+  caption_button_container_->SetButtonImage(views::CAPTION_BUTTON_ICON_FLOAT,
+                                            chromeos::kFloatButtonIcon);
+  UpdateSnapIcons();
 
   // Perform layout to ensure the container height is correct.
   LayoutHeaderInternal();
@@ -405,6 +415,8 @@ void FrameHeader::LayoutHeaderInternal() {
   caption_button_container()->SetButtonImage(
       views::CAPTION_BUTTON_ICON_MAXIMIZE_RESTORE,
       use_restore_frame ? maximize_icon : restore_icon);
+  UpdateSnapIcons();
+
   caption_button_container()->UpdateSizeButtonTooltip(use_restore_frame);
 
   caption_button_container()->SetButtonSize(
@@ -440,21 +452,38 @@ void FrameHeader::LayoutHeaderInternal() {
 
   if (center_button_) {
     constexpr int kCenterButtonSpacing = 5;
-    int full_width = center_button_->GetPreferredSize().width();
-    const gfx::Range range(
-        std::max((view_->width() - full_width) / 2,
-                 origin + kCenterButtonSpacing),
-        std::min((view_->width() + full_width) / 2,
-                 caption_button_container_->x() - kCenterButtonSpacing));
-    center_button_->SetBounds(range.start(), 0, range.end() - range.start(),
+    const int full_width = center_button_->GetPreferredSize().width();
+    const int begin = std::max((view_->width() - full_width) / 2,
+                               origin + kCenterButtonSpacing);
+    const int end = std::max(
+        begin, std::min((view_->width() + full_width) / 2,
+                        caption_button_container_->x() - kCenterButtonSpacing));
+    center_button_->SetBounds(begin, 0, end - begin,
                               caption_button_container_size.height());
   }
 }
 
 gfx::Rect FrameHeader::GetTitleBounds() const {
-  views::View* left_view = left_header_view_ ? left_header_view_ : back_button_;
+  views::View* left_view =
+      left_header_view_ ? left_header_view_.get() : back_button_.get();
   return GetAvailableTitleBounds(left_view, caption_button_container_,
                                  GetHeaderHeight());
+}
+
+void FrameHeader::UpdateSnapIcons() {
+  const bool is_horizontal_display = chromeos::IsDisplayLayoutHorizontal(
+      display::Screen::GetScreen()->GetDisplayNearestWindow(
+          target_widget_->GetNativeWindow()));
+  const bool is_horizontal_snap =
+      is_horizontal_display || !chromeos::wm::features::IsVerticalSnapEnabled();
+  caption_button_container()->SetButtonImage(
+      views::CAPTION_BUTTON_ICON_LEFT_TOP_SNAPPED,
+      is_horizontal_snap ? chromeos::kWindowControlLeftSnappedIcon
+                         : chromeos::kWindowControlTopSnappedIcon);
+  caption_button_container()->SetButtonImage(
+      views::CAPTION_BUTTON_ICON_RIGHT_BOTTOM_SNAPPED,
+      is_horizontal_snap ? chromeos::kWindowControlRightSnappedIcon
+                         : chromeos::kWindowControlBottomSnappedIcon);
 }
 
 }  // namespace chromeos

@@ -6,18 +6,52 @@ import 'chrome://scanning/scan_preview.js';
 
 import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {setAccessibilityFeaturesForTesting} from 'chrome://scanning/mojo_interface_provider.js';
 import {AppState} from 'chrome://scanning/scanning_app_types.js';
 import {ScanningBrowserProxyImpl} from 'chrome://scanning/scanning_browser_proxy.js';
 
 import {assertEquals, assertFalse, assertNotEquals, assertTrue} from '../../chai_assert.js';
-import {flushTasks, isVisible} from '../../test_util.js';
+import {MockController} from '../../mock_controller.js';
+import {flushTasks, isVisible, waitAfterNextRender} from '../../test_util.js';
 
+import {FakeMediaQueryList} from './scanning_app_test_utils.js';
 import {TestScanningBrowserProxy} from './test_scanning_browser_proxy.js';
+
+/** @implements {ash.common.mojom.AccessibilityFeaturesInterface} */
+class FakeAccessibilityFeatures {
+  constructor() {
+    /** @private {?ash.common.mojom.ForceHiddenElementsVisibleObserverRemote} */
+    this.forceHiddenElementsVisibleObserverRemote_ = null;
+  }
+
+  /**
+   * @param {!ash.common.mojom.ForceHiddenElementsVisibleObserverRemote} remote
+   * @return {!Promise<{forceVisible: boolean}>}
+   */
+  observeForceHiddenElementsVisible(remote) {
+    return new Promise(resolve => {
+      this.forceHiddenElementsVisibleObserverRemote_ = remote;
+      resolve({forceVisible: false});
+    });
+  }
+
+  /**
+   * @param {boolean} forceVisible
+   * @return {!Promise}
+   */
+  simulateObserverChange(forceVisible) {
+    this.forceHiddenElementsVisibleObserverRemote_
+        .onForceHiddenElementsVisibleChange(forceVisible);
+    return flushTasks();
+  }
+}
 
 export function scanPreviewTest() {
   /** @type {?ScanPreviewElement} */
   let scanPreview = null;
 
+  /** @type {?FakeAccessibilityFeatures} */
+  let fakeAccessibilityFeatures_ = null;
 
   /** @type {!HTMLElement} */
   let helpOrProgress;
@@ -30,11 +64,39 @@ export function scanPreviewTest() {
   /** @type {!HTMLElement} */
   let cancelingProgress;
 
+  /** @type {{createFunctionMock: Function, reset: Function}} */
+  let mockController;
+
+  /** @type {?FakeMediaQueryList} */
+  let fakePrefersColorSchemeDarkMediaQuery;
+
+  /**
+   * @param {boolean} enabled
+   * @return {!Promise}
+   */
+  function setFakePrefersColorSchemeDark(enabled) {
+    assertTrue(!!scanPreview);
+    fakePrefersColorSchemeDarkMediaQuery.matches = enabled;
+
+    return flushTasks();
+  }
+
   setup(() => {
+    fakeAccessibilityFeatures_ = new FakeAccessibilityFeatures();
+    setAccessibilityFeaturesForTesting(fakeAccessibilityFeatures_);
     scanPreview = /** @type {!ScanPreviewElement} */ (
         document.createElement('scan-preview'));
     assertTrue(!!scanPreview);
     ScanningBrowserProxyImpl.instance_ = new TestScanningBrowserProxy();
+
+    // Setup mock for matchMedia.
+    mockController = new MockController();
+    const mockMatchMedia =
+        mockController.createFunctionMock(window, 'matchMedia');
+    fakePrefersColorSchemeDarkMediaQuery =
+        new FakeMediaQueryList('(prefers-color-scheme: dark)');
+    mockMatchMedia.returnValue = fakePrefersColorSchemeDarkMediaQuery;
+
     document.body.appendChild(scanPreview);
 
     helpOrProgress =
@@ -53,6 +115,7 @@ export function scanPreviewTest() {
     if (scanPreview) {
       scanPreview.remove();
     }
+    mockController.reset();
     scanPreview = null;
   });
 
@@ -154,17 +217,21 @@ export function scanPreviewTest() {
   // Tests that the action toolbar is only displayed for multi-page scans.
   test('showActionToolbarForMultiPageScans', () => {
     scanPreview.objectUrls = ['image'];
-    scanPreview.appState = AppState.MULTI_PAGE_NEXT_ACTION;
-    scanPreview.multiPageScanChecked = false;
-    assertTrue(scanPreview.$$('action-toolbar').hidden);
-    scanPreview.multiPageScanChecked = true;
-    flush();
-    assertFalse(scanPreview.$$('action-toolbar').hidden);
+    scanPreview.appState = AppState.DONE;
+    return flushTasks().then(() => {
+      assertTrue(scanPreview.$$('action-toolbar').hidden);
+      scanPreview.appState = AppState.MULTI_PAGE_NEXT_ACTION;
+      flush();
+      assertFalse(scanPreview.$$('action-toolbar').hidden);
+    });
   });
 
   // Tests that the toolbar will get repositioned after subsequent scans.
   test('positionActionToolbarOnSubsequentScans', () => {
-    scanPreview.multiPageScanChecked = true;
+    const scannedImagesDiv =
+        /** @type {!HTMLElement} */ (scanPreview.$$('#scannedImages'));
+    scanPreview.objectUrls = [];
+    scanPreview.isMultiPageScan = true;
     scanPreview.appState = AppState.MULTI_PAGE_SCANNING;
     return flushTasks()
         .then(() => {
@@ -176,7 +243,7 @@ export function scanPreviewTest() {
 
           scanPreview.objectUrls = ['svg/ready_to_scan.svg'];
           scanPreview.appState = AppState.MULTI_PAGE_NEXT_ACTION;
-          return flushTasks();
+          return waitAfterNextRender(scannedImagesDiv);
         })
         .then(() => {
           // After the image loads we expect the CSS variables to be set.
@@ -200,7 +267,7 @@ export function scanPreviewTest() {
         .then(() => {
           scanPreview.objectUrls = ['svg/ready_to_scan.svg'];
           scanPreview.appState = AppState.MULTI_PAGE_NEXT_ACTION;
-          return flushTasks();
+          return waitAfterNextRender(scannedImagesDiv);
         })
         .then(() => {
           // We expect the CSS variables to be set again.
@@ -214,145 +281,92 @@ export function scanPreviewTest() {
   // Tests that the remove page dialog opens, shows the correct page number,
   // then fires the correct event when the action button is clicked.
   test('removePageDialog', () => {
-    const pageNumberToRemove = 5;
+    const pageIndexToRemove = 5;
     let pageIndexFromEvent;
     scanPreview.addEventListener('remove-page', (e) => {
       pageIndexFromEvent = e.detail;
     });
     scanPreview.objectUrls = ['svg/ready_to_scan.svg'];
+    return flushTasks()
+        .then(() => {
+          assertFalse(scanPreview.$$('#scanPreviewDialog').open);
+          scanPreview.$$('action-toolbar')
+              .dispatchEvent(new CustomEvent(
+                  'show-remove-page-dialog', {detail: pageIndexToRemove}));
+          return flushTasks();
+        })
+        .then(() => {
+          assertTrue(scanPreview.$$('#scanPreviewDialog').open);
+          assertEquals(
+              'Remove page?',
+              scanPreview.$$('#dialogTitle').textContent.trim());
+          assertEquals(
+              'Remove', scanPreview.$$('#actionButton').textContent.trim());
+          assertEquals(
+              loadTimeData.getStringF(
+                  'removePageConfirmationText', pageIndexToRemove + 1),
+              scanPreview.$$('#dialogConfirmationText').textContent.trim());
 
-
-    assertFalse(scanPreview.$$('#scanPreviewDialog').open);
-    scanPreview.$$('action-toolbar')
-        .dispatchEvent(new CustomEvent(
-            'show-remove-page-dialog', {detail: pageNumberToRemove}));
-
-    return flushTasks().then(() => {
-      assertTrue(scanPreview.$$('#scanPreviewDialog').open);
-      assertEquals(
-          'Remove page ' + pageNumberToRemove,
-          scanPreview.$$('#dialogTitle').textContent.trim());
-      assertEquals(
-          'Remove page ' + pageNumberToRemove,
-          scanPreview.$$('#actionButton').textContent.trim());
-      assertEquals(
-          loadTimeData.getStringF(
-              'removePageConfirmationText', pageNumberToRemove),
-          scanPreview.$$('#dialogConfirmationText').textContent.trim());
-
-      scanPreview.$$('#actionButton').click();
-      assertFalse(scanPreview.$$('#scanPreviewDialog').open);
-      assertEquals(pageNumberToRemove - 1, pageIndexFromEvent);
-    });
+          scanPreview.$$('#actionButton').click();
+          assertFalse(scanPreview.$$('#scanPreviewDialog').open);
+          assertEquals(pageIndexToRemove, pageIndexFromEvent);
+        });
   });
 
   // Tests that clicking the cancel button closes the remove page dialog.
   test('cancelRemovePageDialog', () => {
+    scanPreview.objectUrls = ['image'];
     assertFalse(scanPreview.$$('#scanPreviewDialog').open);
-    scanPreview.$$('action-toolbar')
-        .dispatchEvent(new CustomEvent('show-remove-page-dialog'));
+    return flushTasks()
+        .then(() => {
+          scanPreview.$$('action-toolbar')
+              .dispatchEvent(new CustomEvent('show-remove-page-dialog'));
+          return flushTasks();
+        })
+        .then(() => {
+          assertTrue(scanPreview.$$('#scanPreviewDialog').open);
 
-    return flushTasks().then(() => {
-      assertTrue(scanPreview.$$('#scanPreviewDialog').open);
-
-      scanPreview.$$('#cancelButton').click();
-      assertFalse(scanPreview.$$('#scanPreviewDialog').open);
-    });
+          scanPreview.$$('#cancelButton').click();
+          assertFalse(scanPreview.$$('#scanPreviewDialog').open);
+        });
   });
 
   // Tests that the rescan page dialog opens and shows the correct page number.
   test('rescanPageDialog', () => {
-    const pageNum = 6;
+    const pageIndex = 6;
+    scanPreview.objectUrls = ['image1', 'image2'];
     assertFalse(scanPreview.$$('#scanPreviewDialog').open);
-    scanPreview.$$('action-toolbar')
-        .dispatchEvent(
-            new CustomEvent('show-rescan-page-dialog', {detail: pageNum}));
-
-    return flushTasks().then(() => {
-      assertTrue(scanPreview.$$('#scanPreviewDialog').open);
-      assertEquals(
-          'Rescan page ' + pageNum,
-          scanPreview.$$('#dialogTitle').textContent.trim());
-      assertEquals(
-          'Rescan page ' + pageNum,
-          scanPreview.$$('#actionButton').textContent.trim());
-      assertEquals(
-          loadTimeData.getStringF('rescanPageConfirmationText', pageNum),
-          scanPreview.$$('#dialogConfirmationText').textContent.trim());
-    });
-  });
-
-  // Tests that the scan preview viewport is force scrolled to the expected page
-  // for new and rescanned images during multi-page scans.
-  test('scrollToExpectedPageForMultiPageScans', () => {
-    let imageHeight;
-    const previewDiv = scanPreview.$$('#previewDiv');
-
-    scanPreview.multiPageScanChecked = true;
     return flushTasks()
         .then(() => {
-          scanPreview.objectUrls = ['svg/ready_to_scan.svg'];
-          scanPreview.appState = AppState.MULTI_PAGE_NEXT_ACTION;
+          scanPreview.$$('action-toolbar')
+              .dispatchEvent(new CustomEvent(
+                  'show-rescan-page-dialog', {detail: pageIndex}));
           return flushTasks();
         })
         .then(() => {
-          scanPreview.appState = AppState.MULTI_PAGE_SCANNING;
-          return flushTasks();
-        })
-        .then(() => {
-          scanPreview.push('objectUrls', 'svg/ready_to_scan.svg');
-          scanPreview.appState = AppState.MULTI_PAGE_NEXT_ACTION;
-          return flushTasks();
-        })
-        .then(() => {
-          imageHeight = scanPreview.$$('#scannedImages')
-                            .getElementsByClassName('scanned-image')[0]
-                            .height;
-
-          // With two scanned images the viewport should be scrolled so the
-          // second image is at the top.
-          assertEquals(imageHeight, previewDiv.scrollTop);
-        })
-        .then(() => {
-          scanPreview.appState = AppState.MULTI_PAGE_SCANNING;
-          return flushTasks();
-        })
-        .then(() => {
-          // Scroll to the top again before adding a third page.
-          previewDiv.scrollTop = 0;
-          scanPreview.push('objectUrls', 'svg/ready_to_scan.svg');
-          scanPreview.appState = AppState.MULTI_PAGE_NEXT_ACTION;
-          return flushTasks();
-        })
-        .then(() => {
-          // Verify it scrolls down to the third page.
-          assertEquals(imageHeight * 2, previewDiv.scrollTop);
-
-          scanPreview.appState = AppState.MULTI_PAGE_SCANNING;
-          return flushTasks();
-        })
-        .then(() => {
-          // Simulate rescanning and replacing the second page.
-          scanPreview.splice('objectUrls', 1, 1, 'svg/no_scanners.svg');
-          scanPreview.appState = AppState.MULTI_PAGE_NEXT_ACTION;
-          return flushTasks();
-        })
-        .then(() => {
-          // Verify it scrolls back to the second page.
-          assertEquals(imageHeight, previewDiv.scrollTop);
+          assertTrue(scanPreview.$$('#scanPreviewDialog').open);
+          assertEquals(
+              'Rescan page ' + (pageIndex + 1) + '?',
+              scanPreview.$$('#dialogTitle').textContent.trim());
+          assertEquals(
+              loadTimeData.getStringF('rescanPageConfirmationText', pageIndex),
+              scanPreview.$$('#dialogConfirmationText').textContent.trim());
         });
   });
 
   // Tests that for multi-page scans, resizing the app window triggers the
   // repositioning of the action toolbar.
   test('resizingWindowRepositionsActionToolbar', () => {
-    scanPreview.multiPageScanChecked = true;
+    const scannedImagesDiv =
+        /** @type {!HTMLElement} */ (scanPreview.$$('#scannedImages'));
+    scanPreview.objectUrls = ['image'];
+    scanPreview.isMultiPageScan = true;
     scanPreview.appState = AppState.MULTI_PAGE_SCANNING;
     return flushTasks()
         .then(() => {
           scanPreview.objectUrls = ['svg/ready_to_scan.svg'];
           scanPreview.appState = AppState.MULTI_PAGE_NEXT_ACTION;
-          return flushTasks();
+          return waitAfterNextRender(scannedImagesDiv);
         })
         .then(() => {
           // After the image loads we expect the CSS variables to be set.
@@ -377,7 +391,7 @@ export function scanPreviewTest() {
           // Now test that unchecking the multi-page scan checkbox removes the
           // window listener.
           scanPreview.objectUrls = [];
-          scanPreview.multiPageScanChecked = false;
+          scanPreview.isMultiPageScan = false;
           scanPreview.appState = AppState.SCANNING;
           return flushTasks();
         })
@@ -399,5 +413,49 @@ export function scanPreviewTest() {
           assertEquals(
               '', scanPreview.style.getPropertyValue('--action-toolbar-left'));
         });
+  });
+
+  // Tests that the action toolbar will be forced visible when the accessibility
+  // features are enabled.
+  test('showActionToolbarWhenAccessibilityEnabled', () => {
+    scanPreview.objectUrls = ['image'];
+    scanPreview.appState = AppState.DONE;
+    return flushTasks()
+        .then(() => {
+          scanPreview.appState = AppState.MULTI_PAGE_NEXT_ACTION;
+          flush();
+          const actionToolbar =
+              /** @type {!HTMLElement} */ (scanPreview.$$('action-toolbar'));
+          assertEquals(
+              'hidden',
+              getComputedStyle(actionToolbar).getPropertyValue('visibility'));
+
+          return fakeAccessibilityFeatures_.simulateObserverChange(
+              /*forceVisible=*/ true);
+        })
+        .then(() => {
+          const actionToolbar =
+              /** @type {!HTMLElement} */ (scanPreview.$$('action-toolbar'));
+          assertEquals(
+              'visible',
+              getComputedStyle(actionToolbar).getPropertyValue('visibility'));
+        });
+  });
+
+  // Verify correct svg displayed when page is in dark mode.
+  test('readyToScanSvgSetByColorScheme', async () => {
+    const srcBase = 'chrome://scanning/';
+    const lightModeSvg = `${srcBase}svg/ready_to_scan.svg`;
+    const darkModeSvg = `${srcBase}svg/ready_to_scan_dark.svg`;
+    const getReadyToScanSvg = () =>
+        (/** @type {!HTMLImageElement} */ (scanPreview.$$('#readyToScanImg')));
+
+    // Mock media query state for light mode.
+    await setFakePrefersColorSchemeDark(false);
+    assertEquals(getReadyToScanSvg().src, lightModeSvg);
+
+    // Mock media query state for dark mode.
+    await setFakePrefersColorSchemeDark(true);
+    assertEquals(getReadyToScanSvg().src, darkModeSvg);
   });
 }

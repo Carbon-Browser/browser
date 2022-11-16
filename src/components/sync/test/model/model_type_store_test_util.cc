@@ -8,6 +8,7 @@
 
 #include "base/bind.h"
 #include "base/debug/leak_annotations.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/threading/sequenced_task_runner_handle.h"
 #include "components/sync/base/model_type.h"
@@ -60,7 +61,7 @@ class ForwardingModelTypeStore : public ModelTypeStore {
   }
 
  private:
-  ModelTypeStore* other_;
+  raw_ptr<ModelTypeStore> other_;
 };
 
 }  // namespace

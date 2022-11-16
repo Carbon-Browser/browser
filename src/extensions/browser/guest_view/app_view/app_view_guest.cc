@@ -119,10 +119,14 @@ AppViewGuest::~AppViewGuest() {
 }
 
 bool AppViewGuest::HandleContextMenu(
-    content::RenderFrameHost* render_frame_host,
+    content::RenderFrameHost& render_frame_host,
     const content::ContextMenuParams& params) {
+  DCHECK_EQ(web_contents(),
+            content::WebContents::FromRenderFrameHost(&render_frame_host));
+
   if (app_view_guest_delegate_) {
-    return app_view_guest_delegate_->HandleContextMenu(web_contents(), params);
+    return app_view_guest_delegate_->HandleContextMenu(render_frame_host,
+                                                       params);
   }
   return false;
 }
@@ -162,27 +166,28 @@ bool AppViewGuest::CheckMediaAccessPermission(
       render_frame_host, security_origin, type, guest_extension);
 }
 
-void AppViewGuest::CreateWebContents(const base::DictionaryValue& create_params,
+void AppViewGuest::CreateWebContents(const base::Value::Dict& create_params,
                                      WebContentsCreatedCallback callback) {
-  std::string app_id;
-  if (!create_params.GetString(appview::kAppID, &app_id)) {
+  const std::string* app_id = create_params.FindString(appview::kAppID);
+  if (!app_id) {
     std::move(callback).Run(nullptr);
     return;
   }
   // Verifying that the appId is not the same as the host application.
-  if (owner_host() == app_id) {
+  if (owner_host() == *app_id) {
     std::move(callback).Run(nullptr);
     return;
   }
-  const base::DictionaryValue* data = nullptr;
-  if (!create_params.GetDictionary(appview::kData, &data)) {
+
+  const base::Value::Dict* data = create_params.FindDict(appview::kData);
+  if (!data) {
     std::move(callback).Run(nullptr);
     return;
   }
 
   const ExtensionSet& enabled_extensions =
       ExtensionRegistry::Get(browser_context())->enabled_extensions();
-  const Extension* guest_extension = enabled_extensions.GetByID(app_id);
+  const Extension* guest_extension = enabled_extensions.GetByID(*app_id);
   const Extension* embedder_extension =
       enabled_extensions.GetByID(GetOwnerSiteURL().host());
 
@@ -195,11 +200,10 @@ void AppViewGuest::CreateWebContents(const base::DictionaryValue& create_params,
   const LazyContextId context_id(browser_context(), guest_extension->id());
   LazyContextTaskQueue* queue = context_id.GetTaskQueue();
   if (queue->ShouldEnqueueTask(browser_context(), guest_extension)) {
-    queue->AddPendingTask(
-        context_id,
-        base::BindOnce(&AppViewGuest::LaunchAppAndFireEvent,
-                       weak_ptr_factory_.GetWeakPtr(), data->CreateDeepCopy(),
-                       std::move(callback)));
+    queue->AddPendingTask(context_id,
+                          base::BindOnce(&AppViewGuest::LaunchAppAndFireEvent,
+                                         weak_ptr_factory_.GetWeakPtr(),
+                                         data->Clone(), std::move(callback)));
     return;
   }
 
@@ -208,11 +212,11 @@ void AppViewGuest::CreateWebContents(const base::DictionaryValue& create_params,
       process_manager->GetBackgroundHostForExtension(guest_extension->id());
   DCHECK(host);
   LaunchAppAndFireEvent(
-      data->CreateDeepCopy(), std::move(callback),
+      data->Clone(), std::move(callback),
       std::make_unique<LazyContextTaskQueue::ContextInfo>(host));
 }
 
-void AppViewGuest::DidInitialize(const base::DictionaryValue& create_params) {
+void AppViewGuest::DidInitialize(const base::Value::Dict& create_params) {
   ExtensionsAPIClient::Get()->AttachWebContentsHelpers(web_contents());
 
   if (!url_.is_valid())
@@ -252,7 +256,7 @@ void AppViewGuest::CompleteCreateWebContents(
 }
 
 void AppViewGuest::LaunchAppAndFireEvent(
-    std::unique_ptr<base::DictionaryValue> data,
+    base::Value::Dict data,
     WebContentsCreatedCallback callback,
     std::unique_ptr<LazyContextTaskQueue::ContextInfo> context_info) {
   bool has_event_listener = EventRouter::Get(browser_context())
@@ -276,10 +280,9 @@ void AppViewGuest::LaunchAppAndFireEvent(
 
   std::unique_ptr<base::DictionaryValue> embed_request(
       new base::DictionaryValue());
-  embed_request->SetInteger(appview::kGuestInstanceID, guest_instance_id());
-  embed_request->SetString(appview::kEmbedderID, owner_host());
-  embed_request->SetKey(appview::kData,
-                        base::Value::FromUniquePtrValue(std::move(data)));
+  embed_request->SetIntKey(appview::kGuestInstanceID, guest_instance_id());
+  embed_request->SetStringKey(appview::kEmbedderID, owner_host());
+  embed_request->SetKey(appview::kData, base::Value(std::move(data)));
   AppRuntimeEventRouter::DispatchOnEmbedRequestedEvent(
       browser_context(), std::move(embed_request), extension);
 }

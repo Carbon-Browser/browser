@@ -17,14 +17,13 @@
 #include "ash/components/audio/audio_pref_observer.h"
 #include "base/callback.h"
 #include "base/component_export.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/timer/timer.h"
-#include "chromeos/dbus/audio/audio_node.h"
-#include "chromeos/dbus/audio/cras_audio_client.h"
-#include "chromeos/dbus/audio/volume_state.h"
+#include "chromeos/ash/components/dbus/audio/audio_node.h"
+#include "chromeos/ash/components/dbus/audio/cras_audio_client.h"
+#include "chromeos/ash/components/dbus/audio/volume_state.h"
 #include "media/base/video_facing.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -53,7 +52,7 @@ using OnNoiseCancellationSupportedCallback = base::OnceCallback<void()>;
 // This class is not thread safe. The public functions should be called on
 // browser main thread.
 class COMPONENT_EXPORT(ASH_COMPONENTS_AUDIO) CrasAudioHandler
-    : public chromeos::CrasAudioClient::Observer,
+    : public CrasAudioClient::Observer,
       public ui::MicrophoneMuteSwitchMonitor::Observer,
       public AudioPrefObserver,
       public media::VideoCaptureObserver,
@@ -63,10 +62,21 @@ class COMPONENT_EXPORT(ASH_COMPONENTS_AUDIO) CrasAudioHandler
       priority_queue<AudioDevice, std::vector<AudioDevice>, AudioDeviceCompare>
           AudioDevicePriorityQueue;
   typedef std::vector<uint64_t> NodeIdList;
+
+  // Key-value mapping type for audio survey specific data.
+  // For audio satisfaction survey, it contains
+  //  - StreamType: Usage of the stream, e.g., multimedia.
+  //  - ClientType: Client of the stream, e.g., Chrome or ARC++.
+  //  - NodeType: Pair of the active input/output device types, e.g., USB_USB.
+  // The content can be extended when other types of survey is added.
+  typedef base::flat_map<std::string, std::string> AudioSurveyData;
   static constexpr int32_t kSystemAecGroupIdNotAvailable = -1;
 
   class AudioObserver {
    public:
+    AudioObserver(const AudioObserver&) = delete;
+    AudioObserver& operator=(const AudioObserver&) = delete;
+
     // Called when an active output volume changed.
     virtual void OnOutputNodeVolumeChanged(uint64_t node_id, int volume);
 
@@ -116,10 +126,20 @@ class COMPONENT_EXPORT(ASH_COMPONENTS_AUDIO) CrasAudioHandler
     // Called when the last output stream is closed.
     virtual void OnOutputStopped();
 
+    // Called when the audio survey like to trigger an audio survey.
+    // CRAS owns the trigger to send out an audio survey as opposed to trigger
+    // from any Chrome/UI elements as CRAS has the most context to determine
+    // when to sent out audio survey, for example when an input stream living
+    // for >= 30 seconds is closed.
+    // CRAS also has full control on what data to send to Chrome. These survey
+    // specific data will be attached with each survey response for analysis.
+    // Currently this only supports one general audio satisfaction survey and
+    // should be modified and extended when other types of survey is added.
+    virtual void OnSurveyTriggered(const AudioSurveyData& survey_specific_data);
+
    protected:
     AudioObserver();
     virtual ~AudioObserver();
-    DISALLOW_COPY_AND_ASSIGN(AudioObserver);
   };
 
   enum DeviceActivateType {
@@ -154,6 +174,9 @@ class COMPONENT_EXPORT(ASH_COMPONENTS_AUDIO) CrasAudioHandler
 
   // Gets the global instance. Initialize must be called first.
   static CrasAudioHandler* Get();
+
+  CrasAudioHandler(const CrasAudioHandler&) = delete;
+  CrasAudioHandler& operator=(const CrasAudioHandler&) = delete;
 
   // Overrides media::VideoCaptureObserver.
   void OnVideoCaptureStarted(media::VideoFacingMode facing) override;
@@ -248,6 +271,9 @@ class COMPONENT_EXPORT(ASH_COMPONENTS_AUDIO) CrasAudioHandler
 
   // Gets the state of input noise cancellation.
   bool GetNoiseCancellationState() const;
+
+  // Refreshes the input device noise cancellation state.
+  void RefreshNoiseCancellationState();
 
   // Sends a DBus signal to set the state of input noise cancellation.
   void SetNoiseCancellationState(bool state);
@@ -406,7 +432,7 @@ class COMPONENT_EXPORT(ASH_COMPONENTS_AUDIO) CrasAudioHandler
  private:
   friend class CrasAudioHandlerTest;
 
-  // chromeos::CrasAudioClient::Observer overrides.
+  // CrasAudioClient::Observer overrides.
   void AudioClientRestarted() override;
   void NodesChanged() override;
   void ActiveOutputNodeChanged(uint64_t node_id) override;
@@ -418,6 +444,8 @@ class COMPONENT_EXPORT(ASH_COMPONENTS_AUDIO) CrasAudioHandler
   void NumberOfInputStreamsWithPermissionChanged(
       const base::flat_map<std::string, uint32_t>& num_input_streams) override;
   void NumberOfActiveStreamsChanged() override;
+  void SurveyTriggered(const base::flat_map<std::string, std::string>&
+                           survey_specific_data) override;
 
   // AudioPrefObserver overrides.
   void OnAudioPolicyPrefChanged() override;
@@ -453,8 +481,7 @@ class COMPONENT_EXPORT(ASH_COMPONENTS_AUDIO) CrasAudioHandler
   // Sets up the additional active audio node's state.
   void SetupAdditionalActiveAudioNodeState(uint64_t node_id);
 
-  AudioDevice ConvertAudioNodeWithModifiedPriority(
-      const chromeos::AudioNode& node);
+  AudioDevice ConvertAudioNodeWithModifiedPriority(const AudioNode& node);
 
   const AudioDevice* GetDeviceFromStableDeviceId(
       uint64_t stable_device_id) const;
@@ -497,7 +524,7 @@ class COMPONENT_EXPORT(ASH_COMPONENTS_AUDIO) CrasAudioHandler
 
   // Updates the current audio nodes list and switches the active device
   // if needed.
-  void UpdateDevicesAndSwitchActive(const chromeos::AudioNodeList& nodes);
+  void UpdateDevicesAndSwitchActive(const AudioNodeList& nodes);
 
   // Returns true if the current active device is changed to
   // |new_active_device|.
@@ -509,14 +536,14 @@ class COMPONENT_EXPORT(ASH_COMPONENTS_AUDIO) CrasAudioHandler
   // *|device_removed| indicates if any devices have been removed.
   // *|active_device_removed| indicates if the current active device has been
   // removed.
-  bool HasDeviceChange(const chromeos::AudioNodeList& new_nodes,
+  bool HasDeviceChange(const AudioNodeList& new_nodes,
                        bool is_input,
                        AudioDevicePriorityQueue* new_discovered,
                        bool* device_removed,
                        bool* active_device_removed);
 
   // Handles dbus callback for GetNodes.
-  void HandleGetNodes(absl::optional<chromeos::AudioNodeList> node_list);
+  void HandleGetNodes(absl::optional<AudioNodeList> node_list);
 
   void HandleGetNumActiveOutputStreams(
       absl::optional<int> num_active_output_streams);
@@ -634,6 +661,7 @@ class COMPONENT_EXPORT(ASH_COMPONENTS_AUDIO) CrasAudioHandler
 
   // Handle dbus callback for GetSystemNoiseCancellationSupported.
   void HandleGetNoiseCancellationSupported(
+      OnNoiseCancellationSupportedCallback callback,
       absl::optional<bool> system_noise_cancellation_supported);
 
   // Handle dbus callback for GetSystemAecSupported.
@@ -753,8 +781,6 @@ class COMPONENT_EXPORT(ASH_COMPONENTS_AUDIO) CrasAudioHandler
   cras::DisplayRotation display_rotation_ = cras::DisplayRotation::ROTATE_0;
 
   base::WeakPtrFactory<CrasAudioHandler> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(CrasAudioHandler);
 };
 
 // Helper class that will initialize the |CrasAudioHandler| for testing in its

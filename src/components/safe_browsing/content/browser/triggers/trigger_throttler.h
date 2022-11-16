@@ -10,8 +10,9 @@
 #include <vector>
 
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/clock.h"
+#include "base/time/time.h"
 
 class PrefService;
 
@@ -25,14 +26,6 @@ extern const size_t kSuspiciousSiteTriggerDefaultQuota;
 // Param name of the finch param containing the quota for the suspicious site
 // trigger.
 extern const char kSuspiciousSiteTriggerQuotaParam[];
-
-// Param name of the finch param containing the comma-separated list of trigger
-// types and daily quotas.
-// TODO(crbug.com/744869): This param should be deprecated after ad sampler
-// launch in favour of having a unique quota feature and param per trigger.
-// Having a single shared feature makes it impossible to run multiple trigger
-// trials simultaneously.
-extern const char kTriggerTypeAndQuotaParam[];
 
 enum class TriggerType {
   SECURITY_INTERSTITIAL = 1,
@@ -66,6 +59,10 @@ using TriggerTypeAndQuotaItem = std::pair<TriggerType, int>;
 class TriggerThrottler {
  public:
   TriggerThrottler(PrefService* local_state_prefs);
+
+  TriggerThrottler(const TriggerThrottler&) = delete;
+  TriggerThrottler& operator=(const TriggerThrottler&) = delete;
+
   virtual ~TriggerThrottler();
 
   // Check if the the specified |trigger_type| has quota available and is
@@ -101,10 +98,10 @@ class TriggerThrottler {
 
   // Pref service for accessing local state prefs (ie: unsynced, tied to the
   // browser not to a profile). Used to persist quota.
-  PrefService* local_state_prefs_;
+  raw_ptr<PrefService> local_state_prefs_;
 
   // Can be set for testing.
-  base::Clock* clock_;
+  raw_ptr<base::Clock> clock_;
 
   // Stores each trigger type that fired along with the timestamps of when it
   // fired.
@@ -113,8 +110,6 @@ class TriggerThrottler {
   // List of trigger types and their quotas, controlled by Finch feature
   // |kTriggerThrottlerDailyQuotaFeature|.
   std::vector<TriggerTypeAndQuotaItem> trigger_type_and_quota_list_;
-
-  DISALLOW_COPY_AND_ASSIGN(TriggerThrottler);
 };
 
 }  // namespace safe_browsing

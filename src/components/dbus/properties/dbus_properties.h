@@ -7,7 +7,7 @@
 
 #include "base/callback_forward.h"
 #include "base/component_export.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "components/dbus/properties/types.h"
 #include "dbus/bus.h"
@@ -22,6 +22,10 @@ class COMPONENT_EXPORT(DBUS) DbusProperties {
   // not be removed until the bus is shut down.
   DbusProperties(dbus::ExportedObject* exported_object,
                  InitializedCallback callback);
+
+  DbusProperties(const DbusProperties&) = delete;
+  DbusProperties& operator=(const DbusProperties&) = delete;
+
   ~DbusProperties();
 
   void RegisterInterface(const std::string& interface);
@@ -68,7 +72,7 @@ class COMPONENT_EXPORT(DBUS) DbusProperties {
 
   bool initialized_ = false;
 
-  dbus::ExportedObject* exported_object_ = nullptr;
+  raw_ptr<dbus::ExportedObject> exported_object_ = nullptr;
 
   base::RepeatingCallback<void(bool)> barrier_;
 
@@ -77,8 +81,6 @@ class COMPONENT_EXPORT(DBUS) DbusProperties {
   std::map<std::string, std::map<std::string, DbusVariant>> properties_;
 
   base::WeakPtrFactory<DbusProperties> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(DbusProperties);
 };
 
 #endif  // COMPONENTS_DBUS_PROPERTIES_DBUS_PROPERTIES_H_

@@ -8,19 +8,18 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "base/macros.h"
 #include "media/cast/net/cast_transport_defines.h"
 #include "media/cast/net/rtp/rtp_defines.h"
 
 namespace media {
 namespace cast {
 
-// TODO(miu): RtpParser and RtpPacketizer should be consolidated into a single
-// module that handles all RTP/Cast packet serialization and deserialization
-// throughout the media/cast library.
 class RtpParser {
  public:
   RtpParser(uint32_t expected_sender_ssrc, uint8_t expected_payload_type);
+
+  RtpParser(const RtpParser&) = delete;
+  RtpParser& operator=(const RtpParser&) = delete;
 
   virtual ~RtpParser();
 
@@ -47,8 +46,6 @@ class RtpParser {
   // re-expanded into full-form.
   RtpTimeTicks last_parsed_rtp_timestamp_;
   FrameId last_parsed_frame_id_;
-
-  DISALLOW_COPY_AND_ASSIGN(RtpParser);
 };
 
 }  // namespace cast

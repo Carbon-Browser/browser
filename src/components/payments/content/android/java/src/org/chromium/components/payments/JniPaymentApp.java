@@ -139,11 +139,6 @@ public class JniPaymentApp extends PaymentApp {
     }
 
     @Override
-    public boolean isUserGestureRequiredToSkipUi() {
-        return JniPaymentAppJni.get().isUserGestureRequiredToSkipUi(mNativeObject);
-    }
-
-    @Override
     public void invokePaymentApp(String id, String merchantName, String origin, String iframeOrigin,
             @Nullable byte[][] certificateChain, Map<String, PaymentMethodData> methodDataMap,
             PaymentItem total, List<PaymentItem> displayItems,
@@ -172,22 +167,6 @@ public class JniPaymentApp extends PaymentApp {
     public void abortPaymentApp(AbortCallback callback) {
         mAbortCallback = callback;
         JniPaymentAppJni.get().abortPaymentApp(mNativeObject, this);
-    }
-
-    @Override
-    public boolean isReadyForMinimalUI() {
-        return JniPaymentAppJni.get().isReadyForMinimalUI(mNativeObject);
-    }
-
-    @Override
-    @Nullable
-    public String accountBalance() {
-        return JniPaymentAppJni.get().accountBalance(mNativeObject);
-    }
-
-    @Override
-    public void disableShowingOwnUI() {
-        JniPaymentAppJni.get().disableShowingOwnUI(mNativeObject);
     }
 
     @Override
@@ -250,15 +229,11 @@ public class JniPaymentApp extends PaymentApp {
         String getCountryCode(long nativeJniPaymentApp);
         boolean canMakePayment(long nativeJniPaymentApp);
         boolean canPreselect(long nativeJniPaymentApp);
-        boolean isUserGestureRequiredToSkipUi(long nativeJniPaymentApp);
         void invokePaymentApp(long nativeJniPaymentApp, JniPaymentApp callback);
         void updateWith(long nativeJniPaymentApp, ByteBuffer responseByteBuffer);
         void onPaymentDetailsNotUpdated(long nativeJniPaymentApp);
         boolean isWaitingForPaymentDetailsUpdate(long nativeJniPaymentApp);
         void abortPaymentApp(long nativeJniPaymentApp, JniPaymentApp callback);
-        boolean isReadyForMinimalUI(long nativeJniPaymentApp);
-        String accountBalance(long nativeJniPaymentApp);
-        void disableShowingOwnUI(long nativeJniPaymentApp);
         String getApplicationIdentifierToHide(long nativeJniPaymentApp);
         String[] getApplicationIdentifiersThatHideThisApp(long nativeJniPaymentApp);
         long getUkmSourceId(long nativeJniPaymentApp);

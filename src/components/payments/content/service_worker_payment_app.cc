@@ -12,13 +12,16 @@
 #include "base/callback_helpers.h"
 #include "base/containers/contains.h"
 #include "base/feature_list.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/stl_util.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/threading/thread_task_runner_handle.h"
 #include "components/payments/content/payment_event_response_util.h"
 #include "components/payments/content/payment_handler_host.h"
 #include "components/payments/content/payment_request_converter.h"
 #include "components/payments/core/features.h"
 #include "components/payments/core/method_strings.h"
+#include "components/payments/core/pre_purchase_query.h"
 #include "content/public/browser/payment_app_provider.h"
 #include "content/public/browser/payment_app_provider_util.h"
 #include "content/public/browser/web_contents.h"
@@ -137,6 +140,8 @@ void ServiceWorkerPaymentApp::ValidateCanMakePayment(
   if (!payment_app_provider)
     return;
 
+  base::UmaHistogramEnumeration("PaymentRequest.PrePurchaseQuery",
+                                PrePurchaseQuery::kServiceWorkerEvent);
   payment_app_provider->CanMakePayment(
       stored_payment_app_info_->registration_id,
       url::Origin::Create(stored_payment_app_info_->scope),
@@ -170,8 +175,6 @@ ServiceWorkerPaymentApp::CreateCanMakePaymentEventData() {
 
   event_data->top_origin = top_origin_;
   event_data->payment_request_origin = frame_origin_;
-  if (base::FeatureList::IsEnabled(::features::kWebPaymentsMinimalUI))
-    event_data->currency = spec_->details().total->amount->currency;
 
   DCHECK(spec_->details().modifiers);
   for (const auto& modifier : *spec_->details().modifiers) {
@@ -206,9 +209,8 @@ void ServiceWorkerPaymentApp::OnCanMakePaymentEventResponded(
   // |can_make_payment| is true as long as there is a matching payment handler.
   can_make_payment_result_ = true;
   has_enrolled_instrument_result_ = response->can_make_payment;
-  is_ready_for_minimal_ui_ = response->ready_for_minimal_ui;
-  if (response->account_balance)
-    account_balance_ = *response->account_balance;
+  base::UmaHistogramBoolean("PaymentRequest.EventResponse.CanMakePayment",
+                            response->can_make_payment);
   base::ThreadTaskRunnerHandle::Get()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), this, can_make_payment_result_));
@@ -452,6 +454,9 @@ bool ServiceWorkerPaymentApp::IsValidForModifier(
   if (method != methods::kBasicCard)
     return true;
 
+  if (!base::FeatureList::IsEnabled(::features::kPaymentRequestBasicCard))
+    return false;
+
   // Checking the capabilities of this app against the modifier.
   // Return true if card networks are not specified in the  modifier.
   if (!supported_networks_specified)
@@ -514,18 +519,6 @@ ServiceWorkerPaymentApp::GetApplicationIdentifiersThatHideThisApp() const {
   return result;
 }
 
-bool ServiceWorkerPaymentApp::IsReadyForMinimalUI() const {
-  return is_ready_for_minimal_ui_;
-}
-
-std::string ServiceWorkerPaymentApp::GetAccountBalance() const {
-  return account_balance_;
-}
-
-void ServiceWorkerPaymentApp::DisableShowingOwnUI() {
-  can_show_own_ui_ = false;
-}
-
 bool ServiceWorkerPaymentApp::HandlesShippingAddress() const {
   if (!spec_ || !spec_->request_shipping())
     return false;
@@ -581,7 +574,7 @@ ukm::SourceId ServiceWorkerPaymentApp::UkmSourceId() {
     // PaymentRequest::OnPaymentHandlerOpenWindowCalled function.
     ukm_source_id_ =
         content::PaymentAppProviderUtil::GetSourceIdForPaymentAppFromScope(
-            sw_scope.GetOrigin());
+            sw_scope.DeprecatedGetOriginAsURL());
   }
   return ukm_source_id_;
 }

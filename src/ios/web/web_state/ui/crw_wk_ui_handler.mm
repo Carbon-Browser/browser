@@ -5,13 +5,13 @@
 #import "ios/web/web_state/ui/crw_wk_ui_handler.h"
 
 #include "base/logging.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/strings/sys_string_conversions.h"
 #import "ios/web/navigation/wk_navigation_action_util.h"
 #import "ios/web/navigation/wk_navigation_util.h"
 #import "ios/web/public/ui/context_menu_params.h"
 #import "ios/web/public/ui/java_script_dialog_type.h"
 #import "ios/web/public/web_client.h"
-#import "ios/web/web_state/ui/crw_legacy_context_menu_controller.h"
 #import "ios/web/web_state/ui/crw_wk_ui_handler_delegate.h"
 #import "ios/web/web_state/user_interaction_state.h"
 #import "ios/web/web_state/web_state_impl.h"
@@ -23,6 +23,23 @@
 #if !defined(__has_feature) || !__has_feature(objc_arc)
 #error "This file requires ARC support."
 #endif
+
+namespace {
+
+// Histogram name that logs permission requests.
+const char kPermissionRequestsHistogram[] = "IOS.Permission.Requests";
+
+// Values for UMA permission histograms. These values are based on
+// WKMediaCaptureType and persisted to logs. Entries should not be renumbered
+// and numeric values should never be reused.
+enum class PermissionRequest {
+  RequestCamera = 0,
+  RequestMicrophone = 1,
+  RequestCameraAndMicrophone = 2,
+  kMaxValue = RequestCameraAndMicrophone,
+};
+
+}  // namespace
 
 @interface CRWWKUIHandler () {
   // Backs up property with the same name.
@@ -58,6 +75,31 @@
 }
 
 #pragma mark - WKUIDelegate
+
+- (void)webView:(WKWebView*)webView
+    requestMediaCapturePermissionForOrigin:(WKSecurityOrigin*)origin
+                          initiatedByFrame:(WKFrameInfo*)frame
+                                      type:(WKMediaCaptureType)type
+                           decisionHandler:
+                               (void (^)(WKPermissionDecision decision))
+                                   decisionHandler API_AVAILABLE(ios(15.0)) {
+  PermissionRequest request;
+  switch (type) {
+    case WKMediaCaptureTypeCamera:
+      request = PermissionRequest::RequestCamera;
+      break;
+    case WKMediaCaptureTypeMicrophone:
+      request = PermissionRequest::RequestMicrophone;
+      break;
+    case WKMediaCaptureTypeCameraAndMicrophone:
+      request = PermissionRequest::RequestCameraAndMicrophone;
+      break;
+  }
+  base::UmaHistogramEnumeration(kPermissionRequestsHistogram, request);
+  web::GetWebClient()->WillDisplayMediaCapturePermissionPrompt(
+      self.webStateImpl);
+  decisionHandler(WKPermissionDecisionPrompt);
+}
 
 - (WKWebView*)webView:(WKWebView*)webView
     createWebViewWithConfiguration:(WKWebViewConfiguration*)configuration
@@ -110,8 +152,22 @@
 }
 
 - (void)webViewDidClose:(WKWebView*)webView {
-  if (self.webStateImpl && self.webStateImpl->HasOpener())
-    self.webStateImpl->CloseWebState();
+  // This is triggered by a JavaScript |close()| method call, only if the tab
+  // was opened using |window.open|. WebKit is checking that this is the case,
+  // so we can close the tab unconditionally here.
+  if (self.webStateImpl) {
+    __weak __typeof(self) weakSelf = self;
+    // -webViewDidClose will typically trigger another webState to activate,
+    // which may in turn also close. To prevent reentrant modificationre in
+    // WebStateList, trigger a PostTask here.
+    base::SequencedTaskRunnerHandle::Get()->PostTask(
+        FROM_HERE, base::BindOnce(^{
+          web::WebStateImpl* webStateImpl = weakSelf.webStateImpl;
+          if (webStateImpl) {
+            webStateImpl->CloseWebState();
+          }
+        }));
+  }
 }
 
 - (void)webView:(WKWebView*)webView
@@ -168,21 +224,11 @@
                        }];
 }
 
-#if !defined(__IPHONE_13_0) || __IPHONE_OS_VERSION_MIN_REQUIRED < __IPHONE_13_0
-
-// TODO(crbug.com/1131852): Preview depracted is iOS13+
-- (BOOL)webView:(WKWebView*)webView
-    shouldPreviewElement:(WKPreviewElementInfo*)elementInfo {
-  return NO;
-}
-
-#endif  // End of >iOS13 deprecated block.
-
 - (void)webView:(WKWebView*)webView
     contextMenuConfigurationForElement:(WKContextMenuElementInfo*)elementInfo
                      completionHandler:
                          (void (^)(UIContextMenuConfiguration* _Nullable))
-                             completionHandler API_AVAILABLE(ios(13.0)) {
+                             completionHandler {
   web::WebStateDelegate* delegate = self.webStateImpl->GetDelegate();
   if (!delegate) {
     completionHandler(nil);
@@ -197,41 +243,15 @@
 }
 
 - (void)webView:(WKWebView*)webView
-    contextMenuDidEndForElement:(WKContextMenuElementInfo*)elementInfo
-    API_AVAILABLE(ios(13.0)) {
-  web::WebStateDelegate* delegate = self.webStateImpl->GetDelegate();
-  if (!delegate) {
-    return;
-  }
-
-  delegate->ContextMenuDidEnd(self.webStateImpl,
-                              net::GURLWithNSURL(elementInfo.linkURL));
-}
-
-- (void)webView:(WKWebView*)webView
-     contextMenuForElement:(nonnull WKContextMenuElementInfo*)elementInfo
+     contextMenuForElement:(WKContextMenuElementInfo*)elementInfo
     willCommitWithAnimator:
-        (nonnull id<UIContextMenuInteractionCommitAnimating>)animator
-    API_AVAILABLE(ios(13.0)) {
+        (id<UIContextMenuInteractionCommitAnimating>)animator {
   web::WebStateDelegate* delegate = self.webStateImpl->GetDelegate();
   if (!delegate) {
     return;
   }
 
-  delegate->ContextMenuWillCommitWithAnimator(
-      self.webStateImpl, net::GURLWithNSURL(elementInfo.linkURL), animator);
-}
-
-- (void)webView:(WKWebView*)webView
-    contextMenuWillPresentForElement:(WKContextMenuElementInfo*)elementInfo
-    API_AVAILABLE(ios(13.0)) {
-  web::WebStateDelegate* delegate = self.webStateImpl->GetDelegate();
-  if (!delegate) {
-    return;
-  }
-
-  delegate->ContextMenuWillPresent(self.webStateImpl,
-                                   net::GURLWithNSURL(elementInfo.linkURL));
+  delegate->ContextMenuWillCommitWithAnimator(self.webStateImpl, animator);
 }
 
 #pragma mark - Helper
@@ -253,8 +273,8 @@
     return;
   }
 
-  if (self.webStateImpl->GetVisibleURL().GetOrigin() !=
-          requestURL.GetOrigin() &&
+  if (self.webStateImpl->GetVisibleURL().DeprecatedGetOriginAsURL() !=
+          requestURL.DeprecatedGetOriginAsURL() &&
       frame.mainFrame) {
     // Dialog was requested by web page's main frame, but visible URL has
     // different origin. This could happen if the user has started a new

@@ -10,9 +10,11 @@
 
 #include "base/cancelable_callback.h"
 #include "base/memory/weak_ptr.h"
+#include "base/scoped_observation.h"
 #include "chrome/browser/ash/authpolicy/kerberos_files_handler.h"
-#include "chromeos/dbus/authpolicy/active_directory_info.pb.h"
-#include "chromeos/network/network_state_handler_observer.h"
+#include "chromeos/ash/components/dbus/authpolicy/active_directory_info.pb.h"
+#include "chromeos/ash/components/network/network_state_handler.h"
+#include "chromeos/ash/components/network/network_state_handler_observer.h"
 #include "components/account_id/account_id.h"
 #include "components/keyed_service/content/browser_context_keyed_service_factory.h"
 #include "components/keyed_service/core/keyed_service.h"
@@ -29,12 +31,6 @@ template <typename T>
 struct DefaultSingletonTraits;
 }  // namespace base
 
-// TODO(https://crbug.com/1164001): remove when
-// ExistingUserControllerActiveDirectoryTest is moved to ash.
-namespace chromeos {
-class ExistingUserControllerActiveDirectoryTest;
-}  // namespace chromeos
-
 namespace dbus {
 class Signal;
 }
@@ -48,6 +44,11 @@ class AuthPolicyCredentialsManager
       public chromeos::NetworkStateHandlerObserver {
  public:
   explicit AuthPolicyCredentialsManager(Profile* profile);
+
+  AuthPolicyCredentialsManager(const AuthPolicyCredentialsManager&) = delete;
+  AuthPolicyCredentialsManager& operator=(const AuthPolicyCredentialsManager&) =
+      delete;
+
   ~AuthPolicyCredentialsManager() override;
 
   // KeyedService overrides.
@@ -115,6 +116,10 @@ class AuthPolicyCredentialsManager
   bool is_observing_network_ = false;
   KerberosFilesHandler kerberos_files_handler_;
 
+  base::ScopedObservation<chromeos::NetworkStateHandler,
+                          chromeos::NetworkStateHandlerObserver>
+      network_state_handler_observer_{this};
+
   // Stores message ids of shown notifications. Each notification is shown at
   // most once.
   std::set<int> shown_notifications_;
@@ -122,7 +127,6 @@ class AuthPolicyCredentialsManager
   base::CancelableOnceClosure scheduled_get_user_status_call_;
 
   base::WeakPtrFactory<AuthPolicyCredentialsManager> weak_factory_{this};
-  DISALLOW_COPY_AND_ASSIGN(AuthPolicyCredentialsManager);
 };
 
 // Singleton that owns all AuthPolicyCredentialsManagers and associates them
@@ -132,11 +136,16 @@ class AuthPolicyCredentialsManagerFactory
  public:
   static AuthPolicyCredentialsManagerFactory* GetInstance();
 
+  AuthPolicyCredentialsManagerFactory(
+      const AuthPolicyCredentialsManagerFactory&) = delete;
+  AuthPolicyCredentialsManagerFactory& operator=(
+      const AuthPolicyCredentialsManagerFactory&) = delete;
+
  private:
   friend struct base::DefaultSingletonTraits<
       AuthPolicyCredentialsManagerFactory>;
   friend class AuthPolicyCredentialsManagerTest;
-  friend class ::chromeos::ExistingUserControllerActiveDirectoryTest;
+  friend class ExistingUserControllerActiveDirectoryTest;
 
   AuthPolicyCredentialsManagerFactory();
   ~AuthPolicyCredentialsManagerFactory() override;
@@ -147,8 +156,6 @@ class AuthPolicyCredentialsManagerFactory
   // valid AuthPolicyCredentialsManager.
   KeyedService* BuildServiceInstanceFor(
       content::BrowserContext* context) const override;
-
-  DISALLOW_COPY_AND_ASSIGN(AuthPolicyCredentialsManagerFactory);
 };
 
 }  // namespace ash

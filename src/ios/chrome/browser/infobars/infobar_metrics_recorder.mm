@@ -79,6 +79,19 @@ const char kInfobarTranslateModalEventHistogram[] =
 const char kInfobarTranslateBadgeTappedHistogram[] =
     "Mobile.Messages.Badge.Tapped.InfobarTypeTranslate";
 
+// Histogram names for InfobarTypeSaveAutofillAddressProfile.
+// Banner.
+const char kInfobarAutofillAddressBannerEventHistogram[] =
+    "Mobile.Messages.Banner.Event.InfobarTypeAutofillAddressProfile";
+const char kInfobarAutofillAddressBannerDismissTypeHistogram[] =
+    "Mobile.Messages.Banner.Dismiss.InfobarTypeAutofillAddressProfile";
+// Modal.
+const char kInfobarAutofillAddressModalEventHistogram[] =
+    "Mobile.Messages.Modal.Event.InfobarTypeAutofillAddressProfile";
+// Badge.
+const char kInfobarAutofillAddressBadgeTappedHistogram[] =
+    "Mobile.Messages.Badge.Tapped.InfobarTypeAutofillAddressProfile";
+
 // Histogram names for InfobarTypeReadingList.
 // Banner.
 const char kInfobarReadingListBannerEventHistogram[] =
@@ -91,6 +104,19 @@ const char kInfobarReadingListModalEventHistogram[] =
 // Badge.
 const char kInfobarReadingListBadgeTappedHistogram[] =
     "Mobile.Messages.Badge.Tapped.InfobarTypeReadingList";
+
+// Histogram names for InfobarTypePermissions.
+// Banner.
+const char kInfobarPermissionsBannerEventHistogram[] =
+    "Mobile.Messages.Banner.Event.InfobarTypePermissions";
+const char kInfobarPermissionsBannerDismissTypeHistogram[] =
+    "Mobile.Messages.Banner.Dismiss.InfobarTypePermissions";
+// Modal.
+const char kInfobarPermissionsModalEventHistogram[] =
+    "Mobile.Messages.Modal.Event.InfobarTypePermissions";
+// Badge.
+const char kInfobarPermissionsBadgeTappedHistogram[] =
+    "Mobile.Messages.Badge.Tapped.InfobarTypePermissions";
 
 }  // namespace
 
@@ -137,10 +163,15 @@ const char kInfobarReadingListBadgeTappedHistogram[] =
       UMA_HISTOGRAM_ENUMERATION(kInfobarTranslateBannerEventHistogram, event);
       break;
     case InfobarType::kInfobarTypeSaveAutofillAddressProfile:
-      // TODO(crbug.com/1167062): Add metrics.
+      UMA_HISTOGRAM_ENUMERATION(kInfobarAutofillAddressBannerEventHistogram,
+                                event);
       break;
     case InfobarType::kInfobarTypeAddToReadingList:
       base::UmaHistogramEnumeration(kInfobarReadingListBannerEventHistogram,
+                                    event);
+      break;
+    case InfobarType::kInfobarTypePermissions:
+      base::UmaHistogramEnumeration(kInfobarPermissionsBannerEventHistogram,
                                     event);
       break;
   }
@@ -169,17 +200,22 @@ const char kInfobarReadingListBadgeTappedHistogram[] =
                                 dismissType);
       break;
     case InfobarType::kInfobarTypeSaveAutofillAddressProfile:
-      // TODO(crbug.com/1167062): Add metrics.
+      UMA_HISTOGRAM_ENUMERATION(
+          kInfobarAutofillAddressBannerDismissTypeHistogram, dismissType);
       break;
     case InfobarType::kInfobarTypeAddToReadingList:
       base::UmaHistogramEnumeration(
           kInfobarReadingListBannerDismissTypeHistogram, dismissType);
       break;
+    case InfobarType::kInfobarTypePermissions:
+      base::UmaHistogramEnumeration(
+          kInfobarPermissionsBannerDismissTypeHistogram, dismissType);
+      break;
   }
 }
 
 - (void)recordBannerOnScreenDuration:(double)duration {
-  base::TimeDelta timeDelta = base::TimeDelta::FromSecondsD(duration);
+  base::TimeDelta timeDelta = base::Seconds(duration);
   UMA_HISTOGRAM_MEDIUM_TIMES("Mobile.Messages.Banner.OnScreenTime", timeDelta);
 }
 
@@ -202,9 +238,15 @@ const char kInfobarReadingListBadgeTappedHistogram[] =
       UMA_HISTOGRAM_ENUMERATION(kInfobarTranslateModalEventHistogram, event);
       break;
     case InfobarType::kInfobarTypeSaveAutofillAddressProfile:
+      UMA_HISTOGRAM_ENUMERATION(kInfobarAutofillAddressModalEventHistogram,
+                                event);
       break;
     case InfobarType::kInfobarTypeAddToReadingList:
       base::UmaHistogramEnumeration(kInfobarReadingListModalEventHistogram,
+                                    event);
+      break;
+    case InfobarType::kInfobarTypePermissions:
+      base::UmaHistogramEnumeration(kInfobarPermissionsModalEventHistogram,
                                     event);
       break;
   }
@@ -230,9 +272,15 @@ const char kInfobarReadingListBadgeTappedHistogram[] =
       UMA_HISTOGRAM_ENUMERATION(kInfobarTranslateBadgeTappedHistogram, state);
       break;
     case InfobarType::kInfobarTypeSaveAutofillAddressProfile:
+      UMA_HISTOGRAM_ENUMERATION(kInfobarAutofillAddressBadgeTappedHistogram,
+                                state);
       break;
     case InfobarType::kInfobarTypeAddToReadingList:
       base::UmaHistogramEnumeration(kInfobarReadingListBadgeTappedHistogram,
+                                    state);
+      break;
+    case InfobarType::kInfobarTypePermissions:
+      base::UmaHistogramEnumeration(kInfobarPermissionsBadgeTappedHistogram,
                                     state);
       break;
   }

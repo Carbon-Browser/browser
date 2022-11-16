@@ -20,6 +20,7 @@
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chrome/test/base/testing_profile_manager.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "components/prefs/testing_pref_service.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/test_utils.h"
@@ -41,8 +42,12 @@ class FakeNearbyShareSettingsObserver
     : public nearby_share::mojom::NearbyShareSettingsObserver {
  public:
   void OnEnabledChanged(bool enabled) override { this->enabled = enabled; }
-  void OnFastInitiationNotificationEnabledChanged(bool enabled) override {
-    this->fast_initiation_notification_enabled = enabled;
+  void OnFastInitiationNotificationStateChanged(
+      nearby_share::mojom::FastInitiationNotificationState state) override {
+    this->fast_initiation_notification_state = state;
+  }
+  void OnIsFastInitiationHardwareSupportedChanged(bool is_supported) override {
+    this->is_fast_initiation_notification_hardware_supported = is_supported;
   }
   void OnDeviceNameChanged(const std::string& device_name) override {
     this->device_name = device_name;
@@ -63,7 +68,10 @@ class FakeNearbyShareSettingsObserver
   }
 
   bool enabled = false;
-  bool fast_initiation_notification_enabled = true;
+  nearby_share::mojom::FastInitiationNotificationState
+      fast_initiation_notification_state =
+          nearby_share::mojom::FastInitiationNotificationState::kEnabled;
+  bool is_fast_initiation_notification_hardware_supported = false;
   bool is_onboarding_complete = false;
   std::string device_name = "uncalled";
   nearby_share::mojom::DataUsage data_usage =
@@ -78,7 +86,10 @@ class FakeNearbyShareSettingsObserver
 class NearbyShareSettingsTest : public ::testing::Test {
  public:
   NearbyShareSettingsTest() : local_device_data_manager_(kDefaultDeviceName) {
-    scoped_feature_list_.InitAndEnableFeature(features::kNearbySharing);
+    scoped_feature_list_.InitWithFeatures(
+        /*enabled_features=*/{features::kNearbySharing,
+                              features::kNearbySharingBackgroundScanning},
+        /*disabled_features=*/{});
 
     RegisterNearbySharingPrefs(pref_service_.registry());
     nearby_share_settings_ = std::make_unique<NearbyShareSettings>(
@@ -117,6 +128,7 @@ class NearbyShareSettingsTest : public ::testing::Test {
 
 TEST_F(NearbyShareSettingsTest, GetAndSetEnabled) {
   EXPECT_EQ(false, observer_.enabled);
+  settings()->SetIsOnboardingComplete(true);
   settings()->SetEnabled(true);
   EXPECT_EQ(true, settings()->GetEnabled());
   FlushMojoMessages();
@@ -144,17 +156,76 @@ TEST_F(NearbyShareSettingsTest, GetAndSetEnabled) {
   EXPECT_EQ(true, observer_.enabled);
 }
 
-TEST_F(NearbyShareSettingsTest, GetAndSetFastInitiationNotificationEnabled) {
+TEST_F(NearbyShareSettingsTest, GetAndSetFastInitiationNotificationState) {
   // Fast init notifications are enabled by default.
-  EXPECT_TRUE(observer_.fast_initiation_notification_enabled);
-  settings()->SetFastInitiationNotificationEnabled(false);
-  EXPECT_FALSE(settings()->GetFastInitiationNotificationEnabled());
+  EXPECT_EQ(nearby_share::mojom::FastInitiationNotificationState::kEnabled,
+            observer_.fast_initiation_notification_state);
+  settings()->SetFastInitiationNotificationState(
+      nearby_share::mojom::FastInitiationNotificationState::kDisabledByUser);
+  EXPECT_EQ(
+      nearby_share::mojom::FastInitiationNotificationState::kDisabledByUser,
+      settings()->GetFastInitiationNotificationState());
   FlushMojoMessages();
-  EXPECT_FALSE(observer_.fast_initiation_notification_enabled);
+  EXPECT_EQ(
+      nearby_share::mojom::FastInitiationNotificationState::kDisabledByUser,
+      observer_.fast_initiation_notification_state);
 
-  bool enabled = true;
-  settings_waiter()->GetFastInitiationNotificationEnabled(&enabled);
-  EXPECT_FALSE(enabled);
+  nearby_share::mojom::FastInitiationNotificationState state =
+      nearby_share::mojom::FastInitiationNotificationState::kEnabled;
+  settings_waiter()->GetFastInitiationNotificationState(&state);
+  EXPECT_EQ(
+      nearby_share::mojom::FastInitiationNotificationState::kDisabledByUser,
+      state);
+}
+
+TEST_F(NearbyShareSettingsTest,
+       ParentFeatureChangesFastInitiationNotificationState) {
+  // Fast init notifications are enabled by default.
+  EXPECT_EQ(nearby_share::mojom::FastInitiationNotificationState::kEnabled,
+            observer_.fast_initiation_notification_state);
+  settings()->SetIsOnboardingComplete(true);
+  settings()->SetEnabled(true);
+  FlushMojoMessages();
+
+  // Simulate toggling the parent feature off.
+  settings()->SetEnabled(false);
+  FlushMojoMessages();
+  EXPECT_FALSE(settings()->GetEnabled());
+  EXPECT_EQ(
+      nearby_share::mojom::FastInitiationNotificationState::kDisabledByFeature,
+      observer_.fast_initiation_notification_state);
+
+  // Simulate toggling the parent feature on.
+  settings()->SetEnabled(true);
+  FlushMojoMessages();
+  EXPECT_TRUE(settings()->GetEnabled());
+  EXPECT_EQ(nearby_share::mojom::FastInitiationNotificationState::kEnabled,
+            observer_.fast_initiation_notification_state);
+}
+
+TEST_F(NearbyShareSettingsTest,
+       ParentFeatureChangesFastInitiationNotificationDisabedByUser) {
+  // Fast init notifications are enabled by default.
+  EXPECT_EQ(nearby_share::mojom::FastInitiationNotificationState::kEnabled,
+            observer_.fast_initiation_notification_state);
+
+  // Set explicitly disabled by user.
+  settings()->SetFastInitiationNotificationState(
+      FastInitiationNotificationState::kDisabledByUser);
+  FlushMojoMessages();
+  EXPECT_EQ(
+      nearby_share::mojom::FastInitiationNotificationState::kDisabledByUser,
+      observer_.fast_initiation_notification_state);
+
+  // Simulate toggling parent feature on.
+  settings()->SetIsOnboardingComplete(true);
+  settings()->SetEnabled(true);
+  FlushMojoMessages();
+
+  // Disabled by user should persist if parent feature was turned on.
+  EXPECT_EQ(
+      nearby_share::mojom::FastInitiationNotificationState::kDisabledByUser,
+      observer_.fast_initiation_notification_state);
 }
 
 TEST_F(NearbyShareSettingsTest, GetAndSetIsOnboardingComplete) {
@@ -167,6 +238,18 @@ TEST_F(NearbyShareSettingsTest, GetAndSetIsOnboardingComplete) {
   bool is_complete = false;
   settings_waiter()->IsOnboardingComplete(&is_complete);
   EXPECT_TRUE(is_complete);
+}
+
+TEST_F(NearbyShareSettingsTest, GetAndSetIsFastInitiationHardwareSupported) {
+  EXPECT_FALSE(observer_.is_fast_initiation_notification_hardware_supported);
+  settings()->SetIsFastInitiationHardwareSupported(true);
+
+  FlushMojoMessages();
+  EXPECT_TRUE(observer_.is_fast_initiation_notification_hardware_supported);
+
+  bool is_supported = false;
+  settings_waiter()->GetIsFastInitiationHardwareSupported(&is_supported);
+  EXPECT_TRUE(is_supported);
 }
 
 TEST_F(NearbyShareSettingsTest, ValidateDeviceName) {

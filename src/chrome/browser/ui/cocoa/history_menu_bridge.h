@@ -5,13 +5,14 @@
 #ifndef CHROME_BROWSER_UI_COCOA_HISTORY_MENU_BRIDGE_H_
 #define CHROME_BROWSER_UI_COCOA_HISTORY_MENU_BRIDGE_H_
 
+#include "base/memory/raw_ptr.h"
+
 #import <Cocoa/Cocoa.h>
 #include <map>
 #include <memory>
 #include <vector>
 
 #include "base/mac/scoped_nsobject.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/scoped_observation.h"
 #include "base/task/cancelable_task_tracker.h"
@@ -124,6 +125,10 @@ class HistoryMenuBridge : public sessions::TabRestoreServiceObserver,
   };
 
   explicit HistoryMenuBridge(Profile* profile);
+
+  HistoryMenuBridge(const HistoryMenuBridge&) = delete;
+  HistoryMenuBridge& operator=(const HistoryMenuBridge&) = delete;
+
   ~HistoryMenuBridge() override;
 
   // TabRestoreServiceObserver:
@@ -233,7 +238,6 @@ class HistoryMenuBridge : public sessions::TabRestoreServiceObserver,
   void OnURLVisited(history::HistoryService* history_service,
                     ui::PageTransition transition,
                     const history::URLRow& row,
-                    const history::RedirectList& redirects,
                     base::Time visit_time) override;
   void OnURLsModified(history::HistoryService* history_service,
                       const history::URLRows& changed_urls) override;
@@ -251,9 +255,9 @@ class HistoryMenuBridge : public sessions::TabRestoreServiceObserver,
 
   base::scoped_nsobject<HistoryMenuCocoaController> controller_;  // strong
 
-  Profile* const profile_;                                      // weak
-  history::HistoryService* history_service_ = nullptr;          // weak
-  sessions::TabRestoreService* tab_restore_service_ = nullptr;  // weak
+  const raw_ptr<Profile> profile_;                                      // weak
+  raw_ptr<history::HistoryService> history_service_ = nullptr;          // weak
+  raw_ptr<sessions::TabRestoreService> tab_restore_service_ = nullptr;  // weak
 
   base::CancelableTaskTracker cancelable_task_tracker_;
 
@@ -280,8 +284,6 @@ class HistoryMenuBridge : public sessions::TabRestoreServiceObserver,
   base::ScopedObservation<sessions::TabRestoreService,
                           sessions::TabRestoreServiceObserver>
       tab_restore_service_observation_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(HistoryMenuBridge);
 };
 
 #endif  // CHROME_BROWSER_UI_COCOA_HISTORY_MENU_BRIDGE_H_

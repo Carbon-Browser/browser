@@ -17,62 +17,40 @@
 namespace sandbox {
 
 class AppContainer;
-class PolicyInfo;
 
-class TargetPolicy {
+// Windows subsystems that can have specific rules.
+// Note: The process subsystem  (kProcess) does not evaluate the request
+// exactly like the CreateProcess API does. See the comment at the top of
+// process_thread_dispatcher.cc for more details.
+enum class SubSystem {
+  kFiles,           // Creation and opening of files and pipes.
+  kNamedPipes,      // Creation of named pipes.
+  kProcess,         // Creation of child processes.
+  kWin32kLockdown,  // Win32K Lockdown related policy.
+  kSignedBinary,    // Signed binary policy.
+  kSocket           // Socket brokering policy.
+};
+
+// Allowable semantics when a rule is matched.
+enum class Semantics {
+  kFilesAllowAny,       // Allows open or create for any kind of access that
+                        // the file system supports.
+  kFilesAllowReadonly,  // Allows open or create with read access only.
+  kFilesAllowQuery,     // Allows access to query the attributes of a file.
+  kNamedPipesAllowAny,  // Allows creation of a named pipe.
+  kFakeGdiInit,         // Fakes user32 and gdi32 initialization. This can
+                        // be used to allow the DLLs to load and initialize
+                        // even if the process cannot access that subsystem.
+  kSignedAllowLoad,     // Allows loading the module when CIG is enabled.
+  kSocketAllowBroker    // Allows brokering of sockets.
+};
+
+// We need [[clang::lto_visibility_public]] because instances of this class are
+// passed across module boundaries. This means different modules must have
+// compatible definitions of the class even when LTO is enabled.
+class [[clang::lto_visibility_public]] TargetPolicy {
  public:
-  // Windows subsystems that can have specific rules.
-  // Note: The process subsystem(SUBSYS_PROCESS) does not evaluate the request
-  // exactly like the CreateProcess API does. See the comment at the top of
-  // process_thread_dispatcher.cc for more details.
-  enum SubSystem {
-    SUBSYS_FILES,            // Creation and opening of files and pipes.
-    SUBSYS_NAMED_PIPES,      // Creation of named pipes.
-    SUBSYS_PROCESS,          // Creation of child processes.
-    SUBSYS_REGISTRY,         // Creation and opening of registry keys.
-    SUBSYS_SYNC,             // Creation of named sync objects.
-    SUBSYS_WIN32K_LOCKDOWN,  // Win32K Lockdown related policy.
-    SUBSYS_SIGNED_BINARY,    // Signed binary policy.
-    SUBSYS_SOCKET            // Socket brokering policy.
-  };
-
-  // Allowable semantics when a rule is matched.
-  enum Semantics {
-    FILES_ALLOW_ANY,       // Allows open or create for any kind of access that
-                           // the file system supports.
-    FILES_ALLOW_READONLY,  // Allows open or create with read access only.
-    FILES_ALLOW_QUERY,     // Allows access to query the attributes of a file.
-    FILES_ALLOW_DIR_ANY,   // Allows open or create with directory semantics
-                           // only.
-    NAMEDPIPES_ALLOW_ANY,  // Allows creation of a named pipe.
-    PROCESS_MIN_EXEC,      // Allows to create a process with minimal rights
-                           // over the resulting process and thread handles.
-                           // No other parameters besides the command line are
-                           // passed to the child process.
-    PROCESS_ALL_EXEC,      // Allows the creation of a process and return full
-                           // access on the returned handles.
-                           // This flag can be used only when the main token of
-                           // the sandboxed application is at least INTERACTIVE.
-    EVENTS_ALLOW_ANY,      // Allows the creation of an event with full access.
-    EVENTS_ALLOW_READONLY,  // Allows opening an even with synchronize access.
-    REG_ALLOW_READONLY,     // Allows readonly access to a registry key.
-    REG_ALLOW_ANY,          // Allows read and write access to a registry key.
-    FAKE_USER_GDI_INIT,     // Fakes user32 and gdi32 initialization. This can
-                            // be used to allow the DLLs to load and initialize
-                            // even if the process cannot access that subsystem.
-    SIGNED_ALLOW_LOAD,      // Allows loading the module when CIG is enabled.
-    SOCKET_ALLOW_BROKER     // Allows brokering of sockets.
-  };
-
-  // Increments the reference count of this object. The reference count must
-  // be incremented if this interface is given to another component.
-  virtual void AddRef() = 0;
-
-  // Decrements the reference count of this object. When the reference count
-  // is zero the object is automatically destroyed.
-  // Indicates that the caller is done with this interface. After calling
-  // release no other method should be called.
-  virtual void Release() = 0;
+  virtual ~TargetPolicy() {}
 
   // Sets the security level for the target process' two tokens.
   // This setting is permanent and cannot be changed once the target process is
@@ -134,7 +112,7 @@ class TargetPolicy {
   // length in:
   //   http://msdn2.microsoft.com/en-us/library/ms684152.aspx
   //
-  // Note: the recommended level is JOB_RESTRICTED or JOB_LOCKDOWN.
+  // Note: the recommended level is JobLevel::kLockdown.
   virtual ResultCode SetJobLevel(JobLevel job_level,
                                  uint32_t ui_exceptions) = 0;
 
@@ -271,11 +249,12 @@ class TargetPolicy {
   // lifetime of the policy object.
   virtual void SetEffectiveToken(HANDLE token) = 0;
 
-  // Returns a snapshot of the policy configuration.
-  virtual std::unique_ptr<PolicyInfo> GetPolicyInfo() = 0;
+  // Allows the launch of the the target process to proceed even if no job can
+  // be created.
+  virtual void SetAllowNoSandboxJob() = 0;
 
- protected:
-  ~TargetPolicy() {}
+  // Returns true if target process launch should proceed if job creation fails.
+  virtual bool GetAllowNoSandboxJob() = 0;
 };
 
 }  // namespace sandbox

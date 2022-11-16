@@ -13,6 +13,7 @@ class GURL;
 class PrefService;
 
 namespace content {
+class BrowserContext;
 class WebContents;
 }
 
@@ -58,6 +59,12 @@ void FilterMediaList(std::vector<DesktopMediaList::Type>& media_types,
                      AllowedScreenCaptureLevel capture_level);
 
 void ShowCaptureTerminatedDialog(content::WebContents* contents);
+
+// TODO(crbug.com/1342069): Use Origin instead of GURL.
+bool IsGetDisplayMediaSetSelectAllScreensAllowed(
+    content::BrowserContext* context,
+    const GURL& url);
+
 }  // namespace capture_policy
 
 #endif  // CHROME_BROWSER_MEDIA_WEBRTC_CAPTURE_POLICY_UTILS_H_

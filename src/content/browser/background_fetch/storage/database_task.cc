@@ -10,6 +10,8 @@
 
 #include "base/bind.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/observer_list.h"
+#include "base/threading/thread_task_runner_handle.h"
 #include "content/browser/background_fetch/background_fetch_data_manager.h"
 #include "content/browser/background_fetch/background_fetch_data_manager_observer.h"
 #include "content/browser/background_fetch/storage/database_helpers.h"
@@ -52,7 +54,7 @@ base::WeakPtr<DatabaseTaskHost> DatabaseTask::GetWeakPtr() {
 }
 
 void DatabaseTask::Finished() {
-  DCHECK_CURRENTLY_ON(ServiceWorkerContext::GetCoreThreadId());
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
   // Post the OnTaskFinished callback to the same thread, to allow the the
   // DatabaseTask to finish execution before deallocating it.
   base::ThreadTaskRunnerHandle::Get()->PostTask(
@@ -185,7 +187,8 @@ BackgroundFetchDataManager* DatabaseTask::data_manager() {
   return host_->data_manager();
 }
 
-storage::QuotaManagerProxy* DatabaseTask::quota_manager_proxy() {
+const scoped_refptr<storage::QuotaManagerProxy>&
+DatabaseTask::quota_manager_proxy() {
   return data_manager()->quota_manager_proxy();
 }
 

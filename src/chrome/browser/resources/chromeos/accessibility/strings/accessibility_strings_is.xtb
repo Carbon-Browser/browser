@@ -30,7 +30,9 @@
 <translation id="1189258430971676908">Æfingasvæði: Fellilistar</translation>
 <translation id="1195238899008218998">Eftirmáli</translation>
 <translation id="1197088940767939838">Appelsínugulur</translation>
+<translation id="1198865190323699001">Snertibendingar</translation>
 <translation id="1201402288615127009">Áfram</translation>
+<translation id="1202112913213080585">hætta við</translation>
 <translation id="1206619573307042055">marquee</translation>
 <translation id="1207086294218137981">Engin næsta 4. stigs fyrirsögn</translation>
 <translation id="1212770441379271564">Eftirfarandi flýtilyklar eru ekki ChromeVox skipanir, en eru samt mjög gagnlegir upp á að fá sem mest út úr Chrome.
@@ -42,6 +44,7 @@ Til að fara áfram á milli flipa skal ýta á Ctrl + dálkalykil.
 Til að opna vafravalmynd Chrome skal ýta á Alt+F.</translation>
 <translation id="1213216066620407844">ChromeVox – gefur Chrome mál</translation>
 <translation id="1225969361094801578">Dökkgráblár</translation>
+<translation id="122928249241119550">fara í síðustu setningu</translation>
 <translation id="1230503547248836149">Upphaf vals</translation>
 <translation id="1236794971743289975">Aftanmálsgrein</translation>
 <translation id="1237797094773582699">Einnig er hægt að strjúka með fjórum fingrum frá hægri til vinstri til að fara yfir á fyrri hluta. Prófaðu það núna!</translation>
@@ -66,8 +69,10 @@ Til að opna vafravalmynd Chrome skal ýta á Alt+F.</translation>
 <translation id="133801305381959373">Enginn næsti breytanlegur textareitur</translation>
 <translation id="1342835525016946179">grein</translation>
 <translation id="1346059596910821859">Ábending</translation>
+<translation id="1354356357730355833">afrita</translation>
 <translation id="135978014023467274">Þú uppfærðir í ChromeVox 63!</translation>
 <translation id="1360699455582016846">Smelltu á atriðið undir leiðarlyklinum <ph name="ROUTING_KEY_NUMBER" /></translation>
+<translation id="1376703628032300005">færa á næsta staf</translation>
 <translation id="1377925789329510816">Þetta er síðasta fyrirsögnin. Ýttu á leitarlykilinn + H til að fara aftur á fyrstu fyrirsögnina eða leitarlykilinn + Shift + H til að fara á aðra fyrirsögnina á þessari síðu.</translation>
 <translation id="138218114945450791">Ljósblár</translation>
 <translation id="1383876407941801731">Leita</translation>
@@ -210,8 +215,10 @@ Til að opna vafravalmynd Chrome skal ýta á Alt+F.</translation>
 <translation id="2435422727584637732">Dodger-blár</translation>
 <translation id="2438712309510062123">Koma með tillögu</translation>
 <translation id="2450814015951372393">Gátreitur</translation>
+<translation id="2450992626945324272">fara í næstu setningu</translation>
 <translation id="2461822463642141190">Núna</translation>
 <translation id="2462626033734746142">Valhnappahópur</translation>
+<translation id="2467741090055146971">afturkalla val</translation>
 <translation id="2471138580042810658">Fyrirsögn 6</translation>
 <translation id="248982282205370495">{COUNT,plural, =1{stjarna}one{# stjarna}other{# stjörnur}}</translation>
 <translation id="2490721194269245365">Brúnbleikur</translation>
@@ -242,6 +249,7 @@ Til að opna vafravalmynd Chrome skal ýta á Alt+F.</translation>
 <translation id="267442004702508783">endurnýja</translation>
 <translation id="2675533876313964202">Ljósgulgrænn</translation>
 <translation id="2684412629217766642">Loka ChromeVox kennslu</translation>
+<translation id="2692503699962701720">Breyta tónhæð við upplestur einingartegunda og sniðins texta</translation>
 <translation id="2697408785920771974">autoinl</translation>
 <translation id="2697786971245905543">Tillaga að textaumritun</translation>
 <translation id="2704429362613743330">{COUNT,plural, =1{opnunarsvigi}one{# opnunarsvigi}other{# opnunarsvigar}}</translation>
@@ -352,6 +360,7 @@ Til að opna vafravalmynd Chrome skal ýta á Alt+F.</translation>
 <translation id="3286372614333682499">skammsnið</translation>
 <translation id="3286390186030710347">Sleði</translation>
 <translation id="3300348286427369683">Stuðningur við sniðinn texta. ChromeVox styður nú reiti með textasniði, þ. á m. skipanir um að fara á annan stað, leiðir bendils fyrir blindraletur, val og fleira.</translation>
+<translation id="3300733168898541351">afturkalla</translation>
 <translation id="3307886118343381874">Fara í lok töflu</translation>
 <translation id="3312997241656799641">Næsti heimsótti tengill</translation>
 <translation id="3313245066383501820">ChromeVox breytingalykillinn</translation>
@@ -372,6 +381,7 @@ Til að opna vafravalmynd Chrome skal ýta á Alt+F.</translation>
 <translation id="3406283310380167331">Sýna eyðublaðalista</translation>
 <translation id="3414400929511680526">Ljósblár</translation>
 <translation id="3418936350470374046">Ekkert hólf fyrir neðan</translation>
+<translation id="3419269701801640163">líma</translation>
 <translation id="3435494200763325275">Flett með dálkalykli – framhald</translation>
 <translation id="344800400831402066">Perúbrúnn</translation>
 <translation id="3457000393508828486">Ýtt að hluta</translation>
@@ -383,7 +393,9 @@ Til að opna vafravalmynd Chrome skal ýta á Alt+F.</translation>
 <translation id="3492609944033322585">{COUNT,plural, =1{hægri hornklofi}one{# hægri hornklofi}other{# hægri hornklofar}}</translation>
 <translation id="3494946239022273294">mnuitm</translation>
 <translation id="3497063866483065785">{COUNT,plural, =1{spurningarmerki}one{# spurningarmerki}other{# spurningarmerki}}</translation>
+<translation id="3505359110822747654">Draga saman valmyndir ChromeVox</translation>
 <translation id="3514822174137761109">{COUNT,plural, =1{innskotsmerki}one{# innskotsmerki}other{# innskotsmerki}}</translation>
+<translation id="3518600448524470129">{COUNT,plural, =1{hvítt áherslumerki}one{# hvítt áherslumerki}other{# hvít áherslumerki}}</translation>
 <translation id="352577523970648069">Breytanlegur textareitur</translation>
 <translation id="3538907380453898475">lýslisti</translation>
 <translation id="3549141990712742152">klippa <ph name="TEXT" />.</translation>
@@ -452,6 +464,7 @@ Til að opna vafravalmynd Chrome skal ýta á Alt+F.</translation>
 <translation id="4006140876663370126">mynd</translation>
 <translation id="4021716437419160885">Fletta niður</translation>
 <translation id="4035381225449278841">Vor</translation>
+<translation id="4038098586530338813">endurgera</translation>
 <translation id="4047216625641135770">Merkja</translation>
 <translation id="4047910800766704982">Þú getur notað eðlilega, mennska rödd þegar tækið er nettengt. Texti verður sendur til Google til úrvinnslu. Þú getur slökkt á þessu hvenær sem er í stillingunum.</translation>
 <translation id="4053520724192563562">Límónugrænn</translation>
@@ -479,6 +492,7 @@ Til að opna vafravalmynd Chrome skal ýta á Alt+F.</translation>
 <translation id="42164919740161077">Blágrágrænn</translation>
 <translation id="4217571870635786043">Upplestur</translation>
 <translation id="4218529045364428769">{COUNT,plural, =1{bandstrik}one{# bandstrik}other{# bandstrik}}</translation>
+<translation id="4220024144662591089">velja frá <ph name="START_PHRASE" /> til <ph name="END_PHRASE" /></translation>
 <translation id="4221012616705981690">Enginn fyrri listi</translation>
 <translation id="4225355998815256469">Stýringar eyðublaðs</translation>
 <translation id="4230834257931120629">Ljósgráblár</translation>
@@ -497,6 +511,7 @@ Til að opna vafravalmynd Chrome skal ýta á Alt+F.</translation>
 <translation id="4300318234632215983">Tilkynna vefslóðina á bak við tengil</translation>
 <translation id="4322625298640984693">Dökkrauðbrúnn</translation>
 <translation id="4342180618051828363">{COUNT,plural, =1{punktur}=3{þrípunktur}one{# punktur}other{# punktar}}</translation>
+<translation id="4352022650330571548">sláðu inn <ph name="PHRASE" /></translation>
 <translation id="4372435075475052704">lágm.:<ph name="X" /></translation>
 <translation id="4372705107434148843">Hætta að tala</translation>
 <translation id="4376316291247992553">Skoða myndefni sem blindraletur</translation>
@@ -526,6 +541,7 @@ Til að opna vafravalmynd Chrome skal ýta á Alt+F.</translation>
 <translation id="4601367666219428522">ta. <ph name="TABLENAME" /> <ph name="TABLEROWS" />x<ph name="TABLECOLS" /></translation>
 <translation id="4615592953348396470">Hunsar næsta lyklaborðsinnslátt</translation>
 <translation id="4623097797855662355">Baktitill</translation>
+<translation id="4624970070706497034">TalkBack býður ekki lengur upp á sérsnið fyrir Chromebook. Þú getur áfram notað það en þarft að nota sjálfgefna flýtilykla TalkBack. Ýttu á Search+A og svo K til að sjá tiltæka flýtilykla. Ýttu aftur á skipunina ef þú vilt enn nota TalkBack.</translation>
 <translation id="463135993322337640">Ýttu á ChromeVox o, n til að fá upplýsingar um nýjungar</translation>
 <translation id="4649220074413114917">Hægt er að ýta á skjáinn með tveimur fingrum til að stöðva núverandi lestur. Þetta er gagnlegt ef þú vilt ekki að ChromeVox lesi eitthvað. Ýttu á skjáinn með tveimur fingrum til að halda áfram.</translation>
 <translation id="4660783501463101648">Sígilt fjarlægt. Lyklaborðsskipunin til að skipta yfir í sígilt ChromeVox hefur verið fjarlægð.</translation>
@@ -560,6 +576,7 @@ Til að opna vafravalmynd Chrome skal ýta á Alt+F.</translation>
 <translation id="4854380505292502090">Engin fyrri margmiðlunargræja</translation>
 <translation id="4855927945655956315">Nauðsynlegir lyklar: Control</translation>
 <translation id="4862744964787595316">Ekki feitletrað</translation>
+<translation id="4865995900839719272">færa í fyrri línu</translation>
 <translation id="4866956062845190338">rdmnuitm</translation>
 <translation id="4867316986324544967">Virkja TTS-skráningu</translation>
 <translation id="4886524826165775965"><ph name="INDEX" />/<ph name="TOTAL" /></translation>
@@ -617,6 +634,7 @@ Til að opna vafravalmynd Chrome skal ýta á Alt+F.</translation>
 <translation id="5304943142864553931"><ph name="TITLE" />, flipi</translation>
 <translation id="5308380583665731573">Tengjast</translation>
 <translation id="5310788376443009632">fjarlægt:</translation>
+<translation id="5316825363044614340">færa í næstu línu</translation>
 <translation id="5320727453979144100">Festistilling virk</translation>
 <translation id="5321085947096604457">{COUNT,plural, =1{komma}one{# komma}other{# kommur}}</translation>
 <translation id="532485153932049746">Textasnið
@@ -653,6 +671,7 @@ Til að opna vafravalmynd Chrome skal ýta á Alt+F.</translation>
 <translation id="5522423213731659107">Flýtileiðsögn lokið!</translation>
 <translation id="5534303576632885660">hdr</translation>
 <translation id="5539820223028224601">Ljósgrár</translation>
+<translation id="554893713779400387">Kveikja og slökkva á upplestri</translation>
 <translation id="5549179427201066174">Kveikja eða slökkva á hljóðsvörun (hljóðmerkjum)</translation>
 <translation id="556042886152191864">Hnappur</translation>
 <translation id="5561345396546889625">Næsti listi</translation>
@@ -663,6 +682,7 @@ Til að opna vafravalmynd Chrome skal ýta á Alt+F.</translation>
 <translation id="5597170376237141345">Næsti gátreitur</translation>
 <translation id="5598905979683743333"><ph name="NAME" />, valhnappur ekki valinn</translation>
 <translation id="5601172225407283979">Framkvæma sjálfgefna aðgerð</translation>
+<translation id="5604302400025591178">{COUNT,plural, =1{ferningslaga áherslumerki}one{# ferningslaga áherslumerki}other{# ferningslaga áherslumerki}}</translation>
 <translation id="5608798115546226984">Flýtiritun í línu</translation>
 <translation id="5616029807486814372">Næsta kennslusíða</translation>
 <translation id="561939826962581046">time</translation>
@@ -670,6 +690,8 @@ Til að opna vafravalmynd Chrome skal ýta á Alt+F.</translation>
 <translation id="5623842676595125836">Notkunarskrá</translation>
 <translation id="5628125749885014029">h4</translation>
 <translation id="5632083598315326067">Myndtákn</translation>
+<translation id="5648939288050772726">Til hamingju! Þú hefur náð tökum á undirstöðuatriðunum í ChromeVox. Mundu að þú getur opnað skipanavalmynd ChromeVox hvenær sem er með því að ýta á leitarlykilinn og punkt. Til að fá frekari upplýsingar um ChromeVox og ChromeOS skaltu skoða eftirfarandi greinar.
+    Ef þú hefur ekki lengur þörf fyrir frekari kennslu skaltu nota ChromeVox til að velja og smella á hnappinn „Loka“.</translation>
 <translation id="5653397561111110475">Nota aðgengiseiginleika Chromebook snertiskjásins</translation>
 <translation id="5655682562155942719">Stökkskipanir</translation>
 <translation id="56637627897541303">Textasvæði</translation>
@@ -734,6 +756,7 @@ Til að opna vafravalmynd Chrome skal ýta á Alt+F.</translation>
 <translation id="6034000775414344507">Ljósgrár</translation>
 <translation id="6036135911048686884">Snertikönnun</translation>
 <translation id="6037602951055904232">Skima áfram</translation>
+<translation id="604240746417122825">málfræðivilla</translation>
 <translation id="6082768461603900813">Grunnatriði flettingar</translation>
 <translation id="609281021724813947">Engin fyrri sleði</translation>
 <translation id="6100239002225743044">Færa upp um eina línu</translation>
@@ -741,6 +764,7 @@ Til að opna vafravalmynd Chrome skal ýta á Alt+F.</translation>
 <translation id="611827076493383239">vtd</translation>
 <translation id="6122013438240733403">hnappur</translation>
 <translation id="6132506484792346370">Listareitur eða fellivalmynd</translation>
+<translation id="613344593214611552">eyða síðustu setningu</translation>
 <translation id="6142308968191113180">Fyrirsögn 4</translation>
 <translation id="6150023170003443621">Gulgrænn</translation>
 <translation id="6158882249329863701">lína <ph name="TABLECELLROWINDEX" /> dálkur <ph name="TABLECELLCOLUMNINDEX" /></translation>
@@ -750,6 +774,7 @@ Til að opna vafravalmynd Chrome skal ýta á Alt+F.</translation>
 <translation id="6186305613600865047">Fara neðst á síðuna</translation>
 <translation id="6187190722927752226">Sægrænn</translation>
 <translation id="6197361807490522975">Dökkblár</translation>
+<translation id="6218813441317556731">skipta <ph name="DELETE_PHRASE" /> út fyrir <ph name="INSERT_PHRASE" /></translation>
 <translation id="6236061028292614533">Næsta fyrirsögn</translation>
 <translation id="6254901459154107917">Næsta breytanlega textasvæði</translation>
 <translation id="6259464875943891919">Farið úr <ph name="TYPE" />.</translation>
@@ -790,6 +815,7 @@ Til að opna vafravalmynd Chrome skal ýta á Alt+F.</translation>
 <translation id="6544923685317771506">Skel</translation>
 <translation id="6551185905438378412">Beinhvítur</translation>
 <translation id="6561818612645211875">Fara í upphaf línunnar</translation>
+<translation id="6563126228219321999">Ekkert ógilt atriði</translation>
 <translation id="6579990219486187401">Ljósbleikur</translation>
 <translation id="6583174818554398774">Færa í næsta með niðurskiptingu</translation>
 <translation id="6584162722998608255">Næst muntu læra að færa þig til á skjánum. Þú getur strokið einum fingri frá vinstri til hægri til að fara á næsta atriði. Prófaðu það núna til að fara í næsta skref.</translation>
@@ -820,6 +846,7 @@ Til að opna vafravalmynd Chrome skal ýta á Alt+F.</translation>
 <translation id="6815255864998354418">Sítrónugulur</translation>
 <translation id="6816066673340002913">Fölgulur</translation>
 <translation id="6826226459053491773">Strjúktu tveimur fingrum niður</translation>
+<translation id="6826669432862053130">Næsta ógilda atriði</translation>
 <translation id="6833103209700200188">Fótur</translation>
 <translation id="6837853484260746864">Veldu rödd:</translation>
 <translation id="6858047746862060282">Formáli</translation>
@@ -833,6 +860,7 @@ Til að opna vafravalmynd Chrome skal ýta á Alt+F.</translation>
 <translation id="6910211073230771657">Eytt</translation>
 <translation id="6910969481785184048">Kveikja, slökkva og hætta</translation>
 <translation id="6919104639734799681">Sýna töflulista</translation>
+<translation id="692135145298539227">eyða</translation>
 <translation id="6945221475159498467">Velja</translation>
 <translation id="6949846980769640811">Miðlungssægrænn</translation>
 <translation id="6951482098621102657">Engin næsta 5. stigs fyrirsögn</translation>
@@ -892,6 +920,7 @@ Til að opna vafravalmynd Chrome skal ýta á Alt+F.</translation>
 <translation id="7292195267473691167"><ph name="LOCALE" /> (<ph name="VARIANT" />)</translation>
 <translation id="7308519659008003150">Enginn fyrri eyðublaðsreitur</translation>
 <translation id="731121099745151312">tritm</translation>
+<translation id="7313717760367325059">hjálp</translation>
 <translation id="7317017974771324508">hluti valinn</translation>
 <translation id="7322442671176251901">Snertikönnun</translation>
 <translation id="7344012264516629579">Aðrar stökkskipanir eru m.a. stökk með tengli, hnappi eða gátreit svo fáeinar séu nefndar. Heildarlista stökkskipana má nálgast í valmyndum ChromeVox sem hægt er að opna með því að ýta á leitarlykilinn + punkt.</translation>
@@ -913,13 +942,13 @@ Til að opna vafravalmynd Chrome skal ýta á Alt+F.</translation>
 <translation id="7439060726180460871">Skráasafn</translation>
 <translation id="744163271241493234">pwded</translation>
 <translation id="7465123027577412805">Nota venjulega rödd?</translation>
-<translation id="7484805699335881122">Breyta tónhæð við upplestur einingartegunda og texta innan gæsalappa eða sviga, eydds og feitletraðs texta og texta í hástöfum.</translation>
 <translation id="7491962110804786152">flipi</translation>
 <translation id="7492497529767769458">Fara yfir í næsta hluta. Þar eru m.a. stöðusvæði og ræsiforrit.</translation>
 <translation id="7505149250476994901">Segðu „cap“ á undan staf</translation>
 <translation id="7533226154149229506">Ljósgulur</translation>
 <translation id="7543255924852002459">Merking fyrir „Fleygja“</translation>
 <translation id="7552432549459840808">Gagnlegir flýtilyklar í Chrome</translation>
+<translation id="7553679324939294712">setja <ph name="INSERT_PHRASE" /> fyrir framan <ph name="BEFORE_PHRASE" /></translation>
 <translation id="7569983096843329377">Svartur</translation>
 <translation id="7579911500627256166">punktur <ph name="DOT" /></translation>
 <translation id="7592060599656252486">Sumt</translation>
@@ -943,12 +972,11 @@ Til að opna vafravalmynd Chrome skal ýta á Alt+F.</translation>
 <translation id="7684431668231950609">Textareitur, innsláttur vefslóðar</translation>
 <translation id="7685589220304187312">tlbar</translation>
 <translation id="7693840228159394336">Fyrri valhnappur</translation>
+<translation id="7696631298608145306">fara í næsta orð</translation>
 <translation id="7701040980221191251">Ekkert</translation>
 <translation id="7701196182766842984">autolst</translation>
 <translation id="7713139339518499741">Eðlileg rödd</translation>
 <translation id="7714340021005120797">Engin næsta fellivalmynd</translation>
-<translation id="772146615414628379">Til hamingju! Þú hefur náð tökum á undirstöðuatriðunum í ChromeVox. Mundu að þú getur opnað skipanavalmynd ChromeVox hvenær sem er með því að ýta á leitarlykilinn og punkt. Til að fá frekari upplýsingar um ChromeVox og Chrome OS skaltu skoða eftirfarandi greinar.
-    Ef þú hefur ekki lengur þörf fyrir frekari kennslu skaltu nota ChromeVox til að velja og smella á hnappinn Loka.</translation>
 <translation id="7724603315864178912">Klippa</translation>
 <translation id="7731785449856576010">Engin næsta margmiðlunargræja</translation>
 <translation id="7735498529470878067">Snertikönnun getur hjálpað þér að fá fljótt hugmynd um hvað er á skjánum.</translation>
@@ -1009,8 +1037,10 @@ Til að opna vafravalmynd Chrome skal ýta á Alt+F.</translation>
 <translation id="8126386426083591964">Engin fyrri 5. stigs fyrirsögn</translation>
 <translation id="812886159861361726">Niðurhal stöðvað <ph name="FILE_NAME" /></translation>
 <translation id="8129445297241948503">Ekkert hólf fyrir ofan</translation>
+<translation id="8132248161074464367">Fyrra ógilda atriði</translation>
 <translation id="8138880386467279117">Snerting</translation>
 <translation id="8146613869421949343">Næst færðu upplýsingar um leitarlykilinn. Leitarlykillinn er notaður ásamt öðrum lyklum til að framkvæma ChromeVox skipanir. Leitarlykillinn er beint fyrir ofan Shift-lykilinn. Ýttu á leitarlykilinn til að halda áfram.</translation>
+<translation id="8158033275290782295">velja allt</translation>
 <translation id="816818801578874684">Þetta er fyrsta fyrirsögnin. Ýttu á leitarlykilinn + H til að fara í næstu fyrirsögn.</translation>
 <translation id="8173092779156526980">Strjúktu fjórum fingrum til vinstri</translation>
 <translation id="817440585505441544">{COUNT,plural, =1{undirstrik}one{# undirstrik}other{# undirstrik}}</translation>
@@ -1050,6 +1080,7 @@ Til að opna vafravalmynd Chrome skal ýta á Alt+F.</translation>
 <translation id="8455868257606149352">Hámark <ph name="X" /></translation>
 <translation id="84575901236241018">hefur aðgangslykil, <ph name="KEY" /></translation>
 <translation id="8463645336674919227">Lokar málfarsvillu</translation>
+<translation id="8465573210279050749">eyða síðasta orði</translation>
 <translation id="847040613207937740">Enginn næsti gátreitur</translation>
 <translation id="8473540203671727883">Textaupplestur á því sem er undir músarbendli</translation>
 <translation id="8476408756881832830">Gera hlé á spilun þegar ChromeVox talar</translation>
@@ -1080,11 +1111,13 @@ Til að opna vafravalmynd Chrome skal ýta á Alt+F.</translation>
 <translation id="8659501358298941449">Fellilistar</translation>
 <translation id="8666733765751421568">Lok <ph name="TYPE" /></translation>
 <translation id="867187640362843212">Fyrirsögn 5</translation>
+<translation id="8690400660839620419">{COUNT,plural, =1{}one{faldað stig #}other{faldað stig #}}</translation>
 <translation id="8693391540059827073">Uppáhaldsárstíðin mín</translation>
 <translation id="8696284982970258155">Hunangsmelónugrænn</translation>
 <translation id="8697111817566059991">{COUNT,plural, =1{lóðrétt strik}one{# lóðrétt strik}other{# lóðrétt strik}}</translation>
 <translation id="8741370088760768424">Ábending: Ýttu á leitarlykilinn + bilslána til að virkja núverandi atriði.</translation>
 <translation id="8743786158317878347">setja inn skipulegt efni, til dæmis töflur</translation>
+<translation id="8746846427395705317">fara í síðasta orð</translation>
 <translation id="8747966237988593539">Raðaður listi</translation>
 <translation id="8749988712346667988">Silfurlitaður</translation>
 <translation id="875769700429317857">Niðurhali lokið <ph name="FILE_NAME" /></translation>
@@ -1112,12 +1145,14 @@ Til að opna vafravalmynd Chrome skal ýta á Alt+F.</translation>
 <translation id="8970172509886453271">Enginn fyrri hluti</translation>
 <translation id="89720367119469899">Esc</translation>
 <translation id="8978496506222343566">tltip</translation>
+<translation id="898089897833732740">eyða <ph name="PHRASE" /></translation>
 <translation id="8986362086234534611">Gleyma</translation>
 <translation id="8989104346085848538">Ýttu á Control-lykilinn til að láta ChromeVox hætta að tala.</translation>
 <translation id="8993737615451556423">Notað til að hraða, hægja á og gera hlé á talröddinni</translation>
 <translation id="9014206344398081366">ChromeVox leiðsögn</translation>
 <translation id="9040132695316389094">Fyrirsögn 1</translation>
 <translation id="9061884144798498064">Velja átta punkta blindraleturstöflu:</translation>
+<translation id="9063946545000394379">færa á fyrri staf</translation>
 <translation id="9065283790526219006">+sprettigluggi</translation>
 <translation id="9065912140022662363">Enginn næsti hringhnappur</translation>
 <translation id="9067522039955793016">Síðuskil</translation>
@@ -1126,6 +1161,7 @@ Til að opna vafravalmynd Chrome skal ýta á Alt+F.</translation>
 <translation id="9077305471618729969">Ljóssægrænn</translation>
 <translation id="9080299285199342830">Fara aftast</translation>
 <translation id="9089864840575085222">Kveikja/slökkva á upplestri innsláttar</translation>
+<translation id="9099429023611373837">klippa</translation>
 <translation id="9108370397979208512">stærðfræði</translation>
 <translation id="9108589040018540527">scbr</translation>
 <translation id="911476240645808512">{COUNT,plural, =1{prósentumerki}one{# prósentumerki}other{# prósentumerki}}</translation>
@@ -1145,6 +1181,7 @@ Til að opna vafravalmynd Chrome skal ýta á Alt+F.</translation>
 <translation id="9223032053830369045">Dökkrauður</translation>
 <translation id="923331726185079994">ChromeVox uppfært</translation>
 <translation id="93384979447910801">Dökksægrænn</translation>
+<translation id="937605981140327129">Ekki er búið að setja upp TalkBack. Settu upp Android AccessibilitySuite í Play Store og reyndu aftur.</translation>
 <translation id="948171205378458592">Minnka talhraða</translation>
 <translation id="957570623732056069">Strjúktu til vinstri eða hægri með einum fingri til að fletta í gegnum þessa kennslusíðu</translation>
 <translation id="958854023026327378">Strjúktu einum fingri niður</translation>

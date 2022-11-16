@@ -7,11 +7,13 @@
 #import <UIKit/UIKit.h>
 
 #include <memory>
+#include <tuple>
 
 #include "base/metrics/histogram_samples.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
 #import "components/previous_session_info/previous_session_info.h"
+#include "ios/chrome/browser/browser_state/test_chrome_browser_state.h"
 #import "ios/chrome/browser/main/test_browser.h"
 #import "ios/chrome/browser/web_state_list/web_state_list.h"
 #import "ios/chrome/browser/web_state_list/web_state_opener.h"
@@ -49,8 +51,11 @@ class TabUsageRecorderBrowserAgentTest : public PlatformTest {
  protected:
   TabUsageRecorderBrowserAgentTest()
       : application_(OCMClassMock([UIApplication class])) {
-    TabUsageRecorderBrowserAgent::CreateForBrowser(&browser_);
-    tab_usage_recorder_ = TabUsageRecorderBrowserAgent::FromBrowser(&browser_);
+    browser_state_ = TestChromeBrowserState::Builder().Build();
+    browser_ = std::make_unique<TestBrowser>(browser_state_.get());
+    TabUsageRecorderBrowserAgent::CreateForBrowser(browser_.get());
+    tab_usage_recorder_ =
+        TabUsageRecorderBrowserAgent::FromBrowser(browser_.get());
     OCMStub([application_ sharedApplication]).andReturn(application_);
   }
 
@@ -68,12 +73,12 @@ class TabUsageRecorderBrowserAgentTest : public PlatformTest {
     fake_web_state->SetNavigationManager(std::move(fake_navigation_manager));
     fake_web_state->SetIsEvicted(in_memory == NOT_IN_MEMORY);
 
-    const int insertion_index = browser_.GetWebStateList()->InsertWebState(
+    const int insertion_index = browser_->GetWebStateList()->InsertWebState(
         WebStateList::kInvalidIndex, std::move(fake_web_state),
         WebStateList::INSERT_NO_FLAGS, WebStateOpener());
 
     return static_cast<web::FakeWebState*>(
-        browser_.GetWebStateList()->GetWebStateAt(insertion_index));
+        browser_->GetWebStateList()->GetWebStateAt(insertion_index));
   }
 
   web::NavigationItem* InsertItemToFakeNavigationManager(
@@ -91,7 +96,8 @@ class TabUsageRecorderBrowserAgentTest : public PlatformTest {
   }
 
   web::WebTaskEnvironment task_environment_;
-  TestBrowser browser_;
+  std::unique_ptr<TestChromeBrowserState> browser_state_;
+  std::unique_ptr<TestBrowser> browser_;
   base::HistogramTester histogram_tester_;
   TabUsageRecorderBrowserAgent* tab_usage_recorder_;
   id application_;
@@ -335,7 +341,7 @@ TEST_F(TabUsageRecorderBrowserAgentTest, RendererTerminated) {
   // TabUsageRecorder count kAliveTabsCountAtRendererTermination tabs
   // as alive when mock_tab_a is evicted.
   for (int ii = 0; ii < kAliveTabsCountAtRendererTermination; ++ii) {
-    ignore_result(InsertFakeWebState(kURL, IN_MEMORY));
+    std::ignore = InsertFakeWebState(kURL, IN_MEMORY);
   }
 
   base::TimeTicks now = base::TimeTicks::Now();
@@ -345,12 +351,11 @@ TEST_F(TabUsageRecorderBrowserAgentTest, RendererTerminated) {
   for (int seconds = kExpiredTimesAddedCount; seconds > 0; seconds--) {
     int expired_time_delta =
         tab_usage_recorder::kSecondsBeforeRendererTermination + seconds;
-    AddTimeToDequeInTabUsageRecorder(
-        now - base::TimeDelta::FromSeconds(expired_time_delta));
+    AddTimeToDequeInTabUsageRecorder(now - base::Seconds(expired_time_delta));
   }
   base::TimeTicks recent_time =
-      now - base::TimeDelta::FromSeconds(
-                tab_usage_recorder::kSecondsBeforeRendererTermination / 2);
+      now -
+      base::Seconds(tab_usage_recorder::kSecondsBeforeRendererTermination / 2);
   AddTimeToDequeInTabUsageRecorder(recent_time);
 
   mock_tab_a->OnRenderProcessGone();

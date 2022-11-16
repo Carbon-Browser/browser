@@ -169,7 +169,7 @@ class Xcode11LogParser(object):
     id_params = ['--id', ref_id] if ref_id else []
     xcresult_command = ['xcresulttool', 'get', '--format', 'json',
                         '--path', xcresult_path] + id_params
-    return subprocess.check_output(xcresult_command).strip()
+    return subprocess.check_output(xcresult_command).decode('utf-8').strip()
 
   @staticmethod
   def _list_of_failed_tests(actions_invocation_record, excluded=None):
@@ -212,6 +212,8 @@ class Xcode11LogParser(object):
   def _get_test_statuses(xcresult):
     """Returns test results from xcresult.
 
+    Also extracts and stores attachments for failed tests.
+
     Args:
       xcresult: (str) A path to xcresult.
 
@@ -234,6 +236,11 @@ class Xcode11LogParser(object):
           continue
         for test in test_suite['subtests']['_values']:
           test_name = _sanitize_str(test['identifier']['_value'])
+          duration = test.get('duration', {}).get('_value')
+          if duration:
+            # Raw duration is a str in seconds with decimals if it exists.
+            # Convert to milliseconds as int as used in |TestResult|.
+            duration = int(float(duration) * 1000)
           if any(
               test_name.endswith(suffix)
               for suffix in SYSTEM_ERROR_TEST_NAME_SUFFIXES):
@@ -241,17 +248,22 @@ class Xcode11LogParser(object):
             result.crash_message += 'System error in %s: %s\n' % (xcresult,
                                                                   test_name)
             continue
+          # If a test case was executed multiple times, there will be multiple
+          # |test| objects of it. Each |test| corresponds to an execution of the
+          # test case.
           if test['testStatus']['_value'] == 'Success':
-            result.add_test_result(TestResult(test_name, TestStatus.PASS))
+            result.add_test_result(
+                TestResult(test_name, TestStatus.PASS, duration=duration))
           else:
             # Parse data for failed test by its id. See SINGLE_TEST_SUMMARY_REF
-            # in xcode_log_parser_test.py for an example of |rootFailure|.
-            rootFailure = json.loads(
+            # in xcode_log_parser_test.py for an example of |summary_ref|.
+            summary_ref = json.loads(
                 Xcode11LogParser._xcresulttool_get(
                     xcresult, test['summaryRef']['id']['_value']))
+
             failure_message = 'Logs from "failureSummaries" in .xcresult:\n'
             # On rare occasions rootFailure doesn't have 'failureSummaries'.
-            for failure in rootFailure.get('failureSummaries',
+            for failure in summary_ref.get('failureSummaries',
                                            {}).get('_values', []):
               file_name = _sanitize_str(
                   failure.get('fileName', {}).get('_value', ''))
@@ -261,9 +273,17 @@ class Xcode11LogParser(object):
               failure_message += failure_location + '\n'
               failure_message += _sanitize_str(
                   failure['message']['_value']) + '\n'
+
+            attachments = Xcode11LogParser._extract_artifacts_for_test(
+                test_name, summary_ref, xcresult)
+
             result.add_test_result(
                 TestResult(
-                    test_name, TestStatus.FAIL, test_log=failure_message))
+                    test_name,
+                    TestStatus.FAIL,
+                    duration=duration,
+                    test_log=failure_message,
+                    attachments=attachments))
     return result
 
   @staticmethod
@@ -330,7 +350,6 @@ class Xcode11LogParser(object):
           Xcode11LogParser._list_of_failed_tests(
               root, excluded=overall_collected_result.all_test_names()))
     Xcode11LogParser.export_diagnostic_data(output_path)
-    Xcode11LogParser.copy_artifacts(output_path)
     # Remove the symbol link file.
     if os.path.islink(output_path):
       os.unlink(output_path)
@@ -340,6 +359,9 @@ class Xcode11LogParser(object):
   @staticmethod
   def copy_artifacts(output_path):
     """Copy screenshots, crash logs of failed tests to output folder.
+
+    Warning: This method contains duplicate logic as |collect_test_results|
+    method. Do not use these on the same test output path.
 
     Args:
       output_path: (str) An output path passed in --resultBundlePath when
@@ -373,78 +395,12 @@ class Xcode11LogParser(object):
                       test['identifier']
                       ['_value']] = test['summaryRef']['id']['_value']
 
-    def extract_attachments(test,
-                            test_activities,
-                            xcresult,
-                            include_jpg=True,
-                            attachment_index=0):
-      """Exrtact attachments from xcretult folder.
-
-      Copies all attachments under test_activities and nested subactivities(if
-      any) to the same directory as xcresult directory. Uses incremental
-      attachment_index starting from attachment_index + 1.
-
-      Args:
-        test: (str) Test name.
-        test_activities: (list) List of test activities (dict) that
-            store data about each test step.
-        xcresult: (str) A path to test results.
-        include_jpg: (bool) Whether include jpg or jpeg attachments.
-        attachment_index: (int) An attachment index, used as an incremental id
-            for file names in format
-            `attempt_%d_TestCase_testMethod_attachment_index`:
-              attempt_0_TestCase_testMethod_1.jpg
-              ....
-              attempt_0_TestCase_testMethod_3.crash
-
-      Returns:
-        Last used attachment_index.
-      """
-      for activity_summary in test_activities:
-        if 'subactivities' in activity_summary:
-          attachment_index = extract_attachments(
-              test,
-              activity_summary.get('subactivities', {}).get('_values', []),
-              xcresult, attachment_index)
-        for attachment in activity_summary.get('attachments',
-                                               {}).get('_values', []):
-          payload_ref = attachment['payloadRef']['id']['_value']
-          _, file_name_extension = os.path.splitext(
-              attachment['filename']['_value'])
-          if not include_jpg and file_name_extension in ['.jpg', '.jpeg']:
-            continue
-
-          attachment_index += 1
-          attachment_filename = (
-              '%s_%s_%d%s' %
-              (os.path.splitext(os.path.basename(xcresult))[0],
-               test.replace('/', '_'), attachment_index, file_name_extension))
-          # Extracts attachment to the same folder containing xcresult.
-          attachment_output_path = os.path.abspath(
-              os.path.join(xcresult, os.pardir, attachment_filename))
-          Xcode11LogParser._export_data(xcresult, payload_ref, 'file',
-                                        attachment_output_path)
-      return attachment_index
-
-    for test, summaryRef in test_summary_refs.iteritems():
+    for test, summary_ref_id in test_summary_refs.items():
       # See SINGLE_TEST_SUMMARY_REF in xcode_log_parser_test.py for an example
       # of |test_summary|.
       test_summary = json.loads(
-          Xcode11LogParser._xcresulttool_get(xcresult, summaryRef))
-      # Extract all attachments except for screenshots from each step of the
-      # failed test.
-      index = extract_attachments(
-          test,
-          test_summary.get('activitySummaries', {}).get('_values', []),
-          xcresult,
-          include_jpg=False)
-      # Extract all attachments for at the failure step.
-      extract_attachments(
-          test,
-          test_summary.get('failureSummaries', {}).get('_values', []),
-          xcresult,
-          include_jpg=True,
-          attachment_index=index)
+          Xcode11LogParser._xcresulttool_get(xcresult, summary_ref_id))
+      Xcode11LogParser._extract_artifacts_for_test(test, test_summary, xcresult)
 
   @staticmethod
   def export_diagnostic_data(output_path):
@@ -508,7 +464,94 @@ class Xcode11LogParser(object):
         'xcresulttool', 'export', '--type', output_type, '--id', ref_id,
         '--path', xcresult, '--output-path', output_path
     ]
-    subprocess.check_output(export_command).strip()
+    subprocess.check_output(export_command).decode('utf-8').strip()
+
+  @staticmethod
+  def _extract_attachments(test,
+                           test_activities,
+                           xcresult,
+                           attachments,
+                           include_jpg=True):
+    """Exrtact attachments from xcresult folder for a single test result.
+
+    Copies all attachments under test_activities and nested subactivities (if
+    any) to the same directory as xcresult directory. Saves abs paths of
+    extracted attachments in |attachments|.
+
+    Filenames are in format `${output}_TestCase_testMethod_${index}`, where
+    ${output} is the basename of |xcresult| folder, ${index} is the index of
+    attachment for a test case, e.g.:
+        attempt_0_TestCase_testMethod_1.jpg
+        ....
+        attempt_0_TestCase_testMethod_3.crash
+
+    Args:
+      test: (str) Test name.
+      test_activities: (list) List of test activities (dict) that
+          store data about each test step.
+      xcresult: (str) A path to test results.
+      attachments: (dict) File basename to abs path mapping for extracted
+          attachments to be stored in. Its length is also used as part of file
+          name to avoid duplicated filename.
+      include_jpg: (bool) Whether include jpg or jpeg attachments.
+    """
+    for activity_summary in test_activities:
+      if 'subactivities' in activity_summary:
+        Xcode11LogParser._extract_attachments(
+            test,
+            activity_summary.get('subactivities', {}).get('_values', []),
+            xcresult, attachments, include_jpg)
+      for attachment in activity_summary.get('attachments',
+                                             {}).get('_values', []):
+        payload_ref = attachment['payloadRef']['id']['_value']
+        raw_file_name = str(attachment['filename']['_value'])
+        _, file_name_extension = os.path.splitext(raw_file_name)
+
+        if not include_jpg and file_name_extension in ['.jpg', '.jpeg']:
+          continue
+
+        attachment_filename = (
+            '%s_%s_%s' %
+            (os.path.splitext(os.path.basename(xcresult))[0],
+             test.replace('/', '_'), raw_file_name))
+        # Extracts attachment to the same folder containing xcresult.
+        attachment_output_path = os.path.abspath(
+            os.path.join(xcresult, os.pardir, attachment_filename))
+        Xcode11LogParser._export_data(xcresult, payload_ref, 'file',
+                                      attachment_output_path)
+        attachments[attachment_filename] = attachment_output_path
+
+  @staticmethod
+  def _extract_artifacts_for_test(test, summary_ref, xcresult):
+    """Extracts artifacts for a test case result.
+
+    Args:
+      test: (str) Test name.
+      summary_ref: (dict) Summary ref field of a test result parsed by
+          xcresulttool . See SINGLE_TEST_SUMMARY_REF in xcode_log_parser_test.py
+          for an example.
+      xcresult: (str) A path to test results.
+
+    Returns:
+      (dict) File basename to abs path mapping for extracted attachments.
+    """
+    attachments = {}
+    # Extract all attachments except for screenshots from each step of the
+    # test.
+    Xcode11LogParser._extract_attachments(
+        test,
+        summary_ref.get('activitySummaries', {}).get('_values', []),
+        xcresult,
+        attachments,
+        include_jpg=False)
+    # Extract all attachments of the failure step (applied to failed tests).
+    Xcode11LogParser._extract_attachments(
+        test,
+        summary_ref.get('failureSummaries', {}).get('_values', []),
+        xcresult,
+        attachments,
+        include_jpg=True)
+    return attachments
 
 
 class XcodeLogParser(object):

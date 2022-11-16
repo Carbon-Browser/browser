@@ -10,7 +10,6 @@
 #include <vector>
 
 #include "base/callback_forward.h"
-#include "base/macros.h"
 #include "base/values.h"
 #include "components/ntp_tiles/tile_source.h"
 
@@ -23,6 +22,11 @@ class MostVisitedSites;
 // Implemented by embedders to hook up NTPTilesInternalsMessageHandler.
 class NTPTilesInternalsMessageHandlerClient {
  public:
+  NTPTilesInternalsMessageHandlerClient(
+      const NTPTilesInternalsMessageHandlerClient&) = delete;
+  NTPTilesInternalsMessageHandlerClient& operator=(
+      const NTPTilesInternalsMessageHandlerClient&) = delete;
+
   // Returns the PrefService for the embedder and containing WebUI page.
   virtual PrefService* GetPrefs() = 0;
 
@@ -40,19 +44,7 @@ class NTPTilesInternalsMessageHandlerClient {
   // Registers a callback in Javascript. See content::WebUI and web::WebUIIOS.
   virtual void RegisterMessageCallback(
       const std::string& message,
-      base::RepeatingCallback<void(base::Value::ConstListView)> callback) = 0;
-
-  // Always use RegisterMessageCallback() above in new code.
-  //
-  // TODO(crbug.com/1243386): Existing callers of
-  // RegisterDeprecatedMessageCallback() should be migrated to
-  // RegisterMessageCallback() if possible.
-  //
-  // Registers a callback in Javascript. See content::WebUI and web::WebUIIOS.
-  virtual void RegisterDeprecatedMessageCallback(
-      const std::string& message,
-      const base::RepeatingCallback<void(const base::ListValue*)>&
-          callback) = 0;
+      base::RepeatingCallback<void(const base::Value::List&)> callback) = 0;
 
   // Invokes a function in Javascript. See content::WebUI and web::WebUIIOS.
   virtual void CallJavascriptFunctionVector(
@@ -68,9 +60,6 @@ class NTPTilesInternalsMessageHandlerClient {
  protected:
   NTPTilesInternalsMessageHandlerClient();
   virtual ~NTPTilesInternalsMessageHandlerClient();
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(NTPTilesInternalsMessageHandlerClient);
 };
 
 }  // namespace ntp_tiles

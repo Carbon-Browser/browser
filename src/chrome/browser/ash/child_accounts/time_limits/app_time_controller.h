@@ -8,6 +8,7 @@
 #include <memory>
 #include <string>
 
+#include "ash/components/settings/timezone_settings.h"
 #include "base/callback_forward.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/default_tick_clock.h"
@@ -15,9 +16,8 @@
 #include "base/timer/timer.h"
 #include "chrome/browser/ash/child_accounts/time_limits/app_activity_registry.h"
 #include "chrome/browser/ash/child_accounts/time_limits/app_time_notification_delegate.h"
-#include "chromeos/dbus/system_clock/system_clock_client.h"
-#include "chromeos/settings/timezone_settings.h"
-#include "components/services/app_service/public/mojom/types.mojom.h"
+#include "chromeos/ash/components/dbus/system_clock/system_clock_client.h"
+#include "components/services/app_service/public/cpp/app_types.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 class Profile;
@@ -87,7 +87,7 @@ class AppTimeController : public SystemClockClient::Observer,
   // tracked.
   absl::optional<base::TimeDelta> GetTimeLimitForApp(
       const std::string& app_service_id,
-      apps::mojom::AppType app_type) const;
+      apps::AppType app_type) const;
 
   // Called by ChildUserService when it is being destructed to save metrics.
   void RecordMetricsOnShutdown() const;
@@ -164,7 +164,7 @@ class AppTimeController : public SystemClockClient::Observer,
 
   // The time of the day when app time limits should be reset.
   // Defaults to 6am local time.
-  base::TimeDelta limits_reset_time_ = base::TimeDelta::FromHours(6);
+  base::TimeDelta limits_reset_time_ = base::Hours(6);
 
   // The last time when |reset_timer_| fired.
   base::Time last_limits_reset_time_;

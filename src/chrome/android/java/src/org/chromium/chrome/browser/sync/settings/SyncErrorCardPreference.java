@@ -16,9 +16,9 @@ import org.chromium.chrome.R;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.signin.services.IdentityServicesProvider;
 import org.chromium.chrome.browser.signin.services.ProfileDataCache;
-import org.chromium.chrome.browser.signin.ui.PersonalizedSigninPromoView;
 import org.chromium.chrome.browser.sync.SyncService;
 import org.chromium.chrome.browser.sync.settings.SyncSettingsUtils.SyncError;
+import org.chromium.chrome.browser.ui.signin.PersonalizedSigninPromoView;
 import org.chromium.components.signin.base.CoreAccountInfo;
 import org.chromium.components.signin.identitymanager.ConsentLevel;
 
@@ -119,14 +119,15 @@ public class SyncErrorCardPreference extends Preference
         Drawable accountImage =
                 mProfileDataCache.getProfileDataOrDefault(signedInAccount).getImage();
         errorCardView.getImage().setImageDrawable(accountImage);
+        errorCardView.getIllustration().setVisibility(View.GONE);
 
         errorCardView.getDismissButton().setVisibility(View.GONE);
         if (mSyncError == SyncError.SYNC_SETUP_INCOMPLETE) {
-            errorCardView.getStatusMessage().setVisibility(View.GONE);
+            errorCardView.getTitle().setVisibility(View.GONE);
         } else {
-            errorCardView.getStatusMessage().setVisibility(View.VISIBLE);
+            errorCardView.getTitle().setVisibility(View.VISIBLE);
         }
-        errorCardView.getStatusMessage().setText(
+        errorCardView.getTitle().setText(
                 SyncSettingsUtils.getSyncErrorCardTitle(getContext(), mSyncError));
 
         errorCardView.getDescription().setText(

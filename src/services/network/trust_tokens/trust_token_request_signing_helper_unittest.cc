@@ -24,6 +24,7 @@
 #include "components/cbor/writer.h"
 #include "net/base/request_priority.h"
 #include "net/http/structured_headers.h"
+#include "net/log/net_log.h"
 #include "net/log/test_net_log.h"
 #include "net/log/test_net_log_util.h"
 #include "net/traffic_annotation/network_traffic_annotation_test_helper.h"
@@ -31,9 +32,9 @@
 #include "net/url_request/url_request_test_util.h"
 #include "services/network/public/cpp/trust_token_parameterization.h"
 #include "services/network/public/mojom/trust_tokens.mojom-shared.h"
+#include "services/network/test/trust_token_test_util.h"
 #include "services/network/trust_tokens/proto/public.pb.h"
 #include "services/network/trust_tokens/test/signed_request_verification_util.h"
-#include "services/network/trust_tokens/test/trust_token_test_util.h"
 #include "services/network/trust_tokens/trust_token_request_canonicalizer.h"
 #include "services/network/trust_tokens/trust_token_store.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -179,8 +180,8 @@ void AssertDecodesToCborAndExtractField(base::StringPiece signing_data,
   absl::optional<cbor::Value> parsed = cbor::Reader::Read(base::as_bytes(
       // Skip over the domain separator (e.g. "Trust Token v0").
       base::make_span(signing_data)
-          .subspan(base::size(TrustTokenRequestSigningHelper::
-                                  kRequestSigningDomainSeparator))));
+          .subspan(std::size(TrustTokenRequestSigningHelper::
+                                 kRequestSigningDomainSeparator))));
   ASSERT_TRUE(parsed);
 
   const cbor::Value::MapValue& map = parsed->GetMap();
@@ -693,11 +694,11 @@ TEST_F(TrustTokenRequestSigningHelperTest, CatchesSignatureFailure) {
 
   // FailingSigner will fail to sign the request, so we should see the operation
   // fail.
-  net::RecordingTestNetLog net_log;
+  net::RecordingNetLogObserver net_log_observer;
   TrustTokenRequestSigningHelper helper(
       store.get(), std::move(params), std::make_unique<FailingSigner>(),
       std::make_unique<TrustTokenRequestCanonicalizer>(),
-      net::NetLogWithSource::Make(&net_log,
+      net::NetLogWithSource::Make(net::NetLog::Get(),
                                   net::NetLogSourceType::URL_REQUEST));
 
   auto my_request = MakeURLRequest("https://destination.com/");
@@ -712,7 +713,7 @@ TEST_F(TrustTokenRequestSigningHelperTest, CatchesSignatureFailure) {
   EXPECT_THAT(*my_request, Not(Header("Sec-Signature")));
   EXPECT_THAT(*my_request, Header("Sec-Redemption-Record", IsEmpty()));
   EXPECT_TRUE(base::ranges::any_of(
-      net_log.GetEntriesWithType(
+      net_log_observer.GetEntriesWithType(
           net::NetLogEventType::TRUST_TOKEN_OPERATION_BEGIN_SIGNING),
       [](const net::NetLogEntry& entry) {
         absl::optional<std::string> key = net::GetOptionalStringValueFromParams(

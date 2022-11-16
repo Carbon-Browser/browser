@@ -1,3 +1,7 @@
+// Copyright 2022 The Chromium Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
 import {$} from 'chrome://resources/js/util.m.js';
 
 import {AudioBroker} from './audio_broker.js';
@@ -14,41 +18,41 @@ export interface AudioSample {
   description: string;
 }
 
-let audiosSamples: AudioSample[] = [
+const audiosSamples: AudioSample[] = [
   {
     sampleRate: 44100,
     freqency: 440,
     channelCount: 1,
     pan: 0,
-    description: '44.1k mono 440Hz sine tone'
+    description: '44.1k mono 440Hz sine tone',
   },
   {
     sampleRate: 48000,
     freqency: 440,
     channelCount: 1,
     pan: 0,
-    description: '48k mono 440Hz sine tone'
+    description: '48k mono 440Hz sine tone',
   },
   {
     sampleRate: 48000,
     freqency: 440,
     channelCount: 2,
     pan: 0,
-    description: '48k stereo 440Hz sine tone'
+    description: '48k stereo 440Hz sine tone',
   },
   {
     sampleRate: 48000,
     freqency: 440,
     channelCount: 2,
     pan: -1,
-    description: '48k stereo 440Hz sine tone - Left channel only'
+    description: '48k stereo 440Hz sine tone - Left channel only',
   },
   {
     sampleRate: 48000,
     freqency: 440,
     channelCount: 2,
     pan: 1,
-    description: '48k stereo 440Hz sine tone - Right channel only'
+    description: '48k stereo 440Hz sine tone - Right channel only',
   },
 ];
 

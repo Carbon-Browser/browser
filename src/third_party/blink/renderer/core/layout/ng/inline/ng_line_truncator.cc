@@ -292,7 +292,8 @@ LayoutUnit NGLineTruncator::TruncateLineInTheMiddle(
     } else {
       PlaceEllipsisNextTo(line_box, &line[new_index]);
       available_width_right +=
-          available_width_left - line[new_index].inline_size;
+          available_width_left -
+          line[new_index].inline_size.ClampNegativeToZero();
     }
 
     // Find truncation point at the right.
@@ -356,8 +357,8 @@ LayoutUnit NGLineTruncator::TruncateLineInTheMiddle(
       line[new_index].rect.offset.inline_offset +=
           line[index_right].inline_size - line[new_index].inline_size;
       PlaceEllipsisNextTo(line_box, &line[new_index]);
-      available_width_left +=
-          available_width_right - line[new_index].inline_size;
+      available_width_left += available_width_right -
+                              line[new_index].inline_size.ClampNegativeToZero();
     }
     LayoutUnit ellipsis_offset = line[line.size() - 1].InlineOffset();
 
@@ -404,7 +405,7 @@ LayoutUnit NGLineTruncator::TruncateLineInTheMiddle(
 void NGLineTruncator::HideChild(NGLogicalLineItem* child) {
   DCHECK(child->HasInFlowFragment());
 
-  if (const NGLayoutResult* layout_result = child->layout_result.get()) {
+  if (const NGLayoutResult* layout_result = child->layout_result) {
     // Need to propagate OOF descendants in this inline-block child.
     const auto& fragment =
         To<NGPhysicalBoxFragment>(layout_result->PhysicalFragment());

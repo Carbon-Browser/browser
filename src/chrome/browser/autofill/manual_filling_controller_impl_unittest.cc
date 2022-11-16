@@ -11,6 +11,7 @@
 
 #include "base/bind.h"
 #include "base/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/mock_callback.h"
@@ -26,6 +27,7 @@
 #include "components/autofill/core/browser/ui/accessory_sheet_data.h"
 #include "components/autofill/core/browser/ui/accessory_sheet_enums.h"
 #include "components/autofill/core/common/autofill_features.h"
+#include "components/autofill/core/common/autofill_payments_features.h"
 #include "components/password_manager/core/common/password_manager_features.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/test_web_contents_factory.h"
@@ -56,7 +58,7 @@ AccessorySheetData empty_passwords_sheet() {
 
 AccessorySheetData filled_passwords_sheet() {
   return AccessorySheetData::Builder(AccessoryTabType::PASSWORDS, u"Pwds")
-      .AddUserInfo("example.com", autofill::UserInfo::IsPslMatch(false))
+      .AddUserInfo("example.com", autofill::UserInfo::IsExactMatch(true))
       .AppendField(u"Ben", u"Ben", false, true)
       .AppendField(u"S3cur3", u"Ben's PW", true, false)
       .Build();
@@ -132,7 +134,7 @@ class ManualFillingControllerTest : public testing::Test {
   content::BrowserTaskEnvironment task_environment_;
   TestingProfile profile_;
   content::TestWebContentsFactory web_contents_factory_;
-  content::WebContents* web_contents_ =
+  raw_ptr<content::WebContents> web_contents_ =
       web_contents_factory_.CreateWebContents(&profile_);
 
   NiceMock<MockPasswordAccessoryController> mock_pwd_controller_;
@@ -155,6 +157,7 @@ class ManualFillingControllerLegacyTest : public ManualFillingControllerTest {
     scoped_feature_list_.InitWithFeatures(
         /*enabled_features=*/{},
         /*disabled_features=*/{
+            autofill::features::kAutofillEnableManualFallbackForVirtualCards,
             autofill::features::kAutofillKeyboardAccessory,
             autofill::features::kAutofillManualFallbackAndroid});
     ManualFillingControllerImpl::CreateForWebContentsForTesting(
@@ -322,6 +325,35 @@ TEST_F(ManualFillingControllerTest,
 
 TEST_F(ManualFillingControllerTest,
        ShowsAccessoryForCreditCardsTriggeredByObserver) {
+  const AccessorySheetData kTestCreditCardSheet =
+      populate_sheet(AccessoryTabType::CREDIT_CARDS);
+
+  // TODO(crbug.com/1169167): Because the data isn't cached, test that only one
+  // call to `GetSheetData()` happens.
+  EXPECT_CALL(mock_cc_controller_, GetSheetData)
+      .Times(AtLeast(1))
+      .WillRepeatedly(Return(kTestCreditCardSheet));
+  EXPECT_CALL(*view(), OnItemsAvailable(kTestCreditCardSheet))
+      .Times(AnyNumber());
+  EXPECT_CALL(*view(), ShowWhenKeyboardIsVisible());
+
+  FocusFieldAndClearExpectations(FocusedFieldType::kFillableNonSearchField);
+  NotifyCreditCardSourceObserver(IsFillingSourceAvailable(true));
+
+  EXPECT_CALL(*view(), Hide()).Times(0);
+  NotifyCreditCardSourceObserver(IsFillingSourceAvailable(false));
+}
+
+TEST_F(ManualFillingControllerTest,
+       ShowsAccessoryForCreditCardsWhenManualFallbackEnabledForVirtualCards) {
+  base::test::ScopedFeatureList features;
+  features.InitWithFeatures(/*enabled_features=*/
+                            {autofill::features::
+                                 kAutofillEnableManualFallbackForVirtualCards},
+                            /*disabled_features=*/{
+                                autofill::features::kAutofillKeyboardAccessory,
+                                autofill::features::
+                                    kAutofillManualFallbackAndroid});
   const AccessorySheetData kTestCreditCardSheet =
       populate_sheet(AccessoryTabType::CREDIT_CARDS);
 

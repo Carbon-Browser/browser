@@ -128,14 +128,15 @@ public class NavigationPopup implements AdapterView.OnItemClickListener {
         if (!shouldUseIncognitoResources()) {
             mHistory.addEntry(new NavigationEntry(FULL_HISTORY_ENTRY_INDEX,
                     new GURL(UrlConstants.HISTORY_URL), GURL.emptyGURL(), GURL.emptyGURL(),
-                    GURL.emptyGURL(), resources.getString(R.string.show_full_history), null, 0, 0));
+                    GURL.emptyGURL(), resources.getString(R.string.show_full_history), null, 0, 0,
+                    /*isInitialEntry=*/false));
         }
 
         mAdapter = new NavigationAdapter();
 
         mPopup = new ListPopupWindow(context, null, 0, R.style.NavigationPopupDialog);
         mPopup.setOnDismissListener(this::onDismiss);
-        mPopup.setBackgroundDrawable(ApiCompatibilityUtils.getDrawable(resources,
+        mPopup.setBackgroundDrawable(AppCompatResources.getDrawable(context,
                 anchorToBottom ? R.drawable.menu_bg_bottom_tinted : R.drawable.menu_bg_tinted));
         mPopup.setModal(true);
         mPopup.setInputMethodMode(PopupWindow.INPUT_METHOD_NOT_NEEDED);
@@ -327,7 +328,7 @@ public class NavigationPopup implements AdapterView.OnItemClickListener {
             if (entry.getIndex() == FULL_HISTORY_ENTRY_INDEX) {
                 ApiCompatibilityUtils.setImageTintList(viewHolder.mImageView,
                         AppCompatResources.getColorStateList(
-                                mContext, R.color.default_icon_color_blue));
+                                mContext, R.color.default_icon_color_accent1_tint_list));
             } else {
                 ApiCompatibilityUtils.setImageTintList(viewHolder.mImageView, null);
             }

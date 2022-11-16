@@ -8,8 +8,8 @@
 #include <memory>
 #include <vector>
 
-#include "base/compiler_specific.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
+#include "ui/base/models/image_model.h"
 #include "ui/base/models/tree_node_model.h"
 #include "ui/gfx/font_list.h"
 #include "ui/gfx/image/image_skia.h"
@@ -63,6 +63,10 @@ class VIEWS_EXPORT TreeView : public View,
   METADATA_HEADER(TreeView);
 
   TreeView();
+
+  TreeView(const TreeView&) = delete;
+  TreeView& operator=(const TreeView&) = delete;
+
   ~TreeView() override;
 
   // Returns a new ScrollView that contains the given |tree|.
@@ -198,10 +202,10 @@ class VIEWS_EXPORT TreeView : public View,
   void OnDidChangeFocus(View* focused_before, View* focused_now) override;
 
   // PrefixDelegate overrides:
-  int GetRowCount() override;
-  int GetSelectedRow() override;
-  void SetSelectedRow(int row) override;
-  std::u16string GetTextForRow(int row) override;
+  size_t GetRowCount() override;
+  absl::optional<size_t> GetSelectedRow() override;
+  void SetSelectedRow(absl::optional<size_t> row) override;
+  std::u16string GetTextForRow(size_t row) override;
 
  protected:
   // View overrides:
@@ -237,6 +241,10 @@ class VIEWS_EXPORT TreeView : public View,
   class InternalNode : public ui::TreeNode<InternalNode> {
    public:
     InternalNode();
+
+    InternalNode(const InternalNode&) = delete;
+    InternalNode& operator=(const InternalNode&) = delete;
+
     ~InternalNode() override;
 
     // Resets the state from |node|.
@@ -278,14 +286,14 @@ class VIEWS_EXPORT TreeView : public View,
 
    private:
     // The node from the model.
-    ui::TreeModelNode* model_node_ = nullptr;
+    raw_ptr<ui::TreeModelNode> model_node_ = nullptr;
 
     // A virtual accessibility view that is used to expose information about
     // this node to assistive software.
     //
     // This is a weak pointer. This class doesn't own its virtual accessibility
     // view but the Views system does.
-    AXVirtualView* accessibility_view_ = nullptr;
+    raw_ptr<AXVirtualView> accessibility_view_ = nullptr;
 
     // Whether the children have been loaded.
     bool loaded_children_ = false;
@@ -293,8 +301,6 @@ class VIEWS_EXPORT TreeView : public View,
     bool is_expanded_ = false;
 
     int text_width_ = 0;
-
-    DISALLOW_COPY_AND_ASSIGN(InternalNode);
   };
 
   // Used by GetInternalNodeForModelNode.
@@ -458,37 +464,37 @@ class VIEWS_EXPORT TreeView : public View,
   void SetHasFocusIndicator(bool);
 
   // The model, may be null.
-  ui::TreeModel* model_ = nullptr;
+  raw_ptr<ui::TreeModel> model_ = nullptr;
 
   // Default icons for closed/open.
-  gfx::ImageSkia closed_icon_;
-  gfx::ImageSkia open_icon_;
+  ui::ImageModel closed_icon_;
+  ui::ImageModel open_icon_;
 
   // Icons from the model.
-  std::vector<gfx::ImageSkia> icons_;
+  std::vector<ui::ImageModel> icons_;
 
   // The root node.
   InternalNode root_;
 
   // The selected node, may be null.
-  InternalNode* selected_node_ = nullptr;
+  raw_ptr<InternalNode> selected_node_ = nullptr;
 
   // The current active node, may be null.
-  InternalNode* active_node_ = nullptr;
+  raw_ptr<InternalNode> active_node_ = nullptr;
 
   bool editing_ = false;
 
   // The editor; lazily created and never destroyed (well, until TreeView is
   // destroyed). Hidden when no longer editing. We do this to avoid destruction
   // problems.
-  Textfield* editor_ = nullptr;
+  raw_ptr<Textfield> editor_ = nullptr;
 
   // Preferred size of |editor_| with no content.
   gfx::Size empty_editor_size_;
 
   // If non-NULL we've attached a listener to this focus manager. Used to know
   // when focus is changing to another view so that we can cancel the edit.
-  FocusManager* focus_manager_ = nullptr;
+  raw_ptr<FocusManager> focus_manager_ = nullptr;
 
   // Whether to automatically expand children when a parent node is expanded.
   bool auto_expand_children_ = false;
@@ -497,7 +503,7 @@ class VIEWS_EXPORT TreeView : public View,
   bool editable_ = true;
 
   // The controller.
-  TreeViewController* controller_ = nullptr;
+  raw_ptr<TreeViewController> controller_ = nullptr;
 
   // Whether or not the root is shown in the tree.
   bool root_shown_ = true;
@@ -519,8 +525,6 @@ class VIEWS_EXPORT TreeView : public View,
 
   // The current drawing provider for this TreeView.
   std::unique_ptr<TreeViewDrawingProvider> drawing_provider_;
-
-  DISALLOW_COPY_AND_ASSIGN(TreeView);
 };
 
 }  // namespace views

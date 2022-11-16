@@ -10,7 +10,7 @@
 
 #include "base/android/scoped_java_ref.h"
 #include "base/callback.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/history/profile_based_browsing_history_driver.h"
 
 using base::android::JavaParamRef;
@@ -23,6 +23,10 @@ class BrowsingHistoryBridge : public ProfileBasedBrowsingHistoryDriver {
   explicit BrowsingHistoryBridge(JNIEnv* env,
                                  const JavaParamRef<jobject>& obj,
                                  const JavaParamRef<jobject>& j_profile);
+
+  BrowsingHistoryBridge(const BrowsingHistoryBridge&) = delete;
+  BrowsingHistoryBridge& operator=(const BrowsingHistoryBridge&) = delete;
+
   void Destroy(JNIEnv*, const JavaParamRef<jobject>&);
 
   void QueryHistory(JNIEnv* env,
@@ -78,11 +82,9 @@ class BrowsingHistoryBridge : public ProfileBasedBrowsingHistoryDriver {
 
   std::vector<history::BrowsingHistoryService::HistoryEntry> items_to_remove_;
 
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
 
   base::OnceClosure query_history_continuation_;
-
-  DISALLOW_COPY_AND_ASSIGN(BrowsingHistoryBridge);
 };
 
 #endif  // CHROME_BROWSER_ANDROID_HISTORY_BROWSING_HISTORY_BRIDGE_H_

@@ -11,7 +11,7 @@
 
 #include "ash/constants/ash_switches.h"
 #include "base/command_line.h"
-#include "base/macros.h"
+#include "base/containers/adapters.h"
 #include "base/observer_list.h"
 #include "content/public/test/test_web_ui.h"
 #include "device/udev_linux/fake_udev_loader.h"
@@ -43,19 +43,21 @@ class KeyboardHandlerTest : public testing::Test {
     device_data_manager_test_api_.SetKeyboardDevices({});
   }
 
+  KeyboardHandlerTest(const KeyboardHandlerTest&) = delete;
+  KeyboardHandlerTest& operator=(const KeyboardHandlerTest&) = delete;
+
  protected:
   // Updates out-params from the last message sent to WebUI about a change to
   // which keys should be shown. False is returned if the message was invalid or
   // not found.
-  bool GetLastShowKeysChangedMessage(bool* has_caps_lock_out,
-                                     bool* has_external_meta_key_out,
-                                     bool* has_apple_command_key_out,
-                                     bool* has_internal_search_out,
-                                     bool* has_assistant_key_out)
-      WARN_UNUSED_RESULT {
-    for (auto it = web_ui_.call_data().rbegin();
-         it != web_ui_.call_data().rend(); ++it) {
-      const content::TestWebUI::CallData* data = it->get();
+  [[nodiscard]] bool GetLastShowKeysChangedMessage(
+      bool* has_caps_lock_out,
+      bool* has_external_meta_key_out,
+      bool* has_apple_command_key_out,
+      bool* has_internal_search_out,
+      bool* has_assistant_key_out) {
+    for (const std::unique_ptr<content::TestWebUI::CallData>& data :
+         base::Reversed(web_ui_.call_data())) {
       const std::string* name = data->arg1()->GetIfString();
       if (data->function_name() != "cr.webUIListenerCallback" || !name ||
           *name != KeyboardHandler::kShowKeysChangedName) {
@@ -163,14 +165,11 @@ class KeyboardHandlerTest : public testing::Test {
   content::TestWebUI web_ui_;
   TestKeyboardHandler handler_;
   KeyboardHandler::TestAPI handler_test_api_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(KeyboardHandlerTest);
 };
 
 TEST_F(KeyboardHandlerTest, DefaultKeys) {
   base::CommandLine::ForCurrentProcess()->AppendSwitch(
-      chromeos::switches::kHasChromeOSKeyboard);
+      switches::kHasChromeOSKeyboard);
   handler_test_api_.Initialize();
   EXPECT_FALSE(HasLauncherKey());
   EXPECT_FALSE(HasCapsLock());
@@ -251,7 +250,7 @@ TEST_F(KeyboardHandlerTest, ExternalKeyboard) {
 
   // An internal keyboard shouldn't change the defaults.
   base::CommandLine::ForCurrentProcess()->AppendSwitch(
-      chromeos::switches::kHasChromeOSKeyboard);
+      switches::kHasChromeOSKeyboard);
   device_data_manager_test_api_.SetKeyboardDevices({internal_kbd});
   handler_test_api_.Initialize();
   EXPECT_TRUE(HasLauncherKey());

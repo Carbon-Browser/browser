@@ -14,9 +14,11 @@
 #include "base/gtest_prod_util.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
+#include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "chromeos/dbus/power/power_manager_client.h"
 #include "device/bluetooth/bluetooth_adapter.h"
+#include "device/bluetooth/bluetooth_device.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/events/devices/input_device_event_observer.h"
 #include "ui/events/devices/stylus_state.h"
@@ -173,10 +175,9 @@ class ASH_EXPORT PeripheralBatteryListener
       bool active_update) override;
 
   // device::BluetoothAdapter::Observer:
-  void DeviceBatteryChanged(
-      device::BluetoothAdapter* adapter,
-      device::BluetoothDevice* device,
-      absl::optional<uint8_t> new_battery_percentage) override;
+  void DeviceBatteryChanged(device::BluetoothAdapter* adapter,
+                            device::BluetoothDevice* device,
+                            device::BluetoothDevice::BatteryType type) override;
   void DeviceConnectedStateChanged(device::BluetoothAdapter* adapter,
                                    device::BluetoothDevice* device,
                                    bool is_now_connected) override;

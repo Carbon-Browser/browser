@@ -10,7 +10,7 @@
 
 #include "base/bind.h"
 #include "base/json/json_reader.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/test/task_environment.h"
 #include "base/time/tick_clock.h"
@@ -49,6 +49,9 @@ class ResponseInjector {
         base::BindRepeating(&ResponseInjector::AdjustResponseBasedOnSettings,
                             base::Unretained(this)));
   }
+
+  ResponseInjector(const ResponseInjector&) = delete;
+  ResponseInjector& operator=(const ResponseInjector&) = delete;
 
   ~ResponseInjector() {
     url_loader_factory_->SetInterceptor(
@@ -118,7 +121,7 @@ class ResponseInjector {
     complete_immediately_ = complete_immediately;
   }
  private:
-  network::TestURLLoaderFactory* url_loader_factory_;
+  raw_ptr<network::TestURLLoaderFactory> url_loader_factory_;
   GURL pending_url_;
 
   net::HttpStatusCode response_code_;
@@ -126,7 +129,6 @@ class ResponseInjector {
   int current_failure_count_;
   int max_failure_count_;
   std::string results_;
-  DISALLOW_COPY_AND_ASSIGN(ResponseInjector);
 };
 
 const std::string kTestAccessToken = "1/fFAGRNJru1FTz70BzhT3Zg";
@@ -316,7 +318,7 @@ TEST_F(GaiaOAuthClientTest, NetworkFailureRecoverBackoff) {
   //
   // ... so the whole thing should take at least 307s
   EXPECT_GE(task_environment_.GetMockTickClock()->NowTicks() - start,
-            base::TimeDelta::FromSeconds(307));
+            base::Seconds(307));
 }
 
 TEST_F(GaiaOAuthClientTest, OAuthFailure) {
@@ -445,14 +447,11 @@ TEST_F(GaiaOAuthClientTest, GetUserInfo) {
   auth.GetUserInfo("access_token", 1, &delegate);
   FlushNetwork();
 
-  std::unique_ptr<base::Value> value =
-      base::JSONReader::ReadDeprecated(kDummyFullUserInfoResult);
-  DCHECK(value);
-  ASSERT_TRUE(value->is_dict());
-  base::DictionaryValue* expected_result;
-  value->GetAsDictionary(&expected_result);
-
-  ASSERT_TRUE(expected_result->Equals(captured_result.get()));
+  absl::optional<base::Value> expected_value =
+      base::JSONReader::Read(kDummyFullUserInfoResult);
+  DCHECK(expected_value);
+  ASSERT_TRUE(expected_value->is_dict());
+  EXPECT_EQ(*expected_value, *captured_result);
 }
 
 TEST_F(GaiaOAuthClientTest, GetTokenInfo) {
@@ -530,7 +529,7 @@ TEST_F(GaiaOAuthClientTest, GetAccountCapabilities) {
   FlushNetwork();
 
   auto capabilities =
-      captured_result->FindListKey("accountCapabilities")->GetList();
+      captured_result->FindListKey("accountCapabilities")->GetListDeprecated();
   ASSERT_EQ(capabilities.size(), 2U);
   EXPECT_EQ(*capabilities[0].FindStringKey("name"), "accountcapabilities/111");
   EXPECT_FALSE(*capabilities[0].FindBoolKey("booleanValue"));

@@ -6,6 +6,9 @@
 
 #include "base/strings/utf_string_conversions.h"
 #include "components/keyed_service/core/service_access_type.h"
+#import "components/password_manager/core/browser/ui/credential_ui_entry.h"
+#import "components/password_manager/core/browser/ui/credential_utils.h"
+#include "components/password_manager/core/common/password_manager_features.h"
 #include "components/password_manager/core/common/password_manager_pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "ios/chrome/browser/passwords/ios_chrome_bulk_leak_check_service_factory.h"
@@ -27,7 +30,7 @@ using State = password_manager::BulkLeakCheckServiceInterface::State;
 // Key used to attach UserData to a LeakCheckCredential.
 constexpr char kPasswordCheckDataKey[] = "password-check-manager-data-key";
 // Minimum time the check should be running.
-constexpr base::TimeDelta kDelay = base::TimeDelta::FromSeconds(3);
+constexpr base::TimeDelta kDelay = base::Seconds(3);
 
 // Class which ensures that IOSChromePasswordCheckManager will stay alive
 // until password check is completed even if class what initially created
@@ -133,8 +136,21 @@ base::Time IOSChromePasswordCheckManager::GetLastPasswordCheckTime() const {
 }
 
 std::vector<CredentialWithPassword>
-IOSChromePasswordCheckManager::GetCompromisedCredentials() const {
-  return insecure_credentials_manager_.GetInsecureCredentials();
+IOSChromePasswordCheckManager::GetUnmutedCompromisedCredentials() const {
+  const std::vector<CredentialWithPassword> compromised_crendentials =
+      insecure_credentials_manager_.GetInsecureCredentials();
+
+  // Only filter out the muted compromised credentials if the flag is enabled.
+  if (base::FeatureList::IsEnabled(
+          password_manager::features::kMuteCompromisedPasswords)) {
+    std::vector<CredentialWithPassword> unmuted_compromised_crendentials;
+    std::copy_if(
+        compromised_crendentials.begin(), compromised_crendentials.end(),
+        std::back_inserter(unmuted_compromised_crendentials),
+        [](CredentialWithPassword credential) { return !credential.is_muted; });
+    return unmuted_compromised_crendentials;
+  }
+  return compromised_crendentials;
 }
 
 password_manager::SavedPasswordsPresenter::SavedPasswordsView
@@ -150,15 +166,16 @@ IOSChromePasswordCheckManager::GetSavedPasswordsFor(
 
 bool IOSChromePasswordCheckManager::EditPasswordForm(
     const password_manager::PasswordForm& form,
-    base::StringPiece new_username,
-    base::StringPiece new_password) {
-  return saved_passwords_presenter_.EditSavedPasswords(
-      form, base::UTF8ToUTF16(new_username), base::UTF8ToUTF16(new_password));
+    const std::u16string& new_username,
+    const std::u16string& new_password) {
+  return saved_passwords_presenter_.EditSavedPasswords(form, new_username,
+                                                       new_password);
 }
 
 bool IOSChromePasswordCheckManager::AddPasswordForm(
     const password_manager::PasswordForm& form) {
-  return saved_passwords_presenter_.AddPassword(form);
+  return saved_passwords_presenter_.AddCredential(
+      password_manager::CredentialUIEntry(form));
 }
 
 void IOSChromePasswordCheckManager::EditCompromisedPasswordForm(

@@ -8,7 +8,6 @@
 #include <memory>
 #include <string>
 
-#include "base/macros.h"
 #include "extensions/common/permissions/api_permission_set.h"
 
 namespace base {
@@ -22,6 +21,10 @@ namespace extensions {
 class ManifestPermission {
  public:
   ManifestPermission();
+
+  ManifestPermission(const ManifestPermission&) = delete;
+  ManifestPermission& operator=(const ManifestPermission&) = delete;
+
   virtual ~ManifestPermission();
 
   // The manifest key this permission applies to.
@@ -72,9 +75,6 @@ class ManifestPermission {
 
   // Returns true if |rhs| is equal to this.
   bool Equal(const ManifestPermission* rhs) const;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ManifestPermission);
 };
 
 }  // namespace extensions

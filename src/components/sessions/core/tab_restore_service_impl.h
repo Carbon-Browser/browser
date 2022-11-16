@@ -9,7 +9,6 @@
 #include <vector>
 
 #include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/sessions/core/sessions_export.h"
 #include "components/sessions/core/tab_restore_service.h"
@@ -30,6 +29,9 @@ class SESSIONS_EXPORT TabRestoreServiceImpl : public TabRestoreService {
                         PrefService* pref_service,
                         TimeFactory* time_factory);
 
+  TabRestoreServiceImpl(const TabRestoreServiceImpl&) = delete;
+  TabRestoreServiceImpl& operator=(const TabRestoreServiceImpl&) = delete;
+
   ~TabRestoreServiceImpl() override;
 
   // TabRestoreService:
@@ -48,7 +50,7 @@ class SESSIONS_EXPORT TabRestoreServiceImpl : public TabRestoreService {
   const Entries& entries() const override;
   std::vector<LiveTab*> RestoreMostRecentEntry(
       LiveTabContext* context) override;
-  std::unique_ptr<Tab> RemoveTabEntryById(SessionID id) override;
+  void RemoveTabEntryById(SessionID id) override;
   std::vector<LiveTab*> RestoreEntryById(
       LiveTabContext* context,
       SessionID id,
@@ -58,6 +60,8 @@ class SESSIONS_EXPORT TabRestoreServiceImpl : public TabRestoreService {
   void DeleteLastSession() override;
   bool IsRestoring() const override;
   void Shutdown() override;
+
+  void CreateRestoredEntryCommandForTest(SessionID id);
 
  private:
   friend class ::TabRestoreServiceImplTest;
@@ -73,8 +77,6 @@ class SESSIONS_EXPORT TabRestoreServiceImpl : public TabRestoreService {
   std::unique_ptr<PersistenceDelegate> persistence_delegate_;
   TabRestoreServiceHelper helper_;
   PrefChangeRegistrar pref_change_registrar_;
-
-  DISALLOW_COPY_AND_ASSIGN(TabRestoreServiceImpl);
 };
 
 }  // namespace sessions

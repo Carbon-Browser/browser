@@ -23,8 +23,8 @@
 #include "chrome/test/base/scoped_testing_local_state.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
-#include "chromeos/dbus/kerberos/kerberos_client.h"
-#include "chromeos/dbus/kerberos/kerberos_service.pb.h"
+#include "chromeos/ash/components/dbus/kerberos/kerberos_client.h"
+#include "chromeos/ash/components/dbus/kerberos/kerberos_service.pb.h"
 #include "components/user_manager/scoped_user_manager.h"
 #include "components/user_manager/user_manager.h"
 #include "content/public/test/browser_task_environment.h"
@@ -97,7 +97,7 @@ constexpr char kDefaultConfig[] = R"([libdefaults]
 // A long time delta, used to fast forward the task environment until all
 // pending operations are completed. This value should be equal to the maximum
 // time to delay requests on |kBackoffPolicyForManagedAccounts|.
-const base::TimeDelta kLongTimeDelay = base::TimeDelta::FromMinutes(10);
+const base::TimeDelta kLongTimeDelay = base::Minutes(10);
 
 // Fake observer used to test notifications sent by KerberosCredentialsManager
 // on accounts changes.
@@ -138,7 +138,7 @@ class MockKerberosFilesHandler : public KerberosFilesHandler {
   explicit MockKerberosFilesHandler(base::RepeatingClosure get_kerberos_files)
       : KerberosFilesHandler(get_kerberos_files) {}
 
-  ~MockKerberosFilesHandler() = default;
+  ~MockKerberosFilesHandler() override = default;
 
   MOCK_METHOD(void, DeleteFiles, ());
 };
@@ -154,7 +154,7 @@ class KerberosCredentialsManagerTest : public testing::Test {
       : scoped_user_manager_(
             std::make_unique<testing::NiceMock<MockUserManager>>()),
         local_state_(TestingBrowserProcess::GetGlobal()) {
-    chromeos::SessionManagerClient::InitializeFakeInMemory();
+    SessionManagerClient::InitializeFakeInMemory();
     KerberosClient::InitializeFake();
     client_test_interface()->SetTaskDelay(base::TimeDelta());
 
@@ -180,6 +180,11 @@ class KerberosCredentialsManagerTest : public testing::Test {
     mgr_->AddObserver(&observer_);
   }
 
+  KerberosCredentialsManagerTest(const KerberosCredentialsManagerTest&) =
+      delete;
+  KerberosCredentialsManagerTest& operator=(
+      const KerberosCredentialsManagerTest&) = delete;
+
   ~KerberosCredentialsManagerTest() override {
     mgr_->RemoveObserver(&observer_);
     mgr_.reset();
@@ -187,7 +192,7 @@ class KerberosCredentialsManagerTest : public testing::Test {
     profile_.reset();
     UserSessionManager::GetInstance()->Shutdown();
     KerberosClient::Shutdown();
-    chromeos::SessionManagerClient::Shutdown();
+    SessionManagerClient::Shutdown();
   }
 
   void SetPref(const char* name, base::Value value) {
@@ -376,7 +381,6 @@ class KerberosCredentialsManagerTest : public testing::Test {
 
  private:
   base::WeakPtrFactory<KerberosCredentialsManagerTest> weak_ptr_factory_{this};
-  DISALLOW_COPY_AND_ASSIGN(KerberosCredentialsManagerTest);
 };
 
 // The default config sets strong crypto and allows forwardable tickets.
@@ -1319,9 +1323,6 @@ TEST_F(KerberosCredentialsManagerTest,
 // - ValidateConfig
 //     + Normalization like in AddAccountAndAuthenticate
 //     + Calls the ValidateConfig KerberosClient method
-// - AcquireKerberosTgt
-//     + Normalization like in AddAccountAndAuthenticate
-//     + Calls the AcquireKerberosTgt KerberosClient method
 // - SetActiveAccount
 //     + Calls OnAccountsChanged on observers
 // - GetKerberosFiles
@@ -1346,7 +1347,7 @@ TEST_F(KerberosCredentialsManagerTest,
 //   KerberosCredentialsManager, UpdateAccountsFromPref is called.
 //
 // See also
-//   https://analysis.chromium.org/p/chromium/coverage/dir?host=chromium.googlesource.com&project=chromium/src&ref=refs/heads/master&revision=8e25360b5986bc807eb05927b59cb698b120140c&path=//chrome/browser/ash/kerberos/&platform=linux-chromeos
+//   https://analysis.chromium.org/p/chromium/coverage/dir?host=chromium.googlesource.com&project=chromium/src&ref=refs/heads/main&path=//chrome/browser/ash/kerberos/&platform=linux-chromeos
 // for code coverage (try to get as high as possible!).
 
 }  // namespace ash

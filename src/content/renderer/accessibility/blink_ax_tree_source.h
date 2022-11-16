@@ -9,7 +9,6 @@
 
 #include <set>
 #include <string>
-#include <unordered_map>
 
 #include "content/common/content_export.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -32,12 +31,15 @@ class RenderFrameImpl;
 class ScopedFreezeBlinkAXTreeSource {
  public:
   explicit ScopedFreezeBlinkAXTreeSource(BlinkAXTreeSource* tree_source);
+
+  ScopedFreezeBlinkAXTreeSource(const ScopedFreezeBlinkAXTreeSource&) = delete;
+  ScopedFreezeBlinkAXTreeSource& operator=(
+      const ScopedFreezeBlinkAXTreeSource&) = delete;
+
   ~ScopedFreezeBlinkAXTreeSource();
 
  private:
   BlinkAXTreeSource* tree_source_;
-
-  DISALLOW_COPY_AND_ASSIGN(ScopedFreezeBlinkAXTreeSource);
 };
 
 class CONTENT_EXPORT BlinkAXTreeSource
@@ -84,10 +86,10 @@ class CONTENT_EXPORT BlinkAXTreeSource
 
   // The following methods add or remove an image annotator which is used to
   // provide automatic labels for images.
-  void AddImageAnnotator(AXImageAnnotator* const annotator) {
+  void AddBlinkImageAnnotator(AXImageAnnotator* const annotator) {
     image_annotator_ = annotator;
   }
-  void RemoveImageAnnotator() {
+  void RemoveBlinkImageAnnotator() {
     image_annotator_ = nullptr;
     first_unlabeled_image_id_ = absl::nullopt;
   }
@@ -95,16 +97,6 @@ class CONTENT_EXPORT BlinkAXTreeSource
   // Query or update a set of IDs for which we should load inline text boxes.
   bool ShouldLoadInlineTextBoxes(const blink::WebAXObject& obj) const;
   void SetLoadInlineTextBoxesForId(int32_t id);
-
-  void PopulateAXRelativeBounds(blink::WebAXObject obj,
-                                ui::AXRelativeBounds* bounds,
-                                bool* clips_children = nullptr) const;
-
-  // Cached bounding boxes.
-  bool HasCachedBoundingBox(int32_t id) const;
-  const ui::AXRelativeBounds& GetCachedBoundingBox(int32_t id) const;
-  void SetCachedBoundingBox(int32_t id, const ui::AXRelativeBounds& bounds);
-  size_t GetCachedBoundingBoxCount() const;
 
   // AXTreeSource implementation.
   bool GetTreeData(ui::AXTreeData* tree_data) const override;
@@ -145,18 +137,6 @@ class CONTENT_EXPORT BlinkAXTreeSource
     return focus_;
   }
 
-  void SerializeBoundingBoxAttributes(blink::WebAXObject src,
-                                      ui::AXNodeData* dst) const;
-  void SerializeNameAndDescriptionAttributes(blink::WebAXObject src,
-                                             ui::AXNodeData* dst) const;
-  void SerializeInlineTextBoxAttributes(blink::WebAXObject src,
-                                        ui::AXNodeData* dst) const;
-  void SerializeListMarkerAttributes(blink::WebAXObject src,
-                                     ui::AXNodeData* dst) const;
-  void SerializeLiveRegionAttributes(blink::WebAXObject src,
-                                     ui::AXNodeData* dst) const;
-  void SerializeOtherScreenReaderAttributes(blink::WebAXObject src,
-                                            ui::AXNodeData* dst) const;
   blink::WebAXObject ComputeRoot() const;
 
   // Max length for attributes such as aria-label.
@@ -204,9 +184,6 @@ class CONTENT_EXPORT BlinkAXTreeSource
   // Used to ensure that the tutor message that explains to screen reader users
   // how to turn on automatic image labels is provided only once.
   mutable absl::optional<int32_t> first_unlabeled_image_id_ = absl::nullopt;
-
-  // Current bounding box of every object, so we can detect when it moves.
-  mutable std::unordered_map<int, ui::AXRelativeBounds> cached_bounding_boxes_;
 
   // These are updated when calling |Freeze|.
   bool frozen_ = false;

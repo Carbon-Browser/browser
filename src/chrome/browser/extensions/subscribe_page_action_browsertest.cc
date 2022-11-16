@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "base/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/extensions/extension_browsertest.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
@@ -88,6 +89,10 @@ class NamedFrameCreatedObserver : public content::WebContentsObserver {
                             const std::string& frame_name)
       : WebContentsObserver(web_contents), frame_name_(frame_name) {}
 
+  NamedFrameCreatedObserver(const NamedFrameCreatedObserver&) = delete;
+  NamedFrameCreatedObserver& operator=(const NamedFrameCreatedObserver&) =
+      delete;
+
   content::RenderFrameHost* Wait() {
     if (!frame_) {
       run_loop_.Run();
@@ -107,10 +112,8 @@ class NamedFrameCreatedObserver : public content::WebContentsObserver {
   }
 
   base::RunLoop run_loop_;
-  content::RenderFrameHost* frame_ = nullptr;
+  raw_ptr<content::RenderFrameHost> frame_ = nullptr;
   std::string frame_name_;
-
-  DISALLOW_COPY_AND_ASSIGN(NamedFrameCreatedObserver);
 };
 
 bool ValidatePageElement(content::RenderFrameHost* frame,
@@ -145,9 +148,8 @@ void NavigateToFeedAndValidate(net::EmbeddedTestServer* server,
     // TODO(finnur): Implement this is a non-flaky way.
   }
 
-  content::DOMMessageQueue message_queue;
-
   WebContents* tab = browser->tab_strip_model()->GetActiveWebContents();
+  content::DOMMessageQueue message_queue(tab);
   NamedFrameCreatedObserver subframe_observer(tab, "preview");
 
   // Navigate to the subscribe page directly.
@@ -163,8 +165,8 @@ void NavigateToFeedAndValidate(net::EmbeddedTestServer* server,
   content::RenderFrameHost* frame = content::FrameMatchingPredicate(
       tab->GetPrimaryPage(),
       base::BindRepeating(&content::FrameMatchesName, "preview"));
-  ASSERT_TRUE(ValidatePageElement(
-      tab->GetMainFrame(), kScriptFeedTitle, expected_feed_title));
+  ASSERT_TRUE(ValidatePageElement(tab->GetPrimaryMainFrame(), kScriptFeedTitle,
+                                  expected_feed_title));
   ASSERT_TRUE(ValidatePageElement(frame, kScriptAnchor, expected_item_title));
   ASSERT_TRUE(ValidatePageElement(frame, kScriptDesc, expected_item_desc));
   ASSERT_TRUE(ValidatePageElement(frame, kScriptError, expected_error));

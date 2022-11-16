@@ -8,7 +8,6 @@
 #include <stdint.h>
 #include <algorithm>
 
-#include "base/macros.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/metrics_hashes.h"
@@ -41,21 +40,21 @@ void ReportLanguageVerification(LanguageVerificationType type) {
 }
 
 void ReportTimeToBeReady(double time_in_msec) {
-  UMA_HISTOGRAM_MEDIUM_TIMES(metrics_internal::kTranslateTimeToBeReady,
-                             base::TimeDelta::FromMicroseconds(
-                                 static_cast<int64_t>(time_in_msec * 1000.0)));
+  UMA_HISTOGRAM_MEDIUM_TIMES(
+      metrics_internal::kTranslateTimeToBeReady,
+      base::Microseconds(static_cast<int64_t>(time_in_msec * 1000.0)));
 }
 
 void ReportTimeToLoad(double time_in_msec) {
-  UMA_HISTOGRAM_MEDIUM_TIMES(metrics_internal::kTranslateTimeToLoad,
-                             base::TimeDelta::FromMicroseconds(
-                                 static_cast<int64_t>(time_in_msec * 1000.0)));
+  UMA_HISTOGRAM_MEDIUM_TIMES(
+      metrics_internal::kTranslateTimeToLoad,
+      base::Microseconds(static_cast<int64_t>(time_in_msec * 1000.0)));
 }
 
 void ReportTimeToTranslate(double time_in_msec) {
-  UMA_HISTOGRAM_MEDIUM_TIMES(metrics_internal::kTranslateTimeToTranslate,
-                             base::TimeDelta::FromMicroseconds(
-                                 static_cast<int64_t>(time_in_msec * 1000.0)));
+  UMA_HISTOGRAM_MEDIUM_TIMES(
+      metrics_internal::kTranslateTimeToTranslate,
+      base::Microseconds(static_cast<int64_t>(time_in_msec * 1000.0)));
 }
 
 void ReportUserActionDuration(base::TimeTicks begin, base::TimeTicks end) {

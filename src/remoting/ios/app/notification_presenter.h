@@ -7,7 +7,6 @@
 
 #import <Foundation/Foundation.h>
 
-#include "base/macros.h"
 #include "base/no_destructor.h"
 #include "base/sequence_checker.h"
 #include "base/threading/sequence_bound.h"
@@ -25,6 +24,9 @@ class NotificationPresenter final {
  public:
   static NotificationPresenter* GetInstance();
 
+  NotificationPresenter(const NotificationPresenter&) = delete;
+  NotificationPresenter& operator=(const NotificationPresenter&) = delete;
+
   void Start();
 
  private:
@@ -39,7 +41,7 @@ class NotificationPresenter final {
   NotificationPresenter();
   ~NotificationPresenter() = delete;
 
-  void FetchNotificationIfNecessary();
+  void FetchNotification();
   void OnNotificationFetched(absl::optional<NotificationMessage> notification);
 
   NotificationClient notification_client_;
@@ -52,8 +54,6 @@ class NotificationPresenter final {
   State state_ = State::NOT_FETCHED;
 
   SEQUENCE_CHECKER(sequence_checker_);
-
-  DISALLOW_COPY_AND_ASSIGN(NotificationPresenter);
 };
 
 }  // namespace remoting

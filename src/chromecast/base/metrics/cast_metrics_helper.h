@@ -10,7 +10,6 @@
 
 #include "base/callback.h"
 #include "base/containers/flat_map.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/no_destructor.h"
 #include "base/threading/sequenced_task_runner_handle.h"
@@ -69,6 +68,9 @@ class CastMetricsHelper {
       std::string* sdk_version);
 
   static CastMetricsHelper* GetInstance();
+
+  CastMetricsHelper(const CastMetricsHelper&) = delete;
+  CastMetricsHelper& operator=(const CastMetricsHelper&) = delete;
 
   // This records the startup time of an app load (note: another app
   // may be running and still collecting metrics).
@@ -186,8 +188,6 @@ class CastMetricsHelper {
 
   // Default RecordAction callback when metrics_sink_ is not set.
   RecordActionCallback record_action_callback_;
-
-  DISALLOW_COPY_AND_ASSIGN(CastMetricsHelper);
 };
 
 }  // namespace metrics

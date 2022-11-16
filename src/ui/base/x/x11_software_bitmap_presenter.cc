@@ -14,7 +14,7 @@
 
 #include "base/bind.h"
 #include "base/logging.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted_memory.h"
 #include "skia/ext/legacy_display_globals.h"
 #include "third_party/skia/include/core/SkCanvas.h"
@@ -40,15 +40,17 @@ class ScopedPixmap {
   ScopedPixmap(x11::Connection* connection, x11::Pixmap pixmap)
       : connection_(connection), pixmap_(pixmap) {}
 
+  ScopedPixmap(const ScopedPixmap&) = delete;
+  ScopedPixmap& operator=(const ScopedPixmap&) = delete;
+
   ~ScopedPixmap() {
     if (pixmap_ != x11::Pixmap::None)
       connection_->FreePixmap({pixmap_});
   }
 
  private:
-  x11::Connection* const connection_;
+  const raw_ptr<x11::Connection> connection_;
   x11::Pixmap pixmap_;
-  DISALLOW_COPY_AND_ASSIGN(ScopedPixmap);
 };
 
 }  // namespace

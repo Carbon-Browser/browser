@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "chrome/browser/apps/intent_helper/apps_navigation_types.h"
+#include "components/services/app_service/public/cpp/app_types.h"
 
 namespace content {
 class NavigationHandle;
@@ -43,6 +44,8 @@ bool IsNavigateFromLink(content::NavigationHandle* navigation_handle);
 void CloseOrGoBack(content::WebContents* web_contents);
 
 bool IsGoogleRedirectorUrlForTesting(const GURL& url);
+
+PickerEntryType GetPickerEntryType(AppType app_type);
 
 }  // namespace apps
 

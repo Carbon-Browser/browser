@@ -6,15 +6,16 @@
 
 #include <memory>
 
+#include "ash/components/multidevice/remote_device_test_util.h"
 #include "base/memory/ptr_util.h"
 #include "base/observer_list.h"
 #include "base/test/metrics/histogram_tester.h"
+#include "base/values.h"
 #include "chrome/browser/notifications/notification_display_service_tester.h"
 #include "chrome/common/url_constants.h"
 #include "chrome/test/base/browser_with_test_window_test.h"
 #include "chrome/test/base/testing_profile.h"
-#include "chromeos/components/multidevice/remote_device_test_util.h"
-#include "chromeos/network/network_connect.h"
+#include "chromeos/ash/components/network/network_connect.h"
 
 namespace {
 const int kTestNetworkSignalStrength = 50;
@@ -45,13 +46,12 @@ class TetherNotificationPresenterTest : public BrowserWithTestWindowTest {
                               bool enabled_state) override {}
     void ShowMobileSetup(const std::string& network_id) override {}
     void ShowCarrierAccountDetail(const std::string& network_id) override {}
-    void ConfigureNetworkIdAndConnect(
-        const std::string& network_id,
-        const base::DictionaryValue& shill_properties,
-        bool shared) override {}
-    void CreateConfigurationAndConnect(base::DictionaryValue* shill_properties,
+    void ConfigureNetworkIdAndConnect(const std::string& network_id,
+                                      const base::Value& shill_properties,
+                                      bool shared) override {}
+    void CreateConfigurationAndConnect(base::Value* shill_properties,
                                        bool shared) override {}
-    void CreateConfiguration(base::DictionaryValue* shill_properties,
+    void CreateConfiguration(base::Value* shill_properties,
                              bool shared) override {}
 
     void ConnectToNetworkId(const std::string& network_id) override {
@@ -82,6 +82,11 @@ class TetherNotificationPresenterTest : public BrowserWithTestWindowTest {
     Profile* last_profile_ = nullptr;
     std::string last_settings_subpage_;
   };
+
+  TetherNotificationPresenterTest(const TetherNotificationPresenterTest&) =
+      delete;
+  TetherNotificationPresenterTest& operator=(
+      const TetherNotificationPresenterTest&) = delete;
 
  protected:
   TetherNotificationPresenterTest()
@@ -194,9 +199,6 @@ class TetherNotificationPresenterTest : public BrowserWithTestWindowTest {
   TestSettingsUiDelegate* test_settings_ui_delegate_;
   std::unique_ptr<TetherNotificationPresenter> notification_presenter_;
   std::unique_ptr<NotificationDisplayServiceTester> display_service_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(TetherNotificationPresenterTest);
 };
 
 TEST_F(TetherNotificationPresenterTest,

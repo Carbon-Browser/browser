@@ -9,7 +9,9 @@
 #include <memory>
 #include <string>
 #include <unordered_set>
+#include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "components/sync/base/client_tag_hash.h"
@@ -35,25 +37,27 @@ class ModelTypeState;
 namespace syncer {
 
 class CommitQueue;
-class ProcessorEntity;
 
 // A sync component embedded on the model type's thread that tracks entity
 // metadata in the model store and coordinates communication between sync and
 // model type threads. All changes in flight (either incoming from the server
 // or local changes reported by the bridge) must specify a client tag.
 //
-// See //docs/sync/uss/client_tag_based_model_type_processor.md for a more
-// thorough description.
+// See
+// //docs/website/site/developers/design-documents/sync/client-tag-based-model-type-processor/index.md
+// for a more thorough description.
 class ClientTagBasedModelTypeProcessor : public ModelTypeProcessor,
                                          public ModelTypeChangeProcessor,
                                          public ModelTypeControllerDelegate {
  public:
   ClientTagBasedModelTypeProcessor(ModelType type,
                                    const base::RepeatingClosure& dump_stack);
-  // Used only for unit-tests.
-  ClientTagBasedModelTypeProcessor(ModelType type,
-                                   const base::RepeatingClosure& dump_stack,
-                                   bool commit_only);
+
+  ClientTagBasedModelTypeProcessor(const ClientTagBasedModelTypeProcessor&) =
+      delete;
+  ClientTagBasedModelTypeProcessor& operator=(
+      const ClientTagBasedModelTypeProcessor&) = delete;
+
   ~ClientTagBasedModelTypeProcessor() override;
 
   // Returns true if the handshake with sync thread is complete.
@@ -71,6 +75,7 @@ class ClientTagBasedModelTypeProcessor : public ModelTypeProcessor,
   void UntrackEntityForStorageKey(const std::string& storage_key) override;
   void UntrackEntityForClientTagHash(
       const ClientTagHash& client_tag_hash) override;
+  std::vector<std::string> GetAllTrackedStorageKeys() const override;
   bool IsEntityUnsynced(const std::string& storage_key) override;
   base::Time GetEntityCreationTime(
       const std::string& storage_key) const override;
@@ -79,11 +84,13 @@ class ClientTagBasedModelTypeProcessor : public ModelTypeProcessor,
   void OnModelStarting(ModelTypeSyncBridge* bridge) override;
   void ModelReadyToSync(std::unique_ptr<MetadataBatch> batch) override;
   bool IsTrackingMetadata() const override;
-  std::string TrackedAccountId() override;
-  std::string TrackedCacheGuid() override;
+  std::string TrackedAccountId() const override;
+  std::string TrackedCacheGuid() const override;
   void ReportError(const ModelError& error) override;
   absl::optional<ModelError> GetError() const override;
   base::WeakPtr<ModelTypeControllerDelegate> GetControllerDelegate() override;
+  const sync_pb::EntitySpecifics& GetPossiblyTrimmedRemoteSpecifics(
+      const std::string& storage_key) const override;
 
   // ModelTypeProcessor implementation.
   void ConnectSync(std::unique_ptr<CommitQueue> worker) override;
@@ -195,13 +202,6 @@ class ClientTagBasedModelTypeProcessor : public ModelTypeProcessor,
   ClientTagHash GetClientTagHash(const std::string& storage_key,
                                  const EntityData& data) const;
 
-  // Create an entity in the entity map for |storage_key| and return a pointer
-  // to it.
-  // Requires that no entity for |storage_key| already exists in the map.
-  // Never returns nullptr.
-  ProcessorEntity* CreateEntity(const std::string& storage_key,
-                                const EntityData& data);
-
   // Removes metadata for all entries unless they are unsynced.
   // This is used to limit the amount of data stored in sync, and this does not
   // tell the bridge to delete the actual data.
@@ -242,7 +242,7 @@ class ClientTagBasedModelTypeProcessor : public ModelTypeProcessor,
 
   // ModelTypeSyncBridge linked to this processor. The bridge owns this
   // processor instance so the pointer should never become invalid.
-  ModelTypeSyncBridge* bridge_;
+  raw_ptr<ModelTypeSyncBridge> bridge_;
 
   // Function to capture and upload a stack trace when an error occurs.
   const base::RepeatingClosure dump_stack_;
@@ -283,12 +283,6 @@ class ClientTagBasedModelTypeProcessor : public ModelTypeProcessor,
 
   std::unique_ptr<ProcessorEntityTracker> entity_tracker_;
 
-  // If the processor should behave as if |type_| is one of the commit only
-  // model types. For this processor, being commit only means that on commit
-  // confirmation, we should delete local data, because the model side never
-  // intends to read it. This includes both data and metadata.
-  const bool commit_only_;
-
   SEQUENCE_CHECKER(sequence_checker_);
 
   // WeakPtrFactory for this processor for ModelTypeController (only gets
@@ -299,8 +293,6 @@ class ClientTagBasedModelTypeProcessor : public ModelTypeProcessor,
   // WeakPtrFactory for this processor which will be sent to sync thread.
   base::WeakPtrFactory<ClientTagBasedModelTypeProcessor>
       weak_ptr_factory_for_worker_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ClientTagBasedModelTypeProcessor);
 };
 
 }  // namespace syncer

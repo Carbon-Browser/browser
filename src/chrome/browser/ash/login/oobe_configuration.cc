@@ -9,12 +9,11 @@
 #include "base/json/json_reader.h"
 #include "base/logging.h"
 #include "chrome/browser/ash/login/configuration_keys.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
-#include "chromeos/dbus/oobe_config/oobe_configuration_client.h"
-#include "ui/base/ime/chromeos/input_method_manager.h"
-#include "ui/base/ime/chromeos/input_method_util.h"
+#include "chromeos/ash/components/dbus/oobe_config/oobe_configuration_client.h"
+#include "ui/base/ime/ash/input_method_manager.h"
+#include "ui/base/ime/ash/input_method_util.h"
 
-namespace chromeos {
+namespace ash {
 
 // static
 OobeConfiguration* OobeConfiguration::instance = nullptr;
@@ -67,11 +66,8 @@ void OobeConfiguration::ResetConfiguration() {
 void OobeConfiguration::CheckConfiguration() {
   if (skip_check_for_testing_)
     return;
-  DBusThreadManager::Get()
-      ->GetOobeConfigurationClient()
-      ->CheckForOobeConfiguration(
-          base::BindOnce(&OobeConfiguration::OnConfigurationCheck,
-                         weak_factory_.GetWeakPtr()));
+  OobeConfigurationClient::Get()->CheckForOobeConfiguration(base::BindOnce(
+      &OobeConfiguration::OnConfigurationCheck, weak_factory_.GetWeakPtr()));
 }
 
 void OobeConfiguration::OnConfigurationCheck(bool has_configuration,
@@ -82,18 +78,16 @@ void OobeConfiguration::OnConfigurationCheck(bool has_configuration,
     return;
   }
 
-  base::JSONReader::ValueWithError parsed_json =
-      base::JSONReader::ReadAndReturnValueWithError(
-          configuration, base::JSON_ALLOW_TRAILING_COMMAS);
-  if (!parsed_json.value) {
+  auto parsed_json = base::JSONReader::ReadAndReturnValueWithError(
+      configuration,
+      base::JSON_PARSE_CHROMIUM_EXTENSIONS | base::JSON_ALLOW_TRAILING_COMMAS);
+  if (!parsed_json.has_value()) {
     LOG(ERROR) << "Error parsing OOBE configuration: "
-               << parsed_json.error_message;
-  } else if (!chromeos::configuration::ValidateConfiguration(
-                 *parsed_json.value)) {
+               << parsed_json.error().message;
+  } else if (!configuration::ValidateConfiguration(*parsed_json)) {
     LOG(ERROR) << "Invalid OOBE configuration";
   } else {
-    configuration_ =
-        base::Value::ToUniquePtrValue(std::move(*parsed_json.value));
+    configuration_ = base::Value::ToUniquePtrValue(std::move(*parsed_json));
     UpdateConfigurationValues();
   }
   NotifyObservers();
@@ -103,8 +97,7 @@ void OobeConfiguration::UpdateConfigurationValues() {
   auto* ime_value = configuration_->FindKeyOfType(configuration::kInputMethod,
                                                   base::Value::Type::STRING);
   if (ime_value) {
-    chromeos::input_method::InputMethodManager* imm =
-        chromeos::input_method::InputMethodManager::Get();
+    auto* imm = input_method::InputMethodManager::Get();
     configuration_->SetKey(
         configuration::kInputMethod,
         base::Value(imm->GetInputMethodUtil()->MigrateInputMethod(
@@ -117,4 +110,4 @@ void OobeConfiguration::NotifyObservers() {
     observer.OnOobeConfigurationChanged();
 }
 
-}  // namespace chromeos
+}  // namespace ash

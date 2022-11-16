@@ -12,9 +12,7 @@
 #include "base/check_op.h"
 #include "base/files/file.h"
 #include "base/location.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
-#include "base/task/post_task.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
@@ -46,7 +44,7 @@ std::unique_ptr<std::string> ReadOnFileThread(const base::FilePath& path) {
 
   result = std::make_unique<std::string>();
   result->resize(file_info.size);
-  if (file.Read(0, base::data(*result), file_info.size) != file_info.size) {
+  if (file.Read(0, std::data(*result), file_info.size) != file_info.size) {
     result.reset();
   }
 
@@ -55,16 +53,13 @@ std::unique_ptr<std::string> ReadOnFileThread(const base::FilePath& path) {
 
 class ImageDecoderDelegateAdapter : public ImageDecoder::ImageRequest {
  public:
-  ImageDecoderDelegateAdapter(
-      std::unique_ptr<std::string> data,
+  explicit ImageDecoderDelegateAdapter(
       storage::CopyOrMoveFileValidator::ResultCallback callback)
-      : data_(std::move(data)), callback_(std::move(callback)) {
-    DCHECK(data_);
-  }
+      : callback_(std::move(callback)) {}
 
-  const std::string& data() {
-    return *data_;
-  }
+  ImageDecoderDelegateAdapter(const ImageDecoderDelegateAdapter&) = delete;
+  ImageDecoderDelegateAdapter& operator=(const ImageDecoderDelegateAdapter&) =
+      delete;
 
   // ImageDecoder::ImageRequest methods.
   void OnImageDecoded(const SkBitmap& /*decoded_image*/) override {
@@ -78,10 +73,7 @@ class ImageDecoderDelegateAdapter : public ImageDecoder::ImageRequest {
   }
 
  private:
-  std::unique_ptr<std::string> data_;
   storage::CopyOrMoveFileValidator::ResultCallback callback_;
-
-  DISALLOW_COPY_AND_ASSIGN(ImageDecoderDelegateAdapter);
 };
 
 }  // namespace
@@ -130,6 +122,6 @@ void SupportedImageTypeValidator::OnFileOpen(
 
   // |adapter| will delete itself after a completion message is received.
   ImageDecoderDelegateAdapter* adapter =
-      new ImageDecoderDelegateAdapter(std::move(data), std::move(callback_));
-  ImageDecoder::Start(adapter, adapter->data());
+      new ImageDecoderDelegateAdapter(std::move(callback_));
+  ImageDecoder::Start(adapter, std::move(*data));
 }

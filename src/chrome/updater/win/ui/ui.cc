@@ -9,8 +9,8 @@
 
 #include "base/logging.h"
 #include "chrome/updater/updater_scope.h"
-#include "chrome/updater/win/ui/constants.h"
-#include "chrome/updater/win/ui/util.h"
+#include "chrome/updater/win/ui/ui_constants.h"
+#include "chrome/updater/win/ui/ui_util.h"
 #include "chrome/updater/win/win_util.h"
 
 namespace updater {
@@ -172,7 +172,16 @@ void OmahaWnd::Show() {
   CenterWindow(nullptr);
   SetVisible(true);
 
-  ::SetForegroundWindow(*this);
+  // To allow the progress UI to get foreground, the splash screen calls
+  // `::LockSetForegroundWindow(LSFW_LOCK)` before closing the splash screen to
+  // prevent other applications from making a foreground change in between. The
+  // following call completes the cycle with LSFW_UNLOCK.
+  ::LockSetForegroundWindow(LSFW_UNLOCK);
+
+  if (!::SetForegroundWindow(*this)) {
+    LOG(WARNING) << __func__
+                 << ": ::SetForegroundWindow failed: " << ::GetLastError();
+  }
 }
 
 bool OmahaWnd::OnComplete() {

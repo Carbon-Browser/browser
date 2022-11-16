@@ -10,10 +10,12 @@
 #include <unordered_map>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/string_util.h"
 #include "base/version.h"
 #include "components/keyed_service/core/keyed_service.h"
+#include "content/public/browser/service_worker_context.h"
 #include "content/public/browser/service_worker_context_observer.h"
 #include "extensions/browser/lazy_context_id.h"
 #include "extensions/browser/lazy_context_task_queue.h"
@@ -26,7 +28,6 @@
 
 namespace content {
 class BrowserContext;
-class ServiceWorkerContext;
 }
 
 namespace extensions {
@@ -79,6 +80,10 @@ class ServiceWorkerTaskQueue : public KeyedService,
                                public content::ServiceWorkerContextObserver {
  public:
   explicit ServiceWorkerTaskQueue(content::BrowserContext* browser_context);
+
+  ServiceWorkerTaskQueue(const ServiceWorkerTaskQueue&) = delete;
+  ServiceWorkerTaskQueue& operator=(const ServiceWorkerTaskQueue&) = delete;
+
   ~ServiceWorkerTaskQueue() override;
 
   // Convenience method to return the ServiceWorkerTaskQueue for a given
@@ -139,6 +144,10 @@ class ServiceWorkerTaskQueue : public KeyedService,
   class TestObserver {
    public:
     TestObserver();
+
+    TestObserver(const TestObserver&) = delete;
+    TestObserver& operator=(const TestObserver&) = delete;
+
     virtual ~TestObserver();
 
     // Called when an extension with id |extension_id| is going to be activated.
@@ -151,8 +160,9 @@ class ServiceWorkerTaskQueue : public KeyedService,
         size_t num_pending_tasks,
         blink::ServiceWorkerStatusCode status_code) {}
 
-   private:
-    DISALLOW_COPY_AND_ASSIGN(TestObserver);
+    // Called when SW was re-registered to fix missing registration, and that
+    // step finished to mitigate the problem.
+    virtual void RegistrationMismatchMitigated(bool mitigation_succeeded) {}
   };
 
   static void SetObserverForTest(TestObserver* observer);
@@ -164,9 +174,19 @@ class ServiceWorkerTaskQueue : public KeyedService,
 
   class WorkerState;
 
+  enum class RegistrationReason {
+    REGISTER_ON_EXTENSION_LOAD,
+    RE_REGISTER_ON_STATE_MISMATCH,
+  };
+
+  void RegisterServiceWorker(RegistrationReason reason,
+                             const SequencedContextId& context_id,
+                             const Extension& extension);
+
   void RunTasksAfterStartWorker(const SequencedContextId& context_id);
 
   void DidRegisterServiceWorker(const SequencedContextId& context_id,
+                                RegistrationReason reason,
                                 base::Time start_time,
                                 blink::ServiceWorkerStatusCode status);
   void DidUnregisterServiceWorker(const ExtensionId& extension_id,
@@ -218,6 +238,14 @@ class ServiceWorkerTaskQueue : public KeyedService,
   void StartObserving(content::ServiceWorkerContext* service_worker_context);
   void StopObserving(content::ServiceWorkerContext* service_worker_context);
 
+  // Asynchronously verifies whether an expected SW registration (denoted by
+  // |scope|) is there.
+  void VerifyRegistration(content::ServiceWorkerContext* service_worker_context,
+                          const SequencedContextId& context_id,
+                          const GURL& scope);
+  void DidVerifyRegistration(const SequencedContextId& context_id,
+                             content::ServiceWorkerCapability capability);
+
   int next_activation_sequence_ = 0;
 
   std::multiset<content::ServiceWorkerContext*> observing_worker_contexts_;
@@ -225,7 +253,7 @@ class ServiceWorkerTaskQueue : public KeyedService,
   // The state of worker of each activated extension.
   std::map<SequencedContextId, WorkerState> worker_state_map_;
 
-  content::BrowserContext* const browser_context_ = nullptr;
+  const raw_ptr<content::BrowserContext> browser_context_ = nullptr;
 
   // A map of Service Worker registrations if this instance is for an
   // off-the-record BrowserContext. These are stored in the ExtensionPrefs
@@ -238,8 +266,6 @@ class ServiceWorkerTaskQueue : public KeyedService,
   std::map<ExtensionId, ActivationSequence> activation_sequences_;
 
   base::WeakPtrFactory<ServiceWorkerTaskQueue> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ServiceWorkerTaskQueue);
 };
 
 }  // namespace extensions

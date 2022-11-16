@@ -14,12 +14,13 @@
 
 #include "base/callback_forward.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/task/cancelable_task_tracker.h"
 #include "base/time/clock.h"
+#include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "base/values.h"
 #include "components/history/core/browser/history_service.h"
@@ -138,11 +139,15 @@ class BrowsingHistoryService : public HistoryServiceObserver,
   BrowsingHistoryService(BrowsingHistoryDriver* driver,
                          HistoryService* local_history,
                          syncer::SyncService* sync_service);
+
+  BrowsingHistoryService(const BrowsingHistoryService&) = delete;
+  BrowsingHistoryService& operator=(const BrowsingHistoryService&) = delete;
+
   ~BrowsingHistoryService() override;
 
   // Start a new query with the given parameters.
-  void QueryHistory(const std::u16string& search_text,
-                    const QueryOptions& options);
+  virtual void QueryHistory(const std::u16string& search_text,
+                            const QueryOptions& options);
 
   // Gets a version of the last time any webpage on the given host was visited,
   // by using the min("last navigation time", x minutes ago) as the upper bound
@@ -154,6 +159,9 @@ class BrowsingHistoryService : public HistoryServiceObserver,
       base::OnceCallback<void(base::Time)> callback);
 
   // Removes `items` from history.
+  // TODO(tommycli): Update this API to take only URLs and timestamps, because
+  // callers only have that information, and only that information is used by
+  // the actual implementation.
   void RemoveVisits(const std::vector<HistoryEntry>& items);
 
   // SyncServiceObserver implementation.
@@ -165,6 +173,8 @@ class BrowsingHistoryService : public HistoryServiceObserver,
                          HistoryService* local_history,
                          syncer::SyncService* sync_service,
                          std::unique_ptr<base::OneShotTimer> web_history_timer);
+  // Should be used only for tests when mocking the service.
+  BrowsingHistoryService();
 
  private:
   FRIEND_TEST_ALL_PREFIXES(::BrowsingHistoryHandlerTest,
@@ -274,18 +284,16 @@ class BrowsingHistoryService : public HistoryServiceObserver,
   // Whether there are other forms of browsing history on the history server.
   bool has_other_forms_of_browsing_history_ = false;
 
-  BrowsingHistoryDriver* driver_;
+  raw_ptr<BrowsingHistoryDriver> driver_;
 
-  HistoryService* local_history_;
+  raw_ptr<HistoryService> local_history_;
 
-  syncer::SyncService* sync_service_;
+  raw_ptr<syncer::SyncService> sync_service_;
 
   // The clock used to vend times.
   std::unique_ptr<base::Clock> clock_;
 
   base::WeakPtrFactory<BrowsingHistoryService> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(BrowsingHistoryService);
 };
 
 }  // namespace history

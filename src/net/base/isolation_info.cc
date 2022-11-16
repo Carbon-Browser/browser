@@ -6,6 +6,8 @@
 
 #include "base/check_op.h"
 #include "base/unguessable_token.h"
+#include "net/base/features.h"
+#include "net/base/isolation_info.pb.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace net {
@@ -36,20 +38,26 @@ bool ValidateSameSite(const url::Origin& origin,
 
 // Checks if these values are consistent. See IsolationInfo::Create() for
 // descriptions of consistent sets of values. Also allows values used by the
-// 0-argument constructor. Additionally, |opaque_and_non_transient| can only be
-// true if both origins are opaque and |site_for_cookies| is null.
+// 0-argument constructor.
 bool IsConsistent(IsolationInfo::RequestType request_type,
                   const absl::optional<url::Origin>& top_frame_origin,
                   const absl::optional<url::Origin>& frame_origin,
                   const SiteForCookies& site_for_cookies,
-                  bool opaque_and_non_transient,
                   absl::optional<std::set<SchemefulSite>> party_context,
                   const base::UnguessableToken* nonce) {
   // Check for the default-constructed case.
   if (!top_frame_origin) {
     return request_type == IsolationInfo::RequestType::kOther &&
            !frame_origin && !nonce && site_for_cookies.IsNull() &&
-           !opaque_and_non_transient && !party_context;
+           !party_context;
+  }
+
+  // if `kForceIsolationInfoFrameOriginToTopLevelFrame` is enabled the
+  // `top_frame_origin` should be equal to the `frame_origin`.
+  if (base::FeatureList::IsEnabled(
+          net::features::kForceIsolationInfoFrameOriginToTopLevelFrame) &&
+      top_frame_origin != frame_origin) {
+    return false;
   }
 
   // |frame_origin| may only be nullopt if |top_frame_origin| is as well.
@@ -60,12 +68,6 @@ bool IsConsistent(IsolationInfo::RequestType request_type,
   // consistent with the |top_frame_origin|.
   if (!ValidateSameSite(*top_frame_origin, site_for_cookies))
     return false;
-
-  if (opaque_and_non_transient) {
-    return (request_type == IsolationInfo::RequestType::kOther &&
-            top_frame_origin->opaque() && top_frame_origin == frame_origin &&
-            !nonce && site_for_cookies.IsNull());
-  }
 
   switch (request_type) {
     case IsolationInfo::RequestType::kMainFrame:
@@ -98,7 +100,6 @@ IsolationInfo::IsolationInfo()
                     absl::nullopt,
                     absl::nullopt,
                     SiteForCookies(),
-                    false /* opaque_and_non_transient */,
                     nullptr /* nonce */,
                     absl::nullopt) {}
 
@@ -112,7 +113,6 @@ IsolationInfo IsolationInfo::CreateForInternalRequest(
     const url::Origin& top_frame_origin) {
   return IsolationInfo(RequestType::kOther, top_frame_origin, top_frame_origin,
                        SiteForCookies::FromOrigin(top_frame_origin),
-                       false /* opaque_and_non_transient */,
                        nullptr /* nonce */,
                        std::set<SchemefulSite>() /* party_context */);
 }
@@ -120,15 +120,37 @@ IsolationInfo IsolationInfo::CreateForInternalRequest(
 IsolationInfo IsolationInfo::CreateTransient() {
   url::Origin opaque_origin;
   return IsolationInfo(RequestType::kOther, opaque_origin, opaque_origin,
-                       SiteForCookies(), false /* opaque_and_non_transient */,
-                       nullptr /* nonce */, absl::nullopt /* party_context */);
+                       SiteForCookies(), nullptr /* nonce */,
+                       absl::nullopt /* party_context */);
 }
 
-IsolationInfo IsolationInfo::CreateOpaqueAndNonTransient() {
-  url::Origin opaque_origin;
-  return IsolationInfo(RequestType::kOther, opaque_origin, opaque_origin,
-                       SiteForCookies(), true /* opaque_and_non_transient */,
-                       nullptr /* nonce */, absl::nullopt /* party_context */);
+absl::optional<IsolationInfo> IsolationInfo::Deserialize(
+    const std::string& serialized) {
+  proto::IsolationInfo proto;
+  if (!proto.ParseFromString(serialized))
+    return absl::nullopt;
+
+  absl::optional<url::Origin> top_frame_origin;
+  if (proto.has_top_frame_origin())
+    top_frame_origin = url::Origin::Create(GURL(proto.top_frame_origin()));
+
+  absl::optional<url::Origin> frame_origin;
+  if (proto.has_frame_origin())
+    frame_origin = url::Origin::Create(GURL(proto.frame_origin()));
+
+  absl::optional<std::set<SchemefulSite>> party_context;
+  if (proto.has_party_context()) {
+    party_context = std::set<SchemefulSite>();
+    for (const auto& site : proto.party_context().site()) {
+      party_context->insert(SchemefulSite::Deserialize(site));
+    }
+  }
+
+  return IsolationInfo::CreateIfConsistent(
+      static_cast<RequestType>(proto.request_type()),
+      std::move(top_frame_origin), std::move(frame_origin),
+      SiteForCookies::FromUrl(GURL(proto.site_for_cookies())),
+      std::move(party_context), nullptr);
 }
 
 IsolationInfo IsolationInfo::Create(
@@ -139,8 +161,7 @@ IsolationInfo IsolationInfo::Create(
     absl::optional<std::set<SchemefulSite>> party_context,
     const base::UnguessableToken* nonce) {
   return IsolationInfo(request_type, top_frame_origin, frame_origin,
-                       site_for_cookies, false /* opaque_and_non_transient */,
-                       nonce, std::move(party_context));
+                       site_for_cookies, nonce, std::move(party_context));
 }
 
 IsolationInfo IsolationInfo::CreatePartial(
@@ -153,7 +174,9 @@ IsolationInfo IsolationInfo::CreatePartial(
   url::Origin top_frame_origin =
       network_isolation_key.GetTopFrameSite()->site_as_origin_;
   url::Origin frame_origin;
-  if (network_isolation_key.GetFrameSite().has_value()) {
+  if (!base::FeatureList::IsEnabled(
+          net::features::kForceIsolationInfoFrameOriginToTopLevelFrame) &&
+      network_isolation_key.GetFrameSite().has_value()) {
     frame_origin = network_isolation_key.GetFrameSite()->site_as_origin_;
   } else if (request_type == RequestType::kMainFrame) {
     frame_origin = top_frame_origin;
@@ -161,17 +184,13 @@ IsolationInfo IsolationInfo::CreatePartial(
     frame_origin = url::Origin();
   }
 
-  bool opaque_and_non_transient = top_frame_origin.opaque() &&
-                                  frame_origin.opaque() &&
-                                  !network_isolation_key.IsTransient();
-
   const base::UnguessableToken* nonce =
       network_isolation_key.GetNonce()
           ? &network_isolation_key.GetNonce().value()
           : nullptr;
 
   return IsolationInfo(request_type, top_frame_origin, frame_origin,
-                       SiteForCookies(), opaque_and_non_transient, nonce,
+                       SiteForCookies(), nonce,
                        absl::nullopt /* party_context */);
 }
 
@@ -180,17 +199,14 @@ absl::optional<IsolationInfo> IsolationInfo::CreateIfConsistent(
     const absl::optional<url::Origin>& top_frame_origin,
     const absl::optional<url::Origin>& frame_origin,
     const SiteForCookies& site_for_cookies,
-    bool opaque_and_non_transient,
     absl::optional<std::set<SchemefulSite>> party_context,
     const base::UnguessableToken* nonce) {
   if (!IsConsistent(request_type, top_frame_origin, frame_origin,
-                    site_for_cookies, opaque_and_non_transient, party_context,
-                    nonce)) {
+                    site_for_cookies, party_context, nonce)) {
     return absl::nullopt;
   }
   return IsolationInfo(request_type, top_frame_origin, frame_origin,
-                       site_for_cookies, opaque_and_non_transient, nonce,
-                       std::move(party_context));
+                       site_for_cookies, nonce, std::move(party_context));
 }
 
 IsolationInfo IsolationInfo::CreateForRedirect(
@@ -199,18 +215,23 @@ IsolationInfo IsolationInfo::CreateForRedirect(
     return *this;
 
   if (request_type_ == RequestType::kSubFrame) {
-    return IsolationInfo(request_type_, top_frame_origin_, new_origin,
-                         site_for_cookies_, opaque_and_non_transient_,
-                         nonce_.has_value() ? &nonce_.value() : nullptr,
-                         party_context_);
+    return IsolationInfo(
+        request_type_, top_frame_origin_, new_origin, site_for_cookies_,
+        nonce_.has_value() ? &nonce_.value() : nullptr, party_context_);
   }
 
   DCHECK_EQ(RequestType::kMainFrame, request_type_);
   DCHECK(!party_context_ || party_context_->empty());
-  return IsolationInfo(
-      request_type_, new_origin, new_origin,
-      SiteForCookies::FromOrigin(new_origin), opaque_and_non_transient_,
-      nonce_.has_value() ? &nonce_.value() : nullptr, party_context_);
+  return IsolationInfo(request_type_, new_origin, new_origin,
+                       SiteForCookies::FromOrigin(new_origin),
+                       nonce_.has_value() ? &nonce_.value() : nullptr,
+                       party_context_);
+}
+
+const absl::optional<url::Origin>& IsolationInfo::frame_origin() const {
+  // TODO: @brgoldstein, add CHECK that
+  // `kForceIsolationInfoFrameOriginToTopLevelFrame` is not enabled.
+  return frame_origin_;
 }
 
 bool IsolationInfo::IsEqualForTesting(const IsolationInfo& other) const {
@@ -218,7 +239,6 @@ bool IsolationInfo::IsEqualForTesting(const IsolationInfo& other) const {
           top_frame_origin_ == other.top_frame_origin_ &&
           frame_origin_ == other.frame_origin_ &&
           network_isolation_key_ == other.network_isolation_key_ &&
-          opaque_and_non_transient_ == other.opaque_and_non_transient_ &&
           nonce_ == other.nonce_ &&
           site_for_cookies_.IsEquivalent(other.site_for_cookies_) &&
           party_context_ == other.party_context_);
@@ -230,8 +250,33 @@ IsolationInfo IsolationInfo::ToDoUseTopFrameOriginAsWell(
       RequestType::kOther, incorrectly_used_frame_origin,
       incorrectly_used_frame_origin,
       SiteForCookies::FromOrigin(incorrectly_used_frame_origin),
-      false /* opaque_and_non_transient */, nullptr /* nonce */,
-      std::set<SchemefulSite>() /* party_context */);
+      nullptr /* nonce */, std::set<SchemefulSite>() /* party_context */);
+}
+
+std::string IsolationInfo::Serialize() const {
+  if (network_isolation_key().IsTransient())
+    return "";
+
+  proto::IsolationInfo info;
+
+  info.set_request_type(static_cast<int32_t>(request_type_));
+
+  if (top_frame_origin_)
+    info.set_top_frame_origin(top_frame_origin_->Serialize());
+
+  if (frame_origin_)
+    info.set_frame_origin(frame_origin_->Serialize());
+
+  info.set_site_for_cookies(site_for_cookies_.RepresentativeUrl().spec());
+
+  if (party_context_) {
+    auto* pc = info.mutable_party_context();
+    for (const auto& site : *party_context_) {
+      pc->add_site(site.Serialize());
+    }
+  }
+
+  return info.SerializeAsString();
 }
 
 IsolationInfo::IsolationInfo(
@@ -239,29 +284,29 @@ IsolationInfo::IsolationInfo(
     const absl::optional<url::Origin>& top_frame_origin,
     const absl::optional<url::Origin>& frame_origin,
     const SiteForCookies& site_for_cookies,
-    bool opaque_and_non_transient,
     const base::UnguessableToken* nonce,
     absl::optional<std::set<SchemefulSite>> party_context)
     : request_type_(request_type),
       top_frame_origin_(top_frame_origin),
-      frame_origin_(frame_origin),
+      frame_origin_(
+          base::FeatureList::IsEnabled(
+              net::features::kForceIsolationInfoFrameOriginToTopLevelFrame)
+              ? top_frame_origin
+              : frame_origin),
       network_isolation_key_(
           !top_frame_origin
               ? NetworkIsolationKey()
               : NetworkIsolationKey(SchemefulSite(*top_frame_origin),
                                     SchemefulSite(*frame_origin),
-                                    opaque_and_non_transient,
                                     nonce)),
       site_for_cookies_(site_for_cookies),
-      opaque_and_non_transient_(opaque_and_non_transient),
       nonce_(nonce ? absl::make_optional(*nonce) : absl::nullopt),
       party_context_(party_context.has_value() &&
                              party_context->size() > kPartyContextMaxSize
                          ? absl::nullopt
                          : party_context) {
   DCHECK(IsConsistent(request_type_, top_frame_origin_, frame_origin_,
-                      site_for_cookies_, opaque_and_non_transient_,
-                      party_context_, nonce));
+                      site_for_cookies_, party_context_, nonce));
 }
 
 }  // namespace net

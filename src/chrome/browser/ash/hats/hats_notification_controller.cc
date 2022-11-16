@@ -5,13 +5,13 @@
 #include "chrome/browser/ash/hats/hats_notification_controller.h"
 
 #include "ash/constants/ash_switches.h"
+#include "ash/constants/notifier_catalogs.h"
 #include "ash/public/cpp/notification_utils.h"
 #include "base/bind.h"
 #include "base/command_line.h"
 #include "base/feature_list.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
-#include "base/task/post_task.h"
 #include "base/task/thread_pool.h"
 #include "chrome/app/vector_icons/vector_icons.h"
 #include "chrome/browser/ash/hats/hats_config.h"
@@ -27,7 +27,7 @@
 #include "chrome/common/chrome_features.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/grit/generated_resources.h"
-#include "chromeos/network/network_state.h"
+#include "chromeos/ash/components/network/network_state.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/browser_thread.h"
 #include "google_apis/gaia/gaia_auth_util.h"
@@ -38,6 +38,7 @@
 #include "ui/message_center/public/cpp/notification_types.h"
 #include "ui/strings/grit/ui_strings.h"
 
+namespace ash {
 namespace {
 
 const char kNotificationOriginUrl[] = "chrome://hats";
@@ -46,10 +47,10 @@ const char kNotifierHats[] = "ash.hats";
 
 // Minimum amount of time before the notification is displayed again after a
 // user has interacted with it.
-constexpr base::TimeDelta kHatsThreshold = base::TimeDelta::FromDays(90);
+constexpr base::TimeDelta kHatsThreshold = base::Days(90);
 
 // The threshold for a Googler is less.
-constexpr base::TimeDelta kHatsGooglerThreshold = base::TimeDelta::FromDays(30);
+constexpr base::TimeDelta kHatsGooglerThreshold = base::Days(30);
 
 // Returns true if the given |profile| interacted with HaTS by either
 // dismissing the notification or taking the survey within a given
@@ -68,19 +69,18 @@ bool DidShowSurveyToProfileRecently(Profile* profile,
 // OOBE. This is an indirect measure of whether the owner has used the device
 // for at least |new_device_threshold| time.
 bool IsNewDevice(base::TimeDelta new_device_threshold) {
-  return chromeos::StartupUtils::GetTimeSinceOobeFlagFileCreation() <=
+  return StartupUtils::GetTimeSinceOobeFlagFileCreation() <=
          new_device_threshold;
 }
 
 // Returns true if the |kForceHappinessTrackingSystem| flag is enabled for the
 // current survey.
-bool IsTestingEnabled(const ash::HatsConfig& hats_config) {
+bool IsTestingEnabled(const HatsConfig& hats_config) {
   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
 
-  if (command_line->HasSwitch(
-          chromeos::switches::kForceHappinessTrackingSystem)) {
+  if (command_line->HasSwitch(switches::kForceHappinessTrackingSystem)) {
     auto switch_value = command_line->GetSwitchValueASCII(
-        chromeos::switches::kForceHappinessTrackingSystem);
+        switches::kForceHappinessTrackingSystem);
     return switch_value.empty() || hats_config.feature.name == switch_value;
   }
 
@@ -88,8 +88,6 @@ bool IsTestingEnabled(const ash::HatsConfig& hats_config) {
 }
 
 }  // namespace
-
-namespace ash {
 
 // static
 const char HatsNotificationController::kNotificationId[] = "hats_notification";
@@ -242,14 +240,15 @@ void HatsNotificationController::OnPortalDetectionCompleted(
   if (status == NetworkPortalDetector::CAPTIVE_PORTAL_STATUS_ONLINE) {
     // Create and display the notification for the user.
     if (!notification_) {
-      notification_ = ash::CreateSystemNotification(
+      notification_ = CreateSystemNotification(
           message_center::NOTIFICATION_TYPE_SIMPLE, kNotificationId,
           l10n_util::GetStringUTF16(IDS_HATS_NOTIFICATION_TITLE),
           l10n_util::GetStringUTF16(IDS_HATS_NOTIFICATION_BODY),
           l10n_util::GetStringUTF16(IDS_MESSAGE_CENTER_NOTIFIER_HATS_NAME),
           GURL(kNotificationOriginUrl),
           message_center::NotifierId(
-              message_center::NotifierType::SYSTEM_COMPONENT, kNotifierHats),
+              message_center::NotifierType::SYSTEM_COMPONENT, kNotifierHats,
+              NotificationCatalogName::kHats),
           message_center::RichNotificationData(), this, kNotificationGoogleIcon,
           message_center::SystemNotificationWarningLevel::NORMAL);
     }

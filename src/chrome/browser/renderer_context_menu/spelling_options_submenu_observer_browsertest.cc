@@ -24,6 +24,12 @@ namespace {
 class SpellingOptionsSubMenuObserverTest : public InProcessBrowserTest {
  public:
   SpellingOptionsSubMenuObserverTest() {}
+
+  SpellingOptionsSubMenuObserverTest(
+      const SpellingOptionsSubMenuObserverTest&) = delete;
+  SpellingOptionsSubMenuObserverTest& operator=(
+      const SpellingOptionsSubMenuObserverTest&) = delete;
+
   ~SpellingOptionsSubMenuObserverTest() override {}
 
   void SetUpOnMainThread() override {
@@ -69,8 +75,9 @@ class SpellingOptionsSubMenuObserverTest : public InProcessBrowserTest {
     for (const std::string& dict : dictionaries) {
       dictionaries_value.Append(dict);
     }
-    EXPECT_TRUE(dictionaries_value.Equals(menu()->GetPrefs()->GetList(
-        spellcheck::prefs::kSpellCheckDictionaries)));
+    EXPECT_EQ(dictionaries_value,
+              *menu()->GetPrefs()->GetList(
+                  spellcheck::prefs::kSpellCheckDictionaries));
   }
 
   MockRenderViewContextMenu* menu() { return menu_.get(); }
@@ -79,8 +86,6 @@ class SpellingOptionsSubMenuObserverTest : public InProcessBrowserTest {
  private:
   std::unique_ptr<MockRenderViewContextMenu> menu_;
   std::unique_ptr<SpellingOptionsSubMenuObserver> observer_;
-
-  DISALLOW_COPY_AND_ASSIGN(SpellingOptionsSubMenuObserverTest);
 };
 
 // Tests that selecting the "Use basic spell check" item toggles the value

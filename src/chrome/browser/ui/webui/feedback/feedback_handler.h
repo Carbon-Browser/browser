@@ -5,12 +5,10 @@
 #ifndef CHROME_BROWSER_UI_WEBUI_FEEDBACK_FEEDBACK_HANDLER_H_
 #define CHROME_BROWSER_UI_WEBUI_FEEDBACK_FEEDBACK_HANDLER_H_
 
+#include "base/memory/raw_ptr.h"
+#include "build/build_config.h"
 #include "chrome/browser/ui/webui/feedback/feedback_dialog.h"
 #include "content/public/browser/web_ui_message_handler.h"
-
-namespace base {
-class ListValue;
-}  // namespace base
 
 class FeedbackHandler : public content::WebUIMessageHandler {
  public:
@@ -23,15 +21,15 @@ class FeedbackHandler : public content::WebUIMessageHandler {
   void RegisterMessages() override;
 
  private:
-  void HandleShowDialog(const base::ListValue* args);
-#if BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_CHROMEOS_LACROS)
-  void HandleShowAssistantLogsInfo(const base::ListValue* args);
-  void HandleShowBluetoothLogsInfo(const base::ListValue* args);
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_CHROMEOS_LACROS)
-  void HandleShowMetrics(const base::ListValue* args);
-  void HandleShowSystemInfo(const base::ListValue* args);
+  void HandleShowDialog(const base::Value::List& args);
+#if BUILDFLAG(IS_CHROMEOS)
+  void HandleShowAssistantLogsInfo(const base::Value::List& args);
+  void HandleShowBluetoothLogsInfo(const base::Value::List& args);
+#endif  // BUILDFLAG(IS_CHROMEOS)
+  void HandleShowMetrics(const base::Value::List& args);
+  void HandleShowSystemInfo(const base::Value::List& args);
 
-  const FeedbackDialog* dialog_;
+  raw_ptr<const FeedbackDialog> dialog_;
 };
 
 #endif  // CHROME_BROWSER_UI_WEBUI_FEEDBACK_FEEDBACK_HANDLER_H_

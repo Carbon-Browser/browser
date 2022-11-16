@@ -7,6 +7,7 @@
 #include <string>
 
 #include "base/containers/contains.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/test/scoped_command_line.h"
@@ -16,7 +17,6 @@
 #include "content/public/common/origin_util.h"
 #include "content/public/test/test_utils.h"
 #include "extensions/buildflags/buildflags.h"
-#include "extensions/common/constants.h"
 #include "ppapi/buildflags/buildflags.h"
 #include "services/network/public/cpp/is_potentially_trustworthy.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -24,9 +24,13 @@
 #include "url/origin.h"
 #include "url/url_util.h"
 
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+#include "extensions/common/constants.h"
+#endif
+
 namespace chrome_common {
 
-#if BUILDFLAG(ENABLE_PLUGINS)
+#if BUILDFLAG(ENABLE_PPAPI)
 TEST(ChromeContentClientTest, FindMostRecent) {
   std::vector<std::unique_ptr<content::PepperPluginInfo>> version_vector;
   // Test an empty vector.
@@ -92,9 +96,10 @@ TEST(ChromeContentClientTest, FindMostRecent) {
   most_recent = ChromeContentClient::FindMostRecentPlugin(version_vector);
   EXPECT_STREQ("system_flash", most_recent->name.c_str());
 }
-#endif  // BUILDFLAG(ENABLE_PLUGINS)
+#endif  // BUILDFLAG(ENABLE_PPAPI)
 
 TEST(ChromeContentClientTest, AdditionalSchemes) {
+#if BUILDFLAG(ENABLE_EXTENSIONS)
   EXPECT_TRUE(url::IsStandard(
       extensions::kExtensionScheme,
       url::Component(0, strlen(extensions::kExtensionScheme))));
@@ -104,6 +109,7 @@ TEST(ChromeContentClientTest, AdditionalSchemes) {
   url::Origin origin = url::Origin::Create(extension_url);
   EXPECT_EQ("chrome-extension://abcdefghijklmnopqrstuvwxyzabcdef",
             origin.Serialize());
+#endif
 
   // IsUrlPotentiallyTrustworthy assertions test for https://crbug.com/734581.
   constexpr const char* kChromeLayerUrlsRegisteredAsSecure[] = {
@@ -116,6 +122,7 @@ TEST(ChromeContentClientTest, AdditionalSchemes) {
     "chrome://foo/",
     "chrome-untrusted://foo/",
     "chrome-search://foo/",
+    "isolated-app://foo/",
 #if BUILDFLAG(ENABLE_EXTENSIONS)
     "chrome-extension://foo/",
 #endif
@@ -142,6 +149,11 @@ class OriginTrialInitializationTestThread
       ChromeContentClient* chrome_client)
       : chrome_client_(chrome_client) {}
 
+  OriginTrialInitializationTestThread(
+      const OriginTrialInitializationTestThread&) = delete;
+  OriginTrialInitializationTestThread& operator=(
+      const OriginTrialInitializationTestThread&) = delete;
+
   void ThreadMain() override { AccessPolicy(chrome_client_, &policy_objects_); }
 
   // Static helper which can also be called from the main thread.
@@ -161,10 +173,8 @@ class OriginTrialInitializationTestThread
   }
 
  private:
-  ChromeContentClient* chrome_client_;
+  raw_ptr<ChromeContentClient> chrome_client_;
   std::vector<blink::OriginTrialPolicy*> policy_objects_;
-
-  DISALLOW_COPY_AND_ASSIGN(OriginTrialInitializationTestThread);
 };
 
 // Test that the lazy initialization of Origin Trial policy is resistant to

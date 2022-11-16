@@ -10,6 +10,7 @@
 #include "base/json/values_util.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
+#include "base/time/time.h"
 #include "chrome/browser/nearby_sharing/certificates/constants.h"
 #include "chrome/browser/nearby_sharing/certificates/nearby_share_certificate_storage_impl.h"
 #include "chrome/browser/nearby_sharing/certificates/test_util.h"
@@ -119,9 +120,8 @@ std::vector<NearbySharePrivateCertificate> CreatePrivateCertificates(
 }
 
 base::Time TimestampToTime(nearbyshare::proto::Timestamp timestamp) {
-  return base::Time::UnixEpoch() +
-         base::TimeDelta::FromSeconds(timestamp.seconds()) +
-         base::TimeDelta::FromNanoseconds(timestamp.nanos());
+  return base::Time::UnixEpoch() + base::Seconds(timestamp.seconds()) +
+         base::Nanoseconds(timestamp.nanos());
 }
 
 }  // namespace

@@ -4,8 +4,10 @@
 
 #include "ash/accelerators/accelerator_table.h"
 
+#include "ash/public/cpp/accelerators.h"
 #include "ash/strings/grit/ash_strings.h"
-#include "base/cxx17_backports.h"
+#include "build/branding_buildflags.h"
+#include "ui/events/keycodes/keyboard_codes_posix.h"
 
 namespace ash {
 
@@ -36,10 +38,9 @@ const AcceleratorData kDeprecatedAccelerators[] = {
 
     // Deprecated in M59.
     {true, ui::VKEY_K, ui::EF_SHIFT_DOWN | ui::EF_ALT_DOWN,
-     SHOW_IME_MENU_BUBBLE}};
+     TOGGLE_IME_MENU_BUBBLE}};
 
-const size_t kDeprecatedAcceleratorsLength =
-    base::size(kDeprecatedAccelerators);
+const size_t kDeprecatedAcceleratorsLength = std::size(kDeprecatedAccelerators);
 
 const DeprecatedAcceleratorData kDeprecatedAcceleratorsData[] = {
     // The action for the old shortcut was stopped in M92. Delete
@@ -49,12 +50,12 @@ const DeprecatedAcceleratorData kDeprecatedAcceleratorsData[] = {
      IDS_SHORTCUT_TASK_MANAGER_NEW, false},
     // The action for the old shortcut was stopped in M92. Delete
     // completely in M94.
-    {SHOW_IME_MENU_BUBBLE, "Ash.Accelerators.Deprecated.ShowImeMenuBubble",
+    {TOGGLE_IME_MENU_BUBBLE, "Ash.Accelerators.Deprecated.ShowImeMenuBubble",
      IDS_DEPRECATED_SHOW_IME_BUBBLE_MSG, IDS_SHORTCUT_IME_BUBBLE_OLD,
      IDS_SHORTCUT_IME_BUBBLE_NEW, false}};
 
 const size_t kDeprecatedAcceleratorsDataLength =
-    base::size(kDeprecatedAcceleratorsData);
+    std::size(kDeprecatedAcceleratorsData);
 
 static_assert(kDeprecatedAcceleratorsLength ==
                   kDeprecatedAcceleratorsDataLength,
@@ -62,6 +63,9 @@ static_assert(kDeprecatedAcceleratorsLength ==
 
 const AcceleratorData kDebugAcceleratorData[] = {
     {true, ui::VKEY_N, kDebugModifier, TOGGLE_WIFI},
+    {true, ui::VKEY_C, kDebugModifier, DEBUG_DUMP_CALENDAR_MODEL},
+    {true, ui::VKEY_X, kDebugModifier, DEBUG_KEYBOARD_BACKLIGHT_TOGGLE},
+    {true, ui::VKEY_M, kDebugModifier, DEBUG_MICROPHONE_MUTE_TOGGLE},
     {true, ui::VKEY_O, kDebugModifier, DEBUG_SHOW_TOAST},
     {true, ui::VKEY_P, ui::EF_COMMAND_DOWN | ui::EF_SHIFT_DOWN,
      DEBUG_TOGGLE_TOUCH_PAD},
@@ -80,7 +84,7 @@ const AcceleratorData kDebugAcceleratorData[] = {
     {true, ui::VKEY_G, kDebugModifier, DEBUG_TOGGLE_HUD_DISPLAY},
 };
 
-const size_t kDebugAcceleratorDataLength = base::size(kDebugAcceleratorData);
+const size_t kDebugAcceleratorDataLength = std::size(kDebugAcceleratorData);
 
 const AcceleratorData kDeveloperAcceleratorData[] = {
     // Extra shortcut for debug build to control magnifier on Linux desktop.
@@ -95,7 +99,7 @@ const AcceleratorData kDeveloperAcceleratorData[] = {
     {false, ui::VKEY_POWER, ui::EF_SHIFT_DOWN, LOCK_RELEASED},
     {true, ui::VKEY_D, ui::EF_CONTROL_DOWN | ui::EF_SHIFT_DOWN,
      DEV_ADD_REMOVE_DISPLAY},
-    {true, ui::VKEY_J, ui::EF_CONTROL_DOWN | ui::EF_SHIFT_DOWN,
+    {true, ui::VKEY_U, ui::EF_CONTROL_DOWN | ui::EF_SHIFT_DOWN,
      DEV_TOGGLE_UNIFIED_DESKTOP},
     {true, ui::VKEY_M, ui::EF_CONTROL_DOWN | ui::EF_SHIFT_DOWN,
      TOGGLE_MIRROR_MODE},
@@ -117,7 +121,7 @@ const AcceleratorData kDeveloperAcceleratorData[] = {
 };
 
 const size_t kDeveloperAcceleratorDataLength =
-    base::size(kDeveloperAcceleratorData);
+    std::size(kDeveloperAcceleratorData);
 
 const AcceleratorAction kPreferredActions[] = {
     // Window cycling accelerators.
@@ -125,13 +129,15 @@ const AcceleratorAction kPreferredActions[] = {
     CYCLE_FORWARD_MRU,   // Alt+Tab
 };
 
-const size_t kPreferredActionsLength = base::size(kPreferredActions);
+const size_t kPreferredActionsLength = std::size(kPreferredActions);
 
 const AcceleratorAction kReservedActions[] = {
-    POWER_PRESSED, POWER_RELEASED, SUSPEND,
+    POWER_PRESSED,
+    POWER_RELEASED,
+    SUSPEND,
 };
 
-const size_t kReservedActionsLength = base::size(kReservedActions);
+const size_t kReservedActionsLength = std::size(kReservedActions);
 
 const AcceleratorAction kActionsAllowedAtLoginOrLockScreen[] = {
     BRIGHTNESS_DOWN,
@@ -145,6 +151,7 @@ const AcceleratorAction kActionsAllowedAtLoginOrLockScreen[] = {
     DEBUG_TOGGLE_TABLET_MODE,
     DEV_ADD_REMOVE_DISPLAY,
     DISABLE_CAPS_LOCK,
+    KEYBOARD_BACKLIGHT_TOGGLE,
     KEYBOARD_BRIGHTNESS_DOWN,
     KEYBOARD_BRIGHTNESS_UP,
     MAGNIFIER_ZOOM_IN,   // Control+F7
@@ -157,17 +164,19 @@ const AcceleratorAction kActionsAllowedAtLoginOrLockScreen[] = {
     MEDIA_PREV_TRACK,
     MEDIA_REWIND,
     MEDIA_STOP,
+    MICROPHONE_MUTE_TOGGLE,
     PRIVACY_SCREEN_TOGGLE,
     PRINT_UI_HIERARCHIES,
     ROTATE_SCREEN,
     SCALE_UI_DOWN,
     SCALE_UI_RESET,
     SCALE_UI_UP,
-    SHOW_IME_MENU_BUBBLE,
+    TOGGLE_IME_MENU_BUBBLE,
     START_AMBIENT_MODE,
     SWITCH_TO_LAST_USED_IME,
     SWITCH_TO_NEXT_IME,
     TAKE_SCREENSHOT,
+    TOGGLE_CALENDAR,
     TOGGLE_CAPS_LOCK,
     TOGGLE_DICTATION,
     TOGGLE_DOCKED_MAGNIFIER,
@@ -188,7 +197,7 @@ const AcceleratorAction kActionsAllowedAtLoginOrLockScreen[] = {
 };
 
 const size_t kActionsAllowedAtLoginOrLockScreenLength =
-    base::size(kActionsAllowedAtLoginOrLockScreen);
+    std::size(kActionsAllowedAtLoginOrLockScreen);
 
 const AcceleratorAction kActionsAllowedAtLockScreen[] = {
     EXIT,
@@ -196,23 +205,27 @@ const AcceleratorAction kActionsAllowedAtLockScreen[] = {
 };
 
 const size_t kActionsAllowedAtLockScreenLength =
-    base::size(kActionsAllowedAtLockScreen);
+    std::size(kActionsAllowedAtLockScreen);
 
 const AcceleratorAction kActionsAllowedAtPowerMenu[] = {
     BRIGHTNESS_DOWN, BRIGHTNESS_UP, VOLUME_DOWN, VOLUME_UP, VOLUME_MUTE,
 };
 
 const size_t kActionsAllowedAtPowerMenuLength =
-    base::size(kActionsAllowedAtPowerMenu);
+    std::size(kActionsAllowedAtPowerMenu);
 
 const AcceleratorAction kActionsAllowedAtModalWindow[] = {
     BRIGHTNESS_DOWN,
     BRIGHTNESS_UP,
+    DEBUG_DUMP_CALENDAR_MODEL,
+    DEBUG_KEYBOARD_BACKLIGHT_TOGGLE,
+    DEBUG_MICROPHONE_MUTE_TOGGLE,
     DEBUG_TOGGLE_TOUCH_PAD,
     DEBUG_TOGGLE_TOUCH_SCREEN,
     DEV_ADD_REMOVE_DISPLAY,
     DISABLE_CAPS_LOCK,
     EXIT,
+    KEYBOARD_BACKLIGHT_TOGGLE,
     KEYBOARD_BRIGHTNESS_DOWN,
     KEYBOARD_BRIGHTNESS_UP,
     LOCK_SCREEN,
@@ -226,6 +239,7 @@ const AcceleratorAction kActionsAllowedAtModalWindow[] = {
     MEDIA_PREV_TRACK,
     MEDIA_REWIND,
     MEDIA_STOP,
+    MICROPHONE_MUTE_TOGGLE,
     OPEN_FEEDBACK_PAGE,
     POWER_PRESSED,
     POWER_RELEASED,
@@ -235,7 +249,7 @@ const AcceleratorAction kActionsAllowedAtModalWindow[] = {
     SCALE_UI_DOWN,
     SCALE_UI_RESET,
     SCALE_UI_UP,
-    SHOW_IME_MENU_BUBBLE,
+    TOGGLE_IME_MENU_BUBBLE,
     SHOW_SHORTCUT_VIEWER,
     START_AMBIENT_MODE,
     SUSPEND,
@@ -259,7 +273,7 @@ const AcceleratorAction kActionsAllowedAtModalWindow[] = {
 };
 
 const size_t kActionsAllowedAtModalWindowLength =
-    base::size(kActionsAllowedAtModalWindow);
+    std::size(kActionsAllowedAtModalWindow);
 
 const AcceleratorAction kRepeatableActions[] = {
     BRIGHTNESS_DOWN,
@@ -279,11 +293,14 @@ const AcceleratorAction kRepeatableActions[] = {
     VOLUME_UP,
 };
 
-const size_t kRepeatableActionsLength = base::size(kRepeatableActions);
+const size_t kRepeatableActionsLength = std::size(kRepeatableActions);
 
 const AcceleratorAction kActionsAllowedInAppModeOrPinnedMode[] = {
     BRIGHTNESS_DOWN,
     BRIGHTNESS_UP,
+    DEBUG_DUMP_CALENDAR_MODEL,
+    DEBUG_KEYBOARD_BACKLIGHT_TOGGLE,
+    DEBUG_MICROPHONE_MUTE_TOGGLE,
     DEBUG_PRINT_LAYER_HIERARCHY,
     DEBUG_PRINT_VIEW_HIERARCHY,
     DEBUG_PRINT_WINDOW_HIERARCHY,
@@ -291,6 +308,7 @@ const AcceleratorAction kActionsAllowedInAppModeOrPinnedMode[] = {
     DEBUG_TOGGLE_TOUCH_SCREEN,
     DEV_ADD_REMOVE_DISPLAY,
     DISABLE_CAPS_LOCK,
+    KEYBOARD_BACKLIGHT_TOGGLE,
     KEYBOARD_BRIGHTNESS_DOWN,
     KEYBOARD_BRIGHTNESS_UP,
     MAGNIFIER_ZOOM_IN,   // Control+F7
@@ -303,6 +321,7 @@ const AcceleratorAction kActionsAllowedInAppModeOrPinnedMode[] = {
     MEDIA_PREV_TRACK,
     MEDIA_REWIND,
     MEDIA_STOP,
+    MICROPHONE_MUTE_TOGGLE,
     POWER_PRESSED,
     POWER_RELEASED,
     PRINT_UI_HIERARCHIES,
@@ -330,7 +349,7 @@ const AcceleratorAction kActionsAllowedInAppModeOrPinnedMode[] = {
 };
 
 const size_t kActionsAllowedInAppModeOrPinnedModeLength =
-    base::size(kActionsAllowedInAppModeOrPinnedMode);
+    std::size(kActionsAllowedInAppModeOrPinnedMode);
 
 const AcceleratorAction kActionsAllowedInPinnedMode[] = {
     LOCK_SCREEN,
@@ -342,19 +361,20 @@ const AcceleratorAction kActionsAllowedInPinnedMode[] = {
 };
 
 const size_t kActionsAllowedInPinnedModeLength =
-    base::size(kActionsAllowedInPinnedMode);
+    std::size(kActionsAllowedInPinnedMode);
 
 const AcceleratorAction kActionsAllowedInAppMode[] = {
     FOCUS_SHELF,
 };
 
 const size_t kActionsAllowedInAppModeLength =
-    base::size(kActionsAllowedInAppMode);
+    std::size(kActionsAllowedInAppMode);
 
 const AcceleratorAction kActionsNeedingWindow[] = {
     // clang-format off
     DESKS_MOVE_ACTIVE_ITEM_LEFT,
     DESKS_MOVE_ACTIVE_ITEM_RIGHT,
+    DESKS_TOGGLE_ASSIGN_TO_ALL_DESKS,
     MOVE_ACTIVE_WINDOW_BETWEEN_DISPLAYS,
     ROTATE_WINDOW,
     TOGGLE_FLOATING,
@@ -366,11 +386,14 @@ const AcceleratorAction kActionsNeedingWindow[] = {
     // clang-format on
 };
 
-const size_t kActionsNeedingWindowLength = base::size(kActionsNeedingWindow);
+const size_t kActionsNeedingWindowLength = std::size(kActionsNeedingWindow);
 
 const AcceleratorAction kActionsKeepingMenuOpen[] = {
     BRIGHTNESS_DOWN,
     BRIGHTNESS_UP,
+    DEBUG_DUMP_CALENDAR_MODEL,
+    DEBUG_KEYBOARD_BACKLIGHT_TOGGLE,
+    DEBUG_MICROPHONE_MUTE_TOGGLE,
     DEBUG_TOGGLE_TOUCH_PAD,
     DEBUG_TOGGLE_TOUCH_SCREEN,
     // Keep the menu open when switching desks. The desk activation code will
@@ -381,6 +404,7 @@ const AcceleratorAction kActionsKeepingMenuOpen[] = {
     DESKS_NEW_DESK,
     DESKS_REMOVE_CURRENT_DESK,
     DISABLE_CAPS_LOCK,
+    KEYBOARD_BACKLIGHT_TOGGLE,
     KEYBOARD_BRIGHTNESS_DOWN,
     KEYBOARD_BRIGHTNESS_UP,
     MEDIA_FAST_FORWARD,
@@ -391,6 +415,7 @@ const AcceleratorAction kActionsKeepingMenuOpen[] = {
     MEDIA_PREV_TRACK,
     MEDIA_REWIND,
     MEDIA_STOP,
+    MICROPHONE_MUTE_TOGGLE,
     PRINT_UI_HIERARCHIES,
     PRIVACY_SCREEN_TOGGLE,
     SWITCH_TO_LAST_USED_IME,
@@ -413,7 +438,34 @@ const AcceleratorAction kActionsKeepingMenuOpen[] = {
     VOLUME_UP,
 };
 
-const size_t kActionsKeepingMenuOpenLength =
-    base::size(kActionsKeepingMenuOpen);
+const size_t kActionsKeepingMenuOpenLength = std::size(kActionsKeepingMenuOpen);
+
+const AcceleratorAction kActionsDuplicatedWithBrowser[] = {
+    // clang-format off
+    NEW_WINDOW,
+    NEW_INCOGNITO_WINDOW,
+    RESTORE_TAB,
+    NEW_TAB,
+// clang-format on
+
+// OPEN_FEEDBACK_PAGE is guarded by the BRANDING macro on defining Browser's
+// shortcuts. To follow it, guard it here, too.
+#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
+    OPEN_FEEDBACK_PAGE,
+#endif
+};
+
+const size_t kActionsDuplicatedWithBrowserLength =
+    std::size(kActionsDuplicatedWithBrowser);
+
+const AcceleratorAction kActionsInterceptableByBrowser[] = {
+    WINDOW_MINIMIZE,
+    SHOW_TASK_MANAGER,
+    OPEN_GET_HELP,
+    MINIMIZE_TOP_WINDOW_ON_BACK,
+};
+
+const size_t kActionsInterceptableByBrowserLength =
+    std::size(kActionsInterceptableByBrowser);
 
 }  // namespace ash

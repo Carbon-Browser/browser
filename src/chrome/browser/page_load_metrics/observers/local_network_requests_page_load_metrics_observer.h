@@ -63,11 +63,20 @@ class LocalNetworkRequestsPageLoadMetricsObserver
 
  public:
   LocalNetworkRequestsPageLoadMetricsObserver();
+
+  LocalNetworkRequestsPageLoadMetricsObserver(
+      const LocalNetworkRequestsPageLoadMetricsObserver&) = delete;
+  LocalNetworkRequestsPageLoadMetricsObserver& operator=(
+      const LocalNetworkRequestsPageLoadMetricsObserver&) = delete;
+
   ~LocalNetworkRequestsPageLoadMetricsObserver() override;
 
   // page_load_metrics::PageLoadMetricsObserver
-  ObservePolicy OnCommit(content::NavigationHandle* navigation_handle,
-                         ukm::SourceId source_id) override;
+  const char* GetObserverName() const override;
+  ObservePolicy OnFencedFramesStart(
+      content::NavigationHandle* navigation_handle,
+      const GURL& currently_committed_url) override;
+  ObservePolicy OnCommit(content::NavigationHandle* navigation_handle) override;
   ObservePolicy FlushMetricsOnAppEnterBackground(
       const page_load_metrics::mojom::PageLoadTiming& timing) override;
   void OnLoadedResource(const page_load_metrics::ExtraRequestCompleteInfo&
@@ -116,8 +125,6 @@ class LocalNetworkRequestsPageLoadMetricsObserver
   // the page could belong to. Used to distinguish between same subnet and
   // different subnet private network queries.
   size_t page_ip_prefix_length_ = 0;
-
-  DISALLOW_COPY_AND_ASSIGN(LocalNetworkRequestsPageLoadMetricsObserver);
 };
 
 #endif  // CHROME_BROWSER_PAGE_LOAD_METRICS_OBSERVERS_LOCAL_NETWORK_REQUESTS_PAGE_LOAD_METRICS_OBSERVER_H_

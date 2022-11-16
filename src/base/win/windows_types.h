@@ -13,24 +13,27 @@
 #include <sal.h>
 #include <specstrings.h>
 
+#include "base/win/win_handle_types.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 // typedef and define the most commonly used Windows integer types.
 
-typedef unsigned long DWORD;
-typedef long LONG;
+typedef unsigned long DWORD;  // NOLINT(runtime/int)
+typedef long LONG;            // NOLINT(runtime/int)
 typedef __int64 LONGLONG;
 typedef unsigned __int64 ULONGLONG;
 
 #define VOID void
 typedef char CHAR;
-typedef short SHORT;
-typedef long LONG;
+typedef short SHORT;  // NOLINT(runtime/int)
+typedef long LONG;    // NOLINT(runtime/int)
 typedef int INT;
 typedef unsigned int UINT;
 typedef unsigned int* PUINT;
+typedef unsigned __int64 UINT64;
 typedef void* LPVOID;
 typedef void* PVOID;
 typedef void* HANDLE;
@@ -38,7 +41,7 @@ typedef int BOOL;
 typedef unsigned char BYTE;
 typedef BYTE BOOLEAN;
 typedef DWORD ULONG;
-typedef unsigned short WORD;
+typedef unsigned short WORD;  // NOLINT(runtime/int)
 typedef WORD UWORD;
 typedef WORD ATOM;
 
@@ -52,15 +55,15 @@ typedef unsigned __int64 ULONG_PTR, *PULONG_PTR;
 typedef __w64 int INT_PTR, *PINT_PTR;
 typedef __w64 unsigned int UINT_PTR, *PUINT_PTR;
 
-typedef __w64 long LONG_PTR, *PLONG_PTR;
-typedef __w64 unsigned long ULONG_PTR, *PULONG_PTR;
+typedef __w64 long LONG_PTR, *PLONG_PTR;             // NOLINT(runtime/int)
+typedef __w64 unsigned long ULONG_PTR, *PULONG_PTR;  // NOLINT(runtime/int)
 #endif
 
 typedef UINT_PTR WPARAM;
 typedef LONG_PTR LPARAM;
 typedef LONG_PTR LRESULT;
 #define LRESULT LONG_PTR
-typedef _Return_type_success_(return >= 0) long HRESULT;
+typedef _Return_type_success_(return >= 0) long HRESULT;  // NOLINT(runtime/int)
 
 typedef ULONG_PTR SIZE_T, *PSIZE_T;
 typedef LONG_PTR SSIZE_T, *PSSIZE_T;
@@ -76,23 +79,6 @@ typedef LONG NTSTATUS;
 #define REFGUID const GUID&
 #endif
 
-// Forward declare Windows compatible handles.
-
-#define CHROME_DECLARE_HANDLE(name) \
-  struct name##__;                  \
-  typedef struct name##__* name
-CHROME_DECLARE_HANDLE(HDESK);
-CHROME_DECLARE_HANDLE(HGLRC);
-CHROME_DECLARE_HANDLE(HICON);
-CHROME_DECLARE_HANDLE(HINSTANCE);
-CHROME_DECLARE_HANDLE(HKEY);
-CHROME_DECLARE_HANDLE(HKL);
-CHROME_DECLARE_HANDLE(HMENU);
-CHROME_DECLARE_HANDLE(HWINSTA);
-CHROME_DECLARE_HANDLE(HWND);
-CHROME_DECLARE_HANDLE(HMONITOR);
-#undef CHROME_DECLARE_HANDLE
-
 typedef LPVOID HINTERNET;
 typedef HICON HCURSOR;
 typedef HINSTANCE HMODULE;
@@ -103,6 +89,8 @@ typedef PVOID HDEVINFO;
 
 typedef struct _OVERLAPPED OVERLAPPED;
 typedef struct tagMSG MSG, *PMSG, *NPMSG, *LPMSG;
+typedef struct tagTOUCHINPUT TOUCHINPUT;
+typedef struct tagPOINTER_INFO POINTER_INFO;
 
 typedef struct _RTL_SRWLOCK RTL_SRWLOCK;
 typedef RTL_SRWLOCK SRWLOCK, *PSRWLOCK;
@@ -136,6 +124,11 @@ typedef struct tagFORMATETC FORMATETC;
 // space.
 typedef struct _WIN32_FIND_DATAW WIN32_FIND_DATAW;
 typedef WIN32_FIND_DATAW WIN32_FIND_DATA;
+
+typedef UINT_PTR SOCKET;
+typedef struct _PROCESS_INFORMATION PROCESS_INFORMATION;
+typedef struct _SECURITY_CAPABILITIES SECURITY_CAPABILITIES;
+typedef struct _ACL ACL;
 
 // Declare Chrome versions of some Windows structures. These are needed for
 // when we need a concrete type but don't want to pull in Windows.h. We can't

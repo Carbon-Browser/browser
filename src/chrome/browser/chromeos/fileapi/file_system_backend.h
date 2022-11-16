@@ -11,9 +11,7 @@
 #include <string>
 #include <vector>
 
-#include "base/compiler_specific.h"
 #include "base/files/file_path.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "components/account_id/account_id.h"
 #include "storage/browser/file_system/file_system_backend.h"
@@ -73,7 +71,7 @@ constexpr char kSystemMountNameRemovable[] = "removable";
 //
 class FileSystemBackend : public storage::ExternalFileSystemBackend {
  public:
-  using storage::FileSystemBackend::OpenFileSystemCallback;
+  using storage::FileSystemBackend::ResolveURLCallback;
 
   // |system_mount_points| should outlive FileSystemBackend instance.
   FileSystemBackend(
@@ -87,6 +85,10 @@ class FileSystemBackend : public storage::ExternalFileSystemBackend {
       std::unique_ptr<FileSystemBackendDelegate> smbfs_delegate,
       scoped_refptr<storage::ExternalMountPoints> mount_points,
       storage::ExternalMountPoints* system_mount_points);
+
+  FileSystemBackend(const FileSystemBackend&) = delete;
+  FileSystemBackend& operator=(const FileSystemBackend&) = delete;
+
   ~FileSystemBackend() override;
 
   // Adds system mount points, such as "archive", and "removable". This
@@ -103,7 +105,7 @@ class FileSystemBackend : public storage::ExternalFileSystemBackend {
   void Initialize(storage::FileSystemContext* context) override;
   void ResolveURL(const storage::FileSystemURL& url,
                   storage::OpenFileSystemMode mode,
-                  OpenFileSystemCallback callback) override;
+                  ResolveURLCallback callback) override;
   storage::AsyncFileUtil* GetAsyncFileUtil(
       storage::FileSystemType type) override;
   storage::WatcherManager* GetWatcherManager(
@@ -190,8 +192,6 @@ class FileSystemBackend : public storage::ExternalFileSystemBackend {
   // Globally visible mount points. System MountPonts instance should outlive
   // all FileSystemBackend instances, so raw pointer is safe.
   storage::ExternalMountPoints* system_mount_points_;
-
-  DISALLOW_COPY_AND_ASSIGN(FileSystemBackend);
 };
 
 }  // namespace chromeos

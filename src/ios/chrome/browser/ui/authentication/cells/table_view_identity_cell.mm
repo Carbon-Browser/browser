@@ -37,9 +37,7 @@ const CGFloat kSeparatorMargin = 80;
         .active = YES;
     [self.contentView addSubview:_identityView];
     AddSameConstraints(_identityView, self.contentView);
-    if (@available(iOS 13.4, *)) {
-      [self addInteraction:[[ViewPointerInteraction alloc] init]];
-    }
+    [self addInteraction:[[ViewPointerInteraction alloc] init]];
   }
   return self;
 }
@@ -56,7 +54,7 @@ const CGFloat kSeparatorMargin = 80;
   self.identityView.titleColor = titleColor;
   self.accessoryType = checked ? UITableViewCellAccessoryCheckmark
                                : UITableViewCellAccessoryNone;
-  if (checked) {
+  if (checked && identityViewStyle != IdentityViewStyleConsistency) {
     self.directionalLayoutMargins =
         NSDirectionalEdgeInsetsMake(0, 0, 0, kCheckmarkMagin);
   } else {

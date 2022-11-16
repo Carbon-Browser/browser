@@ -24,7 +24,7 @@ const CSSValue* InlineStylePropertyMap::GetProperty(
 }
 
 const CSSValue* InlineStylePropertyMap::GetCustomProperty(
-    AtomicString property_name) const {
+    const AtomicString& property_name) const {
   const CSSPropertyValueSet* inline_style = owner_element_->InlineStyle();
   return inline_style ? inline_style->GetPropertyCSSValue(property_name)
                       : nullptr;
@@ -44,7 +44,7 @@ bool InlineStylePropertyMap::SetShorthandProperty(
   DCHECK(CSSProperty::Get(property_id).IsShorthand());
   const auto result = owner_element_->EnsureMutableInlineStyle().SetProperty(
       property_id, value, false /* important */, secure_context_mode);
-  return result.did_parse;
+  return result != MutableCSSPropertyValueSet::kParseError;
 }
 
 void InlineStylePropertyMap::SetCustomProperty(
@@ -89,8 +89,6 @@ String InlineStylePropertyMap::SerializationForShorthand(
     return StylePropertySerializer(*inline_style)
         .SerializeShorthand(property.PropertyID());
   }
-
-  NOTREACHED();
   return "";
 }
 

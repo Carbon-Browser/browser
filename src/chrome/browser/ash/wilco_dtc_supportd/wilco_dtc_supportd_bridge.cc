@@ -20,8 +20,8 @@
 #include "chrome/browser/ash/wilco_dtc_supportd/wilco_dtc_supportd_network_context.h"
 #include "chrome/browser/ash/wilco_dtc_supportd/wilco_dtc_supportd_notification_controller.h"
 #include "chrome/browser/profiles/profile_manager.h"
+#include "chromeos/ash/services/cros_healthd/public/cpp/service_connection.h"
 #include "chromeos/dbus/dbus_thread_manager.h"
-#include "chromeos/services/cros_healthd/public/cpp/service_connection.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/platform/platform_channel.h"
 #include "mojo/public/cpp/platform/platform_channel_endpoint.h"
@@ -39,8 +39,7 @@ using chromeos::wilco_dtc_supportd::mojom::WilcoDtcSupportdEvent;
 // Interval used between successive connection attempts to the
 // wilco_dtc_supportd. This is a safety measure for avoiding busy loops when the
 // wilco_dtc_supportd is dysfunctional.
-constexpr base::TimeDelta kConnectionAttemptInterval =
-    base::TimeDelta::FromSeconds(1);
+constexpr base::TimeDelta kConnectionAttemptInterval = base::Seconds(1);
 // The maximum number of consecutive connection attempts to the
 // wilco_dtc_supportd before giving up. This is to prevent wasting system
 // resources on hopeless attempts to connect in cases when the
@@ -54,6 +53,12 @@ class WilcoDtcSupportdBridgeDelegateImpl final
     : public WilcoDtcSupportdBridge::Delegate {
  public:
   WilcoDtcSupportdBridgeDelegateImpl();
+
+  WilcoDtcSupportdBridgeDelegateImpl(
+      const WilcoDtcSupportdBridgeDelegateImpl&) = delete;
+  WilcoDtcSupportdBridgeDelegateImpl& operator=(
+      const WilcoDtcSupportdBridgeDelegateImpl&) = delete;
+
   ~WilcoDtcSupportdBridgeDelegateImpl() override;
 
   // Delegate overrides:
@@ -62,9 +67,6 @@ class WilcoDtcSupportdBridgeDelegateImpl final
           chromeos::wilco_dtc_supportd::mojom::WilcoDtcSupportdServiceFactory>*
           wilco_dtc_supportd_service_factory_mojo_remote,
       base::ScopedFD* remote_endpoint_fd) override;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(WilcoDtcSupportdBridgeDelegateImpl);
 };
 
 WilcoDtcSupportdBridgeDelegateImpl::WilcoDtcSupportdBridgeDelegateImpl() =
@@ -387,14 +389,15 @@ void WilcoDtcSupportdBridge::HandleEvent(WilcoDtcSupportdEvent event) {
 }
 
 void WilcoDtcSupportdBridge::GetCrosHealthdDiagnosticsService(
-    chromeos::cros_healthd::mojom::CrosHealthdDiagnosticsServiceRequest
-        service) {
+    mojo::PendingReceiver<
+        chromeos::cros_healthd::mojom::CrosHealthdDiagnosticsService> service) {
   chromeos::cros_healthd::ServiceConnection::GetInstance()
       ->GetDiagnosticsService(std::move(service));
 }
 
 void WilcoDtcSupportdBridge::GetCrosHealthdProbeService(
-    chromeos::cros_healthd::mojom::CrosHealthdProbeServiceRequest service) {
+    mojo::PendingReceiver<
+        chromeos::cros_healthd::mojom::CrosHealthdProbeService> service) {
   chromeos::cros_healthd::ServiceConnection::GetInstance()->GetProbeService(
       std::move(service));
 }

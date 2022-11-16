@@ -16,6 +16,7 @@
 #include "third_party/blink/renderer/core/dom/node_computed_style.h"
 #include "third_party/blink/renderer/core/dom/pseudo_element.h"
 #include "third_party/blink/renderer/core/layout/layout_object.h"
+#include "third_party/blink/renderer/core/page/page_animator.h"
 #include "third_party/blink/renderer/core/testing/core_unit_test_helper.h"
 #include "third_party/blink/renderer/platform/animation/compositor_animation.h"
 #include "third_party/blink/renderer/platform/animation/compositor_animation_delegate.h"
@@ -60,7 +61,7 @@ class CSSAnimationsTest : public RenderingTest, public PaintTestConfigurations {
 
   void StartAnimationOnCompositor(Animation* animation) {
     static_cast<CompositorAnimationDelegate*>(animation)
-        ->NotifyAnimationStarted(TimelineTime().since_origin().InSecondsF(),
+        ->NotifyAnimationStarted(TimelineTime().since_origin(),
                                  animation->CompositorGroup());
   }
 
@@ -75,8 +76,17 @@ class CSSAnimationsTest : public RenderingTest, public PaintTestConfigurations {
     EXPECT_EQ(1u, element->GetComputedStyle()->Filter().size());
     const FilterOperation* filter =
         element->GetComputedStyle()->Filter().Operations()[0];
-    EXPECT_EQ(FilterOperation::OperationType::CONTRAST, filter->GetType());
+    EXPECT_EQ(FilterOperation::OperationType::kContrast, filter->GetType());
     return static_cast<const BasicComponentTransferFilterOperation*>(filter)
+        ->Amount();
+  }
+
+  double GetSaturateFilterAmount(Element* element) {
+    EXPECT_EQ(1u, element->GetComputedStyle()->Filter().size());
+    const FilterOperation* filter =
+        element->GetComputedStyle()->Filter().Operations()[0];
+    EXPECT_EQ(FilterOperation::OperationType::kSaturate, filter->GetType());
+    return static_cast<const BasicColorMatrixFilterOperation*>(filter)
         ->Amount();
   }
 
@@ -85,6 +95,15 @@ class CSSAnimationsTest : public RenderingTest, public PaintTestConfigurations {
     DCHECK(keyframe_effect);
     DCHECK(keyframe_effect->Model());
     keyframe_effect->Model()->InvalidateCompositorKeyframesSnapshot();
+  }
+
+  bool IsUseCounted(mojom::WebFeature feature) {
+    return GetDocument().IsUseCounted(feature);
+  }
+
+  void ClearUseCounter(mojom::WebFeature feature) {
+    GetDocument().ClearUseCounterForTesting(feature);
+    DCHECK(!IsUseCounted(feature));
   }
 
  private:
@@ -134,7 +153,7 @@ TEST_P(CSSAnimationsTest, RetargetedTransition) {
 TEST_P(CSSAnimationsTest, IncompatibleRetargetedTransition) {
   SetBodyInnerHTML(R"HTML(
     <style>
-      #test { transition: filter 1s; }
+      #test { transition: filter 1s linear; }
       .saturate { filter: saturate(20%); }
       .contrast { filter: contrast(20%); }
     </style>
@@ -152,14 +171,14 @@ TEST_P(CSSAnimationsTest, IncompatibleRetargetedTransition) {
   EXPECT_TRUE(animation->HasActiveAnimationsOnCompositor());
   AdvanceClockSeconds(0.003);
 
-  // The computed style still contains no filter until the next frame.
-  EXPECT_TRUE(element->GetComputedStyle()->Filter().IsEmpty());
+  UpdateAllLifecyclePhasesForTest();
+  EXPECT_FLOAT_EQ(1.0 * (1 - 0.003) + 0.2 * 0.003,
+                  GetSaturateFilterAmount(element));
 
   // Now we start a contrast filter. Since it will try to combine with
   // the in progress saturate filter, and be incompatible, there should
   // be no transition and it should immediately apply on the next frame.
   element->setAttribute(html_names::kClassAttr, "contrast");
-  EXPECT_TRUE(element->GetComputedStyle()->Filter().IsEmpty());
   UpdateAllLifecyclePhasesForTest();
   EXPECT_EQ(0.2, GetContrastFilterAmount(element));
 }
@@ -196,7 +215,7 @@ TEST_P(CSSAnimationsTest, CompositedBackgroundColorSnapshot) {
   CSSAnimations::CalculateCompositorAnimationUpdate(
       update, *element, *element, element->ComputedStyleRef(),
       element->parentNode()->GetComputedStyle(),
-      /* was_window_resized */ false);
+      /* was_window_resized */ false, /* force update */ false);
 
   ASSERT_EQ(1u, update.UpdatedCompositorKeyframes().size());
   EXPECT_EQ(animation, update.UpdatedCompositorKeyframes()[0].Get());
@@ -299,6 +318,15 @@ bool OpacityFlag(const ComputedStyle& style) {
 bool TransformFlag(const ComputedStyle& style) {
   return style.HasCurrentTransformAnimation();
 }
+bool ScaleFlag(const ComputedStyle& style) {
+  return style.HasCurrentScaleAnimation();
+}
+bool RotateFlag(const ComputedStyle& style) {
+  return style.HasCurrentRotateAnimation();
+}
+bool TranslateFlag(const ComputedStyle& style) {
+  return style.HasCurrentTranslateAnimation();
+}
 bool FilterFlag(const ComputedStyle& style) {
   return style.HasCurrentFilterAnimation();
 }
@@ -317,6 +345,15 @@ bool CompositedOpacityFlag(const ComputedStyle& style) {
 }
 bool CompositedTransformFlag(const ComputedStyle& style) {
   return style.IsRunningTransformAnimationOnCompositor();
+}
+bool CompositedScaleFlag(const ComputedStyle& style) {
+  return style.IsRunningScaleAnimationOnCompositor();
+}
+bool CompositedRotateFlag(const ComputedStyle& style) {
+  return style.IsRunningRotateAnimationOnCompositor();
+}
+bool CompositedTranslateFlag(const ComputedStyle& style) {
+  return style.IsRunningTranslateAnimationOnCompositor();
 }
 bool CompositedFilterFlag(const ComputedStyle& style) {
   return style.IsRunningFilterAnimationOnCompositor();
@@ -337,9 +374,9 @@ struct FlagData {
 FlagData flag_data[] = {
     {"opacity", "0", "1", OpacityFlag},
     {"transform", "scale(1)", "scale(2)", TransformFlag},
-    {"rotate", "10deg", "20deg", TransformFlag},
-    {"scale", "1", "2", TransformFlag},
-    {"translate", "10px", "20px", TransformFlag},
+    {"rotate", "10deg", "20deg", RotateFlag},
+    {"scale", "1", "2", ScaleFlag},
+    {"translate", "10px", "20px", TranslateFlag},
     {"filter", "contrast(10%)", "contrast(20%)", FilterFlag},
     {"backdrop-filter", "blur(10px)", "blur(20px)", BackdropFilterFlag},
     {"background-color", "red", "blue", BackgroundColorFlag},
@@ -349,6 +386,9 @@ FlagData flag_data[] = {
 FlagData compositor_flag_data[] = {
     {"opacity", "0", "1", CompositedOpacityFlag},
     {"transform", "scale(1)", "scale(2)", CompositedTransformFlag},
+    {"scale", "1", "2", CompositedScaleFlag},
+    {"rotate", "45deg", "90deg", CompositedRotateFlag},
+    {"translate", "10px 0px", "10px 20px", CompositedTranslateFlag},
     {"filter", "contrast(10%)", "contrast(20%)", CompositedFilterFlag},
     {"backdrop-filter", "blur(10px)", "blur(20px)",
      CompositedBackdropFilterFlag},
@@ -651,6 +691,60 @@ TEST_P(CSSAnimationsTest, UpdateAnimationFlags_AnimatingElement) {
   EXPECT_FALSE(before->ComputedStyleRef().HasCurrentTransformAnimation());
 }
 
+TEST_P(CSSAnimationsTest, CSSTransitionBlockedByAnimationUseCounter) {
+  SetBodyInnerHTML(R"HTML(
+    <style>
+      @keyframes anim {
+        from { z-index: 10; }
+        to { z-index: 20; }
+      }
+      #test {
+        z-index: 0;
+        transition: z-index 100s steps(2, start);
+      }
+      #test.animate {
+        animation: anim 100s steps(2, start);
+      }
+      #test.change {
+        z-index: 100;
+      }
+    </style>
+    <div id=test class=animate>Test</div>
+  )HTML");
+
+  Element* element = GetDocument().getElementById("test");
+  ASSERT_TRUE(element);
+
+  // Verify that we see animation effects.
+  UpdateAllLifecyclePhasesForTest();
+  EXPECT_EQ(15, element->ComputedStyleRef().ZIndex());
+  EXPECT_FALSE(IsUseCounted(WebFeature::kCSSTransitionBlockedByAnimation));
+
+  // Attempt to trigger transition. This should not work, because there's a
+  // current animation on the same property.
+  element->classList().Add("change");
+  UpdateAllLifecyclePhasesForTest();
+  EXPECT_EQ(15, element->ComputedStyleRef().ZIndex());
+  EXPECT_TRUE(IsUseCounted(WebFeature::kCSSTransitionBlockedByAnimation));
+
+  // Remove animation and attempt to trigger transition at the same time.
+  // Transition should still not trigger because of
+  // |previous_active_interpolations_for_animations_|.
+  ClearUseCounter(WebFeature::kCSSTransitionBlockedByAnimation);
+  element->classList().Remove("animate");
+  element->classList().Remove("change");
+  UpdateAllLifecyclePhasesForTest();
+  EXPECT_EQ(0, element->ComputedStyleRef().ZIndex());
+  EXPECT_TRUE(IsUseCounted(WebFeature::kCSSTransitionBlockedByAnimation));
+
+  // Finally trigger the transition.
+  ClearUseCounter(WebFeature::kCSSTransitionBlockedByAnimation);
+  element->classList().Add("change");
+  UpdateAllLifecyclePhasesForTest();
+  EXPECT_EQ(50, element->ComputedStyleRef().ZIndex());
+  EXPECT_FALSE(IsUseCounted(WebFeature::kCSSTransitionBlockedByAnimation));
+}
+
 // The following group of tests verify that composited CSS animations are
 // well behaved when updated via the web-animations API. Verifies that changes
 // are synced with the compositor.
@@ -719,7 +813,7 @@ class CSSAnimationsCompositorSyncTest : public CSSAnimationsTest {
     cc::KeyframeModel* keyframe_model = GetCompositorKeyframeForOpacity();
     base::TimeTicks start_time = keyframe_model->start_time();
     static_cast<CompositorAnimationDelegate*>(animation)
-        ->NotifyAnimationStarted(start_time.since_origin().InSecondsF(),
+        ->NotifyAnimationStarted(start_time.since_origin(),
                                  animation->CompositorGroup());
   }
 

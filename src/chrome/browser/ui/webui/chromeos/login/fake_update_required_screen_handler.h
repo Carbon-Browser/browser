@@ -7,8 +7,6 @@
 
 #include <string>
 
-#include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "chrome/browser/ui/webui/chromeos/login/base_screen_handler.h"
 #include "chrome/browser/ui/webui/chromeos/login/update_required_screen_handler.h"
 
@@ -17,15 +15,18 @@ namespace chromeos {
 class FakeUpdateRequiredScreenHandler : public UpdateRequiredView {
  public:
   FakeUpdateRequiredScreenHandler() = default;
+
+  FakeUpdateRequiredScreenHandler(const FakeUpdateRequiredScreenHandler&) =
+      delete;
+  FakeUpdateRequiredScreenHandler& operator=(
+      const FakeUpdateRequiredScreenHandler&) = delete;
+
   ~FakeUpdateRequiredScreenHandler() override {}
 
   UpdateRequiredView::UIState ui_state() { return ui_state_; }
 
  private:
   void Show() override {}
-  void Hide() override {}
-  void Bind(ash::UpdateRequiredScreen* screen) override {}
-  void Unbind() override {}
 
   void SetIsConnected(bool connected) override {}
   void SetUpdateProgressUnavailable(bool unavailable) override {}
@@ -40,8 +41,6 @@ class FakeUpdateRequiredScreenHandler : public UpdateRequiredView {
   void SetIsUserDataPresent(bool data_present) override {}
 
   UpdateRequiredView::UIState ui_state_;
-
-  DISALLOW_COPY_AND_ASSIGN(FakeUpdateRequiredScreenHandler);
 };
 
 }  // namespace chromeos

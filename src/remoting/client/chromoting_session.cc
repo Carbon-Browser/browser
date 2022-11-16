@@ -15,10 +15,11 @@
 #include "base/callback_helpers.h"
 #include "base/format_macros.h"
 #include "base/logging.h"
-#include "base/single_thread_task_runner.h"
-#include "base/task_runner_util.h"
+#include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/task/task_runner_util.h"
 #include "base/timer/timer.h"
-#include "jingle/glue/thread_wrapper.h"
+#include "components/webrtc/thread_wrapper.h"
 #include "net/socket/client_socket_factory.h"
 #include "remoting/base/chromoting_event.h"
 #include "remoting/base/service_urls.h"
@@ -53,12 +54,11 @@ const int kDefaultDPI = 96;
 const int kMinDimension = 640;
 
 // Interval at which to log performance statistics, if enabled.
-constexpr base::TimeDelta kPerfStatsInterval = base::TimeDelta::FromMinutes(1);
+constexpr base::TimeDelta kPerfStatsInterval = base::Minutes(1);
 
 // Delay to destroy the signal strategy, so that the session-terminate event can
 // still be sent out.
-constexpr base::TimeDelta kDestroySignalingDelay =
-    base::TimeDelta::FromSeconds(2);
+constexpr base::TimeDelta kDestroySignalingDelay = base::Seconds(2);
 
 bool IsClientResolutionValid(int dips_width, int dips_height) {
   // This prevents sending resolution on a portrait mode small phone screen
@@ -102,6 +102,10 @@ class ChromotingSession::Core : public ClientUserInterface,
   Core(ChromotingClientRuntime* runtime,
        std::unique_ptr<ClientTelemetryLogger> logger,
        std::unique_ptr<SessionContext> session_context);
+
+  Core(const Core&) = delete;
+  Core& operator=(const Core&) = delete;
+
   ~Core() override;
 
   void RequestPairing(const std::string& device_name);
@@ -182,7 +186,7 @@ class ChromotingSession::Core : public ClientUserInterface,
 
   // |runtime_| and |logger_| are stored separately from |session_context_| so
   // that they won't be destroyed after the core is invalidated.
-  ChromotingClientRuntime* const runtime_;
+  const raw_ptr<ChromotingClientRuntime> runtime_;
   std::unique_ptr<ClientTelemetryLogger> logger_;
 
   std::unique_ptr<SessionContext> session_context_;
@@ -210,7 +214,6 @@ class ChromotingSession::Core : public ClientUserInterface,
   // InvalidateWeakPtrs() is called.
   base::WeakPtr<Core> weak_ptr_;
   base::WeakPtrFactory<Core> weak_factory_{this};
-  DISALLOW_COPY_AND_ASSIGN(Core);
 };
 
 ChromotingSession::Core::Core(ChromotingClientRuntime* runtime,
@@ -509,7 +512,7 @@ void ChromotingSession::Core::ConnectOnNetworkThread() {
     return;
   }
 
-  jingle_glue::JingleThreadWrapper::EnsureForCurrentMessageLoop();
+  webrtc::ThreadWrapper::EnsureForCurrentMessageLoop();
 
   client_context_ = std::make_unique<ClientContext>(network_task_runner());
   client_context_->Start();
@@ -539,22 +542,13 @@ void ChromotingSession::Core::ConnectOnNetworkThread() {
   scoped_refptr<protocol::TransportContext> transport_context =
       new protocol::TransportContext(
           std::make_unique<protocol::ChromiumPortAllocatorFactory>(),
+          webrtc::ThreadWrapper::current()->SocketServer(),
           runtime_->url_loader_factory(),
           /* oauth_token_getter= */ nullptr,
           protocol::NetworkSettings(
               protocol::NetworkSettings::NAT_TRAVERSAL_FULL),
           protocol::TransportRole::CLIENT);
 
-#if defined(ENABLE_WEBRTC_REMOTING_CLIENT)
-  if (session_context_->info.flags.find("useWebrtc") != std::string::npos) {
-    VLOG(0) << "Attempting to connect using WebRTC.";
-    std::unique_ptr<protocol::CandidateSessionConfig> protocol_config =
-        protocol::CandidateSessionConfig::CreateEmpty();
-    protocol_config->set_webrtc_supported(true);
-    protocol_config->set_ice_supported(false);
-    client_->set_protocol_config(std::move(protocol_config));
-  }
-#endif  // defined(ENABLE_WEBRTC_REMOTING_CLIENT)
   if (session_context_->info.pairing_id.length() &&
       session_context_->info.pairing_secret.length()) {
     logger_->SetAuthMethod(ChromotingEvent::AuthMethod::PINLESS);

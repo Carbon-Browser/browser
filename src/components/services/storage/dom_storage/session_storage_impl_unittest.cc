@@ -18,10 +18,9 @@
 #include "base/files/scoped_temp_dir.h"
 #include "base/guid.h"
 #include "base/memory/ref_counted.h"
-#include "base/sequenced_task_runner.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/task/post_task.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
@@ -55,6 +54,9 @@ static const char kSessionStorageDirectory[] = "Session Storage";
 class SessionStorageImplTest : public testing::Test {
  public:
   SessionStorageImplTest() { CHECK(temp_dir_.CreateUniqueTempDir()); }
+
+  SessionStorageImplTest(const SessionStorageImplTest&) = delete;
+  SessionStorageImplTest& operator=(const SessionStorageImplTest&) = delete;
 
   ~SessionStorageImplTest() override {
     EXPECT_TRUE(temp_dir_.Delete());
@@ -161,8 +163,6 @@ class SessionStorageImplTest : public testing::Test {
           {base::MayBlock(), base::TaskShutdownBehavior::BLOCK_SHUTDOWN})};
   std::unique_ptr<SessionStorageImpl> session_storage_;
   mojo::Remote<mojom::SessionStorageControl> remote_session_storage_;
-
-  DISALLOW_COPY_AND_ASSIGN(SessionStorageImplTest);
 };
 
 TEST_F(SessionStorageImplTest, MigrationV0ToV1) {
@@ -662,7 +662,7 @@ TEST_F(SessionStorageImplTest, RecreateOnCommitFailure) {
 
   // Ensure that the first opened database always fails to write data.
   session_storage_impl()->GetDatabaseForTesting().PostTaskWithThisObject(
-      FROM_HERE, base::BindLambdaForTesting([&](DomStorageDatabase* db) {
+      base::BindLambdaForTesting([&](DomStorageDatabase* db) {
         db->MakeAllCommitsFailForTesting();
         db->SetDestructionCallbackForTesting(
             base::BindLambdaForTesting([&] { ++num_databases_destroyed; }));
@@ -694,9 +694,7 @@ TEST_F(SessionStorageImplTest, RecreateOnCommitFailure) {
                base::BindOnce([](bool success) { EXPECT_TRUE(success); }));
 
   // Repeatedly write data to the database, to trigger enough commit errors.
-  int i = 0;
   while (area_o1.is_connected()) {
-    ++i;
     // Every write needs to be different to make sure there actually is a
     // change to commit.
     std::vector<uint8_t> old_value = value;
@@ -782,7 +780,7 @@ TEST_F(SessionStorageImplTest, DontRecreateOnRepeatedCommitFailure) {
 
   // Ensure that this database always fails to write data.
   session_storage_impl()->GetDatabaseForTesting().PostTaskWithThisObject(
-      FROM_HERE, base::BindLambdaForTesting([&](DomStorageDatabase* db) {
+      base::BindLambdaForTesting([&](DomStorageDatabase* db) {
         db->MakeAllCommitsFailForTesting();
         db->SetDestructionCallbackForTesting(
             base::BindLambdaForTesting([&] { ++num_databases_destroyed; }));

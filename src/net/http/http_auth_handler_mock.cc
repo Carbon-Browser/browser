@@ -9,8 +9,8 @@
 #include "base/bind.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/string_util.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "net/base/net_errors.h"
 #include "net/dns/host_resolver.h"
@@ -41,15 +41,7 @@ void PrintTo(const HttpAuthHandlerMock::State& state, ::std::ostream* os) {
   }
 }
 
-HttpAuthHandlerMock::HttpAuthHandlerMock()
-    : state_(State::WAIT_FOR_INIT),
-      generate_async_(false),
-      generate_rv_(OK),
-      auth_token_(nullptr),
-      first_round_(true),
-      connection_based_(false),
-      allows_default_credentials_(false),
-      allows_explicit_credentials_(true) {}
+HttpAuthHandlerMock::HttpAuthHandlerMock() = default;
 
 HttpAuthHandlerMock::~HttpAuthHandlerMock() = default;
 
@@ -147,16 +139,16 @@ void HttpAuthHandlerMock::OnGenerateAuthToken() {
   std::move(callback_).Run(generate_rv_);
 }
 
-HttpAuthHandlerMock::Factory::Factory()
-    : do_init_from_challenge_(false) {
+HttpAuthHandlerMock::Factory::Factory() {
   // TODO(cbentzel): Default do_init_from_challenge_ to true.
 }
 
 HttpAuthHandlerMock::Factory::~Factory() = default;
 
 void HttpAuthHandlerMock::Factory::AddMockHandler(
-    HttpAuthHandler* handler, HttpAuth::Target target) {
-  handlers_[target].push_back(base::WrapUnique(handler));
+    std::unique_ptr<HttpAuthHandler> handler,
+    HttpAuth::Target target) {
+  handlers_[target].push_back(std::move(handler));
 }
 
 int HttpAuthHandlerMock::Factory::CreateAuthHandler(
@@ -164,7 +156,7 @@ int HttpAuthHandlerMock::Factory::CreateAuthHandler(
     HttpAuth::Target target,
     const SSLInfo& ssl_info,
     const NetworkIsolationKey& network_isolation_key,
-    const GURL& origin,
+    const url::SchemeHostPort& scheme_host_port,
     CreateReason reason,
     int nonce_count,
     const NetLogWithSource& net_log,
@@ -178,7 +170,8 @@ int HttpAuthHandlerMock::Factory::CreateAuthHandler(
   handlers.erase(handlers.begin());
   if (do_init_from_challenge_ &&
       !tmp_handler->InitFromChallenge(challenge, target, ssl_info,
-                                      network_isolation_key, origin, net_log)) {
+                                      network_isolation_key, scheme_host_port,
+                                      net_log)) {
     return ERR_INVALID_RESPONSE;
   }
   handler->swap(tmp_handler);

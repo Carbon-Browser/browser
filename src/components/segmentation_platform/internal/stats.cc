@@ -7,28 +7,14 @@
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
-#include "components/optimization_guide/proto/models.pb.h"
+#include "base/strings/strcat.h"
+#include "base/strings/string_util.h"
 #include "components/segmentation_platform/internal/proto/types.pb.h"
+#include "components/segmentation_platform/public/config.h"
+#include "components/segmentation_platform/public/proto/segmentation_platform.pb.h"
 
-namespace segmentation_platform {
-namespace stats {
+namespace segmentation_platform::stats {
 namespace {
-// Should map to SegmentationModel variant in
-// //tools/metrics/histograms/metadata/segmentation_platform/histograms.xml.
-std::string OptimizationTargetToHistogramVariant(
-    OptimizationTarget segment_id) {
-  switch (segment_id) {
-    case OptimizationTarget::OPTIMIZATION_TARGET_SEGMENTATION_NEW_TAB:
-      return "NewTab";
-    case OptimizationTarget::OPTIMIZATION_TARGET_SEGMENTATION_SHARE:
-      return "Share";
-    case OptimizationTarget::OPTIMIZATION_TARGET_SEGMENTATION_VOICE:
-      return "Voice";
-    default:
-      NOTREACHED();
-      return "Unknown";
-  }
-}
 
 // Keep in sync with AdaptiveToolbarButtonVariant in enums.xml.
 enum class AdaptiveToolbarButtonVariant {
@@ -41,8 +27,8 @@ enum class AdaptiveToolbarButtonVariant {
 };
 
 // This is the segmentation subset of
-// optimization_guide::proto::OptimizationTarget.
-// Keep in sync with SegmentationPlatformSegmenationModel in
+// proto::SegmentId.
+// Keep in sync with SegmentationPlatformSegmentationModel in
 // //tools/metrics/histograms/enums.xml.
 // See also SegmentationModel variant in
 // //tools/metrics/histograms/metadata/segmentation_platform/histograms.xml.
@@ -51,75 +37,103 @@ enum class SegmentationModel {
   kNewTab = 4,
   kShare = 5,
   kVoice = 6,
-  kMaxValue = kVoice,
+  kDummy = 10,
+  kChromeStartAndroid = 11,
+  kQueryTiles = 12,
+  kChromeLowUserEngagement = 16,
+  kFeedUserSegment = 17,
+  kContextualPageActionPriceTracking = 18,
+  kMaxValue = kContextualPageActionPriceTracking,
 };
 
 AdaptiveToolbarButtonVariant OptimizationTargetToAdaptiveToolbarButtonVariant(
-    OptimizationTarget segment_id) {
+    SegmentId segment_id) {
   switch (segment_id) {
-    case OptimizationTarget::OPTIMIZATION_TARGET_SEGMENTATION_NEW_TAB:
+    case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_NEW_TAB:
       return AdaptiveToolbarButtonVariant::kNewTab;
-    case OptimizationTarget::OPTIMIZATION_TARGET_SEGMENTATION_SHARE:
+    case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_SHARE:
       return AdaptiveToolbarButtonVariant::kShare;
-    case OptimizationTarget::OPTIMIZATION_TARGET_SEGMENTATION_VOICE:
+    case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_VOICE:
       return AdaptiveToolbarButtonVariant::kVoice;
-    case OptimizationTarget::OPTIMIZATION_TARGET_UNKNOWN:
+    case SegmentId::OPTIMIZATION_TARGET_UNKNOWN:
       return AdaptiveToolbarButtonVariant::kNone;
     default:
+      NOTREACHED();
       return AdaptiveToolbarButtonVariant::kUnknown;
   }
 }
 
-AdaptiveToolbarSegmentSwitch GetSegmentSwitch(
-    OptimizationTarget new_selection,
-    OptimizationTarget previous_selection) {
+bool IsBooleanSegment(const std::string& segmentation_key) {
+  // Please keep in sync with BooleanModel variant in
+  // //tools/metrics/histograms/metadata/segmentation_platform/histograms.xml.
+  return segmentation_key == kChromeStartAndroidSegmentationKey ||
+         segmentation_key == kQueryTilesSegmentationKey ||
+         segmentation_key == kChromeLowUserEngagementSegmentationKey ||
+         segmentation_key == kFeedUserSegmentationKey;
+}
+
+BooleanSegmentSwitch GetBooleanSegmentSwitch(SegmentId new_selection,
+                                             SegmentId previous_selection) {
+  if (new_selection != SegmentId::OPTIMIZATION_TARGET_UNKNOWN &&
+      previous_selection == SegmentId::OPTIMIZATION_TARGET_UNKNOWN) {
+    return BooleanSegmentSwitch::kNoneToEnabled;
+  } else if (new_selection == SegmentId::OPTIMIZATION_TARGET_UNKNOWN &&
+             previous_selection != SegmentId::OPTIMIZATION_TARGET_UNKNOWN) {
+    return BooleanSegmentSwitch::kEnabledToNone;
+  }
+  return BooleanSegmentSwitch::kUnknown;
+}
+
+AdaptiveToolbarSegmentSwitch GetAdaptiveToolbarSegmentSwitch(
+    SegmentId new_selection,
+    SegmentId previous_selection) {
   switch (previous_selection) {
-    case OptimizationTarget::OPTIMIZATION_TARGET_UNKNOWN:
+    case SegmentId::OPTIMIZATION_TARGET_UNKNOWN:
       switch (new_selection) {
-        case OptimizationTarget::OPTIMIZATION_TARGET_SEGMENTATION_NEW_TAB:
+        case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_NEW_TAB:
           return AdaptiveToolbarSegmentSwitch::kNoneToNewTab;
-        case OptimizationTarget::OPTIMIZATION_TARGET_SEGMENTATION_SHARE:
+        case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_SHARE:
           return AdaptiveToolbarSegmentSwitch::kNoneToShare;
-        case OptimizationTarget::OPTIMIZATION_TARGET_SEGMENTATION_VOICE:
+        case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_VOICE:
           return AdaptiveToolbarSegmentSwitch::kNoneToVoice;
         default:
           NOTREACHED();
           return AdaptiveToolbarSegmentSwitch::kUnknown;
       }
 
-    case OptimizationTarget::OPTIMIZATION_TARGET_SEGMENTATION_NEW_TAB:
+    case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_NEW_TAB:
       switch (new_selection) {
-        case OptimizationTarget::OPTIMIZATION_TARGET_UNKNOWN:
+        case SegmentId::OPTIMIZATION_TARGET_UNKNOWN:
           return AdaptiveToolbarSegmentSwitch::kNewTabToNone;
-        case OptimizationTarget::OPTIMIZATION_TARGET_SEGMENTATION_SHARE:
+        case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_SHARE:
           return AdaptiveToolbarSegmentSwitch::kNewTabToShare;
-        case OptimizationTarget::OPTIMIZATION_TARGET_SEGMENTATION_VOICE:
+        case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_VOICE:
           return AdaptiveToolbarSegmentSwitch::kNewTabToVoice;
         default:
           NOTREACHED();
           return AdaptiveToolbarSegmentSwitch::kUnknown;
       }
 
-    case OptimizationTarget::OPTIMIZATION_TARGET_SEGMENTATION_SHARE:
+    case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_SHARE:
       switch (new_selection) {
-        case OptimizationTarget::OPTIMIZATION_TARGET_UNKNOWN:
+        case SegmentId::OPTIMIZATION_TARGET_UNKNOWN:
           return AdaptiveToolbarSegmentSwitch::kShareToNone;
-        case OptimizationTarget::OPTIMIZATION_TARGET_SEGMENTATION_NEW_TAB:
+        case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_NEW_TAB:
           return AdaptiveToolbarSegmentSwitch::kShareToNewTab;
-        case OptimizationTarget::OPTIMIZATION_TARGET_SEGMENTATION_VOICE:
+        case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_VOICE:
           return AdaptiveToolbarSegmentSwitch::kShareToVoice;
         default:
           NOTREACHED();
           return AdaptiveToolbarSegmentSwitch::kUnknown;
       }
 
-    case OptimizationTarget::OPTIMIZATION_TARGET_SEGMENTATION_VOICE:
+    case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_VOICE:
       switch (new_selection) {
-        case OptimizationTarget::OPTIMIZATION_TARGET_UNKNOWN:
+        case SegmentId::OPTIMIZATION_TARGET_UNKNOWN:
           return AdaptiveToolbarSegmentSwitch::kVoiceToNone;
-        case OptimizationTarget::OPTIMIZATION_TARGET_SEGMENTATION_NEW_TAB:
+        case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_NEW_TAB:
           return AdaptiveToolbarSegmentSwitch::kVoiceToNewTab;
-        case OptimizationTarget::OPTIMIZATION_TARGET_SEGMENTATION_SHARE:
+        case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_SHARE:
           return AdaptiveToolbarSegmentSwitch::kVoiceToShare;
         default:
           NOTREACHED();
@@ -132,15 +146,26 @@ AdaptiveToolbarSegmentSwitch GetSegmentSwitch(
   }
 }
 
-SegmentationModel OptimizationTargetToSegmentationModel(
-    OptimizationTarget segment_id) {
+SegmentationModel OptimizationTargetToSegmentationModel(SegmentId segment_id) {
   switch (segment_id) {
-    case OptimizationTarget::OPTIMIZATION_TARGET_SEGMENTATION_NEW_TAB:
+    case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_NEW_TAB:
       return SegmentationModel::kNewTab;
-    case OptimizationTarget::OPTIMIZATION_TARGET_SEGMENTATION_SHARE:
+    case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_SHARE:
       return SegmentationModel::kShare;
-    case OptimizationTarget::OPTIMIZATION_TARGET_SEGMENTATION_VOICE:
+    case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_VOICE:
       return SegmentationModel::kVoice;
+    case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_DUMMY:
+      return SegmentationModel::kDummy;
+    case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_CHROME_START_ANDROID:
+      return SegmentationModel::kChromeStartAndroid;
+    case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_QUERY_TILES:
+      return SegmentationModel::kQueryTiles;
+    case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_CHROME_LOW_USER_ENGAGEMENT:
+      return SegmentationModel::kChromeLowUserEngagement;
+    case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_FEED_USER:
+      return SegmentationModel::kFeedUserSegment;
+    case SegmentId::OPTIMIZATION_TARGET_CONTEXTUAL_PAGE_ACTION_PRICE_TRACKING:
+      return SegmentationModel::kContextualPageActionPriceTracking;
     default:
       return SegmentationModel::kUnknown;
   }
@@ -148,18 +173,23 @@ SegmentationModel OptimizationTargetToSegmentationModel(
 
 // Should map to ModelExecutionStatus variant string in
 // //tools/metrics/histograms/metadata/segmentation_platform/histograms.xml.
-std::string ModelExecutionStatusToHistogramVariant(
+absl::optional<base::StringPiece> ModelExecutionStatusToHistogramVariant(
     ModelExecutionStatus status) {
   switch (status) {
     case ModelExecutionStatus::kSuccess:
       return "Success";
     case ModelExecutionStatus::kExecutionError:
       return "ExecutionError";
-    case ModelExecutionStatus::kInvalidMetadata:
-      return "InvalidMetadata";
-    default:
-      NOTREACHED();
-      return "Unknown";
+
+    // Only record duration histograms when tflite model is executed. These
+    // cases mean the execution was skipped.
+    case ModelExecutionStatus::kSkippedInvalidMetadata:
+    case ModelExecutionStatus::kSkippedModelNotReady:
+    case ModelExecutionStatus::kSkippedHasFreshResults:
+    case ModelExecutionStatus::kSkippedNotEnoughSignals:
+    case ModelExecutionStatus::kSkippedResultNotExpired:
+    case ModelExecutionStatus::kFailedToSaveResultAfterSuccess:
+      return absl::nullopt;
   }
 }
 
@@ -193,31 +223,149 @@ float ZeroValueFraction(const std::vector<float>& tensor) {
 
 }  // namespace
 
-void RecordModelScore(OptimizationTarget segment_id, float score) {
-  base::UmaHistogramPercentage(
-      "SegmentationPlatform.AdaptiveToolbar.ModelScore." +
-          OptimizationTargetToHistogramVariant(segment_id),
-      score * 100);
+// Should map to SegmentationModel variant in
+// //tools/metrics/histograms/metadata/segmentation_platform/histograms.xml.
+// Should also update the field trials allowlist in
+// go/segmentation-field-trials-map.
+std::string OptimizationTargetToHistogramVariant(SegmentId segment_id) {
+  switch (segment_id) {
+    case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_NEW_TAB:
+      return "NewTab";
+    case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_SHARE:
+      return "Share";
+    case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_VOICE:
+      return "Voice";
+    case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_DUMMY:
+      return "Dummy";
+    case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_CHROME_START_ANDROID:
+      return "ChromeStartAndroid";
+    case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_QUERY_TILES:
+      return "QueryTiles";
+    case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_CHROME_LOW_USER_ENGAGEMENT:
+      return "ChromeLowUserEngagement";
+    case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_FEED_USER:
+      return "FeedUserSegment";
+    case SegmentId::OPTIMIZATION_TARGET_CONTEXTUAL_PAGE_ACTION_PRICE_TRACKING:
+      return "ContextualPageActionPriceTracking";
+    default:
+      return "Other";
+  }
+}
+
+const char* SegmentationKeyToUmaName(const std::string& segmentation_key) {
+  // Please keep in sync with SegmentationKey variant in
+  // //tools/metrics/histograms/metadata/segmentation_platform/histograms.xml.
+  // Should also update the field trials allowlist in
+  // go/segmentation-field-trials-map.
+  if (segmentation_key == kAdaptiveToolbarSegmentationKey) {
+    return "AdaptiveToolbar";
+  } else if (segmentation_key == kDummySegmentationKey) {
+    return "DummyFeature";
+  } else if (segmentation_key == kChromeStartAndroidSegmentationKey) {
+    return "ChromeStartAndroid";
+  } else if (segmentation_key == kQueryTilesSegmentationKey) {
+    return "QueryTiles";
+  } else if (segmentation_key == kChromeLowUserEngagementSegmentationKey) {
+    return "ChromeLowUserEngagement";
+  } else if (segmentation_key == kFeedUserSegmentationKey) {
+    return "FeedUserSegment";
+  } else if (segmentation_key == kContextualPageActionsKey) {
+    return "ContextualPageActions";
+  } else if (base::StartsWith(segmentation_key, "test_key")) {
+    return "TestKey";
+  }
+  NOTREACHED();
+  return "Unknown";
+}
+
+void RecordModelScore(SegmentId segment_id, float score) {
+  // Special case adaptive toolbar models since it already has histograms being
+  // recorded and updating names will affect current work.
+  switch (segment_id) {
+    case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_VOICE:
+    case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_NEW_TAB:
+    case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_SHARE:
+      base::UmaHistogramPercentage(
+          "SegmentationPlatform.AdaptiveToolbar.ModelScore." +
+              OptimizationTargetToHistogramVariant(segment_id),
+          score * 100);
+      break;
+    default:
+      break;
+  }
+
+  switch (segment_id) {
+    case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_VOICE:
+    case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_NEW_TAB:
+    case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_SHARE:
+    case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_DUMMY:
+    case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_CHROME_START_ANDROID:
+    case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_QUERY_TILES:
+    case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_CHROME_LOW_USER_ENGAGEMENT:
+    case SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_FEED_USER:
+    case SegmentId::OPTIMIZATION_TARGET_CONTEXTUAL_PAGE_ACTION_PRICE_TRACKING:
+      // Assumes all models return score between 0 and 1. This is true for all
+      // the models we have currently.
+      base::UmaHistogramPercentage(
+          "SegmentationPlatform.ModelScore." +
+              OptimizationTargetToHistogramVariant(segment_id),
+          score * 100);
+      break;
+    default:
+      break;
+  }
+}
+
+void RecordModelUpdateTimeDifference(SegmentId segment_id,
+                                     int64_t model_update_time) {
+  // |model_update_time| might be empty for data persisted before M101.
+  if (model_update_time) {
+    base::Time model_updated_time = base::Time::FromDeltaSinceWindowsEpoch(
+        base::Seconds(model_update_time));
+    base::UmaHistogramCounts1000(
+        "SegmentationPlatform.Init.ModelUpdatedTimeDifferenceInDays." +
+            OptimizationTargetToHistogramVariant(segment_id),
+        (base::Time::Now() - model_updated_time).InDays());
+  }
 }
 
 void RecordSegmentSelectionComputed(
-    OptimizationTarget new_selection,
-    absl::optional<OptimizationTarget> previous_selection) {
+    const std::string& segmentation_key,
+    SegmentId new_selection,
+    absl::optional<SegmentId> previous_selection) {
+  // Special case adaptive toolbar since it already has histograms being
+  // recorded and updating names will affect current work.
+  if (segmentation_key == kAdaptiveToolbarSegmentationKey) {
+    base::UmaHistogramEnumeration(
+        "SegmentationPlatform.AdaptiveToolbar.SegmentSelection.Computed",
+        OptimizationTargetToAdaptiveToolbarButtonVariant(new_selection));
+  }
+  std::string computed_hist = base::StrCat(
+      {"SegmentationPlatform.", SegmentationKeyToUmaName(segmentation_key),
+       ".SegmentSelection.Computed2"});
   base::UmaHistogramEnumeration(
-      "SegmentationPlatform.AdaptiveToolbar.SegmentSelection.Computed",
-      OptimizationTargetToAdaptiveToolbarButtonVariant(new_selection));
+      computed_hist, OptimizationTargetToSegmentationModel(new_selection));
 
-  OptimizationTarget prev_segment =
-      previous_selection.has_value()
-          ? previous_selection.value()
-          : OptimizationTarget::OPTIMIZATION_TARGET_UNKNOWN;
+  SegmentId prev_segment = previous_selection.has_value()
+                               ? previous_selection.value()
+                               : SegmentId::OPTIMIZATION_TARGET_UNKNOWN;
 
   if (prev_segment == new_selection)
     return;
 
-  base::UmaHistogramEnumeration(
-      "SegmentationPlatform.AdaptiveToolbar.SegmentSwitched",
-      GetSegmentSwitch(new_selection, prev_segment));
+  std::string switched_hist = base::StrCat(
+      {"SegmentationPlatform.", SegmentationKeyToUmaName(segmentation_key),
+       ".SegmentSwitched"});
+  if (segmentation_key == kAdaptiveToolbarSegmentationKey) {
+    base::UmaHistogramEnumeration(
+        switched_hist,
+        GetAdaptiveToolbarSegmentSwitch(new_selection, prev_segment));
+  } else if (IsBooleanSegment(segmentation_key)) {
+    base::UmaHistogramEnumeration(
+        switched_hist, GetBooleanSegmentSwitch(new_selection, prev_segment));
+  }
+  // Do not record switched histogram for all keys by default, the client needs
+  // to write custom logic for other kinds of segments.
 }
 
 void RecordMaintenanceCleanupSignalSuccessCount(size_t count) {
@@ -238,15 +386,14 @@ void RecordMaintenanceSignalIdentifierCount(size_t count) {
       "SegmentationPlatform.Maintenance.SignalIdentifierCount", count);
 }
 
-void RecordModelDeliveryHasMetadata(OptimizationTarget segment_id,
-                                    bool has_metadata) {
+void RecordModelDeliveryHasMetadata(SegmentId segment_id, bool has_metadata) {
   base::UmaHistogramBoolean(
       "SegmentationPlatform.ModelDelivery.HasMetadata." +
           OptimizationTargetToHistogramVariant(segment_id),
       has_metadata);
 }
 
-void RecordModelDeliveryMetadataFeatureCount(OptimizationTarget segment_id,
+void RecordModelDeliveryMetadataFeatureCount(SegmentId segment_id,
                                              size_t count) {
   base::UmaHistogramCounts1000(
       "SegmentationPlatform.ModelDelivery.Metadata.FeatureCount." +
@@ -255,7 +402,7 @@ void RecordModelDeliveryMetadataFeatureCount(OptimizationTarget segment_id,
 }
 
 void RecordModelDeliveryMetadataValidation(
-    OptimizationTarget segment_id,
+    SegmentId segment_id,
     bool processed,
     metadata_utils::ValidationResult validation_result) {
   // Should map to ValidationPhase variant string in
@@ -268,82 +415,111 @@ void RecordModelDeliveryMetadataValidation(
       validation_result);
 }
 
-void RecordModelDeliveryReceived(OptimizationTarget segment_id) {
+void RecordModelDeliveryReceived(SegmentId segment_id) {
   UMA_HISTOGRAM_ENUMERATION("SegmentationPlatform.ModelDelivery.Received",
                             OptimizationTargetToSegmentationModel(segment_id));
 }
 
-void RecordModelDeliverySaveResult(OptimizationTarget segment_id,
-                                   bool success) {
+void RecordModelDeliverySaveResult(SegmentId segment_id, bool success) {
   base::UmaHistogramBoolean(
       "SegmentationPlatform.ModelDelivery.SaveResult." +
           OptimizationTargetToHistogramVariant(segment_id),
       success);
 }
 
-void RecordModelDeliverySegmentIdMatches(OptimizationTarget segment_id,
-                                         bool matches) {
+void RecordModelDeliverySegmentIdMatches(SegmentId segment_id, bool matches) {
   base::UmaHistogramBoolean(
       "SegmentationPlatform.ModelDelivery.SegmentIdMatches." +
           OptimizationTargetToHistogramVariant(segment_id),
       matches);
 }
 
-void RecordModelExecutionDurationFeatureProcessing(
-    OptimizationTarget segment_id,
-    base::TimeDelta duration) {
+void RecordModelExecutionDurationFeatureProcessing(SegmentId segment_id,
+                                                   base::TimeDelta duration) {
   base::UmaHistogramTimes(
       "SegmentationPlatform.ModelExecution.Duration.FeatureProcessing." +
           OptimizationTargetToHistogramVariant(segment_id),
       duration);
 }
 
-void RecordModelExecutionDurationModel(OptimizationTarget segment_id,
+void RecordModelExecutionDurationModel(SegmentId segment_id,
                                        bool success,
                                        base::TimeDelta duration) {
   ModelExecutionStatus status = success ? ModelExecutionStatus::kSuccess
                                         : ModelExecutionStatus::kExecutionError;
+  absl::optional<base::StringPiece> status_variant =
+      ModelExecutionStatusToHistogramVariant(status);
+  if (!status_variant)
+    return;
   base::UmaHistogramTimes(
-      "SegmentationPlatform.ModelExecution.Duration.Model." +
-          OptimizationTargetToHistogramVariant(segment_id) + "." +
-          ModelExecutionStatusToHistogramVariant(status),
+      base::StrCat({"SegmentationPlatform.ModelExecution.Duration.Model.",
+                    OptimizationTargetToHistogramVariant(segment_id), ".",
+                    *status_variant}),
       duration);
 }
 
-void RecordModelExecutionDurationTotal(OptimizationTarget segment_id,
+void RecordModelExecutionDurationTotal(SegmentId segment_id,
                                        ModelExecutionStatus status,
                                        base::TimeDelta duration) {
+  absl::optional<base::StringPiece> status_variant =
+      ModelExecutionStatusToHistogramVariant(status);
+  if (!status_variant)
+    return;
   base::UmaHistogramTimes(
-      "SegmentationPlatform.ModelExecution.Duration.Total." +
-          OptimizationTargetToHistogramVariant(segment_id) + "." +
-          ModelExecutionStatusToHistogramVariant(status),
+      base::StrCat({"SegmentationPlatform.ModelExecution.Duration.Total.",
+                    OptimizationTargetToHistogramVariant(segment_id), ".",
+                    *status_variant}),
       duration);
 }
 
-void RecordModelExecutionResult(OptimizationTarget segment_id, float result) {
+void RecordOnDemandSegmentSelectionDuration(
+    const std::string& segmentation_key,
+    const SegmentSelectionResult& result,
+    base::TimeDelta duration) {
+  std::string histogram_prefix =
+      base::StrCat({"SegmentationPlatform.SegmentSelectionOnDemand.Duration.",
+                    SegmentationKeyToUmaName(segmentation_key), "."});
+  base::UmaHistogramTimes(base::StrCat({histogram_prefix, "Any"}), duration);
+
+  std::string histogram_name = base::StrCat(
+      {histogram_prefix,
+       result.segment.has_value()
+           ? OptimizationTargetToHistogramVariant(result.segment.value())
+           : "None"});
+  base::UmaHistogramTimes(histogram_name, duration);
+}
+
+void RecordModelExecutionResult(SegmentId segment_id, float result) {
   base::UmaHistogramPercentage(
       "SegmentationPlatform.ModelExecution.Result." +
           OptimizationTargetToHistogramVariant(segment_id),
       result * 100);
 }
 
-void RecordModelExecutionSaveResult(OptimizationTarget segment_id,
-                                    bool success) {
+void RecordModelExecutionSaveResult(SegmentId segment_id, bool success) {
   base::UmaHistogramBoolean(
       "SegmentationPlatform.ModelExecution.SaveResult." +
           OptimizationTargetToHistogramVariant(segment_id),
       success);
 }
 
-void RecordModelExecutionStatus(OptimizationTarget segment_id,
+void RecordModelExecutionStatus(SegmentId segment_id,
+                                bool default_provider,
                                 ModelExecutionStatus status) {
-  base::UmaHistogramEnumeration(
-      "SegmentationPlatform.ModelExecution.Status." +
-          OptimizationTargetToHistogramVariant(segment_id),
-      status);
+  if (!default_provider) {
+    base::UmaHistogramEnumeration(
+        "SegmentationPlatform.ModelExecution.Status." +
+            OptimizationTargetToHistogramVariant(segment_id),
+        status);
+  } else {
+    base::UmaHistogramEnumeration(
+        "SegmentationPlatform.ModelExecution.DefaultProvider.Status." +
+            OptimizationTargetToHistogramVariant(segment_id),
+        status);
+  }
 }
 
-void RecordModelExecutionZeroValuePercent(OptimizationTarget segment_id,
+void RecordModelExecutionZeroValuePercent(SegmentId segment_id,
                                           const std::vector<float>& tensor) {
   base::UmaHistogramPercentage(
       "SegmentationPlatform.ModelExecution.ZeroValuePercent." +
@@ -394,5 +570,63 @@ void RecordSignalsListeningCount(
       histogram_value_count);
 }
 
-}  // namespace stats
-}  // namespace segmentation_platform
+void RecordSegmentSelectionFailure(const std::string& segmentation_key,
+                                   SegmentationSelectionFailureReason reason) {
+  base::UmaHistogramEnumeration(
+      base::StrCat({"SegmentationPlatform.SelectionFailedReason.",
+                    SegmentationKeyToUmaName(segmentation_key)}),
+      reason);
+}
+
+std::string FeatureProcessingErrorToString(FeatureProcessingError error) {
+  switch (error) {
+    case FeatureProcessingError::kUkmEngineDisabled:
+      return "UkmEngineDisabled";
+    case FeatureProcessingError::kUmaValidationError:
+      return "UmaValidationError";
+    case FeatureProcessingError::kSqlValidationError:
+      return "SqlValidationError";
+    case FeatureProcessingError::kCustomInputError:
+      return "CustomInputError";
+    case FeatureProcessingError::kSqlBindValuesError:
+      return "SqlBindValuesError";
+    case FeatureProcessingError::kSqlQueryRunError:
+      return "SqlQueryRunError";
+    case FeatureProcessingError::kResultTensorError:
+      return "ResultTensorError";
+    default:
+      return "Other";
+  }
+}
+
+void RecordFeatureProcessingError(SegmentId segment_id,
+                                  FeatureProcessingError error) {
+  base::UmaHistogramEnumeration(
+      "SegmentationPlatform.FeatureProcessing.Error." +
+          OptimizationTargetToHistogramVariant(segment_id),
+      error);
+}
+
+void RecordModelAvailability(SegmentId segment_id,
+                             SegmentationModelAvailability availability) {
+  base::UmaHistogramEnumeration(
+      "SegmentationPlatform.ModelAvailability." +
+          OptimizationTargetToHistogramVariant(segment_id),
+      availability);
+}
+
+void RecordTooManyInputTensors(int tensor_size) {
+  UMA_HISTOGRAM_COUNTS_100(
+      "SegmentationPlatform.StructuredMetrics.TooManyTensors.Count",
+      tensor_size);
+}
+
+void RecordTrainingDataCollectionEvent(SegmentId segment_id,
+                                       TrainingDataCollectionEvent event) {
+  base::UmaHistogramEnumeration(
+      "SegmentationPlatform.TrainingDataCollectionEvents." +
+          OptimizationTargetToHistogramVariant(segment_id),
+      event);
+}
+
+}  // namespace segmentation_platform::stats

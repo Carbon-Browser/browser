@@ -9,7 +9,10 @@
 
 GEN_INCLUDE(['//chrome/test/data/webui/polymer_interactive_ui_test.js']);
 
+GEN('#include "build/build_config.h"');
 GEN('#include "content/public/test/browser_test.h"');
+
+/* eslint-disable no-var */
 
 const HistoryFocusTest = class extends PolymerInteractiveUITest {
   /** @override */
@@ -18,7 +21,6 @@ const HistoryFocusTest = class extends PolymerInteractiveUITest {
   }
 };
 
-// eslint-disable-next-line no-var
 var HistoryToolbarFocusTest = class extends HistoryFocusTest {
   /** @override */
   get browsePreload() {
@@ -26,7 +28,7 @@ var HistoryToolbarFocusTest = class extends HistoryFocusTest {
   }
 };
 
-GEN('#if defined(OS_MAC)');
+GEN('#if BUILDFLAG(IS_MAC)');
 GEN('// Flaky, https://crbug.com/1200678');
 GEN('#define MAYBE_All DISABLED_All');
 GEN('#else');
@@ -37,7 +39,6 @@ TEST_F('HistoryToolbarFocusTest', 'MAYBE_All', function() {
 });
 GEN('#undef MAYBE_All');
 
-// eslint-disable-next-line no-var
 var HistoryListFocusTest = class extends HistoryFocusTest {
   /** @override */
   get browsePreload() {
@@ -50,7 +51,6 @@ TEST_F('HistoryListFocusTest', 'DISABLED_All', function() {
   mocha.run();
 });
 
-// eslint-disable-next-line no-var
 var HistorySyncedDeviceManagerFocusTest = class extends HistoryFocusTest {
   /** @override */
   get browsePreload() {
@@ -62,7 +62,6 @@ TEST_F('HistorySyncedDeviceManagerFocusTest', 'All', function() {
   mocha.run();
 });
 
-// eslint-disable-next-line no-var
 var HistoryItemFocusTest = class extends HistoryFocusTest {
   /** @override */
   get browsePreload() {

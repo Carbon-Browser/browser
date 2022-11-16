@@ -38,7 +38,7 @@ class AbortsPageLoadMetricsObserverTest
 };
 
 // Disabled due to flakiness: https://crbug.com/1092598
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 #define MAYBE_NewNavigationBeforeCommit DISABLED_NewNavigationBeforeCommit
 #else
 #define MAYBE_NewNavigationBeforeCommit NewNavigationBeforeCommit
@@ -52,7 +52,7 @@ TEST_F(AbortsPageLoadMetricsObserverTest, MAYBE_NewNavigationBeforeCommit) {
 }
 
 // Disabled due to flakiness: https://crbug.com/1092598
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 #define MAYBE_ReloadBeforeCommit DISABLED_ReloadBeforeCommit
 #else
 #define MAYBE_ReloadBeforeCommit ReloadBeforeCommit
@@ -87,7 +87,7 @@ TEST_F(AbortsPageLoadMetricsObserverTest, BackgroundBeforeCommit) {
 }
 
 // Disabled due to flakiness: https://crbug.com/1092598
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 #define MAYBE_NewProvisionalNavigationBeforeCommit \
   DISABLED_NewProvisionalNavigationBeforeCommit
 #else
@@ -102,8 +102,16 @@ TEST_F(AbortsPageLoadMetricsObserverTest,
       internal::kHistogramAbortNewNavigationBeforeCommit, 1);
 }
 
+// Disabled due to flakiness: https://crbug.com/1330000
+#if BUILDFLAG(IS_LINUX)
+#define MAYBE_NewNavigationBeforeCommitNonTrackedPageLoad \
+  DISABLED_NewNavigationBeforeCommitNonTrackedPageLoad
+#else
+#define MAYBE_NewNavigationBeforeCommitNonTrackedPageLoad \
+  NewNavigationBeforeCommitNonTrackedPageLoad
+#endif
 TEST_F(AbortsPageLoadMetricsObserverTest,
-       NewNavigationBeforeCommitNonTrackedPageLoad) {
+       MAYBE_NewNavigationBeforeCommitNonTrackedPageLoad) {
   tester()->StartNavigation(GURL("https://www.google.com"));
   // Simulate the user performing another navigation before commit. Navigate to
   // an untracked URL, to verify that we still log abort metrics even if the new
@@ -273,7 +281,7 @@ TEST_F(AbortsPageLoadMetricsObserverTest, NoAbortNewNavigationAfterPaint) {
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
   timing.navigation_start = base::Time::FromDoubleT(1);
-  timing.paint_timing->first_paint = base::TimeDelta::FromMicroseconds(1);
+  timing.paint_timing->first_paint = base::Microseconds(1);
   PopulateRequiredTimingFields(&timing);
   NavigateAndCommit(GURL("https://www.google.com"));
   tester()->SimulateTimingUpdate(timing);

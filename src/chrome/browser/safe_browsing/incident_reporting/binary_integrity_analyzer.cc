@@ -30,8 +30,7 @@ void RecordSignatureVerificationTime(size_t file_index,
   base::HistogramBase* signature_verification_time_histogram =
       base::Histogram::FactoryTimeGet(
           std::string(kHistogramName) + base::NumberToString(file_index),
-          base::TimeDelta::FromMilliseconds(1),
-          base::TimeDelta::FromSeconds(20), 50,
+          base::Milliseconds(1), base::Seconds(20), 50,
           base::Histogram::kUmaTargetedHistogramFlag);
 
   signature_verification_time_histogram->AddTime(verification_time);
@@ -47,7 +46,7 @@ void ClearBinaryIntegrityForFile(IncidentReceiver* incident_receiver,
 }
 
 void RegisterBinaryIntegrityAnalysis() {
-#if defined(OS_WIN) || defined(OS_MAC)
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
   scoped_refptr<SafeBrowsingService> safe_browsing_service(
       g_browser_process->safe_browsing_service());
 

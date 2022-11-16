@@ -1043,36 +1043,6 @@ class WebTestDirMergerTests(unittest.TestCase):
   "version": 3
 }"""
 
-    shard0_archived_results_json = b"""\
-ADD_RESULTS({
-  "result_links": [
-    "results.html"
-  ],
-  "tests": {
-    "testdir1": {
-      "test1.html": {
-        "archived_results": [
-          "PASS"
-        ]
-      },
-      "test2.html": {
-        "archived_results": [
-          "PASS"
-        ]
-      }
-    },
-    "testdir2": {
-      "testdir2.1": {
-        "test3.html": {
-          "archived_results": [
-            "PASS"
-          ]
-        }
-      }
-    }
-  }
-});"""
-
     shard0_stats_json = b"""\
 {
   "testdir1": {
@@ -1159,31 +1129,6 @@ ADD_RESULTS({
   "version": 3
 }"""
 
-    shard1_archived_results_json = b"""\
-ADD_RESULTS({
-  "result_links": [
-    "results.html"
-  ],
-  "tests": {
-    "testdir2": {
-      "testdir2.1": {
-        "test4.html": {
-          "archived_results": [
-            "FAIL"
-          ]
-        }
-      }
-    },
-    "testdir3": {
-      "test5.html": {
-        "archived_results": [
-          "PASS"
-        ]
-      }
-    }
-  }
-});"""
-
     shard1_stats_json = b"""\
 {
   "testdir2": {
@@ -1223,8 +1168,6 @@ ADD_RESULTS({
         # Files for shard0
         '/shards/0/layout-test-results/access_log.txt':
         shard0_access_log,
-        '/shards/0/layout-test-results/archived_results.json':
-        shard0_archived_results_json,
         '/shards/0/layout-test-results/error_log.txt':
         shard0_error_log,
         '/shards/0/layout-test-results/failing_results.json':
@@ -1270,8 +1213,6 @@ ADD_RESULTS({
         # Files for shard1
         '/shards/1/layout-test-results/access_log.txt':
         shard1_access_log,
-        '/shards/1/layout-test-results/archived_results.json':
-        shard1_archived_results_json,
         '/shards/1/layout-test-results/error_log.txt':
         shard1_error_log,
         '/shards/1/layout-test-results/failing_results.json':
@@ -1369,49 +1310,6 @@ ADD_RESULTS({
   "version": 3
 }"""
 
-    output_archived_results_json = """\
-ADD_RESULTS({
-  "result_links": [
-    "results.html",
-    "results.html"
-  ],
-  "tests": {
-    "testdir1": {
-      "test1.html": {
-        "archived_results": [
-          "PASS"
-        ]
-      },
-      "test2.html": {
-        "archived_results": [
-          "PASS"
-        ]
-      }
-    },
-    "testdir2": {
-      "testdir2.1": {
-        "test3.html": {
-          "archived_results": [
-            "PASS"
-          ]
-        },
-        "test4.html": {
-          "archived_results": [
-            "FAIL"
-          ]
-        }
-      }
-    },
-    "testdir3": {
-      "test5.html": {
-        "archived_results": [
-          "PASS"
-        ]
-      }
-    }
-  }
-});"""
-
     output_stats_json = """\
 {
   "testdir1": {
@@ -1499,8 +1397,6 @@ ADD_RESULTS({
     web_test_output_filesystem = {
         '/out/layout-test-results/access_log.txt':
         output_access_log,
-        '/out/layout-test-results/archived_results.json':
-        output_archived_results_json,
         '/out/layout-test-results/error_log.txt':
         output_error_log,
         '/out/layout-test-results/failing_results.json':
@@ -1564,26 +1460,27 @@ ADD_RESULTS({
 
         for fname, expected_contents in self.web_test_output_filesystem.items(
         ):
-            self.assertIn(fname, fs.files)
+            self.assertTrue(fs.isfile(fname))
             if fname.endswith(".json"):
-                actual_json_str = fs.files[fname]
+                actual_json_str = fs.read_text_file(fname)
                 expected_json_str = expected_contents
-                if "archived_results" in fname or "failing_results" in fname:
+                if "failing_results" in fname:
                     self.assertTrue(
                         MergeFilesJSONPTests.check_before_after(
-                            fs.files[fname], b'ADD_RESULTS(', b");"))
+                            actual_json_str, 'ADD_RESULTS(', ');'))
                     self.assertTrue(
                         MergeFilesJSONPTests.check_before_after(
-                            expected_contents, 'ADD_RESULTS(', ");"))
+                            expected_contents, 'ADD_RESULTS(', ');'))
                     actual_json_str = MergeFilesJSONPTests.remove_before_after(
-                        fs.files[fname], b'ADD_RESULTS(', b");")
+                        actual_json_str, 'ADD_RESULTS(', ');')
                     expected_json_str = MergeFilesJSONPTests.remove_before_after(
-                        expected_contents, b'ADD_RESULTS(', b");")
+                        expected_contents, 'ADD_RESULTS(', ');')
 
                 self.assertEqual(json.loads(actual_json_str),
                                  json.loads(expected_json_str))
             else:
-                self.assertMultiLineEqual(expected_contents, fs.files[fname])
+                self.assertMultiLineEqual(expected_contents,
+                                          fs.read_text_file(fname))
 
 
 class MarkMissingShardsTest(unittest.TestCase):
@@ -1664,9 +1561,9 @@ class MarkMissingShardsTest(unittest.TestCase):
     web_test_filesystem = {
         '/out/output.json': output_output_json,
         '/swarm/summary.json': summary_json,
-        '/0/output.json': {
+        '/0/output.json': json.dumps({
             'successes': ['fizz', 'baz'],
-        },
+        }),
     }
 
     final_output_json = """\
@@ -1741,6 +1638,6 @@ class MarkMissingShardsTest(unittest.TestCase):
             ['/0'],  #only dir paths
             '/out/output.json',
             fs)
-        final_merged_output_json = fs.files['/out/output.json']
+        final_merged_output_json = fs.read_text_file('/out/output.json')
         self.assertEqual(json.loads(final_merged_output_json),
                          json.loads(self.final_output_json))

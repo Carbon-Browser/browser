@@ -28,6 +28,7 @@
 #include "third_party/blink/renderer/core/editing/iterators/text_iterator.h"
 
 #include <unicode/utf16.h>
+#include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/display_lock/display_lock_utilities.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/shadow_root.h"
@@ -327,7 +328,7 @@ void TextIteratorAlgorithm<Strategy>::Advance() {
     // lock.
     const bool locked =
         !behavior_.IgnoresDisplayLock() &&
-        DisplayLockUtilities::NearestLockedInclusiveAncestor(*node_);
+        DisplayLockUtilities::LockedInclusiveAncestorPreventingLayout(*node_);
 
     LayoutObject* layout_object = node_->GetLayoutObject();
     if (!layout_object || locked) {
@@ -556,12 +557,6 @@ void TextIteratorAlgorithm<Strategy>::HandleReplacedElement() {
   }
 
   DCHECK_EQ(last_text_node_, text_node_handler_.GetNode());
-  if (last_text_node_) {
-    if (text_node_handler_.FixLeadingWhiteSpaceForReplacedElement()) {
-      needs_handle_replaced_element_ = true;
-      return;
-    }
-  }
 
   if (EntersTextControls() && layout_object->IsTextControlIncludingNG()) {
     // The shadow tree should be already visited.
@@ -862,21 +857,18 @@ template <typename Strategy>
 void TextIteratorAlgorithm<Strategy>::EmitChar16AfterNode(UChar code_unit,
                                                           const Node& node) {
   text_state_.EmitChar16AfterNode(code_unit, node);
-  text_node_handler_.ResetCollapsedWhiteSpaceFixup();
 }
 
 template <typename Strategy>
 void TextIteratorAlgorithm<Strategy>::EmitChar16AsNode(UChar code_unit,
                                                        const Node& node) {
   text_state_.EmitChar16AsNode(code_unit, node);
-  text_node_handler_.ResetCollapsedWhiteSpaceFixup();
 }
 
 template <typename Strategy>
 void TextIteratorAlgorithm<Strategy>::EmitChar16BeforeNode(UChar code_unit,
                                                            const Node& node) {
   text_state_.EmitChar16BeforeNode(code_unit, node);
-  text_node_handler_.ResetCollapsedWhiteSpaceFixup();
 }
 
 template <typename Strategy>

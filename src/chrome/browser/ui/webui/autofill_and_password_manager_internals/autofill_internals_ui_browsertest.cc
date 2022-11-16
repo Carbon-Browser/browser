@@ -34,8 +34,7 @@ class AutofillInternalsWebUIBrowserTest : public InProcessBrowserTest {
   void SpinRunLoop() {
     base::RunLoop run_loop;
     base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
-        FROM_HERE, run_loop.QuitClosure(),
-        base::TimeDelta::FromMilliseconds(20));
+        FROM_HERE, run_loop.QuitClosure(), base::Milliseconds(20));
     run_loop.Run();
   }
 };
@@ -47,7 +46,7 @@ IN_PROC_BROWSER_TEST_F(AutofillInternalsWebUIBrowserTest, ResetCache) {
   // Wait for reset-fake-button to become visible
   constexpr char kGetResetButtonDisplayStyle[] =
       "document.getElementById('reset-cache-fake-button').style.display";
-  while ("inline-block" != EvalJs(kGetResetButtonDisplayStyle))
+  while ("inline" != EvalJs(kGetResetButtonDisplayStyle))
     SpinRunLoop();
 
   // Trigger reset button.

@@ -2,11 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "components/search_engines/template_url_service.h"
+
 #include <stddef.h>
 
 #include <memory>
 
-#include "components/search_engines/template_url_service.h"
+#include "base/threading/platform_thread.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 class TemplateURLServiceUnitTest : public testing::Test {
@@ -33,7 +35,7 @@ TEST_F(TemplateURLServiceUnitTest, SessionToken) {
 
   // ... unless the token has expired.
   template_url_service().current_token_.clear();
-  const base::TimeDelta kSmallDelta = base::TimeDelta::FromMilliseconds(1);
+  const base::TimeDelta kSmallDelta = base::Milliseconds(1);
   template_url_service().token_expiration_time_ =
       base::TimeTicks::Now() - kSmallDelta;
   token = template_url_service().GetSessionToken();

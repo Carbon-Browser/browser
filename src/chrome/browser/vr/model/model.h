@@ -8,6 +8,7 @@
 #include <memory>
 #include <vector>
 
+#include "base/time/time.h"
 #include "chrome/browser/vr/gl_texture_location.h"
 #include "chrome/browser/vr/model/capturing_state_model.h"
 #include "chrome/browser/vr/model/color_scheme.h"
@@ -23,7 +24,7 @@
 #include "chrome/browser/vr/model/ui_mode.h"
 #include "chrome/browser/vr/model/web_vr_model.h"
 #include "chrome/browser/vr/vr_ui_export.h"
-#include "ui/gfx/transform.h"
+#include "ui/gfx/geometry/transform.h"
 
 namespace vr {
 

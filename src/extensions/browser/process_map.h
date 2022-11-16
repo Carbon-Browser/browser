@@ -10,7 +10,6 @@
 #include <set>
 #include <string>
 
-#include "base/macros.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "content/public/browser/site_instance.h"
 #include "extensions/common/features/feature.h"
@@ -79,6 +78,10 @@ class Extension;
 class ProcessMap : public KeyedService {
  public:
   ProcessMap();
+
+  ProcessMap(const ProcessMap&) = delete;
+  ProcessMap& operator=(const ProcessMap&) = delete;
+
   ~ProcessMap() override;
 
   // Returns the instance for |browser_context|. An instance is shared between
@@ -159,8 +162,6 @@ class ProcessMap : public KeyedService {
   // Whether the process map belongs to the browser context used on Chrome OS
   // lock screen.
   bool is_lock_screen_context_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(ProcessMap);
 };
 
 }  // namespace extensions

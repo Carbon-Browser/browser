@@ -6,9 +6,9 @@
 
 #include <linux/media/h264-ctrls-legacy.h>
 #include <linux/videodev2.h>
+
 #include <type_traits>
 
-#include "base/cxx17_backports.h"
 #include "base/logging.h"
 #include "media/gpu/macros.h"
 #include "media/gpu/v4l2/v4l2_decode_surface.h"
@@ -33,6 +33,9 @@ class V4L2H264Picture : public H264Picture {
   explicit V4L2H264Picture(scoped_refptr<V4L2DecodeSurface> dec_surface)
       : dec_surface_(std::move(dec_surface)) {}
 
+  V4L2H264Picture(const V4L2H264Picture&) = delete;
+  V4L2H264Picture& operator=(const V4L2H264Picture&) = delete;
+
   V4L2H264Picture* AsV4L2H264Picture() override { return this; }
   scoped_refptr<V4L2DecodeSurface> dec_surface() { return dec_surface_; }
 
@@ -40,8 +43,6 @@ class V4L2H264Picture : public H264Picture {
   ~V4L2H264Picture() override {}
 
   scoped_refptr<V4L2DecodeSurface> dec_surface_;
-
-  DISALLOW_COPY_AND_ASSIGN(V4L2H264Picture);
 };
 
 V4L2VideoDecoderDelegateH264Legacy::V4L2VideoDecoderDelegateH264Legacy(
@@ -85,7 +86,7 @@ void V4L2VideoDecoderDelegateH264Legacy::H264DPBToV4L2DPB(
   memset(priv_->v4l2_decode_param.dpb, 0, sizeof(priv_->v4l2_decode_param.dpb));
   size_t i = 0;
   for (const auto& pic : dpb) {
-    if (i >= base::size(priv_->v4l2_decode_param.dpb)) {
+    if (i >= std::size(priv_->v4l2_decode_param.dpb)) {
       VLOGF(1) << "Invalid DPB size";
       break;
     }
@@ -100,8 +101,13 @@ void V4L2VideoDecoderDelegateH264Legacy::H264DPBToV4L2DPB(
 
     struct v4l2_h264_dpb_entry& entry = priv_->v4l2_decode_param.dpb[i++];
     entry.buf_index = index;
-    entry.frame_num = pic->frame_num;
-    entry.pic_num = pic->pic_num;
+    if (pic->long_term) {
+      entry.frame_num = pic->long_term_pic_num;
+      entry.pic_num = pic->long_term_frame_idx;
+    } else {
+      entry.frame_num = pic->frame_num;
+      entry.pic_num = pic->pic_num;
+    }
     entry.top_field_order_cnt = pic->top_field_order_cnt;
     entry.bottom_field_order_cnt = pic->bottom_field_order_cnt;
     entry.flags = (pic->ref ? V4L2_H264_DPB_ENTRY_FLAG_ACTIVE : 0) |
@@ -147,7 +153,7 @@ V4L2VideoDecoderDelegateH264Legacy::SubmitFrameMetadata(
   static_assert(std::extent<decltype(v4l2_sps.offset_for_ref_frame)>() ==
                     std::extent<decltype(sps->offset_for_ref_frame)>(),
                 "offset_for_ref_frame arrays must be same size");
-  for (size_t i = 0; i < base::size(v4l2_sps.offset_for_ref_frame); ++i)
+  for (size_t i = 0; i < std::size(v4l2_sps.offset_for_ref_frame); ++i)
     v4l2_sps.offset_for_ref_frame[i] = sps->offset_for_ref_frame[i];
   SPS_TO_V4L2SPS(max_num_ref_frames);
   SPS_TO_V4L2SPS(pic_width_in_mbs_minus1);
@@ -247,16 +253,14 @@ V4L2VideoDecoderDelegateH264Legacy::SubmitFrameMetadata(
     scaling_list8x8 = &pps->scaling_list8x8[0];
   }
 
-  for (size_t i = 0; i < base::size(v4l2_scaling_matrix.scaling_list_4x4);
-       ++i) {
-    for (size_t j = 0; j < base::size(v4l2_scaling_matrix.scaling_list_4x4[i]);
+  for (size_t i = 0; i < std::size(v4l2_scaling_matrix.scaling_list_4x4); ++i) {
+    for (size_t j = 0; j < std::size(v4l2_scaling_matrix.scaling_list_4x4[i]);
          ++j) {
       v4l2_scaling_matrix.scaling_list_4x4[i][j] = scaling_list4x4[i][j];
     }
   }
-  for (size_t i = 0; i < base::size(v4l2_scaling_matrix.scaling_list_8x8);
-       ++i) {
-    for (size_t j = 0; j < base::size(v4l2_scaling_matrix.scaling_list_8x8[i]);
+  for (size_t i = 0; i < std::size(v4l2_scaling_matrix.scaling_list_8x8); ++i) {
+    for (size_t j = 0; j < std::size(v4l2_scaling_matrix.scaling_list_8x8[i]);
          ++j) {
       v4l2_scaling_matrix.scaling_list_8x8[i][j] = scaling_list8x8[i][j];
     }
@@ -465,10 +469,9 @@ V4L2VideoDecoderDelegateH264Legacy::SubmitDecode(
 
 bool V4L2VideoDecoderDelegateH264Legacy::OutputPicture(
     scoped_refptr<H264Picture> pic) {
-  // TODO(crbug.com/647725): Insert correct color space.
   surface_handler_->SurfaceReady(H264PictureToV4L2DecodeSurface(pic.get()),
                                  pic->bitstream_id(), pic->visible_rect(),
-                                 VideoColorSpace());
+                                 pic->get_colorspace());
   return true;
 }
 

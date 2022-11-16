@@ -3,6 +3,7 @@ include_rules = [
   "+components/invalidation",
   "+components/keyed_service/core",
   "+components/metrics",
+  "+components/os_crypt",
   "+components/policy",
   "+components/pref_registry",
   "+components/prefs",
@@ -17,6 +18,7 @@ include_rules = [
   "+net",
   "+policy",
   "+services/network/public/cpp",
+  "+services/network/public/mojom",
   "+services/network/test",
   "+third_party/metrics_proto",
 ]

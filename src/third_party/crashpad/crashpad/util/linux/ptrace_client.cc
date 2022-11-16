@@ -18,9 +18,9 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <iterator>
 #include <string>
 
-#include "base/cxx17_backports.h"
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
 #include "util/file/file_io.h"
@@ -248,7 +248,7 @@ bool PtraceClient::ReadFileContents(const base::FilePath& path,
   return true;
 }
 
-ProcessMemory* PtraceClient::Memory() {
+ProcessMemoryLinux* PtraceClient::Memory() {
   INITIALIZATION_STATE_DCHECK_VALID(initialized_);
   if (!memory_) {
     memory_ = std::make_unique<ProcessMemoryLinux>(this);
@@ -265,7 +265,7 @@ bool PtraceClient::Threads(std::vector<pid_t>* threads) {
   threads->push_back(pid_);
 
   char path[32];
-  snprintf(path, base::size(path), "/proc/%d/task", pid_);
+  snprintf(path, std::size(path), "/proc/%d/task", pid_);
 
   PtraceBroker::Request request = {};
   request.type = PtraceBroker::Request::kTypeListDirectory;

@@ -9,11 +9,9 @@
 #include <string>
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/unguessable_token.h"
 #include "content/browser/web_package/prefetched_signed_exchange_cache.h"
-#include "content/common/content_export.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -42,9 +40,9 @@ class SignedExchangePrefetchMetricRecorder;
 
 // A URLLoader for loading a prefetch request, including <link rel="prefetch">.
 // It basically just keeps draining the data.
-class CONTENT_EXPORT PrefetchURLLoader : public network::mojom::URLLoader,
-                                         public network::mojom::URLLoaderClient,
-                                         public mojo::DataPipeDrainer::Client {
+class PrefetchURLLoader : public network::mojom::URLLoader,
+                          public network::mojom::URLLoaderClient,
+                          public mojo::DataPipeDrainer::Client {
  public:
   using URLLoaderThrottlesGetter = base::RepeatingCallback<
       std::vector<std::unique_ptr<blink::URLLoaderThrottle>>()>;
@@ -77,6 +75,10 @@ class CONTENT_EXPORT PrefetchURLLoader : public network::mojom::URLLoader,
           prefetched_signed_exchange_cache,
       const std::string& accept_langs,
       RecursivePrefetchTokenGenerator recursive_prefetch_token_generator);
+
+  PrefetchURLLoader(const PrefetchURLLoader&) = delete;
+  PrefetchURLLoader& operator=(const PrefetchURLLoader&) = delete;
+
   ~PrefetchURLLoader() override;
 
   // Sends an empty response's body to |forwarding_client_|. If failed to create
@@ -101,7 +103,8 @@ class CONTENT_EXPORT PrefetchURLLoader : public network::mojom::URLLoader,
 
   // network::mojom::URLLoaderClient overrides:
   void OnReceiveEarlyHints(network::mojom::EarlyHintsPtr early_hints) override;
-  void OnReceiveResponse(network::mojom::URLResponseHeadPtr head) override;
+  void OnReceiveResponse(network::mojom::URLResponseHeadPtr head,
+                         mojo::ScopedDataPipeConsumerHandle body) override;
   void OnReceiveRedirect(const net::RedirectInfo& redirect_info,
                          network::mojom::URLResponseHeadPtr head) override;
   void OnUploadProgress(int64_t current_position,
@@ -109,8 +112,6 @@ class CONTENT_EXPORT PrefetchURLLoader : public network::mojom::URLLoader,
                         base::OnceCallback<void()> callback) override;
   void OnReceiveCachedMetadata(mojo_base::BigBuffer data) override;
   void OnTransferSizeUpdated(int32_t transfer_size_diff) override;
-  void OnStartLoadingResponseBody(
-      mojo::ScopedDataPipeConsumerHandle body) override;
   void OnComplete(const network::URLLoaderCompletionStatus& status) override;
 
   // mojo::DataPipeDrainer::Client overrides:
@@ -124,6 +125,8 @@ class CONTENT_EXPORT PrefetchURLLoader : public network::mojom::URLLoader,
 
   // Set in the constructor and updated when redirected.
   network::ResourceRequest resource_request_;
+
+  network::mojom::URLResponseHeadPtr response_;
 
   const net::NetworkIsolationKey network_isolation_key_;
 
@@ -158,8 +161,6 @@ class CONTENT_EXPORT PrefetchURLLoader : public network::mojom::URLLoader,
   // TODO(kinuko): This value can become stale if the preference is updated.
   // Make this listen to the changes if it becomes a real concern.
   bool is_signed_exchange_handling_enabled_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(PrefetchURLLoader);
 };
 
 }  // namespace content

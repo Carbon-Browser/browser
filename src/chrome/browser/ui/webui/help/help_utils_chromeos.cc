@@ -8,11 +8,11 @@
 
 #include <algorithm>
 
+#include "ash/components/settings/cros_settings_names.h"
 #include "ash/constants/ash_switches.h"
 #include "base/logging.h"
 #include "base/values.h"
 #include "chrome/browser/ash/settings/cros_settings.h"
-#include "chromeos/settings/cros_settings_names.h"
 
 namespace help_utils_chromeos {
 
@@ -20,7 +20,7 @@ bool IsUpdateOverCellularAllowed(bool interactive) {
   // If this is a Cellular First device or the user actively checks for update,
   // the default is to allow updates over cellular.
   bool default_update_over_cellular_allowed =
-      interactive ? true : chromeos::switches::IsCellularFirstDevice();
+      interactive ? true : ash::switches::IsCellularFirstDevice();
 
   // Device Policy overrides the defaults.
   ash::CrosSettings* settings = ash::CrosSettings::Get();
@@ -28,11 +28,11 @@ bool IsUpdateOverCellularAllowed(bool interactive) {
     return default_update_over_cellular_allowed;
 
   const base::Value* types_value =
-      settings->GetPref(chromeos::kAllowedConnectionTypesForUpdate);
+      settings->GetPref(ash::kAllowedConnectionTypesForUpdate);
   if (!types_value)
     return default_update_over_cellular_allowed;
   CHECK(types_value->is_list());
-  const auto& list = types_value->GetList();
+  const auto& list = types_value->GetListDeprecated();
   for (size_t i = 0; i < list.size(); ++i) {
     if (!list[i].is_int()) {
       LOG(WARNING) << "Can't parse connection type #" << i;

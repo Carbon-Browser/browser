@@ -11,9 +11,9 @@
 
 #include "base/bind.h"
 #include "base/check_op.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/no_destructor.h"
-#include "base/task/post_task.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/timer/timer.h"
@@ -32,8 +32,8 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/gfx/geometry/size_f.h"
+#include "ui/gfx/geometry/skia_conversions.h"
 #include "ui/gfx/scrollbar_size.h"
-#include "ui/gfx/skia_util.h"
 #include "ui/native_theme/native_theme.h"
 
 namespace {
@@ -94,7 +94,7 @@ class ThumbnailTabHelper::TabStateTracker
   // none.
   content::RenderWidgetHostView* GetView() {
     auto* const contents = web_contents();
-    return contents ? contents->GetMainFrame()
+    return contents ? contents->GetPrimaryMainFrame()
                           ->GetRenderViewHost()
                           ->GetWidget()
                           ->GetView()
@@ -147,7 +147,8 @@ class ThumbnailTabHelper::TabStateTracker
 
   void RenderViewReady() override { capture_driver_.SetCanCapture(true); }
 
-  void RenderProcessGone(base::TerminationStatus status) override {
+  void PrimaryMainFrameRenderProcessGone(
+      base::TerminationStatus status) override {
     // TODO(crbug.com/1073141): determine if there are other ways to
     // lose the view.
     capture_driver_.SetCanCapture(false);
@@ -175,7 +176,7 @@ class ThumbnailTabHelper::TabStateTracker
     capture_driver_.UpdatePageReadiness(readiness);
   }
 
-  ThumbnailTabHelper* const thumbnail_tab_helper_;
+  const raw_ptr<ThumbnailTabHelper> thumbnail_tab_helper_;
 
   ThumbnailCaptureDriver capture_driver_{
       this, &thumbnail_tab_helper_->GetScheduler()};
@@ -194,7 +195,8 @@ class ThumbnailTabHelper::TabStateTracker
 // ThumbnailTabHelper ----------------------------------------------------
 
 ThumbnailTabHelper::ThumbnailTabHelper(content::WebContents* contents)
-    : state_(std::make_unique<TabStateTracker>(this, contents)),
+    : content::WebContentsUserData<ThumbnailTabHelper>(*contents),
+      state_(std::make_unique<TabStateTracker>(this, contents)),
       background_capturer_(std::make_unique<BackgroundThumbnailVideoCapturer>(
           contents,
           base::BindRepeating(
@@ -244,8 +246,7 @@ void ThumbnailTabHelper::StoreThumbnailForTabSwitch(base::TimeTicks start_time,
                                                     const SkBitmap& bitmap) {
   UMA_HISTOGRAM_CUSTOM_TIMES("Tab.Preview.TimeToStoreAfterTabSwitch",
                              base::TimeTicks::Now() - start_time,
-                             base::TimeDelta::FromMilliseconds(1),
-                             base::TimeDelta::FromSeconds(1), 50);
+                             base::Milliseconds(1), base::Seconds(1), 50);
   StoreThumbnail(CaptureType::kCopyFromView, bitmap, absl::nullopt);
 }
 
@@ -354,4 +355,4 @@ ThumbnailCaptureInfo ThumbnailTabHelper::GetInitialCaptureInfo(
   return capture_info;
 }
 
-WEB_CONTENTS_USER_DATA_KEY_IMPL(ThumbnailTabHelper)
+WEB_CONTENTS_USER_DATA_KEY_IMPL(ThumbnailTabHelper);

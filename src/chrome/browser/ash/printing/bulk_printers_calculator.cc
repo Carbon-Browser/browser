@@ -15,15 +15,14 @@
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/sequence_checker.h"
-#include "base/sequenced_task_runner.h"
-#include "base/task/post_task.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/task_runner_util.h"
 #include "base/task/thread_pool.h"
-#include "base/task_runner_util.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "base/values.h"
 #include "chromeos/printing/printer_translator.h"
 
-namespace chromeos {
+namespace ash {
 
 namespace {
 
@@ -32,11 +31,12 @@ constexpr int kMaxRecords = 20000;
 // Represents a task scheduled to process in the Restrictions class.
 struct TaskDataInternal {
   const unsigned task_id;  // unique ID in increasing order
-  std::unordered_map<std::string, Printer> printers;  // resultant list (output)
+  std::unordered_map<std::string, chromeos::Printer>
+      printers;  // resultant list (output)
   explicit TaskDataInternal(unsigned id) : task_id(id) {}
 };
 
-using PrinterCache = std::vector<std::unique_ptr<Printer>>;
+using PrinterCache = std::vector<std::unique_ptr<chromeos::Printer>>;
 using TaskData = std::unique_ptr<TaskDataInternal>;
 
 // Parses |data|, a JSON blob, into a vector of Printers.  If |data| cannot be
@@ -51,25 +51,24 @@ std::unique_ptr<PrinterCache> ParsePrinters(std::unique_ptr<std::string> data) {
   // This could be really slow.
   base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
                                                 base::BlockingType::MAY_BLOCK);
-  base::JSONReader::ValueWithError value_with_error =
-      base::JSONReader::ReadAndReturnValueWithError(
-          *data, base::JSONParserOptions::JSON_ALLOW_TRAILING_COMMAS);
+  auto value_with_error = base::JSONReader::ReadAndReturnValueWithError(
+      *data, base::JSONParserOptions::JSON_ALLOW_TRAILING_COMMAS);
 
-  if (!value_with_error.value) {
+  if (!value_with_error.has_value()) {
     LOG(WARNING) << "Failed to parse printers policy ("
-                 << value_with_error.error_message << ") on line "
-                 << value_with_error.error_line << " at position "
-                 << value_with_error.error_column;
+                 << value_with_error.error().message << ") on line "
+                 << value_with_error.error().line << " at position "
+                 << value_with_error.error().column;
     return nullptr;
   }
 
-  base::Value& json_blob = value_with_error.value.value();
+  base::Value& json_blob = *value_with_error;
   if (!json_blob.is_list()) {
     LOG(WARNING) << "Failed to parse printers policy (an array was expected)";
     return nullptr;
   }
 
-  base::Value::ConstListView printer_list = json_blob.GetList();
+  const base::Value::List& printer_list = json_blob.GetList();
   if (printer_list.size() > kMaxRecords) {
     LOG(WARNING) << "Too many records in printers policy: "
                  << printer_list.size();
@@ -79,14 +78,12 @@ std::unique_ptr<PrinterCache> ParsePrinters(std::unique_ptr<std::string> data) {
   auto parsed_printers = std::make_unique<PrinterCache>();
   parsed_printers->reserve(printer_list.size());
   for (const base::Value& val : printer_list) {
-    // TODO(skau): Convert to the new Value APIs.
-    const base::DictionaryValue* printer_dict;
-    if (!val.GetAsDictionary(&printer_dict)) {
+    if (!val.is_dict()) {
       LOG(WARNING) << "Entry in printers policy skipped.  Not a dictionary.";
       continue;
     }
 
-    auto printer = RecommendedPrinterToPrinter(*printer_dict);
+    auto printer = chromeos::RecommendedPrinterToPrinter(val.GetDict());
     if (!printer) {
       LOG(WARNING) << "Failed to parse printer configuration.  Skipped.";
       continue;
@@ -106,6 +103,9 @@ class Restrictions : public base::RefCountedThreadSafe<Restrictions> {
   Restrictions() : printers_cache_(nullptr) {
     DETACH_FROM_SEQUENCE(sequence_checker_);
   }
+
+  Restrictions(const Restrictions&) = delete;
+  Restrictions& operator=(const Restrictions&) = delete;
 
   // Sets the printer cache using the policy blob |data|.
   TaskData SetData(TaskData task_data, std::unique_ptr<std::string> data) {
@@ -220,7 +220,6 @@ class Restrictions : public base::RefCountedThreadSafe<Restrictions> {
   std::set<std::string> allowlist_;
 
   SEQUENCE_CHECKER(sequence_checker_);
-  DISALLOW_COPY_AND_ASSIGN(Restrictions);
 };
 
 class BulkPrintersCalculatorImpl : public BulkPrintersCalculator {
@@ -318,7 +317,8 @@ class BulkPrintersCalculatorImpl : public BulkPrintersCalculator {
     return (last_processed_task_ == last_received_task_);
   }
 
-  const std::unordered_map<std::string, Printer>& GetPrinters() const override {
+  const std::unordered_map<std::string, chromeos::Printer>& GetPrinters()
+      const override {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
     return printers_;
   }
@@ -358,7 +358,7 @@ class BulkPrintersCalculatorImpl : public BulkPrintersCalculator {
   // Id of the last completed task.
   unsigned last_processed_task_ = 0;
   // The computed set of printers.
-  std::unordered_map<std::string, Printer> printers_;
+  std::unordered_map<std::string, chromeos::Printer> printers_;
 
   base::ObserverList<BulkPrintersCalculator::Observer>::Unchecked observers_;
 
@@ -373,4 +373,4 @@ std::unique_ptr<BulkPrintersCalculator> BulkPrintersCalculator::Create() {
   return std::make_unique<BulkPrintersCalculatorImpl>();
 }
 
-}  // namespace chromeos
+}  // namespace ash

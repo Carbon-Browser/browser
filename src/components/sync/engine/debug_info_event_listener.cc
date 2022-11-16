@@ -17,7 +17,7 @@ DebugInfoEventListener::DebugInfoEventListener()
       cryptographer_has_pending_keys_(false),
       cryptographer_can_encrypt_(false) {}
 
-DebugInfoEventListener::~DebugInfoEventListener() {}
+DebugInfoEventListener::~DebugInfoEventListener() = default;
 
 void DebugInfoEventListener::InitializationComplete() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -31,17 +31,11 @@ void DebugInfoEventListener::OnSyncCycleCompleted(
   sync_pb::SyncCycleCompletedEventInfo* sync_completed_event_info =
       event_info.mutable_sync_cycle_completed_event_info();
 
-  sync_completed_event_info->set_num_encryption_conflicts(
-      snapshot.num_encryption_conflicts());
-  sync_completed_event_info->set_num_hierarchy_conflicts(
-      snapshot.num_hierarchy_conflicts());
   sync_completed_event_info->set_num_server_conflicts(
       snapshot.num_server_conflicts());
 
   sync_completed_event_info->set_num_updates_downloaded(
       snapshot.model_neutral_state().num_updates_downloaded_total);
-  sync_completed_event_info->set_num_reflected_updates_downloaded(
-      snapshot.model_neutral_state().num_reflected_updates_downloaded_total);
   sync_completed_event_info->set_get_updates_origin(
       snapshot.get_updates_origin());
   sync_completed_event_info->mutable_caller_info()->set_notifications_enabled(
@@ -80,18 +74,6 @@ void DebugInfoEventListener::OnTrustedVaultKeyRequired() {
 void DebugInfoEventListener::OnTrustedVaultKeyAccepted() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   CreateAndAddEvent(sync_pb::SyncEnums::TRUSTED_VAULT_KEY_ACCEPTED);
-}
-
-void DebugInfoEventListener::OnBootstrapTokenUpdated(
-    const std::string& bootstrap_token,
-    BootstrapTokenType type) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  if (type == PASSPHRASE_BOOTSTRAP_TOKEN) {
-    CreateAndAddEvent(sync_pb::SyncEnums::BOOTSTRAP_TOKEN_UPDATED);
-    return;
-  }
-  DCHECK_EQ(type, KEYSTORE_BOOTSTRAP_TOKEN);
-  CreateAndAddEvent(sync_pb::SyncEnums::KEYSTORE_TOKEN_UPDATED);
 }
 
 void DebugInfoEventListener::OnEncryptedTypesChanged(
@@ -158,43 +140,6 @@ void DebugInfoEventListener::ClearDebugInfo() {
 
   events_.clear();
   events_dropped_ = false;
-}
-
-base::WeakPtr<DataTypeDebugInfoListener> DebugInfoEventListener::GetWeakPtr() {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return weak_ptr_factory_.GetWeakPtr();
-}
-
-void DebugInfoEventListener::OnDataTypeConfigureComplete(
-    const std::vector<DataTypeConfigurationStats>& configuration_stats) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-
-  for (size_t i = 0; i < configuration_stats.size(); ++i) {
-    DCHECK(ProtocolTypes().Has(configuration_stats[i].model_type));
-    sync_pb::DebugEventInfo association_event;
-    sync_pb::DatatypeAssociationStats* datatype_stats =
-        association_event.mutable_datatype_association_stats();
-    datatype_stats->set_data_type_id(GetSpecificsFieldNumberFromModelType(
-        configuration_stats[i].model_type));
-    datatype_stats->set_download_wait_time_us(
-        configuration_stats[i].download_wait_time.InMicroseconds());
-    datatype_stats->set_download_time_us(
-        configuration_stats[i].download_time.InMicroseconds());
-
-    for (ModelType type :
-         configuration_stats[i].high_priority_types_configured_before) {
-      datatype_stats->add_high_priority_type_configured_before(
-          GetSpecificsFieldNumberFromModelType(type));
-    }
-
-    for (ModelType type :
-         configuration_stats[i].same_priority_types_configured_before) {
-      datatype_stats->add_same_priority_type_configured_before(
-          GetSpecificsFieldNumberFromModelType(type));
-    }
-
-    AddEventToQueue(association_event);
-  }
 }
 
 void DebugInfoEventListener::CreateAndAddEvent(

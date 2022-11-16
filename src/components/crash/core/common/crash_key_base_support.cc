@@ -7,6 +7,7 @@
 #include <memory>
 #include <ostream>
 
+#include "base/check_op.h"
 #include "base/debug/crash_logging.h"
 #include "components/crash/core/common/crash_key.h"
 
@@ -41,11 +42,17 @@ struct BaseCrashKeyString : public base::debug::CrashKeyString {
     case base::debug::CrashKeySize::Size256:                                 \
       operation_prefix BaseCrashKeyString<256> operation_suffix;             \
       break;                                                                 \
+    case base::debug::CrashKeySize::Size1024:                                \
+      operation_prefix BaseCrashKeyString<1024> operation_suffix;            \
+      break;                                                                 \
   }
 
 class CrashKeyBaseSupport : public base::debug::CrashKeyImplementation {
  public:
   CrashKeyBaseSupport() = default;
+
+  CrashKeyBaseSupport(const CrashKeyBaseSupport&) = delete;
+  CrashKeyBaseSupport& operator=(const CrashKeyBaseSupport&) = delete;
 
   ~CrashKeyBaseSupport() override = default;
 
@@ -96,9 +103,6 @@ class CrashKeyBaseSupport : public base::debug::CrashKeyImplementation {
     }
 #endif
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(CrashKeyBaseSupport);
 };
 
 #undef SIZE_CLASS_OPERATION

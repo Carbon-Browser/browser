@@ -10,7 +10,6 @@
 
 #include "base/callback_list.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/sessions/session_service_base.h"
 #include "chrome/browser/ui/browser.h"
@@ -28,6 +27,9 @@ class WebContents;
 namespace sessions {
 struct SessionWindow;
 }  // namespace sessions
+
+struct StartupTab;
+using StartupTabs = std::vector<StartupTab>;
 
 // SessionService ------------------------------------------------------------
 
@@ -57,13 +59,20 @@ class SessionService : public SessionServiceBase {
  public:
   // Creates a SessionService for the specified profile.
   explicit SessionService(Profile* profile);
+
+  SessionService(const SessionService&) = delete;
+  SessionService& operator=(const SessionService&) = delete;
+
   ~SessionService() override;
 
-  // Returns true if a new window opening should really be treated like the
-  // start of a session (with potential session restore, startup URLs, etc.).
-  // In particular, this is true if there are no tabbed browsers running
-  // currently (eg. because only background or other app pages are running).
-  bool ShouldNewWindowStartSession(Browser* browser);
+  // Returns true if `window_type` identifies a type tracked by SessionService.
+  static bool IsRelevantWindowType(
+      sessions::SessionWindow::WindowType window_type);
+
+  // Returns true if restore should be triggered. If `browser` is non-null this
+  // is called as the result of a new Browser being created. If `browser` is
+  // null this is called from RestoreIfNecessary();
+  bool ShouldRestore(Browser* browser);
 
   // Invoke at a point when you think session restore might occur. For example,
   // during startup and window creation this is invoked to see if a session
@@ -72,8 +81,7 @@ class SessionService : public SessionServiceBase {
   // not restored and the caller needs to create a new window.
   // Since RestoreIfNecessary can potentially trigger a restore, we need to
   // know whether the caller intends for us to restore apps or not.
-  bool RestoreIfNecessary(const std::vector<GURL>& urls_to_open,
-                          bool restore_apps);
+  bool RestoreIfNecessary(const StartupTabs& startup_tabs, bool restore_apps);
 
   // Moves the current session to the last session. This is useful when a
   // checkpoint occurs, such as when the user launches the app and no tabbed
@@ -100,6 +108,15 @@ class SessionService : public SessionServiceBase {
   void SetPinnedState(const SessionID& window_id,
                       const SessionID& tab_id,
                       bool is_pinned);
+
+  void AddTabExtraData(const SessionID& window_id,
+                       const SessionID& tab_id,
+                       const char* key,
+                       const std::string data);
+
+  void AddWindowExtraData(const SessionID& window_id,
+                          const char* key,
+                          const std::string data);
 
   void TabClosed(const SessionID& window_id, const SessionID& tab_id) override;
 
@@ -153,7 +170,7 @@ class SessionService : public SessionServiceBase {
   // Implementation of RestoreIfNecessary. If |browser| is non-null and we
   // need to restore, the tabs are added to it, otherwise a new browser is
   // created.
-  bool RestoreIfNecessary(const std::vector<GURL>& urls_to_open,
+  bool RestoreIfNecessary(const StartupTabs& startup_tabs,
                           Browser* browser,
                           bool restore_apps);
 
@@ -251,8 +268,6 @@ class SessionService : public SessionServiceBase {
   bool did_schedule_command_ = false;
 
   base::WeakPtrFactory<SessionService> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(SessionService);
 };
 
 #endif  // CHROME_BROWSER_SESSIONS_SESSION_SERVICE_H_

@@ -8,7 +8,7 @@
 #include "base/component_export.h"
 #include "base/files/file_path.h"
 #include "base/files/scoped_file.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/message_loop/message_pump_libevent.h"
 #include "ui/events/event.h"
 #include "ui/events/event_modifiers.h"
@@ -31,6 +31,11 @@ class COMPONENT_EXPORT(EVDEV) TabletEventConverterEvdev
                             CursorDelegateEvdev* cursor,
                             const EventDeviceInfo& info,
                             DeviceEventDispatcherEvdev* dispatcher);
+
+  TabletEventConverterEvdev(const TabletEventConverterEvdev&) = delete;
+  TabletEventConverterEvdev& operator=(const TabletEventConverterEvdev&) =
+      delete;
+
   ~TabletEventConverterEvdev() override;
 
   // EventConverterEvdev:
@@ -56,10 +61,10 @@ class COMPONENT_EXPORT(EVDEV) TabletEventConverterEvdev
   base::MessagePumpLibevent::FdWatchController controller_;
 
   // Shared cursor state.
-  CursorDelegateEvdev* const cursor_;
+  const raw_ptr<CursorDelegateEvdev> cursor_;
 
   // Dispatcher for events.
-  DeviceEventDispatcherEvdev* const dispatcher_;
+  const raw_ptr<DeviceEventDispatcherEvdev> dispatcher_;
 
   int y_abs_location_ = 0;
   int x_abs_location_ = 0;
@@ -89,8 +94,6 @@ class COMPONENT_EXPORT(EVDEV) TabletEventConverterEvdev
 
   // Pen has only one side button
   bool one_side_btn_pen_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(TabletEventConverterEvdev);
 };
 
 }  // namespace ui

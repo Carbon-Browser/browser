@@ -8,7 +8,7 @@
 #include <utility>
 
 #include "base/bind.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
@@ -30,9 +30,8 @@ class NaClExitControlImpl : public nacl::mojom::NaClExitControl {
     // element was removed (perhaps implicitly if the tab was closed) or because
     // the renderer crashed.  The NaCl loader process should therefore exit.
     //
-    // For SFI NaCl, trusted code does this exit voluntarily, but untrusted
-    // code cannot disable it.  However, for Non-SFI NaCl, the following exit
-    // call could be disabled by untrusted code.
+    // Trusted code does this exit voluntarily, but untrusted code cannot
+    // disable it.
     NaClExit(0);
   }
 };

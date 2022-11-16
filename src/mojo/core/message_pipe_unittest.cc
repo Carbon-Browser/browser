@@ -35,6 +35,9 @@ class MessagePipeTest : public test::MojoTestBase {
     CHECK_EQ(MOJO_RESULT_OK, MojoCreateMessagePipe(nullptr, &pipe0_, &pipe1_));
   }
 
+  MessagePipeTest(const MessagePipeTest&) = delete;
+  MessagePipeTest& operator=(const MessagePipeTest&) = delete;
+
   ~MessagePipeTest() override {
     if (pipe0_ != MOJO_HANDLE_INVALID)
       CHECK_EQ(MOJO_RESULT_OK, MojoClose(pipe0_));
@@ -78,9 +81,6 @@ class MessagePipeTest : public test::MojoTestBase {
   }
 
   MojoHandle pipe0_, pipe1_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(MessagePipeTest);
 };
 
 using FuseMessagePipeTest = test::MojoTestBase;
@@ -312,7 +312,7 @@ TEST_F(MessagePipeTest, BasicWaiting) {
   ASSERT_FALSE(hss.satisfiable_signals & MOJO_HANDLE_SIGNAL_WRITABLE);
 }
 
-#if !defined(OS_IOS)
+#if !BUILDFLAG(IS_IOS)
 
 const size_t kPingPongHandlesPerIteration = 30;
 const size_t kPingPongIterations = 500;
@@ -385,7 +385,7 @@ TEST_F(MessagePipeTest, SharedBufferHandlePingPong) {
     MojoClose(buffers[i]);
 }
 
-#endif  // !defined(OS_IOS)
+#endif  // !BUILDFLAG(IS_IOS)
 
 TEST_F(FuseMessagePipeTest, Basic) {
   // Test that we can fuse pipes and they still work.

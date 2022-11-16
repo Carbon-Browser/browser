@@ -6,6 +6,7 @@
 
 #include "base/bind.h"
 #include "base/callback_helpers.h"
+#include "base/threading/thread_task_runner_handle.h"
 #include "content/browser/service_worker/service_worker_client_utils.h"
 #include "content/browser/service_worker/service_worker_container_host.h"
 #include "content/browser/service_worker/service_worker_context_core.h"
@@ -13,7 +14,6 @@
 #include "content/browser/service_worker/service_worker_host.h"
 #include "content/browser/service_worker/service_worker_registration.h"
 #include "content/browser/service_worker/service_worker_type_converters.h"
-#include "content/common/service_worker/service_worker_utils.h"
 #include "content/public/browser/browser_thread.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
 
@@ -69,7 +69,7 @@ void StartWorkerToDispatchExtendableMessageEvent(
     PrepareExtendableMessageEventCallback prepare_callback) {
   // If not enough time is left to actually process the event don't even
   // bother starting the worker and sending the event.
-  if (timeout && *timeout < base::TimeDelta::FromMilliseconds(100)) {
+  if (timeout && *timeout < base::Milliseconds(100)) {
     std::move(callback).Run(blink::ServiceWorkerStatusCode::kErrorTimeout);
     return;
   }
@@ -200,7 +200,7 @@ ServiceWorkerObjectHost::ServiceWorkerObjectHost(
       container_host_(container_host),
       container_origin_(url::Origin::Create(container_host_->url())),
       version_(std::move(version)) {
-  DCHECK_CURRENTLY_ON(ServiceWorkerContext::GetCoreThreadId());
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
   DCHECK(context_ && container_host_ && version_);
   DCHECK(context_->GetLiveRegistration(version_->registration_id()));
   version_->AddObserver(this);
@@ -209,7 +209,7 @@ ServiceWorkerObjectHost::ServiceWorkerObjectHost(
 }
 
 ServiceWorkerObjectHost::~ServiceWorkerObjectHost() {
-  DCHECK_CURRENTLY_ON(ServiceWorkerContext::GetCoreThreadId());
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
   version_->RemoveObserver(this);
 }
 

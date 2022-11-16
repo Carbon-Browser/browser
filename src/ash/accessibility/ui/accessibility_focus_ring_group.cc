@@ -13,6 +13,8 @@
 #include "ash/accessibility/ui/accessibility_layer.h"
 #include "ash/accessibility/ui/layer_animation_info.h"
 #include "ash/public/cpp/accessibility_focus_ring_info.h"
+#include "base/memory/values_equivalent.h"
+#include "base/time/time.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/gfx/geometry/rect.h"
 
@@ -47,9 +49,9 @@ struct Region {
 
 AccessibilityFocusRingGroup::AccessibilityFocusRingGroup() {
   focus_animation_info_.fade_in_time =
-      base::TimeDelta::FromMilliseconds(kFocusFadeInTimeMilliseconds);
+      base::Milliseconds(kFocusFadeInTimeMilliseconds);
   focus_animation_info_.fade_out_time =
-      base::TimeDelta::FromMilliseconds(kFocusFadeOutTimeMilliseconds);
+      base::Milliseconds(kFocusFadeOutTimeMilliseconds);
 }
 
 AccessibilityFocusRingGroup::~AccessibilityFocusRingGroup() {}
@@ -113,7 +115,7 @@ bool AccessibilityFocusRingGroup::AnimateFocusRings(base::TimeTicks timestamp) {
   if (focus_ring_info_->behavior == FocusRingBehavior::PERSIST) {
     base::TimeDelta delta = timestamp - focus_animation_info_.change_time;
     base::TimeDelta transition_time =
-        base::TimeDelta::FromMilliseconds(kTransitionTimeMilliseconds);
+        base::Milliseconds(kTransitionTimeMilliseconds);
     if (delta >= transition_time) {
       focus_layers_[0]->Set(focus_rings_[0]);
       return true;
@@ -149,8 +151,7 @@ bool AccessibilityFocusRingGroup::UpdateFocusRing(
   }
 
   // If there is no change, don't do any work.
-  if ((!focus_ring_info_ && !focus_ring) ||
-      (focus_ring_info_ && focus_ring && *focus_ring_info_ == *focus_ring))
+  if (base::ValuesEquivalent(focus_ring_info_, focus_ring))
     return false;
 
   focus_ring_info_ = std::move(focus_ring);
@@ -179,7 +180,7 @@ void AccessibilityFocusRingGroup::RectsToRings(
   rects.resize(src_rects.size());
   for (size_t i = 0; i < src_rects.size(); ++i) {
     rects[i] = src_rects[i];
-    rects[i].Inset(-GetMargin(), -GetMargin());
+    rects[i].Inset(-GetMargin());
   }
 
   // Split the rects into contiguous regions.

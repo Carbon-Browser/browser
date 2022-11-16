@@ -5,6 +5,7 @@
 #ifndef WEBLAYER_TEST_TEST_LAUNCHER_DELEGATE_IMPL_H_
 #define WEBLAYER_TEST_TEST_LAUNCHER_DELEGATE_IMPL_H_
 
+#include "build/build_config.h"
 #include "content/public/test/test_launcher.h"
 
 namespace weblayer {
@@ -13,7 +14,7 @@ class TestLauncherDelegateImpl : public content::TestLauncherDelegate {
  public:
   int RunTestSuite(int argc, char** argv) override;
   std::string GetUserDataDirectoryCommandLineSwitch() override;
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
   content::ContentMainDelegate* CreateContentMainDelegate() override;
 #endif
 };

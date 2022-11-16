@@ -8,6 +8,7 @@
 #include "chrome/browser/ui/browser_navigator_params.h"
 #include "chrome/browser/ui/views/apps/app_info_dialog/app_info_label.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
+#include "extensions/common/extension.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/gfx/geometry/insets.h"
@@ -23,8 +24,7 @@ const int kSpacingBetweenKeyAndStartOfValue = 3;
 }
 
 AppInfoPanel::AppInfoPanel(Profile* profile, const extensions::Extension* app)
-    : profile_(profile), app_(app) {
-}
+    : profile_(profile), app_(app) {}
 
 AppInfoPanel::~AppInfoPanel() {
 }

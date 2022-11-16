@@ -15,8 +15,8 @@
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "chromeos/dbus/shill/shill_manager_client.h"
@@ -102,13 +102,12 @@ void FakeShillDeviceClient::SetProperty(const dbus::ObjectPath& device_path,
     std::move(callback).Run();
     base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
         FROM_HERE,
-        base::BindOnce(
-            &FakeShillDeviceClient::SetPropertyInternal,
-            weak_ptr_factory_.GetWeakPtr(), device_path, name, value.Clone(),
-            /*callback=*/base::DoNothing::Once<>(),
-            /*error_callback=*/
-            base::DoNothing::Once<const std::string&, const std::string&>(),
-            /*notify_changed=*/true),
+        base::BindOnce(&FakeShillDeviceClient::SetPropertyInternal,
+                       weak_ptr_factory_.GetWeakPtr(), device_path, name,
+                       value.Clone(),
+                       /*callback=*/base::DoNothing(),
+                       /*error_callback=*/base::DoNothing(),
+                       /*notify_changed=*/true),
         *property_change_delay_);
     return;
   }
@@ -278,7 +277,7 @@ void FakeShillDeviceClient::Register(const dbus::ObjectPath& device_path,
     PostError("No Cellular scan results", std::move(error_callback));
     return;
   }
-  for (auto& network : scan_results->GetList()) {
+  for (auto& network : scan_results->GetListDeprecated()) {
     std::string id = network.FindKey(shill::kNetworkIdProperty)->GetString();
     std::string status = id == network_id ? "current" : "available";
     network.SetKey(shill::kStatusProperty, base::Value(status));
@@ -341,8 +340,6 @@ void FakeShillDeviceClient::AddDevice(const std::string& device_path,
   properties->SetKey(shill::kDBusServiceProperty,
                      base::Value(modemmanager::kModemManager1ServiceName));
   if (type == shill::kTypeCellular) {
-    properties->SetKey(shill::kCellularAllowRoamingProperty,
-                       base::Value(false));
     properties->SetKey(shill::kCellularPolicyAllowRoamingProperty,
                        base::Value(false));
   }
@@ -414,7 +411,7 @@ void FakeShillDeviceClient::AddCellularFoundNetwork(
                                              base::ListValue());
   }
   base::Value new_result(base::Value::Type::DICTIONARY);
-  int idx = static_cast<int>(scan_results->GetList().size());
+  int idx = static_cast<int>(scan_results->GetListDeprecated().size());
   new_result.SetKey(shill::kNetworkIdProperty,
                     base::Value(base::StringPrintf("network%d", idx)));
   new_result.SetKey(shill::kLongNameProperty,

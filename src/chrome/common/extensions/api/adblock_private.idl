@@ -1,17 +1,17 @@
-// This file is part of Adblock Plus <https://adblockplus.org/>,
+// This file is part of eyeo Chromium SDK,
 // Copyright (C) 2006-present eyeo GmbH
 //
-// Adblock Plus is free software: you can redistribute it and/or modify
+// eyeo Chromium SDK is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
 // published by the Free Software Foundation.
 //
-// Adblock Plus is distributed in the hope that it will be useful,
+// eyeo Chromium SDK is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with Adblock Plus.  If not, see <http://www.gnu.org/licenses/>.
+// along with eyeo Chromium SDK.  If not, see <http://www.gnu.org/licenses/>.
 
 // adblockPrivate API.
 // This is a private API exposing ability to control AdblockPlus.
@@ -26,13 +26,60 @@ dictionary BuiltInSubscription {
   DOMString[] languages;
 };
 
+dictionary Subscription {
+  // Subscription url
+  DOMString url;
+  // Current state of the subscription. Allowed values are:
+  // "Installed"
+  // "Preloaded"
+  // "Installing"
+  // See components/adblock/core/subscription/subscription.h for description.
+  DOMString installation_state;
+  // Subscription title (may be empty)
+  DOMString title;
+  // May be empty:
+  DOMString current_version;
+  // Time of last successful installation or update, in ISO 8601 format.
+  // May be passed directly to the Date constructor.
+  DOMString last_installation_time;
+};
+
+dictionary SessionStatsEntry {
+  // Subscription url or "adblock:custom" when custom filter was matched
+  DOMString url;
+  // Subscription hits
+  long count;
+};
+
 dictionary AdInfo {
-  // URL of the ad elemennt which has been matched.
+  // URL of the ad element which has been matched.
   DOMString url;
   // URLs of the parent frames.
   DOMString[] parent_frame_urls;
-  // List of subscriptions having the filter which matched for the ad.
-  DOMString[] subscriptions;
+  // URL of subscription having the filter which matched for the ad.
+  DOMString subscription;
+  // A string representation of matched ad's resource type.
+  // Possible values are:
+  // - "SCRIPT"
+  // - "IMAGE"
+  // - "STYLESHEET"
+  // - "OBJECT"
+  // - "SUBDOCUMENT"
+  // - "WEBSOCKET"
+  // - "WEBRTC"
+  // - "PING"
+  // - "XMLHTTPREQUEST"
+  // - "MEDIA"
+  // - "FONT"
+  // - "OTHER" (when none of the above matches)
+  // See: components/adblock/core/common/content_type.h
+  DOMString content_type;
+  // Tab id for which the event is fired. Defaults to -1, a numerical value of
+  // api::tabs::TAB_ID_NONE which means tab id cannot be obtained.
+  long tab_id;
+  // Window id for which the event is fired. Defaults to -1 which is a value
+  // of SessionID::InvalidValue() which means window id cannot be obtained.
+  long window_id;
 };
 
 enum UpdateConsent {
@@ -42,12 +89,13 @@ enum UpdateConsent {
   WIFI_ONLY
 };
 
-callback BuiltInSubscriptionsCallback =
-    void(BuiltInSubscription[] result);
+callback BuiltInSubscriptionsCallback = void(BuiltInSubscription[] result);
+callback SubscriptionsCallback = void(Subscription[] result);
 callback StateCallback = void(boolean result);
 callback CompletionCallback = void();
 callback ListCallback = void(DOMString[] result);
 callback UpdateConsentCallback = void(UpdateConsent consent);
+callback SessionStatsCallback = void(SessionStatsEntry[] result);
 
 interface Functions {
   // Sets on which connection type subscription update is allowed.
@@ -63,10 +111,9 @@ interface Functions {
   // Returns whether Acceptable ads is on.
   static void isAcceptableAdsEnabled(StateCallback callback);
   // Gets the list of built-in subscriptions.
-  static void getBuiltInSubscriptions(
-      BuiltInSubscriptionsCallback callback);
+  static void getBuiltInSubscriptions(BuiltInSubscriptionsCallback callback);
   // Returns a list of built-in subscriptions a user is subscribed to.
-  static void getSelectedBuiltInSubscriptions(ListCallback callback);
+  static void getSelectedBuiltInSubscriptions(SubscriptionsCallback callback);
   // Subscribes to a built-in subscription.
   // |url| must be one from the built-in subscriptions list.
   static void selectBuiltInSubscription(DOMString url,
@@ -75,7 +122,7 @@ interface Functions {
   static void unselectBuiltInSubscription(DOMString url,
                                           optional CompletionCallback feedback);
   // Returns a list of custom subscriptions a user is subscribed to.
-  static void getCustomSubscriptions(ListCallback callback);
+  static void getCustomSubscriptions(SubscriptionsCallback callback);
   // Subscribes to a custom subscription. |url| may point to any URL.
   static void addCustomSubscription(DOMString url,
                                     optional CompletionCallback feedback);
@@ -92,14 +139,30 @@ interface Functions {
   static void addCustomFilter(DOMString filter);
   // Removes a custom filter.
   static void removeCustomFilter(DOMString filter);
+  // Returns number of allowlisted requests in a current session (runtime).
+  static void getSessionAllowedAdsCount(SessionStatsCallback callback);
+  // Returns number of blocked requests in a current session (runtime).
+  static void getSessionBlockedAdsCount(SessionStatsCallback callback);
 };
 
 interface Events {
+  // Fired when an ad is explicitly allowed by an exception rule.
+  static void onAdAllowed(AdInfo info);
+
   // Fired when an ad is blocked.
   static void onAdBlocked(AdInfo info);
 
-  // Fired when an ad is explicitly allowed by an exception rule.
-  static void onAdAllowed(AdInfo info);
+  // Fired when a whole page is allowlisted.
+  static void onPageAllowed(AdInfo info);
+
+  // Fired when a popup is blocked.
+  static void onPopupBlocked(AdInfo info);
+
+  // Fired when a popup is allowlisted.
+  static void onPopupAllowed(AdInfo info);
+
+  // Fired when a subscription has been updated.
+  static void onSubscriptionUpdated(DOMString subscription_url);
 };
 
 };

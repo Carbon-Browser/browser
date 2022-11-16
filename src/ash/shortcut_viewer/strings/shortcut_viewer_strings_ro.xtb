@@ -17,7 +17,7 @@
 <translation id="1516966594427080024">Deschide o fereastră nouă în modul incognito</translation>
 <translation id="152892567002884378">Mărește volumul</translation>
 <translation id="1560480564179555003"><ph name="SHIFT" /><ph name="SEPARATOR1" /><ph name="ALT" /><ph name="SEPARATOR2" /><ph name="L" />, apoi <ph name="ESC" /></translation>
-<translation id="1633761758045565086">Mută focalizarea pe o casetă de ajutor</translation>
+<translation id="1586324912145647027">Accesează un desktop de la 1 la 8</translation>
 <translation id="1652741121070700329">Mută cursorul la începutul cuvântului anterior</translation>
 <translation id="1679841710523778799">Mărește luminozitatea</translation>
 <translation id="168356808214100546">Apasă lung pe <ph name="ALT" />, apăsă pe <ph name="TAB" /> până când ajungi la fereastra pe care dorești să o deschizi, apoi eliberează.</translation>
@@ -71,6 +71,7 @@
 <translation id="3140353188828248647">Focalizează pe bara de adrese</translation>
 <translation id="3256109297135787951">Elimină evidențierea de pe un element de pe raft</translation>
 <translation id="3288816184963444640">Închide fereastra curentă</translation>
+<translation id="3322797428033495633">Focalizează fereastra picture-in-picture</translation>
 <translation id="3350805006883559974">Fereastră mobilă activă în partea de sus</translation>
 <translation id="3407560819924487926">Afișează managerul de activități</translation>
 <translation id="3417835166382867856">Caută în file</translation>
@@ -130,6 +131,7 @@
 <translation id="5563050856984839829">Apasă pe <ph name="CTRL" /><ph name="SEPARATOR" /><ph name="SHIFT" /> și dă clic pe un link</translation>
 <translation id="561814908794220892">Deschide pagina web într-o filă nouă</translation>
 <translation id="5620219513321115856">Mută fereastra activă pe desktopul din dreapta</translation>
+<translation id="5699366815052349604">Atribuie fereastra activă tuturor desktopurilor</translation>
 <translation id="5710621673935162997"><ph name="CTRL" /><ph name="SEPARATOR1" /><ph name="L" /> sau <ph name="ALT" /><ph name="SEPARATOR2" /><ph name="D" /></translation>
 <translation id="5757111373163288447">Deschide linkul în fila respectivă</translation>
 <translation id="5757474750054631686">Redu luminozitatea tastaturii (numai pentru tastaturi cu iluminare)</translation>
@@ -156,6 +158,7 @@
 <translation id="6445033640292336367">Readu fila în poziția inițială</translation>
 <translation id="6474744297082284761">Micșorează (când lupa andocată SAU lupa de ecran complet este activată)</translation>
 <translation id="649811797655257835">Selectează fișierul, apoi apasă <ph name="SPACE" /></translation>
+<translation id="6515089016094047210">Deschide sau închide widgetul Calendar.</translation>
 <translation id="6551886416582667425">Fă o captură de ecran / înregistrare parțială</translation>
 <translation id="6556040137485212400">Deschide fereastra cu cea mai mare durată de nefolosire</translation>
 <translation id="666343722268997814">Deschide meniul de clic dreapta pentru elementul evidențiat</translation>
@@ -205,6 +208,7 @@
 <translation id="8644639153978066712">Afișează fișiere ascunse din aplicația Fișiere</translation>
 <translation id="8717459106217102612">Selectează cuvântul anterior sau litera anterioară</translation>
 <translation id="8727232706774971183">Vezi notificările</translation>
+<translation id="8855548128280178372"><ph name="SHIFT" /><ph name="SEPARATOR1" /><ph name="SEARCH" /><ph name="SEPARATOR2" /> 1 până la 8</translation>
 <translation id="8855885154700222542">Tasta pentru ecran complet</translation>
 <translation id="8881584919399569791">Mută fereastra activă pe desktopul din stânga</translation>
 <translation id="88986195241502842">O pagină mai jos</translation>

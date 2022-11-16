@@ -21,13 +21,6 @@ import org.chromium.ui.text.SpanApplier.SpanInfo;
 
 /** A {@link Fragment} that presents a set of search engines for the user to choose from. */
 public class RewardOnBoardingMessageFragment extends Fragment implements FirstRunFragment {
-    /** FRE page that instantiates this fragment. */
-    public static class Page implements FirstRunPage<RewardOnBoardingMessageFragment> {
-        @Override
-        public RewardOnBoardingMessageFragment instantiateFragment() {
-            return new RewardOnBoardingMessageFragment();
-        }
-    }
 
     @Override
     public View onCreateView(

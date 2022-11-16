@@ -8,7 +8,7 @@
 
 #include "base/atomicops.h"
 #include "base/logging.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/threading/simple_thread.h"
 #include "base/threading/thread_restrictions.h"
 #include "services/device/usb/usb_error.h"
@@ -23,6 +23,10 @@ namespace device {
 class UsbContext::UsbEventHandler : public base::SimpleThread {
  public:
   explicit UsbEventHandler(libusb_context* context);
+
+  UsbEventHandler(const UsbEventHandler&) = delete;
+  UsbEventHandler& operator=(const UsbEventHandler&) = delete;
+
   ~UsbEventHandler() override;
 
   // base::SimpleThread
@@ -32,8 +36,7 @@ class UsbContext::UsbEventHandler : public base::SimpleThread {
 
  private:
   base::subtle::Atomic32 running_;
-  libusb_context* context_;
-  DISALLOW_COPY_AND_ASSIGN(UsbEventHandler);
+  raw_ptr<libusb_context> context_;
 };
 
 UsbContext::UsbEventHandler::UsbEventHandler(libusb_context* context)

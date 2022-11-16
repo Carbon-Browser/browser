@@ -7,7 +7,7 @@
 
 #include "third_party/blink/public/mojom/clipboard/clipboard.mojom-blink.h"
 #include "third_party/blink/renderer/core/core_export.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_remote.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/forward.h"
@@ -16,7 +16,6 @@
 namespace blink {
 
 class DataObject;
-class DocumentFragment;
 class Image;
 class KURL;
 class LocalFrame;
@@ -43,7 +42,9 @@ class CORE_EXPORT SystemClipboard final
   bool IsFormatAvailable(mojom::ClipboardFormat format);
 
   String ReadPlainText();
-  String ReadPlainText(mojom::ClipboardBuffer buffer);
+  String ReadPlainText(mojom::blink::ClipboardBuffer buffer);
+  void ReadPlainText(mojom::blink::ClipboardBuffer buffer,
+                     mojom::blink::ClipboardHost::ReadTextCallback callback);
   void WritePlainText(const String&, SmartReplaceOption = kCannotSmartReplace);
 
   // If no data is read, an empty string will be returned and all out parameters
@@ -53,6 +54,7 @@ class CORE_EXPORT SystemClipboard final
   // no additional context, fragmentStart will be zero and fragmentEnd will be
   // the same as the length of the markup.
   String ReadHTML(KURL&, unsigned& fragment_start, unsigned& fragment_end);
+  void ReadHTML(mojom::blink::ClipboardHost::ReadHtmlCallback callback);
   void WriteHTML(const String& markup,
                  const KURL& document_url,
                  SmartReplaceOption = kCannotSmartReplace);
@@ -63,7 +65,6 @@ class CORE_EXPORT SystemClipboard final
   String ReadRTF();
 
   mojo_base::BigBuffer ReadPng(mojom::blink::ClipboardBuffer);
-  SkBitmap ReadImage(mojom::ClipboardBuffer);
   String ReadImageAsImageMarkup(mojom::blink::ClipboardBuffer);
 
   // Write the image and its associated tag (bookmark/HTML types).
@@ -82,9 +83,6 @@ class CORE_EXPORT SystemClipboard final
   void CommitWrite();
 
   void CopyToFindPboard(const String& text);
-
-  void RecordClipboardImageUrls(DocumentFragment* pasting_fragment);
-  void RecordImageLoadError(const String& image_url);
 
   void ReadAvailableCustomAndStandardFormats(
       mojom::blink::ClipboardHost::ReadAvailableCustomAndStandardFormatsCallback
@@ -110,8 +108,6 @@ class CORE_EXPORT SystemClipboard final
 
   // Whether the selection buffer is available on the underlying platform.
   bool is_selection_buffer_available_ = false;
-  // Cache of image elements inserted by paste.
-  WTF::HashSet<String> image_urls_in_paste_;
 };
 
 }  // namespace blink

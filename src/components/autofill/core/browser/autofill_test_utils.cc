@@ -16,6 +16,8 @@
 #include "components/autofill/core/browser/autofill_external_delegate.h"
 #include "components/autofill/core/browser/data_model/autofill_profile.h"
 #include "components/autofill/core/browser/data_model/credit_card.h"
+#include "components/autofill/core/browser/data_model/credit_card_test_api.h"
+#include "components/autofill/core/browser/data_model/iban.h"
 #include "components/autofill/core/browser/field_types.h"
 #include "components/autofill/core/browser/randomized_encoder.h"
 #include "components/autofill/core/browser/webdata/autofill_table.h"
@@ -61,8 +63,6 @@ namespace test {
 
 namespace {
 
-const int kValidityStateBitfield = 1984;
-
 std::string GetRandomCardNumber() {
   const size_t length = 16;
   std::string value;
@@ -74,8 +74,12 @@ std::string GetRandomCardNumber() {
 
 }  // namespace
 
-LocalFrameToken GetLocalFrameToken() {
-  return LocalFrameToken(base::UnguessableToken::Deserialize(98765, 43210));
+LocalFrameToken MakeLocalFrameToken(RandomizeFrame randomize) {
+  if (*randomize) {
+    return LocalFrameToken(base::UnguessableToken::Create());
+  } else {
+    return LocalFrameToken(base::UnguessableToken::Deserialize(98765, 43210));
+  }
 }
 
 FormRendererId MakeFormRendererId() {
@@ -88,14 +92,12 @@ FieldRendererId MakeFieldRendererId() {
   return FieldRendererId(counter++);
 }
 
-// Creates new, pairwise distinct FormGlobalIds.
-FormGlobalId MakeFormGlobalId() {
-  return {GetLocalFrameToken(), MakeFormRendererId()};
+FormGlobalId MakeFormGlobalId(RandomizeFrame randomize) {
+  return {MakeLocalFrameToken(randomize), MakeFormRendererId()};
 }
 
-// Creates new, pairwise distinct FieldGlobalIds.
-FieldGlobalId MakeFieldGlobalId() {
-  return {GetLocalFrameToken(), MakeFieldRendererId()};
+FieldGlobalId MakeFieldGlobalId(RandomizeFrame randomize) {
+  return {MakeLocalFrameToken(randomize), MakeFieldRendererId()};
 }
 
 void SetFormGroupValues(FormGroup& form_group,
@@ -135,6 +137,7 @@ std::unique_ptr<PrefService> PrefServiceForTesting() {
   registry->RegisterBooleanPref(
       RandomizedEncoder::kUrlKeyedAnonymizedDataCollectionEnabled, false);
   registry->RegisterBooleanPref(::prefs::kMixedFormsWarningsEnabled, true);
+  registry->RegisterStringPref(prefs::kAutofillStatesDataDir, "");
   return PrefServiceForTesting(registry.get());
 }
 
@@ -152,7 +155,7 @@ void CreateTestFormField(const char* label,
                          const char* value,
                          const char* type,
                          FormFieldData* field) {
-  field->host_frame = GetLocalFrameToken();
+  field->host_frame = MakeLocalFrameToken();
   field->unique_renderer_id = MakeFieldRendererId();
   field->label = ASCIIToUTF16(label);
   field->name = ASCIIToUTF16(name);
@@ -215,7 +218,7 @@ void CreateTestAddressFormData(FormData* form, const char* unique_id) {
 void CreateTestAddressFormData(FormData* form,
                                std::vector<ServerFieldTypeSet>* types,
                                const char* unique_id) {
-  form->host_frame = GetLocalFrameToken();
+  form->host_frame = MakeLocalFrameToken();
   form->unique_renderer_id = MakeFormRendererId();
   form->name = u"MyForm" + ASCIIToUTF16(unique_id ? unique_id : "");
   form->button_titles = {std::make_pair(
@@ -444,8 +447,6 @@ AutofillProfile GetServerProfile() {
   profile.SetRawInfo(ADDRESS_HOME_DEPENDENT_LOCALITY, u"Santa Clara");
 
   profile.set_language_code("en");
-  profile.SetClientValidityFromBitfieldValue(kValidityStateBitfield);
-  profile.set_is_client_validity_states_updated(true);
   profile.set_use_count(7);
   profile.set_use_date(base::Time::FromTimeT(54321));
 
@@ -466,14 +467,19 @@ AutofillProfile GetServerProfile2() {
   profile.SetRawInfo(ADDRESS_HOME_DEPENDENT_LOCALITY, u"Santa Monica");
 
   profile.set_language_code("en");
-  profile.SetClientValidityFromBitfieldValue(kValidityStateBitfield);
-  profile.set_is_client_validity_states_updated(true);
   profile.set_use_count(14);
   profile.set_use_date(base::Time::FromTimeT(98765));
 
   profile.GenerateServerProfileIdentifier();
 
   return profile;
+}
+
+Iban GetIban() {
+  Iban iban(base::GenerateGUID());
+  iban.set_value(u"DE91 1000 0000 0123 4567 89");
+  iban.set_nickname(u"Nickname for Iban");
+  return iban;
 }
 
 CreditCard GetCreditCard() {
@@ -526,6 +532,24 @@ CreditCard GetMaskedServerCard() {
   return credit_card;
 }
 
+CreditCard GetMaskedServerCardWithLegacyId() {
+  CreditCard credit_card(CreditCard::MASKED_SERVER_CARD, "a123");
+  test::SetCreditCardInfo(&credit_card, "Bonnie Parker",
+                          "2109" /* Mastercard */, NextMonth().c_str(),
+                          NextYear().c_str(), "1");
+  credit_card.SetNetworkForMaskedCard(kMasterCard);
+  return credit_card;
+}
+
+CreditCard GetMaskedServerCardWithNonLegacyId() {
+  CreditCard credit_card(CreditCard::MASKED_SERVER_CARD, 1);
+  test::SetCreditCardInfo(&credit_card, "Bonnie Parker",
+                          "2109" /* Mastercard */, NextMonth().c_str(),
+                          NextYear().c_str(), "1");
+  credit_card.SetNetworkForMaskedCard(kMasterCard);
+  return credit_card;
+}
+
 CreditCard GetMaskedServerCardAmex() {
   CreditCard credit_card(CreditCard::MASKED_SERVER_CARD, "b456");
   test::SetCreditCardInfo(&credit_card, "Justin Thyme", "8431" /* Amex */,
@@ -557,6 +581,18 @@ CreditCard GetFullServerCard() {
   test::SetCreditCardInfo(&credit_card, "Full Carter",
                           "4111111111111111" /* Visa */, NextMonth().c_str(),
                           NextYear().c_str(), "1");
+  return credit_card;
+}
+
+CreditCard GetVirtualCard() {
+  CreditCard credit_card;
+  test::SetCreditCardInfo(&credit_card, "Lorem Ipsum",
+                          "5555555555554444",  // Mastercard
+                          "10", test::NextYear().c_str(), "1");
+  credit_card.set_record_type(CreditCard::RecordType::VIRTUAL_CARD);
+  credit_card.set_virtual_card_enrollment_state(
+      CreditCard::VirtualCardEnrollmentState::ENROLLED);
+  CreditCardTestApi(&credit_card).set_network_for_virtual_card(kMasterCard);
   return credit_card;
 }
 
@@ -616,53 +652,60 @@ CreditCardCloudTokenData GetCreditCardCloudTokenData2() {
   return data;
 }
 
-AutofillOfferData GetCardLinkedOfferData1() {
-  AutofillOfferData data;
-  data.offer_id = 111;
+AutofillOfferData GetCardLinkedOfferData1(int64_t offer_id) {
   // Sets the expiry to be 45 days later.
-  data.expiry = AutofillClock::Now() + base::TimeDelta::FromDays(45);
-  data.offer_details_url = GURL("http://www.example1.com");
-  data.merchant_origins.emplace_back("http://www.example1.com");
-  data.display_strings.value_prop_text = "Get 5% off your purchase";
-  data.display_strings.see_details_text = "See details";
-  data.display_strings.usage_instructions_text =
+  base::Time expiry = AutofillClock::Now() + base::Days(45);
+  GURL offer_details_url = GURL("http://www.example1.com");
+  std::vector<GURL> merchant_origins{offer_details_url};
+  DisplayStrings display_strings;
+  display_strings.value_prop_text = "Get 5% off your purchase";
+  display_strings.see_details_text = "See details";
+  display_strings.usage_instructions_text =
       "Check out with this card to activate";
-  data.offer_reward_amount = "5%";
-  data.eligible_instrument_id.emplace_back(111111);
-  return data;
+  std::string offer_reward_amount = "5%";
+  std::vector<int64_t> eligible_instrument_id{111111};
+
+  return AutofillOfferData::GPayCardLinkedOffer(
+      offer_id, expiry, merchant_origins, offer_details_url, display_strings,
+      eligible_instrument_id, offer_reward_amount);
 }
 
-AutofillOfferData GetCardLinkedOfferData2() {
-  AutofillOfferData data;
-  data.offer_id = 222;
+AutofillOfferData GetCardLinkedOfferData2(int64_t offer_id) {
   // Sets the expiry to be 40 days later.
-  data.expiry = AutofillClock::Now() + base::TimeDelta::FromDays(40);
-  data.offer_details_url = GURL("http://www.example2.com");
-  data.merchant_origins.emplace_back("http://www.example2.com");
-  data.display_strings.value_prop_text = "Get $10 off your purchase";
-  data.display_strings.see_details_text = "See details";
-  data.display_strings.usage_instructions_text =
+  base::Time expiry = AutofillClock::Now() + base::Days(40);
+  GURL offer_details_url = GURL("http://www.example2.com");
+  std::vector<GURL> merchant_origins{offer_details_url};
+  DisplayStrings display_strings;
+  display_strings.value_prop_text = "Get $10 off your purchase";
+  display_strings.see_details_text = "See details";
+  display_strings.usage_instructions_text =
       "Check out with this card to activate";
-  data.offer_reward_amount = "$10";
-  data.eligible_instrument_id.emplace_back(222222);
-  return data;
+  std::string offer_reward_amount = "$10";
+  std::vector<int64_t> eligible_instrument_id{222222};
+
+  return AutofillOfferData::GPayCardLinkedOffer(
+      offer_id, expiry, merchant_origins, offer_details_url, display_strings,
+      eligible_instrument_id, offer_reward_amount);
 }
 
-AutofillOfferData GetPromoCodeOfferData(GURL origin, bool is_expired) {
-  AutofillOfferData data;
-  data.offer_id = 333;
+AutofillOfferData GetPromoCodeOfferData(GURL origin,
+                                        bool is_expired,
+                                        int64_t offer_id) {
   // Sets the expiry to be later if not expired, or earlier if expired.
-  data.expiry = is_expired
-                    ? AutofillClock::Now() - base::TimeDelta::FromDays(1)
-                    : AutofillClock::Now() + base::TimeDelta::FromDays(35);
-  data.offer_details_url = GURL("http://www.example.com");
-  data.merchant_origins.emplace_back(origin);
-  data.display_strings.value_prop_text = "5% off on shoes. Up to $50.";
-  data.display_strings.see_details_text = "See details";
-  data.display_strings.usage_instructions_text =
+  base::Time expiry = is_expired ? AutofillClock::Now() - base::Days(1)
+                                 : AutofillClock::Now() + base::Days(35);
+  std::vector<GURL> merchant_origins{origin};
+  DisplayStrings display_strings;
+  display_strings.value_prop_text = "5% off on shoes. Up to $50.";
+  display_strings.see_details_text = "See details";
+  display_strings.usage_instructions_text =
       "Click the promo code field at checkout to autofill it.";
-  data.promo_code = "5PCTOFFSHOES";
-  return data;
+  std::string promo_code = "5PCTOFFSHOES";
+  GURL offer_details_url = GURL("https://pay.google.com");
+
+  return AutofillOfferData::GPayPromoCodeOffer(
+      offer_id, expiry, merchant_origins, offer_details_url, display_strings,
+      promo_code);
 }
 
 void SetProfileInfo(AutofillProfile* profile,
@@ -952,9 +995,9 @@ std::vector<FormSignature> GetEncodedSignatures(
 }
 
 void AddFieldSuggestionToForm(
-    const autofill::FormFieldData& field_data,
+    const FormFieldData& field_data,
     ServerFieldType field_type,
-    ::autofill::AutofillQueryResponse_FormSuggestion* form_suggestion) {
+    AutofillQueryResponse_FormSuggestion* form_suggestion) {
   auto* field_suggestion = form_suggestion->add_field_suggestions();
   field_suggestion->set_field_signature(
       CalculateFieldSignatureForField(field_data).value());
@@ -962,9 +1005,9 @@ void AddFieldSuggestionToForm(
 }
 
 void AddFieldPredictionsToForm(
-    const autofill::FormFieldData& field_data,
+    const FormFieldData& field_data,
     const std::vector<int>& field_types,
-    ::autofill::AutofillQueryResponse_FormSuggestion* form_suggestion) {
+    AutofillQueryResponse_FormSuggestion* form_suggestion) {
   std::vector<ServerFieldType> types;
   for (auto type : field_types) {
     types.emplace_back(ToSafeServerFieldType(type, UNKNOWN_TYPE));
@@ -973,9 +1016,9 @@ void AddFieldPredictionsToForm(
 }
 
 void AddFieldPredictionsToForm(
-    const autofill::FormFieldData& field_data,
+    const FormFieldData& field_data,
     const std::vector<ServerFieldType>& field_types,
-    ::autofill::AutofillQueryResponse_FormSuggestion* form_suggestion) {
+    AutofillQueryResponse_FormSuggestion* form_suggestion) {
   auto* field_suggestion = form_suggestion->add_field_suggestions();
   field_suggestion->set_field_signature(
       CalculateFieldSignatureForField(field_data).value());

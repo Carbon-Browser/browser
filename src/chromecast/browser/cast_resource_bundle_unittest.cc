@@ -4,7 +4,6 @@
 
 #include "ui/base/resource/resource_bundle.h"
 
-#include "base/macros.h"
 #include "base/memory/ref_counted_memory.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -17,10 +16,11 @@ namespace ui {
 class CastResourceBundleTest : public testing::Test {
  public:
   CastResourceBundleTest() {}
-  ~CastResourceBundleTest() override {}
 
- private:
-  DISALLOW_COPY_AND_ASSIGN(CastResourceBundleTest);
+  CastResourceBundleTest(const CastResourceBundleTest&) = delete;
+  CastResourceBundleTest& operator=(const CastResourceBundleTest&) = delete;
+
+  ~CastResourceBundleTest() override {}
 };
 
 TEST_F(CastResourceBundleTest, DelegateLoadLocalizedResourceBytes) {

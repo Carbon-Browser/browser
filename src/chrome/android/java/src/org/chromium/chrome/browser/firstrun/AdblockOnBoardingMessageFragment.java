@@ -21,13 +21,6 @@ import org.chromium.ui.text.SpanApplier.SpanInfo;
 
 /** A {@link Fragment} that presents a set of search engines for the user to choose from. */
 public class AdblockOnBoardingMessageFragment extends Fragment implements FirstRunFragment {
-    /** FRE page that instantiates this fragment. */
-    public static class Page implements FirstRunPage<AdblockOnBoardingMessageFragment> {
-        @Override
-        public AdblockOnBoardingMessageFragment instantiateFragment() {
-            return new AdblockOnBoardingMessageFragment();
-        }
-    }
 
     @Override
     public View onCreateView(

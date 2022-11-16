@@ -25,11 +25,13 @@
 #include "base/logging.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/sys_byteorder.h"
+#include "base/timer/elapsed_timer.h"
 #include "build/build_config.h"
 #include "media/media_buildflags.h"
 #include "third_party/blink/public/common/buildflags.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/platform/platform.h"
+#include "third_party/blink/renderer/platform/graphics/bitmap_image_metrics.h"
 #include "third_party/blink/renderer/platform/image-decoders/bmp/bmp_image_decoder.h"
 #include "third_party/blink/renderer/platform/image-decoders/fast_shared_buffer_reader.h"
 #include "third_party/blink/renderer/platform/image-decoders/gif/gif_image_decoder.h"
@@ -39,6 +41,7 @@
 #include "third_party/blink/renderer/platform/image-decoders/webp/webp_image_decoder.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/trace_event.h"
 #include "third_party/blink/renderer/platform/network/mime/mime_type_registry.h"
+#include "third_party/skia/include/core/SkColorSpace.h"
 #include "ui/gfx/geometry/size.h"
 
 #if BUILDFLAG(ENABLE_AV1_DECODER)
@@ -164,6 +167,20 @@ String SniffMimeTypeInternal(scoped_refptr<SegmentReader> reader) {
 }
 
 }  // namespace
+
+ImageDecoder::ImageDecoder(
+    AlphaOption alpha_option,
+    HighBitDepthDecodingOption high_bit_depth_decoding_option,
+    const ColorBehavior& color_behavior,
+    wtf_size_t max_decoded_bytes)
+    : premultiply_alpha_(alpha_option == kAlphaPremultiplied),
+      high_bit_depth_decoding_option_(high_bit_depth_decoding_option),
+      color_behavior_(color_behavior),
+      max_decoded_bytes_(max_decoded_bytes),
+      allow_decode_to_yuv_(false),
+      purge_aggressively_(false) {}
+
+ImageDecoder::~ImageDecoder() = default;
 
 const wtf_size_t ImageDecoder::kNoDecodedImageByteLimit =
     static_cast<wtf_size_t>(-1);
@@ -367,19 +384,19 @@ bool ImageDecoder::IsSizeAvailable() {
   if (!IsDecodedSizeAvailable())
     return false;
 
-#if defined(OS_FUCHSIA)
+#if BUILDFLAG(IS_FUCHSIA)
   unsigned decoded_bytes_per_pixel = 4;
   if (ImageIsHighBitDepth() &&
       high_bit_depth_decoding_option_ == kHighBitDepthToHalfFloat) {
     decoded_bytes_per_pixel = 8;
   }
 
-  const IntSize size = DecodedSize();
+  const gfx::Size size = DecodedSize();
   const wtf_size_t decoded_size_bytes =
-      size.Width() * size.Height() * decoded_bytes_per_pixel;
+      size.width() * size.height() * decoded_bytes_per_pixel;
   if (decoded_size_bytes > max_decoded_bytes_) {
-    LOG(WARNING) << "Blocked decode of oversized image: " << size.Width() << "x"
-                 << size.Height();
+    LOG(WARNING) << "Blocked decode of oversized image: " << size.width() << "x"
+                 << size.height();
     return SetFailed();
   }
 #endif
@@ -393,7 +410,7 @@ cc::ImageHeaderMetadata ImageDecoder::MakeMetadataForDecodeAcceleration()
   cc::ImageHeaderMetadata image_metadata{};
   image_metadata.image_type = FileExtensionToImageType(FilenameExtension());
   image_metadata.yuv_subsampling = GetYUVSubsampling();
-  image_metadata.image_size = static_cast<gfx::Size>(size_);
+  image_metadata.image_size = size_;
   image_metadata.has_embedded_color_profile = HasEmbeddedColorProfile();
   return image_metadata;
 }
@@ -420,7 +437,24 @@ ImageFrame* ImageDecoder::DecodeFrameBufferAtIndex(wtf_size_t index) {
   if (frame->GetStatus() != ImageFrame::kFrameComplete) {
     TRACE_EVENT1(TRACE_DISABLED_BY_DEFAULT("devtools.timeline"), "Decode Image",
                  "imageType", FilenameExtension().Ascii());
+    if (metrics_frame_index_ != index) {
+      metrics_frame_index_ = index;
+      metrics_time_delta_ = base::TimeDelta();
+    }
+    base::ElapsedTimer timer;
     Decode(index);
+    metrics_time_delta_ += timer.Elapsed();
+    if (frame->GetStatus() == ImageFrame::kFrameComplete) {
+      BitmapImageMetrics::CountDecodedImageFrameTime(
+          FilenameExtension(), metrics_time_delta_,
+          frame->OriginalFrameRect().size().Area64(),
+          metrics_first_ && (index == 0));
+      metrics_frame_index_ = kNotFound;
+      metrics_time_delta_ = base::TimeDelta();
+      if (index == 0) {
+        metrics_first_ = false;
+      }
+    }
   }
 
   frame->NotifyBitmapIfPixelsChanged();
@@ -453,9 +487,9 @@ wtf_size_t ImageDecoder::FrameBytesAtIndex(wtf_size_t index) const {
       ImageFrame::PixelFormat::kRGBA_F16) {
     decoded_bytes_per_pixel = 8;
   }
-  IntSize size = FrameSizeAtIndex(index);
-  base::CheckedNumeric<wtf_size_t> area = size.Width();
-  area *= size.Height();
+  gfx::Size size = FrameSizeAtIndex(index);
+  base::CheckedNumeric<wtf_size_t> area = size.width();
+  area *= size.height();
   area *= decoded_bytes_per_pixel;
   return area.ValueOrDie();
 }
@@ -550,7 +584,7 @@ void ImageDecoder::CorrectAlphaWhenFrameBufferSawNoAlpha(wtf_size_t index) {
 
   // When this frame spans the entire image rect we can SetHasAlpha to false,
   // since there are logically no transparent pixels outside of the frame rect.
-  if (buffer.OriginalFrameRect().Contains(IntRect(IntPoint(), Size()))) {
+  if (buffer.OriginalFrameRect().Contains(gfx::Rect(Size()))) {
     buffer.SetHasAlpha(false);
     buffer.SetRequiredPreviousFrameIndex(kNotFound);
   } else if (buffer.RequiredPreviousFrameIndex() != kNotFound) {
@@ -608,7 +642,7 @@ bool ImageDecoder::InitFrameBuffer(wtf_size_t frame_index) {
       buffer->RequiredPreviousFrameIndex();
   if (required_previous_frame_index == kNotFound) {
     // This frame doesn't rely on any previous data.
-    if (!buffer->AllocatePixelData(Size().Width(), Size().Height(),
+    if (!buffer->AllocatePixelData(Size().width(), Size().height(),
                                    ColorSpaceForSkImages())) {
       return false;
     }
@@ -631,8 +665,8 @@ bool ImageDecoder::InitFrameBuffer(wtf_size_t frame_index) {
         ImageFrame::kDisposeOverwriteBgcolor) {
       // We want to clear the previous frame to transparent, without
       // affecting pixels in the image outside of the frame.
-      const IntRect& prev_rect = prev_buffer->OriginalFrameRect();
-      DCHECK(!prev_rect.Contains(IntRect(IntPoint(), Size())));
+      const gfx::Rect& prev_rect = prev_buffer->OriginalFrameRect();
+      DCHECK(!prev_rect.Contains(gfx::Rect(Size())));
       buffer->ZeroFillFrameRect(prev_rect);
     }
   }
@@ -672,11 +706,12 @@ void ImageDecoder::UpdateAggressivePurging(wtf_size_t index) {
     decoded_bytes_per_pixel = 8;
   }
   const uint64_t frame_memory_usage =
-      DecodedSize().Area() * decoded_bytes_per_pixel;
+      DecodedSize().Area64() * decoded_bytes_per_pixel;
 
   // This condition never fails in the current code. Our existing image decoders
   // parse for the image size and SetFailed() if that size overflows
-  DCHECK_EQ(frame_memory_usage / decoded_bytes_per_pixel, DecodedSize().Area());
+  DCHECK_EQ(frame_memory_usage / decoded_bytes_per_pixel,
+            DecodedSize().Area64());
 
   const uint64_t total_memory_usage = frame_memory_usage * index;
   if (total_memory_usage / frame_memory_usage != index) {  // overflow occurred
@@ -700,7 +735,7 @@ wtf_size_t ImageDecoder::FindRequiredPreviousFrame(wtf_size_t frame_index,
   const ImageFrame* curr_buffer = &frame_buffer_cache_[frame_index];
   if ((frame_rect_is_opaque ||
        curr_buffer->GetAlphaBlendSource() == ImageFrame::kBlendAtopBgcolor) &&
-      curr_buffer->OriginalFrameRect().Contains(IntRect(IntPoint(), Size())))
+      curr_buffer->OriginalFrameRect().Contains(gfx::Rect(Size())))
     return kNotFound;
 
   // The starting state for this frame depends on the previous frame's
@@ -733,8 +768,7 @@ wtf_size_t ImageDecoder::FindRequiredPreviousFrame(wtf_size_t frame_index,
       // decoded without reference to any prior frame, the starting state for
       // this frame is a blank frame, so it can again be decoded alone.
       // Otherwise, the previous frame contributes to this frame.
-      return (prev_buffer->OriginalFrameRect().Contains(
-                  IntRect(IntPoint(), Size())) ||
+      return (prev_buffer->OriginalFrameRect().Contains(gfx::Rect(Size())) ||
               (prev_buffer->RequiredPreviousFrameIndex() == kNotFound))
                  ? kNotFound
                  : prev_frame;

@@ -19,8 +19,8 @@
 #include <string>
 
 #include "base/containers/queue.h"
-#include "base/macros.h"
 #include "base/threading/thread_checker.h"
+#include "base/time/time.h"
 #include "media/capture/video/video_capture_device.h"
 #include "media/capture/video/win/capability_list_win.h"
 #include "media/capture/video/win/sink_filter_win.h"
@@ -77,9 +77,16 @@ class VideoCaptureDeviceWin : public VideoCaptureDevice,
   static VideoPixelFormat TranslateMediaSubtypeToPixelFormat(
       const GUID& sub_type);
 
+  VideoCaptureDeviceWin() = delete;
+
   VideoCaptureDeviceWin(const VideoCaptureDeviceDescriptor& device_descriptor,
                         Microsoft::WRL::ComPtr<IBaseFilter> capture_filter);
+
+  VideoCaptureDeviceWin(const VideoCaptureDeviceWin&) = delete;
+  VideoCaptureDeviceWin& operator=(const VideoCaptureDeviceWin&) = delete;
+
   ~VideoCaptureDeviceWin() override;
+
   // Opens the device driver for this device.
   bool Init();
 
@@ -154,11 +161,14 @@ class VideoCaptureDeviceWin : public VideoCaptureDevice,
 
   base::ThreadChecker thread_checker_;
 
+  // Used to guard between race checking capture state between the thread used
+  // in |thread_checker_| and a thread used in
+  // |SinkFilterObserver::SinkFilterObserver| callbacks.
+  base::Lock lock_;
+
   bool enable_get_photo_state_;
 
   absl::optional<int> camera_rotation_;
-
-  DISALLOW_IMPLICIT_CONSTRUCTORS(VideoCaptureDeviceWin);
 };
 
 }  // namespace media

@@ -8,7 +8,6 @@
 
 #include "base/containers/cxx20_erase.h"
 #include "base/ranges/algorithm.h"
-#include "base/stl_util.h"
 #include "chrome/browser/extensions/api/identity/identity_constants.h"
 
 namespace extensions {
@@ -27,8 +26,7 @@ IdentityTokenCacheValue IdentityTokenCacheValue::CreateRemoteConsent(
   cache_value.value_ = resolution_data;
   cache_value.expiration_time_ =
       base::Time::Now() +
-      base::TimeDelta::FromSeconds(
-          identity_constants::kCachedRemoteConsentTTLSeconds);
+      base::Seconds(identity_constants::kCachedRemoteConsentTTLSeconds);
   return cache_value;
 }
 
@@ -39,8 +37,7 @@ IdentityTokenCacheValue IdentityTokenCacheValue::CreateRemoteConsentApproved(
   cache_value.value_ = consent_result;
   cache_value.expiration_time_ =
       base::Time::Now() +
-      base::TimeDelta::FromSeconds(
-          identity_constants::kCachedRemoteConsentTTLSeconds);
+      base::Seconds(identity_constants::kCachedRemoteConsentTTLSeconds);
   return cache_value;
 }
 
@@ -56,7 +53,7 @@ IdentityTokenCacheValue IdentityTokenCacheValue::CreateToken(
 
   // Remove 20 minutes from the ttl so cached tokens will have some time
   // to live any time they are returned.
-  time_to_live -= base::TimeDelta::FromMinutes(20);
+  time_to_live -= base::Minutes(20);
 
   base::TimeDelta zero_delta;
   if (time_to_live < zero_delta)
@@ -171,10 +168,9 @@ void IdentityTokenCache::SetToken(const ExtensionTokenKey& key,
     intermediate_value_cache_.erase(key);
 
     AccessTokensKey access_tokens_key(key);
-    auto emplace_result =
-        base::TryEmplace(access_tokens_cache_, access_tokens_key);
+    auto [it, inserted] = access_tokens_cache_.try_emplace(access_tokens_key);
 
-    AccessTokensValue& cached_tokens = emplace_result.first->second;
+    AccessTokensValue& cached_tokens = it->second;
     // If a cached tokens set already exists, remove any existing token with the
     // same set of scopes.
     cached_tokens.erase(token_data);

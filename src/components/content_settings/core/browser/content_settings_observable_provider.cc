@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "components/content_settings/core/browser/content_settings_observable_provider.h"
+#include "base/observer_list.h"
 
 namespace content_settings {
 
@@ -31,6 +32,8 @@ void ObservableProvider::NotifyObservers(
   DCHECK(primary_pattern.IsValid());
   DCHECK(secondary_pattern.IsValid());
   for (Observer& observer : observer_list_) {
+    observer.OnContentSettingChanged(primary_pattern, secondary_pattern,
+                                     ContentSettingsTypeSet(content_type));
     observer.OnContentSettingChanged(primary_pattern, secondary_pattern,
                                      content_type);
   }

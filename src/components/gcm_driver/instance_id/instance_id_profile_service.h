@@ -7,7 +7,6 @@
 
 #include <memory>
 
-#include "base/macros.h"
 #include "components/keyed_service/core/keyed_service.h"
 
 namespace gcm {
@@ -23,14 +22,22 @@ class InstanceIDProfileService : public KeyedService {
  public:
   InstanceIDProfileService(gcm::GCMDriver* driver, bool is_off_the_record);
 
+  InstanceIDProfileService(const InstanceIDProfileService&) = delete;
+  InstanceIDProfileService& operator=(const InstanceIDProfileService&) = delete;
+
   ~InstanceIDProfileService() override;
 
   InstanceIDDriver* driver() const { return driver_.get(); }
 
- private:
-  std::unique_ptr<InstanceIDDriver> driver_;
+  static std::unique_ptr<InstanceIDProfileService> CreateForTests(
+      std::unique_ptr<InstanceIDDriver> instance_id_driver);
 
-  DISALLOW_COPY_AND_ASSIGN(InstanceIDProfileService);
+ private:
+  // Private constructor used for tests only.
+  explicit InstanceIDProfileService(
+      std::unique_ptr<InstanceIDDriver> instance_id_driver);
+
+  std::unique_ptr<InstanceIDDriver> driver_;
 };
 
 }  // namespace instance_id

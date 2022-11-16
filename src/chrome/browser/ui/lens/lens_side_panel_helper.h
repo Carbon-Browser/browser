@@ -8,6 +8,7 @@
 #include "base/callback_forward.h"
 
 namespace content {
+class WebContents;
 struct OpenURLParams;
 }  // namespace content
 
@@ -29,6 +30,23 @@ views::Widget* OpenLensRegionSearchInstructions(
     base::OnceClosure close_callback,
     base::OnceClosure escape_callback);
 
+// For testing purposes, retrieves the web contents used by the Lens side panel
+// view.
+content::WebContents* GetLensSidePanelWebContentsForTesting(Browser* browser);
+
+// For testing purposes, creates the LensSidePanelController in the
+// corresponding BrowserView of |browser|.
+void CreateLensSidePanelControllerForTesting(Browser* browser);
+
+// For testing purposes, retrieves the web contents used by the lens unified
+// side panel view. This is there because of BUILD rules for browser test where
+// you can't include files from views folder as deps.
+content::WebContents* GetLensUnifiedSidePanelWebContentsForTesting(
+    Browser* browser);
+
+// For testing purposes, creates the lens side panel coordinator and ensures
+// that it has an empty view
+void CreateLensUnifiedSidePanelEntryForTesting(Browser* browser);
 }  // namespace lens
 
 #endif  // CHROME_BROWSER_UI_LENS_LENS_SIDE_PANEL_HELPER_H_

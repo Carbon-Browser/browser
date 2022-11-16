@@ -29,5 +29,13 @@ const char kDriveFsPinnedMigrated[] = "drivefs.pinned_migrated";
 const char kDriveFsWasLaunchedAtLeastOnce[] =
     "drivefs.was_launched_at_least_once";
 
+// A boolean pref toggling MirrorSync functionality.
+const char kDriveFsEnableMirrorSync[] = "drivefs.enable_mirror_sync";
+
+// A string pref containing the machine ID that, when set, ensures existing
+// MirrorSync Computers roots are reassociated to the current device.
+const char kDriveFsMirrorSyncMachineRootId[] =
+    "drivefs.mirror_sync_machine_root_id";
+
 }  // namespace prefs
 }  // namespace drive

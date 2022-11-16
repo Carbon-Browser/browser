@@ -2,19 +2,21 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "ash/components/arc/test/arc_util_test_support.h"
+#include "ash/components/settings/cros_settings_names.h"
+#include "ash/components/tpm/stub_install_attributes.h"
 #include "ash/constants/ash_pref_names.h"
 #include "ash/constants/ash_switches.h"
 #include "ash/public/cpp/stylus_utils.h"
+#include "base/command_line.h"
 #include "base/test/scoped_chromeos_version_info.h"
 #include "base/values.h"
+#include "build/config/chromebox_for_meetings/buildflags.h"
 #include "chrome/browser/ash/arc/arc_util.h"
 #include "chrome/browser/extensions/extension_apitest.h"
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/pref_names.h"
-#include "chromeos/settings/cros_settings_names.h"
-#include "chromeos/tpm/stub_install_attributes.h"
-#include "components/arc/test/arc_util_test_support.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/test/browser_test.h"
 #include "ui/aura/window.h"
@@ -62,8 +64,7 @@ IN_PROC_BROWSER_TEST_F(ChromeOSInfoPrivateTest, DISABLED_TestGetAndSet) {
   ASSERT_FALSE(prefs->GetBoolean(ash::prefs::kAccessibilityAutoclickEnabled));
   ASSERT_FALSE(prefs->GetBoolean(ash::prefs::kAccessibilityCursorColorEnabled));
 
-  ASSERT_FALSE(
-      profile()->GetPrefs()->GetBoolean(prefs::kLanguageSendFunctionKeys));
+  ASSERT_FALSE(profile()->GetPrefs()->GetBoolean(ash::prefs::kSendFunctionKeys));
 
   ASSERT_TRUE(RunExtensionTest("chromeos_info_private/basic", {},
                                {.load_as_component = true}))
@@ -78,7 +79,7 @@ IN_PROC_BROWSER_TEST_F(ChromeOSInfoPrivateTest, DISABLED_TestGetAndSet) {
   ASSERT_TRUE(prefs->GetBoolean(ash::prefs::kAccessibilityAutoclickEnabled));
   ASSERT_TRUE(prefs->GetBoolean(ash::prefs::kAccessibilityCursorColorEnabled));
 
-  ASSERT_TRUE(prefs->GetBoolean(prefs::kLanguageSendFunctionKeys));
+  ASSERT_TRUE(prefs->GetBoolean(ash::prefs::kSendFunctionKeys));
 }
 
 // docked magnifier and screen magnifier are mutually exclusive. test each of
@@ -218,18 +219,35 @@ IN_PROC_BROWSER_TEST_F(ChromeOSInfoPrivateTest, StylusSeen) {
       << message_;
 }
 
+IN_PROC_BROWSER_TEST_F(ChromeOSInfoPrivateTest, TestGetIsMeetDevice) {
+  const char* custom_arg =
+#if BUILDFLAG(PLATFORM_CFM)
+      "Is Meet Device - True";
+#else
+      "Is Meet Device - False";
+#endif
+
+  ASSERT_TRUE(RunExtensionTest(
+      "chromeos_info_private/extended",
+      {.custom_arg = custom_arg, .launch_as_platform_app = true}))
+      << message_;
+}
+
 class ChromeOSInfoPrivateInternalStylusTest : public ChromeOSInfoPrivateTest {
  public:
   ChromeOSInfoPrivateInternalStylusTest() = default;
+
+  ChromeOSInfoPrivateInternalStylusTest(
+      const ChromeOSInfoPrivateInternalStylusTest&) = delete;
+  ChromeOSInfoPrivateInternalStylusTest& operator=(
+      const ChromeOSInfoPrivateInternalStylusTest&) = delete;
+
   ~ChromeOSInfoPrivateInternalStylusTest() override = default;
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
     ChromeOSInfoPrivateTest::SetUpCommandLine(command_line);
     command_line->AppendSwitch(ash::switches::kHasInternalStylus);
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ChromeOSInfoPrivateInternalStylusTest);
 };
 
 IN_PROC_BROWSER_TEST_F(ChromeOSInfoPrivateInternalStylusTest,
@@ -244,6 +262,11 @@ IN_PROC_BROWSER_TEST_F(ChromeOSInfoPrivateInternalStylusTest,
 class ChromeOSArcInfoPrivateTest : public ChromeOSInfoPrivateTest {
  public:
   ChromeOSArcInfoPrivateTest() = default;
+
+  ChromeOSArcInfoPrivateTest(const ChromeOSArcInfoPrivateTest&) = delete;
+  ChromeOSArcInfoPrivateTest& operator=(const ChromeOSArcInfoPrivateTest&) =
+      delete;
+
   ~ChromeOSArcInfoPrivateTest() override = default;
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
@@ -251,9 +274,6 @@ class ChromeOSArcInfoPrivateTest : public ChromeOSInfoPrivateTest {
     // Make ARC enabled for ArcAvailable/ArcEnabled tests.
     arc::SetArcAvailableCommandLineForTesting(command_line);
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ChromeOSArcInfoPrivateTest);
 };
 
 IN_PROC_BROWSER_TEST_F(ChromeOSArcInfoPrivateTest, ArcEnabled) {
@@ -279,14 +299,17 @@ IN_PROC_BROWSER_TEST_F(ChromeOSArcInfoPrivateTest, ArcAvailable) {
 class ChromeOSManagedDeviceInfoPrivateTest : public ChromeOSInfoPrivateTest {
  public:
   ChromeOSManagedDeviceInfoPrivateTest() = default;
+
+  ChromeOSManagedDeviceInfoPrivateTest(
+      const ChromeOSManagedDeviceInfoPrivateTest&) = delete;
+  ChromeOSManagedDeviceInfoPrivateTest& operator=(
+      const ChromeOSManagedDeviceInfoPrivateTest&) = delete;
+
   ~ChromeOSManagedDeviceInfoPrivateTest() override = default;
 
  private:
-  chromeos::ScopedStubInstallAttributes test_install_attributes_{
-      chromeos::StubInstallAttributes::CreateCloudManaged("fake-domain",
-                                                          "fake-id")};
-
-  DISALLOW_COPY_AND_ASSIGN(ChromeOSManagedDeviceInfoPrivateTest);
+  ash::ScopedStubInstallAttributes test_install_attributes_{
+      ash::StubInstallAttributes::CreateCloudManaged("fake-domain", "fake-id")};
 };
 
 IN_PROC_BROWSER_TEST_F(ChromeOSManagedDeviceInfoPrivateTest, Managed) {

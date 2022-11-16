@@ -5,16 +5,13 @@
 #ifndef COMPONENTS_AUTOFILL_ASSISTANT_BROWSER_SCRIPT_PRECONDITION_H_
 #define COMPONENTS_AUTOFILL_ASSISTANT_BROWSER_SCRIPT_PRECONDITION_H_
 
-#include <map>
 #include <memory>
-#include <set>
 #include <string>
 #include <vector>
 
 #include "base/callback.h"
-#include "base/macros.h"
+#include "base/containers/flat_set.h"
 #include "base/memory/weak_ptr.h"
-#include "components/autofill_assistant/browser/element_precondition.h"
 #include "components/autofill_assistant/browser/service.pb.h"
 #include "components/autofill_assistant/browser/web/web_controller.h"
 
@@ -45,6 +42,9 @@ class ScriptPrecondition {
           parameter_match,
       const ElementConditionProto& must_match);
 
+  ScriptPrecondition(const ScriptPrecondition&) = delete;
+  ScriptPrecondition& operator=(const ScriptPrecondition&) = delete;
+
   ~ScriptPrecondition();
 
   // Check whether the conditions satisfied and return the result through
@@ -63,7 +63,7 @@ class ScriptPrecondition {
   bool MatchParameters(const TriggerContext& context) const;
 
   // Domain (exact match) excluding the last '/' character.
-  std::set<std::string> domain_match_;
+  base::flat_set<std::string> domain_match_;
 
   // Pattern of the path parts of the URL.
   std::vector<std::unique_ptr<re2::RE2>> path_pattern_;
@@ -71,9 +71,7 @@ class ScriptPrecondition {
   // Condition on parameters, identified by name, as found in the intent.
   std::vector<ScriptParameterMatchProto> parameter_match_;
 
-  ElementPrecondition element_precondition_;
-
-  DISALLOW_COPY_AND_ASSIGN(ScriptPrecondition);
+  ElementConditionProto element_precondition_;
 };
 
 }  // namespace autofill_assistant

@@ -14,10 +14,9 @@
 #include <vector>
 
 #include "base/mac/scoped_nsobject.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "device/bluetooth/bluetooth_adapter.h"
 #include "device/bluetooth/bluetooth_discovery_manager_mac.h"
 #include "device/bluetooth/bluetooth_export.h"
@@ -38,13 +37,6 @@
 
 namespace device {
 
-// The 10.13 SDK deprecates the CBCentralManagerState enum, but marks the
-// replacement enum with limited availability, making it unusable. API methods
-// now return the new enum, so to compare enum values the new enum must be cast.
-// Wrap this in a function to obtain the state via a call to [manager state] to
-// avoid code that would use the replacement enum and trigger warnings.
-CBCentralManagerState GetCBManagerState(CBCentralManager* manager);
-
 class DEVICE_BLUETOOTH_EXPORT BluetoothAdapterMac
     : public BluetoothAdapter,
       public BluetoothDiscoveryManagerMac::Observer,
@@ -55,6 +47,9 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothAdapterMac
       std::string name,
       std::string address,
       scoped_refptr<base::SingleThreadTaskRunner> ui_task_runner);
+
+  BluetoothAdapterMac(const BluetoothAdapterMac&) = delete;
+  BluetoothAdapterMac& operator=(const BluetoothAdapterMac&) = delete;
 
   // Converts CBUUID into BluetoothUUID
   static BluetoothUUID BluetoothUUIDWithCBUUID(CBUUID* UUID);
@@ -95,6 +90,8 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothAdapterMac
       AdvertisementErrorCallback error_callback) override;
   BluetoothLocalGattService* GetGattService(
       const std::string& identifier) const override;
+  DeviceList GetDevices() override;
+  ConstDeviceList GetDevices() const override;
 
   // BluetoothDiscoveryManagerMac::Observer overrides:
   void ClassicDeviceFound(IOBluetoothDevice* device) override;
@@ -318,8 +315,6 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothAdapterMac
   std::map<std::string, std::string> low_energy_devices_info_;
 
   base::WeakPtrFactory<BluetoothAdapterMac> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(BluetoothAdapterMac);
 };
 
 }  // namespace device

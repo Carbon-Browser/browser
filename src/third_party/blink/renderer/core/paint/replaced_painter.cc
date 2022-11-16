@@ -4,14 +4,17 @@
 
 #include "third_party/blink/renderer/core/paint/replaced_painter.h"
 
+#include "base/metrics/histogram_macros.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
+#include "third_party/blink/renderer/core/frame/web_feature.h"
 #include "third_party/blink/renderer/core/layout/layout_replaced.h"
+#include "third_party/blink/renderer/core/layout/layout_view.h"
 #include "third_party/blink/renderer/core/layout/svg/layout_svg_root.h"
 #include "third_party/blink/renderer/core/paint/box_painter.h"
-#include "third_party/blink/renderer/core/paint/compositing/composited_layer_mapping.h"
 #include "third_party/blink/renderer/core/paint/highlight_painting_utils.h"
 #include "third_party/blink/renderer/core/paint/object_painter.h"
+#include "third_party/blink/renderer/core/paint/paint_auto_dark_mode.h"
 #include "third_party/blink/renderer/core/paint/paint_info.h"
 #include "third_party/blink/renderer/core/paint/paint_layer.h"
 #include "third_party/blink/renderer/core/paint/paint_layer_scrollable_area.h"
@@ -21,6 +24,7 @@
 #include "third_party/blink/renderer/platform/graphics/paint/display_item_cache_skipper.h"
 #include "third_party/blink/renderer/platform/graphics/paint/drawing_recorder.h"
 #include "third_party/blink/renderer/platform/graphics/paint/scoped_paint_chunk_properties.h"
+#include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
 
 namespace blink {
 
@@ -50,7 +54,7 @@ ScopedReplacedContentPaintState::ScopedReplacedContentPaintState(
   bool property_changed = false;
 
   const auto* content_transform = paint_properties->ReplacedContentTransform();
-  if (content_transform && replaced.IsSVGRoot()) {
+  if (content_transform) {
     new_properties.SetTransform(*content_transform);
     adjusted_paint_info_.emplace(input_paint_info_);
     adjusted_paint_info_->TransformCullRect(*content_transform);
@@ -103,11 +107,16 @@ void ReplacedPainter::Paint(const PaintInfo& paint_info) {
   if (ShouldPaintBoxDecorationBackground(local_paint_info)) {
     bool should_paint_background = false;
     if (layout_replaced_.StyleRef().Visibility() == EVisibility::kVisible) {
-      if (layout_replaced_.HasBoxDecorationBackground())
+      if (layout_replaced_.HasBoxDecorationBackground()) {
         should_paint_background = true;
-      if (layout_replaced_.HasEffectiveAllowedTouchAction() ||
-          layout_replaced_.InsideBlockingWheelEventHandler()) {
+      } else if (layout_replaced_.HasEffectiveAllowedTouchAction() ||
+                 layout_replaced_.InsideBlockingWheelEventHandler()) {
         should_paint_background = true;
+      } else {
+        Element* element = DynamicTo<Element>(layout_replaced_.GetNode());
+        if (element && element->GetRegionCaptureCropId()) {
+          should_paint_background = true;
+        }
       }
     }
     if (should_paint_background) {
@@ -116,6 +125,9 @@ void ReplacedPainter::Paint(const PaintInfo& paint_info) {
         // the background but still need to paint the hit test rects.
         BoxPainter(layout_replaced_)
             .RecordHitTestData(local_paint_info, border_rect, layout_replaced_);
+        BoxPainter(layout_replaced_)
+            .RecordRegionCaptureData(local_paint_info, border_rect,
+                                     layout_replaced_);
         return;
       }
 
@@ -155,6 +167,7 @@ void ReplacedPainter::Paint(const PaintInfo& paint_info) {
                                                         layout_replaced_);
     layout_replaced_.PaintReplaced(content_paint_state.GetPaintInfo(),
                                    content_paint_state.PaintOffset());
+    MeasureOverflowMetrics();
   }
 
   if (layout_replaced_.StyleRef().Visibility() == EVisibility::kVisible &&
@@ -163,7 +176,8 @@ void ReplacedPainter::Paint(const PaintInfo& paint_info) {
     DCHECK(scrollable_area);
     if (!scrollable_area->HasLayerForScrollCorner()) {
       ScrollableAreaPainter(*scrollable_area)
-          .PaintResizer(local_paint_info.context, RoundedIntPoint(paint_offset),
+          .PaintResizer(local_paint_info.context,
+                        ToRoundedVector2d(paint_offset),
                         local_paint_info.GetCullRect());
     }
     // Otherwise the resizer will be painted by the scroll corner layer.
@@ -199,17 +213,19 @@ void ReplacedPainter::Paint(const PaintInfo& paint_info) {
     PhysicalRect selection_painting_rect =
         layout_replaced_.LocalSelectionVisualRect();
     selection_painting_rect.Move(paint_offset);
-    IntRect selection_painting_int_rect =
-        PixelSnappedIntRect(selection_painting_rect);
+    gfx::Rect selection_painting_int_rect =
+        ToPixelSnappedRect(selection_painting_rect);
 
     DrawingRecorder recorder(local_paint_info.context, layout_replaced_,
                              DisplayItem::kSelectionTint,
                              selection_painting_int_rect);
     Color selection_bg = HighlightPaintingUtils::HighlightBackgroundColor(
         layout_replaced_.GetDocument(), layout_replaced_.StyleRef(),
-        layout_replaced_.GetNode(), kPseudoIdSelection);
-    local_paint_info.context.FillRect(selection_painting_int_rect,
-                                      selection_bg);
+        layout_replaced_.GetNode(), absl::nullopt, kPseudoIdSelection);
+    local_paint_info.context.FillRect(
+        selection_painting_int_rect, selection_bg,
+        PaintAutoDarkMode(layout_replaced_.StyleRef(),
+                          DarkModeFilter::ElementRole::kBackground));
   }
 }
 
@@ -239,6 +255,40 @@ bool ReplacedPainter::ShouldPaint(const ScopedPaintState& paint_state) const {
     return false;
 
   return true;
+}
+
+void ReplacedPainter::MeasureOverflowMetrics() const {
+  if (!layout_replaced_.BelongsToElementChangingOverflowBehaviour() ||
+      layout_replaced_.ClipsToContentBox() ||
+      !layout_replaced_.HasVisualOverflow()) {
+    return;
+  }
+
+  auto overflow_size = layout_replaced_.PhysicalVisualOverflowRect().size;
+  auto overflow_area = overflow_size.width * overflow_size.height;
+
+  auto content_size = layout_replaced_.Size();
+  auto content_area = content_size.Width() * content_size.Height();
+
+  DCHECK_GE(overflow_area, content_area);
+  if (overflow_area == content_area)
+    return;
+
+  const float device_pixel_ratio =
+      layout_replaced_.GetDocument().DevicePixelRatio();
+  const int overflow_outside_content_rect =
+      (overflow_area - content_area).ToInt() / pow(device_pixel_ratio, 2);
+  UMA_HISTOGRAM_COUNTS_100000(
+      "Blink.Overflow.ReplacedElementAreaOutsideContentRect",
+      overflow_outside_content_rect);
+
+  UseCounter::Count(layout_replaced_.GetDocument(),
+                    WebFeature::kReplacedElementPaintedWithOverflow);
+  constexpr int kMaxContentBreakageHeuristic = 5000;
+  if (overflow_outside_content_rect > kMaxContentBreakageHeuristic) {
+    UseCounter::Count(layout_replaced_.GetDocument(),
+                      WebFeature::kReplacedElementPaintedWithLargeOverflow);
+  }
 }
 
 }  // namespace blink

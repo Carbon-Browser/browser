@@ -11,120 +11,86 @@
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "chrome/browser/ui/webid/account_selection_view.h"
-#include "chrome/browser/ui/webid/webid_dialog.h"
 #include "components/infobars/core/infobar.h"
+#include "components/url_formatter/elide_url.h"
+#include "net/base/registry_controlled_domains/registry_controlled_domain.h"
+#include "net/base/url_util.h"
 #include "url/gurl.h"
+
+namespace {
+
+std::string FormatUrlForDisplay(const GURL& url) {
+  std::string formatted_url_str =
+      net::IsLocalhost(url)
+          ? url.GetWithEmptyPath().spec()
+          : net::registry_controlled_domains::GetDomainAndRegistry(
+                url,
+                net::registry_controlled_domains::INCLUDE_PRIVATE_REGISTRIES);
+  return base::UTF16ToUTF8(url_formatter::FormatUrlForSecurityDisplay(
+      GURL(url.scheme() + "://" + formatted_url_str),
+      url_formatter::SchemeDisplay::OMIT_HTTP_AND_HTTPS));
+}
+
+}  // namespace
 
 IdentityDialogController::IdentityDialogController() = default;
 
 IdentityDialogController::~IdentityDialogController() = default;
 
-void IdentityDialogController::ShowInitialPermissionDialog(
-    content::WebContents* rp_web_contents,
-    const GURL& idp_url,
-    content::IdentityRequestDialogController::PermissionDialogMode mode,
-    InitialApprovalCallback callback) {
-  DCHECK(!view_);
-
-  // The WebContents should be that of RP page to make sure info bar is shown on
-  // the RP page.
-
-  // TODO(majidvp): Use the provider name/url here
-  auto idp_hostname = base::UTF8ToUTF16(idp_url.GetOrigin().host());
-
-  auto rp_hostname =
-      base::UTF8ToUTF16(rp_web_contents->GetVisibleURL().GetOrigin().host());
-
-  GetOrCreateView(rp_web_contents)
-      .ShowInitialPermission(idp_hostname, rp_hostname, mode,
-                             std::move(callback));
+int IdentityDialogController::GetBrandIconMinimumSize() {
+  return AccountSelectionView::GetBrandIconMinimumSize();
 }
 
-void IdentityDialogController::ShowIdProviderWindow(
-    content::WebContents* rp_web_contents,
-    content::WebContents* idp_web_contents,
-    const GURL& idp_signin_url,
-    IdProviderWindowClosedCallback callback) {
-  GetOrCreateView(rp_web_contents)
-      .ShowSigninPage(idp_web_contents, idp_signin_url, std::move(callback));
-}
-
-void IdentityDialogController::CloseIdProviderWindow() {
-  // TODO(majidvp): This may race with user closing the signin window directly.
-  // So we should not really check the signin_window_ instead we should setup
-  // the on_close callback here here and check that to avoid lifetime issues.
-  if (!view_)
-    return;
-
-  // Note that this leads to the window closed callback being run. If the
-  // token exchange permission dialog does not need to be displayed, the
-  // identity request will be completed synchronously and this controller will
-  // be destroyed.
-  // TODO(kenrb, majidvp): Not knowing whether this object will be destroyed
-  // or not during the callback is problematic. We have to rethink the
-  // lifetimes.
-  view_->CloseSigninPage();
-
-  // Do not touch local state here since |this| is now destroyed.
-}
-
-void IdentityDialogController::ShowTokenExchangePermissionDialog(
-    content::WebContents* rp_web_contents,
-    const GURL& idp_url,
-    TokenExchangeApprovalCallback callback) {
-  auto idp_hostname = base::UTF8ToUTF16(idp_url.GetOrigin().host());
-
-  auto rp_hostname =
-      base::UTF8ToUTF16(rp_web_contents->GetVisibleURL().GetOrigin().host());
-
-  GetOrCreateView(rp_web_contents)
-      .ShowTokenExchangePermission(idp_hostname, rp_hostname,
-                                   std::move(callback));
-}
-
-WebIdDialog& IdentityDialogController::GetOrCreateView(
-    content::WebContents* rp_web_contents) {
-  if (!view_)
-    view_ = WebIdDialog::Create(rp_web_contents);
-
-  // It is expected that we use the same rp_web_contents during the lifetime
-  // of this controller.
-  DCHECK_EQ(view_->rp_web_contents(), rp_web_contents);
-
-  return *view_;
+int IdentityDialogController::GetBrandIconIdealSize() {
+  return AccountSelectionView::GetBrandIconIdealSize();
 }
 
 void IdentityDialogController::ShowAccountsDialog(
     content::WebContents* rp_web_contents,
-    content::WebContents* idp_web_contents,
     const GURL& idp_url,
-    AccountList accounts,
+    base::span<const content::IdentityRequestAccount> accounts,
+    const content::IdentityProviderMetadata& idp_metadata,
+    const content::ClientIdData& client_data,
     content::IdentityRequestAccount::SignInMode sign_in_mode,
-    AccountSelectionCallback on_selected) {
+    AccountSelectionCallback on_selected,
+    DismissCallback dismiss_callback) {
   // IDP scheme is expected to always be `https://`.
   CHECK(idp_url.SchemeIs(url::kHttpsScheme));
-#if !defined(OS_ANDROID)
-  std::move(on_selected).Run(accounts[0].sub);
-#else
   rp_web_contents_ = rp_web_contents;
   on_account_selection_ = std::move(on_selected);
-  const GURL& rp_url = rp_web_contents_->GetLastCommittedURL();
+  on_dismiss_ = std::move(dismiss_callback);
+  std::string rp_for_display =
+      FormatUrlForDisplay(rp_web_contents_->GetLastCommittedURL());
+  std::string idp_for_display = FormatUrlForDisplay(idp_url);
 
   if (!account_view_)
     account_view_ = AccountSelectionView::Create(this);
-
-  account_view_->Show(rp_url, idp_url, accounts, sign_in_mode);
-#endif
+  account_view_->Show(rp_for_display, idp_for_display, accounts, idp_metadata,
+                      client_data, sign_in_mode);
 }
 
 void IdentityDialogController::OnAccountSelected(const Account& account) {
-  std::move(on_account_selection_).Run(account.sub);
+  on_dismiss_.Reset();
+  std::move(on_account_selection_)
+      .Run(account.id,
+           account.login_state ==
+               content::IdentityRequestAccount::LoginState::kSignIn);
 }
 
-void IdentityDialogController::OnDismiss() {
-  std::move(on_account_selection_).Run(std::string());
+void IdentityDialogController::OnDismiss(DismissReason dismiss_reason) {
+  // |OnDismiss| can be called after |OnAccountSelected| which sets the callback
+  // to null.
+  if (on_dismiss_) {
+    on_account_selection_.Reset();
+    std::move(on_dismiss_).Run(dismiss_reason);
+  }
 }
 
 gfx::NativeView IdentityDialogController::GetNativeView() {
   return rp_web_contents_->GetNativeView();
+}
+
+content::WebContents* IdentityDialogController::GetWebContents() {
+  return rp_web_contents_;
+  ;
 }

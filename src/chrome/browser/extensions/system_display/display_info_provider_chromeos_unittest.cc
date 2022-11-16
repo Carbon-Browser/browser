@@ -18,7 +18,6 @@
 #include "ash/shell.h"
 #include "base/bind.h"
 #include "base/command_line.h"
-#include "base/macros.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
 #include "chrome/browser/extensions/system_display/display_info_provider_chromeos.h"
@@ -51,6 +50,11 @@ void ErrorCallback(std::string* result,
 class DisplayInfoProviderChromeosTest : public ChromeAshTestBase {
  public:
   DisplayInfoProviderChromeosTest() {}
+
+  DisplayInfoProviderChromeosTest(const DisplayInfoProviderChromeosTest&) =
+      delete;
+  DisplayInfoProviderChromeosTest& operator=(
+      const DisplayInfoProviderChromeosTest&) = delete;
 
   ~DisplayInfoProviderChromeosTest() override {}
 
@@ -187,8 +191,6 @@ class DisplayInfoProviderChromeosTest : public ChromeAshTestBase {
 
  private:
   std::unique_ptr<ash::CrosDisplayConfig> cros_display_config_;
-
-  DISALLOW_COPY_AND_ASSIGN(DisplayInfoProviderChromeosTest);
 };
 
 TEST_F(DisplayInfoProviderChromeosTest, GetBasic) {
@@ -553,7 +555,7 @@ TEST_F(DisplayInfoProviderChromeosTest, GetVisibleArea) {
   EXPECT_EQ("13,10,13,10", SystemInfoDisplayInsetsToString(result[1].overscan));
 
   GetDisplayManager()->SetOverscanInsets(display_id,
-                                         gfx::Insets(20, 30, 50, 60));
+                                         gfx::Insets::TLBR(20, 30, 50, 60));
   result = GetAllDisplaysInfo();
 
   ASSERT_EQ(2u, result.size());
@@ -571,7 +573,7 @@ TEST_F(DisplayInfoProviderChromeosTest, GetVisibleArea) {
   EXPECT_EQ("9,8,9,8", SystemInfoDisplayInsetsToString(result[0].overscan));
 
   GetDisplayManager()->SetOverscanInsets(display_id,
-                                         gfx::Insets(10, 20, 30, 40));
+                                         gfx::Insets::TLBR(10, 20, 30, 40));
   result = GetAllDisplaysInfo();
 
   ASSERT_EQ(2u, result.size());
@@ -1468,7 +1470,7 @@ TEST_F(DisplayInfoProviderChromeosTest, DisplayMode) {
 TEST_F(DisplayInfoProviderChromeosTest, GetDisplayZoomFactor) {
   UpdateDisplay("1200x600,1600x1000*2");
   display::DisplayIdList display_id_list =
-      display_manager()->GetCurrentDisplayIdList();
+      display_manager()->GetConnectedDisplayIdList();
 
   float zoom_factor_1 = 1.23f;
   float zoom_factor_2 = 2.34f;
@@ -1488,7 +1490,7 @@ TEST_F(DisplayInfoProviderChromeosTest, GetDisplayZoomFactor) {
 TEST_F(DisplayInfoProviderChromeosTest, SetDisplayZoomFactor) {
   UpdateDisplay("1200x600, 1600x1000#1600x1000");
   display::DisplayIdList display_id_list =
-      display_manager()->GetCurrentDisplayIdList();
+      display_manager()->GetConnectedDisplayIdList();
 
   float zoom_factor_1 = 1.23f;
   float zoom_factor_2 = 2.34f;
@@ -1540,7 +1542,7 @@ TEST_F(DisplayInfoProviderChromeosTest, SetDisplayZoomFactor) {
   // to 4096px.
   UpdateDisplay("400x400, 4500x1000#4500x1000");
 
-  display_id_list = display_manager()->GetCurrentDisplayIdList();
+  display_id_list = display_manager()->GetConnectedDisplayIdList();
 
   // Results in a logical width of 500px. This is below the 640px threshold but
   // is valid because the initial width was 400px, so the logical width now
@@ -1574,6 +1576,11 @@ class DisplayInfoProviderChromeosTouchviewTest
  public:
   DisplayInfoProviderChromeosTouchviewTest() {}
 
+  DisplayInfoProviderChromeosTouchviewTest(
+      const DisplayInfoProviderChromeosTouchviewTest&) = delete;
+  DisplayInfoProviderChromeosTouchviewTest& operator=(
+      const DisplayInfoProviderChromeosTouchviewTest&) = delete;
+
   ~DisplayInfoProviderChromeosTouchviewTest() override {}
 
   void SetUp() override {
@@ -1583,9 +1590,6 @@ class DisplayInfoProviderChromeosTouchviewTest
         ash::switches::kAshEnableTabletMode);
     DisplayInfoProviderChromeosTest::SetUp();
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(DisplayInfoProviderChromeosTouchviewTest);
 };
 
 TEST_F(DisplayInfoProviderChromeosTouchviewTest, GetTabletMode) {
@@ -1666,7 +1670,8 @@ TEST_F(DisplayInfoProviderChromeosTest, SetMIXEDMode) {
 
   // Add more displays.
   UpdateDisplay("200x200,600x600,700x700");
-  display::DisplayIdList id_list = display_manager()->GetCurrentDisplayIdList();
+  display::DisplayIdList id_list =
+      display_manager()->GetConnectedDisplayIdList();
   EXPECT_EQ(3U, id_list.size());
 
   {

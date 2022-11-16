@@ -14,8 +14,8 @@
 #include "base/metrics/histogram.h"
 #include "base/notreached.h"
 #include "base/one_shot_event.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
 #include "base/version.h"
@@ -138,9 +138,9 @@ void DispatchOnStartupEventImpl(
     }
   }
 
-  std::unique_ptr<Event> event(new Event(events::RUNTIME_ON_STARTUP,
-                                         runtime::OnStartup::kEventName,
-                                         std::vector<base::Value>()));
+  auto event = std::make_unique<Event>(events::RUNTIME_ON_STARTUP,
+                                       runtime::OnStartup::kEventName,
+                                       base::Value::List());
   EventRouter::Get(browser_context)
       ->DispatchEventToExtension(extension_id, std::move(event));
 }
@@ -182,8 +182,8 @@ void BrowserContextKeyedAPIFactory<RuntimeAPI>::DeclareFactoryDependencies() {
 
 RuntimeAPI::RuntimeAPI(content::BrowserContext* context)
     : browser_context_(context),
-      minimum_duration_between_restarts_(base::TimeDelta::FromHours(
-          kMinDurationBetweenSuccessiveRestartsHours)),
+      minimum_duration_between_restarts_(
+          base::Hours(kMinDurationBetweenSuccessiveRestartsHours)),
       dispatch_chrome_updated_event_(false),
       did_read_delayed_restart_preferences_(false),
       was_last_restart_due_to_delayed_restart_api_(false) {
@@ -361,8 +361,7 @@ void RuntimeAPI::OnExtensionsReady() {
 RuntimeAPI::RestartAfterDelayStatus RuntimeAPI::ScheduleDelayedRestart(
     const base::Time& now,
     int seconds_from_now) {
-  base::TimeDelta delay_till_restart =
-      base::TimeDelta::FromSeconds(seconds_from_now);
+  base::TimeDelta delay_till_restart = base::Seconds(seconds_from_now);
 
   // Throttle restart requests that are received too soon successively, only if
   // the previous restart was due to this API.
@@ -450,7 +449,7 @@ void RuntimeEventRouter::DispatchOnInstalledEvent(
     return;
   }
 
-  std::vector<base::Value> event_args;
+  base::Value::List event_args;
   base::Value info(base::Value::Type::DICTIONARY);
   if (old_version.IsValid()) {
     info.SetStringKey(kInstallReason, kInstallReasonUpdate);
@@ -460,12 +459,12 @@ void RuntimeEventRouter::DispatchOnInstalledEvent(
   } else {
     info.SetStringKey(kInstallReason, kInstallReasonInstall);
   }
-  event_args.push_back(std::move(info));
+  event_args.Append(std::move(info));
   EventRouter* event_router = EventRouter::Get(context);
   DCHECK(event_router);
-  std::unique_ptr<Event> event(new Event(events::RUNTIME_ON_INSTALLED,
-                                         runtime::OnInstalled::kEventName,
-                                         std::move(event_args)));
+  auto event = std::make_unique<Event>(events::RUNTIME_ON_INSTALLED,
+                                       runtime::OnInstalled::kEventName,
+                                       std::move(event_args));
   event_router->DispatchEventWithLazyListener(extension_id, std::move(event));
 
   if (old_version.IsValid()) {
@@ -478,15 +477,15 @@ void RuntimeEventRouter::DispatchOnInstalledEvent(
       for (ExtensionSet::const_iterator i = dependents->begin();
            i != dependents->end();
            i++) {
-        std::vector<base::Value> sm_event_args;
+        base::Value::List sm_event_args;
         base::Value sm_info(base::Value::Type::DICTIONARY);
         sm_info.SetStringKey(kInstallReason, kInstallReasonSharedModuleUpdate);
         sm_info.SetStringKey(kInstallPreviousVersion, old_version.GetString());
         sm_info.SetStringKey(kInstallId, extension_id);
-        sm_event_args.push_back(std::move(sm_info));
-        std::unique_ptr<Event> sm_event(new Event(
+        sm_event_args.Append(std::move(sm_info));
+        auto sm_event = std::make_unique<Event>(
             events::RUNTIME_ON_INSTALLED, runtime::OnInstalled::kEventName,
-            std::move(sm_event_args)));
+            std::move(sm_event_args));
         event_router->DispatchEventWithLazyListener((*i)->id(),
                                                     std::move(sm_event));
       }
@@ -503,13 +502,13 @@ void RuntimeEventRouter::DispatchOnUpdateAvailableEvent(
   if (!system)
     return;
 
-  std::vector<base::Value> args;
-  args.push_back(manifest->Clone());
+  base::Value::List args;
+  args.Append(manifest->Clone());
   EventRouter* event_router = EventRouter::Get(context);
   DCHECK(event_router);
-  std::unique_ptr<Event> event(new Event(events::RUNTIME_ON_UPDATE_AVAILABLE,
-                                         runtime::OnUpdateAvailable::kEventName,
-                                         std::move(args)));
+  auto event = std::make_unique<Event>(events::RUNTIME_ON_UPDATE_AVAILABLE,
+                                       runtime::OnUpdateAvailable::kEventName,
+                                       std::move(args));
   event_router->DispatchEventToExtension(extension_id, std::move(event));
 }
 
@@ -522,10 +521,9 @@ void RuntimeEventRouter::DispatchOnBrowserUpdateAvailableEvent(
 
   EventRouter* event_router = EventRouter::Get(context);
   DCHECK(event_router);
-  std::unique_ptr<Event> event(
-      new Event(events::RUNTIME_ON_BROWSER_UPDATE_AVAILABLE,
-                runtime::OnBrowserUpdateAvailable::kEventName,
-                std::vector<base::Value>()));
+  auto event = std::make_unique<Event>(
+      events::RUNTIME_ON_BROWSER_UPDATE_AVAILABLE,
+      runtime::OnBrowserUpdateAvailable::kEventName, base::Value::List());
   event_router->BroadcastEvent(std::move(event));
 }
 
@@ -655,10 +653,10 @@ ExtensionFunction::ResponseAction RuntimeRequestUpdateCheckFunction::Run() {
 void RuntimeRequestUpdateCheckFunction::CheckComplete(
     const RuntimeAPIDelegate::UpdateCheckResult& result) {
   if (result.success) {
-    std::unique_ptr<base::DictionaryValue> details(new base::DictionaryValue);
-    details->SetString("version", result.version);
+    base::Value::Dict details;
+    details.Set("version", result.version);
     Respond(TwoArguments(base::Value(result.response),
-                         base::Value::FromUniquePtrValue(std::move(details))));
+                         base::Value(std::move(details))));
   } else {
     // HMM(kalman): Why does !success not imply Error()?
     Respond(OneArgument(base::Value(result.response)));
@@ -738,11 +736,10 @@ RuntimeGetPackageDirectoryEntryFunction::Run() {
   content::ChildProcessSecurityPolicy* policy =
       content::ChildProcessSecurityPolicy::GetInstance();
   policy->GrantReadFileSystem(source_process_id(), filesystem.id());
-  std::unique_ptr<base::DictionaryValue> dict(new base::DictionaryValue());
-  dict->SetString("fileSystemId", filesystem.id());
-  dict->SetString("baseName", relative_path);
-  return RespondNow(
-      OneArgument(base::Value::FromUniquePtrValue(std::move(dict))));
+  base::Value::Dict dict;
+  dict.Set("fileSystemId", filesystem.id());
+  dict.Set("baseName", relative_path);
+  return RespondNow(OneArgument(base::Value(std::move(dict))));
 }
 
 }  // namespace extensions

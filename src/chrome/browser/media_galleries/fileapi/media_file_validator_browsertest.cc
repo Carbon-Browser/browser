@@ -4,11 +4,11 @@
 
 #include <stddef.h>
 #include <stdint.h>
+
 #include <utility>
 
 #include "base/bind.h"
 #include "base/callback_helpers.h"
-#include "base/cxx17_backports.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
@@ -24,6 +24,7 @@
 #include "content/public/browser/browser_thread.h"
 #include "content/public/test/browser_test.h"
 #include "storage/browser/file_system/copy_or_move_file_validator.h"
+#include "storage/browser/file_system/copy_or_move_hook_delegate.h"
 #include "storage/browser/file_system/file_system_backend.h"
 #include "storage/browser/file_system/file_system_context.h"
 #include "storage/browser/file_system/file_system_operation_runner.h"
@@ -77,6 +78,9 @@ base::FilePath GetMediaTestDir() {
 class MediaFileValidatorTest : public InProcessBrowserTest {
  public:
   MediaFileValidatorTest() : test_file_size_(0) {}
+
+  MediaFileValidatorTest(const MediaFileValidatorTest&) = delete;
+  MediaFileValidatorTest& operator=(const MediaFileValidatorTest&) = delete;
 
   ~MediaFileValidatorTest() override = default;
 
@@ -222,9 +226,10 @@ class MediaFileValidatorTest : public InProcessBrowserTest {
   void OnTestFilesReady(bool expected_result, bool test_files_ready) {
     ASSERT_TRUE(test_files_ready);
     operation_runner()->Move(
-        move_src_, move_dest_, storage::FileSystemOperation::OPTION_NONE,
+        move_src_, move_dest_,
+        storage::FileSystemOperation::CopyOrMoveOptionSet(),
         storage::FileSystemOperation::ERROR_BEHAVIOR_ABORT,
-        storage::FileSystemOperation::CopyOrMoveProgressCallback(),
+        std::make_unique<storage::CopyOrMoveHookDelegate>(),
         base::BindOnce(&MediaFileValidatorTest::OnMoveResult,
                        base::Unretained(this), expected_result));
   }
@@ -264,34 +269,30 @@ class MediaFileValidatorTest : public InProcessBrowserTest {
 
   base::OnceClosure quit_closure_;
   scoped_refptr<base::SequencedTaskRunner> file_system_runner_;
-
-  DISALLOW_COPY_AND_ASSIGN(MediaFileValidatorTest);
 };
 
 IN_PROC_BROWSER_TEST_F(MediaFileValidatorTest, UnsupportedExtension) {
-  MoveTest("a.txt", std::string(kValidImage, base::size(kValidImage)), false);
+  MoveTest("a.txt", std::string(kValidImage, std::size(kValidImage)), false);
 }
 
 // TODO(crbug.com/1169640): Re-enable. Flaky on Linux.
-#if defined(OS_LINUX)
+#if BUILDFLAG(IS_LINUX)
 #define MAYBE_ValidImage DISABLED_ValidImage
 #else
 #define MAYBE_ValidImage ValidImage
 #endif
 IN_PROC_BROWSER_TEST_F(MediaFileValidatorTest, MAYBE_ValidImage) {
-  MoveTest("a.webp", std::string(kValidImage, base::size(kValidImage)), true);
+  MoveTest("a.webp", std::string(kValidImage, std::size(kValidImage)), true);
 }
 
 IN_PROC_BROWSER_TEST_F(MediaFileValidatorTest, InvalidImage) {
   MoveTest("a.webp",
-           std::string(kInvalidMediaFile, base::size(kInvalidMediaFile)),
-           false);
+           std::string(kInvalidMediaFile, std::size(kInvalidMediaFile)), false);
 }
 
 IN_PROC_BROWSER_TEST_F(MediaFileValidatorTest, InvalidAudio) {
   MoveTest("a.ogg",
-           std::string(kInvalidMediaFile, base::size(kInvalidMediaFile)),
-           false);
+           std::string(kInvalidMediaFile, std::size(kInvalidMediaFile)), false);
 }
 
 IN_PROC_BROWSER_TEST_F(MediaFileValidatorTest, ValidAudio) {

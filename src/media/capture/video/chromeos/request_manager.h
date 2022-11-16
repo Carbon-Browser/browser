@@ -14,6 +14,7 @@
 
 #include "base/containers/flat_map.h"
 #include "base/memory/weak_ptr.h"
+#include "base/time/time.h"
 #include "media/capture/mojom/image_capture.mojom.h"
 #include "media/capture/video/chromeos/camera_app_device_impl.h"
 #include "media/capture/video/chromeos/camera_device_context.h"
@@ -99,6 +100,8 @@ class CAPTURE_EXPORT RequestManager final
     int32_t orientation;
   };
 
+  RequestManager() = delete;
+
   RequestManager(const std::string& device_id,
                  mojo::PendingReceiver<cros::mojom::Camera3CallbackOps>
                      callback_ops_receiver,
@@ -109,6 +112,10 @@ class CAPTURE_EXPORT RequestManager final
                  BlobifyCallback blobify_callback,
                  scoped_refptr<base::SingleThreadTaskRunner> ipc_task_runner,
                  uint32_t device_api_version);
+
+  RequestManager(const RequestManager&) = delete;
+  RequestManager& operator=(const RequestManager&) = delete;
+
   ~RequestManager() override;
 
   // Sets up the stream context and allocate buffers according to the
@@ -382,8 +389,6 @@ class CAPTURE_EXPORT RequestManager final
   uint32_t device_api_version_;
 
   base::WeakPtrFactory<RequestManager> weak_ptr_factory_{this};
-
-  DISALLOW_IMPLICIT_CONSTRUCTORS(RequestManager);
 };
 
 }  // namespace media

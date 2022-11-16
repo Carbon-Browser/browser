@@ -22,8 +22,6 @@
 #error "This file requires ARC support."
 #endif
 
-GREY_STUB_CLASS_IN_APP_MAIN_QUEUE(AutomationAppInterface)
-
 namespace {
 
 static const char kAutofillAutomationSwitch[] = "autofillautomation";
@@ -124,7 +122,7 @@ base::Value RecipeJsonToValue(const std::string& recipe_json) {
       recipeRoot.FindKeyOfType("actions", base::Value::Type::LIST);
   GREYAssert(actionValue, @"Test file is missing actions.");
 
-  base::Value::ConstListView actionsValues(actionValue->GetList());
+  base::Value::ConstListView actionsValues(actionValue->GetListDeprecated());
   GREYAssert(actionsValues.size(), @"Test file has empty actions.");
 
   _actions = [[NSMutableArray alloc] initWithCapacity:actionsValues.size()];

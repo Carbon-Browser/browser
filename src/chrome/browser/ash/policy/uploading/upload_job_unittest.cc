@@ -14,7 +14,6 @@
 #include "base/callback_helpers.h"
 #include "base/containers/queue.h"
 #include "base/location.h"
-#include "base/macros.h"
 #include "base/memory/ptr_util.h"
 #include "base/run_loop.h"
 #include "base/threading/thread_task_runner_handle.h"
@@ -53,6 +52,12 @@ class RepeatingMimeBoundaryGenerator
  public:
   explicit RepeatingMimeBoundaryGenerator(char character)
       : character_(character) {}
+
+  RepeatingMimeBoundaryGenerator(const RepeatingMimeBoundaryGenerator&) =
+      delete;
+  RepeatingMimeBoundaryGenerator& operator=(
+      const RepeatingMimeBoundaryGenerator&) = delete;
+
   ~RepeatingMimeBoundaryGenerator() override {}
 
   // MimeBoundaryGenerator:
@@ -63,8 +68,6 @@ class RepeatingMimeBoundaryGenerator
 
  private:
   const char character_;
-
-  DISALLOW_COPY_AND_ASSIGN(RepeatingMimeBoundaryGenerator);
 };
 
 class FakeOAuth2AccessTokenManagerWithCaching
@@ -72,6 +75,12 @@ class FakeOAuth2AccessTokenManagerWithCaching
  public:
   explicit FakeOAuth2AccessTokenManagerWithCaching(
       OAuth2AccessTokenManager::Delegate* delegate);
+
+  FakeOAuth2AccessTokenManagerWithCaching(
+      const FakeOAuth2AccessTokenManagerWithCaching&) = delete;
+  FakeOAuth2AccessTokenManagerWithCaching& operator=(
+      const FakeOAuth2AccessTokenManagerWithCaching&) = delete;
+
   ~FakeOAuth2AccessTokenManagerWithCaching() override;
 
   // FakeOAuth2AccessTokenManager:
@@ -97,8 +106,6 @@ class FakeOAuth2AccessTokenManagerWithCaching
  private:
   base::queue<std::string> token_replies_;
   std::set<std::string> valid_tokens_;
-
-  DISALLOW_COPY_AND_ASSIGN(FakeOAuth2AccessTokenManagerWithCaching);
 };
 
 FakeOAuth2AccessTokenManagerWithCaching::
@@ -192,7 +199,7 @@ class UploadJobTestBase : public testing::Test, public UploadJob::Delegate {
       : task_environment_(content::BrowserTaskEnvironment::IO_MAINLOOP),
         access_token_manager_(&token_manager_delegate_) {}
 
-  // policy::UploadJob::Delegate:
+  // UploadJob::Delegate:
   void OnSuccess() override {
     if (!expected_error_)
       run_loop_.Quit();
@@ -200,7 +207,7 @@ class UploadJobTestBase : public testing::Test, public UploadJob::Delegate {
       FAIL();
   }
 
-  // policy::UploadJob::Delegate:
+  // UploadJob::Delegate:
   void OnFailure(UploadJob::ErrorCode error_code) override {
     if (expected_error_ && *expected_error_.get() == error_code)
       run_loop_.Quit();
@@ -220,7 +227,7 @@ class UploadJobTestBase : public testing::Test, public UploadJob::Delegate {
         base::MakeRefCounted<network::TestSharedURLLoaderFactory>();
     ASSERT_TRUE(test_server_.Start());
     // Set retry delay to prevent timeouts
-    policy::UploadJobImpl::SetRetryDelayForTesting(0);
+    UploadJobImpl::SetRetryDelayForTesting(0);
   }
 
   // testing::Test:

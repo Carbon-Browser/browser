@@ -6,7 +6,6 @@
 #define CHROME_BROWSER_UI_ANDROID_INFOBARS_SAVE_PASSWORD_INFOBAR_H_
 
 #include "base/android/scoped_java_ref.h"
-#include "base/macros.h"
 #include "chrome/browser/profiles/profile.h"
 #include "components/infobars/android/confirm_infobar.h"
 #include "components/signin/public/identity_manager/account_info.h"
@@ -18,7 +17,11 @@ class SavePasswordInfoBar : public infobars::ConfirmInfoBar {
  public:
   explicit SavePasswordInfoBar(
       std::unique_ptr<SavePasswordInfoBarDelegate> delegate,
-      absl::optional<AccountInfo> account_info);
+      const AccountInfo& account_info);
+
+  SavePasswordInfoBar(const SavePasswordInfoBar&) = delete;
+  SavePasswordInfoBar& operator=(const SavePasswordInfoBar&) = delete;
+
   ~SavePasswordInfoBar() override;
 
  private:
@@ -31,9 +34,7 @@ class SavePasswordInfoBar : public infobars::ConfirmInfoBar {
 
   base::android::ScopedJavaGlobalRef<jobject> java_infobar_;
 
-  absl::optional<AccountInfo> account_info_;
-
-  DISALLOW_COPY_AND_ASSIGN(SavePasswordInfoBar);
+  AccountInfo account_info_;
 };
 
 #endif  // CHROME_BROWSER_UI_ANDROID_INFOBARS_SAVE_PASSWORD_INFOBAR_H_

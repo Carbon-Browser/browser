@@ -9,6 +9,7 @@
 #include "chrome/browser/lacros/browser_test_util.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_window.h"
+#include "chrome/browser/ui/lacros/window_utility.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
@@ -43,7 +44,7 @@ class ClipboardLacrosBrowserTest : public InProcessBrowserTest {
         },
         &run_loop, text);
     base::RepeatingTimer timer;
-    timer.Start(FROM_HERE, base::TimeDelta::FromMilliseconds(1),
+    timer.Start(FROM_HERE, base::Milliseconds(1),
                 std::move(look_for_clipboard_text));
     run_loop.Run();
   }
@@ -64,7 +65,8 @@ IN_PROC_BROWSER_TEST_F(ClipboardLacrosBrowserTest, GetCopyPasteText) {
   aura::Window* window = BrowserView::GetBrowserViewForBrowser(browser())
                              ->frame()
                              ->GetNativeWindow();
-  std::string id = browser_test_util::GetWindowId(window->GetRootWindow());
+  std::string id =
+      lacros_window_utility::GetRootWindowUniqueId(window->GetRootWindow());
   browser_test_util::WaitForWindowCreation(id);
   browser_test_util::SendAndWaitForMouseClick(window->GetRootWindow());
 

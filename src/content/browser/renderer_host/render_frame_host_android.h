@@ -10,10 +10,8 @@
 #include "base/android/jni_android.h"
 #include "base/android/jni_weak_ref.h"
 #include "base/android/scoped_java_ref.h"
-#include "base/compiler_specific.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/supports_user_data.h"
-#include "content/common/content_export.h"
 
 namespace content {
 
@@ -25,6 +23,10 @@ class RenderFrameHostImpl;
 class RenderFrameHostAndroid : public base::SupportsUserData::Data {
  public:
   RenderFrameHostAndroid(RenderFrameHostImpl* render_frame_host);
+
+  RenderFrameHostAndroid(const RenderFrameHostAndroid&) = delete;
+  RenderFrameHostAndroid& operator=(const RenderFrameHostAndroid&) = delete;
+
   ~RenderFrameHostAndroid() override;
 
   base::android::ScopedJavaLocalRef<jobject> GetJavaObject();
@@ -43,6 +45,10 @@ class RenderFrameHostAndroid : public base::SupportsUserData::Data {
       const base::android::JavaParamRef<jobject>&,
       const base::android::JavaParamRef<jobject>& jcallback) const;
 
+  base::android::ScopedJavaLocalRef<jobjectArray> GetAllRenderFrameHosts(
+      JNIEnv* env,
+      const base::android::JavaParamRef<jobject>&) const;
+
   bool IsFeatureEnabled(JNIEnv* env,
                         const base::android::JavaParamRef<jobject>&,
                         jint feature) const;
@@ -55,19 +61,18 @@ class RenderFrameHostAndroid : public base::SupportsUserData::Data {
   void NotifyUserActivation(JNIEnv* env,
                             const base::android::JavaParamRef<jobject>&);
 
-  jboolean SignalModalCloseWatcherIfActive(
+  jboolean SignalCloseWatcherIfActive(
       JNIEnv* env,
       const base::android::JavaParamRef<jobject>&) const;
 
-  jboolean IsRenderFrameCreated(
-      JNIEnv* env,
-      const base::android::JavaParamRef<jobject>&) const;
+  jboolean IsRenderFrameLive(JNIEnv* env,
+                             const base::android::JavaParamRef<jobject>&) const;
 
   void GetInterfaceToRendererFrame(
       JNIEnv* env,
       const base::android::JavaParamRef<jobject>&,
       const base::android::JavaParamRef<jstring>& interface_name,
-      jint message_pipe_handle) const;
+      jlong message_pipe_handle) const;
 
   void TerminateRendererDueToBadMessage(
       JNIEnv* env,
@@ -98,10 +103,8 @@ class RenderFrameHostAndroid : public base::SupportsUserData::Data {
   RenderFrameHostImpl* render_frame_host() const { return render_frame_host_; }
 
  private:
-  RenderFrameHostImpl* const render_frame_host_;
+  const raw_ptr<RenderFrameHostImpl> render_frame_host_;
   JavaObjectWeakGlobalRef obj_;
-
-  DISALLOW_COPY_AND_ASSIGN(RenderFrameHostAndroid);
 };
 
 }  // namespace content

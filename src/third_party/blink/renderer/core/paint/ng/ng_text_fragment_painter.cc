@@ -4,7 +4,6 @@
 
 #include "third_party/blink/renderer/core/paint/ng/ng_text_fragment_painter.h"
 
-#include "cc/input/layer_selection_bound.h"
 #include "third_party/blink/renderer/core/editing/editor.h"
 #include "third_party/blink/renderer/core/editing/frame_selection.h"
 #include "third_party/blink/renderer/core/editing/markers/composition_marker.h"
@@ -26,8 +25,10 @@
 #include "third_party/blink/renderer/core/paint/inline_text_box_painter.h"
 #include "third_party/blink/renderer/core/paint/list_marker_painter.h"
 #include "third_party/blink/renderer/core/paint/ng/ng_highlight_painter.h"
+#include "third_party/blink/renderer/core/paint/ng/ng_inline_paint_context.h"
 #include "third_party/blink/renderer/core/paint/ng/ng_text_decoration_painter.h"
 #include "third_party/blink/renderer/core/paint/ng/ng_text_painter.h"
+#include "third_party/blink/renderer/core/paint/paint_auto_dark_mode.h"
 #include "third_party/blink/renderer/core/paint/paint_info.h"
 #include "third_party/blink/renderer/core/paint/selection_bounds_recorder.h"
 #include "third_party/blink/renderer/core/paint/text_painter_base.h"
@@ -61,10 +62,18 @@ inline PhysicalRect BoxInPhysicalSpace(
     const PhysicalOffset& parent_offset,
     const LayoutNGTextCombine* text_combine) {
   PhysicalRect box_rect;
-  if (const auto* svg_data = cursor.CurrentItem()->SvgFragmentData())
-    box_rect = PhysicalRect::FastAndLossyFromFloatRect(svg_data->rect);
-  else
+  if (const auto* svg_data = cursor.CurrentItem()->SvgFragmentData()) {
+    box_rect = PhysicalRect::FastAndLossyFromRectF(svg_data->rect);
+    const float scale = svg_data->length_adjust_scale;
+    if (scale != 1.0f) {
+      if (cursor.CurrentItem()->IsHorizontal())
+        box_rect.SetWidth(LayoutUnit(svg_data->rect.width() / scale));
+      else
+        box_rect.SetHeight(LayoutUnit(svg_data->rect.height() / scale));
+    }
+  } else {
     box_rect = cursor.CurrentItem()->RectInContainerFragment();
+  }
   box_rect.offset.left += paint_offset.left;
   // We round the y-axis to ensure consistent line heights.
   box_rect.offset.top =
@@ -215,7 +224,7 @@ void NGTextFragmentPainter::Paint(const PaintInfo& paint_info,
       return;
   }
 
-  IntRect visual_rect;
+  gfx::Rect visual_rect;
   const auto* const svg_inline_text =
       DynamicTo<LayoutSVGInlineText>(layout_object);
   float scaling_factor = 1.0f;
@@ -223,13 +232,13 @@ void NGTextFragmentPainter::Paint(const PaintInfo& paint_info,
     DCHECK_EQ(text_item.Type(), NGFragmentItem::kSvgText);
     scaling_factor = svg_inline_text->ScalingFactor();
     DCHECK_NE(scaling_factor, 0.0f);
-    visual_rect = EnclosingIntRect(
+    visual_rect = gfx::ToEnclosingRect(
         svg_inline_text->Parent()->VisualRectInLocalSVGCoordinates());
   } else {
     DCHECK_NE(text_item.Type(), NGFragmentItem::kSvgText);
     PhysicalRect ink_overflow = text_item.SelfInkOverflow();
     ink_overflow.Move(physical_box.offset);
-    visual_rect = EnclosingIntRect(ink_overflow);
+    visual_rect = ToEnclosingRect(ink_overflow);
   }
 
   // Ensure the selection bounds are recorded on the paint chunk regardless of
@@ -298,13 +307,10 @@ void NGTextFragmentPainter::Paint(const PaintInfo& paint_info,
   }
 
   // Set our font.
-  const Font& font = UNLIKELY(svg_inline_text)
-                         ? svg_inline_text->ScaledFont()
-                         : UNLIKELY(text_combine)
-                               ? text_combine->UsesCompressedFont()
-                                     ? text_combine->CompressedFont()
-                                     : style.GetFont()
-                               : style.GetFont();
+  const Font& font =
+      UNLIKELY(text_combine && text_combine->UsesCompressedFont())
+          ? text_combine->CompressedFont()
+          : text_item.ScaledFont();
   const SimpleFontData* font_data = font.PrimaryFont();
   DCHECK(font_data);
 
@@ -320,10 +326,15 @@ void NGTextFragmentPainter::Paint(const PaintInfo& paint_info,
           : physical_box.offset.top + ascent);
 
   NGTextPainter text_painter(context, font, fragment_paint_info, visual_rect,
-                             text_origin, physical_box, is_horizontal);
+                             text_origin, physical_box, inline_context_,
+                             is_horizontal);
+  NGTextDecorationPainter decoration_painter(text_painter, text_item,
+                                             paint_info, style, text_style,
+                                             rotated_box, selection);
   NGHighlightPainter highlight_painter(
-      text_painter, paint_info, cursor_, *cursor_.CurrentItem(),
-      physical_box.offset, style, selection, is_printing);
+      fragment_paint_info, text_painter, decoration_painter, paint_info,
+      cursor_, *cursor_.CurrentItem(), rotation, rotated_box,
+      physical_box.offset, style, text_style, selection, is_printing);
 
   if (svg_inline_text) {
     NGTextPainter::SvgTextPaintState& svg_state = text_painter.SetSvgState(
@@ -368,13 +379,10 @@ void NGTextFragmentPainter::Paint(const PaintInfo& paint_info,
     }
 
     // We need to use physical coordinates when invalidating.
-    if (paint_marker_backgrounds && recorder)
-      recorder->UniteVisualRect(EnclosingIntRect(physical_selection));
+    if (paint_marker_backgrounds && recorder) {
+      recorder->UniteVisualRect(ToEnclosingRect(physical_selection));
+    }
   }
-
-  NGTextDecorationPainter decoration_painter(
-      text_painter, text_item, paint_info, style, text_style, rotated_box,
-      highlight_painter.Selection());
 
   // 2. Now paint the foreground, including text and decorations.
   // TODO(dazabani@igalia.com): suppress text proper where one or more highlight
@@ -389,48 +397,73 @@ void NGTextFragmentPainter::Paint(const PaintInfo& paint_info,
     if (auto* layout_text = DynamicTo<LayoutText>(node->GetLayoutObject()))
       node_id = layout_text->EnsureNodeId();
   }
+  NGInlinePaintContext::ScopedPaintOffset scoped_paint_offset(paint_offset,
+                                                              inline_context_);
+
+  AutoDarkMode auto_dark_mode(
+      PaintAutoDarkMode(style, DarkModeFilter::ElementRole::kForeground));
 
   const unsigned length = fragment_paint_info.to - fragment_paint_info.from;
   const unsigned start_offset = fragment_paint_info.from;
   const unsigned end_offset = fragment_paint_info.to;
-
-  if (LIKELY(!highlight_painter.Selection())) {
-    decoration_painter.Begin(NGTextDecorationPainter::kOriginating);
-    decoration_painter.PaintExceptLineThrough();
-    text_painter.Paint(start_offset, end_offset, length, text_style, node_id);
-    decoration_painter.PaintOnlyLineThrough();
-  } else if (!highlight_painter.Selection()->ShouldPaintSelectedTextOnly()) {
-    decoration_painter.Begin(NGTextDecorationPainter::kOriginating);
-    decoration_painter.PaintExceptLineThrough();
-    highlight_painter.Selection()->PaintSuppressingTextProperWhereSelected(
-        text_painter, start_offset, end_offset, length, text_style, node_id);
-    decoration_painter.PaintOnlyLineThrough();
+  NGHighlightPainter::Case highlight_case = highlight_painter.PaintCase();
+  switch (highlight_case) {
+    case NGHighlightPainter::kNoHighlights:
+    case NGHighlightPainter::kFastSpellingGrammar:
+      // Fast path: just paint the text, including its shadows.
+      decoration_painter.Begin(NGTextDecorationPainter::kOriginating);
+      decoration_painter.PaintExceptLineThrough();
+      text_painter.Paint(start_offset, end_offset, length, text_style, node_id,
+                         auto_dark_mode);
+      decoration_painter.PaintOnlyLineThrough();
+      if (highlight_case == NGHighlightPainter::kFastSpellingGrammar)
+        highlight_painter.FastPaintSpellingGrammarDecorations();
+      break;
+    case NGHighlightPainter::kOverlay:
+      // Slow path: paint suppressing text proper where highlighted, then
+      // paint each highlight overlay, suppressing unless topmost highlight.
+      highlight_painter.PaintOriginatingText(text_style, node_id);
+      highlight_painter.PaintHighlightOverlays(
+          text_style, node_id, paint_marker_backgrounds, rotation);
+      break;
+    case NGHighlightPainter::kOldSelection:
+      // Slow path: paint suppressing text proper where ::selection active.
+      decoration_painter.Begin(NGTextDecorationPainter::kOriginating);
+      decoration_painter.PaintExceptLineThrough();
+      highlight_painter.Selection()->PaintSuppressingTextProperWhereSelected(
+          text_painter, start_offset, end_offset, length, text_style, node_id,
+          auto_dark_mode);
+      decoration_painter.PaintOnlyLineThrough();
+      break;
+    case NGHighlightPainter::kSelectionOnly:
+      // Do nothing, and paint the selection later.
+      break;
   }
 
-  // 3. Paint CSS highlight overlays, such as ::selection and ::target-text.
-  // For each overlay, we paint its background, then its shadows, then the text
-  // with any decorations it defines, and all of the ::selection overlay parts
-  // are painted over any ::target-text overlay parts, and so on. The text
-  // proper (as opposed to shadows) is only painted by the topmost overlay
-  // applying to a piece of text (if any), and suppressed everywhere else.
-  // TODO(dazabani@igalia.com): implement this for the other highlight pseudos
-  if (UNLIKELY(highlight_painter.Selection())) {
+  // Paint ::selection background.
+  if (UNLIKELY(highlight_case == NGHighlightPainter::kOldSelection)) {
     if (paint_marker_backgrounds) {
       highlight_painter.Selection()->PaintSelectionBackground(
           context, node, document, style, rotation);
     }
-
-    // Paint only the text that is selected.
-    decoration_painter.Begin(NGTextDecorationPainter::kSelection);
-    decoration_painter.PaintExceptLineThrough();
-    highlight_painter.Selection()->PaintSelectedText(text_painter, length,
-                                                     text_style, node_id);
-    decoration_painter.PaintOnlyLineThrough();
   }
 
-  if (paint_info.phase != PaintPhase::kForeground)
-    return;
-  highlight_painter.Paint(NGHighlightPainter::kForeground);
+  // Paint foregrounds for document markers that don’t participate in the CSS
+  // highlight overlay system, such as composition highlights.
+  if (paint_info.phase == PaintPhase::kForeground) {
+    highlight_painter.Paint(NGHighlightPainter::kForeground);
+  }
+
+  // Paint ::selection foreground only (for selection drag image only, unless
+  // HighlightOverlayPainting is disabled).
+  if (UNLIKELY(highlight_case == NGHighlightPainter::kSelectionOnly ||
+               highlight_case == NGHighlightPainter::kOldSelection)) {
+    decoration_painter.Begin(NGTextDecorationPainter::kSelection);
+    decoration_painter.PaintExceptLineThrough();
+    highlight_painter.Selection()->PaintSelectedText(
+        text_painter, length, text_style, node_id, auto_dark_mode);
+    decoration_painter.PaintOnlyLineThrough();
+  }
 }
 
 }  // namespace blink

@@ -13,12 +13,14 @@
 #include "base/check.h"
 #include "base/command_line.h"
 #include "base/feature_list.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/synchronization/lock.h"
 #include "base/task/task_traits.h"
 #include "base/thread_annotations.h"
+#include "build/chromeos_buildflags.h"
 #include "chrome/browser/content_settings/cookie_settings_factory.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/url_constants.h"
@@ -95,7 +97,7 @@ class ExtensionSpecialStoragePolicy::CookieSettingsObserver
   const scoped_refptr<content_settings::CookieSettings> cookie_settings_;
 
   base::Lock policy_lock_;
-  ExtensionSpecialStoragePolicy* weak_policy_ GUARDED_BY(policy_lock_);
+  raw_ptr<ExtensionSpecialStoragePolicy> weak_policy_ GUARDED_BY(policy_lock_);
 };
 
 ExtensionSpecialStoragePolicy::ExtensionSpecialStoragePolicy(
@@ -152,11 +154,9 @@ ExtensionSpecialStoragePolicy::CreateDeleteCookieOnExitPredicate() {
   // Fetch the list of cookies related content_settings and bind it
   // to CookieSettings::ShouldDeleteCookieOnExit to avoid fetching it on
   // every call.
-  ContentSettingsForOneType entries;
-  cookie_settings_->GetCookieSettings(&entries);
   return base::BindRepeating(
       &content_settings::CookieSettings::ShouldDeleteCookieOnExit,
-      cookie_settings_, std::move(entries));
+      cookie_settings_, cookie_settings_->GetCookieSettings());
 }
 
 bool ExtensionSpecialStoragePolicy::HasSessionOnlyOrigins() {
@@ -165,10 +165,9 @@ bool ExtensionSpecialStoragePolicy::HasSessionOnlyOrigins() {
   if (cookie_settings_->GetDefaultCookieSetting(NULL) ==
       CONTENT_SETTING_SESSION_ONLY)
     return true;
-  ContentSettingsForOneType entries;
-  cookie_settings_->GetCookieSettings(&entries);
-  for (size_t i = 0; i < entries.size(); ++i) {
-    if (entries[i].GetContentSetting() == CONTENT_SETTING_SESSION_ONLY)
+  for (const ContentSettingPatternSource& entry :
+       cookie_settings_->GetCookieSettings()) {
+    if (entry.GetContentSetting() == CONTENT_SETTING_SESSION_ONLY)
       return true;
   }
   return false;
@@ -185,9 +184,8 @@ bool ExtensionSpecialStoragePolicy::IsStorageDurable(const GURL& origin) {
 
 bool ExtensionSpecialStoragePolicy::NeedsProtection(
     const extensions::Extension* extension) {
-  // We only consider "protecting" storage for hosted apps (excluding bookmark
-  // apps, which are only hosted apps as an implementation detail).
-  if (!extension->is_hosted_app() || extension->from_bookmark())
+  // We only consider "protecting" storage for hosted apps.
+  if (!extension->is_hosted_app())
     return false;
 
   // Default-installed apps don't have protected storage.

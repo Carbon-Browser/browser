@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "third_party/blink/public/platform/media/multi_buffer_data_source.h"
+#include "third_party/blink/renderer/platform/media/multi_buffer_data_source.h"
 
 #include <utility>
 
@@ -11,10 +11,10 @@
 #include "base/cxx17_backports.h"
 #include "base/location.h"
 #include "base/numerics/safe_conversions.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "media/base/media_log.h"
 #include "net/base/net_errors.h"
-#include "third_party/blink/public/platform/media/buffered_data_source_host_impl.h"
+#include "third_party/blink/renderer/platform/media/buffered_data_source_host_impl.h"
 #include "third_party/blink/renderer/platform/media/multi_buffer_reader.h"
 #include "url/gurl.h"
 
@@ -58,7 +58,7 @@ const int kSlowPreloadPercentage = 10;
 const int kUpdateBufferSizeFrequency = 32;
 
 // How long to we delay a seek after a read?
-constexpr base::TimeDelta kSeekDelay = base::TimeDelta::FromMilliseconds(20);
+constexpr base::TimeDelta kSeekDelay = base::Milliseconds(20);
 
 }  // namespace
 
@@ -231,7 +231,8 @@ void MultiBufferDataSource::OnRedirected(
     StopLoader();
     return;
   }
-  if (url_data_->url().GetOrigin() != new_destination->url().GetOrigin()) {
+  if (url_data_->url().DeprecatedGetOriginAsURL() !=
+      new_destination->url().DeprecatedGetOriginAsURL()) {
     single_origin_ = false;
   }
   SetReader(nullptr);
@@ -411,7 +412,7 @@ void MultiBufferDataSource::Read(int64_t position,
     // muxing as soon as possible. This works because TryReadAt is
     // thread-safe.
     if (reader_) {
-      int bytes_read = reader_->TryReadAt(position, data, size);
+      int64_t bytes_read = reader_->TryReadAt(position, data, size);
       if (bytes_read > 0) {
         bytes_read_ += bytes_read;
         seek_positions_.push_back(position + bytes_read);
@@ -423,7 +424,7 @@ void MultiBufferDataSource::Read(int64_t position,
               kSeekDelay);
         }
 
-        std::move(read_cb).Run(bytes_read);
+        std::move(read_cb).Run(static_cast<int>(bytes_read));
         return;
       }
     }
@@ -456,7 +457,6 @@ void MultiBufferDataSource::ReadTask() {
   DCHECK(render_task_runner_->BelongsToCurrentThread());
 
   base::AutoLock auto_lock(lock_);
-  int bytes_read = 0;
   if (stop_signal_received_ || !read_op_)
     return;
   DCHECK(read_op_->size());
@@ -471,8 +471,7 @@ void MultiBufferDataSource::ReadTask() {
     return;
   }
   if (available) {
-    bytes_read =
-        static_cast<int>(std::min<int64_t>(available, read_op_->size()));
+    int64_t bytes_read = std::min<int64_t>(available, read_op_->size());
     bytes_read =
         reader_->TryReadAt(read_op_->position(), read_op_->data(), bytes_read);
 
@@ -488,7 +487,7 @@ void MultiBufferDataSource::ReadTask() {
         host_->SetTotalBytes(total_bytes_);
     }
 
-    ReadOperation::Run(std::move(read_op_), bytes_read);
+    ReadOperation::Run(std::move(read_op_), static_cast<int>(bytes_read));
 
     SeekTask_Locked();
   } else {

@@ -6,6 +6,7 @@
 
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/core/layout/ng/exclusions/ng_exclusion.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
 
 namespace blink {
 
@@ -156,7 +157,12 @@ NGLayoutOpportunity CreateLayoutOpportunity(
 }  // namespace
 
 NGExclusionSpaceInternal::NGExclusionSpaceInternal()
-    : exclusions_(MakeGarbageCollected<NGExclusionPtrArray>()) {}
+    : exclusions_(MakeGarbageCollected<NGExclusionPtrArray>()),
+      track_shape_exclusions_(false),
+      has_break_before_left_float_(false),
+      has_break_before_right_float_(false),
+      has_break_inside_left_float_(false),
+      has_break_inside_right_float_(false) {}
 
 NGExclusionSpaceInternal::NGExclusionSpaceInternal(
     const NGExclusionSpaceInternal& other)
@@ -166,6 +172,10 @@ NGExclusionSpaceInternal::NGExclusionSpaceInternal(
       right_clear_offset_(other.right_clear_offset_),
       last_float_block_start_(other.last_float_block_start_),
       track_shape_exclusions_(other.track_shape_exclusions_),
+      has_break_before_left_float_(other.has_break_before_left_float_),
+      has_break_before_right_float_(other.has_break_before_right_float_),
+      has_break_inside_left_float_(other.has_break_inside_left_float_),
+      has_break_inside_right_float_(other.has_break_inside_right_float_),
       derived_geometry_(std::move(other.derived_geometry_)) {
   // This copy-constructor does fun things. It moves the derived_geometry_ to
   // the newly created exclusion space where it'll more-likely be used.
@@ -180,6 +190,10 @@ NGExclusionSpaceInternal& NGExclusionSpaceInternal::operator=(
   right_clear_offset_ = other.right_clear_offset_;
   last_float_block_start_ = other.last_float_block_start_;
   track_shape_exclusions_ = other.track_shape_exclusions_;
+  has_break_before_left_float_ = other.has_break_before_left_float_;
+  has_break_before_right_float_ = other.has_break_before_right_float_;
+  has_break_inside_left_float_ = other.has_break_inside_left_float_;
+  has_break_inside_right_float_ = other.has_break_inside_right_float_;
   derived_geometry_ = std::move(other.derived_geometry_);
   other.derived_geometry_ = nullptr;
   return *this;
@@ -704,7 +718,11 @@ bool NGExclusionSpaceInternal::operator==(
   if (num_exclusions_ == 0 && other.num_exclusions_ == 0)
     return true;
   return num_exclusions_ == other.num_exclusions_ &&
-         exclusions_ == other.exclusions_;
+         exclusions_ == other.exclusions_ &&
+         has_break_before_left_float_ == other.has_break_before_left_float_ &&
+         has_break_before_right_float_ == other.has_break_before_right_float_ &&
+         has_break_inside_left_float_ == other.has_break_inside_left_float_ &&
+         has_break_inside_right_float_ == other.has_break_inside_right_float_;
 }
 
 }  // namespace blink

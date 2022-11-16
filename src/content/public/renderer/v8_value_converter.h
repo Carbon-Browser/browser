@@ -10,10 +10,11 @@
 #include "base/callback.h"
 #include "content/common/content_export.h"
 #include "third_party/blink/public/platform/web_v8_value_converter.h"
-#include "v8/include/v8.h"
+#include "v8/include/v8-forward.h"
 
 namespace base {
 class Value;
+class ValueView;
 }
 
 namespace content {
@@ -106,8 +107,7 @@ class CONTENT_EXPORT V8ValueConverter : public blink::WebV8ValueConverter {
   // Unsupported types are replaced with null.  If an array or object throws
   // while setting a value, that property or item is skipped, leaving a hole in
   // the case of arrays.
-  // TODO(dcheng): This should just take a const reference.
-  v8::Local<v8::Value> ToV8Value(const base::Value* value,
+  v8::Local<v8::Value> ToV8Value(base::ValueView value,
                                  v8::Local<v8::Context> context) override = 0;
 
   // Converts a v8::Value to base::Value.

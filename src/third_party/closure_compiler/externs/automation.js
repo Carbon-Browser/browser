@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -266,6 +266,28 @@ chrome.automation.RoleType = {
   MARK: 'mark',
   MARQUEE: 'marquee',
   MATH: 'math',
+  MATH_MLFRACTION: 'mathMLFraction',
+  MATH_MLIDENTIFIER: 'mathMLIdentifier',
+  MATH_MLMATH: 'mathMLMath',
+  MATH_MLMULTISCRIPTS: 'mathMLMultiscripts',
+  MATH_MLNONE_SCRIPT: 'mathMLNoneScript',
+  MATH_MLNUMBER: 'mathMLNumber',
+  MATH_MLOPERATOR: 'mathMLOperator',
+  MATH_MLOVER: 'mathMLOver',
+  MATH_MLPRESCRIPT_DELIMITER: 'mathMLPrescriptDelimiter',
+  MATH_MLROOT: 'mathMLRoot',
+  MATH_MLROW: 'mathMLRow',
+  MATH_MLSQUARE_ROOT: 'mathMLSquareRoot',
+  MATH_MLSTRING_LITERAL: 'mathMLStringLiteral',
+  MATH_MLSUB: 'mathMLSub',
+  MATH_MLSUB_SUP: 'mathMLSubSup',
+  MATH_MLSUP: 'mathMLSup',
+  MATH_MLTABLE: 'mathMLTable',
+  MATH_MLTABLE_CELL: 'mathMLTableCell',
+  MATH_MLTABLE_ROW: 'mathMLTableRow',
+  MATH_MLTEXT: 'mathMLText',
+  MATH_MLUNDER: 'mathMLUnder',
+  MATH_MLUNDER_OVER: 'mathMLUnderOver',
   MENU: 'menu',
   MENU_BAR: 'menuBar',
   MENU_ITEM: 'menuItem',
@@ -422,7 +444,6 @@ chrome.automation.TreeChangeType = {
  * @see https://developer.chrome.com/extensions/automation#type-NameFromType
  */
 chrome.automation.NameFromType = {
-  UNINITIALIZED: 'uninitialized',
   ATTRIBUTE: 'attribute',
   ATTRIBUTE_EXPLICITLY_EMPTY: 'attributeExplicitlyEmpty',
   CAPTION: 'caption',
@@ -439,10 +460,13 @@ chrome.automation.NameFromType = {
  */
 chrome.automation.DescriptionFromType = {
   ARIA_DESCRIPTION: 'ariaDescription',
+  ATTRIBUTE_EXPLICITLY_EMPTY: 'attributeExplicitlyEmpty',
   BUTTON_LABEL: 'buttonLabel',
+  POPUP_ELEMENT: 'popupElement',
   RELATED_ELEMENT: 'relatedElement',
   RUBY_ANNOTATION: 'rubyAnnotation',
   SUMMARY: 'summary',
+  SVG_DESC_ELEMENT: 'svgDescElement',
   TABLE_CAPTION: 'tableCaption',
   TITLE: 'title',
 };
@@ -486,6 +510,15 @@ chrome.automation.AriaCurrentState = {
 
 /**
  * @enum {string}
+ * @see https://developer.chrome.com/extensions/automation#type-InvalidState
+ */
+chrome.automation.InvalidState = {
+  FALSE: 'false',
+  TRUE: 'true',
+};
+
+/**
+ * @enum {string}
  * @see https://developer.chrome.com/extensions/automation#type-DefaultActionVerb
  */
 chrome.automation.DefaultActionVerb = {
@@ -510,6 +543,7 @@ chrome.automation.MarkerType = {
   TEXT_MATCH: 'textMatch',
   ACTIVE_SUGGESTION: 'activeSuggestion',
   SUGGESTION: 'suggestion',
+  HIGHLIGHT: 'highlight',
 };
 
 /**
@@ -1164,7 +1198,7 @@ chrome.automation.AutomationNode.prototype.state;
 
 /**
  * The rendered location (as a bounding box) of this node in global screen coordinates.
- * @type {(!chrome.automation.Rect|undefined)}
+ * @type {!chrome.automation.Rect}
  * @see https://developer.chrome.com/extensions/automation#type-location
  */
 chrome.automation.AutomationNode.prototype.location;
@@ -1853,6 +1887,34 @@ chrome.automation.AutomationNode.prototype.containerLiveAtomic;
 chrome.automation.AutomationNode.prototype.containerLiveBusy;
 
 /**
+ * Whether or not this node is a button.
+ * @type {boolean}
+ * @see https://developer.chrome.com/extensions/automation#type-isButton
+ */
+chrome.automation.AutomationNode.prototype.isButton;
+
+/**
+ * Whether or not this node is a checkbox.
+ * @type {boolean}
+ * @see https://developer.chrome.com/extensions/automation#type-isCheckBox
+ */
+chrome.automation.AutomationNode.prototype.isCheckBox;
+
+/**
+ * Whether or not this node is a combobox.
+ * @type {boolean}
+ * @see https://developer.chrome.com/extensions/automation#type-isComboBox
+ */
+chrome.automation.AutomationNode.prototype.isComboBox;
+
+/**
+ * Whether or not this node is an image.
+ * @type {boolean}
+ * @see https://developer.chrome.com/extensions/automation#type-isImage
+ */
+chrome.automation.AutomationNode.prototype.isImage;
+
+/**
  * Aria auto complete.
  * @type {(string|undefined)}
  * @see https://developer.chrome.com/extensions/automation#type-autoComplete
@@ -2056,6 +2118,13 @@ chrome.automation.AutomationNode.prototype.nonAtomicTextFieldRoot;
 chrome.automation.AutomationNode.prototype.ariaCurrentState;
 
 /**
+ * Indicates invalid-state.
+ * @type {(!chrome.automation.InvalidState|undefined)}
+ * @see https://developer.chrome.com/extensions/automation#type-invalidState
+ */
+chrome.automation.AutomationNode.prototype.invalidState;
+
+/**
  * The application id for a tree rooted at this node.
  * @type {(string|undefined)}
  * @see https://developer.chrome.com/extensions/automation#type-appId
@@ -2136,6 +2205,13 @@ chrome.automation.AutomationNode.prototype.indexInParent;
  * @see https://developer.chrome.com/extensions/automation#type-sortDirection
  */
 chrome.automation.AutomationNode.prototype.sortDirection;
+
+/**
+ * Explicitly set to true when this node is clickable.
+ * @type {boolean}
+ * @see https://developer.chrome.com/extensions/automation#type-clickable
+ */
+chrome.automation.AutomationNode.prototype.clickable;
 
 /**
  * Does the default action based on this node's role. This is generally the same

@@ -14,6 +14,7 @@
 #include "base/memory/discardable_memory_allocator.h"
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/notreached.h"
+#include "base/test/task_environment.h"
 #include "base/test/test_discardable_memory_allocator.h"
 #include "base/unguessable_token.h"
 #include "cc/paint/paint_canvas.h"
@@ -276,6 +277,9 @@ class PaintPreviewRecorderUtilsSerializeAsSkPictureTest
   // Valid after SetUp() until SerializeAsSkPicture() is called.
   cc::PaintCanvas* canvas{};
 
+ protected:
+  base::test::TaskEnvironment task_environment_;
+
  private:
   base::TestDiscardableMemoryAllocator test_allocator_;
 };
@@ -312,7 +316,7 @@ TEST_P(PaintPreviewRecorderUtilsSerializeAsSkPictureTest, RoundtripWithImage) {
     SkBitmap bitmap;
     bitmap.allocN32Pixels(dimensions.width(), dimensions.height());
     SkCanvas sk_canvas(bitmap);
-    sk_canvas.drawColor(SK_ColorRED);
+    sk_canvas.drawColor(SkColors::kRed);
     cc::PaintImage paint_image = cc::PaintImage::CreateFromBitmap(bitmap);
     ASSERT_FALSE(paint_image.IsLazyGenerated());
     ASSERT_FALSE(paint_image.IsPaintWorklet());
@@ -361,7 +365,7 @@ TEST_P(PaintPreviewRecorderUtilsSerializeAsSkPictureTest,
     SkBitmap bitmap;
     bitmap.allocN32Pixels(dimensions.width(), dimensions.height());
     SkCanvas sk_canvas(bitmap);
-    sk_canvas.drawColor(SK_ColorRED);
+    sk_canvas.drawColor(SkColors::kRed);
     cc::PaintImage paint_image =
         cc::PaintImageBuilder::WithDefault()
             .set_id(cc::PaintImage::GetNextId())
@@ -393,7 +397,7 @@ TEST_P(PaintPreviewRecorderUtilsSerializeAsSkPictureTest,
     SkBitmap bitmap;
     bitmap.allocN32Pixels(dimensions.width(), dimensions.height());
     SkCanvas sk_canvas(bitmap);
-    sk_canvas.drawColor(SK_ColorRED);
+    sk_canvas.drawColor(SkColors::kRed);
     auto sk_image = SkImage::MakeFromBitmap(bitmap);
     auto data = sk_image->encodeToData();
     auto lazy_sk_image = SkImage::MakeFromEncoded(data);
@@ -432,7 +436,7 @@ TEST_P(PaintPreviewRecorderUtilsSerializeAsSkPictureTest,
     cc::PaintRecorder inner_recorder;
     cc::PaintCanvas* inner_canvas =
         inner_recorder.beginRecording(dimensions.width(), dimensions.width());
-    inner_canvas->drawColor(SK_ColorRED);
+    inner_canvas->drawColor(SkColors::kRed);
     cc::PaintImage paint_image =
         cc::PaintImageBuilder::WithDefault()
             .set_id(1)

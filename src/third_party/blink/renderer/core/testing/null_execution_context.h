@@ -6,14 +6,14 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_TESTING_NULL_EXECUTION_CONTEXT_H_
 
 #include <memory>
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
 #include "third_party/blink/public/mojom/devtools/inspector_issue.mojom-blink.h"
 #include "third_party/blink/renderer/bindings/core/v8/source_location.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/inspector/console_message.h"
 #include "third_party/blink/renderer/core/inspector/inspector_audits_issue.h"
-#include "third_party/blink/renderer/platform/heap/handle.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 
 namespace blink {
@@ -31,6 +31,7 @@ class NullExecutionContext : public GarbageCollected<NullExecutionContext>,
   KURL CompleteURL(const String&) const override { return url_; }
 
   void DisableEval(const String&) override {}
+  void SetWasmEvalErrorMessage(const String&) override {}
   String UserAgent() const override { return String(); }
 
   HttpsState GetHttpsState() const override {
@@ -49,7 +50,9 @@ class NullExecutionContext : public GarbageCollected<NullExecutionContext>,
 
   ResourceFetcher* Fetcher() override { return nullptr; }
   bool CrossOriginIsolatedCapability() const override { return false; }
-  bool DirectSocketCapability() const override { return false; }
+  bool IsolatedApplicationCapability() const override { return false; }
+  ukm::UkmRecorder* UkmRecorder() override { return nullptr; }
+  ukm::SourceId UkmSourceID() const override { return ukm::kInvalidSourceId; }
   FrameOrWorkerScheduler* GetScheduler() override;
   scoped_refptr<base::SingleThreadTaskRunner> GetTaskRunner(TaskType) override;
 

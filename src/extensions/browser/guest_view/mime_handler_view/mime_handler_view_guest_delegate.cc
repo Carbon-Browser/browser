@@ -7,13 +7,13 @@
 namespace extensions {
 
 bool MimeHandlerViewGuestDelegate::HandleContextMenu(
-    content::WebContents* web_contents,
+    content::RenderFrameHost& render_frame_host,
     const content::ContextMenuParams& params) {
   return false;
 }
 
 void MimeHandlerViewGuestDelegate::RecordLoadMetric(
-    bool in_main_frame,
+    bool is_full_page,
     const std::string& mime_type) {}
 
 }  // namespace extensions

@@ -44,7 +44,8 @@ std::string IconsKey(const std::string& id) {
 std::string CreateSerializedContentEntry(
     const blink::mojom::ContentDescription& description,
     const GURL& launch_url,
-    base::Time entry_time) {
+    base::Time entry_time,
+    bool is_top_level_context) {
   // Convert description.
   proto::ContentDescription description_proto;
   description_proto.set_id(description.id);
@@ -68,6 +69,7 @@ std::string CreateSerializedContentEntry(
   *entry.mutable_description() = std::move(description_proto);
   entry.set_launch_url(launch_url.spec());
   entry.set_timestamp(entry_time.ToDeltaSinceWindowsEpoch().InMicroseconds());
+  entry.set_is_top_level_context(is_top_level_context);
 
   return entry.SerializeAsString();
 }
@@ -116,11 +118,12 @@ absl::optional<ContentIndexEntry> EntryFromSerializedProto(
 
   auto description = DescriptionFromProto(entry_proto.description());
   base::Time registration_time = base::Time::FromDeltaSinceWindowsEpoch(
-      base::TimeDelta::FromMicroseconds(entry_proto.timestamp()));
+      base::Microseconds(entry_proto.timestamp()));
 
   return ContentIndexEntry(service_worker_registration_id,
                            std::move(description), std::move(launch_url),
-                           registration_time);
+                           registration_time,
+                           entry_proto.is_top_level_context());
 }
 
 }  // namespace
@@ -129,18 +132,21 @@ ContentIndexDatabase::ContentIndexDatabase(
     BrowserContext* browser_context,
     scoped_refptr<ServiceWorkerContextWrapper> service_worker_context)
     : provider_(browser_context->GetContentIndexProvider()),
-      service_worker_context_(std::move(service_worker_context)) {}
+      service_worker_context_(std::move(service_worker_context)) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+}
 
 ContentIndexDatabase::~ContentIndexDatabase() = default;
 
 void ContentIndexDatabase::AddEntry(
     int64_t service_worker_registration_id,
     const url::Origin& origin,
+    bool is_top_level_context,
     blink::mojom::ContentDescriptionPtr description,
     const std::vector<SkBitmap>& icons,
     const GURL& launch_url,
     blink::mojom::ContentIndexService::AddCallback callback) {
-  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   if (blocked_origins_.count(origin)) {
     // TODO(crbug.com/973844): Does this need a more specific error?
@@ -171,7 +177,7 @@ void ContentIndexDatabase::AddEntry(
       base::BindOnce(&ContentIndexDatabase::DidSerializeIcons,
                      weak_ptr_factory_.GetWeakPtr(),
                      service_worker_registration_id, origin,
-                     std::move(description), launch_url,
+                     is_top_level_context, std::move(description), launch_url,
                      std::move(serialized_icons), std::move(callback)));
 
   for (const auto& icon : icons) {
@@ -189,20 +195,23 @@ void ContentIndexDatabase::AddEntry(
 void ContentIndexDatabase::DidSerializeIcons(
     int64_t service_worker_registration_id,
     const url::Origin& origin,
+    bool is_top_level_context,
     blink::mojom::ContentDescriptionPtr description,
     const GURL& launch_url,
     std::unique_ptr<proto::SerializedIcons> serialized_icons,
     blink::mojom::ContentIndexService::AddCallback callback) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   base::Time entry_time = base::Time::Now();
   std::string entry_key = EntryKey(description->id);
   std::string icon_key = IconsKey(description->id);
-  std::string entry_value =
-      CreateSerializedContentEntry(*description, launch_url, entry_time);
+  std::string entry_value = CreateSerializedContentEntry(
+      *description, launch_url, entry_time, is_top_level_context);
   std::string icons_value = serialized_icons->SerializeAsString();
 
   // Entry to pass over to the provider.
   ContentIndexEntry entry(service_worker_registration_id,
-                          std::move(description), launch_url, entry_time);
+                          std::move(description), launch_url, entry_time,
+                          is_top_level_context);
 
   service_worker_context_->StoreRegistrationUserData(
       service_worker_registration_id, blink::StorageKey(origin),
@@ -217,6 +226,7 @@ void ContentIndexDatabase::DidAddEntry(
     blink::mojom::ContentIndexService::AddCallback callback,
     ContentIndexEntry entry,
     blink::ServiceWorkerStatusCode status) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   content_index::RecordDatabaseOperationStatus("Add", status);
 
   if (status != blink::ServiceWorkerStatusCode::kOk) {
@@ -236,7 +246,7 @@ void ContentIndexDatabase::DeleteEntry(
     const url::Origin& origin,
     const std::string& entry_id,
     blink::mojom::ContentIndexService::DeleteCallback callback) {
-  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   DeleteEntryImpl(service_worker_registration_id, origin, entry_id,
                   std::move(callback));
@@ -247,7 +257,7 @@ void ContentIndexDatabase::DeleteEntryImpl(
     const url::Origin& origin,
     const std::string& entry_id,
     blink::mojom::ContentIndexService::DeleteCallback callback) {
-  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   scoped_refptr<ServiceWorkerRegistration> service_worker_registration =
       service_worker_context_->GetLiveRegistration(
@@ -272,6 +282,7 @@ void ContentIndexDatabase::DidDeleteEntry(
     const std::string& entry_id,
     blink::mojom::ContentIndexService::DeleteCallback callback,
     blink::ServiceWorkerStatusCode status) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   content_index::RecordDatabaseOperationStatus("Delete", status);
 
   if (status != blink::ServiceWorkerStatusCode::kOk) {
@@ -289,7 +300,7 @@ void ContentIndexDatabase::GetDescriptions(
     int64_t service_worker_registration_id,
     const url::Origin& origin,
     blink::mojom::ContentIndexService::GetDescriptionsCallback callback) {
-  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   scoped_refptr<ServiceWorkerRegistration> service_worker_registration =
       service_worker_context_->GetLiveRegistration(
@@ -313,6 +324,7 @@ void ContentIndexDatabase::DidGetDescriptions(
     blink::mojom::ContentIndexService::GetDescriptionsCallback callback,
     const std::vector<std::string>& data,
     blink::ServiceWorkerStatusCode status) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   content_index::RecordDatabaseOperationStatus("GetDescriptions", status);
 
   if (status == blink::ServiceWorkerStatusCode::kErrorNotFound) {
@@ -360,7 +372,7 @@ void ContentIndexDatabase::GetIcons(
     int64_t service_worker_registration_id,
     const std::string& description_id,
     ContentIndexContext::GetIconsCallback callback) {
-  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   service_worker_context_->GetRegistrationUserData(
       service_worker_registration_id, {IconsKey(description_id)},
@@ -374,7 +386,7 @@ void ContentIndexDatabase::DidGetSerializedIcons(
     ContentIndexContext::GetIconsCallback callback,
     const std::vector<std::string>& data,
     blink::ServiceWorkerStatusCode status) {
-  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   content_index::RecordDatabaseOperationStatus("GetIcon", status);
 
@@ -421,13 +433,13 @@ void ContentIndexDatabase::DidGetSerializedIcons(
 void ContentIndexDatabase::DidDeserializeIcons(
     ContentIndexContext::GetIconsCallback callback,
     std::unique_ptr<std::vector<SkBitmap>> icons) {
-  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   std::move(callback).Run(std::move(*icons));
 }
 
 void ContentIndexDatabase::GetAllEntries(
     ContentIndexContext::GetAllEntriesCallback callback) {
-  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   service_worker_context_->GetUserDataForAllRegistrationsByKeyPrefix(
       kEntryPrefix,
@@ -439,6 +451,7 @@ void ContentIndexDatabase::DidGetEntries(
     ContentIndexContext::GetAllEntriesCallback callback,
     const std::vector<std::pair<int64_t, std::string>>& user_data,
     blink::ServiceWorkerStatusCode status) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   content_index::RecordDatabaseOperationStatus("GetAllEntries", status);
 
   if (status != blink::ServiceWorkerStatusCode::kOk) {
@@ -485,7 +498,7 @@ void ContentIndexDatabase::GetEntry(
     int64_t service_worker_registration_id,
     const std::string& description_id,
     ContentIndexContext::GetEntryCallback callback) {
-  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   service_worker_context_->GetRegistrationUserData(
       service_worker_registration_id, {EntryKey(description_id)},
@@ -499,6 +512,7 @@ void ContentIndexDatabase::DidGetEntry(
     ContentIndexContext::GetEntryCallback callback,
     const std::vector<std::string>& data,
     blink::ServiceWorkerStatusCode status) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   content_index::RecordDatabaseOperationStatus("GetEntry", status);
 
   if (status != blink::ServiceWorkerStatusCode::kOk) {
@@ -513,7 +527,7 @@ void ContentIndexDatabase::DidGetEntry(
 
 void ContentIndexDatabase::ClearServiceWorkerDataOnCorruption(
     int64_t service_worker_registration_id) {
-  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   service_worker_context_->ClearRegistrationUserDataByKeyPrefixes(
       service_worker_registration_id, {kEntryPrefix, kIconPrefix},
@@ -524,7 +538,7 @@ void ContentIndexDatabase::ClearServiceWorkerDataOnCorruption(
 void ContentIndexDatabase::DeleteItem(int64_t service_worker_registration_id,
                                       const url::Origin& origin,
                                       const std::string& description_id) {
-  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   DeleteEntryImpl(
       service_worker_registration_id, origin, description_id,
@@ -538,7 +552,7 @@ void ContentIndexDatabase::DidDeleteItem(
     const url::Origin& origin,
     const std::string& description_id,
     blink::mojom::ContentIndexError error) {
-  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   if (error != blink::mojom::ContentIndexError::NONE)
     return;
@@ -553,7 +567,7 @@ void ContentIndexDatabase::StartActiveWorkerForDispatch(
     const std::string& description_id,
     blink::ServiceWorkerStatusCode service_worker_status,
     scoped_refptr<ServiceWorkerRegistration> registration) {
-  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   content_index::RecordDisptachStatus("Find", service_worker_status);
 
@@ -576,7 +590,7 @@ void ContentIndexDatabase::DeliverMessageToWorker(
     scoped_refptr<ServiceWorkerRegistration> registration,
     const std::string& description_id,
     blink::ServiceWorkerStatusCode service_worker_status) {
-  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   content_index::RecordDisptachStatus("Start", service_worker_status);
 
@@ -600,17 +614,19 @@ void ContentIndexDatabase::DeliverMessageToWorker(
 void ContentIndexDatabase::DidDispatchEvent(
     const url::Origin& origin,
     blink::ServiceWorkerStatusCode service_worker_status) {
-  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   content_index::RecordDisptachStatus("Dispatch", service_worker_status);
   UnblockOrigin(origin);
 }
 
 void ContentIndexDatabase::BlockOrigin(const url::Origin& origin) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   blocked_origins_[origin]++;
 }
 
 void ContentIndexDatabase::UnblockOrigin(const url::Origin& origin) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(blocked_origins_.count(origin));
   auto it = blocked_origins_.find(origin);
   if (it->second == 1)
@@ -620,14 +636,14 @@ void ContentIndexDatabase::UnblockOrigin(const url::Origin& origin) {
 }
 
 void ContentIndexDatabase::Shutdown() {
-  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   provider_ = nullptr;
 }
 
 void ContentIndexDatabase::NotifyProviderContentAdded(
     std::vector<ContentIndexEntry> entries) {
-  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   if (!provider_)
     return;
@@ -640,7 +656,7 @@ void ContentIndexDatabase::NotifyProviderContentDeleted(
     int64_t service_worker_registration_id,
     const url::Origin& origin,
     const std::string& entry_id) {
-  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   if (!provider_)
     return;

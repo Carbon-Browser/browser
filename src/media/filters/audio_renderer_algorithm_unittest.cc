@@ -20,7 +20,6 @@
 
 #include "base/bind.h"
 #include "base/callback.h"
-#include "base/cxx17_backports.h"
 #include "media/base/audio_buffer.h"
 #include "media/base/audio_bus.h"
 #include "media/base/audio_timestamp_helper.h"
@@ -115,6 +114,8 @@ class AudioRendererAlgorithmTest : public testing::Test {
       format = media::AudioParameters::AUDIO_BITSTREAM_AC3;
     else if (sample_format == kSampleFormatEac3)
       format = media::AudioParameters::AUDIO_BITSTREAM_EAC3;
+    else if (sample_format == kSampleFormatDts)
+      format = media::AudioParameters::AUDIO_BITSTREAM_DTS;
 
     AudioParameters params(format, channel_layout, samples_per_second,
                            frames_per_buffer);
@@ -159,6 +160,13 @@ class AudioRendererAlgorithmTest : public testing::Test {
             sample_format_, channel_layout_,
             ChannelLayoutToChannelCount(channel_layout_), samples_per_second_,
             1, 1, frame_size, kNoTimestamp);
+        break;
+      case kSampleFormatDts:
+      case kSampleFormatDtsxP2:
+        buffer = MakeBitstreamAudioBuffer(
+            sample_format_, channel_layout_,
+            ChannelLayoutToChannelCount(channel_layout_), samples_per_second_,
+            1, 1, frame_size, kFrameSize, kNoTimestamp);
         break;
       default:
         NOTREACHED() << "Unrecognized format " << sample_format_;
@@ -819,7 +827,7 @@ TEST_F(AudioRendererAlgorithmTest, FillBufferOffset) {
   // filled appropriately at normal, above normal, and below normal.
   const int kHalfSize = kFrameSize / 2;
   const float kAudibleRates[] = {1.0f, 2.0f, 0.5f, 5.0f, 0.25f};
-  for (size_t i = 0; i < base::size(kAudibleRates); ++i) {
+  for (size_t i = 0; i < std::size(kAudibleRates); ++i) {
     SCOPED_TRACE(kAudibleRates[i]);
     bus->Zero();
 
@@ -964,7 +972,7 @@ TEST_F(AudioRendererAlgorithmTest, LowLatencyHint) {
   EXPECT_FALSE(algorithm_.IsQueueFull());
 
   // Set a new *slightly higher* hint. Verify we're no longer "adequate".
-  low_latency_hint += base::TimeDelta::FromMilliseconds(10);
+  low_latency_hint += base::Milliseconds(10);
   algorithm_.SetLatencyHint(low_latency_hint);
   EXPECT_FALSE(algorithm_.IsQueueAdequateForPlayback());
 
@@ -1070,9 +1078,9 @@ TEST_F(AudioRendererAlgorithmTest, ClampLatencyHint) {
   algorithm_.FlushBuffers();
 
   // Set a crazy high latency hint.
-  algorithm_.SetLatencyHint(base::TimeDelta::FromSeconds(100));
+  algorithm_.SetLatencyHint(base::Seconds(100));
 
-  const base::TimeDelta kDefaultMax = base::TimeDelta::FromSeconds(3);
+  const base::TimeDelta kDefaultMax = base::Seconds(3);
   // Verify "full" and "adequate" thresholds increased, but to a known max well
   // bellow the hinted value.
   EXPECT_GT(algorithm_.QueueCapacity(), default_capacity);
@@ -1083,7 +1091,7 @@ TEST_F(AudioRendererAlgorithmTest, ClampLatencyHint) {
   algorithm_.FlushBuffers();
 
   // Set an impossibly low latency hint.
-  algorithm_.SetLatencyHint(base::TimeDelta::FromSeconds(0));
+  algorithm_.SetLatencyHint(base::Seconds(0));
 
   // Verify "full" and "adequate" thresholds decreased, but to a known minimum
   // well above the hinted value.

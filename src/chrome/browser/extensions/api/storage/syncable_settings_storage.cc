@@ -22,12 +22,12 @@ using value_store::ValueStore;
 namespace extensions {
 
 SyncableSettingsStorage::SyncableSettingsStorage(
-    scoped_refptr<base::ObserverListThreadSafe<SettingsObserver>> observers,
+    SequenceBoundSettingsChangedCallback observer,
     const std::string& extension_id,
     ValueStore* delegate,
     syncer::ModelType sync_type,
     const syncer::SyncableService::StartSyncFlare& flare)
-    : observers_(std::move(observers)),
+    : observer_(std::move(observer)),
       extension_id_(extension_id),
       delegate_(delegate),
       sync_type_(sync_type),
@@ -97,7 +97,8 @@ ValueStore::WriteResult SyncableSettingsStorage::Set(
 }
 
 ValueStore::WriteResult SyncableSettingsStorage::Set(
-    WriteOptions options, const base::DictionaryValue& values) {
+    WriteOptions options,
+    const base::Value::Dict& values) {
   DCHECK(IsOnBackendSequence());
   WriteResult result = HandleResult(delegate_->Set(options, values));
   if (!result.status().ok())
@@ -172,8 +173,7 @@ absl::optional<syncer::ModelError> SyncableSettingsStorage::StartSyncing(
                                       maybe_settings.status().message.c_str()));
   }
 
-  std::unique_ptr<base::DictionaryValue> current_settings =
-      maybe_settings.PassSettings();
+  base::Value::Dict current_settings = maybe_settings.PassSettings();
   return sync_state->DictEmpty()
              ? SendLocalSettingsToSync(std::move(current_settings))
              : OverwriteLocalSettingsWithSync(std::move(sync_state),
@@ -182,21 +182,17 @@ absl::optional<syncer::ModelError> SyncableSettingsStorage::StartSyncing(
 
 absl::optional<syncer::ModelError>
 SyncableSettingsStorage::SendLocalSettingsToSync(
-    std::unique_ptr<base::DictionaryValue> local_state) {
+    base::Value::Dict local_state) {
   DCHECK(IsOnBackendSequence());
 
-  if (local_state->DictEmpty())
+  if (local_state.empty())
     return absl::nullopt;
 
   // Transform the current settings into a list of sync changes.
   value_store::ValueStoreChangeList changes;
-  while (!local_state->DictEmpty()) {
-    // It's not possible to iterate over a DictionaryValue and modify it at the
-    // same time, so hack around that restriction.
-    std::string key = base::DictionaryValue::Iterator(*local_state).key();
-    absl::optional<base::Value> value = local_state->ExtractKey(key);
-    changes.push_back(
-        value_store::ValueStoreChange(key, absl::nullopt, std::move(*value)));
+  for (auto pair : local_state) {
+    changes.push_back(value_store::ValueStoreChange(pair.first, absl::nullopt,
+                                                    std::move(pair.second)));
   }
 
   absl::optional<syncer::ModelError> error =
@@ -209,42 +205,36 @@ SyncableSettingsStorage::SendLocalSettingsToSync(
 absl::optional<syncer::ModelError>
 SyncableSettingsStorage::OverwriteLocalSettingsWithSync(
     std::unique_ptr<base::DictionaryValue> sync_state,
-    std::unique_ptr<base::DictionaryValue> local_state) {
+    base::Value::Dict local_state) {
   DCHECK(IsOnBackendSequence());
   // This is implemented by building up a list of sync changes then sending
   // those to ProcessSyncChanges. This generates events like onStorageChanged.
   std::unique_ptr<SettingSyncDataList> changes(new SettingSyncDataList());
 
-  for (base::DictionaryValue::Iterator it(*local_state); !it.IsAtEnd();
-       it.Advance()) {
-    absl::optional<base::Value> sync_value = sync_state->ExtractKey(it.key());
+  for (auto it : local_state) {
+    absl::optional<base::Value> sync_value = sync_state->ExtractKey(it.first);
     if (sync_value.has_value()) {
-      if (*sync_value == it.value()) {
+      if (*sync_value == it.second) {
         // Sync and local values are the same, no changes to send.
       } else {
         // Sync value is different, update local setting with new value.
         changes->push_back(std::make_unique<SettingSyncData>(
-            syncer::SyncChange::ACTION_UPDATE, extension_id_, it.key(),
+            syncer::SyncChange::ACTION_UPDATE, extension_id_, it.first,
             base::Value::ToUniquePtrValue(std::move(*sync_value))));
       }
     } else {
       // Not synced, delete local setting.
       changes->push_back(std::make_unique<SettingSyncData>(
-          syncer::SyncChange::ACTION_DELETE, extension_id_, it.key(),
+          syncer::SyncChange::ACTION_DELETE, extension_id_, it.first,
           std::unique_ptr<base::Value>(new base::DictionaryValue())));
     }
   }
 
   // Add all new settings to local settings.
-  while (!sync_state->DictEmpty()) {
-    // It's not possible to iterate over a DictionaryValue and modify it at the
-    // same time, so hack around that restriction.
-    std::string key = base::DictionaryValue::Iterator(*sync_state).key();
-    absl::optional<base::Value> value = sync_state->ExtractKey(key);
-    CHECK(value.has_value());
+  for (auto pair : sync_state->DictItems()) {
     changes->push_back(std::make_unique<SettingSyncData>(
-        syncer::SyncChange::ACTION_ADD, extension_id_, key,
-        base::Value::ToUniquePtrValue(std::move(*value))));
+        syncer::SyncChange::ACTION_ADD, extension_id_, pair.first,
+        base::Value::ToUniquePtrValue(std::move(pair.second))));
   }
 
   if (changes->empty())
@@ -287,7 +277,7 @@ absl::optional<syncer::ModelError> SyncableSettingsStorage::ProcessSyncChanges(
             sync_processor_->type()));
         continue;
       }
-      current_value = maybe_settings.settings().ExtractKey(key);
+      current_value = maybe_settings.settings().Extract(key);
     }
 
     syncer::SyncError error;
@@ -342,10 +332,8 @@ absl::optional<syncer::ModelError> SyncableSettingsStorage::ProcessSyncChanges(
 
   sync_processor_->NotifyChanges(changes);
 
-  observers_->Notify(
-      FROM_HERE, &SettingsObserver::OnSettingsChanged, extension_id_,
-      StorageAreaNamespace::kSync,
-      value_store::ValueStoreChange::ToValue(std::move(changes)));
+  observer_->Run(extension_id_, StorageAreaNamespace::kSync,
+                 value_store::ValueStoreChange::ToValue(std::move(changes)));
 
   // TODO(kalman): Something sensible with multiple errors.
   if (errors.empty())

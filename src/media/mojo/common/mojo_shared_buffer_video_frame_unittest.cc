@@ -11,35 +11,19 @@
 
 #include "base/bind.h"
 #include "base/memory/ref_counted.h"
+#include "base/memory/unsafe_shared_memory_region.h"
+#include "base/test/bind.h"
 #include "base/time/time.h"
-#include "mojo/public/cpp/system/buffer.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
 
 namespace media {
 
-namespace {
-
-void CompareDestructionCallbackValues(
-    mojo::SharedBufferHandle expected_handle,
-    size_t expected_handle_size,
-    bool* callback_called,
-    mojo::ScopedSharedBufferHandle actual_handle,
-    size_t actual_handle_size) {
-  // Compare expected vs actual. Ownership of the memory is transferred with
-  // |actual_handle|, thus it is a ScopedSharedBufferHandle.
-  EXPECT_EQ(expected_handle, actual_handle.get());
-  EXPECT_EQ(expected_handle_size, actual_handle_size);
-  *callback_called = true;
-}
-
-}  // namespace
-
 TEST(MojoSharedBufferVideoFrameTest, CreateFrameWithSharedMemoryI420) {
   const int kWidth = 16;
   const int kHeight = 9;
-  const base::TimeDelta kTimestamp = base::TimeDelta::FromMicroseconds(1337);
+  const base::TimeDelta kTimestamp = base::Microseconds(1337);
 
   // Create a MojoSharedBufferVideoFrame which will allocate enough space
   // to hold a 16x9 video frame.
@@ -71,7 +55,7 @@ TEST(MojoSharedBufferVideoFrameTest, CreateFrameWithSharedMemoryI420) {
 TEST(MojoSharedBufferVideoFrameTest, CreateFrameWithSharedMemoryNV12) {
   const int kWidth = 16;
   const int kHeight = 9;
-  const base::TimeDelta kTimestamp = base::TimeDelta::FromMicroseconds(1337);
+  const base::TimeDelta kTimestamp = base::Microseconds(1337);
 
   // Create a MojoSharedBufferVideoFrame which will allocate enough space
   // to hold a 16x9 video frame.
@@ -100,7 +84,7 @@ TEST(MojoSharedBufferVideoFrameTest, CreateFrameWithSharedMemoryNV12) {
 TEST(MojoSharedBufferVideoFrameTest, CreateFrameAndPassSharedMemoryI420) {
   const int kWidth = 32;
   const int kHeight = 18;
-  const base::TimeDelta kTimestamp = base::TimeDelta::FromMicroseconds(1338);
+  const base::TimeDelta kTimestamp = base::Microseconds(1338);
 
   // Some random values to use. Since we actually don't use the data inside the
   // frame, random values are fine (as long as the offsets are within the
@@ -118,16 +102,16 @@ TEST(MojoSharedBufferVideoFrameTest, CreateFrameAndPassSharedMemoryI420) {
   gfx::Rect visible_rect(size);
   size_t requested_size = VideoFrame::AllocationSize(format, size);
   ASSERT_LT(y_offset, requested_size);
-  mojo::ScopedSharedBufferHandle handle =
-      mojo::SharedBufferHandle::Create(requested_size);
-  ASSERT_TRUE(handle.is_valid());
+  auto region = base::UnsafeSharedMemoryRegion::Create(requested_size);
+  ASSERT_TRUE(region.IsValid());
 
   // Allocate frame.
+  const uint32_t offsets[] = {y_offset, u_offset, v_offset};
+  const int32_t strides[] = {y_stride, u_stride, v_stride};
   scoped_refptr<MojoSharedBufferVideoFrame> frame =
-      MojoSharedBufferVideoFrame::Create(
-          format, size, visible_rect, size, std::move(handle), requested_size,
-          {y_offset, u_offset, v_offset}, {y_stride, u_stride, v_stride},
-          kTimestamp);
+      MojoSharedBufferVideoFrame::Create(format, size, visible_rect, size,
+                                         std::move(region), offsets, strides,
+                                         kTimestamp);
   ASSERT_TRUE(frame.get());
   EXPECT_EQ(frame->format(), format);
 
@@ -150,7 +134,7 @@ TEST(MojoSharedBufferVideoFrameTest, CreateFrameAndPassSharedMemoryI420) {
 TEST(MojoSharedBufferVideoFrameTest, CreateFrameAndPassSharedMemoryNV12) {
   const int kWidth = 32;
   const int kHeight = 18;
-  const base::TimeDelta kTimestamp = base::TimeDelta::FromMicroseconds(1338);
+  const base::TimeDelta kTimestamp = base::Microseconds(1338);
 
   // Some random values to use. Since we actually don't use the data inside the
   // frame, random values are fine (as long as the offsets are within the
@@ -166,15 +150,16 @@ TEST(MojoSharedBufferVideoFrameTest, CreateFrameAndPassSharedMemoryNV12) {
   gfx::Rect visible_rect(size);
   size_t requested_size = VideoFrame::AllocationSize(format, size);
   ASSERT_LT(y_offset, requested_size);
-  mojo::ScopedSharedBufferHandle handle =
-      mojo::SharedBufferHandle::Create(requested_size);
-  ASSERT_TRUE(handle.is_valid());
+  auto region = base::UnsafeSharedMemoryRegion::Create(requested_size);
+  ASSERT_TRUE(region.IsValid());
 
   // Allocate frame.
+  const uint32_t offsets[] = {y_offset, uv_offset};
+  const int32_t strides[] = {y_stride, uv_stride};
   scoped_refptr<MojoSharedBufferVideoFrame> frame =
-      MojoSharedBufferVideoFrame::Create(
-          format, size, visible_rect, size, std::move(handle), requested_size,
-          {y_offset, uv_offset}, {y_stride, uv_stride}, kTimestamp);
+      MojoSharedBufferVideoFrame::Create(format, size, visible_rect, size,
+                                         std::move(region), offsets, strides,
+                                         kTimestamp);
   ASSERT_TRUE(frame.get());
   EXPECT_EQ(frame->format(), format);
 
@@ -194,7 +179,7 @@ TEST(MojoSharedBufferVideoFrameTest, CreateFrameAndPassSharedMemoryNV12) {
 TEST(MojoSharedBufferVideoFrameTest, CreateFrameOddWidth) {
   const int kWidth = 15;
   const int kHeight = 9;
-  const base::TimeDelta kTimestamp = base::TimeDelta::FromMicroseconds(1337);
+  const base::TimeDelta kTimestamp = base::Microseconds(1337);
 
   VideoPixelFormat formats[] = {PIXEL_FORMAT_I420, PIXEL_FORMAT_NV12};
   for (auto format : formats) {
@@ -219,33 +204,47 @@ TEST(MojoSharedBufferVideoFrameTest, TestDestructionCallback) {
   const VideoPixelFormat format = PIXEL_FORMAT_I420;
   const int kWidth = 32;
   const int kHeight = 18;
-  const base::TimeDelta kTimestamp = base::TimeDelta::FromMicroseconds(1338);
+  const base::TimeDelta kTimestamp = base::Microseconds(1338);
 
   // Allocate some shared memory.
   gfx::Size size(kWidth, kHeight);
   gfx::Rect visible_rect(size);
   size_t requested_size = VideoFrame::AllocationSize(format, size);
-  mojo::ScopedSharedBufferHandle handle =
-      mojo::SharedBufferHandle::Create(requested_size);
-  ASSERT_TRUE(handle.is_valid());
+  auto region = base::UnsafeSharedMemoryRegion::Create(requested_size);
+  ASSERT_TRUE(region.IsValid());
 
-  // Keep track of the original handle. MojoSharedBufferVideoFrame::Create()
-  // will get ownership of the memory.
-  mojo::SharedBufferHandle original_handle = handle.get();
+  const char kTestData[] = "reduce reuse recycle";
+  {
+    base::WritableSharedMemoryMapping mapping = region.Map();
+    ASSERT_GT(mapping.size(), strlen(kTestData));
+    // Note: deliberately using sizeof() to include the null terminator.
+    memcpy(mapping.memory(), kTestData, sizeof(kTestData));
+  }
 
   // Allocate frame.
+  const uint32_t kOffsets[] = {0, 0, 0};
+  const int32_t kStrides[] = {kWidth, kWidth, kWidth};
   scoped_refptr<MojoSharedBufferVideoFrame> frame =
-      MojoSharedBufferVideoFrame::Create(
-          format, size, visible_rect, size, std::move(handle), requested_size,
-          {0, 0, 0}, {kWidth, kWidth, kWidth}, kTimestamp);
+      MojoSharedBufferVideoFrame::Create(format, size, visible_rect, size,
+                                         std::move(region), kOffsets, kStrides,
+                                         kTimestamp);
   ASSERT_TRUE(frame.get());
   EXPECT_EQ(frame->format(), format);
 
   // Set the destruction callback.
   bool callback_called = false;
-  frame->SetMojoSharedBufferDoneCB(
-      base::BindOnce(&CompareDestructionCallbackValues, original_handle,
-                     requested_size, &callback_called));
+  auto destruction_cb =
+      base::BindLambdaForTesting([&](base::UnsafeSharedMemoryRegion region) {
+        callback_called = true;
+        ASSERT_EQ(requested_size, region.GetSize());
+        // Unsafe regions are always mapped as writable.
+        base::WritableSharedMemoryMapping mapping = region.Map();
+        // Check that the test data that was written there is still there as a
+        // proxy signal for checking that ownership of the shmem region has been
+        // transferred.
+        EXPECT_STREQ(kTestData, mapping.GetMemoryAs<char>());
+      });
+  frame->SetMojoSharedBufferDoneCB(std::move(destruction_cb));
   EXPECT_FALSE(callback_called);
 
   // Force destruction of |frame|.
@@ -257,7 +256,7 @@ TEST(MojoSharedBufferVideoFrameTest, InterleavedData) {
   const VideoPixelFormat format = PIXEL_FORMAT_I420;
   const int kWidth = 32;
   const int kHeight = 18;
-  const base::TimeDelta kTimestamp = base::TimeDelta::FromMicroseconds(1338);
+  const base::TimeDelta kTimestamp = base::Microseconds(1338);
   gfx::Size size(kWidth, kHeight);
   gfx::Rect visible_rect(size);
 
@@ -274,16 +273,16 @@ TEST(MojoSharedBufferVideoFrameTest, InterleavedData) {
 
   // Allocate some shared memory.
   size_t requested_size = VideoFrame::AllocationSize(format, size);
-  mojo::ScopedSharedBufferHandle handle =
-      mojo::SharedBufferHandle::Create(requested_size);
-  ASSERT_TRUE(handle.is_valid());
+  auto region = base::UnsafeSharedMemoryRegion::Create(requested_size);
+  ASSERT_TRUE(region.IsValid());
 
   // Allocate frame.
+  const uint32_t kOffsets[] = {y_offset, u_offset, v_offset};
+  const int32_t kStrides[] = {y_stride, u_stride, v_stride};
   scoped_refptr<MojoSharedBufferVideoFrame> frame =
-      MojoSharedBufferVideoFrame::Create(
-          format, size, visible_rect, size, std::move(handle), requested_size,
-          {y_offset, u_offset, v_offset}, {y_stride, u_stride, v_stride},
-          kTimestamp);
+      MojoSharedBufferVideoFrame::Create(format, size, visible_rect, size,
+                                         std::move(region), kOffsets, kStrides,
+                                         kTimestamp);
   ASSERT_TRUE(frame.get());
   EXPECT_EQ(frame->format(), format);
 
@@ -322,7 +321,8 @@ TEST(MojoSharedBufferVideoFrameTest, I420FrameToMojoFrame) {
   const size_t u_stride = frame->stride(VideoFrame::kUPlane);
 
   // Verifies mapped size and offset.
-  EXPECT_EQ(mojo_frame->MappedSize(), static_cast<size_t>(3 * stride));
+  EXPECT_EQ(mojo_frame->shmem_region().GetSize(),
+            static_cast<size_t>(3 * stride));
   EXPECT_EQ(mojo_frame->PlaneOffset(VideoFrame::kYPlane), 0u);
   EXPECT_EQ(mojo_frame->PlaneOffset(VideoFrame::kUPlane), y_stride);
   EXPECT_EQ(mojo_frame->PlaneOffset(VideoFrame::kVPlane), y_stride + u_stride);
@@ -347,7 +347,8 @@ TEST(MojoSharedBufferVideoFrameTest, NV12FrameToMojoFrame) {
   const size_t y_stride = frame->stride(VideoFrame::kYPlane);
 
   // Verifies mapped size and offset.
-  EXPECT_EQ(mojo_frame->MappedSize(), static_cast<size_t>(2 * stride));
+  EXPECT_EQ(mojo_frame->shmem_region().GetSize(),
+            static_cast<size_t>(2 * stride));
   EXPECT_EQ(mojo_frame->PlaneOffset(VideoFrame::kYPlane), 0u);
   EXPECT_EQ(mojo_frame->PlaneOffset(VideoFrame::kUVPlane), y_stride);
 }

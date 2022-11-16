@@ -11,6 +11,7 @@
 #include "base/check_op.h"
 #include "base/memory/ptr_util.h"
 #include "base/synchronization/lock.h"
+#include "base/time/time.h"
 #include "gpu/command_buffer/client/context_support.h"
 #include "third_party/skia/include/gpu/GrDirectContext.h"
 
@@ -154,7 +155,7 @@ void ContextCacheController::PostIdleCallback(
       FROM_HERE,
       base::BindOnce(&ContextCacheController::OnIdle, weak_ptr_,
                      current_idle_generation),
-      base::TimeDelta::FromSeconds(kIdleCleanupDelaySeconds));
+      base::Seconds(kIdleCleanupDelaySeconds));
 }
 
 void ContextCacheController::InvalidatePendingIdleCallbacks() {

@@ -119,9 +119,7 @@ auto SupportedOutputFormats() {
 // E.g. ".../yuvsTo420v" instead of ".../4"
 std::string TestParametersOSTypeTupleToString(
     testing::TestParamInfo<std::tuple<OSType, OSType>> info) {
-  OSType input_pixel_format;
-  OSType output_pixel_format;
-  std::tie(input_pixel_format, output_pixel_format) = info.param;
+  auto [input_pixel_format, output_pixel_format] = info.param;
   return MacFourCCToString(input_pixel_format) + std::string("To") +
          MacFourCCToString(output_pixel_format);
 }
@@ -187,7 +185,6 @@ base::ScopedCFTypeRef<CVPixelBufferRef> AddPadding(
     int height,
     int padding) {
   size_t num_planes = CVPixelBufferGetPlaneCount(pixel_buffer);
-  size_t padded_size = 0;
   std::vector<size_t> plane_widths;
   std::vector<size_t> plane_heights;
   std::vector<size_t> plane_strides;
@@ -201,7 +198,6 @@ base::ScopedCFTypeRef<CVPixelBufferRef> AddPadding(
       plane_heights.push_back(h);
       plane_widths.push_back(w);
       plane_strides.push_back(padded_stride);
-      padded_size += h * padded_stride;
     }
   } else {
     // CVPixelBufferGetPlaneCount returns 0 for non-planar buffers.
@@ -209,7 +205,6 @@ base::ScopedCFTypeRef<CVPixelBufferRef> AddPadding(
     size_t plane_stride = CVPixelBufferGetBytesPerRow(pixel_buffer);
     size_t padded_stride = plane_stride + padding;
     size_t h = CVPixelBufferGetHeight(pixel_buffer);
-    padded_size += h * padded_stride;
     plane_heights.push_back(h);
     plane_strides.push_back(padded_stride);
   }
@@ -222,9 +217,7 @@ base::ScopedCFTypeRef<CVPixelBufferRef> AddPadding(
     plane_address.push_back(
         calloc(1, plane_strides[plane] * plane_heights[plane]));
     uint8_t* dst_ptr = static_cast<uint8_t*>(plane_address[plane]);
-    uint8_t* src_ptr;
-    size_t plane_stride;
-    std::tie(src_ptr, plane_stride) = GetDataAndStride(pixel_buffer, plane);
+    auto [src_ptr, plane_stride] = GetDataAndStride(pixel_buffer, plane);
     CHECK(dst_ptr);
     CHECK(src_ptr);
     for (size_t r = 0; r < plane_heights[plane]; ++r) {
@@ -381,9 +374,7 @@ class SampleBufferTransformerPixelTransferTest
       public ::testing::WithParamInterface<std::tuple<OSType, OSType>> {};
 
 TEST_P(SampleBufferTransformerPixelTransferTest, CanConvertFullScale) {
-  OSType input_pixel_format;
-  OSType output_pixel_format;
-  std::tie(input_pixel_format, output_pixel_format) = GetParam();
+  auto [input_pixel_format, output_pixel_format] = GetParam();
 
   base::ScopedCFTypeRef<CMSampleBufferRef> input_sample_buffer =
       CreateSampleBuffer(input_pixel_format, kFullResolutionWidth,
@@ -413,9 +404,7 @@ TEST_P(SampleBufferTransformerPixelTransferTest, CanConvertFullScale) {
 #endif
 
 TEST_P(SampleBufferTransformerPixelTransferTest, MAYBE_CanConvertAndScaleDown) {
-  OSType input_pixel_format;
-  OSType output_pixel_format;
-  std::tie(input_pixel_format, output_pixel_format) = GetParam();
+  auto [input_pixel_format, output_pixel_format] = GetParam();
 
   base::ScopedCFTypeRef<CMSampleBufferRef> input_sample_buffer =
       CreateSampleBuffer(input_pixel_format, kFullResolutionWidth,
@@ -441,9 +430,7 @@ TEST_P(SampleBufferTransformerPixelTransferTest, MAYBE_CanConvertAndScaleDown) {
 
 TEST_P(SampleBufferTransformerPixelTransferTest,
        CanConvertAndScaleDownWhenIoSurfaceIsMissing) {
-  OSType input_pixel_format;
-  OSType output_pixel_format;
-  std::tie(input_pixel_format, output_pixel_format) = GetParam();
+  auto [input_pixel_format, output_pixel_format] = GetParam();
 
   base::ScopedCFTypeRef<CMSampleBufferRef> input_sample_buffer =
       CreateSampleBuffer(input_pixel_format, kFullResolutionWidth,
@@ -469,9 +456,7 @@ TEST_P(SampleBufferTransformerPixelTransferTest,
 
 TEST_P(SampleBufferTransformerPixelTransferTest,
        CanConvertWithPaddingFullScale) {
-  OSType input_pixel_format;
-  OSType output_pixel_format;
-  std::tie(input_pixel_format, output_pixel_format) = GetParam();
+  auto [input_pixel_format, output_pixel_format] = GetParam();
   base::ScopedCFTypeRef<CMSampleBufferRef> input_sample_buffer =
       CreateSampleBuffer(input_pixel_format, kFullResolutionWidth,
                          kFullResolutionHeight, kColorR, kColorG, kColorB,
@@ -494,9 +479,7 @@ TEST_P(SampleBufferTransformerPixelTransferTest,
 
 TEST_P(SampleBufferTransformerPixelTransferTest,
        CanConvertAndScaleWithPadding) {
-  OSType input_pixel_format;
-  OSType output_pixel_format;
-  std::tie(input_pixel_format, output_pixel_format) = GetParam();
+  auto [input_pixel_format, output_pixel_format] = GetParam();
   base::ScopedCFTypeRef<CMSampleBufferRef> input_sample_buffer =
       CreateSampleBuffer(input_pixel_format, kFullResolutionWidth,
                          kFullResolutionHeight, kColorR, kColorG, kColorB,
@@ -530,9 +513,7 @@ class SampleBufferTransformerLibyuvTest
       public ::testing::WithParamInterface<std::tuple<OSType, OSType>> {};
 
 TEST_P(SampleBufferTransformerLibyuvTest, CanConvertFullScale) {
-  OSType input_pixel_format;
-  OSType output_pixel_format;
-  std::tie(input_pixel_format, output_pixel_format) = GetParam();
+  auto [input_pixel_format, output_pixel_format] = GetParam();
 
   base::ScopedCFTypeRef<CMSampleBufferRef> input_sample_buffer =
       CreateSampleBuffer(input_pixel_format, kFullResolutionWidth,
@@ -554,9 +535,7 @@ TEST_P(SampleBufferTransformerLibyuvTest, CanConvertFullScale) {
 }
 
 TEST_P(SampleBufferTransformerLibyuvTest, MAYBE_CanConvertAndScaleDown) {
-  OSType input_pixel_format;
-  OSType output_pixel_format;
-  std::tie(input_pixel_format, output_pixel_format) = GetParam();
+  auto [input_pixel_format, output_pixel_format] = GetParam();
 
   base::ScopedCFTypeRef<CMSampleBufferRef> input_sample_buffer =
       CreateSampleBuffer(input_pixel_format, kFullResolutionWidth,
@@ -580,9 +559,7 @@ TEST_P(SampleBufferTransformerLibyuvTest, MAYBE_CanConvertAndScaleDown) {
 }
 
 TEST_P(SampleBufferTransformerLibyuvTest, CanConvertWithPaddingFullScale) {
-  OSType input_pixel_format;
-  OSType output_pixel_format;
-  std::tie(input_pixel_format, output_pixel_format) = GetParam();
+  auto [input_pixel_format, output_pixel_format] = GetParam();
   base::ScopedCFTypeRef<CMSampleBufferRef> input_sample_buffer =
       CreateSampleBuffer(input_pixel_format, kFullResolutionWidth,
                          kFullResolutionHeight, kColorR, kColorG, kColorB,
@@ -603,9 +580,7 @@ TEST_P(SampleBufferTransformerLibyuvTest, CanConvertWithPaddingFullScale) {
 }
 
 TEST_P(SampleBufferTransformerLibyuvTest, CanConvertAndScaleWithPadding) {
-  OSType input_pixel_format;
-  OSType output_pixel_format;
-  std::tie(input_pixel_format, output_pixel_format) = GetParam();
+  auto [input_pixel_format, output_pixel_format] = GetParam();
   base::ScopedCFTypeRef<CMSampleBufferRef> input_sample_buffer =
       CreateSampleBuffer(input_pixel_format, kFullResolutionWidth,
                          kFullResolutionHeight, kColorR, kColorG, kColorB,
@@ -629,9 +604,7 @@ TEST_P(SampleBufferTransformerLibyuvTest, CanConvertAndScaleWithPadding) {
 
 TEST_P(SampleBufferTransformerLibyuvTest,
        CanConvertAndScaleDownWhenIoSurfaceIsMissing) {
-  OSType input_pixel_format;
-  OSType output_pixel_format;
-  std::tie(input_pixel_format, output_pixel_format) = GetParam();
+  auto [input_pixel_format, output_pixel_format] = GetParam();
 
   base::ScopedCFTypeRef<CMSampleBufferRef> input_sample_buffer =
       CreateSampleBuffer(input_pixel_format, kFullResolutionWidth,

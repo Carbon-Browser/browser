@@ -5,7 +5,7 @@
 #include <memory>
 
 #include "base/files/file_util.h"
-#include "base/sequenced_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
@@ -96,7 +96,7 @@ class SSLConfigServiceMojoTestWithCertVerifier : public testing::Test {
   scoped_refptr<CertNetFetcherURLLoader> cert_net_fetcher_url_loader_;
 };
 
-#if !defined(OS_IOS) && !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_IOS) && !BUILDFLAG(IS_ANDROID)
 TEST_F(SSLConfigServiceMojoTestWithCertVerifier, CRLSetIsApplied) {
   mojo::Remote<network::mojom::SSLConfigClient> ssl_config_client;
 
@@ -163,6 +163,6 @@ TEST_F(SSLConfigServiceMojoTestWithCertVerifier, CRLSetIsApplied) {
               net::test::IsError(net::ERR_CERT_REVOKED));
 }
 
-#endif  // !defined(OS_IOS) && !defined(OS_ANDROID)
+#endif  // !BUILDFLAG(IS_IOS) && !BUILDFLAG(IS_ANDROID)
 
 }  // namespace cert_verifier

@@ -10,12 +10,12 @@
 #include "base/feature_list.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/sharing/click_to_call/click_to_call_ui_controller.h"
-#include "chrome/browser/sharing/shared_clipboard/shared_clipboard_ui_controller.h"
 #include "chrome/browser/sharing/sms/sms_remote_fetcher_ui_controller.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/views/autofill/payments/local_card_migration_icon_view.h"
 #include "chrome/browser/ui/views/autofill/payments/offer_notification_icon_view.h"
 #include "chrome/browser/ui/views/autofill/payments/save_payment_icon_view.h"
+#include "chrome/browser/ui/views/autofill/payments/virtual_card_enroll_icon_view.h"
 #include "chrome/browser/ui/views/autofill/payments/virtual_card_manual_fallback_icon_view.h"
 #include "chrome/browser/ui/views/autofill/save_update_address_profile_icon_view.h"
 #include "chrome/browser/ui/views/file_system_access/file_system_access_icon_view.h"
@@ -35,9 +35,10 @@
 #include "chrome/browser/ui/views/sharing/sharing_dialog_view.h"
 #include "chrome/browser/ui/views/sharing/sharing_icon_view.h"
 #include "chrome/browser/ui/views/sharing_hub/sharing_hub_icon_view.h"
+#include "chrome/browser/ui/views/side_search/side_search_icon_view.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_icon_container_view.h"
 #include "chrome/browser/ui/views/translate/translate_icon_view.h"
-#include "chrome/browser/ui/views/webauthn/webauthn_icon_view.h"
+#include "chrome/common/chrome_features.h"
 #include "content/public/common/content_features.h"
 #include "ui/views/animation/ink_drop.h"
 #include "ui/views/layout/box_layout.h"
@@ -173,19 +174,6 @@ void PageActionIconController::Init(const PageActionIconParams& params,
                       params.command_updater, params.icon_label_bubble_delegate,
                       params.page_action_icon_delegate));
         break;
-      case PageActionIconType::kSharedClipboard:
-        add_page_action_icon(
-            type,
-            std::make_unique<SharingIconView>(
-                params.icon_label_bubble_delegate,
-                params.page_action_icon_delegate,
-                base::BindRepeating([](content::WebContents* contents) {
-                  return static_cast<SharingUiController*>(
-                      SharedClipboardUiController::GetOrCreateFromWebContents(
-                          contents));
-                }),
-                base::BindRepeating(SharingDialogView::GetAsBubble)));
-        break;
       case PageActionIconType::kSharingHub:
         add_page_action_icon(
             type, std::make_unique<sharing_hub::SharingHubIconView>(
@@ -205,6 +193,13 @@ void PageActionIconController::Init(const PageActionIconParams& params,
                 }),
                 base::BindRepeating(SharingDialogView::GetAsBubble)));
         break;
+      case PageActionIconType::kSideSearch:
+        DCHECK(params.command_updater);
+        add_page_action_icon(
+            type, std::make_unique<SideSearchIconView>(
+                      params.command_updater, params.icon_label_bubble_delegate,
+                      params.page_action_icon_delegate, params.browser));
+        break;
       case PageActionIconType::kTranslate:
         DCHECK(params.command_updater);
         add_page_action_icon(
@@ -212,10 +207,9 @@ void PageActionIconController::Init(const PageActionIconParams& params,
                       params.command_updater, params.icon_label_bubble_delegate,
                       params.page_action_icon_delegate));
         break;
-      case PageActionIconType::kWebAuthn:
-        DCHECK(base::FeatureList::IsEnabled(features::kWebAuthConditionalUI));
+      case PageActionIconType::kVirtualCardEnroll:
         add_page_action_icon(
-            type, std::make_unique<WebAuthnIconView>(
+            type, std::make_unique<autofill::VirtualCardEnrollIconView>(
                       params.command_updater, params.icon_label_bubble_delegate,
                       params.page_action_icon_delegate));
         break;

@@ -7,6 +7,7 @@
 #include "base/fuchsia/test_component_context_for_process.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
+#include "base/time/time.h"
 #include "media/capture/video/fuchsia/video_capture_device_factory_fuchsia.h"
 #include "media/fuchsia/camera/fake_fuchsia_camera.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -66,11 +67,6 @@ class HeapBufferHandleProvider final
   ~HeapBufferHandleProvider() override = default;
 
   base::UnsafeSharedMemoryRegion DuplicateAsUnsafeRegion() override {
-    NOTREACHED();
-    return {};
-  }
-
-  mojo::ScopedSharedBufferHandle DuplicateAsMojoBuffer() override {
     NOTREACHED();
     return {};
   }
@@ -222,7 +218,8 @@ class VideoCaptureDeviceFuchsiaTest : public testing::Test {
   void CreateDevice() {
     auto devices_info = GetDevicesInfo();
     ASSERT_EQ(devices_info.size(), 1U);
-    device_ = device_factory_.CreateDevice(devices_info[0].descriptor);
+    device_ = device_factory_.CreateDevice(devices_info[0].descriptor)
+                  .ReleaseDevice();
   }
 
   FakeCameraStream* GetDefaultCameraStream() {
@@ -313,8 +310,7 @@ TEST_F(VideoCaptureDeviceFuchsiaTest, MultipleFrames) {
   for (size_t i = 0; i < 10; ++i) {
     ASSERT_TRUE(stream->WaitFreeBuffer());
 
-    auto frame_timestamp =
-        start_timestamp + base::TimeDelta::FromMilliseconds(i * 16);
+    auto frame_timestamp = start_timestamp + base::Milliseconds(i * 16);
     stream->ProduceFrame(frame_timestamp, i);
     client_->WaitFrame();
 
@@ -405,7 +401,8 @@ TEST_F(VideoCaptureDeviceFuchsiaTest,
   base::RunLoop().RunUntilIdle();
 
   // The factory is expected to reconnect DeviceWatcher.
-  device_ = device_factory_.CreateDevice(devices_info[0].descriptor);
+  device_ =
+      device_factory_.CreateDevice(devices_info[0].descriptor).ReleaseDevice();
 
   StartCapturer();
 

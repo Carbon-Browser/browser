@@ -14,6 +14,7 @@
 #include "third_party/blink/renderer/bindings/modules/v8/v8_video_encoder_config.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_video_encoder_encode_options.h"
 #include "third_party/blink/renderer/core/typed_arrays/dom_array_buffer.h"
+#include "third_party/blink/renderer/modules/webcodecs/allow_shared_buffer_source_util.h"
 #include "third_party/blink/renderer/modules/webcodecs/audio_data.h"
 #include "third_party/blink/renderer/modules/webcodecs/encoded_audio_chunk.h"
 #include "third_party/blink/renderer/modules/webcodecs/encoded_video_chunk.h"
@@ -24,16 +25,22 @@
 
 #include <string>
 
+namespace base {
+class ScopedClosureRunner;
+}
+
 namespace blink {
 
-class FakeFunction : public ScriptFunction {
+class DOMRectInit;
+class PlaneLayout;
+
+base::ScopedClosureRunner MakeScopedGarbageCollectionRequest();
+
+class FakeFunction : public ScriptFunction::Callable {
  public:
-  static FakeFunction* Create(ScriptState* script_state, std::string name);
+  explicit FakeFunction(std::string name);
 
-  explicit FakeFunction(ScriptState* script_state, std::string name);
-
-  v8::Local<v8::Function> Bind();
-  ScriptValue Call(ScriptValue) override;
+  ScriptValue Call(ScriptState*, ScriptValue) override;
 
  private:
   const std::string name_;
@@ -57,11 +64,24 @@ EncodedVideoChunk* MakeEncodedVideoChunk(
 EncodedAudioChunk* MakeEncodedAudioChunk(
     const wc_fuzzer::EncodedAudioChunk& proto);
 
+AllowSharedBufferSource* MakeAllowSharedBufferSource(
+    const wc_fuzzer::AllowSharedBufferSource& proto);
+
+PlaneLayout* MakePlaneLayout(const wc_fuzzer::PlaneLayout& proto);
+
+DOMRectInit* MakeDOMRectInit(const wc_fuzzer::DOMRectInit& proto);
+
+VideoFrame* MakeVideoFrame(
+    ScriptState* script_state,
+    const wc_fuzzer::VideoFrameBufferInitInvocation& proto);
+
 VideoFrame* MakeVideoFrame(ScriptState* script_state,
                            const wc_fuzzer::VideoFrameBitmapInit& proto);
 
-AudioData* MakeAudioData(ScriptState* script_state,
-                         const wc_fuzzer::AudioDataInit& proto);
+AudioData* MakeAudioData(const wc_fuzzer::AudioDataInit& proto);
+
+AudioDataCopyToOptions* MakeAudioDataCopyToOptions(
+    const wc_fuzzer::AudioDataCopyToOptions& proto);
 
 VideoEncoderEncodeOptions* MakeEncodeOptions(
     const wc_fuzzer::EncodeVideo_EncodeOptions& proto);

@@ -12,7 +12,7 @@
 #include "chrome/browser/ash/borealis/borealis_metrics.h"
 #include "chrome/browser/ash/borealis/borealis_service.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "chromeos/dbus/vm_disk_management/disk_management.pb.h"
+#include "chromeos/ash/components/dbus/vm_disk_management/disk_management.pb.h"
 #include "dbus/bus.h"
 #include "dbus/message.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
@@ -195,6 +195,7 @@ void VmDiskManagementServiceProvider::OnGetDiskInfo(
   } else {
     payload.set_available_space(response_or_error.Value().available_bytes);
     payload.set_expandable_space(response_or_error.Value().expandable_bytes);
+    payload.set_disk_size(response_or_error.Value().disk_size);
   }
   // Reply to the original D-Bus method call.
   dbus::MessageWriter writer(response.get());

@@ -30,6 +30,7 @@
 
 #include "third_party/blink/renderer/core/animation/pending_animations.h"
 
+#include "base/auto_reset.h"
 #include "third_party/blink/renderer/core/animation/document_timeline.h"
 #include "third_party/blink/renderer/core/animation/keyframe_effect.h"
 #include "third_party/blink/renderer/core/dom/document.h"
@@ -169,7 +170,7 @@ void PendingAnimations::NotifyCompositorAnimationStarted(
           animation->timeline()->CurrentTime().value_or(AnimationTimeDelta()));
     } else {
       animation->NotifyReady(
-          AnimationTimeDelta::FromSecondsD(monotonic_animation_start_time) -
+          ANIMATION_TIME_DELTA_FROM_SECONDS(monotonic_animation_start_time) -
           animation->timeline()->ZeroTime());
     }
   }

@@ -5,10 +5,8 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_FRAME_BROWSER_FRAME_H_
 #define CHROME_BROWSER_UI_VIEWS_FRAME_BROWSER_FRAME_H_
 
-#include "base/compiler_specific.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
-#include "chrome/browser/ui/browser_window.h"
 #include "content/public/browser/keyboard_event_processing_result.h"
 #include "ui/base/pointer/touch_ui_controller.h"
 #include "ui/views/context_menu_controller.h"
@@ -17,6 +15,7 @@
 class BrowserDesktopWindowTreeHost;
 class BrowserNonClientFrameView;
 class BrowserRootView;
+enum class BrowserThemeChangeType;
 class BrowserView;
 class NativeBrowserFrame;
 class NonClientFrameView;
@@ -55,6 +54,10 @@ enum class TabDragKind {
 class BrowserFrame : public views::Widget, public views::ContextMenuController {
  public:
   explicit BrowserFrame(BrowserView* browser_view);
+
+  BrowserFrame(const BrowserFrame&) = delete;
+  BrowserFrame& operator=(const BrowserFrame&) = delete;
+
   ~BrowserFrame() override;
 
   // Initialize the frame (creates the underlying native window).
@@ -123,6 +126,8 @@ class BrowserFrame : public views::Widget, public views::ContextMenuController {
   bool GetAccelerator(int command_id,
                       ui::Accelerator* accelerator) const override;
   const ui::ThemeProvider* GetThemeProvider() const override;
+  ui::ColorProviderManager::ThemeInitializerSupplier* GetCustomTheme()
+      const override;
   void OnNativeWidgetWorkspaceChanged() override;
 
   // views::ContextMenuController:
@@ -146,6 +151,10 @@ class BrowserFrame : public views::Widget, public views::ContextMenuController {
   void SetTabDragKind(TabDragKind tab_drag_kind);
   TabDragKind tab_drag_kind() const { return tab_drag_kind_; }
 
+ protected:
+  // views::Widget:
+  ui::ColorProviderManager::Key GetColorProviderKey() const override;
+
  private:
   void OnTouchUiChanged();
 
@@ -159,18 +168,18 @@ class BrowserFrame : public views::Widget, public views::ContextMenuController {
   // regenerated.
   bool RegenerateFrameOnThemeChange(BrowserThemeChangeType theme_change_type);
 
-  NativeBrowserFrame* native_browser_frame_;
+  raw_ptr<NativeBrowserFrame> native_browser_frame_;
 
   // A weak reference to the root view associated with the window. We save a
   // copy as a BrowserRootView to avoid evil casting later, when we need to call
   // functions that only exist on BrowserRootView (versus RootView).
-  BrowserRootView* root_view_;
+  raw_ptr<BrowserRootView> root_view_;
 
   // A pointer to our NonClientFrameView as a BrowserNonClientFrameView.
-  BrowserNonClientFrameView* browser_frame_view_;
+  raw_ptr<BrowserNonClientFrameView> browser_frame_view_;
 
   // The BrowserView is our ClientView. This is a pointer to it.
-  BrowserView* browser_view_;
+  raw_ptr<BrowserView> browser_view_;
 
   std::unique_ptr<SystemMenuModelBuilder> menu_model_builder_;
 
@@ -183,7 +192,8 @@ class BrowserFrame : public views::Widget, public views::ContextMenuController {
           base::BindRepeating(&BrowserFrame::OnTouchUiChanged,
                               base::Unretained(this)));
 
-  BrowserDesktopWindowTreeHost* browser_desktop_window_tree_host_ = nullptr;
+  raw_ptr<BrowserDesktopWindowTreeHost> browser_desktop_window_tree_host_ =
+      nullptr;
 
   // Indicates the drag state for this window. The value can be kWindowDrag
   // if the accociated browser is the dragged browser or kTabDrag
@@ -193,15 +203,13 @@ class BrowserFrame : public views::Widget, public views::ContextMenuController {
   // contents for smoother dragging.
   TabDragKind tab_drag_kind_ = TabDragKind::kNone;
 
-#if BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_CHROMEOS_LACROS)
+#if BUILDFLAG(IS_CHROMEOS)
   // Store the number of virtual desks that currently exist. Used to determine
   // whether the system menu should be reset. If the value is -1, then either
   // the ash::DesksHelper does not exist or haven't retrieved the system menu
   // model yet.
   int num_desks_ = -1;
 #endif
-
-  DISALLOW_COPY_AND_ASSIGN(BrowserFrame);
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_FRAME_BROWSER_FRAME_H_

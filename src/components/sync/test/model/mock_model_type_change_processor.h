@@ -7,6 +7,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "components/sync/model/metadata_batch.h"
 #include "components/sync/model/model_type_change_processor.h"
@@ -18,7 +19,13 @@ namespace syncer {
 class MockModelTypeChangeProcessor : public ModelTypeChangeProcessor {
  public:
   MockModelTypeChangeProcessor();
+
+  MockModelTypeChangeProcessor(const MockModelTypeChangeProcessor&) = delete;
+  MockModelTypeChangeProcessor& operator=(const MockModelTypeChangeProcessor&) =
+      delete;
+
   ~MockModelTypeChangeProcessor() override;
+
   MOCK_METHOD(void,
               Put,
               (const std::string& storage_key,
@@ -44,6 +51,10 @@ class MockModelTypeChangeProcessor : public ModelTypeChangeProcessor {
               UntrackEntityForClientTagHash,
               (const ClientTagHash& client_tag_hash),
               (override));
+  MOCK_METHOD(std::vector<std::string>,
+              GetAllTrackedStorageKeys,
+              (),
+              (const override));
   MOCK_METHOD(bool,
               IsEntityUnsynced,
               (const std::string& storage_key),
@@ -65,14 +76,18 @@ class MockModelTypeChangeProcessor : public ModelTypeChangeProcessor {
               (std::unique_ptr<MetadataBatch> batch),
               (override));
   MOCK_METHOD(bool, IsTrackingMetadata, (), (const override));
-  MOCK_METHOD(std::string, TrackedAccountId, (), (override));
-  MOCK_METHOD(std::string, TrackedCacheGuid, (), (override));
+  MOCK_METHOD(std::string, TrackedAccountId, (), (const override));
+  MOCK_METHOD(std::string, TrackedCacheGuid, (), (const override));
   MOCK_METHOD(void, ReportError, (const ModelError& error), (override));
   MOCK_METHOD(absl::optional<ModelError>, GetError, (), (const override));
   MOCK_METHOD(base::WeakPtr<ModelTypeControllerDelegate>,
               GetControllerDelegate,
               (),
               (override));
+  MOCK_METHOD(const sync_pb::EntitySpecifics&,
+              GetPossiblyTrimmedRemoteSpecifics,
+              (const std::string& storage_key),
+              (const override));
 
   // Returns a processor that forwards all calls to
   // |this|. |*this| must outlive the returned processor.
@@ -81,9 +96,6 @@ class MockModelTypeChangeProcessor : public ModelTypeChangeProcessor {
   // Delegates all calls to another instance. |delegate| must not be null and
   // must outlive this object.
   void DelegateCallsByDefaultTo(ModelTypeChangeProcessor* delegate);
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(MockModelTypeChangeProcessor);
 };
 
 }  //  namespace syncer

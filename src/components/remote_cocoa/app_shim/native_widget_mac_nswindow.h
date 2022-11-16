@@ -57,6 +57,11 @@ REMOTE_COCOA_APP_SHIM_EXPORT
 // https://crbug.com/960904
 - (void)enforceNeverMadeVisible;
 
+// Order the window to the front (space switch if necessary), and ensure that
+// the window maintains its key state. A space switch will normally activate a
+// window, so this function prevents that if the window is currently inactive.
+- (void)orderFrontKeepWindowKeyState;
+
 // Identifier for the NativeWidgetMac from which this window was created. This
 // may be used to look up the NativeWidgetMacNSWindowHost in the browser process
 // or the NativeWidgetNSWindowBridge in a display process.
@@ -64,6 +69,9 @@ REMOTE_COCOA_APP_SHIM_EXPORT
 
 // The NativeWidgetNSWindowBridge that this will use to call back to the host.
 @property(assign, nonatomic) remote_cocoa::NativeWidgetNSWindowBridge* bridge;
+
+// Whether this window functions as a tooltip.
+@property(assign, nonatomic) BOOL isTooltip;
 @end
 
 #endif  // COMPONENTS_REMOTE_COCOA_APP_SHIM_NATIVE_WIDGET_MAC_NSWINDOW_H_

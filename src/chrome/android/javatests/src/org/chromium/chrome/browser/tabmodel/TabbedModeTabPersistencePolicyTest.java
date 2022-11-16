@@ -84,6 +84,8 @@ public class TabbedModeTabPersistencePolicyTest {
         for (Activity activity : ApplicationStatus.getRunningActivities()) {
             activity.finishAndRemoveTask();
         }
+
+        TabWindowManagerSingleton.resetTabModelSelectorFactoryForTesting();
     }
 
     private TabbedModeTabModelOrchestrator buildTestTabModelSelector(
@@ -138,8 +140,8 @@ public class TabbedModeTabPersistencePolicyTest {
             for (int tabId : incognitoTabIds) {
                 addTabToSaveQueue(store, incognitoTabModel, incognitoTabModel.addTab(tabId));
             }
-            TabModelUtils.setIndex(normalTabModel, 0);
-            TabModelUtils.setIndex(incognitoTabModel, 0);
+            TabModelUtils.setIndex(normalTabModel, 0, false);
+            TabModelUtils.setIndex(incognitoTabModel, 0, false);
         });
         callbackSignal.waitForCallback(callCount);
         return orchestrator;

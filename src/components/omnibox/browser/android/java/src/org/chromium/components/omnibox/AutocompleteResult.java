@@ -14,6 +14,7 @@ import androidx.annotation.VisibleForTesting;
 import androidx.core.util.ObjectsCompat;
 
 import org.chromium.base.annotations.CalledByNative;
+import org.chromium.base.annotations.MockedInTests;
 import org.chromium.base.annotations.NativeMethods;
 
 import java.lang.annotation.Retention;
@@ -25,6 +26,7 @@ import java.util.List;
 /**
  * AutocompleteResult encompasses and manages autocomplete results.
  */
+@MockedInTests
 public class AutocompleteResult {
     /** Describes details of the Suggestions group. */
     public static class GroupDetails {
@@ -77,7 +79,7 @@ public class AutocompleteResult {
     public static final int NO_SUGGESTION_INDEX = -1;
 
     private final @NonNull SparseArray<GroupDetails> mGroupsDetails;
-    private @NonNull List<AutocompleteMatch> mSuggestions;
+    private final @NonNull List<AutocompleteMatch> mSuggestions;
     private final boolean mIsFromCachedResult;
     private long mNativeAutocompleteResult;
 
@@ -174,11 +176,6 @@ public class AutocompleteResult {
     @NonNull
     public List<AutocompleteMatch> getSuggestionsList() {
         return mSuggestions;
-    }
-
-    public void updateSponsoredSuggestions(List<AutocompleteMatch> suggestions) {
-        mSuggestions.clear();
-        mSuggestions.addAll(suggestions);
     }
 
     /**

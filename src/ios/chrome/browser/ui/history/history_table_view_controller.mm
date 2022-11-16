@@ -11,6 +11,7 @@
 #include "base/metrics/user_metrics_action.h"
 #include "base/strings/sys_string_conversions.h"
 #include "components/strings/grit/components_strings.h"
+#include "components/url_formatter/elide_url.h"
 #include "components/url_formatter/url_formatter.h"
 #import "ios/chrome/app/tests_hook.h"
 #include "ios/chrome/browser/browser_state/chrome_browser_state.h"
@@ -19,6 +20,7 @@
 #import "ios/chrome/browser/drag_and_drop/table_view_url_drag_drop_handler.h"
 #import "ios/chrome/browser/main/browser.h"
 #import "ios/chrome/browser/metrics/new_tab_page_uma.h"
+#import "ios/chrome/browser/net/crurl.h"
 #import "ios/chrome/browser/policy/policy_util.h"
 #include "ios/chrome/browser/sync/sync_setup_service.h"
 #include "ios/chrome/browser/sync/sync_setup_service_factory.h"
@@ -34,7 +36,6 @@
 #include "ios/chrome/browser/ui/history/history_ui_delegate.h"
 #include "ios/chrome/browser/ui/history/history_util.h"
 #import "ios/chrome/browser/ui/history/public/history_presentation_delegate.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_cells_constants.h"
 #import "ios/chrome/browser/ui/table_view/cells/table_view_link_header_footer_item.h"
 #import "ios/chrome/browser/ui/table_view/cells/table_view_text_header_footer_item.h"
 #import "ios/chrome/browser/ui/table_view/cells/table_view_text_item.h"
@@ -43,7 +44,6 @@
 #import "ios/chrome/browser/ui/table_view/table_view_favicon_data_source.h"
 #import "ios/chrome/browser/ui/table_view/table_view_navigation_controller_constants.h"
 #import "ios/chrome/browser/ui/table_view/table_view_utils.h"
-#include "ios/chrome/browser/ui/ui_feature_flags.h"
 #import "ios/chrome/browser/ui/util/pasteboard_util.h"
 #import "ios/chrome/browser/url_loading/url_loading_browser_agent.h"
 #import "ios/chrome/browser/url_loading/url_loading_params.h"
@@ -51,6 +51,7 @@
 #import "ios/chrome/browser/window_activities/window_activity_helpers.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/favicon/favicon_view.h"
+#import "ios/chrome/common/ui/table_view/table_view_cells_constants.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
 #include "ios/chrome/grit/ios_strings.h"
 #import "ios/web/public/navigation/navigation_manager.h"
@@ -86,7 +87,6 @@ const CGFloat kButtonHorizontalPadding = 30.0;
 @interface HistoryTableViewController () <HistoryEntriesStatusItemDelegate,
                                           HistoryEntryInserterDelegate,
                                           TableViewLinkHeaderFooterItemDelegate,
-                                          TableViewTextLinkCellDelegate,
                                           TableViewURLDragDataSource,
                                           UISearchControllerDelegate,
                                           UISearchResultsUpdating,
@@ -137,9 +137,7 @@ const CGFloat kButtonHorizontalPadding = 30.0;
 #pragma mark - ViewController Lifecycle.
 
 - (instancetype)init {
-  UITableViewStyle style = base::FeatureList::IsEnabled(kSettingsRefresh)
-                               ? ChromeTableViewStyle()
-                               : UITableViewStylePlain;
+  UITableViewStyle style = ChromeTableViewStyle();
   return [super initWithStyle:style];
 }
 
@@ -195,7 +193,7 @@ const CGFloat kButtonHorizontalPadding = 30.0;
   self.title = l10n_util::GetNSString(IDS_HISTORY_TITLE);
   // Configures NavigationController Toolbar buttons.
   [self configureViewsForNonEditModeWithAnimation:NO];
-  // Adds the "Done" button and hooks it up to |dismissHistory|.
+  // Adds the "Done" button and hooks it up to `dismissHistory`.
   UIBarButtonItem* dismissButton = [[UIBarButtonItem alloc]
       initWithBarButtonSystemItem:UIBarButtonSystemItemDone
                            target:self
@@ -215,6 +213,10 @@ const CGFloat kButtonHorizontalPadding = 30.0;
   self.searchController.searchBar.backgroundColor = UIColor.clearColor;
   self.searchController.searchBar.accessibilityIdentifier =
       kHistorySearchControllerSearchBarIdentifier;
+  if (self.searchTerms.length) {
+    self.searchController.searchBar.text = self.searchTerms;
+    self.searchInProgress = YES;
+  }
   // UIKit needs to know which controller will be presenting the
   // searchController. If we don't add this trying to dismiss while
   // SearchController is active will fail.
@@ -246,7 +248,7 @@ const CGFloat kButtonHorizontalPadding = 30.0;
 - (void)loadModel {
   [super loadModel];
   // Add Status section, this section will always exist during the lifetime of
-  // HistoryTableVC. Its content will be driven by |updateEntriesStatusMessage|.
+  // HistoryTableVC. Its content will be driven by `updateEntriesStatusMessage`.
   [self.tableViewModel
       addSectionWithIdentifier:kEntriesStatusSectionIdentifier];
   _entryInserter =
@@ -315,8 +317,10 @@ const CGFloat kButtonHorizontalPadding = 30.0;
         [[HistoryEntryItem alloc] initWithType:ItemTypeHistoryEntry
                          accessibilityDelegate:self];
     item.text = [history::FormattedTitle(entry.title, entry.url) copy];
-    item.detailText =
-        [base::SysUTF8ToNSString(entry.url.GetOrigin().spec()) copy];
+    item.detailText = base::SysUTF16ToNSString(
+        url_formatter::
+            FormatUrlForDisplayOmitSchemePathTrivialSubdomainsAndMobilePrefix(
+                entry.url));
     item.timeText =
         [base::SysUTF16ToNSString(base::TimeFormatTimeOfDay(entry.time)) copy];
     item.URL = entry.url;
@@ -446,19 +450,10 @@ const CGFloat kButtonHorizontalPadding = 30.0;
   }
 }
 
-#pragma mark TableViewTextLinkCellDelegate
-
-- (void)tableViewTextLinkCell:(TableViewTextLinkCell*)cell
-            didRequestOpenURL:(const GURL&)URL {
-  DCHECK(!base::FeatureList::IsEnabled(kSettingsRefresh));
-  [self openURLInNewTab:URL];
-}
-
 #pragma mark TableViewLinkHeaderFooterItemDelegate
 
-- (void)view:(TableViewLinkHeaderFooterView*)view didTapLinkURL:(GURL)URL {
-  DCHECK(base::FeatureList::IsEnabled(kSettingsRefresh));
-  [self openURLInNewTab:URL];
+- (void)view:(TableViewLinkHeaderFooterView*)view didTapLinkURL:(CrURL*)URL {
+  [self openURLInNewTab:URL.gurl];
 }
 
 #pragma mark UISearchResultsUpdating
@@ -520,7 +515,7 @@ const CGFloat kButtonHorizontalPadding = 30.0;
 
 #pragma mark - History Data Updates
 
-// Search history for text |query| and display the results. |query| may be nil.
+// Search history for text `query` and display the results. `query` may be nil.
 // If query is empty, show all history items.
 - (void)showHistoryMatchingQuery:(NSString*)query {
   self.finishedLoading = NO;
@@ -549,7 +544,7 @@ const CGFloat kButtonHorizontalPadding = 30.0;
   }
   self.historyService->RemoveVisits(entries);
 
-  // Delete items from |self.tableView| using performBatchUpdates.
+  // Delete items from `self.tableView` using performBatchUpdates.
   __weak __typeof(self) weakSelf = self;
   [self.tableView
       performBatchUpdates:^{
@@ -566,23 +561,21 @@ const CGFloat kButtonHorizontalPadding = 30.0;
 #pragma mark - UITableViewDelegate
 
 - (CGFloat)tableView:(UITableView*)tableView
-    heightForHeaderInSection:(NSInteger)section {
-  if (section ==
-          [self.tableViewModel
-              sectionForSectionIdentifier:kEntriesStatusSectionIdentifier] &&
-      (!base::FeatureList::IsEnabled(kSettingsRefresh) ||
-       ![self.tableViewModel
-           headerForSectionWithIdentifier:kEntriesStatusSectionIdentifier]))
-    return 0;
-  return UITableViewAutomaticDimension;
-}
-
-- (CGFloat)tableView:(UITableView*)tableView
     heightForFooterInSection:(NSInteger)section {
-  if ([self.tableViewModel sectionIdentifierForSection:section] ==
+  if ([self.tableViewModel sectionIdentifierForSectionIndex:section] ==
       kEntriesStatusSectionIdentifier)
     return 0;
   return kSeparationSpaceBetweenSections;
+}
+
+- (CGFloat)tableView:(UITableView*)tableView
+    heightForHeaderInSection:(NSInteger)section {
+  // Hide the status header if the currentStatusMessage is nil.
+  if ([self.tableViewModel sectionIdentifierForSectionIndex:section] ==
+          kEntriesStatusSectionIdentifier &&
+      [self.currentStatusMessage length] == 0)
+    return 0;
+  return UITableViewAutomaticDimension;
 }
 
 - (void)tableView:(UITableView*)tableView
@@ -652,7 +645,7 @@ const CGFloat kButtonHorizontalPadding = 30.0;
     viewForHeaderInSection:(NSInteger)section {
   UIView* view = [super tableView:tableView viewForHeaderInSection:section];
   NSInteger sectionIdentifier =
-      [self.tableViewModel sectionIdentifierForSection:section];
+      [self.tableViewModel sectionIdentifierForSectionIndex:section];
   switch (sectionIdentifier) {
     case kEntriesStatusSectionIdentifier: {
       // Might be a different type of header.
@@ -677,8 +670,9 @@ const CGFloat kButtonHorizontalPadding = 30.0;
         base::mac::ObjCCastStrict<HistoryEntryItem>(item);
     TableViewURLCell* URLCell =
         base::mac::ObjCCastStrict<TableViewURLCell>(cellToReturn);
+    CrURL* crurl = [[CrURL alloc] initWithGURL:URLItem.URL];
     [self.imageDataSource
-        faviconForURL:URLItem.URL
+        faviconForURL:crurl
            completion:^(FaviconAttributes* attributes) {
              // Only set favicon if the cell hasn't been reused.
              if ([URLCell.cellUniqueIdentifier
@@ -687,12 +681,6 @@ const CGFloat kButtonHorizontalPadding = 30.0;
                [URLCell.faviconView configureWithAttributes:attributes];
              }
            }];
-  }
-  if (item.type == ItemTypeEntriesStatusWithLink) {
-    DCHECK(!base::FeatureList::IsEnabled(kSettingsRefresh));
-    TableViewTextLinkCell* tableViewTextLinkCell =
-        base::mac::ObjCCastStrict<TableViewTextLinkCell>(cellToReturn);
-    [tableViewTextLinkCell setDelegate:self];
   }
   return cellToReturn;
 }
@@ -751,7 +739,7 @@ const CGFloat kButtonHorizontalPadding = 30.0;
 
 #pragma mark - Private methods
 
-// Fetches history for search text |query|. If |query| is nil or the empty
+// Fetches history for search text `query`. If `query` is nil or the empty
 // string, all history is fetched. If continuation is false, then the most
 // recent results are fetched, otherwise the results more recent than the
 // previous query will be returned.
@@ -825,130 +813,48 @@ const CGFloat kButtonHorizontalPadding = 30.0;
       newStatusMessage == self.currentStatusMessage)
     return;
 
-  // Get the previous status item and its information, if any.
-  NSArray* previousStatusItems = [self.tableViewModel
-      itemsInSectionWithIdentifier:kEntriesStatusSectionIdentifier];
-  DCHECK([previousStatusItems count] <= 1);
-  TableViewItem* previousStatusItem = nil;
-  NSIndexPath* previousStatusItemIndexPath = nil;
-  if ([previousStatusItems count]) {
-    previousStatusItem = [previousStatusItems lastObject];
-    previousStatusItemIndexPath = [self.tableViewModel
-        indexPathForItemType:previousStatusItem.type
-           sectionIdentifier:kEntriesStatusSectionIdentifier];
+  self.currentStatusMessage = newStatusMessage;
+
+  TableViewHeaderFooterItem* item = nil;
+  if (messageWillContainLink) {
+    TableViewLinkHeaderFooterItem* header =
+        [[TableViewLinkHeaderFooterItem alloc]
+            initWithType:ItemTypeEntriesStatusWithLink];
+    header.text = newStatusMessage;
+    header.urls = @[ [[CrURL alloc] initWithGURL:GURL(kHistoryMyActivityURL)] ];
+    item = header;
+  } else {
+    TableViewTextHeaderFooterItem* header =
+        [[TableViewTextHeaderFooterItem alloc]
+            initWithType:ItemTypeEntriesStatus];
+    header.text = newStatusMessage;
+    item = header;
   }
 
   // Block to hold any tableView and model updates that will be performed.
-  void (^tableUpdates)(void) = nil;
-
-  // If no new status message remove the previous status item if it exists.
-  if (newStatusMessage == nil) {
-    if (previousStatusItem) {
-      tableUpdates = ^{
-        [self.tableViewModel
-                   removeItemWithType:previousStatusItem.type
-            fromSectionWithIdentifier:kEntriesStatusSectionIdentifier];
-        [self.tableView
-            deleteRowsAtIndexPaths:@[ previousStatusItemIndexPath ]
+  // Change the header then reload the section to have it taken into
+  // account.
+  void (^tableUpdates)(void) = ^{
+    [self.tableViewModel setHeader:item
+          forSectionWithIdentifier:kEntriesStatusSectionIdentifier];
+    NSInteger sectionIndex = [self.tableViewModel
+        sectionForSectionIdentifier:kEntriesStatusSectionIdentifier];
+    [self.tableView reloadSections:[NSIndexSet indexSetWithIndex:sectionIndex]
                   withRowAnimation:UITableViewRowAnimationAutomatic];
-      };
-    }
-  } else {
-    // Since there's a new status message, create the new status item.
-    if (base::FeatureList::IsEnabled(kSettingsRefresh)) {
-      TableViewHeaderFooterItem* item = nil;
-      if (messageWillContainLink) {
-        TableViewLinkHeaderFooterItem* header =
-            [[TableViewLinkHeaderFooterItem alloc]
-                initWithType:ItemTypeEntriesStatusWithLink];
-        header.text = newStatusMessage;
-        header.urls = std::vector<GURL>{GURL(kHistoryMyActivityURL)};
-        item = header;
-      } else {
-        TableViewTextHeaderFooterItem* header =
-            [[TableViewTextHeaderFooterItem alloc]
-                initWithType:ItemTypeEntriesStatus];
-        header.text = newStatusMessage;
-        item = header;
-      }
-      // Change the header then reload the section to have it taken into
-      // account.
-      tableUpdates = ^{
-        NSInteger sectionIndex = [self.tableViewModel
-            sectionForSectionIdentifier:kEntriesStatusSectionIdentifier];
-        [self.tableViewModel setHeader:item
-              forSectionWithIdentifier:kEntriesStatusSectionIdentifier];
-        [self.tableView
-              reloadSections:[NSIndexSet indexSetWithIndex:sectionIndex]
-            withRowAnimation:UITableViewRowAnimationAutomatic];
-      };
-    } else {
-      TableViewItem* updatedMessageItem =
-          [self statusItemWithMessage:newStatusMessage
-               messageWillContainLink:messageWillContainLink];
-
-      // If there was a previous status item delete it, insert the new status
-      // item and reload. If not simply insert the new status item.
-      tableUpdates = ^{
-        if (previousStatusItem) {
-          [self.tableViewModel
-                     removeItemWithType:previousStatusItem.type
-              fromSectionWithIdentifier:kEntriesStatusSectionIdentifier];
-          [self.tableViewModel addItem:updatedMessageItem
-               toSectionWithIdentifier:kEntriesStatusSectionIdentifier];
-          [self.tableView
-              reloadRowsAtIndexPaths:@[ [self.tableViewModel
-                                         indexPathForItem:updatedMessageItem] ]
-                    withRowAnimation:UITableViewRowAnimationAutomatic];
-        } else {
-          [self.tableViewModel addItem:updatedMessageItem
-               toSectionWithIdentifier:kEntriesStatusSectionIdentifier];
-          [self.tableView
-              insertRowsAtIndexPaths:@[ [self.tableViewModel
-                                         indexPathForItem:updatedMessageItem] ]
-                    withRowAnimation:UITableViewRowAnimationAutomatic];
-        }
-      };
-    }
-  }
-
-  // If there's any tableUpdates, run them.
-  if (tableUpdates) {
-    [self.tableView performBatchUpdates:tableUpdates completion:nil];
-  }
-  self.currentStatusMessage = newStatusMessage;
-}
-
-// Helper function that creates a new item for the Status message.
-- (TableViewItem*)statusItemWithMessage:(NSString*)statusMessage
-                 messageWillContainLink:(BOOL)messageWillContainLink {
-  TableViewItem* statusMessageItem = nil;
-  if (messageWillContainLink) {
-    TableViewTextLinkItem* entriesStatusItem = [[TableViewTextLinkItem alloc]
-        initWithType:ItemTypeEntriesStatusWithLink];
-    entriesStatusItem.text = statusMessage;
-    entriesStatusItem.linkURL = GURL(kHistoryMyActivityURL);
-    statusMessageItem = entriesStatusItem;
-  } else {
-    TableViewTextItem* entriesStatusItem =
-        [[TableViewTextItem alloc] initWithType:ItemTypeEntriesStatus];
-    entriesStatusItem.text = statusMessage;
-    entriesStatusItem.textColor = [UIColor colorNamed:kTextPrimaryColor];
-    statusMessageItem = entriesStatusItem;
-  }
-  return statusMessageItem;
+  };
+  [self.tableView performBatchUpdates:tableUpdates completion:nil];
 }
 
 // Deletes all items in the tableView which indexes are included in indexArray,
-// if |deleteItemsFromTableView| is YES this method needs to be run inside a
+// if `deleteItemsFromTableView` is YES this method needs to be run inside a
 // performBatchUpdates block.
 - (void)deleteItemsFromTableViewModelWithIndex:(NSArray*)indexArray
                       deleteItemsFromTableView:(BOOL)deleteItemsFromTableView {
   NSArray* sortedIndexPaths =
       [indexArray sortedArrayUsingSelector:@selector(compare:)];
   for (NSIndexPath* indexPath in [sortedIndexPaths reverseObjectEnumerator]) {
-    NSInteger sectionIdentifier =
-        [self.tableViewModel sectionIdentifierForSection:indexPath.section];
+    NSInteger sectionIdentifier = [self.tableViewModel
+        sectionIdentifierForSectionIndex:indexPath.section];
     NSInteger itemType = [self.tableViewModel itemTypeForIndexPath:indexPath];
     NSUInteger index =
         [self.tableViewModel indexInItemTypeForIndexPath:indexPath];
@@ -977,7 +883,7 @@ const CGFloat kButtonHorizontalPadding = 30.0;
   for (int section = 1; section < [self.tableViewModel numberOfSections];
        ++section) {
     NSInteger sectionIdentifier =
-        [self.tableViewModel sectionIdentifierForSection:section];
+        [self.tableViewModel sectionIdentifierForSectionIndex:section];
     if ([self.tableViewModel
             hasSectionForSectionIdentifier:sectionIdentifier]) {
       NSArray* items =
@@ -1046,8 +952,8 @@ const CGFloat kButtonHorizontalPadding = 30.0;
 
 #pragma mark Navigation Toolbar Configuration
 
-// Animates the view configuration after flipping the current status of |[self
-// setEditing]|.
+// Animates the view configuration after flipping the current status of `[self
+// setEditing]`.
 - (void)animateViewsConfigurationForEditingChange {
   if (self.isEditing) {
     [self configureViewsForNonEditModeWithAnimation:YES];
@@ -1217,7 +1123,7 @@ const CGFloat kButtonHorizontalPadding = 30.0;
 
 #pragma mark Helper Methods
 
-// Loads and opens a tab using |params|. If |incognito| is YES the tab will be
+// Loads and opens a tab using `params`. If `incognito` is YES the tab will be
 // opened in incognito mode.
 - (void)loadAndActivateTabFromHistoryWithParams:(const UrlLoadParams&)params
                                       incognito:(BOOL)incognito {

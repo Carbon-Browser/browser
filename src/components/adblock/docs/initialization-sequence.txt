@@ -1,0 +1,27 @@
+# If changed, go to https://sequencediagram.org/ to regenerate diagram
+title eyeo Chromium SDK initialization sequence
+
+participant ProfileImpl (UI thread)
+participant BrowserContextDependencyManager (UI thread)
+participant AdblockControllerFactory (UI thread)
+participant AdblockController (UI thread)
+participant SubscriptionService (UI thread)
+participant SubscriptionPersistentStorage (ThreadPool)
+participant PreloadedSubscriptionProvider (UI Thread)
+
+ProfileImpl (UI thread)->BrowserContextDependencyManager (UI thread): CreateBrowserContextServices()
+note over BrowserContextDependencyManager (UI thread): Service created due to ServiceIsCreatedWithBrowserContext() = true
+BrowserContextDependencyManager (UI thread)->AdblockControllerFactory (UI thread): BuildServiceInstanceFor()
+AdblockControllerFactory (UI thread)->AdblockController (UI thread): create
+AdblockController (UI thread)->SubscriptionService (UI thread): Initialize()
+
+SubscriptionService (UI thread)->(2)SubscriptionPersistentStorage (ThreadPool): Load subscriptions
+SubscriptionPersistentStorage (ThreadPool)-->SubscriptionService (UI thread): StorageInitialized
+
+SubscriptionService (UI thread)->(2)SubscriptionPersistentStorage (ThreadPool): Remove duplicate subscriptions
+note over SubscriptionService (UI thread):Set as initialized. \nNow other services such as ResourceClassificationRunner\nand  AdblockController can start using SubscriptionService \nfor their adblocking needs
+SubscriptionService (UI thread)-> PreloadedSubscriptionProvider (UI Thread): Update preloaded subscriptions from memory.
+
+AdblockController (UI thread)->SubscriptionService (UI thread): Install subscriptions from pref
+
+AdblockController (UI thread)->SubscriptionService (UI thread): Install custom filters from pref

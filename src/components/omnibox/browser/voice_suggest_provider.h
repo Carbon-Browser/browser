@@ -10,18 +10,17 @@
 #include <vector>
 
 #include "base/compiler_specific.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "components/omnibox/browser/autocomplete_input.h"
 #include "components/omnibox/browser/autocomplete_provider_client.h"
-#include "components/omnibox/browser/autocomplete_provider_listener.h"
 #include "components/omnibox/browser/base_search_provider.h"
 #include "third_party/metrics_proto/omnibox_event.pb.h"
 
 // Autocomplete provider serving Voice suggestions on Android.
 class VoiceSuggestProvider : public BaseSearchProvider {
  public:
-  VoiceSuggestProvider(AutocompleteProviderClient* client,
-                       AutocompleteProviderListener* listener);
+  explicit VoiceSuggestProvider(AutocompleteProviderClient* client);
 
   void Start(const AutocompleteInput& input, bool minimal_changes) override;
   void Stop(bool clear_cached_results, bool due_to_user_inactivity) override;
@@ -58,7 +57,7 @@ class VoiceSuggestProvider : public BaseSearchProvider {
   // A pointer to the current AutocompleteInput, retained during the active
   // stage of operation only. Used by the BaseSearchProvider to construct the
   // final AutocompleteMatch objects.
-  const AutocompleteInput* autocomplete_input_{};
+  raw_ptr<const AutocompleteInput> autocomplete_input_{};
 };
 
 #endif  // COMPONENTS_OMNIBOX_BROWSER_VOICE_SUGGEST_PROVIDER_H_

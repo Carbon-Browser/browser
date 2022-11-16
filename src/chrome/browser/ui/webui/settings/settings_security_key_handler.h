@@ -8,22 +8,18 @@
 #include <memory>
 #include <string>
 
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
+#include "base/values.h"
 #include "chrome/browser/ui/webui/settings/settings_page_ui_handler.h"
 #include "device/fido/bio/enrollment.h"
 #include "device/fido/bio/enrollment_handler.h"
+#include "device/fido/credential_management_handler.h"
 #include "device/fido/fido_constants.h"
 #include "device/fido/fido_discovery_factory.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
-namespace base {
-class ListValue;
-}
-
 namespace device {
 struct AggregatedEnumerateCredentialsResponse;
-class CredentialManagementHandler;
 enum class CredentialManagementStatus;
 class SetPINRequestHandler;
 class ResetRequestHandler;
@@ -80,12 +76,12 @@ class SecurityKeysPINHandler : public SecurityKeysHandlerBase {
   void RegisterMessages() override;
   void Close() override;
 
-  void HandleStartSetPIN(const base::ListValue* args);
+  void HandleStartSetPIN(const base::Value::List& args);
   void OnGatherPIN(uint32_t current_min_pin_length,
                    uint32_t new_min_pin_length,
                    absl::optional<int64_t> num_retries);
   void OnSetPINComplete(device::CtapDeviceResponseCode code);
-  void HandleSetPIN(const base::ListValue* args);
+  void HandleSetPIN(const base::Value::List& args);
 
   State state_ = State::kNone;
 
@@ -116,9 +112,9 @@ class SecurityKeysResetHandler : public SecurityKeysHandlerBase {
   void RegisterMessages() override;
   void Close() override;
 
-  void HandleReset(const base::ListValue* args);
+  void HandleReset(const base::Value::List& args);
   void OnResetSent();
-  void HandleCompleteReset(const base::ListValue* args);
+  void HandleCompleteReset(const base::Value::List& args);
   void OnResetFinished(device::CtapDeviceResponseCode result);
 
   State state_ = State::kNone;
@@ -142,7 +138,9 @@ class SecurityKeysCredentialHandler : public SecurityKeysHandlerBase {
  protected:
   explicit SecurityKeysCredentialHandler(
       std::unique_ptr<device::FidoDiscoveryFactory> discovery_factory);
-  void HandleStart(const base::ListValue* args);
+  void HandleStart(const base::Value::List& args);
+  void HandlePIN(const base::Value::List& args);
+  void HandleUpdateUserInformation(const base::Value::List& args);
 
  private:
   enum class State {
@@ -152,14 +150,14 @@ class SecurityKeysCredentialHandler : public SecurityKeysHandlerBase {
     kReady,
     kGettingCredentials,
     kDeletingCredentials,
+    kUpdatingUserInformation,
   };
 
   void RegisterMessages() override;
   void Close() override;
 
-  void HandlePIN(const base::ListValue* args);
-  void HandleEnumerate(const base::ListValue* args);
-  void HandleDelete(const base::ListValue* args);
+  void HandleEnumerate(const base::Value::List& args);
+  void HandleDelete(const base::Value::List& args);
 
   void OnCredentialManagementReady();
   void OnHaveCredentials(
@@ -168,10 +166,11 @@ class SecurityKeysCredentialHandler : public SecurityKeysHandlerBase {
           std::vector<device::AggregatedEnumerateCredentialsResponse>>
           responses,
       absl::optional<size_t> remaining_credentials);
-  void OnGatherPIN(uint32_t min_pin_length,
-                   int64_t num_retries,
+  void OnGatherPIN(device::CredentialManagementHandler::AuthenticatorProperties
+                       authenticator_properties,
                    base::OnceCallback<void(std::string)>);
   void OnCredentialsDeleted(device::CtapDeviceResponseCode status);
+  void OnUserInformationUpdated(device::CtapDeviceResponseCode status);
   void OnFinished(device::CredentialManagementStatus status);
 
   State state_ = State::kNone;
@@ -195,9 +194,9 @@ class SecurityKeysBioEnrollmentHandler : public SecurityKeysHandlerBase {
  protected:
   explicit SecurityKeysBioEnrollmentHandler(
       std::unique_ptr<device::FidoDiscoveryFactory> discovery_factory);
-  void HandleStart(const base::ListValue* args);
-  void HandleProvidePIN(const base::ListValue* args);
-  void HandleStartEnrolling(const base::ListValue* args);
+  void HandleStart(const base::Value::List& args);
+  void HandleProvidePIN(const base::Value::List& args);
+  void HandleStartEnrolling(const base::Value::List& args);
 
  private:
   enum class State {
@@ -217,12 +216,11 @@ class SecurityKeysBioEnrollmentHandler : public SecurityKeysHandlerBase {
   void OnReady(device::BioEnrollmentHandler::SensorInfo sensor_info);
   void OnError(device::BioEnrollmentHandler::Error error);
   void OnGatherPIN(uint32_t min_pin_length,
-                   int64_t retries,
+                   int64_t num_retries,
                    base::OnceCallback<void(std::string)>);
+  void HandleGetSensorInfo(const base::Value::List& args);
 
-  void HandleGetSensorInfo(const base::ListValue* args);
-
-  void HandleEnumerate(const base::ListValue* args);
+  void HandleEnumerate(const base::Value::List& args);
   void OnHaveEnumeration(
       device::CtapDeviceResponseCode,
       absl::optional<std::map<std::vector<uint8_t>, std::string>>);
@@ -235,13 +233,13 @@ class SecurityKeysBioEnrollmentHandler : public SecurityKeysHandlerBase {
       device::CtapDeviceResponseCode code,
       absl::optional<std::map<std::vector<uint8_t>, std::string>> enrollments);
 
-  void HandleDelete(const base::ListValue* args);
+  void HandleDelete(const base::Value::List& args);
   void OnDelete(device::CtapDeviceResponseCode);
 
-  void HandleRename(const base::ListValue* args);
+  void HandleRename(const base::Value::List& args);
   void OnRename(device::CtapDeviceResponseCode);
 
-  void HandleCancel(const base::ListValue* args);
+  void HandleCancel(const base::Value::List& args);
 
   State state_ = State::kNone;
   std::string callback_id_;
@@ -249,6 +247,24 @@ class SecurityKeysBioEnrollmentHandler : public SecurityKeysHandlerBase {
   std::unique_ptr<device::BioEnrollmentHandler> bio_;
   device::BioEnrollmentHandler::SensorInfo sensor_info_;
   base::WeakPtrFactory<SecurityKeysBioEnrollmentHandler> weak_factory_{this};
+};
+
+class SecurityKeysPhonesHandler : public SettingsPageUIHandler {
+ public:
+  SecurityKeysPhonesHandler();
+  ~SecurityKeysPhonesHandler() override;
+
+ protected:
+  void RegisterMessages() override;
+  void OnJavascriptAllowed() override;
+  void OnJavascriptDisallowed() override;
+
+ private:
+  void HandleEnumerate(const base::Value::List& args);
+  void HandleDelete(const base::Value::List& args);
+  void HandleRename(const base::Value::List& args);
+
+  void DoEnumerate(const base::Value& callback_id);
 };
 
 }  // namespace settings

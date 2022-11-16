@@ -9,7 +9,6 @@
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/guid.h"
-#include "base/task/post_task.h"
 #include "content/browser/background_fetch/background_fetch_context.h"
 #include "content/browser/background_fetch/background_fetch_metrics.h"
 #include "content/browser/background_fetch/background_fetch_registration_id.h"
@@ -37,6 +36,7 @@ constexpr size_t kMaxDeveloperIdLength = 1024 * 1024;
 
 // static
 void BackgroundFetchServiceImpl::CreateForWorker(
+    const net::NetworkIsolationKey& network_isolation_key,
     const ServiceWorkerVersionBaseInfo& info,
     mojo::PendingReceiver<blink::mojom::BackgroundFetchService> receiver) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
@@ -46,13 +46,31 @@ void BackgroundFetchServiceImpl::CreateForWorker(
   if (!render_process_host)
     return;
 
+  auto* partition = static_cast<StoragePartitionImpl*>(
+      render_process_host->GetStoragePartition());
   scoped_refptr<BackgroundFetchContext> context =
-      WrapRefCounted(static_cast<StoragePartitionImpl*>(
-                         render_process_host->GetStoragePartition())
-                         ->GetBackgroundFetchContext());
+      WrapRefCounted(partition->GetBackgroundFetchContext());
+
+  // The renderer should have checked and disallowed the request for fenced
+  // frames and thrown an exception in blink::BackgroundFetchManager. Ignore the
+  // request and mark it as bad if the renderer side check didn't happen for
+  // some reason.
+  scoped_refptr<ServiceWorkerRegistration> registration =
+      partition->GetServiceWorkerContext()->GetLiveRegistration(
+          info.registration_id);
+  if (registration && registration->ancestor_frame_type() ==
+                          blink::mojom::AncestorFrameType::kFencedFrame) {
+    bad_message::ReceivedBadMessage(
+        render_process_host, bad_message::BFSI_CREATE_FOR_WORKER_FENCED_FRAME);
+    return;
+  }
+
   mojo::MakeSelfOwnedReceiver(
       std::make_unique<BackgroundFetchServiceImpl>(
-          std::move(context), info.storage_key, /*rfh=*/nullptr),
+          std::move(context), info.storage_key,
+          net::IsolationInfo::CreatePartial(
+              net::IsolationInfo::RequestType::kOther, network_isolation_key),
+          render_process_host, /*rfh=*/nullptr),
       std::move(receiver));
 }
 
@@ -62,6 +80,20 @@ void BackgroundFetchServiceImpl::CreateForFrame(
     mojo::PendingReceiver<blink::mojom::BackgroundFetchService> receiver) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   DCHECK(render_frame_host);
+
+  if (render_frame_host->IsNestedWithinFencedFrame()) {
+    // The renderer should have checked and disallowed the request for fenced
+    // frames and throw exception in blink::BackgroundFetchManager. Ignore the
+    // request and mark it as bad if it didn't happen for some reason.
+    // TODO(crbug.com/1271051) Follow-up on this line depending on the
+    // conclusion at
+    // https://groups.google.com/a/chromium.org/g/navigation-dev/c/BZLlGsL2-64
+    bad_message::ReceivedBadMessage(
+        render_frame_host->GetProcess(),
+        bad_message::BFSI_CREATE_FOR_FRAME_FENCED_FRAME);
+    return;
+  }
+
   auto* rfhi = static_cast<RenderFrameHostImpl*>(render_frame_host);
   RenderProcessHost* render_process_host = rfhi->GetProcess();
   DCHECK(render_process_host);
@@ -71,17 +103,22 @@ void BackgroundFetchServiceImpl::CreateForFrame(
                          render_process_host->GetStoragePartition())
                          ->GetBackgroundFetchContext());
   mojo::MakeSelfOwnedReceiver(
-      std::make_unique<BackgroundFetchServiceImpl>(std::move(context),
-                                                   rfhi->storage_key(), rfhi),
+      std::make_unique<BackgroundFetchServiceImpl>(
+          std::move(context), rfhi->storage_key(),
+          rfhi->GetIsolationInfoForSubresources(), rfhi->GetProcess(), rfhi),
       std::move(receiver));
 }
 
 BackgroundFetchServiceImpl::BackgroundFetchServiceImpl(
     scoped_refptr<BackgroundFetchContext> background_fetch_context,
     blink::StorageKey storage_key,
+    net::IsolationInfo isolation_info,
+    RenderProcessHost* rph,
     RenderFrameHostImpl* rfh)
     : background_fetch_context_(std::move(background_fetch_context)),
       storage_key_(std::move(storage_key)),
+      isolation_info_(std::move(isolation_info)),
+      rph_id_(rph->GetID()),
       rfh_id_(rfh ? rfh->GetGlobalId() : GlobalRenderFrameHostId()) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -117,7 +154,8 @@ void BackgroundFetchServiceImpl::Fetch(
 
   background_fetch_context_->StartFetch(
       registration_id, std::move(requests), std::move(options), icon,
-      std::move(ukm_data), RenderFrameHostImpl::FromID(rfh_id_),
+      std::move(ukm_data), RenderProcessHost::FromID(rph_id_),
+      RenderFrameHostImpl::FromID(rfh_id_), isolation_info_,
       std::move(callback));
 }
 

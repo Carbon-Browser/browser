@@ -33,14 +33,13 @@ class BindingManager implements ComponentCallbacks2 {
     // Delays used when clearing moderate binding pool when onSentToBackground happens.
     private static final long MODERATE_BINDING_POOL_CLEARER_DELAY_MILLIS = 10 * 1000;
 
-    private final boolean mBindWaiveCpu;
     private final Set<ChildProcessConnection> mConnections = new ArraySet<ChildProcessConnection>();
     // Can be -1 to mean no max size.
     private final int mMaxSize;
     private final Iterable<ChildProcessConnection> mRanking;
     private final Runnable mDelayedClearer;
 
-    // If not null, this is a connection in |mConnections| that does not have a moderate binding
+    // If not null, this is the connection in |mConnections| that does not have a moderate binding
     // added by BindingManager.
     private ChildProcessConnection mWaivedConnection;
 
@@ -149,28 +148,50 @@ class BindingManager implements ComponentCallbacks2 {
     }
 
     /**
+     * @return the number of moderate bindings that are the result of just BindingManager.
+     */
+    int getExclusiveModerateBindingCount() {
+        int exclusiveModerateBindingCount = 0;
+        for (ChildProcessConnection connection : mConnections) {
+            if (!isExclusiveModerateBinding(connection)) continue;
+
+            exclusiveModerateBindingCount++;
+        }
+        return exclusiveModerateBindingCount;
+    }
+
+    /**
+     * @param connection The connection to check if BindingManager has a moderate binding for.
+     * @return whether this BindingManager has an exclusive moderate connection.
+     */
+    boolean hasExclusiveModerateBinding(ChildProcessConnection connection) {
+        return mConnections.contains(connection) && isExclusiveModerateBinding(connection);
+    }
+
+    private boolean isExclusiveModerateBinding(ChildProcessConnection connection) {
+        return connection != mWaivedConnection && !connection.isStrongBindingBound()
+                && connection.getModerateBindingCount() == 1;
+    }
+
+    /**
      * Construct instance without maxsize and can support arbitrary number of connections.
      */
-    BindingManager(
-            Context context, Iterable<ChildProcessConnection> ranking, boolean bindWaiveCpu) {
-        this(-1, ranking, context, bindWaiveCpu);
+    BindingManager(Context context, Iterable<ChildProcessConnection> ranking) {
+        this(-1, ranking, context);
     }
 
     /**
      * Construct instance with maxSize.
      */
-    BindingManager(Context context, int maxSize, Iterable<ChildProcessConnection> ranking,
-            boolean bindWaiveCpu) {
-        this(maxSize, ranking, context, bindWaiveCpu);
+    BindingManager(Context context, int maxSize, Iterable<ChildProcessConnection> ranking) {
+        this(maxSize, ranking, context);
         assert maxSize > 0;
     }
 
-    private BindingManager(int maxSize, Iterable<ChildProcessConnection> ranking, Context context,
-            boolean bindWaiveCpu) {
+    private BindingManager(int maxSize, Iterable<ChildProcessConnection> ranking, Context context) {
         assert LauncherThread.runningOnLauncherThread();
         Log.i(TAG, "Moderate binding enabled: maxSize=%d", maxSize);
 
-        mBindWaiveCpu = bindWaiveCpu;
         mMaxSize = maxSize;
         mRanking = ranking;
         assert mMaxSize > 0 || mMaxSize == -1;
@@ -182,7 +203,7 @@ class BindingManager implements ComponentCallbacks2 {
                 // Tests may not load the native library which is required for
                 // recording histograms.
                 if (LibraryLoader.getInstance().isInitialized()) {
-                    RecordHistogram.recordCountHistogram(
+                    RecordHistogram.recordCount1MHistogram(
                             "Android.ModerateBindingCount", mConnections.size());
                 }
                 removeAllConnections();
@@ -218,10 +239,10 @@ class BindingManager implements ComponentCallbacks2 {
     }
 
     private void addModerateBinding(ChildProcessConnection connection) {
-        connection.addModerateBinding(mBindWaiveCpu);
+        connection.addModerateBinding();
     }
 
     private void removeModerateBinding(ChildProcessConnection connection) {
-        connection.removeModerateBinding(mBindWaiveCpu);
+        connection.removeModerateBinding();
     }
 }

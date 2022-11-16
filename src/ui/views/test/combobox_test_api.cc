@@ -8,7 +8,7 @@
 
 #include <memory>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/models/menu_model.h"
 #include "ui/views/controls/combobox/combobox.h"
 #include "ui/views/controls/menu/menu_runner.h"
@@ -25,6 +25,10 @@ class TestMenuRunnerHandler : public MenuRunnerHandler {
  public:
   explicit TestMenuRunnerHandler(int* show_counter)
       : show_counter_(show_counter) {}
+
+  TestMenuRunnerHandler(const TestMenuRunnerHandler&) = delete;
+  TestMenuRunnerHandler& operator=(const TestMenuRunnerHandler&) = delete;
+
   void RunMenuAt(Widget* parent,
                  MenuButtonController* button_controller,
                  const gfx::Rect& bounds,
@@ -35,9 +39,7 @@ class TestMenuRunnerHandler : public MenuRunnerHandler {
   }
 
  private:
-  int* show_counter_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestMenuRunnerHandler);
+  raw_ptr<int> show_counter_;
 };
 
 }  // namespace

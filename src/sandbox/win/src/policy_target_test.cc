@@ -9,6 +9,7 @@
 #include "base/strings/string_util.h"
 #include "base/win/scoped_process_information.h"
 #include "base/win/windows_version.h"
+#include "build/build_config.h"
 #include "sandbox/win/src/sandbox.h"
 #include "sandbox/win/src/sandbox_factory.h"
 #include "sandbox/win/src/sandbox_utils.h"
@@ -16,7 +17,7 @@
 #include "sandbox/win/tests/common/controller.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include "base/win/win_util.h"
 #endif
 
@@ -179,11 +180,13 @@ TEST(PolicyTargetTest, SetInformationThread) {
   runner.SetTestState(BEFORE_REVERT);
   EXPECT_EQ(SBOX_TEST_SUCCEEDED, runner.RunTest(L"PolicyTargetTest_token"));
 
-  runner.SetTestState(AFTER_REVERT);
-  EXPECT_EQ(ERROR_NO_TOKEN, runner.RunTest(L"PolicyTargetTest_token"));
+  TestRunner runner1;
+  runner1.SetTestState(AFTER_REVERT);
+  EXPECT_EQ(ERROR_NO_TOKEN, runner1.RunTest(L"PolicyTargetTest_token"));
 
-  runner.SetTestState(EVERY_STATE);
-  EXPECT_EQ(SBOX_TEST_FAILED, runner.RunTest(L"PolicyTargetTest_steal"));
+  TestRunner runner2;
+  runner2.SetTestState(EVERY_STATE);
+  EXPECT_EQ(SBOX_TEST_FAILED, runner2.RunTest(L"PolicyTargetTest_steal"));
 }
 
 TEST(PolicyTargetTest, OpenThreadToken) {
@@ -191,18 +194,19 @@ TEST(PolicyTargetTest, OpenThreadToken) {
   runner.SetTestState(BEFORE_REVERT);
   EXPECT_EQ(SBOX_TEST_SUCCEEDED, runner.RunTest(L"PolicyTargetTest_token2"));
 
-  runner.SetTestState(AFTER_REVERT);
-  EXPECT_EQ(ERROR_NO_TOKEN, runner.RunTest(L"PolicyTargetTest_token2"));
+  TestRunner runner2;
+  runner2.SetTestState(AFTER_REVERT);
+  EXPECT_EQ(ERROR_NO_TOKEN, runner2.RunTest(L"PolicyTargetTest_token2"));
 }
 
 TEST(PolicyTargetTest, OpenThreadTokenEx) {
   TestRunner runner;
-
   runner.SetTestState(BEFORE_REVERT);
   EXPECT_EQ(SBOX_TEST_SUCCEEDED, runner.RunTest(L"PolicyTargetTest_token3"));
 
-  runner.SetTestState(AFTER_REVERT);
-  EXPECT_EQ(ERROR_NO_TOKEN, runner.RunTest(L"PolicyTargetTest_token3"));
+  TestRunner runner2;
+  runner2.SetTestState(AFTER_REVERT);
+  EXPECT_EQ(ERROR_NO_TOKEN, runner2.RunTest(L"PolicyTargetTest_token3"));
 }
 
 TEST(PolicyTargetTest, OpenThread) {
@@ -210,7 +214,8 @@ TEST(PolicyTargetTest, OpenThread) {
   EXPECT_EQ(SBOX_TEST_SUCCEEDED, runner.RunTest(L"PolicyTargetTest_thread"))
       << "Opens the current thread";
 
-  EXPECT_EQ(SBOX_TEST_SUCCEEDED, runner.RunTest(L"PolicyTargetTest_thread2"))
+  TestRunner runner2;
+  EXPECT_EQ(SBOX_TEST_SUCCEEDED, runner2.RunTest(L"PolicyTargetTest_thread2"))
       << "Creates a new thread and opens it";
 }
 
@@ -221,25 +226,39 @@ TEST(PolicyTargetTest, OpenProcess) {
 }
 
 TEST(PolicyTargetTest, PolicyBaseNoJobLifetime) {
-  TestRunner runner(JOB_NONE, USER_RESTRICTED_SAME_ACCESS, USER_LOCKDOWN);
-  runner.SetReleasePolicyInRun(true);
+  TestRunner runner(JobLevel::kNone, USER_RESTRICTED_SAME_ACCESS,
+                    USER_LOCKDOWN);
   // TargetPolicy and its SharedMemIPCServer should continue to exist until
   // the child process dies.
   EXPECT_EQ(SBOX_TEST_SUCCEEDED, runner.RunTest(L"PolicyTargetTest_thread"))
       << "Opens the current thread";
 }
 
-// Launches the app in the sandbox and ask it to wait in an
-// infinite loop. Waits for 2 seconds and then check if the
-// desktop associated with the app thread is not the same as the
-// current desktop.
-TEST(PolicyTargetTest, DesktopPolicy) {
+// Sets the desktop for the current thread to be one with a null DACL, then
+// launches a sandboxed app. Validates that the sandboxed app has access to the
+// desktop.
+TEST(PolicyTargetTest, InheritedDesktopPolicy) {
+  // Create a desktop with a null dacl - which should allow access to
+  // everything.
+  SECURITY_ATTRIBUTES attributes = {};
+  attributes.nLength = sizeof(SECURITY_ATTRIBUTES);
+  SECURITY_DESCRIPTOR security_desc = {};
+  ::InitializeSecurityDescriptor(&security_desc, SECURITY_DESCRIPTOR_REVISION);
+  ::SetSecurityDescriptorDacl(&security_desc, true, nullptr, false);
+  attributes.lpSecurityDescriptor = &security_desc;
+  HDESK null_dacl_desktop_handle = CreateDesktop(
+      L"null_dacl_desktop", nullptr, nullptr, 0, GENERIC_ALL, &attributes);
+  EXPECT_TRUE(null_dacl_desktop_handle);
+
+  // Switch to the null dacl desktop and run the test.
+  HDESK old_desktop = ::GetThreadDesktop(::GetCurrentThreadId());
+  EXPECT_TRUE(null_dacl_desktop_handle);
+  EXPECT_TRUE(::SetThreadDesktop(null_dacl_desktop_handle));
+
   BrokerServices* broker = GetBroker();
 
   // Precreate the desktop.
-  scoped_refptr<TargetPolicy> temp_policy = broker->CreatePolicy();
-  temp_policy->CreateAlternateDesktop(false);
-  temp_policy = nullptr;
+  broker->CreatePolicy()->CreateAlternateDesktop(false);
 
   ASSERT_TRUE(broker);
 
@@ -257,15 +276,69 @@ TEST(PolicyTargetTest, DesktopPolicy) {
   DWORD last_error = ERROR_SUCCESS;
   base::win::ScopedProcessInformation target;
 
-  scoped_refptr<TargetPolicy> policy = broker->CreatePolicy();
+  auto policy = broker->CreatePolicy();
   policy->SetAlternateDesktop(false);
   policy->SetTokenLevel(USER_INTERACTIVE, USER_LOCKDOWN);
   PROCESS_INFORMATION temp_process_info = {};
   result =
-      broker->SpawnTarget(prog_name, arguments.c_str(), policy, &warning_result,
-                          &last_error, &temp_process_info);
+      broker->SpawnTarget(prog_name, arguments.c_str(), std::move(policy),
+                          &warning_result, &last_error, &temp_process_info);
+
+  EXPECT_EQ(SBOX_ALL_OK, result);
+  if (result == SBOX_ALL_OK)
+    target.Set(temp_process_info);
+
+  // Run the process for some time to make sure it doesn't crash on launch
+  EXPECT_EQ(1u, ::ResumeThread(target.thread_handle()));
+  EXPECT_EQ(static_cast<DWORD>(WAIT_TIMEOUT),
+            ::WaitForSingleObject(target.process_handle(), 2000));
+
+  EXPECT_TRUE(::TerminateProcess(target.process_handle(), 0));
+  ::WaitForSingleObject(target.process_handle(), INFINITE);
+
+  // Close the desktop handle.
+  broker->CreatePolicy()->DestroyAlternateDesktop();
+
+  // Close the null dacl desktop.
+  EXPECT_TRUE(::SetThreadDesktop(old_desktop));
+  EXPECT_TRUE(::CloseDesktop(null_dacl_desktop_handle));
+}
+
+// Launches the app in the sandbox and ask it to wait in an
+// infinite loop. Waits for 2 seconds and then check if the
+// desktop associated with the app thread is not the same as the
+// current desktop.
+TEST(PolicyTargetTest, DesktopPolicy) {
+  BrokerServices* broker = GetBroker();
+
+  // Precreate the desktop.
+  broker->CreatePolicy()->CreateAlternateDesktop(false);
+
+  ASSERT_TRUE(broker);
+
+  // Get the path to the sandboxed app.
+  wchar_t prog_name[MAX_PATH];
+  GetModuleFileNameW(nullptr, prog_name, MAX_PATH);
+
+  std::wstring arguments(L"\"");
+  arguments += prog_name;
+  arguments += L"\" -child 0 wait";  // Don't care about the "state" argument.
+
+  // Launch the app.
+  ResultCode result = SBOX_ALL_OK;
+  ResultCode warning_result = SBOX_ALL_OK;
+  DWORD last_error = ERROR_SUCCESS;
+  base::win::ScopedProcessInformation target;
+
+  auto policy = broker->CreatePolicy();
+  policy->SetAlternateDesktop(false);
+  policy->SetTokenLevel(USER_INTERACTIVE, USER_LOCKDOWN);
+  PROCESS_INFORMATION temp_process_info = {};
+  // Keep the desktop name to test against later.
   std::wstring desktop_name = policy->GetAlternateDesktop();
-  policy = nullptr;
+  result =
+      broker->SpawnTarget(prog_name, arguments.c_str(), std::move(policy),
+                          &warning_result, &last_error, &temp_process_info);
 
   EXPECT_EQ(SBOX_ALL_OK, result);
   if (result == SBOX_ALL_OK)
@@ -287,9 +360,7 @@ TEST(PolicyTargetTest, DesktopPolicy) {
   ::WaitForSingleObject(target.process_handle(), INFINITE);
 
   // Close the desktop handle.
-  temp_policy = broker->CreatePolicy();
-  temp_policy->DestroyAlternateDesktop();
-  temp_policy = nullptr;
+  broker->CreatePolicy()->DestroyAlternateDesktop();
 
   // Make sure the desktop does not exist anymore.
   desk = ::OpenDesktop(desktop_name.c_str(), 0, false, DESKTOP_ENUMERATE);
@@ -304,9 +375,7 @@ TEST(PolicyTargetTest, WinstaPolicy) {
   BrokerServices* broker = GetBroker();
 
   // Precreate the desktop.
-  scoped_refptr<TargetPolicy> temp_policy = broker->CreatePolicy();
-  temp_policy->CreateAlternateDesktop(true);
-  temp_policy = nullptr;
+  broker->CreatePolicy()->CreateAlternateDesktop(true);
 
   ASSERT_TRUE(broker);
 
@@ -323,16 +392,16 @@ TEST(PolicyTargetTest, WinstaPolicy) {
   ResultCode warning_result = SBOX_ALL_OK;
   base::win::ScopedProcessInformation target;
 
-  scoped_refptr<TargetPolicy> policy = broker->CreatePolicy();
+  auto policy = broker->CreatePolicy();
   policy->SetAlternateDesktop(true);
   policy->SetTokenLevel(USER_INTERACTIVE, USER_LOCKDOWN);
   PROCESS_INFORMATION temp_process_info = {};
   DWORD last_error = ERROR_SUCCESS;
-  result =
-      broker->SpawnTarget(prog_name, arguments.c_str(), policy, &warning_result,
-                          &last_error, &temp_process_info);
+  // Keep the desktop name for later.
   std::wstring desktop_name = policy->GetAlternateDesktop();
-  policy = nullptr;
+  result =
+      broker->SpawnTarget(prog_name, arguments.c_str(), std::move(policy),
+                          &warning_result, &last_error, &temp_process_info);
 
   EXPECT_EQ(SBOX_ALL_OK, result);
   if (result == SBOX_ALL_OK)
@@ -362,9 +431,7 @@ TEST(PolicyTargetTest, WinstaPolicy) {
   ::WaitForSingleObject(target.process_handle(), INFINITE);
 
   // Close the desktop handle.
-  temp_policy = broker->CreatePolicy();
-  temp_policy->DestroyAlternateDesktop();
-  temp_policy = nullptr;
+  broker->CreatePolicy()->DestroyAlternateDesktop();
 }
 
 // Creates multiple policies, with alternate desktops on both local and
@@ -372,9 +439,9 @@ TEST(PolicyTargetTest, WinstaPolicy) {
 TEST(PolicyTargetTest, BothLocalAndAlternateWinstationDesktop) {
   BrokerServices* broker = GetBroker();
 
-  scoped_refptr<TargetPolicy> policy1 = broker->CreatePolicy();
-  scoped_refptr<TargetPolicy> policy2 = broker->CreatePolicy();
-  scoped_refptr<TargetPolicy> policy3 = broker->CreatePolicy();
+  auto policy1 = broker->CreatePolicy();
+  auto policy2 = broker->CreatePolicy();
+  auto policy3 = broker->CreatePolicy();
 
   ResultCode result;
   result = policy1->SetAlternateDesktop(false);
@@ -422,7 +489,7 @@ TEST(PolicyTargetTest, ShareHandleTest) {
           std::move(writable_region));
   ASSERT_TRUE(read_only_region.IsValid());
 
-  scoped_refptr<TargetPolicy> policy = broker->CreatePolicy();
+  auto policy = broker->CreatePolicy();
   policy->AddHandleToShare(read_only_region.GetPlatformHandle());
 
   std::wstring arguments(L"\"");
@@ -440,9 +507,8 @@ TEST(PolicyTargetTest, ShareHandleTest) {
   PROCESS_INFORMATION temp_process_info = {};
   DWORD last_error = ERROR_SUCCESS;
   result =
-      broker->SpawnTarget(prog_name, arguments.c_str(), policy, &warning_result,
-                          &last_error, &temp_process_info);
-  policy = nullptr;
+      broker->SpawnTarget(prog_name, arguments.c_str(), std::move(policy),
+                          &warning_result, &last_error, &temp_process_info);
 
   EXPECT_EQ(SBOX_ALL_OK, result);
   if (result == SBOX_ALL_OK)

@@ -7,8 +7,7 @@
 
 #include "base/callback_forward.h"
 #include "base/containers/id_map.h"
-#include "base/macros.h"
-#include "content/public/browser/render_document_host_user_data.h"
+#include "content/public/browser/page_user_data.h"
 #include "mojo/public/cpp/bindings/associated_receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "third_party/blink/public/mojom/manifest/manifest.mojom-forward.h"
@@ -17,16 +16,16 @@
 
 namespace content {
 
-class RenderFrameHostImpl;
-
 // ManifestManagerHost is a helper class that allows callers to get the Manifest
 // associated with the main frame of the observed WebContents. It handles the
 // IPC messaging with the child process.
 // TODO(mlamouri): keep a cached version and a dirty bit here.
-class ManifestManagerHost
-    : public RenderDocumentHostUserData<ManifestManagerHost>,
-      public blink::mojom::ManifestUrlChangeObserver {
+class ManifestManagerHost : public PageUserData<ManifestManagerHost>,
+                            public blink::mojom::ManifestUrlChangeObserver {
  public:
+  ManifestManagerHost(const ManifestManagerHost&) = delete;
+  ManifestManagerHost& operator=(const ManifestManagerHost&) = delete;
+
   ~ManifestManagerHost() override;
 
   using GetManifestCallback =
@@ -45,9 +44,9 @@ class ManifestManagerHost
           receiver);
 
  private:
-  explicit ManifestManagerHost(RenderFrameHost* render_frame_host);
+  explicit ManifestManagerHost(Page& page);
 
-  friend class RenderDocumentHostUserData<ManifestManagerHost>;
+  friend class PageUserData<ManifestManagerHost>;
 
   using CallbackMap = base::IDMap<std::unique_ptr<GetManifestCallback>>;
 
@@ -63,15 +62,13 @@ class ManifestManagerHost
   // blink::mojom::ManifestUrlChangeObserver:
   void ManifestUrlChanged(const GURL& manifest_url) override;
 
-  RenderFrameHostImpl* manifest_manager_frame_;
   mojo::Remote<blink::mojom::ManifestManager> manifest_manager_;
   CallbackMap callbacks_;
 
   mojo::AssociatedReceiver<blink::mojom::ManifestUrlChangeObserver>
       manifest_url_change_observer_receiver_{this};
 
-  RENDER_DOCUMENT_HOST_USER_DATA_KEY_DECL();
-  DISALLOW_COPY_AND_ASSIGN(ManifestManagerHost);
+  PAGE_USER_DATA_KEY_DECL();
 };
 
 }  // namespace content

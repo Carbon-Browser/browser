@@ -10,9 +10,8 @@
 
 #include "base/bind.h"
 #include "base/json/json_writer.h"
-#include "base/macros.h"
 #include "base/run_loop.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/test_mock_time_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
@@ -27,9 +26,9 @@
 
 namespace policy {
 
-namespace em = enterprise_management;
-
 namespace {
+
+namespace em = ::enterprise_management;
 
 // String constant identifying the result field in the result payload.
 const char* const kResultFieldName = "result";
@@ -46,19 +45,18 @@ em::RemoteCommand GenerateScreenshotCommandProto(
     base::TimeDelta age_of_command,
     const std::string upload_url) {
   em::RemoteCommand command_proto;
-  command_proto.set_type(
-      enterprise_management::RemoteCommand_Type_DEVICE_SCREENSHOT);
+  command_proto.set_type(em::RemoteCommand_Type_DEVICE_SCREENSHOT);
   command_proto.set_command_id(unique_id);
   command_proto.set_age_of_command(age_of_command.InMilliseconds());
   std::string payload;
   base::DictionaryValue root_dict;
-  root_dict.SetString(kUploadUrlFieldName, upload_url);
+  root_dict.SetStringKey(kUploadUrlFieldName, upload_url);
   base::JSONWriter::Write(root_dict, &payload);
   command_proto.set_payload(payload);
   return command_proto;
 }
 
-class MockUploadJob : public policy::UploadJob {
+class MockUploadJob : public UploadJob {
  public:
   // If |error_code| is a null pointer OnSuccess() will be invoked when the
   // Start() method is called, otherwise OnFailure() will be invoked with the
@@ -68,7 +66,7 @@ class MockUploadJob : public policy::UploadJob {
                 std::unique_ptr<UploadJob::ErrorCode> error_code);
   ~MockUploadJob() override;
 
-  // policy::UploadJob:
+  // UploadJob:
   void AddDataSegment(const std::string& name,
                       const std::string& filename,
                       const std::map<std::string, std::string>& header_entries,
@@ -91,8 +89,7 @@ MockUploadJob::MockUploadJob(const GURL& upload_url,
       delegate_(delegate),
       error_code_(std::move(error_code)) {}
 
-MockUploadJob::~MockUploadJob() {
-}
+MockUploadJob::~MockUploadJob() {}
 
 void MockUploadJob::AddDataSegment(
     const std::string& name,
@@ -145,7 +142,7 @@ class MockScreenshotDelegate : public DeviceCommandScreenshotJob::Delegate {
   bool IsScreenshotAllowed() override;
   void TakeSnapshot(gfx::NativeWindow window,
                     const gfx::Rect& source_rect,
-                    ui::GrabWindowSnapshotAsyncPNGCallback callback) override;
+                    OnScreenshotTakenCallback callback) override;
   std::unique_ptr<UploadJob> CreateUploadJob(const GURL&,
                                              UploadJob::Delegate*) override;
 
@@ -160,17 +157,15 @@ MockScreenshotDelegate::MockScreenshotDelegate(
     : upload_job_error_code_(std::move(upload_job_error_code)),
       screenshot_allowed_(screenshot_allowed) {}
 
-MockScreenshotDelegate::~MockScreenshotDelegate() {
-}
+MockScreenshotDelegate::~MockScreenshotDelegate() {}
 
 bool MockScreenshotDelegate::IsScreenshotAllowed() {
   return screenshot_allowed_;
 }
 
-void MockScreenshotDelegate::TakeSnapshot(
-    gfx::NativeWindow window,
-    const gfx::Rect& source_rect,
-    ui::GrabWindowSnapshotAsyncPNGCallback callback) {
+void MockScreenshotDelegate::TakeSnapshot(gfx::NativeWindow window,
+                                          const gfx::Rect& source_rect,
+                                          OnScreenshotTakenCallback callback) {
   const int width = source_rect.width();
   const int height = source_rect.height();
   scoped_refptr<base::RefCountedBytes> test_png =
@@ -190,6 +185,10 @@ std::unique_ptr<UploadJob> MockScreenshotDelegate::CreateUploadJob(
 
 class DeviceCommandScreenshotTest : public ChromeAshTestBase {
  public:
+  DeviceCommandScreenshotTest(const DeviceCommandScreenshotTest&) = delete;
+  DeviceCommandScreenshotTest& operator=(const DeviceCommandScreenshotTest&) =
+      delete;
+
   void VerifyResults(RemoteCommandJob* job,
                      RemoteCommandJob::Status expected_status,
                      std::string expected_payload);
@@ -213,13 +212,10 @@ class DeviceCommandScreenshotTest : public ChromeAshTestBase {
 
  private:
   scoped_refptr<base::TestMockTimeTaskRunner> task_runner_;
-
-  DISALLOW_COPY_AND_ASSIGN(DeviceCommandScreenshotTest);
 };
 
 DeviceCommandScreenshotTest::DeviceCommandScreenshotTest()
-    : task_runner_(new base::TestMockTimeTaskRunner()) {
-}
+    : task_runner_(new base::TestMockTimeTaskRunner()) {}
 
 void DeviceCommandScreenshotTest::SetUp() {
   ChromeAshTestBase::SetUp();
@@ -235,7 +231,7 @@ void DeviceCommandScreenshotTest::InitializeScreenshotJob(
       base::TimeTicks::Now(),
       GenerateScreenshotCommandProto(
           unique_id, base::TimeTicks::Now() - issued_time, upload_url),
-      nullptr));
+      em::SignedData()));
   EXPECT_EQ(unique_id, job->unique_id());
   EXPECT_EQ(RemoteCommandJob::NOT_STARTED, job->status());
 }

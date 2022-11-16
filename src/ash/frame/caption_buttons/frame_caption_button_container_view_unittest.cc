@@ -6,10 +6,16 @@
 
 #include "ash/shell.h"
 #include "ash/test/ash_test_base.h"
+#include "ash/wm/float/float_controller.h"
 #include "ash/wm/tablet_mode/tablet_mode_controller.h"
 #include "ash/wm/window_state.h"
+#include "ash/wm/wm_event.h"
 #include "base/test/bind.h"
+#include "base/test/scoped_feature_list.h"
+#include "chromeos/ui/base/window_properties.h"
+#include "chromeos/ui/base/window_state_type.h"
 #include "chromeos/ui/vector_icons/vector_icons.h"
+#include "chromeos/ui/wm/features.h"
 #include "ui/events/test/event_generator.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/views/test/test_views.h"
@@ -33,20 +39,26 @@ class FrameCaptionButtonContainerViewTest : public AshTestBase {
 
   FrameCaptionButtonContainerViewTest() = default;
 
+  FrameCaptionButtonContainerViewTest(
+      const FrameCaptionButtonContainerViewTest&) = delete;
+  FrameCaptionButtonContainerViewTest& operator=(
+      const FrameCaptionButtonContainerViewTest&) = delete;
+
   ~FrameCaptionButtonContainerViewTest() override = default;
 
   // Creates a widget which allows maximizing based on |maximize_allowed|.
   // The caller takes ownership of the returned widget.
-  views::Widget* CreateTestWidget(MaximizeAllowed maximize_allowed,
-                                  MinimizeAllowed minimize_allowed,
-                                  CloseButtonVisible close_button_visible)
-      WARN_UNUSED_RESULT {
+  [[nodiscard]] views::Widget* CreateTestWidget(
+      MaximizeAllowed maximize_allowed,
+      MinimizeAllowed minimize_allowed,
+      CloseButtonVisible close_button_visible) {
     views::Widget* widget = new views::Widget;
     views::Widget::InitParams params(
         views::Widget::InitParams::TYPE_WINDOW_FRAMELESS);
     auto delegate = std::make_unique<views::WidgetDelegateView>();
     delegate->SetCanMaximize(maximize_allowed == MAXIMIZE_ALLOWED);
     delegate->SetCanMinimize(minimize_allowed == MINIMIZE_ALLOWED);
+    delegate->SetCanResize(true);
     delegate->SetShowCloseButton(close_button_visible == CLOSE_BUTTON_VISIBLE);
     params.delegate = delegate.release();
     params.ownership = views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
@@ -97,8 +109,34 @@ class FrameCaptionButtonContainerViewTest : public AshTestBase {
     base::RunLoop().RunUntilIdle();
   }
 
+  void ClickFloatButton(FrameCaptionButtonContainerView::TestApi* testApi) {
+    ui::test::EventGenerator* generator = GetEventGenerator();
+    auto* float_button = testApi->float_button();
+    generator->MoveMouseTo(float_button->GetBoundsInScreen().CenterPoint());
+    generator->ClickLeftButton();
+    base::RunLoop().RunUntilIdle();
+  }
+};
+
+// Test float button requires kFloatWindow feature to be enabled during setup.
+class WindowFloatButtonTest : public FrameCaptionButtonContainerViewTest {
+ public:
+  WindowFloatButtonTest() = default;
+
+  WindowFloatButtonTest(const WindowFloatButtonTest&) = delete;
+  WindowFloatButtonTest& operator=(const WindowFloatButtonTest&) = delete;
+
+  ~WindowFloatButtonTest() override = default;
+
+  void SetUp() override {
+    // Ensure float feature is enabled.
+    scoped_feature_list_.InitAndEnableFeature(
+        chromeos::wm::features::kFloatWindow);
+    AshTestBase::SetUp();
+  }
+
  private:
-  DISALLOW_COPY_AND_ASSIGN(FrameCaptionButtonContainerViewTest);
+  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 // Test how the allowed actions affect which caption buttons are visible.
@@ -294,6 +332,65 @@ TEST_F(FrameCaptionButtonContainerViewTest, TestSizeButtonBehaviorOverride) {
   ClickSizeButton(&testApi);
   EXPECT_TRUE(window_state->IsNormalStateType());
   EXPECT_TRUE(called);
+}
+
+TEST_F(FrameCaptionButtonContainerViewTest, ResizeButtonRestoreBehavior) {
+  auto* widget = CreateTestWidget(MAXIMIZE_ALLOWED, MINIMIZE_ALLOWED,
+                                  CLOSE_BUTTON_VISIBLE);
+  widget->Show();
+
+  auto* window_state = WindowState::Get(widget->GetNativeWindow());
+
+  FrameCaptionButtonContainerView container(widget);
+  InitContainer(&container);
+  widget->GetContentsView()->AddChildView(&container);
+  container.Layout();
+  FrameCaptionButtonContainerView::TestApi testApi(&container);
+
+  // Test using size button to restore the maximized window to its normal window
+  // state.
+  ClickSizeButton(&testApi);
+  EXPECT_TRUE(window_state->IsMaximized());
+  ClickSizeButton(&testApi);
+  EXPECT_TRUE(window_state->IsNormalStateType());
+
+  // Snap the window.
+  const WindowSnapWMEvent snap_event(WM_EVENT_SNAP_PRIMARY);
+  window_state->OnWMEvent(&snap_event);
+  // Check the window is now snapped.
+  EXPECT_TRUE(window_state->IsSnapped());
+  ClickSizeButton(&testApi);
+  EXPECT_TRUE(window_state->IsMaximized());
+  ClickSizeButton(&testApi);
+  // Check instead of returning back to normal window state, the window should
+  // return back to Snapped window state.
+  EXPECT_TRUE(window_state->IsSnapped());
+}
+
+// Test float button behavior.
+TEST_F(WindowFloatButtonTest, TestFloatButtonBehavior) {
+  auto* widget = CreateTestWidget(MAXIMIZE_ALLOWED, MINIMIZE_ALLOWED,
+                                  CLOSE_BUTTON_VISIBLE);
+  widget->Show();
+
+  FrameCaptionButtonContainerView container(widget);
+  InitContainer(&container);
+  widget->GetContentsView()->AddChildView(&container);
+  container.Layout();
+  FrameCaptionButtonContainerView::TestApi testApi(&container);
+  ClickFloatButton(&testApi);
+  auto* window_state = WindowState::Get(widget->GetNativeWindow());
+  // Check if window is floated.
+  auto* window = widget->GetNativeWindow();
+  EXPECT_TRUE(window_state->IsFloated());
+  EXPECT_EQ(window->GetProperty(chromeos::kWindowStateTypeKey),
+            chromeos::WindowStateType::kFloated);
+  ClickFloatButton(&testApi);
+  // Check if window is unfloated.
+  EXPECT_TRUE(window_state->IsNormalStateType());
+  EXPECT_FALSE(window_state->IsFloated());
+  EXPECT_EQ(window->GetProperty(chromeos::kWindowStateTypeKey),
+            chromeos::WindowStateType::kNormal);
 }
 
 }  // namespace ash

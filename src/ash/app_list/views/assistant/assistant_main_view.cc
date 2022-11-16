@@ -20,6 +20,7 @@
 #include "ash/search_box/search_box_constants.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/compositor/layer.h"
+#include "ui/compositor/layer_animator.h"
 #include "ui/views/layout/box_layout.h"
 
 namespace ash {
@@ -28,9 +29,9 @@ namespace {
 
 // Dialog plate animation.
 constexpr base::TimeDelta kDialogPlateAnimationFadeInDelay =
-    base::TimeDelta::FromMilliseconds(283);
+    base::Milliseconds(283);
 constexpr base::TimeDelta kDialogPlateAnimationFadeInDuration =
-    base::TimeDelta::FromMilliseconds(167);
+    base::Milliseconds(167);
 
 }  // namespace
 

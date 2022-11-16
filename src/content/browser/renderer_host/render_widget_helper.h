@@ -10,7 +10,6 @@
 #include <map>
 
 #include "base/atomic_sequence_num.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/process/process.h"
 #include "base/synchronization/lock.h"
@@ -35,6 +34,9 @@ class RenderWidgetHelper
  public:
   RenderWidgetHelper();
 
+  RenderWidgetHelper(const RenderWidgetHelper&) = delete;
+  RenderWidgetHelper& operator=(const RenderWidgetHelper&) = delete;
+
   void Init(int render_process_id);
 
   // Gets the next available routing id.  This is thread safe.
@@ -56,11 +58,6 @@ class RenderWidgetHelper
       const base::UnguessableToken& devtools_frame_token);
 
   // IO THREAD ONLY -----------------------------------------------------------
-
-  // Lookup the RenderWidgetHelper from the render_process_host_id. Returns NULL
-  // if not found. NOTE: The raw pointer is for temporary use only. To retain,
-  // store in a scoped_refptr.
-  static RenderWidgetHelper* FromProcessHostID(int render_process_host_id);
 
  private:
   friend class base::RefCountedThreadSafe<RenderWidgetHelper>;
@@ -94,8 +91,6 @@ class RenderWidgetHelper
 
   // The next routing id to use.
   base::AtomicSequenceNumber next_routing_id_;
-
-  DISALLOW_COPY_AND_ASSIGN(RenderWidgetHelper);
 };
 
 }  // namespace content

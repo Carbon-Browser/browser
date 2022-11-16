@@ -4,6 +4,9 @@
 
 #include "ui/aura/test/ui_controls_ozone.h"
 
+#include <tuple>
+
+#include "base/callback.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "ui/events/event_utils.h"
@@ -205,7 +208,7 @@ bool UIControlsOzone::SendMouseClick(ui_controls::MouseButton type) {
                          ui_controls::kNoAccelerator);
 }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 bool UIControlsOzone::SendTouchEvents(int action, int id, int x, int y) {
   return SendTouchEventsNotifyWhenDone(action, id, x, y, base::OnceClosure());
 }
@@ -249,9 +252,9 @@ void UIControlsOzone::SendEventToSink(ui::Event* event,
     base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
                                                   std::move(closure));
   }
-  WindowTreeHost* host = optional_host ? optional_host : host_;
+  WindowTreeHost* host = optional_host ? optional_host : host_.get();
   ui::EventSourceTestApi event_source_test(host->GetEventSource());
-  ignore_result(event_source_test.SendEventToSink(event));
+  std::ignore = event_source_test.SendEventToSink(event);
 }
 
 void UIControlsOzone::PostKeyEvent(ui::EventType type,
@@ -356,14 +359,9 @@ bool UIControlsOzone::ScreenDIPToHostPixels(gfx::PointF* location,
   return true;
 }
 
-// To avoid multiple definitions when use_x11 && use_ozone is true, disable this
-// factory method for OS_LINUX as Linux has a factory method that decides what
-// UIControls to use based on IsUsingOzonePlatform feature flag.
-#if !defined(OS_LINUX) && !defined(OS_CHROMEOS)
 ui_controls::UIControlsAura* CreateUIControlsAura(WindowTreeHost* host) {
   return new UIControlsOzone(host);
 }
-#endif
 
 }  // namespace test
 }  // namespace aura

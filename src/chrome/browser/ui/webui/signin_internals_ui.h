@@ -5,8 +5,6 @@
 #ifndef CHROME_BROWSER_UI_WEBUI_SIGNIN_INTERNALS_UI_H_
 #define CHROME_BROWSER_UI_WEBUI_SIGNIN_INTERNALS_UI_H_
 
-#include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "base/values.h"
 #include "components/signin/core/browser/about_signin_internals.h"
 #include "content/public/browser/web_ui_controller.h"
@@ -36,7 +34,7 @@ class SignInInternalsHandler : public content::WebUIMessageHandler,
   void OnJavascriptAllowed() override;
   void OnJavascriptDisallowed() override;
 
-  void HandleGetSignInInfo(const base::ListValue* args);
+  void HandleGetSignInInfo(const base::Value::List& args);
 
   // AboutSigninInternals::Observer::OnSigninStateChanged implementation.
   void OnSigninStateChanged(const base::Value* info) override;

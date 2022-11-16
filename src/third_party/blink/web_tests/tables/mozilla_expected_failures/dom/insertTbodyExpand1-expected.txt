@@ -1,1 +1,0 @@
-CONSOLE ERROR: line 10: Uncaught ReferenceError: appendCell is not defined

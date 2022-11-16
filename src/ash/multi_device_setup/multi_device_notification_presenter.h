@@ -10,10 +10,10 @@
 
 #include "ash/ash_export.h"
 #include "ash/public/cpp/session/session_observer.h"
+#include "ash/services/multidevice_setup/public/mojom/multidevice_setup.mojom.h"
+#include "base/auto_reset.h"
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
-#include "chromeos/services/multidevice_setup/public/mojom/multidevice_setup.mojom.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "ui/message_center/message_center_observer.h"
@@ -41,13 +41,23 @@ namespace ash {
 // Note that if one notification is showing and another one is triggered, the
 // old text is replaced (if it's different) and the notification pops up again.
 class ASH_EXPORT MultiDeviceNotificationPresenter
-    : public chromeos::multidevice_setup::mojom::AccountStatusChangeDelegate,
+    : public multidevice_setup::mojom::AccountStatusChangeDelegate,
       public SessionObserver,
       public message_center::MessageCenterObserver {
  public:
   explicit MultiDeviceNotificationPresenter(
       message_center::MessageCenter* message_center);
+
+  MultiDeviceNotificationPresenter(const MultiDeviceNotificationPresenter&) =
+      delete;
+  MultiDeviceNotificationPresenter& operator=(
+      const MultiDeviceNotificationPresenter&) = delete;
+
   ~MultiDeviceNotificationPresenter() override;
+
+  // Disables notifications for tests.
+  static std::unique_ptr<base::AutoReset<bool>>
+  DisableNotificationsForTesting();
 
   // Removes the notification created by NotifyPotentialHostExists() or does
   // nothing if that notification is not currently displayed.
@@ -128,16 +138,13 @@ class ASH_EXPORT MultiDeviceNotificationPresenter
   // Status::kNoNotificationVisible if there isn't one.
   Status notification_status_ = Status::kNoNotificationVisible;
 
-  mojo::Remote<chromeos::multidevice_setup::mojom::MultiDeviceSetup>
+  mojo::Remote<multidevice_setup::mojom::MultiDeviceSetup>
       multidevice_setup_remote_;
-  mojo::Receiver<
-      chromeos::multidevice_setup::mojom::AccountStatusChangeDelegate>
+  mojo::Receiver<multidevice_setup::mojom::AccountStatusChangeDelegate>
       receiver_{this};
 
   base::WeakPtrFactory<MultiDeviceNotificationPresenter> weak_ptr_factory_{
       this};
-
-  DISALLOW_COPY_AND_ASSIGN(MultiDeviceNotificationPresenter);
 };
 
 }  // namespace ash

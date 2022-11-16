@@ -5,11 +5,11 @@
 #ifndef CHROME_BROWSER_UI_SEARCH_SEARCH_IPC_ROUTER_POLICY_IMPL_H_
 #define CHROME_BROWSER_UI_SEARCH_SEARCH_IPC_ROUTER_POLICY_IMPL_H_
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "chrome/browser/ui/search/search_ipc_router.h"
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #error "Instant is only used on desktop";
 #endif
 
@@ -21,6 +21,11 @@ class WebContents;
 class SearchIPCRouterPolicyImpl : public SearchIPCRouter::Policy {
  public:
   explicit SearchIPCRouterPolicyImpl(content::WebContents* web_contents);
+
+  SearchIPCRouterPolicyImpl(const SearchIPCRouterPolicyImpl&) = delete;
+  SearchIPCRouterPolicyImpl& operator=(const SearchIPCRouterPolicyImpl&) =
+      delete;
+
   ~SearchIPCRouterPolicyImpl() override;
 
  private:
@@ -31,7 +36,6 @@ class SearchIPCRouterPolicyImpl : public SearchIPCRouter::Policy {
   bool ShouldProcessDeleteMostVisitedItem() override;
   bool ShouldProcessUndoMostVisitedDeletion() override;
   bool ShouldProcessUndoAllMostVisitedDeletions() override;
-  bool ShouldProcessLogEvent() override;
   bool ShouldSendSetInputInProgress(bool is_active_tab) override;
   bool ShouldSendOmniboxFocusChanged() override;
   bool ShouldSendMostVisitedInfo() override;
@@ -43,10 +47,8 @@ class SearchIPCRouterPolicyImpl : public SearchIPCRouter::Policy {
     is_incognito_ = is_incognito;
   }
 
-  content::WebContents* web_contents_;
+  raw_ptr<content::WebContents> web_contents_;
   bool is_incognito_;
-
-  DISALLOW_COPY_AND_ASSIGN(SearchIPCRouterPolicyImpl);
 };
 
 #endif  // CHROME_BROWSER_UI_SEARCH_SEARCH_IPC_ROUTER_POLICY_IMPL_H_

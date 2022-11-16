@@ -5,7 +5,7 @@
 #ifndef CHROME_BROWSER_UI_EXCLUSIVE_ACCESS_EXCLUSIVE_ACCESS_BUBBLE_H_
 #define CHROME_BROWSER_UI_EXCLUSIVE_ACCESS_EXCLUSIVE_ACCESS_BUBBLE_H_
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/timer/timer.h"
 #include "chrome/browser/ui/exclusive_access/exclusive_access_bubble_type.h"
 #include "ui/gfx/animation/animation_delegate.h"
@@ -33,6 +33,10 @@ class ExclusiveAccessBubble : public gfx::AnimationDelegate {
   ExclusiveAccessBubble(ExclusiveAccessManager* manager,
                         const GURL& url,
                         ExclusiveAccessBubbleType bubble_type);
+
+  ExclusiveAccessBubble(const ExclusiveAccessBubble&) = delete;
+  ExclusiveAccessBubble& operator=(const ExclusiveAccessBubble&) = delete;
+
   ~ExclusiveAccessBubble() override;
 
   // Informs the ExclusiveAccessBubble of some user input, which may update
@@ -98,7 +102,7 @@ class ExclusiveAccessBubble : public gfx::AnimationDelegate {
   bool IsHideTimeoutRunning() const;
 
   // The Manager associated with this bubble.
-  ExclusiveAccessManager* const manager_;
+  const raw_ptr<ExclusiveAccessManager> manager_;
 
   // The host the bubble is for, can be empty.
   GURL url_;
@@ -137,8 +141,6 @@ class ExclusiveAccessBubble : public gfx::AnimationDelegate {
   // if the mouse has moved since our last check. Only used in non-simplified
   // fullscreen mode.
   gfx::Point last_mouse_pos_;
-
-  DISALLOW_COPY_AND_ASSIGN(ExclusiveAccessBubble);
 };
 
 #endif  // CHROME_BROWSER_UI_EXCLUSIVE_ACCESS_EXCLUSIVE_ACCESS_BUBBLE_H_

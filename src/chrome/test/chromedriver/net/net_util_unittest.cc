@@ -11,11 +11,12 @@
 #include "base/bind.h"
 #include "base/compiler_specific.h"
 #include "base/location.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/message_loop/message_pump_type.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/stringprintf.h"
 #include "base/synchronization/waitable_event.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "base/threading/thread.h"
 #include "chrome/test/chromedriver/net/url_request_context_getter.h"
@@ -30,6 +31,7 @@
 #include "net/url_request/url_request_context_getter.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/transitional_url_loader_factory_owner.h"
+#include "services/network/url_loader.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace {
@@ -41,6 +43,16 @@ class FetchUrlTest : public testing::Test,
       : io_thread_("io"),
         response_(kSendHello),
         task_environment_(base::test::TaskEnvironment::MainThreadType::IO) {
+    // The first executed test constructs a CacheTransparencySettings singletone
+    // inside services/network/url_loader.cc.
+    // This object is affined to the sequence that created it, i.e.
+    // to the IO sequence created and destroyed by the first test.
+    // The following test creates a new IO sequence and tries to use there
+    // the singletone affined to the already destroyed sequence.
+    // This leads to the sequence affinity check failure.
+    // In order to alleviate this we destroy this singletone before each test.
+    network::URLLoader::ResetPervasivePayloadsListForTesting();
+
     CHECK(io_thread_.StartWithOptions(
         base::Thread::Options(base::MessagePumpType::IO, 0)));
 
@@ -132,7 +144,7 @@ class FetchUrlTest : public testing::Test,
   std::unique_ptr<net::HttpServer> server_;
   std::unique_ptr<network::TransitionalURLLoaderFactoryOwner>
       url_loader_factory_owner_;
-  network::mojom::URLLoaderFactory* url_loader_factory_;
+  raw_ptr<network::mojom::URLLoaderFactory> url_loader_factory_;
   std::string server_url_;
   base::test::TaskEnvironment task_environment_;
 };

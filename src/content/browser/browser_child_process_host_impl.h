@@ -10,13 +10,13 @@
 #include <list>
 #include <memory>
 
-#include "base/compiler_specific.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/memory/writable_shared_memory_region.h"
 #include "base/process/process.h"
-#include "base/single_thread_task_runner.h"
 #include "base/synchronization/waitable_event_watcher.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "content/browser/child_process_launcher.h"
 #include "content/browser/tracing/tracing_service_controller.h"
@@ -29,7 +29,7 @@
 #include "mojo/public/cpp/system/invitation.h"
 #include "services/resource_coordinator/public/mojom/memory_instrumentation/memory_instrumentation.mojom.h"
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include "base/win/object_watcher.h"
 #endif
 
@@ -50,10 +50,10 @@ class BrowserMessageFilter;
 // Plugins/workers and other child processes that live on the IO thread use this
 // class. RenderProcessHostImpl is the main exception that doesn't use this
 /// class because it lives on the UI thread.
-class CONTENT_EXPORT BrowserChildProcessHostImpl
+class BrowserChildProcessHostImpl
     : public BrowserChildProcessHost,
       public ChildProcessHostDelegate,
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
       public base::win::ObjectWatcher::Delegate,
 #endif
       public ChildProcessLauncher::Client,
@@ -70,11 +70,6 @@ class CONTENT_EXPORT BrowserChildProcessHostImpl
   // instance.
   static void TerminateAll();
 
-  // Copies kEnableFeatures and kDisableFeatures to the command line. Generates
-  // them from the FeatureList override state, to take into account overrides
-  // from FieldTrials.
-  static void CopyFeatureAndFieldTrialFlags(base::CommandLine* cmd_line);
-
   // Appends kTraceStartup and kTraceRecordMode flags to the command line, if
   // needed.
   static void CopyTraceStartupFlags(base::CommandLine* cmd_line);
@@ -84,11 +79,6 @@ class CONTENT_EXPORT BrowserChildProcessHostImpl
   void Launch(std::unique_ptr<SandboxedProcessLauncherDelegate> delegate,
               std::unique_ptr<base::CommandLine> cmd_line,
               bool terminate_on_shutdown) override;
-  void LaunchWithPreloadedFiles(
-      std::unique_ptr<SandboxedProcessLauncherDelegate> delegate,
-      std::unique_ptr<base::CommandLine> cmd_line,
-      std::map<std::string, base::FilePath> files_to_preload,
-      bool terminate_on_shutdown) override;
   const ChildProcessData& GetData() override;
   ChildProcessHost* GetHost() override;
   ChildProcessTerminationInfo GetTerminationInfo(bool known_dead) override;
@@ -118,6 +108,14 @@ class CONTENT_EXPORT BrowserChildProcessHostImpl
   // Adds an IPC message filter.
   void AddFilter(BrowserMessageFilter* filter);
 
+  // Same as Launch(), but the process is launched with preloaded files and file
+  // descriptors containing in `file_data`.
+  void LaunchWithFileData(
+      std::unique_ptr<SandboxedProcessLauncherDelegate> delegate,
+      std::unique_ptr<base::CommandLine> cmd_line,
+      std::unique_ptr<ChildProcessLauncherFileData> file_data,
+      bool terminate_on_shutdown);
+
   // Unlike Launch(), AppendExtraCommandLineSwitches will not be called
   // in this function. If AppendExtraCommandLineSwitches has been called before
   // reaching launch, call this function instead so the command line switches
@@ -125,12 +123,12 @@ class CONTENT_EXPORT BrowserChildProcessHostImpl
   void LaunchWithoutExtraCommandLineSwitches(
       std::unique_ptr<SandboxedProcessLauncherDelegate> delegate,
       std::unique_ptr<base::CommandLine> cmd_line,
-      std::map<std::string, base::FilePath> files_to_preload,
+      std::unique_ptr<ChildProcessLauncherFileData> file_data,
       bool terminate_on_shutdown);
 
   static void HistogramBadMessageTerminated(ProcessType process_type);
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   void EnableWarmUpConnection();
   void DumpProcessStack();
 #endif
@@ -169,7 +167,7 @@ class CONTENT_EXPORT BrowserChildProcessHostImpl
   // ChildProcessLauncher::Client implementation.
   void OnProcessLaunched() override;
   void OnProcessLaunchFailed(int error_code) override;
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   bool CanUseWarmUpConnection() override;
 #endif
 
@@ -192,21 +190,21 @@ class CONTENT_EXPORT BrowserChildProcessHostImpl
       base::WeakPtr<BrowserChildProcessHostImpl> process,
       const std::string& error);
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   // ObjectWatcher::Delegate implementation.
   void OnObjectSignaled(HANDLE object) override;
 #endif
 
   ChildProcessData data_;
   std::string metrics_name_;
-  BrowserChildProcessHostDelegate* delegate_;
+  raw_ptr<BrowserChildProcessHostDelegate> delegate_;
   std::unique_ptr<ChildProcessHost> child_process_host_;
   mojo::Receiver<memory_instrumentation::mojom::CoordinatorConnector>
       coordinator_connector_receiver_{this};
 
   std::unique_ptr<ChildProcessLauncher> child_process_;
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   // Watches to see if the child process exits before the IPC channel has
   // been connected. Thereafter, its exit is determined by an error on the
   // IPC channel.
@@ -223,7 +221,7 @@ class CONTENT_EXPORT BrowserChildProcessHostImpl
   bool has_legacy_ipc_channel_ = false;
   bool notify_child_connection_status_ = true;
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   // whether the child process can use pre-warmed up connection for better
   // performance.
   bool can_use_warm_up_connection_ = false;
@@ -233,7 +231,7 @@ class CONTENT_EXPORT BrowserChildProcessHostImpl
   std::unique_ptr<TracingServiceController::ClientRegistration>
       tracing_registration_;
 
-#if defined(OS_POSIX) && !defined(OS_ANDROID)
+#if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_ANDROID)
   // For child process to connect to the system tracing service.
   std::unique_ptr<tracing::SystemTracingService> system_tracing_service_;
 #endif

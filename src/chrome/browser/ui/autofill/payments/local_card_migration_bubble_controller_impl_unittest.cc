@@ -17,8 +17,8 @@
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/test/base/browser_with_test_window_test.h"
 #include "chrome/test/base/chrome_render_view_host_test_harness.h"
-#include "components/autofill/core/browser/autofill_metrics.h"
 #include "components/autofill/core/browser/autofill_test_utils.h"
+#include "components/autofill/core/browser/metrics/autofill_metrics.h"
 #include "components/autofill/core/browser/test_autofill_clock.h"
 #include "components/autofill/core/common/autofill_payments_features.h"
 #include "content/public/test/mock_navigation_handle.h"
@@ -47,7 +47,7 @@ class TestLocalCardMigrationBubbleControllerImpl
       : LocalCardMigrationBubbleControllerImpl(web_contents) {}
 
   void SimulateNavigation() {
-    content::RenderFrameHost* rfh = web_contents()->GetMainFrame();
+    content::RenderFrameHost* rfh = web_contents()->GetPrimaryMainFrame();
     content::MockNavigationHandle navigation_handle(GURL(), rfh);
     navigation_handle.set_has_committed(true);
     DidFinishNavigation(&navigation_handle);
@@ -147,7 +147,7 @@ TEST_F(LocalCardMigrationBubbleControllerImplTest,
        StickyBubble_ShouldNotDismissUponNavigation) {
   ShowBubble();
   base::HistogramTester histogram_tester;
-  test_clock_.Advance(base::TimeDelta::FromSeconds(10));
+  test_clock_.Advance(base::Seconds(10));
   controller()->SimulateNavigation();
 
   histogram_tester.ExpectTotalCount(

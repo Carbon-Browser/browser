@@ -5,11 +5,12 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_FRAME_BROWSER_NON_CLIENT_FRAME_VIEW_MAC_H_
 #define CHROME_BROWSER_UI_VIEWS_FRAME_BROWSER_NON_CLIENT_FRAME_VIEW_MAC_H_
 
+#include "base/memory/raw_ptr.h"
+
 #import <CoreGraphics/CGBase.h>
 
 #include "base/gtest_prod_util.h"
 #include "base/mac/scoped_nsobject.h"
-#include "base/macros.h"
 #include "chrome/browser/ui/views/frame/browser_non_client_frame_view.h"
 #include "components/prefs/pref_member.h"
 
@@ -26,6 +27,11 @@ class BrowserNonClientFrameViewMac : public BrowserNonClientFrameView {
  public:
   // Mac implementation of BrowserNonClientFrameView.
   BrowserNonClientFrameViewMac(BrowserFrame* frame, BrowserView* browser_view);
+
+  BrowserNonClientFrameViewMac(const BrowserNonClientFrameViewMac&) = delete;
+  BrowserNonClientFrameViewMac& operator=(const BrowserNonClientFrameViewMac&) =
+      delete;
+
   ~BrowserNonClientFrameViewMac() override;
 
   // BrowserNonClientFrameView:
@@ -85,8 +91,7 @@ class BrowserNonClientFrameViewMac : public BrowserNonClientFrameView {
   static gfx::Rect GetCaptionButtonPlaceholderBounds(bool is_rtl,
                                                      const gfx::Size& frame,
                                                      int y,
-                                                     int width,
-                                                     int extra_padding);
+                                                     int width);
 
   void PaintThemedFrame(gfx::Canvas* canvas);
 
@@ -110,12 +115,12 @@ class BrowserNonClientFrameViewMac : public BrowserNonClientFrameView {
   // Used to keep track of the update of kShowFullscreenToolbar preference.
   BooleanPrefMember show_fullscreen_toolbar_;
 
-  views::Label* window_title_ = nullptr;
+  raw_ptr<views::Label> window_title_ = nullptr;
 
   // A placeholder container that lies on top of the traffic lights to indicate
   // NonClientArea. Only for PWAs with window controls overlay display override.
-  CaptionButtonPlaceholderContainer* caption_button_placeholder_container_ =
-      nullptr;
+  raw_ptr<CaptionButtonPlaceholderContainer>
+      caption_button_placeholder_container_ = nullptr;
 
   // PWAs with window controls overlay display override covers the browser
   // window with WebContentsViewCocoa natively even if the views::view 'looks'
@@ -131,8 +136,6 @@ class BrowserNonClientFrameViewMac : public BrowserNonClientFrameView {
 
   base::scoped_nsobject<FullscreenToolbarController>
       fullscreen_toolbar_controller_;
-
-  DISALLOW_COPY_AND_ASSIGN(BrowserNonClientFrameViewMac);
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_FRAME_BROWSER_NON_CLIENT_FRAME_VIEW_MAC_H_

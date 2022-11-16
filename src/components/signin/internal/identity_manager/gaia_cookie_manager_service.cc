@@ -102,11 +102,6 @@ void RecordLogoutRequestState(LogoutRequestState logout_state) {
   UMA_HISTOGRAM_ENUMERATION("Signin.GaiaCookieManager.Logout", logout_state);
 }
 
-void RecordRemoveLocalAccountOutcome(
-    GaiaCookieManagerService::RemoveLocalAccountOutcome outcome) {
-  base::UmaHistogramEnumeration("Signin.RemoveLocalAccountOutcome", outcome);
-}
-
 }  // namespace
 
 GaiaCookieManagerService::GaiaCookieRequest::SetAccountsParams::
@@ -257,9 +252,8 @@ void GaiaCookieManagerService::ExternalCcResultFetcher::Start(
 
   // Some fetches may timeout.  Start a timer to decide when the result fetcher
   // has waited long enough.
-  timer_.Start(
-      FROM_HERE, base::TimeDelta::FromSeconds(kExternalCCResultTimeoutSeconds),
-      this, &GaiaCookieManagerService::ExternalCcResultFetcher::Timeout);
+  timer_.Start(FROM_HERE, base::Seconds(kExternalCCResultTimeoutSeconds), this,
+               &GaiaCookieManagerService::ExternalCcResultFetcher::Timeout);
 }
 
 bool GaiaCookieManagerService::ExternalCcResultFetcher::IsRunning() {
@@ -281,14 +275,14 @@ void GaiaCookieManagerService::ExternalCcResultFetcher::
   }
 
   // If there is nothing to check, terminate immediately.
-  if (value->GetList().size() == 0) {
+  if (value->GetListDeprecated().size() == 0) {
     CleanupTransientState();
     GetCheckConnectionInfoCompleted(true);
     return;
   }
 
   // Start a fetcher for each connection URL that needs to be checked.
-  for (const base::Value& elem : value->GetList()) {
+  for (const base::Value& elem : value->GetListDeprecated()) {
     if (!elem.is_dict())
       continue;
 
@@ -447,9 +441,11 @@ void GaiaCookieManagerService::ExternalCcResultFetcher::
 }
 
 GaiaCookieManagerService::GaiaCookieManagerService(
+    AccountTrackerService* account_tracker_service,
     ProfileOAuth2TokenService* token_service,
     SigninClient* signin_client)
-    : token_service_(token_service),
+    : account_tracker_service_(account_tracker_service),
+      token_service_(token_service),
       signin_client_(signin_client),
       external_cc_result_fetcher_(this),
       fetcher_backoff_(&kBackoffPolicy),
@@ -685,7 +681,6 @@ void GaiaCookieManagerService::RemoveLoggedOutAccountByGaiaId(
   VLOG(1) << "GaiaCookieManagerService::RemoveLoggedOutAccountByGaiaId";
 
   if (list_accounts_stale_) {
-    RecordRemoveLocalAccountOutcome(RemoveLocalAccountOutcome::kAccountsStale);
     return;
   }
 
@@ -696,12 +691,8 @@ void GaiaCookieManagerService::RemoveLoggedOutAccountByGaiaId(
                     }) != 0;
 
   if (!accounts_updated) {
-    RecordRemoveLocalAccountOutcome(
-        RemoveLocalAccountOutcome::kSignedOutAccountMissing);
     return;
   }
-
-  RecordRemoveLocalAccountOutcome(RemoveLocalAccountOutcome::kSuccess);
 
   if (gaia_accounts_updated_in_cookie_callback_) {
     gaia_accounts_updated_in_cookie_callback_.Run(
@@ -726,12 +717,12 @@ GaiaCookieManagerService::GetURLLoaderFactory() {
 
 void GaiaCookieManagerService::MarkListAccountsStale() {
   list_accounts_stale_ = true;
-#if defined(OS_IOS)
+#if BUILDFLAG(IS_IOS)
   base::ThreadTaskRunnerHandle::Get()->PostTask(
       FROM_HERE,
       base::BindOnce(&GaiaCookieManagerService::ForceOnCookieChangeProcessing,
                      weak_ptr_factory_.GetWeakPtr()));
-#endif  // defined(OS_IOS)
+#endif  // BUILDFLAG(IS_IOS)
 }
 
 void GaiaCookieManagerService::OnCookieChange(
@@ -1019,8 +1010,8 @@ GaiaCookieManagerService::GetCookieManagerForPartition() {
 void GaiaCookieManagerService::InitializeListedAccountsIds() {
   for (gaia::ListedAccount& account : listed_accounts_) {
     DCHECK(account.id.empty());
-    account.id = AccountTrackerService::PickAccountIdForAccount(
-        signin_client_->GetPrefs(), account.gaia_id, account.email);
+    account.id = account_tracker_service_->PickAccountIdForAccount(
+        account.gaia_id, account.email);
   }
 }
 

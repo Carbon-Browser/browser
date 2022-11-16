@@ -13,16 +13,14 @@
 #include <utility>
 #include <vector>
 
+#include "base/allocator/partition_allocator/partition_alloc_base/memory/scoped_refptr.h"
+#include "base/allocator/partition_allocator/partition_alloc_base/no_destructor.h"
 #include "base/allocator/partition_allocator/starscan/metadata_allocator.h"
 #include "base/allocator/partition_allocator/starscan/pcscan.h"
 #include "base/allocator/partition_allocator/starscan/starscan_fwd.h"
 #include "base/allocator/partition_allocator/starscan/write_protector.h"
-#include "base/memory/scoped_refptr.h"
-#include "base/no_destructor.h"
 
-namespace base {
-
-namespace internal {
+namespace partition_alloc::internal {
 
 class PCScanTask;
 
@@ -45,7 +43,7 @@ class PCScanInternal final {
   static PCScanInternal& Instance() {
     // Since the data that PCScanInternal holds is cold, it's fine to have the
     // runtime check for thread-safe local static initialization.
-    static base::NoDestructor<PCScanInternal> instance;
+    static internal::base::NoDestructor<PCScanInternal> instance;
     return *instance;
   }
 
@@ -54,20 +52,20 @@ class PCScanInternal final {
 
   ~PCScanInternal();
 
-  void Initialize(PCScan::WantedWriteProtectionMode);
+  void Initialize(PCScan::InitConfig);
   bool is_initialized() const { return is_initialized_; }
 
   void PerformScan(PCScan::InvocationMode);
   void PerformScanIfNeeded(PCScan::InvocationMode);
-  void PerformDelayedScan(TimeDelta delay);
+  void PerformDelayedScan(base::TimeDelta delay);
   void JoinScan();
 
   TaskHandle CurrentPCScanTask() const;
   void SetCurrentPCScanTask(TaskHandle task);
   void ResetCurrentPCScanTask();
 
-  void RegisterScannableRoot(Root* root);
-  void RegisterNonScannableRoot(Root* root);
+  void RegisterScannableRoot(Root*);
+  void RegisterNonScannableRoot(Root*);
 
   RootsMap& scannable_roots() { return scannable_roots_; }
   const RootsMap& scannable_roots() const { return scannable_roots_; }
@@ -102,19 +100,23 @@ class PCScanInternal final {
   void UnprotectPages(uintptr_t begin, size_t size);
 
   void ClearRootsForTesting();                               // IN-TEST
-  void ReinitForTesting(PCScan::WantedWriteProtectionMode);  // IN-TEST
+  void ReinitForTesting(PCScan::InitConfig);                 // IN-TEST
   void FinishScanForTesting();                               // IN-TEST
 
+  void RegisterStatsReporter(partition_alloc::StatsReporter* reporter);
+  partition_alloc::StatsReporter& GetReporter();
+
  private:
-  friend base::NoDestructor<PCScanInternal>;
+  friend internal::base::NoDestructor<PCScanInternal>;
   friend class StarScanSnapshot;
 
   using StackTops = std::unordered_map<
-      PlatformThreadId,
+      internal::base::PlatformThreadId,
       void*,
-      std::hash<PlatformThreadId>,
+      std::hash<internal::base::PlatformThreadId>,
       std::equal_to<>,
-      MetadataAllocator<std::pair<const PlatformThreadId, void*>>>;
+      MetadataAllocator<
+          std::pair<const internal::base::PlatformThreadId, void*>>>;
 
   PCScanInternal();
 
@@ -137,12 +139,11 @@ class PCScanInternal final {
   const SimdSupport simd_support_;
 
   std::unique_ptr<WriteProtector> write_protector_;
+  partition_alloc::StatsReporter* stats_reporter_ = nullptr;
 
   bool is_initialized_ = false;
 };
 
-}  // namespace internal
-
-}  // namespace base
+}  // namespace partition_alloc::internal
 
 #endif  // BASE_ALLOCATOR_PARTITION_ALLOCATOR_STARSCAN_PCSCAN_INTERNAL_H_

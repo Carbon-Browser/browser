@@ -13,7 +13,9 @@
 #include <vector>
 
 #include "base/bind.h"
+#include "base/containers/adapters.h"
 #include "base/i18n/rtl.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/strcat.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/simple_test_clock.h"
@@ -26,10 +28,13 @@
 #include "chrome/browser/command_updater.h"
 #include "chrome/browser/command_updater_impl.h"
 #include "chrome/browser/search_engines/template_url_service_factory_test_util.h"
+#include "chrome/browser/signin/chrome_signin_client_factory.h"
+#include "chrome/browser/signin/chrome_signin_client_test_util.h"
+#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/omnibox/chrome_omnibox_client.h"
 #include "chrome/browser/ui/omnibox/chrome_omnibox_edit_controller.h"
-#include "chrome/browser/ui/omnibox/omnibox_theme.h"
 #include "chrome/grit/generated_resources.h"
+#include "chrome/test/base/test_browser_window.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chrome/test/views/chrome_views_test_base.h"
 #include "components/omnibox/browser/omnibox_edit_model.h"
@@ -41,6 +46,7 @@
 #include "content/public/test/mock_navigation_handle.h"
 #include "content/public/test/test_renderer_host.h"
 #include "content/public/test/web_contents_tester.h"
+#include "services/network/test/test_url_loader_factory.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/input/web_input_event.h"
 #include "third_party/blink/public/common/input/web_keyboard_event.h"
@@ -182,10 +188,9 @@ void TestingOmniboxView::CheckUpdatePopupNotCalled() {
 absl::optional<SkColor> TestingOmniboxView::GetLatestColorForRange(
     const gfx::Range& range) {
   // Iterate backwards to get the most recently applied color for |range|.
-  for (auto range_color = range_colors_.rbegin();
-       range_color != range_colors_.rend(); range_color++) {
-    if (range == range_color->second)
-      return range_color->first;
+  for (const auto& [color, other_range] : base::Reversed(range_colors_)) {
+    if (range == other_range)
+      return color;
   }
   return absl::nullopt;
 }
@@ -193,11 +198,10 @@ absl::optional<SkColor> TestingOmniboxView::GetLatestColorForRange(
 absl::optional<std::pair<gfx::TextStyle, bool>>
 TestingOmniboxView::GetLatestStyleForRange(const gfx::Range& range) const {
   // Iterate backwards to get the most recently applied style for |range|.
-  for (auto range_style = range_styles_.rbegin();
-       range_style != range_styles_.rend(); range_style++) {
-    if (range == std::get<gfx::Range>(*range_style))
-      return std::make_pair(std::get<gfx::TextStyle>(*range_style),
-                            std::get<bool>(*range_style));
+  for (const auto& [style, value, other_range] :
+       base::Reversed(range_styles_)) {
+    if (range == other_range)
+      return std::make_pair(style, value);
   }
   return absl::nullopt;
 }
@@ -256,9 +260,11 @@ void TestingOmniboxView::ApplyStyle(gfx::TextStyle style,
 
 class TestingOmniboxEditController : public ChromeOmniboxEditController {
  public:
-  TestingOmniboxEditController(CommandUpdater* command_updater,
+  TestingOmniboxEditController(Browser* browser,
+                               Profile* profile,
+                               CommandUpdater* command_updater,
                                LocationBarModel* location_bar_model)
-      : ChromeOmniboxEditController(command_updater),
+      : ChromeOmniboxEditController(browser, profile, command_updater),
         location_bar_model_(location_bar_model) {}
   TestingOmniboxEditController(const TestingOmniboxEditController&) = delete;
   TestingOmniboxEditController& operator=(const TestingOmniboxEditController&) =
@@ -281,8 +287,8 @@ class TestingOmniboxEditController : public ChromeOmniboxEditController {
       omnibox_view_->Update();
   }
 
-  LocationBarModel* location_bar_model_;
-  OmniboxViewViews* omnibox_view_ = nullptr;
+  raw_ptr<LocationBarModel> location_bar_model_;
+  raw_ptr<OmniboxViewViews> omnibox_view_ = nullptr;
 };
 
 }  // namespace
@@ -346,6 +352,7 @@ class OmniboxViewViewsTest : public OmniboxViewViewsTestBase {
   }
 
  protected:
+  Browser* browser() { return browser_.get(); }
   Profile* profile() { return profile_.get(); }
   TestingOmniboxEditController* omnibox_edit_controller() {
     return &omnibox_edit_controller_;
@@ -369,7 +376,10 @@ class OmniboxViewViewsTest : public OmniboxViewViewsTestBase {
   }
 
  private:
+  network::TestURLLoaderFactory test_url_loader_factory_;
   std::unique_ptr<TestingProfile> profile_;
+  std::unique_ptr<TestBrowserWindow> browser_window_;
+  std::unique_ptr<Browser> browser_;
   std::unique_ptr<TemplateURLServiceFactoryTestUtil> util_;
   CommandUpdaterImpl command_updater_;
   TestLocationBarModel location_bar_model_;
@@ -379,7 +389,7 @@ class OmniboxViewViewsTest : public OmniboxViewViewsTestBase {
   std::unique_ptr<views::Widget> widget_;
 
   // Owned by |widget_|.
-  TestingOmniboxView* omnibox_view_;
+  raw_ptr<TestingOmniboxView> omnibox_view_;
 
   std::unique_ptr<views::TextfieldTestApi> test_api_;
 };
@@ -392,7 +402,10 @@ OmniboxViewViewsTest::OmniboxViewViewsTest(
                                disabled_features,
                                is_rtl_ui_test),
       command_updater_(nullptr),
-      omnibox_edit_controller_(&command_updater_, &location_bar_model_) {}
+      omnibox_edit_controller_(browser(),
+                               profile(),
+                               &command_updater_,
+                               &location_bar_model_) {}
 
 void OmniboxViewViewsTest::SetAndEmphasizeText(const std::string& new_text,
                                                bool accept_input) {
@@ -410,7 +423,19 @@ void OmniboxViewViewsTest::SetAndEmphasizeText(const std::string& new_text,
 void OmniboxViewViewsTest::SetUp() {
   ChromeViewsTestBase::SetUp();
 
-  profile_ = std::make_unique<TestingProfile>();
+  // We need the signin client initialized with a TestURLLoaderFactory.
+  TestingProfile::Builder profile_builder;
+  profile_builder.AddTestingFactory(
+      ChromeSigninClientFactory::GetInstance(),
+      base::BindRepeating(&BuildChromeSigninClientWithURLLoader,
+                          &test_url_loader_factory_));
+  profile_ = profile_builder.Build();
+  browser_window_ = std::make_unique<TestBrowserWindow>();
+  Browser::CreateParams params(profile(), /*user_gesture*/ true);
+  params.type = Browser::TYPE_NORMAL;
+  params.window = browser_window_.get();
+  browser_.reset(Browser::Create(params));
+
   util_ = std::make_unique<TemplateURLServiceFactoryTestUtil>(profile_.get());
 
   // We need a widget so OmniboxView can be correctly focused and unfocused.
@@ -434,6 +459,10 @@ void OmniboxViewViewsTest::TearDown() {
   // Clean ourselves up as the text input client.
   if (omnibox_view_->GetInputMethod())
     omnibox_view_->GetInputMethod()->DetachTextInputClient(omnibox_view_);
+
+  browser_->tab_strip_model()->CloseAllTabs();
+  browser_ = nullptr;
+  browser_window_ = nullptr;
 
   widget_.reset();
   util_.reset();
@@ -739,7 +768,7 @@ TEST_F(OmniboxViewViewsTest, PasteAndGoToUrlOrSearchCommand) {
 
   // Test input that's a valid URL.
   std::u16string expected_text =
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
       u"Pa&ste and Go to https://test.com";
 #else
       u"Pa&ste and go to https://test.com";
@@ -752,7 +781,7 @@ TEST_F(OmniboxViewViewsTest, PasteAndGoToUrlOrSearchCommand) {
 
   // Test input that's URL-like. (crbug.com/980002).
   expected_text =
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
       u"Pa&ste and Go to test.com";
 #else
       u"Pa&ste and go to test.com";
@@ -764,7 +793,7 @@ TEST_F(OmniboxViewViewsTest, PasteAndGoToUrlOrSearchCommand) {
 
   // Test input that's search-like.
   expected_text =
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
       u"Pa&ste and Search for \x201Cthis is a test sentence\x201D";
 #else
       u"Pa&ste and search for \x201Cthis is a test sentence\x201D";
@@ -964,7 +993,7 @@ TEST_P(OmniboxViewViewsClipboardTest, ClipboardCopyOrCutURL) {
   // Windows clipboard only supports text URLs.
   // Mac clipboard not reporting URL format available for some reason.
   // crbug.com/751031
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   EXPECT_TRUE(clipboard->IsFormatAvailable(ui::ClipboardFormatType::UrlType(),
                                            clipboard_buffer,
                                            /* data_dst = */ nullptr));
@@ -1023,7 +1052,7 @@ class OmniboxViewViewsSteadyStateElisionsTest : public OmniboxViewViewsTest {
     OmniboxViewViewsTest::SetUp();
 
     // Advance 5 seconds from epoch so the time is not considered null.
-    clock_.Advance(base::TimeDelta::FromSeconds(5));
+    clock_.Advance(base::Seconds(5));
     ui::SetEventTickClockForTesting(&clock_);
 
     location_bar_model()->set_url(kFullUrl);
@@ -1214,7 +1243,7 @@ TEST_F(OmniboxViewViewsSteadyStateElisionsTest, CaretPlacementByMouse) {
 
   // Advance the clock 5 seconds so the second click is not interpreted as a
   // double click.
-  clock()->Advance(base::TimeDelta::FromSeconds(5));
+  clock()->Advance(base::Seconds(5));
 
   // Second click should unelide only on mouse release.
   omnibox_textfield()->OnMousePressed(CreateMouseEvent(
@@ -1262,7 +1291,7 @@ TEST_F(OmniboxViewViewsSteadyStateElisionsTest, MouseSingleThenDoubleClick) {
 
   // Advance the clock 5 seconds so the next click is not interpreted as a
   // double click.
-  clock()->Advance(base::TimeDelta::FromSeconds(5));
+  clock()->Advance(base::Seconds(5));
 
   // Double click
   SendMouseClickAtPoint(point, 1);
@@ -1290,7 +1319,7 @@ TEST_F(OmniboxViewViewsSteadyStateElisionsTest, MouseSingleThenRightClick) {
 
   // Advance the clock 5 seconds so the next click is not interpreted as a
   // double click.
-  clock()->Advance(base::TimeDelta::FromSeconds(5));
+  clock()->Advance(base::Seconds(5));
 
   // Right click
   SendMouseClickAtPoint(point, 1, ui::EF_RIGHT_MOUSE_BUTTON);

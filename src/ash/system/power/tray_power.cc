@@ -40,13 +40,10 @@ using message_center::Notification;
 
 namespace ash {
 
-namespace tray {
-
 PowerTrayView::PowerTrayView(Shelf* shelf) : TrayItemView(shelf) {
-  SetBorder(
-      views::CreateEmptyBorder(0, 0, kUnifiedTrayBatteryBottomPadding, 0));
   CreateImageView();
   UpdateStatus();
+
   PowerStatus::Get()->AddObserver(this);
 }
 
@@ -95,9 +92,11 @@ void PowerTrayView::OnPowerStatusChanged() {
 void PowerTrayView::OnSessionStateChanged(session_manager::SessionState state) {
   // Icon color changes only happens when switching session states between OOBE
   // and other state.
-  UpdateImage(session_state_ == session_manager::SessionState::OOBE ||
-              state == session_manager::SessionState::OOBE);
+  const bool update_image =
+      session_state_ == session_manager::SessionState::OOBE ||
+      state == session_manager::SessionState::OOBE;
   session_state_ = state;
+  UpdateImage(update_image);
 }
 
 void PowerTrayView::UpdateStatus() {
@@ -126,8 +125,7 @@ void PowerTrayView::UpdateImage(bool icon_color_changed) {
       AshColorProvider::Get()->GetBackgroundColor());
 
   image_view()->SetImage(PowerStatus::GetBatteryImage(
-      info, kUnifiedTrayIconSize, icon_bg_color, icon_fg_color));
+      info, kUnifiedTrayBatteryIconSize, icon_bg_color, icon_fg_color));
 }
 
-}  // namespace tray
 }  // namespace ash

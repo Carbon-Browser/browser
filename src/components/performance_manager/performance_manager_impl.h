@@ -14,8 +14,8 @@
 #include "base/callback_helpers.h"
 #include "base/location.h"
 #include "base/sequence_checker.h"
-#include "base/sequenced_task_runner.h"
-#include "base/task_runner_util.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/task_runner_util.h"
 #include "components/performance_manager/graph/graph_impl.h"
 #include "components/performance_manager/public/graph/frame_node.h"
 #include "components/performance_manager/public/graph/page_node.h"
@@ -39,6 +39,9 @@ class PageNodeImpl;
 class PerformanceManagerImpl : public PerformanceManager {
  public:
   using FrameNodeCreationCallback = base::OnceCallback<void(FrameNodeImpl*)>;
+
+  PerformanceManagerImpl(const PerformanceManagerImpl&) = delete;
+  PerformanceManagerImpl& operator=(const PerformanceManagerImpl&) = delete;
 
   ~PerformanceManagerImpl() override;
 
@@ -185,8 +188,6 @@ class PerformanceManagerImpl : public PerformanceManager {
   scoped_refptr<base::SequencedTaskRunner> ui_task_runner_;
 
   SEQUENCE_CHECKER(sequence_checker_);
-
-  DISALLOW_COPY_AND_ASSIGN(PerformanceManagerImpl);
 };
 
 // static

@@ -10,20 +10,21 @@
 #include <map>
 #include <memory>
 #include <utility>
+#include <vector>
 
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/command_line.h"
-#include "base/cxx17_backports.h"
 #include "base/feature_list.h"
 #include "base/format_macros.h"
-#include "base/macros.h"
 #include "base/strings/string_split.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/test/metrics/histogram_tester.h"
 #include "base/test/mock_entropy_provider.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/scoped_field_trial_list_resetter.h"
+#include "base/time/time.h"
 #include "components/variations/client_filterable_state.h"
 #include "components/variations/processed_study.h"
 #include "components/variations/proto/study.pb.h"
@@ -94,6 +95,10 @@ class TestOverrideStringCallback {
       : callback_(base::BindRepeating(&TestOverrideStringCallback::Override,
                                       base::Unretained(this))) {}
 
+  TestOverrideStringCallback(const TestOverrideStringCallback&) = delete;
+  TestOverrideStringCallback& operator=(const TestOverrideStringCallback&) =
+      delete;
+
   virtual ~TestOverrideStringCallback() {}
 
   const VariationsSeedProcessor::UIStringOverrideCallback& callback() const {
@@ -109,8 +114,6 @@ class TestOverrideStringCallback {
 
   VariationsSeedProcessor::UIStringOverrideCallback callback_;
   OverrideMap overrides_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestOverrideStringCallback);
 };
 
 }  // namespace
@@ -119,6 +122,10 @@ class VariationsSeedProcessorTest : public ::testing::Test {
  public:
   VariationsSeedProcessorTest() {
   }
+
+  VariationsSeedProcessorTest(const VariationsSeedProcessorTest&) = delete;
+  VariationsSeedProcessorTest& operator=(const VariationsSeedProcessorTest&) =
+      delete;
 
   ~VariationsSeedProcessorTest() override {
     // Ensure that the maps are cleared between tests, since they are stored as
@@ -169,7 +176,7 @@ class VariationsSeedProcessorTest : public ::testing::Test {
     client_state.reference_date = base::Time::Now();
     client_state.version = base::Version("20.0.0.0");
     client_state.channel = Study::STABLE;
-    client_state.form_factor = Study::DESKTOP;
+    client_state.form_factor = Study::PHONE;
     client_state.platform = Study::PLATFORM_ANDROID;
 
     base::FeatureList feature_list;
@@ -182,10 +189,30 @@ class VariationsSeedProcessorTest : public ::testing::Test {
 
  protected:
   TestOverrideStringCallback override_callback_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(VariationsSeedProcessorTest);
 };
+
+TEST_F(VariationsSeedProcessorTest, EmitStudyCountMetric) {
+  struct StudyCountMetricTestParams {
+    VariationsSeed seed;
+    int expected_study_count;
+  };
+
+  VariationsSeed zero_study_seed;
+  VariationsSeed one_study_seed;
+  Study* study = one_study_seed.add_study();
+  study->set_name("MyStudy");
+  AddExperiment("Enabled", 1, study);
+  std::vector<StudyCountMetricTestParams> test_cases = {
+      {.seed = zero_study_seed, .expected_study_count = 0},
+      {.seed = one_study_seed, .expected_study_count = 1}};
+
+  for (const StudyCountMetricTestParams& test_case : test_cases) {
+    base::HistogramTester histogram_tester;
+    CreateTrialsFromSeed(test_case.seed);
+    histogram_tester.ExpectUniqueSample("Variations.AppliedSeed.StudyCount",
+                                        test_case.expected_study_count, 1);
+  }
+}
 
 TEST_F(VariationsSeedProcessorTest, AllowForceGroupAndVariationId) {
   base::CommandLine::ForCurrentProcess()->AppendSwitch(kForcingFlag1);
@@ -289,8 +316,7 @@ TEST_F(VariationsSeedProcessorTest,
   *study2 = *study1;
   ASSERT_EQ(seed.study(0).name(), seed.study(1).name());
 
-  const base::Time year_ago =
-      base::Time::Now() - base::TimeDelta::FromDays(365);
+  const base::Time year_ago = base::Time::Now() - base::Days(365);
 
   ClientFilterableState client_state(base::BindOnce([] { return false; }));
   client_state.locale = "en-CA";
@@ -666,7 +692,7 @@ TEST_F(VariationsSeedProcessorTest, FeatureEnabledOrDisableByTrial) {
       {nullptr, kFeatureOffByDefault.name, false, true},
   };
 
-  for (size_t i = 0; i < base::size(test_cases); i++) {
+  for (size_t i = 0; i < std::size(test_cases); i++) {
     const auto& test_case = test_cases[i];
     SCOPED_TRACE(base::StringPrintf("Test[%" PRIuS "]", i));
 
@@ -788,7 +814,7 @@ TEST_F(VariationsSeedProcessorTest, FeatureAssociationAndForcing) {
        kForcedOffGroup, false, true},
   };
 
-  for (size_t i = 0; i < base::size(test_cases); i++) {
+  for (size_t i = 0; i < std::size(test_cases); i++) {
     const auto& test_case = test_cases[i];
     const int group = test_case.one_hundred_percent_group;
     SCOPED_TRACE(base::StringPrintf(
@@ -849,8 +875,8 @@ TEST_F(VariationsSeedProcessorTest, FeaturesInExpiredStudies) {
     "kEnabledFeature", base::FEATURE_ENABLED_BY_DEFAULT
   };
   const base::Time now = base::Time::Now();
-  const base::Time year_ago = now - base::TimeDelta::FromDays(365);
-  const base::Time year_later = now + base::TimeDelta::FromDays(365);
+  const base::Time year_ago = now - base::Days(365);
+  const base::Time year_later = now + base::Days(365);
 
   struct {
     const base::Feature& feature;
@@ -864,7 +890,7 @@ TEST_F(VariationsSeedProcessorTest, FeaturesInExpiredStudies) {
       {kEnabledFeature, false, year_later, false},
   };
 
-  for (size_t i = 0; i < base::size(test_cases); i++) {
+  for (size_t i = 0; i < std::size(test_cases); i++) {
     const auto& test_case = test_cases[i];
     SCOPED_TRACE(
         base::StringPrintf("Test[%" PRIuS "]: %s", i, test_case.feature.name));
@@ -935,8 +961,7 @@ TEST_F(VariationsSeedProcessorTest, ExistingFieldTrial_ExpiredByConfig) {
 
   Study study;
   study.set_name("Study1");
-  const base::Time year_ago =
-      base::Time::Now() - base::TimeDelta::FromDays(365);
+  const base::Time year_ago = base::Time::Now() - base::Days(365);
   study.set_expiry_date(TimeToProtoTime(year_ago));
   auto* exp1 = AddExperiment("A", 1, &study);
   exp1->mutable_feature_association()->add_enable_feature(kFeature.name);
@@ -960,8 +985,7 @@ TEST_F(VariationsSeedProcessorTest, ExpiredStudy_NoDefaultGroup) {
   // that happens.
   Study study;
   study.set_name("Study1");
-  const base::Time year_ago =
-      base::Time::Now() - base::TimeDelta::FromDays(365);
+  const base::Time year_ago = base::Time::Now() - base::Days(365);
   study.set_expiry_date(TimeToProtoTime(year_ago));
   auto* exp1 = AddExperiment("A", 1, &study);
   exp1->mutable_feature_association()->add_enable_feature(kFeature.name);

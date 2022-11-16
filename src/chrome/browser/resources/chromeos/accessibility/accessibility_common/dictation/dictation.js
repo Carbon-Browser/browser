@@ -2,40 +2,44 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-/**
- * Main class for the Chrome OS dictation feature.
- * Please note: this is being developed behind the flag
- * --enable-experimental-accessibility-dictation-extension
- */
-// TODO(crbug.com/1216111): Metrics and offline speech recognition
-// functionality.
+import {FocusHandler} from './focus_handler.js';
+import {InputController} from './input_controller.js';
+import {LocaleInfo} from './locale_info.js';
+import {HiddenMacroManager} from './macros/hidden_macro_manager.js';
+import {Macro} from './macros/macro.js';
+import {MacroName} from './macros/macro_names.js';
+import {MetricsUtils} from './metrics_utils.js';
+import {SpeechParser} from './parse/speech_parser.js';
+import {HintContext, UIController, UIState} from './ui_controller.js';
+
+const ErrorEvent = chrome.speechRecognitionPrivate.SpeechRecognitionErrorEvent;
+const ResultEvent =
+    chrome.speechRecognitionPrivate.SpeechRecognitionResultEvent;
+const StartOptions = chrome.speechRecognitionPrivate.StartOptions;
+const StopEvent = chrome.speechRecognitionPrivate.SpeechRecognitionStopEvent;
+const SpeechRecognitionType =
+    chrome.speechRecognitionPrivate.SpeechRecognitionType;
+
+/** Main class for the Chrome OS dictation feature. */
 export class Dictation {
   constructor() {
-    /** @private {number} */
-    this.activeImeContextId_ = Dictation.NO_ACTIVE_IME_CONTEXT_ID_;
+    /** @private {InputController} */
+    this.inputController_ = null;
+
+    /** @private {UIController} */
+    this.uiController_ = null;
+
+    /** @private {SpeechParser} */
+    this.speechParser_ = null;
+
+    /** @private {HiddenMacroManager} */
+    this.hiddenMacroManager_ = null;
 
     /**
-     * The engine ID of the previously active IME input method. Used to
-     * restore the previous IME after Dictation is deactivated.
-     * @private {string}
+     * Whether or not Dictation is active.
+     * @private {boolean}
      */
-    this.previousImeEngineId_ = '';
-
-    /**
-     * The current composition text, if any.
-     * @private {string}
-     */
-    this.currentComposition_ = '';
-
-    /**
-     * The state of Dictation.
-     * @private {!Dictation.DictationState}
-     */
-    this.state_ = Dictation.DictationState.OFF;
-
-    // TODO(crbug.com/1198212): Use SpeechRecognitionPrivate when available.
-    /** @private {SpeechRecognition} */
-    this.speechRecognizer_ = new window.webkitSpeechRecognition();
+    this.active_ = false;
 
     /** @private {Audio} */
     this.cancelTone_ = new Audio('dictation/earcons/null_selection.wav');
@@ -47,7 +51,25 @@ export class Dictation {
     this.endTone_ = new Audio('dictation/earcons/audio_end.wav');
 
     /** @private {?number} */
-    this.timeoutId_ = null;
+    this.stopTimeoutId_ = null;
+
+    /** @private {string} */
+    this.interimText_ = '';
+
+    /** @private {boolean} */
+    this.chromeVoxEnabled_ = false;
+
+    /** @private {?StartOptions} */
+    this.speechRecognitionOptions_ = null;
+
+    /** @private {?MetricsUtils} */
+    this.metricsUtils_ = null;
+
+    /** @private {boolean} */
+    this.isPumpkinEnabled_ = false;
+
+    /** @private {?FocusHandler} */
+    this.focusHandler_ = null;
 
     this.initialize_();
   }
@@ -57,27 +79,53 @@ export class Dictation {
    * @private
    */
   initialize_() {
-    this.speechRecognizer_.interimResults = true;
-    this.speechRecognizer_.continuous = true;
-    this.speechRecognizer_.onresult = event => this.onResult_(event);
-    this.speechRecognizer_.onstart = () => this.onSpeechRecognitionStart_();
-    this.speechRecognizer_.onend = () => this.onSpeechRecognitionEnd_();
-    this.speechRecognizer_.onerror = error =>
-        this.onSpeechRecognitionError_(error);
+    this.focusHandler_ = new FocusHandler();
+    this.inputController_ = new InputController(
+        () => this.stopDictation_(/*notify=*/ true), this.focusHandler_);
+    this.uiController_ = new UIController();
+    this.speechParser_ = new SpeechParser(this.inputController_);
+    this.speechParser_.refresh();
+    this.hiddenMacroManager_ = new HiddenMacroManager(this.inputController_);
+
+    // Set default speech recognition properties. Locale will be updated when
+    // `updateFromPrefs_` is called.
+    this.speechRecognitionOptions_ = {
+      locale: 'en-US',
+      interimResults: true,
+    };
+
+    // Setup speechRecognitionPrivate API listeners.
+    chrome.speechRecognitionPrivate.onStop.addListener(
+        event => this.onSpeechRecognitionStopped_(event));
+    chrome.speechRecognitionPrivate.onResult.addListener(
+        event => this.onSpeechRecognitionResult_(event));
+    chrome.speechRecognitionPrivate.onError.addListener(
+        event => this.onSpeechRecognitionError_(event));
 
     chrome.settingsPrivate.getAllPrefs(prefs => this.updateFromPrefs_(prefs));
     chrome.settingsPrivate.onPrefsChanged.addListener(
         prefs => this.updateFromPrefs_(prefs));
 
-    // Listen for IME focus changes.
-    chrome.input.ime.onFocus.addListener(context => this.onImeFocus_(context));
-    chrome.input.ime.onBlur.addListener(
-        contextId => this.onImeBlur_(contextId));
-
     // Listen for Dictation toggles (activated / deactivated) from the Ash
     // Browser process.
     chrome.accessibilityPrivate.onToggleDictation.addListener(
         activated => this.onToggleDictation_(activated));
+
+    this.maybeInstallPumpkin_();
+  }
+
+  /** @private */
+  maybeInstallPumpkin_() {
+    const pumpkinFeature = chrome.accessibilityPrivate.AccessibilityFeature
+                               .DICTATION_PUMPKIN_PARSING;
+    chrome.accessibilityPrivate.isFeatureEnabled(pumpkinFeature, enabled => {
+      this.isPumpkinEnabled_ = enabled;
+      if (enabled) {
+        chrome.accessibilityPrivate.installPumpkinForDictation(success => {
+          this.onPumpkinInstalled_(success);
+        });
+      }
+    });
   }
 
   /**
@@ -86,33 +134,21 @@ export class Dictation {
    * @private
    */
   onToggleDictation_(activated) {
-    if (activated && this.state_ === Dictation.DictationState.OFF) {
-      this.state_ = Dictation.DictationState.STARTING;
-      this.startTone_.play();
-      chrome.inputMethodPrivate.getCurrentInputMethod(
-          method => this.maybeSaveCurrentInputMethodAndStart_(method));
+    if (activated && !this.active_) {
+      this.startDictation_();
     } else {
-      this.onDictationStopped_();
+      this.stopDictation_(/*notify=*/ false);
     }
   }
 
-  /**
-   * Called when Dictation has received the current input method. We save the
-   * current method to reset when Dictation toggles up, then continue with
-   * starting up Dictation. Because this is async, checks that startup state
-   * is still correct before proceeding to the next step.
-   * @param {string} method
-   * @private
-   */
-  maybeSaveCurrentInputMethodAndStart_(method) {
-    if (this.state_ !== Dictation.DictationState.STARTING) {
-      return;
-    }
-    this.previousImeEngineId_ = method;
-    // Add AccessibilityCommon as an input method and active it.
-    chrome.languageSettingsPrivate.addInputMethod(Dictation.IME_ENGINE_ID);
-    chrome.inputMethodPrivate.setCurrentInputMethod(
-        Dictation.IME_ENGINE_ID, () => this.maybeStartSpeechRecognition_());
+  /** @private */
+  startDictation_() {
+    this.active_ = true;
+    this.startTone_.play();
+    this.setStopTimeout_(
+        Dictation.Timeouts.NO_FOCUSED_IME_MS,
+        'Dictation stopped automatically: No focused IME');
+    this.inputController_.connect(() => this.maybeStartSpeechRecognition_());
   }
 
   /**
@@ -122,110 +158,89 @@ export class Dictation {
    * @private
    */
   maybeStartSpeechRecognition_() {
-    if (this.state_ === Dictation.DictationState.STARTING) {
-      this.speechRecognizer_.start();
-      this.timeoutId_ = setTimeout(
-          () => this.stopDictation_(), Dictation.SpeechTimeouts.NO_SPEECH_MS);
+    if (this.active_) {
+      chrome.speechRecognitionPrivate.start(
+          /** @type {!StartOptions} */ (this.speechRecognitionOptions_),
+          type => this.onSpeechRecognitionStarted_(type));
+      this.setStopTimeout_(Dictation.Timeouts.NO_SPEECH_MS);
     } else {
       // We are no longer starting up - perhaps a stop came
       // through during the async callbacks. Ensure cleanup
-      // by calling onDictationStopped_.
-      this.onDictationStopped_();
+      // by calling stopDictation_().
+      this.stopDictation_(/*notify=*/ true);
     }
   }
 
   /**
-   * Stops Dictation in the browser / ash if it wasn't already stopped.
-   * The Dictation extension should always use this method to stop Dictation
-   * to ensure that Browser/Ash knows that Dictation has stopped. When
-   * AccessibilityManager receives the toggleDictation signal it will call
-   * back through onDictationStopped_() for state cleanup.
+   * Stops Dictation and notifies the browser.
+   * @param {boolean} notify True if we should notify the browser that Dictation
+   * stopped.
    * @private
    */
-  stopDictation_() {
-    // Stop Dictation if the state isn't already off or turning off.
-    if (this.state_ !== Dictation.DictationState.OFF &&
-        this.state_ !== Dictation.DictationState.STOPPING) {
-      chrome.accessibilityPrivate.toggleDictation();
-      this.state_ = Dictation.DictationState.STOPPING;
-    }
-  }
-
-  /**
-   * Called when Dictation has been toggled off. Cleans up IME and local state.
-   * @private
-   */
-  onDictationStopped_() {
-    if (this.state_ === Dictation.DictationState.OFF) {
+  stopDictation_(notify) {
+    if (!this.active_) {
       return;
     }
-    this.state_ = Dictation.DictationState.OFF;
-    // Commit composition text, if any.
-    if (this.currentComposition_.length > 0) {
-      this.processSpeechRecognitionResult_(
-          this.currentComposition_, /*isFinal=*/ true);
+
+    this.active_ = false;
+    // Stop speech recognition.
+    chrome.speechRecognitionPrivate.stop({}, () => {});
+    if (this.interimText_) {
       this.endTone_.play();
     } else {
       this.cancelTone_.play();
     }
-    // Stop speech recognition without sending a final result.
-    this.speechRecognizer_.abort();
 
     // Clear any timeouts.
-    if (this.timeoutId_ !== null) {
-      clearTimeout(this.timeoutId_);
-      this.timeoutId_ = null;
-    }
+    this.clearTimeoutIds_();
 
-    // Clean up IME state and reset to the previous IME method.
-    this.activeImeContextId_ = Dictation.NO_ACTIVE_IME_CONTEXT_ID_;
-    chrome.inputMethodPrivate.setCurrentInputMethod(this.previousImeEngineId_);
-    this.previousImeEngineId_ = '';
+    this.inputController_.commitText(this.interimText_);
+    this.hideCommandsUI_();
+    this.inputController_.disconnect();
     Dictation.removeAsInputMethod();
-  }
 
-  /**
-   * chrome.input.ime.onFocus callback. Save the active context ID.
-   * @param {chrome.input.ime.InputContext} context Input field context.
-   * @private
-   */
-  onImeFocus_(context) {
-    this.activeImeContextId_ = context.contextID;
-  }
-
-  /**
-   * chrome.input.ime.onFocus callback. Stops Dictation if the active
-   * context ID lost focus.
-   * @param {number} contextId
-   * @private
-   */
-  onImeBlur_(contextId) {
-    if (contextId === this.activeImeContextId_) {
-      // Clean up context ID immediately. We can no longer use this context.
-      this.activeImeContextId_ = Dictation.NO_ACTIVE_IME_CONTEXT_ID_;
-      this.stopDictation_();
+    // Notify the browser that Dictation turned off.
+    if (notify) {
+      chrome.accessibilityPrivate.toggleDictation();
     }
+  }
+
+  /**
+   * Sets the timeout to stop Dictation.
+   * @param {number} durationMs
+   * @param {string=} debugInfo Optional debugging information for why Dictation
+   *     stopped automatically.
+   * @private
+   */
+  setStopTimeout_(durationMs, debugInfo) {
+    if (this.stopTimeoutId_ !== null) {
+      clearTimeout(this.stopTimeoutId_);
+    }
+    this.stopTimeoutId_ = setTimeout(() => {
+      this.stopDictation_(/*notify=*/ true);
+      if (debugInfo) {
+        console.log(debugInfo);
+      }
+    }, durationMs);
   }
 
   /**
    * Called when the Speech Recognition engine receives a recognition event.
-   * @param {SpeechRecognitionEvent} event
+   * @param {ResultEvent} event
+   * @return {!Promise}
    * @private
    */
-  onResult_(event) {
-    if (this.state_ !== Dictation.DictationState.LISTENING) {
+  async onSpeechRecognitionResult_(event) {
+    if (!this.active_) {
       return;
     }
-    const result = event.results[event.resultIndex];
-    if (result.length < 1) {
-      return;
-    }
-    this.processSpeechRecognitionResult_(result[0].transcript, result.isFinal);
-    clearTimeout(this.timeoutId_);
-    this.timeoutId_ = setTimeout(
-        () => this.stopDictation_(),
-        result.isFinal ? Dictation.SpeechTimeouts.NO_SPEECH_MS :
-                         Dictation.SpeechTimeouts.NO_NEW_SPEECH_MS);
+
+    const transcript = event.transcript;
+    const isFinal = event.isFinal;
+    this.setStopTimeout_(
+        isFinal ? Dictation.Timeouts.NO_SPEECH_MS :
+                  Dictation.Timeouts.NO_NEW_SPEECH_MS);
+    await this.processSpeechRecognitionResult_(transcript, isFinal);
   }
 
   /**
@@ -233,61 +248,97 @@ export class Dictation {
    * @param {string} transcript
    * @param {boolean} isFinal Whether this is a finalized transcript or an
    *     interim result.
+   * @return {!Promise}
    * @private
    */
-  processSpeechRecognitionResult_(transcript, isFinal) {
-    if (this.activeImeContextId_ === Dictation.NO_ACTIVE_IME_CONTEXT_ID_) {
+  async processSpeechRecognitionResult_(transcript, isFinal) {
+    if (!isFinal) {
+      this.showInterimText_(transcript);
       return;
     }
-    if (isFinal) {
-      chrome.input.ime.commitText(
-          {contextID: this.activeImeContextId_, text: transcript});
-      this.currentComposition_ = '';
-    } else if (this.speechRecognizer_.interimResults) {
-      // Set the composition text for interim results.
-      // Later we will do this in a bubble so that if the
-      // result will become a command it will not appear and
-      // disappear from the composition text.
-      chrome.input.ime.setComposition({
-        contextID: this.activeImeContextId_,
-        cursor: transcript.length,
-        text: transcript
-      });
-      this.currentComposition_ = transcript;
+
+    const macro = await this.speechParser_.parse(transcript);
+    MetricsUtils.recordMacroRecognized(macro);
+    // Check if the macro can execute.
+    // TODO(crbug.com/1264544): Deal with ambiguous results here.
+    const checkContextResult = macro.checkContext();
+    if (!checkContextResult.canTryAction) {
+      this.showMacroExecutionFailed_(macro, transcript);
+      return;
     }
+
+    // Try to run the macro.
+    const runMacroResult = macro.runMacro();
+    if (!runMacroResult.isSuccess) {
+      this.showMacroExecutionFailed_(macro, transcript);
+      return;
+    }
+    if (macro.getMacroName() === MacroName.LIST_COMMANDS) {
+      // ListCommandsMacro opens a new tab, thereby changing the cursor focus
+      // and ending the Dictation session.
+      return;
+    }
+
+    // Provide feedback to the user that the macro executed successfully.
+    this.showMacroExecuted_(macro, transcript);
   }
 
   /**
-   * Called when Speech Recognition starts up and begins listening.
+   * Called when Speech Recognition starts up and begins listening. Passed as
+   * a callback to speechRecognitionPrivate.start().
+   * @param {SpeechRecognitionType} type The type of speech recognition used.
    * @private
    */
-  onSpeechRecognitionStart_() {
-    if (this.state_ !== Dictation.DictationState.STARTING) {
-      // We tried to stop during speech shutdown.
+  onSpeechRecognitionStarted_(type) {
+    if (chrome.runtime.lastError) {
+      // chrome.runtime.lastError will be set if the call to
+      // speechRecognitionPrivate.start() caused an error. When this happens,
+      // the speech recognition private API will turn the associated recognizer
+      // off. To align with this, we should call `stopDictation_`.
+      this.stopDictation_(/*notify=*/ true);
       return;
     }
-    this.state_ = Dictation.DictationState.LISTENING;
+
+    if (!this.active_) {
+      return;
+    }
+
+    this.clearInterimText_();
+
+    // Record metrics.
+    this.metricsUtils_ = new MetricsUtils(type, LocaleInfo.locale);
+    this.metricsUtils_.recordSpeechRecognitionStarted();
+
+    this.uiController_.setState(
+        UIState.STANDBY, {context: HintContext.STANDBY});
+    this.focusHandler_.refresh();
   }
 
   /**
-   * Called when Speech Recognition has ended, either because of the
-   * SpeechRecognizer ending recognition or because recognition was cancelled.
+   * Called when speech recognition stops or when speech recognition encounters
+   * an error.
+   * @param {StopEvent} event
    * @private
    */
-  onSpeechRecognitionEnd_() {
+  onSpeechRecognitionStopped_(event) {
+    if (this.metricsUtils_ !== null) {
+      this.metricsUtils_.recordSpeechRecognitionStopped();
+    }
+    this.metricsUtils_ = null;
+
     // Stop dictation if it wasn't already stopped.
-    this.stopDictation_();
+    this.stopDictation_(/*notify=*/ true);
   }
 
   /**
-   * @param {SpeechRecognitionError} error
+   * @param {ErrorEvent} event
    * @private
    */
-  onSpeechRecognitionError_(error) {
+  onSpeechRecognitionError_(event) {
     // TODO: Dictation does not surface speech recognition errors to the user.
     // Informing the user of errors, for example lack of network connection or a
     // missing microphone, would be a useful feature.
-    this.stopDictation_();
+    this.stopDictation_(/*notify=*/ true);
   }
 
   /**
@@ -295,20 +346,21 @@ export class Dictation {
    * @private
    */
   updateFromPrefs_(prefs) {
-    prefs.forEach((pref) => {
+    prefs.forEach(pref => {
       switch (pref.key) {
         case Dictation.DICTATION_LOCALE_PREF:
           if (pref.value) {
-            this.speechRecognizer_.lang = /** @type {string} */ (pref.value);
+            const locale = /** @type {string} */ (pref.value);
+            this.speechRecognitionOptions_.locale = locale;
+            LocaleInfo.locale = locale;
+            this.speechParser_.refresh();
           }
           break;
         case Dictation.SPOKEN_FEEDBACK_PREF:
-          // When Spoken Feedback is enabled, we shouldn't populate interim
-          // results because it will increase the verbosity too much.
           if (pref.value) {
-            this.speechRecognizer_.interimResults = false;
+            this.chromeVoxEnabled_ = true;
           } else {
-            this.speechRecognizer_.interimResults = true;
+            this.chromeVoxEnabled_ = false;
           }
           break;
         default:
@@ -318,37 +370,136 @@ export class Dictation {
   }
 
   /**
+   * Shows the interim result in the UI.
+   * @param {string} text
+   * @private
+   */
+  showInterimText_(text) {
+    // TODO(crbug.com/1252037): Need to find a way to show interim text that is
+    // only whitespace. Google Cloud Speech can return a newline character
+    // although SODA does not seem to do that. The newline character looks wrong
+    // here.
+    this.interimText_ = text;
+    this.uiController_.setState(UIState.RECOGNIZING_TEXT, {text});
+  }
+
+  /**
+   * Clears the interim result in the UI.
+   * @private
+   */
+  clearInterimText_() {
+    this.interimText_ = '';
+    this.uiController_.setState(UIState.STANDBY);
+  }
+
+  /**
+   * Shows that a macro was executed in the UI by putting a checkmark next to
+   * the transcript.
+   * @param {!Macro} macro
+   * @param {string} transcript
+   * @private
+   */
+  showMacroExecuted_(macro, transcript) {
+    MetricsUtils.recordMacroSucceeded(macro);
+
+    if (macro.getMacroName() === MacroName.INPUT_TEXT_VIEW ||
+        macro.getMacroName() === MacroName.NEW_LINE) {
+      this.clearInterimText_();
+      this.uiController_.setState(
+          UIState.STANDBY, {context: HintContext.TEXT_COMMITTED});
+      return;
+    }
+    this.interimText_ = '';
+    const context = macro.getMacroName() === MacroName.SELECT_ALL_TEXT ?
+        HintContext.TEXT_SELECTED :
+        HintContext.MACRO_SUCCESS;
+    this.uiController_.setState(
+        UIState.MACRO_SUCCESS, {text: transcript, context});
+  }
+
+  /**
+   * Shows a message in the UI that a command failed to execute.
+   * TODO(crbug.com/1252037): Optionally use the MacroError to provide
+   * additional context.
+   * @param {!Macro} macro
+   * @param {string} transcript The user's spoken transcript, shown so they
+   *     understand the final speech recognized which might be helpful in
+   *     understanding why the command failed.
+   * @private
+   */
+  showMacroExecutionFailed_(macro, transcript) {
+    MetricsUtils.recordMacroFailed(macro);
+
+    this.interimText_ = '';
+    // TODO(crbug.com/1288964): Finalize string and internationalization.
+    this.uiController_.setState(UIState.MACRO_FAIL, {
+      text: `Failed to run command: ${transcript}`,
+      context: HintContext.STANDBY,
+    });
+  }
+
+  /**
+   * Hides the commands UI bubble.
+   * @private
+   */
+  hideCommandsUI_() {
+    this.interimText_ = '';
+    this.uiController_.setState(UIState.HIDDEN);
+  }
+
+  /** @private */
+  clearTimeoutIds_() {
+    if (this.stopTimeoutId_ !== null) {
+      clearTimeout(this.stopTimeoutId_);
+      this.stopTimeoutId_ = null;
+    }
+  }
+
+  /**
    * Removes AccessibilityCommon as an input method so it doesn't show up in
    * the shelf input method picker UI.
    */
   static removeAsInputMethod() {
-    chrome.languageSettingsPrivate.removeInputMethod(Dictation.IME_ENGINE_ID);
+    chrome.languageSettingsPrivate.removeInputMethod(
+        InputController.IME_ENGINE_ID);
+  }
+
+  /**
+   * @param {boolean} success
+   * @private
+   */
+  onPumpkinInstalled_(success) {
+    if (!this.isPumpkinEnabled_) {
+      return;
+    }
+
+    // TODO(akihiroota): Either instantiate a new Web Worker or sandboxed
+    // iframe to execute Pumpkin code.
+  }
+
+  /** @param {!MacroName} name The macro to run. */
+  runHiddenMacroForTesting(name) {
+    this.hiddenMacroManager_.runMacroForTesting(name);
+  }
+
+  /**
+   * @param {!MacroName} name The macro to run.
+   * @param {string} arg
+   */
+  runHiddenMacroWithStringArgForTesting(name, arg) {
+    this.hiddenMacroManager_.runMacroWithStringArgForTesting(name, arg);
+  }
+
+  /**
+   * @param {!MacroName} name The macro to run.
+   * @param {string} arg1
+   * @param {string} arg2
+   */
+  runHiddenMacroWithTwoStringArgsForTesting(name, arg1, arg2) {
+    this.hiddenMacroManager_.runMacroWithTwoStringArgsForTesting(
+        name, arg1, arg2);
   }
 }
-
-/**
- * Dictation states.
- * @enum {!number}
- */
-Dictation.DictationState = {
-  OFF: 1,
-  STARTING: 2,
-  LISTENING: 3,
-  STOPPING: 4,
-};
-
-/**
- * The IME engine ID for AccessibilityCommon.
- * @private {string}
- * @const
- */
-Dictation.IME_ENGINE_ID = '_ext_ime_egfdjlfmgnehecnclamagfafdccgfndpdictation';
-
-/**
- * @private {number}
- * @const
- */
-Dictation.NO_ACTIVE_IME_CONTEXT_ID_ = -1;
 
 /**
  * Dictation locale pref.
@@ -368,7 +519,8 @@ Dictation.SPOKEN_FEEDBACK_PREF = 'settings.accessibility';
  * Timeout durations.
  * @type {!Object<string, number>}
  */
-Dictation.SpeechTimeouts = {
+Dictation.Timeouts = {
   NO_SPEECH_MS: 10 * 1000,
   NO_NEW_SPEECH_MS: 5 * 1000,
+  NO_FOCUSED_IME_MS: 500,
 };

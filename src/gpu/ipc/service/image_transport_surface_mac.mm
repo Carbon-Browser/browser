@@ -4,7 +4,6 @@
 
 #include "gpu/ipc/service/image_transport_surface.h"
 
-#include "base/macros.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "gpu/ipc/service/image_transport_surface_overlay_mac.h"
 #include "gpu/ipc/service/pass_through_image_transport_surface.h"
@@ -24,15 +23,14 @@ scoped_refptr<gl::GLSurface> ImageTransportSurface::CreateNativeSurface(
   switch (gl::GetGLImplementation()) {
     case gl::kGLImplementationDesktopGL:
     case gl::kGLImplementationDesktopGLCoreProfile:
-    case gl::kGLImplementationAppleGL:
       return base::WrapRefCounted<gl::GLSurface>(
           new ImageTransportSurfaceOverlayMac(delegate));
 #if defined(USE_EGL)
     case gl::kGLImplementationEGLGLES2:
     case gl::kGLImplementationEGLANGLE:
-    case gl::kGLImplementationSwiftShaderGL:
       return base::WrapRefCounted<gl::GLSurface>(
-          new ImageTransportSurfaceOverlayMacEGL(delegate));
+          new ImageTransportSurfaceOverlayMacEGL(
+              gl::GLSurfaceEGL::GetGLDisplayEGL(), delegate));
 #endif
     case gl::kGLImplementationMockGL:
     case gl::kGLImplementationStubGL:

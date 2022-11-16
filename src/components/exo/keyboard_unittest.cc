@@ -4,6 +4,7 @@
 
 #include "components/exo/keyboard.h"
 
+#include "ash/accelerators/accelerator_controller_impl.h"
 #include "ash/accessibility/accessibility_controller_impl.h"
 #include "ash/constants/app_types.h"
 #include "ash/constants/ash_pref_names.h"
@@ -15,7 +16,6 @@
 #include "ash/wm/desks/desks_controller.h"
 #include "ash/wm/desks/desks_test_util.h"
 #include "ash/wm/tablet_mode/tablet_mode_controller.h"
-#include "base/macros.h"
 #include "base/run_loop.h"
 #include "components/exo/buffer.h"
 #include "components/exo/keyboard_delegate.h"
@@ -31,6 +31,7 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/aura/client/focus_client.h"
+#include "ui/base/accelerators/test_accelerator_target.h"
 #include "ui/base/ime/dummy_text_input_client.h"
 #include "ui/events/devices/device_data_manager.h"
 #include "ui/events/event_constants.h"
@@ -200,8 +201,6 @@ TEST_F(KeyboardTest, OnKeyboardEnter) {
   // Set up expectation for the key release.
   EXPECT_CALL(*delegate_ptr, CanAcceptKeyboardEventsForSurface(surface.get()))
       .WillOnce(testing::Return(true));
-  EXPECT_CALL(*delegate_ptr, OnKeyboardModifiers(KeyboardModifiers{
-                                 kShiftMask | kNumLockMask, 0, 0, 0}));
   EXPECT_CALL(
       *delegate_ptr,
       OnKeyboardEnter(
@@ -497,34 +496,6 @@ TEST_F(KeyboardTest, OnKeyboardKey_NotSendKeyIfConsumedByIme) {
   generator.ReleaseKey(ui::VKEY_A, 0);
   testing::Mock::VerifyAndClearExpectations(&observer);
 
-  // Any key event should be sent to a client if the focused window is marked as
-  // ImeBlocking.
-  WMHelper::GetInstance()->SetImeBlocked(surface->window()->GetToplevelWindow(),
-                                         true);
-  {
-    testing::InSequence s;
-    EXPECT_CALL(observer, OnKeyboardKey(testing::_, ui::DomCode::US_B, true));
-    EXPECT_CALL(*delegate_ptr,
-                OnKeyboardKey(testing::_, ui::DomCode::US_B, true));
-  }
-  seat.set_physical_code_for_currently_processing_event_for_testing(
-      ui::DomCode::US_B);
-  generator.PressKey(ui::VKEY_B, 0);
-  testing::Mock::VerifyAndClearExpectations(&observer);
-  testing::Mock::VerifyAndClearExpectations(delegate_ptr);
-
-  {
-    testing::InSequence s;
-    EXPECT_CALL(observer, OnKeyboardKey(testing::_, ui::DomCode::US_B, false));
-    EXPECT_CALL(*delegate_ptr,
-                OnKeyboardKey(testing::_, ui::DomCode::US_B, false));
-  }
-  generator.ReleaseKey(ui::VKEY_B, 0);
-  WMHelper::GetInstance()->SetImeBlocked(surface->window()->GetToplevelWindow(),
-                                         false);
-  testing::Mock::VerifyAndClearExpectations(&observer);
-  testing::Mock::VerifyAndClearExpectations(delegate_ptr);
-
   // Any key event should be sent to a client if a key event skips IME.
   surface->window()->SetProperty(aura::client::kSkipImeProcessing, true);
   {
@@ -550,6 +521,84 @@ TEST_F(KeyboardTest, OnKeyboardKey_NotSendKeyIfConsumedByIme) {
   testing::Mock::VerifyAndClearExpectations(delegate_ptr);
 
   input_method->SetFocusedTextInputClient(nullptr);
+}
+
+TEST_F(KeyboardTest, OnKeyboardKey_KeyboardInhibit) {
+  std::unique_ptr<Surface> surface(new Surface());
+  std::unique_ptr<ShellSurface> shell_surface(new ShellSurface(surface.get()));
+  gfx::Size buffer_size(10, 10);
+  std::unique_ptr<Buffer> buffer(
+      new Buffer(exo_test_helper()->CreateGpuMemoryBuffer(buffer_size)));
+  surface->Attach(buffer.get());
+  surface->Commit();
+  // Set lacros attribute now for testing. This can be removed, when
+  // all clients are migrated into this model.
+  surface->window()->SetProperty(aura::client::kAppType,
+                                 static_cast<int>(ash::AppType::LACROS));
+
+  aura::client::FocusClient* focus_client =
+      aura::client::GetFocusClient(ash::Shell::GetPrimaryRootWindow());
+  focus_client->FocusWindow(nullptr);
+
+  // Register accelerator to be triggered.
+  ui::TestAcceleratorTarget accelerator_target;
+  {
+    ui::Accelerator accelerator(ui::VKEY_P,
+                                ui::EF_ALT_DOWN | ui::EF_SHIFT_DOWN);
+    ash::AcceleratorControllerImpl* controller =
+        ash::Shell::Get()->accelerator_controller();
+    controller->Register({accelerator}, &accelerator_target);
+  }
+
+  auto delegate = std::make_unique<NiceMockKeyboardDelegate>();
+  auto* delegate_ptr = delegate.get();
+  NiceMockKeyboardObserver observer;
+  Seat seat;
+  Keyboard keyboard(std::move(delegate), &seat);
+  keyboard.AddObserver(&observer);
+  keyboard.SetNeedKeyboardKeyAcks(true);
+
+  EXPECT_CALL(*delegate_ptr, CanAcceptKeyboardEventsForSurface(surface.get()))
+      .WillOnce(testing::Return(true));
+  EXPECT_CALL(*delegate_ptr,
+              OnKeyboardModifiers(KeyboardModifiers{kNumLockMask, 0, 0, 0}));
+  EXPECT_CALL(
+      *delegate_ptr,
+      OnKeyboardEnter(surface.get(), base::flat_map<ui::DomCode, KeyState>()));
+  focus_client->FocusWindow(surface->window());
+  testing::Mock::VerifyAndClearExpectations(delegate_ptr);
+
+  ui::test::EventGenerator generator(ash::Shell::GetPrimaryRootWindow());
+  // This should only generate a press event for KEY_P.
+  accelerator_target.ResetCounts();
+  EXPECT_CALL(observer,
+              OnKeyboardKey(testing::_, ui::DomCode::US_P, testing::_))
+      .Times(0);
+  EXPECT_CALL(*delegate_ptr,
+              OnKeyboardKey(testing::_, ui::DomCode::US_P, testing::_))
+      .Times(0);
+  seat.set_physical_code_for_currently_processing_event_for_testing(
+      ui::DomCode::US_P);
+  generator.PressKey(ui::VKEY_P, ui::EF_ALT_DOWN | ui::EF_SHIFT_DOWN);
+  EXPECT_EQ(1, accelerator_target.accelerator_count());
+  testing::Mock::VerifyAndClearExpectations(&observer);
+  testing::Mock::VerifyAndClearExpectations(delegate_ptr);
+
+  // Set keyboard-shortcut-inhibited, so the key event should be sent to app.
+  surface->SetKeyboardShortcutsInhibited(true);
+  accelerator_target.ResetCounts();
+  {
+    testing::InSequence s;
+    EXPECT_CALL(observer, OnKeyboardKey(testing::_, ui::DomCode::US_P, true));
+    EXPECT_CALL(*delegate_ptr,
+                OnKeyboardKey(testing::_, ui::DomCode::US_P, true));
+  }
+  seat.set_physical_code_for_currently_processing_event_for_testing(
+      ui::DomCode::US_P);
+  generator.PressKey(ui::VKEY_P, ui::EF_ALT_DOWN | ui::EF_SHIFT_DOWN);
+  EXPECT_EQ(0, accelerator_target.accelerator_count());
+  testing::Mock::VerifyAndClearExpectations(&observer);
+  testing::Mock::VerifyAndClearExpectations(delegate_ptr);
 }
 
 TEST_F(KeyboardTest, FocusWithArcOverlay) {
@@ -623,6 +672,7 @@ TEST_F(KeyboardTest, FocusWithArcOverlay) {
                widget1->GetFocusManager()->GetFocusedView()->GetClassName());
   EXPECT_EQ(keyboard.focused_surface_for_testing(), surface.get());
 
+  hold.RunAndReset();
   widget1->CloseNow();
 }
 
@@ -791,10 +841,9 @@ TEST_F(KeyboardTest, OnKeyboardTypeChanged_AccessibilityKeyboard) {
   testing::Mock::VerifyAndClearExpectations(&configuration_delegate);
 }
 
-constexpr base::TimeDelta kDelta50Ms = base::TimeDelta::FromMilliseconds(50);
-constexpr base::TimeDelta kDelta500Ms = base::TimeDelta::FromMilliseconds(500);
-constexpr base::TimeDelta kDelta1000Ms =
-    base::TimeDelta::FromMilliseconds(1000);
+constexpr base::TimeDelta kDelta50Ms = base::Milliseconds(50);
+constexpr base::TimeDelta kDelta500Ms = base::Milliseconds(500);
+constexpr base::TimeDelta kDelta1000Ms = base::Milliseconds(1000);
 
 TEST_F(KeyboardTest, KeyRepeatSettingsLoadDefaults) {
   auto delegate = std::make_unique<NiceMockKeyboardDelegate>();
@@ -999,8 +1048,6 @@ TEST_F(KeyboardTest, AckKeyboardKey) {
   // to ShellSurface.
   ui::test::EventGenerator generator(ash::Shell::GetPrimaryRootWindow());
   // Press KEY_W with Ctrl.
-  EXPECT_CALL(*delegate_ptr, OnKeyboardModifiers(KeyboardModifiers{
-                                 kControlMask | kNumLockMask, 0, 0, 0}));
   EXPECT_CALL(*shell_surface.get(), AcceleratorPressed(ui::Accelerator(
                                         ui::VKEY_W, ui::EF_CONTROL_DOWN,
                                         ui::Accelerator::KeyState::PRESSED)))
@@ -1183,8 +1230,7 @@ TEST_F(KeyboardTest, AckKeyboardKeyExpired) {
   // Wait until |ProcessExpiredPendingKeyAcks| is fired.
   base::RunLoop run_loop;
   base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
-      FROM_HERE, run_loop.QuitClosure(),
-      base::TimeDelta::FromMilliseconds(1000));
+      FROM_HERE, run_loop.QuitClosure(), base::Milliseconds(1000));
   run_loop.Run();
   base::RunLoop().RunUntilIdle();
 
@@ -1275,8 +1321,7 @@ TEST_F(KeyboardTest, AckKeyboardKeyExpiredWithMovingFocusAccelerator) {
   // Wait until |ProcessExpiredPendingKeyAcks| is fired.
   base::RunLoop run_loop;
   base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
-      FROM_HERE, run_loop.QuitClosure(),
-      base::TimeDelta::FromMilliseconds(1000));
+      FROM_HERE, run_loop.QuitClosure(), base::Milliseconds(1000));
   run_loop.Run();
   base::RunLoop().RunUntilIdle();
 

@@ -12,6 +12,7 @@
 
 #include "base/callback.h"
 #include "base/containers/circular_deque.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/synchronization/lock.h"
 #include "base/time/time.h"
@@ -31,11 +32,17 @@ class GL_EXPORT DirectCompositionChildSurfaceWin : public GLSurfaceEGL,
  public:
   using VSyncCallback =
       base::RepeatingCallback<void(base::TimeTicks, base::TimeDelta)>;
-  DirectCompositionChildSurfaceWin(VSyncCallback vsync_callback,
+  DirectCompositionChildSurfaceWin(GLDisplayEGL* display,
+                                   VSyncCallback vsync_callback,
                                    bool use_angle_texture_offset,
                                    size_t max_pending_frames,
                                    bool force_full_damage,
                                    bool force_full_damage_always);
+
+  DirectCompositionChildSurfaceWin(const DirectCompositionChildSurfaceWin&) =
+      delete;
+  DirectCompositionChildSurfaceWin& operator=(
+      const DirectCompositionChildSurfaceWin&) = delete;
 
   // GLSurfaceEGL implementation.
   bool Initialize(GLSurfaceFormat format) override;
@@ -111,6 +118,9 @@ class GL_EXPORT DirectCompositionChildSurfaceWin : public GLSurfaceEGL,
   // to it. Returns false if this fails.
   bool ReleaseDrawTexture(bool will_discard);
 
+  Microsoft::WRL::ComPtr<ID3D11Texture2D> GetOffscreenTexture();
+  void CopyOffscreenTextureToDrawTexture();
+
   gfx::Size size_ = gfx::Size(1, 1);
   bool enable_dc_layers_ = false;
   bool has_alpha_ = true;
@@ -138,6 +148,11 @@ class GL_EXPORT DirectCompositionChildSurfaceWin : public GLSurfaceEGL,
   Microsoft::WRL::ComPtr<IDCompositionSurface> dcomp_surface_;
   Microsoft::WRL::ComPtr<IDXGISwapChain1> swap_chain_;
   Microsoft::WRL::ComPtr<ID3D11Texture2D> draw_texture_;
+  POINT dcomp_update_offset_ = {};
+
+  // Used only for kDirectCompositionVerifyDrawOffset to
+  // verify a draw offset bug.
+  Microsoft::WRL::ComPtr<ID3D11Texture2D> offscreen_texture_;
 
   const VSyncCallback vsync_callback_;
   const bool use_angle_texture_offset_;
@@ -145,7 +160,7 @@ class GL_EXPORT DirectCompositionChildSurfaceWin : public GLSurfaceEGL,
   const bool force_full_damage_;
   const bool force_full_damage_always_;
 
-  VSyncThreadWin* const vsync_thread_;
+  const raw_ptr<VSyncThreadWin> vsync_thread_;
   scoped_refptr<base::SequencedTaskRunner> task_runner_;
 
   bool vsync_thread_started_ = false;
@@ -159,8 +174,6 @@ class GL_EXPORT DirectCompositionChildSurfaceWin : public GLSurfaceEGL,
   base::TimeDelta last_vsync_interval_;
 
   base::WeakPtrFactory<DirectCompositionChildSurfaceWin> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(DirectCompositionChildSurfaceWin);
 };
 
 }  // namespace gl

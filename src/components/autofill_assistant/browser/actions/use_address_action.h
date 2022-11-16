@@ -8,7 +8,6 @@
 #include <memory>
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "components/autofill/core/browser/data_model/autofill_profile.h"
 #include "components/autofill_assistant/browser/actions/action.h"
@@ -25,6 +24,10 @@ class ClientStatus;
 class UseAddressAction : public Action {
  public:
   explicit UseAddressAction(ActionDelegate* delegate, const ActionProto& proto);
+
+  UseAddressAction(const UseAddressAction&) = delete;
+  UseAddressAction& operator=(const UseAddressAction&) = delete;
+
   ~UseAddressAction() override;
 
  private:
@@ -51,8 +54,6 @@ class UseAddressAction : public Action {
 
   ProcessActionCallback process_action_callback_;
   base::WeakPtrFactory<UseAddressAction> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(UseAddressAction);
 };
 
 }  // namespace autofill_assistant

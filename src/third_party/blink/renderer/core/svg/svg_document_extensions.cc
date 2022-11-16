@@ -105,6 +105,14 @@ void SVGDocumentExtensions::PauseAnimations() {
     element->pauseAnimations();
 }
 
+bool SVGDocumentExtensions::HasSmilAnimations() const {
+  for (SVGSVGElement* element : time_containers_) {
+    if (element->TimeContainer()->HasAnimations())
+      return true;
+  }
+  return false;
+}
+
 void SVGDocumentExtensions::DispatchSVGLoadEventToOutermostSVGElements() {
   HeapVector<Member<SVGSVGElement>> time_containers;
   CopyToVector(time_containers_, time_containers);
@@ -154,16 +162,18 @@ bool SVGDocumentExtensions::ZoomAndPanEnabled() const {
   return !svg || svg->ZoomAndPanEnabled();
 }
 
-void SVGDocumentExtensions::StartPan(const FloatPoint& start) {
-  if (SVGSVGElement* svg = rootElement(*document_))
-    translate_ = FloatPoint(start.X() - svg->CurrentTranslate().X(),
-                            start.Y() - svg->CurrentTranslate().Y());
+void SVGDocumentExtensions::StartPan(const gfx::PointF& start) {
+  if (SVGSVGElement* svg = rootElement(*document_)) {
+    translate_ = gfx::Vector2dF(start.x() - svg->CurrentTranslate().x(),
+                                start.y() - svg->CurrentTranslate().y());
+  }
 }
 
-void SVGDocumentExtensions::UpdatePan(const FloatPoint& pos) const {
-  if (SVGSVGElement* svg = rootElement(*document_))
+void SVGDocumentExtensions::UpdatePan(const gfx::PointF& pos) const {
+  if (SVGSVGElement* svg = rootElement(*document_)) {
     svg->SetCurrentTranslate(
-        FloatPoint(pos.X() - translate_.X(), pos.Y() - translate_.Y()));
+        gfx::Vector2dF(pos.x() - translate_.x(), pos.y() - translate_.y()));
+  }
 }
 
 SVGSVGElement* SVGDocumentExtensions::rootElement(const Document& document) {

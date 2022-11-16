@@ -9,12 +9,13 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/time/time.h"
 #include "content/browser/loader/navigation_loader_interceptor.h"
 #include "content/browser/service_worker/embedded_worker_status.h"
 #include "content/browser/service_worker/service_worker_fetch_dispatcher.h"
+#include "content/common/content_export.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -66,7 +67,13 @@ class CONTENT_EXPORT ServiceWorkerMainResourceLoader
   // is used instead of NavigationURLLoaderImpl.
   ServiceWorkerMainResourceLoader(
       NavigationLoaderInterceptor::FallbackCallback fallback_callback,
-      base::WeakPtr<ServiceWorkerContainerHost> container_host);
+      base::WeakPtr<ServiceWorkerContainerHost> container_host,
+      int frame_tree_node_id);
+
+  ServiceWorkerMainResourceLoader(const ServiceWorkerMainResourceLoader&) =
+      delete;
+  ServiceWorkerMainResourceLoader& operator=(
+      const ServiceWorkerMainResourceLoader&) = delete;
 
   ~ServiceWorkerMainResourceLoader() override;
 
@@ -120,7 +127,7 @@ class CONTENT_EXPORT ServiceWorkerMainResourceLoader
   // Calls url_loader_client_->OnReceiveResponse() with |response_head_|.
   void CommitResponseHeaders();
 
-  // Calls url_loader_client_->OnStartLoadingResponseBody() with
+  // Calls url_loader_client_->OnReceiveResponse() with
   // |response_body|.
   void CommitResponseBody(mojo::ScopedDataPipeConsumerHandle response_body);
 
@@ -160,6 +167,7 @@ class CONTENT_EXPORT ServiceWorkerMainResourceLoader
   network::ResourceRequest resource_request_;
 
   base::WeakPtr<ServiceWorkerContainerHost> container_host_;
+  const int frame_tree_node_id_;
 
   std::unique_ptr<ServiceWorkerFetchDispatcher> fetch_dispatcher_;
   std::unique_ptr<StreamWaiter> stream_waiter_;
@@ -184,8 +192,6 @@ class CONTENT_EXPORT ServiceWorkerMainResourceLoader
   bool is_detached_ = false;
 
   base::WeakPtrFactory<ServiceWorkerMainResourceLoader> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ServiceWorkerMainResourceLoader);
 };
 
 // Owns a loader and calls DetachedFromRequest() to release it.
@@ -193,14 +199,18 @@ class ServiceWorkerMainResourceLoaderWrapper {
  public:
   explicit ServiceWorkerMainResourceLoaderWrapper(
       std::unique_ptr<ServiceWorkerMainResourceLoader> loader);
+
+  ServiceWorkerMainResourceLoaderWrapper(
+      const ServiceWorkerMainResourceLoaderWrapper&) = delete;
+  ServiceWorkerMainResourceLoaderWrapper& operator=(
+      const ServiceWorkerMainResourceLoaderWrapper&) = delete;
+
   ~ServiceWorkerMainResourceLoaderWrapper();
 
   ServiceWorkerMainResourceLoader* get() { return loader_.get(); }
 
  private:
   std::unique_ptr<ServiceWorkerMainResourceLoader> loader_;
-
-  DISALLOW_COPY_AND_ASSIGN(ServiceWorkerMainResourceLoaderWrapper);
 };
 
 }  // namespace content

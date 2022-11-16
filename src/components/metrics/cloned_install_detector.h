@@ -6,7 +6,6 @@
 #define COMPONENTS_METRICS_CLONED_INSTALL_DETECTOR_H_
 
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 
 class PrefRegistrySimple;
@@ -27,6 +26,10 @@ struct ClonedInstallInfo {
 class ClonedInstallDetector {
  public:
   ClonedInstallDetector();
+
+  ClonedInstallDetector(const ClonedInstallDetector&) = delete;
+  ClonedInstallDetector& operator=(const ClonedInstallDetector&) = delete;
+
   virtual ~ClonedInstallDetector();
 
   // Posts a task to |task_runner| to generate a machine ID and store it to a
@@ -77,8 +80,6 @@ class ClonedInstallDetector {
   bool should_reset_client_ids_ = false;
 
   base::WeakPtrFactory<ClonedInstallDetector> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ClonedInstallDetector);
 };
 
 }  // namespace metrics

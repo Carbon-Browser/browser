@@ -6,7 +6,6 @@
 #define UI_BASE_MODELS_SIMPLE_COMBOBOX_MODEL_H_
 
 #include "base/component_export.h"
-#include "base/macros.h"
 #include "ui/base/models/combobox_model.h"
 #include "ui/base/models/image_model.h"
 
@@ -38,20 +37,22 @@ class COMPONENT_EXPORT(UI_BASE) SimpleComboboxModel : public ComboboxModel {
   };
 
   explicit SimpleComboboxModel(std::vector<Item> items);
+
+  SimpleComboboxModel(const SimpleComboboxModel&) = delete;
+  SimpleComboboxModel& operator=(const SimpleComboboxModel&) = delete;
+
   ~SimpleComboboxModel() override;
 
   // ui::ComboboxModel:
-  int GetItemCount() const override;
-  std::u16string GetItemAt(int index) const override;
-  std::u16string GetDropDownSecondaryTextAt(int index) const override;
-  ui::ImageModel GetIconAt(int index) const override;
-  bool IsItemSeparatorAt(int index) const override;
-  int GetDefaultIndex() const override;
+  size_t GetItemCount() const override;
+  std::u16string GetItemAt(size_t index) const override;
+  std::u16string GetDropDownSecondaryTextAt(size_t index) const override;
+  ui::ImageModel GetIconAt(size_t index) const override;
+  bool IsItemSeparatorAt(size_t index) const override;
+  absl::optional<size_t> GetDefaultIndex() const override;
 
  private:
   const std::vector<Item> items_;
-
-  DISALLOW_COPY_AND_ASSIGN(SimpleComboboxModel);
 };
 
 }  // namespace ui

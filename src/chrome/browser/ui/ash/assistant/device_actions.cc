@@ -8,7 +8,12 @@
 #include <utility>
 #include <vector>
 
+#include "ash/components/arc/mojom/intent_helper.mojom.h"
+#include "ash/components/arc/session/arc_bridge_service.h"
+#include "ash/components/arc/session/arc_service_manager.h"
+#include "ash/constants/ash_features.h"
 #include "ash/constants/ash_pref_names.h"
+#include "ash/public/cpp/bluetooth_config_service.h"
 #include "base/bind.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
@@ -17,13 +22,11 @@
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/app_list/arc/arc_app_list_prefs.h"
 #include "chrome/browser/ui/app_list/arc/arc_app_utils.h"
+#include "chrome/browser/ui/app_list/arc/intent.h"
+#include "chromeos/ash/components/network/network_event_log.h"
+#include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/dbus/power/power_manager_client.h"
 #include "chromeos/dbus/power_manager/backlight.pb.h"
-#include "chromeos/network/network_event_log.h"
-#include "chromeos/network/network_state_handler.h"
-#include "components/arc/arc_service_manager.h"
-#include "components/arc/mojom/intent_helper.mojom.h"
-#include "components/arc/session/arc_bridge_service.h"
 #include "components/prefs/pref_service.h"
 #include "components/user_manager/user_manager.h"
 #include "ui/display/types/display_constants.h"
@@ -108,7 +111,14 @@ void NotifyAndroidAppListRefreshed(
 }  // namespace
 
 DeviceActions::DeviceActions(std::unique_ptr<DeviceActionsDelegate> delegate)
-    : delegate_(std::move(delegate)) {}
+    : delegate_(std::move(delegate)) {
+  if (ash::features::IsBluetoothRevampEnabled()) {
+    // BluetoothConfigService is not available if kBluetoothRevamp is not
+    // enabled.
+    ash::GetBluetoothConfigService(
+        remote_cros_bluetooth_config_.BindNewPipeAndPassReceiver());
+  }
+}
 
 DeviceActions::~DeviceActions() = default;
 
@@ -120,14 +130,19 @@ void DeviceActions::SetWifiEnabled(bool enabled) {
 }
 
 void DeviceActions::SetBluetoothEnabled(bool enabled) {
-  const user_manager::User* const user =
-      user_manager::UserManager::Get()->GetActiveUser();
-  Profile* profile = chromeos::ProfileHelper::Get()->GetProfileByUser(user);
-  DCHECK(profile);
-  // Simply toggle the user pref, which is being observed by ash's bluetooth
-  // power controller.
-  profile->GetPrefs()->SetBoolean(ash::prefs::kUserBluetoothAdapterEnabled,
-                                  enabled);
+  // If kBluetoothRevamp is enabled, BluetoothPowerController does not observe
+  // the pref value change.
+  if (ash::features::IsBluetoothRevampEnabled()) {
+    remote_cros_bluetooth_config_->SetBluetoothEnabledState(enabled);
+  } else {
+    const user_manager::User* const user =
+        user_manager::UserManager::Get()->GetActiveUser();
+    Profile* profile = ash::ProfileHelper::Get()->GetProfileByUser(user);
+    DCHECK(profile);
+    // BluetoothPowerController observes the pref value change.
+    profile->GetPrefs()->SetBoolean(ash::prefs::kUserBluetoothAdapterEnabled,
+                                    enabled);
+  }
 }
 
 void HandleScreenBrightnessCallback(
@@ -161,7 +176,7 @@ void DeviceActions::SetScreenBrightnessLevel(double level, bool gradual) {
 void DeviceActions::SetNightLightEnabled(bool enabled) {
   const user_manager::User* const user =
       user_manager::UserManager::Get()->GetActiveUser();
-  Profile* profile = chromeos::ProfileHelper::Get()->GetProfileByUser(user);
+  Profile* profile = ash::ProfileHelper::Get()->GetProfileByUser(user);
   DCHECK(profile);
   // Simply toggle the user pref, which is being observed by ash's night
   // light controller.
@@ -171,7 +186,7 @@ void DeviceActions::SetNightLightEnabled(bool enabled) {
 void DeviceActions::SetSwitchAccessEnabled(bool enabled) {
   const user_manager::User* const user =
       user_manager::UserManager::Get()->GetActiveUser();
-  Profile* profile = chromeos::ProfileHelper::Get()->GetProfileByUser(user);
+  Profile* profile = ash::ProfileHelper::Get()->GetProfileByUser(user);
   DCHECK(profile);
   profile->GetPrefs()->SetBoolean(ash::prefs::kAccessibilitySwitchAccessEnabled,
                                   enabled);

@@ -4,28 +4,35 @@
 
 #include "chrome/browser/ui/webui/settings/chromeos/apps_section.h"
 
+#include "ash/components/arc/arc_features.h"
+#include "ash/components/arc/arc_prefs.h"
+#include "ash/components/arc/arc_util.h"
 #include "ash/constants/ash_features.h"
 #include "base/feature_list.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/no_destructor.h"
 #include "base/strings/utf_string_conversions.h"
+#include "chrome/browser/apps/app_service/app_service_proxy.h"
+#include "chrome/browser/ash/app_restore/full_restore_service_factory.h"
 #include "chrome/browser/ash/arc/arc_util.h"
-#include "chrome/browser/ash/full_restore/full_restore_service_factory.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_features.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_pref_names.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_util.h"
 #include "chrome/browser/ui/app_list/arc/arc_app_utils.h"
+#include "chrome/browser/ui/webui/settings/ash/search/search_tag_registry.h"
 #include "chrome/browser/ui/webui/settings/chromeos/android_apps_handler.h"
 #include "chrome/browser/ui/webui/settings/chromeos/guest_os_handler.h"
 #include "chrome/browser/ui/webui/settings/chromeos/plugin_vm_handler.h"
-#include "chrome/browser/ui/webui/settings/chromeos/search/search_tag_registry.h"
 #include "chrome/browser/ui/webui/webui_util.h"
+#include "chrome/common/chrome_features.h"
 #include "chrome/common/url_constants.h"
 #include "chrome/grit/generated_resources.h"
 #include "chrome/grit/os_settings_resources.h"
-#include "components/arc/arc_prefs.h"
-#include "components/full_restore/features.h"
+#include "components/app_restore/features.h"
 #include "components/prefs/pref_service.h"
+#include "components/strings/grit/components_strings.h"
 #include "content/public/browser/web_ui_data_source.h"
+#include "ui/accessibility/accessibility_features.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/webui/web_ui_util.h"
 #include "ui/chromeos/devicetype_utils.h"
@@ -166,10 +173,63 @@ const std::vector<SearchConcept>& GetOnStartupSearchConcepts() {
 
 void AddAppManagementStrings(content::WebUIDataSource* html_source) {
   static constexpr webui::LocalizedString kLocalizedStrings[] = {
+      {"appManagementAppDetailsTitle", IDS_APP_MANAGEMENT_APP_DETAILS_TITLE},
+      {"appManagementAppDetailsTypeAndroid",
+       IDS_APP_MANAGEMENT_APP_DETAILS_TYPE_ANDROID},
+      {"appManagementAppDetailsTypeChrome",
+       IDS_APP_MANAGEMENT_APP_DETAILS_TYPE_CHROME},
+      {"appManagementAppDetailsTypeWeb",
+       IDS_APP_MANAGEMENT_APP_DETAILS_TYPE_WEB},
+      {"appManagementAppDetailsTypeSystem",
+       IDS_APP_MANAGEMENT_APP_DETAILS_TYPE_SYSTEM},
+      {"appManagementAppDetailsTypeCrosSystem",
+       IDS_APP_MANAGEMENT_APP_DETAILS_TYPE_CROS_SYSTEM},
+      {"appManagementAppDetailsInstallSourceWebStore",
+       IDS_APP_MANAGEMENT_APP_DETAILS_INSTALL_SOURCE_WEB_STORE},
+      {"appManagementAppDetailsInstallSourcePlayStore",
+       IDS_APP_MANAGEMENT_APP_DETAILS_INSTALL_SOURCE_PLAY_STORE},
+      {"appManagementAppDetailsInstallSourceBrowser",
+       IDS_APP_MANAGEMENT_APP_DETAILS_INSTALL_SOURCE_BROWSER},
+      {"appManagementAppDetailsTypeAndSourceCombined",
+       IDS_APP_MANAGEMENT_APP_DETAILS_TYPE_AND_SOURCE_COMBINED},
+      {"appManagementAppDetailsVersion",
+       IDS_APP_MANAGEMENT_APP_DETAILS_VERSION},
+      {"appManagementAppDetailsStorageTitle",
+       IDS_APP_MANAGEMENT_APP_DETAILS_STORAGE_TITLE},
+      {"appManagementAppDetailsAppSize",
+       IDS_APP_MANAGEMENT_APP_DETAILS_APP_SIZE},
+      {"appManagementAppDetailsDataSize",
+       IDS_APP_MANAGEMENT_APP_DETAILS_DATA_SIZE},
       {"appManagementAppInstalledByPolicyLabel",
        IDS_APP_MANAGEMENT_POLICY_APP_POLICY_STRING},
       {"appManagementCameraPermissionLabel", IDS_APP_MANAGEMENT_CAMERA},
       {"appManagementContactsPermissionLabel", IDS_APP_MANAGEMENT_CONTACTS},
+      {"appManagementFileHandlingHeader",
+       IDS_APP_MANAGEMENT_FILE_HANDLING_HEADER},
+      {"appManagementIntentOverlapChangeButton",
+       IDS_APP_MANAGEMENT_INTENT_OVERLAP_CHANGE_BUTTON},
+      {"appManagementIntentOverlapDialogText1App",
+       IDS_APP_MANAGEMENT_INTENT_OVERLAP_DIALOG_TEXT_1_APP},
+      {"appManagementIntentOverlapDialogText2Apps",
+       IDS_APP_MANAGEMENT_INTENT_OVERLAP_DIALOG_TEXT_2_APPS},
+      {"appManagementIntentOverlapDialogText3Apps",
+       IDS_APP_MANAGEMENT_INTENT_OVERLAP_DIALOG_TEXT_3_APPS},
+      {"appManagementIntentOverlapDialogText4Apps",
+       IDS_APP_MANAGEMENT_INTENT_OVERLAP_DIALOG_TEXT_4_APPS},
+      {"appManagementIntentOverlapDialogText5OrMoreApps",
+       IDS_APP_MANAGEMENT_INTENT_OVERLAP_DIALOG_TEXT_5_OR_MORE_APPS},
+      {"appManagementIntentOverlapDialogTitle",
+       IDS_APP_MANAGEMENT_INTENT_OVERLAP_DIALOG_TITLE},
+      {"appManagementIntentOverlapWarningText1App",
+       IDS_APP_MANAGEMENT_INTENT_OVERLAP_WARNING_TEXT_1_APP},
+      {"appManagementIntentOverlapWarningText2Apps",
+       IDS_APP_MANAGEMENT_INTENT_OVERLAP_WARNING_TEXT_2_APPS},
+      {"appManagementIntentOverlapWarningText3Apps",
+       IDS_APP_MANAGEMENT_INTENT_OVERLAP_WARNING_TEXT_3_APPS},
+      {"appManagementIntentOverlapWarningText4Apps",
+       IDS_APP_MANAGEMENT_INTENT_OVERLAP_WARNING_TEXT_4_APPS},
+      {"appManagementIntentOverlapWarningText5OrMoreApps",
+       IDS_APP_MANAGEMENT_INTENT_OVERLAP_WARNING_TEXT_5_OR_MORE_APPS},
       {"appManagementIntentSettingsDialogTitle",
        IDS_APP_MANAGEMENT_INTENT_SETTINGS_DIALOG_TITLE},
       {"appManagementIntentSettingsTitle",
@@ -182,8 +242,7 @@ void AddAppManagementStrings(content::WebUIDataSource* html_source) {
        IDS_APP_MANAGEMENT_INTENT_SHARING_TAB_EXPLANATION},
       {"appManagementLocationPermissionLabel", IDS_APP_MANAGEMENT_LOCATION},
       {"appManagementMicrophonePermissionLabel", IDS_APP_MANAGEMENT_MICROPHONE},
-      {"appManagementMorePermissionsLabel",
-       IDS_APP_MANAGEMENT_MORE_PERMISSIONS},
+      {"appManagementMorePermissionsLabel", IDS_APP_MANAGEMENT_MORE_SETTINGS},
       {"appManagementNoAppsFound", IDS_APP_MANAGEMENT_NO_APPS_FOUND},
       {"appManagementNoPermissions",
        IDS_APPLICATION_INFO_APP_NO_PERMISSIONS_TEXT},
@@ -198,6 +257,11 @@ void AddAppManagementStrings(content::WebUIDataSource* html_source) {
       {"appManagementSearchPrompt", IDS_APP_MANAGEMENT_SEARCH_PROMPT},
       {"appManagementStoragePermissionLabel", IDS_APP_MANAGEMENT_STORAGE},
       {"appManagementUninstallLabel", IDS_APP_MANAGEMENT_UNINSTALL_APP},
+      {"close", IDS_CLOSE},
+      {"fileHandlingOverflowDialogTitle",
+       IDS_APP_MANAGEMENT_FILE_HANDLING_OVERFLOW_DIALOG_TITLE},
+      {"fileHandlingSetDefaults",
+       IDS_APP_MANAGEMENT_FILE_HANDLING_SET_DEFAULTS_LINK},
   };
   html_source->AddLocalizedStrings(kLocalizedStrings);
 }
@@ -260,7 +324,7 @@ AppsSection::AppsSection(Profile* profile,
                          SearchTagRegistry* search_tag_registry,
                          PrefService* pref_service,
                          ArcAppListPrefs* arc_app_list_prefs,
-                         apps::AppServiceProxyChromeOs* app_service_proxy)
+                         apps::AppServiceProxy* app_service_proxy)
     : OsSettingsSection(profile, search_tag_registry),
       pref_service_(pref_service),
       arc_app_list_prefs_(arc_app_list_prefs),
@@ -317,8 +381,16 @@ void AppsSection::AddLoadTimeData(content::WebUIDataSource* html_source) {
        IDS_SETTINGS_APP_NOTIFICATIONS_DO_NOT_DISTURB_TOGGLE_DESCRIPTION},
       {"appNotificationsLinkToBrowserSettingsDescription",
        IDS_SETTINGS_APP_NOTIFICATIONS_LINK_TO_BROWSER_SETTINGS_DESCRIPTION},
+      {"appNotificationsCountDescription",
+       IDS_SETTINGS_APP_NOTIFICATIONS_SUBLABEL_TEXT},
+      {"appNotificationsDoNotDisturbDescription",
+       IDS_SETTINGS_APP_NOTIFICATIONS_DND_ENABLED_SUBLABEL_TEXT},
   };
   html_source->AddLocalizedStrings(kLocalizedStrings);
+
+  html_source->AddBoolean(
+      "appManagementAppDetailsEnabled",
+      base::FeatureList::IsEnabled(::features::kAppManagementAppDetails));
 
   html_source->AddString("appNotificationsBrowserSettingsURL",
                          chrome::kAppNotificationsBrowserSettingsURL);
@@ -338,6 +410,14 @@ void AppsSection::AddLoadTimeData(content::WebUIDataSource* html_source) {
       "showOsSettingsAppNotificationsRow",
       base::FeatureList::IsEnabled(
           chromeos::features::kOsSettingsAppNotificationsPage));
+  html_source->AddBoolean(
+      "showArcvmManageUsb",
+      arc::IsArcVmEnabled() &&
+          base::FeatureList::IsEnabled(arc::kUsbDeviceDefaultAttachToArcVm));
+
+  html_source->AddBoolean(
+      "isAccessibilityOSSettingsVisibilityEnabled",
+      ::features::IsAccessibilityOSSettingsVisibilityEnabled());
 
   AddAppManagementStrings(html_source);
   AddGuestOsStrings(html_source);
@@ -351,6 +431,9 @@ void AppsSection::AddHandlers(content::WebUI* web_ui) {
   web_ui->AddMessageHandler(
       std::make_unique<chromeos::settings::AndroidAppsHandler>(
           profile(), app_service_proxy_));
+  if (arc::IsArcVmEnabled() &&
+      base::FeatureList::IsEnabled(arc::kUsbDeviceDefaultAttachToArcVm))
+    web_ui->AddMessageHandler(std::make_unique<GuestOsHandler>(profile()));
 
   if (ShowPluginVm(profile(), *pref_service_)) {
     web_ui->AddMessageHandler(std::make_unique<GuestOsHandler>(profile()));
@@ -376,6 +459,11 @@ std::string AppsSection::GetSectionPath() const {
 
 bool AppsSection::LogMetric(mojom::Setting setting, base::Value& value) const {
   // Unimplemented.
+  if (setting == mojom::Setting::kDoNotDisturbOnOff) {
+    base::UmaHistogramBoolean("ChromeOS.Settings.Apps.DoNotDisturbOnOff",
+                              value.GetBool());
+    return true;
+  }
   return false;
 }
 
@@ -430,6 +518,13 @@ void AppsSection::RegisterHierarchy(HierarchyGenerator* generator) const {
                             kGooglePlayStoreSettings, generator);
   generator->RegisterTopLevelAltSetting(
       mojom::Setting::kManageAndroidPreferences);
+
+  generator->RegisterNestedSubpage(
+      IDS_SETTINGS_GUEST_OS_SHARED_USB_DEVICES_LABEL,
+      mojom::Subpage::kArcVmUsbPreferences, mojom::Subpage::kGooglePlayStore,
+      mojom::SearchResultIcon::kGooglePlay,
+      mojom::SearchResultDefaultRank::kMedium,
+      mojom::kArcVmUsbPreferencesSubpagePath);
 }
 
 void AppsSection::OnAppRegistered(const std::string& app_id,
@@ -450,6 +545,8 @@ void AppsSection::AddAndroidAppStrings(content::WebUIDataSource* html_source) {
        IDS_SETTINGS_ANDROID_APPS_DISABLE_DIALOG_MESSAGE},
       {"androidAppsDisableDialogRemove",
        IDS_SETTINGS_ANDROID_APPS_DISABLE_DIALOG_REMOVE},
+      {"arcvmSharedUsbDevicesDescription",
+       IDS_SETTINGS_APPS_ARC_VM_SHARED_USB_DEVICES_DESCRIPTION},
   };
   html_source->AddLocalizedStrings(kLocalizedStrings);
   html_source->AddLocalizedString("androidAppsPageTitle",

@@ -17,6 +17,7 @@
 #include "base/cxx17_backports.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/time/time.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/aura/window.h"
@@ -35,7 +36,9 @@
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/geometry/vector2d.h"
 #include "ui/gfx/text_constants.h"
+#include "ui/views/background.h"
 #include "ui/views/controls/label.h"
+#include "ui/views/highlight_border.h"
 #include "ui/views/layout/box_layout.h"
 #include "ui/views/view.h"
 
@@ -44,7 +47,7 @@ namespace ash {
 namespace {
 
 // Shield rounded corner radius.
-constexpr gfx::RoundedCornersF kBackgroundCornerRadius{16.f};
+constexpr int kBackgroundCornerRadius = 16;
 
 // Shield horizontal inset.
 constexpr int kBackgroundHorizontalInsetDp = 8;
@@ -74,17 +77,14 @@ constexpr char kContainerAnimationSmoothness[] =
     "Ash.WindowCycleView.AnimationSmoothness.Container";
 
 // Duration of the window cycle UI fade in animation.
-constexpr base::TimeDelta kFadeInDuration =
-    base::TimeDelta::FromMilliseconds(100);
+constexpr base::TimeDelta kFadeInDuration = base::Milliseconds(100);
 
 // Duration of the window cycle elements slide animation.
-constexpr base::TimeDelta kContainerSlideDuration =
-    base::TimeDelta::FromMilliseconds(120);
+constexpr base::TimeDelta kContainerSlideDuration = base::Milliseconds(120);
 
 // Duration of the window cycle scale animation when a user toggles alt-tab
 // modes.
-constexpr base::TimeDelta kToggleModeScaleDuration =
-    base::TimeDelta::FromMilliseconds(150);
+constexpr base::TimeDelta kToggleModeScaleDuration = base::Milliseconds(150);
 
 }  // namespace
 
@@ -103,15 +103,17 @@ WindowCycleView::WindowCycleView(aura::Window* root_window,
 
   // The layer for |this| is responsible for showing color, background blur
   // and fading in.
-  SetPaintToLayer(ui::LAYER_SOLID_COLOR);
+  SetPaintToLayer(ui::LAYER_TEXTURED);
   ui::Layer* layer = this->layer();
-  SkColor background_color = AshColorProvider::Get()->GetBaseLayerColor(
-      AshColorProvider::BaseLayerType::kTransparent80);
-  layer->SetColor(background_color);
+  layer->SetFillsBoundsOpaquely(false);
   layer->SetBackgroundBlur(ColorProvider::kBackgroundBlurSigma);
   layer->SetBackdropFilterQuality(ColorProvider::kBackgroundBlurQuality);
   layer->SetName("WindowCycleView");
   layer->SetMasksToBounds(true);
+  SetBackground(views::CreateRoundedRectBackground(
+      AshColorProvider::Get()->GetBaseLayerColor(
+          AshColorProvider::BaseLayerType::kTransparent80),
+      kBackgroundCornerRadius));
 
   // |mirror_container_| may be larger than |this|. In this case, it will be
   // shifted along the x-axis when the user tabs through. It is a container
@@ -122,12 +124,12 @@ WindowCycleView::WindowCycleView(aura::Window* root_window,
   views::BoxLayout* layout =
       mirror_container_->SetLayoutManager(std::make_unique<views::BoxLayout>(
           views::BoxLayout::Orientation::kHorizontal,
-          gfx::Insets(is_interactive_alt_tab_mode_allowed
-                          ? kMirrorContainerVerticalPaddingDp
-                          : kInsideBorderVerticalPaddingDp,
-                      WindowCycleView::kInsideBorderHorizontalPaddingDp,
-                      kInsideBorderVerticalPaddingDp,
-                      WindowCycleView::kInsideBorderHorizontalPaddingDp),
+          gfx::Insets::TLBR(is_interactive_alt_tab_mode_allowed
+                                ? kMirrorContainerVerticalPaddingDp
+                                : kInsideBorderVerticalPaddingDp,
+                            WindowCycleView::kInsideBorderHorizontalPaddingDp,
+                            kInsideBorderVerticalPaddingDp,
+                            WindowCycleView::kInsideBorderHorizontalPaddingDp),
           kBetweenChildPaddingDp));
   layout->set_cross_axis_alignment(
       views::BoxLayout::CrossAxisAlignment::kStart);
@@ -192,8 +194,6 @@ void WindowCycleView::ScaleCycleView(const gfx::Rect& screen_bounds) {
     // new bounds for the next layout, we must abort the ongoing animation so
     // |this| will set the previous bounds of the widget and clear the clip
     // rect.
-    // TODO(chinsenj): We may not want to abort the animation and rather just
-    // animate from the current position.
     layer_animator->AbortAllAnimations();
   }
 
@@ -435,8 +435,7 @@ gfx::Size WindowCycleView::CalculatePreferredSize() const {
   // screen, but the window cycle view with a bandshield, cropping the
   // overflow window list, should remain within the specified horizontal
   // insets of the screen width.
-  const int max_width = root_window_->GetBoundsInScreen().size().width() -
-                        2 * kBackgroundHorizontalInsetDp;
+  const int max_width = CalculateMaxWidth();
   size.set_width(std::min(size.width(), max_width));
   if (Shell::Get()
           ->window_cycle_controller()
@@ -470,7 +469,8 @@ void WindowCycleView::Layout() {
   // work properly.
   if (first_layout) {
     mirror_container_->SizeToPreferredSize();
-    layer()->SetRoundedCornerRadius(kBackgroundCornerRadius);
+    layer()->SetRoundedCornerRadius(
+        gfx::RoundedCornersF{kBackgroundCornerRadius});
   }
 
   gfx::RectF target_bounds;
@@ -551,7 +551,8 @@ void WindowCycleView::Layout() {
   std::unique_ptr<ui::ScopedLayerAnimationSettings> settings;
   absl::optional<ui::AnimationThroughputReporter> reporter;
   if (!first_layout && !this->layer()->GetAnimator()->is_animating() &&
-      !defer_widget_bounds_update_) {
+      !defer_widget_bounds_update_ &&
+      mirror_container_->bounds() != content_container_bounds) {
     settings = std::make_unique<ui::ScopedLayerAnimationSettings>(
         mirror_container_->layer()->GetAnimator());
     settings->SetTransitionDuration(kContainerSlideDuration);
@@ -593,6 +594,30 @@ void WindowCycleView::OnImplicitAnimationsCompleted() {
     GetWidget()->SetBounds(GetTargetBounds());
     defer_widget_bounds_update_ = false;
   }
+}
+
+void WindowCycleView::OnThemeChanged() {
+  views::View::OnThemeChanged();
+  background()->SetNativeControlColor(
+      AshColorProvider::Get()->GetBaseLayerColor(
+          AshColorProvider::BaseLayerType::kTransparent80));
+  if (chromeos::features::IsDarkLightModeEnabled()) {
+    SetBorder(std::make_unique<views::HighlightBorder>(
+        kBackgroundCornerRadius,
+        views::HighlightBorder::Type::kHighlightBorder1,
+        /*use_light_colors=*/false));
+  }
+}
+
+bool WindowCycleView::IsEventInTabSliderContainer(
+    const gfx::Point& screen_point) {
+  return tab_slider_container_ &&
+         tab_slider_container_->GetBoundsInScreen().Contains(screen_point);
+}
+
+int WindowCycleView::CalculateMaxWidth() const {
+  return root_window_->GetBoundsInScreen().size().width() -
+         2 * kBackgroundHorizontalInsetDp;
 }
 
 gfx::Rect WindowCycleView::GetContentContainerBounds() const {

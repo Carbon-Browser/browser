@@ -9,7 +9,6 @@
 
 #include "base/component_export.h"
 #include "base/mac/scoped_nsobject.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #import "ui/base/clipboard/clipboard_util_mac.h"
 #include "ui/base/dragdrop/os_exchange_data.h"
@@ -42,6 +41,8 @@ class COMPONENT_EXPORT(UI_BASE) OSExchangeDataProviderMac
   // Overridden from OSExchangeDataProvider:
   void MarkOriginatedFromRenderer() override;
   bool DidOriginateFromRenderer() const override;
+  void MarkAsFromPrivileged() override;
+  bool IsFromPrivileged() const override;
   void SetString(const std::u16string& data) override;
   void SetURL(const GURL& url, const std::u16string& title) override;
   void SetFilename(const base::FilePath& path) override;

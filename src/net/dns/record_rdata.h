@@ -7,13 +7,13 @@
 
 #include <stdint.h>
 
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "base/check_op.h"
 #include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "base/strings/string_piece.h"
 #include "net/base/io_buffer.h"
 #include "net/base/ip_address.h"
@@ -30,7 +30,7 @@ class DnsRecordParser;
 // DNS record data such as TTL, Name, Type and Class.
 class NET_EXPORT RecordRdata {
  public:
-  virtual ~RecordRdata() {}
+  virtual ~RecordRdata() = default;
 
   // Return true if `data` represents RDATA in the wire format with a valid size
   // for the give `type`. Always returns true for unrecognized `type`s as the
@@ -50,6 +50,9 @@ class NET_EXPORT_PRIVATE SrvRecordRdata : public RecordRdata {
  public:
   static const uint16_t kType = dns_protocol::kTypeSRV;
 
+  SrvRecordRdata(const SrvRecordRdata&) = delete;
+  SrvRecordRdata& operator=(const SrvRecordRdata&) = delete;
+
   ~SrvRecordRdata() override;
   static std::unique_ptr<SrvRecordRdata> Create(const base::StringPiece& data,
                                                 const DnsRecordParser& parser);
@@ -66,13 +69,11 @@ class NET_EXPORT_PRIVATE SrvRecordRdata : public RecordRdata {
  private:
   SrvRecordRdata();
 
-  uint16_t priority_;
-  uint16_t weight_;
-  uint16_t port_;
+  uint16_t priority_ = 0;
+  uint16_t weight_ = 0;
+  uint16_t port_ = 0;
 
   std::string target_;
-
-  DISALLOW_COPY_AND_ASSIGN(SrvRecordRdata);
 };
 
 // A Record format (http://www.ietf.org/rfc/rfc1035.txt):
@@ -80,6 +81,9 @@ class NET_EXPORT_PRIVATE SrvRecordRdata : public RecordRdata {
 class NET_EXPORT ARecordRdata : public RecordRdata {
  public:
   static const uint16_t kType = dns_protocol::kTypeA;
+
+  ARecordRdata(const ARecordRdata&) = delete;
+  ARecordRdata& operator=(const ARecordRdata&) = delete;
 
   ~ARecordRdata() override;
   static std::unique_ptr<ARecordRdata> Create(const base::StringPiece& data,
@@ -93,8 +97,6 @@ class NET_EXPORT ARecordRdata : public RecordRdata {
   ARecordRdata();
 
   IPAddress address_;
-
-  DISALLOW_COPY_AND_ASSIGN(ARecordRdata);
 };
 
 // AAAA Record format (http://www.ietf.org/rfc/rfc1035.txt):
@@ -102,6 +104,9 @@ class NET_EXPORT ARecordRdata : public RecordRdata {
 class NET_EXPORT AAAARecordRdata : public RecordRdata {
  public:
   static const uint16_t kType = dns_protocol::kTypeAAAA;
+
+  AAAARecordRdata(const AAAARecordRdata&) = delete;
+  AAAARecordRdata& operator=(const AAAARecordRdata&) = delete;
 
   ~AAAARecordRdata() override;
   static std::unique_ptr<AAAARecordRdata> Create(const base::StringPiece& data,
@@ -115,8 +120,6 @@ class NET_EXPORT AAAARecordRdata : public RecordRdata {
   AAAARecordRdata();
 
   IPAddress address_;
-
-  DISALLOW_COPY_AND_ASSIGN(AAAARecordRdata);
 };
 
 // CNAME record format (http://www.ietf.org/rfc/rfc1035.txt):
@@ -124,6 +127,9 @@ class NET_EXPORT AAAARecordRdata : public RecordRdata {
 class NET_EXPORT_PRIVATE CnameRecordRdata : public RecordRdata {
  public:
   static const uint16_t kType = dns_protocol::kTypeCNAME;
+
+  CnameRecordRdata(const CnameRecordRdata&) = delete;
+  CnameRecordRdata& operator=(const CnameRecordRdata&) = delete;
 
   ~CnameRecordRdata() override;
   static std::unique_ptr<CnameRecordRdata> Create(
@@ -138,8 +144,6 @@ class NET_EXPORT_PRIVATE CnameRecordRdata : public RecordRdata {
   CnameRecordRdata();
 
   std::string cname_;
-
-  DISALLOW_COPY_AND_ASSIGN(CnameRecordRdata);
 };
 
 // PTR record format (http://www.ietf.org/rfc/rfc1035.txt):
@@ -147,6 +151,9 @@ class NET_EXPORT_PRIVATE CnameRecordRdata : public RecordRdata {
 class NET_EXPORT_PRIVATE PtrRecordRdata : public RecordRdata {
  public:
   static const uint16_t kType = dns_protocol::kTypePTR;
+
+  PtrRecordRdata(const PtrRecordRdata&) = delete;
+  PtrRecordRdata& operator=(const PtrRecordRdata&) = delete;
 
   ~PtrRecordRdata() override;
   static std::unique_ptr<PtrRecordRdata> Create(const base::StringPiece& data,
@@ -160,8 +167,6 @@ class NET_EXPORT_PRIVATE PtrRecordRdata : public RecordRdata {
   PtrRecordRdata();
 
   std::string ptrdomain_;
-
-  DISALLOW_COPY_AND_ASSIGN(PtrRecordRdata);
 };
 
 // TXT record format (http://www.ietf.org/rfc/rfc1035.txt):
@@ -170,6 +175,9 @@ class NET_EXPORT_PRIVATE PtrRecordRdata : public RecordRdata {
 class NET_EXPORT_PRIVATE TxtRecordRdata : public RecordRdata {
  public:
   static const uint16_t kType = dns_protocol::kTypeTXT;
+
+  TxtRecordRdata(const TxtRecordRdata&) = delete;
+  TxtRecordRdata& operator=(const TxtRecordRdata&) = delete;
 
   ~TxtRecordRdata() override;
   static std::unique_ptr<TxtRecordRdata> Create(const base::StringPiece& data,
@@ -183,8 +191,6 @@ class NET_EXPORT_PRIVATE TxtRecordRdata : public RecordRdata {
   TxtRecordRdata();
 
   std::vector<std::string> texts_;
-
-  DISALLOW_COPY_AND_ASSIGN(TxtRecordRdata);
 };
 
 // Only the subset of the NSEC record format required by mDNS is supported.
@@ -194,6 +200,9 @@ class NET_EXPORT_PRIVATE TxtRecordRdata : public RecordRdata {
 class NET_EXPORT_PRIVATE NsecRecordRdata : public RecordRdata {
  public:
   static const uint16_t kType = dns_protocol::kTypeNSEC;
+
+  NsecRecordRdata(const NsecRecordRdata&) = delete;
+  NsecRecordRdata& operator=(const NsecRecordRdata&) = delete;
 
   ~NsecRecordRdata() override;
   static std::unique_ptr<NsecRecordRdata> Create(const base::StringPiece& data,
@@ -217,8 +226,6 @@ class NET_EXPORT_PRIVATE NsecRecordRdata : public RecordRdata {
   NsecRecordRdata();
 
   std::vector<uint8_t> bitmap_;
-
-  DISALLOW_COPY_AND_ASSIGN(NsecRecordRdata);
 };
 
 // OPT record format (https://tools.ietf.org/html/rfc6891):
@@ -243,7 +250,12 @@ class NET_EXPORT_PRIVATE OptRecordRdata : public RecordRdata {
   static const uint16_t kType = dns_protocol::kTypeOPT;
 
   OptRecordRdata();
+
+  OptRecordRdata(const OptRecordRdata&) = delete;
+  OptRecordRdata& operator=(const OptRecordRdata&) = delete;
+
   OptRecordRdata(OptRecordRdata&& other);
+
   ~OptRecordRdata() override;
 
   OptRecordRdata& operator=(OptRecordRdata&& other);
@@ -254,20 +266,20 @@ class NET_EXPORT_PRIVATE OptRecordRdata : public RecordRdata {
   uint16_t Type() const override;
 
   const std::vector<char>& buf() const { return buf_; }
+  const std::multimap<uint16_t, Opt>& opts() { return opts_; }
 
-  const std::vector<Opt>& opts() const { return opts_; }
   void AddOpt(const Opt& opt);
 
   // Add all Opts from |other| to |this|.
   void AddOpts(const OptRecordRdata& other);
 
+  // Checks if an Opt with the specified opt_code is in opts_.
   bool ContainsOptCode(uint16_t opt_code) const;
 
  private:
-  std::vector<Opt> opts_;
+  // Opt objects are stored in a multimap; key is the opt code.
+  std::multimap<uint16_t, Opt> opts_;
   std::vector<char> buf_;
-
-  DISALLOW_COPY_AND_ASSIGN(OptRecordRdata);
 };
 
 // This class parses and serializes the INTEGRITY DNS record.

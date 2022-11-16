@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_piece.h"
 
 class PrefService;
@@ -54,7 +54,7 @@ class LanguagePrefTester {
   void SetForcedLanguagePrefs(std::vector<std::string>&& languages);
 
  private:
-  PrefService* prefs_;
+  raw_ptr<PrefService> prefs_;
 };
 
 }  // namespace test

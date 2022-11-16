@@ -10,7 +10,7 @@
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/scoped_temp_dir.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/scoped_path_override.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -66,6 +66,9 @@ class ExtensionBrowserTest : virtual public InProcessBrowserTest {
     // not parameterized.
     kFromManifest,
   };
+
+  ExtensionBrowserTest(const ExtensionBrowserTest&) = delete;
+  ExtensionBrowserTest& operator=(const ExtensionBrowserTest&) = delete;
 
  protected:
   struct LoadOptions {
@@ -279,12 +282,6 @@ class ExtensionBrowserTest : virtual public InProcessBrowserTest {
     return observer_->WaitForPageActionVisibilityChangeTo(count);
   }
 
-  // Wait for the specified extension to crash. Returns true if it really
-  // crashed.
-  bool WaitForExtensionCrash(const std::string& extension_id) {
-    return observer_->WaitForExtensionCrash(extension_id);
-  }
-
   // Wait for the crx installer to be done. Returns true if it has finished
   // successfully.
   bool WaitForCrxInstallerDone() {
@@ -318,8 +315,9 @@ class ExtensionBrowserTest : virtual public InProcessBrowserTest {
                   content::WebContents** newtab_result);
 
   // Simulates a page navigating itself to an URL and waits for the
-  // navigation.
-  void NavigateInRenderer(content::WebContents* contents, const GURL& url);
+  // navigation. Returns true if the navigation succeeds.
+  [[nodiscard]] bool NavigateInRenderer(content::WebContents* contents,
+                                        const GURL& url);
 
   // Looks for an ExtensionHost whose URL has the given path component
   // (including leading slash).  Also verifies that the expected number of hosts
@@ -411,7 +409,7 @@ class ExtensionBrowserTest : virtual public InProcessBrowserTest {
   // Disable external install UI.
   FeatureSwitch::ScopedOverride override_prompt_for_external_extensions_;
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   // Use mock shortcut directories to ensure app shortcuts are cleaned up.
   base::ScopedPathOverride user_desktop_override_;
   base::ScopedPathOverride common_desktop_override_;
@@ -421,7 +419,7 @@ class ExtensionBrowserTest : virtual public InProcessBrowserTest {
 #endif
 
   // The default profile to be used.
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
 
   // Cache cache implementation.
   std::unique_ptr<ExtensionCacheFake> test_extension_cache_;
@@ -443,8 +441,6 @@ class ExtensionBrowserTest : virtual public InProcessBrowserTest {
       verifier_format_override_;
 
   ExtensionUpdater::ScopedSkipScheduledCheckForTest skip_scheduled_check_;
-
-  DISALLOW_COPY_AND_ASSIGN(ExtensionBrowserTest);
 };
 
 }  // namespace extensions

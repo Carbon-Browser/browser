@@ -58,36 +58,25 @@ class RenderThreadImplDiscardableMemoryBrowserTest : public ContentBrowserTest {
 
   std::unique_ptr<base::DiscardableMemory> AllocateLockedDiscardableMemory(
       size_t size) {
-    if (base::FeatureList::IsEnabled(features::kProcessHostOnUI)) {
-      std::unique_ptr<base::DiscardableMemory> rv;
-      PostTaskToInProcessRendererAndWait(base::BindLambdaForTesting([&] {
-        rv = discardable_memory_allocator()->AllocateLockedDiscardableMemory(
-            size);
-      }));
-      return rv;
-    } else {
-      return discardable_memory_allocator()->AllocateLockedDiscardableMemory(
-          size);
-    }
+    std::unique_ptr<base::DiscardableMemory> rv;
+    PostTaskToInProcessRendererAndWait(base::BindLambdaForTesting([&] {
+      rv =
+          discardable_memory_allocator()->AllocateLockedDiscardableMemory(size);
+    }));
+    return rv;
   }
 
   std::unique_ptr<base::DiscardableMemory>
   AllocateLockedDiscardableMemoryWithRetryOrDie(
       size_t size,
       base::OnceClosure on_no_memory) {
-    if (base::FeatureList::IsEnabled(features::kProcessHostOnUI)) {
-      std::unique_ptr<base::DiscardableMemory> rv;
-      PostTaskToInProcessRendererAndWait(base::BindLambdaForTesting([&] {
-        rv = discardable_memory_allocator()
-                 ->AllocateLockedDiscardableMemoryWithRetryOrDie(
-                     size, std::move(on_no_memory));
-      }));
-      return rv;
-    } else {
-      return discardable_memory_allocator()
-          ->AllocateLockedDiscardableMemoryWithRetryOrDie(
-              size, std::move(on_no_memory));
-    }
+    std::unique_ptr<base::DiscardableMemory> rv;
+    PostTaskToInProcessRendererAndWait(base::BindLambdaForTesting([&] {
+      rv = discardable_memory_allocator()
+               ->AllocateLockedDiscardableMemoryWithRetryOrDie(
+                   size, std::move(on_no_memory));
+    }));
+    return rv;
   }
 
   base::DiscardableMemoryAllocator* discardable_memory_allocator() {
@@ -129,9 +118,10 @@ IN_PROC_BROWSER_TEST_F(RenderThreadImplDiscardableMemoryBrowserTest,
 //
 // Disable the test for the Android asan build.
 // See http://crbug.com/667837 for detail.
-#if !(defined(OS_ANDROID) && defined(ADDRESS_SANITIZER))
+#if !(BUILDFLAG(IS_ANDROID) && defined(ADDRESS_SANITIZER))
 IN_PROC_BROWSER_TEST_F(RenderThreadImplDiscardableMemoryBrowserTest,
-                       DiscardableMemoryAddressSpace) {
+                       // TODO(crbug.com/1065493): Re-enable this test
+                       DISABLED_DiscardableMemoryAddressSpace) {
   const size_t kLargeSize = 4 * 1024 * 1024;   // 4MiB.
   const size_t kNumberOfInstances = 1024 + 1;  // >4GiB total.
 
@@ -184,8 +174,7 @@ IN_PROC_BROWSER_TEST_F(RenderThreadImplDiscardableMemoryBrowserTest,
       ->ReleaseFreeMemory();
 
   // Busy wait for host memory usage to be reduced.
-  base::TimeTicks end =
-      base::TimeTicks::Now() + base::TimeDelta::FromSeconds(5);
+  base::TimeTicks end = base::TimeTicks::Now() + base::Seconds(5);
   while (base::TimeTicks::Now() < end) {
     if (!discardable_memory::DiscardableSharedMemoryManager::Get()
              ->GetBytesAllocated())

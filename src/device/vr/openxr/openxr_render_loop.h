@@ -9,7 +9,6 @@
 #include <memory>
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "components/viz/common/gpu/context_lost_observer.h"
 #include "device/vr/openxr/context_provider_callbacks.h"
 #include "device/vr/openxr/openxr_anchor_manager.h"
@@ -39,15 +38,18 @@ class OpenXrRenderLoop : public XRCompositorCommon,
                          public viz::ContextLostObserver {
  public:
   OpenXrRenderLoop(
-      base::RepeatingCallback<void(mojom::VRDisplayInfoPtr)>
-          on_display_info_changed,
       VizContextProviderFactoryAsync context_provider_factory_async,
       XrInstance instance,
       const OpenXrExtensionHelper& extension_helper_);
+
+  OpenXrRenderLoop(const OpenXrRenderLoop&) = delete;
+  OpenXrRenderLoop& operator=(const OpenXrRenderLoop&) = delete;
+
   ~OpenXrRenderLoop() override;
 
  private:
   // XRCompositorCommon:
+  gpu::gles2::GLES2Interface* GetContextGL() override;
   void ClearPendingFrameInternal() override;
   bool IsUsingSharedImages() const override;
   void SubmitFrameDrawnIntoTexture(int16_t frame_index,
@@ -70,11 +72,13 @@ class OpenXrRenderLoop : public XRCompositorCommon,
   device::mojom::XRInteractionMode GetInteractionMode(
       device::mojom::XRSessionMode session_mode) override;
   bool CanEnableAntiAliasing() const override;
+  std::vector<mojom::XRViewPtr> GetDefaultViews() const override;
 
   // viz::ContextLostObserver Implementation
   void OnContextLost() override;
 
-  void SendInitialDisplayInfo();
+  void OnOpenXrSessionStarted(StartRuntimeCallback start_runtime_callback,
+                              XrResult result);
   bool UpdateViews();
   bool UpdateView(const XrView& view_head,
                   int width,
@@ -135,9 +139,6 @@ class OpenXrRenderLoop : public XRCompositorCommon,
 
   std::unique_ptr<OpenXrApiWrapper> openxr_;
 
-  base::RepeatingCallback<void(mojom::VRDisplayInfoPtr)>
-      on_display_info_changed_;
-
   mojo::AssociatedReceiver<mojom::XREnvironmentIntegrationProvider>
       environment_receiver_{this};
 
@@ -146,8 +147,6 @@ class OpenXrRenderLoop : public XRCompositorCommon,
 
   // This must be the last member
   base::WeakPtrFactory<OpenXrRenderLoop> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(OpenXrRenderLoop);
 };
 
 }  // namespace device

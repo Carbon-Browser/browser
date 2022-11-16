@@ -279,9 +279,6 @@ void GrShaderCache::StoreVkPipelineCacheIfNeeded(GrDirectContext* gr_context) {
   // thread. Calling it from multiple gpu threads and hence multiple context is
   // redundant and expensive since each GrContext will have same key. Hence
   // adding a DCHECK here.
-  // TODO(vikassoni) : https://crbug.com/1211085. Ensure that we call this
-  // method from only one gpu thread when multiple gpu threads aka dr-dc is
-  // implemented.
   DCHECK_CALLED_ON_VALID_THREAD(gpu_main_thread_checker_);
 
   bool need_store_pipeline_cache = false;
@@ -296,8 +293,8 @@ void GrShaderCache::StoreVkPipelineCacheIfNeeded(GrDirectContext* gr_context) {
           [](base::Time time) {
             UMA_HISTOGRAM_CUSTOM_MICROSECONDS_TIMES(
                 "GPU.Vulkan.PipelineCache.StoreDuration",
-                base::Time::Now() - time, base::TimeDelta::FromMicroseconds(1),
-                base::TimeDelta::FromMicroseconds(5000), 50);
+                base::Time::Now() - time, base::Microseconds(1),
+                base::Microseconds(5000), 50);
           },
           base::Time::Now()));
 

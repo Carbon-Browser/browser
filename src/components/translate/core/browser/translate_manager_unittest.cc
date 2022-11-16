@@ -8,6 +8,7 @@
 
 #include "base/containers/contains.h"
 #include "base/json/json_reader.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
@@ -15,6 +16,7 @@
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "components/infobars/core/infobar.h"
+#include "components/language/core/browser/accept_languages_service.h"
 #include "components/language/core/browser/language_model.h"
 #include "components/language/core/browser/language_prefs.h"
 #include "components/language/core/common/language_experiments.h"
@@ -24,7 +26,6 @@
 #include "components/translate/core/browser/mock_translate_driver.h"
 #include "components/translate/core/browser/mock_translate_metrics_logger.h"
 #include "components/translate/core/browser/mock_translate_ranker.h"
-#include "components/translate/core/browser/translate_accept_languages.h"
 #include "components/translate/core/browser/translate_browser_metrics.h"
 #include "components/translate/core/browser/translate_client.h"
 #include "components/translate/core/browser/translate_download_manager.h"
@@ -60,6 +61,10 @@ class TestNetworkChangeNotifier {
   TestNetworkChangeNotifier()
       : mock_notifier_(net::test::MockNetworkChangeNotifier::Create()) {}
 
+  TestNetworkChangeNotifier(const TestNetworkChangeNotifier&) = delete;
+  TestNetworkChangeNotifier& operator=(const TestNetworkChangeNotifier&) =
+      delete;
+
   // Simulates a change of the connection type to |type|. This will notify any
   // objects that are NetworkChangeNotifiers.
   void SimulateNetworkConnectionChange(
@@ -82,8 +87,6 @@ class TestNetworkChangeNotifier {
 
  private:
   std::unique_ptr<net::test::MockNetworkChangeNotifier> mock_notifier_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestNetworkChangeNotifier);
 };
 
 // Compares TranslateEventProto on a restricted set of fields.
@@ -217,7 +220,7 @@ class TranslateManagerTest : public ::testing::Test {
   ProfilePrefRegistration registration_;
   // TODO(groby): request TranslatePrefs from |mock_translate_client_| instead.
   TranslatePrefs translate_prefs_;
-  TranslateDownloadManager* manager_;
+  raw_ptr<TranslateDownloadManager> manager_;
 
   TestNetworkChangeNotifier network_notifier_;
   testing::MockTranslateDriver driver_;
@@ -403,8 +406,9 @@ TEST_F(TranslateManagerTest, OverrideTriggerWithIndiaEnglishExperiment) {
   };
   ON_CALL(mock_translate_client_, IsTranslatableURL(GURL::EmptyGURL()))
       .WillByDefault(Return(true));
-  TranslateAcceptLanguages accept_languages(&prefs_, accept_languages_prefs);
-  ON_CALL(mock_translate_client_, GetTranslateAcceptLanguages())
+  language::AcceptLanguagesService accept_languages(&prefs_,
+                                                    accept_languages_prefs);
+  ON_CALL(mock_translate_client_, GetAcceptLanguagesService())
       .WillByDefault(Return(&accept_languages));
   ON_CALL(mock_translate_client_,
           ShowTranslateUI(_, _, _, _, false /* triggered_from_menu */))
@@ -447,8 +451,9 @@ TEST_F(TranslateManagerTest,
   };
   ON_CALL(mock_translate_client_, IsTranslatableURL(GURL::EmptyGURL()))
       .WillByDefault(Return(true));
-  TranslateAcceptLanguages accept_languages(&prefs_, accept_languages_prefs);
-  ON_CALL(mock_translate_client_, GetTranslateAcceptLanguages())
+  language::AcceptLanguagesService accept_languages(&prefs_,
+                                                    accept_languages_prefs);
+  ON_CALL(mock_translate_client_, GetAcceptLanguagesService())
       .WillByDefault(Return(&accept_languages));
   ON_CALL(mock_translate_client_,
           ShowTranslateUI(_, _, _, _, false /* triggered_from_menu */))
@@ -485,8 +490,9 @@ TEST_F(TranslateManagerTest,
   };
   ON_CALL(mock_translate_client_, IsTranslatableURL(GURL::EmptyGURL()))
       .WillByDefault(Return(true));
-  TranslateAcceptLanguages accept_languages(&prefs_, accept_languages_prefs);
-  ON_CALL(mock_translate_client_, GetTranslateAcceptLanguages())
+  language::AcceptLanguagesService accept_languages(&prefs_,
+                                                    accept_languages_prefs);
+  ON_CALL(mock_translate_client_, GetAcceptLanguagesService())
       .WillByDefault(Return(&accept_languages));
   ON_CALL(mock_translate_client_, ShowTranslateUI(_, _, _, _, _))
       .WillByDefault(Return(true));
@@ -531,8 +537,9 @@ TEST_F(TranslateManagerTest,
   };
   ON_CALL(mock_translate_client_, IsTranslatableURL(GURL::EmptyGURL()))
       .WillByDefault(Return(true));
-  TranslateAcceptLanguages accept_languages(&prefs_, accept_languages_prefs);
-  ON_CALL(mock_translate_client_, GetTranslateAcceptLanguages())
+  language::AcceptLanguagesService accept_languages(&prefs_,
+                                                    accept_languages_prefs);
+  ON_CALL(mock_translate_client_, GetAcceptLanguagesService())
       .WillByDefault(Return(&accept_languages));
   ON_CALL(mock_translate_client_, ShowTranslateUI(_, _, _, _, _))
       .WillByDefault(Return(true));
@@ -580,8 +587,9 @@ TEST_F(TranslateManagerTest, ShouldHonorExperimentRankerEnforcement_Enforce) {
   };
   ON_CALL(mock_translate_client_, IsTranslatableURL(GURL::EmptyGURL()))
       .WillByDefault(Return(true));
-  TranslateAcceptLanguages accept_languages(&prefs_, accept_languages_prefs);
-  ON_CALL(mock_translate_client_, GetTranslateAcceptLanguages())
+  language::AcceptLanguagesService accept_languages(&prefs_,
+                                                    accept_languages_prefs);
+  ON_CALL(mock_translate_client_, GetAcceptLanguagesService())
       .WillByDefault(Return(&accept_languages));
   ON_CALL(mock_translate_client_, ShowTranslateUI(_, _, _, _, _))
       .WillByDefault(Return(true));
@@ -624,8 +632,9 @@ TEST_F(TranslateManagerTest,
   };
   ON_CALL(mock_translate_client_, IsTranslatableURL(GURL::EmptyGURL()))
       .WillByDefault(Return(true));
-  TranslateAcceptLanguages accept_languages(&prefs_, accept_languages_prefs);
-  ON_CALL(mock_translate_client_, GetTranslateAcceptLanguages())
+  language::AcceptLanguagesService accept_languages(&prefs_,
+                                                    accept_languages_prefs);
+  ON_CALL(mock_translate_client_, GetAcceptLanguagesService())
       .WillByDefault(Return(&accept_languages));
   ON_CALL(mock_translate_client_, ShowTranslateUI(_, _, _, _, _))
       .WillByDefault(Return(true));
@@ -663,8 +672,9 @@ TEST_F(TranslateManagerTest, LanguageAddedToAcceptLanguagesAfterTranslation) {
   };
   ON_CALL(mock_translate_client_, IsTranslatableURL(GURL::EmptyGURL()))
       .WillByDefault(Return(true));
-  TranslateAcceptLanguages accept_languages(&prefs_, accept_languages_prefs);
-  ON_CALL(mock_translate_client_, GetTranslateAcceptLanguages())
+  language::AcceptLanguagesService accept_languages(&prefs_,
+                                                    accept_languages_prefs);
+  ON_CALL(mock_translate_client_, GetAcceptLanguagesService())
       .WillByDefault(Return(&accept_languages));
   ON_CALL(mock_translate_client_, ShowTranslateUI(_, _, _, _, _))
       .WillByDefault(Return(true));
@@ -681,15 +691,15 @@ TEST_F(TranslateManagerTest, LanguageAddedToAcceptLanguagesAfterTranslation) {
 
   base::HistogramTester histogram_tester;
   prefs_.SetBoolean(prefs::kOfferTranslateEnabled, true);
-  translate_manager_->GetLanguageState()->LanguageDetermined("en", true);
+  translate_manager_->GetLanguageState()->LanguageDetermined("zu", true);
   network_notifier_.SimulateOnline();
 
-  translate_manager_->InitiateTranslation("en");
+  translate_manager_->InitiateTranslation("zu");
   EXPECT_THAT(histogram_tester.GetAllSamples(kInitiationStatusName),
               ElementsAre(Bucket(metrics::INITIATION_STATUS_SHOW_INFOBAR, 1),
                           Bucket(metrics::INITIATION_STATUS_SHOW_ICON, 1)));
 
-  translate_manager_->TranslatePage("en", "hi", false);
+  translate_manager_->TranslatePage("zu", "hi", false);
 
   // Accept languages should now contain "hi" because the user chose to
   // translate to it once.
@@ -706,8 +716,9 @@ TEST_F(TranslateManagerTest,
   };
   ON_CALL(mock_translate_client_, IsTranslatableURL(GURL::EmptyGURL()))
       .WillByDefault(Return(true));
-  TranslateAcceptLanguages accept_languages(&prefs_, accept_languages_prefs);
-  ON_CALL(mock_translate_client_, GetTranslateAcceptLanguages())
+  language::AcceptLanguagesService accept_languages(&prefs_,
+                                                    accept_languages_prefs);
+  ON_CALL(mock_translate_client_, GetAcceptLanguagesService())
       .WillByDefault(Return(&accept_languages));
   ON_CALL(mock_translate_client_, ShowTranslateUI(_, _, _, _, _))
       .WillByDefault(Return(true));
@@ -748,10 +759,11 @@ TEST_F(TranslateManagerTest,
 TEST_F(TranslateManagerTest, DontTranslateOffline) {
   TranslateManager::SetIgnoreMissingKeyForTesting(true);
 
-  TranslateAcceptLanguages accept_languages(&prefs_, accept_languages_prefs);
+  language::AcceptLanguagesService accept_languages(&prefs_,
+                                                    accept_languages_prefs);
   ON_CALL(mock_translate_client_, IsTranslatableURL(GURL::EmptyGURL()))
       .WillByDefault(Return(true));
-  ON_CALL(mock_translate_client_, GetTranslateAcceptLanguages())
+  ON_CALL(mock_translate_client_, GetAcceptLanguagesService())
       .WillByDefault(Return(&accept_languages));
 
   translate_manager_ = std::make_unique<TranslateManager>(
@@ -788,8 +800,9 @@ TEST_F(TranslateManagerTest, DontTranslateOffline) {
 TEST_F(TranslateManagerTest, DontTranslateAutofillAssistantRunning) {
   TranslateManager::SetIgnoreMissingKeyForTesting(true);
 
-  TranslateAcceptLanguages accept_languages(&prefs_, accept_languages_prefs);
-  ON_CALL(mock_translate_client_, GetTranslateAcceptLanguages())
+  language::AcceptLanguagesService accept_languages(&prefs_,
+                                                    accept_languages_prefs);
+  ON_CALL(mock_translate_client_, GetAcceptLanguagesService())
       .WillByDefault(Return(&accept_languages));
   ON_CALL(mock_translate_client_, IsAutofillAssistantRunning())
       .WillByDefault(Return(true));
@@ -1118,13 +1131,10 @@ TEST_F(TranslateManagerTest, CanManuallyTranslate_UndefinedSourceLanguage) {
   translate_manager_->GetLanguageState()->LanguageDetermined(
       kUnknownLanguageCode, true);
 
-  // Translation of unknown source language pages is not supported on iOS.
-  // Experiment in place for supporting it on Android.
+  // Manual translation of unknown source language pages is not supported on
+  // iOS.
   bool unknown_source_supported = true;
-#if defined(OS_ANDROID)
-  if (!base::FeatureList::IsEnabled(language::kDetectedSourceLanguageOption))
-    unknown_source_supported = false;
-#elif defined(OS_IOS)
+#if BUILDFLAG(IS_IOS)
   unknown_source_supported = false;
 #endif
   EXPECT_EQ(translate_manager_->CanManuallyTranslate(),
@@ -1132,20 +1142,17 @@ TEST_F(TranslateManagerTest, CanManuallyTranslate_UndefinedSourceLanguage) {
 }
 
 TEST_F(TranslateManagerTest, PredefinedTargetLanguage) {
-  TranslateManager::SetIgnoreMissingKeyForTesting(true);
-  translate_manager_ = std::make_unique<TranslateManager>(
-      &mock_translate_client_, &mock_translate_ranker_, &mock_language_model_);
-
+  PrepareTranslateManager();
   manager_->set_application_locale("en");
-  ASSERT_TRUE(TranslateDownloadManager::IsSupportedLanguage("en"));
+  ASSERT_TRUE(TranslateDownloadManager::IsSupportedLanguage("zu"));
 
   ON_CALL(mock_translate_client_, IsTranslatableURL(GURL::EmptyGURL()))
       .WillByDefault(Return(true));
-  TranslateAcceptLanguages accept_languages(&prefs_, accept_languages_prefs);
-  ON_CALL(mock_translate_client_, GetTranslateAcceptLanguages())
+  language::AcceptLanguagesService accept_languages(&prefs_,
+                                                    accept_languages_prefs);
+  ON_CALL(mock_translate_client_, GetAcceptLanguagesService())
       .WillByDefault(Return(&accept_languages));
-  ON_CALL(mock_translate_client_, ShowTranslateUI(_, _, _, _, _))
-      .WillByDefault(Return(true));
+
   network_notifier_.SimulateOnline();
 
   translate_manager_->SetPredefinedTargetLanguage("ru");
@@ -1153,13 +1160,19 @@ TEST_F(TranslateManagerTest, PredefinedTargetLanguage) {
       "ru",
       translate_manager_->GetLanguageState()->GetPredefinedTargetLanguage());
 
-  translate_manager_->GetLanguageState()->LanguageDetermined("en", true);
+  translate_manager_->GetLanguageState()->LanguageDetermined("zu", true);
+
+  EXPECT_CALL(
+      mock_translate_client_,
+      ShowTranslateUI(translate::TRANSLATE_STEP_BEFORE_TRANSLATE, "zu", "ru",
+                      TranslateErrors::NONE, /*triggered_from_menu=*/false))
+      .WillOnce(Return(true));
 
   base::HistogramTester histogram_tester;
-  translate_manager_->InitiateTranslation("en");
+  translate_manager_->InitiateTranslation("zu");
   EXPECT_THAT(
       histogram_tester.GetAllSamples(kInitiationStatusName),
-      ElementsAre(Bucket(
+      ::testing::Contains(Bucket(
           metrics::INITIATION_STATUS_SHOW_UI_PREDEFINED_TARGET_LANGUAGE, 1)));
 }
 
@@ -1179,31 +1192,55 @@ TEST_F(TranslateManagerTest, CanManuallyTranslate_ImagePage) {
   EXPECT_FALSE(translate_manager_->CanManuallyTranslate(true));
 }
 
-TEST_F(TranslateManagerTest, PredefinedTargetLanguage_HonourUserSettings) {
-  TranslateManager::SetIgnoreMissingKeyForTesting(true);
-  translate_manager_ = std::make_unique<TranslateManager>(
-      &mock_translate_client_, &mock_translate_ranker_, &mock_language_model_);
+TEST_F(TranslateManagerTest,
+       PredefinedTargetLanguage_UserSpecifiedAutoTranslation) {
+  PrepareTranslateManager();
   manager_->set_application_locale("en");
-
-  // Add german language to the list of accepted languages.
-  // If a lang is not in the list than CanTranslateLanguage(|lang|) returns true
-  // even if a language is blocked.
-  prefs_.registry()->RegisterStringPref("accept_languages.test", "de");
-  TranslateAcceptLanguages accept_languages(&prefs_, "accept_languages.test");
 
   ON_CALL(mock_translate_client_, IsTranslatableURL(GURL::EmptyGURL()))
       .WillByDefault(Return(true));
-  ON_CALL(mock_translate_client_, GetTranslateAcceptLanguages())
+
+  language::AcceptLanguagesService accept_languages(&prefs_,
+                                                    accept_languages_prefs);
+  ON_CALL(mock_translate_client_, GetAcceptLanguagesService())
       .WillByDefault(Return(&accept_languages));
-  ON_CALL(mock_translate_client_, ShowTranslateUI(_, _, _, _, _))
+
+  translate_prefs_.AddLanguagePairToAlwaysTranslateList("fr", "de");
+  network_notifier_.SimulateOnline();
+
+  translate_manager_->SetPredefinedTargetLanguage("ru", true);
+  EXPECT_EQ(
+      "ru",
+      translate_manager_->GetLanguageState()->GetPredefinedTargetLanguage());
+
+  translate_manager_->GetLanguageState()->LanguageDetermined("fr", true);
+  EXPECT_CALL(
+      mock_translate_client_,
+      ShowTranslateUI(translate::TRANSLATE_STEP_TRANSLATING, "fr", "de",
+                      TranslateErrors::NONE, /*triggered_from_menu=*/false))
+      .WillOnce(Return(true));
+
+  ExpectHighestPriorityTriggerDecision(
+      TriggerDecision::kAutomaticTranslationByPref);
+
+  base::HistogramTester histogram_tester;
+  translate_manager_->InitiateTranslation("fr");
+  EXPECT_THAT(histogram_tester.GetAllSamples(kInitiationStatusName),
+              ElementsAre(Bucket(metrics::INITIATION_STATUS_AUTO_BY_CONFIG, 1),
+                          Bucket(metrics::INITIATION_STATUS_SHOW_ICON, 1)));
+}
+
+TEST_F(TranslateManagerTest, PredefinedTargetLanguage_BlockedLanguage) {
+  PrepareTranslateManager();
+  manager_->set_application_locale("en");
+
+  ON_CALL(mock_translate_client_, IsTranslatableURL(GURL::EmptyGURL()))
       .WillByDefault(Return(true));
 
   translate_prefs_.BlockLanguage("de");
-  translate_prefs_.AddLanguagePairToAlwaysTranslateList("fr", "de");
 
   ASSERT_TRUE(translate_prefs_.IsBlockedLanguage("de"));
-  ASSERT_FALSE(translate_prefs_.CanTranslateLanguage(&accept_languages, "de"));
-
+  ASSERT_FALSE(translate_prefs_.CanTranslateLanguage("de"));
   network_notifier_.SimulateOnline();
 
   translate_manager_->SetPredefinedTargetLanguage("ru");
@@ -1212,6 +1249,7 @@ TEST_F(TranslateManagerTest, PredefinedTargetLanguage_HonourUserSettings) {
       translate_manager_->GetLanguageState()->GetPredefinedTargetLanguage());
 
   translate_manager_->GetLanguageState()->LanguageDetermined("de", true);
+  EXPECT_CALL(mock_translate_client_, ShowTranslateUI(_, _, _, _, _)).Times(0);
 
   ExpectHighestPriorityTriggerDecision(
       TriggerDecision::kDisabledNeverTranslateLanguage);
@@ -1221,17 +1259,172 @@ TEST_F(TranslateManagerTest, PredefinedTargetLanguage_HonourUserSettings) {
   EXPECT_THAT(
       histogram_tester.GetAllSamples(kInitiationStatusName),
       ElementsAre(Bucket(metrics::INITIATION_STATUS_DISABLED_BY_CONFIG, 1)));
+}
 
-  ExpectHighestPriorityTriggerDecision(
-      TriggerDecision::kAutomaticTranslationByPref);
+TEST_F(TranslateManagerTest, PredefinedTargetLanguage_OverrideBlockedLanguage) {
+  PrepareTranslateManager();
+  manager_->set_application_locale("en");
 
-  translate_manager_->GetLanguageState()->LanguageDetermined("fr", true);
-  translate_manager_->InitiateTranslation("fr");
+  ON_CALL(mock_translate_client_, IsTranslatableURL(GURL::EmptyGURL()))
+      .WillByDefault(Return(true));
+
+  translate_prefs_.BlockLanguage("de");
+
+  ASSERT_TRUE(translate_prefs_.IsBlockedLanguage("de"));
+  ASSERT_FALSE(translate_prefs_.CanTranslateLanguage("de"));
+  network_notifier_.SimulateOnline();
+
+  translate_manager_->SetPredefinedTargetLanguage(
+      "ru", /*should_auto_translate=*/true);
+  EXPECT_EQ(
+      "ru",
+      translate_manager_->GetLanguageState()->GetPredefinedTargetLanguage());
+  EXPECT_TRUE(translate_manager_->GetLanguageState()
+                  ->should_auto_translate_to_predefined_target_language());
+
+  translate_manager_->GetLanguageState()->LanguageDetermined("de", true);
+
+  EXPECT_CALL(
+      mock_translate_client_,
+      ShowTranslateUI(translate::TRANSLATE_STEP_TRANSLATING, "de", "ru",
+                      TranslateErrors::NONE, /*triggered_from_menu=*/false))
+      .WillOnce(Return(true));
+
+  base::HistogramTester histogram_tester;
+  translate_manager_->InitiateTranslation("de");
   EXPECT_THAT(
       histogram_tester.GetAllSamples(kInitiationStatusName),
-      ElementsAre(Bucket(metrics::INITIATION_STATUS_DISABLED_BY_CONFIG, 1),
-                  Bucket(metrics::INITIATION_STATUS_AUTO_BY_CONFIG, 1),
-                  Bucket(metrics::INITIATION_STATUS_SHOW_ICON, 1)));
+      ElementsAre(Bucket(
+          metrics::INITIATION_STATUS_AUTO_BY_PREDEFINED_TARGET_LANGUAGE, 1)));
+}
+
+TEST_F(TranslateManagerTest, PredefinedTargetLanguage_BlockedSite) {
+  PrepareTranslateManager();
+  manager_->set_application_locale("en");
+
+  language::AcceptLanguagesService accept_languages(&prefs_,
+                                                    accept_languages_prefs);
+  ON_CALL(mock_translate_client_, GetAcceptLanguagesService())
+      .WillByDefault(Return(&accept_languages));
+
+  const GURL kTestUrl("https://www.example.com/");
+  driver_.SetVisibleURL(kTestUrl);
+  ON_CALL(mock_translate_client_, IsTranslatableURL(kTestUrl))
+      .WillByDefault(Return(true));
+  translate_prefs_.AddSiteToNeverPromptList(kTestUrl.HostNoBracketsPiece());
+  ASSERT_TRUE(
+      translate_prefs_.IsSiteOnNeverPromptList(kTestUrl.HostNoBracketsPiece()));
+
+  network_notifier_.SimulateOnline();
+
+  translate_manager_->SetPredefinedTargetLanguage("ru");
+  EXPECT_EQ(
+      "ru",
+      translate_manager_->GetLanguageState()->GetPredefinedTargetLanguage());
+
+  translate_manager_->GetLanguageState()->LanguageDetermined("de", true);
+  EXPECT_CALL(mock_translate_client_, ShowTranslateUI(_, _, _, _, _)).Times(0);
+
+  base::HistogramTester histogram_tester;
+  translate_manager_->InitiateTranslation("de");
+  EXPECT_THAT(
+      histogram_tester.GetAllSamples(kInitiationStatusName),
+      ElementsAre(Bucket(metrics::INITIATION_STATUS_DISABLED_BY_CONFIG, 1)));
+}
+
+TEST_F(TranslateManagerTest, PredefinedTargetLanguage_OverrideBlockedSite) {
+  PrepareTranslateManager();
+  manager_->set_application_locale("en");
+
+  language::AcceptLanguagesService accept_languages(&prefs_,
+                                                    accept_languages_prefs);
+  ON_CALL(mock_translate_client_, GetAcceptLanguagesService())
+      .WillByDefault(Return(&accept_languages));
+
+  const GURL kTestUrl("https://www.example.com/");
+  driver_.SetVisibleURL(kTestUrl);
+  ON_CALL(mock_translate_client_, IsTranslatableURL(kTestUrl))
+      .WillByDefault(Return(true));
+  translate_prefs_.AddSiteToNeverPromptList(kTestUrl.HostNoBracketsPiece());
+  ASSERT_TRUE(
+      translate_prefs_.IsSiteOnNeverPromptList(kTestUrl.HostNoBracketsPiece()));
+
+  network_notifier_.SimulateOnline();
+
+  translate_manager_->SetPredefinedTargetLanguage(
+      "ru", /*should_auto_translate=*/true);
+  EXPECT_EQ(
+      "ru",
+      translate_manager_->GetLanguageState()->GetPredefinedTargetLanguage());
+  EXPECT_TRUE(translate_manager_->GetLanguageState()
+                  ->should_auto_translate_to_predefined_target_language());
+
+  translate_manager_->GetLanguageState()->LanguageDetermined("de", true);
+
+  EXPECT_CALL(
+      mock_translate_client_,
+      ShowTranslateUI(translate::TRANSLATE_STEP_TRANSLATING, "de", "ru",
+                      TranslateErrors::NONE, /*triggered_from_menu=*/false))
+      .WillOnce(Return(true));
+
+  base::HistogramTester histogram_tester;
+  translate_manager_->InitiateTranslation("de");
+  EXPECT_THAT(
+      histogram_tester.GetAllSamples(kInitiationStatusName),
+      ElementsAre(Bucket(
+          metrics::INITIATION_STATUS_AUTO_BY_PREDEFINED_TARGET_LANGUAGE, 1)));
+}
+
+TEST_F(TranslateManagerTest, PredefinedTargetLanguage_AutoTranslate) {
+  PrepareTranslateManager();
+  manager_->set_application_locale("en");
+
+  ON_CALL(mock_translate_client_, IsTranslatableURL(GURL::EmptyGURL()))
+      .WillByDefault(Return(true));
+  language::AcceptLanguagesService accept_languages(&prefs_,
+                                                    accept_languages_prefs);
+  ON_CALL(mock_translate_client_, GetAcceptLanguagesService())
+      .WillByDefault(Return(&accept_languages));
+  network_notifier_.SimulateOnline();
+
+  translate_manager_->SetPredefinedTargetLanguage(
+      "ru", /*should_auto_translate=*/true);
+  EXPECT_EQ(
+      "ru",
+      translate_manager_->GetLanguageState()->GetPredefinedTargetLanguage());
+  EXPECT_TRUE(translate_manager_->GetLanguageState()
+                  ->should_auto_translate_to_predefined_target_language());
+
+  translate_manager_->GetLanguageState()->LanguageDetermined("en", true);
+
+  EXPECT_CALL(
+      mock_translate_client_,
+      ShowTranslateUI(translate::TRANSLATE_STEP_TRANSLATING, "en", "ru",
+                      TranslateErrors::NONE, /*triggered_from_menu=*/false))
+      .WillOnce(Return(true));
+
+  TranslateMetricsLoggerImpl translate_metrics_logger(
+      translate_manager_->GetWeakPtr());
+  translate_metrics_logger.OnPageLoadStart(true);
+
+  base::HistogramTester histogram_tester;
+  translate_manager_->InitiateTranslation("en");
+  EXPECT_THAT(
+      histogram_tester.GetAllSamples(kInitiationStatusName),
+      ElementsAre(Bucket(
+          metrics::INITIATION_STATUS_AUTO_BY_PREDEFINED_TARGET_LANGUAGE, 1)));
+
+  translate_metrics_logger.RecordMetrics(true);
+  EXPECT_THAT(histogram_tester.GetAllSamples(kTranslatePageLoadTriggerDecision),
+              ElementsAre(Bucket(
+                  static_cast<int>(
+                      TriggerDecision::kAutomaticTranslationToPredefinedTarget),
+                  1)));
+
+  // TODO(https://crbug.com/1169461): This test as well as many of the other
+  // tests in this file should be verifying the state of the TranslateManager
+  // after the translation happens, once the MockTranslateDriver is changed to
+  // update the TranslateManager after a translation is performed.
 }
 
 TEST_F(TranslateManagerTest, ShowTranslateUI) {
@@ -1241,10 +1434,13 @@ TEST_F(TranslateManagerTest, ShowTranslateUI) {
   };
   ON_CALL(mock_translate_client_, IsTranslatableURL(GURL::EmptyGURL()))
       .WillByDefault(Return(true));
-  TranslateAcceptLanguages accept_languages(&prefs_, accept_languages_prefs);
-  ON_CALL(mock_translate_client_, GetTranslateAcceptLanguages())
+  language::AcceptLanguagesService accept_languages(&prefs_,
+                                                    accept_languages_prefs);
+  ON_CALL(mock_translate_client_, GetAcceptLanguagesService())
       .WillByDefault(Return(&accept_languages));
-  EXPECT_CALL(mock_translate_client_, ShowTranslateUI).WillOnce(Return(true));
+  EXPECT_CALL(mock_translate_client_,
+              ShowTranslateUI(_, _, _, _, false /* triggered_from_menu */))
+      .WillOnce(Return(true));
 
   translate_manager_ = std::make_unique<TranslateManager>(
       &mock_translate_client_, &mock_translate_ranker_, &mock_language_model_);
@@ -1311,8 +1507,9 @@ TEST_F(TranslateManagerTest,
 
   ON_CALL(mock_translate_client_, IsTranslatableURL(GURL::EmptyGURL()))
       .WillByDefault(Return(true));
-  TranslateAcceptLanguages accept_languages(&prefs_, accept_languages_prefs);
-  ON_CALL(mock_translate_client_, GetTranslateAcceptLanguages())
+  language::AcceptLanguagesService accept_languages(&prefs_,
+                                                    accept_languages_prefs);
+  ON_CALL(mock_translate_client_, GetAcceptLanguagesService())
       .WillByDefault(Return(&accept_languages));
   EXPECT_CALL(mock_translate_client_,
               ShowTranslateUI(TRANSLATE_STEP_BEFORE_TRANSLATE, "und", "ru",
@@ -1357,8 +1554,9 @@ TEST_F(TranslateManagerTest,
 
   ON_CALL(mock_translate_client_, IsTranslatableURL(GURL::EmptyGURL()))
       .WillByDefault(Return(true));
-  TranslateAcceptLanguages accept_languages(&prefs_, accept_languages_prefs);
-  ON_CALL(mock_translate_client_, GetTranslateAcceptLanguages())
+  language::AcceptLanguagesService accept_languages(&prefs_,
+                                                    accept_languages_prefs);
+  ON_CALL(mock_translate_client_, GetAcceptLanguagesService())
       .WillByDefault(Return(&accept_languages));
   EXPECT_CALL(mock_translate_client_,
               ShowTranslateUI(TRANSLATE_STEP_BEFORE_TRANSLATE, "und", "ru",
@@ -1403,8 +1601,9 @@ TEST_F(TranslateManagerTest,
 
   ON_CALL(mock_translate_client_, IsTranslatableURL(GURL::EmptyGURL()))
       .WillByDefault(Return(true));
-  TranslateAcceptLanguages accept_languages(&prefs_, accept_languages_prefs);
-  ON_CALL(mock_translate_client_, GetTranslateAcceptLanguages())
+  language::AcceptLanguagesService accept_languages(&prefs_,
+                                                    accept_languages_prefs);
+  ON_CALL(mock_translate_client_, GetAcceptLanguagesService())
       .WillByDefault(Return(&accept_languages));
   EXPECT_CALL(mock_translate_client_,
               ShowTranslateUI(TRANSLATE_STEP_TRANSLATING, "und", "ru",
@@ -1448,8 +1647,9 @@ TEST_F(TranslateManagerTest, HrefTranslateSimilarLanguages_OverrideDisabled) {
 
   ON_CALL(mock_translate_client_, IsTranslatableURL(GURL::EmptyGURL()))
       .WillByDefault(Return(true));
-  TranslateAcceptLanguages accept_languages(&prefs_, accept_languages_prefs);
-  ON_CALL(mock_translate_client_, GetTranslateAcceptLanguages())
+  language::AcceptLanguagesService accept_languages(&prefs_,
+                                                    accept_languages_prefs);
+  ON_CALL(mock_translate_client_, GetAcceptLanguagesService())
       .WillByDefault(Return(&accept_languages));
   EXPECT_CALL(mock_translate_client_, ShowTranslateUI(_, _, _, _, _)).Times(0);
   network_notifier_.SimulateOnline();
@@ -1491,8 +1691,9 @@ TEST_F(TranslateManagerTest,
 
   ON_CALL(mock_translate_client_, IsTranslatableURL(GURL::EmptyGURL()))
       .WillByDefault(Return(true));
-  TranslateAcceptLanguages accept_languages(&prefs_, accept_languages_prefs);
-  ON_CALL(mock_translate_client_, GetTranslateAcceptLanguages())
+  language::AcceptLanguagesService accept_languages(&prefs_,
+                                                    accept_languages_prefs);
+  ON_CALL(mock_translate_client_, GetAcceptLanguagesService())
       .WillByDefault(Return(&accept_languages));
   EXPECT_CALL(mock_translate_client_,
               ShowTranslateUI(TRANSLATE_STEP_BEFORE_TRANSLATE, "und", "en",
@@ -1537,8 +1738,9 @@ TEST_F(TranslateManagerTest,
 
   ON_CALL(mock_translate_client_, IsTranslatableURL(GURL::EmptyGURL()))
       .WillByDefault(Return(true));
-  TranslateAcceptLanguages accept_languages(&prefs_, accept_languages_prefs);
-  ON_CALL(mock_translate_client_, GetTranslateAcceptLanguages())
+  language::AcceptLanguagesService accept_languages(&prefs_,
+                                                    accept_languages_prefs);
+  ON_CALL(mock_translate_client_, GetAcceptLanguagesService())
       .WillByDefault(Return(&accept_languages));
   EXPECT_CALL(mock_translate_client_,
               ShowTranslateUI(TRANSLATE_STEP_TRANSLATING, "und", "en",

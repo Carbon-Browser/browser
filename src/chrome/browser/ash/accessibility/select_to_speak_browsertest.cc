@@ -18,6 +18,7 @@
 #include "base/command_line.h"
 #include "base/memory/weak_ptr.h"
 #include "build/branding_buildflags.h"
+#include "build/build_config.h"
 #include "chrome/browser/ash/accessibility/accessibility_manager.h"
 #include "chrome/browser/ash/accessibility/accessibility_test_utils.h"
 #include "chrome/browser/ash/accessibility/speech_monitor.h"
@@ -31,7 +32,9 @@
 #include "content/public/browser/notification_service.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
+#include "extensions/browser/browsertest_util.h"
 #include "extensions/browser/extension_host.h"
+#include "extensions/browser/extension_host_test_helper.h"
 #include "extensions/browser/notification_types.h"
 #include "extensions/browser/process_manager.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -48,6 +51,9 @@ namespace ash {
 
 class SelectToSpeakTest : public InProcessBrowserTest {
  public:
+  SelectToSpeakTest(const SelectToSpeakTest&) = delete;
+  SelectToSpeakTest& operator=(const SelectToSpeakTest&) = delete;
+
   void OnFocusRingChanged() {
     if (loop_runner_) {
       loop_runner_->Quit();
@@ -70,17 +76,35 @@ class SelectToSpeakTest : public InProcessBrowserTest {
         browser()->profile(), extension_misc::kSelectToSpeakExtensionId);
 
     tray_test_api_ = SystemTrayTestApi::Create();
-    content::WindowedNotificationObserver extension_load_waiter(
-        extensions::NOTIFICATION_EXTENSION_HOST_DID_STOP_FIRST_LOAD,
-        content::NotificationService::AllSources());
+
+    extensions::ExtensionHostTestHelper host_helper(
+        browser()->profile(), extension_misc::kSelectToSpeakExtensionId);
     AccessibilityManager::Get()->SetSelectToSpeakEnabled(true);
-    extension_load_waiter.Wait();
+    host_helper.WaitForHostCompletedFirstLoad();
 
     aura::Window* root_window = Shell::Get()->GetPrimaryRootWindow();
     generator_ = std::make_unique<ui::test::EventGenerator>(root_window);
 
     ASSERT_TRUE(
         ui_test_utils::NavigateToURL(browser(), GURL(url::kAboutBlankURL)));
+
+    // Select to speak loads part of itself (eventually all of itself) via a
+    // dynamic import. This means that the background page signals a load event
+    // prior to the import being fully finished. Wait for it here.
+    std::string script =
+        R"JS(
+          (async function() {
+            await import("/select_to_speak/select_to_speak_main.js");
+            window.domAutomationController.send('ok');
+          })();
+        )JS";
+
+    std::string result =
+        extensions::browsertest_util::ExecuteScriptInBackgroundPage(
+            browser()->profile(), extension_misc::kSelectToSpeakExtensionId,
+            script,
+            extensions::browsertest_util::ScriptUserActivation::kDontActivate);
+    ASSERT_EQ(result, "ok");
   }
 
   void SetUpInProcessBrowserTestFixture() override {
@@ -98,7 +122,7 @@ class SelectToSpeakTest : public InProcessBrowserTest {
   gfx::Rect GetWebContentsBounds() const {
     // TODO(katie): Find a way to get the exact bounds programmatically.
     gfx::Rect bounds = browser()->window()->GetBounds();
-    bounds.Inset(8, 8, 75, 8);
+    bounds.Inset(gfx::Insets::TLBR(8, 8, 8, 75));
     return bounds;
   }
 
@@ -167,7 +191,6 @@ class SelectToSpeakTest : public InProcessBrowserTest {
   scoped_refptr<content::MessageLoopRunner> loop_runner_;
   scoped_refptr<content::MessageLoopRunner> tray_loop_runner_;
   base::WeakPtrFactory<SelectToSpeakTest> weak_ptr_factory_{this};
-  DISALLOW_COPY_AND_ASSIGN(SelectToSpeakTest);
 };
 
 /* Test fixture enabling experimental accessibility language detection switch */
@@ -201,7 +224,7 @@ IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, DISABLED_SpeakStatusTray) {
 }
 
 // Flaky on ChromeOS MSAN bots: https://crbug.com/1227368
-#if defined(OS_CHROMEOS) && defined(MEMORY_SANITIZER)
+#if defined(MEMORY_SANITIZER)
 #define MAYBE_ActivatesWithTapOnSelectToSpeakTray DISABLED_ActivatesWithTapOnSelectToSpeakTray
 #else
 #define MAYBE_ActivatesWithTapOnSelectToSpeakTray ActivatesWithTapOnSelectToSpeakTray
@@ -230,7 +253,7 @@ IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, MAYBE_ActivatesWithTapOnSelectToSpeakT
 }
 
 // Flaky on ChromeOS MSAN bots: https://crbug.com/1227368
-#if defined(OS_CHROMEOS) && defined(MEMORY_SANITIZER)
+#if defined(MEMORY_SANITIZER)
 #define MAYBE_WorksWithTouchSelection DISABLED_WorksWithTouchSelection
 #else
 #define MAYBE_WorksWithTouchSelection WorksWithTouchSelection
@@ -323,7 +346,7 @@ IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, SelectToSpeakTrayNotSpoken) {
 }
 
 // Flaky on ChromeOS MSAN bots: https://crbug.com/1227368
-#if defined(OS_CHROMEOS) && defined(MEMORY_SANITIZER)
+#if defined(MEMORY_SANITIZER)
 #define MAYBE_SmoothlyReadsAcrossInlineUrl DISABLED_SmoothlyReadsAcrossInlineUrl
 #else
 #define MAYBE_SmoothlyReadsAcrossInlineUrl SmoothlyReadsAcrossInlineUrl
@@ -341,7 +364,7 @@ IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, MAYBE_SmoothlyReadsAcrossInlineUrl) {
 }
 
 // Flaky on ChromeOS MSAN bots: https://crbug.com/1227368
-#if defined(OS_CHROMEOS) && defined(MEMORY_SANITIZER)
+#if defined(MEMORY_SANITIZER)
 #define MAYBE_SmoothlyReadsAcrossMultipleLines DISABLED_SmoothlyReadsAcrossMultipleLines
 #else
 #define MAYBE_SmoothlyReadsAcrossMultipleLines SmoothlyReadsAcrossMultipleLines
@@ -361,7 +384,7 @@ IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, MAYBE_SmoothlyReadsAcrossMultipleLines
 }
 
 // TODO(crbug.com/1225388): Flaky on ChromeOS MSAN bots
-#if defined(OS_CHROMEOS) && defined(MEMORY_SANITIZER)
+#if defined(MEMORY_SANITIZER)
 #define MAYBE_SmoothlyReadsAcrossFormattedText \
   DISABLED_SmoothlyReadsAcrossFormattedText
 #else
@@ -382,7 +405,7 @@ IN_PROC_BROWSER_TEST_F(SelectToSpeakTest,
 }
 
 // Flaky on ChromeOS MSAN bots: https://crbug.com/1227368
-#if defined(OS_CHROMEOS) && defined(MEMORY_SANITIZER)
+#if defined(MEMORY_SANITIZER)
 #define MAYBE_ReadsStaticTextWithoutInlineTextChildren \
   DISABLED_ReadsStaticTextWithoutInlineTextChildren
 #else
@@ -400,7 +423,7 @@ IN_PROC_BROWSER_TEST_F(SelectToSpeakTest,
 }
 
 // Flaky on ChromeOS MSAN bots: https://crbug.com/1227368
-#if defined(OS_CHROMEOS) && defined(MEMORY_SANITIZER)
+#if defined(MEMORY_SANITIZER)
 #define MAYBE_BreaksAtParagraphBounds DISABLED_BreaksAtParagraphBounds
 #else
 #define MAYBE_BreaksAtParagraphBounds BreaksAtParagraphBounds
@@ -451,7 +474,7 @@ IN_PROC_BROWSER_TEST_F(SelectToSpeakTestWithLanguageDetection,
 }
 
 // Flaky on ChromeOS MSAN bots: https://crbug.com/1227368
-#if defined(OS_CHROMEOS) && defined(MEMORY_SANITIZER)
+#if defined(MEMORY_SANITIZER)
 #define MAYBE_DoesNotCrashWithMousewheelEvent DISABLED_DoesNotCrashWithMousewheelEvent
 #else
 #define MAYBE_DoesNotCrashWithMousewheelEvent DoesNotCrashWithMousewheelEvent
@@ -478,7 +501,13 @@ IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, MAYBE_DoesNotCrashWithMousewheelEvent)
   sm_.Replay();
 }
 
-IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, FocusRingMovesWithMouse) {
+// Flaky on ChromeOS MSAN bots: https://crbug.com/1227368
+#if defined(MEMORY_SANITIZER)
+#define MAYBE_FocusRingMovesWithMouse DISABLED_FocusRingMovesWithMouse
+#else
+#define MAYBE_FocusRingMovesWithMouse FocusRingMovesWithMouse
+#endif
+IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, MAYBE_FocusRingMovesWithMouse) {
   // Create a callback for the focus ring observer.
   base::RepeatingCallback<void()> callback =
       base::BindRepeating(&SelectToSpeakTest::OnFocusRingChanged, GetWeakPtr());
@@ -579,7 +608,7 @@ IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, MAYBE_ContinuesReadingDuringResize) {
 }
 
 // Flaky on ChromeOS MSAN bots: https://crbug.com/1227368
-#if defined(OS_CHROMEOS) && defined(MEMORY_SANITIZER)
+#if defined(MEMORY_SANITIZER)
 #define MAYBE_WorksWithStickyKeys DISABLED_WorksWithStickyKeys
 #else
 #define MAYBE_WorksWithStickyKeys WorksWithStickyKeys
@@ -612,8 +641,10 @@ IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, MAYBE_WorksWithStickyKeys) {
   sm_.Replay();
 }
 
+// TODO(crbug.com/1227368): Flaky on ChromeOS MSAN bots.
+// TODO(crbug.com/1344562): Flaky on other CrOS bots too.
 IN_PROC_BROWSER_TEST_F(SelectToSpeakTest,
-                       SelectToSpeakDoesNotDismissTrayBubble) {
+                       DISABLED_SelectToSpeakDoesNotDismissTrayBubble) {
   // Open tray bubble menu.
   tray_test_api_->ShowBubble();
 

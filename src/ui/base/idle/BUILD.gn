@@ -18,7 +18,11 @@ component("idle") {
   # All targets in this file are allowed to access any of the headers.
   friend = [ ":*" ]
 
-  public = [ "idle.h" ]
+  public = [
+    "idle.h",
+    "idle_polling_service.h",
+    "idle_time_provider.h",
+  ]
 
   deps = [
     "//base",
@@ -26,7 +30,7 @@ component("idle") {
   ]
 
   if (is_chromeos_ash) {
-    deps += [ "//chromeos/dbus/session_manager" ]
+    deps += [ "//chromeos/ash/components/dbus/session_manager" ]
   }
 
   sources = [
@@ -34,6 +38,9 @@ component("idle") {
     "idle.h",
     "idle_internal.cc",
     "idle_internal.h",
+    "idle_polling_service.cc",
+    "idle_polling_service.h",
+    "idle_time_provider.h",
   ]
 
   if (is_chromeos_ash) {
@@ -59,21 +66,11 @@ component("idle") {
 
   if (is_linux) {
     sources += [ "idle_linux.cc" ]
+    deps += [ "//ui/display" ]
     if (use_dbus) {
       deps += [ "//dbus" ]
       defines += [ "USE_DBUS" ]
     }
-  }
-
-  if (use_x11 && !is_chromeos_ash) {
-    deps += [ "//ui/base/x" ]
-  }
-
-  if (use_ozone) {
-    deps += [
-      "//ui/base:features",
-      "//ui/display",
-    ]
   }
 
   if (is_android) {

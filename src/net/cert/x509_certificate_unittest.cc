@@ -8,7 +8,6 @@
 
 #include <memory>
 
-#include "base/cxx17_backports.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/hash/sha1.h"
@@ -16,11 +15,12 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
+#include "base/time/time.h"
 #include "crypto/rsa_private_key.h"
 #include "net/base/net_errors.h"
 #include "net/cert/asn1_util.h"
-#include "net/cert/internal/parse_certificate.h"
 #include "net/cert/pem.h"
+#include "net/cert/pki/parse_certificate.h"
 #include "net/cert/x509_util.h"
 #include "net/test/cert_test_util.h"
 #include "net/test/test_certificate_data.h"
@@ -535,17 +535,17 @@ TEST(X509CertificateTest, ParseSubjectAltNames) {
   static const uint8_t kIPv4Address[] = {
       0x7F, 0x00, 0x00, 0x02
   };
-  ASSERT_EQ(base::size(kIPv4Address), ip_addresses[0].size());
-  EXPECT_EQ(0, memcmp(ip_addresses[0].data(), kIPv4Address,
-                      base::size(kIPv4Address)));
+  ASSERT_EQ(std::size(kIPv4Address), ip_addresses[0].size());
+  EXPECT_EQ(
+      0, memcmp(ip_addresses[0].data(), kIPv4Address, std::size(kIPv4Address)));
 
   static const uint8_t kIPv6Address[] = {
       0xFE, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01
   };
-  ASSERT_EQ(base::size(kIPv6Address), ip_addresses[1].size());
-  EXPECT_EQ(0, memcmp(ip_addresses[1].data(), kIPv6Address,
-                      base::size(kIPv6Address)));
+  ASSERT_EQ(std::size(kIPv6Address), ip_addresses[1].size());
+  EXPECT_EQ(
+      0, memcmp(ip_addresses[1].data(), kIPv6Address, std::size(kIPv6Address)));
 
   // Ensure the subjectAltName dirName has not influenced the handling of
   // the subject commonName.
@@ -619,7 +619,8 @@ TEST(X509CertificateTest, ExtractExtension) {
   base::StringPiece contents;
   ASSERT_TRUE(asn1::ExtractExtensionFromDERCert(
       x509_util::CryptoBufferAsStringPiece(cert->cert_buffer()),
-      BasicConstraintsOid().AsStringPiece(), &present, &critical, &contents));
+      der::Input(kBasicConstraintsOid).AsStringPiece(), &present, &critical,
+      &contents));
   EXPECT_TRUE(present);
   EXPECT_TRUE(critical);
   ASSERT_EQ(base::StringPiece("\x30\x00", 2), contents);
@@ -637,7 +638,8 @@ TEST(X509CertificateTest, ExtractExtension) {
   ASSERT_TRUE(uid_cert);
   ASSERT_TRUE(asn1::ExtractExtensionFromDERCert(
       x509_util::CryptoBufferAsStringPiece(uid_cert->cert_buffer()),
-      BasicConstraintsOid().AsStringPiece(), &present, &critical, &contents));
+      der::Input(kBasicConstraintsOid).AsStringPiece(), &present, &critical,
+      &contents));
   EXPECT_TRUE(present);
   EXPECT_FALSE(critical);
   ASSERT_EQ(base::StringPiece("\x30\x00", 2), contents);
@@ -903,7 +905,7 @@ TEST(X509CertificateTest, IsSelfSigned) {
   EXPECT_FALSE(X509Certificate::IsSelfSigned(cert->cert_buffer()));
 
   scoped_refptr<X509Certificate> self_signed(
-      ImportCertFromFile(certs_dir, "aia-root.pem"));
+      ImportCertFromFile(certs_dir, "root_ca_cert.pem"));
   ASSERT_NE(static_cast<X509Certificate*>(nullptr), self_signed.get());
   EXPECT_TRUE(X509Certificate::IsSelfSigned(self_signed->cert_buffer()));
 
@@ -1090,7 +1092,7 @@ const struct CertificateFormatTestData {
 class X509CertificateParseTest
     : public testing::TestWithParam<CertificateFormatTestData> {
  public:
-  virtual ~X509CertificateParseTest() = default;
+  ~X509CertificateParseTest() override = default;
   void SetUp() override { test_data_ = GetParam(); }
   void TearDown() override {}
 
@@ -1103,11 +1105,11 @@ TEST_P(X509CertificateParseTest, CanParseFormat) {
   CertificateList certs = CreateCertificateListFromFile(
       certs_dir, test_data_.file_name, test_data_.format);
   ASSERT_FALSE(certs.empty());
-  ASSERT_LE(certs.size(), base::size(test_data_.chain_fingerprints));
+  ASSERT_LE(certs.size(), std::size(test_data_.chain_fingerprints));
   CheckGoogleCert(certs.front(), google_parse_fingerprint,
                   kGoogleParseValidFrom, kGoogleParseValidTo);
 
-  for (size_t i = 0; i < base::size(test_data_.chain_fingerprints); ++i) {
+  for (size_t i = 0; i < std::size(test_data_.chain_fingerprints); ++i) {
     if (!test_data_.chain_fingerprints[i]) {
       // No more test certificates expected - make sure no more were
       // returned before marking this test a success.
@@ -1322,13 +1324,13 @@ TEST_P(X509CertificateNameVerifyTest, VerifyHostname) {
         ip_addressses.push_back(std::move(bytes));
         ASSERT_EQ(16U, ip_addressses.back().size()) << i;
       } else {  // Decimal groups
-        std::vector<std::string> decimals_ascii = base::SplitString(
+        std::vector<std::string> decimals_ascii_list = base::SplitString(
             addr_ascii, ".", base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL);
-        EXPECT_EQ(4U, decimals_ascii.size()) << i;
+        EXPECT_EQ(4U, decimals_ascii_list.size()) << i;
         std::string addr_bytes;
-        for (size_t j = 0; j < decimals_ascii.size(); ++j) {
+        for (const auto& decimals_ascii : decimals_ascii_list) {
           int decimal_value;
-          EXPECT_TRUE(base::StringToInt(decimals_ascii[j], &decimal_value));
+          EXPECT_TRUE(base::StringToInt(decimals_ascii, &decimal_value));
           EXPECT_GE(decimal_value, 0);
           EXPECT_LE(decimal_value, 255);
           addr_bytes.push_back(static_cast<char>(decimal_value));

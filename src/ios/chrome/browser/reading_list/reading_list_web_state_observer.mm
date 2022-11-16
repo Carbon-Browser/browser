@@ -159,7 +159,7 @@ void ReadingListWebStateObserver::StartCheckingLoading() {
   try_number_ = 0;
   timer_.reset(new base::RepeatingTimer());
   const base::TimeDelta kDelayUntilLoadingProgressIsChecked =
-      base::TimeDelta::FromMilliseconds(1500);
+      base::Milliseconds(1500);
   timer_->Start(
       FROM_HERE, kDelayUntilLoadingProgressIsChecked,
       base::BindRepeating(
@@ -250,8 +250,7 @@ void ReadingListWebStateObserver::LoadOfflineReadingListEntry() {
       reading_list_model_->GetEntryByURL(pending_url_);
   last_load_was_offline_ = true;
   DCHECK(entry->DistilledState() == ReadingListEntry::PROCESSED);
-  GURL url = reading_list::OfflineURLForPath(
-      entry->DistilledPath(), entry->URL(), entry->DistilledURL());
+  GURL url = reading_list::OfflineURLForURL(entry->URL());
   web::NavigationManager* navigationManager =
       web_state_->GetNavigationManager();
   web::NavigationItem* item = navigationManager->GetPendingItem();

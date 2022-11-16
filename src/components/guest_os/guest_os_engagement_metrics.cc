@@ -12,8 +12,8 @@
 #include "base/system/sys_info.h"
 #include "base/time/default_clock.h"
 #include "base/time/default_tick_clock.h"
+#include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
 #include "chromeos/dbus/power_manager/idle.pb.h"
-#include "chromeos/dbus/session_manager/session_manager_client.h"
 #include "components/exo/wm_helper.h"
 #include "components/guest_os/guest_os_prefs.h"
 #include "components/prefs/pref_service.h"
@@ -23,10 +23,8 @@ namespace guest_os {
 
 namespace {
 
-constexpr base::TimeDelta kUpdateEngagementTimePeriod =
-    base::TimeDelta::FromMinutes(1);
-constexpr base::TimeDelta kSaveEngagementTimeToPrefsPeriod =
-    base::TimeDelta::FromMinutes(30);
+constexpr base::TimeDelta kUpdateEngagementTimePeriod = base::Minutes(1);
+constexpr base::TimeDelta kSaveEngagementTimeToPrefsPeriod = base::Minutes(30);
 
 int GetDayId(const base::Clock* clock) {
   return clock->Now().LocalMidnight().since_origin().InDays();
@@ -196,23 +194,19 @@ void GuestOsEngagementMetrics::RecordEngagementTimeToUmaIfNeeded() {
   if (!ShouldRecordEngagementTimeToUma())
     return;
   VLOG(2) << "day changed, recording engagement time to UMA";
-  UmaHistogramCustomTimes(
-      uma_name_ + ".EngagementTime.Total", engagement_time_total_,
-      base::TimeDelta::FromSeconds(1),
-      base::TimeDelta::FromDays(1) + kUpdateEngagementTimePeriod, 50);
+  UmaHistogramCustomTimes(uma_name_ + ".EngagementTime.Total",
+                          engagement_time_total_, base::Seconds(1),
+                          base::Days(1) + kUpdateEngagementTimePeriod, 50);
   UmaHistogramCustomTimes(
       uma_name_ + ".EngagementTime." + uma_name_ + "Total",
       engagement_time_foreground_ + engagement_time_background_,
-      base::TimeDelta::FromSeconds(1),
-      base::TimeDelta::FromDays(1) + kUpdateEngagementTimePeriod, 50);
-  UmaHistogramCustomTimes(
-      uma_name_ + ".EngagementTime.Foreground", engagement_time_foreground_,
-      base::TimeDelta::FromSeconds(1),
-      base::TimeDelta::FromDays(1) + kUpdateEngagementTimePeriod, 50);
-  UmaHistogramCustomTimes(
-      uma_name_ + ".EngagementTime.Background", engagement_time_background_,
-      base::TimeDelta::FromSeconds(1),
-      base::TimeDelta::FromDays(1) + kUpdateEngagementTimePeriod, 50);
+      base::Seconds(1), base::Days(1) + kUpdateEngagementTimePeriod, 50);
+  UmaHistogramCustomTimes(uma_name_ + ".EngagementTime.Foreground",
+                          engagement_time_foreground_, base::Seconds(1),
+                          base::Days(1) + kUpdateEngagementTimePeriod, 50);
+  UmaHistogramCustomTimes(uma_name_ + ".EngagementTime.Background",
+                          engagement_time_background_, base::Seconds(1),
+                          base::Days(1) + kUpdateEngagementTimePeriod, 50);
   ResetEngagementTimePrefs();
 }
 

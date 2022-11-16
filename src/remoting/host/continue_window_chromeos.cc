@@ -7,7 +7,6 @@
 #include "remoting/host/continue_window.h"
 
 #include "base/bind.h"
-#include "base/macros.h"
 #include "remoting/base/string_resources.h"
 #include "remoting/host/chromeos/message_box.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -19,6 +18,10 @@ namespace {
 class ContinueWindowAura : public ContinueWindow {
  public:
   ContinueWindowAura();
+
+  ContinueWindowAura(const ContinueWindowAura&) = delete;
+  ContinueWindowAura& operator=(const ContinueWindowAura&) = delete;
+
   ~ContinueWindowAura() override;
 
   void OnMessageBoxResult(MessageBox::Result result);
@@ -30,7 +33,6 @@ class ContinueWindowAura : public ContinueWindow {
 
  private:
   std::unique_ptr<MessageBox> message_box_;
-  DISALLOW_COPY_AND_ASSIGN(ContinueWindowAura);
 };
 
 ContinueWindowAura::ContinueWindowAura() = default;

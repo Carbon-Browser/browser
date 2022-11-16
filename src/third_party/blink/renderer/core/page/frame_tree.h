@@ -22,7 +22,8 @@
 
 #include "base/dcheck_is_on.h"
 #include "third_party/blink/renderer/core/core_export.h"
-#include "third_party/blink/renderer/platform/heap/handle.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/wtf/text/atomic_string.h"
 
 namespace blink {
@@ -30,6 +31,12 @@ namespace blink {
 class Frame;
 struct FrameLoadRequest;
 class KURL;
+
+// This is used by FrameTree traversal APIs to determine whether they should
+// honor or ignore the fenced frame boundary, for fenced frames implemented on
+// ShadowDOM. See crbug.com/1123606 and
+// https://docs.google.com/document/d/1ijTZJT3DHQ1ljp4QQe4E4XCCRaYAxmInNzN1SzeJM8s/edit.
+enum class FrameTreeBoundary { kIgnoreFence, kFenced };
 
 class CORE_EXPORT FrameTree final {
   DISALLOW_NEW();
@@ -58,13 +65,19 @@ class CORE_EXPORT FrameTree final {
   // TODO(andypaicu): remove this once we have gathered the data
   void ExperimentalSetNulledName();
 
-  Frame* Parent() const;
-  Frame& Top() const;
-  Frame* NextSibling() const;
-  Frame* FirstChild() const;
+  Frame* Parent(FrameTreeBoundary frame_tree_boundary =
+                    FrameTreeBoundary::kIgnoreFence) const;
+  Frame& Top(FrameTreeBoundary frame_tree_boundary =
+                 FrameTreeBoundary::kIgnoreFence) const;
+  Frame* NextSibling(FrameTreeBoundary frame_tree_boundary =
+                         FrameTreeBoundary::kIgnoreFence) const;
+  Frame* FirstChild(FrameTreeBoundary frame_tree_boundary =
+                        FrameTreeBoundary::kIgnoreFence) const;
 
   bool IsDescendantOf(const Frame* ancestor) const;
-  Frame* TraverseNext(const Frame* stay_within = nullptr) const;
+  Frame* TraverseNext(const Frame* stay_within = nullptr,
+                      FrameTreeBoundary frame_tree_boundary =
+                          FrameTreeBoundary::kIgnoreFence) const;
 
   // For plugins and tests only.
   Frame* FindFrameByName(const AtomicString& name) const;
@@ -96,8 +109,11 @@ class CORE_EXPORT FrameTree final {
   void Trace(Visitor*) const;
 
  private:
-  Frame* FindFrameForNavigationInternal(const AtomicString& name,
-                                        const KURL&) const;
+  // TODO(crbug.com/1315802): Refactor _unfencedTop handling.
+  Frame* FindFrameForNavigationInternal(
+      const AtomicString& name,
+      const KURL&,
+      FrameLoadRequest* request = nullptr) const;
 
   Member<Frame> this_frame_;
 
@@ -116,7 +132,7 @@ class CORE_EXPORT FrameTree final {
 
 #if DCHECK_IS_ON()
 // Outside the blink namespace for ease of invocation from gdb.
-void showFrameTree(const blink::Frame*);
+void ShowFrameTree(const blink::Frame*);
 #endif
 
 #endif  // THIRD_PARTY_BLINK_RENDERER_CORE_PAGE_FRAME_TREE_H_

@@ -6,7 +6,6 @@
 
 #include "ash/constants/ash_pref_names.h"
 #include "ash/focus_cycler.h"
-#include "ash/public/cpp/media_notification_provider.h"
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/root_window_controller.h"
 #include "ash/session/session_controller_impl.h"
@@ -14,6 +13,7 @@
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/style/ash_color_provider.h"
+#include "ash/system/media/media_notification_provider.h"
 #include "ash/system/tray/tray_bubble_view.h"
 #include "ash/system/tray/tray_bubble_wrapper.h"
 #include "ash/system/tray/tray_constants.h"
@@ -22,7 +22,7 @@
 #include "base/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/string_util.h"
-#include "components/media_message_center/media_notification_view_impl.h"
+#include "components/media_message_center/notification_theme.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
@@ -48,7 +48,7 @@ constexpr int kNoMediaTextFontSizeIncrease = 2;
 constexpr int kTitleFontSizeIncrease = 4;
 constexpr int kTitleViewHeight = 56;
 
-constexpr gfx::Insets kTitleViewInsets = gfx::Insets(0, 16, 0, 16);
+constexpr auto kTitleViewInsets = gfx::Insets::TLBR(0, 16, 0, 16);
 
 // Minimum screen diagonal (in inches) for pinning global media controls
 // on shelf by default.
@@ -100,11 +100,12 @@ class GlobalMediaControlsTitleView : public views::View {
   GlobalMediaControlsTitleView() {
     SetBorder(views::CreatePaddedBorder(
         views::CreateSolidSidedBorder(
-            0, 0, kMenuSeparatorWidth, 0,
+            gfx::Insets::TLBR(0, 0, kMenuSeparatorWidth, 0),
             AshColorProvider::Get()->GetContentLayerColor(
                 AshColorProvider::ContentLayerType::kSeparatorColor)),
-        gfx::Insets(kMenuSeparatorVerticalPadding, 0,
-                    kMenuSeparatorVerticalPadding - kMenuSeparatorWidth, 0)));
+        gfx::Insets::TLBR(kMenuSeparatorVerticalPadding, 0,
+                          kMenuSeparatorVerticalPadding - kMenuSeparatorWidth,
+                          0)));
 
     auto* box_layout = SetLayoutManager(std::make_unique<views::BoxLayout>(
         views::BoxLayout::Orientation::kHorizontal, kTitleViewInsets));
@@ -172,10 +173,11 @@ void MediaTray::SetPinnedToShelf(bool pinned) {
 }
 
 MediaTray::PinButton::PinButton()
-    : TopShortcutButton(
+    : IconButton(
           base::BindRepeating(&PinButton::ButtonPressed,
                               base::Unretained(this)),
-          MediaTray::IsPinnedToShelf() ? kPinnedIcon : kUnpinnedIcon,
+          IconButton::Type::kSmall,
+          MediaTray::IsPinnedToShelf() ? &kPinnedIcon : &kUnpinnedIcon,
           MediaTray::IsPinnedToShelf()
               ? IDS_ASH_GLOBAL_MEDIA_CONTROLS_PINNED_BUTTON_TOOLTIP_TEXT
               : IDS_ASH_GLOBAL_MEDIA_CONTROLS_UNPINNED_BUTTON_TOOLTIP_TEXT) {}
@@ -259,7 +261,7 @@ void MediaTray::ShowBubble() {
   SetNotificationColorTheme();
 
   TrayBubbleView::InitParams init_params;
-  init_params.delegate = this;
+  init_params.delegate = GetWeakPtr();
   init_params.parent_window = GetBubbleWindowContainer();
   init_params.anchor_view = nullptr;
   init_params.anchor_mode = TrayBubbleView::AnchorMode::kRect;
@@ -268,7 +270,6 @@ void MediaTray::ShowBubble() {
   init_params.shelf_alignment = shelf()->alignment();
   init_params.preferred_width = kTrayMenuWidth;
   init_params.close_on_deactivate = true;
-  init_params.has_shadow = false;
   init_params.translucent = true;
   init_params.corner_radius = kTrayItemCornerRadius;
   init_params.reroute_event_handler = true;

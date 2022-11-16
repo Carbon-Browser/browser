@@ -7,7 +7,6 @@
 
 #include "chrome/browser/banners/app_banner_manager_desktop.h"
 
-#include "base/macros.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace content {
@@ -21,6 +20,11 @@ namespace webapps {
 class TestAppBannerManagerDesktop : public AppBannerManagerDesktop {
  public:
   explicit TestAppBannerManagerDesktop(content::WebContents* web_contents);
+
+  TestAppBannerManagerDesktop(const TestAppBannerManagerDesktop&) = delete;
+  TestAppBannerManagerDesktop& operator=(const TestAppBannerManagerDesktop&) =
+      delete;
+
   ~TestAppBannerManagerDesktop() override;
 
   // Ensure this test class will be instantiated in place of
@@ -60,7 +64,7 @@ class TestAppBannerManagerDesktop : public AppBannerManagerDesktop {
   // AppBannerManager:
   void OnInstall(blink::mojom::DisplayMode display) override;
   void DidFinishCreatingWebApp(const web_app::AppId& app_id,
-                               web_app::InstallResultCode code) override;
+                               webapps::InstallResultCode code) override;
   void DidFinishLoad(content::RenderFrameHost* render_frame_host,
                      const GURL& validated_url) override;
   void UpdateState(AppBannerManager::State state) override;
@@ -74,8 +78,6 @@ class TestAppBannerManagerDesktop : public AppBannerManagerDesktop {
   base::OnceClosure installable_quit_closure_;
   base::OnceClosure on_done_;
   base::OnceClosure on_install_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestAppBannerManagerDesktop);
 };
 
 }  // namespace webapps

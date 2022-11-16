@@ -9,11 +9,13 @@
 #include "base/logging.h"
 #include "base/strings/string_util.h"
 #include "build/build_config.h"
+#if BUILDFLAG(IS_WIN)
+#include "media/base/media_switches.h"
+#endif
 #include "media/media_buildflags.h"
 #include "media/video/gpu_video_accelerator_factories.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/renderer/platform/peerconnection/rtc_video_encoder.h"
-#include "third_party/blink/renderer/platform/webrtc/webrtc_video_utils.h"
 #include "third_party/webrtc/api/video_codecs/h264_profile_level_id.h"
 #include "third_party/webrtc/api/video_codecs/sdp_video_format.h"
 #include "third_party/webrtc/api/video_codecs/video_encoder.h"
@@ -27,7 +29,7 @@ namespace {
 absl::optional<media::VideoCodecProfile> WebRTCFormatToCodecProfile(
     const webrtc::SdpVideoFormat& sdp) {
   if (sdp.name == "H264") {
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
     // Enable H264 HW encode for WebRTC when SW fallback is available, which is
     // checked by kWebRtcH264WithOpenH264FFmpeg flag. This check should be
     // removed when SW implementation is fully enabled.
@@ -45,6 +47,8 @@ absl::optional<media::VideoCodecProfile> WebRTCFormatToCodecProfile(
     return media::VideoCodecProfile::VP8PROFILE_MIN;
   } else if (sdp.name == "VP9") {
     return media::VideoCodecProfile::VP9PROFILE_MIN;
+  } else if (sdp.name == "AV1") {
+    return media::VideoCodecProfile::AV1PROFILE_MIN;
   }
   return absl::nullopt;
 }
@@ -61,7 +65,7 @@ absl::optional<webrtc::SdpVideoFormat> VEAToWebRTCFormat(
   }
   if (profile.profile >= media::H264PROFILE_MIN &&
       profile.profile <= media::H264PROFILE_MAX) {
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
     // Enable H264 HW encode for WebRTC when SW fallback is available, which is
     // checked by kWebRtcH264WithOpenH264FFmpeg flag. This check should be
     // removed when SW implementation is fully enabled.
@@ -77,7 +81,7 @@ absl::optional<webrtc::SdpVideoFormat> VEAToWebRTCFormat(
     webrtc::H264Profile h264_profile;
     switch (profile.profile) {
       case media::H264PROFILE_BASELINE:
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
         // Force HW H264 on Android to be CBP for most compatibility, since:
         // - Only HW H264 is available on Android at present.
         // - MediaCodec only advise BP, which works same as CBP in most cases.
@@ -85,7 +89,7 @@ absl::optional<webrtc::SdpVideoFormat> VEAToWebRTCFormat(
         h264_profile = webrtc::H264Profile::kProfileConstrainedBaseline;
 #else
         h264_profile = webrtc::H264Profile::kProfileBaseline;
-#endif  // defined(OS_ANDROID)
+#endif  // BUILDFLAG(IS_ANDROID)
         break;
       case media::H264PROFILE_MAIN:
         h264_profile = webrtc::H264Profile::kProfileMain;
@@ -138,12 +142,18 @@ absl::optional<webrtc::SdpVideoFormat> VEAToWebRTCFormat(
     return format;
   }
 
+  if (profile.profile >= media::AV1PROFILE_MIN &&
+      profile.profile <= media::AV1PROFILE_MAX) {
+    return webrtc::SdpVideoFormat("AV1");
+  }
+
   return absl::nullopt;
 }  // namespace
 
 struct SupportedFormats {
   bool unknown = true;
   std::vector<media::VideoCodecProfile> profiles;
+  std::vector<std::vector<media::SVCScalabilityMode>> scalability_modes;
   std::vector<webrtc::SdpVideoFormat> sdp_formats;
 };
 
@@ -161,7 +171,19 @@ SupportedFormats GetSupportedFormatsInternal(
     absl::optional<webrtc::SdpVideoFormat> format = VEAToWebRTCFormat(profile);
     if (format) {
       supported_formats.profiles.push_back(profile.profile);
+      supported_formats.scalability_modes.push_back(profile.scalability_modes);
       supported_formats.sdp_formats.push_back(std::move(*format));
+
+#if BUILDFLAG(IS_WIN)
+      if (media::IsMediaFoundationH264CbpEncodingEnabled() &&
+          profile.profile == media::VideoCodecProfile::H264PROFILE_BASELINE) {
+        supported_formats.profiles.push_back(profile.profile);
+        supported_formats.scalability_modes.push_back(
+            profile.scalability_modes);
+        cricket::AddH264ConstrainedBaselineProfileToSupportedFormats(
+            &supported_formats.sdp_formats);
+      }
+#endif
     }
   }
 
@@ -182,6 +204,18 @@ bool IsConstrainedH264(const webrtc::SdpVideoFormat& format) {
   }
 
   return is_constrained_h264;
+}
+
+bool IsScalabiltiyModeSupported(
+    const std::string& scalability_mode,
+    const std::vector<media::SVCScalabilityMode>& supported_scalability_modes) {
+  for (const auto& supported_scalability_mode : supported_scalability_modes) {
+    if (scalability_mode ==
+        media::GetScalabilityModeName(supported_scalability_mode)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 }  // anonymous namespace
@@ -240,38 +274,21 @@ webrtc::VideoEncoderFactory::CodecSupport
 RTCVideoEncoderFactory::QueryCodecSupport(
     const webrtc::SdpVideoFormat& format,
     absl::optional<std::string> scalability_mode) const {
-  media::VideoCodec codec =
-      WebRtcToMediaVideoCodec(webrtc::PayloadStringToCodecType(format.name));
-  if (scalability_mode) {
-    absl::optional<int> spatial_layers =
-        WebRtcScalabilityModeSpatialLayers(*scalability_mode);
+  CheckAndWaitEncoderSupportStatusIfNeeded();
+  SupportedFormats supported_formats =
+      GetSupportedFormatsInternal(gpu_factories_);
 
-    // Check that the scalability mode was correctly parsed and that the
-    // configuration is valid (e.g., H264 doesn't support SVC at all and VP8
-    // doesn't support spatial layers).
-    if (!spatial_layers ||
-        (codec != media::VideoCodec::kVP8 && codec != media::VideoCodec::kVP9 &&
-         codec != media::VideoCodec::kAV1) ||
-        (codec == media::VideoCodec::kVP8 && *spatial_layers > 1)) {
-      // Ivalid scalability_mode, return unsupported.
-      return {false, false};
-    }
-    DCHECK(spatial_layers);
-    // Most HW encoders cannot handle spatial layers, so return false if the
-    // configuration contains spatial layers and spatial layers are not
-    // supported.
-    if (codec == media::VideoCodec::kVP9 && *spatial_layers > 1 &&
-        !RTCVideoEncoder::Vp9HwSupportForSpatialLayers()) {
-      return {false, false};
+  for (size_t i = 0; i < supported_formats.sdp_formats.size(); ++i) {
+    if (format.IsSameCodec(supported_formats.sdp_formats[i])) {
+      if (!scalability_mode ||
+          IsScalabiltiyModeSupported(*scalability_mode,
+                                     supported_formats.scalability_modes[i])) {
+        return {/*is_supported=*/true, /*is_power_efficient=*/true};
+      }
+      break;
     }
   }
-
-  if (format.IsCodecInList(GetSupportedFormats())) {
-    // Supported and power efficient.
-    return {true, true};
-  }
-  // Unsupported.
-  return {false, false};
+  return {/*is_supported=*/false, /*is_power_efficient=*/false};
 }
 
 }  // namespace blink

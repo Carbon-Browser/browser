@@ -8,7 +8,7 @@
 #include <map>
 #include <string>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/token.h"
 #include "services/service_manager/public/cpp/identity.h"
 #include "services/service_manager/public/cpp/service_filter.h"
@@ -36,6 +36,10 @@ class ServiceInstance;
 class ServiceInstanceRegistry {
  public:
   ServiceInstanceRegistry();
+
+  ServiceInstanceRegistry(const ServiceInstanceRegistry&) = delete;
+  ServiceInstanceRegistry& operator=(const ServiceInstanceRegistry&) = delete;
+
   ~ServiceInstanceRegistry();
 
   // Registers |instance| with the registry. |instance| is not owned by the
@@ -58,7 +62,7 @@ class ServiceInstanceRegistry {
     ~Entry();
 
     base::Token guid;
-    ServiceInstance* instance = nullptr;
+    raw_ptr<ServiceInstance> instance = nullptr;
   };
 
   struct RegularInstanceKey {
@@ -108,8 +112,6 @@ class ServiceInstanceRegistry {
   RegularInstanceMap regular_instances_;
   SharedInstanceMap shared_instances_;
   SingletonInstanceMap singleton_instances_;
-
-  DISALLOW_COPY_AND_ASSIGN(ServiceInstanceRegistry);
 };
 
 }  // namespace service_manager

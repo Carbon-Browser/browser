@@ -11,7 +11,6 @@
 #include <utility>
 
 #include "base/lazy_instance.h"
-#include "base/macros.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "components/storage_monitor/mock_removable_storage_observer.h"
@@ -45,6 +44,7 @@ const uint64_t kStorageFreeSpaceInBytes = 0x20000000;    // 512M bytes left
 const uint64_t kStorageFreeSpaceInObjects = 0x04000000;  // 64M Objects left
 const char kStorageDescription[] = "ExampleDescription";
 const char kStorageVolumeIdentifier[] = "ExampleVolumeId";
+const char kStorageSerialNumber[] = "0123456789ABCDEF0123456789ABCDEF";
 
 base::LazyInstance<std::map<std::string, device::mojom::MtpStorageInfo>>::Leaky
     g_fake_storage_info_map = LAZY_INSTANCE_INITIALIZER;
@@ -67,7 +67,7 @@ const device::mojom::MtpStorageInfo* GetFakeMtpStorageInfoSync(
             kStorageType, kStorageFilesystemType, kStorageAccessCapability,
             kStorageMaxCapacity, kStorageFreeSpaceInBytes,
             kStorageFreeSpaceInObjects, kStorageDescription,
-            kStorageVolumeIdentifier)));
+            kStorageVolumeIdentifier, kStorageSerialNumber)));
   }
 
   const auto it = g_fake_storage_info_map.Get().find(storage_name);
@@ -79,6 +79,10 @@ class FakeMtpManagerClientChromeOS : public MtpManagerClientChromeOS {
   FakeMtpManagerClientChromeOS(StorageMonitor::Receiver* receiver,
                                device::mojom::MtpManager* mtp_manager)
       : MtpManagerClientChromeOS(receiver, mtp_manager) {}
+
+  FakeMtpManagerClientChromeOS(const FakeMtpManagerClientChromeOS&) = delete;
+  FakeMtpManagerClientChromeOS& operator=(const FakeMtpManagerClientChromeOS&) =
+      delete;
 
   // Notifies MtpManagerClientChromeOS about the attachment of MTP storage
   // device given the |storage_name|.
@@ -96,9 +100,6 @@ class FakeMtpManagerClientChromeOS : public MtpManagerClientChromeOS {
     StorageDetached(storage_name);
     base::RunLoop().RunUntilIdle();
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(FakeMtpManagerClientChromeOS);
 };
 
 }  // namespace
@@ -109,6 +110,10 @@ class MtpManagerClientChromeOSTest : public testing::Test {
  public:
   MtpManagerClientChromeOSTest()
       : task_environment_(content::BrowserTaskEnvironment::IO_MAINLOOP) {}
+
+  MtpManagerClientChromeOSTest(const MtpManagerClientChromeOSTest&) = delete;
+  MtpManagerClientChromeOSTest& operator=(const MtpManagerClientChromeOSTest&) =
+      delete;
 
   ~MtpManagerClientChromeOSTest() override {}
 
@@ -140,8 +145,6 @@ class MtpManagerClientChromeOSTest : public testing::Test {
 
   std::unique_ptr<FakeMtpManagerClientChromeOS> mtp_device_observer_;
   std::unique_ptr<MockRemovableStorageObserver> mock_storage_observer_;
-
-  DISALLOW_COPY_AND_ASSIGN(MtpManagerClientChromeOSTest);
 };
 
 // Test to verify basic MTP storage attach and detach notifications.

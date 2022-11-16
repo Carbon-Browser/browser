@@ -6,17 +6,21 @@
 
 #include <algorithm>
 #include <string>
+#include <tuple>
 #include <utility>
 
 #include "base/base64.h"
 #include "base/bind.h"
 #include "base/callback.h"
-#include "base/cxx17_backports.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
+#include "base/threading/thread_task_runner_handle.h"
+#include "base/time/time.h"
+#include "build/build_config.h"
 #include "net/base/features.h"
 #include "net/base/hex_utils.h"
 #include "net/base/host_port_pair.h"
@@ -34,6 +38,7 @@
 #include "net/dns/public/secure_dns_policy.h"
 #include "net/http/http_request_info.h"
 #include "net/http/transport_security_state_test_util.h"
+#include "net/log/net_log.h"
 #include "net/log/net_log_event_type.h"
 #include "net/log/net_log_source.h"
 #include "net/log/test_net_log.h"
@@ -55,7 +60,7 @@
 #include "net/test/gtest_util.h"
 #include "net/test/test_data_directory.h"
 #include "net/test/test_with_task_environment.h"
-#include "net/third_party/quiche/src/spdy/core/spdy_test_utils.h"
+#include "net/third_party/quiche/src/quiche/spdy/test_tools/spdy_test_utils.h"
 #include "net/traffic_annotation/network_traffic_annotation_test_helper.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/platform_test.h"
@@ -77,7 +82,7 @@ const char kHttpURLFromAnotherOrigin[] = "http://www.example2.org/a.dat";
 const char kPushedUrl[] = "https://www.example.org/a.dat";
 
 const char kBodyData[] = "Body data";
-const size_t kBodyDataSize = base::size(kBodyData);
+const size_t kBodyDataSize = std::size(kBodyData);
 const base::StringPiece kBodyDataStringPiece(kBodyData, kBodyDataSize);
 
 static base::TimeDelta g_time_delta;
@@ -88,8 +93,7 @@ base::TimeTicks TheNearFuture() {
 }
 
 base::TimeTicks SlowReads() {
-  g_time_delta +=
-      base::TimeDelta::FromMilliseconds(2 * kYieldAfterDurationMilliseconds);
+  g_time_delta += base::Milliseconds(2 * kYieldAfterDurationMilliseconds);
   return base::TimeTicks::Now() + g_time_delta;
 }
 
@@ -112,13 +116,15 @@ class SpdySessionRequestDelegate
     : public SpdySessionPool::SpdySessionRequest::Delegate {
  public:
   SpdySessionRequestDelegate() = default;
+
+  SpdySessionRequestDelegate(const SpdySessionRequestDelegate&) = delete;
+  SpdySessionRequestDelegate& operator=(const SpdySessionRequestDelegate&) =
+      delete;
+
   ~SpdySessionRequestDelegate() override = default;
 
   void OnSpdySessionAvailable(
       base::WeakPtr<SpdySession> spdy_session) override {}
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(SpdySessionRequestDelegate);
 };
 
 }  // namespace
@@ -160,6 +166,9 @@ class SpdySessionTest : public PlatformTest, public WithTaskEnvironment {
   }
 
  protected:
+  // Used by broken connection detection tests.
+  static constexpr base::TimeDelta kHeartbeatInterval = base::Seconds(10);
+
   explicit SpdySessionTest(base::test::TaskEnvironment::TimeSource time_source =
                                base::test::TaskEnvironment::TimeSource::DEFAULT)
       : WithTaskEnvironment(time_source),
@@ -167,8 +176,6 @@ class SpdySessionTest : public PlatformTest, public WithTaskEnvironment {
             HttpNetworkSession::NORMAL_SOCKET_POOL)),
         old_max_pool_sockets_(ClientSocketPoolManager::max_sockets_per_pool(
             HttpNetworkSession::NORMAL_SOCKET_POOL)),
-        test_push_delegate_(nullptr),
-        spdy_session_pool_(nullptr),
         test_url_(kDefaultUrl),
         test_server_(test_url_),
         key_(HostPortPair::FromURL(test_url_),
@@ -192,7 +199,7 @@ class SpdySessionTest : public PlatformTest, public WithTaskEnvironment {
   void SetUp() override {
     g_time_delta = base::TimeDelta();
     g_time_now = base::TimeTicks::Now();
-    session_deps_.net_log = log_.bound().net_log();
+    session_deps_.net_log = NetLog::Get();
     session_deps_.enable_server_push_cancellation = true;
   }
 
@@ -216,8 +223,8 @@ class SpdySessionTest : public PlatformTest, public WithTaskEnvironment {
 
   void CreateSpdySession() {
     DCHECK(!session_);
-    session_ =
-        ::net::CreateSpdySession(http_session_.get(), key_, log_.bound());
+    session_ = ::net::CreateSpdySession(http_session_.get(), key_,
+                                        net_log_with_source_);
   }
 
   void StallSessionSend() {
@@ -369,7 +376,9 @@ class SpdySessionTest : public PlatformTest, public WithTaskEnvironment {
     return session_->buffered_spdy_framer_->header_encoder_table_size();
   }
 
-  RecordingBoundTestNetLog log_;
+  RecordingNetLogObserver net_log_observer_;
+  NetLogWithSource net_log_with_source_{
+      NetLogWithSource::Make(NetLogSourceType::NONE)};
 
   // Original socket limits.  Some tests set these.  Safest to always restore
   // them once each test has been run.
@@ -380,8 +389,8 @@ class SpdySessionTest : public PlatformTest, public WithTaskEnvironment {
   SpdySessionDependencies session_deps_;
   std::unique_ptr<HttpNetworkSession> http_session_;
   base::WeakPtr<SpdySession> session_;
-  TestServerPushDelegate* test_push_delegate_;
-  SpdySessionPool* spdy_session_pool_;
+  raw_ptr<TestServerPushDelegate> test_push_delegate_ = nullptr;
+  raw_ptr<SpdySessionPool> spdy_session_pool_ = nullptr;
   const GURL test_url_;
   const url::SchemeHostPort test_server_;
   SpdySessionKey key_;
@@ -1083,7 +1092,7 @@ TEST_F(SpdySessionTest, NetworkChangeWithActiveStreams) {
 
   // The SpdySessionPool behavior differs based on how the OSs reacts to
   // network changes; see comment in SpdySessionPool::OnIPAddressChanged().
-#if defined(OS_ANDROID) || defined(OS_WIN) || defined(OS_IOS)
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_IOS)
   // For OSs where the TCP connections will close upon relevant network
   // changes, SpdySessionPool doesn't need to force them to close, so in these
   // cases verify the session has become unavailable but remains open and the
@@ -1138,7 +1147,7 @@ TEST_F(SpdySessionTestWithMockTime, ClientPing) {
   base::TimeTicks before_ping_time = base::TimeTicks::Now();
 
   // Negative value means a preface ping will always be sent.
-  set_connection_at_risk_of_loss_time(base::TimeDelta::FromSeconds(-1));
+  set_connection_at_risk_of_loss_time(base::Seconds(-1));
 
   // Send a PING frame.  This posts CheckPingStatus() with delay.
   MaybeSendPrefacePing();
@@ -1251,7 +1260,7 @@ TEST_F(SpdySessionTest, PingAndWriteLoop) {
   spdy_stream->SendRequestHeaders(std::move(headers), NO_MORE_DATA_TO_SEND);
 
   // Shift time so that a ping will be sent out.
-  g_time_delta = base::TimeDelta::FromSeconds(11);
+  g_time_delta = base::Seconds(11);
 
   base::RunLoop().RunUntilIdle();
   session_->CloseSessionOnError(ERR_ABORTED, "Aborting");
@@ -1259,6 +1268,99 @@ TEST_F(SpdySessionTest, PingAndWriteLoop) {
   data.Resume();
   base::RunLoop().RunUntilIdle();
   EXPECT_FALSE(session_);
+}
+
+TEST_F(SpdySessionTestWithMockTime, DetectBrokenConnectionPing) {
+  session_deps_.enable_ping = true;
+
+  spdy::SpdySerializedFrame read_ping1(spdy_util_.ConstructSpdyPing(1, true));
+  spdy::SpdySerializedFrame read_ping2(spdy_util_.ConstructSpdyPing(2, true));
+  MockRead reads[] = {
+      MockRead(ASYNC, ERR_IO_PENDING, 1),
+      CreateMockRead(read_ping1, 2),
+      MockRead(ASYNC, ERR_IO_PENDING, 3),
+      MockRead(ASYNC, ERR_IO_PENDING, 5),
+      CreateMockRead(read_ping2, 6),
+      MockRead(ASYNC, ERR_IO_PENDING, 7),
+      MockRead(ASYNC, 0, 8)  // EOF
+  };
+  spdy::SpdySerializedFrame write_ping1(spdy_util_.ConstructSpdyPing(1, false));
+  spdy::SpdySerializedFrame write_ping2(spdy_util_.ConstructSpdyPing(2, false));
+  MockWrite writes[] = {CreateMockWrite(write_ping1, 0),
+                        CreateMockWrite(write_ping2, 4)};
+  SequencedSocketData data(reads, writes);
+  session_deps_.socket_factory->AddSocketDataProvider(&data);
+
+  AddSSLSocketData();
+
+  CreateNetworkSession();
+  TestNetworkQualityEstimator estimator;
+
+  spdy_session_pool_->set_network_quality_estimator(&estimator);
+
+  CreateSpdySession();
+
+  constexpr base::TimeDelta kHeartbeatInterval = base::Seconds(15);
+  ASSERT_FALSE(session_->IsBrokenConnectionDetectionEnabled());
+  base::WeakPtr<SpdyStream> spdy_stream1 = CreateStreamSynchronously(
+      SPDY_BIDIRECTIONAL_STREAM, session_, test_url_, MEDIUM,
+      NetLogWithSource(), true, kHeartbeatInterval);
+  ASSERT_TRUE(spdy_stream1);
+  ASSERT_TRUE(session_->IsBrokenConnectionDetectionEnabled());
+  test::StreamDelegateSendImmediate delegate(spdy_stream1, "");
+  spdy_stream1->SetDelegate(&delegate);
+
+  // Negative value means a preface ping will always be sent.
+  set_connection_at_risk_of_loss_time(base::Seconds(-1));
+
+  // Initially there should be no PING in flight or check pending.
+  EXPECT_FALSE(ping_in_flight());
+  EXPECT_FALSE(check_ping_status_pending());
+  // After kHeartbeatInterval time has passed the first PING should be in flight
+  // and its status check pending.
+  FastForwardBy(kHeartbeatInterval);
+  EXPECT_TRUE(ping_in_flight());
+  EXPECT_TRUE(check_ping_status_pending());
+
+  // Consume the PING ack.
+  data.Resume();
+  base::RunLoop run_loop;
+  base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
+                                                run_loop.QuitClosure());
+  run_loop.Run();
+  EXPECT_FALSE(ping_in_flight());
+  EXPECT_TRUE(check_ping_status_pending());
+  // Consume the pending check_ping_status callback, we should be back to the
+  // starting state.
+  FastForwardBy(NextMainThreadPendingTaskDelay());
+  EXPECT_FALSE(ping_in_flight());
+  EXPECT_FALSE(check_ping_status_pending());
+
+  // Unblock data and trigger the next heartbeat.
+  data.Resume();
+  FastForwardBy(NextMainThreadPendingTaskDelay());
+  EXPECT_TRUE(ping_in_flight());
+  EXPECT_TRUE(check_ping_status_pending());
+
+  // Consume PING ack and check_ping_status callback.
+  data.Resume();
+  FastForwardBy(NextMainThreadPendingTaskDelay());
+  EXPECT_FALSE(ping_in_flight());
+  EXPECT_FALSE(check_ping_status_pending());
+
+  data.Resume();
+  base::RunLoop().RunUntilIdle();
+  EXPECT_THAT(delegate.WaitForClose(), IsError(ERR_CONNECTION_CLOSED));
+
+  EXPECT_TRUE(MainThreadIsIdle());
+  EXPECT_FALSE(HasSpdySession(spdy_session_pool_, key_));
+  EXPECT_FALSE(session_);
+  EXPECT_FALSE(spdy_stream1);
+
+  EXPECT_TRUE(data.AllWriteDataConsumed());
+  EXPECT_TRUE(data.AllReadDataConsumed());
+
+  EXPECT_EQ(2u, estimator.ping_rtt_received_count());
 }
 
 TEST_F(SpdySessionTest, StreamIdSpaceExhausted) {
@@ -1880,7 +1982,7 @@ TEST_F(SpdySessionTestWithMockTime, FailedPing) {
   spdy_stream1->SetDelegate(&delegate);
 
   // Negative value means a preface ping will always be sent.
-  set_connection_at_risk_of_loss_time(base::TimeDelta::FromSeconds(-1));
+  set_connection_at_risk_of_loss_time(base::Seconds(-1));
 
   // Send a PING frame.  This posts CheckPingStatus() with delay.
   MaybeSendPrefacePing();
@@ -1894,7 +1996,7 @@ TEST_F(SpdySessionTestWithMockTime, FailedPing) {
   EXPECT_TRUE(HasSpdySession(spdy_session_pool_, key_));
 
   // Run CheckPingStatus() and make it believe hung_interval has passed.
-  g_time_delta = base::TimeDelta::FromSeconds(15);
+  g_time_delta = base::Seconds(15);
   FastForwardUntilNoTasksRemain();
   base::RunLoop().RunUntilIdle();
 
@@ -1930,7 +2032,7 @@ TEST_F(SpdySessionTestWithMockTime, NoPingSentWhenCheckPingPending) {
   CreateSpdySession();
 
   // Negative value means a preface ping will always be sent.
-  set_connection_at_risk_of_loss_time(base::TimeDelta::FromSeconds(-1));
+  set_connection_at_risk_of_loss_time(base::Seconds(-1));
 
   base::WeakPtr<SpdyStream> spdy_stream1 =
       CreateStreamSynchronously(SPDY_BIDIRECTIONAL_STREAM, session_, test_url_,
@@ -1958,7 +2060,7 @@ TEST_F(SpdySessionTestWithMockTime, NoPingSentWhenCheckPingPending) {
 
   // Fast forward mock time so that normally another ping would be sent out.
   // However, since CheckPingStatus() is still pending, no new ping is sent.
-  g_time_delta = base::TimeDelta::FromSeconds(15);
+  g_time_delta = base::Seconds(15);
   MaybeSendPrefacePing();
 
   EXPECT_FALSE(ping_in_flight());
@@ -2143,26 +2245,26 @@ TEST_F(SpdySessionTest, ChangeStreamRequestPriority) {
 // makes |source| an invalid source on failure.
 bool NetLogSourceFromEventParameters(const base::Value* event_params,
                                      NetLogSource* source) {
-  const base::Value* source_dict = nullptr;
+  const base::Value::Dict* source_dict = nullptr;
   int source_id = -1;
   int source_type = static_cast<int>(NetLogSourceType::COUNT);
   if (!event_params) {
     *source = NetLogSource();
     return false;
   }
-  source_dict = event_params->FindDictKey("source_dependency");
+  source_dict = event_params->GetDict().FindDict("source_dependency");
   if (!source_dict) {
     *source = NetLogSource();
     return false;
   }
   absl::optional<int> opt_int;
-  opt_int = source_dict->FindIntKey("id");
+  opt_int = source_dict->FindInt("id");
   if (!opt_int) {
     *source = NetLogSource();
     return false;
   }
   source_id = opt_int.value();
-  opt_int = source_dict->FindIntKey("type");
+  opt_int = source_dict->FindInt("type");
   if (!opt_int) {
     *source = NetLogSource();
     return false;
@@ -2192,7 +2294,7 @@ TEST_F(SpdySessionTest, Initialize) {
   // Flush the read completion task.
   base::RunLoop().RunUntilIdle();
 
-  auto entries = log_.GetEntries();
+  auto entries = net_log_observer_.GetEntries();
   EXPECT_LT(0u, entries.size());
 
   // Check that we logged HTTP2_SESSION_INITIALIZED correctly.
@@ -2205,7 +2307,7 @@ TEST_F(SpdySessionTest, Initialize) {
   EXPECT_TRUE(
       NetLogSourceFromEventParameters(&entries[pos].params, &socket_source));
   EXPECT_TRUE(socket_source.IsValid());
-  EXPECT_NE(log_.bound().source().id, socket_source.id);
+  EXPECT_NE(net_log_with_source_.source().id, socket_source.id);
 }
 
 TEST_F(SpdySessionTest, NetLogOnSessionGoaway) {
@@ -2231,7 +2333,7 @@ TEST_F(SpdySessionTest, NetLogOnSessionGoaway) {
   EXPECT_FALSE(session_);
 
   // Check that the NetLog was filled reasonably.
-  auto entries = log_.GetEntries();
+  auto entries = net_log_observer_.GetEntries();
   EXPECT_LT(0u, entries.size());
 
   int pos = ExpectLogContainsSomewhere(
@@ -2272,7 +2374,7 @@ TEST_F(SpdySessionTest, NetLogOnSessionEOF) {
   EXPECT_FALSE(session_);
 
   // Check that the NetLog was filled reasonably.
-  auto entries = log_.GetEntries();
+  auto entries = net_log_observer_.GetEntries();
   EXPECT_LT(0u, entries.size());
 
   // Check that we logged SPDY_SESSION_CLOSE correctly.
@@ -2865,7 +2967,7 @@ TEST_F(SpdySessionTest, VerifyDomainAuthenticationExpectCT) {
 
   // Add Expect-CT data for all three hosts that passed the above checks, using
   // different NetworkIsolationKeys.
-  const base::Time expiry = base::Time::Now() + base::TimeDelta::FromDays(1);
+  const base::Time expiry = base::Time::Now() + base::Days(1);
   session_deps_.transport_security_state->AddExpectCT(
       "www.example.org", expiry, true, GURL(), NetworkIsolationKey());
   session_deps_.transport_security_state->AddExpectCT(
@@ -3882,9 +3984,9 @@ class StreamCreatingDelegate : public test::StreamDelegateDoNothing {
 
   void OnClose(int status) override {
     GURL url(kDefaultUrl);
-    ignore_result(CreateStreamSynchronously(SPDY_REQUEST_RESPONSE_STREAM,
-                                            session_, url, MEDIUM,
-                                            NetLogWithSource()));
+    std::ignore =
+        CreateStreamSynchronously(SPDY_REQUEST_RESPONSE_STREAM, session_, url,
+                                  MEDIUM, NetLogWithSource());
   }
 
  private:
@@ -4060,6 +4162,59 @@ TEST_F(SpdySessionTest, AdjustRecvWindowSize) {
   data.Resume();
   base::RunLoop().RunUntilIdle();
   EXPECT_FALSE(session_);
+}
+
+// SpdySession::{Increase,Decrease}RecvWindowSize should properly
+// adjust the session receive window size. In addition,
+// SpdySession::IncreaseRecvWindowSize should trigger
+// sending a WINDOW_UPDATE frame for a small delta after
+// kDefaultTimeToBufferSmallWindowUpdates time has passed.
+TEST_F(SpdySessionTestWithMockTime, FlowControlSlowReads) {
+  MockRead reads[] = {
+      MockRead(SYNCHRONOUS, 0, 0)  // EOF
+  };
+  StaticSocketDataProvider data(reads, base::span<MockWrite>());
+  session_deps_.socket_factory->AddSocketDataProvider(&data);
+
+  CreateNetworkSession();
+  session_ = CreateFakeSpdySession(spdy_session_pool_, key_);
+
+  // Re-enable the time-based window update buffering. The test harness
+  // disables it by default to prevent flakiness.
+  session_->SetTimeToBufferSmallWindowUpdates(
+      kDefaultTimeToBufferSmallWindowUpdates);
+
+  const int32_t initial_window_size = kDefaultInitialWindowSize;
+  const int32_t delta_window_size = 100;
+
+  EXPECT_EQ(initial_window_size, session_recv_window_size());
+  EXPECT_EQ(0, session_unacked_recv_window_bytes());
+
+  // Receive data, consuming some of the receive window.
+  set_in_io_loop(true);
+  DecreaseRecvWindowSize(delta_window_size);
+  set_in_io_loop(false);
+
+  EXPECT_EQ(initial_window_size - delta_window_size,
+            session_recv_window_size());
+  EXPECT_EQ(0, session_unacked_recv_window_bytes());
+
+  // Consume the data, returning some of the receive window (locally)
+  IncreaseRecvWindowSize(delta_window_size);
+  EXPECT_EQ(initial_window_size, session_recv_window_size());
+  EXPECT_EQ(delta_window_size, session_unacked_recv_window_bytes());
+
+  // Receive data, consuming some of the receive window.
+  set_in_io_loop(true);
+  DecreaseRecvWindowSize(delta_window_size);
+  set_in_io_loop(false);
+
+  // Window updates after a configured time second should force a WINDOW_UPDATE,
+  // draining the unacked window bytes.
+  AdvanceClock(kDefaultTimeToBufferSmallWindowUpdates);
+  IncreaseRecvWindowSize(delta_window_size);
+  EXPECT_EQ(initial_window_size, session_recv_window_size());
+  EXPECT_EQ(0, session_unacked_recv_window_bytes());
 }
 
 // SpdySession::{Increase,Decrease}SendWindowSize should properly
@@ -4965,6 +5120,226 @@ TEST_F(SpdySessionTest, ResumeSessionWithStalledStream) {
   EXPECT_FALSE(session_);
   EXPECT_TRUE(data.AllWriteDataConsumed());
   EXPECT_TRUE(data.AllReadDataConsumed());
+}
+
+class StreamBrokenConnectionDetectionCheckDelegate
+    : public test::StreamDelegateDoNothing {
+ public:
+  StreamBrokenConnectionDetectionCheckDelegate(
+      const base::WeakPtr<SpdyStream>& stream,
+      const base::WeakPtr<SpdySession>& session,
+      bool expected_is_broken_connection_detection_enabled)
+      : StreamDelegateDoNothing(stream),
+        session_(session),
+        expected_is_broken_connection_detection_enabled_(
+            expected_is_broken_connection_detection_enabled) {}
+
+  ~StreamBrokenConnectionDetectionCheckDelegate() override = default;
+
+  void OnClose(int status) override {
+    ASSERT_EQ(expected_is_broken_connection_detection_enabled_,
+              session_->IsBrokenConnectionDetectionEnabled());
+  }
+
+ private:
+  const base::WeakPtr<SpdySession> session_;
+  bool expected_is_broken_connection_detection_enabled_;
+};
+
+TEST_F(SpdySessionTest, BrokenConnectionDetectionEOF) {
+  MockRead reads[] = {
+      MockRead(ASYNC, 0, 0),  // EOF
+  };
+
+  SequencedSocketData data(reads, base::span<MockWrite>());
+  session_deps_.socket_factory->AddSocketDataProvider(&data);
+
+  AddSSLSocketData();
+
+  CreateNetworkSession();
+  CreateSpdySession();
+
+  ASSERT_FALSE(session_->IsBrokenConnectionDetectionEnabled());
+  base::WeakPtr<SpdyStream> stream = CreateStreamSynchronously(
+      SPDY_REQUEST_RESPONSE_STREAM, session_, test_url_, MEDIUM,
+      NetLogWithSource(), true, kHeartbeatInterval);
+  ASSERT_TRUE(stream);
+  ASSERT_TRUE(session_->IsBrokenConnectionDetectionEnabled());
+  StreamBrokenConnectionDetectionCheckDelegate delegate(stream, session_,
+                                                        false);
+  stream->SetDelegate(&delegate);
+
+  // Let the delegate run and check broken connection detection status during
+  // OnClose().
+  base::RunLoop().RunUntilIdle();
+  ASSERT_FALSE(session_);
+}
+
+TEST_F(SpdySessionTest, BrokenConnectionDetectionCloseSession) {
+  MockRead reads[] = {
+      MockRead(ASYNC, 0, 0),  // EOF
+  };
+
+  SequencedSocketData data(reads, base::span<MockWrite>());
+  session_deps_.socket_factory->AddSocketDataProvider(&data);
+
+  AddSSLSocketData();
+
+  CreateNetworkSession();
+  CreateSpdySession();
+
+  ASSERT_FALSE(session_->IsBrokenConnectionDetectionEnabled());
+  base::WeakPtr<SpdyStream> stream = CreateStreamSynchronously(
+      SPDY_REQUEST_RESPONSE_STREAM, session_, test_url_, MEDIUM,
+      NetLogWithSource(), true, kHeartbeatInterval);
+  ASSERT_TRUE(stream);
+  ASSERT_TRUE(session_->IsBrokenConnectionDetectionEnabled());
+  StreamBrokenConnectionDetectionCheckDelegate delegate(stream, session_,
+                                                        false);
+  stream->SetDelegate(&delegate);
+
+  session_->CloseSessionOnError(ERR_ABORTED, "Aborting session");
+  ASSERT_FALSE(session_->IsBrokenConnectionDetectionEnabled());
+
+  base::RunLoop().RunUntilIdle();
+  ASSERT_FALSE(session_);
+}
+
+TEST_F(SpdySessionTest, BrokenConnectionDetectionCloseStream) {
+  MockRead reads[] = {
+      MockRead(ASYNC, 0, 0),  // EOF
+  };
+
+  SequencedSocketData data(reads, base::span<MockWrite>());
+  session_deps_.socket_factory->AddSocketDataProvider(&data);
+
+  AddSSLSocketData();
+
+  CreateNetworkSession();
+  CreateSpdySession();
+
+  ASSERT_FALSE(session_->IsBrokenConnectionDetectionEnabled());
+  base::WeakPtr<SpdyStream> stream = CreateStreamSynchronously(
+      SPDY_REQUEST_RESPONSE_STREAM, session_, test_url_, MEDIUM,
+      NetLogWithSource(), true, kHeartbeatInterval);
+  ASSERT_TRUE(stream);
+  ASSERT_TRUE(session_->IsBrokenConnectionDetectionEnabled());
+  StreamBrokenConnectionDetectionCheckDelegate delegate(stream, session_,
+                                                        false);
+  stream->SetDelegate(&delegate);
+
+  stream->Close();
+  ASSERT_FALSE(session_->IsBrokenConnectionDetectionEnabled());
+
+  base::RunLoop().RunUntilIdle();
+  ASSERT_FALSE(session_);
+}
+
+TEST_F(SpdySessionTest, BrokenConnectionDetectionCancelStream) {
+  MockRead reads[] = {
+      MockRead(ASYNC, 0, 0),
+  };
+
+  SequencedSocketData data(reads, base::span<MockWrite>());
+  session_deps_.socket_factory->AddSocketDataProvider(&data);
+
+  AddSSLSocketData();
+
+  CreateNetworkSession();
+  CreateSpdySession();
+
+  ASSERT_FALSE(session_->IsBrokenConnectionDetectionEnabled());
+  base::WeakPtr<SpdyStream> stream = CreateStreamSynchronously(
+      SPDY_REQUEST_RESPONSE_STREAM, session_, test_url_, MEDIUM,
+      NetLogWithSource(), true, kHeartbeatInterval);
+  ASSERT_TRUE(stream);
+  ASSERT_TRUE(session_->IsBrokenConnectionDetectionEnabled());
+  StreamBrokenConnectionDetectionCheckDelegate delegate(stream, session_,
+                                                        false);
+  stream->SetDelegate(&delegate);
+
+  stream->Cancel(ERR_ABORTED);
+  ASSERT_FALSE(session_->IsBrokenConnectionDetectionEnabled());
+
+  base::RunLoop().RunUntilIdle();
+  ASSERT_FALSE(session_);
+}
+
+// When multiple streams request broken connection detection, only the last one
+// to complete should disable the connection status check.
+TEST_F(SpdySessionTest, BrokenConnectionDetectionMultipleRequests) {
+  spdy::SpdySerializedFrame goaway(spdy_util_.ConstructSpdyGoAway(1));
+  MockRead reads[] = {
+      MockRead(ASYNC, ERR_IO_PENDING, 2), CreateMockRead(goaway, 3),
+      MockRead(ASYNC, ERR_IO_PENDING, 4), MockRead(ASYNC, 0, 5)  // EOF
+  };
+  spdy::SpdySerializedFrame req1(
+      spdy_util_.ConstructSpdyGet(nullptr, 0, 1, MEDIUM));
+  spdy::SpdySerializedFrame req2(
+      spdy_util_.ConstructSpdyGet(nullptr, 0, 3, MEDIUM));
+  MockWrite writes[] = {
+      CreateMockWrite(req1, 0),
+      CreateMockWrite(req2, 1),
+  };
+  SequencedSocketData data(reads, writes);
+  session_deps_.socket_factory->AddSocketDataProvider(&data);
+
+  AddSSLSocketData();
+
+  CreateNetworkSession();
+  CreateSpdySession();
+
+  EXPECT_FALSE(session_->IsBrokenConnectionDetectionEnabled());
+  base::WeakPtr<SpdyStream> spdy_stream1 = CreateStreamSynchronously(
+      SPDY_REQUEST_RESPONSE_STREAM, session_, test_url_, MEDIUM,
+      NetLogWithSource(), true, kHeartbeatInterval);
+  EXPECT_TRUE(spdy_stream1);
+  EXPECT_TRUE(session_->IsBrokenConnectionDetectionEnabled());
+  StreamBrokenConnectionDetectionCheckDelegate delegate1(spdy_stream1, session_,
+                                                         false);
+  spdy_stream1->SetDelegate(&delegate1);
+
+  base::WeakPtr<SpdyStream> spdy_stream2 = CreateStreamSynchronously(
+      SPDY_REQUEST_RESPONSE_STREAM, session_, test_url_, MEDIUM,
+      NetLogWithSource(), true, kHeartbeatInterval);
+  EXPECT_TRUE(spdy_stream2);
+  EXPECT_TRUE(session_->IsBrokenConnectionDetectionEnabled());
+  StreamBrokenConnectionDetectionCheckDelegate delegate2(spdy_stream2, session_,
+                                                         true);
+  spdy_stream2->SetDelegate(&delegate2);
+
+  spdy::Http2HeaderBlock headers(
+      spdy_util_.ConstructGetHeaderBlock(kDefaultUrl));
+  spdy::Http2HeaderBlock headers2(headers.Clone());
+
+  spdy_stream1->SendRequestHeaders(std::move(headers), NO_MORE_DATA_TO_SEND);
+  spdy_stream2->SendRequestHeaders(std::move(headers2), NO_MORE_DATA_TO_SEND);
+
+  base::RunLoop().RunUntilIdle();
+
+  EXPECT_TRUE(session_->IsBrokenConnectionDetectionEnabled());
+  EXPECT_EQ(1u, spdy_stream1->stream_id());
+  EXPECT_EQ(3u, spdy_stream2->stream_id());
+
+  // Read and process the GOAWAY frame.
+  data.Resume();
+  base::RunLoop().RunUntilIdle();
+
+  EXPECT_TRUE(session_->IsBrokenConnectionDetectionEnabled());
+  EXPECT_FALSE(session_->IsStreamActive(3));
+  EXPECT_FALSE(spdy_stream2);
+  EXPECT_TRUE(session_->IsStreamActive(1));
+  EXPECT_TRUE(session_->IsGoingAway());
+
+  // Should close the session.
+  spdy_stream1->Close();
+  EXPECT_FALSE(spdy_stream1);
+
+  EXPECT_TRUE(session_);
+  EXPECT_FALSE(session_->IsBrokenConnectionDetectionEnabled());
+  data.Resume();
+  base::RunLoop().RunUntilIdle();
+  EXPECT_FALSE(session_);
 }
 
 // Delegate that closes a given stream after sending its body.
@@ -6038,7 +6413,7 @@ TEST_F(SpdySessionTest, GreaseFrameTypeAfterSettings) {
       'f',  'o',  'o'          // payload
   };
   spdy::SpdySerializedFrame grease(reinterpret_cast<char*>(kRawFrameData),
-                                   base::size(kRawFrameData),
+                                   std::size(kRawFrameData),
                                    /* owns_buffer = */ false);
 
   MockWrite writes[] = {CreateMockWrite(combined_frame, 0),
@@ -6228,11 +6603,12 @@ TEST_F(SendInitialSettingsOnNewSpdySessionTest, UnknownSettings) {
 class AltSvcFrameTest : public SpdySessionTest {
  public:
   AltSvcFrameTest()
-      : alternative_service_("quic",
-                             "alternative.example.org",
-                             443,
-                             86400,
-                             spdy::SpdyAltSvcWireFormat::VersionVector()) {
+      : alternative_service_(
+            quic::AlpnForVersion(DefaultSupportedQuicVersions().front()),
+            "alternative.example.org",
+            443,
+            86400,
+            spdy::SpdyAltSvcWireFormat::VersionVector()) {
     // Since the default |alternative_service_| is QUIC, need to enable QUIC for
     // the not added tests to be meaningful.
     session_deps_.enable_quic = true;
@@ -6241,7 +6617,7 @@ class AltSvcFrameTest : public SpdySessionTest {
   void AddSocketData(const spdy::SpdyAltSvcIR& altsvc_ir) {
     altsvc_frame_ = spdy_util_.SerializeFrame(altsvc_ir);
     reads_.push_back(CreateMockRead(altsvc_frame_, 0));
-    reads_.push_back(MockRead(ASYNC, 0, 1));
+    reads_.emplace_back(ASYNC, 0, 1);
 
     data_ =
         std::make_unique<SequencedSocketData>(reads_, base::span<MockWrite>());
@@ -6350,8 +6726,7 @@ TEST_F(AltSvcFrameTest, DoNotProcessAltSvcFrameWithExpectCTError) {
   session_deps_.transport_security_state =
       std::make_unique<TransportSecurityState>();
   session_deps_.transport_security_state->AddExpectCT(
-      GURL(origin).host(),
-      base::Time::Now() + base::TimeDelta::FromDays(1) /* expiry */, true,
+      GURL(origin).host(), base::Time::Now() + base::Days(1) /* expiry */, true,
       GURL(), key_.network_isolation_key());
 
   spdy::SpdyAltSvcIR altsvc_ir(/* stream_id = */ 0);
@@ -6707,9 +7082,9 @@ TEST(MapFramerErrorToProtocolError, MapsValues) {
   CHECK_EQ(SPDY_ERROR_INVALID_DATA_FRAME_FLAGS,
            MapFramerErrorToProtocolError(
                http2::Http2DecoderAdapter::SPDY_INVALID_DATA_FRAME_FLAGS));
-  CHECK_EQ(SPDY_ERROR_GOAWAY_FRAME_CORRUPT,
+  CHECK_EQ(SPDY_ERROR_HPACK_NAME_HUFFMAN_ERROR,
            MapFramerErrorToProtocolError(
-               http2::Http2DecoderAdapter::SPDY_GOAWAY_FRAME_CORRUPT));
+               http2::Http2DecoderAdapter::SPDY_HPACK_NAME_HUFFMAN_ERROR));
   CHECK_EQ(SPDY_ERROR_UNEXPECTED_FRAME,
            MapFramerErrorToProtocolError(
                http2::Http2DecoderAdapter::SPDY_UNEXPECTED_FRAME));
@@ -6719,9 +7094,6 @@ TEST(MapFramerErrorToNetError, MapsValue) {
   CHECK_EQ(ERR_HTTP2_PROTOCOL_ERROR,
            MapFramerErrorToNetError(
                http2::Http2DecoderAdapter::SPDY_INVALID_CONTROL_FRAME));
-  CHECK_EQ(ERR_HTTP2_COMPRESSION_ERROR,
-           MapFramerErrorToNetError(
-               http2::Http2DecoderAdapter::SPDY_COMPRESS_FAILURE));
   CHECK_EQ(ERR_HTTP2_COMPRESSION_ERROR,
            MapFramerErrorToNetError(
                http2::Http2DecoderAdapter::SPDY_DECOMPRESS_FAILURE));
@@ -6769,7 +7141,7 @@ namespace {
 
 class TestSSLConfigService : public SSLConfigService {
  public:
-  TestSSLConfigService() {}
+  TestSSLConfigService() = default;
   ~TestSSLConfigService() override = default;
 
   SSLContextConfig GetSSLContextConfig() override { return config_; }
@@ -6853,7 +7225,7 @@ TEST(CanPoolTest, CanPoolExpectCT) {
                                    network_isolation_key));
 
   const base::Time current_time(base::Time::Now());
-  const base::Time expiry = current_time + base::TimeDelta::FromSeconds(1000);
+  const base::Time expiry = current_time + base::Seconds(1000);
   ssl_info.ct_policy_compliance =
       ct::CTPolicyCompliance::CT_POLICY_NOT_ENOUGH_SCTS;
 
@@ -6922,8 +7294,12 @@ TEST(CanPoolTest, CanNotPoolWithClientCerts) {
 }
 
 TEST(CanPoolTest, CanNotPoolWithBadPins) {
+  base::test::ScopedFeatureList scoped_feature_list_;
+  scoped_feature_list_.InitAndEnableFeature(
+      net::features::kStaticKeyPinningEnforcement);
   TransportSecurityState tss;
   tss.EnableStaticPinsForTesting();
+  tss.SetPinningListAlwaysTimelyForTesting(true);
   ScopedTransportSecurityStateSource scoped_security_state_source;
 
   TestSSLConfigService ssl_config_service;
@@ -7029,6 +7405,7 @@ TEST(CanPoolTest, CanPoolWithGoodCTWhenCTRequired) {
 TEST(CanPoolTest, CanPoolWithAcceptablePins) {
   TransportSecurityState tss;
   tss.EnableStaticPinsForTesting();
+  tss.SetPinningListAlwaysTimelyForTesting(true);
   ScopedTransportSecurityStateSource scoped_security_state_source;
 
   TestSSLConfigService ssl_config_service;
@@ -7090,23 +7467,23 @@ TEST(RecordPushedStreamHistogramTest, VaryResponseHeader) {
                     {1, {"vary", "fooaccept-encoding"}, 5},
                     {1, {"vary", "foo, accept-encodingbar"}, 5}};
 
-  for (size_t i = 0; i < base::size(test_cases); ++i) {
+  for (const auto& test_case : test_cases) {
     spdy::Http2HeaderBlock headers;
-    for (size_t j = 0; j < test_cases[i].num_headers; ++j) {
-      headers[test_cases[i].headers[2 * j]] = test_cases[i].headers[2 * j + 1];
+    for (size_t j = 0; j < test_case.num_headers; ++j) {
+      headers[test_case.headers[2 * j]] = test_case.headers[2 * j + 1];
     }
     base::HistogramTester histograms;
     histograms.ExpectTotalCount("Net.PushedStreamVaryResponseHeader", 0);
     SpdySession::RecordPushedStreamVaryResponseHeaderHistogram(headers);
     histograms.ExpectTotalCount("Net.PushedStreamVaryResponseHeader", 1);
     histograms.ExpectBucketCount("Net.PushedStreamVaryResponseHeader",
-                                 test_cases[i].expected_bucket, 1);
+                                 test_case.expected_bucket, 1);
     // Adding an unrelated header field should not change how Vary is parsed.
     headers["foo"] = "bar";
     SpdySession::RecordPushedStreamVaryResponseHeaderHistogram(headers);
     histograms.ExpectTotalCount("Net.PushedStreamVaryResponseHeader", 2);
     histograms.ExpectBucketCount("Net.PushedStreamVaryResponseHeader",
-                                 test_cases[i].expected_bucket, 2);
+                                 test_case.expected_bucket, 2);
   }
 }
 
@@ -7314,8 +7691,8 @@ TEST_F(SpdySessionTest, AlpsEmpty) {
                                       kNoEntries, 1);
 
   histogram_tester.ExpectTotalCount("Net.SpdySession.AcceptChForOrigin", 0);
-  EXPECT_EQ("", session_->GetAcceptChViaAlpsForOrigin(
-                    url::Origin::Create(GURL("https://www.example.org"))));
+  EXPECT_EQ("", session_->GetAcceptChViaAlps(
+                    url::SchemeHostPort(GURL("https://www.example.org"))));
   histogram_tester.ExpectUniqueSample("Net.SpdySession.AcceptChForOrigin",
                                       false, 1);
 }
@@ -7376,13 +7753,13 @@ TEST_F(SpdySessionTest, AlpsAcceptCh) {
 
   histogram_tester.ExpectTotalCount("Net.SpdySession.AcceptChForOrigin", 0);
 
-  EXPECT_EQ("foo", session_->GetAcceptChViaAlpsForOrigin(
-                       url::Origin::Create(GURL("https://www.example.com"))));
+  EXPECT_EQ("foo", session_->GetAcceptChViaAlps(
+                       url::SchemeHostPort(GURL("https://www.example.com"))));
   histogram_tester.ExpectUniqueSample("Net.SpdySession.AcceptChForOrigin", true,
                                       1);
 
-  EXPECT_EQ("", session_->GetAcceptChViaAlpsForOrigin(
-                    url::Origin::Create(GURL("https://www.example.org"))));
+  EXPECT_EQ("", session_->GetAcceptChViaAlps(
+                    url::SchemeHostPort(GURL("https://www.example.org"))));
   histogram_tester.ExpectTotalCount("Net.SpdySession.AcceptChForOrigin", 2);
   histogram_tester.ExpectBucketCount("Net.SpdySession.AcceptChForOrigin", true,
                                      1);

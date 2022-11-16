@@ -13,7 +13,6 @@
 #include "ash/public/cpp/shelf_types.h"
 #include "ash/wm/workspace/workspace_types.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_tree_host.h"
 
@@ -27,6 +26,7 @@ class Point;
 
 namespace ui {
 class WindowTreeHost;
+class SimpleMenuModel;
 }
 
 namespace views {
@@ -72,6 +72,9 @@ class ASH_EXPORT RootWindowController {
   // it is primary. In a multi-display environment one monitor is deemed the
   // PRIMARY and all others SECONDARY.
   enum class RootWindowType { PRIMARY, SECONDARY };
+
+  RootWindowController(const RootWindowController&) = delete;
+  RootWindowController& operator=(const RootWindowController&) = delete;
 
   ~RootWindowController();
 
@@ -196,9 +199,6 @@ class ASH_EXPORT RootWindowController {
   // for something else.
   void MoveWindowsTo(aura::Window* dest);
 
-  // Force the shelf to query for it's current visibility state.
-  void UpdateShelfVisibility();
-
   // Initialize touch HUDs if necessary.
   void InitTouchHuds();
 
@@ -227,8 +227,12 @@ class ASH_EXPORT RootWindowController {
 
   void CreateAmbientWidget();
   void CloseAmbientWidget(bool immediately);
+  bool HasAmbientWidget() const;
 
   views::Widget* ambient_widget_for_testing() { return ambient_widget_.get(); }
+  AppMenuModelAdapter* menu_model_adapter_for_testing() {
+    return root_window_menu_model_adapter_.get();
+  }
 
   // Returns accessibility panel layout manager for this root window.
   AccessibilityPanelLayoutManager* GetAccessibilityPanelLayoutManagerForTest();
@@ -246,9 +250,6 @@ class ASH_EXPORT RootWindowController {
   void InitLayoutManagers();
 
   AccessibilityPanelLayoutManager* GetAccessibilityPanelLayoutManager() const;
-
-  // Initializes the shelf for this root window and notifies observers.
-  void InitializeShelf();
 
   // Creates the containers (aura::Windows) used by the shell.
   void CreateContainers();
@@ -283,6 +284,7 @@ class ASH_EXPORT RootWindowController {
 
   // Manages the context menu.
   std::unique_ptr<AppMenuModelAdapter> root_window_menu_model_adapter_;
+  std::unique_ptr<ui::SimpleMenuModel> sort_apps_submenu_;
 
   std::unique_ptr<StackingController> stacking_controller_;
 
@@ -292,10 +294,6 @@ class ASH_EXPORT RootWindowController {
   // of the RootWindowController so that it is safe for observers to be added
   // to it during construction of the shelf widget and status tray.
   std::unique_ptr<Shelf> shelf_;
-
-  // TODO(jamescook): Eliminate this. It is left over from legacy shelf code and
-  // doesn't mean anything in particular.
-  bool shelf_initialized_ = false;
 
   std::unique_ptr<SystemWallpaperController> system_wallpaper_;
 
@@ -322,8 +320,6 @@ class ASH_EXPORT RootWindowController {
   std::unique_ptr<WorkAreaInsets> work_area_insets_;
 
   static std::vector<RootWindowController*>* root_window_controllers_;
-
-  DISALLOW_COPY_AND_ASSIGN(RootWindowController);
 };
 
 }  // namespace ash

@@ -5,10 +5,12 @@
 #ifndef ASH_ASSISTANT_MODEL_ASSISTANT_UI_MODEL_H_
 #define ASH_ASSISTANT_MODEL_ASSISTANT_UI_MODEL_H_
 
+#include <ostream>
+
+#include "ash/assistant/ui/assistant_ui_constants.h"
 #include "base/component_export.h"
-#include "base/macros.h"
 #include "base/observer_list.h"
-#include "chromeos/services/assistant/public/cpp/assistant_service.h"
+#include "chromeos/ash/services/assistant/public/cpp/assistant_service.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/geometry/rect.h"
 
@@ -16,17 +18,15 @@ namespace ash {
 
 class AssistantUiModelObserver;
 
-// Enumeration of Assistant UI modes.
-enum class AssistantUiMode {
-  kLauncherEmbeddedUi,
-};
-
 // Enumeration of Assistant visibility states.
 enum class AssistantVisibility {
   kClosed,   // Assistant UI is hidden and the previous session has finished.
   kClosing,  // Assistant UI is transitioning from `kVisible` to `kClosed`.
   kVisible,  // Assistant UI is visible and a session is in progress.
 };
+
+COMPONENT_EXPORT(ASSISTANT_MODEL)
+std::ostream& operator<<(std::ostream& os, AssistantVisibility visibility);
 
 // Enumeration of Assistant button ID. These values are persisted to logs.
 // Entries should not be renumbered and numeric values should never be reused.
@@ -49,18 +49,15 @@ class COMPONENT_EXPORT(ASSISTANT_MODEL) AssistantUiModel {
   using AssistantExitPoint = chromeos::assistant::AssistantExitPoint;
 
   AssistantUiModel();
+
+  AssistantUiModel(const AssistantUiModel&) = delete;
+  AssistantUiModel& operator=(const AssistantUiModel&) = delete;
+
   ~AssistantUiModel();
 
   // Adds/removes the specified |observer|.
   void AddObserver(AssistantUiModelObserver* observer) const;
   void RemoveObserver(AssistantUiModelObserver* observer) const;
-
-  // Sets the UI mode. If |due_to_interaction| is true, the UI mode was changed
-  // as a result of an Assistant interaction.
-  void SetUiMode(AssistantUiMode ui_mode, bool due_to_interaction = false);
-
-  // Returns the UI mode.
-  AssistantUiMode ui_mode() const { return ui_mode_; }
 
   // Sets the UI visibility.
   void SetVisible(AssistantEntryPoint entry_point);
@@ -78,11 +75,21 @@ class COMPONENT_EXPORT(ASSISTANT_MODEL) AssistantUiModel {
   // Returns the UI entry point. Only valid while UI is visible.
   AssistantEntryPoint entry_point() const { return entry_point_; }
 
+  // Sets the current keyboard traversal mode.
+  void SetKeyboardTraversalMode(bool keyboard_traversal_mode);
+
+  // Returns the current keyboard traversal mode.
+  bool keyboard_traversal_mode() const { return keyboard_traversal_mode_; }
+
+  int AppListBubbleWidth() const { return app_list_bubble_width_; }
+  void SetAppListBubbleWidth(int width);
+
  private:
   void SetVisibility(AssistantVisibility visibility,
                      absl::optional<AssistantEntryPoint> entry_point,
                      absl::optional<AssistantExitPoint> exit_point);
 
+  void NotifyKeyboardTraversalModeChanged();
   void NotifyUiModeChanged(bool due_to_interaction);
   void NotifyUiVisibilityChanged(
       AssistantVisibility old_visibility,
@@ -90,9 +97,9 @@ class COMPONENT_EXPORT(ASSISTANT_MODEL) AssistantUiModel {
       absl::optional<AssistantExitPoint> exit_point);
   void NotifyUsableWorkAreaChanged();
 
-  AssistantUiMode ui_mode_ = AssistantUiMode::kLauncherEmbeddedUi;
   AssistantVisibility visibility_ = AssistantVisibility::kClosed;
   AssistantEntryPoint entry_point_ = AssistantEntryPoint::kUnspecified;
+  int app_list_bubble_width_ = kPreferredWidthDip;
 
   mutable base::ObserverList<AssistantUiModelObserver> observers_;
 
@@ -100,7 +107,9 @@ class COMPONENT_EXPORT(ASSISTANT_MODEL) AssistantUiModel {
   // UI exists.
   gfx::Rect usable_work_area_;
 
-  DISALLOW_COPY_AND_ASSIGN(AssistantUiModel);
+  // Whether or not keyboard traversal is currently enabled.
+  // Used for updating the Assistant UI when it exists.
+  bool keyboard_traversal_mode_ = false;
 };
 
 }  // namespace ash

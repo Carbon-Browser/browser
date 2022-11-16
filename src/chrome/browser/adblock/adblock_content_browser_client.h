@@ -1,38 +1,35 @@
 /*
- * This file is part of Adblock Plus <https://adblockplus.org/>,
+ * This file is part of eyeo Chromium SDK,
  * Copyright (C) 2006-present eyeo GmbH
  *
- * Adblock Plus is free software: you can redistribute it and/or modify
+ * eyeo Chromium SDK is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
  * published by the Free Software Foundation.
  *
- * Adblock Plus is distributed in the hope that it will be useful,
+ * eyeo Chromium SDK is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Adblock Plus.  If not, see <http://www.gnu.org/licenses/>.
+ * along with eyeo Chromium SDK.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef ADBLOCK_BROWSER_CHROME_CONTENT_BROWSER_CLIENT_H_
-#define ADBLOCK_BROWSER_CHROME_CONTENT_BROWSER_CLIENT_H_
+#ifndef CHROME_BROWSER_ADBLOCK_ADBLOCK_CONTENT_BROWSER_CLIENT_H_
+#define CHROME_BROWSER_ADBLOCK_ADBLOCK_CONTENT_BROWSER_CLIENT_H_
 
 #include "chrome/browser/chrome_content_browser_client.h"
 
-namespace adblock {
-class AdblockMojoInterfaceImpl;
-namespace mojom {
+namespace adblock::mojom {
 enum class FilterMatchResult;
-}
-}  // namespace adblock
+}  // namespace adblock::mojom
 
 /**
  * @brief Intercepts network and UI events to inject ad-filtering.
  * Provides ad-filtering implementations of URLLoaderThrottles.
  * Binds a mojo connection between Renderer processes and the
- * Browser-process-based AdblockRequestClassifier. Lives in browser process UI
- * thread.
+ * Browser-process-based ResourceClassificationRunner.
+ * Lives in browser process UI thread.
  */
 class AdblockContentBrowserClient : public ChromeContentBrowserClient {
  public:
@@ -65,13 +62,20 @@ class AdblockContentBrowserClient : public ChromeContentBrowserClient {
       service_manager::BinderRegistry* registry,
       blink::AssociatedInterfaceRegistry* associated_registry,
       content::RenderProcessHost* render_process_host) override;
-  std::vector<std::unique_ptr<blink::URLLoaderThrottle>>
-  CreateURLLoaderThrottles(
-      const network::ResourceRequest& request,
+  bool WillCreateURLLoaderFactory(
       content::BrowserContext* browser_context,
-      const base::RepeatingCallback<content::WebContents*()>& wc_getter,
-      content::NavigationUIData* navigation_ui_data,
-      int frame_tree_node_id) override;
+      content::RenderFrameHost* frame,
+      int render_process_id,
+      URLLoaderFactoryType type,
+      const url::Origin& request_initiator,
+      absl::optional<int64_t> navigation_id,
+      ukm::SourceIdObj ukm_source_id,
+      mojo::PendingReceiver<network::mojom::URLLoaderFactory>* factory_receiver,
+      mojo::PendingRemote<network::mojom::TrustedURLLoaderHeaderClient>*
+          header_client,
+      bool* bypass_redirect_checks,
+      bool* disable_secure_dns,
+      network::mojom::URLLoaderFactoryOverridePtr* factory_override) override;
 
  private:
   void OnWebSocketFilterCheckCompleted(
@@ -87,4 +91,4 @@ class AdblockContentBrowserClient : public ChromeContentBrowserClient {
   base::WeakPtrFactory<AdblockContentBrowserClient> weak_factory_{this};
 };
 
-#endif  // ADBLOCK_BROWSER_CHROME_CONTENT_BROWSER_CLIENT_H_
+#endif  // CHROME_BROWSER_ADBLOCK_ADBLOCK_CONTENT_BROWSER_CLIENT_H_

@@ -47,6 +47,12 @@ public class StartupPaintPreviewMetrics {
          * @param durationMs duration from activity creation to first paint. Reported in millis.
          */
         void onFirstPaint(long durationMs);
+
+        /**
+         * Called on the first paint of a paint preview in the case where the first paint was not
+         * recorded. Added to aid in investigating crbug.com/1273097.
+         */
+        void onUnrecordedFirstPaint();
     }
 
     private static final Map<Integer, String> UPTIME_HISTOGRAM_MAP = new HashMap<>();
@@ -90,6 +96,10 @@ public class StartupPaintPreviewMetrics {
             for (PaintPreviewMetricsObserver observer : mObservers) {
                 observer.onFirstPaint(durationMs);
             }
+        } else if (shouldRecordFirstPaint != null) {
+            for (PaintPreviewMetricsObserver observer : mObservers) {
+                observer.onUnrecordedFirstPaint();
+            }
         }
     }
 
@@ -115,7 +125,7 @@ public class StartupPaintPreviewMetrics {
         }
 
         RecordUserAction.record("PaintPreview.TabbedPlayer.Removed");
-        RecordHistogram.recordCountHistogram(
+        RecordHistogram.recordCount1MHistogram(
                 "Browser.PaintPreview.TabbedPlayer.SnackbarCount", snackbarShownCount);
         RecordHistogram.recordEnumeratedHistogram(
                 "Browser.PaintPreview.TabbedPlayer.ExitCause", exitCause, ExitCause.COUNT);

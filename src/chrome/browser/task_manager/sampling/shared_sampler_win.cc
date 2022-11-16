@@ -211,13 +211,13 @@ const ProcessData* SeekInPreviousSnapshot(
 
 // A wrapper function converting ticks (in units of 100 ns) to Time.
 base::Time ConvertTicksToTime(uint64_t ticks) {
-  FILETIME ft = bit_cast<FILETIME, uint64_t>(ticks);
+  FILETIME ft = base::bit_cast<FILETIME, uint64_t>(ticks);
   return base::Time::FromFileTime(ft);
 }
 
 // A wrapper function converting ticks (in units of 100 ns) to TimeDelta.
 base::TimeDelta ConvertTicksToTimeDelta(uint64_t ticks) {
-  return base::TimeDelta::FromMicroseconds(ticks / 10);
+  return base::Microseconds(ticks / 10);
 }
 
 }  // namespace

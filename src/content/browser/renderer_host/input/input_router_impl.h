@@ -12,7 +12,7 @@
 
 #include "base/containers/flat_map.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "cc/input/touch_action.h"
 #include "content/browser/renderer_host/input/fling_scheduler.h"
 #include "content/browser/renderer_host/input/gesture_event_queue.h"
@@ -22,6 +22,8 @@
 #include "content/browser/renderer_host/input/passthrough_touch_event_queue.h"
 #include "content/browser/renderer_host/input/touch_action_filter.h"
 #include "content/browser/renderer_host/input/touchpad_pinch_event_queue.h"
+#include "content/browser/renderer_host/render_widget_host_view_base.h"
+#include "content/common/content_export.h"
 #include "content/common/input/input_event_stream_validator.h"
 #include "content/public/browser/native_web_keyboard_event.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -46,6 +48,8 @@ class CONTENT_EXPORT InputRouterImplClient : public InputRouterClient {
   virtual void OnImeCompositionRangeChanged(
       const gfx::Range& range,
       const std::vector<gfx::Rect>& bounds) = 0;
+  virtual RenderWidgetHostViewBase* GetRenderWidgetHostViewBase() = 0;
+  virtual void OnStartStylusWriting() = 0;
 };
 
 // A default implementation for browser input event routing.
@@ -62,6 +66,10 @@ class CONTENT_EXPORT InputRouterImpl
                   InputDispositionHandler* disposition_handler,
                   FlingControllerSchedulerClient* fling_scheduler_client,
                   const Config& config);
+
+  InputRouterImpl(const InputRouterImpl&) = delete;
+  InputRouterImpl& operator=(const InputRouterImpl&) = delete;
+
   ~InputRouterImpl() override;
 
   // InputRouter
@@ -87,6 +95,7 @@ class CONTENT_EXPORT InputRouterImpl
 
   // InputHandlerHost impl
   void SetTouchActionFromMain(cc::TouchAction touch_action) override;
+  void SetPanAction(blink::mojom::PanAction pan_action) override;
   void DidOverscroll(blink::mojom::DidOverscrollParamsPtr params) override;
   void ImeCancelComposition() override;
   void DidStartScrollingViewport() override;
@@ -177,6 +186,8 @@ class CONTENT_EXPORT InputRouterImpl
       blink::mojom::InputEventResultSource ack_source,
       blink::mojom::InputEventResultState ack_result) override;
 
+  bool HandleGestureScrollForStylusWriting(const blink::WebGestureEvent& event);
+
   void FilterAndSendWebInputEvent(
       const blink::WebInputEvent& input_event,
       const ui::LatencyInfo& latency_info,
@@ -230,12 +241,20 @@ class CONTENT_EXPORT InputRouterImpl
   void ProcessDeferredGestureEventQueue();
   void OnSetCompositorAllowedTouchAction(cc::TouchAction touch_action);
 
-  InputRouterImplClient* client_;
-  InputDispositionHandler* disposition_handler_;
+  raw_ptr<InputRouterImplClient> client_;
+  raw_ptr<InputDispositionHandler> disposition_handler_;
 
   // Whether the TouchScrollStarted event has been sent for the current
   // gesture scroll yet.
   bool touch_scroll_started_sent_;
+
+  // Whether stylus writing has started.
+  bool stylus_writing_started_ = false;
+
+  // Stores the pan action that can take place like stylus writing, moving
+  // cursor or scrolling. This is sent when the pointer is hovering and set from
+  // the main thread.
+  blink::mojom::PanAction pan_action_ = blink::mojom::PanAction::kNone;
 
   MouseWheelEventQueue wheel_event_queue_;
   PassthroughTouchEventQueue touch_event_queue_;
@@ -256,8 +275,6 @@ class CONTENT_EXPORT InputRouterImpl
 
   base::WeakPtr<InputRouterImpl> weak_this_;
   base::WeakPtrFactory<InputRouterImpl> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(InputRouterImpl);
 };
 
 }  // namespace content

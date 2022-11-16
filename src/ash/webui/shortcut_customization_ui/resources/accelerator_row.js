@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import './accelerator_view.js'
+import './accelerator_view.js';
 import './icons.js';
 import './shortcut_customization_shared_css.js';
 
@@ -49,13 +49,19 @@ export class AcceleratorRowElement extends PolymerElement {
         value: false,
       },
 
+      /** @type {number} */
+      action: {
+        type: Number,
+        value: 0,
+      },
+
       /** @type {!AcceleratorSource} */
       source: {
         type: Number,
         value: 0,
         observer: 'onSourceChanged_',
       },
-    }
+    };
   }
 
   constructor() {
@@ -90,10 +96,18 @@ export class AcceleratorRowElement extends PolymerElement {
   /** @private */
   showDialog_() {
     this.dispatchEvent(new CustomEvent(
-        'show-edit-dialog', {bubbles: true, composed: true,
-            detail: {description: this.description,
-                     accelerators: this.acceleratorInfos}},
-    ));
+        'show-edit-dialog',
+        {
+          bubbles: true,
+          composed: true,
+          detail: {
+            description: this.description,
+            accelerators: this.acceleratorInfos,
+            action: this.action,
+            source: this.source,
+          },
+        },
+        ));
   }
 }
 

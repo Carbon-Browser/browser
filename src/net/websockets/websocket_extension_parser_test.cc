@@ -6,7 +6,6 @@
 
 #include <string>
 
-#include "base/cxx17_backports.h"
 #include "net/websockets/websocket_extension.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -143,9 +142,9 @@ TEST(WebSocketExtensionParserTest, InvalidPatterns) {
       "foo; bar=\"baz\\"    // ends with backslash
   };
 
-  for (size_t i = 0; i < base::size(patterns); ++i) {
+  for (const auto* pattern : patterns) {
     WebSocketExtensionParser parser;
-    EXPECT_FALSE(parser.Parse(patterns[i]));
+    EXPECT_FALSE(parser.Parse(pattern));
     EXPECT_EQ(0U, parser.extensions().size());
   }
 }

@@ -204,8 +204,11 @@ void DropCompletionCallback(
   NSDragOperation mask = info->operation_mask;
 
   // Give the delegate an opportunity to cancel the drag.
-  _canceled = !_webContents->GetDelegate()->CanDragEnter(
-      _webContents, *dropData, static_cast<DragOperationsMask>(mask));
+  if (auto* delegate = _webContents->GetDelegate()) {
+    _canceled = !delegate->CanDragEnter(_webContents, *dropData,
+                                        static_cast<DragOperationsMask>(mask));
+  }
+
   if (_canceled)
     return NSDragOperationNone;
 
@@ -330,7 +333,7 @@ void DropCompletionCallback(
     [self draggingEntered:info];
   }
 
-  _currentRVH = NULL;
+  _currentRVH = nullptr;
   _webContents->Focus();
 
   if (webContentsViewDelegate) {
@@ -438,9 +441,9 @@ void PopulateDropDataFromPasteboard(content::DropData* data,
         BOOL exists = [[NSFileManager defaultManager]
                            fileExistsAtPath:filename];
         if (exists) {
-          data->filenames.push_back(ui::FileInfo(
+          data->filenames.emplace_back(
               base::FilePath::FromUTF8Unsafe(base::SysNSStringToUTF8(filename)),
-              base::FilePath()));
+              base::FilePath());
         }
       }
     }

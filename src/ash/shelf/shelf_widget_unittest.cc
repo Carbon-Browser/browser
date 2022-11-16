@@ -11,6 +11,7 @@
 #include "ash/keyboard/ui/test/keyboard_test_util.h"
 #include "ash/public/cpp/keyboard/keyboard_switches.h"
 #include "ash/public/cpp/shelf_config.h"
+#include "ash/public/cpp/tablet_mode.h"
 #include "ash/root_window_controller.h"
 #include "ash/screen_util.h"
 #include "ash/shelf/drag_handle.h"
@@ -19,17 +20,22 @@
 #include "ash/shelf/shelf.h"
 #include "ash/shelf/shelf_layout_manager.h"
 #include "ash/shelf/shelf_navigation_widget.h"
+#include "ash/shelf/shelf_test_util.h"
 #include "ash/shelf/shelf_view.h"
 #include "ash/shelf/shelf_view_test_api.h"
 #include "ash/shell.h"
+#include "ash/style/dark_light_mode_controller_impl.h"
 #include "ash/system/status_area_widget.h"
 #include "ash/test/ash_test_base.h"
 #include "ash/test/ash_test_helper.h"
 #include "ash/test_shell_delegate.h"
+#include "ash/wm/tablet_mode/tablet_mode_controller_test_api.h"
 #include "ash/wm/window_util.h"
 #include "base/callback_helpers.h"
+#include "base/command_line.h"
 #include "base/run_loop.h"
 #include "base/test/scoped_feature_list.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "components/session_manager/session_manager_types.h"
 #include "ui/aura/window_event_dispatcher.h"
 #include "ui/compositor/layer.h"
@@ -141,6 +147,108 @@ TEST_F(ShelfWidgetTest, TestAlignmentForMultipleDisplays) {
   }
 }
 
+class ShelfWidgetDarkLightModeTest : public ShelfWidgetTest {
+ public:
+  ShelfWidgetDarkLightModeTest() {
+    scoped_feature_list_.InitAndEnableFeature(
+        chromeos::features::kDarkLightMode);
+  }
+
+  void SetUp() override {
+    ShelfWidgetTest::SetUp();
+
+    // Enable tablet mode transition screenshots to simulate production behavior
+    // where shelf layers get recreated during the tablet mode transition.
+    TabletModeController::SetUseScreenshotForTest(true);
+  }
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
+TEST_F(ShelfWidgetDarkLightModeTest, TabletModeTransition) {
+  ShelfWidget* const shelf_widget = GetShelfWidget();
+
+  TabletMode::Waiter enter_waiter(/*enable=*/true);
+  TabletModeControllerTestApi().EnterTabletMode();
+  enter_waiter.Wait();
+  shelf_widget->background_animator_for_testing()
+      ->CompleteAnimationForTesting();
+
+  EXPECT_EQ(AshColorProvider::Get()->GetBaseLayerColor(
+                AshColorProvider::BaseLayerType::kTransparent60),
+            shelf_widget->GetShelfBackgroundColor());
+  EXPECT_EQ(0.0, shelf_widget->GetOpaqueBackground()->background_blur());
+
+  auto* dark_light_mode_controller = ash::DarkLightModeControllerImpl::Get();
+  dark_light_mode_controller->ToggleColorMode();
+
+  EXPECT_EQ(AshColorProvider::Get()->GetBaseLayerColor(
+                AshColorProvider::BaseLayerType::kTransparent60),
+            shelf_widget->GetShelfBackgroundColor());
+  EXPECT_EQ(0.0f, shelf_widget->GetOpaqueBackground()->background_blur());
+
+  TabletMode::Waiter leave_waiter(/*enable=*/false);
+  TabletModeControllerTestApi().LeaveTabletMode();
+  leave_waiter.Wait();
+  shelf_widget->background_animator_for_testing()
+      ->CompleteAnimationForTesting();
+
+  EXPECT_EQ(AshColorProvider::Get()->GetBaseLayerColor(
+                AshColorProvider::BaseLayerType::kTransparent80),
+            shelf_widget->GetShelfBackgroundColor());
+  EXPECT_GT(shelf_widget->GetOpaqueBackground()->background_blur(), 0.0f);
+
+  dark_light_mode_controller->ToggleColorMode();
+
+  EXPECT_EQ(AshColorProvider::Get()->GetBaseLayerColor(
+                AshColorProvider::BaseLayerType::kTransparent80),
+            shelf_widget->GetShelfBackgroundColor());
+  EXPECT_GT(shelf_widget->GetOpaqueBackground()->background_blur(), 0.0f);
+}
+
+TEST_F(ShelfWidgetDarkLightModeTest, TabletModeTransitionWithWindowOpen) {
+  ShelfWidget* const shelf_widget = GetShelfWidget();
+  auto window = AshTestBase::CreateTestWindow(gfx::Rect(0, 0, 800, 800));
+
+  TabletMode::Waiter enter_waiter(/*enable=*/true);
+  TabletModeControllerTestApi().EnterTabletMode();
+  enter_waiter.Wait();
+  shelf_widget->background_animator_for_testing()
+      ->CompleteAnimationForTesting();
+
+  EXPECT_EQ(AshColorProvider::Get()->GetBaseLayerColor(
+                AshColorProvider::BaseLayerType::kOpaque),
+            shelf_widget->GetShelfBackgroundColor());
+  EXPECT_EQ(0.0f, shelf_widget->GetOpaqueBackground()->background_blur());
+
+  auto* dark_light_mode_controller = ash::DarkLightModeControllerImpl::Get();
+  dark_light_mode_controller->ToggleColorMode();
+
+  EXPECT_EQ(AshColorProvider::Get()->GetBaseLayerColor(
+                AshColorProvider::BaseLayerType::kOpaque),
+            shelf_widget->GetShelfBackgroundColor());
+  EXPECT_EQ(0.0f, shelf_widget->GetOpaqueBackground()->background_blur());
+
+  TabletMode::Waiter leave_waiter(/*enable=*/false);
+  TabletModeControllerTestApi().LeaveTabletMode();
+  leave_waiter.Wait();
+  shelf_widget->background_animator_for_testing()
+      ->CompleteAnimationForTesting();
+
+  EXPECT_EQ(AshColorProvider::Get()->GetBaseLayerColor(
+                AshColorProvider::BaseLayerType::kTransparent80),
+            shelf_widget->GetShelfBackgroundColor());
+  EXPECT_GT(shelf_widget->GetOpaqueBackground()->background_blur(), 0.0f);
+
+  dark_light_mode_controller->ToggleColorMode();
+
+  EXPECT_EQ(AshColorProvider::Get()->GetBaseLayerColor(
+                AshColorProvider::BaseLayerType::kTransparent80),
+            shelf_widget->GetShelfBackgroundColor());
+  EXPECT_GT(shelf_widget->GetOpaqueBackground()->background_blur(), 0.0f);
+}
+
 class ShelfWidgetLayoutBasicsTest
     : public ShelfWidgetTest,
       public testing::WithParamInterface<std::tuple<bool, bool>> {
@@ -204,6 +312,51 @@ TEST_P(ShelfWidgetLayoutBasicsTest, LauncherInitiallySized) {
   const int margins = 2 * ShelfConfig::Get()->GetAppIconGroupMargin();
 
   EXPECT_EQ(status_width, total_width - nav_width - hotseat_width - margins);
+}
+
+TEST_F(ShelfWidgetTest, CheckVerticalShelfCornersInOverviewMode) {
+  // Verify corners of the shelf on the left alignment.
+  Shelf* shelf = GetPrimaryShelf();
+  shelf->SetAlignment(ShelfAlignment::kLeft);
+  EXPECT_EQ(ShelfAlignment::kLeft, GetPrimaryShelf()->alignment());
+
+  ShelfWidget* const shelf_widget = GetShelfWidget();
+  ui::Layer* opaque_background_layer =
+      shelf_widget->GetDelegateViewOpaqueBackgroundLayerForTesting();
+
+  // The gfx::RoundedCornersF object is considered empty when all of the
+  // corners are squared (no effective radius).
+  EXPECT_FALSE(opaque_background_layer->rounded_corner_radii().IsEmpty());
+
+  OverviewController* overview_controller = Shell::Get()->overview_controller();
+  // Enter overview mode. Expect the shelf with square corners.
+  EnterOverview();
+  WaitForOverviewAnimation(/*enter=*/true);
+  EXPECT_TRUE(overview_controller->InOverviewSession());
+  EXPECT_TRUE(opaque_background_layer->rounded_corner_radii().IsEmpty());
+
+  // Exit overview mode. Expect the shelf with rounded corners.
+  ExitOverview();
+  WaitForOverviewAnimation(/*enter=*/false);
+  EXPECT_FALSE(overview_controller->InOverviewSession());
+  EXPECT_FALSE(opaque_background_layer->rounded_corner_radii().IsEmpty());
+
+  // Verify corners of the shelf on the right alignment.
+  shelf->SetAlignment(ShelfAlignment::kRight);
+  EXPECT_EQ(ShelfAlignment::kRight, GetPrimaryShelf()->alignment());
+  EXPECT_FALSE(opaque_background_layer->rounded_corner_radii().IsEmpty());
+
+  // Enter overview mode. Expect the shelf with square corners.
+  EnterOverview();
+  WaitForOverviewAnimation(/*enter=*/true);
+  EXPECT_TRUE(overview_controller->InOverviewSession());
+  EXPECT_TRUE(opaque_background_layer->rounded_corner_radii().IsEmpty());
+
+  // Exit overview mode. Expect the shelf with rounded corners.
+  ExitOverview();
+  WaitForOverviewAnimation(/*enter=*/false);
+  EXPECT_FALSE(overview_controller->InOverviewSession());
+  EXPECT_FALSE(opaque_background_layer->rounded_corner_radii().IsEmpty());
 }
 
 // Verifies when the shell is deleted with a full screen window we don't crash.
@@ -753,6 +906,11 @@ TEST_F(ShelfWidgetTest,
 class ShelfWidgetAfterLoginTest : public AshTestBase {
  public:
   ShelfWidgetAfterLoginTest() { set_start_session(false); }
+
+  ShelfWidgetAfterLoginTest(const ShelfWidgetAfterLoginTest&) = delete;
+  ShelfWidgetAfterLoginTest& operator=(const ShelfWidgetAfterLoginTest&) =
+      delete;
+
   ~ShelfWidgetAfterLoginTest() override = default;
 
   void TestShelf(ShelfAlignment alignment,
@@ -775,9 +933,6 @@ class ShelfWidgetAfterLoginTest : public AshTestBase {
     EXPECT_EQ(expected_shelf_visibility_state, shelf->GetVisibilityState());
     EXPECT_EQ(expected_shelf_auto_hide_state, shelf->GetAutoHideState());
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ShelfWidgetAfterLoginTest);
 };
 
 TEST_F(ShelfWidgetAfterLoginTest, InitialValues) {
@@ -787,7 +942,7 @@ TEST_F(ShelfWidgetAfterLoginTest, InitialValues) {
   ShelfWidget* shelf_widget = GetShelfWidget();
   ASSERT_NE(nullptr, shelf_widget);
   ASSERT_NE(nullptr, shelf_widget->shelf_view_for_testing());
-  ASSERT_NE(nullptr, shelf_widget->login_shelf_view());
+  ASSERT_NE(nullptr, shelf_widget->GetLoginShelfView());
   ASSERT_NE(nullptr, shelf_widget->shelf_layout_manager());
 
   // Ensure settings are correct before login.
@@ -834,6 +989,12 @@ TEST_F(ShelfWidgetAfterLoginTest, CreateLockedShelf) {
 class ShelfWidgetViewsVisibilityTest : public AshTestBase {
  public:
   ShelfWidgetViewsVisibilityTest() { set_start_session(false); }
+
+  ShelfWidgetViewsVisibilityTest(const ShelfWidgetViewsVisibilityTest&) =
+      delete;
+  ShelfWidgetViewsVisibilityTest& operator=(
+      const ShelfWidgetViewsVisibilityTest&) = delete;
+
   ~ShelfWidgetViewsVisibilityTest() override = default;
 
   enum ShelfVisibility {
@@ -861,7 +1022,7 @@ class ShelfWidgetViewsVisibilityTest : public AshTestBase {
               !primary_shelf_widget_->IsVisible());
     if (primary_shelf_visibility != kNone) {
       EXPECT_EQ(primary_shelf_visibility == kLoginShelf,
-                primary_shelf_widget_->login_shelf_view()->GetVisible());
+                primary_shelf_widget_->GetLoginShelfView()->GetVisible());
       EXPECT_EQ(primary_shelf_visibility == kShelf,
                 primary_shelf_widget_->shelf_view_for_testing()->GetVisible());
     }
@@ -869,7 +1030,7 @@ class ShelfWidgetViewsVisibilityTest : public AshTestBase {
               !secondary_shelf_widget_->IsVisible());
     if (secondary_shelf_visibility != kNone) {
       EXPECT_EQ(secondary_shelf_visibility == kLoginShelf,
-                secondary_shelf_widget_->login_shelf_view()->GetVisible());
+                secondary_shelf_widget_->GetLoginShelfView()->GetVisible());
       EXPECT_EQ(
           secondary_shelf_visibility == kShelf,
           secondary_shelf_widget_->shelf_view_for_testing()->GetVisible());
@@ -879,8 +1040,6 @@ class ShelfWidgetViewsVisibilityTest : public AshTestBase {
  private:
   ShelfWidget* primary_shelf_widget_ = nullptr;
   ShelfWidget* secondary_shelf_widget_ = nullptr;
-
-  DISALLOW_COPY_AND_ASSIGN(ShelfWidgetViewsVisibilityTest);
 };
 
 TEST_F(ShelfWidgetViewsVisibilityTest, LoginViewsLockViews) {

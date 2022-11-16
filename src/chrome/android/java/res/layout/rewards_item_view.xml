@@ -40,7 +40,6 @@
             android:layout_width="wrap_content"
             android:layout_height="85dp"
             android:layout_alignParentEnd="true"
-            android:layout_marginEnd="10dp"
             android:orientation="vertical"
             android:gravity="center"
             android:layout_toEndOf="@+id/reward_imageview">
@@ -50,6 +49,8 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textSize="18sp"
+                android:layout_marginEnd="10dp"
+                android:gravity="center"
                 android:textStyle="bold"
                 android:textColor="#ffffff" />
 
@@ -58,6 +59,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textSize="18sp"
+                android:layout_marginEnd="10dp"
                 android:textColor="#ffffff" />
 
             <!-- <TextView
@@ -77,6 +79,18 @@
                 android:letterSpacing="-0.03"
                 android:text="@string/reward_redeem" /> -->
         </LinearLayout>
+
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/pro_help_btn"
+            android:src="@drawable/rewards_help_new"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription=""
+            android:layout_alignParentEnd="true"
+            android:scaleType="fitXY"
+            android:layout_marginTop="30dp"
+            android:visibility="gone"
+            android:layout_gravity="end"
+            style="@style/SplitToolbarButtonHelpPro"/>
     </RelativeLayout>
 
     <!-- <View

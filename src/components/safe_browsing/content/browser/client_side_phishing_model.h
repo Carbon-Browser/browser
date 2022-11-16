@@ -13,7 +13,6 @@
 #include "base/gtest_prod_util.h"
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/synchronization/lock.h"
-#include "components/safe_browsing/content/browser/client_side_model_loader.h"
 
 namespace safe_browsing {
 
@@ -69,6 +68,8 @@ class ClientSidePhishingModel {
   void ClearMappedRegionForTesting();
   // Get flatbuffer memory address.
   void* GetFlatBufferMemoryAddressForTesting();
+  // Notifies all the callbacks of a change in model.
+  void NotifyCallbacksOfUpdateForTesting();
 
   // Called to check the command line and maybe override the current model.
   void MaybeOverrideModel();
@@ -81,8 +82,9 @@ class ClientSidePhishingModel {
   void NotifyCallbacksOnUI();
 
   // Callback when the local file overriding the model has been read.
-  void OnGetOverridenModelData(CSDModelType model_type,
-                               const std::string& model_data);
+  void OnGetOverridenModelData(
+      CSDModelType model_type,
+      std::pair<std::string, base::File> model_and_tflite);
 
   // The list of callbacks to notify when a new model is ready. Protected by
   // lock_. Will always be notified on the UI thread.

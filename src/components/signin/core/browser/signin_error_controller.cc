@@ -4,6 +4,7 @@
 
 #include "components/signin/core/browser/signin_error_controller.h"
 
+#include "base/observer_list.h"
 #include "components/signin/public/base/signin_metrics.h"
 
 SigninErrorController::SigninErrorController(
@@ -13,7 +14,7 @@ SigninErrorController::SigninErrorController(
       identity_manager_(identity_manager),
       auth_error_(GoogleServiceAuthError::AuthErrorNone()) {
   DCHECK(identity_manager_);
-  scoped_identity_manager_observation_.Observe(identity_manager_);
+  scoped_identity_manager_observation_.Observe(identity_manager_.get());
 
   Update();
 }

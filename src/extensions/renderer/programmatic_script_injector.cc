@@ -65,6 +65,11 @@ bool ProgrammaticScriptInjector::ExpectsResults() const {
   return params_->injection->get_js()->wants_result;
 }
 
+bool ProgrammaticScriptInjector::ShouldWaitForPromise() const {
+  DCHECK(params_->injection->is_js());
+  return params_->injection->get_js()->wait_for_promise;
+}
+
 bool ProgrammaticScriptInjector::ShouldInjectJs(
     mojom::RunLocation run_location,
     const std::set<std::string>& executing_scripts) const {
@@ -96,7 +101,7 @@ PermissionsData::PageAccess ProgrammaticScriptInjector::CanExecuteOnFrame(
               ? MatchOriginAsFallbackBehavior::kMatchForAboutSchemeAndClimbTree
               : MatchOriginAsFallbackBehavior::kNever);
   if (params_->is_web_view) {
-    if (frame->Parent()) {
+    if (!frame->IsOutermostMainFrame()) {
       // This is a subframe inside <webview>, so allow it.
       return PermissionsData::PageAccess::kAllowed;
     }

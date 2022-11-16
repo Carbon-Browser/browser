@@ -5,19 +5,20 @@
 #include "chrome/browser/supervised_user/child_accounts/family_info_fetcher.h"
 
 #include <stddef.h>
+
 #include <utility>
 
 #include "base/bind.h"
-#include "base/cxx17_backports.h"
 #include "base/json/json_reader.h"
 #include "base/strings/stringprintf.h"
 #include "base/values.h"
 #include "chrome/browser/supervised_user/child_accounts/kids_management_api.h"
 #include "chrome/browser/supervised_user/supervised_user_constants.h"
+#include "components/signin/public/base/consent_level.h"
 #include "components/signin/public/identity_manager/access_token_info.h"
-#include "components/signin/public/identity_manager/consent_level.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/signin/public/identity_manager/primary_account_access_token_fetcher.h"
+#include "google_apis/gaia/gaia_constants.h"
 #include "net/base/load_flags.h"
 #include "net/http/http_status_code.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
@@ -29,7 +30,6 @@
 
 const char kGetFamilyProfileApiPath[] = "families/mine?alt=json";
 const char kGetFamilyMembersApiPath[] = "families/mine/members?alt=json";
-const char kScope[] = "https://www.googleapis.com/auth/kid.family.readonly";
 const int kNumFamilyInfoFetcherRetries = 1;
 
 const char kIdFamily[] = "family";
@@ -89,9 +89,6 @@ FamilyInfoFetcher::FamilyInfoFetcher(
     signin::IdentityManager* identity_manager,
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory)
     : consumer_(consumer),
-      // This feature doesn't care about browser sync consent.
-      primary_account_id_(
-          identity_manager->GetPrimaryAccountId(signin::ConsentLevel::kSignin)),
       identity_manager_(identity_manager),
       url_loader_factory_(std::move(url_loader_factory)),
       access_token_expired_(false) {}
@@ -107,7 +104,7 @@ std::string FamilyInfoFetcher::RoleToString(FamilyMemberRole role) {
 bool FamilyInfoFetcher::StringToRole(
     const std::string& str,
     FamilyInfoFetcher::FamilyMemberRole* role) {
-  for (size_t i = 0; i < base::size(kFamilyMemberRoleStrings); i++) {
+  for (size_t i = 0; i < std::size(kFamilyMemberRoleStrings); i++) {
     if (str == kFamilyMemberRoleStrings[i]) {
       *role = FamilyMemberRole(i);
       return true;
@@ -127,14 +124,14 @@ void FamilyInfoFetcher::StartGetFamilyMembers() {
 }
 
 void FamilyInfoFetcher::StartFetchingAccessToken() {
-  OAuth2AccessTokenManager::ScopeSet scopes{kScope};
+  OAuth2AccessTokenManager::ScopeSet scopes{
+      GaiaConstants::kKidFamilyReadonlyOAuth2Scope};
   access_token_fetcher_ =
       std::make_unique<signin::PrimaryAccountAccessTokenFetcher>(
           "family_info_fetcher", identity_manager_, scopes,
           base::BindOnce(&FamilyInfoFetcher::OnAccessTokenFetchComplete,
                          base::Unretained(this)),
           signin::PrimaryAccountAccessTokenFetcher::Mode::kWaitUntilAvailable,
-          // This feature doesn't care about browser sync consent.
           signin::ConsentLevel::kSignin);
 }
 
@@ -222,8 +219,11 @@ void FamilyInfoFetcher::OnSimpleLoaderCompleteInternal(
     DVLOG(1) << "Access token expired, retrying";
     access_token_expired_ = true;
     OAuth2AccessTokenManager::ScopeSet scopes;
-    scopes.insert(kScope);
-    identity_manager_->RemoveAccessTokenFromCache(primary_account_id_, scopes,
+    scopes.insert(GaiaConstants::kKidFamilyReadonlyOAuth2Scope);
+    CoreAccountId primary_account_id =
+        identity_manager_->GetPrimaryAccountId(signin::ConsentLevel::kSignin);
+    DCHECK(!primary_account_id.empty());
+    identity_manager_->RemoveAccessTokenFromCache(primary_account_id, scopes,
                                                   access_token_);
     StartFetchingAccessToken();
     return;
@@ -253,7 +253,7 @@ void FamilyInfoFetcher::OnSimpleLoaderCompleteInternal(
 // static
 bool FamilyInfoFetcher::ParseMembers(const base::ListValue* list,
                                      std::vector<FamilyMember>* members) {
-  for (const auto& entry : list->GetList()) {
+  for (const auto& entry : list->GetListDeprecated()) {
     FamilyMember member;
     const base::DictionaryValue* dict = NULL;
     if (!entry.GetAsDictionary(&dict) || !ParseMember(dict, &member)) {

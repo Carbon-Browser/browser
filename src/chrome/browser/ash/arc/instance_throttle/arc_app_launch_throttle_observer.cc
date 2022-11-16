@@ -12,13 +12,12 @@ namespace arc {
 
 namespace {
 
-constexpr base::TimeDelta kAppLaunchTimeout = base::TimeDelta::FromSeconds(20);
+constexpr base::TimeDelta kAppLaunchTimeout = base::Seconds(20);
 
 }  // namespace
 
 ArcAppLaunchThrottleObserver::ArcAppLaunchThrottleObserver()
-    : ThrottleObserver(ThrottleObserver::PriorityLevel::CRITICAL,
-                       "ArcAppLaunchRequested") {}
+    : ThrottleObserver("ArcAppLaunchRequested") {}
 
 ArcAppLaunchThrottleObserver::~ArcAppLaunchThrottleObserver() = default;
 

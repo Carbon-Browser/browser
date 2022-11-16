@@ -10,12 +10,12 @@
 #include <utility>
 #include <vector>
 
+#include "base/callback.h"
 #include "base/callback_helpers.h"
 #include "base/run_loop.h"
-#include "base/sequenced_task_runner.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/task/post_task.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
@@ -298,11 +298,16 @@ class ThreadedPerfettoService : public mojom::TracingSessionClient {
   bool tracing_enabled_ = false;
 };
 
+// TODO(crbug.com/1006541): Switch this to use TracingUnitTest.
 class TracingConsumerTest : public testing::Test,
                             public mojo::DataPipeDrainer::Client {
  public:
   void SetUp() override {
-    PerfettoTracedProcess::ResetTaskRunnerForTesting();
+    task_environment_ = std::make_unique<base::test::TaskEnvironment>();
+    tracing_environment_ = std::make_unique<base::test::TracingEnvironment>(
+        *task_environment_, base::ThreadTaskRunnerHandle::Get(),
+        PerfettoTracedProcess::Get()->perfetto_platform_for_testing());
+    test_handle_ = tracing::PerfettoTracedProcess::SetupForTesting();
     PerfettoTracedProcess::Get()->ClearDataSourcesForTesting();
     threaded_service_ = std::make_unique<ThreadedPerfettoService>();
 
@@ -310,7 +315,13 @@ class TracingConsumerTest : public testing::Test,
     total_bytes_received_ = 0;
   }
 
-  void TearDown() override { threaded_service_.reset(); }
+  void TearDown() override {
+    tracing_environment_.reset();
+    threaded_service_.reset();
+    task_environment_->RunUntilIdle();
+    test_handle_.reset();
+    task_environment_.reset();
+  }
 
   // mojo::DataPipeDrainer::Client
   void OnDataAvailable(const void* data, size_t num_bytes) override {
@@ -420,7 +431,7 @@ class TracingConsumerTest : public testing::Test,
   bool IsTracingEnabled() {
     // Flush any other pending tasks on the perfetto task runner to ensure that
     // any pending data source start callbacks have propagated.
-    task_environment_.RunUntilIdle();
+    task_environment_->RunUntilIdle();
 
     return threaded_service_->IsTracingEnabled();
   }
@@ -433,7 +444,9 @@ class TracingConsumerTest : public testing::Test,
 
  private:
   std::unique_ptr<ThreadedPerfettoService> threaded_service_;
-  base::test::TaskEnvironment task_environment_;
+  std::unique_ptr<base::test::TaskEnvironment> task_environment_;
+  std::unique_ptr<base::test::TracingEnvironment> tracing_environment_;
+  std::unique_ptr<PerfettoTracedProcess::TestHandle> test_handle_;
   base::OnceClosure on_data_complete_;
   std::unique_ptr<mojo::DataPipeDrainer> drainer_;
   std::vector<uint8_t> received_data_;

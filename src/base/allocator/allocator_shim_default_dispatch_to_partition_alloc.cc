@@ -6,11 +6,17 @@
 
 #include <atomic>
 #include <cstddef>
+#include <map>
+#include <string>
+#include <tuple>
 
 #include "base/allocator/allocator_shim_internals.h"
 #include "base/allocator/buildflags.h"
+#include "base/allocator/partition_alloc_features.h"
+#include "base/allocator/partition_allocator/allocation_guard.h"
 #include "base/allocator/partition_allocator/memory_reclaimer.h"
 #include "base/allocator/partition_allocator/partition_alloc.h"
+#include "base/allocator/partition_allocator/partition_alloc_base/threading/platform_thread.h"
 #include "base/allocator/partition_allocator/partition_alloc_check.h"
 #include "base/allocator/partition_allocator/partition_alloc_config.h"
 #include "base/allocator/partition_allocator/partition_alloc_constants.h"
@@ -18,16 +24,19 @@
 #include "base/allocator/partition_allocator/partition_stats.h"
 #include "base/bits.h"
 #include "base/compiler_specific.h"
+#include "base/feature_list.h"
 #include "base/memory/nonscannable_memory.h"
-#include "base/no_destructor.h"
 #include "base/numerics/checked_math.h"
+#include "base/numerics/safe_conversions.h"
+#include "base/threading/platform_thread.h"
 #include "build/build_config.h"
+#include "build/chromecast_buildflags.h"
 
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 #include <malloc.h>
 #endif
 
-#if defined(OS_WIN) && defined(ARCH_CPU_X86)
+#if BUILDFLAG(IS_WIN) && defined(ARCH_CPU_X86)
 #include <windows.h>
 #endif
 
@@ -89,7 +98,17 @@ class LeakySingleton {
   T* GetSlowPath();
 
   std::atomic<T*> instance_;
+  // Before C++20, having an initializer here causes a "variable does not have a
+  // constant initializer" error.  In C++20, omitting it causes a similar error.
+  // Presumably this is due to the C++20 changes to make atomic initialization
+  // (of the other members of this class) sane, so guarding under that
+  // feature-test.
+#if !defined(__cpp_lib_atomic_value_initialization) || \
+    __cpp_lib_atomic_value_initialization < 201911L
   alignas(T) uint8_t instance_buffer_[sizeof(T)];
+#else
+  alignas(T) uint8_t instance_buffer_[sizeof(T)] = {0};
+#endif
   std::atomic<bool> initialization_lock_;
 };
 
@@ -127,62 +146,64 @@ T* LeakySingleton<T, Constructor>::GetSlowPath() {
 
 class MainPartitionConstructor {
  public:
-  static base::ThreadSafePartitionRoot* New(void* buffer) {
-    constexpr base::PartitionOptions::ThreadCache thread_cache =
+  static partition_alloc::ThreadSafePartitionRoot* New(void* buffer) {
+    constexpr partition_alloc::PartitionOptions::ThreadCache thread_cache =
 #if BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC)
-#if BUILDFLAG(USE_BACKUP_REF_PTR)
-        // With USE_BACKUP_REF_PTR, this partition is only temporary until a
-        // BRP-enabled partition is created later. Leave the ability to have
-        // a thread cache to that partition.
-        base::PartitionOptions::ThreadCache::kDisabled;
-#else
-        base::PartitionOptions::ThreadCache::kEnabled;
-#endif  // BUILDFLAG(USE_BACKUP_REF_PTR)
+        // Additional partitions may be created in ConfigurePartitions(). Since
+        // only one partition can have thread cache enabled, postpone the
+        // decision to turn the thread cache on until after that call.
+        // TODO(bartekn): Enable it here by default, once the "split-only" mode
+        // is no longer needed.
+        partition_alloc::PartitionOptions::ThreadCache::kDisabled;
 #else   // BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC)
         // Other tests, such as the ThreadCache tests create a thread cache,
         // and only one is supported at a time.
-        base::PartitionOptions::ThreadCache::kDisabled;
+        partition_alloc::PartitionOptions::ThreadCache::kDisabled;
 #endif  // BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC)
-    auto* new_root = new (buffer) base::ThreadSafePartitionRoot({
-        base::PartitionOptions::AlignedAlloc::kAllowed,
+    auto* new_root = new (buffer) partition_alloc::ThreadSafePartitionRoot({
+        partition_alloc::PartitionOptions::AlignedAlloc::kAllowed,
         thread_cache,
-        base::PartitionOptions::Quarantine::kAllowed,
-        base::PartitionOptions::Cookie::kAllowed,
-        base::PartitionOptions::RefCount::kDisallowed,
+        partition_alloc::PartitionOptions::Quarantine::kAllowed,
+        partition_alloc::PartitionOptions::Cookie::kAllowed,
+        partition_alloc::PartitionOptions::BackupRefPtr::kDisabled,
+        partition_alloc::PartitionOptions::BackupRefPtrZapping::kDisabled,
+        partition_alloc::PartitionOptions::UseConfigurablePool::kNo,
     });
 
     return new_root;
   }
 };
 
-LeakySingleton<base::ThreadSafePartitionRoot, MainPartitionConstructor> g_root
-    CONSTINIT = {};
-base::ThreadSafePartitionRoot* Allocator() {
+LeakySingleton<partition_alloc::ThreadSafePartitionRoot,
+               MainPartitionConstructor>
+    g_root CONSTINIT = {};
+partition_alloc::ThreadSafePartitionRoot* Allocator() {
   return g_root.Get();
 }
 
-// Original g_root_ if it was replaced by ConfigurePartitionRefCountSupport().
-std::atomic<base::ThreadSafePartitionRoot*> g_original_root(nullptr);
+// Original g_root_ if it was replaced by ConfigurePartitions().
+std::atomic<partition_alloc::ThreadSafePartitionRoot*> g_original_root(nullptr);
 
 class AlignedPartitionConstructor {
  public:
-  static base::ThreadSafePartitionRoot* New(void* buffer) {
+  static partition_alloc::ThreadSafePartitionRoot* New(void* buffer) {
     return g_root.Get();
   }
 };
 
-LeakySingleton<base::ThreadSafePartitionRoot, AlignedPartitionConstructor>
+LeakySingleton<partition_alloc::ThreadSafePartitionRoot,
+               AlignedPartitionConstructor>
     g_aligned_root CONSTINIT = {};
 
-base::ThreadSafePartitionRoot* OriginalAllocator() {
+partition_alloc::ThreadSafePartitionRoot* OriginalAllocator() {
   return g_original_root.load(std::memory_order_relaxed);
 }
 
-base::ThreadSafePartitionRoot* AlignedAllocator() {
+partition_alloc::ThreadSafePartitionRoot* AlignedAllocator() {
   return g_aligned_root.Get();
 }
 
-#if defined(OS_WIN) && defined(ARCH_CPU_X86)
+#if BUILDFLAG(IS_WIN) && defined(ARCH_CPU_X86)
 #if BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC)
 bool IsRunning32bitEmulatedOnArm64() {
   using IsWow64Process2Function = decltype(&IsWow64Process2);
@@ -207,15 +228,15 @@ bool IsRunning32bitEmulatedOnArm64() {
 // The number of bytes to add to every allocation. Ordinarily zero, but set to 8
 // when emulating an x86 on ARM64 to avoid a bug in the Windows x86 emulator.
 size_t g_extra_bytes;
-#endif  // defined(OS_WIN) && defined(ARCH_CPU_X86)
+#endif  // BUILDFLAG(IS_WIN) && defined(ARCH_CPU_X86)
 
 // TODO(brucedawson): Remove this when https://crbug.com/1151455 is fixed.
 ALWAYS_INLINE size_t MaybeAdjustSize(size_t size) {
-#if defined(OS_WIN) && defined(ARCH_CPU_X86)
+#if BUILDFLAG(IS_WIN) && defined(ARCH_CPU_X86)
   return base::CheckAdd(size, g_extra_bytes).ValueOrDie();
-#else   // defined(OS_WIN) && defined(ARCH_CPU_X86)
+#else   // BUILDFLAG(IS_WIN) && defined(ARCH_CPU_X86)
   return size;
-#endif  // defined(OS_WIN) && defined(ARCH_CPU_X86)
+#endif  // BUILDFLAG(IS_WIN) && defined(ARCH_CPU_X86)
 }
 
 void* AllocateAlignedMemory(size_t alignment, size_t size) {
@@ -236,16 +257,17 @@ void* AllocateAlignedMemory(size_t alignment, size_t size) {
   // Note that all "AlignedFree()" variants (_aligned_free() on Windows for
   // instance) directly call PartitionFree(), so there is no risk of
   // mismatch. (see below the default_dispatch definition).
-  if (alignment <= base::kAlignment) {
+  if (alignment <= partition_alloc::internal::kAlignment) {
     // This is mandated by |posix_memalign()| and friends, so should never fire.
     PA_CHECK(base::bits::IsPowerOfTwo(alignment));
     // TODO(bartekn): See if the compiler optimizes branches down the stack on
     // Mac, where PartitionPageSize() isn't constexpr.
-    return Allocator()->AllocFlagsNoHooks(0, size, base::PartitionPageSize());
+    return Allocator()->AllocWithFlagsNoHooks(
+        0, size, partition_alloc::PartitionPageSize());
   }
 
-  return AlignedAllocator()->AlignedAllocFlags(base::PartitionAllocNoHooks,
-                                               alignment, size);
+  return AlignedAllocator()->AlignedAllocWithFlags(
+      partition_alloc::AllocFlags::kNoHooks, alignment, size);
 }
 
 }  // namespace
@@ -253,32 +275,62 @@ void* AllocateAlignedMemory(size_t alignment, size_t size) {
 namespace base {
 namespace internal {
 
+namespace {
+#if BUILDFLAG(IS_APPLE)
+unsigned int g_alloc_flags = 0;
+#else
+constexpr unsigned int g_alloc_flags = 0;
+#endif
+}  // namespace
+
+void PartitionAllocSetCallNewHandlerOnMallocFailure(bool value) {
+#if BUILDFLAG(IS_APPLE)
+  // We generally prefer to always crash rather than returning nullptr for
+  // OOM. However, on some macOS releases, we have to locally allow it due to
+  // weirdness in OS code. See https://crbug.com/654695 for details.
+  //
+  // Apple only since it's not needed elsewhere, and there is a performance
+  // penalty.
+
+  if (value)
+    g_alloc_flags = 0;
+  else
+    g_alloc_flags = partition_alloc::AllocFlags::kReturnNull;
+#endif
+}
+
 void* PartitionMalloc(const AllocatorDispatch*, size_t size, void* context) {
-  return Allocator()->AllocFlagsNoHooks(0, MaybeAdjustSize(size),
-                                        PartitionPageSize());
+  ScopedDisallowAllocations guard{};
+  return Allocator()->AllocWithFlagsNoHooks(
+      g_alloc_flags, MaybeAdjustSize(size),
+      partition_alloc::PartitionPageSize());
 }
 
 void* PartitionMallocUnchecked(const AllocatorDispatch*,
                                size_t size,
                                void* context) {
-  return Allocator()->AllocFlagsNoHooks(base::PartitionAllocReturnNull,
-                                        MaybeAdjustSize(size),
-                                        PartitionPageSize());
+  ScopedDisallowAllocations guard{};
+  return Allocator()->AllocWithFlagsNoHooks(
+      partition_alloc::AllocFlags::kReturnNull | g_alloc_flags,
+      MaybeAdjustSize(size), partition_alloc::PartitionPageSize());
 }
 
 void* PartitionCalloc(const AllocatorDispatch*,
                       size_t n,
                       size_t size,
                       void* context) {
+  ScopedDisallowAllocations guard{};
   const size_t total = base::CheckMul(n, MaybeAdjustSize(size)).ValueOrDie();
-  return Allocator()->AllocFlagsNoHooks(base::PartitionAllocZeroFill, total,
-                                        PartitionPageSize());
+  return Allocator()->AllocWithFlagsNoHooks(
+      partition_alloc::AllocFlags::kZeroFill | g_alloc_flags, total,
+      partition_alloc::PartitionPageSize());
 }
 
 void* PartitionMemalign(const AllocatorDispatch*,
                         size_t alignment,
                         size_t size,
                         void* context) {
+  ScopedDisallowAllocations guard{};
   return AllocateAlignedMemory(alignment, size);
 }
 
@@ -286,6 +338,7 @@ void* PartitionAlignedAlloc(const AllocatorDispatch* dispatch,
                             size_t size,
                             size_t alignment,
                             void* context) {
+  ScopedDisallowAllocations guard{};
   return AllocateAlignedMemory(alignment, size);
 }
 
@@ -294,13 +347,14 @@ void* PartitionAlignedAlloc(const AllocatorDispatch* dispatch,
 // TODO(tasak): Expand the given memory block to the given size if possible.
 // This realloc always free the original memory block and allocates a new memory
 // block.
-// TODO(tasak): Implement PartitionRoot<thread_safe>::AlignedReallocFlags and
-// use it.
+// TODO(tasak): Implement PartitionRoot<thread_safe>::AlignedReallocWithFlags
+// and use it.
 void* PartitionAlignedRealloc(const AllocatorDispatch* dispatch,
                               void* address,
                               size_t size,
                               size_t alignment,
                               void* context) {
+  ScopedDisallowAllocations guard{};
   void* new_ptr = nullptr;
   if (size > 0) {
     size = MaybeAdjustSize(size);
@@ -308,7 +362,7 @@ void* PartitionAlignedRealloc(const AllocatorDispatch* dispatch,
   } else {
     // size == 0 and address != null means just "free(address)".
     if (address)
-      base::ThreadSafePartitionRoot::FreeNoHooks(address);
+      partition_alloc::ThreadSafePartitionRoot::FreeNoHooks(address);
   }
   // The original memory block (specified by address) is unchanged if ENOMEM.
   if (!new_ptr)
@@ -316,11 +370,12 @@ void* PartitionAlignedRealloc(const AllocatorDispatch* dispatch,
   // TODO(tasak): Need to compare the new alignment with the address' alignment.
   // If the two alignments are not the same, need to return nullptr with EINVAL.
   if (address) {
-    size_t usage = base::ThreadSafePartitionRoot::GetUsableSize(address);
+    size_t usage =
+        partition_alloc::ThreadSafePartitionRoot::GetUsableSize(address);
     size_t copy_size = usage > size ? size : usage;
     memcpy(new_ptr, address, copy_size);
 
-    base::ThreadSafePartitionRoot::FreeNoHooks(address);
+    partition_alloc::ThreadSafePartitionRoot::FreeNoHooks(address);
   }
   return new_ptr;
 }
@@ -329,69 +384,150 @@ void* PartitionRealloc(const AllocatorDispatch*,
                        void* address,
                        size_t size,
                        void* context) {
-#if defined(OS_APPLE)
-  if (UNLIKELY(!base::IsManagedByPartitionAlloc(address) && address)) {
+  ScopedDisallowAllocations guard{};
+#if BUILDFLAG(IS_APPLE)
+  if (UNLIKELY(!partition_alloc::IsManagedByPartitionAlloc(
+                   reinterpret_cast<uintptr_t>(address)) &&
+               address)) {
     // A memory region allocated by the system allocator is passed in this
     // function.  Forward the request to `realloc` which supports zone-
     // dispatching so that it appropriately selects the right zone.
     return realloc(address, size);
   }
-#endif  // defined(OS_APPLE)
+#endif  // BUILDFLAG(IS_APPLE)
 
-  return Allocator()->ReallocFlags(base::PartitionAllocNoHooks, address,
-                                   MaybeAdjustSize(size), "");
+  return Allocator()->ReallocWithFlags(
+      partition_alloc::AllocFlags::kNoHooks | g_alloc_flags, address,
+      MaybeAdjustSize(size), "");
 }
 
-void PartitionFree(const AllocatorDispatch*, void* address, void* context) {
-#if defined(OS_APPLE)
-  if (UNLIKELY(!base::IsManagedByPartitionAlloc(address) && address)) {
+#if BUILDFLAG(IS_CAST_ANDROID)
+extern "C" {
+void __real_free(void*);
+}  // extern "C"
+#endif  // BUILDFLAG(IS_CAST_ANDROID)
+
+void PartitionFree(const AllocatorDispatch*, void* object, void* context) {
+  ScopedDisallowAllocations guard{};
+#if BUILDFLAG(IS_APPLE)
+  // TODO(bartekn): Add MTE unmasking here (and below).
+  if (UNLIKELY(!partition_alloc::IsManagedByPartitionAlloc(
+                   reinterpret_cast<uintptr_t>(object)) &&
+               object)) {
     // A memory region allocated by the system allocator is passed in this
     // function.  Forward the request to `free` which supports zone-
     // dispatching so that it appropriately selects the right zone.
-    return free(address);
+    return free(object);
   }
-#endif  // defined(OS_APPLE)
+#endif  // BUILDFLAG(IS_APPLE)
 
-  base::ThreadSafePartitionRoot::FreeNoHooks(address);
+  // On Android Chromecast devices, there is at least one case where a system
+  // malloc() pointer can be passed to PartitionAlloc's free(). If we don't own
+  // the pointer, pass it along. This should not have a runtime cost vs regular
+  // Android, since on Android we have a PA_CHECK() rather than the branch here.
+#if BUILDFLAG(IS_CAST_ANDROID)
+  if (UNLIKELY(!partition_alloc::IsManagedByPartitionAlloc(
+                   reinterpret_cast<uintptr_t>(object)) &&
+               object)) {
+    // A memory region allocated by the system allocator is passed in this
+    // function.  Forward the request to `free()`, which is `__real_free()`
+    // here.
+    return __real_free(object);
+  }
+#endif  // BUILDFLAG(IS_CAST_ANDROID)
+
+  partition_alloc::ThreadSafePartitionRoot::FreeNoHooks(object);
 }
+
+#if BUILDFLAG(IS_APPLE)
+// Normal free() path on Apple OSes:
+// 1. size = GetSizeEstimate(ptr);
+// 2. if (size) FreeDefiniteSize(ptr, size)
+//
+// So we don't need to re-check that the pointer is owned in Free(), and we
+// can use the size.
+void PartitionFreeDefiniteSize(const AllocatorDispatch*,
+                               void* address,
+                               size_t size,
+                               void* context) {
+  ScopedDisallowAllocations guard{};
+  // TODO(lizeb): Optimize PartitionAlloc to use the size information. This is
+  // still useful though, as we avoid double-checking that the address is owned.
+  partition_alloc::ThreadSafePartitionRoot::FreeNoHooks(address);
+}
+#endif  // BUILDFLAG(IS_APPLE)
 
 size_t PartitionGetSizeEstimate(const AllocatorDispatch*,
                                 void* address,
                                 void* context) {
-  PA_DCHECK(address);
+  // This is used to implement malloc_usable_size(3). Per its man page, "if ptr
+  // is NULL, 0 is returned".
+  if (!address)
+    return 0;
 
-#if defined(OS_APPLE)
-  if (!base::IsManagedByPartitionAlloc(address)) {
+#if BUILDFLAG(IS_APPLE)
+  if (!partition_alloc::IsManagedByPartitionAlloc(
+          reinterpret_cast<uintptr_t>(address))) {
     // The object pointed to by `address` is not allocated by the
     // PartitionAlloc.  The return value `0` means that the pointer does not
     // belong to this malloc zone.
     return 0;
   }
-#endif  // defined(OS_APPLE)
+#endif  // BUILDFLAG(IS_APPLE)
 
   // TODO(lizeb): Returns incorrect values for aligned allocations.
-  const size_t size = base::ThreadSafePartitionRoot::GetUsableSize(address);
-#if defined(OS_APPLE)
+  const size_t size =
+      partition_alloc::ThreadSafePartitionRoot::GetUsableSize(address);
+#if BUILDFLAG(IS_APPLE)
   // The object pointed to by `address` is allocated by the PartitionAlloc.
   // So, this function must not return zero so that the malloc zone dispatcher
   // finds the appropriate malloc zone.
   PA_DCHECK(size);
-#endif  // defined(OS_APPLE)
+#endif  // BUILDFLAG(IS_APPLE)
   return size;
 }
 
+unsigned PartitionBatchMalloc(const AllocatorDispatch*,
+                              size_t size,
+                              void** results,
+                              unsigned num_requested,
+                              void* context) {
+  // No real batching: we could only acquire the lock once for instance, keep it
+  // simple for now.
+  for (unsigned i = 0; i < num_requested; i++) {
+    // No need to check the results, we crash if it fails.
+    results[i] = PartitionMalloc(nullptr, size, nullptr);
+  }
+
+  // Either all succeeded, or we crashed.
+  return num_requested;
+}
+
+void PartitionBatchFree(const AllocatorDispatch*,
+                        void** to_be_freed,
+                        unsigned num_to_be_freed,
+                        void* context) {
+  // No real batching: we could only acquire the lock once for instance, keep it
+  // simple for now.
+  for (unsigned i = 0; i < num_to_be_freed; i++) {
+    PartitionFree(nullptr, to_be_freed[i], nullptr);
+  }
+}
+
 // static
-ThreadSafePartitionRoot* PartitionAllocMalloc::Allocator() {
+partition_alloc::ThreadSafePartitionRoot* PartitionAllocMalloc::Allocator() {
   return ::Allocator();
 }
 
 // static
-ThreadSafePartitionRoot* PartitionAllocMalloc::OriginalAllocator() {
+partition_alloc::ThreadSafePartitionRoot*
+PartitionAllocMalloc::OriginalAllocator() {
   return ::OriginalAllocator();
 }
 
 // static
-ThreadSafePartitionRoot* PartitionAllocMalloc::AlignedAllocator() {
+partition_alloc::ThreadSafePartitionRoot*
+PartitionAllocMalloc::AlignedAllocator() {
   return ::AlignedAllocator();
 }
 
@@ -409,127 +545,144 @@ void EnablePartitionAllocMemoryReclaimer() {
   // memory. Thus, the registration to the memory reclaimer has to be done
   // some time later, when the main root is fully configured.
   // TODO(bartekn): Aligned allocator can use the regular initialization path.
-  PartitionAllocMemoryReclaimer::Instance()->RegisterPartition(Allocator());
+  ::partition_alloc::MemoryReclaimer::Instance()->RegisterPartition(
+      Allocator());
   auto* original_root = OriginalAllocator();
   if (original_root)
-    PartitionAllocMemoryReclaimer::Instance()->RegisterPartition(original_root);
+    ::partition_alloc::MemoryReclaimer::Instance()->RegisterPartition(
+        original_root);
   if (AlignedAllocator() != Allocator()) {
-    PartitionAllocMemoryReclaimer::Instance()->RegisterPartition(
+    ::partition_alloc::MemoryReclaimer::Instance()->RegisterPartition(
         AlignedAllocator());
   }
 }
 
-void ReconfigurePartitionAllocLazyCommit() {
-  // Unlike other partitions, Allocator() and AlignedAllocator() do not
-  // configure lazy commit upfront, because it uses base::Feature, which in turn
-  // allocates memory. Thus, lazy commit configuration has to be done after
-  // base::FeatureList is initialized.
-  // TODO(bartekn): Aligned allocator can use the regular initialization path.
-  Allocator()->ConfigureLazyCommit();
-  auto* original_root = OriginalAllocator();
-  if (original_root)
-    original_root->ConfigureLazyCommit();
-  AlignedAllocator()->ConfigureLazyCommit();
-}
+alignas(partition_alloc::ThreadSafePartitionRoot) uint8_t
+    g_allocator_buffer_for_new_main_partition[sizeof(
+        partition_alloc::ThreadSafePartitionRoot)];
 
-#if BUILDFLAG(USE_BACKUP_REF_PTR)
-alignas(base::ThreadSafePartitionRoot) uint8_t
-    g_allocator_buffer_for_ref_count_config[sizeof(
-        base::ThreadSafePartitionRoot)];
-
-#if BUILDFLAG(USE_DEDICATED_PARTITION_FOR_ALIGNED_ALLOC_UPON_ENABLING_BRP)
-alignas(base::ThreadSafePartitionRoot) uint8_t
+alignas(partition_alloc::ThreadSafePartitionRoot) uint8_t
     g_allocator_buffer_for_aligned_alloc_partition[sizeof(
-        base::ThreadSafePartitionRoot)];
-#endif
+        partition_alloc::ThreadSafePartitionRoot)];
 
-void ConfigurePartitionRefCountSupport(bool enable_ref_count) {
+void ConfigurePartitions(
+    EnableBrp enable_brp,
+    EnableBrpZapping enable_brp_zapping,
+    SplitMainPartition split_main_partition,
+    UseDedicatedAlignedPartition use_dedicated_aligned_partition,
+    AlternateBucketDistribution use_alternate_bucket_distribution) {
+  // BRP cannot be enabled without splitting the main partition. Furthermore, in
+  // the "before allocation" mode, it can't be enabled without further splitting
+  // out the aligned partition.
+  PA_CHECK(!enable_brp || split_main_partition);
+#if !BUILDFLAG(PUT_REF_COUNT_IN_PREVIOUS_SLOT)
+  PA_CHECK(!enable_brp || use_dedicated_aligned_partition);
+#endif
+  // Can't split out the aligned partition, without splitting the main one.
+  PA_CHECK(!use_dedicated_aligned_partition || split_main_partition);
+
+  static bool configured = false;
+  PA_CHECK(!configured);
+  configured = true;
+
+  // Calling Get() is actually important, even if the return values weren't
+  // used, because it has a side effect of initializing the variables, if they
+  // weren't already.
   auto* current_root = g_root.Get();
-  // Call Get() to ensure g_aligned_root gets initialized. In some cases it is
-  // initialized with g_root, and we want to make sure it is the pre-swap
-  // value (unless explicitly overwritten below).
   auto* current_aligned_root = g_aligned_root.Get();
 
-  current_root->PurgeMemory(PartitionPurgeDecommitEmptySlotSpans |
-                            PartitionPurgeDiscardUnusedSystemPages);
-
-  const bool allow_aligned_alloc_in_main_root =
-#if BUILDFLAG(USE_DEDICATED_PARTITION_FOR_ALIGNED_ALLOC_UPON_ENABLING_BRP)
-      // If ref-count is to be enabled, this partition can't support
-      // AlignedAlloc. Instead, a new one is created below. Otherwise,
-      // no separate AlignedAlloc partition is created, so this one must
-      // support it.
-      !enable_ref_count;
-#else
-      // No separate AlignedAlloc partition is created, so this one must
-      // support it.
-      true;
-#endif
-  // TODO(bartekn): When enable_ref_count is false, simply enable thread cache
-  // in the existing root instead of creating a new one -- the only difference
-  // between the current and new partition is the thread cache setting.
-  auto* new_root = new (g_allocator_buffer_for_ref_count_config)
-      base::ThreadSafePartitionRoot({
-          allow_aligned_alloc_in_main_root
-              ? base::PartitionOptions::AlignedAlloc::kAllowed
-              : base::PartitionOptions::AlignedAlloc::kDisallowed,
-          base::PartitionOptions::ThreadCache::kEnabled,
-          base::PartitionOptions::Quarantine::kAllowed,
-          base::PartitionOptions::Cookie::kAllowed,
-          enable_ref_count ? base::PartitionOptions::RefCount::kAllowed
-                           : base::PartitionOptions::RefCount::kDisallowed,
+  if (!split_main_partition) {
+    if (!use_alternate_bucket_distribution) {
+      current_root->SwitchToDenserBucketDistribution();
+      current_aligned_root->SwitchToDenserBucketDistribution();
+    }
+    PA_DCHECK(!enable_brp);
+    PA_DCHECK(!use_dedicated_aligned_partition);
+    PA_DCHECK(!current_root->flags.with_thread_cache);
+    return;
+  }
+  auto* new_root = new (g_allocator_buffer_for_new_main_partition)
+      partition_alloc::ThreadSafePartitionRoot({
+          !use_dedicated_aligned_partition
+              ? partition_alloc::PartitionOptions::AlignedAlloc::kAllowed
+              : partition_alloc::PartitionOptions::AlignedAlloc::kDisallowed,
+          partition_alloc::PartitionOptions::ThreadCache::kDisabled,
+          partition_alloc::PartitionOptions::Quarantine::kAllowed,
+          partition_alloc::PartitionOptions::Cookie::kAllowed,
+          enable_brp
+              ? partition_alloc::PartitionOptions::BackupRefPtr::kEnabled
+              : partition_alloc::PartitionOptions::BackupRefPtr::kDisabled,
+          enable_brp_zapping
+              ? partition_alloc::PartitionOptions::BackupRefPtrZapping::kEnabled
+              : partition_alloc::PartitionOptions::BackupRefPtrZapping::
+                    kDisabled,
+          partition_alloc::PartitionOptions::UseConfigurablePool::kNo,
       });
+
+  partition_alloc::ThreadSafePartitionRoot* new_aligned_root;
+  if (use_dedicated_aligned_partition) {
+    // TODO(bartekn): Use the original root instead of creating a new one. It'd
+    // result in one less partition, but come at a cost of commingling types.
+    new_aligned_root = new (g_allocator_buffer_for_aligned_alloc_partition)
+        partition_alloc::ThreadSafePartitionRoot({
+            partition_alloc::PartitionOptions::AlignedAlloc::kAllowed,
+            partition_alloc::PartitionOptions::ThreadCache::kDisabled,
+            partition_alloc::PartitionOptions::Quarantine::kAllowed,
+            partition_alloc::PartitionOptions::Cookie::kAllowed,
+            partition_alloc::PartitionOptions::BackupRefPtr::kDisabled,
+            partition_alloc::PartitionOptions::BackupRefPtrZapping::kDisabled,
+            partition_alloc::PartitionOptions::UseConfigurablePool::kNo,
+        });
+  } else {
+    // The new main root can also support AlignedAlloc.
+    new_aligned_root = new_root;
+  }
+
+  // Now switch traffic to the new partitions.
+  g_aligned_root.Replace(new_aligned_root);
   g_root.Replace(new_root);
+
   // g_original_root has to be set after g_root, because other code doesn't
   // handle well both pointing to the same root.
   // TODO(bartekn): Reorder, once handled well. It isn't ideal for one
   // partition to be invisible temporarily.
-  // TODO(bartekn): Move current_root->PurgeMemory after the replacement.
   g_original_root = current_root;
 
-  base::ThreadSafePartitionRoot* new_aligned_root =
-#if BUILDFLAG(USE_DEDICATED_PARTITION_FOR_ALIGNED_ALLOC_UPON_ENABLING_BRP)
-      enable_ref_count
-          // If BRP is getting enabled, we need to create a new AlignedAlloc
-          // partition now.
-          // TODO(bartekn): Use the original root instead of creating a new one.
-          // It'd result in one less partition, but come at a cost of
-          // commingling types.
-          ? new (g_allocator_buffer_for_aligned_alloc_partition)
-                base::ThreadSafePartitionRoot({
-                    base::PartitionOptions::AlignedAlloc::kAllowed,
-                    base::PartitionOptions::ThreadCache::kDisabled,
-                    base::PartitionOptions::Quarantine::kAllowed,
-                    base::PartitionOptions::Cookie::kAllowed,
-                    base::PartitionOptions::RefCount::kDisallowed,
-                })
-          // Otherwise, the new main root can also support AlignedAlloc.
-          : g_root.Get();
-  PA_CHECK(current_aligned_root == g_original_root);
-#else   // USE_DEDICATED_PARTITION_FOR_ALIGNED_ALLOC_UPON_ENABLING_BRP
-      // The new main root can also support AlignedAlloc.
-      g_root.Get();
-  PA_CHECK(current_aligned_root == g_original_root);
-#endif  // USE_DEDICATED_PARTITION_FOR_ALIGNED_ALLOC_UPON_ENABLING_BRP
-  g_aligned_root.Replace(new_aligned_root);
   // No need for g_original_aligned_root, because in cases where g_aligned_root
   // is replaced, it must've been g_original_root.
+  PA_CHECK(current_aligned_root == g_original_root);
+
+  // Purge memory, now that the traffic to the original partition is cut off.
+  current_root->PurgeMemory(
+      partition_alloc::PurgeFlags::kDecommitEmptySlotSpans |
+      partition_alloc::PurgeFlags::kDiscardUnusedSystemPages);
+
+  if (!use_alternate_bucket_distribution) {
+    g_root.Get()->SwitchToDenserBucketDistribution();
+    g_aligned_root.Get()->SwitchToDenserBucketDistribution();
+  }
 }
-#endif  // BUILDFLAG(USE_BACKUP_REF_PTR)
 
 #if defined(PA_ALLOW_PCSCAN)
-void EnablePCScan(bool dcscan) {
-  internal::PCScan::Initialize(
-      dcscan ? internal::PCScan::WantedWriteProtectionMode::kEnabled
-             : internal::PCScan::WantedWriteProtectionMode::kDisabled);
-  internal::PCScan::RegisterScannableRoot(Allocator());
+void EnablePCScan(partition_alloc::internal::PCScan::InitConfig config) {
+  partition_alloc::internal::base::PlatformThread::SetThreadNameHook(
+      &::base::PlatformThread::SetName);
+  partition_alloc::internal::PCScan::Initialize(config);
+
+  partition_alloc::internal::PCScan::RegisterScannableRoot(Allocator());
+  if (OriginalAllocator() != nullptr)
+    partition_alloc::internal::PCScan::RegisterScannableRoot(
+        OriginalAllocator());
   if (Allocator() != AlignedAllocator())
-    internal::PCScan::RegisterScannableRoot(AlignedAllocator());
-  internal::NonScannableAllocator::Instance().EnablePCScan();
+    partition_alloc::internal::PCScan::RegisterScannableRoot(
+        AlignedAllocator());
+
+  internal::NonScannableAllocator::Instance().NotifyPCScanEnabled();
+  internal::NonQuarantinableAllocator::Instance().NotifyPCScanEnabled();
 }
 #endif  // defined(PA_ALLOW_PCSCAN)
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 // Call this as soon as possible during startup.
 void ConfigurePartitionAlloc() {
 #if defined(ARCH_CPU_X86)
@@ -537,11 +690,11 @@ void ConfigurePartitionAlloc() {
     g_extra_bytes = 8;
 #endif  // defined(ARCH_CPU_X86)
 }
-#endif  // defined(OS_WIN)
+#endif  // BUILDFLAG(IS_WIN)
 }  // namespace allocator
 }  // namespace base
 
-constexpr AllocatorDispatch AllocatorDispatch::default_dispatch = {
+const AllocatorDispatch AllocatorDispatch::default_dispatch = {
     &base::internal::PartitionMalloc,           // alloc_function
     &base::internal::PartitionMallocUnchecked,  // alloc_unchecked_function
     &base::internal::PartitionCalloc,    // alloc_zero_initialized_function
@@ -549,13 +702,20 @@ constexpr AllocatorDispatch AllocatorDispatch::default_dispatch = {
     &base::internal::PartitionRealloc,   // realloc_function
     &base::internal::PartitionFree,      // free_function
     &base::internal::PartitionGetSizeEstimate,  // get_size_estimate_function
-    nullptr,                                    // batch_malloc_function
-    nullptr,                                    // batch_free_function
-    nullptr,                                    // free_definite_size_function
-    &base::internal::PartitionAlignedAlloc,     // aligned_malloc_function
-    &base::internal::PartitionAlignedRealloc,   // aligned_realloc_function
-    &base::internal::PartitionFree,             // aligned_free_function
-    nullptr,                                    // next
+    &base::internal::PartitionBatchMalloc,      // batch_malloc_function
+    &base::internal::PartitionBatchFree,        // batch_free_function
+#if BUILDFLAG(IS_APPLE)
+    // On Apple OSes, free_definite_size() is always called from free(), since
+    // get_size_estimate() is used to determine whether an allocation belongs to
+    // the current zone. It makes sense to optimize for it.
+    &base::internal::PartitionFreeDefiniteSize,
+#else
+    nullptr,  // free_definite_size_function
+#endif
+    &base::internal::PartitionAlignedAlloc,    // aligned_malloc_function
+    &base::internal::PartitionAlignedRealloc,  // aligned_realloc_function
+    &base::internal::PartitionFree,            // aligned_free_function
+    nullptr,                                   // next
 };
 
 // Intercept diagnostics symbols as well, even though they are not part of the
@@ -565,7 +725,7 @@ constexpr AllocatorDispatch AllocatorDispatch::default_dispatch = {
 
 extern "C" {
 
-#if !defined(OS_APPLE)
+#if !BUILDFLAG(IS_APPLE) && !BUILDFLAG(IS_ANDROID)
 
 SHIM_ALWAYS_EXPORT void malloc_stats(void) __THROW {}
 
@@ -573,51 +733,63 @@ SHIM_ALWAYS_EXPORT int mallopt(int cmd, int value) __THROW {
   return 0;
 }
 
-#endif  // !defined(OS_APPLE)
+#endif  // !BUILDFLAG(IS_APPLE) && !BUILDFLAG(IS_ANDROID)
 
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 SHIM_ALWAYS_EXPORT struct mallinfo mallinfo(void) __THROW {
-  base::SimplePartitionStatsDumper allocator_dumper;
+  partition_alloc::SimplePartitionStatsDumper allocator_dumper;
   Allocator()->DumpStats("malloc", true, &allocator_dumper);
   // TODO(bartekn): Dump OriginalAllocator() into "malloc" as well.
 
-  base::SimplePartitionStatsDumper aligned_allocator_dumper;
+  partition_alloc::SimplePartitionStatsDumper aligned_allocator_dumper;
   if (AlignedAllocator() != Allocator()) {
     AlignedAllocator()->DumpStats("posix_memalign", true,
                                   &aligned_allocator_dumper);
   }
 
-  // Dump stats for nonscannable allocators.
+  // Dump stats for nonscannable and nonquarantinable allocators.
   auto& nonscannable_allocator =
       base::internal::NonScannableAllocator::Instance();
-  base::SimplePartitionStatsDumper nonscannable_allocator_dumper;
+  partition_alloc::SimplePartitionStatsDumper nonscannable_allocator_dumper;
   if (auto* nonscannable_root = nonscannable_allocator.root())
     nonscannable_root->DumpStats("malloc", true,
                                  &nonscannable_allocator_dumper);
+  auto& nonquarantinable_allocator =
+      base::internal::NonQuarantinableAllocator::Instance();
+  partition_alloc::SimplePartitionStatsDumper nonquarantinable_allocator_dumper;
+  if (auto* nonquarantinable_root = nonquarantinable_allocator.root())
+    nonquarantinable_root->DumpStats("malloc", true,
+                                     &nonquarantinable_allocator_dumper);
 
   struct mallinfo info = {0};
   info.arena = 0;  // Memory *not* allocated with mmap().
 
   // Memory allocated with mmap(), aka virtual size.
-  info.hblks = allocator_dumper.stats().total_mmapped_bytes +
-               aligned_allocator_dumper.stats().total_mmapped_bytes +
-               nonscannable_allocator_dumper.stats().total_mmapped_bytes;
+  info.hblks = base::checked_cast<decltype(info.hblks)>(
+      allocator_dumper.stats().total_mmapped_bytes +
+      aligned_allocator_dumper.stats().total_mmapped_bytes +
+      nonscannable_allocator_dumper.stats().total_mmapped_bytes +
+      nonquarantinable_allocator_dumper.stats().total_mmapped_bytes);
   // Resident bytes.
-  info.hblkhd = allocator_dumper.stats().total_resident_bytes +
-                aligned_allocator_dumper.stats().total_resident_bytes +
-                nonscannable_allocator_dumper.stats().total_resident_bytes;
+  info.hblkhd = base::checked_cast<decltype(info.hblkhd)>(
+      allocator_dumper.stats().total_resident_bytes +
+      aligned_allocator_dumper.stats().total_resident_bytes +
+      nonscannable_allocator_dumper.stats().total_resident_bytes +
+      nonquarantinable_allocator_dumper.stats().total_resident_bytes);
   // Allocated bytes.
-  info.uordblks = allocator_dumper.stats().total_active_bytes +
-                  aligned_allocator_dumper.stats().total_active_bytes +
-                  nonscannable_allocator_dumper.stats().total_active_bytes;
+  info.uordblks = base::checked_cast<decltype(info.uordblks)>(
+      allocator_dumper.stats().total_active_bytes +
+      aligned_allocator_dumper.stats().total_active_bytes +
+      nonscannable_allocator_dumper.stats().total_active_bytes +
+      nonquarantinable_allocator_dumper.stats().total_active_bytes);
 
   return info;
 }
-#endif  // defined(OS_LINUX) || defined(OS_CHROMEOS)
+#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 
 }  // extern "C"
 
-#if defined(OS_APPLE)
+#if BUILDFLAG(IS_APPLE)
 
 namespace base {
 namespace allocator {
@@ -627,12 +799,12 @@ void InitializeDefaultAllocatorPartitionRoot() {
   // internally, e.g. __builtin_available, and it's not easy to avoid it.
   // Thus, we initialize the PartitionRoot with using the system default
   // allocator before we intercept the system default allocator.
-  ignore_result(Allocator());
+  std::ignore = Allocator();
 }
 
 }  // namespace allocator
 }  // namespace base
 
-#endif  // defined(OS_APPLE)
+#endif  // BUILDFLAG(IS_APPLE)
 
 #endif  // BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC)

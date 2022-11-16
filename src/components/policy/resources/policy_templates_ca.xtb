@@ -113,13 +113,13 @@
       Determina la durada abans no es mostri l'estalvi de pantalla a la pantalla d'inici de sessió per als dispositius en mode de venta.
 
       El valor de la política s'ha d'especificar en mil·lisegons.</translation>
-<translation id="1141767714195601945">Aquesta política controla els paràmetres de la línia d'ordres per a Carbon Browser Browser Browser des d'Internet Explorer.
+<translation id="1141767714195601945">Aquesta política controla els paràmetres de la línia d'ordres per a Carbon Browser des d'Internet Explorer.
 
       Si el complement Compatibilitat amb navegadors antics d'Internet Explorer no està instal·lat, aquesta política no té cap efecte.
 
-      Si aquesta política es deixa sense establir, Internet Explorer només transmet l'URL a Carbon Browser Browser Browser com a paràmetre de la línia d'ordres.
+      Si aquesta política es deixa sense establir, Internet Explorer només transmet l'URL a Carbon Browser com a paràmetre de la línia d'ordres.
 
-      Si aquesta política s'estableix en una llista de cadenes, les cadenes s'uneixen amb espais i es transmeten a Carbon Browser Browser Browser com a paràmetres de la línia d'ordres.
+      Si aquesta política s'estableix en una llista de cadenes, les cadenes s'uneixen amb espais i es transmeten a Carbon Browser com a paràmetres de la línia d'ordres.
 
       Si un element conté ${url}, se substitueix per l'URL de la pàgina que cal obrir.
 
@@ -366,11 +366,11 @@
 
       Si la política no s'estableix, la funcionalitat d'actualització del microprogramari de <ph name="TPM_FIRMWARE_UPDATE_TPM" /> no estarà disponible.</translation>
 <translation id="1708496595873025510">Defineix la restricció de l'obtenció del valor seed de les variacions</translation>
-<translation id="1717817358640580294">Si no s'estableix, en el cas que Neteja de Carbon Browser Browser Browser detecti programari no desitjat, podrà comunicar les metadades de l'escaneig a Google de conformitat amb la política establerta per SafeBrowsingExtendedReportingEnabled. A continuació, Neteja de Carbon Browser Browser Browser preguntarà a l'usuari si vol netejar el programari no desitjat. L'usuari podrà optar per compartir els resultats de la neteja amb Google per contribuir a la detecció de programari no desitjat en el futur. Aquests resultats contenen metadades de fitxers, extensions instal·lades automàticament i claus de registre, segons es descriu al llibre blanc de privadesa de Carbon Browser Browser Browser.
+<translation id="1717817358640580294">Si no s'estableix, en el cas que Neteja de Carbon Browser detecti programari no desitjat, podrà comunicar les metadades de l'escaneig a Google de conformitat amb la política establerta per SafeBrowsingExtendedReportingEnabled. A continuació, Neteja de Carbon Browser preguntarà a l'usuari si vol netejar el programari no desitjat. L'usuari podrà optar per compartir els resultats de la neteja amb Google per contribuir a la detecció de programari no desitjat en el futur. Aquests resultats contenen metadades de fitxers, extensions instal·lades automàticament i claus de registre, segons es descriu al llibre blanc de privadesa de Carbon Browser.
 
-      Si es desactiva, en el cas que Neteja de Carbon Browser Browser Browser detecti programari no desitjat, no comunicarà les metadades de l'escaneig a Google i substituirà qualsevol política establerta per SafeBrowsingExtendedReportingEnabled. Neteja de Carbon Browser Browser Browser preguntarà a l'usuari si vol netejar el programari no desitjat.  Els resultats de la neteja no es comunicaran a Google i l'usuari no podrà fer-ho.
+      Si es desactiva, en el cas que Neteja de Carbon Browser detecti programari no desitjat, no comunicarà les metadades de l'escaneig a Google i substituirà qualsevol política establerta per SafeBrowsingExtendedReportingEnabled. Neteja de Carbon Browser preguntarà a l'usuari si vol netejar el programari no desitjat.  Els resultats de la neteja no es comunicaran a Google i l'usuari no podrà fer-ho.
 
-      Si s'activa, en el cas que Neteja de Carbon Browser Browser Browser detecti programari no desitjat, podrà comunicar les metadades de l'escaneig a Google de conformitat amb la política establerta per SafeBrowsingExtendedReportingEnabled. Neteja de Carbon Browser Browser Browser preguntarà a l'usuari si vol netejar el programari no desitjat.  Els resultats de la neteja es comunicaran a Google i l'usuari no podrà impedir-ho.
+      Si s'activa, en el cas que Neteja de Carbon Browser detecti programari no desitjat, podrà comunicar les metadades de l'escaneig a Google de conformitat amb la política establerta per SafeBrowsingExtendedReportingEnabled. Neteja de Carbon Browser preguntarà a l'usuari si vol netejar el programari no desitjat.  Els resultats de la neteja es comunicaran a Google i l'usuari no podrà impedir-ho.
 
       Aquesta política només està disponible en instàncies de Windows que s'hagin unit a un domini de <ph name="MS_AD_NAME" /> o instàncies de Windows 10 Pro o Enterprise que s'hagin inscrit per a la gestió de dispositius.</translation>
 <translation id="172374442286684480">Permet que tots els llocs defineixin dades locals</translation>
@@ -549,7 +549,7 @@
 <translation id="2073552873076775140">Permet iniciar la sessió a <ph name="PRODUCT_NAME" /></translation>
 <translation id="2077129598763517140">Utilitza l'acceleració per maquinari quan estigui disponible</translation>
 <translation id="2077273864382355561">Retard de la desactivació de pantalla quan s'utilitza bateria</translation>
-<translation id="2082205219176343977">Configura la versió mínima de Carbon Browser Browser Browser que es permet al dispositiu.</translation>
+<translation id="2082205219176343977">Configura la versió mínima de Carbon Browser que es permet al dispositiu.</translation>
 <translation id="209586405398070749">Canal estable</translation>
 <translation id="2098658257603918882">Activa la creació d'informes d'ús i de dades relacionades amb bloqueigs</translation>
 <translation id="2104418465060359056">Proporciona informació sobre extensions i connectors</translation>
@@ -642,7 +642,7 @@ Deixar aquesta política sense establir és igual que activar l'opció, amb el f
 
       Si es desactiva la política o no s'estableix, no es permet que les pàgines mostrin finestres emergents mentre es desactiven, tal com s'indica a l'especificació (https://html.spec.whatwg.org/#apis-for-creating-and-navigating-browsing-contexts-by-name).
 
-      Aquesta política se suprimirà a Carbon Browser Browser Browser 82.
+      Aquesta política se suprimirà a Carbon Browser 82.
 
       Consulta https://www.chromestatus.com/feature/5989473649164288 .</translation>
 <translation id="2269319728625047531">Permet mostrar el consentiment de sincronització durant l'inici de sessió</translation>
@@ -714,9 +714,9 @@ Deixar aquesta política sense establir és igual que activar l'opció, amb el f
 <translation id="2463034609187171371">Permet els sistemes de xifratge DHE de TLS</translation>
 <translation id="2463365186486772703">Configuració regional de l'aplicació</translation>
 <translation id="2466131534462628618">L'autenticació de portals captius ignora el servidor intermediari</translation>
-<translation id="2471748297300970300">Si es desactiva, impedeix que es mostrin advertiments de seguretat quan s'inicia Carbon Browser Browser Browser amb algunes marques de la línia d'ordres potencialment perilloses.
+<translation id="2471748297300970300">Si es desactiva, impedeix que es mostrin advertiments de seguretat quan s'inicia Carbon Browser amb algunes marques de la línia d'ordres potencialment perilloses.
 
-          Si s'activa o es deixa sense establir, es mostren advertiments de seguretat quan s'utilitzen algunes marques de la línia d'ordres per iniciar Carbon Browser Browser Browser.
+          Si s'activa o es deixa sense establir, es mostren advertiments de seguretat quan s'utilitzen algunes marques de la línia d'ordres per iniciar Carbon Browser.
 
           A Windows, aquesta política només està disponible en instàncies que formin part d'un domini que pertanyi a <ph name="MS_AD_NAME" /> o en instàncies de Windows 10 Pro o Enterprise que s'hagin inscrit en la gestió de dispositius.</translation>
 <translation id="2482676533225429905">Missatgeria nativa</translation>
@@ -827,7 +827,7 @@ Deixar aquesta política sense establir és igual que activar l'opció, amb el f
           L'URL de cerca de Google es pot especificar de la manera següent: <ph name="GOOGLE_SEARCH_URL" />.
  
           Aquesta opció s'ha d'establir quan s'activa la política DefaultSearchProviderEnabled i només es respectarà si és així.</translation>
-<translation id="2659019163577049044">Si s'activa aquesta opció de configuració, els usuaris podran configurar els dispositius perquè sincronitzin els missatges SMS entre els telèfons i els dispositius Carbon Browser Browser Browserbook. Tingues en compte que, si es permet aquesta política, els usuaris hauran d'activar aquesta funció explícitament completant un procés de configuració. Un cop finalitzat aquest procés, els usuaris podran enviar i rebre missatges SMS als dispositius Carbon Browser Browser Browserbook.
+<translation id="2659019163577049044">Si s'activa aquesta opció de configuració, els usuaris podran configurar els dispositius perquè sincronitzin els missatges SMS entre els telèfons i els dispositius Carbon Browserbook. Tingues en compte que, si es permet aquesta política, els usuaris hauran d'activar aquesta funció explícitament completant un procés de configuració. Un cop finalitzat aquest procés, els usuaris podran enviar i rebre missatges SMS als dispositius Carbon Browserbook.
 
       Si aquesta opció de configuració es desactiva, no es permetrà que els usuaris configurin la sincronització d'SMS.
 
@@ -840,7 +840,7 @@ Deixar aquesta política sense establir és igual que activar l'opció, amb el f
 <translation id="2694143893026486692">Lupa acoblada activada</translation>
 <translation id="2706708761587205154">Permet imprimir només amb PIN</translation>
 <translation id="2731627323327011390">Desactiva l'ús de certificats de <ph name="PRODUCT_OS_NAME" /> a les aplicacions ARC</translation>
-<translation id="2742843273354638707">Amaga l'aplicació Carbon Browser Browser Browser Web Store i l'enllaç de la part inferior de la pàgina a la pàgina Pestanya nova i al Menú d'aplicacions de <ph name="PRODUCT_OS_NAME" />.
+<translation id="2742843273354638707">Amaga l'aplicació Carbon Browser Web Store i l'enllaç de la part inferior de la pàgina a la pàgina Pestanya nova i al Menú d'aplicacions de <ph name="PRODUCT_OS_NAME" />.
 
       Si aquesta política s'estableix en true, les icones s'amaguen.
 
@@ -902,12 +902,12 @@ Cada entrada de la llista especifica un identificador, que s'utilitza internamen
       Si aquesta política s'estableix en una llista no buida d'intervals de temps:
       Els dispositius no podran cercar actualitzacions automàticament durant els intervals de temps especificats. Aquesta política no afectarà els dispositius <ph name="PRODUCT_OS_NAME" /> que s'hagin de revertir a una versió anterior o que tinguin una versió anterior a la mínima, ja que podria provocar problemes de seguretat. A més, aquesta política no bloquejarà les cerques d'actualitzacions sol·licitades per usuaris o administradors.
       Si aquesta política no s'estableix o no conté cap interval de temps:
-      La política no bloquejarà les cerques automàtiques d'actualitzacions, però pot ser que hi hagi altres polítiques que sí que les bloquegin. Aquesta funció només s'activa en dispositius Carbon Browser Browser Browser configurats com a quioscos d'inici automàtic. Aquesta política no restringirà altres dispositius.</translation>
+      La política no bloquejarà les cerques automàtiques d'actualitzacions, però pot ser que hi hagi altres polítiques que sí que les bloquegin. Aquesta funció només s'activa en dispositius Carbon Browser configurats com a quioscos d'inici automàtic. Aquesta política no restringirà altres dispositius.</translation>
 <translation id="2823870601012066791">Ubicació del registre de Windows per a clients amb <ph name="PRODUCT_OS_NAME" />:</translation>
 <translation id="2824715612115726353">Activa el mode d'incògnit</translation>
 <translation id="2836621397261130126">Controla si es respecta l'aprovació de la política del KDC per decidir si es poden delegar els tiquets de <ph name="KERBEROS" />.
 
-          Si aquesta política s'estableix en "true", l'autenticació HTTP respecta l'aprovació per part de la política del KDC. És a dir, Carbon Browser Browser Browser només delega les credencials si el KDC estableix <ph name="OK_AS_DELEGATE" /> en un tiquet de servei. Per obtenir més informació, consulta https://tools.ietf.org/html/rfc5896.html. El servei també ha de coincidir amb la política AuthNegotiateDelegateWhitelist.
+          Si aquesta política s'estableix en "true", l'autenticació HTTP respecta l'aprovació per part de la política del KDC. És a dir, Carbon Browser només delega les credencials si el KDC estableix <ph name="OK_AS_DELEGATE" /> en un tiquet de servei. Per obtenir més informació, consulta https://tools.ietf.org/html/rfc5896.html. El servei també ha de coincidir amb la política AuthNegotiateDelegateWhitelist.
 
           Si aquesta política no s'estableix o s'estableix en "false", s'ignora la política del KDC a les plataformes admeses i només es respecta la política AuthNegotiateDelegateWhitelist.
 
@@ -1044,7 +1044,7 @@ Cada entrada de la llista especifica un identificador, que s'utilitza internamen
 <translation id="3034580675120919256">Us permet definir si els llocs web poden executar JavaScript. L'execució de JavaScript es pot autoritzar o denegar per a tots els llocs web. Si no es defineix aquesta política, s'utilitzarà el paràmetre "AllowJavaScript" i l'usuari podrà canviar-lo.</translation>
 <translation id="3038323923255997294">Continua executant les aplicacions en segon pla quan es tanqui <ph name="PRODUCT_NAME" /></translation>
 <translation id="3046192273793919231">Envia paquets de xarxa al servidor de gestió per supervisar l'estat en línia</translation>
-<translation id="3047732214002457234">Controla de quina manera Neteja de Carbon Browser Browser Browser comunica dades a Google</translation>
+<translation id="3047732214002457234">Controla de quina manera Neteja de Carbon Browser comunica dades a Google</translation>
 <translation id="304775240152542058">Aquesta política controla els paràmetres de línia d'ordres per iniciar el navegador alternatiu.
 
       Si aquesta política es deixa sense establir, només es transmet l'URL com a paràmetre de línia d'ordres.
@@ -1116,9 +1116,9 @@ Cada entrada de la llista especifica un identificador, que s'utilitza internamen
       Si la política no s'estableix o s'estableix en "false", els sistemes de xifratge DHE de TLS no s'activaran. En cas contrari, es pot establir en "true" per activar els sistemes de xifratge DHE i conservar la compatibilitat amb un servidor obsolet. Es tracta d'una mesura temporal i el servidor s'ha de tornar a configurar.
 
       Es recomana migrar els servidors a sistemes de xifratge ECDHE. Si no estan disponibles, assegura't que s'activi un sistema de xifratge que utilitzi un intercanvi de clau RSA.</translation>
-<translation id="3117706142826400449">Si es desactiva, Neteja de Carbon Browser Browser Browser no podrà escanejar el sistema per detectar-hi programari no desitjat ni per netejar-lo. L'opció per activar Neteja de Carbon Browser Browser Browser manualment des de chrome://settings/cleanup està desactivada.
+<translation id="3117706142826400449">Si es desactiva, Neteja de Carbon Browser no podrà escanejar el sistema per detectar-hi programari no desitjat ni per netejar-lo. L'opció per activar Neteja de Carbon Browser manualment des de chrome://settings/cleanup està desactivada.
 
-      Si s'activa o es deixa sense establir, Neteja de Carbon Browser Browser Browser escanejarà periòdicament el sistema per detectar-hi programari no desitjat i, si en troba, preguntarà a l'usuari si el vol suprimir. L'opció per activar Neteja de Carbon Browser Browser Browser manualment des de chrome://settings està activada.
+      Si s'activa o es deixa sense establir, Neteja de Carbon Browser escanejarà periòdicament el sistema per detectar-hi programari no desitjat i, si en troba, preguntarà a l'usuari si el vol suprimir. L'opció per activar Neteja de Carbon Browser manualment des de chrome://settings està activada.
 
       Aquesta política només està disponible en instàncies de Windows que s'hagin unit a un domini de <ph name="MS_AD_NAME" /> o instàncies de Windows 10 Pro o Enterprise que s'hagin inscrit per a la gestió de dispositius.</translation>
 <translation id="3159375329008977062">L'usuari té permís per exportar i importar contenidors de Crostini a través de la IU</translation>
@@ -1280,7 +1280,7 @@ Si es desactiva aquest paràmetre, els usuaris no podran activar el servidor int
       Si un idioma està inclòs tant en aquesta política com a la política <ph name="SPELLCHECK_LANGUAGE_BLACKLIST_POLICY_NAME" />, es prioritzarà aquesta i s'activarà l'idioma del corrector ortogràfic.
 
       En aquests moments s'admeten els idiomes següents: af, bg, ca, cs, da, de, el, en-AU, en-CA, en-GB, en-US, es, es-419, es-AR, es-ES, es-MX, es-US, et, fa, fo, fr, he, hi, hr, hu, id, it, ko, lt, lv, nb, nl, pl, pt-BR, pt-PT, ro, ru, sh, sk, sl, sq, sr, sv, ta, tg, tr, uk, vi.</translation>
-<translation id="356579196325389849">Els usuaris poden configurar el canal de versió de Carbon Browser Browser Browser OS</translation>
+<translation id="356579196325389849">Els usuaris poden configurar el canal de versió de Carbon Browser OS</translation>
 <translation id="3575011234198230041">Autenticació HTTP</translation>
 <translation id="3577251398714997599">Configuració d'anuncis per als llocs web amb anuncis intrusius</translation>
 <translation id="357917253161699596">Permet que els usuaris gestionin els certificats electrònics</translation>
@@ -1295,9 +1295,9 @@ Si es desactiva aquest paràmetre, els usuaris no podran activar el servidor int
 <translation id="3646859102161347133">Defineix el tipus de lupa</translation>
 <translation id="3653237928288822292">Icona del proveïdor de cerca predeterminat</translation>
 <translation id="3660510274595679517">
-        Si aquesta política s'estableix en "true", la inscripció a la gestió al núvol és obligatòria i bloqueja el procés per obrir Carbon Browser Browser Browser si falla.
+        Si aquesta política s'estableix en "true", la inscripció a la gestió al núvol és obligatòria i bloqueja el procés per obrir Carbon Browser si falla.
 
-        Si aquesta política s'estableix en "false" o es deixa sense establir, la inscripció a la gestió al núvol és opcional i no bloqueja el procés per obrir Carbon Browser Browser Browser si falla.
+        Si aquesta política s'estableix en "false" o es deixa sense establir, la inscripció a la gestió al núvol és opcional i no bloqueja el procés per obrir Carbon Browser si falla.
 
         La inscripció a polítiques al núvol segons l'abast de l'equip utilitza aquesta política als ordinadors. La política es pot definir amb Registry o GPO a Windows, plist a Mac i el fitxer de polítiques JSON a Linux.</translation>
 <translation id="3660562134618097814">Transfereix les galetes del proveïdor d'identitat SAML durant l'inici de sessió</translation>
@@ -1473,9 +1473,9 @@ Si es desactiva aquest paràmetre, els usuaris no podran activar el servidor int
 <translation id="3963602271515417124">Si s'estableix en "true", es permetrà la confirmació remota per al dispositiu i es crearà i es penjarà automàticament un certificat al servidor de gestió de dispositius.
 
           Si s'estableix en "false" o no s'estableix, no es crearà cap certificat i les crides a l'API de l'extensió enterprise.platformKeys fallaran.</translation>
-<translation id="3964262920683972987">Configura la imatge de fons de la pantalla d'inici de sessió d'un dispositiu si ningú no hi ha iniciat la sessió. Per establir la política, cal especificar l'URL que pot fer servir el dispositiu Carbon Browser Browser Browser OS per baixar la imatge i un resum criptogràfic per verificar la integritat de la baixada. La imatge ha d'estar en format JPEG i no pot superar els 16 MB. S'ha de poder accedir a l'URL sense cap autenticació. La imatge de fons de pantalla es baixa i es desa a la memòria cau, i es tornarà a baixar si es modifiquen l'URL o el resum.
+<translation id="3964262920683972987">Configura la imatge de fons de la pantalla d'inici de sessió d'un dispositiu si ningú no hi ha iniciat la sessió. Per establir la política, cal especificar l'URL que pot fer servir el dispositiu Carbon Browser OS per baixar la imatge i un resum criptogràfic per verificar la integritat de la baixada. La imatge ha d'estar en format JPEG i no pot superar els 16 MB. S'ha de poder accedir a l'URL sense cap autenticació. La imatge de fons de pantalla es baixa i es desa a la memòria cau, i es tornarà a baixar si es modifiquen l'URL o el resum.
 
-      Si la política de fons de pantalla del dispositiu s'estableix, el dispositiu Carbon Browser Browser Browser OS baixarà la imatge i la farà servir a la pantalla d'inici de sessió si ningú no hi ha iniciat la sessió. Un cop un usuari l'hagi iniciada, la política de fons de pantalla de l'usuari s'executarà.
+      Si la política de fons de pantalla del dispositiu s'estableix, el dispositiu Carbon Browser OS baixarà la imatge i la farà servir a la pantalla d'inici de sessió si ningú no hi ha iniciat la sessió. Un cop un usuari l'hagi iniciada, la política de fons de pantalla de l'usuari s'executarà.
 
       Si la política de fons de pantalla del dispositiu es deixa sense establir, la política de fons de pantalla de l'usuari determinarà el que es mostra si està establerta.</translation>
 <translation id="3965339130942650562">Temps d'espera fins que s'executi el tancament de sessió de l'usuari inactiu</translation>
@@ -1483,11 +1483,11 @@ Si es desactiva aquest paràmetre, els usuaris no podran activar el servidor int
 <translation id="3984028218719007910">Determina si <ph name="PRODUCT_OS_NAME" /> conserva les dades de comptes locals després de tancar la sessió. Si es defineix a «true» (cert), <ph name="PRODUCT_OS_NAME" /> no conserva cap compte persistent i es descartaran totes les dades de la sessió de l'usuari després de tancar la sessió. Si aquesta política es defineix a «false» (fals) o no es configura, el dispositiu pot conservar dades d'usuari locals (xifrades).</translation>
 <translation id="398475542699441679">Aquesta política controla si s'activa l'extensió Compatibilitat amb navegadors antics.
 
-      Si aquesta política es deixa sense establir o s'estableix en "false", Carbon Browser Browser Browser no provarà d'iniciar URL designats en un altre navegador.
+      Si aquesta política es deixa sense establir o s'estableix en "false", Carbon Browser no provarà d'iniciar URL designats en un altre navegador.
 
-      Si aquesta política s'estableix en "true", Carbon Browser Browser Browser provarà d'iniciar alguns URL en un altre navegador (com ara Internet Explorer). Aquesta funció està configurada mitjançant les polítiques del grup <ph name="LEGACY_BROWSER_SUPPORT_POLICY_GROUP" />.
+      Si aquesta política s'estableix en "true", Carbon Browser provarà d'iniciar alguns URL en un altre navegador (com ara Internet Explorer). Aquesta funció està configurada mitjançant les polítiques del grup <ph name="LEGACY_BROWSER_SUPPORT_POLICY_GROUP" />.
 
-      Aquesta funció substitueix l'extensió <ph name="LEGACY_BROWSER_SUPPORT_EXTENSION_NAME" />. La configuració de l'extensió s'aplicarà a aquesta funció, però et recomanem que utilitzis les polítiques de Carbon Browser Browser Browser en lloc seu. Això garantirà una millor compatibilitat en el futur.</translation>
+      Aquesta funció substitueix l'extensió <ph name="LEGACY_BROWSER_SUPPORT_EXTENSION_NAME" />. La configuració de l'extensió s'aplicarà a aquesta funció, però et recomanem que utilitzis les polítiques de Carbon Browser en lloc seu. Això garantirà una millor compatibilitat en el futur.</translation>
 <translation id="3997519162482760140">URL que obtindran permís per accedir a dispositius de captura de vídeo en pàgines d'inici de sessió amb SAML</translation>
 <translation id="4001275826058808087">Els administradors de TI de dispositius empresarials poden utilitzar aquesta marca per controlar si es permet als usuaris bescanviar ofertes mitjançant el registre de Chrome OS.
 
@@ -1498,13 +1498,13 @@ Si es desactiva aquest paràmetre, els usuaris no podran activar el servidor int
 
           Aquesta política preval sobre una política <ph name="EXTENSION_INSTALL_BLACKLIST_POLICY_NAME" /> amb què pugui entrar en conflicte. Si se suprimeix d'aquesta llista una aplicació o una extensió que prèviament s'havia instal·lat a la força, <ph name="PRODUCT_NAME" /> la desinstal·larà automàticament.
 
-          En les instàncies de Windows que no formin part d'un domini que pertanyi a <ph name="MS_AD_NAME" />, la instal·lació forçada es limita a les aplicacions i les extensions incloses a Carbon Browser Browser Browser Web Store.
+          En les instàncies de Windows que no formin part d'un domini que pertanyi a <ph name="MS_AD_NAME" />, la instal·lació forçada es limita a les aplicacions i les extensions incloses a Carbon Browser Web Store.
 
           Tingues en compte que els usuaris poden modificar el codi font de qualsevol extensió amb les Eines per a desenvolupadors (la qual cosa podria provocar problemes de funcionament de l'extensió). Si et preocupa aquesta possibilitat, defineix la política <ph name="DEVELOPER_TOOLS_POLICY_NAME" />.
 
-          Cada element de la llista de la política és una cadena que conté un identificador d'extensió i, opcionalment, un URL d'actualització separats per punt i coma (<ph name="SEMICOLON" />). L'identificador d'extensió és la cadena de 32 lletres que, per exemple, es troba a <ph name="CHROME_EXTENSIONS_LINK" /> quan el mode de desenvolupador està activat. L'URL d'actualització, si s'especifica, ha de dirigir a un document XML de manifest d'actualització, tal com es descriu a <ph name="LINK_TO_EXTENSION_DOC1" />. De manera predeterminada, s'utilitza l'URL d'actualització de Carbon Browser Browser Browser Web Store, que actualment és "https://clients2.google.com/service/update2/crx". Tingues en compte que l'URL d'actualització definit en aquesta política només s'utilitza per a la instal·lació inicial; les properes actualitzacions de l'extensió faran servir l'URL d'actualització indicat al fitxer de manifest de l'extensió. Recorda que, fins a la versió 67 (inclosa) de <ph name="PRODUCT_NAME" />, també calia especificar de manera obligatòria i explícita l'URL d'actualització.
+          Cada element de la llista de la política és una cadena que conté un identificador d'extensió i, opcionalment, un URL d'actualització separats per punt i coma (<ph name="SEMICOLON" />). L'identificador d'extensió és la cadena de 32 lletres que, per exemple, es troba a <ph name="CHROME_EXTENSIONS_LINK" /> quan el mode de desenvolupador està activat. L'URL d'actualització, si s'especifica, ha de dirigir a un document XML de manifest d'actualització, tal com es descriu a <ph name="LINK_TO_EXTENSION_DOC1" />. De manera predeterminada, s'utilitza l'URL d'actualització de Carbon Browser Web Store, que actualment és "https://clients2.google.com/service/update2/crx". Tingues en compte que l'URL d'actualització definit en aquesta política només s'utilitza per a la instal·lació inicial; les properes actualitzacions de l'extensió faran servir l'URL d'actualització indicat al fitxer de manifest de l'extensió. Recorda que, fins a la versió 67 (inclosa) de <ph name="PRODUCT_NAME" />, també calia especificar de manera obligatòria i explícita l'URL d'actualització.
 
-          Per exemple, <ph name="EXTENSION_POLICY_EXAMPLE" /> instal·la l'extensió amb l'identificador <ph name="EXTENSION_ID_SAMPLE" /> des de l'URL d'actualització de Carbon Browser Browser Browser Web Store estàndard. Per obtenir més informació sobre com s'allotgen les extensions, consulta: <ph name="LINK_TO_EXTENSION_DOC2" />.
+          Per exemple, <ph name="EXTENSION_POLICY_EXAMPLE" /> instal·la l'extensió amb l'identificador <ph name="EXTENSION_ID_SAMPLE" /> des de l'URL d'actualització de Carbon Browser Web Store estàndard. Per obtenir més informació sobre com s'allotgen les extensions, consulta: <ph name="LINK_TO_EXTENSION_DOC2" />.
 
           Si aquesta política es deixa sense establir, no s'instal·larà automàticament cap aplicació ni cap extensió i l'usuari podrà desinstal·lar-ne qualsevol a <ph name="PRODUCT_NAME" />.
 
@@ -1600,7 +1600,7 @@ Si es desactiva aquest paràmetre, els usuaris no podran activar el servidor int
           Si estableixes aquesta política, els usuaris no la podran canviar ni substituir.
 
           Si aquesta política no s'estableix, les tecles permanents estaran desactivades d'entrada, però l'usuari les podrà activar en qualsevol moment.</translation>
-<translation id="4171331498167688968">Si la política s'estableix en "false", el programari de tercers podrà injectar codi executable als processos de Carbon Browser Browser Browser. Si la política no es defineix o s'estableix en "true", el programari de tercers no podrà introduir codi executable als processos de Carbon Browser Browser Browser.
+<translation id="4171331498167688968">Si la política s'estableix en "false", el programari de tercers podrà injectar codi executable als processos de Carbon Browser. Si la política no es defineix o s'estableix en "true", el programari de tercers no podrà introduir codi executable als processos de Carbon Browser.
 
       Independentment del valor d'aquesta política, el navegador no impedirà al programari de tercers introduir codi executable als seus processos en un ordinador que formi part d'un domini de <ph name="MS_AD_NAME" />.</translation>
 <translation id="4183229833636799228">Configuració predeterminada del connector <ph name="FLASH_PLUGIN_NAME" /></translation>
@@ -1663,11 +1663,11 @@ Si es desactiva aquest paràmetre, els usuaris no podran activar el servidor int
 <translation id="4298509794364745131">Indica una llista d'aplicacions que es poden activar com a aplicacions per prendre notes a la pantalla de bloqueig de <ph name="PRODUCT_OS_NAME" />.
 
       Si l'aplicació preferida per prendre notes està activada a la pantalla de bloqueig, en aquesta pantalla s'hi mostrarà un element d'IU per iniciar-la.
-      Quan s'hagi iniciat, l'aplicació podrà crear una finestra d'aplicació a la part superior de la pantalla de bloqueig i crear elements de dades (notes) a l'entorn de la pantalla de bloqueig. L'aplicació podrà importar notes creades a la sessió principal de l'usuari quan la sessió estigui desbloquejada. En aquests moments, a la pantalla de bloqueig només s'hi admeten aplicacions de Carbon Browser Browser Browser per prendre notes.
+      Quan s'hagi iniciat, l'aplicació podrà crear una finestra d'aplicació a la part superior de la pantalla de bloqueig i crear elements de dades (notes) a l'entorn de la pantalla de bloqueig. L'aplicació podrà importar notes creades a la sessió principal de l'usuari quan la sessió estigui desbloquejada. En aquests moments, a la pantalla de bloqueig només s'hi admeten aplicacions de Carbon Browser per prendre notes.
 
       Si la política es defineix, l'usuari podrà activar una aplicació a la pantalla de bloqueig només si el valor de la llista de polítiques conté l'identificador d'extensió de l'aplicació.
       Per tant, si aquesta política es defineix en una llista buida, no es permetrà en cap cas prendre notes des de la pantalla de bloqueig.
-      Tingues en compte que el fet que la política contingui un identificador d'aplicació no vol dir necessàriament que l'usuari pugui activar l'aplicació com a aplicació per prendre notes a la pantalla de bloqueig. Per exemple, a Carbon Browser Browser Browser 61, la plataforma també restringeix el conjunt d'aplicacions disponibles.
+      Tingues en compte que el fet que la política contingui un identificador d'aplicació no vol dir necessàriament que l'usuari pugui activar l'aplicació com a aplicació per prendre notes a la pantalla de bloqueig. Per exemple, a Carbon Browser 61, la plataforma també restringeix el conjunt d'aplicacions disponibles.
 
       Si la política no es defineix, no imposarà cap restricció al conjunt d'aplicacions que l'usuari pot activar a la pantalla de bloqueig.</translation>
 <translation id="4313767483634435271">Adreça MAC de la base designada del dispositiu</translation>
@@ -1807,7 +1807,7 @@ Si es desactiva aquest paràmetre, els usuaris no podran activar el servidor int
 <translation id="467236746355332046">Funcions compatibles:</translation>
 <translation id="4674167212832291997">Personalitza la llista dels patrons d'URL que <ph name="PRODUCT_FRAME_NAME" /> sempre ha de renderitzar.
 
-          Si no es defineix aquesta política, s'utilitzarà el renderitzador predeterminat per a tots els llocs, tal com es descriu a la política "Carbon Browser Browser BrowserFrameRendererSettings".
+          Si no es defineix aquesta política, s'utilitzarà el renderitzador predeterminat per a tots els llocs, tal com es descriu a la política "Carbon BrowserFrameRendererSettings".
 
           Per veure patrons d'exemple, consulteu l'enllaç https://www.chromium.org/developers/how-tos/chrome-frame-getting-started.</translation>
 <translation id="467449052039111439">Obre una llista d'URL</translation>
@@ -1904,10 +1904,10 @@ Si es desactiva aquest paràmetre, els usuaris no podran activar el servidor int
 
       Si aquesta política s'estableix en "false", <ph name="PRODUCT_NAME" /> no permetrà crear perfils des del gestor d'usuaris.</translation>
 <translation id="4970855112942626932">Desactiva l'inici de sessió al navegador</translation>
-<translation id="4978405676361550165">Si es defineix la política "OffHours", s'ignoraran les polítiques especificades del dispositiu (s'utilitza la configuració predeterminada d'aquestes polítiques) durant els intervals de temps definits. Carbon Browser Browser Browser tornarà a aplicar les polítiques del dispositiu en cada esdeveniment quan el període "OffHours" s'iniciï o finalitzi. L'usuari rebrà una notificació i se'l forçarà a tancar la sessió quan finalitzi el temps establert a "OffHours" i es modifiqui la configuració de la política del dispositiu (per exemple, quan un usuari iniciï la sessió amb un compte no permès).</translation>
+<translation id="4978405676361550165">Si es defineix la política "OffHours", s'ignoraran les polítiques especificades del dispositiu (s'utilitza la configuració predeterminada d'aquestes polítiques) durant els intervals de temps definits. Carbon Browser tornarà a aplicar les polítiques del dispositiu en cada esdeveniment quan el període "OffHours" s'iniciï o finalitzi. L'usuari rebrà una notificació i se'l forçarà a tancar la sessió quan finalitzi el temps establert a "OffHours" i es modifiqui la configuració de la política del dispositiu (per exemple, quan un usuari iniciï la sessió amb un compte no permès).</translation>
 <translation id="4980635395568992380">Tipus de dades:</translation>
 <translation id="4983201894483989687">Permet que s'executin els connectors que estiguin obsolets</translation>
-<translation id="4986560318567565414">Camí a Carbon Browser Browser Browser per canviar des del navegador alternatiu.</translation>
+<translation id="4986560318567565414">Camí a Carbon Browser per canviar des del navegador alternatiu.</translation>
 <translation id="4988291787868618635">Acció que cal dur a terme quan s'arriba al retard d'inactivitat</translation>
 <translation id="5034604678285451405">Estableix el percentatge del llindar de bateria en què s'ha d'aplicar el canvi d'alimentació en els pics d'ús.
 
@@ -1971,11 +1971,11 @@ Si es desactiva aquest paràmetre, els usuaris no podran activar el servidor int
       Si la política es defineix en 0, el canvi de contrasenya del compte de l'ordinador es desactiva.
 
       Tingues en compte que les contrasenyes poden tenir una antiguitat superior al nombre de dies especificat si el dispositiu del client ha estat sense connexió durant un període més llarg de temps.</translation>
-<translation id="510196893779239086">Aquesta política controla si es tanca Carbon Browser Browser Browser totalment quan l'última pestanya canvia a un altre navegador.
+<translation id="510196893779239086">Aquesta política controla si es tanca Carbon Browser totalment quan l'última pestanya canvia a un altre navegador.
 
-      Si aquesta política es deixa sense establir o s'estableix en "true", Carbon Browser Browser Browser mantindrà oberta almenys una pestanya després de canviar a un navegador alternatiu.
+      Si aquesta política es deixa sense establir o s'estableix en "true", Carbon Browser mantindrà oberta almenys una pestanya després de canviar a un navegador alternatiu.
 
-      Si aquesta política s'estableix en "false", Carbon Browser Browser Browser tancarà la pestanya després de canviar a un navegador alternatiu, encara que sigui l'última. És a dir, Carbon Browser Browser Browser es tancarà totalment.</translation>
+      Si aquesta política s'estableix en "false", Carbon Browser tancarà la pestanya després de canviar a un navegador alternatiu, encara que sigui l'última. És a dir, Carbon Browser es tancarà totalment.</translation>
 <translation id="5102203758995933166">Permet aplicar la configuració de la xarxa per usuari a un dispositiu <ph name="PRODUCT_OS_NAME" />. La configuració de la xarxa és una cadena en format JSON, segons la definició del format de la configuració de xarxa oberta.</translation>
 <translation id="5105313908130842249">Retard del bloqueig de pantalla quan s'utilitza bateria</translation>
 <translation id="5108031557082757679">Impressores desactivades per a dispositius d'empresa</translation>
@@ -1990,7 +1990,7 @@ Si es desactiva aquest paràmetre, els usuaris no podran activar el servidor int
 <translation id="5148753489738115745">Us permet especificar els paràmetres especials que s'utilitzen quan <ph name="PRODUCT_FRAME_NAME" /> inicia <ph name="PRODUCT_NAME" />.
 
           Si no definiu aquesta política, s'utilitzarà la línia d'ordres predeterminada.</translation>
-<translation id="5152787786897382519">Tant Carbon Browser Browser Browser com Google Carbon Browser Browser Browser tenen alguns grups de polítiques que depenen els uns dels altres per proporcionar control sobre una funció. Aquests conjunts es representen amb els grups de polítiques següents. Com que les polítiques poden tenir diverses fonts, només s'aplicaran els valors que procedeixin de la font amb més prioritat. Els valors que procedeixin d'una font amb menys prioritat del mateix grup s'ignoraran. L'ordre de prioritat està definit a <ph name="POLICY_PRIORITY_DOC_URL" />.</translation>
+<translation id="5152787786897382519">Tant Carbon Browser com Google Carbon Browser tenen alguns grups de polítiques que depenen els uns dels altres per proporcionar control sobre una funció. Aquests conjunts es representen amb els grups de polítiques següents. Com que les polítiques poden tenir diverses fonts, només s'aplicaran els valors que procedeixin de la font amb més prioritat. Els valors que procedeixin d'una font amb menys prioritat del mateix grup s'ignoraran. L'ordre de prioritat està definit a <ph name="POLICY_PRIORITY_DOC_URL" />.</translation>
 <translation id="5159469559091666409">La freqüència, en mil·lisegons, amb què s'envien paquets de xarxa de supervisió.
 
       Si aquesta política no s'estableix, l'interval predeterminat és de 3 minuts. L'interval mínim és de 30 segons i l'interval màxim és de 24 hores. Tots els valors que no es trobin dins d'aquest interval es restringiran al límit respectiu.</translation>
@@ -2075,7 +2075,7 @@ Si es desactiva aquest paràmetre, els usuaris no podran activar el servidor int
           Un valor de llista negra de "*" significa que tots els amfitrions de missatgeria s'inclouran a la llista negra llevat que s'indiquin explícitament a la llista blanca.
 
           Si aquesta política no es defineix, <ph name="PRODUCT_NAME" /> carregarà tots els amfitrions de missatgeria nativa instal·lats.</translation>
-<translation id="5272684451155669299">Si s'estableix en "true", l'usuari pot utilitzar el maquinari dels dispositius Carbon Browser Browser Browser per confirmar la seva identitat de manera remota de cara a l'entitat emissora de certificats de privadesa a través de l'<ph name="ENTERPRISE_PLATFORM_KEYS_API" /> mitjançant <ph name="CHALLENGE_USER_KEY_FUNCTION" />.
+<translation id="5272684451155669299">Si s'estableix en "true", l'usuari pot utilitzar el maquinari dels dispositius Carbon Browser per confirmar la seva identitat de manera remota de cara a l'entitat emissora de certificats de privadesa a través de l'<ph name="ENTERPRISE_PLATFORM_KEYS_API" /> mitjançant <ph name="CHALLENGE_USER_KEY_FUNCTION" />.
 
           Si s'estableix en "false" o no s'estableix, les crides a l'API tornaran un codi d'error.</translation>
 <translation id="5277806246014825877">Permet que aquest usuari executi Crostini.
@@ -2251,7 +2251,7 @@ Si la política no es defineix, els usuaris podran triar si el prestatge s'ha d'
         Si la política s'estableix en "false", els usuaris no podran enviar comentaris a Google.
 
         Si la política no s'estableix o s'estableix en "true", els usuaris podran enviar comentaris a Google des de Menú-&gt;Ajuda-&gt;Informa d'un problema o mitjançant la combinació de tecles pertinent.</translation>
-<translation id="5581292529942108810">Configura les polítiques relacionades amb Carbon Browser Browser Browser Reporting Extension.
+<translation id="5581292529942108810">Configura les polítiques relacionades amb Carbon Browser Reporting Extension.
 
       Aquesta política només funciona quan l'extensió <ph name="CHROME_REPORTING_EXTENSION_NAME" /> està activada i l'ordinador està inscrit amb <ph name="MACHINE_LEVEL_USER_CLOUD_POLICY_ENROLLMENT_TOKEN_POLICY_NAME" />.</translation>
 <translation id="5584132346604748282">Controla els serveis d'ubicació de Google a Android</translation>
@@ -2272,7 +2272,7 @@ Si la política no es defineix, els usuaris podran triar si el prestatge s'ha d'
 
       NOTA: a Android, l'aïllament de llocs web és experimental. Amb el temps se'n millorarà la compatibilitat, però actualment pot provocar problemes de rendiment.
 
-      NOTA: aquesta política només s'aplica a Carbon Browser Browser Browser als dispositius Android amb més d'1 GB de RAM. Per aplicar-la en altres plataformes que no siguin d'Android, fes servir IsolateOrigins.
+      NOTA: aquesta política només s'aplica a Carbon Browser als dispositius Android amb més d'1 GB de RAM. Per aplicar-la en altres plataformes que no siguin d'Android, fes servir IsolateOrigins.
       </translation>
 <translation id="5599461642204007579">Configuració de la gestió de la política <ph name="MS_AD_NAME" /></translation>
 <translation id="5630352020869108293">Restaura l'última sessió</translation>
@@ -2358,7 +2358,7 @@ Si la política no es defineix, els usuaris podran triar si el prestatge s'ha d'
       Si no es configura la política, l'usuari podrà canviar aquesta opció de configuració.
       </translation>
 <translation id="5832274826894536455">Polítiques obsoletes</translation>
-<translation id="5835124959204887277">Especifica els URL i els dominis per als quals no es mostrarà cap avís quan se sol·licitin certificats de confirmació de les claus de seguretat. A més, s'enviarà un senyal a la clau de seguretat per indicar que es pot utilitzar una confirmació individual. En cas contrari, els usuaris de Carbon Browser Browser Browser 65 i versions posteriors rebran un avís quan els llocs web sol·licitin una confirmació de les claus de seguretat.
+<translation id="5835124959204887277">Especifica els URL i els dominis per als quals no es mostrarà cap avís quan se sol·licitin certificats de confirmació de les claus de seguretat. A més, s'enviarà un senyal a la clau de seguretat per indicar que es pot utilitzar una confirmació individual. En cas contrari, els usuaris de Carbon Browser 65 i versions posteriors rebran un avís quan els llocs web sol·licitin una confirmació de les claus de seguretat.
 
       Els URL (com ara https://example.com/un/camí) només s'identifiquen com a appID d'U2F. Els dominis (com ara example.com) només tornaran resultats com a identificadors RP de WebAuthn. Per tant, per permetre alhora les API de WebAuthn i d'U2F en un lloc web determinat, s'ha d'incloure tant el domini com l'URL de WebAuthn.</translation>
 <translation id="5836064773277134605">Restringeix l'interval de port UDP utilitzat per l'amfitrió d'accés remot</translation>
@@ -2414,7 +2414,7 @@ Si la política no es defineix, els usuaris podran triar si el prestatge s'ha d'
           Si s'estableix aquesta política, els usuaris podran anular-la temporalment si activen o desactiven el cursor gran. No obstant això, l'elecció de l'usuari no és permanent i l'estat predeterminat es restablirà quan la pantalla d'inici de sessió es torni a mostrar o si l'usuari resta inactiu a la pantalla d'inici de sessió durant un minut.
 
           Si no s'estableix aquesta política, el cursor gran es desactivarà quan la pantalla d'inici de sessió es mostri per primera vegada. Els usuaris podran activar o desactivar el cursor gran en qualsevol moment i el seu estat a la pantalla d'inici de sessió es mantindrà entre els usuaris.</translation>
-<translation id="5929855945144989709">Permet que els dispositius executin ordinadors virtuals a Carbon Browser Browser Browser OS</translation>
+<translation id="5929855945144989709">Permet que els dispositius executin ordinadors virtuals a Carbon Browser OS</translation>
 <translation id="5932767795525445337">Aquesta política també es pot utilitzar per fixar les aplicacions per a Android.</translation>
 <translation id="5936622343001856595">Força que les consultes de Cerca web de Google es facin amb l'opció SafeSearch activada i impedeix que els usuaris canviïn aquest paràmetre.
 
@@ -2468,7 +2468,7 @@ Si aquesta política no es defineix o no s'activa, les ordres d'impressió faran
           El valor de la política s'ha d'especificar en mil·lisegons. Els valors es fixen perquè siguin inferiors al temps d'inactivitat.</translation>
 <translation id="6097601282776163274">Activa la recollida de dades anonimitzades mitjançant URL amb clau</translation>
 <translation id="6099853574908182288">Mode d'impressió en color predeterminat</translation>
-<translation id="6107642964266628393">Controla com i quan s'apliquen les actualitzacions de Carbon Browser Browser Browser OS.</translation>
+<translation id="6107642964266628393">Controla com i quan s'apliquen les actualitzacions de Carbon Browser OS.</translation>
 <translation id="6111936128861357925">Permet el joc sorpresa del dinosaure</translation>
 <translation id="6114416803310251055">obsolet</translation>
 <translation id="6133088669883929098">Permet que tots els llocs utilitzin la generació de claus</translation>
@@ -2489,7 +2489,7 @@ Si aquesta política no es defineix o no s'activa, les ordres d'impressió faran
 
       Si aquesta política no es defineix o es defineix en "false", no es recopilaran ni es penjaran dades.
       Si aquesta política es defineix en "true", les dades es recopilaran i es penjaran a la consola d'administració de Google.
-      Per controlar les dades que es pengen, utilitza les polítiques del grup Carbon Browser Browser Browser Reporting Extension.
+      Per controlar les dades que es pengen, utilitza les polítiques del grup Carbon Browser Reporting Extension.
 
       Aquesta política només funciona quan l'ordinador està inscrit amb <ph name="MACHINE_LEVEL_USER_CLOUD_POLICY_ENROLLMENT_TOKEN_POLICY_NAME" />.
 
@@ -2558,7 +2558,7 @@ Si aquesta política no es defineix o no s'activa, les ordres d'impressió faran
 <translation id="6282799760374509080">Permet o bloqueja la captura d'àudio</translation>
 <translation id="6284362063448764300">TLS 1.1</translation>
 <translation id="6310223829319187614">Activa la funció de compleció automàtica del nom de domini durant l'inici de sessió de l'usuari</translation>
-<translation id="6315673513957120120">Carbon Browser Browser Browser mostra una pàgina d'advertiment quan els usuaris accedeixen a llocs que tenen errors de SSL. De manera predeterminada o quan aquesta política s'estableix en "true", els usuaris poden fer clic per tancar aquestes pàgines d'advertiment.
+<translation id="6315673513957120120">Carbon Browser mostra una pàgina d'advertiment quan els usuaris accedeixen a llocs que tenen errors de SSL. De manera predeterminada o quan aquesta política s'estableix en "true", els usuaris poden fer clic per tancar aquestes pàgines d'advertiment.
       Si aquesta política s'estableix en "false", els usuaris no poden fer clic per tancar les pàgines d'advertiment.</translation>
 <translation id="6319198883324703402">Defineix quan s'envia la primera notificació de reinici a l'usuari</translation>
 <translation id="6352543686437322588">Un compte local del dispositiu per iniciar la sessió automàticament després d'un retard.
@@ -2600,7 +2600,7 @@ Si aquesta política no es defineix o no s'activa, les ordres d'impressió faran
           Si decideixes detectar automàticament el servidor intermediari, es proporcionarà l'URL de script "http://wpad/wpad.dat" a les aplicacions per a Android. No s'utilitzarà cap altra part del protocol de detecció automàtica del servidor intermediari.
 
           Si decideixes fer servir un script de servidor intermediari .pac, es proporcionarà l'URL de script a les aplicacions per a Android.</translation>
-<translation id="6430366557948788869">Carbon Browser Browser Browser Reporting Extension</translation>
+<translation id="6430366557948788869">Carbon Browser Reporting Extension</translation>
 <translation id="6440051664870270040">Permet que els llocs web naveguin i obrin finestres emergents simultàniament</translation>
 <translation id="6447948611083700881">Còpia de seguretat i restauració desactivades</translation>
 <translation id="6449476513004303784">No permetis que els usuaris gestionin els certificats</translation>
@@ -2649,9 +2649,9 @@ Si aquesta política no es defineix o no s'activa, les ordres d'impressió faran
 <translation id="6536600139108165863">Reinicia automàticament en apagar el dispositiu</translation>
 <translation id="6539246272469751178">Aquesta política no té cap efecte a les aplicacions per a Android. Aquestes aplicacions utilitzen sempre el directori de baixades predeterminat i no poden accedir a cap fitxer que <ph name="PRODUCT_OS_NAME" /> baixi a un altre directori.</translation>
 <translation id="654303922206238013">Estratègia de migració per a eCryptfs</translation>
-<translation id="6544897973797372144">Si aquesta política s'estableix com a certa i no s'especifica la política Carbon Browser Browser BrowserOsReleaseChannel, els usuaris del domini de vinculació podran canviar el canal de llançament del dispositiu. Si aquesta política s'estableix com a falsa, el dispositiu es bloquejarà a tots els canals on s'hagi establert per darrera vegada.
+<translation id="6544897973797372144">Si aquesta política s'estableix com a certa i no s'especifica la política Carbon BrowserOsReleaseChannel, els usuaris del domini de vinculació podran canviar el canal de llançament del dispositiu. Si aquesta política s'estableix com a falsa, el dispositiu es bloquejarà a tots els canals on s'hagi establert per darrera vegada.
 
-      La política Carbon Browser Browser BrowserOsReleaseChannel anul·larà el canal seleccionat per l'usuari, però si el canal de la política és més estable que el que s'ha instal·lat al dispositiu, el canal només canviarà un cop la versió del canal més estable passi a un número de versió superior a l'instal·lat al dispositiu.</translation>
+      La política Carbon BrowserOsReleaseChannel anul·larà el canal seleccionat per l'usuari, però si el canal de la política és més estable que el que s'ha instal·lat al dispositiu, el canal només canviarà un cop la versió del canal més estable passi a un número de versió superior a l'instal·lat al dispositiu.</translation>
 <translation id="6553143066970470539">Percentatge de brillantor de la pantalla</translation>
 <translation id="6559057113164934677">No permetis que cap lloc accedeixi a la càmera ni al micròfon</translation>
 <translation id="6561396069801924653">Mostra les opcions d'accessibilitat al menú de la safata del sistema</translation>
@@ -2729,7 +2729,7 @@ Si aquesta política no es defineix o no s'activa, les ordres d'impressió faran
 <translation id="6698632841807204978">Permet la impressió monocroma</translation>
 <translation id="6699880231565102694">Activació de l'autenticació de dos factors per als amfitrions d'accés remot</translation>
 <translation id="6731757988219967594">Filtra els llocs web de nivell superior amb contingut per a adults (però no els iframes inserits)</translation>
-<translation id="6734521799274931721">Controla si la funció Fitxers compartits de la xarxa estarà disponible per a Carbon Browser Browser Browser OS</translation>
+<translation id="6734521799274931721">Controla si la funció Fitxers compartits de la xarxa estarà disponible per a Carbon Browser OS</translation>
 <translation id="6735701345096330595">Força l'activació del corrector ortogràfic d'idiomes</translation>
 <translation id="673699536430961464">Aquesta opció de configuració permet que els usuaris canviïn d'un compte de Google a un altre des de l'àrea de contingut de la finestra del navegador després que hagin iniciat la sessió al dispositiu <ph name="PRODUCT_OS_NAME" />.
 
@@ -2737,7 +2737,7 @@ Si aquesta política no es defineix o no s'activa, les ordres d'impressió faran
 
       Si aquesta política no es defineix o es defineix en "true", s'aplicarà el comportament predeterminat: els usuaris podran iniciar la sessió en un altre compte des de l'àrea de contingut del navegador, excepte en el cas dels comptes secundaris, en què es bloquejarà aquesta política a l'àrea de contingut dels navegadors que no estiguin en mode d'incògnit.
 
-      En cas que no vulguis permetre l'inici de sessió a un altre compte mitjançant el mode d'incògnit, pots bloquejar aquest mode amb la política PrivateModeAvailability.
+      En cas que no vulguis permetre l'inici de sessió a un altre compte mitjançant el mode d'incògnit, pots bloquejar aquest mode amb la política privateModeAvailability.
 
       Tingues en compte que els usuaris poden bloquejar les galetes per accedir als serveis de Google sense autenticar-se.</translation>
 <translation id="6757438632136860443">Permet definir una llista de patrons d'URL que especifiquin llocs que poden executar el connector <ph name="FLASH_PLUGIN_NAME" />.
@@ -2774,7 +2774,7 @@ Si aquesta política no es defineix o no s'activa, les ordres d'impressió faran
 
       Si aquesta política s'estableix en "false", no s'utilitzarà mai el client DNS integrat.
 
-      Si aquesta política es deixa sense establir, el client DNS integrat s'activarà de manera predeterminada a MacOS, Android (quan no estiguin activats ni el DNS privat ni la VPN) i Carbon Browser Browser BrowserOS, i els usuaris podran canviar la configuració i establir si s'utilitzarà o no el client DNS integrat editant chrome://flags o especificant una marca de la línia d'ordres.</translation>
+      Si aquesta política es deixa sense establir, el client DNS integrat s'activarà de manera predeterminada a MacOS, Android (quan no estiguin activats ni el DNS privat ni la VPN) i Carbon BrowserOS, i els usuaris podran canviar la configuració i establir si s'utilitzarà o no el client DNS integrat editant chrome://flags o especificant una marca de la línia d'ordres.</translation>
 <translation id="6843296367238757293">Aquesta política es considera obsoleta. No es recomana fer-la servir. Més informació a https://support.google.com/chrome/a/answer/7643500</translation>
 <translation id="684856667300805181">Aquesta política s'ha suprimit a <ph name="PRODUCT_NAME" /> 68 i s'ha substituït per <ph name="ARC_GLS_POLICY_NAME" />.</translation>
 <translation id="6856743875250214792">Aquesta política està obsoleta i s'ha tret d'M66, perquè només s'utilitzava per fer proves internes i és un requisit de seguretat.
@@ -2817,7 +2817,7 @@ Si aquesta política no es defineix o no s'activa, les ordres d'impressió faran
 
       NOTA: a Android, l'aïllament de llocs web és experimental. Amb el temps se'n millorarà la compatibilitat, però actualment pot provocar problemes de rendiment.
 
-      NOTA: aquesta política només s'aplica a Carbon Browser Browser Browser als dispositius Android amb més d'1 GB de RAM. Per aplicar-la en altres plataformes que no siguin d'Android, fes servir SitePerProcess.
+      NOTA: aquesta política només s'aplica a Carbon Browser als dispositius Android amb més d'1 GB de RAM. Per aplicar-la en altres plataformes que no siguin d'Android, fes servir SitePerProcess.
       </translation>
 <translation id="6922884955650325312">Bloqueja el connector <ph name="FLASH_PLUGIN_NAME" /></translation>
 <translation id="6923366716660828830">Especifica el nom del proveïdor de cerca predeterminat. Si es deixa buit o no es defineix, s'utilitzarà el nom de l'amfitrió especificat a l'URL de cerca. Aquesta política només es tindrà en compte si la política "DefaultSearchProviderEnabled" està activada.</translation>
@@ -2901,9 +2901,9 @@ Si aquesta política no es defineix o no s'activa, les ordres d'impressió faran
 
       Si la política s'estableix en "false" o no s'estableix, és possible que <ph name="PRODUCT_NAME" /> no reculli ni pengi aquests registres.
 
-      Aquests registres contenen informació de diagnòstic útil a l'hora de depurar problemes relacionats amb trucades d'àudio o videotrucades a Carbon Browser Browser Browser, com ara l'hora i la mida dels paquets RTP enviats i rebuts, comentaris sobre la congestió de la xarxa, i metadades sobre l'hora i la qualitat dels marcs d'àudio i de vídeo. Aquests registres no inclouen contingut d'àudio ni vídeo de les trucades.
+      Aquests registres contenen informació de diagnòstic útil a l'hora de depurar problemes relacionats amb trucades d'àudio o videotrucades a Carbon Browser, com ara l'hora i la mida dels paquets RTP enviats i rebuts, comentaris sobre la congestió de la xarxa, i metadades sobre l'hora i la qualitat dels marcs d'àudio i de vídeo. Aquests registres no inclouen contingut d'àudio ni vídeo de les trucades.
 
-      Aquesta recollida de dades que fa Carbon Browser Browser Browser només la poden activar els serveis web de Google, com ara Google Hangouts o Google Meet.
+      Aquesta recollida de dades que fa Carbon Browser només la poden activar els serveis web de Google, com ara Google Hangouts o Google Meet.
 
       Google pot associar aquests registres, mitjançant un identificador de sessió, a altres registres recollits pel servei de Google per tal de facilitar la depuració.
       </translation>
@@ -3086,7 +3086,7 @@ Si aquesta política no es defineix o no s'activa, les ordres d'impressió faran
 <translation id="7329968046053403405">Especifica de quin tipus han de ser els comptes que proporciona l'aplicació d'autenticació per a Android que admet l'autenticació <ph name="HTTP_NEGOTIATE" /> (per exemple, l'autenticació Kerberos). El proveïdor de l'aplicació d'autenticació ha de facilitar aquesta informació. Per obtenir informació més detallada, consulteu https://goo.gl/hajyfN.
 
           Si no es proporciona cap opció de configuració, l'autenticació <ph name="HTTP_NEGOTIATE" /> es desactiva a Android.</translation>
-<translation id="7331962793961469250">Quan es defineix com a True, les promocions de les aplicacions de Carbon Browser Browser Browser Web Store no apareixeran a la pàgina de pestanya nova. En definir aquesta opció a False o en deixar-la sense definir, les promocions de les aplicacions de Carbon Browser Browser Browser Web Store apareixeran a la pàgina de pestanya nova.</translation>
+<translation id="7331962793961469250">Quan es defineix com a True, les promocions de les aplicacions de Carbon Browser Web Store no apareixeran a la pàgina de pestanya nova. En definir aquesta opció a False o en deixar-la sense definir, les promocions de les aplicacions de Carbon Browser Web Store apareixeran a la pàgina de pestanya nova.</translation>
 <translation id="7332963785317884918">Aquesta política està obsoleta. <ph name="PRODUCT_OS_NAME" /> sempre utilitzarà l'estratègia de neteja RemoveLRU.
 
       Controla el comportament de neteja automàtic en dispositius <ph name="PRODUCT_OS_NAME" />. La neteja automàtica s'activa quan la quantitat d'espai de disc lliure assoleix un nivell crític per recuperar part de l'espai de disc.
@@ -3139,7 +3139,7 @@ Si aquesta política no es defineix o no s'activa, les ordres d'impressió faran
       </translation>
 <translation id="7506269062143646163">Activa la compatibilitat amb Signed HTTP Exchange (SXG).
 
-          Si aquesta política s'activa o no s'estableix, Google Carbon Browser Browser Browser acceptarà el contingut web publicat com a Signed HTTP Exchanges.
+          Si aquesta política s'activa o no s'estableix, Google Carbon Browser acceptarà el contingut web publicat com a Signed HTTP Exchanges.
 
           Si aquesta política es desactiva, Signed HTTP Exchanges no es podrà carregar.</translation>
 <translation id="7511361072385293666">Si aquesta política s'estableix en "true" o no es configura, es permet utilitzar el protocol QUIC a <ph name="PRODUCT_NAME" />.
@@ -3178,7 +3178,7 @@ Si aquesta política no es defineix o no s'activa, les ordres d'impressió faran
 
       Si aquesta política es deixa sense establir o s'estableix en "0", en navegar a un URL designat, l'URL s'obre immediatament en un navegador alternatiu.
 
-      Si aquesta política s'estableix en un altre número, Carbon Browser Browser Browser mostra un missatge durant aquest nombre de mil·lisegons i, a continuació, obre el navegador alternatiu.</translation>
+      Si aquesta política s'estableix en un altre número, Carbon Browser mostra un missatge durant aquest nombre de mil·lisegons i, a continuació, obre el navegador alternatiu.</translation>
 <translation id="7593523670408385997">Defineix la mida de memòria cau que <ph name="PRODUCT_NAME" /> utilitzarà per emmagatzemar fitxers de la memòria cau al disc.
 
       Si definiu aquesta política, <ph name="PRODUCT_NAME" /> utilitzarà la mida de memòria cau proporcionada, tant si l'usuari ha marcat "--disk-cache-size" com si no. El valor que s'especifica en aquesta política no és un límit estricte, és més aviat un suggeriment per al sistema de memòria cau; qualsevol valor per sota d'uns quants megabytes és massa petit i s'arrodonirà a l'alça per arribar a un mínim acceptable.
@@ -3347,7 +3347,7 @@ Si aquesta política no es defineix o no s'activa, les ordres d'impressió faran
 
       NOTA: fins a la versió 45, aquesta política només s'admetia en mode quiosc.</translation>
 <translation id="7912255076272890813">Configuració dels tipus d'aplicacions i d'extensions permeses</translation>
-<translation id="7922358664346625612">Mantén oberta l'última pestanya a Carbon Browser Browser Browser.</translation>
+<translation id="7922358664346625612">Mantén oberta l'última pestanya a Carbon Browser.</translation>
 <translation id="793134539373873765">Permet especificar si s'utilitzarà la tecnologia d'igual a igual (P2P) per a les càrregues útils d'actualització del sistema operatiu. Si el valor s'estableix com a True, els dispositius compartiran i provaran de consumir les càrregues útils d'actualització a la xarxa LAN, amb la qual cosa és possible que es redueixi l'ús i la congestió de l'amplada de banda d'Internet. Si la càrrega útil d'actualització no està disponible a la xarxa LAN, el dispositiu farà les baixades des d'un servidor d'actualitzacions. Si el valor s'estableix com a False o si no es configura, no es farà servir P2P.</translation>
 <translation id="7933141401888114454">Activa la creació d'usuaris supervisats.</translation>
 <translation id="793473937901685727">Estableix la disponibilitat de certificats per a aplicacions ARC</translation>
@@ -3474,7 +3474,7 @@ Si es defineix aquesta política, la pantalla d'inici de sessió farà servir la
 Si la política no es defineix, <ph name="PRODUCT_OS_NAME" /> farà servir l'ID del compte de correu electrònic del compte local del dispositiu com a nom de visualització a la pantalla d'inici de sessió.
 
 Aquesta política s'ignora en els comptes d'usuari normals.</translation>
-<translation id="8259375588339409826">Tant Carbon Browser Browser Browser com Carbon Browser Browser Browser admeten el mateix conjunt de polítiques. Tingues en compte que aquest document pot incloure polítiques no publicades (per exemple, l'entrada "Compatible amb" pot fer referència a una versió de <ph name="PRODUCT_NAME" /> que encara no s'ha publicat). Aquestes polítiques es poden canviar o suprimir sense avís previ i no s'hi proporcionen garanties de cap tipus, incloses les garanties relacionades amb les seves propietats de seguretat i privadesa.
+<translation id="8259375588339409826">Tant Carbon Browser com Carbon Browser admeten el mateix conjunt de polítiques. Tingues en compte que aquest document pot incloure polítiques no publicades (per exemple, l'entrada "Compatible amb" pot fer referència a una versió de <ph name="PRODUCT_NAME" /> que encara no s'ha publicat). Aquestes polítiques es poden canviar o suprimir sense avís previ i no s'hi proporcionen garanties de cap tipus, incloses les garanties relacionades amb les seves propietats de seguretat i privadesa.
 
 La finalitat exclusiva d'aquestes polítiques és configurar instàncies de <ph name="PRODUCT_NAME" /> internes de la teva organització. L'ús de les polítiques fora de l'organització (per exemple, en un programa distribuït públicament) es considera programari maliciós i és possible que Google i els proveïdors d'antivirus l'etiquetin com a tal.
 
@@ -3488,7 +3488,7 @@ La manera recomanada de configurar la política a Windows és amb GPO, tot i que
 
       Si la política s'estableix en "false", no s'informarà de les estadístiques.
       Si s'estableix en "true" o es deixa sense establir, s'informarà de les estadístiques.</translation>
-<translation id="8294750666104911727">Normalment, les pàgines compatibles amb X-UA que s'estableixen com a chrome=1 es renderitzen a <ph name="PRODUCT_FRAME_NAME" />, independentment de la política "Carbon Browser Browser BrowserFrameRendererSettings".
+<translation id="8294750666104911727">Normalment, les pàgines compatibles amb X-UA que s'estableixen com a chrome=1 es renderitzen a <ph name="PRODUCT_FRAME_NAME" />, independentment de la política "Carbon BrowserFrameRendererSettings".
 
           Si activeu el paràmetre, no se cercaran metaetiquetes a les pàgines.
 
@@ -3513,7 +3513,7 @@ La manera recomanada de configurar la política a Windows és amb GPO, tot i que
 <translation id="8339420913453596618">Segon factor desactivat</translation>
 <translation id="8344454543174932833">Importació de les adreces d'interès des del navegador predeterminat en la primera execució</translation>
 <translation id="8359734107661430198">Activa l'API de ExampleDeprecatedFeature fins al 02/09/2008</translation>
-<translation id="8367209241899435947">Activa Neteja de Carbon Browser Browser Browser a Windows</translation>
+<translation id="8367209241899435947">Activa Neteja de Carbon Browser a Windows</translation>
 <translation id="8369602308428138533">Retard de la desactivació de pantalla quan s'utilitza alimentació</translation>
 <translation id="8371178326720637170">Permet que les extensions gestionades utilitzin l'API Enterprise Hardware Platform</translation>
 <translation id="8374747520743832795">Informa d'estadístiques del maquinari i d'identificadors relacionats amb l'alimentació.
@@ -3579,14 +3579,14 @@ La manera recomanada de configurar la política a Windows és amb GPO, tot i que
 <translation id="8484458986062090479">Personalitza la llista de patrons d'URL que ha de renderitzar sempre el navegador amfitrió.
 
 
-          Si no es defineix aquesta política, s'utilitzarà el renderitzador predeterminat per a tots els llocs, tal com es descriu a la política "Carbon Browser Browser BrowserFrameRendererSettings".
+          Si no es defineix aquesta política, s'utilitzarà el renderitzador predeterminat per a tots els llocs, tal com es descriu a la política "Carbon BrowserFrameRendererSettings".
 
 
           Per veure exemples de patrons, consulteu l'enllaç https://www.chromium.org/developers/how-tos/chrome-frame-getting-started.</translation>
 <translation id="8489964335640955763">PluginVm</translation>
 <translation id="8493645415242333585">Desactiva el desament de l'historial de navegació</translation>
 <translation id="8499172469244085141">Configuració predeterminada (els usuaris la poden sobreescriure)</translation>
-<translation id="849962487677588458">Aquesta política es considera obsoleta. Està previst que se suprimeixi a Carbon Browser Browser Browser 78 i que no se substitueixi.
+<translation id="849962487677588458">Aquesta política es considera obsoleta. Està previst que se suprimeixi a Carbon Browser 78 i que no se substitueixi.
 
       La política admet HTTP/0.9 en ports que no siguin 80 per a HTTP i 443 per a HTTPS.
 
@@ -3613,7 +3613,7 @@ La manera recomanada de configurar la política a Windows és amb GPO, tot i que
 
       En aquesta política, "versió" pot ser una versió exacta com ara "61.0.3163.120" o un prefix per a la versió com ara "61.0".  </translation>
 <translation id="8544375438507658205">Renderitzador HTML predeterminat per a <ph name="PRODUCT_FRAME_NAME" /></translation>
-<translation id="8544465954173828789">Permet que se sincronitzin missatges SMS del telèfon al dispositiu Carbon Browser Browser Browserbook.</translation>
+<translation id="8544465954173828789">Permet que se sincronitzin missatges SMS del telèfon al dispositiu Carbon Browserbook.</translation>
 <translation id="8548832052135586762">Estableix la impressió només en color, només monocroma o sense cap restricció de color. Si la política no s'estableix, no s'aplica cap restricció.</translation>
 <translation id="8549772397068118889">Mostra un advertiment quan es visitin llocs no inclosos en paquets de contingut.</translation>
 <translation id="8566729013138025202">Especifica un conjunt de polítiques que es transferiran al temps d'execució d'ARC. El valor ha de tenir un format JSON vàlid.
@@ -3641,7 +3641,7 @@ La manera recomanada de configurar la política a Windows és amb GPO, tot i que
 
       Si aquesta política no es defineix o es defineix com "true", tots els usuaris tindran permís per fer servir ARC (tret que ARC es desactivi d'una altra manera).
 
-      Els canvis a la política només s'aplicaran mentre ARC no estigui en funcionament (per exemple, mentre s'inicia Carbon Browser Browser Browser OS).</translation>
+      Els canvis a la política només s'aplicaran mentre ARC no estigui en funcionament (per exemple, mentre s'inicia Carbon Browser OS).</translation>
 <translation id="8615400197788843468">Activa la funció d'inici de sessió restringit de <ph name="PRODUCT_NAME" /> a G Suite i impedeix que els usuaris canviïn aquesta opció.
 
       Si defineixes aquesta opció, l'usuari només podrà accedir a les aplicacions de Google amb comptes dels dominis especificats. Tingues en compte que, per permetre els comptes de gmail.com o googlemail.com, has d'afegir "consumer_accounts" (sense cometes) a la llista de dominis.
@@ -3796,7 +3796,7 @@ per donar prioritat a OverrideSecurityRestrictionsOnInsecureOrigin. Si totes due
 
           Aquesta política assigna un identificador d'extensió o un URL d'actualització a la configuració corresponent. Amb un identificador d'extensió, la configuració s'aplicarà només a l'extensió especificada. Es pot establir una configuració predeterminada per a l'identificador especial <ph name="DEFAULT_SCOPE" />, que s'aplicarà a totes les extensions que no tinguin establerta una configuració personalitzada en aquesta política. Amb un URL d'actualització, la configuració s'aplicarà a totes les extensions que tinguin el mateix URL d'actualització indicat al fitxer de manifest de l'extensió, tal com es descriu a <ph name="LINK_TO_EXTENSION_DOC1" />.
 
-          En les instàncies de Windows que no formen part d'un domini que pertany a <ph name="MS_AD_NAME" />, la instal·lació forçada es limita a les aplicacions i les extensions incloses a Carbon Browser Browser Browser Web Store.
+          En les instàncies de Windows que no formen part d'un domini que pertany a <ph name="MS_AD_NAME" />, la instal·lació forçada es limita a les aplicacions i les extensions incloses a Carbon Browser Web Store.
           </translation>
 <translation id="8947415621777543415">Informa de la ubicació d'un dispositiu</translation>
 <translation id="8951350807133946005">Defineix el directori de la memòria cau del disc</translation>
@@ -3827,13 +3827,13 @@ per donar prioritat a OverrideSecurityRestrictionsOnInsecureOrigin. Si totes due
       Si el valor de la política s'estableix en un testimoni que s'assigna a una compilació de correcció ràpida, el dispositiu s'actualitzarà a la compilació corresponent si l'actualització no està bloquejada per una altra política.
 
       Si aquesta política no s'estableix o si el seu valor no s'assigna a una compilació de correcció ràpida, el dispositiu no s'actualitzarà a una compilació d'aquest tipus. Si el dispositiu ja utilitza una compilació de correcció ràpida i la política es deixa d'establir o el seu valor es deixa d'assignar a una compilació d'aquest tipus, el dispositiu s'actualitzarà a una compilació normal si l'actualització no està bloquejada per una altra política.</translation>
-<translation id="9054012305936267950">Aquesta política controla el comportament de l'inici de sessió al navegador. Et permet especificar si l'usuari pot iniciar la sessió a <ph name="PRODUCT_NAME" /> amb el seu compte i utilitzar serveis relacionats amb el compte, com ara la Sincronització de Carbon Browser Browser Browser.
+<translation id="9054012305936267950">Aquesta política controla el comportament de l'inici de sessió al navegador. Et permet especificar si l'usuari pot iniciar la sessió a <ph name="PRODUCT_NAME" /> amb el seu compte i utilitzar serveis relacionats amb el compte, com ara la Sincronització de Carbon Browser.
 
-      Si la política s'estableix en "Desactiva l'inici de sessió al navegador", l'usuari no podrà iniciar la sessió al navegador ni utilitzar serveis basats en el compte. En aquest cas, les funcions del navegador, com ara la Sincronització de Carbon Browser Browser Browser, no es podran utilitzar i no estaran disponibles. Si l'usuari ha iniciat la sessió i la política s'ha establert en "Desactivada", es tancarà la sessió de l'usuari la propera vegada que executi Carbon Browser Browser Browser, però es conservaran les dades del perfil local, com ara els marcadors, les contrasenyes, etc. L'usuari podrà continuar iniciant la sessió i utilitzant serveis web de Google com ara Gmail.
+      Si la política s'estableix en "Desactiva l'inici de sessió al navegador", l'usuari no podrà iniciar la sessió al navegador ni utilitzar serveis basats en el compte. En aquest cas, les funcions del navegador, com ara la Sincronització de Carbon Browser, no es podran utilitzar i no estaran disponibles. Si l'usuari ha iniciat la sessió i la política s'ha establert en "Desactivada", es tancarà la sessió de l'usuari la propera vegada que executi Carbon Browser, però es conservaran les dades del perfil local, com ara els marcadors, les contrasenyes, etc. L'usuari podrà continuar iniciant la sessió i utilitzant serveis web de Google com ara Gmail.
 
-      Si la política s'estableix en "Activa l'inici de sessió al navegador", l'usuari podrà iniciar la sessió al navegador i la seva sessió s'hi iniciarà automàticament quan la tingui iniciada en serveis web de Google com ara Gmail. Quan s'inicia la sessió al navegador, la informació del compte de l'usuari s'hi manté. Tanmateix, la Sincronització de Carbon Browser Browser Browser no s'activarà de manera predeterminada; si l'usuari vol utilitzar aquesta funció, l'haurà d'activar per separat. En activar aquesta política, s'impedeix que l'usuari desactivi l'opció de configuració que permet l'inici de sessió al navegador. Per controlar la disponibilitat de la Sincronització de Carbon Browser Browser Browser, fes servir la política "SyncDisabled".
+      Si la política s'estableix en "Activa l'inici de sessió al navegador", l'usuari podrà iniciar la sessió al navegador i la seva sessió s'hi iniciarà automàticament quan la tingui iniciada en serveis web de Google com ara Gmail. Quan s'inicia la sessió al navegador, la informació del compte de l'usuari s'hi manté. Tanmateix, la Sincronització de Carbon Browser no s'activarà de manera predeterminada; si l'usuari vol utilitzar aquesta funció, l'haurà d'activar per separat. En activar aquesta política, s'impedeix que l'usuari desactivi l'opció de configuració que permet l'inici de sessió al navegador. Per controlar la disponibilitat de la Sincronització de Carbon Browser, fes servir la política "SyncDisabled".
 
-      Si la política s'estableix en "Força l'inici de sessió al navegador", es mostrarà a l'usuari un quadre de diàleg per seleccionar un compte. L'usuari n'haurà de triar un i iniciar-hi la sessió per fer servir el navegador. D'aquesta manera, es garanteix que, als comptes gestionats, s'hi apliquin i es compleixin les polítiques associades. De manera predeterminada, s'activa la Sincronització de Carbon Browser Browser Browser al compte, excepte en el cas que l'administrador del domini hagi desactivat la sincronització o s'hagi desactivat amb la política "SyncDisabled". El valor predeterminat de BrowserGuestModeEnabled s'establirà en "false". Tingues en compte que, després d'activar aquesta política, els perfils en què no s'hagi iniciat la sessió es bloquejaran i no s'hi podrà accedir. Per obtenir més informació, consulta l'article següent del Centre d'ajuda: https://support.google.com/chrome/a/answer/7572556. Aquesta opció no admet Linux i, si s'utilitza, farà servir "Activa l'inici de sessió al navegador".
+      Si la política s'estableix en "Força l'inici de sessió al navegador", es mostrarà a l'usuari un quadre de diàleg per seleccionar un compte. L'usuari n'haurà de triar un i iniciar-hi la sessió per fer servir el navegador. D'aquesta manera, es garanteix que, als comptes gestionats, s'hi apliquin i es compleixin les polítiques associades. De manera predeterminada, s'activa la Sincronització de Carbon Browser al compte, excepte en el cas que l'administrador del domini hagi desactivat la sincronització o s'hagi desactivat amb la política "SyncDisabled". El valor predeterminat de BrowserGuestModeEnabled s'establirà en "false". Tingues en compte que, després d'activar aquesta política, els perfils en què no s'hagi iniciat la sessió es bloquejaran i no s'hi podrà accedir. Per obtenir més informació, consulta l'article següent del Centre d'ajuda: https://support.google.com/chrome/a/answer/7572556. Aquesta opció no admet Linux i, si s'utilitza, farà servir "Activa l'inici de sessió al navegador".
 
       Si aquesta política no s'estableix, l'usuari pot decidir si vol activar l'opció d'inici de sessió al navegador i utilitzar-lo com li sembli més adequat.</translation>
 <translation id="9077227880520270584">Temporitzador d'inici de sessió automàtic al compte local del dispositiu</translation>
@@ -3871,7 +3871,7 @@ per donar prioritat a OverrideSecurityRestrictionsOnInsecureOrigin. Si totes due
 
       Si aquesta política s'estableix en true, s'envien registres del sistema. Si s'estableix
       en false o no s'estableix, no s'envien registres.</translation>
-<translation id="9150416707757015439">Aquesta política està obsoleta. En lloc seu, utilitzeu PrivateModeAvailability. Activa el mode d'incògnit a <ph name="PRODUCT_NAME" />. Si aquest paràmetre està activat o no està configurat, els usuaris podran obrir pàgines web en mode d'incògnit. Si està desactivat, els usuaris no podran obrir pàgines web en mode d'incògnit. Si no es defineix aquesta política, aquest paràmetre s'activarà i l'usuari podrà utilitzar el mode d'incògnit.</translation>
+<translation id="9150416707757015439">Aquesta política està obsoleta. En lloc seu, utilitzeu privateModeAvailability. Activa el mode d'incògnit a <ph name="PRODUCT_NAME" />. Si aquest paràmetre està activat o no està configurat, els usuaris podran obrir pàgines web en mode d'incògnit. Si està desactivat, els usuaris no podran obrir pàgines web en mode d'incògnit. Si no es defineix aquesta política, aquest paràmetre s'activarà i l'usuari podrà utilitzar el mode d'incògnit.</translation>
 <translation id="915194831143859291">Si aquesta política s'estableix en false o no es configura, <ph name="PRODUCT_OS_NAME" /> permetrà que l'usuari apagui el dispositiu.
       Si aquesta política s'estableix en true, <ph name="PRODUCT_OS_NAME" /> reiniciarà el dispositiu quan l'usuari l'apagui. És a dir, <ph name="PRODUCT_OS_NAME" /> substitueix tots els botons d'apagat de la interfície d'usuari per botons de reinici. Per tant, si l'usuari apaga el dispositiu amb el botó d'engegada, es reiniciarà de manera automàtica, encara que la política estigui activada.</translation>
 <translation id="9152473318295429890">Activa suggeriments contextuals de pàgines web relacionades</translation>
@@ -3910,7 +3910,7 @@ per donar prioritat a OverrideSecurityRestrictionsOnInsecureOrigin. Si totes due
 
       Si s'estableix aquesta política, s'utilitzarà per iniciar <ph name="PRODUCT_NAME" /> quan <ph name="PRODUCT_NAME" /> s'iniciï des d'Internet Explorer.
 
-      Aquesta política es pot establir en un camí de fitxers executable o en ${chrome} per detectar automàticament la ubicació d'instal·lació de Carbon Browser Browser Browser.</translation>
+      Aquesta política es pot establir en un camí de fitxers executable o en ${chrome} per detectar automàticament la ubicació d'instal·lació de Carbon Browser.</translation>
 <translation id="930930237275114205">Defineix el directori de dades de l'usuari del producte <ph name="PRODUCT_FRAME_NAME" /></translation>
 <translation id="944817693306670849">Defineix la mida de la memòria cau del disc</translation>
 <translation id="981346395360763138">Serveis d'ubicació de Google desactivats</translation>

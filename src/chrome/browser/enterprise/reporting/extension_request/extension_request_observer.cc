@@ -6,7 +6,6 @@
 
 #include "base/metrics/histogram_functions.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/enterprise/reporting/extension_request/extension_request_report_throttler.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/pref_names.h"
 #include "components/prefs/pref_service.h"
@@ -48,15 +47,25 @@ ExtensionRequestObserver::~ExtensionRequestObserver() {
   CloseAllNotifications();
 }
 
+bool ExtensionRequestObserver::IsReportEnabled() {
+  return !report_trigger_.is_null();
+}
+
+void ExtensionRequestObserver::EnableReport(ReportTrigger trigger) {
+  report_trigger_ = trigger;
+}
+
+void ExtensionRequestObserver::DisableReport() {
+  report_trigger_.Reset();
+}
+
 void ExtensionRequestObserver::OnExtensionManagementSettingsChanged() {
   ShowAllNotifications();
 }
 
 void ExtensionRequestObserver::OnPendingListChanged() {
-  // Trigger real-time reporting with DM server is available.
-  auto* throttler = ExtensionRequestReportThrottler::Get();
-  if (throttler->IsEnabled())
-    throttler->AddProfile(profile_->GetPath());
+  if (report_trigger_)
+    report_trigger_.Run(profile_.get());
 
   // The pending list is updated when user confirm the notification and requests
   // are removed from the list. There is no need to show new notification at
@@ -87,11 +96,8 @@ void ExtensionRequestObserver::ShowAllNotifications() {
 
 void ExtensionRequestObserver::ShowNotification(
     ExtensionRequestNotification::NotifyType type) {
-  const base::DictionaryValue* pending_requests =
-      profile_->GetPrefs()->GetDictionary(prefs::kCloudExtensionRequestIds);
-
-  if (!pending_requests)
-    return;
+  const base::Value::Dict& pending_requests =
+      profile_->GetPrefs()->GetValueDict(prefs::kCloudExtensionRequestIds);
 
   ExtensionRequestNotification::ExtensionIds filtered_extension_ids;
   extensions::ExtensionManagement* extension_management =
@@ -99,7 +105,7 @@ void ExtensionRequestObserver::ShowNotification(
   std::string web_store_update_url =
       extension_urls::GetDefaultWebstoreUpdateUrl().spec();
 
-  for (auto request : pending_requests->DictItems()) {
+  for (auto request : pending_requests) {
     const std::string& id = request.first;
     extensions::ExtensionManagement::InstallationMode mode =
         extension_management->GetInstallationMode(id, web_store_update_url);

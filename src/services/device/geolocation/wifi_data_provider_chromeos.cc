@@ -11,8 +11,8 @@
 #include "base/bind.h"
 #include "base/logging.h"
 #include "base/strings/utf_string_conversions.h"
-#include "chromeos/network/geolocation_handler.h"
-#include "chromeos/network/network_handler.h"
+#include "chromeos/ash/components/network/geolocation_handler.h"
+#include "chromeos/ash/components/network/network_handler.h"
 #include "services/device/geolocation/wifi_data_provider_manager.h"
 
 using chromeos::NetworkHandler;
@@ -128,7 +128,7 @@ void WifiDataProviderChromeOs::ScheduleNextScan(int interval) {
       base::BindOnce(
           &WifiDataProviderChromeOs::DoWifiScanTaskOnNetworkHandlerThread,
           this),
-      base::TimeDelta::FromMilliseconds(interval));
+      base::Milliseconds(interval));
 }
 
 void WifiDataProviderChromeOs::ScheduleStop() {
@@ -164,7 +164,7 @@ bool WifiDataProviderChromeOs::GetAccessPointData(
   if (!geolocation_handler || !geolocation_handler->wifi_enabled())
     return true;  // Access point list is empty, no more data.
 
-  chromeos::WifiAccessPointVector access_points;
+  ash::WifiAccessPointVector access_points;
   int64_t age_ms = 0;
   if (!geolocation_handler->GetWifiAccessPoints(&access_points, &age_ms))
     return false;

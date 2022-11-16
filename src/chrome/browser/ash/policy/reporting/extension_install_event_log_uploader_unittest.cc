@@ -11,9 +11,11 @@
 
 #include "base/json/json_string_value_serializer.h"
 #include "base/memory/ref_counted.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/gmock_move_support.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_mock_time_task_runner.h"
+#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/values.h"
@@ -42,8 +44,8 @@ namespace policy {
 
 namespace {
 
-constexpr base::TimeDelta kMinRetryBackoff = base::TimeDelta::FromSeconds(10);
-constexpr base::TimeDelta kMaxRetryBackoff = base::TimeDelta::FromDays(1);
+constexpr base::TimeDelta kMinRetryBackoff = base::Seconds(10);
+constexpr base::TimeDelta kMaxRetryBackoff = base::Days(1);
 
 static const char kExtensionId[] = "abcdefghabcdefghabcdefghabcdefgh";
 
@@ -96,13 +98,16 @@ class ExtensionInstallEventLogUploaderTest : public testing::Test {
   }
 
   void CreateUploader() {
-    uploader_ = std::make_unique<ExtensionInstallEventLogUploader>(
-        /*profile=*/nullptr);
-    uploader_->SetDelegate(&delegate_);
-
-    auto mock_report_queue = std::make_unique<reporting::MockReportQueue>();
+    ASSERT_TRUE(base::SequencedTaskRunnerHandle::IsSet());
+    auto mock_report_queue = std::unique_ptr<::reporting::MockReportQueue,
+                                             base::OnTaskRunnerDeleter>(
+        new ::reporting::MockReportQueue(),
+        base::OnTaskRunnerDeleter(base::SequencedTaskRunnerHandle::Get()));
     mock_report_queue_ = mock_report_queue.get();
-    uploader_->SetReportQueue(std::move(mock_report_queue));
+
+    uploader_ = ExtensionInstallEventLogUploader::CreateForTest(
+        /*profile=*/nullptr, std::move(mock_report_queue));
+    uploader_->SetDelegate(&delegate_);
   }
 
   void CompleteSerialize() {
@@ -124,18 +129,10 @@ class ExtensionInstallEventLogUploaderTest : public testing::Test {
             DoAll(MoveArg<0>(callback), Invoke([=]() { waiter_->Signal(); })));
   }
 
-  void ClearReportDict() {
-    base::DictionaryValue* mutable_dict;
-    if (value_report_.GetAsDictionary(&mutable_dict))
-      mutable_dict->Clear();
-    else
-      NOTREACHED();
-  }
-
   void CompleteUpload(bool success) {
-    ClearReportDict();
-    base::Value context = reporting::GetContext(/*profile=*/nullptr);
-    base::Value events = ConvertExtensionProtoToValue(&log_, context);
+    value_report_.clear();
+    base::Value::Dict context = reporting::GetContext(/*profile=*/nullptr);
+    base::Value::List events = ConvertExtensionProtoToValue(&log_, context);
     value_report_ = RealtimeReportingJobConfiguration::BuildReport(
         std::move(events), std::move(context));
 
@@ -162,9 +159,9 @@ class ExtensionInstallEventLogUploaderTest : public testing::Test {
   }
 
   void CaptureUpload(reporting::MockReportQueue::EnqueueCallback* callback) {
-    ClearReportDict();
-    base::Value context = reporting::GetContext(/*profile=*/nullptr);
-    base::Value events = ConvertExtensionProtoToValue(&log_, context);
+    value_report_.clear();
+    base::Value::Dict context = reporting::GetContext(/*profile=*/nullptr);
+    base::Value::List events = ConvertExtensionProtoToValue(&log_, context);
     value_report_ = RealtimeReportingJobConfiguration::BuildReport(
         std::move(events), std::move(context));
 
@@ -207,7 +204,7 @@ class ExtensionInstallEventLogUploaderTest : public testing::Test {
     Mock::VerifyAndClearExpectations(mock_report_queue_);
 
     // A task is enqueued with zero delay and needs to be processed.
-    base::TimeDelta zero_delay = base::TimeDelta::FromSeconds(0);
+    base::TimeDelta zero_delay = base::Seconds(0);
 
     // Expect and throwaway task.
     EXPECT_EQ(task_environment_.NextMainThreadPendingTaskDelay(), zero_delay);
@@ -217,7 +214,7 @@ class ExtensionInstallEventLogUploaderTest : public testing::Test {
   content::BrowserTaskEnvironment task_environment_{
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
   em::ExtensionInstallReportRequest log_;
-  base::Value value_report_{base::Value::Type::DICTIONARY};
+  base::Value::Dict value_report_;
 
   reporting::MockReportQueue* mock_report_queue_;
   MockExtensionInstallEventLogUploaderDelegate delegate_;
@@ -392,11 +389,9 @@ TEST_F(ExtensionInstallEventLogUploaderTest, DuplicateEvents) {
   uploader_->RequestUpload();
 
   WaitAndReset();
-  EXPECT_EQ(2u,
-            value_report_
-                .FindListKey(RealtimeReportingJobConfiguration::kEventListKey)
-                ->GetList()
-                .size());
+  EXPECT_EQ(2u, value_report_
+                    .FindList(RealtimeReportingJobConfiguration::kEventListKey)
+                    ->size());
 }
 
 }  // namespace policy

@@ -16,12 +16,13 @@
 
 #include "base/component_export.h"
 #include "base/containers/flat_set.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/synchronization/lock.h"
 #include "build/build_config.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/skia/include/core/SkColorType.h"
 #include "ui/base/x/x11_cursor.h"
 #include "ui/gfx/icc_profile.h"
 #include "ui/gfx/image/image_skia.h"
@@ -200,17 +201,6 @@ COMPONENT_EXPORT(UI_BASE_X)
 void SetHideTitlebarWhenMaximizedProperty(x11::Window window,
                                           HideTitlebarWhenMaximized property);
 
-// Returns true if |window| is visible.
-COMPONENT_EXPORT(UI_BASE_X) bool IsWindowVisible(x11::Window window);
-
-// Returns true if |window| contains the point |screen_loc|.
-COMPONENT_EXPORT(UI_BASE_X)
-bool WindowContainsPoint(x11::Window window, gfx::Point screen_loc);
-
-// Return true if |window| has any property with |property_name|.
-COMPONENT_EXPORT(UI_BASE_X)
-bool PropertyExists(x11::Window window, x11::Atom property);
-
 // Returns the raw bytes from a property with minimal
 // interpretation. |out_data| should be freed by XFree() after use.
 COMPONENT_EXPORT(UI_BASE_X)
@@ -264,11 +254,6 @@ static const int32_t kAllDesktops = -1;
 // property not found.
 COMPONENT_EXPORT(UI_BASE_X)
 bool GetWindowDesktop(x11::Window window, int32_t* desktop);
-
-// Returns all children windows of a given window in top-to-bottom stacking
-// order.
-COMPONENT_EXPORT(UI_BASE_X)
-bool GetXWindowStack(x11::Window window, std::vector<x11::Window>* windows);
 
 enum WindowManagerName {
   WM_OTHER,    // We were able to obtain the WM's name, but there is
@@ -352,8 +337,11 @@ COMPONENT_EXPORT(UI_BASE_X) bool IsCompositingManagerPresent();
 // Returns true if a given window is in full-screen mode.
 COMPONENT_EXPORT(UI_BASE_X) bool IsX11WindowFullScreen(x11::Window window);
 
-// Suspends or resumes the X screen saver.  Must be called on the UI thread.
-COMPONENT_EXPORT(UI_BASE_X) void SuspendX11ScreenSaver(bool suspend);
+// Suspends or resumes the X screen saver, and returns whether the operation was
+// successful.  Must be called on the UI thread. If called multiple times with
+// |suspend| set to true, the screen saver is not un-suspended until this method
+// is called an equal number of times with |suspend| set to false.
+COMPONENT_EXPORT(UI_BASE_X) bool SuspendX11ScreenSaver(bool suspend);
 
 // Returns true if the window manager supports the given hint.
 COMPONENT_EXPORT(UI_BASE_X) bool WmSupportsHint(x11::Atom atom);
@@ -412,6 +400,9 @@ class COMPONENT_EXPORT(UI_BASE_X) XVisualManager {
   // Are all of the system requirements met for using transparent visuals?
   bool ArgbVisualAvailable() const;
 
+  XVisualManager(const XVisualManager&) = delete;
+  XVisualManager& operator=(const XVisualManager&) = delete;
+
   ~XVisualManager();
 
  private:
@@ -427,7 +418,7 @@ class COMPONENT_EXPORT(UI_BASE_X) XVisualManager {
     x11::ColorMap GetColormap();
 
     const uint8_t depth;
-    const x11::VisualType* const info;
+    const raw_ptr<const x11::VisualType> info;
 
    private:
     x11::ColorMap colormap_{};
@@ -439,18 +430,6 @@ class COMPONENT_EXPORT(UI_BASE_X) XVisualManager {
 
   x11::VisualId opaque_visual_id_{};
   x11::VisualId transparent_visual_id_{};
-
-  DISALLOW_COPY_AND_ASSIGN(XVisualManager);
-};
-
-class COMPONENT_EXPORT(UI_BASE_X) ScopedUnsetDisplay {
- public:
-  ScopedUnsetDisplay();
-  ~ScopedUnsetDisplay();
-
- private:
-  absl::optional<std::string> display_;
-  DISALLOW_COPY_AND_ASSIGN(ScopedUnsetDisplay);
 };
 
 }  // namespace ui

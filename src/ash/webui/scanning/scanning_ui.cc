@@ -9,15 +9,16 @@
 #include <utility>
 
 #include "ash/constants/ash_features.h"
-#include "ash/grit/ash_scanning_app_resources.h"
-#include "ash/grit/ash_scanning_app_resources_map.h"
+#include "ash/webui/common/backend/accessibility_features.h"
+#include "ash/webui/common/mojom/accessibility_features.mojom.h"
+#include "ash/webui/grit/ash_scanning_app_resources.h"
+#include "ash/webui/grit/ash_scanning_app_resources_map.h"
 #include "ash/webui/scanning/mojom/scanning.mojom.h"
 #include "ash/webui/scanning/scanning_app_delegate.h"
 #include "ash/webui/scanning/scanning_metrics_handler.h"
 #include "ash/webui/scanning/url_constants.h"
 #include "base/containers/span.h"
 #include "base/feature_list.h"
-#include "base/memory/ptr_util.h"
 #include "chromeos/strings/grit/chromeos_strings.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_ui.h"
@@ -25,7 +26,6 @@
 #include "services/network/public/mojom/content_security_policy.mojom.h"
 #include "ui/base/webui/web_ui_util.h"
 #include "ui/resources/grit/webui_generated_resources.h"
-#include "ui/resources/grit/webui_resources.h"
 
 namespace ash {
 
@@ -79,6 +79,7 @@ void AddScanningAppStrings(content::WebUIDataSource* html_source) {
       {"multiPageCheckboxAriaLabel",
        IDS_SCANNING_APP_MULTI_PAGE_CHECKBOX_ARIA_LABEL},
       {"multiPageCheckboxText", IDS_SCANNING_APP_MULTI_PAGE_CHECKBOX_TEXT},
+      {"multiPageImageAriaLabel", IDS_SCANNING_APP_MULTI_PAGE_IMAGE_ARIA_LABEL},
       {"multiPageScanInstructionsText",
        IDS_SCANNING_APP_MULTI_PAGE_SCAN_INSTRUCTIONS_TEXT},
       {"multiPageScanProgressText",
@@ -92,8 +93,10 @@ void AddScanningAppStrings(content::WebUIDataSource* html_source) {
       {"pdfOptionText", IDS_SCANNING_APP_PDF_OPTION_TEXT},
       {"pngOptionText", IDS_SCANNING_APP_PNG_OPTION_TEXT},
       {"pageSizeDropdownLabel", IDS_SCANNING_APP_PAGE_SIZE_DROPDOWN_LABEL},
+      {"removePageButtonLabel", IDS_SCANNING_APP_REMOVE_PAGE_BUTTON_LABEL},
       {"removePageConfirmationText",
        IDS_SCANNING_APP_REMOVE_PAGE_CONFIRMATION_TEXT},
+      {"rescanPageButtonLabel", IDS_SCANNING_APP_RESCAN_PAGE_BUTTON_LABEL},
       {"rescanPageConfirmationText",
        IDS_SCANNING_APP_RESCAN_PAGE_CONFIRMATION_TEXT},
       {"resolutionDropdownLabel", IDS_SCANNING_APP_RESOLUTION_DROPDOWN_LABEL},
@@ -121,7 +124,6 @@ void AddScanningAppStrings(content::WebUIDataSource* html_source) {
       {"scannerDropdownLabel", IDS_SCANNING_APP_SCANNER_DROPDOWN_LABEL},
       {"scannersLoadingText", IDS_SCANNING_APP_SCANNERS_LOADING_TEXT},
       {"scanningImagesAriaLabel", IDS_SCANNING_APP_SCANNING_IMAGES_ARIA_LABEL},
-      {"searchablePdfOptionText", IDS_SCANNING_APP_SEARCHABLE_PDF_OPTION_TEXT},
       {"selectFolderOption", IDS_SCANNING_APP_SELECT_FOLDER_OPTION},
       {"showInFolderButtonLabel", IDS_SCANNING_APP_SHOW_IN_FOLDER_BUTTON_LABEL},
       {"sourceDropdownLabel", IDS_SCANNING_APP_SOURCE_DROPDOWN_LABEL},
@@ -138,28 +140,13 @@ void AddScanningAppPluralStrings(ScanningHandler* handler) {
   static constexpr webui::LocalizedString kLocalizedStrings[] = {
       {"editButtonLabel", IDS_SCANNING_APP_EDIT_BUTTON_LABEL},
       {"fileSavedText", IDS_SCANNING_APP_FILE_SAVED_TEXT},
-      {"removePageButtonLabel", IDS_SCANNING_APP_REMOVE_PAGE_BUTTON_LABEL},
-      {"rescanPageButtonLabel", IDS_SCANNING_APP_RESCAN_PAGE_BUTTON_LABEL},
+      {"removePageDialogTitle", IDS_SCANNING_APP_REMOVE_PAGE_DIALOG_TITLE},
+      {"rescanPageDialogTitle", IDS_SCANNING_APP_RESCAN_PAGE_DIALOG_TITLE},
       {"scanButtonText", IDS_SCANNING_APP_SCAN_BUTTON_TEXT},
       {"scannedImagesAriaLabel", IDS_SCANNING_APP_SCANNED_IMAGES_ARIA_LABEL}};
 
   for (const auto& str : kLocalizedStrings)
     handler->AddStringToPluralMap(str.name, str.id);
-}
-
-void AddFeatureFlags(content::WebUIDataSource* html_source) {
-  html_source->AddBoolean(
-      "scanAppMediaLinkEnabled",
-      base::FeatureList::IsEnabled(chromeos::features::kScanAppMediaLink));
-  html_source->AddBoolean(
-      "scanAppMultiPageScanEnabled",
-      base::FeatureList::IsEnabled(chromeos::features::kScanAppMultiPageScan));
-  html_source->AddBoolean(
-      "scanAppSearchablePdfEnabled",
-      base::FeatureList::IsEnabled(chromeos::features::kScanAppSearchablePdf));
-  html_source->AddBoolean(
-      "scanAppStickySettingsEnabled",
-      base::FeatureList::IsEnabled(chromeos::features::kScanAppStickySettings));
 }
 
 }  // namespace
@@ -170,26 +157,29 @@ ScanningUI::ScanningUI(
     std::unique_ptr<ScanningAppDelegate> scanning_app_delegate)
     : ui::MojoWebUIController(web_ui, true /* enable_chrome_send */),
       bind_pending_receiver_callback_(std::move(callback)) {
-  auto html_source = base::WrapUnique(
-      content::WebUIDataSource::Create(kChromeUIScanningAppHost));
+  content::WebUIDataSource* html_source =
+      content::WebUIDataSource::CreateAndAdd(
+          web_ui->GetWebContents()->GetBrowserContext(),
+          kChromeUIScanningAppHost);
   html_source->OverrideContentSecurityPolicy(
       network::mojom::CSPDirectiveName::ScriptSrc,
       "script-src chrome://resources chrome://test 'self';");
   html_source->DisableTrustedTypesCSP();
 
+  accessibility_features_ = std::make_unique<AccessibilityFeatures>();
+
   const auto resources =
       base::make_span(kAshScanningAppResources, kAshScanningAppResourcesSize);
-  SetUpWebUIDataSource(html_source.get(), resources,
-                       IDR_SCANNING_APP_INDEX_HTML);
+  SetUpWebUIDataSource(html_source, resources, IDR_SCANNING_APP_INDEX_HTML);
 
   html_source->AddResourcePath("scanning.mojom-lite.js",
                                IDR_SCANNING_MOJO_LITE_JS);
   html_source->AddResourcePath("file_path.mojom-lite.js",
                                IDR_SCANNING_APP_FILE_PATH_MOJO_LITE_JS);
+  html_source->AddResourcePath("accessibility_features.mojom-lite.js",
+                               IDR_ACCESSIBILITY_FEATURES_MOJO_LITE_JS);
 
-  AddFeatureFlags(html_source.get());
-
-  AddScanningAppStrings(html_source.get());
+  AddScanningAppStrings(html_source);
 
   auto handler =
       std::make_unique<ScanningHandler>(std::move(scanning_app_delegate));
@@ -197,8 +187,6 @@ ScanningUI::ScanningUI(
 
   web_ui->AddMessageHandler(std::move(handler));
   web_ui->AddMessageHandler(std::make_unique<ScanningMetricsHandler>());
-  content::WebUIDataSource::Add(web_ui->GetWebContents()->GetBrowserContext(),
-                                html_source.release());
 }
 
 ScanningUI::~ScanningUI() = default;
@@ -206,6 +194,12 @@ ScanningUI::~ScanningUI() = default;
 void ScanningUI::BindInterface(
     mojo::PendingReceiver<scanning::mojom::ScanService> pending_receiver) {
   bind_pending_receiver_callback_.Run(std::move(pending_receiver));
+}
+
+void ScanningUI::BindInterface(
+    mojo::PendingReceiver<common::mojom::AccessibilityFeatures>
+        pending_receiver) {
+  accessibility_features_->BindInterface(std::move(pending_receiver));
 }
 
 WEB_UI_CONTROLLER_TYPE_IMPL(ScanningUI)

@@ -8,6 +8,7 @@
 #include <memory>
 #include <vector>
 #include "base/callback_forward.h"
+#include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "components/password_manager/core/browser/field_info_store.h"
 #include "components/password_manager/core/browser/password_store_backend.h"
@@ -29,29 +30,38 @@ class MockPasswordStoreBackend : public PasswordStoreBackend {
                base::RepeatingClosure sync_enabled_or_disabled_cb,
                base::OnceCallback<void(bool)> completion),
               (override));
+  MOCK_METHOD(void, Shutdown, (base::OnceClosure), (override));
 
-  MOCK_METHOD(void, GetAllLoginsAsync, (LoginsReply callback), (override));
+  MOCK_METHOD(void,
+              GetAllLoginsAsync,
+              (LoginsOrErrorReply callback),
+              (override));
   MOCK_METHOD(void,
               GetAutofillableLoginsAsync,
-              (LoginsReply callback),
+              (LoginsOrErrorReply callback),
+              (override));
+  MOCK_METHOD(void,
+              GetAllLoginsForAccountAsync,
+              (absl::optional<std::string> account,
+               LoginsOrErrorReply callback),
               (override));
   MOCK_METHOD(void,
               FillMatchingLoginsAsync,
-              (LoginsReply callback,
+              (LoginsOrErrorReply callback,
                bool include_psl,
                const std::vector<PasswordFormDigest>& forms),
               (override));
   MOCK_METHOD(void,
               AddLoginAsync,
-              (const PasswordForm& form, PasswordStoreChangeListReply callback),
+              (const PasswordForm& form, PasswordChangesOrErrorReply callback),
               (override));
   MOCK_METHOD(void,
               UpdateLoginAsync,
-              (const PasswordForm& form, PasswordStoreChangeListReply callback),
+              (const PasswordForm& form, PasswordChangesOrErrorReply callback),
               (override));
   MOCK_METHOD(void,
               RemoveLoginAsync,
-              (const PasswordForm& form, PasswordStoreChangeListReply callback),
+              (const PasswordForm& form, PasswordChangesOrErrorReply callback),
               (override));
   MOCK_METHOD(void,
               RemoveLoginsByURLAndTimeAsync,
@@ -59,13 +69,13 @@ class MockPasswordStoreBackend : public PasswordStoreBackend {
                base::Time delete_begin,
                base::Time delete_end,
                base::OnceCallback<void(bool)> sync_completion,
-               PasswordStoreChangeListReply callback),
+               PasswordChangesOrErrorReply callback),
               (override));
   MOCK_METHOD(void,
               RemoveLoginsCreatedBetweenAsync,
               (base::Time delete_begin,
                base::Time delete_end,
-               PasswordStoreChangeListReply callback),
+               PasswordChangesOrErrorReply callback),
               (override));
   MOCK_METHOD(void,
               DisableAutoSignInForOriginsAsync,
@@ -75,8 +85,13 @@ class MockPasswordStoreBackend : public PasswordStoreBackend {
   MOCK_METHOD(SmartBubbleStatsStore*, GetSmartBubbleStatsStore, (), (override));
   MOCK_METHOD(FieldInfoStore*, GetFieldInfoStore, (), (override));
   MOCK_METHOD(std::unique_ptr<syncer::ProxyModelTypeControllerDelegate>,
-              CreateSyncControllerDelegateFactory,
+              CreateSyncControllerDelegate,
               (),
+              (override));
+  MOCK_METHOD(void, ClearAllLocalPasswords, (), (override));
+  MOCK_METHOD(void,
+              OnSyncServiceInitialized,
+              (syncer::SyncService*),
               (override));
 };
 

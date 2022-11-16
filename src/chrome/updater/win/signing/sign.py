@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 # Copyright 2020 The Chromium Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -26,10 +26,9 @@ import resedit
 
 class SigningError(Exception):
     """Module exception class."""
-    pass
 
 
-class Signer(object):
+class Signer:
     """A container for a signing operation."""
 
     def __init__(self, tmpdir, lzma_exe, signtool_exe, tagging_exe, identity):

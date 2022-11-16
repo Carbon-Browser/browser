@@ -12,16 +12,15 @@
 #include "base/files/file_path.h"
 #include "base/location.h"
 #include "base/strings/string_util.h"
-#include "base/task/post_task.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
+#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "components/device_event_log/device_event_log.h"
 
-#if BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_CHROMEOS_LACROS)
+#if BUILDFLAG(IS_CHROMEOS)
 #include "chromeos/dbus/permission_broker/permission_broker_client.h"  // nogncheck
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_CHROMEOS_LACROS)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 namespace device {
 
@@ -51,7 +50,7 @@ void SerialIoHandler::Open(const mojom::SerialConnectionOptions& options,
   DCHECK(ui_thread_task_runner_.get());
   MergeConnectionOptions(options);
 
-#if BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_CHROMEOS_LACROS)
+#if BUILDFLAG(IS_CHROMEOS)
   // Note: dbus clients are destroyed in PostDestroyThreads so passing |client|
   // as unretained is safe.
   auto* client = chromeos::PermissionBrokerClient::Get();
@@ -73,10 +72,10 @@ void SerialIoHandler::Open(const mojom::SerialConnectionOptions& options,
       {base::MayBlock(), base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN},
       base::BindOnce(&SerialIoHandler::StartOpen, this,
                      base::ThreadTaskRunnerHandle::Get()));
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_CHROMEOS_LACROS)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_CHROMEOS_LACROS)
+#if BUILDFLAG(IS_CHROMEOS)
 
 void SerialIoHandler::OnPathOpened(
     scoped_refptr<base::SingleThreadTaskRunner> io_thread_task_runner,
@@ -105,7 +104,7 @@ void SerialIoHandler::ReportPathOpenError(const std::string& error_name,
   std::move(open_complete_).Run(false);
 }
 
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_CHROMEOS_LACROS)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 void SerialIoHandler::MergeConnectionOptions(
     const mojom::SerialConnectionOptions& options) {
@@ -132,8 +131,8 @@ void SerialIoHandler::StartOpen(
   DCHECK(open_complete_);
   DCHECK(!file_.IsValid());
   int flags = base::File::FLAG_OPEN | base::File::FLAG_READ |
-              base::File::FLAG_EXCLUSIVE_READ | base::File::FLAG_WRITE |
-              base::File::FLAG_EXCLUSIVE_WRITE | base::File::FLAG_ASYNC |
+              base::File::FLAG_WIN_EXCLUSIVE_READ | base::File::FLAG_WRITE |
+              base::File::FLAG_WIN_EXCLUSIVE_WRITE | base::File::FLAG_ASYNC |
               base::File::FLAG_TERMINAL_DEVICE;
   base::File file(port_, flags);
   io_task_runner->PostTask(
@@ -190,10 +189,17 @@ void SerialIoHandler::Read(base::span<uint8_t> buffer,
                            ReadCompleteCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(!IsReadPending());
+
   pending_read_buffer_ = buffer;
   pending_read_callback_ = std::move(callback);
   read_canceled_ = false;
   AddRef();
+
+  if (!file().IsValid()) {
+    ReadCompleted(0, mojom::SerialReceiveError::DISCONNECTED);
+    return;
+  }
+
   ReadImpl();
 }
 
@@ -201,10 +207,17 @@ void SerialIoHandler::Write(base::span<const uint8_t> buffer,
                             WriteCompleteCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(!IsWritePending());
+
   pending_write_buffer_ = buffer;
   pending_write_callback_ = std::move(callback);
   write_canceled_ = false;
   AddRef();
+
+  if (!file().IsValid()) {
+    WriteCompleted(0, mojom::SerialSendError::DISCONNECTED);
+    return;
+  }
+
   WriteImpl();
 }
 
@@ -258,20 +271,6 @@ bool SerialIoHandler::ConfigurePort(
     const mojom::SerialConnectionOptions& options) {
   MergeConnectionOptions(options);
   return ConfigurePortImpl();
-}
-
-void SerialIoHandler::QueueReadCompleted(int bytes_read,
-                                         mojom::SerialReceiveError error) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE,
-      base::BindOnce(&SerialIoHandler::ReadCompleted, this, bytes_read, error));
-}
-
-void SerialIoHandler::QueueWriteCompleted(int bytes_written,
-                                          mojom::SerialSendError error) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE, base::BindOnce(&SerialIoHandler::WriteCompleted, this,
-                                bytes_written, error));
 }
 
 }  // namespace device

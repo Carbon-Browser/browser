@@ -9,12 +9,11 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
 #include "base/threading/thread_local.h"
 #include "content/public/renderer/worker_thread.h"
 #include "extensions/renderer/script_context_set_iterable.h"
 #include "url/gurl.h"
-#include "v8/include/v8.h"
+#include "v8/include/v8-forward.h"
 
 namespace extensions {
 
@@ -25,6 +24,9 @@ class WorkerScriptContextSet : public ScriptContextSetIterable,
                                public content::WorkerThread::Observer {
  public:
   WorkerScriptContextSet();
+
+  WorkerScriptContextSet(const WorkerScriptContextSet&) = delete;
+  WorkerScriptContextSet& operator=(const WorkerScriptContextSet&) = delete;
 
   ~WorkerScriptContextSet() override;
 
@@ -51,8 +53,6 @@ class WorkerScriptContextSet : public ScriptContextSetIterable,
   // Implement thread safety by storing each ScriptContext in TLS.
   base::ThreadLocalPointer<std::vector<std::unique_ptr<ScriptContext>>>
       contexts_tls_;
-
-  DISALLOW_COPY_AND_ASSIGN(WorkerScriptContextSet);
 };
 
 }  // namespace extensions

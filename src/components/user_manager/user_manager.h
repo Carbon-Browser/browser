@@ -8,7 +8,6 @@
 #include <string>
 
 #include "base/callback_forward.h"
-#include "base/macros.h"
 #include "components/user_manager/user.h"
 #include "components/user_manager/user_manager_export.h"
 #include "components/user_manager/user_type.h"
@@ -50,6 +49,11 @@ class USER_MANAGER_EXPORT UserManager {
 
     // Called when the image of the given user is changed.
     virtual void OnUserImageChanged(const User& user);
+
+    // Called when the user image enterprise state of the given user is changed.
+    virtual void OnUserImageIsEnterpriseManagedChanged(
+        const User& user,
+        bool is_enterprise_managed);
 
     // Called when the profile image download for the given user fails or
     // user has the default profile image or no porfile image at all.
@@ -100,6 +104,10 @@ class USER_MANAGER_EXPORT UserManager {
     UserAccountData(const std::u16string& display_name,
                     const std::u16string& given_name,
                     const std::string& locale);
+
+    UserAccountData(const UserAccountData&) = delete;
+    UserAccountData& operator=(const UserAccountData&) = delete;
+
     ~UserAccountData();
     const std::u16string& display_name() const { return display_name_; }
     const std::u16string& given_name() const { return given_name_; }
@@ -109,8 +117,6 @@ class USER_MANAGER_EXPORT UserManager {
     const std::u16string display_name_;
     const std::u16string given_name_;
     const std::string locale_;
-
-    DISALLOW_COPY_AND_ASSIGN(UserAccountData);
   };
 
   // Initializes UserManager instance to this. Normally should be called right
@@ -261,6 +267,9 @@ class USER_MANAGER_EXPORT UserManager {
   virtual void SaveUserDisplayEmail(const AccountId& account_id,
                                     const std::string& display_email) = 0;
 
+  // Returns stored user type or USER_TYPE_REGULAR by default.
+  virtual UserType GetUserType(const AccountId& account_id) = 0;
+
   // Saves user's type for |user| into local state preferences.
   virtual void SaveUserType(const User* user) = 0;
 
@@ -331,6 +340,9 @@ class USER_MANAGER_EXPORT UserManager {
 
   virtual void NotifyLocalStateChanged() = 0;
   virtual void NotifyUserImageChanged(const User& user) = 0;
+  virtual void NotifyUserImageIsEnterpriseManagedChanged(
+      const User& user,
+      bool is_enterprise_managed) = 0;
   virtual void NotifyUserProfileImageUpdateFailed(const User& user) = 0;
   virtual void NotifyUserProfileImageUpdated(
       const User& user,
@@ -351,6 +363,10 @@ class USER_MANAGER_EXPORT UserManager {
   // Returns true if |user| is allowed depending on device policies.
   // Accepted user types: USER_TYPE_REGULAR, USER_TYPE_GUEST, USER_TYPE_CHILD.
   virtual bool IsUserAllowed(const User& user) const = 0;
+
+  // Returns true if trusted device policies have successfully been retrieved
+  // and ephemeral users are enabled.
+  virtual bool AreEphemeralUsersEnabled() const = 0;
 
   // Returns "Local State" PrefService instance.
   virtual PrefService* GetLocalState() const = 0;

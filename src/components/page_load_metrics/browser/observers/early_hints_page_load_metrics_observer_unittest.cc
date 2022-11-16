@@ -37,27 +37,33 @@ class EarlyHintsPageLoadMetricsObserverTest
     page_load_metrics::mojom::PageLoadTiming timing;
     page_load_metrics::InitPageLoadTimingForTest(&timing);
     timing.navigation_start = base::Time::Now();
-    timing.parse_timing->parse_stop = base::TimeDelta::FromMilliseconds(50);
-    timing.paint_timing->first_contentful_paint =
-        base::TimeDelta::FromMilliseconds(100);
+    timing.parse_timing->parse_stop = base::Milliseconds(50);
+    timing.paint_timing->first_contentful_paint = base::Milliseconds(100);
 
     auto largest_contentful_paint =
         page_load_metrics::mojom::LargestContentfulPaintTiming::New();
-    largest_contentful_paint->largest_image_paint =
-        base::TimeDelta::FromMilliseconds(100);
+    largest_contentful_paint->largest_image_paint = base::Milliseconds(100);
     largest_contentful_paint->largest_image_paint_size = 100;
     timing.paint_timing->largest_contentful_paint =
         std::move(largest_contentful_paint);
 
-    timing.interactive_timing->first_input_delay =
-        base::TimeDelta::FromMilliseconds(10);
-    timing.interactive_timing->first_input_timestamp =
-        base::TimeDelta::FromMilliseconds(4780);
+    timing.interactive_timing->first_input_delay = base::Milliseconds(10);
+    timing.interactive_timing->first_input_timestamp = base::Milliseconds(4780);
 
     PopulateRequiredTimingFields(&timing);
     tester()->SimulateTimingUpdate(timing);
   }
 };
+
+TEST_F(EarlyHintsPageLoadMetricsObserverTest, PageType) {
+  NavigateAndCommit(GURL(kTestUrl));
+  PopulateTimingForHistograms();
+  tester()->NavigateToUntrackedUrl();
+
+  tester()->histogram_tester().ExpectUniqueSample(
+      page_load_metrics::internal::kPageLoadTrackerPageType,
+      page_load_metrics::internal::PageLoadTrackerPageType::kPrimaryPage, 1);
+}
 
 TEST_F(EarlyHintsPageLoadMetricsObserverTest, WithoutPreload) {
   NavigateAndCommit(GURL(kTestUrl));

@@ -19,8 +19,8 @@
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
-#include "base/sequenced_task_runner.h"
 #include "base/strings/string_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/sequenced_task_runner_handle.h"
 #include "base/values.h"
 #include "components/url_formatter/url_fixer.h"
@@ -29,10 +29,10 @@
 #include "net/base/hash_value.h"
 #include "net/base/host_port_pair.h"
 #include "net/cert/asn1_util.h"
-#include "net/cert/internal/name_constraints.h"
-#include "net/cert/internal/parse_name.h"
-#include "net/cert/internal/parsed_certificate.h"
 #include "net/cert/known_roots.h"
+#include "net/cert/pki/name_constraints.h"
+#include "net/cert/pki/parse_name.h"
+#include "net/cert/pki/parsed_certificate.h"
 #include "net/cert/x509_certificate.h"
 #include "net/cert/x509_util.h"
 
@@ -75,7 +75,7 @@ class OrgAttributeFilter {
   void AdvanceIfNecessary() {
     while (sequence_head_ != sequence_end_) {
       while (rdn_it_ != sequence_head_->end()) {
-        if (rdn_it_->type == net::TypeOrganizationNameOid())
+        if (rdn_it_->type == net::der::Input(net::kTypeOrganizationNameOid))
           return;
         ++rdn_it_;
       }
@@ -100,8 +100,10 @@ bool ParseOrganizationBoundName(net::der::Input dn_without_sequence,
     return false;
   for (const auto& rdn : *out) {
     for (const auto& attribute_type_and_value : rdn) {
-      if (attribute_type_and_value.type == net::TypeOrganizationNameOid())
+      if (attribute_type_and_value.type ==
+          net::der::Input(net::kTypeOrganizationNameOid)) {
         return true;
+      }
     }
   }
   return false;
@@ -184,7 +186,7 @@ ChromeRequireCTDelegate::IsCTRequiredForHost(
   // Compute >= 2018-05-01, rather than deal with possible fractional
   // seconds.
   const base::Time kMay_1_2018 =
-      base::Time::UnixEpoch() + base::TimeDelta::FromSeconds(1525132800);
+      base::Time::UnixEpoch() + base::Seconds(1525132800);
   if (chain->valid_start() >= kMay_1_2018)
     return CTRequirementLevel::REQUIRED;
 
@@ -227,7 +229,7 @@ bool ChromeRequireCTDelegate::MatchHostname(const std::string& hostname,
   // Scheme and port are ignored by the policy, so it's OK to construct a
   // new GURL here. However, |hostname| is in network form, not URL form,
   // so it's necessary to wrap IPv6 addresses in brackets.
-  std::set<url_matcher::URLMatcherConditionSet::ID> matching_ids =
+  std::set<base::MatcherStringPattern::ID> matching_ids =
       url_matcher_->MatchURL(
           GURL("https://" + net::HostPortPair(hostname, 443).HostForURL()));
   if (matching_ids.empty())

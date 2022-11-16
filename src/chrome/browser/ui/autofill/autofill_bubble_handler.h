@@ -5,8 +5,6 @@
 #ifndef CHROME_BROWSER_UI_AUTOFILL_AUTOFILL_BUBBLE_HANDLER_H_
 #define CHROME_BROWSER_UI_AUTOFILL_AUTOFILL_BUBBLE_HANDLER_H_
 
-#include "base/macros.h"
-
 namespace content {
 class WebContents;
 }
@@ -21,12 +19,17 @@ class SaveCardBubbleController;
 class SaveUPIBubble;
 class SaveUPIBubbleController;
 class VirtualCardManualFallbackBubbleController;
+class VirtualCardEnrollBubbleController;
 
 // Responsible for receiving calls from controllers and showing autofill
 // bubbles.
 class AutofillBubbleHandler {
  public:
   AutofillBubbleHandler() = default;
+
+  AutofillBubbleHandler(const AutofillBubbleHandler&) = delete;
+  AutofillBubbleHandler& operator=(const AutofillBubbleHandler&) = delete;
+
   virtual ~AutofillBubbleHandler() = default;
 
   virtual AutofillBubbleBase* ShowSaveCreditCardBubble(
@@ -67,15 +70,15 @@ class AutofillBubbleHandler {
       VirtualCardManualFallbackBubbleController* controller,
       bool is_user_gesture) = 0;
 
+  virtual AutofillBubbleBase* ShowVirtualCardEnrollBubble(
+      content::WebContents* web_contents,
+      VirtualCardEnrollBubbleController* controller,
+      bool is_user_gesture) = 0;
+
   // TODO(crbug.com/964127): Wait for the integration with sign in after local
   // save to be landed to see if we need to merge password saved and credit card
   // saved functions.
   virtual void OnPasswordSaved() = 0;
-
-  // TODO(crbug.com/964127): Move password bubble here.
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(AutofillBubbleHandler);
 };
 
 }  // namespace autofill

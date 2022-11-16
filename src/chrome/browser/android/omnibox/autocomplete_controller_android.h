@@ -8,7 +8,7 @@
 #include <memory>
 
 #include "base/android/jni_android.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "components/keyed_service/content/browser_context_keyed_service_factory.h"
 #include "components/keyed_service/core/keyed_service.h"
@@ -33,6 +33,10 @@ class AutocompleteControllerAndroid : public AutocompleteController::Observer,
       Profile* profile,
       std::unique_ptr<ChromeAutocompleteProviderClient> client);
 
+  AutocompleteControllerAndroid(const AutocompleteControllerAndroid&) = delete;
+  AutocompleteControllerAndroid& operator=(
+      const AutocompleteControllerAndroid&) = delete;
+
   // Methods that forward to AutocompleteController:
   void Start(JNIEnv* env,
              const base::android::JavaRef<jstring>& j_text,
@@ -43,9 +47,8 @@ class AutocompleteControllerAndroid : public AutocompleteController::Observer,
              bool prevent_inline_autocomplete,
              bool prefer_keyword,
              bool allow_exact_keyword_match,
-             bool want_asynchronous_matches,
-             const base::android::JavaRef<jstring>& j_query_tile_id,
-             bool is_query_started_from_tiles);
+             bool want_asynchronous_matches);
+  void StartPrefetch(JNIEnv* env);
   base::android::ScopedJavaLocalRef<jobject> Classify(
       JNIEnv* env,
       const base::android::JavaParamRef<jstring>& j_text,
@@ -61,24 +64,25 @@ class AutocompleteControllerAndroid : public AutocompleteController::Observer,
 
   void OnSuggestionSelected(
       JNIEnv* env,
-      jint selected_index,
+      jint match_index,
       const jint j_window_open_disposition,
       const base::android::JavaParamRef<jstring>& j_current_url,
       jint j_page_classification,
       jlong elapsed_time_since_first_modified,
       jint completed_length,
       const base::android::JavaParamRef<jobject>& j_web_contents);
-  void DeleteSuggestion(JNIEnv* env, jint selected_index);
+  void DeleteMatch(JNIEnv* env, jint match_index);
+  void DeleteMatchElement(JNIEnv* env, jint match_index, jint element_index);
   base::android::ScopedJavaLocalRef<jobject>
-  UpdateMatchDestinationURLWithQueryFormulationTime(
+  UpdateMatchDestinationURLWithAdditionalAssistedQueryStats(
       JNIEnv* env,
-      jint selected_index,
+      jint match_index,
       jlong elapsed_time_since_input_change,
       const base::android::JavaParamRef<jstring>& jnew_query_text,
       const base::android::JavaParamRef<jobjectArray>& jnew_query_params);
-  base::android::ScopedJavaLocalRef<jobject> FindMatchingTabWithUrl(
+  base::android::ScopedJavaLocalRef<jobject> GetMatchingTabForSuggestion(
       JNIEnv* env,
-      const base::android::JavaParamRef<jobject>& j_gurl);
+      jint match_index);
 
   // KeyedService:
   void Shutdown() override;
@@ -135,15 +139,11 @@ class AutocompleteControllerAndroid : public AutocompleteController::Observer,
   // from Classify().
   bool inside_synchronous_start_{false};
 
-  // Whether the omnibox input is a query that starts building
-  // by clicking on an image tile.
-  bool is_query_started_from_tiles_{false};
-
   // The Profile associated with this instance of AutocompleteControllerAndroid.
   // There should be only one instance of AutocompleteControllerAndroid per
   // Profile. This is orchestrated by AutocompleteControllerFactory java class.
   // Guaranteed to be non-null.
-  Profile* const profile_;
+  const raw_ptr<Profile> profile_;
 
   // Direct reference to AutocompleteController java class. Kept for as long as
   // this instance of AutocompleteControllerAndroid lives: until corresponding
@@ -155,7 +155,7 @@ class AutocompleteControllerAndroid : public AutocompleteController::Observer,
 
   // Associated AutocompleteProviderClient.
   // Guaranteed to be non-null.
-  ChromeAutocompleteProviderClient* const provider_client_;
+  const raw_ptr<ChromeAutocompleteProviderClient> provider_client_;
 
   // AutocompleteController associated with this client. As this is directly
   // associated with the |provider_client_| and indirectly with |profile_|
@@ -169,8 +169,6 @@ class AutocompleteControllerAndroid : public AutocompleteController::Observer,
   // Retained throughout the lifetime of the AutocompleteControllerAndroid.
   const base::WeakPtrFactory<AutocompleteControllerAndroid> weak_ptr_factory_{
       this};
-
-  DISALLOW_COPY_AND_ASSIGN(AutocompleteControllerAndroid);
 };
 
 #endif  // CHROME_BROWSER_ANDROID_OMNIBOX_AUTOCOMPLETE_CONTROLLER_ANDROID_H_

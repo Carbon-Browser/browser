@@ -8,7 +8,6 @@
 #include <memory>
 #include <string>
 
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "components/autofill/core/common/language_code.h"
@@ -23,6 +22,7 @@
 #include "components/password_manager/core/browser/sync_credentials_filter.h"
 #include "components/password_manager/ios/password_manager_client_bridge.h"
 #include "components/prefs/pref_member.h"
+#include "components/sync/driver/sync_service.h"
 #import "ios/chrome/browser/safe_browsing/input_event_observer.h"
 #import "ios/chrome/browser/safe_browsing/password_protection_java_script_feature.h"
 #import "ios/web/public/web_state.h"
@@ -37,6 +37,7 @@ class LogManager;
 }
 
 namespace password_manager {
+class PasswordScriptsFetcher;
 class PasswordFormManagerForUI;
 class PasswordManagerDriver;
 }
@@ -68,6 +69,11 @@ class IOSChromePasswordManagerClient
  public:
   explicit IOSChromePasswordManagerClient(
       id<IOSChromePasswordManagerClientBridge> bridge);
+
+  IOSChromePasswordManagerClient(const IOSChromePasswordManagerClient&) =
+      delete;
+  IOSChromePasswordManagerClient& operator=(
+      const IOSChromePasswordManagerClient&) = delete;
 
   ~IOSChromePasswordManagerClient() override;
 
@@ -101,16 +107,17 @@ class IOSChromePasswordManagerClient
   const password_manager::PasswordFeatureManager* GetPasswordFeatureManager()
       const override;
   PrefService* GetPrefs() const override;
-  // TODO(crbug.com/1218413): Remove the following two methods once migration
-  // from PasswordStore to PasswordStoreInterface is complete.
-  password_manager::PasswordStore* GetProfilePasswordStore() const override;
-  password_manager::PasswordStore* GetAccountPasswordStore() const override;
-  password_manager::PasswordStoreInterface* GetProfilePasswordStoreInterface()
+  const syncer::SyncService* GetSyncService() const override;
+  password_manager::PasswordStoreInterface* GetProfilePasswordStore()
       const override;
-  password_manager::PasswordStoreInterface* GetAccountPasswordStoreInterface()
+  password_manager::PasswordStoreInterface* GetAccountPasswordStore()
       const override;
   password_manager::PasswordReuseManager* GetPasswordReuseManager()
       const override;
+  password_manager::PasswordScriptsFetcher* GetPasswordScriptsFetcher()
+      override;
+  password_manager::PasswordChangeSuccessTracker*
+  GetPasswordChangeSuccessTracker() override;
 
   void NotifyUserAutoSignin(
       std::vector<std::unique_ptr<password_manager::PasswordForm>> local_forms,
@@ -204,8 +211,6 @@ class IOSChromePasswordManagerClient
   base::ScopedObservation<PasswordProtectionJavaScriptFeature,
                           InputEventObserver>
       input_event_observation_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(IOSChromePasswordManagerClient);
   base::WeakPtrFactory<IOSChromePasswordManagerClient> weak_factory_{this};
 };
 

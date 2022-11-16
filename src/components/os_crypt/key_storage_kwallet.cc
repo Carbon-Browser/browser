@@ -4,6 +4,7 @@
 
 #include "components/os_crypt/key_storage_kwallet.h"
 
+#include <tuple>
 #include <utility>
 
 #include "base/base64.h"
@@ -20,7 +21,7 @@ KeyStorageKWallet::~KeyStorageKWallet() {
   // The handle is shared between programs that are using the same wallet.
   // Closing the wallet is a nop in the typical case.
   bool success = true;
-  ignore_result(kwallet_dbus_->Close(handle_, false, app_name_, &success));
+  std::ignore = kwallet_dbus_->Close(handle_, false, app_name_, &success);
   kwallet_dbus_->GetSessionBus()->ShutdownAndBlock();
 }
 

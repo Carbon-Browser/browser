@@ -44,12 +44,13 @@ class LayoutSVGText final : public LayoutSVGBlock {
     NOT_DESTROYED();
     needs_text_metrics_update_ = true;
   }
-  FloatRect VisualRectInLocalSVGCoordinates() const override;
-  FloatRect ObjectBoundingBox() const override;
-  FloatRect StrokeBoundingBox() const override;
+  gfx::RectF VisualRectInLocalSVGCoordinates() const override;
+  gfx::RectF ObjectBoundingBox() const override;
+  gfx::RectF StrokeBoundingBox() const override;
   bool IsObjectBoundingBoxValid() const;
 
   void AddOutlineRects(Vector<PhysicalRect>&,
+                       OutlineInfo*,
                        const PhysicalOffset& additional_offset,
                        NGOutlineType) const override;
 
@@ -77,7 +78,7 @@ class LayoutSVGText final : public LayoutSVGBlock {
   }
 
  private:
-  bool AllowsNonVisibleOverflow() const override {
+  bool RespectsCSSOverflow() const override {
     NOT_DESTROYED();
     return false;
   }
@@ -91,12 +92,12 @@ class LayoutSVGText final : public LayoutSVGBlock {
   bool NodeAtPoint(HitTestResult&,
                    const HitTestLocation&,
                    const PhysicalOffset& accumulated_offset,
-                   HitTestAction) override;
+                   HitTestPhase) override;
   PositionWithAffinity PositionForPoint(const PhysicalOffset&) const override;
 
   void UpdateLayout() override;
 
-  void AbsoluteQuads(Vector<FloatQuad>&,
+  void AbsoluteQuads(Vector<gfx::QuadF>&,
                      MapCoordinatesFlags mode = 0) const override;
 
   void AddChild(LayoutObject* child,

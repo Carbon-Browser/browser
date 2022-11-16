@@ -43,14 +43,22 @@ class MockMediaStreamVideoSink : public MediaStreamVideoSink {
   void OnEnabledChanged(bool enabled) override;
   void OnContentHintChanged(
       WebMediaStreamTrack::ContentHintType content_hint) override;
+  MOCK_METHOD(void,
+              OnVideoConstraintsChanged,
+              (absl::optional<double>, absl::optional<double>),
+              (override));
 
   // Triggered when OnVideoFrame(scoped_refptr<media::VideoFrame> frame)
   // is called.
-  MOCK_METHOD1(OnVideoFrame, void(base::TimeTicks));
-  MOCK_METHOD1(OnEncodedVideoFrame, void(base::TimeTicks));
+  MOCK_METHOD(void, OnVideoFrame, (base::TimeTicks));
+  MOCK_METHOD(void, OnEncodedVideoFrame, (base::TimeTicks));
+
+  // Triggered when a frame is dropped.
+  MOCK_METHOD(void, OnNotifyFrameDropped, ());
 
   VideoCaptureDeliverFrameCB GetDeliverFrameCB();
   EncodedVideoFrameCB GetDeliverEncodedVideoFrameCB();
+  VideoCaptureNotifyFrameDroppedCB GetNotifyFrameDroppedCB();
 
   int number_of_frames() const { return number_of_frames_; }
   media::VideoPixelFormat format() const { return format_; }
@@ -74,6 +82,7 @@ class MockMediaStreamVideoSink : public MediaStreamVideoSink {
       base::TimeTicks estimated_capture_time);
   void DeliverEncodedVideoFrame(scoped_refptr<EncodedVideoFrame> frame,
                                 base::TimeTicks estimated_capture_time);
+  void NotifyFrameDropped();
 
   MediaStreamVideoSink::UsesAlpha uses_alpha_ =
       MediaStreamVideoSink::UsesAlpha::kDefault;

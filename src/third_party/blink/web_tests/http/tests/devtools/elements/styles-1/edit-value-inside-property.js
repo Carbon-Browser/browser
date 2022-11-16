@@ -4,7 +4,7 @@
 
 (async function() {
   TestRunner.addResult(`Verifies that property value editing triggers style update in rendering engine.\n`);
-  await TestRunner.loadModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
+  await TestRunner.loadLegacyModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
   await TestRunner.showPanel('elements');
   await TestRunner.loadHTML(`
       <div id="inspected" style="font-size: 19px"></div>
@@ -32,7 +32,7 @@
   }
 
   function onNodeFound(node) {
-    TestRunner.cssModel.inlineStylesPromise(node.id).then(onInlineStyle);
+    TestRunner.cssModel.getInlineStyles(node.id).then(onInlineStyle);
   }
 
   function onInlineStyle(inlineStyleResult) {

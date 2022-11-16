@@ -10,6 +10,7 @@
 #include "content/browser/renderer_host/frame_tree.h"
 #include "content/browser/renderer_host/frame_tree_node.h"
 #include "content/browser/renderer_host/navigation_request.h"
+#include "content/common/navigation_params_utils.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/common/content_features.h"
@@ -20,6 +21,7 @@ namespace content {
 
 namespace {
 const char kConsoleError[] = "Not allowed to navigate top frame to %s URL: %s";
+const char kAnyFrameConsoleError[] = "Not allowed to navigate to %s URL: %s";
 }
 
 BlockedSchemeNavigationThrottle::BlockedSchemeNavigationThrottle(
@@ -27,6 +29,26 @@ BlockedSchemeNavigationThrottle::BlockedSchemeNavigationThrottle(
     : NavigationThrottle(navigation_handle) {}
 
 BlockedSchemeNavigationThrottle::~BlockedSchemeNavigationThrottle() {}
+
+NavigationThrottle::ThrottleCheckResult
+BlockedSchemeNavigationThrottle::WillStartRequest() {
+  NavigationRequest* request = NavigationRequest::From(navigation_handle());
+  if (!request->GetURL().SchemeIs(url::kFileSystemScheme))
+    return PROCEED;
+
+  if (base::FeatureList::IsEnabled(blink::features::kFileSystemUrlNavigation))
+    return PROCEED;
+
+  RenderFrameHost* top_frame =
+      request->frame_tree_node()->frame_tree()->root()->current_frame_host();
+  top_frame->AddMessageToConsole(
+      blink::mojom::ConsoleMessageLevel::kError,
+      base::StringPrintf(kAnyFrameConsoleError,
+                         request->GetURL().scheme().c_str(),
+                         request->GetURL().spec().c_str()));
+
+  return CANCEL;
+}
 
 NavigationThrottle::ThrottleCheckResult
 BlockedSchemeNavigationThrottle::WillProcessResponse() {
@@ -51,14 +73,29 @@ const char* BlockedSchemeNavigationThrottle::GetNameForLogging() {
 std::unique_ptr<NavigationThrottle>
 BlockedSchemeNavigationThrottle::CreateThrottleForNavigation(
     NavigationHandle* navigation_handle) {
-  if (navigation_handle->IsInMainFrame() &&
-      navigation_handle->IsRendererInitiated() &&
-      !navigation_handle->IsSameDocument() &&
-      (navigation_handle->GetURL().SchemeIs(url::kDataScheme) ||
-       navigation_handle->GetURL().SchemeIs(url::kFileSystemScheme)) &&
+  NavigationRequest* request = NavigationRequest::From(navigation_handle);
+  // Create throttles when going to blocked schemes via renderer-initiated
+  // navigations (which are cross-document in the main frame). Note that history
+  // navigations can bypass this, because the blocked scheme must have
+  // originally committed in a permitted case (e.g., omnibox navigation).
+  if (request->IsInMainFrame() && request->IsRendererInitiated() &&
+      !request->IsSameDocument() &&
+      !NavigationTypeUtils::IsHistory(
+          request->common_params().navigation_type) &&
+      (request->GetURL().SchemeIs(url::kDataScheme) ||
+       request->GetURL().SchemeIs(url::kFileSystemScheme)) &&
       !base::FeatureList::IsEnabled(
           features::kAllowContentInitiatedDataUrlNavigations)) {
-    return std::make_unique<BlockedSchemeNavigationThrottle>(navigation_handle);
+    return std::make_unique<BlockedSchemeNavigationThrottle>(request);
+  }
+  // Block all renderer initiated navigations to filesystem: URLs. These won't
+  // load anyway since no URL Loader exists for them, but the throttle lets us
+  // add a message to the console.
+  if (!base::FeatureList::IsEnabled(
+          blink::features::kFileSystemUrlNavigation) &&
+      request->IsRendererInitiated() &&
+      request->GetURL().SchemeIs(url::kFileSystemScheme)) {
+    return std::make_unique<BlockedSchemeNavigationThrottle>(request);
   }
   return nullptr;
 }

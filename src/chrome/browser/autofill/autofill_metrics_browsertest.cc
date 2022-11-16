@@ -7,7 +7,6 @@
 #include <utility>
 
 #include "base/command_line.h"
-#include "base/macros.h"
 #include "base/path_service.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_navigator_params.h"
@@ -51,6 +50,10 @@ class AutofillMetricsBrowserTest : public InProcessBrowserTest {
  public:
   AutofillMetricsBrowserTest() {}
 
+  AutofillMetricsBrowserTest(const AutofillMetricsBrowserTest&) = delete;
+  AutofillMetricsBrowserTest& operator=(const AutofillMetricsBrowserTest&) =
+      delete;
+
   ~AutofillMetricsBrowserTest() override {}
 
  protected:
@@ -76,9 +79,6 @@ class AutofillMetricsBrowserTest : public InProcessBrowserTest {
   }
 
   std::unique_ptr<ukm::TestAutoSetUkmRecorder> test_ukm_recorder_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(AutofillMetricsBrowserTest);
 };
 
 IN_PROC_BROWSER_TEST_F(AutofillMetricsBrowserTest,
@@ -94,7 +94,7 @@ IN_PROC_BROWSER_TEST_F(AutofillMetricsBrowserTest,
   EXPECT_TRUE(content::NavigateIframeToURL(tab, "test", iframe_url));
 
   EXPECT_TRUE(tab->GetRenderWidgetHostView()->IsShowing());
-  content::RenderFrameHost* frame = ChildFrameAt(tab->GetMainFrame(), 0);
+  content::RenderFrameHost* frame = ChildFrameAt(tab->GetPrimaryMainFrame(), 0);
   EXPECT_TRUE(frame);
 
   // Make sure the UKM were logged for the main frame url and none for the
@@ -118,7 +118,7 @@ IN_PROC_BROWSER_TEST_F(AutofillMetricsBrowserTest,
   EXPECT_TRUE(content::NavigateIframeToURL(tab, "test", iframe_url));
 
   EXPECT_TRUE(tab->GetRenderWidgetHostView()->IsShowing());
-  content::RenderFrameHost* frame = ChildFrameAt(tab->GetMainFrame(), 0);
+  content::RenderFrameHost* frame = ChildFrameAt(tab->GetPrimaryMainFrame(), 0);
   EXPECT_TRUE(frame);
 
   // Make sure the UKM were logged for the main frame url and none for the
@@ -165,7 +165,7 @@ IN_PROC_BROWSER_TEST_F(
   EXPECT_TRUE(content::NavigateIframeToURL(tab, "test", iframe_url));
 
   EXPECT_TRUE(tab->GetRenderWidgetHostView()->IsShowing());
-  content::RenderFrameHost* frame = ChildFrameAt(tab->GetMainFrame(), 0);
+  content::RenderFrameHost* frame = ChildFrameAt(tab->GetPrimaryMainFrame(), 0);
   EXPECT_TRUE(frame);
 
   // Make sure the UKM were logged for the main frame url and none for the
@@ -190,7 +190,7 @@ IN_PROC_BROWSER_TEST_F(
   EXPECT_TRUE(content::NavigateIframeToURL(tab, "test", iframe_url));
 
   EXPECT_TRUE(tab->GetRenderWidgetHostView()->IsShowing());
-  content::RenderFrameHost* frame = ChildFrameAt(tab->GetMainFrame(), 0);
+  content::RenderFrameHost* frame = ChildFrameAt(tab->GetPrimaryMainFrame(), 0);
   EXPECT_TRUE(frame);
 
   // Make sure the UKM were logged for the main frame url and none for the
@@ -206,6 +206,11 @@ class SitePerProcessAutofillMetricsBrowserTest
  public:
   SitePerProcessAutofillMetricsBrowserTest() {}
 
+  SitePerProcessAutofillMetricsBrowserTest(
+      const SitePerProcessAutofillMetricsBrowserTest&) = delete;
+  SitePerProcessAutofillMetricsBrowserTest& operator=(
+      const SitePerProcessAutofillMetricsBrowserTest&) = delete;
+
   ~SitePerProcessAutofillMetricsBrowserTest() override {}
 
  protected:
@@ -215,9 +220,6 @@ class SitePerProcessAutofillMetricsBrowserTest
     // Append --site-per-process flag.
     content::IsolateAllSitesForTesting(command_line);
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(SitePerProcessAutofillMetricsBrowserTest);
 };
 
 IN_PROC_BROWSER_TEST_F(SitePerProcessAutofillMetricsBrowserTest,
@@ -233,9 +235,10 @@ IN_PROC_BROWSER_TEST_F(SitePerProcessAutofillMetricsBrowserTest,
   EXPECT_TRUE(content::NavigateIframeToURL(tab, "test", iframe_url));
 
   EXPECT_TRUE(tab->GetRenderWidgetHostView()->IsShowing());
-  content::RenderFrameHost* frame = ChildFrameAt(tab->GetMainFrame(), 0);
+  content::RenderFrameHost* frame = ChildFrameAt(tab->GetPrimaryMainFrame(), 0);
   EXPECT_TRUE(frame);
-  EXPECT_NE(frame->GetSiteInstance(), tab->GetMainFrame()->GetSiteInstance());
+  EXPECT_NE(frame->GetSiteInstance(),
+            tab->GetPrimaryMainFrame()->GetSiteInstance());
 
   // Make sure the UKM were logged for the main frame url and none for the
   // iframe url.
@@ -258,9 +261,10 @@ IN_PROC_BROWSER_TEST_F(SitePerProcessAutofillMetricsBrowserTest,
   EXPECT_TRUE(content::NavigateIframeToURL(tab, "test", iframe_url));
 
   EXPECT_TRUE(tab->GetRenderWidgetHostView()->IsShowing());
-  content::RenderFrameHost* frame = ChildFrameAt(tab->GetMainFrame(), 0);
+  content::RenderFrameHost* frame = ChildFrameAt(tab->GetPrimaryMainFrame(), 0);
   EXPECT_TRUE(frame);
-  EXPECT_NE(frame->GetSiteInstance(), tab->GetMainFrame()->GetSiteInstance());
+  EXPECT_NE(frame->GetSiteInstance(),
+            tab->GetPrimaryMainFrame()->GetSiteInstance());
 
   // Make sure the UKM were logged for the main frame url and none for the
   // iframe url.
@@ -306,9 +310,10 @@ IN_PROC_BROWSER_TEST_F(
   EXPECT_TRUE(content::NavigateIframeToURL(tab, "test", iframe_url));
 
   EXPECT_TRUE(tab->GetRenderWidgetHostView()->IsShowing());
-  content::RenderFrameHost* frame = ChildFrameAt(tab->GetMainFrame(), 0);
+  content::RenderFrameHost* frame = ChildFrameAt(tab->GetPrimaryMainFrame(), 0);
   EXPECT_TRUE(frame);
-  EXPECT_NE(frame->GetSiteInstance(), tab->GetMainFrame()->GetSiteInstance());
+  EXPECT_NE(frame->GetSiteInstance(),
+            tab->GetPrimaryMainFrame()->GetSiteInstance());
 
   // Make sure the UKM were logged for the main frame url and none for the
   // iframe url.
@@ -332,9 +337,10 @@ IN_PROC_BROWSER_TEST_F(
   EXPECT_TRUE(content::NavigateIframeToURL(tab, "test", iframe_url));
 
   EXPECT_TRUE(tab->GetRenderWidgetHostView()->IsShowing());
-  content::RenderFrameHost* frame = ChildFrameAt(tab->GetMainFrame(), 0);
+  content::RenderFrameHost* frame = ChildFrameAt(tab->GetPrimaryMainFrame(), 0);
   EXPECT_TRUE(frame);
-  EXPECT_NE(frame->GetSiteInstance(), tab->GetMainFrame()->GetSiteInstance());
+  EXPECT_NE(frame->GetSiteInstance(),
+            tab->GetPrimaryMainFrame()->GetSiteInstance());
 
   // Make sure the UKM were logged for the main frame url and none for the
   // iframe url.

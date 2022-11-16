@@ -37,6 +37,9 @@ if (is_win) {
       "//base",
       "//build:branding_buildflags",
       "//build/win:default_exe_manifest",
+      "//chrome/browser/enterprise/connectors/device_trust/key_management/core/network",
+      "//chrome/browser/enterprise/connectors/device_trust/key_management/installer:elevated_rotation",
+      "//chrome/browser/enterprise/connectors/device_trust/key_management/installer/management_service:rotate_util",
       "//chrome/chrome_elf:constants",
       "//chrome/common:constants",
       "//chrome/install_static:install_static_util",
@@ -46,6 +49,7 @@ if (is_win) {
       "//components/crash/core/app:run_as_crashpad_handler",
       "//content/public/common:static_switches",
       "//rlz:rlz_lib_no_network",
+      "//url",
     ]
 
     libs = [ "netapi32.lib" ]
@@ -101,7 +105,6 @@ if (is_win) {
 
     deps = [
       "//build:branding_buildflags",
-      "//chrome/browser/enterprise/connectors/device_trust/attestation/desktop:elevated_command_support",
       "//chrome/common:constants",
       "//chrome/common:version_header",
       "//chrome/install_static:buildflags",

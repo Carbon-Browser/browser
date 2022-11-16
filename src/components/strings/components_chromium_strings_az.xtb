@@ -2,13 +2,12 @@
 <!DOCTYPE translationbundle>
 <translationbundle lang="az">
 <translation id="130631256467250065">Dəyişiklikləriniz cihazınızı işə salandan sonra qüvvəyə minəcək.</translation>
-<translation id="275588974610408078">Xəta hesabatı Carbon Browser Browser Browser'da əlçatan deyil.</translation>
-<translation id="3064346599913645280">Təhlükəsiz Carbon Browser Browser Browser səhifəsinə baxırsınız</translation>
-<translation id="3550966579244642892">Google Chrome OS ilkin quraşdırmanı tamamlamadı.</translation>
-<translation id="358997566136285270">Carbon Browser Browser Browser loqo</translation>
-<translation id="4365115785552740256">Carbon Browser Browser Browser <ph name="BEGIN_LINK_CHROMIUM" />Carbon Browser Browser Browser<ph name="END_LINK_CHROMIUM" /> açıq mənbə layihəsi və digər <ph name="BEGIN_LINK_OSS" />açıq mənbə proqram təminatları tərəfindən<ph name="END_LINK_OSS" /> əlçatan edilib.</translation>
+<translation id="275588974610408078">Xəta hesabatı Carbon Browser'da əlçatan deyil.</translation>
+<translation id="3064346599913645280">Təhlükəsiz Carbon Browser səhifəsinə baxırsınız</translation>
+<translation id="358997566136285270">Carbon Browser loqo</translation>
+<translation id="4365115785552740256">Carbon Browser <ph name="BEGIN_LINK_CHROMIUM" />Carbon Browser<ph name="END_LINK_CHROMIUM" /> açıq mənbə layihəsi və digər <ph name="BEGIN_LINK_OSS" />açıq mənbə proqram təminatları tərəfindən<ph name="END_LINK_OSS" /> əlçatan edilib.</translation>
 <translation id="4559775032954821361">Go to
-          the Carbon Browser Browser Browser menu &gt;
+          the Carbon Browser menu &gt;
           <ph name="SETTINGS_TITLE" />
           &gt;
           <ph name="ADVANCED_TITLE" />
@@ -17,12 +16,13 @@
           &gt;
           LAN Settings
           and deselect the "Use a proxy server for your LAN" checkbox.</translation>
-<translation id="4622039161600275920">Bu səhifə Carbon Browser Browser Browser tərəfindən bloklanıb</translation>
-<translation id="48558539577516920">Carbon Browser Browser Browser'a qoruyucu divar və ya antivirus ayarlarınızda şəbəkəyə daxil olmağa imkan verin.</translation>
-<translation id="580822234363523061">Carbon Browser Browser Browser menyusuna gedin &gt;           <ph name="SETTINGS_TITLE" />           &gt;           <ph name="ADVANCED_TITLE" />           &gt;           <ph name="PROXIES_TITLE" />           və konfiqurasiyanın "heç bir proksi" və ya "birbaşa" ayarlandığına əmin olun."</translation>
-<translation id="6613594504749178791">Dəyişiklikləriniz gələn dəfə Carbon Browser Browser Browser'u başlatdıqda qüvvəyə minəcək.</translation>
+<translation id="4622039161600275920">Bu səhifə Carbon Browser tərəfindən bloklanıb</translation>
+<translation id="48558539577516920">Carbon Browser'a qoruyucu divar və ya antivirus ayarlarınızda şəbəkəyə daxil olmağa imkan verin.</translation>
+<translation id="4918837013875648434">Carbon BrowserOS ilkin quraşdırmanı tamamlamadı.</translation>
+<translation id="580822234363523061">Carbon Browser menyusuna gedin &gt;           <ph name="SETTINGS_TITLE" />           &gt;           <ph name="ADVANCED_TITLE" />           &gt;           <ph name="PROXIES_TITLE" />           və konfiqurasiyanın "heç bir proksi" və ya "birbaşa" ayarlandığına əmin olun."</translation>
+<translation id="6613594504749178791">Dəyişiklikləriniz gələn dəfə Carbon Browser'u başlatdıqda qüvvəyə minəcək.</translation>
 <translation id="7861509383340276692">Buraya keçin:
-          Carbon Browser Browser Browser menyusu &gt;
+          Carbon Browser menyusu &gt;
           <ph name="SETTINGS_TITLE" />
           &gt;
           <ph name="ADVANCED_TITLE" />
@@ -30,5 +30,5 @@
 Əgər problem bununla həll olmursa, bu variantı qabaqcıl performans üçün seçməyi tövsiyə edirik.</translation>
 <translation id="8187289872471304532">Tətbiqlər &gt; Sistem Tərcihləri &gt; Şəbəkə &gt; Qabaqcıl &gt; Proksilər bölməsinə gedin
           və seçilmiş hər hansı proksidən seçimi qaldırın.</translation>
-<translation id="8684913864886094367">Carbon Browser Browser Browser düzgün qapadılmadı.</translation>
+<translation id="8684913864886094367">Carbon Browser düzgün qapadılmadı.</translation>
 </translationbundle>

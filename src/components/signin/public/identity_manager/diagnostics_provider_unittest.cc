@@ -5,8 +5,8 @@
 #include "components/signin/internal/identity_manager/diagnostics_provider_impl.h"
 
 #include "base/callback_helpers.h"
-#include "base/macros.h"
 #include "base/test/task_environment.h"
+#include "base/time/time.h"
 #include "components/signin/public/identity_manager/accounts_cookie_mutator.h"
 #include "components/signin/public/identity_manager/identity_test_environment.h"
 #include "components/signin/public/identity_manager/load_credentials_state.h"
@@ -22,6 +22,9 @@ class DiagnosticsProviderTest : public testing::Test {
     identity_test_env()->WaitForRefreshTokensLoaded();
   }
 
+  DiagnosticsProviderTest(const DiagnosticsProviderTest&) = delete;
+  DiagnosticsProviderTest& operator=(const DiagnosticsProviderTest&) = delete;
+
   signin::IdentityTestEnvironment* identity_test_env() {
     return &identity_test_env_;
   }
@@ -35,8 +38,6 @@ class DiagnosticsProviderTest : public testing::Test {
 
  private:
   signin::IdentityTestEnvironment identity_test_env_;
-
-  DISALLOW_COPY_AND_ASSIGN(DiagnosticsProviderTest);
 };
 
 }  // namespace

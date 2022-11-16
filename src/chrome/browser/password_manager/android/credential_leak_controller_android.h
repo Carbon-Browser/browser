@@ -6,9 +6,11 @@
 #define CHROME_BROWSER_PASSWORD_MANAGER_ANDROID_CREDENTIAL_LEAK_CONTROLLER_ANDROID_H_
 
 #include <memory>
-#include "base/macros.h"
+#include <string>
+
+#include "base/memory/raw_ptr.h"
 #include "components/password_manager/core/browser/leak_detection_dialog_utils.h"
-#include "ui/gfx/range/range.h"
+#include "components/password_manager/core/browser/password_change_success_tracker.h"
 #include "url/gurl.h"
 
 namespace ui {
@@ -25,7 +27,18 @@ class CredentialLeakControllerAndroid {
       password_manager::CredentialLeakType leak_type,
       const GURL& origin,
       const std::u16string& username,
-      ui::WindowAndroid* window_android);
+      password_manager::PasswordChangeSuccessTracker*
+          password_change_success_tracker,
+      ui::WindowAndroid* window_android,
+      // Metrics recorder for leak dialog related UMA and UKM logging.
+      std::unique_ptr<password_manager::metrics_util::LeakDialogMetricsRecorder>
+          metrics_recorder);
+
+  CredentialLeakControllerAndroid(const CredentialLeakControllerAndroid&) =
+      delete;
+  CredentialLeakControllerAndroid& operator=(
+      const CredentialLeakControllerAndroid&) = delete;
+
   ~CredentialLeakControllerAndroid();
 
   // Called when a leaked credential was detected.
@@ -56,16 +69,12 @@ class CredentialLeakControllerAndroid {
   // The title of the dialog displaying the leak warning.
   std::u16string GetTitle() const;
 
-  // Checks whether the dialog should show the option to check passwords.
-  bool ShouldCheckPasswords() const;
-
-  // Checks whether the change password button should be shown.
-  // |ShouldShowChangePasswordButton()| and |ShouldCheckPasswords()| are not
-  // both true at the same time.
-  bool ShouldShowChangePasswordButton() const;
-
   // Checks whether the cancel button should be shown.
   bool ShouldShowCancelButton() const;
+
+  // Whether the "change password automatically" button is available. Varies by
+  // leak type.
+  bool ShouldShowAutomaticChangePasswordButton() const;
 
  private:
   // Used to customize the UI.
@@ -75,11 +84,18 @@ class CredentialLeakControllerAndroid {
 
   const std::u16string username_;
 
-  ui::WindowAndroid* window_android_;
+  const raw_ptr<password_manager::PasswordChangeSuccessTracker>
+      password_change_success_tracker_;
+
+  const raw_ptr<ui::WindowAndroid> window_android_;
 
   std::unique_ptr<CredentialLeakDialogViewAndroid> dialog_view_;
 
-  DISALLOW_COPY_AND_ASSIGN(CredentialLeakControllerAndroid);
+  std::unique_ptr<password_manager::LeakDialogTraits> leak_dialog_traits_;
+
+  // Metrics recorder for leak dialog related UMA and UKM logging.
+  std::unique_ptr<password_manager::metrics_util::LeakDialogMetricsRecorder>
+      metrics_recorder_;
 };
 
 #endif  // CHROME_BROWSER_PASSWORD_MANAGER_ANDROID_CREDENTIAL_LEAK_CONTROLLER_ANDROID_H_

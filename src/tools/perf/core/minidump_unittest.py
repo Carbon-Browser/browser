@@ -10,6 +10,8 @@ import sys
 import time
 
 from telemetry.core import exceptions
+from telemetry.internal.results import artifact_compatibility_wrapper as acw
+from telemetry.internal.results import artifact_logger
 from telemetry.testing import tab_test_case
 from telemetry import decorators
 
@@ -27,6 +29,7 @@ GPU_CRASH_SIGNATURES = [
 FORCED_RENDERER_CRASH_SIGNATURES = [
     'base::debug::BreakDebugger',
     'blink::DevToolsSession::IOSession::DispatchProtocolCommand',
+    'blink::HandleChromeDebugURL',
     'chrome!DispatchProtocolCommand',
     'logging::LogMessage::~LogMessage',
 ]
@@ -40,6 +43,18 @@ def ContainsAtLeastOne(expected_values, checked_value):
 
 
 class BrowserMinidumpTest(tab_test_case.TabTestCase):
+  def setUp(self):
+    # If something is wrong with minidump symbolization, we want to get all the
+    # debugging information we can from the bots since it may be difficult to
+    # reproduce the issue locally. So, use the full logger implementation.
+    artifact_logger.RegisterArtifactImplementation(
+        acw.FullLoggingArtifactImpl())
+    super(BrowserMinidumpTest, self).setUp()
+
+  def tearDown(self):
+    super(BrowserMinidumpTest, self).tearDown()
+    artifact_logger.RegisterArtifactImplementation(None)
+
   def assertContainsAtLeastOne(self, expected_values, checked_value):
     self.assertTrue(ContainsAtLeastOne(expected_values, checked_value),
                     'None of %s found in %s' % (expected_values, checked_value))
@@ -48,9 +63,8 @@ class BrowserMinidumpTest(tab_test_case.TabTestCase):
   # Minidump symbolization doesn't work in ChromeOS local mode if the rootfs is
   # still read-only, so skip the test in that case.
   @decorators.Disabled(
-      'android',  # https://crbug.com/1218560
       'chromeos-local',
-      'win7'  # https://crbug.com/1084931
+      'win7',  # https://crbug.com/1084931
   )
   def testSymbolizeMinidump(self):
     # Wait for the browser to restart fully before crashing
@@ -94,9 +108,8 @@ class BrowserMinidumpTest(tab_test_case.TabTestCase):
   # Minidump symbolization doesn't work in ChromeOS local mode if the rootfs is
   # still read-only, so skip the test in that case.
   @decorators.Disabled(
-      'android',  # https://crbug.com/1218560
       'chromeos-local',
-      'win7'  # https://crbug.com/1084931
+      'win7',  # https://crbug.com/1084931
   )
   def testMultipleCrashMinidumps(self):
     # Wait for the browser to restart fully before crashing
@@ -117,7 +130,7 @@ class BrowserMinidumpTest(tab_test_case.TabTestCase):
     # information if this is hit on the bots.
     if len(all_paths) != 1:
       self._browser.CollectDebugData(logging.ERROR)
-    self.assertEquals(len(all_paths), 1)
+    self.assertEqual(len(all_paths), 1)
     self.assertEqual(all_paths[0], first_crash_path)
     all_unsymbolized_paths = self._browser.GetAllUnsymbolizedMinidumpPaths()
     self.assertTrue(len(all_unsymbolized_paths) == 1)
@@ -153,7 +166,7 @@ class BrowserMinidumpTest(tab_test_case.TabTestCase):
     if second_crash_all_unsymbolized_paths is not None:
       logging.info('testMultipleCrashMinidumps: second crash all unsymbolized '
           'paths: ' + ''.join(second_crash_all_unsymbolized_paths))
-    self.assertEquals(len(second_crash_all_paths), 2)
+    self.assertEqual(len(second_crash_all_paths), 2)
     # Check that both paths are now present and unsymbolized
     self.assertTrue(first_crash_path in second_crash_all_paths)
     self.assertTrue(second_crash_path in second_crash_all_paths)
@@ -170,15 +183,14 @@ class BrowserMinidumpTest(tab_test_case.TabTestCase):
     if after_symbolize_all_paths is not None:
       logging.info('testMultipleCrashMinidumps: after symbolize all paths: '
           + ''.join(after_symbolize_all_paths))
-    self.assertEquals(len(after_symbolize_all_paths), 2)
+    self.assertEqual(len(after_symbolize_all_paths), 2)
     after_symbolize_all_unsymbolized_paths = \
         self._browser.GetAllUnsymbolizedMinidumpPaths()
     if after_symbolize_all_unsymbolized_paths is not None:
       logging.info('testMultipleCrashMinidumps: after symbolize all '
           + 'unsymbolized paths: '
           + ''.join(after_symbolize_all_unsymbolized_paths))
-    self.assertEquals(after_symbolize_all_unsymbolized_paths,
-        [first_crash_path])
+    self.assertEqual(after_symbolize_all_unsymbolized_paths, [first_crash_path])
 
     # Explicitly ignore the remaining minidump so that it isn't detected during
     # teardown by the test runner.
@@ -188,9 +200,8 @@ class BrowserMinidumpTest(tab_test_case.TabTestCase):
   # Minidump symbolization doesn't work in ChromeOS local mode if the rootfs is
   # still read-only, so skip the test in that case.
   @decorators.Disabled(
-      'chromeos',  # https://crbug.com/1247948
       'chromeos-local',
-      'win7'  # https://crbug.com/1084931
+      'win7',  # https://crbug.com/1084931
   )
   def testMinidumpFromRendererHang(self):
     """Tests that renderer hangs result in minidumps.

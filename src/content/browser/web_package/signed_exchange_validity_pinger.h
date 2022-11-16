@@ -8,7 +8,6 @@
 #include "base/callback.h"
 #include "base/time/time.h"
 #include "base/unguessable_token.h"
-#include "content/common/content_export.h"
 #include "mojo/public/cpp/system/data_pipe_drainer.h"
 #include "services/network/public/mojom/url_loader.mojom.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -29,9 +28,8 @@ namespace content {
 // sends a HEAD request to the URL, wait for the response and then calls
 // the given |callback| when it's done, regardless of whether it was success
 // or not.
-class CONTENT_EXPORT SignedExchangeValidityPinger
-    : public network::mojom::URLLoaderClient,
-      public mojo::DataPipeDrainer::Client {
+class SignedExchangeValidityPinger : public network::mojom::URLLoaderClient,
+                                     public mojo::DataPipeDrainer::Client {
  public:
   static std::unique_ptr<SignedExchangeValidityPinger> CreateAndStart(
       const GURL& validity_url,
@@ -39,6 +37,10 @@ class CONTENT_EXPORT SignedExchangeValidityPinger
       std::vector<std::unique_ptr<blink::URLLoaderThrottle>> throttles,
       const absl::optional<base::UnguessableToken>& throttling_profile_id,
       base::OnceClosure callback);
+
+  SignedExchangeValidityPinger(const SignedExchangeValidityPinger&) = delete;
+  SignedExchangeValidityPinger& operator=(const SignedExchangeValidityPinger&) =
+      delete;
 
   ~SignedExchangeValidityPinger() override;
 
@@ -52,7 +54,8 @@ class CONTENT_EXPORT SignedExchangeValidityPinger
 
   // network::mojom::URLLoaderClient
   void OnReceiveEarlyHints(network::mojom::EarlyHintsPtr early_hints) override;
-  void OnReceiveResponse(network::mojom::URLResponseHeadPtr head) override;
+  void OnReceiveResponse(network::mojom::URLResponseHeadPtr head,
+                         mojo::ScopedDataPipeConsumerHandle body) override;
   void OnReceiveRedirect(const net::RedirectInfo& redirect_info,
                          network::mojom::URLResponseHeadPtr head) override;
   void OnUploadProgress(int64_t current_position,
@@ -60,8 +63,6 @@ class CONTENT_EXPORT SignedExchangeValidityPinger
                         OnUploadProgressCallback callback) override;
   void OnReceiveCachedMetadata(mojo_base::BigBuffer data) override;
   void OnTransferSizeUpdated(int32_t transfer_size_diff) override;
-  void OnStartLoadingResponseBody(
-      mojo::ScopedDataPipeConsumerHandle body) override;
   void OnComplete(const network::URLLoaderCompletionStatus& status) override;
 
   // mojo::DataPipeDrainer::Client overrides:
@@ -74,8 +75,6 @@ class CONTENT_EXPORT SignedExchangeValidityPinger
   std::unique_ptr<blink::ThrottlingURLLoader> url_loader_;
   std::unique_ptr<mojo::DataPipeDrainer> pipe_drainer_;
   base::OnceClosure callback_;
-
-  DISALLOW_COPY_AND_ASSIGN(SignedExchangeValidityPinger);
 };
 
 }  // namespace content

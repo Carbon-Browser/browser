@@ -7,7 +7,9 @@
 #include <utility>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/accessibility/platform/atk_util_auralinux.h"
 #include "ui/accessibility/platform/ax_platform_node_auralinux.h"
 #include "ui/accessibility/platform/ax_platform_node_unittest.h"
@@ -148,7 +150,7 @@ static void SetStringAttributeOnNode(
     absl::optional<ax::mojom::Role> role = absl::nullopt) {
   AXNodeData new_data = AXNodeData();
   new_data.role = role.value_or(ax::mojom::Role::kApplication);
-  new_data.id = ax_node->data().id;
+  new_data.id = ax_node->id();
   new_data.AddStringAttribute(attribute, attribute_value);
   ax_node->SetData(new_data);
 }
@@ -161,7 +163,7 @@ static void TestAtkObjectIntAttribute(
     absl::optional<ax::mojom::Role> role = absl::nullopt) {
   AXNodeData new_data = AXNodeData();
   new_data.role = role.value_or(ax::mojom::Role::kApplication);
-  new_data.id = ax_node->data().id;
+  new_data.id = ax_node->id();
   ax_node->SetData(new_data);
   EnsureAtkObjectDoesNotHaveAttribute(atk_object, attribute_name);
 
@@ -172,11 +174,11 @@ static void TestAtkObjectIntAttribute(
   };
 
   for (const auto& test : tests) {
-    AXNodeData new_data = AXNodeData();
-    new_data.role = role.value_or(ax::mojom::Role::kApplication);
-    new_data.id = ax_node->data().id;
-    new_data.AddIntAttribute(mojom_attribute, test.first);
-    ax_node->SetData(new_data);
+    AXNodeData newer_data = AXNodeData();
+    newer_data.role = role.value_or(ax::mojom::Role::kApplication);
+    newer_data.id = ax_node->id();
+    newer_data.AddIntAttribute(mojom_attribute, test.first);
+    ax_node->SetData(newer_data);
     EnsureAtkObjectHasAttributeWithValue(atk_object, attribute_name,
                                          test.second);
   }
@@ -190,7 +192,7 @@ static void TestAtkObjectStringAttribute(
     absl::optional<ax::mojom::Role> role = absl::nullopt) {
   AXNodeData new_data = AXNodeData();
   new_data.role = role.value_or(ax::mojom::Role::kApplication);
-  new_data.id = ax_node->data().id;
+  new_data.id = ax_node->id();
   ax_node->SetData(new_data);
   EnsureAtkObjectDoesNotHaveAttribute(atk_object, attribute_name);
 
@@ -213,20 +215,20 @@ static void TestAtkObjectBoolAttribute(
     absl::optional<ax::mojom::Role> role = absl::nullopt) {
   AXNodeData new_data = AXNodeData();
   new_data.role = role.value_or(ax::mojom::Role::kApplication);
-  new_data.id = ax_node->data().id;
+  new_data.id = ax_node->id();
   ax_node->SetData(new_data);
   EnsureAtkObjectDoesNotHaveAttribute(atk_object, attribute_name);
 
   new_data = AXNodeData();
   new_data.role = role.value_or(ax::mojom::Role::kApplication);
-  new_data.id = ax_node->data().id;
+  new_data.id = ax_node->id();
   new_data.AddBoolAttribute(mojom_attribute, true);
   ax_node->SetData(new_data);
   EnsureAtkObjectHasAttributeWithValue(atk_object, attribute_name, "true");
 
   new_data = AXNodeData();
   new_data.role = role.value_or(ax::mojom::Role::kApplication);
-  new_data.id = ax_node->data().id;
+  new_data.id = ax_node->id();
   new_data.AddBoolAttribute(mojom_attribute, false);
   ax_node->SetData(new_data);
   EnsureAtkObjectHasAttributeWithValue(atk_object, attribute_name, "false");
@@ -989,6 +991,108 @@ TEST_F(AXPlatformNodeAuraLinuxTest, AtkComponentScrollTo) {
 #endif  //  ATK_CHECK_VERSION(2, 30, 0)
 
 //
+// AtkAction tests
+//
+
+TEST_F(AXPlatformNodeAuraLinuxTest, TestAtkActionGetNActions) {
+  AXNodeData root;
+  root.id = 1;
+  root.role = ax::mojom::Role::kSlider;
+  root.SetDefaultActionVerb(ax::mojom::DefaultActionVerb::kClick);
+  root.AddAction(ax::mojom::Action::kDecrement);
+  root.AddAction(ax::mojom::Action::kIncrement);
+  // Additionally, any object will have a context menu action, that makes it 4
+  Init(root);
+
+  AtkObject* root_obj(GetRootAtkObject());
+  ASSERT_TRUE(ATK_IS_OBJECT(root_obj));
+  ASSERT_TRUE(ATK_IS_ACTION(root_obj));
+  g_object_ref(root_obj);
+
+  gint number_of_actions = atk_action_get_n_actions(ATK_ACTION(root_obj));
+
+  EXPECT_EQ(4, number_of_actions);
+
+  g_object_unref(root_obj);
+}
+
+TEST_F(AXPlatformNodeAuraLinuxTest, TestAtkActionGetNActionsNoActions) {
+  AXNodeData root;
+  root.id = 1;
+  root.role = ax::mojom::Role::kRootWebArea;
+  Init(root);
+
+  AtkObject* root_obj(GetRootAtkObject());
+  ASSERT_TRUE(ATK_IS_OBJECT(root_obj));
+  ASSERT_TRUE(ATK_IS_ACTION(root_obj));
+  g_object_ref(root_obj);
+
+  gint number_of_actions = atk_action_get_n_actions(ATK_ACTION(root_obj));
+
+  // The only action exposed would be the context menu action.
+  EXPECT_EQ(1, number_of_actions);
+
+  g_object_unref(root_obj);
+}
+
+TEST_F(AXPlatformNodeAuraLinuxTest, TestAtkActionGetName) {
+  AXNodeData root;
+  root.id = 1;
+  root.role = ax::mojom::Role::kSlider;
+  root.SetDefaultActionVerb(ax::mojom::DefaultActionVerb::kClick);
+  root.AddAction(ax::mojom::Action::kDecrement);
+  root.AddAction(ax::mojom::Action::kIncrement);
+  Init(root);
+
+  AtkObject* root_obj(GetRootAtkObject());
+  ASSERT_TRUE(ATK_IS_OBJECT(root_obj));
+  ASSERT_TRUE(ATK_IS_ACTION(root_obj));
+  g_object_ref(root_obj);
+
+  const gchar* action_name = atk_action_get_name(ATK_ACTION(root_obj), 0);
+  // The index 0 is reserved for the default action, and the index 1 to the
+  // context menu action. The rest of actions are presented in the order they
+  // were added.
+  EXPECT_STREQ("click", action_name);
+  action_name = atk_action_get_name(ATK_ACTION(root_obj), 1);
+  EXPECT_STREQ("showContextMenu", action_name);
+  action_name = atk_action_get_name(ATK_ACTION(root_obj), 2);
+  EXPECT_STREQ("decrement", action_name);
+  action_name = atk_action_get_name(ATK_ACTION(root_obj), 3);
+  EXPECT_STREQ("increment", action_name);
+
+  g_object_unref(root_obj);
+}
+
+TEST_F(AXPlatformNodeAuraLinuxTest, TestAtkActionDoAction) {
+  AXNodeData root;
+  root.id = 1;
+  root.role = ax::mojom::Role::kSlider;
+  root.SetDefaultActionVerb(ax::mojom::DefaultActionVerb::kClick);
+  root.AddAction(ax::mojom::Action::kDecrement);
+  root.AddAction(ax::mojom::Action::kIncrement);
+  Init(root);
+
+  AtkObject* root_obj(GetRootAtkObject());
+  ASSERT_TRUE(ATK_IS_OBJECT(root_obj));
+  ASSERT_TRUE(ATK_IS_ACTION(root_obj));
+  g_object_ref(root_obj);
+  auto* root_node = GetRootAsAXNode();
+
+  EXPECT_TRUE(atk_action_do_action(ATK_ACTION(root_obj), 0));
+  EXPECT_EQ(root_node, TestAXNodeWrapper::GetNodeFromLastDefaultAction());
+  EXPECT_TRUE(atk_action_do_action(ATK_ACTION(root_obj), 1));
+  EXPECT_TRUE(atk_action_do_action(ATK_ACTION(root_obj), 2));
+  EXPECT_TRUE(atk_action_do_action(ATK_ACTION(root_obj), 3));
+
+  // Test that querying actions out of bounds doesn't crash
+  EXPECT_FALSE(atk_action_do_action(ATK_ACTION(root_obj), -1));
+  EXPECT_FALSE(atk_action_do_action(ATK_ACTION(root_obj), 4));
+
+  g_object_unref(root_obj);
+}
+
+//
 // AtkValue tests
 //
 
@@ -1202,8 +1306,7 @@ TEST_F(AXPlatformNodeAuraLinuxTest, TestAtkTextCharacterGranularity) {
   AXNodeData root;
   root.id = 1;
   root.role = ax::mojom::Role::kTextField;
-  root.AddStringAttribute(ax::mojom::StringAttribute::kValue,
-                          "A decently long string \xE2\x98\xBA with an emoji.");
+  root.SetValue("A decently long string \xE2\x98\xBA with an emoji.");
   Init(root);
 
   AtkObject* root_obj(GetRootAtkObject());
@@ -1421,7 +1524,8 @@ TEST_F(AXPlatformNodeAuraLinuxTest, TestAtkTextSentenceGranularity) {
 }
 
 #if ATK_CHECK_VERSION(2, 10, 0)
-TEST_F(AXPlatformNodeAuraLinuxTest, TestAtkTextParagraphGranularity) {
+TEST_F(AXPlatformNodeAuraLinuxTest, DISABLED_TestAtkTextParagraphGranularity) {
+  // TODO(nektar): Enable navigating by paragraphs in plain text.
   AXNodeData root;
   root.id = 1;
   root.role = ax::mojom::Role::kTextField;
@@ -1640,7 +1744,7 @@ class ActivationTester {
     g_signal_handler_disconnect(target_, deactivate_id_);
   }
 
-  AtkObject* target_;
+  raw_ptr<AtkObject> target_;
   bool saw_activate_ = false;
   bool saw_deactivate_ = false;
   gulong activate_id_ = 0;

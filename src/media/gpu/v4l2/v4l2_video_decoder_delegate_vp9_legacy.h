@@ -6,7 +6,6 @@
 #define MEDIA_GPU_V4L2_V4L2_VIDEO_DECODER_DELEGATE_VP9_LEGACY_H_
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/memory/scoped_refptr.h"
 #include "media/filters/vp9_parser.h"
 #include "media/gpu/vp9_decoder.h"
@@ -22,6 +21,12 @@ class V4L2VideoDecoderDelegateVP9Legacy : public VP9Decoder::VP9Accelerator {
   explicit V4L2VideoDecoderDelegateVP9Legacy(
       V4L2DecodeSurfaceHandler* surface_handler,
       V4L2Device* device);
+
+  V4L2VideoDecoderDelegateVP9Legacy(const V4L2VideoDecoderDelegateVP9Legacy&) =
+      delete;
+  V4L2VideoDecoderDelegateVP9Legacy& operator=(
+      const V4L2VideoDecoderDelegateVP9Legacy&) = delete;
+
   ~V4L2VideoDecoderDelegateVP9Legacy() override;
 
   // VP9Decoder::VP9Accelerator implementation.
@@ -38,18 +43,20 @@ class V4L2VideoDecoderDelegateVP9Legacy : public VP9Decoder::VP9Accelerator {
   bool GetFrameContext(scoped_refptr<VP9Picture> pic,
                        Vp9FrameContext* frame_ctx) override;
 
-  bool IsFrameContextRequired() const override;
+  bool NeedsCompressedHeaderParsed() const override;
+  bool SupportsContextProbabilityReadback() const override;
 
  private:
   scoped_refptr<V4L2DecodeSurface> VP9PictureToV4L2DecodeSurface(
       VP9Picture* pic);
 
-  bool device_needs_frame_context_;
-
   V4L2DecodeSurfaceHandler* const surface_handler_;
   V4L2Device* const device_;
 
-  DISALLOW_COPY_AND_ASSIGN(V4L2VideoDecoderDelegateVP9Legacy);
+  // True if |device_| exposes the V4L2_CID_STATELESS_VP9_FRAME control
+  // (indicating that the driver needs the entropy tables from the compressed
+  // header).
+  const bool device_needs_compressed_header_parsed_;
 };
 
 }  // namespace media

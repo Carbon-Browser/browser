@@ -32,8 +32,6 @@ static_library("content") {
     "payment_credential.h",
     "payment_credential_factory.cc",
     "payment_credential_factory.h",
-    "payment_credential_manager.cc",
-    "payment_credential_manager.h",
     "payment_details_converter.cc",
     "payment_details_converter.h",
     "payment_event_response_util.cc",
@@ -57,6 +55,8 @@ static_library("content") {
     "secure_payment_confirmation_model.h",
     "secure_payment_confirmation_no_creds.cc",
     "secure_payment_confirmation_no_creds.h",
+    "secure_payment_confirmation_no_creds_model.cc",
+    "secure_payment_confirmation_no_creds_model.h",
     "secure_payment_confirmation_no_creds_view.cc",
     "secure_payment_confirmation_no_creds_view.h",
     "secure_payment_confirmation_view.h",
@@ -97,9 +97,8 @@ static_library("content") {
     sources += [ "android_app_communication_chrome_os.cc" ]
 
     deps += [
+      "//ash/components/arc",
       "//ash/public/cpp/external_arc",
-      "//components/arc",
-      "//components/arc/mojom",
     ]
   }
 
@@ -220,6 +219,7 @@ source_set("unit_tests") {
     "payment_event_response_util_unittest.cc",
     "payment_method_manifest_table_unittest.cc",
     "secure_payment_confirmation_model_unittest.cc",
+    "secure_payment_confirmation_no_creds_model_unittest.cc",
     "service_worker_payment_app_finder_unittest.cc",
     "web_app_manifest_section_table_unittest.cc",
   ]
@@ -230,6 +230,7 @@ source_set("unit_tests") {
       "payment_app_unittest.cc",
       "payment_request_spec_unittest.cc",
       "payment_request_state_unittest.cc",
+      "payment_request_web_contents_manager_unittest.cc",
       "payment_response_helper_unittest.cc",
       "secure_payment_confirmation_app_unittest.cc",
       "service_worker_payment_app_unittest.cc",
@@ -267,10 +268,11 @@ source_set("unit_tests") {
     sources += [ "android_app_communication_test_support_chrome_os.cc" ]
 
     deps += [
+      "//ash/components/arc",
+      "//ash/components/arc:arc_test_support",
+      "//ash/components/arc/mojom",
       "//ash/public/cpp/external_arc:test_support",
       "//components/arc",
-      "//components/arc:arc_test_support",
-      "//components/arc/mojom",
     ]
   }
 

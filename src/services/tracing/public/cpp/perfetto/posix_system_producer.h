@@ -12,8 +12,8 @@
 #include <vector>
 
 #include "base/atomicops.h"
+#include "base/callback.h"
 #include "base/component_export.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/synchronization/lock.h"
@@ -40,6 +40,10 @@ class COMPONENT_EXPORT(TRACING_CPP) PosixSystemProducer
   };
   PosixSystemProducer(const char* socket,
                       base::tracing::PerfettoTaskRunner* task_runner);
+
+  PosixSystemProducer(const PosixSystemProducer&) = delete;
+  PosixSystemProducer& operator=(const PosixSystemProducer&) = delete;
+
   ~PosixSystemProducer() override;
 
   // Functions needed for PosixSystemProducer only.
@@ -153,7 +157,6 @@ class COMPONENT_EXPORT(TRACING_CPP) PosixSystemProducer
   // NOTE: Weak pointers must be invalidated before all other member variables.
   // and thus must be the last member variable.
   base::WeakPtrFactory<PosixSystemProducer> weak_ptr_factory_{this};
-  DISALLOW_COPY_AND_ASSIGN(PosixSystemProducer);
 };
 
 }  // namespace tracing

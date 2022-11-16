@@ -5,6 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_PUBLIC_COMMON_FRAME_FRAME_VISUAL_PROPERTIES_MOJOM_TRAITS_H_
 #define THIRD_PARTY_BLINK_PUBLIC_COMMON_FRAME_FRAME_VISUAL_PROPERTIES_MOJOM_TRAITS_H_
 
+#include "base/check_op.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/common_export.h"
 #include "third_party/blink/public/common/frame/frame_visual_properties.h"
@@ -16,9 +17,9 @@ template <>
 struct BLINK_COMMON_EXPORT
     StructTraits<blink::mojom::FrameVisualPropertiesDataView,
                  blink::FrameVisualProperties> {
-  static const display::ScreenInfo& screen_info(
+  static const display::ScreenInfos& screen_infos(
       const blink::FrameVisualProperties& r) {
-    return r.screen_info;
+    return r.screen_infos;
   }
 
   static bool auto_resize_enabled(const blink::FrameVisualProperties& r) {
@@ -84,7 +85,7 @@ struct BLINK_COMMON_EXPORT
     return r.local_frame_size;
   }
 
-  static absl::optional<viz::LocalSurfaceId> local_surface_id(
+  static const viz::LocalSurfaceId& local_surface_id(
       const blink::FrameVisualProperties& r) {
     return r.local_surface_id;
   }

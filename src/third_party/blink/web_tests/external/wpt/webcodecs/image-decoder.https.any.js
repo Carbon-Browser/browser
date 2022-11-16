@@ -64,6 +64,39 @@ promise_test(t => {
 }, 'Test JPEG w/ EXIF orientation left-bottom.');
 
 promise_test(t => {
+  return testFourColorDecodeWithExifOrientation(1, null, /*useYuv=*/ true);
+}, 'Test 4:2:0 JPEG w/ EXIF orientation top-left.');
+
+promise_test(t => {
+  return testFourColorDecodeWithExifOrientation(2, null, /*useYuv=*/ true);
+}, 'Test 4:2:0 JPEG w/ EXIF orientation top-right.');
+
+promise_test(t => {
+  return testFourColorDecodeWithExifOrientation(3, null, /*useYuv=*/ true);
+}, 'Test 4:2:0 JPEG w/ EXIF orientation bottom-right.');
+
+promise_test(t => {
+  return testFourColorDecodeWithExifOrientation(4, null, /*useYuv=*/ true);
+}, 'Test 4:2:0 JPEG w/ EXIF orientation bottom-left.');
+
+promise_test(t => {
+  return testFourColorDecodeWithExifOrientation(5, null, /*useYuv=*/ true);
+}, 'Test 4:2:0 JPEG w/ EXIF orientation left-top.');
+
+promise_test(t => {
+  return testFourColorDecodeWithExifOrientation(6, null, /*useYuv=*/ true);
+}, 'Test 4:2:0 JPEG w/ EXIF orientation right-top.');
+
+promise_test(t => {
+  return testFourColorDecodeWithExifOrientation(7, null, /*useYuv=*/ true);
+}, 'Test 4:2:0 JPEG w/ EXIF orientation right-bottom.');
+
+promise_test(t => {
+  return testFourColorDecodeWithExifOrientation(8, null, /*useYuv=*/ true);
+}, 'Test 4:2:0 JPEG w/ EXIF orientation left-bottom.');
+
+
+promise_test(t => {
   return testFourColorsDecode('four-colors.png', 'image/png');
 }, 'Test PNG image decoding.');
 
@@ -73,7 +106,8 @@ promise_test(t => {
 
 promise_test(t => {
   return testFourColorsDecode(
-      'four-colors-full-range-bt2020-pq-444-10bpc.avif', 'image/avif');
+      'four-colors-full-range-bt2020-pq-444-10bpc.avif', 'image/avif',
+      { tolerance: 3 });
 }, 'Test high bit depth HDR AVIF image decoding.');
 
 promise_test(t => {
@@ -97,31 +131,31 @@ promise_test(t => {
 promise_test(t => {
   return testFourColorsYuvDecode(
       'four-colors-limited-range-420-8bpc.jpg', 'image/jpeg',
-      {yuvFormat: 'I420', tolerance: 1});
+      {yuvFormat: 'I420', tolerance: 3});
 }, 'Test JPEG image YUV 4:2:0 decoding.');
 
 promise_test(t => {
   return testFourColorsYuvDecode(
       'four-colors-limited-range-420-8bpc.avif', 'image/avif',
-      {yuvFormat: 'I420', tolerance: 1});
+      {yuvFormat: 'I420', tolerance: 3});
 }, 'Test AVIF image YUV 4:2:0 decoding.');
 
 promise_test(t => {
   return testFourColorsYuvDecode(
       'four-colors-limited-range-422-8bpc.avif', 'image/avif',
-      {yuvFormat: 'I422', tolerance: 1});
+      {yuvFormat: 'I422', tolerance: 3});
 }, 'Test AVIF image YUV 4:2:2 decoding.');
 
 promise_test(t => {
   return testFourColorsYuvDecode(
       'four-colors-limited-range-444-8bpc.avif', 'image/avif',
-      {yuvFormat: 'I444', tolerance: 1});
+      {yuvFormat: 'I444', tolerance: 3});
 }, 'Test AVIF image YUV 4:4:4 decoding.');
 
 promise_test(t => {
   return testFourColorsYuvDecode(
       'four-colors-limited-range-420-8bpc.webp', 'image/webp',
-      {yuvFormat: 'I420', tolerance: 1});
+      {yuvFormat: 'I420', tolerance: 3});
 }, 'Test WEBP image YUV 4:2:0 decoding.');
 
 promise_test(t => {
@@ -371,8 +405,9 @@ promise_test(async t => {
       })
       .then(_ => {
         // Ensure feeding the source after closing doesn't crash.
-        source.addFrame();
-        return promise_rejects_dom(t, 'InvalidStateError', decoder.decode());
+        assert_throws_js(TypeError, () => {
+          source.addFrame();
+        });
       });
 }, 'Test ReadableStream of gif');
 

@@ -5,6 +5,7 @@
 #include "net/socket/socks_connect_job.h"
 
 #include "base/callback.h"
+#include "base/containers/flat_set.h"
 #include "base/containers/span.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
@@ -38,7 +39,7 @@ namespace {
 const char kProxyHostName[] = "proxy.test";
 const int kProxyPort = 4321;
 
-constexpr base::TimeDelta kTinyTime = base::TimeDelta::FromMicroseconds(1);
+constexpr base::TimeDelta kTinyTime = base::Microseconds(1);
 
 class SOCKSConnectJobTest : public testing::Test, public WithTaskEnvironment {
  public:
@@ -65,7 +66,7 @@ class SOCKSConnectJobTest : public testing::Test, public WithTaskEnvironment {
             NetLog::Get(),
             nullptr /* websocket_endpoint_lock_manager */) {}
 
-  ~SOCKSConnectJobTest() override {}
+  ~SOCKSConnectJobTest() override = default;
 
   static scoped_refptr<SOCKSSocketParams> CreateSOCKSParams(
       SOCKSVersion socks_version,
@@ -73,7 +74,8 @@ class SOCKSConnectJobTest : public testing::Test, public WithTaskEnvironment {
     return base::MakeRefCounted<SOCKSSocketParams>(
         base::MakeRefCounted<TransportSocketParams>(
             HostPortPair(kProxyHostName, kProxyPort), NetworkIsolationKey(),
-            secure_dns_policy, OnHostResolutionCallback()),
+            secure_dns_policy, OnHostResolutionCallback(),
+            /*supported_alpns=*/base::flat_set<std::string>()),
         socks_version == SOCKSVersion::V5,
         socks_version == SOCKSVersion::V4
             ? HostPortPair(kSOCKS4TestHost, kSOCKS4TestPort)
@@ -82,7 +84,8 @@ class SOCKSConnectJobTest : public testing::Test, public WithTaskEnvironment {
   }
 
  protected:
-  MockHostResolver host_resolver_;
+  MockHostResolver host_resolver_{/*default_result=*/MockHostResolverBase::
+                                      RuleResolver::GetLocalhostResult()};
   MockTaggingClientSocketFactory client_socket_factory_;
   const CommonConnectJobParams common_connect_job_params_;
 };
@@ -120,7 +123,8 @@ TEST_F(SOCKSConnectJobTest, HostResolutionFailureSOCKS4Endpoint) {
         base::MakeRefCounted<SOCKSSocketParams>(
             base::MakeRefCounted<TransportSocketParams>(
                 HostPortPair(kProxyHostName, kProxyPort), NetworkIsolationKey(),
-                SecureDnsPolicy::kAllow, OnHostResolutionCallback()),
+                SecureDnsPolicy::kAllow, OnHostResolutionCallback(),
+                /*supported_alpns=*/base::flat_set<std::string>()),
             false /* socks_v5 */, HostPortPair(hostname, kSOCKS4TestPort),
             NetworkIsolationKey(), TRAFFIC_ANNOTATION_FOR_TESTS);
 

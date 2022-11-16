@@ -13,22 +13,21 @@
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
-#include "base/macros.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
-#include "base/task/post_task.h"
 #include "base/task/thread_pool.h"
 #include "base/test/scoped_path_override.h"
 #include "base/test/test_simple_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
-#include "chrome/browser/browser_process_platform_part_chromeos.h"
+#include "chrome/browser/browser_process_platform_part_ash.h"
 #include "chrome/browser/component_updater/cros_component_installer_chromeos.h"
 #include "chrome/browser/component_updater/metadata_table_chromeos.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/test/base/testing_browser_process.h"
+#include "chromeos/ash/components/dbus/image_loader/fake_image_loader_client.h"
+#include "chromeos/ash/components/dbus/image_loader/image_loader_client.h"
 #include "chromeos/dbus/dbus_thread_manager.h"
-#include "chromeos/dbus/image_loader/fake_image_loader_client.h"
 #include "components/component_updater/mock_component_updater_service.h"
 #include "components/update_client/utils.h"
 #include "components/user_manager/scoped_user_manager.h"
@@ -73,6 +72,10 @@ void WrapInstallerCallback(update_client::Callback callback,
 class TestUpdater : public OnDemandUpdater {
  public:
   TestUpdater() = default;
+
+  TestUpdater(const TestUpdater&) = delete;
+  TestUpdater& operator=(const TestUpdater&) = delete;
+
   ~TestUpdater() override = default;
 
   // Whether has a pending update request (either foreground or background).
@@ -106,9 +109,11 @@ class TestUpdater : public OnDemandUpdater {
   }
 
   // Registers a CRX component for updates.
-  bool RegisterComponent(const update_client::CrxComponent& component) {
+  bool RegisterComponent(const ComponentRegistration& component) {
     component_installers_[component.name] = component.installer;
-    component_id_to_name_[update_client::GetCrxComponentID(component)] =
+    update_client::CrxComponent crx;
+    crx.pk_hash = component.public_key_hash;
+    component_id_to_name_[update_client::GetCrxComponentID(crx)] =
         component.name;
     return true;
   }
@@ -174,8 +179,6 @@ class TestUpdater : public OnDemandUpdater {
       component_installers_;
   // Maps a registered component ID to the component name.
   std::map<std::string, std::string> component_id_to_name_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestUpdater);
 };
 
 }  // namespace
@@ -185,6 +188,10 @@ class CrOSComponentInstallerTest : public testing::Test {
   CrOSComponentInstallerTest()
       : user_manager_(std::make_unique<ash::FakeChromeUserManager>()) {}
 
+  CrOSComponentInstallerTest(const CrOSComponentInstallerTest&) = delete;
+  CrOSComponentInstallerTest& operator=(const CrOSComponentInstallerTest&) =
+      delete;
+
   void SetUp() override {
     ASSERT_TRUE(base_component_paths_.CreateUniqueTempDir());
 
@@ -193,7 +200,7 @@ class CrOSComponentInstallerTest : public testing::Test {
                                         .AppendASCII("cros-components");
     preinstalled_components_path_override_ =
         std::make_unique<base::ScopedPathOverride>(
-            chromeos::DIR_PREINSTALLED_COMPONENTS,
+            ash::DIR_PREINSTALLED_COMPONENTS,
             preinstalled_cros_components_.DirName());
 
     user_cros_components_ =
@@ -204,16 +211,15 @@ class CrOSComponentInstallerTest : public testing::Test {
 
     tmp_unpack_dir_ = base_component_paths_.GetPath().AppendASCII("tmp_unpack");
 
-    auto fake_image_loader_client =
-        std::make_unique<chromeos::FakeImageLoaderClient>();
-    image_loader_client_ = fake_image_loader_client.get();
     chromeos::DBusThreadManager::Initialize();
-    chromeos::DBusThreadManager::GetSetterForTesting()->SetImageLoaderClient(
-        std::move(fake_image_loader_client));
+    ash::ImageLoaderClient::InitializeFake();
+    image_loader_client_ =
+        static_cast<ash::FakeImageLoaderClient*>(ash::ImageLoaderClient::Get());
   }
 
   void TearDown() override {
     image_loader_client_ = nullptr;
+    ash::ImageLoaderClient::Shutdown();
     chromeos::DBusThreadManager::Shutdown();
     preinstalled_components_path_override_.reset();
     user_components_path_override_.reset();
@@ -292,7 +298,7 @@ class CrOSComponentInstallerTest : public testing::Test {
 
   void RunUntilIdle() { task_environment_.RunUntilIdle(); }
 
-  chromeos::FakeImageLoaderClient* image_loader_client() {
+  ash::FakeImageLoaderClient* image_loader_client() {
     return image_loader_client_;
   }
 
@@ -345,9 +351,8 @@ class CrOSComponentInstallerTest : public testing::Test {
 
   user_manager::ScopedUserManager user_manager_;
 
-  // Image loader client that is active during the test. Owned by
-  // chromeos::DBusThreadManager.
-  chromeos::FakeImageLoaderClient* image_loader_client_ = nullptr;
+  // Image loader client that is active during the test.
+  ash::FakeImageLoaderClient* image_loader_client_ = nullptr;
 
   base::ScopedTempDir base_component_paths_;
 
@@ -359,8 +364,6 @@ class CrOSComponentInstallerTest : public testing::Test {
   base::FilePath user_cros_components_;
 
   base::FilePath tmp_unpack_dir_;
-
-  DISALLOW_COPY_AND_ASSIGN(CrOSComponentInstallerTest);
 };
 
 TEST_F(CrOSComponentInstallerTest, CompatibleCrOSComponent) {
@@ -389,9 +392,8 @@ TEST_F(CrOSComponentInstallerTest, CompatibilityOK) {
   EnvVersionInstallerPolicy policy(config, installer.get());
   base::Version version;
   base::FilePath path("/path");
-  std::unique_ptr<base::DictionaryValue> manifest =
-      std::make_unique<base::DictionaryValue>();
-  manifest->SetString("min_env_version", "2.1");
+  base::Value manifest(base::Value::Type::DICTIONARY);
+  manifest.SetStringKey("min_env_version", "2.1");
   policy.ComponentReady(version, path, std::move(manifest));
   // Component is compatible and was registered.
   EXPECT_EQ(path, installer->GetCompatiblePath("component"));
@@ -406,8 +408,7 @@ TEST_F(CrOSComponentInstallerTest, CompatibilityMissingManifest) {
   EnvVersionInstallerPolicy policy(config, installer.get());
   base::Version version;
   base::FilePath path("/path");
-  std::unique_ptr<base::DictionaryValue> manifest =
-      std::make_unique<base::DictionaryValue>();
+  base::Value manifest(base::Value::Type::DICTIONARY);
   policy.ComponentReady(version, path, std::move(manifest));
   // No compatible path was registered.
   EXPECT_EQ(base::FilePath(), installer->GetCompatiblePath("component"));
@@ -437,15 +438,15 @@ TEST_F(CrOSComponentInstallerTest, LacrosMinVersion) {
   LacrosInstallerPolicy policy(config, installer.get());
 
   // Simulate finding an incompatible existing install.
-  policy.ComponentReady(base::Version("8.0.0.0"),
-                        base::FilePath("/lacros/8.0.0.0"),
-                        /*manifest=*/nullptr);
+  policy.ComponentReady(
+      base::Version("8.0.0.0"), base::FilePath("/lacros/8.0.0.0"),
+      /*manifest=*/base::Value(base::Value::Type::DICTIONARY));
   EXPECT_TRUE(installer->GetCompatiblePath("lacros-fishfood").empty());
 
   // Simulate finding a compatible existing install.
-  policy.ComponentReady(base::Version("9.0.0.0"),
-                        base::FilePath("/lacros/9.0.0.0"),
-                        /*manifest=*/nullptr);
+  policy.ComponentReady(
+      base::Version("9.0.0.0"), base::FilePath("/lacros/9.0.0.0"),
+      /*manifest=*/base::Value(base::Value::Type::DICTIONARY));
   EXPECT_EQ("/lacros/9.0.0.0",
             installer->GetCompatiblePath("lacros-fishfood").MaybeAsASCII());
 
@@ -919,6 +920,56 @@ TEST_F(CrOSComponentInstallerTest,
   VerifyComponentLoaded(cros_component_manager, kTestComponentName, load_result,
                         install_path.value());
   EXPECT_EQ(base::FilePath(kTestComponentMountPath), mount_path);
+}
+
+TEST_F(CrOSComponentInstallerTest, LoadCache) {
+  absl::optional<base::FilePath> install_path = CreateInstalledComponent(
+      kTestComponentName, "1.0", kTestComponentValidMinEnvVersion);
+  ASSERT_TRUE(install_path.has_value());
+
+  image_loader_client()->SetMountPathForComponent(
+      kTestComponentName, base::FilePath(kTestComponentMountPath));
+
+  TestUpdater updater;
+  std::unique_ptr<MockComponentUpdateService> update_service =
+      CreateUpdateServiceForSingleRegistration(kTestComponentName, &updater);
+  scoped_refptr<CrOSComponentInstaller> cros_component_manager =
+      base::MakeRefCounted<CrOSComponentInstaller>(nullptr,
+                                                   update_service.get());
+
+  cros_component_manager->RegisterInstalled();
+  RunUntilIdle();
+  EXPECT_FALSE(updater.HasPendingUpdate(kTestComponentName));
+  EXPECT_EQ(install_path.value(),
+            cros_component_manager->GetCompatiblePath(kTestComponentName));
+
+  absl::optional<CrOSComponentManager::Error> load_result1;
+  base::FilePath mount_path1;
+  absl::optional<CrOSComponentManager::Error> load_result2;
+  base::FilePath mount_path2;
+  cros_component_manager->Load(
+      kTestComponentName, CrOSComponentManager::MountPolicy::kMount,
+      CrOSComponentManager::UpdatePolicy::kDontForce,
+      base::BindOnce(&RecordLoadResult, &load_result1, &mount_path1));
+  cros_component_manager->Load(
+      kTestComponentName, CrOSComponentManager::MountPolicy::kMount,
+      CrOSComponentManager::UpdatePolicy::kDontForce,
+      base::BindOnce(&RecordLoadResult, &load_result2, &mount_path2));
+
+  auto& load_cache = cros_component_manager->GetLoadCacheForTesting();
+  ASSERT_EQ(load_cache.size(), 1u);
+  ASSERT_EQ(load_cache.begin()->second.callbacks.size(), 1u);
+  RunUntilIdle();
+
+  ASSERT_TRUE(load_result1.has_value());
+  ASSERT_TRUE(load_result2.has_value());
+  ASSERT_EQ(load_result1.value(), load_result2.value());
+  ASSERT_EQ(mount_path1, mount_path2);
+  ASSERT_EQ(load_cache.size(), 1u);
+  ASSERT_EQ(load_cache.begin()->second.callbacks.size(), 0u);
+  ASSERT_TRUE(load_cache.begin()->second.success.has_value());
+  ASSERT_TRUE(load_cache.begin()->second.success.value());
+  ASSERT_EQ(mount_path1, load_cache.begin()->second.path);
 }
 
 }  // namespace component_updater

@@ -20,11 +20,10 @@
 #include "base/containers/contains.h"
 #include "base/files/file_path.h"
 #include "base/location.h"
-#include "base/macros.h"
 #include "base/notreached.h"
-#include "base/sequenced_task_runner.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
 #include "components/policy/core/common/cloud/cloud_external_data_store.h"
@@ -47,6 +46,10 @@ const int kMaxParallelFetches = 2;
 // external data even if no |max_size| was specified in policy_templates.json.
 int g_max_external_data_size_for_testing = 0;
 
+// Keys for 'DictionaryValue' objects
+const char kUrlKey[] = "url";
+const char kHashKey[] = "hash";
+const char kCustomIconKey[] = "custom_icon";
 }  // namespace
 
 // Backend for the CloudExternalDataManagerBase that handles all data download,
@@ -60,6 +63,9 @@ class CloudExternalDataManagerBase::Backend {
   Backend(const GetChromePolicyDetailsCallback& get_policy_details,
           scoped_refptr<base::SequencedTaskRunner> task_runner,
           scoped_refptr<base::SequencedTaskRunner> callback_task_runner);
+
+  Backend(const Backend&) = delete;
+  Backend& operator=(const Backend&) = delete;
 
   // Allows downloaded external data to be cached in |external_data_store|.
   // Ownership of the store is taken. The store can be destroyed by calling
@@ -159,8 +165,6 @@ class CloudExternalDataManagerBase::Backend {
   std::unique_ptr<ExternalPolicyDataUpdater> updater_;
 
   SEQUENCE_CHECKER(sequence_checker_);
-
-  DISALLOW_COPY_AND_ASSIGN(Backend);
 };
 
 CloudExternalDataManagerBase::Backend::Backend(
@@ -426,8 +430,8 @@ void AddMetadataFromValue(CloudExternalDataManagerBase::Metadata* metadata,
   const base::DictionaryValue* dict = nullptr;
   if (!value || !value->GetAsDictionary(&dict))
     return;
-  const std::string* url = dict->FindStringKey("url");
-  const std::string* hex_hash = dict->FindStringKey("hash");
+  const std::string* url = dict->FindStringKey(kUrlKey);
+  const std::string* hex_hash = dict->FindStringKey(kHashKey);
   std::string hash;
   if (url && hex_hash && !url->empty() && !hex_hash->empty() &&
       base::HexStringToString(*hex_hash, &hash)) {
@@ -452,15 +456,16 @@ void CloudExternalDataManagerBase::OnPolicyStoreLoaded() {
     }
     if (it.first != key::kWebAppInstallForceList) {
       AddMetadataFromValue(metadata.get(), it.first, std::string(),
-                           it.second.value());
+                           it.second.value_unsafe());
       continue;
     }
-    if (it.second.value() && it.second.value()->is_list()) {
-      for (const auto& app : it.second.value()->GetList()) {
+    if (it.second.value(base::Value::Type::LIST)) {
+      for (const auto& app :
+           it.second.value(base::Value::Type::LIST)->GetListDeprecated()) {
         const base::DictionaryValue* dict = nullptr;
         if (app.GetAsDictionary(&dict)) {
-          const base::Value* const icon = dict->FindKey("custom_icon");
-          const std::string* const url = dict->FindStringKey("url");
+          const base::Value* const icon = dict->FindKey(kCustomIconKey);
+          const std::string* const url = dict->FindStringKey(kUrlKey);
           if (icon && url) {
             AddMetadataFromValue(metadata.get(), it.first, *url, icon);
           }

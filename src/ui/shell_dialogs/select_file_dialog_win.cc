@@ -12,12 +12,11 @@
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/i18n/case_conversion.h"
-#include "base/macros.h"
 #include "base/notreached.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/task_runner_util.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/task/task_runner_util.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/win/registry.h"
 #include "ui/aura/window.h"
@@ -28,6 +27,7 @@
 #include "ui/shell_dialogs/base_shell_dialog_win.h"
 #include "ui/shell_dialogs/execute_select_file_win.h"
 #include "ui/shell_dialogs/select_file_policy.h"
+#include "ui/shell_dialogs/select_file_utils_win.h"
 #include "ui/strings/grit/ui_strings.h"
 
 namespace ui {
@@ -84,7 +84,8 @@ std::vector<FileFilterSpec> FormatFilterForExtensions(
   result.reserve(file_ext.size() + 1);
 
   for (size_t i = 0; i < file_ext.size(); ++i) {
-    std::u16string ext = file_ext[i];
+    std::u16string ext =
+        RemoveEnvVarFromFileName<char16_t>(file_ext[i], std::u16string(u"%"));
     std::u16string desc;
     if (i < ext_desc.size())
       desc = ext_desc[i];
@@ -157,6 +158,9 @@ class SelectFileDialogImpl : public ui::SelectFileDialog,
       std::unique_ptr<ui::SelectFilePolicy> policy,
       const ExecuteSelectFileCallback& execute_select_file_callback);
 
+  SelectFileDialogImpl(const SelectFileDialogImpl&) = delete;
+  SelectFileDialogImpl& operator=(const SelectFileDialogImpl&) = delete;
+
   // BaseShellDialog implementation:
   bool IsRunning(gfx::NativeWindow owning_window) const override;
   void ListenerDestroyed() override;
@@ -197,8 +201,6 @@ class SelectFileDialogImpl : public ui::SelectFileDialog,
 
   bool has_multiple_file_type_choices_;
   ExecuteSelectFileCallback execute_select_file_callback_;
-
-  DISALLOW_COPY_AND_ASSIGN(SelectFileDialogImpl);
 };
 
 SelectFileDialogImpl::SelectFileDialogImpl(

@@ -12,16 +12,17 @@ import androidx.annotation.GuardedBy;
 import androidx.annotation.MainThread;
 import androidx.annotation.Nullable;
 
-import com.google.common.base.Optional;
-
 import org.chromium.base.Callback;
 import org.chromium.base.Promise;
 import org.chromium.base.ThreadUtils;
 import org.chromium.components.signin.AccessTokenData;
 import org.chromium.components.signin.AccountManagerFacade;
 import org.chromium.components.signin.AccountsChangeObserver;
+import org.chromium.components.signin.AuthException;
+import org.chromium.components.signin.base.AccountCapabilities;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -32,11 +33,19 @@ import java.util.UUID;
  * for testing.
  */
 public class FakeAccountManagerFacade implements AccountManagerFacade {
+    /**
+     * All the account names starting with this prefix will be considered as
+     * a child account in {@link FakeAccountManagerFacade}.
+     */
+    private static final String CHILD_ACCOUNT_NAME_PREFIX = "child.";
     private final Object mLock = new Object();
 
     @GuardedBy("mLock")
     private final Set<AccountHolder> mAccountHolders = new LinkedHashSet<>();
     private final List<AccountsChangeObserver> mObservers = new ArrayList<>();
+
+    /** Can be used to block {@link #getAccounts()} result. */
+    private @Nullable Promise<List<Account>> mBlockedGetAccountsPromise;
 
     /**
      * Creates an object of FakeAccountManagerFacade.
@@ -59,13 +68,12 @@ public class FakeAccountManagerFacade implements AccountManagerFacade {
 
     @Override
     public Promise<List<Account>> getAccounts() {
-        List<Account> accounts = new ArrayList<>();
         synchronized (mLock) {
-            for (AccountHolder accountHolder : mAccountHolders) {
-                accounts.add(accountHolder.getAccount());
+            if (mBlockedGetAccountsPromise != null) {
+                return mBlockedGetAccountsPromise;
             }
+            return Promise.fulfilled(getAccountsInternal());
         }
-        return Promise.fulfilled(accounts);
     }
 
     @Override
@@ -74,7 +82,7 @@ public class FakeAccountManagerFacade implements AccountManagerFacade {
     }
 
     @Override
-    public AccessTokenData getAccessToken(Account account, String scope) {
+    public AccessTokenData getAccessToken(Account account, String scope) throws AuthException {
         synchronized (mLock) {
             AccountHolder accountHolder = getAccountHolder(account);
             if (accountHolder.getAuthToken(scope) == null) {
@@ -96,12 +104,17 @@ public class FakeAccountManagerFacade implements AccountManagerFacade {
     }
 
     @Override
-    public void checkChildAccountStatus(Account account, ChildAccountStatusListener listener) {}
+    public void checkChildAccountStatus(Account account, ChildAccountStatusListener listener) {
+        if (account.name.startsWith(CHILD_ACCOUNT_NAME_PREFIX)) {
+            listener.onStatusReady(true, account);
+        } else {
+            listener.onStatusReady(false, /*childAccount=*/null);
+        }
+    }
 
     @Override
-    public Optional<Boolean> canOfferExtendedSyncPromos(Account account) {
-        assert account != null;
-        return Optional.absent();
+    public Promise<AccountCapabilities> getAccountCapabilities(Account account) {
+        return Promise.fulfilled(new AccountCapabilities(new HashMap<>()));
     }
 
     @Override
@@ -149,14 +162,63 @@ public class FakeAccountManagerFacade implements AccountManagerFacade {
         return "gaia-id-" + email.replace("@", "_at_");
     }
 
+    /**
+     * Creates an email used to identify child accounts in tests.
+     * A child-specific prefix will be appended to the base name so that the created account
+     * will be considered a child account in {@link FakeAccountManagerFacade}.
+     */
+    public static String generateChildEmail(String baseEmail) {
+        return CHILD_ACCOUNT_NAME_PREFIX + baseEmail;
+    }
+
+    /**
+     * Blocks callers from getting accounts through {@link #getAccounts}.
+     * After this method is called, subsequent calls to {@link #getAccounts} will return
+     * a non-fulfilled promise. Use {@link #unblockGetAccounts} to unblock this promise.
+     */
+    public void blockGetAccounts() {
+        synchronized (mLock) {
+            assert mBlockedGetAccountsPromise == null;
+            mBlockedGetAccountsPromise = new Promise<>();
+        }
+    }
+
+    /**
+     * Unblocks callers that are waiting for {@link #getAccounts} result.
+     * Use after {@link #blockGetAccounts} to unblock callers waiting for promises obtained from
+     * {@link #getAccounts}.
+     */
+    public void unblockGetAccounts() {
+        synchronized (mLock) {
+            assert mBlockedGetAccountsPromise != null;
+            mBlockedGetAccountsPromise.fulfill(getAccountsInternal());
+            mBlockedGetAccountsPromise = null;
+        }
+    }
+
     @GuardedBy("mLock")
-    private AccountHolder getAccountHolder(Account account) {
+    private List<Account> getAccountsInternal() {
+        List<Account> accounts = new ArrayList<>();
+        for (AccountHolder accountHolder : mAccountHolders) {
+            accounts.add(accountHolder.getAccount());
+        }
+        return accounts;
+    }
+
+    @GuardedBy("mLock")
+    private AccountHolder getAccountHolder(Account account) throws AuthException {
         for (AccountHolder accountHolder : mAccountHolders) {
             if (accountHolder.getAccount().equals(account)) {
                 return accountHolder;
             }
         }
-        throw new IllegalArgumentException("Cannot find account:" + account);
+        // Since token requests are asynchronous, sometimes they arrive after the account has been
+        // removed. Thus, throwing an unchecked exception here would cause test failures (see
+        // https://crbug.com/1205346 for details). On the other hand, AuthException thrown here
+        // will be caught by ProfileOAuth2TokenServiceDelegate and reported as a token request
+        // failure (which matches the behavior of the production code in the situation when a token
+        // is requested for an account that doesn't exist or has been removed).
+        throw new AuthException(/* isTransientError = */ false, "Cannot find account:" + account);
     }
 
     @MainThread

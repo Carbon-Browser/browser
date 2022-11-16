@@ -8,7 +8,6 @@
 
 #include "base/command_line.h"
 #include "base/lazy_instance.h"
-#include "base/macros.h"
 #include "base/path_service.h"
 #include "base/strings/string_number_conversions.h"
 #include "chrome/browser/browser_process.h"
@@ -43,6 +42,9 @@ class TCPServerSocketFactory
   explicit TCPServerSocketFactory(uint16_t port)
       : port_(port), last_tethering_port_(kMinTetheringPort) {}
 
+  TCPServerSocketFactory(const TCPServerSocketFactory&) = delete;
+  TCPServerSocketFactory& operator=(const TCPServerSocketFactory&) = delete;
+
  private:
   std::unique_ptr<net::ServerSocket> CreateLocalHostServerSocket(int port) {
     std::unique_ptr<net::ServerSocket> socket(
@@ -57,8 +59,6 @@ class TCPServerSocketFactory
 
   // content::DevToolsSocketFactory.
   std::unique_ptr<net::ServerSocket> CreateForHttpServer() override {
-    std::unique_ptr<net::ServerSocket> socket(
-        new net::TCPServerSocket(nullptr, net::NetLogSource()));
     return CreateLocalHostServerSocket(port_);
   }
 
@@ -77,8 +77,6 @@ class TCPServerSocketFactory
   std::string address_;
   uint16_t port_;
   uint16_t last_tethering_port_;
-
-  DISALLOW_COPY_AND_ASSIGN(TCPServerSocketFactory);
 };
 
 }  // namespace

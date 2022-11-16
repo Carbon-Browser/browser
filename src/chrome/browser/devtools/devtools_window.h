@@ -8,7 +8,8 @@
 #include <memory>
 #include <string>
 
-#include "base/macros.h"
+#include "base/memory/weak_ptr.h"
+#include "base/time/time.h"
 #include "chrome/browser/devtools/devtools_contents_resizing_strategy.h"
 #include "chrome/browser/devtools/devtools_toggle_action.h"
 #include "chrome/browser/devtools/devtools_ui_bindings.h"
@@ -57,16 +58,10 @@ enum class DevToolsOpenedByAction {
 class DevToolsWindow : public DevToolsUIBindings::Delegate,
                        public content::WebContentsDelegate {
  public:
-  class ObserverWithAccessor : public content::WebContentsObserver {
-   public:
-    explicit ObserverWithAccessor(content::WebContents* web_contents);
-    ~ObserverWithAccessor() override;
-
-   private:
-    DISALLOW_COPY_AND_ASSIGN(ObserverWithAccessor);
-  };
-
   static const char kDevToolsApp[];
+
+  DevToolsWindow(const DevToolsWindow&) = delete;
+  DevToolsWindow& operator=(const DevToolsWindow&) = delete;
 
   ~DevToolsWindow() override;
 
@@ -109,6 +104,8 @@ class DevToolsWindow : public DevToolsUIBindings::Delegate,
   // How to get pointer to the created window see comments for
   // ToggleDevToolsWindow().
   static void OpenDevToolsWindow(content::WebContents* inspected_web_contents);
+  static void OpenDevToolsWindow(content::WebContents* inspected_web_contents,
+                                 Profile* profile);
 
   // Open or reveal DevTools window, with no special action. Use |profile| to
   // open client window in, default to |host|'s profile if none given.
@@ -202,7 +199,7 @@ class DevToolsWindow : public DevToolsUIBindings::Delegate,
   //    to BeforeUnloadFired is proxied through HandleBeforeUnload() rather
   //    than getting called directly.
   // 3a. If |DevToolsWindow::BeforeUnloadFired| is called with |proceed|=false
-  //     it calls throught to the content's BeforeUnloadFired(), which from the
+  //     it calls through to the content's BeforeUnloadFired(), which from the
   //     WebContents perspective looks the same as the |content|'s own
   //     beforeunload dialog having had it's 'stay on this page' button clicked.
   // 3b. If |proceed| = true, then it fires beforeunload event on |contents|
@@ -232,7 +229,7 @@ class DevToolsWindow : public DevToolsUIBindings::Delegate,
 
   // Returns true if this contents beforeunload event was intercepted by
   // devtools and false otherwise. If the event was intercepted, caller should
-  // not fire beforeunlaod event on |contents| itself as devtools window will
+  // not fire beforeunload event on |contents| itself as devtools window will
   // take care of it, otherwise caller should continue handling the event as
   // usual.
   static bool InterceptPageBeforeUnload(content::WebContents* contents);
@@ -271,7 +268,7 @@ class DevToolsWindow : public DevToolsUIBindings::Delegate,
   // - Toggle/Open: client call;
   // - Create;
   // - ScheduleShow: setup window to be functional, but not yet show;
-  // - DocumentOnLoadCompletedInMainFrame: frontend loaded;
+  // - DocumentOnLoadCompletedInPrimaryMainFrame: frontend loaded;
   // - SetIsDocked: frontend decided on docking state;
   // - OnLoadCompleted: ready to present frontend;
   // - Show: actually placing frontend WebContents to a Browser or docked place;
@@ -322,7 +319,7 @@ class DevToolsWindow : public DevToolsUIBindings::Delegate,
                                 const std::string& settings,
                                 const std::string& panel,
                                 bool has_other_clients,
-                                bool browser_connnection);
+                                bool browser_connection);
   static GURL GetDevToolsURL(Profile* profile,
                              FrontendType frontend_type,
                              const std::string& frontend_url,
@@ -333,6 +330,7 @@ class DevToolsWindow : public DevToolsUIBindings::Delegate,
 
   static void ToggleDevToolsWindow(
       content::WebContents* web_contents,
+      Profile* profile,
       bool force_open,
       const DevToolsToggleAction& action,
       const std::string& settings,
@@ -425,7 +423,7 @@ class DevToolsWindow : public DevToolsUIBindings::Delegate,
   void OnLocaleChanged();
   void OverrideAndSyncDevToolsRendererPrefs();
 
-  std::unique_ptr<ObserverWithAccessor> inspected_contents_observer_;
+  base::WeakPtr<content::WebContents> inspected_web_contents_;
 
   FrontendType frontend_type_;
   Profile* profile_;
@@ -478,7 +476,6 @@ class DevToolsWindow : public DevToolsUIBindings::Delegate,
   base::ScopedClosureRunner capture_handle_;
 
   friend class DevToolsEventForwarder;
-  DISALLOW_COPY_AND_ASSIGN(DevToolsWindow);
 };
 
 #endif  // CHROME_BROWSER_DEVTOOLS_DEVTOOLS_WINDOW_H_

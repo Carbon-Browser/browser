@@ -72,16 +72,20 @@ enum class NavigatorVibrationType {
   kSameOriginSubFrameWithUserGesture = 3,
   kCrossOriginSubFrameNoUserGesture = 4,
   kCrossOriginSubFrameWithUserGesture = 5,
-  kMaxValue = kCrossOriginSubFrameWithUserGesture,
+  kInFencedFrameTree = 6,
+  kMaxValue = kInFencedFrameTree,
 };
 
 void CollectHistogramMetrics(LocalDOMWindow* window) {
   NavigatorVibrationType type;
   bool user_gesture = window->GetFrame()->HasStickyUserActivation();
   UseCounter::Count(window, WebFeature::kNavigatorVibrate);
-  if (!window->GetFrame()->IsMainFrame()) {
+  if (window->GetFrame()->IsInFencedFrameTree()) {
+    type = NavigatorVibrationType::kInFencedFrameTree;
+  } else if (!window->GetFrame()->IsMainFrame()) {
+    // TODO(crbug.com/1254770): Update for embedded portals.
     UseCounter::Count(window, WebFeature::kNavigatorVibrateSubFrame);
-    if (window->GetFrame()->IsCrossOriginToMainFrame()) {
+    if (window->GetFrame()->IsCrossOriginToNearestMainFrame()) {
       if (user_gesture)
         type = NavigatorVibrationType::kCrossOriginSubFrameWithUserGesture;
       else
@@ -174,12 +178,20 @@ bool VibrationController::Vibrate(const VibrationPattern& pattern) {
   CollectHistogramMetrics(DomWindow());
 
   LocalFrame* frame = DomWindow()->GetFrame();
+  if (frame->IsInFencedFrameTree()) {
+    Intervention::GenerateReport(
+        frame, "NavigatorVibrate",
+        "Blocked call to navigator.vibrate inside a fenced frame.");
+    return false;
+  }
+
   if (!frame->GetPage()->IsPageVisible())
     return false;
 
   if (!frame->HasStickyUserActivation()) {
     String message;
-    if (frame->IsCrossOriginToMainFrame()) {
+    // TODO(crbug.com/1254770): Update for embedded portals.
+    if (frame->IsCrossOriginToNearestMainFrame()) {
       message =
           "Blocked call to navigator.vibrate inside a cross-origin "
           "iframe because the frame has never been activated by the user: "
@@ -255,8 +267,7 @@ void VibrationController::DidVibrate() {
     pattern_.EraseAt(0);
   }
 
-  timer_do_vibrate_.StartOneShot(base::TimeDelta::FromMilliseconds(interval),
-                                 FROM_HERE);
+  timer_do_vibrate_.StartOneShot(base::Milliseconds(interval), FROM_HERE);
 }
 
 void VibrationController::Cancel() {

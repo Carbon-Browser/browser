@@ -7,6 +7,7 @@
 
 #include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/mock_callback.h"
@@ -166,7 +167,7 @@ class MockUrlCheckerDelegate : public UrlCheckerDelegate {
   ~MockUrlCheckerDelegate() override = default;
 
  private:
-  SafeBrowsingDatabaseManager* database_manager_;
+  raw_ptr<SafeBrowsingDatabaseManager> database_manager_;
   SBThreatTypeSet threat_types_;
 };
 
@@ -184,6 +185,8 @@ class MockRealTimeUrlLookupService : public RealTimeUrlLookupServiceBase {
   // if the threat type for the |gurl| is not set in advance.
   void StartLookup(
       const GURL& gurl,
+      const GURL& last_committed_url,
+      bool is_mainframe,
       RTLookupRequestCallback request_callback,
       RTLookupResponseCallback response_callback,
       scoped_refptr<base::SequencedTaskRunner> callback_task_runner) override {
@@ -219,6 +222,13 @@ class MockRealTimeUrlLookupService : public RealTimeUrlLookupServiceBase {
                                   std::move(response)));
   }
 
+  void SendSampledRequest(
+      const GURL& gurl,
+      const GURL& last_committed_url,
+      bool is_mainframe,
+      RTLookupRequestCallback request_callback,
+      scoped_refptr<base::SequencedTaskRunner> callback_task_runner) override {}
+
   void SetThreatTypeForUrl(const GURL& gurl, SBThreatType threat_type) {
     urls_threat_type_[gurl.spec()] = threat_type;
   }
@@ -231,6 +241,7 @@ class MockRealTimeUrlLookupService : public RealTimeUrlLookupServiceBase {
   bool CanPerformFullURLLookup() const override { return true; }
   bool CanCheckSubresourceURL() const override { return false; }
   bool CanCheckSafeBrowsingDb() const override { return true; }
+  bool CanSendRTSampleRequest() const override { return true; }
 
  private:
   // RealTimeUrlLookupServiceBase:
@@ -239,10 +250,12 @@ class MockRealTimeUrlLookupService : public RealTimeUrlLookupServiceBase {
     return TRAFFIC_ANNOTATION_FOR_TESTS;
   }
   bool CanPerformFullURLLookupWithToken() const override { return false; }
-  bool CanAttachReferrerChain() const override { return false; }
   int GetReferrerUserGestureLimit() const override { return 0; }
+  bool CanSendPageLoadToken() const override { return false; }
   void GetAccessToken(
       const GURL& url,
+      const GURL& last_committed_url,
+      bool is_mainframe,
       RTLookupRequestCallback request_callback,
       RTLookupResponseCallback response_callback,
       scoped_refptr<base::SequencedTaskRunner> callback_task_runner) override {}
@@ -283,7 +296,7 @@ class SafeBrowsingUrlCheckerTest : public PlatformTest {
         UnsafeResource::kNoRenderFrameId, UnsafeResource::kNoFrameTreeNodeId,
         real_time_lookup_enabled,
         /*can_rt_check_subresource_url=*/false, can_check_safe_browsing_db,
-        base::SequencedTaskRunnerHandle::Get(),
+        /*last_committed_url=*/GURL(), base::SequencedTaskRunnerHandle::Get(),
         real_time_lookup_enabled ? url_lookup_service_->GetWeakPtr() : nullptr,
         /*webui_delegate_=*/nullptr);
   }

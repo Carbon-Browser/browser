@@ -42,6 +42,10 @@ namespace {
 class MockAudioFocusDelegate : public AudioFocusDelegate {
  public:
   MockAudioFocusDelegate() = default;
+
+  MockAudioFocusDelegate(const MockAudioFocusDelegate&) = delete;
+  MockAudioFocusDelegate& operator=(const MockAudioFocusDelegate&) = delete;
+
   ~MockAudioFocusDelegate() override = default;
 
   void AbandonAudioFocus() override {}
@@ -75,8 +79,6 @@ class MockAudioFocusDelegate : public AudioFocusDelegate {
   int request_audio_focus_count_ = 0;
 
   MediaSessionInfoPtr session_info_;
-
-  DISALLOW_COPY_AND_ASSIGN(MockAudioFocusDelegate);
 };
 
 // A mock WebContentsDelegate which listens to |ActivateContents()| calls.
@@ -100,6 +102,9 @@ class MediaSessionImplTest : public RenderViewHostTestHarness {
     default_actions_.insert(media_session::mojom::MediaSessionAction::kScrubTo);
   }
 
+  MediaSessionImplTest(const MediaSessionImplTest&) = delete;
+  MediaSessionImplTest& operator=(const MediaSessionImplTest&) = delete;
+
   void SetUp() override {
     scoped_feature_list_.InitWithFeatures(
         {media_session::features::kMediaSessionService,
@@ -108,8 +113,8 @@ class MediaSessionImplTest : public RenderViewHostTestHarness {
 
     RenderViewHostTestHarness::SetUp();
 
-    player_observer_ =
-        std::make_unique<MockMediaSessionPlayerObserver>(main_rfh());
+    player_observer_ = std::make_unique<MockMediaSessionPlayerObserver>(
+        main_rfh(), media::MediaContentType::Persistent);
     mock_media_session_service_ =
         std::make_unique<testing::NiceMock<MockMediaSessionServiceImpl>>(
             main_rfh());
@@ -182,8 +187,7 @@ class MediaSessionImplTest : public RenderViewHostTestHarness {
 
   void StartNewPlayer() {
     GetMediaSession()->AddPlayer(player_observer_.get(),
-                                 player_observer_->StartNewPlayer(),
-                                 media::MediaContentType::Persistent);
+                                 player_observer_->StartNewPlayer());
   }
 
   const std::set<media_session::mojom::MediaSessionAction>& default_actions()
@@ -199,8 +203,6 @@ class MediaSessionImplTest : public RenderViewHostTestHarness {
   std::unique_ptr<MockMediaSessionServiceImpl> mock_media_session_service_;
 
   mojo::Remote<media_session::mojom::AudioFocusManager> audio_focus_remote_;
-
-  DISALLOW_COPY_AND_ASSIGN(MediaSessionImplTest);
 };
 
 TEST_F(MediaSessionImplTest, SessionInfoState) {
@@ -292,10 +294,11 @@ TEST_F(MediaSessionImplTest, PepperForcesDuckAndRequestsFocus) {
   int player_id = player_observer_->StartNewPlayer();
 
   {
+    player_observer_->SetMediaContentType(media::MediaContentType::Pepper);
     MockMediaSessionMojoObserver observer(*GetMediaSession());
-    GetMediaSession()->AddPlayer(player_observer_.get(), player_id,
-                                 media::MediaContentType::Pepper);
+    GetMediaSession()->AddPlayer(player_observer_.get(), player_id);
     observer.WaitForState(MediaSessionInfo::SessionState::kActive);
+    player_observer_->SetMediaContentType(media::MediaContentType::Persistent);
   }
 
   EXPECT_TRUE(GetForceDuck(GetMediaSession()));
@@ -331,8 +334,7 @@ TEST_F(MediaSessionImplTest, SessionInfo_PlaybackState) {
 
   {
     MockMediaSessionMojoObserver observer(*GetMediaSession());
-    GetMediaSession()->AddPlayer(player_observer_.get(), player_id,
-                                 media::MediaContentType::Persistent);
+    GetMediaSession()->AddPlayer(player_observer_.get(), player_id);
     observer.WaitForPlaybackState(MediaPlaybackState::kPlaying);
   }
 
@@ -485,7 +487,7 @@ TEST_F(MediaSessionImplTest, ResumeUI_WithAction) {
   observer.WaitForExpectedActions(default_actions());
 }
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
 
 TEST_F(MediaSessionImplTest, WebContentsDestroyed_ReleasesFocus) {
   std::unique_ptr<WebContents> web_contents(CreateTestWebContents());
@@ -581,7 +583,7 @@ TEST_F(MediaSessionImplTest, WebContentsDestroyed_StopsDucking) {
   }
 }
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 
 TEST_F(MediaSessionImplTest, TabFocusDoesNotCauseAudioFocus) {
   MockAudioFocusDelegate* delegate = new MockAudioFocusDelegate();
@@ -599,7 +601,7 @@ TEST_F(MediaSessionImplTest, TabFocusDoesNotCauseAudioFocus) {
   EXPECT_EQ(1, delegate->request_audio_focus_count());
 }
 
-#else  // defined(OS_MAC)
+#else  // BUILDFLAG(IS_MAC)
 
 TEST_F(MediaSessionImplTest, RequestAudioFocus_OnFocus_Active) {
   MockAudioFocusDelegate* delegate = new MockAudioFocusDelegate();
@@ -650,9 +652,9 @@ TEST_F(MediaSessionImplTest, RequestAudioFocus_OnFocus_Suspended) {
   EXPECT_EQ(1, delegate->request_audio_focus_count());
 }
 
-#endif  // defined(OS_MAC)
+#endif  // BUILDFLAG(IS_MAC)
 
-#endif  // !defined(OS_ANDROID)
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 TEST_F(MediaSessionImplTest, SourceId_SameBrowserContext) {
   auto other_contents = TestWebContents::Create(browser_context(), nullptr);
@@ -716,10 +718,8 @@ TEST_F(MediaSessionImplTest, SessionInfoAudioSink) {
                    ->audio_sink_id.has_value());
   int player1 = player_observer_->StartNewPlayer();
   int player2 = player_observer_->StartNewPlayer();
-  GetMediaSession()->AddPlayer(player_observer_.get(), player1,
-                               media::MediaContentType::Persistent);
-  GetMediaSession()->AddPlayer(player_observer_.get(), player2,
-                               media::MediaContentType::Persistent);
+  GetMediaSession()->AddPlayer(player_observer_.get(), player1);
+  GetMediaSession()->AddPlayer(player_observer_.get(), player2);
   player_observer_->SetAudioSinkId(player1, "1");
   player_observer_->SetAudioSinkId(player2, "1");
 
@@ -774,15 +774,14 @@ class MediaSessionImplDurationThrottleTest : public MediaSessionImplTest {
 TEST_F(MediaSessionImplDurationThrottleTest, ThrottleDurationUpdate) {
   MockMediaSessionMojoObserver observer(*GetMediaSession());
   int player_id = player_observer_->StartNewPlayer();
-  GetMediaSession()->AddPlayer(player_observer_.get(), player_id,
-                               media::MediaContentType::Persistent);
+  GetMediaSession()->AddPlayer(player_observer_.get(), player_id);
 
   media_session::MediaPosition pos;
   for (int duration = 0; duration <= GetDurationUpdateMaxAllowance();
        ++duration) {
     pos = media_session::MediaPosition(
         /*playback_rate=*/0.0,
-        /*duration=*/base::TimeDelta::FromSeconds(duration),
+        /*duration=*/base::Seconds(duration),
         /*position=*/base::TimeDelta(), /*end_of_media=*/false);
 
     player_observer_->SetPosition(player_id, pos);
@@ -816,12 +815,11 @@ TEST_F(MediaSessionImplDurationThrottleTest, ThrottleResetOnPlayerChange) {
   for (int duration = 0; duration <= GetDurationUpdateMaxAllowance();
        ++duration) {
     int player_id = player_observer_->StartNewPlayer();
-    GetMediaSession()->AddPlayer(player_observer_.get(), player_id,
-                                 media::MediaContentType::Persistent);
+    GetMediaSession()->AddPlayer(player_observer_.get(), player_id);
 
     pos = media_session::MediaPosition(
         /*playback_rate=*/0.0,
-        /*duration=*/base::TimeDelta::FromSeconds(duration),
+        /*duration=*/base::Seconds(duration),
         /*position=*/base::TimeDelta(), /*end_of_media=*/false);
 
     player_observer_->SetPosition(player_id, pos);

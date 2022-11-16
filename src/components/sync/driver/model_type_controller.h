@@ -10,7 +10,7 @@
 
 #include "base/callback.h"
 #include "base/containers/flat_map.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "components/sync/base/model_type.h"
 #include "components/sync/base/sync_mode.h"
@@ -36,6 +36,10 @@ class ModelTypeController : public DataTypeController {
       ModelType type,
       std::unique_ptr<ModelTypeControllerDelegate> delegate_for_full_sync_mode,
       std::unique_ptr<ModelTypeControllerDelegate> delegate_for_transport_mode);
+
+  ModelTypeController(const ModelTypeController&) = delete;
+  ModelTypeController& operator=(const ModelTypeController&) = delete;
+
   ~ModelTypeController() override;
 
   // DataTypeController implementation.
@@ -79,7 +83,7 @@ class ModelTypeController : public DataTypeController {
   State state_ = NOT_RUNNING;
 
   // Owned by |delegate_map_|. Null while NOT_RUNNING.
-  ModelTypeControllerDelegate* delegate_ = nullptr;
+  raw_ptr<ModelTypeControllerDelegate> delegate_ = nullptr;
 
   // Callback for use when starting the datatype (usually MODEL_STARTING, but
   // STOPPING if abort requested while starting).
@@ -98,8 +102,6 @@ class ModelTypeController : public DataTypeController {
   // ClientTagBasedModelTypeProcessor callback and must temporarily own it until
   // Connect is called.
   std::unique_ptr<DataTypeActivationResponse> activation_response_;
-
-  DISALLOW_COPY_AND_ASSIGN(ModelTypeController);
 };
 
 }  // namespace syncer

@@ -7,6 +7,8 @@
 // LSAN_OPTIONS=suppressions=/path/to/suppressions. Please refer to
 // http://dev.chromium.org/developers/testing/leaksanitizer for more info.
 
+#include "build/build_config.h"
+
 #if defined(LEAK_SANITIZER)
 
 // Please make sure the code below declares a single string variable
@@ -49,6 +51,12 @@ char kLSanDefaultSuppressions[] =
     // Leak in glibc's gconv caused by fopen(..., "r,ccs=UNICODE")
     "leak:__gconv_lookup_cache\n"
 
+    // Leak in libnssutil. crbug.com/1290634
+    "leak:libnssutil3\n"
+
+    // Suppress leaks from unknown third party modules. http://anglebug.com/6937
+    "leak:<unknown module>\n"
+
     // ================ Leaks in Chromium code ================
     // PLEASE DO NOT ADD SUPPRESSIONS FOR NEW LEAKS.
     // Instead, commits that introduce memory leaks should be reverted.
@@ -69,6 +77,27 @@ char kLSanDefaultSuppressions[] =
 
     // Suppress leaks in CreateCdmInstance. https://crbug.com/961062
     "leak:media::CdmAdapter::CreateCdmInstance\n"
+
+#if BUILDFLAG(IS_CHROMEOS)
+    // Suppress leak in FileStream. crbug.com/1263374
+    "leak:chromeos::PipeReader::StartIO\n"
+    // Supppress AnimationObserverToHideView leak. crbug.com/1261464
+    "leak:ash::ShelfNavigationWidget::UpdateButtonVisibility\n"
+    // Suppress AnimationSequence leak. crbug.com/1265031
+    "leak:ash::LockStateController::StartPostLockAnimation\n"
+    // Suppress leak in SurfaceDrawContext. crbug.com/1265033
+    "leak:skgpu::v1::SurfaceDrawContext::drawGlyphRunList\n"
+    // Suppress leak in BluetoothServerSocket. crbug.com/1278970
+    "leak:location::nearby::chrome::BluetoothServerSocket::"
+    "BluetoothServerSocket\n"
+    // Suppress leak in NearbyConnectionBrokerImpl. crbug.com/1279578
+    "leak:ash::secure_channel::NearbyConnectionBrokerImpl\n"
+    // Suppress leak in NearbyEndpointFinderImpl. crbug.com/1288577
+    "leak:ash::secure_channel::NearbyEndpointFinderImpl::~"
+    "NearbyEndpointFinderImpl\n"
+    // Suppress leak in DelayedCallbackGroup test. crbug.com/1279563
+    "leak:DelayedCallbackGroup_TimeoutAndRun_Test\n"
+#endif
 
     // PLEASE READ ABOVE BEFORE ADDING NEW SUPPRESSIONS.
 

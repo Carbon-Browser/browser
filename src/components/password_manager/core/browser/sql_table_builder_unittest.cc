@@ -9,7 +9,6 @@
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/logging.h"
-#include "base/macros.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/mock_callback.h"
 #include "sql/database.h"
@@ -100,7 +99,8 @@ void SQLTableBuilderTest::SetupChildTable() {
 
   child_builder_.AddColumn("name", "TEXT");
   child_builder_.AddColumnToUniqueKey("parent_id", "INTEGER",
-                                      /*parent_table=*/kMyLoginTable);
+                                      /*parent_table=*/kMyLoginTable,
+                                      "foreign_key_index");
   EXPECT_EQ(0u, child_builder_.SealVersion());
   EXPECT_TRUE(child_builder_.CreateTable(db()));
 }

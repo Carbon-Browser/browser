@@ -5,7 +5,6 @@
 #ifndef CHROME_BROWSER_NEW_TAB_PAGE_PROMOS_PROMO_SERVICE_FACTORY_H_
 #define CHROME_BROWSER_NEW_TAB_PAGE_PROMOS_PROMO_SERVICE_FACTORY_H_
 
-#include "base/macros.h"
 #include "base/memory/singleton.h"
 #include "components/keyed_service/content/browser_context_keyed_service_factory.h"
 
@@ -19,6 +18,9 @@ class PromoServiceFactory : public BrowserContextKeyedServiceFactory {
 
   static PromoServiceFactory* GetInstance();
 
+  PromoServiceFactory(const PromoServiceFactory&) = delete;
+  PromoServiceFactory& operator=(const PromoServiceFactory&) = delete;
+
  private:
   friend struct base::DefaultSingletonTraits<PromoServiceFactory>;
 
@@ -28,8 +30,6 @@ class PromoServiceFactory : public BrowserContextKeyedServiceFactory {
   // Overridden from BrowserContextKeyedServiceFactory:
   KeyedService* BuildServiceInstanceFor(
       content::BrowserContext* profile) const override;
-
-  DISALLOW_COPY_AND_ASSIGN(PromoServiceFactory);
 };
 
 #endif  // CHROME_BROWSER_NEW_TAB_PAGE_PROMOS_PROMO_SERVICE_FACTORY_H_

@@ -258,3 +258,82 @@ class CheckStableMojomCompatibilityTest(unittest.TestCase):
                [Stable] struct T { foo.S s; int32 x; };
                """)
     ])
+
+  def testWithPartialImport(self):
+    """The compatibility checking tool correctly parses imports with partial
+    paths."""
+    self.assertBackwardCompatible([
+        UnchangedFile('foo/foo.mojom', 'module foo; [Stable] struct S {};'),
+        Change('foo/bar.mojom',
+               old="""\
+               module bar;
+               import "foo/foo.mojom";
+               [Stable] struct T { foo.S s; };
+               """,
+               new="""\
+               module bar;
+               import "foo.mojom";
+               [Stable] struct T { foo.S s; };
+               """)
+    ])
+
+    self.assertBackwardCompatible([
+        UnchangedFile('foo/foo.mojom', 'module foo; [Stable] struct S {};'),
+        Change('foo/bar.mojom',
+               old="""\
+               module bar;
+               import "foo.mojom";
+               [Stable] struct T { foo.S s; };
+               """,
+               new="""\
+               module bar;
+               import "foo/foo.mojom";
+               [Stable] struct T { foo.S s; };
+               """)
+    ])
+
+    self.assertNotBackwardCompatible([
+        UnchangedFile('foo/foo.mojom', 'module foo; [Stable] struct S {};'),
+        Change('bar/bar.mojom',
+               old="""\
+               module bar;
+               import "foo/foo.mojom";
+               [Stable] struct T { foo.S s; };
+               """,
+               new="""\
+               module bar;
+               import "foo.mojom";
+               [Stable] struct T { foo.S s; };
+               """)
+    ])
+
+    self.assertNotBackwardCompatible([
+        UnchangedFile('foo/foo.mojom', 'module foo; [Stable] struct S {};'),
+        Change('bar/bar.mojom',
+               old="""\
+               module bar;
+               import "foo.mojom";
+               [Stable] struct T { foo.S s; };
+               """,
+               new="""\
+               module bar;
+               import "foo/foo.mojom";
+               [Stable] struct T { foo.S s; };
+               """)
+    ])
+
+  def testNewEnumDefault(self):
+    # Should be backwards compatible since it does not affect the wire format.
+    # This specific case also checks that the backwards compatibility checker
+    # does not throw an error due to the older version of the enum not
+    # specifying [Default].
+    self.assertBackwardCompatible([
+        Change('foo/foo.mojom',
+               old='[Extensible] enum E { One };',
+               new='[Extensible] enum E { [Default] One };')
+    ])
+    self.assertBackwardCompatible([
+        Change('foo/foo.mojom',
+               old='[Extensible] enum E { [Default] One, Two, };',
+               new='[Extensible] enum E { One, [Default] Two, };')
+    ])

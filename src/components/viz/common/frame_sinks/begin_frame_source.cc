@@ -115,6 +115,17 @@ BeginFrameSource::BeginFrameArgsGenerator::GenerateBeginFrameArgs(
       next_sequence_number_ +
       EstimateTickCountsBetween(frame_time, next_expected_frame_time_,
                                 vsync_interval);
+  // This is utilized by ExternalBeginFrameSourceAndroid,
+  // GpuVSyncBeginFrameSource, and DelayBasedBeginFrameSource. Which covers the
+  // main Viz use cases. BackToBackBeginFrameSource is not relevenant. We also
+  // are not looking to adjust ExternalBeginFrameSourceMojo which is used in
+  // headless.
+  if (dynamic_begin_frame_deadline_offset_source_) {
+    base::TimeDelta deadline_offset =
+        dynamic_begin_frame_deadline_offset_source_->GetDeadlineOffset(
+            vsync_interval);
+    next_frame_time -= deadline_offset;
+  }
   next_expected_frame_time_ = next_frame_time;
   next_sequence_number_ = sequence_number + 1;
   return BeginFrameArgs::Create(BEGINFRAME_FROM_HERE, source_id,
@@ -194,6 +205,10 @@ void BeginFrameSource::AsProtozeroInto(
   state->set_source_id(static_cast<uint32_t>(source_id_));
 }
 
+void BeginFrameSource::SetDynamicBeginFrameDeadlineOffsetSource(
+    DynamicBeginFrameDeadlineOffsetSource*
+        dynamic_begin_frame_deadline_offset_source) {}
+
 // StubBeginFrameSource ---------------------------------------------------
 StubBeginFrameSource::StubBeginFrameSource()
     : BeginFrameSource(kNotRestartableId) {}
@@ -232,8 +247,9 @@ void BackToBackBeginFrameSource::RemoveObserver(BeginFrameObserver* obs) {
   DCHECK(base::Contains(observers_, obs));
   observers_.erase(obs);
   pending_begin_frame_observers_.erase(obs);
-  if (pending_begin_frame_observers_.empty())
+  if (pending_begin_frame_observers_.empty()) {
     time_source_->SetActive(false);
+  }
 }
 
 void BackToBackBeginFrameSource::DidFinishFrame(BeginFrameObserver* obs) {
@@ -303,7 +319,7 @@ void DelayBasedBeginFrameSource::AddObserver(BeginFrameObserver* obs) {
 
   observers_.insert(obs);
   obs->OnBeginFrameSourcePausedChanged(false);
-  time_source_->SetActive(true);
+  SetActive(true);
 
   // Missed args should correspond to |last_begin_frame_args_| (particularly,
   // have the same sequence number) if |last_begin_frame_args_| still correspond
@@ -330,17 +346,29 @@ void DelayBasedBeginFrameSource::RemoveObserver(BeginFrameObserver* obs) {
 
   observers_.erase(obs);
   if (observers_.empty())
-    time_source_->SetActive(false);
+    SetActive(false);
 }
 
 void DelayBasedBeginFrameSource::OnGpuNoLongerBusy() {
   OnTimerTick();
 }
 
+void DelayBasedBeginFrameSource::SetDynamicBeginFrameDeadlineOffsetSource(
+    DynamicBeginFrameDeadlineOffsetSource*
+        dynamic_begin_frame_deadline_offset_source) {
+  begin_frame_args_generator_.set_dynamic_begin_frame_deadline_offset_source(
+      dynamic_begin_frame_deadline_offset_source);
+}
+
 void DelayBasedBeginFrameSource::OnTimerTick() {
   if (RequestCallbackOnGpuAvailable())
     return;
-  last_begin_frame_args_ = CreateBeginFrameArgs(time_source_->LastTickTime());
+  // In case of gpu back pressure LastTickTime can fall behind, and in case of
+  // a change in vsync using (NextTickTime-interval) could be before
+  // LastTickTime, so should use the latest of the two.
+  last_begin_frame_args_ = CreateBeginFrameArgs(
+      std::max(time_source_->LastTickTime(),
+               time_source_->NextTickTime() - time_source_->Interval()));
   TRACE_EVENT2(
       "viz", "DelayBasedBeginFrameSource::OnTimerTick", "frame_time",
       last_begin_frame_args_.frame_time.since_origin().InMicroseconds(),
@@ -363,6 +391,12 @@ void DelayBasedBeginFrameSource::IssueBeginFrameToObserver(
     }
     FilterAndIssueBeginFrame(obs, args);
   }
+}
+
+void DelayBasedBeginFrameSource::SetActive(bool active) {
+  if (time_source_->Active() == active)
+    return;
+  time_source_->SetActive(active);
 }
 
 // ExternalBeginFrameSource -----------------------------------------------
@@ -392,8 +426,9 @@ void ExternalBeginFrameSource::AddObserver(BeginFrameObserver* obs) {
   DCHECK(obs);
   DCHECK(!base::Contains(observers_, obs));
 
-  if (observers_.empty())
+  if (observers_.empty()) {
     client_->OnNeedsBeginFrames(true);
+  }
 
   observers_.insert(obs);
   obs->OnBeginFrameSourcePausedChanged(paused_);
@@ -411,8 +446,9 @@ void ExternalBeginFrameSource::RemoveObserver(BeginFrameObserver* obs) {
   DCHECK(base::Contains(observers_, obs));
 
   observers_.erase(obs);
-  if (observers_.empty())
+  if (observers_.empty()) {
     client_->OnNeedsBeginFrames(false);
+  }
 }
 
 void ExternalBeginFrameSource::OnGpuNoLongerBusy() {

@@ -7,11 +7,10 @@
 #include "build/build_config.h"
 
 namespace metrics {
-
 namespace {
 
 // The delay, in seconds, after startup before sending the first log message.
-#if defined(OS_ANDROID) || defined(OS_IOS)
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
 // Sessions are more likely to be short on a mobile device, so handle the
 // initial log quickly.
 const int kInitialIntervalSeconds = 15;
@@ -24,7 +23,7 @@ const int kInitialIntervalSeconds = 60;
 MetricsScheduler::MetricsScheduler(const base::RepeatingClosure& task_callback,
                                    bool fast_startup_for_testing)
     : task_callback_(task_callback),
-      interval_(base::TimeDelta::FromSeconds(
+      interval_(base::Seconds(
           fast_startup_for_testing ? 0 : kInitialIntervalSeconds)),
       running_(false),
       callback_pending_(false) {}

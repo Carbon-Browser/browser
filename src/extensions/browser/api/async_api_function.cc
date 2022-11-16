@@ -68,7 +68,7 @@ void AsyncApiFunction::AsyncWorkCompleted() {
 
 void AsyncApiFunction::SetResult(std::unique_ptr<base::Value> result) {
   results_ = std::make_unique<base::ListValue>();
-  results_->Append(std::move(result));
+  results_->Append(base::Value::FromUniquePtrValue(std::move(result)));
 }
 
 void AsyncApiFunction::SetResultList(std::unique_ptr<base::ListValue> results) {
@@ -95,11 +95,17 @@ void AsyncApiFunction::RespondOnUIThread() {
 
 void AsyncApiFunction::SendResponse(bool success) {
   ResponseValue response;
+  base::Value::List arguments;
+  if (results_) {
+    arguments = std::move(results_->GetList());
+    results_.reset();
+  }
   if (success) {
-    response = ArgumentList(std::move(results_));
+    response = ArgumentList(std::move(arguments));
+  } else if (results_) {
+    response = ErrorWithArguments(std::move(arguments), error_);
   } else {
-    response = results_ ? ErrorWithArguments(std::move(results_), error_)
-                        : Error(error_);
+    response = Error(error_);
   }
   ExtensionFunction::Respond(std::move(response));
 }

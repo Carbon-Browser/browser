@@ -7,16 +7,15 @@
 #include <memory>
 #include <string>
 
+#include "ash/components/arc/mojom/file_system.mojom.h"
+#include "ash/components/arc/session/arc_bridge_service.h"
+#include "ash/components/arc/session/arc_service_manager.h"
+#include "ash/components/arc/test/connection_holder_util.h"
+#include "ash/components/arc/test/fake_file_system_instance.h"
 #include "base/bind.h"
 #include "base/callback_helpers.h"
-#include "base/macros.h"
 #include "base/run_loop.h"
 #include "chrome/test/base/testing_profile.h"
-#include "components/arc/arc_service_manager.h"
-#include "components/arc/mojom/file_system.mojom.h"
-#include "components/arc/session/arc_bridge_service.h"
-#include "components/arc/test/connection_holder_util.h"
-#include "components/arc/test/fake_file_system_instance.h"
 #include "components/keyed_service/content/browser_context_keyed_service_factory.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -31,12 +30,19 @@ constexpr char kAuthority[] = "authority";
 constexpr char kDocumentId[] = "document_id";
 constexpr char kRootId[] = "root_id";
 constexpr char kUrl[] = "content://test";
+constexpr char kUrlId[] = "url_id";
 
 }  // namespace
 
 class ArcFileSystemOperationRunnerTest : public testing::Test {
  public:
   ArcFileSystemOperationRunnerTest() = default;
+
+  ArcFileSystemOperationRunnerTest(const ArcFileSystemOperationRunnerTest&) =
+      delete;
+  ArcFileSystemOperationRunnerTest& operator=(
+      const ArcFileSystemOperationRunnerTest&) = delete;
+
   ~ArcFileSystemOperationRunnerTest() override = default;
 
   void SetUp() override {
@@ -117,16 +123,17 @@ class ArcFileSystemOperationRunnerTest : public testing::Test {
         base::BindOnce(
             [](int* counter, mojom::RootSizePtr root_size) { ++*counter; },
             counter));
-    runner_->OpenFileToRead(
+    runner_->OpenFileSessionToWrite(
         GURL(kUrl),
-        base::BindOnce(
-            [](int* counter, mojo::ScopedHandle handle) { ++*counter; },
-            counter));
-    runner_->OpenFileToWrite(
+        base::BindOnce([](int* counter,
+                          mojom::FileSessionPtr file_session) { ++*counter; },
+                       counter));
+    runner_->OpenFileSessionToRead(
         GURL(kUrl),
-        base::BindOnce(
-            [](int* counter, mojo::ScopedHandle handle) { ++*counter; },
-            counter));
+        base::BindOnce([](int* counter,
+                          mojom::FileSessionPtr file_session) { ++*counter; },
+                       counter));
+    runner_->CloseFileSession(kUrlId, /*error_message=*/std::string());
 
     // RemoveWatcher() is never deferred.
     runner_->RemoveWatcher(
@@ -138,13 +145,10 @@ class ArcFileSystemOperationRunnerTest : public testing::Test {
   FakeFileSystemInstance file_system_instance_;
 
   // Use the same initialization/destruction order as
-  // ChromeBrowserMainPartsChromeos.
+  // `ChromeBrowserMainPartsAsh`.
   std::unique_ptr<ArcServiceManager> arc_service_manager_;
   std::unique_ptr<TestingProfile> profile_;
   std::unique_ptr<ArcFileSystemOperationRunner> runner_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ArcFileSystemOperationRunnerTest);
 };
 
 TEST_F(ArcFileSystemOperationRunnerTest, RunImmediately) {

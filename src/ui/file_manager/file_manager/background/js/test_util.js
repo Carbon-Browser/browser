@@ -64,7 +64,7 @@ test.util.sync.getFileList = contentWindow => {
       row.querySelector('.filename-label').textContent,
       row.querySelector('.size').textContent,
       row.querySelector('.type').textContent,
-      row.querySelector('.date').textContent
+      row.querySelector('.date').textContent,
     ]);
   }
   return fileList;
@@ -185,7 +185,7 @@ test.util.async.selectInDirectoryTree =
           callback(
               test.util.sync.fakeMouseDown(contentWindow, query) &&
               test.util.sync.fakeMouseClick(contentWindow, query));
-        }
+        },
       };
       steps.checkQuery();
     };
@@ -286,6 +286,15 @@ test.util.sync.getTreeItems = contentWindow => {
  */
 test.util.sync.getLastVisitedURL = contentWindow => {
   return contentWindow.fileManager.getLastVisitedURL();
+};
+
+/**
+ * Returns a string translation from its translation ID.
+ * @param {string} id The id of the translated string.
+ * @return {string}
+ */
+test.util.sync.getTranslatedString = (contentWindow, id) => {
+  return contentWindow.fileManager.getTranslatedString(id);
 };
 
 /**
@@ -420,7 +429,8 @@ test.util.sync.taskWasExecuted = (contentWindow, descriptor) => {
     console.error('Please call overrideTasks() first.');
     return null;
   }
-  return !!test.util.executedTasks_.find(util.descriptorEqual.bind(descriptor));
+  return !!test.util.executedTasks_.find(
+      task => util.descriptorEqual(task.descriptor, descriptor));
 };
 
 /**
@@ -456,26 +466,21 @@ test.util.sync.unload = contentWindow => {
 };
 
 /**
- * Returns the path shown in the location line breadcrumb.
+ * Returns the path shown in the breadcrumb.
  *
  * @param {Window} contentWindow Window to be tested.
  * @return {string} The breadcrumb path.
  */
 test.util.sync.getBreadcrumbPath = contentWindow => {
-  const breadcrumb =
-      contentWindow.document.querySelector('#location-breadcrumbs');
+  const doc = contentWindow.document;
+  const breadcrumb = doc.querySelector('#location-breadcrumbs bread-crumb') ||
+      doc.querySelector('#location-breadcrumbs xf-breadcrumb');
+
   if (!breadcrumb) {
     return '';
   }
 
-  let path = '';
-
-  const crumbs = breadcrumb.querySelector('bread-crumb');
-  if (crumbs) {
-    path = '/' + crumbs.path;
-  }
-
-  return path;
+  return '/' + breadcrumb.path;
 };
 
 /**
@@ -654,6 +659,12 @@ test.util.PrepareFake = class {
      * @private {number}
      */
     this.callCounter_ = 0;
+
+    /**
+     * List to record the arguments provided to the static fake calls.
+     * @private {!Array}
+     */
+    this.calledArgs_ = [];
   }
 
   /**
@@ -691,6 +702,7 @@ test.util.PrepareFake = class {
     this.parentObject_[this.leafAttrName_] = (...args) => {
       this.fake_(...args);
       this.callCounter_++;
+      this.calledArgs_.push([...args]);
     };
   }
 
@@ -870,6 +882,19 @@ test.util.sync.staticFakeCounter = (contentWindow, fakedApi) => {
   const fake =
       test.util.foregroundReplacedObjects_[contentWindow.appID][fakedApi];
   return fake.callCounter_;
+};
+
+/**
+ * Obtains the list of arguments with which the static fake api was called.
+ * @param {Window} contentWindow Window to be tested.
+ * @param {string} fakedApi Path of the method that is faked.
+ * @param {!Array<!Array<*>>} An array with all calls to this fake, each item is
+ *     an array with all args passed in when the fake was called.
+ */
+test.util.sync.staticFakeCalledArgs = (contentWindow, fakedApi) => {
+  const fake =
+      test.util.foregroundReplacedObjects_[contentWindow.appID][fakedApi];
+  return fake.calledArgs_;
 };
 
 /**

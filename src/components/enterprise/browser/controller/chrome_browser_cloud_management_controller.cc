@@ -12,8 +12,9 @@
 #include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
+#include "base/observer_list.h"
 #include "base/path_service.h"
-#include "base/task/post_task.h"
+#include "base/strings/strcat.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
@@ -21,7 +22,6 @@
 #include "components/enterprise/browser/controller/chrome_browser_cloud_management_helper.h"
 #include "components/enterprise/browser/enterprise_switches.h"
 #include "components/policy/core/browser/browser_policy_connector.h"
-#include "components/policy/core/common/cloud/chrome_browser_cloud_management_metrics.h"
 #include "components/policy/core/common/cloud/client_data_delegate.h"
 #include "components/policy/core/common/cloud/cloud_external_data_manager.h"
 #include "components/policy/core/common/cloud/cloud_policy_constants.h"
@@ -29,29 +29,24 @@
 #include "components/policy/core/common/cloud/machine_level_user_cloud_policy_manager.h"
 #include "components/policy/core/common/cloud/machine_level_user_cloud_policy_store.h"
 #include "components/policy/core/common/configuration_policy_provider.h"
-#include "components/policy/core/common/features.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
 #include "components/enterprise/browser/reporting/report_generator.h"
 #include "components/enterprise/browser/reporting/report_scheduler.h"
-#endif  // !defined(OS_ANDROID)
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 namespace policy {
-
-namespace {
-
-void RecordEnrollmentResult(
-    ChromeBrowserCloudManagementEnrollmentResult result) {
-  UMA_HISTOGRAM_ENUMERATION(
-      "Enterprise.MachineLevelUserCloudPolicyEnrollment.Result", result);
-}
-
-}  // namespace
 
 const base::FilePath::CharType
     ChromeBrowserCloudManagementController::kPolicyDir[] =
         FILE_PATH_LITERAL("Policy");
+
+std::unique_ptr<enterprise_connectors::DeviceTrustKeyManager>
+ChromeBrowserCloudManagementController::Delegate::
+    CreateDeviceTrustKeyManager() {
+  return nullptr;
+}
 
 void ChromeBrowserCloudManagementController::Delegate::DeferInitialization(
     base::OnceClosure callback) {
@@ -160,10 +155,7 @@ void ChromeBrowserCloudManagementController::Init(
   if (!IsEnabled())
     return;
 
-  if (base::FeatureList::IsEnabled(
-          policy::features::kCBCMPolicyInvalidations)) {
-    delegate_->InitializeOAuthTokenFactory(url_loader_factory, local_state);
-  }
+  delegate_->InitializeOAuthTokenFactory(url_loader_factory, local_state);
 
   if (create_cloud_policy_manager_callback_) {
     // The conditions that allow controller initialization should also unblock
@@ -174,7 +166,6 @@ void ChromeBrowserCloudManagementController::Init(
     std::move(create_cloud_policy_manager_callback_).Run();
   }
 
-#if !defined(OS_ANDROID)
   // Post the task of CreateReportScheduler to run on best effort after launch
   // is completed.
   delegate_->GetBestEffortTaskRunner()->PostTask(
@@ -182,7 +173,6 @@ void ChromeBrowserCloudManagementController::Init(
       base::BindOnce(
           &ChromeBrowserCloudManagementController::CreateReportScheduler,
           weak_factory_.GetWeakPtr()));
-#endif  // !defined(OS_ANDROID)
 
   MachineLevelUserCloudPolicyManager* policy_manager =
       delegate_->GetMachineLevelUserCloudPolicyManager();
@@ -283,11 +273,21 @@ bool ChromeBrowserCloudManagementController::
   return delegate_->IsEnterpriseStartupDialogShowing();
 }
 
-void ChromeBrowserCloudManagementController::UnenrollBrowser() {
+void ChromeBrowserCloudManagementController::UnenrollBrowser(
+    bool delete_dm_token) {
+  if (delete_dm_token) {
+    DVLOG(1) << "Browser unenrollment: Attempting DMToken deletion";
+    BrowserDMTokenStorage::Get()->ClearDMToken(base::BindOnce(
+        &ChromeBrowserCloudManagementController::UnenrollCallback,
+        weak_factory_.GetWeakPtr(), "DMTokenDeletion"));
+    return;
+  }
+
   // Invalidate DM token in storage.
-  BrowserDMTokenStorage::Get()->InvalidateDMToken(base::BindOnce(
-      &ChromeBrowserCloudManagementController::InvalidateDMTokenCallback,
-      weak_factory_.GetWeakPtr()));
+  DVLOG(1) << "Browser unenrollment: Attempting DMToken invalidation";
+  BrowserDMTokenStorage::Get()->InvalidateDMToken(
+      base::BindOnce(&ChromeBrowserCloudManagementController::UnenrollCallback,
+                     weak_factory_.GetWeakPtr(), "UnenrollSuccess"));
 }
 
 void ChromeBrowserCloudManagementController::InvalidatePolicies() {
@@ -297,25 +297,24 @@ void ChromeBrowserCloudManagementController::InvalidatePolicies() {
     policy_fetcher_->Disconnect();
   }
 
-#if !defined(OS_ANDROID)
   // This causes the scheduler to stop refreshing itself since the DM token is
   // no longer valid.
   if (report_scheduler_)
     report_scheduler_->OnDMTokenUpdated();
-#endif
 }
 
-void ChromeBrowserCloudManagementController::InvalidateDMTokenCallback(
+void ChromeBrowserCloudManagementController::UnenrollCallback(
+    const std::string& metric_name,
     bool success) {
   UMA_HISTOGRAM_BOOLEAN(
-      "Enterprise.MachineLevelUserCloudPolicyEnrollment.UnenrollSuccess",
+      base::StrCat(
+          {"Enterprise.MachineLevelUserCloudPolicyEnrollment.", metric_name}),
       success);
-  if (success) {
-    DVLOG(1) << "Successfully invalidated the DM token";
+  DVLOG(1) << "Browser unenrollment: " << (success ? "succeeded" : "failed");
+
+  if (success)
     InvalidatePolicies();
-  } else {
-    DVLOG(1) << "Failed to invalidate the DM token";
-  }
+
   NotifyBrowserUnenrolled(success);
 }
 
@@ -332,9 +331,15 @@ void ChromeBrowserCloudManagementController::OnRegistrationStateChanged(
 void ChromeBrowserCloudManagementController::OnClientError(
     CloudPolicyClient* client) {
   // DM_STATUS_SERVICE_DEVICE_NOT_FOUND being the last status implies the
-  // browser has been unenrolled.
-  if (client->status() == DM_STATUS_SERVICE_DEVICE_NOT_FOUND)
-    UnenrollBrowser();
+  // browser has been unenrolled via DMToken invalidation, so it is not expected
+  // to re-enroll automatically. DM_STATUS_SERVICE_DEVICE_NEEDS_RESET signals
+  // that the browser has been unenrolled via DMToken deletion, and that it will
+  // automatically re-enroll if a valid enrollment token has been set.
+  if (client->status() == DM_STATUS_SERVICE_DEVICE_NOT_FOUND ||
+      client->status() == DM_STATUS_SERVICE_DEVICE_NEEDS_RESET) {
+    UnenrollBrowser(/*delete_dm_token=*/client->status() ==
+                    DM_STATUS_SERVICE_DEVICE_NEEDS_RESET);
+  }
 }
 
 void ChromeBrowserCloudManagementController::OnServiceAccountSet(
@@ -345,10 +350,16 @@ void ChromeBrowserCloudManagementController::OnServiceAccountSet(
 
 void ChromeBrowserCloudManagementController::ShutDown() {
   delegate_->ShutDown();
-#if !defined(OS_ANDROID)
   if (report_scheduler_)
     report_scheduler_.reset();
-#endif
+}
+
+enterprise_connectors::DeviceTrustKeyManager*
+ChromeBrowserCloudManagementController::GetDeviceTrustKeyManager() {
+  if (!device_trust_key_manager_) {
+    device_trust_key_manager_ = delegate_->CreateDeviceTrustKeyManager();
+  }
+  return device_trust_key_manager_.get();
 }
 
 void ChromeBrowserCloudManagementController::SetGaiaURLLoaderFactory(
@@ -371,7 +382,7 @@ void ChromeBrowserCloudManagementController::NotifyBrowserUnenrolled(
 
 void ChromeBrowserCloudManagementController::NotifyCloudReportingLaunched() {
   for (auto& observer : observers_) {
-    observer.OnCloudReportingLaunched();
+    observer.OnCloudReportingLaunched(report_scheduler_.get());
   }
 }
 
@@ -416,27 +427,29 @@ void ChromeBrowserCloudManagementController::
 
   // TODO(alito): Log failures to store the DM token. Should we try again later?
   BrowserDMTokenStorage::Get()->StoreDMToken(
-      dm_token, base::BindOnce([](bool success) {
-        if (!success) {
-          DVLOG(1) << "Failed to store the DM token";
-          RecordEnrollmentResult(
-              ChromeBrowserCloudManagementEnrollmentResult::kFailedToStore);
-        } else {
-          DVLOG(1) << "Successfully stored the DM token";
-          RecordEnrollmentResult(
-              ChromeBrowserCloudManagementEnrollmentResult::kSuccess);
-        }
-      }));
+      dm_token,
+      base::BindOnce(
+          [](base::WeakPtr<ChromeBrowserCloudManagementController> controller,
+             bool success) {
+            if (!success) {
+              DVLOG(1) << "Failed to store the DM token";
+              controller->RecordEnrollmentResult(
+                  ChromeBrowserCloudManagementEnrollmentResult::kFailedToStore);
+            } else {
+              DVLOG(1) << "Successfully stored the DM token";
+              controller->RecordEnrollmentResult(
+                  ChromeBrowserCloudManagementEnrollmentResult::kSuccess);
+            }
+          },
+          weak_factory_.GetWeakPtr()));
 
   // Start fetching policies.
   VLOG(1) << "Fetch policy after enrollment.";
   policy_fetcher_->SetupRegistrationAndFetchPolicy(
       BrowserDMTokenStorage::Get()->RetrieveDMToken(), client_id);
-#if !defined(OS_ANDROID)
   if (report_scheduler_) {
     report_scheduler_->OnDMTokenUpdated();
   }
-#endif  // !defined(OS_ANDROID)
 
   NotifyPolicyRegisterFinished(true);
 }
@@ -449,14 +462,17 @@ void ChromeBrowserCloudManagementController::CreateReportScheduler() {
   cloud_policy_client_->AddObserver(this);
   auto reporting_delegate_factory = delegate_->GetReportingDelegateFactory();
 
-  auto generator = std::make_unique<enterprise_reporting::ReportGenerator>(
-      reporting_delegate_factory.get());
-  auto real_time_generator =
+  enterprise_reporting::ReportScheduler::CreateParams params;
+  params.client = cloud_policy_client_.get();
+  params.delegate = reporting_delegate_factory->GetReportSchedulerDelegate();
+  params.report_generator =
+      std::make_unique<enterprise_reporting::ReportGenerator>(
+          reporting_delegate_factory.get());
+  params.real_time_report_generator =
       std::make_unique<enterprise_reporting::RealTimeReportGenerator>(
           reporting_delegate_factory.get());
   report_scheduler_ = std::make_unique<enterprise_reporting::ReportScheduler>(
-      cloud_policy_client_.get(), std::move(generator),
-      std::move(real_time_generator), reporting_delegate_factory.get());
+      std::move(params));
 
   NotifyCloudReportingLaunched();
 }
@@ -468,6 +484,15 @@ void ChromeBrowserCloudManagementController::DeferrableCreatePolicyManagerImpl(
   std::unique_ptr<MachineLevelUserCloudPolicyManager> policy_manager =
       CreatePolicyManager(platform_provider);
   std::move(callback).Run(std::move(policy_manager));
+}
+
+void ChromeBrowserCloudManagementController::RecordEnrollmentResult(
+    ChromeBrowserCloudManagementEnrollmentResult result) {
+  UMA_HISTOGRAM_ENUMERATION(
+      "Enterprise.MachineLevelUserCloudPolicyEnrollment.Result", result);
+  for (auto& observer : observers_) {
+    observer.OnEnrollmentResultRecorded();
+  }
 }
 
 }  // namespace policy

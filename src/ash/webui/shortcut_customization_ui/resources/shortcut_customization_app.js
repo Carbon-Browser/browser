@@ -2,10 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import './accelerator_edit_dialog.js'
+import './accelerator_edit_dialog.js';
 import './shortcut_input.js';
-import './shortcuts_page.js'
-import './shortcut_customization_fonts_css.js'
+import './shortcuts_page.js';
+import './shortcut_customization_fonts_css.js';
 import 'chrome://resources/ash/common/navigation_view_panel.js';
 import 'chrome://resources/ash/common/page_toolbar.js';
 
@@ -13,7 +13,7 @@ import {html, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/poly
 
 import {AcceleratorLookupManager} from './accelerator_lookup_manager.js';
 import {getShortcutProvider} from './mojo_interface_provider.js';
-import {AcceleratorConfig, LayoutInfoList, ShortcutProviderInterface} from './shortcut_types.js';
+import {AcceleratorConfig, AcceleratorSource, AcceleratorState, AcceleratorType, LayoutInfoList, ShortcutProviderInterface} from './shortcut_types.js';
 import {AcceleratorInfo} from './shortcut_types.js';
 
 /**
@@ -48,11 +48,29 @@ export class ShortcutCustomizationAppElement extends PolymerElement {
       },
 
       /** @private */
+      dialogAction_: {
+        type: Number,
+        value: 0,
+      },
+
+      /** @private {!AcceleratorSource} */
+      dialogSource_: {
+        type: Number,
+        value: 0,
+      },
+
+      /** @private */
       showEditDialog_: {
         type: Boolean,
         value: false,
       },
-    }
+
+      /** @protected */
+      showRestoreAllDialog_: {
+        type: Boolean,
+        value: false,
+      },
+    };
   }
 
   /** @override */
@@ -76,6 +94,9 @@ export class ShortcutCustomizationAppElement extends PolymerElement {
     window.addEventListener('show-edit-dialog',
         (e) => this.showDialog_(e.detail));
     window.addEventListener('edit-dialog-closed', () => this.onDialogClosed_());
+    window.addEventListener(
+        'request-update-accelerator',
+        (e) => this.onRequestUpdateAccelerators_(e.detail));
   }
 
   /** @override */
@@ -140,13 +161,16 @@ export class ShortcutCustomizationAppElement extends PolymerElement {
   }
 
   /**
-   * @param {!{description: string, accelerators: !Array<!AcceleratorInfo>}} e
+   * @param {!{description: string, accelerators: !Array<!AcceleratorInfo>,
+   *           action: number, source: !AcceleratorSource}} e
    * @private
    */
   showDialog_(e) {
     this.dialogShortcutTitle_ = e.description;
     this.dialogAccelerators_ =
         /** @type {!Array<!AcceleratorInfo>}*/(e.accelerators);
+    this.dialogAction_ = e.action;
+    this.dialogSource_ = e.source;
     this.showEditDialog_ = true;
   }
 
@@ -155,6 +179,44 @@ export class ShortcutCustomizationAppElement extends PolymerElement {
     this.showEditDialog_ = false;
     this.dialogShortcutTitle_ = '';
     this.dialogAccelerators_ = [];
+  }
+
+  /**
+   * @param {!Object<number, number>} detail
+   * @private
+   */
+  onRequestUpdateAccelerators_(detail) {
+    this.$.navigationPanel.notifyEvent('updateSubsections');
+    const updatedAccels =
+        this.acceleratorLookupManager_
+            .getAccelerators(detail.source, detail.action)
+            .filter((accel) => {
+              // Hide accelerators that are default and disabled.
+              return !(accel.type === AcceleratorType.kDefault &&
+                  accel.state === AcceleratorState.kDisabledByUser);
+            });
+    this.shadowRoot.querySelector('#editDialog')
+        .updateDialogAccelerators(updatedAccels);
+  }
+
+  /** @protected */
+  onRestoreAllDefaultClicked_() {
+    this.showRestoreAllDialog_ = true;
+  }
+
+  /** @protected */
+  onCancelRestoreButtonClicked_() {
+    this.closeRestoreAllDialog_();
+  }
+
+  /** @protected */
+  onConfirmRestoreButtonClicked_() {
+    // TODO(jimmyxgong): Implement this function.
+  }
+
+  /** @protected */
+  closeRestoreAllDialog_() {
+    this.showRestoreAllDialog_ = false;
   }
 }
 

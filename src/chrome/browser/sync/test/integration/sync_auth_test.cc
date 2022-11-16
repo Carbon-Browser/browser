@@ -2,12 +2,12 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "build/buildflag.h"
-#include "base/macros.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/threading/platform_thread.h"
 #include "base/time/time.h"
+#include "build/buildflag.h"
+#include "build/chromeos_buildflags.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "chrome/browser/sync/test/integration/bookmarks_helper.h"
 #include "chrome/browser/sync/test/integration/single_client_status_change_checker.h"
@@ -95,8 +95,12 @@ class SyncTransportActiveChecker : public SingleClientStatusChangeChecker {
 
 class SyncAuthTest : public SyncTest {
  public:
-  SyncAuthTest() : SyncTest(SINGLE_CLIENT), bookmark_index_(0) {}
-  ~SyncAuthTest() override {}
+  SyncAuthTest() : SyncTest(SINGLE_CLIENT) {}
+
+  SyncAuthTest(const SyncAuthTest&) = delete;
+  SyncAuthTest& operator=(const SyncAuthTest&) = delete;
+
+  ~SyncAuthTest() override = default;
 
   // Helper function that adds a bookmark and waits for either an auth error, or
   // for the bookmark to be committed.  Returns true if it detects an auth
@@ -130,13 +134,9 @@ class SyncAuthTest : public SyncTest {
   }
 
  private:
-  int GetNextBookmarkIndex() {
-    return bookmark_index_++;
-  }
+  int GetNextBookmarkIndex() { return bookmark_index_++; }
 
-  int bookmark_index_;
-
-  DISALLOW_COPY_AND_ASSIGN(SyncAuthTest);
+  int bookmark_index_ = 0;
 };
 
 // Verify that sync works with a valid OAuth2 token.
@@ -291,7 +291,7 @@ IN_PROC_BROWSER_TEST_F(SyncAuthTest, MAYBE_TokenExpiry) {
   std::string old_token = GetSyncService(0)->GetAccessTokenForTest();
 
   // Wait until the token has expired.
-  base::PlatformThread::Sleep(base::TimeDelta::FromSeconds(5));
+  base::PlatformThread::Sleep(base::Seconds(5));
 
   // Trigger an auth error on the server so PSS requests OA2TS for a new token
   // during the next sync cycle.

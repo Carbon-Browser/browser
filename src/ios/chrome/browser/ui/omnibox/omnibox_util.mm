@@ -6,12 +6,20 @@
 
 #include "base/notreached.h"
 #include "base/strings/utf_string_conversions.h"
+#import "ios/chrome/browser/ui/icons/chrome_symbol.h"
 #include "ios/chrome/browser/ui/ui_feature_flags.h"
 #include "ios/chrome/grit/ios_theme_resources.h"
 
 #if !defined(__has_feature) || !__has_feature(objc_arc)
 #error "This file requires ARC support."
 #endif
+
+namespace {
+
+// The size of symbol images.
+const CGFloat kSymbolLocationBarPointSize = 10;
+
+}  // namespace
 
 #pragma mark - Suggestion icons.
 
@@ -34,12 +42,13 @@ OmniboxSuggestionIconType GetOmniboxSuggestionIconTypeForAutocompleteMatchType(
     case AutocompleteMatchType::URL_WHAT_YOU_TYPED:
     case AutocompleteMatchType::DOCUMENT_SUGGESTION:
     case AutocompleteMatchType::PEDAL_DEPRECATED:
-      return DEFAULT_FAVICON;
     case AutocompleteMatchType::HISTORY_BODY:
     case AutocompleteMatchType::HISTORY_KEYWORD:
     case AutocompleteMatchType::HISTORY_TITLE:
     case AutocompleteMatchType::HISTORY_URL:
     case AutocompleteMatchType::TAB_SEARCH_DEPRECATED:
+    case AutocompleteMatchType::OPEN_TAB:
+    case AutocompleteMatchType::HISTORY_CLUSTER:
       return DEFAULT_FAVICON;
     case AutocompleteMatchType::CONTACT_DEPRECATED:
     case AutocompleteMatchType::SEARCH_OTHER_ENGINE:
@@ -78,12 +87,17 @@ UIImage* GetOmniboxSuggestionIconForAutocompleteMatchType(
 
 // Returns the asset with "always template" rendering mode.
 UIImage* GetLocationBarSecurityIcon(LocationBarSecurityIconType iconType) {
+  if (UseSymbols()) {
+    return DefaultSymbolTemplateWithPointSize(
+        GetLocationBarSecuritySymbolName(iconType),
+        kSymbolLocationBarPointSize);
+  }
   NSString* imageName = GetLocationBarSecurityIconTypeAssetName(iconType);
   return [[UIImage imageNamed:imageName]
       imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
 }
 
-// Converts the |security_level| to an appropriate security icon type.
+// Converts the `security_level` to an appropriate security icon type.
 LocationBarSecurityIconType GetLocationBarSecurityIconTypeForSecurityState(
     security_state::SecurityLevel security_level) {
   switch (security_level) {
@@ -101,7 +115,7 @@ LocationBarSecurityIconType GetLocationBarSecurityIconTypeForSecurityState(
   }
 }
 
-// Converts the |security_level| to an appropriate icon in "always template"
+// Converts the `security_level` to an appropriate icon in "always template"
 // rendering mode.
 UIImage* GetLocationBarSecurityIconForSecurityState(
     security_state::SecurityLevel security_level) {

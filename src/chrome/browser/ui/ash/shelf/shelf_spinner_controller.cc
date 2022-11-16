@@ -27,12 +27,9 @@ namespace {
 constexpr int kUpdateIconIntervalMs = 40;  // 40ms for 25 frames per second.
 
 // Controls the spinner animation. See crbug.com/922977 for details.
-constexpr base::TimeDelta kFadeInDuration =
-    base::TimeDelta::FromMilliseconds(200);
-constexpr base::TimeDelta kFadeOutDuration =
-    base::TimeDelta::FromMilliseconds(200);
-constexpr base::TimeDelta kMinimumShowDuration =
-    base::TimeDelta::FromMilliseconds(200);
+constexpr base::TimeDelta kFadeInDuration = base::Milliseconds(200);
+constexpr base::TimeDelta kFadeOutDuration = base::Milliseconds(200);
+constexpr base::TimeDelta kMinimumShowDuration = base::Milliseconds(200);
 
 constexpr int kSpinningGapPercent = 25;
 constexpr color_utils::HSL kInactiveHslShift = {-1, 0, 0.25};
@@ -115,6 +112,9 @@ class SpinningEffectSource : public gfx::CanvasImageSource {
                                                             kInactiveHslShift),
             kInactiveTransparency)) {}
 
+  SpinningEffectSource(const SpinningEffectSource&) = delete;
+  SpinningEffectSource& operator=(const SpinningEffectSource&) = delete;
+
   ~SpinningEffectSource() override {}
 
   // gfx::CanvasImageSource override.
@@ -127,11 +127,13 @@ class SpinningEffectSource : public gfx::CanvasImageSource {
                          0, 0);
 
     const int gap = kSpinningGapPercent * inactive_image_.width() / 100;
+    constexpr SkColor kThrobberColor = SK_ColorWHITE;
     gfx::PaintThrobberSpinning(
         canvas,
         gfx::Rect(gap, gap, inactive_image_.width() - 2 * gap,
                   inactive_image_.height() - 2 * gap),
-        SkColorSetA(SK_ColorWHITE, 0xFF * (1.0 - std::abs(animation_lirp))),
+        SkColorSetA(kThrobberColor, SkColorGetA(kThrobberColor) *
+                                        (1.0 - std::abs(animation_lirp))),
         now - data_.creation_time());
   }
 
@@ -144,16 +146,14 @@ class SpinningEffectSource : public gfx::CanvasImageSource {
     if (data_.IsFadingIn()) {
       return 1.0 -
              TimeProportionSince(data_.creation_time(), now, kFadeInDuration);
-    } else {
-      return TimeProportionSince(data_.removal_time(), now, kFadeOutDuration);
     }
+
+    return TimeProportionSince(data_.removal_time(), now, kFadeOutDuration);
   }
 
   ShelfSpinnerController::ShelfSpinnerData data_;
   const gfx::ImageSkia active_image_;
   const gfx::ImageSkia inactive_image_;
-
-  DISALLOW_COPY_AND_ASSIGN(SpinningEffectSource);
 };
 
 }  // namespace
@@ -236,8 +236,7 @@ bool ShelfSpinnerController::RemoveSpinnerFromControllerMap(
 void ShelfSpinnerController::CloseCrostiniSpinners() {
   std::vector<std::string> app_ids_to_close;
   const Profile* profile =
-      chromeos::ProfileHelper::Get()->GetProfileByAccountId(
-          current_account_id_);
+      ash::ProfileHelper::Get()->GetProfileByAccountId(current_account_id_);
   for (const auto& app_id_controller_pair : app_controller_map_) {
     if (crostini::IsCrostiniShelfAppId(profile, app_id_controller_pair.first))
       app_ids_to_close.push_back(app_id_controller_pair.first);
@@ -333,7 +332,7 @@ void ShelfSpinnerController::RegisterNextUpdate() {
       FROM_HERE,
       base::BindOnce(&ShelfSpinnerController::UpdateApps,
                      weak_ptr_factory_.GetWeakPtr()),
-      base::TimeDelta::FromMilliseconds(kUpdateIconIntervalMs));
+      base::Milliseconds(kUpdateIconIntervalMs));
 }
 
 void ShelfSpinnerController::AddSpinnerToShelf(

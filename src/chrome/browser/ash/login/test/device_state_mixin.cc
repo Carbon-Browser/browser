@@ -18,15 +18,14 @@
 #include "chrome/browser/browser_process.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/common/pref_names.h"
-#include "chromeos/dbus/session_manager/fake_session_manager_client.h"
-#include "chromeos/dbus/session_manager/session_manager_client.h"
+#include "chromeos/ash/components/dbus/session_manager/fake_session_manager_client.h"
+#include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
 #include "components/policy/core/common/cloud/cloud_policy_constants.h"
 #include "components/policy/core/common/cloud/test/policy_builder.h"
 #include "components/policy/proto/install_attributes.pb.h"
 #include "components/prefs/pref_service.h"
 
-namespace chromeos {
-
+namespace ash {
 namespace {
 
 constexpr char kFakeDomain[] = "example.com";
@@ -88,8 +87,8 @@ bool DeviceStateMixin::SetUpUserDataDirectory() {
 void DeviceStateMixin::SetUpInProcessBrowserTestFixture() {
   // Make sure session manager client has been initialized as in-memory. This is
   // requirement for setting policy blobs.
-  if (!chromeos::SessionManagerClient::Get())
-    chromeos::SessionManagerClient::InitializeFakeInMemory();
+  if (!SessionManagerClient::Get())
+    SessionManagerClient::InitializeFakeInMemory();
 
   session_manager_initialized_ = true;
 
@@ -276,4 +275,4 @@ void DeviceStateMixin::SetCachedDeviceLocalAccountPolicy(
 
 DeviceStateMixin::~DeviceStateMixin() = default;
 
-}  // namespace chromeos
+}  // namespace ash

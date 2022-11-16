@@ -14,7 +14,7 @@
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
@@ -50,16 +50,8 @@ void RunCallbackOnTaskRunner(
 void GetSystemSlotOnIOThread(
     const scoped_refptr<base::SingleThreadTaskRunner>& response_task_runner,
     base::OnceCallback<void(crypto::ScopedPK11Slot)> callback) {
-  // This callback will only be executed once but must be marked repeating
-  // because it could be discarded by GetSystemNSSKeySlot() and invoked here
-  // instead.
-  auto callback_on_origin_thread = base::BindRepeating(
-      &RunCallbackOnTaskRunner, response_task_runner, base::Passed(&callback));
-
-  crypto::ScopedPK11Slot system_slot =
-      crypto::GetSystemNSSKeySlot(callback_on_origin_thread);
-  if (system_slot)
-    callback_on_origin_thread.Run(std::move(system_slot));
+  crypto::GetSystemNSSKeySlot(base::BindOnce(
+      &RunCallbackOnTaskRunner, response_task_runner, std::move(callback)));
 }
 
 // Relays `EnsureUserTpmInitializedOnIOThread` callback to
@@ -262,7 +254,7 @@ bool EasyUnlockTpmKeyManager::StartGetSystemSlotTimeoutMs(size_t timeout_ms) {
       base::BindOnce(&EasyUnlockTpmKeyManager::OnTpmKeyCreated,
                      get_tpm_slot_weak_ptr_factory_.GetWeakPtr(),
                      std::string()),
-      base::TimeDelta::FromMilliseconds(timeout_ms));
+      base::Milliseconds(timeout_ms));
   return true;
 }
 
@@ -270,11 +262,9 @@ std::string EasyUnlockTpmKeyManager::GetPublicTpmKey(
     const AccountId& account_id) {
   if (!local_state_)
     return std::string();
-  const base::DictionaryValue* dict =
-      local_state_->GetDictionary(prefs::kEasyUnlockLocalStateTpmKeys);
-  const std::string* key = nullptr;
-  if (dict)
-    key = dict->FindStringKey(account_id.GetUserEmail());
+  const base::Value::Dict& dict =
+      local_state_->GetValueDict(prefs::kEasyUnlockLocalStateTpmKeys);
+  const std::string* key = dict.FindString(account_id.GetUserEmail());
   std::string decoded;
   base::Base64Decode(key ? *key : std::string(), &decoded);
   return decoded;
@@ -314,7 +304,7 @@ void EasyUnlockTpmKeyManager::SetKeyInLocalState(const AccountId& account_id,
   base::Base64Encode(value, &encoded);
   DictionaryPrefUpdate update(local_state_,
                               prefs::kEasyUnlockLocalStateTpmKeys);
-  update->SetKey(account_id.GetUserEmail(), base::Value(encoded));
+  update->SetStringKey(account_id.GetUserEmail(), encoded);
 }
 
 void EasyUnlockTpmKeyManager::OnUserTPMInitialized(
@@ -334,7 +324,12 @@ void EasyUnlockTpmKeyManager::OnUserTPMInitialized(
 void EasyUnlockTpmKeyManager::CreateKeyInSystemSlot(
     const std::string& public_key,
     crypto::ScopedPK11Slot system_slot) {
-  CHECK(system_slot);
+  if (!system_slot) {
+    // Emulate timeout, system slot will never be loaded.
+    OnTpmKeyCreated(std::string());
+    return;
+  }
+
   create_tpm_key_state_ = CREATE_TPM_KEY_GOT_SYSTEM_SLOT;
 
   // If there are any delayed tasks posted using `StartGetSystemSlotTimeoutMs`,
@@ -358,7 +353,11 @@ void EasyUnlockTpmKeyManager::SignDataWithSystemSlot(
     const std::string& data,
     base::OnceCallback<void(const std::string& data)> callback,
     crypto::ScopedPK11Slot system_slot) {
-  CHECK(system_slot);
+  if (!system_slot) {
+    // Emulate timeout, system slot will never be loaded.
+    OnTpmKeyCreated(std::string());
+    return;
+  }
 
   // This task interacts with the TPM, hence MayBlock().
   base::ThreadPool::PostTask(

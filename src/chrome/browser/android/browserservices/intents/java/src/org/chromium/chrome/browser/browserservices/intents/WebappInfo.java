@@ -10,9 +10,12 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.browser.trusted.sharing.ShareData;
 
+import org.chromium.blink.mojom.DisplayMode;
 import org.chromium.chrome.browser.browserservices.intents.WebApkExtras.ShortcutItem;
 import org.chromium.components.webapps.ShortcutSource;
 import org.chromium.components.webapps.WebApkDistributor;
+import org.chromium.device.mojom.ScreenOrientationLockType;
+import org.chromium.ui.util.ColorUtils;
 
 import java.util.List;
 import java.util.Map;
@@ -34,7 +37,7 @@ public class WebappInfo {
         return (provider == null) ? null : new WebappInfo(provider);
     }
 
-    private WebappInfo(@NonNull BrowserServicesIntentDataProvider provider) {
+    protected WebappInfo(@NonNull BrowserServicesIntentDataProvider provider) {
         mProvider = provider;
     }
 
@@ -71,7 +74,7 @@ public class WebappInfo {
         return getWebappExtras().shortName;
     }
 
-    public @WebDisplayMode int displayMode() {
+    public @DisplayMode.EnumType int displayMode() {
         return getWebappExtras().displayMode;
     }
 
@@ -83,7 +86,7 @@ public class WebappInfo {
         return getWebApkExtras().webApkPackageName;
     }
 
-    public int orientation() {
+    public @ScreenOrientationLockType.EnumType int orientation() {
         return getWebappExtras().orientation;
     }
 
@@ -93,11 +96,11 @@ public class WebappInfo {
 
     /**
      * Returns the toolbar color if it is valid, and
-     * WebappConstants.MANIFEST_COLOR_INVALID_OR_MISSING otherwise.
+     * ColorUtils.INVALID_COLOR otherwise.
      */
     public long toolbarColor() {
         return hasValidToolbarColor() ? mProvider.getColorProvider().getToolbarColor()
-                                      : WebappConstants.MANIFEST_COLOR_INVALID_OR_MISSING;
+                                      : ColorUtils.INVALID_COLOR;
     }
 
     /**
@@ -110,7 +113,7 @@ public class WebappInfo {
     /**
      * Background color is actually a 32 bit unsigned integer which encodes a color
      * in ARGB format. Return value is a long because we also need to encode the
-     * error state of WebappConstants.MANIFEST_COLOR_INVALID_OR_MISSING.
+     * error state of ColorUtils.INVALID_COLOR.
      */
     public long backgroundColor() {
         return WebappIntentUtils.colorFromIntegerColor(getWebappExtras().backgroundColor);
@@ -200,6 +203,14 @@ public class WebappInfo {
         return getWebApkExtras().manifestStartUrl;
     }
 
+    public String manifestId() {
+        return getWebApkExtras().manifestId;
+    }
+
+    public String appKey() {
+        return getWebApkExtras().appKey;
+    }
+
     public @WebApkDistributor int distributor() {
         return getWebApkExtras().distributor;
     }
@@ -230,13 +241,13 @@ public class WebappInfo {
                 && source != ShortcutSource.WEBAPK_SHARE_TARGET_FILE;
     }
 
-    private WebappExtras getWebappExtras() {
+    protected WebappExtras getWebappExtras() {
         WebappExtras extras = mProvider.getWebappExtras();
         assert extras != null;
         return extras;
     }
 
-    private @NonNull WebApkExtras getWebApkExtras() {
+    protected @NonNull WebApkExtras getWebApkExtras() {
         if (mWebApkExtras != null) return mWebApkExtras;
 
         mWebApkExtras = mProvider.getWebApkExtras();

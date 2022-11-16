@@ -10,12 +10,8 @@
 #include <memory>
 #include <string>
 
-#include "base/macros.h"
+#include "base/values.h"
 #include "components/content_settings/core/common/content_settings_types.h"
-
-namespace base {
-class Value;
-}  // namespace base
 
 namespace content_settings {
 
@@ -69,11 +65,15 @@ class WebsiteSettingsInfo {
 
   WebsiteSettingsInfo(ContentSettingsType type,
                       const std::string& name,
-                      std::unique_ptr<base::Value> initial_default_value,
+                      base::Value initial_default_value,
                       SyncStatus sync_status,
                       LossyStatus lossy_status,
                       ScopingType scoping_type,
                       IncognitoBehavior incognito_behavior);
+
+  WebsiteSettingsInfo(const WebsiteSettingsInfo&) = delete;
+  WebsiteSettingsInfo& operator=(const WebsiteSettingsInfo&) = delete;
+
   ~WebsiteSettingsInfo();
 
   ContentSettingsType type() const { return type_; }
@@ -83,8 +83,8 @@ class WebsiteSettingsInfo {
   const std::string& default_value_pref_name() const {
     return default_value_pref_name_;
   }
-  const base::Value* initial_default_value() const {
-    return initial_default_value_.get();
+  const base::Value& initial_default_value() const {
+    return initial_default_value_;
   }
 
   uint32_t GetPrefRegistrationFlags() const;
@@ -100,13 +100,11 @@ class WebsiteSettingsInfo {
 
   const std::string pref_name_;
   const std::string default_value_pref_name_;
-  const std::unique_ptr<base::Value> initial_default_value_;
+  const base::Value initial_default_value_;
   const SyncStatus sync_status_;
   const LossyStatus lossy_status_;
   const ScopingType scoping_type_;
   const IncognitoBehavior incognito_behavior_;
-
-  DISALLOW_COPY_AND_ASSIGN(WebsiteSettingsInfo);
 };
 
 }  // namespace content_settings

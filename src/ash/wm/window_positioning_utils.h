@@ -55,8 +55,14 @@ ASH_EXPORT void AdjustBoundsToEnsureMinimumWindowVisibility(
     const gfx::Rect& visible_area,
     gfx::Rect* bounds);
 
-// Returns the bounds of a snapped window for a given snap |type| in clamshell
-// mode, with default snapped ratio |kDefaultSnapRatio|, in parent coordinates.
+// Returns the bounds of a snapped window for a given snap |type| and
+// |snap_ratio| in clamshell mode.
+ASH_EXPORT gfx::Rect GetSnappedWindowBoundsInParent(aura::Window* window,
+                                                    SnapViewType type,
+                                                    float snap_ratio);
+
+// Returns the bounds of a snapped window with default snapped ratio
+// |kDefaultSnapRatio|, in parent coordinates.
 ASH_EXPORT gfx::Rect GetDefaultSnappedWindowBoundsInParent(aura::Window* window,
                                                            SnapViewType type);
 
@@ -74,7 +80,7 @@ ASH_EXPORT gfx::Rect GetSnappedWindowBounds(const gfx::Rect& work_area,
 // If vertical snap state is not enabled, returns primary-landscape
 // orientation. Otherwise, returns the current orientation relative to natural
 // orientation of this |display|.
-ash::OrientationLockType GetSnapDisplayOrientation(
+chromeos::OrientationType GetSnapDisplayOrientation(
     const display::Display& display);
 
 // Moves the window to the center of the display.

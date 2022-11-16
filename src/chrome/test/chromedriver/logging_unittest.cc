@@ -2,12 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "chrome/test/chromedriver/logging.h"
+
 #include <stddef.h>
 
 #include <memory>
 #include <vector>
 
-#include "base/cxx17_backports.h"
 #include "base/format_macros.h"
 #include "base/strings/stringprintf.h"
 #include "base/values.h"
@@ -16,7 +17,6 @@
 #include "chrome/test/chromedriver/chrome/log.h"
 #include "chrome/test/chromedriver/chrome/status.h"
 #include "chrome/test/chromedriver/command_listener.h"
-#include "chrome/test/chromedriver/logging.h"
 #include "chrome/test/chromedriver/session.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -30,7 +30,7 @@ const char* const kAllWdLevels[] = {
 
 TEST(Logging, NameLevelConversionHappy) {
   // All names map to a valid enum value.
-  for (int i = 0; static_cast<size_t>(i) < base::size(kAllWdLevels); ++i) {
+  for (int i = 0; static_cast<size_t>(i) < std::size(kAllWdLevels); ++i) {
     Log::Level level = static_cast<Log::Level>(-1);
     EXPECT_TRUE(WebDriverLog::NameToLevel(kAllWdLevels[i], &level));
     EXPECT_LE(Log::kAll, level);
@@ -56,15 +56,17 @@ void ValidateLogEntry(base::ListValue *entries,
                       int index,
                       const std::string& expected_level,
                       const std::string& expected_message) {
-  const base::DictionaryValue *entry;
-  ASSERT_TRUE(entries->GetDictionary(index, &entry));
+  const base::Value& entry_value = entries->GetList()[index];
+  ASSERT_TRUE(entry_value.is_dict());
+  const base::DictionaryValue& entry =
+      base::Value::AsDictionaryValue(entry_value);
   std::string level;
-  EXPECT_TRUE(entry->GetString("level", &level));
+  EXPECT_TRUE(entry.GetString("level", &level));
   EXPECT_EQ(expected_level, level);
   std::string message;
-  ASSERT_TRUE(entry->GetString("message", &message));
+  ASSERT_TRUE(entry.GetString("message", &message));
   EXPECT_EQ(expected_message, message);
-  EXPECT_LT(0, entry->FindDoubleKey("timestamp").value());
+  EXPECT_LT(0, entry.FindDoubleKey("timestamp").value());
 }
 
 }  // namespace

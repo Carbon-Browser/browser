@@ -4,7 +4,6 @@
 
 #include "chrome/browser/subresource_filter/subresource_filter_browser_test_harness.h"
 
-#include "build/build_config.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/subresource_filter/content/browser/ad_tagging_browser_test_utils.h"
 #include "components/subresource_filter/content/browser/content_subresource_filter_throttle_manager.h"
@@ -29,6 +28,10 @@ using testing::_;
 using testing::Mock;
 
 namespace subresource_filter {
+
+// TODO(bokan): These tests don't run on Android but it'd be good to test there
+// as well as the UI differs. In particular, testing that prerender activation
+// hides infobars.
 
 // Tests -----------------------------------------------------------------------
 
@@ -138,7 +141,8 @@ IN_PROC_BROWSER_TEST_F(SubresourceFilterPrerenderingBrowserTest,
 
   // Now dynamically try to load `included_script.js` in the primary frame.
   // Ensure it is not filtered.
-  EXPECT_TRUE(IsDynamicScriptElementLoaded(web_contents()->GetMainFrame()));
+  EXPECT_TRUE(
+      IsDynamicScriptElementLoaded(web_contents()->GetPrimaryMainFrame()));
 }
 
 // Test that we don't start filtering an unactivated prerendering page when the
@@ -234,11 +238,9 @@ IN_PROC_BROWSER_TEST_F(SubresourceFilterPrerenderingBrowserTest,
 
     // But ensure we haven't shown the notification UI yet since the page is
     // still prerendering.
-    EXPECT_FALSE(AdsBlockedInContentSettings(web_contents()->GetMainFrame()));
+    EXPECT_FALSE(
+        AdsBlockedInContentSettings(web_contents()->GetPrimaryMainFrame()));
     EXPECT_FALSE(AdsBlockedInContentSettings(prerender_rfh));
-#if defined(OS_ANDROID)
-    EXPECT_FALSE(PresentingAdsBlockedInfobar());
-#endif
   }
 
   // Makes the prerendering page primary (i.e. the user clicked on a link to
@@ -248,11 +250,8 @@ IN_PROC_BROWSER_TEST_F(SubresourceFilterPrerenderingBrowserTest,
     EXPECT_CALL(observer, OnPageActivationComputed(_, _)).Times(0);
     prerender_helper_.NavigatePrimaryPage(kPrerenderingUrl);
 
-    EXPECT_TRUE(AdsBlockedInContentSettings(web_contents()->GetMainFrame()));
+    ASSERT_EQ(web_contents()->GetPrimaryMainFrame(), prerender_rfh);
     EXPECT_TRUE(AdsBlockedInContentSettings(prerender_rfh));
-#if defined(OS_ANDROID)
-    EXPECT_TRUE(PresentingAdsBlockedInfobar());
-#endif
   }
 }
 
@@ -367,7 +366,8 @@ IN_PROC_BROWSER_TEST_F(SubresourceFilterPrerenderingBrowserTest,
   // filtered.
   {
     prerender_helper_.NavigatePrimaryPage(kPrerenderingUrl);
-    EXPECT_FALSE(IsDynamicScriptElementLoaded(web_contents()->GetMainFrame()));
+    EXPECT_FALSE(
+        IsDynamicScriptElementLoaded(web_contents()->GetPrimaryMainFrame()));
   }
 }
 
@@ -416,7 +416,8 @@ IN_PROC_BROWSER_TEST_F(SubresourceFilterPrerenderingBrowserTest,
   {
     prerender_helper_.NavigatePrimaryPage(kPrerenderingUrl);
     ASSERT_EQ(kPrerenderingUrl, web_contents()->GetLastCommittedURL());
-    EXPECT_TRUE(IsDynamicScriptElementLoaded(web_contents()->GetMainFrame()));
+    EXPECT_TRUE(
+        IsDynamicScriptElementLoaded(web_contents()->GetPrimaryMainFrame()));
   }
 }
 
@@ -473,6 +474,53 @@ IN_PROC_BROWSER_TEST_F(SubresourceFilterPrerenderingBrowserTest,
   }
 }
 
-// TODO - test that prerender activation hides infobars.
+// Tests that NavigationConsoleLogger works with a prerendered page by checking
+// if a console message is added in LogMessageOnCommit() from NotifyResult()
+// during navigation.
+IN_PROC_BROWSER_TEST_F(SubresourceFilterPrerenderingBrowserTest,
+                       NavigationConsoleLogger) {
+  Configuration config(subresource_filter::mojom::ActivationLevel::kEnabled,
+                       subresource_filter::ActivationScope::ACTIVATION_LIST,
+                       subresource_filter::ActivationList::BETTER_ADS);
+  ResetConfiguration(std::move(config));
+
+  {
+    GURL url(GetTestUrl("/empty.html"));
+    ConfigureURLWithWarning(url,
+                            {safe_browsing::SubresourceFilterType::BETTER_ADS});
+    content::WebContentsConsoleObserver console_observer(web_contents());
+    console_observer.SetPattern(kActivationWarningConsoleMessage);
+    // Initial page loading adds a console message.
+    ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
+    console_observer.Wait();
+    ASSERT_EQ(1u, console_observer.messages().size());
+    EXPECT_EQ(kActivationWarningConsoleMessage,
+              console_observer.GetMessageAt(0u));
+  }
+  {
+    GURL prerender_url(GetTestUrl("/title1.html"));
+    ConfigureURLWithWarning(prerender_url,
+                            {safe_browsing::SubresourceFilterType::BETTER_ADS});
+    content::WebContentsConsoleObserver console_observer(web_contents());
+    console_observer.SetPattern(kActivationWarningConsoleMessage);
+    // Trigger a prerender.
+    const int host_id = prerender_helper_.AddPrerender(prerender_url);
+    console_observer.Wait();
+    RenderFrameHost* prerender_rfh =
+        prerender_helper_.GetPrerenderedMainFrameHost(host_id);
+    // The prerendering adds a console message.
+    ASSERT_EQ(1u, console_observer.messages().size());
+    EXPECT_EQ(kActivationWarningConsoleMessage,
+              console_observer.GetMessageAt(0u));
+    EXPECT_EQ(&console_observer.messages().back().source_frame->GetPage(),
+              &prerender_rfh->GetPage());
+    // Activate the prerendered page.
+    prerender_helper_.NavigatePrimaryPage(prerender_url);
+    // The prerendering activation doesn't add a console message.
+    ASSERT_EQ(1u, console_observer.messages().size());
+    EXPECT_EQ(kActivationWarningConsoleMessage,
+              console_observer.GetMessageAt(0u));
+  }
+}
 
 }  // namespace subresource_filter

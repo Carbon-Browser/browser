@@ -67,11 +67,11 @@ class FakeSerialIoHandler : public SerialIoHandler {
   void WriteImpl() override {}
 
   void CancelReadImpl() override {
-    QueueReadCompleted(/*bytes_read=*/0, mojom::SerialReceiveError::NONE);
+    ReadCompleted(/*bytes_read=*/0, mojom::SerialReceiveError::NONE);
   }
 
   void CancelWriteImpl() override {
-    QueueWriteCompleted(/*bytes_written=*/0, mojom::SerialSendError::NONE);
+    WriteCompleted(/*bytes_written=*/0, mojom::SerialSendError::NONE);
   }
 
   bool ConfigurePortImpl() override {
@@ -322,7 +322,7 @@ TEST_F(SerialPortImplTest, Close) {
   CreatePort(&serial_port, &watcher);
 
   base::RunLoop loop;
-  serial_port->Close(loop.QuitClosure());
+  serial_port->Close(/*flush=*/true, loop.QuitClosure());
   loop.Run();
 }
 

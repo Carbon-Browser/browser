@@ -9,21 +9,24 @@
 #include <string>
 #include <vector>
 
+#include "base/containers/cxx20_erase_list.h"
+#include "base/files/file_util.h"
 #include "base/test/scoped_feature_list.h"
 #include "content/browser/web_contents/web_contents_impl.h"
 #include "content/public/browser/ax_inspect_factory.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/accessibility_notification_waiter.h"
 #include "content/public/test/content_browser_test.h"
-#include "content/public/test/dump_accessibility_test_helper.h"
+#include "content/public/test/content_browser_test_utils.h"
 #include "third_party/blink/public/common/features.h"
+#include "ui/accessibility/platform/inspect/ax_api_type.h"
 #include "ui/accessibility/platform/inspect/ax_inspect_scenario.h"
+#include "ui/accessibility/platform/inspect/ax_inspect_test_helper.h"
 
 namespace content {
 
 class BrowserAccessibility;
 class BrowserAccessibilityManager;
-class DumpAccessibilityTestHelper;
 
 // Base class for an accessibility browsertest that takes an HTML file as
 // input, loads it into a tab, dumps some accessibility data in text format,
@@ -35,10 +38,12 @@ class DumpAccessibilityTestHelper;
 // See content/test/data/accessibility/readme.md for an overview.
 class DumpAccessibilityTestBase
     : public ContentBrowserTest,
-      public ::testing::WithParamInterface<AXInspectFactory::Type> {
+      public ::testing::WithParamInterface<ui::AXApiType::Type> {
  public:
   DumpAccessibilityTestBase();
   ~DumpAccessibilityTestBase() override;
+
+  void SignalRunTestOnMainThread(int) override;
 
   // Given a path to an HTML file relative to the test directory,
   // loads the HTML, loads the accessibility tree, calls Dump(), then
@@ -48,6 +53,45 @@ class DumpAccessibilityTestBase
                const char* file_dir,
                const base::FilePath::StringType& expectations_qualifier =
                    FILE_PATH_LITERAL(""));
+
+  template <const char* type>
+  void RunTypedTest(const base::FilePath::CharType* file_path) {
+    base::FilePath test_path = GetTestFilePath("accessibility", type);
+    {
+      base::ScopedAllowBlockingForTesting allow_blocking;
+      ASSERT_TRUE(base::PathExists(test_path)) << test_path.LossyDisplayName();
+    }
+    base::FilePath test_file = test_path.Append(base::FilePath(file_path));
+
+    std::string dir(std::string() + "accessibility/" + type);
+    RunTest(test_file, dir.c_str());
+  }
+
+  template <std::vector<ui::AXApiType::Type> TestPasses(),
+            ui::AXApiType::TypeConstant type>
+  static std::vector<ui::AXApiType::Type> TestPassesExcept() {
+    std::vector<ui::AXApiType::Type> passes = TestPasses();
+    base::Erase(passes, type);
+    return passes;
+  }
+
+  template <ui::AXApiType::TypeConstant type>
+  static std::vector<ui::AXApiType::Type> TreeTestPassesExcept() {
+    return TestPassesExcept<ui::AXInspectTestHelper::TreeTestPasses, type>();
+  }
+
+  template <ui::AXApiType::TypeConstant type>
+  static std::vector<ui::AXApiType::Type> EventTestPassesExcept() {
+    return TestPassesExcept<ui::AXInspectTestHelper::EventTestPasses, type>();
+  }
+
+  static std::vector<ui::AXApiType::Type> TreeTestPassesExceptUIA() {
+    return TreeTestPassesExcept<ui::AXApiType::kWinUIA>();
+  }
+
+  static std::vector<ui::AXApiType::Type> EventTestPassesExceptUIA() {
+    return EventTestPassesExcept<ui::AXApiType::kWinUIA>();
+  }
 
  protected:
   void SetUpCommandLine(base::CommandLine* command_line) override;
@@ -78,6 +122,9 @@ class DumpAccessibilityTestBase
   //
   // Helpers
   //
+
+  // Dump the accessibility tree with all provided filters into a string.
+  std::string DumpTreeAsString() const;
 
   // Dump the whole accessibility tree, without applying any filters,
   // and return it as a string.
@@ -123,7 +170,7 @@ class DumpAccessibilityTestBase
                                                 const std::string& value) const;
 
  protected:
-  DumpAccessibilityTestHelper test_helper_;
+  ui::AXInspectTestHelper test_helper_;
 
   WebContentsImpl* GetWebContents() const;
 
@@ -139,6 +186,20 @@ class DumpAccessibilityTestBase
 
   // Wait for default action, expected text and then end of test signal.
   void WaitForFinalTreeContents();
+
+  // Creates a new secure test server that can be used in place of the default
+  // HTTP embedded_test_server defined in BrowserTestBase. The new test server
+  // can then be retrieved using the same embedded_test_server() method used
+  // to get the BrowserTestBase HTTP server.
+  void UseHttpsTestServer();
+
+  // This will return either the https test server or the
+  // default one specified in BrowserTestBase, depending on if an https test
+  // server was created by calling UseHttpsTestServer().
+  net::EmbeddedTestServer* embedded_test_server() {
+    return (https_test_server_) ? https_test_server_.get()
+                                : BrowserTestBase::embedded_test_server();
+  }
 
  private:
   BrowserAccessibility* FindNodeInSubtree(BrowserAccessibility& node,
@@ -161,6 +222,11 @@ class DumpAccessibilityTestBase
   }
 
   bool has_performed_default_actions_ = false;
+
+  // Secure test server, isn't created by default. Needs to be
+  // created using UseHttpsTestServer() and then called with
+  // embedded_test_server().
+  std::unique_ptr<net::EmbeddedTestServer> https_test_server_;
 };
 
 }  // namespace content

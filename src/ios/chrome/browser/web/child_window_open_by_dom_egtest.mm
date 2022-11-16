@@ -8,6 +8,7 @@
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
 #import "ios/chrome/test/earl_grey/chrome_matchers.h"
 #import "ios/chrome/test/earl_grey/chrome_test_case.h"
+#include "ios/chrome/test/earl_grey/scoped_block_popups_pref.h"
 #import "ios/testing/earl_grey/earl_grey_test.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "net/test/embedded_test_server/http_request.h"
@@ -57,7 +58,7 @@ std::unique_ptr<net::test_server::HttpResponse> SlowResponseHandler(
     const net::test_server::HttpRequest& request) {
   auto slow_http_response =
       std::make_unique<net::test_server::DelayedHttpResponse>(
-          base::TimeDelta::FromSeconds(kSlowPathDelay));
+          base::Seconds(kSlowPathDelay));
   slow_http_response->set_content_type("text/html");
   slow_http_response->set_content(kSlowPathContent);
   return std::move(slow_http_response);
@@ -66,27 +67,18 @@ std::unique_ptr<net::test_server::HttpResponse> SlowResponseHandler(
 }  // namespace
 
 // Test case for child windows opened by DOM.
-@interface ChildWindowOpenByDOMTestCase : ChromeTestCase
+@interface ChildWindowOpenByDOMTestCase : ChromeTestCase {
+  std::unique_ptr<ScopedBlockPopupsPref> _blockPopupsPref;
+}
+
 @end
 
 @implementation ChildWindowOpenByDOMTestCase
 
-+ (void)setUpForTestCase {
-  [super setUpForTestCase];
-  [self setUpHelper];
-}
-
-+ (void)setUpHelper {
-  [ChromeEarlGrey setContentSettings:CONTENT_SETTING_ALLOW];
-}
-
-+ (void)tearDown {
-  [ChromeEarlGrey setContentSettings:CONTENT_SETTING_DEFAULT];
-  [super tearDown];
-}
-
 - (void)setUp {
   [super setUp];
+  _blockPopupsPref =
+      std::make_unique<ScopedBlockPopupsPref>(CONTENT_SETTING_ALLOW);
   self.testServer->RegisterDefaultHandler(base::BindRepeating(
       net::test_server::HandlePrefixedRequest, kWriteReloadPath,
       base::BindRepeating(&ReloadHandler)));

@@ -9,10 +9,10 @@
 
 #include "base/bind.h"
 #include "base/location.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
-#include "jingle/glue/thread_wrapper.h"
+#include "components/webrtc/thread_wrapper.h"
 #include "net/url_request/url_request_context_getter.h"
 #include "remoting/base/logging.h"
 #include "remoting/base/oauth_token_getter.h"
@@ -28,8 +28,7 @@ namespace protocol {
 namespace {
 
 // Use a cooldown period to prevent multiple service requests in case of a bug.
-constexpr base::TimeDelta kIceConfigRequestCooldown =
-    base::TimeDelta::FromMinutes(2);
+constexpr base::TimeDelta kIceConfigRequestCooldown = base::Minutes(2);
 
 void PrintIceConfig(const IceConfig& ice_config) {
   std::stringstream ss;
@@ -60,10 +59,10 @@ void PrintIceConfig(const IceConfig& ice_config) {
 
 // static
 scoped_refptr<TransportContext> TransportContext::ForTests(TransportRole role) {
-  jingle_glue::JingleThreadWrapper::EnsureForCurrentMessageLoop();
+  webrtc::ThreadWrapper::EnsureForCurrentMessageLoop();
   return new protocol::TransportContext(
-      std::make_unique<protocol::ChromiumPortAllocatorFactory>(), nullptr,
-      nullptr,
+      std::make_unique<protocol::ChromiumPortAllocatorFactory>(),
+      webrtc::ThreadWrapper::current()->SocketServer(), nullptr, nullptr,
       protocol::NetworkSettings(
           protocol::NetworkSettings::NAT_TRAVERSAL_OUTGOING),
       role);
@@ -71,15 +70,19 @@ scoped_refptr<TransportContext> TransportContext::ForTests(TransportRole role) {
 
 TransportContext::TransportContext(
     std::unique_ptr<PortAllocatorFactory> port_allocator_factory,
+    rtc::SocketFactory* socket_factory,
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
     OAuthTokenGetter* oauth_token_getter,
     const NetworkSettings& network_settings,
     TransportRole role)
     : port_allocator_factory_(std::move(port_allocator_factory)),
+      socket_factory_(socket_factory),
       url_loader_factory_(url_loader_factory),
       oauth_token_getter_(oauth_token_getter),
       network_settings_(network_settings),
-      role_(role) {}
+      role_(role) {
+  DCHECK(socket_factory_);
+}
 
 TransportContext::~TransportContext() = default;
 

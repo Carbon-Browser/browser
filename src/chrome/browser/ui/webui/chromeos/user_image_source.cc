@@ -5,6 +5,7 @@
 #include "chrome/browser/ui/webui/chromeos/user_image_source.h"
 
 #include "base/memory/ref_counted_memory.h"
+#include "base/strings/escape.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "chrome/browser/ash/login/users/default_user_image/default_user_images.h"
@@ -12,12 +13,12 @@
 #include "components/account_id/account_id.h"
 #include "components/user_manager/known_user.h"
 #include "components/user_manager/user_manager.h"
-#include "net/base/escape.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/chromeos/resources/grit/ui_chromeos_resources.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
 #include "ui/gfx/codec/png_codec.h"
+#include "ui/gfx/image/image_skia_rep.h"
 #include "url/third_party/mozilla/url_parse.h"
 
 namespace chromeos {
@@ -31,10 +32,10 @@ const char kFrameIndex[] = "frame";
 // to user email and frame.
 void ParseRequest(const GURL& url, std::string* email, int* frame) {
   DCHECK(url.is_valid());
-  const std::string serialized_account_id = net::UnescapeURLComponent(
+  const std::string serialized_account_id = base::UnescapeURLComponent(
       url.path().substr(1),
-      net::UnescapeRule::URL_SPECIAL_CHARS_EXCEPT_PATH_SEPARATORS |
-          net::UnescapeRule::PATH_SEPARATORS | net::UnescapeRule::SPACES);
+      base::UnescapeRule::URL_SPECIAL_CHARS_EXCEPT_PATH_SEPARATORS |
+          base::UnescapeRule::PATH_SEPARATORS | base::UnescapeRule::SPACES);
   AccountId account_id(EmptyAccountId());
   const bool status =
       AccountId::Deserialize(serialized_account_id, &account_id);
@@ -148,7 +149,7 @@ scoped_refptr<base::RefCountedMemory> GetUserImageInternal(
     }
     if (user->HasDefaultImage()) {
       return LoadUserImageFrameForScaleFactor(
-          default_user_image::kDefaultImageResourceIDs[user->image_index()],
+          default_user_image::GetDefaultImageResourceId(user->image_index()),
           frame, scale_factor);
     }
     NOTREACHED() << "User with custom image missing data bytes";
@@ -189,7 +190,7 @@ void UserImageSource::StartDataRequest(
   std::move(callback).Run(GetUserImageInternal(account_id, frame));
 }
 
-std::string UserImageSource::GetMimeType(const std::string& path) {
+std::string UserImageSource::GetMimeType(const GURL& url) {
   // We need to explicitly return a mime type, otherwise if the user tries to
   // drag the image they get no extension.
   return "image/png";

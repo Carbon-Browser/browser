@@ -9,6 +9,7 @@
 #include <memory>
 
 #include "base/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/new_tab_page/modules/task_module/task_module.mojom.h"
@@ -43,29 +44,23 @@ class TaskModuleService : public KeyedService {
   // On success |callback| is called with a populated |TaskModuleData| object
   // of the first task which has not been dismissed. On failure, it is called
   // with nullptr.
-  void GetPrimaryTask(task_module::mojom::TaskModuleType task_module_type,
-                      TaskModuleCallback callback);
+  void GetPrimaryTask(TaskModuleCallback callback);
   // Dismisses the task with the given name and remembers that setting.
-  void DismissTask(task_module::mojom::TaskModuleType task_module_type,
-                   const std::string& task_name);
+  void DismissTask(const std::string& task_name);
   // Restores the task with the given name and remembers that setting.
-  void RestoreTask(task_module::mojom::TaskModuleType task_module_type,
-                   const std::string& task_name);
+  void RestoreTask(const std::string& task_name);
 
  private:
-  void OnDataLoaded(task_module::mojom::TaskModuleType task_module_type,
-                    network::SimpleURLLoader* loader,
+  void OnDataLoaded(network::SimpleURLLoader* loader,
                     TaskModuleCallback callback,
                     std::unique_ptr<std::string> response);
-  void OnJsonParsed(task_module::mojom::TaskModuleType task_module_type,
-                    TaskModuleCallback callback,
+  void OnJsonParsed(TaskModuleCallback callback,
                     data_decoder::DataDecoder::ValueOrError result);
 
   // Returns whether a task with the given name has been dismissed.
-  bool IsTaskDismissed(task_module::mojom::TaskModuleType task_module_type,
-                       const std::string& task_name);
+  bool IsTaskDismissed(const std::string& task_name);
 
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
   scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory_;
   std::list<std::unique_ptr<network::SimpleURLLoader>> loaders_;
   std::string application_locale_;

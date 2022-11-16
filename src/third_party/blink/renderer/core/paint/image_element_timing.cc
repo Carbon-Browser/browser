@@ -5,6 +5,7 @@
 #include "third_party/blink/renderer/core/paint/image_element_timing.h"
 
 #include "base/time/time.h"
+#include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/layout/layout_object.h"
 #include "third_party/blink/renderer/core/loader/resource/image_resource_content.h"
@@ -92,7 +93,7 @@ void ImageElementTiming::NotifyImagePainted(
     const LayoutObject& layout_object,
     const ImageResourceContent& cached_image,
     const PropertyTreeStateOrAlias& current_paint_chunk_properties,
-    const IntRect& image_border) {
+    const gfx::Rect& image_border) {
   if (!internal::IsExplicitlyRegisteredForTiming(layout_object))
     return;
 
@@ -115,7 +116,7 @@ void ImageElementTiming::NotifyImagePaintedInternal(
     const ImageResourceContent& cached_image,
     const PropertyTreeStateOrAlias& current_paint_chunk_properties,
     base::TimeTicks load_time,
-    const IntRect& image_border) {
+    const gfx::Rect& image_border) {
   LocalFrame* frame = GetSupplementable()->GetFrame();
   DCHECK(frame == layout_object.GetDocument().GetFrame());
   // Background images could cause |node| to not be an element. For example,
@@ -141,7 +142,7 @@ void ImageElementTiming::NotifyImagePaintedInternal(
   RespectImageOrientationEnum respect_orientation =
       LayoutObject::ShouldRespectImageOrientation(&layout_object);
 
-  FloatRect intersection_rect = ElementTimingUtils::ComputeIntersectionRect(
+  gfx::RectF intersection_rect = ElementTimingUtils::ComputeIntersectionRect(
       frame, image_border, current_paint_chunk_properties);
   const AtomicString attr =
       element->FastGetAttribute(html_names::kElementtimingAttr);
@@ -194,7 +195,7 @@ void ImageElementTiming::NotifyBackgroundImagePainted(
     Node& node,
     const StyleFetchedImage& background_image,
     const PropertyTreeStateOrAlias& current_paint_chunk_properties,
-    const IntRect& image_border) {
+    const gfx::Rect& image_border) {
   const LayoutObject* layout_object = node.GetLayoutObject();
   if (!layout_object)
     return;
@@ -228,7 +229,6 @@ void ImageElementTiming::NotifyBackgroundImagePainted(
 }
 
 void ImageElementTiming::ReportImagePaintPresentationTime(
-    WebSwapResult,
     base::TimeTicks timestamp) {
   WindowPerformance* performance =
       DOMWindowPerformance::performance(*GetSupplementable());

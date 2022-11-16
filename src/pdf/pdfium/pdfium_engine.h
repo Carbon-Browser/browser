@@ -15,14 +15,15 @@
 
 #include "base/check.h"
 #include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "base/values.h"
 #include "pdf/document_attachment_info.h"
 #include "pdf/document_layout.h"
-#include "pdf/document_loader.h"
 #include "pdf/document_metadata.h"
+#include "pdf/loader/document_loader.h"
 #include "pdf/pdf_engine.h"
 #include "pdf/pdfium/pdfium_form_filler.h"
 #include "pdf/pdfium/pdfium_page.h"
@@ -135,7 +136,7 @@ class PDFiumEngine : public PDFEngine,
   std::vector<uint8_t> GetAttachmentData(size_t index) override;
   const DocumentMetadata& GetDocumentMetadata() const override;
   int GetNumberOfPages() const override;
-  base::Value GetBookmarks() override;
+  base::Value::List GetBookmarks() override;
   absl::optional<PDFEngine::NamedDestination> GetNamedDestination(
       const std::string& destination) override;
   int GetMostVisiblePage() override;
@@ -227,7 +228,7 @@ class PDFiumEngine : public PDFEngine,
     // compensate for any rounding errors.
     void Invalidate(const gfx::Rect& selection);
 
-    PDFiumEngine* const engine_;
+    const raw_ptr<PDFiumEngine> engine_;
     // The origin at the time this object was constructed.
     const gfx::Point previous_origin_;
     // Screen rectangles that were selected on construction.
@@ -293,7 +294,7 @@ class PDFiumEngine : public PDFEngine,
   // This should only be called after `doc_` has been loaded and the document is
   // fully downloaded.
   // If this has been run once, it will not notify the client again.
-  void FinishLoadingDocument(int32_t /*unused_but_required*/);
+  void FinishLoadingDocument();
 
   // Loads information about the pages in the document and performs layout.
   void LoadPageInfo();
@@ -390,7 +391,7 @@ class PDFiumEngine : public PDFEngine,
   void UpdateTickMarks();
 
   // Called to continue searching so we don't block the main thread.
-  void ContinueFind(int32_t result);
+  void ContinueFind(bool case_sensitive);
 
   // Inserts a find result into `find_results_`, which is sorted.
   void AddFindResult(const PDFiumRange& result);
@@ -490,6 +491,7 @@ class PDFiumEngine : public PDFEngine,
 
   // Creates a FPDF_BITMAP from a rectangle in screen coordinates.
   ScopedFPDFBitmap CreateBitmap(const gfx::Rect& rect,
+                                bool has_alpha,
                                 SkBitmap& image_data) const;
 
   // Given a rectangle in screen coordinates, returns the coordinates in the
@@ -555,9 +557,8 @@ class PDFiumEngine : public PDFEngine,
   // within form text fields.
   void SetSelecting(bool selecting);
 
-  // Sets whether or not focus is in form text field or form combobox text
-  // field.
-  void SetInFormTextArea(bool in_form_text_area);
+  // Sets the type of field that has focus.
+  void SetFieldFocus(PDFEngine::FocusFieldType type);
 
   // Sets whether or not left mouse button is currently being held down.
   void SetMouseLeftButtonDown(bool is_mouse_left_button_down);
@@ -574,11 +575,12 @@ class PDFiumEngine : public PDFEngine,
   void KillTouchTimer();
   void HandleLongPress(const blink::WebTouchEvent& event);
 
-  // Returns a base::Value (representing a bookmark), which in turn contains
-  // child base::Value dictionaries (representing the child bookmarks).
-  // If nullptr is passed in as the bookmark then we traverse from the "root".
-  // Note that the "root" bookmark contains no useful information.
-  base::Value TraverseBookmarks(FPDF_BOOKMARK bookmark, unsigned int depth);
+  // Returns a dictionary representing a bookmark, which in turn contains child
+  // dictionaries representing the child bookmarks. If `bookmark` is null, then
+  // this method traverses from the root of the bookmarks tree. Note that the
+  // root bookmark contains no useful information.
+  base::Value::Dict TraverseBookmarks(FPDF_BOOKMARK bookmark,
+                                      unsigned int depth);
 
   void ScrollBasedOnScrollAlignment(
       const gfx::Rect& scroll_rect,
@@ -639,9 +641,9 @@ class PDFiumEngine : public PDFEngine,
   bool HandleTabForward(int modifiers);
   bool HandleTabBackward(int modifiers);
 
-  // Updates the currently focused object stored in `focus_item_type_`. Notifies
-  // `client_` about document focus change, if any.
-  void UpdateFocusItemType(FocusElementType focus_item_type);
+  // Updates the currently focused object stored in `focus_element_type_`.
+  // Notifies `client_` about document focus change, if any.
+  void UpdateFocusElementType(FocusElementType focus_element_type);
 
   void UpdateLinkUnderCursor(const std::string& target_url);
   void SetLinkUnderCursorForAnnotation(FPDF_ANNOTATION annot, int page_index);
@@ -650,11 +652,7 @@ class PDFiumEngine : public PDFEngine,
   // requests the thumbnail for that page.
   void MaybeRequestPendingThumbnail(int page_index);
 
-  // Keeps track of the most recently used plugin instance.
-  // TODO(crbug.com/702993): Remove when PPAPI is gone.
-  void SetLastInstance();
-
-  PDFEngine::Client* const client_;
+  const raw_ptr<PDFEngine::Client> client_;
 
   // The current document layout.
   DocumentLayout layout_;
@@ -715,13 +713,6 @@ class PDFiumEngine : public PDFEngine,
   // Text selection within form text fields and form combobox text fields.
   std::string selected_form_text_;
 
-  // True if focus is in form text field or form combobox text field.
-  bool in_form_text_area_ = false;
-
-  // True if the form text area currently in focus is not read only, and is a
-  // form text field or user-editable form combobox text field.
-  bool editable_form_text_area_ = false;
-
   // True if left mouse button is currently being held down.
   bool mouse_left_button_down_ = false;
 
@@ -760,11 +751,18 @@ class PDFiumEngine : public PDFEngine,
   // Set to true when updating plugin focus.
   bool updating_focus_ = false;
 
-  // The focus item type for the currently focused object.
-  FocusElementType focus_item_type_ = FocusElementType::kNone;
+  // True if `focus_field_type_` is currently set to `FocusFieldType::kText` and
+  // the focused form text area is not read-only.
+  bool editable_form_text_area_ = false;
 
-  // Stores the last focused object's focus item type before PDF loses focus.
-  FocusElementType last_focused_item_type_ = FocusElementType::kNone;
+  // The type of the currently focused form field.
+  FocusFieldType focus_field_type_ = FocusFieldType::kNoFocus;
+
+  // The focus element type for the currently focused object.
+  FocusElementType focus_element_type_ = FocusElementType::kNone;
+
+  // Stores the last focused object's focus element type before PDF loses focus.
+  FocusElementType last_focused_element_type_ = FocusElementType::kNone;
 
   // Stores the last focused annotation's index before PDF loses focus.
   int last_focused_annot_index_ = -1;

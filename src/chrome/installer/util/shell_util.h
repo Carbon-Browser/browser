@@ -14,6 +14,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <array>
 #include <map>
 #include <memory>
 #include <set>
@@ -23,6 +24,7 @@
 
 #include "base/check.h"
 #include "base/containers/flat_map.h"
+#include "base/containers/span.h"
 #include "base/files/file_path.h"
 #include "base/memory/ref_counted.h"
 #include "chrome/installer/util/work_item_list.h"
@@ -33,6 +35,12 @@ class RegistryEntry;
 namespace base {
 class AtomicFlag;
 class CommandLine;
+
+namespace win {
+enum class ShortcutOperation;
+struct ShortcutProperties;
+
+}  // namespace win
 }  // namespace base
 
 // This is a utility class that provides common shell integration methods
@@ -75,7 +83,8 @@ class ShellUtil {
     SHORTCUT_LOCATION_TASKBAR_PINS,   // base::win::Version::WIN7 +
     SHORTCUT_LOCATION_APP_SHORTCUTS,  // base::win::Version::WIN8 +
     SHORTCUT_LOCATION_STARTUP,
-    NUM_SHORTCUT_LOCATIONS
+    // Update this if a new ShortcutLocation is added.
+    SHORTCUT_LOCATION_LAST = SHORTCUT_LOCATION_STARTUP,
   };
 
   enum ShortcutOperation {
@@ -215,15 +224,6 @@ class ShellUtil {
     // and possibly replaced by default values on create (see individual
     // property setters above for details on default values).
     uint32_t options;
-  };
-
-  struct FileAssociationsAndAppName {
-    FileAssociationsAndAppName();
-    FileAssociationsAndAppName(FileAssociationsAndAppName&& other);
-    ~FileAssociationsAndAppName();
-
-    std::set<std::wstring> file_associations;
-    std::wstring app_name;
   };
 
   // Details about a Windows application, to be entered into the registry for
@@ -391,6 +391,22 @@ class ShellUtil {
   static bool MoveExistingShortcut(ShortcutLocation old_location,
                                    ShortcutLocation new_location,
                                    const ShortcutProperties& properties);
+
+  // This converts ShellUtil's `location`, `properties`, and `operation` into
+  // their base::win equivalents so callers can get the behavior of
+  // CreateOrUpdateShortcut, but handle the actual shortcut creation themselves,
+  // e.g., update the shortcut out-of-process. If `should_install_shortcut` is
+  // set to false, caller should not create or update the shortcut, but may try
+  // to pin an existing shortcut, as long as the function returns true.
+  // This functions returns false in unexpected error conditions.
+  static bool TranslateShortcutCreationOrUpdateInfo(
+      ShortcutLocation location,
+      const ShortcutProperties& properties,
+      ShortcutOperation operation,
+      base::win::ShortcutOperation& base_operation,
+      base::win::ShortcutProperties& base_properties,
+      bool& should_install_shortcut,
+      base::FilePath& shortcut_path);
 
   // Updates shortcut in |location| (or creates it if |options| specify
   // SHELL_SHORTCUT_CREATE_ALWAYS).
@@ -709,6 +725,21 @@ class ShellUtil {
   // should call GetCurrentInstallationSuffix().
   static bool GetUserSpecificRegistrySuffix(std::wstring* suffix);
 
+  // Stores the given list of `file_handler_prog_ids` registered for an app as a
+  // subkey under the app's `prog_id`. This is used to remove the registry
+  // entries for the file handler ProgIds when the app is uninstalled.
+  // `prog_id` - Windows ProgId for the app.
+  // `file_handler_prog_ids` - ProgIds of the file handlers registered for the
+  // app.
+  static bool RegisterFileHandlerProgIdsForAppId(
+      const std::wstring& prog_id,
+      const std::vector<std::wstring>& file_handler_prog_ids);
+
+  // Returns the list of file-handler ProgIds registered for the app with
+  // ProgId `prog_id`.
+  static std::vector<std::wstring> GetFileHandlerProgIdsForAppId(
+      const std::wstring& prog_id);
+
   // Sets |suffix| to this user's username preceded by a dot. This suffix should
   // only be used to support legacy installs that used this suffixing
   // style.
@@ -718,10 +749,8 @@ class ShellUtil {
   static bool GetOldUserSpecificRegistrySuffix(std::wstring* suffix);
 
   // Associates a set of file extensions with a particular application in the
-  // Windows registry, for the current user only. If an extension has no
-  // existing default association, the given application becomes the default.
-  // Otherwise, the application is added to the Open With menu for this type,
-  // but does not become the default.
+  // Windows registry, for the current user only. The application is added to
+  // the Open With menu for these types, but does not become the default.
   //
   // |prog_id| is the ProgId used by Windows for file associations with this
   // application. Must not be empty or start with a '.'.
@@ -734,8 +763,6 @@ class ShellUtil {
   // associated with this application by default.
   // |application_icon_path| is the path of the icon displayed for this
   // application in the Open With menu.
-  // |file_type_icon_path| is the path of the icon used for files of these
-  // types when associated with this application by default.
   // |file_extensions| is the set of extensions to associate. They must not be
   // empty or start with a '.'.
   // Returns true on success, false on failure.
@@ -745,12 +772,11 @@ class ShellUtil {
       const std::wstring& application_name,
       const std::wstring& file_type_name,
       const base::FilePath& application_icon_path,
-      const base::FilePath& file_type_icon_path,
       const std::set<std::wstring>& file_extensions);
 
   // Deletes all associations with a particular application in the Windows
   // registry, for the current user only.
-  // |prog_id| is the ProgId used by Windows for file associations with this
+  // `prog_id` is the ProgId used by Windows for file associations with this
   // application, as given to AddFileAssociations. All information associated
   // with this name will be deleted.
   static bool DeleteFileAssociations(const std::wstring& prog_id);
@@ -780,18 +806,17 @@ class ShellUtil {
   // Removes all entries of an application at HKCU\SOFTWARE\classes\<prog_id>.
   static bool DeleteApplicationClass(const std::wstring& prog_id);
 
-  // Returns application details for HKCU\SOFTWARE\classes\|prog_id|. The
+  // Returns application details for HKCU\SOFTWARE\classes\`prog_id`. The
   // returned instance's members will be empty if not found.
   static ApplicationInfo GetApplicationInfoForProgId(
       const std::wstring& prog_id);
 
-  // Returns the app name and file associations registered for a particular
-  // application in the Windows registry. If there is no entry in the registry
-  // for |prog_id|, nothing will be returned.
-  static FileAssociationsAndAppName GetFileAssociationsAndAppName(
-      const std::wstring& prog_id);
+  // Returns the app name registered for a particular application in the Windows
+  // registry. If there is no entry in the registry for `prog_id`, nothing will
+  // be returned.
+  static std::wstring GetAppName(const std::wstring& prog_id);
 
-  // For each protocol in |protocols|, the web app represented by |prog_id| is
+  // For each protocol in `protocols`, the web app represented by `prog_id` is
   // designated as the non-default handler for the corresponding protocol. For
   // protocols uncontested by other handlers on the OS, the app will be
   // promoted to default handler.
@@ -809,9 +834,6 @@ class ShellUtil {
   // prior to Win8, where write access to HKLM is required.
   static bool RemoveAppProtocolAssociations(const std::wstring& prog_id);
 
-  // Returns the browser's ProgId for the current install.
-  static std::wstring GetProgIdForBrowser(const base::FilePath& chrome_exe);
-
   // Retrieves the file path of the application registered as the
   // shell->open->command for |prog_id|. This only queries the user's
   // registered applications in HKCU. If |prog_id| is for an app that is
@@ -828,6 +850,19 @@ class ShellUtil {
       HKEY root,
       const std::vector<std::unique_ptr<RegistryEntry>>& entries,
       bool best_effort_no_rollback = false);
+
+  static std::array<uint32_t, 4> ComputeHashForTesting(
+      base::span<const uint8_t> input);
+
+  static std::wstring ComputeUserChoiceHashForTesting(
+      const std::wstring& extension,
+      const std::wstring& sid,
+      const std::wstring& prog_id,
+      const std::wstring& datetime);
+
+  // Use IPinnedList3 to pin shortcut to taskbar on WIN10_RS5 and above.
+  // Returns true if pinning was successful.
+  static bool PinShortcut(const base::FilePath& shortcut);
 };
 
 #endif  // CHROME_INSTALLER_UTIL_SHELL_UTIL_H_

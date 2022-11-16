@@ -11,7 +11,11 @@ export const constants = {};
 /**
  * @const {!Array<string>}
  */
-constants.ACTIONS_MODEL_METADATA_PREFETCH_PROPERTY_NAMES = ['hosted', 'pinned'];
+constants.ACTIONS_MODEL_METADATA_PREFETCH_PROPERTY_NAMES = [
+  'canPin',
+  'hosted',
+  'pinned',
+];
 
 /**
  * The list of executable file extensions.
@@ -37,6 +41,7 @@ constants.FILE_SELECTION_METADATA_PREFETCH_PROPERTY_NAMES = [
   'availableOffline',
   'contentMimeType',
   'hosted',
+  'canPin',
 ];
 
 /**
@@ -62,9 +67,21 @@ constants.LIST_CONTAINER_METADATA_PREFETCH_PROPERTY_NAMES = [
   'canRename',
   'canAddChildren',
   'canShare',
+  'canPin',
   'isMachineRoot',
   'isExternalMedia',
   'isArbitrarySyncFolder',
+];
+
+/**
+ * Metadata properties used to inform the user about DLP (Data Leak Prevention)
+ * Files restrictions. These metadata is expected to be cached.
+ *
+ * @const {!Array<string>}
+ */
+constants.DLP_METADATA_PREFETCH_PROPERTY_NAMES = [
+  'isDlpRestricted',
+  'sourceUrl',
 ];
 
 /**

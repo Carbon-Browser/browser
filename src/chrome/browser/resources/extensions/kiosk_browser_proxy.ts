@@ -9,7 +9,7 @@
 
 import {sendWithPromise} from 'chrome://resources/js/cr.m.js';
 
-type KioskSettings = {
+export type KioskSettings = {
   kioskEnabled: boolean,
   autoLaunchEnabled: boolean,
 };
@@ -23,7 +23,7 @@ export type KioskApp = {
 };
 
 export type KioskAppSettings = {
-  apps: Array<KioskApp>,
+  apps: KioskApp[],
   disableBailout: boolean,
   hasAutoLaunchApp: boolean,
 };

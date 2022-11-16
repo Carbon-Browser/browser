@@ -13,7 +13,6 @@
 #include <set>
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "storage/common/file_system/file_system_types.h"
 #include "url/origin.h"
@@ -102,9 +101,10 @@ class FileSystemHelper : public base::RefCountedThreadSafe<FileSystemHelper> {
   // task runner.
   void FetchFileSystemInfoInFileThread(FetchCallback callback);
 
-  // Deletes all file systems associated with |origin|. This must be called on
-  // the file task runner.
-  void DeleteFileSystemOriginInFileThread(const url::Origin& origin);
+  // Deletes all file systems associated with `storage_key`. This must be called
+  // on the file task runner.
+  void DeleteFileSystemForStorageKeyInFileThread(
+      const blink::StorageKey& storage_key);
 
   // Called when FetchFileSystemInfoInFileThread completes and starts fetching
   // the NativeIOData.
@@ -145,6 +145,9 @@ class CannedFileSystemHelper : public FileSystemHelper {
       const std::vector<storage::FileSystemType>& additional_types,
       content::NativeIOContext* native_io_context);
 
+  CannedFileSystemHelper(const CannedFileSystemHelper&) = delete;
+  CannedFileSystemHelper& operator=(const CannedFileSystemHelper&) = delete;
+
   // Manually adds a filesystem to the set of canned file systems that this
   // helper returns via StartFetching.
   void Add(const url::Origin& origin);
@@ -170,8 +173,6 @@ class CannedFileSystemHelper : public FileSystemHelper {
 
   // Holds the current list of filesystems returned to the client.
   std::set<url::Origin> pending_origins_;
-
-  DISALLOW_COPY_AND_ASSIGN(CannedFileSystemHelper);
 };
 
 }  // namespace browsing_data

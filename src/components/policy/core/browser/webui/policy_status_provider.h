@@ -5,12 +5,20 @@
 #ifndef COMPONENTS_POLICY_CORE_BROWSER_WEBUI_POLICY_STATUS_PROVIDER_H_
 #define COMPONENTS_POLICY_CORE_BROWSER_WEBUI_POLICY_STATUS_PROVIDER_H_
 
+#include <memory>
+
 #include "base/callback_helpers.h"
+#include "base/time/clock.h"
+#include "base/time/time.h"
+#include "base/values.h"
 #include "components/policy/policy_export.h"
 
 namespace base {
-class DictionaryValue;
 class Time;
+}
+
+namespace enterprise_management {
+class PolicyData;
 }
 
 namespace policy {
@@ -31,18 +39,23 @@ class POLICY_EXPORT PolicyStatusProvider {
   // Sets a callback to invoke upon status changes.
   virtual void SetStatusChangeCallback(const base::RepeatingClosure& callback);
 
-  // Fills the passed dictionary with metadata about policies.
-  // The passed base::DictionaryValue should be empty.
-  virtual void GetStatus(base::DictionaryValue* dict);
+  // Returns a dictionary with metadata about policies.
+  virtual base::Value::Dict GetStatus();
 
-  static void GetStatusFromCore(const CloudPolicyCore* core,
-                                base::DictionaryValue* dict);
+  static base::Value::Dict GetStatusFromCore(const CloudPolicyCore* core);
+  static base::Value::Dict GetStatusFromPolicyData(
+      const enterprise_management::PolicyData* policy);
+
+  // Overrides clock in tests. Returned closure removes the override when
+  // destroyed.
+  static base::ScopedClosureRunner OverrideClockForTesting(
+      base::Clock* clock_for_testing);
 
  protected:
   void NotifyStatusChange();
   static std::u16string GetPolicyStatusFromStore(const CloudPolicyStore*,
                                                  const CloudPolicyClient*);
-  static std::u16string GetTimeSinceLastRefreshString(base::Time);
+  static std::u16string GetTimeSinceLastActionString(base::Time);
 
  private:
   base::RepeatingClosure callback_;

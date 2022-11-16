@@ -10,12 +10,20 @@
 #include "base/i18n/rtl.h"
 #include "cc/paint/paint_shader.h"
 #include "skia/ext/image_operations.h"
+#include "third_party/skia/include/core/SkBitmap.h"
+#include "third_party/skia/include/core/SkColor.h"
+#include "third_party/skia/include/core/SkPath.h"
+#include "third_party/skia/include/core/SkPathTypes.h"
+#include "third_party/skia/include/core/SkPoint.h"
+#include "third_party/skia/include/core/SkScalar.h"
+#include "third_party/skia/include/core/SkTileMode.h"
+#include "ui/color/color_id.h"
+#include "ui/color/color_provider.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/color_analysis.h"
 #include "ui/gfx/color_utils.h"
+#include "ui/gfx/geometry/skia_conversions.h"
 #include "ui/gfx/scoped_canvas.h"
-#include "ui/gfx/skia_util.h"
-#include "ui/native_theme/native_theme.h"
 #include "ui/views/style/typography.h"
 #include "ui/views/view.h"
 
@@ -152,7 +160,7 @@ absl::optional<SkColor> GetNotificationForegroundColor(
   const SkColor fallback_color = is_light ? SK_ColorBLACK : SK_ColorWHITE;
 
   gfx::Rect bitmap_area(source->width(), source->height());
-  bitmap_area.Inset(source->width() * 0.4, 0, 0, 0);
+  bitmap_area.Inset(gfx::Insets::TLBR(0, source->width() * 0.4, 0, 0));
 
   // If the background color is dark we want to look for colors that are darker
   // and vice versa.
@@ -292,8 +300,10 @@ void MediaNotificationBackgroundImpl::Paint(gfx::Canvas* canvas,
     // Draw a gradient to fade the color background and the image together.
     gfx::Rect draw_bounds = GetGradientBounds(*view);
 
-    const SkColor colors[2] = {
-        background_color, SkColorSetA(background_color, SK_AlphaTRANSPARENT)};
+    // TODO(crbug/1308932): Remove FromColor and make all SkColor4f.
+    const SkColor4f colors[2] = {SkColor4f::FromColor(background_color),
+                                 SkColor4f::FromColor(SkColorSetA(
+                                     background_color, SK_AlphaTRANSPARENT))};
     const SkPoint points[2] = {GetGradientStartPoint(draw_bounds),
                                GetGradientEndPoint(draw_bounds)};
 
@@ -311,8 +321,10 @@ void MediaNotificationBackgroundImpl::Paint(gfx::Canvas* canvas,
     // and the image together.
     gfx::Rect draw_bounds = GetBottomGradientBounds(*view);
 
-    const SkColor colors[2] = {
-        background_color, SkColorSetA(background_color, SK_AlphaTRANSPARENT)};
+    // TODO(crbug/1308932): Remove FromColor and make all SkColor4f.
+    const SkColor4f colors[2] = {SkColor4f::FromColor(background_color),
+                                 SkColor4f::FromColor(SkColorSetA(
+                                     background_color, SK_AlphaTRANSPARENT))};
     const SkPoint points[2] = {gfx::PointToSkPoint(draw_bounds.bottom_center()),
                                gfx::PointToSkPoint(draw_bounds.top_center())};
 
@@ -437,7 +449,8 @@ gfx::Rect MediaNotificationBackgroundImpl::GetFilledBackgroundBounds(
   // taken up by the artwork.
   const gfx::Rect& view_bounds = owner.GetContentsBounds();
   gfx::Rect bounds = gfx::Rect(view_bounds);
-  bounds.Inset(0, 0, GetArtworkVisibleWidth(view_bounds.size()), 0);
+  bounds.Inset(
+      gfx::Insets().set_right(GetArtworkVisibleWidth(view_bounds.size())));
   return owner.GetMirroredRect(bounds);
 }
 
@@ -481,8 +494,7 @@ SkPoint MediaNotificationBackgroundImpl::GetGradientEndPoint(
 
 SkColor MediaNotificationBackgroundImpl::GetDefaultBackgroundColor(
     const views::View& owner) const {
-  return owner.GetNativeTheme()->GetSystemColor(
-      ui::NativeTheme::kColorId_BubbleBackground);
+  return owner.GetColorProvider()->GetColor(ui::kColorBubbleBackground);
 }
 
 void MediaNotificationBackgroundImpl::UpdateColorsInternal() {

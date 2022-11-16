@@ -106,7 +106,7 @@ void FPSGraphPageView::OnPaint(gfx::Canvas* canvas) {
   // Layout graphs.
   gfx::Rect rect = GetContentsBounds();
   // Adjust bounds to not overlap with bordering reference lines.
-  rect.Inset(kHUDGraphReferenceLineWidth, kHUDGraphReferenceLineWidth);
+  rect.Inset(kHUDGraphReferenceLineWidth);
 
   frame_rate_500ms_.Layout(rect, /*base=*/nullptr);
   frame_rate_1s_.Layout(rect, /*base=*/nullptr);
@@ -173,8 +173,8 @@ void FPSGraphPageView::OnWindowRemovingFromRootWindow(aura::Window* window,
 }
 
 void FPSGraphPageView::UpdateStats(const gfx::PresentationFeedback& feedback) {
-  constexpr base::TimeDelta kOneSec = base::TimeDelta::FromSeconds(1);
-  constexpr base::TimeDelta k500ms = base::TimeDelta::FromMilliseconds(500);
+  constexpr base::TimeDelta kOneSec = base::Seconds(1);
+  constexpr base::TimeDelta k500ms = base::Milliseconds(500);
   if (!feedback.failed())
     presented_times_.push_back(feedback.timestamp);
 

@@ -11,12 +11,12 @@ namespace web {
 class WebState;
 }
 
-@class BubblePresenter;
 @class ContentSuggestionsHeaderViewController;
-@class DiscoverFeedMetricsRecorder;
-@protocol NewTabPageCommands;
+@class ContentSuggestionsViewController;
+@protocol FeedDelegate;
 @protocol NewTabPageControllerDelegate;
-@protocol NewTabPageFeedDelegate;
+@protocol NewTabPageDelegate;
+class NotificationPromoWhatsNew;
 @class NTPHomeMediator;
 @protocol ThumbStripSupporting;
 @class ViewRevealingVerticalPanHandler;
@@ -36,11 +36,16 @@ class WebState;
 @property(nonatomic, strong, readonly)
     ContentSuggestionsHeaderViewController* headerController;
 
+// The CollectionView that this coordinator manages.
 @property(nonatomic, strong, readonly)
-    UICollectionViewController* viewController;
+    UICollectionViewController* contentSuggestionsCollectionViewController;
 
-// The pan gesture handler for the view controller.
-@property(nonatomic, weak) ViewRevealingVerticalPanHandler* panGestureHandler;
+// The ViewController that this coordinator managers if
+// kContentSuggestionsUIViewControllerMigration is enabled.
+// TODO(crbug.com/1285378): remove `contentSuggestionsCollectionViewController`
+// once migration is finished.
+@property(nonatomic, strong, readonly)
+    ContentSuggestionsViewController* viewController;
 
 // Allows for the in-flight enabling/disabling of the thumb strip.
 @property(nonatomic, weak, readonly) id<ThumbStripSupporting>
@@ -52,24 +57,11 @@ class WebState;
 // mediator for non NTP logic.
 @property(nonatomic, strong) NTPHomeMediator* ntpMediator;
 
-// Command handler for NTP related commands.
-@property(nonatomic, weak) id<NewTabPageCommands> ntpCommandHandler;
+// Delegate for NTP related actions.
+@property(nonatomic, weak) id<NewTabPageDelegate> ntpDelegate;
 
-// Delegate for providing information relating to the feed.
-@property(nonatomic, weak) id<NewTabPageFeedDelegate> ntpFeedDelegate;
-
-// Bubble presenter for displaying IPH bubbles relating to the NTP.
-@property(nonatomic, strong) BubblePresenter* bubblePresenter;
-
-// Metrics recorder for the Discover feed events related to ContentSuggestions.
-@property(nonatomic, strong)
-    DiscoverFeedMetricsRecorder* discoverFeedMetricsRecorder;
-
-// Dismisses all modals owned by the NTP mediator.
-- (void)dismissModals;
-
-// Called when a snapshot of the content will be taken.
-- (void)willUpdateSnapshot;
+// Delegate used to communicate to communicate events to the feed.
+@property(nonatomic, weak) id<FeedDelegate> feedDelegate;
 
 // Stop any scrolling in the scroll view.
 - (void)stopScrolling;
@@ -77,9 +69,6 @@ class WebState;
 // The content inset and offset of the scroll view.
 - (UIEdgeInsets)contentInset;
 - (CGPoint)contentOffset;
-
-// The current NTP view.
-- (UIView*)view;
 
 // Reloads the suggestions.
 - (void)reload;
@@ -90,11 +79,11 @@ class WebState;
 // Tell location bar has taken focus.
 - (void)locationBarDidBecomeFirstResponder;
 
-// Constrains the named layout guide for the Discover header menu button.
-- (void)constrainDiscoverHeaderMenuButtonNamedGuide;
-
 // Configure Content Suggestions if showing the Start Surface.
 - (void)configureStartSurfaceIfNeeded;
+
+// The notification promo.
+- (NotificationPromoWhatsNew*)notificationPromo;
 @end
 
 #endif  // IOS_CHROME_BROWSER_UI_CONTENT_SUGGESTIONS_CONTENT_SUGGESTIONS_COORDINATOR_H_

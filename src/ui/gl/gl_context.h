@@ -11,7 +11,7 @@
 
 #include "base/atomicops.h"
 #include "base/cancelable_callback.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/synchronization/atomic_flag.h"
@@ -29,6 +29,7 @@ class ColorSpace;
 }  // namespace gfx
 
 namespace gl {
+class GLDisplayEGL;
 class YUVToRGBConverter;
 }  // namespace gl
 
@@ -69,6 +70,13 @@ enum ContextPriority {
   ContextPriorityHigh
 };
 
+// Angle allows selecting context virtualization group at context creation time.
+// This enum is used to specify the group number to use for a given context.
+// Currently all contexts which does not specify any group number are part of
+// default angle context virtualization group. DrDc will use below enum to
+// become part of different virtualization group.
+enum class AngleContextVirtualizationGroup { kDefault = -1, kDrDc = 1 };
+
 struct GL_EXPORT GLContextAttribs {
   GLContextAttribs();
   GLContextAttribs(const GLContextAttribs& other);
@@ -105,6 +113,9 @@ struct GL_EXPORT GLContextAttribs {
   // state when MakeCurrent was previously called.
   bool angle_restore_external_context_state = false;
 
+  AngleContextVirtualizationGroup angle_context_virtualization_group_number =
+      AngleContextVirtualizationGroup::kDefault;
+
   ContextPriority context_priority = ContextPriorityMedium;
 };
 
@@ -114,18 +125,15 @@ class GL_EXPORT GLContext : public base::RefCounted<GLContext>,
  public:
   explicit GLContext(GLShareGroup* share_group);
 
+  GLContext(const GLContext&) = delete;
+  GLContext& operator=(const GLContext&) = delete;
+
   static int32_t TotalGLContexts();
 
   static bool SwitchableGPUsSupported();
   // This should be called at most once at GPU process startup time.
   // By default, GPU switching is not supported unless this is called.
   static void SetSwitchableGPUsSupported();
-
-  // This should be called at most once at GPU process startup time.
-  static void SetForcedGpuPreference(GpuPreference gpu_preference);
-  // If a gpu preference is forced (by GPU driver bug workaround, etc), return
-  // it. Otherwise, return the original input preference.
-  static GpuPreference AdjustGpuPreference(GpuPreference gpu_preference);
 
   // Initializes the GL context to be compatible with the given surface. The GL
   // context can be made with other surface's of the same type. The compatible
@@ -240,7 +248,13 @@ class GL_EXPORT GLContext : public base::RefCounted<GLContext>,
   // context is made current.
   void DirtyVirtualContextState();
 
-#if defined(OS_APPLE)
+#if defined(USE_EGL)
+  // Returns GLDisplayEGL this context belongs to if this context is a
+  // GLContextEGL; returns nullptr otherwise.
+  virtual GLDisplayEGL* GetGLDisplayEGL();
+#endif  // USE_EGL
+
+#if BUILDFLAG(IS_APPLE)
   // Create a fence for all work submitted to this context so far, and return a
   // monotonically increasing handle to it. This returned handle never needs to
   // be freed. This method is used to create backpressure to throttle GL work
@@ -290,7 +304,7 @@ class GL_EXPORT GLContext : public base::RefCounted<GLContext>,
 
   GLApi* gl_api() { return gl_api_wrapper_->api(); }
 
-#if defined(OS_APPLE)
+#if BUILDFLAG(IS_APPLE)
   // Child classes are responsible for calling DestroyBackpressureFences during
   // their destruction while a context is current.
   bool HasBackpressureFences() const;
@@ -309,8 +323,6 @@ class GL_EXPORT GLContext : public base::RefCounted<GLContext>,
 
   static bool switchable_gpus_supported_;
 
-  static GpuPreference forced_gpu_preference_;
-
   GLWorkarounds gl_workarounds_;
   std::string disabled_gl_extensions_;
 
@@ -322,10 +334,10 @@ class GL_EXPORT GLContext : public base::RefCounted<GLContext>,
   std::unique_ptr<CurrentGL> current_gl_;
 
   // Copy of the real API (if one was created) for dynamic initialization
-  RealGLApi* real_gl_api_ = nullptr;
+  raw_ptr<RealGLApi> real_gl_api_ = nullptr;
 
   scoped_refptr<GLShareGroup> share_group_;
-  GLContext* current_virtual_context_ = nullptr;
+  raw_ptr<GLContext> current_virtual_context_ = nullptr;
   bool state_dirtied_externally_ = false;
   std::unique_ptr<GLStateRestorer> state_restorer_;
   std::unique_ptr<GLVersionInfo> version_info_;
@@ -333,17 +345,19 @@ class GL_EXPORT GLContext : public base::RefCounted<GLContext>,
   // where this underlying context becomes lost.  https://crbug.com/1061442
   bool context_lost_ = false;
 
-#if defined(OS_APPLE)
+#if BUILDFLAG(IS_APPLE)
   std::map<uint64_t, std::unique_ptr<GLFence>> backpressure_fences_;
   uint64_t next_backpressure_fence_ = 0;
 #endif
-
-  DISALLOW_COPY_AND_ASSIGN(GLContext);
 };
 
 class GL_EXPORT GLContextReal : public GLContext {
  public:
   explicit GLContextReal(GLShareGroup* share_group);
+
+  GLContextReal(const GLContextReal&) = delete;
+  GLContextReal& operator=(const GLContextReal&) = delete;
+
   scoped_refptr<GPUTimingClient> CreateGPUTimingClient() override;
   const gfx::ExtensionSet& GetExtensions() override;
 
@@ -361,7 +375,6 @@ class GL_EXPORT GLContextReal : public GLContext {
   std::string extensions_string_;
   gfx::ExtensionSet extensions_;
   bool extensions_initialized_ = false;
-  DISALLOW_COPY_AND_ASSIGN(GLContextReal);
 };
 
 // Wraps GLContext in scoped_refptr and tries to initializes it. Returns a

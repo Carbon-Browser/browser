@@ -53,11 +53,9 @@ void CSSPaintImageGeneratorImpl::NotifyGeneratorReady() {
 
 scoped_refptr<Image> CSSPaintImageGeneratorImpl::Paint(
     const ImageResourceObserver& observer,
-    const FloatSize& container_size,
-    const CSSStyleValueVector* data,
-    float device_scale_factor) {
-  return paint_worklet_->Paint(name_, observer, container_size, data,
-                               device_scale_factor);
+    const gfx::SizeF& container_size,
+    const CSSStyleValueVector* data) {
+  return paint_worklet_->Paint(name_, observer, container_size, data);
 }
 
 bool CSSPaintImageGeneratorImpl::HasDocumentDefinition() const {

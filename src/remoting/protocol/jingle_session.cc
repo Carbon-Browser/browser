@@ -13,8 +13,8 @@
 #include "base/bind.h"
 #include "base/callback.h"
 #include "base/logging.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/string_split.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "remoting/base/constants.h"
@@ -26,8 +26,8 @@
 #include "remoting/protocol/session_plugin.h"
 #include "remoting/protocol/transport.h"
 #include "remoting/signaling/iq_sender.h"
+#include "remoting/signaling/xmpp_constants.h"
 #include "third_party/libjingle_xmpp/xmllite/xmlelement.h"
-#include "third_party/libjingle_xmpp/xmpp/constants.h"
 #include "third_party/webrtc/api/candidate.h"
 
 using jingle_xmpp::XmlElement;
@@ -75,8 +75,10 @@ ErrorCode AuthRejectionReasonToErrorCode(
       return SESSION_REJECTED;
     case Authenticator::REJECTED_BY_USER:
       return SESSION_REJECTED;
-    case Authenticator::AUTHORIZATION_POLICY_CHECK_FAILED:
+    case Authenticator::AUTHZ_POLICY_CHECK_FAILED:
       return AUTHZ_POLICY_CHECK_FAILED;
+    case Authenticator::LOCATION_AUTHZ_POLICY_CHECK_FAILED:
+      return LOCATION_AUTHZ_POLICY_CHECK_FAILED;
   }
   NOTREACHED();
   return UNKNOWN_ERROR;
@@ -115,6 +117,10 @@ int GetSequentialId(const std::string& id) {
 class JingleSession::OrderedMessageQueue {
  public:
   OrderedMessageQueue() = default;
+
+  OrderedMessageQueue(const OrderedMessageQueue&) = delete;
+  OrderedMessageQueue& operator=(const OrderedMessageQueue&) = delete;
+
   ~OrderedMessageQueue() = default;
 
   // Returns the list of messages ordered by their sequential IDs.
@@ -131,8 +137,6 @@ class JingleSession::OrderedMessageQueue {
   std::map<int, PendingMessage> queue_;
 
   int next_incoming_ = kAny;
-
-  DISALLOW_COPY_AND_ASSIGN(OrderedMessageQueue);
 };
 
 std::vector<JingleSession::PendingMessage>
@@ -347,13 +351,13 @@ void JingleSession::SendTransportInfo(
   AddPluginAttachments(message.get());
 
   std::unique_ptr<jingle_xmpp::XmlElement> stanza = message->ToXml();
-  stanza->AddAttr(jingle_xmpp::QN_ID, GetNextOutgoingId());
+  stanza->AddAttr(kQNameId, GetNextOutgoingId());
 
   auto request = session_manager_->iq_sender()->SendIq(
       std::move(stanza), base::BindOnce(&JingleSession::OnTransportInfoResponse,
                                         base::Unretained(this)));
   if (request) {
-    request->SetTimeout(base::TimeDelta::FromSeconds(kTransportInfoTimeout));
+    request->SetTimeout(base::Seconds(kTransportInfoTimeout));
     transport_info_requests_.push_back(std::move(request));
   } else {
     LOG(ERROR) << "Failed to send a transport-info message";
@@ -427,7 +431,7 @@ void JingleSession::SendMessage(std::unique_ptr<JingleMessage> message) {
     AddPluginAttachments(message.get());
   }
   std::unique_ptr<jingle_xmpp::XmlElement> stanza = message->ToXml();
-  stanza->AddAttr(jingle_xmpp::QN_ID, GetNextOutgoingId());
+  stanza->AddAttr(kQNameId, GetNextOutgoingId());
 
   auto request = session_manager_->iq_sender()->SendIq(
       std::move(stanza),
@@ -440,7 +444,7 @@ void JingleSession::SendMessage(std::unique_ptr<JingleMessage> message) {
     timeout = kSessionInitiateAndAcceptTimeout;
   }
   if (request) {
-    request->SetTimeout(base::TimeDelta::FromSeconds(timeout));
+    request->SetTimeout(base::Seconds(timeout));
     pending_requests_.push_back(std::move(request));
   } else {
     LOG(ERROR) << "Failed to send a "

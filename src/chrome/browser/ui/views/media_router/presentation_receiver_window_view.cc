@@ -6,8 +6,8 @@
 
 #include "base/bind.h"
 #include "base/check.h"
-#include "base/macros.h"
 #include "base/notreached.h"
+#include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/browser_process.h"
@@ -44,7 +44,7 @@
 #include "ui/views/layout/box_layout.h"
 #include "ui/views/widget/widget.h"
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 #include "chrome/browser/global_keyboard_shortcuts_mac.h"
 #endif
 
@@ -71,6 +71,9 @@ class FullscreenWindowObserver : public aura::WindowObserver {
       : on_fullscreen_change_(on_fullscreen_change) {
     window_observation_.Observe(observed_window);
   }
+
+  FullscreenWindowObserver(const FullscreenWindowObserver&) = delete;
+  FullscreenWindowObserver& operator=(const FullscreenWindowObserver&) = delete;
 
   ~FullscreenWindowObserver() override = default;
 
@@ -99,8 +102,6 @@ class FullscreenWindowObserver : public aura::WindowObserver {
 
   base::ScopedObservation<aura::Window, aura::WindowObserver>
       window_observation_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(FullscreenWindowObserver);
 };
 
 #endif
@@ -123,7 +124,7 @@ PresentationReceiverWindowView::PresentationReceiverWindowView(
   SetOwnedByWidget(false);
   RegisterDeleteDelegateCallback(base::BindOnce(
       [](PresentationReceiverWindowView* dialog) {
-        auto* const delegate = dialog->delegate_;
+        auto* const delegate = dialog->delegate_.get();
         delete dialog;
         delegate->WindowClosed();
       },
@@ -136,7 +137,7 @@ PresentationReceiverWindowView::PresentationReceiverWindowView(
 PresentationReceiverWindowView::~PresentationReceiverWindowView() = default;
 
 void PresentationReceiverWindowView::Init() {
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   // On macOS, the mapping between accelerators and commands is dynamic and user
   // configurable. We fetch and use the default mapping.
   bool result = GetDefaultMacAcceleratorForCommandId(IDC_FULLSCREEN,
@@ -172,8 +173,10 @@ void PresentationReceiverWindowView::Init() {
   autofill::ContentAutofillDriverFactory::CreateForWebContentsAndDelegate(
       web_contents,
       autofill::ChromeAutofillClient::FromWebContents(web_contents),
-      g_browser_process->GetApplicationLocale(),
-      autofill::BrowserAutofillManager::ENABLE_AUTOFILL_DOWNLOAD_MANAGER);
+      base::BindRepeating(
+          &autofill::BrowserDriverInitHook,
+          autofill::ChromeAutofillClient::FromWebContents(web_contents),
+          g_browser_process->GetApplicationLocale()));
   ChromePasswordManagerClient::CreateForWebContentsWithAutofillClient(
       web_contents,
       autofill::ChromeAutofillClient::FromWebContents(web_contents));
@@ -202,7 +205,7 @@ void PresentationReceiverWindowView::Init() {
   box_owner->set_cross_axis_alignment(
       views::BoxLayout::CrossAxisAlignment::kStretch);
   auto* box = SetLayoutManager(std::move(box_owner));
-  AddChildView(location_bar_view_);
+  AddChildView(location_bar_view_.get());
   box->SetFlexForView(location_bar_view_, 0);
   AddChildView(web_view);
   box->SetFlexForView(web_view, 1);
@@ -349,6 +352,10 @@ void PresentationReceiverWindowView::UpdateExclusiveAccessExitBubbleContent(
 
   exclusive_access_bubble_ = std::make_unique<ExclusiveAccessBubbleViews>(
       this, url, bubble_type, std::move(bubble_first_hide_callback));
+}
+
+bool PresentationReceiverWindowView::IsExclusiveAccessBubbleDisplayed() const {
+  return exclusive_access_bubble_ && exclusive_access_bubble_->IsShowing();
 }
 
 void PresentationReceiverWindowView::OnExclusiveAccessUserInput() {}

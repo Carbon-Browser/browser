@@ -5,6 +5,9 @@
 #ifndef CONTENT_BROWSER_CLIENT_HINTS_CRITICAL_CLIENT_HINTS_THROTTLE_H_
 #define CONTENT_BROWSER_CLIENT_HINTS_CRITICAL_CLIENT_HINTS_THROTTLE_H_
 
+#include "base/containers/flat_set.h"
+#include "base/memory/raw_ptr.h"
+#include "net/http/http_request_headers.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
 #include "third_party/blink/public/common/loader/url_loader_throttle.h"
 
@@ -19,14 +22,6 @@ enum class CriticalCHRestart {
   kMaxValue = kNavigationRestarted,
 };
 
-// These values are persisted to logs. Entries should not be renumbered and
-// numeric values should never be reused.
-enum class AcceptCHFrameRestart {
-  kFramePresent = 0,
-  kNavigationRestarted = 1,
-  kMaxValue = kNavigationRestarted,
-};
-
 }  // namespace
 
 namespace content {
@@ -38,43 +33,44 @@ class CriticalClientHintsThrottle : public blink::URLLoaderThrottle {
  public:
   CriticalClientHintsThrottle(
       BrowserContext* context,
-
       ClientHintsControllerDelegate* client_hint_delegate,
       int frame_tree_node_id);
-  ~CriticalClientHintsThrottle() override = default;
+  ~CriticalClientHintsThrottle() override;
 
   // blink::URLLoaderThrottle
+  void WillStartRequest(network::ResourceRequest* request,
+                        bool* defer) override;
   void BeforeWillProcessResponse(
       const GURL& response_url,
       const network::mojom::URLResponseHead& response_head,
       bool* defer) override;
-  void HandleAcceptCHFrameReceived(
-      const GURL& url,
-      const std::vector<network::mojom::WebClientHintsType>& accept_ch_frame)
-      override;
+  void BeforeWillRedirectRequest(
+      net::RedirectInfo* redirect_info,
+      const network::mojom::URLResponseHead& response_head,
+      bool* defer,
+      std::vector<std::string>* to_be_removed_request_headers,
+      net::HttpRequestHeaders* modified_request_headers,
+      net::HttpRequestHeaders* modified_cors_exempt_request_headers) override;
 
  private:
-  // Returns true if the extra `hints` are both not stored in the client hints
-  // preferences and allowed to be sent to the given URL (from the given frame
-  // tree node and so on). If returning true, the new name and values are added
-  // to |modified_headers|.
-  bool ShouldRestartWithHints(
-      const GURL& url,
-      const std::vector<network::mojom::WebClientHintsType>& hints,
-      net::HttpRequestHeaders& modified_headers);
+  // Contains the logic for whether or not the navigation should restart, and
+  // persists the Accept-CH header if there is a restart.
+  void MaybeRestartWithHints(
+      const network::mojom::URLResponseHead& response_head);
 
-  BrowserContext* context_;
-  ClientHintsControllerDelegate* client_hint_delegate_;
+  raw_ptr<BrowserContext> context_;
+  raw_ptr<ClientHintsControllerDelegate> client_hint_delegate_;
   int frame_tree_node_id_;
 
-  // The ACCEPT_CH frame should only restart a navigation once. Once a redirect
-  // is triggered, the `accept_ch_frame_redirect_` flag for the feature is set
-  // to true. These ensure the navigation doesn't turn into an infinite loop
-  // (this object should stay alive until the navigation is committed).
-  bool accept_ch_frame_redirect_ = false;
+  // Ensure that there's only one restart per origin
+  base::flat_set<url::Origin> restarted_origins_;
 
-  // Additional headers to add after redirect.
-  net::HttpRequestHeaders additional_client_hints_;
+  // Url of the last request made.
+  GURL response_url_;
+
+  // Headers from the initial request. This should include headers added from an
+  // ACCEPT_CH frame that aren't in storage.
+  net::HttpRequestHeaders initial_request_headers_;
 };
 
 }  // namespace content

@@ -17,6 +17,8 @@ blink_modules_sources("canvas") {
     "canvas2d/canvas_formatted_text.h",
     "canvas2d/canvas_formatted_text_run.cc",
     "canvas2d/canvas_formatted_text_run.h",
+    "canvas2d/canvas_formatted_text_style.cc",
+    "canvas2d/canvas_formatted_text_style.h",
     "canvas2d/canvas_gradient.cc",
     "canvas2d/canvas_gradient.h",
     "canvas2d/canvas_image_source_util.cc",
@@ -33,8 +35,6 @@ blink_modules_sources("canvas") {
     "canvas2d/canvas_style.h",
     "canvas2d/clip_list.cc",
     "canvas2d/clip_list.h",
-    "canvas2d/hit_region.cc",
-    "canvas2d/hit_region.h",
     "canvas2d/identifiability_study_helper.cc",
     "canvas2d/identifiability_study_helper.h",
     "canvas2d/path_2d.cc",
@@ -53,6 +53,7 @@ blink_modules_sources("canvas") {
     "offscreencanvas/offscreen_canvas_module.h",
     "offscreencanvas2d/offscreen_canvas_rendering_context_2d.cc",
     "offscreencanvas2d/offscreen_canvas_rendering_context_2d.h",
+    "testing/canvas_test_utils.cc",
   ]
 
   deps = [ "//third_party/blink/renderer/modules/webcodecs" ]

@@ -8,9 +8,9 @@
 #include <string>
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
+#include "base/time/time.h"
 #include "base/unguessable_token.h"
 #include "content/browser/media/audio_stream_broker.h"
 #include "content/browser/renderer_host/media/audio_output_stream_observer_impl.h"
@@ -39,6 +39,9 @@ class CONTENT_EXPORT AudioOutputStreamBroker final : public AudioStreamBroker {
       DeleterCallback deleter,
       mojo::PendingRemote<media::mojom::AudioOutputStreamProviderClient>
           client);
+
+  AudioOutputStreamBroker(const AudioOutputStreamBroker&) = delete;
+  AudioOutputStreamBroker& operator=(const AudioOutputStreamBroker&) = delete;
 
   ~AudioOutputStreamBroker() final;
 
@@ -76,8 +79,6 @@ class CONTENT_EXPORT AudioOutputStreamBroker final : public AudioStreamBroker {
   DisconnectReason disconnect_reason_ = DisconnectReason::kDocumentDestroyed;
 
   base::WeakPtrFactory<AudioOutputStreamBroker> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(AudioOutputStreamBroker);
 };
 
 }  // namespace content

@@ -8,7 +8,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include <list>
 #include <memory>
 #include <string>
 
@@ -21,7 +20,7 @@
 #include "base/tracing/protos/chrome_track_event.pbzero.h"
 #include "build/build_config.h"
 #include "content/common/content_export.h"
-#include "ipc/ipc_channel_proxy.h"
+#include "ipc/ipc_listener.h"
 #include "ipc/ipc_sender.h"
 #include "media/media_buildflags.h"
 #include "media/mojo/mojom/video_decode_perf_history.mojom-forward.h"
@@ -33,7 +32,6 @@
 #include "services/network/public/mojom/network_context.mojom-forward.h"
 #include "services/network/public/mojom/restricted_cookie_manager.mojom-forward.h"
 #include "services/network/public/mojom/url_loader_factory.mojom-forward.h"
-#include "third_party/blink/public/mojom/appcache/appcache.mojom.h"
 #include "third_party/blink/public/mojom/background_sync/background_sync.mojom.h"
 #include "third_party/blink/public/mojom/buckets/bucket_manager_host.mojom-forward.h"
 #include "third_party/blink/public/mojom/cache_storage/cache_storage.mojom-forward.h"
@@ -51,9 +49,13 @@
 #include "third_party/perfetto/include/perfetto/tracing/traced_value_forward.h"
 #include "ui/gfx/native_widget_types.h"
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #include "content/public/browser/android/child_process_importance.h"
 #endif
+
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+#include "media/mojo/mojom/stable/stable_video_decoder.mojom-forward.h"
+#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 
 class GURL;
 
@@ -66,6 +68,10 @@ class Token;
 namespace blink {
 class StorageKey;
 }  // namespace blink
+
+namespace IPC {
+class ChannelProxy;
+}  // namespace IPC
 
 namespace network {
 struct CrossOriginEmbedderPolicy;
@@ -80,9 +86,11 @@ class BrowserContext;
 class BrowserMessageFilter;
 class IsolationContext;
 class ProcessLock;
+class RenderFrameHost;
 class RenderProcessHostObserver;
 class StoragePartition;
-#if defined(OS_ANDROID)
+struct GlobalRenderFrameHostId;
+#if BUILDFLAG(IS_ANDROID)
 enum class ChildProcessImportance;
 #endif
 
@@ -106,7 +114,7 @@ class CONTENT_EXPORT RenderProcessHost : public IPC::Sender,
     bool is_hidden;
     unsigned int frame_depth;
     bool intersects_viewport;
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
     ChildProcessImportance importance;
 #endif
   };
@@ -269,7 +277,14 @@ class CONTENT_EXPORT RenderProcessHost : public IPC::Sender,
   // plugins, etc.
   //
   // This will never return ChildProcessHost::kInvalidUniqueID.
-  virtual int GetID() = 0;
+  virtual int GetID() const = 0;
+
+  // Returns a SafeRef to `this`. It should only be used in non-owning cases,
+  // where the caller is not expected to outlive `this`.
+  // This method is public so that it can be called from within //content, and
+  // used by MockRenderProcessHost. It isn't meant to be called outside of
+  // //content.
+  virtual base::SafeRef<RenderProcessHost> GetSafeRef() const = 0;
 
   // Returns true iff the Init() was called and the process hasn't died yet.
   //
@@ -314,13 +329,18 @@ class CONTENT_EXPORT RenderProcessHost : public IPC::Sender,
   virtual bool HasPriorityOverride() = 0;
   virtual void ClearPriorityOverride() = 0;
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   // Return the highest importance of all widgets in this process.
   virtual ChildProcessImportance GetEffectiveImportance() = 0;
 
   // Dumps the stack of this render process without crashing it.
   virtual void DumpProcessStack() = 0;
 #endif
+
+  virtual void PauseSocketManagerForRenderFrameHost(
+      const GlobalRenderFrameHostId& render_frame_host_id) = 0;
+  virtual void ResumeSocketManagerForRenderFrameHost(
+      const GlobalRenderFrameHostId& render_frame_host_id) = 0;
 
   // Sets a flag indicating that the process can be abnormally terminated.
   virtual void SetSuddenTerminationAllowed(bool allowed) = 0;
@@ -387,7 +407,10 @@ class CONTENT_EXPORT RenderProcessHost : public IPC::Sender,
   // "Keep alive ref count" represents the number of the customers of this
   // render process who wish the renderer process to be alive. While the ref
   // count is positive, |this| object will keep the renderer process alive,
-  // unless DisableRefCounts() is called.
+  // unless DisableRefCounts() is called. |handle_id| is a unique identifier
+  // associated with each keep-alive request.
+  // TODO(wjmaclean): Remove |handle_id| once the causes behind
+  // https://crbug.com/1148542 are known.
   //
   // Here is the list of users:
   //  - Keepalive request (if the KeepAliveRendererForKeepaliveRequests
@@ -402,8 +425,36 @@ class CONTENT_EXPORT RenderProcessHost : public IPC::Sender,
   //  - Process reuse timer (experimental):
   //    Keeps the process alive for a set period of time in case it can be
   //    reused for the same site. See https://crbug.com/894253.
-  virtual void IncrementKeepAliveRefCount() = 0;
-  virtual void DecrementKeepAliveRefCount() = 0;
+  virtual void IncrementKeepAliveRefCount(uint64_t handle_id) = 0;
+  virtual void DecrementKeepAliveRefCount(uint64_t handle_id) = 0;
+  // Returns a list of durations for active KeepAlive requests.
+  // For debugging only. TODO(wjmaclean): Remove once the causes behind
+  // https://crbug.com/1148542 are known.
+  virtual std::string GetKeepAliveDurations() const = 0;
+
+  // Returns the number of active Shutdown-Delay requests.
+  // For debugging only. TODO(wjmaclean): Remove once the causes behind
+  // https://crbug.com/1148542 are known.
+  virtual size_t GetShutdownDelayRefCount() const = 0;
+  // Diagnostic code for https://crbug/1148542. This will be removed prior to
+  // resolving that issue. It counts all RenderFrameHosts that have not been
+  // destroyed, including speculative ones and pending deletion ones. This
+  // is included to allow MockRenderProcessHost to override them, and should not
+  // be called from outside of content/.
+  virtual int GetRenderFrameHostCount() const = 0;
+
+  // Calls |on_frame| for every RenderFrameHost whose frames live in this
+  // process. Note that speculative RenderFrameHosts will be skipped.
+  virtual void ForEachRenderFrameHost(
+      base::RepeatingCallback<void(RenderFrameHost*)> on_frame) = 0;
+
+  // Register/unregister a RenderFrameHost instance whose frame lives in this
+  // process. RegisterRenderFrameHost and UnregisterRenderFrameHost are the
+  // implementation details and should be called only from within //content.
+  virtual void RegisterRenderFrameHost(
+      const GlobalRenderFrameHostId& render_frame_host_id) = 0;
+  virtual void UnregisterRenderFrameHost(
+      const GlobalRenderFrameHostId& render_frame_host_id) = 0;
 
   // "Worker ref count" is similar to "Keep alive ref count", but is specific to
   // workers since they do not have pre-defined timeouts. Also affected by
@@ -421,6 +472,21 @@ class CONTENT_EXPORT RenderProcessHost : public IPC::Sender,
   //    the renderer process to be alive. The ref count is incremented when
   //    a shared worker is created in the process, and decremented when
   //    it is terminated (it self-destructs when it no longer has clients).
+  //  - Shared Storage Worklet:
+  //    (https://github.com/pythagoraskitty/shared-storage)
+  //    While there are shared storage worklets who live in this process, they
+  //    wish the renderer process to be alive. The ref count is incremented when
+  //    a shared storage worklet is created in the process, and decremented when
+  //    it is terminated (after the document is destroyed, the worklet
+  //    will be destroyed when all pending operations have finished or a timeout
+  //    is reached). Note that this is only relevant for the implementation of
+  //    shared storage worklets that run in the renderer process. The actual
+  //    process that the shared storage worklets are going to use is determined
+  //    by the concrete implementation of
+  //    `SharedStorageRenderThreadWorkletDriver`.
+  //  - Auction Worklets (on Android only):
+  //    (https://github.com/WICG/turtledove/blob/main/FLEDGE.md)
+  //    Keeps the renderer alive if there are any worklets using it.
   virtual void IncrementWorkerRefCount() = 0;
   virtual void DecrementWorkerRefCount() = 0;
 
@@ -477,11 +543,17 @@ class CONTENT_EXPORT RenderProcessHost : public IPC::Sender,
   virtual bool HostHasNotBeenUsed() = 0;
 
   // Locks this RenderProcessHost to documents compatible with |process_lock|.
-  // This method is public so that it can be called from SiteInstanceImpl, and
+  // This method is public so that it can be called from within //content, and
   // used by MockRenderProcessHost. It isn't meant to be called outside of
-  // content.
+  // //content.
   virtual void SetProcessLock(const IsolationContext& isolation_context,
                               const ProcessLock& process_lock) = 0;
+
+  // Returns the ProcessLock associated with this process.
+  // This method is public so that it can be called from within //content, and
+  // used by MockRenderProcessHost. It isn't meant to be called outside of
+  // //content.
+  virtual ProcessLock GetProcessLock() const = 0;
 
   // Returns true if this process is locked to a particular site-specific
   // ProcessLock.  See the SetProcessLock() call above.
@@ -504,16 +576,17 @@ class CONTENT_EXPORT RenderProcessHost : public IPC::Sender,
       mojo::PendingReceiver<blink::mojom::FileSystemAccessManager>
           receiver) = 0;
 
-  // |render_frame_id| is the frame associated with |receiver|, or
-  // MSG_ROUTING_NONE if |receiver| is associated with a worker.
   virtual void BindIndexedDB(
       const blink::StorageKey& storage_key,
       mojo::PendingReceiver<blink::mojom::IDBFactory> receiver) = 0;
-  virtual void BindBucketManagerHost(
+  virtual void BindBucketManagerHostForRenderFrame(
+      const GlobalRenderFrameHostId& render_frame_host_id,
+      mojo::PendingReceiver<blink::mojom::BucketManagerHost> receiver) = 0;
+  virtual void BindBucketManagerHostForWorker(
       const url::Origin& origin,
       mojo::PendingReceiver<blink::mojom::BucketManagerHost> receiver) = 0;
   virtual void BindRestrictedCookieManagerForServiceWorker(
-      const url::Origin& origin,
+      const blink::StorageKey& storage_key,
       mojo::PendingReceiver<network::mojom::RestrictedCookieManager>
           receiver) = 0;
   virtual void BindVideoDecodePerfHistory(
@@ -527,12 +600,10 @@ class CONTENT_EXPORT RenderProcessHost : public IPC::Sender,
       mojo::PendingReceiver<blink::mojom::PeriodicBackgroundSyncService>
           receiver) = 0;
   virtual void BindQuotaManagerHost(
-      int render_frame_id,
-      const url::Origin& origin,
+      const blink::StorageKey& storage_key,
       mojo::PendingReceiver<blink::mojom::QuotaManagerHost> receiver) = 0;
   virtual void CreateLockManager(
-      int render_frame_id,
-      const url::Origin& origin,
+      const blink::StorageKey& storage_key,
       mojo::PendingReceiver<blink::mojom::LockManager> receiver) = 0;
   virtual void CreatePermissionService(
       const url::Origin& origin,
@@ -540,6 +611,8 @@ class CONTENT_EXPORT RenderProcessHost : public IPC::Sender,
   virtual void CreatePaymentManagerForOrigin(
       const url::Origin& origin,
       mojo::PendingReceiver<payments::mojom::PaymentManager> receiver) = 0;
+  // |render_frame_id| is the frame associated with |receiver|, or
+  // MSG_ROUTING_NONE if |receiver| is associated with a worker.
   virtual void CreateNotificationService(
       int render_frame_id,
       const url::Origin& origin,
@@ -547,6 +620,12 @@ class CONTENT_EXPORT RenderProcessHost : public IPC::Sender,
   virtual void CreateWebSocketConnector(
       const blink::StorageKey& storage_key,
       mojo::PendingReceiver<blink::mojom::WebSocketConnector> receiver) = 0;
+
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+  virtual void CreateStableVideoDecoder(
+      mojo::PendingReceiver<media::stable::mojom::StableVideoDecoder>
+          receiver) = 0;
+#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 
   // Returns the current number of active views in this process.  Excludes
   // any RenderViewHosts that are swapped out.
@@ -562,26 +641,15 @@ class CONTENT_EXPORT RenderProcessHost : public IPC::Sender,
   // Forces the renderer process to crash ASAP.
   virtual void ForceCrash() {}
 
-  // Controls whether the destructor of RenderProcessHost*Impl* will end up
-  // cleaning the memory used by the exception added via
-  // RenderProcessHostImpl::AddAllowedRequestInitiatorForPlugin.
-  //
-  // TODO(lukasza): https://crbug.com/652474: This method shouldn't be part of
-  // the //content public API, because it shouldn't be called by anyone other
-  // than RenderProcessHostImpl (from underneath
-  // RenderProcessHostImpl::AddAllowedRequestInitiatorForPlugin).
-  virtual void CleanupNetworkServicePluginExceptionsUponDestruction() = 0;
-
   // Returns a string that contains information useful for debugging
   // crashes related to RenderProcessHost objects staying alive longer than
   // the BrowserContext they are associated with.
   virtual std::string GetInfoForBrowserContextDestructionCrashReporting() = 0;
 
+  using TraceProto = perfetto::protos::pbzero::RenderProcessHost;
   // Write a representation of this object into a trace.
-  virtual void WriteIntoTrace(perfetto::TracedValue context) = 0;
   virtual void WriteIntoTrace(
-      perfetto::TracedProto<perfetto::protos::pbzero::RenderProcessHost>
-          proto) = 0;
+      perfetto::TracedProto<TraceProto> proto) const = 0;
 
 #if BUILDFLAG(CLANG_PROFILING_INSIDE_SANDBOX)
   // Ask the renderer process to dump its profiling data to disk. Invokes

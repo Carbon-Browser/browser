@@ -29,13 +29,14 @@
 #include <memory>
 
 #include "base/location.h"
-#include "base/macros.h"
 #include "base/memory/ptr_util.h"
 #include "gin/public/v8_idle_task_runner.h"
-#include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/scheduler/public/thread.h"
 #include "third_party/blink/renderer/platform/scheduler/public/thread_scheduler.h"
+#include "third_party/blink/renderer/platform/wtf/cross_thread_copier_std.h"
+#include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
+#include "third_party/blink/renderer/platform/wtf/functional.h"
 
 namespace blink {
 
@@ -45,22 +46,24 @@ class V8IdleTaskRunner : public gin::V8IdleTaskRunner {
  public:
   explicit V8IdleTaskRunner(ThreadScheduler* scheduler)
       : scheduler_(scheduler) {}
+
+  V8IdleTaskRunner(const V8IdleTaskRunner&) = delete;
+  V8IdleTaskRunner& operator=(const V8IdleTaskRunner&) = delete;
+
   ~V8IdleTaskRunner() override = default;
   void PostIdleTask(std::unique_ptr<v8::IdleTask> task) override {
     DCHECK(RuntimeEnabledFeatures::V8IdleTasksEnabled());
     scheduler_->PostIdleTask(
         FROM_HERE,
-        WTF::Bind(
+        ConvertToBaseOnceCallback(WTF::CrossThreadBindOnce(
             [](std::unique_ptr<v8::IdleTask> task, base::TimeTicks deadline) {
               task->Run(deadline.since_origin().InSecondsF());
             },
-            std::move(task)));
+            std::move(task))));
   }
 
  private:
   ThreadScheduler* scheduler_;
-
-  DISALLOW_COPY_AND_ASSIGN(V8IdleTaskRunner);
 };
 
 }  // namespace blink

@@ -34,6 +34,7 @@
 #include "base/timer/elapsed_timer.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_arraybuffer_string.h"
+#include "third_party/blink/renderer/core/event_target_names.h"
 #include "third_party/blink/renderer/core/events/progress_event.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/fileapi/file.h"
@@ -67,7 +68,7 @@ const std::string Utf8FilePath(Blob* blob) {
 // requests (the value is arbitrarily chosen).
 static const size_t kMaxOutstandingRequestsPerThread = 100;
 static const base::TimeDelta kProgressNotificationInterval =
-    base::TimeDelta::FromMilliseconds(50);
+    base::Milliseconds(50);
 
 class FileReader::ThrottlingController final
     : public GarbageCollected<FileReader::ThrottlingController>,
@@ -95,7 +96,7 @@ class FileReader::ThrottlingController final
     if (!controller)
       return;
 
-    probe::AsyncTaskScheduled(context, "FileReader", reader->async_task_id());
+    reader->async_task_context()->Schedule(context, "FileReader");
     controller->PushReader(reader);
   }
 
@@ -116,7 +117,7 @@ class FileReader::ThrottlingController final
       return;
 
     controller->FinishReader(reader, next_step);
-    probe::AsyncTaskCanceled(context, reader->async_task_id());
+    reader->async_task_context()->Cancel();
   }
 
   explicit ThrottlingController(ExecutionContext& context)
@@ -408,7 +409,7 @@ void FileReader::DidFinishLoading() {
     return;
   DCHECK_EQ(loading_state_, kLoadingStateLoading);
 
-  // TODO(jochen): When we set m_state to DONE below, we still need to fire
+  // When we set m_state to DONE below, we still need to fire
   // the load and loadend events. To avoid GC to collect this FileReader, we
   // use this separate variable to keep the wrapper of this FileReader alive.
   // An alternative would be to keep any ActiveScriptWrappables alive that is on
@@ -464,7 +465,8 @@ void FileReader::DidFail(FileErrorCode error_code) {
 }
 
 void FileReader::FireEvent(const AtomicString& type) {
-  probe::AsyncTask async_task(GetExecutionContext(), async_task_id(), "event");
+  probe::AsyncTask async_task(GetExecutionContext(), async_task_context(),
+                              "event");
   if (!loader_) {
     DispatchEvent(*ProgressEvent::Create(type, false, 0, 0));
     return;

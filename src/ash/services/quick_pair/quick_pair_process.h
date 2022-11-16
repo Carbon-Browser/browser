@@ -17,6 +17,7 @@ namespace quick_pair {
 
 struct DecryptedResponse;
 struct DecryptedPasskey;
+struct NotDiscoverableAdvertisement;
 
 namespace quick_pair_process {
 
@@ -49,6 +50,23 @@ void ParseDecryptedPasskey(const std::vector<uint8_t>& aes_key,
                            const std::vector<uint8_t>& encrypted_passkey_bytes,
                            ParseDecryptedPasskeyCallback callback,
                            ProcessStoppedCallback process_stopped_callback);
+
+using ParseNotDiscoverableAdvertisementCallback = base::OnceCallback<void(
+    const absl::optional<NotDiscoverableAdvertisement>&)>;
+
+void ParseNotDiscoverableAdvertisement(
+    const std::vector<uint8_t>& service_data,
+    const std::string& address,
+    ParseNotDiscoverableAdvertisementCallback callback,
+    ProcessStoppedCallback process_stopped_callback);
+
+using ParseMessageStreamMessagesCallback =
+    base::OnceCallback<void(std::vector<mojom::MessageStreamMessagePtr>)>;
+
+void ParseMessageStreamMessages(
+    const std::vector<uint8_t>& message_bytes,
+    ParseMessageStreamMessagesCallback callback,
+    ProcessStoppedCallback process_stopped_callback);
 
 }  // namespace quick_pair_process
 

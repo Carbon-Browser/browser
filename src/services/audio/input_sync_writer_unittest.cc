@@ -12,8 +12,8 @@
 #include <utility>
 
 #include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/sync_socket.h"
 #include "base/test/mock_callback.h"
@@ -48,6 +48,9 @@ class MockCancelableSyncSocket : public base::CancelableSyncSocket {
         receives_(0),
         buffer_size_(buffer_size),
         read_buffer_index_(0) {}
+
+  MockCancelableSyncSocket(const MockCancelableSyncSocket&) = delete;
+  MockCancelableSyncSocket& operator=(const MockCancelableSyncSocket&) = delete;
 
   size_t Send(const void* buffer, size_t length) override {
     EXPECT_EQ(length, sizeof(uint32_t));
@@ -98,8 +101,6 @@ class MockCancelableSyncSocket : public base::CancelableSyncSocket {
   int receives_;
   int buffer_size_;
   uint32_t read_buffer_index_;
-
-  DISALLOW_COPY_AND_ASSIGN(MockCancelableSyncSocket);
 };
 
 class InputSyncWriterTest : public testing::Test {
@@ -124,6 +125,9 @@ class InputSyncWriterTest : public testing::Test {
     audio_bus_ = media::AudioBus::Create(audio_params);
   }
 
+  InputSyncWriterTest(const InputSyncWriterTest&) = delete;
+  InputSyncWriterTest& operator=(const InputSyncWriterTest&) = delete;
+
   ~InputSyncWriterTest() override {}
 
   // Get total number of expected log calls. On non-Android we expect one log
@@ -131,7 +135,7 @@ class InputSyncWriterTest : public testing::Test {
   // with a glitch summary from the destructor. Besides that only for errors
   // and fifo info.
   int GetTotalNumberOfExpectedLogCalls(int expected_calls_due_to_error) {
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
     return expected_calls_due_to_error + 1;
 #else
     return expected_calls_due_to_error + 2;
@@ -158,11 +162,8 @@ class InputSyncWriterTest : public testing::Test {
   base::test::TaskEnvironment env_;
   MockLogger mock_logger_;
   std::unique_ptr<InputSyncWriter> writer_;
-  MockCancelableSyncSocket* socket_;
+  raw_ptr<MockCancelableSyncSocket> socket_;
   std::unique_ptr<media::AudioBus> audio_bus_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(InputSyncWriterTest);
 };
 
 TEST_F(InputSyncWriterTest, SingleWriteAndRead) {

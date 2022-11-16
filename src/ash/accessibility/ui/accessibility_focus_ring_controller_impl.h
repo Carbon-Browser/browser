@@ -16,7 +16,6 @@
 #include "ash/ash_export.h"
 #include "ash/public/cpp/accessibility_focus_ring_controller.h"
 #include "base/bind.h"
-#include "base/macros.h"
 #include "base/time/time.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/gfx/geometry/rect.h"
@@ -33,6 +32,12 @@ class ASH_EXPORT AccessibilityFocusRingControllerImpl
       public AccessibilityFocusRingController {
  public:
   AccessibilityFocusRingControllerImpl();
+
+  AccessibilityFocusRingControllerImpl(
+      const AccessibilityFocusRingControllerImpl&) = delete;
+  AccessibilityFocusRingControllerImpl& operator=(
+      const AccessibilityFocusRingControllerImpl&) = delete;
+
   ~AccessibilityFocusRingControllerImpl() override;
 
   // AccessibilityFocusRingController overrides:
@@ -110,8 +115,6 @@ class ASH_EXPORT AccessibilityFocusRingControllerImpl
   float highlight_opacity_ = 0.f;
 
   bool no_fade_for_testing_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(AccessibilityFocusRingControllerImpl);
 };
 
 }  // namespace ash

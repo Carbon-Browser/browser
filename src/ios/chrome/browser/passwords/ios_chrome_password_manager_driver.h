@@ -7,7 +7,6 @@
 
 #include <vector>
 
-#include "base/macros.h"
 #include "components/password_manager/core/browser/password_manager_driver.h"
 #include "components/password_manager/ios/password_manager_driver_bridge.h"
 
@@ -27,6 +26,12 @@ class IOSChromePasswordManagerDriver
   explicit IOSChromePasswordManagerDriver(
       id<PasswordManagerDriverBridge> bridge,
       password_manager::PasswordManager* password_manager);
+
+  IOSChromePasswordManagerDriver(const IOSChromePasswordManagerDriver&) =
+      delete;
+  IOSChromePasswordManagerDriver& operator=(
+      const IOSChromePasswordManagerDriver&) = delete;
+
   ~IOSChromePasswordManagerDriver() override;
 
   // password_manager::PasswordManagerDriver implementation.
@@ -56,8 +61,6 @@ class IOSChromePasswordManagerDriver
  private:
   __weak id<PasswordManagerDriverBridge> bridge_;  // (weak)
   password_manager::PasswordManager* password_manager_;
-
-  DISALLOW_COPY_AND_ASSIGN(IOSChromePasswordManagerDriver);
 };
 
 #endif  // IOS_CHROME_BROWSER_PASSWORDS_IOS_CHROME_PASSWORD_MANAGER_DRIVER_H_

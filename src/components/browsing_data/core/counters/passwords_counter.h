@@ -34,6 +34,10 @@ class PasswordsCounter : public browsing_data::BrowsingDataCounter {
                     bool sync_enabled,
                     std::vector<std::string> domain_examples,
                     std::vector<std::string> account_domain_examples);
+
+    PasswordsResult(const PasswordsResult&) = delete;
+    PasswordsResult& operator=(const PasswordsResult&) = delete;
+
     ~PasswordsResult() override;
 
     ResultInt account_passwords() const { return account_passwords_; }
@@ -50,8 +54,6 @@ class PasswordsCounter : public browsing_data::BrowsingDataCounter {
     ResultInt account_passwords_ = 0;
     std::vector<std::string> domain_examples_;
     std::vector<std::string> account_domain_examples_;
-
-    DISALLOW_COPY_AND_ASSIGN(PasswordsResult);
   };
 
   PasswordsCounter(
@@ -61,8 +63,11 @@ class PasswordsCounter : public browsing_data::BrowsingDataCounter {
   ~PasswordsCounter() override;
 
   const char* GetPrefName() const override;
+
  protected:
+  virtual void OnPasswordsFetchDone();
   virtual std::unique_ptr<PasswordsResult> MakeResult();
+  void Count() override;
 
   bool is_sync_active() { return sync_tracker_.IsSyncActive(); }
   int num_passwords();
@@ -73,8 +78,6 @@ class PasswordsCounter : public browsing_data::BrowsingDataCounter {
  private:
   void OnInitialized() override;
   void OnFetchDone();
-
-  void Count() override;
 
   base::CancelableTaskTracker cancelable_task_tracker_;
   std::unique_ptr<PasswordStoreFetcher> profile_store_fetcher_;

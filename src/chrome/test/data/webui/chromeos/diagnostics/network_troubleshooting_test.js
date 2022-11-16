@@ -2,11 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TroubleshootingInfo} from 'chrome://diagnostics/diagnostics_types.js';
 import {NetworkTroubleshootingElement} from 'chrome://diagnostics/network_troubleshooting.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
 
 import {assertFalse, assertTrue} from '../../chai_assert.js';
-import {flushTasks} from '../../test_util.js';
+import {flushTasks, isVisible} from '../../test_util.js';
 
 import * as dx_utils from './diagnostics_test_utils.js';
 
@@ -23,11 +23,32 @@ export function networkTroubleshootingTestSuite() {
     networkTroubleshootingElement = null;
   });
 
+  /** @return {!HTMLElement} */
+  function getLinkTextElement() {
+    assertTrue(!!networkTroubleshootingElement);
+
+    return /** @type {!HTMLElement} */ (
+        networkTroubleshootingElement.shadowRoot.querySelector(
+            '#troubleshootingLinkText'));
+  }
+
   /**
-   * @param {string} type
+   * @suppress {visibility}
+   * @param {boolean} state
    * @return {!Promise}
    */
-  function initializeNetworkTroubleshooting(type) {
+  function setIsLoggedIn(state) {
+    assertTrue(!!networkTroubleshootingElement);
+    networkTroubleshootingElement.isLoggedIn_ = state;
+
+    return flushTasks();
+  }
+
+  /**
+   * @param {!TroubleshootingInfo} info
+   * @return {!Promise}
+   */
+  function initializeNetworkTroubleshooting(info) {
     assertFalse(!!networkTroubleshootingElement);
 
     // Add the network troubleshooting element to the DOM.
@@ -35,19 +56,45 @@ export function networkTroubleshootingTestSuite() {
         /** @type {!NetworkTroubleshootingElement} */ (
             document.createElement('network-troubleshooting'));
     assertTrue(!!networkTroubleshootingElement);
-    networkTroubleshootingElement.networkType = type;
+    networkTroubleshootingElement.troubleshootingInfo = info;
     document.body.appendChild(networkTroubleshootingElement);
 
     return flushTasks();
   }
 
-  test('CorrectNetworkTypeDisplayedInMessage', () => {
-    return initializeNetworkTroubleshooting(loadTimeData.getString('wifiLabel'))
+  test('CorrectInfoDisplayedInTroubleshootingElement', () => {
+    return initializeNetworkTroubleshooting({
+             header: 'header',
+             linkText: 'linkText',
+             url: 'https://google.com',
+           })
         .then(() => {
           dx_utils.assertElementContainsText(
               networkTroubleshootingElement.shadowRoot.querySelector(
-                  '#troubleConnectingText'),
-              loadTimeData.getString('wifiLabel'));
+                  '#troubleshootingText'),
+              'header');
+          dx_utils.assertElementContainsText(
+              networkTroubleshootingElement.shadowRoot.querySelector(
+                  '#troubleshootingLinkText'),
+              'linkText');
+        });
+  });
+
+  test('IsLoggedInFalseThenLinkTextHidden', () => {
+    /** @type {TroubleshootingInfo} */
+    const troubleShootingInfo = {
+      header: 'header',
+      linkText: 'linkText',
+      url: 'https://google.com',
+    };
+    return initializeNetworkTroubleshooting(troubleShootingInfo)
+        .then(() => setIsLoggedIn(false))
+        .then(() => {
+          dx_utils.assertElementContainsText(
+              networkTroubleshootingElement.shadowRoot.querySelector(
+                  '#troubleshootingText'),
+              'header');
+          assertFalse(isVisible(getLinkTextElement()));
         });
   });
 }

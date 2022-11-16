@@ -13,7 +13,6 @@
 #include <vector>
 
 #include "base/containers/circular_deque.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
@@ -55,6 +54,10 @@ enum KeyLocationCode {
 class EventSender {
  public:
   EventSender(blink::WebFrameWidget*, content::TestRunner* test_runner);
+
+  EventSender(const EventSender&) = delete;
+  EventSender& operator=(const EventSender&) = delete;
+
   virtual ~EventSender();
 
   void Reset();
@@ -217,7 +220,7 @@ class EventSender {
   bool is_drag_mode() const { return is_drag_mode_; }
   void set_is_drag_mode(bool drag_mode) { is_drag_mode_ = drag_mode; }
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   int wm_key_down() const { return wm_key_down_; }
   void set_wm_key_down(int key_down) { wm_key_down_ = key_down; }
 
@@ -318,8 +321,6 @@ class EventSender {
   base::TimeTicks last_event_timestamp_;
 
   base::WeakPtrFactory<EventSender> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(EventSender);
 };
 
 }  // namespace content

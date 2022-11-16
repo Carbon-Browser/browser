@@ -9,8 +9,7 @@
 #include <set>
 
 #include "base/callback.h"
-#include "base/compiler_specific.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/bookmarks/bookmark_stats.h"
 #include "chrome/browser/ui/toolbar/app_menu_model.h"
 #include "chrome/browser/ui/views/bookmarks/bookmark_context_menu.h"
@@ -62,6 +61,10 @@ class BookmarkMenuDelegate : public bookmarks::BaseBookmarkModelObserver,
       Browser* browser,
       base::RepeatingCallback<content::PageNavigator*()> get_navigator,
       views::Widget* parent);
+
+  BookmarkMenuDelegate(const BookmarkMenuDelegate&) = delete;
+  BookmarkMenuDelegate& operator=(const BookmarkMenuDelegate&) = delete;
+
   ~BookmarkMenuDelegate() override;
 
   // Creates the menus from the model.
@@ -116,10 +119,6 @@ class BookmarkMenuDelegate : public bookmarks::BaseBookmarkModelObserver,
       views::MenuItemView* item,
       const ui::DropTargetEvent& event,
       views::MenuDelegate::DropPosition* position);
-  ui::mojom::DragOperation OnPerformDrop(
-      views::MenuItemView* menu,
-      views::MenuDelegate::DropPosition position,
-      const ui::DropTargetEvent& event);
   views::View::DropCallback GetDropCallback(
       views::MenuItemView* menu,
       views::MenuDelegate::DropPosition position,
@@ -194,19 +193,19 @@ class BookmarkMenuDelegate : public bookmarks::BaseBookmarkModelObserver,
   // an id.
   int GetAndIncrementNextMenuID();
 
-  Browser* const browser_;
-  Profile* profile_;
+  const raw_ptr<Browser> browser_;
+  raw_ptr<Profile> profile_;
 
   base::RepeatingCallback<content::PageNavigator*()> get_navigator_;
 
   // Parent of menus.
-  views::Widget* parent_;
+  raw_ptr<views::Widget> parent_;
 
   // Maps from menu id to BookmarkNode.
   MenuIDToNodeMap menu_id_to_node_map_;
 
   // Current menu.
-  views::MenuItemView* menu_;
+  raw_ptr<views::MenuItemView> menu_;
 
   // Data for the drop.
   bookmarks::BookmarkNodeData drop_data_;
@@ -215,7 +214,7 @@ class BookmarkMenuDelegate : public bookmarks::BaseBookmarkModelObserver,
   std::unique_ptr<BookmarkContextMenu> context_menu_;
 
   // If non-NULL this is the |parent| passed to Init and is NOT owned by us.
-  views::MenuItemView* parent_menu_item_;
+  raw_ptr<views::MenuItemView> parent_menu_item_;
 
   // Maps from node to menu.
   NodeToMenuMap node_to_menu_map_;
@@ -223,7 +222,7 @@ class BookmarkMenuDelegate : public bookmarks::BaseBookmarkModelObserver,
   // ID of the next menu item.
   int next_menu_id_;
 
-  views::MenuDelegate* real_delegate_;
+  raw_ptr<views::MenuDelegate> real_delegate_;
 
   // Is the model being changed?
   bool is_mutating_model_;
@@ -234,8 +233,6 @@ class BookmarkMenuDelegate : public bookmarks::BaseBookmarkModelObserver,
   // Whether the involved menu uses mnemonics or not. If it does, ampersands
   // inside bookmark titles need to be escaped.
   bool menu_uses_mnemonics_;
-
-  DISALLOW_COPY_AND_ASSIGN(BookmarkMenuDelegate);
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_BOOKMARKS_BOOKMARK_MENU_DELEGATE_H_

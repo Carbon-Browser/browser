@@ -14,7 +14,6 @@
 #include "ash/public/cpp/login_accelerators.h"
 #include "ash/public/cpp/login_screen.h"
 #include "ash/public/cpp/system_tray_observer.h"
-#include "base/macros.h"
 #include "base/time/time.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/native_widget_types.h"
@@ -51,6 +50,10 @@ class ASH_EXPORT LoginScreenController : public LoginScreen,
       base::OnceCallback<void(absl::optional<bool> success)>;
 
   explicit LoginScreenController(SystemTrayNotifier* system_tray_notifier);
+
+  LoginScreenController(const LoginScreenController&) = delete;
+  LoginScreenController& operator=(const LoginScreenController&) = delete;
+
   ~LoginScreenController() override;
 
   static void RegisterProfilePrefs(PrefRegistrySimple* registry, bool for_test);
@@ -81,6 +84,7 @@ class ASH_EXPORT LoginScreenController : public LoginScreen,
   void SignOutUser();
   void CancelAddUser();
   void LoginAsGuest();
+  void ShowGuestTosScreen();
   void OnMaxIncorrectPasswordAttempted(const AccountId& account_id);
   void FocusLockScreenApps(bool reverse);
   void ShowGaiaSignin(const AccountId& prefilled_account);
@@ -124,14 +128,11 @@ class ASH_EXPORT LoginScreenController : public LoginScreen,
 
   void RequestSecurityTokenPin(SecurityTokenPinRequest request) override;
   void ClearSecurityTokenPinRequest() override;
-  bool SetLoginShelfGestureHandler(const std::u16string& nudge_text,
-                                   const base::RepeatingClosure& fling_callback,
-                                   base::OnceClosure exit_callback) override;
-  void ClearLoginShelfGestureHandler() override;
+  views::Widget* GetLoginWindowWidget() override;
 
   // KioskAppMenu:
-  void SetKioskApps(
-      const std::vector<KioskAppMenuEntry>& kiosk_apps,
+  void SetKioskApps(const std::vector<KioskAppMenuEntry>& kiosk_apps) override;
+  void ConfigureKioskCallbacks(
       const base::RepeatingCallback<void(const KioskAppMenuEntry&)>& launch_app,
       const base::RepeatingClosure& on_show_menu) override;
 
@@ -170,8 +171,6 @@ class ASH_EXPORT LoginScreenController : public LoginScreen,
   ForceFailAuth force_fail_auth_for_debug_overlay_ = ForceFailAuth::kOff;
 
   base::WeakPtrFactory<LoginScreenController> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(LoginScreenController);
 };
 
 }  // namespace ash

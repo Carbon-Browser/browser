@@ -5,13 +5,12 @@
 #include "chrome/browser/ui/ash/network/network_portal_notification_controller.h"
 
 #include "base/command_line.h"
-#include "base/macros.h"
 #include "chrome/browser/notifications/notification_display_service_tester.h"
 #include "chrome/browser/notifications/system_notification_helper.h"
 #include "chrome/test/base/browser_with_test_window_test.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile_manager.h"
-#include "chromeos/network/network_state.h"
+#include "chromeos/ash/components/network/network_state.h"
 #include "third_party/cros_system_api/dbus/shill/dbus-constants.h"
 
 namespace chromeos {
@@ -36,6 +35,12 @@ class NetworkPortalNotificationControllerTest
     : public BrowserWithTestWindowTest {
  public:
   NetworkPortalNotificationControllerTest() : controller_(nullptr) {}
+
+  NetworkPortalNotificationControllerTest(
+      const NetworkPortalNotificationControllerTest&) = delete;
+  NetworkPortalNotificationControllerTest& operator=(
+      const NetworkPortalNotificationControllerTest&) = delete;
+
   ~NetworkPortalNotificationControllerTest() override {}
 
   void SetUp() override {
@@ -60,9 +65,6 @@ class NetworkPortalNotificationControllerTest
 
   std::unique_ptr<NotificationDisplayServiceTester> display_service_;
   NetworkPortalNotificationController controller_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(NetworkPortalNotificationControllerTest);
 };
 
 TEST_F(NetworkPortalNotificationControllerTest, NetworkStateChanged) {

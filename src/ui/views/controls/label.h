@@ -8,9 +8,7 @@
 #include <memory>
 #include <vector>
 
-#include "base/compiler_specific.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/models/simple_menu_model.h"
@@ -81,6 +79,9 @@ class VIEWS_EXPORT Label : public View,
   // Construct a Label with the given |font| description.
   Label(const std::u16string& text, const CustomFont& font);
 
+  Label(const Label&) = delete;
+  Label& operator=(const Label&) = delete;
+
   ~Label() override;
 
   static const gfx::FontList& GetDefaultFontList();
@@ -114,6 +115,9 @@ class VIEWS_EXPORT Label : public View,
   // Applies |style| to a specific |range|.  This is unimplemented for styles
   // that vary from the global text style by anything besides weight.
   void SetTextStyleRange(int style, const gfx::Range& range);
+
+  // Apply the baseline style range across the entire label.
+  void ApplyBaselineTextStyle();
 
   // Enables or disables auto-color-readability (enabled by default).  If this
   // is enabled, then calls to set any foreground or background color will
@@ -189,8 +193,8 @@ class VIEWS_EXPORT Label : public View,
 
   // If multi-line, a non-zero value will cap the number of lines rendered, and
   // elide the rest (currently only ELIDE_TAIL supported). See gfx::RenderText.
-  int GetMaxLines() const;
-  void SetMaxLines(int max_lines);
+  size_t GetMaxLines() const;
+  void SetMaxLines(size_t max_lines);
 
   // If single-line, a non-zero value will help determine the amount of space
   // needed *after* elision, which may be less than the passed |max_width|.
@@ -299,8 +303,8 @@ class VIEWS_EXPORT Label : public View,
   // within the |range|. See gfx::RenderText.
   std::vector<gfx::Rect> GetSubstringBounds(const gfx::Range& range);
 
-  base::CallbackListSubscription AddTextChangedCallback(
-      views::PropertyChangedCallback callback) WARN_UNUSED_RESULT;
+  [[nodiscard]] base::CallbackListSubscription AddTextChangedCallback(
+      views::PropertyChangedCallback callback);
 
   // View:
   int GetBaseline() const override;
@@ -321,6 +325,11 @@ class VIEWS_EXPORT Label : public View,
   // which may exceed the local bounds of the label.
   gfx::Rect GetTextBounds() const;
 
+  // Returns the Y coordinate the font_list() will actually be drawn at, in
+  // local coordinates.  This may differ from GetTextBounds().y() since the font
+  // is positioned inside the display rect.
+  int GetFontListY() const;
+
   void PaintText(gfx::Canvas* canvas);
 
   // View:
@@ -330,7 +339,7 @@ class VIEWS_EXPORT Label : public View,
   void OnDeviceScaleFactorChanged(float old_device_scale_factor,
                                   float new_device_scale_factor) override;
   void OnThemeChanged() override;
-  gfx::NativeCursor GetCursor(const ui::MouseEvent& event) override;
+  ui::Cursor GetCursor(const ui::MouseEvent& event) override;
   void OnFocus() override;
   void OnBlur() override;
   bool OnMousePressed(const ui::MouseEvent& event) override;
@@ -466,7 +475,7 @@ class VIEWS_EXPORT Label : public View,
   bool auto_color_readability_enabled_ = true;
   // TODO(mukai): remove |multi_line_| when all RenderText can render multiline.
   bool multi_line_ = false;
-  int max_lines_ = 0;
+  size_t max_lines_ = 0;
   std::u16string tooltip_text_;
   bool handles_tooltips_ = true;
   // Whether to collapse the label when it's not visible.
@@ -485,8 +494,6 @@ class VIEWS_EXPORT Label : public View,
   // Context menu related members.
   ui::SimpleMenuModel context_menu_contents_;
   std::unique_ptr<views::MenuRunner> context_menu_runner_;
-
-  DISALLOW_COPY_AND_ASSIGN(Label);
 };
 
 BEGIN_VIEW_BUILDER(VIEWS_EXPORT, Label, View)
@@ -516,6 +523,7 @@ VIEW_BUILDER_PROPERTY(bool, HandlesTooltips)
 VIEW_BUILDER_PROPERTY(int, MaximumWidth)
 VIEW_BUILDER_PROPERTY(bool, CollapseWhenHidden)
 VIEW_BUILDER_PROPERTY(bool, Selectable)
+VIEW_BUILDER_METHOD(SizeToFit, int)
 END_VIEW_BUILDER
 
 }  // namespace views

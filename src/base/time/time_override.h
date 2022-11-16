@@ -8,7 +8,6 @@
 #include <atomic>
 
 #include "base/base_export.h"
-#include "base/macros.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -40,6 +39,9 @@ class BASE_EXPORT ScopedTimeClockOverrides {
                            TimeTicksNowFunction time_ticks_override,
                            ThreadTicksNowFunction thread_ticks_override);
 
+  ScopedTimeClockOverrides(const ScopedTimeClockOverrides&) = delete;
+  ScopedTimeClockOverrides& operator=(const ScopedTimeClockOverrides&) = delete;
+
   // Restores the platform default Now() functions.
   ~ScopedTimeClockOverrides();
 
@@ -47,8 +49,6 @@ class BASE_EXPORT ScopedTimeClockOverrides {
 
  private:
   static bool overrides_active_;
-
-  DISALLOW_COPY_AND_ASSIGN(ScopedTimeClockOverrides);
 };
 
 // These methods return the platform default Time::Now / TimeTicks::Now /
@@ -61,7 +61,7 @@ BASE_EXPORT Time TimeNowFromSystemTimeIgnoringOverride();
 BASE_EXPORT TimeTicks TimeTicksNowIgnoringOverride();
 BASE_EXPORT ThreadTicks ThreadTicksNowIgnoringOverride();
 
-#if defined(OS_POSIX)
+#if BUILDFLAG(IS_POSIX)
 // Equivalent to TimeTicksNowIgnoringOverride(), but is allowed to fail and
 // return absl::nullopt. This may safely be used in a signal handler.
 BASE_EXPORT absl::optional<TimeTicks> MaybeTimeTicksNowIgnoringOverride();

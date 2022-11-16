@@ -53,6 +53,7 @@ class ASH_EXPORT BluetoothFeaturePodController
   };
 
   bool DoesFirstConnectedDeviceHaveBatteryInfo() const;
+  int GetFirstConnectedDeviceBatteryLevelForDisplay() const;
 
   const gfx::VectorIcon& ComputeButtonIcon() const;
   std::u16string ComputeButtonLabel() const;
@@ -74,7 +75,11 @@ class ASH_EXPORT BluetoothFeaturePodController
 
   size_t connected_device_count_ = 0;
   absl::optional<BluetoothDeviceNameAndBatteryInfo> first_connected_device_;
-  chromeos::bluetooth_config::mojom::BluetoothSystemState system_state_;
+  chromeos::bluetooth_config::mojom::BluetoothModificationState
+      modification_state_ = chromeos::bluetooth_config::mojom::
+          BluetoothModificationState::kCannotModifyBluetooth;
+  chromeos::bluetooth_config::mojom::BluetoothSystemState system_state_ =
+      chromeos::bluetooth_config::mojom::BluetoothSystemState::kUnavailable;
   FeaturePodButton* button_ = nullptr;
   UnifiedSystemTrayController* tray_controller_;
 };

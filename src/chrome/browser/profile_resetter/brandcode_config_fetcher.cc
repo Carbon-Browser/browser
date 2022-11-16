@@ -95,9 +95,7 @@ BrandcodeConfigFetcher::BrandcodeConfigFetcher(
       base::BindOnce(&BrandcodeConfigFetcher::OnSimpleLoaderComplete,
                      weak_ptr_factory_.GetWeakPtr()));
   // Abort the download attempt if it takes too long.
-  download_timer_.Start(FROM_HERE,
-                        base::TimeDelta::FromSeconds(kDownloadTimeoutSec),
-                        this,
+  download_timer_.Start(FROM_HERE, base::Seconds(kDownloadTimeoutSec), this,
                         &BrandcodeConfigFetcher::OnDownloadTimeout);
 }
 
@@ -113,6 +111,7 @@ void BrandcodeConfigFetcher::OnSimpleLoaderComplete(
       simple_url_loader_->ResponseInfo()->mime_type == "text/xml") {
     data_decoder::DataDecoder::ParseXmlIsolated(
         *response_body,
+        data_decoder::mojom::XmlParser::WhitespaceBehavior::kIgnore,
         base::BindOnce(&BrandcodeConfigFetcher::OnXmlConfigParsed,
                        weak_ptr_factory_.GetWeakPtr()));
   } else {
@@ -128,10 +127,10 @@ void BrandcodeConfigFetcher::OnXmlConfigParsed(
   // failure. The difference is whether |default_settings_| is populated.
   base::ScopedClosureRunner scoped_closure(std::move(fetch_callback_));
 
-  if (!value_or_error.value)
+  if (!value_or_error.has_value())
     return;
 
-  const base::Value* node = &value_or_error.value.value();
+  const base::Value* node = &*value_or_error;
   if (!data_decoder::IsXmlElementNamed(*node, "response"))
     return;
 

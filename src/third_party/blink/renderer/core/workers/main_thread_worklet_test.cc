@@ -4,7 +4,7 @@
 
 #include <bitset>
 
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
@@ -47,7 +47,7 @@ class MainThreadWorkletTest : public PageTestBase {
     SetUpScope("script-src 'self' https://allowed.example.com");
   }
   void SetUpScope(const String& csp_header) {
-    PageTestBase::SetUp(IntSize());
+    PageTestBase::SetUp(gfx::Size());
     KURL url = KURL("https://example.com/");
     NavigateTo(url);
     LocalDOMWindow* window = GetFrame().DomWindow();
@@ -68,10 +68,11 @@ class MainThreadWorkletTest : public PageTestBase {
         window->UserAgent(), window->GetFrame()->Loader().UserAgentMetadata(),
         nullptr /* web_worker_fetch_context */,
         mojo::Clone(window->GetContentSecurityPolicy()->GetParsedPolicies()),
+        Vector<network::mojom::blink::ContentSecurityPolicyPtr>(),
         window->GetReferrerPolicy(), window->GetSecurityOrigin(),
         window->IsSecureContext(), window->GetHttpsState(),
         nullptr /* worker_clients */, nullptr /* content_settings_client */,
-        window->AddressSpace(), OriginTrialContext::GetTokens(window).get(),
+        OriginTrialContext::GetInheritedTrialFeatures(window).get(),
         base::UnguessableToken::Create(), nullptr /* worker_settings */,
         mojom::blink::V8CacheOptions::kDefault,
         MakeGarbageCollected<WorkletModuleResponsesMap>(),

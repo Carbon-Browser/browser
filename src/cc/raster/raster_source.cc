@@ -128,7 +128,7 @@ void RasterSource::PlaybackDisplayListToCanvas(
 }
 
 bool RasterSource::PerformSolidColorAnalysis(gfx::Rect layer_rect,
-                                             SkColor* color) const {
+                                             SkColor4f* color) const {
   TRACE_EVENT0("cc", "RasterSource::PerformSolidColorAnalysis");
 
   layer_rect.Intersect(gfx::Rect(size_));
@@ -181,7 +181,7 @@ bool RasterSource::IsSolidColor() const {
   return is_solid_color_;
 }
 
-SkColor RasterSource::GetSolidColor() const {
+SkColor4f RasterSource::GetSolidColor() const {
   DCHECK(IsSolidColor());
   return solid_color_;
 }

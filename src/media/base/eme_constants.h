@@ -7,6 +7,7 @@
 
 #include <stdint.h>
 
+#include "media/base/media_export.h"
 #include "media/media_buildflags.h"
 
 namespace media {
@@ -40,6 +41,8 @@ enum EmeCodec : uint32_t {
   EME_CODEC_FLAC = 1 << 13,
   EME_CODEC_AV1 = 1 << 14,
   EME_CODEC_HEVC_PROFILE_MAIN10 = 1 << 15,
+  EME_CODEC_DTS = 1 << 16,
+  EME_CODEC_DTSXP2 = 1 << 17,
 };
 
 // *_ALL values should only be used for masking, do not use them to specify
@@ -56,6 +59,9 @@ constexpr SupportedCodecs GetMp4AudioCodecs() {
 #if BUILDFLAG(ENABLE_PLATFORM_AC3_EAC3_AUDIO)
   codecs |= EME_CODEC_AC3 | EME_CODEC_EAC3;
 #endif  // BUILDFLAG(ENABLE_PLATFORM_AC3_EAC3_AUDIO)
+#if BUILDFLAG(ENABLE_PLATFORM_DTS_AUDIO)
+  codecs |= EME_CODEC_DTS | EME_CODEC_DTSXP2;
+#endif  // BUILDFLAG(ENABLE_PLATFORM_DTS_AUDIO)
 #if BUILDFLAG(ENABLE_PLATFORM_MPEG_H_AUDIO)
   codecs |= EME_CODEC_MPEG_H_AUDIO;
 #endif  // BUILDFLAG(ENABLE_PLATFORM_MPEG_H_AUDIO)
@@ -121,17 +127,6 @@ static_assert(
 #endif  // BUILDFLAG(ENABLE_MSE_MPEG2TS_STREAM_PARSER)
 #endif  // BUILDFLAG(USE_PROPRIETARY_CODECS)
 
-enum class EmeSessionTypeSupport {
-  // Invalid default value.
-  INVALID,
-  // The session type is not supported.
-  NOT_SUPPORTED,
-  // The session type is supported if a distinctive identifier is available.
-  SUPPORTED_WITH_IDENTIFIER,
-  // The session type is always supported.
-  SUPPORTED,
-};
-
 // Used to declare support for distinctive identifier and persistent state.
 // These are purposefully limited to not allow one to require the other, so that
 // transitive requirements are not possible. Non-trivial refactoring would be
@@ -152,58 +147,40 @@ enum class EmeMediaType {
   VIDEO,
 };
 
-// Configuration rules indicate the configuration state required to support a
-// configuration option (note: a configuration option may be disallowing a
-// feature). Configuration rules are used to answer queries about distinctive
-// identifier, persistent state, and robustness requirements, as well as to
-// describe support for different session types.
-//
-// If in the future there are reasons to request user permission other than
-// access to a distinctive identifier, then additional rules should be added.
-// Rules are implemented in ConfigState and are otherwise opaque.
-enum class EmeConfigRule {
-  // The configuration option is not supported.
-  NOT_SUPPORTED,
+enum class EmeConfigRuleState {
+  // To correctly identify the EmeConfigRule as Supported,
+  // we use the enum value kUnset for each of the rules so
+  // that it is easy to check for, and cannot be confused.
+  kUnset,
 
-  // The configuration option prevents use of a distinctive identifier.
-  IDENTIFIER_NOT_ALLOWED,
+  // Not Allowed represents when the rule in the collection of
+  // EmeConfigRules is not allowed by the current system.
+  kNotAllowed,
 
-  // The configuration option is supported if a distinctive identifier is
-  // available.
-  IDENTIFIER_REQUIRED,
+  // Recommended represents when the rule in the collection of
+  // EmeConfigRules is recommended by the current system. In
+  // our design, the recommended takes a second priority and
+  // cannot override the NotAllowed or Required value.
+  kRecommended,
 
-  // The configuration option is supported, but the user experience may be
-  // improved if a distinctive identifier is available.
-  IDENTIFIER_RECOMMENDED,
-
-  // The configuration option prevents use of persistent state.
-  PERSISTENCE_NOT_ALLOWED,
-
-  // The configuration option is supported if persistent state is available.
-  PERSISTENCE_REQUIRED,
-
-  // The configuration option is supported if both a distinctive identifier and
-  // persistent state are available.
-  IDENTIFIER_AND_PERSISTENCE_REQUIRED,
-
-  // The configuration option prevents use of hardware-secure codecs.
-  HW_SECURE_CODECS_NOT_ALLOWED,
-
-  // The configuration option is supported if hardware-secure codecs are used.
-  HW_SECURE_CODECS_REQUIRED,
-
-  // The configuration option is supported on platforms where hardware-secure
-  // codecs are used and an identifier is also required (i.e. ChromeOS).
-  IDENTIFIER_AND_HW_SECURE_CODECS_REQUIRED,
-
-  // The configuration option is supported on platforms where hardware-secure
-  // codecs are used and both identifier and persistent state are required (i.e.
-  // Windows).
-  IDENTIFIER_PERSISTENCE_AND_HW_SECURE_CODECS_REQUIRED,
-
-  // The configuration option is supported without conditions.
-  SUPPORTED,
+  // Required represents when the rule in the collection of
+  // EmeConfigRules is required by the current system.
+  kRequired,
 };
+
+struct MEDIA_EXPORT EmeConfigRule {
+  // Refer to the EME spec for definitions on what
+  // identifier, persistence, and hw_secure_codecs represent.
+  EmeConfigRuleState identifier = EmeConfigRuleState::kUnset;
+  EmeConfigRuleState persistence = EmeConfigRuleState::kUnset;
+  EmeConfigRuleState hw_secure_codecs = EmeConfigRuleState::kUnset;
+};
+
+inline bool operator==(EmeConfigRule const& lhs, EmeConfigRule const& rhs) {
+  return lhs.persistence == rhs.persistence &&
+         lhs.identifier == rhs.identifier &&
+         lhs.hw_secure_codecs == rhs.hw_secure_codecs;
+}
 
 }  // namespace media
 

@@ -9,11 +9,12 @@
 
 #include "base/containers/flat_map.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/scoped_observation.h"
-#include "ui/base/cursor/cursor_theme_manager.h"
-#include "ui/base/cursor/cursor_theme_manager_observer.h"
-#include "ui/base/cursor/ozone/bitmap_cursor_factory_ozone.h"
+#include "ui/linux/cursor_theme_manager_observer.h"
+#include "ui/linux/linux_ui.h"
+#include "ui/ozone/common/bitmap_cursor_factory.h"
 #include "ui/ozone/platform/wayland/common/wayland_object.h"
 #include "ui/ozone/platform/wayland/host/wayland_cursor.h"
 
@@ -21,10 +22,11 @@ struct wl_cursor_theme;
 
 namespace ui {
 
+class BitmapCursor;
 class WaylandConnection;
 
 // CursorFactory implementation for Wayland.
-class WaylandCursorFactory : public BitmapCursorFactoryOzone,
+class WaylandCursorFactory : public BitmapCursorFactory,
                              public CursorThemeManagerObserver,
                              public WaylandCursorBufferListener {
  public:
@@ -54,7 +56,7 @@ class WaylandCursorFactory : public BitmapCursorFactoryOzone,
     ThemeData();
     ~ThemeData();
     wl::Object<wl_cursor_theme> theme;
-    base::flat_map<mojom::CursorType, scoped_refptr<BitmapCursorOzone>> cache;
+    base::flat_map<mojom::CursorType, scoped_refptr<BitmapCursor>> cache;
   };
 
   // CusorThemeManagerObserver:
@@ -69,9 +71,12 @@ class WaylandCursorFactory : public BitmapCursorFactoryOzone,
                      int loaded_theme_size,
                      wl_cursor_theme* loaded_theme);
 
-  WaylandConnection* const connection_;
+  const raw_ptr<WaylandConnection> connection_;
 
-  base::ScopedObservation<CursorThemeManager, CursorThemeManagerObserver>
+  base::ScopedObservation<LinuxUi,
+                          CursorThemeManagerObserver,
+                          &LinuxUi::AddCursorThemeObserver,
+                          &LinuxUi::RemoveCursorThemeObserver>
       cursor_theme_observer_{this};
 
   // Name of the current theme.

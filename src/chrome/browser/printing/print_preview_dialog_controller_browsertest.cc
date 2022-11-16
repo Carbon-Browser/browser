@@ -11,10 +11,11 @@
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/location.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/test/bind.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "chrome/browser/plugins/chrome_plugin_service_filter.h"
@@ -37,6 +38,7 @@
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/web_contents_observer.h"
+#include "content/public/common/webplugininfo.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/test_utils.h"
@@ -44,7 +46,6 @@
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/ui_base_switches.h"
 #include "url/gurl.h"
-#include "url/origin.h"
 
 using content::WebContents;
 using content::WebContentsObserver;
@@ -57,41 +58,23 @@ void PluginsLoadedCallback(
   std::move(quit_closure).Run();
 }
 
-bool GetPdfPluginInfo(content::WebPluginInfo* info) {
-  static const base::FilePath pdf_plugin_path(
-      ChromeContentClient::kPDFPluginPath);
-  return content::PluginService::GetInstance()->GetPluginInfoByPath(
-      pdf_plugin_path, info);
-}
-
-const char kDummyPrintUrl[] = "chrome://print/dummy.pdf";
-
-void CountFrames(int* frame_count,
-                 content::RenderFrameHost* frame) {
-  ++(*frame_count);
-}
-
 void CheckPdfPluginForRenderFrame(content::RenderFrameHost* frame) {
-  content::WebPluginInfo pdf_plugin_info;
-  ASSERT_TRUE(GetPdfPluginInfo(&pdf_plugin_info));
+  static const base::FilePath kPdfInternalPluginPath(
+      ChromeContentClient::kPDFPluginPath);
+
+  content::WebPluginInfo pdf_internal_plugin_info;
+  ASSERT_TRUE(content::PluginService::GetInstance()->GetPluginInfoByPath(
+      kPdfInternalPluginPath, &pdf_internal_plugin_info));
 
   ChromePluginServiceFilter* filter = ChromePluginServiceFilter::GetInstance();
-  EXPECT_TRUE(filter->IsPluginAvailable(
-      frame->GetProcess()->GetID(), frame->GetRoutingID(), GURL(kDummyPrintUrl),
-      url::Origin(), &pdf_plugin_info));
+  EXPECT_TRUE(filter->IsPluginAvailable(frame->GetProcess()->GetID(),
+                                        pdf_internal_plugin_info));
 }
 
 }  // namespace
 
 class PrintPreviewDialogControllerBrowserTest : public InProcessBrowserTest {
  public:
-  PrintPreviewDialogControllerBrowserTest() = default;
-  PrintPreviewDialogControllerBrowserTest(
-      const PrintPreviewDialogControllerBrowserTest&) = delete;
-  PrintPreviewDialogControllerBrowserTest& operator=(
-      const PrintPreviewDialogControllerBrowserTest&) = delete;
-  ~PrintPreviewDialogControllerBrowserTest() override = default;
-
   WebContents* initiator() {
     return initiator_;
   }
@@ -118,7 +101,7 @@ class PrintPreviewDialogControllerBrowserTest : public InProcessBrowserTest {
 
  private:
   void SetUpOnMainThread() override {
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
     base::CommandLine::ForCurrentProcess()->AppendSwitch(
         switches::kDisableModalAnimations);
 #endif
@@ -127,7 +110,7 @@ class PrintPreviewDialogControllerBrowserTest : public InProcessBrowserTest {
         browser()->tab_strip_model()->GetActiveWebContents();
     ASSERT_TRUE(first_tab);
 
-    // Open a new tab so |cloned_tab_observer_| can see it and create a
+    // Open a new tab so `cloned_tab_observer_` can see it and create a
     // TestPrintViewManagerForRequestPreview for it before the real
     // PrintViewManager gets created.
     // Since TestPrintViewManagerForRequestPreview is created with
@@ -156,8 +139,9 @@ class PrintPreviewDialogControllerBrowserTest : public InProcessBrowserTest {
 
   std::unique_ptr<printing::TestPrintPreviewDialogClonedObserver>
       cloned_tab_observer_;
-  printing::TestPrintViewManagerForRequestPreview* test_print_view_manager_;
-  WebContents* initiator_ = nullptr;
+  raw_ptr<printing::TestPrintViewManagerForRequestPreview>
+      test_print_view_manager_;
+  raw_ptr<WebContents> initiator_ = nullptr;
 };
 
 // Test to verify that when a initiator navigates, we can create a new preview
@@ -245,19 +229,20 @@ IN_PROC_BROWSER_TEST_F(PrintPreviewDialogControllerBrowserTest,
     run_loop.Run();
   }
   // Get the PDF plugin info.
-  content::WebPluginInfo pdf_plugin_info;
-  ASSERT_TRUE(GetPdfPluginInfo(&pdf_plugin_info));
+  content::WebPluginInfo pdf_external_plugin_info;
+  ASSERT_TRUE(content::PluginService::GetInstance()->GetPluginInfoByPath(
+      base::FilePath(FILE_PATH_LITERAL(
+          "chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai/")),
+      &pdf_external_plugin_info));
 
   // Disable the PDF plugin.
   SetAlwaysOpenPdfExternallyForTests();
 
   // Make sure it is actually disabled for webpages.
   ChromePluginServiceFilter* filter = ChromePluginServiceFilter::GetInstance();
-  content::WebPluginInfo dummy_pdf_plugin_info = pdf_plugin_info;
   EXPECT_FALSE(filter->IsPluginAvailable(
-      initiator()->GetMainFrame()->GetProcess()->GetID(),
-      initiator()->GetMainFrame()->GetRoutingID(), GURL(),
-      url::Origin::Create(GURL("http://google.com")), &dummy_pdf_plugin_info));
+      initiator()->GetPrimaryMainFrame()->GetProcess()->GetID(),
+      pdf_external_plugin_info));
 
   PrintPreview();
 
@@ -266,24 +251,28 @@ IN_PROC_BROWSER_TEST_F(PrintPreviewDialogControllerBrowserTest,
   ASSERT_TRUE(preview_dialog);
   ASSERT_NE(initiator(), preview_dialog);
 
-  // Wait until the <iframe> in the print preview renderer has loaded.
-  // |frame_count| should be 2. The other frame is the main frame.
-  const int kExpectedFrameCount = 2;
+  // Wait until all the frames in the Print Preview renderer have loaded.
+  // `frame_count` should be 3: the main frame, the viewer's <iframe>, and the
+  // plugin frame.
+  const int kExpectedFrameCount = 3;
   int frame_count;
   do {
     base::RunLoop run_loop;
     base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
-        FROM_HERE, run_loop.QuitClosure(), base::TimeDelta::FromSeconds(1));
+        FROM_HERE, run_loop.QuitClosure(), base::Seconds(1));
     run_loop.Run();
 
     frame_count = 0;
-    preview_dialog->ForEachFrame(
-        base::BindRepeating(&CountFrames, base::Unretained(&frame_count)));
+    preview_dialog->GetPrimaryMainFrame()->ForEachRenderFrameHost(
+        base::BindLambdaForTesting(
+            [&frame_count](content::RenderFrameHost* /*frame*/) {
+              ++frame_count;
+            }));
   } while (frame_count < kExpectedFrameCount);
   ASSERT_EQ(kExpectedFrameCount, frame_count);
 
   // Make sure all the frames in the dialog has access to the PDF plugin.
-  preview_dialog->ForEachFrame(
+  preview_dialog->GetPrimaryMainFrame()->ForEachRenderFrameHost(
       base::BindRepeating(&CheckPdfPluginForRenderFrame));
 
   PrintPreviewDone();

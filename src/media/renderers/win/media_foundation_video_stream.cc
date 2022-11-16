@@ -5,6 +5,7 @@
 #include "media/renderers/win/media_foundation_video_stream.h"
 
 #include <initguid.h>  // NOLINT(build/include_order)
+#include <mfapi.h>     // NOLINT(build/include_order)
 #include <mferror.h>   // NOLINT(build/include_order)
 #include <wrl.h>       // NOLINT(build/include_order)
 
@@ -13,6 +14,7 @@
 #include "media/base/video_codecs.h"
 #include "media/base/video_decoder_config.h"
 #include "media/base/win/mf_helpers.h"
+#include "media/media_buildflags.h"
 
 namespace media {
 
@@ -24,7 +26,11 @@ namespace {
 // This is supported by Media Foundation.
 DEFINE_MEDIATYPE_GUID(MFVideoFormat_THEORA, FCC('theo'))
 
-GUID VideoCodecToMFSubtype(VideoCodec codec) {
+// MF_MT_MIN_MASTERING_LUMINANCE values are in 1/10000th of a nit (0.0001 nit).
+// https://docs.microsoft.com/en-us/windows/win32/api/dxgi1_5/ns-dxgi1_5-dxgi_hdr_metadata_hdr10
+constexpr int kMasteringDispLuminanceScale = 10000;
+
+GUID VideoCodecToMFSubtype(VideoCodec codec, VideoCodecProfile profile) {
   switch (codec) {
     case VideoCodec::kH264:
       return MFVideoFormat_H264;
@@ -43,9 +49,12 @@ GUID VideoCodecToMFSubtype(VideoCodec codec) {
     case VideoCodec::kHEVC:
       return MFVideoFormat_HEVC;
     case VideoCodec::kDolbyVision:
-      // TODO(frankli): DolbyVision also supports H264 when the profile ID is 9
-      // (DOLBYVISION_PROFILE9). Will it be fine to use HEVC?
-      return MFVideoFormat_HEVC;
+      if (profile == VideoCodecProfile::DOLBYVISION_PROFILE0 ||
+          profile == VideoCodecProfile::DOLBYVISION_PROFILE9) {
+        return MFVideoFormat_H264;
+      } else {
+        return MFVideoFormat_HEVC;
+      }
     case VideoCodec::kAV1:
       return MFVideoFormat_AV1;
     default:
@@ -155,7 +164,65 @@ MFVideoTransferFunction VideoTransferFunctionToMF(
   return MFVideoTransFunc_Unknown;
 }
 
-//
+MT_CUSTOM_VIDEO_PRIMARIES CustomVideoPrimaryToMF(
+    gfx::ColorVolumeMetadata color_volume_metadata) {
+  // MT_CUSTOM_VIDEO_PRIMARIES stores value in float no scaling factor needed
+  // https://docs.microsoft.com/en-us/windows/win32/api/mfapi/ns-mfapi-mt_custom_video_primaries
+  MT_CUSTOM_VIDEO_PRIMARIES primaries = {0};
+  primaries.fRx = color_volume_metadata.primary_r.x();
+  primaries.fRy = color_volume_metadata.primary_r.y();
+  primaries.fGx = color_volume_metadata.primary_g.x();
+  primaries.fGy = color_volume_metadata.primary_g.y();
+  primaries.fBx = color_volume_metadata.primary_b.x();
+  primaries.fBy = color_volume_metadata.primary_b.y();
+  primaries.fWx = color_volume_metadata.white_point.x();
+  primaries.fWy = color_volume_metadata.white_point.y();
+  return primaries;
+}
+
+#if BUILDFLAG(ENABLE_PLATFORM_DOLBY_VISION)
+// To MediaFoundation, DolbyVision renderer profile strings are always 7
+// characters. For HEVC based profiles, it's in the format "dvhe.xx". For AVC
+// based profiles, it's in the format "dvav.xx". In both cases, "xx" is the
+// two-digit profile number. Note the DolbyVision level is ignored.
+bool GetDolbyVisionConfigurations(
+    VideoCodecProfile profile,
+    std::wstring& dolby_vision_profile,
+    unsigned& dolby_vision_configuration_nalu_type) {
+  DVLOG(2) << __func__ << ": profile=" << profile;
+  switch (profile) {
+    case VideoCodecProfile::DOLBYVISION_PROFILE0:
+      DLOG(ERROR) << __func__ << ": Profile 0 unsupported by Media Foundation";
+      return false;
+    case VideoCodecProfile::DOLBYVISION_PROFILE4:
+      dolby_vision_profile = L"dvhe.04";
+      dolby_vision_configuration_nalu_type = 62;
+      break;
+    case VideoCodecProfile::DOLBYVISION_PROFILE5:
+      dolby_vision_profile = L"dvhe.05";
+      dolby_vision_configuration_nalu_type = 62;
+      break;
+    case VideoCodecProfile::DOLBYVISION_PROFILE7:
+      dolby_vision_profile = L"dvhe.07";
+      dolby_vision_configuration_nalu_type = 62;
+      break;
+    case VideoCodecProfile::DOLBYVISION_PROFILE8:
+      dolby_vision_profile = L"dvhe.08";
+      dolby_vision_configuration_nalu_type = 62;
+      break;
+    case VideoCodecProfile::DOLBYVISION_PROFILE9:
+      dolby_vision_profile = L"dvav.09";
+      dolby_vision_configuration_nalu_type = 28;
+      break;
+    default:
+      DLOG(ERROR) << __func__ << ": Invalid profile (" << profile << ")";
+      return false;
+  }
+
+  return true;
+}
+#endif  // BUILDFLAG(ENABLE_PLATFORM_DOLBY_VISION)
+
 // https://docs.microsoft.com/en-us/windows/win32/api/mfobjects/ns-mfobjects-mfoffset
 // The value of the MFOffset number is value + (fract / 65536.0f).
 MFOffset MakeOffset(float value) {
@@ -166,62 +233,103 @@ MFOffset MakeOffset(float value) {
 }
 
 // TODO(frankli): investigate if VideoCodecProfile is needed by MF.
-HRESULT GetVideoType(const VideoDecoderConfig& decoder_config,
+HRESULT GetVideoType(const VideoDecoderConfig& config,
                      IMFMediaType** media_type_out) {
   ComPtr<IMFMediaType> media_type;
   RETURN_IF_FAILED(MFCreateMediaType(&media_type));
   RETURN_IF_FAILED(media_type->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video));
 
-  GUID mf_subtype = VideoCodecToMFSubtype(decoder_config.codec());
+  GUID mf_subtype = VideoCodecToMFSubtype(config.codec(), config.profile());
   if (mf_subtype == GUID_NULL) {
-    DLOG(ERROR) << "Unsupported codec type: " << decoder_config.codec();
+    DLOG(ERROR) << "Unsupported codec type: " << config.codec();
     return MF_E_TOPO_CODEC_NOT_FOUND;
   }
   RETURN_IF_FAILED(media_type->SetGUID(MF_MT_SUBTYPE, mf_subtype));
 
-  UINT32 width = decoder_config.visible_rect().width();
-  UINT32 height = decoder_config.visible_rect().height();
+  UINT32 width = config.visible_rect().width();
+  UINT32 height = config.visible_rect().height();
   RETURN_IF_FAILED(
       MFSetAttributeSize(media_type.Get(), MF_MT_FRAME_SIZE, width, height));
 
-  UINT32 natural_width = decoder_config.natural_size().width();
-  UINT32 natural_height = decoder_config.natural_size().height();
+  UINT32 natural_width = config.natural_size().width();
+  UINT32 natural_height = config.natural_size().height();
   RETURN_IF_FAILED(
       MFSetAttributeRatio(media_type.Get(), MF_MT_PIXEL_ASPECT_RATIO,
                           height * natural_width, width * natural_height));
 
   MFVideoArea area;
-  area.OffsetX =
-      MakeOffset(static_cast<float>(decoder_config.visible_rect().x()));
-  area.OffsetY =
-      MakeOffset(static_cast<float>(decoder_config.visible_rect().y()));
-  area.Area = decoder_config.natural_size().ToSIZE();
+  area.OffsetX = MakeOffset(static_cast<float>(config.visible_rect().x()));
+  area.OffsetY = MakeOffset(static_cast<float>(config.visible_rect().y()));
+  area.Area = config.natural_size().ToSIZE();
   RETURN_IF_FAILED(media_type->SetBlob(MF_MT_GEOMETRIC_APERTURE, (UINT8*)&area,
                                        sizeof(area)));
 
-  if (decoder_config.video_transformation().rotation !=
+  if (config.video_transformation().rotation !=
       VideoRotation::VIDEO_ROTATION_0) {
     MFVideoRotationFormat mf_rotation =
-        VideoRotationToMF(decoder_config.video_transformation().rotation);
+        VideoRotationToMF(config.video_transformation().rotation);
     RETURN_IF_FAILED(media_type->SetUINT32(MF_MT_VIDEO_ROTATION, mf_rotation));
   }
 
   MFVideoTransferFunction mf_transfer_function =
-      VideoTransferFunctionToMF(decoder_config.color_space_info().transfer);
+      VideoTransferFunctionToMF(config.color_space_info().transfer);
   RETURN_IF_FAILED(
       media_type->SetUINT32(MF_MT_TRANSFER_FUNCTION, mf_transfer_function));
 
   MFVideoPrimaries mf_video_primary =
-      VideoPrimariesToMF(decoder_config.color_space_info().primaries);
+      VideoPrimariesToMF(config.color_space_info().primaries);
   RETURN_IF_FAILED(
       media_type->SetUINT32(MF_MT_VIDEO_PRIMARIES, mf_video_primary));
 
+  UINT32 video_nominal_range =
+      config.color_space_info().range == gfx::ColorSpace::RangeID::FULL
+          ? MFNominalRange_0_255
+          : MFNominalRange_16_235;
+  RETURN_IF_FAILED(
+      media_type->SetUINT32(MF_MT_VIDEO_NOMINAL_RANGE, video_nominal_range));
+
+  if (config.hdr_metadata().has_value()) {
+    UINT32 max_display_mastering_luminance =
+        config.hdr_metadata()->color_volume_metadata.luminance_max;
+    RETURN_IF_FAILED(media_type->SetUINT32(MF_MT_MAX_MASTERING_LUMINANCE,
+                                           max_display_mastering_luminance));
+
+    UINT32 min_display_mastering_luminance =
+        config.hdr_metadata()->color_volume_metadata.luminance_min *
+        kMasteringDispLuminanceScale;
+    RETURN_IF_FAILED(media_type->SetUINT32(MF_MT_MIN_MASTERING_LUMINANCE,
+                                           min_display_mastering_luminance));
+
+    MT_CUSTOM_VIDEO_PRIMARIES primaries =
+        CustomVideoPrimaryToMF(config.hdr_metadata()->color_volume_metadata);
+    RETURN_IF_FAILED(media_type->SetBlob(MF_MT_CUSTOM_VIDEO_PRIMARIES,
+                                         reinterpret_cast<UINT8*>(&primaries),
+                                         sizeof(MT_CUSTOM_VIDEO_PRIMARIES)));
+  }
   base::UmaHistogramEnumeration(
       "Media.MediaFoundation.VideoColorSpace.TransferID",
-      decoder_config.color_space_info().transfer);
+      config.color_space_info().transfer);
   base::UmaHistogramEnumeration(
       "Media.MediaFoundation.VideoColorSpace.PrimaryID",
-      decoder_config.color_space_info().primaries);
+      config.color_space_info().primaries);
+
+#if BUILDFLAG(ENABLE_PLATFORM_DOLBY_VISION)
+  if (config.codec() == VideoCodec::kDolbyVision) {
+    std::wstring dolby_vision_profile;
+    // This value should be 28 for AVC and 62 for HEVC.
+    unsigned dolby_vision_configuration_nalu_type = 0;
+    if (!GetDolbyVisionConfigurations(config.profile(), dolby_vision_profile,
+                                      dolby_vision_configuration_nalu_type)) {
+      return MF_E_TOPO_CODEC_NOT_FOUND;
+    }
+
+    media_type->SetString(MF_MT_VIDEO_RENDERER_EXTENSION_PROFILE,
+                          dolby_vision_profile.c_str());
+    media_type->SetUINT32(MF_MT_FORWARD_CUSTOM_NALU,
+                          dolby_vision_configuration_nalu_type);
+    media_type->SetUINT32(MF_DECODER_FWD_CUSTOM_SEI_DECODE_ORDER, TRUE);
+  }
+#endif  // BUILDFLAG(ENABLE_PLATFORM_DOLBY_VISION)
 
   *media_type_out = media_type.Detach();
   return S_OK;
@@ -234,6 +342,7 @@ HRESULT MediaFoundationVideoStream::Create(
     int stream_id,
     IMFMediaSource* parent_source,
     DemuxerStream* demuxer_stream,
+    std::unique_ptr<MediaLog> media_log,
     MediaFoundationStreamWrapper** stream_out) {
   DVLOG(1) << __func__ << ": stream_id=" << stream_id;
 
@@ -243,7 +352,8 @@ HRESULT MediaFoundationVideoStream::Create(
 #if BUILDFLAG(USE_PROPRIETARY_CODECS)
     case VideoCodec::kH264:
       RETURN_IF_FAILED(MakeAndInitialize<MediaFoundationH264VideoStream>(
-          &video_stream, stream_id, parent_source, demuxer_stream));
+          &video_stream, stream_id, parent_source, demuxer_stream,
+          std::move(media_log)));
       break;
 #endif  // BUILDFLAG(USE_PROPRIETARY_CODECS)
 #if BUILDFLAG(ENABLE_PLATFORM_HEVC)
@@ -254,15 +364,18 @@ HRESULT MediaFoundationVideoStream::Create(
 #endif
 #if BUILDFLAG(ENABLE_PLATFORM_HEVC) || BUILDFLAG(ENABLE_PLATFORM_DOLBY_VISION)
       RETURN_IF_FAILED(MakeAndInitialize<MediaFoundationHEVCVideoStream>(
-          &video_stream, stream_id, parent_source, demuxer_stream));
+          &video_stream, stream_id, parent_source, demuxer_stream,
+          std::move(media_log)));
       break;
 #endif  // BUILDFLAG(ENABLE_PLATFORM_HEVC) ||
         // BUILDFLAG(ENABLE_PLATFORM_DOLBY_VISION)
     default:
       RETURN_IF_FAILED(MakeAndInitialize<MediaFoundationVideoStream>(
-          &video_stream, stream_id, parent_source, demuxer_stream));
+          &video_stream, stream_id, parent_source, demuxer_stream,
+          std::move(media_log)));
       break;
   }
+
   *stream_out =
       static_cast<MediaFoundationStreamWrapper*>(video_stream.Detach());
   return S_OK;

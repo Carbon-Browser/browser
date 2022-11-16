@@ -13,21 +13,22 @@
 #include "base/containers/queue.h"
 #include "base/json/json_reader.h"
 #include "base/notreached.h"
-#include "base/sequenced_task_runner.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/task_runner.h"
+#include "base/token.h"
 #include "base/values.h"
 #include "chrome/browser/policy/messaging_layer/upload/dm_server_upload_service.h"
 #include "chrome/browser/policy/messaging_layer/upload/record_upload_request_builder.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/profiles/reporting_util.h"
 #include "components/policy/core/common/cloud/cloud_policy_client.h"
-#include "components/reporting/proto/record.pb.h"
-#include "components/reporting/proto/record_constants.pb.h"
+#include "components/reporting/proto/synced/record.pb.h"
+#include "components/reporting/proto/synced/record_constants.pb.h"
 #include "components/reporting/util/status.h"
 #include "components/reporting/util/status_macros.h"
 #include "components/reporting/util/statusor.h"
@@ -44,14 +45,13 @@ namespace {
 constexpr char kEncryptedRecordListKey[] = "encryptedRecord";
 constexpr char kAttachEncryptionSettingsKey[] = "attachEncryptionSettings";
 
-// EncrypedRecordDictionaryBuilder strings
+// EncryptedRecordDictionaryBuilder strings
 constexpr char kEncryptedWrappedRecord[] = "encryptedWrappedRecord";
-constexpr char kUnsignedSequencingInformationKey[] = "sequencingInformation";
-constexpr char kSequencingInformationKey[] = "sequenceInformation";
+constexpr char kSequenceInformationKey[] = "sequenceInformation";
 constexpr char kEncryptionInfoKey[] = "encryptionInfo";
 constexpr char kCompressionInformationKey[] = "compressionInformation";
 
-// SequencingInformationDictionaryBuilder strings
+// SequenceInformationDictionaryBuilder strings
 constexpr char kSequencingId[] = "sequencingId";
 constexpr char kGenerationId[] = "generationId";
 constexpr char kPriority[] = "priority";
@@ -67,9 +67,9 @@ constexpr char kCompressionAlgorithmKey[] = "compressionAlgorithm";
 
 UploadEncryptedReportingRequestBuilder::UploadEncryptedReportingRequestBuilder(
     bool attach_encryption_settings) {
-  result_ = base::Value{base::Value::Type::DICTIONARY};
+  result_.emplace();
   if (attach_encryption_settings) {
-    result_.value().SetBoolKey(GetAttachEncryptionSettingsPath(), true);
+    result_->Set(GetAttachEncryptionSettingsPath(), true);
   }
 }
 
@@ -78,23 +78,23 @@ UploadEncryptedReportingRequestBuilder::
 
 UploadEncryptedReportingRequestBuilder&
 UploadEncryptedReportingRequestBuilder::AddRecord(
-    const EncryptedRecord& record) {
+    EncryptedRecord record,
+    ScopedReservation& scoped_reservation) {
   if (!result_.has_value()) {
     // Some errors were already detected.
     return *this;
   }
-  base::Value* records_list =
-      result_.value().FindListKey(GetEncryptedRecordListPath());
+  base::Value::List* records_list =
+      result_->FindList(GetEncryptedRecordListPath());
   if (!records_list) {
-    records_list = result_.value().SetKey(GetEncryptedRecordListPath(),
-                                          base::Value{base::Value::Type::LIST});
-  }
-  if (!records_list->is_list()) {
-    NOTREACHED();  // Should not happen.
-    return *this;
+    records_list =
+        &result_->Set(GetEncryptedRecordListPath(), base::Value::List())
+             ->GetList();
   }
 
-  auto record_result = EncryptedRecordDictionaryBuilder(record).Build();
+  auto record_result =
+      EncryptedRecordDictionaryBuilder(std::move(record), scoped_reservation)
+          .Build();
   if (!record_result.has_value()) {
     // Record has errors. Stop here.
     result_ = absl::nullopt;
@@ -105,7 +105,32 @@ UploadEncryptedReportingRequestBuilder::AddRecord(
   return *this;
 }
 
-absl::optional<base::Value> UploadEncryptedReportingRequestBuilder::Build() {
+UploadEncryptedReportingRequestBuilder&
+UploadEncryptedReportingRequestBuilder::SetRequestId(
+    base::StringPiece request_id) {
+  if (!result_.has_value()) {
+    // Some errors were already detected
+    return *this;
+  }
+
+  result_->Set(UploadEncryptedReportingRequestBuilder::kRequestId, request_id);
+
+  return *this;
+}
+
+absl::optional<base::Value::Dict>
+UploadEncryptedReportingRequestBuilder::Build() {
+  // Ensure that if result_ has value, then it must not have a non-string
+  // requestId.
+  DCHECK(!(result_.has_value() &&
+           result_->Find(UploadEncryptedReportingRequestBuilder::kRequestId) &&
+           !result_->FindString(
+               UploadEncryptedReportingRequestBuilder::kRequestId)));
+  if (result_.has_value() &&
+      result_->FindString(UploadEncryptedReportingRequestBuilder::kRequestId) ==
+          nullptr) {
+    SetRequestId(base::Token::CreateRandom().ToString());
+  }
   return std::move(result_);
 }
 
@@ -122,36 +147,24 @@ UploadEncryptedReportingRequestBuilder::GetAttachEncryptionSettingsPath() {
 }
 
 EncryptedRecordDictionaryBuilder::EncryptedRecordDictionaryBuilder(
-    const EncryptedRecord& record) {
-  base::Value record_dictionary{base::Value::Type::DICTIONARY};
+    EncryptedRecord record,
+    ScopedReservation& scoped_reservation) {
+  base::Value::Dict record_dictionary;
 
-  // A record without sequencing information cannot be uploaded - deny it.
-  if (!record.has_sequencing_information()) {
+  // A record without sequence information cannot be uploaded - deny it.
+  if (!record.has_sequence_information()) {
     return;
   }
-  auto sequencing_information_result =
-      SequencingInformationDictionaryBuilder(record.sequencing_information())
+  auto sequence_information_result =
+      SequenceInformationDictionaryBuilder(record.sequence_information())
           .Build();
-  if (!sequencing_information_result.has_value()) {
+  if (!sequence_information_result.has_value()) {
     // Sequencing information was improperly configured. Record cannot be
     // uploaded. Deny it.
     return;
   }
-  record_dictionary.SetKey(GetSequencingInformationKeyPath(),
-                           std::move(sequencing_information_result.value()));
-  // For backwards compatibility, store unsigned sequencing information too.
-  // The values are non-negative anyway, so the same builder can be used.
-  auto unsigned_sequencing_information_result =
-      SequencingInformationDictionaryBuilder(record.sequencing_information())
-          .Build();
-  if (!unsigned_sequencing_information_result.has_value()) {
-    // Sequencing information was improperly configured. Record cannot be
-    // uploaded. Deny it.
-    return;
-  }
-  record_dictionary.SetKey(
-      GetUnsignedSequencingInformationKeyPath(),
-      std::move(unsigned_sequencing_information_result.value()));
+  record_dictionary.Set(GetSequenceInformationKeyPath(),
+                        std::move(sequence_information_result.value()));
 
   // Encryption information can be missing until we set up encryption as
   // mandatory.
@@ -162,12 +175,12 @@ EncryptedRecordDictionaryBuilder::EncryptedRecordDictionaryBuilder(
       // Encryption info has been corrupted or set improperly. Deny it.
       return;
     }
-    record_dictionary.SetKey(GetEncryptionInfoPath(),
-                             std::move(encryption_info_result.value()));
+    record_dictionary.Set(GetEncryptionInfoPath(),
+                          std::move(encryption_info_result.value()));
   }
 
-  // TODO (b/189130411) Compression information can be missing until we set up
-  // compression as mandatory.
+  // Compression information can be missing until we set up compression as
+  // mandatory.
   if (record.has_compression_information()) {
     auto compression_information_result =
         CompressionInformationDictionaryBuilder(
@@ -177,16 +190,25 @@ EncryptedRecordDictionaryBuilder::EncryptedRecordDictionaryBuilder(
       // Compression info has been corrupted or set improperly. Deny it.
       return;
     }
-    record_dictionary.SetKey(GetCompressionInformationPath(),
-                             std::move(compression_information_result.value()));
+    record_dictionary.Set(GetCompressionInformationPath(),
+                          std::move(compression_information_result.value()));
   }
 
   // Gap records won't fill in this field, so it can be missing.
   if (record.has_encrypted_wrapped_record()) {
     std::string base64_encode;
     base::Base64Encode(record.encrypted_wrapped_record(), &base64_encode);
-    record_dictionary.SetStringKey(GetEncryptedWrappedRecordPath(),
-                                   base64_encode);
+    ScopedReservation base64_encode_reservation(base64_encode.size(),
+                                                scoped_reservation);
+    if (!base64_encode_reservation.reserved()) {
+      // Insufficient memory
+      return;
+    }
+    record_dictionary.Set(GetEncryptedWrappedRecordPath(),
+                          std::move(base64_encode));
+    // Replace record reservation with base64_encode.
+    scoped_reservation.Reduce(0uL);
+    scoped_reservation.HandOver(base64_encode_reservation);
   }
 
   // Result complete.
@@ -195,7 +217,7 @@ EncryptedRecordDictionaryBuilder::EncryptedRecordDictionaryBuilder(
 
 EncryptedRecordDictionaryBuilder::~EncryptedRecordDictionaryBuilder() = default;
 
-absl::optional<base::Value> EncryptedRecordDictionaryBuilder::Build() {
+absl::optional<base::Value::Dict> EncryptedRecordDictionaryBuilder::Build() {
   return std::move(result_);
 }
 
@@ -207,14 +229,8 @@ EncryptedRecordDictionaryBuilder::GetEncryptedWrappedRecordPath() {
 
 // static
 base::StringPiece
-EncryptedRecordDictionaryBuilder::GetUnsignedSequencingInformationKeyPath() {
-  return kUnsignedSequencingInformationKey;
-}
-
-// static
-base::StringPiece
-EncryptedRecordDictionaryBuilder::GetSequencingInformationKeyPath() {
-  return kSequencingInformationKey;
+EncryptedRecordDictionaryBuilder::GetSequenceInformationKeyPath() {
+  return kSequenceInformationKey;
 }
 
 // static
@@ -228,54 +244,49 @@ EncryptedRecordDictionaryBuilder::GetCompressionInformationPath() {
   return kCompressionInformationKey;
 }
 
-SequencingInformationDictionaryBuilder::SequencingInformationDictionaryBuilder(
-    const SequencingInformation& sequencing_information) {
-  // SequencingInformation requires all three fields be set.
-  if (!sequencing_information.has_sequencing_id() ||
-      !sequencing_information.has_generation_id() ||
-      !sequencing_information.has_priority()) {
+SequenceInformationDictionaryBuilder::SequenceInformationDictionaryBuilder(
+    const SequenceInformation& sequence_information) {
+  // SequenceInformation requires all three fields be set.
+  if (!sequence_information.has_sequencing_id() ||
+      !sequence_information.has_generation_id() ||
+      !sequence_information.has_priority()) {
     return;
   }
 
-  base::Value sequencing_dictionary{base::Value::Type::DICTIONARY};
-  sequencing_dictionary.SetStringKey(
-      GetSequencingIdPath(),
-      base::NumberToString(sequencing_information.sequencing_id()));
-  sequencing_dictionary.SetStringKey(
-      GetGenerationIdPath(),
-      base::NumberToString(sequencing_information.generation_id()));
-  sequencing_dictionary.SetIntKey(GetPriorityPath(),
-                                  sequencing_information.priority());
-  result_ = std::move(sequencing_dictionary);
+  result_.emplace();
+  result_->Set(GetSequencingIdPath(),
+               base::NumberToString(sequence_information.sequencing_id()));
+  result_->Set(GetGenerationIdPath(),
+               base::NumberToString(sequence_information.generation_id()));
+  result_->Set(GetPriorityPath(), sequence_information.priority());
 }
 
-SequencingInformationDictionaryBuilder::
-    ~SequencingInformationDictionaryBuilder() = default;
+SequenceInformationDictionaryBuilder::~SequenceInformationDictionaryBuilder() =
+    default;
 
-absl::optional<base::Value> SequencingInformationDictionaryBuilder::Build() {
+absl::optional<base::Value::Dict>
+SequenceInformationDictionaryBuilder::Build() {
   return std::move(result_);
 }
 
 // static
-base::StringPiece
-SequencingInformationDictionaryBuilder::GetSequencingIdPath() {
+base::StringPiece SequenceInformationDictionaryBuilder::GetSequencingIdPath() {
   return kSequencingId;
 }
 
 // static
-base::StringPiece
-SequencingInformationDictionaryBuilder::GetGenerationIdPath() {
+base::StringPiece SequenceInformationDictionaryBuilder::GetGenerationIdPath() {
   return kGenerationId;
 }
 
 // static
-base::StringPiece SequencingInformationDictionaryBuilder::GetPriorityPath() {
+base::StringPiece SequenceInformationDictionaryBuilder::GetPriorityPath() {
   return kPriority;
 }
 
 EncryptionInfoDictionaryBuilder::EncryptionInfoDictionaryBuilder(
     const EncryptionInfo& encryption_info) {
-  base::Value encryption_info_dictionary{base::Value::Type::DICTIONARY};
+  base::Value::Dict encryption_info_dictionary;
 
   // EncryptionInfo requires both fields are set.
   if (!encryption_info.has_encryption_key() ||
@@ -285,8 +296,8 @@ EncryptionInfoDictionaryBuilder::EncryptionInfoDictionaryBuilder(
 
   std::string base64_key;
   base::Base64Encode(encryption_info.encryption_key(), &base64_key);
-  encryption_info_dictionary.SetStringKey(GetEncryptionKeyPath(), base64_key);
-  encryption_info_dictionary.SetStringKey(
+  encryption_info_dictionary.Set(GetEncryptionKeyPath(), base64_key);
+  encryption_info_dictionary.Set(
       GetPublicKeyIdPath(),
       base::NumberToString(encryption_info.public_key_id()));
   result_ = std::move(encryption_info_dictionary);
@@ -294,7 +305,7 @@ EncryptionInfoDictionaryBuilder::EncryptionInfoDictionaryBuilder(
 
 EncryptionInfoDictionaryBuilder::~EncryptionInfoDictionaryBuilder() = default;
 
-absl::optional<base::Value> EncryptionInfoDictionaryBuilder::Build() {
+absl::optional<base::Value::Dict> EncryptionInfoDictionaryBuilder::Build() {
   return std::move(result_);
 }
 
@@ -311,7 +322,7 @@ base::StringPiece EncryptionInfoDictionaryBuilder::GetPublicKeyIdPath() {
 CompressionInformationDictionaryBuilder::
     CompressionInformationDictionaryBuilder(
         const CompressionInformation& compression_information) {
-  base::Value compression_information_dictionary{base::Value::Type::DICTIONARY};
+  base::Value::Dict compression_information_dictionary;
 
   // Ensure that compression_algorithm is valid.
   if (!CompressionInformation::CompressionAlgorithm_IsValid(
@@ -319,7 +330,7 @@ CompressionInformationDictionaryBuilder::
     return;
   }
 
-  compression_information_dictionary.SetIntKey(
+  compression_information_dictionary.Set(
       GetCompressionAlgorithmPath(),
       compression_information.compression_algorithm());
   result_ = std::move(compression_information_dictionary);
@@ -328,7 +339,8 @@ CompressionInformationDictionaryBuilder::
 CompressionInformationDictionaryBuilder::
     ~CompressionInformationDictionaryBuilder() = default;
 
-absl::optional<base::Value> CompressionInformationDictionaryBuilder::Build() {
+absl::optional<base::Value::Dict>
+CompressionInformationDictionaryBuilder::Build() {
   return std::move(result_);
 }
 

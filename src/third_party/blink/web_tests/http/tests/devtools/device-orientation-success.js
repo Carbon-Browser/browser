@@ -4,7 +4,7 @@
 
 (async function() {
   TestRunner.addResult(`Test device orientation\n`);
-  await TestRunner.loadModule('console'); await TestRunner.loadTestModule('console_test_runner');
+  await TestRunner.loadLegacyModule('console'); await TestRunner.loadTestModule('console_test_runner');
   await TestRunner.addScriptTag('/resources/testharness.js');
   await TestRunner.evaluateInPagePromise(`
       var sensorProvider = null;
@@ -15,7 +15,7 @@
       async function setUpDeviceOrientation()
       {
           const {sensorMocks, setMockSensorDataForType} =
-              await import('/wpt_internal/orientation-event/resources/sensor-helpers.js');
+              await import('/resources/sensor-helpers.js');
           sensorProvider = sensorMocks();
           let mockDataPromise = setMockSensorDataForType(
               sensorProvider,

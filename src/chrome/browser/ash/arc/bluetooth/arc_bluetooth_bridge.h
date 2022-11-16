@@ -15,6 +15,9 @@
 #include <unordered_set>
 #include <vector>
 
+#include "ash/components/arc/mojom/bluetooth.mojom.h"
+#include "ash/components/arc/mojom/intent_helper.mojom-forward.h"
+#include "ash/components/arc/session/connection_observer.h"
 #include "base/callback_forward.h"
 #include "base/containers/unique_ptr_adapters.h"
 #include "base/files/file.h"
@@ -22,9 +25,6 @@
 #include "base/threading/thread_checker.h"
 #include "base/timer/timer.h"
 #include "chrome/browser/ash/arc/bluetooth/arc_bluetooth_task_queue.h"
-#include "components/arc/mojom/bluetooth.mojom.h"
-#include "components/arc/mojom/intent_helper.mojom-forward.h"
-#include "components/arc/session/connection_observer.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "device/bluetooth/bluetooth_adapter.h"
 #include "device/bluetooth/bluetooth_adapter_factory.h"
@@ -74,6 +74,10 @@ class ArcBluetoothBridge
 
   ArcBluetoothBridge(content::BrowserContext* context,
                      ArcBridgeService* bridge_service);
+
+  ArcBluetoothBridge(const ArcBluetoothBridge&) = delete;
+  ArcBluetoothBridge& operator=(const ArcBluetoothBridge&) = delete;
+
   ~ArcBluetoothBridge() override;
 
   void OnAdapterInitialized(scoped_refptr<device::BluetoothAdapter> adapter);
@@ -266,9 +270,6 @@ class ArcBluetoothBridge
   void ReadRemoteRssi(mojom::BluetoothAddressPtr remote_addr,
                       ReadRemoteRssiCallback callback) override;
 
-  void OpenBluetoothSocketDeprecated(
-      OpenBluetoothSocketDeprecatedCallback callback) override;
-
   // Bluetooth Mojo host interface - Bluetooth Gatt Server functions
   // Android counterpart link:
   // https://source.android.com/devices/halref/bt__gatt__server_8h.html
@@ -314,16 +315,6 @@ class ArcBluetoothBridge
                        CreateSdpRecordCallback callback) override;
   void RemoveSdpRecord(uint32_t service_handle,
                        RemoveSdpRecordCallback callback) override;
-
-  // Bluetooth Mojo host interface - Bluetooth RFCOMM functions
-  void RfcommListenDeprecated(int32_t channel,
-                              int32_t optval,
-                              RfcommListenDeprecatedCallback callback) override;
-  void RfcommConnectDeprecated(
-      mojom::BluetoothAddressPtr remote_addr,
-      int32_t channel,
-      int32_t optval,
-      RfcommConnectDeprecatedCallback callback) override;
 
   // Bluetooth Mojo host interface - Bluetooth socket functions
   void BluetoothSocketListen(mojom::BluetoothSocketType sock_type,
@@ -673,12 +664,13 @@ class ArcBluetoothBridge
                    std::unique_ptr<device::BluetoothGattConnection> connection,
                    bool need_hard_disconnect);
     GattConnection();
+    GattConnection(const GattConnection&) = delete;
+    GattConnection& operator=(const GattConnection&) = delete;
     ~GattConnection();
     GattConnection(GattConnection&&);
     GattConnection& operator=(GattConnection&&);
 
    private:
-    DISALLOW_COPY_AND_ASSIGN(GattConnection);
   };
   std::unordered_map<std::string, GattConnection> gatt_connections_;
 
@@ -752,8 +744,6 @@ class ArcBluetoothBridge
 
   // WeakPtrFactory to use for callbacks.
   base::WeakPtrFactory<ArcBluetoothBridge> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ArcBluetoothBridge);
 };
 
 }  // namespace arc

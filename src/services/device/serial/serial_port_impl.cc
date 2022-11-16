@@ -9,7 +9,7 @@
 
 #include "base/bind.h"
 #include "base/callback_helpers.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "services/device/serial/serial_io_handler.h"
 
 namespace device {
@@ -199,7 +199,11 @@ void SerialPortImpl::GetPortInfo(GetPortInfoCallback callback) {
   std::move(callback).Run(io_handler_->GetPortInfo());
 }
 
-void SerialPortImpl::Close(CloseCallback callback) {
+void SerialPortImpl::Close(bool flush, CloseCallback callback) {
+  if (flush) {
+    io_handler_->Flush(mojom::SerialPortFlushMode::kReceiveAndTransmit);
+  }
+
   io_handler_->Close(base::BindOnce(&SerialPortImpl::PortClosed,
                                     weak_factory_.GetWeakPtr(),
                                     std::move(callback)));

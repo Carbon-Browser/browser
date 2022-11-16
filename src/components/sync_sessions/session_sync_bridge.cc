@@ -14,7 +14,8 @@
 #include "base/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
-#include "base/sequenced_task_runner.h"
+#include "base/memory/raw_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/time.h"
 #include "components/sync/base/client_tag_hash.h"
@@ -34,12 +35,10 @@ namespace {
 
 using sync_pb::SessionSpecifics;
 using syncer::MetadataChangeList;
-using syncer::ModelTypeStore;
-using syncer::ModelTypeSyncBridge;
 
 // Default time without activity after which a session is considered stale and
 // becomes a candidate for garbage collection.
-const base::TimeDelta kStaleSessionThreshold = base::TimeDelta::FromDays(14);
+const base::TimeDelta kStaleSessionThreshold = base::Days(14);
 
 std::unique_ptr<syncer::EntityData> MoveToEntityData(
     const std::string& client_name,
@@ -63,7 +62,7 @@ class LocalSessionWriteBatch : public LocalSessionEventHandlerImpl::WriteBatch {
     DCHECK(processor_->IsTrackingMetadata());
   }
 
-  ~LocalSessionWriteBatch() override {}
+  ~LocalSessionWriteBatch() override = default;
 
   // WriteBatch implementation.
   void Delete(int tab_node_id) override {
@@ -91,7 +90,7 @@ class LocalSessionWriteBatch : public LocalSessionEventHandlerImpl::WriteBatch {
  private:
   const SessionStore::SessionInfo session_info_;
   std::unique_ptr<SessionStore::WriteBatch> batch_;
-  syncer::ModelTypeChangeProcessor* const processor_;
+  const raw_ptr<syncer::ModelTypeChangeProcessor> processor_;
 };
 
 }  // namespace
@@ -338,11 +337,9 @@ void SessionSyncBridge::OnSyncStarting(
   }
 
   // Open the store and read state from disk if it exists.
-  SessionStore::Open(
-      request.cache_guid,
-      sessions_client_,
-      base::BindOnce(&SessionSyncBridge::OnStoreInitialized,
-                     weak_ptr_factory_.GetWeakPtr()));
+  SessionStore::Open(request.cache_guid, sessions_client_,
+                     base::BindOnce(&SessionSyncBridge::OnStoreInitialized,
+                                    weak_ptr_factory_.GetWeakPtr()));
 }
 
 void SessionSyncBridge::OnStoreInitialized(
@@ -441,10 +438,9 @@ void SessionSyncBridge::ResubmitLocalSession() {
       CreateSessionStoreWriteBatch();
   std::unique_ptr<syncer::DataBatch> read_batch = store_->GetAllSessionData();
   while (read_batch->HasNext()) {
-    syncer::KeyAndData key_and_data = read_batch->Next();
-    if (store_->StorageKeyMatchesLocalSession(key_and_data.first)) {
-      change_processor()->Put(key_and_data.first,
-                              std::move(key_and_data.second),
+    auto [key, data] = read_batch->Next();
+    if (store_->StorageKeyMatchesLocalSession(key)) {
+      change_processor()->Put(key, std::move(data),
                               write_batch->GetMetadataChangeList());
     }
   }
@@ -456,8 +452,8 @@ void SessionSyncBridge::ReportError(const syncer::ModelError& error) {
   change_processor()->ReportError(error);
 }
 
-SessionSyncBridge::SyncingState::SyncingState() {}
+SessionSyncBridge::SyncingState::SyncingState() = default;
 
-SessionSyncBridge::SyncingState::~SyncingState() {}
+SessionSyncBridge::SyncingState::~SyncingState() = default;
 
 }  // namespace sync_sessions

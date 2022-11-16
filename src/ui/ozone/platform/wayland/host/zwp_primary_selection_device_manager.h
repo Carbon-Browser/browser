@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "ui/ozone/platform/wayland/common/wayland_object.h"
 #include "ui/ozone/platform/wayland/host/wayland_data_source.h"
 
@@ -18,10 +19,13 @@ class WaylandConnection;
 class ZwpPrimarySelectionDeviceManager
     : public wl::GlobalObjectRegistrar<ZwpPrimarySelectionDeviceManager> {
  public:
-  static void Register(WaylandConnection* connection);
+  static constexpr char kInterfaceName[] =
+      "zwp_primary_selection_device_manager_v1";
+
   static void Instantiate(WaylandConnection* connection,
                           wl_registry* registry,
                           uint32_t name,
+                          const std::string& interface,
                           uint32_t version);
 
   using DataSource = ZwpPrimarySelectionSource;
@@ -43,7 +47,7 @@ class ZwpPrimarySelectionDeviceManager
  private:
   wl::Object<zwp_primary_selection_device_manager_v1> device_manager_;
 
-  WaylandConnection* const connection_;
+  const raw_ptr<WaylandConnection> connection_;
 
   std::unique_ptr<ZwpPrimarySelectionDevice> device_;
 };

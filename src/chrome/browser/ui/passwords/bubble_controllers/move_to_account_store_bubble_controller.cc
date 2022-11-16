@@ -14,7 +14,7 @@
 #include "components/password_manager/core/browser/password_feature_manager.h"
 #include "components/password_manager/core/browser/password_manager_features_util.h"
 #include "components/password_manager/core/common/password_manager_ui.h"
-#include "components/signin/public/identity_manager/consent_level.h"
+#include "components/signin/public/base/consent_level.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/web_contents.h"
@@ -32,8 +32,7 @@ MoveToAccountStoreBubbleController::MoveToAccountStoreBubbleController(
 MoveToAccountStoreBubbleController::~MoveToAccountStoreBubbleController() {
   // Make sure the interactions are reported even if Views didn't notify the
   // controller about the bubble being closed.
-  if (!interaction_reported_)
-    OnBubbleClosing();
+  OnBubbleClosing();
 }
 
 void MoveToAccountStoreBubbleController::RequestFavicon(
@@ -91,8 +90,8 @@ gfx::Image MoveToAccountStoreBubbleController::GetProfileIcon(int size) {
         profiles::GetPlaceholderAvatarIconResourceID());
   }
   return profiles::GetSizedAvatarIcon(account_icon,
-                                      /*is_rectangle=*/true, /*width=*/size,
-                                      /*height=*/size, profiles::SHAPE_CIRCLE);
+                                      /*width=*/size, /*height=*/size,
+                                      profiles::SHAPE_CIRCLE);
 }
 
 void MoveToAccountStoreBubbleController::ReportInteractions() {

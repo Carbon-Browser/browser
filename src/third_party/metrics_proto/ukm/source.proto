@@ -21,6 +21,8 @@ enum SourceType {
   DESKTOP_WEB_APP_ID = 6;
   WORKER_ID = 7;
   NO_URL_ID = 8;
+  REDIRECT_ID = 9;
+  WEB_IDENTITY_ID = 10;
 }
 
 // Android Activity Type defined by
@@ -140,10 +142,6 @@ message Source {
   // The URL of the source, as recorded in history. If this URL has not been
   // discovered by Google's crawler, it should not be recorded.
   optional string url = 2;
-
-  // The origin of the URL (ex. "http://docs.google.com" if the URL is something
-  // like "http://docs.google.com/some_doc_hash"). This field is populated
-  // server-side and should never be filled in by clients.
   reserved 5;
   reserved "url_origin";
   reserved 9;
@@ -177,8 +175,4 @@ message Source {
   // Unique identifier (for a given client_id/session_id) for the tab this
   // source is associated with. Should only be set for navigation sources.
   optional int64 tab_id = 10;
-
-  // Time between navigation and the first contentful paint, in milliseconds.
-  // Deprecated. Use ukm::Entry instead.
-  optional int64 first_contentful_paint_msec = 4 [deprecated = true];
 }

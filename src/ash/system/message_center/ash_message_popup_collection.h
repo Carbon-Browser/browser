@@ -11,7 +11,6 @@
 #include "ash/public/cpp/shelf_types.h"
 #include "ash/shelf/shelf_observer.h"
 #include "ash/shell_observer.h"
-#include "base/macros.h"
 #include "ui/compositor/throughput_tracker.h"
 #include "ui/display/display_observer.h"
 #include "ui/gfx/geometry/rect.h"
@@ -43,6 +42,11 @@ class ASH_EXPORT AshMessagePopupCollection
   static const char kMessagePopupWidgetName[];
 
   explicit AshMessagePopupCollection(Shelf* shelf);
+
+  AshMessagePopupCollection(const AshMessagePopupCollection&) = delete;
+  AshMessagePopupCollection& operator=(const AshMessagePopupCollection&) =
+      delete;
+
   ~AshMessagePopupCollection() override;
 
   // Start observing the system.
@@ -128,8 +132,6 @@ class ASH_EXPORT AshMessagePopupCollection
   // Keeps track the last pop up added, used by throughout tracker. We only
   // record smoothness when this variable is in scope.
   message_center::MessagePopupView* last_pop_up_added_ = nullptr;
-
-  DISALLOW_COPY_AND_ASSIGN(AshMessagePopupCollection);
 };
 
 }  // namespace ash

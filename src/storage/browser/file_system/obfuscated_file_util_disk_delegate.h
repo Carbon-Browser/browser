@@ -35,7 +35,8 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) ObfuscatedFileUtilDiskDelegate
   NativeFileUtil::CopyOrMoveMode CopyOrMoveModeForDestination(
       const FileSystemURL& dest_url,
       bool copy) override;
-  base::File CreateOrOpen(const base::FilePath& path, int file_flags) override;
+  base::File CreateOrOpen(const base::FilePath& path,
+                          uint32_t file_flags) override;
   base::File::Error EnsureFileExists(const base::FilePath& path,
                                      bool* created) override;
   base::File::Error CreateDirectory(const base::FilePath& path,
@@ -51,12 +52,12 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) ObfuscatedFileUtilDiskDelegate
   base::File::Error CopyOrMoveFile(
       const base::FilePath& src_path,
       const base::FilePath& dest_path,
-      FileSystemOperation::CopyOrMoveOption option,
+      FileSystemOperation::CopyOrMoveOptionSet options,
       NativeFileUtil::CopyOrMoveMode mode) override;
   base::File::Error CopyInForeignFile(
       const base::FilePath& src_path,
       const base::FilePath& dest_path,
-      FileSystemOperation::CopyOrMoveOption option,
+      FileSystemOperation::CopyOrMoveOptionSet options,
       NativeFileUtil::CopyOrMoveMode mode) override;
   base::File::Error DeleteFile(const base::FilePath& path) override;
 };

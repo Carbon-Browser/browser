@@ -7,7 +7,7 @@
 #include <utility>
 
 #include "base/bind.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "chrome/browser/profiles/profile.h"
@@ -45,14 +45,17 @@ class TemplateURLServiceObserver {
             &TemplateURLServiceObserver::StopLoop, base::Unretained(this)));
     service->Load();
   }
+
+  TemplateURLServiceObserver(const TemplateURLServiceObserver&) = delete;
+  TemplateURLServiceObserver& operator=(const TemplateURLServiceObserver&) =
+      delete;
+
   ~TemplateURLServiceObserver() {}
 
  private:
   void StopLoop() { runner_->Quit(); }
-  base::RunLoop* runner_;
+  raw_ptr<base::RunLoop> runner_;
   base::CallbackListSubscription template_url_subscription_;
-
-  DISALLOW_COPY_AND_ASSIGN(TemplateURLServiceObserver);
 };
 
 testing::AssertionResult VerifyTemplateURLServiceLoad(
@@ -72,6 +75,12 @@ testing::AssertionResult VerifyTemplateURLServiceLoad(
 class SearchEngineTabHelperBrowserTest : public InProcessBrowserTest {
  public:
   SearchEngineTabHelperBrowserTest() = default;
+
+  SearchEngineTabHelperBrowserTest(const SearchEngineTabHelperBrowserTest&) =
+      delete;
+  SearchEngineTabHelperBrowserTest& operator=(
+      const SearchEngineTabHelperBrowserTest&) = delete;
+
   ~SearchEngineTabHelperBrowserTest() override = default;
 
  private:
@@ -107,8 +116,6 @@ class SearchEngineTabHelperBrowserTest : public InProcessBrowserTest {
   }
 
   void SetUpOnMainThread() override { ASSERT_TRUE(StartTestServer()); }
-
-  DISALLOW_COPY_AND_ASSIGN(SearchEngineTabHelperBrowserTest);
 };
 
 IN_PROC_BROWSER_TEST_F(SearchEngineTabHelperBrowserTest,
@@ -236,7 +243,7 @@ IN_PROC_BROWSER_TEST_F(SearchEngineTabHelperPrerenderingBrowserTest,
   EXPECT_FALSE(host_observer.was_activated());
   // Submits a search query.
   content::TestNavigationObserver observer(GetWebContents());
-  EXPECT_EQ(nullptr, content::EvalJs(GetWebContents()->GetMainFrame(),
+  EXPECT_EQ(nullptr, content::EvalJs(GetWebContents()->GetPrimaryMainFrame(),
                                      "submit_form();"));
   observer.Wait();
 

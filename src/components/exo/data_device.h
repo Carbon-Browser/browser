@@ -7,7 +7,6 @@
 
 #include <cstdint>
 
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "components/exo/data_offer_observer.h"
 #include "components/exo/seat_observer.h"
@@ -39,6 +38,10 @@ class DataDevice : public WMHelper::DragDropObserver,
                    public SeatObserver {
  public:
   DataDevice(DataDeviceDelegate* delegate, Seat* seat);
+
+  DataDevice(const DataDevice&) = delete;
+  DataDevice& operator=(const DataDevice&) = delete;
+
   ~DataDevice() override;
 
   // Starts drag-and-drop operation.
@@ -61,16 +64,15 @@ class DataDevice : public WMHelper::DragDropObserver,
   aura::client::DragUpdateInfo OnDragUpdated(
       const ui::DropTargetEvent& event) override;
   void OnDragExited() override;
-  ui::mojom::DragOperation OnPerformDrop(
-      const ui::DropTargetEvent& event) override;
-  WMHelper::DragDropObserver::DropCallback GetDropCallback(
-      const ui::DropTargetEvent& event) override;
+  WMHelper::DragDropObserver::DropCallback GetDropCallback() override;
 
   // Overridden from ui::ClipboardObserver:
   void OnClipboardDataChanged() override;
 
   // Overridden from SeatObserver:
-  void OnSurfaceFocused(Surface* surface) override;
+  void OnSurfaceFocused(Surface* surface,
+                        Surface* lost_focus,
+                        bool has_focused_client) override;
 
   // Overridden from DataOfferObserver:
   void OnDataOfferDestroying(DataOffer* data_offer) override;
@@ -85,7 +87,6 @@ class DataDevice : public WMHelper::DragDropObserver,
   void SetSelectionToCurrentClipboardData();
 
   void PerformDropOrExitDrag(base::ScopedClosureRunner exit_drag,
-                             const ui::DropTargetEvent& event,
                              ui::mojom::DragOperation& output_drag_op);
 
   DataDeviceDelegate* const delegate_;
@@ -97,8 +98,6 @@ class DataDevice : public WMHelper::DragDropObserver,
   bool drop_succeeded_;
   base::WeakPtrFactory<DataDevice> drop_weak_factory_{this};
   base::WeakPtrFactory<DataDevice> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(DataDevice);
 };
 
 }  // namespace exo

@@ -19,8 +19,8 @@
 #include "ash/shelf/shelf_layout_manager_observer.h"
 #include "base/callback.h"
 #include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "base/scoped_observation.h"
+#include "base/time/time.h"
 #include "ui/aura/client/focus_change_observer.h"
 #include "ui/aura/window_observer.h"
 #include "ui/compositor/layer_animation_observer.h"
@@ -65,6 +65,10 @@ class ASH_EXPORT AppListPresenterImpl
 
   // |controller| must outlive |this|.
   explicit AppListPresenterImpl(AppListControllerImpl* controller);
+
+  AppListPresenterImpl(const AppListPresenterImpl&) = delete;
+  AppListPresenterImpl& operator=(const AppListPresenterImpl&) = delete;
+
   ~AppListPresenterImpl() override;
 
   // Returns app list window or nullptr if it is not visible.
@@ -101,6 +105,16 @@ class ASH_EXPORT AppListPresenterImpl
   ShelfAction ToggleAppList(int64_t display_id,
                             AppListShowSource show_source,
                             base::TimeTicks event_time_stamp);
+
+  // Handles `AppListController::UpdateAppListWithNewSortingOrder()` for the
+  // app list presenter.
+  void UpdateForNewSortingOrder(
+      const absl::optional<AppListSortOrder>& new_order,
+      bool animate,
+      base::OnceClosure update_position_closure);
+
+  // Updates the continue section visibility based on user preference.
+  void UpdateContinueSectionVisibility();
 
   // Returns current visibility of the app list. Deprecated, use
   // |IsAtLeastPartiallyVisible| instead.
@@ -205,6 +219,9 @@ class ASH_EXPORT AppListPresenterImpl
   // https://crbug.com/884889).
   void SnapAppListBoundsToDisplayEdge();
 
+  // Called when the reorder animation completes.
+  void OnAppListReorderAnimationDone();
+
   // Owns |this|.
   AppListControllerImpl* const controller_;
 
@@ -236,7 +253,12 @@ class ASH_EXPORT AppListPresenterImpl
   absl::optional<base::Time> last_open_time_;
   absl::optional<AppListShowSource> last_open_source_;
 
-  DISALLOW_COPY_AND_ASSIGN(AppListPresenterImpl);
+  // Whether the presenter is currently changing app list view state to shown.
+  // TODO(https://crbug.com/1307871): Remove this when the linked crash gets
+  // diagnosed.
+  bool showing_app_list_ = false;
+
+  base::WeakPtrFactory<AppListPresenterImpl> weak_ptr_factory_{this};
 };
 
 }  // namespace ash

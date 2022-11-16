@@ -23,15 +23,16 @@
 #include "ash/public/cpp/assistant/controller/assistant_ui_controller.h"
 #include "ash/public/cpp/session/session_types.h"
 #include "ash/public/cpp/session/user_info.h"
-#include "ash/public/cpp/style/color_provider.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
 #include "ash/style/ash_color_provider.h"
+#include "ash/style/dark_light_mode_controller_impl.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/icu_test_util.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/unguessable_token.h"
-#include "chromeos/services/assistant/public/cpp/assistant_service.h"
+#include "chromeos/ash/services/assistant/public/cpp/assistant_service.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "chromeos/ui/vector_icons/vector_icons.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -167,8 +168,6 @@ class AssistantOnboardingViewTest : public AssistantAshTestBase {
   base::test::ScopedRestoreICUDefaultLocale locale_{"en_US"};
 };
 
-}  // namespace
-
 // Tests -----------------------------------------------------------------------
 
 TEST_F(AssistantOnboardingViewTest, ShouldHaveExpectedGreeting) {
@@ -207,13 +206,12 @@ TEST_F(AssistantOnboardingViewTest, ShouldHaveExpectedGreeting) {
     CreateAndSwitchActiveUser(test_case.display_email, test_case.given_name);
 
     // Advance clock to midnight tomorrow.
-    AdvanceClock(base::Time::Now().LocalMidnight() +
-                 base::TimeDelta::FromHours(24) - base::Time::Now());
+    AdvanceClock(base::Time::Now().LocalMidnight() + base::Hours(24) -
+                 base::Time::Now());
 
     {
       // Verify 4:59 AM.
-      AdvanceClock(base::TimeDelta::FromHours(4) +
-                   base::TimeDelta::FromMinutes(59));
+      AdvanceClock(base::Hours(4) + base::Minutes(59));
       ScopedShowUi scoped_show_ui;
       EXPECT_EQ(greeting_label()->GetText(),
                 test_case.expected_greeting.for_night);
@@ -221,7 +219,7 @@ TEST_F(AssistantOnboardingViewTest, ShouldHaveExpectedGreeting) {
 
     {
       // Verify 5:00 AM.
-      AdvanceClock(base::TimeDelta::FromMinutes(1));
+      AdvanceClock(base::Minutes(1));
       ScopedShowUi scoped_show_ui;
       EXPECT_EQ(greeting_label()->GetText(),
                 test_case.expected_greeting.for_morning);
@@ -229,8 +227,7 @@ TEST_F(AssistantOnboardingViewTest, ShouldHaveExpectedGreeting) {
 
     {
       // Verify 11:59 AM.
-      AdvanceClock(base::TimeDelta::FromHours(6) +
-                   base::TimeDelta::FromMinutes(59));
+      AdvanceClock(base::Hours(6) + base::Minutes(59));
       ScopedShowUi scoped_show_ui;
       EXPECT_EQ(greeting_label()->GetText(),
                 test_case.expected_greeting.for_morning);
@@ -238,7 +235,7 @@ TEST_F(AssistantOnboardingViewTest, ShouldHaveExpectedGreeting) {
 
     {
       // Verify 12:00 PM.
-      AdvanceClock(base::TimeDelta::FromMinutes(1));
+      AdvanceClock(base::Minutes(1));
       ScopedShowUi scoped_show_ui;
       EXPECT_EQ(greeting_label()->GetText(),
                 test_case.expected_greeting.for_afternoon);
@@ -246,8 +243,7 @@ TEST_F(AssistantOnboardingViewTest, ShouldHaveExpectedGreeting) {
 
     {
       // Verify 4:59 PM.
-      AdvanceClock(base::TimeDelta::FromHours(4) +
-                   base::TimeDelta::FromMinutes(59));
+      AdvanceClock(base::Hours(4) + base::Minutes(59));
       ScopedShowUi scoped_show_ui;
       EXPECT_EQ(greeting_label()->GetText(),
                 test_case.expected_greeting.for_afternoon);
@@ -255,7 +251,7 @@ TEST_F(AssistantOnboardingViewTest, ShouldHaveExpectedGreeting) {
 
     {
       // Verify 5:00 PM.
-      AdvanceClock(base::TimeDelta::FromMinutes(1));
+      AdvanceClock(base::Minutes(1));
       ScopedShowUi scoped_show_ui;
       EXPECT_EQ(greeting_label()->GetText(),
                 test_case.expected_greeting.for_evening);
@@ -263,8 +259,7 @@ TEST_F(AssistantOnboardingViewTest, ShouldHaveExpectedGreeting) {
 
     {
       // Verify 10:59 PM.
-      AdvanceClock(base::TimeDelta::FromHours(5) +
-                   base::TimeDelta::FromMinutes(59));
+      AdvanceClock(base::Hours(5) + base::Minutes(59));
       ScopedShowUi scoped_show_ui;
       EXPECT_EQ(greeting_label()->GetText(),
                 test_case.expected_greeting.for_evening);
@@ -272,7 +267,7 @@ TEST_F(AssistantOnboardingViewTest, ShouldHaveExpectedGreeting) {
 
     {
       // Verify 11:00 PM.
-      AdvanceClock(base::TimeDelta::FromMinutes(1));
+      AdvanceClock(base::Minutes(1));
       ScopedShowUi scoped_show_ui;
       EXPECT_EQ(greeting_label()->GetText(),
                 test_case.expected_greeting.for_night);
@@ -301,6 +296,25 @@ TEST_F(AssistantOnboardingViewTest, ShouldHaveExpectedSuggestions) {
     std::unique_ptr<VectorIconWithColor> icon_with_color;
   };
 
+  auto get_color = [](int index) {
+    constexpr SkColor kForegroundColors[6][3] = {
+        // Colors of dark/light mode is disabled, dark mode, light mode.
+        {gfx::kGoogleBlue800, gfx::kGoogleBlue200, gfx::kGoogleBlue800},
+        {gfx::kGoogleRed800, gfx::kGoogleRed200, gfx::kGoogleRed800},
+        {SkColorSetRGB(0xBF, 0x50, 0x00), gfx::kGoogleYellow200,
+         SkColorSetRGB(0xBF, 0x50, 0x00)},
+        {gfx::kGoogleGreen800, gfx::kGoogleGreen200, gfx::kGoogleGreen800},
+        {SkColorSetRGB(0x8A, 0x0E, 0x9E), SkColorSetRGB(0xf8, 0x82, 0xff),
+         SkColorSetRGB(0xaa, 0x00, 0xb8)},
+        {gfx::kGoogleBlue800, gfx::kGoogleBlue200, gfx::kGoogleBlue800}};
+    const bool is_dark_light_enabled = features::IsDarkLightModeEnabled();
+    const bool is_dark_mode_status =
+        DarkLightModeControllerImpl::Get()->IsDarkModeEnabled();
+    const int color_index =
+        is_dark_light_enabled ? (is_dark_mode_status ? 1 : 2) : 0;
+    return kForegroundColors[index][color_index];
+  };
+
   // Iterate over each onboarding mode.
   for (int mode = 0;
        mode <= static_cast<int>(AssistantOnboardingMode::kMaxValue); ++mode) {
@@ -314,53 +328,53 @@ TEST_F(AssistantOnboardingViewTest, ShouldHaveExpectedSuggestions) {
         expected_suggestions.push_back(
             {/*message=*/u"Square root of 71",
              /*icon_with_color=*/std::make_unique<VectorIconWithColor>(
-                 chromeos::kCalculateIcon, gfx::kGoogleBlue800)});
+                 chromeos::kCalculateIcon, get_color(0))});
         expected_suggestions.push_back(
             {/*message=*/u"How far is Venus",
              /*icon_with_color=*/std::make_unique<VectorIconWithColor>(
-                 chromeos::kStraightenIcon, gfx::kGoogleRed800)});
+                 chromeos::kStraightenIcon, get_color(1))});
         expected_suggestions.push_back(
             {/*message=*/u"Set timer",
              /*icon_with_color=*/std::make_unique<VectorIconWithColor>(
-                 chromeos::kTimerIcon, SkColorSetRGB(0xBF, 0x50, 0x00))});
+                 chromeos::kTimerIcon, get_color(2))});
         expected_suggestions.push_back(
             {/*message=*/u"Tell me a joke",
              /*icon_with_color=*/std::make_unique<VectorIconWithColor>(
-                 chromeos::kSentimentVerySatisfiedIcon, gfx::kGoogleGreen800)});
+                 chromeos::kSentimentVerySatisfiedIcon, get_color(3))});
         expected_suggestions.push_back(
             {/*message=*/u"\"Hello\" in Chinese",
              /*icon_with_color=*/std::make_unique<VectorIconWithColor>(
-                 chromeos::kTranslateIcon, SkColorSetRGB(0x8A, 0x0E, 0x9E))});
+                 chromeos::kTranslateIcon, get_color(4))});
         expected_suggestions.push_back(
             {/*message=*/u"Take a screenshot",
              /*icon_with_color=*/std::make_unique<VectorIconWithColor>(
-                 chromeos::kScreenshotIcon, gfx::kGoogleBlue800)});
+                 chromeos::kScreenshotIcon, get_color(5))});
         break;
       case AssistantOnboardingMode::kDefault:
         expected_suggestions.push_back(
             {/*message=*/u"5K in miles",
              /*icon_with_color=*/std::make_unique<VectorIconWithColor>(
-                 chromeos::kConversionPathIcon, gfx::kGoogleBlue800)});
+                 chromeos::kConversionPathIcon, get_color(0))});
         expected_suggestions.push_back(
             {/*message=*/u"Population in Nigeria",
              /*icon_with_color=*/std::make_unique<VectorIconWithColor>(
-                 chromeos::kPersonPinCircleIcon, gfx::kGoogleRed800)});
+                 chromeos::kPersonPinCircleIcon, get_color(1))});
         expected_suggestions.push_back(
             {/*message=*/u"Set timer",
              /*icon_with_color=*/std::make_unique<VectorIconWithColor>(
-                 chromeos::kTimerIcon, SkColorSetRGB(0xBF, 0x50, 0x00))});
+                 chromeos::kTimerIcon, get_color(2))});
         expected_suggestions.push_back(
             {/*message=*/u"Tell me a joke",
              /*icon_with_color=*/std::make_unique<VectorIconWithColor>(
-                 chromeos::kSentimentVerySatisfiedIcon, gfx::kGoogleGreen800)});
+                 chromeos::kSentimentVerySatisfiedIcon, get_color(3))});
         expected_suggestions.push_back(
             {/*message=*/u"\"Hello\" in Chinese",
              /*icon_with_color=*/std::make_unique<VectorIconWithColor>(
-                 chromeos::kTranslateIcon, SkColorSetRGB(0x8A, 0x0E, 0x9E))});
+                 chromeos::kTranslateIcon, get_color(4))});
         expected_suggestions.push_back(
             {/*message=*/u"Take a screenshot",
              /*icon_with_color=*/std::make_unique<VectorIconWithColor>(
-                 chromeos::kScreenshotIcon, gfx::kGoogleBlue800)});
+                 chromeos::kScreenshotIcon, get_color(5))});
         break;
     }
 
@@ -472,40 +486,59 @@ TEST_F(AssistantOnboardingViewTest, ShouldHandleRemoteIcons) {
 }
 
 TEST_F(AssistantOnboardingViewTest, DarkAndLightTheme) {
-  base::test::ScopedFeatureList scoped_feature_list(features::kDarkLightMode);
-  AshColorProvider::Get()->OnActiveUserPrefServiceChanged(
+  base::test::ScopedFeatureList scoped_feature_list(
+      chromeos::features::kDarkLightMode);
+  AshColorProvider* color_provider = AshColorProvider::Get();
+  auto* dark_light_mode_controller = DarkLightModeControllerImpl::Get();
+  dark_light_mode_controller->OnActiveUserPrefServiceChanged(
       Shell::Get()->session_controller()->GetActivePrefService());
-  ASSERT_TRUE(features::IsDarkLightModeEnabled());
-  ASSERT_FALSE(ColorProvider::Get()->IsDarkModeEnabled());
+  ASSERT_TRUE(chromeos::features::IsDarkLightModeEnabled());
 
   ShowAssistantUi();
 
-  EXPECT_EQ(greeting_label()->GetEnabledColor(),
-            ColorProvider::Get()->GetContentLayerColor(
-                ColorProvider::ContentLayerType::kTextColorPrimary));
-  EXPECT_EQ(intro_label()->GetEnabledColor(),
-            ColorProvider::Get()->GetContentLayerColor(
-                ColorProvider::ContentLayerType::kTextColorPrimary));
+  const bool initial_dark_mode_status =
+      dark_light_mode_controller->IsDarkModeEnabled();
+  const SkColor initial_greeting_label_color =
+      greeting_label()->GetEnabledColor();
+  const SkColor initial_intro_label_color = intro_label()->GetEnabledColor();
+  const SkColor intial_text_primary_color =
+      color_provider->GetContentLayerColor(
+          ColorProvider::ContentLayerType::kTextColorPrimary);
+  EXPECT_EQ(initial_greeting_label_color, intial_text_primary_color);
+  EXPECT_EQ(initial_intro_label_color, intial_text_primary_color);
 
-  Shell::Get()->session_controller()->GetActivePrefService()->SetBoolean(
-      prefs::kDarkModeEnabled, true);
-  ASSERT_TRUE(ColorProvider::Get()->IsDarkModeEnabled());
+  // Switch the color mode.
+  dark_light_mode_controller->ToggleColorMode();
+  ASSERT_NE(initial_dark_mode_status,
+            dark_light_mode_controller->IsDarkModeEnabled());
+  const SkColor text_primary_color = color_provider->GetContentLayerColor(
+      ColorProvider::ContentLayerType::kTextColorPrimary);
+  EXPECT_NE(intial_text_primary_color, text_primary_color);
 
-  EXPECT_EQ(greeting_label()->GetEnabledColor(),
-            ColorProvider::Get()->GetContentLayerColor(
-                ColorProvider::ContentLayerType::kTextColorPrimary));
-  EXPECT_EQ(intro_label()->GetEnabledColor(),
-            ColorProvider::Get()->GetContentLayerColor(
-                ColorProvider::ContentLayerType::kTextColorPrimary));
+  // Check that both label colors are updated to the text primary color,
+  // calculated based on the new color mode.
+  const SkColor greeting_label_color = greeting_label()->GetEnabledColor();
+  const SkColor intro_label_color = intro_label()->GetEnabledColor();
+  EXPECT_EQ(greeting_label_color, text_primary_color);
+  EXPECT_EQ(intro_label_color, text_primary_color);
 }
 
 TEST_F(AssistantOnboardingViewTest, DarkAndLightModeFlagOff) {
-  ASSERT_FALSE(features::IsDarkLightModeEnabled());
+  // ProductivityLauncher uses DarkLightMode colors.
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitWithFeatures(
+      /*enabled_features=*/{}, /*disabled_features=*/{
+          chromeos::features::kDarkLightMode, features::kNotificationsRefresh,
+          features::kProductivityLauncher});
 
   ShowAssistantUi();
 
   EXPECT_EQ(greeting_label()->GetEnabledColor(), kTextColorPrimary);
   EXPECT_EQ(intro_label()->GetEnabledColor(), kTextColorPrimary);
+
+  // Avoid test teardown issues by explicitly closing the launcher.
+  CloseAssistantUi();
 }
 
+}  // namespace
 }  // namespace ash

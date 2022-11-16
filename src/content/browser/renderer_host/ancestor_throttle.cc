@@ -30,7 +30,7 @@
 #include "services/network/public/cpp/content_security_policy/csp_context.h"
 #include "third_party/blink/public/mojom/devtools/console_message.mojom-shared.h"
 #include "third_party/blink/public/mojom/devtools/console_message.mojom.h"
-#include "third_party/blink/public/mojom/web_feature/web_feature.mojom.h"
+#include "third_party/blink/public/mojom/use_counter/metrics/web_feature.mojom.h"
 
 namespace content {
 
@@ -47,10 +47,12 @@ bool HeadersContainFrameAncestorsCSP(
       });
 }
 
-// Returns the parent, including outer delegates in the case of portals.
-RenderFrameHostImpl* ParentOrOuterDelegate(RenderFrameHostImpl* frame) {
-  return frame->InsidePortal() ? frame->ParentOrOuterDelegateFrame()
-                               : frame->GetParent();
+// From a RenderFrameHost |rfh|, return its parent. This goes through nested
+// WebContents like Portals, but doesn't go through FencedFrames. This returns
+// nullptr for the top-level document and FencedFrame top-level document.
+RenderFrameHostImpl* GetParentExceptForFencedFrame(RenderFrameHostImpl* frame) {
+  return frame->IsFencedFrameRoot() ? nullptr
+                                    : frame->GetParentOrOuterDocument();
 }
 
 }  // namespace
@@ -92,8 +94,7 @@ NavigationThrottle::ThrottleCheckResult AncestorThrottle::ProcessResponseImpl(
     bool is_response_check) {
   NavigationRequest* request = NavigationRequest::From(navigation_handle());
 
-  bool is_portal =
-      request->frame_tree_node()->current_frame_host()->InsidePortal();
+  bool is_portal = request->frame_tree_node()->frame_tree()->IsPortal();
   if (request->IsInMainFrame() && !is_portal) {
     // Allow main frame navigations.
     return NavigationThrottle::PROCEED;
@@ -244,7 +245,9 @@ AncestorThrottle::CheckResult AncestorThrottle::EvaluateXFrameOptions(
 
     case network::mojom::XFrameOptionsValue::kSameOrigin: {
       // Block the request when any ancestor is not same-origin.
-      RenderFrameHostImpl* parent = ParentOrOuterDelegate(
+      // We enforce XFrameOptions in the outer documents, but not for
+      // embedders/GuestViews.
+      RenderFrameHostImpl* parent = GetParentExceptForFencedFrame(
           request->frame_tree_node()->current_frame_host());
       url::Origin current_origin =
           url::Origin::Create(navigation_handle()->GetURL());
@@ -255,7 +258,7 @@ AncestorThrottle::CheckResult AncestorThrottle::EvaluateXFrameOptions(
             ConsoleErrorXFrameOptions(disposition);
           return CheckResult::BLOCK;
         }
-        parent = ParentOrOuterDelegate(parent);
+        parent = GetParentExceptForFencedFrame(parent);
       }
       return CheckResult::PROCEED;
     }
@@ -273,16 +276,17 @@ AncestorThrottle::CheckResult AncestorThrottle::EvaluateEmbeddingOptIn(
   // enabled, a response will be blocked unless it's explicitly opted-into
   // being embeddable via 'X-Frame-Options'/'frame-ancestors', or is same-origin
   // with its ancestors.
+  // We enforce frame-ancestors in the outer documents, but not for
+  // embedders/GuestViews.
   NavigationRequest* request = NavigationRequest::From(navigation_handle());
   if (request->response()->parsed_headers->xfo ==
           network::mojom::XFrameOptionsValue::kNone &&
       !HeadersContainFrameAncestorsCSP(request->response()->parsed_headers)) {
-    RenderFrameHostImpl* parent =
-        ParentOrOuterDelegate(request->frame_tree_node()->current_frame_host());
-    url::Origin current_origin =
-        url::Origin::Create(navigation_handle()->GetURL());
+    RenderFrameHostImpl* parent = GetParentExceptForFencedFrame(
+        request->frame_tree_node()->current_frame_host());
     while (parent) {
-      if (!parent->GetLastCommittedOrigin().IsSameOriginWith(current_origin)) {
+      if (!parent->GetLastCommittedOrigin().IsSameOriginWith(
+              navigation_handle()->GetURL())) {
         GetContentClient()->browser()->LogWebFeatureForCurrentPage(
             parent, blink::mojom::WebFeature::
                         kEmbeddedCrossOriginFrameWithoutFrameAncestorsOrXFO);
@@ -295,7 +299,7 @@ AncestorThrottle::CheckResult AncestorThrottle::EvaluateEmbeddingOptIn(
 
         return CheckResult::BLOCK;
       }
-      parent = ParentOrOuterDelegate(parent);
+      parent = GetParentExceptForFencedFrame(parent);
     }
   }
   return CheckResult::PROCEED;
@@ -310,11 +314,12 @@ AncestorThrottle::CheckResult AncestorThrottle::EvaluateFrameAncestors(
   auto empty_source_location = network::mojom::SourceLocation::New();
 
   // Check CSP frame-ancestors against every parent.
-  // We enforce frame-ancestors in the outer delegate for portals, but not
-  // for other uses of inner/outer WebContents (GuestViews).
+  // We enforce frame-ancestors in the outer documents, but not for
+  // embedders/GuestViews.
   RenderFrameHostImpl* parent =
-      ParentOrOuterDelegate(static_cast<RenderFrameHostImpl*>(
+      GetParentExceptForFencedFrame(static_cast<RenderFrameHostImpl*>(
           navigation_handle()->GetRenderFrameHost()));
+
   while (parent) {
     // CSP violations (if any) are reported via the disallowed ancestor of the
     // navigated frame (because while the throttle runs the navigation hasn't
@@ -332,7 +337,7 @@ AncestorThrottle::CheckResult AncestorThrottle::EvaluateFrameAncestors(
             navigation_handle()->IsFormSubmission())) {
       return CheckResult::BLOCK;
     }
-    parent = ParentOrOuterDelegate(parent);
+    parent = GetParentExceptForFencedFrame(parent);
   }
 
   return CheckResult::PROCEED;

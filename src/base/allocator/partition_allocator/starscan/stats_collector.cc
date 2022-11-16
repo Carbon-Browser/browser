@@ -4,12 +4,11 @@
 
 #include "base/allocator/partition_allocator/starscan/stats_collector.h"
 
-#include "base/logging.h"
-#include "base/time/time.h"
-#include "base/trace_event/base_tracing.h"
+#include "base/allocator/partition_allocator/partition_alloc_base/time/time.h"
+#include "base/allocator/partition_allocator/starscan/logging.h"
+#include "base/allocator/partition_allocator/starscan/stats_reporter.h"
 
-namespace base {
-namespace internal {
+namespace partition_alloc::internal {
 
 StatsCollector::StatsCollector(const char* process_name,
                                size_t quarantine_last_size)
@@ -25,10 +24,11 @@ base::TimeDelta StatsCollector::GetOverallTime() const {
                                         ScannerId::kOverall);
 }
 
-void StatsCollector::ReportTracesAndHists() const {
-  ReportTracesAndHistsImpl<Context::kMutator>(mutator_trace_events_);
-  ReportTracesAndHistsImpl<Context::kScanner>(scanner_trace_events_);
-  ReportSurvivalRate();
+void StatsCollector::ReportTracesAndHists(
+    partition_alloc::StatsReporter& reporter) const {
+  ReportTracesAndHistsImpl<Context::kMutator>(reporter, mutator_trace_events_);
+  ReportTracesAndHistsImpl<Context::kScanner>(reporter, scanner_trace_events_);
+  ReportSurvivalRate(reporter);
 }
 
 template <Context context>
@@ -46,15 +46,13 @@ base::TimeDelta StatsCollector::GetTimeImpl(
 
 template <Context context>
 void StatsCollector::ReportTracesAndHistsImpl(
+    partition_alloc::StatsReporter& reporter,
     const DeferredTraceEventMap<context>& event_map) const {
   std::array<base::TimeDelta, static_cast<size_t>(IdType<context>::kNumIds)>
       accumulated_events{};
   // First, report traces and accumulate each trace scope to report UMA hists.
   for (const auto& tid_and_events : event_map.get_underlying_map_unsafe()) {
-    const PlatformThreadId tid = tid_and_events.first;
-    // TRACE_EVENT_* macros below drop most parameters when tracing is
-    // disabled at compile time.
-    ignore_result(tid);
+    const internal::base::PlatformThreadId tid = tid_and_events.first;
     const auto& events = tid_and_events.second;
     PA_DCHECK(accumulated_events.size() == events.size());
     for (size_t id = 0; id < events.size(); ++id) {
@@ -65,13 +63,9 @@ void StatsCollector::ReportTracesAndHistsImpl(
         PA_DCHECK(event.end_time.is_null());
         continue;
       }
-      TRACE_EVENT_BEGIN(kTraceCategory,
-                        perfetto::StaticString(
-                            ToTracingString(static_cast<IdType<context>>(id))),
-                        perfetto::ThreadTrack::ForThread(tid),
-                        event.start_time);
-      TRACE_EVENT_END(kTraceCategory, perfetto::ThreadTrack::ForThread(tid),
-                      event.end_time);
+      reporter.ReportTraceEvent(static_cast<IdType<context>>(id), tid,
+                                event.start_time.ToInternalValue(),
+                                event.end_time.ToInternalValue());
       accumulated_events[id] += (event.end_time - event.start_time);
     }
   }
@@ -81,24 +75,24 @@ void StatsCollector::ReportTracesAndHistsImpl(
   for (size_t id = 0; id < accumulated_events.size(); ++id) {
     if (accumulated_events[id].is_zero())
       continue;
-    UmaHistogramTimes(ToUMAString(static_cast<IdType<context>>(id)).c_str(),
-                      accumulated_events[id]);
+    reporter.ReportStats(ToUMAString(static_cast<IdType<context>>(id)).c_str(),
+                         accumulated_events[id].InMicroseconds());
   }
 }
 
-void StatsCollector::ReportSurvivalRate() const {
+void StatsCollector::ReportSurvivalRate(
+    partition_alloc::StatsReporter& reporter) const {
   const double survived_rate =
       static_cast<double>(survived_quarantine_size()) / quarantine_last_size_;
-  TRACE_COUNTER1(kTraceCategory, "PCScan.SurvivedQuarantineSize",
-                 survived_quarantine_size());
-  // Multiply by 1000 since TRACE_COUNTER1 expects integer. In catapult, divide
-  // back.
-  // TODO(bikineev): Remove after switching to perfetto.
-  TRACE_COUNTER1(kTraceCategory, "PCScan.SurvivedQuarantinePercent",
-                 1000 * survived_rate);
-  VLOG(2) << "quarantine size: " << quarantine_last_size_ << " -> "
-          << survived_quarantine_size() << ", swept bytes: " << swept_size()
-          << ", survival rate: " << survived_rate;
+  reporter.ReportSurvivedQuarantineSize(survived_quarantine_size());
+  reporter.ReportSurvivedQuarantinePercent(survived_rate);
+  PA_PCSCAN_VLOG(2) << "quarantine size: " << quarantine_last_size_ << " -> "
+                    << survived_quarantine_size()
+                    << ", swept bytes: " << swept_size()
+                    << ", survival rate: " << survived_rate;
+  if (discarded_quarantine_size_)
+    PA_PCSCAN_VLOG(2) << "discarded quarantine size: "
+                      << discarded_quarantine_size_;
 }
 
 template base::TimeDelta StatsCollector::GetTimeImpl(
@@ -109,9 +103,10 @@ template base::TimeDelta StatsCollector::GetTimeImpl(
     IdType<Context::kScanner>) const;
 
 template void StatsCollector::ReportTracesAndHistsImpl(
+    partition_alloc::StatsReporter& reporter,
     const DeferredTraceEventMap<Context::kMutator>&) const;
 template void StatsCollector::ReportTracesAndHistsImpl(
+    partition_alloc::StatsReporter& reporter,
     const DeferredTraceEventMap<Context::kScanner>&) const;
 
-}  // namespace internal
-}  // namespace base
+}  // namespace partition_alloc::internal

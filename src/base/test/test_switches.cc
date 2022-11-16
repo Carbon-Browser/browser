@@ -4,6 +4,8 @@
 
 #include "base/test/test_switches.h"
 
+#include "build/build_config.h"
+
 // Flag to show the help message.
 const char switches::kHelpFlag[] = "help";
 
@@ -53,6 +55,11 @@ const char switches::kTestLauncherListTests[] = "test-launcher-list-tests";
 
 // Path to test results file in our custom test launcher format.
 const char switches::kTestLauncherOutput[] = "test-launcher-output";
+
+// Maximum output bytes allowed from a single test. Exceeding this limit
+// results in truncating the output and failing the test.
+const char switches::kTestLauncherOutputBytesLimit[] =
+    "test-launcher-output-bytes-limit";
 
 // Causes the test launcher to print information about leaked files and/or
 // directories in child process's temporary directories.
@@ -118,7 +125,7 @@ const char switches::kTestTinyTimeout[] = "test-tiny-timeout";
 const char switches::kUiTestActionMaxTimeout[] = "ui-test-action-max-timeout";
 const char switches::kUiTestActionTimeout[] = "ui-test-action-timeout";
 
-#if defined(OS_IOS)
+#if BUILDFLAG(IS_IOS)
 // If enabled, runs unittests using the XCTest test runner.
 const char switches::kEnableRunIOSUnittestsWithXCTest[] =
     "enable-run-ios-unittests-with-xctest";

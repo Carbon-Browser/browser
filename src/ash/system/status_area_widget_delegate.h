@@ -9,7 +9,6 @@
 #include "ash/public/cpp/shelf_config.h"
 #include "ash/public/cpp/shelf_types.h"
 #include "ash/system/status_area_widget.h"
-#include "base/macros.h"
 #include "ui/gfx/image/image_skia.h"
 #include "ui/views/accessible_pane_view.h"
 #include "ui/views/widget/widget_delegate.h"
@@ -23,6 +22,10 @@ class ASH_EXPORT StatusAreaWidgetDelegate : public views::AccessiblePaneView,
                                             public views::WidgetDelegate {
  public:
   explicit StatusAreaWidgetDelegate(Shelf* shelf);
+
+  StatusAreaWidgetDelegate(const StatusAreaWidgetDelegate&) = delete;
+  StatusAreaWidgetDelegate& operator=(const StatusAreaWidgetDelegate&) = delete;
+
   ~StatusAreaWidgetDelegate() override;
 
   // Calculates the bounds that this view should have given its constraints,
@@ -52,6 +55,7 @@ class ASH_EXPORT StatusAreaWidgetDelegate : public views::AccessiblePaneView,
   void Shutdown();
 
   // views::AccessiblePaneView:
+  void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
   View* GetDefaultFocusableChild() override;
   const char* GetClassName() const override;
   views::Widget* GetWidget() override;
@@ -85,8 +89,6 @@ class ASH_EXPORT StatusAreaWidgetDelegate : public views::AccessiblePaneView,
   // When true, the default focus of the status area widget is the last
   // focusable child.
   bool default_last_focusable_child_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(StatusAreaWidgetDelegate);
 };
 
 }  // namespace ash

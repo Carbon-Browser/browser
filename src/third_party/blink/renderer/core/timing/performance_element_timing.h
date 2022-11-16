@@ -24,25 +24,27 @@ class CORE_EXPORT PerformanceElementTiming final : public PerformanceEntry {
  public:
   static PerformanceElementTiming* Create(const AtomicString& name,
                                           const String& url,
-                                          const FloatRect& intersection_rect,
+                                          const gfx::RectF& intersection_rect,
                                           DOMHighResTimeStamp render_time,
                                           DOMHighResTimeStamp load_time,
                                           const AtomicString& identifier,
                                           int naturalWidth,
                                           int naturalHeight,
                                           const AtomicString& id,
-                                          Element*);
+                                          Element*,
+                                          uint32_t navigation_id);
   PerformanceElementTiming(const AtomicString& name,
                            DOMHighResTimeStamp start_time,
                            const String& url,
-                           const FloatRect& intersection_rect,
+                           const gfx::RectF& intersection_rect,
                            DOMHighResTimeStamp render_time,
                            DOMHighResTimeStamp load_time,
                            const AtomicString& identifier,
                            int naturalWidth,
                            int naturalHeight,
                            const AtomicString& id,
-                           Element*);
+                           Element*,
+                           uint32_t navigation_id);
 
   ~PerformanceElementTiming() override;
 

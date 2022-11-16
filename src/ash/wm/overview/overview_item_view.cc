@@ -7,9 +7,8 @@
 #include <algorithm>
 #include <memory>
 
-#include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/strings/grit/ash_strings.h"
-#include "ash/style/ash_color_provider.h"
+#include "ash/style/close_button.h"
 #include "ash/wm/overview/overview_constants.h"
 #include "ash/wm/overview/overview_grid.h"
 #include "ash/wm/overview/overview_item.h"
@@ -20,19 +19,12 @@
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/aura/window.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/scoped_layer_animation_settings.h"
 #include "ui/gfx/geometry/size_conversions.h"
-#include "ui/gfx/image/image_skia_operations.h"
-#include "ui/gfx/paint_vector_icon.h"
 #include "ui/strings/grit/ui_strings.h"
-#include "ui/views/animation/flood_fill_ink_drop_ripple.h"
 #include "ui/views/animation/ink_drop.h"
-#include "ui/views/animation/ink_drop_impl.h"
-#include "ui/views/animation/ink_drop_mask.h"
-#include "ui/views/controls/button/image_button.h"
-#include "ui/views/controls/highlight_path_generator.h"
-#include "ui/views/controls/image_view.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/widget/widget.h"
 
@@ -41,22 +33,17 @@ namespace ash {
 namespace {
 
 // Duration of the show/hide animation of the header.
-constexpr base::TimeDelta kHeaderFadeDuration =
-    base::TimeDelta::FromMilliseconds(167);
+constexpr base::TimeDelta kHeaderFadeDuration = base::Milliseconds(167);
 
 // Delay before the show animation of the header.
-constexpr base::TimeDelta kHeaderFadeInDelay =
-    base::TimeDelta::FromMilliseconds(83);
+constexpr base::TimeDelta kHeaderFadeInDelay = base::Milliseconds(83);
 
 // Duration of the slow show animation of the close button.
 constexpr base::TimeDelta kCloseButtonSlowFadeInDuration =
-    base::TimeDelta::FromMilliseconds(300);
+    base::Milliseconds(300);
 
 // Delay before the slow show animation of the close button.
-constexpr base::TimeDelta kCloseButtonSlowFadeInDelay =
-    base::TimeDelta::FromMilliseconds(750);
-
-constexpr int kCloseButtonInkDropRadiusDp = 18;
+constexpr base::TimeDelta kCloseButtonSlowFadeInDelay = base::Milliseconds(750);
 
 // Value should match the one in
 // ash/resources/vector_icons/overview_window_close.icon.
@@ -85,48 +72,6 @@ void AnimateLayerOpacity(ui::Layer* layer, bool visible) {
   layer->SetOpacity(target_opacity);
 }
 
-// The close button for the overview item. It has a custom ink drop.
-class OverviewCloseButton : public views::ImageButton {
- public:
-  explicit OverviewCloseButton(PressedCallback callback)
-      : views::ImageButton(std::move(callback)) {
-    views::InkDrop::Get(this)->SetMode(
-        views::InkDropHost::InkDropMode::ON_NO_GESTURE_HANDLER);
-    views::InkDrop::UseInkDropForFloodFillRipple(views::InkDrop::Get(this));
-    SetImageHorizontalAlignment(views::ImageButton::ALIGN_CENTER);
-    SetImageVerticalAlignment(views::ImageButton::ALIGN_MIDDLE);
-    SetMinimumImageSize(gfx::Size(kHeaderHeightDp, kHeaderHeightDp));
-    SetAccessibleName(l10n_util::GetStringUTF16(IDS_APP_ACCNAME_CLOSE));
-    SetTooltipText(l10n_util::GetStringUTF16(IDS_APP_ACCNAME_CLOSE));
-    SetFocusBehavior(views::View::FocusBehavior::ACCESSIBLE_ONLY);
-
-    views::InstallFixedSizeCircleHighlightPathGenerator(
-        this, kCloseButtonInkDropRadiusDp);
-  }
-  OverviewCloseButton(const OverviewCloseButton&) = delete;
-  OverviewCloseButton& operator=(const OverviewCloseButton&) = delete;
-  ~OverviewCloseButton() override = default;
-
-  // Resets the listener so that the listener can go out of scope.
-  void ResetListener() { SetCallback(views::Button::PressedCallback()); }
-
- protected:
-  // views::ImageButton:
-  void OnThemeChanged() override {
-    views::ImageButton::OnThemeChanged();
-    auto* color_provider = AshColorProvider::Get();
-    const SkColor color = color_provider->GetContentLayerColor(
-        AshColorProvider::ContentLayerType::kButtonIconColor);
-    SetImage(views::Button::STATE_NORMAL,
-             gfx::CreateVectorIcon(kOverviewWindowCloseIcon, color));
-
-    const auto ripple_attributes = color_provider->GetRippleAttributes(color);
-    views::InkDrop::Get(this)->SetBaseColor(ripple_attributes.base_color);
-    views::InkDrop::Get(this)->SetVisibleOpacity(
-        ripple_attributes.inkdrop_opacity);
-  }
-};
-
 }  // namespace
 
 OverviewItemView::OverviewItemView(
@@ -134,16 +79,21 @@ OverviewItemView::OverviewItemView(
     views::Button::PressedCallback close_callback,
     aura::Window* window,
     bool show_preview)
-    : WindowMiniView(window), overview_item_(overview_item) {
+    : WindowMiniView(window),
+      overview_item_(overview_item),
+      close_button_(header_view()->AddChildView(
+          std::make_unique<CloseButton>(std::move(close_callback),
+                                        CloseButton::Type::kLargeFloating))) {
   DCHECK(overview_item_);
   // This should not be focusable. It's also to avoid accessibility error when
   // |window->GetTitle()| is empty.
   SetFocusBehavior(FocusBehavior::NEVER);
 
-  close_button_ = header_view()->AddChildView(
-      std::make_unique<OverviewCloseButton>(std::move(close_callback)));
-  close_button_->SetPaintToLayer();
-  close_button_->layer()->SetFillsBoundsOpaquely(false);
+  views::InkDrop::Get(close_button_)
+      ->SetMode(views::InkDropHost::InkDropMode::ON_NO_GESTURE_HANDLER);
+  close_button_->SetAccessibleName(
+      l10n_util::GetStringUTF16(IDS_APP_ACCNAME_CLOSE));
+  close_button_->SetFocusBehavior(views::View::FocusBehavior::ACCESSIBLE_ONLY);
 
   // Call this last as it calls |Layout()| which relies on the some of the other
   // elements existing.
@@ -170,21 +120,29 @@ void OverviewItemView::SetHeaderVisibility(HeaderVisibility visibility) {
   const bool all_invisible = visibility == HeaderVisibility::kInvisible;
   AnimateLayerOpacity(header_view()->layer(), !all_invisible);
 
-  // If |header_view()| is fading out, we are done. Depending on if the close
-  // button was visible, it will fade out with |header_view()| or stay hidden.
-  if (all_invisible || !close_button_)
+  // If there is not a `close_button_`, then we are done.
+  if (!close_button_)
     return;
 
+  // If the whole header is fading out and there is a `close_button_`, then
+  // we need to disable the close button without also fading the close button.
+  if (all_invisible) {
+    close_button_->SetEnabled(false);
+    return;
+  }
+
   const bool close_button_visible = visibility == HeaderVisibility::kVisible;
-  // If |header_view()| was hidden and is fading in, set the opacity of
-  // |close_button_| depending on whether the close button should fade in with
-  // |header_view()| or stay hidden.
+  // If `header_view()` was hidden and is fading in, set the opacity and enabled
+  // state of `close_button_` depending on whether the close button should fade
+  // in with `header_view()` or stay hidden.
   if (previous_visibility == HeaderVisibility::kInvisible) {
     close_button_->layer()->SetOpacity(close_button_visible ? 1.f : 0.f);
+    close_button_->SetEnabled(close_button_visible);
     return;
   }
 
   AnimateLayerOpacity(close_button_->layer(), close_button_visible);
+  close_button_->SetEnabled(close_button_visible);
 }
 
 void OverviewItemView::HideCloseInstantlyAndThenShowItSlowly() {
@@ -201,11 +159,12 @@ void OverviewItemView::HideCloseInstantlyAndThenShowItSlowly() {
   layer->GetAnimator()->SchedulePauseForProperties(
       kCloseButtonSlowFadeInDelay, ui::LayerAnimationElement::OPACITY);
   layer->SetOpacity(1.f);
+  close_button_->SetEnabled(true);
 }
 
 void OverviewItemView::OnOverviewItemWindowRestoring() {
   overview_item_ = nullptr;
-  static_cast<OverviewCloseButton*>(close_button_)->ResetListener();
+  close_button_->ResetListener();
 }
 
 void OverviewItemView::RefreshPreviewView() {
@@ -284,8 +243,8 @@ void OverviewItemView::MaybeActivateHighlightedView() {
     overview_item_->OnHighlightedViewActivated();
 }
 
-void OverviewItemView::MaybeCloseHighlightedView() {
-  if (overview_item_)
+void OverviewItemView::MaybeCloseHighlightedView(bool primary_action) {
+  if (overview_item_ && primary_action)
     overview_item_->OnHighlightedViewClosed();
 }
 
@@ -312,10 +271,6 @@ gfx::Point OverviewItemView::GetMagnifierFocusPointInScreen() {
   const gfx::Rect title_bounds = title_label()->GetBoundsInScreen();
   return gfx::Point(GetMirroredXInView(title_bounds.x()),
                     title_bounds.CenterPoint().y());
-}
-
-const char* OverviewItemView::GetClassName() const {
-  return "OverviewItemView";
 }
 
 bool OverviewItemView::OnMousePressed(const ui::MouseEvent& event) {
@@ -373,5 +328,13 @@ void OverviewItemView::GetAccessibleNodeData(ui::AXNodeData* node_data) {
       l10n_util::GetStringUTF8(
           IDS_ASH_OVERVIEW_CLOSABLE_HIGHLIGHT_ITEM_A11Y_EXTRA_TIP));
 }
+
+void OverviewItemView::OnThemeChanged() {
+  WindowMiniView::OnThemeChanged();
+  UpdateBorderState(IsViewHighlighted());
+}
+
+BEGIN_METADATA(OverviewItemView, WindowMiniView)
+END_METADATA
 
 }  // namespace ash

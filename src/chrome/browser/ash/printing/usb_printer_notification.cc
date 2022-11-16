@@ -4,6 +4,7 @@
 
 #include "chrome/browser/ash/printing/usb_printer_notification.h"
 
+#include "ash/constants/notifier_catalogs.h"
 #include "ash/public/cpp/notification_utils.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/app/vector_icons/vector_icons.h"
@@ -21,7 +22,7 @@
 #include "ui/message_center/public/cpp/notification_types.h"
 #include "url/gurl.h"
 
-namespace chromeos {
+namespace ash {
 
 namespace {
 
@@ -30,7 +31,7 @@ const char kNotifierId[] = "printing.usb_printer";
 }  // namespace
 
 UsbPrinterNotification::UsbPrinterNotification(
-    const Printer& printer,
+    const chromeos::Printer& printer,
     const std::string& notification_id,
     Type type,
     Profile* profile)
@@ -40,17 +41,18 @@ UsbPrinterNotification::UsbPrinterNotification(
       profile_(profile) {
   message_center::RichNotificationData rich_notification_data;
   rich_notification_data.vector_small_image = &kNotificationPrintingIcon;
-  rich_notification_data.accent_color = ash::kSystemNotificationColorNormal;
+  rich_notification_data.accent_color = kSystemNotificationColorNormal;
 
   notification_ = std::make_unique<message_center::Notification>(
       message_center::NOTIFICATION_TYPE_SIMPLE, notification_id_,
       std::u16string(),  // title
       std::u16string(),  // body
-      gfx::Image(),      // icon
+      ui::ImageModel(),  // icon
       l10n_util::GetStringUTF16(IDS_PRINT_JOB_NOTIFICATION_DISPLAY_SOURCE),
       GURL(),  // origin_url
       message_center::NotifierId(message_center::NotifierType::SYSTEM_COMPONENT,
-                                 kNotifierId),
+                                 kNotifierId,
+                                 NotificationCatalogName::kUsbPrinter),
       rich_notification_data,
       base::MakeRefCounted<message_center::ThunkNotificationDelegate>(
           weak_factory_.GetWeakPtr()));
@@ -124,4 +126,4 @@ void UsbPrinterNotification::UpdateContents() {
   NOTREACHED();
 }
 
-}  // namespace chromeos
+}  // namespace ash

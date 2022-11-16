@@ -10,18 +10,19 @@
 #include "base/at_exit.h"
 #include "base/bind.h"
 #include "base/callback.h"
+#include "base/check.h"
 #include "base/command_line.h"
+#include "base/json/json_reader.h"
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/task/single_thread_task_executor.h"
-#include "base/task/thread_pool.h"
-#include "base/task/thread_pool/thread_pool_instance.h"
 #include "base/test/bind.h"
 #include "base/test/launcher/unit_test_launcher.h"
+#include "base/test/task_environment.h"
 #include "base/test/test_suite.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/threading/thread_task_runner_handle.h"
+#include "base/values.h"
 #include "base/version.h"
 #include "build/build_config.h"
 #include "chrome/common/chrome_paths.h"
@@ -30,10 +31,12 @@
 #include "chrome/updater/test/integration_tests_impl.h"
 #include "chrome/updater/updater_scope.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include "base/win/scoped_com_initializer.h"
+#include "chrome/updater/win/win_util.h"
 #endif
 
 namespace updater {
@@ -52,6 +55,12 @@ constexpr int kSuccess = 0;
 constexpr int kUnknownSwitch = 101;
 constexpr int kBadCommand = 102;
 
+base::Value ValueFromString(const std::string& values) {
+  absl::optional<base::Value> results_value = base::JSONReader::Read(values);
+  EXPECT_TRUE(results_value);
+  return results_value->Clone();
+}
+
 template <typename... Args>
 base::RepeatingCallback<bool(Args...)> WithSwitch(
     const std::string& flag,
@@ -66,6 +75,21 @@ base::RepeatingCallback<bool(Args...)> WithSwitch(
     LOG(ERROR) << "Missing switch: " << flag;
     return false;
   });
+}
+
+// Overload for bool switches, represented by literals "false" and "true".
+template <typename... Args>
+base::RepeatingCallback<bool(Args...)> WithSwitch(
+    const std::string& flag,
+    base::RepeatingCallback<bool(bool, Args...)> callback) {
+  return WithSwitch(
+      flag,
+      base::BindLambdaForTesting([=](const std::string& flag, Args... args) {
+        if (flag == "false" || flag == "true") {
+          return callback.Run(flag == "true", std::move(args)...);
+        }
+        return false;
+      }));
 }
 
 // Overload for int switches.
@@ -121,6 +145,32 @@ base::RepeatingCallback<bool(Args...)> WithSwitch(
       }));
 }
 
+// Overload for base::Value::Dict switches.
+template <typename... Args>
+base::RepeatingCallback<bool(Args...)> WithSwitch(
+    const std::string& flag,
+    base::RepeatingCallback<bool(const base::Value::Dict&, Args...)> callback) {
+  return WithSwitch(
+      flag,
+      base::BindLambdaForTesting([=](const std::string& flag, Args... args) {
+        return callback.Run(std::move(ValueFromString(flag).GetDict()),
+                            std::move(args)...);
+      }));
+}
+
+// Overload for base::Value::List switches.
+template <typename... Args>
+base::RepeatingCallback<bool(Args...)> WithSwitch(
+    const std::string& flag,
+    base::RepeatingCallback<bool(const base::Value::List&, Args...)> callback) {
+  return WithSwitch(
+      flag,
+      base::BindLambdaForTesting([=](const std::string& flag, Args... args) {
+        return callback.Run(std::move(ValueFromString(flag).GetList()),
+                            std::move(args)...);
+      }));
+}
+
 template <typename Arg, typename... RemainingArgs>
 base::RepeatingCallback<bool(RemainingArgs...)> WithArg(
     Arg arg,
@@ -168,7 +218,6 @@ class AppTestHelper : public App {
  private:
   ~AppTestHelper() override = default;
   void FirstTaskRun() override;
-  void InitializeThreadPool() override;
 };
 
 void AppTestHelper::FirstTaskRun() {
@@ -181,9 +230,12 @@ void AppTestHelper::FirstTaskRun() {
     // then use the With* helper functions to provide its arguments.
     {"clean", WithSystemScope(Wrap(&Clean))},
     {"enter_test_mode", WithSwitch("url", Wrap(&EnterTestMode))},
+    {"set_group_policies", WithSwitch("values", Wrap(&SetGroupPolicies))},
     {"expect_active_updater", WithSystemScope(Wrap(&ExpectActiveUpdater))},
-    {"expect_app_unregistered_existence_checker_path",
-     WithSwitch("app_id", Wrap(&ExpectAppUnregisteredExistenceCheckerPath))},
+    {"expect_registered",
+     WithSwitch("app_id", WithSystemScope(Wrap(&ExpectRegistered)))},
+    {"expect_not_registered",
+     WithSwitch("app_id", WithSystemScope(Wrap(&ExpectNotRegistered)))},
     {"expect_app_version",
      WithSwitch("version", WithSwitch("app_id", WithSystemScope(
                                                     Wrap(&ExpectAppVersion))))},
@@ -191,29 +243,76 @@ void AppTestHelper::FirstTaskRun() {
      WithSystemScope(Wrap(&ExpectCandidateUninstalled))},
     {"expect_clean", WithSystemScope(Wrap(&ExpectClean))},
     {"expect_installed", WithSystemScope(Wrap(&ExpectInstalled))},
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
     {"expect_interfaces_registered",
      WithSystemScope(Wrap(&ExpectInterfacesRegistered))},
-#endif  // OS_WIN
+    {"expect_legacy_update3web_succeeds",
+     WithSwitch("expected_error_code",
+                WithSwitch("expected_final_state",
+                           WithSwitch("app_id",
+                                      WithSystemScope(Wrap(
+                                          &ExpectLegacyUpdate3WebSucceeds)))))},
+    {"expect_legacy_process_launcher_succeeds",
+     WithSystemScope(Wrap(&ExpectLegacyProcessLauncherSucceeds))},
+    {"expect_legacy_app_command_web_succeeds",
+     WithSwitch(
+         "expected_exit_code",
+         WithSwitch(
+             "parameters",
+             WithSwitch(
+                 "command_id",
+                 WithSwitch("app_id",
+                            WithSystemScope(
+                                Wrap(&ExpectLegacyAppCommandWebSucceeds))))))},
+    {"run_uninstall_cmd_line", WithSystemScope(Wrap(&RunUninstallCmdLine))},
+#endif  // BUILDFLAG(IS_WIN)
     {"expect_version_active",
-     WithSwitch("version", Wrap(&ExpectVersionActive))},
+     WithSwitch("version", WithSystemScope(Wrap(&ExpectVersionActive)))},
     {"expect_version_not_active",
-     WithSwitch("version", Wrap(&ExpectVersionNotActive))},
+     WithSwitch("version", WithSystemScope(Wrap(&ExpectVersionNotActive)))},
     {"install", WithSystemScope(Wrap(&Install))},
     {"print_log", WithSystemScope(Wrap(&PrintLog))},
     {"run_wake", WithSwitch("exit_code", WithSystemScope(Wrap(&RunWake)))},
-    {"update", WithSwitch("app_id", Wrap(&Update))},
-    {"update_all", Wrap(&UpdateAll)},
-    {"register_app", WithSwitch("app_id", Wrap(&RegisterApp))},
+    {"run_wake_active",
+     WithSwitch("exit_code", WithSystemScope(Wrap(&RunWakeActive)))},
+    {"update",
+     WithSwitch("install_data_index",
+                (WithSwitch("app_id", WithSystemScope(Wrap(&Update)))))},
+    {"update_all", WithSystemScope(Wrap(&UpdateAll))},
+    {"delete_updater_directory",
+     WithSystemScope(Wrap(&DeleteUpdaterDirectory))},
+    {"install_app", WithSwitch("app_id", WithSystemScope(Wrap(&InstallApp)))},
+    {"uninstall_app",
+     WithSwitch("app_id", WithSystemScope(Wrap(&UninstallApp)))},
     {"set_existence_checker_path",
-     WithSwitch("path", WithSwitch("app_id", Wrap(&SetExistenceCheckerPath)))},
+     WithSwitch("path",
+                (WithSwitch("app_id",
+                            WithSystemScope(Wrap(&SetExistenceCheckerPath)))))},
     {"setup_fake_updater_higher_version",
      WithSystemScope(Wrap(&SetupFakeUpdaterHigherVersion))},
     {"setup_fake_updater_lower_version",
      WithSystemScope(Wrap(&SetupFakeUpdaterLowerVersion))},
+    {"setup_real_updater_lower_version",
+     WithSystemScope(Wrap(&SetupRealUpdaterLowerVersion))},
     {"set_first_registration_counter",
-     WithSwitch("value", Wrap(&SetServerStarts))},
+     WithSwitch("value", WithSystemScope(Wrap(&SetServerStarts)))},
+    {"stress_update_service", WithSystemScope(Wrap(&StressUpdateService))},
     {"uninstall", WithSystemScope(Wrap(&Uninstall))},
+    {"call_service_update",
+     WithSwitch("same_version_update_allowed",
+                WithSwitch("install_data_index",
+                           WithSwitch("app_id", WithSystemScope(Wrap(
+                                                    &CallServiceUpdate)))))},
+    {"setup_fake_legacy_updater_data",
+     WithSystemScope(Wrap(&SetupFakeLegacyUpdaterData))},
+    {"expect_legacy_updater_data_migrated",
+     WithSystemScope(Wrap(&ExpectLegacyUpdaterDataMigrated))},
+    {"run_recovery_component",
+     WithSwitch("version", WithSwitch("app_id", WithSystemScope(Wrap(
+                                                    &RunRecoveryComponent))))},
+    {"expect_last_checked", WithSystemScope(Wrap(&ExpectLastChecked))},
+    {"expect_last_started", WithSystemScope(Wrap(&ExpectLastStarted))},
+    {"run_offline_install", WithSystemScope(Wrap(&RunOfflineInstall))},
   };
 
   const base::CommandLine* command_line =
@@ -231,10 +330,6 @@ void AppTestHelper::FirstTaskRun() {
   LOG(ERROR) << "No supported switch provided. Command: "
              << command_line->GetCommandLineString();
   Shutdown(kUnknownSwitch);
-}
-
-void AppTestHelper::InitializeThreadPool() {
-  base::ThreadPoolInstance::CreateAndStartWithDefaultParams("test_helper");
 }
 
 scoped_refptr<App> MakeAppTestHelper() {
@@ -274,17 +369,23 @@ class TersePrinter : public EmptyTestEventListener {
 int IntegrationTestsHelperMain(int argc, char** argv) {
   base::PlatformThread::SetName("IntegrationTestsHelperMain");
   base::CommandLine::Init(argc, argv);
+
+  // `test_suite` must be defined before setting log items.
+  base::TestSuite test_suite(argc, argv);
   logging::SetLogItems(/*enable_process_id=*/true,
                        /*enable_thread_id=*/true,
                        /*enable_timestamp=*/true,
                        /*enable_tickcount=*/false);
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   auto scoped_com_initializer =
       std::make_unique<base::win::ScopedCOMInitializer>(
           base::win::ScopedCOMInitializer::kMTA);
+  if (FAILED(DisableCOMExceptionHandling())) {
+    // Failing to disable COM exception handling is a critical error.
+    CHECK(false) << "Failed to disable COM exception handling.";
+  }
 #endif
   chrome::RegisterPathProvider();
-  base::TestSuite test_suite(argc, argv);
   TestEventListeners& listeners = UnitTest::GetInstance()->listeners();
   delete listeners.Release(listeners.default_result_printer());
   listeners.Append(new TersePrinter);
@@ -293,20 +394,11 @@ int IntegrationTestsHelperMain(int argc, char** argv) {
       base::BindOnce(&base::TestSuite::Run, base::Unretained(&test_suite)));
 }
 
-class TestHelperCommandRunner : public ::testing::Test {
- private:
-  void TearDown() override {
-    // Avoids reporting the thread pool instance leak in gtest.
-    base::ThreadPoolInstance::Get()->JoinForTesting();
-    base::ThreadPoolInstance::Set(nullptr);
-  }
-};
-
 // Do not disable this test when encountering integration tests failures.
 // This is not a unit test. It just wraps the execution of an integration test
 // command, which is typical a step of an integration test.
-TEST_F(TestHelperCommandRunner, Run) {
-  base::SingleThreadTaskExecutor main_task_executor(base::MessagePumpType::UI);
+TEST(TestHelperCommandRunner, Run) {
+  base::test::TaskEnvironment environment;
   EXPECT_EQ(MakeAppTestHelper()->Run(), 0);
 }
 

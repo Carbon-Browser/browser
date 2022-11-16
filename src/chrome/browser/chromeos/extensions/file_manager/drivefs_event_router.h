@@ -12,7 +12,6 @@
 
 #include "ash/components/drivefs/drivefs_host_observer.h"
 #include "ash/components/drivefs/mojom/drivefs.mojom.h"
-#include "base/macros.h"
 #include "base/values.h"
 #include "chrome/browser/chromeos/extensions/file_manager/system_notification_manager.h"
 #include "extensions/browser/extension_event_histogram_value.h"
@@ -97,7 +96,7 @@ class DriveFsEventRouter : public drivefs::DriveFsHostObserver {
   virtual void BroadcastEvent(
       extensions::events::HistogramValue histogram_value,
       const std::string& event_name,
-      std::vector<base::Value> event_args) = 0;
+      base::Value::List event_args) = 0;
 
   static extensions::api::file_manager_private::FileTransferStatus
   CreateFileTransferStatus(

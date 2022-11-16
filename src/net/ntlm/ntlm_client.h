@@ -20,13 +20,13 @@
 #include <memory>
 #include <string>
 
+#include "base/check.h"
 #include "base/containers/span.h"
 #include "base/strings/string_piece.h"
 #include "net/base/net_export.h"
 #include "net/ntlm/ntlm_constants.h"
 
-namespace net {
-namespace ntlm {
+namespace net::ntlm {
 
 // Provides an implementation of an NTLMv1 or NTLMv2 Client with support
 // for MIC and EPA [1]. This implementation does not support the key exchange,
@@ -41,6 +41,9 @@ class NET_EXPORT_PRIVATE NtlmClient {
   // features such as Extended Protection for Authentication (EPA) and Message
   // Integrity Check (MIC).
   explicit NtlmClient(NtlmFeatures features);
+
+  NtlmClient(const NtlmClient&) = delete;
+  NtlmClient& operator=(const NtlmClient&) = delete;
 
   ~NtlmClient();
 
@@ -150,11 +153,8 @@ class NET_EXPORT_PRIVATE NtlmClient {
   const NtlmFeatures features_;
   NegotiateFlags negotiate_flags_;
   std::vector<uint8_t> negotiate_message_;
-
-  DISALLOW_COPY_AND_ASSIGN(NtlmClient);
 };
 
-}  // namespace ntlm
-}  // namespace net
+}  // namespace net::ntlm
 
 #endif  // NET_NTLM_NTLM_CLIENT_H_

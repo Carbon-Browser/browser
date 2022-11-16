@@ -4,6 +4,7 @@
 
 #include "chrome/browser/notifications/screen_capture_notification_blocker.h"
 
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
@@ -33,7 +34,7 @@ message_center::Notification CreateNotification(const GURL& origin,
   return message_center::Notification(
       message_center::NOTIFICATION_TYPE_SIMPLE, id,
       /*title=*/std::u16string(),
-      /*message=*/std::u16string(), /*icon=*/gfx::Image(),
+      /*message=*/std::u16string(), /*icon=*/ui::ImageModel(),
       /*display_source=*/std::u16string(), origin, message_center::NotifierId(),
       message_center::RichNotificationData(), /*delegate=*/nullptr);
 }
@@ -135,7 +136,7 @@ class ScreenCaptureNotificationBlockerTest
   TestingProfile profile_;
   content::TestWebContentsFactory web_contents_factory_;
   std::unique_ptr<StubNotificationDisplayService> notification_service_;
-  ScreenCaptureNotificationBlocker* blocker_;
+  raw_ptr<ScreenCaptureNotificationBlocker> blocker_;
 };
 
 TEST_P(ScreenCaptureNotificationBlockerTest, ShouldNotBlockWhenNotCapturing) {
@@ -399,7 +400,7 @@ TEST_P(ScreenCaptureNotificationBlockerTest, CloseHistogram) {
 
   blocker().OnBlockedNotification(notification, /*replaced*/ false);
 
-  auto action_delay = base::TimeDelta::FromSeconds(5);
+  auto action_delay = base::Seconds(5);
   task_environment_.FastForwardBy(action_delay);
   SimulateClose(/*by_user=*/true);
 
@@ -430,7 +431,7 @@ TEST_P(ScreenCaptureNotificationBlockerTest, BodyClickHistogram) {
 
   blocker().OnBlockedNotification(notification, /*replaced*/ false);
 
-  auto action_delay = base::TimeDelta::FromSeconds(5);
+  auto action_delay = base::Seconds(5);
   task_environment_.FastForwardBy(action_delay);
   SimulateClick(/*action_index=*/absl::nullopt);
 
@@ -460,7 +461,7 @@ TEST_P(ScreenCaptureNotificationBlockerTest, SnoozeClickHistogram) {
 
   blocker().OnBlockedNotification(notification, /*replaced*/ false);
 
-  auto action_delay = base::TimeDelta::FromSeconds(5);
+  auto action_delay = base::Seconds(5);
   task_environment_.FastForwardBy(action_delay);
   SimulateClick(0);
 
@@ -490,7 +491,7 @@ TEST_P(ScreenCaptureNotificationBlockerTest, ShowClickHistogram) {
 
   blocker().OnBlockedNotification(notification, /*replaced*/ false);
 
-  auto action_delay = base::TimeDelta::FromSeconds(5);
+  auto action_delay = base::Seconds(5);
   task_environment_.FastForwardBy(action_delay);
   SimulateClick(GetParam() ? 1 : 0);
 
@@ -556,12 +557,12 @@ TEST_P(ScreenCaptureNotificationBlockerTest, SessionTimingHistograms) {
       CreateNotification(GURL("https://example2.com"));
   blocker().OnBlockedNotification(notification, /*replaced*/ false);
 
-  auto click_delay = base::TimeDelta::FromSeconds(3);
+  auto click_delay = base::Seconds(3);
   task_environment_.FastForwardBy(click_delay);
 
   SimulateClick(GetParam() ? 1 : 0);
 
-  auto session_delay = base::TimeDelta::FromSeconds(5);
+  auto session_delay = base::Seconds(5);
   task_environment_.FastForwardBy(session_delay);
 
   blocker().OnIsCapturingDisplayChanged(contents, false);

@@ -11,11 +11,13 @@
 #include <vector>
 
 #include "base/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/token.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/gfx/geometry/size.h"
 #include "ui/gfx/image/image_skia.h"
 
 namespace base {
@@ -114,10 +116,13 @@ class ThumbnailImage : public base::RefCounted<ThumbnailImage> {
 
    private:
     friend class ThumbnailImage;
-    ThumbnailImage* thumbnail_ = nullptr;
+    raw_ptr<ThumbnailImage> thumbnail_ = nullptr;
   };
 
   explicit ThumbnailImage(Delegate* delegate);
+
+  ThumbnailImage(const ThumbnailImage&) = delete;
+  ThumbnailImage& operator=(const ThumbnailImage&) = delete;
 
   bool has_data() const { return data_.get(); }
 
@@ -189,7 +194,7 @@ class ThumbnailImage : public base::RefCounted<ThumbnailImage> {
 
   void HandleSubscriptionDestroyed(Subscription* subscription);
 
-  Delegate* delegate_;
+  raw_ptr<Delegate> delegate_;
 
   // This is a scoped_refptr to immutable data. Once set, the wrapped
   // data must not be modified; it is referenced by other threads.
@@ -217,8 +222,6 @@ class ThumbnailImage : public base::RefCounted<ThumbnailImage> {
   SEQUENCE_CHECKER(sequence_checker_);
 
   base::WeakPtrFactory<ThumbnailImage> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ThumbnailImage);
 };
 
 #endif  // CHROME_BROWSER_UI_THUMBNAILS_THUMBNAIL_IMAGE_H_

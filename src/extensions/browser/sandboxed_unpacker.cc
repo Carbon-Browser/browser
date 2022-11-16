@@ -20,10 +20,9 @@
 #include "base/json/json_string_value_serializer.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/path_service.h"
-#include "base/sequenced_task_runner.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/task/post_task.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/timer/elapsed_timer.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -31,7 +30,7 @@
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "extensions/browser/api/declarative_net_request/file_backed_ruleset_source.h"
-#include "extensions/browser/api/declarative_net_request/index_helper.h"
+#include "extensions/browser/api/declarative_net_request/install_index_helper.h"
 #include "extensions/browser/api/declarative_net_request/ruleset_source.h"
 #include "extensions/browser/computed_hashes.h"
 #include "extensions/browser/content_verifier/content_verifier_key.h"
@@ -150,8 +149,8 @@ std::set<base::FilePath> GetMessageCatalogPathsToBeSanitized(
 // _metadata directory (e.g. computed_hashes.json itself).
 bool ShouldComputeHashesForResource(
     const base::FilePath& relative_resource_path) {
-  std::vector<base::FilePath::StringType> components;
-  relative_resource_path.GetComponents(&components);
+  std::vector<base::FilePath::StringType> components =
+      relative_resource_path.GetComponents();
   return !components.empty() && components[0] != kMetadataFolder;
 }
 
@@ -385,9 +384,9 @@ void SandboxedUnpacker::UnzipDone(const base::FilePath& zip_file,
 
 void SandboxedUnpacker::OnVerifiedContentsUncompressed(
     const base::FilePath& unzip_dir,
-    data_decoder::DataDecoder::ResultOrError<mojo_base::BigBuffer> result) {
+    base::expected<mojo_base::BigBuffer, std::string> result) {
   DCHECK(unpacker_io_task_runner_->RunsTasksInCurrentSequence());
-  if (!result.value) {
+  if (!result.has_value()) {
     ReportFailure(SandboxedUnpackerFailureReason::
                       CRX_HEADER_VERIFIED_CONTENTS_UNCOMPRESSING_FAILURE,
                   l10n_util::GetStringFUTF16(
@@ -397,9 +396,8 @@ void SandboxedUnpacker::OnVerifiedContentsUncompressed(
   }
   // Make a copy, since |result| may store data in shared memory, accessible by
   // some other processes.
-  std::vector<uint8_t> verified_contents(
-      result.value.value().data(),
-      result.value.value().data() + result.value.value().size());
+  std::vector<uint8_t> verified_contents(result->data(),
+                                         result->data() + result->size());
 
   client_->GetContentVerifierKey(
       base::BindOnce(&SandboxedUnpacker::StoreVerifiedContentsInExtensionDir,
@@ -558,19 +556,20 @@ void SandboxedUnpacker::UnpackExtensionSucceeded(base::Value manifest) {
   std::set<base::FilePath> image_paths =
       ExtensionsClient::Get()->GetBrowserImagePaths(extension_.get());
   image_sanitizer_ = ImageSanitizer::CreateAndStart(
-      &data_decoder_, extension_root_, image_paths,
-      base::BindRepeating(&SandboxedUnpacker::ImageSanitizerDecodedImage, this),
-      base::BindOnce(&SandboxedUnpacker::ImageSanitizationDone, this),
-      unpacker_io_task_runner_);
+      this, extension_root_, image_paths, unpacker_io_task_runner_);
 }
 
-void SandboxedUnpacker::ImageSanitizerDecodedImage(const base::FilePath& path,
-                                                   SkBitmap image) {
+data_decoder::DataDecoder* SandboxedUnpacker::GetDataDecoder() {
+  return &data_decoder_;
+}
+
+void SandboxedUnpacker::OnImageDecoded(const base::FilePath& path,
+                                       SkBitmap image) {
   if (path == install_icon_path_)
     install_icon_ = image;
 }
 
-void SandboxedUnpacker::ImageSanitizationDone(
+void SandboxedUnpacker::OnImageSanitizationDone(
     ImageSanitizer::Status status,
     const base::FilePath& file_path_for_error) {
   if (status == ImageSanitizer::Status::kSuccess) {
@@ -612,12 +611,6 @@ void SandboxedUnpacker::ImageSanitizationDone(
       failure_reason = SandboxedUnpackerFailureReason::ERROR_SAVING_THEME_IMAGE;
       error = l10n_util::GetStringFUTF16(IDS_EXTENSION_PACKAGE_INSTALL_ERROR,
                                          u"ERROR_SAVING_THEME_IMAGE");
-      break;
-    case ImageSanitizer::Status::kServiceError:
-      failure_reason = SandboxedUnpackerFailureReason::
-          UTILITY_PROCESS_CRASHED_WHILE_TRYING_TO_INSTALL;
-      error = l10n_util::GetStringFUTF16(IDS_EXTENSION_PACKAGE_INSTALL_ERROR,
-                                         u"ERROR_UTILITY_PROCESS_CRASH");
       break;
     default:
       NOTREACHED();
@@ -704,16 +697,15 @@ void SandboxedUnpacker::IndexAndPersistJSONRulesetsIfNeeded() {
 
   // Ignore rule parsing errors since ruleset indexing (and therefore rule
   // parsing) is deferred until the ruleset is enabled for packed extensions.
-  auto invalid_rule_parse_behavior =
-      declarative_net_request::RulesetSource::InvalidRuleParseBehavior::kIgnore;
+  auto parse_flags = declarative_net_request::RulesetSource::kNone;
 
-  declarative_net_request::IndexHelper::IndexStaticRulesets(
-      *extension_, ruleset_filter, invalid_rule_parse_behavior,
+  declarative_net_request::InstallIndexHelper::IndexStaticRulesets(
+      *extension_, ruleset_filter, parse_flags,
       base::BindOnce(&SandboxedUnpacker::OnJSONRulesetsIndexed, this));
 }
 
 void SandboxedUnpacker::OnJSONRulesetsIndexed(
-    declarative_net_request::IndexHelper::Result result) {
+    declarative_net_request::InstallIndexHelper::Result result) {
   if (result.error) {
     ReportFailure(
         SandboxedUnpackerFailureReason::ERROR_INDEXING_DNR_RULESET,
@@ -1067,7 +1059,8 @@ void SandboxedUnpacker::ParseJsonFile(
     return;
   }
 
-  GetJsonParserPtr()->Parse(contents, std::move(callback));
+  GetJsonParserPtr()->Parse(contents, base::JSON_PARSE_CHROMIUM_EXTENSIONS,
+                            std::move(callback));
 }
 
 }  // namespace extensions

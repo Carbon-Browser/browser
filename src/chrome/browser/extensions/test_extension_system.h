@@ -7,14 +7,11 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/one_shot_event.h"
 #include "build/chromeos_buildflags.h"
 #include "extensions/browser/extension_system.h"
 #include "services/data_decoder/public/cpp/test_support/in_process_data_decoder.h"
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chrome/browser/ash/login/users/scoped_test_user_manager.h"
-#endif
 
 class Profile;
 
@@ -26,6 +23,12 @@ class FilePath;
 namespace content {
 class BrowserContext;
 }
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+namespace user_manager {
+class ScopedUserManager;
+}  // namespace user_manager
+#endif
 
 namespace value_store {
 class TestingValueStore;
@@ -60,12 +63,12 @@ class TestExtensionSystem : public ExtensionSystem {
   void InitForRegularProfile(bool extensions_enabled) override {}
   void SetExtensionService(ExtensionService* service);
   ExtensionService* extension_service() override;
-  RuntimeData* runtime_data() override;
   ManagementPolicy* management_policy() override;
   ServiceWorkerManager* service_worker_manager() override;
   UserScriptManager* user_script_manager() override;
   StateStore* state_store() override;
   StateStore* rules_store() override;
+  StateStore* dynamic_user_scripts_store() override;
   scoped_refptr<value_store::ValueStoreFactory> store_factory() override;
   value_store::TestingValueStore* value_store();
   InfoMap* info_map() override;
@@ -100,14 +103,13 @@ class TestExtensionSystem : public ExtensionSystem {
   void RecreateAppSorting();
 
  protected:
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
 
  private:
   scoped_refptr<value_store::TestValueStoreFactory> store_factory_;
   // This depends on store_factory_.
   std::unique_ptr<StateStore> state_store_;
   std::unique_ptr<ManagementPolicy> management_policy_;
-  std::unique_ptr<RuntimeData> runtime_data_;
   std::unique_ptr<ExtensionService> extension_service_;
   scoped_refptr<InfoMap> info_map_;
   std::unique_ptr<QuotaService> quota_service_;
@@ -119,7 +121,7 @@ class TestExtensionSystem : public ExtensionSystem {
       in_process_data_decoder_;
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  std::unique_ptr<ash::ScopedTestUserManager> test_user_manager_;
+  std::unique_ptr<user_manager::ScopedUserManager> scoped_user_manager_;
 #endif
 };
 

@@ -5,8 +5,6 @@
 #ifndef EXTENSIONS_RENDERER_IPC_MESSAGE_SENDER_H_
 #define EXTENSIONS_RENDERER_IPC_MESSAGE_SENDER_H_
 
-#include "base/macros.h"
-
 #include <memory>
 #include <string>
 
@@ -31,6 +29,9 @@ struct PortId;
 // versions handle main thread vs. service worker threads.
 class IPCMessageSender {
  public:
+  IPCMessageSender(const IPCMessageSender&) = delete;
+  IPCMessageSender& operator=(const IPCMessageSender&) = delete;
+
   virtual ~IPCMessageSender();
 
   // Used to distinguish API calls & events from each other in activity log.
@@ -87,6 +88,11 @@ class IPCMessageSender {
   virtual void SendPostMessageToPort(const PortId& port_id,
                                      const Message& message) = 0;
 
+  // Sends a message indicating that a receiver of a message indicated that it
+  // plans to send a response later.
+  virtual void SendMessageResponsePending(int routing_id,
+                                          const PortId& port_id) = 0;
+
   // Sends activityLog IPC to the browser process.
   virtual void SendActivityLogIPC(
       const ExtensionId& extension_id,
@@ -103,8 +109,6 @@ class IPCMessageSender {
 
  protected:
   IPCMessageSender();
-
-  DISALLOW_COPY_AND_ASSIGN(IPCMessageSender);
 };
 
 }  // namespace extensions

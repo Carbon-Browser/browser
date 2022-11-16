@@ -139,24 +139,35 @@ void DoLegacyCleanups(const InstallerState& installer_state,
 // a null time in case of error.
 base::Time GetConsoleSessionStartTime();
 
-// Returns a DM token decoded from the base-64 |encoded_token|, or null in case
+// Returns a DM token decoded from the base-64 `encoded_token`, or null in case
 // of a decoding error.  The returned DM token is an opaque binary blob and
 // should not be treated as an ASCII or UTF-8 string.
 absl::optional<std::string> DecodeDMTokenSwitchValue(
     const std::wstring& encoded_token);
 
+// Returns a nonce decoded from the base-64 `encoded_nonce`, or null in case
+// of a decoding error.  The returned nonce is an opaque binary blob and
+// should not be treated as an ASCII or UTF-8 string.
+absl::optional<std::string> DecodeNonceSwitchValue(
+    const std::string& encoded_nonce);
+
 // Saves a DM token to a global location on the machine accessible to all
 // install modes of the browser (i.e., stable and all three side-by-side modes).
 bool StoreDMToken(const std::string& token);
 
-// Rotates the device trust signing key and saves it to a global location on
-// the machine accessible to all install modes of the browser (i.e., stable and
-// all three side-by-side modes).
-bool RotateDeviceTrustKey(const std::string& dm_token);
+// Deletes any existing DMToken from the global location on the machine.
+bool DeleteDMToken();
 
 // Returns the file path to notification_helper.exe (in |version| directory).
 base::FilePath GetNotificationHelperPath(const base::FilePath& target_path,
                                          const base::Version& version);
+
+// Returns the file path to chrome_wer.dll (in `version` directory).
+base::FilePath GetWerHelperPath(const base::FilePath& target_path,
+                                const base::Version& version);
+
+// Returns the WER runtime exception helper module registry path.
+std::wstring GetWerHelperRegistryPath();
 
 // Returns the file path to elevation_service.exe (in |version| directory).
 base::FilePath GetElevationServicePath(const base::FilePath& target_path,

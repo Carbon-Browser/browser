@@ -11,7 +11,7 @@
 #include <unordered_map>
 
 #include "base/containers/id_map.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "components/media_router/browser/android/media_router_android_bridge.h"
 #include "components/media_router/browser/media_router_base.h"
@@ -30,6 +30,7 @@ class MediaRouterAndroid : public MediaRouterBase {
   const MediaRoute* FindRouteBySource(const MediaSource::Id& source_id) const;
 
   // MediaRouter implementation.
+  void Initialize() override;
   void CreateRoute(const MediaSource::Id& source_id,
                    const MediaSink::Id& sink_id,
                    const url::Origin& origin,
@@ -44,13 +45,6 @@ class MediaRouterAndroid : public MediaRouterBase {
                  MediaRouteResponseCallback callback,
                  base::TimeDelta timeout,
                  bool incognito) override;
-  void ConnectRouteByRouteId(const MediaSource::Id& source,
-                             const MediaRoute::Id& route_id,
-                             const url::Origin& origin,
-                             content::WebContents* web_contents,
-                             MediaRouteResponseCallback callback,
-                             base::TimeDelta timeout,
-                             bool incognito) override;
   void DetachRoute(MediaRoute::Id route_id) override;
   void TerminateRoute(const MediaRoute::Id& route_id) override;
   void SendRouteMessage(const MediaRoute::Id& route_id,
@@ -59,6 +53,8 @@ class MediaRouterAndroid : public MediaRouterBase {
       const MediaRoute::Id& route_id,
       std::unique_ptr<std::vector<uint8_t>> data) override;
   void OnUserGesture() override;
+  std::vector<MediaRoute> GetCurrentRoutes() const override;
+
   std::unique_ptr<media::FlingingController> GetFlingingController(
       const MediaRoute::Id& route_id) override;
 
@@ -101,6 +97,11 @@ class MediaRouterAndroid : public MediaRouterBase {
 
     PresentationConnectionProxy(MediaRouterAndroid* media_router_android,
                                 const MediaRoute::Id& route_id);
+
+    PresentationConnectionProxy(const PresentationConnectionProxy&) = delete;
+    PresentationConnectionProxy& operator=(const PresentationConnectionProxy&) =
+        delete;
+
     ~PresentationConnectionProxy() override;
 
     // Initializes the connection binding and interface request and returns that
@@ -128,10 +129,8 @@ class MediaRouterAndroid : public MediaRouterBase {
     mojo::Remote<blink::mojom::PresentationConnection> peer_;
     mojo::Receiver<blink::mojom::PresentationConnection> receiver_{this};
     // |media_router_android_| owns |this|, so it will outlive |this|.
-    MediaRouterAndroid* media_router_android_;
+    raw_ptr<MediaRouterAndroid> media_router_android_;
     MediaRoute::Id route_id_;
-
-    DISALLOW_COPY_AND_ASSIGN(PresentationConnectionProxy);
   };
 
   // Removes the route with the given id from |active_routes_| and updates the
@@ -150,7 +149,7 @@ class MediaRouterAndroid : public MediaRouterBase {
   void OnRouteRequestError(
       const std::string& error_text,
       int route_request_id,
-      base::OnceCallback<void(RouteRequestResult::ResultCode,
+      base::OnceCallback<void(mojom::RouteRequestResultCode,
                               absl::optional<mojom::MediaRouteProviderId>)>
           callback);
 
@@ -189,8 +188,6 @@ class MediaRouterAndroid : public MediaRouterBase {
   std::unordered_map<MediaRoute::Id,
                      std::vector<std::unique_ptr<PresentationConnectionProxy>>>
       presentation_connections_;
-
-  DISALLOW_COPY_AND_ASSIGN(MediaRouterAndroid);
 };
 
 }  // namespace media_router

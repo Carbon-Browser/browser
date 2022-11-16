@@ -72,8 +72,7 @@ TEST_F(UploadDomActionTest, ActionFailsForNonExistentElement) {
   *proto_.mutable_tree_root() = selector.proto;
 
   EXPECT_CALL(mock_action_delegate_, OnShortWaitForElement(selector, _))
-      .WillOnce(RunOnceCallback<1>(ClientStatus(TIMED_OUT),
-                                   base::TimeDelta::FromSeconds(0)));
+      .WillOnce(RunOnceCallback<1>(ClientStatus(TIMED_OUT), base::Seconds(0)));
 
   EXPECT_CALL(
       callback_,
@@ -91,8 +90,7 @@ TEST_F(UploadDomActionTest, CheckExpectedCallChain) {
   proto_.set_include_all_inner_text(true);
 
   EXPECT_CALL(mock_action_delegate_, OnShortWaitForElement(selector, _))
-      .WillOnce(RunOnceCallback<1>(OkClientStatus(),
-                                   base::TimeDelta::FromSeconds(0)));
+      .WillOnce(RunOnceCallback<1>(OkClientStatus(), base::Seconds(0)));
   auto expected_element =
       test_util::MockFindElement(mock_action_delegate_, selector);
   EXPECT_CALL(mock_web_controller_,
@@ -118,8 +116,7 @@ TEST_F(UploadDomActionTest, ReturnsEmptyStringForNotFoundElement) {
   // too. Failing FindElement is however the more interesting test than failing
   // GetOuterHtml.
   EXPECT_CALL(mock_action_delegate_, OnShortWaitForElement(selector, _))
-      .WillOnce(RunOnceCallback<1>(OkClientStatus(),
-                                   base::TimeDelta::FromSeconds(0)));
+      .WillOnce(RunOnceCallback<1>(OkClientStatus(), base::Seconds(0)));
   EXPECT_CALL(mock_action_delegate_, FindElement(selector, _))
       .WillOnce(
           RunOnceCallback<1>(ClientStatus(ELEMENT_RESOLUTION_FAILED), nullptr));
@@ -141,8 +138,7 @@ TEST_F(UploadDomActionTest, RedactedText) {
   *proto_.mutable_tree_root() = selector.proto;
 
   EXPECT_CALL(mock_action_delegate_, OnShortWaitForElement(selector, _))
-      .WillOnce(RunOnceCallback<1>(OkClientStatus(),
-                                   base::TimeDelta::FromSeconds(0)));
+      .WillOnce(RunOnceCallback<1>(OkClientStatus(), base::Seconds(0)));
   auto expected_element =
       test_util::MockFindElement(mock_action_delegate_, selector);
   EXPECT_CALL(mock_web_controller_,
@@ -167,18 +163,17 @@ TEST_F(UploadDomActionTest, MultipleDomUpload) {
   proto_.set_include_all_inner_text(true);
 
   EXPECT_CALL(mock_action_delegate_, OnShortWaitForElement(selector, _))
-      .WillOnce(RunOnceCallback<1>(OkClientStatus(),
-                                   base::TimeDelta::FromSeconds(0)));
+      .WillOnce(RunOnceCallback<1>(OkClientStatus(), base::Seconds(0)));
 
   EXPECT_CALL(mock_action_delegate_, FindAllElements(selector, _))
       .WillOnce(testing::WithArgs<1>([](auto&& callback) {
-        auto element_result = std::make_unique<ElementFinder::Result>();
-        element_result->dom_object.object_data.object_id = "fake_object_id";
+        auto element_result = std::make_unique<ElementFinderResult>();
+        element_result->SetObjectId("fake_object_id");
         std::move(callback).Run(OkClientStatus(), std::move(element_result));
       }));
 
-  ElementFinder::Result expected_result;
-  expected_result.dom_object.object_data.object_id = "fake_object_id";
+  ElementFinderResult expected_result;
+  expected_result.SetObjectId("fake_object_id");
 
   std::vector<std::string> fake_htmls{"<div></div>", "<span></span>"};
   EXPECT_CALL(mock_web_controller_,
@@ -203,18 +198,17 @@ TEST_F(UploadDomActionTest, MultipleDomUploadRedactText) {
   proto_.set_can_match_multiple_elements(true);
 
   EXPECT_CALL(mock_action_delegate_, OnShortWaitForElement(selector, _))
-      .WillOnce(RunOnceCallback<1>(OkClientStatus(),
-                                   base::TimeDelta::FromSeconds(0)));
+      .WillOnce(RunOnceCallback<1>(OkClientStatus(), base::Seconds(0)));
 
   EXPECT_CALL(mock_action_delegate_, FindAllElements(selector, _))
       .WillOnce(testing::WithArgs<1>([](auto&& callback) {
-        auto element_result = std::make_unique<ElementFinder::Result>();
-        element_result->dom_object.object_data.object_id = "fake_object_id";
+        auto element_result = std::make_unique<ElementFinderResult>();
+        element_result->SetObjectId("fake_object_id");
         std::move(callback).Run(OkClientStatus(), std::move(element_result));
       }));
 
-  ElementFinder::Result expected_result;
-  expected_result.dom_object.object_data.object_id = "fake_object_id";
+  ElementFinderResult expected_result;
+  expected_result.SetObjectId("fake_object_id");
 
   std::vector<std::string> fake_htmls{"<div></div>", "<span></span>"};
 

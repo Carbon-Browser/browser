@@ -32,6 +32,9 @@ class GPUCommandEncoder : public DawnObject<WGPUCommandEncoder> {
   explicit GPUCommandEncoder(GPUDevice* device,
                              WGPUCommandEncoder command_encoder);
 
+  GPUCommandEncoder(const GPUCommandEncoder&) = delete;
+  GPUCommandEncoder& operator=(const GPUCommandEncoder&) = delete;
+
   // gpu_command_encoder.idl
   GPURenderPassEncoder* beginRenderPass(
       const GPURenderPassDescriptor* descriptor,
@@ -76,14 +79,25 @@ class GPUCommandEncoder : public DawnObject<WGPUCommandEncoder> {
         GetHandle(), querySet->GetHandle(), firstQuery, queryCount,
         destination->GetHandle(), destinationOffset);
   }
-  void writeTimestamp(DawnObject<WGPUQuerySet>* querySet, uint32_t queryIndex) {
-    GetProcs().commandEncoderWriteTimestamp(GetHandle(), querySet->GetHandle(),
-                                            queryIndex);
+  void writeTimestamp(DawnObject<WGPUQuerySet>* querySet,
+                      uint32_t queryIndex,
+                      ExceptionState& exception_state);
+  void clearBuffer(DawnObject<WGPUBuffer>* buffer, uint64_t offset) {
+    GetProcs().commandEncoderClearBuffer(GetHandle(), buffer->GetHandle(),
+                                         offset, WGPU_WHOLE_SIZE);
+  }
+  void clearBuffer(DawnObject<WGPUBuffer>* buffer,
+                   uint64_t offset,
+                   uint64_t size) {
+    GetProcs().commandEncoderClearBuffer(GetHandle(), buffer->GetHandle(),
+                                         offset, size);
   }
   GPUCommandBuffer* finish(const GPUCommandBufferDescriptor* descriptor);
 
- private:
-  DISALLOW_COPY_AND_ASSIGN(GPUCommandEncoder);
+  void setLabelImpl(const String& value) override {
+    std::string utf8_label = value.Utf8();
+    GetProcs().commandEncoderSetLabel(GetHandle(), utf8_label.c_str());
+  }
 };
 
 }  // namespace blink

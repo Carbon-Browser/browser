@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/callback_forward.h"
 #include "base/containers/flat_set.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
@@ -18,9 +18,11 @@
 #include "chromecast/browser/mojom/cast_web_contents.mojom.h"
 #include "chromecast/browser/web_types.h"
 #include "chromecast/common/mojom/feature_manager.mojom.h"
+#include "chromecast/mojo/interface_bundle.h"
 #include "content/public/common/media_playback_renderer_type.mojom.h"
 #include "mojo/public/cpp/bindings/generic_pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
+#include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/remote_set.h"
 #include "services/service_manager/public/cpp/interface_provider.h"
@@ -33,6 +35,10 @@ namespace content {
 class NavigationHandle;
 class WebContents;
 }  // namespace content
+
+namespace url_rewrite {
+class UrlRequestRewriteRulesManager;
+}  // namespace url_rewrite
 
 namespace chromecast {
 
@@ -124,6 +130,18 @@ class CastWebContents : public mojom::CastWebContents {
     virtual void MainFrameReadyToCommitNavigation(
         content::NavigationHandle* navigation_handle) {}
 
+    // Notify that an inner WebContents was created. |inner_contents| is created
+    // in a default-initialized state with no delegate, and can be safely
+    // initialized by the delegate.
+    virtual void InnerContentsCreated(CastWebContents* inner_contents,
+                                      CastWebContents* outer_contents) {}
+
+    // Notify the page state changed.
+    virtual void PageStateChanged(PageState page_state) {}
+
+    // Notify the page stopped.
+    virtual void PageStopped(PageState page_state, int32_t error_code) {}
+
     // Sets |cast_web_contents_| to |nullptr| but does not remove the Observer
     // from the ObserverList. Called for each Observer during CastWebContents
     // destruction; we don't use Observe(nullptr) since it would mutate the
@@ -143,6 +161,10 @@ class CastWebContents : public mojom::CastWebContents {
   static CastWebContents* FromWebContents(content::WebContents* web_contents);
 
   CastWebContents();
+
+  CastWebContents(const CastWebContents&) = delete;
+  CastWebContents& operator=(const CastWebContents&) = delete;
+
   ~CastWebContents() override;
 
   // Tab identifier for the WebContents, mainly used by the tabs extension API.
@@ -157,15 +179,25 @@ class CastWebContents : public mojom::CastWebContents {
   // TODO(seantopping): Hide this, clients shouldn't use WebContents directly.
   virtual content::WebContents* web_contents() const = 0;
   virtual PageState page_state() const = 0;
+  virtual url_rewrite::UrlRequestRewriteRulesManager*
+  url_rewrite_rules_manager() = 0;
 
   // mojom::CastWebContents implementation:
   void SetAppProperties(const std::string& app_id,
                         const std::string& session_id,
                         bool is_audio_app,
-                        const GURL& app_web_url) override = 0;
+                        const GURL& app_web_url,
+                        bool enforce_feature_permissions,
+                        const std::vector<int32_t>& feature_permissions,
+                        const std::vector<std::string>&
+                            additional_feature_permission_origins) override = 0;
+  void SetGroupInfo(const std::string& session_id,
+                    bool is_multizone_launch) override = 0;
   void AddRendererFeatures(base::Value features) override = 0;
   void SetInterfacesForRenderer(mojo::PendingRemote<mojom::RemoteInterfaces>
                                     remote_interfaces) override = 0;
+  void SetUrlRewriteRules(
+      url_rewrite::mojom::UrlRequestRewriteRulesPtr rules) override = 0;
   void LoadUrl(const GURL& url) override = 0;
   void ClosePage() override = 0;
   void SetWebVisibilityAndPaint(bool visible) override = 0;
@@ -178,14 +210,6 @@ class CastWebContents : public mojom::CastWebContents {
   void AddObserver(
       mojo::PendingRemote<mojom::CastWebContentsObserver> observer) override;
   void GetMainFramePid(GetMainFramePidCallback cb) override = 0;
-
-  // ===========================================================================
-  // Initialization and Setup
-  // ===========================================================================
-
-  // TODO(b/149041392): This can be an initialization parameter.
-  virtual void AllowWebAndMojoWebUiBindings() = 0;
-  virtual void ClearRenderWidgetHostView() = 0;
 
   // ===========================================================================
   // Page Lifetime
@@ -247,13 +271,8 @@ class CastWebContents : public mojom::CastWebContents {
   // registry or any registered InterfaceProvider.
   virtual bool TryBindReceiver(mojo::GenericPendingReceiver& receiver) = 0;
 
-  // Used for owner to pass its |InterfaceProvider| pointers to CastWebContents.
-  // It is owner's responsibility to make sure each |InterfaceProvider| pointer
-  // has distinct mojo interface set.
-  using InterfaceSet = base::flat_set<std::string>;
-  virtual void RegisterInterfaceProvider(
-      const InterfaceSet& interface_set,
-      service_manager::InterfaceProvider* interface_provider) = 0;
+  // Locally-registered interfaces which are exposed to render frames.
+  virtual InterfaceBundle* local_interfaces() = 0;
 
   // Returns true if WebSQL database is configured enabled for this
   // CastWebContents.
@@ -262,11 +281,24 @@ class CastWebContents : public mojom::CastWebContents {
   // Returns true if mixer audio is enabled.
   virtual bool is_mixer_audio_enabled() = 0;
 
-  // Binds a receiver for remote control of CastWebContents.
-  void BindReceiver(mojo::PendingReceiver<mojom::CastWebContents> receiver);
+  // Binds an owning receiver for remote control of CastWebContents. When the
+  // CastWebContents is managed by CastWebService, its lifetime is scoped to the
+  // duration of the connection. Only one owner can be bound at a time.
+  void BindOwnerReceiver(
+      mojo::PendingReceiver<mojom::CastWebContents> receiver);
+
+  // Binds a non-owning receiver for CastWebContents. This can be called by
+  // multiple clients.
+  void BindSharedReceiver(
+      mojo::PendingReceiver<mojom::CastWebContents> receiver);
+
+  // |cb| is called when |receiver_| is disconnected. This allows the web
+  // service to destroy CastWebContents which are owned via a remote handle.
+  void SetDisconnectCallback(base::OnceClosure cb);
 
  protected:
-  mojo::ReceiverSet<mojom::CastWebContents> receivers_;
+  mojo::Receiver<mojom::CastWebContents> owner_receiver_{this};
+  mojo::ReceiverSet<mojom::CastWebContents> shared_receivers_;
   mojo::RemoteSet<mojom::CastWebContentsObserver> observers_;
   base::ObserverList<Observer> sync_observers_;
 
@@ -278,7 +310,9 @@ class CastWebContents : public mojom::CastWebContents {
   void AddObserver(Observer* observer);
   void RemoveObserver(Observer* observer);
 
-  DISALLOW_COPY_AND_ASSIGN(CastWebContents);
+  void OnDisconnect();
+
+  base::OnceClosure disconnect_cb_;
 };
 
 }  // namespace chromecast

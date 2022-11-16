@@ -7,7 +7,6 @@
 #include "base/bind.h"
 #include "base/callback.h"
 #include "base/check.h"
-#include "base/cxx17_backports.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "chrome/browser/resource_coordinator/intervention_policy_database.h"
@@ -47,7 +46,7 @@ InterventionPolicyDatabaseComponentInstallerPolicy::
 
 bool InterventionPolicyDatabaseComponentInstallerPolicy::
     SupportsGroupPolicyEnabledComponentUpdates() const {
-  return false;
+  return true;
 }
 
 bool InterventionPolicyDatabaseComponentInstallerPolicy::
@@ -58,7 +57,7 @@ bool InterventionPolicyDatabaseComponentInstallerPolicy::
 
 update_client::CrxInstaller::Result
 InterventionPolicyDatabaseComponentInstallerPolicy::OnCustomInstall(
-    const base::DictionaryValue& manifest,
+    const base::Value& manifest,
     const base::FilePath& install_dir) {
   return update_client::CrxInstaller::Result(0);
 }
@@ -67,7 +66,7 @@ void InterventionPolicyDatabaseComponentInstallerPolicy::OnCustomUninstall() {}
 
 // Called during startup and installation before ComponentReady().
 bool InterventionPolicyDatabaseComponentInstallerPolicy::VerifyInstallation(
-    const base::DictionaryValue& manifest,
+    const base::Value& manifest,
     const base::FilePath& install_dir) const {
   return base::PathExists(
       install_dir.Append(kInterventionPolicyDatabaseBinaryPbFileName));
@@ -79,7 +78,7 @@ bool InterventionPolicyDatabaseComponentInstallerPolicy::VerifyInstallation(
 void InterventionPolicyDatabaseComponentInstallerPolicy::ComponentReady(
     const base::Version& version,
     const base::FilePath& install_dir,
-    std::unique_ptr<base::DictionaryValue> manifest) {
+    base::Value manifest) {
   DCHECK(database_);
   database_->InitializeDatabaseWithProtoFile(
       install_dir.Append(kInterventionPolicyDatabaseBinaryPbFileName), version,
@@ -96,7 +95,7 @@ void InterventionPolicyDatabaseComponentInstallerPolicy::GetHash(
     std::vector<uint8_t>* hash) const {
   hash->assign(kInterventionPolicyDatabasePublicKeySHA256,
                kInterventionPolicyDatabasePublicKeySHA256 +
-                   base::size(kInterventionPolicyDatabasePublicKeySHA256));
+                   std::size(kInterventionPolicyDatabasePublicKeySHA256));
 }
 
 std::string InterventionPolicyDatabaseComponentInstallerPolicy::GetName()

@@ -94,7 +94,7 @@ void MachineLevelUserCloudPolicyStore::LoadImmediately() {
   // succeeded.
   if (!machine_dm_token_.is_valid()) {
     VLOG(1) << "LoadImmediately ignored, no DM token present.";
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
     // On Android, some dependencies (e.g. FirstRunActivity) are blocked until
     // the PolicyService is initialized, which waits on all policy providers to
     // indicate that policies are available.
@@ -110,7 +110,7 @@ void MachineLevelUserCloudPolicyStore::LoadImmediately() {
     PolicyLoadResult result;
     result.status = policy::LOAD_RESULT_NO_POLICY_FILE;
     PolicyLoaded(/*validate_in_background=*/false, result);
-#endif  // defined(OS_ANDROID)
+#endif  // BUILDFLAG(IS_ANDROID)
     return;
   }
   VLOG(1) << "Load policy cache Immediately.";
@@ -194,19 +194,20 @@ PolicyLoadResult MachineLevelUserCloudPolicyStore::LoadExternalCachedPolicies(
 
 std::unique_ptr<UserCloudPolicyValidator>
 MachineLevelUserCloudPolicyStore::CreateValidator(
-    std::unique_ptr<enterprise_management::PolicyFetchResponse> policy,
+    std::unique_ptr<enterprise_management::PolicyFetchResponse>
+        policy_fetch_response,
     CloudPolicyValidatorBase::ValidateTimestampOption option) {
   auto validator = std::make_unique<UserCloudPolicyValidator>(
-      std::move(policy), background_task_runner());
+      std::move(policy_fetch_response), background_task_runner());
   validator->ValidatePolicyType(
       GetMachineLevelUserCloudPolicyTypeForCurrentOS());
   validator->ValidateDMToken(machine_dm_token_.value(),
                              CloudPolicyValidatorBase::DM_TOKEN_REQUIRED);
   validator->ValidateDeviceId(machine_client_id_,
                               CloudPolicyValidatorBase::DEVICE_ID_REQUIRED);
-  if (policy_) {
-    validator->ValidateTimestamp(base::Time::FromJavaTime(policy_->timestamp()),
-                                 option);
+  if (has_policy()) {
+    validator->ValidateTimestamp(
+        base::Time::FromJavaTime(policy()->timestamp()), option);
   }
   validator->ValidatePayload();
   return validator;

@@ -6,8 +6,8 @@
 #define CONTENT_PUBLIC_BROWSER_BROWSER_ACCESSIBILITY_STATE_H_
 
 #include "base/callback_forward.h"
+#include "base/callback_list.h"
 #include "build/build_config.h"
-
 #include "content/common/content_export.h"
 #include "content/public/browser/browser_context.h"
 #include "ui/accessibility/ax_mode.h"
@@ -21,7 +21,7 @@ struct FocusedNodeDetails;
 // readers.
 class CONTENT_EXPORT BrowserAccessibilityState {
  public:
-  virtual ~BrowserAccessibilityState() { }
+  virtual ~BrowserAccessibilityState() = default;
 
   // Returns the singleton instance.
   static BrowserAccessibilityState* GetInstance();
@@ -79,7 +79,7 @@ class CONTENT_EXPORT BrowserAccessibilityState {
   // Update BrowserAccessibilityState with the current status of caret browsing.
   virtual void SetCaretBrowsingState(bool enabled) = 0;
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   // Update BrowserAccessibilityState with the current state of accessibility
   // image labels. Used exclusively on Android.
   virtual void SetImageLabelsModeForProfile(bool enabled,

@@ -108,7 +108,7 @@
 
 #pragma mark - Privates
 
-// Remove |self.webViewScrollViewObserver| from the given |webState|. |webState|
+// Remove `self.webViewScrollViewObserver` from the given `webState`. `webState`
 // can be nullptr.
 - (void)removeObserverFromWebState:(web::WebState*)webState {
   if (webState && self.webViewScrollViewObserver) {
@@ -117,7 +117,7 @@
   }
 }
 
-// Add |self.webViewScrollViewObserver| to the given |webState|. |webState| can
+// Add `self.webViewScrollViewObserver` to the given `webState`. `webState` can
 // be nullptr.
 - (void)addObserverToWebState:(web::WebState*)webState {
   if (webState && self.webViewScrollViewObserver) {
@@ -166,9 +166,11 @@
   // No-op.
 }
 
-- (void)didAnimateViewReveal:(ViewRevealState)viewRevealState {
-  if (viewRevealState == ViewRevealState::Peeked ||
-      viewRevealState == ViewRevealState::Hidden) {
+- (void)didAnimateViewRevealFromState:(ViewRevealState)startViewRevealState
+                              toState:(ViewRevealState)currentViewRevealState
+                              trigger:(ViewRevealTrigger)trigger {
+  if (currentViewRevealState == ViewRevealState::Peeked ||
+      currentViewRevealState == ViewRevealState::Hidden) {
     self.regularOverlayPresentationContext->SetUIDisabled(false);
     if (self.incognitoOverlayPresentationContext) {
       self.incognitoOverlayPresentationContext->SetUIDisabled(false);

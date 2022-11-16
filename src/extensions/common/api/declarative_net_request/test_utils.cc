@@ -76,6 +76,11 @@ std::unique_ptr<base::DictionaryValue> TestRuleCondition::ToValue() const {
            is_url_filter_case_sensitive);
   SetValue(dict.get(), kDomainsKey, domains);
   SetValue(dict.get(), kExcludedDomainsKey, excluded_domains);
+  SetValue(dict.get(), kInitiatorDomainsKey, initiator_domains);
+  SetValue(dict.get(), kExcludedInitiatorDomainsKey,
+           excluded_initiator_domains);
+  SetValue(dict.get(), kRequestDomainsKey, request_domains);
+  SetValue(dict.get(), kExcludedRequestDomainsKey, excluded_request_domains);
   SetValue(dict.get(), kRequestMethodsKey, request_methods);
   SetValue(dict.get(), kExcludedRequestMethodsKey, excluded_request_methods);
   SetValue(dict.get(), kResourceTypesKey, resource_types);
@@ -270,6 +275,9 @@ std::unique_ptr<base::DictionaryValue> CreateManifest(
 
   if (flags & kConfig_HasActiveTab)
     permissions.push_back("activeTab");
+
+  if (flags & kConfig_HasDelarativeNetRequestWithHostAccessPermission)
+    permissions.push_back("declarativeNetRequestWithHostAccess");
 
   std::vector<std::string> background_scripts;
   if (flags & kConfig_HasBackgroundScript)

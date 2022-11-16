@@ -3,7 +3,6 @@
 // found in the LICENSE file.
 
 import './diagnostics_card_frame.js';
-import './diagnostics_fonts_css.js';
 import './diagnostics_shared_css.js';
 
 import {html, Polymer} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
@@ -39,7 +38,7 @@ Polymer({
    * @protected
    */
   getTopSectionClassName_() {
-    return `top-section${this.isNetworkingCard ? '-padding' : ''}`;
+    return `top-section${this.isNetworkingCard ? '-networking' : ''}`;
   },
 
   /**

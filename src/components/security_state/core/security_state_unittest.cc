@@ -11,8 +11,6 @@
 #include "base/bind.h"
 #include "base/command_line.h"
 #include "base/test/metrics/histogram_tester.h"
-#include "base/test/scoped_feature_list.h"
-#include "components/security_state/core/features.h"
 #include "net/cert/x509_certificate.h"
 #include "net/ssl/ssl_cipher_suite_names.h"
 #include "net/ssl/ssl_connection_status_flags.h"
@@ -30,7 +28,6 @@ const char kHttpUrl[] = "http://foo.test/";
 const char kLocalhostUrl[] = "http://localhost";
 const char kFileOrigin[] = "file://example_file";
 const char kWssUrl[] = "wss://foo.test/";
-const char kFtpUrl[] = "ftp://example.test/";
 const char kDataUrl[] = "data:text/html,<html>test</html>";
 
 // This list doesn't include data: URL, as data: URLs will be explicitly marked
@@ -235,13 +232,6 @@ TEST(SecurityStateTest, AlwaysWarnOnDataUrls) {
   EXPECT_EQ(WARNING, helper.GetSecurityLevel());
 }
 
-// Tests that FTP URLs always cause an WARNING to be shown.
-TEST(SecurityStateTest, AlwaysWarnOnFtpUrls) {
-  TestSecurityStateHelper helper;
-  helper.SetUrl(GURL(kFtpUrl));
-  EXPECT_EQ(WARNING, helper.GetSecurityLevel());
-}
-
 // Tests that the security level is downgraded to WARNING on
 // pseudo URLs.
 TEST(SecurityStateTest, WarningOnPseudoUrls) {
@@ -338,10 +328,6 @@ TEST(SecurityStateTest, SafetyTipSometimesRemovesSecure) {
       {SafetyTipStatus::kBadKeyword, SECURE},
   };
 
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitAndEnableFeature(
-      security_state::features::kSafetyTipUI);
-
   for (auto testcase : kTestCases) {
     TestSecurityStateHelper helper;
     helper.set_cert_status(0);
@@ -431,9 +417,6 @@ TEST(SecurityStateTest, NonCryptoHasNoCertificateErrors) {
                          net::CERT_STATUS_REVOKED);
 
   helper.SetUrl(GURL(kHttpUrl));
-  EXPECT_FALSE(helper.HasMajorCertificateError());
-
-  helper.SetUrl(GURL(kFtpUrl));
   EXPECT_FALSE(helper.HasMajorCertificateError());
 
   helper.SetUrl(GURL(kDataUrl));

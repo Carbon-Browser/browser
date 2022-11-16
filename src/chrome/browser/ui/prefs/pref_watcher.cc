@@ -2,6 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// This source code is a part of eyeo Chromium SDK.
+// Use of this source code is governed by the GPLv3 that can be found in the
+// components/adblock/LICENSE file.
+
 #include "chrome/browser/ui/prefs/pref_watcher.h"
 
 #include "base/bind.h"
@@ -13,6 +17,7 @@
 #include "chrome/browser/renderer_preferences_util.h"
 #include "chrome/browser/ui/prefs/prefs_tab_helper.h"
 #include "chrome/common/pref_names.h"
+#include "components/adblock/core/common/adblock_prefs.h"
 #include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/language/core/browser/pref_names.h"
 #include "components/live_caption/pref_names.h"
@@ -20,6 +25,10 @@
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "ash/constants/ash_pref_names.h"
+#endif
+
+#if BUILDFLAG(IS_ANDROID)
+#include "components/browser_ui/accessibility/android/font_size_prefs_android.h"
 #endif
 
 namespace {
@@ -43,9 +52,9 @@ const char* const kWebPrefsToObserve[] = {
     prefs::kAccessibilityCaptionsBackgroundColor,
     prefs::kAccessibilityCaptionsTextShadow,
     prefs::kAccessibilityCaptionsBackgroundOpacity,
-#if defined(OS_ANDROID)
-    prefs::kWebKitFontScaleFactor,
-    prefs::kWebKitForceEnableZoom,
+#if BUILDFLAG(IS_ANDROID)
+    browser_ui::prefs::kWebKitFontScaleFactor,
+    browser_ui::prefs::kWebKitForceEnableZoom,
     prefs::kWebKitPasswordEchoEnabled,
 #endif
     prefs::kWebKitForceDarkModeEnabled,
@@ -62,9 +71,17 @@ const char* const kWebPrefsToObserve[] = {
 #else
     prefs::kAccessibilityFocusHighlightEnabled,
 #endif
+
+    adblock::prefs::kAdblockAllowedDomains,
+    adblock::prefs::kAdblockCustomFilters,
+    adblock::prefs::kAdblockCustomSubscriptions,
+    adblock::prefs::kAdblockSubscriptions,
+    adblock::prefs::kEnableAcceptableAds,
+    adblock::prefs::kEnableAdblock,
+
 };
 
-const int kWebPrefsToObserveLength = base::size(kWebPrefsToObserve);
+const int kWebPrefsToObserveLength = std::size(kWebPrefsToObserve);
 
 }  // namespace
 
@@ -89,12 +106,12 @@ PrefWatcher::PrefWatcher(Profile* profile) : profile_(profile) {
   profile_pref_change_registrar_.Add(prefs::kWebRTCUDPPortRange,
                                      renderer_callback);
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
   profile_pref_change_registrar_.Add(prefs::kCaretBrowsingEnabled,
                                      renderer_callback);
 #endif
 
-#if !defined(OS_MAC)
+#if !BUILDFLAG(IS_MAC)
   profile_pref_change_registrar_.Add(prefs::kFullscreenAllowed,
                                      renderer_callback);
 #endif

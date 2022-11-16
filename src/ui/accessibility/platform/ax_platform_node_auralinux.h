@@ -11,7 +11,6 @@
 #include <string>
 #include <utility>
 
-#include "base/macros.h"
 #include "base/strings/utf_offset_string_conversions.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/accessibility/ax_enums.mojom-forward.h"
@@ -113,8 +112,9 @@ class ImplementedAtkInterfaces {
 // Implements accessibility on Aura Linux using ATK.
 class AX_EXPORT AXPlatformNodeAuraLinux : public AXPlatformNodeBase {
  public:
-  AXPlatformNodeAuraLinux();
   ~AXPlatformNodeAuraLinux() override;
+  AXPlatformNodeAuraLinux(const AXPlatformNodeAuraLinux&) = delete;
+  AXPlatformNodeAuraLinux& operator=(const AXPlatformNodeAuraLinux&) = delete;
 
   static AXPlatformNodeAuraLinux* FromAtkObject(const AtkObject*);
 
@@ -195,6 +195,7 @@ class AX_EXPORT AXPlatformNodeAuraLinux : public AXPlatformNodeBase {
 
   // Event helpers
   void OnActiveDescendantChanged();
+  void OnBusyStateChanged(bool is_busy);
   void OnCheckedStateChanged();
   void OnEnabledChanged();
   void OnExpandedStateChanged(bool is_expanded);
@@ -226,6 +227,7 @@ class AX_EXPORT AXPlatformNodeAuraLinux : public AXPlatformNodeBase {
   void RunPostponedEvents();
 
   void ResendFocusSignalsForCurrentlyFocusedNode();
+  void SetAsCurrentlyFocusedNode();
   bool SupportsSelectionWithAtkSelection();
   bool SelectionAndFocusAreTheSame();
   void SetActiveViewsDialog();
@@ -237,9 +239,8 @@ class AX_EXPORT AXPlatformNodeAuraLinux : public AXPlatformNodeBase {
   void NotifyAccessibilityEvent(ax::mojom::Event event_type) override;
 
   // AXPlatformNodeBase overrides.
-  void Init(AXPlatformNodeDelegate* delegate) override;
   bool IsPlatformCheckable() const override;
-  absl::optional<int> GetIndexInParent() override;
+  absl::optional<size_t> GetIndexInParent() override;
 
   bool IsNameExposed();
 
@@ -293,8 +294,13 @@ class AX_EXPORT AXPlatformNodeAuraLinux : public AXPlatformNodeBase {
   absl::optional<std::pair<int, int>> GetEmbeddedObjectIndices();
 
   std::string accessible_name_;
-
+  
  protected:
+  AXPlatformNodeAuraLinux();
+
+  // AXPlatformNode overrides.
+  void Init(AXPlatformNodeDelegate* delegate) override;
+
   // Offsets for the AtkText API are calculated in UTF-16 code point offsets,
   // but the ATK APIs want all offsets to be in "characters," which we
   // understand to be Unicode character offsets. We keep a lazily generated set
@@ -424,7 +430,8 @@ class AX_EXPORT AXPlatformNodeAuraLinux : public AXPlatformNodeBase {
 
   bool window_activate_event_postponed_ = false;
 
-  DISALLOW_COPY_AND_ASSIGN(AXPlatformNodeAuraLinux);
+  friend AXPlatformNode* AXPlatformNode::Create(
+      AXPlatformNodeDelegate* delegate);
 };
 
 }  // namespace ui

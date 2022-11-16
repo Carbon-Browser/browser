@@ -5,14 +5,12 @@
 #ifndef SERVICES_DEVICE_GEOLOCATION_GEOLOCATION_PROVIDER_IMPL_H_
 #define SERVICES_DEVICE_GEOLOCATION_GEOLOCATION_PROVIDER_IMPL_H_
 
-#include <list>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "base/callback_forward.h"
 #include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "base/threading/thread.h"
 #include "build/build_config.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -61,6 +59,9 @@ class GeolocationProviderImpl : public GeolocationProvider,
   // called on the UI thread so that the GeolocationProviderImpl is always
   // instantiated on the same thread. Ownership is NOT returned.
   static GeolocationProviderImpl* GetInstance();
+
+  GeolocationProviderImpl(const GeolocationProviderImpl&) = delete;
+  GeolocationProviderImpl& operator=(const GeolocationProviderImpl&) = delete;
 
   // Optional: Provide global configuration to Geolocation. Should be called
   // before using Init() on the singleton GetInstance().
@@ -145,8 +146,6 @@ class GeolocationProviderImpl : public GeolocationProvider,
   std::unique_ptr<LocationProvider> arbitrator_;
 
   mojo::Receiver<mojom::GeolocationControl> receiver_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(GeolocationProviderImpl);
 };
 
 }  // namespace device

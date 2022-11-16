@@ -4,12 +4,11 @@
 
 #include "chrome/browser/ash/crostini/crostini_installer.h"
 
+#include "ash/components/disks/disk_mount_manager.h"
+#include "ash/components/disks/mock_disk_mount_manager.h"
 #include "base/bind.h"
 #include "base/callback_helpers.h"
-#include "base/macros.h"
-#include "base/memory/ptr_util.h"
 #include "base/run_loop.h"
-#include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
 #include "chrome/browser/ash/crostini/ansible/ansible_management_test_helper.h"
@@ -22,16 +21,16 @@
 #include "chrome/test/base/scoped_testing_local_state.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
-#include "chromeos/dbus/cicerone/cicerone_client.h"
-#include "chromeos/dbus/cicerone/fake_cicerone_client.h"
-#include "chromeos/dbus/concierge/concierge_client.h"
-#include "chromeos/dbus/concierge/concierge_service.pb.h"
-#include "chromeos/dbus/concierge/fake_concierge_client.h"
+#include "chromeos/ash/components/dbus/chunneld/chunneld_client.h"
+#include "chromeos/ash/components/dbus/cicerone/cicerone_client.h"
+#include "chromeos/ash/components/dbus/cicerone/fake_cicerone_client.h"
+#include "chromeos/ash/components/dbus/concierge/concierge_client.h"
+#include "chromeos/ash/components/dbus/concierge/concierge_service.pb.h"
+#include "chromeos/ash/components/dbus/concierge/fake_concierge_client.h"
+#include "chromeos/ash/components/dbus/seneschal/seneschal_client.h"
 #include "chromeos/dbus/dbus_thread_manager.h"
+#include "chromeos/dbus/debug_daemon/debug_daemon_client.h"
 #include "chromeos/dbus/dlcservice/dlcservice_client.h"
-#include "chromeos/dbus/seneschal/seneschal_client.h"
-#include "chromeos/disks/disk_mount_manager.h"
-#include "chromeos/disks/mock_disk_mount_manager.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -64,17 +63,16 @@ class CrostiniInstallerTest : public testing::Test {
     MOCK_METHOD0(OnCanceled, void());
   };
 
-  class WaitingFakeConciergeClient : public chromeos::FakeConciergeClient {
+  class WaitingFakeConciergeClient : public ash::FakeConciergeClient {
    public:
-    explicit WaitingFakeConciergeClient(chromeos::FakeCiceroneClient* client)
-        : chromeos::FakeConciergeClient(client) {}
+    explicit WaitingFakeConciergeClient(ash::FakeCiceroneClient* client)
+        : ash::FakeConciergeClient(client) {}
 
-    void StartTerminaVm(
+    void StartVm(
         const vm_tools::concierge::StartVmRequest& request,
         chromeos::DBusMethodCallback<vm_tools::concierge::StartVmResponse>
             callback) override {
-      chromeos::FakeConciergeClient::StartTerminaVm(request,
-                                                    std::move(callback));
+      ash::FakeConciergeClient::StartVm(request, std::move(callback));
       if (quit_closure_) {
         base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
                                                       std::move(quit_closure_));
@@ -85,7 +83,7 @@ class CrostiniInstallerTest : public testing::Test {
       base::RunLoop loop;
       quit_closure_ = loop.QuitClosure();
       loop.Run();
-      EXPECT_GE(start_termina_vm_call_count(), 1);
+      EXPECT_GE(start_vm_call_count(), 1);
     }
 
    private:
@@ -96,6 +94,16 @@ class CrostiniInstallerTest : public testing::Test {
       : local_state_(std::make_unique<ScopedTestingLocalState>(
             TestingBrowserProcess::GetGlobal())),
         browser_part_(g_browser_process->platform_part()) {}
+
+  CrostiniInstallerTest(const CrostiniInstallerTest&) = delete;
+  CrostiniInstallerTest& operator=(const CrostiniInstallerTest&) = delete;
+
+  void SetOSRelease() {
+    vm_tools::cicerone::OsRelease os_release;
+    os_release.set_id("debian");
+    os_release.set_version_id("10");
+    ash::FakeCiceroneClient::Get()->set_lxd_container_os_release(os_release);
+  }
 
   void SetUp() override {
     component_manager_ =
@@ -110,13 +118,17 @@ class CrostiniInstallerTest : public testing::Test {
 
     chromeos::DlcserviceClient::InitializeFake();
     chromeos::DBusThreadManager::Initialize();
-    chromeos::CiceroneClient::InitializeFake();
+    ash::ChunneldClient::InitializeFake();
+    ash::CiceroneClient::InitializeFake();
+    chromeos::DebugDaemonClient::InitializeFake();
+    SetOSRelease();
     waiting_fake_concierge_client_ =
-        new WaitingFakeConciergeClient(chromeos::FakeCiceroneClient::Get());
-    chromeos::SeneschalClient::InitializeFake();
+        new WaitingFakeConciergeClient(ash::FakeCiceroneClient::Get());
 
-    disk_mount_manager_mock_ = new chromeos::disks::MockDiskMountManager;
-    chromeos::disks::DiskMountManager::InitializeForTesting(
+    ash::SeneschalClient::InitializeFake();
+
+    disk_mount_manager_mock_ = new ash::disks::MockDiskMountManager;
+    ash::disks::DiskMountManager::InitializeForTesting(
         disk_mount_manager_mock_);
 
     profile_ = std::make_unique<TestingProfile>();
@@ -141,10 +153,12 @@ class CrostiniInstallerTest : public testing::Test {
     crostini_test_helper_.reset();
     profile_.reset();
 
-    chromeos::disks::MockDiskMountManager::Shutdown();
-    chromeos::SeneschalClient::Shutdown();
-    chromeos::ConciergeClient::Shutdown();
-    chromeos::CiceroneClient::Shutdown();
+    ash::disks::MockDiskMountManager::Shutdown();
+    ash::SeneschalClient::Shutdown();
+    chromeos::DebugDaemonClient::Shutdown();
+    ash::ConciergeClient::Shutdown();
+    ash::CiceroneClient::Shutdown();
+    ash::ChunneldClient::Shutdown();
     chromeos::DBusThreadManager::Shutdown();
     chromeos::DlcserviceClient::Shutdown();
 
@@ -176,7 +190,7 @@ class CrostiniInstallerTest : public testing::Test {
   base::HistogramTester histogram_tester_;
 
   // Owned by DiskMountManager
-  chromeos::disks::MockDiskMountManager* disk_mount_manager_mock_ = nullptr;
+  ash::disks::MockDiskMountManager* disk_mount_manager_mock_ = nullptr;
 
   WaitingFakeConciergeClient* waiting_fake_concierge_client_ = nullptr;
 
@@ -188,8 +202,6 @@ class CrostiniInstallerTest : public testing::Test {
   std::unique_ptr<ScopedTestingLocalState> local_state_;
   scoped_refptr<component_updater::FakeCrOSComponentManager> component_manager_;
   BrowserProcessPlatformPartTestApi browser_part_;
-
-  DISALLOW_COPY_AND_ASSIGN(CrostiniInstallerTest);
 };
 
 TEST_F(CrostiniInstallerTest, InstallFlow) {
@@ -283,12 +295,12 @@ TEST_F(CrostiniInstallerTest, CancelAfterStart) {
   // Hang the installer flow waiting for Tremplin to start, so we get a chance
   // to cancel it.
   waiting_fake_concierge_client_->set_send_tremplin_started_signal_delay(
-      base::TimeDelta::FromDays(1));
-  task_environment_.FastForwardBy(base::TimeDelta::FromSeconds(1));
+      base::Days(1));
+  task_environment_.FastForwardBy(base::Seconds(1));
 
   check.Call("calling Cancel()");
   Cancel();
-  task_environment_.FastForwardBy(base::TimeDelta::FromSeconds(1));
+  task_environment_.FastForwardBy(base::Seconds(1));
 
   histogram_tester_.ExpectUniqueSample(
       "Crostini.SetupResult",

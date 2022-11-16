@@ -18,18 +18,23 @@ extern const base::Feature kPreemptiveLinkToTextGeneration;
 // Sets the timeout length for pre-emptive link generation.
 extern const base::FeatureParam<int> kPreemptiveLinkGenTimeoutLengthMs;
 
-// If enabled, a blocklist will disable link generation on certain pages where
-// the feature is unlikely to work correctly.
-extern const base::Feature kSharedHighlightingUseBlocklist;
-
-// Enables the new UI features for highlighted text.
-extern const base::Feature kSharedHighlightingV2;
-
 // Enables shared highlighting for AMP viewers pages.
 extern const base::Feature kSharedHighlightingAmp;
 
-// Enable the fix for layout object crash in shared highlighting generator.
-extern const base::Feature kSharedHighlightingLayoutObjectFix;
+// Enables the new SharedHighlightingManager refactoring.
+extern const base::Feature kSharedHighlightingManager;
+
+// Feature flag that enable Shared Highlighting V2 in iOS.
+extern const base::Feature kIOSSharedHighlightingV2;
+
+// Feature flag that enables a narrower blocklist.
+extern const base::Feature kSharedHighlightingRefinedBlocklist;
+
+// Feature flag that allows to experiment with different Max Context Words.
+extern const base::Feature kSharedHighlightingRefinedMaxContextWords;
+// Feature name and parameter to capture the different maxContextWords values.
+extern const char kSharedHighlightingRefinedMaxContextWordsName[];
+extern const base::FeatureParam<int> kSharedHighlightingMaxContextWords;
 
 // Returns the pre-emptive link generation timeout length.
 int GetPreemptiveLinkGenTimeoutLengthMs();

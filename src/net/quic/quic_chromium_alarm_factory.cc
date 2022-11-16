@@ -7,6 +7,7 @@
 #include "base/bind.h"
 #include "base/check.h"
 #include "base/location.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/tick_clock.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
@@ -35,8 +36,7 @@ class QuicChromeAlarm : public quic::QuicAlarm, public base::TickClock {
   void SetImpl() override {
     DCHECK(deadline().IsInitialized());
     const int64_t delay_us = (deadline() - clock_->Now()).ToMicroseconds();
-    timer_->Start(FROM_HERE, base::TimeDelta::FromMicroseconds(delay_us),
-                  on_alarm_callback_);
+    timer_->Start(FROM_HERE, base::Microseconds(delay_us), on_alarm_callback_);
   }
 
   void CancelImpl() override {
@@ -66,7 +66,7 @@ class QuicChromeAlarm : public quic::QuicAlarm, public base::TickClock {
     return quic::QuicChromiumClock::QuicTimeToTimeTicks(clock_->Now());
   }
 
-  const quic::QuicClock* const clock_;
+  const raw_ptr<const quic::QuicClock> clock_;
   base::RepeatingClosure on_alarm_callback_;
   const std::unique_ptr<base::OneShotTimer> timer_;
 };
@@ -78,7 +78,7 @@ QuicChromiumAlarmFactory::QuicChromiumAlarmFactory(
     const quic::QuicClock* clock)
     : task_runner_(task_runner), clock_(clock) {}
 
-QuicChromiumAlarmFactory::~QuicChromiumAlarmFactory() {}
+QuicChromiumAlarmFactory::~QuicChromiumAlarmFactory() = default;
 
 quic::QuicArenaScopedPtr<quic::QuicAlarm> QuicChromiumAlarmFactory::CreateAlarm(
     quic::QuicArenaScopedPtr<quic::QuicAlarm::Delegate> delegate,

@@ -8,14 +8,17 @@
 #include <string>
 #include <unordered_map>
 
-#include "base/macros.h"
 #include "chrome/browser/ash/printing/history/print_job_database.h"
 
-namespace chromeos {
+namespace ash {
 
 class TestPrintJobDatabase : public PrintJobDatabase {
  public:
   TestPrintJobDatabase();
+
+  TestPrintJobDatabase(const TestPrintJobDatabase&) = delete;
+  TestPrintJobDatabase& operator=(const TestPrintJobDatabase&) = delete;
+
   ~TestPrintJobDatabase() override;
 
   // PrintJobDatabase:
@@ -31,10 +34,13 @@ class TestPrintJobDatabase : public PrintJobDatabase {
  private:
   // In-memory database of PrintJobInfo.
   std::unordered_map<std::string, printing::proto::PrintJobInfo> database_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestPrintJobDatabase);
 };
 
+}  // namespace ash
+
+// TODO(https://crbug.com/1164001): remove when ChromeOS code migration is done.
+namespace chromeos {
+using ::ash::TestPrintJobDatabase;
 }  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_PRINTING_HISTORY_TEST_PRINT_JOB_DATABASE_H_

@@ -9,6 +9,7 @@
 
 #include "base/bind.h"
 #include "base/run_loop.h"
+#include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -39,6 +40,9 @@ class TestWakeLockObserver : public mojom::WakeLockObserver {
         mojom::WakeLockType::kPreventDisplaySleepAllowDimming, EventCount());
   }
 
+  TestWakeLockObserver(const TestWakeLockObserver&) = delete;
+  TestWakeLockObserver& operator=(const TestWakeLockObserver&) = delete;
+
   ~TestWakeLockObserver() override = default;
 
   void AddReceiver(mojo::PendingReceiver<mojom::WakeLockObserver> receiver) {
@@ -65,13 +69,15 @@ class TestWakeLockObserver : public mojom::WakeLockObserver {
   mojo::ReceiverSet<mojom::WakeLockObserver> receivers_;
 
   std::map<mojom::WakeLockType, EventCount> wake_lock_events_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestWakeLockObserver);
 };
 
 class WakeLockTest : public DeviceServiceTestBase {
  public:
   WakeLockTest() = default;
+
+  WakeLockTest(const WakeLockTest&) = delete;
+  WakeLockTest& operator=(const WakeLockTest&) = delete;
+
   ~WakeLockTest() override = default;
 
  protected:
@@ -146,8 +152,6 @@ class WakeLockTest : public DeviceServiceTestBase {
 
   mojo::Remote<device::mojom::WakeLockProvider> wake_lock_provider_;
   mojo::Remote<mojom::WakeLock> wake_lock_;
-
-  DISALLOW_COPY_AND_ASSIGN(WakeLockTest);
 };
 
 // Request a wake lock, then cancel.
@@ -200,7 +204,7 @@ TEST_F(WakeLockTest, MultipleRequests) {
 // multiple clients. Has no effect on Android either.
 TEST_F(WakeLockTest, ChangeType) {
   EXPECT_FALSE(HasWakeLock());
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
   // Call ChangeType() on a wake lock that is in inactive status.
   EXPECT_TRUE(ChangeType(device::mojom::WakeLockType::kPreventAppSuspension));
   EXPECT_TRUE(ChangeType(device::mojom::WakeLockType::kPreventDisplaySleep));
@@ -266,7 +270,7 @@ TEST_F(WakeLockTest, ChangeType) {
   EXPECT_EQ(0, GetActiveWakeLocks(mojom::WakeLockType::kPreventDisplaySleep));
   EXPECT_EQ(0, GetActiveWakeLocks(
                    mojom::WakeLockType::kPreventDisplaySleepAllowDimming));
-#else  // OS_ANDROID:
+#else  // BUILDFLAG(IS_ANDROID):
   EXPECT_FALSE(ChangeType(device::mojom::WakeLockType::kPreventAppSuspension));
   EXPECT_FALSE(ChangeType(device::mojom::WakeLockType::kPreventDisplaySleep));
   EXPECT_FALSE(ChangeType(

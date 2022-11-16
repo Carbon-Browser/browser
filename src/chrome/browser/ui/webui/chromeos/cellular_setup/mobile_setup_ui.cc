@@ -17,6 +17,7 @@
 #include "base/memory/ref_counted_memory.h"
 #include "base/memory/weak_ptr.h"
 #include "base/no_destructor.h"
+#include "base/scoped_observation.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
@@ -27,11 +28,11 @@
 #include "chrome/common/url_constants.h"
 #include "chrome/grit/browser_resources.h"
 #include "chrome/grit/generated_resources.h"
-#include "chromeos/network/device_state.h"
-#include "chromeos/network/network_event_log.h"
-#include "chromeos/network/network_state.h"
-#include "chromeos/network/network_state_handler.h"
-#include "chromeos/network/network_state_handler_observer.h"
+#include "chromeos/ash/components/network/device_state.h"
+#include "chromeos/ash/components/network/network_event_log.h"
+#include "chromeos/ash/components/network/network_state.h"
+#include "chromeos/ash/components/network/network_state_handler.h"
+#include "chromeos/ash/components/network/network_state_handler_observer.h"
 #include "components/strings/grit/components_strings.h"
 #include "content/public/browser/url_data_source.h"
 #include "content/public/browser/web_contents.h"
@@ -52,11 +53,7 @@ namespace cellular_setup {
 namespace {
 
 // Host page JS API function names.
-const char kJsApiStartActivation[] = "startActivation";
-const char kJsApiSetTransactionStatus[] = "setTransactionStatus";
-const char kJsApiPaymentPortalLoad[] = "paymentPortalLoad";
 const char kJsGetDeviceInfo[] = "getDeviceInfo";
-const char kJsApiResultOK[] = "ok";
 
 const char kJsDeviceStatusChangedCallback[] =
     "mobile.MobileSetup.deviceStateChanged";
@@ -175,6 +172,10 @@ base::Value GetCellularNetworkInfoValue(const NetworkState* network,
 class MobileSetupUIHTMLSource : public content::URLDataSource {
  public:
   MobileSetupUIHTMLSource();
+
+  MobileSetupUIHTMLSource(const MobileSetupUIHTMLSource&) = delete;
+  MobileSetupUIHTMLSource& operator=(const MobileSetupUIHTMLSource&) = delete;
+
   ~MobileSetupUIHTMLSource() override {}
 
   // content::URLDataSource implementation.
@@ -183,7 +184,7 @@ class MobileSetupUIHTMLSource : public content::URLDataSource {
       const GURL& url,
       const content::WebContents::Getter& wc_getter,
       content::URLDataSource::GotDataCallback callback) override;
-  std::string GetMimeType(const std::string&) override { return "text/html"; }
+  std::string GetMimeType(const GURL&) override { return "text/html"; }
   bool ShouldAddContentSecurityPolicy() override { return false; }
   bool AllowCaching() override {
     // Should not be cached to reflect dynamically-generated contents that may
@@ -193,8 +194,6 @@ class MobileSetupUIHTMLSource : public content::URLDataSource {
 
  private:
   base::WeakPtrFactory<MobileSetupUIHTMLSource> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(MobileSetupUIHTMLSource);
 };
 
 // The handler for Javascript messages related to the "register" view.
@@ -203,6 +202,10 @@ class MobileSetupHandler : public content::WebUIMessageHandler,
                            public NetworkStateHandlerObserver {
  public:
   MobileSetupHandler();
+
+  MobileSetupHandler(const MobileSetupHandler&) = delete;
+  MobileSetupHandler& operator=(const MobileSetupHandler&) = delete;
+
   ~MobileSetupHandler() override;
 
   // WebUIMessageHandler implementation.
@@ -231,10 +234,7 @@ class MobileSetupHandler : public content::WebUIMessageHandler,
   void Reset();
 
   // Handlers for JS WebUI messages.
-  void HandleSetTransactionStatus(const base::ListValue* args);
-  void HandleStartActivation(const base::ListValue* args);
-  void HandlePaymentPortalLoad(const base::ListValue* args);
-  void HandleGetDeviceInfo(const base::ListValue* args);
+  void HandleGetDeviceInfo(const base::Value::List& args);
 
   // NetworkStateHandlerObserver implementation.
   void NetworkConnectionStateChanged(const NetworkState* network) override;
@@ -254,9 +254,12 @@ class MobileSetupHandler : public content::WebUIMessageHandler,
   // connection state. This value is reflected in portal webui for lte networks.
   // Initial value is true.
   bool lte_portal_reachable_;
-  base::WeakPtrFactory<MobileSetupHandler> weak_ptr_factory_{this};
 
-  DISALLOW_COPY_AND_ASSIGN(MobileSetupHandler);
+  base::ScopedObservation<chromeos::NetworkStateHandler,
+                          chromeos::NetworkStateHandlerObserver>
+      network_state_handler_observer_{this};
+
+  base::WeakPtrFactory<MobileSetupHandler> weak_ptr_factory_{this};
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -314,50 +317,27 @@ void MobileSetupUIHTMLSource::StartDataRequest(
   }
 
   NET_LOG(EVENT) << "Starting mobile setup: " << NetworkId(network);
-  base::DictionaryValue strings;
+  base::Value::Dict strings;
 
-  strings.SetString(
-      "connecting_header",
-      l10n_util::GetStringFUTF16(IDS_MOBILE_CONNECTING_HEADER,
-                                 base::UTF8ToUTF16(device->operator_name())));
-  strings.SetString("error_header",
-                    l10n_util::GetStringUTF16(IDS_MOBILE_ERROR_HEADER));
-  strings.SetString("activating_header",
-                    l10n_util::GetStringUTF16(IDS_MOBILE_ACTIVATING_HEADER));
-  strings.SetString("completed_header",
-                    l10n_util::GetStringUTF16(IDS_MOBILE_COMPLETED_HEADER));
-  strings.SetString("please_wait",
-                    l10n_util::GetStringUTF16(IDS_MOBILE_PLEASE_WAIT));
-  strings.SetString("completed_text",
-                    l10n_util::GetStringUTF16(IDS_MOBILE_COMPLETED_TEXT));
-  strings.SetString("portal_unreachable_header",
-                    l10n_util::GetStringUTF16(IDS_MOBILE_NO_CONNECTION_HEADER));
-  strings.SetString(
-      "invalid_device_info_header",
-      l10n_util::GetStringUTF16(IDS_MOBILE_INVALID_DEVICE_INFO_HEADER));
-  strings.SetString("title", l10n_util::GetStringUTF16(IDS_MOBILE_SETUP_TITLE));
-  strings.SetString("close_button", l10n_util::GetStringUTF16(IDS_CLOSE));
-  strings.SetString("cancel_button", l10n_util::GetStringUTF16(IDS_CANCEL));
-  strings.SetString("ok_button", l10n_util::GetStringUTF16(IDS_OK));
+  strings.Set("view_account_error_title",
+              l10n_util::GetStringUTF16(IDS_MOBILE_VIEW_ACCOUNT_ERROR_TITLE));
+  strings.Set("view_account_error_message",
+              l10n_util::GetStringUTF16(IDS_MOBILE_VIEW_ACCOUNT_ERROR_MESSAGE));
+  strings.Set("title", l10n_util::GetStringUTF16(IDS_MOBILE_SETUP_TITLE));
+  strings.Set("close_button", l10n_util::GetStringUTF16(IDS_CLOSE));
+  strings.Set("cancel_button", l10n_util::GetStringUTF16(IDS_CANCEL));
+  strings.Set("ok_button", l10n_util::GetStringUTF16(IDS_OK));
 
   const std::string& app_locale = g_browser_process->GetApplicationLocale();
   webui::SetLoadTimeDataDefaults(app_locale, &strings);
 
-  // The webui differs based on whether the network is activated or not. If the
-  // network is activated, the webui goes straight to portal. Otherwise the
-  // webui is used for activation flow.
-  std::string full_html;
-  if (network->activation_state() == shill::kActivationStateActivated) {
-    static const base::NoDestructor<std::string> html_string(
-        ui::ResourceBundle::GetSharedInstance().LoadDataResourceString(
-            IDR_MOBILE_SETUP_PORTAL_PAGE_HTML));
-    full_html = webui::GetI18nTemplateHtml(*html_string, &strings);
-  } else {
-    static const base::NoDestructor<std::string> html_string(
-        ui::ResourceBundle::GetSharedInstance().LoadDataResourceString(
-            IDR_MOBILE_SETUP_PAGE_HTML));
-    full_html = webui::GetI18nTemplateHtml(*html_string, &strings);
-  }
+  // mobile_setup_ui.cc will only be triggered from the detail page for
+  // activated cellular network.
+  DCHECK(network->activation_state() == shill::kActivationStateActivated);
+  std::string html_string =
+      ui::ResourceBundle::GetSharedInstance().LoadDataResourceString(
+          IDR_MOBILE_SETUP_PORTAL_PAGE_HTML);
+  std::string full_html = webui::GetI18nTemplateHtml(html_string, strings);
 
   std::move(callback).Run(base::RefCountedString::TakeString(&full_html));
 }
@@ -414,84 +394,18 @@ void MobileSetupHandler::Reset() {
     ash::MobileActivator::GetInstance()->RemoveObserver(this);
     ash::MobileActivator::GetInstance()->TerminateActivation();
   } else if (type_ == TYPE_PORTAL_LTE) {
-    NetworkHandler::Get()->network_state_handler()->RemoveObserver(this,
-                                                                   FROM_HERE);
+    network_state_handler_observer_.Reset();
   }
 }
 
 void MobileSetupHandler::RegisterMessages() {
-  web_ui()->RegisterDeprecatedMessageCallback(
-      kJsApiStartActivation,
-      base::BindRepeating(&MobileSetupHandler::HandleStartActivation,
-                          base::Unretained(this)));
-  web_ui()->RegisterDeprecatedMessageCallback(
-      kJsApiSetTransactionStatus,
-      base::BindRepeating(&MobileSetupHandler::HandleSetTransactionStatus,
-                          base::Unretained(this)));
-  web_ui()->RegisterDeprecatedMessageCallback(
-      kJsApiPaymentPortalLoad,
-      base::BindRepeating(&MobileSetupHandler::HandlePaymentPortalLoad,
-                          base::Unretained(this)));
-  web_ui()->RegisterDeprecatedMessageCallback(
+  web_ui()->RegisterMessageCallback(
       kJsGetDeviceInfo,
       base::BindRepeating(&MobileSetupHandler::HandleGetDeviceInfo,
                           base::Unretained(this)));
 }
 
-void MobileSetupHandler::HandleStartActivation(const base::ListValue* args) {
-  DCHECK_EQ(TYPE_UNDETERMINED, type_);
-  if (!web_ui())
-    return;
-
-  std::string path = web_ui()->GetWebContents()->GetURL().path();
-  if (path.empty())
-    return;
-
-  NET_LOG(EVENT) << "Starting activation for service: " << NetworkPathId(path);
-  active_ = true;
-  AllowJavascript();
-
-  type_ = TYPE_ACTIVATION;
-  ash::MobileActivator::GetInstance()->AddObserver(this);
-  ash::MobileActivator::GetInstance()->InitiateActivation(path.substr(1));
-}
-
-void MobileSetupHandler::HandleSetTransactionStatus(
-    const base::ListValue* args) {
-  DCHECK_EQ(TYPE_ACTIVATION, type_);
-  if (!web_ui())
-    return;
-
-  const size_t kSetTransactionStatusParamCount = 1;
-  if (args->GetList().size() != kSetTransactionStatusParamCount)
-    return;
-  // Get change callback function name.
-  std::string status;
-  if (!args->GetString(0, &status))
-    return;
-
-  ash::MobileActivator::GetInstance()->OnSetTransactionStatus(
-      base::LowerCaseEqualsASCII(status, kJsApiResultOK));
-}
-
-void MobileSetupHandler::HandlePaymentPortalLoad(const base::ListValue* args) {
-  // Only activation flow webui is interested in these events.
-  if (type_ != TYPE_ACTIVATION || !web_ui())
-    return;
-
-  const size_t kPaymentPortalLoadParamCount = 1;
-  if (args->GetList().size() != kPaymentPortalLoadParamCount)
-    return;
-  // Get change callback function name.
-  std::string result;
-  if (!args->GetString(0, &result))
-    return;
-
-  ash::MobileActivator::GetInstance()->OnPortalLoaded(
-      base::LowerCaseEqualsASCII(result, kJsApiResultOK));
-}
-
-void MobileSetupHandler::HandleGetDeviceInfo(const base::ListValue* args) {
+void MobileSetupHandler::HandleGetDeviceInfo(const base::Value::List& args) {
   DCHECK_NE(TYPE_ACTIVATION, type_);
   if (!web_ui())
     return;
@@ -520,7 +434,7 @@ void MobileSetupHandler::HandleGetDeviceInfo(const base::ListValue* args) {
     if (network->network_technology() == shill::kNetworkTechnologyLte ||
         network->network_technology() == shill::kNetworkTechnologyLteAdvanced) {
       type_ = TYPE_PORTAL_LTE;
-      nsh->AddObserver(this, FROM_HERE);
+      network_state_handler_observer_.Observe(nsh);
       // Update the network status and notify the webui. This is the initial
       // network state so the webui should be notified no matter what.
       UpdatePortalReachability(network, true /* force notification */);

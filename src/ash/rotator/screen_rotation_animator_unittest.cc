@@ -26,6 +26,7 @@
 #include "base/strings/stringprintf.h"
 #include "components/viz/common/frame_sinks/copy_output_request.h"
 #include "components/viz/common/frame_sinks/copy_output_result.h"
+#include "ui/compositor/layer_animator.h"
 #include "ui/compositor/layer_tree_owner.h"
 #include "ui/compositor/scoped_animation_duration_scale_mode.h"
 #include "ui/display/display.h"
@@ -60,6 +61,9 @@ class AnimationObserver : public ScreenRotationAnimatorObserver {
  public:
   AnimationObserver() = default;
 
+  AnimationObserver(const AnimationObserver&) = delete;
+  AnimationObserver& operator=(const AnimationObserver&) = delete;
+
   bool copy_notified() const { return copy_notified_; }
   bool finish_notified() const { return finish_notified_; }
 
@@ -72,8 +76,6 @@ class AnimationObserver : public ScreenRotationAnimatorObserver {
  private:
   bool copy_notified_ = false;
   bool finish_notified_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(AnimationObserver);
 };
 
 class TestScreenRotationAnimator : public ScreenRotationAnimator {
@@ -81,6 +83,11 @@ class TestScreenRotationAnimator : public ScreenRotationAnimator {
   TestScreenRotationAnimator(aura::Window* root_window,
                              const base::RepeatingClosure& before_callback,
                              const base::RepeatingClosure& after_callback);
+
+  TestScreenRotationAnimator(const TestScreenRotationAnimator&) = delete;
+  TestScreenRotationAnimator& operator=(const TestScreenRotationAnimator&) =
+      delete;
+
   ~TestScreenRotationAnimator() override = default;
 
  private:
@@ -96,8 +103,6 @@ class TestScreenRotationAnimator : public ScreenRotationAnimator {
 
   base::RepeatingClosure intersect_before_callback_;
   base::RepeatingClosure intersect_after_callback_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestScreenRotationAnimator);
 };
 
 TestScreenRotationAnimator::TestScreenRotationAnimator(
@@ -147,6 +152,12 @@ void TestScreenRotationAnimator::IntersectAfter(
 class ScreenRotationAnimatorSlowAnimationTest : public AshTestBase {
  public:
   ScreenRotationAnimatorSlowAnimationTest() = default;
+
+  ScreenRotationAnimatorSlowAnimationTest(
+      const ScreenRotationAnimatorSlowAnimationTest&) = delete;
+  ScreenRotationAnimatorSlowAnimationTest& operator=(
+      const ScreenRotationAnimatorSlowAnimationTest&) = delete;
+
   ~ScreenRotationAnimatorSlowAnimationTest() override = default;
 
   // AshTestBase:
@@ -167,8 +178,6 @@ class ScreenRotationAnimatorSlowAnimationTest : public AshTestBase {
   std::unique_ptr<ScreenRotationAnimatorTestApi> test_api_;
 
   std::unique_ptr<ui::ScopedAnimationDurationScaleMode> non_zero_duration_mode_;
-
-  DISALLOW_COPY_AND_ASSIGN(ScreenRotationAnimatorSlowAnimationTest);
 };
 
 void ScreenRotationAnimatorSlowAnimationTest::SetUp() {
@@ -192,6 +201,12 @@ class ScreenRotationAnimatorSmoothAnimationTest
       public testing::WithParamInterface<bool> {
  public:
   ScreenRotationAnimatorSmoothAnimationTest() = default;
+
+  ScreenRotationAnimatorSmoothAnimationTest(
+      const ScreenRotationAnimatorSmoothAnimationTest&) = delete;
+  ScreenRotationAnimatorSmoothAnimationTest& operator=(
+      const ScreenRotationAnimatorSmoothAnimationTest&) = delete;
+
   ~ScreenRotationAnimatorSmoothAnimationTest() override = default;
 
   // AshTestBase:
@@ -234,8 +249,6 @@ class ScreenRotationAnimatorSmoothAnimationTest
   std::unique_ptr<ScreenRotationAnimatorTestApi> test_api_;
 
   std::unique_ptr<ui::ScopedAnimationDurationScaleMode> non_zero_duration_mode_;
-
-  DISALLOW_COPY_AND_ASSIGN(ScreenRotationAnimatorSmoothAnimationTest);
 };
 
 void ScreenRotationAnimatorSmoothAnimationTest::RemoveSecondaryDisplay(

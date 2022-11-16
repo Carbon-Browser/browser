@@ -15,7 +15,10 @@
 #include "third_party/skia/include/core/SkSurface.h"
 #include "third_party/skia/include/gpu/GrContextOptions.h"
 #include "third_party/skia/include/gpu/GrTypes.h"
+
+#if BUILDFLAG(ENABLE_VULKAN)
 #include "third_party/skia/include/gpu/vk/GrVkTypes.h"
+#endif
 
 // Forwardly declare a few GL types to avoid including GL header files.
 typedef int GLint;
@@ -99,6 +102,9 @@ GPU_GLES2_EXPORT GrVkYcbcrConversionInfo CreateGrVkYcbcrConversionInfo(
 // to free released memory immediately.
 GPU_GLES2_EXPORT bool ShouldVulkanSyncCpuForSkiaSubmit(
     viz::VulkanContextProvider* context_provider);
+
+GPU_GLES2_EXPORT uint64_t
+GrBackendTextureTracingID(const GrBackendTexture& backend_texture);
 
 }  // namespace gpu
 

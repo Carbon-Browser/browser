@@ -5,11 +5,14 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_MOBILE_METRICS_MOBILE_FRIENDLINESS_CHECKER_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_MOBILE_METRICS_MOBILE_FRIENDLINESS_CHECKER_H_
 
+#include "base/time/time.h"
 #include "third_party/blink/public/common/mobile_metrics/mobile_friendliness.h"
 #include "third_party/blink/renderer/core/core_export.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/core/frame/local_frame_view.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/heap/visitor.h"
+#include "third_party/blink/renderer/platform/timer.h"
 
 namespace blink {
 
@@ -22,20 +25,22 @@ struct ViewportDescription;
 // smart phone devices are checked. The calculated value will be sent as a part
 // of UKM.
 class CORE_EXPORT MobileFriendlinessChecker
-    : public GarbageCollected<MobileFriendlinessChecker> {
+    : public GarbageCollected<MobileFriendlinessChecker>,
+      public LocalFrameView::LifecycleNotificationObserver {
  public:
   explicit MobileFriendlinessChecker(LocalFrameView& frame_view);
   virtual ~MobileFriendlinessChecker();
 
-  void NotifyFirstContentfulPaint();
+  // LocalFrameView::LifecycleNotificationObserver implementation
+  void DidFinishLifecycleUpdate(const LocalFrameView&) override;
+  void NotifyInitialScaleUpdated();
+
+  void NotifyPaint();
+  void WillBeRemovedFromFrame();
   void NotifyViewportUpdated(const ViewportDescription&);
   void NotifyInvalidatePaint(const LayoutObject& object);
-  const blink::MobileFriendliness& GetMobileFriendliness() const {
-    return mobile_friendliness_;
-  }
-  void EvaluateNow();
 
-  void Trace(Visitor* visitor) const;
+  void Trace(Visitor* visitor) const override;
   struct TextAreaWithFontSize {
     double small_font_area = 0;
     double total_text_area = 0;
@@ -43,18 +48,28 @@ class CORE_EXPORT MobileFriendlinessChecker
   };
 
  private:
-  void ComputeSmallTextRatio(const LayoutObject& object);
+  void Activate(TimerBase*);
+
+  // Returns the percentage of the width of the content that overflows the
+  // viewport.
+  // Returns 0 if all content fits in the viewport.
   int ComputeContentOutsideViewport();
-  void ComputeBadTapTargetsRatio();
+
+  // Returns percentage value [0-100] of bad tap targets in the area of the
+  // first page. Returns kTimeBudgetExceeded if the time limit is exceeded.
+  int ComputeBadTapTargetsRatio();
 
  private:
-  TextAreaWithFontSize text_area_sizes_;
   Member<LocalFrameView> frame_view_;
-  blink::MobileFriendliness mobile_friendliness_;
-  bool font_size_check_enabled_;
-  bool tap_target_check_enabled_;
-  float viewport_scalar_;
-  bool fcp_detected_;
+  HeapTaskRunnerTimer<MobileFriendlinessChecker> timer_;
+  double viewport_scalar_;
+  double initial_scale_ = 1.0;
+  base::TimeTicks last_evaluated_;
+  TextAreaWithFontSize text_area_sizes_;
+  bool viewport_device_width_ = false;
+  bool allow_user_zoom_ = true;
+  int viewport_initial_scale_x10_ = -1;
+  int viewport_hardcoded_width_ = -1;
 };
 
 }  // namespace blink

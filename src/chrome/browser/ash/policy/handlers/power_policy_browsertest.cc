@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "ash/components/cryptohome/cryptohome_parameters.h"
 #include "ash/constants/ash_switches.h"
 #include "base/bind.h"
 #include "base/callback.h"
@@ -15,11 +16,10 @@
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/location.h"
-#include "base/macros.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/ash/login/test/login_or_lock_screen_visible_waiter.h"
 #include "chrome/browser/ash/policy/core/device_policy_cros_browser_test.h"
@@ -31,14 +31,13 @@
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/test/base/testing_profile.h"
-#include "chromeos/cryptohome/cryptohome_parameters.h"
+#include "chromeos/ash/components/dbus/session_manager/fake_session_manager_client.h"
+#include "chromeos/ash/components/dbus/userdataauth/userdataauth_client.h"
 #include "chromeos/dbus/constants/dbus_paths.h"
 #include "chromeos/dbus/dbus_thread_manager.h"
 #include "chromeos/dbus/power/fake_power_manager_client.h"
 #include "chromeos/dbus/power/power_policy_controller.h"
 #include "chromeos/dbus/power_manager/policy.pb.h"
-#include "chromeos/dbus/session_manager/fake_session_manager_client.h"
-#include "chromeos/dbus/userdataauth/userdataauth_client.h"
 #include "components/account_id/account_id.h"
 #include "components/policy/core/common/cloud/cloud_policy_core.h"
 #include "components/policy/core/common/cloud/cloud_policy_store.h"
@@ -120,6 +119,11 @@ const char kScreenLockDelayPolicy[] =
 }  // namespace
 
 class PowerPolicyBrowserTestBase : public DevicePolicyCrosBrowserTest {
+ public:
+  PowerPolicyBrowserTestBase(const PowerPolicyBrowserTestBase&) = delete;
+  PowerPolicyBrowserTestBase& operator=(const PowerPolicyBrowserTestBase&) =
+      delete;
+
  protected:
   PowerPolicyBrowserTestBase();
 
@@ -148,11 +152,15 @@ class PowerPolicyBrowserTestBase : public DevicePolicyCrosBrowserTest {
 
   // Reloads user policy for |profile| from session manager client.
   void ReloadUserPolicy(Profile* profile);
-
-  DISALLOW_COPY_AND_ASSIGN(PowerPolicyBrowserTestBase);
 };
 
 class PowerPolicyLoginScreenBrowserTest : public PowerPolicyBrowserTestBase {
+ public:
+  PowerPolicyLoginScreenBrowserTest(const PowerPolicyLoginScreenBrowserTest&) =
+      delete;
+  PowerPolicyLoginScreenBrowserTest& operator=(
+      const PowerPolicyLoginScreenBrowserTest&) = delete;
+
  protected:
   PowerPolicyLoginScreenBrowserTest();
 
@@ -160,20 +168,20 @@ class PowerPolicyLoginScreenBrowserTest : public PowerPolicyBrowserTestBase {
   void SetUpCommandLine(base::CommandLine* command_line) override;
   void SetUpOnMainThread() override;
   void TearDownOnMainThread() override;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(PowerPolicyLoginScreenBrowserTest);
 };
 
 class PowerPolicyInSessionBrowserTest : public PowerPolicyBrowserTestBase {
+ public:
+  PowerPolicyInSessionBrowserTest(const PowerPolicyInSessionBrowserTest&) =
+      delete;
+  PowerPolicyInSessionBrowserTest& operator=(
+      const PowerPolicyInSessionBrowserTest&) = delete;
+
  protected:
   PowerPolicyInSessionBrowserTest();
 
   // PowerPolicyBrowserTestBase:
   void SetUpOnMainThread() override;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(PowerPolicyInSessionBrowserTest);
 };
 
 PowerPolicyBrowserTestBase::PowerPolicyBrowserTestBase() = default;
@@ -194,7 +202,7 @@ void PowerPolicyBrowserTestBase::InstallUserKey() {
   ASSERT_TRUE(base::PathService::Get(chromeos::dbus_paths::DIR_USER_POLICY_KEYS,
                                      &user_keys_dir));
   std::string sanitized_username =
-      chromeos::UserDataAuthClient::GetStubSanitizedUsername(
+      ash::UserDataAuthClient::GetStubSanitizedUsername(
           cryptohome::CreateAccountIdentifierFromAccountId(
               user_manager::StubAccountId()));
   base::FilePath user_key_file =
@@ -223,7 +231,7 @@ void PowerPolicyBrowserTestBase::StoreAndReloadUserPolicy() {
 
 void PowerPolicyBrowserTestBase::
     StoreAndReloadDevicePolicyAndWaitForLoginProfileChange() {
-  Profile* profile = chromeos::ProfileHelper::GetSigninProfile();
+  Profile* profile = ash::ProfileHelper::GetSigninProfile();
   ASSERT_TRUE(profile);
 
   // Install the new device policy blob in session manager client, reload device
@@ -269,15 +277,15 @@ PowerPolicyLoginScreenBrowserTest::PowerPolicyLoginScreenBrowserTest() {}
 void PowerPolicyLoginScreenBrowserTest::SetUpCommandLine(
     base::CommandLine* command_line) {
   PowerPolicyBrowserTestBase::SetUpCommandLine(command_line);
-  command_line->AppendSwitch(chromeos::switches::kLoginManager);
-  command_line->AppendSwitch(chromeos::switches::kForceLoginManagerInTests);
+  command_line->AppendSwitch(ash::switches::kLoginManager);
+  command_line->AppendSwitch(ash::switches::kForceLoginManagerInTests);
 }
 
 void PowerPolicyLoginScreenBrowserTest::SetUpOnMainThread() {
   PowerPolicyBrowserTestBase::SetUpOnMainThread();
 
   // Wait for the login screen to be shown.
-  chromeos::LoginOrLockScreenVisibleWaiter().Wait();
+  ash::LoginOrLockScreenVisibleWaiter().Wait();
 }
 
 void PowerPolicyLoginScreenBrowserTest::TearDownOnMainThread() {

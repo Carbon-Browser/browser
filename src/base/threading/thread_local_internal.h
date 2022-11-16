@@ -5,13 +5,16 @@
 #ifndef BASE_THREADING_THREAD_LOCAL_INTERNAL_H_
 #define BASE_THREADING_THREAD_LOCAL_INTERNAL_H_
 
+#include "base/dcheck_is_on.h"
+
 #if DCHECK_IS_ON()
 
 #include <atomic>
 #include <memory>
 #include <ostream>
 
-#include "base/macros.h"
+#include "base/check_op.h"
+#include "base/memory/raw_ptr.h"
 #include "base/threading/thread_local_storage.h"
 
 namespace base {
@@ -26,6 +29,11 @@ template <typename T>
 class CheckedThreadLocalOwnedPointer {
  public:
   CheckedThreadLocalOwnedPointer() = default;
+
+  CheckedThreadLocalOwnedPointer<T>(const CheckedThreadLocalOwnedPointer<T>&) =
+      delete;
+  CheckedThreadLocalOwnedPointer<T>& operator=(
+      const CheckedThreadLocalOwnedPointer<T>&) = delete;
 
   ~CheckedThreadLocalOwnedPointer() {
     Set(nullptr);
@@ -70,7 +78,7 @@ class CheckedThreadLocalOwnedPointer {
       outer_->num_assigned_threads_.fetch_sub(1, std::memory_order_relaxed);
     }
 
-    CheckedThreadLocalOwnedPointer<T>* const outer_;
+    const raw_ptr<CheckedThreadLocalOwnedPointer<T>> outer_;
     std::unique_ptr<T> ptr_;
   };
 
@@ -79,8 +87,6 @@ class CheckedThreadLocalOwnedPointer {
   ThreadLocalStorage::Slot slot_{&DeleteTlsPtr};
 
   std::atomic_int num_assigned_threads_{0};
-
-  DISALLOW_COPY_AND_ASSIGN(CheckedThreadLocalOwnedPointer<T>);
 };
 
 }  // namespace internal

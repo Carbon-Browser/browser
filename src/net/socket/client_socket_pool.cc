@@ -124,6 +124,9 @@ std::string ClientSocketPool::GroupId::ToString() const {
     case SecureDnsPolicy::kDisable:
       result = "dsd/" + result;
       break;
+    case SecureDnsPolicy::kBootstrap:
+      result = "dns_bootstrap/" + result;
+      break;
   }
 
   return result;
@@ -133,7 +136,7 @@ ClientSocketPool::~ClientSocketPool() = default;
 
 // static
 base::TimeDelta ClientSocketPool::used_idle_socket_timeout() {
-  return base::TimeDelta::FromSeconds(g_used_idle_socket_timeout_s);
+  return base::Seconds(g_used_idle_socket_timeout_s);
 }
 
 // static
@@ -153,17 +156,15 @@ ClientSocketPool::ClientSocketPool(
 void ClientSocketPool::NetLogTcpClientSocketPoolRequestedSocket(
     const NetLogWithSource& net_log,
     const GroupId& group_id) {
-  if (net_log.IsCapturing()) {
-    // TODO(eroman): Split out the host and port parameters.
-    net_log.AddEvent(NetLogEventType::TCP_CLIENT_SOCKET_POOL_REQUESTED_SOCKET,
-                     [&] { return NetLogGroupIdParams(group_id); });
-  }
+  // TODO(eroman): Split out the host and port parameters.
+  net_log.AddEvent(NetLogEventType::TCP_CLIENT_SOCKET_POOL_REQUESTED_SOCKET,
+                   [&] { return NetLogGroupIdParams(group_id); });
 }
 
 base::Value ClientSocketPool::NetLogGroupIdParams(const GroupId& group_id) {
-  base::Value event_params(base::Value::Type::DICTIONARY);
-  event_params.SetStringKey("group_id", group_id.ToString());
-  return event_params;
+  base::Value::Dict event_params;
+  event_params.Set("group_id", group_id.ToString());
+  return base::Value(std::move(event_params));
 }
 
 std::unique_ptr<ConnectJob> ClientSocketPool::CreateConnectJob(
@@ -200,10 +201,8 @@ std::unique_ptr<ConnectJob> ClientSocketPool::CreateConnectJob(
         is_for_websockets_);
   }
 
-  // TODO(crbug.com/1206799): Pass along as SchemeHostPort.
   return connect_job_factory_->CreateConnectJob(
-      using_ssl, HostPortPair::FromSchemeHostPort(group_id.destination()),
-      proxy_server, proxy_annotation_tag,
+      group_id.destination(), proxy_server, proxy_annotation_tag,
       socket_params->ssl_config_for_origin(),
       socket_params->ssl_config_for_proxy(), is_for_websockets_,
       group_id.privacy_mode(), resolution_callback, request_priority,

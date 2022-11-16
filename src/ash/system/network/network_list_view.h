@@ -14,7 +14,6 @@
 #include "ash/system/network/network_icon_animation_observer.h"
 #include "ash/system/network/network_info.h"
 #include "ash/system/network/network_state_list_detailed_view.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "chromeos/services/network_config/public/mojom/cros_network_config.mojom-forward.h"
 #include "chromeos/services/network_config/public/mojom/network_types.mojom-forward.h"
@@ -25,13 +24,12 @@ class View;
 }  // namespace views
 
 namespace ash {
-class HoverHighlightView;
-class TrayInfoLabel;
-class TriView;
 
-namespace tray {
+class HoverHighlightView;
 class NetworkSectionHeaderView;
 class MobileSectionHeaderView;
+class TrayInfoLabel;
+class TriView;
 class WifiSectionHeaderView;
 
 // A list of available networks of a given type. This class is used for all
@@ -40,6 +38,10 @@ class NetworkListView : public NetworkStateListDetailedView,
                         public network_icon::AnimationObserver {
  public:
   NetworkListView(DetailedViewDelegate* delegate, LoginStatus login);
+
+  NetworkListView(const NetworkListView&) = delete;
+  NetworkListView& operator=(const NetworkListView&) = delete;
+
   ~NetworkListView() override;
 
   // NetworkStateListDetailedView:
@@ -161,11 +163,8 @@ class NetworkListView : public NetworkStateListDetailedView,
   NetworkInfoMap last_network_info_map_;
 
   base::WeakPtrFactory<NetworkListView> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(NetworkListView);
 };
 
-}  // namespace tray
 }  // namespace ash
 
 #endif  // ASH_SYSTEM_NETWORK_NETWORK_LIST_VIEW_H_

@@ -15,7 +15,6 @@
 #include <vector>
 
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "content/browser/devtools/protocol/devtools_domain_handler.h"
 #include "content/browser/devtools/protocol/tracing.h"
@@ -25,11 +24,12 @@
 #include "third_party/perfetto/include/perfetto/tracing/tracing.h"
 
 namespace base {
+
 namespace trace_event {
 class TraceConfig;
 }
 class RepeatingTimer;
-}
+}  // namespace base
 
 namespace media {
 class VideoFrame;
@@ -49,9 +49,16 @@ namespace protocol {
 class TracingHandler : public DevToolsDomainHandler, public Tracing::Backend {
  public:
   CONTENT_EXPORT explicit TracingHandler(DevToolsIOContext* io_context);
+
+  TracingHandler(const TracingHandler&) = delete;
+  TracingHandler& operator=(const TracingHandler&) = delete;
+
   CONTENT_EXPORT ~TracingHandler() override;
 
   static std::vector<TracingHandler*> ForAgentHost(DevToolsAgentHostImpl* host);
+
+  // Adds an additional process to tracing configuration, if tracing is active.
+  void AddProcess(base::ProcessId pid);
 
   // DevToolsDomainHandler implementation.
   void SetRenderer(int process_host_id,
@@ -126,16 +133,12 @@ class TracingHandler : public DevToolsDomainHandler, public Tracing::Backend {
   void EmitFrameTree();
   static bool IsStartupTracingActive();
   CONTENT_EXPORT static base::trace_event::TraceConfig
-      GetTraceConfigFromDevToolsConfig(
-          const base::DictionaryValue& devtools_config);
+  GetTraceConfigFromDevToolsConfig(const base::Value& devtools_config);
   perfetto::TraceConfig CreatePerfettoConfiguration(
       const base::trace_event::TraceConfig& browser_config,
       bool return_as_stream,
       bool proto_format);
   void SetupProcessFilter(base::ProcessId gpu_pid, RenderFrameHost*);
-  void StartTracingWithGpuPid(std::unique_ptr<StartCallback>,
-                              perfetto::BackendType tracing_backend,
-                              base::ProcessId gpu_pid);
   void AppendProcessId(RenderFrameHost*,
                        std::unordered_set<base::ProcessId>* process_set);
   void OnProcessReady(RenderProcessHost*);
@@ -160,12 +163,12 @@ class TracingHandler : public DevToolsDomainHandler, public Tracing::Backend {
   std::unique_ptr<DevToolsVideoConsumer> video_consumer_;
   int number_of_screenshots_from_video_consumer_ = 0;
   perfetto::TraceConfig trace_config_;
+  std::unordered_set<base::ProcessId> pids_being_traced_;
   std::unique_ptr<PerfettoTracingSession> session_;
   base::WeakPtrFactory<TracingHandler> weak_factory_{this};
 
   FRIEND_TEST_ALL_PREFIXES(TracingHandlerTest,
                            GetTraceConfigFromDevToolsConfig);
-  DISALLOW_COPY_AND_ASSIGN(TracingHandler);
 };
 
 }  // namespace protocol

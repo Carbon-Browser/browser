@@ -7,7 +7,8 @@
 
 #include <memory>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
+#include "chrome/browser/extensions/extension_context_menu_model.h"
 #include "ui/views/context_menu_controller.h"
 
 class ToolbarActionViewController;
@@ -22,7 +23,15 @@ class MenuRunner;
 class ExtensionContextMenuController : public views::ContextMenuController {
  public:
   explicit ExtensionContextMenuController(
-      ToolbarActionViewController* controller);
+      ToolbarActionViewController* controller,
+      extensions::ExtensionContextMenuModel::ContextMenuSource
+          context_menu_source);
+
+  ExtensionContextMenuController(const ExtensionContextMenuController&) =
+      delete;
+  ExtensionContextMenuController& operator=(
+      const ExtensionContextMenuController&) = delete;
+
   ~ExtensionContextMenuController() override;
 
   // views::ContextMenuController:
@@ -48,12 +57,13 @@ class ExtensionContextMenuController : public views::ContextMenuController {
 
   // The root MenuItemView for the context menu, or null if no menu is being
   // shown. This is used for testing.
-  views::MenuItemView* menu_ = nullptr;
+  raw_ptr<views::MenuItemView> menu_ = nullptr;
 
   // This controller contains the data for the extension's context menu.
-  ToolbarActionViewController* const controller_;
+  const raw_ptr<ToolbarActionViewController> controller_;
 
-  DISALLOW_COPY_AND_ASSIGN(ExtensionContextMenuController);
+  // Location where the context menu is open from.
+  extensions::ExtensionContextMenuModel::ContextMenuSource context_menu_source_;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_EXTENSIONS_EXTENSION_CONTEXT_MENU_CONTROLLER_H_

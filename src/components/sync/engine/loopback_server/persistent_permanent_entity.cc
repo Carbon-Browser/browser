@@ -25,7 +25,7 @@ static const char kRootParentTag[] = "0";
 
 namespace syncer {
 
-PersistentPermanentEntity::~PersistentPermanentEntity() {}
+PersistentPermanentEntity::~PersistentPermanentEntity() = default;
 
 // static
 std::unique_ptr<LoopbackServerEntity> PersistentPermanentEntity::CreateNew(
@@ -74,7 +74,7 @@ std::unique_ptr<LoopbackServerEntity> PersistentPermanentEntity::CreateTopLevel(
   }
 
   string server_tag = syncer::ModelTypeToRootTag(model_type);
-  string name = syncer::ModelTypeToString(model_type);
+  string name = syncer::ModelTypeToDebugString(model_type);
   string id = LoopbackServerEntity::GetTopLevelId(model_type);
   sync_pb::EntitySpecifics entity_specifics;
   AddDefaultFieldValue(model_type, &entity_specifics);

@@ -75,8 +75,8 @@ ScopedDrmColorCtmPtr CreateCTMBlob(const std::vector<float>& color_matrix) {
 
   ScopedDrmColorCtmPtr ctm(
       static_cast<drm_color_ctm*>(malloc(sizeof(drm_color_ctm))));
-  DCHECK_EQ(color_matrix.size(), base::size(ctm->matrix));
-  for (size_t i = 0; i < base::size(ctm->matrix); ++i) {
+  DCHECK_EQ(color_matrix.size(), std::size(ctm->matrix));
+  for (size_t i = 0; i < std::size(ctm->matrix); ++i) {
     if (color_matrix[i] < 0) {
       ctm->matrix[i] = static_cast<uint64_t>(-color_matrix[i] * (1ull << 32));
       ctm->matrix[i] |= static_cast<uint64_t>(1) << 63;
@@ -121,23 +121,25 @@ std::vector<display::GammaRampRGBEntry> ResampleLut(
   return result;
 }
 
-bool IsDriverName(const char* device_file_name, const char* driver) {
-  base::ScopedFD fd(open(device_file_name, O_RDWR));
-  if (!fd.is_valid()) {
-    LOG(ERROR) << "Failed to open DRM device " << device_file_name;
-    return false;
+HardwareDisplayControllerInfoList GetDisplayInfosAndUpdateCrtcs(int fd) {
+  auto [displays, invalid_crtcs] = GetDisplayInfosAndInvalidCrtcs(fd);
+  // Disable invalid CRTCs to allow the preferred CRTCs to be enabled later
+  // instead.
+  for (uint32_t crtc : invalid_crtcs) {
+    drmModeSetCrtc(fd, crtc, 0, 0, 0, nullptr, 0, nullptr);
+    VLOG(1) << "Disabled unpreferred CRTC " << crtc;
   }
+  return std::move(displays);
+}
 
-  ScopedDrmVersionPtr version(drmGetVersion(fd.get()));
-  if (!version) {
-    LOG(ERROR) << "Failed to query DRM version " << device_file_name;
-    return false;
-  }
-
-  if (strncmp(driver, version->name, version->name_len) == 0)
-    return true;
-
-  return false;
+void DrmAsValueIntoHelper(const drmModeModeInfo& mode_info,
+                          base::trace_event::TracedValue* value) {
+  value->SetString("name", mode_info.name);
+  value->SetInteger("type", mode_info.type);
+  value->SetInteger("flags", mode_info.flags);
+  value->SetInteger("clock", mode_info.clock);
+  value->SetInteger("hdisplay", mode_info.hdisplay);
+  value->SetInteger("vdisplay", mode_info.vdisplay);
 }
 
 }  // namespace ui

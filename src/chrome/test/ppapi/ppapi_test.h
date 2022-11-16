@@ -7,8 +7,6 @@
 
 #include <string>
 
-#include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "base/scoped_observation.h"
 #include "base/test/scoped_feature_list.h"
 #include "chrome/test/base/in_process_browser_test.h"
@@ -26,6 +24,9 @@ class PPAPITestMessageHandler : public content::TestMessageHandler {
  public:
   PPAPITestMessageHandler();
 
+  PPAPITestMessageHandler(const PPAPITestMessageHandler&) = delete;
+  PPAPITestMessageHandler& operator=(const PPAPITestMessageHandler&) = delete;
+
   MessageResponse HandleMessage(const std::string& json) override;
   void Reset() override;
 
@@ -35,8 +36,6 @@ class PPAPITestMessageHandler : public content::TestMessageHandler {
 
  private:
   std::string message_;
-
-  DISALLOW_COPY_AND_ASSIGN(PPAPITestMessageHandler);
 };
 
 class PPAPITestBase : public InProcessBrowserTest {
@@ -187,21 +186,6 @@ class PPAPIPrivateNaClPNaClTest : public PPAPINaClPNaClTest {
  protected:
   void SetUpCommandLine(base::CommandLine* command_line) override;
 };
-
-// Test Non-SFI Mode, using PNaCl toolchain to produce nexes.
-class PPAPINaClPNaClNonSfiTest : public PPAPINaClTest {
- public:
-  void SetUpCommandLine(base::CommandLine* command_line) override;
-
-  std::string BuildQuery(const std::string& base,
-                         const std::string& test_case) override;
-};
-
-class PPAPIPrivateNaClPNaClNonSfiTest : public PPAPINaClPNaClNonSfiTest {
- protected:
-  void SetUpCommandLine(base::CommandLine* command_line) override;
-};
-
 
 class PPAPINaClTestDisallowedSockets : public PPAPITestBase {
  public:

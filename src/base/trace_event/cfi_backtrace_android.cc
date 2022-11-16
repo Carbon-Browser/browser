@@ -9,6 +9,7 @@
 
 #include "base/android/apk_assets.h"
 #include "base/android/library_loader/anchor_functions.h"
+#include "build/build_config.h"
 
 #if !defined(ARCH_CPU_ARMEL)
 #error This file should not be built for this architecture.
@@ -106,10 +107,12 @@ struct CFIUnwindDataRow {
   uint16_t cfi_data;
 
   // Return the RA offset for the current unwind row.
-  size_t ra_offset() const { return (cfi_data & kRAMask) << kRAShift; }
+  uint16_t ra_offset() const {
+    return static_cast<uint16_t>((cfi_data & kRAMask) << kRAShift);
+  }
 
   // Returns the CFA offset for the current unwind row.
-  size_t cfa_offset() const { return cfi_data & kCFAMask; }
+  uint16_t cfa_offset() const { return cfi_data & kCFAMask; }
 };
 
 static_assert(
@@ -258,8 +261,8 @@ bool CFIBacktraceAndroid::FindCFIRowForPC(uintptr_t func_addr,
   // on this array to find the required function address.
   static const uintptr_t* const unw_index_fn_end =
       unw_index_function_col_ + unw_index_row_count_;
-  const uintptr_t* found =
-      std::lower_bound(unw_index_function_col_, unw_index_fn_end, func_addr);
+  const uintptr_t* found = std::lower_bound(unw_index_function_col_.get(),
+                                            unw_index_fn_end, func_addr);
 
   // If found is start, then the given function is not in the table. If the
   // given pc is start of a function then we cannot unwind.
@@ -271,7 +274,7 @@ bool CFIBacktraceAndroid::FindCFIRowForPC(uintptr_t func_addr,
   // less than the value returned by std::lower_bound().
   --found;
   uintptr_t func_start_addr = *found;
-  size_t row_num = found - unw_index_function_col_;
+  size_t row_num = static_cast<size_t>(found - unw_index_function_col_);
   uint16_t index = unw_index_indices_col_[row_num];
   DCHECK_LE(func_start_addr, func_addr);
   // If the index is CANT_UNWIND then we do not have unwind infomation for the
@@ -316,7 +319,7 @@ bool CFIBacktraceAndroid::FindCFIRowForPC(uintptr_t func_addr,
       ra_offset = cfi_row.ra_offset();
   }
   DCHECK_NE(0u, cfi_row.addr_offset);
-  *cfi = {static_cast<uint16_t>(cfi_row.cfa_offset()), ra_offset};
+  *cfi = {cfi_row.cfa_offset(), ra_offset};
   DCHECK(cfi->cfa_offset);
   DCHECK(cfi->ra_offset);
 

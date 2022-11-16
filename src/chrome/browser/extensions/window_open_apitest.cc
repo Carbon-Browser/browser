@@ -32,6 +32,7 @@
 #include "extensions/browser/process_manager.h"
 #include "extensions/common/constants.h"
 #include "extensions/common/extension.h"
+#include "extensions/common/manifest_constants.h"
 #include "extensions/test/extension_test_message_listener.h"
 #include "extensions/test/result_catcher.h"
 #include "net/dns/mock_host_resolver.h"
@@ -39,14 +40,19 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/base_window.h"
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/extensions/window_controller.h"
 #include "chrome/browser/extensions/window_controller_list.h"
 #include "chrome/browser/ui/browser_command_controller.h"
 #include "chromeos/ui/base/window_pin_type.h"
-#include "chromeos/ui/base/window_properties.h"
 #include "ui/aura/window.h"
+#endif
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+#include "chrome/browser/ui/lacros/window_properties.h"
+#else
+#include "chrome/browser/ui/ash/window_pin_util.h"
 #endif
 
 using content::OpenURLParams;
@@ -77,7 +83,7 @@ bool WaitForTabsPopupsApps(Browser* browser,
   ++num_tabs;
   size_t num_browsers = static_cast<size_t>(num_popups + num_app_popups) + 1;
 
-  const base::TimeDelta kWaitTime = base::TimeDelta::FromSeconds(10);
+  const base::TimeDelta kWaitTime = base::Seconds(10);
   base::TimeTicks end_time = base::TimeTicks::Now() + kWaitTime;
   while (base::TimeTicks::Now() < end_time) {
     if (chrome::GetBrowserCount(browser->profile()) == num_browsers &&
@@ -262,7 +268,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionBrowserTest, WindowOpenInvalidExtension) {
       broken_extension_url, new_page_in_same_process, expect_success, &newtab));
 
   EXPECT_EQ(broken_extension_url,
-            newtab->GetMainFrame()->GetLastCommittedURL());
+            newtab->GetPrimaryMainFrame()->GetLastCommittedURL());
   EXPECT_EQ(content::PAGE_TYPE_ERROR,
             newtab->GetController().GetLastCommittedEntry()->GetPageType());
 }
@@ -304,24 +310,20 @@ IN_PROC_BROWSER_TEST_F(ExtensionBrowserTest,
 
   // test.html is not web-accessible and should not be loaded.
   GURL extension_url(extension->GetResourceURL("test.html"));
-  content::WindowedNotificationObserver windowed_observer(
-      content::NOTIFICATION_LOAD_STOP,
-      content::NotificationService::AllSources());
+  content::CreateAndLoadWebContentsObserver windowed_observer;
   ASSERT_TRUE(content::ExecuteScript(
       browser()->tab_strip_model()->GetActiveWebContents(),
       "window.open('" + extension_url.spec() + "');"));
-  windowed_observer.Wait();
-  content::NavigationController* controller =
-      content::Source<content::NavigationController>(windowed_observer.source())
-          .ptr();
-  content::WebContents* newtab = controller->DeprecatedGetWebContents();
+  content::WebContents* newtab = windowed_observer.Wait();
   ASSERT_TRUE(newtab);
 
   EXPECT_EQ(content::PAGE_TYPE_ERROR,
             newtab->GetController().GetLastCommittedEntry()->GetPageType());
-  EXPECT_EQ(extension_url, newtab->GetMainFrame()->GetLastCommittedURL());
-  EXPECT_FALSE(newtab->GetMainFrame()->GetSiteInstance()->GetSiteURL().SchemeIs(
-      extensions::kExtensionScheme));
+  EXPECT_EQ(extension_url,
+            newtab->GetPrimaryMainFrame()->GetLastCommittedURL());
+  EXPECT_FALSE(
+      newtab->GetPrimaryMainFrame()->GetSiteInstance()->GetSiteURL().SchemeIs(
+          extensions::kExtensionScheme));
 }
 
 // Test that navigating to an extension URL is allowed on chrome://.
@@ -342,20 +344,20 @@ IN_PROC_BROWSER_TEST_F(ExtensionBrowserTest,
   GURL history_url(chrome::kChromeUIHistoryURL);
   ASSERT_TRUE(history_url.SchemeIs(content::kChromeUIScheme));
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), history_url));
-  EXPECT_EQ(history_url, tab->GetMainFrame()->GetLastCommittedURL());
+  EXPECT_EQ(history_url, tab->GetPrimaryMainFrame()->GetLastCommittedURL());
 
   content::TestNavigationObserver observer(tab);
   ASSERT_TRUE(content::ExecuteScript(
       tab, "location.href = '" + extension_url.spec() + "';"));
   observer.Wait();
-  EXPECT_EQ(extension_url, tab->GetMainFrame()->GetLastCommittedURL());
+  EXPECT_EQ(extension_url, tab->GetPrimaryMainFrame()->GetLastCommittedURL());
   std::string result;
   ASSERT_TRUE(content::ExecuteScriptAndExtractString(
       tab, "domAutomationController.send(document.body.innerText)", &result));
   EXPECT_EQ("HOWDIE!!!", result);
 }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 
 namespace {
 
@@ -368,22 +370,43 @@ aura::Window* GetCurrentWindow() {
       break;
     }
   }
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  if (!controller || !controller->window())
+    return nullptr;
+#else
   EXPECT_TRUE(controller);
+#endif
   return controller->window()->GetNativeWindow();
 }
 
 chromeos::WindowPinType GetCurrentWindowPinType() {
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
   chromeos::WindowPinType type =
-      GetCurrentWindow()->GetProperty(chromeos::kWindowPinTypeKey);
+      GetCurrentWindow()->GetProperty(lacros::kWindowPinTypeKey);
+#else
+  chromeos::WindowPinType type = GetWindowPinType(GetCurrentWindow());
+#endif
   return type;
 }
 
+// Disabling this test temporarily - Ash needs to be built to make this test
+// work. Will enable after this landed.
+#if !BUILDFLAG(IS_CHROMEOS_LACROS)
 void SetCurrentWindowPinType(chromeos::WindowPinType type) {
-  GetCurrentWindow()->SetProperty(chromeos::kWindowPinTypeKey, type);
+  if (type == chromeos::WindowPinType::kNone) {
+    UnpinWindow(GetCurrentWindow());
+  } else {
+    PinWindow(GetCurrentWindow(), /*trusted=*/true);
+  }
 }
+#endif
 
 }  // namespace
 
+// Disabling this test temporarily - Ash needs to be built to make this test
+// work. Will enable after this landed.
+#if !BUILDFLAG(IS_CHROMEOS_LACROS)
 IN_PROC_BROWSER_TEST_F(WindowOpenApiTest, OpenLockedFullscreenWindow) {
   ASSERT_TRUE(RunExtensionTest("locked_fullscreen/with_permission",
                                {.custom_arg = "openLockedFullscreenWindow"}))
@@ -393,8 +416,17 @@ IN_PROC_BROWSER_TEST_F(WindowOpenApiTest, OpenLockedFullscreenWindow) {
   // it's in locked fullscreen mode).
   EXPECT_EQ(chromeos::WindowPinType::kTrustedPinned, GetCurrentWindowPinType());
 }
+#endif  // !BUILDFLAG(IS_CHROMEOS_LACROS)
 
-IN_PROC_BROWSER_TEST_F(WindowOpenApiTest, UpdateWindowToLockedFullscreen) {
+// Disabled on Lacros due to flaky. crbug.com/1254453
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+#define MAYBE_UpdateWindowToLockedFullscreen \
+  DISABLED_UpdateWindowToLockedFullscreen
+#else
+#define MAYBE_UpdateWindowToLockedFullscreen UpdateWindowToLockedFullscreen
+#endif
+IN_PROC_BROWSER_TEST_F(WindowOpenApiTest,
+                       MAYBE_UpdateWindowToLockedFullscreen) {
   ASSERT_TRUE(
       RunExtensionTest("locked_fullscreen/with_permission",
                        {.custom_arg = "updateWindowToLockedFullscreen"}))
@@ -404,6 +436,9 @@ IN_PROC_BROWSER_TEST_F(WindowOpenApiTest, UpdateWindowToLockedFullscreen) {
   EXPECT_EQ(chromeos::WindowPinType::kTrustedPinned, GetCurrentWindowPinType());
 }
 
+// Disabling this test temporarily - Ash needs to be built to make this test
+// work. Will enable after this landed.
+#if !BUILDFLAG(IS_CHROMEOS_LACROS)
 IN_PROC_BROWSER_TEST_F(WindowOpenApiTest, RemoveLockedFullscreenFromWindow) {
   // After locking the window, do a LockedFullscreenStateChanged so the
   // command_controller state catches up as well.
@@ -418,6 +453,7 @@ IN_PROC_BROWSER_TEST_F(WindowOpenApiTest, RemoveLockedFullscreenFromWindow) {
   // Make sure the current window is removed from locked-fullscreen state.
   EXPECT_EQ(chromeos::WindowPinType::kNone, GetCurrentWindowPinType());
 }
+#endif  // !BUILDFLAG(IS_CHROMEOS_LACROS)
 
 // Make sure that commands disabling code works in locked fullscreen mode.
 IN_PROC_BROWSER_TEST_F(WindowOpenApiTest, VerifyCommandsInLockedFullscreen) {
@@ -455,8 +491,16 @@ IN_PROC_BROWSER_TEST_F(WindowOpenApiTest,
             extensions::WindowControllerList::GetInstance()->windows().size());
 }
 
+// Disabled on Lacros due to flaky. crbug.com/1254453
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+#define MAYBE_UpdateWindowToLockedFullscreenWithoutPermission \
+  DISABLED_UpdateWindowToLockedFullscreenWithoutPermission
+#else
+#define MAYBE_UpdateWindowToLockedFullscreenWithoutPermission \
+  UpdateWindowToLockedFullscreenWithoutPermission
+#endif
 IN_PROC_BROWSER_TEST_F(WindowOpenApiTest,
-                       UpdateWindowToLockedFullscreenWithoutPermission) {
+                       MAYBE_UpdateWindowToLockedFullscreenWithoutPermission) {
   ASSERT_TRUE(
       RunExtensionTest("locked_fullscreen/without_permission",
                        {.custom_arg = "updateWindowToLockedFullscreen"}))
@@ -467,6 +511,9 @@ IN_PROC_BROWSER_TEST_F(WindowOpenApiTest,
   EXPECT_EQ(chromeos::WindowPinType::kNone, GetCurrentWindowPinType());
 }
 
+// Disabling this test temporarily - Ash needs to be built to make this test
+// work. Will enable after this landed.
+#if !BUILDFLAG(IS_CHROMEOS_LACROS)
 IN_PROC_BROWSER_TEST_F(WindowOpenApiTest,
                        RemoveLockedFullscreenFromWindowWithoutPermission) {
   SetCurrentWindowPinType(chromeos::WindowPinType::kTrustedPinned);
@@ -480,9 +527,10 @@ IN_PROC_BROWSER_TEST_F(WindowOpenApiTest,
   // The current window is still locked-fullscreen.
   EXPECT_EQ(chromeos::WindowPinType::kTrustedPinned, GetCurrentWindowPinType());
 }
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // !BUILDFLAG(IS_CHROMEOS_LACROS)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
+#if !BUILDFLAG(IS_CHROMEOS)
 // Loading an extension requiring the 'lockWindowFullscreenPrivate' permission
 // on non Chrome OS platforms should always fail since the API is available only
 // on Chrome OS.
@@ -492,10 +540,14 @@ IN_PROC_BROWSER_TEST_F(WindowOpenApiTest,
       test_data_dir_.AppendASCII("locked_fullscreen/with_permission"),
       {.ignore_manifest_warnings = true});
   ASSERT_TRUE(extension);
-  EXPECT_EQ(1u, extension->install_warnings().size());
+  EXPECT_EQ(2u, extension->install_warnings().size());
+  // TODO(https://crbug.com/1269161): Remove the check for the deprecated
+  // manifest version when the test extension is updated to MV3.
+  EXPECT_EQ(manifest_errors::kManifestV2IsDeprecatedWarning,
+            extension->install_warnings()[0].message);
   EXPECT_EQ(std::string("'lockWindowFullscreenPrivate' "
                         "is not allowed for specified platform."),
-            extension->install_warnings().front().message);
+            extension->install_warnings()[1].message);
 }
 #endif
 

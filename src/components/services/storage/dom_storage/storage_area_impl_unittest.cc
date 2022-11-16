@@ -4,6 +4,12 @@
 
 #include "components/services/storage/dom_storage/storage_area_impl.h"
 
+#include <list>
+#include <memory>
+#include <string>
+#include <tuple>
+#include <vector>
+
 #include "base/atomic_ref_count.h"
 #include "base/bind.h"
 #include "base/callback_helpers.h"
@@ -11,9 +17,8 @@
 #include "base/memory/ptr_util.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/task/post_task.h"
+#include "base/task/task_runner_util.h"
 #include "base/task/thread_pool.h"
-#include "base/task_runner_util.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_simple_task_runner.h"
@@ -62,14 +67,15 @@ class BarrierBuilder {
       : continuation_(
             base::MakeRefCounted<ContinuationRef>(std::move(continuation))) {}
 
+  BarrierBuilder(const BarrierBuilder&) = delete;
+  BarrierBuilder& operator=(const BarrierBuilder&) = delete;
+
   base::OnceClosure AddClosure() {
     return base::BindOnce([](scoped_refptr<ContinuationRef>) {}, continuation_);
   }
 
  private:
   const scoped_refptr<ContinuationRef> continuation_;
-
-  DISALLOW_COPY_AND_ASSIGN(BarrierBuilder);
 };
 
 class MockDelegate : public StorageAreaImpl::Delegate {
@@ -118,7 +124,7 @@ base::OnceCallback<void(bool, const std::vector<uint8_t>&)> MakeGetCallback(
 StorageAreaImpl::Options GetDefaultTestingOptions(CacheMode cache_mode) {
   StorageAreaImpl::Options options;
   options.max_size = kTestSizeLimit;
-  options.default_commit_delay = base::TimeDelta::FromSeconds(5);
+  options.default_commit_delay = base::Seconds(5);
   options.max_bytes_per_hour = 10 * 1024 * 1024;
   options.max_commits_per_hour = 60;
   options.cache_mode = cache_mode;
@@ -168,7 +174,6 @@ class StorageAreaImplTest : public testing::Test,
                         const std::vector<uint8_t>& value) {
     base::RunLoop loop;
     db_->database().PostTaskWithThisObject(
-        FROM_HERE,
         base::BindLambdaForTesting([&](const DomStorageDatabase& db) {
           ASSERT_TRUE(db.Put(key, value).ok());
           loop.Quit();
@@ -184,7 +189,6 @@ class StorageAreaImplTest : public testing::Test,
     std::vector<uint8_t> value;
     base::RunLoop loop;
     db_->database().PostTaskWithThisObject(
-        FROM_HERE,
         base::BindLambdaForTesting([&](const DomStorageDatabase& db) {
           ASSERT_TRUE(db.Get(ToBytes(key), &value).ok());
           loop.Quit();
@@ -197,7 +201,6 @@ class StorageAreaImplTest : public testing::Test,
     base::RunLoop loop;
     leveldb::Status status;
     db_->database().PostTaskWithThisObject(
-        FROM_HERE,
         base::BindLambdaForTesting([&](const DomStorageDatabase& db) {
           std::vector<uint8_t> value;
           status = db.Get(ToBytes(key), &value);
@@ -210,7 +213,6 @@ class StorageAreaImplTest : public testing::Test,
   void ClearDatabase() {
     base::RunLoop loop;
     db_->database().PostTaskWithThisObject(
-        FROM_HERE,
         base::BindLambdaForTesting([&](const DomStorageDatabase& db) {
           leveldb::WriteBatch batch;
           ASSERT_TRUE(db.DeletePrefixed({}, &batch).ok());
@@ -900,7 +902,7 @@ TEST_F(StorageAreaImplTest, GetAllWhenCacheOnlyKeys) {
         MakeSuccessCallback(barrier.AddClosure(), &put_result1));
 
     mojo::PendingRemote<blink::mojom::StorageAreaObserver> unused_observer;
-    ignore_result(unused_observer.InitWithNewPipeAndPassReceiver());
+    std::ignore = unused_observer.InitWithNewPipeAndPassReceiver();
     storage_area()->GetAll(std::move(unused_observer),
                            MakeGetAllCallback(barrier.AddClosure(), &data));
     storage_area()->Put(
@@ -971,7 +973,7 @@ TEST_F(StorageAreaImplTest, GetAllAfterSetCacheMode) {
     upgrade_loop.Run();
 
     mojo::PendingRemote<blink::mojom::StorageAreaObserver> unused_observer;
-    ignore_result(unused_observer.InitWithNewPipeAndPassReceiver());
+    std::ignore = unused_observer.InitWithNewPipeAndPassReceiver();
     storage_area()->GetAll(
         std::move(unused_observer),
         MakeGetAllCallback(upgrade_loop.QuitClosure(), &data));

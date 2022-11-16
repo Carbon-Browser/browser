@@ -8,8 +8,8 @@
 #include <memory>
 
 #include "base/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "components/content_creation/notes/core/server/note_data.h"
 #include "components/content_creation/notes/core/server/save_note_response.h"
 #include "components/version_info/channel.h"
 
@@ -24,6 +24,7 @@ namespace content_creation {
 
 using PublishNoteCallback = base::OnceCallback<void(std::string)>;
 
+struct NoteData;
 class NotesServerSaver;
 
 // Instance in charge of saving and publishing the notes to the server.
@@ -55,7 +56,7 @@ class NotesRepository {
                                SaveNoteResponse save_response);
 
  private:
-  signin::IdentityManager* identity_manager_;
+  raw_ptr<signin::IdentityManager> identity_manager_;
   scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory_;
   std::unique_ptr<NotesServerSaver> notes_saver_;
   const version_info::Channel channel_;

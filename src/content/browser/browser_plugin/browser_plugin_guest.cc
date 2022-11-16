@@ -11,7 +11,6 @@
 #include "base/memory/ptr_util.h"
 #include "base/metrics/user_metrics.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "content/browser/browser_plugin/browser_plugin_embedder.h"
 #include "content/browser/renderer_host/navigation_request.h"
 #include "content/browser/renderer_host/render_view_host_impl.h"
@@ -26,7 +25,7 @@
 #include "third_party/blink/public/common/renderer_preferences/renderer_preferences.h"
 #include "third_party/blink/public/mojom/input/focus_type.mojom.h"
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 #include "content/browser/browser_plugin/browser_plugin_popup_menu_helper_mac.h"
 #endif
 
@@ -61,25 +60,6 @@ void BrowserPluginGuest::Init() {
   InitInternal(owner_web_contents);
 }
 
-void BrowserPluginGuest::SetFocus(bool focused,
-                                  blink::mojom::FocusType focus_type) {
-  RenderWidgetHostView* rwhv = web_contents()->GetRenderWidgetHostView();
-  RenderWidgetHost* rwh = rwhv ? rwhv->GetRenderWidgetHost() : nullptr;
-
-  if (!rwh)
-    return;
-
-  if ((focus_type == blink::mojom::FocusType::kForward) ||
-      (focus_type == blink::mojom::FocusType::kBackward)) {
-    static_cast<RenderViewHostImpl*>(RenderViewHost::From(rwh))
-        ->SetInitialFocus(focus_type == blink::mojom::FocusType::kBackward);
-  }
-  RenderWidgetHostImpl::From(rwh)->GetWidgetInputHandler()->SetFocus(focused);
-
-  // Restore the last seen state of text input to the view.
-  SendTextInputTypeChangedToView(static_cast<RenderWidgetHostViewBase*>(rwhv));
-}
-
 WebContentsImpl* BrowserPluginGuest::CreateNewGuestWindow(
     const WebContents::CreateParams& params) {
   WebContentsImpl* new_contents =
@@ -89,7 +69,17 @@ WebContentsImpl* BrowserPluginGuest::CreateNewGuestWindow(
 }
 
 void BrowserPluginGuest::InitInternal(WebContentsImpl* owner_web_contents) {
-  SetFocus(false, blink::mojom::FocusType::kNone);
+  RenderWidgetHostImpl* rwhi =
+      GetWebContents()->GetPrimaryMainFrame()->GetRenderWidgetHost();
+  DCHECK(rwhi);
+  // The initial state will not be focused but the plugin may be active so
+  // set that appropriately.
+  rwhi->GetWidgetInputHandler()->SetFocus(
+      rwhi->is_active() ? blink::mojom::FocusState::kNotFocusedAndActive
+                        : blink::mojom::FocusState::kNotFocusedAndNotActive);
+
+  // Restore the last seen state of text input to the view.
+  SendTextInputTypeChangedToView(rwhi->GetView());
 
   if (owner_web_contents_ != owner_web_contents) {
     // Once a BrowserPluginGuest has an embedder WebContents, it's considered to
@@ -113,8 +103,6 @@ void BrowserPluginGuest::InitInternal(WebContentsImpl* owner_web_contents) {
   // Navigation is disabled in Chrome Apps. We want to make sure guest-initiated
   // navigations still continue to function inside the app.
   renderer_prefs->browser_handles_all_top_level_requests = false;
-
-  DCHECK(GetWebContents()->GetRenderViewHost());
 
   // TODO(chrishtr): this code is wrong. The navigate_on_drag_drop field will
   // be reset again the next time preferences are updated.
@@ -193,9 +181,10 @@ void BrowserPluginGuest::DidFinishNavigation(
     RecordAction(base::UserMetricsAction("BrowserPlugin.Guest.DidNavigate"));
 }
 
-void BrowserPluginGuest::RenderProcessGone(base::TerminationStatus status) {
+void BrowserPluginGuest::PrimaryMainFrameRenderProcessGone(
+    base::TerminationStatus status) {
   switch (status) {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
     case base::TERMINATION_STATUS_PROCESS_WAS_KILLED_BY_OOM:
 #endif
     case base::TERMINATION_STATUS_PROCESS_WAS_KILLED:
@@ -216,7 +205,7 @@ void BrowserPluginGuest::RenderProcessGone(base::TerminationStatus status) {
   }
 }
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 void BrowserPluginGuest::ShowPopupMenu(
     RenderFrameHost* render_frame_host,
     mojo::PendingRemote<blink::mojom::PopupMenuClient>* popup_client,
@@ -233,7 +222,7 @@ void BrowserPluginGuest::ShowPopupMenu(
       guest->GetRenderWidgetHostView()->TransformPointToRootCoordSpace(
           translated_bounds.origin()));
   BrowserPluginPopupMenuHelper popup_menu_helper(
-      owner_web_contents_->GetMainFrame(), render_frame_host,
+      owner_web_contents_->GetPrimaryMainFrame(), render_frame_host,
       std::move(*popup_client));
   popup_menu_helper.ShowPopupMenu(translated_bounds, item_height, font_size,
                                   selected_item, std::move(*menu_items),

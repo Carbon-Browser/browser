@@ -4,6 +4,7 @@
 
 #include "chrome/browser/ash/crostini/crostini_upgrade_available_notification.h"
 
+#include "ash/constants/notifier_catalogs.h"
 #include "ash/public/cpp/notification_utils.h"
 #include "base/callback.h"
 #include "base/callback_helpers.h"
@@ -32,8 +33,13 @@ class CrostiniUpgradeAvailableNotificationDelegate
         notification_(notification),
         closure_(std::move(closure)) {
     CrostiniManager::GetForProfile(profile_)->UpgradePromptShown(
-        ContainerId::GetDefault());
+        DefaultContainerId());
   }
+
+  CrostiniUpgradeAvailableNotificationDelegate(
+      const CrostiniUpgradeAvailableNotificationDelegate&) = delete;
+  CrostiniUpgradeAvailableNotificationDelegate& operator=(
+      const CrostiniUpgradeAvailableNotificationDelegate&) = delete;
 
   void Click(const absl::optional<int>& button_index,
              const absl::optional<std::u16string>& reply) override {
@@ -84,8 +90,6 @@ class CrostiniUpgradeAvailableNotificationDelegate
 
   base::WeakPtrFactory<CrostiniUpgradeAvailableNotificationDelegate>
       weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(CrostiniUpgradeAvailableNotificationDelegate);
 };
 
 std::unique_ptr<CrostiniUpgradeAvailableNotification>
@@ -114,9 +118,11 @@ CrostiniUpgradeAvailableNotification::CrostiniUpgradeAvailableNotification(
           IDS_CROSTINI_UPGRADE_AVAILABLE_NOTIFICATION_TITLE),
       l10n_util::GetStringUTF16(
           IDS_CROSTINI_UPGRADE_AVAILABLE_NOTIFICATION_BODY),
-      gfx::Image(), std::u16string(), GURL(),
-      message_center::NotifierId(message_center::NotifierType::SYSTEM_COMPONENT,
-                                 kNotifierCrostiniUpgradeAvailable),
+      ui::ImageModel(), std::u16string(), GURL(),
+      message_center::NotifierId(
+          message_center::NotifierType::SYSTEM_COMPONENT,
+          kNotifierCrostiniUpgradeAvailable,
+          ash::NotificationCatalogName::kCrostiniUpgradeAvailable),
       rich_notification_data,
       base::MakeRefCounted<CrostiniUpgradeAvailableNotificationDelegate>(
           profile_, weak_ptr_factory_.GetWeakPtr(), std::move(closure)));

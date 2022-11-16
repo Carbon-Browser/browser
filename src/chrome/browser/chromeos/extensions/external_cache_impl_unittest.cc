@@ -13,9 +13,7 @@
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
-#include "base/macros.h"
 #include "base/run_loop.h"
-#include "base/task/post_task.h"
 #include "base/task/thread_pool.h"
 #include "base/values.h"
 #include "chrome/browser/ash/settings/scoped_cros_settings_test_helper.h"
@@ -29,9 +27,12 @@
 #include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
 #include "services/network/public/mojom/url_loader_factory.mojom.h"
 #include "services/network/test/test_url_loader_factory.h"
+#include "testing/gmock/include/gmock/gmock-matchers.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace {
+
+using ::testing::Optional;
 
 const char kTestExtensionId1[] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const char kTestExtensionId2[] = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
@@ -53,6 +54,10 @@ class ExternalCacheImplTest : public testing::Test,
         test_shared_loader_factory_(
             base::MakeRefCounted<network::WeakWrapperSharedURLLoaderFactory>(
                 &test_url_loader_factory_)) {}
+
+  ExternalCacheImplTest(const ExternalCacheImplTest&) = delete;
+  ExternalCacheImplTest& operator=(const ExternalCacheImplTest&) = delete;
+
   ~ExternalCacheImplTest() override = default;
 
   scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory() {
@@ -109,19 +114,19 @@ class ExternalCacheImplTest : public testing::Test,
 
   base::DictionaryValue CreateEntryWithUpdateUrl(bool from_webstore) {
     base::DictionaryValue entry;
-    entry.SetString(extensions::ExternalProviderImpl::kExternalUpdateUrl,
-                    from_webstore
-                        ? extension_urls::GetWebstoreUpdateUrl().spec()
-                        : kNonWebstoreUpdateUrl);
+    entry.SetStringKey(extensions::ExternalProviderImpl::kExternalUpdateUrl,
+                       from_webstore
+                           ? extension_urls::GetWebstoreUpdateUrl().spec()
+                           : kNonWebstoreUpdateUrl);
     return entry;
   }
 
   base::DictionaryValue CreateEntryWithExternalCrx() {
     base::DictionaryValue entry;
-    entry.SetString(extensions::ExternalProviderImpl::kExternalCrx,
-                    kExternalCrxPath);
-    entry.SetString(extensions::ExternalProviderImpl::kExternalVersion,
-                    kExternalCrxVersion);
+    entry.SetStringKey(extensions::ExternalProviderImpl::kExternalCrx,
+                       kExternalCrxPath);
+    entry.SetStringKey(extensions::ExternalProviderImpl::kExternalVersion,
+                       kExternalCrxVersion);
     return entry;
   }
 
@@ -137,8 +142,6 @@ class ExternalCacheImplTest : public testing::Test,
   std::set<extensions::ExtensionId> deleted_extension_files_;
 
   ScopedCrosSettingsTestHelper cros_settings_test_helper_;
-
-  DISALLOW_COPY_AND_ASSIGN(ExternalCacheImplTest);
 };
 
 TEST_F(ExternalCacheImplTest, Basic) {
@@ -146,7 +149,7 @@ TEST_F(ExternalCacheImplTest, Basic) {
   ExternalCacheImpl external_cache(
       cache_dir, url_loader_factory(),
       base::ThreadPool::CreateSequencedTaskRunner({base::MayBlock()}), this,
-      true, false);
+      true, false, false);
 
   std::unique_ptr<base::DictionaryValue> prefs(new base::DictionaryValue);
   prefs->SetKey(kTestExtensionId1, CreateEntryWithUpdateUrl(true));
@@ -172,10 +175,9 @@ TEST_F(ExternalCacheImplTest, Basic) {
             nullptr);
   EXPECT_NE(entry1->FindKey(extensions::ExternalProviderImpl::kExternalVersion),
             nullptr);
-  bool from_webstore = false;
-  EXPECT_TRUE(entry1->GetBoolean(
-      extensions::ExternalProviderImpl::kIsFromWebstore, &from_webstore));
-  EXPECT_TRUE(from_webstore);
+  EXPECT_THAT(
+      entry1->FindBoolKey(extensions::ExternalProviderImpl::kIsFromWebstore),
+      Optional(true));
 
   // File in cache not from Webstore.
   const base::DictionaryValue* entry3 = NULL;
@@ -215,10 +217,9 @@ TEST_F(ExternalCacheImplTest, Basic) {
             nullptr);
   EXPECT_NE(entry2->FindKey(extensions::ExternalProviderImpl::kExternalVersion),
             nullptr);
-  from_webstore = false;
-  EXPECT_TRUE(entry2->GetBoolean(
-      extensions::ExternalProviderImpl::kIsFromWebstore, &from_webstore));
-  EXPECT_TRUE(from_webstore);
+  EXPECT_THAT(
+      entry2->FindBoolKey(extensions::ExternalProviderImpl::kIsFromWebstore),
+      Optional(true));
   EXPECT_TRUE(
       base::PathExists(GetExtensionFile(cache_dir, kTestExtensionId2, "2")));
 
@@ -285,7 +286,7 @@ TEST_F(ExternalCacheImplTest, PreserveExternalCrx) {
   ExternalCacheImpl external_cache(
       cache_dir, url_loader_factory(),
       base::ThreadPool::CreateSequencedTaskRunner({base::MayBlock()}), this,
-      true, false);
+      true, false, false);
 
   std::unique_ptr<base::DictionaryValue> prefs(new base::DictionaryValue);
   prefs->SetKey(kTestExtensionId1, CreateEntryWithExternalCrx());

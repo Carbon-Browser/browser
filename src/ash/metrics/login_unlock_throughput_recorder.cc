@@ -47,9 +47,8 @@ void RecordMetrics(const base::TimeTicks& start,
   // TODO(crbug.com/1143898): Deprecate this metrics once the login/unlock
   // performance issue is resolved.
   base::UmaHistogramCustomTimes(duration_name + suffix,
-                                base::TimeDelta::FromMilliseconds(duration_ms),
-                                base::TimeDelta::FromMilliseconds(100),
-                                base::TimeDelta::FromSeconds(5), 50);
+                                base::Milliseconds(duration_ms),
+                                base::Milliseconds(100), base::Seconds(5), 50);
 }
 
 void ReportLogin(base::TimeTicks start,
@@ -109,12 +108,21 @@ void LoginUnlockThroughputRecorder::LoggedInStateChanged() {
   if (login_state->IsUserLoggedIn() &&
       (logged_in_user == chromeos::LoginState::LOGGED_IN_USER_OWNER ||
        logged_in_user == chromeos::LoginState::LOGGED_IN_USER_REGULAR)) {
+    ui_recorder_.OnUserLoggedIn();
     auto* primary_root = Shell::GetPrimaryRootWindow();
     new ui::TotalAnimationThroughputReporter(
         primary_root->GetHost()->compositor(),
-        base::BindOnce(&ReportLogin, base::TimeTicks::Now()),
+        base::BindOnce(&LoginUnlockThroughputRecorder::OnLoginAnimationFinish,
+                       weak_ptr_factory_.GetWeakPtr(), base::TimeTicks::Now()),
         /*self_destruct=*/true);
   }
+}
+
+void LoginUnlockThroughputRecorder::OnLoginAnimationFinish(
+    base::TimeTicks start,
+    const cc::FrameSequenceMetrics::CustomReportData& data) {
+  ui_recorder_.OnPostLoginAnimationFinish();
+  ReportLogin(start, data);
 }
 
 }  // namespace ash

@@ -11,7 +11,7 @@
 
 #include "ash/components/audio/audio_devices_pref_handler.h"
 #include "base/component_export.h"
-#include "base/macros.h"
+#include "base/observer_list.h"
 
 namespace ash {
 
@@ -30,6 +30,10 @@ class COMPONENT_EXPORT(ASH_COMPONENTS_AUDIO) AudioDevicesPrefHandlerStub
 
   AudioDevicesPrefHandlerStub();
 
+  AudioDevicesPrefHandlerStub(const AudioDevicesPrefHandlerStub&) = delete;
+  AudioDevicesPrefHandlerStub& operator=(const AudioDevicesPrefHandlerStub&) =
+      delete;
+
   // AudioDevicesPrefHandler:
   double GetOutputVolumeValue(const AudioDevice* device) override;
   double GetInputGainValue(const AudioDevice* device) override;
@@ -42,12 +46,14 @@ class COMPONENT_EXPORT(ASH_COMPONENTS_AUDIO) AudioDevicesPrefHandlerStub
   bool GetDeviceActive(const AudioDevice& device,
                        bool* active,
                        bool* activate_by_user) override;
-  bool GetAudioOutputAllowedValue() override;
+  bool GetAudioOutputAllowedValue() const override;
   void AddAudioPrefObserver(AudioPrefObserver* observer) override;
   void RemoveAudioPrefObserver(AudioPrefObserver* observer) override;
 
   bool GetNoiseCancellationState() override;
   void SetNoiseCancellationState(bool noise_cancellation_state) override;
+
+  void SetAudioOutputAllowedValue(bool is_audio_output_allowed);
 
  protected:
   ~AudioDevicesPrefHandlerStub() override;
@@ -57,9 +63,10 @@ class COMPONENT_EXPORT(ASH_COMPONENTS_AUDIO) AudioDevicesPrefHandlerStub
   AudioDeviceVolumeGain audio_device_volume_gain_map_;
   AudioDeviceStateMap audio_device_state_map_;
 
-  bool noise_cancellation_state_ = true;
+  base::ObserverList<AudioPrefObserver>::Unchecked observers_;
 
-  DISALLOW_COPY_AND_ASSIGN(AudioDevicesPrefHandlerStub);
+  bool is_audio_output_allowed_ = true;
+  bool noise_cancellation_state_ = true;
 };
 
 }  // namespace ash

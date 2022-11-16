@@ -7,7 +7,6 @@
 
 #include "base/android/jni_android.h"
 #include "base/android/jni_weak_ref.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "components/webapps/browser/android/shortcut_info.h"
 #include "components/webapps/browser/android/webapk/webapk_icon_hasher.h"
@@ -32,8 +31,13 @@ class WebApkUpdateDataFetcher : public content::WebContentsObserver {
  public:
   WebApkUpdateDataFetcher(JNIEnv* env,
                           jobject obj,
+                          const GURL& start_url,
                           const GURL& scope,
-                          const GURL& web_manifest_url);
+                          const GURL& web_manifest_url,
+                          const GURL& web_manifest_id);
+
+  WebApkUpdateDataFetcher(const WebApkUpdateDataFetcher&) = delete;
+  WebApkUpdateDataFetcher& operator=(const WebApkUpdateDataFetcher&) = delete;
 
   // Replaces the WebContents that is being observed.
   void ReplaceWebContents(
@@ -74,11 +78,17 @@ class WebApkUpdateDataFetcher : public content::WebContentsObserver {
   // Points to the Java object.
   base::android::ScopedJavaGlobalRef<jobject> java_ref_;
 
+  // The WebAPK's current start url. Used for recording UMA.
+  const GURL start_url_;
+
   // The detector will only fetch the URL within the scope of the WebAPK.
   const GURL scope_;
 
   // The WebAPK's Web Manifest URL that the detector is looking for.
   const GURL web_manifest_url_;
+
+  // The WebAPK's Web Manifest ID that the detector is looking for.
+  const GURL web_manifest_id_;
 
   // The URL for which the installable data is being fetched / was last fetched.
   GURL last_fetched_url_;
@@ -92,8 +102,6 @@ class WebApkUpdateDataFetcher : public content::WebContentsObserver {
   bool is_splash_icon_maskable_;
 
   base::WeakPtrFactory<WebApkUpdateDataFetcher> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(WebApkUpdateDataFetcher);
 };
 
 #endif  // CHROME_BROWSER_ANDROID_WEBAPK_WEBAPK_UPDATE_DATA_FETCHER_H_

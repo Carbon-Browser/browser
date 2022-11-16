@@ -4,14 +4,15 @@
 
 #include "base/win/message_window.h"
 
+#include <windows.h>
+
+#include <utility>
+
 #include "base/lazy_instance.h"
 #include "base/logging.h"
-#include "base/macros.h"
 #include "base/strings/string_util.h"
 #include "base/win/current_module.h"
 #include "base/win/wrapped_window_proc.h"
-
-#include <windows.h>
 
 // To avoid conflicts with the macro from the Windows SDK...
 #undef FindWindow
@@ -26,6 +27,10 @@ namespace win {
 class MessageWindow::WindowClass {
  public:
   WindowClass();
+
+  WindowClass(const WindowClass&) = delete;
+  WindowClass& operator=(const WindowClass&) = delete;
+
   ~WindowClass();
 
   ATOM atom() { return atom_; }
@@ -34,8 +39,6 @@ class MessageWindow::WindowClass {
  private:
   ATOM atom_ = 0;
   HINSTANCE instance_ = CURRENT_MODULE();
-
-  DISALLOW_COPY_AND_ASSIGN(WindowClass);
 };
 
 static LazyInstance<MessageWindow::WindowClass>::DestructorAtExit

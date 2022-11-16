@@ -10,6 +10,7 @@
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
 #include "base/scoped_observation.h"
+#include "base/time/time.h"
 #include "components/password_manager/core/browser/ui/bulk_leak_check_service_adapter.h"
 #include "components/password_manager/core/browser/ui/credential_utils.h"
 #include "components/password_manager/core/browser/ui/insecure_credentials_manager.h"
@@ -62,9 +63,10 @@ class IOSChromePasswordCheckManager
   // The elapsed time since the last full password check was performed.
   base::Time GetLastPasswordCheckTime() const;
 
-  // Obtains all compromised credentials that are present in the password store.
+  // Obtains all unmuted compromised credentials that are present in the
+  // password store.
   std::vector<password_manager::CredentialWithPassword>
-  GetCompromisedCredentials() const;
+  GetUnmutedCompromisedCredentials() const;
 
   password_manager::SavedPasswordsPresenter::SavedPasswordsView
   GetAllCredentials() const;
@@ -75,8 +77,8 @@ class IOSChromePasswordCheckManager
 
   // Edits |username| and |password| for |form| and its duplicates.
   bool EditPasswordForm(const password_manager::PasswordForm& form,
-                        base::StringPiece new_username,
-                        base::StringPiece new_password);
+                        const std::u16string& new_username,
+                        const std::u16string& new_password);
 
   // Adds new password credentials |form| to the store.
   bool AddPasswordForm(const password_manager::PasswordForm& form);
@@ -102,7 +104,7 @@ class IOSChromePasswordCheckManager
   }
 
  private:
-  friend class RefCounted<IOSChromePasswordCheckManager>;
+  friend class base::RefCounted<IOSChromePasswordCheckManager>;
   friend class IOSChromePasswordCheckManagerProxy;
 
   explicit IOSChromePasswordCheckManager(ChromeBrowserState* browser_state);
@@ -133,7 +135,7 @@ class IOSChromePasswordCheckManager
 
   // Handle to the password store, powering both |saved_passwords_presenter_|
   // and |insecure_credentials_manager_|.
-  scoped_refptr<password_manager::PasswordStore> password_store_;
+  scoped_refptr<password_manager::PasswordStoreInterface> password_store_;
 
   // Used by |insecure_credentials_manager_| to obtain the list of saved
   // passwords.

@@ -30,23 +30,22 @@ void ChildActivityStorage::AddActivityPeriod(base::Time start,
   DCHECK(start <= end);
 
   DictionaryPrefUpdate update(pref_service_, pref_name_);
-  base::DictionaryValue* activity_times = update.Get();
+  base::Value* activity_times = update.Get();
 
   // Assign the period to day buckets in local time.
   base::Time day_start = GetBeginningOfDay(start);
   if (start < day_start)
-    day_start -= base::TimeDelta::FromDays(1);
+    day_start -= base::Days(1);
   while (day_start < end) {
-    day_start += base::TimeDelta::FromDays(1);
+    day_start += base::Days(1);
     int64_t activity = (std::min(end, day_start) - start).InMilliseconds();
     const std::string key = MakeActivityPeriodPrefKey(
         LocalTimeToUtcDayStart(start), /*activity_id=*/"");
-    int previous_activity = 0;
-    activity_times->GetInteger(key, &previous_activity);
-    activity_times->SetInteger(key, previous_activity + activity);
+    int previous_activity = activity_times->FindIntKey(key).value_or(0);
+    activity_times->SetIntKey(key, previous_activity + activity);
 
-    StoreChildScreenTime(day_start - base::TimeDelta::FromDays(1),
-                         base::TimeDelta::FromMilliseconds(activity), now);
+    StoreChildScreenTime(day_start - base::Days(1),
+                         base::Milliseconds(activity), now);
 
     start = day_start;
   }
@@ -64,14 +63,14 @@ void ChildActivityStorage::StoreChildScreenTime(base::Time activity_day_start,
   // Today's start time.
   base::Time today_start = GetBeginningOfDay(now);
   if (today_start > now)
-    today_start -= base::TimeDelta::FromDays(1);
+    today_start -= base::Days(1);
 
   // The activity windows always start and end on the reset time of two
   // consecutive days, so it is not possible to have a window starting after
   // the current day's reset time.
   DCHECK(activity_day_start <= today_start);
 
-  base::TimeDelta previous_activity = base::TimeDelta::FromMilliseconds(
+  base::TimeDelta previous_activity = base::Milliseconds(
       pref_service_->GetInteger(prefs::kChildScreenTimeMilliseconds));
 
   // If this activity window belongs to the current day, the screen time pref

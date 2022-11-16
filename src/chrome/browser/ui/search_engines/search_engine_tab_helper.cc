@@ -98,6 +98,7 @@ std::u16string SearchEngineTabHelper::GenerateKeywordFromNavigationEntry(
 
 SearchEngineTabHelper::SearchEngineTabHelper(WebContents* web_contents)
     : content::WebContentsObserver(web_contents),
+      content::WebContentsUserData<SearchEngineTabHelper>(*web_contents),
       osdd_handler_receivers_(web_contents, this) {
   DCHECK(web_contents);
 
@@ -115,7 +116,7 @@ void SearchEngineTabHelper::PageHasOpenSearchDescriptionDocument(
 
   // Only accept messages from the main frame.
   if (osdd_handler_receivers_.GetCurrentTargetFrame() !=
-      web_contents()->GetMainFrame())
+      web_contents()->GetPrimaryMainFrame())
     return;
 
   // Make sure that the page is the current page and other basic checks.
@@ -149,7 +150,7 @@ void SearchEngineTabHelper::PageHasOpenSearchDescriptionDocument(
   if (keyword.empty())
     return;
 
-  auto* frame = web_contents()->GetMainFrame();
+  auto* frame = web_contents()->GetPrimaryMainFrame();
   mojo::Remote<network::mojom::URLLoaderFactory> url_loader_factory;
   frame->CreateNetworkServiceDefaultFactory(
       url_loader_factory.BindNewPipeAndPassReceiver());
@@ -243,4 +244,4 @@ void SearchEngineTabHelper::GenerateKeywordIfNecessary(
   url_service->Add(std::make_unique<TemplateURL>(data));
 }
 
-WEB_CONTENTS_USER_DATA_KEY_IMPL(SearchEngineTabHelper)
+WEB_CONTENTS_USER_DATA_KEY_IMPL(SearchEngineTabHelper);

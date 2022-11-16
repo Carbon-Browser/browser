@@ -2,7 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/macros.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/autofill/autofill_uitest_util.h"
 #include "chrome/browser/sync/test/integration/sync_test.h"
@@ -41,9 +40,8 @@ class CreditCardAccessManagerBrowserTest : public InProcessBrowserTest {
         browser()->tab_strip_model()->GetActiveWebContents();
     ContentAutofillDriver* autofill_driver =
         ContentAutofillDriverFactory::FromWebContents(web_contents)
-            ->DriverForFrame(web_contents->GetMainFrame());
-    return autofill_driver->browser_autofill_manager()
-        ->credit_card_access_manager();
+            ->DriverForFrame(web_contents->GetPrimaryMainFrame());
+    return autofill_driver->autofill_manager()->GetCreditCardAccessManager();
   }
 
   CreditCard SaveServerCard(std::string card_number) {

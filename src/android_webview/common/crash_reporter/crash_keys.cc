@@ -43,6 +43,7 @@ const char* const kWebViewCrashKeyAllowList[] = {
     "gpu-gl-renderer",
     "gr-context-type",
     "oop_read_failure",
+    "gpu-gl-error-message",
 
     // components/viz
     "viz_deserialization",
@@ -137,6 +138,9 @@ const char* const kWebViewCrashKeyAllowList[] = {
     // crash keys needed for recording finch trials
     "variations",
     "num-experiments",
+
+    // sandbox/linux
+    "seccomp-sigsys",
 
     kWeblayerWebViewCompatMode,
 

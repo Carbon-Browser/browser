@@ -11,17 +11,17 @@
 
 #include "base/bind.h"
 #include "base/compiler_specific.h"
-#include "base/cxx17_backports.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/location.h"
 #include "base/logging.h"
-#include "base/macros.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/stringize_macros.h"
 #include "base/test/task_environment.h"
 #include "base/threading/thread_task_runner_handle.h"
+#include "base/time/time.h"
 #include "base/values.h"
 #include "build/chromeos_buildflags.h"
 #include "components/policy/core/common/fake_async_policy_loader.h"
@@ -49,8 +49,7 @@ using protocol::ErrorCode;
 namespace {
 
 const char kTestAccessCode[] = "888888";
-constexpr base::TimeDelta kTestAccessCodeLifetime =
-    base::TimeDelta::FromSeconds(666);
+constexpr base::TimeDelta kTestAccessCodeLifetime = base::Seconds(666);
 const char kTestClientUsername[] = "some_user@gmail.com";
 const char kTestStunServer[] = "test_relay_server.com";
 
@@ -90,10 +89,10 @@ void VerifyCommonProperties(std::unique_ptr<base::DictionaryValue> response,
 
 base::DictionaryValue CreateConnectMessage(int id) {
   base::DictionaryValue connect_message;
-  connect_message.SetInteger(kMessageId, id);
-  connect_message.SetString(kMessageType, kConnectMessage);
-  connect_message.SetString(kUserName, kTestClientUsername);
-  connect_message.SetString(kAuthServiceWithToken, "oauth2:sometoken");
+  connect_message.SetIntKey(kMessageId, id);
+  connect_message.SetStringKey(kMessageType, kConnectMessage);
+  connect_message.SetStringKey(kUserName, kTestClientUsername);
+  connect_message.SetStringKey(kAuthServiceWithToken, "oauth2:sometoken");
   connect_message.SetKey(
       kIceConfig,
       base::Value::FromUniquePtrValue(base::JSONReader::ReadDeprecated(
@@ -105,8 +104,8 @@ base::DictionaryValue CreateConnectMessage(int id) {
 
 base::DictionaryValue CreateDisconnectMessage(int id) {
   base::DictionaryValue disconnect_message;
-  disconnect_message.SetInteger(kMessageId, id);
-  disconnect_message.SetString(kMessageType, kDisconnectMessage);
+  disconnect_message.SetIntKey(kMessageId, id);
+  disconnect_message.SetStringKey(kMessageType, kDisconnectMessage);
   return disconnect_message;
 }
 
@@ -115,6 +114,9 @@ base::DictionaryValue CreateDisconnectMessage(int id) {
 class MockIt2MeHost : public It2MeHost {
  public:
   MockIt2MeHost() = default;
+
+  MockIt2MeHost(const MockIt2MeHost&) = delete;
+  MockIt2MeHost& operator=(const MockIt2MeHost&) = delete;
 
   // It2MeHost overrides
   void Connect(std::unique_ptr<ChromotingHostContext> context,
@@ -133,8 +135,6 @@ class MockIt2MeHost : public It2MeHost {
       CreateDeferredConnectContext create_connection_context);
 
   void RunSetState(It2MeHostState state);
-
-  DISALLOW_COPY_AND_ASSIGN(MockIt2MeHost);
 };
 
 void MockIt2MeHost::Connect(
@@ -216,6 +216,10 @@ void MockIt2MeHost::RunSetState(It2MeHostState state) {
 class MockIt2MeHostFactory : public It2MeHostFactory {
  public:
   MockIt2MeHostFactory() : host(new MockIt2MeHost()) {}
+
+  MockIt2MeHostFactory(const MockIt2MeHostFactory&) = delete;
+  MockIt2MeHostFactory& operator=(const MockIt2MeHostFactory&) = delete;
+
   ~MockIt2MeHostFactory() override = default;
 
   scoped_refptr<It2MeHost> CreateIt2MeHost() override {
@@ -223,14 +227,16 @@ class MockIt2MeHostFactory : public It2MeHostFactory {
   }
 
   scoped_refptr<MockIt2MeHost> host;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(MockIt2MeHostFactory);
 };
 
 class It2MeNativeMessagingHostTest : public testing::Test {
  public:
   It2MeNativeMessagingHostTest() = default;
+
+  It2MeNativeMessagingHostTest(const It2MeNativeMessagingHostTest&) = delete;
+  It2MeNativeMessagingHostTest& operator=(const It2MeNativeMessagingHostTest&) =
+      delete;
+
   ~It2MeNativeMessagingHostTest() override = default;
 
   void SetUp() override;
@@ -255,7 +261,7 @@ class It2MeNativeMessagingHostTest : public testing::Test {
   void TestConnect();
 
   // Raw pointer to host factory (owned by It2MeNativeMessagingHost).
-  MockIt2MeHostFactory* factory_raw_ptr_ = nullptr;
+  raw_ptr<MockIt2MeHostFactory> factory_raw_ptr_ = nullptr;
 
  private:
   void StartHost();
@@ -281,13 +287,11 @@ class It2MeNativeMessagingHostTest : public testing::Test {
 
   // Retain a raw pointer to |policy_loader_| in order to control the policy
   // contents.
-  policy::FakeAsyncPolicyLoader* policy_loader_ = nullptr;
+  raw_ptr<policy::FakeAsyncPolicyLoader> policy_loader_ = nullptr;
 
   // Task runner of the host thread.
   scoped_refptr<AutoThreadTaskRunner> host_task_runner_;
   std::unique_ptr<remoting::NativeMessagingPipe> pipe_;
-
-  DISALLOW_COPY_AND_ASSIGN(It2MeNativeMessagingHostTest);
 };
 
 void It2MeNativeMessagingHostTest::SetUp() {
@@ -367,7 +371,7 @@ It2MeNativeMessagingHostTest::ReadMessageFromOutputPipe() {
 
     std::string message_json(length, '\0');
     read_result =
-        output_read_file_.ReadAtCurrentPos(base::data(message_json), length);
+        output_read_file_.ReadAtCurrentPos(std::data(message_json), length);
     if (read_result != static_cast<int>(length)) {
       LOG(ERROR) << "Message size (" << read_result
                  << ") doesn't match the header (" << length << ").";
@@ -527,8 +531,8 @@ void It2MeNativeMessagingHostTest::VerifyPolicyErrorResponse() {
 void It2MeNativeMessagingHostTest::TestBadRequest(const base::Value& message,
                                                   bool expect_error_response) {
   base::DictionaryValue good_message;
-  good_message.SetString(kMessageType, kHelloMessage);
-  good_message.SetInteger(kMessageId, 1);
+  good_message.SetStringKey(kMessageType, kHelloMessage);
+  good_message.SetIntKey(kMessageId, 1);
 
   WriteMessageToInputPipe(good_message);
   WriteMessageToInputPipe(message);
@@ -619,8 +623,8 @@ void It2MeNativeMessagingHostTest::TestConnect() {
 TEST_F(It2MeNativeMessagingHostTest, Hello) {
   int next_id = 0;
   base::DictionaryValue message;
-  message.SetInteger(kMessageId, ++next_id);
-  message.SetString(kMessageType, kHelloMessage);
+  message.SetIntKey(kMessageId, ++next_id);
+  message.SetStringKey(kMessageType, kHelloMessage);
   WriteMessageToInputPipe(message);
 
   VerifyHelloResponse(next_id);
@@ -629,9 +633,9 @@ TEST_F(It2MeNativeMessagingHostTest, Hello) {
 // Verify that response ID matches request ID.
 TEST_F(It2MeNativeMessagingHostTest, Id) {
   base::DictionaryValue message;
-  message.SetString(kMessageType, kHelloMessage);
+  message.SetStringKey(kMessageType, kHelloMessage);
   WriteMessageToInputPipe(message);
-  message.SetString(kMessageId, "42");
+  message.SetStringKey(kMessageId, "42");
   WriteMessageToInputPipe(message);
 
   std::unique_ptr<base::DictionaryValue> response = ReadMessageFromOutputPipe();
@@ -658,7 +662,7 @@ TEST_F(It2MeNativeMessagingHostTest,
        ConnectRespectsSuppressUserDialogsParameterOnChromeOsOnly) {
   int next_id = 1;
   base::DictionaryValue connect_message = CreateConnectMessage(next_id);
-  connect_message.SetBoolean(kSuppressUserDialogs, true);
+  connect_message.SetBoolKey(kSuppressUserDialogs, true);
   WriteMessageToInputPipe(connect_message);
   VerifyConnectResponses(next_id);
 #if BUILDFLAG(IS_CHROMEOS_ASH) || !defined(NDEBUG)
@@ -675,7 +679,7 @@ TEST_F(It2MeNativeMessagingHostTest,
        ConnectRespectsSuppressNotificationsParameterOnChromeOsOnly) {
   int next_id = 1;
   base::DictionaryValue connect_message = CreateConnectMessage(next_id);
-  connect_message.SetBoolean(kSuppressNotifications, true);
+  connect_message.SetBoolKey(kSuppressNotifications, true);
   WriteMessageToInputPipe(connect_message);
   VerifyConnectResponses(next_id);
 #if BUILDFLAG(IS_CHROMEOS_ASH) || !defined(NDEBUG)
@@ -704,14 +708,14 @@ TEST_F(It2MeNativeMessagingHostTest, MissingType) {
 // Verify rejection if type is unrecognized.
 TEST_F(It2MeNativeMessagingHostTest, InvalidType) {
   base::DictionaryValue message;
-  message.SetString(kMessageType, "xxx");
+  message.SetStringKey(kMessageType, "xxx");
   TestBadRequest(message, true);
 }
 
 // Verify rejection if type is unrecognized.
 TEST_F(It2MeNativeMessagingHostTest, BadPoliciesBeforeConnect) {
   base::DictionaryValue bad_policy;
-  bad_policy.SetInteger(policy::key::kRemoteAccessHostFirewallTraversal, 1);
+  bad_policy.SetIntKey(policy::key::kRemoteAccessHostFirewallTraversal, 1);
   SetPolicies(bad_policy);
   WriteMessageToInputPipe(CreateConnectMessage(1));
   VerifyPolicyErrorResponse();
@@ -720,7 +724,7 @@ TEST_F(It2MeNativeMessagingHostTest, BadPoliciesBeforeConnect) {
 // Verify rejection if type is unrecognized.
 TEST_F(It2MeNativeMessagingHostTest, BadPoliciesAfterConnect) {
   base::DictionaryValue bad_policy;
-  bad_policy.SetInteger(policy::key::kRemoteAccessHostFirewallTraversal, 1);
+  bad_policy.SetIntKey(policy::key::kRemoteAccessHostFirewallTraversal, 1);
   WriteMessageToInputPipe(CreateConnectMessage(1));
   VerifyConnectResponses(1);
   SetPolicies(bad_policy);

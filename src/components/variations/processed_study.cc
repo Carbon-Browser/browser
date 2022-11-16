@@ -4,6 +4,7 @@
 
 #include "components/variations/processed_study.h"
 
+#include <cstdint>
 #include <set>
 #include <string>
 
@@ -13,23 +14,7 @@
 #include "components/variations/proto/study.pb.h"
 
 namespace variations {
-
 namespace {
-
-// These values are persisted to logs. Entries should not be renumbered and
-// numeric values should never be reused.
-enum class InvalidStudyReason {
-  kInvalidMinVersion = 0,
-  kInvalidMaxVersion = 1,
-  kInvalidMinOsVersion = 2,
-  kInvalidMaxOsVersion = 3,
-  kMissingExperimentName = 4,
-  kRepeatedExperimentName = 5,
-  kTotalProbabilityOverflow = 6,
-  kMissingDefaultExperimentInList = 7,
-  kBlankStudyName = 8,
-  kMaxValue = kBlankStudyName,
-};
 
 void LogInvalidReason(InvalidStudyReason reason) {
   base::UmaHistogramEnumeration("Variations.InvalidStudyReason", reason);
@@ -51,15 +36,15 @@ bool ValidateStudyAndComputeTotalProbability(
   if (study.filter().has_min_version() &&
       !base::Version::IsValidWildcardString(study.filter().min_version())) {
     LogInvalidReason(InvalidStudyReason::kInvalidMinVersion);
-    DVLOG(1) << study.name() << " has invalid min version: "
-             << study.filter().min_version();
+    DVLOG(1) << study.name()
+             << " has invalid min version: " << study.filter().min_version();
     return false;
   }
   if (study.filter().has_max_version() &&
       !base::Version::IsValidWildcardString(study.filter().max_version())) {
     LogInvalidReason(InvalidStudyReason::kInvalidMaxVersion);
-    DVLOG(1) << study.name() << " has invalid max version: "
-             << study.filter().max_version();
+    DVLOG(1) << study.name()
+             << " has invalid max version: " << study.filter().max_version();
     return false;
   }
   if (study.filter().has_min_os_version() &&
@@ -114,10 +99,29 @@ bool ValidateStudyAndComputeTotalProbability(
       }
     }
 
+    if (experiment.has_google_web_experiment_id() &&
+        experiment.has_google_web_trigger_experiment_id()) {
+      LogInvalidReason(InvalidStudyReason::kTriggerAndNonTriggerExperimentId);
+      DVLOG(1) << study.name() << " has experiment (" << experiment.name()
+               << ") with a google_web_experiment_id and a "
+               << "web_trigger_experiment_id.";
+      return false;
+    }
+
     if (!experiment.has_forcing_flag() && experiment.probability_weight() > 0) {
       // If |divisor| is not 0, there was at least one prior non-zero group.
       if (divisor != 0)
         multiple_assigned_groups = true;
+
+      if (experiment.probability_weight() >
+          std::numeric_limits<base::FieldTrial::Probability>::max()) {
+        LogInvalidReason(InvalidStudyReason::kExperimentProbabilityOverflow);
+        DVLOG(1) << study.name() << " has an experiment (" << experiment.name()
+                 << ") with a probability weight of "
+                 << experiment.probability_weight()
+                 << " that exceeds the maximum supported value";
+        return false;
+      }
 
       if (divisor + experiment.probability_weight() >
           std::numeric_limits<base::FieldTrial::Probability>::max()) {
@@ -157,7 +161,6 @@ bool ValidateStudyAndComputeTotalProbability(
   return true;
 }
 
-
 }  // namespace
 
 // static
@@ -168,8 +171,7 @@ ProcessedStudy::ProcessedStudy() {}
 
 ProcessedStudy::ProcessedStudy(const ProcessedStudy& other) = default;
 
-ProcessedStudy::~ProcessedStudy() {
-}
+ProcessedStudy::~ProcessedStudy() = default;
 
 bool ProcessedStudy::Init(const Study* study, bool is_expired) {
   base::FieldTrial::Probability total_probability = 0;
@@ -198,11 +200,11 @@ int ProcessedStudy::GetExperimentIndexByName(const std::string& name) const {
   return -1;
 }
 
-const char* ProcessedStudy::GetDefaultExperimentName() const {
+const base::StringPiece ProcessedStudy::GetDefaultExperimentName() const {
   if (study_->default_experiment_name().empty())
     return kGenericDefaultExperimentName;
 
-  return study_->default_experiment_name().c_str();
+  return study_->default_experiment_name();
 }
 
 }  // namespace variations

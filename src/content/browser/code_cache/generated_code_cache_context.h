@@ -7,6 +7,7 @@
 
 #include "base/files/file_path.h"
 #include "base/memory/ref_counted.h"
+#include "base/thread_annotations.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/browser_thread.h"
 
@@ -36,6 +37,10 @@ class CONTENT_EXPORT GeneratedCodeCacheContext
 
   GeneratedCodeCacheContext();
 
+  GeneratedCodeCacheContext(const GeneratedCodeCacheContext&) = delete;
+  GeneratedCodeCacheContext& operator=(const GeneratedCodeCacheContext&) =
+      delete;
+
   // Initialize is called on the UI thread when the StoragePartition is
   // being setup.
   void Initialize(const base::FilePath& path, int max_bytes);
@@ -52,20 +57,21 @@ class CONTENT_EXPORT GeneratedCodeCacheContext
   ~GeneratedCodeCacheContext();
 
   void InitializeOnThread(const base::FilePath& path, int max_bytes);
+  void ShutdownOnThread();
 
   // Created, used and deleted on the code cache thread.
   std::unique_ptr<GeneratedCodeCache, base::OnTaskRunnerDeleter>
-      generated_js_code_cache_{nullptr, base::OnTaskRunnerDeleter(nullptr)};
+      generated_js_code_cache_ GUARDED_BY_CONTEXT(sequence_checker_) = {
+          nullptr, base::OnTaskRunnerDeleter(nullptr)};
   std::unique_ptr<GeneratedCodeCache, base::OnTaskRunnerDeleter>
-      generated_wasm_code_cache_{nullptr, base::OnTaskRunnerDeleter(nullptr)};
+      generated_wasm_code_cache_ GUARDED_BY_CONTEXT(sequence_checker_) = {
+          nullptr, base::OnTaskRunnerDeleter(nullptr)};
   std::unique_ptr<GeneratedCodeCache, base::OnTaskRunnerDeleter>
-      generated_webui_js_code_cache_{nullptr,
-                                     base::OnTaskRunnerDeleter(nullptr)};
+      generated_webui_js_code_cache_ GUARDED_BY_CONTEXT(sequence_checker_) = {
+          nullptr, base::OnTaskRunnerDeleter(nullptr)};
   scoped_refptr<base::SequencedTaskRunner> task_runner_;
 
   SEQUENCE_CHECKER(sequence_checker_);
-
-  DISALLOW_COPY_AND_ASSIGN(GeneratedCodeCacheContext);
 };
 
 }  // namespace content

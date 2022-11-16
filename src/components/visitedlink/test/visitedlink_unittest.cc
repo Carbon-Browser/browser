@@ -14,12 +14,12 @@
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/location.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/process/process_handle.h"
 #include "base/run_loop.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/timer/mock_timer.h"
@@ -556,6 +556,9 @@ class VisitCountingContext : public mojom::VisitedLinkNotificationSink {
         completely_reset_event_count_(0),
         new_table_count_(0) {}
 
+  VisitCountingContext(const VisitCountingContext&) = delete;
+  VisitCountingContext& operator=(const VisitCountingContext&) = delete;
+
   void Bind(mojo::ScopedMessagePipeHandle handle) {
     receiver_.Add(this,
                   mojo::PendingReceiver<mojom::VisitedLinkNotificationSink>(
@@ -616,8 +619,6 @@ class VisitCountingContext : public mojom::VisitedLinkNotificationSink {
 
   base::OnceClosure quit_closure_;
   mojo::ReceiverSet<mojom::VisitedLinkNotificationSink> receiver_;
-
-  DISALLOW_COPY_AND_ASSIGN(VisitCountingContext);
 };
 
 // Stub out as little as possible, borrowing from RenderProcessHost.
@@ -630,34 +631,47 @@ class VisitRelayingRenderProcessHost : public MockRenderProcessHost {
     OverrideBinderForTesting(mojom::VisitedLinkNotificationSink::Name_,
                              base::BindRepeating(&VisitCountingContext::Bind,
                                                  base::Unretained(context)));
-    content::NotificationService::current()->Notify(
-        content::NOTIFICATION_RENDERER_PROCESS_CREATED,
-        content::Source<RenderProcessHost>(this),
-        content::NotificationService::NoDetails());
   }
+
+  VisitRelayingRenderProcessHost(const VisitRelayingRenderProcessHost&) =
+      delete;
+  VisitRelayingRenderProcessHost& operator=(
+      const VisitRelayingRenderProcessHost&) = delete;
+
   ~VisitRelayingRenderProcessHost() override {
     content::NotificationService::current()->Notify(
         content::NOTIFICATION_RENDERER_PROCESS_TERMINATED,
         content::Source<content::RenderProcessHost>(this),
         content::NotificationService::NoDetails());
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(VisitRelayingRenderProcessHost);
 };
 
 class VisitedLinkRenderProcessHostFactory
     : public content::RenderProcessHostFactory {
  public:
   VisitedLinkRenderProcessHostFactory() : context_(new VisitCountingContext) {}
+
+  VisitedLinkRenderProcessHostFactory(
+      const VisitedLinkRenderProcessHostFactory&) = delete;
+  VisitedLinkRenderProcessHostFactory& operator=(
+      const VisitedLinkRenderProcessHostFactory&) = delete;
+
   content::RenderProcessHost* CreateRenderProcessHost(
       content::BrowserContext* browser_context,
       content::SiteInstance* site_instance) override {
     auto rph = std::make_unique<VisitRelayingRenderProcessHost>(browser_context,
                                                                 context_.get());
+
     content::RenderProcessHost* result = rph.get();
+    creation_observer_->OnRenderProcessHostCreated(result);
+
     processes_.push_back(std::move(rph));
     return result;
+  }
+
+  void SetRenderProcessHostCreationObserver(
+      content::RenderProcessHostCreationObserver* observer) {
+    creation_observer_ = observer;
   }
 
   VisitCountingContext* context() { return context_.get(); }
@@ -665,9 +679,11 @@ class VisitedLinkRenderProcessHostFactory
   void DeleteRenderProcessHosts() { processes_.clear(); }
 
  private:
+  raw_ptr<content::RenderProcessHostCreationObserver> creation_observer_ =
+      nullptr;
+
   std::list<std::unique_ptr<VisitRelayingRenderProcessHost>> processes_;
   std::unique_ptr<VisitCountingContext> context_;
-  DISALLOW_COPY_AND_ASSIGN(VisitedLinkRenderProcessHostFactory);
 };
 
 class VisitedLinkEventsTest : public content::RenderViewHostTestHarness {
@@ -692,6 +708,8 @@ class VisitedLinkEventsTest : public content::RenderViewHostTestHarness {
   std::unique_ptr<content::BrowserContext> CreateBrowserContext() override {
     auto context = std::make_unique<content::TestBrowserContext>();
     CreateVisitedLinkWriter(context.get());
+    vc_rph_factory_.SetRenderProcessHostCreationObserver(
+        static_cast<VisitedLinkEventListener*>(writer_->GetListener()));
     return context;
   }
 
@@ -867,14 +885,17 @@ TEST_F(VisitedLinkEventsTest, TabVisibility) {
 TEST_F(VisitedLinkEventsTest, IgnoreRendererCreationFromDifferentContext) {
   content::TestBrowserContext different_context;
   VisitCountingContext counting_context;
+  // There are two render process hosts in play with this test. The primary
+  // one is where the observer callback (done below) will be received
+  // and don't need an observer for the other process host as it isn't
+  // needed in the test.
   VisitRelayingRenderProcessHost different_process_host(&different_context,
                                                         &counting_context);
 
   size_t old_size = counting_context.binding().size();
-  content::NotificationService::current()->Notify(
-      content::NOTIFICATION_RENDERER_PROCESS_CREATED,
-      content::Source<content::RenderProcessHost>(&different_process_host),
-      content::NotificationService::NoDetails());
+
+  static_cast<VisitedLinkEventListener*>(writer()->GetListener())
+      ->OnRenderProcessHostCreated(&different_process_host);
   size_t new_size = counting_context.binding().size();
   EXPECT_EQ(old_size, new_size);
 }
@@ -885,6 +906,8 @@ class VisitedLinkCompletelyResetEventTest : public VisitedLinkEventsTest {
     auto context = std::make_unique<content::TestBrowserContext>();
     CreateVisitedLinkFile(context.get());
     CreateVisitedLinkWriter(context.get());
+    vc_rph_factory_.SetRenderProcessHostCreationObserver(
+        static_cast<VisitedLinkEventListener*>(writer_->GetListener()));
     return context;
   }
 

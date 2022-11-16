@@ -10,11 +10,13 @@
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 #include "third_party/blink/renderer/platform/wtf/text/atomic_string.h"
+#include "third_party/blink/renderer/platform/wtf/text/atomic_string_hash.h"
 
 namespace blink {
 
-class EventCounts final : public ScriptWrappable,
-                          public Maplike<AtomicString, unsigned> {
+class EventCounts final
+    : public ScriptWrappable,
+      public Maplike<AtomicString, IDLString, uint32_t, IDLUnsignedLong> {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
@@ -38,9 +40,9 @@ class EventCounts final : public ScriptWrappable,
 
  private:
   // Maplike implementation.
-  PairIterable<AtomicString, unsigned>::IterationSource* StartIteration(
-      ScriptState*,
-      ExceptionState&) override;
+  PairIterable<AtomicString, IDLString, uint32_t, IDLUnsignedLong>::
+      IterationSource*
+      StartIteration(ScriptState*, ExceptionState&) override;
   bool GetMapEntry(ScriptState*,
                    const AtomicString& key,
                    unsigned& value,

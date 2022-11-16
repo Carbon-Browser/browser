@@ -8,9 +8,8 @@
 #include <memory>
 
 #include "base/memory/weak_ptr.h"
-#include "base/task/post_task.h"
 #include "chrome/browser/ash/release_notes/release_notes_storage.h"
-#include "chromeos/network/network_state_handler_observer.h"
+#include "chromeos/ash/components/network/network_state_handler_observer.h"
 #include "components/session_manager/core/session_manager_observer.h"
 
 namespace message_center {
@@ -26,6 +25,10 @@ class ReleaseNotesNotificationTest;
 class ReleaseNotesNotification {
  public:
   explicit ReleaseNotesNotification(Profile* profile);
+
+  ReleaseNotesNotification(const ReleaseNotesNotification&) = delete;
+  ReleaseNotesNotification& operator=(const ReleaseNotesNotification&) = delete;
+
   ~ReleaseNotesNotification();
 
   // Checks profile preferences and release notes storage to determine whether
@@ -48,8 +51,6 @@ class ReleaseNotesNotification {
       release_notes_available_notification_;
 
   base::WeakPtrFactory<ReleaseNotesNotification> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ReleaseNotesNotification);
 };
 
 }  // namespace ash

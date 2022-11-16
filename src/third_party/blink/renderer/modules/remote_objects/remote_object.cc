@@ -3,7 +3,11 @@
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/remote_objects/remote_object.h"
+
+#include <tuple>
+
 #include "base/metrics/histogram_macros.h"
+#include "base/numerics/safe_conversions.h"
 #include "gin/converter.h"
 #include "third_party/blink/public/web/blink.h"
 #include "third_party/blink/renderer/platform/bindings/v8_binding.h"
@@ -66,7 +70,7 @@ v8::Local<v8::Object> GetMethodCache(v8::Isolate* isolate,
 
   if (result->IsUndefined()) {
     result = v8::Object::New(isolate, v8::Null(isolate), nullptr, nullptr, 0);
-    ignore_result(method_cache_symbol.Set(object, result));
+    std::ignore = method_cache_symbol.Set(object, result);
   }
 
   DCHECK(result->IsObject());
@@ -228,7 +232,7 @@ mojom::blink::RemoteInvocationArgumentPtr JSValueToMojom(
     }
 
     WTF::Vector<mojom::blink::RemoteInvocationArgumentPtr> nested_arguments(
-        SafeCast<wtf_size_t>(length));
+        base::checked_cast<wtf_size_t>(length));
     for (uint32_t i = 0; i < property_names->Length(); ++i) {
       v8::Local<v8::Value> key;
       if (!property_names->Get(isolate->GetCurrentContext(), i).ToLocal(&key) ||
@@ -450,8 +454,8 @@ v8::Local<v8::Value> RemoteObject::GetNamedProperty(
                                     RemoteObjectInvokeCallback, v8_property)
                       .ToLocalChecked();
 
-  ignore_result(method_cache->CreateDataProperty(isolate->GetCurrentContext(),
-                                                 v8_property, function));
+  std::ignore = method_cache->CreateDataProperty(isolate->GetCurrentContext(),
+                                                 v8_property, function);
   return function;
 }
 

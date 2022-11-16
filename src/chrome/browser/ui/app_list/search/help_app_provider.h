@@ -9,21 +9,17 @@
 #include <vector>
 
 #include "ash/webui/help_app_ui/search/search.mojom.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
+#include "chrome/browser/apps/app_service/app_service_proxy_forward.h"
 #include "chrome/browser/ui/app_list/search/chrome_search_result.h"
 #include "chrome/browser/ui/app_list/search/search_provider.h"
 #include "components/services/app_service/public/cpp/app_registry_cache.h"
-#include "components/services/app_service/public/mojom/types.mojom.h"
+#include "components/services/app_service/public/cpp/icon_types.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 
 class Profile;
-
-namespace apps {
-class AppServiceProxyChromeOs;
-}  // namespace apps
 
 namespace ash {
 namespace help_app {
@@ -40,12 +36,6 @@ namespace app_list {
 // Search results for the Help App (aka Explore).
 class HelpAppResult : public ChromeSearchResult {
  public:
-  // Constructor for the What's new chip.
-  HelpAppResult(Profile* profile,
-                const std::string& id,
-                const std::u16string& title,
-                const gfx::ImageSkia& icon);
-  // Constructor for a list result.
   HelpAppResult(const float& relevance,
                 Profile* profile,
                 const ash::help_app::mojom::SearchResultPtr& result,
@@ -66,8 +56,7 @@ class HelpAppResult : public ChromeSearchResult {
   const std::string help_app_content_id_;
 };
 
-// Provides results from the Help App based on the search query. Also provides
-// zero-state results.
+// Provides results from the Help App based on the search query.
 class HelpAppProvider : public SearchProvider,
                         public apps::AppRegistryCache::Observer,
                         public ash::help_app::mojom::SearchResultsObserver {
@@ -80,9 +69,9 @@ class HelpAppProvider : public SearchProvider,
 
   // SearchProvider:
   void Start(const std::u16string& query) override;
+  void StartZeroState() override;
   void ViewClosing() override;
-  void AppListShown() override;
-  ash::AppListSearchResultType ResultType() override;
+  ash::AppListSearchResultType ResultType() const override;
 
   // apps::AppRegistryCache::Observer:
   void OnAppUpdate(const apps::AppUpdate& update) override;
@@ -97,12 +86,13 @@ class HelpAppProvider : public SearchProvider,
       const std::u16string& query,
       const base::TimeTicks& start_time,
       std::vector<ash::help_app::mojom::SearchResultPtr> results);
-  void OnLoadIcon(apps::mojom::IconValuePtr icon_value);
+  void OnLoadIcon(apps::IconValuePtr icon_value);
   void LoadIcon();
 
   Profile* const profile_;
+
   ash::help_app::SearchHandler* search_handler_;
-  apps::AppServiceProxyChromeOs* app_service_proxy_;
+  apps::AppServiceProxy* app_service_proxy_;
   gfx::ImageSkia icon_;
 
   // Last search query. It is reset when the view is closed.

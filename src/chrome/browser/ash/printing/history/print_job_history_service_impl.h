@@ -5,28 +5,32 @@
 #ifndef CHROME_BROWSER_ASH_PRINTING_HISTORY_PRINT_JOB_HISTORY_SERVICE_IMPL_H_
 #define CHROME_BROWSER_ASH_PRINTING_HISTORY_PRINT_JOB_HISTORY_SERVICE_IMPL_H_
 
+#include "chrome/browser/ash/printing/cups_print_job_manager.h"
 #include "chrome/browser/ash/printing/history/print_job_database.h"
 #include "chrome/browser/ash/printing/history/print_job_history_cleaner.h"
 #include "chrome/browser/ash/printing/history/print_job_history_service.h"
-#include "chrome/browser/chromeos/printing/cups_print_job_manager.h"
 
 class PrefService;
 
-namespace chromeos {
+namespace ash {
 
 class CupsPrintJobManager;
 
 // This service is responsible for maintaining print job history.
 // It observes CupsPrintJobManager events and uses PrintJobDatabase as
 // persistent storage for print job history.
-class PrintJobHistoryServiceImpl
-    : public PrintJobHistoryService,
-      public chromeos::CupsPrintJobManager::Observer {
+class PrintJobHistoryServiceImpl : public PrintJobHistoryService,
+                                   public CupsPrintJobManager::Observer {
  public:
   PrintJobHistoryServiceImpl(
       std::unique_ptr<PrintJobDatabase> print_job_database,
       CupsPrintJobManager* print_job_manager,
       PrefService* pref_service);
+
+  PrintJobHistoryServiceImpl(const PrintJobHistoryServiceImpl&) = delete;
+  PrintJobHistoryServiceImpl& operator=(const PrintJobHistoryServiceImpl&) =
+      delete;
+
   ~PrintJobHistoryServiceImpl() override;
 
   // PrintJobHistoryService:
@@ -65,10 +69,8 @@ class PrintJobHistoryServiceImpl
   // Used for avoiding that callbacks are called after the class was
   // destroyed already.
   base::WeakPtrFactory<PrintJobHistoryServiceImpl> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(PrintJobHistoryServiceImpl);
 };
 
-}  // namespace chromeos
+}  // namespace ash
 
 #endif  // CHROME_BROWSER_ASH_PRINTING_HISTORY_PRINT_JOB_HISTORY_SERVICE_IMPL_H_

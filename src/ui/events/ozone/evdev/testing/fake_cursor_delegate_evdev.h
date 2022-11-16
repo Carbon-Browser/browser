@@ -12,6 +12,10 @@ namespace ui {
 class FakeCursorDelegateEvdev : public CursorDelegateEvdev {
  public:
   FakeCursorDelegateEvdev() {}
+
+  FakeCursorDelegateEvdev(const FakeCursorDelegateEvdev&) = delete;
+  FakeCursorDelegateEvdev& operator=(const FakeCursorDelegateEvdev&) = delete;
+
   ~FakeCursorDelegateEvdev() override {}
 
   // CursorDelegateEvdev:
@@ -25,7 +29,7 @@ class FakeCursorDelegateEvdev : public CursorDelegateEvdev {
   void MoveCursor(const gfx::Vector2dF& delta) override {
     cursor_location_ = gfx::PointF(delta.x(), delta.y());
   }
-  bool IsCursorVisible() override { return 1; }
+  bool IsCursorVisible() override { return true; }
   gfx::Rect GetCursorConfinedBounds() override {
     NOTIMPLEMENTED();
     return gfx::Rect();
@@ -36,8 +40,6 @@ class FakeCursorDelegateEvdev : public CursorDelegateEvdev {
  private:
   // The location of the mock cursor.
   gfx::PointF cursor_location_;
-
-  DISALLOW_COPY_AND_ASSIGN(FakeCursorDelegateEvdev);
 };
 
 }  // namespace ui

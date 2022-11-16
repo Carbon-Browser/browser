@@ -9,15 +9,18 @@
 #include <vector>
 
 #include "base/containers/flat_set.h"
+#include "chrome/browser/ash/printing/cups_printers_manager.h"
+#include "chrome/browser/ash/printing/printers_map.h"
+#include "chrome/browser/ash/printing/test_printer_configurer.h"
 #include "chrome/browser/ash/printing/usb_printer_notification_controller.h"
-#include "chrome/browser/chromeos/printing/cups_printers_manager.h"
-#include "chrome/browser/chromeos/printing/printers_map.h"
-#include "chrome/browser/chromeos/printing/test_printer_configurer.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
-namespace chromeos {
+namespace ash {
 namespace {
+
+using ::chromeos::Printer;
+using ::chromeos::PrinterClass;
 
 Printer CreateUsbPrinter(const std::string& id) {
   Printer printer;
@@ -166,6 +169,11 @@ class AutomaticUsbPrinterConfigurerTest : public testing::Test {
         auto_usb_printer_configurer_.get());
   }
 
+  AutomaticUsbPrinterConfigurerTest(const AutomaticUsbPrinterConfigurerTest&) =
+      delete;
+  AutomaticUsbPrinterConfigurerTest& operator=(
+      const AutomaticUsbPrinterConfigurerTest&) = delete;
+
   ~AutomaticUsbPrinterConfigurerTest() override = default;
 
  protected:
@@ -175,8 +183,6 @@ class AutomaticUsbPrinterConfigurerTest : public testing::Test {
   std::unique_ptr<FakeUsbPrinterNotificationController>
       fake_notification_controller_;
   std::unique_ptr<AutomaticUsbPrinterConfigurer> auto_usb_printer_configurer_;
-
-  DISALLOW_COPY_AND_ASSIGN(AutomaticUsbPrinterConfigurerTest);
 };
 
 TEST_F(AutomaticUsbPrinterConfigurerTest,
@@ -353,4 +359,4 @@ TEST_F(AutomaticUsbPrinterConfigurerTest, RegisterAutoconfFailureForIppUsb) {
       fake_installation_manager_->IsMarkedAsNotAutoconfigurable(printer2));
 }
 
-}  // namespace chromeos
+}  // namespace ash

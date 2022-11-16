@@ -4,7 +4,8 @@
 
 #import "ios/chrome/browser/ui/omnibox/popup/simple_omnibox_icon.h"
 
-#import "ios/chrome/browser/ui/colors/MDCPalette+CrAdditions.h"
+#import "base/notreached.h"
+#import "ios/chrome/browser/net/crurl.h"
 #import "ios/chrome/browser/ui/omnibox/omnibox_suggestion_icon_util.h"
 #import "ios/chrome/browser/ui/ui_feature_flags.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
@@ -20,7 +21,7 @@
 @property(nonatomic, assign) OmniboxIconType iconType;
 @property(nonatomic, assign) OmniboxSuggestionIconType suggestionIconType;
 @property(nonatomic, assign) BOOL isAnswer;
-@property(nonatomic, assign) GURL imageURL;
+@property(nonatomic, strong) CrURL* imageURL;
 
 @end
 
@@ -29,7 +30,7 @@
 - (instancetype)initWithIconType:(OmniboxIconType)iconType
               suggestionIconType:(OmniboxSuggestionIconType)suggestionIconType
                         isAnswer:(BOOL)isAnswer
-                        imageURL:(GURL)imageURL {
+                        imageURL:(CrURL*)imageURL {
   self = [super init];
   if (self) {
     _iconType = iconType;
@@ -44,7 +45,7 @@
   return [self initWithIconType:OmniboxIconTypeSuggestionIcon
              suggestionIconType:DEFAULT_FAVICON
                        isAnswer:NO
-                       imageURL:GURL()];
+                       imageURL:[[CrURL alloc] initWithGURL:GURL()]];
 }
 
 - (UIImage*)iconImage {

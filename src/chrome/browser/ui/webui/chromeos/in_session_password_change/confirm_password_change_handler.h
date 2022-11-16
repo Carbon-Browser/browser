@@ -19,14 +19,19 @@ class ConfirmPasswordChangeHandler
   ConfirmPasswordChangeHandler(const std::string& scraped_old_password,
                                const std::string& scraped_new_password,
                                const bool show_spinner_initially);
+
+  ConfirmPasswordChangeHandler(const ConfirmPasswordChangeHandler&) = delete;
+  ConfirmPasswordChangeHandler& operator=(const ConfirmPasswordChangeHandler&) =
+      delete;
+
   ~ConfirmPasswordChangeHandler() override;
 
   // Called by the JS UI to find out what to show and what size to be.
-  void HandleGetInitialState(const base::ListValue* params);
+  void HandleGetInitialState(const base::Value::List& params);
 
   // Tries to change the cryptohome password once the confirm-password-change
   // dialog is filled in and the password change is confirmed.
-  void HandleChangePassword(const base::ListValue* passwords);
+  void HandleChangePassword(const base::Value::List& passwords);
 
   // InSessionPasswordChangeManager::Observer:
   void OnEvent(InSessionPasswordChangeManager::Event event) override;
@@ -40,7 +45,6 @@ class ConfirmPasswordChangeHandler
   bool show_spinner_initially_ = false;
 
   base::WeakPtrFactory<ConfirmPasswordChangeHandler> weak_factory_{this};
-  DISALLOW_COPY_AND_ASSIGN(ConfirmPasswordChangeHandler);
 };
 
 }  // namespace chromeos

@@ -10,7 +10,6 @@
 
 #include "base/bind.h"
 #include "base/containers/contains.h"
-#include "base/task/post_task.h"
 #include "chrome/browser/media/router/media_router_feature.h"
 #include "chrome/browser/media/router/providers/cast/cast_activity_manager.h"
 #include "chrome/browser/media/router/providers/cast/cast_internal_message_util.h"
@@ -93,12 +92,6 @@ void CastMediaRouteProvider::Init(
   activity_manager_ = std::make_unique<CastActivityManager>(
       media_sink_service_, session_tracker, message_handler_,
       media_router_.get(), logger_.get(), hash_token);
-
-  // TODO(crbug.com/816702): This needs to be set properly according to sinks
-  // discovered.
-  media_router_->OnSinkAvailabilityUpdated(
-      mojom::MediaRouteProviderId::CAST,
-      mojom::MediaRouter::SinkAvailability::PER_SOURCE);
 }
 
 CastMediaRouteProvider::~CastMediaRouteProvider() {
@@ -128,7 +121,7 @@ void CastMediaRouteProvider::CreateRoute(const std::string& source_id,
                       sink_id, source_id, presentation_id);
     std::move(callback).Run(absl::nullopt, nullptr,
                             std::string("Sink not found"),
-                            RouteRequestResult::ResultCode::SINK_NOT_FOUND);
+                            mojom::RouteRequestResultCode::SINK_NOT_FOUND);
     return;
   }
 
@@ -140,7 +133,7 @@ void CastMediaRouteProvider::CreateRoute(const std::string& source_id,
                       sink_id, source_id, presentation_id);
     std::move(callback).Run(
         absl::nullopt, nullptr, std::string("Invalid source"),
-        RouteRequestResult::ResultCode::NO_SUPPORTED_PROVIDER);
+        mojom::RouteRequestResultCode::NO_SUPPORTED_PROVIDER);
     return;
   }
 
@@ -160,7 +153,7 @@ void CastMediaRouteProvider::JoinRoute(const std::string& media_source,
   if (!cast_source) {
     std::move(callback).Run(
         absl::nullopt, nullptr, std::string("Invalid source"),
-        RouteRequestResult::ResultCode::NO_SUPPORTED_PROVIDER);
+        mojom::RouteRequestResultCode::NO_SUPPORTED_PROVIDER);
     logger_->LogError(mojom::LogCategory::kRoute, kLoggerComponent,
                       "Attempted to join a route with an invalid source", "",
                       media_source, presentation_id);
@@ -179,29 +172,12 @@ void CastMediaRouteProvider::JoinRoute(const std::string& media_source,
     LOG(ERROR) << "missing activity manager";
     std::move(callback).Run(absl::nullopt, nullptr,
                             "Internal error: missing activity manager",
-                            RouteRequestResult::ResultCode::UNKNOWN_ERROR);
+                            mojom::RouteRequestResultCode::UNKNOWN_ERROR);
     return;
   }
 
   activity_manager_->JoinSession(*cast_source, presentation_id, origin, tab_id,
                                  incognito, std::move(callback));
-}
-
-void CastMediaRouteProvider::ConnectRouteByRouteId(
-    const std::string& media_source,
-    const std::string& route_id,
-    const std::string& presentation_id,
-    const url::Origin& origin,
-    int32_t tab_id,
-    base::TimeDelta timeout,
-    bool incognito,
-    ConnectRouteByRouteIdCallback callback) {
-  // TODO(crbug.com/951061): We'll need to implement this to allow joining from
-  // the dialog.
-  NOTIMPLEMENTED();
-  std::move(callback).Run(
-      absl::nullopt, nullptr, std::string("Not implemented"),
-      RouteRequestResult::ResultCode::NO_SUPPORTED_PROVIDER);
 }
 
 void CastMediaRouteProvider::TerminateRoute(const std::string& route_id,
@@ -254,16 +230,9 @@ void CastMediaRouteProvider::StopObservingMediaSinks(
   sink_queries_.erase(media_source);
 }
 
-void CastMediaRouteProvider::StartObservingMediaRoutes(
-    const std::string& media_source) {
+void CastMediaRouteProvider::StartObservingMediaRoutes() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  activity_manager_->AddRouteQuery(media_source);
-}
-
-void CastMediaRouteProvider::StopObservingMediaRoutes(
-    const std::string& media_source) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  activity_manager_->RemoveRouteQuery(media_source);
+  activity_manager_->NotifyAllOnRoutesUpdated();
 }
 
 void CastMediaRouteProvider::StartListeningForRouteMessages(
@@ -301,7 +270,7 @@ void CastMediaRouteProvider::CreateMediaRouteController(
 
 void CastMediaRouteProvider::GetState(GetStateCallback callback) {
   if (!activity_manager_) {
-    std::move(callback).Run(mojom::ProviderState::New());
+    std::move(callback).Run(nullptr);
     return;
   }
   const CastSessionTracker::SessionMap& sessions =

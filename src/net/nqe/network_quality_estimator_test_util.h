@@ -14,7 +14,6 @@
 #include <vector>
 
 #include "base/files/file_path.h"
-#include "base/macros.h"
 #include "base/time/time.h"
 #include "net/base/network_change_notifier.h"
 #include "net/log/net_log.h"
@@ -39,18 +38,20 @@ class TestNetworkQualityEstimator : public NetworkQualityEstimator {
   TestNetworkQualityEstimator(
       const std::map<std::string, std::string>& variation_params,
       bool allow_local_host_requests_for_tests,
-      bool allow_smaller_responses_for_tests,
-      std::unique_ptr<RecordingBoundTestNetLog> net_log);
+      bool allow_smaller_responses_for_tests);
 
   TestNetworkQualityEstimator(
       const std::map<std::string, std::string>& variation_params,
       bool allow_local_host_requests_for_tests,
       bool allow_smaller_responses_for_tests,
-      bool suppress_notifications_for_testing,
-      std::unique_ptr<RecordingBoundTestNetLog> net_log);
+      bool suppress_notifications_for_testing);
 
   explicit TestNetworkQualityEstimator(
       std::unique_ptr<NetworkQualityEstimatorParams> params);
+
+  TestNetworkQualityEstimator(const TestNetworkQualityEstimator&) = delete;
+  TestNetworkQualityEstimator& operator=(const TestNetworkQualityEstimator&) =
+      delete;
 
   ~TestNetworkQualityEstimator() override;
 
@@ -232,25 +233,22 @@ class TestNetworkQualityEstimator : public NetworkQualityEstimator {
     explicit LocalHttpTestServer(const base::FilePath& document_root);
   };
 
-  TestNetworkQualityEstimator(
-      std::unique_ptr<NetworkQualityEstimatorParams> params,
-      std::unique_ptr<RecordingBoundTestNetLog> net_log);
-
   // NetworkQualityEstimator implementation that returns the overridden
   // network id and signal strength (instead of invoking platform APIs).
   nqe::internal::NetworkID GetCurrentNetworkID() const override;
 
   absl::optional<net::EffectiveConnectionType> GetOverrideECT() const override;
 
-  // Net log provided to network quality estimator.
-  std::unique_ptr<net::RecordingBoundTestNetLog> net_log_;
+  // Net log observer used to test correctness of NetLog entries.
+  net::RecordingNetLogObserver net_log_observer_;
 
   // If set, GetEffectiveConnectionType() and GetRecentEffectiveConnectionType()
   // would return the set values, respectively.
   absl::optional<EffectiveConnectionType> effective_connection_type_;
   absl::optional<EffectiveConnectionType> recent_effective_connection_type_;
 
-  NetworkChangeNotifier::ConnectionType current_network_type_;
+  NetworkChangeNotifier::ConnectionType current_network_type_ =
+      NetworkChangeNotifier::CONNECTION_UNKNOWN;
   std::string current_network_id_;
 
   // If set, GetRecentHttpRTT() would return one of the set values.
@@ -286,8 +284,6 @@ class TestNetworkQualityEstimator : public NetworkQualityEstimator {
   size_t ping_rtt_received_count_ = 0;
 
   absl::optional<size_t> transport_rtt_observation_count_last_ect_computation_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestNetworkQualityEstimator);
 };
 
 }  // namespace net

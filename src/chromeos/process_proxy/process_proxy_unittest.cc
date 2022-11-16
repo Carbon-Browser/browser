@@ -11,12 +11,12 @@
 #include "base/at_exit.h"
 #include "base/bind.h"
 #include "base/command_line.h"
-#include "base/cxx17_backports.h"
 #include "base/location.h"
+#include "base/memory/raw_ptr.h"
 #include "base/process/kill.h"
 #include "base/process/process.h"
 #include "base/run_loop.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "base/threading/sequenced_task_runner_handle.h"
 #include "base/threading/thread.h"
@@ -59,7 +59,7 @@ class TestRunner {
 
  protected:
   std::string id_;
-  const base::Process* process_;
+  raw_ptr<const base::Process> process_;
 
   base::OnceClosure done_read_closure_;
 };
@@ -117,7 +117,7 @@ class RegistryTestRunner : public TestRunner {
 
  private:
   bool ProcessReceivedCharacter(char received, size_t stream) {
-    if (stream >= base::size(left_to_check_index_))
+    if (stream >= std::size(left_to_check_index_))
       return false;
     bool success = left_to_check_index_[stream] < expected_line_.length() &&
         expected_line_[left_to_check_index_[stream]] == received;
@@ -259,9 +259,9 @@ class ProcessProxyTest : public testing::Test {
   // Destroys ProcessProxyRegistry LazyInstance after each test.
   base::ShadowingAtExitManager shadowing_at_exit_manager_;
 
-  ProcessProxyRegistry* registry_;
+  raw_ptr<ProcessProxyRegistry> registry_;
   std::string id_;
-  const base::Process* process_ = nullptr;
+  raw_ptr<const base::Process> process_ = nullptr;
 
   base::test::TaskEnvironment task_environment_;
 };

@@ -21,8 +21,7 @@ constexpr char kLoggerComponent[] = "CastAppDiscoveryService";
 
 // The minimum time that must elapse before an app availability result can be
 // force refreshed.
-static constexpr base::TimeDelta kRefreshThreshold =
-    base::TimeDelta::FromMinutes(1);
+static constexpr base::TimeDelta kRefreshThreshold = base::Minutes(1);
 
 }  // namespace
 
@@ -130,8 +129,15 @@ void CastAppDiscoveryServiceImpl::Refresh() {
 
 void CastAppDiscoveryServiceImpl::BindLogger(
     mojo::PendingRemote<mojom::Logger> pending_remote) {
+  // TODO(crbug.com/1293535): Simplify how logger instances are made available
+  // to their clients.
+
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  // Reset |logger_| if it is bound to a disconnected remote.
+  if (logger_.is_bound())
+    return;
   logger_.Bind(std::move(pending_remote));
+  logger_.reset_on_disconnect();
 }
 
 scoped_refptr<base::SequencedTaskRunner>

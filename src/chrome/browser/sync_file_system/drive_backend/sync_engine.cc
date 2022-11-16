@@ -9,9 +9,8 @@
 
 #include "base/bind.h"
 #include "base/callback_helpers.h"
-#include "base/macros.h"
 #include "base/memory/ptr_util.h"
-#include "base/task/post_task.h"
+#include "base/observer_list.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
@@ -116,6 +115,9 @@ class SyncEngine::WorkerObserver : public SyncWorkerInterface::Observer {
     sequence_checker_.DetachFromSequence();
   }
 
+  WorkerObserver(const WorkerObserver&) = delete;
+  WorkerObserver& operator=(const WorkerObserver&) = delete;
+
   ~WorkerObserver() override {
     DCHECK(sequence_checker_.CalledOnValidSequence());
   }
@@ -175,8 +177,6 @@ class SyncEngine::WorkerObserver : public SyncWorkerInterface::Observer {
   base::WeakPtr<SyncEngine> sync_engine_;
 
   base::SequenceChecker sequence_checker_;
-
-  DISALLOW_COPY_AND_ASSIGN(WorkerObserver);
 };
 
 std::unique_ptr<SyncEngine> SyncEngine::CreateForBrowserContext(

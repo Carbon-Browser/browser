@@ -7,7 +7,7 @@
 
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
-#include "base/sequenced_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "media/base/moving_average.h"
 #include "media/base/video_frame.h"
@@ -50,9 +50,10 @@ class V4L2FrameRateControl {
   MovingAverage frame_duration_moving_average_;
 
   const scoped_refptr<base::SequencedTaskRunner> task_runner_;
-  base::WeakPtrFactory<V4L2FrameRateControl> weak_this_factory_;
 
   SEQUENCE_CHECKER(sequence_checker_);
+
+  base::WeakPtrFactory<V4L2FrameRateControl> weak_this_factory_;
 };
 
 }  // namespace media

@@ -9,7 +9,7 @@
 #import <UIKit/UIKit.h>
 
 // Accessibility identifier prefix of a grid cell. To reference a specific cell,
-// concatenate |kGridCellIdentifierPrefix| with the index of the cell. For
+// concatenate `kGridCellIdentifierPrefix` with the index of the cell. For
 // example, [NSString stringWithFormat:@"%@%d", kGridCellIdentifierPrefix,
 // index].
 extern NSString* const kGridCellIdentifierPrefix;
@@ -20,16 +20,18 @@ extern NSString* const kGridCellCloseButtonIdentifier;
 // Accessibility identifier for the background of the grid.
 extern NSString* const kGridBackgroundIdentifier;
 
+// Accessibility identifier for the grid section header.
+extern NSString* const kGridSectionHeaderIdentifier;
+
+// Accessibility identifier for the suggested actions cell.
+extern NSString* const kSuggestedActionsGridCellIdentifier;
+
 // Grid styling.
 extern NSString* const kGridBackgroundColor;
 
 // PlusSignCell styling
 extern NSString* const kPlusSignCellBackgroundColor;
 extern NSString* const kPlusSignCellBackgroundDarkColor;
-
-// The height of the BVC that remains visible after transitioning from thumb
-// strip to tab grid.
-extern const CGFloat kBVCHeightTabGrid;
 
 // GridLayout.
 // Extra-small screens require a slightly different layout configuration (e.g.,
@@ -61,6 +63,17 @@ extern const CGFloat kGridLayoutLineSpacingRegularRegular;
 extern const CGFloat kReorderingInactiveCellOpacity;
 // Scale for the cell that is being moved.
 extern const CGFloat kReorderingActiveCellScale;
+
+// GridHeader styling.
+// The GridHeader height.
+extern const CGFloat kGridHeaderHeight;
+extern const CGFloat kGridHeaderAccessibilityHeight;
+// The GridHeader title label Color.
+extern const int kGridHeaderTitleColor;
+// The GridHeader value label Color.
+extern const int kGridHeaderValueColor;
+// The space between different labels inside the GridHeader.
+extern const CGFloat kGridHeaderContentSpacing;
 
 // GridCell styling.
 // All kxxxColor constants after this are RGB values stored in a Hex integer.
@@ -94,6 +107,11 @@ extern const CGFloat kGridCellSelectIconSize;
 extern const CGFloat kGridCellSelectionRingGapWidth;
 extern const CGFloat kGridCellSelectionRingTintWidth;
 
+// PriceCardView constants
+extern const CGFloat kGridCellPriceDropTopSpacing;
+extern const CGFloat kGridCellPriceDropLeadingSpacing;
+extern const CGFloat kGridCellPriceDropTrailingSpacing;
+
 // Horizontal distance from the center of the plus sign image to the trailing of
 // the tab grid.
 extern const CGFloat kPlusSignImageTrailingCenterDistance;
@@ -104,5 +122,11 @@ extern const CGFloat kScrollThresholdForPlusSignButtonHide;
 extern const CGFloat kPlusSignImageYCenterConstant;
 // With of the plus sign button.
 extern const CGFloat kPlusSignButtonWidth;
+// Expected collection view top content inset. If mismatch, the extra space
+// is communicated to the plus sign button to align + sign correctly.
+extern const CGFloat kGridExpectedTopContentInset;
+// Height of the view that is revealed. The thumb strip has a height equal to a
+// small grid cell + edge insets (top and bottom) from thumb strip layout.
+extern const CGFloat kThumbStripHeight;
 
 #endif  // IOS_CHROME_BROWSER_UI_TAB_SWITCHER_TAB_GRID_GRID_GRID_CONSTANTS_H_

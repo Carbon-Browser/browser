@@ -16,6 +16,10 @@ namespace ios_web_view {
 class WebViewWebClient : public web::WebClient {
  public:
   WebViewWebClient();
+
+  WebViewWebClient(const WebViewWebClient&) = delete;
+  WebViewWebClient& operator=(const WebViewWebClient&) = delete;
+
   ~WebViewWebClient() override;
 
   // WebClient implementation.
@@ -32,8 +36,6 @@ class WebViewWebClient : public web::WebClient {
   NSString* GetDocumentStartScriptForMainFrame(
       web::BrowserState* browser_state) const override;
   std::u16string GetPluginNotSupportedText() const override;
-  bool IsLegacyTLSAllowedForHost(web::WebState* web_state,
-                                 const std::string& hostname) override;
   void PrepareErrorPage(web::WebState* web_state,
                         const GURL& url,
                         NSError* error,
@@ -43,9 +45,6 @@ class WebViewWebClient : public web::WebClient {
                         int64_t navigation_id,
                         base::OnceCallback<void(NSString*)> callback) override;
   bool EnableLongPressUIContextMenu() const override;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(WebViewWebClient);
 };
 
 }  // namespace ios_web_view

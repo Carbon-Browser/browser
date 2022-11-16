@@ -4,9 +4,11 @@
 
 #include "ui/gl/gl_image.h"
 
+#include "base/notreached.h"
+#include "build/build_config.h"
 #include "ui/gl/gl_bindings.h"
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #include "base/android/scoped_hardware_buffer_fence_sync.h"
 #endif
 
@@ -87,17 +89,6 @@ bool GLImage::CopyTexSubImage(unsigned target,
   return false;
 }
 
-bool GLImage::ScheduleOverlayPlane(gfx::AcceleratedWidget widget,
-                                   int z_order,
-                                   gfx::OverlayTransform transform,
-                                   const gfx::Rect& bounds_rect,
-                                   const gfx::RectF& crop_rect,
-                                   bool enable_blend,
-                                   std::unique_ptr<gfx::GpuFence> gpu_fence) {
-  NOTREACHED();
-  return false;
-}
-
 void GLImage::SetColorSpace(const gfx::ColorSpace& color_space) {
   color_space_ = color_space;
 }
@@ -128,7 +119,7 @@ GLImage::Type GLImage::GetType() const {
   return Type::NONE;
 }
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 std::unique_ptr<base::android::ScopedHardwareBufferFenceSync>
 GLImage::GetAHardwareBuffer() {
   return nullptr;
@@ -140,6 +131,10 @@ bool GLImage::HasMutableState() const {
 }
 
 scoped_refptr<gfx::NativePixmap> GLImage::GetNativePixmap() {
+  return nullptr;
+}
+
+void* GLImage::GetEGLImage() const {
   return nullptr;
 }
 

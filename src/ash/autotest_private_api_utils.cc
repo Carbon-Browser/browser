@@ -16,6 +16,7 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_animation_observer.h"
+#include "ui/compositor/layer_animator.h"
 
 namespace ash {
 namespace {
@@ -30,6 +31,10 @@ class HomeLauncherStateWaiter {
             &HomeLauncherStateWaiter::OnHomeLauncherAnimationCompleted,
             base::Unretained(this)));
   }
+
+  HomeLauncherStateWaiter(const HomeLauncherStateWaiter&) = delete;
+  HomeLauncherStateWaiter& operator=(const HomeLauncherStateWaiter&) = delete;
+
   ~HomeLauncherStateWaiter() {
     Shell::Get()
         ->app_list_controller()
@@ -48,8 +53,6 @@ class HomeLauncherStateWaiter {
 
   bool target_shown_;
   base::OnceClosure closure_;
-
-  DISALLOW_COPY_AND_ASSIGN(HomeLauncherStateWaiter);
 };
 
 // A waiter that waits until the animation ended with the target state, and
@@ -63,6 +66,10 @@ class LauncherStateWaiter {
         ->SetStateTransitionAnimationCallbackForTesting(base::BindRepeating(
             &LauncherStateWaiter::OnStateChanged, base::Unretained(this)));
   }
+
+  LauncherStateWaiter(const LauncherStateWaiter&) = delete;
+  LauncherStateWaiter& operator=(const LauncherStateWaiter&) = delete;
+
   ~LauncherStateWaiter() {
     Shell::Get()
         ->app_list_controller()
@@ -79,8 +86,6 @@ class LauncherStateWaiter {
  private:
   ash::AppListViewState target_state_;
   base::OnceClosure closure_;
-
-  DISALLOW_COPY_AND_ASSIGN(LauncherStateWaiter);
 };
 
 class LauncherAnimationWaiter : public ui::LayerAnimationObserver {
@@ -123,7 +128,7 @@ bool WaitForHomeLauncherState(bool target_visible, base::OnceClosure closure) {
 
 bool WaitForLauncherAnimation(base::OnceClosure closure) {
   auto* app_list_view =
-      Shell::Get()->app_list_controller()->presenter()->GetView();
+      Shell::Get()->app_list_controller()->fullscreen_presenter()->GetView();
   if (!app_list_view) {
     std::move(closure).Run();
     return true;
@@ -176,7 +181,7 @@ bool WaitForLauncherState(AppListViewState target_state,
   // Don't wait if the launcher is already in the target state and not
   // animating.
   auto* app_list_view =
-      Shell::Get()->app_list_controller()->presenter()->GetView();
+      Shell::Get()->app_list_controller()->fullscreen_presenter()->GetView();
   bool animating =
       app_list_view &&
       app_list_view->GetWidget()->GetLayer()->GetAnimator()->is_animating();

@@ -7,6 +7,7 @@
 
 #include <stdint.h>
 
+#include "base/memory/raw_ptr.h"
 #include "components/services/storage/public/mojom/cache_storage_control.mojom.h"
 #include "content/browser/cache_storage/cache_storage_handle.h"
 #include "content/browser/cache_storage/cache_storage_manager.h"
@@ -20,6 +21,10 @@ namespace network {
 struct CrossOriginEmbedderPolicy;
 }
 
+namespace storage {
+struct BucketLocator;
+}
+
 namespace content {
 
 class CacheStorageContextImpl;
@@ -31,6 +36,11 @@ class CacheStorageContextImpl;
 class CacheStorageDispatcherHost {
  public:
   explicit CacheStorageDispatcherHost(CacheStorageContextImpl* context);
+
+  CacheStorageDispatcherHost(const CacheStorageDispatcherHost&) = delete;
+  CacheStorageDispatcherHost& operator=(const CacheStorageDispatcherHost&) =
+      delete;
+
   ~CacheStorageDispatcherHost();
 
   // Binds the CacheStorage Mojo receiver to this instance.
@@ -44,6 +54,7 @@ class CacheStorageDispatcherHost {
       mojo::PendingRemote<network::mojom::CrossOriginEmbedderPolicyReporter>
           coep_reporter,
       const blink::StorageKey& storage_key,
+      const absl::optional<storage::BucketLocator>& bucket,
       storage::mojom::CacheStorageOwner owner,
       mojo::PendingReceiver<blink::mojom::CacheStorage> receiver);
 
@@ -56,18 +67,18 @@ class CacheStorageDispatcherHost {
       std::unique_ptr<CacheImpl> cache_impl,
       mojo::PendingAssociatedReceiver<blink::mojom::CacheStorageCache>
           receiver);
-  CacheStorageHandle OpenCacheStorage(const blink::StorageKey& storage_key,
-                                      storage::mojom::CacheStorageOwner owner);
+  CacheStorageHandle OpenCacheStorage(
+      const storage::BucketLocator& bucket_locator,
+      storage::mojom::CacheStorageOwner owner);
 
   // `this` is owned by `context_`.
-  CacheStorageContextImpl* const context_;
+  const raw_ptr<CacheStorageContextImpl> context_;
 
   mojo::UniqueReceiverSet<blink::mojom::CacheStorage> receivers_;
   mojo::UniqueAssociatedReceiverSet<blink::mojom::CacheStorageCache>
       cache_receivers_;
 
   SEQUENCE_CHECKER(sequence_checker_);
-  DISALLOW_COPY_AND_ASSIGN(CacheStorageDispatcherHost);
 };
 
 }  // namespace content

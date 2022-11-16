@@ -12,11 +12,10 @@
 #include "ash/public/cpp/accessibility_event_rewriter_delegate.h"
 #include "ash/shell.h"
 #include "ash/test/ash_test_base.h"
-#include "base/macros.h"
 #include "ui/aura/env.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_tree_host.h"
-#include "ui/base/ime/chromeos/fake_ime_keyboard.h"
+#include "ui/base/ime/ash/fake_ime_keyboard.h"
 #include "ui/chromeos/events/event_rewriter_chromeos.h"
 #include "ui/chromeos/events/modifier_key.h"
 #include "ui/chromeos/events/pref_names.h"
@@ -167,7 +166,7 @@ class ChromeVoxAccessibilityEventRewriterTest
 
   std::unique_ptr<AccessibilityEventRewriter> accessibility_event_rewriter_;
 
-  chromeos::input_method::FakeImeKeyboard fake_ime_keyboard_;
+  input_method::FakeImeKeyboard fake_ime_keyboard_;
   std::unique_ptr<ui::EventRewriterChromeOS> event_rewriter_chromeos_;
 
  private:
@@ -483,11 +482,13 @@ class SwitchAccessTestDelegate : public AccessibilityEventRewriterDelegate {
   std::vector<SwitchAccessCommand> commands_;
 };
 
-class SwitchAccessAccessibilityEventRewriterTest : public AshTestBase {
+class SwitchAccessAccessibilityEventRewriterTest
+    : public AshTestBase,
+      public ui::EventRewriterChromeOS::Delegate {
  public:
   SwitchAccessAccessibilityEventRewriterTest() {
     event_rewriter_chromeos_ = std::make_unique<ui::EventRewriterChromeOS>(
-        nullptr, nullptr, false, &fake_ime_keyboard_);
+        this, nullptr, false, &fake_ime_keyboard_);
   }
   ~SwitchAccessAccessibilityEventRewriterTest() override = default;
 
@@ -539,6 +540,11 @@ class SwitchAccessAccessibilityEventRewriterTest : public AshTestBase {
     rewriter->SetKeyCodesForSwitchAccessCommand(key_codes, command);
   }
 
+  void SetModifierRemapping(const std::string& pref_name,
+                            ui::chromeos::ModifierKey value) {
+    modifier_remapping_[pref_name] = static_cast<int>(value);
+  }
+
   const std::map<int, std::set<ui::InputDeviceType>> GetKeyCodesToCapture() {
     AccessibilityEventRewriter* rewriter =
         controller_->GetAccessibilityEventRewriterForTest();
@@ -555,12 +561,43 @@ class SwitchAccessAccessibilityEventRewriterTest : public AshTestBase {
     return std::map<int, SwitchAccessCommand>();
   }
 
+ private:
+  // ui::EventRewriterChromeOS::Delegate:
+  bool RewriteModifierKeys() override { return true; }
+
+  bool GetKeyboardRemappedPrefValue(const std::string& pref_name,
+                                    int* value) const override {
+    auto it = modifier_remapping_.find(pref_name);
+    if (it == modifier_remapping_.end())
+      return false;
+
+    *value = it->second;
+    return true;
+  }
+
+  bool TopRowKeysAreFunctionKeys() const override { return false; }
+
+  bool IsExtensionCommandRegistered(ui::KeyboardCode key_code,
+                                    int flags) const override {
+    return false;
+  }
+
+  bool IsSearchKeyAcceleratorReserved() const override { return false; }
+
+  bool NotifyDeprecatedRightClickRewrite() override { return false; }
+  bool NotifyDeprecatedFKeyRewrite() override { return false; }
+  bool NotifyDeprecatedSixPackKeyRewrite(ui::KeyboardCode key_code) override {
+    return false;
+  }
+
+  std::map<std::string, int> modifier_remapping_;
+
  protected:
   ui::test::EventGenerator* generator_ = nullptr;
   EventCapturer event_capturer_;
   AccessibilityControllerImpl* controller_ = nullptr;
   std::unique_ptr<SwitchAccessTestDelegate> delegate_;
-  chromeos::input_method::FakeImeKeyboard fake_ime_keyboard_;
+  input_method::FakeImeKeyboard fake_ime_keyboard_;
   std::unique_ptr<AccessibilityEventRewriter> accessibility_event_rewriter_;
   std::unique_ptr<ui::EventRewriterChromeOS> event_rewriter_chromeos_;
 };
@@ -744,6 +781,72 @@ TEST_F(SwitchAccessAccessibilityEventRewriterTest,
   EXPECT_EQ(command_map.end(), command_map.find(48));
 }
 
+TEST_F(SwitchAccessAccessibilityEventRewriterTest, RespectsModifierRemappings) {
+  // Set Control to be Switch Access' next button.
+  SetKeyCodesForSwitchAccessCommand(
+      {{ui::VKEY_CONTROL, {kSwitchAccessInternalDevice}}},
+      SwitchAccessCommand::kNext);
+
+  // Set Alt to be Switch Access' select button.
+  SetKeyCodesForSwitchAccessCommand(
+      {{ui::VKEY_MENU /* Alt key */, {kSwitchAccessInternalDevice}}},
+      SwitchAccessCommand::kSelect);
+
+  // Map Control key to Alt.
+  SetModifierRemapping(prefs::kLanguageRemapControlKeyTo,
+                       ui::chromeos::ModifierKey::kAltKey);
+
+  // Send a key event for Control.
+  generator_->PressKey(ui::VKEY_CONTROL, ui::EF_CONTROL_DOWN,
+                       1 /* keyboard id */);
+  // EventRewriterChromeOS actually omits the modifier flag on release.
+  generator_->ReleaseKey(ui::VKEY_CONTROL, ui::EF_NONE, 1 /* keyboard id */);
+
+  // Verify Switch Access treated it like Alt.
+  EXPECT_EQ(1, delegate_->command_count());
+  EXPECT_EQ(SwitchAccessCommand::kSelect, delegate_->last_command());
+
+  // Send a key event for Alt.
+  generator_->PressKey(ui::VKEY_MENU, ui::EF_ALT_DOWN, 1 /* keyboard id */);
+  // EventRewriterChromeOS actually omits the modifier flag on release.
+  generator_->ReleaseKey(ui::VKEY_MENU, ui::EF_NONE, 1 /* keyboard id */);
+
+  // Verify Switch Access also treats that like Alt.
+  EXPECT_EQ(2, delegate_->command_count());
+  EXPECT_EQ(SwitchAccessCommand::kSelect, delegate_->last_command());
+}
+
+TEST_F(SwitchAccessAccessibilityEventRewriterTest, UseFunctionKeyRemappings) {
+  // Set BrowserForward to be Switch Access' next button.
+  SetKeyCodesForSwitchAccessCommand(
+      {{ui::VKEY_BROWSER_FORWARD, {kSwitchAccessInternalDevice}}},
+      SwitchAccessCommand::kNext);
+
+  // Set F2 (the underlying value for BrowserForward) to be Switch Access'
+  // select button.
+  SetKeyCodesForSwitchAccessCommand(
+      {{ui::VKEY_F2, {kSwitchAccessInternalDevice}}},
+      SwitchAccessCommand::kSelect);
+
+  // Send a key event for F2.
+  generator_->PressKey(ui::VKEY_F2, ui::EF_NONE, 1 /* keyboard id */);
+  generator_->ReleaseKey(ui::VKEY_F2, ui::EF_NONE, 1 /* keyboard id */);
+
+  // Verify Switch Access treated it like BrowserForward.
+  EXPECT_EQ(1, delegate_->command_count());
+  EXPECT_EQ(SwitchAccessCommand::kNext, delegate_->last_command());
+
+  // Send a key event for BrowserForward.
+  generator_->PressKey(ui::VKEY_BROWSER_FORWARD, ui::EF_NONE,
+                       1 /* keyboard id */);
+  generator_->ReleaseKey(ui::VKEY_BROWSER_FORWARD, ui::EF_NONE,
+                         1 /* keyboard id */);
+
+  // Verify Switch Access also treats that like BrowserForward.
+  EXPECT_EQ(2, delegate_->command_count());
+  EXPECT_EQ(SwitchAccessCommand::kNext, delegate_->last_command());
+}
+
 class MagnifierTestDelegate : public AccessibilityEventRewriterDelegate {
  public:
   MagnifierTestDelegate() = default;
@@ -812,7 +915,7 @@ class MagnifierAccessibilityEventRewriterTest : public AshTestBase {
   EventCapturer event_capturer_;
   AccessibilityControllerImpl* controller_ = nullptr;
   std::unique_ptr<MagnifierTestDelegate> delegate_;
-  chromeos::input_method::FakeImeKeyboard fake_ime_keyboard_;
+  input_method::FakeImeKeyboard fake_ime_keyboard_;
   std::unique_ptr<AccessibilityEventRewriter> accessibility_event_rewriter_;
   std::unique_ptr<ui::EventRewriterChromeOS> event_rewriter_chromeos_;
 };

@@ -8,7 +8,6 @@
 #include <vector>
 
 #include "base/compiler_specific.h"
-#include "base/macros.h"
 
 namespace base {
 class FilePath;
@@ -22,13 +21,17 @@ namespace ios {
 // ChromeBrowserState instances. Owns all instances that it creates.
 class ChromeBrowserStateManager {
  public:
+  ChromeBrowserStateManager(const ChromeBrowserStateManager&) = delete;
+  ChromeBrowserStateManager& operator=(const ChromeBrowserStateManager&) =
+      delete;
+
   virtual ~ChromeBrowserStateManager() {}
 
   // Returns the ChromeBrowserState that was last used, creating one if
   // necessary.
   virtual ChromeBrowserState* GetLastUsedBrowserState() = 0;
 
-  // Returns the ChromeBrowserState associated with |path|, creating one if
+  // Returns the ChromeBrowserState associated with `path`, creating one if
   // necessary.
   virtual ChromeBrowserState* GetBrowserState(const base::FilePath& path) = 0;
 
@@ -40,9 +43,6 @@ class ChromeBrowserStateManager {
 
  protected:
   ChromeBrowserStateManager() {}
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ChromeBrowserStateManager);
 };
 
 }  // namespace ios

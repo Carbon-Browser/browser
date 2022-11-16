@@ -10,12 +10,10 @@
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/location.h"
-#include "base/macros.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/system/sys_info.h"
 #include "base/threading/thread_task_runner_handle.h"
-#include "base/time/time.h"
 #include "chrome/browser/offline_pages/offline_page_mhtml_archiver.h"
 #include "chrome/browser/offline_pages/offline_page_model_factory.h"
 #include "chrome/browser/offline_pages/offline_page_utils.h"
@@ -98,6 +96,7 @@ struct RecentTabHelper::SnapshotProgressInfo {
 
 RecentTabHelper::RecentTabHelper(content::WebContents* web_contents)
     : content::WebContentsObserver(web_contents),
+      content::WebContentsUserData<RecentTabHelper>(*web_contents),
       delegate_(new DefaultRecentTabHelperDelegate()) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 }
@@ -192,11 +191,11 @@ bool RecentTabHelper::EnsureInitialized() {
 
 void RecentTabHelper::DidFinishNavigation(
     content::NavigationHandle* navigation_handle) {
-  if (!navigation_handle->IsInMainFrame() ||
+  if (!navigation_handle->IsInPrimaryMainFrame() ||
       !navigation_handle->HasCommitted() ||
       navigation_handle->IsSameDocument()) {
-    DVLOG_IF(1, navigation_handle->IsInMainFrame())
-        << "Main frame navigation ignored (reasons: "
+    DVLOG_IF(1, navigation_handle->IsInPrimaryMainFrame())
+        << "Primary main frame navigation ignored (reasons: "
         << !navigation_handle->HasCommitted() << ", "
         << navigation_handle->IsSameDocument()
         << ") to: " << web_contents()->GetLastCommittedURL().spec();
@@ -270,16 +269,14 @@ void RecentTabHelper::DidFinishNavigation(
       << " - Page can not be saved by last_n";
 }
 
-void RecentTabHelper::DocumentAvailableInMainFrame(
-    content::RenderFrameHost* render_frame_host) {
+void RecentTabHelper::PrimaryMainDocumentElementAvailable() {
   EnsureInitialized();
-  snapshot_controller_->DocumentAvailableInMainFrame();
+  snapshot_controller_->PrimaryMainDocumentElementAvailable();
 }
 
-void RecentTabHelper::DocumentOnLoadCompletedInMainFrame(
-    content::RenderFrameHost* render_frame_host) {
+void RecentTabHelper::DocumentOnLoadCompletedInPrimaryMainFrame() {
   EnsureInitialized();
-  snapshot_controller_->DocumentOnLoadCompletedInMainFrame();
+  snapshot_controller_->DocumentOnLoadCompletedInPrimaryMainFrame();
 }
 
 void RecentTabHelper::WebContentsDestroyed() {
@@ -570,6 +567,6 @@ void RecentTabHelper::CancelInFlightSnapshots() {
   last_n_ongoing_snapshot_info_.reset();
 }
 
-WEB_CONTENTS_USER_DATA_KEY_IMPL(RecentTabHelper)
+WEB_CONTENTS_USER_DATA_KEY_IMPL(RecentTabHelper);
 
 }  // namespace offline_pages

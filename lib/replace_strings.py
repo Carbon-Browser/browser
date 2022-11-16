@@ -7,15 +7,15 @@ import os
 
 files_to_search = []
 
-browser_name = "Carbon"
-company_name = "Sutherland Enterprises Ltd"
+browser_name = "Carbon Browser"
+company_name = "Carbon X Labs"
 
 words_to_replace_1 = ["Chromiumista", "Chromiumist", "Chromiumilla", "Chromiumille", "Chromiumile", "Chromiumil", "Chromiumiin", "Chromiumin",
 "Chromiumia", "Chromiumi", "Chromiuma", "Chromiumu", "Chromiumova", "Chromiumove", "Chromiumov", "Chromiumom", "Chromiumot",
 "Chromiumnak", "Chromiumban", "Chromiumba", "Chromiumhoz", "Chromiumra", "Chromiummal", "Chromiumos", "Chromiumon", "Chromiumja", "Chromiums", "Chromium", "Freedom Browser"]
 
 # What needs to be fixed
-fixer_wrong_1 = ["Carbon <ph name=\"VERSION_CHROMIUM\">", "Carbon Authors", "Carbon OS"]
+fixer_wrong_1 = ["Carbon <ph name=\"VERSION_CHROMIUM\">", "Carbon Browser Authors", "Carbon Browser OS"]
 # Used to fix..
 fixer_correct_1 = ["Chromium <ph name=\"VERSION_CHROMIUM\">", "Chromium Authors", "Chromium OS"]
 
@@ -76,8 +76,8 @@ for i in range(0, len(files_to_search)):
 				counter += 1
 
 			# Check for Carbon OS
-			if "Carbon OS" in line:
-				line = line.replace("Carbon OS", "Google Chrome OS")
+			if "Carbon Browser OS" in line:
+				line = line.replace("Carbon Browser OS", "Google Chrome OS")
 
 			# Reset counter
 			counter = 0
@@ -88,18 +88,15 @@ for i in range(0, len(files_to_search)):
 					line = line.replace(words_to_replace_3[counter], browser_name)
 				counter += 1
 
-			if "Super Fast Browser" in line:
-				line = line.replace("Super Fast Browser", "Carbon")
-
 			# Check for The Carbon Authors
-			if "The Carbon Authors" in line:
-				line = line.replace("The Carbon Authors", "Sutherland Enterprises Ltd")
+			if "The Carbon Browser Authors" in line:
+				line = line.replace("The Carbon Browser Authors", company_name)
 			if "Carbon Authors" in line:
-				line = line.replace("Carbon Authors", "Sutherland Enterprises Ltd")
+				line = line.replace("Carbon Browser Authors", company_name)
 
 			# Check for Carbon OS
-			if "Carbon OS" in line:
-				line = line.replace("Carbon OS", "Chrome OS")
+			if "Carbon Browser OS" in line:
+				line = line.replace("Carbon Browser OS", "Chrome OS")
 
 			# Check for Carbon OS
 			if "Google Inc" in line:
@@ -110,7 +107,7 @@ for i in range(0, len(files_to_search)):
 
 			# fix showing "google Carbon storage" in app storage management in settings
 			if 'Google <ph name="APP_NAME">%1$s<ex>Carbon</ex></ph> storage' in line:
-				line = line.replace('Google <ph name="APP_NAME">%1$s<ex>Carbon</ex></ph> storage', '<ph name="APP_NAME">%1$s<ex>Carbon</ex></ph> storage')
+				line = line.replace('Google <ph name="APP_NAME">%1$s<ex>Carbon Browser</ex></ph> storage', '<ph name="APP_NAME">%1$s<ex>Carbon</ex></ph> storage')
 			if 'Google <ph name="APP_NAME" /> storage' in line:
 				line = line.replace('Google <ph name="APP_NAME" /> storage', '<ph name="APP_NAME" /> storage')
 
@@ -130,12 +127,6 @@ for i in range(0, len(files_to_search)):
 
 			if "Incognito" in line:
 				line = line.replace("Incognito", "private")
-
-			if "Carbon" in line:
-				line = line.replace("Carbon", "Carbon Browser")
-
-			if "Sutherland Enterprises Ltd" in line:
-				line = line.replace("Sutherland Enterprises Ltd", "Carbon X Labs")
 
 			# Print the line to the document
 			print(line, end='')

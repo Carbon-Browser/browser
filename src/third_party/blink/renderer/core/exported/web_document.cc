@@ -28,6 +28,10 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+// This source code is a part of eyeo Chromium SDK.
+// Use of this source code is governed by the GPLv3 that can be found in the
+// components/adblock/LICENSE file.
+
 #include "third_party/blink/public/web/web_document.h"
 
 #include "base/memory/scoped_refptr.h"
@@ -45,10 +49,13 @@
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/document_statistics_collector.h"
 #include "third_party/blink/renderer/core/dom/document_type.h"
+#include "third_party/blink/renderer/core/dom/dom_node_ids.h"
 #include "third_party/blink/renderer/core/dom/element.h"
 #include "third_party/blink/renderer/core/dom/events/event.h"
+#include "third_party/blink/renderer/core/dom/node.h"
 #include "third_party/blink/renderer/core/editing/ephemeral_range.h"
 #include "third_party/blink/renderer/core/editing/iterators/text_iterator.h"
+#include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/frame/visual_viewport.h"
 #include "third_party/blink/renderer/core/frame/web_local_frame_impl.h"
 #include "third_party/blink/renderer/core/html/forms/html_form_control_element.h"
@@ -61,8 +68,10 @@
 #include "third_party/blink/renderer/core/html/html_head_element.h"
 #include "third_party/blink/renderer/core/html/html_link_element.h"
 #include "third_party/blink/renderer/core/html/plugin_document.h"
+#include "third_party/blink/renderer/core/layout/layout_object.h"
 #include "third_party/blink/renderer/core/page/page.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/graphics/dom_node_id.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/weborigin/security_origin.h"
 #include "third_party/blink/renderer/platform/wtf/casting.h"
 
@@ -200,9 +209,7 @@ WebVector<WebFormElement> WebDocument::Forms() const {
   Vector<WebFormElement> form_elements;
   form_elements.ReserveCapacity(forms->length());
   for (Element* element : *forms) {
-    // Strange but true, sometimes node can be 0.
-    if (auto* html_form_element = DynamicTo<HTMLFormElement>(element))
-      form_elements.emplace_back(html_form_element);
+    form_elements.emplace_back(blink::To<HTMLFormElement>(element));
   }
   return form_elements;
 }
@@ -222,7 +229,7 @@ WebElement WebDocument::FocusedElement() const {
 WebStyleSheetKey WebDocument::InsertStyleSheet(
     const WebString& source_code,
     const WebStyleSheetKey* key,
-    CSSOrigin origin,
+    WebCssOrigin origin,
     BackForwardCacheAware back_forward_cache_aware) {
   Document* document = Unwrap<Document>();
   DCHECK(document);
@@ -241,8 +248,56 @@ WebStyleSheetKey WebDocument::InsertStyleSheet(
   return injection_key;
 }
 
+bool IsValidAbpRule(StyleRuleBase* rule) {
+  if (!rule->IsStyleRule())
+    return false;
+  const auto& props = blink::To<StyleRule>(rule)->Properties();
+  if (props.PropertyCount() != 1)
+    return false;
+  const auto& ref = props.PropertyAt(0);
+  return ref.Id() == CSSPropertyID::kDisplay && ref.IsImportant();
+}
+
+// Should be same as WebDocument::InsertStyleSheet, excluding content
+// validation.
+WebStyleSheetKey WebDocument::InsertAbpElemhideStylesheet(
+    const WebString& source_code,
+    const WebStyleSheetKey* key,
+    WebCssOrigin origin,
+    BackForwardCacheAware back_forward_cache_aware) {
+  Document* document = Unwrap<Document>();
+  DCHECK(document);
+
+  auto* parsed_sheet = MakeGarbageCollected<StyleSheetContents>(
+      MakeGarbageCollected<CSSParserContext>(*document));
+  parsed_sheet->ParseString(source_code);
+  // Rule count is not validated because some selectors can be malformed for
+  // third-party lists. Checking body is valid for all the rules is enough.
+  for (unsigned n = 0; n < parsed_sheet->RuleCount();) {
+    if (IsValidAbpRule(parsed_sheet->RuleAt(n)))
+      ++n;
+    else {
+      parsed_sheet->SetMutable();
+      parsed_sheet->WrapperDeleteRule(n);
+      LOG(WARNING) << "[eyeo] Broken rule";
+    }
+  }
+
+  if (back_forward_cache_aware == BackForwardCacheAware::kPossiblyDisallow) {
+    document->GetFrame()->GetFrameScheduler()->RegisterStickyFeature(
+        SchedulingPolicy::Feature::kInjectedStyleSheet,
+        {SchedulingPolicy::DisableBackForwardCache()});
+  }
+
+  const WebStyleSheetKey& injection_key =
+      key && !key->IsNull() ? *key : GenerateStyleSheetKey();
+  DCHECK(!injection_key.IsEmpty());
+  document->GetStyleEngine().InjectSheet(injection_key, parsed_sheet, origin);
+  return injection_key;
+}
+
 void WebDocument::RemoveInsertedStyleSheet(const WebStyleSheetKey& key,
-                                           CSSOrigin origin) {
+                                           WebCssOrigin origin) {
   Unwrap<Document>()->GetStyleEngine().RemoveInjectedSheet(key, origin);
 }
 
@@ -252,7 +307,7 @@ void WebDocument::WatchCSSSelectors(const WebVector<WebString>& web_selectors) {
   if (!watch && web_selectors.empty())
     return;
   Vector<String> selectors;
-  selectors.Append(web_selectors.Data(),
+  selectors.Append(web_selectors.data(),
                    base::checked_cast<wtf_size_t>(web_selectors.size()));
   CSSSelectorWatch::From(*document).WatchCSSSelectors(selectors);
 }
@@ -266,18 +321,10 @@ WebVector<WebDraggableRegion> WebDocument::DraggableRegions() const {
     for (wtf_size_t i = 0; i < regions.size(); i++) {
       const AnnotatedRegionValue& value = regions[i];
       draggable_regions[i].draggable = value.draggable;
-      draggable_regions[i].bounds = PixelSnappedIntRect(value.bounds);
+      draggable_regions[i].bounds = ToPixelSnappedRect(value.bounds);
     }
   }
   return draggable_regions;
-}
-
-WebURL WebDocument::CanonicalUrlForSharing() const {
-  const Document* document = ConstUnwrap<Document>();
-  HTMLLinkElement* link_element = document->LinkCanonical();
-  if (!link_element)
-    return WebURL();
-  return link_element->Href();
 }
 
 WebDistillabilityFeatures WebDocument::DistillabilityFeatures() {
@@ -322,6 +369,15 @@ void WebDocument::SetCookieManager(
     CrossVariantMojoRemote<network::mojom::RestrictedCookieManagerInterfaceBase>
         cookie_manager) {
   Unwrap<Document>()->SetCookieManager(std::move(cookie_manager));
+}
+
+WebElement WebDocument::GetElementByDevToolsNodeId(const int node_id) {
+  Node* node = DOMNodeIds::NodeForId(static_cast<DOMNodeId>(node_id));
+  if (!node || !node->IsElementNode() ||
+      !node->IsDescendantOrShadowDescendantOf(private_.Get())) {
+    return WebElement();
+  }
+  return WebElement(blink::To<Element>(node));
 }
 
 WebDocument::WebDocument(Document* elem) : WebNode(elem) {}

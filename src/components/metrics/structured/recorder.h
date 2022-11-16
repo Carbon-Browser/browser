@@ -10,7 +10,10 @@
 #include "base/no_destructor.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
-#include "base/sequenced_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
+#include "components/metrics/structured/event.h"
+#include "components/metrics/structured/event_base.h"
+#include "components/metrics/structured/structured_metrics_client.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
@@ -19,8 +22,6 @@ class FilePath;
 
 namespace metrics {
 namespace structured {
-
-class EventBase;
 
 // Recorder is a singleton to help communicate with the
 // StructuredMetricsProvider. It serves three purposes:
@@ -35,7 +36,10 @@ class EventBase;
 // record events. The StructuredMetricsProvider registers itself as an observer
 // of this singleton when recording is enabled, and calls to Record (for
 // recording) or ProfileAdded (for initialization) are then forwarded to it.
-class Recorder {
+//
+// Recorder is embedded within StructuredMetricsClient for Ash Chrome and should
+// only be used in Ash Chrome.
+class Recorder : public StructuredMetricsClient::RecordingDelegate {
  public:
   class RecorderImpl : public base::CheckedObserver {
    public:
@@ -45,14 +49,18 @@ class Recorder {
     virtual void OnProfileAdded(const base::FilePath& profile_path) = 0;
     // Called on a call to OnReportingStateChanged.
     virtual void OnReportingStateChanged(bool enabled) = 0;
+    // Called when hardware class has been loaded.
+    virtual void OnHardwareClassInitialized(){};
     // Called on a call to LastKeyRotation.
     virtual absl::optional<int> LastKeyRotation(uint64_t project_name_hash) = 0;
   };
 
   static Recorder* GetInstance();
 
-  // Notifies observers of |event|,
-  void Record(const EventBase& event);
+  // RecordingDelegate:
+  void RecordEvent(Event&& event) override;
+  void Record(EventBase&& event) override;
+  bool IsReadyToRecord() const override;
 
   // Notifies the StructuredMetricsProvider that a profile has been added with
   // path |profile_path|. The first call to ProfileAdded initializes the
@@ -70,20 +78,22 @@ class Recorder {
   // Notifies observers that metrics reporting has been enabled or disabled.
   void OnReportingStateChanged(bool enabled);
 
+  // Notifies observers that hardware class has been loaded.
+  void OnHardwareClassInitialized();
+
   void SetUiTaskRunner(
       const scoped_refptr<base::SequencedTaskRunner> ui_task_runner);
 
- private:
-  friend class base::NoDestructor<Recorder>;
-  friend class StructuredMetricsProvider;
-
-  Recorder();
-  ~Recorder();
-  Recorder(const Recorder&) = delete;
-  Recorder& operator=(const Recorder&) = delete;
-
   void AddObserver(RecorderImpl* observer);
   void RemoveObserver(RecorderImpl* observer);
+
+ private:
+  friend class base::NoDestructor<Recorder>;
+
+  Recorder();
+  ~Recorder() override;
+  Recorder(const Recorder&) = delete;
+  Recorder& operator=(const Recorder&) = delete;
 
   scoped_refptr<base::SequencedTaskRunner> ui_task_runner_;
 

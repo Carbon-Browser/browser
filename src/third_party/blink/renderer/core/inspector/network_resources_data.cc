@@ -29,6 +29,8 @@
 #include "third_party/blink/renderer/core/inspector/network_resources_data.h"
 
 #include <memory>
+
+#include "base/numerics/safe_conversions.h"
 #include "third_party/blink/renderer/core/dom/dom_implementation.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_response.h"
@@ -303,7 +305,7 @@ void NetworkResourcesData::MaybeAddResourceData(const String& request_id,
                                                 uint64_t data_length) {
   if (ResourceData* resource_data =
           PrepareToAddResourceData(request_id, data_length)) {
-    resource_data->AppendData(data, SafeCast<size_t>(data_length));
+    resource_data->AppendData(data, base::checked_cast<size_t>(data_length));
   }
 }
 
@@ -356,11 +358,11 @@ XHRReplayData* NetworkResourcesData::XhrReplayData(const String& request_id) {
 
 void NetworkResourcesData::SetCertificate(
     const String& request_id,
-    const Vector<AtomicString>& certificate) {
+    scoped_refptr<net::X509Certificate> certificate) {
   ResourceData* resource_data = ResourceDataForRequestId(request_id);
   if (!resource_data)
     return;
-  resource_data->SetCertificate(certificate);
+  resource_data->SetCertificate(std::move(certificate));
 }
 
 void NetworkResourcesData::SetXHRReplayData(const String& request_id,

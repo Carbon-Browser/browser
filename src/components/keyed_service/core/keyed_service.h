@@ -5,7 +5,6 @@
 #ifndef COMPONENTS_KEYED_SERVICE_CORE_KEYED_SERVICE_H_
 #define COMPONENTS_KEYED_SERVICE_CORE_KEYED_SERVICE_H_
 
-#include "base/macros.h"
 #include "components/keyed_service/core/keyed_service_export.h"
 
 // Interface for keyed services that support two-phase destruction order.
@@ -24,18 +23,20 @@
 // process will run at shutdown of a given embedder.
 class KEYED_SERVICE_EXPORT KeyedService {
  public:
-  KeyedService();
+  KeyedService() = default;
+
+  KeyedService(const KeyedService&) = delete;
+  KeyedService& operator=(const KeyedService&) = delete;
+  KeyedService(KeyedService&&) = delete;
+  KeyedService& operator=(KeyedService&&) = delete;
 
   // The second pass is the actual deletion of each object.
-  virtual ~KeyedService();
+  virtual ~KeyedService() = default;
 
   // The first pass is to call Shutdown on a KeyedService.
-  // Shutdown will be called automatically for you. Don't directly invoke this
-  // unless you have a specific reason and understand the implications.
-  virtual void Shutdown();
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(KeyedService);
+  // Shutdown will be called automatically for you. Don't directly invoke
+  // this unless you have a specific reason and understand the implications.
+  virtual void Shutdown() {}
 };
 
 #endif  // COMPONENTS_KEYED_SERVICE_CORE_KEYED_SERVICE_H_

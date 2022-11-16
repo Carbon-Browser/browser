@@ -5,9 +5,20 @@
 import 'chrome://resources/polymer/v3_0/iron-location/iron-location.js';
 import 'chrome://resources/polymer/v3_0/iron-location/iron-query-params.js';
 
-import {Debouncer, html, microTask, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {Debouncer, microTask, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {QueryState} from './externs.js';
+import {getTemplate} from './router.html.js';
+
+// All valid pages.
+export enum Page {
+  HISTORY = 'history',
+  HISTORY_CLUSTERS = 'journeys',
+  SYNCED_TABS = 'syncedTabs',
+}
+
+// The ids of pages with corresponding tabs in the order of their tab indices.
+export const TABBED_PAGES = [Page.HISTORY, Page.HISTORY_CLUSTERS];
 
 export class HistoryRouterElement extends PolymerElement {
   static get is() {
@@ -15,7 +26,7 @@ export class HistoryRouterElement extends PolymerElement {
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
   }
 
   static get properties() {
@@ -57,8 +68,7 @@ export class HistoryRouterElement extends PolymerElement {
   private path_: string;
   private urlQuery_: string;
 
-  /** @override */
-  connectedCallback() {
+  override connectedCallback() {
     super.connectedCallback();
 
     // Redirect legacy search URLs to URLs compatible with History.
@@ -88,7 +98,7 @@ export class HistoryRouterElement extends PolymerElement {
   serializeUrl() {
     let path = this.selectedPage;
 
-    if (path === 'history') {
+    if (path === Page.HISTORY) {
       path = '';
     }
 
@@ -110,7 +120,7 @@ export class HistoryRouterElement extends PolymerElement {
     this.parsing_ = true;
     const changes: {search: string} = {search: ''};
     const sections = this.path_.substr(1).split('/');
-    const page = sections[0] || 'history';
+    const page = sections[0] || Page.HISTORY;
 
     changes.search = this.queryParams_.q || '';
 
@@ -130,6 +140,16 @@ export class HistoryRouterElement extends PolymerElement {
     // changes get processed together.
     this.debouncer_ = Debouncer.debounce(
         this.debouncer_, microTask, this.parseUrl_.bind(this));
+  }
+
+  getDebouncerForTesting(): Debouncer|null {
+    return this.debouncer_;
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'history-router': HistoryRouterElement;
   }
 }
 

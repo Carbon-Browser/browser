@@ -9,21 +9,25 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/environment.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/process/launch.h"
 #include "build/build_config.h"
+#include "build/chromecast_buildflags.h"
 #include "content/common/child_process.mojom.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/browser_child_process_host_delegate.h"
 #include "mojo/public/cpp/bindings/generic_pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
-#include "mojo/public/cpp/system/message_pipe.h"
-#include "sandbox/policy/sandbox_type.h"
+#include "sandbox/policy/mojom/sandbox.mojom.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+
+// TODO(crbug.com/1328879): Remove this when fixing the bug.
+#if BUILDFLAG(IS_CASTOS) || BUILDFLAG(IS_CAST_ANDROID)
+#include "base/callback.h"
+#include "mojo/public/cpp/system/message_pipe.h"
+#endif
 
 namespace base {
 class Thread;
@@ -69,23 +73,29 @@ class CONTENT_EXPORT UtilityProcessHost
 
   UtilityProcessHost();
   explicit UtilityProcessHost(std::unique_ptr<Client> client);
+
+  UtilityProcessHost(const UtilityProcessHost&) = delete;
+  UtilityProcessHost& operator=(const UtilityProcessHost&) = delete;
+
   ~UtilityProcessHost() override;
 
   base::WeakPtr<UtilityProcessHost> AsWeakPtr();
 
   // Makes the process run with a specific sandbox type, or unsandboxed if
-  // SandboxType::kNoSandbox is specified.
-  void SetSandboxType(sandbox::policy::SandboxType sandbox_type);
+  // Sandbox::kNoSandbox is specified.
+  void SetSandboxType(sandbox::mojom::Sandbox sandbox_type);
 
   // Returns information about the utility child process.
   const ChildProcessData& GetData();
-#if defined(OS_POSIX)
+#if BUILDFLAG(IS_POSIX)
   void SetEnv(const base::EnvironmentMap& env);
 #endif
 
   // Starts the utility process.
   bool Start();
 
+// TODO(crbug.com/1328879): Remove this method when fixing the bug.
+#if BUILDFLAG(IS_CASTOS) || BUILDFLAG(IS_CAST_ANDROID)
   // Instructs the utility process to run an instance of the named service,
   // bound to |service_pipe|. This is DEPRECATED and should never be used.
   using RunServiceDeprecatedCallback =
@@ -93,6 +103,7 @@ class CONTENT_EXPORT UtilityProcessHost
   void RunServiceDeprecated(const std::string& service_name,
                             mojo::ScopedMessagePipeHandle service_pipe,
                             RunServiceDeprecatedCallback callback);
+#endif
 
   // Sets the name of the process to appear in the task manager.
   void SetName(const std::u16string& name);
@@ -122,7 +133,7 @@ class CONTENT_EXPORT UtilityProcessHost
   void BindHostReceiver(mojo::GenericPendingReceiver receiver) override;
 
   // Launch the child process with switches that will setup this sandbox type.
-  sandbox::policy::SandboxType sandbox_type_;
+  sandbox::mojom::Sandbox sandbox_type_;
 
   // ChildProcessHost flags to use when starting the child process.
   int child_flags_;
@@ -157,16 +168,17 @@ class CONTENT_EXPORT UtilityProcessHost
   };
   LaunchState launch_state_ = LaunchState::kLaunchInProgress;
 
+// TODO(crbug.com/1328879): Remove this when fixing the bug.
+#if BUILDFLAG(IS_CASTOS) || BUILDFLAG(IS_CAST_ANDROID)
   // Collection of callbacks to be run once the process is actually started (or
   // fails to start).
   std::vector<RunServiceDeprecatedCallback> pending_run_service_callbacks_;
+#endif
 
   std::unique_ptr<Client> client_;
 
   // Used to vend weak pointers, and should always be declared last.
   base::WeakPtrFactory<UtilityProcessHost> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(UtilityProcessHost);
 };
 
 }  // namespace content

@@ -63,8 +63,8 @@ DemuxerStream::Type FakeDemuxerStream::type() const {
   return type_;
 }
 
-DemuxerStream::Liveness FakeDemuxerStream::liveness() const {
-  return LIVENESS_UNKNOWN;
+StreamLiveness FakeDemuxerStream::liveness() const {
+  return StreamLiveness::kUnknown;
 }
 
 bool FakeDemuxerStream::SupportsConfigChanges() {
@@ -79,7 +79,7 @@ void FakeDemuxerStream::CreateFakeFrame(size_t size,
   for (size_t i = 0; i < size; ++i) {
     buffer[i] = static_cast<uint8_t>(i & 0xFF);
   }
-  base::TimeDelta pts = base::TimeDelta::FromMilliseconds(pts_ms);
+  base::TimeDelta pts = base::Milliseconds(pts_ms);
 
   // To DecoderBuffer
   scoped_refptr<DecoderBuffer> input_buffer =

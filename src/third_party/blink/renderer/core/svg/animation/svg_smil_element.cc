@@ -39,8 +39,7 @@
 #include "third_party/blink/renderer/core/svg/animation/smil_time_container.h"
 #include "third_party/blink/renderer/core/svg/svg_svg_element.h"
 #include "third_party/blink/renderer/core/svg/svg_uri_reference.h"
-#include "third_party/blink/renderer/platform/heap/handle.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "third_party/blink/renderer/platform/wtf/math_extras.h"
@@ -1053,9 +1052,9 @@ SVGSMILElement::ProgressState SVGSMILElement::CalculateProgressState(
     repeat = active_time.IntDiv(simple_duration);
     simple_time = active_time % simple_duration;
   }
-  return {clampTo<float>(simple_time.InternalValueAsDouble() /
+  return {ClampTo<float>(simple_time.InternalValueAsDouble() /
                          simple_duration.InternalValueAsDouble()),
-          clampTo<unsigned>(repeat)};
+          ClampTo<unsigned>(repeat)};
 }
 
 SMILTime SVGSMILElement::NextProgressTime(SMILTime presentation_time) const {

@@ -12,10 +12,10 @@
 #include "base/lazy_instance.h"
 #include "base/metrics/histogram_macros.h"
 #include "components/prefs/pref_service.h"
-#include "components/safe_browsing/content/browser/safe_browsing_metrics_collector.h"
 #include "components/safe_browsing/content/browser/safe_browsing_navigation_observer_manager.h"
 #include "components/safe_browsing/content/browser/threat_details.h"
 #include "components/safe_browsing/content/browser/triggers/trigger_manager.h"
+#include "components/safe_browsing/core/browser/safe_browsing_metrics_collector.h"
 #include "components/safe_browsing/core/common/features.h"
 #include "components/safe_browsing/core/common/safe_browsing_prefs.h"
 #include "components/safe_browsing/core/common/utils.h"
@@ -36,29 +36,6 @@ using security_interstitials::BaseSafeBrowsingErrorUI;
 using security_interstitials::SecurityInterstitialControllerClient;
 
 namespace safe_browsing {
-
-namespace {
-
-SafeBrowsingMetricsCollector::EventType GetEventTypeFromThreatSource(
-    ThreatSource threat_source) {
-  switch (threat_source) {
-    case ThreatSource::LOCAL_PVER4:
-    case ThreatSource::REMOTE:
-      return SafeBrowsingMetricsCollector::EventType::
-          DATABASE_INTERSTITIAL_BYPASS;
-    case ThreatSource::CLIENT_SIDE_DETECTION:
-      return SafeBrowsingMetricsCollector::EventType::CSD_INTERSTITIAL_BYPASS;
-    case ThreatSource::REAL_TIME_CHECK:
-      return SafeBrowsingMetricsCollector::EventType::
-          REAL_TIME_INTERSTITIAL_BYPASS;
-    default:
-      NOTREACHED() << "Unexpected threat source.";
-      return SafeBrowsingMetricsCollector::EventType::
-          DATABASE_INTERSTITIAL_BYPASS;
-  }
-}
-
-}  // namespace
 
 // static
 const security_interstitials::SecurityInterstitialPage::TypeID
@@ -97,6 +74,12 @@ SafeBrowsingBlockingPage::SafeBrowsingBlockingPage(
                               unsafe_resources[0].request_destination);
   }
 
+  if (metrics_collector_) {
+    metrics_collector_->AddSafeBrowsingEventToPref(
+        SafeBrowsingMetricsCollector::EventType::
+            SECURITY_SENSITIVE_SAFE_BROWSING_INTERSTITIAL);
+  }
+
   if (!trigger_manager_)
     return;
 
@@ -133,16 +116,15 @@ SafeBrowsingBlockingPage::GetTypeForTesting() {
 void SafeBrowsingBlockingPage::OnInterstitialClosing() {
   // With committed interstitials OnProceed and OnDontProceed don't get
   // called, so call FinishThreatDetails from here.
-  FinishThreatDetails((proceeded() ? base::TimeDelta::FromMilliseconds(
-                                         threat_details_proceed_delay())
-                                   : base::TimeDelta()),
-                      proceeded(), controller()->metrics_helper()->NumVisits());
+  FinishThreatDetails(
+      (proceeded() ? base::Milliseconds(threat_details_proceed_delay())
+                   : base::TimeDelta()),
+      proceeded(), controller()->metrics_helper()->NumVisits());
   if (!proceeded()) {
     OnDontProceedDone();
   } else {
     if (metrics_collector_) {
-      metrics_collector_->AddSafeBrowsingEventToPref(
-          GetEventTypeFromThreatSource(threat_source_));
+      metrics_collector_->AddBypassEventToPref(threat_source_);
     }
   }
   BaseBlockingPage::OnInterstitialClosing();

@@ -13,7 +13,6 @@
 #include "base/logging.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/path_service.h"
-#include "base/task/post_task.h"
 #include "base/task/thread_pool.h"
 #include "base/values.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
@@ -60,7 +59,8 @@ SigninScreenExtensionsExternalLoader::SigninScreenExtensionsExternalLoader(
                base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN}),
           this,
           /*always_check_updates=*/true,
-          /*wait_for_cache_initialization=*/false) {
+          /*wait_for_cache_initialization=*/false,
+          /*allow_scheduled_updates=*/false) {
   DCHECK(ProfileHelper::IsSigninProfile(profile));
 }
 

@@ -12,11 +12,12 @@
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
 #include "base/time/time.h"
+#include "base/values.h"
 #include "chrome/browser/ash/child_accounts/parent_access_code/parent_access_service.h"
 #include "chrome/browser/ash/child_accounts/time_limit_notifier.h"
 #include "chrome/browser/ash/child_accounts/usage_time_limit_processor.h"
 #include "chrome/browser/ash/child_accounts/usage_time_state_notifier.h"
-#include "chromeos/dbus/system_clock/system_clock_client.h"
+#include "chromeos/ash/components/dbus/system_clock/system_clock_client.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/session_manager/core/session_manager_observer.h"
@@ -62,6 +63,10 @@ class ScreenTimeController
   static void RegisterProfilePrefs(PrefRegistrySimple* registry);
 
   explicit ScreenTimeController(content::BrowserContext* context);
+
+  ScreenTimeController(const ScreenTimeController&) = delete;
+  ScreenTimeController& operator=(const ScreenTimeController&) = delete;
+
   ~ScreenTimeController() override;
 
   // Returns the child's screen time duration. This is how long the child has
@@ -142,7 +147,7 @@ class ScreenTimeController
   // system::TimezoneSettings::Observer:
   void TimezoneChanged(const icu::TimeZone& timezone) override;
 
-  // chromeos::SystemClockClient::Observer:
+  // SystemClockClient::Observer:
   void SystemClockUpdated() override;
 
   content::BrowserContext* context_;
@@ -165,14 +170,12 @@ class ScreenTimeController
 
   // Contains the last time limit policy processed by this class. Used to
   // generate notifications when the policy changes.
-  std::unique_ptr<base::DictionaryValue> last_policy_;
+  base::Value last_policy_{base::Value::Type::DICTIONARY};
 
   // Used to set up timers when a time limit is approaching.
   TimeLimitNotifier time_limit_notifier_;
 
   PrefChangeRegistrar pref_change_registrar_;
-
-  DISALLOW_COPY_AND_ASSIGN(ScreenTimeController);
 };
 
 }  // namespace ash

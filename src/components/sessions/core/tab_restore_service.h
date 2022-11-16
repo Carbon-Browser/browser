@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 
+#include "base/callback_forward.h"
 #include "base/memory/ref_counted.h"
 #include "base/time/time.h"
 #include "base/token.h"
@@ -63,11 +64,17 @@ class SESSIONS_EXPORT TabRestoreService : public KeyedService {
   };
 
   struct SESSIONS_EXPORT Entry {
+    Entry(const Entry&) = delete;
+    Entry& operator=(const Entry&) = delete;
+
     virtual ~Entry();
 
     // Unique id for this entry. The id is guaranteed to be unique for a
     // session.
     SessionID id;
+
+    // The original id of the entry when it was saved.
+    SessionID original_id;
 
     // The type of the entry.
     const Type type;
@@ -77,14 +84,14 @@ class SESSIONS_EXPORT TabRestoreService : public KeyedService {
     // creation.
     base::Time timestamp;
 
+    // Used for storing arbitrary key/value pairs.
+    std::map<std::string, std::string> extra_data;
+
     // Estimates memory usage. By default returns 0.
     virtual size_t EstimateMemoryUsage() const;
 
    protected:
     explicit Entry(Type type);
-
-   private:
-    DISALLOW_COPY_AND_ASSIGN(Entry);
   };
 
   // Represents a previously open tab.
@@ -138,6 +145,9 @@ class SESSIONS_EXPORT TabRestoreService : public KeyedService {
 
     // Entry:
     size_t EstimateMemoryUsage() const override;
+
+    // Type of window.
+    SessionWindow::WindowType type;
 
     // The tabs that comprised the window, in order.
     std::vector<std::unique_ptr<Tab>> tabs;
@@ -239,8 +249,8 @@ class SESSIONS_EXPORT TabRestoreService : public KeyedService {
   virtual std::vector<LiveTab*> RestoreMostRecentEntry(
       LiveTabContext* context) = 0;
 
-  // Removes the Tab with id |id| from the list and returns it.
-  virtual std::unique_ptr<Tab> RemoveTabEntryById(SessionID id) = 0;
+  // Removes the Entry with id |id| if it is a Tab entry.
+  virtual void RemoveTabEntryById(SessionID id) = 0;
 
   // Restores an entry by id. If there is no entry with an id matching |id|,
   // this does nothing. If |context| is NULL, this creates a new window for the

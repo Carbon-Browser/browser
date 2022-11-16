@@ -20,6 +20,7 @@ BorealisServiceFake* BorealisServiceFake::UseFakeForTesting(
           })));
 }
 
+BorealisServiceFake::BorealisServiceFake() = default;
 BorealisServiceFake::~BorealisServiceFake() = default;
 
 BorealisAppLauncher& BorealisServiceFake::AppLauncher() {
@@ -50,6 +51,11 @@ BorealisFeatures& BorealisServiceFake::Features() {
 BorealisInstaller& BorealisServiceFake::Installer() {
   CHECK(installer_);
   return *installer_;
+}
+
+BorealisLaunchOptions& BorealisServiceFake::LaunchOptions() {
+  CHECK(launch_options_);
+  return *launch_options_;
 }
 
 BorealisShutdownMonitor& BorealisServiceFake::ShutdownMonitor() {

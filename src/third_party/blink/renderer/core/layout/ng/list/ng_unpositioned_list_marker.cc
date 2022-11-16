@@ -37,7 +37,7 @@ LayoutUnit NGUnpositionedListMarker::InlineOffset(
   return margins.first;
 }
 
-scoped_refptr<const NGLayoutResult> NGUnpositionedListMarker::Layout(
+const NGLayoutResult* NGUnpositionedListMarker::Layout(
     const NGConstraintSpace& parent_space,
     const ComputedStyle& parent_style,
     FontBaseline baseline_type) const {
@@ -46,10 +46,9 @@ scoped_refptr<const NGLayoutResult> NGUnpositionedListMarker::Layout(
 
   // We need the first-line baseline from the list-marker, instead of the
   // typical atomic-inline baseline.
-  scoped_refptr<const NGLayoutResult> marker_layout_result =
-      marker_node.LayoutAtomicInline(parent_space, parent_style,
-                                     parent_space.UseFirstLineStyle(),
-                                     NGBaselineAlgorithmType::kFirstLine);
+  const NGLayoutResult* marker_layout_result = marker_node.LayoutAtomicInline(
+      parent_space, parent_style, parent_space.UseFirstLineStyle(),
+      NGBaselineAlgorithmType::kFirstLine);
   DCHECK(marker_layout_result);
   return marker_layout_result;
 }
@@ -121,7 +120,7 @@ void NGUnpositionedListMarker::AddToBox(
     items_builder->AddListMarker(marker_physical_fragment, marker_offset);
     return;
   }
-  container_builder->AddChild(marker_physical_fragment, marker_offset);
+  container_builder->AddResult(marker_layout_result, marker_offset);
 }
 
 void NGUnpositionedListMarker::AddToBoxWithoutLineBoxes(
@@ -141,7 +140,7 @@ void NGUnpositionedListMarker::AddToBoxWithoutLineBoxes(
 
   DCHECK(container_builder);
   DCHECK(!container_builder->ItemsBuilder());
-  container_builder->AddChild(marker_physical_fragment, offset);
+  container_builder->AddResult(marker_layout_result, offset);
 
   // Whether the list marker should affect the block size or not is not
   // well-defined, but 3 out of 4 impls do.

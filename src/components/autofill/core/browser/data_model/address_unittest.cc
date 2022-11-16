@@ -6,7 +6,6 @@
 
 #include <string>
 
-#include "base/macros.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/scoped_feature_list.h"
 #include "components/autofill/core/browser/autofill_type.h"
@@ -188,10 +187,6 @@ TEST_P(AddressTest, SetCountry) {
 
 // Test setting and getting the new structured address tokens
 TEST_P(AddressTest, StructuredAddressTokens) {
-  // Activate the feature to support the new structured address tokens.
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitAndEnableFeature(
-      features::kAutofillAddressEnhancementVotes);
   Address address;
 
   // Set the address tokens.
@@ -209,112 +204,6 @@ TEST_P(AddressTest, StructuredAddressTokens) {
             u"DependentStreetName");
   EXPECT_EQ(address.GetRawInfo(ADDRESS_HOME_PREMISE_NAME), u"PremiseNmae");
   EXPECT_EQ(address.GetRawInfo(ADDRESS_HOME_SUBPREMISE), u"SubPremise");
-}
-
-// Test setting and getting the new structured address tokens
-TEST_P(AddressTest,
-       StructuredAddressTokens_ResetOnChangedUnstructuredInformation) {
-  // Activate the feature to support the new structured address tokens for
-  // voting. The feature to actively support structured addresses must be turned
-  // of.
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitWithFeatures(
-      {features::kAutofillAddressEnhancementVotes},
-      {features::kAutofillEnableSupportForMoreStructureInAddresses});
-  Address address;
-
-  // Set the address tokens.
-  address.SetRawInfo(ADDRESS_HOME_STREET_ADDRESS, u"Line1\nLine2");
-  address.SetRawInfo(ADDRESS_HOME_STREET_NAME, u"StreetName");
-  address.SetRawInfo(ADDRESS_HOME_HOUSE_NUMBER, u"HouseNumber");
-  address.SetRawInfo(ADDRESS_HOME_DEPENDENT_STREET_NAME,
-                     u"DependentStreetName");
-  address.SetRawInfo(ADDRESS_HOME_PREMISE_NAME, u"PremiseNmae");
-  address.SetRawInfo(ADDRESS_HOME_SUBPREMISE, u"SubPremise");
-
-  // Retrieve the tokens and verify that they are correct.
-  EXPECT_EQ(address.GetRawInfo(ADDRESS_HOME_LINE1), u"Line1");
-  EXPECT_EQ(address.GetRawInfo(ADDRESS_HOME_LINE2), u"Line2");
-  EXPECT_EQ(address.GetRawInfo(ADDRESS_HOME_STREET_ADDRESS), u"Line1\nLine2");
-  EXPECT_EQ(address.GetRawInfo(ADDRESS_HOME_STREET_NAME), u"StreetName");
-  EXPECT_EQ(address.GetRawInfo(ADDRESS_HOME_HOUSE_NUMBER), u"HouseNumber");
-  EXPECT_EQ(address.GetRawInfo(ADDRESS_HOME_DEPENDENT_STREET_NAME),
-            u"DependentStreetName");
-  EXPECT_EQ(address.GetRawInfo(ADDRESS_HOME_PREMISE_NAME), u"PremiseNmae");
-  EXPECT_EQ(address.GetRawInfo(ADDRESS_HOME_SUBPREMISE), u"SubPremise");
-
-  // Set the unstructured address information to the same values as they already
-  // are.
-  address.SetRawInfo(ADDRESS_HOME_STREET_ADDRESS, u"Line1\nLine2");
-  address.SetRawInfo(ADDRESS_HOME_LINE1, u"Line1");
-  address.SetRawInfo(ADDRESS_HOME_LINE2, u"Line2");
-
-  // Verify that the structured tokens are still set.
-  EXPECT_EQ(address.GetRawInfo(ADDRESS_HOME_STREET_NAME), u"StreetName");
-  EXPECT_EQ(address.GetRawInfo(ADDRESS_HOME_HOUSE_NUMBER), u"HouseNumber");
-  EXPECT_EQ(address.GetRawInfo(ADDRESS_HOME_DEPENDENT_STREET_NAME),
-            u"DependentStreetName");
-  EXPECT_EQ(address.GetRawInfo(ADDRESS_HOME_PREMISE_NAME), u"PremiseNmae");
-  EXPECT_EQ(address.GetRawInfo(ADDRESS_HOME_SUBPREMISE), u"SubPremise");
-
-  // Now, change the address by changing HOME_ADDRESS_LINE1 and verify that the
-  // structured tokens are reset.
-  address.SetRawInfo(ADDRESS_HOME_LINE1, u"NewLine1");
-
-  EXPECT_EQ(address.GetRawInfo(ADDRESS_HOME_LINE1), u"NewLine1");
-  EXPECT_EQ(address.GetRawInfo(ADDRESS_HOME_LINE2), u"Line2");
-  EXPECT_EQ(address.GetRawInfo(ADDRESS_HOME_STREET_ADDRESS),
-            u"NewLine1\nLine2");
-  EXPECT_EQ(address.GetRawInfo(ADDRESS_HOME_STREET_NAME), std::u16string());
-  EXPECT_EQ(address.GetRawInfo(ADDRESS_HOME_HOUSE_NUMBER), std::u16string());
-  EXPECT_EQ(address.GetRawInfo(ADDRESS_HOME_DEPENDENT_STREET_NAME),
-            std::u16string());
-  EXPECT_EQ(address.GetRawInfo(ADDRESS_HOME_PREMISE_NAME), std::u16string());
-  EXPECT_EQ(address.GetRawInfo(ADDRESS_HOME_SUBPREMISE), std::u16string());
-
-  // Reset the structured tokens and perform the same step for
-  // HOME_ADDRESS_LINE2.
-  address.SetRawInfo(ADDRESS_HOME_STREET_ADDRESS, u"Line1\nLine2");
-  address.SetRawInfo(ADDRESS_HOME_STREET_NAME, u"StreetName");
-  address.SetRawInfo(ADDRESS_HOME_HOUSE_NUMBER, u"HouseNumber");
-  address.SetRawInfo(ADDRESS_HOME_DEPENDENT_STREET_NAME,
-                     u"DependentStreetName");
-  address.SetRawInfo(ADDRESS_HOME_PREMISE_NAME, u"PremiseNmae");
-  address.SetRawInfo(ADDRESS_HOME_SUBPREMISE, u"SubPremise");
-
-  address.SetRawInfo(ADDRESS_HOME_LINE2, u"NewLine2");
-
-  EXPECT_EQ(address.GetRawInfo(ADDRESS_HOME_LINE1), u"Line1");
-  EXPECT_EQ(address.GetRawInfo(ADDRESS_HOME_LINE2), u"NewLine2");
-  EXPECT_EQ(address.GetRawInfo(ADDRESS_HOME_STREET_ADDRESS),
-            u"Line1\nNewLine2");
-  EXPECT_EQ(address.GetRawInfo(ADDRESS_HOME_STREET_NAME), std::u16string());
-  EXPECT_EQ(address.GetRawInfo(ADDRESS_HOME_HOUSE_NUMBER), std::u16string());
-  EXPECT_EQ(address.GetRawInfo(ADDRESS_HOME_DEPENDENT_STREET_NAME),
-            std::u16string());
-  EXPECT_EQ(address.GetRawInfo(ADDRESS_HOME_PREMISE_NAME), std::u16string());
-  EXPECT_EQ(address.GetRawInfo(ADDRESS_HOME_SUBPREMISE), std::u16string());
-
-  // And once again for ADDRESS_HOME_STREET_ADDRESS.
-  address.SetRawInfo(ADDRESS_HOME_STREET_ADDRESS, u"Line1\nLine2");
-  address.SetRawInfo(ADDRESS_HOME_STREET_NAME, u"StreetName");
-  address.SetRawInfo(ADDRESS_HOME_HOUSE_NUMBER, u"HouseNumber");
-  address.SetRawInfo(ADDRESS_HOME_DEPENDENT_STREET_NAME,
-                     u"DependentStreetName");
-  address.SetRawInfo(ADDRESS_HOME_PREMISE_NAME, u"PremiseNmae");
-  address.SetRawInfo(ADDRESS_HOME_SUBPREMISE, u"SubPremise");
-
-  address.SetRawInfo(ADDRESS_HOME_STREET_ADDRESS, u"NewLine1\nNewLine2");
-  EXPECT_EQ(address.GetRawInfo(ADDRESS_HOME_LINE1), u"NewLine1");
-  EXPECT_EQ(address.GetRawInfo(ADDRESS_HOME_LINE2), u"NewLine2");
-  EXPECT_EQ(address.GetRawInfo(ADDRESS_HOME_STREET_ADDRESS),
-            u"NewLine1\nNewLine2");
-  EXPECT_EQ(address.GetRawInfo(ADDRESS_HOME_STREET_NAME), std::u16string());
-  EXPECT_EQ(address.GetRawInfo(ADDRESS_HOME_HOUSE_NUMBER), std::u16string());
-  EXPECT_EQ(address.GetRawInfo(ADDRESS_HOME_DEPENDENT_STREET_NAME),
-            std::u16string());
-  EXPECT_EQ(address.GetRawInfo(ADDRESS_HOME_PREMISE_NAME), std::u16string());
-  EXPECT_EQ(address.GetRawInfo(ADDRESS_HOME_SUBPREMISE), std::u16string());
 }
 
 // Test that we properly match typed values to stored country data.
@@ -656,6 +545,35 @@ TEST_P(AddressTest, TestMergeStructuredAddresses) {
   Address address3;
   address3.SetRawInfo(ADDRESS_HOME_ZIP, u"67890");
   EXPECT_FALSE(address1.IsStructuredAddressMergeable(address3));
+}
+
+// Tests that if only one of the structured addresses in a merge operation has
+// country information, it is used as their common country during comparison and
+// for rewriting rules.
+TEST_P(AddressTest, TestMergeStructuredAddressesMissingCountry) {
+  // This test is only applicable for structured addresses.
+  if (!StructuredAddresses())
+    return;
+
+  Address address1;
+  Address address2;
+
+  address1.SetRawInfo(ADDRESS_HOME_COUNTRY, u"GB");
+  address1.SetRawInfoWithVerificationStatus(
+      ADDRESS_HOME_STREET_ADDRESS, u"1 Trafalgar Square",
+      structured_address::VerificationStatus::kUserVerified);
+
+  address2.SetRawInfoWithVerificationStatus(
+      ADDRESS_HOME_STREET_ADDRESS, u"1 Trafalgar Square",
+      structured_address::VerificationStatus::kObserved);
+
+  // |address1| and |address2|'s street address are not trivially the same,
+  // because their verification status differs. But they should still be
+  // mergeable, regardless if one of them has a country or not. This is not
+  // trivially given, because country-specific rewriting rules are applied
+  // during the merge process.
+  EXPECT_TRUE(address1.IsStructuredAddressMergeable(address2));
+  EXPECT_TRUE(address2.IsStructuredAddressMergeable(address1));
 }
 
 // Tests the retrieval of the structured address.

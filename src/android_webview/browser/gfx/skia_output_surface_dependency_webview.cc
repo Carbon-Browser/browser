@@ -59,7 +59,7 @@ SkiaOutputSurfaceDependencyWebView::GetGpuDriverBugWorkarounds() {
 
 scoped_refptr<gpu::SharedContextState>
 SkiaOutputSurfaceDependencyWebView::GetSharedContextState() {
-  return shared_context_state_;
+  return shared_context_state_.get();
 }
 
 gpu::raster::GrShaderCache*
@@ -95,9 +95,9 @@ void SkiaOutputSurfaceDependencyWebView::ScheduleGrContextCleanup() {
   // There is no way to access the gpu thread here, so leave it no-op for now.
 }
 
-void SkiaOutputSurfaceDependencyWebView::PostTaskToClientThread(
-    base::OnceClosure closure) {
-  task_queue_->ScheduleClientTask(std::move(closure));
+scoped_refptr<base::TaskRunner>
+SkiaOutputSurfaceDependencyWebView::GetClientTaskRunner() {
+  return task_queue_->GetClientTaskRunner();
 }
 
 gpu::ImageFactory* SkiaOutputSurfaceDependencyWebView::GetGpuImageFactory() {
@@ -116,7 +116,7 @@ scoped_refptr<gl::GLSurface>
 SkiaOutputSurfaceDependencyWebView::CreateGLSurface(
     base::WeakPtr<gpu::ImageTransportSurfaceDelegate> stub,
     gl::GLSurfaceFormat format) {
-  return gl_surface_;
+  return gl_surface_.get();
 }
 
 base::ScopedClosureRunner SkiaOutputSurfaceDependencyWebView::CacheGLSurface(

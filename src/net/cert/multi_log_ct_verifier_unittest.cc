@@ -70,8 +70,9 @@ class MultiLogCTVerifierTest : public ::testing::Test {
     ASSERT_TRUE(embedded_sct_chain_.get());
   }
 
-  bool CheckForEmbeddedSCTInNetLog(const RecordingTestNetLog& net_log) {
-    auto entries = net_log.GetEntries();
+  bool CheckForEmbeddedSCTInNetLog(
+      const RecordingNetLogObserver& net_log_observer) {
+    auto entries = net_log_observer.GetEntries();
     if (entries.size() != 2)
       return false;
 
@@ -85,10 +86,10 @@ class MultiLogCTVerifierTest : public ::testing::Test {
       return false;
 
     const base::Value* scts = parsed.params.FindListPath("scts");
-    if (!scts || scts->GetList().size() != 1)
+    if (!scts || scts->GetListDeprecated().size() != 1)
       return false;
 
-    const base::Value& the_sct = scts->GetList()[0];
+    const base::Value& the_sct = scts->GetListDeprecated()[0];
     if (!the_sct.is_dict())
       return false;
 
@@ -118,15 +119,15 @@ class MultiLogCTVerifierTest : public ::testing::Test {
   // |kLogDescription|.
   bool CheckPrecertificateVerification(scoped_refptr<X509Certificate> chain) {
     SignedCertificateTimestampAndStatusList scts;
-    RecordingTestNetLog test_net_log;
+    RecordingNetLogObserver net_log_observer(NetLogCaptureMode::kDefault);
     NetLogWithSource net_log = NetLogWithSource::Make(
-        &test_net_log, NetLogSourceType::SSL_CONNECT_JOB);
+        NetLog::Get(), NetLogSourceType::SSL_CONNECT_JOB);
     verifier_->Verify(kHostname, chain.get(), base::StringPiece(),
                       base::StringPiece(), &scts, net_log);
     return ct::CheckForSingleVerifiedSCTInResult(scts, kLogDescription) &&
            ct::CheckForSCTOrigin(
                scts, ct::SignedCertificateTimestamp::SCT_EMBEDDED) &&
-           CheckForEmbeddedSCTInNetLog(test_net_log);
+           CheckForEmbeddedSCTInNetLog(net_log_observer);
   }
 
   // Histogram-related helper methods

@@ -16,10 +16,6 @@ SearchBoxModel::SearchBoxModel() = default;
 
 SearchBoxModel::~SearchBoxModel() = default;
 
-void SearchBoxModel::SetTabletMode(bool is_tablet_mode) {
-  is_tablet_mode_ = is_tablet_mode;
-}
-
 void SearchBoxModel::SetShowAssistantButton(bool show) {
   if (show_assistant_button_ == show)
     return;
@@ -46,9 +42,11 @@ void SearchBoxModel::Update(const std::u16string& text,
       UMA_HISTOGRAM_ENUMERATION("Apps.AppListSearchCommenced", 1, 2);
       base::RecordAction(base::UserMetricsAction("AppList_EnterSearch"));
     } else if (!text_.empty() && text.empty()) {
+      // The user ended a search interaction. Reset search start time.
       base::RecordAction(base::UserMetricsAction("AppList_LeaveSearch"));
     }
   }
+
   text_ = text;
   for (auto& observer : observers_)
     observer.Update();

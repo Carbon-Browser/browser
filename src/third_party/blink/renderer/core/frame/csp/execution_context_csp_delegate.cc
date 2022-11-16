@@ -8,6 +8,7 @@
 #include "services/network/public/mojom/web_sandbox_flags.mojom-blink.h"
 #include "third_party/blink/public/common/security_context/insecure_request_policy.h"
 #include "third_party/blink/public/mojom/devtools/inspector_issue.mojom-blink.h"
+#include "third_party/blink/public/mojom/frame/frame.mojom-blink.h"
 #include "third_party/blink/public/mojom/security_context/insecure_request_policy.mojom-blink.h"
 #include "third_party/blink/renderer/bindings/core/v8/source_location.h"
 #include "third_party/blink/renderer/core/dom/document.h"
@@ -20,6 +21,7 @@
 #include "third_party/blink/renderer/core/frame/local_frame_client.h"
 #include "third_party/blink/renderer/core/frame/report.h"
 #include "third_party/blink/renderer/core/frame/reporting_context.h"
+#include "third_party/blink/renderer/core/inspector/inspector_audits_issue.h"
 #include "third_party/blink/renderer/core/loader/document_loader.h"
 #include "third_party/blink/renderer/core/loader/ping_loader.h"
 #include "third_party/blink/renderer/core/probe/core_probes.h"
@@ -209,13 +211,17 @@ void ExecutionContextCSPDelegate::AddConsoleMessage(
   execution_context_->AddConsoleMessage(console_message);
 }
 
-void ExecutionContextCSPDelegate::AddInspectorIssue(
-    mojom::blink::InspectorIssueInfoPtr info) {
-  execution_context_->AddInspectorIssue(std::move(info));
+void ExecutionContextCSPDelegate::AddInspectorIssue(AuditsIssue issue) {
+  execution_context_->AddInspectorIssue(std::move(issue));
 }
 
 void ExecutionContextCSPDelegate::DisableEval(const String& error_message) {
   execution_context_->DisableEval(error_message);
+}
+
+void ExecutionContextCSPDelegate::SetWasmEvalErrorMessage(
+    const String& error_message) {
+  execution_context_->SetWasmEvalErrorMessage(error_message);
 }
 
 void ExecutionContextCSPDelegate::ReportBlockedScriptExecutionToInspector(
@@ -233,8 +239,10 @@ void ExecutionContextCSPDelegate::DidAddContentSecurityPolicies(
   if (!frame)
     return;
 
-  // Record what source was used to find main frame CSP.
-  if (frame->IsMainFrame()) {
+  // Record what source was used to find main frame CSP. Do not record
+  // this for fence frame roots since they will never become an
+  // outermost main frame, but we do wish to record this for portals.
+  if (frame->IsMainFrame() && !frame->IsInFencedFrameTree()) {
     for (const auto& policy : policies) {
       switch (policy->header->source) {
         case network::mojom::ContentSecurityPolicySource::kHTTP:
@@ -242,9 +250,6 @@ void ExecutionContextCSPDelegate::DidAddContentSecurityPolicies(
           break;
         case network::mojom::ContentSecurityPolicySource::kMeta:
           Count(WebFeature::kMainFrameCSPViaMeta);
-          break;
-        case network::mojom::ContentSecurityPolicySource::kOriginPolicy:
-          Count(WebFeature::kMainFrameCSPViaOriginPolicy);
           break;
       }
     }
@@ -283,11 +288,11 @@ void ExecutionContextCSPDelegate::DispatchViolationEventInternal(
 
   if (auto* document = GetDocument()) {
     if (element && element->isConnected() && element->GetDocument() == document)
-      element->EnqueueEvent(event, TaskType::kInternalDefault);
+      element->DispatchEvent(event);
     else
-      document->EnqueueEvent(event, TaskType::kInternalDefault);
+      document->DispatchEvent(event);
   } else if (auto* scope = DynamicTo<WorkerGlobalScope>(*execution_context_)) {
-    scope->EnqueueEvent(event, TaskType::kInternalDefault);
+    scope->DispatchEvent(event);
   }
 }
 

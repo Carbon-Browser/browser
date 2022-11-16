@@ -6,7 +6,7 @@
 #define CHROME_BROWSER_ASH_PLUGIN_VM_PLUGIN_VM_TEST_HELPER_H_
 
 #include "base/test/scoped_feature_list.h"
-#include "chromeos/dbus/concierge/fake_concierge_client.h"
+#include "chromeos/ash/components/dbus/concierge/fake_concierge_client.h"
 
 class TestingProfile;
 
@@ -23,20 +23,24 @@ class ScopedUserManager;
 namespace plugin_vm {
 
 void SetupConciergeForSuccessfulDiskImageImport(
-    chromeos::FakeConciergeClient* fake_concierge_client_);
+    ash::FakeConciergeClient* fake_concierge_client_);
 
 void SetupConciergeForFailedDiskImageImport(
-    chromeos::FakeConciergeClient* fake_concierge_client_,
+    ash::FakeConciergeClient* fake_concierge_client_,
     vm_tools::concierge::DiskImageStatus status);
 
 void SetupConciergeForCancelDiskImageOperation(
-    chromeos::FakeConciergeClient* fake_concierge_client_,
+    ash::FakeConciergeClient* fake_concierge_client_,
     bool success);
 
 // A helper class for enabling Plugin VM in unit tests.
 class PluginVmTestHelper {
  public:
   explicit PluginVmTestHelper(TestingProfile* testing_profile);
+
+  PluginVmTestHelper(const PluginVmTestHelper&) = delete;
+  PluginVmTestHelper& operator=(const PluginVmTestHelper&) = delete;
+
   ~PluginVmTestHelper();
 
   void SetPolicyRequirementsToAllowPluginVm();
@@ -58,8 +62,6 @@ class PluginVmTestHelper {
   std::unique_ptr<user_manager::ScopedUserManager> scoped_user_manager_;
   base::test::ScopedFeatureList scoped_feature_list_;
   std::unique_ptr<base::test::ScopedRunningOnChromeOS> running_on_chromeos_;
-
-  DISALLOW_COPY_AND_ASSIGN(PluginVmTestHelper);
 };
 
 }  // namespace plugin_vm

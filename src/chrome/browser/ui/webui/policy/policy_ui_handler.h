@@ -11,11 +11,13 @@
 #include <memory>
 #include <string>
 
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
+#include "base/scoped_multi_source_observation.h"
 #include "base/values.h"
 #include "build/branding_buildflags.h"
 #include "build/build_config.h"
+#include "build/chromeos_buildflags.h"
+#include "chrome/browser/policy/value_provider/policy_value_provider.h"
 #include "components/policy/core/browser/policy_error_map.h"
 #include "components/policy/core/common/policy_map.h"
 #include "components/policy/core/common/policy_namespace.h"
@@ -28,7 +30,7 @@
 #include "ui/shell_dialogs/select_file_dialog.h"
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
-#include "extensions/browser/extension_registry_observer.h"
+#include "chrome/browser/policy/value_provider/extension_policies_value_provider.h"
 #endif
 
 class PrefChangeRegistrar;
@@ -41,14 +43,16 @@ class PolicyStatusProvider;
 
 // The JavaScript message handler for the chrome://policy page.
 class PolicyUIHandler : public content::WebUIMessageHandler,
-#if BUILDFLAG(ENABLE_EXTENSIONS)
-                        public extensions::ExtensionRegistryObserver,
-#endif
                         public policy::PolicyService::Observer,
                         public policy::SchemaRegistry::Observer,
+                        public policy::PolicyValueProvider::Observer,
                         public ui::SelectFileDialog::Listener {
  public:
   PolicyUIHandler();
+
+  PolicyUIHandler(const PolicyUIHandler&) = delete;
+  PolicyUIHandler& operator=(const PolicyUIHandler&) = delete;
+
   ~PolicyUIHandler() override;
 
   static void AddCommonLocalizedStringsToSource(
@@ -56,15 +60,6 @@ class PolicyUIHandler : public content::WebUIMessageHandler,
 
   // content::WebUIMessageHandler implementation.
   void RegisterMessages() override;
-
-#if BUILDFLAG(ENABLE_EXTENSIONS)
-  // extensions::ExtensionRegistryObserver implementation.
-  void OnExtensionLoaded(content::BrowserContext* browser_context,
-                         const extensions::Extension* extension) override;
-  void OnExtensionUnloaded(content::BrowserContext* browser_context,
-                           const extensions::Extension* extension,
-                           extensions::UnloadedExtensionReason reason) override;
-#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
   // policy::PolicyService::Observer implementation.
   void OnPolicyUpdated(const policy::PolicyNamespace& ns,
@@ -74,6 +69,9 @@ class PolicyUIHandler : public content::WebUIMessageHandler,
   // policy::SchemaRegistry::Observer implementation.
   void OnSchemaRegistryUpdated(bool has_new_schemas) override;
 
+  // policy::PolicyValueProvider::Observer implementation.
+  void OnPolicyValueChanged() override;
+
  protected:
   // ui::SelectFileDialog::Listener implementation.
   void FileSelected(const base::FilePath& path,
@@ -82,23 +80,20 @@ class PolicyUIHandler : public content::WebUIMessageHandler,
   void FileSelectionCanceled(void* params) override;
 
  private:
-  base::Value GetPolicyNames();
-  base::Value GetPolicyValues();
+  base::Value::Dict GetPolicyNames();
+  base::Value::List GetPolicyValues();
 
-  void AddExtensionPolicyNames(base::Value* names,
-                               policy::PolicyDomain policy_domain);
-
-  void HandleExportPoliciesJson(const base::ListValue* args);
-  void HandleListenPoliciesUpdates(const base::ListValue* args);
-  void HandleReloadPolicies(const base::ListValue* args);
-  void HandleCopyPoliciesJson(const base::ListValue* args);
+  void HandleExportPoliciesJson(const base::Value::List& args);
+  void HandleListenPoliciesUpdates(const base::Value::List& args);
+  void HandleReloadPolicies(const base::Value::List& args);
+  void HandleCopyPoliciesJson(const base::Value::List& args);
 
   // Send information about the current policy values to the UI. For each policy
   // whose value has been set, a dictionary containing the value and additional
   // metadata is sent.
   void SendPolicies();
 
-#if defined(OS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
+#if BUILDFLAG(IS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
   // Sets |updater_policies_| in this instance, updates
   // |updater_status_provider_| with a new state and refreshes the UI via
   // SendPolicies.
@@ -106,7 +101,7 @@ class PolicyUIHandler : public content::WebUIMessageHandler,
       std::unique_ptr<GoogleUpdatePoliciesAndState> updater_policies_and_state);
 
   void ReloadUpdaterPoliciesAndState();
-#endif  // defined(OS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
+#endif  // BUILDFLAG(IS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
 
   // Send the status of cloud policy to the UI.
   void SendStatus();
@@ -115,7 +110,7 @@ class PolicyUIHandler : public content::WebUIMessageHandler,
   // enabled (device and/or user), a dictionary containing status information.
   // If |for_webui| is true, values needed for webui will be included
   // additionally.
-  base::DictionaryValue GetStatusValue(bool for_webui) const;
+  base::Value GetStatusValue(bool for_webui) const;
 
   // Build a JSON string of all the policies.
   std::string GetPoliciesAsJson();
@@ -124,9 +119,12 @@ class PolicyUIHandler : public content::WebUIMessageHandler,
 
   void OnRefreshPoliciesDone();
 
-  policy::PolicyService* GetPolicyService();
-
-  std::string device_domain_;
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  void OnGotDevicePolicy(base::Value::Dict device_policy,
+                         base::Value::Dict legend_data);
+  void OnGotDevicePolicyDeprecated(base::Value device_policy,
+                                   base::Value legend_data);
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 
   scoped_refptr<ui::SelectFileDialog> export_policies_select_file_dialog_;
 
@@ -138,15 +136,26 @@ class PolicyUIHandler : public content::WebUIMessageHandler,
   std::unique_ptr<policy::PolicyStatusProvider> machine_status_provider_;
   std::unique_ptr<policy::PolicyStatusProvider> updater_status_provider_;
 
-#if defined(OS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+  std::unique_ptr<ExtensionPoliciesValueProvider>
+      extension_policies_value_provider_;
+#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
+
+#if BUILDFLAG(IS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
   std::unique_ptr<policy::PolicyMap> updater_policies_;
-#endif  // defined(OS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
+#endif  // BUILDFLAG(IS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  base::Value::Dict device_policy_;
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 
   std::unique_ptr<PrefChangeRegistrar> pref_change_registrar_;
 
-  base::WeakPtrFactory<PolicyUIHandler> weak_factory_{this};
+  base::ScopedMultiSourceObservation<policy::PolicyValueProvider,
+                                     policy::PolicyValueProvider::Observer>
+      policy_value_provider_observations_{this};
 
-  DISALLOW_COPY_AND_ASSIGN(PolicyUIHandler);
+  base::WeakPtrFactory<PolicyUIHandler> weak_factory_{this};
 };
 
 #endif  // CHROME_BROWSER_UI_WEBUI_POLICY_POLICY_UI_HANDLER_H_

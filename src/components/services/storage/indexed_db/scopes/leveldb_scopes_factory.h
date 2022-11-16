@@ -12,27 +12,29 @@
 #include <vector>
 
 #include "base/callback.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "third_party/leveldatabase/src/include/leveldb/status.h"
 
 namespace content {
 class LevelDBScopes;
 class LevelDBState;
-class ScopesLockManager;
+class LeveledLockManager;
 
 struct LevelDBScopesOptions {
   LevelDBScopesOptions();
-  ~LevelDBScopesOptions();
+
+  LevelDBScopesOptions(const LevelDBScopesOptions&) = delete;
+  LevelDBScopesOptions& operator=(const LevelDBScopesOptions&) = delete;
+
   LevelDBScopesOptions(LevelDBScopesOptions&&) noexcept;
   LevelDBScopesOptions& operator=(LevelDBScopesOptions&&) noexcept;
 
+  ~LevelDBScopesOptions();
+
   std::vector<uint8_t> metadata_key_prefix;
   size_t max_write_batch_size = 1 * 1024 * 1024;
-  ScopesLockManager* lock_manager = nullptr;
+  raw_ptr<LeveledLockManager> lock_manager = nullptr;
   base::RepeatingCallback<void(leveldb::Status)> failure_callback;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(LevelDBScopesOptions);
 };
 
 // The user must still call |StartTaskRunners| on the LevelDBScopes object after

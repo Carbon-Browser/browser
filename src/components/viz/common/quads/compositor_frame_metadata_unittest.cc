@@ -34,9 +34,6 @@ bool AreLatencyInfosEqual(const ui::LatencyInfo& a, const ui::LatencyInfo& b) {
   return a.began() == b.began() && a.terminated() == b.terminated() &&
          a.coalesced() == b.coalesced() && a.trace_id() == b.trace_id() &&
          a.ukm_source_id() == b.ukm_source_id() &&
-         std::abs(a.scroll_update_delta() - b.scroll_update_delta()) < 1e-6 &&
-         std::abs(a.predicted_scroll_update_delta() -
-                  b.predicted_scroll_update_delta()) < 1e-6 &&
          a.gesture_scroll_id() == b.gesture_scroll_id();
 }
 
@@ -51,7 +48,8 @@ bool AreDelegatedInkMetadataEqual(const gfx::DelegatedInkMetadata& a,
 bool AreTransitionDirectivesEqual(const CompositorFrameTransitionDirective& a,
                                   const CompositorFrameTransitionDirective& b) {
   return a.sequence_id() == b.sequence_id() && a.type() == b.type() &&
-         a.effect() == b.effect();
+         a.effect() == b.effect() &&
+         a.is_renderer_driven_animation() == b.is_renderer_driven_animation();
 }
 
 TEST(CompositorFrameMetadata, Clone) {
@@ -61,35 +59,32 @@ TEST(CompositorFrameMetadata, Clone) {
 
   CompositorFrameMetadata metadata;
   metadata.device_scale_factor = 12.3f;
-  metadata.root_scroll_offset = gfx::Vector2dF(4.f, 5.f);
+  metadata.root_scroll_offset = gfx::PointF(4.f, 5.f);
   metadata.page_scale_factor = 6.7f;
   metadata.scrollable_viewport_size = gfx::SizeF(89.0f, 12.3f);
   metadata.content_color_usage = gfx::ContentColorUsage::kHDR;
   metadata.may_contain_video = true;
   metadata.is_resourceless_software_draw_with_scroll_or_animation = true;
-  metadata.root_background_color = SK_ColorBLUE;
+  metadata.root_background_color = SkColors::kBlue;
   metadata.latency_info.emplace_back(ui::SourceEventType::KEY_PRESS);
   metadata.referenced_surfaces.emplace_back(
       SurfaceId(frame_sink_id, local_id1), SurfaceId(frame_sink_id, local_id2));
   metadata.activation_dependencies.emplace_back(
       SurfaceId(frame_sink_id, local_id1));
-  metadata.deadline =
-      FrameDeadline(base::TimeTicks() + base::TimeDelta::FromSeconds(123), 15,
-                    base::TimeDelta::FromMilliseconds(16), true);
+  metadata.deadline = FrameDeadline(base::TimeTicks() + base::Seconds(123), 15,
+                                    base::Milliseconds(16), true);
   metadata.begin_frame_ack = BeginFrameAck(999, 888, true, 777);
   metadata.frame_token = 6;
   metadata.send_frame_token_to_embedder = true;
   metadata.min_page_scale_factor = 123.3f;
   metadata.top_controls_visible_height.emplace(0.5);
-  metadata.preferred_frame_interval.emplace(
-      base::TimeDelta::FromMilliseconds(11));
+  metadata.preferred_frame_interval.emplace(base::Milliseconds(11));
   metadata.display_transform_hint = gfx::OVERLAY_TRANSFORM_FLIP_VERTICAL;
   metadata.delegated_ink_metadata = std::make_unique<gfx::DelegatedInkMetadata>(
       gfx::PointF(88.8, 44.4), 1.f, SK_ColorRED,
-      base::TimeTicks() + base::TimeDelta::FromSeconds(125),
-      gfx::RectF(1, 2, 3, 4), true);
+      base::TimeTicks() + base::Seconds(125), gfx::RectF(1, 2, 3, 4), true);
   metadata.transition_directives.emplace_back(
-      4u, CompositorFrameTransitionDirective::Type::kSave,
+      4u, CompositorFrameTransitionDirective::Type::kSave, true,
       CompositorFrameTransitionDirective::Effect::kCoverUp);
 
   CompositorFrameMetadata clone = metadata.Clone();

@@ -9,6 +9,7 @@
 #include "base/json/json_writer.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/histogram_macros_local.h"
+#include "base/observer_list.h"
 #include "base/time/default_tick_clock.h"
 #include "base/values.h"
 #include "build/build_config.h"
@@ -45,7 +46,7 @@ void WritePredictionToConsoleLog(
     return;
   }
 
-  prediction.web_contents()->GetMainFrame()->AddMessageToConsole(
+  prediction.web_contents()->GetPrimaryMainFrame()->AddMessageToConsole(
       blink::mojom::ConsoleMessageLevel::kInfo,
       "JSON Navigation Prediction: " + json_body);
 }
@@ -125,7 +126,7 @@ NavigationPredictorKeyedService::NavigationPredictorKeyedService(
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   DCHECK(!browser_context->IsOffTheRecord());
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
   // Start preconnecting to the search engine.
   search_engine_preconnector_.StartPreconnecting(/*with_startup_delay=*/true);
 #endif
@@ -195,12 +196,12 @@ bool NavigationPredictorKeyedService::IsBrowserAppLikelyInForeground() const {
   // in foreground for a very short period.
   if (visible_web_contents_.empty() &&
       tick_clock_->NowTicks() - last_web_contents_state_change_time_ >
-          base::TimeDelta::FromSeconds(1)) {
+          base::Seconds(1)) {
     return false;
   }
 
   return tick_clock_->NowTicks() - last_web_contents_state_change_time_ <=
-         base::TimeDelta::FromSeconds(120);
+         base::Seconds(120);
 }
 
 void NavigationPredictorKeyedService::SetTickClockForTesting(

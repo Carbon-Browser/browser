@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "components/viz/common/resources/release_callback.h"
+#include "components/viz/common/resources/resource_format_utils.h"
 #include "gpu/GLES2/gl2extchromium.h"
 #include "gpu/command_buffer/client/gles2_interface.h"
 #include "gpu/command_buffer/client/raster_interface.h"
@@ -55,10 +56,13 @@ AcceleratedStaticBitmapImage::CreateFromCanvasMailbox(
     base::WeakPtr<WebGraphicsContext3DProviderWrapper> context_provider_wrapper,
     base::PlatformThreadRef context_thread_ref,
     scoped_refptr<base::SingleThreadTaskRunner> context_task_runner,
-    viz::ReleaseCallback release_callback) {
+    viz::ReleaseCallback release_callback,
+    bool supports_display_compositing,
+    bool is_overlay_candidate) {
   return base::AdoptRef(new AcceleratedStaticBitmapImage(
       mailbox, sync_token, shared_image_texture_id, sk_image_info,
-      texture_target, is_origin_top_left, ImageOrientationEnum::kDefault,
+      texture_target, is_origin_top_left, supports_display_compositing,
+      is_overlay_candidate, ImageOrientationEnum::kDefault,
       std::move(context_provider_wrapper), context_thread_ref,
       std::move(context_task_runner), std::move(release_callback)));
 }
@@ -70,6 +74,8 @@ AcceleratedStaticBitmapImage::AcceleratedStaticBitmapImage(
     const SkImageInfo& sk_image_info,
     GLenum texture_target,
     bool is_origin_top_left,
+    bool supports_display_compositing,
+    bool is_overlay_candidate,
     const ImageOrientation& orientation,
     base::WeakPtr<WebGraphicsContext3DProviderWrapper> context_provider_wrapper,
     base::PlatformThreadRef context_thread_ref,
@@ -80,6 +86,8 @@ AcceleratedStaticBitmapImage::AcceleratedStaticBitmapImage(
       sk_image_info_(sk_image_info),
       texture_target_(texture_target),
       is_origin_top_left_(is_origin_top_left),
+      supports_display_compositing_(supports_display_compositing),
+      is_overlay_candidate_(is_overlay_candidate),
       context_provider_wrapper_(std::move(context_provider_wrapper)),
       mailbox_ref_(
           base::MakeRefCounted<MailboxRef>(sync_token,
@@ -98,8 +106,8 @@ AcceleratedStaticBitmapImage::~AcceleratedStaticBitmapImage() {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
 }
 
-IntSize AcceleratedStaticBitmapImage::SizeInternal() const {
-  return IntSize(sk_image_info_.width(), sk_image_info_.height());
+SkImageInfo AcceleratedStaticBitmapImage::GetSkImageInfoInternal() const {
+  return sk_image_info_;
 }
 
 scoped_refptr<StaticBitmapImage>
@@ -116,8 +124,8 @@ bool AcceleratedStaticBitmapImage::CopyToTexture(
     GLint dest_level,
     bool unpack_premultiply_alpha,
     bool unpack_flip_y,
-    const IntPoint& dest_point,
-    const IntRect& source_sub_rectangle) {
+    const gfx::Point& dest_point,
+    const gfx::Rect& source_sub_rectangle) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   if (!IsValid())
     return false;
@@ -136,9 +144,9 @@ bool AcceleratedStaticBitmapImage::CopyToTexture(
       source_texture_id, GL_SHARED_IMAGE_ACCESS_MODE_READ_CHROMIUM);
   dest_gl->CopySubTextureCHROMIUM(
       source_texture_id, 0, dest_target, dest_texture_id, dest_level,
-      dest_point.X(), dest_point.Y(), source_sub_rectangle.X(),
-      source_sub_rectangle.Y(), source_sub_rectangle.Width(),
-      source_sub_rectangle.Height(), unpack_flip_y ? GL_FALSE : GL_TRUE,
+      dest_point.x(), dest_point.y(), source_sub_rectangle.x(),
+      source_sub_rectangle.y(), source_sub_rectangle.width(),
+      source_sub_rectangle.height(), unpack_flip_y ? GL_FALSE : GL_TRUE,
       GL_FALSE, unpack_premultiply_alpha ? GL_FALSE : GL_TRUE);
   dest_gl->EndSharedImageAccessDirectCHROMIUM(source_texture_id);
   dest_gl->DeleteTextures(1, &source_texture_id);
@@ -181,7 +189,7 @@ bool AcceleratedStaticBitmapImage::CopyToResourceProvider(
   DCHECK(ri);
   ri->WaitSyncTokenCHROMIUM(mailbox_ref_->sync_token().GetConstData());
   ri->CopySubTexture(mailbox_, dst_mailbox, dst_target, 0, 0, 0, 0,
-                     Size().Width(), Size().Height(), unpack_flip_y,
+                     Size().width(), Size().height(), unpack_flip_y,
                      unpack_premultiply_alpha);
   // We need to update the texture holder's sync token to ensure that when this
   // mailbox is recycled or deleted, it is done after the copy operation above.
@@ -208,8 +216,8 @@ PaintImage AcceleratedStaticBitmapImage::PaintImageForCurrentFrame() {
 
 void AcceleratedStaticBitmapImage::Draw(cc::PaintCanvas* canvas,
                                         const cc::PaintFlags& flags,
-                                        const FloatRect& dst_rect,
-                                        const FloatRect& src_rect,
+                                        const gfx::RectF& dst_rect,
+                                        const gfx::RectF& src_rect,
                                         const ImageDrawOptions& draw_options) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   auto paint_image = PaintImageForCurrentFrame();
@@ -217,10 +225,13 @@ void AcceleratedStaticBitmapImage::Draw(cc::PaintCanvas* canvas,
     return;
   auto paint_image_decoding_mode =
       ToPaintImageDecodingMode(draw_options.decode_mode);
-  if (paint_image.decoding_mode() != paint_image_decoding_mode) {
-    paint_image = PaintImageBuilder::WithCopy(std::move(paint_image))
-                      .set_decoding_mode(paint_image_decoding_mode)
-                      .TakePaintImage();
+  if (paint_image.decoding_mode() != paint_image_decoding_mode ||
+      paint_image.may_be_lcp_candidate() != draw_options.may_be_lcp_candidate) {
+    paint_image =
+        PaintImageBuilder::WithCopy(std::move(paint_image))
+            .set_decoding_mode(paint_image_decoding_mode)
+            .set_may_be_lcp_candidate(draw_options.may_be_lcp_candidate)
+            .TakePaintImage();
   }
   StaticBitmapImage::DrawHelper(canvas, flags, dst_rect, src_rect, draw_options,
                                 paint_image);
@@ -270,9 +281,10 @@ void AcceleratedStaticBitmapImage::InitializeTextureBacking(
       context_provider_wrapper->ContextProvider()->RasterInterface();
   shared_ri->WaitSyncTokenCHROMIUM(mailbox_ref_->sync_token().GetConstData());
 
-  if (context_provider_wrapper->ContextProvider()
-          ->GetCapabilities()
-          .supports_oop_raster) {
+  const auto& capabilities =
+      context_provider_wrapper->ContextProvider()->GetCapabilities();
+
+  if (capabilities.supports_oop_raster) {
     DCHECK_EQ(shared_image_texture_id, 0u);
     skia_context_provider_wrapper_ = context_provider_wrapper;
     texture_backing_ = sk_make_sp<MailboxTextureBacking>(
@@ -302,8 +314,9 @@ void AcceleratedStaticBitmapImage::InitializeTextureBacking(
   GrGLTextureInfo texture_info;
   texture_info.fTarget = texture_target_;
   texture_info.fID = shared_context_texture_id;
-  texture_info.fFormat =
-      CanvasResourceParams(sk_image_info_).GLSizedInternalFormat();
+  texture_info.fFormat = viz::TextureStorageFormat(
+      viz::SkColorTypeToResourceFormat(sk_image_info_.colorType()),
+      capabilities.angle_rgbx_internal_format);
   GrBackendTexture backend_texture(sk_image_info_.width(),
                                    sk_image_info_.height(), GrMipMapped::kNo,
                                    texture_info);
@@ -378,28 +391,29 @@ scoped_refptr<StaticBitmapImage>
 AcceleratedStaticBitmapImage::ConvertToColorSpace(
     sk_sp<SkColorSpace> color_space,
     SkColorType color_type) {
+  SkImageInfo image_info = PaintImageForCurrentFrame().GetSkImageInfo();
   DCHECK(color_space);
   DCHECK(color_type == kRGBA_F16_SkColorType ||
-         color_type == kRGBA_8888_SkColorType);
+         color_type == kRGBA_8888_SkColorType ||
+         color_type == image_info.colorType());
 
   if (!ContextProviderWrapper())
     return nullptr;
 
-  SkImageInfo image_info = PaintImageForCurrentFrame().GetSkImageInfo();
   if (SkColorSpace::Equals(color_space.get(), image_info.colorSpace()) &&
       color_type == image_info.colorType()) {
     return this;
   }
-
-  image_info = image_info.makeColorSpace(color_space).makeColorType(color_type);
+  image_info = image_info.makeColorSpace(color_space)
+                   .makeColorType(color_type)
+                   .makeWH(Size().width(), Size().height());
 
   auto usage_flags = ContextProviderWrapper()
                          ->ContextProvider()
                          ->SharedImageInterface()
                          ->UsageForMailbox(mailbox_);
   auto provider = CanvasResourceProvider::CreateSharedImageProvider(
-      Size(), cc::PaintFlags::FilterQuality::kLow,
-      CanvasResourceParams(image_info),
+      image_info, cc::PaintFlags::FilterQuality::kLow,
       CanvasResourceProvider::ShouldInitialize::kNo, ContextProviderWrapper(),
       RasterMode::kGPU, IsOriginTopLeft(), usage_flags);
   if (!provider) {

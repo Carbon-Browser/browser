@@ -45,10 +45,20 @@ TabSizer CalculateSpaceFractionAvailable(
   float space_fraction_available;
   if (width < crossover_width) {
     domain = LayoutDomain::kInactiveWidthBelowActiveWidth;
-    space_fraction_available =
-        (width.value() - minimum_width) / (crossover_width - minimum_width);
+    // |minimum_width| may equal |crossover_width| when there is only one tab,
+    // that tab is active, and the tabstrip width is smaller than that width,
+    // which will generally happen during startup of a new window. In this case
+    // the layout will always be replaced before we paint, so our return value
+    // is irrelevant.
+    space_fraction_available = minimum_width == crossover_width
+                                   ? 1
+                                   : (width.value() - minimum_width) /
+                                         (crossover_width - minimum_width);
   } else {
     domain = LayoutDomain::kInactiveWidthEqualsActiveWidth;
+    // |preferred_width| may equal |crossover_width| when all tabs are pinned.
+    // In this case tabs will have the same width regardless of the space
+    // available to them, so our return value is irrelevant.
     space_fraction_available = preferred_width == crossover_width
                                    ? 1
                                    : (width.value() - crossover_width) /
@@ -116,44 +126,21 @@ void AllocateExtraSpace(std::vector<gfx::Rect>* bounds,
   }
 }
 
-TabWidthOverride CalculateTabWidthOverride(
-    const TabLayoutConstants& layout_constants,
-    const std::vector<TabWidthConstraints>& tabs,
-    int width) {
-  TabSizer tab_sizer =
-      CalculateSpaceFractionAvailable(layout_constants, tabs, width);
-
-  int next_leading_x = 0;
-  std::vector<gfx::Rect> bounds;
-  for (const TabWidthConstraints& tab : tabs) {
-    const int tab_width = tab_sizer.CalculateTabWidth(tab);
-    next_leading_x += tab_width - layout_constants.tab_overlap;
-  }
-
-  const int trailing_x = next_leading_x + layout_constants.tab_overlap;
-
-  return TabWidthOverride{tab_sizer, width - trailing_x};
-}
-
 std::vector<gfx::Rect> CalculateTabBounds(
     const TabLayoutConstants& layout_constants,
     const std::vector<TabWidthConstraints>& tabs,
-    absl::optional<int> width,
-    absl::optional<TabWidthOverride> tab_width_override) {
+    absl::optional<int> width) {
   if (tabs.empty())
     return std::vector<gfx::Rect>();
 
   TabSizer tab_sizer =
-      tab_width_override.has_value()
-          ? tab_width_override->sizer
-          : CalculateSpaceFractionAvailable(layout_constants, tabs, width);
+      CalculateSpaceFractionAvailable(layout_constants, tabs, width);
 
   int next_x = 0;
   std::vector<gfx::Rect> bounds;
   for (const TabWidthConstraints& tab : tabs) {
     const int tab_width = tab_sizer.CalculateTabWidth(tab);
-    bounds.push_back(
-        gfx::Rect(next_x, 0, tab_width, layout_constants.tab_height));
+    bounds.emplace_back(next_x, 0, tab_width, layout_constants.tab_height);
     next_x += tab_width - layout_constants.tab_overlap;
   }
 
@@ -161,17 +148,8 @@ std::vector<gfx::Rect> CalculateTabBounds(
       width.has_value()
           ? absl::make_optional(width.value() - bounds.back().right())
           : absl::nullopt;
-  const absl::optional<int> extra_space = tab_width_override.has_value()
-                                              ? tab_width_override->extra_space
-                                              : calculated_extra_space;
+  const absl::optional<int> extra_space = calculated_extra_space;
   AllocateExtraSpace(&bounds, tabs, extra_space, tab_sizer);
 
   return bounds;
-}
-
-std::vector<gfx::Rect> CalculatePinnedTabBounds(
-    const TabLayoutConstants& layout_constants,
-    const std::vector<TabWidthConstraints>& pinned_tabs) {
-  // Pinned tabs are always the same size regardless of the available width.
-  return CalculateTabBounds(layout_constants, pinned_tabs, 0, absl::nullopt);
 }

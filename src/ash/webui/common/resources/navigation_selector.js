@@ -56,8 +56,8 @@ export class NavigationSelectorElement extends PolymerElement {
       selectorItems: {
         type: Array,
         value: () => [],
-      }
-    }
+      },
+    };
   }
 
   /**
@@ -81,7 +81,7 @@ export class NavigationSelectorElement extends PolymerElement {
    * @private
    */
   updateSelected_(items) {
-    for (let item of items) {
+    for (const item of items) {
       if (item.textContent.trim() === this.selectedItem.name) {
         item.classList.add('selected');
       } else {
@@ -105,10 +105,10 @@ export class NavigationSelectorElement extends PolymerElement {
    * @protected
    */
   computeInitialClass_(item) {
-    let classList = "navigation-item";
+    let classList = 'navigation-item';
     if (!!this.selectedItem && item.name == this.selectedItem.name) {
       // Add the initial .selected class to the currently selected entry.
-      classList += " selected";
+      classList += ' selected';
     }
     return classList;
   }

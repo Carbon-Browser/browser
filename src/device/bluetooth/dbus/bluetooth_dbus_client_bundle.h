@@ -8,7 +8,6 @@
 #include <memory>
 #include <string>
 
-#include "base/macros.h"
 #include "device/bluetooth/bluetooth_export.h"
 
 namespace bluez {
@@ -34,6 +33,11 @@ class BluetoothProfileManagerClient;
 class DEVICE_BLUETOOTH_EXPORT BluetoothDBusClientBundle {
  public:
   explicit BluetoothDBusClientBundle(bool use_fakes);
+
+  BluetoothDBusClientBundle(const BluetoothDBusClientBundle&) = delete;
+  BluetoothDBusClientBundle& operator=(const BluetoothDBusClientBundle&) =
+      delete;
+
   ~BluetoothDBusClientBundle();
 
   // Returns true if |client| is stubbed.
@@ -101,6 +105,10 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothDBusClientBundle {
     return alternate_bluetooth_adapter_client_.get();
   }
 
+  BluetoothAdminPolicyClient* alternate_bluetooth_admin_policy_client() {
+    return alternate_bluetooth_admin_policy_client_.get();
+  }
+
   BluetoothDeviceClient* alternate_bluetooth_device_client() {
     return alternate_bluetooth_device_client_.get();
   }
@@ -132,9 +140,9 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothDBusClientBundle {
 
   // See "Alternate D-Bus Client" note in bluez_dbus_manager.h.
   std::unique_ptr<BluetoothAdapterClient> alternate_bluetooth_adapter_client_;
+  std::unique_ptr<BluetoothAdminPolicyClient>
+      alternate_bluetooth_admin_policy_client_;
   std::unique_ptr<BluetoothDeviceClient> alternate_bluetooth_device_client_;
-
-  DISALLOW_COPY_AND_ASSIGN(BluetoothDBusClientBundle);
 };
 
 }  // namespace bluez

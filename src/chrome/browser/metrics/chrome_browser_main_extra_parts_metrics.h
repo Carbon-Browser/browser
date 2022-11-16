@@ -9,16 +9,14 @@
 
 #include <memory>
 
-#include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "build/build_config.h"
 #include "chrome/browser/chrome_browser_main_extra_parts.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/display/display_observer.h"
 
 class ChromeBrowserMainParts;
-class UsageScenarioTracker;
 class PowerMetricsReporter;
+class ProcessMonitor;
 
 namespace chrome {
 void AddMetricsExtraParts(ChromeBrowserMainParts* main_parts);
@@ -32,19 +30,26 @@ class ChromeBrowserMainExtraPartsMetrics : public ChromeBrowserMainExtraParts,
                                            public display::DisplayObserver {
  public:
   ChromeBrowserMainExtraPartsMetrics();
+
+  ChromeBrowserMainExtraPartsMetrics(
+      const ChromeBrowserMainExtraPartsMetrics&) = delete;
+  ChromeBrowserMainExtraPartsMetrics& operator=(
+      const ChromeBrowserMainExtraPartsMetrics&) = delete;
+
   ~ChromeBrowserMainExtraPartsMetrics() override;
 
   // Overridden from ChromeBrowserMainExtraParts:
+  void PostCreateMainMessageLoop() override;
   void PreProfileInit() override;
   void PreBrowserStart() override;
   void PostBrowserStart() override;
   void PreMainMessageLoopRun() override;
 
  private:
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   // Records Mac specific metrics.
   void RecordMacMetrics();
-#endif  // defined(OS_MAC)
+#endif  // BUILDFLAG(IS_MAC)
 
   // DisplayObserver overrides.
   void OnDisplayAdded(const display::Display& new_display) override;
@@ -60,25 +65,18 @@ class ChromeBrowserMainExtraPartsMetrics : public ChromeBrowserMainExtraParts,
 
   absl::optional<display::ScopedDisplayObserver> display_observer_;
 
-#if defined(USE_OZONE) || defined(USE_X11)
+#if defined(USE_OZONE)
   std::unique_ptr<ui::InputDeviceEventObserver> input_device_event_observer_;
-#endif  // defined(USE_OZONE) || defined(USE_X11)
+#endif  // defined(USE_OZONE)
 
-#if defined(OS_MAC) || defined(OS_WIN)
-  // Tracks coarse usage scenarios that affect performance during a given
-  // interval of time (e.g. navigating to a new page, watching a video). The
-  // data tracked by this is used by other classes (see below) to report metrics
-  // that correlate performance with usage scenarios, which is necessary to
-  // optimize the performance of specific scenarios.
-  std::unique_ptr<UsageScenarioTracker> usage_scenario_tracker_;
+#if !BUILDFLAG(IS_ANDROID)
+  // The process monitor instance. Allows collecting metrics about every child
+  // process.
+  std::unique_ptr<ProcessMonitor> process_monitor_;
 
-  // Reports power metrics coupled with the data tracked by
-  // |usage_scenario_tracker_|, used to analyze the correlation between usage
-  // scenarios and power consumption.
+  // Reports power metrics.
   std::unique_ptr<PowerMetricsReporter> power_metrics_reporter_;
-#endif  // defined(OS_MAC) || defined (OS_WIN)
-
-  DISALLOW_COPY_AND_ASSIGN(ChromeBrowserMainExtraPartsMetrics);
+#endif  // !BUILDFLAG(IS_ANDROID)
 };
 
 #endif  // CHROME_BROWSER_METRICS_CHROME_BROWSER_MAIN_EXTRA_PARTS_METRICS_H_

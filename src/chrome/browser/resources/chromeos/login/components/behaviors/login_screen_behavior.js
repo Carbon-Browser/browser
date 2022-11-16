@@ -24,10 +24,9 @@ const CALLBACK_USER_ACTED = 'userActed';
   /**
    * Initialize screen behavior.
    * @param {string} screenName Name of created class (external api prefix).
-   * @param {DisplayManagerScreenAttributes} attributes
    */
-  initializeLoginScreen(screenName, attributes) {
-    let api = {};
+  initializeLoginScreen(screenName) {
+    const api = {};
 
     if (this.EXTERNAL_API.length != 0) {
       for (let i = 0; i < this.EXTERNAL_API.length; ++i) {
@@ -42,18 +41,21 @@ const CALLBACK_USER_ACTED = 'userActed';
     }
     this.sendPrefix_ = 'login.' + screenName + '.';
     this.registerScreenApi_(screenName, api);
-    Oobe.getInstance().registerScreen(this, attributes);
+    Oobe.getInstance().registerScreen(this);
   },
 
 
   sendPrefix_: undefined,
 
-  userActed(action_id) {
+  userActed(args) {
     if (this.sendPrefix_ === undefined) {
       console.error('LoginScreenBehavior: send prefix is not defined');
       return;
     }
-    chrome.send(this.sendPrefix_ + CALLBACK_USER_ACTED, [action_id]);
+    if (typeof args === 'string') {
+      args = [args];
+    }
+    chrome.send(this.sendPrefix_ + CALLBACK_USER_ACTED, args);
   },
 
   /* ******************  Default screen API below.  ********************** */
@@ -88,12 +90,6 @@ const CALLBACK_USER_ACTED = 'userActed';
   getOobeUIInitialState() {
     return OOBE_UI_STATE.HIDDEN;
   },
-
-  /**
-   * Screen will ignore accelerators when true.
-   * @type {boolean}
-   */
-  ignoreAccelerators: false,
 
   /**
    * If defined, invoked for the currently active screen when screen size
@@ -150,3 +146,25 @@ const CALLBACK_USER_ACTED = 'userActed';
  * }}
  */
 LoginScreenBehavior.Proto;
+
+/** @interface */
+/* #export */ class LoginScreenBehaviorInterface {
+  /**
+   * @param {string} screenName
+   */
+  initializeLoginScreen(screenName) {}
+
+  userActed(action_id) {}
+
+  /** return {!Array<string>} */
+  get EXTERNAL_API() {
+    return [];
+  }
+
+  /**
+   * @return {Object}
+   */
+  get defaultControl() {
+    return this;
+  }
+}

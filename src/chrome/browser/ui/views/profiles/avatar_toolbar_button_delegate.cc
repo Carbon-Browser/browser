@@ -5,6 +5,7 @@
 #include "chrome/browser/ui/views/profiles/avatar_toolbar_button_delegate.h"
 
 #include "base/check_op.h"
+#include "base/threading/thread_task_runner_handle.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
@@ -17,21 +18,15 @@
 #include "chrome/browser/sync/sync_service_factory.h"
 #include "chrome/browser/sync/sync_ui_util.h"
 #include "chrome/browser/ui/browser_list.h"
-#include "components/signin/public/identity_manager/consent_level.h"
+#include "components/signin/public/base/consent_level.h"
 #include "components/sync/driver/sync_service.h"
 #include "ui/base/resource/resource_bundle.h"
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "ash/constants/ash_features.h"
-#endif
-
 namespace {
 
-constexpr base::TimeDelta kIdentityAnimationDuration =
-    base::TimeDelta::FromSeconds(3);
+constexpr base::TimeDelta kIdentityAnimationDuration = base::Seconds(3);
 
-constexpr base::TimeDelta kAvatarHighlightAnimationDuration =
-    base::TimeDelta::FromSeconds(2);
+constexpr base::TimeDelta kAvatarHighlightAnimationDuration = base::Seconds(2);
 
 ProfileAttributesStorage& GetProfileAttributesStorage() {
   return g_browser_process->profile_manager()->GetProfileAttributesStorage();
@@ -68,13 +63,11 @@ AvatarToolbarButtonDelegate::AvatarToolbarButtonDelegate(
   }
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  if (!base::FeatureList::IsEnabled(chromeos::features::kAvatarToolbarButton)) {
-    // On CrOS this button should only show as badging for Incognito and Guest
-    // sessions. It's only enabled for Incognito where a menu is available for
-    // closing all Incognito windows.
-    avatar_toolbar_button_->SetEnabled(
-        state == AvatarToolbarButton::State::kIncognitoProfile);
-  }
+  // On CrOS this button should only show as badging for Incognito and Guest
+  // sessions. It's only enabled for Incognito where a menu is available for
+  // closing all Incognito windows.
+  avatar_toolbar_button_->SetEnabled(
+      state == AvatarToolbarButton::State::kIncognitoProfile);
 #endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
 }
 
@@ -161,6 +154,10 @@ AvatarToolbarButton::State AvatarToolbarButtonDelegate::GetState() const {
 
   if (identity_animation_state_ == IdentityAnimationState::kShowing)
     return AvatarToolbarButton::State::kAnimatedUserIdentity;
+
+  if (!SyncServiceFactory::IsSyncAllowed(profile_)) {
+    return AvatarToolbarButton::State::kNormal;
+  }
 
   // Show any existing sync errors (sync-the-feature or sync-the-transport).
   // |last_avatar_error_| should be checked here rather than

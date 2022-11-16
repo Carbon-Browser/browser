@@ -13,7 +13,6 @@
 
 #include "ash/public/cpp/app_list/app_list_features.h"
 #include "base/cxx17_backports.h"
-#include "base/macros.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
@@ -75,6 +74,10 @@ bool Mixer::SortData::operator<(const SortData& other) const {
 class Mixer::Group {
  public:
   explicit Group(size_t max_results) : max_results_(max_results) {}
+
+  Group(const Group&) = delete;
+  Group& operator=(const Group&) = delete;
+
   ~Group() {}
 
   void AddProvider(SearchProvider* provider) {
@@ -97,7 +100,7 @@ class Mixer::Group {
 
     if (ranker)
       ranker->Rank(&results_);
-    std::sort(results_.begin(), results_.end());
+    std::stable_sort(results_.begin(), results_.end());
   }
 
   const SortedResults& results() const { return results_; }
@@ -110,8 +113,6 @@ class Mixer::Group {
 
   Providers providers_;  // Not owned.
   SortedResults results_;
-
-  DISALLOW_COPY_AND_ASSIGN(Group);
 };
 
 Mixer::Mixer(AppListModelUpdater* model_updater,
@@ -121,9 +122,10 @@ Mixer::~Mixer() = default;
 
 void Mixer::InitializeRankers(Profile* profile) {
   search_result_ranker_ = std::make_unique<SearchResultRanker>(profile);
-  search_result_ranker_->InitializeRankers(search_controller_);
+  search_result_ranker_->InitializeRankers();
 
-  if (app_list_features::IsSuggestedFilesEnabled()) {
+  if (app_list_features::IsSuggestedFilesEnabled() ||
+      app_list_features::IsSuggestedLocalFilesEnabled()) {
     chip_ranker_ = std::make_unique<ChipRanker>(profile);
   }
 }
@@ -163,7 +165,7 @@ void Mixer::MixAndPublish(size_t num_max_results, const std::u16string& query) {
     chip_ranker_->Rank(&results);
   }
 
-  std::sort(results.begin(), results.end());
+  std::stable_sort(results.begin(), results.end());
 
   const size_t original_size = results.size();
   if (original_size < num_max_results) {
@@ -178,7 +180,7 @@ void Mixer::MixAndPublish(size_t num_max_results, const std::u16string& query) {
     // 0.4) that the People result will be 5th, not 7th, because the Omnibox
     // group has a soft maximum of 4 results. (Otherwise, the People result
     // would not be seen at all once the result list is truncated.)
-    std::sort(results.begin() + original_size, results.end());
+    std::stable_sort(results.begin() + original_size, results.end());
   }
   RemoveDuplicates(&results);
 
@@ -188,7 +190,8 @@ void Mixer::MixAndPublish(size_t num_max_results, const std::u16string& query) {
     new_results.push_back(sort_data.result);
   }
   search_controller_->NotifyResultsAdded(new_results);
-  model_updater_->PublishSearchResults(new_results);
+  // Categories are unused in old search.
+  model_updater_->PublishSearchResults(new_results, /*categories=*/{});
 }
 
 void Mixer::FetchResults(const std::u16string& query) {

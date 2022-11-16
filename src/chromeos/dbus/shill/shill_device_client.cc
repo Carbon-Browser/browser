@@ -9,7 +9,6 @@
 
 #include "base/bind.h"
 #include "base/logging.h"
-#include "base/macros.h"
 #include "base/values.h"
 #include "chromeos/dbus/shill/fake_shill_device_client.h"
 #include "chromeos/dbus/shill/shill_property_changed_observer.h"
@@ -31,6 +30,9 @@ ShillDeviceClient* g_instance = nullptr;
 class ShillDeviceClientImpl : public ShillDeviceClient {
  public:
   explicit ShillDeviceClientImpl(dbus::Bus* bus) : bus_(bus) {}
+
+  ShillDeviceClientImpl(const ShillDeviceClientImpl&) = delete;
+  ShillDeviceClientImpl& operator=(const ShillDeviceClientImpl&) = delete;
 
   ~ShillDeviceClientImpl() override {
     for (HelperMap::iterator iter = helpers_.begin(); iter != helpers_.end();
@@ -214,8 +216,6 @@ class ShillDeviceClientImpl : public ShillDeviceClient {
 
   dbus::Bus* bus_;
   HelperMap helpers_;
-
-  DISALLOW_COPY_AND_ASSIGN(ShillDeviceClientImpl);
 };
 
 }  // namespace

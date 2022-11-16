@@ -17,7 +17,7 @@
 #include "chrome/browser/ui/exclusive_access/exclusive_access_context.h"
 #include "chrome/browser/ui/views/apps/chrome_native_app_window_views_aura.h"
 #include "chrome/browser/ui/views/exclusive_access_bubble_views_context.h"
-#include "components/services/app_service/public/mojom/types.mojom-forward.h"
+#include "components/services/app_service/public/cpp/icon_types.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_observer.h"
 #include "ui/base/accelerators/accelerator.h"
@@ -51,6 +51,12 @@ class ChromeNativeAppWindowViewsAuraAsh
       public aura::WindowObserver {
  public:
   ChromeNativeAppWindowViewsAuraAsh();
+
+  ChromeNativeAppWindowViewsAuraAsh(const ChromeNativeAppWindowViewsAuraAsh&) =
+      delete;
+  ChromeNativeAppWindowViewsAuraAsh& operator=(
+      const ChromeNativeAppWindowViewsAuraAsh&) = delete;
+
   ~ChromeNativeAppWindowViewsAuraAsh() override;
 
  protected:
@@ -82,7 +88,6 @@ class ChromeNativeAppWindowViewsAuraAsh
   // WidgetDelegate:
   std::unique_ptr<views::NonClientFrameView> CreateNonClientFrameView(
       views::Widget* widget) override;
-  ui::ModalType GetModalType() const override;
   ui::ImageModel GetWindowIcon() override;
 
   // NativeAppWindow:
@@ -102,13 +107,14 @@ class ChromeNativeAppWindowViewsAuraAsh
   bool IsFullscreen() const override;
   void EnterFullscreen(const GURL& url,
                        ExclusiveAccessBubbleType bubble_type,
-                       const int64_t display_id) override;
+                       int64_t display_id) override;
   void ExitFullscreen() override;
   void UpdateExclusiveAccessExitBubbleContent(
       const GURL& url,
       ExclusiveAccessBubbleType bubble_type,
       ExclusiveAccessBubbleHideCallback bubble_first_hide_callback,
       bool force_update) override;
+  bool IsExclusiveAccessBubbleDisplayed() const override;
   void OnExclusiveAccessUserInput() override;
   content::WebContents* GetActiveWebContents() override;
   bool CanUserExitFullscreen() const override;
@@ -181,7 +187,7 @@ class ChromeNativeAppWindowViewsAuraAsh
   // Helper function to call AppServiceProxy to load icon.
   void LoadAppIcon(bool allow_placeholder_icon);
   // Invoked when the icon is loaded.
-  void OnLoadIcon(apps::mojom::IconValuePtr icon_value);
+  void OnLoadIcon(apps::IconValuePtr icon_value);
 
   gfx::ImageSkia app_icon_image_skia_;
 
@@ -203,8 +209,6 @@ class ChromeNativeAppWindowViewsAuraAsh
 
   base::WeakPtrFactory<ChromeNativeAppWindowViewsAuraAsh> weak_ptr_factory_{
       this};
-
-  DISALLOW_COPY_AND_ASSIGN(ChromeNativeAppWindowViewsAuraAsh);
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_APPS_CHROME_NATIVE_APP_WINDOW_VIEWS_AURA_ASH_H_

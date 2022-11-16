@@ -6,64 +6,79 @@
  * @fileoverview
  * 'os-settings-menu' shows a menu with a hardcoded set of pages and subpages.
  */
-import '//resources/cr_elements/cr_button/cr_button.m.js';
-import '//resources/cr_elements/icons.m.js';
-import '//resources/polymer/v3_0/iron-collapse/iron-collapse.js';
-import '//resources/polymer/v3_0/iron-icon/iron-icon.js';
-import '//resources/polymer/v3_0/iron-selector/iron-selector.js';
-import '../../settings_shared_css.js';
-import '../os_icons.m.js';
+import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
+import 'chrome://resources/cr_elements/icons.m.js';
+import 'chrome://resources/polymer/v3_0/iron-collapse/iron-collapse.js';
+import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
+import 'chrome://resources/polymer/v3_0/iron-selector/iron-selector.js';
+import '../../settings_shared.css.js';
+import '../os_icons.js';
 
-import {assert, assertNotReached} from '//resources/js/assert.m.js';
-import {loadTimeData} from '//resources/js/load_time_data.m.js';
-import {afterNextRender, flush, html, Polymer, TemplateInstanceBase, Templatizer} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {Route, RouteObserverBehavior, Router} from '../../router.js';
-import {routes} from '../os_route.m.js';
+import {Route, Router} from '../../router.js';
+import {routes} from '../os_route.js';
+import {RouteObserverBehavior, RouteObserverBehaviorInterface} from '../route_observer_behavior.js';
 
-Polymer({
-  _template: html`{__html_template__}`,
-  is: 'os-settings-menu',
+/**
+ * @constructor
+ * @extends {PolymerElement}
+ * @implements {RouteObserverBehaviorInterface}
+ */
+const OsSettingsMenuElementBase =
+    mixinBehaviors([RouteObserverBehavior], PolymerElement);
 
-  behaviors: [RouteObserverBehavior],
+/** @polymer */
+class OsSettingsMenuElement extends OsSettingsMenuElementBase {
+  static get is() {
+    return 'os-settings-menu';
+  }
 
-  properties: {
-    advancedOpened: {
-      type: Boolean,
-      value: false,
-      notify: true,
-    },
+  static get template() {
+    return html`{__html_template__}`;
+  }
 
-    /**
-     * Whether the user is in guest mode.
-     * @private{boolean}
-     */
-    isGuestMode_: {
-      type: Boolean,
-      value: loadTimeData.getBoolean('isGuest'),
-      readOnly: true,
-    },
-
-    showCrostini: Boolean,
-
-    showStartup: Boolean,
-
-    showReset: Boolean,
-
-    showKerberosSection: Boolean,
-
-    /**
-     * True if redesign of account management flows is enabled.
-     * @private
-     */
-    isAccountManagementFlowsV2Enabled_: {
-      type: Boolean,
-      value() {
-        return loadTimeData.getBoolean('isAccountManagementFlowsV2Enabled');
+  static get properties() {
+    return {
+      advancedOpened: {
+        type: Boolean,
+        value: false,
+        notify: true,
       },
-      readOnly: true,
-    },
-  },
+
+      /**
+       * Whether the user is in guest mode.
+       * @private{boolean}
+       */
+      isGuestMode_: {
+        type: Boolean,
+        value: loadTimeData.getBoolean('isGuest'),
+        readOnly: true,
+      },
+
+      /**
+       * Whether Accessibility OS Settings visibility improvements are enabled.
+       * @private{boolean}
+       */
+      isAccessibilityOSSettingsVisibilityEnabled_: {
+        type: Boolean,
+        readOnly: true,
+        value() {
+          return loadTimeData.getBoolean(
+              'isAccessibilityOSSettingsVisibilityEnabled');
+        },
+      },
+
+      showCrostini: Boolean,
+
+      showStartup: Boolean,
+
+      showReset: Boolean,
+
+      showKerberosSection: Boolean,
+    };
+  }
 
   /** @param {!Route} newRoute */
   currentRouteChanged(newRoute) {
@@ -88,12 +103,12 @@ Polymer({
     }
 
     this.setSelectedUrl_('');  // Nothing is selected.
-  },
+  }
 
   /** @private */
   onAdvancedButtonToggle_() {
     this.advancedOpened = !this.advancedOpened;
-  },
+  }
 
   /**
    * Prevent clicks on sidebar items from navigating. These are only links for
@@ -105,7 +120,7 @@ Polymer({
     if (event.target.matches('a')) {
       event.preventDefault();
     }
-  },
+  }
 
   /**
    * Keeps both menus in sync. |url| needs to come from |element.href| because
@@ -114,7 +129,7 @@ Polymer({
    */
   setSelectedUrl_(url) {
     this.$.topMenu.selected = this.$.subMenu.selected = url;
-  },
+  }
 
   /**
    * @param {!Event} event
@@ -122,7 +137,7 @@ Polymer({
    */
   onSelectorActivate_(event) {
     this.setSelectedUrl_(event.detail.selected);
-  },
+  }
 
   /**
    * @param {boolean} opened Whether the menu is expanded.
@@ -131,13 +146,13 @@ Polymer({
    * */
   arrowState_(opened) {
     return opened ? 'cr:arrow-drop-up' : 'cr:arrow-drop-down';
-  },
+  }
 
   /** @return {boolean} Whether the advanced submenu is open. */
   isAdvancedSubmenuOpenedForTest() {
     const submenu = /** @type {IronCollapseElement} */ (this.$.advancedSubmenu);
     return submenu.opened;
-  },
+  }
 
   /**
    * @param {boolean} bool
@@ -146,5 +161,7 @@ Polymer({
    */
   boolToString_(bool) {
     return bool.toString();
-  },
-});
+  }
+}
+
+customElements.define(OsSettingsMenuElement.is, OsSettingsMenuElement);

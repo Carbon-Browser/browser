@@ -12,7 +12,6 @@
 #include "base/callback_helpers.h"
 #include "base/files/file_path.h"
 #include "base/files/scoped_temp_dir.h"
-#include "base/macros.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/test/task_environment.h"
@@ -72,6 +71,12 @@ const char k20ByteAppURL[] = "http://localhost/app_20_bytes";
 }  // namespace
 
 class CloudExternalDataManagerBaseTest : public testing::Test {
+ public:
+  CloudExternalDataManagerBaseTest(const CloudExternalDataManagerBaseTest&) =
+      delete;
+  CloudExternalDataManagerBaseTest& operator=(
+      const CloudExternalDataManagerBaseTest&) = delete;
+
  protected:
   CloudExternalDataManagerBaseTest();
 
@@ -115,9 +120,6 @@ class CloudExternalDataManagerBaseTest : public testing::Test {
 
   std::map<int, std::unique_ptr<std::string>> callback_data_;
   PolicyDetailsMap policy_details_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(CloudExternalDataManagerBaseTest);
 };
 
 CloudExternalDataManagerBaseTest::CloudExternalDataManagerBaseTest() {}

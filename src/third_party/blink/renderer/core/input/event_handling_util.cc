@@ -118,11 +118,11 @@ ContainerNode* ParentForClickEvent(const Node& node) {
 
 PhysicalOffset ContentPointFromRootFrame(
     LocalFrame* frame,
-    const FloatPoint& point_in_root_frame) {
+    const gfx::PointF& point_in_root_frame) {
   LocalFrameView* view = frame->View();
   // FIXME: Is it really OK to use the wrong coordinates here when view is 0?
   // Historically the code would just crash; this is clearly no worse than that.
-  return PhysicalOffset::FromFloatPointRound(
+  return PhysicalOffset::FromPointFRound(
       view ? view->ConvertFromRootFrame(point_in_root_frame)
            : point_in_root_frame);
 }
@@ -135,8 +135,7 @@ MouseEventWithHitTestResults PerformMouseEventHitTest(
   DCHECK(frame->GetDocument());
 
   return frame->GetDocument()->PerformMouseEventHitTest(
-      request,
-      ContentPointFromRootFrame(frame, FloatPoint(mev.PositionInRootFrame())),
+      request, ContentPointFromRootFrame(frame, mev.PositionInRootFrame()),
       mev);
 }
 
@@ -144,12 +143,13 @@ bool ShouldDiscardEventTargetingFrame(const WebInputEvent& event,
                                       const LocalFrame& frame) {
   // There are two different mechanisms for tracking whether an iframe has moved
   // recently, for OOPIF and in-process iframes. For OOPIF's, frame movement is
-  // tracked in the browser process using hit test data, and it's propagated
-  // in event.GetModifiers(). For in-process iframes, frame movement is tracked
+  // tracked in the browser process using hit test data, and it's propagated in
+  // event.GetModifiers(). For in-process iframes, frame movement is tracked
   // during lifecycle updates, in FrameView::UpdateViewportIntersection, and
   // propagated via FrameView::RectInParentIsStable.
   bool should_discard = false;
-  if (frame.NeedsOcclusionTracking() && frame.IsCrossOriginToMainFrame()) {
+  if (frame.NeedsOcclusionTracking() &&
+      frame.IsCrossOriginToOutermostMainFrame()) {
     should_discard =
         (event.GetModifiers() & WebInputEvent::kTargetFrameMovedRecently) ||
         !frame.View()->RectInParentIsStable(event.TimeStamp());
@@ -195,6 +195,7 @@ LocalFrame* GetTargetSubframe(
 void PointerEventTarget::Trace(Visitor* visitor) const {
   visitor->Trace(target_element);
   visitor->Trace(target_frame);
+  visitor->Trace(scrollbar);
 }
 
 }  // namespace event_handling_util

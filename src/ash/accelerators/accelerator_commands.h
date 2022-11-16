@@ -14,6 +14,9 @@
 namespace ash {
 namespace accelerators {
 
+// Logs a dump of CalendarModel internal data.
+ASH_EXPORT void DumpCalendarModel();
+
 // Cycle backwards in the MRU window list. Usually Alt-Shift-Tab.
 ASH_EXPORT void CycleBackwardMru();
 
@@ -59,6 +62,9 @@ ASH_EXPORT void MediaRewind();
 // Stop playing media.
 ASH_EXPORT void MediaStop();
 
+// Toggle microphone mute.
+ASH_EXPORT void MicrophoneMuteToggle();
+
 // Open a new incognito browser window.
 ASH_EXPORT void NewIncognitoWindow();
 
@@ -93,13 +99,15 @@ ASH_EXPORT void RestoreTab();
 // display
 ASH_EXPORT void ShiftPrimaryDisplay();
 
-// Toggles the floating state. If the floating window feature is enabled, it
-// will keep the window always on top.
-ASH_EXPORT void ToggleFloating();
+// Toogles to show and hide the calendar widget.
+ASH_EXPORT void ToggleCalendar();
 
 // Toggles the fullscreen state. The behavior can be overridden
 // by WindowStateDelegate::ToggleFullscreen().
 ASH_EXPORT void ToggleFullscreen();
+
+// Toggle keyboard backlight.
+ASH_EXPORT void ToggleKeyboardBacklight();
 
 // Toggles the maxmized state. If the window is in fulllscreen, it exits
 // fullscreen mode.

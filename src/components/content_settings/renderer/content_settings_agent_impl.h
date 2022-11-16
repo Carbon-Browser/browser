@@ -55,7 +55,6 @@ class ContentSettingsAgentImpl
     virtual absl::optional<bool> AllowReadFromClipboard();
     virtual absl::optional<bool> AllowWriteToClipboard();
     virtual absl::optional<bool> AllowMutationEvents();
-    virtual void PassiveInsecureContentFound(const blink::WebURL& resource_url);
   };
 
   // Set `should_allowlist` to true if `render_frame()` contains content that
@@ -63,14 +62,11 @@ class ContentSettingsAgentImpl
   ContentSettingsAgentImpl(content::RenderFrame* render_frame,
                            bool should_allowlist,
                            std::unique_ptr<Delegate> delegate);
-  ~ContentSettingsAgentImpl() override;
 
-  // Sets the content setting rules which back `allowImage()`, `allowScript()`,
-  // `allowScriptFromSource()`. `content_setting_rules` must outlive this
-  // `ContentSettingsAgentImpl`.
-  void SetContentSettingRules(
-      const RendererContentSettingRules* content_setting_rules);
-  const RendererContentSettingRules* GetContentSettingRules();
+  ContentSettingsAgentImpl(const ContentSettingsAgentImpl&) = delete;
+  ContentSettingsAgentImpl& operator=(const ContentSettingsAgentImpl&) = delete;
+
+  ~ContentSettingsAgentImpl() override;
 
   // Sends an IPC notification that the specified content type was blocked.
   void DidBlockContentType(ContentSettingsType settings_type);
@@ -88,6 +84,7 @@ class ContentSettingsAgentImpl
   bool AllowScript(bool enabled_per_settings) override;
   bool AllowScriptFromSource(bool enabled_per_settings,
                              const blink::WebURL& script_url) override;
+  bool AllowAutoDarkWebContent(bool enabled_per_settings) override;
   bool AllowReadFromClipboard(bool default_value) override;
   bool AllowWriteToClipboard(bool default_value) override;
   bool AllowMutationEvents(bool default_value) override;
@@ -95,28 +92,20 @@ class ContentSettingsAgentImpl
   bool AllowRunningInsecureContent(bool allowed_per_settings,
                                    const blink::WebURL& url) override;
   bool AllowPopupsAndRedirects(bool default_value) override;
-  void PassiveInsecureContentFound(const blink::WebURL& resource_url) override;
   bool ShouldAutoupgradeMixedContent() override;
 
   bool allow_running_insecure_content() const {
     return allow_running_insecure_content_;
   }
 
-  // Allow passing both WebURL and GURL here, so that we can early return
-  // without allocating a new backing string if only the default rule matches.
-  ContentSetting GetContentSettingFromRules(
-      const ContentSettingsForOneType& rules,
-      const blink::WebFrame* frame,
-      const GURL& secondary_url);
-  ContentSetting GetContentSettingFromRules(
-      const ContentSettingsForOneType& rules,
-      const blink::WebFrame* frame,
-      const blink::WebURL& secondary_url);
-
   void SetContentSettingsManager(
       mojo::Remote<mojom::ContentSettingsManager> manager) {
     content_settings_manager_ = std::move(manager);
   }
+
+  RendererContentSettingRules* GetRendererContentSettingRules();
+  void SetRendererContentSettingRulesForTest(
+      const RendererContentSettingRules& rules);
 
  protected:
   // Allow this to be overridden by tests.
@@ -136,6 +125,8 @@ class ContentSettingsAgentImpl
   // mojom::ContentSettingsAgent:
   void SetAllowRunningInsecureContent() override;
   void SetDisabledMixedContentUpgrades() override;
+  void SendRendererContentSettingRules(
+      const RendererContentSettingRules& renderer_settings) override;
 
   void OnContentSettingsAgentRequest(
       mojo::PendingAssociatedReceiver<mojom::ContentSettingsAgent> receiver);
@@ -156,11 +147,7 @@ class ContentSettingsAgentImpl
   // Insecure content may be permitted for the duration of this render view.
   bool allow_running_insecure_content_ = false;
 
-  // A pointer to content setting rules stored by the renderer. Normally, the
-  // `RendererContentSettingRules` object is owned by
-  // `ChromeRenderThreadObserver`. In the tests it is owned by the caller of
-  // `SetContentSettingRules`.
-  const RendererContentSettingRules* content_setting_rules_ = nullptr;
+  std::unique_ptr<RendererContentSettingRules> content_setting_rules_ = nullptr;
 
   // Stores if images, scripts, and plugins have actually been blocked.
   base::flat_set<ContentSettingsType> content_blocked_;
@@ -180,8 +167,6 @@ class ContentSettingsAgentImpl
   std::unique_ptr<Delegate> delegate_;
 
   mojo::AssociatedReceiverSet<mojom::ContentSettingsAgent> receivers_;
-
-  DISALLOW_COPY_AND_ASSIGN(ContentSettingsAgentImpl);
 };
 
 }  // namespace content_settings

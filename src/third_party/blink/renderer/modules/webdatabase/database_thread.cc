@@ -37,6 +37,7 @@
 #include "third_party/blink/renderer/modules/webdatabase/sql_transaction_coordinator.h"
 #include "third_party/blink/renderer/modules/webdatabase/storage_log.h"
 #include "third_party/blink/renderer/platform/scheduler/public/post_cross_thread_task.h"
+#include "third_party/blink/renderer/platform/wtf/cross_thread_copier_std.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 
 namespace blink {
@@ -75,7 +76,7 @@ void DatabaseThread::Terminate() {
   DCHECK(IsMainThread());
   base::WaitableEvent sync;
   {
-    MutexLocker lock(termination_requested_mutex_);
+    base::AutoLock lock(termination_requested_lock_);
     DCHECK(!termination_requested_);
     termination_requested_ = true;
     cleanup_sync_ = &sync;
@@ -132,7 +133,7 @@ void DatabaseThread::RecordDatabaseOpen(Database* database) {
   DCHECK(IsDatabaseThread());
   DCHECK(database);
   DCHECK(!open_database_set_.Contains(database));
-  MutexLocker lock(termination_requested_mutex_);
+  base::AutoLock lock(termination_requested_lock_);
   if (!termination_requested_)
     open_database_set_.insert(database);
 }
@@ -142,7 +143,7 @@ void DatabaseThread::RecordDatabaseClosed(Database* database) {
   DCHECK(database);
 #if DCHECK_IS_ON()
   {
-    MutexLocker lock(termination_requested_mutex_);
+    base::AutoLock lock(termination_requested_lock_);
     DCHECK(termination_requested_ || open_database_set_.Contains(database));
   }
 #endif
@@ -152,7 +153,7 @@ void DatabaseThread::RecordDatabaseClosed(Database* database) {
 bool DatabaseThread::IsDatabaseOpen(Database* database) {
   DCHECK(IsDatabaseThread());
   DCHECK(database);
-  MutexLocker lock(termination_requested_mutex_);
+  base::AutoLock lock(termination_requested_lock_);
   return !termination_requested_ && open_database_set_.Contains(database);
 }
 
@@ -166,7 +167,7 @@ void DatabaseThread::ScheduleTask(std::unique_ptr<DatabaseTask> task) {
   DCHECK(thread_);
 #if DCHECK_IS_ON()
   {
-    MutexLocker lock(termination_requested_mutex_);
+    base::AutoLock lock(termination_requested_lock_);
     DCHECK(!termination_requested_);
   }
 #endif

@@ -30,6 +30,10 @@ using base::test::ios::kWaitForDownloadTimeout;
 
 namespace {
 
+// Wait for 2 seconds longer than the default promo show time, in case it's
+// slightly delayed.
+const int64_t kShowPromoWebpageLoadWaitTime = 5;
+
 // Returns a matcher to "Link You Copied" row.
 id<GREYMatcher> LinkYouCopiedMatcher() {
   NSString* a11yLabelText = l10n_util::GetNSString(IDS_LINK_FROM_CLIPBOARD);
@@ -58,12 +62,6 @@ id<GREYMatcher> FakeOmniboxMatcher() {
 
 @implementation NonModalEGTest
 
-- (AppLaunchConfiguration)appConfigurationForTestCase {
-  AppLaunchConfiguration config;
-  config.features_enabled.push_back(kDefaultPromoNonModal);
-  return config;
-}
-
 - (void)setUp {
   [super setUp];
   [ChromeEarlGreyAppInterface clearDefaultBrowserPromoData];
@@ -84,18 +82,24 @@ id<GREYMatcher> FakeOmniboxMatcher() {
 #define MAYBE_testNonModalAppears DISABLED_testNonModalAppears
 #endif
 - (void)MAYBE_testNonModalAppears {
-  // Promos only appear on iOS 14 and up.
-  if (!base::ios::IsRunningOnIOS14OrLater()) {
-    return;
-  }
-
   [ChromeEarlGreyAppInterface copyURLToPasteBoard];
   [[EarlGrey selectElementWithMatcher:FakeOmniboxMatcher()]
       performAction:grey_tap()];
   [[EarlGrey selectElementWithMatcher:LinkYouCopiedMatcher()]
       performAction:grey_tap()];
-  [[EarlGrey selectElementWithMatcher:NonModalTitleMatcher()]
-      assertWithMatcher:grey_sufficientlyVisible()];
+
+  // Wait until the promo appears.
+  NSString* description = @"Wait for the promo to appear.";
+  ConditionBlock condition = ^{
+    NSError* error = nil;
+    [[EarlGrey selectElementWithMatcher:NonModalTitleMatcher()]
+        assertWithMatcher:grey_sufficientlyVisible()
+                    error:&error];
+    return (error == nil);
+  };
+  GREYAssert(
+      WaitUntilConditionOrTimeout(kShowPromoWebpageLoadWaitTime, condition),
+      description);
 }
 
 @end

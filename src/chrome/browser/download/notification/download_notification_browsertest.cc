@@ -7,26 +7,29 @@
 #include <memory>
 #include <utility>
 
-#include "ash/constants/ash_features.h"
-#include "ash/constants/ash_switches.h"
 #include "base/bind.h"
+#include "base/callback.h"
 #include "base/command_line.h"
-#include "base/cxx17_backports.h"
 #include "base/feature_list.h"
 #include "base/files/file_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/synchronization/lock.h"
 #include "base/test/scoped_feature_list.h"
+#include "build/chromeos_buildflags.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
+#include "chrome/browser/browser_process.h"
 #include "chrome/browser/download/chrome_download_manager_delegate.h"
 #include "chrome/browser/download/download_core_service.h"
 #include "chrome/browser/download/download_core_service_factory.h"
 #include "chrome/browser/download/download_prefs.h"
 #include "chrome/browser/notifications/notification_display_service_tester.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/profiles/profile_manager.h"
+#include "chrome/browser/profiles/profile_test_util.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
@@ -58,6 +61,13 @@
 #include "ui/base/l10n/l10n_util.h"
 #include "url/gurl.h"
 
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "ash/constants/ash_features.h"
+#include "ash/constants/ash_switches.h"
+#elif BUILDFLAG(IS_CHROMEOS_LACROS)
+#include "chromeos/startup/browser_init_params.h"
+#endif
+
 namespace {
 
 enum {
@@ -66,6 +76,7 @@ enum {
   SECONDARY_ACCOUNT_INDEX_START = 2,
 };
 
+#if BUILDFLAG(IS_CHROMEOS_ASH)
 // Structure to describe an account info.
 struct TestAccountInfo {
   const char* const email;
@@ -81,6 +92,7 @@ static const TestAccountInfo kTestAccounts[] = {
     {"bob@invalid.domain", "10002", "hashbobbo", "Bob"},
     {"charlie@invalid.domain", "10003", "hashcharl", "Charlie"},
 };
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 class TestChromeDownloadManagerDelegate : public ChromeDownloadManagerDelegate {
  public:
@@ -134,6 +146,9 @@ class SlowDownloadInterceptor {
         : params_(std::move(params)),
           task_runner_(base::SequencedTaskRunnerHandle::Get()) {}
 
+    PendingRequest(const PendingRequest&) = delete;
+    PendingRequest& operator=(const PendingRequest&) = delete;
+
     void Complete(net::Error error_code) {
       task_runner_->PostTask(
           FROM_HERE, base::BindOnce(&PendingRequest::CompleteOnOriginalSequence,
@@ -150,8 +165,6 @@ class SlowDownloadInterceptor {
 
     content::URLLoaderInterceptor::RequestParams params_;
     scoped_refptr<base::SequencedTaskRunner> task_runner_;
-
-    DISALLOW_COPY_AND_ASSIGN(PendingRequest);
   };
 
   // Can be called on the UI or IO thread depending on which factory we hooked.
@@ -165,17 +178,19 @@ class SlowDownloadInterceptor {
   }
 
   void HandleKnownSize(content::URLLoaderInterceptor::RequestParams* params) {
-    SendHead(params, "application/octet-stream", /*content_length=*/1024);
-    SendBody(params, "some random data");
+    SendHead(params, "application/octet-stream", /*content_length=*/1024,
+             "some random data");
     base::AutoLock lock(lock_);
-    pending_requests_.push_back(new PendingRequest(std::move(*params)));
+    pending_requests_.push_back(
+        std::make_unique<PendingRequest>(std::move(*params)));
   }
 
   void HandleUnknownSize(content::URLLoaderInterceptor::RequestParams* params) {
-    SendHead(params, "application/octet-stream", /*content_length=*/-1);
-    SendBody(params, "some random data");
+    SendHead(params, "application/octet-stream", /*content_length=*/-1,
+             "some random data");
     base::AutoLock lock(lock_);
-    pending_requests_.push_back(new PendingRequest(std::move(*params)));
+    pending_requests_.push_back(
+        std::make_unique<PendingRequest>(std::move(*params)));
   }
 
   void HandleFinish(content::URLLoaderInterceptor::RequestParams* params) {
@@ -190,15 +205,14 @@ class SlowDownloadInterceptor {
 
   void CompletePendingRequests(net::Error error_code) {
     base::AutoLock lock(lock_);
-    for (auto* request : pending_requests_)
-      request->Complete(error_code);
+    for (auto& request : pending_requests_)
+      request.release()->Complete(error_code);
     pending_requests_.clear();
   }
 
   static void SendOk(content::URLLoaderInterceptor::RequestParams* params) {
     std::string response = "OK";
-    SendHead(params, "text/http", response.size());
-    SendBody(params, response);
+    SendHead(params, "text/http", response.size(), response);
     network::URLLoaderCompletionStatus status;
     status.error_code = net::OK;
     params->client->OnComplete(status);
@@ -206,7 +220,8 @@ class SlowDownloadInterceptor {
 
   static void SendHead(content::URLLoaderInterceptor::RequestParams* params,
                        std::string mime_type,
-                       int64_t content_length) {
+                       int64_t content_length,
+                       std::string data) {
     auto head = network::mojom::URLResponseHead::New();
     std::string headers =
         "HTTP/1.1 200 OK\n"
@@ -220,11 +235,7 @@ class SlowDownloadInterceptor {
     head->headers = base::MakeRefCounted<net::HttpResponseHeaders>(
         net::HttpUtil::AssembleRawHeaders(headers));
     head->headers->GetMimeType(&head->mime_type);
-    params->client->OnReceiveResponse(std::move(head));
-  }
 
-  static void SendBody(content::URLLoaderInterceptor::RequestParams* params,
-                       std::string data) {
     mojo::ScopedDataPipeProducerHandle producer_handle;
     mojo::ScopedDataPipeConsumerHandle consumer_handle;
     ASSERT_EQ(
@@ -237,12 +248,14 @@ class SlowDownloadInterceptor {
     ASSERT_EQ(MOJO_RESULT_OK, result);
     ASSERT_EQ(data.size(), write_size);
     ASSERT_TRUE(consumer_handle.is_valid());
-    params->client->OnStartLoadingResponseBody(std::move(consumer_handle));
+    params->client->OnReceiveResponse(std::move(head),
+                                      std::move(consumer_handle));
   }
 
   const std::map<std::string, Handler> handlers_;
   base::Lock lock_;
-  std::vector<PendingRequest*> pending_requests_ GUARDED_BY(lock_);
+  std::vector<std::unique_ptr<PendingRequest>> pending_requests_
+      GUARDED_BY(lock_);
   content::URLLoaderInterceptor interceptor_;
 };
 
@@ -276,21 +289,35 @@ void WaitForDownloadNotificationForDisplayService(
 }  // namespace
 
 // Base class for tests parameterized by whether the holding space in-progress
-// downloads integration feature is enabled.
+// downloads notification suppression feature is enabled.
 class DownloadNotificationTestBase
     : public InProcessBrowserTest,
       public testing::WithParamInterface<
-          /*is_holding_space_in_progress_downloads_integration_enabled=*/bool> {
+          /*is_holding_space_in_progress_downloads_notification_suppression_enabled=*/
+          bool> {
  public:
   DownloadNotificationTestBase() {
+#if BUILDFLAG(IS_CHROMEOS_ASH)
     scoped_feature_list_.InitWithFeatureState(
-        ash::features::kHoldingSpaceInProgressDownloadsIntegration,
-        IsHoldingSpaceInProgressDownloadsIntegrationEnabled());
+        ash::features::kHoldingSpaceInProgressDownloadsNotificationSuppression,
+        IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled());
+#endif
   }
+
+  DownloadNotificationTestBase(const DownloadNotificationTestBase&) = delete;
+  DownloadNotificationTestBase& operator=(const DownloadNotificationTestBase&) =
+      delete;
 
   ~DownloadNotificationTestBase() override = default;
 
   void SetUpOnMainThread() override {
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+    auto init_params(crosapi::mojom::BrowserInitParams::New());
+    init_params
+        ->is_holding_space_in_progress_downloads_notification_suppression_enabled =
+        IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled();
+    chromeos::BrowserInitParams::SetInitParamsForTests(std::move(init_params));
+#endif
     ASSERT_TRUE(embedded_test_server()->Start());
 
     display_service_ = std::make_unique<NotificationDisplayServiceTester>(
@@ -320,18 +347,19 @@ class DownloadNotificationTestBase
     download_terminal_observer.WaitForFinished();
   }
 
-  // Returns whether holding space in-progress downloads integration is enabled
-  // given test parameterization.
-  bool IsHoldingSpaceInProgressDownloadsIntegrationEnabled() const {
+  // Returns whether holding space in-progress downloads notification
+  // suppression is enabled given test parameterization.
+  bool IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled() const {
+#if BUILDFLAG(IS_CHROMEOS)
     return GetParam();
+#else
+    return false;
+#endif
   }
 
   std::unique_ptr<NotificationDisplayServiceTester> display_service_;
   std::unique_ptr<NotificationDisplayServiceTester> incognito_display_service_;
   std::unique_ptr<SlowDownloadInterceptor> interceptor_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(DownloadNotificationTestBase);
 
   base::test::ScopedFeatureList scoped_feature_list_;
 };
@@ -343,6 +371,10 @@ class DownloadNotificationTestBase
 class DownloadNotificationTest : public DownloadNotificationTestBase {
  public:
   DownloadNotificationTest() = default;
+
+  DownloadNotificationTest(const DownloadNotificationTest&) = delete;
+  DownloadNotificationTest& operator=(const DownloadNotificationTest&) = delete;
+
   ~DownloadNotificationTest() override = default;
 
   void SetUpOnMainThread() override {
@@ -424,10 +456,11 @@ class DownloadNotificationTest : public DownloadNotificationTestBase {
 
     // Confirms that a notification is created when the `download_item_` is not
     // in-progress, dangerous, mixed content, or holding space in-progress
-    // downloads integration is disabled. Otherwise notification is suppressed.
+    // downloads notification suppression is disabled. Otherwise notification is
+    // suppressed.
     if (download_item_->GetState() != download::DownloadItem::IN_PROGRESS ||
         download_item_->IsDangerous() || download_item_->IsMixedContent() ||
-        !IsHoldingSpaceInProgressDownloadsIntegrationEnabled()) {
+        !IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled()) {
       WaitForDownloadNotification(browser);
       CacheNotification(browser);
     } else {
@@ -503,25 +536,23 @@ class DownloadNotificationTest : public DownloadNotificationTestBase {
   }
 
  private:
-  download::DownloadItem* download_item_ = nullptr;
-  Browser* incognito_browser_ = nullptr;
+  raw_ptr<download::DownloadItem> download_item_ = nullptr;
+  raw_ptr<Browser> incognito_browser_ = nullptr;
   std::string notification_id_;
-
-  DISALLOW_COPY_AND_ASSIGN(DownloadNotificationTest);
 };
 
 INSTANTIATE_TEST_SUITE_P(
     All,
     DownloadNotificationTest,
-    /*is_holding_space_in_progress_downloads_integration_enabled=*/
+    /*is_holding_space_in_progress_downloads_notification_suppression_enabled=*/
     testing::Bool());
 
 IN_PROC_BROWSER_TEST_P(DownloadNotificationTest, DownloadFile) {
   CreateDownload();
 
-  // If holding space in-progress downloads integration is enabled, the
-  // notification is expected to have been suppressed.
-  if (!IsHoldingSpaceInProgressDownloadsIntegrationEnabled()) {
+  // If holding space in-progress downloads notification suppression is enabled,
+  // the notification is expected to have been suppressed.
+  if (!IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled()) {
     EXPECT_EQ(
         l10n_util::GetStringFUTF16(
             IDS_DOWNLOAD_STATUS_IN_PROGRESS_TITLE,
@@ -539,9 +570,9 @@ IN_PROC_BROWSER_TEST_P(DownloadNotificationTest, DownloadFile) {
 
   CompleteTheDownload();
 
-  // If holding space in-progress downloads integration is enabled, the
-  // notification is expected to be created following download completion.
-  if (IsHoldingSpaceInProgressDownloadsIntegrationEnabled())
+  // If holding space in-progress downloads notification suppression is enabled,
+  // the notification is expected to be created following download completion.
+  if (IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled())
     CacheNotification(browser());
 
   // Checks strings.
@@ -677,9 +708,9 @@ IN_PROC_BROWSER_TEST_P(DownloadNotificationTest,
 
   CompleteTheDownload();
 
-  // If holding space in-progress downloads integration is enabled, the
-  // notification is expected to be created following download completion.
-  if (IsHoldingSpaceInProgressDownloadsIntegrationEnabled())
+  // If holding space in-progress downloads notification suppression is enabled,
+  // the notification is expected to be created following download completion.
+  if (IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled())
     CacheNotification(browser());
 
   CloseNotification();
@@ -690,8 +721,9 @@ IN_PROC_BROWSER_TEST_P(DownloadNotificationTest,
 IN_PROC_BROWSER_TEST_P(DownloadNotificationTest,
                        CloseNotificationWhileDownloading) {
   // This test is only relevant if holding space in-progress downloads
-  // integration is disabled. Otherwise the notification will be suppressed.
-  if (IsHoldingSpaceInProgressDownloadsIntegrationEnabled())
+  // notification suppression is disabled. Otherwise the notification will be
+  // suppressed.
+  if (IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled())
     return;
 
   CreateDownload();
@@ -710,9 +742,9 @@ IN_PROC_BROWSER_TEST_P(DownloadNotificationTest, InterruptDownload) {
 
   InterruptTheDownload();
 
-  // If holding space in-progress downloads integration is enabled, the
-  // notification is expected to be created following download interruption.
-  if (IsHoldingSpaceInProgressDownloadsIntegrationEnabled())
+  // If holding space in-progress downloads notification suppression is enabled,
+  // the notification is expected to be created following download interruption.
+  if (IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled())
     CacheNotification(browser());
 
   EXPECT_EQ(1u, GetDownloadNotifications().size());
@@ -735,8 +767,9 @@ IN_PROC_BROWSER_TEST_P(DownloadNotificationTest, InterruptDownload) {
 IN_PROC_BROWSER_TEST_P(DownloadNotificationTest,
                        InterruptDownloadAfterClosingNotification) {
   // This test is only relevant if holding space in-progress downloads
-  // integration is disabled. Otherwise the notification will be suppressed.
-  if (IsHoldingSpaceInProgressDownloadsIntegrationEnabled())
+  // notification suppression is disabled. Otherwise the notification will be
+  // suppressed.
+  if (IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled())
     return;
 
   CreateDownload();
@@ -765,9 +798,9 @@ IN_PROC_BROWSER_TEST_P(DownloadNotificationTest,
 IN_PROC_BROWSER_TEST_P(DownloadNotificationTest, DownloadRemoved) {
   CreateDownload();
 
-  // If holding space in-progress downloads integration is enabled, the
-  // notification is expected to have been suppressed.
-  if (!IsHoldingSpaceInProgressDownloadsIntegrationEnabled())
+  // If holding space in-progress downloads notification suppression is enabled,
+  // the notification is expected to have been suppressed.
+  if (!IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled())
     EXPECT_TRUE(notification());
 
   download_item()->Remove();
@@ -788,10 +821,10 @@ IN_PROC_BROWSER_TEST_P(DownloadNotificationTest,
   // Starts the 1st download.
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url1));
 
-  // If holding space in-progress downloads integration is enabled, the
-  // notification is expected to have been suppressed.
+  // If holding space in-progress downloads notification suppression is enabled,
+  // the notification is expected to have been suppressed.
   std::string notification_id1;
-  if (!IsHoldingSpaceInProgressDownloadsIntegrationEnabled()) {
+  if (!IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled()) {
     WaitForDownloadNotification();
     auto notifications = GetDownloadNotifications();
     ASSERT_EQ(1u, notifications.size());
@@ -810,9 +843,9 @@ IN_PROC_BROWSER_TEST_P(DownloadNotificationTest,
   // Starts the 2nd download.
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url2));
 
-  // If holding space in-progress downloads integration is enabled, the
-  // notification is expected to have been suppressed.
-  if (!IsHoldingSpaceInProgressDownloadsIntegrationEnabled())
+  // If holding space in-progress downloads notification suppression is enabled,
+  // the notification is expected to have been suppressed.
+  if (!IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled())
     WaitForDownloadNotification();
 
   // Confirms that there are 2 downloads.
@@ -830,10 +863,10 @@ IN_PROC_BROWSER_TEST_P(DownloadNotificationTest,
 
   auto notifications = GetDownloadNotifications();
 
-  // If holding space in-progress downloads integration is enabled, the
-  // notification is expected to have been suppressed.
+  // If holding space in-progress downloads notification suppression is enabled,
+  // the notification is expected to have been suppressed.
   std::string notification_id2;
-  if (!IsHoldingSpaceInProgressDownloadsIntegrationEnabled()) {
+  if (!IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled()) {
     // Confirms that there are 2 notifications.
     EXPECT_EQ(2u, notifications.size());
 
@@ -872,9 +905,9 @@ IN_PROC_BROWSER_TEST_P(DownloadNotificationTest,
   notifications = GetDownloadNotifications();
   EXPECT_EQ(2u, notifications.size());
 
-  // If holding space in-progress downloads integration is enabled,
+  // If holding space in-progress downloads notification suppression is enabled,
   // notifications are expected to be created following download completion.
-  if (IsHoldingSpaceInProgressDownloadsIntegrationEnabled()) {
+  if (IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled()) {
     EXPECT_TRUE(notification_id1.empty());
     EXPECT_TRUE(notification_id2.empty());
     notification_id1 = notifications[0].id();
@@ -907,17 +940,17 @@ IN_PROC_BROWSER_TEST_P(DownloadNotificationTest,
   download::DownloadItem* first_download_item = download_item();
   std::string first_notification_id;
 
-  // If holding space in-progress downloads integration is enabled, the
-  // notification is expected to have been suppressed.
-  if (!IsHoldingSpaceInProgressDownloadsIntegrationEnabled())
+  // If holding space in-progress downloads notification suppression is enabled,
+  // the notification is expected to have been suppressed.
+  if (!IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled())
     first_notification_id = notification_id();
 
   CompleteTheDownload();
   EXPECT_EQ(download::DownloadItem::COMPLETE, first_download_item->GetState());
 
-  // If holding space in-progress downloads integration is enabled, the
-  // notification is expected to be created following download completion.
-  if (IsHoldingSpaceInProgressDownloadsIntegrationEnabled()) {
+  // If holding space in-progress downloads notification suppression is enabled,
+  // the notification is expected to be created following download completion.
+  if (IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled()) {
     CacheNotification(browser());
     first_notification_id = notification_id();
   }
@@ -929,9 +962,9 @@ IN_PROC_BROWSER_TEST_P(DownloadNotificationTest,
   GURL url(SlowDownloadInterceptor::kKnownSizeUrl);
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
 
-  // If holding space in-progress downloads integration is enabled, the
-  // notification is expected to have been suppressed.
-  if (!IsHoldingSpaceInProgressDownloadsIntegrationEnabled()) {
+  // If holding space in-progress downloads notification suppression is enabled,
+  // the notification is expected to have been suppressed.
+  if (!IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled()) {
     WaitForDownloadNotification();
 
     // Confirms that the second notification is created.
@@ -968,8 +1001,9 @@ IN_PROC_BROWSER_TEST_P(DownloadNotificationTest,
 
 IN_PROC_BROWSER_TEST_P(DownloadNotificationTest, CancelDownload) {
   // This test is only relevant if holding space in-progress downloads
-  // integration is disabled. Otherwise the notification will be suppressed.
-  if (IsHoldingSpaceInProgressDownloadsIntegrationEnabled())
+  // notification suppression is disabled. Otherwise the notification will be
+  // suppressed.
+  if (IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled())
     return;
 
   CreateDownload();
@@ -1129,6 +1163,10 @@ IN_PROC_BROWSER_TEST_P(DownloadNotificationTest,
   chrome::CloseWindow(incognito_browser());
 }
 
+// These tests have ash dependency so they are only available for ash.
+// TODO(crbug.com/1266950): Enable these tests for Lacros.
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+
 //////////////////////////////////////////////////
 // Test with multi profiles
 //////////////////////////////////////////////////
@@ -1137,20 +1175,26 @@ class MultiProfileDownloadNotificationTest
     : public DownloadNotificationTestBase {
  public:
   MultiProfileDownloadNotificationTest() = default;
+
+  MultiProfileDownloadNotificationTest(
+      const MultiProfileDownloadNotificationTest&) = delete;
+  MultiProfileDownloadNotificationTest& operator=(
+      const MultiProfileDownloadNotificationTest&) = delete;
+
   ~MultiProfileDownloadNotificationTest() override = default;
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
     DownloadNotificationTestBase::SetUpCommandLine(command_line);
 
     // Logs in to a dummy profile.
-    command_line->AppendSwitchASCII(chromeos::switches::kLoginUser,
+    command_line->AppendSwitchASCII(ash::switches::kLoginUser,
                                     kTestAccounts[DUMMY_ACCOUNT_INDEX].email);
-    command_line->AppendSwitchASCII(chromeos::switches::kLoginProfile,
+    command_line->AppendSwitchASCII(ash::switches::kLoginProfile,
                                     kTestAccounts[DUMMY_ACCOUNT_INDEX].hash);
     // Don't require policy for our sessions - this is required because
     // this test creates a secondary profile synchronously, so we need to
     // let the policy code know not to expect cached policy.
-    command_line->AppendSwitchASCII(chromeos::switches::kProfileRequiresPolicy,
+    command_line->AppendSwitchASCII(ash::switches::kProfileRequiresPolicy,
                                     "false");
   }
 
@@ -1166,7 +1210,7 @@ class MultiProfileDownloadNotificationTest
   // This is used for preparing all accounts in PRE_ test setup, and for testing
   // actual login behavior.
   void AddAllUsers() {
-    for (size_t i = 0; i < base::size(kTestAccounts); ++i) {
+    for (size_t i = 0; i < std::size(kTestAccounts); ++i) {
       // The primary account was already set up in SetUpOnMainThread, so skip it
       // here.
       if (i == PRIMARY_ACCOUNT_INDEX)
@@ -1176,8 +1220,9 @@ class MultiProfileDownloadNotificationTest
   }
 
   Profile* GetProfileByIndex(int index) {
-    return chromeos::ProfileHelper::GetProfileByUserIdHashForTest(
-        kTestAccounts[index].hash);
+    return g_browser_process->profile_manager()->GetProfileByPath(
+        ash::ProfileHelper::GetProfilePathByUserIdHash(
+            kTestAccounts[index].hash));
   }
 
   // Adds a new user for testing to the current session.
@@ -1190,8 +1235,9 @@ class MultiProfileDownloadNotificationTest
     user_manager::UserManager::Get()->SaveUserDisplayName(
         AccountId::FromUserEmailGaiaId(info.email, info.gaia_id),
         base::UTF8ToUTF16(info.display_name));
-    Profile* profile =
-        chromeos::ProfileHelper::GetProfileByUserIdHashForTest(info.hash);
+    Profile* profile = profiles::testing::CreateProfileSync(
+        g_browser_process->profile_manager(),
+        ash::ProfileHelper::GetProfilePathByUserIdHash(info.hash));
 
     signin::IdentityManager* identity_manager =
         IdentityManagerFactory::GetForProfile(profile);
@@ -1202,15 +1248,12 @@ class MultiProfileDownloadNotificationTest
 
   std::unique_ptr<NotificationDisplayServiceTester> display_service1_;
   std::unique_ptr<NotificationDisplayServiceTester> display_service2_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(MultiProfileDownloadNotificationTest);
 };
 
 INSTANTIATE_TEST_SUITE_P(
     All,
     MultiProfileDownloadNotificationTest,
-    /*is_holding_space_in_progress_downloads_integration_enabled=*/
+    /*is_holding_space_in_progress_downloads_notification_suppression_enabled=*/
     testing::Bool());
 
 IN_PROC_BROWSER_TEST_P(MultiProfileDownloadNotificationTest,
@@ -1238,9 +1281,9 @@ IN_PROC_BROWSER_TEST_P(MultiProfileDownloadNotificationTest,
   // First user starts a download.
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser1, url));
 
-  // If holding space in-progress downloads integration is enabled, the
-  // notification is expected to have been suppressed.
-  if (!IsHoldingSpaceInProgressDownloadsIntegrationEnabled())
+  // If holding space in-progress downloads notification suppression is enabled,
+  // the notification is expected to have been suppressed.
+  if (!IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled())
     WaitForDownloadNotificationForDisplayService(display_service1_.get());
 
   // Confirms that the download is started.
@@ -1249,10 +1292,10 @@ IN_PROC_BROWSER_TEST_P(MultiProfileDownloadNotificationTest,
   EXPECT_EQ(1u, downloads.size());
   download::DownloadItem* download1 = downloads[0];
 
-  // If holding space in-progress downloads integration is enabled, the
-  // notification is expected to have been suppressed.
+  // If holding space in-progress downloads notification suppression is enabled,
+  // the notification is expected to have been suppressed.
   std::string notification_id_user1;
-  if (!IsHoldingSpaceInProgressDownloadsIntegrationEnabled()) {
+  if (!IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled()) {
     // Confirms that a download notification is generated.
     auto notifications1 = display_service1_->GetDisplayedNotificationsForType(
         NotificationHandler::Type::TRANSIENT);
@@ -1269,10 +1312,10 @@ IN_PROC_BROWSER_TEST_P(MultiProfileDownloadNotificationTest,
   // Second user starts a download.
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser2, url));
 
-  // If holding space in-progress downloads integration is enabled, the
-  // notification is expected to have been suppressed.
+  // If holding space in-progress downloads notification suppression is enabled,
+  // the notification is expected to have been suppressed.
   std::string notification_id_user2;
-  if (!IsHoldingSpaceInProgressDownloadsIntegrationEnabled()) {
+  if (!IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled()) {
     WaitForDownloadNotificationForDisplayService(display_service2_.get());
     auto notifications2 = display_service2_->GetDisplayedNotificationsForType(
         NotificationHandler::Type::TRANSIENT);
@@ -1294,9 +1337,9 @@ IN_PROC_BROWSER_TEST_P(MultiProfileDownloadNotificationTest,
   // Second user starts another download.
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser2, url));
 
-  // If holding space in-progress downloads integration is enabled, the
-  // notification is expected to have been suppressed.
-  if (!IsHoldingSpaceInProgressDownloadsIntegrationEnabled()) {
+  // If holding space in-progress downloads notification suppression is enabled,
+  // the notification is expected to have been suppressed.
+  if (!IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled()) {
     WaitForDownloadNotificationForDisplayService(display_service2_.get());
     auto notifications2 = display_service2_->GetDisplayedNotificationsForType(
         NotificationHandler::Type::TRANSIENT);
@@ -1324,9 +1367,9 @@ IN_PROC_BROWSER_TEST_P(MultiProfileDownloadNotificationTest,
   ASSERT_EQ(1u, downloads.size());
   EXPECT_EQ(download1, downloads[0]);
 
-  // If holding space in-progress downloads integration is enabled,
+  // If holding space in-progress downloads notification suppression is enabled,
   // notifications are expected to have been suppressed.
-  if (!IsHoldingSpaceInProgressDownloadsIntegrationEnabled()) {
+  if (!IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled()) {
     // Confirms the types of download notifications are correct.
     // Normal notification for user1.
     EXPECT_EQ(
@@ -1360,9 +1403,9 @@ IN_PROC_BROWSER_TEST_P(MultiProfileDownloadNotificationTest,
   download_terminal_observer.WaitForFinished();
   download_terminal_observer2.WaitForFinished();
 
-  // If holding space in-progress downloads integration is enabled, the
-  // notification is expected to be created following download completion.
-  if (IsHoldingSpaceInProgressDownloadsIntegrationEnabled()) {
+  // If holding space in-progress downloads notification suppression is enabled,
+  // the notification is expected to be created following download completion.
+  if (IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled()) {
     auto notifications1 = display_service1_->GetDisplayedNotificationsForType(
         NotificationHandler::Type::TRANSIENT);
     ASSERT_EQ(1u, notifications1.size());
@@ -1380,3 +1423,4 @@ IN_PROC_BROWSER_TEST_P(MultiProfileDownloadNotificationTest,
               notification.type());
   }
 }
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)

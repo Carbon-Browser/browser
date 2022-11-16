@@ -7,8 +7,6 @@
 
 #include <memory>
 
-#include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "content/public/browser/web_ui_controller.h"
 #include "ui/gfx/native_widget_types.h"
 
@@ -87,7 +85,7 @@ class ConstrainedWebDialogUI : public content::WebUIController {
 
  private:
   // JS Message Handler
-  void OnDialogCloseMessage(const base::ListValue* args);
+  void OnDialogCloseMessage(const base::Value::List& args);
 };
 
 // Create and show a constrained HTML dialog. The actual object that gets

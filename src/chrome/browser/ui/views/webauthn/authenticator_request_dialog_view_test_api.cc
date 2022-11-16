@@ -13,10 +13,9 @@ namespace test {
 // static
 AuthenticatorRequestDialogView*
 AuthenticatorRequestDialogViewTestApi::CreateDialogView(
-    std::unique_ptr<AuthenticatorRequestDialogModel> dialog_model,
-    content::WebContents* web_contents) {
-  return new AuthenticatorRequestDialogView(web_contents,
-                                            std::move(dialog_model));
+    content::WebContents* web_contents,
+    AuthenticatorRequestDialogModel* dialog_model) {
+  return new AuthenticatorRequestDialogView(web_contents, dialog_model);
 }
 
 // static
@@ -26,4 +25,11 @@ void AuthenticatorRequestDialogViewTestApi::ShowWithSheet(
   dialog->ReplaceCurrentSheetWith(std::move(new_sheet));
   dialog->Show();
 }
+
+// static
+AuthenticatorRequestSheetView* AuthenticatorRequestDialogViewTestApi::GetSheet(
+    AuthenticatorRequestDialogView* dialog) {
+  return dialog->sheet_;
+}
+
 }  // namespace test

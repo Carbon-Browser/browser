@@ -8,7 +8,6 @@
 #include <memory>
 #include <string>
 
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/values.h"
 #include "components/sync/driver/sync_service_observer.h"
@@ -29,6 +28,11 @@ class SyncInternalsMessageHandler : public content::WebUIMessageHandler,
                                     public syncer::InvalidationsListener {
  public:
   SyncInternalsMessageHandler();
+
+  SyncInternalsMessageHandler(const SyncInternalsMessageHandler&) = delete;
+  SyncInternalsMessageHandler& operator=(const SyncInternalsMessageHandler&) =
+      delete;
+
   ~SyncInternalsMessageHandler() override;
 
   // content::WebUIMessageHandler implementation.
@@ -37,35 +41,35 @@ class SyncInternalsMessageHandler : public content::WebUIMessageHandler,
 
   // Fires an event to send updated data to the About page and registers
   // observers to notify the page upon updates.
-  void HandleRequestDataAndRegisterForUpdates(const base::ListValue* args);
+  void HandleRequestDataAndRegisterForUpdates(const base::Value::List& args);
 
   // Fires an event to send the list of types back to the page.
-  void HandleRequestListOfTypes(const base::ListValue* args);
+  void HandleRequestListOfTypes(const base::Value::List& args);
 
   // Fires an event to send the initial state of the "include specifics" flag.
-  void HandleRequestIncludeSpecificsInitialState(const base::ListValue* args);
+  void HandleRequestIncludeSpecificsInitialState(const base::Value::List& args);
 
   // Handler for getAllNodes message.  Needs a |request_id| argument.
-  void HandleGetAllNodes(const base::ListValue* args);
+  void HandleGetAllNodes(const base::Value::List& args);
 
   // Handler for setting internal state of if specifics should be included in
   // protocol events when sent to be displayed.
-  void HandleSetIncludeSpecifics(const base::ListValue* args);
+  void HandleSetIncludeSpecifics(const base::Value::List& args);
 
   // Handler for writeUserEvent message.
-  void HandleWriteUserEvent(const base::ListValue* args);
+  void HandleWriteUserEvent(const base::Value::List& args);
 
   // Handler for requestStart message.
-  void HandleRequestStart(const base::ListValue* args);
+  void HandleRequestStart(const base::Value::List& args);
 
   // Handler for requestStopKeepData message.
-  void HandleRequestStopKeepData(const base::ListValue* args);
+  void HandleRequestStopKeepData(const base::Value::List& args);
 
   // Handler for requestStopClearData message.
-  void HandleRequestStopClearData(const base::ListValue* args);
+  void HandleRequestStopClearData(const base::Value::List& args);
 
   // Handler for triggerRefresh message.
-  void HandleTriggerRefresh(const base::ListValue* args);
+  void HandleTriggerRefresh(const base::Value::List& args);
 
   // Callback used in GetAllNodes.
   void OnReceivedAllNodes(const std::string& callback_id,
@@ -123,8 +127,6 @@ class SyncInternalsMessageHandler : public content::WebUIMessageHandler,
   AboutSyncDataDelegate about_sync_data_delegate_;
 
   base::WeakPtrFactory<SyncInternalsMessageHandler> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(SyncInternalsMessageHandler);
 };
 
 #endif  // CHROME_BROWSER_UI_WEBUI_SYNC_INTERNALS_SYNC_INTERNALS_MESSAGE_HANDLER_H_

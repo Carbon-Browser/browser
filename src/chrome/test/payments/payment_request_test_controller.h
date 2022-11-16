@@ -9,10 +9,11 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "build/build_config.h"
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
 namespace sync_preferences {
 class TestingPrefServiceSyncable;
 }
@@ -46,7 +47,6 @@ class PaymentRequestTestObserver {
   virtual void OnConnectionTerminated() {}
   virtual void OnAbortCalled() {}
   virtual void OnCompleteCalled() {}
-  virtual void OnMinimalUIReady() {}
   virtual void OnUIDisplayed() {}
 
  protected:
@@ -80,7 +80,7 @@ class PaymentRequestTestController {
   // only if: 1) PaymentRequest UI is opening. 2) PaymentHandler is opening.
   content::WebContents* GetPaymentHandlerWebContents();
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   // Clicks the security icon on the Expandable Payment Handler toolbar for
   // testing purpose. Return whether it's succeeded.
   bool ClickPaymentHandlerSecurityIcon();
@@ -98,13 +98,9 @@ class PaymentRequestTestController {
   // available.
   bool ConfirmPayment();
 
-  // Confirms payment in minimal UI. Returns true on success or if the minimal
-  // UI is not implemented on the current platform.
-  bool ConfirmMinimalUI();
-
-  // Dismisses payment in minimal UI. Returns true on success or if the minimal
-  // UI is not implemented on the current platform.
-  bool DismissMinimalUI();
+  // Clicks opt-out on the dialog, if available. Returns true if the opt-out
+  // link was available, false if not.
+  bool ClickOptOut();
 
   // Returns true when running on Android M or L.
   bool IsAndroidMarshmallowOrLollipop();
@@ -132,10 +128,9 @@ class PaymentRequestTestController {
   void OnConnectionTerminated();
   void OnAbortCalled();
   void OnCompleteCalled();
-  void OnMinimalUIReady();
   void OnUIDisplayed();
 
-  PaymentRequestTestObserver* observer_ = nullptr;
+  raw_ptr<PaymentRequestTestObserver> observer_ = nullptr;
 
   bool is_off_the_record_ = false;
   bool valid_ssl_ = true;
@@ -146,7 +141,7 @@ class PaymentRequestTestController {
   std::string twa_payment_app_response_;
   std::vector<AppDescription> app_descriptions_;
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
   void UpdateDelegateFactory();
 
   std::unique_ptr<sync_preferences::TestingPrefServiceSyncable> prefs_;

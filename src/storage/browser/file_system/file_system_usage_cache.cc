@@ -20,7 +20,7 @@
 namespace storage {
 
 namespace {
-constexpr base::TimeDelta kCloseDelay = base::TimeDelta::FromSeconds(5);
+constexpr base::TimeDelta kCloseDelay = base::Seconds(5);
 const size_t kMaxHandleCacheSize = 2;
 }  // namespace
 
@@ -36,7 +36,7 @@ FileSystemUsageCache::~FileSystemUsageCache() {
 const base::FilePath::CharType FileSystemUsageCache::kUsageFileName[] =
     FILE_PATH_LITERAL(".usage");
 const char FileSystemUsageCache::kUsageFileHeader[] = "FSU5";
-const int FileSystemUsageCache::kUsageFileHeaderSize = 4;
+const size_t FileSystemUsageCache::kUsageFileHeaderSize = 4;
 
 // Pickle::{Read,Write}Bool treat bool as int
 const int FileSystemUsageCache::kUsageFileSize =

@@ -34,7 +34,7 @@ class LightProviderMojo
       public chromeos::sensors::mojom::SensorHalClient,
       public chromeos::sensors::mojom::SensorServiceNewDevicesObserver {
  public:
-  LightProviderMojo(AlsReader* als_reader, bool has_several_light_sensors);
+  explicit LightProviderMojo(AlsReader* als_reader);
   LightProviderMojo(const LightProviderMojo&) = delete;
   LightProviderMojo& operator=(const LightProviderMojo&) = delete;
   ~LightProviderMojo() override;
@@ -81,6 +81,12 @@ class LightProviderMojo
   void OnSensorServiceDisconnect();
   void ResetSensorService();
 
+  // Called when an in-use device is unplugged, and we need to search for other
+  // devices to use.
+  // Assumes that the angle device won't be unplugged.
+  void ResetStates();
+  void QueryDevices();
+
   // Callback of GetDeviceIds(LIGHT), containing all iio_device_ids of light
   // sensors.
   void GetLightIdsCallback(const std::vector<int32_t>& light_ids);
@@ -91,22 +97,18 @@ class LightProviderMojo
   void GetNameLocationCallback(
       int32_t id,
       const std::vector<absl::optional<std::string>>& values);
-  void GetNameCallback(int32_t id,
-                       const std::vector<absl::optional<std::string>>& values);
 
   // Ignores the light with |id| due to some errors of it's attributes.
   void IgnoreLight(int32_t id);
 
   mojo::Remote<chromeos::sensors::mojom::SensorDevice> GetSensorDeviceRemote(
       int32_t id);
-  void OnLightRemoteDisconnect(int32_t id);
+  void OnLightRemoteDisconnect(int32_t id,
+                               uint32_t custom_reason_code,
+                               const std::string& description);
 
   void DetermineLightSensor(int32_t id);
   void SetupLightSamplesObserver();
-
-  // Needs cros-ec-light on the lid if true; prefer cros-ec-light than acpi-als
-  // if false.
-  bool has_several_light_sensors_;
 
   // The Mojo channel connecting to Sensor Hal Dispatcher.
   mojo::Receiver<chromeos::sensors::mojom::SensorHalClient> sensor_hal_client_{
@@ -123,6 +125,7 @@ class LightProviderMojo
   // remote.
   std::map<int32_t, LightData> lights_;
 
+  bool als_init_status_set_ = false;
   // The device id of light to be used.
   absl::optional<int32_t> light_device_id_;
 

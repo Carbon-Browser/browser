@@ -23,7 +23,7 @@
 #include "components/viz/test/compositor_frame_helpers.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
 
 namespace viz {
 namespace {
@@ -38,7 +38,7 @@ constexpr bool kIsChildRoot = false;
 class SurfaceAggregatorPixelTest : public VizPixelTestWithParam {
  public:
   SurfaceAggregatorPixelTest()
-      : manager_(&shared_bitmap_manager_),
+      : manager_(FrameSinkManagerImpl::InitParams(&shared_bitmap_manager_)),
         support_(std::make_unique<CompositorFrameSinkSupport>(
             nullptr,
             &manager_,
@@ -57,8 +57,7 @@ class SurfaceAggregatorPixelTest : public VizPixelTestWithParam {
   FrameSinkManagerImpl manager_;
   ParentLocalSurfaceIdAllocator root_allocator_;
   std::unique_ptr<CompositorFrameSinkSupport> support_;
-  base::TimeTicks next_display_time_ =
-      base::TimeTicks() + base::TimeDelta::FromSeconds(1);
+  base::TimeTicks next_display_time_ = base::TimeTicks() + base::Seconds(1);
 };
 
 INSTANTIATE_TEST_SUITE_P(,
@@ -99,7 +98,7 @@ TEST_P(SurfaceAggregatorPixelTest, DrawSimpleFrame) {
   auto* color_quad = pass->CreateAndAppendDrawQuad<SolidColorDrawQuad>();
   bool force_anti_aliasing_off = false;
   color_quad->SetNew(pass->shared_quad_state_list.back(), rect, rect,
-                     SK_ColorGREEN, force_anti_aliasing_off);
+                     SkColors::kGreen, force_anti_aliasing_off);
 
   auto root_frame =
       CompositorFrameBuilder().AddRenderPass(std::move(pass)).Build();
@@ -154,12 +153,12 @@ TEST_P(SurfaceAggregatorPixelTest, DrawSimpleAggregatedFrame) {
     surface_quad->SetNew(
         pass->shared_quad_state_list.back(), gfx::Rect(child_size),
         gfx::Rect(child_size), SurfaceRange(absl::nullopt, child_surface_id),
-        SK_ColorWHITE, /*stretch_content_to_fill_bounds=*/false);
+        SkColors::kWhite, /*stretch_content_to_fill_bounds=*/false);
 
     auto* color_quad = pass->CreateAndAppendDrawQuad<SolidColorDrawQuad>();
     bool force_anti_aliasing_off = false;
     color_quad->SetNew(pass->shared_quad_state_list.back(), rect, rect,
-                       SK_ColorYELLOW, force_anti_aliasing_off);
+                       SkColors::kYellow, force_anti_aliasing_off);
 
     auto root_frame =
         CompositorFrameBuilder().AddRenderPass(std::move(pass)).Build();
@@ -180,7 +179,7 @@ TEST_P(SurfaceAggregatorPixelTest, DrawSimpleAggregatedFrame) {
     auto* color_quad = pass->CreateAndAppendDrawQuad<SolidColorDrawQuad>();
     bool force_anti_aliasing_off = false;
     color_quad->SetNew(pass->shared_quad_state_list.back(), rect, rect,
-                       SK_ColorBLUE, force_anti_aliasing_off);
+                       SkColors::kBlue, force_anti_aliasing_off);
 
     auto child_frame =
         CompositorFrameBuilder().AddRenderPass(std::move(pass)).Build();
@@ -248,7 +247,7 @@ TEST_P(SurfaceAggregatorPixelTest, DrawAggregatedFrameWithSurfaceTransforms) {
     left_surface_quad->SetNew(
         pass->shared_quad_state_list.back(), gfx::Rect(child_size),
         gfx::Rect(child_size), SurfaceRange(absl::nullopt, left_child_id),
-        SK_ColorWHITE, /*stretch_content_to_fill_bounds=*/false);
+        SkColors::kWhite, /*stretch_content_to_fill_bounds=*/false);
 
     surface_transform.Translate(100, 0);
     CreateAndAppendTestSharedQuadState(pass.get(), surface_transform,
@@ -258,7 +257,7 @@ TEST_P(SurfaceAggregatorPixelTest, DrawAggregatedFrameWithSurfaceTransforms) {
     right_surface_quad->SetNew(
         pass->shared_quad_state_list.back(), gfx::Rect(child_size),
         gfx::Rect(child_size), SurfaceRange(absl::nullopt, right_child_id),
-        SK_ColorWHITE, /*stretch_content_to_fill_bounds=*/false);
+        SkColors::kWhite, /*stretch_content_to_fill_bounds=*/false);
 
     auto root_frame =
         CompositorFrameBuilder().AddRenderPass(std::move(pass)).Build();
@@ -280,13 +279,13 @@ TEST_P(SurfaceAggregatorPixelTest, DrawAggregatedFrameWithSurfaceTransforms) {
     bool force_anti_aliasing_off = false;
     top_color_quad->SetNew(pass->shared_quad_state_list.back(),
                            gfx::Rect(quad_size), gfx::Rect(quad_size),
-                           SK_ColorGREEN, force_anti_aliasing_off);
+                           SkColors::kGreen, force_anti_aliasing_off);
 
     auto* bottom_color_quad =
         pass->CreateAndAppendDrawQuad<SolidColorDrawQuad>();
     bottom_color_quad->SetNew(
         pass->shared_quad_state_list.back(), gfx::Rect(0, 100, 100, 100),
-        gfx::Rect(0, 100, 100, 100), SK_ColorBLUE, force_anti_aliasing_off);
+        gfx::Rect(0, 100, 100, 100), SkColors::kBlue, force_anti_aliasing_off);
 
     auto child_frame =
         CompositorFrameBuilder().AddRenderPass(std::move(pass)).Build();
@@ -308,13 +307,13 @@ TEST_P(SurfaceAggregatorPixelTest, DrawAggregatedFrameWithSurfaceTransforms) {
     bool force_anti_aliasing_off = false;
     top_color_quad->SetNew(pass->shared_quad_state_list.back(),
                            gfx::Rect(quad_size), gfx::Rect(quad_size),
-                           SK_ColorBLUE, force_anti_aliasing_off);
+                           SkColors::kBlue, force_anti_aliasing_off);
 
     auto* bottom_color_quad =
         pass->CreateAndAppendDrawQuad<SolidColorDrawQuad>();
     bottom_color_quad->SetNew(
         pass->shared_quad_state_list.back(), gfx::Rect(0, 100, 100, 100),
-        gfx::Rect(0, 100, 100, 100), SK_ColorGREEN, force_anti_aliasing_off);
+        gfx::Rect(0, 100, 100, 100), SkColors::kGreen, force_anti_aliasing_off);
 
     auto child_frame =
         CompositorFrameBuilder().AddRenderPass(std::move(pass)).Build();
@@ -340,10 +339,6 @@ TEST_P(SurfaceAggregatorPixelTest, DrawAggregatedFrameWithSurfaceTransforms) {
 // Draw a simple frame with a delegated ink trail on top of it, then confirm
 // that it is erased by the next aggregation.
 TEST_P(SurfaceAggregatorPixelTest, DrawAndEraseDelegatedInkTrail) {
-  // DelegatedInkTrail isn't supported on non-Skia renderers.
-  if (renderer_type() == RendererType::kGL)
-    return;
-
   DelegatedInkPointPixelTestHelper delegated_ink_helper(renderer_.get());
 
   // Create and send metadata and points to the renderer that will be drawn.
@@ -354,8 +349,8 @@ TEST_P(SurfaceAggregatorPixelTest, DrawAndEraseDelegatedInkTrail) {
   delegated_ink_helper.CreateAndSendPointFromLastPoint(gfx::PointF(26, 37));
   delegated_ink_helper.CreateAndSendPointFromLastPoint(gfx::PointF(45, 87));
 
-  delegated_ink_helper.CreateAndSendMetadata(kFirstPoint, 7.7f, SK_ColorWHITE,
-                                             kFirstTimestamp,
+  delegated_ink_helper.CreateAndSendMetadata(kFirstPoint, 7.7f,
+                                             SkColors::kWhite, kFirstTimestamp,
                                              gfx::RectF(0, 0, 200, 200));
 
   gfx::Rect rect(this->device_viewport_size_);
@@ -369,7 +364,7 @@ TEST_P(SurfaceAggregatorPixelTest, DrawAndEraseDelegatedInkTrail) {
   auto* color_quad = pass->CreateAndAppendDrawQuad<SolidColorDrawQuad>();
   bool force_anti_aliasing_off = false;
   color_quad->SetNew(pass->shared_quad_state_list.back(), rect, rect,
-                     SK_ColorGREEN, force_anti_aliasing_off);
+                     SkColors::kGreen, force_anti_aliasing_off);
 
   auto root_frame =
       CompositorFrameBuilder().AddRenderPass(std::move(pass)).Build();
@@ -409,4 +404,4 @@ TEST_P(SurfaceAggregatorPixelTest, DrawAndEraseDelegatedInkTrail) {
 }  // namespace
 }  // namespace viz
 
-#endif  // !defined(OS_ANDROID)
+#endif  // !BUILDFLAG(IS_ANDROID)

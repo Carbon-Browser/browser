@@ -9,8 +9,8 @@
 
 #include "base/bind.h"
 #include "base/callback_helpers.h"
-#include "base/macros.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/android/tab_android.h"
 #include "chrome/browser/offline_pages/android/offline_page_auto_fetcher.h"
 #include "chrome/browser/offline_pages/android/offline_page_auto_fetcher_service.h"
@@ -80,7 +80,9 @@ class AutoFetchPageLoadWatcher::NavigationObserver
           AutoFetchPageLoadWatcher::NavigationObserver> {
  public:
   explicit NavigationObserver(content::WebContents* web_contents)
-      : content::WebContentsObserver(web_contents) {
+      : content::WebContentsObserver(web_contents),
+        content::WebContentsUserData<
+            AutoFetchPageLoadWatcher::NavigationObserver>(*web_contents) {
     page_load_watcher_ =
         OfflinePageAutoFetcherServiceFactory::GetForBrowserContext(
             web_contents->GetBrowserContext())
@@ -88,10 +90,13 @@ class AutoFetchPageLoadWatcher::NavigationObserver
     DCHECK(page_load_watcher_);
   }
 
+  NavigationObserver(const NavigationObserver&) = delete;
+  NavigationObserver& operator=(const NavigationObserver&) = delete;
+
   // content::WebContentsObserver implementation.
   void DidFinishNavigation(
       content::NavigationHandle* navigation_handle) override {
-    if (!navigation_handle->IsInMainFrame() ||
+    if (!navigation_handle->IsInPrimaryMainFrame() ||
         !navigation_handle->HasCommitted())
       return;
     page_load_watcher_->HandleNavigation(navigation_handle);
@@ -100,13 +105,11 @@ class AutoFetchPageLoadWatcher::NavigationObserver
  private:
   friend class content::WebContentsUserData<
       AutoFetchPageLoadWatcher::NavigationObserver>;
-  AutoFetchPageLoadWatcher* page_load_watcher_;
-
-  DISALLOW_COPY_AND_ASSIGN(NavigationObserver);
+  raw_ptr<AutoFetchPageLoadWatcher> page_load_watcher_;
   WEB_CONTENTS_USER_DATA_KEY_DECL();
 };
 
-WEB_CONTENTS_USER_DATA_KEY_IMPL(AutoFetchPageLoadWatcher::NavigationObserver)
+WEB_CONTENTS_USER_DATA_KEY_IMPL(AutoFetchPageLoadWatcher::NavigationObserver);
 
 // static
 void AutoFetchPageLoadWatcher::CreateForWebContents(
@@ -394,9 +397,9 @@ class AutoFetchPageLoadWatcher::TabWatcher : public TabModelListObserver,
     return weak_ptr_factory_.GetWeakPtr();
   }
 
-  InternalImpl* impl_;
+  raw_ptr<InternalImpl> impl_;
   // The observed tab model. May be null if not yet observing.
-  TabModel* observed_tab_model_ = nullptr;
+  raw_ptr<TabModel> observed_tab_model_ = nullptr;
   base::WeakPtrFactory<TabWatcher> weak_ptr_factory_{this};
 };
 
@@ -434,7 +437,8 @@ void AutoFetchPageLoadWatcher::HandleNavigation(
   }
 
   // Ignore if the URL didn't change.
-  const GURL& previous_url = navigation_handle->GetPreviousMainFrameURL();
+  const GURL& previous_url =
+      navigation_handle->GetPreviousPrimaryMainFrameURL();
   if (navigation_handle->GetURL() == previous_url)
     return;
 

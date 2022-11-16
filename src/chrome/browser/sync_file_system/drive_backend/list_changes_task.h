@@ -9,7 +9,7 @@
 
 #include <memory>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/sync_file_system/drive_backend/sync_task.h"
 #include "google_apis/common/api_error_codes.h"
@@ -32,6 +32,10 @@ class SyncEngineContext;
 class ListChangesTask : public SyncTask {
  public:
   explicit ListChangesTask(SyncEngineContext* sync_context);
+
+  ListChangesTask(const ListChangesTask&) = delete;
+  ListChangesTask& operator=(const ListChangesTask&) = delete;
+
   ~ListChangesTask() override;
 
   void RunPreflight(std::unique_ptr<SyncTaskToken> token) override;
@@ -48,14 +52,12 @@ class ListChangesTask : public SyncTask {
   MetadataDatabase* metadata_database();
   drive::DriveServiceInterface* drive_service();
 
-  SyncEngineContext* sync_context_;
+  raw_ptr<SyncEngineContext> sync_context_;
   std::vector<std::unique_ptr<google_apis::ChangeResource>> change_list_;
 
   std::vector<std::string> file_ids_;
 
   base::WeakPtrFactory<ListChangesTask> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ListChangesTask);
 };
 
 }  // namespace drive_backend

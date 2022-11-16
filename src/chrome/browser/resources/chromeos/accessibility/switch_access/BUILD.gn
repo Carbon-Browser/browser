@@ -5,7 +5,7 @@
 import("//build/config/chromeos/ui_mode.gni")
 import("//build/config/features.gni")
 import(
-    "//chrome/browser/resources/chromeos/accessibility/common/run_jsbundler.gni")
+    "//chrome/browser/resources/chromeos/accessibility/tools/run_jsbundler.gni")
 import("//chrome/common/features.gni")
 import("//chrome/test/base/js2gtest.gni")
 import("//testing/test.gni")
@@ -115,14 +115,18 @@ js2gtest("switch_access_extjs_tests") {
     "nodes/group_node_test.js",
     "nodes/tab_node_test.js",
     "point_scan_manager_test.js",
-    "saatlite/gen/saatlite_tests.js",
+
+    # TODO(1316408): Tests were broken at head. Re-enable tests when they pass.
+    # "saatlite/gen/saatlite_tests.js",
     "switch_access_predicate_test.js",
     "switch_access_test.js",
     "text_navigation_manager_test.js",
   ]
   gen_include_files = [
+    "../common/testing/accessibility_test_base.js",
     "../common/testing/assert_additions.js",
     "../common/testing/callback_helper.js",
+    "../common/testing/e2e_test_base.js",
     "switch_access_e2e_test_base.js",
     "test_utility.js",
   ]
@@ -132,7 +136,8 @@ js2gtest("switch_access_extjs_tests") {
     "//ash",
     "//ash/keyboard/ui",
     "//base",
-    "//chrome/browser/chromeos",
+    "//chrome/browser/ash",
+    "//chrome/browser/ash/crosapi",
     "//chrome/common",
     "//chromeos",
   ]

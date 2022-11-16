@@ -14,12 +14,12 @@
 #include "base/ios/device_util.h"
 #include "base/logging.h"
 #include "base/metrics/field_trial.h"
+#include "base/no_destructor.h"
 #include "base/rand_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/system/sys_info.h"
-#include "base/task/post_task.h"
 #include "base/time/time.h"
 #include "base/values.h"
 #include "build/branding_buildflags.h"
@@ -41,7 +41,6 @@
 #include "ios/web/public/thread/web_thread.h"
 #include "net/base/backoff_entry.h"
 #include "net/base/load_flags.h"
-#include "net/url_request/url_fetcher.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/cpp/simple_url_loader.h"
@@ -369,8 +368,8 @@ void OmahaService::Start(std::unique_ptr<network::PendingSharedURLLoaderFactory>
          !service->url_loader_factory_);
   service->pending_url_loader_factory_ = std::move(pending_url_loader_factory);
   service->locale_lang_ = GetApplicationContext()->GetApplicationLocale();
-  base::PostTask(FROM_HERE, {web::WebThread::IO},
-                 base::BindOnce(&OmahaService::SendOrScheduleNextPing,
+  web::GetIOThreadTaskRunner({})->PostTask(
+      FROM_HERE, base::BindOnce(&OmahaService::SendOrScheduleNextPing,
                                 base::Unretained(service)));
 }
 
@@ -468,17 +467,15 @@ void OmahaService::StartInternal() {
   // If the |next_tries_time_| is more than kHoursBetweenRequests hours away,
   // there is a possibility that the clock has been tampered with. Reschedule
   // the ping to be the usual interval after the last successful one.
-  if (next_tries_time_ - now >
-      base::TimeDelta::FromHours(kHoursBetweenRequests)) {
-    next_tries_time_ =
-        last_sent_time_ + base::TimeDelta::FromHours(kHoursBetweenRequests);
+  if (next_tries_time_ - now > base::Hours(kHoursBetweenRequests)) {
+    next_tries_time_ = last_sent_time_ + base::Hours(kHoursBetweenRequests);
     persist_again = true;
   }
 
   // Fire a ping as early as possible if the version changed.
   const base::Version& current_version = version_info::GetVersion();
   if (last_sent_version_ < current_version) {
-    next_tries_time_ = base::Time::Now() - base::TimeDelta::FromSeconds(1);
+    next_tries_time_ = base::Time::Now() - base::Seconds(1);
     number_of_tries_ = 0;
     persist_again = true;
   }
@@ -498,16 +495,16 @@ void OmahaService::GetDebugInformation(
     base::OnceCallback<void(base::DictionaryValue*)> callback) {
   if (OmahaService::IsEnabled()) {
     OmahaService* service = GetInstance();
-    base::PostTask(
-        FROM_HERE, {web::WebThread::IO},
+    web::GetIOThreadTaskRunner({})->PostTask(
+        FROM_HERE,
         base::BindOnce(&OmahaService::GetDebugInformationOnIOThread,
                        base::Unretained(service), std::move(callback)));
 
   } else {
     auto result = std::make_unique<base::DictionaryValue>();
     // Invoke the callback with an empty response.
-    base::PostTask(
-        FROM_HERE, {web::WebThread::UI},
+    web::GetUIThreadTaskRunner({})->PostTask(
+        FROM_HERE,
         base::BindOnce(std::move(callback), base::Owned(result.release())));
   }
 }
@@ -711,21 +708,24 @@ void OmahaService::SendOrScheduleNextPing() {
 }
 
 void OmahaService::PersistStates() {
-  NSUserDefaults* defaults = [NSUserDefaults standardUserDefaults];
+  // As a workaround to crbug.com/1247282, dispatch back to the main thread.
+  dispatch_async(dispatch_get_main_queue(), ^{
+    NSUserDefaults* defaults = [NSUserDefaults standardUserDefaults];
 
-  [defaults setDouble:next_tries_time_.ToCFAbsoluteTime()
-               forKey:kNextTriesTimesKey];
-  [defaults setDouble:current_ping_time_.ToCFAbsoluteTime()
-               forKey:kCurrentPingKey];
-  [defaults setDouble:last_sent_time_.ToCFAbsoluteTime()
-               forKey:kLastSentTimeKey];
-  [defaults setInteger:number_of_tries_ forKey:kNumberTriesKey];
-  [defaults setObject:base::SysUTF8ToNSString(last_sent_version_.GetString())
-               forKey:kLastSentVersionKey];
-  [defaults setInteger:last_server_date_ forKey:kLastServerDateKey];
+    [defaults setDouble:next_tries_time_.ToCFAbsoluteTime()
+                 forKey:kNextTriesTimesKey];
+    [defaults setDouble:current_ping_time_.ToCFAbsoluteTime()
+                 forKey:kCurrentPingKey];
+    [defaults setDouble:last_sent_time_.ToCFAbsoluteTime()
+                 forKey:kLastSentTimeKey];
+    [defaults setInteger:number_of_tries_ forKey:kNumberTriesKey];
+    [defaults setObject:base::SysUTF8ToNSString(last_sent_version_.GetString())
+                 forKey:kLastSentVersionKey];
+    [defaults setInteger:last_server_date_ forKey:kLastServerDateKey];
 
-  // Save critical state information for usage reporting.
-  [defaults synchronize];
+    // Save critical state information for usage reporting.
+    [defaults synchronize];
+  });
 }
 
 void OmahaService::OnURLLoadComplete(
@@ -756,10 +756,10 @@ void OmahaService::OnURLLoadComplete(
   number_of_tries_ = 0;
   // Schedule the next request. If requset that just finished was an install
   // notification, send an active ping immediately.
-  next_tries_time_ = sending_install_event_
-                         ? base::Time::Now()
-                         : base::Time::Now() + base::TimeDelta::FromHours(
-                                                   kHoursBetweenRequests);
+  next_tries_time_ =
+      sending_install_event_
+          ? base::Time::Now()
+          : base::Time::Now() + base::Hours(kHoursBetweenRequests);
   current_ping_time_ = next_tries_time_;
   last_sent_time_ = base::Time::Now();
   last_sent_version_ = version_info::GetVersion();
@@ -774,16 +774,16 @@ void OmahaService::OnURLLoadComplete(
   if (details) {
     // Use the correct callback based on if a one-off check is ongoing.
     if (!one_off_check_callback_.is_null()) {
-      base::PostTask(
-          FROM_HERE, {web::WebThread::UI},
+      web::GetUIThreadTaskRunner({})->PostTask(
+          FROM_HERE,
           base::BindOnce(std::move(one_off_check_callback_), *details));
       // Do not schedule another ping for one-off checks, unless
       // it canceled a scheduled ping.
       need_to_schedule_ping = scheduled_ping_canceled_;
       scheduled_ping_canceled_ = false;
     } else if (!details->is_up_to_date) {
-      base::PostTask(FROM_HERE, {web::WebThread::UI},
-                     base::BindOnce(upgrade_recommended_callback_, *details));
+      web::GetUIThreadTaskRunner({})->PostTask(
+          FROM_HERE, base::BindOnce(upgrade_recommended_callback_, *details));
     }
   }
 
@@ -818,8 +818,8 @@ void OmahaService::GetDebugInformationOnIOThread(
                         (timer_.desired_run_time() - base::TimeTicks::Now())));
 
   // Sending the value to the callback.
-  base::PostTask(
-      FROM_HERE, {web::WebThread::UI},
+  web::GetUIThreadTaskRunner({})->PostTask(
+      FROM_HERE,
       base::BindOnce(std::move(callback), base::Owned(result.release())));
 }
 

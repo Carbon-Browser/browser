@@ -69,37 +69,24 @@ V4L2JpegEncodeAccelerator::JobRecord::JobRecord(
     scoped_refptr<VideoFrame> output_frame,
     int quality,
     int32_t task_id,
-    BitstreamBuffer* exif_buffer)
+    base::WritableSharedMemoryMapping exif_mapping)
     : input_frame(input_frame),
       output_frame(output_frame),
       quality(quality),
       task_id(task_id),
-      output_shm(base::subtle::PlatformSharedMemoryRegion(), 0, true),  // dummy
-      exif_shm(nullptr) {
-  if (exif_buffer) {
-    exif_shm.reset(new UnalignedSharedMemory(exif_buffer->TakeRegion(),
-                                             exif_buffer->size(), false));
-    exif_offset = exif_buffer->offset();
-  }
-}
+      exif_mapping(std::move(exif_mapping)) {}
 
 V4L2JpegEncodeAccelerator::JobRecord::JobRecord(
     scoped_refptr<VideoFrame> input_frame,
     int quality,
-    BitstreamBuffer* exif_buffer,
-    BitstreamBuffer output_buffer)
+    int32_t task_id,
+    base::WritableSharedMemoryMapping exif_mapping,
+    base::WritableSharedMemoryMapping output_mapping)
     : input_frame(input_frame),
       quality(quality),
-      task_id(output_buffer.id()),
-      output_shm(output_buffer.TakeRegion(), output_buffer.size(), false),
-      output_offset(output_buffer.offset()),
-      exif_shm(nullptr) {
-  if (exif_buffer) {
-    exif_shm.reset(new UnalignedSharedMemory(exif_buffer->TakeRegion(),
-                                             exif_buffer->size(), false));
-    exif_offset = exif_buffer->offset();
-  }
-}
+      task_id(task_id),
+      output_mapping(std::move(output_mapping)),
+      exif_mapping(std::move(exif_mapping)) {}
 
 V4L2JpegEncodeAccelerator::JobRecord::~JobRecord() {}
 
@@ -493,7 +480,7 @@ bool V4L2JpegEncodeAccelerator::EncodedInstance::RequestInputBuffers() {
     buffer.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
     buffer.memory = V4L2_MEMORY_MMAP;
     buffer.m.planes = planes;
-    buffer.length = base::size(planes);
+    buffer.length = std::size(planes);
     IOCTL_OR_ERROR_RETURN_FALSE(VIDIOC_QUERYBUF, &buffer);
 
     if (input_buffer_num_planes_ != buffer.length) {
@@ -544,7 +531,7 @@ bool V4L2JpegEncodeAccelerator::EncodedInstance::RequestOutputBuffers() {
     buffer.index = i;
     buffer.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
     buffer.m.planes = planes;
-    buffer.length = base::size(planes);
+    buffer.length = std::size(planes);
     buffer.memory = V4L2_MEMORY_MMAP;
     IOCTL_OR_ERROR_RETURN_FALSE(VIDIOC_QUERYBUF, &buffer);
     if (buffer.length != kMaxJpegPlane) {
@@ -577,9 +564,9 @@ void V4L2JpegEncodeAccelerator::EncodedInstance::DestroyInputBuffers() {
     input_streamon_ = false;
   }
 
-  for (const auto& input_record : input_buffer_map_) {
+  for (const auto& [address, length, at_device] : input_buffer_map_) {
     for (size_t i = 0; i < input_buffer_num_planes_; ++i) {
-      device_->Munmap(input_record.address[i], input_record.length[i]);
+      device_->Munmap(address[i], length[i]);
     }
   }
 
@@ -727,7 +714,7 @@ bool V4L2JpegEncodeAccelerator::EncodedInstance::EnqueueInputRecord() {
   qbuf.index = index;
   qbuf.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
   qbuf.memory = V4L2_MEMORY_MMAP;
-  qbuf.length = base::size(planes);
+  qbuf.length = std::size(planes);
   for (size_t i = 0; i < input_buffer_num_planes_; i++) {
     // sets this to 0 means the size of the plane.
     planes[i].bytesused = 0;
@@ -757,7 +744,7 @@ bool V4L2JpegEncodeAccelerator::EncodedInstance::EnqueueOutputRecord() {
   qbuf.index = index;
   qbuf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
   qbuf.memory = V4L2_MEMORY_MMAP;
-  qbuf.length = base::size(planes);
+  qbuf.length = std::size(planes);
   qbuf.m.planes = planes;
   IOCTL_OR_ERROR_RETURN_FALSE(VIDIOC_QBUF, &qbuf);
   output_record.at_device = true;
@@ -769,7 +756,7 @@ size_t V4L2JpegEncodeAccelerator::EncodedInstance::FinalizeJpegImage(
     uint8_t* dst_ptr,
     const JpegBufferRecord& output_buffer,
     size_t buffer_size,
-    std::unique_ptr<UnalignedSharedMemory> exif_shm) {
+    base::WritableSharedMemoryMapping exif_mapping) {
   DCHECK(parent_->encoder_task_runner_->BelongsToCurrentThread());
   size_t idx;
 
@@ -778,9 +765,9 @@ size_t V4L2JpegEncodeAccelerator::EncodedInstance::FinalizeJpegImage(
   dst_ptr[1] = JPEG_SOI;
   idx = 2;
 
-  if (exif_shm) {
-    uint8_t* exif_buffer = static_cast<uint8_t*>(exif_shm->memory());
-    size_t exif_buffer_size = exif_shm->size();
+  if (exif_mapping.IsValid()) {
+    uint8_t* exif_buffer = exif_mapping.GetMemoryAs<uint8_t>();
+    size_t exif_buffer_size = exif_mapping.size();
     // Application Segment for Exif data.
     uint16_t exif_segment_size = static_cast<uint16_t>(exif_buffer_size + 2);
     const uint8_t kAppSegment[] = {
@@ -851,7 +838,7 @@ void V4L2JpegEncodeAccelerator::EncodedInstance::Dequeue() {
     memset(planes, 0, sizeof(planes));
     dqbuf.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
     dqbuf.memory = V4L2_MEMORY_MMAP;
-    dqbuf.length = base::size(planes);
+    dqbuf.length = std::size(planes);
     dqbuf.m.planes = planes;
     if (device_->Ioctl(VIDIOC_DQBUF, &dqbuf) != 0) {
       if (errno == EAGAIN) {
@@ -886,7 +873,7 @@ void V4L2JpegEncodeAccelerator::EncodedInstance::Dequeue() {
     memset(planes, 0, sizeof(planes));
     dqbuf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
     dqbuf.memory = V4L2_MEMORY_MMAP;
-    dqbuf.length = base::size(planes);
+    dqbuf.length = std::size(planes);
     dqbuf.m.planes = planes;
     if (device_->Ioctl(VIDIOC_DQBUF, &dqbuf) != 0) {
       if (errno == EAGAIN) {
@@ -914,8 +901,8 @@ void V4L2JpegEncodeAccelerator::EncodedInstance::Dequeue() {
     }
 
     size_t jpeg_size = FinalizeJpegImage(
-        static_cast<uint8_t*>(job_record->output_shm.memory()), output_record,
-        planes[0].bytesused, std::move(job_record->exif_shm));
+        job_record->output_mapping.GetMemoryAs<uint8_t>(), output_record,
+        planes[0].bytesused, std::move(job_record->exif_mapping));
     if (!jpeg_size) {
       NotifyError(job_record->task_id, PLATFORM_FAILURE);
       return;
@@ -1200,6 +1187,21 @@ bool V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::SetUpJpegParameters(
       VLOG(1) << "JPEG Quality: max:" << queryctrl.maximum
               << ", min:" << queryctrl.minimum << ", value:" << quality;
       IOCTL_OR_ERROR_RETURN_FALSE(VIDIOC_S_EXT_CTRLS, &ctrls);
+
+      queryctrl.id = V4L2_CID_JPEG_ACTIVE_MARKER;
+      queryctrl.type = V4L2_CTRL_TYPE_BITMASK;
+      // Driver may not have implemented V4L2_CID_JPEG_ACTIVE_MARKER.
+      // Ignore any error and assume the driver implements the JPEG stream
+      // the way we want it.
+      device_->Ioctl(VIDIOC_QUERY_EXT_CTRL, &queryctrl);
+
+      // Ask for JPEG markers we want. Since not all may be implemented,
+      // ask for the common subset of what we want and what is supported.
+      ctrl.id = V4L2_CID_JPEG_ACTIVE_MARKER;
+      ctrl.value = queryctrl.maximum &
+                   (V4L2_JPEG_ACTIVE_MARKER_APP0 | V4L2_JPEG_ACTIVE_MARKER_DQT |
+                    V4L2_JPEG_ACTIVE_MARKER_DHT);
+      device_->Ioctl(VIDIOC_S_EXT_CTRLS, &ctrls);
       break;
 
     default:
@@ -1502,7 +1504,7 @@ bool V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::EnqueueInputRecord() {
   qbuf.index = index;
   qbuf.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
   qbuf.memory = V4L2_MEMORY_DMABUF;
-  qbuf.length = base::size(planes);
+  qbuf.length = std::size(planes);
   qbuf.m.planes = planes;
 
   const auto& frame = job_record->input_frame;
@@ -1518,11 +1520,12 @@ bool V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::EnqueueInputRecord() {
     }
 
     const auto& fds = frame->DmabufFds();
-    const auto& planes = frame->layout().planes();
+    const auto& layout_planes = frame->layout().planes();
     qbuf.m.planes[i].m.fd = (i < fds.size()) ? fds[i].get() : fds.back().get();
-    qbuf.m.planes[i].data_offset = planes[i].offset;
+    qbuf.m.planes[i].data_offset = layout_planes[i].offset;
     qbuf.m.planes[i].bytesused += qbuf.m.planes[i].data_offset;
-    qbuf.m.planes[i].length = planes[i].size + qbuf.m.planes[i].data_offset;
+    qbuf.m.planes[i].length =
+        layout_planes[i].size + qbuf.m.planes[i].data_offset;
   }
 
   IOCTL_OR_ERROR_RETURN_FALSE(VIDIOC_QBUF, &qbuf);
@@ -1544,7 +1547,7 @@ bool V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::EnqueueOutputRecord() {
   qbuf.index = index;
   qbuf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
   qbuf.memory = V4L2_MEMORY_DMABUF;
-  qbuf.length = base::size(planes);
+  qbuf.length = std::size(planes);
   qbuf.m.planes = planes;
 
   auto& job_record = running_job_queue_.back();
@@ -1559,7 +1562,7 @@ bool V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::EnqueueOutputRecord() {
 size_t V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::FinalizeJpegImage(
     scoped_refptr<VideoFrame> output_frame,
     size_t buffer_size,
-    std::unique_ptr<UnalignedSharedMemory> exif_shm) {
+    base::WritableSharedMemoryMapping exif_mapping) {
   DCHECK(parent_->encoder_task_runner_->BelongsToCurrentThread());
   size_t idx = 0;
 
@@ -1589,9 +1592,9 @@ size_t V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::FinalizeJpegImage(
   // Fill SOI and EXIF markers.
   static const uint8_t kJpegStart[] = {0xFF, JPEG_SOI};
 
-  if (exif_shm) {
-    uint8_t* exif_buffer = static_cast<uint8_t*>(exif_shm->memory());
-    size_t exif_buffer_size = exif_shm->size();
+  if (exif_mapping.IsValid()) {
+    uint8_t* exif_buffer = exif_mapping.GetMemoryAs<uint8_t>();
+    size_t exif_buffer_size = exif_mapping.size();
     // Application Segment for Exif data.
     uint16_t exif_segment_size = static_cast<uint16_t>(exif_buffer_size + 2);
     const uint8_t kAppSegment[] = {
@@ -1608,15 +1611,27 @@ size_t V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::FinalizeJpegImage(
       }
       memmove(dst_ptr + compressed_data_offset, dst_ptr, buffer_size);
     } else if (output_buffer_pixelformat_ == V4L2_PIX_FMT_JPEG) {
-      // Move data after SOI and APP0 marker for exif room.
+      // V4L2_PIX_FMT_JPEG refers to a valid JPEG bitstream. It does not
+      // imply a standard JFIF bitstream with JFIF-APP0 markers.
+      // Move data after SOI to make room for APP1 marker and EXIF data.
+      // If an APP0 marker is found directly after the SOI marker, skip
+      // over it.
       // The JPEG from V4L2_PIX_FMT_JPEG is
-      // SOI-APP0-DQT-marker1-marker2-...-markerN-compressed stream-EOI
-      // |......| <- src_data_offset = len(SOI) + len(APP0)
+      // SOI-marker1-marker2-...-SOS-compressed stream-EOI
+      // |......| <- src_data_offset = len(SOI) + len(APP0) (if APP0 found)
       // |...................| <- data_offset = len(SOI) + len(APP1)
       size_t data_offset =
           sizeof(kJpegStart) + sizeof(kAppSegment) + exif_buffer_size;
-      size_t app0_length = 2 + ((dst_ptr[4] << 16) | dst_ptr[5]);
-      size_t src_data_offset = sizeof(kJpegStart) + app0_length;
+      size_t src_data_offset = sizeof(kJpegStart);
+      // Check for APP0 segment following SOI marker and skip over it if found
+      if (dst_ptr[2] == JPEG_MARKER_PREFIX && dst_ptr[3] == JPEG_APP0) {
+        src_data_offset += 2 + ((dst_ptr[4] << 8) | dst_ptr[5]);
+        if (src_data_offset >= buffer_size) {
+          LOG(WARNING)
+              << "APP0 segment from encoder extends beyond JPEG buffer";
+          return 0;
+        }
+      }
       buffer_size -= src_data_offset;
       if (buffer_size + data_offset > output_buffer_sizeimage_) {
         LOG(WARNING) << "JPEG buffer is too small for the EXIF metadata";
@@ -1709,7 +1724,7 @@ void V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::Dequeue() {
     memset(planes, 0, sizeof(planes));
     dqbuf.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
     dqbuf.memory = V4L2_MEMORY_DMABUF;
-    dqbuf.length = base::size(planes);
+    dqbuf.length = std::size(planes);
     dqbuf.m.planes = planes;
     if (device_->Ioctl(VIDIOC_DQBUF, &dqbuf) != 0) {
       if (errno == EAGAIN) {
@@ -1741,7 +1756,7 @@ void V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::Dequeue() {
     memset(planes, 0, sizeof(planes));
     dqbuf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
     dqbuf.memory = V4L2_MEMORY_DMABUF;
-    dqbuf.length = base::size(planes);
+    dqbuf.length = std::size(planes);
     dqbuf.m.planes = planes;
     if (device_->Ioctl(VIDIOC_DQBUF, &dqbuf) != 0) {
       if (errno == EAGAIN) {
@@ -1767,7 +1782,7 @@ void V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::Dequeue() {
 
     size_t jpeg_size =
         FinalizeJpegImage(job_record->output_frame, planes[0].bytesused,
-                          std::move(job_record->exif_shm));
+                          std::move(job_record->exif_mapping));
 
     if (!jpeg_size) {
       NotifyError(job_record->task_id, PLATFORM_FAILURE);
@@ -1914,16 +1929,36 @@ void V4L2JpegEncodeAccelerator::Encode(
     return;
   }
 
+  base::WritableSharedMemoryMapping exif_mapping;
   if (exif_buffer) {
     VLOGF(4) << "EXIF size " << exif_buffer->size();
     if (exif_buffer->size() > kMaxMarkerSizeAllowed) {
       NotifyError(output_buffer.id(), INVALID_ARGUMENT);
       return;
     }
+
+    base::UnsafeSharedMemoryRegion exif_region = exif_buffer->TakeRegion();
+    exif_mapping =
+        exif_region.MapAt(exif_buffer->offset(), exif_buffer->size());
+    if (!exif_mapping.IsValid()) {
+      VPLOGF(1) << "could not map exif bitstream_buffer";
+      NotifyError(output_buffer.id(), PLATFORM_FAILURE);
+      return;
+    }
   }
 
-  std::unique_ptr<JobRecord> job_record(new JobRecord(
-      video_frame, quality, exif_buffer, std::move(output_buffer)));
+  base::UnsafeSharedMemoryRegion output_region = output_buffer.TakeRegion();
+  base::WritableSharedMemoryMapping output_mapping =
+      output_region.MapAt(output_buffer.offset(), output_buffer.size());
+  if (!output_mapping.IsValid()) {
+    VPLOGF(1) << "could not map I420 bitstream_buffer";
+    NotifyError(output_buffer.id(), PLATFORM_FAILURE);
+    return;
+  }
+
+  std::unique_ptr<JobRecord> job_record(
+      new JobRecord(video_frame, quality, output_buffer.id(),
+                    std::move(exif_mapping), std::move(output_mapping)));
 
   encoder_task_runner_->PostTask(
       FROM_HERE, base::BindOnce(&V4L2JpegEncodeAccelerator::EncodeTaskLegacy,
@@ -1950,16 +1985,26 @@ void V4L2JpegEncodeAccelerator::EncodeWithDmaBuf(
     return;
   }
 
+  base::WritableSharedMemoryMapping exif_mapping;
   if (exif_buffer) {
     VLOGF(4) << "EXIF size " << exif_buffer->size();
     if (exif_buffer->size() > kMaxMarkerSizeAllowed) {
       NotifyError(task_id, INVALID_ARGUMENT);
       return;
     }
+
+    base::UnsafeSharedMemoryRegion exif_region = exif_buffer->TakeRegion();
+    exif_mapping =
+        exif_region.MapAt(exif_buffer->offset(), exif_buffer->size());
+    if (!exif_mapping.IsValid()) {
+      VPLOGF(1) << "could not map exif bitstream_buffer";
+      NotifyError(task_id, PLATFORM_FAILURE);
+      return;
+    }
   }
 
-  std::unique_ptr<JobRecord> job_record(
-      new JobRecord(input_frame, output_frame, quality, task_id, exif_buffer));
+  std::unique_ptr<JobRecord> job_record(new JobRecord(
+      input_frame, output_frame, quality, task_id, std::move(exif_mapping)));
 
   encoder_task_runner_->PostTask(
       FROM_HERE, base::BindOnce(&V4L2JpegEncodeAccelerator::EncodeTask,
@@ -1969,19 +2014,6 @@ void V4L2JpegEncodeAccelerator::EncodeWithDmaBuf(
 void V4L2JpegEncodeAccelerator::EncodeTaskLegacy(
     std::unique_ptr<JobRecord> job_record) {
   DCHECK(encoder_task_runner_->BelongsToCurrentThread());
-  if (!job_record->output_shm.MapAt(job_record->output_offset,
-                                    job_record->output_shm.size())) {
-    VPLOGF(1) << "could not map I420 bitstream_buffer";
-    NotifyError(job_record->task_id, PLATFORM_FAILURE);
-    return;
-  }
-  if (job_record->exif_shm &&
-      !job_record->exif_shm->MapAt(job_record->exif_offset,
-                                   job_record->exif_shm->size())) {
-    VPLOGF(1) << "could not map exif bitstream_buffer";
-    NotifyError(job_record->task_id, PLATFORM_FAILURE);
-    return;
-  }
 
   // Check if the parameters of input frame changes.
   // If it changes, we open a new device and put the job in it.
@@ -2006,7 +2038,7 @@ void V4L2JpegEncodeAccelerator::EncodeTaskLegacy(
     }
 
     if (!encoded_device->CreateBuffers(coded_size,
-                                       job_record->output_shm.size())) {
+                                       job_record->output_mapping.size())) {
       VLOGF(1) << "Create buffers failed.";
       NotifyError(job_record->task_id, PLATFORM_FAILURE);
       return;
@@ -2027,13 +2059,6 @@ void V4L2JpegEncodeAccelerator::EncodeTaskLegacy(
 void V4L2JpegEncodeAccelerator::EncodeTask(
     std::unique_ptr<JobRecord> job_record) {
   DCHECK(encoder_task_runner_->BelongsToCurrentThread());
-  if (job_record->exif_shm &&
-      !job_record->exif_shm->MapAt(job_record->exif_offset,
-                                   job_record->exif_shm->size())) {
-    VPLOGF(1) << "could not map exif bitstream_buffer";
-    NotifyError(job_record->task_id, PLATFORM_FAILURE);
-    return;
-  }
 
   // Check if the parameters of input frame changes.
   // If it changes, we open a new device and put the job in it.

@@ -9,6 +9,7 @@
 
 #include "base/component_export.h"
 #include "base/run_loop.h"
+#include "base/time/time.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote_set.h"
 #include "services/media_session/public/mojom/media_controller.mojom.h"
@@ -132,6 +133,10 @@ class COMPONENT_EXPORT(MEDIA_SESSION_TEST_SUPPORT_CPP) TestMediaController
     : public mojom::MediaController {
  public:
   TestMediaController();
+
+  TestMediaController(const TestMediaController&) = delete;
+  TestMediaController& operator=(const TestMediaController&) = delete;
+
   ~TestMediaController() override;
 
   mojo::Remote<mojom::MediaController> CreateMediaControllerRemote();
@@ -200,8 +205,6 @@ class COMPONENT_EXPORT(MEDIA_SESSION_TEST_SUPPORT_CPP) TestMediaController
   mojo::RemoteSet<mojom::MediaControllerObserver> observers_;
 
   mojo::Receiver<mojom::MediaController> receiver_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(TestMediaController);
 };
 
 }  // namespace test

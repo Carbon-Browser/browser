@@ -10,15 +10,15 @@
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
 #include "base/threading/thread_task_runner_handle.h"
-#include "chrome/browser/chromeos/printing/history/print_job_info.pb.h"
+#include "chrome/browser/ash/printing/history/print_job_info.pb.h"
 #include "components/leveldb_proto/public/proto_database_provider.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace chromeos {
-
-using printing::proto::PrintJobInfo;
+namespace ash {
 
 namespace {
+
+using printing::proto::PrintJobInfo;
 
 constexpr char kId1[] = "id1";
 constexpr char kId2[] = "id2";
@@ -252,4 +252,4 @@ TEST_F(PrintJobDatabaseImplTest, RequestsBeforeInitialization) {
   EXPECT_EQ(kTitle1, print_job_entries[0].title());
 }
 
-}  // namespace chromeos
+}  // namespace ash

@@ -11,7 +11,7 @@
 
 #include "base/callback.h"
 #include "base/component_export.h"
-#include "base/macros.h"
+#include "base/time/time.h"
 #include "base/values.h"
 #include "chromeos/dbus/shill/shill_manager_client.h"
 
@@ -25,6 +25,10 @@ class COMPONENT_EXPORT(SHILL_CLIENT) FakeShillManagerClient
       public ShillManagerClient::TestInterface {
  public:
   FakeShillManagerClient();
+
+  FakeShillManagerClient(const FakeShillManagerClient&) = delete;
+  FakeShillManagerClient& operator=(const FakeShillManagerClient&) = delete;
+
   ~FakeShillManagerClient() override;
 
   // ShillManagerClient overrides
@@ -58,9 +62,17 @@ class COMPONENT_EXPORT(SHILL_CLIENT) FakeShillManagerClient
   void GetService(const base::Value& properties,
                   ObjectPathCallback callback,
                   ErrorCallback error_callback) override;
-  void ConnectToBestServices(base::OnceClosure callback,
-                             ErrorCallback error_callback) override;
+  void ScanAndConnectToBestServices(base::OnceClosure callback,
+                                    ErrorCallback error_callback) override;
   void SetNetworkThrottlingStatus(const NetworkThrottlingStatus& status,
+                                  base::OnceClosure callback,
+                                  ErrorCallback error_callback) override;
+  void AddPasspointCredentials(const dbus::ObjectPath& profile_path,
+                               const base::Value& properties,
+                               base::OnceClosure callback,
+                               ErrorCallback error_callback) override;
+  void RemovePasspointCredentials(const dbus::ObjectPath& profile_path,
+                                  const base::Value& properties,
                                   base::OnceClosure callback,
                                   ErrorCallback error_callback) override;
 
@@ -76,6 +88,9 @@ class COMPONENT_EXPORT(SHILL_CLIENT) FakeShillManagerClient
                                  bool initializing) override;
   void SetTechnologyProhibited(const std::string& type,
                                bool prohibited) override;
+  void SetTechnologyEnabled(const std::string& type,
+                            base::OnceClosure callback,
+                            bool enabled) override;
   void AddGeoNetwork(const std::string& technology,
                      const base::Value& network) override;
   void AddProfile(const std::string& profile_path) override;
@@ -99,21 +114,20 @@ class COMPONENT_EXPORT(SHILL_CLIENT) FakeShillManagerClient
       FakeShillSimulatedResult configuration_result) override;
   base::Value GetEnabledServiceList() const override;
   void ClearProfiles() override;
+  void SetShouldReturnNullProperties(bool value) override;
 
   // Constants used for testing.
   static const char kFakeEthernetNetworkGuid[];
 
  private:
   void SetDefaultProperties();
+  void PassNullopt(DBusMethodCallback<base::Value> callback) const;
   void PassStubProperties(DBusMethodCallback<base::Value> callback) const;
   void PassStubGeoNetworks(DBusMethodCallback<base::Value> callback) const;
   void CallNotifyObserversPropertyChanged(const std::string& property);
   void NotifyObserversPropertyChanged(const std::string& property);
   base::ListValue* GetListProperty(const std::string& property);
   bool TechnologyEnabled(const std::string& type) const;
-  void SetTechnologyEnabled(const std::string& type,
-                            base::OnceClosure callback,
-                            bool enabled);
   void ScanCompleted(const std::string& device_path);
 
   // Parses the command line for Shill stub switches and sets initial states.
@@ -165,11 +179,11 @@ class COMPONENT_EXPORT(SHILL_CLIENT) FakeShillManagerClient
   FakeShillSimulatedResult simulate_configuration_result_ =
       FakeShillSimulatedResult::kSuccess;
 
+  bool return_null_properties_;
+
   // Note: This should remain the last member so it'll be destroyed and
   // invalidate its weak pointers before any other members are destroyed.
   base::WeakPtrFactory<FakeShillManagerClient> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(FakeShillManagerClient);
 };
 
 }  // namespace chromeos

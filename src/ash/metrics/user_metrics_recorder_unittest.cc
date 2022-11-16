@@ -21,9 +21,6 @@ using session_manager::SessionState;
 namespace ash {
 namespace {
 
-const char kAsh_NumberOfVisibleWindowsInPrimaryDisplay[] =
-    "Ash.NumberOfVisibleWindowsInPrimaryDisplay";
-
 const char kAsh_ActiveWindowShowTypeOverTime[] =
     "Ash.ActiveWindowShowTypeOverTime";
 
@@ -43,6 +40,10 @@ const char kAsh_NotificationBadgeShownPref[] = "Ash.AppNotificationBadgingPref";
 class UserMetricsRecorderTest : public NoSessionAshTestBase {
  public:
   UserMetricsRecorderTest() = default;
+
+  UserMetricsRecorderTest(const UserMetricsRecorderTest&) = delete;
+  UserMetricsRecorderTest& operator=(const UserMetricsRecorderTest&) = delete;
+
   ~UserMetricsRecorderTest() override = default;
 
   UserMetricsRecorderTestAPI& test_api() { return test_api_; }
@@ -55,8 +56,6 @@ class UserMetricsRecorderTest : public NoSessionAshTestBase {
 
   // Histogram value verifier.
   base::HistogramTester histograms_;
-
-  DISALLOW_COPY_AND_ASSIGN(UserMetricsRecorderTest);
 };
 
 // Verifies the return value of IsUserInActiveDesktopEnvironment() for the
@@ -101,7 +100,6 @@ TEST_F(UserMetricsRecorderTest,
   ASSERT_FALSE(test_api().IsUserInActiveDesktopEnvironment());
   test_api().RecordPeriodicMetrics();
 
-  histograms().ExpectTotalCount(kAsh_NumberOfVisibleWindowsInPrimaryDisplay, 0);
   histograms().ExpectTotalCount(kAsh_Shelf_NumberOfItems, 0);
   histograms().ExpectTotalCount(kAsh_Shelf_NumberOfPinnedItems, 0);
   histograms().ExpectTotalCount(kAsh_Shelf_NumberOfUnpinnedItems, 0);
@@ -116,7 +114,6 @@ TEST_F(UserMetricsRecorderTest,
   ASSERT_TRUE(test_api().IsUserInActiveDesktopEnvironment());
   test_api().RecordPeriodicMetrics();
 
-  histograms().ExpectTotalCount(kAsh_NumberOfVisibleWindowsInPrimaryDisplay, 1);
   histograms().ExpectTotalCount(kAsh_Shelf_NumberOfItems, 1);
   histograms().ExpectTotalCount(kAsh_Shelf_NumberOfPinnedItems, 1);
   histograms().ExpectTotalCount(kAsh_Shelf_NumberOfUnpinnedItems, 1);

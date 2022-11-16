@@ -32,9 +32,7 @@ class FrameSinkId;
 
 namespace blink {
 
-class AssociatedInterfaceProvider;
 class ChildFrameCompositingHelper;
-class InterfaceRegistry;
 class LocalFrame;
 class RemoteFrameClient;
 class WebFrameWidget;
@@ -53,18 +51,20 @@ class CORE_EXPORT RemoteFrame final : public Frame,
 
   // For a description of |inheriting_agent_factory| go see the comment on the
   // Frame constructor.
-  RemoteFrame(RemoteFrameClient*,
-              Page&,
-              FrameOwner*,
-              Frame* parent,
-              Frame* previous_sibling,
-              FrameInsertType insert_type,
-              const RemoteFrameToken& frame_token,
-              WindowAgentFactory* inheriting_agent_factory,
-              InterfaceRegistry*,
-              AssociatedInterfaceProvider*,
-              WebFrameWidget* ancestor_widget,
-              const base::UnguessableToken& devtools_frame_token);
+  RemoteFrame(
+      RemoteFrameClient*,
+      Page&,
+      FrameOwner*,
+      Frame* parent,
+      Frame* previous_sibling,
+      FrameInsertType insert_type,
+      const RemoteFrameToken& frame_token,
+      WindowAgentFactory* inheriting_agent_factory,
+      WebFrameWidget* ancestor_widget,
+      const base::UnguessableToken& devtools_frame_token,
+      mojo::PendingAssociatedRemote<mojom::blink::RemoteFrameHost>
+          remote_frame_host,
+      mojo::PendingAssociatedReceiver<mojom::blink::RemoteFrame> receiver);
   ~RemoteFrame() override;
 
   // Frame overrides:
@@ -79,10 +79,6 @@ class CORE_EXPORT RemoteFrame final : public Frame,
   void SetTextDirection(base::i18n::TextDirection) override {}
   void SetIsInert(bool) override;
   void SetInheritedEffectiveTouchAction(TouchAction) override;
-  bool BubbleLogicalScrollFromChildFrame(
-      mojom::blink::ScrollDirection direction,
-      ui::ScrollGranularity granularity,
-      Frame* child) override;
   void DidFocus() override;
   void AddResourceTimingFromChild(
       mojom::blink::ResourceTimingInfoPtr timing) override;
@@ -118,17 +114,18 @@ class CORE_EXPORT RemoteFrame final : public Frame,
   void SetReplicatedSandboxFlags(network::mojom::blink::WebSandboxFlags);
   void SetInsecureRequestPolicy(mojom::blink::InsecureRequestPolicy);
   void SetInsecureNavigationsSet(const WebVector<unsigned>&);
-  void FrameRectsChanged(const IntRect& local_frame_rect,
-                         const IntRect& screen_space_rect);
+  void FrameRectsChanged(const gfx::Size& local_frame_size,
+                         const gfx::Rect& screen_space_rect);
   void InitializeFrameVisualProperties(const FrameVisualProperties& properties);
   // If 'propagate' is true, updated properties will be sent to the browser.
   // Returns true if visual properties have changed.
   bool SynchronizeVisualProperties(bool propagate = true);
   void ResendVisualProperties();
   void SetViewportIntersection(const mojom::blink::ViewportIntersectionState&);
+  void UpdateCompositedLayerBounds();
 
-  // Called when the local root's screen info changes.
-  void DidChangeScreenInfo(const display::ScreenInfo& screen_info);
+  // Called when the local root's screen infos change.
+  void DidChangeScreenInfos(const display::ScreenInfos& screen_info);
   // Called when the main frame's zoom level is changed and should be propagated
   // to the remote's associated view.
   void ZoomLevelChanged(double zoom_level);
@@ -179,7 +176,7 @@ class CORE_EXPORT RemoteFrame final : public Frame,
       mojom::blink::ResourceTimingInfoPtr timing,
       const String& server_timing_values) final;
   void ScrollRectToVisible(
-      const gfx::Rect& rect_to_scroll,
+      const gfx::RectF& rect_to_scroll,
       mojom::blink::ScrollIntoViewParamsPtr params) override;
   void DidStartLoading() override;
   void DidStopLoading() override;
@@ -206,8 +203,8 @@ class CORE_EXPORT RemoteFrame final : public Frame,
   void ChildProcessGone() override;
 
   // Called only when this frame has a local frame owner.
-  IntSize GetMainFrameViewportSize() const override;
-  IntPoint GetMainFrameScrollOffset() const override;
+  gfx::Size GetMainFrameViewportSize() const override;
+  gfx::Point GetMainFrameScrollPosition() const override;
 
   void SetOpener(Frame* opener) override;
 
@@ -239,7 +236,7 @@ class CORE_EXPORT RemoteFrame final : public Frame,
 
  private:
   // Frame protected overrides:
-  bool DetachImpl(FrameDetachType) override;
+  bool DetachImpl(FrameDetachType type) override;
 
   // ChildFrameCompositor:
   void SetCcLayer(scoped_refptr<cc::Layer> layer,
@@ -255,10 +252,6 @@ class CORE_EXPORT RemoteFrame final : public Frame,
   bool DetachChildren();
   void ApplyReplicatedPermissionsPolicyHeader();
   void RecordSentVisualProperties();
-
-  static void BindToReceiver(
-      RemoteFrame* frame,
-      mojo::PendingAssociatedReceiver<mojom::blink::RemoteFrame> receiver);
 
   Member<RemoteFrameView> view_;
   RemoteSecurityContext security_context_;
@@ -277,8 +270,6 @@ class CORE_EXPORT RemoteFrame final : public Frame,
   // local root ancestor (eg it is a proxy of the root frame) then the pointer
   // is null.
   WebFrameWidget* ancestor_widget_;
-
-  InterfaceRegistry* const interface_registry_;
 
   // True when the process rendering the child's frame contents has terminated
   // and ChildProcessGone() is called.

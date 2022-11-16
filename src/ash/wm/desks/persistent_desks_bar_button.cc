@@ -13,6 +13,7 @@
 #include "ash/wm/desks/persistent_desks_bar_context_menu.h"
 #include "ash/wm/overview/overview_controller.h"
 #include "ui/compositor/layer.h"
+#include "ui/gfx/paint_vector_icon.h"
 #include "ui/views/animation/ink_drop.h"
 #include "ui/views/controls/highlight_path_generator.h"
 
@@ -26,7 +27,7 @@ constexpr int kCircularButtonSize = 32;
 // PersistentDesksBarDeskButton:
 
 PersistentDesksBarDeskButton::PersistentDesksBarDeskButton(const Desk* desk)
-    : DeskButtonBase(desk->name()), desk_(desk) {
+    : DeskButtonBase(desk->name(), /*set_text=*/true), desk_(desk) {
   // TODO(minch): A11y of bento bar.
   SetAccessibleName(base::UTF8ToUTF16(GetClassName()));
   // Only paint the background of the active desk's button.
@@ -42,8 +43,12 @@ const char* PersistentDesksBarDeskButton::GetClassName() const {
 }
 
 void PersistentDesksBarDeskButton::OnButtonPressed() {
-  DesksController::Get()->ActivateDesk(desk_,
-                                       DesksSwitchSource::kPersistentDesksBar);
+  // If there is an ongoing desk activation, do nothing.
+  DesksController* desks_controller = DesksController::Get();
+  if (!desks_controller->AreDesksBeingModified()) {
+    desks_controller->ActivateDesk(desk_,
+                                   DesksSwitchSource::kPersistentDesksBar);
+  }
 }
 
 void PersistentDesksBarDeskButton::OnThemeChanged() {
@@ -90,7 +95,12 @@ gfx::Size PersistentDesksBarCircularButton::CalculatePreferredSize() const {
 
 void PersistentDesksBarCircularButton::OnThemeChanged() {
   views::ImageButton::OnThemeChanged();
-  AshColorProvider::Get()->DecorateFloatingIconButton(this, icon_);
+
+  const SkColor enabled_icon_color =
+      AshColorProvider::Get()->GetContentLayerColor(
+          AshColorProvider::ContentLayerType::kButtonIconColor);
+  SetImage(views::Button::STATE_NORMAL,
+           gfx::CreateVectorIcon(icon_, enabled_icon_color));
 }
 
 // -----------------------------------------------------------------------------

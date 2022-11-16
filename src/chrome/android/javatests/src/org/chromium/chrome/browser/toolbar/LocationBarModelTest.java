@@ -111,6 +111,8 @@ public class LocationBarModelTest {
             model.mDisplayUrl = "about:blank";
             model.mFullUrl = "about:blank";
             assertDisplayAndEditText(model, "about:blank", "about:blank");
+
+            model.destroy();
         });
     }
 
@@ -160,7 +162,7 @@ public class LocationBarModelTest {
             mActivityTestRule.getActivity().getTabModelSelector().selectModel(/*incognito=*/
                     toIncognito);
             mActivityTestRule.getActivity().getTabModelSelector().getCurrentModel().setIndex(
-                    0, TabSelectionType.FROM_USER);
+                    0, TabSelectionType.FROM_USER, false);
         });
 
         assertEquals(toIncognito, locationBarModel.isIncognito());

@@ -10,8 +10,7 @@
 #include <memory>
 #include <vector>
 
-#include "base/cxx17_backports.h"
-#include "base/macros.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
@@ -38,6 +37,10 @@ const double kDmgAnalysisTimeoutMs = 10000;
 class MachOFeatureExtractor {
  public:
   MachOFeatureExtractor();
+
+  MachOFeatureExtractor(const MachOFeatureExtractor&) = delete;
+  MachOFeatureExtractor& operator=(const MachOFeatureExtractor&) = delete;
+
   ~MachOFeatureExtractor();
 
   // Tests if the stream references a Mach-O image by examinig its magic
@@ -57,8 +60,6 @@ class MachOFeatureExtractor {
 
   scoped_refptr<BinaryFeatureExtractor> bfe_;
   std::vector<uint8_t> buffer_;  // Buffer that contains read stream data.
-
-  DISALLOW_COPY_AND_ASSIGN(MachOFeatureExtractor);
 };
 
 MachOFeatureExtractor::MachOFeatureExtractor()
@@ -140,8 +141,17 @@ void AnalyzeDMGFile(DMGIterator* iterator, ArchiveAnalyzerResults* results) {
   base::Time start_time = base::Time::Now();
   results->success = false;
 
-  if (!iterator->Open())
+  bool opened_iterator = iterator->Open();
+  base::UmaHistogramBoolean("SBClientDownload.DmgIterationSuccess",
+                            opened_iterator && !iterator->IsEmpty());
+  if (!opened_iterator) {
+    results->analysis_result = safe_browsing::ArchiveAnalysisResult::kUnknown;
     return;
+  } else if (iterator->IsEmpty()) {
+    results->analysis_result =
+        safe_browsing::ArchiveAnalysisResult::kDmgNoPartitions;
+    return;
+  }
 
   MachOFeatureExtractor feature_extractor;
 
@@ -153,7 +163,7 @@ void AnalyzeDMGFile(DMGIterator* iterator, ArchiveAnalyzerResults* results) {
     if (!stream)
       continue;
     if (base::Time::Now() - start_time >=
-        base::TimeDelta::FromMilliseconds(kDmgAnalysisTimeoutMs)) {
+        base::Milliseconds(kDmgAnalysisTimeoutMs)) {
       timeout = true;
       break;
     }
@@ -170,11 +180,11 @@ void AnalyzeDMGFile(DMGIterator* iterator, ArchiveAnalyzerResults* results) {
       if (!ReadEntireStream(stream.get(), &signature_contents))
         continue;
 
-      if (signature_contents.size() < base::size(kDERPKCS7SignedData))
+      if (signature_contents.size() < std::size(kDERPKCS7SignedData))
         continue;
 
       if (memcmp(kDERPKCS7SignedData, signature_contents.data(),
-                 base::size(kDERPKCS7SignedData)) != 0) {
+                 std::size(kDERPKCS7SignedData)) != 0) {
         continue;
       }
 
@@ -199,8 +209,12 @@ void AnalyzeDMGFile(DMGIterator* iterator, ArchiveAnalyzerResults* results) {
     }
   }
 
-  if (!timeout)
+  if (timeout) {
+    results->analysis_result = safe_browsing::ArchiveAnalysisResult::kTimeout;
+  } else {
+    results->analysis_result = safe_browsing::ArchiveAnalysisResult::kValid;
     results->success = true;
+  }
 }
 
 }  // namespace dmg

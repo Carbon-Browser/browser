@@ -4,10 +4,13 @@
 
 #include "chrome/browser/ui/hats/trust_safety_sentiment_service.h"
 
+#include "base/memory/raw_ptr.h"
 #include "base/time/time_override.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/hats/hats_service_factory.h"
 #include "chrome/browser/ui/hats/mock_hats_service.h"
+#include "chrome/browser/ui/hats/trust_safety_sentiment_service.h"
+#include "chrome/browser/ui/hats/trust_safety_sentiment_service_factory.h"
 #include "chrome/browser/ui/page_info/page_info_dialog.h"
 #include "chrome/browser/ui/views/page_info/page_info_bubble_view.h"
 #include "chrome/common/chrome_features.h"
@@ -17,6 +20,16 @@
 #include "content/public/test/browser_test.h"
 
 using ::testing::_;
+
+namespace {
+
+std::unique_ptr<KeyedService> BuildSentimentServiceForTesting(
+    content::BrowserContext* context) {
+  return std::make_unique<TrustSafetySentimentService>(
+      static_cast<Profile*>(context));
+}
+
+}  // namespace
 
 class TrustSafetySentimentServiceBrowserTest : public InProcessBrowserTest {
  public:
@@ -30,6 +43,9 @@ class TrustSafetySentimentServiceBrowserTest : public InProcessBrowserTest {
     mock_hats_service_ = static_cast<MockHatsService*>(
         HatsServiceFactory::GetInstance()->SetTestingFactoryAndUse(
             browser()->profile(), base::BindRepeating(&BuildMockHatsService)));
+    TrustSafetySentimentServiceFactory::GetInstance()->SetTestingFactory(
+        browser()->profile(),
+        base::BindRepeating(&BuildSentimentServiceForTesting));
     EXPECT_CALL(*mock_hats_service_, CanShowAnySurvey(_))
         .WillRepeatedly(testing::Return(true));
   }
@@ -51,11 +67,11 @@ class TrustSafetySentimentServiceBrowserTest : public InProcessBrowserTest {
     permission.type = ContentSettingsType::NOTIFICATIONS;
     permission.setting = ContentSetting::CONTENT_SETTING_BLOCK;
     permission.default_setting = ContentSetting::CONTENT_SETTING_ASK;
-    permission.source = content_settings::SettingSource::SETTING_SOURCE_USER;
 
-    static_cast<PageInfoBubbleView*>(
-        PageInfoBubbleView::GetPageInfoBubbleForTesting())
-        ->OnPermissionChanged(permission);
+    auto* bubble = static_cast<PageInfoBubbleView*>(
+        PageInfoBubbleView::GetPageInfoBubbleForTesting());
+    bubble->presenter_for_testing()->OnSitePermissionChanged(
+        permission.type, permission.setting, permission.is_one_time);
   }
 
   void OpenEnoughNewTabs() {
@@ -71,7 +87,7 @@ class TrustSafetySentimentServiceBrowserTest : public InProcessBrowserTest {
 
  protected:
   base::test::ScopedFeatureList feature_list_;
-  MockHatsService* mock_hats_service_;
+  raw_ptr<MockHatsService> mock_hats_service_;
 };
 
 IN_PROC_BROWSER_TEST_F(TrustSafetySentimentServiceBrowserTest,

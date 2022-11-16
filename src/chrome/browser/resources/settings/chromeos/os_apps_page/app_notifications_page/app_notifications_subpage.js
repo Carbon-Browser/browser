@@ -9,14 +9,20 @@ import 'chrome://resources/mojo/skia/public/mojom/bitmap.mojom-lite.js';
 import 'chrome://resources/mojo/url/mojom/url.mojom-lite.js';
 import '/app-management/file_path.mojom-lite.js';
 import '/app-management/image.mojom-lite.js';
+import '/app-management/safe_base_name.mojom-lite.js';
 import '/app-management/types.mojom-lite.js';
 import '/os_apps_page/app_notification_handler.mojom-lite.js';
 
+import {assert} from 'chrome://resources/js/assert.m.js';
 import {html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {Route, RouteObserverBehavior, RouteObserverBehaviorInterface, Router} from '../../../router.js';
-import {DeepLinkingBehavior, DeepLinkingBehaviorInterface} from '../../deep_linking_behavior.m.js';
-import {routes} from '../../os_route.m.js';
+import {Setting} from '../../../mojom-webui/setting.mojom-webui.js';
+import {Route, Router} from '../../../router.js';
+import {DeepLinkingBehavior, DeepLinkingBehaviorInterface} from '../../deep_linking_behavior.js';
+import {recordSettingChange} from '../../metrics_recorder.js';
+import {routes} from '../../os_route.js';
+import {RouteObserverBehavior, RouteObserverBehaviorInterface} from '../../route_observer_behavior.js';
+import {isAppInstalled} from '../os_apps_page.js';
 
 import {getAppNotificationProvider} from './mojo_interface_provider.js';
 
@@ -70,12 +76,12 @@ export class AppNotificationsSubpage extends AppNotificationsSubpageBase {
 
       /**
        * Used by DeepLinkingBehavior to focus this page's deep links.
-       * @type {!Set<!chromeos.settings.mojom.Setting>}
+       * @type {!Set<!Setting>}
        */
       supportedSettingIds: {
         type: Object,
         value: () => new Set([
-          chromeos.settings.mojom.Setting.kDoNotDisturbOnOff,
+          Setting.kDoNotDisturbOnOff,
         ]),
       },
     };
@@ -101,7 +107,12 @@ export class AppNotificationsSubpage extends AppNotificationsSubpageBase {
   connectedCallback() {
     super.connectedCallback();
     this.startObservingAppNotifications_();
-    this.mojoInterfaceProvider_.notifyPageReady();
+    this.mojoInterfaceProvider_.getQuietMode().then((result) => {
+      this.isDndEnabled_ = result.enabled;
+    });
+    this.mojoInterfaceProvider_.getApps().then((result) => {
+      this.appList_ = result.apps;
+    });
   }
 
   /** @override */
@@ -141,14 +152,37 @@ export class AppNotificationsSubpage extends AppNotificationsSubpageBase {
     this.isDndEnabled_ = enabled;
   }
 
-  /** Override chromeos.settings.appNotification.onNotificationAppListChanged */
-  onNotificationAppListChanged(apps) {
-    this.appList_ = apps;
+  /** Override chromeos.settings.appNotification.onNotificationAppChanged */
+  onNotificationAppChanged(updatedApp) {
+    // Using Polymer mutation methods do not properly handle splice updates with
+    // object that have deep properties. Create and assign a copy list instead.
+    const appList = Array.from(this.appList_);
+    const foundIdx = this.appList_.findIndex(app => {
+      return app.id === updatedApp.id;
+    });
+    if (isAppInstalled(updatedApp)) {
+      if (foundIdx !== -1) {
+        appList[foundIdx] = updatedApp;
+      } else {
+        appList.push(updatedApp);
+      }
+      this.appList_ = appList;
+      return;
+    }
+
+    // Cannot have an app that is uninstalled prior to being installed.
+    assert(foundIdx !== -1);
+    // Uninstalled app found, remove it from the list.
+    appList.splice(foundIdx, 1);
+    this.appList_ = appList;
   }
 
   /** @private */
   setQuietMode_() {
+    this.isDndEnabled_ = !this.isDndEnabled_;
     this.mojoInterfaceProvider_.setQuietMode(this.isDndEnabled_);
+    recordSettingChange(
+        Setting.kDoNotDisturbOnOff, {boolValue: this.isDndEnabled_});
   }
 
   /**
@@ -156,9 +190,19 @@ export class AppNotificationsSubpage extends AppNotificationsSubpageBase {
    * @private
    */
   onEnableTap_(event) {
-    this.isDndEnabled_ = !this.isDndEnabled_;
-    this.mojoInterfaceProvider_.setQuietMode(this.isDndEnabled_);
+    this.setQuietMode_();
     event.stopPropagation();
+  }
+
+  /**
+   * A function used for sorting languages alphabetically.
+   * @param {!Object} first An app array item.
+   * @param {!Object} second An app array item.
+   * @return {number} The result of the comparison.
+   * @private
+   */
+  alphabeticalSort_(first, second) {
+    return first.title.localeCompare(second.title);
   }
 }
 

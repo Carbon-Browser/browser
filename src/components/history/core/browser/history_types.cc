@@ -12,6 +12,12 @@
 
 namespace history {
 
+namespace {
+
+static constexpr float kScoreEpsilon = 1e-8;
+
+}  // namespace
+
 // VisitRow --------------------------------------------------------------------
 
 VisitRow::VisitRow() = default;
@@ -32,6 +38,8 @@ VisitRow::VisitRow(URLID arg_url_id,
       opener_visit(arg_opener_visit) {}
 
 VisitRow::~VisitRow() = default;
+
+VisitRow::VisitRow(const VisitRow&) = default;
 
 // QueryResults ----------------------------------------------------------------
 
@@ -169,7 +177,7 @@ QueryOptions& QueryOptions::operator=(QueryOptions&&) noexcept = default;
 
 void QueryOptions::SetRecentDayRange(int days_ago) {
   end_time = base::Time::Now();
-  begin_time = end_time - base::TimeDelta::FromDays(days_ago);
+  begin_time = end_time - base::Days(days_ago);
 }
 
 int64_t QueryOptions::EffectiveBeginTime() const {
@@ -203,8 +211,10 @@ QueryURLResult& QueryURLResult::operator=(QueryURLResult&&) noexcept = default;
 
 MostVisitedURL::MostVisitedURL() = default;
 
-MostVisitedURL::MostVisitedURL(const GURL& url, const std::u16string& title)
-    : url(url), title(title) {}
+MostVisitedURL::MostVisitedURL(const GURL& url,
+                               const std::u16string& title,
+                               double score)
+    : url(url), title(title), score(score) {}
 
 MostVisitedURL::MostVisitedURL(const MostVisitedURL& other) = default;
 
@@ -268,6 +278,7 @@ HistoryAddPageArgs::HistoryAddPageArgs()
                          true,
                          false,
                          absl::nullopt,
+                         absl::nullopt,
                          absl::nullopt) {}
 
 HistoryAddPageArgs::HistoryAddPageArgs(const GURL& url,
@@ -283,7 +294,8 @@ HistoryAddPageArgs::HistoryAddPageArgs(const GURL& url,
                                        bool consider_for_ntp_most_visited,
                                        bool floc_allowed,
                                        absl::optional<std::u16string> title,
-                                       absl::optional<Opener> opener)
+                                       absl::optional<Opener> opener,
+                                       absl::optional<int64_t> bookmark_id)
     : url(url),
       time(time),
       context_id(context_id),
@@ -297,7 +309,8 @@ HistoryAddPageArgs::HistoryAddPageArgs(const GURL& url,
       consider_for_ntp_most_visited(consider_for_ntp_most_visited),
       floc_allowed(floc_allowed),
       title(title),
-      opener(opener) {}
+      opener(opener),
+      bookmark_id(bookmark_id) {}
 
 HistoryAddPageArgs::HistoryAddPageArgs(const HistoryAddPageArgs& other) =
     default;
@@ -324,7 +337,7 @@ void ExpireHistoryArgs::SetTimeRangeForOneDay(base::Time time) {
 
   // Due to DST, leap seconds, etc., the next day at midnight may be more than
   // 24 hours away, so add 36 hours and round back down to midnight.
-  end_time = (begin_time + base::TimeDelta::FromHours(36)).LocalMidnight();
+  end_time = (begin_time + base::Hours(36)).LocalMidnight();
 }
 
 // DeletionTimeRange ----------------------------------------------------------
@@ -392,29 +405,101 @@ AnnotatedVisit::AnnotatedVisit(URLRow url_row,
                                VisitRow visit_row,
                                VisitContextAnnotations context_annotations,
                                VisitContentAnnotations content_annotations,
-                               VisitID referring_visit_of_redirect_chain_start)
+                               VisitID referring_visit_of_redirect_chain_start,
+                               VisitID opener_visit_of_redirect_chain_start,
+                               VisitSource source)
     : url_row(url_row),
       visit_row(visit_row),
       context_annotations(context_annotations),
       content_annotations(content_annotations),
       referring_visit_of_redirect_chain_start(
-          referring_visit_of_redirect_chain_start) {}
+          referring_visit_of_redirect_chain_start),
+      opener_visit_of_redirect_chain_start(
+          opener_visit_of_redirect_chain_start),
+      source(source) {}
 AnnotatedVisit::AnnotatedVisit(const AnnotatedVisit&) = default;
+AnnotatedVisit::AnnotatedVisit(AnnotatedVisit&&) = default;
 AnnotatedVisit& AnnotatedVisit::operator=(const AnnotatedVisit&) = default;
+AnnotatedVisit& AnnotatedVisit::operator=(AnnotatedVisit&&) = default;
 AnnotatedVisit::~AnnotatedVisit() = default;
 
 ClusterVisit::ClusterVisit() = default;
 ClusterVisit::~ClusterVisit() = default;
 ClusterVisit::ClusterVisit(const ClusterVisit&) = default;
+ClusterVisit::ClusterVisit(ClusterVisit&&) = default;
+ClusterVisit& ClusterVisit::operator=(const ClusterVisit&) = default;
+ClusterVisit& ClusterVisit::operator=(ClusterVisit&&) = default;
+
+ClusterKeywordData::ClusterKeywordData() = default;
+ClusterKeywordData::ClusterKeywordData(
+    const std::vector<std::string>& entity_collections)
+    : entity_collections(entity_collections) {}
+ClusterKeywordData::ClusterKeywordData(
+    ClusterKeywordData::ClusterKeywordType type,
+    float score,
+    const std::vector<std::string>& entity_collections)
+    : type(type), score(score), entity_collections(entity_collections) {}
+ClusterKeywordData::ClusterKeywordData(const ClusterKeywordData&) = default;
+ClusterKeywordData::ClusterKeywordData(ClusterKeywordData&&) = default;
+ClusterKeywordData& ClusterKeywordData::operator=(const ClusterKeywordData&) =
+    default;
+ClusterKeywordData& ClusterKeywordData::operator=(ClusterKeywordData&&) =
+    default;
+ClusterKeywordData::~ClusterKeywordData() = default;
+
+bool ClusterKeywordData::operator==(const ClusterKeywordData& data) const {
+  return type == data.type && std::fabs(score - data.score) < kScoreEpsilon &&
+         entity_collections == data.entity_collections;
+}
+
+void ClusterKeywordData::MaybeUpdateKeywordType(
+    ClusterKeywordData::ClusterKeywordType other_type) {
+  if (type < other_type) {
+    type = other_type;
+  }
+}
+
+std::string ClusterKeywordData::GetKeywordTypeLabel() const {
+  switch (type) {
+    case kUnknown:
+      return "Unknown";
+    case kEntityCategory:
+      return "EntityCategory";
+    case kEntityAlias:
+      return "EntityAlias";
+    case kEntity:
+      return "Entity";
+    case kSearchTerms:
+      return "SearchTerms";
+  }
+}
 
 Cluster::Cluster() = default;
 Cluster::Cluster(int64_t cluster_id,
                  const std::vector<ClusterVisit>& visits,
-                 const std::vector<std::u16string>& keywords)
-    : cluster_id(cluster_id), visits(visits), keywords(keywords) {}
+                 const base::flat_map<std::u16string, ClusterKeywordData>&
+                     keyword_to_data_map,
+                 bool should_show_on_prominent_ui_surfaces,
+                 absl::optional<std::u16string> label)
+    : cluster_id(cluster_id),
+      visits(visits),
+      keyword_to_data_map(keyword_to_data_map),
+      should_show_on_prominent_ui_surfaces(
+          should_show_on_prominent_ui_surfaces),
+      label(label) {}
 Cluster::Cluster(const Cluster&) = default;
+Cluster::Cluster(Cluster&&) = default;
 Cluster& Cluster::operator=(const Cluster&) = default;
+Cluster& Cluster::operator=(Cluster&&) = default;
 Cluster::~Cluster() = default;
+
+std::vector<std::u16string> Cluster::GetKeywords() const {
+  std::vector<std::u16string> keywords;
+  for (const auto& p : keyword_to_data_map) {
+    keywords.push_back(p.first);
+  }
+  return keywords;
+}
 
 ClusterRow::ClusterRow() = default;
 ClusterRow::ClusterRow(int64_t cluster_id) : cluster_id(cluster_id) {}

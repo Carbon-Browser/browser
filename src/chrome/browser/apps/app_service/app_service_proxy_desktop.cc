@@ -4,17 +4,16 @@
 
 #include "chrome/browser/apps/app_service/app_service_proxy_desktop.h"
 
-#include "chrome/browser/apps/app_service/publishers/extension_apps.h"
-#include "chrome/browser/web_applications/app_service/web_apps.h"
+#include "chrome/browser/web_applications/app_service/web_app_publisher_helper.h"
+#include "chrome/browser/web_applications/web_app_command_manager.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
-#include "components/services/app_service/app_service_impl.h"
+#include "components/services/app_service/app_service_mojom_impl.h"
+#include "components/services/app_service/public/cpp/app_types.h"
 
 namespace apps {
 
 AppServiceProxy::AppServiceProxy(Profile* profile)
-    : AppServiceProxyBase(profile) {
-  Initialize();
-}
+    : AppServiceProxyBase(profile) {}
 
 AppServiceProxy::~AppServiceProxy() = default;
 
@@ -29,31 +28,36 @@ void AppServiceProxy::Initialize() {
     return;
   }
 
-  web_apps_ = std::make_unique<web_app::WebApps>(app_service_, profile_);
-  extension_apps_ = std::make_unique<ExtensionApps>(app_service_, profile_);
-
-  // Asynchronously add app icon source, so we don't do too much work in the
-  // constructor.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE, base::BindOnce(&AppServiceProxy::AddAppIconSource,
-                                weak_ptr_factory_.GetWeakPtr(), profile_));
+  publisher_host_ = std::make_unique<PublisherHost>(this);
 }
 
 void AppServiceProxy::Uninstall(const std::string& app_id,
                                 apps::mojom::UninstallSource uninstall_source,
                                 gfx::NativeWindow parent_window) {
   // On non-ChromeOS, publishers run the remove dialog.
-  apps::mojom::AppType app_type = app_registry_cache_.GetAppType(app_id);
-  if (app_type == apps::mojom::AppType::kWeb) {
-    web_app::WebApps::UninstallImpl(
-        web_app::WebAppProvider::GetForWebApps(profile_), app_id,
-        uninstall_source, parent_window);
+  auto app_type = app_registry_cache_.GetAppType(app_id);
+  if (app_type == apps::AppType::kWeb) {
+    web_app::UninstallImpl(web_app::WebAppProvider::GetForWebApps(profile_),
+                           app_id, uninstall_source, parent_window);
   }
 }
 
 void AppServiceProxy::FlushMojoCallsForTesting() {
-  app_service_impl_->FlushMojoCallsForTesting();
+  app_service_mojom_impl_->FlushMojoCallsForTesting();
   receivers_.FlushForTesting();
+  web_app::WebAppProvider::GetForTest(profile())
+      ->command_manager()
+      .AwaitAllCommandsCompleteForTesting();
+}
+
+void AppServiceProxy::SetRunOnOsLoginMode(
+    const std::string& app_id,
+    apps::mojom::RunOnOsLoginMode run_on_os_login_mode) {
+  if (app_service_.is_connected()) {
+    app_service_->SetRunOnOsLoginMode(
+        ConvertAppTypeToMojomAppType(app_registry_cache_.GetAppType(app_id)),
+        app_id, run_on_os_login_mode);
+  }
 }
 
 bool AppServiceProxy::MaybeShowLaunchPreventionDialog(

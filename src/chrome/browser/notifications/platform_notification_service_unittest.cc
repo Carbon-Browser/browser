@@ -9,12 +9,13 @@
 
 #include "base/bind.h"
 #include "base/callback_helpers.h"
-#include "base/cxx17_backports.h"
 #include "base/feature_list.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
+#include "build/chromeos_buildflags.h"
 #include "chrome/browser/history/history_service_factory.h"
 #include "chrome/browser/notifications/metrics/mock_notification_metrics_logger.h"
 #include "chrome/browser/notifications/metrics/notification_metrics_logger_factory.h"
@@ -38,6 +39,7 @@
 #include "third_party/blink/public/mojom/notifications/notification.mojom.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "third_party/skia/include/core/SkColor.h"
+#include "ui/gfx/image/image_skia_rep.h"
 #include "url/gurl.h"
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
@@ -49,8 +51,8 @@
 #include "extensions/common/value_builder.h"
 #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
-#if !defined(OS_ANDROID)
-#include "chrome/browser/web_applications/test/test_web_app_provider.h"
+#if !BUILDFLAG(IS_ANDROID)
+#include "chrome/browser/web_applications/test/fake_web_app_provider.h"
 #include "chrome/browser/web_applications/test/web_app_icon_test_utils.h"
 #include "chrome/browser/web_applications/test/web_app_test_utils.h"
 #include "chrome/browser/web_applications/web_app.h"
@@ -89,13 +91,22 @@ const char kTimeUntilLastClickMillis[] = "TimeUntilLastClick";
 class PlatformNotificationServiceTest : public testing::Test {
  public:
   void SetUp() override {
+    TestingProfile::Builder profile_builder;
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+    profile_builder.SetIsMainProfile(true);
+#endif
+    profile_builder.AddTestingFactory(
+        HistoryServiceFactory::GetInstance(),
+        HistoryServiceFactory::GetDefaultFactory());
+    profile_ = profile_builder.Build();
+
     display_service_tester_ =
-        std::make_unique<NotificationDisplayServiceTester>(&profile_);
+        std::make_unique<NotificationDisplayServiceTester>(profile_.get());
 
     mock_logger_ = static_cast<MockNotificationMetricsLogger*>(
         NotificationMetricsLoggerFactory::GetInstance()
             ->SetTestingFactoryAndUse(
-                &profile_,
+                profile_.get(),
                 base::BindRepeating(
                     &MockNotificationMetricsLogger::FactoryForTests)));
 
@@ -109,7 +120,7 @@ class PlatformNotificationServiceTest : public testing::Test {
  protected:
   // Returns the Platform Notification Service these unit tests are for.
   PlatformNotificationServiceImpl* service() {
-    return PlatformNotificationServiceFactory::GetForProfile(&profile_);
+    return PlatformNotificationServiceFactory::GetForProfile(profile_.get());
   }
 
   size_t GetNotificationCountForType(NotificationHandler::Type type) {
@@ -126,19 +137,23 @@ class PlatformNotificationServiceTest : public testing::Test {
   }
 
  protected:
+  // This needs to be declared before `task_environment_`, so that it is
+  // destroyed after `task_environment_` - this ensures that tasks running on
+  // other threads won't access `scoped_feature_list_` while it is being
+  // destroyed.
+  base::test::ScopedFeatureList scoped_feature_list_;
   content::BrowserTaskEnvironment task_environment_;
-  TestingProfile profile_;
+  std::unique_ptr<TestingProfile> profile_;
 
   std::unique_ptr<NotificationDisplayServiceTester> display_service_tester_;
 
   // Owned by the |profile_| as a keyed service.
-  MockNotificationMetricsLogger* mock_logger_;
+  raw_ptr<MockNotificationMetricsLogger> mock_logger_;
 
   std::unique_ptr<ukm::TestAutoSetUkmRecorder> recorder_;
 };
 
 TEST_F(PlatformNotificationServiceTest, DisplayNonPersistentThenClose) {
-  ASSERT_TRUE(profile_.CreateHistoryService());
   PlatformNotificationData data;
   data.title = u"My Notification";
   data.body = u"Hello, world!";
@@ -157,7 +172,6 @@ TEST_F(PlatformNotificationServiceTest, DisplayNonPersistentThenClose) {
 }
 
 TEST_F(PlatformNotificationServiceTest, DisplayPersistentThenClose) {
-  ASSERT_TRUE(profile_.CreateHistoryService());
   PlatformNotificationData data;
   data.title = u"My notification's title";
   data.body = u"Hello, world!";
@@ -184,11 +198,9 @@ TEST_F(PlatformNotificationServiceTest, DisplayPersistentThenClose) {
 }
 
 TEST_F(PlatformNotificationServiceTest, DisplayNonPersistentPropertiesMatch) {
-  ASSERT_TRUE(profile_.CreateHistoryService());
   std::vector<int> vibration_pattern(
       kNotificationVibrationPattern,
-      kNotificationVibrationPattern +
-          base::size(kNotificationVibrationPattern));
+      kNotificationVibrationPattern + std::size(kNotificationVibrationPattern));
 
   PlatformNotificationData data;
   data.title = u"My notification's title";
@@ -218,11 +230,9 @@ TEST_F(PlatformNotificationServiceTest, DisplayNonPersistentPropertiesMatch) {
 }
 
 TEST_F(PlatformNotificationServiceTest, DisplayPersistentPropertiesMatch) {
-  ASSERT_TRUE(profile_.CreateHistoryService());
   std::vector<int> vibration_pattern(
       kNotificationVibrationPattern,
-      kNotificationVibrationPattern +
-          base::size(kNotificationVibrationPattern));
+      kNotificationVibrationPattern + std::size(kNotificationVibrationPattern));
   PlatformNotificationData data;
   data.title = u"My notification's title";
   data.body = u"Hello, world!";
@@ -286,14 +296,13 @@ TEST_F(PlatformNotificationServiceTest, RecordNotificationUkmEvent) {
   data.notification_data.require_interaction = false;
   data.num_clicks = 3;
   data.num_action_button_clicks = 1;
-  data.time_until_close_millis = base::TimeDelta::FromMilliseconds(10000);
-  data.time_until_first_click_millis = base::TimeDelta::FromMilliseconds(2222);
-  data.time_until_last_click_millis = base::TimeDelta::FromMilliseconds(3333);
+  data.time_until_close_millis = base::Milliseconds(10000);
+  data.time_until_first_click_millis = base::Milliseconds(2222);
+  data.time_until_last_click_millis = base::Milliseconds(3333);
 
   // Set up UKM recording conditions.
-  ASSERT_TRUE(profile_.CreateHistoryService());
   auto* history_service = HistoryServiceFactory::GetForProfile(
-      &profile_, ServiceAccessType::EXPLICIT_ACCESS);
+      profile_.get(), ServiceAccessType::EXPLICIT_ACCESS);
   history_service->AddPage(data.origin, base::Time::Now(),
                            history::SOURCE_BROWSED);
 
@@ -361,7 +370,7 @@ TEST_F(PlatformNotificationServiceTest, DisplayNameForContextMessage) {
           .Build();
 
   extensions::ExtensionRegistry* registry =
-      extensions::ExtensionRegistry::Get(&profile_);
+      extensions::ExtensionRegistry::Get(profile_.get());
   EXPECT_TRUE(registry->AddEnabled(extension));
 
   display_name = service()->DisplayNameForContextMessage(
@@ -393,7 +402,7 @@ TEST_F(PlatformNotificationServiceTest, CreateNotificationFromData) {
           .Build();
 
   extensions::ExtensionRegistry* registry =
-      extensions::ExtensionRegistry::Get(&profile_);
+      extensions::ExtensionRegistry::Get(profile_.get());
   EXPECT_TRUE(registry->AddEnabled(extension));
 
   notification = service()->CreateNotificationFromData(
@@ -406,19 +415,14 @@ TEST_F(PlatformNotificationServiceTest, CreateNotificationFromData) {
 
 #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
-#if !defined(OS_ANDROID)
-
-class PlatformNotificationServiceTest_WebAppNotificationIconAndTitle
-    : public PlatformNotificationServiceTest {
- private:
-  base::test::ScopedFeatureList scoped_feature_list_{
-      features::kDesktopPWAsNotificationIconAndTitle};
-};
+#if BUILDFLAG(IS_CHROMEOS)
+using PlatformNotificationServiceTest_WebAppNotificationIconAndTitle =
+    PlatformNotificationServiceTest;
 
 TEST_F(PlatformNotificationServiceTest_WebAppNotificationIconAndTitle,
        FindWebAppIconAndTitle_NoApp) {
-  web_app::TestWebAppProvider* provider =
-      web_app::TestWebAppProvider::Get(&profile_);
+  web_app::FakeWebAppProvider* provider =
+      web_app::FakeWebAppProvider::Get(profile_.get());
   provider->Start();
 
   const GURL web_app_url{"https://example.org/"};
@@ -427,12 +431,11 @@ TEST_F(PlatformNotificationServiceTest_WebAppNotificationIconAndTitle,
 
 TEST_F(PlatformNotificationServiceTest_WebAppNotificationIconAndTitle,
        FindWebAppIconAndTitle) {
-  web_app::TestWebAppProvider* provider =
-      web_app::TestWebAppProvider::Get(&profile_);
+  web_app::FakeWebAppProvider* provider =
+      web_app::FakeWebAppProvider::Get(profile_.get());
   web_app::WebAppIconManager& icon_manager = provider->GetIconManager();
 
-  std::unique_ptr<web_app::WebApp> web_app =
-      web_app::test::CreateMinimalWebApp();
+  std::unique_ptr<web_app::WebApp> web_app = web_app::test::CreateWebApp();
   const GURL web_app_url = web_app->start_url();
   const web_app::AppId app_id = web_app->app_id();
   web_app->SetName("Web App Title");
@@ -460,5 +463,4 @@ TEST_F(PlatformNotificationServiceTest_WebAppNotificationIconAndTitle,
       SK_ColorTRANSPARENT,
       icon_and_title->icon.GetRepresentation(1.0f).GetBitmap().getColor(0, 0));
 }
-
-#endif  // !defined(OS_ANDROID)
+#endif  // BUILDFLAG(IS_CHROMEOS)

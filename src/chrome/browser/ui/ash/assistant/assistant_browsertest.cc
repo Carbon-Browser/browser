@@ -3,17 +3,22 @@
 // found in the LICENSE file.
 
 #include "ash/components/audio/cras_audio_handler.h"
+#include "ash/constants/ash_features.h"
+#include "ash/public/cpp/test/app_list_test_api.h"
+#include "base/command_line.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
+#include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/scoped_run_loop_timeout.h"
 #include "base/time/time.h"
 #include "chrome/browser/ui/ash/assistant/assistant_test_mixin.h"
 #include "chrome/test/base/mixin_based_in_process_browser_test.h"
-#include "chromeos/assistant/test_support/expect_utils.h"
+#include "chromeos/ash/components/assistant/test_support/expect_utils.h"
+#include "chromeos/ash/services/assistant/public/cpp/features.h"
+#include "chromeos/ash/services/assistant/public/cpp/switches.h"
+#include "chromeos/ash/services/assistant/service.h"
 #include "chromeos/dbus/power_manager/backlight.pb.h"
-#include "chromeos/services/assistant/public/cpp/features.h"
-#include "chromeos/services/assistant/service.h"
 #include "content/public/test/browser_test.h"
 
 namespace chromeos {
@@ -29,6 +34,12 @@ constexpr int kVersion = 1;
 
 constexpr int kStartBrightnessPercent = 50;
 
+inline constexpr char kDlcInstallResultHistogram[] =
+    "Assistant.Libassistant.DlcInstallResult";
+
+inline constexpr char kDlcLoadStatusHistogram[] =
+    "Assistant.Libassistant.DlcLoadStatus";
+
 // Ensures that |value_| is within the range {min_, max_}. If it isn't, this
 // will print a nice error message.
 #define EXPECT_WITHIN_RANGE(min_, value_, max_)                \
@@ -40,7 +51,7 @@ constexpr int kStartBrightnessPercent = 50;
 
 }  // namespace
 
-using chromeos::assistant::test::ExpectResult;
+using ::ash::assistant::test::ExpectResult;
 
 class AssistantBrowserTest : public MixinBasedInProcessBrowserTest {
  public:
@@ -48,7 +59,15 @@ class AssistantBrowserTest : public MixinBasedInProcessBrowserTest {
     // TODO(b/190633242): enable sandbox in browser tests.
     feature_list_.InitAndDisableFeature(
         chromeos::assistant::features::kEnableLibAssistantSandbox);
+
+    // Do not log to file in test. Otherwise multiple tests may create/delete
+    // the log file at the same time. See http://crbug.com/1307868.
+    base::CommandLine::ForCurrentProcess()->AppendSwitch(
+        switches::kDisableLibAssistantLogfile);
   }
+
+  AssistantBrowserTest(const AssistantBrowserTest&) = delete;
+  AssistantBrowserTest& operator=(const AssistantBrowserTest&) = delete;
 
   ~AssistantBrowserTest() override = default;
 
@@ -57,6 +76,13 @@ class AssistantBrowserTest : public MixinBasedInProcessBrowserTest {
   void ShowAssistantUi() {
     if (!tester()->IsVisible())
       tester()->PressAssistantKey();
+
+    // Make sure that the app list bubble finished showing when productivity
+    // launcher is enabled.
+    if (ash::features::IsProductivityLauncherEnabled()) {
+      ash::AppListTestApi().WaitForBubbleWindow(
+          /*wait_for_opening_animation=*/false);
+    }
   }
 
   void CloseAssistantUi() {
@@ -117,12 +143,13 @@ class AssistantBrowserTest : public MixinBasedInProcessBrowserTest {
         }));
   }
 
+  base::HistogramTester* histogram_tester() { return &histogram_tester_; }
+
  private:
   base::test::ScopedFeatureList feature_list_;
+  base::HistogramTester histogram_tester_;
   AssistantTestMixin tester_{&mixin_host_, this, embedded_test_server(), kMode,
                              kVersion};
-
-  DISALLOW_COPY_AND_ASSIGN(AssistantBrowserTest);
 };
 
 IN_PROC_BROWSER_TEST_F(AssistantBrowserTest,
@@ -131,12 +158,20 @@ IN_PROC_BROWSER_TEST_F(AssistantBrowserTest,
 
   tester()->PressAssistantKey();
 
+  // Make sure that the app list bubble finished showing when productivity
+  // launcher is enabled (the app list view gets created asynchronously for
+  // productivity launcher).
+  if (ash::features::IsProductivityLauncherEnabled()) {
+    ash::AppListTestApi().WaitForBubbleWindow(
+        /*wait_for_opening_animation=*/false);
+  }
+
   EXPECT_TRUE(tester()->IsVisible());
+  histogram_tester()->ExpectTotalCount(kDlcInstallResultHistogram, 1);
+  histogram_tester()->ExpectTotalCount(kDlcLoadStatusHistogram, 1);
 }
 
-// TODO(b/184802501): Fix this flaky test.
-IN_PROC_BROWSER_TEST_F(AssistantBrowserTest,
-                       DISABLED_ShouldDisplayTextResponse) {
+IN_PROC_BROWSER_TEST_F(AssistantBrowserTest, ShouldDisplayTextResponse) {
   tester()->StartAssistantAndWaitForReady();
 
   ShowAssistantUi();
@@ -151,9 +186,24 @@ IN_PROC_BROWSER_TEST_F(AssistantBrowserTest,
   });
 }
 
-// Flaky. See https://crbug.com/1196560.
 IN_PROC_BROWSER_TEST_F(AssistantBrowserTest,
-                       DISABLED_ShouldDisplayCardResponse) {
+                       ShouldDisplayTextResponseWithTwoContiniousQueries) {
+  tester()->StartAssistantAndWaitForReady();
+
+  ShowAssistantUi();
+
+  tester()->SendTextQuery("phone");
+  tester()->SendTextQuery("test");
+  tester()->ExpectAnyOfTheseTextResponses({
+      "No one told me there would be a test",
+      "You're coming in loud and clear",
+      "debug OK",
+      "I can assure you, this thing's on",
+      "Is this thing on?",
+  });
+}
+
+IN_PROC_BROWSER_TEST_F(AssistantBrowserTest, ShouldDisplayCardResponse) {
   tester()->StartAssistantAndWaitForReady();
 
   ShowAssistantUi();
@@ -268,7 +318,7 @@ IN_PROC_BROWSER_TEST_F(AssistantBrowserTest,
       "Something went wrong. Try again in a few seconds");
 
   // Make sure no further changes happen to the view hierarchy.
-  tester()->ExpectNoChange(base::TimeDelta::FromSeconds(1));
+  tester()->ExpectNoChange(base::Seconds(1));
 
   // This is necessary to prevent a UserInitiatedVoicelessActivity from
   // blocking test harness teardown while we wait on assistant to finish

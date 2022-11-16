@@ -19,7 +19,6 @@
 
 #include "base/auto_reset.h"
 #include "base/command_line.h"
-#include "base/cxx17_backports.h"
 #include "base/files/file_path.h"
 #include "base/logging.h"
 #include "base/mac/authorization_util.h"
@@ -31,7 +30,6 @@
 #include "base/mac/scoped_authorizationref.h"
 #include "base/mac/scoped_cftyperef.h"
 #include "base/mac/scoped_ioobject.h"
-#include "base/macros.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/sys_string_conversions.h"
@@ -235,7 +233,7 @@ DiskImageStatus IsPathOnReadOnlyDiskImage(
   }
 
   const char dev_root[] = "/dev/";
-  const int dev_root_length = base::size(dev_root) - 1;
+  const int dev_root_length = std::size(dev_root) - 1;
   if (strncmp(statfs_buf.f_mntfromname, dev_root, dev_root_length) != 0) {
     // Not rooted at dev_root, no BSD name to search on.
     return DiskImageStatusFalse;
@@ -301,7 +299,7 @@ bool ShouldInstallDialog() {
 
   NSAlert* alert = [[[NSAlert alloc] init] autorelease];
 
-  [alert setAlertStyle:NSInformationalAlertStyle];
+  [alert setAlertStyle:NSAlertStyleInformational];
   [alert setMessageText:title];
   [alert setInformativeText:prompt];
   [alert addButtonWithTitle:yes];
@@ -439,7 +437,7 @@ void ShowErrorDialog() {
 
   NSAlert* alert = [[[NSAlert alloc] init] autorelease];
 
-  [alert setAlertStyle:NSWarningAlertStyle];
+  [alert setAlertStyle:NSAlertStyleWarning];
   [alert setMessageText:title];
   [alert setInformativeText:error];
   [alert addButtonWithTitle:ok];
@@ -548,6 +546,11 @@ class ScopedDASessionScheduleWithRunLoop {
     DASessionScheduleWithRunLoop(session_, run_loop_, run_loop_mode_);
   }
 
+  ScopedDASessionScheduleWithRunLoop(
+      const ScopedDASessionScheduleWithRunLoop&) = delete;
+  ScopedDASessionScheduleWithRunLoop& operator=(
+      const ScopedDASessionScheduleWithRunLoop&) = delete;
+
   ~ScopedDASessionScheduleWithRunLoop() {
     DASessionUnscheduleFromRunLoop(session_, run_loop_, run_loop_mode_);
   }
@@ -556,8 +559,6 @@ class ScopedDASessionScheduleWithRunLoop {
   DASessionRef session_;
   CFRunLoopRef run_loop_;
   CFStringRef run_loop_mode_;
-
-  DISALLOW_COPY_AND_ASSIGN(ScopedDASessionScheduleWithRunLoop);
 };
 
 // A small structure used to ferry data between SynchronousDAOperation and
@@ -570,13 +571,14 @@ struct SynchronousDACallbackData {
         can_log(true) {
   }
 
+  SynchronousDACallbackData(const SynchronousDACallbackData&) = delete;
+  SynchronousDACallbackData& operator=(const SynchronousDACallbackData&) =
+      delete;
+
   base::ScopedCFTypeRef<DADissenterRef> dissenter;
   bool callback_called;
   bool run_loop_running;
   bool can_log;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(SynchronousDACallbackData);
 };
 
 // The callback target for SynchronousDAOperation. Set the fields in

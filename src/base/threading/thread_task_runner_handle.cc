@@ -9,8 +9,10 @@
 
 #include "base/bind.h"
 #include "base/check_op.h"
+#include "base/dcheck_is_on.h"
 #include "base/lazy_instance.h"
 #include "base/run_loop.h"
+#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/threading/thread_local.h"
 
 namespace base {
@@ -29,7 +31,12 @@ const scoped_refptr<SingleThreadTaskRunner>& ThreadTaskRunnerHandle::Get() {
   CHECK(current)
       << "Error: This caller requires a single-threaded context (i.e. the "
          "current task needs to run from a SingleThreadTaskRunner). If you're "
-         "in a test refer to //docs/threading_and_tasks_testing.md.";
+         "in a test refer to //docs/threading_and_tasks_testing.md."
+      << (SequencedTaskRunnerHandle::IsSet()
+              ? " Note: base::SequencedTaskRunnerHandle::Get() is set; "
+                "consider using it if the current task can run from a "
+                "SequencedTaskRunner."
+              : "");
   return current->task_runner_;
 }
 
@@ -77,8 +84,10 @@ ThreadTaskRunnerHandleOverride::ThreadTaskRunnerHandleOverride(
   // runner and `overriding_task_runner_` points to the previous task runner.
   task_runner_to_restore_ = std::move(overriding_task_runner);
 
-  if (!allow_nested_runloop)
-    no_running_during_override_.emplace();
+  if (!allow_nested_runloop) {
+    no_running_during_override_ =
+        std::make_unique<ScopedDisallowRunningRunLoop>();
+  }
 }
 
 ThreadTaskRunnerHandleOverride::~ThreadTaskRunnerHandleOverride() {

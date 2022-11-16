@@ -15,6 +15,7 @@
 #include "base/metrics/field_trial_params.h"
 #include "base/no_destructor.h"
 #include "base/strings/string_split.h"
+#include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
 #include "cc/base/features.h"
 #include "url/gurl.h"
@@ -22,6 +23,9 @@
 namespace cc {
 
 namespace {
+
+constexpr char kTraceCategory[] =
+    "cc,benchmark," TRACE_DISABLED_BY_DEFAULT("devtools.timeline.frame");
 
 const char kJankInjectionAllowedURLs[] = "allowed_urls";
 const char kJankInjectionClusterSize[] = "cluster";
@@ -88,7 +92,7 @@ bool IsJankInjectionEnabledForURL(const GURL& url) {
 }
 
 void RunJank(JankInjectionParams params) {
-  TRACE_EVENT0("cc,benchmark", "Injected Jank");
+  TRACE_EVENT0(kTraceCategory, "Injected Jank");
   if (params.busy_loop) {
     // Do some useless work, and prevent any weird compiler optimization from
     // doing anything here.

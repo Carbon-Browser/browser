@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <tuple>
 #include <utility>
 
 #include "base/allocator/buildflags.h"
@@ -18,8 +19,8 @@
 #include "base/debug/stack_trace.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
-#include "base/sequenced_task_runner.h"
 #include "base/strings/string_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/third_party/dynamic_annotations/dynamic_annotations.h"
 #include "base/threading/thread.h"
 #include "base/threading/thread_task_runner_handle.h"
@@ -34,14 +35,18 @@
 #include "base/trace_event/traced_value.h"
 #include "build/build_config.h"
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #include "base/trace_event/java_heap_dump_provider_android.h"
 
 #if BUILDFLAG(CAN_UNWIND_WITH_CFI_TABLE)
 #include "base/trace_event/cfi_backtrace_android.h"
 #endif
 
-#endif  // defined(OS_ANDROID)
+#endif  // BUILDFLAG(IS_ANDROID)
+
+#if BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC)
+#include "base/trace_event/address_space_dump_provider.h"
+#endif
 
 namespace base {
 namespace trace_event {
@@ -132,7 +137,12 @@ void MemoryDumpManager::Initialize(
   RegisterDumpProvider(MallocDumpProvider::GetInstance(), "Malloc", nullptr);
 #endif
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC)
+  RegisterDumpProvider(AddressSpaceDumpProvider::GetInstance(),
+                       "PartitionAlloc.AddressSpace", nullptr);
+#endif
+
+#if BUILDFLAG(IS_ANDROID)
   RegisterDumpProvider(JavaHeapDumpProvider::GetInstance(), "JavaHeap",
                        nullptr);
 #endif
@@ -286,7 +296,7 @@ MemoryDumpManager::GetOrCreateBgTaskRunnerLocked() {
 void MemoryDumpManager::CreateProcessDump(const MemoryDumpRequestArgs& args,
                                           ProcessMemoryDumpCallback callback) {
   char guid_str[20];
-  snprintf(guid_str, base::size(guid_str), "0x%" PRIx64, args.dump_guid);
+  snprintf(guid_str, std::size(guid_str), "0x%" PRIx64, args.dump_guid);
   TRACE_EVENT_NESTABLE_ASYNC_BEGIN1(kTraceCategory, "ProcessMemoryDump",
                                     TRACE_ID_LOCAL(args.dump_guid), "dump_guid",
                                     TRACE_STR_COPY(guid_str));
@@ -344,7 +354,7 @@ void MemoryDumpManager::ContinueAsyncProcessDump(
     MemoryDumpProviderInfo* mdpinfo =
         pmd_async_state->pending_dump_providers.back().get();
 
-    // If we are in background mode, we should invoke only the whitelisted
+    // If we are in background mode, we should invoke only the allowed
     // providers. Ignore other providers and continue.
     if (pmd_async_state->req_args.level_of_detail ==
             MemoryDumpLevelOfDetail::BACKGROUND &&
@@ -376,8 +386,8 @@ void MemoryDumpManager::ContinueAsyncProcessDump(
                  Unretained(pmd_async_state.get())));
 
     if (did_post_task) {
-      // Ownership is tranferred to the posted task.
-      ignore_result(pmd_async_state.release());
+      // Ownership is transferred to the posted task.
+      std::ignore = pmd_async_state.release();
       return;
     }
 

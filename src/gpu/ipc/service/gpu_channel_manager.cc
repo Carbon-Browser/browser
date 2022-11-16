@@ -8,21 +8,26 @@
 #include <memory>
 #include <utility>
 
+#include "build/build_config.h"
+
+#if BUILDFLAG(IS_WIN)
+#include <dxgi1_3.h>
+#endif
+
 #include "base/bind.h"
-#include "base/bind_post_task.h"
 #include "base/command_line.h"
 #include "base/debug/crash_logging.h"
 #include "base/debug/dump_without_crashing.h"
 #include "base/location.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/run_loop.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/stringprintf.h"
 #include "base/system/sys_info.h"
+#include "base/task/bind_post_task.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/trace_event/traced_value.h"
 #include "build/build_config.h"
-#include "components/viz/common/features.h"
 #include "gpu/command_buffer/common/context_creation_attribs.h"
 #include "gpu/command_buffer/common/sync_token.h"
 #include "gpu/command_buffer/service/feature_info.h"
@@ -34,6 +39,7 @@
 #include "gpu/command_buffer/service/scheduler.h"
 #include "gpu/command_buffer/service/service_utils.h"
 #include "gpu/command_buffer/service/sync_point_manager.h"
+#include "gpu/config/gpu_crash_keys.h"
 #include "gpu/config/gpu_finch_features.h"
 #include "gpu/ipc/common/gpu_client_ids.h"
 #include "gpu/ipc/common/memory_stats.h"
@@ -43,7 +49,7 @@
 #include "gpu/ipc/service/gpu_memory_buffer_factory.h"
 #include "gpu/ipc/service/gpu_watchdog_thread.h"
 #include "third_party/skia/include/core/SkGraphics.h"
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include "ui/gl/gl_angle_util_win.h"
 #endif
 #include "ui/gl/gl_bindings.h"
@@ -56,14 +62,14 @@
 namespace gpu {
 
 namespace {
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 // Amount of time we expect the GPU to stay powered up without being used.
 const int kMaxGpuIdleTimeMs = 40;
 // Maximum amount of time we keep pinging the GPU waiting for the client to
 // draw.
 const int kMaxKeepAliveTimeMs = 200;
 #endif
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 void TrimD3DResources() {
   // Graphics drivers periodically allocate internal memory buffers in
   // order to speed up subsequent rendering requests. These memory allocations
@@ -96,7 +102,16 @@ void APIENTRY CrashReportOnGLErrorDebugCallback(GLenum source,
                                                 const GLvoid* user_param) {
   if (type == GL_DEBUG_TYPE_ERROR && source == GL_DEBUG_SOURCE_API &&
       user_param) {
-    LOG(ERROR) << gl::GLEnums::GetStringEnum(id) << ": " << message;
+    // Note: log_message cannot contain any user data. The error strings
+    // generated from ANGLE are all static strings and do not contain user
+    // information such as shader source code. Be careful if updating the
+    // contents of this string.
+    std::string log_message = gl::GLEnums::GetStringEnum(id);
+    if (message && length > 0) {
+      log_message += ": " + std::string(message, length);
+    }
+    LOG(ERROR) << log_message;
+    crash_keys::gpu_gl_error_message.Set(log_message);
     int* remaining_reports =
         const_cast<int*>(static_cast<const int*>(user_param));
     if (*remaining_reports > 0) {
@@ -344,18 +359,14 @@ GpuChannelManager::GpuChannelManager(
   DCHECK(io_task_runner);
   DCHECK(scheduler);
 
-  const bool using_skia_renderer = features::IsUsingSkiaRenderer();
   const bool enable_gr_shader_cache =
-      (gpu_feature_info_.status_values[GPU_FEATURE_TYPE_OOP_RASTERIZATION] ==
-       gpu::kGpuFeatureStatusEnabled) ||
-      using_skia_renderer;
+      (gpu_feature_info_.status_values[GPU_FEATURE_TYPE_GPU_RASTERIZATION] ==
+       gpu::kGpuFeatureStatusEnabled);
   const bool disable_disk_cache =
       gpu_preferences_.disable_gpu_shader_disk_cache;
   if (enable_gr_shader_cache && !disable_disk_cache) {
     gr_shader_cache_.emplace(gpu_preferences.gpu_program_cache_size, this);
-    if (using_skia_renderer) {
-      gr_shader_cache_->CacheClientIdOnDisk(gpu::kDisplayCompositorClientId);
-    }
+    gr_shader_cache_->CacheClientIdOnDisk(gpu::kDisplayCompositorClientId);
   }
 }
 
@@ -625,7 +636,7 @@ GpuChannelManager::GetPeakMemoryUsage(uint32_t sequence_num,
   return allocation_per_source;
 }
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 void GpuChannelManager::DidAccessGpu() {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
 
@@ -646,11 +657,9 @@ void GpuChannelManager::ScheduleWakeUpGpu() {
   TRACE_EVENT2("gpu", "GpuChannelManager::ScheduleWakeUp", "idle_time",
                (now - last_gpu_access_time_).InMilliseconds(),
                "keep_awake_time", (now - begin_wake_up_time_).InMilliseconds());
-  if (now - last_gpu_access_time_ <
-      base::TimeDelta::FromMilliseconds(kMaxGpuIdleTimeMs))
+  if (now - last_gpu_access_time_ < base::Milliseconds(kMaxGpuIdleTimeMs))
     return;
-  if (now - begin_wake_up_time_ >
-      base::TimeDelta::FromMilliseconds(kMaxKeepAliveTimeMs))
+  if (now - begin_wake_up_time_ > base::Milliseconds(kMaxKeepAliveTimeMs))
     return;
 
   DoWakeUpGpu();
@@ -659,7 +668,7 @@ void GpuChannelManager::ScheduleWakeUpGpu() {
       FROM_HERE,
       base::BindOnce(&GpuChannelManager::ScheduleWakeUpGpu,
                      weak_factory_.GetWeakPtr()),
-      base::TimeDelta::FromMilliseconds(kMaxGpuIdleTimeMs));
+      base::Milliseconds(kMaxGpuIdleTimeMs));
 }
 
 void GpuChannelManager::DoWakeUpGpu() {
@@ -744,7 +753,7 @@ void GpuChannelManager::HandleMemoryPressure(
 
   if (gr_shader_cache_)
     gr_shader_cache_->PurgeMemory(memory_pressure_level);
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   TrimD3DResources();
 #endif
 }
@@ -760,7 +769,7 @@ scoped_refptr<SharedContextState> GpuChannelManager::GetSharedContextState(
 
   scoped_refptr<gl::GLSurface> surface = default_offscreen_surface();
   bool use_virtualized_gl_contexts = false;
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   // Virtualize GpuPreference::kLowPower contexts by default on OS X to prevent
   // performance regressions when enabling FCM.
   // http://crbug.com/180463
@@ -795,28 +804,34 @@ scoped_refptr<SharedContextState> GpuChannelManager::GetSharedContextState(
     context = nullptr;
   }
   if (!context) {
+    ContextCreationAttribs attribs_helper;
+    attribs_helper.context_type = features::UseGles2ForOopR()
+                                      ? gpu::CONTEXT_TYPE_OPENGLES2
+                                      : gpu::CONTEXT_TYPE_OPENGLES3;
     gl::GLContextAttribs attribs = gles2::GenerateGLContextAttribs(
-        ContextCreationAttribs(), use_passthrough_decoder);
+        attribs_helper, use_passthrough_decoder);
 
-#if !defined(OS_MAC)
     // Disable robust resource initialization for raster decoder and compositor.
     // TODO(crbug.com/1192632): disable robust_resource_initialization for
     // SwANGLE.
-    // TODO(crbug.com/1238413): disable robust_resource_initialization for Mac.
-    // TODO(crbug.com/1116174): Currently disabling robust initialization is
-    // breaking some tests with OOP canvas. Once that's fixed remove check for
-    // kCanvasOopRasterization feature.
-    if (gl::GLSurfaceEGL::GetDisplayType() != gl::ANGLE_SWIFTSHADER &&
-        features::IsUsingSkiaRenderer() &&
-        !base::FeatureList::IsEnabled(features::kCanvasOopRasterization)) {
+    if (gl::GLSurfaceEGL::GetGLDisplayEGL()->GetDisplayType() !=
+        gl::ANGLE_SWIFTSHADER) {
       attribs.robust_resource_initialization = false;
     }
-#endif
 
     attribs.can_skip_validation = !enable_angle_validation;
 
     context =
         gl::init::CreateGLContext(share_group.get(), surface.get(), attribs);
+
+    if (!context && !features::UseGles2ForOopR()) {
+      LOG(ERROR) << "Failed to create GLES3 context, fallback to GLES2.";
+      attribs.client_major_es_version = 2;
+      attribs.client_minor_es_version = 0;
+      context =
+          gl::init::CreateGLContext(share_group.get(), surface.get(), attribs);
+    }
+
     if (!context) {
       // TODO(piman): This might not be fatal, we could recurse into
       // CreateGLContext to get more info, tho it should be exceedingly
@@ -879,27 +894,13 @@ scoped_refptr<SharedContextState> GpuChannelManager::GetSharedContextState(
                                     &remaining_gl_error_reports);
   }
 
-  // OOP-R needs GrContext for raster tiles.
-  bool need_gr_context =
-      gpu_feature_info_.status_values[GPU_FEATURE_TYPE_OOP_RASTERIZATION] ==
-      gpu::kGpuFeatureStatusEnabled;
-
-  // SkiaRenderer needs GrContext to composite output surface.
-  need_gr_context |= features::IsUsingSkiaRenderer();
-
-  // GpuMemoryAblationExperiment needs a context to use Skia for Gpu
-  // allocations.
-  need_gr_context |= GpuMemoryAblationExperiment::ExperimentSupported();
-
-  if (need_gr_context) {
-    if (!shared_context_state->InitializeGrContext(
-            gpu_preferences_, gpu_driver_bug_workarounds_, gr_shader_cache(),
-            &activity_flags_, watchdog_)) {
-      LOG(ERROR) << "ContextResult::kFatalFailure: Failed to Initialize"
-                    "GrContext for SharedContextState";
-      *result = ContextResult::kFatalFailure;
-      return nullptr;
-    }
+  if (!shared_context_state->InitializeGrContext(
+          gpu_preferences_, gpu_driver_bug_workarounds_, gr_shader_cache(),
+          &activity_flags_, watchdog_)) {
+    LOG(ERROR) << "ContextResult::kFatalFailure: Failed to Initialize"
+                  "GrContext for SharedContextState";
+    *result = ContextResult::kFatalFailure;
+    return nullptr;
   }
   shared_context_state_ = std::move(shared_context_state);
 

@@ -14,6 +14,7 @@
 #include "ui/gfx/canvas.h"
 #include "ui/views/controls/native/native_view_host_wrapper.h"
 #include "ui/views/painter.h"
+#include "ui/views/view_utils.h"
 #include "ui/views/widget/widget.h"
 
 namespace views {
@@ -102,6 +103,11 @@ void NativeViewHost::NativeViewDestroyed() {
   Detach(true);
 }
 
+void NativeViewHost::SetBackgroundColorWhenClipped(
+    absl::optional<SkColor> color) {
+  background_color_when_clipped_ = color;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // NativeViewHost, View overrides:
 
@@ -160,10 +166,14 @@ void NativeViewHost::OnPaint(gfx::Canvas* canvas) {
   // view background color doesn't show up), we need to cover that blackness
   // with something so that fast resizes don't result in black flash.
   //
-  // It would be nice if this used some approximation of the page's
-  // current background color.
-  if (native_wrapper_->HasInstalledClip())
-    canvas->FillRect(GetLocalBounds(), SK_ColorWHITE);
+  // Affected views should set the desired color using
+  // SetBackgroundColorWhenClipped(), otherwise the background is left
+  // transparent to let the lower layers show through.
+  if (native_wrapper_->HasInstalledClip()) {
+    if (background_color_when_clipped_) {
+      canvas->FillRect(GetLocalBounds(), *background_color_when_clipped_);
+    }
+  }
 }
 
 void NativeViewHost::VisibilityChanged(View* starting_from, bool is_visible) {
@@ -224,7 +234,7 @@ gfx::NativeViewAccessible NativeViewHost::GetNativeViewAccessible() {
   return View::GetNativeViewAccessible();
 }
 
-gfx::NativeCursor NativeViewHost::GetCursor(const ui::MouseEvent& event) {
+ui::Cursor NativeViewHost::GetCursor(const ui::MouseEvent& event) {
   return native_wrapper_->GetCursor(event.x(), event.y());
 }
 
@@ -232,6 +242,20 @@ void NativeViewHost::SetVisible(bool visible) {
   if (native_view_)
     native_wrapper_->SetVisible(visible);
   View::SetVisible(visible);
+}
+
+bool NativeViewHost::OnMousePressed(const ui::MouseEvent& event) {
+  // In the typical case the attached NativeView receives the events directly
+  // from the system and this function is not called. There are scenarios
+  // where that may not happen. For example, if the NativeView is configured
+  // not to receive events, then this function will be called. An additional
+  // scenario is if the WidgetDelegate overrides
+  // ShouldDescendIntoChildForEventHandling(). In that case the NativeView
+  // will not receive the events, and this function will be called. Regardless,
+  // this function does not need to forward to the NativeView, because it is
+  // expected to be done by the system, and the only cases where this is called
+  // is if the NativeView should not receive events.
+  return View::OnMousePressed(event);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

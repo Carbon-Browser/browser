@@ -9,6 +9,7 @@
 
 #include "base/bind.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/notreached.h"
 #include "base/trace_event/trace_event.h"
 #include "cc/base/features.h"
 #include "cc/paint/image_animation_count.h"
@@ -19,7 +20,7 @@ namespace {
 // The maximum number of time an animation can be delayed before it is reset to
 // start from the beginning, instead of fast-forwarding to catch up to the
 // desired frame.
-const base::TimeDelta kAnimationResyncCutoff = base::TimeDelta::FromMinutes(5);
+const base::TimeDelta kAnimationResyncCutoff = base::Minutes(5);
 
 // Given the |desired_frame_time|, returns the time of the tick it should be
 // snapped to.

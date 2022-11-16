@@ -6,7 +6,6 @@
 
 #include <memory>
 
-#include "base/macros.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
@@ -16,8 +15,8 @@
 #include "chrome/test/base/scoped_testing_local_state.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
-#include "chromeos/dbus/authpolicy/fake_authpolicy_client.h"
-#include "chromeos/network/network_handler_test_helper.h"
+#include "chromeos/ash/components/dbus/authpolicy/fake_authpolicy_client.h"
+#include "chromeos/ash/components/network/network_handler_test_helper.h"
 #include "components/user_manager/scoped_user_manager.h"
 #include "components/user_manager/user_manager.h"
 #include "content/public/test/browser_task_environment.h"
@@ -26,8 +25,6 @@
 namespace ash {
 
 namespace {
-
-using ::chromeos::AuthPolicyClient;
 
 constexpr char kProfileSigninNotificationId[] = "chrome://settings/signin/";
 constexpr char kProfileEmail[] = "user@example.com";
@@ -50,6 +47,12 @@ class AuthPolicyCredentialsManagerTest : public testing::Test {
   AuthPolicyCredentialsManagerTest()
       : user_manager_enabler_(std::make_unique<MockUserManager>()),
         local_state_(TestingBrowserProcess::GetGlobal()) {}
+
+  AuthPolicyCredentialsManagerTest(const AuthPolicyCredentialsManagerTest&) =
+      delete;
+  AuthPolicyCredentialsManagerTest& operator=(
+      const AuthPolicyCredentialsManagerTest&) = delete;
+
   ~AuthPolicyCredentialsManagerTest() override = default;
 
   void SetUp() override {
@@ -93,8 +96,8 @@ class AuthPolicyCredentialsManagerTest : public testing::Test {
   AuthPolicyCredentialsManager* authpolicy_credentials_manager() {
     return authpolicy_credentials_manager_;
   }
-  chromeos::FakeAuthPolicyClient* fake_authpolicy_client() const {
-    return chromeos::FakeAuthPolicyClient::Get();
+  FakeAuthPolicyClient* fake_authpolicy_client() const {
+    return FakeAuthPolicyClient::Get();
   }
 
   MockUserManager* mock_user_manager() {
@@ -136,9 +139,6 @@ class AuthPolicyCredentialsManagerTest : public testing::Test {
   std::unique_ptr<NotificationDisplayServiceTester> display_service_;
 
   ScopedTestingLocalState local_state_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(AuthPolicyCredentialsManagerTest);
 };
 
 // Tests saving display and given name into user manager. No error means no

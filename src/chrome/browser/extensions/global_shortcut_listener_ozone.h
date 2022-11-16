@@ -7,7 +7,7 @@
 
 #include <set>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/extensions/global_shortcut_listener.h"
 #include "ui/events/keycodes/keyboard_codes.h"
 #include "ui/ozone/public/platform_global_shortcut_listener.h"
@@ -28,6 +28,11 @@ class GlobalShortcutListenerOzone
       public ui::PlatformGlobalShortcutListenerDelegate {
  public:
   GlobalShortcutListenerOzone();
+
+  GlobalShortcutListenerOzone(const GlobalShortcutListenerOzone&) = delete;
+  GlobalShortcutListenerOzone& operator=(const GlobalShortcutListenerOzone&) =
+      delete;
+
   ~GlobalShortcutListenerOzone() override;
 
  private:
@@ -48,10 +53,8 @@ class GlobalShortcutListenerOzone
   std::set<ui::Accelerator> registered_hot_keys_;
 
   // The platform implementation.
-  ui::PlatformGlobalShortcutListener* platform_global_shortcut_listener_ =
-      nullptr;
-
-  DISALLOW_COPY_AND_ASSIGN(GlobalShortcutListenerOzone);
+  raw_ptr<ui::PlatformGlobalShortcutListener>
+      platform_global_shortcut_listener_ = nullptr;
 };
 
 }  // namespace extensions

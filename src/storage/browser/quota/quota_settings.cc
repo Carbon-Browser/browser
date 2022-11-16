@@ -13,7 +13,6 @@
 #include "base/no_destructor.h"
 #include "base/rand_util.h"
 #include "base/system/sys_info.h"
-#include "base/task/post_task.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "build/build_config.h"
@@ -38,7 +37,7 @@ int64_t RandomizeByPercent(int64_t value, int percent) {
 }
 
 QuotaSettings CalculateIncognitoDynamicSettings(
-    int64_t physical_memory_amount) {
+    uint64_t physical_memory_amount) {
   // The incognito pool size is a fraction of the amount of system memory.
   double incognito_pool_size_ratio =
       kIncognitoQuotaRatioLowerBound +
@@ -147,7 +146,7 @@ absl::optional<QuotaSettings> CalculateNominalDynamicSettings(
       RandomizeByPercent(kMaxSessionOnlyHostQuota, kRandomizedPercentage),
       static_cast<int64_t>(settings.per_host_quota *
                            kSessionOnlyHostQuotaRatio));
-  settings.refresh_interval = base::TimeDelta::FromSeconds(60);
+  settings.refresh_interval = base::Seconds(60);
   return settings;
 }
 

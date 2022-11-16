@@ -7,7 +7,6 @@
 
 #include <string>
 
-#include "base/macros.h"
 #include "components/download/internal/background_service/controller.h"
 #include "components/download/internal/background_service/startup_status.h"
 #include "components/download/public/background_service/download_params.h"
@@ -19,6 +18,10 @@ namespace test {
 class MockController : public Controller {
  public:
   MockController();
+
+  MockController(const MockController&) = delete;
+  MockController& operator=(const MockController&) = delete;
+
   ~MockController() override;
 
   // Controller implementation.
@@ -52,7 +55,6 @@ class MockController : public Controller {
 
  private:
   base::OnceClosure init_callback_;
-  DISALLOW_COPY_AND_ASSIGN(MockController);
 };
 
 }  // namespace test

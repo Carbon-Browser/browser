@@ -28,17 +28,18 @@
 #define EarlGrey [self earlGrey]
 #pragma clang diagnostic pop
 
+using base::test::ios::kWaitForUIElementTimeout;
+using base::test::ios::WaitUntilConditionOrTimeout;
 using chrome_test_util::ButtonWithAccessibilityLabelId;
 using chrome_test_util::ClearAutofillButton;
 using chrome_test_util::ClearBrowsingDataButton;
 using chrome_test_util::ClearBrowsingDataView;
 using chrome_test_util::ClearSavedPasswordsButton;
 using chrome_test_util::ConfirmClearBrowsingDataButton;
+using chrome_test_util::SettingsActionButton;
+using chrome_test_util::SettingsDestinationButton;
 using chrome_test_util::SettingsMenuBackButton;
-using chrome_test_util::SettingsMenuButton;
 using chrome_test_util::ToolsMenuView;
-using base::test::ios::kWaitForUIElementTimeout;
-using base::test::ios::WaitUntilConditionOrTimeout;
 
 namespace {
 
@@ -50,6 +51,28 @@ id<GREYAction> ScrollDown() {
   // down the scroll.
   CGFloat const kMenuScrollDisplacement = 150;
   return grey_scrollInDirection(kGREYDirectionDown, kMenuScrollDisplacement);
+}
+
+// Returns a GREYAction to scroll down (swipe up) for a reasonably small amount.
+id<GREYAction> PageSheetScrollDown() {
+  // 500 is a reasonable value to ensure all menu items are seen, and cause the
+  // page sheet to expand to full screen. With a larger value, some menu items
+  // could be skipped while searching. A smaller value increses the area that is
+  // searched, but slows down the scroll. It also causes the page sheet to not
+  // expand.
+  CGFloat const kMenuScrollDisplacement = 500;
+  return grey_scrollInDirection(kGREYDirectionDown, kMenuScrollDisplacement);
+}
+
+// Returns a GREYAction to scroll right (swipe left) for a reasonably small
+// amount.
+id<GREYAction> ScrollRight() {
+  // 150 is a reasonable value to ensure all menu items are seen, without too
+  // much delay. With a larger value, some menu items could be skipped while
+  // searching. A smaller value increses the area that is searched, but slows
+  // down the scroll.
+  CGFloat const kMenuScrollDisplacement = 150;
+  return grey_scrollInDirection(kGREYDirectionRight, kMenuScrollDisplacement);
 }
 
 bool IsAppCompactWidth() {
@@ -100,6 +123,34 @@ class ScopedDisableTimerTracking {
   // to always find it.
 }
 
+- (void)closeToolsMenu {
+  if ([ChromeEarlGrey isNewOverflowMenuEnabled] &&
+      [ChromeEarlGrey isCompactWidth]) {
+    // With the new overflow menu on compact devices, the half sheet covers the
+    // bottom half of the screen. Swiping down on the sheet will close the menu.
+    [[EarlGrey selectElementWithMatcher:chrome_test_util::ToolsMenuView()]
+        performAction:grey_swipeFastInDirection(kGREYDirectionDown)];
+
+    // Sometimes the menu can be expanded to full height, so one swipe isn't
+    // enough to dismiss. If the menu is still visible, swipe one more time to
+    // guarantee closing.
+    NSError* error;
+    [[EarlGrey selectElementWithMatcher:chrome_test_util::ToolsMenuView()]
+        assertWithMatcher:grey_notVisible()
+                    error:&error];
+    if (error) {
+      [[EarlGrey selectElementWithMatcher:chrome_test_util::ToolsMenuView()]
+          performAction:grey_swipeFastInDirection(kGREYDirectionDown)];
+    }
+  } else {
+    // A scrim covers the whole window and tapping on this scrim dismisses the
+    // tools menu.  The "Tools Menu" button happens to be outside of the bounds
+    // of the menu and is a convenient place to tap to activate the scrim.
+    [[EarlGrey selectElementWithMatcher:chrome_test_util::ToolsMenuButton()]
+        performAction:grey_tap()];
+  }
+}
+
 - (void)openToolsMenuInWindowWithNumber:(int)windowNumber {
   [EarlGrey setRootMatcherForSubsequentInteractions:
                 chrome_test_util::WindowWithNumber(windowNumber)];
@@ -118,21 +169,59 @@ class ScopedDisableTimerTracking {
 
 - (void)openSettingsMenu {
   [self openToolsMenu];
-  [self tapToolsMenuButton:SettingsMenuButton()];
+  if ([ChromeEarlGrey isNewOverflowMenuEnabled]) {
+    [self tapToolsMenuButton:SettingsDestinationButton()];
+  } else {
+    [self tapToolsMenuButton:SettingsActionButton()];
+  }
 }
 
 - (void)openSettingsMenuInWindowWithNumber:(int)windowNumber {
   [self openToolsMenuInWindowWithNumber:windowNumber];
-  [self tapToolsMenuButton:SettingsMenuButton()];
+  if ([ChromeEarlGrey isNewOverflowMenuEnabled]) {
+    [self tapToolsMenuButton:SettingsDestinationButton()];
+  } else {
+    [self tapToolsMenuButton:SettingsActionButton()];
+  }
+}
+
+- (void)openNewTabMenu {
+  // TODO(crbug.com/639524): Add logic to ensure the app is in the correct
+  // state, for example DCHECK if no tabs are displayed.
+  [[[EarlGrey
+      selectElementWithMatcher:grey_allOf(chrome_test_util::NewTabButton(),
+                                          grey_sufficientlyVisible(), nil)]
+         usingSearchAction:grey_swipeSlowInDirection(kGREYDirectionDown)
+      onElementWithMatcher:chrome_test_util::WebStateScrollViewMatcher()]
+      performAction:grey_longPress()];
+  // TODO(crbug.com/639517): Add webViewScrollView matcher so we don't have
+  // to always find it.
 }
 
 - (void)tapToolsMenuButton:(id<GREYMatcher>)buttonMatcher {
   ScopedDisableTimerTracking disabler;
   id<GREYMatcher> interactableSettingsButton =
       grey_allOf(buttonMatcher, grey_interactable(), nil);
+  id<GREYAction> scrollAction =
+      [ChromeEarlGrey isNewOverflowMenuEnabled] ? ScrollRight() : ScrollDown();
   [[[EarlGrey selectElementWithMatcher:interactableSettingsButton]
-         usingSearchAction:ScrollDown()
+         usingSearchAction:scrollAction
       onElementWithMatcher:ToolsMenuView()] performAction:grey_tap()];
+}
+
+- (void)tapToolsMenuAction:(id<GREYMatcher>)buttonMatcher {
+  if (![ChromeEarlGrey isNewOverflowMenuEnabled]) {
+    [self tapToolsMenuButton:buttonMatcher];
+    return;
+  }
+  ScopedDisableTimerTracking disabler;
+  id<GREYMatcher> interactableSettingsButton =
+      grey_allOf(buttonMatcher, grey_interactable(), nil);
+  [[[EarlGrey selectElementWithMatcher:interactableSettingsButton]
+         usingSearchAction:PageSheetScrollDown()
+      onElementWithMatcher:grey_accessibilityID(
+                               kPopupMenuToolsMenuActionListId)]
+      performAction:grey_tap()];
 }
 
 - (void)tapSettingsMenuButton:(id<GREYMatcher>)buttonMatcher {
@@ -222,6 +311,17 @@ class ScopedDisableTimerTracking {
       performAction:grey_tap()];
 }
 
+- (void)tapPrivacySafeBrowsingMenuButton:(id<GREYMatcher>)buttonMatcher {
+  ScopedDisableTimerTracking disabler;
+  id<GREYMatcher> interactableButtonMatcher =
+      grey_allOf(buttonMatcher, grey_interactable(), nil);
+  [[[EarlGrey selectElementWithMatcher:interactableButtonMatcher]
+         usingSearchAction:ScrollDown()
+      onElementWithMatcher:chrome_test_util::
+                               SettingsPrivacySafeBrowsingTableView()]
+      performAction:grey_tap()];
+}
+
 - (void)tapAccountsMenuButton:(id<GREYMatcher>)buttonMatcher {
   ScopedDisableTimerTracking disabler;
   [[[EarlGrey selectElementWithMatcher:buttonMatcher]
@@ -300,13 +400,31 @@ class ScopedDisableTimerTracking {
 
 - (void)openPageInfo {
   [self openToolsMenu];
+  id<GREYAction> searchAction =
+      [ChromeEarlGrey isNewOverflowMenuEnabled]
+          ? ScrollRight()
+          : grey_scrollInDirection(kGREYDirectionDown, 200);
   [[[EarlGrey
       selectElementWithMatcher:grey_allOf(grey_accessibilityID(
                                               kToolsMenuSiteInformation),
                                           grey_sufficientlyVisible(), nil)]
-         usingSearchAction:grey_scrollInDirection(kGREYDirectionDown, 200)
+         usingSearchAction:searchAction
       onElementWithMatcher:grey_accessibilityID(kPopupMenuToolsMenuTableViewId)]
       performAction:grey_tap()];
+}
+
+- (BOOL)dismissContextMenuIfPresent {
+  // There is no way to programmatically dismiss the native context menu from
+  // application side, so instead tap on the context menu container view if it
+  // exists.
+  NSError* err = nil;
+  [[EarlGrey
+      selectElementWithMatcher:grey_allOf(grey_kindOfClassName(
+                                              @"_UIContextMenuContainerView"),
+                                          grey_sufficientlyVisible(), nil)]
+      performAction:grey_tapAtPoint(CGPointMake(0, 0))
+              error:&err];
+  return err == nil;
 }
 
 #pragma mark - Private

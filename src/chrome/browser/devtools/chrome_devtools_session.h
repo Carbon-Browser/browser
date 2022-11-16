@@ -10,7 +10,6 @@
 #include "base/containers/flat_map.h"
 #include "base/containers/span.h"
 #include "build/chromeos_buildflags.h"
-#include "chrome/browser/devtools/protocol/forward.h"
 #include "chrome/browser/devtools/protocol/protocol.h"
 #include "content/public/browser/devtools_manager_delegate.h"
 
@@ -18,6 +17,7 @@ namespace content {
 class DevToolsAgentHostClientChannel;
 }  // namespace content
 
+class EmulationHandler;
 class BrowserHandler;
 class CastHandler;
 class PageHandler;
@@ -29,6 +29,10 @@ class ChromeDevToolsSession : public protocol::FrontendChannel {
  public:
   explicit ChromeDevToolsSession(
       content::DevToolsAgentHostClientChannel* channel);
+
+  ChromeDevToolsSession(const ChromeDevToolsSession&) = delete;
+  ChromeDevToolsSession& operator=(const ChromeDevToolsSession&) = delete;
+
   ~ChromeDevToolsSession() override;
 
   void HandleCommand(
@@ -55,6 +59,7 @@ class ChromeDevToolsSession : public protocol::FrontendChannel {
   protocol::UberDispatcher dispatcher_;
   std::unique_ptr<BrowserHandler> browser_handler_;
   std::unique_ptr<CastHandler> cast_handler_;
+  std::unique_ptr<EmulationHandler> emulation_handler_;
   std::unique_ptr<PageHandler> page_handler_;
   std::unique_ptr<SecurityHandler> security_handler_;
   std::unique_ptr<TargetHandler> target_handler_;
@@ -62,8 +67,6 @@ class ChromeDevToolsSession : public protocol::FrontendChannel {
   std::unique_ptr<WindowManagerHandler> window_manager_handler_;
 #endif
   content::DevToolsAgentHostClientChannel* client_channel_;
-
-  DISALLOW_COPY_AND_ASSIGN(ChromeDevToolsSession);
 };
 
 #endif  // CHROME_BROWSER_DEVTOOLS_CHROME_DEVTOOLS_SESSION_H_

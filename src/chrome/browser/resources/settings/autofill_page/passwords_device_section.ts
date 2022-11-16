@@ -13,9 +13,9 @@
 
 import './passwords_list_handler.js';
 import 'chrome://resources/cr_elements/shared_style_css.m.js';
-import '../settings_shared_css.js';
+import '../settings_shared.css.js';
 import './avatar_icon.js';
-import './passwords_shared_css.js';
+import './passwords_shared.css.js';
 import './password_list_item.js';
 import './password_move_multiple_passwords_to_account_dialog.js';
 import 'chrome://resources/cr_elements/cr_toast/cr_toast.js';
@@ -25,8 +25,9 @@ import 'chrome://resources/polymer/v3_0/iron-list/iron-list.js';
 import {CrToastElement} from 'chrome://resources/cr_elements/cr_toast/cr_toast.js';
 import {PluralStringProxyImpl} from 'chrome://resources/js/plural_string_proxy.js';
 import {getDeepActiveElement} from 'chrome://resources/js/util.m.js';
-import {WebUIListenerBehavior} from 'chrome://resources/js/web_ui_listener_behavior.m.js';
-import {html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {WebUIListenerMixin, WebUIListenerMixinInterface} from 'chrome://resources/js/web_ui_listener_mixin.js';
+import {IronListElement} from 'chrome://resources/polymer/v3_0/iron-list/iron-list.js';
+import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {GlobalScrollTargetMixin} from '../global_scroll_target_mixin.js';
 import {loadTimeData} from '../i18n_setup.js';
@@ -35,9 +36,10 @@ import {StoredAccount, SyncBrowserProxyImpl, SyncStatus} from '../people_page/sy
 import {routes} from '../route.js';
 import {Route, RouteObserverMixin, RouteObserverMixinInterface, Router} from '../router.js';
 
-import {MergePasswordsStoreCopiesBehavior, MergePasswordsStoreCopiesBehaviorInterface} from './merge_passwords_store_copies_behavior.js';
+import {MergePasswordsStoreCopiesMixin, MergePasswordsStoreCopiesMixinInterface} from './merge_passwords_store_copies_mixin.js';
 import {MultiStorePasswordUiEntry} from './multi_store_password_ui_entry.js';
 import {AccountStorageOptInStateChangedListener, PasswordManagerImpl} from './password_manager_proxy.js';
+import {getTemplate} from './passwords_device_section.html.js';
 import {PasswordsListHandlerElement} from './passwords_list_handler.js';
 
 /**
@@ -53,31 +55,36 @@ function isEditable(element: Element): boolean {
             (element as HTMLInputElement).type)));
 }
 
-interface PasswordsDeviceSectionElement {
+export interface PasswordsDeviceSectionElement {
   $: {
-    toast: CrToastElement,
+    deviceAndAccountPasswordList: IronListElement,
+    deviceOnlyPasswordList: IronListElement,
+    moveMultiplePasswordsBanner: HTMLElement,
     passwordsListHandler: PasswordsListHandlerElement,
+    toast: CrToastElement,
   };
 }
 
+// TODO(crbug.com/1234307): Remove when RouteObserverMixin is converted to
+// TypeScript.
+type Constructor<T> = new (...args: any[]) => T;
+
 const PasswordsDeviceSectionElementBase =
-    mixinBehaviors(
-        [
-          MergePasswordsStoreCopiesBehavior,
-          WebUIListenerBehavior,
-        ],
-        GlobalScrollTargetMixin(RouteObserverMixin(PolymerElement))) as {
-      new (): PolymerElement & WebUIListenerBehavior &
-      MergePasswordsStoreCopiesBehaviorInterface & RouteObserverMixinInterface
+    MergePasswordsStoreCopiesMixin(GlobalScrollTargetMixin(WebUIListenerMixin(
+        RouteObserverMixin(PolymerElement) as unknown as
+        Constructor<PolymerElement>))) as {
+      new (): PolymerElement & WebUIListenerMixinInterface &
+          MergePasswordsStoreCopiesMixinInterface & RouteObserverMixinInterface,
     };
 
-class PasswordsDeviceSectionElement extends PasswordsDeviceSectionElementBase {
+export class PasswordsDeviceSectionElement extends
+    PasswordsDeviceSectionElementBase {
   static get is() {
     return 'passwords-device-section';
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
   }
 
   static get properties() {
@@ -185,20 +192,30 @@ class PasswordsDeviceSectionElement extends PasswordsDeviceSectionElementBase {
         type: String,
         value: '',
       },
+
+      isPasswordViewPageEnabled_: {
+        type: Boolean,
+        value() {
+          return loadTimeData.getBoolean('enablePasswordViewPage');
+        },
+        reflectToAttribute: true,
+      },
+
+      focusConfig: Object,
     };
   }
 
   static get observers() {
     return [
-      'maybeRedirectToPasswordsPage_(isUserAllowedToAccessPage_, currentRoute_)'
+      'maybeRedirectToPasswordsPage_(isUserAllowedToAccessPage_, currentRoute_)',
     ];
   }
 
   subpageRoute: Route;
   filter: string;
-  private deviceOnlyPasswords_: Array<MultiStorePasswordUiEntry>;
-  private deviceAndAccountPasswords_: Array<MultiStorePasswordUiEntry>;
-  private allDevicePasswords_: Array<MultiStorePasswordUiEntry>;
+  private deviceOnlyPasswords_: MultiStorePasswordUiEntry[];
+  private deviceAndAccountPasswords_: MultiStorePasswordUiEntry[];
+  private allDevicePasswords_: MultiStorePasswordUiEntry[];
   private shouldShowMoveMultiplePasswordsBanner_: boolean;
   private lastFocused_: MultiStorePasswordUiEntry;
   private listBlurred_: boolean;
@@ -210,16 +227,18 @@ class PasswordsDeviceSectionElement extends PasswordsDeviceSectionElementBase {
   private showMoveMultiplePasswordsDialog_: boolean;
   private currentRoute_: Route|null;
   private devicePasswordsLabel_: string;
+  private isPasswordViewPageEnabled_: boolean;
+  focusConfig: Map<string, string|(() => void)>;
   private accountStorageOptInStateListener_:
       AccountStorageOptInStateChangedListener|null = null;
 
-  connectedCallback() {
+  override connectedCallback() {
     super.connectedCallback();
 
     this.addListenersForAccountStorageRequirements_();
     this.currentRoute_ = Router.getInstance().currentRoute;
 
-    const extractFirstStoredAccountEmail = (accounts: Array<StoredAccount>) => {
+    const extractFirstStoredAccountEmail = (accounts: StoredAccount[]) => {
       this.accountEmail_ = accounts.length > 0 ? accounts[0].email : '';
     };
     SyncBrowserProxyImpl.getInstance().getStoredAccounts().then(
@@ -228,7 +247,7 @@ class PasswordsDeviceSectionElement extends PasswordsDeviceSectionElementBase {
         'stored-accounts-updated', extractFirstStoredAccountEmail);
   }
 
-  ready() {
+  override ready() {
     super.ready();
 
     document.addEventListener('keydown', keyboardEvent => {
@@ -245,7 +264,7 @@ class PasswordsDeviceSectionElement extends PasswordsDeviceSectionElementBase {
     });
   }
 
-  disconnectedCallback() {
+  override disconnectedCallback() {
     super.disconnectedCallback();
 
     PasswordManagerImpl.getInstance().removeAccountStorageOptInStateListener(
@@ -253,19 +272,20 @@ class PasswordsDeviceSectionElement extends PasswordsDeviceSectionElementBase {
     this.accountStorageOptInStateListener_ = null;
   }
 
-  private computeAllDevicePasswords_(): Array<MultiStorePasswordUiEntry> {
-    return this.savedPasswords.filter(p => p.isPresentOnDevice());
+  private computeAllDevicePasswords_(): MultiStorePasswordUiEntry[] {
+    return this.savedPasswords.filter(
+        p => p.storedIn !== chrome.passwordsPrivate.PasswordStoreSet.ACCOUNT);
   }
 
-  private computeDeviceOnlyPasswords_(): Array<MultiStorePasswordUiEntry> {
+  private computeDeviceOnlyPasswords_(): MultiStorePasswordUiEntry[] {
     return this.savedPasswords.filter(
-        p => p.isPresentOnDevice() && !p.isPresentInAccount());
+        p => p.storedIn === chrome.passwordsPrivate.PasswordStoreSet.DEVICE);
   }
 
-  private computeDeviceAndAccountPasswords_():
-      Array<MultiStorePasswordUiEntry> {
+  private computeDeviceAndAccountPasswords_(): MultiStorePasswordUiEntry[] {
     return this.savedPasswords.filter(
-        p => p.isPresentOnDevice() && p.isPresentInAccount());
+        p => p.storedIn ===
+            chrome.passwordsPrivate.PasswordStoreSet.DEVICE_AND_ACCOUNT);
   }
 
   private computeIsUserAllowedToAccessPage_(): boolean {
@@ -278,10 +298,6 @@ class PasswordsDeviceSectionElement extends PasswordsDeviceSectionElementBase {
   }
 
   private computeShouldShowMoveMultiplePasswordsBanner_(): boolean {
-    if (!loadTimeData.getBoolean('enableMovingMultiplePasswordsToAccount')) {
-      return false;
-    }
-
     if (this.allDevicePasswords_.length === 0) {
       return false;
     }
@@ -310,7 +326,7 @@ class PasswordsDeviceSectionElement extends PasswordsDeviceSectionElementBase {
   /**
    * From RouteObserverMixin.
    */
-  currentRouteChanged(route: Route) {
+  override currentRouteChanged(route: Route) {
     super.currentRouteChanged(route);
     this.currentRoute_ = route || null;
   }
@@ -322,7 +338,7 @@ class PasswordsDeviceSectionElement extends PasswordsDeviceSectionElementBase {
     SyncBrowserProxyImpl.getInstance().getSyncStatus().then(setSyncDisabled);
     this.addWebUIListener('sync-status-changed', setSyncDisabled);
 
-    const setSignedIn = (storedAccounts: Array<StoredAccount>) => {
+    const setSignedIn = (storedAccounts: StoredAccount[]) => {
       this.signedIn_ = storedAccounts.length > 0;
     };
     SyncBrowserProxyImpl.getInstance().getStoredAccounts().then(setSignedIn);
@@ -338,13 +354,13 @@ class PasswordsDeviceSectionElement extends PasswordsDeviceSectionElementBase {
     this.accountStorageOptInStateListener_ = setOptedIn;
   }
 
-  private isNonEmpty_(passwords: Array<MultiStorePasswordUiEntry>): boolean {
+  private isNonEmpty_(passwords: MultiStorePasswordUiEntry[]): boolean {
     return passwords.length > 0;
   }
 
   private getFilteredPasswords_(
-      passwords: Array<MultiStorePasswordUiEntry>,
-      filter: string): Array<MultiStorePasswordUiEntry> {
+      passwords: MultiStorePasswordUiEntry[],
+      filter: string): MultiStorePasswordUiEntry[] {
     if (!filter) {
       return passwords.slice();
     }
@@ -397,6 +413,12 @@ class PasswordsDeviceSectionElement extends PasswordsDeviceSectionElementBase {
         this.currentRoute_ === routes.DEVICE_PASSWORDS) {
       Router.getInstance().navigateTo(routes.PASSWORDS);
     }
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'passwords-device-section': PasswordsDeviceSectionElement;
   }
 }
 

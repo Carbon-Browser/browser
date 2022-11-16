@@ -16,11 +16,10 @@
 #include "chrome/browser/ui/webui/chromeos/login/active_directory_password_change_screen_handler.h"
 #include "chrome/browser/ui/webui/chromeos/login/oobe_ui.h"
 #include "chrome/browser/ui/webui/chromeos/login/signin_screen_handler.h"
-#include "chromeos/dbus/authpolicy/fake_authpolicy_client.h"
+#include "chromeos/ash/components/dbus/authpolicy/fake_authpolicy_client.h"
 #include "content/public/test/browser_test_utils.h"
 
-namespace chromeos {
-
+namespace ash {
 namespace {
 
 constexpr char kAdOfflineAuthId[] = "offline-ad-login";
@@ -112,7 +111,7 @@ void ActiveDirectoryLoginMixin::TestLoginVisible() {
 
   test::OobeJS().ExpectElementText(autocomplete_realm_, kAdAutocompleteRealm);
 
-  EXPECT_TRUE(ash::LoginScreenTestApi::IsLoginShelfShown());
+  EXPECT_TRUE(LoginScreenTestApi::IsLoginShelfShown());
 }
 
 // Checks if Active Directory password change screen is shown.
@@ -234,4 +233,4 @@ void ActiveDirectoryLoginMixin::WaitForAuthError() {
 
 ActiveDirectoryLoginMixin::~ActiveDirectoryLoginMixin() = default;
 
-}  // namespace chromeos
+}  // namespace ash

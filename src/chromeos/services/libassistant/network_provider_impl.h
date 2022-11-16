@@ -7,10 +7,9 @@
 
 #include <vector>
 
-#include "base/macros.h"
+#include "chromeos/assistant/internal/libassistant/shared_headers.h"
 #include "chromeos/services/libassistant/public/mojom/platform_delegate.mojom-forward.h"
-#include "chromeos/services/network_config/public/mojom/cros_network_config.mojom.h"
-#include "libassistant/shared/public/platform_net.h"
+#include "chromeos/services/network_config/public/cpp/cros_network_config_observer.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 
@@ -19,9 +18,13 @@ namespace libassistant {
 
 class COMPONENT_EXPORT(ASSISTANT_SERVICE) NetworkProviderImpl
     : public assistant_client::NetworkProvider,
-      public network_config::mojom::CrosNetworkConfigObserver {
+      public network_config::CrosNetworkConfigObserver {
  public:
   NetworkProviderImpl();
+
+  NetworkProviderImpl(const NetworkProviderImpl&) = delete;
+  NetworkProviderImpl& operator=(const NetworkProviderImpl&) = delete;
+
   ~NetworkProviderImpl() override;
 
   void Initialize(mojom::PlatformDelegate* platform_delegate);
@@ -30,17 +33,10 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) NetworkProviderImpl
   ConnectionStatus GetConnectionStatus() override;
   assistant_client::MdnsResponder* GetMdnsResponder() override;
 
-  // network_config::mojom::CrosNetworkConfigObserver:
+  // network_config::CrosNetworkConfigObserver:
   void OnActiveNetworksChanged(
       std::vector<network_config::mojom::NetworkStatePropertiesPtr> networks)
       override;
-  void OnNetworkStateChanged(
-      chromeos::network_config::mojom::NetworkStatePropertiesPtr network)
-      override {}
-  void OnNetworkStateListChanged() override {}
-  void OnDeviceStateListChanged() override {}
-  void OnVpnProvidersChanged() override {}
-  void OnNetworkCertificatesChanged() override {}
 
  private:
   ConnectionStatus connection_status_;
@@ -48,8 +44,6 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) NetworkProviderImpl
       this};
   mojo::Remote<network_config::mojom::CrosNetworkConfig>
       cros_network_config_remote_;
-
-  DISALLOW_COPY_AND_ASSIGN(NetworkProviderImpl);
 };
 
 }  // namespace libassistant

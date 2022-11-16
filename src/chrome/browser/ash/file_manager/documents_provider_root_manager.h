@@ -8,11 +8,10 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
+#include "ash/components/arc/mojom/file_system.mojom-forward.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "chrome/browser/ash/arc/fileapi/arc_file_system_bridge.h"
-#include "components/arc/mojom/file_system.mojom-forward.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "url/gurl.h"
@@ -70,6 +69,11 @@ class DocumentsProviderRootManager : public arc::ArcFileSystemBridge::Observer {
   };
   DocumentsProviderRootManager(Profile* profile,
                                arc::ArcFileSystemOperationRunner* runner);
+
+  DocumentsProviderRootManager(const DocumentsProviderRootManager&) = delete;
+  DocumentsProviderRootManager& operator=(const DocumentsProviderRootManager&) =
+      delete;
+
   ~DocumentsProviderRootManager() override;
 
   void AddObserver(Observer* observer);
@@ -128,8 +132,6 @@ class DocumentsProviderRootManager : public arc::ArcFileSystemBridge::Observer {
   std::vector<RootInfo> current_roots_;
 
   base::WeakPtrFactory<DocumentsProviderRootManager> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(DocumentsProviderRootManager);
 };
 
 }  // namespace file_manager

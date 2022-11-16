@@ -29,7 +29,7 @@ void AddNotification(const std::string& notification_id,
   message_center::MessageCenter::Get()->AddNotification(
       std::make_unique<message_center::Notification>(
           message_center::NOTIFICATION_TYPE_BASE_FORMAT, notification_id,
-          u"test_title", u"test message", gfx::Image(),
+          u"test_title", u"test message", ui::ImageModel(),
           /*display_source=*/std::u16string(), GURL(),
           message_center::NotifierId(message_center::NotifierType::APPLICATION,
                                      "app"),
@@ -165,7 +165,7 @@ TEST_P(NotificationCounterViewTest, DisplayChanged) {
   notification_counter_view()->Update();
 
   // In small display, the counter show be shown with pinned notification.
-  UpdateDisplay("600x600");
+  UpdateDisplay("600x500");
   EXPECT_TRUE(notification_counter_view()->GetVisible());
 
   // In large screen size, expected the same behavior like medium screen size.

@@ -28,34 +28,40 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "base/synchronization/lock.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
 #include "gin/public/v8_platform.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/features.h"
-#include "third_party/blink/public/platform/platform.h"
-#include "third_party/blink/renderer/platform/heap/handle.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_deque.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_counted_set.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_map.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_linked_hash_set.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/heap/heap_test_objects.h"
 #include "third_party/blink/renderer/platform/heap/heap_test_platform.h"
 #include "third_party/blink/renderer/platform/heap/heap_test_utilities.h"
+#include "third_party/blink/renderer/platform/heap/prefinalizer.h"
 #include "third_party/blink/renderer/platform/heap/self_keep_alive.h"
+#include "third_party/blink/renderer/platform/heap/visitor.h"
 #include "third_party/blink/renderer/platform/scheduler/public/post_cross_thread_task.h"
 #include "third_party/blink/renderer/platform/scheduler/public/thread.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 #include "third_party/blink/renderer/platform/wtf/hash_traits.h"
 #include "third_party/blink/renderer/platform/wtf/threading_primitives.h"
-
-#if BUILDFLAG(USE_V8_OILPAN)
 #include "v8/include/cppgc/internal/api-constants.h"
-#endif
 
 namespace blink {
 
 namespace {
 
 class HeapTest : public TestSupportingGC {};
+
+class HeapDeathTest : public TestSupportingGC {};
 
 class IntWrapper : public GarbageCollected<IntWrapper> {
  public:
@@ -189,7 +195,7 @@ class PreFinalizerVectorBackingExpandForbidden final
 };
 }  // namespace
 
-TEST(HeapDeathTest, PreFinalizerVectorBackingExpandForbidden) {
+TEST_F(HeapDeathTest, PreFinalizerVectorBackingExpandForbidden) {
   MakeGarbageCollected<PreFinalizerVectorBackingExpandForbidden>();
   TestSupportingGC::PreciselyCollectGarbage();
 }
@@ -220,7 +226,7 @@ class PreFinalizerHashTableBackingExpandForbidden final
 };
 }  // namespace
 
-TEST(HeapDeathTest, PreFinalizerHashTableBackingExpandForbidden) {
+TEST_F(HeapDeathTest, PreFinalizerHashTableBackingExpandForbidden) {
   MakeGarbageCollected<PreFinalizerHashTableBackingExpandForbidden>();
   TestSupportingGC::PreciselyCollectGarbage();
 }
@@ -293,7 +299,7 @@ class HeapTestResurrectingPreFinalizer
 };
 }  // namespace
 
-TEST(HeapDeathTest, DiesOnResurrectedHeapVectorMember) {
+TEST_F(HeapDeathTest, DiesOnResurrectedHeapVectorMember) {
   Persistent<HeapTestResurrectingPreFinalizer::GlobalStorage> storage(
       MakeGarbageCollected<HeapTestResurrectingPreFinalizer::GlobalStorage>());
   MakeGarbageCollected<HeapTestResurrectingPreFinalizer>(
@@ -302,7 +308,7 @@ TEST(HeapDeathTest, DiesOnResurrectedHeapVectorMember) {
   TestSupportingGC::PreciselyCollectGarbage();
 }
 
-TEST(HeapDeathTest, DiesOnResurrectedHeapHashSetMember) {
+TEST_F(HeapDeathTest, DiesOnResurrectedHeapHashSetMember) {
   Persistent<HeapTestResurrectingPreFinalizer::GlobalStorage> storage(
       MakeGarbageCollected<HeapTestResurrectingPreFinalizer::GlobalStorage>());
   MakeGarbageCollected<HeapTestResurrectingPreFinalizer>(
@@ -311,7 +317,7 @@ TEST(HeapDeathTest, DiesOnResurrectedHeapHashSetMember) {
   TestSupportingGC::PreciselyCollectGarbage();
 }
 
-TEST(HeapDeathTest, DiesOnResurrectedHeapHashSetWeakMember) {
+TEST_F(HeapDeathTest, DiesOnResurrectedHeapHashSetWeakMember) {
   Persistent<HeapTestResurrectingPreFinalizer::GlobalStorage> storage(
       MakeGarbageCollected<HeapTestResurrectingPreFinalizer::GlobalStorage>());
   MakeGarbageCollected<HeapTestResurrectingPreFinalizer>(
@@ -328,7 +334,7 @@ class ThreadedTesterBase {
     HeapTestingPlatformAdapter platform_for_threads(gin::V8Platform::Get());
     std::unique_ptr<Thread> threads[kNumberOfThreads];
     for (auto& thread : threads) {
-      thread = Platform::Current()->CreateThread(
+      thread = Thread::CreateThread(
           ThreadCreationParams(ThreadType::kTestThread)
               .SetThreadNameForTest("blink gc testing thread"));
       PostCrossThreadTask(
@@ -389,7 +395,7 @@ class ThreadedHeapTester : public ThreadedTesterBase {
  protected:
   using GlobalIntWrapperPersistent = CrossThreadPersistent<IntWrapper>;
 
-  Mutex mutex_;
+  base::Lock lock_;
   Vector<std::unique_ptr<GlobalIntWrapperPersistent>> cross_persistents_;
 
   std::unique_ptr<GlobalIntWrapperPersistent> CreateGlobalPersistent(
@@ -399,7 +405,7 @@ class ThreadedHeapTester : public ThreadedTesterBase {
   }
 
   void AddGlobalPersistent() {
-    MutexLocker lock(mutex_);
+    base::AutoLock lock(lock_);
     cross_persistents_.push_back(CreateGlobalPersistent(0x2a2a2a2a));
   }
 
@@ -615,14 +621,10 @@ TEST_F(HeapTest, ThreadPersistent) {
 
 namespace {
 size_t GetOverallObjectSize() {
-#if BUILDFLAG(USE_V8_OILPAN)
   return ThreadState::Current()
       ->cpp_heap()
       .CollectStatistics(cppgc::HeapStatistics::DetailLevel::kDetailed)
       .used_size_bytes;
-#else   // !BUILDFLAG(USE_V8_OILPAN)
-  return ThreadState::Current()->Heap().ObjectPayloadSizeForTesting();
-#endif  // !BUILDFLAG(USE_V8_OILPAN)
 }
 }  // namespace
 
@@ -716,20 +718,27 @@ TEST_F(HeapTest, HashMapOfMembers) {
   EXPECT_EQ(after_gc4, initial_object_payload_size);
 }
 
+namespace {
+
+static constexpr size_t kLargeObjectSize = size_t{1} << 27;
+
+}  // namespace
+
 // This test often fails on Android (https://crbug.com/843032).
 // We run out of memory on Android devices because ReserveCapacityForSize
 // actually allocates a much larger backing than specified (in this case 400MB).
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #define MAYBE_LargeHashMap DISABLED_LargeHashMap
 #else
 #define MAYBE_LargeHashMap LargeHashMap
 #endif
 TEST_F(HeapTest, MAYBE_LargeHashMap) {
-  ClearOutOldGarbage();
+  // Regression test: https://crbug.com/597953
+  //
+  // Try to allocate a HashTable larger than kLargeObjectSize.
 
-  // Try to allocate a HashTable larger than kMaxHeapObjectSize
-  // (crbug.com/597953).
-  wtf_size_t size = HeapAllocator::kMaxHeapObjectSize /
+  ClearOutOldGarbage();
+  wtf_size_t size = kLargeObjectSize /
                     sizeof(HeapHashMap<int, Member<IntWrapper>>::ValueType);
   Persistent<HeapHashMap<int, Member<IntWrapper>>> map =
       MakeGarbageCollected<HeapHashMap<int, Member<IntWrapper>>>();
@@ -738,12 +747,13 @@ TEST_F(HeapTest, MAYBE_LargeHashMap) {
 }
 
 TEST_F(HeapTest, LargeVector) {
+  // Regression test: https://crbug.com/597953
+  //
+  // Try to allocate a HeapVector larger than kLargeObjectSize.
+
   ClearOutOldGarbage();
 
-  // Try to allocate a HeapVectors larger than kMaxHeapObjectSize
-  // (crbug.com/597953).
-  const wtf_size_t size =
-      HeapAllocator::kMaxHeapObjectSize / sizeof(Member<IntWrapper>);
+  const wtf_size_t size = kLargeObjectSize / sizeof(Member<IntWrapper>);
   Persistent<HeapVector<Member<IntWrapper>>> vector =
       MakeGarbageCollected<HeapVector<Member<IntWrapper>>>(size);
   EXPECT_LE(size, vector->capacity());
@@ -901,10 +911,8 @@ class Container final : public GarbageCollected<Container> {
 }  // namespace
 
 TEST_F(HeapTest, HeapVectorOnStackLargeObjectPageSized) {
-#if BUILDFLAG(USE_V8_OILPAN)
   static constexpr size_t kLargeObjectSizeThreshold =
       cppgc::internal::api_constants::kLargeObjectSizeThreshold;
-#endif  // !BUILDFLAG(USE_V8_OILPAN)
   ClearOutOldGarbage();
   using Container = HeapVector<Member<IntWrapper>>;
   Container vector;
@@ -1693,7 +1701,7 @@ int ThingWithDestructor::live_things_with_destructor_;
 class RefCountedAndGarbageCollected final
     : public GarbageCollected<RefCountedAndGarbageCollected> {
  public:
-  RefCountedAndGarbageCollected() : keep_alive_(PERSISTENT_FROM_HERE) {}
+  RefCountedAndGarbageCollected() = default;
   ~RefCountedAndGarbageCollected() { ++destructor_calls_; }
 
   void AddRef() {
@@ -2815,11 +2823,7 @@ TEST_F(HeapTest, IndirectStrongToWeak) {
 }
 
 class AllocatesOnAssignment : public GarbageCollected<AllocatesOnAssignment> {
-#if BUILDFLAG(USE_V8_OILPAN)
   static constexpr auto kHashTableDeletedValue = cppgc::kSentinelPointer;
-#else   // !USE_V8_OILPAN
-  static constexpr auto kHashTableDeletedValue = WTF::kHashTableDeletedValue;
-#endif  // !USE_V8_OILPAN
 
  public:
   AllocatesOnAssignment(std::nullptr_t) : value_(nullptr) {}
@@ -2834,9 +2838,6 @@ class AllocatesOnAssignment : public GarbageCollected<AllocatesOnAssignment> {
   enum DeletedMarker { kDeletedValue };
 
   AllocatesOnAssignment(const AllocatesOnAssignment& other) {
-#if !BUILDFLAG(USE_V8_OILPAN)
-    DCHECK(!ThreadState::Current()->IsGCForbidden());
-#endif
     TestSupportingGC::ConservativelyCollectGarbage();
     value_ = MakeGarbageCollected<IntWrapper>(other.value_->Value());
   }
@@ -2845,11 +2846,7 @@ class AllocatesOnAssignment : public GarbageCollected<AllocatesOnAssignment> {
       : value_(kHashTableDeletedValue) {}
 
   inline bool IsDeleted() const {
-#if BUILDFLAG(USE_V8_OILPAN)
     return value_ == cppgc::kSentinelPointer;
-#else   // !USE_V8_OILPAN
-    return value_.IsHashTableDeletedValue();
-#endif  // !USE_V8_OILPAN
   }
 
   void Trace(Visitor* visitor) const { visitor->Trace(value_); }
@@ -3197,14 +3194,6 @@ TEST_F(HeapTest, HeapHashMapCallsDestructor) {
 namespace {
 class FakeCSSValue : public GarbageCollected<FakeCSSValue> {
  public:
-#if !BUILDFLAG(USE_V8_OILPAN)
-  template <typename T>
-  static void* AllocateObject(size_t size) {
-    return ThreadState::Current()->Heap().AllocateOnArenaIndex(
-        ThreadState::Current(), size, BlinkGC::kCSSValueArenaIndex,
-        GCInfoTrait<GCInfoFoldedType<FakeCSSValue>>::Index(), "FakeCSSValue");
-  }
-#endif
   virtual void Trace(Visitor*) const {}
   char* Data() { return data_; }
 
@@ -3215,14 +3204,6 @@ class FakeCSSValue : public GarbageCollected<FakeCSSValue> {
 
 class FakeNode : public GarbageCollected<FakeNode> {
  public:
-#if !BUILDFLAG(USE_V8_OILPAN)
-  template <typename T>
-  static void* AllocateObject(size_t size) {
-    return ThreadState::Current()->Heap().AllocateOnArenaIndex(
-        ThreadState::Current(), size, BlinkGC::kNodeArenaIndex,
-        GCInfoTrait<GCInfoFoldedType<FakeNode>>::Index(), "FakeNode");
-  }
-#endif
   virtual void Trace(Visitor*) const {}
   char* Data() { return data_; }
 
@@ -3232,7 +3213,6 @@ class FakeNode : public GarbageCollected<FakeNode> {
 };
 }  // namespace
 
-#if BUILDFLAG(USE_V8_OILPAN)
 }  // namespace blink
 
 namespace cppgc {
@@ -3250,7 +3230,6 @@ struct SpaceTrait<blink::FakeNode> {
 }  // namespace cppgc
 
 namespace blink {
-#endif
 
 TEST_F(HeapTest, CollectNodeAndCssStatistics) {
   PreciselyCollectGarbage();
@@ -3275,6 +3254,22 @@ TEST_F(HeapTest, CollectNodeAndCssStatistics) {
   EXPECT_TRUE(css);
   EXPECT_LE(node_bytes_before + sizeof(FakeNode), node_bytes_after);
   EXPECT_LE(css_bytes_before + sizeof(FakeCSSValue), css_bytes_after);
+}
+
+TEST_F(HeapTest, ContainerAnnotationOnTinyBacking) {
+  // Regression test: https://crbug.com/1292392
+  //
+  // This test aims to check that ASAN container annotations work for backing
+  // with sizeof(T) < 8 (which is smaller than ASAN's shadow granularity), size
+  // =1, and capacity = 1.
+  HeapVector<uint32_t> vector;
+  DCHECK_EQ(0u, vector.capacity());
+  vector.ReserveCapacity(1);
+  DCHECK_EQ(1u, vector.capacity());
+  // The following push_back() should not crash, even with container
+  // annotations. The critical path expands the backing without allocating a new
+  // one.
+  vector.ReserveCapacity(2);
 }
 
 }  // namespace blink

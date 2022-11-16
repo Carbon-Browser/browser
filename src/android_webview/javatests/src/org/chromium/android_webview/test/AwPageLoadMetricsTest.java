@@ -19,6 +19,7 @@ import org.junit.Test;
 import org.chromium.android_webview.AwContents;
 import org.chromium.android_webview.metrics.AwMetricsServiceClient;
 import org.chromium.base.metrics.RecordHistogram;
+import org.chromium.base.test.util.DisabledTest;
 import org.chromium.base.test.util.Feature;
 import org.chromium.base.test.util.MetricsUtils;
 import org.chromium.blink.mojom.WebFeature;
@@ -94,7 +95,7 @@ public class AwPageLoadMetricsTest {
         int navigationToFirstContentfulPaint = RecordHistogram.getHistogramTotalCountForTesting(
                 "PageLoad.PaintTiming.NavigationToFirstContentfulPaint");
         int navigationToLargestContentfulPaint = RecordHistogram.getHistogramTotalCountForTesting(
-                "PageLoad.PaintTiming.NavigationToLargestContentfulPaint");
+                "PageLoad.PaintTiming.NavigationToLargestContentfulPaint2");
         loadUrlSync(url);
         AwActivityTestRule.pollInstrumentationThread(
                 () -> (1 + navigationToFirstPaint
@@ -107,9 +108,10 @@ public class AwPageLoadMetricsTest {
         // Flush NavigationToLargestContentfulPaint.
         loadUrlSync("about:blank");
         AwActivityTestRule.pollInstrumentationThread(
-                () -> (1 + navigationToLargestContentfulPaint
-                        == RecordHistogram.getHistogramTotalCountForTesting(
-                                "PageLoad.PaintTiming.NavigationToLargestContentfulPaint")));
+                ()
+                        -> (1 + navigationToLargestContentfulPaint
+                                == RecordHistogram.getHistogramTotalCountForTesting(
+                                        "PageLoad.PaintTiming.NavigationToLargestContentfulPaint2")));
     }
 
     /**
@@ -118,6 +120,7 @@ public class AwPageLoadMetricsTest {
     @Test
     @SmallTest
     @Feature({"AndroidWebView"})
+    @DisabledTest(message = "https://crbug.com/1312527")
     public void testFirstInputDelay4() throws Throwable {
         final String data = "<html><head></head><body>"
                 + "<p>Hello World</p><input type='text' id='text1'>"

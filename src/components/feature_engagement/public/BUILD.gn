@@ -62,11 +62,13 @@ if (is_android) {
       "android/java/src/org/chromium/components/feature_engagement/EventConstants.java",
       "android/java/src/org/chromium/components/feature_engagement/FeatureConstants.java",
       "android/java/src/org/chromium/components/feature_engagement/Tracker.java",
+      "android/java/src/org/chromium/components/feature_engagement/TriggerDetails.java",
     ]
 
     deps = [
       ":jni_headers",
       "//base:base_java",
+      "//base:jni_java",
       "//third_party/androidx:androidx_annotation_annotation_java",
     ]
     annotation_processor_deps = [ "//base/android/jni_generator:jni_processor" ]

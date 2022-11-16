@@ -15,6 +15,7 @@
 #include "ash/system/accessibility/tray_accessibility.h"
 #include "ash/test/ash_test_base.h"
 #include "base/barrier_closure.h"
+#include "base/callback.h"
 #include "base/callback_helpers.h"
 #include "base/strings/stringprintf.h"
 
@@ -222,8 +223,8 @@ TEST_F(FloatingAccessibilityControllerTest, LocaleChangeObserver) {
   // RTL should position the menu on the bottom left.
   base::i18n::SetICUDefaultLocale("he");
   // Trigger the LocaleChangeObserver, which should cause a layout of the menu.
-  ash::LocaleUpdateController::Get()->ConfirmLocaleChange(
-      "en", "en", "he", base::DoNothing::Once<ash::LocaleNotificationResult>());
+  ash::LocaleUpdateController::Get()->ConfirmLocaleChange("en", "en", "he",
+                                                          base::DoNothing());
   EXPECT_TRUE(base::i18n::IsRTL());
   EXPECT_LT(
       GetMenuViewBounds().ManhattanDistanceToPoint(window_bounds.bottom_left()),
@@ -231,8 +232,8 @@ TEST_F(FloatingAccessibilityControllerTest, LocaleChangeObserver) {
 
   // LTR should position the menu on the bottom right.
   base::i18n::SetICUDefaultLocale("en");
-  ash::LocaleUpdateController::Get()->ConfirmLocaleChange(
-      "he", "he", "en", base::DoNothing::Once<ash::LocaleNotificationResult>());
+  ash::LocaleUpdateController::Get()->ConfirmLocaleChange("he", "he", "en",
+                                                          base::DoNothing());
   EXPECT_FALSE(base::i18n::IsRTL());
   EXPECT_LT(GetMenuViewBounds().ManhattanDistanceToPoint(
                 window_bounds.bottom_right()),
@@ -427,7 +428,7 @@ TEST_F(FloatingAccessibilityControllerTest, ActiveFeaturesButtons) {
 
   {
     base::RunLoop loop_enable;
-    SetOnLayoutCallback(base::BarrierClosure(base::size(kFeatureButtons),
+    SetOnLayoutCallback(base::BarrierClosure(std::size(kFeatureButtons),
                                              loop_enable.QuitClosure()));
     // Enable all features.
     for (FeatureWithButton feature : kFeatureButtons)
@@ -441,7 +442,7 @@ TEST_F(FloatingAccessibilityControllerTest, ActiveFeaturesButtons) {
   EXPECT_TRUE(window_bounds.Contains(GetMenuViewBounds()));
   {
     base::RunLoop loop_disable;
-    SetOnLayoutCallback(base::BarrierClosure(base::size(kFeatureButtons),
+    SetOnLayoutCallback(base::BarrierClosure(std::size(kFeatureButtons),
                                              loop_disable.QuitClosure()));
     // Enable all features.
     // Dicable all features.

@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/cancelable_task_tracker.h"
@@ -45,6 +45,12 @@ class PasswordAccessoryControllerImpl
   using PasswordDriverSupplierForFocusedFrame =
       base::RepeatingCallback<password_manager::PasswordManagerDriver*(
           content::WebContents*)>;
+
+  PasswordAccessoryControllerImpl(const PasswordAccessoryControllerImpl&) =
+      delete;
+  PasswordAccessoryControllerImpl& operator=(
+      const PasswordAccessoryControllerImpl&) = delete;
+
   ~PasswordAccessoryControllerImpl() override;
 
   // AccessoryController:
@@ -176,18 +182,17 @@ class PasswordAccessoryControllerImpl
   // the Bottom Sheet view is destroyed.
   void AllPasswordsSheetDismissed();
 
-  // The tab for which this class is scoped.
-  content::WebContents* web_contents_ = nullptr;
+  content::WebContents& GetWebContents() const;
 
   // Keeps track of credentials which are stored for all origins in this tab.
-  password_manager::CredentialCache* credential_cache_ = nullptr;
+  raw_ptr<password_manager::CredentialCache> credential_cache_ = nullptr;
 
   // The password accessory controller object to forward client requests to.
   base::WeakPtr<ManualFillingController> mf_controller_;
 
   // The password manager client is used to update the save passwords status
   // for the currently focused origin.
-  password_manager::PasswordManagerClient* password_client_ = nullptr;
+  raw_ptr<password_manager::PasswordManagerClient> password_client_ = nullptr;
 
   // The authenticator used to trigger a biometric re-auth before filling.
   // null, if there is no ongoing authentication.
@@ -213,15 +218,13 @@ class PasswordAccessoryControllerImpl
 
   // Helper for determining whether a bottom sheet showing passwords is useful.
   AllPasswordsBottomSheetHelper all_passwords_helper_{
-      password_client_->GetProfilePasswordStoreInterface()};
+      password_client_->GetProfilePasswordStore()};
 
   // Security level used for testing only.
   security_state::SecurityLevel security_level_for_testing_ =
       security_state::NONE;
 
   WEB_CONTENTS_USER_DATA_KEY_DECL();
-
-  DISALLOW_COPY_AND_ASSIGN(PasswordAccessoryControllerImpl);
 };
 
 #endif  // CHROME_BROWSER_PASSWORD_MANAGER_ANDROID_PASSWORD_ACCESSORY_CONTROLLER_IMPL_H_

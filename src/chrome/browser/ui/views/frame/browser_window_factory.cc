@@ -21,6 +21,7 @@
 #include "ui/aura/window_occlusion_tracker.h"
 #endif
 #include "build/chromeos_buildflags.h"
+#include "chrome/browser/profiles/profiles_state.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/views/widget/widget.h"
 
@@ -56,11 +57,19 @@ BrowserWindow* BrowserWindow::CreateBrowserWindow(
   view->GetWidget()->non_client_view()->SetAccessibleName(
       l10n_util::GetStringUTF16(IDS_PRODUCT_NAME));
 
+  if (view->GetIsPictureInPictureType() && view->GetLockAspectRatio()) {
+    gfx::SizeF aspect_ratio(view->GetInitialAspectRatio(), 1.0f);
+    view->GetWidget()->SetAspectRatio(aspect_ratio);
+  }
+
 #if defined(USE_AURA)
   // For now, all browser windows are true. This only works when USE_AURA
   // because it requires gfx::NativeWindow to be an aura::Window*.
   view->GetWidget()->GetNativeWindow()->SetProperty(
       aura::client::kCreatedByUserGesture, user_gesture);
 #endif
+  if (profiles::IsKioskSession())
+    view->SetForceFullscreen(true);
+
   return view;
 }

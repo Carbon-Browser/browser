@@ -15,7 +15,6 @@
 #include "base/component_export.h"
 #include "base/containers/circular_deque.h"
 #include "base/containers/flat_map.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/time/tick_clock.h"
@@ -40,6 +39,10 @@ class COMPONENT_EXPORT(DBUS_POWER) FakePowerManagerClient
     : public PowerManagerClient {
  public:
   FakePowerManagerClient();
+
+  FakePowerManagerClient(const FakePowerManagerClient&) = delete;
+  FakePowerManagerClient& operator=(const FakePowerManagerClient&) = delete;
+
   ~FakePowerManagerClient() override;
 
   // Checks that FakePowerManagerClient was initialized and returns it.
@@ -83,6 +86,9 @@ class COMPONENT_EXPORT(DBUS_POWER) FakePowerManagerClient
                                             int level) {
     peripheral_battery_refresh_levels_[address] = level;
   }
+  void set_restart_callback(base::OnceClosure callback) {
+    restart_callback_ = std::move(callback);
+  }
 
   // PowerManagerClient overrides:
   void AddObserver(Observer* observer) override;
@@ -99,6 +105,9 @@ class COMPONENT_EXPORT(DBUS_POWER) FakePowerManagerClient
   void IncreaseKeyboardBrightness() override;
   void GetKeyboardBrightnessPercent(
       DBusMethodCallback<double> callback) override;
+  void SetKeyboardBacklightToggledOff(bool toggled_off) override;
+  void GetKeyboardBacklightToggledOff(
+      DBusMethodCallback<bool> callback) override;
   const absl::optional<power_manager::PowerSupplyProperties>& GetLastStatus()
       override;
   void RequestStatusUpdate() override;
@@ -139,6 +148,7 @@ class COMPONENT_EXPORT(DBUS_POWER) FakePowerManagerClient
   void SetExternalDisplayALSBrightness(bool enabled) override;
   void GetExternalDisplayALSBrightness(
       DBusMethodCallback<bool> callback) override;
+  void ChargeNowForAdaptiveCharging() override;
 
   // Pops the first report from |video_activity_reports_|, returning whether the
   // activity was fullscreen or not. There must be at least one report.
@@ -309,6 +319,9 @@ class COMPONENT_EXPORT(DBUS_POWER) FakePowerManagerClient
   // If non-empty, called by SetPowerPolicy().
   base::OnceClosure power_policy_quit_closure_;
 
+  // Callback that will be run, if set, when RequestRestart() is called.
+  base::OnceClosure restart_callback_;
+
   // If non-empty, called by NotifyUserActivity().
   base::RepeatingClosure user_activity_callback_;
 
@@ -326,8 +339,6 @@ class COMPONENT_EXPORT(DBUS_POWER) FakePowerManagerClient
   // Note: This should remain the last member so it'll be destroyed and
   // invalidate its weak pointers before any other members are destroyed.
   base::WeakPtrFactory<FakePowerManagerClient> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(FakePowerManagerClient);
 };
 
 }  // namespace chromeos

@@ -19,15 +19,16 @@ import org.chromium.base.Log;
 import org.chromium.base.task.AsyncTask;
 import org.chromium.base.task.PostTask;
 import org.chromium.base.task.TaskTraits;
+import org.chromium.blink.mojom.DisplayMode;
 import org.chromium.chrome.browser.ShortcutHelper;
 import org.chromium.chrome.browser.browserservices.intents.BitmapHelper;
 import org.chromium.chrome.browser.browserservices.intents.BrowserServicesIntentDataProvider;
-import org.chromium.chrome.browser.browserservices.intents.WebDisplayMode;
 import org.chromium.chrome.browser.browserservices.intents.WebappConstants;
 import org.chromium.chrome.browser.browserservices.intents.WebappInfo;
 import org.chromium.components.webapk.lib.common.WebApkConstants;
 import org.chromium.components.webapps.ShortcutSource;
 import org.chromium.device.mojom.ScreenOrientationLockType;
+import org.chromium.ui.util.ColorUtils;
 
 import java.io.File;
 
@@ -71,6 +72,13 @@ public class WebappDataStorage {
 
     // Whether the last WebAPK update request succeeded.
     static final String KEY_DID_LAST_UPDATE_REQUEST_SUCCEED = "did_last_update_request_succeed";
+
+    // The update pipeline might hold off on updating while the WebAPK is in use. If the usage drags
+    // on, it could result in a new update check being issued (restarting the update pipeline)
+    // before the update takes place, which can result in the App Identity Update dialog being shown
+    // again to the user (showing the same update they already approved). This setting helps prevent
+    // that, by storing a hash of what the last accepted update contained.
+    static final String KEY_LAST_UPDATE_HASH_ACCEPTED = "last_update_hash_accepted";
 
     // Whether to check updates less frequently.
     static final String KEY_RELAX_UPDATES = "relax_updates";
@@ -224,12 +232,10 @@ public class WebappDataStorage {
                 mPreferences.getString(KEY_SCOPE, null), mPreferences.getString(KEY_NAME, null),
                 mPreferences.getString(KEY_SHORT_NAME, null),
                 mPreferences.getString(KEY_ICON, null), version,
-                mPreferences.getInt(KEY_DISPLAY_MODE, WebDisplayMode.STANDALONE),
+                mPreferences.getInt(KEY_DISPLAY_MODE, DisplayMode.STANDALONE),
                 mPreferences.getInt(KEY_ORIENTATION, ScreenOrientationLockType.DEFAULT),
-                mPreferences.getLong(
-                        KEY_THEME_COLOR, WebappConstants.MANIFEST_COLOR_INVALID_OR_MISSING),
-                mPreferences.getLong(
-                        KEY_BACKGROUND_COLOR, WebappConstants.MANIFEST_COLOR_INVALID_OR_MISSING),
+                mPreferences.getLong(KEY_THEME_COLOR, ColorUtils.INVALID_COLOR),
+                mPreferences.getLong(KEY_BACKGROUND_COLOR, ColorUtils.INVALID_COLOR),
                 mPreferences.getBoolean(KEY_IS_ICON_GENERATED, false),
                 mPreferences.getBoolean(KEY_IS_ICON_ADAPTIVE, false));
     }
@@ -327,6 +333,7 @@ public class WebappDataStorage {
         editor.remove(KEY_LAST_CHECK_WEB_MANIFEST_UPDATE_TIME);
         editor.remove(KEY_LAST_UPDATE_REQUEST_COMPLETE_TIME);
         editor.remove(KEY_DID_LAST_UPDATE_REQUEST_SUCCEED);
+        editor.remove(KEY_LAST_UPDATE_HASH_ACCEPTED);
         editor.remove(KEY_RELAX_UPDATES);
         editor.remove(KEY_SHOW_DISCLOSURE);
         editor.remove(KEY_LAUNCH_COUNT);
@@ -452,6 +459,20 @@ public class WebappDataStorage {
      */
     boolean getDidLastWebApkUpdateRequestSucceed() {
         return mPreferences.getBoolean(KEY_DID_LAST_UPDATE_REQUEST_SUCCEED, false);
+    }
+
+    /**
+     * Updates the `hash` of the last accepted identity update that was approved.
+     */
+    public void updateLastWebApkUpdateHashAccepted(String hash) {
+        mPreferences.edit().putString(KEY_LAST_UPDATE_HASH_ACCEPTED, hash).apply();
+    }
+
+    /**
+     * Returns the `hash` of the last accepted identity update that was approved.
+     */
+    String getLastWebApkUpdateHashAccepted() {
+        return mPreferences.getString(KEY_LAST_UPDATE_HASH_ACCEPTED, "");
     }
 
     /**

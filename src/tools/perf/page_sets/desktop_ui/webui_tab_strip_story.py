@@ -2,12 +2,15 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+from page_sets.desktop_ui.browser_element_identifiers import \
+    kTabCounterButtonElementId
 from page_sets.desktop_ui.custom_metric_utils import SetMetricNames
 from page_sets.desktop_ui.js_utils import MEASURE_JS_MEMORY
 from page_sets.desktop_ui.multitab_story import MultiTabStory
 from page_sets.desktop_ui.ui_devtools_utils import ClickOn
 from page_sets.desktop_ui.url_list import TOP_URL
 from page_sets.desktop_ui.webui_utils import Inspect
+from page_sets.desktop_ui import story_tags
 
 WEBUI_TAB_STRIP_BENCHMARK_UMA = [
     'TabStrip.Tab.Views.ActivationAction',
@@ -50,7 +53,7 @@ class WebUITabStripStory(MultiTabStory):
 
   def RunPageInteractions(self, action_runner):
     SetMetricNames(action_runner, WEBUI_TAB_STRIP_CUSTOM_METRIC_NAMES)
-    ClickOn(self._devtools, 'WebUITabCounterButton')
+    ClickOn(self._devtools, element_id=kTabCounterButtonElementId)
     action_runner = Inspect(action_runner.tab.browser, WEBUI_TAB_STRIP_URL)
     action_runner.ExecuteJavaScript(MEASURE_JS_MEMORY %
                                     'webui_tab_strip:used_js_heap_size_begin')
@@ -82,6 +85,7 @@ class WebUITabStripStoryCleanSlate(WebUITabStripStory):
   NAME = 'webui_tab_strip:clean_slate'
   URL_LIST = []
   URL = 'about:blank'
+  TAGS = [story_tags.SMOKE_TEST]
   WAIT_FOR_NETWORK_QUIESCENCE = False
 
 

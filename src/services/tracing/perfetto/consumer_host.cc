@@ -7,7 +7,6 @@
 #include <algorithm>
 #include <cstring>
 #include <string>
-#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -17,7 +16,6 @@
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
-#include "base/task/post_task.h"
 #include "base/task/thread_pool.h"
 #include "base/trace_event/trace_log.h"
 #include "base/values.h"
@@ -137,13 +135,14 @@ class ConsumerHost::StreamWriter {
     }
   }
 
+  StreamWriter(const StreamWriter&) = delete;
+  StreamWriter& operator=(const StreamWriter&) = delete;
+
  private:
   mojo::ScopedDataPipeProducerHandle stream_;
   TracingSession::ReadBuffersCallback read_buffers_callback_;
   base::OnceClosure disconnect_callback_;
   scoped_refptr<base::SequencedTaskRunner> callback_task_runner_;
-
-  DISALLOW_COPY_AND_ASSIGN(StreamWriter);
 };
 
 ConsumerHost::TracingSession::TracingSession(
@@ -227,8 +226,8 @@ ConsumerHost::TracingSession::TracingSession(
     // ACK our EnableTracing request eventually, so we'll add a timeout for that
     // case.
     enable_tracing_ack_timer_.Start(
-        FROM_HERE, base::TimeDelta::FromSeconds(kEnableTracingTimeoutSeconds),
-        this, &ConsumerHost::TracingSession::OnEnableTracingTimeout);
+        FROM_HERE, base::Seconds(kEnableTracingTimeoutSeconds), this,
+        &ConsumerHost::TracingSession::OnEnableTracingTimeout);
   }
 }
 
@@ -525,9 +524,7 @@ void ConsumerHost::TracingSession::OnTraceData(
     size_t position = 0;
     std::unique_ptr<uint8_t[]> data(new uint8_t[max_size]);
     for (perfetto::TracePacket& packet : packets) {
-      char* preamble;
-      size_t preamble_size;
-      std::tie(preamble, preamble_size) = packet.GetProtoPreamble();
+      auto [preamble, preamble_size] = packet.GetProtoPreamble();
       DCHECK_LT(position + preamble_size, max_size);
       memcpy(&data[position], preamble, preamble_size);
       position += preamble_size;
@@ -555,9 +552,7 @@ void ConsumerHost::TracingSession::OnTraceData(
   auto chunk = std::make_unique<StreamWriter::Slice>();
   chunk->reserve(max_size);
   for (auto& packet : packets) {
-    char* data;
-    size_t size;
-    std::tie(data, size) = packet.GetProtoPreamble();
+    auto [data, size] = packet.GetProtoPreamble();
     chunk->append(data, size);
     auto& slices = packet.slices();
     for (auto& slice : slices) {
@@ -661,7 +656,7 @@ void ConsumerHost::EnableTracing(
     }
   }
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   // TODO(crbug.com/1158482): Support writing to a file directly on Windows.
   DCHECK(!output_file.IsValid())
       << "Tracing directly to a file isn't supported yet on Windows";

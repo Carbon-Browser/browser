@@ -12,15 +12,12 @@
 #include <vector>
 
 #include "ash/services/quick_pair/public/mojom/fast_pair_data_parser.mojom.h"
+#include "base/containers/span.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 
-namespace {
-
-constexpr int kEncryptedDataByteSize = 16;
-constexpr int kAesBlockByteSize = 16;
-
-}  // namespace
+inline constexpr int kEncryptedDataByteSize = 16;
+inline constexpr int kAesBlockByteSize = 16;
 
 namespace ash {
 namespace quick_pair {
@@ -55,7 +52,42 @@ class FastPairDataParser : public mojom::FastPairDataParser {
       const std::vector<uint8_t>& encrypted_passkey_bytes,
       ParseDecryptedPasskeyCallback callback) override;
 
+  // Attempts to parse a 'Not Discoverable' advertisement from |service_data|.
+  // If the advertisement does not contain information about salt, use the
+  // |address| as salt instead.
+  void ParseNotDiscoverableAdvertisement(
+      const std::vector<uint8_t>& service_data,
+      const std::string& address,
+      ParseNotDiscoverableAdvertisementCallback callback) override;
+
+  // Attempts to parse MessageStreamMessage instances from |message_bytes| and
+  // stores results in array to pass to callback on success.
+  void ParseMessageStreamMessages(
+      const std::vector<uint8_t>& message_bytes,
+      ParseMessageStreamMessagesCallback callback) override;
+
  private:
+  mojom::MessageStreamMessagePtr ParseMessageStreamMessage(
+      mojom::MessageGroup message_group,
+      uint8_t message_code,
+      const base::span<uint8_t>& additional_data);
+
+  mojom::MessageStreamMessagePtr ParseBluetoothEvent(uint8_t message_code);
+
+  mojom::MessageStreamMessagePtr ParseCompanionAppEvent(uint8_t message_code);
+
+  mojom::MessageStreamMessagePtr ParseDeviceInformationEvent(
+      uint8_t message_code,
+      const base::span<uint8_t>& additional_data);
+
+  mojom::MessageStreamMessagePtr ParseDeviceActionEvent(
+      uint8_t message_code,
+      const base::span<uint8_t>& additional_data);
+
+  mojom::MessageStreamMessagePtr ParseAcknowledgementEvent(
+      uint8_t message_code,
+      const base::span<uint8_t>& additional_data);
+
   mojo::Receiver<mojom::FastPairDataParser> receiver_;
 };
 

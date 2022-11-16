@@ -6,6 +6,7 @@
 #define CHROME_BROWSER_PAGE_LOAD_METRICS_OBSERVERS_LOADING_PREDICTOR_PAGE_LOAD_METRICS_OBSERVER_H_
 
 #include <memory>
+#include "base/memory/raw_ptr.h"
 #include "components/page_load_metrics/browser/page_load_metrics_observer.h"
 
 namespace content {
@@ -42,12 +43,20 @@ class LoadingPredictorPageLoadMetricsObserver
       predictors::ResourcePrefetchPredictor* predictor,
       predictors::LoadingPredictorTabHelper* predictor_tab_helper);
 
+  LoadingPredictorPageLoadMetricsObserver(
+      const LoadingPredictorPageLoadMetricsObserver&) = delete;
+  LoadingPredictorPageLoadMetricsObserver& operator=(
+      const LoadingPredictorPageLoadMetricsObserver&) = delete;
+
   ~LoadingPredictorPageLoadMetricsObserver() override;
 
   // page_load_metrics::PageLoadMetricsObserver:
   ObservePolicy OnStart(content::NavigationHandle* navigation_handle,
                         const GURL& currently_commited_url,
                         bool started_in_foreground) override;
+  ObservePolicy OnFencedFramesStart(
+      content::NavigationHandle* navigation_handle,
+      const GURL& currently_committed_url) override;
   ObservePolicy OnHidden(
       const page_load_metrics::mojom::PageLoadTiming& timing) override;
   void OnFirstContentfulPaintInPage(
@@ -56,11 +65,9 @@ class LoadingPredictorPageLoadMetricsObserver
       const page_load_metrics::mojom::PageLoadTiming& timing) override;
 
  private:
-  predictors::ResourcePrefetchPredictor* predictor_;
-  predictors::LoadingPredictorTabHelper* predictor_tab_helper_;
+  raw_ptr<predictors::ResourcePrefetchPredictor> predictor_;
+  raw_ptr<predictors::LoadingPredictorTabHelper> predictor_tab_helper_;
   bool record_histogram_preconnectable_;
-
-  DISALLOW_COPY_AND_ASSIGN(LoadingPredictorPageLoadMetricsObserver);
 };
 
 #endif  // CHROME_BROWSER_PAGE_LOAD_METRICS_OBSERVERS_LOADING_PREDICTOR_PAGE_LOAD_METRICS_OBSERVER_H_

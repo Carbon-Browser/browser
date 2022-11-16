@@ -12,8 +12,8 @@
 #include <set>
 #include <vector>
 
-#include "base/macros.h"
 #include "content/browser/accessibility/browser_accessibility_manager.h"
+#include "content/common/content_export.h"
 #include "ui/accessibility/platform/ax_platform_node_win.h"
 
 namespace content {
@@ -29,6 +29,11 @@ class CONTENT_EXPORT BrowserAccessibilityManagerWin
   BrowserAccessibilityManagerWin(const ui::AXTreeUpdate& initial_tree,
                                  BrowserAccessibilityDelegate* delegate);
 
+  BrowserAccessibilityManagerWin(const BrowserAccessibilityManagerWin&) =
+      delete;
+  BrowserAccessibilityManagerWin& operator=(
+      const BrowserAccessibilityManagerWin&) = delete;
+
   ~BrowserAccessibilityManagerWin() override;
 
   static ui::AXTreeUpdate GetEmptyDocument();
@@ -42,11 +47,11 @@ class CONTENT_EXPORT BrowserAccessibilityManagerWin
   BrowserAccessibility* GetFocus() const override;
   bool IsIgnoredChangedNode(const BrowserAccessibility* node) const;
   bool CanFireEvents() const override;
-  gfx::Rect GetViewBoundsInScreenCoordinates() const override;
 
   void FireFocusEvent(BrowserAccessibility* node) override;
   void FireBlinkEvent(ax::mojom::Event event_type,
-                      BrowserAccessibility* node) override;
+                      BrowserAccessibility* node,
+                      int action_request_id) override;
   void FireGeneratedEvent(ui::AXEventGenerator::Event event_type,
                           BrowserAccessibility* node) override;
 
@@ -126,12 +131,6 @@ class CONTENT_EXPORT BrowserAccessibilityManagerWin
   // Give BrowserAccessibilityManager::Create access to our constructor.
   friend class BrowserAccessibilityManager;
 
-  // Keep track of if we got a "load complete" event but were unable to fire
-  // it because of no HWND, because otherwise JAWS can get very confused.
-  // TODO(dmazzoni): a better fix would be to always have an HWND.
-  // http://crbug.com/521877
-  bool load_complete_pending_;
-
   // Since there could be multiple aria property changes on a node and we only
   // want to fire UIA_AriaPropertiesPropertyId once for that node, we use the
   // set here to keep track of the unique nodes that had aria property changes,
@@ -160,8 +159,6 @@ class CONTENT_EXPORT BrowserAccessibilityManagerWin
   // the map is cleared in |FinalizeAccessibilityEvents|.
   SelectionEventsMap ia2_selection_events_;
   SelectionEventsMap uia_selection_events_;
-
-  DISALLOW_COPY_AND_ASSIGN(BrowserAccessibilityManagerWin);
 };
 
 }  // namespace content

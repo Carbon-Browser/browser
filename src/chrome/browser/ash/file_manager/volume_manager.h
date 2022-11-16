@@ -7,28 +7,31 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
+#include "ash/components/disks/disk_mount_manager.h"
 #include "base/callback.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager_observer.h"
 #include "chrome/browser/ash/drive/drive_integration_service.h"
 #include "chrome/browser/ash/file_manager/documents_provider_root_manager.h"
+#include "chrome/browser/ash/file_manager/io_task_controller.h"
 #include "chrome/browser/ash/file_system_provider/icon_set.h"
 #include "chrome/browser/ash/file_system_provider/observer.h"
 #include "chrome/browser/ash/file_system_provider/provided_file_system_info.h"
 #include "chrome/browser/ash/file_system_provider/service.h"
-#include "chromeos/dbus/cros_disks/cros_disks_client.h"
-#include "chromeos/disks/disk_mount_manager.h"
+#include "chrome/browser/ash/guest_os/public/types.h"
+#include "chromeos/ash/components/dbus/cros_disks/cros_disks_client.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/storage_monitor/removable_storage_observer.h"
 #include "services/device/public/mojom/mtp_manager.mojom.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class Profile;
 
@@ -47,6 +50,7 @@ class BrowserContext;
 
 namespace file_manager {
 
+class FuseBoxMounter;
 class SnapshotManager;
 class VolumeManagerObserver;
 
@@ -64,6 +68,9 @@ enum VolumeType {
   VOLUME_TYPE_ANDROID_FILES,
   VOLUME_TYPE_DOCUMENTS_PROVIDER,
   VOLUME_TYPE_SMB,
+  VOLUME_TYPE_SYSTEM_INTERNAL,  // Internal volume which is never exposed to
+                                // users.
+  VOLUME_TYPE_GUEST_OS,         // Guest OS volumes (Crostini, Bruschetta, etc)
   // The enum values must be kept in sync with FileManagerVolumeType in
   // tools/metrics/histograms/enums.xml. Since enums for histograms are
   // append-only (for keeping the number consistent across versions), new values
@@ -88,6 +95,9 @@ enum Source { SOURCE_FILE, SOURCE_DEVICE, SOURCE_NETWORK, SOURCE_SYSTEM };
 // valid as long as the volume is mounted.
 class Volume : public base::SupportsWeakPtr<Volume> {
  public:
+  Volume(const Volume&) = delete;
+  Volume& operator=(const Volume&) = delete;
+
   ~Volume();
 
   // Factory static methods for different volume types.
@@ -96,14 +106,22 @@ class Volume : public base::SupportsWeakPtr<Volume> {
   static std::unique_ptr<Volume> CreateForDownloads(
       const base::FilePath& downloads_path);
   static std::unique_ptr<Volume> CreateForRemovable(
-      const chromeos::disks::DiskMountManager::MountPointInfo& mount_point,
-      const chromeos::disks::Disk* disk);
+      const ash::disks::DiskMountManager::MountPointInfo& mount_point,
+      const ash::disks::Disk* disk);
   static std::unique_ptr<Volume> CreateForProvidedFileSystem(
+      const ash::file_system_provider::ProvidedFileSystemInfo& file_system_info,
+      MountContext mount_context);
+  static std::unique_ptr<Volume> CreateForFuseBoxProvidedFileSystem(
+      const base::FilePath& mount_path,
       const ash::file_system_provider::ProvidedFileSystemInfo& file_system_info,
       MountContext mount_context);
   static std::unique_ptr<Volume> CreateForMTP(const base::FilePath& mount_path,
                                               const std::string& label,
                                               bool read_only);
+  static std::unique_ptr<Volume> CreateForFuseBoxMTP(
+      const base::FilePath& mount_path,
+      const std::string& label,
+      bool read_only);
   static std::unique_ptr<Volume> CreateForMediaView(
       const std::string& root_document_id);
   static std::unique_ptr<Volume> CreateMediaViewForTesting(
@@ -112,6 +130,11 @@ class Volume : public base::SupportsWeakPtr<Volume> {
   static std::unique_ptr<Volume> CreateForSshfsCrostini(
       const base::FilePath& crostini_path,
       const base::FilePath& remote_mount_path);
+  static std::unique_ptr<Volume> CreateForSftpGuestOs(
+      const std::string display_name,
+      const base::FilePath& sftp_mount_path,
+      const base::FilePath& remote_mount_path,
+      const guest_os::VmType vm_type);
   static std::unique_ptr<Volume> CreateForAndroidFiles(
       const base::FilePath& mount_path);
   static std::unique_ptr<Volume> CreateForDocumentsProvider(
@@ -124,6 +147,8 @@ class Volume : public base::SupportsWeakPtr<Volume> {
       bool read_only);
   static std::unique_ptr<Volume> CreateForSmb(const base::FilePath& mount_point,
                                               const std::string display_name);
+  static std::unique_ptr<Volume> CreateForShareCache(
+      const base::FilePath& mount_path);
   static std::unique_ptr<Volume> CreateForTesting(
       const base::FilePath& path,
       VolumeType volume_type,
@@ -131,7 +156,8 @@ class Volume : public base::SupportsWeakPtr<Volume> {
       bool read_only,
       const base::FilePath& device_path,
       const std::string& drive_label,
-      const std::string& file_system_type = "");
+      const std::string& file_system_type = "",
+      bool hidden = false);
   static std::unique_ptr<Volume> CreateForTesting(
       const base::FilePath& device_path,
       const base::FilePath& mount_path);
@@ -148,7 +174,7 @@ class Volume : public base::SupportsWeakPtr<Volume> {
   const base::FilePath& source_path() const { return source_path_; }
   const base::FilePath& mount_path() const { return mount_path_; }
   const base::FilePath& remote_mount_path() const { return remote_mount_path_; }
-  chromeos::disks::MountCondition mount_condition() const {
+  ash::disks::MountCondition mount_condition() const {
     return mount_condition_;
   }
   MountContext mount_context() const { return mount_context_; }
@@ -177,6 +203,8 @@ class Volume : public base::SupportsWeakPtr<Volume> {
   const ash::file_system_provider::IconSet& icon_set() const {
     return icon_set_;
   }
+  bool hidden() const { return hidden_; }
+  absl::optional<guest_os::VmType> vm_type() const { return vm_type_; }
 
  private:
   Volume();
@@ -218,7 +246,7 @@ class Volume : public base::SupportsWeakPtr<Volume> {
   base::FilePath remote_mount_path_;
 
   // The mounting condition. See the enum for the details.
-  chromeos::disks::MountCondition mount_condition_;
+  ash::disks::MountCondition mount_condition_;
 
   // The context of the mount. Whether mounting was performed due to a user
   // interaction or not.
@@ -262,7 +290,12 @@ class Volume : public base::SupportsWeakPtr<Volume> {
   // belonging to the same device share the same device label.
   std::string drive_label_;
 
-  DISALLOW_COPY_AND_ASSIGN(Volume);
+  // True if the volume is hidden and never shown to the user through File
+  // Manager.
+  bool hidden_;
+
+  // Only set for VOLUME_TYPE_GUEST_OS, identifies the type of Guest OS VM.
+  absl::optional<guest_os::VmType> vm_type_;
 };
 
 // Manages Volumes for file manager. Example of Volumes:
@@ -277,7 +310,7 @@ class Volume : public base::SupportsWeakPtr<Volume> {
 class VolumeManager : public KeyedService,
                       public arc::ArcSessionManagerObserver,
                       public drive::DriveIntegrationServiceObserver,
-                      public chromeos::disks::DiskMountManager::Observer,
+                      public ash::disks::DiskMountManager::Observer,
                       public ash::file_system_provider::Observer,
                       public storage_monitor::RemovableStorageObserver,
                       public DocumentsProviderRootManager::Observer {
@@ -288,16 +321,23 @@ class VolumeManager : public KeyedService,
       const std::string&,
       device::mojom::MtpManager::GetStorageInfoCallback)>;
 
-  // Callback for |RemoveSshfsCrostiniVolume|.
+  // Callback for `RemoveSshfsCrostiniVolume`.
   using RemoveSshfsCrostiniVolumeCallback = base::OnceCallback<void(bool)>;
+
+  // Callback for `RemoveSftpGuestOsVolume`.
+  using RemoveSftpGuestOsVolumeCallback = base::OnceCallback<void(bool)>;
 
   VolumeManager(
       Profile* profile,
       drive::DriveIntegrationService* drive_integration_service,
       chromeos::PowerManagerClient* power_manager_client,
-      chromeos::disks::DiskMountManager* disk_mount_manager,
+      ash::disks::DiskMountManager* disk_mount_manager,
       ash::file_system_provider::Service* file_system_provider_service,
       GetMtpStorageInfoCallback get_mtp_storage_info_callback);
+
+  VolumeManager(const VolumeManager&) = delete;
+  VolumeManager& operator=(const VolumeManager&) = delete;
+
   ~VolumeManager() override;
 
   // Returns the instance corresponding to the |context|.
@@ -324,15 +364,33 @@ class VolumeManager : public KeyedService,
   // the volume manager.
   base::WeakPtr<Volume> FindVolumeById(const std::string& volume_id);
 
-  // Add sshfs crostini volume mounted at specified path.
+  // Returns the volume on which an entry, identified by its local (cracked)
+  // path, is located. Returns nullptr if no volume is found.
+  base::WeakPtr<Volume> FindVolumeFromPath(const base::FilePath& path);
+
+  // Add sshfs crostini volume mounted at `sshfs_mount_path` path. Will
+  // automatically remove the volume on container shutdown.
   void AddSshfsCrostiniVolume(const base::FilePath& sshfs_mount_path,
                               const base::FilePath& remote_mount_path);
 
-  // Removes specified sshfs crostini mount. Runs |callback| with true if the
+  // Add sftp Guest OS volume mounted at `sftp_mount_path`. Note: volume must be
+  // removed on unmount (including Guest OS shutdown).
+  void AddSftpGuestOsVolume(const std::string display_name,
+                            const base::FilePath& sftp_mount_path,
+                            const base::FilePath& remote_mount_path,
+                            const guest_os::VmType vm_type);
+
+  // Removes specified sshfs crostini mount. Runs `callback` with true if the
   // mount was removed successfully or wasn't mounted to begin with. Runs
-  // |callback| with false in all other cases.
+  // `callback` with false in all other cases.
   void RemoveSshfsCrostiniVolume(const base::FilePath& sshfs_mount_path,
                                  RemoveSshfsCrostiniVolumeCallback callback);
+
+  // Removes specified sftp Guest OS mount. Runs `callback` with true if the
+  // mount was removed successfully or wasn't mounted to begin with. Runs
+  // `callback` with false in all other cases.
+  void RemoveSftpGuestOsVolume(const base::FilePath& sftp_mount_path,
+                               RemoveSftpGuestOsVolumeCallback callback);
 
   // Removes Downloads volume used for testing.
   void RemoveDownloadsDirectoryForTesting();
@@ -365,7 +423,8 @@ class VolumeManager : public KeyedService,
                            bool read_only,
                            const base::FilePath& device_path = base::FilePath(),
                            const std::string& drive_label = "",
-                           const std::string& file_system_type = "");
+                           const std::string& file_system_type = "",
+                           bool hidden = false);
 
   // For testing purposes, adds the volume info to the volume manager.
   void AddVolumeForTesting(std::unique_ptr<Volume> volume);
@@ -383,25 +442,24 @@ class VolumeManager : public KeyedService,
   void OnFileSystemMounted() override;
   void OnFileSystemBeingUnmounted() override;
 
-  // chromeos::disks::DiskMountManager::Observer overrides.
-  void OnAutoMountableDiskEvent(
-      chromeos::disks::DiskMountManager::DiskEvent event,
-      const chromeos::disks::Disk& disk) override;
-  void OnDeviceEvent(chromeos::disks::DiskMountManager::DeviceEvent event,
+  // ash::disks::DiskMountManager::Observer overrides.
+  void OnAutoMountableDiskEvent(ash::disks::DiskMountManager::DiskEvent event,
+                                const ash::disks::Disk& disk) override;
+  void OnDeviceEvent(ash::disks::DiskMountManager::DeviceEvent event,
                      const std::string& device_path) override;
-  void OnMountEvent(chromeos::disks::DiskMountManager::MountEvent event,
-                    chromeos::MountError error_code,
-                    const chromeos::disks::DiskMountManager::MountPointInfo&
-                        mount_info) override;
-  void OnFormatEvent(chromeos::disks::DiskMountManager::FormatEvent event,
+  void OnMountEvent(
+      ash::disks::DiskMountManager::MountEvent event,
+      chromeos::MountError error_code,
+      const ash::disks::DiskMountManager::MountPointInfo& mount_info) override;
+  void OnFormatEvent(ash::disks::DiskMountManager::FormatEvent event,
                      chromeos::FormatError error_code,
                      const std::string& device_path,
                      const std::string& device_label) override;
-  void OnPartitionEvent(chromeos::disks::DiskMountManager::PartitionEvent event,
+  void OnPartitionEvent(ash::disks::DiskMountManager::PartitionEvent event,
                         chromeos::PartitionError error_code,
                         const std::string& device_path,
                         const std::string& device_label) override;
-  void OnRenameEvent(chromeos::disks::DiskMountManager::RenameEvent event,
+  void OnRenameEvent(ash::disks::DiskMountManager::RenameEvent event,
                      chromeos::RenameError error_code,
                      const std::string& device_path,
                      const std::string& device_label) override;
@@ -449,9 +507,28 @@ class VolumeManager : public KeyedService,
                       const std::string& display_name);
   void RemoveSmbFsVolume(const base::FilePath& mount_point);
 
+  void OnFuseboxAttachStorageMTP(const std::string& subdir,
+                                 const std::string& fsid,
+                                 const std::string& label,
+                                 bool read_only,
+                                 int error);
+  void OnFuseboxAttachStorageProvidedFileSystem(
+      const std::string& subdir,
+      const std::string& fsid,
+      const ash::file_system_provider::ProvidedFileSystemInfo& file_system_info,
+      MountContext volume_context,
+      int error);
+
+  void ConvertFuseBoxFSPVolumeIdToFSPIfNeeded(std::string* volume_id) const;
+
   SnapshotManager* snapshot_manager() { return snapshot_manager_.get(); }
 
+  io_task::IOTaskController* io_task_controller() {
+    return &io_task_controller_;
+  }
+
  private:
+  void RestoreProvidedFileSystems();
   void OnDiskMountManagerRefreshed(bool success);
   void OnStorageMonitorInitialized();
   void DoAttachMtpStorage(const storage_monitor::StorageInfo& info,
@@ -471,24 +548,29 @@ class VolumeManager : public KeyedService,
       RemoveSshfsCrostiniVolumeCallback callback,
       chromeos::MountError error_code);
 
+  void OnSftpGuestOsUnmountCallback(const base::FilePath& sftp_mount_path,
+                                    RemoveSftpGuestOsVolumeCallback callback,
+                                    chromeos::MountError error_code);
+
   Profile* profile_;
   drive::DriveIntegrationService* drive_integration_service_;  // Not owned.
-  chromeos::disks::DiskMountManager* disk_mount_manager_;      // Not owned.
+  ash::disks::DiskMountManager* disk_mount_manager_;           // Not owned.
   PrefChangeRegistrar pref_change_registrar_;
   base::ObserverList<VolumeManagerObserver>::Unchecked observers_;
   ash::file_system_provider::Service*
       file_system_provider_service_;  // Not owned by this class.
   GetMtpStorageInfoCallback get_mtp_storage_info_callback_;
   std::map<std::string, std::unique_ptr<Volume>> mounted_volumes_;
+  std::unique_ptr<FuseBoxMounter> fusebox_mounter_;
   std::unique_ptr<SnapshotManager> snapshot_manager_;
   std::unique_ptr<DocumentsProviderRootManager>
       documents_provider_root_manager_;
   bool arc_volumes_mounted_ = false;
+  io_task::IOTaskController io_task_controller_;
 
   // Note: This should remain the last member so it'll be destroyed and
   // invalidate its weak pointers before any other members are destroyed.
   base::WeakPtrFactory<VolumeManager> weak_ptr_factory_{this};
-  DISALLOW_COPY_AND_ASSIGN(VolumeManager);
 };
 
 }  // namespace file_manager

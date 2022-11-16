@@ -9,6 +9,7 @@
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
@@ -33,9 +34,12 @@
 #include "components/policy/proto/chrome_extension_policy.pb.h"
 #include "components/policy/proto/cloud_policy.pb.h"
 #include "components/policy/proto/device_management_backend.pb.h"
-#include "components/policy/test_support/local_policy_test_server.h"
+#include "components/policy/test_support/client_storage.h"
+#include "components/policy/test_support/embedded_policy_test_server.h"
+#include "components/policy/test_support/policy_storage.h"
 #include "components/signin/public/base/signin_metrics.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/test_utils.h"
 #include "extensions/common/extension.h"
 #include "extensions/test/extension_test_message_listener.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -97,8 +101,8 @@ const char kTestPolicy2JSON[] = "{\"Another\":\"turn_it_off\"}";
 
 class ComponentCloudPolicyTest : public extensions::ExtensionBrowserTest {
  protected:
-  ComponentCloudPolicyTest() {}
-  ~ComponentCloudPolicyTest() override {}
+  ComponentCloudPolicyTest() = default;
+  ~ComponentCloudPolicyTest() override = default;
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
     extensions::ExtensionBrowserTest::SetUpCommandLine(command_line);
@@ -106,20 +110,27 @@ class ComponentCloudPolicyTest : public extensions::ExtensionBrowserTest {
     // ExtensionBrowserTest sets the login users to a non-managed value;
     // replace it. This is the default username sent in policy blobs from the
     // testserver.
-    command_line->AppendSwitchASCII(::chromeos::switches::kLoginUser,
+    command_line->AppendSwitchASCII(ash::switches::kLoginUser,
                                     PolicyBuilder::kFakeUsername);
     // Let policy code know that policy is not required to be cached at startup
     // (it can be loaded asynchronously).
-    command_line->AppendSwitchASCII(
-        ::chromeos::switches::kProfileRequiresPolicy, "false");
+    command_line->AppendSwitchASCII(ash::switches::kProfileRequiresPolicy,
+                                    "false");
 #endif
   }
 
   void SetUpInProcessBrowserTestFixture() override {
-    test_server_.RegisterClient(kDMToken, kDeviceID, {} /* state_keys */);
-    EXPECT_TRUE(test_server_.UpdatePolicyData(
-        dm_protocol::kChromeExtensionPolicyType, kTestExtension, kTestPolicy));
+    ClientStorage::ClientInfo client_info;
+    client_info.device_id = kDeviceID;
+    client_info.device_token = kDMToken;
+    client_info.allowed_policy_types = {
+        policy::dm_protocol::kChromeExtensionPolicyType,
+        policy::dm_protocol::kChromeUserPolicyType,
+    };
+    test_server_.client_storage()->RegisterClient(client_info);
     ASSERT_TRUE(test_server_.Start());
+    test_server_.UpdateExternalPolicy(dm_protocol::kChromeExtensionPolicyType,
+                                      kTestExtension, kTestPolicy);
 
     std::string url = test_server_.GetServiceURL().spec();
     base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
@@ -135,9 +146,9 @@ class ComponentCloudPolicyTest : public extensions::ExtensionBrowserTest {
         << "Pre-existing policies in this machine will make this test fail.";
 
     // Install the initial extension.
-    ExtensionTestMessageListener ready_listener("ready", false);
-    event_listener_ =
-        std::make_unique<ExtensionTestMessageListener>("event", true);
+    ExtensionTestMessageListener ready_listener("ready");
+    event_listener_ = std::make_unique<ExtensionTestMessageListener>(
+        "event", ReplyBehavior::kWillReply);
     extension_ = LoadExtension(kTestExtensionPath);
     ASSERT_TRUE(extension_.get());
     ASSERT_EQ(kTestExtension, extension_->id());
@@ -237,10 +248,10 @@ class ComponentCloudPolicyTest : public extensions::ExtensionBrowserTest {
     run_loop.Run();
   }
 
-  LocalPolicyTestServer test_server_;
+  EmbeddedPolicyTestServer test_server_;
   scoped_refptr<const extensions::Extension> extension_;
   std::unique_ptr<ExtensionTestMessageListener> event_listener_;
-  CloudPolicyClient* client_ = nullptr;
+  raw_ptr<CloudPolicyClient> client_ = nullptr;
 };
 
 // crbug.com/1230268 not working on Lacros.
@@ -251,7 +262,7 @@ class ComponentCloudPolicyTest : public extensions::ExtensionBrowserTest {
 #endif
 IN_PROC_BROWSER_TEST_F(ComponentCloudPolicyTest, MAYBE_FetchExtensionPolicy) {
   // Read the initial policy.
-  ExtensionTestMessageListener policy_listener(kTestPolicyJSON, false);
+  ExtensionTestMessageListener policy_listener(kTestPolicyJSON);
   event_listener_->Reply("get-policy-Name");
   EXPECT_TRUE(policy_listener.WaitUntilSatisfied());
 }
@@ -264,16 +275,17 @@ IN_PROC_BROWSER_TEST_F(ComponentCloudPolicyTest, MAYBE_FetchExtensionPolicy) {
 #endif
 IN_PROC_BROWSER_TEST_F(ComponentCloudPolicyTest, MAYBE_UpdateExtensionPolicy) {
   // Read the initial policy.
-  ExtensionTestMessageListener policy_listener(kTestPolicyJSON, true);
+  ExtensionTestMessageListener policy_listener(kTestPolicyJSON,
+                                               ReplyBehavior::kWillReply);
   event_listener_->Reply("get-policy-Name");
   EXPECT_TRUE(policy_listener.WaitUntilSatisfied());
 
   // Update the policy at the server and reload policy.
-  event_listener_ =
-      std::make_unique<ExtensionTestMessageListener>("event", true);
+  event_listener_ = std::make_unique<ExtensionTestMessageListener>(
+      "event", ReplyBehavior::kWillReply);
   policy_listener.Reply("idle");
-  EXPECT_TRUE(test_server_.UpdatePolicyData(
-      dm_protocol::kChromeExtensionPolicyType, kTestExtension, kTestPolicy2));
+  test_server_.UpdateExternalPolicy(dm_protocol::kChromeExtensionPolicyType,
+                                    kTestExtension, kTestPolicy2);
   RefreshPolicies();
 
   // Check that the update event was received, and verify the new policy
@@ -281,11 +293,12 @@ IN_PROC_BROWSER_TEST_F(ComponentCloudPolicyTest, MAYBE_UpdateExtensionPolicy) {
   EXPECT_TRUE(event_listener_->WaitUntilSatisfied());
 
   // This policy was removed.
-  ExtensionTestMessageListener policy_listener1("{}", true);
+  ExtensionTestMessageListener policy_listener1("{}",
+                                                ReplyBehavior::kWillReply);
   event_listener_->Reply("get-policy-Name");
   EXPECT_TRUE(policy_listener1.WaitUntilSatisfied());
 
-  ExtensionTestMessageListener policy_listener2(kTestPolicy2JSON, false);
+  ExtensionTestMessageListener policy_listener2(kTestPolicy2JSON);
   policy_listener1.Reply("get-policy-Another");
   EXPECT_TRUE(policy_listener2.WaitUntilSatisfied());
 }
@@ -300,15 +313,15 @@ IN_PROC_BROWSER_TEST_F(ComponentCloudPolicyTest, MAYBE_InstallNewExtension) {
   event_listener_->Reply("idle");
   event_listener_.reset();
 
-  EXPECT_TRUE(test_server_.UpdatePolicyData(
-      dm_protocol::kChromeExtensionPolicyType, kTestExtension2, kTestPolicy2));
+  test_server_.UpdateExternalPolicy(dm_protocol::kChromeExtensionPolicyType,
+                                    kTestExtension2, kTestPolicy2);
   // Installing a new extension doesn't trigger another policy fetch because
   // the server always sends down the list of all extensions that have policy.
   // Fetch now that the configuration has been updated and before installing
   // the extension.
   RefreshPolicies();
 
-  ExtensionTestMessageListener result_listener("ok", false);
+  ExtensionTestMessageListener result_listener("ok");
   result_listener.set_failure_message("fail");
   scoped_refptr<const extensions::Extension> extension2 =
       LoadExtension(kTestExtension2Path);
@@ -328,10 +341,12 @@ IN_PROC_BROWSER_TEST_F(ComponentCloudPolicyTest, MAYBE_InstallNewExtension) {
 // This test verifies that when the user signs out then any existing component
 // policy caches are dropped, and that it's still possible to sign back in and
 // get policy for components working again.
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
+// Signing out on Lacros is not possible.
+#if !BUILDFLAG(IS_CHROMEOS)
 IN_PROC_BROWSER_TEST_F(ComponentCloudPolicyTest, SignOutAndBackIn) {
   // Read the initial policy.
-  ExtensionTestMessageListener initial_policy_listener(kTestPolicyJSON, true);
+  ExtensionTestMessageListener initial_policy_listener(
+      kTestPolicyJSON, ReplyBehavior::kWillReply);
   event_listener_->Reply("get-policy-Name");
   EXPECT_TRUE(initial_policy_listener.WaitUntilSatisfied());
 
@@ -356,41 +371,48 @@ IN_PROC_BROWSER_TEST_F(ComponentCloudPolicyTest, SignOutAndBackIn) {
 
   // Now sign-out. The policy cache should be removed, and the extension should
   // get an empty policy update.
-  ExtensionTestMessageListener event_listener("event", true);
+  ExtensionTestMessageListener event_listener("event",
+                                              ReplyBehavior::kWillReply);
   initial_policy_listener.Reply("idle");
   SignOut();
   EXPECT_TRUE(event_listener.WaitUntilSatisfied());
 
   // The extension got an update event; verify that the policy was empty.
-  ExtensionTestMessageListener signout_policy_listener("{}", false);
+  ExtensionTestMessageListener signout_policy_listener("{}");
   event_listener.Reply("get-policy-Name");
   EXPECT_TRUE(signout_policy_listener.WaitUntilSatisfied());
+
+  // Spin all threads, including the background thread that performs cache
+  // operations, in order to guarantee that the cache file gets deleted before
+  // the test asserts it. There's no easy way to wait for this event otherwise.
+  content::RunAllTasksUntilIdle();
 
   // Verify that the cache is gone.
   EXPECT_FALSE(base::PathExists(cache_path));
 
   // Verify that the policy is fetched again if the user signs back in.
-  ExtensionTestMessageListener event_listener2("event", true);
+  ExtensionTestMessageListener event_listener2("event",
+                                               ReplyBehavior::kWillReply);
 
   SignInAndRegister();
   EXPECT_TRUE(event_listener2.WaitUntilSatisfied());
 
   // The extension got updated policy; verify it.
-  ExtensionTestMessageListener signin_policy_listener(kTestPolicyJSON, false);
+  ExtensionTestMessageListener signin_policy_listener(kTestPolicyJSON);
   event_listener2.Reply("get-policy-Name");
   EXPECT_TRUE(signin_policy_listener.WaitUntilSatisfied());
 
   // And the cache is back.
   EXPECT_TRUE(base::PathExists(cache_path));
 }
-#endif
+#endif  // !BUILDFLAG(IS_CHROMEOS)
 
 // Test of the component cloud policy when the policy test server is configured
 // to perform the signing key rotation for each policy fetch.
 class KeyRotationComponentCloudPolicyTest : public ComponentCloudPolicyTest {
  protected:
   void SetUpInProcessBrowserTestFixture() override {
-    test_server_.EnableAutomaticRotationOfSigningKeys();
+    test_server_.policy_storage()->signature_provider()->set_rotate_keys(true);
     ComponentCloudPolicyTest::SetUpInProcessBrowserTestFixture();
   }
 
@@ -415,7 +437,8 @@ class KeyRotationComponentCloudPolicyTest : public ComponentCloudPolicyTest {
 #endif
 IN_PROC_BROWSER_TEST_F(KeyRotationComponentCloudPolicyTest, MAYBE_Basic) {
   // Read the initial policy.
-  ExtensionTestMessageListener policy_listener(kTestPolicyJSON, true);
+  ExtensionTestMessageListener policy_listener(kTestPolicyJSON,
+                                               ReplyBehavior::kWillReply);
   event_listener_->Reply("get-policy-Name");
   EXPECT_TRUE(policy_listener.WaitUntilSatisfied());
   const int public_key_version =
@@ -424,11 +447,11 @@ IN_PROC_BROWSER_TEST_F(KeyRotationComponentCloudPolicyTest, MAYBE_Basic) {
 
   // Update the policy at the server and reload the policy, causing also the key
   // rotation to be performed by the policy test server.
-  event_listener_ =
-      std::make_unique<ExtensionTestMessageListener>("event", true);
+  event_listener_ = std::make_unique<ExtensionTestMessageListener>(
+      "event", ReplyBehavior::kWillReply);
   policy_listener.Reply("idle");
-  EXPECT_TRUE(test_server_.UpdatePolicyData(
-      dm_protocol::kChromeExtensionPolicyType, kTestExtension, kTestPolicy2));
+  test_server_.UpdateExternalPolicy(dm_protocol::kChromeExtensionPolicyType,
+                                    kTestExtension, kTestPolicy2);
   RefreshPolicies();
 
   // Check that the update event was received, and verify that the policy has
@@ -438,11 +461,12 @@ IN_PROC_BROWSER_TEST_F(KeyRotationComponentCloudPolicyTest, MAYBE_Basic) {
       GetFetchedPolicyPublicKeyVersion(kTestExtension);
   EXPECT_LT(public_key_version, new_public_key_version);
 
-  ExtensionTestMessageListener policy_listener1("{}", true);
+  ExtensionTestMessageListener policy_listener1("{}",
+                                                ReplyBehavior::kWillReply);
   event_listener_->Reply("get-policy-Name");
   EXPECT_TRUE(policy_listener1.WaitUntilSatisfied());
 
-  ExtensionTestMessageListener policy_listener2(kTestPolicy2JSON, false);
+  ExtensionTestMessageListener policy_listener2(kTestPolicy2JSON);
   policy_listener1.Reply("get-policy-Another");
   EXPECT_TRUE(policy_listener2.WaitUntilSatisfied());
 }

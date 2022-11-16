@@ -17,48 +17,26 @@
 #include "chrome/browser/profiles/incognito_helpers.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "chrome/browser/sync/sync_service_factory.h"
 #include "chrome/browser/web_data_service_factory.h"
 #include "chrome/common/chrome_paths_internal.h"
 #include "components/keyed_service/content/browser_context_dependency_manager.h"
-#include "components/password_manager/core/browser/login_database.h"
 #include "components/password_manager/core/browser/password_manager_constants.h"
 #include "components/password_manager/core/browser/password_manager_util.h"
 #include "components/password_manager/core/browser/password_store.h"
 #include "components/password_manager/core/browser/password_store_backend.h"
-#include "components/password_manager/core/browser/password_store_factory_util.h"
-#include "components/password_manager/core/browser/password_store_impl.h"
-#include "components/password_manager/core/common/password_manager_features.h"
-#include "components/password_manager/core/common/password_manager_pref_names.h"
-#include "components/pref_registry/pref_registry_syncable.h"
-#include "components/sync/driver/sync_service.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/network_service_instance.h"
 #include "content/public/browser/storage_partition.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 
-#if defined(OS_WIN)
-#include "chrome/browser/password_manager/password_manager_util_win.h"
-#endif
-
+using password_manager::AffiliatedMatchHelper;
 using password_manager::PasswordStore;
 using password_manager::PasswordStoreInterface;
 
-// TODO(crbug.com/1218413): Delete this method when the migration to
-// PasswordStoreInterface is complete and rename the method below to
-// GetForProfile.
 // static
-scoped_refptr<PasswordStore> PasswordStoreFactory::GetForProfile(
+scoped_refptr<PasswordStoreInterface> PasswordStoreFactory::GetForProfile(
     Profile* profile,
     ServiceAccessType access_type) {
-  return base::WrapRefCounted(static_cast<PasswordStore*>(
-      GetInterfaceForProfile(profile, access_type).get()));
-}
-
-// static
-scoped_refptr<PasswordStoreInterface>
-PasswordStoreFactory::GetInterfaceForProfile(Profile* profile,
-                                             ServiceAccessType access_type) {
   // |profile| gets always redirected to a non-Incognito profile below, so
   // Incognito & IMPLICIT_ACCESS means that incognito browsing session would
   // result in traces in the normal profile without the user knowing it.
@@ -87,33 +65,37 @@ PasswordStoreFactory::~PasswordStoreFactory() = default;
 scoped_refptr<RefcountedKeyedService>
 PasswordStoreFactory::BuildServiceInstanceFor(
     content::BrowserContext* context) const {
-#if defined(OS_WIN)
-  password_manager_util_win::DelayReportOsPassword();
-#endif
-  Profile* profile = static_cast<Profile*>(context);
-
-  std::unique_ptr<password_manager::LoginDatabase> login_db(
-      password_manager::CreateLoginDatabaseForProfileStorage(
-          profile->GetPath()));
+  Profile* profile = Profile::FromBrowserContext(context);
 
   scoped_refptr<PasswordStore> ps;
-#if defined(OS_WIN) || BUILDFLAG(IS_CHROMEOS_ASH) || defined(OS_ANDROID) || \
-    defined(OS_MAC) || defined(USE_X11) || defined(USE_OZONE)
-
-  // TODO(crbug.com/1217071): Remove feature-guard once PasswordStoreImpl does
-  // not implement the PasswordStore abstract class anymore.
-  if (base::FeatureList::IsEnabled(
-          password_manager::features::kUnifiedPasswordManagerAndroid)) {
-    ps = new password_manager::PasswordStore(
-        password_manager::PasswordStoreBackend::Create(std::move(login_db)));
-  } else {
-    ps = new password_manager::PasswordStoreImpl(std::move(login_db));
-  }
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_MAC) || \
+    defined(USE_OZONE)
+  // Since SyncService has dependency on PasswordStore keyed service, there
+  // are no guarantees that during the construction of the password store
+  // about the sync service existence. And hence we cannot directly query the
+  // status of password syncing. However, status of password syncing is
+  // relevant for migrating passwords from the built-in backend to the Android
+  // backend. Since migration does *not* start immediately after start up,
+  // SyncService will be propagated to PasswordStoreBackend after the backend
+  // creation once SyncService is initialized. Assumption is by the time the
+  // migration starts, the sync service will have been created. As a safety
+  // mechanism, if the sync service isn't created yet, we proceed as if the
+  // user isn't syncing which forces moving the passwords to the Android backend
+  // to avoid data loss.
+  ps = new password_manager::PasswordStore(
+      password_manager::PasswordStoreBackend::Create(profile->GetPath(),
+                                                     profile->GetPrefs()));
 #else
   NOTIMPLEMENTED();
 #endif
   DCHECK(ps);
-  if (!ps->Init(profile->GetPrefs())) {
+
+  password_manager::AffiliationService* affiliation_service =
+      AffiliationServiceFactory::GetForProfile(profile);
+  std::unique_ptr<AffiliatedMatchHelper> affiliated_match_helper =
+      std::make_unique<AffiliatedMatchHelper>(affiliation_service);
+
+  if (!ps->Init(profile->GetPrefs(), std::move(affiliated_match_helper))) {
     // TODO(crbug.com/479725): Remove the LOG once this error is visible in the
     // UI.
     LOG(WARNING) << "Could not initialize password store.";
@@ -129,14 +111,11 @@ PasswordStoreFactory::BuildServiceInstanceFor(
       profile);
   password_manager_util::RemoveUselessCredentials(
       CredentialsCleanerRunnerFactory::GetForProfile(profile), ps,
-      profile->GetPrefs(), base::TimeDelta::FromSeconds(60),
-      network_context_getter);
+      profile->GetPrefs(), base::Seconds(60), network_context_getter);
 
-  password_manager::AffiliationService* affiliation_service =
-      AffiliationServiceFactory::GetForProfile(profile);
-  password_manager::EnableAffiliationBasedMatching(ps.get(),
-                                                   affiliation_service);
-  DelayReportingPasswordStoreMetrics(profile);
+  if (profile->IsRegularProfile())
+    DelayReportingPasswordStoreMetrics(profile);
+
   return ps;
 }
 

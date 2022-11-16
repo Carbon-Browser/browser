@@ -1,0 +1,60 @@
+#
+# This file is part of eyeo Chromium SDK,
+# Copyright (C) 2006-present eyeo GmbH
+#
+# eyeo Chromium SDK is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 3 as
+# published by the Free Software Foundation.
+#
+# eyeo Chromium SDK is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with eyeo Chromium SDK.  If not, see <http://www.gnu.org/licenses/>.
+
+import("//build/compiled_action.gni")
+
+# Converts text-format filter lists into flatbuffers using a standalone
+# converter tool.
+template("make_preloaded_subscription") {
+  compiled_action(target_name) {
+    tool = "//components/adblock/core/converter:adblock_flatbuffer_converter"
+    inputs = [ invoker.input ]
+    outputs = [ invoker.output ]
+    args = [
+      rebase_path(invoker.input, root_build_dir),
+      invoker.url,
+      rebase_path(invoker.output, root_build_dir),
+    ]
+  }
+}
+
+# Note, url is *not* used to download the list during build time, only to
+# identify the subscription. Consider it metadata.
+make_preloaded_subscription("make_easylist") {
+  input = "//components/resources/adblocking/easylist.txt"
+  url = "https://easylist-downloads.adblockplus.org/easylist.txt"
+  output = "${target_gen_dir}/easylist.fb"
+}
+
+make_preloaded_subscription("make_exceptionrules") {
+  input = "//components/resources/adblocking/exceptionrules.txt"
+  url = "https://easylist-downloads.adblockplus.org/exceptionrules.txt"
+  output = "${target_gen_dir}/exceptionrules.fb"
+}
+
+make_preloaded_subscription("make_anticv") {
+  input = "//components/resources/adblocking/anticv.txt"
+  url = "https://easylist-downloads.adblockplus.org/abp-filters-anti-cv.txt"
+  output = "${target_gen_dir}/anticv.fb"
+}
+
+group("make_all_preloaded_subscriptions") {
+  deps = [
+    ":make_anticv",
+    ":make_easylist",
+    ":make_exceptionrules",
+  ]
+}

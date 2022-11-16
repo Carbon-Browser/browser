@@ -10,6 +10,7 @@
 #include "third_party/blink/renderer/core/layout/geometry/physical_rect.h"
 #include "third_party/blink/renderer/core/layout/layout_theme.h"
 #include "third_party/blink/renderer/core/paint/highlight_painting_utils.h"
+#include "third_party/blink/renderer/core/paint/paint_auto_dark_mode.h"
 #include "third_party/blink/renderer/core/paint/paint_info.h"
 #include "third_party/blink/renderer/core/paint/text_paint_style.h"
 #include "third_party/blink/renderer/core/style/computed_style.h"
@@ -22,7 +23,7 @@ namespace blink {
 
 namespace {
 
-#if !defined(OS_MAC)
+#if !BUILDFLAG(IS_MAC)
 
 static const float kMarkerWidth = 4;
 static const float kMarkerHeight = 2;
@@ -48,10 +49,10 @@ sk_sp<PaintRecord> RecordMarker(Color blink_color) {
                kMarkerWidth * 7 / 8, kMarkerHeight * 1 / 4,
                kMarkerWidth * 9 / 8, kMarkerHeight * 1 / 4);
 
-  PaintFlags flags;
+  cc::PaintFlags flags;
   flags.setAntiAlias(true);
   flags.setColor(color);
-  flags.setStyle(PaintFlags::kStroke_Style);
+  flags.setStyle(cc::PaintFlags::kStroke_Style);
   flags.setStrokeWidth(kMarkerHeight * 1 / 2);
 
   PaintRecorder recorder;
@@ -62,7 +63,7 @@ sk_sp<PaintRecord> RecordMarker(Color blink_color) {
   return recorder.finishRecordingAsPicture();
 }
 
-#else  // defined(OS_MAC)
+#else  // !BUILDFLAG(IS_MAC)
 
 static const float kMarkerWidth = 4;
 static const float kMarkerHeight = 3;
@@ -75,7 +76,7 @@ sk_sp<PaintRecord> RecordMarker(Color blink_color) {
   // Match the artwork used by the Mac.
   static const float kR = 1.5f;
 
-  PaintFlags flags;
+  cc::PaintFlags flags;
   flags.setAntiAlias(true);
   flags.setColor(color);
   PaintRecorder recorder;
@@ -85,18 +86,18 @@ sk_sp<PaintRecord> RecordMarker(Color blink_color) {
   return recorder.finishRecordingAsPicture();
 }
 
-#endif  // defined(OS_MAC)
+#endif  // !BUILDFLAG(IS_MAC)
 
 void DrawDocumentMarker(GraphicsContext& context,
-                        const FloatPoint& pt,
+                        const gfx::PointF& pt,
                         float width,
                         float zoom,
                         PaintRecord* const marker) {
   // Position already includes zoom and device scale factor.
-  SkScalar origin_x = WebCoreFloatToSkScalar(pt.X());
-  SkScalar origin_y = WebCoreFloatToSkScalar(pt.Y());
+  SkScalar origin_x = WebCoreFloatToSkScalar(pt.x());
+  SkScalar origin_y = WebCoreFloatToSkScalar(pt.y());
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   // Make sure to draw only complete dots, and finish inside the marked text.
   float spacing = kMarkerSpacing * zoom;
   width -= fmodf(width + spacing, kMarkerWidth * zoom) - spacing;
@@ -105,10 +106,10 @@ void DrawDocumentMarker(GraphicsContext& context,
   const auto rect = SkRect::MakeWH(width, kMarkerHeight * zoom);
   const auto local_matrix = SkMatrix::Scale(zoom, zoom);
 
-  PaintFlags flags;
+  cc::PaintFlags flags;
   flags.setAntiAlias(true);
   flags.setShader(PaintShader::MakePaintRecord(
-      sk_ref_sp(marker), FloatRect(0, 0, kMarkerWidth, kMarkerHeight),
+      sk_ref_sp(marker), SkRect::MakeWH(kMarkerWidth, kMarkerHeight),
       SkTileMode::kRepeat, SkTileMode::kClamp, &local_matrix));
 
   // Apply the origin translation as a global transform.  This ensures that the
@@ -116,7 +117,7 @@ void DrawDocumentMarker(GraphicsContext& context,
   // cached tile for all markers at a given zoom level.
   GraphicsContextStateSaver saver(context);
   context.Translate(origin_x, origin_y);
-  context.DrawRect(rect, flags);
+  context.DrawRect(rect, flags, AutoDarkMode::Disabled());
 }
 
 }  // namespace
@@ -137,12 +138,13 @@ void DocumentMarkerPainter::PaintStyleableMarkerUnderline(
     const PhysicalOffset& box_origin,
     const StyleableMarker& marker,
     const ComputedStyle& style,
-    const FloatRect& marker_rect,
+    const Document& document,
+    const gfx::RectF& marker_rect,
     LayoutUnit logical_height,
     bool in_dark_mode) {
   // start of line to draw, relative to box_origin.X()
-  LayoutUnit start = LayoutUnit(marker_rect.X());
-  LayoutUnit width = LayoutUnit(marker_rect.Width());
+  LayoutUnit start = LayoutUnit(marker_rect.x());
+  LayoutUnit width = LayoutUnit(marker_rect.width());
 
   // We need to have some space between underlines of subsequent clauses,
   // because some input methods do not use different underline styles for those.
@@ -195,10 +197,11 @@ void DocumentMarkerPainter::PaintStyleableMarkerUnderline(
         break;
     }
     context.DrawLineForText(
-        FloatPoint(box_origin.left + start,
-                   (box_origin.top + logical_height.ToInt() - line_thickness)
-                       .ToFloat()),
-        width);
+        gfx::PointF(box_origin.left + start,
+                    (box_origin.top + logical_height.ToInt() - line_thickness)
+                        .ToFloat()),
+        width,
+        PaintAutoDarkMode(style, DarkModeFilter::ElementRole::kForeground));
   } else {
     // For wavy underline format we use this logic that is very similar to
     // spelling/grammar squiggles format. Only applicable for composition
@@ -207,9 +210,9 @@ void DocumentMarkerPainter::PaintStyleableMarkerUnderline(
       sk_sp<PaintRecord> composition_marker = (RecordMarker(marker_color));
       DrawDocumentMarker(
           context,
-          FloatPoint((box_origin.left + start).ToFloat(),
-                     (box_origin.top + logical_height.ToInt() - line_thickness)
-                         .ToFloat()),
+          gfx::PointF((box_origin.left + start).ToFloat(),
+                      (box_origin.top + logical_height.ToInt() - line_thickness)
+                          .ToFloat()),
           width, line_thickness, composition_marker.get());
     }
   }
@@ -220,7 +223,8 @@ void DocumentMarkerPainter::PaintDocumentMarker(
     const PhysicalOffset& box_origin,
     const ComputedStyle& style,
     DocumentMarker::MarkerType marker_type,
-    const PhysicalRect& local_rect) {
+    const PhysicalRect& local_rect,
+    absl::optional<Color> custom_marker_color) {
   // IMPORTANT: The misspelling underline is not considered when calculating the
   // text bounds, so we have to make sure to fit within those bounds.  This
   // means the top pixel(s) of the underline will overlap the bottom pixel(s) of
@@ -247,6 +251,7 @@ void DocumentMarkerPainter::PaintDocumentMarker(
     // prevent a big gap.
     underline_offset = baseline + 2 * zoom;
   }
+
   DEFINE_STATIC_LOCAL(
       PaintRecord*, spelling_marker,
       (RecordMarker(
@@ -258,12 +263,19 @@ void DocumentMarkerPainter::PaintDocumentMarker(
            LayoutTheme::GetTheme().PlatformGrammarMarkerUnderlineColor())
            .release()));
 
-  auto* const marker = marker_type == DocumentMarker::kSpelling
-                           ? spelling_marker
-                           : grammar_marker;
+  sk_sp<PaintRecord> custom_paint_record;
+  if (custom_marker_color)
+    custom_paint_record = RecordMarker(*custom_marker_color);
+
+  auto* const marker = custom_marker_color
+                           ? custom_paint_record.get()
+                           : marker_type == DocumentMarker::kSpelling
+                                 ? spelling_marker
+                                 : grammar_marker;
+
   DrawDocumentMarker(paint_info.context,
-                     FloatPoint((box_origin.left + local_rect.X()).ToFloat(),
-                                (box_origin.top + underline_offset).ToFloat()),
+                     gfx::PointF((box_origin.left + local_rect.X()).ToFloat(),
+                                 (box_origin.top + underline_offset).ToFloat()),
                      local_rect.Width().ToFloat(), zoom, marker);
 }
 
@@ -271,13 +283,14 @@ TextPaintStyle DocumentMarkerPainter::ComputeTextPaintStyleFrom(
     const Document& document,
     Node* node,
     const ComputedStyle& style,
-    const TextMarkerBase& marker,
+    const DocumentMarker& marker,
     const PaintInfo& paint_info) {
   Color text_color = style.VisitedDependentColor(GetCSSPropertyColor());
-  if (marker.GetType() != DocumentMarker::kTextFragment) {
+  if (marker.GetType() == DocumentMarker::kTextMatch) {
     const Color platform_text_color =
         LayoutTheme::GetTheme().PlatformTextSearchColor(
-            marker.IsActiveMatch(), style.UsedColorScheme());
+            To<TextMatchMarker>(marker).IsActiveMatch(),
+            style.UsedColorScheme());
     if (platform_text_color == text_color)
       return {};
     text_color = platform_text_color;
@@ -289,7 +302,7 @@ TextPaintStyle DocumentMarkerPainter::ComputeTextPaintStyleFrom(
   text_style.stroke_width = style.TextStrokeWidth();
   text_style.color_scheme = style.UsedColorScheme();
   text_style.shadow = nullptr;
-  if (marker.GetType() != DocumentMarker::kTextFragment)
+  if (marker.GetType() == DocumentMarker::kTextMatch)
     return text_style;
   return HighlightPaintingUtils::HighlightPaintingStyle(
       document, style, node, kPseudoIdTargetText, text_style, paint_info);

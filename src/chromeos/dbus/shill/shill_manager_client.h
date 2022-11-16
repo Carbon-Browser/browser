@@ -8,9 +8,8 @@
 #include <string>
 
 #include "base/component_export.h"
-#include "base/macros.h"
 #include "base/time/time.h"
-#include "chromeos/dbus/dbus_method_call_status.h"
+#include "chromeos/dbus/common/dbus_method_call_status.h"
 #include "chromeos/dbus/shill/fake_shill_simulated_result.h"
 #include "chromeos/dbus/shill/shill_client_helper.h"
 
@@ -58,6 +57,9 @@ class COMPONENT_EXPORT(SHILL_CLIENT) ShillManagerClient {
                                            bool initializing) = 0;
     virtual void SetTechnologyProhibited(const std::string& type,
                                          bool prohibited) = 0;
+    virtual void SetTechnologyEnabled(const std::string& type,
+                                      base::OnceClosure callback,
+                                      bool enabled) = 0;
     // |network| must be a dictionary describing a Shill network configuration
     // which will be appended to the results returned from
     // GetNetworksForGeolocation().
@@ -124,6 +126,9 @@ class COMPONENT_EXPORT(SHILL_CLIENT) ShillManagerClient {
     // Clears profile list.
     virtual void ClearProfiles() = 0;
 
+    // Set (or unset) stub client state to return nullopt on GetProperties().
+    virtual void SetShouldReturnNullProperties(bool value) = 0;
+
    protected:
     virtual ~TestInterface() {}
   };
@@ -139,6 +144,9 @@ class COMPONENT_EXPORT(SHILL_CLIENT) ShillManagerClient {
 
   // Returns the global instance if initialized. May return null.
   static ShillManagerClient* Get();
+
+  ShillManagerClient(const ShillManagerClient&) = delete;
+  ShillManagerClient& operator=(const ShillManagerClient&) = delete;
 
   // Adds a property changed |observer|.
   virtual void AddPropertyChangedObserver(
@@ -199,14 +207,30 @@ class COMPONENT_EXPORT(SHILL_CLIENT) ShillManagerClient {
                           ObjectPathCallback callback,
                           ErrorCallback error_callback) = 0;
 
+  // Force a fresh WiFi scan if a WiFi device is available as a way of
+  // ensuring that recently configured networks can be found.
   // For each technology present, connects to the "best" service available.
   // Called once the user is logged in and certificates are loaded.
-  virtual void ConnectToBestServices(base::OnceClosure callback,
-                                     ErrorCallback error_callback) = 0;
+  virtual void ScanAndConnectToBestServices(base::OnceClosure callback,
+                                            ErrorCallback error_callback) = 0;
 
   // Enable or disable network bandwidth throttling, on all interfaces on the
   // system.
   virtual void SetNetworkThrottlingStatus(const NetworkThrottlingStatus& status,
+                                          base::OnceClosure callback,
+                                          ErrorCallback error_callback) = 0;
+
+  // Creates a set of Passpoint credentials from |properties| in the profile
+  // referenced by |profile_path|.
+  virtual void AddPasspointCredentials(const dbus::ObjectPath& profile_path,
+                                       const base::Value& properties,
+                                       base::OnceClosure callback,
+                                       ErrorCallback error_callback) = 0;
+
+  // Removes all Passpoint credentials that matches all property of |properties|
+  // in the profile referenced by |profile_path|.
+  virtual void RemovePasspointCredentials(const dbus::ObjectPath& profile_path,
+                                          const base::Value& properties,
                                           base::OnceClosure callback,
                                           ErrorCallback error_callback) = 0;
 
@@ -219,9 +243,6 @@ class COMPONENT_EXPORT(SHILL_CLIENT) ShillManagerClient {
   // Initialize/Shutdown should be used instead.
   ShillManagerClient();
   virtual ~ShillManagerClient();
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ShillManagerClient);
 };
 
 }  // namespace chromeos

@@ -9,6 +9,7 @@
 #include "base/bind.h"
 #include "base/callback.h"
 #include "base/check_op.h"
+#include "base/containers/adapters.h"
 #include "base/notreached.h"
 #include "components/sync/base/model_type.h"
 #include "components/sync/protocol/data_type_progress_marker.pb.h"
@@ -24,7 +25,7 @@ MockModelTypeWorker::MockModelTypeWorker(
   model_type_state_.set_initial_sync_done(true);
 }
 
-MockModelTypeWorker::~MockModelTypeWorker() {}
+MockModelTypeWorker::~MockModelTypeWorker() = default;
 
 void MockModelTypeWorker::NudgeForCommit() {
   processor_->GetLocalChanges(
@@ -74,9 +75,8 @@ const CommitRequestData* MockModelTypeWorker::GetLatestPendingCommitForHash(
     const ClientTagHash& tag_hash) const {
   // Iterate backward through the sets of commit requests to find the most
   // recent one that applies to the specified tag_hash.
-  for (auto rev_it = pending_commits_.rbegin();
-       rev_it != pending_commits_.rend(); ++rev_it) {
-    for (const std::unique_ptr<CommitRequestData>& data : *rev_it) {
+  for (const CommitRequestDataList& commit : base::Reversed(pending_commits_)) {
+    for (const std::unique_ptr<CommitRequestData>& data : commit) {
       if (data && data->entity->client_tag_hash == tag_hash) {
         return data.get();
       }
@@ -172,9 +172,8 @@ syncer::UpdateResponseData MockModelTypeWorker::GenerateUpdateData(
   data.specifics = specifics;
   // These elements should have no effect on behavior, but we set them anyway
   // so we can test they are properly copied around the system if we want to.
-  data.creation_time = base::Time::UnixEpoch() + base::TimeDelta::FromDays(1);
-  data.modification_time =
-      data.creation_time + base::TimeDelta::FromSeconds(version);
+  data.creation_time = base::Time::UnixEpoch() + base::Days(1);
+  data.modification_time = data.creation_time + base::Seconds(version);
   data.name = data.specifics.has_encrypted()
                   ? "encrypted"
                   : data.specifics.preference().name();
@@ -198,7 +197,7 @@ syncer::UpdateResponseData MockModelTypeWorker::GenerateTypeRootUpdateData(
     const ModelType& model_type) {
   syncer::EntityData data;
   data.id = syncer::ModelTypeToRootTag(model_type);
-  data.parent_id = "r";
+  data.legacy_parent_id = "r";
   data.server_defined_unique_tag = syncer::ModelTypeToRootTag(model_type);
   syncer::AddDefaultFieldValue(model_type, &data.specifics);
   // These elements should have no effect on behavior, but we set them anyway
@@ -224,9 +223,8 @@ syncer::UpdateResponseData MockModelTypeWorker::GenerateTombstoneUpdateData(
   data.client_tag_hash = tag_hash;
   // These elements should have no effect on behavior, but we set them anyway
   // so we can test they are properly copied around the system if we want to.
-  data.creation_time = base::Time::UnixEpoch() + base::TimeDelta::FromDays(1);
-  data.modification_time =
-      data.creation_time + base::TimeDelta::FromSeconds(version);
+  data.creation_time = base::Time::UnixEpoch() + base::Days(1);
+  data.modification_time = data.creation_time + base::Seconds(version);
   data.name = "Name Non Unique";
 
   UpdateResponseData response_data;
@@ -353,9 +351,8 @@ int64_t MockModelTypeWorker::GetServerVersion(const ClientTagHash& tag_hash) {
   auto it = server_versions_.find(tag_hash);
   if (it == server_versions_.end()) {
     return 0;
-  } else {
-    return it->second;
   }
+  return it->second;
 }
 
 void MockModelTypeWorker::SetServerVersion(const ClientTagHash& tag_hash,

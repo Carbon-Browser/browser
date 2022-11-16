@@ -9,7 +9,6 @@
 #include <memory>
 #include <string>
 
-#include "base/cxx17_backports.h"
 #include "base/memory/ptr_util.h"
 #include "build/build_config.h"
 #include "chrome/browser/ash/login/signin/signin_error_notifier_factory.h"
@@ -17,10 +16,10 @@
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/notifications/notification_display_service_tester.h"
 #include "chrome/browser/signin/identity_test_environment_profile_adaptor.h"
-#include "chrome/browser/supervised_user/supervised_user_constants.h"
 #include "chrome/browser/supervised_user/supervised_user_service.h"
 #include "chrome/browser/supervised_user/supervised_user_service_factory.h"
 #include "chrome/common/pref_names.h"
+#include "chrome/grit/generated_resources.h"
 #include "chrome/test/base/browser_with_test_window_test.h"
 #include "chrome/test/base/testing_profile.h"
 #include "components/prefs/pref_service.h"
@@ -28,6 +27,7 @@
 #include "components/signin/public/identity_manager/identity_test_utils.h"
 #include "components/user_manager/scoped_user_manager.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/base/l10n/l10n_util.h"
 #include "ui/message_center/public/cpp/notification.h"
 
 namespace ash {
@@ -36,12 +36,15 @@ namespace {
 const char kTestEmail[] = "email@example.com";
 const char kTestSecondaryEmail[] = "email2@example.com";
 
+const char kTokenHandle[] = "test_token_handle";
+
 // Notification ID corresponding to kProfileSigninNotificationId +
 // kTestAccountId.
 const char kPrimaryAccountErrorNotificationId[] =
     "chrome://settings/signin/testing_profile";
 const char kSecondaryAccountErrorNotificationId[] =
     "chrome://settings/signin/testing_profile/secondary-account";
+}  // namespace
 
 class SigninErrorNotifierTest : public BrowserWithTestWindowTest {
  public:
@@ -210,40 +213,43 @@ TEST_F(SigninErrorNotifierTest, ErrorTransitionForPrimaryAccount) {
 
 // Verify that SigninErrorNotifier ignores certain errors.
 TEST_F(SigninErrorNotifierTest, AuthStatusEnumerateAllErrors) {
-  typedef struct {
-    GoogleServiceAuthError::State error_state;
-    bool is_error;
-  } ErrorTableEntry;
-
-  ErrorTableEntry table[] = {
-      {GoogleServiceAuthError::NONE, false},
-      {GoogleServiceAuthError::INVALID_GAIA_CREDENTIALS, true},
-      {GoogleServiceAuthError::USER_NOT_SIGNED_UP, true},
-      {GoogleServiceAuthError::CONNECTION_FAILED, false},
-      {GoogleServiceAuthError::SERVICE_UNAVAILABLE, false},
-      {GoogleServiceAuthError::REQUEST_CANCELED, false},
-      {GoogleServiceAuthError::UNEXPECTED_SERVICE_RESPONSE, true},
-      {GoogleServiceAuthError::SERVICE_ERROR, true},
+  GoogleServiceAuthError::State table[] = {
+      GoogleServiceAuthError::NONE,
+      GoogleServiceAuthError::INVALID_GAIA_CREDENTIALS,
+      GoogleServiceAuthError::USER_NOT_SIGNED_UP,
+      GoogleServiceAuthError::CONNECTION_FAILED,
+      GoogleServiceAuthError::SERVICE_UNAVAILABLE,
+      GoogleServiceAuthError::REQUEST_CANCELED,
+      GoogleServiceAuthError::UNEXPECTED_SERVICE_RESPONSE,
+      GoogleServiceAuthError::SERVICE_ERROR,
+      GoogleServiceAuthError::SCOPE_LIMITED_UNRECOVERABLE_ERROR,
   };
   static_assert(
-      base::size(table) == GoogleServiceAuthError::NUM_STATES -
-                               GoogleServiceAuthError::kDeprecatedStateCount,
+      std::size(table) == GoogleServiceAuthError::NUM_STATES -
+                              GoogleServiceAuthError::kDeprecatedStateCount,
       "table size should match number of auth error types");
   CoreAccountId account_id =
       identity_test_env()
           ->MakePrimaryAccountAvailable(kTestEmail, signin::ConsentLevel::kSync)
           .account_id;
 
-  for (size_t i = 0; i < base::size(table); ++i) {
-    SetAuthError(account_id, GoogleServiceAuthError(table[i].error_state));
+  for (size_t i = 0; i < std::size(table); ++i) {
+    GoogleServiceAuthError error(table[i]);
+    SetAuthError(account_id, error);
     absl::optional<message_center::Notification> notification =
         display_service_->GetNotification(kPrimaryAccountErrorNotificationId);
-    ASSERT_EQ(table[i].is_error, !!notification) << "Failed case #" << i;
-    if (table[i].is_error) {
-      EXPECT_FALSE(notification->title().empty());
-      EXPECT_FALSE(notification->message().empty());
-      EXPECT_EQ((size_t)1, notification->buttons().size());
-    }
+
+    // Only non scope persistent errors are reported.
+    bool expect_notification =
+        error.IsPersistentError() && !error.IsScopePersistentError();
+    ASSERT_EQ(expect_notification, !!notification) << "Failed case #" << i;
+    if (!expect_notification)
+      continue;
+
+    ASSERT_TRUE(notification.has_value()) << "Failed case #" << i;
+    EXPECT_FALSE(notification->title().empty());
+    EXPECT_FALSE(notification->message().empty());
+    EXPECT_EQ((size_t)1, notification->buttons().size());
     SetAuthError(account_id, GoogleServiceAuthError::AuthErrorNone());
   }
 }
@@ -257,7 +263,7 @@ TEST_F(SigninErrorNotifierTest, ChildSecondaryAccountMigrationTest) {
       identity_test_env()->MakeAccountAvailable(kTestSecondaryEmail).account_id;
 
   // Mark the profile as a child user.
-  GetProfile()->SetSupervisedUserId(supervised_users::kChildAccountSUID);
+  GetProfile()->SetIsSupervisedProfile();
   base::RunLoop().RunUntilIdle();
 
   // Invalidate the secondary account.
@@ -292,5 +298,61 @@ TEST_F(SigninErrorNotifierTest, ChildSecondaryAccountMigrationTest) {
   EXPECT_NE(new_message, message);
 }
 
-}  // namespace
+// Tests that token handle errors display the expected error message.
+TEST_F(SigninErrorNotifierTest, TokenHandleTest) {
+  // Setup.
+  const CoreAccountId core_account_id =
+      identity_test_env()
+          ->MakePrimaryAccountAvailable(kTestEmail, signin::ConsentLevel::kSync)
+          .account_id;
+  const AccountId account_id = AccountId::FromUserEmailGaiaId(
+      /*user_email=*/kTestEmail, /*gaia_id=*/core_account_id.ToString());
+  TokenHandleUtil::StoreTokenHandle(account_id, kTokenHandle);
+  TokenHandleUtil::SetInvalidTokenForTesting(kTokenHandle);
+  SigninErrorNotifier* signin_error_notifier =
+      SigninErrorNotifierFactory::GetForProfile(GetProfile());
+  signin_error_notifier->OnTokenHandleCheck(account_id,
+                                            TokenHandleUtil::INVALID);
+
+  // Test.
+  absl::optional<message_center::Notification> notification =
+      display_service_->GetNotification(kPrimaryAccountErrorNotificationId);
+  ASSERT_TRUE(notification);
+  const std::u16string& message = notification->message();
+  EXPECT_EQ(message, l10n_util::GetStringUTF16(
+                         IDS_SYNC_TOKEN_HANDLE_ERROR_BUBBLE_VIEW_MESSAGE));
+}
+
+TEST_F(SigninErrorNotifierTest,
+       TokenHandleErrorsDoNotDisplaySecondaryAccountErrors) {
+  // Setup Secondary Account Error.
+  CoreAccountId secondary_account =
+      identity_test_env()->MakeAccountAvailable(kTestSecondaryEmail).account_id;
+  SetAuthError(
+      secondary_account,
+      GoogleServiceAuthError(GoogleServiceAuthError::INVALID_GAIA_CREDENTIALS));
+
+  // Setup Device Account.
+  const CoreAccountId core_account_id =
+      identity_test_env()
+          ->MakePrimaryAccountAvailable(kTestEmail, signin::ConsentLevel::kSync)
+          .account_id;
+  const AccountId account_id = AccountId::FromUserEmailGaiaId(
+      /*user_email=*/kTestEmail, /*gaia_id=*/core_account_id.ToString());
+  TokenHandleUtil::StoreTokenHandle(account_id, kTokenHandle);
+  TokenHandleUtil::SetInvalidTokenForTesting(kTokenHandle);
+  SigninErrorNotifier* signin_error_notifier =
+      SigninErrorNotifierFactory::GetForProfile(GetProfile());
+  signin_error_notifier->OnTokenHandleCheck(account_id,
+                                            TokenHandleUtil::INVALID);
+
+  // Test.
+  absl::optional<message_center::Notification> notification =
+      display_service_->GetNotification(kPrimaryAccountErrorNotificationId);
+  ASSERT_TRUE(notification);
+  const std::u16string& message = notification->message();
+  EXPECT_EQ(message, l10n_util::GetStringUTF16(
+                         IDS_SYNC_TOKEN_HANDLE_ERROR_BUBBLE_VIEW_MESSAGE));
+}
+
 }  // namespace ash

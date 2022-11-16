@@ -7,57 +7,21 @@
 
 #include "components/performance_manager/public/features.h"
 
-#include "base/dcheck_is_on.h"
 #include "base/metrics/field_trial_params.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 
-namespace performance_manager {
-namespace features {
-
-const base::Feature kTabLoadingFrameNavigationThrottles{
-    "TabLoadingFrameNavigationThrottles", base::FEATURE_DISABLED_BY_DEFAULT};
-
-// Parameters associated with the "TabLoadingFrameNavigationThrottles"
-// feature.
-const base::FeatureParam<int> kMinimumThrottleTimeoutMilliseconds = {
-    &kTabLoadingFrameNavigationThrottles, "MinimumThrottleTimeoutMilliseconds",
-    1000};
-// This defaults to the 99th %ile of LargestContentfulPaint (LCP).
-const base::FeatureParam<int> kMaximumThrottleTimeoutMilliseconds = {
-    &kTabLoadingFrameNavigationThrottles, "MaximumThrottleTimeoutMilliseconds",
-    40000};
-// This defaults to 3 since 3 * 99th%ile FCP ~= 99th%ile LCP.
-const base::FeatureParam<double> kFCPMultiple = {
-    &kTabLoadingFrameNavigationThrottles, "FCPMultiple", 3.0};
-
-TabLoadingFrameNavigationThrottlesParams::
-    TabLoadingFrameNavigationThrottlesParams() = default;
-
-TabLoadingFrameNavigationThrottlesParams::
-    ~TabLoadingFrameNavigationThrottlesParams() = default;
-
-// static
-TabLoadingFrameNavigationThrottlesParams
-TabLoadingFrameNavigationThrottlesParams::GetParams() {
-  TabLoadingFrameNavigationThrottlesParams params;
-  params.minimum_throttle_timeout = base::TimeDelta::FromMilliseconds(
-      kMinimumThrottleTimeoutMilliseconds.Get());
-  params.maximum_throttle_timeout = base::TimeDelta::FromMilliseconds(
-      kMaximumThrottleTimeoutMilliseconds.Get());
-  params.fcp_multiple = kFCPMultiple.Get();
-  return params;
-}
+namespace performance_manager::features {
 
 const base::Feature kRunOnMainThread{"RunOnMainThread",
                                      base::FEATURE_DISABLED_BY_DEFAULT};
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
 const base::Feature kUrgentDiscardingFromPerformanceManager {
   "UrgentDiscardingFromPerformanceManager",
 // Ash Chrome uses memory pressure evaluator instead of performance manager to
 // discard tabs.
-#if BUILDFLAG(IS_CHROMEOS_ASH) || defined(OS_LINUX)
+#if BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_LINUX)
       base::FEATURE_DISABLED_BY_DEFAULT
 #else
       base::FEATURE_ENABLED_BY_DEFAULT
@@ -83,30 +47,17 @@ const base::Feature kBackgroundTabLoadingFromPerformanceManager{
     "BackgroundTabLoadingFromPerformanceManager",
     base::FEATURE_DISABLED_BY_DEFAULT};
 
-const base::Feature kHighPMFDiscardPolicy{"HighPMFDiscardPolicy",
-                                          base::FEATURE_DISABLED_BY_DEFAULT};
+const base::Feature kHighEfficiencyModeAvailable{
+    "HighEfficiencyModeAvailable", base::FEATURE_DISABLED_BY_DEFAULT};
+
+const base::Feature kBatterySaverModeAvailable{
+    "BatterySaverModeAvailable", base::FEATURE_DISABLED_BY_DEFAULT};
+
+const base::FeatureParam<base::TimeDelta> kHighEfficiencyModeTimeBeforeDiscard{
+    &kHighEfficiencyModeAvailable, "time_before_discard", base::Minutes(5)};
 #endif
 
 const base::Feature kBFCachePerformanceManagerPolicy{
     "BFCachePerformanceManagerPolicy", base::FEATURE_DISABLED_BY_DEFAULT};
 
-constexpr base::FeatureParam<bool>
-    BFCachePerformanceManagerPolicyParams::kFlushOnModeratePressure;
-
-constexpr base::FeatureParam<int>
-    BFCachePerformanceManagerPolicyParams::kDelayToFlushBackgroundTabInSeconds;
-
-// static
-BFCachePerformanceManagerPolicyParams
-BFCachePerformanceManagerPolicyParams::GetParams() {
-  BFCachePerformanceManagerPolicyParams params;
-  params.flush_on_moderate_pressure_ =
-      BFCachePerformanceManagerPolicyParams::kFlushOnModeratePressure.Get();
-  params.delay_to_flush_background_tab_ = base::TimeDelta::FromSeconds(
-      BFCachePerformanceManagerPolicyParams::kDelayToFlushBackgroundTabInSeconds
-          .Get());
-  return params;
-}
-
-}  // namespace features
-}  // namespace performance_manager
+}  // namespace performance_manager::features

@@ -9,7 +9,6 @@
 #include <string>
 
 #include "base/callback_forward.h"
-#include "base/macros.h"
 #include "components/history/core/browser/history_types.h"
 
 namespace sql {
@@ -25,6 +24,10 @@ class VisitSegmentDatabase {
  public:
   // Must call InitSegmentTables before using any other part of this class.
   VisitSegmentDatabase();
+
+  VisitSegmentDatabase(const VisitSegmentDatabase&) = delete;
+  VisitSegmentDatabase& operator=(const VisitSegmentDatabase&) = delete;
+
   virtual ~VisitSegmentDatabase();
 
   // Compute a segment name given a URL. The segment name is currently the
@@ -50,11 +53,10 @@ class VisitSegmentDatabase {
   bool IncreaseSegmentVisitCount(SegmentID segment_id, base::Time ts,
                                  int amount);
 
-  // Computes the segment usage since `from_time`. If `url_filter` is non-null,
-  // then only URLs for which it returns true will be included.
-  // Returns the highest-scored segments up to `max_result_count`.
+  // Returns the highest-scored segments up to `max_result_count`. If
+  // `url_filter` is non-null, then only URLs for which it returns true will be
+  // included.
   std::vector<std::unique_ptr<PageUsageData>> QuerySegmentUsage(
-      base::Time from_time,
       int max_result_count,
       const base::RepeatingCallback<bool(const GURL&)>& url_filter);
 
@@ -91,8 +93,6 @@ class VisitSegmentDatabase {
   // `from_segment_id` are updated to `to_segment_id` and `from_segment_id` is
   // deleted. Returns true on success.
   bool MergeSegments(SegmentID from_segment_id, SegmentID to_segment_id);
-
-  DISALLOW_COPY_AND_ASSIGN(VisitSegmentDatabase);
 };
 
 }  // namespace history

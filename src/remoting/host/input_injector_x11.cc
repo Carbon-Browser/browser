@@ -13,14 +13,15 @@
 #include "base/bind.h"
 #include "base/compiler_specific.h"
 #include "base/location.h"
-#include "base/macros.h"
-#include "base/single_thread_task_runner.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversion_utils.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "remoting/base/logging.h"
 #include "remoting/host/clipboard.h"
+#include "remoting/host/input_injector_constants_linux.h"
 #include "remoting/host/linux/unicode_to_keysym.h"
 #include "remoting/host/linux/x11_character_injector.h"
 #include "remoting/host/linux/x11_keyboard_impl.h"
@@ -51,12 +52,6 @@ using protocol::MouseEvent;
 using protocol::TextEvent;
 using protocol::TouchEvent;
 
-enum class ScrollDirection {
-  DOWN = -1,
-  UP = 1,
-  NONE = 0,
-};
-
 ScrollDirection WheelDeltaToScrollDirection(float num) {
   return (num > 0)   ? ScrollDirection::UP
          : (num < 0) ? ScrollDirection::DOWN
@@ -79,14 +74,17 @@ bool IsDomModifierKey(ui::DomCode dom_code) {
 const float kWheelTicksPerPixel = 3.0f / 160.0f;
 
 // When the user is scrolling, generate at least one tick per time period.
-const base::TimeDelta kContinuousScrollTimeout =
-    base::TimeDelta::FromMilliseconds(500);
+const base::TimeDelta kContinuousScrollTimeout = base::Milliseconds(500);
 
 // A class to generate events on X11.
 class InputInjectorX11 : public InputInjector {
  public:
   explicit InputInjectorX11(
       scoped_refptr<base::SingleThreadTaskRunner> task_runner);
+
+  InputInjectorX11(const InputInjectorX11&) = delete;
+  InputInjectorX11& operator=(const InputInjectorX11&) = delete;
+
   ~InputInjectorX11() override;
 
   void Init();
@@ -109,6 +107,9 @@ class InputInjectorX11 : public InputInjector {
   class Core : public base::RefCountedThreadSafe<Core> {
    public:
     explicit Core(scoped_refptr<base::SingleThreadTaskRunner> task_runner);
+
+    Core(const Core&) = delete;
+    Core& operator=(const Core&) = delete;
 
     void Init();
 
@@ -168,7 +169,7 @@ class InputInjectorX11 : public InputInjector {
     ScrollDirection latest_tick_y_direction_ = ScrollDirection::NONE;
 
     // X11 graphics context. Must only be accessed on the input thread.
-    x11::Connection* connection_;
+    raw_ptr<x11::Connection> connection_;
 
     // Number of buttons we support.
     // Left, Right, Middle, VScroll Up/Down, HScroll Left/Right, back, forward.
@@ -185,13 +186,9 @@ class InputInjectorX11 : public InputInjector {
     std::unique_ptr<X11CharacterInjector> character_injector_;
 
     bool saved_auto_repeat_enabled_ = false;
-
-    DISALLOW_COPY_AND_ASSIGN(Core);
   };
 
   scoped_refptr<Core> core_;
-
-  DISALLOW_COPY_AND_ASSIGN(InputInjectorX11);
 };
 
 InputInjectorX11::InputInjectorX11(
@@ -356,8 +353,8 @@ void InputInjectorX11::Core::InjectTextEvent(const TextEvent& event) {
   pressed_keys_.clear();
 
   const std::string text = event.text();
-  for (int32_t index = 0; index < static_cast<int32_t>(text.size()); ++index) {
-    uint32_t code_point;
+  for (size_t index = 0; index < text.size(); ++index) {
+    base_icu::UChar32 code_point;
     if (!base::ReadUnicodeCharacter(text.c_str(), text.size(), &index,
                                     &code_point)) {
       continue;

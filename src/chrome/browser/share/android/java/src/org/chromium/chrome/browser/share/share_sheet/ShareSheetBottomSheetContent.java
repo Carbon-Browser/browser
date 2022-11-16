@@ -23,9 +23,9 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 
 import androidx.annotation.ColorInt;
+import androidx.annotation.ColorRes;
 import androidx.annotation.Nullable;
 import androidx.appcompat.content.res.AppCompatResources;
-import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -43,6 +43,7 @@ import org.chromium.chrome.browser.user_education.UserEducationHelper;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetContent;
 import org.chromium.components.browser_ui.share.ShareImageFileUtils;
 import org.chromium.components.browser_ui.share.ShareParams;
+import org.chromium.components.browser_ui.styles.SemanticColorUtils;
 import org.chromium.components.browser_ui.widget.RoundedCornerImageView;
 import org.chromium.components.browser_ui.widget.highlight.ViewHighlighter;
 import org.chromium.components.favicon.IconType;
@@ -195,6 +196,9 @@ class ShareSheetBottomSheetContent implements BottomSheetContent, OnItemClickLis
         } else if (ShareSheetItemViewProperties.LABEL.equals(propertyKey)) {
             TextView view = (TextView) parent.findViewById(R.id.text);
             view.setText(model.get(ShareSheetItemViewProperties.LABEL));
+        } else if (ShareSheetItemViewProperties.CONTENT_DESCRIPTION.equals(propertyKey)) {
+            TextView view = (TextView) parent.findViewById(R.id.text);
+            view.setContentDescription(model.get(ShareSheetItemViewProperties.CONTENT_DESCRIPTION));
         } else if (ShareSheetItemViewProperties.CLICK_LISTENER.equals(propertyKey)) {
             View layout = (View) parent.findViewById(R.id.layout);
             layout.setOnClickListener(model.get(ShareSheetItemViewProperties.CLICK_LISTENER));
@@ -292,8 +296,7 @@ class ShareSheetBottomSheetContent implements BottomSheetContent, OnItemClickLis
 
         RoundedCornerImageView imageView = this.getContentView().findViewById(R.id.image_preview);
         imageView.setImageBitmap(bitmap);
-        imageView.setRoundedFillColor(ApiCompatibilityUtils.getColor(
-                mActivity.getResources(), R.color.default_icon_color));
+        imageView.setRoundedFillColor(SemanticColorUtils.getDefaultIconColor(mActivity));
         imageView.setScaleType(ScaleType.FIT_CENTER);
     }
 
@@ -386,6 +389,8 @@ class ShareSheetBottomSheetContent implements BottomSheetContent, OnItemClickLis
                 return R.string.link_toggle_share_screenshot_only;
             case DetailedContentType.WEB_NOTES:
                 return R.string.link_toggle_share_webnote_only;
+            case DetailedContentType.LIGHTWEIGHT_REACTION:
+                return R.string.link_toggle_share_reaction_only;
             case DetailedContentType.HIGHLIGHTED_TEXT:
             case DetailedContentType.NOT_SPECIFIED:
                 return R.string.link_toggle_share_content_only;
@@ -397,15 +402,16 @@ class ShareSheetBottomSheetContent implements BottomSheetContent, OnItemClickLis
     private void setLinkToggleForPreview(@DetailedContentType int detailedContentType) {
         int drawable;
         int contentDescription;
+        @ColorRes
         int skillColor;
 
         if (mLinkToggleState == LinkToggleState.LINK) {
             drawable = R.drawable.link;
-            skillColor = R.color.default_icon_color_blue;
+            skillColor = R.color.default_icon_color_accent1_tint_list;
             contentDescription = R.string.link_toggle_include_link;
         } else {
             drawable = R.drawable.link_off;
-            skillColor = R.color.default_icon_color;
+            skillColor = R.color.default_icon_color_tint_list;
             contentDescription = getExcludeLinkToast(detailedContentType);
         }
 
@@ -420,7 +426,8 @@ class ShareSheetBottomSheetContent implements BottomSheetContent, OnItemClickLis
         }
 
         ImageView linkToggleView = getContentView().findViewById(R.id.link_toggle_view);
-        linkToggleView.setColorFilter(ContextCompat.getColor(mActivity, skillColor));
+        linkToggleView.setColorFilter(
+                AppCompatResources.getColorStateList(mActivity, skillColor).getDefaultColor());
         linkToggleView.setVisibility(View.VISIBLE);
         linkToggleView.setImageDrawable(AppCompatResources.getDrawable(mActivity, drawable));
         // This is necessary in order to prevent voice over announcing the content description

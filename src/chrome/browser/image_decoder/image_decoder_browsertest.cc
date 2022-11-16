@@ -4,10 +4,8 @@
 
 #include "chrome/browser/image_decoder/image_decoder.h"
 
-#include "base/macros.h"
 #include "base/run_loop.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "chrome/grit/generated_resources.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "content/public/browser/browser_child_process_observer.h"
@@ -65,6 +63,9 @@ class TestImageRequest : public ImageDecoder::ImageRequest {
         quit_closure_(std::move(quit_closure)),
         quit_called_(false) {}
 
+  TestImageRequest(const TestImageRequest&) = delete;
+  TestImageRequest& operator=(const TestImageRequest&) = delete;
+
   ~TestImageRequest() override {
     if (!quit_called_) {
       std::move(quit_closure_).Run();
@@ -95,8 +96,6 @@ class TestImageRequest : public ImageDecoder::ImageRequest {
   base::OnceClosure quit_closure_;
   bool quit_called_;
   SkBitmap bitmap_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestImageRequest);
 };
 
 }  // namespace
@@ -111,7 +110,7 @@ IN_PROC_BROWSER_TEST_F(ImageDecoderBrowserTest, Basic) {
   EXPECT_FALSE(test_request.decode_succeeded());
 }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_CHROMEOS_LACROS)
+#if BUILDFLAG(IS_CHROMEOS)
 
 IN_PROC_BROWSER_TEST_F(ImageDecoderBrowserTest, BasicDecodeWithOptionsString) {
   base::RunLoop run_loop;
@@ -156,7 +155,7 @@ IN_PROC_BROWSER_TEST_F(ImageDecoderBrowserTest, RobustPngCodecWithJpegData) {
   EXPECT_FALSE(test_request.decode_succeeded());
 }
 
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_CHROMEOS_LACROS)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 IN_PROC_BROWSER_TEST_F(ImageDecoderBrowserTest, BasicDecode) {
   base::RunLoop run_loop;

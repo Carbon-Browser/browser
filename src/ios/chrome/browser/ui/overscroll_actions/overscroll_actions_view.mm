@@ -10,6 +10,7 @@
 #include "base/ios/block_types.h"
 #include "base/numerics/math_constants.h"
 #import "ios/chrome/browser/ui/content_suggestions/ntp_home_constant.h"
+#import "ios/chrome/browser/ui/icons/chrome_symbol.h"
 #include "ios/chrome/browser/ui/util/rtl_geometry.h"
 #include "ios/chrome/browser/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
@@ -23,13 +24,14 @@
 #endif
 
 namespace {
+
 // Actions images.
 NSString* const kNewTabActionImage = @"ptr_new_tab";
-NSString* const kNewTabActionActiveImage = @"ptr_new_tab_active";
 NSString* const kReloadActionImage = @"ptr_reload";
-NSString* const kReloadActionActiveImage = @"ptr_reload_active";
 NSString* const kCloseActionImage = @"ptr_close";
-NSString* const kCloseActionActiveImage = @"ptr_close_active";
+
+// The size of overscroll symbol images.
+const CGFloat kOverScrollSymbolPointSize = 17.;
 
 // Represents a simple min/max range.
 typedef struct {
@@ -115,6 +117,7 @@ enum class OverscrollViewState {
   PREPARE,  // The actions are starting to be displayed.
   READY     // Actions are fully displayed.
 };
+
 }  // namespace
 
 // Minimum delay to perform the transition to the ready state.
@@ -222,7 +225,7 @@ const CGFloat kActionViewBackgroundColorBrightnessIncognito = 80.0 / 256.0;
 // Returns a newly allocated and configured selection circle shape.
 - (CAShapeLayer*)newSelectionCircleLayer;
 // Returns an autoreleased circular bezier path horizontally deformed according
-// to |dx|.
+// to `dx`.
 - (UIBezierPath*)circlePath:(CGFloat)dx;
 // Returns the action at the given location in the view.
 - (OverscrollAction)actionAtLocation:(CGPoint)location;
@@ -231,9 +234,9 @@ const CGFloat kActionViewBackgroundColorBrightnessIncognito = 80.0 / 256.0;
 // Clear the direct touch interaction after a small delay to prevent graphic
 // glitch with pan gesture selection deformation animations.
 - (void)clearDirectTouchInteraction;
-// Returns the tooltip label for |action|.
+// Returns the tooltip label for `action`.
 - (UILabel*)labelForAction:(OverscrollAction)action;
-// Fades out |previousLabel| and fades in |actionLabel|.
+// Fades out `previousLabel` and fades in `actionLabel`.
 - (void)fadeInActionLabel:(UILabel*)actionLabel
       previousActionLabel:(UILabel*)previousLabel;
 @end
@@ -256,22 +259,34 @@ const CGFloat kActionViewBackgroundColorBrightnessIncognito = 80.0 / 256.0;
     [_selectionCircleCroppingLayer addSublayer:_selectionCircleLayer];
 
     _addTabActionImageView = [[UIImageView alloc] init];
-    _addTabActionImageView.image = [[UIImage imageNamed:kNewTabActionImage]
-        imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+    _addTabActionImageView.image =
+        UseSymbols()
+            ? DefaultSymbolTemplateWithPointSize(kPlusSymbol,
+                                                 kOverScrollSymbolPointSize)
+            : [[UIImage imageNamed:kNewTabActionImage]
+                  imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
     _addTabActionImageView.tintColor = [UIColor colorNamed:kToolbarButtonColor];
     [_addTabActionImageView sizeToFit];
     [self addSubview:_addTabActionImageView];
     _reloadActionImageView = [[UIImageView alloc] init];
-    _reloadActionImageView.image = [[UIImage imageNamed:kReloadActionImage]
-        imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+    _reloadActionImageView.image =
+        UseSymbols()
+            ? CustomSymbolTemplateWithPointSize(kArrowClockWiseSymbol,
+                                                kOverScrollSymbolPointSize)
+            : [[UIImage imageNamed:kReloadActionImage]
+                  imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
     _reloadActionImageView.tintColor = [UIColor colorNamed:kToolbarButtonColor];
     [_reloadActionImageView sizeToFit];
     if (UseRTLLayout())
       [_reloadActionImageView setTransform:CGAffineTransformMakeScale(-1, 1)];
     [self addSubview:_reloadActionImageView];
     _closeTabActionImageView = [[UIImageView alloc] init];
-    _closeTabActionImageView.image = [[UIImage imageNamed:kCloseActionImage]
-        imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+    _closeTabActionImageView.image =
+        UseSymbols()
+            ? DefaultSymbolTemplateWithPointSize(kXMarkSymbol,
+                                                 kOverScrollSymbolPointSize)
+            : [[UIImage imageNamed:kCloseActionImage]
+                  imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
     _closeTabActionImageView.tintColor =
         [UIColor colorNamed:kToolbarButtonColor];
     [_closeTabActionImageView sizeToFit];
@@ -319,7 +334,7 @@ const CGFloat kActionViewBackgroundColorBrightnessIncognito = 80.0 / 256.0;
     if (UseRTLLayout()) {
       // Handle RTL using transforms since this class is CALayer-based.
       [self setTransform:CGAffineTransformMakeScale(-1, 1)];
-      // Reverse labels again because they are subview of |self|, otherwise they
+      // Reverse labels again because they are subview of `self`, otherwise they
       // will be rendered backwards.
       [_addTabLabel setTransform:CGAffineTransformMakeScale(-1, 1)];
       [_reloadLabel setTransform:CGAffineTransformMakeScale(-1, 1)];
@@ -337,7 +352,6 @@ const CGFloat kActionViewBackgroundColorBrightnessIncognito = 80.0 / 256.0;
 
 - (void)dealloc {
   [self.snapshotView removeFromSuperview];
-  ;
 }
 
 - (BOOL)selectionCroppingEnabled {
@@ -546,8 +560,8 @@ const CGFloat kActionViewBackgroundColorBrightnessIncognito = 80.0 / 256.0;
   CGSize boundingSize = self.bounds.size;
   boundingSize.width /= 2.0;
 
-  // The UILabels in |labels| are laid out according to the location of their
-  // corresponding UIImageView in |images|.
+  // The UILabels in `labels` are laid out according to the location of their
+  // corresponding UIImageView in `images`.
   NSArray* labels = @[ self.addTabLabel, self.reloadLabel, self.closeTabLabel ];
   NSArray* images = @[
     self.addTabActionImageView, self.reloadActionImageView,

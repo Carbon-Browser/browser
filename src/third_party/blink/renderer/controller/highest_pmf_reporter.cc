@@ -6,7 +6,7 @@
 
 #include <limits>
 #include "base/metrics/histogram_functions.h"
-#include "base/task_runner.h"
+#include "base/task/task_runner.h"
 #include "base/time/default_tick_clock.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/loader/document_loader.h"
@@ -43,8 +43,7 @@ const char* HighestPmfReporter::webpage_counts_metric_names[] = {
     "8to16min"};
 
 constexpr base::TimeDelta HighestPmfReporter::time_to_report[] = {
-    base::TimeDelta::FromMinutes(2), base::TimeDelta::FromMinutes(4),
-    base::TimeDelta::FromMinutes(8), base::TimeDelta::FromMinutes(16)};
+    base::Minutes(2), base::Minutes(4), base::Minutes(8), base::Minutes(16)};
 
 HighestPmfReporter& HighestPmfReporter::Instance() {
   DEFINE_STATIC_LOCAL(HighestPmfReporter, reporter, ());
@@ -121,7 +120,7 @@ void HighestPmfReporter::OnReportMetrics() {
   peak_resident_bytes_at_current_highest_pmf_ = 0.0;
   webpage_counts_at_current_highest_pmf_ = 0;
   report_count_++;
-  if (report_count_ >= base::size(time_to_report)) {
+  if (report_count_ >= std::size(time_to_report)) {
     // Stop observing the MemoryUsageMonitor once there's no more histogram to
     // report.
     MemoryUsageMonitor::Instance().RemoveObserver(this);

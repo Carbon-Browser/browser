@@ -7,7 +7,8 @@
 
 #include "services/device/public/mojom/usb_device.mojom-blink.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 
 namespace blink {
 
@@ -41,6 +42,7 @@ class USBInterface : public ScriptWrappable {
 
  private:
   Member<const USBDevice> device_;
+  HeapVector<Member<USBAlternateInterface>> alternates_;
   const wtf_size_t configuration_index_;
   const wtf_size_t interface_index_;
 };

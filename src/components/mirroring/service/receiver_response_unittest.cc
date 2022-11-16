@@ -8,7 +8,6 @@
 #include "base/bind.h"
 #include "base/callback.h"
 #include "base/json/json_reader.h"
-#include "base/macros.h"
 #include "base/test/mock_callback.h"
 #include "components/mirroring/service/value_util.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -22,10 +21,11 @@ namespace mirroring {
 class ReceiverResponseTest : public ::testing::Test {
  public:
   ReceiverResponseTest() {}
-  ~ReceiverResponseTest() override {}
 
- private:
-  DISALLOW_COPY_AND_ASSIGN(ReceiverResponseTest);
+  ReceiverResponseTest(const ReceiverResponseTest&) = delete;
+  ReceiverResponseTest& operator=(const ReceiverResponseTest&) = delete;
+
+  ~ReceiverResponseTest() override {}
 };
 
 TEST_F(ReceiverResponseTest, ParseValidJson) {
@@ -101,10 +101,10 @@ TEST_F(ReceiverResponseTest, ParseErrorMessage) {
   ASSERT_TRUE(response->error());
   EXPECT_EQ(42, response->error()->code);
   EXPECT_EQ("it is broken", response->error()->description);
-  std::unique_ptr<base::Value> parsed_details =
-      base::JSONReader::ReadDeprecated(response->error()->details);
+  absl::optional<base::Value> parsed_details =
+      base::JSONReader::Read(response->error()->details);
   ASSERT_TRUE(parsed_details && parsed_details->is_dict());
-  EXPECT_EQ(2u, parsed_details->DictSize());
+  EXPECT_EQ(2u, parsed_details->GetDict().size());
   int fool_value = 0;
   EXPECT_TRUE(GetInt(*parsed_details, "foo", &fool_value));
   EXPECT_EQ(-1, fool_value);

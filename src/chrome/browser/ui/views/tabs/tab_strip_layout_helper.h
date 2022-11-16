@@ -9,8 +9,9 @@
 
 #include "base/callback.h"
 #include "base/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/tabs/tab_types.h"
-#include "chrome/browser/ui/views/tabs/tab_animation_state.h"
+#include "chrome/browser/ui/views/tabs/tab_layout_state.h"
 #include "chrome/browser/ui/views/tabs/tab_slot_view.h"
 #include "chrome/browser/ui/views/tabs/tab_strip_layout.h"
 #include "chrome/browser/ui/views/tabs/tab_width_constraints.h"
@@ -53,7 +54,7 @@ class TabStripLayoutHelper {
   int first_non_pinned_tab_x() { return first_non_pinned_tab_x_; }
 
   // Returns the number of pinned tabs in the tabstrip.
-  int GetPinnedTabCount() const;
+  size_t GetPinnedTabCount() const;
 
   // Returns a map of all tab groups and their bounds.
   const std::map<tab_groups::TabGroupId, gfx::Rect>& group_header_ideal_bounds()
@@ -67,18 +68,6 @@ class TabStripLayoutHelper {
   // Marks the tab at |model_index| as closing, but does not remove it from
   // |slots_|.
   void RemoveTabAt(int model_index, Tab* tab);
-
-  // Called when the tabstrip enters tab closing mode, wherein tabs should
-  // resize differently to control which tab ends up under the cursor.
-  // Assumes that the available width will never be smaller than this value
-  // for the duration of this tab closing session, i.e. that resizing the
-  // tabstrip will only happen after ExitTabClosingMode().
-  void EnterTabClosingMode(int available_width);
-
-  // Called when the tabstrip has left tab closing mode or when falling back
-  // to the old animation system while in closing mode. Returns the current
-  // available width.
-  absl::optional<int> ExitTabClosingMode();
 
   // Invoked when |tab| has been destroyed by TabStrip (i.e. the remove
   // animation has completed).
@@ -105,7 +94,8 @@ class TabStripLayoutHelper {
   void UpdateGroupHeaderIndex(tab_groups::TabGroupId group);
 
   // Changes the active tab from |prev_active_index| to |new_active_index|.
-  void SetActiveTab(int prev_active_index, int new_active_index);
+  void SetActiveTab(absl::optional<size_t> prev_active_index,
+                    absl::optional<size_t> new_active_index);
 
   // Calculates the smallest width the tabs can occupy.
   int CalculateMinimumWidth();
@@ -118,11 +108,6 @@ class TabStripLayoutHelper {
   // |inactive_tab_width_|. Returns the total width occupied by the new ideal
   // bounds.
   int UpdateIdealBounds(int available_width);
-
-  // Generates and sets the ideal bounds for |tabs|. Updates
-  // the cached values in |first_non_pinned_tab_index_| and
-  // |first_non_pinned_tab_x_|.
-  void UpdateIdealBoundsForPinnedTabs();
 
  private:
   struct TabSlot;
@@ -156,9 +141,6 @@ class TabStripLayoutHelper {
   // in |slots_|.
   int GetSlotIndexForGroupHeader(tab_groups::TabGroupId group) const;
 
-  // Returns the current width constraints for each View.
-  std::vector<TabWidthConstraints> GetCurrentTabWidthConstraints() const;
-
   // Compares |cached_slots_| to the TabAnimations in |animator_| and DCHECKs if
   // the TabAnimation::ViewType do not match. Prevents bugs that could cause the
   // wrong callback being run when a tab or group is deleted.
@@ -168,18 +150,11 @@ class TabStripLayoutHelper {
   // as appropriate.
   void UpdateCachedTabWidth(int tab_index, int tab_width, bool active);
 
-  // The tabstrip may enter 'closing mode' when tabs are closed with the mouse.
-  // In closing mode, the ideal widths of tabs are manipulated to control which
-  // tab ends up under the cursor after each remove animation completes - the
-  // next tab to the right, if it exists, or the next tab to the left otherwise.
-  // Returns true if any width constraint is currently being enforced.
-  bool WidthsConstrainedForClosingMode();
-
   // True iff the slot at index |i| is a tab that is in a collapsed group.
   bool SlotIsCollapsedTab(int i) const;
 
   // The owning tabstrip's controller.
-  const TabStripController* const controller_;
+  const raw_ptr<const TabStripController> controller_;
 
   // Callback to get the necessary View objects from the owning tabstrip.
   GetTabsCallback get_tabs_callback_;
@@ -190,16 +165,6 @@ class TabStripLayoutHelper {
 
   // Contains the ideal bounds of tab group headers.
   std::map<tab_groups::TabGroupId, gfx::Rect> group_header_ideal_bounds_;
-
-  // When in tab closing mode, if we want the next tab to the right to end up
-  // under the cursor, each tab needs to stay the same size. When defined,
-  // this specifies that size.
-  absl::optional<TabWidthOverride> tab_width_override_;
-
-  // When in tab closing mode, if we want the next tab to the left to end up
-  // under the cursor, the overall space taken by tabs needs to stay the same.
-  // When defined, this specifies that size.
-  absl::optional<int> tabstrip_width_override_;
 
   // The current widths of tabs. If the space for tabs is not evenly divisible
   // into these widths, the initial tabs in the strip will be 1 px larger.

@@ -6,19 +6,26 @@ import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
 import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
 import 'chrome://resources/polymer/v3_0/paper-spinner/paper-spinner-lite.js';
 import 'chrome://resources/cr_elements/icons.m.js';
-import './signin_shared_css.js';
-import './signin_vars_css.js';
+import './signin_shared.css.js';
+import './signin_vars.css.js';
 import './strings.m.js';
 
+import {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
 import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
-import {WebUIListenerBehavior} from 'chrome://resources/js/web_ui_listener_behavior.m.js';
-import {afterNextRender, html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {WebUIListenerMixin} from 'chrome://resources/js/web_ui_listener_mixin.js';
+import {afterNextRender, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
+import {getTemplate} from './dice_web_signin_intercept_app.html.js';
 import {DiceWebSigninInterceptBrowserProxy, DiceWebSigninInterceptBrowserProxyImpl, InterceptionParameters} from './dice_web_signin_intercept_browser_proxy.js';
 
-const DiceWebSigninInterceptAppElementBase =
-    mixinBehaviors([WebUIListenerBehavior], PolymerElement) as
-    {new (): PolymerElement & WebUIListenerBehavior};
+const DiceWebSigninInterceptAppElementBase = WebUIListenerMixin(PolymerElement);
+
+export interface DiceWebSigninInterceptAppElement {
+  $: {
+    cancelButton: CrButtonElement,
+    acceptButton: CrButtonElement,
+  };
+}
 
 export class DiceWebSigninInterceptAppElement extends
     DiceWebSigninInterceptAppElementBase {
@@ -27,7 +34,7 @@ export class DiceWebSigninInterceptAppElement extends
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
   }
 
   static get properties() {
@@ -58,7 +65,7 @@ export class DiceWebSigninInterceptAppElement extends
       DiceWebSigninInterceptBrowserProxy =
           DiceWebSigninInterceptBrowserProxyImpl.getInstance();
 
-  connectedCallback() {
+  override connectedCallback() {
     super.connectedCallback();
 
     this.addWebUIListener(
@@ -101,9 +108,18 @@ export class DiceWebSigninInterceptAppElement extends
   private handleParametersChanged_(parameters: InterceptionParameters) {
     this.interceptionParameters_ = parameters;
     this.style.setProperty(
-        '--header-background-color', parameters.headerBackgroundColor);
+        '--intercepted-profile-color', parameters.interceptedProfileColor);
+    this.style.setProperty(
+        '--primary-profile-color', parameters.primaryProfileColor);
     this.style.setProperty('--header-text-color', parameters.headerTextColor);
     this.notifyPath('interceptionParameters_.interceptedAccount.isManaged');
+    this.notifyPath('interceptionParameters_.primaryAccount.isManaged');
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'dice-web-signin-intercept-app': DiceWebSigninInterceptAppElement;
   }
 }
 

@@ -7,7 +7,6 @@
 #include <memory>
 #include <string>
 
-#include "base/strings/utf_string_conversions.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
 #include "chromeos/crosapi/mojom/message_center.mojom-test-utils.h"
@@ -28,7 +27,6 @@
 #include "ui/message_center/public/cpp/notifier_id.h"
 #include "url/gurl.h"
 
-using base::ASCIIToUTF16;
 using gfx::test::AreBitmapsEqual;
 using gfx::test::AreImagesEqual;
 
@@ -40,7 +38,7 @@ std::unique_ptr<message_center::Notification> CreateNotificationWithId(
     const std::string& id) {
   return std::make_unique<message_center::Notification>(
       message_center::NOTIFICATION_TYPE_SIMPLE, id, u"title", u"message",
-      /*icon=*/gfx::Image(),
+      /*icon=*/ui::ImageModel(),
       /*display_source=*/std::u16string(), GURL(), message_center::NotifierId(),
       message_center::RichNotificationData(), /*delegate=*/nullptr);
 }
@@ -160,7 +158,8 @@ TEST_F(MessageCenterAshTest, SerializationSimple) {
 
   EXPECT_TRUE(
       AreBitmapsEqual(test_badge, ui_notification->small_image().AsBitmap()));
-  EXPECT_TRUE(AreBitmapsEqual(test_icon, ui_notification->icon().AsBitmap()));
+  EXPECT_TRUE(AreBitmapsEqual(
+      test_icon, *ui_notification->icon().Rasterize(nullptr).bitmap()));
 
   ASSERT_EQ(2u, ui_notification->buttons().size());
   EXPECT_EQ(u"button1", ui_notification->buttons()[0].title);
@@ -296,6 +295,45 @@ TEST_F(MessageCenterAshTest, SerializationProgress) {
   EXPECT_EQ(100, ui_notification->progress());
   // Status was updated.
   EXPECT_EQ(u"complete", ui_notification->progress_status());
+}
+
+// Regression test for https://crbug.com/1270544.
+TEST_F(MessageCenterAshTest, DisplayNotificationCanUpdateWithoutClosing) {
+  // Display a progress notification.
+  auto mojo_notification = mojom::Notification::New();
+  mojo_notification->type = mojom::NotificationType::kProgress;
+  mojo_notification->id = "test_id";
+  mojo_notification->progress = 55;
+
+  auto mojo_delegate1 = std::make_unique<MojoDelegate>();
+  message_center_remote_->DisplayNotification(
+      std::move(mojo_notification),
+      mojo_delegate1->receiver_.BindNewPipeAndPassRemote());
+  message_center_remote_.FlushForTesting();
+
+  // Update the progress by creating a new notification with the same ID.
+  mojo_notification = mojom::Notification::New();
+  mojo_notification->type = mojom::NotificationType::kProgress;
+  mojo_notification->id = "test_id";
+  mojo_notification->progress = 66;
+
+  auto mojo_delegate2 = std::make_unique<MojoDelegate>();
+  message_center_remote_->DisplayNotification(
+      std::move(mojo_notification),
+      mojo_delegate2->receiver_.BindNewPipeAndPassRemote());
+  message_center_remote_.FlushForTesting();
+
+  // Destroy the first delegate, which destroys its mojo receiver. This
+  // simulates how Lacros updates notifications.
+  mojo_delegate1.reset();
+  message_center_remote_.FlushForTesting();
+
+  // Notification is still visible and has updated progress.
+  message_center::Notification* ui_notification =
+      message_center::MessageCenter::Get()->FindVisibleNotificationById(
+          "test_id");
+  ASSERT_TRUE(ui_notification);
+  EXPECT_EQ(66, ui_notification->progress());
 }
 
 TEST_F(MessageCenterAshTest, UserActions) {

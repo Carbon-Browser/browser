@@ -11,6 +11,8 @@
 #include <string>
 #include <utility>
 
+#include "ash/components/tpm/install_attributes.h"
+#include "ash/components/tpm/tpm_token_loader.h"
 #include "ash/constants/ash_switches.h"
 #include "base/bind.h"
 #include "base/callback.h"
@@ -20,7 +22,6 @@
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_functions.h"
-#include "base/task/post_task.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/thread_checker.h"
 #include "chrome/browser/ash/login/session/user_session_manager.h"
@@ -32,8 +33,6 @@
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "chromeos/tpm/install_attributes.h"
-#include "chromeos/tpm/tpm_token_loader.h"
 #include "components/ownership/owner_key_util.h"
 #include "components/prefs/pref_service.h"
 #include "components/user_manager/user.h"
@@ -183,6 +182,13 @@ void DoesPrivateKeyExistAsync(
       std::move(callback));
 }
 
+void OnTPMTokenReadyOnIOThread(
+    scoped_refptr<base::SequencedTaskRunner> original_task_runner,
+    base::OnceClosure ready_callback,
+    bool /*is_tpm_token_enabled*/) {
+  original_task_runner->PostTask(FROM_HERE, std::move(ready_callback));
+}
+
 }  // namespace
 
 OwnerSettingsServiceAsh::ManagementSettings::ManagementSettings() = default;
@@ -196,18 +202,8 @@ OwnerSettingsServiceAsh::OwnerSettingsServiceAsh(
     : ownership::OwnerSettingsService(owner_key_util),
       device_settings_service_(device_settings_service),
       profile_(profile) {
-  if (chromeos::TPMTokenLoader::IsInitialized()) {
-    chromeos::TPMTokenLoader::TPMTokenStatus tpm_token_status =
-        chromeos::TPMTokenLoader::Get()->IsTPMTokenEnabled(
-            base::BindOnce(&OwnerSettingsServiceAsh::OnTPMTokenReady,
-                           weak_factory_.GetWeakPtr()));
-    waiting_for_tpm_token_ =
-        tpm_token_status ==
-        chromeos::TPMTokenLoader::TPM_TOKEN_STATUS_UNDETERMINED;
-  }
-
-  if (chromeos::SessionManagerClient::Get())
-    chromeos::SessionManagerClient::Get()->AddObserver(this);
+  if (SessionManagerClient::Get())
+    SessionManagerClient::Get()->AddObserver(this);
 
   if (device_settings_service_)
     device_settings_service_->AddObserver(this);
@@ -224,6 +220,16 @@ OwnerSettingsServiceAsh::OwnerSettingsServiceAsh(
   // The ProfileManager may be null in unit tests.
   if (g_browser_process->profile_manager())
     g_browser_process->profile_manager()->AddObserver(this);
+
+  auto ready_callback = base::BindOnce(
+      &OwnerSettingsServiceAsh::OnTPMTokenReady, weak_factory_.GetWeakPtr());
+  waiting_for_tpm_token_ = true;
+  content::GetIOThreadTaskRunner({})->PostTask(
+      FROM_HERE,
+      base::BindOnce(&crypto::IsTPMTokenEnabled,
+                     base::BindOnce(OnTPMTokenReadyOnIOThread,
+                                    base::SequencedTaskRunnerHandle::Get(),
+                                    std::move(ready_callback))));
 }
 
 OwnerSettingsServiceAsh::~OwnerSettingsServiceAsh() {
@@ -236,8 +242,8 @@ OwnerSettingsServiceAsh::~OwnerSettingsServiceAsh() {
   if (device_settings_service_)
     device_settings_service_->RemoveObserver(this);
 
-  if (chromeos::SessionManagerClient::Get())
-    chromeos::SessionManagerClient::Get()->RemoveObserver(this);
+  if (SessionManagerClient::Get())
+    SessionManagerClient::Get()->RemoveObserver(this);
 }
 
 OwnerSettingsServiceAsh* OwnerSettingsServiceAsh::FromWebUI(
@@ -250,7 +256,7 @@ OwnerSettingsServiceAsh* OwnerSettingsServiceAsh::FromWebUI(
   return OwnerSettingsServiceAshFactory::GetForBrowserContext(profile);
 }
 
-void OwnerSettingsServiceAsh::OnTPMTokenReady(bool /* tpm_token_enabled */) {
+void OwnerSettingsServiceAsh::OnTPMTokenReady() {
   DCHECK(thread_checker_.CalledOnValidThread());
   waiting_for_tpm_token_ = false;
 
@@ -272,14 +278,14 @@ bool OwnerSettingsServiceAsh::HasPendingChanges() const {
 }
 
 bool OwnerSettingsServiceAsh::IsOwner() {
-  if (chromeos::InstallAttributes::Get()->IsEnterpriseManaged()) {
+  if (InstallAttributes::Get()->IsEnterpriseManaged()) {
     return false;
   }
   return OwnerSettingsService::IsOwner();
 }
 
 void OwnerSettingsServiceAsh::IsOwnerAsync(IsOwnerCallback callback) {
-  if (chromeos::InstallAttributes::Get()->IsEnterpriseManaged()) {
+  if (InstallAttributes::Get()->IsEnterpriseManaged()) {
     base::ThreadTaskRunnerHandle::Get()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), false));
     return;
@@ -488,7 +494,7 @@ void OwnerSettingsServiceAsh::UpdateDeviceSettings(
         settings.mutable_device_local_accounts();
     device_local_accounts->clear_account();
     if (value.is_list()) {
-      for (const auto& entry : value.GetList()) {
+      for (const auto& entry : value.GetListDeprecated()) {
         const base::DictionaryValue* entry_dict = nullptr;
         if (entry.GetAsDictionary(&entry_dict)) {
           em::DeviceLocalAccountInfoProto* account =
@@ -583,7 +589,7 @@ void OwnerSettingsServiceAsh::UpdateDeviceSettings(
     }
     DCHECK(list);
     list->Clear();
-    for (const auto& user : value.GetList()) {
+    for (const auto& user : value.GetListDeprecated()) {
       if (user.is_string()) {
         list->Add(std::string(user.GetString()));
       }
@@ -608,7 +614,7 @@ void OwnerSettingsServiceAsh::UpdateDeviceSettings(
     em::FeatureFlagsProto* feature_flags = settings.mutable_feature_flags();
     feature_flags->Clear();
     if (value.is_list()) {
-      for (const auto& flag : value.GetList()) {
+      for (const auto& flag : value.GetListDeprecated()) {
         if (flag.is_string())
           feature_flags->add_feature_flags(flag.GetString());
       }
@@ -639,6 +645,13 @@ void OwnerSettingsServiceAsh::UpdateDeviceSettings(
     } else {
       NOTREACHED();
     }
+  } else if (path == kRevenEnableDeviceHWDataUsage) {
+    em::RevenDeviceHWDataUsageEnabledProto* hw_data_usage =
+        settings.mutable_hardware_data_usage_enabled();
+    if (value.is_bool())
+      hw_data_usage->set_hardware_data_usage_enabled(value.GetBool());
+    else
+      NOTREACHED();
   } else {
     // The remaining settings don't support Set(), since they are not
     // intended to be customizable by the user:
@@ -663,8 +676,10 @@ void OwnerSettingsServiceAsh::UpdateDeviceSettings(
     //   kReportDeviceNetworkInterfaces
     //   kReportDeviceNetworkConfiguration
     //   kReportDeviceNetworkStatus
+    //   kReportDevicePeripherals
     //   kReportDevicePowerStatus
     //   kReportDeviceStorageStatus
+    //   kReportDeviceSecurityStatus
     //   kReportDeviceSessionStatus
     //   kReportDeviceGraphicsStatus
     //   kReportDeviceCrashReportInfoStatus
@@ -675,11 +690,15 @@ void OwnerSettingsServiceAsh::UpdateDeviceSettings(
     //   kReportDeviceSystemInfo
     //   kReportDevicePrintJobs
     //   kReportDeviceLoginLogout
+    //   kReportCRDSessions
     //   kServiceAccountIdentity
     //   kSystemTimezonePolicy
     //   kVariationsRestrictParameter
     //   kDeviceDisabled
     //   kDeviceDisabledMessage
+    //   ReportDeviceNetworkTelemetryCollectionRateMs
+    //   ReportDeviceNetworkTelemetryEventCheckingRateMs
+    //   ReportDeviceAudioStatusCheckingRateMs
 
     LOG(FATAL) << "Device setting " << path << " is read-only.";
   }

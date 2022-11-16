@@ -11,7 +11,6 @@
 #include <string>
 
 #include "base/mac/scoped_nsobject.h"
-#include "base/macros.h"
 #include "base/time/time.h"
 #include "device/bluetooth/bluetooth_device_mac.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -27,6 +26,11 @@ class BluetoothClassicDeviceMac : public BluetoothDeviceMac {
  public:
   explicit BluetoothClassicDeviceMac(BluetoothAdapterMac* adapter,
                                      IOBluetoothDevice* device);
+
+  BluetoothClassicDeviceMac(const BluetoothClassicDeviceMac&) = delete;
+  BluetoothClassicDeviceMac& operator=(const BluetoothClassicDeviceMac&) =
+      delete;
+
   ~BluetoothClassicDeviceMac() override;
 
   // BluetoothDevice override
@@ -78,6 +82,7 @@ class BluetoothClassicDeviceMac : public BluetoothDeviceMac {
   // Returns the Bluetooth address for the |device|. The returned address has a
   // normalized format (see below).
   static std::string GetDeviceAddress(IOBluetoothDevice* device);
+  bool IsLowEnergyDevice() override;
 
  protected:
   // BluetoothDevice override
@@ -94,8 +99,6 @@ class BluetoothClassicDeviceMac : public BluetoothDeviceMac {
       BluetoothHCITransmitPowerLevelType power_level_type) const;
 
   base::scoped_nsobject<IOBluetoothDevice> device_;
-
-  DISALLOW_COPY_AND_ASSIGN(BluetoothClassicDeviceMac);
 };
 
 }  // namespace device

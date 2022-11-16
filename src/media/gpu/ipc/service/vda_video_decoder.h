@@ -11,11 +11,10 @@
 #include <memory>
 
 #include "base/callback_forward.h"
-#include "base/containers/mru_cache.h"
-#include "base/macros.h"
+#include "base/containers/lru_cache.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "media/base/media_log.h"
 #include "media/base/video_decoder.h"
@@ -118,7 +117,7 @@ class VdaVideoDecoder : public VideoDecoder,
       const VideoDecodeAccelerator::Capabilities& vda_capabilities);
 
   // media::VideoDecodeAccelerator::Client implementation.
-  void NotifyInitializationComplete(Status status) override;
+  void NotifyInitializationComplete(DecoderStatus status) override;
   void ProvidePictureBuffers(uint32_t requested_num_of_buffers,
                              VideoPixelFormat format,
                              uint32_t textures_per_buffer,
@@ -137,7 +136,7 @@ class VdaVideoDecoder : public VideoDecoder,
   static void CleanupOnGpuThread(std::unique_ptr<VdaVideoDecoder>);
   void InitializeOnGpuThread();
   void ReinitializeOnGpuThread();
-  void InitializeDone(Status status);
+  void InitializeDone(DecoderStatus status);
   void DecodeOnGpuThread(scoped_refptr<DecoderBuffer> buffer,
                          int32_t bitstream_id);
   void DismissPictureBufferOnParentThread(int32_t picture_buffer_id);
@@ -183,7 +182,7 @@ class VdaVideoDecoder : public VideoDecoder,
   std::map<int32_t, DecodeCB> decode_cbs_;
   // Records timestamps so that they can be mapped to output pictures. Must be
   // large enough to account for any amount of frame reordering.
-  base::MRUCache<int32_t, base::TimeDelta> timestamps_;
+  base::LRUCache<int32_t, base::TimeDelta> timestamps_;
 
   //
   // Shared state.

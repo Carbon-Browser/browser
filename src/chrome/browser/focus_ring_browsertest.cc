@@ -32,7 +32,7 @@
 // 6. Save the image into your chromium checkout in
 //    chrome/test/data/focus_rings.
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 // Mac has subtle rendering differences between different versions of MacOS, so
 // we account for them with these fuzzy pixel comparators. These two comparators
 // are used in different tests in order to keep the matching somewhat strict.
@@ -79,10 +79,12 @@ class FocusRingBrowserTest : public InProcessBrowserTest {
     ASSERT_TRUE(base::PathService::Get(chrome::DIR_TEST_DATA, &dir_test_data));
 
     std::string platform_suffix;
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
     platform_suffix = "_mac";
-#elif defined(OS_WIN)
+#elif BUILDFLAG(IS_WIN)
     platform_suffix = "_win";
+#elif BUILDFLAG(IS_LINUX)
+    platform_suffix = "_linux";
 #elif BUILDFLAG(IS_CHROMEOS_ASH)
     platform_suffix = "_chromeos";
 #endif
@@ -110,13 +112,13 @@ class FocusRingBrowserTest : public InProcessBrowserTest {
 };
 
 // TODO(crbug.com/1222757): Flaky on Mac.
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 #define MAYBE_Checkbox DISABLED_Checkbox
 #else
 #define MAYBE_Checkbox Checkbox
 #endif
 IN_PROC_BROWSER_TEST_F(FocusRingBrowserTest, MAYBE_Checkbox) {
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   cc::FuzzyPixelComparator comparator = mac_strict_comparator;
 #else
   cc::ExactPixelComparator comparator(/*discard_alpha=*/true);
@@ -129,13 +131,13 @@ IN_PROC_BROWSER_TEST_F(FocusRingBrowserTest, MAYBE_Checkbox) {
 }
 
 // TODO(crbug.com/1222757): Flaky on Mac.
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 #define MAYBE_Radio DISABLED_Radio
 #else
 #define MAYBE_Radio Radio
 #endif
 IN_PROC_BROWSER_TEST_F(FocusRingBrowserTest, MAYBE_Radio) {
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   cc::FuzzyPixelComparator comparator = mac_loose_comparator;
 #else
   cc::ExactPixelComparator comparator(/*discard_alpha=*/true);
@@ -148,13 +150,13 @@ IN_PROC_BROWSER_TEST_F(FocusRingBrowserTest, MAYBE_Radio) {
 }
 
 // TODO(crbug.com/1222757): Flaky on Mac.
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 #define MAYBE_Button DISABLED_Button
 #else
 #define MAYBE_Button Button
 #endif
 IN_PROC_BROWSER_TEST_F(FocusRingBrowserTest, MAYBE_Button) {
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   cc::FuzzyPixelComparator comparator = mac_strict_comparator;
 #else
   cc::ExactPixelComparator comparator(/*discard_alpha=*/true);
@@ -169,13 +171,13 @@ IN_PROC_BROWSER_TEST_F(FocusRingBrowserTest, MAYBE_Button) {
 }
 
 // TODO(crbug.com/1222757): Flaky on Mac.
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 #define MAYBE_Anchor DISABLED_Anchor
 #else
 #define MAYBE_Anchor Anchor
 #endif
 IN_PROC_BROWSER_TEST_F(FocusRingBrowserTest, MAYBE_Anchor) {
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   cc::FuzzyPixelComparator comparator = mac_strict_comparator;
 #else
   cc::ExactPixelComparator comparator(/*discard_alpha=*/true);
@@ -193,13 +195,13 @@ IN_PROC_BROWSER_TEST_F(FocusRingBrowserTest, MAYBE_Anchor) {
 }
 
 // TODO(crbug.com/1222757): Flaky on Mac.
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 #define MAYBE_DarkModeButton DISABLED_DarkModeButton
 #else
 #define MAYBE_DarkModeButton DarkModeButton
 #endif
 IN_PROC_BROWSER_TEST_F(FocusRingBrowserTest, MAYBE_DarkModeButton) {
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   if (!MacOSVersionSupportsDarkMode())
     return;
   cc::FuzzyPixelComparator comparator = mac_strict_comparator;

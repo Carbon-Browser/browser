@@ -35,7 +35,7 @@
 #include "third_party/blink/renderer/core/html/media/html_media_element.h"
 #include "third_party/blink/renderer/core/html/track/loadable_text_track.h"
 #include "third_party/blink/renderer/core/html_names.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 
 #define TRACK_LOG_LEVEL 3
 
@@ -146,8 +146,8 @@ void HTMLTrackElement::ScheduleLoad() {
 
   // 2. If the text track's text track mode is not set to one of hidden or
   // showing, abort these steps.
-  if (EnsureTrack()->mode() != TextTrack::HiddenKeyword() &&
-      EnsureTrack()->mode() != TextTrack::ShowingKeyword())
+  if (EnsureTrack()->mode() != TextTrackMode::kHidden &&
+      EnsureTrack()->mode() != TextTrackMode::kShowing)
     return;
 
   // 3. If the text track's track element does not have a media element as a

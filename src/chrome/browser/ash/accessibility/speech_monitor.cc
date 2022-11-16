@@ -19,6 +19,7 @@ constexpr int kPrintExpectationDelayMs = 3000;
 }  // namespace
 
 SpeechMonitor::SpeechMonitor() {
+  content::TtsController::SkipAddNetworkChangeObserverForTests(true);
   content::TtsController::GetInstance()->SetTtsPlatform(this);
 }
 
@@ -99,9 +100,10 @@ void SpeechMonitor::SetError(const std::string& error) {
 
 void SpeechMonitor::Shutdown() {}
 
-bool SpeechMonitor::PreferEngineDelegateVoices() {
-  return false;
-}
+void SpeechMonitor::FinalizeVoiceOrdering(
+    std::vector<content::VoiceData>& voices) {}
+
+void SpeechMonitor::RefreshVoices() {}
 
 double SpeechMonitor::CalculateUtteranceDelayMS() {
   std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
@@ -241,7 +243,7 @@ void SpeechMonitor::MaybeContinueReplay() {
         FROM_HERE,
         base::BindOnce(&SpeechMonitor::MaybePrintExpectations,
                        weak_factory_.GetWeakPtr()),
-        base::TimeDelta::FromMilliseconds(kPrintExpectationDelayMs));
+        base::Milliseconds(kPrintExpectationDelayMs));
 
     if (!replay_loop_runner_.get()) {
       replay_loop_runner_ = new content::MessageLoopRunner();

@@ -11,16 +11,15 @@
 
 #include "base/bind.h"
 #include "base/callback.h"
-#include "base/cxx17_backports.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/logging.h"  // For CHECK macros.
-#include "base/single_thread_task_runner.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/system/sys_info.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
 #include "build/build_config.h"
@@ -45,7 +44,7 @@
 #include "services/network/transitional_url_loader_factory_owner.h"
 #include "url/url_util.h"
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 #include "base/mac/scoped_nsautorelease_pool.h"
 #endif
 
@@ -86,6 +85,9 @@ class WrapperURLLoaderFactory : public network::mojom::URLLoaderFactory {
       : url_loader_factory_(std::move(url_loader_factory)),
         network_task_runner_(base::SequencedTaskRunnerHandle::Get()) {}
 
+  WrapperURLLoaderFactory(const WrapperURLLoaderFactory&) = delete;
+  WrapperURLLoaderFactory& operator=(const WrapperURLLoaderFactory&) = delete;
+
   void CreateLoaderAndStart(
       mojo::PendingReceiver<network::mojom::URLLoader> loader,
       int32_t request_id,
@@ -117,8 +119,6 @@ class WrapperURLLoaderFactory : public network::mojom::URLLoaderFactory {
 
   // Runner for URLRequestContextGetter network thread.
   scoped_refptr<base::SequencedTaskRunner> network_task_runner_;
-
-  DISALLOW_COPY_AND_ASSIGN(WrapperURLLoaderFactory);
 };
 
 CommandMapping::CommandMapping(HttpMethod method,
@@ -154,7 +154,7 @@ HttpHandler::HttpHandler(
       io_task_runner_(io_task_runner),
       url_base_(url_base),
       received_shutdown_(false) {
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   base::mac::ScopedNSAutoreleasePool autorelease_pool;
 #endif
   context_getter_ = new URLRequestContextGetter(io_task_runner_);
@@ -263,6 +263,20 @@ HttpHandler::HttpHandler(
           kGet, "session/:sessionId/element/active",
           WrapToCommand("GetActiveElement",
                         base::BindRepeating(&ExecuteGetActiveElement))),
+      CommandMapping(
+          kGet, "session/:sessionId/element/:id/shadow",
+          WrapToCommand("GetElementShadowRoot",
+                        base::BindRepeating(&ExecuteGetElementShadowRoot))),
+      CommandMapping(
+          kPost, "session/:sessionId/shadow/:id/element",
+          WrapToCommand(
+              "FindChildElementFromShadowRoot",
+              base::BindRepeating(&ExecuteFindChildElementFromShadowRoot, 50))),
+      CommandMapping(
+          kPost, "session/:sessionId/shadow/:id/elements",
+          WrapToCommand("FindChildElementsFromShadowRoot",
+                        base::BindRepeating(
+                            &ExecuteFindChildElementsFromShadowRoot, 50))),
       CommandMapping(
           kPost, "session/:sessionId/element",
           WrapToCommand("FindElement",
@@ -842,6 +856,13 @@ HttpHandler::HttpHandler(
                             &ExecuteWebAuthnCommand,
                             base::BindRepeating(&ExecuteSetUserVerified)))),
 
+      // Extensions for Secure Payment Confirmation API:
+      // https://w3c.github.io/secure-payment-confirmation/#sctn-automation
+      CommandMapping(
+          kPost, "session/:sessionId/secure-payment-confirmation/set-mode",
+          WrapToCommand("SetSPCTransactionMode",
+                        base::BindRepeating(&ExecuteSetSPCTransactionMode))),
+
       // Extension for Permissions Standard Automation "set permission" command:
       // https://w3c.github.io/permissions/#set-permission-command
       CommandMapping(kPost, "session/:sessionId/permissions",
@@ -933,6 +954,10 @@ HttpHandler::HttpHandler(
           WrapToCommand("SetSinkToUse",
                         base::BindRepeating(&ExecuteSetSinkToUse))),
       VendorPrefixedCommandMapping(
+          kPost, "session/:sessionId/%s/cast/start_desktop_mirroring",
+          WrapToCommand("StartDesktopMirroring",
+                        base::BindRepeating(&ExecuteStartDesktopMirroring))),
+      VendorPrefixedCommandMapping(
           kPost, "session/:sessionId/%s/cast/start_tab_mirroring",
           WrapToCommand("StartTabMirroring",
                         base::BindRepeating(&ExecuteStartTabMirroring))),
@@ -974,7 +999,7 @@ HttpHandler::HttpHandler(
                         base::BindRepeating(&ExecuteSendCommandFromWebSocket))),
   };
   command_map_ =
-      std::make_unique<CommandMap>(commands, commands + base::size(commands));
+      std::make_unique<CommandMap>(commands, commands + std::size(commands));
 }
 
 HttpHandler::~HttpHandler() {}
@@ -1282,6 +1307,14 @@ HttpHandler::PrepareStandardResponse(
       response = std::make_unique<net::HttpServerResponseInfo>(
           net::HTTP_INTERNAL_SERVER_ERROR);
       break;
+    case kNoSuchShadowRoot:
+      response =
+          std::make_unique<net::HttpServerResponseInfo>(net::HTTP_NOT_FOUND);
+      break;
+    case kDetachedShadowRoot:
+      response =
+          std::make_unique<net::HttpServerResponseInfo>(net::HTTP_NOT_FOUND);
+      break;
 
     default:
       DCHECK(false);
@@ -1295,11 +1328,11 @@ HttpHandler::PrepareStandardResponse(
 
   base::DictionaryValue body_params;
   if (status.IsError()){
-    std::unique_ptr<base::DictionaryValue> inner_params(
-        new base::DictionaryValue());
-    inner_params->SetString("error", StatusCodeToString(status.code()));
-    inner_params->SetString("message", status.message());
-    inner_params->SetString("stacktrace", status.stack_trace());
+    base::Value* inner_params =
+        body_params.SetKey("value", base::Value(base::Value::Type::DICTIONARY));
+    inner_params->SetStringKey("error", StatusCodeToString(status.code()));
+    inner_params->SetStringKey("message", status.message());
+    inner_params->SetStringKey("stacktrace", status.stack_trace());
     // According to
     // https://www.w3.org/TR/2018/REC-webdriver1-20180605/#dfn-annotated-unexpected-alert-open-error
     // error UnexpectedAlertOpen should contain 'data.text' with alert text
@@ -1308,18 +1341,18 @@ HttpHandler::PrepareStandardResponse(
       auto first = message.find("{");
       auto last = message.find_last_of("}");
       if (first == std::string::npos || last == std::string::npos) {
-        inner_params->SetString("data.text", "");
+        inner_params->SetStringPath("data.text", "");
       } else {
         std::string alertText = message.substr(first, last - first);
         auto colon = alertText.find(":");
         if (colon != std::string::npos && alertText.size() > (colon + 2))
           alertText = alertText.substr(colon + 2);
-        inner_params->SetString("data.text", alertText);
+        inner_params->SetStringPath("data.text", alertText);
       }
     }
-    body_params.SetDictionary("value", std::move(inner_params));
   } else {
-    body_params.Set("value", std::move(value));
+    body_params.SetKey("value",
+                       base::Value::FromUniquePtrValue(std::move(value)));
   }
 
   std::string body;

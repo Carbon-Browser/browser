@@ -5,7 +5,7 @@
 /**
  * @typedef {{
  *   downloadButtonClick: function(),
- *   reloadButtonClick: function(),
+ *   reloadButtonClick: function(string),
  *   detailsButtonClick: function(),
  *   diagnoseErrorsButtonClick: function(),
  *   trackEasterEgg: function(),
@@ -95,7 +95,13 @@ function updateIconClass(newClass) {
 // between implementing these in trunk chromium and implementing them in iOS.
 function reloadButtonClick(url) {
   if (window.errorPageController) {
+    // <if expr="is_ios">
+    errorPageController.reloadButtonClick(url);
+    // </if>
+
+    // <if expr="not is_ios">
     errorPageController.reloadButtonClick();
+    // </if>
   } else {
     window.location = url;
   }
@@ -123,7 +129,9 @@ function detailsButtonClick() {
 }
 
 let primaryControlOnLeft = true;
-// <if expr="is_macosx or is_ios or is_linux or is_android">
+// clang-format off
+// <if expr="is_macosx or is_ios or is_linux or chromeos_ash or chromeos_lacros or is_android">
+// clang-format on
 primaryControlOnLeft = false;
 // </if>
 

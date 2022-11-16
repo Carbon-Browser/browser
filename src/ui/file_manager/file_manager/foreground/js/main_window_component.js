@@ -142,10 +142,19 @@ export class MainWindowComponent {
         'focus', this.onFileListFocus_.bind(this));
     ui.listContainer.grid.addEventListener(
         'focus', this.onFileListFocus_.bind(this));
-    ui.locationLine.addEventListener(
-        'pathclick', this.onBreadcrumbClick_.bind(this));
+    if (!util.isFilesAppExperimental()) {
+      ui.breadcrumbController.addEventListener(
+          'pathclick', this.onBreadcrumbClick_.bind(this));
+    }
+    /**
+     * We are binding both click/keyup event here because "click" event will
+     * be triggered multiple times if the Enter/Space key is being pressed
+     * without releasing (because the focus is always on the button).
+     */
     ui.toggleViewButton.addEventListener(
         'click', this.onToggleViewButtonClick_.bind(this));
+    ui.toggleViewButton.addEventListener(
+        'keyup', this.onToggleViewButtonClick_.bind(this));
     directoryModel.addEventListener(
         'directory-changed', this.onDirectoryChanged_.bind(this));
     volumeManager.addEventListener(
@@ -268,13 +277,20 @@ export class MainWindowComponent {
    */
   acceptSelection_() {
     if (this.dialogType_ === DialogType.FULL_PAGE) {
+      // Files within the trash root should not have default tasks. They should
+      // be restored first.
+      if (this.directoryModel_.getCurrentRootType() ===
+          VolumeManagerCommon.RootType.TRASH) {
+        this.ui_.alertDialog.show(str('OPEN_TRASHED_FILES_ERROR'), null, null);
+        return false;
+      }
       this.taskController_.getFileTasks()
           .then(tasks => {
             tasks.executeDefault();
           })
           .catch(error => {
             if (error) {
-              console.error(error.stack || error);
+              console.warn(error.stack || error);
             }
           });
       return true;
@@ -289,11 +305,29 @@ export class MainWindowComponent {
   }
 
   /**
-   * Handles click event on the toggle-view button.
-   * @param {Event} event Click event.
+   * Handles click/keyup event on the toggle-view button.
+   * @param {Event} event Click or keyup event.
    * @private
    */
   onToggleViewButtonClick_(event) {
+    /**
+     * This callback can be triggered by both mouse click and Enter/Space key,
+     * so we explicitly check if the "click" event is triggered by keyboard
+     * or not, if so, do nothing because this callback will be triggered
+     * again by "keyup" event when users release the Enter/Space key.
+     */
+    if (event.type === 'click') {
+      const pointerEvent = /** @type {PointerEvent} */ (event);
+      if (pointerEvent.detail === 0) {  // Click is triggered by keyboard.
+        return;
+      }
+    }
+    if (event.type === 'keyup') {
+      const keyboardEvent = /** @type {KeyboardEvent} */ (event);
+      if (keyboardEvent.code !== 'Space' && keyboardEvent.code !== 'Enter') {
+        return;
+      }
+    }
     const listType = this.ui_.listContainer.currentListType ===
             ListContainer.ListType.DETAIL ?
         ListContainer.ListType.THUMBNAIL :
@@ -305,7 +339,10 @@ export class MainWindowComponent {
     this.ui_.speakA11yMessage(str(msgId));
     this.appStateController_.saveViewOptions();
 
-    this.ui_.listContainer.focus();
+    // The aria-label of toggleViewButton has been updated, we need to
+    // explicitly show the tooltip.
+    this.ui_.filesTooltip.updateTooltipText(
+        /** @type {!HTMLElement} */ (this.ui_.toggleViewButton));
     metrics.recordEnum(
         'ToggleFileListType', listType, ListContainer.ListTypesForUMA);
   }
@@ -380,7 +417,8 @@ export class MainWindowComponent {
     switch (util.getKeyModifiers(event) + event.key) {
       case 'Backspace':  // Backspace => Up one directory.
         event.preventDefault();
-        const components = this.ui_.locationLine.getCurrentPathComponents();
+        const components =
+            this.ui_.breadcrumbController.getCurrentPathComponents();
         if (components.length < 2) {
           break;
         }
@@ -445,23 +483,13 @@ export class MainWindowComponent {
         null;
 
     // Update unformatted volume status.
-    if (newVolumeInfo && newVolumeInfo.error) {
-      this.ui_.element.setAttribute('unformatted', '');
-
-      if (newVolumeInfo.error ===
-          VolumeManagerCommon.VolumeError.UNSUPPORTED_FILESYSTEM) {
-        this.ui_.formatPanelError.textContent =
-            str('UNSUPPORTED_FILESYSTEM_WARNING');
-      } else {
-        this.ui_.formatPanelError.textContent =
-            str('UNKNOWN_FILESYSTEM_WARNING');
-      }
-    } else {
-      this.ui_.element.removeAttribute('unformatted');
-    }
+    const unformatted = !!(newVolumeInfo && newVolumeInfo.error);
+    this.ui_.element.toggleAttribute('unformatted', /*force=*/ unformatted);
 
     if (event.newDirEntry) {
-      this.ui_.locationLine.show(event.newDirEntry);
+      if (!util.isFilesAppExperimental()) {
+        this.ui_.breadcrumbController.show(event.newDirEntry);
+      }
       // Updates UI.
       if (this.dialogType_ === DialogType.FULL_PAGE) {
         const locationInfo =
@@ -470,13 +498,15 @@ export class MainWindowComponent {
           const label = util.getEntryLabel(locationInfo, event.newDirEntry);
           document.title = `${str('FILEMANAGER_APP_NAME')} - ${label}`;
         } else {
-          console.error(
+          console.warn(
               'Could not find location info for entry: ' +
               event.newDirEntry.fullPath);
         }
       }
     } else {
-      this.ui_.locationLine.hide();
+      if (!util.isFilesAppExperimental()) {
+        this.ui_.breadcrumbController.hide();
+      }
     }
   }
 

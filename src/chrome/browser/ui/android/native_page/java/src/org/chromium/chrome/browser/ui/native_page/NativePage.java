@@ -71,6 +71,11 @@ public interface NativePage {
     }
 
     /**
+     * Reloads the native page.
+     */
+    default void reload() {}
+
+    /**
      * @return True if the native page needs the toolbar shadow to be drawn.
      */
     boolean needsToolbarShadow();
@@ -88,13 +93,19 @@ public interface NativePage {
     }
 
     /**
+     * Notify the native page that it is about to be navigated back or hidden by a back press.
+     */
+    default void notifyHidingWithBack() {}
+
+    /**
      * Called after a page has been removed from the view hierarchy and will no longer be used.
      */
     void destroy();
 
     @IntDef({NativePageType.NONE, NativePageType.CANDIDATE, NativePageType.NTP,
             NativePageType.BOOKMARKS, NativePageType.RECENT_TABS, NativePageType.DOWNLOADS,
-            NativePageType.HISTORY, NativePageType.EXPLORE, NativePageType.LAUNCHPAD})
+            NativePageType.HISTORY, NativePageType.EXPLORE, NativePageType.LAUNCHPAD,
+            NativePageType.MANAGEMENT})
     @Retention(RetentionPolicy.SOURCE)
     public @interface NativePageType {
         int NONE = 0;
@@ -106,6 +117,7 @@ public interface NativePage {
         int HISTORY = 6;
         int EXPLORE = 7;
         int LAUNCHPAD = 8;
+        int MANAGEMENT = 9;
     }
 
     /**
@@ -162,6 +174,8 @@ public interface NativePage {
             return NativePageType.EXPLORE;
         } else if (UrlConstants.LAUNCHPAD_HOST.equals(host)) {
             return NativePageType.LAUNCHPAD;
+        } else if (UrlConstants.MANAGEMENT_HOST.equals(host)) {
+            return NativePageType.MANAGEMENT;
         } else {
             return NativePageType.NONE;
         }

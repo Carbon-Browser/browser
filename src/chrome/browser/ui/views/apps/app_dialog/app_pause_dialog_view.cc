@@ -19,13 +19,12 @@ AppPauseDialogView* g_app_pause_dialog_view = nullptr;
 }  // namespace
 
 // static
-void apps::AppServiceProxyChromeOs::CreatePauseDialog(
-    apps::mojom::AppType app_type,
+void apps::AppServiceProxy::CreatePauseDialog(
+    apps::AppType app_type,
     const std::string& app_name,
     const gfx::ImageSkia& image,
     const apps::PauseData& pause_data,
-    apps::AppServiceProxyChromeOs::OnPauseDialogClosedCallback
-        closed_callback) {
+    apps::AppServiceProxy::OnPauseDialogClosedCallback closed_callback) {
   views::DialogDelegate::CreateDialogWidget(
       new AppPauseDialogView(app_type, app_name, image, pause_data,
                              std::move(closed_callback)),
@@ -34,12 +33,12 @@ void apps::AppServiceProxyChromeOs::CreatePauseDialog(
 }
 
 AppPauseDialogView::AppPauseDialogView(
-    apps::mojom::AppType app_type,
+    apps::AppType app_type,
     const std::string& app_name,
     const gfx::ImageSkia& image,
     const apps::PauseData& pause_data,
-    apps::AppServiceProxyChromeOs::OnPauseDialogClosedCallback closed_callback)
-    : AppDialogView(image) {
+    apps::AppServiceProxy::OnPauseDialogClosedCallback closed_callback)
+    : AppDialogView(ui::ImageModel::FromImageSkia(image)) {
   SetTitle(l10n_util::GetStringFUTF16(IDS_APP_PAUSE_PROMPT_TITLE,
                                       base::UTF8ToUTF16(app_name)));
 
@@ -47,15 +46,13 @@ AppPauseDialogView::AppPauseDialogView(
 
   const int cutoff = pause_data.minutes == 0 || pause_data.hours == 0 ? 0 : -1;
   std::u16string heading_text = l10n_util::GetStringFUTF16(
-      (app_type == apps::mojom::AppType::kWeb)
-          ? IDS_APP_PAUSE_HEADING_FOR_WEB_APPS
-          : IDS_APP_PAUSE_HEADING,
+      (app_type == apps::AppType::kWeb) ? IDS_APP_PAUSE_HEADING_FOR_WEB_APPS
+                                        : IDS_APP_PAUSE_HEADING,
       base::UTF8ToUTF16(app_name),
       ui::TimeFormat::Detailed(
           ui::TimeFormat::Format::FORMAT_DURATION,
           ui::TimeFormat::Length::LENGTH_LONG, cutoff,
-          base::TimeDelta::FromHours(pause_data.hours) +
-              base::TimeDelta::FromMinutes(pause_data.minutes)));
+          base::Hours(pause_data.hours) + base::Minutes(pause_data.minutes)));
 
   InitializeView(heading_text);
 

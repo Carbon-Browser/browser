@@ -81,7 +81,9 @@ device. Make sure you hit every code path you changed.
 
 Some testing tips:
 *   Use `LOG(ERROR) << "debug print statement"` for debugging. You can find
-    the logs in /var/logs/chrome/ on the ChromeOS device.
+    the logs in /var/logs/chrome/ on the ChromeOS device. You can add a
+    keyword to your print statement to help find your log statements
+    more quickly.
 *   Use GDB for setting breakpoints while debugging.
 
 Think about testing any edge cases that could break your code. Some common edge
@@ -162,6 +164,9 @@ Run `git cl upload`. Some useful options include:
 *   `-r <chromium_username>` will add reviewers.
 *   `-b <bug_number>` automatically populates the bug reference line of the
     commit message. Use `-b None` if there is no relevant crbug.
+*   `-x <bug_number>` automatically populates the bug reference line of the
+    commit message and will automatically mark the bug as closed when the
+    CL is submitted and merged.
 *   `--edit-description` will let you update the commit message. Using square
     brackets in the commit message title, like [hashtag], will add a hashtag to
     your CL. This feature is useful for grouping related CLs together.
@@ -209,8 +214,9 @@ You are expected to wait for all actively participating reviewers to CR+1 the
 change before submitting (CQ+2), even if your CL already has all required owners
 reviews. Other than preventing confusion and mistakes, this expectation exists
 because:
-1. Participating reviewers are [helping you write sustainable code](cr_respect),
-   and letting them sign off is respectful of their efforts.
+1. Participating reviewers are
+   [helping you write sustainable code][sustainable-code], and letting them sign
+   off is respectful of their efforts.
 1. The owners system is not perfect, and sometimes you will need an owner who
    *can* approve the whole change, but will delegate approval of pieces to
    other, more knowledgeable owners.
@@ -276,12 +282,13 @@ first and ask questions later. Gerrit can automatically generate revert CLs.
 
 After your CL is landed, you can use `git rebase-update` or `git cl archive` to
 clean up your local branches. These commands will automatically delete merged
-branches. Mark the associated crbug as "fixed".
+branches. Please mark the associated crbug as "fixed".
 
 [//]: # (the reference link section should be alphabetically sorted)
 [build-instructions]: https://chromium.googlesource.com/chromium/src.git/+/main/docs/#Checking-Out-and-Building
 [chromium-tree]: https://ci.chromium.org/p/chromium/g/main/console
 [contributing]: contributing.md
-[simple-chrome]: https://chromium.googlesource.com/chromiumos/docs/+/HEAD/simple_chrome_workflow.md
-[uploading-a-change-for-review]: contributing.md#Uploading-a-change-for-review
 [respectful-changes]: cl_respect.md
+[simple-chrome]: https://chromium.googlesource.com/chromiumos/docs/+/HEAD/simple_chrome_workflow.md
+[sustainable-code]: cr_respect.md
+[uploading-a-change-for-review]: contributing.md#Uploading-a-change-for-review

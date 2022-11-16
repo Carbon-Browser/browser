@@ -4,6 +4,9 @@
 
 #include "chrome/browser/ash/arc/enterprise/arc_data_snapshotd_delegate.h"
 
+#include "ash/components/arc/arc_prefs.h"
+#include "ash/components/arc/test/arc_util_test_support.h"
+#include "ash/components/arc/test/fake_arc_session.h"
 #include "base/command_line.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
@@ -12,11 +15,8 @@
 #include "chrome/browser/ash/arc/test/test_arc_session_manager.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/test/base/testing_profile.h"
-#include "chromeos/dbus/concierge/concierge_client.h"
+#include "chromeos/ash/components/dbus/concierge/concierge_client.h"
 #include "chromeos/dbus/dbus_thread_manager.h"
-#include "components/arc/arc_prefs.h"
-#include "components/arc/test/arc_util_test_support.h"
-#include "components/arc/test/fake_arc_session.h"
 #include "components/prefs/pref_service.h"
 #include "components/user_manager/scoped_user_manager.h"
 #include "components/user_manager/user_manager.h"
@@ -69,8 +69,8 @@ class ArcDataSnapshotdDelegateTest : public testing::Test {
     ArcSessionManager::EnableCheckAndroidManagementForTesting(false);
 
     chromeos::DBusThreadManager::Initialize();
-    chromeos::ConciergeClient::InitializeFake(/*fake_cicerone_client=*/nullptr);
-    chromeos::SessionManagerClient::InitializeFakeInMemory();
+    ash::ConciergeClient::InitializeFake(/*fake_cicerone_client=*/nullptr);
+    ash::SessionManagerClient::InitializeFakeInMemory();
 
     TestingProfile::Builder profile_builder;
     profile_builder.SetProfileName("user@gmail.com");
@@ -87,8 +87,8 @@ class ArcDataSnapshotdDelegateTest : public testing::Test {
       delete;
 
   ~ArcDataSnapshotdDelegateTest() override {
-    chromeos::SessionManagerClient::Shutdown();
-    chromeos::ConciergeClient::Shutdown();
+    ash::SessionManagerClient::Shutdown();
+    ash::ConciergeClient::Shutdown();
     chromeos::DBusThreadManager::Shutdown();
   }
 

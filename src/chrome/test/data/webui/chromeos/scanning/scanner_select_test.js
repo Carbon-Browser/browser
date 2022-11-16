@@ -48,7 +48,7 @@ export function scannerSelectTest() {
 
     const scannerArr = [
       createScanner(firstScannerId, firstScannerName),
-      createScanner(secondScannerId, secondScannerName)
+      createScanner(secondScannerId, secondScannerName),
     ];
     scannerSelect.scanners = scannerArr;
     flush();
@@ -64,7 +64,7 @@ export function scannerSelectTest() {
   test('scannersSortedAlphabetically', () => {
     const scanners = [
       createScanner(secondScannerId, secondScannerName),
-      createScanner(firstScannerId, firstScannerName)
+      createScanner(firstScannerId, firstScannerName),
     ];
     scannerSelect.scanners = scanners;
     flush();
@@ -79,10 +79,6 @@ export function scannerSelectTest() {
 
   // Verify the last used scanner is selected if available.
   test('selectLastUsedScanner', () => {
-    if (!loadTimeData.getBoolean('scanAppStickySettingsEnabled')) {
-      return;
-    }
-
     const secondScannerIdString = tokenToString(secondScannerId);
     const secondScannerInfo = /** @type {!ScannerInfo} */ ({
       token: secondScannerId,
@@ -106,10 +102,6 @@ export function scannerSelectTest() {
   // Verify the first scanner in the dropdown is selected when the last used
   // scanner is not set.
   test('selectFirtScanner', () => {
-    if (!loadTimeData.getBoolean('scanAppStickySettingsEnabled')) {
-      return;
-    }
-
     const scanners = [
       createScanner(secondScannerId, secondScannerName),
       createScanner(firstScannerId, firstScannerName),

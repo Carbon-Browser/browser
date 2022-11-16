@@ -2,12 +2,12 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// clang-format off
-// #import {TestBrowserProxy} from '../../test_browser_proxy.js';
-// clang-format on
+import {webUIListenerCallback} from 'chrome://resources/js/cr.m.js';
 
-/** @implements {settings.CrostiniBrowserProxy} */
-/* #export */ class TestCrostiniBrowserProxy extends TestBrowserProxy {
+import {TestBrowserProxy} from '../../test_browser_proxy.js';
+
+/** @implements {CrostiniBrowserProxy} */
+export class TestCrostiniBrowserProxy extends TestBrowserProxy {
   constructor() {
     super([
       'requestCrostiniInstallerView',
@@ -33,11 +33,18 @@
       'requestCrostiniInstallerStatus',
       'requestArcAdbSideloadStatus',
       'getCanChangeArcAdbSideloading',
+      'createContainer',
+      'deleteContainer',
+      'requestContainerInfo',
+      'setContainerBadgeColor',
+      'stopContainer',
+      'requestCrostiniExportImportOperationStatus',
     ]);
     this.crostiniMicSharingEnabled = false;
     this.crostiniIsRunning = true;
     this.methodCalls_ = {};
     this.portOperationSuccess = true;
+    this.containerInfo = [];
   }
 
   getNewPromiseFor(name) {
@@ -89,23 +96,24 @@
   /** @override */
   requestCrostiniInstallerStatus() {
     this.methodCalled('requestCrostiniInstallerStatus');
-    cr.webUIListenerCallback('crostini-installer-status-changed', false);
+    webUIListenerCallback('crostini-installer-status-changed', false);
   }
 
   /** @override */
   requestCrostiniExportImportOperationStatus() {
-    cr.webUIListenerCallback(
+    this.methodCalled('requestCrostiniExportImportOperationStatus');
+    webUIListenerCallback(
         'crostini-export-import-operation-status-changed', false);
   }
 
   /** override */
-  exportCrostiniContainer() {
-    this.methodCalled('exportCrostiniContainer');
+  exportCrostiniContainer(containerId) {
+    this.methodCalled('exportCrostiniContainer', containerId);
   }
 
   /** override */
-  importCrostiniContainer() {
-    this.methodCalled('importCrostiniContainer');
+  importCrostiniContainer(containerId) {
+    this.methodCalled('importCrostiniContainer', containerId);
   }
 
   /** @override */
@@ -115,44 +123,53 @@
 
   /** @override */
   requestCrostiniUpgraderDialogStatus() {
-    cr.webUIListenerCallback('crostini-upgrader-status-changed', false);
+    webUIListenerCallback('crostini-upgrader-status-changed', false);
   }
 
   /** @override */
   requestCrostiniContainerUpgradeAvailable() {
-    cr.webUIListenerCallback(
-        'crostini-container-upgrade-available-changed', true);
+    webUIListenerCallback('crostini-container-upgrade-available-changed', true);
   }
 
   /** @override */
-  addCrostiniPortForward(
-      vmName, containerName, portNumber, protocolIndex, label) {
+  addCrostiniPortForward(containerId, portNumber, protocolIndex, label) {
     this.methodCalled(
-        'addCrostiniPortForward', vmName, containerName, portNumber,
-        protocolIndex, label);
+        'addCrostiniPortForward', containerId, portNumber, protocolIndex,
+        label);
     return Promise.resolve(this.portOperationSuccess);
   }
 
   /** @override */
-  removeCrostiniPortForward(vmName, containerName, portNumber, protocolIndex) {
+  removeCrostiniPortForward(containerId, portNumber, protocolIndex) {
     this.methodCalled(
-        'removeCrostiniPortForward', vmName, containerName, portNumber,
+        'removeCrostiniPortForward', containerId, portNumber, protocolIndex);
+    return Promise.resolve(this.portOperationSuccess);
+  }
+
+  /** @override */
+  activateCrostiniPortForward(containerId, portNumber, protocolIndex) {
+    this.methodCalled(
+        'activateCrostiniPortForward', containerId, portNumber, protocolIndex);
+    return Promise.resolve(this.portOperationSuccess);
+  }
+
+  /** @override */
+  deactivateCrostiniPortForward(containerId, portNumber, protocolIndex) {
+    this.methodCalled(
+        'deactivateCrostiniPortForward', containerId, portNumber,
         protocolIndex);
     return Promise.resolve(this.portOperationSuccess);
   }
 
   /** @override */
-  activateCrostiniPortForward(
-      vmName, containerName, portNumber, protocolIndex) {
-    this.methodCalled(
-        'activateCrostiniPortForward', vmName, containerName, portNumber,
-        protocolIndex);
-    return Promise.resolve(this.portOperationSuccess);
+  removeAllCrostiniPortForwards(containerId) {
+    this.methodCalled('removeAllCrostiniPortForwards', containerId);
   }
 
   /** @override */
-  removeAllCrostiniPortForwards(vmName, containerName) {
-    this.methodCalled('removeAllCrostiniPortForwards');
+  getCrostiniActivePorts() {
+    this.methodCalled('getCrostiniActivePorts');
+    return Promise.resolve([]);
   }
 
   /** @override */
@@ -165,21 +182,6 @@
   resizeCrostiniDisk(vmName, newSizeBytes) {
     this.methodCalled('resizeCrostiniDisk', vmName, newSizeBytes);
     return this.getNewPromiseFor('resizeCrostiniDisk');
-  }
-
-  /** @override */
-  deactivateCrostiniPortForward(
-      vmName, containerName, portNumber, protocolIndex) {
-    this.methodCalled(
-        'deactivateCrostiniPortForward', vmName, containerName, portNumber,
-        protocolIndex);
-    return Promise.resolve(this.portOperationSuccess);
-  }
-
-  /** @override */
-  getCrostiniActivePorts() {
-    this.methodCalled('getCrostiniActivePorts');
-    return Promise.resolve(new Array());
   }
 
   /** @override */
@@ -204,5 +206,31 @@
   getCrostiniMicSharingEnabled() {
     this.methodCalled('getCrostiniMicSharingEnabled');
     return Promise.resolve(this.CrostiniMicSharingEnabled);
+  }
+
+  /** @override */
+  createContainer(containerId, imageServer, imageAlias) {
+    this.methodCalled('createContainer');
+  }
+
+  /** @override */
+  deleteContainer(containerId) {
+    this.methodCalled('deleteContainer');
+  }
+
+  /** @override */
+  requestContainerInfo() {
+    this.methodCalled('requestContainerInfo');
+    webUIListenerCallback('crostini-container-info', this.containerInfo);
+  }
+
+  /** @override */
+  setContainerBadgeColor(containerId, badge_color) {
+    this.methodCalled('setContainerBadgeColor');
+  }
+
+  /** @override */
+  stopContainer(containerId) {
+    this.methodCalled('stopContainer');
   }
 }

@@ -17,7 +17,6 @@
 #include "third_party/blink/renderer/core/frame/local_frame_client.h"
 #include "third_party/blink/renderer/core/layout/layout_text.h"
 #include "third_party/blink/renderer/core/paint/paint_layer.h"
-#include "third_party/blink/renderer/platform/graphics/graphics_layer.h"
 #include "third_party/blink/renderer/platform/scheduler/public/thread_scheduler.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 
@@ -33,8 +32,8 @@ base::TimeDelta ContentCaptureTask::TaskDelay::ResetAndGetInitialDelay() {
 }
 
 base::TimeDelta ContentCaptureTask::TaskDelay::GetNextTaskDelay() const {
-  return base::TimeDelta::FromMilliseconds(
-      task_initial_delay_.InMilliseconds() * (1 << delay_exponent_));
+  return base::Milliseconds(task_initial_delay_.InMilliseconds() *
+                            (1 << delay_exponent_));
 }
 
 void ContentCaptureTask::TaskDelay::IncreaseDelayExponent() {
@@ -51,6 +50,7 @@ ContentCaptureTask::ContentCaptureTask(LocalFrame& local_frame_root,
           local_frame_root_->GetTaskRunner(TaskType::kInternalContentCapture),
           this,
           &ContentCaptureTask::Run) {
+  DCHECK(local_frame_root.Client()->GetWebContentCaptureClient());
   task_delay_ = std::make_unique<TaskDelay>(local_frame_root.Client()
                                                 ->GetWebContentCaptureClient()
                                                 ->GetTaskInitialDelay());

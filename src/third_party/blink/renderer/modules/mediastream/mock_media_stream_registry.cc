@@ -15,7 +15,8 @@
 #include "third_party/blink/renderer/modules/mediastream/mock_media_stream_video_source.h"
 #include "third_party/blink/renderer/modules/mediastream/video_track_adapter_settings.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_audio_source.h"
-#include "third_party/blink/renderer/platform/mediastream/media_stream_component.h"
+#include "third_party/blink/renderer/platform/mediastream/media_stream_audio_track.h"
+#include "third_party/blink/renderer/platform/mediastream/media_stream_component_impl.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_source.h"
 
 namespace blink {
@@ -41,8 +42,8 @@ class MockCDQualityAudioSource : public MediaStreamAudioSource {
         media::AudioParameters::kAudioCDSampleRate / 100));
   }
 
- private:
-  DISALLOW_COPY_AND_ASSIGN(MockCDQualityAudioSource);
+  MockCDQualityAudioSource(const MockCDQualityAudioSource&) = delete;
+  MockCDQualityAudioSource& operator=(const MockCDQualityAudioSource&) = delete;
 };
 
 }  // namespace
@@ -57,46 +58,47 @@ void MockMediaStreamRegistry::Init() {
 }
 
 MockMediaStreamVideoSource* MockMediaStreamRegistry::AddVideoTrack(
-    const std::string& track_id,
+    const String& track_id,
     const VideoTrackAdapterSettings& adapter_settings,
     const absl::optional<bool>& noise_reduction,
     bool is_screencast,
     double min_frame_rate) {
-  auto* source = MakeGarbageCollected<MediaStreamSource>(
-      "mock video source id", MediaStreamSource::kTypeVideo,
-      "mock video source name", false /* remote */);
   auto native_source = std::make_unique<MockMediaStreamVideoSource>();
   auto* native_source_ptr = native_source.get();
-  source->SetPlatformSource(std::move(native_source));
+  auto* source = MakeGarbageCollected<MediaStreamSource>(
+      "mock video source id", MediaStreamSource::kTypeVideo,
+      "mock video source name", false /* remote */, std::move(native_source));
 
-  auto* component = MakeGarbageCollected<MediaStreamComponent>(
-      String::FromUTF8(track_id), source);
-  component->SetPlatformTrack(std::make_unique<MediaStreamVideoTrack>(
-      native_source_ptr, adapter_settings, noise_reduction, is_screencast,
-      min_frame_rate, absl::nullopt /* pan */, absl::nullopt /* tilt */,
-      absl::nullopt /* zoom */, false /* pan_tilt_zoom_allowed */,
-      MediaStreamVideoSource::ConstraintsOnceCallback(), true /* enabled */));
+  auto* component = MakeGarbageCollected<MediaStreamComponentImpl>(
+      track_id, source,
+      std::make_unique<MediaStreamVideoTrack>(
+          native_source_ptr, adapter_settings, noise_reduction, is_screencast,
+          min_frame_rate, absl::nullopt /* pan */, absl::nullopt /* tilt */,
+          absl::nullopt /* zoom */, false /* pan_tilt_zoom_allowed */,
+          MediaStreamVideoSource::ConstraintsOnceCallback(),
+          true /* enabled */));
   descriptor_->AddRemoteTrack(component);
   return native_source_ptr;
 }
 
 MockMediaStreamVideoSource* MockMediaStreamRegistry::AddVideoTrack(
-    const std::string& track_id) {
+    const String& track_id) {
   return AddVideoTrack(track_id, VideoTrackAdapterSettings(),
                        absl::optional<bool>(), false /* is_screncast */,
                        0.0 /* min_frame_rate */);
 }
 
-void MockMediaStreamRegistry::AddAudioTrack(const std::string& track_id) {
-  auto* source = MakeGarbageCollected<MediaStreamSource>(
-      "mock audio source id", MediaStreamSource::kTypeAudio,
-      "mock audio source name", false /* remote */);
+void MockMediaStreamRegistry::AddAudioTrack(const String& track_id) {
   auto audio_source = std::make_unique<MockCDQualityAudioSource>();
   auto* audio_source_ptr = audio_source.get();
-  source->SetPlatformSource(std::move(audio_source));
+  auto* source = MakeGarbageCollected<MediaStreamSource>(
+      "mock audio source id", MediaStreamSource::kTypeAudio,
+      "mock audio source name", false /* remote */, std::move(audio_source));
 
-  auto* component = MakeGarbageCollected<MediaStreamComponent>(source);
-  CHECK(audio_source_ptr->ConnectToTrack(component));
+  auto* component = MakeGarbageCollected<MediaStreamComponentImpl>(
+      source,
+      std::make_unique<MediaStreamAudioTrack>(true /* is_local_track */));
+  CHECK(audio_source_ptr->ConnectToInitializedTrack(component));
 
   descriptor_->AddRemoteTrack(component);
 }

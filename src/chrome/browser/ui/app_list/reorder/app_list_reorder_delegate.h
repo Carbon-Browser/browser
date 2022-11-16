@@ -5,39 +5,46 @@
 #ifndef CHROME_BROWSER_UI_APP_LIST_REORDER_APP_LIST_REORDER_DELEGATE_H_
 #define CHROME_BROWSER_UI_APP_LIST_REORDER_APP_LIST_REORDER_DELEGATE_H_
 
-#include <stack>
-#include <string>
-#include <vector>
-
-#include "ash/public/cpp/app_list/app_list_types.h"
 #include "components/sync/model/string_ordinal.h"
+
+namespace ash {
+enum class AppListSortOrder;
+struct AppListItemMetadata;
+}  // namespace ash
 
 namespace app_list {
 namespace reorder {
-struct ReorderParam;
-}
 
-class AppListSyncableService;
-
-// The helper class for sorting launcher apps in order.
+// An interface to provide functions for app list sorting.
 class AppListReorderDelegate {
  public:
-  explicit AppListReorderDelegate(
-      AppListSyncableService* app_list_syncable_service);
-  AppListReorderDelegate(const AppListReorderDelegate&) = delete;
-  AppListReorderDelegate& operator=(const AppListReorderDelegate&) = delete;
-  ~AppListReorderDelegate() = default;
+  virtual ~AppListReorderDelegate() {}
 
-  // Returns reorder params which indicate the changes in ordinals to ensure
-  // `order` among sync items. This function ensures that the number of updates
-  // is as few as possible.
-  std::vector<reorder::ReorderParam> GenerateReorderParams(
-      ash::AppListSortOrder order) const;
+  // Sets the preferred sorting order.
+  virtual void SetAppListPreferredOrder(ash::AppListSortOrder order) = 0;
 
- private:
-  AppListSyncableService* const app_list_syncable_service_;
+  // Returns the front position among all sync items.
+  virtual syncer::StringOrdinal CalculateGlobalFrontPosition() const = 0;
+
+  // Calcuates the target position so that the permanent sorting order is still
+  // maintained on all sync items after:
+  // (1) the item matched by `metadata` is added to the model updater if it does
+  // not exist in the model updater yet, or
+  // (2) the item matched by `metadata` is set with the target position if it is
+  // already in the model updater. In this case, if the item's current position
+  // maintains the sort order, `target_position` should be the current position.
+  // The target position is returned through the parameter. Returns whether such
+  // a target position could exist, in which case `target_position` is set.
+  virtual bool CalculateItemPositionInPermanentSortOrder(
+      const ash::AppListItemMetadata& metadata,
+      syncer::StringOrdinal* target_position) const = 0;
+
+  // Returns the sorting order that is saved in perf service and gets shared
+  // among synced devices.
+  virtual ash::AppListSortOrder GetPermanentSortingOrder() const = 0;
 };
 
+}  // namespace reorder
 }  // namespace app_list
 
 #endif  // CHROME_BROWSER_UI_APP_LIST_REORDER_APP_LIST_REORDER_DELEGATE_H_

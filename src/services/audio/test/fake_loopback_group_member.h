@@ -8,7 +8,6 @@
 #include <memory>
 #include <vector>
 
-#include "base/macros.h"
 #include "base/time/time.h"
 #include "base/unguessable_token.h"
 #include "media/base/audio_parameters.h"
@@ -29,6 +28,9 @@ namespace audio {
 class FakeLoopbackGroupMember : public LoopbackGroupMember {
  public:
   explicit FakeLoopbackGroupMember(const media::AudioParameters& params);
+
+  FakeLoopbackGroupMember(const FakeLoopbackGroupMember&) = delete;
+  FakeLoopbackGroupMember& operator=(const FakeLoopbackGroupMember&) = delete;
 
   ~FakeLoopbackGroupMember() override;
 
@@ -66,8 +68,6 @@ class FakeLoopbackGroupMember : public LoopbackGroupMember {
   int64_t at_frame_ = 0;
 
   Snooper* snooper_ = nullptr;
-
-  DISALLOW_COPY_AND_ASSIGN(FakeLoopbackGroupMember);
 };
 
 }  // namespace audio

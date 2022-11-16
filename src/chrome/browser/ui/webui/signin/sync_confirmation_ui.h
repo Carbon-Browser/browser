@@ -9,8 +9,9 @@
 #include <string>
 #include <unordered_map>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/webui/signin/signin_web_dialog_ui.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class Browser;
 class Profile;
@@ -29,29 +30,20 @@ class WebUI;
 // the responsability of the caller to pass the correct message handler.
 class SyncConfirmationUI : public SigninWebDialogUI {
  public:
-  enum class DesignVersion { kMonotone, kColored };
-
   explicit SyncConfirmationUI(content::WebUI* web_ui);
+
+  SyncConfirmationUI(const SyncConfirmationUI&) = delete;
+  SyncConfirmationUI& operator=(const SyncConfirmationUI&) = delete;
+
   ~SyncConfirmationUI() override;
 
   // SigninWebDialogUI:
+  // `browser` can be nullptr when the UI is displayed without a browser.
   void InitializeMessageHandlerWithBrowser(Browser* browser) override;
 
-  // Initializes the message handler for the profile creation flow (when there's
-  // no browser available).
-  void InitializeMessageHandlerForCreationFlow(
-      absl::optional<SkColor> profile_color);
-
  private:
-  void Initialize(absl::optional<SkColor> profile_creation_flow_color,
-                  DesignVersion design,
-                  bool is_modal_dialog);
-  void InitializeMessageHandler(Browser* browser);
-  void InitializeForSyncConfirmation(
-      content::WebUIDataSource* source,
-      absl::optional<SkColor> profile_creation_flow_color,
-      DesignVersion design,
-      bool is_modal_dialog);
+  void InitializeForSyncConfirmation(content::WebUIDataSource* source,
+                                     bool is_modal_dialog);
   void InitializeForSyncDisabled(content::WebUIDataSource* source);
 
   // Adds a string resource with the given GRD |ids| to the WebUI data |source|
@@ -65,9 +57,7 @@ class SyncConfirmationUI : public SigninWebDialogUI {
   // For consent auditing.
   std::unordered_map<std::string, int> js_localized_string_to_ids_map_;
 
-  Profile* const profile_;
-
-  DISALLOW_COPY_AND_ASSIGN(SyncConfirmationUI);
+  const raw_ptr<Profile> profile_;
 };
 
 #endif  // CHROME_BROWSER_UI_WEBUI_SIGNIN_SYNC_CONFIRMATION_UI_H_

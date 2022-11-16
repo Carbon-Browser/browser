@@ -5,7 +5,6 @@
 #include <stdint.h>
 #include <memory>
 
-#include "base/macros.h"
 #include "media/base/video_frame.h"
 #include "media/cdm/api/content_decryption_module.h"
 #include "media/cdm/cdm_helpers.h"
@@ -20,6 +19,9 @@ class TestCdmBuffer final : public cdm::Buffer {
   static TestCdmBuffer* Create(uint32_t capacity) {
     return new TestCdmBuffer(capacity);
   }
+
+  TestCdmBuffer(const TestCdmBuffer&) = delete;
+  TestCdmBuffer& operator=(const TestCdmBuffer&) = delete;
 
   // cdm::Buffer implementation.
   void Destroy() override {
@@ -42,20 +44,19 @@ class TestCdmBuffer final : public cdm::Buffer {
 
   std::vector<uint8_t> buffer_;
   uint32_t size_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestCdmBuffer);
 };
 
 class SimpleCdmAllocatorTest : public testing::Test {
  public:
   SimpleCdmAllocatorTest() = default;
+
+  SimpleCdmAllocatorTest(const SimpleCdmAllocatorTest&) = delete;
+  SimpleCdmAllocatorTest& operator=(const SimpleCdmAllocatorTest&) = delete;
+
   ~SimpleCdmAllocatorTest() override = default;
 
  protected:
   SimpleCdmAllocator allocator_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(SimpleCdmAllocatorTest);
 };
 
 TEST_F(SimpleCdmAllocatorTest, CreateCdmBuffer) {

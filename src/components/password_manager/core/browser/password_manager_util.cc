@@ -16,8 +16,11 @@
 #include "base/feature_list.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/ranges/algorithm.h"
+#include "base/strings/strcat.h"
 #include "base/time/time.h"
+#include "build/branding_buildflags.h"
 #include "build/build_config.h"
+#include "components/autofill/core/browser/autofill_client.h"
 #include "components/autofill/core/browser/logging/log_manager.h"
 #include "components/autofill/core/browser/ui/popup_item_ids.h"
 #include "components/autofill/core/common/password_generation_util.h"
@@ -26,6 +29,7 @@
 #include "components/password_manager/core/browser/credentials_cleaner_runner.h"
 #include "components/password_manager/core/browser/http_credentials_cleaner.h"
 #include "components/password_manager/core/browser/old_google_credentials_cleaner.h"
+#include "components/password_manager/core/browser/password_bubble_experiment.h"
 #include "components/password_manager/core/browser/password_feature_manager.h"
 #include "components/password_manager/core/browser/password_form.h"
 #include "components/password_manager/core/browser/password_generation_frame_helper.h"
@@ -42,6 +46,7 @@
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/sync/driver/sync_service.h"
 #include "components/sync/driver/sync_user_settings.h"
+#include "url/url_util.h"
 
 using autofill::password_generation::PasswordGenerationType;
 using password_manager::PasswordForm;
@@ -148,7 +153,12 @@ bool ShowAllSavedPasswordsContextMenuEnabled(
 }
 
 void UserTriggeredManualGenerationFromContextMenu(
-    password_manager::PasswordManagerClient* password_manager_client) {
+    password_manager::PasswordManagerClient* password_manager_client,
+    autofill::AutofillClient* autofill_client) {
+  if (autofill_client) {
+    autofill_client->HideAutofillPopup(
+        autofill::PopupHidingReason::kOverlappingWithPasswordGenerationPopup);
+  }
   if (!password_manager_client->GetPasswordFeatureManager()
            ->ShouldShowAccountStorageOptIn()) {
     password_manager_client->GeneratePassword(PasswordGenerationType::kManual);
@@ -185,14 +195,14 @@ void RemoveUselessCredentials(
         network_context_getter) {
   DCHECK(cleaning_tasks_runner);
 
-#if !defined(OS_IOS)
+#if !BUILDFLAG(IS_IOS)
   // Can be null for some unittests.
   if (!network_context_getter.is_null()) {
     cleaning_tasks_runner->MaybeAddCleaningTask(
         std::make_unique<password_manager::HttpCredentialCleaner>(
             store, network_context_getter, prefs));
   }
-#endif  // !defined(OS_IOS)
+#endif  // !BUILDFLAG(IS_IOS)
 
   // TODO(crbug.com/450621): Remove this when enough number of clients switch
   // to the new version of Chrome.
@@ -304,7 +314,8 @@ const PasswordForm* FindFormByUsername(
 
 const PasswordForm* GetMatchForUpdating(
     const PasswordForm& submitted_form,
-    const std::vector<const PasswordForm*>& credentials) {
+    const std::vector<const PasswordForm*>& credentials,
+    bool username_updated_in_bubble) {
   // This is the case for the credential management API. It should not depend on
   // form managers. Once that's the case, this should be turned into a DCHECK.
   // TODO(crbug/947030): turn it into a DCHECK.
@@ -346,6 +357,12 @@ const PasswordForm* GetMatchForUpdating(
       return stored_match;
   }
 
+  // If the user manually changed the username value: consider this at this
+  // point of the heuristic a new credential (didn't match other
+  // passwords/usernames).
+  if (username_updated_in_bubble)
+    return nullptr;
+
   // Last try. The submitted form had no username but a password. Assume that
   // it's an existing credential.
   return credentials.empty() ? nullptr : credentials.front();
@@ -367,15 +384,14 @@ PasswordForm MakeNormalizedBlocklistedForm(
     // standard. DCHECK that this will not happen.
     DCHECK(digest.url.is_valid());
     DCHECK(digest.url.IsStandard());
-    result.url = digest.url.GetOrigin();
+    result.url = digest.url.DeprecatedGetOriginAsURL();
   }
   return result;
 }
 
-bool CanUseBiometricAuth(device_reauth::BiometricAuthenticator* authenticator) {
-  return authenticator &&
-         authenticator->CanAuthenticate() ==
-             device_reauth::BiometricsAvailability::kAvailable &&
+bool CanUseBiometricAuth(device_reauth::BiometricAuthenticator* authenticator,
+                         device_reauth::BiometricAuthRequester requester) {
+  return authenticator && authenticator->CanAuthenticate(requester) &&
          base::FeatureList::IsEnabled(
              password_manager::features::kBiometricTouchToFill);
 }
@@ -388,5 +404,54 @@ GURL StripAuthAndParams(const GURL& gurl) {
   rep.ClearRef();
   return gurl.ReplaceComponents(rep);
 }
+
+GURL ConstructGURLWithScheme(const std::string& url) {
+  GURL gurl = GURL(url);
+  if (!gurl.has_scheme()) {
+    GURL https_url(
+        base::StrCat({url::kHttpsScheme, url::kStandardSchemeSeparator, url}));
+    if (url::HostIsIPAddress(https_url.host())) {
+      GURL::Replacements replacements;
+      replacements.SetSchemeStr(url::kHttpScheme);
+      return https_url.ReplaceComponents(replacements);
+    }
+    return https_url;
+  }
+  return gurl;
+}
+
+bool IsValidPasswordURL(const GURL& url) {
+  return url.is_valid() && url.SchemeIsHTTPOrHTTPS();
+}
+
+std::string GetSignonRealm(const GURL& url) {
+  GURL::Replacements rep;
+  rep.ClearUsername();
+  rep.ClearPassword();
+  rep.ClearQuery();
+  rep.ClearRef();
+  rep.SetPathStr("");
+  return url.ReplaceComponents(rep).spec();
+}
+
+bool UsesPasswordManagerGoogleBranding(bool is_syncing) {
+#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
+  return true;
+#else
+  return is_syncing;
+#endif  // GOOGLE_CHROME_BRANDING
+}
+
+#if BUILDFLAG(IS_IOS)
+bool IsCredentialProviderEnabledOnStartup(const PrefService* prefs) {
+  return prefs->GetBoolean(
+      password_manager::prefs::kCredentialProviderEnabledOnStartup);
+}
+
+void SetCredentialProviderEnabledOnStartup(PrefService* prefs, bool enabled) {
+  prefs->SetBoolean(
+      password_manager::prefs::kCredentialProviderEnabledOnStartup, enabled);
+}
+#endif
 
 }  // namespace password_manager_util

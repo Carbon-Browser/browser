@@ -10,10 +10,12 @@
 namespace site_isolation {
 namespace features {
 
+extern const base::Feature kCacheSiteIsolationMemoryThreshold;
 extern const base::Feature kSiteIsolationForPasswordSites;
 extern const base::Feature kSiteIsolationForOAuthSites;
-extern const base::Feature kSitePerProcessOnlyForHighMemoryClients;
-extern const char kSitePerProcessOnlyForHighMemoryClientsParamName[];
+extern const base::Feature kSiteIsolationMemoryThresholds;
+extern const char kStrictSiteIsolationMemoryThresholdParamName[];
+extern const char kPartialSiteIsolationMemoryThresholdParamName[];
 
 }  // namespace features
 }  // namespace site_isolation

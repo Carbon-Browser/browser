@@ -15,8 +15,8 @@
 #include "base/check.h"
 #include "base/location.h"
 #include "base/message_loop/message_pump_type.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/third_party/dynamic_annotations/dynamic_annotations.h"
 #include "base/threading/thread.h"
 #include "base/threading/thread_restrictions.h"
@@ -208,8 +208,7 @@ void GamepadProvider::OnDevicesChanged(base::SystemMonitor::DeviceType type) {
 }
 
 void GamepadProvider::Initialize(std::unique_ptr<GamepadDataFetcher> fetcher) {
-  sampling_interval_delta_ =
-      base::TimeDelta::FromMilliseconds(kPollingIntervalMilliseconds);
+  sampling_interval_delta_ = base::Milliseconds(kPollingIntervalMilliseconds);
 
   base::SystemMonitor* monitor = base::SystemMonitor::Get();
   if (monitor)
@@ -217,11 +216,11 @@ void GamepadProvider::Initialize(std::unique_ptr<GamepadDataFetcher> fetcher) {
 
   if (!polling_thread_)
     polling_thread_ = std::make_unique<base::Thread>("Gamepad polling thread");
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   // On Linux, the data fetcher needs to watch file descriptors, so the message
   // loop needs to be a libevent loop.
   const base::MessagePumpType kMessageLoopType = base::MessagePumpType::IO;
-#elif defined(OS_ANDROID)
+#elif BUILDFLAG(IS_ANDROID)
   // On Android, keeping a message loop of default type.
   const base::MessagePumpType kMessageLoopType = base::MessagePumpType::DEFAULT;
 #else

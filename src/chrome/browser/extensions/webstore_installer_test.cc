@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "base/bind.h"
+#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
@@ -30,6 +31,7 @@
 #include "net/base/host_port_pair.h"
 #include "net/dns/mock_host_resolver.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
+#include "third_party/blink/public/common/switches.h"
 #include "url/gurl.h"
 
 using content::WebContents;
@@ -76,7 +78,8 @@ void WebstoreInstallerTest::SetUpCommandLine(base::CommandLine* command_line) {
 
   // Allow tests to call window.gc(), so that we can check that callback
   // functions don't get collected prematurely.
-  command_line->AppendSwitchASCII(switches::kJavaScriptFlags, "--expose-gc");
+  command_line->AppendSwitchASCII(blink::switches::kJavaScriptFlags,
+                                  "--expose-gc");
 }
 
 void WebstoreInstallerTest::SetUpOnMainThread() {
@@ -132,8 +135,12 @@ void WebstoreInstallerTest::RunTestAsync(
     const std::string& test_function_name) {
   std::string script = base::StringPrintf(
       "%s('%s')", test_function_name.c_str(), test_gallery_url_.c_str());
-  browser()->tab_strip_model()->GetActiveWebContents()->GetMainFrame()->
-      ExecuteJavaScriptWithUserGestureForTests(base::UTF8ToUTF16(script));
+  browser()
+      ->tab_strip_model()
+      ->GetActiveWebContents()
+      ->GetPrimaryMainFrame()
+      ->ExecuteJavaScriptWithUserGestureForTests(base::UTF8ToUTF16(script),
+                                                 base::NullCallback());
 }
 
 void WebstoreInstallerTest::ProcessServerRequest(const HttpRequest& request) {}

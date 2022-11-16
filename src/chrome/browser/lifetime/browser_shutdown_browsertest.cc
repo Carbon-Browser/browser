@@ -32,22 +32,25 @@ using testing::AtLeast;
 class BrowserShutdownBrowserTest : public InProcessBrowserTest {
  public:
   BrowserShutdownBrowserTest() {}
+
+  BrowserShutdownBrowserTest(const BrowserShutdownBrowserTest&) = delete;
+  BrowserShutdownBrowserTest& operator=(const BrowserShutdownBrowserTest&) =
+      delete;
+
   ~BrowserShutdownBrowserTest() override {}
 
  protected:
   base::HistogramTester histogram_tester_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(BrowserShutdownBrowserTest);
 };
 
 class BrowserClosingObserver : public BrowserListObserver {
  public:
   BrowserClosingObserver() {}
-  MOCK_METHOD1(OnBrowserClosing, void(Browser* browser));
 
- private:
-  DISALLOW_COPY_AND_ASSIGN(BrowserClosingObserver);
+  BrowserClosingObserver(const BrowserClosingObserver&) = delete;
+  BrowserClosingObserver& operator=(const BrowserClosingObserver&) = delete;
+
+  MOCK_METHOD1(OnBrowserClosing, void(Browser* browser));
 };
 
 // ChromeOS has the different shutdown flow on user initiated exit process.
@@ -82,10 +85,8 @@ IN_PROC_BROWSER_TEST_F(BrowserShutdownBrowserTest,
   histogram_tester_.ExpectUniqueSample(
       "Shutdown.ShutdownType",
       static_cast<int>(browser_shutdown::ShutdownType::kWindowClose), 1);
-  histogram_tester_.ExpectTotalCount("Shutdown.renderers.total", 1);
-  histogram_tester_.ExpectTotalCount("Shutdown.window_close.time2", 1);
-  histogram_tester_.ExpectTotalCount("Shutdown.window_close.time_per_process",
-                                     1);
+  histogram_tester_.ExpectTotalCount("Shutdown.Renderers.Total", 1);
+  histogram_tester_.ExpectTotalCount("Shutdown.WindowClose.Time", 1);
 }
 #else
 // On Chrome OS, the shutdown accelerator is handled by Ash and requires

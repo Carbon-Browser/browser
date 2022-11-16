@@ -5,7 +5,6 @@
 #include "components/media_router/browser/route_message_util.h"
 
 #include "base/json/json_writer.h"
-#include "base/macros.h"
 #include "base/values.h"
 
 using media_router::mojom::RouteMessage;
@@ -46,10 +45,9 @@ PresentationConnectionFromRouteMessage(RouteMessagePtr route_message) {
     case RouteMessage::Type::BINARY:
       return blink::mojom::PresentationConnectionMessage::NewData(
           route_message->data.value());
-    default:
-      NOTREACHED() << "Unknown RouteMessageType " << route_message->type;
-      return blink::mojom::PresentationConnectionMessage::New();
   }
+  NOTREACHED() << "Unknown RouteMessageType " << route_message->type;
+  return nullptr;
 }
 
 }  // namespace message_util

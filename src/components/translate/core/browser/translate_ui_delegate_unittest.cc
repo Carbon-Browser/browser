@@ -6,7 +6,6 @@
 
 #include "base/bind.h"
 #include "base/command_line.h"
-#include "base/macros.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
@@ -55,6 +54,9 @@ class MockLanguageModel : public language::LanguageModel {
 class TranslateUIDelegateTest : public ::testing::Test {
  public:
   TranslateUIDelegateTest() = default;
+
+  TranslateUIDelegateTest(const TranslateUIDelegateTest&) = delete;
+  TranslateUIDelegateTest& operator=(const TranslateUIDelegateTest&) = delete;
 
   void SetUp() override {
     pref_service_ =
@@ -125,9 +127,6 @@ class TranslateUIDelegateTest : public ::testing::Test {
   std::unique_ptr<TranslateManager> manager_;
   std::unique_ptr<TranslateUIDelegate> delegate_;
   base::test::ScopedFeatureList scoped_feature_list_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(TranslateUIDelegateTest);
 };
 
 TEST_F(TranslateUIDelegateTest, CheckDeclinedFalse) {

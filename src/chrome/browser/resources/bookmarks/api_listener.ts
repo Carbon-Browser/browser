@@ -2,12 +2,12 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {assert} from 'chrome://resources/js/assert.m.js';
+import {assert} from 'chrome://resources/js/assert_ts.js';
 import {addWebUIListener, removeWebUIListener} from 'chrome://resources/js/cr.m.js';
-import {Action} from 'chrome://resources/js/cr/ui/store.m.js';
+import {Action} from 'chrome://resources/js/cr/ui/store.js';
 
 import {createBookmark, editBookmark, moveBookmark, refreshNodes, removeBookmark, reorderChildren, setCanEditBookmarks, setIncognitoAvailability} from './actions.js';
-import {BrowserProxy} from './browser_proxy.js';
+import {BrowserProxyImpl} from './browser_proxy.js';
 import {IncognitoAvailability} from './constants.js';
 import {Debouncer} from './debouncer.js';
 import {Store} from './store.js';
@@ -21,7 +21,7 @@ import {normalizeNodes} from './util.js';
 let trackUpdates: boolean = false;
 let updatedItems: string[] = [];
 
-let debouncer: Debouncer;
+let debouncer: Debouncer|null = null;
 
 /**
  * Batches UI updates so that no changes will be made to UI until the next
@@ -29,7 +29,7 @@ let debouncer: Debouncer;
  * can be called in a tight loop by UI actions.
  */
 function batchUIUpdates() {
-  if (!debouncer) {
+  if (debouncer === null) {
     debouncer = new Debouncer(() => Store.getInstance().endBatchUpdate());
   }
 
@@ -150,7 +150,7 @@ export function init() {
   chrome.bookmarks.onImportBegan.addListener(onImportBegan);
   chrome.bookmarks.onImportEnded.addListener(onImportEnded);
 
-  const browserProxy = BrowserProxy.getInstance();
+  const browserProxy = BrowserProxyImpl.getInstance();
   browserProxy.getIncognitoAvailability().then(onIncognitoAvailabilityChanged);
   incognitoAvailabilityListener = addWebUIListener(
       'incognito-availability-changed', onIncognitoAvailabilityChanged);

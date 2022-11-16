@@ -51,11 +51,11 @@ class PLATFORM_EXPORT PageSchedulerImpl : public PageScheduler {
  public:
   // Interval between throttled wake ups, without intensive throttling.
   static constexpr base::TimeDelta kDefaultThrottledWakeUpInterval =
-      base::TimeDelta::FromSeconds(1);
+      base::Seconds(1);
 
   // Interval between throttled wake ups, with intensive throttling.
   static constexpr base::TimeDelta kIntensiveThrottledWakeUpInterval =
-      base::TimeDelta::FromMinutes(1);
+      base::Minutes(1);
 
   PageSchedulerImpl(PageScheduler::Delegate*, AgentGroupSchedulerImpl&);
   PageSchedulerImpl(const PageSchedulerImpl&) = delete;
@@ -70,7 +70,6 @@ class PLATFORM_EXPORT PageSchedulerImpl : public PageScheduler {
   void SetPageBackForwardCached(bool) override;
   bool IsMainFrameLocal() const override;
   void SetIsMainFrameLocal(bool is_local) override;
-  void OnLocalMainFrameNetworkAlmostIdle() override;
   base::TimeTicks GetStoredInBackForwardCacheTimestamp() {
     return stored_in_back_forward_cache_timestamp_;
   }
@@ -82,25 +81,14 @@ class PLATFORM_EXPORT PageSchedulerImpl : public PageScheduler {
   std::unique_ptr<FrameScheduler> CreateFrameScheduler(
       FrameScheduler::Delegate* delegate,
       BlameContext*,
+      bool is_in_embedded_frame_tree,
       FrameScheduler::FrameType) override;
-  base::TimeTicks EnableVirtualTime() override;
-  void DisableVirtualTimeForTesting() override;
-  bool VirtualTimeAllowedToAdvance() const override;
-  void SetVirtualTimePolicy(VirtualTimePolicy) override;
-  void SetInitialVirtualTime(base::Time time) override;
-  void GrantVirtualTimeBudget(
-      base::TimeDelta budget,
-      base::OnceClosure budget_exhausted_callback) override;
-  void SetMaxVirtualTimeTaskStarvationCount(
-      int max_task_starvation_count) override;
   void AudioStateChanged(bool is_audio_playing) override;
   bool IsAudioPlaying() const override;
   bool IsExemptFromBudgetBasedThrottling() const override;
   bool OptedOutFromAggressiveThrottlingForTest() const override;
   bool RequestBeginMainFrameNotExpected(bool new_state) override;
-  WebScopedVirtualTimePauser CreateWebScopedVirtualTimePauser(
-      const WTF::String& name,
-      WebScopedVirtualTimePauser::VirtualTaskDuration) override;
+  scoped_refptr<scheduler::WidgetScheduler> CreateWidgetScheduler() override;
 
   // Virtual for testing.
   virtual void ReportIntervention(const String& message);
@@ -120,10 +108,13 @@ class PLATFORM_EXPORT PageSchedulerImpl : public PageScheduler {
 
   MainThreadSchedulerImpl* GetMainThreadScheduler() const;
   AgentGroupSchedulerImpl& GetAgentGroupScheduler() override;
+  VirtualTimeController* GetVirtualTimeController() override;
 
   void Unregister(FrameSchedulerImpl*);
 
   void OnThrottlingStatusUpdated();
+
+  void OnVirtualTimeEnabled();
 
   void OnTraceLogEnabled();
 
@@ -193,31 +184,6 @@ class PLATFORM_EXPORT PageSchedulerImpl : public PageScheduler {
     kMaxValue = kFrozenToHiddenBackgrounded,
   };
 
-  class PageLifecycleStateTracker {
-    USING_FAST_MALLOC(PageLifecycleStateTracker);
-
-   public:
-    explicit PageLifecycleStateTracker(PageSchedulerImpl*, PageLifecycleState);
-    PageLifecycleStateTracker(const PageLifecycleStateTracker&) = delete;
-    PageLifecycleStateTracker& operator=(const PageLifecycleStateTracker&) =
-        delete;
-    ~PageLifecycleStateTracker() = default;
-
-    void SetPageLifecycleState(PageLifecycleState);
-    PageLifecycleState GetPageLifecycleState() const;
-
-   private:
-    static absl::optional<PageLifecycleStateTransition>
-    ComputePageLifecycleStateTransition(PageLifecycleState old_state,
-                                        PageLifecycleState new_state);
-
-    static void RecordPageLifecycleStateTransition(
-        PageLifecycleStateTransition);
-
-    PageSchedulerImpl* page_scheduler_impl_;
-    PageLifecycleState current_state_;
-  };
-
   void RegisterFrameSchedulerImpl(FrameSchedulerImpl* frame_scheduler);
 
   // A page cannot be throttled or frozen 30 seconds after playing audio.
@@ -226,14 +192,13 @@ class PLATFORM_EXPORT PageSchedulerImpl : public PageScheduler {
   // silence during which a logo and button are shown after a YouTube ad. Since
   // most pages don't play audio in background, it was decided that the delay
   // can be increased to 30 seconds without significantly affecting performance.
-  static constexpr base::TimeDelta kRecentAudioDelay =
-      base::TimeDelta::FromSeconds(30);
-
-  static const char kHistogramPageLifecycleStateTransition[];
+  static constexpr base::TimeDelta kRecentAudioDelay = base::Seconds(30);
 
   // Support not issuing a notification to frames when we disable freezing as
   // a part of foregrounding the page.
   void SetPageFrozenImpl(bool frozen, NotificationPolicy notification_policy);
+
+  void SetPageLifecycleState(PageLifecycleState state);
 
   // Adds or removes a |task_queue| from the WakeUpBudgetPool. When the
   // FrameOriginType or visibility of a FrameScheduler changes, it should remove
@@ -286,11 +251,12 @@ class PLATFORM_EXPORT PageSchedulerImpl : public PageScheduler {
   void EnableThrottling();
 
   // Returns true if the page is backgrounded, false otherwise. A page is
-  // considered backgrounded if it is both not visible and not playing audio.
+  // considered backgrounded if it is not visible, not playing audio and
+  // virtual time is disabled.
   bool IsBackgrounded() const;
 
   // Returns true if the page should be frozen after delay, which happens if
-  // IsBackgrounded() and freezing is enabled.
+  // IsBackgrounded() is true and freezing is enabled.
   bool ShouldFreezePage() const;
 
   // Callback for freezing the page. Freezing must be enabled and the page must
@@ -373,13 +339,6 @@ class PLATFORM_EXPORT PageSchedulerImpl : public PageScheduler {
   CancelableClosureHolder do_freeze_page_callback_;
   const base::TimeDelta delay_for_background_tab_freezing_;
 
-  // Whether a background page can be frozen before
-  // |delay_for_background_tab_freezing_| if network is idle.
-  const bool freeze_on_network_idle_enabled_;
-
-  // Delay after which a background page can be frozen if network is idle.
-  const base::TimeDelta delay_for_background_and_network_idle_tab_freezing_;
-
   // Whether foreground timers should be always throttled.
   const bool throttle_foreground_timers_;
   // Interval between throttled wake ups on a foreground page.
@@ -389,7 +348,7 @@ class PLATFORM_EXPORT PageSchedulerImpl : public PageScheduler {
   TaskHandle set_ipc_posted_handler_task_;
   base::TimeTicks stored_in_back_forward_cache_timestamp_;
 
-  std::unique_ptr<PageLifecycleStateTracker> page_lifecycle_state_tracker_;
+  PageLifecycleState current_lifecycle_state_ = kDefaultPageLifecycleState;
   base::WeakPtrFactory<PageSchedulerImpl> weak_factory_{this};
 };
 

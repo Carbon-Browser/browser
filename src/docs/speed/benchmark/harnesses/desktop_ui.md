@@ -20,7 +20,7 @@ in different stories representing different scenarios such as
 * tab_search:scroll_up_and_down:2020 - Test srolling down, up and down 100 tabs, before all tabs are loaded
 
 
-For more information please see this [doc](https://docs.google.com/document/d/1-1ijT7wt05hlBZmSKjX_DaTCzVqpxbfTM1y-j7kYHlc).
+For more information please see this [doc](https://docs.google.com/document/d/1-1ijT7wt05hlBZmSKjX_DaTCzVqpxbfTM1y-j7kYHlc?usp=sharing).
 
 ## Run the benchmark on pinpoint
 
@@ -29,7 +29,7 @@ In most cases, you only need to run the benchmark on [pinpoint](https://pinpoint
 
 ## Run the benchmark locally
 
-In some cases, if trybots cannot meet your requirement or you need to debug on your own machine, use the following command to run the benchmark locally. You need an @google account to be able to do that.
+In some cases, if trybots cannot meet your requirement or you need to debug on your own machine, use the following command to run the benchmark locally. You need an @google account to run some of the recorded tests, or append --use-live-sites to the following command.
 
 ```
 tools/perf/run_benchmark run desktop_ui --browser-executable=out/Default/chrome --story-filter=tab_search:top10:2020 --pageset-repeat=3
@@ -107,14 +107,8 @@ Finally, run the new stories locally to make sure they work, then upload the CL 
 
 ## Record new stories
 
-Use the following command to record a story
-```
-tools/perf/record_wpr --browser-executable=out/Default/chrome desktop_ui --story-filter=<YOUR_STORY_NAME>
-```
-and the following command to upload to the cloud.
-```
-upload_to_google_storage.py --bucket chrome-partner-telemetry tools/perf/page_sets/data/desktop_ui_<YOUR_RECORDED_HASH>.wprgo
-```
+Record and upload new stories to cloud storage using
+[these instructions](https://source.chromium.org/chromium/chromium/src/+/main:tools/perf/recording_benchmarks.md).
 
 ## Query benchmark metrics from chrome perf waterfall
 

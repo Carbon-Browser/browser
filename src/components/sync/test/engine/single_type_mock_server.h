@@ -12,7 +12,6 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
 #include "components/sync/base/client_tag_hash.h"
 #include "components/sync/base/model_type.h"
 #include "components/sync/engine/commit_and_get_updates_types.h"
@@ -39,6 +38,10 @@ namespace syncer {
 class SingleTypeMockServer {
  public:
   explicit SingleTypeMockServer(ModelType type);
+
+  SingleTypeMockServer(const SingleTypeMockServer&) = delete;
+  SingleTypeMockServer& operator=(const SingleTypeMockServer&) = delete;
+
   ~SingleTypeMockServer();
 
   // Generates a SyncEntity representing a server-delivered update containing
@@ -110,8 +113,6 @@ class SingleTypeMockServer {
 
   // The token that is used to generate the current progress marker.
   std::string progress_marker_token_;
-
-  DISALLOW_COPY_AND_ASSIGN(SingleTypeMockServer);
 };
 
 }  // namespace syncer

@@ -4,28 +4,28 @@
 
 import 'chrome://resources/cr_components/managed_footnote/managed_footnote.js';
 import './item.js';
-import './shared_style.js';
+import './shared_style.css.js';
 
 import {CrContainerShadowMixin} from 'chrome://resources/cr_elements/cr_container_shadow_mixin.js';
-import {I18nBehavior} from 'chrome://resources/js/i18n_behavior.m.js';
+import {I18nMixin} from 'chrome://resources/js/i18n_mixin.js';
 import {IronA11yAnnouncer} from 'chrome://resources/polymer/v3_0/iron-a11y-announcer/iron-a11y-announcer.js';
-import {html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {ExtensionsItemElement, ItemDelegate} from './item.js';
+import {getTemplate} from './item_list.html.js';
 
 type Filter = (info: chrome.developerPrivate.ExtensionInfo) => boolean;
 
 const ExtensionsItemListElementBase =
-    mixinBehaviors([I18nBehavior], CrContainerShadowMixin(PolymerElement)) as
-    {new (): PolymerElement & I18nBehavior};
+    I18nMixin(CrContainerShadowMixin(PolymerElement));
 
-class ExtensionsItemListElement extends ExtensionsItemListElementBase {
+export class ExtensionsItemListElement extends ExtensionsItemListElementBase {
   static get is() {
     return 'extensions-item-list';
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
   }
 
   static get properties() {
@@ -66,8 +66,8 @@ class ExtensionsItemListElement extends ExtensionsItemListElementBase {
     };
   }
 
-  apps: Array<chrome.developerPrivate.ExtensionInfo>;
-  extensions: Array<chrome.developerPrivate.ExtensionInfo>;
+  apps: chrome.developerPrivate.ExtensionInfo[];
+  extensions: chrome.developerPrivate.ExtensionInfo[];
   delegate: ItemDelegate;
   inDevMode: boolean;
   filter: string;
@@ -138,7 +138,7 @@ class ExtensionsItemListElement extends ExtensionsItemListElementBase {
                      this.i18n('searchResultsSingular', this.filter) :
                      this.i18n(
                          'searchResultsPlural', total.toString(), this.filter)),
-          }
+          },
         }));
       }, 0);
     }

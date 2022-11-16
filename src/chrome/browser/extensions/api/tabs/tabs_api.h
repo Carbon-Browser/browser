@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "base/compiler_specific.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "chrome/browser/extensions/chrome_extension_function_details.h"
 #include "chrome/common/extensions/api/tabs.h"
@@ -72,17 +72,6 @@ class WindowsGetAllFunction : public ExtensionFunction {
 class WindowsCreateFunction : public ExtensionFunction {
   ~WindowsCreateFunction() override {}
   ResponseAction Run() override;
-  // Returns whether the window should be created in incognito mode.
-  // |create_data| are the options passed by the extension. It may be NULL.
-  // |urls| is the list of urls to open. If we are creating an incognito window,
-  // the function will remove these urls which may not be opened in incognito
-  // mode.  If window creation leads the browser into an erroneous state,
-  // |is_error| is set to true (also, error_ member variable is assigned
-  // the proper error message).
-  bool ShouldOpenIncognitoWindow(
-      const api::windows::Create::Params::CreateData* create_data,
-      std::vector<GURL>* urls,
-      std::string* error);
   DECLARE_EXTENSION_FUNCTION("windows.create", WINDOWS_CREATE)
 };
 class WindowsUpdateFunction : public ExtensionFunction {
@@ -137,7 +126,7 @@ class TabsHighlightFunction : public ExtensionFunction {
   ResponseAction Run() override;
   bool HighlightTab(TabStripModel* tabstrip,
                     ui::ListSelectionModel* selection,
-                    int* active_index,
+                    absl::optional<size_t>* active_index,
                     int index,
                     std::string* error);
   DECLARE_EXTENSION_FUNCTION("tabs.highlight", TABS_HIGHLIGHT)
@@ -153,7 +142,7 @@ class TabsUpdateFunction : public ExtensionFunction {
                  std::string* error);
   ResponseValue GetResult();
 
-  content::WebContents* web_contents_;
+  raw_ptr<content::WebContents> web_contents_;
 
  private:
   ResponseAction Run() override;
@@ -238,6 +227,11 @@ class TabsCaptureVisibleTabFunction
       public ExtensionFunction {
  public:
   TabsCaptureVisibleTabFunction();
+
+  TabsCaptureVisibleTabFunction(const TabsCaptureVisibleTabFunction&) = delete;
+  TabsCaptureVisibleTabFunction& operator=(
+      const TabsCaptureVisibleTabFunction&) = delete;
+
   static void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry);
 
   static void set_disable_throttling_for_tests(
@@ -276,8 +270,6 @@ class TabsCaptureVisibleTabFunction
   static std::string CaptureResultToErrorMessage(CaptureResult result);
 
   static bool disable_throttling_for_test_;
-
-  DISALLOW_COPY_AND_ASSIGN(TabsCaptureVisibleTabFunction);
 };
 
 // Implement API calls tabs.executeScript, tabs.insertCSS, and tabs.removeCSS.
@@ -379,13 +371,14 @@ class TabsDiscardFunction : public ExtensionFunction {
 
   TabsDiscardFunction();
 
+  TabsDiscardFunction(const TabsDiscardFunction&) = delete;
+  TabsDiscardFunction& operator=(const TabsDiscardFunction&) = delete;
+
  private:
   ~TabsDiscardFunction() override;
 
   // ExtensionFunction:
   ExtensionFunction::ResponseAction Run() override;
-
-  DISALLOW_COPY_AND_ASSIGN(TabsDiscardFunction);
 };
 
 class TabsGoForwardFunction : public ExtensionFunction {
@@ -394,13 +387,14 @@ class TabsGoForwardFunction : public ExtensionFunction {
 
   TabsGoForwardFunction() {}
 
+  TabsGoForwardFunction(const TabsGoForwardFunction&) = delete;
+  TabsGoForwardFunction& operator=(const TabsGoForwardFunction&) = delete;
+
  private:
   ~TabsGoForwardFunction() override {}
 
   // ExtensionFunction:
   ExtensionFunction::ResponseAction Run() override;
-
-  DISALLOW_COPY_AND_ASSIGN(TabsGoForwardFunction);
 };
 
 class TabsGoBackFunction : public ExtensionFunction {
@@ -409,13 +403,14 @@ class TabsGoBackFunction : public ExtensionFunction {
 
   TabsGoBackFunction() {}
 
+  TabsGoBackFunction(const TabsGoBackFunction&) = delete;
+  TabsGoBackFunction& operator=(const TabsGoBackFunction&) = delete;
+
  private:
   ~TabsGoBackFunction() override {}
 
   // ExtensionFunction:
   ExtensionFunction::ResponseAction Run() override;
-
-  DISALLOW_COPY_AND_ASSIGN(TabsGoBackFunction);
 };
 
 }  // namespace extensions

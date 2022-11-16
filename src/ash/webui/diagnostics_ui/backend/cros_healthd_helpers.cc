@@ -6,8 +6,8 @@
 
 #include "base/logging.h"
 #include "base/strings/string_piece.h"
-#include "chromeos/services/cros_healthd/public/mojom/cros_healthd_diagnostics.mojom.h"
-#include "chromeos/services/cros_healthd/public/mojom/cros_healthd_probe.mojom.h"
+#include "chromeos/ash/services/cros_healthd/public/mojom/cros_healthd_diagnostics.mojom.h"
+#include "chromeos/ash/services/cros_healthd/public/mojom/cros_healthd_probe.mojom.h"
 
 namespace ash {
 namespace diagnostics {
@@ -27,9 +27,9 @@ using ::chromeos::cros_healthd::mojom::NonInteractiveRoutineUpdatePtr;
 using ::chromeos::cros_healthd::mojom::RoutineUpdate;
 using ::chromeos::cros_healthd::mojom::RoutineUpdateUnion;
 using ::chromeos::cros_healthd::mojom::RoutineUpdateUnionPtr;
-using ::chromeos::cros_healthd::mojom::SystemInfo;
-using ::chromeos::cros_healthd::mojom::SystemResult;
-using ::chromeos::cros_healthd::mojom::SystemResultPtr;
+using ::chromeos::cros_healthd::mojom::SystemInfoV2;
+using ::chromeos::cros_healthd::mojom::SystemResultV2;
+using ::chromeos::cros_healthd::mojom::SystemResultV2Ptr;
 using ::chromeos::cros_healthd::mojom::TelemetryInfo;
 
 template <typename TResult, typename TTag>
@@ -42,7 +42,7 @@ bool CheckResponse(const TResult& result,
   }
 
   auto tag = result->which();
-  if (tag == TTag::ERROR) {
+  if (tag == TTag::kError) {
     LOG(ERROR) << "Error retrieving " << type_name
                << "from croshealthd: " << result->get_error()->msg;
     return false;
@@ -57,7 +57,7 @@ bool CheckResponse(const TResult& result,
 
 const BatteryInfo* GetBatteryInfo(const TelemetryInfo& info) {
   const BatteryResultPtr& battery_result = info.battery_result;
-  if (!CheckResponse(battery_result, BatteryResult::Tag::BATTERY_INFO,
+  if (!CheckResponse(battery_result, BatteryResult::Tag::kBatteryInfo,
                      "battery info")) {
     return nullptr;
   }
@@ -67,7 +67,7 @@ const BatteryInfo* GetBatteryInfo(const TelemetryInfo& info) {
 
 const CpuInfo* GetCpuInfo(const TelemetryInfo& info) {
   const CpuResultPtr& cpu_result = info.cpu_result;
-  if (!CheckResponse(cpu_result, CpuResult::Tag::CPU_INFO, "cpu info")) {
+  if (!CheckResponse(cpu_result, CpuResult::Tag::kCpuInfo, "cpu info")) {
     return nullptr;
   }
 
@@ -76,7 +76,7 @@ const CpuInfo* GetCpuInfo(const TelemetryInfo& info) {
 
 const MemoryInfo* GetMemoryInfo(const TelemetryInfo& info) {
   const MemoryResultPtr& memory_result = info.memory_result;
-  if (!CheckResponse(memory_result, MemoryResult::Tag::MEMORY_INFO,
+  if (!CheckResponse(memory_result, MemoryResult::Tag::kMemoryInfo,
                      "memory info")) {
     return nullptr;
   }
@@ -84,14 +84,14 @@ const MemoryInfo* GetMemoryInfo(const TelemetryInfo& info) {
   return memory_result->get_memory_info().get();
 }
 
-const SystemInfo* GetSystemInfo(const TelemetryInfo& info) {
-  const SystemResultPtr& system_result = info.system_result;
-  if (!CheckResponse(system_result, SystemResult::Tag::SYSTEM_INFO,
-                     "system info")) {
+const SystemInfoV2* GetSystemInfo(const TelemetryInfo& info) {
+  const SystemResultV2Ptr& system_result = info.system_result_v2;
+  if (!CheckResponse(system_result, SystemResultV2::Tag::kSystemInfoV2,
+                     "system info v2")) {
     return nullptr;
   }
 
-  return system_result->get_system_info().get();
+  return system_result->get_system_info_v2().get();
 }
 
 const NonInteractiveRoutineUpdate* GetNonInteractiveRoutineUpdate(
@@ -99,9 +99,9 @@ const NonInteractiveRoutineUpdate* GetNonInteractiveRoutineUpdate(
   const RoutineUpdateUnionPtr& routine_update = update.routine_update_union;
 
   switch (routine_update->which()) {
-    case RoutineUpdateUnion::Tag::INTERACTIVE_UPDATE:
+    case RoutineUpdateUnion::Tag::kInteractiveUpdate:
       return nullptr;
-    case RoutineUpdateUnion::Tag::NONINTERACTIVE_UPDATE:
+    case RoutineUpdateUnion::Tag::kNoninteractiveUpdate:
       return routine_update->get_noninteractive_update().get();
   }
 }

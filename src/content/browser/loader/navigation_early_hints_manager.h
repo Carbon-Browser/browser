@@ -8,14 +8,15 @@
 #include "base/callback_forward.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
+#include "base/memory/raw_ptr.h"
 #include "content/common/content_export.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "net/base/isolation_info.h"
+#include "net/url_request/referrer_policy.h"
 #include "services/network/public/cpp/url_loader_completion_status.h"
 #include "services/network/public/mojom/early_hints.mojom.h"
 #include "services/network/public/mojom/url_loader_factory.mojom.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
-#include "third_party/blink/public/common/origin_trials/trial_token_validator.h"
 #include "url/gurl.h"
 
 namespace blink {
@@ -57,6 +58,9 @@ struct CONTENT_EXPORT NavigationEarlyHintsManagerParams {
   net::IsolationInfo isolation_info;
   mojo::Remote<network::mojom::URLLoaderFactory> loader_factory;
 };
+
+constexpr char kEarlyHintsPreloadRequestDestinationHistogramName[] =
+    "Network.EarlyHints.Preload.RequestDestination";
 
 // Handles 103 Early Hints responses for navigation. Responsible for resource
 // hints in Early Hints responses. Created when the first 103 response is
@@ -102,11 +106,11 @@ class CONTENT_EXPORT NavigationEarlyHintsManager {
   // navigation. When `early_hints` contains a preload Link header, starts
   // preloading it if preloading hasn't started for the same URL.
   void HandleEarlyHints(network::mojom::EarlyHintsPtr early_hints,
-                        const network::ResourceRequest& navigation_request);
+                        const network::ResourceRequest& request_for_navigation);
 
-  // True when at least one preload Link header was received via Early Hints
-  // responses for main frame navigation.
-  bool WasPreloadLinkHeaderReceived() const;
+  // True when at least one preload or preconnect Link header was received via
+  // Early Hints responses for main frame navigation.
+  bool WasResourceHintsReceived() const;
 
   std::vector<GURL> TakePreloadedResourceURLs();
 
@@ -126,23 +130,18 @@ class CONTENT_EXPORT NavigationEarlyHintsManager {
 
   network::mojom::NetworkContext* GetNetworkContext();
 
-  bool IsPreloadForNavigationEnabledByOriginTrial(
-      const std::vector<std::string>& raw_tokens);
-
-  void MaybePreconnect(const network::mojom::LinkHeaderPtr& link,
-                       bool enabled_by_origin_trial);
+  void MaybePreconnect(const network::mojom::LinkHeaderPtr& link);
 
   void MaybePreloadHintedResource(
       const network::mojom::LinkHeaderPtr& link,
-      const network::ResourceRequest& navigation_request,
-      bool enabled_by_origin_trial);
+      const network::ResourceRequest& request_for_navigation,
+      const std::vector<network::mojom::ContentSecurityPolicyPtr>&
+          content_security_policies,
+      net::ReferrerPolicy referrer_policy);
 
   // Determines whether resource hints like preload and preconnect should be
-  // handled or not. Currently we are running two trials: The field trial and
-  // the origin trial. When the field trial forcibly disables preloads, always
-  // returns false. Otherwise, returns true when either of trials is enabled.
-  bool ShouldHandleResourceHints(const network::mojom::LinkHeaderPtr& link,
-                                 bool enabled_by_origin_trial);
+  // handled or not.
+  bool ShouldHandleResourceHints(const network::mojom::LinkHeaderPtr& link);
 
   void OnPreloadComplete(const GURL& url, const PreloadedResource& result);
 
@@ -177,15 +176,18 @@ class CONTENT_EXPORT NavigationEarlyHintsManager {
 
   std::vector<GURL> preloaded_urls_;
 
-  bool was_preload_link_header_received_ = false;
-  bool was_preload_triggered_by_origin_trial_ = false;
-
-  blink::TrialTokenValidator const trial_token_validator_;
+  // Set to true when HandleEarlyHints() is called for the first time. Used to
+  // ignore following responses.
+  bool was_first_early_hints_received_ = false;
+  // Set to true when preload or preconnect Link headers are received. Used for
+  // metrics recording.
+  bool was_resource_hints_received_ = false;
 
   base::OnceCallback<void(PreloadedResources)>
       preloads_completion_callback_for_testing_;
 
-  network::mojom::NetworkContext* network_context_for_testing_ = nullptr;
+  raw_ptr<network::mojom::NetworkContext> network_context_for_testing_ =
+      nullptr;
 };
 
 }  // namespace content

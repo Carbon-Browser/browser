@@ -7,6 +7,7 @@
 #include "content/test/test_render_frame_host.h"
 #include "content/test/test_web_contents.h"
 #include "third_party/blink/public/common/features.h"
+#include "third_party/blink/public/common/frame/frame_owner_element_type.h"
 
 namespace content {
 
@@ -23,20 +24,21 @@ class FencedFrameTreeNodeTest : public RenderViewHostImplTestHarness {
         {{"implementation_type", "shadow_dom"}});
   }
 
-  FrameTreeNode* AddFrame(FrameTree* frame_tree,
+  FrameTreeNode* AddFrame(FrameTree& frame_tree,
                           RenderFrameHostImpl* parent,
                           int process_id,
                           int new_routing_id,
                           const blink::FramePolicy& frame_policy,
-                          blink::mojom::FrameOwnerElementType owner_type) {
-    return frame_tree->AddFrame(
+                          blink::FrameOwnerElementType owner_type) {
+    return frame_tree.AddFrame(
         parent, process_id, new_routing_id,
         TestRenderFrameHost::CreateStubFrameRemote(),
         TestRenderFrameHost::CreateStubBrowserInterfaceBrokerReceiver(),
         TestRenderFrameHost::CreateStubPolicyContainerBindParams(),
         blink::mojom::TreeScopeType::kDocument, std::string(), "uniqueName0",
         false, blink::LocalFrameToken(), base::UnguessableToken::Create(),
-        frame_policy, blink::mojom::FrameOwnerProperties(), false, owner_type);
+        frame_policy, blink::mojom::FrameOwnerProperties(), false, owner_type,
+        /*is_dummy_frame_for_inner_tree=*/false);
   }
 
  private:
@@ -45,12 +47,12 @@ class FencedFrameTreeNodeTest : public RenderViewHostImplTestHarness {
 
 TEST_F(FencedFrameTreeNodeTest, IsFencedFrameHelpers) {
   main_test_rfh()->InitializeRenderFrameIfNeeded();
-  FrameTree* frame_tree = contents()->GetFrameTree();
-  FrameTreeNode* root = frame_tree->root();
+  FrameTree& frame_tree = contents()->GetPrimaryFrameTree();
+  FrameTreeNode* root = frame_tree.root();
   int process_id = root->current_frame_host()->GetProcess()->GetID();
 
   // Simulate attaching an iframe.
-  constexpr auto kOwnerType = blink::mojom::FrameOwnerElementType::kIframe;
+  constexpr auto kOwnerType = blink::FrameOwnerElementType::kIframe;
   AddFrame(frame_tree, root->current_frame_host(), process_id, 14,
            blink::FramePolicy(), kOwnerType);
   EXPECT_FALSE(root->child_at(0)->IsFencedFrameRoot());
@@ -59,7 +61,7 @@ TEST_F(FencedFrameTreeNodeTest, IsFencedFrameHelpers) {
   // Add a fenced frame.
   // main-frame -> fenced-frame.
   constexpr auto kFencedframeOwnerType =
-      blink::mojom::FrameOwnerElementType::kFencedframe;
+      blink::FrameOwnerElementType::kFencedframe;
   blink::FramePolicy policy;
   policy.is_fenced = true;
   AddFrame(frame_tree, root->current_frame_host(), process_id, 15, policy,

@@ -7,9 +7,10 @@
 #include <memory>
 #include <utility>
 
+#include "ash/public/cpp/update_types.h"
 #include "base/callback_helpers.h"
-#include "base/macros.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/test/mock_callback.h"
 #include "base/test/power_monitor_test.h"
@@ -19,6 +20,7 @@
 #include "base/time/time.h"
 #include "base/values.h"
 #include "build/chromeos_buildflags.h"
+#include "chrome/browser/ui/ash/system_tray_client_impl.h"
 #include "chrome/browser/upgrade_detector/upgrade_detector.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/scoped_testing_local_state.h"
@@ -31,7 +33,6 @@
 #include "ash/shell.h"
 #include "ash/test/ash_test_helper.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
-#include "components/session_manager/core/session_manager.h"
 #include "components/user_manager/scoped_user_manager.h"
 #include "content/public/test/browser_task_environment.h"
 #include "ui/display/manager/display_configurator.h"
@@ -74,6 +75,11 @@ class FakeRelaunchNotificationController
       : RelaunchNotificationController(upgrade_detector, clock, tick_clock),
         delegate_(delegate) {}
 
+  FakeRelaunchNotificationController(
+      const FakeRelaunchNotificationController&) = delete;
+  FakeRelaunchNotificationController& operator=(
+      const FakeRelaunchNotificationController&) = delete;
+
   using RelaunchNotificationController::kRelaunchGracePeriod;
 
   base::Time IncreaseRelaunchDeadlineOnShow() {
@@ -101,9 +107,7 @@ class FakeRelaunchNotificationController
     delegate_->OnRelaunchDeadlineExpired();
   }
 
-  ControllerDelegate* delegate_;
-
-  DISALLOW_COPY_AND_ASSIGN(FakeRelaunchNotificationController);
+  raw_ptr<ControllerDelegate> delegate_;
 };
 
 // A mock delegate for testing.
@@ -124,6 +128,9 @@ class FakeUpgradeDetector : public UpgradeDetector {
       : UpgradeDetector(clock, tick_clock) {
     set_upgrade_detected_time(this->clock()->Now());
   }
+
+  FakeUpgradeDetector(const FakeUpgradeDetector&) = delete;
+  FakeUpgradeDetector& operator=(const FakeUpgradeDetector&) = delete;
 
   base::TimeDelta GetHighAnnoyanceLevelDelta() {
     return GetAnnoyanceLevelDeadline(UpgradeDetector::UPGRADE_ANNOYANCE_HIGH) -
@@ -169,9 +176,7 @@ class FakeUpgradeDetector : public UpgradeDetector {
   base::TimeDelta high_threshold() const { return high_threshold_; }
 
  private:
-  base::TimeDelta high_threshold_ = base::TimeDelta::FromDays(7);
-
-  DISALLOW_COPY_AND_ASSIGN(FakeUpgradeDetector);
+  base::TimeDelta high_threshold_ = base::Days(7);
 };
 
 }  // namespace
@@ -179,6 +184,12 @@ class FakeUpgradeDetector : public UpgradeDetector {
 // A test harness that provides facilities for manipulating the relaunch
 // notification policy setting and for broadcasting upgrade notifications.
 class RelaunchNotificationControllerTest : public ::testing::Test {
+ public:
+  RelaunchNotificationControllerTest(
+      const RelaunchNotificationControllerTest&) = delete;
+  RelaunchNotificationControllerTest& operator=(
+      const RelaunchNotificationControllerTest&) = delete;
+
  protected:
   RelaunchNotificationControllerTest()
       : task_environment_(
@@ -226,8 +237,6 @@ class RelaunchNotificationControllerTest : public ::testing::Test {
   base::test::TaskEnvironment task_environment_;
   ScopedTestingLocalState scoped_local_state_;
   FakeUpgradeDetector upgrade_detector_;
-
-  DISALLOW_COPY_AND_ASSIGN(RelaunchNotificationControllerTest);
 };
 
 TEST_F(RelaunchNotificationControllerTest, CreateDestroy) {
@@ -553,20 +562,17 @@ TEST_F(RelaunchNotificationControllerTest, NonePeriodChange) {
       &mock_controller_delegate);
 
   // Reduce the period.
-  fake_upgrade_detector().BroadcastHighThresholdChange(
-      base::TimeDelta::FromDays(1));
+  fake_upgrade_detector().BroadcastHighThresholdChange(base::Days(1));
   FastForwardBy(fake_upgrade_detector().high_threshold());
   ::testing::Mock::VerifyAndClearExpectations(&mock_controller_delegate);
 
   SetNotificationPref(1);
-  fake_upgrade_detector().BroadcastHighThresholdChange(
-      base::TimeDelta::FromHours(23));
+  fake_upgrade_detector().BroadcastHighThresholdChange(base::Hours(23));
   FastForwardBy(fake_upgrade_detector().high_threshold());
   ::testing::Mock::VerifyAndClearExpectations(&mock_controller_delegate);
 
   SetNotificationPref(2);
-  fake_upgrade_detector().BroadcastHighThresholdChange(
-      base::TimeDelta::FromHours(22));
+  fake_upgrade_detector().BroadcastHighThresholdChange(base::Hours(22));
   FastForwardBy(fake_upgrade_detector().high_threshold());
   ::testing::Mock::VerifyAndClearExpectations(&mock_controller_delegate);
 }
@@ -585,20 +591,17 @@ TEST_F(RelaunchNotificationControllerTest, VeryLowPeriodChange) {
   ::testing::Mock::VerifyAndClearExpectations(&mock_controller_delegate);
 
   // Reduce the period.
-  fake_upgrade_detector().BroadcastHighThresholdChange(
-      base::TimeDelta::FromDays(1));
+  fake_upgrade_detector().BroadcastHighThresholdChange(base::Days(1));
   FastForwardBy(fake_upgrade_detector().high_threshold());
   ::testing::Mock::VerifyAndClearExpectations(&mock_controller_delegate);
 
   SetNotificationPref(1);
-  fake_upgrade_detector().BroadcastHighThresholdChange(
-      base::TimeDelta::FromHours(23));
+  fake_upgrade_detector().BroadcastHighThresholdChange(base::Hours(23));
   FastForwardBy(fake_upgrade_detector().high_threshold());
   ::testing::Mock::VerifyAndClearExpectations(&mock_controller_delegate);
 
   SetNotificationPref(2);
-  fake_upgrade_detector().BroadcastHighThresholdChange(
-      base::TimeDelta::FromHours(22));
+  fake_upgrade_detector().BroadcastHighThresholdChange(base::Hours(22));
   FastForwardBy(fake_upgrade_detector().high_threshold());
   ::testing::Mock::VerifyAndClearExpectations(&mock_controller_delegate);
 }
@@ -886,7 +889,7 @@ TEST_F(RelaunchNotificationControllerTest, NotifyAllWithShortestPeriod) {
   ::testing::Mock::VerifyAndClearExpectations(&mock_controller_delegate);
 
   // Advance to the grace threshold and raise the annoyance level.
-  FastForwardBy(delta - base::TimeDelta::FromHours(1));
+  FastForwardBy(delta - base::Hours(1));
   ::testing::Mock::VerifyAndClearExpectations(&mock_controller_delegate);
   EXPECT_CALL(mock_controller_delegate, NotifyRelaunchRequired());
   fake_upgrade_detector().BroadcastLevelChange(
@@ -900,7 +903,7 @@ TEST_F(RelaunchNotificationControllerTest, NotifyAllWithShortestPeriod) {
 
   // Advance to the deadline to restart.
   EXPECT_CALL(mock_controller_delegate, OnRelaunchDeadlineExpired());
-  FastForwardBy(base::TimeDelta::FromHours(1));
+  FastForwardBy(base::Hours(1));
   ASSERT_EQ(GetMockClock()->Now(),
             upgrade_detector()->GetAnnoyanceLevelDeadline(
                 UpgradeDetector::UPGRADE_ANNOYANCE_HIGH));
@@ -929,8 +932,13 @@ class RelaunchNotificationControllerPlatformImplTest : public ::testing::Test {
     const AccountId test_account_id(AccountId::FromUserEmail(test_user_email));
     user_manager_->AddUser(test_account_id);
     user_manager_->LoginUser(test_account_id);
-    session_manager_.CreateSession(test_account_id, test_user_email, false);
-    session_manager_.SetSessionState(session_manager::SessionState::ACTIVE);
+
+    // SessionManager is created by
+    // |AshTestHelper::bluetooth_config_test_helper()|.
+    session_manager::SessionManager::Get()->CreateSession(
+        test_account_id, test_user_email, false);
+    session_manager::SessionManager::Get()->SetSessionState(
+        session_manager::SessionState::ACTIVE);
 
     logger_ = std::make_unique<display::test::ActionLogger>();
     native_display_delegate_ =
@@ -941,11 +949,13 @@ class RelaunchNotificationControllerPlatformImplTest : public ::testing::Test {
   }
 
   void LockScreen() {
-    session_manager_.SetSessionState(session_manager::SessionState::LOCKED);
+    session_manager::SessionManager::Get()->SetSessionState(
+        session_manager::SessionState::LOCKED);
   }
 
   void UnLockScreen() {
-    session_manager_.SetSessionState(session_manager::SessionState::ACTIVE);
+    session_manager::SessionManager::Get()->SetSessionState(
+        session_manager::SessionState::ACTIVE);
   }
 
   void TurnDisplayOff() {
@@ -967,7 +977,6 @@ class RelaunchNotificationControllerPlatformImplTest : public ::testing::Test {
   content::BrowserTaskEnvironment task_environment_;
   RelaunchNotificationControllerPlatformImpl impl_;
   ash::AshTestHelper ash_test_helper_;
-  session_manager::SessionManager session_manager_;
   ash::FakeChromeUserManager* user_manager_;
   std::unique_ptr<user_manager::ScopedUserManager> scoped_user_manager_;
   std::unique_ptr<display::test::ActionLogger> logger_;
@@ -982,7 +991,9 @@ TEST_F(RelaunchNotificationControllerPlatformImplTest,
 
   // Expect the platform_impl to query for the deadline synchronously.
   ::testing::StrictMock<base::MockOnceCallback<base::Time()>> callback;
-  platform_impl().NotifyRelaunchRequired(GetMockClock()->Now(), callback.Get());
+  platform_impl().NotifyRelaunchRequired(
+      GetMockClock()->Now(), /*is_notification_type_overriden=*/false,
+      callback.Get());
   ::testing::Mock::VerifyAndClearExpectations(&callback);
 }
 
@@ -993,7 +1004,9 @@ TEST_F(RelaunchNotificationControllerPlatformImplTest,
 
   ::testing::StrictMock<base::MockOnceCallback<base::Time()>> callback;
 
-  platform_impl().NotifyRelaunchRequired(GetMockClock()->Now(), callback.Get());
+  platform_impl().NotifyRelaunchRequired(
+      GetMockClock()->Now(), /*is_notification_type_overriden=*/false,
+      callback.Get());
   ::testing::Mock::VerifyAndClearExpectations(&callback);
 
   EXPECT_CALL(callback, Run());
@@ -1008,7 +1021,9 @@ TEST_F(RelaunchNotificationControllerPlatformImplTest,
 
   ::testing::StrictMock<base::MockOnceCallback<base::Time()>> callback;
 
-  platform_impl().NotifyRelaunchRequired(GetMockClock()->Now(), callback.Get());
+  platform_impl().NotifyRelaunchRequired(
+      GetMockClock()->Now(), /*is_notification_type_overriden=*/false,
+      callback.Get());
   ::testing::Mock::VerifyAndClearExpectations(&callback);
 
   EXPECT_CALL(callback, Run());
@@ -1023,7 +1038,9 @@ TEST_F(RelaunchNotificationControllerPlatformImplTest,
 
   ::testing::StrictMock<base::MockOnceCallback<base::Time()>> callback;
 
-  platform_impl().NotifyRelaunchRequired(GetMockClock()->Now(), callback.Get());
+  platform_impl().NotifyRelaunchRequired(
+      GetMockClock()->Now(), /*is_notification_type_overriden=*/false,
+      callback.Get());
   ::testing::Mock::VerifyAndClearExpectations(&callback);
 
   EXPECT_CALL(callback, Run());
@@ -1043,7 +1060,9 @@ TEST_F(RelaunchNotificationControllerPlatformImplTest,
 
   ::testing::StrictMock<base::MockOnceCallback<base::Time()>> callback;
 
-  platform_impl().NotifyRelaunchRequired(GetMockClock()->Now(), callback.Get());
+  platform_impl().NotifyRelaunchRequired(
+      GetMockClock()->Now(), /*is_notification_type_overriden=*/false,
+      callback.Get());
   ::testing::Mock::VerifyAndClearExpectations(&callback);
 
   EXPECT_CALL(callback, Run());
@@ -1054,6 +1073,58 @@ TEST_F(RelaunchNotificationControllerPlatformImplTest,
   LockScreen();
   UnLockScreen();
   ::testing::Mock::VerifyAndClearExpectations(&callback);
+}
+
+class MockSystemTrayClientImpl : public SystemTrayClientImpl {
+ public:
+  MockSystemTrayClientImpl() : SystemTrayClientImpl(this) {}
+  MOCK_METHOD(void,
+              SetRelaunchNotificationState,
+              (const ash::RelaunchNotificationState&),
+              (override));
+};
+
+// Correct relaunch notification state for required notification type.
+TEST_F(RelaunchNotificationControllerPlatformImplTest,
+       RelaunchNotificationStateRequired) {
+  base::MockOnceCallback<base::Time()> callback;
+  MockSystemTrayClientImpl system_tray_client_impl;
+  ash::RelaunchNotificationState relaunch_notification_state;
+  EXPECT_CALL(system_tray_client_impl, SetRelaunchNotificationState(_))
+      .WillOnce(testing::SaveArg<0>(&relaunch_notification_state));
+
+  platform_impl().NotifyRelaunchRequired(
+      GetMockClock()->Now(), /*is_notification_type_overriden=*/false,
+      callback.Get());
+
+  EXPECT_EQ(relaunch_notification_state.requirement_type,
+            ash::RelaunchNotificationState::kRequired);
+  EXPECT_EQ(relaunch_notification_state.policy_source,
+            ash::RelaunchNotificationState::kUser);
+  EXPECT_LE(relaunch_notification_state.rounded_time_until_reboot_required,
+            base::Seconds(1));
+}
+
+// Correct relaunch notification state for required notification type with an
+// override.
+TEST_F(RelaunchNotificationControllerPlatformImplTest,
+       RelaunchNotificationStateRequiredWithOverride) {
+  base::MockOnceCallback<base::Time()> callback;
+  MockSystemTrayClientImpl system_tray_client_impl;
+  ash::RelaunchNotificationState relaunch_notification_state;
+  EXPECT_CALL(system_tray_client_impl, SetRelaunchNotificationState(_))
+      .WillOnce(testing::SaveArg<0>(&relaunch_notification_state));
+
+  platform_impl().NotifyRelaunchRequired(
+      GetMockClock()->Now(), /*is_notification_type_overriden=*/true,
+      callback.Get());
+
+  EXPECT_EQ(relaunch_notification_state.requirement_type,
+            ash::RelaunchNotificationState::kRequired);
+  EXPECT_EQ(relaunch_notification_state.policy_source,
+            ash::RelaunchNotificationState::kDevice);
+  EXPECT_LE(relaunch_notification_state.rounded_time_until_reboot_required,
+            base::Seconds(1));
 }
 
 #else  // BUILDFLAG(IS_CHROMEOS_ASH)
@@ -1084,16 +1155,16 @@ class RelaunchNotificationControllerPlatformImplTest
   absl::optional<RelaunchNotificationControllerPlatformImpl> impl_;
 };
 
+// Flaky on all platforms: https://crbug.com/1294032
 TEST_F(RelaunchNotificationControllerPlatformImplTest,
-       SynchronousNotification) {
+       DISABLED_SynchronousNotification) {
   // Make the UX visible to the user so that no delay will be incurred
   ASSERT_NO_FATAL_FAILURE(SetVisibility(true));
 
   // Expect the platform_impl to show the notification synchronously.
   ::testing::StrictMock<base::MockOnceCallback<base::Time()>> callback;
 
-  base::Time deadline =
-      base::Time::FromDeltaSinceWindowsEpoch(base::TimeDelta::FromHours(1));
+  base::Time deadline = base::Time::FromDeltaSinceWindowsEpoch(base::Hours(1));
 
   // There should be no query at the time of showing.
   platform_impl().NotifyRelaunchRequired(deadline, callback.Get());
@@ -1111,11 +1182,16 @@ TEST_F(RelaunchNotificationControllerPlatformImplTest,
   ::testing::Mock::VerifyAndClearExpectations(&callback);
 }
 
-TEST_F(RelaunchNotificationControllerPlatformImplTest, DeferredDeadline) {
+//  Flaky on Mac: https://crbug.com/1312578
+#if BUILDFLAG(IS_MAC)
+#define MAYBE_DeferredDeadline DISABLED_DeferredDeadline
+#else
+#define MAYBE_DeferredDeadline DeferredDeadline
+#endif
+TEST_F(RelaunchNotificationControllerPlatformImplTest, MAYBE_DeferredDeadline) {
   ::testing::StrictMock<base::MockOnceCallback<base::Time()>> callback;
 
-  base::Time deadline =
-      base::Time::FromDeltaSinceWindowsEpoch(base::TimeDelta::FromHours(1));
+  base::Time deadline = base::Time::FromDeltaSinceWindowsEpoch(base::Hours(1));
 
   // There should be no query because the browser isn't visible.
   platform_impl().NotifyRelaunchRequired(deadline, callback.Get());

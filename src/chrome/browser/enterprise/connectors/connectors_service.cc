@@ -10,10 +10,12 @@
 #include "base/no_destructor.h"
 #include "base/path_service.h"
 #include "base/strings/utf_string_conversions.h"
+#include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/enterprise/connectors/common.h"
 #include "chrome/browser/enterprise/connectors/connectors_manager.h"
+#include "chrome/browser/enterprise/connectors/reporting/extension_install_event_router.h"
 #include "chrome/browser/enterprise/connectors/service_provider_config.h"
 #include "chrome/browser/enterprise/util/affiliation.h"
 #include "chrome/browser/policy/chrome_browser_policy_connector.h"
@@ -23,6 +25,7 @@
 #include "chrome/browser/profiles/profile_attributes_storage.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/profiles/reporting_util.h"
+#include "chrome/browser/safe_browsing/cloud_content_scanning/deep_scanning_utils.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "chrome/browser/ui/managed_ui.h"
 #include "components/embedder_support/user_agent_utils.h"
@@ -37,7 +40,7 @@
 #include "components/policy/core/common/cloud/user_cloud_policy_manager.h"
 #include "components/policy/core/common/policy_types.h"
 #include "components/safe_browsing/core/common/safe_browsing_prefs.h"
-#include "components/signin/public/identity_manager/consent_level.h"
+#include "components/signin/public/base/consent_level.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/user_prefs/user_prefs.h"
 #include "components/version_info/version_info.h"
@@ -48,7 +51,15 @@
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "chrome/browser/ash/policy/core/user_cloud_policy_manager_ash.h"
+#include "chrome/browser/ash/profiles/profile_helper.h"
+#include "chrome/browser/ash/settings/device_settings_service.h"
+#include "components/user_manager/user.h"
 #include "extensions/common/constants.h"
+#endif
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+#include "chromeos/startup/browser_params_proxy.h"
+#include "components/policy/core/common/policy_loader_lacros.h"
 #endif
 
 namespace enterprise_connectors {
@@ -75,6 +86,12 @@ void PopulateDeviceMetadata(const ReportingSettings& reporting_settings,
   auto* manager = profile->GetUserCloudPolicyManagerAsh();
   if (manager && manager->core() && manager->core()->client())
     client_id = manager->core()->client()->client_id();
+#elif BUILDFLAG(IS_CHROMEOS_LACROS)
+  Profile* main_profile = GetMainProfileLacros();
+  std::string client_id;
+  if (main_profile) {
+    client_id = reporting::GetUserClientId(main_profile).value_or("");
+  }
 #else
   std::string client_id =
       policy::BrowserDMTokenStorage::Get()->RetrieveClientId();
@@ -99,102 +116,28 @@ bool IsURLExemptFromAnalysis(const GURL& url) {
   return false;
 }
 
+#if BUILDFLAG(IS_CHROMEOS)
+absl::optional<std::string> GetDeviceDMToken() {
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  const chromeos::BrowserParamsProxy* init_params =
+      chromeos::BrowserParamsProxy::Get();
+  if (init_params->DeviceProperties()) {
+    return init_params->DeviceProperties()->device_dm_token;
+  }
+  return absl::nullopt;
+#else
+  const enterprise_management::PolicyData* policy_data =
+      ash::DeviceSettingsService::Get()->policy_data();
+  if (policy_data && policy_data->has_request_token())
+    return policy_data->request_token();
+  return absl::nullopt;
+#endif
+}
+#endif
 }  // namespace
 
 const base::Feature kEnterpriseConnectorsEnabled{
     "EnterpriseConnectorsEnabled", base::FEATURE_ENABLED_BY_DEFAULT};
-
-const char kServiceProviderConfig[] = R"({
-  "version": "1",
-  "service_providers" : [
-    {
-      "name": "google",
-      "display_name": "Google Cloud",
-      "version": {
-        "1": {
-          "analysis": {
-            "url": "https://safebrowsing.google.com/safebrowsing/uploads/scan",
-            "supported_tags": [
-              {
-                "name": "malware",
-                "display_name": "Threat protection",
-                "mime_types": [
-                  "application/vnd.microsoft.portable-executable",
-                  "application/vnd.rar",
-                  "application/x-msdos-program",
-                  "application/zip"
-                ],
-                "max_file_size": 52428800
-              },
-              {
-                "name": "dlp",
-                "display_name": "Sensitive data protection",
-                "mime_types": [
-                  "application/gzip",
-                  "application/msword",
-                  "application/pdf",
-                  "application/postscript",
-                  "application/rtf",
-                  "application/vnd.google-apps.document.internal",
-                  "application/vnd.google-apps.spreadsheet.internal",
-                  "application/vnd.ms-cab-compressed",
-                  "application/vnd.ms-excel",
-                  "application/vnd.ms-powerpoint",
-                  "application/vnd.ms-xpsdocument",
-                  "application/vnd.oasis.opendocument.text",
-                  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                  "application/vnd.openxmlformats-officedocument.spreadsheetml.template",
-                  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                  "application/vnd.openxmlformats-officedocument.wordprocessingml.template",
-                  "application/vnd.ms-excel.sheet.macroenabled.12",
-                  "application/vnd.ms-excel.template.macroenabled.12",
-                  "application/vnd.ms-word.document.macroenabled.12",
-                  "application/vnd.ms-word.template.macroenabled.12",
-                  "application/vnd.rar",
-                  "application/vnd.wordperfect",
-                  "application/x-7z-compressed",
-                  "application/x-bzip",
-                  "application/x-bzip2",
-                  "application/x-tar",
-                  "application/zip",
-                  "text/csv",
-                  "text/plain"
-                ],
-                "max_file_size": 52428800
-              }
-            ]
-          },
-          "reporting": {
-            "url": "https://chromereporting-pa.googleapis.com/v1/events"
-          }
-        }
-      }
-    },
-    {
-      "name": "box",
-      "display_name": "Box",
-      "version":  {
-        "1": {
-          "file_system": {
-            "home": "https://box.com",
-            "authorization_endpoint": "https://account.box.com/api/oauth2/authorize",
-            "token_endpoint": "https://api.box.com/oauth2/token",
-            "max_direct_size": 20971520,
-            "scopes": [],
-            "disable": [ "box.com", "boxcloud.com" ]
-          }
-        }
-      }
-    }
-  ]
-})";
-
-ServiceProviderConfig* GetServiceProviderConfig() {
-  static base::NoDestructor<ServiceProviderConfig> config(
-      kServiceProviderConfig);
-  return config.get();
-}
 
 // --------------------------------
 // ConnectorsService implementation
@@ -219,6 +162,21 @@ absl::optional<ReportingSettings> ConnectorsService::GetReportingSettings(
   if (!settings.has_value())
     return absl::nullopt;
 
+#if BUILDFLAG(IS_CHROMEOS)
+  Profile* profile = Profile::FromBrowserContext(context_);
+  if (enterprise_connectors::IncludeDeviceInfo(profile,
+                                               /*per_profile=*/false)) {
+    // The device dm token includes additional information like a device id,
+    // which is relevant for reporting and should only be used for
+    // IncludeDeviceInfo==true.
+    absl::optional<std::string> device_dm_token = GetDeviceDMToken();
+    if (device_dm_token.has_value()) {
+      settings.value().dm_token = device_dm_token.value();
+      settings.value().per_profile = false;
+      return settings;
+    }
+  }
+#endif
   absl::optional<DmToken> dm_token = GetDmToken(ConnectorScopePref(connector));
   if (!dm_token.has_value())
     return absl::nullopt;
@@ -245,13 +203,20 @@ absl::optional<AnalysisSettings> ConnectorsService::GetAnalysisSettings(
     return absl::nullopt;
 
   absl::optional<DmToken> dm_token = GetDmToken(ConnectorScopePref(connector));
-  if (!dm_token.has_value())
-    return absl::nullopt;
+  bool is_cloud = settings.value().cloud_or_local_settings.is_cloud_analysis();
 
-  settings.value().dm_token = dm_token.value().value;
+  if (is_cloud) {
+    if (!dm_token.has_value())
+      return absl::nullopt;
+
+    absl::get<CloudAnalysisSettings>(settings.value().cloud_or_local_settings)
+        .dm_token = dm_token.value().value;
+  }
+
   settings.value().per_profile =
+      dm_token.has_value() &&
       dm_token.value().scope == policy::POLICY_SCOPE_USER;
-  settings.value().client_metadata = BuildClientMetadata();
+  settings.value().client_metadata = BuildClientMetadata(is_cloud);
 
   return settings;
 }
@@ -342,9 +307,19 @@ absl::optional<GURL> ConnectorsService::GetLearnMoreUrl(
   return connectors_manager_->GetLearnMoreUrl(connector, tag);
 }
 
-bool ConnectorsService::HasCustomInfoToDisplay(AnalysisConnector connector,
-                                               const std::string& tag) {
-  return GetCustomMessage(connector, tag) || GetLearnMoreUrl(connector, tag);
+bool ConnectorsService::GetBypassJustificationRequired(
+    AnalysisConnector connector,
+    const std::string& tag) {
+  if (!ConnectorsEnabled())
+    return false;
+
+  return connectors_manager_->GetBypassJustificationRequired(connector, tag);
+}
+
+bool ConnectorsService::HasExtraUiToDisplay(AnalysisConnector connector,
+                                            const std::string& tag) {
+  return GetCustomMessage(connector, tag) || GetLearnMoreUrl(connector, tag) ||
+         GetBypassJustificationRequired(connector, tag);
 }
 
 std::vector<std::string> ConnectorsService::GetAnalysisServiceProviderNames(
@@ -358,7 +333,6 @@ std::vector<std::string> ConnectorsService::GetAnalysisServiceProviderNames(
   return connectors_manager_->GetAnalysisServiceProviderNames(connector);
 }
 
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
 std::string ConnectorsService::GetManagementDomain() {
   if (!ConnectorsEnabled())
     return std::string();
@@ -369,6 +343,7 @@ std::string ConnectorsService::GetManagementDomain() {
         ConnectorScopePref(AnalysisConnector::FILE_ATTACHED),
         ConnectorScopePref(AnalysisConnector::FILE_DOWNLOADED),
         ConnectorScopePref(AnalysisConnector::BULK_DATA_ENTRY),
+        ConnectorScopePref(AnalysisConnector::PRINT),
         ConnectorScopePref(ReportingConnector::SECURITY_EVENT)}) {
     absl::optional<DmToken> dm_token = GetDmToken(scope_pref);
     if (dm_token.has_value()) {
@@ -384,6 +359,18 @@ std::string ConnectorsService::GetManagementDomain() {
   if (!scope.has_value())
     return std::string();
 
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  return chrome::GetAccountManagerIdentity(
+             Profile::FromBrowserContext(context_))
+      .value_or(std::string());
+#elif BUILDFLAG(IS_CHROMEOS_LACROS)
+  // In LaCros it's always managed by main profile policy.
+  const enterprise_management::PolicyData* policy =
+      policy::PolicyLoaderLacros::main_user_policy_data();
+  if (policy && policy->has_managed_by())
+    return policy->managed_by();
+  return std::string();
+#else
   if (scope.value() == policy::PolicyScope::POLICY_SCOPE_USER) {
     return chrome::GetAccountManagerIdentity(
                Profile::FromBrowserContext(context_))
@@ -400,8 +387,8 @@ std::string ConnectorsService::GetManagementDomain() {
   return (store && store->has_policy())
              ? gaia::ExtractDomainName(store->policy()->username())
              : std::string();
-}
 #endif
+}
 
 absl::optional<std::string> ConnectorsService::GetDMTokenForRealTimeUrlCheck()
     const {
@@ -449,9 +436,8 @@ ConnectorsService::DmToken::~DmToken() = default;
 
 absl::optional<ConnectorsService::DmToken> ConnectorsService::GetDmToken(
     const char* scope_pref) const {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  // On CrOS, the device must be affiliated to use the DM token for
-  // scanning/reporting so we always use the browser DM token.
+#if BUILDFLAG(IS_CHROMEOS)
+  // On CrOS the settings from primary profile applies to all profiles.
   return GetBrowserDmToken();
 #else
   return GetPolicyScope(scope_pref) == policy::POLICY_SCOPE_USER
@@ -471,14 +457,16 @@ ConnectorsService::GetBrowserDmToken() const {
   return DmToken(dm_token.value(), policy::POLICY_SCOPE_MACHINE);
 }
 
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
+#if !BUILDFLAG(IS_CHROMEOS)
 absl::optional<ConnectorsService::DmToken>
 ConnectorsService::GetProfileDmToken() const {
   if (!CanUseProfileDmToken())
     return absl::nullopt;
 
+  Profile* profile = Profile::FromBrowserContext(context_);
+
   policy::UserCloudPolicyManager* policy_manager =
-      Profile::FromBrowserContext(context_)->GetUserCloudPolicyManager();
+      profile->GetUserCloudPolicyManager();
   if (!policy_manager || !policy_manager->IsClientRegistered())
     return absl::nullopt;
 
@@ -487,15 +475,16 @@ ConnectorsService::GetProfileDmToken() const {
 }
 
 bool ConnectorsService::CanUseProfileDmToken() const {
+  Profile* profile = Profile::FromBrowserContext(context_);
+
   // If the browser isn't managed by CBCM, then the profile DM token can be
   // used.
   if (!policy::BrowserDMTokenStorage::Get()->RetrieveDMToken().is_valid())
     return true;
 
-  return chrome::enterprise_util::IsProfileAffiliated(
-      Profile::FromBrowserContext(context_));
+  return chrome::enterprise_util::IsProfileAffiliated(profile);
 }
-#endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // !BUILDFLAG(IS_CHROMEOS)
 
 policy::PolicyScope ConnectorsService::GetPolicyScope(
     const char* scope_pref) const {
@@ -511,20 +500,30 @@ bool ConnectorsService::ConnectorsEnabled() const {
   return !Profile::FromBrowserContext(context_)->IsOffTheRecord();
 }
 
-std::unique_ptr<ClientMetadata> ConnectorsService::BuildClientMetadata() {
-  // Check the reporting policy value to check if the analysis should include
-  // browser/device/profile information.
+std::unique_ptr<ClientMetadata> ConnectorsService::BuildClientMetadata(
+    bool is_cloud) {
+  // Use reporting settings to determine what should be included in client
+  // metadata, but only for cloud service providers.  If the reporting
+  // connector is is not enabled, don't send anything at all.
   auto reporting_settings =
       GetReportingSettings(ReportingConnector::SECURITY_EVENT);
-  if (!reporting_settings.has_value())
+  if (is_cloud && !reporting_settings.has_value())
     return nullptr;
 
-  bool include_device_info = !reporting_settings.value().per_profile;
   Profile* profile = Profile::FromBrowserContext(context_);
-
   auto metadata = std::make_unique<ClientMetadata>(
       reporting::GetContextAsClientMetadata(profile));
-  PopulateBrowserMetadata(include_device_info, metadata->mutable_browser());
+
+  // Device info is only useful for cloud service providers since local
+  // provider can already determine all this info themselves.
+  const bool include_device_info =
+      is_cloud && enterprise_connectors::IncludeDeviceInfo(
+                      profile, reporting_settings.value().per_profile);
+
+  // Always include browser metadata for local service providers, but include
+  // it for cloud service providers only if device info is included.
+  PopulateBrowserMetadata(!is_cloud || include_device_info,
+                          metadata->mutable_browser());
   if (include_device_info) {
     PopulateDeviceMetadata(reporting_settings.value(), profile,
                            metadata->mutable_device());
@@ -560,12 +559,29 @@ KeyedService* ConnectorsServiceFactory::BuildServiceInstanceFor(
   return new ConnectorsService(
       context,
       std::make_unique<ConnectorsManager>(
+          ExtensionInstallEventRouter(context),
           user_prefs::UserPrefs::Get(context), GetServiceProviderConfig(),
           base::FeatureList::IsEnabled(kEnterpriseConnectorsEnabled)));
 }
 
 content::BrowserContext* ConnectorsServiceFactory::GetBrowserContextToUse(
     content::BrowserContext* context) const {
+  // On Chrome OS, settings from the primary/main profile apply to all
+  // profiles, besides incognito.
+  // However, the primary/main profile might not exist in tests - then the
+  // provided |context| is still used.
+  if (context && !context->IsOffTheRecord() &&
+      !Profile::FromBrowserContext(context)->AsTestingProfile()) {
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+    Profile* primary_profile = ProfileManager::GetPrimaryUserProfile();
+    if (primary_profile)
+      return primary_profile;
+#elif BUILDFLAG(IS_CHROMEOS_LACROS)
+    Profile* main_profile = GetMainProfileLacros();
+    if (main_profile)
+      return main_profile;
+#endif
+  }
   return context;
 }
 

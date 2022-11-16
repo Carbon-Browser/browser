@@ -25,8 +25,7 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/signin/chrome_device_id_helper.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
-#include "chrome/browser/ui/webui/signin/login_ui_service.h"
-#include "chrome/browser/ui/webui/signin/login_ui_service_factory.h"
+#include "chrome/browser/signin/signin_ui_util.h"
 #include "chrome/common/channel_info.h"
 #include "chrome/common/extensions/api/identity.h"
 #include "components/prefs/pref_service.h"
@@ -326,14 +325,13 @@ void IdentityGetAuthTokenFunction::CompleteFunctionWithResult(
     const std::set<std::string>& granted_scopes) {
   RecordFunctionResult(IdentityGetAuthTokenError(), remote_consent_approved_);
 
-  std::unique_ptr<base::Value> granted_scopes_value =
-      std::make_unique<base::Value>(base::Value::Type::LIST);
-  for (const auto& scope : granted_scopes)
-    granted_scopes_value->Append(scope);
+  api::identity::GetAuthTokenResult result;
+  result.token = std::make_unique<std::string>(access_token);
+  result.granted_scopes = std::make_unique<std::vector<std::string>>(
+      granted_scopes.begin(), granted_scopes.end());
 
-  CompleteAsyncRun(TwoArguments(
-      base::Value(access_token),
-      base::Value::FromUniquePtrValue(std::move(granted_scopes_value))));
+  CompleteAsyncRun(
+      OneArgument(base::Value::FromUniquePtrValue(result.ToValue())));
 }
 
 void IdentityGetAuthTokenFunction::CompleteFunctionWithError(
@@ -559,7 +557,7 @@ void IdentityGetAuthTokenFunction::OnMintTokenSuccess(
   TRACE_EVENT_NESTABLE_ASYNC_INSTANT0("identity", "OnMintTokenSuccess", this);
 
   IdentityTokenCacheValue token = IdentityTokenCacheValue::CreateToken(
-      access_token, granted_scopes, base::TimeDelta::FromSeconds(time_to_live));
+      access_token, granted_scopes, base::Seconds(time_to_live));
   IdentityAPI::GetFactoryInstance()
       ->Get(GetProfile())
       ->token_cache()
@@ -892,16 +890,12 @@ void IdentityGetAuthTokenFunction::StartGaiaRequest(
 }
 
 void IdentityGetAuthTokenFunction::ShowExtensionLoginPrompt() {
-  AccountInfo account = IdentityManagerFactory::GetForProfile(GetProfile())
-                            ->FindExtendedAccountInfoByAccountId(
-                                token_key_.account_info.account_id);
+  const CoreAccountInfo& account = token_key_.account_info;
   std::string email_hint =
       account.IsEmpty() ? email_for_default_web_account_ : account.email;
 
-  LoginUIService* login_ui_service =
-      LoginUIServiceFactory::GetForProfile(GetProfile());
-  login_ui_service->ShowExtensionLoginPrompt(IsPrimaryAccountOnly(),
-                                             email_hint);
+  signin_ui_util::ShowExtensionSigninPrompt(GetProfile(),
+                                            IsPrimaryAccountOnly(), email_hint);
 }
 
 void IdentityGetAuthTokenFunction::ShowRemoteConsentDialog(

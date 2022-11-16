@@ -242,12 +242,17 @@ class PictureBufferManagerImpl : public PictureBufferManager {
                        picture_buffer_id),
         picture_buffer_data.texture_size, visible_rect, natural_size,
         timestamp);
+    if (!frame) {
+      DLOG(ERROR) << "Failed to create VideoFrame for picture.";
+      return nullptr;
+    }
 
     frame->set_color_space(picture.color_space());
 
     frame->metadata().allow_overlay = picture.allow_overlay();
     frame->metadata().read_lock_fences_enabled =
         picture.read_lock_fences_enabled();
+    frame->metadata().is_webgpu_compatible = picture.is_webgpu_compatible();
 
     // TODO(sandersd): Provide an API for VDAs to control this.
     frame->metadata().power_efficient = true;

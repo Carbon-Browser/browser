@@ -2,8 +2,8 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 #
-# This source code is a part of ABP Chromium.
-# Use of this source code is governed by the GPLv3 that can be found in the docs_abp/LICENSE file.
+# This source code is a part of eyeo Chromium SDK.
+# Use of this source code is governed by the GPLv3 that can be found in the components/adblock/LICENSE file.
 
 
 import("//base/android/linker/config.gni")
@@ -13,6 +13,14 @@ import("//build/config/compiler/compiler.gni")
 import("//build/partitioned_shared_library.gni")
 import("//chrome/android/modules/buildflags.gni")
 import("//device/vr/buildflags/buildflags.gni")
+
+declare_args() {
+  # Compile libmonochrome.so with RELR relocations, which are smaller and more
+  # efficient, but supported only on API 28+.
+  # This is not permanently enabled for Trichrome because it shares its native
+  # library with Monochrome.
+  use_relr_relocations = false
+}
 
 # TODO(cjgrant): Remove these variables once downstream stops using them.
 bundle_library_suffix = ""
@@ -85,16 +93,15 @@ template("chrome_common_shared_library") {
       deps += [ "//chrome:chrome_android_core" ]
     }
 
+    # Warn if linking code which could implicitly disable BTI on Arm systems
+    configs += [ "//build/config/android:lld_branch_target_hardening" ]
+
     if (!(defined(invoker.testonly) && invoker.testonly)) {
       configs -= [ "//build/config/compiler:thinlto_optimize_default" ]
       configs += [ "//build/config/compiler:thinlto_optimize_max" ]
     }
 
     configs += [ "//build/config/compiler:chrome_orderfile_config" ]
-
-    deps += [
-      "//third_party/libadblockplus:libadblockplus_native"
-    ]
 
     # Use a dynamically-generated linker script.
     configs -= [ "//build/config/android:hide_all_but_jni_onload" ]
@@ -143,8 +150,10 @@ template("chrome_common_shared_library") {
     }
 
     # Compress relocations if needed.
-    if ((_is_monochrome || _is_webview || chromium_linker_supported) &&
-        use_lld) {
+    if (use_relr_relocations) {
+      configs += [ "//build/config/android:lld_relr_relocations" ]
+    } else if ((_is_monochrome || _is_webview || chromium_linker_supported) &&
+               use_lld) {
       configs += [ "//build/config/android:lld_pack_relocations" ]
     }
 

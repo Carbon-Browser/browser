@@ -7,7 +7,6 @@
 
 #import <UIKit/UIKit.h>
 
-#include "components/omnibox/browser/omnibox_popup_model.h"
 #include "components/omnibox/browser/omnibox_popup_view.h"
 #import "ios/chrome/browser/ui/omnibox/popup/omnibox_popup_mediator.h"
 #include "ios/chrome/browser/ui/omnibox/popup/omnibox_popup_provider.h"
@@ -26,8 +25,8 @@ class OmniboxPopupViewIOS : public OmniboxPopupView,
                       OmniboxPopupViewSuggestionsDelegate* delegate);
   ~OmniboxPopupViewIOS() override;
 
-  // Popup model used for this.
-  OmniboxPopupModel* model() const;
+  // Model used for this.
+  OmniboxEditModel* model() const;
 
   // OmniboxPopupView implementation.
   bool IsOpen() const override;
@@ -37,8 +36,6 @@ class OmniboxPopupViewIOS : public OmniboxPopupView,
   void OnMatchIconUpdated(size_t match_index) override {}
   void OnDragCanceled() override {}
 
-  void UpdateEditViewIcon();
-
   // OmniboxPopupProvider implemetation.
   void SetTextAlignment(NSTextAlignment alignment) override;
   void SetSemanticContentAttribute(
@@ -47,8 +44,7 @@ class OmniboxPopupViewIOS : public OmniboxPopupView,
 
   // OmniboxPopupViewControllerDelegate implementation.
   bool IsStarredMatch(const AutocompleteMatch& match) const override;
-  void OnMatchHighlighted(size_t row) override;
-  // |disposition| should be CURRENT_TAB is the match should be loaded,
+  // `disposition` should be CURRENT_TAB is the match should be loaded,
   // SWITCH_TO_TAB if it should switch to this tab.
   void OnMatchSelected(const AutocompleteMatch& match,
                        size_t row,

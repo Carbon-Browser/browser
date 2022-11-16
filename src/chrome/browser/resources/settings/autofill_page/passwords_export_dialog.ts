@@ -12,15 +12,16 @@ import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
 import 'chrome://resources/cr_elements/shared_vars_css.m.js';
 import 'chrome://resources/polymer/v3_0/iron-flex-layout/iron-flex-layout-classes.js';
 import 'chrome://resources/polymer/v3_0/paper-progress/paper-progress.js';
-import '../settings_shared_css.js';
+import '../settings_shared.css.js';
 
-import {I18nBehavior} from 'chrome://resources/js/i18n_behavior.m.js';
-import {html, microTask, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {I18nMixin} from 'chrome://resources/js/i18n_mixin.js';
+import {microTask, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-// <if expr="chromeos">
+// <if expr="chromeos_ash or chromeos_lacros">
 import {BlockingRequestManager} from './blocking_request_manager.js';
 // </if>
 import {PasswordManagerImpl, PasswordManagerProxy, PasswordsFileExportProgressListener} from './password_manager_proxy.js';
+import {getTemplate} from './passwords_export_dialog.html.js';
 
 
 /**
@@ -46,17 +47,16 @@ const progressBarDelayMs: number = 100;
 const progressBarBlockMs: number = 1000;
 
 
-const PasswordsExportDialogElementBase =
-    mixinBehaviors([I18nBehavior], PolymerElement) as
-    {new (): PolymerElement & I18nBehavior};
+const PasswordsExportDialogElementBase = I18nMixin(PolymerElement);
 
-class PasswordsExportDialogElement extends PasswordsExportDialogElementBase {
+export class PasswordsExportDialogElement extends
+    PasswordsExportDialogElementBase {
   static get is() {
     return 'passwords-export-dialog';
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
   }
 
   static get properties() {
@@ -68,8 +68,8 @@ class PasswordsExportDialogElement extends PasswordsExportDialogElementBase {
       showProgressDialog_: Boolean,
       showErrorDialog_: Boolean,
 
-      // <if expr="chromeos">
-      tokenRequestManager: Object
+      // <if expr="chromeos_ash or chromeos_lacros">
+      tokenRequestManager: Object,
       // </if>
     };
   }
@@ -86,7 +86,7 @@ class PasswordsExportDialogElement extends PasswordsExportDialogElementBase {
   private delayedCompletionToken_: number|null;
   private delayedProgress_: chrome.passwordsPrivate.PasswordExportProgress|null;
 
-  // <if expr="chromeos">
+  // <if expr="chromeos_ash or chromeos_lacros">
   tokenRequestManager: BlockingRequestManager;
   // </if>
 
@@ -116,12 +116,12 @@ class PasswordsExportDialogElement extends PasswordsExportDialogElementBase {
     this.delayedProgress_ = null;
   }
 
-  ready() {
+  override ready() {
     super.ready();
     this.addEventListener('cancel', this.close);
   }
 
-  connectedCallback() {
+  override connectedCallback() {
     super.connectedCallback();
 
     this.switchToDialog_(States.START);
@@ -132,7 +132,7 @@ class PasswordsExportDialogElement extends PasswordsExportDialogElementBase {
 
     // If export started on a different tab and is still in progress, display a
     // busy UI.
-    this.passwordManager_.requestExportProgressStatus(status => {
+    this.passwordManager_.requestExportProgressStatus().then(status => {
       if (status === ProgressStatus.IN_PROGRESS) {
         this.switchToDialog_(States.IN_PROGRESS);
       }
@@ -167,7 +167,7 @@ class PasswordsExportDialogElement extends PasswordsExportDialogElementBase {
    * Displays the progress bar and suspends further UI updates for
    * |progressBarBlockMs|.
    */
-  progressTask_() {
+  private progressTask_() {
     this.progressTaskToken_ = null;
     this.switchToDialog_(States.IN_PROGRESS);
 
@@ -179,7 +179,7 @@ class PasswordsExportDialogElement extends PasswordsExportDialogElementBase {
    * Unblocks progress after showing the progress bar for |progressBarBlock|ms
    * and processes any progress that was delayed.
    */
-  delayedCompletionTask_() {
+  private delayedCompletionTask_() {
     this.delayedCompletionToken_ = null;
     if (this.delayedProgress_) {
       this.processProgress_(this.delayedProgress_);
@@ -205,11 +205,11 @@ class PasswordsExportDialogElement extends PasswordsExportDialogElementBase {
             'passwords-export-dialog-close', {bubbles: true, composed: true})));
   }
 
-  onExportTap_() {
-    // <if expr="chromeos">
+  private onExportTap_() {
+    // <if expr="chromeos_ash or chromeos_lacros">
     this.tokenRequestManager.request(() => this.exportPasswords_());
     // </if>
-    // <if expr="not chromeos">
+    // <if expr="not (chromeos_ash or chromeos_lacros)">
     this.exportPasswords_();
     // </if>
   }
@@ -219,9 +219,8 @@ class PasswordsExportDialogElement extends PasswordsExportDialogElementBase {
    * security checks.
    */
   private exportPasswords_() {
-    this.passwordManager_.exportPasswords(() => {
-      if (chrome.runtime.lastError &&
-          chrome.runtime.lastError.message === 'in-progress') {
+    this.passwordManager_.exportPasswords().catch((error) => {
+      if (error === 'in-progress') {
         // Exporting was started by a different call to exportPasswords() and is
         // is still in progress. This UI needs to be updated to the current
         // status.
@@ -276,6 +275,12 @@ class PasswordsExportDialogElement extends PasswordsExportDialogElementBase {
   private onCancelProgressButtonTap_() {
     this.passwordManager_.cancelExportPasswords();
     this.close();
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'passwords-export-dialog': PasswordsExportDialogElement;
   }
 }
 

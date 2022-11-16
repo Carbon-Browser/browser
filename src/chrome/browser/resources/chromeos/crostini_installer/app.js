@@ -67,7 +67,7 @@ const UNAVAILABLE_USERNAMES = [
   'pulse',
   'android-root',
   'chronos-access',
-  'android-everybody'
+  'android-everybody',
 ];
 
 Polymer({
@@ -443,12 +443,6 @@ Polymer({
         messageId = 'startLxdMessage';
         break;
       case InstallerState.kCreateContainer:
-        // TODO(crbug.com/1015722): we are using the same message as for
-        // |START_CONTAINER|, which is weird because user is going to see
-        // message "start container" then "setup container" and then "start
-        // container" again.
-        messageId = 'startContainerMessage';
-        break;
       case InstallerState.kSetupContainer:
         messageId = 'setupContainerMessage';
         break;
@@ -529,8 +523,9 @@ Polymer({
   getConfigureMessageTitle_() {
     // If the flags only allow username config, then we show a username specific
     // subtitle instead of a generic configure subtitle.
-    if (!this.showDiskResizing_())
+    if (!this.showDiskResizing_()) {
       return loadTimeData.getString('usernameMessage');
+    }
     return loadTimeData.getString('configureMessage');
   },
 
@@ -567,5 +562,5 @@ Polymer({
   onDiskSizeRadioChanged_(event) {
     this.showDiskSlider_ =
         (event.detail.value !== 'recommended' || !!this.isLowSpaceAvailable_);
-  }
+  },
 });

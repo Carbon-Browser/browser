@@ -26,11 +26,11 @@
 #include "third_party/crashpad/crashpad/snapshot/process_snapshot.h"
 #include "third_party/crashpad/crashpad/util/process/process_memory.h"
 
-#if defined(OS_LINUX) || defined(OS_CHROMEOS) || defined(OS_ANDROID)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_ANDROID)
 #include <signal.h>
-#elif defined(OS_APPLE)
+#elif BUILDFLAG(IS_APPLE)
 #include <mach/exception_types.h>
-#elif defined(OS_WIN)
+#elif BUILDFLAG(IS_WIN)
 #include <windows.h>
 #endif
 
@@ -81,13 +81,13 @@ bool CrashAnalyzer::GetExceptionInfo(
 
 crashpad::VMAddress CrashAnalyzer::GetAccessAddress(
     const crashpad::ExceptionSnapshot& exception) {
-#if defined(OS_LINUX) || defined(OS_CHROMEOS) || defined(OS_ANDROID)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_ANDROID)
   if (exception.Exception() == SIGSEGV || exception.Exception() == SIGBUS)
     return exception.ExceptionAddress();
-#elif defined(OS_APPLE)
+#elif BUILDFLAG(IS_APPLE)
   if (exception.Exception() == EXC_BAD_ACCESS)
     return exception.ExceptionAddress();
-#elif defined(OS_WIN)
+#elif BUILDFLAG(IS_WIN)
   if (exception.Exception() == EXCEPTION_ACCESS_VIOLATION) {
     const std::vector<uint64_t>& codes = exception.Codes();
     if (codes.size() < 2)
@@ -270,11 +270,11 @@ bool CrashAnalyzer::AnalyzeCrashedAllocator(
 
   if (ret == GetMetadataReturnType::kGwpAsanCrash) {
     SlotMetadata& metadata = metadata_arr[metadata_idx];
-    AllocatorState::ErrorType error =
+    AllocatorState::ErrorType error_type =
         valid_state.GetErrorType(exception_addr, metadata.alloc.trace_collected,
                                  metadata.dealloc.trace_collected);
     proto->set_missing_metadata(false);
-    proto->set_error_type(static_cast<Crash_ErrorType>(error));
+    proto->set_error_type(static_cast<Crash_ErrorType>(error_type));
     proto->set_allocation_address(metadata.alloc_ptr);
     proto->set_allocation_size(metadata.alloc_size);
     if (metadata.alloc.tid != base::kInvalidThreadId ||

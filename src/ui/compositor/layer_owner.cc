@@ -7,12 +7,13 @@
 // layer_owner.h is a widely included header and its size impacts build
 // time. Try not to raise this limit unless necessary. See
 // https://chromium.googlesource.com/chromium/src/+/HEAD/docs/wmax_tokens.md
-#pragma clang max_tokens_here 480000
-
-#include "ui/compositor/layer.h"
+#pragma clang max_tokens_here 550000
 
 #include <utility>
 
+#include "base/observer_list.h"
+#include "ui/compositor/compositor.h"
+#include "ui/compositor/layer.h"
 
 namespace ui {
 

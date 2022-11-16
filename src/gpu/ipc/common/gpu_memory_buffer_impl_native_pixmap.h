@@ -10,7 +10,6 @@
 #include <memory>
 #include <vector>
 
-#include "base/macros.h"
 #include "gpu/gpu_export.h"
 #include "gpu/ipc/common/gpu_memory_buffer_impl.h"
 
@@ -24,6 +23,11 @@ namespace gpu {
 // Implementation of GPU memory buffer based on Ozone native pixmap.
 class GPU_EXPORT GpuMemoryBufferImplNativePixmap : public GpuMemoryBufferImpl {
  public:
+  GpuMemoryBufferImplNativePixmap(const GpuMemoryBufferImplNativePixmap&) =
+      delete;
+  GpuMemoryBufferImplNativePixmap& operator=(
+      const GpuMemoryBufferImplNativePixmap&) = delete;
+
   ~GpuMemoryBufferImplNativePixmap() override;
 
   static constexpr gfx::GpuMemoryBufferType kBufferType = gfx::NATIVE_PIXMAP;
@@ -59,8 +63,6 @@ class GPU_EXPORT GpuMemoryBufferImplNativePixmap : public GpuMemoryBufferImpl {
       std::unique_ptr<gfx::ClientNativePixmap> native_pixmap);
 
   const std::unique_ptr<gfx::ClientNativePixmap> pixmap_;
-
-  DISALLOW_COPY_AND_ASSIGN(GpuMemoryBufferImplNativePixmap);
 };
 
 }  // namespace gpu

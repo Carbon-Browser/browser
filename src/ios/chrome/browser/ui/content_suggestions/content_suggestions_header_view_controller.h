@@ -50,10 +50,10 @@ class ReadingListModel;
 // Whether the Google logo or doodle is being shown.
 @property(nonatomic, assign) BOOL logoIsShowing;
 
-// |YES| if a what's new promo can be displayed.
+// `YES` if a what's new promo can be displayed.
 @property(nonatomic, assign) BOOL promoCanShow;
 
-// |YES| if the omnibox should be focused on when the view appears for voice
+// `YES` if the omnibox should be focused on when the view appears for voice
 // over.
 @property(nonatomic, assign) BOOL focusOmniboxWhenViewAppears;
 
@@ -69,6 +69,9 @@ class ReadingListModel;
 
 // Sends notification to focus the accessibility of the omnibox.
 - (void)focusAccessibilityOnOmnibox;
+
+// Returns the height of the entire header.
+- (CGFloat)headerHeight;
 
 // Identity disc shown in this ViewController.
 // TODO(crbug.com/1170995): Remove once the Feed header properly supports

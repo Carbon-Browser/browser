@@ -6,6 +6,7 @@
 
 #include <memory>
 
+#include "ash/components/tpm/stub_install_attributes.h"
 #include "base/test/gtest_util.h"
 #include "base/test/mock_callback.h"
 #include "chrome/browser/ash/login/ui/login_screen_extension_ui/create_options.h"
@@ -15,7 +16,6 @@
 #include "chrome/common/chrome_constants.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile_manager.h"
-#include "chromeos/tpm/stub_install_attributes.h"
 #include "components/session_manager/core/session_manager.h"
 #include "components/version_info/version_info.h"
 #include "content/public/test/browser_task_environment.h"
@@ -54,6 +54,10 @@ namespace login_screen_extension_ui {
 class FakeWindowFactory : public WindowFactory {
  public:
   FakeWindowFactory() = default;
+
+  FakeWindowFactory(const FakeWindowFactory&) = delete;
+  FakeWindowFactory& operator=(const FakeWindowFactory&) = delete;
+
   ~FakeWindowFactory() override = default;
 
   std::unique_ptr<Window> Create(CreateOptions* create_options) override {
@@ -90,8 +94,6 @@ class FakeWindowFactory : public WindowFactory {
   bool last_can_be_closed_by_user_;
   base::OnceClosure last_close_callback_;
   bool create_was_called_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(FakeWindowFactory);
 };
 
 class LoginScreenExtensionUiHandlerUnittest : public testing::Test {
@@ -99,6 +101,12 @@ class LoginScreenExtensionUiHandlerUnittest : public testing::Test {
   LoginScreenExtensionUiHandlerUnittest()
       : scoped_current_channel_(version_info::Channel::DEV),
         profile_manager_(TestingBrowserProcess::GetGlobal()) {}
+
+  LoginScreenExtensionUiHandlerUnittest(
+      const LoginScreenExtensionUiHandlerUnittest&) = delete;
+  LoginScreenExtensionUiHandlerUnittest& operator=(
+      const LoginScreenExtensionUiHandlerUnittest&) = delete;
+
   ~LoginScreenExtensionUiHandlerUnittest() override = default;
 
   void SetUp() override {
@@ -211,8 +219,6 @@ class LoginScreenExtensionUiHandlerUnittest : public testing::Test {
   FakeWindowFactory* fake_window_factory_ = nullptr;
 
   std::unique_ptr<UiHandler> ui_handler_;
-
-  DISALLOW_COPY_AND_ASSIGN(LoginScreenExtensionUiHandlerUnittest);
 };
 
 using LoginScreenExtensionUiHandlerDeathUnittest =

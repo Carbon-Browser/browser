@@ -8,9 +8,9 @@
 #include <stddef.h>
 
 #include <string>
+#include <utility>
 #include <vector>
 
-#include "base/macros.h"
 #include "net/base/net_export.h"
 #include "net/cookies/cookie_constants.h"
 
@@ -43,6 +43,10 @@ class NET_EXPORT ParsedCookie {
   // is valid.
   explicit ParsedCookie(const std::string& cookie_line,
                         CookieInclusionStatus* status_out = nullptr);
+
+  ParsedCookie(const ParsedCookie&) = delete;
+  ParsedCookie& operator=(const ParsedCookie&) = delete;
+
   ~ParsedCookie();
 
   // You should not call any other methods except for SetName/SetValue on the
@@ -58,6 +62,9 @@ class NET_EXPORT ParsedCookie {
     DCHECK(HasPath());
     return pairs_[path_index_].second;
   }
+  // Note that Domain() may return the empty string; in the case of cookie_line
+  // "domain=", HasDomain() will return true (as the empty string is an
+  // acceptable domain value), so Domain() will return std::string().
   bool HasDomain() const { return domain_index_ != 0; }
   const std::string& Domain() const {
     DCHECK(HasDomain());
@@ -83,7 +90,10 @@ class NET_EXPORT ParsedCookie {
   bool IsSameParty() const { return same_party_index_ != 0; }
   bool IsPartitioned() const { return partitioned_index_ != 0; }
   bool HasTruncatedNameOrValue() const { return truncated_name_or_value_; }
-
+  TruncatingCharacterInCookieStringType
+  GetTruncatingCharacterInCookieStringType() const {
+    return truncating_char_in_cookie_string_type_;
+  }
   // Returns the number of attributes, for example, returning 2 for:
   //   "BLAH=hah; path=/; domain=.google.com"
   size_t NumberOfAttributes() const { return pairs_.size() - 1; }
@@ -197,12 +207,6 @@ class NET_EXPORT ParsedCookie {
   // |index| refers to a position in |pairs_|.
   void ClearAttributePair(size_t index);
 
-  // Records metrics on cookie name+value and attribute value lengths.
-  // This is being recorded to evaluate whether to change length limits for
-  // cookies, such that limits are applied to name+value, and individual
-  // attribute lengths, rather than to the whole set-cookie line.
-  void RecordCookieAttributeValueLengthHistograms() const;
-
   PairList pairs_;
   // These will default to 0, but that should never be valid since the
   // 0th index is the user supplied cookie name/value, not an attribute.
@@ -219,8 +223,8 @@ class NET_EXPORT ParsedCookie {
   // For metrics on cookie name/value truncation. See usage at the bottom of
   // `ParseTokenValuePairs()` for more details.
   bool truncated_name_or_value_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(ParsedCookie);
+  TruncatingCharacterInCookieStringType truncating_char_in_cookie_string_type_ =
+      TruncatingCharacterInCookieStringType::kTruncatingCharNone;
 };
 
 }  // namespace net

@@ -8,12 +8,17 @@
 #include <memory>
 #include <string>
 
+#include "base/callback.h"
 #include "base/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
+#include "build/buildflag.h"
 #include "components/live_caption/views/caption_bubble_model.h"
 #include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/gfx/font_list.h"
 #include "ui/native_theme/caption_style.h"
 #include "ui/views/bubble/bubble_dialog_delegate_view.h"
 #include "ui/views/controls/button/button.h"
+#include "ui/views/controls/styled_label.h"
 #include "ui/views/metadata/view_factory.h"
 
 namespace base {
@@ -22,6 +27,7 @@ class TickClock;
 }
 
 namespace views {
+class Checkbox;
 class ImageButton;
 class ImageView;
 class Label;
@@ -34,6 +40,21 @@ struct AXNodeData;
 namespace captions {
 class CaptionBubbleFrameView;
 class CaptionBubbleLabel;
+
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused. These should be the same as
+// LiveCaptionSessionEvent in enums.xml.
+enum class SessionEvent {
+  // We began showing captions for an audio stream.
+  kStreamStarted = 0,
+  // The audio stream ended and the caption bubble closes.
+  kStreamEnded = 1,
+  // The close button was clicked, so we stopped listening to an audio stream.
+  kCloseButtonClicked = 2,
+  kMaxValue = kCloseButtonClicked,
+};
+
+using ResetInactivityTimerCallback = base::RepeatingCallback<void()>;
 
 ///////////////////////////////////////////////////////////////////////////////
 // Caption Bubble
@@ -74,6 +95,10 @@ class CaptionBubble : public views::BubbleDialogDelegateView {
     tick_clock_ = tick_clock;
   }
 
+#if BUILDFLAG(IS_WIN)
+  void OnContentSettingsLinkClicked();
+#endif
+
  protected:
   // views::BubbleDialogDelegateView:
   void Init() override;
@@ -88,6 +113,7 @@ class CaptionBubble : public views::BubbleDialogDelegateView {
   void OnWidgetActivationChanged(views::Widget* widget, bool active) override;
   void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
   std::u16string GetAccessibleWindowTitle() const override;
+  void OnThemeChanged() override;
 
  private:
   friend class CaptionBubbleControllerViewsTest;
@@ -104,7 +130,9 @@ class CaptionBubble : public views::BubbleDialogDelegateView {
   // Called by CaptionBubbleModel to notify this object that the model's error
   // state has changed. Makes the caption bubble display an error message if
   // the model has an error, otherwise displays the latest text.
-  void OnErrorChanged();
+  void OnErrorChanged(CaptionBubbleErrorType error_type,
+                      OnErrorClickedCallback callback,
+                      OnDoNotShowAgainClickedCallback error_silenced_callback);
 
   // Called when the caption bubble expanded state has changed. Changes the
   // number of lines displayed.
@@ -134,6 +162,7 @@ class CaptionBubble : public views::BubbleDialogDelegateView {
   // preferences, which are stored in `caption_style_`.
   void SetCaptionBubbleStyle();
   double GetTextScaleFactor();
+  const gfx::FontList GetFontList();
   void SetTextSizeAndFontFamily();
   void SetTextColor();
   void SetBackgroundColor();
@@ -143,21 +172,40 @@ class CaptionBubble : public views::BubbleDialogDelegateView {
   // the bubble through focus, pressing buttons, or dragging.
   void OnInactivityTimeout();
 
+  void ResetInactivityTimer();
+
+  void MediaFoundationErrorCheckboxPressed();
+  bool HasMediaFoundationError();
+
+  void LogSessionEvent(SessionEvent event);
+
   // Unowned. Owned by views hierarchy.
-  CaptionBubbleLabel* label_;
-  views::Label* title_;
-  views::Label* error_text_;
-  views::ImageView* error_icon_;
-  views::View* error_message_;
-  views::ImageButton* back_to_tab_button_;
-  views::ImageButton* close_button_;
-  views::ImageButton* expand_button_;
-  views::ImageButton* collapse_button_;
-  CaptionBubbleFrameView* frame_;
+  raw_ptr<CaptionBubbleLabel> label_;
+  raw_ptr<views::Label> title_;
+  raw_ptr<views::Label> generic_error_text_;
+  raw_ptr<views::ImageView> generic_error_icon_;
+  raw_ptr<views::View> generic_error_message_;
+  raw_ptr<views::ImageButton> back_to_tab_button_;
+  raw_ptr<views::ImageButton> close_button_;
+  raw_ptr<views::ImageButton> expand_button_;
+  raw_ptr<views::ImageButton> collapse_button_;
+  raw_ptr<CaptionBubbleFrameView> frame_;
+
+#if BUILDFLAG(IS_WIN)
+  raw_ptr<views::StyledLabel> media_foundation_renderer_error_text_;
+  raw_ptr<views::ImageView> media_foundation_renderer_error_icon_;
+  raw_ptr<views::View> media_foundation_renderer_error_message_;
+
+  // Checkbox the user can use to indicate whether to silence the error message
+  // for the origin.
+  raw_ptr<views::Checkbox> media_foundation_renderer_error_checkbox_ = nullptr;
+#endif
 
   absl::optional<ui::CaptionStyle> caption_style_;
-  CaptionBubbleModel* model_ = nullptr;
+  raw_ptr<CaptionBubbleModel> model_ = nullptr;
 
+  OnErrorClickedCallback error_clicked_callback_;
+  OnDoNotShowAgainClickedCallback error_silenced_callback_;
   base::ScopedClosureRunner destroyed_callback_;
 
   // Whether the caption bubble is expanded to show more lines of text.
@@ -171,7 +219,7 @@ class CaptionBubble : public views::BubbleDialogDelegateView {
   // A timer which causes the bubble to hide if there is no activity after a
   // specified interval.
   std::unique_ptr<base::RetainingOneShotTimer> inactivity_timer_;
-  const base::TickClock* tick_clock_;
+  raw_ptr<const base::TickClock> tick_clock_;
 };
 
 BEGIN_VIEW_BUILDER(/* no export */,

@@ -19,6 +19,7 @@
 #include "net/test/test_data_directory.h"
 #include "services/network/public/cpp/is_potentially_trustworthy.h"
 #include "storage/browser/test/mock_special_storage_policy.h"
+#include "storage/browser/test/quota_manager_proxy_sync.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/origin_trials/scoped_test_origin_trial_policy.h"
@@ -28,6 +29,9 @@
 namespace content {
 
 namespace {
+
+using ::testing::Eq;
+using ::testing::Pointee;
 
 struct ReadResponseHeadResult {
   int result;
@@ -128,7 +132,7 @@ int WriteBasicResponse(
     int64_t id) {
   const char kHttpHeaders[] = "HTTP/1.0 200 HONKYDORY\0Content-Length: 5\0\0";
   const char kHttpBody[] = "Hello";
-  std::string headers(kHttpHeaders, base::size(kHttpHeaders));
+  std::string headers(kHttpHeaders, std::size(kHttpHeaders));
   return WriteStringResponse(storage, id, headers, std::string(kHttpBody));
 }
 
@@ -277,6 +281,10 @@ class ServiceWorkerRegistryTest : public testing::Test {
 
   storage::MockSpecialStoragePolicy* special_storage_policy() {
     return special_storage_policy_.get();
+  }
+
+  storage::QuotaManagerProxy* quota_manager_proxy() {
+    return registry()->quota_manager_proxy_.get();
   }
 
   size_t inflight_call_count() { return registry()->inflight_calls_.size(); }
@@ -605,6 +613,65 @@ TEST_F(ServiceWorkerRegistryTest, RegisteredStorageKeyCount) {
   }
 }
 
+TEST_F(ServiceWorkerRegistryTest, CreateNewRegistration) {
+  EnsureRemoteCallsAreExecuted();
+
+  const GURL kScope("http://www.test.not/scope/");
+  const blink::StorageKey kKey(url::Origin::Create(kScope));
+
+  scoped_refptr<ServiceWorkerRegistration> registration;
+
+  blink::mojom::ServiceWorkerRegistrationOptions options;
+  options.scope = kScope;
+
+  storage::QuotaManagerProxySync quota_manager_proxy_sync(
+      quota_manager_proxy());
+
+  base::RunLoop loop;
+  registry()->CreateNewRegistration(
+      std::move(options), kKey, blink::mojom::AncestorFrameType::kNormalFrame,
+      base::BindLambdaForTesting(
+          [&](scoped_refptr<ServiceWorkerRegistration> new_registration) {
+            EXPECT_EQ(new_registration->scope(), kScope);
+            registration = new_registration;
+            loop.Quit();
+          }));
+  loop.Run();
+
+  // Check default bucket exists.com.
+  storage::QuotaErrorOr<storage::BucketInfo> result =
+      quota_manager_proxy_sync.GetBucket(kKey, storage::kDefaultBucketName,
+                                         blink::mojom::StorageType::kTemporary);
+  ASSERT_TRUE(result.ok());
+  EXPECT_EQ(result->name, storage::kDefaultBucketName);
+  EXPECT_EQ(result->storage_key, kKey);
+  EXPECT_GT(result->id.value(), 0);
+}
+
+TEST_F(ServiceWorkerRegistryTest, GetOrCreateBucketError) {
+  const GURL kScope("http://www.test.not/scope/");
+  const blink::StorageKey kKey(url::Origin::Create(kScope));
+
+  scoped_refptr<ServiceWorkerRegistration> registration;
+
+  blink::mojom::ServiceWorkerRegistrationOptions options;
+  options.scope = kScope;
+
+  helper()->quota_manager()->SetDisableDatabase(true);
+  storage::QuotaManagerProxySync quota_manager_proxy_sync(
+      quota_manager_proxy());
+
+  base::RunLoop loop;
+  registry()->CreateNewRegistration(
+      std::move(options), kKey, blink::mojom::AncestorFrameType::kNormalFrame,
+      base::BindLambdaForTesting(
+          [&](scoped_refptr<ServiceWorkerRegistration> new_registration) {
+            EXPECT_EQ(new_registration, nullptr);
+            loop.Quit();
+          }));
+  loop.Run();
+}
+
 TEST_F(ServiceWorkerRegistryTest, StoreFindUpdateDeleteRegistration) {
   const GURL kScope("http://www.test.not/scope/");
   const blink::StorageKey kKey(url::Origin::Create(kScope));
@@ -616,7 +683,7 @@ TEST_F(ServiceWorkerRegistryTest, StoreFindUpdateDeleteRegistration) {
   const int64_t kRegistrationId = 0;
   const int64_t kVersionId = 0;
   const base::Time kToday = base::Time::Now();
-  const base::Time kYesterday = kToday - base::TimeDelta::FromDays(1);
+  const base::Time kYesterday = kToday - base::Days(1);
   std::set<blink::mojom::WebFeature> used_features = {
       blink::mojom::WebFeature::kServiceWorkerControlledPage,
       blink::mojom::WebFeature::kReferrerPolicyHeader,
@@ -651,13 +718,15 @@ TEST_F(ServiceWorkerRegistryTest, StoreFindUpdateDeleteRegistration) {
   blink::mojom::ServiceWorkerRegistrationOptions options;
   options.scope = kScope;
   scoped_refptr<ServiceWorkerRegistration> live_registration =
-      new ServiceWorkerRegistration(options, kKey, kRegistrationId,
-                                    context()->AsWeakPtr());
-  scoped_refptr<ServiceWorkerVersion> live_version = new ServiceWorkerVersion(
-      live_registration.get(), kResource1, blink::mojom::ScriptType::kClassic,
-      kVersionId,
-      mojo::PendingRemote<storage::mojom::ServiceWorkerLiveVersionRef>(),
-      context()->AsWeakPtr());
+      base::MakeRefCounted<ServiceWorkerRegistration>(
+          options, kKey, kRegistrationId, context()->AsWeakPtr(),
+          blink::mojom::AncestorFrameType::kNormalFrame);
+  scoped_refptr<ServiceWorkerVersion> live_version =
+      base::MakeRefCounted<ServiceWorkerVersion>(
+          live_registration.get(), kResource1,
+          blink::mojom::ScriptType::kClassic, kVersionId,
+          mojo::PendingRemote<storage::mojom::ServiceWorkerLiveVersionRef>(),
+          context()->AsWeakPtr());
   live_version->set_fetch_handler_existence(
       ServiceWorkerVersion::FetchHandlerExistence::EXISTS);
   live_version->SetStatus(ServiceWorkerVersion::INSTALLED);
@@ -693,9 +762,9 @@ TEST_F(ServiceWorkerRegistryTest, StoreFindUpdateDeleteRegistration) {
             found_registration->resources_total_size_bytes());
   EXPECT_EQ(used_features,
             found_registration->waiting_version()->used_features());
-  EXPECT_EQ(
+  EXPECT_THAT(
       found_registration->waiting_version()->cross_origin_embedder_policy(),
-      coep_require_corp);
+      Pointee(Eq(coep_require_corp)));
   found_registration = nullptr;
 
   // But FindRegistrationForScope is always async.
@@ -801,8 +870,9 @@ TEST_F(ServiceWorkerRegistryTest, StoreFindUpdateDeleteRegistration) {
 
   // Trying to update a unstored registration to active should fail.
   scoped_refptr<ServiceWorkerRegistration> unstored_registration =
-      new ServiceWorkerRegistration(options, kKey, kRegistrationId + 1,
-                                    context()->AsWeakPtr());
+      new ServiceWorkerRegistration(
+          options, kKey, kRegistrationId + 1, context()->AsWeakPtr(),
+          blink::mojom::AncestorFrameType::kNormalFrame);
   EXPECT_EQ(blink::ServiceWorkerStatusCode::kErrorNotFound,
             UpdateToActiveState(unstored_registration.get()));
   unstored_registration = nullptr;
@@ -1632,9 +1702,12 @@ TEST_F(ServiceWorkerRegistryTest,
   {
     blink::mojom::ServiceWorkerRegistrationOptions options;
     options.scope = kScope;
+    storage::QuotaManagerProxySync quota_manager_proxy_sync(
+        quota_manager_proxy());
+
     base::RunLoop loop;
     registry()->CreateNewRegistration(
-        std::move(options), kKey,
+        std::move(options), kKey, blink::mojom::AncestorFrameType::kNormalFrame,
         base::BindLambdaForTesting(
             [&](scoped_refptr<ServiceWorkerRegistration> new_registration) {
               EXPECT_EQ(new_registration->scope(), kScope);
@@ -1647,6 +1720,16 @@ TEST_F(ServiceWorkerRegistryTest,
 
     loop.Run();
     EXPECT_EQ(inflight_call_count(), 0U);
+
+    // Check default bucket exists.com.
+    storage::QuotaErrorOr<storage::BucketInfo> result =
+        quota_manager_proxy_sync.GetBucket(
+            kKey, storage::kDefaultBucketName,
+            blink::mojom::StorageType::kTemporary);
+    ASSERT_TRUE(result.ok());
+    EXPECT_EQ(result->name, storage::kDefaultBucketName);
+    EXPECT_EQ(result->storage_key, kKey);
+    EXPECT_GT(result->id.value(), 0);
   }
 
   {
@@ -2061,8 +2144,9 @@ TEST_F(ServiceWorkerRegistryOriginTrialsTest, FromMainScript) {
   blink::mojom::ServiceWorkerRegistrationOptions options;
   options.scope = kScope;
   scoped_refptr<ServiceWorkerRegistration> registration =
-      new ServiceWorkerRegistration(options, kKey, kRegistrationId,
-                                    context()->AsWeakPtr());
+      new ServiceWorkerRegistration(
+          options, kKey, kRegistrationId, context()->AsWeakPtr(),
+          blink::mojom::AncestorFrameType::kNormalFrame);
   scoped_refptr<ServiceWorkerVersion> version = new ServiceWorkerVersion(
       registration.get(), kScript, blink::mojom::ScriptType::kClassic,
       kVersionId,
@@ -2079,33 +2163,43 @@ TEST_F(ServiceWorkerRegistryOriginTrialsTest, FromMainScript) {
 
   const std::string kHTTPHeaderLine("HTTP/1.1 200 OK\n\n");
   const std::string kOriginTrial("Origin-Trial");
+  // Test features declared in runtime_enabled_features.json5
+  const std::string kFeature1Name("Frobulate");
+  const std::string kFeature2Name("FrobulateDeprecation");
+  const std::string kFeature3Name("FrobulateThirdParty");
   // Token for Feature1 which expires 2033-05-18.
-  // generate_token.py valid.example.com Feature1 --expire-timestamp=2000000000
+  // generate_token.py valid.example.com Frobulate --expire-timestamp=2000000000
   // TODO(horo): Generate this sample token during the build.
   const std::string kFeature1Token(
-      "AtiUXksymWhTv5ipBE7853JytiYb0RMj3wtEBjqu3PeufQPwV1oEaNjHt4R/oEBfcK0UiWlA"
-      "P2b9BE2/eThqcAYAAABYeyJvcmlnaW4iOiAiaHR0cHM6Ly92YWxpZC5leGFtcGxlLmNvbTo0"
-      "NDMiLCAiZmVhdHVyZSI6ICJGZWF0dXJlMSIsICJleHBpcnkiOiAyMDAwMDAwMDAwfQ==");
+      "A3hKfIvnlYdXEp9a7ikD4hSZoQgqQhJIP3HF3ny2Faoeu7HNSnhstN7lcQM1N81y9OkxIT6b"
+      "mSXYFpoMRZ862AoAAABZeyJvcmlnaW4iOiAiaHR0cHM6Ly92YWxpZC5leGFtcGxlLmNvbTo0"
+      "NDMiLCAiZmVhdHVyZSI6ICJGcm9idWxhdGUiLCAiZXhwaXJ5IjogMjAwMDAwMDAwMH0=");
   // Token for Feature2 which expires 2033-05-18.
-  // generate_token.py valid.example.com Feature2 --expire-timestamp=2000000000
+  // generate_token.py valid.example.com FrobulateDeprecation
+  // --expire-timestamp=2000000000
   // TODO(horo): Generate this sample token during the build.
   const std::string kFeature2Token1(
-      "ApmHVC6Dpez0KQNBy13o6cGuoB5AgzOLN0keQMyAN5mjebCwR0MA8/IyjKQIlyom2RuJVg/u"
-      "LmnqEpldfewkbA8AAABYeyJvcmlnaW4iOiAiaHR0cHM6Ly92YWxpZC5leGFtcGxlLmNvbTo0"
-      "NDMiLCAiZmVhdHVyZSI6ICJGZWF0dXJlMiIsICJleHBpcnkiOiAyMDAwMDAwMDAwfQ==");
+      "AzkSdDq68kCktuJuhqg9LRcN7ytUGZHibfhTUV8Sa7TEUv/9HOP1tKAYvQPaCEv0chewHpgh"
+      "iAVci8x2guhMNgkAAABkeyJvcmlnaW4iOiAiaHR0cHM6Ly92YWxpZC5leGFtcGxlLmNvbTo0"
+      "NDMiLCAiZmVhdHVyZSI6ICJGcm9idWxhdGVEZXByZWNhdGlvbiIsICJleHBpcnkiOiAyMDAw"
+      "MDAwMDAwfQ==");
   // Token for Feature2 which expires 2036-07-18.
-  // generate_token.py valid.example.com Feature2 --expire-timestamp=2100000000
+  // generate_token.py valid.example.com FrobulateDeprecation
+  // --expire-timestamp=2100000000
   // TODO(horo): Generate this sample token during the build.
   const std::string kFeature2Token2(
-      "AmV2SSxrYstE2zSwZToy7brAbIJakd146apC/6+VDflLmc5yDfJlHGILe5+ZynlcliG7clOR"
-      "fHhXCzS5Lh1v4AAAAABYeyJvcmlnaW4iOiAiaHR0cHM6Ly92YWxpZC5leGFtcGxlLmNvbTo0"
-      "NDMiLCAiZmVhdHVyZSI6ICJGZWF0dXJlMiIsICJleHBpcnkiOiAyMTAwMDAwMDAwfQ==");
+      "AzO+RDF5GwnZ+9OzbhWrpNV3+Gnx9ce4si8EdVded/1V5rreParDE+Q/mBGl+vb3YYA6uis1"
+      "zpQXSxoVTp1prAYAAABkeyJvcmlnaW4iOiAiaHR0cHM6Ly92YWxpZC5leGFtcGxlLmNvbTo0"
+      "NDMiLCAiZmVhdHVyZSI6ICJGcm9idWxhdGVEZXByZWNhdGlvbiIsICJleHBpcnkiOiAyMTAw"
+      "MDAwMDAwfQ==");
   // Token for Feature3 which expired 2001-09-09.
-  // generate_token.py valid.example.com Feature3 --expire-timestamp=1000000000
+  // generate_token.py valid.example.com FrobulateThirdParty
+  // --expire-timestamp=1000000000
   const std::string kFeature3ExpiredToken(
-      "AtSAc03z4qvid34W4MHMxyRFUJKlubZ+P5cs5yg6EiBWcagVbnm5uBgJMJN34pag7D5RywGV"
-      "ol2RFf+4Sdm1hQ4AAABYeyJvcmlnaW4iOiAiaHR0cHM6Ly92YWxpZC5leGFtcGxlLmNvbTo0"
-      "NDMiLCAiZmVhdHVyZSI6ICJGZWF0dXJlMyIsICJleHBpcnkiOiAxMDAwMDAwMDAwfQ==");
+      "A4qtahM+1dC9dllCTPmjAHG8WJpDIcJuhYRM+lwfpd+7OBYQntbKpi1RXMNdDSldi974UrYW"
+      "5gEr+86Z9I+9BwQAAABjeyJvcmlnaW4iOiAiaHR0cHM6Ly92YWxpZC5leGFtcGxlLmNvbTo0"
+      "NDMiLCAiZmVhdHVyZSI6ICJGcm9idWxhdGVUaGlyZFBhcnR5IiwgImV4cGlyeSI6IDEwMDAw"
+      "MDAwMDB9");
   response_head.headers = base::MakeRefCounted<net::HttpResponseHeaders>("");
   response_head.headers->AddHeader(kOriginTrial, kFeature1Token);
   response_head.headers->AddHeader(kOriginTrial, kFeature2Token1);
@@ -2118,11 +2212,11 @@ TEST_F(ServiceWorkerRegistryOriginTrialsTest, FromMainScript) {
   const blink::TrialTokenValidator::FeatureToTokensMap& tokens =
       *version->origin_trial_tokens();
   ASSERT_EQ(2UL, tokens.size());
-  ASSERT_EQ(1UL, tokens.at("Feature1").size());
-  EXPECT_EQ(kFeature1Token, tokens.at("Feature1")[0]);
-  ASSERT_EQ(2UL, tokens.at("Feature2").size());
-  EXPECT_EQ(kFeature2Token1, tokens.at("Feature2")[0]);
-  EXPECT_EQ(kFeature2Token2, tokens.at("Feature2")[1]);
+  ASSERT_EQ(1UL, tokens.at(kFeature1Name).size());
+  EXPECT_EQ(kFeature1Token, tokens.at(kFeature1Name)[0]);
+  ASSERT_EQ(2UL, tokens.at(kFeature2Name).size());
+  EXPECT_EQ(kFeature2Token1, tokens.at(kFeature2Name)[0]);
+  EXPECT_EQ(kFeature2Token2, tokens.at(kFeature2Name)[1]);
 
   std::vector<storage::mojom::ServiceWorkerResourceRecordPtr> records;
   records.push_back(
@@ -2147,11 +2241,11 @@ TEST_F(ServiceWorkerRegistryOriginTrialsTest, FromMainScript) {
   const blink::TrialTokenValidator::FeatureToTokensMap& found_tokens =
       *found_registration->active_version()->origin_trial_tokens();
   ASSERT_EQ(2UL, found_tokens.size());
-  ASSERT_EQ(1UL, found_tokens.at("Feature1").size());
-  EXPECT_EQ(kFeature1Token, found_tokens.at("Feature1")[0]);
-  ASSERT_EQ(2UL, found_tokens.at("Feature2").size());
-  EXPECT_EQ(kFeature2Token1, found_tokens.at("Feature2")[0]);
-  EXPECT_EQ(kFeature2Token2, found_tokens.at("Feature2")[1]);
+  ASSERT_EQ(1UL, found_tokens.at(kFeature1Name).size());
+  EXPECT_EQ(kFeature1Token, found_tokens.at(kFeature1Name)[0]);
+  ASSERT_EQ(2UL, found_tokens.at(kFeature2Name).size());
+  EXPECT_EQ(kFeature2Token1, found_tokens.at(kFeature2Name)[0]);
+  EXPECT_EQ(kFeature2Token2, found_tokens.at(kFeature2Name)[1]);
 }
 
 class ServiceWorkerRegistryResourceTest : public ServiceWorkerRegistryTest {
@@ -2363,10 +2457,8 @@ TEST_F(ServiceWorkerRegistryResourceTest, DeleteRegistration_ActiveVersion) {
   // Promote the worker to active and add a controllee.
   registration_->SetActiveVersion(registration_->waiting_version());
   registration_->active_version()->SetStatus(ServiceWorkerVersion::ACTIVATED);
-  registry()->UpdateToActiveState(
-      registration_->id(),
-      blink::StorageKey(url::Origin::Create(registration_->scope())),
-      base::DoNothing());
+  registry()->UpdateToActiveState(registration_->id(), registration_->key(),
+                                  base::DoNothing());
   ServiceWorkerRemoteContainerEndpoint remote_endpoint;
   base::WeakPtr<ServiceWorkerContainerHost> container_host =
       CreateContainerHostForWindow(

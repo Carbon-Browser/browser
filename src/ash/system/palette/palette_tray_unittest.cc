@@ -14,6 +14,8 @@
 #include "ash/constants/ash_switches.h"
 #include "ash/highlighter/highlighter_controller.h"
 #include "ash/highlighter/highlighter_controller_test_api.h"
+#include "ash/projector/model/projector_session_impl.h"
+#include "ash/projector/projector_controller_impl.h"
 #include "ash/public/cpp/assistant/assistant_state.h"
 #include "ash/public/cpp/stylus_utils.h"
 #include "ash/root_window_controller.h"
@@ -30,9 +32,10 @@
 #include "base/command_line.h"
 #include "base/memory/ptr_util.h"
 #include "base/run_loop.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/test/simple_test_tick_clock.h"
-#include "chromeos/services/assistant/public/cpp/assistant_prefs.h"
-#include "chromeos/services/assistant/test_support/scoped_assistant_browser_delegate.h"
+#include "chromeos/ash/services/assistant/public/cpp/assistant_prefs.h"
+#include "chromeos/ash/services/assistant/test_support/scoped_assistant_browser_delegate.h"
 #include "components/prefs/pref_service.h"
 #include "components/session_manager/session_manager_types.h"
 #include "ui/compositor/scoped_animation_duration_scale_mode.h"
@@ -49,6 +52,10 @@ namespace ash {
 class PaletteTrayTest : public AshTestBase {
  public:
   PaletteTrayTest() = default;
+
+  PaletteTrayTest(const PaletteTrayTest&) = delete;
+  PaletteTrayTest& operator=(const PaletteTrayTest&) = delete;
+
   ~PaletteTrayTest() override = default;
 
   // Performs a tap on the palette tray button.
@@ -97,9 +104,6 @@ class PaletteTrayTest : public AshTestBase {
   PaletteTray* palette_tray_ = nullptr;  // not owned
 
   std::unique_ptr<PaletteTrayTestApi> test_api_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(PaletteTrayTest);
 };
 
 // Verify the palette tray button exists and but is not visible initially.
@@ -283,6 +287,11 @@ TEST_F(PaletteTrayTest, WelcomeBubbleVisibility) {
 class PaletteTrayTestWithAssistant : public PaletteTrayTest {
  public:
   PaletteTrayTestWithAssistant() = default;
+
+  PaletteTrayTestWithAssistant(const PaletteTrayTestWithAssistant&) = delete;
+  PaletteTrayTestWithAssistant& operator=(const PaletteTrayTestWithAssistant&) =
+      delete;
+
   ~PaletteTrayTestWithAssistant() override = default;
 
   // PaletteTrayTest:
@@ -296,7 +305,7 @@ class PaletteTrayTestWithAssistant : public PaletteTrayTest {
     GetEventGenerator();
 
     // Tests fail if event time is ever 0.
-    simulated_clock_.Advance(base::TimeDelta::FromMilliseconds(10));
+    simulated_clock_.Advance(base::Milliseconds(10));
     ui::SetEventTickClockForTesting(&simulated_clock_);
 
     highlighter_test_api_ = std::make_unique<HighlighterControllerTestApi>(
@@ -365,7 +374,7 @@ class PaletteTrayTestWithAssistant : public PaletteTrayTest {
                                   bool expected,
                                   bool expected_on_press) {
     const int kStrokeGap = 1000;
-    simulated_clock_.Advance(base::TimeDelta::FromMilliseconds(kStrokeGap));
+    simulated_clock_.Advance(base::Milliseconds(kStrokeGap));
     DragAndAssertMetalayer(context, origin, event_flags, expected,
                            expected_on_press);
   }
@@ -375,8 +384,6 @@ class PaletteTrayTestWithAssistant : public PaletteTrayTest {
  private:
   base::SimpleTestTickClock simulated_clock_;
   chromeos::assistant::ScopedAssistantBrowserDelegate delegate_;
-
-  DISALLOW_COPY_AND_ASSIGN(PaletteTrayTestWithAssistant);
 };
 
 TEST_F(PaletteTrayTestWithAssistant, MetalayerToolViewCreated) {
@@ -590,6 +597,12 @@ class PaletteTrayTestWithInternalStylus : public PaletteTrayTest {
     base::CommandLine::ForCurrentProcess()->AppendSwitch(
         switches::kHasInternalStylus);
   }
+
+  PaletteTrayTestWithInternalStylus(const PaletteTrayTestWithInternalStylus&) =
+      delete;
+  PaletteTrayTestWithInternalStylus& operator=(
+      const PaletteTrayTestWithInternalStylus&) = delete;
+
   ~PaletteTrayTestWithInternalStylus() override = default;
 
   // PaletteTrayTest:
@@ -597,9 +610,6 @@ class PaletteTrayTestWithInternalStylus : public PaletteTrayTest {
     PaletteTrayTest::SetUp();
     test_api_->SetDisplayHasStylus();
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(PaletteTrayTestWithInternalStylus);
 };
 
 // Verify the palette tray button exists and is visible if the device has an
@@ -773,15 +783,18 @@ class PaletteTrayNoSessionTestWithInternalStylus : public PaletteTrayTest {
         switches::kHasInternalStylus);
     stylus_utils::SetHasStylusInputForTesting();
   }
+
+  PaletteTrayNoSessionTestWithInternalStylus(
+      const PaletteTrayNoSessionTestWithInternalStylus&) = delete;
+  PaletteTrayNoSessionTestWithInternalStylus& operator=(
+      const PaletteTrayNoSessionTestWithInternalStylus&) = delete;
+
   ~PaletteTrayNoSessionTestWithInternalStylus() override = default;
 
  protected:
   PrefService* active_user_pref_service() {
     return Shell::Get()->session_controller()->GetActivePrefService();
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(PaletteTrayNoSessionTestWithInternalStylus);
 };
 
 // Verify that the palette tray is created on an external display, but it is not
@@ -1037,6 +1050,56 @@ TEST_F(PaletteTrayTestMultiDisplay, MirrorModeEnable) {
 
   // The external tray will have been deleted, so only check if
   // we're visible on the internal display now.
+  EXPECT_TRUE(palette_tray_->GetVisible());
+}
+
+class PaletteTrayTestWithProjector : public PaletteTrayTest {
+ public:
+  PaletteTrayTestWithProjector() {
+    scoped_feature_list_.InitWithFeatures({features::kProjector}, {});
+  }
+
+  PaletteTrayTestWithProjector(const PaletteTrayTestWithProjector&) = delete;
+  PaletteTrayTestWithProjector& operator=(const PaletteTrayTestWithProjector&) =
+      delete;
+
+  ~PaletteTrayTestWithProjector() override = default;
+
+  // AshTestBase:
+  void SetUp() override {
+    PaletteTrayTest::SetUp();
+    projector_session_ = ProjectorControllerImpl::Get()->projector_session();
+  }
+
+ protected:
+  ProjectorSessionImpl* projector_session_;
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
+// Verify that the palette tray is hidden during a Projector session.
+TEST_F(PaletteTrayTestWithProjector,
+       PaletteTrayNotVisibleDuringProjectorSession) {
+  active_user_pref_service()->SetBoolean(prefs::kEnableStylusTools, true);
+  local_state()->SetBoolean(prefs::kHasSeenStylus, true);
+  test_api_->palette_tool_manager()->ActivateTool(PaletteToolId::LASER_POINTER);
+
+  EXPECT_TRUE(palette_tray_->GetVisible());
+  EXPECT_EQ(
+      test_api_->palette_tool_manager()->GetActiveTool(PaletteGroup::MODE),
+      PaletteToolId::LASER_POINTER);
+
+  // Verify palette tray is hidden and the active tool is deactivated during
+  // Projector session.
+  projector_session_->Start("projector_data");
+  EXPECT_FALSE(palette_tray_->GetVisible());
+  EXPECT_EQ(
+      test_api_->palette_tool_manager()->GetActiveTool(PaletteGroup::MODE),
+      PaletteToolId::NONE);
+
+  // Verify palette tray is visible when Projector session ends.
+  projector_session_->Stop();
   EXPECT_TRUE(palette_tray_->GetVisible());
 }
 

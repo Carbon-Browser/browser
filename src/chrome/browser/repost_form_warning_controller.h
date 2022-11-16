@@ -5,8 +5,6 @@
 #ifndef CHROME_BROWSER_REPOST_FORM_WARNING_CONTROLLER_H_
 #define CHROME_BROWSER_REPOST_FORM_WARNING_CONTROLLER_H_
 
-#include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "chrome/browser/ui/tab_modal_confirm_dialog_delegate.h"
 
 // This class is used to continue or cancel a pending reload when the
@@ -15,6 +13,11 @@
 class RepostFormWarningController : public TabModalConfirmDialogDelegate {
  public:
   explicit RepostFormWarningController(content::WebContents* web_contents);
+
+  RepostFormWarningController(const RepostFormWarningController&) = delete;
+  RepostFormWarningController& operator=(const RepostFormWarningController&) =
+      delete;
+
   ~RepostFormWarningController() override;
 
  private:
@@ -28,8 +31,6 @@ class RepostFormWarningController : public TabModalConfirmDialogDelegate {
 
   // content::WebContentsObserver methods via TabModalConfirmDialogDelegate:
   void BeforeFormRepostWarningShow() override;
-
-  DISALLOW_COPY_AND_ASSIGN(RepostFormWarningController);
 };
 
 #endif  // CHROME_BROWSER_REPOST_FORM_WARNING_CONTROLLER_H_

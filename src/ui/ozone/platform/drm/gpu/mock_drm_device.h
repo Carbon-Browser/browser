@@ -16,7 +16,6 @@
 
 #include "base/containers/flat_map.h"
 #include "base/containers/queue.h"
-#include "base/macros.h"
 #include "third_party/skia/include/core/SkRefCnt.h"
 #include "third_party/skia/include/core/SkSurface.h"
 #include "ui/ozone/platform/drm/gpu/drm_device.h"
@@ -58,6 +57,9 @@ class MockDrmDevice : public DrmDevice {
 
   explicit MockDrmDevice(std::unique_ptr<GbmDevice> gbm_device);
 
+  MockDrmDevice(const MockDrmDevice&) = delete;
+  MockDrmDevice& operator=(const MockDrmDevice&) = delete;
+
   static ScopedDrmPropertyBlobPtr AllocateInFormatsBlob(
       uint32_t id,
       const std::vector<uint32_t>& supported_formats,
@@ -75,6 +77,7 @@ class MockDrmDevice : public DrmDevice {
   int get_overlay_clear_call_count() const { return overlay_clear_call_count_; }
   int get_test_modeset_count() const { return test_modeset_count_; }
   int get_commit_modeset_count() const { return commit_modeset_count_; }
+  int get_seamless_modeset_count() const { return seamless_modeset_count_; }
   int get_commit_count() const { return commit_count_; }
   int get_set_object_property_count() const {
     return set_object_property_count_;
@@ -193,6 +196,8 @@ class MockDrmDevice : public DrmDevice {
       uint32_t crtc_id,
       const std::vector<display::GammaRampRGBEntry>& lut) override;
   bool SetCapability(uint64_t capability, uint64_t value) override;
+  absl::optional<std::string> GetDriverName() const override;
+  void SetDriverName(absl::optional<std::string> name);
   uint32_t GetFramebufferForCrtc(uint32_t crtc_id) const;
 
  private:
@@ -228,6 +233,7 @@ class MockDrmDevice : public DrmDevice {
   int allocate_buffer_count_;
   int test_modeset_count_ = 0;
   int commit_modeset_count_ = 0;
+  int seamless_modeset_count_ = 0;
   int commit_count_ = 0;
   int set_object_property_count_ = 0;
   int set_gamma_ramp_count_ = 0;
@@ -243,6 +249,8 @@ class MockDrmDevice : public DrmDevice {
 
   uint32_t current_framebuffer_;
   uint32_t plane_crtc_id_prop_id_ = 0;
+
+  absl::optional<std::string> driver_name_ = "mock";
 
   std::vector<sk_sp<SkSurface>> buffers_;
 
@@ -268,8 +276,6 @@ class MockDrmDevice : public DrmDevice {
 
   uint64_t system_watermark_limitations_ = std::numeric_limits<uint64_t>::max();
   base::flat_map<uint64_t /*modifier*/, int /*overhead*/> modifiers_overhead_;
-
-  DISALLOW_COPY_AND_ASSIGN(MockDrmDevice);
 };
 
 }  // namespace ui

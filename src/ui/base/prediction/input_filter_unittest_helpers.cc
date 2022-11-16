@@ -5,6 +5,7 @@
 #include "ui/base/prediction/input_filter_unittest_helpers.h"
 
 #include "base/rand_util.h"
+#include "base/time/time.h"
 #include "ui/base/prediction/input_predictor_unittest_helpers.h"
 #include "ui/base/prediction/prediction_unittest_helpers.h"
 
@@ -20,7 +21,7 @@ InputFilterTest::~InputFilterTest() = default;
 void InputFilterTest::TestCloneFilter() {
   gfx::PointF point;
   base::TimeTicks ts = PredictionUnittestHelpers::GetStaticTimeStampForTests();
-  base::TimeDelta delta = base::TimeDelta::FromMilliseconds(8);
+  base::TimeDelta delta = base::Milliseconds(8);
 
   for (int i = 0; i < 100; i++) {
     point.SetPoint(base::RandDouble(), base::RandDouble());
@@ -54,7 +55,7 @@ void InputFilterTest::TestResetFilter() {
   std::vector<gfx::PointF> results;
   gfx::PointF point;
   base::TimeTicks ts = PredictionUnittestHelpers::GetStaticTimeStampForTests();
-  base::TimeDelta delta = base::TimeDelta::FromMilliseconds(8);
+  base::TimeDelta delta = base::Milliseconds(8);
 
   for (int i = 0; i < 100; i++) {
     point.SetPoint(base::RandDouble(), base::RandDouble());

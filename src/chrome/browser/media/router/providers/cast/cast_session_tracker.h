@@ -7,7 +7,7 @@
 
 #include "base/containers/flat_map.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/sequence_checker.h"
 #include "base/values.h"
@@ -39,6 +39,9 @@ class CastSessionTracker : public MediaSinkServiceBase::Observer,
                                       const base::Value& media_status,
                                       absl::optional<int> request_id) = 0;
   };
+
+  CastSessionTracker(const CastSessionTracker&) = delete;
+  CastSessionTracker& operator=(const CastSessionTracker&) = delete;
 
   ~CastSessionTracker() override;
 
@@ -94,15 +97,14 @@ class CastSessionTracker : public MediaSinkServiceBase::Observer,
   // |SetInstanceForTest()|.
   static CastSessionTracker* instance_for_test_;
 
-  MediaSinkServiceBase* const media_sink_service_;
-  cast_channel::CastMessageHandler* const message_handler_;
+  const raw_ptr<MediaSinkServiceBase> media_sink_service_;
+  const raw_ptr<cast_channel::CastMessageHandler> message_handler_;
 
   SessionMap sessions_by_sink_id_;
 
   base::ObserverList<Observer> observers_;
 
   SEQUENCE_CHECKER(sequence_checker_);
-  DISALLOW_COPY_AND_ASSIGN(CastSessionTracker);
   FRIEND_TEST_ALL_PREFIXES(AppActivityTest, SendAppMessageToReceiver);
   FRIEND_TEST_ALL_PREFIXES(CastMediaRouteProviderTest, GetState);
   FRIEND_TEST_ALL_PREFIXES(CastSessionTrackerTest, RemoveSession);

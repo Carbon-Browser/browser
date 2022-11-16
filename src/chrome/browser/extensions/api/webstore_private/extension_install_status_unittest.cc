@@ -8,7 +8,6 @@
 
 #include "base/json/json_reader.h"
 #include "base/json/values_util.h"
-#include "base/macros.h"
 #include "base/strings/stringprintf.h"
 #include "base/time/time.h"
 #include "chrome/common/extensions/extension_constants.h"
@@ -52,6 +51,10 @@ class ExtensionInstallStatusTest : public BrowserWithTestWindowTest {
  public:
   ExtensionInstallStatusTest() = default;
 
+  ExtensionInstallStatusTest(const ExtensionInstallStatusTest&) = delete;
+  ExtensionInstallStatusTest& operator=(const ExtensionInstallStatusTest&) =
+      delete;
+
   std::string GenerateArgs(const char* id) {
     return base::StringPrintf(R"(["%s"])", id);
   }
@@ -86,9 +89,6 @@ class ExtensionInstallStatusTest : public BrowserWithTestWindowTest {
     profile()->GetTestingPrefService()->SetUserPref(
         prefs::kCloudExtensionRequestIds, std::move(id_values));
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ExtensionInstallStatusTest);
 };
 
 TEST_F(ExtensionInstallStatusTest, ExtensionEnabled) {

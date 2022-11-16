@@ -11,13 +11,13 @@
 #include "third_party/blink/renderer/core/typed_arrays/array_buffer_view_helpers.h"
 #include "third_party/blink/renderer/modules/webgpu/dawn_object.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/graphics/graphics_types.h"
 
 namespace blink {
 
 class ExceptionState;
 class GPUBuffer;
 class GPUCommandBuffer;
-class GPUImageCopyImageBitmap;
 class GPUImageCopyExternalImage;
 class GPUImageCopyTexture;
 class GPUImageCopyTextureTagged;
@@ -31,6 +31,9 @@ class GPUQueue : public DawnObject<WGPUQueue> {
 
  public:
   explicit GPUQueue(GPUDevice* device, WGPUQueue queue);
+
+  GPUQueue(const GPUQueue&) = delete;
+  GPUQueue& operator=(const GPUQueue&) = delete;
 
   // gpu_queue.idl
   void submit(const HeapVector<Member<GPUCommandBuffer>>& buffers);
@@ -71,29 +74,18 @@ class GPUQueue : public DawnObject<WGPUQueue> {
                                   GPUImageCopyTextureTagged* destination,
                                   const V8GPUExtent3D* copySize,
                                   ExceptionState& exception_state);
-  void copyImageBitmapToTexture(GPUImageCopyImageBitmap* source,
-                                GPUImageCopyTexture* destination,
-                                const V8GPUExtent3D* copy_size,
-                                ExceptionState& exception_state);
 
  private:
   void OnWorkDoneCallback(ScriptPromiseResolver* resolver,
                           WGPUQueueWorkDoneStatus status);
 
-  bool CopyContentFromCPU(StaticBitmapImage* image,
-                          const WGPUOrigin3D& origin,
-                          const WGPUExtent3D& copy_size,
-                          const WGPUImageCopyTexture& destination,
-                          const WGPUTextureFormat dest_texture_format,
-                          bool premultiplied_alpha,
-                          bool flipY = false);
-  bool CopyContentFromGPU(StaticBitmapImage* image,
-                          const WGPUOrigin3D& origin,
-                          const WGPUExtent3D& copy_size,
-                          const WGPUImageCopyTexture& destination,
-                          const WGPUTextureFormat dest_texture_format,
-                          bool premultiplied_alpha,
-                          bool flipY = false);
+  bool UploadContentToTexture(StaticBitmapImage* image,
+                              const WGPUOrigin3D& origin,
+                              const WGPUExtent3D& copy_size,
+                              const WGPUImageCopyTexture& destination,
+                              bool dst_premultiplied_alpha,
+                              PredefinedColorSpace dst_color_space,
+                              bool flipY);
   void WriteBufferImpl(GPUBuffer* buffer,
                        uint64_t buffer_offset,
                        uint64_t data_byte_length,
@@ -109,7 +101,10 @@ class GPUQueue : public DawnObject<WGPUQueue> {
                         const V8GPUExtent3D* write_size,
                         ExceptionState& exception_state);
 
-  DISALLOW_COPY_AND_ASSIGN(GPUQueue);
+  void setLabelImpl(const String& value) override {
+    std::string utf8_label = value.Utf8();
+    GetProcs().queueSetLabel(GetHandle(), utf8_label.c_str());
+  }
 };
 
 }  // namespace blink

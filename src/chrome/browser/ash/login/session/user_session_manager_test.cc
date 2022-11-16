@@ -4,8 +4,9 @@
 
 #include "chrome/browser/ash/login/session/user_session_manager.h"
 
+#include "ash/components/login/auth/public/key.h"
+#include "ash/components/login/auth/public/user_context.h"
 #include "base/callback_helpers.h"
-#include "base/macros.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ash/login/demo_mode/demo_session.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
@@ -14,10 +15,8 @@
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chrome/test/base/testing_profile_manager.h"
-#include "chromeos/dbus/session_manager/fake_session_manager_client.h"
-#include "chromeos/dbus/session_manager/session_manager_client.h"
-#include "chromeos/login/auth/key.h"
-#include "chromeos/login/auth/user_context.h"
+#include "chromeos/ash/components/dbus/session_manager/fake_session_manager_client.h"
+#include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
 #include "components/language/core/browser/pref_names.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
 #include "components/user_manager/fake_user_manager.h"
@@ -56,6 +55,9 @@ class UserSessionManagerTest : public testing::Test {
 
   void SetUp() override { ASSERT_TRUE(profile_manager_->SetUp()); }
 
+  UserSessionManagerTest(const UserSessionManagerTest&) = delete;
+  UserSessionManagerTest& operator=(const UserSessionManagerTest&) = delete;
+
   ~UserSessionManagerTest() override {
     profile_manager_->DeleteAllTestingProfiles();
     user_session_manager_.reset();
@@ -92,7 +94,6 @@ class UserSessionManagerTest : public testing::Test {
     RegisterUserProfilePrefs(prefs->registry());
     TestingProfile* profile = profile_manager_->CreateTestingProfile(
         "test-profile", std::move(prefs), u"Test profile", 1 /* avatar_id */,
-        std::string() /* supervised_user_id */,
         TestingProfile::TestingFactories());
     ProfileHelper::Get()->SetUserToProfileMappingForTesting(test_user_,
                                                             profile);
@@ -112,9 +113,6 @@ class UserSessionManagerTest : public testing::Test {
 
   std::unique_ptr<TestingProfileManager> profile_manager_;
   user_manager::User* test_user_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(UserSessionManagerTest);
 };
 
 // Calling VoteForSavingLoginPassword() with `save_password` set to false for

@@ -125,13 +125,13 @@
       Avgör hur länge skärmsläckaren ska visas på inloggningsskärmen för enheter i återförsäljarläge.
 
       Policyns värde anges i millisekunder.</translation>
-<translation id="1141767714195601945">Den här principen styr kommandoradsparametrar för Carbon Browser Browser Browser från Internet Explorer.
+<translation id="1141767714195601945">Den här principen styr kommandoradsparametrar för Carbon Browser från Internet Explorer.
 
       Om tillägget Stöd för äldre webbläsare för Internet Explorer inte är installerat har den här principen ingen funktion.
 
-      Om den här principen saknar inställning skickar Internet Explorer bara webbadressen till Carbon Browser Browser Browser som en kommandoradsparameter.
+      Om den här principen saknar inställning skickar Internet Explorer bara webbadressen till Carbon Browser som en kommandoradsparameter.
 
-      Om den här principen är inställd på en lista med strängar, kombineras strängarna med blanksteg och skickas till Carbon Browser Browser Browser som kommandoradsparametrar.
+      Om den här principen är inställd på en lista med strängar, kombineras strängarna med blanksteg och skickas till Carbon Browser som kommandoradsparametrar.
 
       Om ett element innehåller ${url} ersätts det med webbadressen till sidan som ska öppnas.
 
@@ -270,7 +270,7 @@
 
       Varje post i principen är en sträng som innehåller ett tilläggs-id och en uppdateringsadress avgränsade med semikolon (<ph name="SEMICOLON" />). Ett tilläggs-id är en sträng med 32 bokstäver, till exempel den som finns på <ph name="CHROME_EXTENSIONS_LINK" /> i utvecklarläge. Uppdateringsadressen ska peka på ett XML-manifestdokument för uppdatering enligt beskrivningen på <ph name="LINK_TO_EXTENSION_DOC1" />. Observera att uppdateringsadressen som anges i den här principen bara används för den ursprungliga installationen. För senare uppdateringar av tillägget används den uppdateringsadress som anges i tilläggets manifest.
 
-      Exempel: <ph name="EXTENSION_POLICY_EXAMPLE" /> installerar appen <ph name="EXTENSION_POLICY_EXAMPLE_EXTENSION_NAME" /> från standarduppdateringsadressen för Carbon Browser Browser Browser Web Store. Mer information om att tillhandahålla tillägg finns på: <ph name="LINK_TO_EXTENSION_DOC2" />.</translation>
+      Exempel: <ph name="EXTENSION_POLICY_EXAMPLE" /> installerar appen <ph name="EXTENSION_POLICY_EXAMPLE_EXTENSION_NAME" /> från standarduppdateringsadressen för Carbon Browser Web Store. Mer information om att tillhandahålla tillägg finns på: <ph name="LINK_TO_EXTENSION_DOC2" />.</translation>
 <translation id="1435659902881071157">Nätverkskonfiguration på enhetsnivå</translation>
 <translation id="1438739959477268107">Standardinställningar för nyckelgenerering</translation>
 <translation id="1454846751303307294">Policyn gör att du kan ställa in en lista med webbadressmönster som anger webbplatser som inte får köra JavaScript.
@@ -431,11 +431,11 @@
 
       Om inget värde anges för principen är uppdateringar av firmware för <ph name="TPM_FIRMWARE_UPDATE_TPM" /> inte tillgängliga.</translation>
 <translation id="1708496595873025510">Ange begränsning av hämtningen av startvärdet för Variations</translation>
-<translation id="1717817358640580294">Om ingen inställning anges kan Carbon Browser Browser Browser Cleanup rapportera metadata om oönskad programvara hittas i en sökning till Google enligt inställningen i principen SafeBrowsingExtendedReportingEnabled. Carbon Browser Browser Browser Cleanup frågar sedan om användaren vill ta bort det oönskade programmet. Användaren kan välja att dela resultatet av rensningen med Google för att bidra till att identifiera oönskade program i framtiden. Resultaten innehåller metadata om filer, automatiskt installerade tillägg och registernycklar enligt beskrivningen i rapporten om sekretess i Carbon Browser Browser Browser.
+<translation id="1717817358640580294">Om ingen inställning anges kan Carbon Browser Cleanup rapportera metadata om oönskad programvara hittas i en sökning till Google enligt inställningen i principen SafeBrowsingExtendedReportingEnabled. Carbon Browser Cleanup frågar sedan om användaren vill ta bort det oönskade programmet. Användaren kan välja att dela resultatet av rensningen med Google för att bidra till att identifiera oönskade program i framtiden. Resultaten innehåller metadata om filer, automatiskt installerade tillägg och registernycklar enligt beskrivningen i rapporten om sekretess i Carbon Browser.
 
-      Om principen är inaktiverad rapporterar Carbon Browser Browser Browser Cleanup inga metadata om oönskade program som upptäcks under en sökning till Google, vilket åsidosätter eventuella inställningar av principen SafeBrowsingExtendedReportingEnabled. Carbon Browser Browser Browser Cleanup frågar användaren om hen vill ta bort den oönskade programvaran.  Resultatet av rensningen rapporteras inte till Google och användaren kan inte välja att göra det.
+      Om principen är inaktiverad rapporterar Carbon Browser Cleanup inga metadata om oönskade program som upptäcks under en sökning till Google, vilket åsidosätter eventuella inställningar av principen SafeBrowsingExtendedReportingEnabled. Carbon Browser Cleanup frågar användaren om hen vill ta bort den oönskade programvaran.  Resultatet av rensningen rapporteras inte till Google och användaren kan inte välja att göra det.
 
-      Om principen är aktiverad rapporterar Carbon Browser Browser Browser Cleanup metadata om oönskade program som upptäcks under en sökning till Google enligt den princip som anges av SafeBrowsingExtendedReportingEnabled. Carbon Browser Browser Browser Cleanup frågar användaren om hen vill ta bort den oönskade programvaran.  Resultatet av rensningen rapporteras till Google och användaren kan inte välja bort det.
+      Om principen är aktiverad rapporterar Carbon Browser Cleanup metadata om oönskade program som upptäcks under en sökning till Google enligt den princip som anges av SafeBrowsingExtendedReportingEnabled. Carbon Browser Cleanup frågar användaren om hen vill ta bort den oönskade programvaran.  Resultatet av rensningen rapporteras till Google och användaren kan inte välja bort det.
 
       Den här principen är bara tillgänglig i Windows-instanser som är kopplade till en <ph name="MS_AD_NAME" />-domän, eller i Windows 10 Pro- eller Enterprise-instanser som är registrerade i enhetshantering.</translation>
 <translation id="172374442286684480">Tillåt alla webbplatser att ange lokala data</translation>
@@ -631,7 +631,7 @@
 <translation id="2073552873076775140">Tillåt inloggning i <ph name="PRODUCT_NAME" /></translation>
 <translation id="2077129598763517140">Använd maskinvaruacceleration när det är tillgängligt</translation>
 <translation id="2077273864382355561">Skärmavstängningstid när enheten drivs av batteriet</translation>
-<translation id="2082205219176343977">Konfigurera lägsta tillåtna Carbon Browser Browser Browser-version för enheten.</translation>
+<translation id="2082205219176343977">Konfigurera lägsta tillåtna Carbon Browser-version för enheten.</translation>
 <translation id="209586405398070749">Stabil kanal</translation>
 <translation id="2098658257603918882">Aktivera rapportering av användning och kraschrelaterade data</translation>
 <translation id="2104418465060359056">Rapportera information om tillägg och pluginprogram</translation>
@@ -676,7 +676,7 @@
       Om du inaktiverar inställningen eller inte anger den visas autentiseringssidor för infångstportaler på en (vanlig) ny flik i webbläsaren med den aktuella användarens proxyinställningar.</translation>
 <translation id="21394354835637379">Gör att du kan ange vilka webbadresser som får installera tillägg, appar och teman.
 
-          Från och med <ph name="PRODUCT_NAME" /> 21 blir det svårare att installera tillägg, appar och användarskript som inte kommer från Carbon Browser Browser Browser Web Store. Tidigare kunde användare klicka på en länk till en *CRX-fil och sedan installera filen via <ph name="PRODUCT_NAME" /> efter att några varningar visats. Efter <ph name="PRODUCT_NAME" /> 21 måste sådana filer laddas ned och dras till inställningssidan i <ph name="PRODUCT_NAME" />. Med den här inställningen kan du göra det möjligt för särskilda webbadresser att använda det äldre och enklare installationsflödet.
+          Från och med <ph name="PRODUCT_NAME" /> 21 blir det svårare att installera tillägg, appar och användarskript som inte kommer från Carbon Browser Web Store. Tidigare kunde användare klicka på en länk till en *CRX-fil och sedan installera filen via <ph name="PRODUCT_NAME" /> efter att några varningar visats. Efter <ph name="PRODUCT_NAME" /> 21 måste sådana filer laddas ned och dras till inställningssidan i <ph name="PRODUCT_NAME" />. Med den här inställningen kan du göra det möjligt för särskilda webbadresser att använda det äldre och enklare installationsflödet.
 
           Varje objekt i listan motsvarar en matchning i form av ett tillägg (se https://developer.chrome.com/extensions/match_patterns). Användarna kan enkelt installera objekt från alla webbadresser som matchar ett objekt i listan. Både *CRX-filens plats och sidan där objektet laddas ned (dvs. referenten) måste tillåtas enligt matchningsmönstren.
 
@@ -752,7 +752,7 @@
 
       När principen är inaktiverad eller inte har angetts får sidor inte visa popupfönster när de tas bort, enligt specifikationen (https://html.spec.whatwg.org/#apis-for-creating-and-navigating-browsing-contexts-by-name).
 
-      Den här principen tas bort i Carbon Browser Browser Browser 82.
+      Den här principen tas bort i Carbon Browser 82.
 
       Se https://www.chromestatus.com/feature/5989473649164288 .</translation>
 <translation id="2269319728625047531">Aktivera visning av samtycke till synkronisering vid inloggning</translation>
@@ -826,9 +826,9 @@
 <translation id="2463034609187171371">Aktivera DHE-krypteringssviter i TLS</translation>
 <translation id="2463365186486772703">Appens språkversion</translation>
 <translation id="2466131534462628618">Autentisering via infångstportal ignorerar proxy</translation>
-<translation id="2471748297300970300">Om principen har inaktiverats visas inga säkerhetsvarningar när Carbon Browser Browser Browser startas med vissa potentiellt skadliga flaggor på kommandoraden.
+<translation id="2471748297300970300">Om principen har inaktiverats visas inga säkerhetsvarningar när Carbon Browser startas med vissa potentiellt skadliga flaggor på kommandoraden.
 
-          Om principen har aktiverats eller saknar inställning visas säkerhetsvarningar när Carbon Browser Browser Browser startas med vissa flaggor på kommandoraden.
+          Om principen har aktiverats eller saknar inställning visas säkerhetsvarningar när Carbon Browser startas med vissa flaggor på kommandoraden.
 
           På Windows är principen bara tillgänglig i instanser som är kopplade till en <ph name="MS_AD_NAME" />-domän eller i Windows 10 Pro- eller Enterprise-instanser som är registrerade i enhetshantering.</translation>
 <translation id="2482676533225429905">Native Messaging</translation>
@@ -950,7 +950,7 @@
          Googles sökadress kan anges så här: <ph name="GOOGLE_SEARCH_URL" />.
 
           Alternativet måste anges om principen DefaultSearchProviderEnabled är aktiverad och används bara om så är fallet.</translation>
-<translation id="2659019163577049044">Om inställningen är aktiverad tillåts användare att konfigurera sina enheter så att sms synkroniseras mellan deras mobiler och Carbon Browser Browser Browserbook-enheter. Observera att om principen är tillåten måste användare uttryckligen välja att delta genom att slutföra ett konfigurationsflöde. Användaren kan skicka och ta emot sms på sin Carbon Browser Browser Browserbook när konfigurationsflödet har slutförts.
+<translation id="2659019163577049044">Om inställningen är aktiverad tillåts användare att konfigurera sina enheter så att sms synkroniseras mellan deras mobiler och Carbon Browserbook-enheter. Observera att om principen är tillåten måste användare uttryckligen välja att delta genom att slutföra ett konfigurationsflöde. Användaren kan skicka och ta emot sms på sin Carbon Browserbook när konfigurationsflödet har slutförts.
 
       Om inställningen är inaktiverad tillåts inte användare att konfigurera synkronisering för sms.
 
@@ -968,7 +968,7 @@
 <translation id="2706708761587205154">Tillåt bara utskrift med PIN</translation>
 <translation id="2710534340210290498">Om principen är inställd på falskt kan användare inte låsa skärmen (utan endast logga ut från användarsessionen). Om principen är inställd på sant eller inte har angetts kan användare som har autentiserats med ett lösenord låsa skärmen.</translation>
 <translation id="2731627323327011390">Inaktivera användning av <ph name="PRODUCT_OS_NAME" />-certifikat för ARC-appar</translation>
-<translation id="2742843273354638707">Dölj appen Carbon Browser Browser Browser Web Store och länken i sidfoten från den nya fliksidan och startprogrammet för <ph name="PRODUCT_OS_NAME" />.
+<translation id="2742843273354638707">Dölj appen Carbon Browser Web Store och länken i sidfoten från den nya fliksidan och startprogrammet för <ph name="PRODUCT_OS_NAME" />.
 
       När principen är inställd på sant döljs ikonerna.
 
@@ -1031,12 +1031,12 @@
       Följande gäller om principen är inställd på en lista över tidsintervall som inte är tom:
       Enheterna tillåts inte att söka efter uppdateringar automatiskt inom de angivna tidsintervallen. Enheter som behöver återställas eller som inte uppfyller de lägsta versionskraven för <ph name="PRODUCT_OS_NAME" /> påverkas inte av principen på grund av möjliga säkerhetsproblem. Principen blockerar inte heller sökningar efter uppdateringar som användaren eller administratören har begärt.
       Följande gäller om principen inte har angetts eller om tidsintervall saknas:
-      Inga automatiska sökningar efter uppdateringar blockeras av principen, men de kan blockeras av andra principer. Den här funktionen är bara aktiverad på Carbon Browser Browser Browser-enheter som har konfigurerats så att de automatiskt startas för offentlig miljö. Andra enheter begränsas inte av den här principen.</translation>
+      Inga automatiska sökningar efter uppdateringar blockeras av principen, men de kan blockeras av andra principer. Den här funktionen är bara aktiverad på Carbon Browser-enheter som har konfigurerats så att de automatiskt startas för offentlig miljö. Andra enheter begränsas inte av den här principen.</translation>
 <translation id="2823870601012066791">Windows-registerplats för <ph name="PRODUCT_OS_NAME" />-klienter:</translation>
 <translation id="2824715612115726353">Aktivera inkognitoläge</translation>
 <translation id="2836621397261130126">Avgör om godkännande enligt KDC-princip följs för att avgöra om <ph name="KERBEROS" />-ärenden ska delegeras.
 
-          Om den här principen är inställd på sant följer HTTP-autentiseringen godkännande av KDC-princip, d.v.s. Carbon Browser Browser Browser delegerar bara uppgifter om KDC anger <ph name="OK_AS_DELEGATE" /> för ett serviceärende. Mer information finns på https://tools.ietf.org/html/rfc5896.html. Tjänsten ska också matcha principen AuthNegotiateDelegateWhitelist.
+          Om den här principen är inställd på sant följer HTTP-autentiseringen godkännande av KDC-princip, d.v.s. Carbon Browser delegerar bara uppgifter om KDC anger <ph name="OK_AS_DELEGATE" /> för ett serviceärende. Mer information finns på https://tools.ietf.org/html/rfc5896.html. Tjänsten ska också matcha principen AuthNegotiateDelegateWhitelist.
 
           Om den här principen saknar inställning eller ställs in på falskt ignoreras KDC-policyn på plattformar som stöds och bara principen AuthNegotiateDelegateWhitelist följs.
 
@@ -1184,7 +1184,7 @@
           Om policyn inte anges används AllowJavaScript och användaren kan ändra inställningen.</translation>
 <translation id="3038323923255997294">Fortsätt köra bakgrundsappar när <ph name="PRODUCT_NAME" /> avslutas</translation>
 <translation id="3046192273793919231">Skicka nätverkspaket för övervakning av onlinestatusen till hanteringsservern</translation>
-<translation id="3047732214002457234">Styr hur Carbon Browser Browser Browser Cleanup rapporterar data till Google</translation>
+<translation id="3047732214002457234">Styr hur Carbon Browser Cleanup rapporterar data till Google</translation>
 <translation id="304775240152542058">Med den här principen styrs vilka kommandoradsparametrar som ska öppna alternativa webbläsare.
 
       När den här principen lämnas utan inställning skickas endast webbadressen som en kommandoradsparameter.
@@ -1256,9 +1256,9 @@
       Om principen inte har ställts in eller är inställd på falskt kommer DHE-krypteringssviter i TLS inte att aktiveras. Principen kan ställas in som sant för att aktivera DHE-krypteringssviter och om kompatibilitet med en föråldrad server önskas bibehållas. Detta är en nödlösning, och servern bör omkonfigureras.
 
       Servrar uppmanas att migrera till ECDHE-krypteringssviter. Om dessa inte är tillgängliga ska en krypteringssvit med RSA-nyckelutbyte aktiveras.</translation>
-<translation id="3117706142826400449">Om principen är inaktiverad förhindras att Carbon Browser Browser Browser Cleanup söker igenom systemet och tar bort oönskade program. Det går inte att aktivera Carbon Browser Browser Browser Cleanup manuellt från chrome://settings/cleanup.
+<translation id="3117706142826400449">Om principen är inaktiverad förhindras att Carbon Browser Cleanup söker igenom systemet och tar bort oönskade program. Det går inte att aktivera Carbon Browser Cleanup manuellt från chrome://settings/cleanup.
 
-      Om principen är aktiverad eller inte inställd alls genomsöker Carbon Browser Browser Browser Cleanup systemet efter oönskade program regelbundet. Om något upptäcks blir användaren tillfrågad om det ska tas bort. Det går att aktivera Carbon Browser Browser Browser Cleanup manuellt från chrome://settings.
+      Om principen är aktiverad eller inte inställd alls genomsöker Carbon Browser Cleanup systemet efter oönskade program regelbundet. Om något upptäcks blir användaren tillfrågad om det ska tas bort. Det går att aktivera Carbon Browser Cleanup manuellt från chrome://settings.
 
       Den här principen är bara tillgänglig i Windows-instanser som är kopplade till en <ph name="MS_AD_NAME" />-domän, eller i Windows 10 Pro- eller Enterprise-instanser som är registrerade i enhetshantering.</translation>
 <translation id="3152425128389603870">Gör enhetligt skrivbord tillgängligt och aktivera det som standard</translation>
@@ -1373,7 +1373,7 @@
       Med inställningen Av eller om inget värde anges är begränsat läge på YouTube inte obligatoriskt i <ph name="PRODUCT_NAME" />. Däremot kan det fortfarande finnas externa principer, till exempel principer för YouTube, som gör begränsat läge obligatoriskt.</translation>
 <translation id="3428247105888806363">Aktivera nätverksförslag</translation>
 <translation id="3432863169147125747">Styr utskriftsinställningar.</translation>
-<translation id="3434932177006334880">Den här inställningen hette EnableWebBasedSignin före Carbon Browser Browser Browser 42 och stöd för den tas bort helt i Carbon Browser Browser Browser 43.
+<translation id="3434932177006334880">Den här inställningen hette EnableWebBasedSignin före Carbon Browser 42 och stöd för den tas bort helt i Carbon Browser 43.
 
       Den här inställningen är praktisk för företagskunder som använder SSO-lösningar som inte är kompatibla med det nya direktinloggningsflödet ännu.
       Om du aktiverar den här inställningen används det gamla webbaserade inloggningsflödet.
@@ -1471,9 +1471,9 @@
 <translation id="3646859102161347133">Ange typen av skärmförstorare</translation>
 <translation id="3653237928288822292">Ikon för standardsökleverantör</translation>
 <translation id="3660510274595679517">
-        Om principen ställs in på Sant är registrering för molnhantering obligatoriskt och det går inte att starta Carbon Browser Browser Browser om registreringen misslyckas.
+        Om principen ställs in på Sant är registrering för molnhantering obligatoriskt och det går inte att starta Carbon Browser om registreringen misslyckas.
 
-        Om principen inte anges eller ställs in på Falskt är registrering för molnhantering valfritt och det går att starta Carbon Browser Browser Browser även om registreringen misslyckas.
+        Om principen inte anges eller ställs in på Falskt är registrering för molnhantering valfritt och det går att starta Carbon Browser även om registreringen misslyckas.
 
         Principen används på stationära datorer för registrering av datorn för molnhantering och kan ställas in via registret eller gruppolicyobjekt på Windows, plist på Mac och en JSON-principfil på Linux.</translation>
 <translation id="3660562134618097814">Överför SAML-cookies från identitetsleverantörer vid inloggning</translation>
@@ -1668,11 +1668,11 @@
 <translation id="3984028218719007910">Avgör om <ph name="PRODUCT_OS_NAME" /> ska spara lokala kontodata efter utloggning. Om värdet är sant sparas inga konton permanent av <ph name="PRODUCT_OS_NAME" /> och alla data från användarsessionen kasseras efter utloggning. Om policyn är inställd på falskt eller inte konfigurerad kan lokala användardata sparas (krypterade) i enheten.</translation>
 <translation id="398475542699441679">Principen styr om stödet för äldre webbläsare ska vara aktiverat.
 
-      När principen saknar inställning eller har ställts in på falskt görs inga försök att öppna angivna webbadresser i en annan webbläsare än Carbon Browser Browser Browser.
+      När principen saknar inställning eller har ställts in på falskt görs inga försök att öppna angivna webbadresser i en annan webbläsare än Carbon Browser.
 
-      När principen är inställd på sant öppnas vissa webbadresser i en annan webbläsare än Carbon Browser Browser Browser (t.ex. Internet Explorer). Funktionen konfigureras med principerna i gruppen <ph name="LEGACY_BROWSER_SUPPORT_POLICY_GROUP" />.
+      När principen är inställd på sant öppnas vissa webbadresser i en annan webbläsare än Carbon Browser (t.ex. Internet Explorer). Funktionen konfigureras med principerna i gruppen <ph name="LEGACY_BROWSER_SUPPORT_POLICY_GROUP" />.
 
-      Funktionen ersätter tillägget <ph name="LEGACY_BROWSER_SUPPORT_EXTENSION_NAME" />. Tilläggets inställningar förs över till den här funktionen, men vi rekommenderar starkt att du använder principerna i Carbon Browser Browser Browser i stället. På det sättet förebyggs framtida kompatibilitetsproblem.</translation>
+      Funktionen ersätter tillägget <ph name="LEGACY_BROWSER_SUPPORT_EXTENSION_NAME" />. Tilläggets inställningar förs över till den här funktionen, men vi rekommenderar starkt att du använder principerna i Carbon Browser i stället. På det sättet förebyggs framtida kompatibilitetsproblem.</translation>
 <translation id="3997519162482760140">Webbadresser som ska beviljas åtkomst till videoinspelningsenheter på inloggningssidor med SAML</translation>
 <translation id="4001275826058808087">IT-administratörer för företagsenheter kan använda den här flaggan för att styra om användarna ska kunna utnyttja erbjudanden via registrering i Chrome OS.
 
@@ -1681,13 +1681,13 @@
       Om policyn är inställd på falskt kan användarna inte utnyttja erbjudanden.</translation>
 <translation id="4008233182078913897">Anger en lista med appar och tillägg som installeras tyst, utan att användaren gör något, och som användaren inte kan avinstallera eller inaktivera. Alla behörigheter som apparna eller tilläggen behöver beviljas implicit utan att användaren blir tillfrågad. Det gäller även nya behörigheter som tillkommer i framtida versioner av appen eller tillägget. Dessutom beviljas behörighet för tilläggs-API:erna enterprise.deviceAttributes och enterprise.platformKeys. (Dessa API:er är inte tillgängliga för appar eller tillägg som inte tvångsinstallerats.)
 
-          Den här principen har företräde framför en <ph name="EXTENSION_INSTALL_BLACKLIST_POLICY_NAME" />-princip vid en eventuell konflikt. Om en app eller ett tillägg som tidigare har tvångsinstallerats tas bort från den här listan avinstalleras den/det automatiskt i <ph name="PRODUCT_NAME" />. På Windows-domäner som inte har anslutits till en <ph name="MS_AD_NAME" />-domän kan bara appar och tillägg som finns på Carbon Browser Browser Browser Web Store tvångsinstalleras.
+          Den här principen har företräde framför en <ph name="EXTENSION_INSTALL_BLACKLIST_POLICY_NAME" />-princip vid en eventuell konflikt. Om en app eller ett tillägg som tidigare har tvångsinstallerats tas bort från den här listan avinstalleras den/det automatiskt i <ph name="PRODUCT_NAME" />. På Windows-domäner som inte har anslutits till en <ph name="MS_AD_NAME" />-domän kan bara appar och tillägg som finns på Carbon Browser Web Store tvångsinstalleras.
 
           Observera att användarna kan ändra i källkoden till vilket tillägg som helst med hjälp av verktygen för utvecklare (vilket kan leda till att tillägget slutar fungera). Om detta är ett problem bör principen <ph name="DEVELOPER_TOOLS_POLICY_NAME" /> ställas in.
 
-          Varje listpost i principen är en sträng med ett tilläggs-id och eventuellt en ”uppdateringsadress” med semikolon (<ph name="SEMICOLON" />) som avgränsare. Tilläggs-id:t är den sträng med 32 tecken som visas exempelvis på <ph name="CHROME_EXTENSIONS_LINK" /> i utvecklarläget. Om en ”uppdateringsadress” anges ska den peka på ett uppdateringsmanifest i XML-format enligt beskrivningen på <ph name="LINK_TO_EXTENSION_DOC1" />. Som standard används uppdateringsadressen på Carbon Browser Browser Browser Web Store (som för närvarande är https://clients2.google.com/service/update2/crx). Observera att den ”uppdateringsadress” som anges i den här principen bara används vid den första installationen. För senare uppdateringar av tillägget används uppdateringsadressen i tilläggets manifestfil. Observera även att det var obligatoriskt att ange ”uppdateringsadressen” explicit i version 67 och äldre versioner av <ph name="PRODUCT_NAME" />.
+          Varje listpost i principen är en sträng med ett tilläggs-id och eventuellt en ”uppdateringsadress” med semikolon (<ph name="SEMICOLON" />) som avgränsare. Tilläggs-id:t är den sträng med 32 tecken som visas exempelvis på <ph name="CHROME_EXTENSIONS_LINK" /> i utvecklarläget. Om en ”uppdateringsadress” anges ska den peka på ett uppdateringsmanifest i XML-format enligt beskrivningen på <ph name="LINK_TO_EXTENSION_DOC1" />. Som standard används uppdateringsadressen på Carbon Browser Web Store (som för närvarande är https://clients2.google.com/service/update2/crx). Observera att den ”uppdateringsadress” som anges i den här principen bara används vid den första installationen. För senare uppdateringar av tillägget används uppdateringsadressen i tilläggets manifestfil. Observera även att det var obligatoriskt att ange ”uppdateringsadressen” explicit i version 67 och äldre versioner av <ph name="PRODUCT_NAME" />.
 
-          Med <ph name="EXTENSION_POLICY_EXAMPLE" /> installeras t.ex. tillägget med id <ph name="EXTENSION_ID_SAMPLE" /> från den vanliga ”uppdateringsadressen” på Carbon Browser Browser Browser Web Store. Mer information om att stå värd för tillägg finns här: <ph name="LINK_TO_EXTENSION_DOC2" />.
+          Med <ph name="EXTENSION_POLICY_EXAMPLE" /> installeras t.ex. tillägget med id <ph name="EXTENSION_ID_SAMPLE" /> från den vanliga ”uppdateringsadressen” på Carbon Browser Web Store. Mer information om att stå värd för tillägg finns här: <ph name="LINK_TO_EXTENSION_DOC2" />.
 
            Om den här principen lämnas utan inställning installeras inga appar eller tillägg automatiskt och användaren får avinstallera alla appar och tillägg i <ph name="PRODUCT_NAME" />.
 
@@ -1794,7 +1794,7 @@
           Om principen har ställts in kan användarna inte ändra eller åsidosätta den.
 
           Om principen saknar inställning är tröga tangenter inaktiverat från start, men funktionen kan aktiveras av användaren när som helst.</translation>
-<translation id="4171331498167688968">Om principen är inställd på falskt är det tillåtet för programvara från tredje part att injicera körbar kod i Carbon Browser Browser Browser-processer. Om principen har lämnats utan inställning eller ställts in på sant blockeras injicering av körbar kod i Carbon Browser Browser Browser-processer från tredjepartsprogram.
+<translation id="4171331498167688968">Om principen är inställd på falskt är det tillåtet för programvara från tredje part att injicera körbar kod i Carbon Browser-processer. Om principen har lämnats utan inställning eller ställts in på sant blockeras injicering av körbar kod i Carbon Browser-processer från tredjepartsprogram.
 
       Oavsett principens värde kommer webbläsaren inte att förhindra att tredjepartsprogram injicerar körbar kod i dess processer på en dator som ingår i en <ph name="MS_AD_NAME" />-domän.</translation>
 <translation id="4183229833636799228">Standardinställning för <ph name="FLASH_PLUGIN_NAME" /></translation>
@@ -1863,11 +1863,11 @@
 <translation id="4298509794364745131">Anger en lista med anteckningsappar som går att aktivera på låsskärmen i <ph name="PRODUCT_OS_NAME" />.
 
       När den föredragna anteckningsappen har aktiverats på låsskärmen ges möjlighet att starta den appen i gränssnittet på låsskärmen.
-      När anteckningsappen har startats kan den öppna ett appfönster ovanpå låsskärmen och skapa dataobjekt (anteckningar) med låsskärmen som kontext. Appen kan importera de anteckningar som skapas till den primära användarsessionen när sessionen har låsts upp. För närvarande stöds bara anteckningsappar i Carbon Browser Browser Browser på låsskärmen.
+      När anteckningsappen har startats kan den öppna ett appfönster ovanpå låsskärmen och skapa dataobjekt (anteckningar) med låsskärmen som kontext. Appen kan importera de anteckningar som skapas till den primära användarsessionen när sessionen har låsts upp. För närvarande stöds bara anteckningsappar i Carbon Browser på låsskärmen.
 
       När principen har ställts in går en app bara att aktivera som anteckningsapp på låsskärmen om den appens tilläggs-id står med i principens värdelista.
       Därav följer att anteckningar på låsskärmen inaktiveras helt och hållet om principen ställs in på en tom lista.
-      Observera att användaren inte nödvändigtvis kan aktivera en anteckningsapp på låsskärmen även om dess app-id har angetts i principen. I Carbon Browser Browser Browser 61, till exempel, begränsas listan med tillgängliga appar ytterligare av plattformen.
+      Observera att användaren inte nödvändigtvis kan aktivera en anteckningsapp på låsskärmen även om dess app-id har angetts i principen. I Carbon Browser 61, till exempel, begränsas listan med tillgängliga appar ytterligare av plattformen.
 
       Om principen inte ställs in alls begränsar den inte villka appar som användaren får aktivera på låsskärmen.</translation>
 <translation id="4313767483634435271">Enhetens utsedda MAC-adress för dockning</translation>
@@ -2024,7 +2024,7 @@
 <translation id="467236746355332046">Funktioner som stöds:</translation>
 <translation id="4674167212832291997">Anpassa listan med webbadressmönster som alltid ska renderas av <ph name="PRODUCT_FRAME_NAME" />.
 
-          Om principen inte har ställts in används standardrenderaren för alla webbplatser enligt specifikationen i principen Carbon Browser Browser BrowserFrameRendererSettings.
+          Om principen inte har ställts in används standardrenderaren för alla webbplatser enligt specifikationen i principen Carbon BrowserFrameRendererSettings.
 
           Exempel på mönster finns på https://www.chromium.org/developers/how-tos/chrome-frame-getting-started.</translation>
 <translation id="467449052039111439">Öppna följande sidor</translation>
@@ -2122,10 +2122,10 @@
 
       Om principen är inställd på falskt tillåter <ph name="PRODUCT_NAME" /> inte att nya profiler skapas i profilhanteraren.</translation>
 <translation id="4970855112942626932">Inaktivera inloggning i webbläsare</translation>
-<translation id="4978405676361550165">När principen OffHours har ställts in ignoreras de angivna enhetsprinciperna (använd standardinställningarna för dessa principer) under de angivna tidsperioderna. Varje gång en OffHours-period börjar eller slutar ändras tillämpningen av enhetsprinciperna i Carbon Browser Browser Browser. Användarna aviseras och måste logga ut när OffHours-perioden slutar och enhetens principinställningar ändras (t.ex. om användaren är inloggad med ett konto som inte är tillåtet).</translation>
+<translation id="4978405676361550165">När principen OffHours har ställts in ignoreras de angivna enhetsprinciperna (använd standardinställningarna för dessa principer) under de angivna tidsperioderna. Varje gång en OffHours-period börjar eller slutar ändras tillämpningen av enhetsprinciperna i Carbon Browser. Användarna aviseras och måste logga ut när OffHours-perioden slutar och enhetens principinställningar ändras (t.ex. om användaren är inloggad med ett konto som inte är tillåtet).</translation>
 <translation id="4980635395568992380">Datatyp:</translation>
 <translation id="4983201894483989687">Tillåt att föråldrade plugin-program körs</translation>
-<translation id="4986560318567565414">Sökväg till Carbon Browser Browser Browser för att byta från den alternativa webbläsaren.</translation>
+<translation id="4986560318567565414">Sökväg till Carbon Browser för att byta från den alternativa webbläsaren.</translation>
 <translation id="4988291787868618635">Åtgärd som ska vidtas när inaktivitetstiden har gått</translation>
 <translation id="5034604678285451405">Ange ett tröskelvärde i procent för batterianvändning vid belastningsförskjutning.
 
@@ -2199,11 +2199,11 @@
       Om värdet anges som 0 inaktiveras ändring av datorns lösenord.
 
       Observera att om klienten har varit offline en längre tid kan lösenorden vara äldre än det angivna antalet dagar.</translation>
-<translation id="510196893779239086">Principen styr om Carbon Browser Browser Browser ska stängas helt när den sista fliken dirigeras om till en annan webbläsare.
+<translation id="510196893779239086">Principen styr om Carbon Browser ska stängas helt när den sista fliken dirigeras om till en annan webbläsare.
 
-      När principen saknar inställning eller är inställd på sant förblir minst en flik öppen i Carbon Browser Browser Browser efter bytet till en annan webbläsare.
+      När principen saknar inställning eller är inställd på sant förblir minst en flik öppen i Carbon Browser efter bytet till en annan webbläsare.
 
-      När principen är inställd på falskt stängs fliken i Carbon Browser Browser Browser efter bytet till en annan webbläsare, även om det var den sista öppna fliken. Detta innebär att Carbon Browser Browser Browser avslutas helt.</translation>
+      När principen är inställd på falskt stängs fliken i Carbon Browser efter bytet till en annan webbläsare, även om det var den sista öppna fliken. Detta innebär att Carbon Browser avslutas helt.</translation>
 <translation id="5102203758995933166">Tillåter att en pushad nätverkskonfiguration används per användare på en <ph name="PRODUCT_OS_NAME" />-enhet. Nätverkskonfigurationen är en JSON-formaterad sträng i Open Network Configuration-format.</translation>
 <translation id="5105313908130842249">Skärmlåsningstid när enheten drivs av batteriet</translation>
 <translation id="5108031557082757679">Inaktiverade skrivare för företagsenheter</translation>
@@ -2218,7 +2218,7 @@
 <translation id="5148753489738115745">Innebär att du kan ange ytterligare parametrar som används när <ph name="PRODUCT_FRAME_NAME" /> startar <ph name="PRODUCT_NAME" />.
 
           Om policyn inte anges används standardkommandoraden.</translation>
-<translation id="5152787786897382519">I både Carbon Browser Browser Browser och Carbon Browser Browser Browser finns principgrupper som måste användas tillsammans för att styra över vissa funktioner. Dessa uppsättningar representeras av följande principgrupper. Eftersom principer kan komma från flera olika källor gäller endast värden som kommer från källor med högst prioritet. Värden från en källa med lägre prioritet i samma grupp ignoreras. Prioriteringsordningen förklaras i <ph name="POLICY_PRIORITY_DOC_URL" />.</translation>
+<translation id="5152787786897382519">I både Carbon Browser och Carbon Browser finns principgrupper som måste användas tillsammans för att styra över vissa funktioner. Dessa uppsättningar representeras av följande principgrupper. Eftersom principer kan komma från flera olika källor gäller endast värden som kommer från källor med högst prioritet. Värden från en källa med lägre prioritet i samma grupp ignoreras. Prioriteringsordningen förklaras i <ph name="POLICY_PRIORITY_DOC_URL" />.</translation>
 <translation id="5159469559091666409">Hur ofta nätverkspaket för övervakning skickas, i millisekunder.
 
       Om principen inte har angetts är standardintervallet 3 minuter. Det lägsta
@@ -2333,7 +2333,7 @@
            Om svarta listan har värdet * betyder det att alla värdar för Native Messaging är otillåtna, såvida de inte har angetts explicit i vitlistan.
 
           Om principen inte har getts något värde läser <ph name="PRODUCT_NAME" /> in alla installerade värdar för Native Messaging.</translation>
-<translation id="5272684451155669299">Om den är inställd på sant kan användaren använda maskinvaran i Carbon Browser Browser Browser-enheten för att fjärrattestera sin identitet i sekretessinställningarna CA via <ph name="ENTERPRISE_PLATFORM_KEYS_API" /> med hjälp av <ph name="CHALLENGE_USER_KEY_FUNCTION" />.
+<translation id="5272684451155669299">Om den är inställd på sant kan användaren använda maskinvaran i Carbon Browser-enheten för att fjärrattestera sin identitet i sekretessinställningarna CA via <ph name="ENTERPRISE_PLATFORM_KEYS_API" /> med hjälp av <ph name="CHALLENGE_USER_KEY_FUNCTION" />.
 
           Om den är inställd på falskt, eller om den saknar inställning, fungerar inte anslutningen till API:et och en felkod visas.</translation>
 <translation id="5277806246014825877">Gör det möjligt för användaren att köra Crostini.
@@ -2549,7 +2549,7 @@
         Om principen är inställd på falskt kan användare inte skicka feedback till Google.
 
         Om principen inte har ställts in eller är inställd på sant kan användare skicka feedback till Google via en tangentkombination eller Meny -&gt; Hjälp -&gt; Rapportera ett problem.</translation>
-<translation id="5581292529942108810">Konfigurera principer som gäller tillägget Carbon Browser Browser Browser Reporting Extension.
+<translation id="5581292529942108810">Konfigurera principer som gäller tillägget Carbon Browser Reporting Extension.
 
       Principen träder bara i kraft när tillägget <ph name="CHROME_REPORTING_EXTENSION_NAME" /> har aktiverats och enheten har registrerats med <ph name="MACHINE_LEVEL_USER_CLOUD_POLICY_ENROLLMENT_TOKEN_POLICY_NAME" />.</translation>
 <translation id="5583806683960333345">Om den här inställningen är aktiverad kan användare använda direktinternetdelning, vilket innebär att de kan dela mobildata från Google-mobiler andra enheter.
@@ -2579,7 +2579,7 @@
 
       OBS! På Android är webbplatsisolering en funktion på experimentstadiet. Stödet kommer att bli bättre med tiden, men i nuläget kan prestandaproblem uppstå.
 
-      OBS! Den här principen gäller bara Carbon Browser Browser Browser på Android på enheter med mer än 1 GB RAM. Använd SitePerProcess om du vill tillämpa principen på andra plattformar än Android.
+      OBS! Den här principen gäller bara Carbon Browser på Android på enheter med mer än 1 GB RAM. Använd SitePerProcess om du vill tillämpa principen på andra plattformar än Android.
       </translation>
 <translation id="5599461642204007579">Inställningar för hantering med <ph name="MS_AD_NAME" /></translation>
 <translation id="5610104657949692379">Om den här principen är inställd anger den vilken åtgärd som ska vidtas av <ph name="PRODUCT_OS_NAME" /> om användaren är inaktiv så lång tid som anges av inaktivitetstiden, som ställs in separat.
@@ -2587,7 +2587,7 @@
           Om principen inte ställs in vidtas standardåtgärden som är att enheten stängs av.
 
           Om åtgärden är att enheten ska stängas av kan <ph name="PRODUCT_OS_NAME" /> konfigureras separat så att skärmen låses eller inte låses innan enheten stängs av.</translation>
-<translation id="5618398258385745432">Inställningen som hör ihop med den här principen användes innan vi införde systemet med att göra om autentiseringen efter att lösenorden visats. Sedan dess har inställningen – och därmed principen – inte haft någon inverkan på hur Carbon Browser Browser Browser fungerar. Nu fungerar Carbon Browser Browser Browser som om principen vore inställd på att inaktivera visning i klartext av lösenord på lösenordshanterarens inställningssida. Det innebär att det bara finns en platshållare på inställningssidan, och lösenordet visas bara i Carbon Browser Browser Browser om användaren klickar på Visa (och gör om autentiseringen i tillämpliga fall). Den ursprungliga beskrivningen av principen följer nedan.
+<translation id="5618398258385745432">Inställningen som hör ihop med den här principen användes innan vi införde systemet med att göra om autentiseringen efter att lösenorden visats. Sedan dess har inställningen – och därmed principen – inte haft någon inverkan på hur Carbon Browser fungerar. Nu fungerar Carbon Browser som om principen vore inställd på att inaktivera visning i klartext av lösenord på lösenordshanterarens inställningssida. Det innebär att det bara finns en platshållare på inställningssidan, och lösenordet visas bara i Carbon Browser om användaren klickar på Visa (och gör om autentiseringen i tillämpliga fall). Den ursprungliga beskrivningen av principen följer nedan.
 
           Styr om användaren kan visa lösenord i klartext i lösenordshanteraren.
 
@@ -2693,7 +2693,7 @@
       Om principen inte konfigureras kan användaren ändra inställningen.
       </translation>
 <translation id="5832274826894536455">Utfasade principer</translation>
-<translation id="5835124959204887277">Anger webbadresser och domäner som det inte visas meddelanden för när attesteringscertifikat begärs från säkerhetsnycklar. Dessutom skickas en signal till säkerhetsnyckeln som indikerar att enskild attestering kan användas. Utan detta meddelas användare i version 65 eller senare av Carbon Browser Browser Browser när webbplatser begär attestering för säkerhetsnycklar.
+<translation id="5835124959204887277">Anger webbadresser och domäner som det inte visas meddelanden för när attesteringscertifikat begärs från säkerhetsnycklar. Dessutom skickas en signal till säkerhetsnyckeln som indikerar att enskild attestering kan användas. Utan detta meddelas användare i version 65 eller senare av Carbon Browser när webbplatser begär attestering för säkerhetsnycklar.
 
       Webbadresser (som https://example.com/some/path) matchar endast som U2F appID. Domäner (som example.com) matchar endast som WebAuthn RP ID. Därför måste både webbadressen och domänen för appID anges om båda API:erna U2F och WebAuthn ska täcka en viss webbplats.</translation>
 <translation id="5836064773277134605">Begränsa UDP-portintervallet som används av värden för fjärråtkomst</translation>
@@ -2829,7 +2829,7 @@
 
       När principen har lämnats utan inställning eller är inställd på falskt samlas inga uppgifter in eller laddas upp.
       När principen är inställd på sant samlas uppgifter in och laddas upp till Google Administratörskonsol.
-      Styr vilken data som laddas upp med hjälp av principer som gäller tillägget Carbon Browser Browser Browser Reporting Extension.
+      Styr vilken data som laddas upp med hjälp av principer som gäller tillägget Carbon Browser Reporting Extension.
 
       Principen träder bara i kraft när enheten har registrerats med <ph name="MACHINE_LEVEL_USER_CLOUD_POLICY_ENROLLMENT_TOKEN_POLICY_NAME" />.
 
@@ -2916,7 +2916,7 @@
 <translation id="6282799760374509080">Tillåta eller neka ljudinspelning</translation>
 <translation id="6284362063448764300">TLS 1.1</translation>
 <translation id="6310223829319187614">Aktivera autoslutför av domännamn vid användarinloggning</translation>
-<translation id="6315673513957120120">Carbon Browser Browser Browser visar en varningssida när användare besöker webbplatser med SSL-fel. Som standardinställning eller om den här principen är inställd på sant ges användare möjligheten att klicka sig förbi dessa varningssidor.
+<translation id="6315673513957120120">Carbon Browser visar en varningssida när användare besöker webbplatser med SSL-fel. Som standardinställning eller om den här principen är inställd på sant ges användare möjligheten att klicka sig förbi dessa varningssidor.
       Om principen är inställd på falskt hindras användare från att klicka sig förbi varningssidor.</translation>
 <translation id="6319198883324703402">Ange tidsperiod för den första användaraviseringen om omstart</translation>
 <translation id="6352543686437322588">Ett lokalt konto på enheten som ska loggas in automatiskt efter en fördröjning.
@@ -2958,7 +2958,7 @@
           Med alternativet Identifiera proxyserver automatiskt får Android-apparna tillgång till skriptadressen http://wpad/wpad.dat. Ingen annan del av protokollet för automatisk proxyidentifiering används. 
 
           Med alternativet PAC-proxyskript får Android-apparna tillgång till skriptadressen.</translation>
-<translation id="6430366557948788869">Carbon Browser Browser Browser Reporting Extension</translation>
+<translation id="6430366557948788869">Carbon Browser Reporting Extension</translation>
 <translation id="6440051664870270040">Tillåt att webbplatser navigerar och öppnar popup-fönster samtidigt</translation>
 <translation id="6447948611083700881">Säkerhetskopiering och återställning har inaktiverats</translation>
 <translation id="6449476513004303784">Tillåt inte användarna att hantera certifikat</translation>
@@ -3016,9 +3016,9 @@
 <translation id="6536600139108165863">Automatisk omstart vid avstängning av enhet</translation>
 <translation id="6539246272469751178">Den här principen gäller inte Android-appar. Android-appar använder alltid standardmappen för nedladdningar och har inte tillgång till filer som har laddats ned i någon annan mapp i <ph name="PRODUCT_OS_NAME" />.</translation>
 <translation id="654303922206238013">Migreringsstrategi för ecryptfs</translation>
-<translation id="6544897973797372144">Om policyn angetts som sann och policyn Carbon Browser Browser BrowserOsReleaseChannel inte är angiven kommer användare på den registrerade domänen att kunna ändra lanseringskanal för enheten. Om policyn angetts som falsk kommer enheten att låsas till den kanal som senast angetts.
+<translation id="6544897973797372144">Om policyn angetts som sann och policyn Carbon BrowserOsReleaseChannel inte är angiven kommer användare på den registrerade domänen att kunna ändra lanseringskanal för enheten. Om policyn angetts som falsk kommer enheten att låsas till den kanal som senast angetts.
 
-      Den kanal som användaren valt kommer att åsidosättas av policyn Carbon Browser Browser BrowserOsReleaseChannel, men om kanalen för policyn är mer stabil än den som installerats på enheten kommer kanalen endast bytas då versionen för den mer stabila kanalen uppnått ett högre versionsnummer än det som installerats på enheten.</translation>
+      Den kanal som användaren valt kommer att åsidosättas av policyn Carbon BrowserOsReleaseChannel, men om kanalen för policyn är mer stabil än den som installerats på enheten kommer kanalen endast bytas då versionen för den mer stabila kanalen uppnått ett högre versionsnummer än det som installerats på enheten.</translation>
 <translation id="6553143066970470539">Skärmens ljusstyrka i procent</translation>
 <translation id="6559057113164934677">Tillåt inte att webbplatser kommer åt min kamera och mikrofon</translation>
 <translation id="6561396069801924653">Visa tillgänglighetsalternativ i menyn i systemfältet</translation>
@@ -3106,7 +3106,7 @@
 
       Om principen har lämnats utan inställning eller ställts in på sant används standardförfarandet, d.v.s. det är tillåtet att logga in med ett annat konto via innehållsområdet i webbläsaren utom för barnkonton, där inloggning blockeras i alla innehållsområden utom inkognitofönster.
 
-      Om det inte ska vara tillåtet att logga in på ett annat konto via inkognitoläget kan du blockera det läget med principen PrivateModeAvailability.
+      Om det inte ska vara tillåtet att logga in på ett annat konto via inkognitoläget kan du blockera det läget med principen privateModeAvailability.
 
       Observera att användarna kan nå Googles tjänster utan autentisering genom att blockera cookies.</translation>
 <translation id="6757438632136860443">Låter dig ange en lista med webbadressmönster som definierar på vilka webbplatser pluginprogrammet för <ph name="FLASH_PLUGIN_NAME" /> får köras.
@@ -3143,7 +3143,7 @@
 
       Om den här principen är inställd på Falskt används aldrig den inbyggda DNS-klienten.
 
-      Om den här principen inte anges, aktiveras den inbyggda DNS-klienten som standard i MacOS, Android (om varken Privat DNS eller VPN är aktiverad) och Carbon Browser Browser BrowserOS, och användarna kan ändra om den inbyggda DNS-klienten används genom att ändra chrome://flags eller ange en flagga på kommandoraden.</translation>
+      Om den här principen inte anges, aktiveras den inbyggda DNS-klienten som standard i MacOS, Android (om varken Privat DNS eller VPN är aktiverad) och Carbon BrowserOS, och användarna kan ändra om den inbyggda DNS-klienten används genom att ändra chrome://flags eller ange en flagga på kommandoraden.</translation>
 <translation id="6843296367238757293">Den här principen är föråldrad. Den bör inte användas. Läs mer på https://support.google.com/chrome/a/answer/7643500</translation>
 <translation id="684856667300805181">Den här principen togs bort i <ph name="PRODUCT_NAME" /> 68 och ersattes av <ph name="ARC_GLS_POLICY_NAME" />.</translation>
 <translation id="6856743875250214792">Principen har fasats ut och togs bort i M66 eftersom den endast användes för interna tester och utgör en säkerhetsrisk.
@@ -3186,7 +3186,7 @@
 
       OBS! På Android är webbplatsisolering en funktion på experimentstadiet. Stödet kommer att bli bättre med tiden, men för närvarande kan prestandaproblem uppstå.
 
-      OBS! Den här principen gäller bara Carbon Browser Browser Browser på Android på enheter med mer än 1 GB RAM. Använd SitePerProcess om du vill tillämpa principen på andra plattformar än Android.
+      OBS! Den här principen gäller bara Carbon Browser på Android på enheter med mer än 1 GB RAM. Använd SitePerProcess om du vill tillämpa principen på andra plattformar än Android.
       </translation>
 <translation id="6922884955650325312">Blockera pluginprogrammet för <ph name="FLASH_PLUGIN_NAME" /></translation>
 <translation id="6923366716660828830">Policyn anger namnet på standardsökleverantören. Om värdet lämnas tomt eller inte anges används det värdnamn som angavs av sökadressen.
@@ -3283,7 +3283,7 @@
 
       Om principen är inställd på Falskt eller inte angiven får <ph name="PRODUCT_NAME" /> inte samla in eller ladda upp sådana loggar.
 
-      Loggarna innehåller diagnostisk information som är användbar vid felsökning av problem med ljud- eller videosamtal i Carbon Browser Browser Browser, till exempel när RTP-paket skickades och togs emot och hur stora de var, feedback om överbelastning i nätverket och metadata om ljud och bildramars längd och kvalitet. Loggarna innehåller inte ljud eller video från själva samtalet.
+      Loggarna innehåller diagnostisk information som är användbar vid felsökning av problem med ljud- eller videosamtal i Carbon Browser, till exempel när RTP-paket skickades och togs emot och hur stora de var, feedback om överbelastning i nätverket och metadata om ljud och bildramars längd och kvalitet. Loggarna innehåller inte ljud eller video från själva samtalet.
 
       Datainsamlingen kan bara aktiveras av Googles webbtjänster som Google Hangouts eller Google Meet.
 
@@ -3381,12 +3381,12 @@
 <translation id="7185078796915954712">TLS 1.3</translation>
 <translation id="718956142899066210">Anslutningstyper som tillåts för uppdateringar</translation>
 <translation id="7194407337890404814">Standardsökleverantörens namn</translation>
-<translation id="7199304109870655950">Konfigurera alternativ för fjärråtkomst i värden för Carbon Browser Browser Browser Remote Desktop.
+<translation id="7199304109870655950">Konfigurera alternativ för fjärråtkomst i värden för Carbon Browser Remote Desktop.
 
-      Värden för Carbon Browser Browser Browser Remote Desktop är en inbyggd tjänst som körs på målenheten och som en användare kan ansluta till via appen Carbon Browser Browser Browser Remote Desktop.  Den inbyggda tjänsten paketeras och körs åtskilt från <ph name="PRODUCT_NAME" />.
+      Värden för Carbon Browser Remote Desktop är en inbyggd tjänst som körs på målenheten och som en användare kan ansluta till via appen Carbon Browser Remote Desktop.  Den inbyggda tjänsten paketeras och körs åtskilt från <ph name="PRODUCT_NAME" />.
 
       Dessa principer ignoreras om värden
-      för Carbon Browser Browser Browser Remote Desktop inte har installerats.</translation>
+      för Carbon Browser Remote Desktop inte har installerats.</translation>
 <translation id="7202925763179776247">Tillåt nedladdningsbegränsningar</translation>
 <translation id="7207095846245296855">Tvinga fram användning av Google SafeSearch</translation>
 <translation id="7211368186050418507">Identifiera aldrig tidszon automatiskt</translation>
@@ -3487,9 +3487,9 @@
 <translation id="7329968046053403405">Anger kontotypen för konton som tillhandahålls av Androids autentiseringsapp som har stöd för autentisering av <ph name="HTTP_NEGOTIATE" /> (t.ex. Kerberos-autentisering). Informationen ska vara tillgänglig från leverantören av autentiseringsappen. Mer information finns på https://goo.gl/hajyfN.
 
           Om inställningen inte anges är autentisering av <ph name="HTTP_NEGOTIATE" /> inaktiverat på Android.</translation>
-<translation id="7331962793961469250">När värdet är True visas inte kampanjer för appar i Carbon Browser Browser Browser Web Store på sidan Ny flik.
+<translation id="7331962793961469250">När värdet är True visas inte kampanjer för appar i Carbon Browser Web Store på sidan Ny flik.
 
-      Om inställningen är False eller inte anges visas kampanjer för appar i Carbon Browser Browser Browser Web Store på sidan Ny flik</translation>
+      Om inställningen är False eller inte anges visas kampanjer för appar i Carbon Browser Web Store på sidan Ny flik</translation>
 <translation id="7332963785317884918">Policyn är föråldrad. Rensningsstrategin RemoveLRU används alltid av <ph name="PRODUCT_OS_NAME" />.
 
       Strategin kontrollerar den automatiska rensningen på <ph name="PRODUCT_OS_NAME" />-enheter. Automatisk rensning utlöses för att frigöra diskutrymme när det tomma utrymmet har minskat till kritiska nivåer.
@@ -3549,7 +3549,7 @@
       </translation>
 <translation id="7506269062143646163">Aktivera stöd för Signed HTTP Exchange (SXG).
 
-          Om principen inte anges eller ställs in på Aktiverad accepterar Carbon Browser Browser Browser webbinnehåll som visas som Signed HTTP Exchange.
+          Om principen inte anges eller ställs in på Aktiverad accepterar Carbon Browser webbinnehåll som visas som Signed HTTP Exchange.
 
           Om principen ställs in på Inaktiverad kan inte Signed HTTP Exchange läsas in.</translation>
 <translation id="7511361072385293666">Om den här policyn är inställd på sant eller inte har angetts är användning av QUIC-protokoll i <ph name="PRODUCT_NAME" /> tillåten.
@@ -3590,7 +3590,7 @@
 
       Om principen saknar inställning eller har ställts in på 0 öppnas den aktuella webbadressen omedelbart i den andra webbläsaren när användaren navigerar dit.
 
-      Om principen har ställts in på ett tal visas ett meddelande i Carbon Browser Browser Browser under det antalet millisekunder varpå den andra webbläsaren öppnas.</translation>
+      Om principen har ställts in på ett tal visas ett meddelande i Carbon Browser under det antalet millisekunder varpå den andra webbläsaren öppnas.</translation>
 <translation id="7593523670408385997">Konfigurerar storleken på cacheminnet där <ph name="PRODUCT_NAME" /> sparar cachade filer på skivan.
 
       När den här principen har getts ett värde använder <ph name="PRODUCT_NAME" /> ett cacheminne med den angivna storleken oavsett om användaren har angett en storlek med flaggan --disk-cache-size eller inte. Det värde som anges i principen är inte en fast gräns utan snarare ett förslag till cachesystemet. Om värdet är mindre än några MB är det för litet och avrundas uppåt till en vettig minimigräns.
@@ -3775,7 +3775,7 @@
 
       OBS! Före version 45 stöddes den här principen enbart i kioskläge.</translation>
 <translation id="7912255076272890813">Konfigurera tillåtna app- och tilläggstyper</translation>
-<translation id="7922358664346625612">Låt den sista fliken förbli öppen i Carbon Browser Browser Browser.</translation>
+<translation id="7922358664346625612">Låt den sista fliken förbli öppen i Carbon Browser.</translation>
 <translation id="793134539373873765">Anger om p2p ska användas för uppdateringar av betalningar i operativsystemet. Om policyn är inställd på Sant kommer enheterna att dela och försöka använda uppdateringar av betalningar i det lokala nätverket och eventuellt reducera användningen av bandbredd och överbelastning. Om uppdateringar av betalningar inte är tillgängliga i det lokala nätverket kommer enheten att återgå till att ladda ned från en uppdateringsserver. Om policyn är inställd på Falskt eller inte konfigurerad kommer p2p inte att användas.</translation>
 <translation id="7933141401888114454">Aktivera alternativet att skapa kontrollerade användare</translation>
 <translation id="793473937901685727">Ange om certifikat ska vara tillgängliga för ARC-appar</translation>
@@ -3938,7 +3938,7 @@
       Om policyn inte tillämpas använder <ph name="PRODUCT_OS_NAME" /> det lokala kontot på enhetens e-postkonto-ID som visningsnamn på inloggningsskärmen.
 
       Policyn ignoreras för vanliga användarkonton.</translation>
-<translation id="8259375588339409826">Carbon Browser Browser Browser och Carbon Browser Browser Browser stöder samma uppsättning principer. Observera att principer som ännu inte har lanserats kan finnas med i det här dokumentet (en version av <ph name="PRODUCT_NAME" /> som inte har släppts ännu anges i fältet Stöds av). Sådana principer kan ändras eller tas bort utan föregående meddelande och vi ger inga som helst garantier för dem, vad gäller säkerhet eller sekretess eller något annat.
+<translation id="8259375588339409826">Carbon Browser och Carbon Browser stöder samma uppsättning principer. Observera att principer som ännu inte har lanserats kan finnas med i det här dokumentet (en version av <ph name="PRODUCT_NAME" /> som inte har släppts ännu anges i fältet Stöds av). Sådana principer kan ändras eller tas bort utan föregående meddelande och vi ger inga som helst garantier för dem, vad gäller säkerhet eller sekretess eller något annat.
 
 De här principerna ska endast användas för att konfigurera instanser av <ph name="PRODUCT_NAME" /> internt inom organisationen. All användning av principerna utanför organisationen (t.ex. i ett program som är allmänt tillgängligt) är att uppfatta som skadlig programvara och skulle sannolikt märkas som sådan av Google och av antivirusleverantörer.
 
@@ -3955,7 +3955,7 @@ Det rekommenderade sättet att konfigurera principer på när du använder Windo
 
       Om principen är inställd på falskt rapporteras ingen sådan statistik.
       Om principen är inställd på sant eller saknar inställning rapporteras statistiken.</translation>
-<translation id="8294750666104911727">Normalt kommer sidor med X-UA-Compatible som är inställda på chrome=1 att renderas i <ph name="PRODUCT_FRAME_NAME" /> trots policyn Carbon Browser Browser BrowserFrameRendererSettings.
+<translation id="8294750666104911727">Normalt kommer sidor med X-UA-Compatible som är inställda på chrome=1 att renderas i <ph name="PRODUCT_FRAME_NAME" /> trots policyn Carbon BrowserFrameRendererSettings.
 
           Om du aktiverar inställningen kommer sidorna inte att kunna genomsökas efter metataggar.
 
@@ -3981,7 +3981,7 @@ Det rekommenderade sättet att konfigurera principer på när du använder Windo
 <translation id="8344454543174932833">Importera bokmärken från standardwebbläsaren första gången den körs</translation>
 <translation id="8357681633047935212">Begränsa längden på användarsessioner</translation>
 <translation id="8359734107661430198">Aktivera API:et ExampleDeprecatedFeature sedan 2008-09-02.</translation>
-<translation id="8367209241899435947">Aktivera Carbon Browser Browser Browser Cleanup i Windows</translation>
+<translation id="8367209241899435947">Aktivera Carbon Browser Cleanup i Windows</translation>
 <translation id="8369602308428138533">Skärmavstängningstid när enheten är ansluten till elnätet</translation>
 <translation id="8371178326720637170">Gör det möjligt för hanterade tillägg att använda API:et Enterprise Hardware Platform</translation>
 <translation id="8374747520743832795">Rapportera maskinvarustatistik och identifierare för strömförsörjningen.
@@ -4055,13 +4055,13 @@ Det rekommenderade sättet att konfigurera principer på när du använder Windo
       Principen kommer att tas bort i M75.</translation>
 <translation id="8484458986062090479">Anpassa listan med webbadressmönster som alltid ska renderas av värdwebbläsaren.
 
-          Om principen inte har ställts in används standardrenderaren för alla webbplatser enligt specifikationen i principen Carbon Browser Browser BrowserFrameRendererSettings.
+          Om principen inte har ställts in används standardrenderaren för alla webbplatser enligt specifikationen i principen Carbon BrowserFrameRendererSettings.
 
           Exempel på mönster finns på https://www.chromium.org/developers/how-tos/chrome-frame-getting-started.</translation>
 <translation id="8489964335640955763">PluginVm</translation>
 <translation id="8493645415242333585">Spara inte webbhistorik</translation>
 <translation id="8499172469244085141">Standardinställningar (kan åsidosättas av användare)</translation>
-<translation id="849962487677588458">Den här principen är utfasad och ska tas bort från Carbon Browser Browser Browser 78 utan att ersättas av ett annat tillägg.
+<translation id="849962487677588458">Den här principen är utfasad och ska tas bort från Carbon Browser 78 utan att ersättas av ett annat tillägg.
 
       Den här principen aktiverar HTTP/0.9 på andra portar än 80 för HTTP och 443 för HTTPS.
 
@@ -4089,7 +4089,7 @@ Det rekommenderade sättet att konfigurera principer på när du använder Windo
 
       Versionen kan vara ett exakt versionsnummer som 61.0.3163.120 eller ett versionsprefix som 61.0.  </translation>
 <translation id="8544375438507658205">HTML-standardrenderare för <ph name="PRODUCT_FRAME_NAME" /></translation>
-<translation id="8544465954173828789">Tillåt att sms synkroniseras från mobilen till Carbon Browser Browser Browserbook.</translation>
+<translation id="8544465954173828789">Tillåt att sms synkroniseras från mobilen till Carbon Browserbook.</translation>
 <translation id="8548832052135586762">Ställer in utskrift endast i färg, endast i svartvitt eller utan begränsning vad gäller färg. Om principen har lämnats utan inställning används ingen begränsning.</translation>
 <translation id="8549772397068118889">Varna när du besöker webbplatser utanför innehållspaket</translation>
 <translation id="8566729013138025202">Anger en uppsättning principer som överlämnas till ARC-körningen. Värdet måste vara giltig JSON.
@@ -4302,7 +4302,7 @@ Det rekommenderade sättet att konfigurera principer på när du använder Windo
 
           Principen kopplar samman ett tilläggs-id eller en uppdateringsadress med motsvarande konfiguration. Med ett tilläggs-id tillämpas konfigurationen endast på det angivna tillägget. Det särskilda id:t <ph name="DEFAULT_SCOPE" /> kan tilldelas en standardkonfiguration, som tillämpas på alla tillägg som det inte finns någon anpassad konfiguration för i principen. Med en uppdateringsadress tillämpas konfigurationen på alla tillägg som har exakt denna uppdateringsadress angiven i sitt manifest, så som beskrivs på <ph name="LINK_TO_EXTENSION_DOC1" />.
 
-          På Windows-domäner som inte har anslutits till en <ph name="MS_AD_NAME" />-domän kan bara appar och tillägg som finns på Carbon Browser Browser Browser Web Store tvångsinstalleras.
+          På Windows-domäner som inte har anslutits till en <ph name="MS_AD_NAME" />-domän kan bara appar och tillägg som finns på Carbon Browser Web Store tvångsinstalleras.
           </translation>
 <translation id="8947415621777543415">Rapportera enhetsplats</translation>
 <translation id="8951350807133946005">Ange katalog för diskcache</translation>
@@ -4393,7 +4393,7 @@ Det rekommenderade sättet att konfigurera principer på när du använder Windo
 
       Om principen är inställd på sant kommer systemloggar att skickas.
       Om principen är inställd på falskt eller inte har angetts kommer inga systemloggar att skickas.</translation>
-<translation id="9150416707757015439">Policyn är föråldrad. Använd PrivateModeAvailability istället.
+<translation id="9150416707757015439">Policyn är föråldrad. Använd privateModeAvailability istället.
       Inkognitoläge i <ph name="PRODUCT_NAME" /> aktiveras.
 
       Om inställningen är aktiverad eller inte konfigurerad kan användarna öppna webbsidor i inkognitoläge.
@@ -4440,7 +4440,7 @@ Det rekommenderade sättet att konfigurera principer på när du använder Windo
 
       När den här principen är inställd används den för att starta <ph name="PRODUCT_NAME" /> när <ph name="PRODUCT_NAME" /> startas från Internet Explorer.
 
-      Den här principen kan ställas in på en körbar filsökväg, eller på ${chrome} för att identifiera Carbon Browser Browser Browsers installationsplats automatiskt.</translation>
+      Den här principen kan ställas in på en körbar filsökväg, eller på ${chrome} för att identifiera Carbon Browsers installationsplats automatiskt.</translation>
 <translation id="930930237275114205">Ange katalog för användardata i <ph name="PRODUCT_FRAME_NAME" /></translation>
 <translation id="943865157632139008">Innebär att du kan konfigurera standardrenderare för HTML när <ph name="PRODUCT_FRAME_NAME" /> är installerat.
           Standardinställningen är att låta värdwebbläsaren utföra renderingen, men du kan välja att åsidosätta detta och låta <ph name="PRODUCT_FRAME_NAME" /> rendera HTML-sidor som standard.</translation>

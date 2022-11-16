@@ -13,7 +13,6 @@
 #include "ash/public/cpp/app_list/app_list_types.h"
 #include "ash/public/cpp/tablet_mode.h"
 #include "base/bind.h"
-#include "base/metrics/histogram_macros.h"
 #include "base/metrics/metrics_hashes.h"
 #include "base/sequence_token.h"
 #include "base/strings/strcat.h"
@@ -24,6 +23,7 @@
 #include "chrome/browser/ui/app_list/app_list_controller_delegate.h"
 #include "chrome/browser/ui/app_list/app_list_model_updater.h"
 #include "chrome/browser/ui/app_list/search/chrome_search_result.h"
+#include "chrome/browser/ui/app_list/search/common/string_util.h"
 #include "chrome/browser/ui/app_list/search/cros_action_history/cros_action_recorder.h"
 #include "chrome/browser/ui/app_list/search/search_metrics_observer.h"
 #include "chrome/browser/ui/app_list/search/search_provider.h"
@@ -31,45 +31,12 @@
 #include "chrome/browser/ui/app_list/search/search_result_ranker/histogram_util.h"
 #include "chrome/browser/ui/app_list/search/search_result_ranker/ranking_item_util.h"
 #include "chrome/browser/ui/app_list/search/search_result_ranker/search_result_ranker.h"
-#include "components/metrics/structured/structured_events.h"
+#include "components/metrics/structured/structured_mojo_events.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 
 namespace app_list {
-
-namespace {
-
-constexpr char kLauncherSearchQueryLengthJumped[] =
-    "Apps.LauncherSearchQueryLengthJumped";
-
-// TODO(931149): Move the string manipulation utilities into a helper class.
-
-// Normalizes training targets by removing any scheme prefix and trailing slash:
-// "arc://[id]/" to "[id]". This is necessary because apps launched from
-// different parts of the launcher have differently formatted IDs.
-std::string NormalizeId(const std::string& id) {
-  std::string result(id);
-  // No existing scheme names include the delimiter string "://".
-  std::size_t delimiter_index = result.find("://");
-  if (delimiter_index != std::string::npos)
-    result.erase(0, delimiter_index + 3);
-  if (!result.empty() && result.back() == '/')
-    result.pop_back();
-  return result;
-}
-
-// Remove the Arc app shortcut label from an app ID, if it exists, so that
-// "[app]/[label]" becomes "[app]".
-std::string RemoveAppShortcutLabel(const std::string& id) {
-  std::string result(id);
-  std::size_t delimiter_index = result.find_last_of('/');
-  if (delimiter_index != std::string::npos)
-    result.erase(delimiter_index);
-  return result;
-}
-
-}  // namespace
 
 SearchControllerImpl::SearchControllerImpl(
     AppListModelUpdater* model_updater,
@@ -78,32 +45,37 @@ SearchControllerImpl::SearchControllerImpl(
     Profile* profile)
     : profile_(profile),
       mixer_(std::make_unique<Mixer>(model_updater, this)),
-      metrics_observer_(std::make_unique<SearchMetricsObserver>(notifier)),
-      list_controller_(list_controller) {
+      metrics_observer_(
+          std::make_unique<SearchMetricsObserver>(profile, notifier)),
+      list_controller_(list_controller),
+      notifier_(notifier) {
   DCHECK(!app_list_features::IsCategoricalSearchEnabled());
+  if (notifier_)
+    notifier_->AddObserver(this);
 }
 
-SearchControllerImpl::~SearchControllerImpl() {}
+SearchControllerImpl::~SearchControllerImpl() {
+  if (notifier_)
+    notifier_->RemoveObserver(this);
+}
 
 void SearchControllerImpl::InitializeRankers() {
   mixer_->InitializeRankers(profile_);
 }
 
-void SearchControllerImpl::Start(const std::u16string& query) {
+void SearchControllerImpl::StartSearch(const std::u16string& query) {
   session_start_ = base::Time::Now();
   dispatching_query_ = true;
   ash::RecordLauncherIssuedSearchQueryLength(query.length());
-  if (query.length() > 0) {
-    const int length_diff = query.length() >= last_query_.length()
-                                ? query.length() - last_query_.length()
-                                : last_query_.length() - query.length();
-    UMA_HISTOGRAM_BOOLEAN(kLauncherSearchQueryLengthJumped, length_diff > 1);
-  }
-  for (Observer& observer : observer_list_) {
+  for (SearchController::Observer& observer : observer_list_) {
     observer.OnResultsCleared();
   }
+
   for (const auto& provider : providers_) {
-    provider->Start(query);
+    if (query.empty())
+      provider->StartZeroState();
+    else
+      provider->Start(query);
   }
 
   dispatching_query_ = false;
@@ -111,6 +83,14 @@ void SearchControllerImpl::Start(const std::u16string& query) {
   query_for_recommendation_ = query.empty();
 
   OnResultsChanged();
+}
+
+void SearchControllerImpl::StartZeroState(base::OnceClosure on_done,
+                                          base::TimeDelta timeout) {
+  // Only used for the productivity launcher.
+  // TODO(crbug.com/1269115): Unimplemented.
+  base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+      FROM_HERE, std::move(on_done), timeout);
 }
 
 void SearchControllerImpl::ViewClosing() {
@@ -141,10 +121,11 @@ void SearchControllerImpl::OpenResult(ChromeSearchResult* result,
   }
 }
 
-void SearchControllerImpl::InvokeResultAction(ChromeSearchResult* result,
-                                              int action_index) {
+void SearchControllerImpl::InvokeResultAction(
+    ChromeSearchResult* result,
+    ash::SearchResultActionType action) {
   // TODO(xiyuan): Hook up with user learning.
-  result->InvokeAction(action_index);
+  result->InvokeAction(action);
 }
 
 size_t SearchControllerImpl::AddGroup(size_t max_results) {
@@ -162,9 +143,13 @@ void SearchControllerImpl::AddProvider(
   providers_.emplace_back(std::move(provider));
 }
 
-void SearchControllerImpl::SetResults(
-    const ash::AppListSearchResultType provider_type,
-    Results results) {
+void SearchControllerImpl::SetResults(const SearchProvider* provider,
+                                      Results results) {
+  // Should only be called when IsCategoricalSearchEnabled is true.
+  NOTREACHED();
+}
+
+void SearchControllerImpl::Publish() {
   // Should only be called when IsCategoricalSearchEnabled is true.
   NOTREACHED();
 }
@@ -198,21 +183,17 @@ ChromeSearchResult* SearchControllerImpl::FindSearchResult(
   return nullptr;
 }
 
-void SearchControllerImpl::OnSearchResultsImpressionMade(
-    const std::u16string& trimmed_query,
-    const ash::SearchResultIdWithPositionIndices& results,
-    int launched_index) {
-  if (trimmed_query.empty()) {
-    if (mixer_) {
-      mixer_->search_result_ranker()->ZeroStateResultsDisplayed(results);
+void SearchControllerImpl::OnImpression(
+    ash::AppListNotifier::Location location,
+    const std::vector<ash::AppListNotifier::Result>& results,
+    const std::u16string& query) {
+  if (query.empty() && location == ash::kList && mixer_) {
+    ash::SearchResultIdWithPositionIndices results_with_indices;
+    for (size_t i = 0; i < results.size(); ++i) {
+      results_with_indices.emplace_back(results[i].id, i);
     }
-
-    // Extract result types for logging.
-    std::vector<RankingItemType> result_types;
-    for (const auto& result : results) {
-      result_types.push_back(
-          RankingItemTypeFromSearchResult(*FindSearchResult(result.id)));
-    }
+    mixer_->search_result_ranker()->ZeroStateResultsDisplayed(
+        results_with_indices);
   }
 }
 
@@ -245,7 +226,7 @@ void SearchControllerImpl::Train(LaunchData&& launch_data) {
     base::Time::Exploded now_exploded;
     now.LocalExplode(&now_exploded);
 
-    metrics::structured::events::launcher_usage::LauncherUsage()
+    metrics::structured::events::v2::launcher_usage::LauncherUsage()
         .SetTarget(NormalizeId(launch_data.id))
         .SetApp(last_launched_app_id_)
         .SetSearchQuery(base::UTF16ToUTF8(last_query_))
@@ -280,16 +261,12 @@ void SearchControllerImpl::Train(LaunchData&& launch_data) {
   mixer_->Train(launch_data);
 }
 
-void SearchControllerImpl::AppListShown() {
-  for (const auto& provider : providers_)
-    provider->AppListShown();
-}
-
-void SearchControllerImpl::AddObserver(Observer* observer) {
+void SearchControllerImpl::AddObserver(SearchController::Observer* observer) {
   observer_list_.AddObserver(observer);
 }
 
-void SearchControllerImpl::RemoveObserver(Observer* observer) {
+void SearchControllerImpl::RemoveObserver(
+    SearchController::Observer* observer) {
   observer_list_.RemoveObserver(observer);
 }
 
@@ -301,7 +278,7 @@ void SearchControllerImpl::NotifyResultsAdded(
   std::vector<const ChromeSearchResult*> observer_results;
   for (auto* result : results)
     observer_results.push_back(const_cast<const ChromeSearchResult*>(result));
-  for (Observer& observer : observer_list_)
+  for (SearchController::Observer& observer : observer_list_)
     observer.OnResultsAdded(last_query_, observer_results);
 }
 
@@ -316,6 +293,11 @@ base::Time SearchControllerImpl::session_start() {
 void SearchControllerImpl::set_results_changed_callback_for_test(
     ResultsChangedCallback callback) {
   results_changed_callback_ = std::move(callback);
+}
+
+void SearchControllerImpl::disable_ranking_for_test() {
+  // Only called for the productivity launcher.
+  NOTREACHED();
 }
 
 }  // namespace app_list

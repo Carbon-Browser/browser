@@ -16,7 +16,7 @@ TEST(JsonSchemaCompilerAnyTest, AnyTypePopulate) {
     any_type_value->SetString("any", "value");
     EXPECT_TRUE(test::api::any::AnyType::Populate(*any_type_value, &any_type));
     std::unique_ptr<base::Value> any_type_to_value(any_type.ToValue());
-    EXPECT_TRUE(any_type_value->Equals(any_type_to_value.get()));
+    EXPECT_EQ(*any_type_value, *any_type_to_value.get());
   }
   {
     test::api::any::AnyType any_type;
@@ -24,36 +24,36 @@ TEST(JsonSchemaCompilerAnyTest, AnyTypePopulate) {
     any_type_value->SetInteger("any", 5);
     EXPECT_TRUE(test::api::any::AnyType::Populate(*any_type_value, &any_type));
     std::unique_ptr<base::Value> any_type_to_value(any_type.ToValue());
-    EXPECT_TRUE(any_type_value->Equals(any_type_to_value.get()));
+    EXPECT_EQ(*any_type_value, *any_type_to_value.get());
   }
 }
 
 TEST(JsonSchemaCompilerAnyTest, OptionalAnyParamsCreate) {
   {
-    std::vector<base::Value> params_value;
+    base::Value::List params_value;
     std::unique_ptr<test::api::any::OptionalAny::Params> params(
         test::api::any::OptionalAny::Params::Create(params_value));
     EXPECT_TRUE(params.get());
     EXPECT_FALSE(params->any_name.get());
   }
   {
-    std::vector<base::Value> params_value;
+    base::Value::List params_value;
     base::Value param("asdf");
-    params_value.push_back(param.Clone());
+    params_value.Append(param.Clone());
     std::unique_ptr<test::api::any::OptionalAny::Params> params(
         test::api::any::OptionalAny::Params::Create(params_value));
     ASSERT_TRUE(params);
     ASSERT_TRUE(params->any_name);
-    EXPECT_TRUE(params->any_name->Equals(&param));
+    EXPECT_EQ(*params->any_name, param);
   }
   {
-    std::vector<base::Value> params_value;
+    base::Value::List params_value;
     base::Value param(true);
-    params_value.push_back(param.Clone());
+    params_value.Append(param.Clone());
     std::unique_ptr<test::api::any::OptionalAny::Params> params(
         test::api::any::OptionalAny::Params::Create(params_value));
     ASSERT_TRUE(params);
     ASSERT_TRUE(params->any_name);
-    EXPECT_TRUE(params->any_name->Equals(&param));
+    EXPECT_EQ(*params->any_name, param);
   }
 }

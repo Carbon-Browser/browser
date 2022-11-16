@@ -5,25 +5,26 @@
 #include "chrome/browser/ash/app_mode/kiosk_profile_loader.h"
 
 #include <memory>
+#include <tuple>
 
+#include "ash/components/login/auth/public/auth_failure.h"
+#include "ash/components/login/auth/public/user_context.h"
 #include "base/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/string_util.h"
 #include "base/syslog_logging.h"
 #include "base/system/sys_info.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/ash/app_mode/kiosk_app_manager.h"
 #include "chrome/browser/ash/app_mode/kiosk_app_types.h"
 #include "chrome/browser/ash/login/auth/chrome_login_performer.h"
+#include "chrome/browser/ash/login/ui/login_display_host.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
+#include "chromeos/ash/components/dbus/userdataauth/userdataauth_client.h"
 #include "chromeos/dbus/dbus_thread_manager.h"
-#include "chromeos/dbus/userdataauth/userdataauth_client.h"
-#include "chromeos/login/auth/auth_status_consumer.h"
-#include "chromeos/login/auth/user_context.h"
 #include "components/account_id/account_id.h"
 #include "components/user_manager/user_names.h"
 #include "content/public/browser/browser_thread.h"
@@ -34,7 +35,6 @@ namespace ash {
 
 namespace {
 
-using ::chromeos::UserDataAuthClient;
 using ::content::BrowserThread;
 
 KioskAppLaunchError::Error LoginFailureToKioskAppLaunchError(
@@ -91,7 +91,7 @@ class KioskProfileLoader::CryptohomedChecker
     const int retry_delay_in_milliseconds = 500 * (1 << retry_count_);
     base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
         FROM_HERE, base::BindOnce(&CryptohomedChecker::StartCheck, AsWeakPtr()),
-        base::TimeDelta::FromMilliseconds(retry_delay_in_milliseconds));
+        base::Milliseconds(retry_delay_in_milliseconds));
   }
 
   void OnServiceAvailibityChecked(bool service_is_ready) {
@@ -154,7 +154,8 @@ void KioskProfileLoader::Start() {
 }
 
 void KioskProfileLoader::LoginAsKioskAccount() {
-  login_performer_ = std::make_unique<ChromeLoginPerformer>(this);
+  login_performer_ = std::make_unique<ChromeLoginPerformer>(
+      this, LoginDisplayHost::default_host()->metrics_recorder());
   switch (app_type_) {
     case KioskAppType::kArcApp:
       login_performer_->LoginAsArcKioskAccount(account_id_);
@@ -179,20 +180,12 @@ void KioskProfileLoader::ReportLaunchResult(KioskAppLaunchError::Error error) {
 void KioskProfileLoader::OnAuthSuccess(const UserContext& user_context) {
   // LoginPerformer will delete itself.
   login_performer_->set_delegate(NULL);
-  ignore_result(login_performer_.release());
+  std::ignore = login_performer_.release();
 
   failed_mount_attempts_ = 0;
 
-  // If we are launching a demo session, we need to start MountGuest with the
-  // guest username; this is because there are several places in the cros code
-  // which rely on the username sent to cryptohome to be $guest. Back in Chrome
-  // we switch this back to the demo user name to correctly identify this
-  // user as a demo user.
-  UserContext context = user_context;
-  if (context.GetAccountId() == user_manager::GuestAccountId())
-    context.SetAccountId(user_manager::DemoAccountId());
   UserSessionManager::GetInstance()->StartSession(
-      context, UserSessionManager::StartSessionType::kPrimary,
+      user_context, UserSessionManager::StartSessionType::kPrimary,
       false,  // has_auth_cookies
       false,  // Start session for user.
       this);

@@ -13,7 +13,7 @@
 
 #include "base/component_export.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/field_trial.h"
 #include "base/observer_list.h"
 #include "base/synchronization/lock.h"
@@ -65,6 +65,10 @@ class COMPONENT_EXPORT(VARIATIONS) VariationsIdsProvider
     // treated as true, regardless of what is supplied. This is intended for
     // embedders (such as WebLayer) that do not have the notion of signed-in.
     kIgnoreSignedInState,
+
+    // Indicates the signed-in parameter supplied to GetClientDataHeaders() is
+    // treated as false, regardless of what is supplied.
+    kDontSendSignedInVariations,
   };
 
   // Creates the VariationsIdsProvider instance. This must be called before
@@ -72,6 +76,9 @@ class COMPONENT_EXPORT(VARIATIONS) VariationsIdsProvider
   static VariationsIdsProvider* Create(Mode mode);
 
   static VariationsIdsProvider* GetInstance();
+
+  VariationsIdsProvider(const VariationsIdsProvider&) = delete;
+  VariationsIdsProvider& operator=(const VariationsIdsProvider&) = delete;
 
   Mode mode() const { return mode_; }
 
@@ -215,16 +222,22 @@ class COMPONENT_EXPORT(VARIATIONS) VariationsIdsProvider
   std::string GenerateBase64EncodedProto(bool is_signed_in,
                                          bool is_first_party_context);
 
-  // Adds variation ids and trigger variation ids to |target_set|.
-  static bool AddVariationIdsToSet(
-      const std::vector<std::string>& variation_ids,
-      std::set<VariationIDEntry>* target_set);
+  // Adds variation ids and trigger variation ids to |target_set|. If
+  // |should_dedupe| is true, the ids in |variation_ids| that have already been
+  // added as non-Google-app ids are not added to |target_set|. Returns false if
+  // any variation ids are malformed or duplicated. Returns true otherwise.
+  bool AddVariationIdsToSet(const std::vector<std::string>& variation_ids,
+                            bool should_dedupe,
+                            std::set<VariationIDEntry>* target_set);
 
   // Parses a comma-separated string of variation ids and trigger variation ids
-  // and adds them to |target_set|.
-  static bool ParseVariationIdsParameter(
-      const std::string& command_line_variation_ids,
-      std::set<VariationIDEntry>* target_set);
+  // and adds them to |target_set|. If |should_dedupe| is true, ids that have
+  // already been added as non-Google-app ids are not added to |target_set|.
+  // Returns false if any variation ids are malformed or duplicated. Returns
+  // true otherwise.
+  bool ParseVariationIdsParameter(const std::string& command_line_variation_ids,
+                                  bool should_dedupe,
+                                  std::set<VariationIDEntry>* target_set);
 
   // Returns the value of the X-Client-Data header corresponding to
   // |is_signed_in| and |web_visibility|. Considering |web_visibility| may allow
@@ -233,14 +246,20 @@ class COMPONENT_EXPORT(VARIATIONS) VariationsIdsProvider
       bool is_signed_in,
       Study_GoogleWebVisibility web_visibility);
 
-  // Returns the currently active set of variation ids, which includes any
-  // default values, synthetic variations and actual field trial variations.
+  // Returns the currently active set of variation ids, which includes ids from
+  // field trials, synthetic trials, and forced ids.
   std::set<VariationIDEntry> GetAllVariationIds();
 
   // Returns the collection of variation ids matching any of the given
   // |keys|. Each entry in the returned vector will be unique.
   std::vector<VariationID> GetVariationsVectorImpl(
       const std::set<IDCollectionKey>& key);
+
+  // Returns whether |id| has already been added to the active set of variation
+  // ids. This includes ids from field trials, synthetic trials, and forced ids.
+  // Note that Google app ids are treated differently. They may be reused as a
+  // Google Web id.
+  bool IsDuplicateId(VariationID id);
 
   const Mode mode_;
 
@@ -258,8 +277,9 @@ class COMPONENT_EXPORT(VARIATIONS) VariationsIdsProvider
   // This consists of a list of valid IDs, and the actual transmitted header.
   std::set<VariationIDEntry> variation_ids_set_;
 
-  // Provides the google experiment ids forced from command line.
-  std::set<VariationIDEntry> default_variation_ids_set_;
+  // Provides the google experiment ids that are force-enabled through
+  // ForceVariationIds().
+  std::set<VariationIDEntry> force_enabled_ids_set_;
 
   // Variations ids from synthetic field trials.
   std::set<VariationIDEntry> synthetic_variation_ids_set_;
@@ -282,9 +302,7 @@ class COMPONENT_EXPORT(VARIATIONS) VariationsIdsProvider
   // https://crbug.com/1051937 this isn't currently possible.
   base::ObserverList<Observer>::Unchecked observer_list_;
 
-  const VariationsClient* variations_client_ = nullptr;
-
-  DISALLOW_COPY_AND_ASSIGN(VariationsIdsProvider);
+  raw_ptr<const VariationsClient> variations_client_ = nullptr;
 };
 
 }  // namespace variations

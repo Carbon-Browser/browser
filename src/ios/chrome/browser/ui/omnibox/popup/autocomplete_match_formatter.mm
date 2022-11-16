@@ -6,12 +6,15 @@
 
 #import <UIKit/UIKit.h>
 
+#include "base/metrics/field_trial_params.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "components/omnibox/browser/autocomplete_match.h"
 #include "components/omnibox/browser/suggestion_answer.h"
+#import "ios/chrome/browser/ui/omnibox/omnibox_ui_features.h"
 #import "ios/chrome/browser/ui/omnibox/omnibox_util.h"
 #import "ios/chrome/browser/ui/omnibox/popup/omnibox_icon_formatter.h"
+#import "ios/chrome/browser/ui/omnibox/popup/popup_swift.h"
 #include "ios/chrome/browser/ui/ui_feature_flags.h"
 #import "ios/chrome/browser/ui/util/ui_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
@@ -21,6 +24,17 @@
 #endif
 
 namespace {
+
+// The current popup UI variation according to flags.
+PopupUIVariation CurrentPopupUIVariation() {
+  std::string variationName = base::GetFieldTrialParamValueByFeature(
+      kIOSOmniboxUpdatedPopupUI, kIOSOmniboxUpdatedPopupUIVariationName);
+
+  return variationName == kIOSOmniboxUpdatedPopupUIVariation1
+             ? PopupUIVariationOne
+             : PopupUIVariationTwo;
+}
+
 // The color of the main text of a suggest cell.
 UIColor* SuggestionTextColor() {
   return [UIColor colorNamed:kTextPrimaryColor];
@@ -59,8 +73,14 @@ UIColor* DimColorIncognito() {
 #pragma mark - NSObject
 
 - (NSString*)description {
-  return [NSString
-      stringWithFormat:@"%@ (%@)", self.text.string, self.detailText.string];
+  NSString* description = [NSString
+      stringWithFormat:@"<%@ %p> %@ (%@)", self.class, self,
+                       self.text.string, self.detailText.string];
+  if (self.pedalData) {
+    description =
+        [description stringByAppendingFormat:@" P:[%@]", self.pedalData.title];
+  }
+  return description;
 }
 
 #pragma mark AutocompleteSuggestion
@@ -71,13 +91,6 @@ UIColor* DimColorIncognito() {
 
 - (BOOL)hasAnswer {
   return _match.answer.has_value();
-}
-
-- (BOOL)hasImage {
-  BOOL hasAnswerImage =
-      self.hasAnswer && _match.answer->second_line().image_url().is_valid();
-  BOOL hasRichEntityImage = !_match.image_url.is_empty();
-  return hasAnswerImage || hasRichEntityImage;
 }
 
 - (BOOL)isURL {
@@ -101,9 +114,9 @@ UIColor* DimColorIncognito() {
                            useDeemphasizedStyling:YES];
     }
   } else {
-    // The detail text should be the URL (|_match.contents|) for non-search
-    // suggestions and the entity type (|_match.description|) for search entity
-    // suggestions. For all other search suggestions, |_match.description| is
+    // The detail text should be the URL (`_match.contents`) for non-search
+    // suggestions and the entity type (`_match.description`) for search entity
+    // suggestions. For all other search suggestions, `_match.description` is
     // the name of the currently selected search engine, which for mobile we
     // suppress.
     NSString* detailText = nil;
@@ -117,10 +130,12 @@ UIColor* DimColorIncognito() {
     // suggestions. For non-search suggestions (URLs), a highlight color is used
     // instead.
     UIColor* suggestionDetailTextColor = nil;
-    if (_match.type == AutocompleteMatchType::SEARCH_SUGGEST_ENTITY) {
-      suggestionDetailTextColor = SuggestionTextColor();
-    } else {
+    if (_match.type != AutocompleteMatchType::SEARCH_SUGGEST_ENTITY ||
+        (base::FeatureList::IsEnabled(kIOSOmniboxUpdatedPopupUI) &&
+         CurrentPopupUIVariation() == PopupUIVariationTwo)) {
       suggestionDetailTextColor = SuggestionDetailTextColor();
+    } else {
+      suggestionDetailTextColor = SuggestionTextColor();
     }
     DCHECK(suggestionDetailTextColor);
     return [self attributedStringWithString:detailText
@@ -168,8 +183,8 @@ UIColor* DimColorIncognito() {
                        useDeemphasizedStyling:NO];
     }
   } else {
-    // The text should be search term (|_match.contents|) for searches,
-    // otherwise page title (|_match.description|).
+    // The text should be search term (`_match.contents`) for searches,
+    // otherwise page title (`_match.description`).
     std::u16string textString =
         !self.isURL ? _match.contents : _match.description;
     NSString* text = base::SysUTF16ToNSString(textString);
@@ -192,6 +207,11 @@ UIColor* DimColorIncognito() {
   }
 }
 
+- (NSAttributedString*)omniboxPreviewText {
+  return [[NSAttributedString alloc]
+      initWithString:base::SysUTF16ToNSString(_match.fill_into_edit)];
+}
+
 // The primary purpose of this list is to omit the "what you typed" types, since
 // those are simply the input in the omnibox and copying the text back to the
 // omnibox would be a noop. However, this list also omits other types that are
@@ -200,11 +220,13 @@ UIColor* DimColorIncognito() {
   return _match.type == AutocompleteMatchType::BOOKMARK_TITLE ||
          _match.type == AutocompleteMatchType::CALCULATOR ||
          _match.type == AutocompleteMatchType::HISTORY_BODY ||
+         _match.type == AutocompleteMatchType::HISTORY_CLUSTER ||
          _match.type == AutocompleteMatchType::HISTORY_KEYWORD ||
          _match.type == AutocompleteMatchType::HISTORY_TITLE ||
          _match.type == AutocompleteMatchType::HISTORY_URL ||
          _match.type == AutocompleteMatchType::NAVSUGGEST ||
          _match.type == AutocompleteMatchType::NAVSUGGEST_PERSONALIZED ||
+         _match.type == AutocompleteMatchType::SEARCH_HISTORY ||
          _match.type == AutocompleteMatchType::SEARCH_SUGGEST_PERSONALIZED ||
          _match.type == AutocompleteMatchType::SEARCH_SUGGEST_TAIL ||
          _match.type == AutocompleteMatchType::SEARCH_SUGGEST ||
@@ -214,29 +236,35 @@ UIColor* DimColorIncognito() {
          _match.type == AutocompleteMatchType::PHYSICAL_WEB_DEPRECATED;
 }
 
-- (GURL)imageURL {
-  if (self.hasAnswer && _match.answer->second_line().image_url().is_valid()) {
-    return _match.answer->second_line().image_url();
+- (BOOL)isTabMatch {
+  return _match.has_tab_match.value_or(false);
+}
+
+- (BOOL)isClipboardMatch {
+  if (base::FeatureList::IsEnabled(kOmniboxPasteButton)) {
+    return _match.type == AutocompleteMatchType::CLIPBOARD_URL ||
+           _match.type == AutocompleteMatchType::CLIPBOARD_TEXT ||
+           _match.type == AutocompleteMatchType::CLIPBOARD_IMAGE;
   } else {
-    return GURL(_match.image_url);
+    return NO;
   }
 }
 
-- (GURL)faviconPageURL {
-  return _match.destination_url;
+- (id<OmniboxPedal>)pedal {
+  return self.pedalData;
 }
 
-- (UIImage*)suggestionTypeIcon {
-  DCHECK(
-      !(self.isIncognito && _match.type == AutocompleteMatchType::CALCULATOR))
-      << "Calculator answers are never shown in incognito mode because input "
-         "is never sent to the search provider.";
-  return GetOmniboxSuggestionIconForAutocompleteMatchType(_match.type,
-                                                          self.isStarred);
+- (UIImage*)matchTypeIcon {
+  return GetOmniboxSuggestionIconForAutocompleteMatchType(
+      _match.type, /* is_starred */ false);
 }
 
-- (BOOL)isTabMatch {
-  return _match.has_tab_match;
+- (BOOL)isMatchTypeSearch {
+  return AutocompleteMatch::IsSearchType(_match.type);
+}
+
+- (CrURL*)destinationUrl {
+  return [[CrURL alloc] initWithGURL:_match.destination_url];
 }
 
 #pragma mark tail suggest
@@ -246,7 +274,7 @@ UIColor* DimColorIncognito() {
 }
 
 - (NSString*)commonPrefix {
-  if (![self isTailSuggestion]) {
+  if (!self.isTailSuggestion) {
     return @"";
   }
   return base::SysUTF16ToNSString(_match.tail_suggest_common_prefix);
@@ -272,7 +300,7 @@ UIColor* DimColorIncognito() {
                    useDeemphasizedStyling:useDeemphasizedStyling];
 }
 
-// Adds the |additional_text| and |status_text| from |line| to the given
+// Adds the `additional_text` and `status_text` from `line` to the given
 // attributed string. This is necessary because answers get their main text
 // from the match contents instead of the ImageLine's text_fields. This is
 // because those fields contain server-provided formatting, which aren't used.
@@ -310,7 +338,7 @@ UIColor* DimColorIncognito() {
   const std::u16string& string = field->text();
 
   NSString* unescapedString =
-      base::SysUTF16ToNSString(net::UnescapeForHTML(string));
+      base::SysUTF16ToNSString(base::UnescapeForHTML(string));
 
   NSDictionary* attributes =
       [self formattingAttributesForSuggestionStyle:field->style()
@@ -321,7 +349,7 @@ UIColor* DimColorIncognito() {
 }
 
 // Return correct formatting attributes for the given style.
-// |useDeemphasizedStyling| is necessary because some styles (e.g. SUPERIOR)
+// `useDeemphasizedStyling` is necessary because some styles (e.g. SUPERIOR)
 // should take their color from the surrounding line; they don't have a fixed
 // color.
 - (NSDictionary<NSAttributedStringKey, id>*)

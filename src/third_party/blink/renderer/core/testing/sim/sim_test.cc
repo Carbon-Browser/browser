@@ -19,7 +19,7 @@
 namespace blink {
 
 SimTest::SimTest() {
-  Document::SetThreadedParsingEnabledForTesting(false);
+  Document::SetForceSynchronousParsingForTesting(true);
   // Threaded animations are usually enabled for blink. However these tests use
   // synchronous compositing, which can not run threaded animations.
   bool was_threaded_animation_enabled =
@@ -30,7 +30,7 @@ SimTest::SimTest() {
 }
 
 SimTest::~SimTest() {
-  Document::SetThreadedParsingEnabledForTesting(true);
+  Document::SetForceSynchronousParsingForTesting(false);
   content::TestBlinkWebUnitTestSupport::SetThreadedAnimationEnabled(true);
   WebCache::Clear();
 }
@@ -62,7 +62,7 @@ void SimTest::SetUp() {
   compositor_->SetLayerTreeHost(
       local_frame_root_->FrameWidgetImpl()->LayerTreeHostForTesting());
 
-  WebView().MainFrameViewWidget()->Resize(gfx::Size(300, 200));
+  ResizeView(gfx::Size(300, 200));
 }
 
 void SimTest::TearDown() {
@@ -95,6 +95,21 @@ void SimTest::InitializeRemote() {
   local_frame_root_ = web_view_helper_->CreateLocalChild(
       *WebView().MainFrame()->ToWebRemoteFrame(), "local_frame_root",
       WebFrameOwnerProperties(), nullptr, web_frame_client_.get());
+  compositor_->SetLayerTreeHost(
+      local_frame_root_->FrameWidgetImpl()->LayerTreeHostForTesting());
+}
+
+void SimTest::InitializeFencedFrameRoot(mojom::blink::FencedFrameMode mode) {
+  web_view_helper_->InitializeWithOpener(/*opener=*/nullptr,
+                                         /*frame_client=*/nullptr,
+                                         /*view_client=*/nullptr,
+                                         /*update_settings_func=*/nullptr,
+                                         mode);
+  compositor_->SetWebView(WebView(), *web_view_client_);
+  page_->SetPage(WebView().GetPage());
+  web_frame_client_ =
+      std::make_unique<frame_test_helpers::TestWebFrameClient>();
+  local_frame_root_ = WebView().MainFrameImpl();
   compositor_->SetLayerTreeHost(
       local_frame_root_->FrameWidgetImpl()->LayerTreeHostForTesting());
 }
@@ -154,6 +169,10 @@ Vector<String>& SimTest::ConsoleMessages() {
   return web_frame_client_->ConsoleMessages();
 }
 
+void SimTest::ResizeView(const gfx::Size& size) {
+  web_view_helper_->Resize(size);
+}
+
 SimWebFrameWidget* SimTest::CreateSimWebFrameWidget(
     base::PassKey<WebLocalFrame> pass_key,
     CrossVariantMojoAssociatedRemote<mojom::blink::FrameWidgetHostInterfaceBase>
@@ -170,12 +189,13 @@ SimWebFrameWidget* SimTest::CreateSimWebFrameWidget(
     bool never_composited,
     bool is_for_child_local_root,
     bool is_for_nested_main_frame,
+    bool is_for_scalable_page,
     SimCompositor* compositor) {
   return MakeGarbageCollected<SimWebFrameWidget>(
       compositor, std::move(pass_key), std::move(frame_widget_host),
       std::move(frame_widget), std::move(widget_host), std::move(widget),
       std::move(task_runner), frame_sink_id, hidden, never_composited,
-      is_for_child_local_root, is_for_nested_main_frame);
+      is_for_child_local_root, is_for_nested_main_frame, is_for_scalable_page);
 }
 
 frame_test_helpers::TestWebFrameWidget* SimTest::CreateTestWebFrameWidget(
@@ -193,12 +213,14 @@ frame_test_helpers::TestWebFrameWidget* SimTest::CreateTestWebFrameWidget(
     bool hidden,
     bool never_composited,
     bool is_for_child_local_root,
-    bool is_for_nested_main_frame) {
+    bool is_for_nested_main_frame,
+    bool is_for_scalable_page) {
   return CreateSimWebFrameWidget(
       std::move(pass_key), std::move(frame_widget_host),
       std::move(frame_widget), std::move(widget_host), std::move(widget),
       std::move(task_runner), frame_sink_id, hidden, never_composited,
-      is_for_child_local_root, is_for_nested_main_frame, compositor_.get());
+      is_for_child_local_root, is_for_nested_main_frame, is_for_scalable_page,
+      compositor_.get());
 }
 
 }  // namespace blink

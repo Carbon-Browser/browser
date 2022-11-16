@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- android_chrome_strings.grd contains strings for VR DFM of Carbon Browser Browser Browser for Android. -->
+<!-- android_chrome_strings.grd contains strings for VR DFM of Carbon Browser for Android. -->
 <grit current_release="1" latest_public_release="0" output_all_resource_defines="false">
   <outputs>
     <output filename="values-af/android_chrome_media_router_strings.xml" lang="af" type="android" />
@@ -83,6 +83,9 @@
     <output filename="values-zh-rHK/android_chrome_media_router_strings.xml" lang="zh-HK" type="android" />
     <output filename="values-zh-rTW/android_chrome_media_router_strings.xml" lang="zh-TW" type="android" />
     <output filename="values-zu/android_chrome_media_router_strings.xml" lang="zu" type="android" />
+    <!-- Pseudolocales -->
+    <output filename="values-ar-rXB/android_chrome_media_router_strings.xml" lang="ar-XB" type="android" />
+    <output filename="values-en-rXA/android_chrome_media_router_strings.xml" lang="en-XA" type="android" />
   </outputs>
   <translations>
     <file path="translations/android_chrome_media_router_strings_af.xtb" lang="af" />
@@ -96,6 +99,7 @@
     <file path="translations/android_chrome_media_router_strings_bs.xtb" lang="bs" />
     <file path="translations/android_chrome_media_router_strings_ca.xtb" lang="ca" />
     <file path="translations/android_chrome_media_router_strings_cs.xtb" lang="cs" />
+    <file path="translations/android_chrome_media_router_strings_cy.xtb" lang="cy" />
     <file path="translations/android_chrome_media_router_strings_da.xtb" lang="da" />
     <file path="translations/android_chrome_media_router_strings_de.xtb" lang="de" />
     <file path="translations/android_chrome_media_router_strings_el.xtb" lang="el" />

@@ -2,17 +2,39 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {I18nBehavior} from 'chrome://resources/js/i18n_behavior.m.js';
+import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
+import 'chrome://resources/polymer/v3_0/iron-list/iron-list.js';
 
-Polymer({
-  is: 'app-management-supported-links-dialog',
+import {I18nBehavior, I18nBehaviorInterface} from 'chrome://resources/js/i18n_behavior.m.js';
+import {html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-  behaviors: [
-    I18nBehavior,
-  ],
+/**
+ * @constructor
+ * @extends {PolymerElement}
+ * @implements {I18nBehaviorInterface}
+ */
+const AppManagementSupportedLinksDialogElementBase =
+    mixinBehaviors([I18nBehavior], PolymerElement);
 
-  properties: {
-    /** @type {!App} */
-    app: Object,
-  },
-});
+/** @polymer */
+class AppManagementSupportedLinksDialogElement extends
+    AppManagementSupportedLinksDialogElementBase {
+  static get is() {
+    return 'app-management-supported-links-dialog';
+  }
+
+  static get template() {
+    return html`{__html_template__}`;
+  }
+
+  static get properties() {
+    return {
+      /** @type {!App} */
+      app: Object,
+    };
+  }
+}
+
+customElements.define(
+    AppManagementSupportedLinksDialogElement.is,
+    AppManagementSupportedLinksDialogElement);

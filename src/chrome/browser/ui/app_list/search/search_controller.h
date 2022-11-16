@@ -14,8 +14,9 @@
 
 #include "base/callback.h"
 #include "base/containers/flat_map.h"
-#include "base/macros.h"
+#include "base/logging.h"
 #include "base/observer_list_types.h"
+#include "base/time/time.h"
 #include "chrome/browser/ui/app_list/search/mixer.h"
 #include "chrome/browser/ui/app_list/search/ranking/launch_data.h"
 #include "chrome/browser/ui/app_list/search/ranking/types.h"
@@ -26,18 +27,17 @@ namespace ash {
 enum class AppListSearchResultType;
 }
 
+namespace base {
+class Time;
+class TimeDelta;
+}
+
 namespace app_list {
 
 class SearchProvider;
 enum class RankingItemType;
 
 // Common types used throughout result ranking.
-
-// The type of a particular result.
-using ResultType = ash::AppListSearchResultType;
-// The type of a search provider as a whole. This is currently just the 'main'
-// ResultType returned by the provider.
-using ProviderType = ash::AppListSearchResultType;
 
 using Results = std::vector<std::unique_ptr<ChromeSearchResult>>;
 using ResultsMap = base::flat_map<ProviderType, Results>;
@@ -46,7 +46,7 @@ using ResultsMap = base::flat_map<ProviderType, Results>;
 // to all search providers, then invokes the mixer to mix and to publish the
 // results to the given SearchResults UI model.
 //
-// // TODO(crbug.com/1199206): The SearchController is being reimplemented with
+// TODO(crbug.com/1199206): The SearchController is being reimplemented with
 // a different ranking system. Once this reimplementation is finished, this pure
 // virtual class can be removed and replaced with SearchControllerImplNew.
 class SearchController {
@@ -73,16 +73,18 @@ class SearchController {
 
   virtual ~SearchController() {}
 
-  virtual void InitializeRankers() = 0;
+  virtual void InitializeRankers() {}
 
-  virtual void Start(const std::u16string& query) = 0;
+  virtual void StartSearch(const std::u16string& query) = 0;
+  virtual void StartZeroState(base::OnceClosure on_done,
+                              base::TimeDelta timeout) = 0;
   // TODO(crbug.com/1199206): We should rename this to AppListClosing for
   // consistency with AppListShown.
   virtual void ViewClosing() = 0;
 
   virtual void OpenResult(ChromeSearchResult* result, int event_flags) = 0;
   virtual void InvokeResultAction(ChromeSearchResult* result,
-                                  int action_index) = 0;
+                                  ash::SearchResultActionType action) = 0;
 
   // Adds a new mixer group. See Mixer::AddGroup.
   virtual size_t AddGroup(size_t max_results) = 0;
@@ -93,8 +95,9 @@ class SearchController {
 
   // Update the controller with the given results. Used only if the categorical
   // search feature flag is enabled.
-  virtual void SetResults(ash::AppListSearchResultType provider_type,
-                          Results results) = 0;
+  virtual void SetResults(const SearchProvider* provider, Results results) = 0;
+  // Publishes results to ash.
+  virtual void Publish() = 0;
 
   virtual ChromeSearchResult* FindSearchResult(
       const std::string& result_id) = 0;
@@ -104,21 +107,10 @@ class SearchController {
   // Sends training signal to each |providers_|
   virtual void Train(LaunchData&& launch_data) = 0;
 
-  // Invoked when the app list is shown.
-  virtual void AppListShown() = 0;
-
   // Gets the length of the most recent query.
   // TODO(crbug.com/1199206): This should be replaced with calls to
   // get_query().size().
   virtual int GetLastQueryLength() const = 0;
-
-  // TODO(crbug.com/1199206): This is unused and can be deleted.
-  // Called when items in the results list have been on screen for some amount
-  // of time, or the user clicked a search result.
-  virtual void OnSearchResultsImpressionMade(
-      const std::u16string& trimmed_query,
-      const ash::SearchResultIdWithPositionIndices& results,
-      int launched_index) = 0;
 
   virtual void AddObserver(Observer* observer) = 0;
   virtual void RemoveObserver(Observer* observer) = 0;
@@ -129,6 +121,8 @@ class SearchController {
 
   virtual void set_results_changed_callback_for_test(
       ResultsChangedCallback callback) = 0;
+
+  virtual void disable_ranking_for_test() = 0;
 };
 
 }  // namespace app_list

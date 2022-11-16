@@ -18,7 +18,7 @@
 #include "chrome/browser/ui/web_applications/test/web_app_browsertest_util.h"
 #include "chrome/browser/web_applications/test/web_app_install_test_utils.h"
 #include "chrome/browser/web_applications/web_app_id.h"
-#include "chrome/browser/web_applications/web_application_info.h"
+#include "chrome/browser/web_applications/web_app_install_info.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "content/public/common/content_features.h"
@@ -40,7 +40,7 @@ class AppServiceShelfContextMenuWebAppBrowserTest
   struct MenuSection {
     std::unique_ptr<ui::SimpleMenuModel> menu_model;
     ui::MenuModel* sub_model = nullptr;
-    int command_index = -1;
+    size_t command_index = 0;
   };
 
   absl::optional<MenuSection> GetContextMenuSectionForAppCommand(
@@ -62,7 +62,7 @@ class AppServiceShelfContextMenuWebAppBrowserTest
     run_loop.Run();
 
     result.sub_model = result.menu_model.get();
-    result.command_index = -1;
+    result.command_index = 0;
     if (!ui::MenuModel::GetModelAndIndexForCommandId(
             command_id, &result.sub_model, &result.command_index)) {
       return absl::nullopt;
@@ -80,11 +80,11 @@ IN_PROC_BROWSER_TEST_F(AppServiceShelfContextMenuWebAppBrowserTest,
   Profile* profile = browser()->profile();
   base::UserActionTester user_action_tester;
 
-  auto web_application_info = std::make_unique<WebApplicationInfo>();
-  web_application_info->start_url = GURL("https://example.org");
-  web_application_info->display_mode = blink::mojom::DisplayMode::kMinimalUi;
+  auto web_app_install_info = std::make_unique<WebAppInstallInfo>();
+  web_app_install_info->start_url = GURL("https://example.org");
+  web_app_install_info->display_mode = blink::mojom::DisplayMode::kMinimalUi;
   web_app::AppId app_id =
-      web_app::test::InstallWebApp(profile, std::move(web_application_info));
+      web_app::test::InstallWebApp(profile, std::move(web_app_install_info));
 
   // Wait for app service to see the newly installed app.
   apps::AppServiceProxyFactory::GetForProfile(profile)
@@ -92,7 +92,7 @@ IN_PROC_BROWSER_TEST_F(AppServiceShelfContextMenuWebAppBrowserTest,
 
   // Activate open in window menu item.
   absl::optional<MenuSection> menu_section =
-      GetContextMenuSectionForAppCommand(app_id, ash::LAUNCH_TYPE_WINDOW);
+      GetContextMenuSectionForAppCommand(app_id, ash::USE_LAUNCH_TYPE_WINDOW);
   ASSERT_TRUE(menu_section);
   menu_section->sub_model->ActivatedAt(menu_section->command_index);
 
@@ -113,11 +113,11 @@ IN_PROC_BROWSER_TEST_F(AppServiceShelfContextMenuWebAppBrowserTest,
   Profile* profile = browser()->profile();
   base::UserActionTester user_action_tester;
 
-  auto web_application_info = std::make_unique<WebApplicationInfo>();
-  web_application_info->start_url = GURL("https://example.org");
-  web_application_info->display_mode = blink::mojom::DisplayMode::kMinimalUi;
+  auto web_app_install_info = std::make_unique<WebAppInstallInfo>();
+  web_app_install_info->start_url = GURL("https://example.org");
+  web_app_install_info->display_mode = blink::mojom::DisplayMode::kMinimalUi;
   web_app::AppId app_id =
-      web_app::test::InstallWebApp(profile, std::move(web_application_info));
+      web_app::test::InstallWebApp(profile, std::move(web_app_install_info));
 
   // Wait for app service to see the newly installed app.
   apps::AppServiceProxyFactory::GetForProfile(profile)
@@ -125,7 +125,7 @@ IN_PROC_BROWSER_TEST_F(AppServiceShelfContextMenuWebAppBrowserTest,
 
   // Set app to open in tabbed window.
   absl::optional<MenuSection> menu_section = GetContextMenuSectionForAppCommand(
-      app_id, ash::LAUNCH_TYPE_TABBED_WINDOW);
+      app_id, ash::USE_LAUNCH_TYPE_TABBED_WINDOW);
   ASSERT_TRUE(menu_section);
   menu_section->sub_model->ActivatedAt(menu_section->command_index);
 
@@ -145,10 +145,10 @@ IN_PROC_BROWSER_TEST_F(AppServiceShelfContextMenuWebAppBrowserTest,
   Profile* profile = browser()->profile();
   base::UserActionTester user_action_tester;
 
-  auto web_application_info = std::make_unique<WebApplicationInfo>();
-  web_application_info->start_url = GURL("https://example.org");
+  auto web_app_install_info = std::make_unique<WebAppInstallInfo>();
+  web_app_install_info->start_url = GURL("https://example.org");
   web_app::AppId app_id =
-      web_app::test::InstallWebApp(profile, std::move(web_application_info));
+      web_app::test::InstallWebApp(profile, std::move(web_app_install_info));
 
   // Wait for app service to see the newly installed app.
   apps::AppServiceProxyFactory::GetForProfile(profile)
@@ -156,7 +156,7 @@ IN_PROC_BROWSER_TEST_F(AppServiceShelfContextMenuWebAppBrowserTest,
 
   // Set app to open in browser tab.
   absl::optional<MenuSection> menu_section =
-      GetContextMenuSectionForAppCommand(app_id, ash::LAUNCH_TYPE_REGULAR_TAB);
+      GetContextMenuSectionForAppCommand(app_id, ash::USE_LAUNCH_TYPE_REGULAR);
   ASSERT_TRUE(menu_section);
   menu_section->sub_model->ActivatedAt(menu_section->command_index);
 

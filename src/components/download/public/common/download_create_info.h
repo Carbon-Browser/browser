@@ -10,7 +10,6 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/time/time.h"
 #include "components/download/public/common/download_export.h"
@@ -49,6 +48,10 @@ struct COMPONENTS_DOWNLOAD_EXPORT DownloadCreateInfo {
   DownloadCreateInfo(const base::Time& start_time,
                      std::unique_ptr<DownloadSaveInfo> save_info);
   DownloadCreateInfo();
+
+  DownloadCreateInfo(const DownloadCreateInfo&) = delete;
+  DownloadCreateInfo& operator=(const DownloadCreateInfo&) = delete;
+
   ~DownloadCreateInfo();
 
   bool is_new_download;
@@ -67,8 +70,9 @@ struct COMPONENTS_DOWNLOAD_EXPORT DownloadCreateInfo {
   GURL referrer_url;
   net::ReferrerPolicy referrer_policy;
 
-  // Site URL for the site instance that initiated the download.
-  GURL site_url;
+  // The serialized embedder download data for the site instance that initiated
+  // the download.
+  std::string serialized_embedder_download_data;
 
   // The URL of the tab that started us.
   GURL tab_url;
@@ -97,6 +101,9 @@ struct COMPONENTS_DOWNLOAD_EXPORT DownloadCreateInfo {
   // Whether the download should be transient. A transient download is
   // short-lived and is not shown in the UI.
   bool transient;
+
+  // Whether this download requires safety checks.
+  bool require_safety_checks;
 
   absl::optional<ui::PageTransition> transition_type;
 
@@ -172,13 +179,15 @@ struct COMPONENTS_DOWNLOAD_EXPORT DownloadCreateInfo {
   // Source of the download, used in metrics.
   DownloadSource download_source = DownloadSource::UNKNOWN;
 
-  // Whether download is initated by the content on the page.
+  // Whether download is initiated by the content on the page.
   bool is_content_initiated;
 
+  // The credentials mode for whether to expose the response headers to
+  // javascript, see Access-Control-Allow-Credentials header.
   ::network::mojom::CredentialsMode credentials_mode;
 
- private:
-  DISALLOW_COPY_AND_ASSIGN(DownloadCreateInfo);
+  // Isolation info for the download request, mainly for same site cookies.
+  absl::optional<net::IsolationInfo> isolation_info;
 };
 
 }  // namespace download

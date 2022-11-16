@@ -18,7 +18,6 @@
 #include "base/logging.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
-#include "base/task/post_task.h"
 #include "remoting/base/oauth_token_getter_impl.h"
 #include "remoting/base/protobuf_http_status.h"
 #include "remoting/base/url_request_context_getter.h"
@@ -256,7 +255,7 @@ void FtlServicesPlayground::OnReceiveMessagesStreamClosed(
   base::OnceClosure callback = std::move(receive_messages_done_callback_);
   bool is_callback_null = callback.is_null();
   if (is_callback_null) {
-    callback = base::DoNothing::Once();
+    callback = base::DoNothing();
   }
   if (status.error_code() == ProtobufHttpStatus::Code::CANCELLED) {
     printf("ReceiveMessages stream canceled by client.\n");

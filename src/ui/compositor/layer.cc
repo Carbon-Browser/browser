@@ -15,6 +15,8 @@
 #include "base/command_line.h"
 #include "base/json/json_writer.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
+#include "base/observer_list.h"
 #include "base/trace_event/trace_event.h"
 #include "cc/layers/mirror_layer.h"
 #include "cc/layers/nine_patch_layer.h"
@@ -27,6 +29,7 @@
 #include "cc/trees/layer_tree_settings.h"
 #include "components/viz/common/frame_sinks/copy_output_request.h"
 #include "components/viz/common/resources/transferable_resource.h"
+#include "ui/compositor/compositor.h"
 #include "ui/compositor/compositor_switches.h"
 #include "ui/compositor/layer_animator.h"
 #include "ui/compositor/layer_delegate.h"
@@ -40,8 +43,9 @@
 #include "ui/gfx/geometry/rect_conversions.h"
 #include "ui/gfx/geometry/rounded_corners_f.h"
 #include "ui/gfx/geometry/size_conversions.h"
+#include "ui/gfx/geometry/transform.h"
+#include "ui/gfx/image/image_skia_rep.h"
 #include "ui/gfx/interpolated_transform.h"
-#include "ui/gfx/transform.h"
 
 namespace ui {
 namespace {
@@ -102,8 +106,8 @@ class Layer::LayerMirror : public LayerDelegate, LayerObserver {
   }
 
  private:
-  Layer* const source_;
-  Layer* const dest_;
+  const raw_ptr<Layer> source_;
+  const raw_ptr<Layer> dest_;
 };
 
 // Manages the subpixel offset data for a given set of parameters (device
@@ -258,9 +262,10 @@ std::unique_ptr<Layer> Layer::Clone() const {
     clone->SetAlphaShape(std::make_unique<ShapeRects>(*alpha_shape_));
 
   // cc::Layer state.
+  // TODO(crbug/1308932): Remove toSkColor and make all SkColor4f.
   if (surface_layer_) {
     clone->SetShowSurface(surface_layer_->surface_id(), frame_size_in_dip_,
-                          surface_layer_->background_color(),
+                          surface_layer_->background_color().toSkColor(),
                           surface_layer_->deadline_in_frames()
                               ? cc::DeadlinePolicy::UseSpecifiedDeadline(
                                     *surface_layer_->deadline_in_frames())
@@ -285,6 +290,7 @@ std::unique_ptr<Layer> Layer::Clone() const {
   clone->SetFillsBoundsOpaquely(fills_bounds_opaquely_);
   clone->SetFillsBoundsCompletely(fills_bounds_completely_);
   clone->SetRoundedCornerRadius(rounded_corner_radii());
+  clone->SetGradientMask(gradient_mask());
   clone->SetIsFastRoundedCorner(is_fast_rounded_corner());
   clone->SetName(name_);
 
@@ -318,7 +324,7 @@ void Layer::SetShowReflectedLayerSubtree(Layer* subtree_reflected_layer) {
     return;
 
   scoped_refptr<cc::MirrorLayer> new_layer =
-      cc::MirrorLayer::Create(subtree_reflected_layer->cc_layer_);
+      cc::MirrorLayer::Create(subtree_reflected_layer->cc_layer_.get());
   if (!SwitchToLayer(new_layer))
     return;
 
@@ -354,7 +360,7 @@ void Layer::SetCompositor(Compositor* compositor,
   compositor_ = compositor;
   OnDeviceScaleFactorChanged(compositor->device_scale_factor());
 
-  root_layer->AddChild(cc_layer_);
+  root_layer->AddChild(cc_layer_.get());
   SetCompositorForAnimatorsInTree(compositor);
 }
 
@@ -380,10 +386,10 @@ void Layer::Add(Layer* child) {
     child->parent_->Remove(child);
   child->parent_ = this;
   children_.push_back(child);
-  cc_layer_->AddChild(child->cc_layer_);
+  cc_layer_->AddChild(child->cc_layer_.get());
   child->OnDeviceScaleFactorChanged(device_scale_factor_);
   Compositor* compositor = GetCompositor();
-  if (compositor)
+  if (compositor && compositor->animations_are_enabled())
     child->SetCompositorForAnimatorsInTree(compositor);
 }
 
@@ -403,7 +409,7 @@ void Layer::Remove(Layer* child) {
     return;
 
   Compositor* compositor = GetCompositor();
-  if (compositor)
+  if (compositor && compositor->animations_are_enabled())
     child->ResetCompositorForAnimatorsInTree(compositor);
 
   auto i = std::find(children_.begin(), children_.end(), child);
@@ -448,7 +454,8 @@ void Layer::SetAnimator(LayerAnimator* animator) {
   Compositor* compositor = GetCompositor();
 
   if (animator_) {
-    if (compositor && !layer_mask_back_link())
+    if (compositor && compositor->animations_are_enabled() &&
+        !layer_mask_back_link())
       animator_->DetachLayerAndTimeline(compositor);
     animator_->SetDelegate(nullptr);
   }
@@ -457,7 +464,8 @@ void Layer::SetAnimator(LayerAnimator* animator) {
 
   if (animator_) {
     animator_->SetDelegate(this);
-    if (compositor && !layer_mask_back_link())
+    if (compositor && compositor->animations_are_enabled() &&
+        !layer_mask_back_link())
       animator_->AttachLayerAndTimeline(compositor);
   }
 }
@@ -711,6 +719,10 @@ void Layer::SetRoundedCornerRadius(const gfx::RoundedCornersF& corner_radii) {
   GetAnimator()->SetRoundedCorners(corner_radii);
 }
 
+void Layer::SetGradientMask(const gfx::LinearGradient& gradient_mask) {
+  GetAnimator()->SetGradientMask(gradient_mask);
+}
+
 void Layer::SetIsFastRoundedCorner(bool enable) {
   cc_layer_->SetIsFastRoundedCorner(enable);
   ScheduleDraw();
@@ -785,7 +797,7 @@ bool Layer::SwitchToLayer(scoped_refptr<cc::Layer> new_layer) {
 
   cc_layer_->RemoveAllChildren();
   if (cc_layer_->parent()) {
-    cc_layer_->parent()->ReplaceChild(cc_layer_, new_layer);
+    cc_layer_->mutable_parent()->ReplaceChild(cc_layer_, new_layer);
   }
   cc_layer_->ClearDebugInfo();
 
@@ -801,6 +813,7 @@ bool Layer::SwitchToLayer(scoped_refptr<cc::Layer> new_layer) {
   new_layer->SetRoundedCorner(cc_layer_->corner_radii());
   new_layer->SetIsFastRoundedCorner(cc_layer_->is_fast_rounded_corner());
   new_layer->SetMasksToBounds(cc_layer_->masks_to_bounds());
+  new_layer->SetGradientMask(cc_layer_->gradient_mask());
 
   cc_layer_ = new_layer.get();
   if (content_layer_) {
@@ -814,7 +827,7 @@ bool Layer::SwitchToLayer(scoped_refptr<cc::Layer> new_layer) {
 
   for (auto* child : children_) {
     DCHECK(child->cc_layer_);
-    cc_layer_->AddChild(child->cc_layer_);
+    cc_layer_->AddChild(child->cc_layer_.get());
   }
   cc_layer_->SetTransformOrigin(gfx::Point3F());
   cc_layer_->SetContentsOpaque(fills_bounds_opaquely_);
@@ -991,8 +1004,11 @@ void Layer::SetShowSurface(const viz::SurfaceId& surface_id,
   CreateSurfaceLayerIfNecessary();
 
   surface_layer_->SetSurfaceId(surface_id, deadline_policy);
-  surface_layer_->SetBackgroundColor(default_background_color);
-  surface_layer_->SetSafeOpaqueBackgroundColor(default_background_color);
+  // TODO(crbug/1308932): Remove FromColor and make all SkColor4f.
+  surface_layer_->SetBackgroundColor(
+      SkColor4f::FromColor(default_background_color));
+  surface_layer_->SetSafeOpaqueBackgroundColor(
+      SkColor4f::FromColor(default_background_color));
   surface_layer_->SetStretchContentToFillBounds(stretch_content_to_fill_bounds);
 
   frame_size_in_dip_ = frame_size_in_dip;
@@ -1030,8 +1046,8 @@ void Layer::SetShowReflectedSurface(const viz::SurfaceId& surface_id,
 
   surface_layer_->SetSurfaceId(surface_id,
                                cc::DeadlinePolicy::UseInfiniteDeadline());
-  surface_layer_->SetBackgroundColor(SK_ColorBLACK);
-  surface_layer_->SetSafeOpaqueBackgroundColor(SK_ColorBLACK);
+  surface_layer_->SetBackgroundColor(SkColors::kBlack);
+  surface_layer_->SetSafeOpaqueBackgroundColor(SkColors::kBlack);
   surface_layer_->SetStretchContentToFillBounds(true);
   surface_layer_->SetIsReflection(true);
 
@@ -1116,11 +1132,13 @@ SkColor Layer::GetTargetColor() const {
   if (animator_ && animator_->IsAnimatingProperty(
       LayerAnimationElement::COLOR))
     return animator_->GetTargetColor();
-  return cc_layer_->background_color();
+  // TODO(crbug/1308932): Remove toSkColor and make all SkColor4f.
+  return cc_layer_->background_color().toSkColor();
 }
 
 SkColor Layer::background_color() const {
-  return cc_layer_->background_color();
+  // TODO(crbug/1308932): Remove toSkColor and make all SkColor4f.
+  return cc_layer_->background_color().toSkColor();
 }
 
 bool Layer::SchedulePaint(const gfx::Rect& invalid_rect) {
@@ -1191,7 +1209,7 @@ void Layer::StackChildrenAtBottom(
     DCHECK_EQ(leading_child->parent(), this);
     new_children_order.emplace_back(leading_child);
     new_cc_children_order.emplace_back(
-        scoped_refptr<cc::Layer>(leading_child->cc_layer_));
+        scoped_refptr<cc::Layer>(leading_child->cc_layer_.get()));
   }
 
   base::flat_set<Layer*> reordered_children(new_children_order);
@@ -1275,8 +1293,8 @@ void Layer::OnDeviceScaleFactorChanged(float device_scale_factor) {
 }
 
 void Layer::SetDidScrollCallback(
-    base::RepeatingCallback<void(const gfx::ScrollOffset&,
-                                 const cc::ElementId&)> callback) {
+    base::RepeatingCallback<void(const gfx::PointF&, const cc::ElementId&)>
+        callback) {
   cc_layer_->SetDidScrollCallback(std::move(callback));
 }
 
@@ -1285,16 +1303,16 @@ void Layer::SetScrollable(const gfx::Size& container_bounds) {
   cc_layer_->SetUserScrollable(true, true);
 }
 
-gfx::ScrollOffset Layer::CurrentScrollOffset() const {
+gfx::PointF Layer::CurrentScrollOffset() const {
   const Compositor* compositor = GetCompositor();
-  gfx::ScrollOffset offset;
+  gfx::PointF offset;
   if (compositor &&
       compositor->GetScrollOffsetForLayer(cc_layer_->element_id(), &offset))
     return offset;
   return cc_layer_->scroll_offset();
 }
 
-void Layer::SetScrollOffset(const gfx::ScrollOffset& offset) {
+void Layer::SetScrollOffset(const gfx::PointF& offset) {
   Compositor* compositor = GetCompositor();
   bool scrolled_on_impl_side =
       compositor && compositor->ScrollLayerTo(cc_layer_->element_id(), offset);
@@ -1376,8 +1394,7 @@ void Layer::StackRelativeTo(Layer* child, Layer* other, bool above) {
   children_.erase(children_.begin() + child_i);
   children_.insert(children_.begin() + dest_i, child);
 
-  child->cc_layer_->RemoveFromParent();
-  cc_layer_->InsertChild(child->cc_layer_, dest_i);
+  cc_layer_->InsertChild(child->cc_layer_.get(), dest_i);
 }
 
 bool Layer::ConvertPointForAncestor(const Layer* ancestor,
@@ -1501,14 +1518,21 @@ void Layer::SetGrayscaleFromAnimation(float grayscale,
 
 void Layer::SetColorFromAnimation(SkColor color, PropertyChangeReason reason) {
   DCHECK_EQ(type_, LAYER_SOLID_COLOR);
-  cc_layer_->SetBackgroundColor(color);
-  cc_layer_->SetSafeOpaqueBackgroundColor(color);
+  // TODO(crbug/1308932): Remove FromColor and make all SkColor4f.
+  cc_layer_->SetBackgroundColor(SkColor4f::FromColor(color));
+  cc_layer_->SetSafeOpaqueBackgroundColor(SkColor4f::FromColor(color));
   SetFillsBoundsOpaquelyWithReason(SkColorGetA(color) == 0xFF, reason);
 }
 
 void Layer::SetClipRectFromAnimation(const gfx::Rect& clip_rect,
                                      PropertyChangeReason reason) {
+  const gfx::Rect old_rect = cc_layer_->clip_rect();
+  if (old_rect == clip_rect)
+    return;
   cc_layer_->SetClipRect(clip_rect);
+
+  if (delegate_)
+    delegate_->OnLayerClipRectChanged(old_rect, reason);
 }
 
 void Layer::SetRoundedCornersFromAnimation(
@@ -1518,6 +1542,15 @@ void Layer::SetRoundedCornersFromAnimation(
 
   for (const auto& mirror : mirrors_)
     mirror->dest()->SetRoundedCornersFromAnimation(rounded_corners, reason);
+}
+
+void Layer::SetGradientMaskFromAnimation(
+    const gfx::LinearGradient& gradient_mask,
+    PropertyChangeReason reason) {
+  cc_layer_->SetGradientMask(gradient_mask);
+
+  for (const auto& mirror : mirrors_)
+    mirror->dest()->SetGradientMaskFromAnimation(gradient_mask, reason);
 }
 
 void Layer::ScheduleDrawForAnimation() {
@@ -1551,8 +1584,10 @@ float Layer::GetGrayscaleForAnimation() const {
 SkColor Layer::GetColorForAnimation() const {
   // The NULL check is here since this is invoked regardless of whether we have
   // been configured as LAYER_SOLID_COLOR.
-  return solid_color_layer_.get() ?
-      solid_color_layer_->background_color() : SK_ColorBLACK;
+  // TODO(crbug/1308932): Remove toSkColor and make all SkColor4f.
+  return solid_color_layer_.get()
+             ? solid_color_layer_->background_color().toSkColor()
+             : SK_ColorBLACK;
 }
 
 gfx::Rect Layer::GetClipRectForAnimation() const {
@@ -1563,6 +1598,10 @@ gfx::Rect Layer::GetClipRectForAnimation() const {
 
 gfx::RoundedCornersF Layer::GetRoundedCornersForAnimation() const {
   return rounded_corner_radii();
+}
+
+const gfx::LinearGradient& Layer::GetGradientMaskForAnimation() const {
+  return gradient_mask();
 }
 
 float Layer::GetDeviceScaleFactor() const {
@@ -1613,7 +1652,7 @@ void Layer::CreateCcLayer() {
   }
   cc_layer_->SetTransformOrigin(gfx::Point3F());
   cc_layer_->SetContentsOpaque(true);
-  cc_layer_->SetSafeOpaqueBackgroundColor(SK_ColorWHITE);
+  cc_layer_->SetSafeOpaqueBackgroundColor(SkColors::kWhite);
   cc_layer_->SetIsDrawable(type_ != LAYER_NOT_DRAWN);
   cc_layer_->SetHitTestable(IsHitTestableForCC());
   cc_layer_->SetElementId(cc::ElementId(cc_layer_->id()));

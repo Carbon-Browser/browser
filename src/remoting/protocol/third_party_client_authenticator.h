@@ -9,7 +9,6 @@
 #include <string>
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "remoting/protocol/client_authentication_config.h"
 #include "remoting/protocol/third_party_authenticator_base.h"
@@ -34,6 +33,11 @@ class ThirdPartyClientAuthenticator : public ThirdPartyAuthenticatorBase {
   ThirdPartyClientAuthenticator(
       const CreateBaseAuthenticatorCallback& create_base_authenticator_callback,
       const FetchThirdPartyTokenCallback& fetch_token_callback);
+
+  ThirdPartyClientAuthenticator(const ThirdPartyClientAuthenticator&) = delete;
+  ThirdPartyClientAuthenticator& operator=(
+      const ThirdPartyClientAuthenticator&) = delete;
+
   ~ThirdPartyClientAuthenticator() override;
 
  protected:
@@ -53,8 +57,6 @@ class ThirdPartyClientAuthenticator : public ThirdPartyAuthenticatorBase {
   std::string token_;
 
   base::WeakPtrFactory<ThirdPartyClientAuthenticator> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ThirdPartyClientAuthenticator);
 };
 
 

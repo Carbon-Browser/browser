@@ -10,6 +10,7 @@
 #include "ash/wm/overview/overview_grid.h"
 #include "ash/wm/overview/overview_session.h"
 #include "ash/wm/window_util.h"
+#include "base/containers/adapters.h"
 #include "ui/aura/client/screen_position_client.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_targeter.h"
@@ -21,7 +22,11 @@ namespace {
 // Returns true if |window| is considered to be a toplevel window.
 // Please see the aura::Window::GetToplevelWindow() for the condition.
 bool IsTopLevelWindow(aura::Window* window) {
-  return !!window->delegate();
+  // It can happen that we're trying to find the next top-level window as a
+  // result of a window being destroyed (i.e. inside
+  // WindowObserver::OnWindowDestroying()). In this case, the destroying window
+  // should not be returned again as the top-level window.
+  return !!window->delegate() && !window->is_destroying();
 }
 
 // Returns true if |window| can be a target at |screen_point| by |targeter|.
@@ -69,13 +74,11 @@ aura::Window* GetTopmostWindowAtPointWithinWindow(
     return nullptr;
   }
 
-  for (aura::Window::Windows::const_reverse_iterator i =
-           window->children().rbegin();
-       i != window->children().rend(); ++i) {
+  for (auto* child : base::Reversed(window->children())) {
     aura::WindowTargeter* child_targeter =
-        (*i)->targeter() ? (*i)->targeter() : targeter;
+        child->targeter() ? child->targeter() : targeter;
     aura::Window* result = GetTopmostWindowAtPointWithinWindow(
-        screen_point, *i, child_targeter, ignore);
+        screen_point, child, child_targeter, ignore);
     if (result)
       return result;
   }

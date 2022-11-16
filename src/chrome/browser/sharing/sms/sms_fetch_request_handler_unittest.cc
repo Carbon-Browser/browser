@@ -4,6 +4,7 @@
 
 #include "chrome/browser/sharing/sms/sms_fetch_request_handler.h"
 
+#include <memory>
 #include <string>
 
 #include "base/android/jni_android.h"
@@ -32,7 +33,6 @@ using content::SmsFetcher;
 using ::testing::_;
 using ::testing::NiceMock;
 using ::testing::Return;
-using ::testing::SaveArg;
 using ::testing::StrictMock;
 
 namespace {
@@ -43,22 +43,23 @@ const char kDefaultDeviceName[] = "Default Device";
 class MockSmsFetcher : public SmsFetcher {
  public:
   MockSmsFetcher() = default;
+
+  MockSmsFetcher(const MockSmsFetcher&) = delete;
+  MockSmsFetcher& operator=(const MockSmsFetcher&) = delete;
+
   ~MockSmsFetcher() = default;
 
   MOCK_METHOD2(Subscribe,
                void(const content::OriginList& origin_list,
-                    Subscriber* subscriber));
+                    Subscriber& subscriber));
   MOCK_METHOD3(Subscribe,
                void(const content::OriginList& origin_list,
-                    Subscriber* subscriber,
-                    content::RenderFrameHost* rfh));
+                    Subscriber& subscriber,
+                    content::RenderFrameHost& rfh));
   MOCK_METHOD2(Unsubscribe,
                void(const content::OriginList& origin_list,
                     Subscriber* subscriber));
   MOCK_METHOD0(HasSubscribers, bool());
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(MockSmsFetcher);
 };
 
 class MockSmsFetchRequestHandler : public SmsFetchRequestHandler {
@@ -105,6 +106,14 @@ SharingMessage CreateRequestWithMultipleOrigins(
   return message;
 }
 
+// A similar action as testing::SaveArg, but it takes the address of the thing.
+template <size_t I = 0, typename T>
+auto SavePtrToArg(T* out) {
+  return [out](auto&&... args) {
+    *out = std::addressof(std::get<I>(std::tie(args...)));
+  };
+}
+
 }  // namespace
 
 TEST(SmsFetchRequestHandlerTest, Basic) {
@@ -123,7 +132,7 @@ TEST(SmsFetchRequestHandlerTest, Basic) {
   base::RunLoop loop;
 
   SmsFetcher::Subscriber* subscriber;
-  EXPECT_CALL(fetcher, Subscribe(_, _)).WillOnce(SaveArg<1>(&subscriber));
+  EXPECT_CALL(fetcher, Subscribe(_, _)).WillOnce(SavePtrToArg<1>(&subscriber));
   EXPECT_CALL(fetcher, Unsubscribe(_, _));
 
   handler.OnMessage(
@@ -165,7 +174,7 @@ TEST(SmsFetchRequestHandlerTest, OutOfOrder) {
   base::RunLoop loop1;
 
   SmsFetcher::Subscriber* request1;
-  EXPECT_CALL(fetcher, Subscribe(_, _)).WillOnce(SaveArg<1>(&request1));
+  EXPECT_CALL(fetcher, Subscribe(_, _)).WillOnce(SavePtrToArg<1>(&request1));
   EXPECT_CALL(fetcher, Unsubscribe(_, _)).Times(2);
 
   handler.OnMessage(
@@ -179,7 +188,7 @@ TEST(SmsFetchRequestHandlerTest, OutOfOrder) {
   base::RunLoop loop2;
 
   SmsFetcher::Subscriber* request2;
-  EXPECT_CALL(fetcher, Subscribe(_, _)).WillOnce(SaveArg<1>(&request2));
+  EXPECT_CALL(fetcher, Subscribe(_, _)).WillOnce(SavePtrToArg<1>(&request2));
 
   handler.OnMessage(
       message2,
@@ -206,7 +215,7 @@ TEST(SmsFetchRequestHandlerTest, HangingRequestUnsubscribedUponDestruction) {
   MockSmsFetchRequestHandler handler(&fetcher);
   SharingMessage message = CreateRequest("https://a.com");
   SmsFetcher::Subscriber* subscriber;
-  EXPECT_CALL(fetcher, Subscribe(_, _)).WillOnce(SaveArg<1>(&subscriber));
+  EXPECT_CALL(fetcher, Subscribe(_, _)).WillOnce(SavePtrToArg<1>(&subscriber));
 
   // Expects Unsubscribe to be called when SmsFetchRequestHandler goes out of
   // scope.
@@ -225,7 +234,7 @@ TEST(SmsFetchRequestHandlerTest, AskUserPermissionOnReceive) {
   SharingMessage message = CreateRequest("https://a.com");
 
   SmsFetcher::Subscriber* subscriber;
-  EXPECT_CALL(fetcher, Subscribe(_, _)).WillOnce(SaveArg<1>(&subscriber));
+  EXPECT_CALL(fetcher, Subscribe(_, _)).WillOnce(SavePtrToArg<1>(&subscriber));
   EXPECT_CALL(fetcher, Unsubscribe);
 
   handler.OnMessage(message, base::DoNothing());
@@ -237,7 +246,7 @@ TEST(SmsFetchRequestHandlerTest, AskUserPermissionOnReceive) {
 
   testing::Mock::VerifyAndClear(&handler);
   EXPECT_CALL(handler, AskUserPermission);
-  handler.task_environment().FastForwardBy(base::TimeDelta::FromSeconds(1));
+  handler.task_environment().FastForwardBy(base::Seconds(1));
 }
 
 TEST(SmsFetchRequestHandlerTest, SendSuccessMessageOnConfirm) {
@@ -256,7 +265,7 @@ TEST(SmsFetchRequestHandlerTest, SendSuccessMessageOnConfirm) {
   base::RunLoop loop;
 
   SmsFetcher::Subscriber* subscriber;
-  EXPECT_CALL(fetcher, Subscribe(_, _)).WillOnce(SaveArg<1>(&subscriber));
+  EXPECT_CALL(fetcher, Subscribe(_, _)).WillOnce(SavePtrToArg<1>(&subscriber));
   EXPECT_CALL(fetcher, Unsubscribe);
 
   handler.OnMessage(
@@ -289,7 +298,7 @@ TEST(SmsFetchRequestHandlerTest, SendFailureMessageOnDismiss) {
   base::RunLoop loop;
 
   SmsFetcher::Subscriber* subscriber;
-  EXPECT_CALL(fetcher, Subscribe(_, _)).WillOnce(SaveArg<1>(&subscriber));
+  EXPECT_CALL(fetcher, Subscribe(_, _)).WillOnce(SavePtrToArg<1>(&subscriber));
   EXPECT_CALL(fetcher, Unsubscribe);
 
   handler.OnMessage(
@@ -333,7 +342,7 @@ TEST(SmsFetchRequestHandlerTest, EmbeddedFrameConfirm) {
   base::RunLoop loop;
 
   SmsFetcher::Subscriber* subscriber;
-  EXPECT_CALL(fetcher, Subscribe(_, _)).WillOnce(SaveArg<1>(&subscriber));
+  EXPECT_CALL(fetcher, Subscribe(_, _)).WillOnce(SavePtrToArg<1>(&subscriber));
   EXPECT_CALL(fetcher, Unsubscribe(_, _));
 
   handler.OnMessage(
@@ -381,7 +390,7 @@ TEST(SmsFetchRequestHandlerTest, EmbeddedFrameDismiss) {
   base::RunLoop loop;
 
   SmsFetcher::Subscriber* subscriber;
-  EXPECT_CALL(fetcher, Subscribe(_, _)).WillOnce(SaveArg<1>(&subscriber));
+  EXPECT_CALL(fetcher, Subscribe(_, _)).WillOnce(SavePtrToArg<1>(&subscriber));
   EXPECT_CALL(fetcher, Unsubscribe(_, _));
 
   handler.OnMessage(

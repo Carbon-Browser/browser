@@ -13,11 +13,12 @@
 #include "ash/wallpaper/wallpaper_constants.h"
 #include "ash/wm/lock_state_observer.h"
 #include "ash/wm/session_state_animator.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/timer/elapsed_timer.h"
 #include "base/timer/timer.h"
+#include "components/prefs/pref_registry_simple.h"
+#include "components/prefs/pref_service.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/aura/window_tree_host_observer.h"
 
@@ -52,8 +53,15 @@ class ASH_EXPORT LockStateController : public aura::WindowTreeHostObserver,
   // pre-lock hiding animation.
   static const int kPreLockContainersMask;
 
-  explicit LockStateController(ShutdownController* shutdown_controller);
+  LockStateController(ShutdownController* shutdown_controller,
+                      PrefService* local_state);
+
+  LockStateController(const LockStateController&) = delete;
+  LockStateController& operator=(const LockStateController&) = delete;
+
   ~LockStateController() override;
+
+  static void RegisterPrefs(PrefRegistrySimple* registry);
 
   void AddObserver(LockStateObserver* observer);
   void RemoveObserver(LockStateObserver* observer);
@@ -77,6 +85,9 @@ class ASH_EXPORT LockStateController : public aura::WindowTreeHostObserver,
   // Cancels locking and reverts lock animation.
   void CancelLockAnimation();
 
+  // Cancels unlock animation.
+  void CancelUnlockAnimation();
+
   // Returns true if we are within cancellable shutdown timeframe.
   bool CanCancelShutdownAnimation();
 
@@ -90,7 +101,7 @@ class ASH_EXPORT LockStateController : public aura::WindowTreeHostObserver,
   // Called when ScreenLocker is ready to close, but not yet destroyed.
   // Can be used to display "hiding" animations on unlock.
   // |callback| will be called when all animations are done.
-  void OnLockScreenHide(base::OnceClosure callback);
+  void OnLockScreenHide(SessionStateAnimator::AnimationCallback callback);
 
   // Sets up the callback that should be called once lock animation is finished.
   // Callback is guaranteed to be called once and then discarded.
@@ -136,7 +147,8 @@ class ASH_EXPORT LockStateController : public aura::WindowTreeHostObserver,
                         bool request_lock_on_completion);
   void StartPostLockAnimation();
   // This method calls |callback| when animation completes.
-  void StartUnlockAnimationBeforeUIDestroyed(base::OnceClosure callback);
+  void StartUnlockAnimationBeforeUIDestroyed(
+      SessionStateAnimator::AnimationCallback callback);
   void StartUnlockAnimationAfterUIDestroyed();
 
   // These methods are called when corresponding animation completes.
@@ -180,6 +192,9 @@ class ASH_EXPORT LockStateController : public aura::WindowTreeHostObserver,
   // Indicates that controller displays lock animation.
   bool animating_lock_ = false;
 
+  // Indicates that controller displays unlock animation.
+  bool animating_unlock_ = false;
+
   // Indicates whether post lock animation should be immediate.
   bool post_lock_immediate_animation_ = false;
 
@@ -214,9 +229,10 @@ class ASH_EXPORT LockStateController : public aura::WindowTreeHostObserver,
 
   base::ObserverList<LockStateObserver>::Unchecked observers_;
 
-  base::WeakPtrFactory<LockStateController> weak_ptr_factory_{this};
+  // To access the pref kLoginShutdownTimestampPrefName
+  PrefService* local_state_;
 
-  DISALLOW_COPY_AND_ASSIGN(LockStateController);
+  base::WeakPtrFactory<LockStateController> weak_ptr_factory_{this};
 };
 
 }  // namespace ash

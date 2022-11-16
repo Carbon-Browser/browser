@@ -15,8 +15,8 @@
 
 #include "base/memory/ref_counted.h"
 #include "base/strings/string_piece.h"
+#include "net/base/hash_value.h"
 #include "net/base/net_export.h"
-#include "net/cert/x509_cert_types.h"
 
 namespace net {
 
@@ -114,10 +114,10 @@ class NET_EXPORT CRLSet : public base::RefCountedThreadSafe<CRLSet> {
 
   friend class base::RefCountedThreadSafe<CRLSet>;
 
-  uint32_t sequence_;
+  uint32_t sequence_ = 0;
   // not_after_ contains the time, in UNIX epoch seconds, after which the
   // CRLSet should be considered stale, or 0 if no such time was given.
-  uint64_t not_after_;
+  uint64_t not_after_ = 0;
   // crls_ is a map from the SHA-256 hash of an X.501 subject name to a list
   // of revoked serial numbers.
   CRLList crls_;

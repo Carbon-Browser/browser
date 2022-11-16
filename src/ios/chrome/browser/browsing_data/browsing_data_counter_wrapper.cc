@@ -13,7 +13,7 @@
 #include "components/browsing_data/core/counters/passwords_counter.h"
 #include "components/browsing_data/core/pref_names.h"
 #include "components/keyed_service/core/service_access_type.h"
-#include "components/password_manager/core/browser/password_store.h"
+#include "components/password_manager/core/browser/password_store_interface.h"
 #include "components/prefs/pref_service.h"
 #include "components/sync/driver/sync_service.h"
 #include "ios/chrome/browser/browser_state/chrome_browser_state.h"
@@ -28,7 +28,7 @@
 namespace {
 
 // Creates a new instance of BrowsingDataCounter that is counting the data
-// for |browser_state| related to a given deletion preference |pref_name|.
+// for `browser_state` related to a given deletion preference `pref_name`.
 std::unique_ptr<browsing_data::BrowsingDataCounter>
 CreateCounterForBrowserStateAndPref(ChromeBrowserState* browser_state,
                                     base::StringPiece pref_name) {

@@ -80,7 +80,7 @@ class MediaSessionControllersManagerTest
     RenderViewHostImplTestHarness::SetUp();
 
     GlobalRenderFrameHostId frame_routing_id =
-        contents()->GetMainFrame()->GetGlobalId();
+        contents()->GetPrimaryMainFrame()->GetGlobalId();
     media_player_id_ = MediaPlayerId(frame_routing_id, 1);
     media_player_id2_ = MediaPlayerId(frame_routing_id, 2);
     manager_ = std::make_unique<MediaSessionControllersManager>(contents());
@@ -151,7 +151,7 @@ TEST_P(MediaSessionControllersManagerTest, RenderFrameDeletedRemovesHost) {
   EXPECT_TRUE(manager_->RequestPlay(media_player_id_));
   ASSERT_EQ(media_session()->IsActive(), IsMediaSessionEnabled());
 
-  manager_->RenderFrameDeleted(contents()->GetMainFrame());
+  manager_->RenderFrameDeleted(contents()->GetPrimaryMainFrame());
   EXPECT_FALSE(media_session()->IsActive());
 }
 
@@ -206,7 +206,7 @@ TEST_P(MediaSessionControllersManagerTest, PositionState) {
             *media_session());
 
     media_session::MediaPosition expected_position(
-        /*playback_rate=*/0.0, /*duration=*/base::TimeDelta::FromSeconds(10),
+        /*playback_rate=*/0.0, /*duration=*/base::Seconds(10),
         /*position=*/base::TimeDelta(), /*end_of_media=*/false);
 
     manager_->OnMediaPositionStateChanged(media_player_id_, expected_position);
@@ -241,7 +241,7 @@ TEST_P(MediaSessionControllersManagerTest, MultiplePlayersWithPositionState) {
       /*playback_rate=*/1.0, /*duration=*/base::TimeDelta(),
       /*position=*/base::TimeDelta(), /*end_of_media=*/false);
   media_session::MediaPosition expected_position2(
-      /*playback_rate=*/0.0, /*duration=*/base::TimeDelta::FromSeconds(10),
+      /*playback_rate=*/0.0, /*duration=*/base::Seconds(10),
       /*position=*/base::TimeDelta(), /*end_of_media=*/false);
 
   media_session::test::MockMediaSessionMojoObserver observer(*media_session());
@@ -260,7 +260,7 @@ TEST_P(MediaSessionControllersManagerTest, MultiplePlayersWithPositionState) {
 
   // Change the position of the second player.
   media_session::MediaPosition new_position(
-      /*playback_rate=*/0.0, /*duration=*/base::TimeDelta::FromSeconds(20),
+      /*playback_rate=*/0.0, /*duration=*/base::Seconds(20),
       /*position=*/base::TimeDelta(), /*end_of_media=*/false);
   manager_->OnMediaPositionStateChanged(media_player_id2_, new_position);
 

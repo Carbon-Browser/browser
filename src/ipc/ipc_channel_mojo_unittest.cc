@@ -17,8 +17,8 @@
 #include "base/files/file.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/location.h"
-#include "base/macros.h"
 #include "base/memory/platform_shared_memory_region.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/memory/shared_memory_mapping.h"
 #include "base/memory/unsafe_shared_memory_region.h"
@@ -27,8 +27,8 @@
 #include "base/path_service.h"
 #include "base/pickle.h"
 #include "base/run_loop.h"
-#include "base/single_thread_task_runner.h"
 #include "base/synchronization/waitable_event.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_io_thread.h"
@@ -56,7 +56,7 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
-#if defined(OS_POSIX) || defined(OS_FUCHSIA)
+#if BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
 #include "base/file_descriptor_posix.h"
 #include "ipc/ipc_platform_file_attachment_posix.h"
 #endif
@@ -122,7 +122,7 @@ class TestListenerBase : public IPC::Listener {
   }
 
  private:
-  IPC::Sender* sender_ = nullptr;
+  raw_ptr<IPC::Sender> sender_ = nullptr;
   base::OnceClosure quit_closure_;
 };
 
@@ -415,7 +415,7 @@ class HandleSendingHelper {
               GetSendingFileContent());
   }
 
-#if defined(OS_POSIX) || defined(OS_FUCHSIA)
+#if BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
   static base::FilePath GetSendingFilePath(const base::FilePath& dir_path) {
     return dir_path.Append("ListenerThatExpectsFile.txt");
   }
@@ -751,7 +751,7 @@ class ListenerSendingAssociatedMessages : public IPC::Listener {
  private:
   void OnQuitAck() { std::move(quit_closure_).Run(); }
 
-  IPC::Channel* channel_ = nullptr;
+  raw_ptr<IPC::Channel> channel_ = nullptr;
   mojo::AssociatedRemote<IPC::mojom::SimpleTestDriver> driver_;
   base::OnceClosure quit_closure_;
 };
@@ -795,6 +795,9 @@ class ChannelProxyRunner {
                         base::WaitableEvent::InitialState::NOT_SIGNALED) {
   }
 
+  ChannelProxyRunner(const ChannelProxyRunner&) = delete;
+  ChannelProxyRunner& operator=(const ChannelProxyRunner&) = delete;
+
   void CreateProxy(IPC::Listener* listener) {
     io_thread_.StartWithOptions(
         base::Thread::Options(base::MessagePumpType::IO, 0));
@@ -826,8 +829,6 @@ class ChannelProxyRunner {
   base::Thread io_thread_;
   base::WaitableEvent never_signaled_;
   std::unique_ptr<IPC::ChannelProxy> proxy_;
-
-  DISALLOW_COPY_AND_ASSIGN(ChannelProxyRunner);
 };
 
 class IPCChannelProxyMojoTest : public IPCChannelMojoTestBase {
@@ -1165,6 +1166,10 @@ class ListenerWithSyncAssociatedInterface
 class SyncReplyReader : public IPC::MessageReplyDeserializer {
  public:
   explicit SyncReplyReader(int32_t* storage) : storage_(storage) {}
+
+  SyncReplyReader(const SyncReplyReader&) = delete;
+  SyncReplyReader& operator=(const SyncReplyReader&) = delete;
+
   ~SyncReplyReader() override = default;
 
  private:
@@ -1176,9 +1181,7 @@ class SyncReplyReader : public IPC::MessageReplyDeserializer {
     return true;
   }
 
-  int32_t* storage_;
-
-  DISALLOW_COPY_AND_ASSIGN(SyncReplyReader);
+  raw_ptr<int32_t> storage_;
 };
 
 TEST_F(IPCChannelProxyMojoTest, SyncAssociatedInterface) {
@@ -1227,6 +1230,10 @@ class SimpleTestClientImpl : public IPC::mojom::SimpleTestClient,
                              public IPC::Listener {
  public:
   SimpleTestClientImpl() = default;
+
+  SimpleTestClientImpl(const SimpleTestClientImpl&) = delete;
+  SimpleTestClientImpl& operator=(const SimpleTestClientImpl&) = delete;
+
   ~SimpleTestClientImpl() override = default;
 
   void set_driver(IPC::mojom::SimpleTestDriver* driver) { driver_ = driver; }
@@ -1291,8 +1298,6 @@ class SimpleTestClientImpl : public IPC::mojom::SimpleTestClient,
   IPC::Sender* sync_sender_ = nullptr;
   IPC::mojom::SimpleTestDriver* driver_ = nullptr;
   std::unique_ptr<base::RunLoop> run_loop_;
-
-  DISALLOW_COPY_AND_ASSIGN(SimpleTestClientImpl);
 };
 
 DEFINE_IPC_CHANNEL_MOJO_TEST_CLIENT_WITH_CUSTOM_FIXTURE(SyncAssociatedInterface,
@@ -1388,6 +1393,11 @@ class ExpectValueSequenceListener : public IPC::Listener {
                               base::OnceClosure quit_closure)
       : expected_values_(expected_values),
         quit_closure_(std::move(quit_closure)) {}
+
+  ExpectValueSequenceListener(const ExpectValueSequenceListener&) = delete;
+  ExpectValueSequenceListener& operator=(const ExpectValueSequenceListener&) =
+      delete;
+
   ~ExpectValueSequenceListener() override = default;
 
   // IPC::Listener:
@@ -1404,10 +1414,8 @@ class ExpectValueSequenceListener : public IPC::Listener {
   }
 
  private:
-  base::queue<int32_t>* expected_values_;
+  raw_ptr<base::queue<int32_t>> expected_values_;
   base::OnceClosure quit_closure_;
-
-  DISALLOW_COPY_AND_ASSIGN(ExpectValueSequenceListener);
 };
 
 DEFINE_IPC_CHANNEL_MOJO_TEST_CLIENT_WITH_CUSTOM_FIXTURE(CreatePausedClient,
@@ -1478,7 +1486,7 @@ DEFINE_IPC_CHANNEL_MOJO_TEST_CLIENT_WITH_CUSTOM_FIXTURE(DropAssociatedRequest,
   DestroyProxy();
 }
 
-#if !defined(OS_APPLE)
+#if !BUILDFLAG(IS_APPLE)
 // TODO(wez): On Mac we need to set up a MachPortBroker before we can transfer
 // Mach ports (which underpin Sharedmemory on Mac) across IPC.
 
@@ -1602,9 +1610,9 @@ DEFINE_IPC_CHANNEL_MOJO_TEST_CLIENT(
 
   Close();
 }
-#endif  // !defined(OS_APPLE)
+#endif  // !BUILDFLAG(IS_APPLE)
 
-#if defined(OS_POSIX) || defined(OS_FUCHSIA)
+#if BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
 
 class ListenerThatExpectsFile : public TestListenerBase {
  public:
@@ -1703,9 +1711,9 @@ DEFINE_IPC_CHANNEL_MOJO_TEST_CLIENT(
   Close();
 }
 
-#endif  // defined(OS_POSIX) || defined(OS_FUCHSIA)
+#endif  // BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
 
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 
 const base::ProcessId kMagicChildId = 54321;
 
@@ -1725,6 +1733,8 @@ class ListenerThatVerifiesPeerPid : public TestListenerBase {
   }
 };
 
+// The global PID is only used on systems that use the zygote. Hence, this
+// test is disabled on other platforms.
 TEST_F(IPCChannelMojoTest, VerifyGlobalPid) {
   Init("IPCChannelMojoTestVerifyGlobalPidClient");
 
@@ -1752,6 +1762,6 @@ DEFINE_IPC_CHANNEL_MOJO_TEST_CLIENT(IPCChannelMojoTestVerifyGlobalPidClient) {
   Close();
 }
 
-#endif  // defined(OS_LINUX) || defined(OS_CHROMEOS)
+#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 
 }  // namespace

@@ -10,9 +10,10 @@
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/check_op.h"
+#include "base/command_line.h"
 #include "base/location.h"
 #include "base/run_loop.h"
-#include "base/sequenced_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/sequenced_task_runner_handle.h"
 #include "mojo/public/cpp/platform/platform_channel.h"
 #include "mojo/public/cpp/system/invitation.h"
@@ -102,13 +103,14 @@ void MojoChromePromptIPC::InitializeChromePromptPtr() {
   mojo::ScopedMessagePipeHandle message_pipe_handle =
       incoming_invitation.ExtractMessagePipe(chrome_mojo_pipe_token_);
 
+  mojo::PendingRemote<chrome_cleaner::mojom::ChromePrompt> pending_remote(
+      std::move(message_pipe_handle), /*version=*/0);
   chrome_prompt_service_ =
-      std::make_unique<chrome_cleaner::mojom::ChromePromptPtr>();
-  chrome_prompt_service_->Bind(chrome_cleaner::mojom::ChromePromptPtrInfo(
-      std::move(message_pipe_handle), 0));
+      std::make_unique<mojo::Remote<chrome_cleaner::mojom::ChromePrompt>>(
+          std::move(pending_remote));
   // No need to retain this object, since it will live until the process
   // finishes.
-  chrome_prompt_service_->set_connection_error_handler(base::BindOnce(
+  chrome_prompt_service_->set_disconnect_handler(base::BindOnce(
       &MojoChromePromptIPC::OnConnectionError, base::Unretained(this)));
   state_ = State::kWaitingForScanResults;
 }

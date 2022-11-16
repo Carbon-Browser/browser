@@ -34,7 +34,7 @@ namespace device {
 namespace {
 
 constexpr auto kTestCableVersion = CableDiscoveryData::Version::V1;
-#if defined(OS_WIN) || defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 constexpr auto kTestCableVersionNumber = 1;
 #endif
 
@@ -61,7 +61,7 @@ constexpr CableSessionPreKeyArray kTestSessionPreKey = {
      0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}};
 
 // TODO(https://crbug.com/837088): Add support for multiple EIDs on Windows.
-#if !defined(OS_WIN)
+#if !BUILDFLAG(IS_WIN)
 constexpr CableEidArray kSecondaryClientEid = {
     {0x15, 0x14, 0x13, 0x12, 0x11, 0x10, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04,
      0x03, 0x02, 0x01, 0x00}};
@@ -77,7 +77,7 @@ constexpr CableSessionPreKeyArray kSecondarySessionPreKey = {
     {0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd,
      0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd,
      0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd}};
-#endif  // !defined(OS_WIN)
+#endif  // !BUILDFLAG(IS_WIN)
 
 // Below constants are used to construct MockBluetoothDevice for testing.
 constexpr char kTestBleDeviceAddress[] = "11:12:13:14:15:16";
@@ -100,14 +100,14 @@ MATCHER_P2(IsAdvertisementContent,
            expected_client_eid,
            expected_uuid_formatted_client_eid,
            "") {
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   const auto uuid_list = arg->service_uuids();
   return std::any_of(uuid_list->begin(), uuid_list->end(),
                      [this](const auto& uuid) {
                        return uuid == expected_uuid_formatted_client_eid;
                      });
 
-#elif defined(OS_WIN)
+#elif BUILDFLAG(IS_WIN)
   const auto manufacturer_data = arg->manufacturer_data();
   const auto manufacturer_data_value = manufacturer_data->find(0x00E0);
 
@@ -124,7 +124,7 @@ MATCHER_P2(IsAdvertisementContent,
                     manufacturer_data_payload.end(),
                     expected_client_eid.begin(), expected_client_eid.end());
 
-#elif defined(OS_LINUX) || defined(OS_CHROMEOS)
+#elif BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   const auto service_data = arg->service_data();
   const auto service_data_with_uuid = service_data->find(kGoogleCableUUID128);
 
@@ -224,22 +224,6 @@ class CableMockAdapter : public MockBluetoothAdapter {
       observer.DeviceAdded(this, mock_device_ptr);
   }
 
-  void AddNewTestAppleBluetoothDevice(
-      base::span<const uint8_t, kCableEphemeralIdSize> authenticator_eid) {
-    auto mock_device = CreateTestBluetoothDevice();
-    // Apple doesn't allow advertising service data, so we advertise a 16 bit
-    // UUID plus the EID converted into 128 bit UUID.
-    mock_device->AddUUID(BluetoothUUID("fde2"));
-    mock_device->AddUUID(BluetoothUUID(
-        fido_parsing_utils::ConvertBytesToUuid(authenticator_eid)));
-
-    auto* mock_device_ptr = mock_device.get();
-    AddMockDevice(std::move(mock_device));
-
-    for (auto& observer : GetObservers())
-      observer.DeviceAdded(this, mock_device_ptr);
-  }
-
   void ExpectRegisterAdvertisementWithResponse(
       bool simulate_success,
       base::span<const uint8_t> expected_client_eid,
@@ -278,19 +262,13 @@ class CableMockAdapter : public MockBluetoothAdapter {
   }
 
   void ExpectDiscoveryWithScanCallback(
-      base::span<const uint8_t, kCableEphemeralIdSize> eid,
-      bool is_apple_device = false) {
+      base::span<const uint8_t, kCableEphemeralIdSize> eid) {
     EXPECT_CALL(*this, StartScanWithFilter_(_, _))
-        .WillOnce(
-            ::testing::WithArg<1>([this, eid, is_apple_device](auto& callback) {
-              std::move(callback).Run(
-                  false, device::UMABluetoothDiscoverySessionOutcome::SUCCESS);
-              if (is_apple_device) {
-                AddNewTestAppleBluetoothDevice(eid);
-              } else {
-                AddNewTestBluetoothDevice(eid);
-              }
-            }));
+        .WillOnce(::testing::WithArg<1>([this, eid](auto& callback) {
+          std::move(callback).Run(
+              false, device::UMABluetoothDiscoverySessionOutcome::SUCCESS);
+          AddNewTestBluetoothDevice(eid);
+        }));
   }
 
  protected:
@@ -407,26 +385,6 @@ TEST_F(FidoCableDiscoveryTest, TestDiscoveryFindsNewDevice) {
   task_environment_.FastForwardUntilNoTasksRemain();
 }
 
-// Tests successful discovery flow for Apple Cable device.
-TEST_F(FidoCableDiscoveryTest, TestDiscoveryFindsNewAppleDevice) {
-  auto cable_discovery = CreateDiscovery();
-  NiceMock<MockFidoDiscoveryObserver> mock_observer;
-  EXPECT_CALL(mock_observer,
-              DiscoveryStarted(cable_discovery.get(), true,
-                               std::vector<FidoAuthenticator*>()));
-  EXPECT_CALL(mock_observer, AuthenticatorAdded(_, _));
-  cable_discovery->set_observer(&mock_observer);
-
-  auto mock_adapter = CableMockAdapter::MakePoweredOn();
-  mock_adapter->ExpectDiscoveryWithScanCallback(kAuthenticatorEid, true);
-  mock_adapter->ExpectRegisterAdvertisementWithResponse(
-      true /* simulate_success */, kClientEid, kUuidFormattedClientEid);
-
-  BluetoothAdapterFactory::SetAdapterForTesting(mock_adapter);
-  cable_discovery->Start();
-  task_environment_.FastForwardUntilNoTasksRemain();
-}
-
 // Tests a scenario where upon broadcasting advertisement and scanning, client
 // discovers a device with an incorrect authenticator EID. Observer::AddDevice()
 // must not be called.
@@ -452,7 +410,7 @@ TEST_F(FidoCableDiscoveryTest, TestDiscoveryFindsIncorrectDevice) {
 // not applicable.
 // TODO(https://crbug.com/837088): Support multiple EIDs on Windows and enable
 // these tests.
-#if !defined(OS_WIN)
+#if !BUILDFLAG(IS_WIN)
 // Tests Cable discovery flow when multiple(2) sets of client/authenticator EIDs
 // are passed on from the relying party. We should expect 2 invocations of
 // BluetoothAdapter::RegisterAdvertisement().
@@ -554,7 +512,7 @@ TEST_F(FidoCableDiscoveryTest, TestDiscoveryWithAdvertisementFailures) {
   task_environment_.FastForwardUntilNoTasksRemain();
   EXPECT_TRUE(cable_discovery->AdvertisementsForTesting().empty());
 }
-#endif  // !defined(OS_WIN)
+#endif  // !BUILDFLAG(IS_WIN)
 
 TEST_F(FidoCableDiscoveryTest, TestUnregisterAdvertisementUponDestruction) {
   auto cable_discovery = CreateDiscovery();

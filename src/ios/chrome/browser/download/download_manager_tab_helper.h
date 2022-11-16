@@ -9,7 +9,6 @@
 
 #import <Foundation/Foundation.h>
 
-#include "base/macros.h"
 #include "ios/web/public/download/download_task_observer.h"
 #include "ios/web/public/web_state_observer.h"
 #import "ios/web/public/web_state_user_data.h"
@@ -26,12 +25,10 @@ class DownloadManagerTabHelper
       public web::WebStateObserver,
       public web::DownloadTaskObserver {
  public:
-  ~DownloadManagerTabHelper() override;
+  DownloadManagerTabHelper(const DownloadManagerTabHelper&) = delete;
+  DownloadManagerTabHelper& operator=(const DownloadManagerTabHelper&) = delete;
 
-  // Creates TabHelper. |delegate| is not retained by TabHelper. |web_state|
-  // must not be null.
-  static void CreateForWebState(web::WebState* web_state,
-                                id<DownloadManagerTabHelperDelegate> delegate);
+  ~DownloadManagerTabHelper() override;
 
   // Asynchronously downloads a file using the given |task|.
   virtual void Download(std::unique_ptr<web::DownloadTask> task);
@@ -40,10 +37,12 @@ class DownloadManagerTabHelper
   // cancelled.
   bool has_download_task() const { return task_.get(); }
 
+  // Set the delegate. The tab helper will no-op if the delegate is nil.
+  void SetDelegate(id<DownloadManagerTabHelperDelegate> delegate);
+
  protected:
   // Allow subclassing from DownloadManagerTabHelper for testing purposes.
-  DownloadManagerTabHelper(web::WebState* web_state,
-                           id<DownloadManagerTabHelperDelegate> delegate);
+  DownloadManagerTabHelper(web::WebState* web_state);
 
  private:
   friend class web::WebStateUserData<DownloadManagerTabHelper>;
@@ -66,10 +65,9 @@ class DownloadManagerTabHelper
   web::WebState* web_state_ = nullptr;
   __weak id<DownloadManagerTabHelperDelegate> delegate_ = nil;
   std::unique_ptr<web::DownloadTask> task_;
+  bool delegate_started_ = false;
 
   WEB_STATE_USER_DATA_KEY_DECL();
-
-  DISALLOW_COPY_AND_ASSIGN(DownloadManagerTabHelper);
 };
 
 #endif  // IOS_CHROME_BROWSER_DOWNLOAD_DOWNLOAD_MANAGER_TAB_HELPER_H_

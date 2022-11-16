@@ -45,7 +45,7 @@ bool ClipChainHasCompositedTransformTo(
 }
 }  // namespace
 
-const PropertyTreeState& PropertyTreeState::Root() {
+const PropertyTreeState& PropertyTreeStateOrAlias::Root() {
   DEFINE_STATIC_LOCAL(
       const PropertyTreeState, root,
       (TransformPaintPropertyNode::Root(), ClipPaintPropertyNode::Root(),
@@ -53,8 +53,9 @@ const PropertyTreeState& PropertyTreeState::Root() {
   return root;
 }
 
-bool PropertyTreeState::Changed(PaintPropertyChangeType change,
-                                const PropertyTreeState& relative_to) const {
+bool PropertyTreeStateOrAlias::Changed(
+    PaintPropertyChangeType change,
+    const PropertyTreeState& relative_to) const {
   return Transform().Changed(change, relative_to.Transform()) ||
          Clip().Changed(change, relative_to, &Transform()) ||
          Effect().Changed(change, relative_to, &Transform());
@@ -74,13 +75,18 @@ absl::optional<PropertyTreeState> PropertyTreeState::CanUpcastWith(
   // must be within compositing boundary of the home transform space.
   DCHECK_EQ(&Effect(), &guest.Effect());
 
-  if (Transform().IsBackfaceHidden() != guest.Transform().IsBackfaceHidden())
-    return absl::nullopt;
-
-  auto* upcast_transform =
-      NonCompositedLowestCommonAncestor(Transform(), guest.Transform());
-  if (!upcast_transform)
-    return absl::nullopt;
+  const TransformPaintPropertyNode* upcast_transform = nullptr;
+  // Fast-path for the common case of the transform state being equal.
+  if (&Transform() == &guest.Transform()) {
+    upcast_transform = &Transform();
+  } else {
+    if (Transform().IsBackfaceHidden() != guest.Transform().IsBackfaceHidden())
+      return absl::nullopt;
+    upcast_transform =
+        NonCompositedLowestCommonAncestor(Transform(), guest.Transform());
+    if (!upcast_transform)
+      return absl::nullopt;
+  }
 
   const auto& clip_lca = Clip().LowestCommonAncestor(guest.Clip()).Unalias();
   if (ClipChainHasCompositedTransformTo(Clip(), clip_lca, *upcast_transform) ||

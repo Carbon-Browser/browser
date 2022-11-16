@@ -10,7 +10,7 @@
 #include <string>
 
 #include "base/callback_forward.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/threading/thread_checker.h"
@@ -129,6 +129,9 @@ class DriveUploader : public DriveUploaderInterface {
       const scoped_refptr<base::TaskRunner>& blocking_task_runner,
       mojo::PendingRemote<device::mojom::WakeLockProvider> wake_lock_provider);
 
+  DriveUploader(const DriveUploader&) = delete;
+  DriveUploader& operator=(const DriveUploader&) = delete;
+
   ~DriveUploader() override;
 
   // DriveUploaderInterface overrides.
@@ -237,7 +240,7 @@ class DriveUploader : public DriveUploaderInterface {
 
   // The lifetime of this object should be guaranteed to exceed that of the
   // DriveUploader instance.
-  DriveServiceInterface* drive_service_;  // Not owned by this class.
+  raw_ptr<DriveServiceInterface> drive_service_;  // Not owned by this class.
 
   scoped_refptr<base::TaskRunner> blocking_task_runner_;
   scoped_refptr<RefCountedBatchRequest> current_batch_request_;
@@ -247,7 +250,6 @@ class DriveUploader : public DriveUploaderInterface {
   // Note: This should remain the last member so it'll be destroyed and
   // invalidate its weak pointers before any other members are destroyed.
   base::WeakPtrFactory<DriveUploader> weak_ptr_factory_{this};
-  DISALLOW_COPY_AND_ASSIGN(DriveUploader);
 };
 
 }  // namespace drive

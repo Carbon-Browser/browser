@@ -20,10 +20,7 @@ const int HttpResponseBodyDrainer::kDrainBodyBufferSize;
 const int HttpResponseBodyDrainer::kTimeoutInSeconds;
 
 HttpResponseBodyDrainer::HttpResponseBodyDrainer(HttpStream* stream)
-    : stream_(stream),
-      next_state_(STATE_NONE),
-      total_read_(0),
-      session_(nullptr) {}
+    : stream_(stream) {}
 
 HttpResponseBodyDrainer::~HttpResponseBodyDrainer() = default;
 
@@ -33,9 +30,7 @@ void HttpResponseBodyDrainer::Start(HttpNetworkSession* session) {
   int rv = DoLoop(OK);
 
   if (rv == ERR_IO_PENDING) {
-    timer_.Start(FROM_HERE,
-                 base::TimeDelta::FromSeconds(kTimeoutInSeconds),
-                 this,
+    timer_.Start(FROM_HERE, base::Seconds(kTimeoutInSeconds), this,
                  &HttpResponseBodyDrainer::OnTimerFired);
     session_ = session;
     session->AddResponseDrainer(base::WrapUnique(this));

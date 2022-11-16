@@ -67,6 +67,10 @@ namespace content_settings {
 class CookieSettingsBase {
  public:
   CookieSettingsBase() = default;
+
+  CookieSettingsBase(const CookieSettingsBase&) = delete;
+  CookieSettingsBase& operator=(const CookieSettingsBase&) = delete;
+
   virtual ~CookieSettingsBase() = default;
 
   // Returns true if the cookie associated with |domain| should be deleted
@@ -139,9 +143,8 @@ class CookieSettingsBase {
   // cookie domain. The |cookie_domain| can be provided as the direct output of
   // CanonicalCookie::Domain(), i.e. any leading dot does not have to be
   // removed.
-  virtual void GetSettingForLegacyCookieAccess(
-      const std::string& cookie_domain,
-      ContentSetting* setting) const = 0;
+  virtual ContentSetting GetSettingForLegacyCookieAccess(
+      const std::string& cookie_domain) const = 0;
 
   // Returns whether a cookie should be attached regardless of its SameSite
   // value vs the request context.
@@ -191,8 +194,6 @@ class CookieSettingsBase {
       const GURL& first_party_url,
       bool is_third_party_request,
       content_settings::SettingSource* source) const = 0;
-
-  DISALLOW_COPY_AND_ASSIGN(CookieSettingsBase);
 };
 
 }  // namespace content_settings

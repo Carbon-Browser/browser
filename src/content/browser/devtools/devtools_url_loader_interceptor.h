@@ -80,10 +80,11 @@ class DevToolsURLLoaderInterceptor {
     AuthChallengeResponse(const std::u16string& username,
                           const std::u16string& password);
 
+    AuthChallengeResponse(const AuthChallengeResponse&) = delete;
+    AuthChallengeResponse& operator=(const AuthChallengeResponse&) = delete;
+
     const ResponseType response_type;
     const net::AuthCredentials credentials;
-
-    DISALLOW_COPY_AND_ASSIGN(AuthChallengeResponse);
   };
 
   struct Modifications {
@@ -161,13 +162,15 @@ class DevToolsURLLoaderInterceptor {
                 std::vector<Pattern> patterns,
                 RequestInterceptedCallback callback);
     FilterEntry(FilterEntry&&);
+
+    FilterEntry(const FilterEntry&) = delete;
+    FilterEntry& operator=(const FilterEntry&) = delete;
+
     ~FilterEntry();
 
     const base::UnguessableToken target_id;
     std::vector<Pattern> patterns;
     const RequestInterceptedCallback callback;
-
-    DISALLOW_COPY_AND_ASSIGN(FilterEntry);
   };
 
   using HandleAuthRequestCallback =
@@ -179,6 +182,11 @@ class DevToolsURLLoaderInterceptor {
                                 HandleAuthRequestCallback callback);
 
   explicit DevToolsURLLoaderInterceptor(RequestInterceptedCallback callback);
+
+  DevToolsURLLoaderInterceptor(const DevToolsURLLoaderInterceptor&) = delete;
+  DevToolsURLLoaderInterceptor& operator=(const DevToolsURLLoaderInterceptor&) =
+      delete;
+
   ~DevToolsURLLoaderInterceptor();
 
   void SetPatterns(std::vector<Pattern> patterns, bool handle_auth);
@@ -243,8 +251,6 @@ class DevToolsURLLoaderInterceptor {
   std::map<std::string, InterceptionJob*> jobs_;
 
   base::WeakPtrFactory<DevToolsURLLoaderInterceptor> weak_factory_;
-
-  DISALLOW_COPY_AND_ASSIGN(DevToolsURLLoaderInterceptor);
 };
 
 // The purpose of this class is to have a thin wrapper around

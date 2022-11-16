@@ -10,6 +10,7 @@
 #include <set>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "components/metrics/metrics_log_store.h"
 #include "components/metrics/metrics_log_uploader.h"
 #include "components/metrics/metrics_service_client.h"
@@ -29,11 +30,13 @@ class TestMetricsServiceClient : public MetricsServiceClient {
   ~TestMetricsServiceClient() override;
 
   // MetricsServiceClient:
+  variations::SyntheticTrialRegistry* GetSyntheticTrialRegistry() override;
   metrics::MetricsService* GetMetricsService() override;
   void SetMetricsClientId(const std::string& client_id) override;
   bool ShouldUploadMetricsForUserId(uint64_t user_id) override;
   int32_t GetProduct() override;
   std::string GetApplicationLocale() override;
+  const network_time::NetworkTimeTracker* GetNetworkTimeTracker() override;
   bool GetBrand(std::string* brand_code) override;
   SystemProfileProto::Channel GetChannel() override;
   bool IsExtendedStableChannel() override;
@@ -91,7 +94,7 @@ class TestMetricsServiceClient : public MetricsServiceClient {
   std::set<uint64_t> allowed_user_ids_;
 
   // A weak ref to the last created TestMetricsLogUploader.
-  TestMetricsLogUploader* uploader_ = nullptr;
+  raw_ptr<TestMetricsLogUploader> uploader_ = nullptr;
 };
 
 }  // namespace metrics

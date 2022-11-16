@@ -8,7 +8,6 @@
 #include <utility>
 #include <vector>
 
-#include "base/macros.h"
 #include "base/memory/scoped_refptr.h"
 #include "net/base/completion_once_callback.h"
 #include "net/base/host_port_pair.h"
@@ -84,6 +83,10 @@ class MockClientSocketHandleFactory {
             nullptr /* websocket_endpoint_lock_manager */),
         pool_(1, 1, &common_connect_job_params_) {}
 
+  MockClientSocketHandleFactory(const MockClientSocketHandleFactory&) = delete;
+  MockClientSocketHandleFactory& operator=(
+      const MockClientSocketHandleFactory&) = delete;
+
   // The created socket expects |expect_written| to be written to the socket,
   // and will respond with |return_to_read|. The test will fail if the expected
   // text is not written, or if all the bytes are not read.
@@ -108,8 +111,6 @@ class MockClientSocketHandleFactory {
   WebSocketMockClientSocketFactoryMaker socket_factory_maker_;
   const CommonConnectJobParams common_connect_job_params_;
   MockTransportClientSocketPool pool_;
-
-  DISALLOW_COPY_AND_ASSIGN(MockClientSocketHandleFactory);
 };
 
 class TestConnectDelegate : public WebSocketStream::ConnectDelegate {
@@ -199,10 +200,10 @@ class WebSocketHandshakeStreamCreateHelperTest
       case BASIC_HANDSHAKE_STREAM: {
         std::unique_ptr<ClientSocketHandle> socket_handle =
             socket_handle_factory_.CreateClientSocketHandle(
-                WebSocketStandardRequest(
-                    kPath, "www.example.org",
-                    url::Origin::Create(GURL(kOrigin)), "",
-                    WebSocketExtraHeadersToString(extra_request_headers)),
+                WebSocketStandardRequest(kPath, "www.example.org",
+                                         url::Origin::Create(GURL(kOrigin)),
+                                         /*send_additional_request_headers=*/{},
+                                         extra_request_headers),
                 WebSocketStandardResponse(
                     WebSocketExtraHeadersToString(extra_response_headers)));
 
@@ -216,9 +217,9 @@ class WebSocketHandshakeStreamCreateHelperTest
         static_cast<WebSocketBasicHandshakeStream*>(handshake.get())
             ->SetWebSocketKeyForTesting("dGhlIHNhbXBsZSBub25jZQ==");
 
-        int rv =
-            handshake->InitializeStream(&request_info, true, DEFAULT_PRIORITY,
-                                        net_log, CompletionOnceCallback());
+        handshake->RegisterRequest(&request_info);
+        int rv = handshake->InitializeStream(true, DEFAULT_PRIORITY, net_log,
+                                             CompletionOnceCallback());
         EXPECT_THAT(rv, IsOk());
 
         HttpResponseInfo response;
@@ -273,9 +274,10 @@ class WebSocketHandshakeStreamCreateHelperTest
         std::unique_ptr<WebSocketHandshakeStreamBase> handshake =
             create_helper.CreateHttp2Stream(spdy_session, {} /* dns_aliases */);
 
-        int rv = handshake->InitializeStream(
-            &request_info, true, DEFAULT_PRIORITY, NetLogWithSource(),
-            CompletionOnceCallback());
+        handshake->RegisterRequest(&request_info);
+        int rv = handshake->InitializeStream(true, DEFAULT_PRIORITY,
+                                             NetLogWithSource(),
+                                             CompletionOnceCallback());
         EXPECT_THAT(rv, IsOk());
 
         HttpResponseInfo response;

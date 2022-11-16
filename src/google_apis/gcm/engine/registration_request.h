@@ -13,7 +13,7 @@
 #include <vector>
 
 #include "base/callback.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "google_apis/gcm/base/gcm_export.h"
@@ -124,12 +124,17 @@ class GCM_EXPORT RegistrationRequest {
       scoped_refptr<base::SequencedTaskRunner> io_task_runner,
       GCMStatsRecorder* recorder,
       const std::string& source_to_record);
+
+  RegistrationRequest(const RegistrationRequest&) = delete;
+  RegistrationRequest& operator=(const RegistrationRequest&) = delete;
+
   ~RegistrationRequest();
 
   void Start();
 
   // Invoked from SimpleURLLoader.
-  void OnURLLoadComplete(const network::SimpleURLLoader* source,
+  void OnURLLoadComplete(const std::string& request_body,
+                         const network::SimpleURLLoader* source,
                          std::unique_ptr<std::string> body);
 
  private:
@@ -141,7 +146,8 @@ class GCM_EXPORT RegistrationRequest {
 
   // Parse the response returned by the URL loader into token, and returns the
   // status.
-  Status ParseResponse(const network::SimpleURLLoader* source,
+  Status ParseResponse(const std::string& request_body,
+                       const network::SimpleURLLoader* source,
                        std::unique_ptr<std::string> body,
                        std::string* token);
 
@@ -158,12 +164,10 @@ class GCM_EXPORT RegistrationRequest {
   const scoped_refptr<base::SequencedTaskRunner> io_task_runner_;
 
   // Recorder that records GCM activities for debugging purpose. Not owned.
-  GCMStatsRecorder* recorder_;
+  raw_ptr<GCMStatsRecorder> recorder_;
   std::string source_to_record_;
 
   base::WeakPtrFactory<RegistrationRequest> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(RegistrationRequest);
 };
 
 }  // namespace gcm

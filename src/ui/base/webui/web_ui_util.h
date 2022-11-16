@@ -37,7 +37,7 @@ std::string GetPngDataUrl(const unsigned char* data, size_t size);
 // an integer button and booleans alt key, ctrl key, meta key, and shift key
 // (in that order), starting at |start_index|.
 COMPONENT_EXPORT(UI_BASE)
-WindowOpenDisposition GetDispositionFromClick(const base::ListValue* args,
+WindowOpenDisposition GetDispositionFromClick(const base::Value::List& args,
                                               int start_index);
 
 // Parse a formatted scale factor string into float and sets to |scale_factor|.
@@ -68,6 +68,15 @@ void ParsePathAndScale(const GURL& url, std::string* path, float* scale_factor);
 COMPONENT_EXPORT(UI_BASE)
 void SetLoadTimeDataDefaults(const std::string& app_locale,
                              base::Value* localized_strings);
+// Helper function to set some default values (e.g., font family, size,
+// language, and text direction) into the given dictionary. Requires an
+// application locale (i.e. g_browser_process->GetApplicationLocale()).
+// TODO(https://crbug.com/1187023): Remove base::Value version above
+// once all callers have been converted to use this method.
+COMPONENT_EXPORT(UI_BASE)
+void SetLoadTimeDataDefaults(const std::string& app_locale,
+                             base::Value::Dict* localized_strings);
+
 COMPONENT_EXPORT(UI_BASE)
 void SetLoadTimeDataDefaults(const std::string& app_locale,
                              ui::TemplateReplacements* replacements);

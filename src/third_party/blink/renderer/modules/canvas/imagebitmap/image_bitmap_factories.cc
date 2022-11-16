@@ -35,7 +35,9 @@
 
 #include "base/location.h"
 #include "third_party/blink/public/platform/platform.h"
+#include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_image_bitmap_options.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_throw_dom_exception.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_union_blob_htmlcanvaselement_htmlimageelement_htmlvideoelement_imagebitmap_imagedata_offscreencanvas_svgimageelement_videoframe.h"
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
@@ -57,6 +59,8 @@
 #include "third_party/blink/renderer/platform/scheduler/public/post_cross_thread_task.h"
 #include "third_party/blink/renderer/platform/scheduler/public/thread.h"
 #include "third_party/blink/renderer/platform/scheduler/public/worker_pool.h"
+#include "third_party/blink/renderer/platform/wtf/cross_thread_copier_base.h"
+#include "third_party/blink/renderer/platform/wtf/cross_thread_copier_skia.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 #include "third_party/blink/renderer/platform/wtf/shared_buffer.h"
 #include "v8/include/v8.h"
@@ -77,6 +81,18 @@ enum CreateImageBitmapSource {
   kCreateImageBitmapSourceVideoFrame = 8,
   kMaxValue = kCreateImageBitmapSourceVideoFrame,
 };
+
+gfx::Rect NormalizedCropRect(int x, int y, int width, int height) {
+  if (width < 0) {
+    x = base::ClampAdd(x, width);
+    width = base::ClampSub(0, width);
+  }
+  if (height < 0) {
+    y = base::ClampAdd(y, height);
+    height = base::ClampSub(0, height);
+  }
+  return gfx::Rect(x, y, width, height);
+}
 
 }  // namespace
 
@@ -132,7 +148,7 @@ inline ImageBitmapSource* ToImageBitmapSourceInternal(
 ScriptPromise ImageBitmapFactories::CreateImageBitmapFromBlob(
     ScriptState* script_state,
     ImageBitmapSource* bitmap_source,
-    absl::optional<IntRect> crop_rect,
+    absl::optional<gfx::Rect> crop_rect,
     const ImageBitmapOptions* options) {
   DCHECK(script_state->ContextIsValid());
   ImageBitmapFactories& factory = From(*ExecutionContext::From(script_state));
@@ -154,8 +170,8 @@ ScriptPromise ImageBitmapFactories::CreateImageBitmap(
       ToImageBitmapSourceInternal(bitmap_source, options, false);
   if (!bitmap_source_internal)
     return ScriptPromise();
-  return CreateImageBitmap(script_state, bitmap_source_internal,
-                           absl::optional<IntRect>(), options, exception_state);
+  return CreateImageBitmap(script_state, bitmap_source_internal, absl::nullopt,
+                           options, exception_state);
 }
 
 ScriptPromise ImageBitmapFactories::CreateImageBitmap(
@@ -173,7 +189,7 @@ ScriptPromise ImageBitmapFactories::CreateImageBitmap(
       ToImageBitmapSourceInternal(bitmap_source, options, true);
   if (!bitmap_source_internal)
     return ScriptPromise();
-  absl::optional<IntRect> crop_rect = IntRect(sx, sy, sw, sh);
+  gfx::Rect crop_rect = NormalizedCropRect(sx, sy, sw, sh);
   return CreateImageBitmap(script_state, bitmap_source_internal, crop_rect,
                            options, exception_state);
 }
@@ -181,12 +197,12 @@ ScriptPromise ImageBitmapFactories::CreateImageBitmap(
 ScriptPromise ImageBitmapFactories::CreateImageBitmap(
     ScriptState* script_state,
     ImageBitmapSource* bitmap_source,
-    absl::optional<IntRect> crop_rect,
+    absl::optional<gfx::Rect> crop_rect,
     const ImageBitmapOptions* options,
     ExceptionState& exception_state) {
-  if (crop_rect && (crop_rect->Width() == 0 || crop_rect->Height() == 0)) {
+  if (crop_rect && (crop_rect->width() == 0 || crop_rect->height() == 0)) {
     exception_state.ThrowRangeError(String::Format(
-        "The crop rect %s is 0.", crop_rect->Width() ? "height" : "width"));
+        "The crop rect %s is 0.", crop_rect->width() ? "height" : "width"));
     return ScriptPromise();
   }
 
@@ -195,13 +211,13 @@ ScriptPromise ImageBitmapFactories::CreateImageBitmap(
                                      options);
   }
 
-  if (bitmap_source->BitmapSourceSize().Width() == 0 ||
-      bitmap_source->BitmapSourceSize().Height() == 0) {
+  if (bitmap_source->BitmapSourceSize().width() == 0 ||
+      bitmap_source->BitmapSourceSize().height() == 0) {
     exception_state.ThrowDOMException(
         DOMExceptionCode::kInvalidStateError,
         String::Format(
             "The source image %s is 0.",
-            bitmap_source->BitmapSourceSize().Width() ? "height" : "width"));
+            bitmap_source->BitmapSourceSize().width() ? "height" : "width"));
     return ScriptPromise();
   }
 
@@ -239,7 +255,7 @@ void ImageBitmapFactories::Trace(Visitor* visitor) const {
 
 ImageBitmapFactories::ImageBitmapLoader::ImageBitmapLoader(
     ImageBitmapFactories& factory,
-    absl::optional<IntRect> crop_rect,
+    absl::optional<gfx::Rect> crop_rect,
     ScriptState* script_state,
     const ImageBitmapOptions* options)
     : ExecutionContextLifecycleObserver(ExecutionContext::From(script_state)),
@@ -262,14 +278,25 @@ ImageBitmapFactories::ImageBitmapLoader::~ImageBitmapLoader() {
 
 void ImageBitmapFactories::ImageBitmapLoader::RejectPromise(
     ImageBitmapRejectionReason reason) {
+  CHECK(resolver_);
+  ScriptState* resolver_script_state = resolver_->GetScriptState();
+  if (!IsInParallelAlgorithmRunnable(resolver_->GetExecutionContext(),
+                                     resolver_script_state)) {
+    loader_.reset();
+    factory_->DidFinishLoading(this);
+    return;
+  }
+  ScriptState::Scope script_state_scope(resolver_script_state);
   switch (reason) {
     case kUndecodableImageBitmapRejectionReason:
-      resolver_->Reject(MakeGarbageCollected<DOMException>(
+      resolver_->Reject(V8ThrowDOMException::CreateOrEmpty(
+          resolver_script_state->GetIsolate(),
           DOMExceptionCode::kInvalidStateError,
           "The source image could not be decoded."));
       break;
     case kAllocationFailureImageBitmapRejectionReason:
-      resolver_->Reject(MakeGarbageCollected<DOMException>(
+      resolver_->Reject(V8ThrowDOMException::CreateOrEmpty(
+          resolver_script_state->GetIsolate(),
           DOMExceptionCode::kInvalidStateError,
           "The ImageBitmap could not be allocated."));
       break;

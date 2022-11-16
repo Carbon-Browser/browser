@@ -9,6 +9,7 @@
 #include <string>
 
 #include "base/files/file_path.h"
+#include "chrome/browser/ash/borealis/borealis_launch_options.h"
 
 class Profile;
 
@@ -21,6 +22,7 @@ class BorealisDiskManager;
 class BorealisEngagementMetrics;
 class BorealisGameModeController;
 class BorealisLifetimeObserver;
+class BorealisPowerController;
 class SelfActivationPermissionGranter;
 
 // An object to track information about the state of the Borealis VM.
@@ -37,6 +39,13 @@ class BorealisContext {
 
   Profile* profile() const { return profile_; }
 
+  const BorealisLaunchOptions::Options& launch_options() const {
+    return launch_options_;
+  }
+  void set_launch_options(BorealisLaunchOptions::Options launch_options) {
+    launch_options_ = std::move(launch_options);
+  }
+
   const std::string& vm_name() const { return vm_name_; }
   void set_vm_name(std::string vm_name) { vm_name_ = std::move(vm_name); }
 
@@ -47,6 +56,11 @@ class BorealisContext {
 
   const base::FilePath& disk_path() const { return disk_path_; }
   void set_disk_path(base::FilePath path) { disk_path_ = std::move(path); }
+
+  const base::FilePath& wayland_path() const { return wayland_path_; }
+  void set_wayland_path(base::FilePath path) {
+    wayland_path_ = std::move(path);
+  }
 
   BorealisDiskManager& get_disk_manager() { return *disk_manager_.get(); }
   void SetDiskManagerForTesting(
@@ -62,9 +76,11 @@ class BorealisContext {
   explicit BorealisContext(Profile* profile);
 
   Profile* const profile_;
+  BorealisLaunchOptions::Options launch_options_;
   std::string vm_name_;
   std::string container_name_;
   base::FilePath disk_path_;
+  base::FilePath wayland_path_;
   // This instance listens for the session to finish and issues an automatic
   // shutdown when it does.
   std::unique_ptr<BorealisLifetimeObserver> lifetime_observer_;
@@ -77,6 +93,8 @@ class BorealisContext {
   std::unique_ptr<BorealisEngagementMetrics> engagement_metrics_;
 
   std::unique_ptr<BorealisDiskManager> disk_manager_;
+
+  std::unique_ptr<BorealisPowerController> power_controller_;
 
   std::unique_ptr<SelfActivationPermissionGranter> self_activation_granter_;
 };

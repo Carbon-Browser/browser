@@ -5,35 +5,31 @@
 import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.m.js';
 import 'chrome://resources/cr_elements/cr_icons_css.m.js';
 import 'chrome://resources/cr_elements/shared_vars_css.m.js';
-import './shared_style.js';
+import './shared_style.css.js';
 import './strings.m.js';
 
 import {CrIconButtonElement} from 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.m.js';
-import {assert} from 'chrome://resources/js/assert.m.js';
+import {assert} from 'chrome://resources/js/assert_ts.js';
 import {isMac} from 'chrome://resources/js/cr.m.js';
 import {focusWithoutInk} from 'chrome://resources/js/cr/ui/focus_without_ink.m.js';
-import {StoreObserver} from 'chrome://resources/js/cr/ui/store.m.js';
 import {getFaviconForPageURL} from 'chrome://resources/js/icon.js';
 import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
-import {html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {selectItem} from './actions.js';
 import {BookmarksCommandManagerElement} from './command_manager.js';
 import {Command, MenuSource} from './constants.js';
-import {BookmarksStoreClientInterface, StoreClient} from './store_client.js';
-import {BookmarkNode, BookmarksPageState} from './types.js';
+import {getTemplate} from './item.html.js';
+import {StoreClientMixin} from './store_client_mixin.js';
+import {BookmarkNode} from './types.js';
 
-const BookmarksItemElementBase =
-    mixinBehaviors(StoreClient, PolymerElement) as {
-      new (): PolymerElement & BookmarksStoreClientInterface &
-      StoreObserver<BookmarksPageState>
-    };
+const BookmarksItemElementBase = StoreClientMixin(PolymerElement);
 
 export interface BookmarksItemElement {
   $: {
     icon: HTMLDivElement,
     menuButton: CrIconButtonElement,
-  }
+  };
 }
 
 export class BookmarksItemElement extends BookmarksItemElementBase {
@@ -42,7 +38,7 @@ export class BookmarksItemElement extends BookmarksItemElementBase {
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
   }
 
   static get properties() {
@@ -79,7 +75,7 @@ export class BookmarksItemElement extends BookmarksItemElementBase {
     ];
   }
 
-  ready() {
+  override ready() {
     super.ready();
 
     this.addEventListener('click', e => this.onClick_(e as MouseEvent));
@@ -96,19 +92,18 @@ export class BookmarksItemElement extends BookmarksItemElementBase {
         'touchstart', e => this.onTouchStart_(e as TouchEvent));
   }
 
-  connectedCallback() {
+  override connectedCallback() {
     super.connectedCallback();
-    this.watch('item_', state => {
-      return (state as BookmarksPageState).nodes[this.itemId];
-    });
-    this.watch('isSelectedItem_', state => {
-      return (state as BookmarksPageState).selection.items.has(this.itemId);
-    });
-    this.watch('isMultiSelect_', state => {
-      return (state as BookmarksPageState).selection.items.size > 1;
-    });
+    this.watch('item_', state => state.nodes[this.itemId]);
+    this.watch(
+        'isSelectedItem_', state => state.selection.items.has(this.itemId));
+    this.watch('isMultiSelect_', state => state.selection.items.size > 1);
 
     this.updateFromStore();
+  }
+
+  setIsSelectedItemForTesting(selected: boolean) {
+    this.isSelectedItem_ = selected;
   }
 
   focusMenuButton() {
@@ -126,7 +121,7 @@ export class BookmarksItemElement extends BookmarksItemElementBase {
     // Prevent context menu from appearing after a drag, but allow opening the
     // context menu through 2 taps
     const capabilities = (e as unknown as {
-                           sourceCapabilities: {firesTouchEvents?: boolean}
+                           sourceCapabilities: {firesTouchEvents?: boolean},
                          }).sourceCapabilities;
     if (capabilities && capabilities.firesTouchEvents &&
         this.lastTouchPoints_ !== 2) {
@@ -146,7 +141,7 @@ export class BookmarksItemElement extends BookmarksItemElementBase {
         y: e.clientY,
         source: MenuSource.ITEM,
         targetId: this.itemId,
-      }
+      },
     }));
   }
 
@@ -166,7 +161,7 @@ export class BookmarksItemElement extends BookmarksItemElementBase {
         targetElement: e.target,
         source: MenuSource.ITEM,
         targetId: this.itemId,
-      }
+      },
     }));
   }
 
@@ -226,7 +221,7 @@ export class BookmarksItemElement extends BookmarksItemElementBase {
     }
   }
 
-  private onDblClick_(e: MouseEvent) {
+  private onDblClick_(_e: MouseEvent) {
     if (!this.isSelectedItem_) {
       this.selectThisItem_();
     }
@@ -294,6 +289,12 @@ export class BookmarksItemElement extends BookmarksItemElementBase {
    */
   private isMultiSelectMenu_(): boolean {
     return this.isSelectedItem_ && this.isMultiSelect_;
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'bookmarks-item': BookmarksItemElement;
   }
 }
 

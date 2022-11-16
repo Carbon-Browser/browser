@@ -55,7 +55,7 @@ struct StructTraits<viz::mojom::CompositorRenderPassDataView,
     return input->backdrop_filters;
   }
 
-  static absl::optional<gfx::RRectF> backdrop_filter_bounds(
+  static const absl::optional<gfx::RRectF>& backdrop_filter_bounds(
       const std::unique_ptr<viz::CompositorRenderPass>& input) {
     return input->backdrop_filter_bounds;
   }
@@ -71,6 +71,12 @@ struct StructTraits<viz::mojom::CompositorRenderPassDataView,
       const std::unique_ptr<viz::CompositorRenderPass>& input) {
     return input->subtree_size;
   }
+
+  static viz::SharedElementResourceId shared_element_resource_id(
+      const std::unique_ptr<viz::CompositorRenderPass>& input) {
+    return input->shared_element_resource_id;
+  }
+
   static bool has_transparent_background(
       const std::unique_ptr<viz::CompositorRenderPass>& input) {
     return input->has_transparent_background;

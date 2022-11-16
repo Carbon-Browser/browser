@@ -5,7 +5,6 @@
 #include "apps/saved_files_service.h"
 #include "base/bind.h"
 #include "base/files/file_util.h"
-#include "base/macros.h"
 #include "base/path_service.h"
 #include "base/scoped_observation.h"
 #include "base/threading/thread_restrictions.h"
@@ -41,6 +40,9 @@ class AppLoadObserver : public ExtensionRegistryObserver {
         ExtensionRegistry::Get(browser_context));
   }
 
+  AppLoadObserver(const AppLoadObserver&) = delete;
+  AppLoadObserver& operator=(const AppLoadObserver&) = delete;
+
   void OnExtensionLoaded(content::BrowserContext* browser_context,
                          const Extension* extension) override {
     callback_.Run(extension);
@@ -50,7 +52,6 @@ class AppLoadObserver : public ExtensionRegistryObserver {
   base::RepeatingCallback<void(const Extension*)> callback_;
   base::ScopedObservation<ExtensionRegistry, ExtensionRegistryObserver>
       extension_registry_observation_{this};
-  DISALLOW_COPY_AND_ASSIGN(AppLoadObserver);
 };
 
 void SetLastChooseEntryDirectory(const base::FilePath& choose_entry_directory,
@@ -163,7 +164,7 @@ IN_PROC_BROWSER_TEST_F(FileSystemApiTest, FileSystemApiGetDisplayPath) {
       << message_;
 }
 
-#if defined(OS_WIN) || defined(OS_POSIX)
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_POSIX)
 IN_PROC_BROWSER_TEST_F(FileSystemApiTest, FileSystemApiGetDisplayPathPrettify) {
   {
     base::ScopedAllowBlockingForTesting allow_blocking;
@@ -180,7 +181,7 @@ IN_PROC_BROWSER_TEST_F(FileSystemApiTest, FileSystemApiGetDisplayPathPrettify) {
 }
 #endif
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 IN_PROC_BROWSER_TEST_F(FileSystemApiTest,
     FileSystemApiGetDisplayPathPrettifyMac) {
   base::FilePath test_file;
@@ -273,6 +274,20 @@ IN_PROC_BROWSER_TEST_F(FileSystemApiTest,
   CheckStoredDirectoryMatches(test_file);
 }
 
+IN_PROC_BROWSER_TEST_F(
+    FileSystemApiTest,
+    FileSystemApiOpenExistingFileSuggestedNameFilteringTest) {
+  base::FilePath test_file = TempFilePath("_.txt", true);
+  ASSERT_FALSE(test_file.empty());
+  FileSystemChooseEntryFunction::SkipPickerAndAlwaysSelectPathForTest picker(
+      test_file);
+  ASSERT_TRUE(RunExtensionTest(
+      "api_test/file_system/open_existing_suggested_name_filtering",
+      {.launch_as_platform_app = true}))
+      << message_;
+  CheckStoredDirectoryMatches(test_file);
+}
+
 IN_PROC_BROWSER_TEST_F(FileSystemApiTest, FileSystemApiOpenMultipleSuggested) {
   base::FilePath test_file = TempFilePath("open_existing.txt", true);
   ASSERT_FALSE(test_file.empty());
@@ -356,7 +371,7 @@ IN_PROC_BROWSER_TEST_F(FileSystemApiTest,
   CheckStoredDirectoryMatches(base::FilePath());
 }
 
-#if defined(OS_WIN) || defined(OS_POSIX)
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
 IN_PROC_BROWSER_TEST_F(FileSystemApiTest,
                        FileSystemApiOpenDirectoryOnGraylistAndAllowTest) {
   base::FilePath test_file = TempFilePath("open_existing.txt", true);
@@ -438,7 +453,7 @@ IN_PROC_BROWSER_TEST_F(FileSystemApiTest,
       << message_;
   CheckStoredDirectoryMatches(test_file);
 }
-#endif  // defined(OS_WIN) || defined(OS_POSIX)
+#endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
 
 IN_PROC_BROWSER_TEST_F(FileSystemApiTest,
     FileSystemApiInvalidChooseEntryTypeTest) {
@@ -564,7 +579,7 @@ IN_PROC_BROWSER_TEST_F(FileSystemApiTest,
   CheckStoredDirectoryMatches(test_file);
 }
 
-#if defined(OS_MAC) && defined(ADDRESS_SANITIZER)
+#if BUILDFLAG(IS_MAC) && defined(ADDRESS_SANITIZER)
 // TODO(http://crbug.com/1230100): Timing-out on Mac ASan.
 #define MAYBE_FileSystemApiSaveMultipleFilesTest \
   DISABLED_FileSystemApiSaveMultipleFilesTest

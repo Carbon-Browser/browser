@@ -8,6 +8,7 @@
 #include "components/viz/service/display_embedder/server_shared_bitmap_manager.h"
 #include "components/viz/service/frame_sinks/compositor_frame_sink_support.h"
 #include "components/viz/service/frame_sinks/frame_sink_manager_impl.h"
+#include "components/viz/service/surfaces/frame_index_constants.h"
 #include "components/viz/service/surfaces/surface.h"
 #include "components/viz/service/surfaces/surface_allocation_group.h"
 #include "components/viz/test/begin_frame_args_test.h"
@@ -62,8 +63,14 @@ CompositorFrame MakeCompositorFrame(
 class SurfaceSynchronizationTest : public testing::Test {
  public:
   SurfaceSynchronizationTest()
-      : frame_sink_manager_(&shared_bitmap_manager_),
+      : frame_sink_manager_(
+            FrameSinkManagerImpl::InitParams(&shared_bitmap_manager_)),
         surface_observer_(false) {}
+
+  SurfaceSynchronizationTest(const SurfaceSynchronizationTest&) = delete;
+  SurfaceSynchronizationTest& operator=(const SurfaceSynchronizationTest&) =
+      delete;
+
   ~SurfaceSynchronizationTest() override {}
 
   CompositorFrameSinkSupport& display_support() {
@@ -261,8 +268,6 @@ class SurfaceSynchronizationTest : public testing::Test {
                      FrameSinkIdHash>
       supports_;
   SurfaceIdAllocatorSet allocator_set_;
-
-  DISALLOW_COPY_AND_ASSIGN(SurfaceSynchronizationTest);
 };
 
 // The display root surface should have a surface reference from the top-level
@@ -2125,7 +2130,7 @@ TEST_F(SurfaceSynchronizationTest, ActiveFrameIndex) {
   child_support2().SubmitCompositorFrame(child_id2.local_surface_id(),
                                          MakeDefaultCompositorFrame());
   EXPECT_TRUE(parent_surface()->HasActiveFrame());
-  uint64_t expected_index = CompositorFrameSinkSupport::kFrameIndexStart;
+  uint64_t expected_index = kFrameIndexStart;
   EXPECT_EQ(expected_index, parent_surface()->GetActiveFrameIndex());
 }
 
@@ -2519,12 +2524,9 @@ TEST_F(SurfaceSynchronizationTest,
 // its nonce is different.
 TEST_F(SurfaceSynchronizationTest, LatestInFlightSurfaceSkipDifferentNonce) {
   const SurfaceId parent_id = MakeSurfaceId(kParentFrameSink, 1);
-  const base::UnguessableToken nonce1(
-      base::UnguessableToken::Deserialize(0, 1));
-  const base::UnguessableToken nonce2(
-      base::UnguessableToken::Deserialize(1, 1));
-  const base::UnguessableToken nonce3(
-      base::UnguessableToken::Deserialize(2, 1));
+  const base::UnguessableToken nonce1 = base::UnguessableToken::Create();
+  const base::UnguessableToken nonce2 = base::UnguessableToken::Create();
+  const base::UnguessableToken nonce3 = base::UnguessableToken::Create();
   const SurfaceId child_id1 =
       SurfaceId(kChildFrameSink1, LocalSurfaceId(1, nonce1));
   const SurfaceId child_id2 =

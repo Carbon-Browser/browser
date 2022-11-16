@@ -12,7 +12,6 @@
 #include "components/download/public/common/download_danger_type.h"
 #include "components/download/public/common/download_item.h"
 #include "components/download/public/common/download_item_rename_handler.h"
-#include "components/download/public/common/download_schedule.h"
 #include "components/download/public/common/download_url_parameters.h"
 #include "components/download/public/common/quarantine_connection.h"
 #include "content/common/content_export.h"
@@ -56,6 +55,9 @@ using SavePackagePathPickedCallback =
 //     |intermediate_path| could be the same as |target_path|. Both paths must
 //     be in the same directory.
 //
+// |display_name| specifies the suggested file name in case the file name cannot
+//     be determined from target_path. Could be empty.
+//
 // |interrupt_reason| should be set to DOWNLOAD_INTERRUPT_REASON_NONE in
 //     order to proceed with the download. DOWNLOAD_INTERRUPT_REASON_USER_CANCEL
 //     results in the download being marked cancelled. Any other value results
@@ -67,7 +69,8 @@ using DownloadTargetCallback = base::OnceCallback<void(
     download::DownloadDangerType danger_type,
     download::DownloadItem::MixedContentStatus mixed_content_status,
     const base::FilePath& intermediate_path,
-    absl::optional<download::DownloadSchedule> download_schedule,
+    const base::FilePath& display_name,
+    const std::string& mime_type,
     download::DownloadInterruptReason interrupt_reason)>;
 
 // Called when a download delayed by the delegate has completed.
@@ -78,6 +81,10 @@ using DownloadIdCallback = base::OnceCallback<void(uint32_t /* next_id */)>;
 
 // Called on whether a download is allowed to continue.
 using CheckDownloadAllowedCallback = base::OnceCallback<void(bool /*allow*/)>;
+
+// Called by CheckSavePackageAllowed when the content of a save package is known
+// to be allowed or not.
+using SavePackageAllowedCallback = base::OnceCallback<void(bool /*allow*/)>;
 
 // Browser's download manager: manages all downloads and destination view.
 class CONTENT_EXPORT DownloadManagerDelegate {
@@ -172,7 +179,10 @@ class CONTENT_EXPORT DownloadManagerDelegate {
   // |filename| contains a basename with an extension, but without a path. This
   // should be the case on return as well. I.e. |filename| cannot specify a
   // relative path.
-  virtual void SanitizeSavePackageResourceName(base::FilePath* filename) {}
+  // |source_url| contains the URL from which the download originates and is
+  // needed to determine the file's danger level.
+  virtual void SanitizeSavePackageResourceName(base::FilePath* filename,
+                                               const GURL& source_url) {}
 
   // Sanitize a download parameters
   //
@@ -221,6 +231,13 @@ class CONTENT_EXPORT DownloadManagerDelegate {
 
   // Gets a |DownloadItem| from the GUID, or null if no such GUID is available.
   virtual download::DownloadItem* GetDownloadByGuid(const std::string& guid);
+
+  // Allows the delegate to delay completion of a SavePackage's final renaming
+  // step so it can be disallowed.
+  virtual void CheckSavePackageAllowed(
+      download::DownloadItem* download_item,
+      base::flat_map<base::FilePath, base::FilePath> save_package_files,
+      SavePackageAllowedCallback callback);
 
  protected:
   virtual ~DownloadManagerDelegate();

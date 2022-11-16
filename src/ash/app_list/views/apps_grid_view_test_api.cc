@@ -13,10 +13,13 @@
 #include "ash/app_list/views/apps_grid_view.h"
 #include "base/run_loop.h"
 #include "build/build_config.h"
+#include "ui/aura/window.h"
 #include "ui/events/event.h"
+#include "ui/events/test/event_generator.h"
 #include "ui/views/animation/bounds_animator.h"
 #include "ui/views/animation/bounds_animator_observer.h"
 #include "ui/views/view.h"
+#include "ui/views/widget/widget.h"
 
 namespace ash {
 namespace test {
@@ -29,6 +32,10 @@ class BoundsAnimatorWaiter : public views::BoundsAnimatorObserver {
       : animator_(animator) {
     animator->AddObserver(this);
   }
+
+  BoundsAnimatorWaiter(const BoundsAnimatorWaiter&) = delete;
+  BoundsAnimatorWaiter& operator=(const BoundsAnimatorWaiter&) = delete;
+
   ~BoundsAnimatorWaiter() override { animator_->RemoveObserver(this); }
 
   void Wait() {
@@ -49,8 +56,6 @@ class BoundsAnimatorWaiter : public views::BoundsAnimatorObserver {
 
   views::BoundsAnimator* animator_;
   std::unique_ptr<base::RunLoop> run_loop_;
-
-  DISALLOW_COPY_AND_ASSIGN(BoundsAnimatorWaiter);
 };
 
 }  // namespace
@@ -87,7 +92,7 @@ void AppsGridViewTestApi::PressItemAt(int index) {
       ui::KeyEvent(ui::ET_KEY_PRESSED, ui::VKEY_RETURN, ui::EF_NONE));
 }
 
-int AppsGridViewTestApi::TilesPerPage(int page) const {
+size_t AppsGridViewTestApi::TilesPerPage(int page) const {
   return view_->TilesPerPage(page);
 }
 
@@ -128,6 +133,18 @@ void AppsGridViewTestApi::WaitForItemMoveAnimationDone() {
   waiter.Wait();
 }
 
+void AppsGridViewTestApi::FireReorderTimerAndWaitForAnimationDone() {
+  base::OneShotTimer* timer = &view_->reorder_timer_;
+  if (timer->IsRunning())
+    timer->FireNow();
+
+  WaitForItemMoveAnimationDone();
+}
+
+void AppsGridViewTestApi::FireFolderItemReparentTimer() {
+  view_->FireFolderItemReparentTimerForTest();
+}
+
 gfx::Rect AppsGridViewTestApi::GetDragIconBoundsInAppsGridView() {
   if (!view_->drag_icon_proxy_)
     return gfx::Rect();
@@ -138,6 +155,42 @@ gfx::Rect AppsGridViewTestApi::GetDragIconBoundsInAppsGridView() {
   gfx::Point icon_origin = icon_bounds_in_screen.origin();
   views::View::ConvertPointFromScreen(view_, &icon_origin);
   return gfx::Rect(icon_origin, icon_bounds_in_screen.size());
+}
+
+ui::Layer* AppsGridViewTestApi::GetDragIconLayer() {
+  if (!view_->drag_icon_proxy_)
+    return nullptr;
+  return view_->drag_icon_proxy_->GetImageLayerForTesting();
+}
+
+void AppsGridViewTestApi::ReorderItemByDragAndDrop(int source_index,
+                                                   int target_index) {
+  if (source_index == target_index)
+    return;
+
+  ui::test::EventGenerator event_generator(
+      view_->GetWidget()->GetNativeView()->GetRootWindow());
+  ash::AppListItemView* dragged_view =
+      view_->view_model()->view_at(source_index);
+  event_generator.MoveMouseTo(dragged_view->GetBoundsInScreen().CenterPoint());
+  event_generator.PressLeftButton();
+  dragged_view->FireMouseDragTimerForTest();
+
+  // Calculate the move target location. If `source_index` is to the left of
+  // `target_index`, the item should be moved to the right of the target slot
+  // in order to trigger apps reorder; otherwise, the item should be moved to
+  // the left.
+  const gfx::Rect target_view_screen_bounds =
+      view_->view_model()->view_at(target_index)->GetBoundsInScreen();
+  constexpr int offset = 10;
+  const int target_location_x =
+      (source_index < target_index ? target_view_screen_bounds.right() + offset
+                                   : target_view_screen_bounds.x() - offset);
+  const gfx::Point target_move_location(
+      target_location_x, target_view_screen_bounds.CenterPoint().y());
+  event_generator.MoveMouseTo(target_move_location);
+  FireReorderTimerAndWaitForAnimationDone();
+  event_generator.ReleaseLeftButton();
 }
 
 }  // namespace test

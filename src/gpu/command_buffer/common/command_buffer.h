@@ -8,7 +8,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "base/macros.h"
 #include "gpu/command_buffer/common/buffer.h"
 #include "gpu/command_buffer/common/constants.h"
 #include "gpu/gpu_export.h"
@@ -66,6 +65,9 @@ class GPU_EXPORT CommandBuffer {
   };
 
   CommandBuffer() = default;
+
+  CommandBuffer(const CommandBuffer&) = delete;
+  CommandBuffer& operator=(const CommandBuffer&) = delete;
 
   virtual ~CommandBuffer() = default;
 
@@ -125,8 +127,9 @@ class GPU_EXPORT CommandBuffer {
   // before it is safe to call this function to destroy it.
   virtual void DestroyTransferBuffer(int32_t id) = 0;
 
- private:
-  DISALLOW_COPY_AND_ASSIGN(CommandBuffer);
+  // Forcibly lose this context. Used by higher-level code when it determines
+  // the necessity to do so. Has no effect if the context has already been lost.
+  virtual void ForceLostContext(error::ContextLostReason reason) = 0;
 };
 
 }  // namespace gpu

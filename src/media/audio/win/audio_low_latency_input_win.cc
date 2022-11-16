@@ -14,7 +14,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/cxx17_backports.h"
+#include "base/command_line.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
@@ -192,6 +192,8 @@ const char* EffectTypeToString(
       return "SpeakerCompensation";
     case ABI::Windows::Media::Effects::AudioEffectType_DynamicRangeCompression:
       return "DynamicRangeCompression";
+    case ABI::Windows::Media::Effects::AudioEffectType_FarFieldBeamForming:
+      return "FarFieldBeamForming";
   }
   return "Unknown";
 }
@@ -250,12 +252,57 @@ bool InitializeUWPSupport() {
 
 }  // namespace
 
+// Counts how often an OS capture callback reports a data discontinuity and logs
+// it as a UMA histogram.
+class WASAPIAudioInputStream::DataDiscontinuityReporter {
+ public:
+  // Logs once every 10s, assuming 10ms buffers.
+  constexpr static int kCallbacksPerLogPeriod = 1000;
+
+  DataDiscontinuityReporter() {}
+
+  int GetLongTermDiscontinuityCountAndReset() {
+    int long_term_count = data_discontinuity_long_term_count_;
+    callback_count_ = 0;
+    data_discontinuity_short_term_count_ = 0;
+    data_discontinuity_long_term_count_ = 0;
+    return long_term_count;
+  }
+
+  void Log(bool observed_data_discontinuity) {
+    ++callback_count_;
+    if (observed_data_discontinuity) {
+      ++data_discontinuity_short_term_count_;
+      ++data_discontinuity_long_term_count_;
+    }
+
+    if (callback_count_ % kCallbacksPerLogPeriod)
+      return;
+
+    // TODO(https://crbug.com/825744): It can be possible to replace
+    // "Media.Audio.Capture.Glitches2" with this new (simplified) metric
+    // instead.
+    base::UmaHistogramCounts1000("Media.Audio.Capture.Win.Glitches2",
+                                 data_discontinuity_short_term_count_);
+
+    data_discontinuity_short_term_count_ = 0;
+  }
+
+ private:
+  int callback_count_ = 0;
+  int data_discontinuity_short_term_count_ = 0;
+  int data_discontinuity_long_term_count_ = 0;
+};
+
 WASAPIAudioInputStream::WASAPIAudioInputStream(
     AudioManagerWin* manager,
     const AudioParameters& params,
     const std::string& device_id,
     AudioManager::LogCallback log_callback)
     : manager_(manager),
+      glitch_reporter_(SystemGlitchReporter::StreamType::kCapture),
+      data_discontinuity_reporter_(
+          std::make_unique<DataDiscontinuityReporter>()),
       device_id_(device_id),
       log_callback_(std::move(log_callback)) {
   DCHECK(manager_);
@@ -377,6 +424,14 @@ AudioInputStream::OpenOutcome WASAPIAudioInputStream::Open() {
     }
   }
 
+  const base::CommandLine* cmd_line = base::CommandLine::ForCurrentProcess();
+  use_fake_audio_capture_timestamps_ =
+      cmd_line->HasSwitch(switches::kUseFakeAudioCaptureTimestamps);
+  if (use_fake_audio_capture_timestamps_) {
+    SendLogMessage("%s => (WARNING: capture timestamps will be fake)",
+                   __func__);
+  }
+
   // Obtain an IAudioClient interface which enables us to create and initialize
   // an audio stream between an audio application and the audio engine.
   hr = endpoint_device_->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr,
@@ -387,20 +442,23 @@ AudioInputStream::OpenOutcome WASAPIAudioInputStream::Open() {
     return OpenOutcome::kFailed;
   }
 
-#ifndef NDEBUG
-  // Retrieve the stream format which the audio engine uses for its internal
-  // processing/mixing of shared-mode streams. This function call is for
-  // diagnostic purposes only and only in debug mode.
-  hr = GetAudioEngineStreamFormat();
-#endif
+  // Raw audio capture suppresses processing that down mixes e.g. a microphone
+  // array into a supported format and instead exposes the device's native
+  // format. Chrome only supports a maximum number of input channels given by
+  // media::kMaxConcurrentChannels. Therefore, one additional test is needed
+  // before stating that raw audio processing can be supported.
+  // Failure will not prevent opening but the method must succeed to be able to
+  // select raw input capture mode.
+  WORD audio_engine_channels = 0;
+  hr = GetAudioEngineNumChannels(&audio_engine_channels);
 
   // Attempt to enable communications category and raw capture mode on the audio
   // stream. Ignoring return value since the method logs its own error messages
   // and it should be OK to continue opening the stream even after a failure.
   if (base::FeatureList::IsEnabled(media::kWasapiRawAudioCapture) &&
       raw_processing_supported_ &&
-      !AudioDeviceDescription::IsLoopbackDevice(device_id_)) {
-    SetCommunicationsCategoryAndRawCaptureMode();
+      !AudioDeviceDescription::IsLoopbackDevice(device_id_) && SUCCEEDED(hr)) {
+    SetCommunicationsCategoryAndMaybeRawCaptureMode(audio_engine_channels);
   }
 
   // Verify that the selected audio endpoint supports the specified format
@@ -481,7 +539,7 @@ void WASAPIAudioInputStream::Start(AudioInputCallback* callback) {
   DCHECK(!capture_thread_.get());
   capture_thread_ = std::make_unique<base::DelegateSimpleThread>(
       this, "wasapi_capture_thread",
-      base::SimpleThread::Options(base::ThreadPriority::REALTIME_AUDIO));
+      base::SimpleThread::Options(base::ThreadType::kRealtimeAudio));
   capture_thread_->Start();
 
   // Start streaming data between the endpoint buffer and the audio engine.
@@ -574,13 +632,6 @@ void WASAPIAudioInputStream::Stop() {
       "%s => (timestamp(n)-timestamp(n-1)=[min: %.3f msec, max: %.3f msec])",
       __func__, min_timestamp_diff_.InMillisecondsF(),
       max_timestamp_diff_.InMillisecondsF());
-
-  const bool monotonic_timestamps =
-      min_timestamp_diff_ >= base::TimeDelta::FromMicroseconds(1);
-  base::UmaHistogramBoolean("Media.Audio.Capture.Win.MonotonicTimestamps",
-                            monotonic_timestamps);
-  SendLogMessage("%s => (Media.Audio.Capture.Win.MonotonicTimestamps=%s)",
-                 __func__, monotonic_timestamps ? "true" : "false");
 
   started_ = false;
   sink_ = nullptr;
@@ -707,7 +758,6 @@ void WASAPIAudioInputStream::SendLogMessage(const char* format, ...) {
   va_start(args, format);
   std::string msg("WAIS::" + base::StringPrintV(format, args));
   log_callback_.Run(msg);
-  DVLOG(1) << msg;
   va_end(args);
 }
 
@@ -850,16 +900,17 @@ void WASAPIAudioInputStream::PullCaptureDataAndPushToSink() {
     // The data in the packet is not correlated with the previous packet's
     // device position; this is possibly due to a stream state transition or
     // timing glitch. Note that, usage of this flag was added after the existing
-    // glitch detection in UpdateGlitchCount() and it will be used as a
-    // supplementary scheme initially.
+    // glitch detection and it will be used as a supplementary scheme initially.
     // The behavior of the AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY flag is
     // undefined on the application's first call to GetBuffer after Start and
     // Windows 7 or later is required for support.
-    if (device_position > 0 && flags & AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY) {
+    const bool observed_data_discontinuity =
+        (device_position > 0 && flags & AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY);
+    if (observed_data_discontinuity) {
       LOG(WARNING) << "WAIS::" << __func__
                    << " => (WARNING: AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY)";
-      ++num_data_discontinuity_warnings_;
     }
+    data_discontinuity_reporter_->Log(observed_data_discontinuity);
 
     // The time at which the device's stream position was recorded is uncertain.
     // Thus, the client might be unable to accurately set a time stamp for the
@@ -885,7 +936,16 @@ void WASAPIAudioInputStream::PullCaptureDataAndPushToSink() {
     // If the device position has not changed we assume this data belongs to the
     // previous chunk, and only update the expected next device position.
     if (device_position != last_device_position) {
-      UpdateGlitchCount(device_position);
+      if (expected_next_device_position_ != 0) {
+        base::TimeDelta glitch_duration;
+        if (device_position > expected_next_device_position_) {
+          glitch_duration = AudioTimestampHelper::FramesToTime(
+              device_position - expected_next_device_position_,
+              input_format_.Format.nSamplesPerSec);
+        }
+        glitch_reporter_.UpdateStats(glitch_duration);
+      }
+
       last_device_position = device_position;
       expected_next_device_position_ = device_position + num_frames_to_read;
     } else {
@@ -893,15 +953,16 @@ void WASAPIAudioInputStream::PullCaptureDataAndPushToSink() {
     }
 
     base::TimeTicks capture_time;
-    if (!timestamp_error_was_detected) {
+    if (use_fake_audio_capture_timestamps_) {
+      capture_time = base::TimeTicks::Now();
+    } else if (!timestamp_error_was_detected) {
       // Use the latest |capture_time_100ns| since it is marked as valid.
-      capture_time +=
-          base::TimeDelta::FromMicroseconds(capture_time_100ns / 10.0);
+      capture_time += base::Microseconds(capture_time_100ns / 10.0);
     }
     if (capture_time <= last_capture_time_) {
       // Latest |capture_time_100ns| can't be trusted. Ensure a monotonic time-
       // stamp sequence by adding one microsecond to the latest timestamp.
-      capture_time = last_capture_time_ + base::TimeDelta::FromMicroseconds(1);
+      capture_time = last_capture_time_ + base::Microseconds(1);
     }
 
     // Keep track of max and min time difference between two successive time-
@@ -1060,18 +1121,6 @@ HRESULT WASAPIAudioInputStream::SetCaptureDevice() {
   return hr;
 }
 
-HRESULT WASAPIAudioInputStream::GetAudioEngineStreamFormat() {
-  HRESULT hr = S_OK;
-#ifndef NDEBUG
-  base::win::ScopedCoMem<WAVEFORMATEX> format;
-  hr = audio_client_->GetMixFormat(&format);
-  if (FAILED(hr))
-    return hr;
-  DVLOG(1) << CoreAudioUtil::WaveFormatToString(format.get());
-#endif
-  return hr;
-}
-
 bool WASAPIAudioInputStream::RawProcessingSupported() {
   DCHECK(endpoint_device_.Get());
   // Check if System.Devices.AudioDevice.RawProcessingSupported can be found
@@ -1207,7 +1256,7 @@ HRESULT WASAPIAudioInputStream::GetAudioCaptureEffects(
   ABI::Windows::Media::AudioProcessing audio_processing_mode[] = {
       ABI::Windows::Media::AudioProcessing::AudioProcessing_Default,
       ABI::Windows::Media::AudioProcessing::AudioProcessing_Raw};
-  for (size_t i = 0; i < base::size(audio_processing_mode); ++i) {
+  for (size_t i = 0; i < std::size(audio_processing_mode); ++i) {
     // Create an AudioCaptureEffectsManager manager which can be used to
     // discover the audio processing chain on a device for a specific media
     // category and audio processing mode. The media category is fixed and set
@@ -1283,11 +1332,30 @@ HRESULT WASAPIAudioInputStream::GetAudioCaptureEffects(
   return hr;
 }
 
-HRESULT WASAPIAudioInputStream::SetCommunicationsCategoryAndRawCaptureMode() {
+HRESULT WASAPIAudioInputStream::GetAudioEngineNumChannels(WORD* channels) {
+  DCHECK(audio_client_.Get());
+  SendLogMessage("%s()", __func__);
+  WAVEFORMATEXTENSIBLE mix_format;
+  // Retrieve the stream format that the audio engine uses for its internal
+  // processing of shared-mode streams.
+  HRESULT hr =
+      CoreAudioUtil::GetSharedModeMixFormat(audio_client_.Get(), &mix_format);
+  if (SUCCEEDED(hr)) {
+    // Return the native number of supported audio channels.
+    CoreAudioUtil::WaveFormatWrapper wformat(&mix_format);
+    *channels = wformat->nChannels;
+    SendLogMessage("%s => (native channels=[%d])", __func__, *channels);
+  }
+  return hr;
+}
+
+HRESULT
+WASAPIAudioInputStream::SetCommunicationsCategoryAndMaybeRawCaptureMode(
+    WORD channels) {
   DCHECK(audio_client_.Get());
   DCHECK(!AudioDeviceDescription::IsLoopbackDevice(device_id_));
   DCHECK(raw_processing_supported_);
-  SendLogMessage("%s()", __func__);
+  SendLogMessage("%s({channels=%d})", __func__, channels);
 
   Microsoft::WRL::ComPtr<IAudioClient2> audio_client2;
   HRESULT hr = audio_client_.As(&audio_client2);
@@ -1308,7 +1376,11 @@ HRESULT WASAPIAudioInputStream::SetCommunicationsCategoryAndRawCaptureMode() {
     // The audio stream is a 'raw' stream that bypasses all signal processing
     // except for endpoint specific, always-on processing in the Audio
     // Processing Object (APO), driver, and hardware.
-    audio_props.Options = AUDCLNT_STREAMOPTIONS_RAW;
+    // See https://crbug.com/1257662 for details on why we avoid using raw
+    // capture mode on devices with more than eight input channels.
+    if (channels > 0 && channels <= media::kMaxConcurrentChannels) {
+      audio_props.Options = AUDCLNT_STREAMOPTIONS_RAW;
+    }
     hr = audio_client2->SetClientProperties(&audio_props);
     if (FAILED(hr)) {
       SendLogMessage("%s => (ERROR: IAudioClient2::SetClientProperties=[%s])",
@@ -1337,7 +1409,6 @@ bool WASAPIAudioInputStream::DesiredFormatIsSupported(HRESULT* hr) {
     SendLogMessage("%s => (ERROR: IAudioClient::IsFormatSupported=[%s])",
                    __func__, ErrorToString(hresult).c_str());
   }
-
   if (hresult == S_FALSE) {
     SendLogMessage(
         "%s => (WARNING: Format is not supported but a closest match exists)",
@@ -1593,10 +1664,10 @@ void WASAPIAudioInputStream::MaybeReportFormatRelatedInitError(
           ? converter_.get()
                 ? FormatRelatedInitError::kUnsupportedFormatWithFormatConversion
                 : FormatRelatedInitError::kUnsupportedFormat
-          // Otherwise |hr| == E_INVALIDARG.
-          : converter_.get()
-                ? FormatRelatedInitError::kInvalidArgumentWithFormatConversion
-                : FormatRelatedInitError::kInvalidArgument;
+      // Otherwise |hr| == E_INVALIDARG.
+      : converter_.get()
+          ? FormatRelatedInitError::kInvalidArgumentWithFormatConversion
+          : FormatRelatedInitError::kInvalidArgument;
   base::UmaHistogramEnumeration(
       "Media.Audio.Capture.Win.InitError.FormatRelated", format_related_error,
       FormatRelatedInitError::kCount);
@@ -1608,61 +1679,29 @@ double WASAPIAudioInputStream::ProvideInput(AudioBus* audio_bus,
   return 1.0;
 }
 
-void WASAPIAudioInputStream::UpdateGlitchCount(UINT64 device_position) {
-  if (expected_next_device_position_ != 0) {
-    if (device_position > expected_next_device_position_) {
-      ++total_glitches_;
-      auto lost_frames = device_position - expected_next_device_position_;
-      total_lost_frames_ += lost_frames;
-      if (lost_frames > largest_glitch_frames_)
-        largest_glitch_frames_ = lost_frames;
-    }
-  }
-}
-
 void WASAPIAudioInputStream::ReportAndResetGlitchStats() {
-  UMA_HISTOGRAM_COUNTS_1M("Media.Audio.Capture.Glitches", total_glitches_);
-  double lost_frames_ms =
-      (total_lost_frames_ * 1000) / input_format_.Format.nSamplesPerSec;
+  SystemGlitchReporter::Stats stats =
+      glitch_reporter_.GetLongTermStatsAndReset();
   SendLogMessage(
-      "%s => (total glitches=[%d], total frames lost=[%llu/%.0lf ms])",
-      __func__, total_glitches_, total_lost_frames_, lost_frames_ms);
-  if (total_glitches_ != 0) {
-    UMA_HISTOGRAM_LONG_TIMES("Media.Audio.Capture.LostFramesInMs",
-                             base::TimeDelta::FromMilliseconds(lost_frames_ms));
-    int64_t largest_glitch_ms =
-        (largest_glitch_frames_ * 1000) / input_format_.Format.nSamplesPerSec;
-    UMA_HISTOGRAM_CUSTOM_TIMES(
-        "Media.Audio.Capture.LargestGlitchMs",
-        base::TimeDelta::FromMilliseconds(largest_glitch_ms),
-        base::TimeDelta::FromMilliseconds(1), base::TimeDelta::FromMinutes(1),
-        50);
-  }
+      "%s => (num_glitches_detected=[%d], cumulative_audio_lost=[%llu ms], "
+      "largest_glitch=[%llu ms])",
+      __func__, stats.glitches_detected,
+      stats.total_glitch_duration.InMilliseconds(),
+      stats.largest_glitch_duration.InMilliseconds());
 
-  // TODO(https://crbug.com/825744): It can be possible to replace
-  // "Media.Audio.Capture.Glitches" with this new (simplified) metric instead.
-  base::UmaHistogramCounts1M("Media.Audio.Capture.Win.Glitches",
-                             num_data_discontinuity_warnings_);
-  SendLogMessage("%s => (discontinuity warnings=[%" PRIu64 "])", __func__,
-                 num_data_discontinuity_warnings_);
-  base::UmaHistogramCounts1M("Media.Audio.Capture.Win.TimestampErrors",
-                             num_timestamp_errors_);
+  int num_data_discontinuities =
+      data_discontinuity_reporter_->GetLongTermDiscontinuityCountAndReset();
+  SendLogMessage("%s => (discontinuity warnings=[%d])", __func__,
+                 num_data_discontinuities);
   SendLogMessage("%s => (timstamp errors=[%" PRIu64 "])", __func__,
                  num_timestamp_errors_);
   if (num_timestamp_errors_ > 0) {
-    base::UmaHistogramLongTimes(
-        "Media.Audio.Capture.Win.TimeUntilFirstTimestampError",
-        time_until_first_timestamp_error_);
     SendLogMessage("%s => (time until first timestamp error=[%" PRId64 " ms])",
                    __func__,
                    time_until_first_timestamp_error_.InMilliseconds());
   }
 
   expected_next_device_position_ = 0;
-  total_glitches_ = 0;
-  total_lost_frames_ = 0;
-  largest_glitch_frames_ = 0;
-  num_data_discontinuity_warnings_ = 0;
   num_timestamp_errors_ = 0;
 }
 

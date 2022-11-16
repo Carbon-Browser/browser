@@ -7,9 +7,9 @@
 #include "base/bind.h"
 #include "base/logging.h"
 #include "base/strings/string_util.h"
-#include "chromeos/network/network_handler.h"
-#include "chromeos/network/network_state.h"
-#include "chromeos/network/network_state_handler.h"
+#include "chromeos/ash/components/network/network_handler.h"
+#include "chromeos/ash/components/network/network_state.h"
+#include "chromeos/ash/components/network/network_state_handler.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "google_apis/gaia/google_service_auth_error.h"
@@ -76,8 +76,7 @@ void OAuth2TokenFetcher::RetryOnError(const GoogleServiceAuthError& error,
   if (error.IsTransientError() && retry_count_ < kMaxRequestAttemptCount) {
     retry_count_++;
     content::GetUIThreadTaskRunner({})->PostDelayedTask(
-        FROM_HERE, std::move(task),
-        base::TimeDelta::FromMilliseconds(kRequestRestartDelay));
+        FROM_HERE, std::move(task), base::Milliseconds(kRequestRestartDelay));
     return;
   }
   LOG(ERROR) << "Unrecoverable error or retry count max reached. State: "

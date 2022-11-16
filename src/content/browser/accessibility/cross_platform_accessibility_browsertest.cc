@@ -10,12 +10,14 @@
 #include <vector>
 
 #include "base/callback_helpers.h"
-#include "base/macros.h"
+#include "base/command_line.h"
+#include "base/strings/escape.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/timer/elapsed_timer.h"
 #include "build/build_config.h"
 #include "build/chromecast_buildflags.h"
+#include "build/chromeos_buildflags.h"
 #include "content/browser/accessibility/browser_accessibility.h"
 #include "content/browser/accessibility/browser_accessibility_manager.h"
 #include "content/browser/renderer_host/render_view_host_impl.h"
@@ -29,7 +31,6 @@
 #include "content/public/test/content_browser_test.h"
 #include "content/public/test/content_browser_test_utils.h"
 #include "content/shell/browser/shell.h"
-#include "net/base/escape.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "third_party/blink/public/common/features.h"
 #include "ui/accessibility/accessibility_features.h"
@@ -38,7 +39,7 @@
 #include "ui/accessibility/ax_tree.h"
 #include "ui/accessibility/ax_tree_id.h"
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include "base/win/atl.h"
 #include "base/win/scoped_com_initializer.h"
 #include "ui/base/win/atl_module.h"
@@ -50,7 +51,7 @@ using ::testing::Pair;
 #if defined(NDEBUG) && !defined(ADDRESS_SANITIZER) &&              \
     !defined(LEAK_SANITIZER) && !defined(MEMORY_SANITIZER) &&      \
     !defined(THREAD_SANITIZER) && !defined(UNDEFINED_SANITIZER) && \
-    !defined(OS_ANDROID)
+    !BUILDFLAG(IS_ANDROID)
 #define IS_FAST_BUILD
 constexpr int kDelayForDeferredUpdatesAfterPageLoad = 150;
 #endif
@@ -60,6 +61,12 @@ namespace content {
 class CrossPlatformAccessibilityBrowserTest : public ContentBrowserTest {
  public:
   CrossPlatformAccessibilityBrowserTest() = default;
+
+  CrossPlatformAccessibilityBrowserTest(
+      const CrossPlatformAccessibilityBrowserTest&) = delete;
+  CrossPlatformAccessibilityBrowserTest& operator=(
+      const CrossPlatformAccessibilityBrowserTest&) = delete;
+
   ~CrossPlatformAccessibilityBrowserTest() override = default;
 
   // Make sure each node in the tree has a unique id.
@@ -88,7 +95,7 @@ class CrossPlatformAccessibilityBrowserTest : public ContentBrowserTest {
                               std::vector<base::Feature>* disabled_features);
 
   void ExecuteScript(const char* script) {
-    shell()->web_contents()->GetMainFrame()->ExecuteJavaScriptForTests(
+    shell()->web_contents()->GetPrimaryMainFrame()->ExecuteJavaScriptForTests(
         base::ASCIIToUTF16(script), base::NullCallback());
   }
 
@@ -97,9 +104,9 @@ class CrossPlatformAccessibilityBrowserTest : public ContentBrowserTest {
                                            ui::kAXModeComplete,
                                            ax::mojom::Event::kLoadComplete);
     GURL html_data_url(
-        net::EscapeExternalHandlerValue("data:text/html," + html));
+        base::EscapeExternalHandlerValue("data:text/html," + html));
     ASSERT_TRUE(NavigateToURL(shell(), html_data_url));
-    waiter.WaitForNotification();
+    ASSERT_TRUE(waiter.WaitForNotification());
   }
 
   void LoadInitialAccessibilityTreeFromHtmlFilePath(
@@ -112,7 +119,9 @@ class CrossPlatformAccessibilityBrowserTest : public ContentBrowserTest {
                                            ax::mojom::Event::kLoadComplete);
     ASSERT_TRUE(
         NavigateToURL(shell(), embedded_test_server()->GetURL(html_file_path)));
-    waiter.WaitForNotification();
+    // TODO(https://crbug.com/1332468): Investigate why this does not return
+    // true.
+    ASSERT_TRUE(waiter.WaitForNotification());
   }
 
   BrowserAccessibilityManager* GetManager() const {
@@ -188,7 +197,7 @@ class CrossPlatformAccessibilityBrowserTest : public ContentBrowserTest {
         ui::AXEventGenerator::Event::FOCUS_CHANGED);
     SimulateKeyPress(shell()->web_contents(), ui::DomKey::TAB, ui::DomCode::TAB,
                      ui::VKEY_TAB, false, false, false, false);
-    waiter.WaitForNotification();
+    ASSERT_TRUE(waiter.WaitForNotification());
   }
 
   std::string GetNameOfFocusedNode() {
@@ -201,11 +210,9 @@ class CrossPlatformAccessibilityBrowserTest : public ContentBrowserTest {
  private:
   base::test::ScopedFeatureList scoped_feature_list_;
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   std::unique_ptr<base::win::ScopedCOMInitializer> com_initializer_;
 #endif
-
-  DISALLOW_COPY_AND_ASSIGN(CrossPlatformAccessibilityBrowserTest);
 };
 
 void CrossPlatformAccessibilityBrowserTest::SetUp() {
@@ -231,7 +238,7 @@ void CrossPlatformAccessibilityBrowserTest::ChooseFeatures(
 }
 
 void CrossPlatformAccessibilityBrowserTest::SetUpOnMainThread() {
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   com_initializer_ = std::make_unique<base::win::ScopedCOMInitializer>();
   ui::win::CreateATLModuleIfNeeded();
 #endif
@@ -313,7 +320,7 @@ IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
   const ui::AXNode* root = tree.root();
 
   // Check properties of the tree.
-  EXPECT_EQ(net::EscapeExternalHandlerValue("data:text/html," + url_str),
+  EXPECT_EQ(base::EscapeExternalHandlerValue("data:text/html," + url_str),
             tree.data().url);
   EXPECT_EQ("Accessibility Test", tree.data().title);
   EXPECT_EQ("html", tree.data().doctype);
@@ -351,6 +358,50 @@ IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
   EXPECT_THAT(checkbox->data().html_attributes,
               ElementsAre(Pair("type", "checkbox")));
 }
+
+// Android's text representation is different, so disable the test there.
+#if !BUILDFLAG(IS_ANDROID)
+IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
+                       ReparentingANodeShouldReuseSameNativeWrapper) {
+  LoadInitialAccessibilityTreeFromHtml(R"HTML(
+      <!DOCTYPE html>
+      <html>
+      <body>
+        <div id="source">
+          <div id="destination">
+            <p id="paragraph">Testing</p>
+          </div>
+        </div>
+      </body>
+      </html>)HTML");
+
+  WaitForAccessibilityTreeToContainNodeWithName(shell()->web_contents(),
+                                                "Testing");
+  const BrowserAccessibility* wrapper1 = FindNode("Testing");
+  ASSERT_NE(nullptr, wrapper1);
+  wrapper1 = wrapper1->PlatformGetParent();
+  ASSERT_EQ(ax::mojom::Role::kParagraph, wrapper1->GetRole());
+  ASSERT_EQ(ax::mojom::Role::kGenericContainer,
+            wrapper1->PlatformGetParent()->GetRole());
+
+  // Reparent the paragraph from "source" to "destination".
+  ExecuteScript(
+      "let destination = document.getElementById('destination');"
+      "let paragraph = document.getElementById('paragraph');"
+      "destination.setAttribute('role', 'group');"
+      "paragraph.textContent = 'Testing changed';");
+
+  WaitForAccessibilityTreeToContainNodeWithName(shell()->web_contents(),
+                                                "Testing changed");
+  const BrowserAccessibility* wrapper2 = FindNode("Testing changed");
+  ASSERT_NE(nullptr, wrapper2);
+  wrapper2 = wrapper2->PlatformGetParent();
+  ASSERT_EQ(ax::mojom::Role::kParagraph, wrapper2->GetRole());
+  ASSERT_EQ(ax::mojom::Role::kGroup, wrapper2->PlatformGetParent()->GetRole());
+
+  EXPECT_EQ(wrapper1, wrapper2);
+}
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
                        UnselectedEditableTextAccessibility) {
@@ -527,7 +578,7 @@ IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
   ASSERT_EQ(3U, body->PlatformChildCount());
 
   const BrowserAccessibility* button1 = body->PlatformGetChild(0);
-  EXPECT_EQ(ax::mojom::Role::kButton, button1->GetData().role);
+  EXPECT_EQ(ax::mojom::Role::kButton, button1->GetRole());
   EXPECT_STREQ(
       "Button 1",
       GetAttr(button1->node(), ax::mojom::StringAttribute::kName).c_str());
@@ -539,27 +590,27 @@ IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
   EXPECT_EQ(1U, iframe->PlatformChildCount());
 
   const BrowserAccessibility* sub_document = iframe->PlatformGetChild(0);
-  EXPECT_EQ(ax::mojom::Role::kRootWebArea, sub_document->GetData().role);
+  EXPECT_EQ(ax::mojom::Role::kRootWebArea, sub_document->GetRole());
   ASSERT_EQ(1U, sub_document->PlatformChildCount());
 
   const BrowserAccessibility* sub_body = sub_document->PlatformGetChild(0);
   ASSERT_EQ(1U, sub_body->PlatformChildCount());
 
   const BrowserAccessibility* button2 = sub_body->PlatformGetChild(0);
-  EXPECT_EQ(ax::mojom::Role::kButton, button2->GetData().role);
+  EXPECT_EQ(ax::mojom::Role::kButton, button2->GetRole());
   EXPECT_STREQ(
       "Button 2",
       GetAttr(button2->node(), ax::mojom::StringAttribute::kName).c_str());
 
   const BrowserAccessibility* button3 = body->PlatformGetChild(2);
-  EXPECT_EQ(ax::mojom::Role::kButton, button3->GetData().role);
+  EXPECT_EQ(ax::mojom::Role::kButton, button3->GetRole());
   EXPECT_STREQ(
       "Button 3",
       GetAttr(button3->node(), ax::mojom::StringAttribute::kName).c_str());
 }
 
 // Android's text representation is different, so disable the test there.
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
 IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
                        AXNodePositionTreeBoundary) {
   LoadInitialAccessibilityTreeFromHtml(R"HTML(
@@ -650,10 +701,10 @@ IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
   EXPECT_FALSE(test_position->AtStartOfAXTree());
   EXPECT_TRUE(test_position->AtEndOfAXTree());
 }
-#endif  // !defined(OS_ANDROID)
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 // Android's text representation is different, so disable the test there.
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
 IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
                        NavigationSkipsCompositeItems) {
   LoadInitialAccessibilityTreeFromHtml(R"HTML(
@@ -686,10 +737,10 @@ IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
   test_position = position->CreatePositionAtEndOfAnchor();
   EXPECT_TRUE(position->IsValid());
 }
-#endif  // !defined(OS_ANDROID)
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 // Select controls behave differently on Mac/Android, this test doesn't apply.
-#if !defined(OS_ANDROID) && !defined(OS_MAC)
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_MAC)
 IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
                        SelectSizeChangeWithOpenedPopupDoesNotCrash) {
   LoadInitialAccessibilityTreeFromHtml(R"HTML(
@@ -725,7 +776,7 @@ IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
       ui::AXActionData action_data;
       action_data.action = ax::mojom::Action::kDoDefault;
       select->AccessibilityPerformAction(action_data);
-      waiter.WaitForNotification();
+      ASSERT_TRUE(waiter.WaitForNotification());
     }
 
     // Toggle whether 'size' is '2' or not present (effectively size=1),
@@ -741,7 +792,113 @@ IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
         "}");
   }
 }
-#endif  // !defined(OS_ANDROID) && !defined(OS_MAC)
+#endif  // !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_MAC)
+
+// Select controls behave differently on Mac/Android, this test doesn't apply.
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_MAC)
+IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
+                       SelectWithOptgroupActiveDescendant) {
+  LoadInitialAccessibilityTreeFromHtml(R"HTML(
+      <!DOCTYPE html>
+      <html>
+      <body>
+        <select autofocus aria-label="Select" id="select_node">
+          <optgroup label="A">
+            <option>Option 1</option>
+          </optgroup>
+          <optgroup label="B">
+            <option selected>Option 2</option>
+            <option>Option 3</option>
+          </optgroup>
+        </select>
+      </body>
+      </html>)HTML");
+
+  WaitForAccessibilityTreeToContainNodeWithName(shell()->web_contents(),
+                                                "Select");
+
+  const BrowserAccessibility* root = GetManager()->GetRoot();
+  ASSERT_NE(root, nullptr);
+  const BrowserAccessibility* body = root->PlatformGetChild(0);
+  ASSERT_NE(body, nullptr);
+  BrowserAccessibility* select = body->PlatformGetChild(0);
+  ASSERT_NE(select, nullptr);
+  EXPECT_EQ(ax::mojom::Role::kPopUpButton, select->GetRole());
+
+  // Open popup.
+  AccessibilityNotificationWaiter waiter(shell()->web_contents(),
+                                         ui::kAXModeComplete,
+                                         ax::mojom::Event::kChildrenChanged);
+  ui::AXActionData action_data;
+  action_data.action = ax::mojom::Action::kDoDefault;
+  select->AccessibilityPerformAction(action_data);
+  ASSERT_TRUE(waiter.WaitForNotification());
+
+  // Get popup.
+  const BrowserAccessibility* popup = select->PlatformGetChild(0);
+  ASSERT_NE(popup, nullptr);
+  EXPECT_EQ(ax::mojom::Role::kMenuListPopup, popup->GetRole());
+
+  // Get "Option 2".
+  const BrowserAccessibility* option_2 = popup->PlatformGetChild(1);
+  ASSERT_NE(option_2, nullptr);
+  EXPECT_EQ(ax::mojom::Role::kMenuListOption, option_2->GetRole());
+  EXPECT_EQ("Option 2",
+            option_2->GetStringAttribute(ax::mojom::StringAttribute::kName));
+
+  // Ensure active descendant is "Option 2"
+  int active_descendant_id = -1;
+  EXPECT_TRUE(popup->GetIntAttribute(
+      ax::mojom::IntAttribute::kActivedescendantId, &active_descendant_id));
+  EXPECT_EQ(active_descendant_id, option_2->GetId());
+}
+#endif  // !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_MAC)
+
+// Select controls behave differently on Mac/Android, this test doesn't apply.
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_MAC)
+IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
+                       SelectListWithOptgroupActiveDescendant) {
+  LoadInitialAccessibilityTreeFromHtml(R"HTML(
+      <!DOCTYPE html>
+      <html>
+      <body>
+        <select autofocus size="8" aria-label="Select">
+          <optgroup label="A">
+            <option>Option 1</option>
+          </optgroup>
+          <optgroup label="B">
+            <option selected>Option 2</option>
+            <option>Option 3</option>
+          </optgroup>
+        </select>
+      </body>
+      </html>)HTML");
+
+  WaitForAccessibilityTreeToContainNodeWithName(shell()->web_contents(),
+                                                "Select");
+
+  const BrowserAccessibility* root = GetManager()->GetRoot();
+  ASSERT_NE(root, nullptr);
+  const BrowserAccessibility* body = root->PlatformGetChild(0);
+  ASSERT_NE(body, nullptr);
+  BrowserAccessibility* select = body->PlatformGetChild(0);
+  ASSERT_NE(select, nullptr);
+  EXPECT_EQ(ax::mojom::Role::kListBox, select->GetRole());
+
+  // Get "Option 2".
+  const BrowserAccessibility* option_2 = select->PlatformGetChild(3);
+  ASSERT_NE(option_2, nullptr);
+  EXPECT_EQ(ax::mojom::Role::kListBoxOption, option_2->GetRole());
+  EXPECT_EQ("Option 2",
+            option_2->GetStringAttribute(ax::mojom::StringAttribute::kName));
+
+  // Ensure active descendant is "Option 2"
+  int active_descendant_id = -1;
+  EXPECT_TRUE(select->GetIntAttribute(
+      ax::mojom::IntAttribute::kActivedescendantId, &active_descendant_id));
+  EXPECT_EQ(active_descendant_id, option_2->GetId());
+}
+#endif  // !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_MAC)
 
 IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
                        PlatformIterator) {
@@ -768,7 +925,7 @@ IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
   const BrowserAccessibility* root = GetManager()->GetRoot();
   BrowserAccessibility::PlatformChildIterator it =
       root->PlatformChildrenBegin();
-  EXPECT_EQ(ax::mojom::Role::kGenericContainer, (*it).GetData().role);
+  EXPECT_EQ(ax::mojom::Role::kGenericContainer, (*it).GetRole());
   it = (*it).PlatformChildrenBegin();
   EXPECT_STREQ(
       "Button 1",
@@ -779,10 +936,9 @@ IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
       GetAttr((*it).node(), ax::mojom::StringAttribute::kHtmlTag).c_str());
   EXPECT_EQ(1U, (*it).PlatformChildCount());
   auto iframe_iterator = (*it).PlatformChildrenBegin();
-  EXPECT_EQ(ax::mojom::Role::kRootWebArea, (*iframe_iterator).GetData().role);
+  EXPECT_EQ(ax::mojom::Role::kRootWebArea, (*iframe_iterator).GetRole());
   iframe_iterator = (*iframe_iterator).PlatformChildrenBegin();
-  EXPECT_EQ(ax::mojom::Role::kGenericContainer,
-            (*iframe_iterator).GetData().role);
+  EXPECT_EQ(ax::mojom::Role::kGenericContainer, (*iframe_iterator).GetRole());
   iframe_iterator = (*iframe_iterator).PlatformChildrenBegin();
   EXPECT_STREQ("Button 2", GetAttr((*iframe_iterator).node(),
                                    ax::mojom::StringAttribute::kName)
@@ -955,7 +1111,7 @@ IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
 }
 
 // TODO(https://crbug.com/1020456) re-enable when crashing on linux is resolved.
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 #define MAYBE_LocalizedRoleDescription DISABLED_LocalizedRoleDescription
 #else
 #define MAYBE_LocalizedRoleDescription LocalizedRoleDescription
@@ -1021,7 +1177,7 @@ IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
   TestLocalizedRoleDescription(14, u"week picker");
   TestLocalizedRoleDescription(15, u"highlight");
   TestLocalizedRoleDescription(16, u"meter");
-  TestLocalizedRoleDescription(17, u"output");
+  TestLocalizedRoleDescription(17, u"status");
   TestLocalizedRoleDescription(18, u"time");
   TestLocalizedRoleDescription(19, u"content information");
 }
@@ -1142,7 +1298,7 @@ IN_PROC_BROWSER_TEST_F(
 
 // On Android root scroll offset is handled by the Java layer. The final rect
 // bounds is device specific.
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
 IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
                        GetBoundsRectUnclippedRootFrameFromIFrame) {
   LoadInitialAccessibilityTreeFromHtmlFilePath(
@@ -1243,8 +1399,16 @@ IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
                 .ToString());
 }
 
+// Flaky on Lacros: https://crbug.com/1292527
+// TODO(https://crbug.com/1318197): Enable on Fuchsia when content_browsertests
+// runs in non-headless mode.
+#if BUILDFLAG(IS_CHROMEOS_LACROS) || BUILDFLAG(IS_FUCHSIA)
+#define MAYBE_ControlsIdsForDateTimePopup DISABLED_ControlsIdsForDateTimePopup
+#else
+#define MAYBE_ControlsIdsForDateTimePopup ControlsIdsForDateTimePopup
+#endif
 IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
-                       ControlsIdsForDateTimePopup) {
+                       MAYBE_ControlsIdsForDateTimePopup) {
   LoadInitialAccessibilityTreeFromHtml(R"HTML(
       <!DOCTYPE html>
       <html>
@@ -1291,7 +1455,7 @@ IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
     action_data.action = ax::mojom::Action::kDoDefault;
     popup_control->AccessibilityPerformAction(action_data);
 
-    waiter.WaitForNotification();
+    ASSERT_TRUE(waiter.WaitForNotification());
   }
 
   // Get the list of ControlsIds again; should now also include the popup
@@ -1306,12 +1470,12 @@ IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
     ASSERT_NE(nullptr, popup_area);
     EXPECT_EQ(ax::mojom::Role::kRootWebArea, popup_area->GetRole());
 
-#if !BUILDFLAG(IS_CHROMECAST)
+#if !BUILDFLAG(IS_CASTOS) && !BUILDFLAG(IS_CAST_ANDROID)
     // Ensure that the bounding box of the popup area is at least 100
     // pixels down the page.
     gfx::Rect popup_bounds = popup_area->GetUnclippedRootFrameBoundsRect();
     EXPECT_GT(popup_bounds.y(), 100);
-#endif
+#endif  // !BUILDFLAG(IS_CASTOS) && !BUILDFLAG(IS_CAST_ANDROID)
   }
 }
 
@@ -1357,7 +1521,7 @@ IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
     action_data.action = ax::mojom::Action::kDoDefault;
     input_control->AccessibilityPerformAction(action_data);
 
-    waiter.WaitForNotification();
+    ASSERT_TRUE(waiter.WaitForNotification());
   }
 
   // Get the list of ControlsIds again; should now include the popup
@@ -1379,7 +1543,7 @@ IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
       shell()->web_contents(), ui::kAXModeComplete,
       ax::mojom::Event::kScrolledToAnchor);
 
-  GURL url(net::EscapeExternalHandlerValue(R"HTML(data:text/html,
+  GURL url(base::EscapeExternalHandlerValue(R"HTML(data:text/html,
       <p>
         Some text
       </p>
@@ -1389,7 +1553,7 @@ IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
       #:~:text=Anchor text)HTML"));
   ASSERT_TRUE(NavigateToURL(shell(), url));
 
-  anchor_waiter.WaitForNotification();
+  ASSERT_TRUE(anchor_waiter.WaitForNotification());
   WaitForAccessibilityTreeToContainNodeWithName(shell()->web_contents(),
                                                 "Anchor text");
 
@@ -1428,19 +1592,19 @@ IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest, GeneratedText) {
   ASSERT_EQ(3U, heading->PlatformChildCount());
 
   const BrowserAccessibility* static1 = heading->PlatformGetChild(0);
-  EXPECT_EQ(ax::mojom::Role::kStaticText, static1->GetData().role);
+  EXPECT_EQ(ax::mojom::Role::kStaticText, static1->GetRole());
   EXPECT_STREQ(
       "[ ",
       GetAttr(static1->node(), ax::mojom::StringAttribute::kName).c_str());
 
   const BrowserAccessibility* static2 = heading->PlatformGetChild(1);
-  EXPECT_EQ(ax::mojom::Role::kStaticText, static2->GetData().role);
+  EXPECT_EQ(ax::mojom::Role::kStaticText, static2->GetRole());
   EXPECT_STREQ(
       "Foo",
       GetAttr(static2->node(), ax::mojom::StringAttribute::kName).c_str());
 
   const BrowserAccessibility* static3 = heading->PlatformGetChild(2);
-  EXPECT_EQ(ax::mojom::Role::kStaticText, static3->GetData().role);
+  EXPECT_EQ(ax::mojom::Role::kStaticText, static3->GetRole());
   EXPECT_STREQ(
       " ]",
       GetAttr(static3->node(), ax::mojom::StringAttribute::kName).c_str());
@@ -1478,7 +1642,7 @@ IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
   AccessibilityNotificationWaiter waiter(
       shell()->web_contents(), ui::kAXModeComplete, ax::mojom::Event::kFocus);
   second_iframe_root_browser_accessibility->manager()->SetFocus(*second_button);
-  waiter.WaitForNotification();
+  ASSERT_TRUE(waiter.WaitForNotification());
   EXPECT_EQ(second_button, root_accessibility_manager->GetFocus());
 
   BrowserAccessibility* first_iframe_browser_accessibility =
@@ -1535,7 +1699,7 @@ IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
         shell()->web_contents(), ui::kAXModeComplete, ax::mojom::Event::kFocus);
     second_iframe_root_browser_accessibility->manager()->SetFocus(
         *second_button);
-    waiter.WaitForNotification();
+    ASSERT_TRUE(waiter.WaitForNotification());
     ASSERT_EQ(second_button, root_accessibility_manager->GetFocus());
   }
 
@@ -1546,20 +1710,18 @@ IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
     AccessibilityNotificationWaiter waiter(
         shell()->web_contents(), ui::kAXModeComplete, ax::mojom::Event::kBlur);
     root_accessibility_manager->SetFocus(*root_browser_accessibility);
-    waiter.WaitForNotification();
+    ASSERT_TRUE(waiter.WaitForNotification());
     ASSERT_EQ(root_browser_accessibility,
               root_accessibility_manager->GetFocus());
   }
 }
-#endif  // !defined(OS_ANDROID)
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 // This test is checking behavior when ImplicitRootScroller is enabled which
 // applies only on Android.
-// TODO(http://crbug.com/1137425): Re-enable the test after it gets fixed on
-// Android O.
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
-                       DISABLED_ImplicitRootScroller) {
+                       ImplicitRootScroller) {
   LoadInitialAccessibilityTreeFromHtmlFilePath(
       "/accessibility/scrolling/implicit-root-scroller.html");
 
@@ -1586,7 +1748,7 @@ IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
   bounds = heading->GetUnclippedRootFrameBoundsRect();
   EXPECT_GT(bounds.y(), 0);
 }
-#endif  // defined(OS_ANDROID)
+#endif  // BUILDFLAG(IS_ANDROID)
 
 #if defined(IS_FAST_BUILD)  // Avoid flakiness on slower debug/sanitizer builds.
 IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
@@ -1626,8 +1788,8 @@ IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
                                            ax::mojom::Event::kLayoutComplete);
     // Run test for 1 second, counting the number of layout completes.
     while (timer.Elapsed().InMilliseconds() < 1000) {
-      waiter.WaitForNotificationWithTimeout(
-          base::TimeDelta::FromMilliseconds(1000) - timer.Elapsed());
+      std::ignore = waiter.WaitForNotificationWithTimeout(
+          base::Milliseconds(1000) - timer.Elapsed());
       ++num_batches;
     }
   }
@@ -1640,8 +1802,15 @@ IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
 #endif
 
 #if defined(IS_FAST_BUILD)  // Avoid flakiness on slower debug/sanitizer builds.
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
+#define MAYBE_DocumentSelectionChangesAreNotBatched \
+  DISABLED_DocumentSelectionChangesAreNotBatched
+#else
+#define MAYBE_DocumentSelectionChangesAreNotBatched \
+  DocumentSelectionChangesAreNotBatched
+#endif
 IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
-                       DocumentSelectionChangesAreNotBatched) {
+                       MAYBE_DocumentSelectionChangesAreNotBatched) {
   // Ensure that document selection changes are not batched, and occur faster
   // than once per kDelayForDeferredUpdatesAfterPageLoad.
   LoadInitialAccessibilityTreeFromHtml(R"HTML(
@@ -1677,8 +1846,8 @@ IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
       ax::mojom::Event::kDocumentSelectionChanged);
   // Run test for 1 second, counting the number of selection changes.
   while (timer.Elapsed().InMilliseconds() < 1000) {
-    waiter.WaitForNotificationWithTimeout(
-        base::TimeDelta::FromMilliseconds(1000) - timer.Elapsed());
+    std::ignore = waiter.WaitForNotificationWithTimeout(
+        base::Milliseconds(1000) - timer.Elapsed());
     ++num_batches;
   }
 
@@ -1688,8 +1857,15 @@ IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
 #endif  // IS_FAST_BUILD
 
 #if defined(IS_FAST_BUILD)  // Avoid flakiness on slower debug/sanitizer builds.
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
+#define MAYBE_ActiveDescendantChangesAreNotBatched \
+  DISABLED_ActiveDescendantChangesAreNotBatched
+#else
+#define MAYBE_ActiveDescendantChangesAreNotBatched \
+  ActiveDescendantChangesAreNotBatched
+#endif
 IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
-                       ActiveDescendantChangesAreNotBatched) {
+                       MAYBE_ActiveDescendantChangesAreNotBatched) {
   // Ensure that active descendant changes are not batched, and occur faster
   // than once per kDelayForDeferredUpdatesAfterPageLoad.
   LoadInitialAccessibilityTreeFromHtml(R"HTML(
@@ -1728,8 +1904,8 @@ IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
         ui::AXEventGenerator::Event::ACTIVE_DESCENDANT_CHANGED);
     // Run test for 1 second, counting the number of active descendant changes.
     while (timer.Elapsed().InMilliseconds() < 1000) {
-      waiter.WaitForNotificationWithTimeout(
-          base::TimeDelta::FromMilliseconds(1000) - timer.Elapsed());
+      std::ignore = waiter.WaitForNotificationWithTimeout(
+          base::Milliseconds(1000) - timer.Elapsed());
       ++num_batches;
     }
   }
@@ -1777,7 +1953,7 @@ IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
       shell()->web_contents(), ui::kAXModeComplete,
       ui::AXEventGenerator::Event::IGNORED_CHANGED);
   ExecuteScript("document.body.addEventListener('mousedown', function() {});");
-  waiter.WaitForNotification();
+  ASSERT_TRUE(waiter.WaitForNotification());
 
   // The body should no longer be ignored after adding a mouse button listener.
   ASSERT_FALSE(body_node->IsIgnored());
@@ -1798,13 +1974,13 @@ IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
 
   // Press enter to activate the link, wait for the second iframe to load.
   {
-    AccessibilityNotificationWaiter waiter(
-        shell()->web_contents(), ui::kAXModeComplete,
-        ui::AXEventGenerator::Event::LOAD_COMPLETE);
+    AccessibilityNotificationWaiter waiter(shell()->web_contents(),
+                                           ui::kAXModeComplete,
+                                           ax::mojom::Event::kLoadComplete);
     SimulateKeyPress(shell()->web_contents(), ui::DomKey::ENTER,
                      ui::DomCode::ENTER, ui::VKEY_RETURN, false, false, false,
                      false);
-    waiter.WaitForNotification();
+    ASSERT_TRUE(waiter.WaitForNotification());
   }
 
   // Press Tab, we should eventually land on the last button within the
@@ -1855,7 +2031,7 @@ IN_PROC_BROWSER_TEST_F(
     action_data.target_node_id = list_option_1_browser_accessibility->GetId();
     list_option_1_browser_accessibility->AccessibilityPerformAction(
         action_data);
-    waiter.WaitForNotification();
+    ASSERT_TRUE(waiter.WaitForNotification());
   }
 
   EXPECT_TRUE(list_option_1_browser_accessibility->GetBoolAttribute(
@@ -1876,7 +2052,7 @@ IN_PROC_BROWSER_TEST_F(
     action_data.target_node_id = list_option_2_browser_accessibility->GetId();
     list_option_2_browser_accessibility->AccessibilityPerformAction(
         action_data);
-    waiter.WaitForNotification();
+    ASSERT_TRUE(waiter.WaitForNotification());
   }
 
   EXPECT_FALSE(list_option_1_browser_accessibility->GetBoolAttribute(
@@ -1933,7 +2109,7 @@ IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
     action_data.action = ax::mojom::Action::kFocus;
     action_data.target_node_id = input_browser_accessibility->GetId();
     input_browser_accessibility->AccessibilityPerformAction(action_data);
-    waiter.WaitForNotification();
+    ASSERT_TRUE(waiter.WaitForNotification());
   }
 
   ui::AXNodeID active_descendant_id = ui::kInvalidAXNodeID;
@@ -1957,7 +2133,7 @@ IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
     action_data.action = ax::mojom::Action::kFocus;
     action_data.target_node_id = button_browser_accessibility->GetId();
     button_browser_accessibility->AccessibilityPerformAction(action_data);
-    waiter.WaitForNotification();
+    ASSERT_TRUE(waiter.WaitForNotification());
   }
 
   active_descendant_id = ui::kInvalidAXNodeID;
@@ -2015,7 +2191,7 @@ IN_PROC_BROWSER_TEST_F(
     action_data.target_node_id = list_option_1_browser_accessibility->GetId();
     list_option_1_browser_accessibility->AccessibilityPerformAction(
         action_data);
-    waiter.WaitForNotification();
+    ASSERT_TRUE(waiter.WaitForNotification());
   }
 
   EXPECT_FALSE(list_option_1_browser_accessibility->GetBoolAttribute(
@@ -2035,7 +2211,7 @@ IN_PROC_BROWSER_TEST_F(
     action_data.target_node_id = list_option_2_browser_accessibility->GetId();
     list_option_2_browser_accessibility->AccessibilityPerformAction(
         action_data);
-    waiter.WaitForNotification();
+    ASSERT_TRUE(waiter.WaitForNotification());
   }
 
   EXPECT_FALSE(list_option_1_browser_accessibility->GetBoolAttribute(
@@ -2051,7 +2227,7 @@ IN_PROC_BROWSER_TEST_F(
 // We do not run this test on Android because only the Java code can change the
 // size of the web contents, instead see the associated test in
 // WebContentsAccessibilityTest#testBoundingBoxUpdatesOnWindowResize().
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
 IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
                        FlexBoxBoundingBoxUpdatesOnWindowResize) {
   // This is an edge case that was discovered on a mobile sign-in page.
@@ -2083,7 +2259,7 @@ IN_PROC_BROWSER_TEST_F(CrossPlatformAccessibilityBrowserTest,
     // Wait for any event
     AccessibilityNotificationWaiter waiter(
         shell()->web_contents(), ui::AXMode(), ax::mojom::Event::kNone);
-    waiter.WaitForNotification();
+    ASSERT_TRUE(waiter.WaitForNotification());
     bounds1 = button->GetUnclippedRootFrameBoundsRect();
   } while (bounds1.y() == bounds0.y());
 

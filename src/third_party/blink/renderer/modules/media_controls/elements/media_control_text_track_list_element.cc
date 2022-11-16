@@ -18,7 +18,7 @@
 #include "third_party/blink/renderer/modules/media_controls/elements/media_control_toggle_closed_captions_button_element.h"
 #include "third_party/blink/renderer/modules/media_controls/media_controls_impl.h"
 #include "third_party/blink/renderer/modules/media_controls/media_controls_text_track_manager.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/text/platform_locale.h"
 
 namespace blink {
@@ -123,14 +123,14 @@ Element* MediaControlTextTrackListElement::CreateTextTrackListItem(
   track_item_input->SetIntegralAttribute(TrackIndexAttrName(), track_index);
   if (!MediaElement().TextTracksVisible()) {
     if (!track) {
-      track_item_input->setChecked(true);
+      track_item_input->SetChecked(true);
       track_item->setAttribute(html_names::kAriaCheckedAttr, "true");
     }
   } else {
     // If there are multiple text tracks set to showing, they must all have
     // checkmarks displayed.
-    if (track && track->mode() == TextTrack::ShowingKeyword()) {
-      track_item_input->setChecked(true);
+    if (track && track->mode() == TextTrackMode::kShowing) {
+      track_item_input->SetChecked(true);
       track_item->setAttribute(html_names::kAriaCheckedAttr, "true");
     } else {
       track_item->setAttribute(html_names::kAriaCheckedAttr, "false");

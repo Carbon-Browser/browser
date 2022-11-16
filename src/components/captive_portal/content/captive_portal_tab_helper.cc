@@ -25,7 +25,7 @@ CaptivePortalTabHelper::CaptivePortalTabHelper(
         open_login_tab_callback)
 
     : content::WebContentsObserver(web_contents),
-      navigation_handle_(nullptr),
+      content::WebContentsUserData<CaptivePortalTabHelper>(*web_contents),
       tab_reloader_(new CaptivePortalTabReloader(captive_portal_service,
                                                  web_contents,
                                                  open_login_tab_callback)),
@@ -155,6 +155,6 @@ CaptivePortalTabReloader* CaptivePortalTabHelper::GetTabReloaderForTest() {
   return tab_reloader_.get();
 }
 
-WEB_CONTENTS_USER_DATA_KEY_IMPL(CaptivePortalTabHelper)
+WEB_CONTENTS_USER_DATA_KEY_IMPL(CaptivePortalTabHelper);
 
 }  // namespace captive_portal

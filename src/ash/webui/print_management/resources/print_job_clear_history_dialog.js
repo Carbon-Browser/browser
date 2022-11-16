@@ -30,7 +30,7 @@ Polymer({
     /** @private */
     shouldDisableClearButton_: {
       type: Boolean,
-      value: false
+      value: false,
     },
   },
 
@@ -54,8 +54,8 @@ Polymer({
   /** @private */
   onClearButtonClick_() {
     this.shouldDisableClearButton_ = true;
-    this.mojoInterfaceProvider_.deleteAllPrintJobs()
-      .then(this.onClearedHistory_.bind(this))
+    this.mojoInterfaceProvider_.deleteAllPrintJobs().then(
+        this.onClearedHistory_.bind(this));
   },
 
   /**

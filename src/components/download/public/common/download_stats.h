@@ -224,6 +224,10 @@ COMPONENTS_DOWNLOAD_EXPORT void RecordDownloadResumption(
     DownloadInterruptReason reason,
     bool user_resume);
 
+// Records the interrupt reason when a download is retried.
+COMPONENTS_DOWNLOAD_EXPORT void RecordDownloadRetry(
+    DownloadInterruptReason reason);
+
 // Records whenever a download hits max auto-resumption limit.
 COMPONENTS_DOWNLOAD_EXPORT void RecordAutoResumeCountLimitReached(
     DownloadInterruptReason reason);
@@ -370,7 +374,7 @@ COMPONENTS_DOWNLOAD_EXPORT void RecordParallelRequestCreationFailure(
 COMPONENTS_DOWNLOAD_EXPORT void RecordDownloadLaterEvent(
     DownloadLaterEvent event);
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 enum class BackgroudTargetDeterminationResultTypes {
   // Target determination succeeded.
   kSuccess = 0,
@@ -388,12 +392,12 @@ enum class BackgroudTargetDeterminationResultTypes {
 // reduced mode.
 COMPONENTS_DOWNLOAD_EXPORT void RecordBackgroundTargetDeterminationResult(
     BackgroudTargetDeterminationResultTypes type);
-#endif  // defined(OS_ANDROID)
+#endif  // BUILDFLAG(IS_ANDROID)
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 // Records the OS error code when moving a file on Windows.
 COMPONENTS_DOWNLOAD_EXPORT void RecordWinFileMoveError(int os_error);
-#endif  // defined(OS_WIN)
+#endif  // BUILDFLAG(IS_WIN)
 }  // namespace download
 
 #endif  // COMPONENTS_DOWNLOAD_PUBLIC_COMMON_DOWNLOAD_STATS_H_

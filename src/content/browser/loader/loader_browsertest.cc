@@ -9,7 +9,6 @@
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/command_line.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
 #include "base/strings/string_util.h"
@@ -50,7 +49,6 @@
 #include "services/network/public/cpp/features.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "third_party/blink/public/common/chrome_debug_urls.h"
-#include "third_party/blink/public/common/loader/previews_state.h"
 #include "third_party/blink/public/common/loader/url_loader_throttle.h"
 #include "url/gurl.h"
 
@@ -236,7 +234,7 @@ IN_PROC_BROWSER_TEST_F(LoaderBrowserTest, SyncXMLHttpRequest_Disallowed) {
 // downloadable) would trigger download and hang the renderer process,
 // if executed while navigating to a new page.
 // Disabled on Mac: see http://crbug.com/56264
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 #define MAYBE_SyncXMLHttpRequest_DuringUnload \
   DISABLED_SyncXMLHttpRequest_DuringUnload
 #else
@@ -290,7 +288,7 @@ std::unique_ptr<net::test_server::HttpResponse> CancelOnRequest(
 // URLRequest, which passes the error on ResourceLoader teardown, rather than in
 // response to call to AsyncResourceHandler::OnResponseComplete.
 // Failed on Android M builder. See crbug/1111427.
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #define MAYBE_SyncXMLHttpRequest_Cancelled DISABLED_SyncXMLHttpRequest_Cancelled
 #else
 #define MAYBE_SyncXMLHttpRequest_Cancelled SyncXMLHttpRequest_Cancelled
@@ -302,7 +300,7 @@ IN_PROC_BROWSER_TEST_F(LoaderBrowserTest, MAYBE_SyncXMLHttpRequest_Cancelled) {
 
   embedded_test_server()->RegisterRequestHandler(base::BindRepeating(
       &CancelOnRequest, "/hung",
-      shell()->web_contents()->GetMainFrame()->GetProcess()->GetID(),
+      shell()->web_contents()->GetPrimaryMainFrame()->GetProcess()->GetID(),
       base::BindRepeating(&BrowserTestBase::SimulateNetworkServiceCrash,
                           base::Unretained(this))));
 
@@ -401,7 +399,7 @@ IN_PROC_BROWSER_TEST_F(LoaderBrowserTest, CrossSiteNoUnloadOn204) {
 // app isn't stripped of debug symbols, this takes about five minutes to
 // complete and isn't conducive to quick turnarounds. As we don't currently
 // strip the app on the build bots, this is bad times.
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 #define MAYBE_CrossSiteAfterCrash DISABLED_CrossSiteAfterCrash
 #else
 #define MAYBE_CrossSiteAfterCrash CrossSiteAfterCrash
@@ -828,11 +826,12 @@ IN_PROC_BROWSER_TEST_F(RequestDataBrowserTest, LinkRelPrefetchReferrerPolicy) {
   EXPECT_TRUE(image_request->initiator.has_value());
   EXPECT_EQ(top_origin, image_request->initiator);
   // Respect the "origin" policy set by the <meta> tag.
-  EXPECT_EQ(top_url.GetOrigin().spec(), image_request->referrer);
+  EXPECT_EQ(top_url.DeprecatedGetOriginAsURL().spec(), image_request->referrer);
   EXPECT_TRUE(image_request->load_flags & net::LOAD_PREFETCH);
 }
 
-IN_PROC_BROWSER_TEST_F(RequestDataBrowserTest, BasicCrossSite) {
+// TODO(crbug.com/1271868): Flaky on all platforms.
+IN_PROC_BROWSER_TEST_F(RequestDataBrowserTest, DISABLED_BasicCrossSite) {
   GURL top_url(embedded_test_server()->GetURL(
       "a.com", "/nested_page_with_subresources.html"));
   GURL nested_url(embedded_test_server()->GetURL(
@@ -1091,6 +1090,10 @@ class URLModifyingThrottle : public blink::URLLoaderThrottle {
  public:
   URLModifyingThrottle(bool modify_start, bool modify_redirect)
       : modify_start_(modify_start), modify_redirect_(modify_redirect) {}
+
+  URLModifyingThrottle(const URLModifyingThrottle&) = delete;
+  URLModifyingThrottle& operator=(const URLModifyingThrottle&) = delete;
+
   ~URLModifyingThrottle() override = default;
 
   void WillStartRequest(network::ResourceRequest* request,
@@ -1133,8 +1136,6 @@ class URLModifyingThrottle : public blink::URLLoaderThrottle {
   bool modify_start_;
   bool modify_redirect_;
   bool modified_redirect_url_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(URLModifyingThrottle);
 };
 
 class ThrottleContentBrowserClient : public TestContentBrowserClient {
@@ -1143,6 +1144,11 @@ class ThrottleContentBrowserClient : public TestContentBrowserClient {
       : TestContentBrowserClient(),
         modify_start_(modify_start),
         modify_redirect_(modify_redirect) {}
+
+  ThrottleContentBrowserClient(const ThrottleContentBrowserClient&) = delete;
+  ThrottleContentBrowserClient& operator=(const ThrottleContentBrowserClient&) =
+      delete;
+
   ~ThrottleContentBrowserClient() override {}
 
   // ContentBrowserClient overrides:
@@ -1163,8 +1169,6 @@ class ThrottleContentBrowserClient : public TestContentBrowserClient {
  private:
   bool modify_start_;
   bool modify_redirect_;
-
-  DISALLOW_COPY_AND_ASSIGN(ThrottleContentBrowserClient);
 };
 
 // Ensures if a URLLoaderThrottle modifies a URL in WillStartRequest the

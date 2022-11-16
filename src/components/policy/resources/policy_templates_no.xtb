@@ -111,13 +111,13 @@ For mer informasjon om sikkert innhold, se https://www.w3.org/TR/secure-contexts
       Avgjør varighet før skjermspareren vises på påloggingssiden for enheter i detaljistmodus.
 
       Retningslinjeverdien må angis i millisekunder.</translation>
-<translation id="1141767714195601945">Denne regelen styrer kommandolinjeparametere for Carbon Browser Browser Browser fra Internet Explorer.
+<translation id="1141767714195601945">Denne regelen styrer kommandolinjeparametere for Carbon Browser fra Internet Explorer.
 
       Hvis ikke «Støtte for eldre nettlesere»-tillegget for Internet Explorer er installert, har ikke denne regelen noen virkning.
 
-      Når denne regelen ikke er angitt, sender Internet Explorer bare nettadressen til Carbon Browser Browser Browser som en kommandolinjeparameter.
+      Når denne regelen ikke er angitt, sender Internet Explorer bare nettadressen til Carbon Browser som en kommandolinjeparameter.
 
-      Når denne regelen er satt til en liste med strenger, settes strengene sammen med mellomrom og sendes til Carbon Browser Browser Browser som kommandolinjeparametere.
+      Når denne regelen er satt til en liste med strenger, settes strengene sammen med mellomrom og sendes til Carbon Browser som kommandolinjeparametere.
 
       Hvis et element inneholder ${url}, erstattes det med nettadressen til siden som skal åpnes.
 
@@ -252,7 +252,7 @@ For mer informasjon om sikkert innhold, se https://www.w3.org/TR/secure-contexts
 
       Hvert av elementene på listen er en streng som inneholder en utvidelses-ID og en «oppdatering»-nettadresse – atskilt med semikolon (<ph name="SEMICOLON" />). Utvidelses-ID-en er en streng på 32 tegn som du for eksempel finner i <ph name="CHROME_EXTENSIONS_LINK" /> når du er i utviklermodus. «Oppdatering»-nettadressen skal peke til et oppdateringsmanifest i XML-format, som beskrevet her: <ph name="LINK_TO_EXTENSION_DOC1" />. Vær oppmerksom på at «oppdatering»-nettadressen som angis i denne regelen, bare brukes for den innledende installasjonen. Påfølgende oppdateringer av utvidelsen bruker oppdateringsnettadressen som er beskrevet i utvidelsens manifest.
 
-      For eksempel installerer <ph name="EXTENSION_POLICY_EXAMPLE" /> appen <ph name="EXTENSION_POLICY_EXAMPLE_EXTENSION_NAME" /> fra «oppdatering»-nettadressen som er standard for Carbon Browser Browser Browser Nettmarked. For mer informasjon om å være vert for utvidelser, se: <ph name="LINK_TO_EXTENSION_DOC2" />.</translation>
+      For eksempel installerer <ph name="EXTENSION_POLICY_EXAMPLE" /> appen <ph name="EXTENSION_POLICY_EXAMPLE_EXTENSION_NAME" /> fra «oppdatering»-nettadressen som er standard for Carbon Browser Nettmarked. For mer informasjon om å være vert for utvidelser, se: <ph name="LINK_TO_EXTENSION_DOC2" />.</translation>
 <translation id="1435659902881071157">Nettverkskonfigurasjon på enhetsnivå</translation>
 <translation id="1438739959477268107">Standardinnstilling for nøkkelgenerering</translation>
 <translation id="1454846751303307294">Gjør at du kan angi en liste over nettadressemønstre som spesifiserer nettsteder som ikke tillates å kjøre JavaScript.
@@ -413,11 +413,11 @@ For mer informasjon om sikkert innhold, se https://www.w3.org/TR/secure-contexts
 
       Hvis regelen ikke er angitt, er oppdateringsfunksjonalitet for <ph name="TPM_FIRMWARE_UPDATE_TPM" />-fastvaren ikke tilgjengelig.</translation>
 <translation id="1708496595873025510">Angi begrensning for henting av startverdien for variasjonene</translation>
-<translation id="1717817358640580294">Hvis denne regelen ikke er angitt og Opprydning for Carbon Browser Browser Browser oppdager uønsket programvare, kan den rapportere metadata om skanningen til Google, i samsvar med regelen som er angitt av SafeBrowsingExtendedReportingEnabled. Opprydning for Carbon Browser Browser Browser spør deretter brukerne om de vil fjerne den uønskede programvaren. Brukerne kan velge å dele resultatet fra opprydninger med Google, for å hjelpe oss med å bli enda bedre på å oppdage uønsket programvare. Disse resultatene inneholder informasjon om filmetadata, automatisk installerte utvidelser og registernøkler – som beskrevet i det tekniske dokumentet om personvern i Carbon Browser Browser Browser.
+<translation id="1717817358640580294">Hvis denne regelen ikke er angitt og Opprydning for Carbon Browser oppdager uønsket programvare, kan den rapportere metadata om skanningen til Google, i samsvar med regelen som er angitt av SafeBrowsingExtendedReportingEnabled. Opprydning for Carbon Browser spør deretter brukerne om de vil fjerne den uønskede programvaren. Brukerne kan velge å dele resultatet fra opprydninger med Google, for å hjelpe oss med å bli enda bedre på å oppdage uønsket programvare. Disse resultatene inneholder informasjon om filmetadata, automatisk installerte utvidelser og registernøkler – som beskrevet i det tekniske dokumentet om personvern i Carbon Browser.
 
-      Hvis regelen er slått av og Opprydning for Carbon Browser Browser Browser oppdager uønsket programvare, rapporterer den ingen metadata om skanningen til Google, og dermed overstyres eventuelle regler som er angitt av SafeBrowsingExtendedReportingEnabled. Opprydning for Carbon Browser Browser Browser spør brukerne om de vil fjerne den uønskede programvaren.  Resultatene fra opprydninger rapporteres ikke til Google, og brukerne har ingen muligheter til å gjøre det.
+      Hvis regelen er slått av og Opprydning for Carbon Browser oppdager uønsket programvare, rapporterer den ingen metadata om skanningen til Google, og dermed overstyres eventuelle regler som er angitt av SafeBrowsingExtendedReportingEnabled. Opprydning for Carbon Browser spør brukerne om de vil fjerne den uønskede programvaren.  Resultatene fra opprydninger rapporteres ikke til Google, og brukerne har ingen muligheter til å gjøre det.
 
-      Hvis regelen er slått på og Opprydning for Carbon Browser Browser Browser oppdager uønsket programvare, kan den rapportere metadata om skanningen til Google, i samsvar med regelen som er angitt av SafeBrowsingExtendedReportingEnabled. Opprydning for Carbon Browser Browser Browser spør brukerne om de vil fjerne den uønskede programvaren.  Resultatene fra opprydninger rapporteres til Google, og brukerne kan ikke forhindre dette.
+      Hvis regelen er slått på og Opprydning for Carbon Browser oppdager uønsket programvare, kan den rapportere metadata om skanningen til Google, i samsvar med regelen som er angitt av SafeBrowsingExtendedReportingEnabled. Opprydning for Carbon Browser spør brukerne om de vil fjerne den uønskede programvaren.  Resultatene fra opprydninger rapporteres til Google, og brukerne kan ikke forhindre dette.
 
       Denne regelen er bare tilgjengelig på Windows-forekomster som er tilknyttet <ph name="MS_AD_NAME" />-domener, eller Windows 10 Pro- eller Enterprise-forekomster som er registrert for enhetsadministrering.</translation>
 <translation id="172374442286684480">Lar alle nettsteder angi lokale data</translation>
@@ -611,7 +611,7 @@ For mer informasjon om sikkert innhold, se https://www.w3.org/TR/secure-contexts
 <translation id="2073552873076775140">Tillat pålogging i <ph name="PRODUCT_NAME" /></translation>
 <translation id="2077129598763517140">Bruk maskinvareakselerasjon når det er tilgjengelig</translation>
 <translation id="2077273864382355561">Forsinkelse for avslått skjerm når enheten kjører på batteristrøm</translation>
-<translation id="2082205219176343977">Konfigurer minimum tillatt Carbon Browser Browser Browser-versjon for enheten.</translation>
+<translation id="2082205219176343977">Konfigurer minimum tillatt Carbon Browser-versjon for enheten.</translation>
 <translation id="209586405398070749">Stabil kanal</translation>
 <translation id="2098658257603918882">Aktiver rapportering av bruk og programstopprelaterte data</translation>
 <translation id="2104418465060359056">Rapportér informasjon om utvidelser og programtillegg</translation>
@@ -656,7 +656,7 @@ For mer informasjon om sikkert innhold, se https://www.w3.org/TR/secure-contexts
       Hvis du slår av denne innstillingen eller ikke angir den, blir alle obligatoriske autentiseringssider vist i (vanlige) nye nettleserfaner, og den aktive brukerens innstillinger for proxy-tjenere brukes.</translation>
 <translation id="21394354835637379">Lar deg angi hvilke nettadresser som kan installere utvidelser, apper og temaer.
 
-          Fra og med <ph name="PRODUCT_NAME" /> 21 er det vanskeligere å installere utvidelser, apper og brukerskript som ikke kommer fra Carbon Browser Browser Browser Nettmarked. Tidligere kunne brukerne klikke på linker til *.crx-filer. <ph name="PRODUCT_NAME" /> viste da noen advarsler før brukerne ble spurt om de ville installere filene. Fra og med <ph name="PRODUCT_NAME" /> 21 må denne typen filer lastes ned og dras til innstillingssiden for <ph name="PRODUCT_NAME" />. Denne innstillingen tillater at visse nettadresser beholder den gamle og enklere installasjonsprosessen.
+          Fra og med <ph name="PRODUCT_NAME" /> 21 er det vanskeligere å installere utvidelser, apper og brukerskript som ikke kommer fra Carbon Browser Nettmarked. Tidligere kunne brukerne klikke på linker til *.crx-filer. <ph name="PRODUCT_NAME" /> viste da noen advarsler før brukerne ble spurt om de ville installere filene. Fra og med <ph name="PRODUCT_NAME" /> 21 må denne typen filer lastes ned og dras til innstillingssiden for <ph name="PRODUCT_NAME" />. Denne innstillingen tillater at visse nettadresser beholder den gamle og enklere installasjonsprosessen.
 
           Hvert element i denne listen er et samsvarsmønster av typen som brukes for utvidelser (se https://developer.chrome.com/extensions/match_patterns). Brukerne kan enkelt installere elementer fra alle nettadresser som samsvarer med elementer på denne listen. Både plasseringene til *.crx-filer og sidene der nedlastingene startes fra (dvs. henvisningsadressene), må tillates av disse mønstrene.
 
@@ -727,7 +727,7 @@ For mer informasjon om sikkert innhold, se https://www.w3.org/TR/secure-contexts
 
       Når regelen er satt til «disabled» (deaktivert) eller ikke er angitt, kan sider ikke vise forgrunnsvinduer mens de lastes ut, i tråd med spesifikasjonen (https://html.spec.whatwg.org/#apis-for-creating-and-navigating-browsing-contexts-by-name).
 
-      Denne regelen fjernes i Carbon Browser Browser Browser 82.
+      Denne regelen fjernes i Carbon Browser 82.
 
       Se https://www.chromestatus.com/feature/5989473649164288 .</translation>
 <translation id="2269319728625047531">Aktiver visning av samtykke for synkronisering under påloggingen</translation>
@@ -799,9 +799,9 @@ For mer informasjon om sikkert innhold, se https://www.w3.org/TR/secure-contexts
 <translation id="2463034609187171371">Slå på DHE-chifferserier i TLS</translation>
 <translation id="2463365186486772703">Lokalitet for program</translation>
 <translation id="2466131534462628618">Autentisering via obligatoriske sider ignorerer proxy-tjenere</translation>
-<translation id="2471748297300970300">Hvis regelen er slått av, vises ikke sikkerhetsadvarsler når Carbon Browser Browser Browser startes med enkelte kommandolinjeflagg som kan være farlige.
+<translation id="2471748297300970300">Hvis regelen er slått av, vises ikke sikkerhetsadvarsler når Carbon Browser startes med enkelte kommandolinjeflagg som kan være farlige.
 
-          Hvis regelen er slått på eller ikke er angitt, vises sikkerhetsadvarsler når enkelte kommandolinjeflagg brukes for å starte Carbon Browser Browser Browser.
+          Hvis regelen er slått på eller ikke er angitt, vises sikkerhetsadvarsler når enkelte kommandolinjeflagg brukes for å starte Carbon Browser.
 
           I Windows er denne regelen bare tilgjengelig på forekomster som er tilknyttet <ph name="MS_AD_NAME" />-domener, eller Windows 10 Pro- eller Enterprise-forekomster som er registrert for enhetsadministrering.</translation>
 <translation id="2482676533225429905">Innebygde meldinger</translation>
@@ -921,7 +921,7 @@ For mer informasjon om sikkert innhold, se https://www.w3.org/TR/secure-contexts
           Googles nettadresse for søk kan spesifiseres slik: <ph name="GOOGLE_SEARCH_URL" />.
 
           Dette alternativet må spesifiseres når regelen DefaultSearchProviderEnabled er slått på. Hvis ikke ignoreres det.</translation>
-<translation id="2659019163577049044">Hvis denne innstillingen er slått på, kan brukere konfigurere enhetene sine til å synkronisere SMS-er mellom telefoner og Carbon Browser Browser Browserbook. Merk at hvis dette er tillatt, må brukere uttrykkelig velge denne funksjonen ved å fullføre en konfigureringsprosess. Når konfigureringsprosessen er fullført, kan brukere sende og motta SMS-er på Carbon Browser Browser Browserbook.
+<translation id="2659019163577049044">Hvis denne innstillingen er slått på, kan brukere konfigurere enhetene sine til å synkronisere SMS-er mellom telefoner og Carbon Browserbook. Merk at hvis dette er tillatt, må brukere uttrykkelig velge denne funksjonen ved å fullføre en konfigureringsprosess. Når konfigureringsprosessen er fullført, kan brukere sende og motta SMS-er på Carbon Browserbook.
 
       Hvis denne innstillingen er slått av, kan ikke brukere konfigurere SMS-synkronisering.
 
@@ -939,7 +939,7 @@ For mer informasjon om sikkert innhold, se https://www.w3.org/TR/secure-contexts
 <translation id="2706708761587205154">Tillat utskrift kun med PIN-kode</translation>
 <translation id="2710534340210290498">Hvis denne regelen settes til «false» (usann), kan ikke brukerne låse skjermen (det er bare mulig å logge av fra brukerøkten). Hvis denne regelen er satt til «true» (sann) eller ikke er angitt, kan brukere som har autentisert seg med passord, låse skjermen.</translation>
 <translation id="2731627323327011390">Slå av bruken av <ph name="PRODUCT_OS_NAME" />-sertifikater for ARC-apper</translation>
-<translation id="2742843273354638707">Skjul Carbon Browser Browser Browser Nettmarked-appen og linken fra ny fane-siden og <ph name="PRODUCT_OS_NAME" /> OS-appvelgeren.
+<translation id="2742843273354638707">Skjul Carbon Browser Nettmarked-appen og linken fra ny fane-siden og <ph name="PRODUCT_OS_NAME" /> OS-appvelgeren.
 
       Hvis denne regelen slås på («true»), skjules ikonene.
 
@@ -1002,12 +1002,12 @@ For mer informasjon om sikkert innhold, se https://www.w3.org/TR/secure-contexts
       Dette skjer når denne regelen er satt til en liste med tidsintervaller som ikke er tom:
       Enheter kan ikke se etter oppdateringer automatisk i tidsintervallene du angir. Enheter som krever rollback eller har en eldre <ph name="PRODUCT_OS_NAME" />-versjon enn minstekravet, berøres ikke av denne regelen. Dette er for å unngå potensielle sikkerhetsproblemer. Denne regelen blokkerer heller ikke forespørsler fra brukere og administratorer om å se etter oppdateringer.
       Dette skjer når denne regelen ikke er angitt eller ikke inneholder tidsintervaller:
-      Regelen blokkerer ikke enheter fra å se etter oppdateringer automatisk, men andre regler kan blokkere dette. Denne funksjonen er bare aktivert på Carbon Browser Browser Browser-enheter som er konfigurert til å starte kioskapper automatisk. Andre enheter begrenses ikke av denne regelen.</translation>
+      Regelen blokkerer ikke enheter fra å se etter oppdateringer automatisk, men andre regler kan blokkere dette. Denne funksjonen er bare aktivert på Carbon Browser-enheter som er konfigurert til å starte kioskapper automatisk. Andre enheter begrenses ikke av denne regelen.</translation>
 <translation id="2823870601012066791">Plasseringen av Windows-registeret for <ph name="PRODUCT_OS_NAME" />-klienter:</translation>
 <translation id="2824715612115726353">Aktiver inkognitomodus</translation>
 <translation id="2836621397261130126">Bestemmer om regelen for godkjenning fra KDC overholdes når det avgjøres om <ph name="KERBEROS" />-saker skal delegeres eller ikke.
 
-          Hvis denne regelen er satt til «true» (sann), overholder HTTP-autentiseringen regelen for godkjenning fra KDC, dvs. Carbon Browser Browser Browser delegerer kun legitimasjon hvis KDC angir <ph name="OK_AS_DELEGATE" /> på en servicesak. Se https://tools.ietf.org/html/rfc5896.html for mer informasjon. Tjenesten må også samsvare med «AuthNegotiateDelegateWhitelist»-regelen.
+          Hvis denne regelen er satt til «true» (sann), overholder HTTP-autentiseringen regelen for godkjenning fra KDC, dvs. Carbon Browser delegerer kun legitimasjon hvis KDC angir <ph name="OK_AS_DELEGATE" /> på en servicesak. Se https://tools.ietf.org/html/rfc5896.html for mer informasjon. Tjenesten må også samsvare med «AuthNegotiateDelegateWhitelist»-regelen.
 
           Hvis denne regelen er satt til «false» (usann) eller ikke er angitt, ignoreres KDC-regelen på støttede plattformer, og kun «AuthNegotiateDelegateWhitelist»-regelen overholdes.
 
@@ -1155,7 +1155,7 @@ For mer informasjon om sikkert innhold, se https://www.w3.org/TR/secure-contexts
           Hvis denne retningslinjen ikke angis, brukes AllowJavaScript, og brukeren kan endre på dette.</translation>
 <translation id="3038323923255997294">Fortsett å kjøre bakgrunnsprogrammer når <ph name="PRODUCT_NAME" /> er lukket</translation>
 <translation id="3046192273793919231">Send nettverkspakker til administreringstjeneren for å overvåke nettstatusen</translation>
-<translation id="3047732214002457234">Kontrollerer hvordan Opprydning for Carbon Browser Browser Browser rapporterer data til Google</translation>
+<translation id="3047732214002457234">Kontrollerer hvordan Opprydning for Carbon Browser rapporterer data til Google</translation>
 <translation id="304775240152542058">Denne regelen kontrollerer kommandolinjeparametere som starter den alternative nettleseren.
 
       Hvis denne regelen ikke er konfigurert, er det bare nettadressen som sendes som kommandolinjeparameter.
@@ -1227,9 +1227,9 @@ For mer informasjon om sikkert innhold, se https://www.w3.org/TR/secure-contexts
       Hvis regelen ikke er angitt eller er satt til false (usann), er ikke DHE-chifferserier i TLS slått på. Den kan angis som true (sann) for å sikre kompatibilitet med utdaterte tjenere. Dette er en midlertidig løsning, og eventuelle slike tjenere bør konfigureres på nytt.
 
       Vi anbefaler at tjenere overføres til ECDHE-chifferserier. Hvis det ikke er mulig, bør du sikre at nøkkelutveksling er slått på for chifferserien.</translation>
-<translation id="3117706142826400449">Hvis denne er slått av, hindres Opprydning for Carbon Browser Browser Browser i å søke etter og fjerne uønsket programvare på systemet. Manuell start av Opprydning for Carbon Browser Browser Browser fra chrome://settings/cleanup er deaktivert.
+<translation id="3117706142826400449">Hvis denne er slått av, hindres Opprydning for Carbon Browser i å søke etter og fjerne uønsket programvare på systemet. Manuell start av Opprydning for Carbon Browser fra chrome://settings/cleanup er deaktivert.
 
-      Hvis regelen er slått på eller ikke er angitt, søker Opprydning for Carbon Browser Browser Browser med jevne mellomrom etter uønsket programvare på systemet, og hvis det blir funnet noe, blir brukeren spurt om det skal fjernes. Manuell start av Opprydning for Carbon Browser Browser Browser fra chrome://settings er aktivert.
+      Hvis regelen er slått på eller ikke er angitt, søker Opprydning for Carbon Browser med jevne mellomrom etter uønsket programvare på systemet, og hvis det blir funnet noe, blir brukeren spurt om det skal fjernes. Manuell start av Opprydning for Carbon Browser fra chrome://settings er aktivert.
 
       Denne regelen er bare tilgjengelig på Windows-forekomster som er tilknyttet <ph name="MS_AD_NAME" />-domener, eller Windows 10 Pro- eller Enterprise-forekomster som er registrert for enhetsadministrering.</translation>
 <translation id="3152425128389603870">Gjør det enhetlige skrivebordet tilgjengelig, og slå det på som standard.</translation>
@@ -1338,7 +1338,7 @@ For mer informasjon om sikkert innhold, se https://www.w3.org/TR/secure-contexts
       Hvis denne innstillingen er angitt som av (Off), eller hvis ingen verdi er angitt, fremtvinger ikke <ph name="PRODUCT_NAME" /> bruk av Begrenset innhold-modusen. Eksterne regler, for eksempel YouTube-regler, kan imidlertid fortsatt fremtvinge bruk av Begrenset innhold-modusen.</translation>
 <translation id="3428247105888806363">Slå på nettverksforutsigelse</translation>
 <translation id="3432863169147125747">Kontrollerer utskriftsinnstillinger.</translation>
-<translation id="3434932177006334880">Denne regelen het EnableWebBasedSignin før Carbon Browser Browser Browser 42, og støtten for den blir fjernet helt i Carbon Browser Browser Browser 43.
+<translation id="3434932177006334880">Denne regelen het EnableWebBasedSignin før Carbon Browser 42, og støtten for den blir fjernet helt i Carbon Browser 43.
 
       Denne innstillingen er nyttig for bedriftskunder som bruker løsninger for global pålogging som ikke er kompatible med den nye, innebygde påloggingsprosessen.
       Hvis du slår på denne innstillingen, brukes den gamle, nettbaserte påloggingsprosessen.
@@ -1433,9 +1433,9 @@ For mer informasjon om sikkert innhold, se https://www.w3.org/TR/secure-contexts
 <translation id="3646859102161347133">Angi skjermforstørrelsestype</translation>
 <translation id="3653237928288822292">Ikon for standard søkeleverandør</translation>
 <translation id="3660510274595679517">
-        Hvis denne regelen er satt til True (sann), er registrering for skyadministrering obligatorisk, og oppstartsprosessen for Carbon Browser Browser Browser blokkeres hvis dette ikke gjøres.
+        Hvis denne regelen er satt til True (sann), er registrering for skyadministrering obligatorisk, og oppstartsprosessen for Carbon Browser blokkeres hvis dette ikke gjøres.
 
-        Hvis denne regelen ikke er angitt eller den er satt til False (usann), er registrering for skyadministrering valgfritt, og oppstartsprosessen for Carbon Browser Browser Browser blokkeres ikke selv om dette ikke gjøres.
+        Hvis denne regelen ikke er angitt eller den er satt til False (usann), er registrering for skyadministrering valgfritt, og oppstartsprosessen for Carbon Browser blokkeres ikke selv om dette ikke gjøres.
 
         Denne regelen brukes ved registrering av retningslinjer for nettskyer med maskinomfang på datamaskiner. Den kan angis via registeret eller GPO i Windows, plist på Mac og en JSON-regelfil i Linux.</translation>
 <translation id="3660562134618097814">Overfør SAML IdP-informasjonskapsler ved pålogging</translation>
@@ -1629,11 +1629,11 @@ For mer informasjon om sikkert innhold, se https://www.w3.org/TR/secure-contexts
 <translation id="3984028218719007910">Avgjør om <ph name="PRODUCT_OS_NAME" /> beholder lokal kontodata etter avlogging. Hvis retningslinjen er angitt som Sann, beholdes det ikke noen vedvarende kontoer av <ph name="PRODUCT_OS_NAME" />, og all data fra brukerøkten blir forkastet etter avlogging. Hvis denne retningslinjen er angitt som Usann eller ikke er konfigurert, kan enheten beholde (kryptert) lokal brukerdata.</translation>
 <translation id="398475542699441679">Denne regelen styrer om støtte for eldre nettlesere skal aktiveres.
 
-      Når denne regelen er satt til «false» (usann) eller ikke er angitt, prøver ikke Carbon Browser Browser Browser å åpne angitte nettadresser i andre nettlesere.
+      Når denne regelen er satt til «false» (usann) eller ikke er angitt, prøver ikke Carbon Browser å åpne angitte nettadresser i andre nettlesere.
 
-      Når denne regelen er satt til «true» (sann), prøver Carbon Browser Browser Browser å åpne visse nettadresser i andre nettlesere (som Internet Explorer). Denne funksjonen konfigureres med reglene i <ph name="LEGACY_BROWSER_SUPPORT_POLICY_GROUP" />-gruppen.
+      Når denne regelen er satt til «true» (sann), prøver Carbon Browser å åpne visse nettadresser i andre nettlesere (som Internet Explorer). Denne funksjonen konfigureres med reglene i <ph name="LEGACY_BROWSER_SUPPORT_POLICY_GROUP" />-gruppen.
 
-      Denne funksjonen erstatter <ph name="LEGACY_BROWSER_SUPPORT_EXTENSION_NAME" />-utvidelsen. Konfigurasjonen for utvidelsen blir videreført til denne funksjonen, men det anbefales sterkt å bruke Carbon Browser Browser Browser-regler i stedet. Dette sikrer bedre kompatibilitet i fremtiden.</translation>
+      Denne funksjonen erstatter <ph name="LEGACY_BROWSER_SUPPORT_EXTENSION_NAME" />-utvidelsen. Konfigurasjonen for utvidelsen blir videreført til denne funksjonen, men det anbefales sterkt å bruke Carbon Browser-regler i stedet. Dette sikrer bedre kompatibilitet i fremtiden.</translation>
 <translation id="3997519162482760140">Nettadresser som får tilgang til videoopptaksenheter på SAML-påloggingssider</translation>
 <translation id="4001275826058808087">IT-administratorer for bedriftsenheter kan bruke denne markeringen til å kontrollere om brukerne kan innløse tilbud via Chrome OS- registrering.
 
@@ -1652,13 +1652,13 @@ For mer informasjon om sikkert innhold, se https://www.w3.org/TR/secure-contexts
 
           Denne regelen prioriteres foran eventuelle regler for <ph name="EXTENSION_INSTALL_BLACKLIST_POLICY_NAME" /> hvis de er i konflikt med hverandre. Hvis apper eller utvidelser som tidligere var administratorinstallert, blir fjernet fra listen, blir de automatisk avinstallert av <ph name="PRODUCT_NAME" />.
 
-          For Windows-forekomster som ikke er tilknyttet noe <ph name="MS_AD_NAME" />-domene, er administratorinstallasjon begrenset til apper og utvidelser som står oppført i Carbon Browser Browser Browser Nettmarked.
+          For Windows-forekomster som ikke er tilknyttet noe <ph name="MS_AD_NAME" />-domene, er administratorinstallasjon begrenset til apper og utvidelser som står oppført i Carbon Browser Nettmarked.
 
          Vær oppmerksom på at kildekoden for utvidelsene kan endres av brukere via utviklerverktøy (noe som potensielt kan føre til at utvidelsene ikke fungerer). Hvis dette kan bli et problem, bør du angi regelen <ph name="DEVELOPER_TOOLS_POLICY_NAME" />.
 
-          Hvert av elementene i listen er en streng som inneholder en utvidelses-ID og eventuelt (valgfritt) en oppdateringsadresse, atskilt med semikolon (<ph name="SEMICOLON" />). Utvidelses-ID-en er strengen på 32 tegn du for eksempel finner i <ph name="CHROME_EXTENSIONS_LINK" /> når du er i utviklermodus. Oppdateringsadressen skal være til et oppdateringsmanifest i XML-format, som beskrevet her: <ph name="LINK_TO_EXTENSION_DOC1" />. Oppdateringsadressen for Carbon Browser Browser Browser Nettmarked brukes som standard (og for øyeblikket er den «https://clients2.google.com/service/update2/crx»). Vær oppmerksom på at oppdateringsadressen som angis i denne regelen, bare brukes for den første installasjonen. Påfølgende oppdateringer av utvidelsen bruker oppdateringsadressen som er beskrevet i utvidelsens manifest. Vær også oppmerksom på at det var uttrykkelig påkrevd å angi oppdateringsadressen i <ph name="PRODUCT_NAME" />-versjoner til og med 67.
+          Hvert av elementene i listen er en streng som inneholder en utvidelses-ID og eventuelt (valgfritt) en oppdateringsadresse, atskilt med semikolon (<ph name="SEMICOLON" />). Utvidelses-ID-en er strengen på 32 tegn du for eksempel finner i <ph name="CHROME_EXTENSIONS_LINK" /> når du er i utviklermodus. Oppdateringsadressen skal være til et oppdateringsmanifest i XML-format, som beskrevet her: <ph name="LINK_TO_EXTENSION_DOC1" />. Oppdateringsadressen for Carbon Browser Nettmarked brukes som standard (og for øyeblikket er den «https://clients2.google.com/service/update2/crx»). Vær oppmerksom på at oppdateringsadressen som angis i denne regelen, bare brukes for den første installasjonen. Påfølgende oppdateringer av utvidelsen bruker oppdateringsadressen som er beskrevet i utvidelsens manifest. Vær også oppmerksom på at det var uttrykkelig påkrevd å angi oppdateringsadressen i <ph name="PRODUCT_NAME" />-versjoner til og med 67.
 
-          For eksempel installerer <ph name="EXTENSION_POLICY_EXAMPLE" /> utvidelsen med ID-en <ph name="EXTENSION_ID_SAMPLE" /> fra den oppdateringsadressen som er standard for Carbon Browser Browser Browser Nettmarked. Gå til <ph name="LINK_TO_EXTENSION_DOC2" /> for å finne ut mer om verter for utvidelser.
+          For eksempel installerer <ph name="EXTENSION_POLICY_EXAMPLE" /> utvidelsen med ID-en <ph name="EXTENSION_ID_SAMPLE" /> fra den oppdateringsadressen som er standard for Carbon Browser Nettmarked. Gå til <ph name="LINK_TO_EXTENSION_DOC2" /> for å finne ut mer om verter for utvidelser.
 
           Hvis denne regelen ikke er angitt, blir ingen apper eller utvidelser installert automatisk, og brukere kan avinstallere hvilke som helst apper og utvidelser i <ph name="PRODUCT_NAME" />.
 
@@ -1765,7 +1765,7 @@ For mer informasjon om sikkert innhold, se https://www.w3.org/TR/secure-contexts
           Hvis du angir denne regelen, kan ikke brukerne endre eller overstyre den.
 
           Hvis regelen ikke er angitt, er trege taster i utgangspunktet slått av, men brukerne kan når som helst slå på funksjonen.</translation>
-<translation id="4171331498167688968">Hvis regelen er satt til «false» (usann), kan tredjepartsprogramvare sette inn kjørbar kode i prosessene til Carbon Browser Browser Browser. Hvis regelen er satt til «true» (sann) eller ikke er angitt, forhindres tredjepartsprogramvare fra å sette inn kjørbar kode i prosessene til Carbon Browser Browser Browser.
+<translation id="4171331498167688968">Hvis regelen er satt til «false» (usann), kan tredjepartsprogramvare sette inn kjørbar kode i prosessene til Carbon Browser. Hvis regelen er satt til «true» (sann) eller ikke er angitt, forhindres tredjepartsprogramvare fra å sette inn kjørbar kode i prosessene til Carbon Browser.
 
       Uavhengig av regelverdien blir tredjepartsprogramvare for tiden ikke forhindret fra å sette inn kjørbar kode i nettleserens prosesser på maskiner som er tilknyttet <ph name="MS_AD_NAME" />-domener.</translation>
 <translation id="4183229833636799228">Standard <ph name="FLASH_PLUGIN_NAME" />-innstilling</translation>
@@ -1834,11 +1834,11 @@ Verdiene for denne regelen og WebUsbAllowDevicesForUrls-regelen slås sammen.</t
 <translation id="4298509794364745131">Angir en liste over apper som kan aktiveres som notatapper på låseskjermen for <ph name="PRODUCT_OS_NAME" />.
 
       Hvis den foretrukne notatappen er aktivert på låseskjermen, inneholder låseskjermen et UI-element for å starte den aktuelle appen.
-      Når appen er startet, kan den opprette et appvindu øverst på låseskjermen og opprette dataelementer (notater) når skjermen er låst. Appen kan også importere opprettede notater til den primære brukerøkten når den aktuelle økten er låst opp. For øyeblikket støttes bare Carbon Browser Browser Browser-notatapper på låseskjermen.
+      Når appen er startet, kan den opprette et appvindu øverst på låseskjermen og opprette dataelementer (notater) når skjermen er låst. Appen kan også importere opprettede notater til den primære brukerøkten når den aktuelle økten er låst opp. For øyeblikket støttes bare Carbon Browser-notatapper på låseskjermen.
 
       Når regelen er angitt, kan brukeren bare aktivere en app på låseskjermen hvis utvidelses-ID-en til den aktuelle appen er oppført i listeverdien for regelen.
       Dette betyr at hvis en tom liste angis for regelen, blir notater på startskjermen fullstendig deaktivert.
-      Vær oppmerksom på at selv når regelen inneholder en app-ID, er det ikke sikkert at brukeren kan aktivere den aktuelle appen som en notatapp på låseskjermen. I Carbon Browser Browser Browser 61 er for eksempel settet med tilgjengelige apper også begrenset av plattformen.
+      Vær oppmerksom på at selv når regelen inneholder en app-ID, er det ikke sikkert at brukeren kan aktivere den aktuelle appen som en notatapp på låseskjermen. I Carbon Browser 61 er for eksempel settet med tilgjengelige apper også begrenset av plattformen.
 
     Hvis regelen ikke angis, innfører den ikke noen begrensinger for hvilke apper brukeren kan aktivere på låseskjermen.</translation>
 <translation id="4313767483634435271">Enhetens dokkspesifikke MAC-adresse</translation>
@@ -1994,7 +1994,7 @@ Verdiene for denne regelen og WebUsbAllowDevicesForUrls-regelen slås sammen.</t
 <translation id="467236746355332046">Støttede funksjoner:</translation>
 <translation id="4674167212832291997">Tilpass listen over nettadressemønstre som alltid skal gjengis av <ph name="PRODUCT_FRAME_NAME" />.
 
-          Hvis denne regelen ikke er angitt, brukes standardgjengivelsen for alle nettsteder, som angitt i regelen «Carbon Browser Browser BrowserFrameRendererSettings».
+          Hvis denne regelen ikke er angitt, brukes standardgjengivelsen for alle nettsteder, som angitt i regelen «Carbon BrowserFrameRendererSettings».
 
           Du finner eksempelmønstre på https://www.chromium.org/developers/how-tos/chrome-frame-getting-started.</translation>
 <translation id="467449052039111439">Åpne en liste over nettadresser</translation>
@@ -2093,10 +2093,10 @@ Verdiene for denne regelen og WebUsbAllowDevicesForUrls-regelen slås sammen.</t
 
       Hvis denne regelen angis som «false» (usann), tillates ikke oppretting av nye profiler via brukeradministreringen for <ph name="PRODUCT_NAME" />.</translation>
 <translation id="4970855112942626932">Deaktiver nettleserpålogging</translation>
-<translation id="4978405676361550165">Hvis regelen «OffHours» er angitt, ignoreres de spesifiserte enhetsreglene (og standardverdiene for disse reglene brukes i stedet) i løpet av de definerte tidsintervallene. Enhetsreglene brukes på nytt av Carbon Browser Browser Browser hver gang perioden for «OffHours» begynner og slutter. Brukeren blir varslet og tvunget til å logge av når «OffHours»-perioden slutter og enhetsinnstillingene for regelen blir endret (for eksempel når brukeren er logget på med en konto som ikke er tillatt).</translation>
+<translation id="4978405676361550165">Hvis regelen «OffHours» er angitt, ignoreres de spesifiserte enhetsreglene (og standardverdiene for disse reglene brukes i stedet) i løpet av de definerte tidsintervallene. Enhetsreglene brukes på nytt av Carbon Browser hver gang perioden for «OffHours» begynner og slutter. Brukeren blir varslet og tvunget til å logge av når «OffHours»-perioden slutter og enhetsinnstillingene for regelen blir endret (for eksempel når brukeren er logget på med en konto som ikke er tillatt).</translation>
 <translation id="4980635395568992380">Datatype:</translation>
 <translation id="4983201894483989687">Tillat kjøring av foreldede programtillegg</translation>
-<translation id="4986560318567565414">Banen til Carbon Browser Browser Browser for å bytte fra den alternative nettleseren.</translation>
+<translation id="4986560318567565414">Banen til Carbon Browser for å bytte fra den alternative nettleseren.</translation>
 <translation id="4988291787868618635">Handling som skal utføres når inaktivitetsforsinkelsen blir overskredet</translation>
 <translation id="5034604678285451405">Angi batteriterskelen for strømtoppskift i prosent.
 
@@ -2163,11 +2163,11 @@ Verdiene for denne regelen og WebUsbAllowDevicesForUrls-regelen slås sammen.</t
       Hvis regelen er spesifisert som 0, kan ikke passordet for maskinkontoen endres.
 
       Vær oppmerksom på at passord kan bli eldre enn det spesifiserte antallet dager hvis klienten har vært uten nett over lengre tid.</translation>
-<translation id="510196893779239086">Denne regelen styrer om Carbon Browser Browser Browser skal lukkes helt når den siste fanen ville ha byttet til en annen nettleser.
+<translation id="510196893779239086">Denne regelen styrer om Carbon Browser skal lukkes helt når den siste fanen ville ha byttet til en annen nettleser.
 
-      Når denne regelen er satt til «true» (sann) eller ikke er angitt, holder Carbon Browser Browser Browser minst én fane åpen etter å ha byttet til en annen nettleser.
+      Når denne regelen er satt til «true» (sann) eller ikke er angitt, holder Carbon Browser minst én fane åpen etter å ha byttet til en annen nettleser.
 
-      Når denne regelen er satt til «false» (usann), lukker Carbon Browser Browser Browser fanen etter å ha byttet til en annen nettleser, selv om det var den siste fanen. Dette gjør at Carbon Browser Browser Browser avsluttes helt.</translation>
+      Når denne regelen er satt til «false» (usann), lukker Carbon Browser fanen etter å ha byttet til en annen nettleser, selv om det var den siste fanen. Dette gjør at Carbon Browser avsluttes helt.</translation>
 <translation id="5102203758995933166">Gir tillatelse til at nettverkskonfigurasjon tilordnes enkeltbrukere på en <ph name="PRODUCT_OS_NAME" />-enhet. Nettverkskonfigurasjonen er en JSON-formatert streng definert etter Open Network Configuration-formatet.</translation>
 <translation id="5105313908130842249">Forsinkelse for låst skjerm når enheten kjører på batteristrøm</translation>
 <translation id="5108031557082757679">Deaktiverte bedriftsskrivere</translation>
@@ -2182,7 +2182,7 @@ Verdiene for denne regelen og WebUsbAllowDevicesForUrls-regelen slås sammen.</t
 <translation id="5148753489738115745">Lar deg spesifisere ytterligere parametere som brukes når <ph name="PRODUCT_FRAME_NAME" /> kjører <ph name="PRODUCT_NAME" />.
 
           Hvis denne tillatelsen ikke er angitt, blir standardkommandolinjen brukt.</translation>
-<translation id="5152787786897382519">Både Carbon Browser Browser Browser og Carbon Browser Browser Browser har enkelte regelgrupper som avhenger av hverandre for å gi kontroll over funksjoner. Disse settene representeres av de følgende regelgruppene. Siden regler kan ha flere kilder, brukes kun verdier fra kilden som har høyest prioritet. Verdier fra kilder med lavere prioritet i samme gruppe ignoreres. Prioritetsrekkefølgen er definert i <ph name="POLICY_PRIORITY_DOC_URL" />.</translation>
+<translation id="5152787786897382519">Både Carbon Browser og Carbon Browser har enkelte regelgrupper som avhenger av hverandre for å gi kontroll over funksjoner. Disse settene representeres av de følgende regelgruppene. Siden regler kan ha flere kilder, brukes kun verdier fra kilden som har høyest prioritet. Verdier fra kilder med lavere prioritet i samme gruppe ignoreres. Prioritetsrekkefølgen er definert i <ph name="POLICY_PRIORITY_DOC_URL" />.</translation>
 <translation id="5159469559091666409">Hvor ofte (i millisekunder) nettverkspakker for overvåking sendes.
 
       Hvis denne regelen ikke er spesifisert, er standardintervallet 3 minutter.
@@ -2292,7 +2292,7 @@ Verdiene for denne regelen og DeviceWebUsbAllowDevicesForUrls-regelen slås samm
           En svartelisteverdi på «*» betyr at alle innebygde meldingsverter er svartelistet, med mindre de er eksplistitt oppført på godkjenningslisten.
 
           Hvis denne innstillingen ikke angis, laster <ph name="PRODUCT_NAME" /> inn alle installerte innebygde verter.</translation>
-<translation id="5272684451155669299">Hvis denne er angitt som «true» (sann), kan brukerne bruke maskinvaren på Carbon Browser Browser Browser-enheter til å attestere enhetenes identitet eksternt til sertifiseringsinstansen for personvern via <ph name="ENTERPRISE_PLATFORM_KEYS_API" /> ved bruk av <ph name="CHALLENGE_USER_KEY_FUNCTION" />.
+<translation id="5272684451155669299">Hvis denne er angitt som «true» (sann), kan brukerne bruke maskinvaren på Carbon Browser-enheter til å attestere enhetenes identitet eksternt til sertifiseringsinstansen for personvern via <ph name="ENTERPRISE_PLATFORM_KEYS_API" /> ved bruk av <ph name="CHALLENGE_USER_KEY_FUNCTION" />.
 
           Hvis den er angitt som «false» (usann), eller hvis den ikke er angitt, kan ikke API-et kalles opp – i stedet vises en feilkode.</translation>
 <translation id="5277806246014825877">Gi denne brukeren tillatelse til å kjøre Crostini.
@@ -2506,7 +2506,7 @@ Verdiene for denne regelen og DeviceWebUsbAllowDevicesForUrls-regelen slås samm
         Hvis regelen er satt til «false» (usann), kan ikke brukerne sende tilbakemeldinger til Google.
 
         Hvis regelen er satt til «true» (sann) eller ikke er angitt, kan brukerne sende tilbakemeldinger til Google via Meny-&gt;Hjelp-&gt;Rapportér et problem eller en tastekombinasjon.</translation>
-<translation id="5581292529942108810">Konfigurer regler knyttet til Carbon Browser Browser Browser Reporting Extension.
+<translation id="5581292529942108810">Konfigurer regler knyttet til Carbon Browser Reporting Extension.
 
       Disse reglene gjelder bare når <ph name="CHROME_REPORTING_EXTENSION_NAME" /> er slått på og maskinen er registrert med <ph name="MACHINE_LEVEL_USER_CLOUD_POLICY_ENROLLMENT_TOKEN_POLICY_NAME" />.</translation>
 <translation id="5583806683960333345">Hvis denne innstillingen er slått på, kan brukerne bruke umiddelbar internettdeling. Det betyr at Google-telefonene deres kan dele mobildata med enhetene deres.
@@ -2536,7 +2536,7 @@ Verdiene for denne regelen og DeviceWebUsbAllowDevicesForUrls-regelen slås samm
 
       MERK: På Android er nettstedsisolering på forsøksstadiet. Støtte for dette forbedres over tid, men for øyeblikket kan det føre til nedsatt ytelse.
 
-      MERK: Denne regelen gjelder bare for Carbon Browser Browser Browser på Android med mer enn 1 GB RAM. For å anvende regelen på andre plattformer, bruk IsolateOrigins.
+      MERK: Denne regelen gjelder bare for Carbon Browser på Android med mer enn 1 GB RAM. For å anvende regelen på andre plattformer, bruk IsolateOrigins.
       </translation>
 <translation id="5599461642204007579">Administrasjonsinnstillinger for <ph name="MS_AD_NAME" /></translation>
 <translation id="5610104657949692379">Når denne regelen er angitt, spesifiserer den handlingen <ph name="PRODUCT_OS_NAME" /> skal utføre når brukeren er inaktiv lenger enn den angitte inaktivitetsforsinkelsen, som kan konfigureres separat.
@@ -2544,7 +2544,7 @@ Verdiene for denne regelen og DeviceWebUsbAllowDevicesForUrls-regelen slås samm
           Når denne regelen ikke er angitt, utføres standardhandlingen, som er Suspend (Hvilemodus).
 
           Hvis handlingen er Suspend (Hvilemodus), kan <ph name="PRODUCT_OS_NAME" /> konfigureres separat for enten å låse eller ikke å låse skjermen før suspendering.</translation>
-<translation id="5618398258385745432">Den tilknyttede innstillingen ble brukt før vi implementerte ny autentisering for visning av passord. Etter dette har ikke innstillingen – og dermed heller ikke denne regelen – hatt noen innvirkning på funksjonaliteten i Carbon Browser Browser Browser. Den nåværende funksjonaliteten i Carbon Browser Browser Browser er den samme som hvis denne regelen hadde vært konfigurert til å slå av visning av passord i klartekst på innstillingssiden i passordbehandlingen. Det betyr at innstillingssiden bare har en plassholder, og brukeren må klikke på «Vis» (og eventuelt utføre en ny autentisering) for å se passordet i Carbon Browser Browser Browser. Du kan se den opprinnelige beskrivelsen av regelen nedenfor.
+<translation id="5618398258385745432">Den tilknyttede innstillingen ble brukt før vi implementerte ny autentisering for visning av passord. Etter dette har ikke innstillingen – og dermed heller ikke denne regelen – hatt noen innvirkning på funksjonaliteten i Carbon Browser. Den nåværende funksjonaliteten i Carbon Browser er den samme som hvis denne regelen hadde vært konfigurert til å slå av visning av passord i klartekst på innstillingssiden i passordbehandlingen. Det betyr at innstillingssiden bare har en plassholder, og brukeren må klikke på «Vis» (og eventuelt utføre en ny autentisering) for å se passordet i Carbon Browser. Du kan se den opprinnelige beskrivelsen av regelen nedenfor.
 
           Kontrollerer hvorvidt brukeren kan se passord i klartekst i passordbehandlingen.
 
@@ -2647,7 +2647,7 @@ Verdiene for denne regelen og DeviceWebUsbAllowDevicesForUrls-regelen slås samm
       Hvis regelen ikke er spesifisert, kan brukeren endre denne innstillingen.
       </translation>
 <translation id="5832274826894536455">Avviklede regler</translation>
-<translation id="5835124959204887277">Spesifiserer nettadresser og domener som det ikke blir vist noen forespørsel for når det blir bedt om attestsertifikater fra sikkerhetsnøkler. I tillegg blir et signal sendt til sikkerhetsnøkkelen. Dette signalet indikerer at enkeltattester kan brukes. Uten dette kommer brukere til å få opp en forespørsel i Carbon Browser Browser Browser v65+ når nettsteder ber om attest for sikkerhetsnøkler.
+<translation id="5835124959204887277">Spesifiserer nettadresser og domener som det ikke blir vist noen forespørsel for når det blir bedt om attestsertifikater fra sikkerhetsnøkler. I tillegg blir et signal sendt til sikkerhetsnøkkelen. Dette signalet indikerer at enkeltattester kan brukes. Uten dette kommer brukere til å få opp en forespørsel i Carbon Browser v65+ når nettsteder ber om attest for sikkerhetsnøkler.
 
       Nettadresser (for eksempel https://example.com/some/path) samsvarer bare som U2F-app-ID-er. Domener (for eksempel example.com) samsvarer bare som webauthn RP-ID-er. For å dekke både U2F- og webauthn-API-er for et bestemt nettsted må derfor både app-ID-nettadressen og domenet listes opp.</translation>
 <translation id="5836064773277134605">Begrens UDP-portområdet som brukes av fjerntilgangsverten</translation>
@@ -2782,7 +2782,7 @@ Verdiene for denne regelen og DeviceWebUsbAllowDevicesForUrls-regelen slås samm
 
       Hvis denne regelen ikke er konfigurert eller er angitt som «false» (usant), blir ikke data samlet inn eller lastet opp.
       Hvis denne regelen er angitt som «true» (sant), blir dataene samlet inn og lastet opp til Google Administrasjonskonsoll.
-      For å kontrollere hvilke data som lastes opp, bruk reglene i gruppen «Carbon Browser Browser Browser Reporting Extension».
+      For å kontrollere hvilke data som lastes opp, bruk reglene i gruppen «Carbon Browser Reporting Extension».
 
       Denne regelen gjelder bare når maskinen er registrert med <ph name="MACHINE_LEVEL_USER_CLOUD_POLICY_ENROLLMENT_TOKEN_POLICY_NAME" />.
 
@@ -2869,7 +2869,7 @@ Verdiene for denne regelen og DeviceWebUsbAllowDevicesForUrls-regelen slås samm
 <translation id="6282799760374509080">Tillat eller avvis lydopptak</translation>
 <translation id="6284362063448764300">TLS 1.1</translation>
 <translation id="6310223829319187614">Slå på autofullføring av domenenavn ved brukerpålogging</translation>
-<translation id="6315673513957120120">Brukerne ser advarselssider i Carbon Browser Browser Browser når de åpner nettsteder med SSL-feil. Som standard, eller når denne regelen er satt til true (sann), kan brukerne klikke seg forbi disse advarselssidene.
+<translation id="6315673513957120120">Brukerne ser advarselssider i Carbon Browser når de åpner nettsteder med SSL-feil. Som standard, eller når denne regelen er satt til true (sann), kan brukerne klikke seg forbi disse advarselssidene.
       Hvis denne regelen settes til false (usann), kan ikke brukerne klikke seg forbi advarselssider.</translation>
 <translation id="6319198883324703402">Angi tidspunkt for første varsel til bruker om at enheten må startes på nytt</translation>
 <translation id="6352543686437322588">Forsinket pålogging på den lokale kontoen på enheten.
@@ -2911,7 +2911,7 @@ Verdiene for denne regelen og DeviceWebUsbAllowDevicesForUrls-regelen slås samm
           Hvis du velger å finne proxy-tjeneren automatisk, får Android-apper skriptnettadressen «http://wpad/wpad.dat». Ingen annen del av protokollen for automatisk gjenkjennelse brukes.
 
           Hvis du velger PAC-skript for proxy-tjenere, får Android-apper skriptnettadressen.</translation>
-<translation id="6430366557948788869">Carbon Browser Browser Browser Reporting Extension</translation>
+<translation id="6430366557948788869">Carbon Browser Reporting Extension</translation>
 <translation id="6440051664870270040">Tillat at nettsteder navigerer og åpner forgrunnsvinduer samtidig</translation>
 <translation id="6447948611083700881">Sikkerhetskopiering og gjenoppretting er deaktivert</translation>
 <translation id="6449476513004303784">Ikke la brukerne administrere sertifikater</translation>
@@ -2969,9 +2969,9 @@ Hvis denne regelen er deaktivert eller ikke angitt, kan Flash-innhold av annen o
 <translation id="6536600139108165863">Start på nytt automatisk når enheten slås av</translation>
 <translation id="6539246272469751178">Denne regelen har ingen innvirkning på Android-apper. Android-apper bruker alltid standardkatalogen for nedlastinger og har ikke tilgang til noen filer som lastes ned av <ph name="PRODUCT_OS_NAME" /> til en annen katalog en standardkatalogen.</translation>
 <translation id="654303922206238013">Overføringsstrategi for eCryptfs</translation>
-<translation id="6544897973797372144">Hvis denne innstillingen er angitt som Sann og Carbon Browser Browser BrowserOsReleaseChannel-retningslinjen ikke er spesifisert, så gis brukere fra domenet som registreres, tillatelse til å endre enhetens lanseringskanal. Hvis denne retningslinjen er angitt som Usann, blir enheten låst til kanalen den sist ble tilordnet til.
+<translation id="6544897973797372144">Hvis denne innstillingen er angitt som Sann og Carbon BrowserOsReleaseChannel-retningslinjen ikke er spesifisert, så gis brukere fra domenet som registreres, tillatelse til å endre enhetens lanseringskanal. Hvis denne retningslinjen er angitt som Usann, blir enheten låst til kanalen den sist ble tilordnet til.
 
-      Den brukervalgte kanalen overstyres av Carbon Browser Browser BrowserOsReleaseChannel-retningslinjen, men hvis retningslinjekanalen er mer stabil enn den som ble installert på enheten, byttes kanalen bare etter at versjonen av den mer stabile kanalen når et høyere versjonsnummer enn nummeret på den som er installert på enheten.</translation>
+      Den brukervalgte kanalen overstyres av Carbon BrowserOsReleaseChannel-retningslinjen, men hvis retningslinjekanalen er mer stabil enn den som ble installert på enheten, byttes kanalen bare etter at versjonen av den mer stabile kanalen når et høyere versjonsnummer enn nummeret på den som er installert på enheten.</translation>
 <translation id="6553143066970470539">Lysstyrkeprosent for skjermen</translation>
 <translation id="6559057113164934677">Forby nettsteder fra å bruke kameraet og mikrofonen min</translation>
 <translation id="6561396069801924653">Vis tilgjengelighetsalternativer i systemmenyen</translation>
@@ -3051,7 +3051,7 @@ skjermtastaturet når som helst og statusen den har på påloggingsskjermen er v
 <translation id="6698632841807204978">Slå på utskrift i svart/hvitt</translation>
 <translation id="6699880231565102694">Aktiver to-delt autentisering for verter med ekstern adgang</translation>
 <translation id="6731757988219967594">Filtrer toppnivånettsteder (men ikke innebygde iframe-elementer) for seksuelt innhold</translation>
-<translation id="6734521799274931721">Kontrollerer tilgjengeligheten for delte nettverksressurser for Carbon Browser Browser BrowserOS</translation>
+<translation id="6734521799274931721">Kontrollerer tilgjengeligheten for delte nettverksressurser for Carbon BrowserOS</translation>
 <translation id="6735701345096330595">Tving aktivering av språk med stavekontroll</translation>
 <translation id="673699536430961464">Denne innstillingen lar brukere bytte mellom Google-kontoer i innholdsområdet i nettleservinduet når de har logget på <ph name="PRODUCT_OS_NAME" />-enhetene sine.
 
@@ -3059,7 +3059,7 @@ skjermtastaturet når som helst og statusen den har på påloggingsskjermen er v
 
       Hvis regelen ikke er angitt eller er angitt som True (sann), brukes standardinnstillingen. Det vil si at det er tillatt å logge på andre kontoer i innholdsområdet i nettleseren. Dette gjelder imidlertid ikke for underkontoer, der det blokkeres for innholdsområder som ikke er i inkognitomodus.
 
-      Hvis det ikke skal være lov å logge på andre kontoer i inkognitomodus, kan du blokkere denne modusen i PrivateModeAvailability-regelen.
+      Hvis det ikke skal være lov å logge på andre kontoer i inkognitomodus, kan du blokkere denne modusen i privateModeAvailability-regelen.
 
       Vær oppmerksom på at brukerne kan få tilgang til Google-tjenester uten autentisering ved å blokkere informasjonskapsler.</translation>
 <translation id="6757438632136860443">Lar deg angi en liste med nettadressemønstre for å spesifisere nettsteder hvor <ph name="FLASH_PLUGIN_NAME" />-programtillegget skal kunne kjøres automatisk.
@@ -3096,7 +3096,7 @@ skjermtastaturet når som helst og statusen den har på påloggingsskjermen er v
 
       Hvis denne regelen er satt til «false» (usann), brukes aldri den innebygde DNS-klienten.
 
-      Hvis denne regelen ikke angis, blir den innebygde DNS-klienten slått på som standard på MacOS, Android (når verken Privat DNS eller VPN er slått på) og Carbon Browser Browser BrowserOS, og brukerne kan endre om den innebygde DNS-klienten skal brukes eller ikke, ved å endre chrome://flags eller spesifisere et flagg i kommandolinjen.</translation>
+      Hvis denne regelen ikke angis, blir den innebygde DNS-klienten slått på som standard på MacOS, Android (når verken Privat DNS eller VPN er slått på) og Carbon BrowserOS, og brukerne kan endre om den innebygde DNS-klienten skal brukes eller ikke, ved å endre chrome://flags eller spesifisere et flagg i kommandolinjen.</translation>
 <translation id="6843296367238757293">Denne regelen er avviklet. Vi anbefaler å ikke bruke den. Les mer på https://support.google.com/chrome/a/answer/7643500</translation>
 <translation id="684856667300805181">Denne regelen ble fjernet i <ph name="PRODUCT_NAME" /> 68 og erstattet av <ph name="ARC_GLS_POLICY_NAME" />.</translation>
 <translation id="6856743875250214792">Denne regelen er avviklet og fjernet i M66, fordi den bare ble brukt til intern testing og er en sikkerhetsrisiko.
@@ -3137,7 +3137,7 @@ Minneinformasjon blir uansett rapportert til siden, uavhengig av verdien for alt
 
       MERK: Nettstedsisolering er på forsøksstadiet på Android. Det kan foreløpig forårsake ytelsesproblemer, men kommer til å bli mer kompatibel.
 
-      MERK: Denne regelen gjelder bare for Carbon Browser Browser Browser på Android med mer enn 1 GB RAM. Bruk SitePerProcess for å anvende regelen på andre plattformer.
+      MERK: Denne regelen gjelder bare for Carbon Browser på Android med mer enn 1 GB RAM. Bruk SitePerProcess for å anvende regelen på andre plattformer.
       </translation>
 <translation id="6922884955650325312">Blokkér <ph name="FLASH_PLUGIN_NAME" />-programtillegget</translation>
 <translation id="6923366716660828830">Angir navnet på standard søkeleverandør. Hvis dette ikke angis, brukes vertsnavnet angitt av søkenettadressen.
@@ -3224,9 +3224,9 @@ Minneinformasjon blir uansett rapportert til siden, uavhengig av verdien for alt
 
       Hvis usann er valgt for regelen eller ingen valg er gjort, kan ikke <ph name="PRODUCT_NAME" /> samle inn eller laste opp slike logger.
 
-      Disse loggene inneholder diagnostikkinformasjon som er nyttig ved feilsøking av problemer med lyd- eller videoanrop i Carbon Browser Browser Browser, for eksempel tidspunkt for og størrelse på sendte og mottatte RTP-pakker, tilbakemelding om overbelastning av nettverket samt metadata om tid og kvalitet for lyd- og videorammer. Loggene inneholder ikke lyd- eller videoinnhold fra samtaler.
+      Disse loggene inneholder diagnostikkinformasjon som er nyttig ved feilsøking av problemer med lyd- eller videoanrop i Carbon Browser, for eksempel tidspunkt for og størrelse på sendte og mottatte RTP-pakker, tilbakemelding om overbelastning av nettverket samt metadata om tid og kvalitet for lyd- og videorammer. Loggene inneholder ikke lyd- eller videoinnhold fra samtaler.
 
-      Denne datainnsamlingen til Carbon Browser Browser Browser kan kun bli utløst av Googles nettjenester, for eksempel Google Hangouts eller Google Meet.
+      Denne datainnsamlingen til Carbon Browser kan kun bli utløst av Googles nettjenester, for eksempel Google Hangouts eller Google Meet.
 
       Google kan knytte disse loggene, via en økt-ID, sammen med andre logger som er samlet inn av Google-tjenesten, for å gjøre feilsøking enklere.
       </translation>
@@ -3322,11 +3322,11 @@ Minneinformasjon blir uansett rapportert til siden, uavhengig av verdien for alt
 <translation id="7185078796915954712">TLS 1.3</translation>
 <translation id="718956142899066210">Tilkoblingstyper som tillates for oppdateringer</translation>
 <translation id="7194407337890404814">Navn for standard søkeleverandør</translation>
-<translation id="7199304109870655950">Konfigurer alternativer for ekstern tilgang i Carbon Browser Browser Browser Eksternt skrivebord-vert.
+<translation id="7199304109870655950">Konfigurer alternativer for ekstern tilgang i Carbon Browser Eksternt skrivebord-vert.
 
-      Carbon Browser Browser Browser Eksternt skrivebord-vert er en integrert tjeneste som kjører på målmaskinen. Brukerne kan koble til denne ved å bruke Carbon Browser Browser Browser Eksternt skrivebord-programmet.  Den innebygde tjenesten pakkes og kjøres separat fra <ph name="PRODUCT_NAME" />-nettleseren.
+      Carbon Browser Eksternt skrivebord-vert er en integrert tjeneste som kjører på målmaskinen. Brukerne kan koble til denne ved å bruke Carbon Browser Eksternt skrivebord-programmet.  Den innebygde tjenesten pakkes og kjøres separat fra <ph name="PRODUCT_NAME" />-nettleseren.
 
-      Disse reglene ignoreres hvis ikke Carbon Browser Browser Browser Eksternt skrivebord-vert er installert.</translation>
+      Disse reglene ignoreres hvis ikke Carbon Browser Eksternt skrivebord-vert er installert.</translation>
 <translation id="7202925763179776247">Tillat begrensninger for nedlastinger</translation>
 <translation id="7207095846245296855">Fremtving bruk av Google Sikkert Søk</translation>
 <translation id="7211368186050418507">Detekter aldri tidssonen automatisk</translation>
@@ -3428,9 +3428,9 @@ Minneinformasjon blir uansett rapportert til siden, uavhengig av verdien for alt
 <translation id="7329968046053403405">Spesifiserer kontotypen for kontoene som gjøres tilgjengelige av Android-autentiseringsappen som støtter <ph name="HTTP_NEGOTIATE" />-autentisering (f.eks. Kerberos-autentisering). Denne informasjonen skal være tilgjengelig fra leverandøren av autentiseringsappen. For mer detaljert informasjon se https://goo.gl/hajyfN.
 
           Hvis du ikke velger noen innstilling, er <ph name="HTTP_NEGOTIATE" />-autentisering slått av på Android.</translation>
-<translation id="7331962793961469250">Når innstillingen er True, vil ikke reklamer for programmer fra Carbon Browser Browser Browser Nettmarked vises på siden Ny fane.
+<translation id="7331962793961469250">Når innstillingen er True, vil ikke reklamer for programmer fra Carbon Browser Nettmarked vises på siden Ny fane.
 
-      Hvis dette alternativet settes til False, eller hvis det ikke angis noe for dette alternativet, vises reklamer for programmer fra Carbon Browser Browser Browser Nettbutikk på siden Ny fane</translation>
+      Hvis dette alternativet settes til False, eller hvis det ikke angis noe for dette alternativet, vises reklamer for programmer fra Carbon Browser Nettbutikk på siden Ny fane</translation>
 <translation id="7332963785317884918">Denne innstillingen er foreldet. <ph name="PRODUCT_OS_NAME" /> kommer alltid til å bruke oppryddingsstrategien «RemoveLRU».
 
       Kontrollerer den automatiske oppryddingsfunksjonaliteten på <ph name="PRODUCT_OS_NAME" />-enheter. Automatisk opprydding starter når mengden ledig diskplass når et kritisk nivå. Dette gjøres for å frigjøre diskplass.
@@ -3490,7 +3490,7 @@ Minneinformasjon blir uansett rapportert til siden, uavhengig av verdien for alt
       </translation>
 <translation id="7506269062143646163">Aktiver støtte for signerte HTTP-utvekslinger (SXG).
 
-          Hvis denne regelen ikke er angitt eller den er satt til «Enabled» (aktivert), godtar Carbon Browser Browser Browser nettinnhold som sendes via signerte HTTP-utvekslinger.
+          Hvis denne regelen ikke er angitt eller den er satt til «Enabled» (aktivert), godtar Carbon Browser nettinnhold som sendes via signerte HTTP-utvekslinger.
 
           Hvis denne regelen er satt til «Disabled» (deaktivert), kan ikke signerte HTTP-utvekslinger lastes inn.</translation>
 <translation id="7511361072385293666">Hvis denne regelen settes til «sann» eller ikke spesifiseres, er bruk av QUIC-protokollen tillatt i <ph name="PRODUCT_NAME" />.
@@ -3531,7 +3531,7 @@ Minneinformasjon blir uansett rapportert til siden, uavhengig av verdien for alt
 
       Hvis denne regelen er satt til 0 eller ikke er angitt, åpnes konfigurerte nettadresser umiddelbart i en alternativ nettleser når brukeren navigerer til dem.
 
-      Når denne regelen er satt til et tall, viser Carbon Browser Browser Browser en melding i dette antallet millisekunder og åpner deretter den alternative nettleseren.</translation>
+      Når denne regelen er satt til et tall, viser Carbon Browser en melding i dette antallet millisekunder og åpner deretter den alternative nettleseren.</translation>
 <translation id="7593523670408385997">Konfigurerer bufferstørrelsen som <ph name="PRODUCT_NAME" /> bruker for lagring av bufrede filer på disken.
 
       Hvis du angir denne innstillingen, bruker <ph name="PRODUCT_NAME" /> den tildelte bufferstørrelsen uansett om brukeren har spesifisert «--disk-cache-size»-flagget eller ikke. Verdien som er angitt i denne innstillingen er ikke en hard grense, men et forslag til buffersystemet. Alle verdier under et par megabyte er for små og blir avrundet oppover til et logisk minimum.
@@ -3714,7 +3714,7 @@ Minneinformasjon blir uansett rapportert til siden, uavhengig av verdien for alt
 
 MERK: Frem til versjon 45 ble denne regelen bare støttet i kioskmodus.</translation>
 <translation id="7912255076272890813">Konfigurer tillatte typer apper og utvidelser</translation>
-<translation id="7922358664346625612">Hold den siste fanen åpen i Carbon Browser Browser Browser.</translation>
+<translation id="7922358664346625612">Hold den siste fanen åpen i Carbon Browser.</translation>
 <translation id="793134539373873765">Angir om p2p skal brukes for nyttelast av OS-oppdatering. Hvis angitt til «True», kommer enhetene til å dele og forsøke å konsumere oppdateringsnyttelast på LAN, noe som potensielt kan redusere Internett-båndbredden og -trafikken. Hvis oppdateringsnyttelasten ikke er tilgjengelig på LAN, går enheten tilbake til å laste ned fra en oppdateringstjener. Hvis angitt til «False» eller ikke konfigurert, blir ikke p2p brukt.</translation>
 <translation id="7933141401888114454">Slå på oppretting av administrerte brukere</translation>
 <translation id="793473937901685727">Angi sertifikattilgjengeligheten for ARC-apper</translation>
@@ -3872,7 +3872,7 @@ MERK: Frem til versjon 45 ble denne regelen bare støttet i kioskmodus.</transla
       Hvis innstillingen ikke angis, bruker <ph name="PRODUCT_OS_NAME" /> ID-en for e-postkontoen til enhetens lokale konto som skjermnavn på påloggingsskjermen.
 
       Denne innstillingen ignoreres for vanlige brukerkontoer.</translation>
-<translation id="8259375588339409826">Både Carbon Browser Browser Browser og Carbon Browser Browser Browser støtter det samme settet med regler. Merk at dette dokumentet kan inneholde upubliserte regler (dvs. at reglenes «Støttes på»-informasjon kan vise til en upublisert versjon av <ph name="PRODUCT_NAME" />) som kan endres eller fjernes uten varsel. Det gis ingen garantier av noe slag, verken i forbindelse med sikkerhet, personvern eller annet, for slike upubliserte regler.
+<translation id="8259375588339409826">Både Carbon Browser og Carbon Browser støtter det samme settet med regler. Merk at dette dokumentet kan inneholde upubliserte regler (dvs. at reglenes «Støttes på»-informasjon kan vise til en upublisert versjon av <ph name="PRODUCT_NAME" />) som kan endres eller fjernes uten varsel. Det gis ingen garantier av noe slag, verken i forbindelse med sikkerhet, personvern eller annet, for slike upubliserte regler.
 
 Disse reglene er kun ment å brukes for å konfigurere forekomster av <ph name="PRODUCT_NAME" /> internt i organisasjonen din. Bruk av disse reglene utenfor organisasjonen (for eksempel i et offentlig distribuert program) regnes som skadelig programvare og blir sannsynligvis merket som skadelig programvare av Google og antivirus-leverandører.
 
@@ -3889,7 +3889,7 @@ Vi anbefaler å konfigurere regler på Windows via GPO, men tildeling av regler 
 
       Hvis regelen settes til «false» (usann), blir ikke statistikk rapportert.
       Hvis den settes til «true» (sann) eller ikke angis, blir statistikk rapportert.</translation>
-<translation id="8294750666104911727">Vanligvis blir sider angitt med X-UA-Compatible til chrome=1 gjengitt i <ph name="PRODUCT_FRAME_NAME" /> uavhengig av innstillingen «Carbon Browser Browser BrowserFrameRendererSettings».
+<translation id="8294750666104911727">Vanligvis blir sider angitt med X-UA-Compatible til chrome=1 gjengitt i <ph name="PRODUCT_FRAME_NAME" /> uavhengig av innstillingen «Carbon BrowserFrameRendererSettings».
 
           Hvis du aktiverer denne innstillingen, skannes ikke sider for metatagger.
 
@@ -3915,7 +3915,7 @@ Vi anbefaler å konfigurere regler på Windows via GPO, men tildeling av regler 
 <translation id="8344454543174932833">Importer bokmerker fra standard nettleser ved første kjøring</translation>
 <translation id="8357681633047935212">Begrens lengden på brukerøkter</translation>
 <translation id="8359734107661430198">Slå på ExampleDeprecatedFeature API frem til og med 2008/09/02</translation>
-<translation id="8367209241899435947">Aktiver Opprydning for Carbon Browser Browser Browser på Windows</translation>
+<translation id="8367209241899435947">Aktiver Opprydning for Carbon Browser på Windows</translation>
 <translation id="8369602308428138533">Forsinkelse for avslått skjerm når du bruker strømadapteren</translation>
 <translation id="8371178326720637170">Lar administrerte utvidelser bruke Enterprise Hardware Platform API</translation>
 <translation id="8374747520743832795">Rapportér maskinvarestatistikk og -identifikatorer knyttet til strøm.
@@ -3986,13 +3986,13 @@ Vi anbefaler å konfigurere regler på Windows via GPO, men tildeling av regler 
       Innstillingen fjernes i M75.</translation>
 <translation id="8484458986062090479">Tilpass listen over nettadressemønstre som alltid skal gjengis av vertsnettleseren.
 
-          Hvis denne regelen ikke er angitt, brukes standardgjengivelsen for alle nettsteder, slik den er angitt i regelen «Carbon Browser Browser BrowserFrameRendererSettings».
+          Hvis denne regelen ikke er angitt, brukes standardgjengivelsen for alle nettsteder, slik den er angitt i regelen «Carbon BrowserFrameRendererSettings».
 
           Du finner eksempelmønstre på https://www.chromium.org/developers/how-tos/chrome-frame-getting-started.</translation>
 <translation id="8489964335640955763">PluginVm</translation>
 <translation id="8493645415242333585">Deaktiver lagring av nettleserlogg</translation>
 <translation id="8499172469244085141">Standardinnstillinger (kan overstyres av brukere)</translation>
-<translation id="849962487677588458">Denne regelen er avviklet og planlagt fjernet uten erstatning i Carbon Browser Browser Browser 78.
+<translation id="849962487677588458">Denne regelen er avviklet og planlagt fjernet uten erstatning i Carbon Browser 78.
 
       Denne regelen slår på HTTP/0.9 på andre porter enn 80 for HTTP og 443 for HTTPS.
 
@@ -4020,7 +4020,7 @@ Vi anbefaler å konfigurere regler på Windows via GPO, men tildeling av regler 
 
       «Version» her kan enten være et eksakt versjonsnummer som «61.0.3163.120» eller et versjonsprefiks som «61.0».  </translation>
 <translation id="8544375438507658205">Standard gjengivelse av HTML for <ph name="PRODUCT_FRAME_NAME" /></translation>
-<translation id="8544465954173828789">Tillat synkronisering av SMS-er fra telefon til Carbon Browser Browser Browserbook.</translation>
+<translation id="8544465954173828789">Tillat synkronisering av SMS-er fra telefon til Carbon Browserbook.</translation>
 <translation id="8548832052135586762">Konfigurerer utskrift i bare fargemodus, bare svart/hvitt eller uten begrensninger knyttet til fargemodus. Regler som ikke er konfigurert, regnes for å være uten begrensninger.</translation>
 <translation id="8549772397068118889">Varsle ved besøk på nettsteder som ikke inngår i innholdspakker</translation>
 <translation id="8566729013138025202">Spesifiserer et sett med regler som overleveres til ARC-kjøringen. Verdien må være gyldig JSON.
@@ -4216,7 +4216,7 @@ For mer informasjon om sikkert innhold, se https://www.w3.org/TR/secure-contexts
 
           Denne regelen tilordner en utvidelses-ID eller en oppdateringsnettadresse til konfigurasjonen sin. Med en utvidelses-ID blir konfigurasjonen kun brukt på den bestemte utvidelsen. En standardkonfigurasjon kan angis for den spesielle ID-en <ph name="DEFAULT_SCOPE" />, som gjelder for alle utvidelser uten tilpasset konfigurasjon i denne regelen. Med en oppdateringsnettadresse brukes konfigurasjonen for alle utvidelser med den nøyaktige oppdateringsnettadressen som står oppført i manifestet til denne utvidelsen, som beskrevet i <ph name="LINK_TO_EXTENSION_DOC1" />.
 
-          For Windows-forekomster som ikke er tilknyttet noe <ph name="MS_AD_NAME" />-domene, begrenses administratorinstallering til apper og utvidelser oppført i Carbon Browser Browser Browser Nettmarked.
+          For Windows-forekomster som ikke er tilknyttet noe <ph name="MS_AD_NAME" />-domene, begrenses administratorinstallering til apper og utvidelser oppført i Carbon Browser Nettmarked.
           </translation>
 <translation id="8947415621777543415">Rapportering av enhetsposisjonen</translation>
 <translation id="8951350807133946005">Angi katalog for diskbufring</translation>
@@ -4307,7 +4307,7 @@ For mer informasjon om sikkert innhold, se https://www.w3.org/TR/secure-contexts
 
       Hvis denne regelen settes til true (sann), sendes systemloggene. Hvis den
       settes til false (usann) eller ikke spesifiseres, blir det ikke sendt noen systemlogger.</translation>
-<translation id="9150416707757015439">Denne retningslinjen er foreldet. Bruk PrivateModeAvailability i stedet.
+<translation id="9150416707757015439">Denne retningslinjen er foreldet. Bruk privateModeAvailability i stedet.
       Aktiverer inkognitomodus i <ph name="PRODUCT_NAME" />.
 
       Hvis innstillingen er aktivert eller ikke konfigurert, kan brukeren åpne nettsider i inkognitomodus.
@@ -4354,7 +4354,7 @@ For mer informasjon om sikkert innhold, se https://www.w3.org/TR/secure-contexts
 
       Når denne regelen er angitt, brukes den til å starte <ph name="PRODUCT_NAME" /> når <ph name="PRODUCT_NAME" /> startes fra Internet Explorer.
 
-      Denne regelen kan settes til banen til en kjørbar fil – eller til ${chrome} for å finne ut automatisk hvor Carbon Browser Browser Browser er installert.</translation>
+      Denne regelen kan settes til banen til en kjørbar fil – eller til ${chrome} for å finne ut automatisk hvor Carbon Browser er installert.</translation>
 <translation id="930930237275114205">Angi <ph name="PRODUCT_FRAME_NAME" />-katalog for brukerdata</translation>
 <translation id="943865157632139008">Lar deg konfigurere standard HTML-gjengivelse når <ph name="PRODUCT_FRAME_NAME" /> er installert.
       Standardinnstillingen er å la vertsnettleseren utføre gjengivelsen, men du kan eventuelt overstyre dette og la <ph name="PRODUCT_FRAME_NAME" /> gjengi HTML-sider som standard.</translation>

@@ -4,6 +4,7 @@
 
 #include "ash/system/message_center/ash_message_popup_collection.h"
 
+#include "ash/constants/ash_features.h"
 #include "ash/focus_cycler.h"
 #include "ash/public/cpp/shelf_config.h"
 #include "ash/public/cpp/shelf_types.h"
@@ -13,6 +14,7 @@
 #include "ash/shelf/shelf.h"
 #include "ash/shell.h"
 #include "ash/system/message_center/fullscreen_notification_blocker.h"
+#include "ash/system/message_center/message_center_constants.h"
 #include "ash/system/message_center/message_view_factory.h"
 #include "ash/system/message_center/metrics_utils.h"
 #include "ash/system/tray/tray_constants.h"
@@ -47,7 +49,10 @@ const char AshMessagePopupCollection::kMessagePopupWidgetName[] =
 
 AshMessagePopupCollection::AshMessagePopupCollection(Shelf* shelf)
     : screen_(nullptr), shelf_(shelf), tray_bubble_height_(0) {
-  set_inverse();
+  // The order for notifications will be reversed when
+  // IsNotificationsRefreshEnabled.
+  if (!features::IsNotificationsRefreshEnabled())
+    set_inverse();
   shelf_->AddObserver(this);
 }
 
@@ -145,6 +150,7 @@ void AshMessagePopupCollection::ConfigureWidgetInitParamsForContainer(
   // windows (i.e. pressing ctrl + forward/back).
   init_params->activatable = views::Widget::InitParams::Activatable::kYes;
   init_params->name = kMessagePopupWidgetName;
+  init_params->corner_radius = kMessagePopupCornerRadius;
   Shell::Get()->focus_cycler()->AddWidget(widget);
   widget->AddObserver(this);
   tracked_widgets_.insert(widget);

@@ -13,10 +13,12 @@ import("//build/config/ozone.gni")
 import("//build/config/sanitizers/sanitizers.gni")
 import("//build/config/ui.gni")
 import("//build/util/branding.gni")
+import("//skia/features.gni")
 import("//testing/libfuzzer/fuzzer_test.gni")
 import("//testing/test.gni")
 import("//tools/grit/grit_rule.gni")
 import("//ui/base/ui_features.gni")
+import("//ui/qt/qt.gni")
 
 if (is_android) {
   import("//build/config/android/config.gni")
@@ -43,6 +45,8 @@ component("ui_data_pack") {
     "resource/resource_handle.h",
     "resource/resource_scale_factor.cc",
     "resource/resource_scale_factor.h",
+    "resource/scoped_file_writer.cc",
+    "resource/scoped_file_writer.h",
   ]
 
   deps = [
@@ -52,6 +56,20 @@ component("ui_data_pack") {
   ]
 
   defines = [ "UI_DATA_PACK_IMPLEMENTATION" ]
+
+  if (is_chromeos) {
+    sources += [
+      "resource/temporary_shared_resource_path_chromeos.cc",
+      "resource/temporary_shared_resource_path_chromeos.h",
+    ]
+  }
+  if (is_chromeos_lacros) {
+    sources += [
+      "resource/data_pack_with_resource_sharing_lacros.cc",
+      "resource/data_pack_with_resource_sharing_lacros.h",
+    ]
+    deps += [ "//components/version_info" ]
+  }
 
   configs += [ "//build/config/compiler:wexit_time_destructors" ]
 }
@@ -66,6 +84,7 @@ buildflag_header("buildflags") {
     "HAS_NATIVE_ACCESSIBILITY=$has_native_accessibility",
     "HAS_PLATFORM_ACCESSIBILITY_SUPPORT=$has_platform_accessibility_support",
     "USE_GTK=$use_gtk",
+    "USE_QT=$use_qt",
   ]
 }
 
@@ -74,15 +93,6 @@ source_set("hit_test") {
     "hit_test.cc",
     "hit_test.h",
   ]
-
-  if (use_x11 || use_ozone) {
-    sources += [
-      "hit_test_x11.cc",
-      "hit_test_x11.h",
-    ]
-  }
-
-  deps = [ "//base" ]
 }
 
 component("base") {
@@ -106,6 +116,7 @@ component("base") {
     "interaction/element_identifier.h",
     "interaction/element_tracker.cc",
     "interaction/element_tracker.h",
+    "interaction/framework_specific_implementation.h",
     "interaction/interaction_sequence.cc",
     "interaction/interaction_sequence.h",
     "l10n/formatter.cc",
@@ -129,6 +140,8 @@ component("base") {
     "models/dialog_model_field.cc",
     "models/dialog_model_field.h",
     "models/dialog_model_host.h",
+    "models/dialog_model_menu_model_adapter.cc",
+    "models/dialog_model_menu_model_adapter.h",
     "models/image_model.cc",
     "models/image_model.h",
     "models/list_model.h",
@@ -212,8 +225,6 @@ component("base") {
       "resource/resource_data_dll_win.cc",
       "resource/resource_data_dll_win.h",
       "win/accessibility_ids_win.h",
-      "win/accessibility_misc_utils.cc",
-      "win/accessibility_misc_utils.h",
       "win/atl_module.h",
       "win/event_creation_utils.cc",
       "win/event_creation_utils.h",
@@ -243,6 +254,10 @@ component("base") {
       "win/shell.h",
       "win/touch_input.cc",
       "win/touch_input.h",
+      "win/win_cursor.cc",
+      "win/win_cursor.h",
+      "win/win_cursor_factory.cc",
+      "win/win_cursor_factory.h",
       "win/window_event_target.cc",
       "win/window_event_target.h",
     ]
@@ -268,22 +283,22 @@ component("base") {
       "cocoa/command_dispatcher.mm",
       "cocoa/constrained_window/constrained_window_animation.h",
       "cocoa/constrained_window/constrained_window_animation.mm",
-      "cocoa/controls/button_utils.h",
-      "cocoa/controls/button_utils.mm",
-      "cocoa/controls/textfield_utils.h",
-      "cocoa/controls/textfield_utils.mm",
+      "cocoa/cursor_utils.h",
+      "cocoa/cursor_utils.mm",
       "cocoa/defaults_utils.h",
       "cocoa/defaults_utils.mm",
       "cocoa/find_pasteboard.h",
       "cocoa/find_pasteboard.mm",
       "cocoa/flipped_view.h",
       "cocoa/flipped_view.mm",
-      "cocoa/focus_tracker.h",
-      "cocoa/focus_tracker.mm",
       "cocoa/menu_controller.h",
       "cocoa/menu_controller.mm",
+      "cocoa/nsmenu_additions.h",
+      "cocoa/nsmenu_additions.mm",
       "cocoa/nsmenuitem_additions.h",
       "cocoa/nsmenuitem_additions.mm",
+      "cocoa/nswindow_test_util.cc",
+      "cocoa/nswindow_test_util.h",
       "cocoa/permissions_utils.h",
       "cocoa/permissions_utils.mm",
       "cocoa/quartz_util.h",
@@ -294,8 +309,8 @@ component("base") {
       "cocoa/remote_layer_api.mm",
       "cocoa/secure_password_input.h",
       "cocoa/secure_password_input.mm",
-      "cocoa/text_services_context_menu.cc",
       "cocoa/text_services_context_menu.h",
+      "cocoa/text_services_context_menu.mm",
       "cocoa/tool_tip_base_view.h",
       "cocoa/tool_tip_base_view.mm",
       "cocoa/touch_bar_util.h",
@@ -320,6 +335,10 @@ component("base") {
       "l10n/l10n_util_mac.mm",
       "resource/resource_bundle_mac.mm",
     ]
+  }
+
+  if (is_chromeos_lacros) {
+    sources += [ "resource/resource_bundle_lacros.cc" ]
   }
 
   if (is_ios) {
@@ -351,6 +370,8 @@ component("base") {
       "pointer/touch_editing_controller.h",
       "text/bytes_formatting.cc",
       "text/bytes_formatting.h",
+      "themed_vector_icon.cc",
+      "themed_vector_icon.h",
       "ui_base_types.cc",
       "ui_base_types.h",
       "user_activity/user_activity_detector.cc",
@@ -364,8 +385,6 @@ component("base") {
         "accelerators/menu_label_accelerator_util_linux.h",
         "linux/linux_desktop.cc",
         "linux/linux_desktop.h",
-        "linux/linux_ui_delegate.cc",
-        "linux/linux_ui_delegate.h",
       ]
     }
 
@@ -438,6 +457,7 @@ component("base") {
     "//base",
     "//skia",
     "//third_party/abseil-cpp:absl",
+    "//ui/color:color_headers",
     "//ui/gfx",
     "//ui/gfx/geometry",
   ]
@@ -458,12 +478,12 @@ component("base") {
     "//ui/base:data_exchange",
     "//ui/base/clipboard:clipboard_types",
     "//ui/base/dragdrop/mojom",
+    "//ui/color",
     "//ui/display",
     "//ui/display/util:gpu_info_util",
     "//ui/events",
     "//ui/events/devices",
     "//ui/resources:webui_generated_resources_grd",
-    "//ui/resources:webui_resources_grd",
     "//ui/strings",
     "//url",
   ]
@@ -486,6 +506,8 @@ component("base") {
     sources += [
       "l10n/l10n_util_mac.h",
       "l10n/l10n_util_mac.mm",
+      "l10n/l10n_util_mac_bridge.h",
+      "l10n/l10n_util_mac_bridge.mm",
     ]
     public_deps += [ "//ui/events:event_constants" ]
     deps -= [
@@ -494,27 +516,21 @@ component("base") {
     ]
   }
 
-  if (toolkit_views) {
-    deps += [ "//ui/events" ]
+  if (is_win) {
+    public_deps += [
+      "//ui/base/cursor",
+      "//ui/base/cursor/mojom:cursor_type_shared",
+    ]
+    deps += [ "//ui/resources:ui_unscaled_resources_grd" ]
   }
 
-  if ((is_linux || is_chromeos) && (use_x11 || ozone_platform_x11)) {
-    public_deps += [ "//ui/base/x" ]
+  if (is_mac) {
+    public_deps += [ "//ui/base/cursor" ]
+    deps += [ "//ui/resources:ui_resources_grd" ]
+  }
 
-    # X11 drag and drop wants to use common drag and drop types.
-    allow_circular_includes_from = [ "//ui/base/x" ]
-
-    if (!is_chromeos_ash) {
-      # These files/deps aren't used in ChromeOS.
-      sources += [
-        "dragdrop/os_exchange_data_provider_x11.cc",
-        "dragdrop/os_exchange_data_provider_x11.h",
-      ]
-      deps += [
-        "//ui/events/platform/x11",
-        "//ui/gfx/x",
-      ]
-    }
+  if (toolkit_views) {
+    deps += [ "//ui/events" ]
   }
 
   if (use_aura && (is_linux || is_chromeos)) {
@@ -523,6 +539,13 @@ component("base") {
 
   if (is_linux || is_chromeos) {
     deps += [ "//third_party/fontconfig" ]
+  }
+
+  if (is_chromeos_lacros) {
+    deps += [
+      "//chromeos/crosapi/cpp:crosapi_constants",
+      "//chromeos/lacros:lacros_paths",
+    ]
   }
 
   if (use_glib) {
@@ -535,7 +558,8 @@ component("base") {
     ]
   }
 
-  if (is_chromeos_ash || (use_aura && (is_linux || is_chromeos_lacros))) {
+  if (is_chromeos_ash || (use_aura && (is_linux || is_chromeos_lacros)) ||
+      is_fuchsia) {
     sources += [
       "dragdrop/os_exchange_data_provider_non_backed.cc",
       "dragdrop/os_exchange_data_provider_non_backed.h",
@@ -632,15 +656,26 @@ component("features") {
     "ui_base_features.h",
   ]
 
+  if (is_chromeos_ash) {
+    sources += [
+      "shortcut_mapping_pref_delegate.cc",
+      "shortcut_mapping_pref_delegate.h",
+    ]
+  }
+
   deps = [
     ":buildflags",
     "//base",
     "//build:chromeos_buildflags",
   ]
+
+  if (is_android) {
+    sources += [ "ui_base_feature_list_android.cc" ]
+    deps += [ ":ui_base_jni_headers" ]
+  }
 }
 
-# TODO(crbug.com/1091985): Support CrOS.
-if (is_win || is_mac || (is_linux || is_chromeos_lacros)) {
+if (is_win || is_mac || is_linux || is_chromeos) {
   static_library("pixel_diff_test_support") {
     testonly = true
     sources = [
@@ -674,7 +709,10 @@ if (!is_ios) {
     if (is_win) {
       data += [ "//tools/skia_goldctl/win/goldctl.exe" ]
     } else if (is_mac) {
-      data += [ "//tools/skia_goldctl/mac/goldctl" ]
+      data += [
+        "//tools/skia_goldctl/mac_amd64/goldctl",
+        "//tools/skia_goldctl/mac_arm64/goldctl",
+      ]
     } else {
       data += [ "//tools/skia_goldctl/linux/goldctl" ]
     }
@@ -687,20 +725,24 @@ static_library("test_support") {
     "interaction/element_test_util.cc",
     "interaction/element_test_util.h",
     "interaction/expect_call_in_scope.h",
+    "interaction/interaction_test_util.cc",
+    "interaction/interaction_test_util.h",
     "resource/mock_resource_bundle_delegate.cc",
     "resource/mock_resource_bundle_delegate.h",
+    "test/idle_test_utils.cc",
+    "test/idle_test_utils.h",
   ]
 
   if (is_mac) {
     sources += [
+      "interaction/interaction_test_util_mac.h",
+      "interaction/interaction_test_util_mac.mm",
       "test/cocoa_helper.h",
       "test/cocoa_helper.mm",
       "test/menu_test_observer.h",
       "test/menu_test_observer.mm",
       "test/ns_ax_tree_validator.h",
       "test/ns_ax_tree_validator.mm",
-      "test/nswindow_fullscreen_notification_waiter.h",
-      "test/nswindow_fullscreen_notification_waiter.mm",
       "test/scoped_fake_full_keyboard_access.h",
       "test/scoped_fake_full_keyboard_access.mm",
       "test/scoped_fake_nswindow_focus.h",
@@ -729,6 +771,7 @@ static_library("test_support") {
       "accelerators/test_accelerator_target.h",
       "test/mock_base_window.cc",
       "test/mock_base_window.h",
+      "test/test_dialog_model_host.cc",
       "test/test_dialog_model_host.h",
       "test/ui_controls.h",
       "test/view_tree_validator.h",
@@ -749,7 +792,10 @@ static_library("test_support") {
     ]
   }
 
-  public_deps = [ ":base" ]
+  public_deps = [
+    ":base",
+    "//ui/base/idle",
+  ]
   deps = [
     "//base",
     "//base/test:test_config",
@@ -795,22 +841,22 @@ static_library("test_support") {
 
   if (is_chromeos_ash) {
     sources += [
-      "ime/chromeos/mock_component_extension_ime_manager.cc",
-      "ime/chromeos/mock_component_extension_ime_manager.h",
-      "ime/chromeos/mock_component_extension_ime_manager_delegate.cc",
-      "ime/chromeos/mock_component_extension_ime_manager_delegate.h",
-      "ime/chromeos/mock_ime_candidate_window_handler.cc",
-      "ime/chromeos/mock_ime_candidate_window_handler.h",
-      "ime/chromeos/mock_ime_engine_handler.cc",
-      "ime/chromeos/mock_ime_engine_handler.h",
-      "ime/chromeos/mock_ime_input_context_handler.cc",
-      "ime/chromeos/mock_ime_input_context_handler.h",
-      "ime/chromeos/mock_input_method_manager.cc",
-      "ime/chromeos/mock_input_method_manager.h",
+      "ime/ash/mock_component_extension_ime_manager.cc",
+      "ime/ash/mock_component_extension_ime_manager.h",
+      "ime/ash/mock_component_extension_ime_manager_delegate.cc",
+      "ime/ash/mock_component_extension_ime_manager_delegate.h",
+      "ime/ash/mock_ime_candidate_window_handler.cc",
+      "ime/ash/mock_ime_candidate_window_handler.h",
+      "ime/ash/mock_ime_engine_handler.cc",
+      "ime/ash/mock_ime_engine_handler.h",
+      "ime/ash/mock_ime_input_context_handler.cc",
+      "ime/ash/mock_ime_input_context_handler.h",
+      "ime/ash/mock_input_method_manager.cc",
+      "ime/ash/mock_input_method_manager.h",
     ]
     deps += [
-      "//ui/base/ime/chromeos",
-      "//ui/base/ime/chromeos:typing_session_manager",
+      "//ui/base/ime/ash",
+      "//ui/base/ime/ash:typing_session_manager",
     ]
   }
 }
@@ -825,7 +871,31 @@ if (is_android) {
       "../android/java/src/org/chromium/ui/base/ResourceBundle.java",
       "../android/java/src/org/chromium/ui/base/SelectFileDialog.java",
       "../android/java/src/org/chromium/ui/base/TouchDevice.java",
+      "../android/java/src/org/chromium/ui/base/UiBaseFeatureList.java",
     ]
+  }
+
+  java_cpp_features("java_features_srcjar") {
+    # External code should depend on ":features_java" instead.
+    visibility = [ ":*" ]
+    sources = [ "ui_base_features.cc" ]
+    template =
+        "../android/java/src/org/chromium/ui/base/UiBaseFeatures.java.tmpl"
+  }
+
+  android_library("features_java") {
+    srcjar_deps = [ ":java_features_srcjar" ]
+  }
+
+  android_library("feature_list_java") {
+    sources =
+        [ "../android/java/src/org/chromium/ui/base/UiBaseFeatureList.java" ]
+    deps = [
+      "//base:base_java",
+      "//base:jni_java",
+      "//build/android:build_java",
+    ]
+    annotation_processor_deps = [ "//base/android/jni_generator:jni_processor" ]
   }
 }
 
@@ -880,8 +950,11 @@ test("ui_base_unittests") {
     "class_property_unittest.cc",
     "clipboard/file_info_unittest.cc",
     "ime/utf_offset_unittest.cc",
+    "interaction/element_identifier_unittest.cc",
     "interaction/element_tracker_unittest.cc",
+    "interaction/framework_specific_implementation_unittest.cc",
     "interaction/interaction_sequence_unittest.cc",
+    "interaction/interaction_test_util_unittest.cc",
     "l10n/l10n_util_unittest.cc",
     "l10n/time_format_unittest.cc",
     "layout_unittest.cc",
@@ -915,30 +988,36 @@ test("ui_base_unittests") {
   ]
   if (is_mac) {
     sources += [
+      "cocoa/defaults_utils_unittest.mm",
+      "cocoa/nsmenu_additions_unittest.mm",
       "cocoa/nsmenuitem_additions_unittest.mm",
       "interaction/element_tracker_mac_unittest.mm",
       "l10n/l10n_util_mac_unittest.mm",
     ]
   }
+  if (is_chromeos_lacros) {
+    sources += [ "resource/data_pack_with_resource_sharing_lacros_unittest.cc" ]
+  }
   if (!is_ios) {
-    sources += [ "user_activity/user_activity_detector_unittest.cc" ]
+    sources += [
+      "themed_vector_icon_unittest.cc",
+      "user_activity/user_activity_detector_unittest.cc",
+    ]
 
     if (is_mac) {
-      sources += [
-        "test/scoped_fake_nswindow_fullscreen_unittest.mm",
-        "test/view_tree_validator_unittest.mm",
-      ]
+      sources += [ "test/view_tree_validator_unittest.mm" ]
     }
   }
 
   data = []
-  data_deps = []
+  data_deps = [ "//testing/buildbot/filters:ui_base_unittests_filters" ]
   deps = [
     ":ui_base_test_resources_grit",
     ":ui_base_unittests_bundle_data",
     "//base",
     "//base/test:test_support",
     "//build:chromeos_buildflags",
+    "//components/vector_icons",
     "//mojo/core/embedder",
     "//net",
     "//net:test_support",
@@ -959,6 +1038,7 @@ test("ui_base_unittests") {
     "//ui/base/data_transfer_policy:unittests",
     "//ui/base/metadata:metadata_tests",
     "//ui/base/prediction:prediction",
+    "//ui/color",
     "//ui/display",
     "//ui/events:events_base",
     "//ui/events:test_support",
@@ -1008,7 +1088,6 @@ test("ui_base_unittests") {
         "cocoa/bubble_closer_unittest.mm",
         "cocoa/cocoa_base_utils_unittest.mm",
         "cocoa/constrained_window/constrained_window_animation_unittest.mm",
-        "cocoa/focus_tracker_unittest.mm",
         "cocoa/menu_controller_unittest.mm",
         "cocoa/touch_bar_util_unittest.mm",
         "cocoa/tracking_area_unittest.mm",
@@ -1018,7 +1097,7 @@ test("ui_base_unittests") {
   }
 
   # TODO(crbug.com/1091985): Support CrOS.
-  if (is_win || is_mac || (is_linux || is_chromeos_lacros)) {
+  if (is_win || is_mac || is_linux || is_chromeos_lacros) {
     sources += [
       "test/skia_gold_matching_algorithm_unittest.cc",
       "test/skia_gold_pixel_diff_unittest.cc",
@@ -1045,34 +1124,31 @@ test("ui_base_unittests") {
     if (is_chromeos_ash) {
       sources += [
         "dragdrop/os_exchange_data_provider_non_backed_unittest.cc",
-        "ime/chromeos/extension_ime_util_unittest.cc",
-        "ime/chromeos/ime_keyboard_unittest.cc",
-        "ime/chromeos/input_method_chromeos_unittest.cc",
-        "ime/chromeos/input_method_descriptor_unittest.cc",
-        "ime/chromeos/input_method_util_unittest.cc",
-        "ime/chromeos/typing_session_manager_unittest.cc",
+        "ime/ash/extension_ime_util_unittest.cc",
+        "ime/ash/ime_keyboard_unittest.cc",
+        "ime/ash/input_method_ash_unittest.cc",
+        "ime/ash/input_method_descriptor_unittest.cc",
+        "ime/ash/input_method_util_unittest.cc",
+        "ime/ash/typing_session_manager_unittest.cc",
       ]
       deps += [
         "//build:branding_buildflags",
-        "//ui/base/ime/chromeos",
-        "//ui/base/ime/chromeos:typing_session_manager",
+        "//ui/base/ime/ash",
+        "//ui/base/ime/ash:typing_session_manager",
       ]
     }
     if ((is_linux || is_chromeos_lacros) && use_aura) {
-      sources += [ "dragdrop/os_exchange_data_provider_non_backed_unittest.cc" ]
-
-      if (use_x11 || use_ozone) {
-        sources += [ "ime/linux/input_method_auralinux_unittest.cc" ]
-        deps += [
-          "//ui/base/ime/init",
-          "//ui/base/ime/linux",
-        ]
-      }
-      if (!use_x11) {
-        sources += [ "ime/input_method_minimal_unittest.cc" ]
-      }
+      sources += [
+        "dragdrop/os_exchange_data_provider_non_backed_unittest.cc",
+        "ime/input_method_minimal_unittest.cc",
+        "ime/linux/input_method_auralinux_unittest.cc",
+      ]
+      deps += [
+        "//ui/base/ime/init",
+        "//ui/base/ime/linux",
+      ]
     }
-    if (use_x11) {
+    if (is_linux && !is_castos) {
       sources += [ "ime/linux/composition_text_util_pango_unittest.cc" ]
     }
     if (is_chromeos_ash || use_ozone) {
@@ -1112,6 +1188,11 @@ test("ui_base_unittests") {
       "dragdrop/os_exchange_data_win_unittest.cc",
       "view_prop_unittest.cc",
       "win/hwnd_subclass_unittest.cc",
+      "win/win_cursor_factory_unittest.cc",
+    ]
+    deps += [
+      "//ui/base/cursor",
+      "//ui/base/cursor/mojom:cursor_type_shared",
     ]
   }
 
@@ -1126,14 +1207,6 @@ test("ui_base_unittests") {
     configs += [ "//build/config/linux/pangocairo" ]
   }
 
-  if (use_x11) {
-    deps += [
-      "//ui/base/x:unittests",
-      "//ui/events/platform/x11",
-      "//ui/gfx/x",
-    ]
-  }
-
   if (is_mac) {
     deps += [
       ":ui_unittests_framework",
@@ -1141,8 +1214,7 @@ test("ui_base_unittests") {
     ]
   }
 
-  # TODO(crbug.com/980371): Implement OSExchangeDataProvider for Fuchsia.
-  if ((use_aura || toolkit_views) && !is_fuchsia) {
+  if (use_aura || toolkit_views) {
     sources += [ "dragdrop/os_exchange_data_unittest.cc" ]
     deps += [
       "//ui/events",
@@ -1178,9 +1250,19 @@ test("ui_base_unittests") {
     data += [ "$root_out_dir/ui_unittests Framework.framework/" ]
   }
 
-  if (!is_ios) {
+  if (skia_support_skottie && !is_ios) {
     sources += [ "//ui/lottie/animation_unittest.cc" ]
-    deps += [ "//ui/lottie" ]
+    deps += [
+      "//cc:test_support",
+      "//cc/paint",
+      "//third_party/abseil-cpp:absl",
+      "//ui/lottie",
+    ]
+  }
+
+  # If the platform supports wayland, run wayland library unittests, too.
+  if (is_chromeos_ash || ozone_platform_wayland) {
+    deps += [ "//ui/base/wayland:unittests" ]
   }
 }
 
@@ -1247,11 +1329,11 @@ fuzzer_test("file_info_fuzzer") {
 
 # Same as locales, but includes "en" on Apple platforms.
 # Apple platforms use "en" instead of "en-US" (see the definition of
-# |locales_as_mac_outputs| in locales.gni). However, we still want to keep
+# |locales_as_apple_outputs| in locales.gni). However, we still want to keep
 # "en-US" in the list as the |ResourceBundle::GetLocaleFilePath| implementations
 # in ui/base/resource/resource_bundle_{mac,ios}.mm return a valid path for
 # "en-US" (as they internally rewrite it as "en" instead).
-locales_for_platform_list = locales
+locales_for_platform_list = platform_pak_locales
 if (is_apple) {
   locales_for_platform_list += [ "en" ]
 }

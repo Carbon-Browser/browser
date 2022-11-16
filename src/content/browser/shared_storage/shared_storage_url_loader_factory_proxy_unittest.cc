@@ -60,14 +60,14 @@ class SharedStorageURLLoaderFactoryProxyTest : public testing::Test {
            !remote_url_loader_factory_.is_connected());
 
     remote_url_loader_factory_.reset();
+
+    mojo::Remote<network::mojom::URLLoaderFactory> factory;
+    proxied_url_loader_factory_.Clone(factory.BindNewPipeAndPassReceiver());
+
     url_loader_factory_proxy_ =
         std::make_unique<SharedStorageURLLoaderFactoryProxy>(
+            factory.Unbind(),
             remote_url_loader_factory_.BindNewPipeAndPassReceiver(),
-            base::BindRepeating(
-                [](network::mojom::URLLoaderFactory* factory) {
-                  return factory;
-                },
-                &proxied_url_loader_factory_),
             frame_origin_, GURL(kScriptUrl));
   }
 
@@ -164,8 +164,7 @@ class SharedStorageURLLoaderFactoryProxyTest : public testing::Test {
  protected:
   base::test::TaskEnvironment task_environment_;
 
-  const url::Origin frame_origin_ =
-      url::Origin::Create(GURL("https://foo.test/"));
+  const url::Origin frame_origin_ = url::Origin::Create(GURL(kScriptUrl));
   network::TestURLLoaderFactory proxied_url_loader_factory_;
   std::unique_ptr<SharedStorageURLLoaderFactoryProxy> url_loader_factory_proxy_;
   mojo::Remote<network::mojom::URLLoaderFactory> remote_url_loader_factory_;

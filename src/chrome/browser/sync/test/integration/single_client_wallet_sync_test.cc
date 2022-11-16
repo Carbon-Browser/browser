@@ -3,7 +3,7 @@
 // found in the LICENSE file.
 
 #include "base/command_line.h"
-#include "base/macros.h"
+#include "base/feature_list.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "build/build_config.h"
@@ -20,11 +20,11 @@
 #include "chrome/browser/sync/test/integration/wallet_helper.h"
 #include "chrome/browser/web_data_service_factory.h"
 #include "components/autofill/core/browser/autofill_data_util.h"
-#include "components/autofill/core/browser/autofill_metrics.h"
 #include "components/autofill/core/browser/data_model/autofill_metadata.h"
 #include "components/autofill/core/browser/data_model/credit_card.h"
 #include "components/autofill/core/browser/data_model/credit_card_cloud_token_data.h"
 #include "components/autofill/core/browser/field_types.h"
+#include "components/autofill/core/browser/metrics/autofill_metrics.h"
 #include "components/autofill/core/browser/payments/payments_customer_data.h"
 #include "components/autofill/core/browser/personal_data_manager.h"
 #include "components/autofill/core/browser/personal_data_manager_observer.h"
@@ -54,7 +54,6 @@ using autofill::AutofillProfile;
 using autofill::CreditCard;
 using autofill::CreditCardCloudTokenData;
 using autofill::data_util::TruncateUTF8;
-using base::ASCIIToUTF16;
 using testing::Contains;
 using wallet_helper::CreateDefaultSyncCreditCardCloudTokenData;
 using wallet_helper::CreateDefaultSyncPaymentsCustomerData;
@@ -75,7 +74,6 @@ using wallet_helper::GetServerCardsMetadata;
 using wallet_helper::GetWalletModelTypeState;
 using wallet_helper::kDefaultBillingAddressID;
 using wallet_helper::kDefaultCardID;
-using wallet_helper::kDefaultCreditCardCloudTokenDataID;
 using wallet_helper::kDefaultCustomerID;
 using wallet_helper::UnmaskServerCard;
 
@@ -101,9 +99,14 @@ constexpr char kInvalidGrantOAuth2Token[] = R"({
 template <class T>
 class AutofillWebDataServiceConsumer : public WebDataServiceConsumer {
  public:
-  AutofillWebDataServiceConsumer() {}
+  AutofillWebDataServiceConsumer() = default;
 
-  virtual ~AutofillWebDataServiceConsumer() {}
+  AutofillWebDataServiceConsumer(const AutofillWebDataServiceConsumer&) =
+      delete;
+  AutofillWebDataServiceConsumer& operator=(
+      const AutofillWebDataServiceConsumer&) = delete;
+
+  ~AutofillWebDataServiceConsumer() override = default;
 
   void OnWebDataServiceRequestDone(
       WebDataServiceBase::Handle handle,
@@ -119,7 +122,6 @@ class AutofillWebDataServiceConsumer : public WebDataServiceConsumer {
  private:
   base::RunLoop run_loop_;
   T result_;
-  DISALLOW_COPY_AND_ASSIGN(AutofillWebDataServiceConsumer);
 };
 
 std::vector<std::unique_ptr<CreditCard>> GetServerCards(
@@ -191,7 +193,11 @@ class SingleClientWalletSyncTest : public SyncTest {
     test_clock_.SetNow(kArbitraryDefaultTime);
   }
 
-  ~SingleClientWalletSyncTest() override {}
+  SingleClientWalletSyncTest(const SingleClientWalletSyncTest&) = delete;
+  SingleClientWalletSyncTest& operator=(const SingleClientWalletSyncTest&) =
+      delete;
+
+  ~SingleClientWalletSyncTest() override = default;
 
  protected:
   void WaitForOnPersonalDataChanged(autofill::PersonalDataManager* pdm) {
@@ -245,16 +251,11 @@ class SingleClientWalletSyncTest : public SyncTest {
         .Wait();
   }
 
-  void AdvanceAutofillClockByOneDay() {
-    test_clock_.Advance(base::TimeDelta::FromDays(1));
-  }
+  void AdvanceAutofillClockByOneDay() { test_clock_.Advance(base::Days(1)); }
 
   testing::NiceMock<PersonalDataLoadedObserverMock> personal_data_observer_;
   base::HistogramTester histogram_tester_;
   autofill::TestAutofillClock test_clock_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(SingleClientWalletSyncTest);
 };
 
 class SingleClientWalletSyncTestWithoutAccountStorage
@@ -276,9 +277,11 @@ IN_PROC_BROWSER_TEST_F(SingleClientWalletSyncTestWithoutAccountStorage,
                                   CreateDefaultSyncPaymentsCustomerData()});
   ASSERT_TRUE(SetupSync());
 
-  auto profile_data = GetProfileWebDataService(0);
+  scoped_refptr<autofill::AutofillWebDataService> profile_data =
+      GetProfileWebDataService(0);
   ASSERT_NE(nullptr, profile_data);
-  auto account_data = GetAccountWebDataService(0);
+  scoped_refptr<autofill::AutofillWebDataService> account_data =
+      GetAccountWebDataService(0);
   ASSERT_EQ(nullptr, account_data);
 
   autofill::PersonalDataManager* pdm = GetPersonalDataManager(0);
@@ -329,9 +332,11 @@ IN_PROC_BROWSER_TEST_F(SingleClientWalletWithAccountStorageSyncTest,
   ASSERT_TRUE(GetSyncService(0)->GetActiveDataTypes().Has(
       syncer::AUTOFILL_WALLET_DATA));
 
-  auto profile_data = GetProfileWebDataService(0);
+  scoped_refptr<autofill::AutofillWebDataService> profile_data =
+      GetProfileWebDataService(0);
   ASSERT_NE(nullptr, profile_data);
-  auto account_data = GetAccountWebDataService(0);
+  scoped_refptr<autofill::AutofillWebDataService> account_data =
+      GetAccountWebDataService(0);
   ASSERT_NE(nullptr, account_data);
 
   // Check that no data is stored in the profile storage.
@@ -347,7 +352,6 @@ IN_PROC_BROWSER_TEST_F(SingleClientWalletWithAccountStorageSyncTest,
 
   ExpectDefaultCreditCardValues(*cards[0]);
 
-  // Now sign back out.
   GetClient(0)->SignOutPrimaryAccount();
 
   // Verify that sync is stopped.
@@ -528,7 +532,6 @@ IN_PROC_BROWSER_TEST_F(SingleClientWalletSyncTest, ClearOnStopSync) {
 
 // ChromeOS does not sign out, so the test below does not apply.
 #if !BUILDFLAG(IS_CHROMEOS_ASH)
-// Wallet data should get cleared from the database when the user signs out.
 IN_PROC_BROWSER_TEST_F(SingleClientWalletSyncTest, ClearOnSignOut) {
   GetFakeServer()->SetWalletData({CreateDefaultSyncWalletAddress(),
                                   CreateDefaultSyncWalletCard(),
@@ -1272,8 +1275,8 @@ IN_PROC_BROWSER_TEST_F(SingleClientWalletSyncTest, ConvertServerAddress) {
 
   histogram_tester_.ExpectBucketCount(
       "Autofill.WalletAddressConversionType",
-      /*bucket=*/AutofillMetrics::CONVERTED_ADDRESS_ADDED,
-      /*count=*/1);
+      /*sample=*/AutofillMetrics::CONVERTED_ADDRESS_ADDED,
+      /*expected_count=*/1);
 }
 
 IN_PROC_BROWSER_TEST_F(SingleClientWalletSyncTest,
@@ -1303,7 +1306,7 @@ IN_PROC_BROWSER_TEST_F(SingleClientWalletSyncTest,
   GetFakeServer()->InjectEntity(
       syncer::PersistentUniqueClientEntity::CreateFromSpecificsForTesting(
           "non_unique_name",
-          /*client_tag_hash=*/"address-" + wallet_metadata_specifics->id(),
+          /*client_tag=*/"address-" + wallet_metadata_specifics->id(),
           specifics,
           /*creation_time=*/0,
           /*last_modified_time=*/0));
@@ -1325,7 +1328,13 @@ class SingleClientWalletSecondaryAccountSyncTest
     features_.InitAndEnableFeature(
         autofill::features::kAutofillEnableAccountWalletStorage);
   }
-  ~SingleClientWalletSecondaryAccountSyncTest() override {}
+
+  SingleClientWalletSecondaryAccountSyncTest(
+      const SingleClientWalletSecondaryAccountSyncTest&) = delete;
+  SingleClientWalletSecondaryAccountSyncTest& operator=(
+      const SingleClientWalletSecondaryAccountSyncTest&) = delete;
+
+  ~SingleClientWalletSecondaryAccountSyncTest() override = default;
 
   void SetUpInProcessBrowserTestFixture() override {
     test_signin_client_subscription_ =
@@ -1345,12 +1354,10 @@ class SingleClientWalletSecondaryAccountSyncTest
   base::test::ScopedFeatureList features_;
 
   base::CallbackListSubscription test_signin_client_subscription_;
-
-  DISALLOW_COPY_AND_ASSIGN(SingleClientWalletSecondaryAccountSyncTest);
 };
 
 // ChromeOS doesn't support changes to the primary account after startup, so
-// these secondary-account-related tests don't apply.
+// these tests don't apply.
 #if !BUILDFLAG(IS_CHROMEOS_ASH)
 IN_PROC_BROWSER_TEST_F(SingleClientWalletSecondaryAccountSyncTest,
                        SwitchesFromAccountToProfileStorageOnSyncOptIn) {
@@ -1360,8 +1367,8 @@ IN_PROC_BROWSER_TEST_F(SingleClientWalletSecondaryAccountSyncTest,
                                   CreateDefaultSyncPaymentsCustomerData(),
                                   CreateDefaultSyncCreditCardCloudTokenData()});
 
-  // Set up Sync in transport mode for a non-primary account.
-  secondary_account_helper::SignInSecondaryAccount(
+  // Set up Sync in transport mode for an unconsented account.
+  secondary_account_helper::SignInUnconsentedAccount(
       profile(), &test_url_loader_factory_, "user@email.com");
   ASSERT_TRUE(GetClient(0)->AwaitSyncTransportActive());
   ASSERT_EQ(syncer::SyncService::TransportState::ACTIVE,
@@ -1376,9 +1383,11 @@ IN_PROC_BROWSER_TEST_F(SingleClientWalletSecondaryAccountSyncTest,
   EXPECT_TRUE(
       GetPersonalDataManager(0)->IsUsingAccountStorageForServerDataForTest());
 
-  auto account_data = GetAccountWebDataService(0);
+  scoped_refptr<autofill::AutofillWebDataService> account_data =
+      GetAccountWebDataService(0);
   ASSERT_NE(nullptr, account_data);
-  auto profile_data = GetProfileWebDataService(0);
+  scoped_refptr<autofill::AutofillWebDataService> profile_data =
+      GetProfileWebDataService(0);
   ASSERT_NE(nullptr, profile_data);
 
   // Check that the data is stored in the account storage (ephemeral), but not
@@ -1390,9 +1399,9 @@ IN_PROC_BROWSER_TEST_F(SingleClientWalletSecondaryAccountSyncTest,
   EXPECT_EQ(1U, GetCreditCardCloudTokenData(account_data).size());
   EXPECT_EQ(0U, GetCreditCardCloudTokenData(profile_data).size());
 
-  // Simulate the user opting in to full Sync: Make the account primary, and
-  // set first-time setup to complete.
-  secondary_account_helper::MakeAccountPrimary(profile(), "user@email.com");
+  // Simulate the user opting in to full Sync, and set first-time setup to
+  // complete.
+  secondary_account_helper::GrantSyncConsent(profile(), "user@email.com");
   GetSyncService(0)->GetUserSettings()->SetSyncRequested(true);
   GetSyncService(0)->GetUserSettings()->SetFirstSetupComplete(
       kSetSourceFromTest);
@@ -1428,8 +1437,8 @@ IN_PROC_BROWSER_TEST_F(
   GetFakeServer()->SetWalletData({CreateDefaultSyncWalletCard(),
                                   CreateDefaultSyncCreditCardCloudTokenData()});
 
-  // Set up Sync in transport mode for a non-primary account.
-  secondary_account_helper::SignInSecondaryAccount(
+  // Set up Sync in transport mode for an unconsented account.
+  secondary_account_helper::SignInUnconsentedAccount(
       profile(), &test_url_loader_factory_, "user@email.com");
   ASSERT_TRUE(GetClient(0)->AwaitSyncTransportActive());
   ASSERT_EQ(syncer::SyncService::TransportState::ACTIVE,
@@ -1444,9 +1453,11 @@ IN_PROC_BROWSER_TEST_F(
   EXPECT_TRUE(
       GetPersonalDataManager(0)->IsUsingAccountStorageForServerDataForTest());
 
-  auto account_data = GetAccountWebDataService(0);
+  scoped_refptr<autofill::AutofillWebDataService> account_data =
+      GetAccountWebDataService(0);
   ASSERT_NE(nullptr, account_data);
-  auto profile_data = GetProfileWebDataService(0);
+  scoped_refptr<autofill::AutofillWebDataService> profile_data =
+      GetProfileWebDataService(0);
   ASSERT_NE(nullptr, profile_data);
 
   // Check that the card is stored in the account storage (ephemeral), but not
@@ -1456,12 +1467,13 @@ IN_PROC_BROWSER_TEST_F(
   EXPECT_EQ(1U, GetCreditCardCloudTokenData(account_data).size());
   EXPECT_EQ(0U, GetCreditCardCloudTokenData(profile_data).size());
 
-  // Simulate the user opting in to full Sync: First, make the account primary.
-  secondary_account_helper::MakeAccountPrimary(profile(), "user@email.com");
+  // Simulate the user opting in to full Sync.
+  secondary_account_helper::GrantSyncConsent(profile(), "user@email.com");
 
   // Now start actually configuring Sync.
   GetSyncService(0)->GetUserSettings()->SetSyncRequested(true);
-  auto setup_handle = GetSyncService(0)->GetSetupInProgressHandle();
+  std::unique_ptr<syncer::SyncSetupInProgressHandle> setup_handle =
+      GetSyncService(0)->GetSetupInProgressHandle();
 
   GetSyncService(0)->GetUserSettings()->SetSelectedTypes(
       /*sync_everything=*/false, {syncer::UserSelectableType::kAutofill});
@@ -1530,9 +1542,11 @@ IN_PROC_BROWSER_TEST_F(SingleClientWalletWithAccountStorageSyncTest,
   EXPECT_FALSE(
       GetPersonalDataManager(0)->IsUsingAccountStorageForServerDataForTest());
 
-  auto account_data = GetAccountWebDataService(0);
+  scoped_refptr<autofill::AutofillWebDataService> account_data =
+      GetAccountWebDataService(0);
   ASSERT_NE(nullptr, account_data);
-  auto profile_data = GetProfileWebDataService(0);
+  scoped_refptr<autofill::AutofillWebDataService> profile_data =
+      GetProfileWebDataService(0);
   ASSERT_NE(nullptr, profile_data);
 
   // Check that the card is stored in the profile storage (persisted), but not

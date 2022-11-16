@@ -5,6 +5,7 @@
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/path_service.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/values.h"
@@ -12,6 +13,7 @@
 #include "chrome/browser/extensions/extension_apitest.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
+#include "chrome/browser/ui/webui/test_data_source.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/common/webui_url_constants.h"
 #include "chrome/test/base/ui_test_utils.h"
@@ -21,6 +23,7 @@
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
+#include "content/public/test/test_navigation_observer.h"
 #include "extensions/browser/api/extensions_api_client.h"
 #include "extensions/browser/event_router.h"
 #include "extensions/common/api/test.h"
@@ -59,8 +62,10 @@ class ExtensionWebUITest : public ExtensionApiTest {
     // Run the test.
     bool actual_result = false;
     EXPECT_TRUE(ui_test_utils::NavigateToURL(browser(), page_url));
-    content::RenderFrameHost* webui =
-        browser()->tab_strip_model()->GetActiveWebContents()->GetMainFrame();
+    content::RenderFrameHost* webui = browser()
+                                          ->tab_strip_model()
+                                          ->GetActiveWebContents()
+                                          ->GetPrimaryMainFrame();
     if (!webui)
       return testing::AssertionFailure() << "Failed to navigate to WebUI";
     CHECK(content::ExecuteScriptAndExtractBool(webui, script, &actual_result));
@@ -123,10 +128,10 @@ class ExtensionWebUIEmbeddedOptionsTest : public ExtensionWebUITest {
 
  private:
   guest_view::TestGuestViewManagerFactory test_guest_view_manager_factory_;
-  guest_view::TestGuestViewManager* test_guest_view_manager_ = nullptr;
+  raw_ptr<guest_view::TestGuestViewManager> test_guest_view_manager_ = nullptr;
 };
 
-#if !defined(OS_WIN)  // flaky http://crbug.com/530722
+#if !BUILDFLAG(IS_WIN)  // flaky http://crbug.com/530722
 
 IN_PROC_BROWSER_TEST_F(ExtensionWebUITest, SanityCheckAvailableAPIs) {
   ASSERT_TRUE(RunTestOnExtensionsPage("sanity_check_available_apis.js"));
@@ -139,12 +144,12 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebUITest, SanityCheckUnavailableAPIs) {
 // Tests chrome.test.sendMessage, which exercises WebUI making a
 // function call and receiving a response.
 IN_PROC_BROWSER_TEST_F(ExtensionWebUITest, SendMessage) {
-  ExtensionTestMessageListener ping_listener("ping", true);
+  ExtensionTestMessageListener ping_listener("ping", ReplyBehavior::kWillReply);
 
   ASSERT_TRUE(RunTestOnExtensionsPage("send_message.js"));
   ASSERT_TRUE(ping_listener.WaitUntilSatisfied());
 
-  ExtensionTestMessageListener result_listener(false);
+  ExtensionTestMessageListener result_listener;
   ping_listener.Reply("pong");
 
   ASSERT_TRUE(result_listener.WaitUntilSatisfied());
@@ -156,7 +161,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebUITest, SendMessage) {
 IN_PROC_BROWSER_TEST_F(ExtensionWebUITest, OnMessage) {
   ASSERT_TRUE(RunTestOnExtensionsPage("on_message.js"));
 
-  ExtensionTestMessageListener result_listener(false);
+  ExtensionTestMessageListener result_listener;
 
   OnMessage::Info info;
   info.data = "hi";
@@ -172,19 +177,20 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebUITest, OnMessage) {
 // Tests chrome.runtime.lastError, which exercises WebUI accessing a property
 // on an API which it doesn't actually have access to. A bindings test really.
 IN_PROC_BROWSER_TEST_F(ExtensionWebUITest, RuntimeLastError) {
-  ExtensionTestMessageListener ping_listener("ping", true);
+  ExtensionTestMessageListener ping_listener("ping", ReplyBehavior::kWillReply);
 
   ASSERT_TRUE(RunTestOnExtensionsPage("runtime_last_error.js"));
   ASSERT_TRUE(ping_listener.WaitUntilSatisfied());
 
-  ExtensionTestMessageListener result_listener(false);
+  ExtensionTestMessageListener result_listener;
   ping_listener.ReplyWithError("unknown host");
   ASSERT_TRUE(result_listener.WaitUntilSatisfied());
   EXPECT_EQ("true", result_listener.message());
 }
 
 IN_PROC_BROWSER_TEST_F(ExtensionWebUITest, CanEmbedExtensionOptions) {
-  ExtensionTestMessageListener ready_listener("ready", true);
+  ExtensionTestMessageListener ready_listener("ready",
+                                              ReplyBehavior::kWillReply);
 
   const Extension* extension =
       LoadExtension(test_data_dir_.AppendASCII("extension_options")
@@ -194,7 +200,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebUITest, CanEmbedExtensionOptions) {
   ASSERT_TRUE(RunTestOnExtensionsPage("can_embed_extension_options.js"));
   ASSERT_TRUE(ready_listener.WaitUntilSatisfied());
 
-  ExtensionTestMessageListener load_listener("load", false);
+  ExtensionTestMessageListener load_listener("load");
   ready_listener.Reply(extension->id());
   ASSERT_TRUE(load_listener.WaitUntilSatisfied());
 }
@@ -276,7 +282,8 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebUIEmbeddedOptionsTest,
 }
 
 IN_PROC_BROWSER_TEST_F(ExtensionWebUITest, ReceivesExtensionOptionsOnClose) {
-  ExtensionTestMessageListener ready_listener("ready", true);
+  ExtensionTestMessageListener ready_listener("ready",
+                                              ReplyBehavior::kWillReply);
 
   const Extension* extension =
       InstallExtension(test_data_dir_.AppendASCII("extension_options")
@@ -287,7 +294,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebUITest, ReceivesExtensionOptionsOnClose) {
       RunTestOnExtensionsPage("receives_extension_options_on_close.js"));
   ASSERT_TRUE(ready_listener.WaitUntilSatisfied());
 
-  ExtensionTestMessageListener onclose_listener("onclose received", false);
+  ExtensionTestMessageListener onclose_listener("onclose received");
   ready_listener.Reply(extension->id());
   ASSERT_TRUE(onclose_listener.WaitUntilSatisfied());
 }
@@ -297,7 +304,8 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebUITest, ReceivesExtensionOptionsOnClose) {
 // Same setup as CanEmbedExtensionOptions but disable the extension before
 // embedding.
 IN_PROC_BROWSER_TEST_F(ExtensionWebUITest, EmbedDisabledExtension) {
-  ExtensionTestMessageListener ready_listener("ready", true);
+  ExtensionTestMessageListener ready_listener("ready",
+                                              ReplyBehavior::kWillReply);
 
   std::string extension_id;
   {
@@ -312,26 +320,28 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebUITest, EmbedDisabledExtension) {
   ASSERT_TRUE(RunTestOnExtensionsPage("can_embed_extension_options.js"));
   ASSERT_TRUE(ready_listener.WaitUntilSatisfied());
 
-  ExtensionTestMessageListener create_failed_listener("createfailed", false);
+  ExtensionTestMessageListener create_failed_listener("createfailed");
   ready_listener.Reply(extension_id);
   ASSERT_TRUE(create_failed_listener.WaitUntilSatisfied());
 }
 
 IN_PROC_BROWSER_TEST_F(ExtensionWebUITest, EmbedInvalidExtension) {
-  ExtensionTestMessageListener ready_listener("ready", true);
+  ExtensionTestMessageListener ready_listener("ready",
+                                              ReplyBehavior::kWillReply);
 
   const std::string extension_id = "thisisprobablynotrealextensionid";
 
   ASSERT_TRUE(RunTestOnExtensionsPage("can_embed_extension_options.js"));
   ASSERT_TRUE(ready_listener.WaitUntilSatisfied());
 
-  ExtensionTestMessageListener create_failed_listener("createfailed", false);
+  ExtensionTestMessageListener create_failed_listener("createfailed");
   ready_listener.Reply(extension_id);
   ASSERT_TRUE(create_failed_listener.WaitUntilSatisfied());
 }
 
 IN_PROC_BROWSER_TEST_F(ExtensionWebUITest, EmbedExtensionWithoutOptionsPage) {
-  ExtensionTestMessageListener ready_listener("ready", true);
+  ExtensionTestMessageListener ready_listener("ready",
+                                              ReplyBehavior::kWillReply);
 
   const Extension* extension =
       LoadExtension(test_data_dir_.AppendASCII("extension_options")
@@ -341,9 +351,51 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebUITest, EmbedExtensionWithoutOptionsPage) {
   ASSERT_TRUE(RunTestOnExtensionsPage("can_embed_extension_options.js"));
   ASSERT_TRUE(ready_listener.WaitUntilSatisfied());
 
-  ExtensionTestMessageListener create_failed_listener("createfailed", false);
+  ExtensionTestMessageListener create_failed_listener("createfailed");
   ready_listener.Reply(extension->id());
   ASSERT_TRUE(create_failed_listener.WaitUntilSatisfied());
+}
+
+// Tests crbug.com/1253745 where adding and removing listeners in a WebUI frame
+// causes all listeners to be removed.
+IN_PROC_BROWSER_TEST_F(ExtensionWebUITest, MultipleURLListeners) {
+  content::URLDataSource::Add(profile(),
+                              std::make_unique<TestDataSource>("extensions"));
+  EXPECT_TRUE(ui_test_utils::NavigateToURL(browser(),
+                                           GURL("chrome://test/body1.html")));
+  content::WebContents* web_contents =
+      browser()->tab_strip_model()->GetActiveWebContents();
+  content::RenderFrameHost* main_frame = web_contents->GetPrimaryMainFrame();
+  EventRouter* event_router = EventRouter::Get(profile());
+  EXPECT_FALSE(event_router->HasEventListener("test.onMessage"));
+  // Register a listener and create a child frame at a different URL.
+  content::TestNavigationObserver observer(web_contents);
+  EXPECT_TRUE(content::ExecuteScript(main_frame, R"(
+      const listener = e => {};
+      chrome.test.onMessage.addListener(listener);
+      const iframe = document.createElement('iframe');
+      iframe.src = 'chrome://test/body2.html';
+      document.body.appendChild(iframe);
+  )"));
+  EXPECT_TRUE(event_router->HasEventListener("test.onMessage"));
+  observer.Wait();
+
+  // Add and remove the listener in the child frame.
+  content::RenderFrameHost* child_frame = ChildFrameAt(main_frame, 0);
+  EXPECT_EQ(GURL("chrome://test/body2.html"),
+            child_frame->GetLastCommittedURL());
+  EXPECT_TRUE(content::ExecuteScript(child_frame, R"(
+      const listener = e => {};
+      chrome.test.onMessage.addListener(listener);
+      chrome.test.onMessage.removeListener(listener);
+  )"));
+  EXPECT_TRUE(event_router->HasEventListener("test.onMessage"));
+
+  // Now remove last listener from main frame.
+  EXPECT_TRUE(content::ExecuteScript(main_frame, R"(
+      chrome.test.onMessage.removeListener(listener);
+  )"));
+  EXPECT_FALSE(event_router->HasEventListener("test.onMessage"));
 }
 
 #endif

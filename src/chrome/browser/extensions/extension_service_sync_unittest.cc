@@ -13,6 +13,7 @@
 #include "base/command_line.h"
 #include "base/files/file_util.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/extensions/chrome_test_extension_loader.h"
 #include "chrome/browser/extensions/component_loader.h"
@@ -120,6 +121,9 @@ class StatefulChangeProcessor : public syncer::FakeSyncChangeProcessor {
                 expected_type == syncer::ModelType::APPS);
   }
 
+  StatefulChangeProcessor(const StatefulChangeProcessor&) = delete;
+  StatefulChangeProcessor& operator=(const StatefulChangeProcessor&) = delete;
+
   ~StatefulChangeProcessor() override {}
 
   // We let our parent class, FakeSyncChangeProcessor, handle saving the
@@ -173,8 +177,6 @@ class StatefulChangeProcessor : public syncer::FakeSyncChangeProcessor {
   // The expected ModelType of changes that this processor will see.
   const syncer::ModelType expected_type_;
   syncer::SyncDataList data_;
-
-  DISALLOW_COPY_AND_ASSIGN(StatefulChangeProcessor);
 };
 
 }  // namespace
@@ -234,25 +236,6 @@ class ExtensionServiceSyncTest
   }
 };
 
-TEST_F(ExtensionServiceSyncTest, DeleteAllInstalledBookMarkAppsDuringSync) {
-  InitializeEmptyExtensionService();
-
-  // Install the bookmark app.
-  InstallCRX(data_dir().AppendASCII("good.crx"),
-             ManifestLocation::kExternalPref, INSTALL_NEW,
-             Extension::FROM_BOOKMARK);
-  const Extension* extension = registry()->GetInstalledExtension(good_crx);
-  ASSERT_TRUE(extension);
-  ASSERT_TRUE(extension->from_bookmark());
-  ASSERT_FALSE(extensions::util::ShouldSync(extension, profile()));
-
-  StartSyncing(syncer::EXTENSIONS);
-
-  // Should uninstall the bookmark app.
-  EXPECT_FALSE(
-      registry()->GetExtensionById(good_crx, ExtensionRegistry::EVERYTHING));
-}
-
 TEST_F(ExtensionServiceSyncTest, DeferredSyncStartupPreInstalledComponent) {
   InitializeEmptyExtensionService();
 
@@ -291,7 +274,7 @@ TEST_F(ExtensionServiceSyncTest, DeferredSyncStartupPreInstalledNormal) {
 
   ASSERT_FALSE(extension_system()->is_ready());
   service()->Init();
-  ASSERT_EQ(3u, loaded_.size());
+  ASSERT_EQ(3u, loaded_extensions().size());
   ASSERT_TRUE(extension_system()->is_ready());
 
   // Extensions added before service is_ready() don't trigger sync startup.
@@ -350,7 +333,7 @@ TEST_F(ExtensionServiceSyncTest, DisableExtensionFromSync) {
   service()->Init();
   ASSERT_TRUE(extension_system()->is_ready());
 
-  ASSERT_EQ(3u, loaded_.size());
+  ASSERT_EQ(3u, loaded_extensions().size());
 
   // We start enabled.
   const Extension* extension = registry()->enabled_extensions().GetByID(good0);
@@ -535,7 +518,7 @@ TEST_F(ExtensionServiceSyncTest, IgnoreSyncChangesWhenLocalStateIsMoreRecent) {
 
   service()->Init();
   ASSERT_TRUE(extension_system()->is_ready());
-  ASSERT_EQ(3u, loaded_.size());
+  ASSERT_EQ(3u, loaded_extensions().size());
 
   ASSERT_TRUE(service()->IsExtensionEnabled(good0));
   ASSERT_TRUE(service()->IsExtensionEnabled(good2));
@@ -597,7 +580,7 @@ TEST_F(ExtensionServiceSyncTest, DontSelfNotify) {
 
   service()->Init();
   ASSERT_TRUE(extension_system()->is_ready());
-  ASSERT_EQ(3u, loaded_.size());
+  ASSERT_EQ(3u, loaded_extensions().size());
   ASSERT_TRUE(service()->IsExtensionEnabled(good0));
 
   syncer::FakeSyncChangeProcessor* processor =
@@ -705,7 +688,6 @@ TEST_F(ExtensionServiceSyncTest, GetSyncData) {
   EXPECT_EQ(data->version(), extension->version());
   EXPECT_EQ(extensions::ManifestURL::GetUpdateURL(extension),
             data->update_url());
-  EXPECT_EQ(extension->name(), data->name());
 }
 
 TEST_F(ExtensionServiceSyncTest, GetSyncDataDisableReasons) {
@@ -812,7 +794,6 @@ TEST_F(ExtensionServiceSyncTest, GetSyncDataTerminated) {
   EXPECT_EQ(data->version(), extension->version());
   EXPECT_EQ(extensions::ManifestURL::GetUpdateURL(extension),
             data->update_url());
-  EXPECT_EQ(extension->name(), data->name());
 }
 
 TEST_F(ExtensionServiceSyncTest, GetSyncDataFilter) {
@@ -1702,7 +1683,7 @@ TEST_F(ExtensionServiceSyncCustomGalleryTest,
         prefs->GetGrantedPermissions(id);
     if (test_case.expect_permissions_granted) {
       std::unique_ptr<const PermissionSet> active_permissions =
-          prefs->GetActivePermissions(id);
+          prefs->GetDesiredActivePermissions(id);
       EXPECT_EQ(*granted_permissions, *active_permissions);
     } else {
       EXPECT_EQ(*granted_permissions, *granted_permissions_v1);
@@ -1846,6 +1827,11 @@ class BlocklistedExtensionSyncServiceTest : public ExtensionServiceSyncTest {
  public:
   BlocklistedExtensionSyncServiceTest() {}
 
+  BlocklistedExtensionSyncServiceTest(
+      const BlocklistedExtensionSyncServiceTest&) = delete;
+  BlocklistedExtensionSyncServiceTest& operator=(
+      const BlocklistedExtensionSyncServiceTest&) = delete;
+
   void SetUp() override {
     ExtensionServiceSyncTest::SetUp();
 
@@ -1892,12 +1878,10 @@ class BlocklistedExtensionSyncServiceTest : public ExtensionServiceSyncTest {
   extensions::TestBlocklist& test_blocklist() { return test_blocklist_; }
 
  private:
-  syncer::FakeSyncChangeProcessor* processor_raw_;
+  raw_ptr<syncer::FakeSyncChangeProcessor> processor_raw_;
   scoped_refptr<const Extension> extension_;
   std::string extension_id_;
   extensions::TestBlocklist test_blocklist_;
-
-  DISALLOW_COPY_AND_ASSIGN(BlocklistedExtensionSyncServiceTest);
 };
 
 // Test that sync cannot enable blocklisted extensions.

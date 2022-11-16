@@ -4,24 +4,26 @@
 
 #include "chrome/browser/ui/webui/settings/chromeos/crostini_section.h"
 
+#include "ash/components/arc/arc_prefs.h"
 #include "ash/constants/ash_features.h"
 #include "base/feature_list.h"
 #include "base/no_destructor.h"
 #include "base/strings/utf_string_conversions.h"
+#include "chrome/browser/ash/bruschetta/bruschetta_features.h"
 #include "chrome/browser/ash/crostini/crostini_disk.h"
 #include "chrome/browser/ash/crostini/crostini_features.h"
 #include "chrome/browser/ash/crostini/crostini_pref_names.h"
 #include "chrome/browser/ash/crostini/crostini_util.h"
+#include "chrome/browser/ash/guest_os/guest_os_pref_names.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/policy/profile_policy_connector.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/ui/webui/settings/ash/search/search_tag_registry.h"
 #include "chrome/browser/ui/webui/settings/chromeos/crostini_handler.h"
 #include "chrome/browser/ui/webui/settings/chromeos/guest_os_handler.h"
-#include "chrome/browser/ui/webui/settings/chromeos/search/search_tag_registry.h"
 #include "chrome/browser/ui/webui/webui_util.h"
 #include "chrome/common/url_constants.h"
 #include "chrome/grit/generated_resources.h"
-#include "components/arc/arc_prefs.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/web_ui.h"
 #include "content/public/browser/web_ui_data_source.h"
@@ -234,6 +236,9 @@ CrostiniSection::~CrostiniSection() = default;
 
 void CrostiniSection::AddLoadTimeData(content::WebUIDataSource* html_source) {
   static constexpr webui::LocalizedString kLocalizedStrings[] = {
+      {"bruschettaPageLabel", IDS_SETTINGS_BRUSCHETTA_LABEL},
+      {"bruschettaSharedUsbDevicesDescription",
+       IDS_SETTINGS_BRUSCHETTA_SHARED_USB_DEVICES_DESCRIPTION},
       {"crostiniPageTitle", IDS_SETTINGS_CROSTINI_TITLE},
       {"crostiniPageLabel", IDS_SETTINGS_CROSTINI_LABEL},
       {"crostiniEnable", IDS_SETTINGS_TURN_ON},
@@ -345,6 +350,38 @@ void CrostiniSection::AddLoadTimeData(content::WebUIDataSource* html_source) {
       {"crostiniMicDialogShutdownButton",
        IDS_SETTINGS_CROSTINI_MIC_DIALOG_SHUTDOWN_BUTTON},
       {"crostiniRemove", IDS_SETTINGS_CROSTINI_REMOVE},
+      {"crostiniExtraContainersLabel",
+       IDS_SETTINGS_CROSTINI_EXTRA_CONTAINERS_LABEL},
+      {"crostiniExtraContainersDescription",
+       IDS_SETTINGS_CROSTINI_EXTRA_CONTAINERS_DESCRIPTION},
+      {"crostiniExtraContainersCreate",
+       IDS_SETTINGS_CROSTINI_EXTRA_CONTAINERS_CREATE},
+      {"crostiniExtraContainersDelete",
+       IDS_SETTINGS_CROSTINI_EXTRA_CONTAINERS_DELETE},
+      {"crostiniExtraContainersStop",
+       IDS_SETTINGS_CROSTINI_EXTRA_CONTAINERS_STOP},
+      {"crostiniExtraContainersTableTitle",
+       IDS_SETTINGS_CROSTINI_EXTRA_CONTAINERS_TABLE_TITLE},
+      {"crostiniExtraContainersVmNameLabel",
+       IDS_SETTINGS_CROSTINI_EXTRA_CONTAINERS_VM_NAME_LABEL},
+      {"crostiniExtraContainersContainerNameLabel",
+       IDS_SETTINGS_CROSTINI_EXTRA_CONTAINERS_CONTAINER_NAME_LABEL},
+      {"crostiniExtraContainersContainerIpLabel",
+       IDS_SETTINGS_CROSTINI_EXTRA_CONTAINERS_CONTAINER_IP_LABEL},
+      {"crostiniExtraContainersCreateDialogTitle",
+       IDS_SETTINGS_CROSTINI_EXTRA_CONTAINERS_CREATE_DIALOG_TITLE},
+      {"crostiniExtraContainersCreateDialogContainerExistsError",
+       IDS_SETTINGS_CROSTINI_EXTRA_CONTAINERS_CREATE_DIALOG_CONTAINER_EXISTS_ERROR},
+      {"crostiniExtraContainersCreateDialogEmptyContainerNameError",
+       IDS_SETTINGS_CROSTINI_EXTRA_CONTAINERS_CREATE_DIALOG_EMPTY_CONTAINER_NAME_ERROR},
+      {"crostiniExtraContainersCreateDialogImageServer",
+       IDS_SETTINGS_CROSTINI_EXTRA_CONTAINERS_CREATE_DIALOG_IMAGE_SERVER},
+      {"crostiniExtraContainersCreateDialogImageAlias",
+       IDS_SETTINGS_CROSTINI_EXTRA_CONTAINERS_CREATE_DIALOG_IMAGE_ALIAS},
+      {"crostiniPreconfiguredContainersAddPlaybook",
+       IDS_SETTINGS_CROSTINI_PRECONFIGURED_CONTAINERS_ADD_PLAYBOOK},
+      {"crostiniPreconfiguredContainersAttachPlaybookButtonLabel",
+       IDS_SETTINGS_CROSTINI_PRECONFIGURED_CONTAINERS_ATTACH_PLAYBOOK_BUTTON_LABEL},
   };
   html_source->AddLocalizedStrings(kLocalizedStrings);
 
@@ -361,9 +398,9 @@ void CrostiniSection::AddLoadTimeData(content::WebUIDataSource* html_source) {
             IDS_SETTINGS_CROSTINI_CONTAINER_UPGRADE_MESSAGE));
   }
 
-  if (auto* pretty_name_value = crostini::GetContainerPrefValue(
+  if (auto* pretty_name_value = guest_os::GetContainerPrefValue(
           profile_, crostini::DefaultContainerId(),
-          crostini::prefs::kContainerOsPrettyNameKey)) {
+          guest_os::prefs::kContainerOsPrettyNameKey)) {
     std::string pretty_name = pretty_name_value->GetString();
     html_source->AddString("crostiniContainerUpgradeSubtext",
                            l10n_util::GetStringFUTF16(
@@ -379,16 +416,25 @@ void CrostiniSection::AddLoadTimeData(content::WebUIDataSource* html_source) {
   // Should the crostini section in settings be displayed?
   html_source->AddBoolean(
       "showCrostini",
-      crostini::CrostiniFeatures::Get()->CouldBeAllowed(profile()));
+      crostini::CrostiniFeatures::Get()->CouldBeAllowed(profile_));
   // Should we actually enable the button to install it?
   html_source->AddBoolean(
       "allowCrostini",
-      crostini::CrostiniFeatures::Get()->IsAllowedNow(profile()));
+      crostini::CrostiniFeatures::Get()->IsAllowedNow(profile_));
+  // Should the Bruschetta subpage be enabled?
+  html_source->AddBoolean("enableBruschetta",
+                          bruschetta::BruschettaFeatures::Get()->IsEnabled());
 
   html_source->AddString(
       "crostiniSubtext",
       l10n_util::GetStringFUTF16(
           IDS_SETTINGS_CROSTINI_SUBTEXT, ui::GetChromeOSDeviceName(),
+          GetHelpUrlWithBoard(chrome::kLinuxAppsLearnMoreURL)));
+  html_source->AddString(
+      "crostiniSubtextNotSupported",
+      l10n_util::GetStringFUTF16(
+          IDS_SETTINGS_CROSTINI_SUBTEXT_NOT_SUPPORTED,
+          ui::GetChromeOSDeviceName(),
           GetHelpUrlWithBoard(chrome::kLinuxAppsLearnMoreURL)));
   html_source->AddString(
       "crostiniArcAdbPowerwashRequiredSublabel",
@@ -427,19 +473,21 @@ void CrostiniSection::AddLoadTimeData(content::WebUIDataSource* html_source) {
                           IsAdbSideloadingAllowed());
   html_source->AddBoolean("showCrostiniPortForwarding",
                           IsPortForwardingAllowed());
+  html_source->AddBoolean("showCrostiniExtraContainers",
+                          IsMultiContainerAllowed());
   html_source->AddBoolean("isOwnerProfile",
-                          chromeos::ProfileHelper::IsOwnerProfile(profile()));
+                          chromeos::ProfileHelper::IsOwnerProfile(profile_));
   html_source->AddBoolean("isEnterpriseManaged",
-                          IsDeviceManaged() || IsProfileManaged(profile()));
+                          IsDeviceManaged() || IsProfileManaged(profile_));
   html_source->AddBoolean("showCrostiniContainerUpgrade",
                           IsContainerUpgradeAllowed());
   html_source->AddBoolean("showCrostiniDiskResize", IsDiskResizingAllowed());
 }
 
 void CrostiniSection::AddHandlers(content::WebUI* web_ui) {
-  if (crostini::CrostiniFeatures::Get()->CouldBeAllowed(profile())) {
-    web_ui->AddMessageHandler(std::make_unique<GuestOsHandler>(profile()));
-    web_ui->AddMessageHandler(std::make_unique<CrostiniHandler>(profile()));
+  if (crostini::CrostiniFeatures::Get()->CouldBeAllowed(profile_)) {
+    web_ui->AddMessageHandler(std::make_unique<GuestOsHandler>(profile_));
+    web_ui->AddMessageHandler(std::make_unique<CrostiniHandler>(profile_));
   }
 }
 
@@ -530,18 +578,44 @@ void CrostiniSection::RegisterHierarchy(HierarchyGenerator* generator) const {
                                    mojom::SearchResultIcon::kPenguin,
                                    mojom::SearchResultDefaultRank::kMedium,
                                    mojom::kCrostiniPortForwardingSubpagePath);
+
+  // Extra containers.
+  generator->RegisterNestedSubpage(IDS_SETTINGS_CROSTINI_EXTRA_CONTAINERS_LABEL,
+                                   mojom::Subpage::kCrostiniExtraContainers,
+                                   mojom::Subpage::kCrostiniDetails,
+                                   mojom::SearchResultIcon::kPenguin,
+                                   mojom::SearchResultDefaultRank::kMedium,
+                                   mojom::kCrostiniExtraContainersSubpagePath);
+
+  // Bruschetta subpage.
+  generator->RegisterTopLevelSubpage(IDS_SETTINGS_BRUSCHETTA_LABEL,
+                                     mojom::Subpage::kBruschettaDetails,
+                                     mojom::SearchResultIcon::kDeveloperTags,
+                                     mojom::SearchResultDefaultRank::kMedium,
+                                     mojom::kBruschettaDetailsSubpagePath);
+  // USB preferences.
+  generator->RegisterNestedSubpage(
+      IDS_SETTINGS_GUEST_OS_SHARED_USB_DEVICES_LABEL,
+      mojom::Subpage::kBruschettaUsbPreferences,
+      mojom::Subpage::kBruschettaDetails, mojom::SearchResultIcon::kPenguin,
+      mojom::SearchResultDefaultRank::kMedium,
+      mojom::kBruschettaUsbPreferencesSubpagePath);
 }
 
-bool CrostiniSection::IsExportImportAllowed() {
-  return crostini::CrostiniFeatures::Get()->IsExportImportUIAllowed(profile());
+bool CrostiniSection::IsExportImportAllowed() const {
+  return crostini::CrostiniFeatures::Get()->IsExportImportUIAllowed(profile_);
 }
 
-bool CrostiniSection::IsContainerUpgradeAllowed() {
-  return crostini::ShouldAllowContainerUpgrade(profile());
+bool CrostiniSection::IsContainerUpgradeAllowed() const {
+  return crostini::ShouldAllowContainerUpgrade(profile_);
 }
 
-bool CrostiniSection::IsPortForwardingAllowed() {
-  return crostini::CrostiniFeatures::Get()->IsPortForwardingAllowed(profile());
+bool CrostiniSection::IsPortForwardingAllowed() const {
+  return crostini::CrostiniFeatures::Get()->IsPortForwardingAllowed(profile_);
+}
+
+bool CrostiniSection::IsMultiContainerAllowed() const {
+  return crostini::CrostiniFeatures::Get()->IsMultiContainerAllowed(profile_);
 }
 
 void CrostiniSection::UpdateSearchTags() {
@@ -555,10 +629,8 @@ void CrostiniSection::UpdateSearchTags() {
   updater.RemoveSearchTags(GetCrostiniContainerUpgradeSearchConcepts());
   updater.RemoveSearchTags(GetCrostiniDiskResizingSearchConcepts());
 
-  if (!crostini::CrostiniFeatures::Get()->IsAllowedNow(profile()))
-    return;
-
-  if (!pref_service_->GetBoolean(crostini::prefs::kCrostiniEnabled)) {
+  if (!crostini::CrostiniFeatures::Get()->IsAllowedNow(profile_) ||
+      !pref_service_->GetBoolean(crostini::prefs::kCrostiniEnabled)) {
     updater.AddSearchTags(GetCrostiniOptedOutSearchConcepts());
     return;
   }
@@ -581,6 +653,8 @@ void CrostiniSection::UpdateSearchTags() {
 
   if (IsDiskResizingAllowed())
     updater.AddSearchTags(GetCrostiniDiskResizingSearchConcepts());
+
+  // TODO(crbug:1261319): search concepts for extras containers.
 }
 
 }  // namespace settings

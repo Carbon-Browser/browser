@@ -11,8 +11,9 @@
 #include <string>
 
 #include "base/files/file_path.h"
-#include "pdf/document_loader.h"
-#include "pdf/range_set.h"
+#include "base/memory/raw_ptr.h"
+#include "pdf/loader/document_loader.h"
+#include "pdf/loader/range_set.h"
 
 namespace chrome_pdf {
 
@@ -40,7 +41,7 @@ class TestDocumentLoader : public DocumentLoader {
   void ClearPendingRequests() override;
 
  private:
-  Client* const client_;
+  const raw_ptr<Client> client_;
   std::string pdf_data_;
 
   // Not using ChunkStream, for more fine-grained control over request size.

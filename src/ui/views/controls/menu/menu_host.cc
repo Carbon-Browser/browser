@@ -8,6 +8,7 @@
 
 #include "base/auto_reset.h"
 #include "base/check_op.h"
+#include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
@@ -58,6 +59,10 @@ class PreMenuEventDispatchHandler : public ui::EventHandler,
     window_->AddObserver(this);
   }
 
+  PreMenuEventDispatchHandler(const PreMenuEventDispatchHandler&) = delete;
+  PreMenuEventDispatchHandler& operator=(const PreMenuEventDispatchHandler&) =
+      delete;
+
   ~PreMenuEventDispatchHandler() override { StopObserving(); }
 
   // ui::EventHandler overrides.
@@ -80,11 +85,9 @@ class PreMenuEventDispatchHandler : public ui::EventHandler,
     window_ = nullptr;
   }
 
-  MenuController* menu_controller_;
-  SubmenuView* submenu_;
-  aura::Window* window_;
-
-  DISALLOW_COPY_AND_ASSIGN(PreMenuEventDispatchHandler);
+  raw_ptr<MenuController> menu_controller_;
+  raw_ptr<SubmenuView> submenu_;
+  raw_ptr<aura::Window> window_;
 };
 #endif  // USE_AURA
 
@@ -128,8 +131,10 @@ void MenuHost::InitMenuHost(const InitParams& init_params) {
   bool rounded_border = menu_config.CornerRadiusForMenu(menu_controller) != 0;
   bool bubble_border = submenu_->GetScrollViewContainer() &&
                        submenu_->GetScrollViewContainer()->HasBubbleBorder();
-  params.shadow_type = bubble_border ? Widget::InitParams::ShadowType::kNone
-                                     : Widget::InitParams::ShadowType::kDrop;
+  params.shadow_type =
+      (bubble_border || (menu_config.win11_style_menus && rounded_border))
+          ? Widget::InitParams::ShadowType::kNone
+          : Widget::InitParams::ShadowType::kDrop;
   params.opacity = (bubble_border || rounded_border)
                        ? Widget::InitParams::WindowOpacity::kTranslucent
                        : Widget::InitParams::WindowOpacity::kOpaque;
@@ -153,7 +158,7 @@ void MenuHost::InitMenuHost(const InitParams& init_params) {
   if (init_params.parent == nullptr)
     params.activatable = Widget::InitParams::Activatable::kYes;
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   // On Windows use the software compositor to ensure that we don't block
   // the UI thread blocking issue during command buffer creation. We can
   // revert this change once http://crbug.com/125248 is fixed.

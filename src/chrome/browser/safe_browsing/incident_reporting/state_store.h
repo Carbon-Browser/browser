@@ -11,10 +11,15 @@
 #include <string>
 
 #include "base/check_op.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "components/prefs/scoped_user_pref_update.h"
 
 class Profile;
+
+namespace base {
+class DictionaryValue;
+class Value;
+}  // namespace base
 
 namespace safe_browsing {
 
@@ -44,6 +49,10 @@ class StateStore {
   class Transaction {
    public:
     explicit Transaction(StateStore* store);
+
+    Transaction(const Transaction&) = delete;
+    Transaction& operator=(const Transaction&) = delete;
+
     ~Transaction();
 
     // Marks the described incident as having been reported.
@@ -67,22 +76,24 @@ class StateStore {
     // obtaining this view will cause a serialize-and-write operation to be
     // scheduled when the transaction terminates. Use the store's
     // |incidents_sent_| member directly to simply query the preference.
-    base::DictionaryValue* GetPrefDict();
+    base::Value* GetPrefDict();
 
     // Replaces the contents of the underlying dictionary value.
-    void ReplacePrefDict(std::unique_ptr<base::DictionaryValue> pref_dict);
+    void ReplacePrefDict(base::Value pref_dict);
 
     // The store corresponding to this transaction.
-    StateStore* store_;
+    raw_ptr<StateStore> store_;
 
     // A ScopedUserPrefUpdate through which changes to the incidents_sent
     // preference are made.
     std::unique_ptr<DictionaryPrefUpdate> pref_update_;
-
-    DISALLOW_COPY_AND_ASSIGN(Transaction);
   };
 
   explicit StateStore(Profile* profile);
+
+  StateStore(const StateStore&) = delete;
+  StateStore& operator=(const StateStore&) = delete;
+
   ~StateStore();
 
   // Returns true if the described incident has already been reported.
@@ -95,7 +106,7 @@ class StateStore {
   void CleanLegacyValues(Transaction* transaction);
 
   // The profile to which this state corresponds.
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
 
   // A read-only view on the profile's incidents_sent preference.
   const base::DictionaryValue* incidents_sent_;
@@ -104,8 +115,6 @@ class StateStore {
   // True when a Transaction instance is outstanding.
   bool has_transaction_;
 #endif
-
-  DISALLOW_COPY_AND_ASSIGN(StateStore);
 };
 
 }  // namespace safe_browsing

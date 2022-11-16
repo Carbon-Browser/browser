@@ -14,6 +14,7 @@
 #include "base/location.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/notreached.h"
 #include "base/time/time.h"
 #include "chrome/browser/device_reauth/android/biometric_authenticator_bridge_impl.h"
 #include "components/autofill/core/common/autofill_features.h"
@@ -27,7 +28,6 @@
 #include "ui/android/view_android.h"
 
 using content::WebContents;
-using device_reauth::BiometricAuthFinalResult;
 using device_reauth::BiometricAuthUIResult;
 using device_reauth::BiometricsAvailability;
 using password_manager::UiCredential;
@@ -42,8 +42,7 @@ bool IsSuccessfulResult(BiometricAuthUIResult result) {
          result == BiometricAuthUIResult::kSuccessWithDeviceLock;
 }
 
-device_reauth::BiometricAuthFinalResult MapUIResultToFinal(
-    BiometricAuthUIResult result) {
+BiometricAuthFinalResult MapUIResultToFinal(BiometricAuthUIResult result) {
   switch (result) {
     case BiometricAuthUIResult::kSuccessWithUnknownMethod:
       return BiometricAuthFinalResult::kSuccessWithUnknownMethod;
@@ -58,9 +57,47 @@ device_reauth::BiometricAuthFinalResult MapUIResultToFinal(
   }
 }
 
-void LogAuthResult(BiometricAuthFinalResult result) {
-  base::UmaHistogramEnumeration(
-      "PasswordManager.BiometricAuthPwdFill.AuthResult", result);
+bool isPasswordManagerRequester(
+    const device_reauth::BiometricAuthRequester& requester) {
+  switch (requester) {
+    case device_reauth::BiometricAuthRequester::kTouchToFill:
+    case device_reauth::BiometricAuthRequester::kAutofillSuggestion:
+    case device_reauth::BiometricAuthRequester::kFallbackSheet:
+    case device_reauth::BiometricAuthRequester::kAllPasswordsList:
+    case device_reauth::BiometricAuthRequester::kAccountChooserDialog:
+    case device_reauth::BiometricAuthRequester::kPasswordCheckAutoPwdChange:
+      return true;
+    case device_reauth::BiometricAuthRequester::kIncognitoReauthPage:
+      return false;
+  }
+}
+
+void LogAuthResult(const device_reauth::BiometricAuthRequester& requester,
+                   const BiometricAuthFinalResult& result) {
+  if (isPasswordManagerRequester(requester)) {
+    base::UmaHistogramEnumeration(
+        "PasswordManager.BiometricAuthPwdFill.AuthResult", result);
+  }
+}
+
+void LogAuthRequester(const device_reauth::BiometricAuthRequester& requester) {
+  // TODO(crbug.com/1263397): The
+  // "PasswordManager.BiometricAuthPwdFill.AuthRequester" should be removed once
+  // the "Android.BiometricAuth.AuthRequester" is saturated and adopted.
+  if (isPasswordManagerRequester(requester)) {
+    base::UmaHistogramEnumeration(
+        "PasswordManager.BiometricAuthPwdFill.AuthRequester", requester);
+  }
+  base::UmaHistogramEnumeration("Android.BiometricAuth.AuthRequester",
+                                requester);
+}
+
+void LogCanAuthenticate(const device_reauth::BiometricAuthRequester& requester,
+                        const BiometricsAvailability& availability) {
+  if (isPasswordManagerRequester(requester)) {
+    base::UmaHistogramEnumeration(
+        "PasswordManager.BiometricAuthPwdFill.CanAuthenticate", availability);
+  }
 }
 
 }  // namespace
@@ -71,17 +108,22 @@ BiometricAuthenticatorAndroid::BiometricAuthenticatorAndroid(
 
 BiometricAuthenticatorAndroid::~BiometricAuthenticatorAndroid() {}
 
-BiometricsAvailability BiometricAuthenticatorAndroid::CanAuthenticate() {
-  BiometricsAvailability availability = bridge_->CanAuthenticate();
-  base::UmaHistogramEnumeration(
-      "PasswordManager.BiometricAuthPwdFill.CanAuthenticate", availability);
+bool BiometricAuthenticatorAndroid::CanAuthenticate(
+    device_reauth::BiometricAuthRequester requester) {
+  if (requester ==
+      device_reauth::BiometricAuthRequester::kIncognitoReauthPage) {
+    return bridge_->CanAuthenticateWithBiometricOrScreenLock();
+  }
 
-  return availability;
+  BiometricsAvailability availability = bridge_->CanAuthenticateWithBiometric();
+  LogCanAuthenticate(requester, availability);
+  return availability == BiometricsAvailability::kAvailable;
 }
 
 void BiometricAuthenticatorAndroid::Authenticate(
     device_reauth::BiometricAuthRequester requester,
-    AuthenticateCallback callback) {
+    AuthenticateCallback callback,
+    bool use_last_valid_auth) {
   // Previous authentication is not yet completed, so return.
   if (callback_ || requester_.has_value())
     return;
@@ -89,12 +131,12 @@ void BiometricAuthenticatorAndroid::Authenticate(
   callback_ = std::move(callback);
   requester_ = requester;
 
-  base::UmaHistogramEnumeration(
-      "PasswordManager.BiometricAuthPwdFill.AuthRequester", requester);
-  if (last_good_auth_timestamp_.has_value() &&
+  LogAuthRequester(requester);
+
+  if (use_last_valid_auth && last_good_auth_timestamp_.has_value() &&
       base::TimeTicks::Now() - last_good_auth_timestamp_.value() <
-          base::TimeDelta::FromSeconds(kAuthValidSeconds)) {
-    LogAuthResult(BiometricAuthFinalResult::kAuthStillValid);
+          base::Seconds(kAuthValidSeconds)) {
+    LogAuthResult(requester, BiometricAuthFinalResult::kAuthStillValid);
     std::move(callback_).Run(/*success=*/true);
     requester_ = absl::nullopt;
     return;
@@ -105,12 +147,22 @@ void BiometricAuthenticatorAndroid::Authenticate(
                      base::Unretained(this)));
 }
 
+void BiometricAuthenticatorAndroid::AuthenticateWithMessage(
+    device_reauth::BiometricAuthRequester requester,
+    const std::u16string message,
+    AuthenticateCallback callback) {
+  NOTIMPLEMENTED();
+}
+
 void BiometricAuthenticatorAndroid::Cancel(
     device_reauth::BiometricAuthRequester requester) {
   // The object cancelling the auth is not the same as the one to which
   // the ongoing auth corresponds.
   if (!requester_.has_value() || requester != requester_.value())
     return;
+
+  LogAuthResult(requester, BiometricAuthFinalResult::kCanceledByChrome);
+
   callback_.Reset();
   requester_ = absl::nullopt;
   bridge_->Cancel();
@@ -127,12 +179,10 @@ BiometricAuthenticatorAndroid::CreateForTesting(
 void BiometricAuthenticatorAndroid::OnAuthenticationCompleted(
     BiometricAuthUIResult ui_result) {
   bool success = IsSuccessfulResult(ui_result);
+  // OnAuthenticationCompleted is called aysnchronously and by the time it's
+  // invoked Chrome can cancel the authentication via
+  // BiometricAuthenticatorAndroid::Cancel which resets the callback_.
   if (callback_.is_null()) {
-    if (success) {
-      LogAuthResult(BiometricAuthFinalResult::kSuccessButCanceled);
-    } else {
-      LogAuthResult(BiometricAuthFinalResult::kFailedAndCanceled);
-    }
     return;
   }
 
@@ -140,7 +190,7 @@ void BiometricAuthenticatorAndroid::OnAuthenticationCompleted(
     last_good_auth_timestamp_ = base::TimeTicks::Now();
   }
 
-  LogAuthResult(MapUIResultToFinal(ui_result));
+  LogAuthResult(requester_.value(), MapUIResultToFinal(ui_result));
   std::move(callback_).Run(success);
   requester_ = absl::nullopt;
 }

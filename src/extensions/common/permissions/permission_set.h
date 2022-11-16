@@ -9,7 +9,6 @@
 #include <string>
 
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "extensions/common/mojom/api_permission_id.mojom-shared.h"
 #include "extensions/common/permissions/api_permission.h"
@@ -40,6 +39,9 @@ class PermissionSet {
                 ManifestPermissionSet manifest_permissions,
                 URLPatternSet explicit_hosts,
                 URLPatternSet scriptable_hosts);
+
+  PermissionSet& operator=(const PermissionSet&) = delete;
+
   ~PermissionSet();
 
   PermissionSet(PermissionSet&& other);
@@ -177,8 +179,6 @@ class PermissionSet {
       UNINITIALIZED;
   mutable ShouldWarnAllHostsType api_permissions_should_warn_all_hosts_ =
       UNINITIALIZED;
-
-  DISALLOW_ASSIGN(PermissionSet);
 };
 
 }  // namespace extensions

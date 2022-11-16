@@ -8,6 +8,7 @@
 
 #include "base/auto_reset.h"
 #include "base/callback_helpers.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/one_shot_event.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/extensions/extension_management.h"
@@ -82,7 +83,7 @@ syncer::SyncDataList ToSyncerSyncDataList(
   return result;
 }
 
-static_assert(extensions::disable_reason::DISABLE_REASON_LAST == (1LL << 21),
+static_assert(extensions::disable_reason::DISABLE_REASON_LAST == (1LL << 22),
               "Please consider whether your new disable reason should be"
               " syncable, and if so update this bitmask accordingly!");
 const int kKnownSyncableDisableReasons =
@@ -183,7 +184,7 @@ ExtensionSyncService::MergeDataAndStartSyncing(
   std::unique_ptr<ExtensionSet> all_extensions =
       registry->GenerateInstalledExtensionsSet();
   for (const auto& extension : *all_extensions) {
-    if (extension->from_bookmark()) {
+    if (extension->from_deprecated_bookmark()) {
       // Deleting deprecated bookmark apps.
       const std::string& id = extension->id();
       std::u16string error;
@@ -193,6 +194,7 @@ ExtensionSyncService::MergeDataAndStartSyncing(
         LOG(WARNING) << "Failed to uninstall bookmark apps with id '" << id
                      << "' : " << error;
       }
+      base::UmaHistogramBoolean("Extensions.UninstallBookmarkApp", uninstalled);
     }
   }
 
@@ -261,9 +263,8 @@ ExtensionSyncData ExtensionSyncService::CreateSyncData(
   // for the existence of disable reasons instead), we're just setting it here
   // for older Chrome versions (<M48).
   bool enabled = (disable_reasons == extensions::disable_reason::DISABLE_NONE);
-  if (extensions::blocklist_prefs::GetExtensionBlocklistState(
-          id, extension_prefs) ==
-      extensions::BitMapBlocklistState::BLOCKLISTED_MALWARE) {
+  if (extensions::blocklist_prefs::IsExtensionBlocklisted(id,
+                                                          extension_prefs)) {
     enabled = false;
     NOTREACHED() << "Blocklisted extensions should not be getting synced.";
   }
@@ -476,12 +477,6 @@ void ExtensionSyncService::ApplySyncData(
         extension_sync_data.launch_type() < extensions::NUM_LAUNCH_TYPES) {
       extensions::SetLaunchType(
           profile_, id, extension_sync_data.launch_type());
-    }
-
-    if (!extension_sync_data.bookmark_app_url().empty()) {
-      // Bookmark apps have been migrated to web apps and are now handled by
-      // WebAppSyncBridge.
-      return;
     }
 
     if (extension_sync_data.app_launch_ordinal().IsValid() &&

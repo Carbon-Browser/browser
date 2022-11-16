@@ -14,7 +14,7 @@ import 'chrome://resources/polymer/v3_0/iron-flex-layout/iron-flex-layout-classe
 import './icons.js';
 import './shared_styles.js';
 
-import {sendWithPromise} from 'chrome://resources/js/cr.m.js';
+import {addWebUIListener, sendWithPromise} from 'chrome://resources/js/cr.m.js';
 import {html, Polymer} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 /** @enum {string} */ var AudioNodeType = {
@@ -86,7 +86,7 @@ Polymer({
       type: Number,
       value() {
         return -1;
-      }
+      },
     },
 
     /**
@@ -98,7 +98,7 @@ Polymer({
       type: Number,
       value() {
         return 0;
-      }
+      },
     },
 
     /**
@@ -109,7 +109,7 @@ Polymer({
       type: Array,
       value() {
         return [];
-      }
+      },
     },
 
     /**
@@ -132,15 +132,15 @@ Polymer({
           {name: 'Aokr', type: AudioNodeType.AOKR},
           {name: 'Post Mix Loopback', type: AudioNodeType.POST_MIX_LOOPBACK},
           {name: 'Post Dsp Loopback', type: AudioNodeType.POST_DSP_LOOPBACK},
-          {name: 'Other', type: AudioNodeType.OTHER}
+          {name: 'Other', type: AudioNodeType.OTHER},
         ];
-      }
+      },
     },
   },
 
   ready() {
-    sendWithPromise('requestAudioNodes').then(
-        this.updateAudioNodes_.bind(this));
+    addWebUIListener('audioNodesUpdated', this.updateAudioNodes_.bind(this));
+    chrome.send('requestAudioNodes');
   },
 
   /**
@@ -230,5 +230,5 @@ Polymer({
       newNodeList.push(node);
     }
     this.nodes = newNodeList;
-  }
+  },
 });

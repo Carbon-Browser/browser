@@ -9,7 +9,6 @@
 
 #include "ash/app_list/views/search_result_base_view.h"
 #include "ash/ash_export.h"
-#include "base/macros.h"
 
 namespace views {
 class BoxLayout;
@@ -66,6 +65,10 @@ class ASH_EXPORT SearchResultSuggestionChipView : public SearchResultBaseView {
 
   // Sets rounded corners for the layer with |corner_radius| to clip the chip.
   void SetRoundedCornersForLayer(float corner_radius);
+
+  // The color of the enabled focus ring. Stored so we can swap between this and
+  // transparent.
+  const ui::ColorId focus_ring_color_;
 
   AppListViewDelegate* const view_delegate_;  // Owned by AppListView.
 

@@ -28,14 +28,6 @@
 #error "This file requires ARC support."
 #endif
 
-// TODO(crbug.com/1015113) The EG2 macro is breaking indexing for some reason
-// without the trailing semicolon.  For now, disable the extra semi warning
-// so Xcode indexing works for the egtest.
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wc++98-compat-extra-semi"
-GREY_STUB_CLASS_IN_APP_MAIN_QUEUE(AdaptiveToolbarAppInterface);
-#pragma clang diagnostic pop
-
 namespace {
 
 using chrome_test_util::BackButton;
@@ -135,7 +127,7 @@ id<GREYMatcher> VisibleInSecondaryToolbar() {
       grey_sufficientlyVisible(), nil);
 }
 
-// Checks that the element designated by |matcher| is |visible| in the primary
+// Checks that the element designated by `matcher` is `visible` in the primary
 // toolbar.
 void CheckVisibleInPrimaryToolbar(id<GREYMatcher> matcher, BOOL visible) {
   id<GREYMatcher> assertionMatcher = visible ? grey_notNil() : grey_nil();
@@ -145,7 +137,7 @@ void CheckVisibleInPrimaryToolbar(id<GREYMatcher> matcher, BOOL visible) {
       assertWithMatcher:assertionMatcher];
 }
 
-// Checks that the element designed by |matcher| is |visible| in the secondary
+// Checks that the element designed by `matcher` is `visible` in the secondary
 // toolbar.
 void CheckVisibleInSecondaryToolbar(id<GREYMatcher> matcher, BOOL visible) {
   id<GREYMatcher> assertionMatcher = visible ? grey_notNil() : grey_nil();
@@ -175,8 +167,8 @@ UITraitCollection* RotateOrChangeTraitCollection(
   }
 }
 
-// Checks that the element associated with |matcher| is visible in the toolbar
-// defined by |visibility|.
+// Checks that the element associated with `matcher` is visible in the toolbar
+// defined by `visibility`.
 void CheckVisibilityInToolbar(id<GREYMatcher> matcher,
                               ButtonVisibility visibility) {
   CheckVisibleInPrimaryToolbar(matcher, visibility == ButtonVisibilityPrimary);
@@ -281,7 +273,7 @@ void CheckButtonsVisibilityIPad() {
 }
 
 // Check that the button displayed are the ones which should be displayed in the
-// environment described by |traitCollection| and with |omniboxFocused|.
+// environment described by `traitCollection` and with `omniboxFocused`.
 void CheckToolbarButtonVisibility(UITraitCollection* traitCollection,
                                   BOOL omniboxFocused) {
   CheckOmniboxVisibility(omniboxFocused);
@@ -499,9 +491,7 @@ UIViewController* TopPresentedViewController() {
                         true /* menu should appear */)];
   [[EarlGrey selectElementWithMatcher:
                  chrome_test_util::StaticTextWithAccessibilityLabelId(
-                     web::features::UseWebViewNativeContextMenuSystem()
-                         ? IDS_IOS_OPEN_IN_INCOGNITO_ACTION_TITLE
-                         : IDS_IOS_CONTENT_CONTEXT_OPENLINKNEWINCOGNITOTAB)]
+                     IDS_IOS_OPEN_IN_INCOGNITO_ACTION_TITLE)]
       performAction:grey_tap()];
 
   // Check the buttons status.

@@ -5,26 +5,26 @@
 #include <memory>
 #include <ostream>
 
+#include "ash/components/cryptohome/cryptohome_parameters.h"
+#include "ash/components/tpm/install_attributes.h"
 #include "ash/constants/ash_switches.h"
 #include "base/bind.h"
 #include "base/callback_helpers.h"
-#include "base/macros.h"
 #include "base/memory/ptr_util.h"
 #include "base/strings/stringprintf.h"
 #include "chrome/browser/ash/login/test/device_state_mixin.h"
 #include "chrome/browser/ash/login/test/login_or_lock_screen_visible_waiter.h"
 #include "chrome/browser/ash/policy/affiliation/affiliation_mixin.h"
 #include "chrome/browser/ash/policy/affiliation/affiliation_test_helper.h"
-#include "chrome/browser/net/nss_context.h"
+#include "chrome/browser/net/nss_service.h"
+#include "chrome/browser/net/nss_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/test/base/mixin_based_in_process_browser_test.h"
-#include "chromeos/cryptohome/cryptohome_parameters.h"
-#include "chromeos/dbus/authpolicy/fake_authpolicy_client.h"
+#include "chromeos/ash/components/dbus/authpolicy/fake_authpolicy_client.h"
+#include "chromeos/ash/components/dbus/upstart/upstart_client.h"
+#include "chromeos/ash/components/dbus/userdataauth/userdataauth_client.h"
 #include "chromeos/dbus/dbus_thread_manager.h"
-#include "chromeos/dbus/upstart/upstart_client.h"
-#include "chromeos/dbus/userdataauth/userdataauth_client.h"
-#include "chromeos/tpm/install_attributes.h"
 #include "components/account_id/account_id.h"
 #include "components/policy/core/common/cloud/device_management_service.h"
 #include "components/user_manager/user.h"
@@ -101,7 +101,8 @@ bool IsSystemSlotAvailable(Profile* profile) {
   content::GetIOThreadTaskRunner({})->PostTask(
       FROM_HERE,
       base::BindOnce(CheckIsSystemSlotAvailableOnIOThread,
-                     CreateNSSCertDatabaseGetter(profile),
+                     NssServiceFactory::GetForContext(profile)
+                         ->CreateNSSCertDatabaseGetterForIOThread(),
                      &system_slot_available, run_loop.QuitClosure()));
   run_loop.Run();
   return system_slot_available;
@@ -119,6 +120,10 @@ class UserAffiliationBrowserTest
     affiliation_mixin_.set_affiliated(GetParam().affiliated);
   }
 
+  UserAffiliationBrowserTest(const UserAffiliationBrowserTest&) = delete;
+  UserAffiliationBrowserTest& operator=(const UserAffiliationBrowserTest&) =
+      delete;
+
  protected:
   // MixinBasedInProcessBrowserTest:
   void SetUpCommandLine(base::CommandLine* command_line) override {
@@ -130,12 +135,11 @@ class UserAffiliationBrowserTest
       const cryptohome::AccountIdentifier cryptohome_id =
           cryptohome::CreateAccountIdentifierFromAccountId(
               affiliation_mixin_.account_id());
-      command_line->AppendSwitchASCII(chromeos::switches::kLoginUser,
+      command_line->AppendSwitchASCII(ash::switches::kLoginUser,
                                       cryptohome_id.account_id());
       command_line->AppendSwitchASCII(
-          chromeos::switches::kLoginProfile,
-          chromeos::UserDataAuthClient::GetStubSanitizedUsername(
-              cryptohome_id));
+          ash::switches::kLoginProfile,
+          ash::UserDataAuthClient::GetStubSanitizedUsername(cryptohome_id));
     }
   }
 
@@ -144,15 +148,15 @@ class UserAffiliationBrowserTest
 
     // Initialize clients here so they are available during setup. They will be
     // shutdown in ChromeBrowserMain.
-    chromeos::SessionManagerClient::InitializeFakeInMemory();
-    chromeos::UpstartClient::InitializeFake();
+    ash::SessionManagerClient::InitializeFakeInMemory();
+    ash::UpstartClient::InitializeFake();
     if (GetParam().active_directory) {
-      chromeos::AuthPolicyClient::InitializeFake();
-      chromeos::FakeAuthPolicyClient::Get()->DisableOperationDelayForTesting();
+      ash::AuthPolicyClient::InitializeFake();
+      ash::FakeAuthPolicyClient::Get()->DisableOperationDelayForTesting();
     }
 
     // Set retry delay to prevent timeouts.
-    policy::DeviceManagementService::SetRetryDelayForTesting(0);
+    DeviceManagementService::SetRetryDelayForTesting(0);
   }
 
   void CreatedBrowserMainParts(
@@ -160,7 +164,7 @@ class UserAffiliationBrowserTest
     MixinBasedInProcessBrowserTest::CreatedBrowserMainParts(browser_main_parts);
 
     login_ui_visible_waiter_ =
-        std::make_unique<chromeos::LoginOrLockScreenVisibleWaiter>();
+        std::make_unique<ash::LoginOrLockScreenVisibleWaiter>();
   }
 
   void SetUpOnMainThread() override {
@@ -214,7 +218,8 @@ class UserAffiliationBrowserTest
  private:
   void SetUpTestSystemSlotOnIO(bool* out_system_slot_constructed_successfully) {
     DCHECK_CURRENTLY_ON(content::BrowserThread::IO);
-    test_system_slot_ = std::make_unique<crypto::ScopedTestSystemNSSKeySlot>();
+    test_system_slot_ = std::make_unique<crypto::ScopedTestSystemNSSKeySlot>(
+        /*simulate_token_loader=*/false);
     *out_system_slot_constructed_successfully =
         test_system_slot_->ConstructedSuccessfully();
   }
@@ -236,17 +241,14 @@ class UserAffiliationBrowserTest
 
   std::unique_ptr<crypto::ScopedTestSystemNSSKeySlot> test_system_slot_;
 
-  std::unique_ptr<chromeos::LoginOrLockScreenVisibleWaiter>
-      login_ui_visible_waiter_;
+  std::unique_ptr<ash::LoginOrLockScreenVisibleWaiter> login_ui_visible_waiter_;
 
-  chromeos::DeviceStateMixin device_state_{
+  ash::DeviceStateMixin device_state_{
       &mixin_host_,
       GetParam().active_directory
-          ? chromeos::DeviceStateMixin::State::
+          ? ash::DeviceStateMixin::State::
                 OOBE_COMPLETED_ACTIVE_DIRECTORY_ENROLLED
-          : chromeos::DeviceStateMixin::State::OOBE_COMPLETED_CLOUD_ENROLLED};
-
-  DISALLOW_COPY_AND_ASSIGN(UserAffiliationBrowserTest);
+          : ash::DeviceStateMixin::State::OOBE_COMPLETED_CLOUD_ENROLLED};
 };
 
 IN_PROC_BROWSER_TEST_P(UserAffiliationBrowserTest, PRE_PRE_TestAffiliation) {

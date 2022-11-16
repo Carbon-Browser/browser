@@ -17,6 +17,9 @@ COMPONENT_EXPORT(EVENTS_OZONE)
 extern const base::Feature kEnableNeuralPalmDetectionFilter;
 
 COMPONENT_EXPORT(EVENTS_OZONE)
+extern const base::Feature kEnableNeuralPalmAdaptiveHold;
+
+COMPONENT_EXPORT(EVENTS_OZONE)
 extern const base::Feature kEnableNeuralStylusReportFilter;
 
 COMPONENT_EXPORT(EVENTS_OZONE)
@@ -27,6 +30,9 @@ extern const base::Feature kEnablePalmOnMaxTouchMajor;
 
 COMPONENT_EXPORT(EVENTS_OZONE)
 extern const base::Feature kEnablePalmOnToolTypePalm;
+
+COMPONENT_EXPORT(EVENTS_OZONE)
+extern const base::FeatureParam<std::string> kNeuralPalmModelVersion;
 
 COMPONENT_EXPORT(EVENTS_OZONE)
 extern const base::FeatureParam<std::string> kNeuralPalmRadiusPolynomial;
@@ -47,14 +53,22 @@ COMPONENT_EXPORT(EVENTS_OZONE)
 extern const base::Feature kEnableInputEventLogging;
 
 COMPONENT_EXPORT(EVENTS_OZONE)
+extern const base::Feature kLibinputHandleTouchpad;
+
+COMPONENT_EXPORT(EVENTS_OZONE)
+extern const base::Feature kEnableFakeKeyboardHeuristic;
+
+COMPONENT_EXPORT(EVENTS_OZONE)
 extern const char kOzoneNNPalmSwitchName[];
 
 COMPONENT_EXPORT(EVENTS_OZONE)
 extern const char kOzoneNNPalmTouchCompatibleProperty[];
 
 COMPONENT_EXPORT(EVENTS_OZONE)
-extern const char kOzoneNNPalmRadiusPolynomialProperty[];
+extern const char kOzoneNNPalmModelVersionProperty[];
 
+COMPONENT_EXPORT(EVENTS_OZONE)
+extern const char kOzoneNNPalmRadiusPolynomialProperty[];
 }  // namespace ui
 
 #endif  // UI_EVENTS_OZONE_FEATURES_H_

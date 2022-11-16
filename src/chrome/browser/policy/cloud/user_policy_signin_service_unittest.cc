@@ -7,11 +7,13 @@
 
 #include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
+#include "build/chromeos_buildflags.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/policy/chrome_browser_policy_connector.h"
@@ -55,7 +57,7 @@
 #include "chromeos/lacros/lacros_test_helper.h"
 #endif
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/policy/cloud/user_policy_signin_service_mobile.h"
 #else
 #include "chrome/browser/policy/cloud/user_policy_signin_service.h"
@@ -152,6 +154,8 @@ class UserPolicySigninServiceTest : public testing::Test {
     profile_ = IdentityTestEnvironmentProfileAdaptor::
         CreateProfileForIdentityTestEnvironment(builder);
 
+    UserPolicySigninServiceFactory::GetForProfile(profile_.get())
+        ->set_profile_can_be_managed_for_testing(true);
     identity_test_env_adaptor_ =
         std::make_unique<IdentityTestEnvironmentProfileAdaptor>(profile_.get());
 
@@ -191,10 +195,13 @@ class UserPolicySigninServiceTest : public testing::Test {
     EXPECT_CALL(*mock_store_, Clear());
 
     // Let the SigninService know that the profile has been created.
-    content::NotificationService::current()->Notify(
-        chrome::NOTIFICATION_PROFILE_ADDED,
-        content::Source<Profile>(profile_.get()),
-        content::NotificationService::NoDetails());
+#if BUILDFLAG(IS_ANDROID)
+    UserPolicySigninServiceFactory::GetForProfile(profile_.get())
+        ->OnProfileAdded(profile_.get());
+#else
+    UserPolicySigninServiceFactory::GetForProfile(profile_.get())
+        ->OnProfileReady(profile_.get());
+#endif  // BUILDFLAG(IS_ANDROID)
   }
 
   bool IsRequestActive() {
@@ -277,9 +284,9 @@ class UserPolicySigninServiceTest : public testing::Test {
   std::unique_ptr<TestingProfile> profile_;
   std::unique_ptr<IdentityTestEnvironmentProfileAdaptor>
       identity_test_env_adaptor_;
-  MockUserCloudPolicyStore* mock_store_ = nullptr;  // Not owned.
+  raw_ptr<MockUserCloudPolicyStore> mock_store_ = nullptr;  // Not owned.
   SchemaRegistry schema_registry_;
-  UserCloudPolicyManager* manager_ = nullptr;  // Not owned.
+  raw_ptr<UserCloudPolicyManager> manager_ = nullptr;  // Not owned.
 
   // BrowserPolicyConnector and UrlFetcherFactory want to initialize and free
   // various components asynchronously via tasks, so create fake threads here.
@@ -318,10 +325,13 @@ class UserPolicySigninServiceSignedInTest : public UserPolicySigninServiceTest {
                                            signin::ConsentLevel::kSync);
 
     // Let the SigninService know that the profile has been created.
-    content::NotificationService::current()->Notify(
-        chrome::NOTIFICATION_PROFILE_ADDED,
-        content::Source<Profile>(profile_.get()),
-        content::NotificationService::NoDetails());
+#if BUILDFLAG(IS_ANDROID)
+    UserPolicySigninServiceFactory::GetForProfile(profile_.get())
+        ->OnProfileAdded(profile_.get());
+#else
+    UserPolicySigninServiceFactory::GetForProfile(profile_.get())
+        ->OnProfileReady(profile_.get());
+#endif  // BUILDFLAG(IS_ANDROID)
   }
 };
 
@@ -334,7 +344,10 @@ TEST_F(UserPolicySigninServiceTest, InitWhileSignedOut) {
   ASSERT_FALSE(manager_->core()->service());
 }
 
-#if !defined(OS_ANDROID)
+// TODO(crbug.com/1312544): Extend the test coverage by merging tests from
+// ios/chrome/browser/policy/cloud/user_policy_signin_service_unittest.mm here.
+
+#if !BUILDFLAG(IS_ANDROID)
 TEST_F(UserPolicySigninServiceTest, InitRefreshTokenAvailableBeforeSignin) {
   // Make sure user is not signed in.
   ASSERT_FALSE(identity_test_env()->identity_manager()->HasPrimaryAccount(
@@ -361,12 +374,12 @@ TEST_F(UserPolicySigninServiceTest, InitRefreshTokenAvailableBeforeSignin) {
   EXPECT_EQ(mock_store_->signin_account_id(), test_account_id_);
   ASSERT_TRUE(IsRequestActive());
 }
-#endif  // !defined(OS_ANDROID)
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 // TODO(joaodasilva): these tests rely on issuing the OAuth2 login refresh
 // token after signin. Revisit this after figuring how to handle that on
 // Android.
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
 
 TEST_F(UserPolicySigninServiceSignedInTest, InitWhileSignedIn) {
   // UserCloudPolicyManager should be initialized.
@@ -438,7 +451,7 @@ TEST_F(UserPolicySigninServiceTest, SignInWithNonEnterpriseUser) {
   // signed-in user.
   ASSERT_FALSE(manager_->core()->service());
 
-  // Now sign in a non-enterprise user (blacklisted gmail.com domain).
+  // Now sign in a non-enterprise user (gmail.com domain).
   identity_test_env()->SetPrimaryAccount("non_enterprise_user@gmail.com",
                                          signin::ConsentLevel::kSync);
 
@@ -502,9 +515,10 @@ TEST_F(UserPolicySigninServiceTest, RegisteredClient) {
   ASSERT_FALSE(manager_->IsClientRegistered());
   ASSERT_FALSE(IsRequestActive());
 
-  mock_store_->policy_ = std::make_unique<enterprise_management::PolicyData>();
-  mock_store_->policy_->set_request_token("fake token");
-  mock_store_->policy_->set_device_id("fake client id");
+  auto data = std::make_unique<enterprise_management::PolicyData>();
+  data->set_request_token("fake token");
+  data->set_device_id("fake client id");
+  mock_store_->set_policy_data_for_testing(std::move(data));
 
   // Complete initialization of the store.
   mock_store_->NotifyStoreLoaded();
@@ -526,7 +540,7 @@ TEST_F(UserPolicySigninServiceTest, RegisteredClient) {
             job_type);
 }
 
-#endif  // !defined(OS_ANDROID)
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 TEST_F(UserPolicySigninServiceSignedInTest, SignOutAfterInit) {
   // UserCloudPolicyManager should be initialized.

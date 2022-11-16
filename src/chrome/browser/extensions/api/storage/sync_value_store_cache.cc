@@ -11,9 +11,9 @@
 #include "base/bind.h"
 #include "chrome/browser/extensions/api/storage/sync_storage_backend.h"
 #include "chrome/browser/sync/glue/sync_start_util.h"
+#include "components/value_store/value_store_factory.h"
 #include "content/public/browser/browser_thread.h"
 #include "extensions/browser/api/storage/backend_task_runner.h"
-#include "extensions/browser/value_store/value_store_factory.h"
 #include "extensions/common/api/storage.h"
 #include "extensions/common/extension.h"
 
@@ -37,7 +37,7 @@ SettingsStorageQuotaEnforcer::Limits GetSyncQuotaLimits() {
 
 SyncValueStoreCache::SyncValueStoreCache(
     scoped_refptr<value_store::ValueStoreFactory> factory,
-    scoped_refptr<SettingsObserverList> observers,
+    SettingsChangedCallback observer,
     const base::FilePath& profile_path)
     : initialized_(false) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
@@ -48,7 +48,10 @@ SyncValueStoreCache::SyncValueStoreCache(
   GetBackendTaskRunner()->PostTask(
       FROM_HERE, base::BindOnce(&SyncValueStoreCache::InitOnBackend,
                                 base::Unretained(this), std::move(factory),
-                                std::move(observers), profile_path));
+                                GetSequenceBoundSettingsChangedCallback(
+                                    base::SequencedTaskRunnerHandle::Get(),
+                                    std::move(observer)),
+                                profile_path));
 }
 
 SyncValueStoreCache::~SyncValueStoreCache() {
@@ -93,15 +96,15 @@ void SyncValueStoreCache::DeleteStorageSoon(const std::string& extension_id) {
 
 void SyncValueStoreCache::InitOnBackend(
     scoped_refptr<value_store::ValueStoreFactory> factory,
-    scoped_refptr<SettingsObserverList> observers,
+    SequenceBoundSettingsChangedCallback observer,
     const base::FilePath& profile_path) {
   DCHECK(IsOnBackendSequence());
   DCHECK(!initialized_);
   app_backend_ = std::make_unique<SyncStorageBackend>(
-      factory, GetSyncQuotaLimits(), observers, syncer::APP_SETTINGS,
+      factory, GetSyncQuotaLimits(), observer, syncer::APP_SETTINGS,
       sync_start_util::GetFlareForSyncableService(profile_path));
   extension_backend_ = std::make_unique<SyncStorageBackend>(
-      std::move(factory), GetSyncQuotaLimits(), std::move(observers),
+      std::move(factory), GetSyncQuotaLimits(), std::move(observer),
       syncer::EXTENSION_SETTINGS,
       sync_start_util::GetFlareForSyncableService(profile_path));
   initialized_ = true;

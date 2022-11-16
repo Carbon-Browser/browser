@@ -7,21 +7,31 @@
 
 #include <functional>
 #include <map>
+#include <string>
 
 #include "base/containers/flat_map.h"
 #include "chrome/common/extensions/api/passwords_private.h"
+#include "url/gurl.h"
+
+class Profile;
 
 namespace password_manager {
-struct PasswordForm;
+struct CredentialUIEntry;
 }  // namespace password_manager
 
 namespace extensions {
 
-// Obtains a collection of URLs from the passed in form. This includes an origin
-// URL used for internal logic, a human friendly string shown to the user as
-// well as a URL that is linked to.
-api::passwords_private::UrlCollection CreateUrlCollectionFromForm(
-    const password_manager::PasswordForm& form);
+// Obtains a collection of URLs from the passed in |form|. This includes an
+// origin URL used for internal logic, a human friendly string shown to the user
+// as well as a URL that is linked to.
+api::passwords_private::UrlCollection CreateUrlCollectionFromCredential(
+    const password_manager::CredentialUIEntry& credential);
+
+// Obtains a collection of URLs from the passed in |url|. This includes an
+// origin URL used for internal logic, a human friendly string shown to the user
+// as well as a URL that is linked to.
+api::passwords_private::UrlCollection CreateUrlCollectionFromGURL(
+    const GURL& url);
 
 // This class is an id generator for an arbitrary key type. It is used by both
 // PasswordManagerPresenter and PasswordCheckDelegate to create ids send to the

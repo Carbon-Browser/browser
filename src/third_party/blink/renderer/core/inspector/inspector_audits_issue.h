@@ -12,6 +12,7 @@
 #include "third_party/blink/public/mojom/fetch/fetch_api_request.mojom-blink.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/dom/dom_node_ids.h"
+#include "third_party/blink/renderer/core/frame/csp/content_security_policy_violation_type.h"
 
 namespace WTF {
 class String;
@@ -24,12 +25,76 @@ class Element;
 class ExecutionContext;
 class LocalFrame;
 class ResourceError;
+class LocalDOMWindow;
+class LocalFrame;
+class SecurityPolicyViolationEventInit;
+class SourceLocation;
 
 namespace protocol {
 namespace Audits {
 class InspectorIssue;
 }
 }  // namespace protocol
+
+// Please keep this alphabetized.
+enum class DeprecationIssueType {
+  kAuthorizationCoveredByWildcard,
+  kCanRequestURLHTTPContainingNewline,
+  kChromeLoadTimesConnectionInfo,
+  kChromeLoadTimesFirstPaintAfterLoadTime,
+  kChromeLoadTimesWasAlternateProtocolAvailable,
+  kCookieWithTruncatingChar,
+  kCrossOriginAccessBasedOnDocumentDomain,
+  kCrossOriginWindowAlert,
+  kCrossOriginWindowConfirm,
+  kCSSSelectorInternalMediaControlsOverlayCastButton,
+  kDeprecationExample,
+  kDocumentDomainSettingWithoutOriginAgentClusterHeader,
+  kEventPath,
+  kExpectCTHeader,
+  kGeolocationInsecureOrigin,
+  kGeolocationInsecureOriginDeprecatedNotRemoved,
+  kGetUserMediaInsecureOrigin,
+  kHostCandidateAttributeGetter,
+  kIdentityInCanMakePaymentEvent,
+  kInsecurePrivateNetworkSubresourceRequest,
+  kLegacyConstraintGoogIPv6,
+  kLocalCSSFileExtensionRejected,
+  kMediaSourceAbortRemove,
+  kMediaSourceDurationTruncatingBuffered,
+  kNavigateEventRestoreScroll,
+  kNavigateEventTransitionWhile,
+  kNoSysexWebMIDIWithoutPermission,
+  kNotDeprecated,
+  kNotificationInsecureOrigin,
+  kNotificationPermissionRequestedIframe,
+  kObsoleteWebRtcCipherSuite,
+  kOpenWebDatabaseInsecureContext,
+  kOverflowVisibleOnReplacedElement,
+  kPictureSourceSrc,
+  kPrefixedCancelAnimationFrame,
+  kPrefixedRequestAnimationFrame,
+  kPrefixedStorageInfo,
+  kPrefixedVideoDisplayingFullscreen,
+  kPrefixedVideoEnterFullScreen,
+  kPrefixedVideoEnterFullscreen,
+  kPrefixedVideoExitFullScreen,
+  kPrefixedVideoExitFullscreen,
+  kPrefixedVideoSupportsFullscreen,
+  kRangeExpand,
+  kRequestedSubresourceWithEmbeddedCredentials,
+  kRTCConstraintEnableDtlsSrtpFalse,
+  kRTCConstraintEnableDtlsSrtpTrue,
+  kRTCPeerConnectionComplexPlanBSdpUsingDefaultSdpSemantics,
+  kRTCPeerConnectionSdpSemanticsPlanB,
+  kRtcpMuxPolicyNegotiate,
+  kSharedArrayBufferConstructedWithoutIsolation,
+  kTextToSpeech_DisallowedByAutoplay,
+  kV8SharedArrayBufferConstructedInExtensionWithoutIsolation,
+  kXHRJSONEncodingDetection,
+  kXMLHttpRequestSynchronousInNonWorkerOutsideBeforeUnload,
+  kXRSupportsSession,
+};
 
 enum class RendererCorsIssueCode {
   kDisallowedByMode,
@@ -39,10 +104,9 @@ enum class RendererCorsIssueCode {
 
 enum class AttributionReportingIssueType {
   kPermissionPolicyDisabled,
-  kInvalidAttributionSourceEventId,
-  kInvalidAttributionData,
   kAttributionSourceUntrustworthyOrigin,
   kAttributionUntrustworthyOrigin,
+  kInvalidHeader,
 };
 
 enum class SharedArrayBufferIssueType {
@@ -54,6 +118,11 @@ enum class MixedContentResolutionStatus {
   kMixedContentBlocked,
   kMixedContentAutomaticallyUpgraded,
   kMixedContentWarning,
+};
+
+enum class ClientHintIssueReason {
+  kMetaTagAllowListInvalidOrigin,
+  kMetaTagModifiedHTML,
 };
 
 // |AuditsIssue| is a thin wrapper around the Audits::InspectorIssue
@@ -116,17 +185,19 @@ class CORE_EXPORT AuditsIssue {
       ExecutionContext* execution_context,
       WTF::String url);
 
-  static void ReportCrossOriginWasmModuleSharingIssue(
-      ExecutionContext* execution_context,
-      const std::string& wasm_source_url,
-      WTF::String source_origin,
-      WTF::String target_origin,
-      bool is_warning);
-
   static void ReportSharedArrayBufferIssue(
       ExecutionContext* execution_context,
       bool shared_buffer_transfer_allowed,
       SharedArrayBufferIssueType issue_type);
+
+  // Reports a Deprecation issue to DevTools.
+  // `execution_context` is used to extract the affected frame and source.
+  // `type` is the enum used to differentiate messages.
+  static void ReportDeprecationIssue(ExecutionContext* execution_context,
+                                     DeprecationIssueType type);
+
+  static void ReportClientHintIssue(LocalDOMWindow* local_dom_window,
+                                    ClientHintIssueReason reason);
 
   static AuditsIssue CreateBlockedByResponseIssue(
       network::mojom::BlockedByResponseReason reason,
@@ -142,6 +213,15 @@ class CORE_EXPORT AuditsIssue {
       LocalFrame* frame,
       const MixedContentResolutionStatus resolution_status,
       const absl::optional<String>& devtools_id);
+
+  static AuditsIssue CreateContentSecurityPolicyIssue(
+      const blink::SecurityPolicyViolationEventInit& violation_data,
+      bool is_report_only,
+      ContentSecurityPolicyViolationType violation_type,
+      LocalFrame* frame_ancestor,
+      Element* element,
+      SourceLocation* source_location,
+      absl::optional<base::UnguessableToken> issue_id);
 
  private:
   explicit AuditsIssue(std::unique_ptr<protocol::Audits::InspectorIssue> issue);

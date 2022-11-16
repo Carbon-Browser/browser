@@ -34,13 +34,12 @@
 #include "components/autofill/core/browser/webdata/mock_autofill_webdata_backend.h"
 #include "components/autofill/core/common/autofill_constants.h"
 #include "components/sync/base/client_tag_hash.h"
-#include "components/sync/driver/sync_driver_switches.h"
 #include "components/sync/engine/data_type_activation_response.h"
-#include "components/sync/engine/entity_data.h"
 #include "components/sync/model/client_tag_based_model_type_processor.h"
 #include "components/sync/model/in_memory_metadata_change_list.h"
 #include "components/sync/model/sync_data.h"
 #include "components/sync/protocol/autofill_specifics.pb.h"
+#include "components/sync/protocol/entity_data.h"
 #include "components/sync/protocol/entity_metadata.pb.h"
 #include "components/sync/protocol/entity_specifics.pb.h"
 #include "components/sync/protocol/model_type_state.pb.h"
@@ -65,7 +64,6 @@ using syncer::HasInitialSyncDone;
 using syncer::KeyAndData;
 using syncer::MockModelTypeChangeProcessor;
 using syncer::ModelType;
-using testing::_;
 using testing::NiceMock;
 using testing::Pointee;
 using testing::Return;
@@ -213,6 +211,11 @@ MATCHER_P2(AddChange, key, data, "") {
 class AutofillWalletSyncBridgeTest : public testing::Test {
  public:
   AutofillWalletSyncBridgeTest() {}
+
+  AutofillWalletSyncBridgeTest(const AutofillWalletSyncBridgeTest&) = delete;
+  AutofillWalletSyncBridgeTest& operator=(const AutofillWalletSyncBridgeTest&) =
+      delete;
+
   ~AutofillWalletSyncBridgeTest() override {}
 
   void SetUp() override {
@@ -334,8 +337,6 @@ class AutofillWalletSyncBridgeTest : public testing::Test {
   testing::NiceMock<MockModelTypeChangeProcessor> mock_processor_;
   std::unique_ptr<syncer::ClientTagBasedModelTypeProcessor> real_processor_;
   std::unique_ptr<AutofillWalletSyncBridge> bridge_;
-
-  DISALLOW_COPY_AND_ASSIGN(AutofillWalletSyncBridgeTest);
 };
 
 // The following 4 tests make sure client tags stay stable.
@@ -630,8 +631,8 @@ TEST_F(AutofillWalletSyncBridgeTest, MergeSyncData_NewPaymentsCustomerData) {
 
   EXPECT_CALL(*backend(), NotifyOfMultipleAutofillChanges());
   EXPECT_CALL(*backend(), CommitChanges());
-  EXPECT_CALL(*backend(), NotifyOfAutofillProfileChanged(_)).Times(0);
-  EXPECT_CALL(*backend(), NotifyOfCreditCardChanged(_)).Times(0);
+  EXPECT_CALL(*backend(), NotifyOfAutofillProfileChanged).Times(0);
+  EXPECT_CALL(*backend(), NotifyOfCreditCardChanged).Times(0);
   StartSyncing({profile_specifics, card_specifics, customer_data_specifics2,
                 cloud_token_data_specifics});
 
@@ -673,8 +674,8 @@ TEST_F(AutofillWalletSyncBridgeTest, MergeSyncData_NewCloudTokenData) {
 
   EXPECT_CALL(*backend(), NotifyOfMultipleAutofillChanges());
   EXPECT_CALL(*backend(), CommitChanges());
-  EXPECT_CALL(*backend(), NotifyOfAutofillProfileChanged(_)).Times(0);
-  EXPECT_CALL(*backend(), NotifyOfCreditCardChanged(_)).Times(0);
+  EXPECT_CALL(*backend(), NotifyOfAutofillProfileChanged).Times(0);
+  EXPECT_CALL(*backend(), NotifyOfCreditCardChanged).Times(0);
   StartSyncing({profile_specifics, card_specifics, customer_data_specifics,
                 cloud_token_data_specifics2});
 
@@ -721,8 +722,8 @@ TEST_F(AutofillWalletSyncBridgeTest, MergeSyncData_NoCloudTokenData) {
 
   EXPECT_CALL(*backend(), NotifyOfMultipleAutofillChanges());
   EXPECT_CALL(*backend(), CommitChanges());
-  EXPECT_CALL(*backend(), NotifyOfAutofillProfileChanged(_)).Times(0);
-  EXPECT_CALL(*backend(), NotifyOfCreditCardChanged(_)).Times(0);
+  EXPECT_CALL(*backend(), NotifyOfAutofillProfileChanged).Times(0);
+  EXPECT_CALL(*backend(), NotifyOfCreditCardChanged).Times(0);
   StartSyncing({});
 
   EXPECT_TRUE(GetAllLocalData().empty());
@@ -761,8 +762,8 @@ TEST_F(AutofillWalletSyncBridgeTest,
   EXPECT_CALL(*backend(), NotifyOfMultipleAutofillChanges()).Times(0);
   // We still need to commit the updated progress marker on the client.
   EXPECT_CALL(*backend(), CommitChanges());
-  EXPECT_CALL(*backend(), NotifyOfAutofillProfileChanged(_)).Times(0);
-  EXPECT_CALL(*backend(), NotifyOfCreditCardChanged(_)).Times(0);
+  EXPECT_CALL(*backend(), NotifyOfAutofillProfileChanged).Times(0);
+  EXPECT_CALL(*backend(), NotifyOfCreditCardChanged).Times(0);
   StartSyncing({profile_specifics, card_specifics, customer_data_specifics,
                 cloud_token_data_specifics});
 
@@ -977,8 +978,8 @@ TEST_F(AutofillWalletSyncBridgeTest, ApplyStopSyncChanges_ClearAllData) {
 
   EXPECT_CALL(*backend(), CommitChanges());
   EXPECT_CALL(*backend(), NotifyOfMultipleAutofillChanges());
-  EXPECT_CALL(*backend(), NotifyOfAutofillProfileChanged(_)).Times(0);
-  EXPECT_CALL(*backend(), NotifyOfCreditCardChanged(_)).Times(0);
+  EXPECT_CALL(*backend(), NotifyOfAutofillProfileChanged).Times(0);
+  EXPECT_CALL(*backend(), NotifyOfCreditCardChanged).Times(0);
 
   // Passing in a non-null metadata change list indicates to the bridge that
   // sync is stopping because it was disabled.
@@ -1005,8 +1006,8 @@ TEST_F(AutofillWalletSyncBridgeTest, ApplyStopSyncChanges_KeepData) {
   // We do not write to DB at all, so we should not commit any changes.
   EXPECT_CALL(*backend(), CommitChanges()).Times(0);
   EXPECT_CALL(*backend(), NotifyOfMultipleAutofillChanges()).Times(0);
-  EXPECT_CALL(*backend(), NotifyOfAutofillProfileChanged(_)).Times(0);
-  EXPECT_CALL(*backend(), NotifyOfCreditCardChanged(_)).Times(0);
+  EXPECT_CALL(*backend(), NotifyOfAutofillProfileChanged).Times(0);
+  EXPECT_CALL(*backend(), NotifyOfCreditCardChanged).Times(0);
 
   // Passing in a non-null metadata change list indicates to the bridge that
   // sync is stopping but the data type is not disabled.
@@ -1094,7 +1095,6 @@ TEST_F(AutofillWalletSyncBridgeTest, SetWalletCards_LogVirtualMetadataSynced) {
 
   std::vector<std::string> server_ids = {"card2_server_id", "card3_server_id",
                                          "card4_server_id"};
-  EXPECT_CALL(*backend(), NotifyOfCreditCardArtImagesChanged(server_ids));
 
   // Trigger sync.
   base::HistogramTester histogram_tester;

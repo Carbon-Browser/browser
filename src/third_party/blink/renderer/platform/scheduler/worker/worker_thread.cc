@@ -12,11 +12,12 @@
 #include "base/message_loop/message_pump.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/run_loop.h"
-#include "base/single_thread_task_runner.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/task/sequence_manager/sequence_manager.h"
 #include "base/task/sequence_manager/task_queue.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_restrictions.h"
+#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/default_tick_clock.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/renderer/platform/heap/blink_gc_memory_dump_provider.h"
@@ -35,7 +36,7 @@ WorkerThread::WorkerThread(const ThreadCreationParams& params)
                                   : nullptr),
       supports_gc_(params.supports_gc) {
   base::SimpleThread::Options options;
-  options.priority = params.thread_priority;
+  options.thread_type = params.base_thread_type;
   thread_ = std::make_unique<SimpleThreadImpl>(
       params.name ? params.name : String(), options, supports_gc_,
       const_cast<scheduler::WorkerThread*>(this));

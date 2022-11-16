@@ -6,8 +6,10 @@ import {assert, assertInstanceof, assertNotReached} from 'chrome://resources/js/
 import {Command} from 'chrome://resources/js/cr/ui/command.m.js';
 import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
 
+import {startIOTask} from '../../common/js/api.js';
 import {DialogType} from '../../common/js/dialog_type.js';
-import {str, strf, util} from '../../common/js/util.js';
+import {strf, util} from '../../common/js/util.js';
+import {VolumeManagerCommon} from '../../common/js/volume_manager_types.js';
 import {Crostini} from '../../externs/background/crostini.js';
 import {ProgressCenter} from '../../externs/background/progress_center.js';
 import {VolumeManager} from '../../externs/volume_manager.js';
@@ -123,11 +125,6 @@ export class TaskController {
     this.canExecuteOpenActions_ = false;
 
     /**
-     * @private {boolean}
-     */
-    this.canExecuteMoreActions_ = false;
-
-    /**
      * @private {!Command}
      * @const
      */
@@ -144,23 +141,6 @@ export class TaskController {
         assertInstanceof(document.querySelector('#open-with'), Command);
 
     /**
-     * More actions command that uses #open-with as selector due to the
-     * open-with command used previously for the same task.
-     * @private {!Command}
-     * @const
-     */
-    this.moreActionsCommand_ =
-        assertInstanceof(document.querySelector('#more-actions'), Command);
-
-    /**
-     * Show sub menu command that uses #show-submenu as selector.
-     * @private {!Command}
-     * @const
-     */
-    this.showSubMenuCommand_ =
-        assertInstanceof(document.querySelector('#show-submenu'), Command);
-
-    /**
      * @private {Promise<!FileTasks>}
      */
     this.tasks_ = null;
@@ -172,6 +152,12 @@ export class TaskController {
     this.tasksEntries_ = [];
 
     /**
+     * Map used to track extract IOTasks in progress.
+     * @private @const {Map}
+     */
+    this.extractTasks_ = new Map();
+
+    /**
      * Selected entries from the last time onSelectionChanged_ was called.
      * @private {!Array<!Entry>}
      */
@@ -179,10 +165,6 @@ export class TaskController {
 
     ui.taskMenuButton.addEventListener(
         'select', this.onTaskItemClicked_.bind(this));
-    ui.shareMenuButton.menu.addEventListener(
-        'activate', this.onTaskItemClicked_.bind(this));
-    ui.shareSubMenu.addEventListener(
-        'activate', this.onTaskItemClicked_.bind(this));
     this.selectionHandler_.addEventListener(
         FileSelectionHandler.EventType.CHANGE,
         this.onSelectionChanged_.bind(this));
@@ -192,7 +174,7 @@ export class TaskController {
     this.taskHistory_.addEventListener(
         TaskHistory.EventType.UPDATE, this.updateTasks_.bind(this));
     chrome.fileManagerPrivate.onAppsUpdated.addListener(
-        this.updateTasks_.bind(this));
+        this.clearCacheAndUpdateTasks_.bind(this));
   }
 
   /**
@@ -262,7 +244,7 @@ export class TaskController {
         })
         .catch(error => {
           if (error) {
-            console.error(error.stack || error);
+            console.warn(error.stack || error);
           }
         });
   }
@@ -289,12 +271,11 @@ export class TaskController {
             this.tasks_ = null;
             this.getFileTasks()
                 .then(tasks => {
-                  tasks.display(
-                      this.ui_.taskMenuButton, this.ui_.shareMenuButton);
+                  tasks.display(this.ui_.taskMenuButton);
                 })
                 .catch(error => {
                   if (error) {
-                    console.error(error.stack || error);
+                    console.warn(error.stack || error);
                   }
                 });
           }
@@ -330,7 +311,7 @@ export class TaskController {
         })
         .catch(error => {
           if (error) {
-            console.error(error.stack || error);
+            console.warn(error.stack || error);
           }
         });
   }
@@ -367,6 +348,9 @@ export class TaskController {
    * @private
    */
   onSelectionChanged_() {
+    if (window.IN_TEST) {
+      this.ui_.taskMenuButton.removeAttribute('get-tasks-completed');
+    }
     const selection = this.selectionHandler_.selection;
     // Caller of update context menu task items.
     // FileSelectionHandler.EventType.CHANGE
@@ -375,13 +359,23 @@ export class TaskController {
       // Compare entries while ignoring changes inside directories.
       if (!util.isSameEntries(this.lastSelectedEntries_, selection.entries)) {
         // Update the context menu if selection changed.
-        this.updateContextMenuTaskItems_([], []);
+        this.updateContextMenuTaskItems_([]);
       }
     } else {
       // Update context menu.
-      this.updateContextMenuTaskItems_([], []);
+      this.updateContextMenuTaskItems_([]);
     }
     this.lastSelectedEntries_ = selection.entries;
+  }
+
+  /**
+   * Explicitly removes the cached tasks first and and re-calculates the current
+   * tasks.
+   * @private
+   */
+  clearCacheAndUpdateTasks_() {
+    this.tasks_ = null;
+    this.updateTasks_();
   }
 
   /**
@@ -389,23 +383,37 @@ export class TaskController {
    * @private
    */
   updateTasks_() {
+    // The list of available tasks should not be available to trashed items.
+    if (this.directoryModel_.getCurrentRootType() ==
+        VolumeManagerCommon.RootType.TRASH) {
+      this.ui_.taskMenuButton.hidden = true;
+      if (window.IN_TEST) {
+        this.ui_.taskMenuButton.toggleAttribute('get-tasks-completed', true);
+      }
+      return;
+    }
     const selection = this.selectionHandler_.selection;
     if (this.dialogType_ === DialogType.FULL_PAGE &&
         (selection.directoryCount > 0 || selection.fileCount > 0)) {
       this.getFileTasks()
           .then(tasks => {
-            tasks.display(this.ui_.taskMenuButton, this.ui_.shareMenuButton);
-            this.updateContextMenuTaskItems_(
-                tasks.getOpenTaskItems(), tasks.getNonOpenTaskItems());
+            tasks.display(this.ui_.taskMenuButton);
+            this.updateContextMenuTaskItems_(tasks.getOpenTaskItems());
+            if (window.IN_TEST) {
+              this.ui_.taskMenuButton.toggleAttribute(
+                  'get-tasks-completed', true);
+            }
           })
           .catch(error => {
             if (error) {
-              console.error(error.stack || error);
+              console.warn(error.stack || error);
             }
           });
     } else {
       this.ui_.taskMenuButton.hidden = true;
-      this.ui_.shareMenuButton.hidden = true;
+      if (window.IN_TEST) {
+        this.ui_.taskMenuButton.toggleAttribute('get-tasks-completed', true);
+      }
     }
   }
 
@@ -463,53 +471,37 @@ export class TaskController {
   }
 
   /**
-   * Returns whether open with command can be executed or not.
-   * @return {boolean} True if open with command is executable.
-   */
-  canExecuteMoreActions() {
-    return this.canExecuteMoreActions_;
-  }
-
-  /**
-   * Returns whether show sub-menu command can be executed or not.
-   * @return {boolean} True if show-submenu command is executable.
-   */
-  canExecuteShowOverflow() {
-    // TODO (adanilo@) extend this for general sub-menu case
-    return this.ui_.shareMenuButton.overflow.firstChild !== null;
-  }
-
-  /**
    * Updates tasks menu item to match passed task items.
    *
    * @param {!Array<!chrome.fileManagerPrivate.FileTask>} openTasks List of OPEN
    *     tasks.
-   * @param {!Array<!chrome.fileManagerPrivate.FileTask>} nonOpenTasks List of
-   *     non-OPEN tasks.
    * @private
    */
-  updateContextMenuTaskItems_(openTasks, nonOpenTasks) {
+  updateContextMenuTaskItems_(openTasks) {
     const defaultTask = FileTasks.getDefaultTask(openTasks, this.taskHistory_);
     if (defaultTask) {
-      this.ui_.defaultTaskMenuItem.removeAttribute('file-type-icon');
+      const menuItem = this.ui_.defaultTaskMenuItem;
+      /**
+       * Menu icon can be controlled by either `iconEndImage` or
+       * `iconEndFileType`, since the default task menu item DOM is shared,
+       * before updating it, we should remove the previous one, e.g. reset both
+       * `iconEndImage` and `iconEndFileType`.
+       */
+      menuItem.iconEndImage = '';
+      menuItem.removeIconEndFileType();
+
+      menuItem.setIconEndHidden(false);
       if (defaultTask.iconType) {
-        this.ui_.defaultTaskMenuItem.style.backgroundImage = '';
-        this.ui_.defaultTaskMenuItem.setAttribute(
-            'file-type-icon', defaultTask.iconType);
-        this.ui_.defaultTaskMenuItem.style.marginInlineEnd = '28px';
+        menuItem.iconEndFileType = defaultTask.iconType;
       } else if (defaultTask.iconUrl) {
-        this.ui_.defaultTaskMenuItem.style.backgroundImage =
-            'url(' + defaultTask.iconUrl + ')';
-        this.ui_.defaultTaskMenuItem.style.marginInlineEnd = '28px';
+        menuItem.iconEndImage = 'url(' + defaultTask.iconUrl + ')';
       } else {
-        this.ui_.defaultTaskMenuItem.style.backgroundImage = '';
-        this.ui_.defaultTaskMenuItem.style.marginInlineEnd = '';
+        menuItem.setIconEndHidden(true);
       }
 
-      this.ui_.defaultTaskMenuItem.label =
-          defaultTask.label || defaultTask.title;
-      this.ui_.defaultTaskMenuItem.disabled = !!defaultTask.disabled;
-      this.ui_.defaultTaskMenuItem.descriptor = defaultTask.descriptor;
+      menuItem.label = defaultTask.label || defaultTask.title;
+      menuItem.disabled = !!defaultTask.disabled;
+      menuItem.descriptor = defaultTask.descriptor;
     }
 
     this.canExecuteDefaultTask_ = defaultTask != null;
@@ -518,11 +510,7 @@ export class TaskController {
     this.canExecuteOpenActions_ = openTasks.length > 1;
     this.openWithCommand_.canExecuteChange(this.ui_.listContainer.element);
 
-    this.canExecuteMoreActions_ = nonOpenTasks.length >= 1;
-    this.moreActionsCommand_.canExecuteChange(this.ui_.listContainer.element);
-
-    this.ui_.tasksSeparator.hidden =
-        openTasks.length === 0 && nonOpenTasks.length == 0;
+    this.ui_.tasksSeparator.hidden = openTasks.length === 0;
   }
 
   /**
@@ -548,5 +536,82 @@ export class TaskController {
     this.getEntryFileTasks(entry).then(tasks => {
       tasks.executeDefault();
     });
+  }
+
+  /**
+   * Stores the task ID and parameters for an extract archive task.
+   */
+  storeExtractTaskDetails(taskId, selectionEntries, parameters) {
+    this.extractTasks_.set(
+        taskId, {'entries': selectionEntries, 'params': parameters});
+  }
+
+  /**
+   * Removes information about an extract archive task.
+   */
+  deleteExtractTaskDetails(taskId) {
+    this.extractTasks_.delete(taskId);
+  }
+
+  /**
+   * Starts extraction for a single entry and stores the task details.
+   * @private
+   */
+  async startExtractTask_(entry, params) {
+    let taskId;
+    try {
+      taskId = await startIOTask(
+          chrome.fileManagerPrivate.IOTaskType.EXTRACT, [entry], params);
+      this.storeExtractTaskDetails(taskId, [entry], params);
+    } catch (e) {
+      console.warn('Error getting extract taskID', e);
+    }
+  }
+
+  /**
+   * Triggers a password dialog and starts an extract task with the
+   * password (unless cancel is clicked on the dialog).
+   * @private
+   */
+  async startGetPasswordThenExtractTask_(entry, params) {
+    /** @type {?string} */ let password = null;
+    // Ask for password.
+    try {
+      password = await this.ui_.passwordDialog.askForPassword(
+          entry.fullPath, password);
+    } catch (error) {
+      console.warn('User cancelled password fetch ', error);
+      return;
+    }
+
+    params['password'] = password;
+    await this.startExtractTask_(entry, params);
+  }
+
+  /**
+   * If an extract operation has finished due to missing password,
+   * see if we have the operation stored and if so, pop up a password
+   * dialog and try to restart another IO operation for it.
+   */
+  handleMissingPassword(taskId) {
+    const existingOperation = this.extractTasks_.get(taskId);
+    if (existingOperation) {
+      // If we have multiple entries (from a multi-select extract) then
+      // we need to start a new task for each of them individually so
+      // that the password dialog is presented once for every file
+      // that's encrypted.
+      const selectionEntries = existingOperation['entries'];
+      const params = existingOperation['params'];
+      if (selectionEntries.length == 1) {
+        this.startGetPasswordThenExtractTask_(
+            existingOperation['entries'][0], params);
+      } else {
+        for (const entry of selectionEntries) {
+          this.startExtractTask_(entry, params);
+        }
+      }
+    }
+    // Remove the failed operation reference since it's finished.
+    this.deleteExtractTaskDetails(taskId);
   }
 }

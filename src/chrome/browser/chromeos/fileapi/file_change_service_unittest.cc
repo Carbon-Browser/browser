@@ -4,7 +4,6 @@
 
 #include "chrome/browser/chromeos/fileapi/file_change_service.h"
 
-#include "base/callback_helpers.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/scoped_observation.h"
 #include "base/test/bind.h"
@@ -42,13 +41,6 @@ storage::FileSystemContext* GetFileSystemContext(Profile* profile) {
   return file_manager::util::GetFileManagerFileSystemContext(profile);
 }
 
-// Returns the file system operation runner associated with the specified
-// `profile`.
-storage::FileSystemOperationRunner* GetFileSystemOperationRunner(
-    Profile* profile) {
-  return GetFileSystemContext(profile)->operation_runner();
-}
-
 // Creates a mojo data pipe with the provided `content`.
 mojo::ScopedDataPipeConsumerHandle CreateStream(const std::string& contents) {
   mojo::ScopedDataPipeProducerHandle producer_handle;
@@ -67,10 +59,8 @@ mojo::ScopedDataPipeConsumerHandle CreateStream(const std::string& contents) {
       std::make_unique<mojo::StringDataSource>(
           contents, mojo::StringDataSource::AsyncWritingMode::
                         STRING_MAY_BE_INVALIDATED_BEFORE_COMPLETION),
-      base::BindOnce(
-          base::DoNothing::Once<std::unique_ptr<mojo::DataPipeProducer>,
-                                MojoResult>(),
-          std::move(producer)));
+      base::BindOnce([](std::unique_ptr<mojo::DataPipeProducer>, MojoResult) {},
+                     std::move(producer)));
   return consumer_handle;
 }
 

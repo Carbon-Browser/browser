@@ -14,7 +14,6 @@
 
 #include "base/callback.h"
 #include "base/mac/scoped_nsobject.h"
-#include "base/macros.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/gfx/geometry/rect_f.h"
 
@@ -29,12 +28,15 @@ gfx::RectF ConvertCGToGfxCoordinates(CGRect bounds, int height);
 
 // This class submits an image analysis request for asynchronous execution on a
 // dispatch queue with default priority.
-class API_AVAILABLE(macos(10.13)) VisionAPIAsyncRequestMac {
+class VisionAPIAsyncRequestMac {
  public:
   // A callback run when the asynchronous execution completes. The callback is
   // repeating for the instance.
   using Callback =
       base::RepeatingCallback<void(VNRequest* request, NSError* error)>;
+
+  VisionAPIAsyncRequestMac(const VisionAPIAsyncRequestMac&) = delete;
+  VisionAPIAsyncRequestMac& operator=(const VisionAPIAsyncRequestMac&) = delete;
 
   ~VisionAPIAsyncRequestMac();
 
@@ -57,8 +59,6 @@ class API_AVAILABLE(macos(10.13)) VisionAPIAsyncRequestMac {
 
   base::scoped_nsobject<VNRequest> request_;
   const Callback callback_;
-
-  DISALLOW_COPY_AND_ASSIGN(VisionAPIAsyncRequestMac);
 };
 
 }  // namespace shape_detection

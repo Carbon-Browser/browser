@@ -8,6 +8,7 @@
 
 #include "base/test/scoped_feature_list.h"
 #include "base/test/test_simple_task_runner.h"
+#include "base/time/time.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace cc {
@@ -35,7 +36,7 @@ TEST_F(JankInjectorTest, Basic) {
 
   const uint32_t kSourceId = 1;
   uint32_t sequence_number = 1;
-  constexpr base::TimeDelta kInterval = base::TimeDelta::FromMilliseconds(16);
+  constexpr base::TimeDelta kInterval = base::Milliseconds(16);
   base::TimeTicks frame_time = base::TimeTicks::Now();
   base::TimeTicks deadline = frame_time + kInterval;
 

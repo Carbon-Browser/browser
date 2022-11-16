@@ -2,7 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/macros.h"
 #include "base/strings/string_split.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chromecast/browser/test/cast_browser_test.h"
@@ -28,6 +27,10 @@ class CastNavigationBrowserTest : public CastBrowserTest {
  public:
   CastNavigationBrowserTest() {}
 
+  CastNavigationBrowserTest(const CastNavigationBrowserTest&) = delete;
+  CastNavigationBrowserTest& operator=(const CastNavigationBrowserTest&) =
+      delete;
+
   void SetUpOnMainThread() override {
     embedded_test_server()->ServeFilesFromSourceDirectory(
         ::media::GetTestDataPath());
@@ -37,10 +40,9 @@ class CastNavigationBrowserTest : public CastBrowserTest {
   void LoadAboutBlank() {
     content::WebContents* web_contents =
         NavigateToURL(GURL(url::kAboutBlankURL));
-    content::TitleWatcher title_watcher(
-        web_contents, base::ASCIIToUTF16(url::kAboutBlankURL));
+    content::TitleWatcher title_watcher(web_contents, url::kAboutBlankURL16);
     std::u16string result = title_watcher.WaitAndGetTitle();
-    EXPECT_EQ(url::kAboutBlankURL, base::UTF16ToASCII(result));
+    EXPECT_EQ(url::kAboutBlankURL16, result);
   }
   void PlayAudio(const std::string& media_file) {
     PlayMedia("audio", media_file);
@@ -85,8 +87,6 @@ class CastNavigationBrowserTest : public CastBrowserTest {
     title_watcher.AlsoWaitForTitle(kFailed);
     return title_watcher.WaitAndGetTitle();
   }
-
-  DISALLOW_COPY_AND_ASSIGN(CastNavigationBrowserTest);
 };
 
 IN_PROC_BROWSER_TEST_F(CastNavigationBrowserTest, EmptyTest) {

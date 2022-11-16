@@ -6,6 +6,7 @@
 #include "base/files/file_util.h"
 #include "base/json/json_writer.h"
 #include "base/path_service.h"
+#include "base/process/launch.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/threading/thread_restrictions.h"
@@ -153,14 +154,21 @@ class MediaEngagementAutoplayBrowserTest
     base::JSONWriter::Write(list, &json_data);
     EXPECT_TRUE(base::WriteFile(input_path, json_data));
 
-    // Get the path to the "generator" binary in the module path.
-    base::FilePath module_dir;
-    EXPECT_TRUE(base::PathService::Get(base::DIR_MODULE, &module_dir));
+    // Get the source root. The make_dafsa.py script is in here.
+    base::FilePath src_root;
+    EXPECT_TRUE(
+        base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &src_root));
+
+    // Get the generated root. The protobuf-generated files are in here.
+    base::FilePath gen_root;
+    EXPECT_TRUE(
+        base::PathService::Get(base::DIR_GEN_TEST_DATA_ROOT, &gen_root));
 
     // Launch the generator and wait for it to finish.
     base::CommandLine cmd(GetPythonPath());
-    cmd.AppendArgPath(module_dir.Append(
+    cmd.AppendArgPath(src_root.Append(
         FILE_PATH_LITERAL("tools/media_engagement_preload/make_dafsa.py")));
+    cmd.AppendArgPath(gen_root);
     cmd.AppendArgPath(input_path);
     cmd.AppendArgPath(output_path);
     base::Process process = base::LaunchProcess(cmd, base::LaunchOptions());
@@ -288,7 +296,7 @@ IN_PROC_BROWSER_TEST_P(MediaEngagementAutoplayBrowserTest,
 }
 
 // Disabled due to being flaky. crbug.com/1212507
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 #define MAYBE_UsePreloadedData_Allowed DISABLED_UsePreloadedData_Allowed
 #else
 #define MAYBE_UsePreloadedData_Allowed UsePreloadedData_Allowed

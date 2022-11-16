@@ -8,18 +8,17 @@
 #include <memory>
 #include <string>
 
+#include "ash/components/multidevice/remote_device_ref.h"
+#include "ash/components/proximity_auth/screenlock_bridge.h"
+#include "ash/services/device_sync/proto/cryptauth_api.pb.h"
+#include "ash/services/device_sync/public/cpp/device_sync_client.h"
+#include "ash/services/multidevice_setup/public/cpp/multidevice_setup_client.h"
+// TODO(https://crbug.com/1164001): move to forward declaration
+#include "ash/services/secure_channel/public/cpp/client/secure_channel_client.h"
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "chrome/browser/ash/login/easy_unlock/easy_unlock_service.h"
-#include "chromeos/components/multidevice/remote_device_ref.h"
-#include "chromeos/components/proximity_auth/screenlock_bridge.h"
-#include "chromeos/services/device_sync/proto/cryptauth_api.pb.h"
-#include "chromeos/services/device_sync/public/cpp/device_sync_client.h"
-#include "chromeos/services/multidevice_setup/public/cpp/multidevice_setup_client.h"
-// TODO(https://crbug.com/1164001): move to forward declaration
-#include "chromeos/services/secure_channel/public/cpp/client/secure_channel_client.h"
 #include "components/prefs/pref_change_registrar.h"
 
 namespace base {
@@ -34,12 +33,12 @@ class Profile;
 
 namespace ash {
 class EasyUnlockNotificationController;
+class SmartLockFeatureUsageMetrics;
 
 // EasyUnlockService instance that should be used for regular, non-signin
 // profiles.
 class EasyUnlockServiceRegular
     : public EasyUnlockService,
-      public proximity_auth::ScreenlockBridge::Observer,
       public device_sync::DeviceSyncClient::Observer,
       public multidevice_setup::MultiDeviceSetupClient::Observer {
  public:
@@ -56,6 +55,9 @@ class EasyUnlockServiceRegular
       std::unique_ptr<EasyUnlockNotificationController> notification_controller,
       device_sync::DeviceSyncClient* device_sync_client,
       multidevice_setup::MultiDeviceSetupClient* multidevice_setup_client);
+
+  EasyUnlockServiceRegular(const EasyUnlockServiceRegular&) = delete;
+  EasyUnlockServiceRegular& operator=(const EasyUnlockServiceRegular&) = delete;
 
   ~EasyUnlockServiceRegular() override;
 
@@ -109,7 +111,15 @@ class EasyUnlockServiceRegular
       const std::set<std::string>& public_keys_before_sync,
       const std::set<std::string>& public_keys_after_sync);
 
-  // proximity_auth::ScreenlockBridge::Observer implementation:
+  // Called when ready to begin recording Smart Lock feature usage
+  // within Standard Feature Usage Logging (SFUL) framework.
+  void StartFeatureUsageMetrics();
+
+  // Called when ready to stop recording Smart Lock feature usage
+  // within SFUL framework.
+  void StopFeatureUsageMetrics();
+
+  // EasyUnlockService:
   void OnScreenDidLock(proximity_auth::ScreenlockBridge::LockHandler::ScreenType
                            screen_type) override;
   void OnScreenDidUnlock(
@@ -144,6 +154,10 @@ class EasyUnlockServiceRegular
   // Used to determine the FeatureState of Smart Lock.
   multidevice_setup::MultiDeviceSetupClient* multidevice_setup_client_;
 
+  // Tracks Smart Lock feature usage for the Standard Feature Usage Logging
+  // (SFUL) framework.
+  std::unique_ptr<SmartLockFeatureUsageMetrics> feature_usage_metrics_;
+
   // Stores the unlock keys for EasyUnlock before the current device sync, so we
   // can compare it to the unlock keys after syncing.
   std::vector<cryptauth::ExternalDeviceInfo> unlock_keys_before_sync_;
@@ -158,8 +172,6 @@ class EasyUnlockServiceRegular
   PrefChangeRegistrar registrar_;
 
   base::WeakPtrFactory<EasyUnlockServiceRegular> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(EasyUnlockServiceRegular);
 };
 
 }  // namespace ash

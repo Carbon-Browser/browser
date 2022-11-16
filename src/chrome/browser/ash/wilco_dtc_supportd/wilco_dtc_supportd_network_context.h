@@ -5,7 +5,6 @@
 #ifndef CHROME_BROWSER_ASH_WILCO_DTC_SUPPORTD_WILCO_DTC_SUPPORTD_NETWORK_CONTEXT_H_
 #define CHROME_BROWSER_ASH_WILCO_DTC_SUPPORTD_WILCO_DTC_SUPPORTD_NETWORK_CONTEXT_H_
 
-#include "base/macros.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/unguessable_token.h"
 #include "chrome/browser/net/proxy_config_monitor.h"
@@ -36,6 +35,12 @@ class WilcoDtcSupportdNetworkContextImpl
       public network::mojom::URLLoaderNetworkServiceObserver {
  public:
   WilcoDtcSupportdNetworkContextImpl();
+
+  WilcoDtcSupportdNetworkContextImpl(
+      const WilcoDtcSupportdNetworkContextImpl&) = delete;
+  WilcoDtcSupportdNetworkContextImpl& operator=(
+      const WilcoDtcSupportdNetworkContextImpl&) = delete;
+
   ~WilcoDtcSupportdNetworkContextImpl() override;
 
   // WilcoDtcSupportdNetworkContext overrides:
@@ -70,10 +75,12 @@ class WilcoDtcSupportdNetworkContextImpl
       const scoped_refptr<net::HttpResponseHeaders>& head_headers,
       mojo::PendingRemote<network::mojom::AuthChallengeResponder>
           auth_challenge_responder) override;
-  void OnClearSiteData(const GURL& url,
-                       const std::string& header_value,
-                       int32_t load_flags,
-                       OnClearSiteDataCallback callback) override;
+  void OnClearSiteData(
+      const GURL& url,
+      const std::string& header_value,
+      int32_t load_flags,
+      const absl::optional<net::CookiePartitionKey>& cookie_partition_key,
+      OnClearSiteDataCallback callback) override;
   void OnLoadingStateUpdate(network::mojom::LoadInfoPtr info,
                             OnLoadingStateUpdateCallback callback) override;
   void OnDataUseUpdate(int32_t network_traffic_annotation_id_hash,
@@ -92,8 +99,6 @@ class WilcoDtcSupportdNetworkContextImpl
 
   mojo::ReceiverSet<network::mojom::URLLoaderNetworkServiceObserver>
       cert_receivers_;
-
-  DISALLOW_COPY_AND_ASSIGN(WilcoDtcSupportdNetworkContextImpl);
 };
 
 }  // namespace ash

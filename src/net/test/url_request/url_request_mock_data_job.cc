@@ -8,10 +8,9 @@
 
 #include "base/bind.h"
 #include "base/location.h"
-#include "base/macros.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "net/base/io_buffer.h"
 #include "net/base/url_util.h"
@@ -78,6 +77,10 @@ GURL GetMockUrl(const std::string& scheme,
 class MockJobInterceptor : public URLRequestInterceptor {
  public:
   MockJobInterceptor() = default;
+
+  MockJobInterceptor(const MockJobInterceptor&) = delete;
+  MockJobInterceptor& operator=(const MockJobInterceptor&) = delete;
+
   ~MockJobInterceptor() override = default;
 
   // URLRequestInterceptor implementation
@@ -88,9 +91,6 @@ class MockJobInterceptor : public URLRequestInterceptor {
         GetRepeatCountFromRequest(*request),
         GetRequestClientCertificate(*request));
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(MockJobInterceptor);
 };
 
 }  // namespace
@@ -100,7 +100,6 @@ URLRequestMockDataJob::URLRequestMockDataJob(URLRequest* request,
                                              int data_repeat_count,
                                              bool request_client_certificate)
     : URLRequestJob(request),
-      data_offset_(0),
       request_client_certificate_(request_client_certificate) {
   DCHECK_GT(data_repeat_count, 0);
   for (int i = 0; i < data_repeat_count; ++i) {

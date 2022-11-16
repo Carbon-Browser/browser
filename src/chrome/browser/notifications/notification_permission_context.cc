@@ -9,7 +9,7 @@
 #include "base/callback_helpers.h"
 #include "base/location.h"
 #include "base/rand_util.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/profiles/profile.h"
@@ -21,6 +21,14 @@
 #include "content/public/browser/browser_thread.h"
 #include "third_party/blink/public/mojom/permissions_policy/permissions_policy_feature.mojom.h"
 #include "url/gurl.h"
+
+#if BUILDFLAG(IS_ANDROID)
+#include "base/android/build_info.h"
+#include "chrome/browser/android/shortcut_helper.h"
+#include "chrome/browser/flags/android/cached_feature_flags.h"
+#include "chrome/browser/flags/android/chrome_feature_list.h"
+#include "chrome/browser/installable/installed_webapp_bridge.h"
+#endif  // BUILDFLAG(IS_ANDROID)
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 #include "chrome/browser/notifications/notifier_state_tracker.h"
@@ -118,7 +126,6 @@ ContentSetting NotificationPermissionContext::GetPermissionStatusForExtension(
 #endif
 
 void NotificationPermissionContext::DecidePermission(
-    content::WebContents* web_contents,
     const permissions::PermissionRequestID& id,
     const GURL& requesting_origin,
     const GURL& embedding_origin,
@@ -135,6 +142,12 @@ void NotificationPermissionContext::DecidePermission(
     std::move(callback).Run(CONTENT_SETTING_BLOCK);
     return;
   }
+
+  content::RenderFrameHost* rfh = content::RenderFrameHost::FromID(
+      id.render_process_id(), id.render_frame_id());
+
+  content::WebContents* web_contents =
+      content::WebContents::FromRenderFrameHost(rfh);
 
   // Notifications permission is always denied in incognito. To prevent sites
   // from using that to detect whether incognito mode is active, we deny after a
@@ -155,12 +168,35 @@ void NotificationPermissionContext::DecidePermission(
                            requesting_origin, embedding_origin,
                            std::move(callback), /*persist=*/true,
                            CONTENT_SETTING_BLOCK, /*is_one_time=*/false),
-            base::TimeDelta::FromSecondsD(delay_seconds));
+            base::Seconds(delay_seconds));
     return;
   }
 
+#if BUILDFLAG(IS_ANDROID)
+  bool contains_webapk =
+      ShortcutHelper::DoesOriginContainAnyInstalledWebApk(requesting_origin);
+  bool contains_twa =
+      ShortcutHelper::DoesOriginContainAnyInstalledTrustedWebActivity(
+          requesting_origin);
+  bool contains_installed_webapp = contains_twa || contains_webapk;
+  if (base::android::BuildInfo::GetInstance()->is_at_least_t() &&
+      contains_installed_webapp) {
+    // WebAPKs match URLs using a scope URL which may contain a path. An origin
+    // has no path and would not fall within such a scope. So to find a matching
+    // WebAPK we must pass a more complete URL e.g. GetLastCommittedURL.
+    InstalledWebappBridge::DecidePermission(
+        ContentSettingsType::NOTIFICATIONS, requesting_origin,
+        web_contents->GetLastCommittedURL(),
+        base::BindOnce(&NotificationPermissionContext::NotifyPermissionSet,
+                       weak_factory_ui_thread_.GetWeakPtr(), id,
+                       requesting_origin, embedding_origin, std::move(callback),
+                       /*persist=*/false));
+    return;
+  }
+#endif  // BUILDFLAG(IS_ANDROID)
+
   permissions::PermissionContextBase::DecidePermission(
-      web_contents, id, requesting_origin, embedding_origin, user_gesture,
+      id, requesting_origin, embedding_origin, user_gesture,
       std::move(callback));
 }
 

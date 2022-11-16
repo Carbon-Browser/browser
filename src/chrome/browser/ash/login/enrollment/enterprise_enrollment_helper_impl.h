@@ -10,7 +10,6 @@
 
 #include "base/callback.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/login/enrollment/enterprise_enrollment_helper.h"
 #include "chrome/browser/ash/policy/enrollment/enrollment_config.h"
@@ -28,20 +27,26 @@ namespace ash {
 class EnterpriseEnrollmentHelperImpl : public EnterpriseEnrollmentHelper {
  public:
   EnterpriseEnrollmentHelperImpl();
+
+  EnterpriseEnrollmentHelperImpl(const EnterpriseEnrollmentHelperImpl&) =
+      delete;
+  EnterpriseEnrollmentHelperImpl& operator=(
+      const EnterpriseEnrollmentHelperImpl&) = delete;
+
   ~EnterpriseEnrollmentHelperImpl() override;
 
   // EnterpriseEnrollmentHelper:
   void EnrollUsingAuthCode(const std::string& auth_code) override;
   void EnrollUsingToken(const std::string& token) override;
   void EnrollUsingAttestation() override;
-  void EnrollForOfflineDemo() override;
   void ClearAuth(base::OnceClosure callback) override;
   void GetDeviceAttributeUpdatePermission() override;
   void UpdateDeviceAttributes(const std::string& asset_id,
                               const std::string& location) override;
   void Setup(policy::ActiveDirectoryJoinDelegate* ad_join_delegate,
              const policy::EnrollmentConfig& enrollment_config,
-             const std::string& enrolling_user_domain) override;
+             const std::string& enrolling_user_domain,
+             policy::LicenseType license_type) override;
 
  private:
   FRIEND_TEST_ALL_PREFIXES(EnterpriseEnrollmentTest,
@@ -78,6 +83,7 @@ class EnterpriseEnrollmentHelperImpl : public EnterpriseEnrollmentHelper {
 
   policy::EnrollmentConfig enrollment_config_;
   std::string enrolling_user_domain_;
+  policy::LicenseType license_type_;
 
   enum {
     OAUTH_NOT_STARTED,
@@ -96,8 +102,6 @@ class EnterpriseEnrollmentHelperImpl : public EnterpriseEnrollmentHelper {
   std::unique_ptr<policy::EnrollmentHandler> enrollment_handler_;
 
   base::WeakPtrFactory<EnterpriseEnrollmentHelperImpl> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(EnterpriseEnrollmentHelperImpl);
 };
 
 }  // namespace ash

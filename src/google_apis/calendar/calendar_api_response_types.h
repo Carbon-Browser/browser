@@ -14,7 +14,6 @@
 
 #include "base/compiler_specific.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
 #include "base/strings/string_piece.h"
 #include "base/time/time.h"
 #include "url/gurl.h"
@@ -29,7 +28,7 @@ namespace google_apis {
 
 namespace calendar {
 
-// Parses the time filed in the calendar Events.list response.
+// Parses the time field in the calendar Events.list response.
 class DateTime {
  public:
   DateTime();
@@ -57,9 +56,26 @@ class DateTime {
 class CalendarEvent {
  public:
   CalendarEvent();
-  CalendarEvent(const CalendarEvent&) = delete;
-  CalendarEvent& operator=(const CalendarEvent&) = delete;
+  CalendarEvent(const CalendarEvent&);
+  CalendarEvent& operator=(const CalendarEvent&);
   ~CalendarEvent();
+
+  // Status of the event.
+  enum class EventStatus {
+    kUnknown,
+    kCancelled,
+    kConfirmed,
+    kTentative,
+  };
+
+  // The attendee's response status.
+  enum class ResponseStatus {
+    kUnknown,
+    kAccepted,
+    kDeclined,
+    kNeedsAction,
+    kTentative,
+  };
 
   // Registers the mapping between JSON field names and the members in this
   // class.
@@ -86,8 +102,14 @@ class CalendarEvent {
   void set_color_id(const std::string& color_id) { color_id_ = color_id; }
 
   // The status of the event.
-  const std::string& status() const { return status_; }
-  void set_status(const std::string& status) { status_ = status; }
+  EventStatus status() const { return status_; }
+  void set_status(EventStatus status) { status_ = status; }
+
+  // The self attendency response status of the event.
+  ResponseStatus self_response_status() const { return self_response_status_; }
+  void set_self_response_status(ResponseStatus self_response_status) {
+    self_response_status_ = self_response_status;
+  }
 
   const DateTime& start_time() const { return start_time_; }
   void set_start_time(const DateTime& start_time) { start_time_ = start_time; }
@@ -95,12 +117,16 @@ class CalendarEvent {
   const DateTime& end_time() const { return end_time_; }
   void set_end_time(const DateTime& end_time) { end_time_ = end_time; }
 
+  // Return the approximate size of this event, in bytes.
+  int GetApproximateSizeInBytes() const;
+
  private:
   std::string id_;
   std::string summary_;
   std::string html_link_;
   std::string color_id_;
-  std::string status_;
+  EventStatus status_ = EventStatus::kUnknown;
+  ResponseStatus self_response_status_ = ResponseStatus::kUnknown;
   DateTime start_time_;
   DateTime end_time_;
 };
@@ -141,6 +167,8 @@ class EventList {
   std::vector<std::unique_ptr<CalendarEvent>>* mutable_items() {
     return &items_;
   }
+
+  void InjectItemForTesting(std::unique_ptr<CalendarEvent> item);
 
  private:
   std::string time_zone_;

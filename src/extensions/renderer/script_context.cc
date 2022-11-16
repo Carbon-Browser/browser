@@ -5,7 +5,6 @@
 #include "extensions/renderer/script_context.h"
 
 #include "base/command_line.h"
-#include "base/containers/contains.h"
 #include "base/containers/flat_set.h"
 #include "base/logging.h"
 #include "base/no_destructor.h"
@@ -22,6 +21,7 @@
 #include "extensions/common/extension_urls.h"
 #include "extensions/common/manifest_handlers/sandboxed_page_info.h"
 #include "extensions/common/permissions/permissions_data.h"
+#include "extensions/renderer/dispatcher.h"
 #include "extensions/renderer/renderer_extension_registry.h"
 #include "extensions/renderer/v8_helpers.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_registration.mojom.h"
@@ -29,7 +29,12 @@
 #include "third_party/blink/public/web/web_document.h"
 #include "third_party/blink/public/web/web_document_loader.h"
 #include "third_party/blink/public/web/web_local_frame.h"
-#include "v8/include/v8.h"
+#include "v8/include/v8-context.h"
+#include "v8/include/v8-debug.h"
+#include "v8/include/v8-function.h"
+#include "v8/include/v8-isolate.h"
+#include "v8/include/v8-microtask-queue.h"
+#include "v8/include/v8-primitive.h"
 
 namespace extensions {
 
@@ -64,7 +69,15 @@ class WebLocalFrameAdapter
     return std::make_unique<WebLocalFrameAdapter>(local_parent_or_opener);
   }
 
-  GURL GetUrl() const override { return frame_->GetDocument().Url(); }
+  GURL GetUrl() const override {
+    if (frame_->GetDocument().Url().IsEmpty()) {
+      // It's possible for URL to be empty when `frame_` is on the initial empty
+      // document. TODO(https://crbug.com/1197308): Consider making  `frame_`'s
+      // document's URL about:blank instead of empty in that case.
+      return GURL(url::kAboutBlankURL);
+    }
+    return frame_->GetDocument().Url();
+  }
 
   url::Origin GetOrigin() const override { return frame_->GetSecurityOrigin(); }
 
@@ -124,6 +137,8 @@ std::string GetContextTypeDescriptionString(Feature::Context context_type) {
       return "WEBUI_UNTRUSTED";
     case Feature::LOCK_SCREEN_EXTENSION_CONTEXT:
       return "LOCK_SCREEN_EXTENSION";
+    case Feature::OFFSCREEN_EXTENSION_CONTEXT:
+      return "OFFSCREEN_EXTENSION_CONTEXT";
   }
   NOTREACHED();
   return std::string();
@@ -325,7 +340,8 @@ Feature::Availability ScriptContext::GetAvailability(
     extension = NULL;
   }
   return ExtensionAPI::GetSharedInstance()->IsAvailable(
-      api_name, extension, context_type_, url(), check_alias);
+      api_name, extension, context_type_, url(), check_alias,
+      kRendererProfileId);
 }
 
 std::string ScriptContext::GetContextTypeDescription() const {
@@ -356,7 +372,7 @@ bool ScriptContext::IsAnyFeatureAvailableToContext(
   // web_frame() is null.
   GURL url = web_frame() ? GetDocumentLoaderURLForFrame(web_frame()) : url_;
   return ExtensionAPI::GetSharedInstance()->IsAnyFeatureAvailableToContext(
-      api, extension(), context_type(), url, check_alias);
+      api, extension(), context_type(), url, check_alias, kRendererProfileId);
 }
 
 // static
@@ -555,43 +571,6 @@ v8::Local<v8::Value> ScriptContext::RunScript(
   }
 
   return handle_scope.Escape(result);
-}
-
-v8::Local<v8::Value> ScriptContext::CallFunction(
-    const v8::Local<v8::Function>& function,
-    int argc,
-    v8::Local<v8::Value> argv[]) const {
-  DCHECK(thread_checker_.CalledOnValidThread());
-  v8::EscapableHandleScope handle_scope(isolate());
-  v8::Context::Scope scope(v8_context());
-
-  v8::MicrotasksScope microtasks(isolate(),
-                                 v8::MicrotasksScope::kDoNotRunMicrotasks);
-  if (!is_valid_) {
-    return handle_scope.Escape(
-        v8::Local<v8::Primitive>(v8::Undefined(isolate())));
-  }
-
-  v8::Local<v8::Object> global = v8_context()->Global();
-  if (!web_frame_) {
-    v8::MaybeLocal<v8::Value> maybe_result =
-        function->Call(v8_context(), global, argc, argv);
-    v8::Local<v8::Value> result;
-    if (!maybe_result.ToLocal(&result)) {
-      return handle_scope.Escape(
-          v8::Local<v8::Primitive>(v8::Undefined(isolate())));
-    }
-    return handle_scope.Escape(result);
-  }
-
-  v8::MaybeLocal<v8::Value> result =
-      web_frame_->CallFunctionEvenIfScriptDisabled(function, global, argc,
-                                                   argv);
-
-  // TODO(devlin): Stop coercing this to a v8::Local.
-  v8::Local<v8::Value> coerced_result;
-  ignore_result(result.ToLocal(&coerced_result));
-  return handle_scope.Escape(coerced_result);
 }
 
 }  // namespace extensions

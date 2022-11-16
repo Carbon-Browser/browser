@@ -22,6 +22,9 @@
 // Delete button for the toolbar.
 @property(nonatomic, strong, readonly) UIBarButtonItem* deleteButton;
 
+// Add button for the toolbar.
+@property(nonatomic, strong, readonly) UIBarButtonItem* addButtonInToolbar;
+
 // Whether this table view controller should hide the "Done" button (the right
 // navigation bar button). Default is NO.
 @property(nonatomic, assign) BOOL shouldHideDoneButton;
@@ -30,6 +33,14 @@
 // navigation bar button) on edit. Default is NO.
 @property(nonatomic, assign) BOOL shouldDisableDoneButtonOnEdit;
 
+// Whether this table view controller should show the "Add" button in the
+// toolbar(bottom left). Default is NO.
+@property(nonatomic, assign) BOOL shouldShowAddButtonInToolbar;
+
+// Whether this table view controller should show the "Delete" button in the
+// toolbar(bottom left). Default is YES. Set in `viewDidLoad`.
+@property(nonatomic, assign) BOOL shouldShowDeleteButtonInToolbar;
+
 // Updates the edit or done button to reflect editing state.  If the
 // tableView is not in edit mode (and thus showing the 'Done' button) it is
 // using shouldHideDoneButton to know if it should display the edit button.
@@ -37,7 +48,13 @@
 // setEditing:animated: method instead of being manually triggered.
 - (void)updateUIForEditState;
 
-// Reloads the table view model with |loadModel| and then reloads the
+// Updates the edit or done button to reflect editing state in the toolbar.
+// Shows Add button in the left end if `shouldShowAddButtonInToolbar` is YES. In
+// edit state, the left end shows the Delete button and the right end shows
+// Done.
+- (void)updatedToolbarForEditState;
+
+// Reloads the table view model with `loadModel` and then reloads the
 // table view data.
 - (void)reloadData;
 
@@ -74,11 +91,11 @@
 - (BOOL)showCancelDuringEditing;
 
 // Called when this ViewController toolbar's delete item has been tapped.
-// |indexPaths| is the index paths of the currently selected item to be deleted.
+// `indexPaths` is the index paths of the currently selected item to be deleted.
 // Default implementation removes the items.
 - (void)deleteItems:(NSArray<NSIndexPath*>*)indexPaths;
 
-// Prevents user interaction until |-allowUserInteraction| is called by doing
+// Prevents user interaction until `-allowUserInteraction` is called by doing
 // the following:
 // * Disables user interaction with the navigation bar.
 // * Replaces the done button with an activity indicator.
@@ -90,6 +107,10 @@
 // * Restores the done button.
 // * Removes the transparent veil.
 - (void)allowUserInteraction;
+
+// Called when the add button in the toolbar is pressed. Subclasses should
+// override this method.
+- (void)addButtonCallback;
 
 @end
 

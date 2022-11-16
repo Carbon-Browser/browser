@@ -13,9 +13,9 @@
 #include "base/strings/string_util.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
-#include "chromeos/services/cros_healthd/public/cpp/service_connection.h"
-#include "chromeos/services/cros_healthd/public/mojom/cros_healthd.mojom.h"
-#include "chromeos/services/cros_healthd/public/mojom/cros_healthd_probe.mojom.h"
+#include "chromeos/ash/services/cros_healthd/public/cpp/service_connection.h"
+#include "chromeos/ash/services/cros_healthd/public/mojom/cros_healthd.mojom.h"
+#include "chromeos/ash/services/cros_healthd/public/mojom/cros_healthd_probe.mojom.h"
 #include "components/policy/proto/device_management_backend.pb.h"
 #include "third_party/metrics_proto/system_profile.pb.h"
 
@@ -23,8 +23,7 @@ using metrics::SystemProfileProto;
 
 namespace {
 
-constexpr base::TimeDelta kServiceDiscoveryTimeout =
-    base::TimeDelta::FromSeconds(5);
+constexpr base::TimeDelta kServiceDiscoveryTimeout = base::Seconds(5);
 
 }  // namespace
 
@@ -92,13 +91,13 @@ void CrosHealthdMetricsProvider::OnProbeDone(
 
   auto tag = block_device_result->which();
   if (tag == chromeos::cros_healthd::mojom::NonRemovableBlockDeviceResult::Tag::
-                 ERROR) {
+                 kError) {
     DVLOG(1) << "cros_healthd: Error getting block device info: "
              << block_device_result->get_error()->msg;
     return;
   }
   DCHECK_EQ(tag, chromeos::cros_healthd::mojom::NonRemovableBlockDeviceResult::
-                     Tag::BLOCK_DEVICE_INFO);
+                     Tag::kBlockDeviceInfo);
 
   for (const auto& storage : block_device_result->get_block_device_info()) {
     SystemProfileProto::Hardware::InternalStorageDevice dev;

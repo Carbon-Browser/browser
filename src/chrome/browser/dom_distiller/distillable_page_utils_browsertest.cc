@@ -7,6 +7,7 @@
 
 #include "base/bind.h"
 #include "base/command_line.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
@@ -26,8 +27,8 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
-#if defined(OS_CHROMEOS) || defined(OS_LINUX) || defined(OS_MAC) || \
-    defined(OS_WIN)
+#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC) || \
+    BUILDFLAG(IS_WIN)
 #include "components/ukm/test_ukm_recorder.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #endif
@@ -63,14 +64,14 @@ class MockObserver : public DistillabilityObserver {
 // so 100ms should be pretty safe to catch extra calls.
 //
 // If there are no extra calls, changing this doesn't change the test result.
-const auto kWaitAfterLastCall = base::TimeDelta::FromMilliseconds(100);
+const auto kWaitAfterLastCall = base::Milliseconds(100);
 
 // Wait a bit if no calls are expected to make sure any unexpected calls are
 // caught. Expected calls happen within 100ms after content::WaitForLoadStop()
 // on linux release build, so 1s provides a safe margin.
 //
 // If there are no extra calls, changing this doesn't change the test result.
-const auto kWaitNoExpectedCall = base::TimeDelta::FromSeconds(1);
+const auto kWaitNoExpectedCall = base::Seconds(1);
 
 }  // namespace
 
@@ -114,7 +115,7 @@ class TestOption : public InProcessBrowserTest {
   void QuitSoon() { QuitAfter(kWaitAfterLastCall); }
 
   void QuitAfter(base::TimeDelta delta) {
-    DCHECK(delta > base::TimeDelta());
+    DCHECK(delta.is_positive());
     base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
         FROM_HERE, run_loop_->QuitClosure(), delta);
   }
@@ -125,7 +126,7 @@ class TestOption : public InProcessBrowserTest {
 
   std::unique_ptr<base::RunLoop> run_loop_;
   MockObserver holder_;
-  content::WebContents* web_contents_ = nullptr;
+  raw_ptr<content::WebContents> web_contents_ = nullptr;
   std::unique_ptr<net::test_server::EmbeddedTestServer> https_server_;
 };
 
@@ -279,8 +280,8 @@ IN_PROC_BROWSER_TEST_F(DistillablePageUtilsBrowserTestAllArticles,
       Optional(AllOf(IsDistillable(), IsLast(), Not(IsMobileFriendly()))));
 }
 
-#if defined(OS_CHROMEOS) || defined(OS_LINUX) || defined(OS_MAC) || \
-    defined(OS_WIN)
+#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC) || \
+    BUILDFLAG(IS_WIN)
 IN_PROC_BROWSER_TEST_F(DistillablePageUtilsBrowserTestAllArticles,
                        RecordPageIsDistillableOnArticleLoad) {
   ON_CALL(holder_, OnResult(IsLast()))
@@ -312,6 +313,7 @@ IN_PROC_BROWSER_TEST_F(DistillablePageUtilsBrowserTestAllArticles,
                                           "IsPageDistillable"),
               Pointee(false));
 }
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH) || OS_LINUX || OS_MACOS || OS_WIN
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_LINUX) ||
+        // BUILDFLAG(IS_MAC)OS || BUILDFLAG(IS_WIN)
 
 }  // namespace dom_distiller

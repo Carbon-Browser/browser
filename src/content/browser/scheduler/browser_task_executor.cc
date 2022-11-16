@@ -7,13 +7,12 @@
 #include <atomic>
 
 #include "base/bind.h"
-#include "base/deferred_sequenced_task_runner.h"
 #include "base/message_loop/message_pump_type.h"
-#include "base/no_destructor.h"
 #include "base/run_loop.h"
-#include "base/task/post_task.h"
+#include "base/task/deferred_sequenced_task_runner.h"
 #include "base/task/task_traits_extension.h"
 #include "base/threading/thread_task_runner_handle.h"
+#include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
 #include "content/browser/browser_process_io_thread.h"
@@ -21,7 +20,7 @@
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/common/content_features.h"
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #include "base/android/task_scheduler/post_task_android.h"
 #endif
 
@@ -35,8 +34,12 @@ namespace features {
 //
 // The goal is to reduce jank by ensuring chromium is handling input events as
 // soon as possible.
+//
+// TODO(nuskos): Remove this feature flag after we've done our retroactive study
+// of all chrometto performance improvements.
 constexpr base::Feature kBrowserPrioritizeInputQueue{
-    "BrowserPrioritizeInputQueue", base::FEATURE_DISABLED_BY_DEFAULT};
+    "BrowserPrioritizeInputQueue", base::FEATURE_ENABLED_BY_DEFAULT};
+
 }  // namespace features
 
 namespace {
@@ -95,14 +98,14 @@ BaseBrowserTaskExecutor::CreateSingleThreadTaskRunner(
   return GetTaskRunner(ExtractBrowserThreadId(traits), traits);
 }
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 scoped_refptr<base::SingleThreadTaskRunner>
 BaseBrowserTaskExecutor::CreateCOMSTATaskRunner(
     const base::TaskTraits& traits,
     base::SingleThreadTaskRunnerThreadMode thread_mode) {
   return GetTaskRunner(ExtractBrowserThreadId(traits), traits);
 }
-#endif  // defined(OS_WIN)
+#endif  // BUILDFLAG(IS_WIN)
 
 scoped_refptr<base::SingleThreadTaskRunner>
 BaseBrowserTaskExecutor::GetTaskRunner(BrowserThread::ID identifier,
@@ -133,13 +136,15 @@ QueueType BaseBrowserTaskExecutor::GetQueueType(
 
     switch (task_type) {
       case BrowserTaskType::kBootstrap:
+        if (base::FeatureList::IsEnabled(
+                ::features::kTreatBootstrapAsDefault)) {
+          // Defer to traits.priority() below rather than executing this task on
+          // the dedicated bootstrap queue.
+          break;
+        }
+
         // Note we currently ignore the priority for bootstrap tasks.
         return QueueType::kBootstrap;
-
-      case BrowserTaskType::kPreconnect:
-        // Note we currently ignore the priority for navigation and
-        // preconnection tasks.
-        return QueueType::kPreconnection;
 
       case BrowserTaskType::kUserInput:
         if (base::FeatureList::IsEnabled(
@@ -148,6 +153,17 @@ QueueType BaseBrowserTaskExecutor::GetQueueType(
         }
         // Defer to traits.priority() below.
         break;
+
+      case BrowserTaskType::kNavigationNetworkResponse:
+        if (base::FeatureList::IsEnabled(
+                ::features::kNavigationNetworkResponseQueue)) {
+          return QueueType::kNavigationNetworkResponse;
+        }
+        // Defer to traits.priority() below.
+        break;
+
+      case BrowserTaskType::kServiceWorkerStorageControlResponse:
+        return QueueType::kServiceWorkerStorageControlResponse;
 
       case BrowserTaskType::kDefault:
         // Defer to traits.priority() below.
@@ -220,7 +236,7 @@ void BrowserTaskExecutor::CreateInternal(
   g_browser_task_executor->browser_ui_thread_handle_
       ->EnableAllExceptBestEffortQueues();
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   base::PostTaskAndroid::SignalNativeSchedulerReady();
 #endif
 }
@@ -236,7 +252,7 @@ BrowserTaskExecutor* BrowserTaskExecutor::Get() {
 
 // static
 void BrowserTaskExecutor::ResetForTesting() {
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   base::PostTaskAndroid::SignalNativeSchedulerShutdownForTesting();
 #endif
   if (g_browser_task_executor) {
@@ -310,9 +326,9 @@ void BrowserTaskExecutor::RunAllPendingTasksOnThreadForTesting(
 }
 
 // static
-void BrowserTaskExecutor::EnableAllQueues() {
-  Get()->browser_ui_thread_handle_->EnableAllQueues();
-  Get()->browser_io_thread_handle_->EnableAllQueues();
+void BrowserTaskExecutor::OnStartupComplete() {
+  Get()->browser_ui_thread_handle_->OnStartupComplete();
+  Get()->browser_io_thread_handle_->OnStartupComplete();
 }
 
 // static
@@ -350,11 +366,18 @@ std::unique_ptr<BrowserProcessIOThread> BrowserTaskExecutor::CreateIOThread() {
   base::Thread::Options options;
   options.message_pump_type = base::MessagePumpType::IO;
   options.delegate = std::move(browser_io_thread_delegate);
+// TODO(1329208): Consider doing this on Windows as well. The platform
+// discrepancy stems from organic evolution of the thread priorities on each
+// platform and while it might make sense not to bump the priority of the IO
+// thread per Windows' priority boosts capabilities on MessagePumpForIO, this
+// should at least be aligned with what platform_thread_win.cc does for
+// ThreadType::kDisplayCritical (IO pumps in other processes) and it currently
+// does not.
+#if !BUILDFLAG(IS_WIN)
   // Up the priority of the |io_thread_| as some of its IPCs relate to
   // display tasks.
-  if (base::FeatureList::IsEnabled(
-          ::features::kBrowserUseDisplayThreadPriority))
-    options.priority = base::ThreadPriority::DISPLAY;
+  options.thread_type = base::ThreadType::kCompositing;
+#endif
   if (!io_thread->StartWithOptions(std::move(options)))
     LOG(FATAL) << "Failed to start BrowserThread:IO";
   return io_thread;

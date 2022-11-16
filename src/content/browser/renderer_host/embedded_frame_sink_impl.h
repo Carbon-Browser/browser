@@ -6,13 +6,12 @@
 #define CONTENT_BROWSER_RENDERER_HOST_EMBEDDED_FRAME_SINK_IMPL_H_
 
 #include "base/callback.h"
-#include "base/compiler_specific.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "components/viz/common/surfaces/frame_sink_bundle_id.h"
 #include "components/viz/common/surfaces/frame_sink_id.h"
 #include "components/viz/common/surfaces/surface_info.h"
 #include "components/viz/host/host_frame_sink_client.h"
-#include "content/common/content_export.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -29,7 +28,7 @@ namespace content {
 // Both the embedder and embedded frame sink are in the same renderer. Holds a
 // client connection to the renderer that is notified when a new SurfaceId
 // activates for the embedded frame sink.
-class CONTENT_EXPORT EmbeddedFrameSinkImpl : public viz::HostFrameSinkClient {
+class EmbeddedFrameSinkImpl : public viz::HostFrameSinkClient {
  public:
   using DestroyCallback = base::OnceCallback<void()>;
 
@@ -39,6 +38,10 @@ class CONTENT_EXPORT EmbeddedFrameSinkImpl : public viz::HostFrameSinkClient {
       const viz::FrameSinkId& frame_sink_id,
       mojo::PendingRemote<blink::mojom::EmbeddedFrameSinkClient> client,
       DestroyCallback destroy_callback);
+
+  EmbeddedFrameSinkImpl(const EmbeddedFrameSinkImpl&) = delete;
+  EmbeddedFrameSinkImpl& operator=(const EmbeddedFrameSinkImpl&) = delete;
+
   ~EmbeddedFrameSinkImpl() override;
 
   const viz::FrameSinkId& frame_sink_id() const { return frame_sink_id_; }
@@ -65,6 +68,11 @@ class CONTENT_EXPORT EmbeddedFrameSinkImpl : public viz::HostFrameSinkClient {
   void ConnectToEmbedder(mojo::PendingReceiver<blink::mojom::SurfaceEmbedder>
                              surface_embedder_receiver);
 
+  // Adjusts the frame sink hierarchy for |parent_frame_sink_id_| and
+  // |frame_sink_id_|.
+  void RegisterFrameSinkHierarchy();
+  void UnregisterFrameSinkHierarchy();
+
   // viz::HostFrameSinkClient implementation.
   void OnFirstSurfaceActivation(const viz::SurfaceInfo& surface_info) override;
   void OnFrameTokenChanged(uint32_t frame_token,
@@ -76,7 +84,7 @@ class CONTENT_EXPORT EmbeddedFrameSinkImpl : public viz::HostFrameSinkClient {
       mojo::PendingRemote<viz::mojom::CompositorFrameSinkClient> client,
       mojo::PendingReceiver<viz::mojom::CompositorFrameSink> receiver);
 
-  viz::HostFrameSinkManager* const host_frame_sink_manager_;
+  const raw_ptr<viz::HostFrameSinkManager> host_frame_sink_manager_;
 
   mojo::Remote<blink::mojom::EmbeddedFrameSinkClient> client_;
 
@@ -85,9 +93,7 @@ class CONTENT_EXPORT EmbeddedFrameSinkImpl : public viz::HostFrameSinkClient {
   const viz::FrameSinkId frame_sink_id_;
   viz::LocalSurfaceId local_surface_id_;
 
-  bool has_created_compositor_frame_sink_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(EmbeddedFrameSinkImpl);
+  bool has_registered_compositor_frame_sink_ = false;
 };
 
 }  // namespace content

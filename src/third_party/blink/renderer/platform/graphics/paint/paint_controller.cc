@@ -6,7 +6,6 @@
 
 #include <memory>
 
-#include "base/auto_reset.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
 #include "third_party/blink/renderer/platform/graphics/paint/drawing_display_item.h"
@@ -14,6 +13,7 @@
 #include "third_party/blink/renderer/platform/graphics/paint/paint_chunk_subset.h"
 #include "third_party/blink/renderer/platform/graphics/paint/paint_under_invalidation_checker.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/trace_event.h"
+#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 
 namespace blink {
 
@@ -70,20 +70,11 @@ void PaintController::EnsureChunk() {
 }
 
 void PaintController::RecordHitTestData(const DisplayItemClient& client,
-                                        const IntRect& rect,
+                                        const gfx::Rect& rect,
                                         TouchAction touch_action,
                                         bool blocking_wheel) {
   if (rect.IsEmpty())
     return;
-  // In CompositeAfterPaint, we ensure a paint chunk for correct composited
-  // hit testing. In pre-CompositeAfterPaint, this is unnecessary, except that
-  // there is special touch action, and that we have a non-root effect so that
-  // PaintChunksToCcLayer will emit paint operations for filters.
-  if (!RuntimeEnabledFeatures::CompositeAfterPaintEnabled() &&
-      touch_action == TouchAction::kAuto && !blocking_wheel &&
-      CurrentPaintChunkProperties().Effect().IsRoot())
-    return;
-
   PaintChunk::Id id(client.Id(), DisplayItem::kHitTest, current_fragment_);
   CheckNewChunkId(id);
   ValidateNewChunkClient(client);
@@ -94,39 +85,37 @@ void PaintController::RecordHitTestData(const DisplayItemClient& client,
   }
 }
 
+void PaintController::RecordRegionCaptureData(
+    const DisplayItemClient& client,
+    const RegionCaptureCropId& crop_id,
+    const gfx::Rect& rect) {
+  DCHECK(!crop_id->is_zero());
+  PaintChunk::Id id(client.Id(), DisplayItem::kRegionCapture,
+                    current_fragment_);
+  CheckNewChunkId(id);
+  ValidateNewChunkClient(client);
+  if (paint_chunker_.AddRegionCaptureDataToCurrentChunk(id, client, crop_id,
+                                                        rect))
+    CheckNewChunk();
+}
+
 void PaintController::RecordScrollHitTestData(
     const DisplayItemClient& client,
     DisplayItem::Type type,
     const TransformPaintPropertyNode* scroll_translation,
-    const IntRect& rect) {
+    const gfx::Rect& rect) {
   PaintChunk::Id id(client.Id(), type, current_fragment_);
   CheckNewChunkId(id);
   ValidateNewChunkClient(client);
   paint_chunker_.CreateScrollHitTestChunk(id, client, scroll_translation, rect);
-  RecordDebugInfo(client);
   CheckNewChunk();
 }
 
 void PaintController::RecordSelection(
     absl::optional<PaintedSelectionBound> start,
     absl::optional<PaintedSelectionBound> end) {
-  DCHECK(RuntimeEnabledFeatures::CompositeAfterPaintEnabled());
   DCHECK(start.has_value() || end.has_value());
   paint_chunker_.AddSelectionToCurrentChunk(start, end);
-}
-
-void PaintController::SetPossibleBackgroundColor(
-    const DisplayItemClient& client,
-    Color color,
-    uint64_t area) {
-  PaintChunk::Id id(client.Id(), DisplayItem::kBoxDecorationBackground,
-                    current_fragment_);
-  CheckNewChunkId(id);
-  ValidateNewChunkClient(client);
-  if (paint_chunker_.ProcessBackgroundColorCandidate(id, client, color, area)) {
-    RecordDebugInfo(client);
-    CheckNewChunk();
-  }
 }
 
 bool PaintController::UseCachedItemIfPossible(const DisplayItemClient& client,
@@ -386,7 +375,7 @@ void PaintController::CheckNewChunkId(const PaintChunk::Id& id) {
   if (it != new_paint_chunk_id_index_map_.end()) {
     ShowDebugData();
     NOTREACHED() << "New paint chunk id " << id.ToString(*new_paint_artifact_)
-                 << " has duplicated id with previous chuck "
+                 << " is already used by a previous chuck "
                  << new_paint_artifact_->PaintChunks()[it->value].ToString(
                         *new_paint_artifact_);
   }
@@ -395,10 +384,12 @@ void PaintController::CheckNewChunkId(const PaintChunk::Id& id) {
 
 void PaintController::CheckNewChunk() {
 #if DCHECK_IS_ON()
-  auto& chunks = new_paint_artifact_->PaintChunks();
-  if (chunks.back().is_cacheable) {
-    AddToIdIndexMap(chunks.back().id, chunks.size() - 1,
-                    new_paint_chunk_id_index_map_);
+  if (usage_ == kMultiplePaints) {
+    auto& chunks = new_paint_artifact_->PaintChunks();
+    if (chunks.back().is_cacheable) {
+      AddToIdIndexMap(chunks.back().id, chunks.size() - 1,
+                      new_paint_chunk_id_index_map_);
+    }
   }
 #endif
 
@@ -684,17 +675,8 @@ void PaintController::CommitNewDisplayItems() {
 #endif
 }
 
-PaintController::CycleScope::~CycleScope() {
-  for (const auto* client : clients_to_validate_) {
-    if (client->IsCacheable())
-      client->Validate();
-  }
-  for (auto* controller : controllers_)
-    controller->FinishCycle();
-}
-
 void PaintController::StartCycle(
-    Vector<const DisplayItemClient*>& clients_to_validate,
+    HeapVector<Member<const DisplayItemClient>>& clients_to_validate,
     bool record_debug_info) {
   // StartCycle() can only be called before the controller has painted anything.
   DCHECK(new_paint_artifact_);
@@ -808,6 +790,7 @@ FrameFirstPaint PaintController::EndFrame(const void* frame) {
 }
 
 void PaintController::ValidateNewChunkClient(const DisplayItemClient& client) {
+  RecordDebugInfo(client);
   if (IsSkippingCache() && usage_ == kMultiplePaints)
     client.Invalidate(PaintInvalidationReason::kUncacheable);
 }
@@ -815,6 +798,15 @@ void PaintController::ValidateNewChunkClient(const DisplayItemClient& client) {
 void PaintController::SetBenchmarkMode(PaintBenchmarkMode mode) {
   DCHECK(new_paint_artifact_->IsEmpty());
   benchmark_mode_ = mode;
+}
+
+PaintControllerCycleScope::~PaintControllerCycleScope() {
+  for (const auto& client : *clients_to_validate_) {
+    if (client->IsCacheable())
+      client->Validate();
+  }
+  for (auto* controller : controllers_)
+    controller->FinishCycle();
 }
 
 }  // namespace blink

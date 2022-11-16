@@ -10,22 +10,25 @@
 
 import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
 import 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.m.js';
+import 'chrome://resources/cr_elements/cr_lottie/cr_lottie.m.js';
 import 'chrome://resources/mojo/mojo/public/js/mojo_bindings_lite.js';
 import 'chrome://resources/mojo/mojo/public/mojom/base/unguessable_token.mojom-lite.js';
 import 'chrome://resources/mojo/url/mojom/url.mojom-lite.js';
+import 'chrome://resources/polymer/v3_0/iron-media-query/iron-media-query.js';
 import './mojo/nearby_share_target_types.mojom-lite.js';
 import './mojo/nearby_share_share_type.mojom-lite.js';
 import './mojo/nearby_share.mojom-lite.js';
-import './shared/nearby_page_template.m.js';
-import './shared/nearby_preview.m.js';
-import './shared/nearby_progress.m.js';
+import './shared/nearby_page_template.js';
+import './shared/nearby_preview.js';
+import './shared/nearby_progress.js';
 import './strings.m.js';
 
-import {I18nBehavior} from 'chrome://resources/js/i18n_behavior.m.js';
-import {html, Polymer} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {I18nBehavior, I18nBehaviorInterface} from 'chrome://resources/js/i18n_behavior.m.js';
+import {html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {getDiscoveryManager} from './discovery_manager.js';
-import {CloseReason} from './shared/types.m.js';
+import {getTemplate} from './nearby_confirmation_page.html.js';
+import {CloseReason} from './shared/types.js';
 
 /** @implements {nearbyShare.mojom.TransferUpdateListenerInterface} */
 class TransferUpdateListener {
@@ -53,114 +56,168 @@ class TransferUpdateListener {
   }
 }
 
-Polymer({
-  is: 'nearby-confirmation-page',
+/**
+ * The progress bar asset URL for light mode
+ * @type {string}
+ */
+const PROGRESS_BAR_URL_LIGHT = 'nearby_share_progress_bar_light.json';
 
-  behaviors: [I18nBehavior],
+/**
+ * The progress bar asset URL for dark mode
+ * @type {string}
+ */
+const PROGRESS_BAR_URL_DARK = 'nearby_share_progress_bar_dark.json';
 
-  _template: html`{__html_template__}`,
 
-  properties: {
-    /**
-     * ConfirmationManager interface for the currently selected share target.
-     * Expected to start as null, then change to a valid object before this
-     * component is shown.
-     * @type {?nearbyShare.mojom.ConfirmationManagerInterface}
-     */
-    confirmationManager: {
-      type: Object,
-      value: null,
-    },
+/**
+ * @constructor
+ * @extends {PolymerElement}
+ * @implements {I18nBehaviorInterface}
+ */
+const NearbyConfirmationPageElementBase =
+    mixinBehaviors([I18nBehavior], PolymerElement);
 
-    /**
-     * TransferUpdateListener interface for the currently selected share target.
-     * Expected to start as null, then change to a valid object before this
-     * component is shown.
-     * @type {?nearbyShare.mojom.TransferUpdateListenerPendingReceiver}
-     */
-    transferUpdateListener: {
-      type: Object,
-      value: null,
-      observer: 'onTransferUpdateListenerChanged_'
-    },
+/** @polymer */
+export class NearbyConfirmationPageElement extends
+    NearbyConfirmationPageElementBase {
+  static get is() {
+    return 'nearby-confirmation-page';
+  }
 
-    /**
-     * The selected share target to confirm the transfer for. Expected to start
-     * as null, then change to a valid object before this component is shown.
-     * @type {?nearbyShare.mojom.ShareTarget}
-     */
-    shareTarget: {
-      type: Object,
-      value: null,
-    },
+  static get template() {
+    return getTemplate();
+  }
 
-    /**
-     * Preview info for the file(s) to send. Expected to start
-     * as null, then change to a valid object before this component is shown.
-     * @type {?nearbyShare.mojom.PayloadPreview}
-     */
-    payloadPreview: {
-      type: Object,
-      value: null,
-    },
+  static get properties() {
+    return {
+      /**
+       * ConfirmationManager interface for the currently selected share target.
+       * Expected to start as null, then change to a valid object before this
+       * component is shown.
+       * @type {?nearbyShare.mojom.ConfirmationManagerInterface}
+       */
+      confirmationManager: {
+        type: Object,
+        value: null,
+      },
 
-    /**
-     * Token to show to the user to confirm the selected share target. Expected
-     * to start as null, then change to a valid object via updates from the
-     * transferUpdateListener.
-     * @private {?string}
-     */
-    confirmationToken_: {
-      type: String,
-      value: null,
-    },
+      /**
+       * TransferUpdateListener interface for the currently selected share
+       * target. Expected to start as null, then change to a valid object before
+       * this component is shown.
+       * @type {?nearbyShare.mojom.TransferUpdateListenerPendingReceiver}
+       */
+      transferUpdateListener: {
+        type: Object,
+        value: null,
+        observer: 'onTransferUpdateListenerChanged_',
+      },
 
-    /**
-     * Header text for error. The error section is not displayed if this is
-     * falsey.
-     * @private {?string}
-     */
-    errorTitle_: {
-      type: String,
-      value: null,
-    },
+      /**
+       * The selected share target to confirm the transfer for. Expected to
+       * start as null, then change to a valid object before this component is
+       * shown.
+       * @type {?nearbyShare.mojom.ShareTarget}
+       */
+      shareTarget: {
+        type: Object,
+        value: null,
+      },
 
-    /**
-     * Description text for error, displayed under the error title.
-     * @private {?string}
-     */
-    errorDescription_: {
-      type: String,
-      value: null,
-    },
+      /**
+       * Preview info for the file(s) to send. Expected to start
+       * as null, then change to a valid object before this component is shown.
+       * @type {?nearbyShare.mojom.PayloadPreview}
+       */
+      payloadPreview: {
+        type: Object,
+        value: null,
+      },
 
-    /**
-     * Whether the user needs to confirm this transfer on the local device. This
-     * affects which buttons are displayed to the user.
-     * @private
-     * */
-    needsConfirmation_: {
-      type: Boolean,
-      value: false,
-    },
+      /**
+       * Token to show to the user to confirm the selected share target.
+       * Expected to start as null, then change to a valid object via updates
+       * from the transferUpdateListener.
+       * @private {?string}
+       */
+      confirmationToken_: {
+        type: String,
+        value: null,
+      },
 
-    /**
-     * @private {?nearbyShare.mojom.TransferStatus}
-     */
-    lastTransferStatus_: {
-      type: nearbyShare.mojom.TransferStatus,
-      value: null,
-    },
-  },
+      /**
+       * Header text for error. The error section is not displayed if this is
+       * falsey.
+       * @private {?string}
+       */
+      errorTitle_: {
+        type: String,
+        value: null,
+      },
 
-  listeners: {
-    'accept': 'onAccept_',
-    'reject': 'onReject_',
-    'cancel': 'onCancel_',
-  },
+      /**
+       * Description text for error, displayed under the error title.
+       * @private {?string}
+       */
+      errorDescription_: {
+        type: String,
+        value: null,
+      },
 
-  /** @private {?TransferUpdateListener} */
-  transferUpdateListener_: null,
+      /**
+       * Whether the user needs to confirm this transfer on the local device.
+       * This affects which buttons are displayed to the user.
+       * @private
+       * */
+      needsConfirmation_: {
+        type: Boolean,
+        value: false,
+      },
+
+      /**
+       * @private {?nearbyShare.mojom.TransferStatus}
+       */
+      lastTransferStatus_: {
+        type: nearbyShare.mojom.TransferStatus,
+        value: null,
+      },
+
+      /**
+       * Whether the confirmation page is being rendered in dark mode.
+       * @private {boolean}
+       */
+      isDarkModeActive_: {
+        type: Boolean,
+        value: false,
+      },
+
+    };
+  }
+
+  constructor() {
+    super();
+
+    /** @private {?TransferUpdateListener} */
+    this.transferUpdateListener_ = null;
+  }
+
+  /** @override */
+  ready() {
+    super.ready();
+    this.addEventListener('accept', this.onAccept_);
+    this.addEventListener('reject', this.onReject_);
+    this.addEventListener('cancel', this.onCancel_);
+  }
+
+  /**
+   * @param {string} eventName
+   * @param {*=} detail
+   * @private
+   */
+  fire_(eventName, detail) {
+    this.dispatchEvent(
+        new CustomEvent(eventName, {bubbles: true, composed: true, detail}));
+  }
 
   /**
    * @return {!Object} The transferStatus, errorTitle, and errorDescription.
@@ -173,7 +230,7 @@ Polymer({
       errorTitle: this.errorTitle_,
       errorDescription: this.errorDescription_,
     };
-  },
+  }
 
   /**
    * @param {?nearbyShare.mojom.TransferUpdateListenerPendingReceiver}
@@ -187,7 +244,7 @@ Polymer({
 
     this.transferUpdateListener_ =
         new TransferUpdateListener(this, transferUpdateListener);
-  },
+  }
 
   /**
    * @param {!nearbyShare.mojom.TransferStatus} status The status update.
@@ -208,11 +265,12 @@ Polymer({
         break;
       case nearbyShare.mojom.TransferStatus.kInProgress:
         getDiscoveryManager().stopDiscovery().then(
-            () => this.fire('close', {reason: CloseReason.TRANSFER_STARTED}));
+            () => this.fire_('close', {reason: CloseReason.TRANSFER_STARTED}));
         break;
       case nearbyShare.mojom.TransferStatus.kComplete:
         getDiscoveryManager().stopDiscovery().then(
-            () => this.fire('close', {reason: CloseReason.TRANSFER_SUCCEEDED}));
+            () =>
+                this.fire_('close', {reason: CloseReason.TRANSFER_SUCCEEDED}));
         break;
       case nearbyShare.mojom.TransferStatus.kRejected:
         this.errorTitle_ = this.i18n('nearbyShareErrorCantShare');
@@ -248,7 +306,7 @@ Polymer({
         this.errorDescription_ = this.i18n('nearbyShareErrorSomethingWrong');
         break;
     }
-  },
+  }
 
   /**
    * @return {string} The contact name of the selected ShareTarget.
@@ -261,7 +319,7 @@ Polymer({
       return '';
     }
     return this.i18n('nearbyShareConfirmationPageAddContactTitle', contactName);
-  },
+  }
 
   /** @private */
   onAccept_() {
@@ -269,21 +327,21 @@ Polymer({
         result => {
             // TODO(crbug.com/1123934): Show error if !result.success
         });
-  },
+  }
 
   /** @private */
   onReject_() {
     this.confirmationManager.reject().then(result => {
-      this.fire('close', {reason: CloseReason.REJECTED});
+      this.fire_('close', {reason: CloseReason.REJECTED});
     });
-  },
+  }
 
   /** @private */
   onCancel_() {
     this.confirmationManager.cancel().then(result => {
-      this.fire('close', {reason: CloseReason.CANCELLED});
+      this.fire_('close', {reason: CloseReason.CANCELLED});
     });
-  },
+  }
 
   /**
    * @param {boolean} needsConfirmation
@@ -291,7 +349,7 @@ Polymer({
    */
   getActionButtonLabel_(needsConfirmation) {
     return needsConfirmation ? this.i18n('nearbyShareActionsConfirm') : null;
-  },
+  }
 
   /**
    * @param {boolean} needsConfirmation
@@ -301,7 +359,7 @@ Polymer({
   getCancelButtonLabel_(needsConfirmation) {
     return needsConfirmation ? this.i18n('nearbyShareActionsReject') :
                                this.i18n('nearbyShareActionsCancel');
-  },
+  }
 
   /**
    * @param {boolean} needsConfirmation
@@ -310,7 +368,7 @@ Polymer({
    */
   getCancelEventName_(needsConfirmation) {
     return needsConfirmation ? 'reject' : 'cancel';
-  },
+  }
 
   /**
    * @return {!string} The title of the attachment to be shared.
@@ -320,5 +378,17 @@ Polymer({
     return this.payloadPreview && this.payloadPreview.description ?
         this.payloadPreview.description :
         'Unknown file';
-  },
-});
+  }
+
+  /**
+   * Returns the URL for the asset that defines a file transfer's animated
+   * progress bar.
+   */
+  getAnimationUrl_() {
+    return this.isDarkModeActive_ ? PROGRESS_BAR_URL_DARK :
+                                    PROGRESS_BAR_URL_LIGHT;
+  }
+}
+
+customElements.define(
+    NearbyConfirmationPageElement.is, NearbyConfirmationPageElement);

@@ -8,7 +8,9 @@
 
 #include "base/bind.h"
 #include "base/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
+#include "chrome/browser/history/history_service_factory.h"
 #include "chrome/browser/notifications/metrics/mock_notification_metrics_logger.h"
 #include "chrome/browser/notifications/metrics/notification_metrics_logger_factory.h"
 #include "chrome/browser/notifications/notification_display_service_tester.h"
@@ -16,13 +18,13 @@
 #include "chrome/browser/notifications/platform_notification_service_factory.h"
 #include "chrome/browser/notifications/platform_notification_service_impl.h"
 #include "chrome/test/base/testing_profile.h"
-#include "content/public/browser/permission_type.h"
 #include "content/public/common/persistent_notification_status.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/mock_permission_manager.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/notifications/notification_resources.h"
+#include "third_party/blink/public/common/permissions/permission_utils.h"
 #include "third_party/blink/public/mojom/permissions/permission_status.mojom.h"
 
 using ::testing::_;
@@ -50,7 +52,7 @@ class TestingProfileWithPermissionManager : public TestingProfile {
   void SetNotificationPermissionStatus(
       blink::mojom::PermissionStatus permission_status) {
     ON_CALL(*permission_manager_,
-            GetPermissionStatus(content::PermissionType::NOTIFICATIONS, _, _))
+            GetPermissionStatus(blink::PermissionType::NOTIFICATIONS, _, _))
         .WillByDefault(Return(permission_status));
   }
 
@@ -79,6 +81,9 @@ class PersistentNotificationHandlerTest : public ::testing::Test {
 
   // ::testing::Test overrides:
   void SetUp() override {
+    HistoryServiceFactory::GetInstance()->SetTestingFactory(
+        &profile_, HistoryServiceFactory::GetDefaultFactory());
+
     mock_logger_ = static_cast<MockNotificationMetricsLogger*>(
         NotificationMetricsLoggerFactory::GetInstance()
             ->SetTestingFactoryAndUse(
@@ -99,7 +104,7 @@ class PersistentNotificationHandlerTest : public ::testing::Test {
   GURL origin_;
 
   // Owned by the |profile_| as a keyed service.
-  MockNotificationMetricsLogger* mock_logger_ = nullptr;
+  raw_ptr<MockNotificationMetricsLogger> mock_logger_ = nullptr;
 };
 
 TEST_F(PersistentNotificationHandlerTest, OnClick_WithoutPermission) {
@@ -117,7 +122,6 @@ TEST_F(PersistentNotificationHandlerTest, OnClick_WithoutPermission) {
 
 TEST_F(PersistentNotificationHandlerTest,
        OnClick_CloseUnactionableNotifications) {
-  ASSERT_TRUE(profile_.CreateHistoryService());
   // Show a notification for a particular origin.
   {
     base::RunLoop run_loop;

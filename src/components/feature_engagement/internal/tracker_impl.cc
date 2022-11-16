@@ -36,6 +36,7 @@
 #include "components/feature_engagement/public/feature_constants.h"
 #include "components/feature_engagement/public/feature_list.h"
 #include "components/leveldb_proto/public/proto_database_provider.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace feature_engagement {
 
@@ -176,10 +177,16 @@ void TrackerImpl::NotifyEvent(const std::string& event) {
 }
 
 bool TrackerImpl::ShouldTriggerHelpUI(const base::Feature& feature) {
+  return ShouldTriggerHelpUIWithSnooze(feature).ShouldShowIph();
+}
+
+TrackerImpl::TriggerDetails TrackerImpl::ShouldTriggerHelpUIWithSnooze(
+    const base::Feature& feature) {
   FeatureConfig feature_config = configuration_->GetFeatureConfig(feature);
   ConditionValidator::Result result = condition_validator_->MeetsConditions(
       feature, feature_config, *event_model_, *availability_model_,
-      *display_lock_controller_, time_provider_->GetCurrentDay());
+      *display_lock_controller_, configuration_.get(),
+      time_provider_->GetCurrentDay());
   if (result.NoErrors()) {
     condition_validator_->NotifyIsShowing(
         feature, feature_config, configuration_->GetRegisteredFeatures());
@@ -195,6 +202,8 @@ bool TrackerImpl::ShouldTriggerHelpUI(const base::Feature& feature) {
            << " tracking_only=" << feature_config.tracking_only << " "
            << result;
 
+  bool should_show_iph = false;
+
   if (feature_config.tracking_only) {
     if (result.NoErrors()) {
       // Because tracking only features always return false to the client,
@@ -203,17 +212,20 @@ bool TrackerImpl::ShouldTriggerHelpUI(const base::Feature& feature) {
       // showing. See https://crbug.com/1188679 for more details.
       Dismissed(feature);
     }
-    return false;
+    should_show_iph = false;
   } else {
-    return result.NoErrors();
+    should_show_iph = result.NoErrors();
   }
+
+  return TriggerDetails(should_show_iph, result.should_show_snooze);
 }
 
 bool TrackerImpl::WouldTriggerHelpUI(const base::Feature& feature) const {
   FeatureConfig feature_config = configuration_->GetFeatureConfig(feature);
   ConditionValidator::Result result = condition_validator_->MeetsConditions(
       feature, feature_config, *event_model_, *availability_model_,
-      *display_lock_controller_, time_provider_->GetCurrentDay());
+      *display_lock_controller_, configuration_.get(),
+      time_provider_->GetCurrentDay());
   DVLOG(2) << "Would trigger result for " << feature.name
            << ": trigger=" << result.NoErrors()
            << " tracking_only=" << feature_config.tracking_only << " "
@@ -246,7 +258,7 @@ Tracker::TriggerState TrackerImpl::GetTriggerState(
 
   ConditionValidator::Result result = condition_validator_->MeetsConditions(
       feature, configuration_->GetFeatureConfig(feature), *event_model_,
-      *availability_model_, *display_lock_controller_,
+      *availability_model_, *display_lock_controller_, configuration_.get(),
       time_provider_->GetCurrentDay());
 
   if (result.trigger_ok) {
@@ -266,8 +278,63 @@ void TrackerImpl::Dismissed(const base::Feature& feature) {
   stats::RecordUserDismiss();
 }
 
+void TrackerImpl::DismissedWithSnooze(
+    const base::Feature& feature,
+    absl::optional<SnoozeAction> snooze_action) {
+  FeatureConfig feature_config = configuration_->GetFeatureConfig(feature);
+  if (snooze_action == SnoozeAction::SNOOZED) {
+    event_model_->IncrementSnooze(feature_config.trigger.name,
+                                  time_provider_->GetCurrentDay(),
+                                  time_provider_->Now());
+  } else if (snooze_action == SnoozeAction::DISMISSED) {
+    event_model_->DismissSnooze(feature_config.trigger.name);
+  }
+  if (snooze_action.has_value())
+    stats::RecordUserSnoozeAction(snooze_action.value());
+}
+
 std::unique_ptr<DisplayLockHandle> TrackerImpl::AcquireDisplayLock() {
   return display_lock_controller_->AcquireDisplayLock();
+}
+
+void TrackerImpl::SetPriorityNotification(const base::Feature& feature) {
+  // If the handler hasn't been registered.
+  auto iter = priority_notification_handlers_.find(feature.name);
+  if (iter == priority_notification_handlers_.end()) {
+    condition_validator_->SetPriorityNotification(feature.name);
+    return;
+  }
+
+  // We already have a handler. Serve the request and remove the handler.
+  condition_validator_->SetPriorityNotification(absl::nullopt);
+  std::move(iter->second).Run();
+  priority_notification_handlers_.erase(feature.name);
+}
+
+absl::optional<std::string> TrackerImpl::GetPendingPriorityNotification() {
+  return condition_validator_->GetPendingPriorityNotification();
+}
+
+void TrackerImpl::RegisterPriorityNotificationHandler(
+    const base::Feature& feature,
+    base::OnceClosure callback) {
+  // If we already have a pending notification, handle it right away.
+  auto pending_priority_notification =
+      condition_validator_->GetPendingPriorityNotification();
+  if (pending_priority_notification.has_value() &&
+      pending_priority_notification.value() == feature.name) {
+    std::move(callback).Run();
+    condition_validator_->SetPriorityNotification(absl::nullopt);
+    return;
+  }
+
+  // We don't have the notification yet. Cache the handler.
+  priority_notification_handlers_.emplace(feature.name, std::move(callback));
+}
+
+void TrackerImpl::UnregisterPriorityNotificationHandler(
+    const base::Feature& feature) {
+  priority_notification_handlers_.erase(feature.name);
 }
 
 bool TrackerImpl::IsInitialized() const {

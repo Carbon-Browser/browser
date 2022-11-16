@@ -25,13 +25,14 @@ namespace {
 class MockColorChooser : public content::ColorChooser {
  public:
   MockColorChooser() = default;
+
+  MockColorChooser(const MockColorChooser&) = delete;
+  MockColorChooser& operator=(const MockColorChooser&) = delete;
+
   ~MockColorChooser() override = default;
 
   MOCK_METHOD0(End, void());
   MOCK_METHOD1(SetSelectedColor, void(SkColor color));
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(MockColorChooser);
 };
 
 // Delegate to override OpenColorChooser.
@@ -40,6 +41,9 @@ class OpenColorChooserDelegate : public WebContentsDelegate {
   explicit OpenColorChooserDelegate(
       std::unique_ptr<MockColorChooser> mock_color_chooser)
       : mock_color_chooser_(std::move(mock_color_chooser)) {}
+
+  OpenColorChooserDelegate(const OpenColorChooserDelegate&) = delete;
+  OpenColorChooserDelegate& operator=(const OpenColorChooserDelegate&) = delete;
 
   ~OpenColorChooserDelegate() override = default;
 
@@ -56,15 +60,13 @@ class OpenColorChooserDelegate : public WebContentsDelegate {
 
  private:
   std::unique_ptr<MockColorChooser> mock_color_chooser_;
-
-  DISALLOW_COPY_AND_ASSIGN(OpenColorChooserDelegate);
 };
 
 }  // namespace
 
 class ColorChooserUnitTest : public RenderViewHostImplTestHarness {};
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 // The ColorChooser is only available/called on Android.
 TEST_F(ColorChooserUnitTest, ColorChooserCallsEndOnNavigatingAway) {
   GURL kUrl1("https://foo.com");
@@ -119,7 +121,7 @@ class ColorChooserTestWithBackForwardCache : public ColorChooserUnitTest {
   base::test::ScopedFeatureList scoped_feature_list_;
 };
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 // The ColorChooser is only available/called on Android.
 TEST_F(ColorChooserTestWithBackForwardCache,
        ColorChooserCallsEndOnEnteringBackForwardCache) {
@@ -139,7 +141,7 @@ TEST_F(ColorChooserTestWithBackForwardCache,
 
   // Navigate to A.
   NavigationSimulator::NavigateAndCommitFromBrowser(contents(), kUrl1);
-  RenderFrameHostImpl* rfh_a = contents()->GetMainFrame();
+  RenderFrameHostImpl* rfh_a = contents()->GetPrimaryMainFrame();
 
   mojo::PendingRemote<blink::mojom::ColorChooserClient> pending_client;
   mojo::Remote<blink::mojom::ColorChooser> pending_remote;

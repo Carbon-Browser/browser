@@ -5,11 +5,10 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_FRAME_GLASS_BROWSER_FRAME_VIEW_H_
 #define CHROME_BROWSER_UI_VIEWS_FRAME_GLASS_BROWSER_FRAME_VIEW_H_
 
-#include "base/compiler_specific.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/win/scoped_gdi_object.h"
 #include "chrome/browser/ui/views/frame/browser_non_client_frame_view.h"
-#include "chrome/browser/ui/views/frame/windows_10_caption_button.h"
+#include "chrome/browser/ui/views/frame/windows_caption_button.h"
 #include "chrome/browser/ui/views/tab_icon_view.h"
 #include "chrome/browser/ui/views/tab_icon_view_model.h"
 #include "ui/base/metadata/metadata_header_macros.h"
@@ -17,16 +16,12 @@
 
 class BrowserView;
 class TabSearchBubbleHost;
+class GlassBrowserCaptionButtonContainer;
 
 class GlassBrowserFrameView : public BrowserNonClientFrameView,
                               public TabIconViewModel {
  public:
   METADATA_HEADER(GlassBrowserFrameView);
-  // Alpha to use for features in the titlebar (the window title and caption
-  // buttons) when the window is inactive. They are opaque when active.
-  static constexpr SkAlpha kInactiveTitlebarFeatureAlpha = 0x66;
-
-  static SkColor GetReadableFeatureColor(SkColor background_color);
 
   // Constructs a non-client view for an BrowserFrame.
   GlassBrowserFrameView(BrowserFrame* frame, BrowserView* browser_view);
@@ -74,6 +69,10 @@ class GlassBrowserFrameView : public BrowserNonClientFrameView,
   SkColor GetTitlebarColor() const;
 
   const views::Label* window_title_for_testing() const { return window_title_; }
+  const GlassBrowserCaptionButtonContainer*
+  caption_button_container_for_testing() const {
+    return caption_button_container_;
+  }
 
  protected:
   // BrowserNonClientFrameView:
@@ -168,12 +167,12 @@ class GlassBrowserFrameView : public BrowserNonClientFrameView,
 
   // Icon and title. Only used when custom-drawing the titlebar for popups.
   TabIconView* window_icon_ = nullptr;
-  views::Label* window_title_ = nullptr;
+  raw_ptr<views::Label> window_title_ = nullptr;
 
   // The container holding the caption buttons (minimize, maximize, close, etc.)
   // May be null if the caption button container is destroyed before the frame
   // view. Always check for validity before using!
-  GlassBrowserCaptionButtonContainer* caption_button_container_;
+  raw_ptr<GlassBrowserCaptionButtonContainer> caption_button_container_;
 
   // Whether or not the window throbber is currently animating.
   bool throbber_running_ = false;

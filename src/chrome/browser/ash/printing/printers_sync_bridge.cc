@@ -11,7 +11,6 @@
 #include "base/containers/contains.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
-#include "base/task/post_task.h"
 #include "chrome/browser/ash/printing/specifics_translation.h"
 #include "chromeos/printing/printer_configuration.h"
 #include "components/sync/base/report_unrecoverable_error.h"
@@ -21,7 +20,7 @@
 #include "components/sync/protocol/entity_specifics.pb.h"
 #include "components/sync/protocol/printer_specifics.pb.h"
 
-namespace chromeos {
+namespace ash {
 
 namespace {
 
@@ -53,7 +52,7 @@ bool MigrateMakeAndModel(sync_pb::PrinterSpecifics* specifics) {
   }
 
   specifics->set_make_and_model(
-      chromeos::MakeAndModel(specifics->manufacturer(), specifics->model()));
+      MakeAndModel(specifics->manufacturer(), specifics->model()));
   base::UmaHistogramBoolean("Printing.CUPS.MigratedMakeAndModel", true);
   return true;
 }
@@ -490,4 +489,4 @@ void PrintersSyncBridge::NotifyPrintersUpdated() {
                      &PrintersSyncBridge::Observer::OnPrintersUpdated);
 }
 
-}  // namespace chromeos
+}  // namespace ash

@@ -18,14 +18,11 @@
 #include "base/containers/cxx20_erase.h"
 #include "base/containers/unique_ptr_adapters.h"
 #include "base/logging.h"
-#include "base/macros.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "cc/paint/paint_canvas.h"
 #include "content/public/common/isolated_world_ids.h"
-#include "content/public/common/use_zoom_for_dsf_policy.h"
 #include "content/public/renderer/render_frame_observer.h"
-#include "content/public/renderer/render_view_visitor.h"
 #include "content/renderer/render_thread_impl.h"
 #include "content/renderer/render_view_impl.h"
 #include "content/web_test/common/web_test_constants.h"
@@ -74,19 +71,21 @@
 #include "third_party/blink/public/web/web_script_source.h"
 #include "third_party/blink/public/web/web_security_policy.h"
 #include "third_party/blink/public/web/web_serialized_script_value.h"
+#include "third_party/blink/public/web/web_settings.h"
 #include "third_party/blink/public/web/web_testing_support.h"
 #include "third_party/blink/public/web/web_view.h"
 #include "third_party/blink/public/web/web_view_observer.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "third_party/skia/include/core/SkCanvas.h"
+#include "ui/gfx/codec/png_codec.h"
 #include "ui/gfx/color_space.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/rect_f.h"
 #include "ui/gfx/geometry/size.h"
-#include "ui/gfx/skia_util.h"
+#include "ui/gfx/geometry/skia_conversions.h"
 #include "ui/gfx/test/icc_profiles.h"
 
-#if defined(OS_LINUX) || defined(OS_CHROMEOS) || defined(OS_FUCHSIA)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_FUCHSIA)
 #include "third_party/blink/public/platform/web_font_render_style.h"
 #endif
 
@@ -171,38 +170,14 @@ void ConvertAndSet(gin::Arguments* args, blink::WebString* set_param) {
       args->isolate(), result.ToLocalChecked());
 }
 
-class SynchronousResizeModeVisitor : public RenderViewVisitor {
- public:
-  SynchronousResizeModeVisitor() = default;
-
-  bool Visit(RenderView* render_view) override {
-    render_view->GetWebView()->UseSynchronousResizeModeForTesting(true);
-    return true;
-  }
-};
-
-class SetAcceptLanguagesVisitor : public RenderViewVisitor {
- public:
-  explicit SetAcceptLanguagesVisitor(const std::string& accept_languages)
-      : accept_languages_(accept_languages) {}
-
-  bool Visit(RenderView* render_view) override {
-    blink::WebView* view = render_view->GetWebView();
-    blink::RendererPreferences prefs = view->GetRendererPreferences();
-    prefs.accept_languages = accept_languages_;
-    view->SetRendererPreferences(prefs);
-    return true;
-  }
-
- private:
-  const std::string& accept_languages_;
-};
-
 }  // namespace
 
 class TestRunnerBindings : public gin::Wrappable<TestRunnerBindings> {
  public:
   static gin::WrapperInfo kWrapperInfo;
+
+  TestRunnerBindings(const TestRunnerBindings&) = delete;
+  TestRunnerBindings& operator=(const TestRunnerBindings&) = delete;
 
   static void Install(TestRunner* test_runner,
                       WebFrameTestProxy* frame,
@@ -227,7 +202,10 @@ class TestRunnerBindings : public gin::Wrappable<TestRunnerBindings> {
   void PostV8Callback(v8::Local<v8::Function> v8_callback,
                       std::vector<v8::Local<v8::Value>> args = {});
 
-  blink::WebLocalFrame* GetWebFrame() { return frame_->GetWebFrame(); }
+  blink::WebLocalFrame* GetWebFrame() {
+    CHECK(!invalid_);
+    return frame_->GetWebFrame();
+  }
 
  private:
   // Watches for the RenderFrame that the TestRunnerBindings is attached to
@@ -330,6 +308,7 @@ class TestRunnerBindings : public gin::Wrappable<TestRunnerBindings> {
   void SetBluetoothFakeAdapter(const std::string& adapter_name,
                                v8::Local<v8::Function> callback);
   void SetBluetoothManualChooser(bool enable);
+  void SetBrowserHandlesFocus(bool enable);
   void SetCaretBrowsingEnabled();
   void SetColorProfile(const std::string& name,
                        v8::Local<v8::Function> callback);
@@ -382,7 +361,6 @@ class TestRunnerBindings : public gin::Wrappable<TestRunnerBindings> {
   void SimulateWebNotificationClick(gin::Arguments* args);
   void SimulateWebNotificationClose(const std::string& title, bool by_user);
   void SimulateWebContentIndexDelete(const std::string& id);
-  void UseUnfortunateSynchronousResizeMode();
   void WaitForPolicyDelegate();
   void WaitUntilDone();
   void WaitUntilExternalURLLoad();
@@ -407,6 +385,7 @@ class TestRunnerBindings : public gin::Wrappable<TestRunnerBindings> {
   void ZoomPageOut();
   void SetPageZoomFactor(double factor);
   std::string TooltipText();
+  void DisableEndDocumentTransition();
 
   int WebHistoryItemCount();
   int WindowCount();
@@ -435,8 +414,6 @@ class TestRunnerBindings : public gin::Wrappable<TestRunnerBindings> {
   std::unique_ptr<AppBannerService> app_banner_service_;
 
   base::WeakPtrFactory<TestRunnerBindings> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(TestRunnerBindings);
 };
 
 gin::WrapperInfo TestRunnerBindings::kWrapperInfo = {gin::kEmbedderNativeGin};
@@ -485,7 +462,7 @@ void TestRunnerBindings::Install(TestRunner* test_runner,
   // because WPT reftests never access this object.
   if (is_wpt_test && is_main_test_window && !web_frame->Parent() &&
       !web_frame->Opener()) {
-    web_frame->ExecuteScript(blink::WebString(
+    web_frame->ExecuteScript(blink::WebScriptSource(blink::WebString(
         R"(if (!window.testRunner._wpt_reftest_setup) {
           window.testRunner._wpt_reftest_setup = true;
 
@@ -514,7 +491,7 @@ void TestRunnerBindings::Install(TestRunner* test_runner,
               document.fonts.ready.then(() => window.testRunner.notifyDone());
             }
           });
-        })"));
+        })")));
   }
 }
 
@@ -726,6 +703,8 @@ gin::ObjectTemplateBuilder TestRunnerBindings::GetObjectTemplateBuilder(
       // Otherwise falls back to the browser's default chooser.
       .SetMethod("setBluetoothManualChooser",
                  &TestRunnerBindings::SetBluetoothManualChooser)
+      .SetMethod("setBrowserHandlesFocus",
+                 &TestRunnerBindings::SetBrowserHandlesFocus)
       .SetMethod("setCallCloseOnWebViews", &TestRunnerBindings::NotImplemented)
       .SetMethod("setCaretBrowsingEnabled",
                  &TestRunnerBindings::SetCaretBrowsingEnabled)
@@ -825,8 +804,6 @@ gin::ObjectTemplateBuilder TestRunnerBindings::GetObjectTemplateBuilder(
       .SetMethod("zoomPageOut", &TestRunnerBindings::ZoomPageOut)
       .SetMethod("setPageZoomFactor", &TestRunnerBindings::SetPageZoomFactor)
       .SetProperty("tooltipText", &TestRunnerBindings::TooltipText)
-      .SetMethod("useUnfortunateSynchronousResizeMode",
-                 &TestRunnerBindings::UseUnfortunateSynchronousResizeMode)
       .SetMethod("waitForPolicyDelegate",
                  &TestRunnerBindings::WaitForPolicyDelegate)
       .SetMethod("waitUntilDone", &TestRunnerBindings::WaitUntilDone)
@@ -836,7 +813,11 @@ gin::ObjectTemplateBuilder TestRunnerBindings::GetObjectTemplateBuilder(
       // webHistoryItemCount is used by tests in web_tests\http\tests\history
       .SetProperty("webHistoryItemCount",
                    &TestRunnerBindings::WebHistoryItemCount)
-      .SetMethod("windowCount", &TestRunnerBindings::WindowCount);
+      .SetMethod("windowCount", &TestRunnerBindings::WindowCount)
+
+      // document-transition functionality to avoid ending the animation.
+      .SetMethod("disableEndDocumentTransition",
+                 &TestRunnerBindings::DisableEndDocumentTransition);
 }
 
 BoundV8Callback TestRunnerBindings::WrapV8Callback(
@@ -866,6 +847,8 @@ base::OnceClosure TestRunnerBindings::WrapV8Closure(
 void TestRunnerBindings::PostV8Callback(
     v8::Local<v8::Function> v8_callback,
     std::vector<v8::Local<v8::Value>> args) {
+  if (invalid_)
+    return;
   const auto& task_runner =
       GetWebFrame()->GetTaskRunner(blink::TaskType::kInternalTest);
   task_runner->PostTask(FROM_HERE,
@@ -876,6 +859,8 @@ void TestRunnerBindings::InvokeV8Callback(
     v8::UniquePersistent<v8::Function> callback,
     std::vector<v8::UniquePersistent<v8::Value>> bound_args,
     const std::vector<v8::Local<v8::Value>>& runtime_args) {
+  if (invalid_)
+    return;
   v8::Isolate* isolate = blink::MainThreadIsolate();
   v8::HandleScope handle_scope(isolate);
 
@@ -971,6 +956,12 @@ int TestRunnerBindings::WindowCount() {
   return runner_->InProcessWindowCount();
 }
 
+void TestRunnerBindings::DisableEndDocumentTransition() {
+  if (invalid_)
+    return;
+  frame_->GetLocalRootFrameWidgetTestHelper()->DisableEndDocumentTransition();
+}
+
 void TestRunnerBindings::SetTabKeyCyclesThroughElements(
     bool tab_key_cycles_through_elements) {
   if (invalid_)
@@ -1003,7 +994,7 @@ void TestRunnerBindings::TriggerTestInspectorIssue(gin::Arguments* args) {
   if (invalid_)
     return;
   GetWebFrame()->AddInspectorIssue(
-      blink::mojom::InspectorIssueCode::kSameSiteCookieIssue);
+      blink::mojom::InspectorIssueCode::kCookieIssue);
 }
 
 bool TestRunnerBindings::IsCommandEnabled(const std::string& command) {
@@ -1100,7 +1091,7 @@ TestRunnerBindings::EvaluateScriptInIsolatedWorldAndReturnValue(
   if (invalid_ || world_id <= 0 || world_id >= (1 << 29))
     return {};
 
-  blink::WebScriptSource source = blink::WebString::FromUTF8(script);
+  blink::WebScriptSource source(blink::WebString::FromUTF8(script));
   return GetWebFrame()->ExecuteScriptInIsolatedWorldAndReturnValue(
       world_id, source, blink::BackForwardCacheAware::kAllow);
 }
@@ -1111,7 +1102,7 @@ void TestRunnerBindings::EvaluateScriptInIsolatedWorld(
   if (invalid_ || world_id <= 0 || world_id >= (1 << 29))
     return;
 
-  blink::WebScriptSource source = blink::WebString::FromUTF8(script);
+  blink::WebScriptSource source(blink::WebString::FromUTF8(script));
   GetWebFrame()->ExecuteScriptInIsolatedWorld(
       world_id, source, blink::BackForwardCacheAware::kAllow);
 }
@@ -1261,12 +1252,6 @@ void TestRunnerBindings::SetTextDirection(const std::string& direction_name) {
   GetWebFrame()->SetTextDirectionForTesting(direction);
 }
 
-void TestRunnerBindings::UseUnfortunateSynchronousResizeMode() {
-  if (invalid_)
-    return;
-  runner_->UseUnfortunateSynchronousResizeMode();
-}
-
 void TestRunnerBindings::EnableAutoResizeMode(int min_width,
                                               int min_height,
                                               int max_width,
@@ -1279,11 +1264,9 @@ void TestRunnerBindings::EnableAutoResizeMode(int min_width,
   if (max_width <= 0 || max_height <= 0)
     return;
 
-  blink::WebView* web_view = GetWebFrame()->View();
-
   gfx::Size min_size(min_width, min_height);
   gfx::Size max_size(max_width, max_height);
-  web_view->EnableAutoResizeForTesting(min_size, max_size);
+  runner_->GetWebTestControlHostRemote()->EnableAutoResize(min_size, max_size);
 }
 
 void TestRunnerBindings::DisableAutoResizeMode(int new_width, int new_height) {
@@ -1295,14 +1278,8 @@ void TestRunnerBindings::DisableAutoResizeMode(int new_width, int new_height) {
   if (new_width <= 0 || new_height <= 0)
     return;
 
-  blink::WebFrameWidget* widget = frame_->GetLocalRootWebFrameWidget();
-
   gfx::Size new_size(new_width, new_height);
-  blink::WebView* web_view = GetWebFrame()->View();
-  web_view->DisableAutoResizeForTesting(new_size);
-
-  gfx::Rect window_rect(widget->WindowRect().origin(), new_size);
-  web_view->SetWindowRectSynchronouslyForTesting(window_rect);
+  runner_->GetWebTestControlHostRemote()->DisableAutoResize(new_size);
 }
 
 void TestRunnerBindings::SetMockScreenOrientation(
@@ -1702,12 +1679,7 @@ void TestRunnerBindings::SetBackingScaleFactor(
   v8::Isolate* isolate = blink::MainThreadIsolate();
   v8::HandleScope handle_scope(isolate);
 
-  WrapV8Callback(std::move(v8_callback))
-      .Run({
-          // TODO(oshima): remove this callback argument when all platforms are
-          // migrated to use-zoom-for-dsf by default.
-          v8::Boolean::New(isolate, IsUseZoomForDSFEnabled()),
-      });
+  WrapV8Closure(std::move(v8_callback)).Run();
 }
 
 void TestRunnerBindings::SetColorProfile(const std::string& name,
@@ -1778,6 +1750,12 @@ void TestRunnerBindings::GetBluetoothManualChooserEvents(
       base::BindOnce(&GetBluetoothManualChooserEventsReply,
                      weak_ptr_factory_.GetWeakPtr(), GetWebFrame(),
                      WrapV8Callback(std::move(callback))));
+}
+
+void TestRunnerBindings::SetBrowserHandlesFocus(bool enable) {
+  if (invalid_)
+    return;
+  blink::SetBrowserCanHandleFocusForWebTest(enable);
 }
 
 void TestRunnerBindings::SendBluetoothManualChooserEvent(
@@ -1942,6 +1920,8 @@ void TestRunnerBindings::CheckForLeakedWindows() {
 void TestRunnerBindings::CopyImageThen(int x,
                                        int y,
                                        v8::Local<v8::Function> v8_callback) {
+  if (invalid_)
+    return;
   mojo::Remote<blink::mojom::ClipboardHost> remote_clipboard;
   frame_->GetBrowserInterfaceBroker()->GetInterface(
       remote_clipboard.BindNewPipeAndPassReceiver());
@@ -1958,8 +1938,10 @@ void TestRunnerBindings::CopyImageThen(int x,
                                         &sequence_number_after);
   }
 
+  mojo_base::BigBuffer png_data;
+  remote_clipboard->ReadPng(ui::ClipboardBuffer::kCopyPaste, &png_data);
   SkBitmap bitmap;
-  remote_clipboard->ReadImage(ui::ClipboardBuffer::kCopyPaste, &bitmap);
+  gfx::PNGCodec::Decode(png_data.data(), png_data.size(), &bitmap);
 
   v8::Isolate* isolate = blink::MainThreadIsolate();
   v8::HandleScope handle_scope(isolate);
@@ -2253,13 +2235,13 @@ void TestRunner::WorkQueue::ProcessWorkItem(mojom::WorkItemPtr work_item) {
 bool TestRunner::WorkQueue::ProcessWorkItemInternal(
     mojom::WorkItemPtr work_item) {
   switch (work_item->which()) {
-    case mojom::WorkItem::Tag::BACK_FORWARD: {
+    case mojom::WorkItem::Tag::kBackForward: {
       mojom::WorkItemBackForwardPtr& item_back_forward =
           work_item->get_back_forward();
       controller_->GoToOffset(item_back_forward->distance);
       return true;  // TODO(danakj): Did it really start a navigation?
     }
-    case mojom::WorkItem::Tag::LOADING_SCRIPT: {
+    case mojom::WorkItem::Tag::kLoadingScript: {
       mojom::WorkItemLoadingScriptPtr& item_loading_script =
           work_item->get_loading_script();
       WebFrameTestProxy* main_frame =
@@ -2269,7 +2251,7 @@ bool TestRunner::WorkQueue::ProcessWorkItemInternal(
           blink::WebString::FromUTF8(item_loading_script->script)));
       return true;  // TODO(danakj): Did it really start a navigation?
     }
-    case mojom::WorkItem::Tag::NON_LOADING_SCRIPT: {
+    case mojom::WorkItem::Tag::kNonLoadingScript: {
       mojom::WorkItemNonLoadingScriptPtr& item_non_loading_script =
           work_item->get_non_loading_script();
       WebFrameTestProxy* main_frame =
@@ -2279,12 +2261,12 @@ bool TestRunner::WorkQueue::ProcessWorkItemInternal(
           blink::WebString::FromUTF8(item_non_loading_script->script)));
       return false;
     }
-    case mojom::WorkItem::Tag::LOAD: {
+    case mojom::WorkItem::Tag::kLoad: {
       mojom::WorkItemLoadPtr& item_load = work_item->get_load();
       controller_->LoadURLForFrame(GURL(item_load->url), item_load->target);
       return true;  // TODO(danakj): Did it really start a navigation?
     }
-    case mojom::WorkItem::Tag::RELOAD:
+    case mojom::WorkItem::Tag::kReload:
       controller_->Reload();
       return true;
   }
@@ -2292,15 +2274,14 @@ bool TestRunner::WorkQueue::ProcessWorkItemInternal(
   return false;
 }
 
-void TestRunner::WorkQueue::ReplicateStates(
-    const base::DictionaryValue& values) {
+void TestRunner::WorkQueue::ReplicateStates(const base::Value::Dict& values) {
   states_.ApplyUntrackedChanges(values);
   if (!has_items())
     controller_->FinishTestIfReady();
 }
 
 void TestRunner::WorkQueue::OnStatesChanged() {
-  if (states_.changed_values().DictEmpty())
+  if (states_.changed_values().empty())
     return;
 
   controller_->GetWebTestControlHostRemote()->WorkQueueStatesChanged(
@@ -2344,11 +2325,12 @@ void TestRunner::Reset() {
   blink::WebTestingSupport::ResetRuntimeFeatures();
   blink::WebCache::Clear();
   blink::WebSecurityPolicy::ClearOriginAccessList();
-#if defined(OS_LINUX) || defined(OS_CHROMEOS) || defined(OS_FUCHSIA)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_FUCHSIA)
   blink::WebFontRenderStyle::SetSubpixelPositioning(false);
 #endif
   blink::ResetDomainRelaxationForTest();
 
+  blink::SetBrowserCanHandleFocusForWebTest(false);
   setlocale(LC_ALL, "");
   setlocale(LC_NUMERIC, "C");
 
@@ -2377,7 +2359,6 @@ void TestRunner::ResetWebView(blink::WebView* web_view) {
   web_view->DisableAutoResizeForTesting(gfx::Size());
   web_view->SetScreenOrientationOverrideForTesting(
       fake_screen_orientation_impl_.CurrentOrientationType());
-  web_view->UseSynchronousResizeModeForTesting(false);
 }
 
 void TestRunner::ResetWebFrameWidget(blink::WebFrameWidget* web_frame_widget) {
@@ -2501,7 +2482,7 @@ SkBitmap TestRunner::DumpPixelsInRenderer(blink::WebLocalFrame* main_frame) {
 }
 
 void TestRunner::ReplicateWebTestRuntimeFlagsChanges(
-    const base::DictionaryValue& changed_values) {
+    const base::Value::Dict& changed_values) {
   if (!test_is_running_)
     return;
 
@@ -2802,7 +2783,7 @@ void TestRunner::ProcessWorkItem(mojom::WorkItemPtr work_item) {
   work_queue_.ProcessWorkItem(std::move(work_item));
 }
 
-void TestRunner::ReplicateWorkQueueStates(const base::DictionaryValue& values) {
+void TestRunner::ReplicateWorkQueueStates(const base::Value::Dict& values) {
   if (!test_is_running_)
     return;
   work_queue_.ReplicateStates(values);
@@ -2946,17 +2927,11 @@ void TestRunner::AddOriginAccessAllowListEntry(
 }
 
 void TestRunner::SetTextSubpixelPositioning(bool value) {
-#if defined(OS_LINUX) || defined(OS_CHROMEOS) || defined(OS_FUCHSIA)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_FUCHSIA)
   // Since FontConfig doesn't provide a variable to control subpixel
   // positioning, we'll fall back to setting it globally for all fonts.
   blink::WebFontRenderStyle::SetSubpixelPositioning(value);
 #endif
-}
-
-void TestRunner::UseUnfortunateSynchronousResizeMode() {
-  // Sets the resize mode on the view of each open window.
-  SynchronousResizeModeVisitor visitor;
-  RenderView::ForEach(&visitor);
 }
 
 void TestRunner::SetMockScreenOrientation(blink::WebView* view,
@@ -2984,23 +2959,8 @@ void TestRunner::DisableMockScreenOrientation(blink::WebView* view) {
   fake_screen_orientation_impl_.SetDisabled(view, true);
 }
 
-std::string TestRunner::GetAcceptLanguages() const {
-  return web_test_runtime_flags_.accept_languages();
-}
-
 void TestRunner::SetAcceptLanguages(const std::string& accept_languages) {
-  if (accept_languages == GetAcceptLanguages())
-    return;
-
-  // TODO(danakj): IPC to WebTestControlHost, and have it change the
-  // WebContentsImpl::GetMutableRendererPrefs(). Then have the browser sync that
-  // to the window's RenderViews, instead of using WebTestRuntimeFlags for this.
-  web_test_runtime_flags_.set_accept_languages(accept_languages);
-  OnWebTestRuntimeFlagsChanged();
-
-  // Sets the accept language on the view of each open window.
-  SetAcceptLanguagesVisitor visitor(accept_languages);
-  RenderView::ForEach(&visitor);
+  GetWebTestControlHostRemote()->SetAcceptLanguages(accept_languages);
 }
 
 void TestRunner::DumpEditingCallbacks() {
@@ -3267,7 +3227,7 @@ void TestRunner::OnWebTestRuntimeFlagsChanged() {
   // web flag changes in SetTestConfiguration().
   if (!test_is_running_)
     return;
-  if (web_test_runtime_flags_.tracked_dictionary().changed_values().DictEmpty())
+  if (web_test_runtime_flags_.tracked_dictionary().changed_values().empty())
     return;
 
   GetWebTestControlHostRemote()->WebTestRuntimeFlagsChanged(
@@ -3336,7 +3296,7 @@ void TestRunner::FinishTest() {
       spec = spec.substr(path_start);
 
     std::string mime_type =
-        web_frame->GetDocumentLoader()->GetResponse().MimeType().Utf8();
+        web_frame->GetDocumentLoader()->GetWebResponse().MimeType().Utf8();
 
     // In a text/plain document, and in a dumpAsText/ subdirectory, we generate
     // text results no matter what the test may previously have requested.

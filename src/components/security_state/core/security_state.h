@@ -10,7 +10,6 @@
 #include <string>
 
 #include "base/feature_list.h"
-#include "base/macros.h"
 #include "net/base/url_util.h"
 #include "net/cert/cert_status_flags.h"
 #include "net/cert/sct_status_flags.h"
@@ -248,10 +247,6 @@ std::string GetSafetyTipHistogramName(const std::string& prefix,
                                       SafetyTipStatus safety_tip_status);
 
 bool IsSHA1InChain(const VisibleSecurityState& visible_security_state);
-
-// Returns true if Safety Tip UI should be shown because a relevant field trial
-// is enabled.
-bool IsSafetyTipUIFeatureEnabled();
 
 }  // namespace security_state
 

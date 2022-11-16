@@ -13,11 +13,10 @@
 
 #include "base/base64.h"
 #include "base/bind.h"
-#include "base/cxx17_backports.h"
 #include "base/feature_list.h"
 #include "base/files/file_path.h"
 #include "base/json/json_string_value_serializer.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
@@ -36,6 +35,7 @@
 #include "components/variations/proto/study.pb.h"
 #include "components/variations/proto/variations_seed.pb.h"
 #include "components/variations/scoped_variations_ids_provider.h"
+#include "components/version_info/channel.h"
 #include "components/web_resource/resource_request_allowed_notifier_test_util.h"
 #include "net/base/mock_network_change_notifier.h"
 #include "net/base/url_util.h"
@@ -65,14 +65,6 @@ const char kBase64SeedSignature[] =
     "MEQCIDD1IVxjzWYncun+9IGzqYjZvqxxujQEayJULTlbTGA/AiAr0oVmEgVUQZBYq5VLOSvy"
     "96JkMYgzTkHPwbv7K/CmgA==";
 
-// A stub for the metrics state manager.
-void StubStoreClientInfo(const metrics::ClientInfo& /* client_info */) {}
-
-// A stub for the metrics state manager.
-std::unique_ptr<metrics::ClientInfo> StubLoadClientInfo() {
-  return nullptr;
-}
-
 // TODO(crbug.com/1167566): Remove when fake VariationsServiceClient created.
 class TestVariationsServiceClient : public VariationsServiceClient {
  public:
@@ -81,12 +73,15 @@ class TestVariationsServiceClient : public VariationsServiceClient {
         base::MakeRefCounted<network::WeakWrapperSharedURLLoaderFactory>(
             &test_url_loader_factory_);
   }
+
+  TestVariationsServiceClient(const TestVariationsServiceClient&) = delete;
+  TestVariationsServiceClient& operator=(const TestVariationsServiceClient&) =
+      delete;
+
   ~TestVariationsServiceClient() override {}
 
   // VariationsServiceClient:
-  VersionCallback GetVersionForSimulationCallback() override {
-    return base::BindOnce([] { return base::Version(); });
-  }
+  base::Version GetVersionForSimulation() override { return base::Version(); }
   scoped_refptr<network::SharedURLLoaderFactory> GetURLLoaderFactory()
       override {
     return test_shared_loader_factory_;
@@ -120,8 +115,6 @@ class TestVariationsServiceClient : public VariationsServiceClient {
   version_info::Channel channel_ = version_info::Channel::UNKNOWN;
   network::TestURLLoaderFactory test_url_loader_factory_;
   scoped_refptr<network::SharedURLLoaderFactory> test_shared_loader_factory_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestVariationsServiceClient);
 };
 
 // A test class used to validate expected functionality in VariationsService.
@@ -148,6 +141,9 @@ class TestVariationsService : public VariationsService {
         GetVariationsServerURL(use_secure_url ? USE_HTTPS : USE_HTTP);
     set_variations_server_url(interception_url_);
   }
+
+  TestVariationsService(const TestVariationsService&) = delete;
+  TestVariationsService& operator=(const TestVariationsService&) = delete;
 
   ~TestVariationsService() override {}
 
@@ -236,14 +232,17 @@ class TestVariationsService : public VariationsService {
   std::string stored_country_;
   bool delta_compressed_seed_;
   bool gzip_compressed_seed_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestVariationsService);
 };
 
 class TestVariationsServiceObserver : public VariationsService::Observer {
  public:
   TestVariationsServiceObserver()
       : best_effort_changes_notified_(0), crticial_changes_notified_(0) {}
+
+  TestVariationsServiceObserver(const TestVariationsServiceObserver&) = delete;
+  TestVariationsServiceObserver& operator=(
+      const TestVariationsServiceObserver&) = delete;
+
   ~TestVariationsServiceObserver() override {}
 
   void OnExperimentChangesDetected(Severity severity) override {
@@ -271,8 +270,6 @@ class TestVariationsServiceObserver : public VariationsService::Observer {
 
   // Number of notification received with CRITICAL severity.
   int crticial_changes_notified_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestVariationsServiceObserver);
 };
 
 // Constants used to create the test seed.
@@ -304,12 +301,12 @@ std::string SerializeSeed(const VariationsSeed& seed) {
   return serialized_seed;
 }
 
-// Converts |list_value| to a string, to make it easier for debugging.
-std::string ListValueToString(const base::ListValue& list_value) {
+// Converts |value| to a string, to make it easier for debugging.
+std::string ValueToString(const base::Value& value) {
   std::string json;
   JSONStringValueSerializer serializer(&json);
   serializer.set_pretty_print(true);
-  serializer.Serialize(list_value);
+  serializer.Serialize(value);
   return json;
 }
 
@@ -344,21 +341,24 @@ class VariationsServiceTest : public ::testing::Test {
     metrics::MetricsStateManager::RegisterPrefs(prefs_.registry());
   }
 
+  VariationsServiceTest(const VariationsServiceTest&) = delete;
+  VariationsServiceTest& operator=(const VariationsServiceTest&) = delete;
+
   metrics::MetricsStateManager* GetMetricsStateManager() {
     // Lazy-initialize the metrics_state_manager so that it correctly reads the
     // stability state from prefs after tests have a chance to initialize it.
     if (!metrics_state_manager_) {
       metrics_state_manager_ = metrics::MetricsStateManager::Create(
           &prefs_, enabled_state_provider_.get(), std::wstring(),
-          base::FilePath(), base::BindRepeating(&StubStoreClientInfo),
-          base::BindRepeating(&StubLoadClientInfo));
+          base::FilePath());
+      metrics_state_manager_->InstantiateFieldTrialList();
     }
     return metrics_state_manager_.get();
   }
 
  protected:
   TestingPrefServiceSimple prefs_;
-  network::TestNetworkConnectionTracker* network_tracker_;
+  raw_ptr<network::TestNetworkConnectionTracker> network_tracker_;
 
  private:
   base::test::TaskEnvironment task_environment_;
@@ -366,8 +366,6 @@ class VariationsServiceTest : public ::testing::Test {
       variations::VariationsIdsProvider::Mode::kUseSignedInState};
   std::unique_ptr<metrics::TestEnabledStateProvider> enabled_state_provider_;
   std::unique_ptr<metrics::MetricsStateManager> metrics_state_manager_;
-
-  DISALLOW_COPY_AND_ASSIGN(VariationsServiceTest);
 };
 
 TEST_F(VariationsServiceTest, GetVariationsServerURL) {
@@ -525,7 +523,7 @@ TEST_F(VariationsServiceTest, SeedNotStoredWhenNonOKStatus) {
           &prefs_, network_tracker_),
       &prefs_, GetMetricsStateManager(), true);
   service.set_intercepts_fetch(false);
-  for (size_t i = 0; i < base::size(non_ok_status_codes); ++i) {
+  for (size_t i = 0; i < std::size(non_ok_status_codes); ++i) {
     EXPECT_TRUE(prefs_.FindPreference(prefs::kVariationsCompressedSeed)
                     ->IsDefaultValue());
     service.test_url_loader_factory()->ClearResponses();
@@ -624,7 +622,7 @@ TEST_F(VariationsServiceTest, InstanceManipulations) {
 
   std::string serialized_seed = SerializeSeed(CreateTestSeed());
   VariationsService::EnableFetchForTesting();
-  for (size_t i = 0; i < base::size(cases); ++i) {
+  for (size_t i = 0; i < std::size(cases); ++i) {
     TestVariationsService service(
         std::make_unique<web_resource::TestRequestAllowedNotifier>(
             &prefs_, network_tracker_),
@@ -696,7 +694,7 @@ TEST_F(VariationsServiceTest, Observer) {
       {1, 0, 1, 0, 1},
   };
 
-  for (size_t i = 0; i < base::size(cases); ++i) {
+  for (size_t i = 0; i < std::size(cases); ++i) {
     TestVariationsServiceObserver observer;
     service.AddObserver(&observer);
 
@@ -813,16 +811,15 @@ TEST_F(VariationsServiceTest, LoadPermanentConsistencyCountry) {
         << test.permanent_consistency_country_before << ", " << test.version
         << ", " << test.latest_country_code;
 
-    base::ListValue expected_list_value;
+    base::Value expected_list_value{base::Value::Type::LIST};
     for (const std::string& component :
          base::SplitString(test.permanent_consistency_country_after, ",",
                            base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL)) {
       expected_list_value.Append(component);
     }
-    const base::ListValue* pref_value =
+    const base::Value* pref_value =
         prefs_.GetList(prefs::kVariationsPermanentConsistencyCountry);
-    EXPECT_EQ(ListValueToString(expected_list_value),
-              ListValueToString(*pref_value))
+    EXPECT_EQ(ValueToString(expected_list_value), ValueToString(*pref_value))
         << test.permanent_consistency_country_before << ", " << test.version
         << ", " << test.latest_country_code;
 

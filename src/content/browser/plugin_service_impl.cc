@@ -15,19 +15,18 @@
 #include "base/files/file_path.h"
 #include "base/location.h"
 #include "base/logging.h"
-#include "base/metrics/histogram_macros.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/synchronization/waitable_event.h"
-#include "base/task/post_task.h"
+#include "base/task/task_runner_util.h"
 #include "base/task/thread_pool.h"
-#include "base/task_runner_util.h"
 #include "base/threading/thread.h"
 #include "build/build_config.h"
 #include "content/browser/child_process_security_policy_impl.h"
 #include "content/browser/plugin_list.h"
 #include "content/browser/ppapi_plugin_process_host.h"
+#include "content/browser/process_lock.h"
 #include "content/browser/renderer_host/render_process_host_impl.h"
 #include "content/browser/renderer_host/render_view_host_impl.h"
 #include "content/common/content_switches_internal.h"
@@ -41,7 +40,6 @@
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/content_client.h"
 #include "content/public/common/content_constants.h"
-#include "content/public/common/content_features.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/common/process_type.h"
 #include "content/public/common/webplugininfo.h"
@@ -50,16 +48,6 @@
 
 namespace content {
 namespace {
-
-// This enum is used to collect Flash usage data.
-enum FlashUsage {
-  // Number of browser processes that have started at least one PPAPI Flash
-  // process during their lifetime.
-  START_PPAPI_FLASH_AT_LEAST_ONCE = 1,
-  // Total number of browser processes.
-  TOTAL_BROWSER_PROCESSES,
-  FLASH_USAGE_ENUM_COUNT
-};
 
 // Callback set on the PluginList to assert that plugin loading happens on the
 // correct thread.
@@ -89,20 +77,9 @@ PluginServiceImpl* PluginServiceImpl::GetInstance() {
   return base::Singleton<PluginServiceImpl>::get();
 }
 
-PluginServiceImpl::PluginServiceImpl() : filter_(nullptr) {
-  // Collect the total number of browser processes (which create
-  // PluginServiceImpl objects, to be precise). The number is used to normalize
-  // the number of processes which start at least one NPAPI/PPAPI Flash process.
-  static bool counted = false;
-  if (!counted) {
-    counted = true;
-    UMA_HISTOGRAM_ENUMERATION("Plugin.FlashUsage", TOTAL_BROWSER_PROCESSES,
-                              FLASH_USAGE_ENUM_COUNT);
-  }
-}
+PluginServiceImpl::PluginServiceImpl() = default;
 
-PluginServiceImpl::~PluginServiceImpl() {
-}
+PluginServiceImpl::~PluginServiceImpl() = default;
 
 void PluginServiceImpl::Init() {
   plugin_list_task_runner_ = base::ThreadPool::CreateSequencedTaskRunner(
@@ -146,13 +123,10 @@ int PluginServiceImpl::CountPpapiPluginProcessesForProfile(
 
 PpapiPluginProcessHost* PluginServiceImpl::FindOrStartPpapiPluginProcess(
     int render_process_id,
-    const url::Origin& embedder_origin,
     const base::FilePath& plugin_path,
     const base::FilePath& profile_data_directory,
     const absl::optional<url::Origin>& origin_lock) {
-  DCHECK_CURRENTLY_ON(base::FeatureList::IsEnabled(features::kProcessHostOnUI)
-                          ? BrowserThread::UI
-                          : BrowserThread::IO);
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
   if (filter_ && !filter_->CanLoadPlugin(render_process_id, plugin_path)) {
     VLOG(1) << "Unable to load ppapi plugin: " << plugin_path.MaybeAsASCII();
@@ -167,58 +141,10 @@ PpapiPluginProcessHost* PluginServiceImpl::FindOrStartPpapiPluginProcess(
     return nullptr;
   }
 
-  // Validate that |embedder_origin| is allowed to embed the plugin.
-  if (!GetContentClient()->browser()->ShouldAllowPluginCreation(embedder_origin,
-                                                                *info)) {
-    return nullptr;
-  }
-
-  if (info->permissions & ppapi::PERMISSION_PDF) {
-    // Extra assertions for the PDF plugin.  These assertions do not apply to
-    // the test plugin.
-    if (0 == (info->permissions & ppapi::PERMISSION_TESTING)) {
-      // We want to limit ability to bypass |request_initiator_origin_lock| to
-      // trustworthy renderers.  PDF plugin is okay, because it is always hosted
-      // by the PDF extension (mhjfbmdgcfjbbpaeojofohoefgiehjai) or
-      // chrome://print, both of which we assume are trustworthy (the extension
-      // process can also host other extensions, but this is okay).
-      //
-      // The CHECKs below help verify that |render_process_id| does not host
-      // web-controlled content.  This is a defense-in-depth for verifying that
-      // ShouldAllowPluginCreation called above is doing the right thing.
-      auto* policy = ChildProcessSecurityPolicyImpl::GetInstance();
-      ProcessLock renderer_lock = policy->GetProcessLock(render_process_id);
-      CHECK(!renderer_lock.matches_scheme(url::kHttpScheme) &&
-            !renderer_lock.matches_scheme(url::kHttpsScheme));
-      CHECK(embedder_origin.scheme() != url::kHttpScheme);
-      CHECK(embedder_origin.scheme() != url::kHttpsScheme);
-      CHECK(!embedder_origin.opaque());
-    }
-
-    // In some scenarios, the PDF plugin can issue fetch requests that will need
-    // to be proxied by |render_process_id| - such proxying needs to bypass
-    // CORB. See also https://crbug.com/1027173.
-    //
-    // TODO(lukasza, kmoon): https://crbug.com/702993: Remove the code here once
-    // PDF support doesn't depend on PPAPI anymore.
-    DCHECK(origin_lock.has_value());
-    RenderProcessHostImpl::AddAllowedRequestInitiatorForPlugin(
-        render_process_id, origin_lock.value());
-  }
-
   PpapiPluginProcessHost* plugin_host =
       FindPpapiPluginProcess(plugin_path, profile_data_directory, origin_lock);
   if (plugin_host)
     return plugin_host;
-
-  // Record when PPAPI Flash process is started for the first time.
-  static bool counted = false;
-  if (!counted && info->name == kFlashPluginName) {
-    counted = true;
-    UMA_HISTOGRAM_ENUMERATION("Plugin.FlashUsage",
-                              START_PPAPI_FLASH_AT_LEAST_ONCE,
-                              FLASH_USAGE_ENUM_COUNT);
-  }
 
   // Avoid fork bomb.
   if (origin_lock.has_value() && CountPpapiPluginProcessesForProfile(
@@ -240,14 +166,12 @@ PpapiPluginProcessHost* PluginServiceImpl::FindOrStartPpapiPluginProcess(
 
 void PluginServiceImpl::OpenChannelToPpapiPlugin(
     int render_process_id,
-    const url::Origin& embedder_origin,
     const base::FilePath& plugin_path,
     const base::FilePath& profile_data_directory,
     const absl::optional<url::Origin>& origin_lock,
     PpapiPluginProcessHost::PluginClient* client) {
   PpapiPluginProcessHost* plugin_host = FindOrStartPpapiPluginProcess(
-      render_process_id, embedder_origin, plugin_path, profile_data_directory,
-      origin_lock);
+      render_process_id, plugin_path, profile_data_directory, origin_lock);
   if (plugin_host) {
     plugin_host->OpenChannelToPlugin(client);
   } else {
@@ -267,9 +191,7 @@ bool PluginServiceImpl::GetPluginInfoArray(
 }
 
 bool PluginServiceImpl::GetPluginInfo(int render_process_id,
-                                      int render_frame_id,
                                       const GURL& url,
-                                      const url::Origin& main_frame_origin,
                                       const std::string& mime_type,
                                       bool allow_wildcard,
                                       bool* is_stale,
@@ -284,9 +206,7 @@ bool PluginServiceImpl::GetPluginInfo(int render_process_id,
     *is_stale = stale;
 
   for (size_t i = 0; i < plugins.size(); ++i) {
-    if (!filter_ ||
-        filter_->IsPluginAvailable(render_process_id, render_frame_id, url,
-                                   main_frame_origin, &plugins[i])) {
+    if (!filter_ || filter_->IsPluginAvailable(render_process_id, plugins[i])) {
       *info = plugins[i];
       if (actual_mime_type)
         *actual_mime_type = mime_types[i];
@@ -318,13 +238,13 @@ std::u16string PluginServiceImpl::GetPluginDisplayNameByPath(
   if (PluginService::GetInstance()->GetPluginInfoByPath(path, &info) &&
       !info.name.empty()) {
     plugin_name = info.name;
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
     // Many plugins on the Mac have .plugin in the actual name, which looks
     // terrible, so look for that and strip it off if present.
     static constexpr base::StringPiece16 kPluginExtension = u".plugin";
     if (base::EndsWith(plugin_name, kPluginExtension))
       plugin_name.erase(plugin_name.size() - kPluginExtension.size());
-#endif  // defined(OS_MAC)
+#endif  // BUILDFLAG(IS_MAC)
   }
   return plugin_name;
 }

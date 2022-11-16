@@ -60,13 +60,11 @@ namespace {
 
 // The default time that the bubble should stay on the screen if it will close
 // automatically.
-constexpr base::TimeDelta kBubbleCloseDelayDefault =
-    base::TimeDelta::FromMilliseconds(1500);
+constexpr base::TimeDelta kBubbleCloseDelayDefault = base::Milliseconds(1500);
 
 // A longer timeout used for how long the bubble should stay on the screen
 // before it will close automatically after + or - buttons have been used.
-constexpr base::TimeDelta kBubbleCloseDelayLong =
-    base::TimeDelta::FromMilliseconds(5000);
+constexpr base::TimeDelta kBubbleCloseDelayLong = base::Milliseconds(5000);
 
 class ZoomButtonHighlightPathGenerator : public views::HighlightPathGenerator {
  public:
@@ -305,7 +303,6 @@ ZoomBubbleView::ZoomBubbleView(
   if (immersive_mode_controller_)
     immersive_mode_controller_->AddObserver(this);
   UseCompactMargins();
-  chrome::RecordDialogCreation(chrome::DialogIdentifier::ZOOM);
 }
 
 ZoomBubbleView::~ZoomBubbleView() {
@@ -314,7 +311,7 @@ ZoomBubbleView::~ZoomBubbleView() {
 }
 
 std::u16string ZoomBubbleView::GetAccessibleWindowTitle() const {
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents());
+  Browser* browser = GetBrowser();
   if (!browser)
     return {};
   return BrowserView::GetBrowserViewForBrowser(browser)
@@ -386,16 +383,17 @@ void ZoomBubbleView::Init() {
   // Calculate child views margins in |this| client view.
   const int label_vertical_spacing =
       provider->GetDistanceMetric(DISTANCE_TOAST_LABEL_VERTICAL);
-  const gfx::Insets label_margin(label_vertical_spacing - margins().top(), 0,
-                                 label_vertical_spacing - margins().bottom(),
-                                 kPercentLabelPadding - spacing);
+  const auto label_margin =
+      gfx::Insets::TLBR(label_vertical_spacing - margins().top(), 0,
+                        label_vertical_spacing - margins().bottom(),
+                        kPercentLabelPadding - spacing);
 
   // Account for the apparent margins that vector buttons have around icons.
   const int control_vertical_spacing =
       provider->GetDistanceMetric(DISTANCE_TOAST_CONTROL_VERTICAL);
-  const gfx::Insets control_vertical_margin(
-      control_vertical_spacing - margins().top(), 0,
-      control_vertical_spacing - margins().bottom(), 0);
+  const auto control_vertical_margin =
+      gfx::Insets::TLBR(control_vertical_spacing - margins().top(), 0,
+                        control_vertical_spacing - margins().bottom(), 0);
   const gfx::Insets vector_button_margin(
       control_vertical_margin -
       provider->GetInsetsMetric(views::INSETS_VECTOR_IMAGE_BUTTON));
@@ -473,8 +471,8 @@ void ZoomBubbleView::WindowClosing() {
 }
 
 void ZoomBubbleView::CloseBubble() {
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents());
-  if (ignore_close_bubble_ &&
+  Browser* browser = GetBrowser();
+  if (ignore_close_bubble_ && browser &&
       GetAnchorViewForBrowser(browser) == GetAnchorView()) {
     return;
   }
@@ -588,13 +586,19 @@ void ZoomBubbleView::ButtonPressed(base::RepeatingClosure closure) {
 
 void ZoomBubbleView::ImageButtonPressed() {
   DCHECK(extension_info_.icon_image) << "Invalid button press.";
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents());
-  DCHECK(browser);
-  chrome::AddSelectedTabWithURL(
-      browser,
-      GURL(base::StringPrintf("chrome://extensions?id=%s",
-                              extension_info_.id.c_str())),
-      ui::PAGE_TRANSITION_FROM_API);
+  Browser* browser = GetBrowser();
+  if (browser) {
+    chrome::AddSelectedTabWithURL(
+        browser,
+        GURL(base::StringPrintf("chrome://extensions?id=%s",
+                                extension_info_.id.c_str())),
+        ui::PAGE_TRANSITION_FROM_API);
+  }
+}
+
+Browser* ZoomBubbleView::GetBrowser() const {
+  return web_contents() ? chrome::FindBrowserWithWebContents(web_contents())
+                        : nullptr;
 }
 
 ZoomBubbleView::ZoomBubbleExtensionInfo::ZoomBubbleExtensionInfo() {}

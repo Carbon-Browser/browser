@@ -28,6 +28,7 @@
 #include "ash/wm/window_state.h"
 #include "ash/wm/window_util.h"
 #include "base/bind.h"
+#include "base/check.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/user_metrics.h"
 #include "components/prefs/pref_change_registrar.h"
@@ -135,8 +136,11 @@ void WindowCycleController::HandleCycleWindow(
 
 void WindowCycleController::HandleKeyboardNavigation(
     KeyboardNavDirection direction) {
-  if (!CanCycle() || !IsCycling() || !IsValidKeyboardNavigation(direction))
+  // If the UI is not shown yet, discard the event.
+  if (!CanCycle() || !IsCycling() || !window_cycle_list_->cycle_view() ||
+      !IsValidKeyboardNavigation(direction)) {
     return;
+  }
 
   switch (direction) {
     // Pressing the Up arrow key moves the focus from the window cycle list
@@ -234,6 +238,7 @@ void WindowCycleController::StartCycling() {
 }
 
 void WindowCycleController::CompleteCycling() {
+  DCHECK(window_cycle_list_);
   window_cycle_list_->set_user_did_accept(true);
   StopCycling();
 }
@@ -269,6 +274,12 @@ aura::Window* WindowCycleController::GetWindowAtPoint(
     const ui::LocatedEvent* event) {
   return window_cycle_list_ ? window_cycle_list_->GetWindowAtPoint(event)
                             : nullptr;
+}
+
+bool WindowCycleController::IsEventInTabSliderContainer(
+    const ui::LocatedEvent* event) {
+  return window_cycle_list_ &&
+         window_cycle_list_->IsEventInTabSliderContainer(event);
 }
 
 bool WindowCycleController::IsWindowListVisible() {
@@ -395,8 +406,18 @@ void WindowCycleController::Step(WindowCyclingDirection direction,
 }
 
 void WindowCycleController::StopCycling() {
-  desks_observation_.Reset();
+  // There's an edge case where `StopCycling()` is already triggered via an alt
+  // release event, but user doesn't release the tap on the
+  // `window_cycle_list_`. If we reset `window_cycle_list_` first,
+  // `WindowEventDispatcher::DispatchSyntheticTouchEvent` will be triggered
+  // because of the availability changed for the `window_cycle_list_`. Thus
+  // `event_filter_` will still receive the event and try to handle the event
+  // even though it's in the process of stopping cycling. To avoid this, we
+  // should remove our event filter first. Please check
+  // https://crbug.com/1228381 for more details.
+  event_filter_.reset();
 
+  desks_observation_.Reset();
   window_cycle_list_.reset();
 
   // We can't use the MRU window list here to get the active window, since
@@ -405,9 +426,6 @@ void WindowCycleController::StopCycling() {
   // will always be for the current active desk, not the target active desk.
   aura::Window* active_window_after_window_cycle =
       window_util::GetActiveWindow();
-
-  // Remove our key event filter.
-  event_filter_.reset();
 
   if (active_window_after_window_cycle != nullptr &&
       active_window_before_window_cycle_ != active_window_after_window_cycle) {

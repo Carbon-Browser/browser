@@ -17,9 +17,9 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/messaging/string_message_codec.h"
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #include "base/android/jni_string.h"
-#include "content/public/browser/android/app_web_message_port.h"
+#include "content/browser/android/app_web_message_port.h"
 #endif
 
 using blink::MessagePortChannel;
@@ -31,7 +31,7 @@ void PostMessageToFrameInternal(
     Page& page,
     const std::u16string& source_origin,
     const std::u16string& target_origin,
-    const std::u16string& data,
+    const blink::WebMessagePayload& data,
     std::vector<blink::MessagePortDescriptor> ports) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
@@ -41,9 +41,7 @@ void PostMessageToFrameInternal(
   for (auto& port : ports)
     channels.emplace_back(MessagePortChannel(std::move(port)));
 
-  blink::TransferableMessage message;
-  message.owned_encoded_message = blink::EncodeStringMessage(data);
-  message.encoded_message = message.owned_encoded_message;
+  blink::TransferableMessage message = blink::EncodeWebMessagePayload(data);
   message.ports = std::move(channels);
 
   RenderFrameHostImpl* rfh =
@@ -52,7 +50,7 @@ void PostMessageToFrameInternal(
                         std::move(message));
 }
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 std::u16string ToString16(JNIEnv* env,
                           const base::android::JavaParamRef<jstring>& s) {
   if (s.is_null())
@@ -68,12 +66,12 @@ void MessagePortProvider::PostMessageToFrame(
     Page& page,
     const std::u16string& source_origin,
     const std::u16string& target_origin,
-    const std::u16string& data) {
+    const blink::WebMessagePayload& data) {
   PostMessageToFrameInternal(page, source_origin, target_origin, data,
                              std::vector<blink::MessagePortDescriptor>());
 }
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 void MessagePortProvider::PostMessageToFrame(
     Page& page,
     JNIEnv* env,
@@ -83,11 +81,13 @@ void MessagePortProvider::PostMessageToFrame(
     const base::android::JavaParamRef<jobjectArray>& ports) {
   PostMessageToFrameInternal(
       page, ToString16(env, source_origin), ToString16(env, target_origin),
-      ToString16(env, data), AppWebMessagePort::UnwrapJavaArray(env, ports));
+      ToString16(env, data), android::AppWebMessagePort::Release(env, ports));
 }
 #endif
 
-#if defined(OS_FUCHSIA) || BUILDFLAG(IS_CHROMECAST)
+#if BUILDFLAG(IS_FUCHSIA) ||           \
+    BUILDFLAG(ENABLE_CAST_RECEIVER) && \
+        (BUILDFLAG(IS_CASTOS) || BUILDFLAG(IS_CAST_ANDROID))
 // static
 void MessagePortProvider::PostMessageToFrame(
     Page& page,

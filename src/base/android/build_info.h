@@ -11,7 +11,6 @@
 #include <vector>
 
 #include "base/base_export.h"
-#include "base/macros.h"
 #include "base/memory/singleton.h"
 
 namespace base {
@@ -43,6 +42,9 @@ enum SdkVersion {
 // primarily in crash reporting.
 class BASE_EXPORT BuildInfo {
  public:
+  BuildInfo(const BuildInfo&) = delete;
+  BuildInfo& operator=(const BuildInfo&) = delete;
+
   ~BuildInfo() {}
 
   // Static factory method for getting the singleton BuildInfo instance.
@@ -136,6 +138,10 @@ class BASE_EXPORT BuildInfo {
 
   const char* version_incremental() const { return version_incremental_; }
 
+  const char* hardware() const { return hardware_; }
+
+  bool is_at_least_t() const { return is_at_least_t_; }
+
  private:
   friend struct BuildInfoSingletonTraits;
 
@@ -171,8 +177,8 @@ class BASE_EXPORT BuildInfo {
   const bool is_debug_android_;
   const bool is_tv_;
   const char* const version_incremental_;
-
-  DISALLOW_COPY_AND_ASSIGN(BuildInfo);
+  const char* const hardware_;
+  const bool is_at_least_t_;
 };
 
 }  // namespace android

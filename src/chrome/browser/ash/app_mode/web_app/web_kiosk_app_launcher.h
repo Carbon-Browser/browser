@@ -8,16 +8,17 @@
 #include <memory>
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "chrome/browser/ash/app_mode/kiosk_app_launcher.h"
 #include "chrome/browser/ash/crosapi/browser_manager.h"
 #include "chrome/browser/web_applications/web_app_constants.h"
 #include "chrome/browser/web_applications/web_app_id.h"
+#include "chrome/browser/web_applications/web_app_install_task.h"
 #include "chrome/browser/web_applications/web_app_install_utils.h"
 #include "chrome/browser/web_applications/web_app_url_loader.h"
 #include "components/account_id/account_id.h"
+#include "components/exo/wm_helper.h"
 #include "content/public/browser/web_contents.h"
 #include "url/gurl.h"
 
@@ -26,7 +27,6 @@ class BrowserWindow;
 class Profile;
 
 namespace web_app {
-class WebAppInstallTask;
 class WebAppUrlLoader;
 class WebAppDataRetriever;
 }  // namespace web_app
@@ -38,7 +38,8 @@ class WebKioskAppData;
 // Object responsible for preparing and launching web kiosk app. Is destroyed
 // upon app launch.
 class WebKioskAppLauncher : public KioskAppLauncher,
-                            public crosapi::BrowserManagerObserver {
+                            public crosapi::BrowserManagerObserver,
+                            public exo::WMHelper::ExoWindowObserver {
  public:
   WebKioskAppLauncher(Profile* profile,
                       Delegate* delegate,
@@ -69,9 +70,13 @@ class WebKioskAppLauncher : public KioskAppLauncher,
   // crosapi::BrowserManagerObserver:
   void OnStateChanged() override;
 
+  // exo::WMHelper::ExoWindowObserver:
+  void OnExoWindowCreated(aura::Window* window) override;
+
   // Callback method triggered after web application and its icon are obtained
   // from `WebKioskAppManager`.
-  void OnAppDataObtained(std::unique_ptr<WebApplicationInfo> app_info);
+  void OnAppDataObtained(
+      web_app::WebAppInstallTask::WebAppInstallInfoOrErrorCode);
 
   // Callback method triggered after the lacros-chrome window is created.
   void OnLacrosWindowCreated(crosapi::mojom::CreationResult result);

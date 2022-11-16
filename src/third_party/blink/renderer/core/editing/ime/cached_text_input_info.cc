@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/core/editing/ime/cached_text_input_info.h"
 
+#include "build/chromeos_buildflags.h"
 #include "third_party/blink/renderer/core/editing/editing_utilities.h"
 #include "third_party/blink/renderer/core/editing/ephemeral_range.h"
 #include "third_party/blink/renderer/core/editing/iterators/text_iterator.h"
@@ -123,7 +124,7 @@ void CachedTextInputInfo::EnsureCached(const ContainerNode& container) const {
   if (it.AtEnd())
     return;
 
-  const bool needs_text = HasEditableStyle(*container_);
+  const bool needs_text = IsEditable(*container_);
 
   // The initial buffer size can be critical for performance:
   // https://bugs.webkit.org/show_bug.cgi?id=81192
@@ -188,22 +189,27 @@ PlainTextRange CachedTextInputInfo::GetPlainTextRange(
       range.IsCollapsed()
           ? start_offset
           : RangeLength(EphemeralRange(container_start, range.EndPosition()));
+// TODO(crbug.com/1256635): This DCHECK is triggered by Crostini on CrOS.
+#if !BUILDFLAG(IS_CHROMEOS_ASH)
   DCHECK_EQ(
       static_cast<unsigned>(TextIterator::RangeLength(
           EphemeralRange(container_start, range.EndPosition()), Behavior())),
       end_offset);
+#endif
   return PlainTextRange(start_offset, end_offset);
 }
 
 PlainTextRange CachedTextInputInfo::GetSelection(
     const EphemeralRange& range) const {
   DCHECK(container_);
+  if (range.IsNull())
+    return PlainTextRange();
   return GetPlainTextRangeWithCache(range, &selection_);
 }
 
 String CachedTextInputInfo::GetText() const {
   DCHECK(container_);
-  DCHECK(HasEditableStyle(*container_));
+  DCHECK(IsEditable(*container_));
   return text_;
 }
 
@@ -227,10 +233,14 @@ unsigned CachedTextInputInfo::RangeLength(const EphemeralRange& range) const {
           TextIterator::RangeLength(
               EphemeralRange(Position(node, 0), range.EndPosition()),
               Behavior());
+// TODO(crbug.com/1256635): Revert https://crrev.com/c/3221041 to re-enable this
+// DCHECK on CrOS.
+#if !BUILDFLAG(IS_CHROMEOS_ASH)
       DCHECK_EQ(
           static_cast<unsigned>(TextIterator::RangeLength(range, Behavior())),
           length)
           << it->value << " " << range;
+#endif
       return length;
     }
   }

@@ -20,7 +20,7 @@
 #include "components/autofill/core/browser/personal_data_manager.h"
 #include "components/autofill/core/browser/webdata/autofill_table.h"
 #include "components/keyed_service/core/service_access_type.h"
-#include "components/sync/driver/sync_driver_switches.h"
+#include "components/sync/model/metadata_batch.h"
 #include "components/sync/protocol/data_type_progress_marker.pb.h"
 #include "components/sync/protocol/model_type_state.pb.h"
 
@@ -230,12 +230,6 @@ void GetModelTypeStateOnDBSequence(syncer::ModelType model_type,
 
 namespace wallet_helper {
 
-const char kDefaultCardID[] = "wallet card ID";
-const char kDefaultAddressID[] = "wallet address ID";
-const char kDefaultCustomerID[] = "deadbeef";
-const char kDefaultBillingAddressID[] = "billing address entity ID";
-const char kDefaultCreditCardCloudTokenDataID[] = "cloud token data ID";
-
 PersonalDataManager* GetPersonalDataManager(int index) {
   return autofill::PersonalDataManagerFactory::GetForProfile(
       test()->GetProfile(index));
@@ -373,7 +367,6 @@ sync_pb::SyncEntity CreateSyncWalletCard(const std::string& name,
   credit_card->set_exp_year(kDefaultCardExpYear);
   credit_card->set_last_four(last_four);
   credit_card->set_name_on_card(kDefaultCardName);
-  credit_card->set_status(sync_pb::WalletMaskedCreditCard::VALID);
   credit_card->set_type(kDefaultCardType);
   credit_card->set_instrument_id(instrument_id);
   if (!billing_address_id.empty()) {
@@ -413,7 +406,6 @@ CreditCard GetDefaultCreditCard() {
   card.SetExpirationYear(kDefaultCardExpYear);
   card.SetNumber(kDefaultCardLastFour16);
   card.SetRawInfo(autofill::CREDIT_CARD_NAME_FULL, kDefaultCardName16);
-  card.SetServerStatus(CreditCard::OK);
   card.SetNetworkForMaskedCard(autofill::kAmericanExpressCard);
   card.set_billing_address_id(kDefaultBillingAddressID);
   return card;

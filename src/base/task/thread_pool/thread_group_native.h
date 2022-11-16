@@ -6,6 +6,7 @@
 #define BASE_TASK_THREAD_POOL_THREAD_GROUP_NATIVE_H_
 
 #include "base/base_export.h"
+#include "base/dcheck_is_on.h"
 #include "base/synchronization/atomic_flag.h"
 #include "base/task/thread_pool/thread_group.h"
 
@@ -29,6 +30,7 @@ class BASE_EXPORT ThreadGroupNative : public ThreadGroup {
   void JoinForTesting() override;
   size_t GetMaxConcurrentNonBlockedTasksDeprecated() const override;
   void DidUpdateCanRunPolicy() override;
+  void OnShutdownStarted() override;
 
  protected:
   ThreadGroupNative(TrackedRef<TaskTracker> task_tracker,

@@ -10,14 +10,14 @@
 #include "base/callback_forward.h"
 #include "base/compiler_specific.h"
 #include "base/memory/weak_ptr.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/string_piece_forward.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread.h"
-#include "components/ui_devtools/DOM.h"
-#include "components/ui_devtools/Forward.h"
-#include "components/ui_devtools/Protocol.h"
 #include "components/ui_devtools/devtools_client.h"
 #include "components/ui_devtools/devtools_export.h"
+#include "components/ui_devtools/dom.h"
+#include "components/ui_devtools/forward.h"
+#include "components/ui_devtools/protocol.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "services/network/public/cpp/server/http_server.h"
@@ -32,6 +32,9 @@ class UI_DEVTOOLS_EXPORT UiDevToolsServer
  public:
   // Network tags to be used for the UI devtools servers.
   static const net::NetworkTrafficAnnotationTag kUIDevtoolsServerTag;
+
+  UiDevToolsServer(const UiDevToolsServer&) = delete;
+  UiDevToolsServer& operator=(const UiDevToolsServer&) = delete;
 
   ~UiDevToolsServer() override;
 
@@ -78,6 +81,9 @@ class UI_DEVTOOLS_EXPORT UiDevToolsServer
   // Marks as a const function so it can be called after the server is set up
   // and used as a constant instance.
   void SetOnSessionEnded(base::OnceClosure callback) const;
+  // Sets a callback that tests can use to wait for the server to be ready to
+  // accept connections.
+  void SetOnSocketConnectedForTesting(base::OnceClosure on_socket_connected);
 
  private:
   UiDevToolsServer(int port,
@@ -120,14 +126,13 @@ class UI_DEVTOOLS_EXPORT UiDevToolsServer
 
   // Invoked when the server doesn't have any live connection.
   mutable base::OnceClosure on_session_ended_;
+  base::OnceClosure on_socket_connected_;
 
   // The server (owned by Chrome for now)
   static UiDevToolsServer* devtools_server_;
 
   SEQUENCE_CHECKER(devtools_server_sequence_);
   base::WeakPtrFactory<UiDevToolsServer> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(UiDevToolsServer);
 };
 
 }  // namespace ui_devtools

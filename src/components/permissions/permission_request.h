@@ -8,11 +8,11 @@
 #include <string>
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "build/build_config.h"
 #include "components/content_settings/core/common/content_settings.h"
 #include "components/content_settings/core/common/content_settings_types.h"
 #include "components/permissions/permission_request_enums.h"
+#include "components/permissions/request_type.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
@@ -66,15 +66,27 @@ class PermissionRequest {
   // need to be shown in the UI.
   virtual bool IsDuplicateOf(PermissionRequest* other_request) const;
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   // Returns prompt text appropriate for displaying in an Android dialog.
   virtual std::u16string GetDialogMessageText() const;
 #endif
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
+  // Returns prompt icon appropriate for displaying on the chip button in the
+  // location bar.
+  IconId GetIconForChip();
+
+  // Returns prompt icon appropriate for displaying on the quiet chip button in
+  // the location bar.
+  IconId GetBlockedIconForChip();
+
   // Returns prompt text appropriate for displaying on the chip button in the
   // location bar.
-  absl::optional<std::u16string> GetChipText() const;
+  absl::optional<std::u16string> GetRequestChipText() const;
+
+  // Returns prompt text appropriate for displaying on the quiet chip button in
+  // the location bar.
+  absl::optional<std::u16string> GetQuietChipText() const;
 
   // Returns prompt text appropriate for displaying under the dialog title
   // "[domain] wants to:".

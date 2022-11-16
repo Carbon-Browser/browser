@@ -6,9 +6,12 @@
 
 #include <limits>
 
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace device {
+
+using mojom::SensorType;
 
 TEST(PlatformSensorUtil, RoundPositive) {
   EXPECT_DOUBLE_EQ(1.2, RoundToMultiple(1.20, 0.1));

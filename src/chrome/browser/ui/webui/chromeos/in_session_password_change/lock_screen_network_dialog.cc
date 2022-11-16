@@ -6,13 +6,14 @@
 
 #include <memory>
 
+#include "ash/constants/ash_features.h"
 #include "base/bind.h"
-#include "base/task/post_task.h"
 #include "base/task/task_traits.h"
 #include "chrome/browser/ash/login/saml/in_session_password_sync_manager.h"
 #include "chrome/browser/ash/login/saml/in_session_password_sync_manager_factory.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/ui/webui/chromeos/in_session_password_change/lock_screen_reauth_dialogs.h"
 #include "chrome/common/webui_url_constants.h"
 #include "chrome/grit/browser_resources.h"
 #include "chrome/grit/generated_resources.h"
@@ -25,15 +26,17 @@ namespace chromeos {
 
 LockScreenNetworkDialog::LockScreenNetworkDialog(
     NetworkDialogCleanupCallback callback)
-    : BaseLockDialog(GURL(chrome::kChromeUILockScreenNetworkURL),
-                     kBaseLockDialogSize) {
+    : BaseLockDialog(
+          GURL(chrome::kChromeUILockScreenNetworkURL),
+          LockScreenStartReauthDialog::CalculateLockScreenReauthDialogSize(
+              features::IsNewLockScreenReauthLayoutEnabled())) {
   callback_ = std::move(callback);
 }
 
 LockScreenNetworkDialog::~LockScreenNetworkDialog() = default;
 
 void LockScreenNetworkDialog::OnDialogClosed(const std::string& json_retval) {
-  base::PostTask(FROM_HERE, {content::BrowserThread::UI}, std::move(callback_));
+  content::GetUIThreadTaskRunner({})->PostTask(FROM_HERE, std::move(callback_));
 }
 
 void LockScreenNetworkDialog::Show(Profile* profile) {

@@ -6,15 +6,14 @@
 
 #include "base/containers/contains.h"
 #include "base/metrics/histogram_base.h"
-#include "base/no_destructor.h"
 #include "base/test/metrics/histogram_enum_reader.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
+#include "chrome/browser/ash/android_sms/android_sms_service_factory.h"
+#include "chrome/browser/ash/eche_app/eche_app_manager_factory.h"
 #include "chrome/browser/ash/kerberos/kerberos_credentials_manager_factory.h"
-#include "chrome/browser/ash/profiles/profile_helper.h"
-#include "chrome/browser/chromeos/android_sms/android_sms_service_factory.h"
-#include "chrome/browser/chromeos/multidevice_setup/multidevice_setup_client_factory.h"
-#include "chrome/browser/chromeos/phonehub/phone_hub_manager_factory.h"
-#include "chrome/browser/chromeos/printing/cups_printers_manager_factory.h"
+#include "chrome/browser/ash/multidevice_setup/multidevice_setup_client_factory.h"
+#include "chrome/browser/ash/phonehub/phone_hub_manager_factory.h"
+#include "chrome/browser/ash/printing/cups_printers_manager_factory.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "chrome/browser/supervised_user/supervised_user_service_factory.h"
 #include "chrome/browser/sync/sync_service_factory.h"
@@ -27,11 +26,12 @@
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chrome/test/base/testing_profile_manager.h"
-#include "chromeos/components/local_search_service/public/cpp/local_search_service_proxy.h"
-#include "chromeos/components/local_search_service/public/cpp/local_search_service_proxy_factory.h"
-#include "chromeos/components/local_search_service/search_metrics_reporter.h"
+#include "chromeos/ash/components/local_search_service/public/cpp/local_search_service_proxy.h"
+#include "chromeos/ash/components/local_search_service/public/cpp/local_search_service_proxy_factory.h"
+#include "chromeos/ash/components/local_search_service/search_metrics_reporter.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/accessibility/accessibility_features.h"
 
 namespace chromeos {
 namespace settings {
@@ -46,6 +46,9 @@ class OsSettingsManagerTest : public testing::Test {
 
   // testing::Test:
   void SetUp() override {
+    scoped_feature_list_.InitWithFeatures(
+      {features::kAccessibilityOSSettingsVisibility}, {});
+
     ASSERT_TRUE(profile_manager_.SetUp());
     TestingProfile* profile =
         profile_manager_.CreateTestingProfile("TestingProfile");
@@ -54,10 +57,7 @@ class OsSettingsManagerTest : public testing::Test {
         pref_service_.registry());
     local_search_service::LocalSearchServiceProxyFactory::GetInstance()
         ->SetLocalState(&pref_service_);
-    KerberosCredentialsManager* kerberos_credentials_manager =
-        ProfileHelper::IsPrimaryProfile(profile)
-            ? KerberosCredentialsManagerFactory::Get(profile)
-            : nullptr;
+
     manager_ = std::make_unique<OsSettingsManager>(
         profile, local_search_service_proxy_.get(),
         multidevice_setup::MultiDeviceSetupClientFactory::GetForProfile(
@@ -65,12 +65,13 @@ class OsSettingsManagerTest : public testing::Test {
         phonehub::PhoneHubManagerFactory::GetForProfile(profile),
         SyncServiceFactory::GetForProfile(profile),
         SupervisedUserServiceFactory::GetForProfile(profile),
-        kerberos_credentials_manager,
+        KerberosCredentialsManagerFactory::Get(profile),
         ArcAppListPrefsFactory::GetForBrowserContext(profile),
         IdentityManagerFactory::GetForProfile(profile),
         android_sms::AndroidSmsServiceFactory::GetForBrowserContext(profile),
         CupsPrintersManagerFactory::GetForBrowserContext(profile),
-        apps::AppServiceProxyFactory::GetForProfile(profile));
+        apps::AppServiceProxyFactory::GetForProfile(profile),
+        eche_app::EcheAppManagerFactory::GetForProfile(profile));
   }
 
   content::BrowserTaskEnvironment task_environment_;
@@ -81,6 +82,7 @@ class OsSettingsManagerTest : public testing::Test {
           std::make_unique<local_search_service::LocalSearchServiceProxy>(
               /*for_testing=*/true);
   std::unique_ptr<OsSettingsManager> manager_;
+  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 TEST_F(OsSettingsManagerTest, Initialization) {

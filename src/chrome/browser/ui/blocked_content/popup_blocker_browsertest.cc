@@ -8,7 +8,6 @@
 #include "base/command_line.h"
 #include "base/containers/contains.h"
 #include "base/files/file_path.h"
-#include "base/macros.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/metrics/histogram_tester.h"
@@ -68,17 +67,19 @@
 #include "content/public/test/back_forward_cache_util.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
+#include "content/public/test/fenced_frame_test_util.h"
 #include "content/public/test/test_navigation_observer.h"
 #include "content/public/test/test_utils.h"
 #include "extensions/buildflags/buildflags.h"
 #include "net/dns/mock_host_resolver.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
+#include "printing/buildflags/buildflags.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/events/keycodes/dom/dom_code.h"
 #include "ui/events/keycodes/dom/keycode_converter.h"
 
-#if defined(OS_CHROMEOS) || defined(OS_LINUX) || defined(OS_MAC)
+#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC)
 #include "third_party/blink/public/common/switches.h"
 #endif
 
@@ -94,6 +95,9 @@ class CloseObserver : public content::WebContentsObserver {
   explicit CloseObserver(WebContents* contents)
       : content::WebContentsObserver(contents) {}
 
+  CloseObserver(const CloseObserver&) = delete;
+  CloseObserver& operator=(const CloseObserver&) = delete;
+
   void Wait() { close_loop_.Run(); }
 
   // content::WebContentsObserver:
@@ -101,13 +105,15 @@ class CloseObserver : public content::WebContentsObserver {
 
  private:
   base::RunLoop close_loop_;
-
-  DISALLOW_COPY_AND_ASSIGN(CloseObserver);
 };
 
 class PopupBlockerBrowserTest : public InProcessBrowserTest {
  public:
   PopupBlockerBrowserTest() {}
+
+  PopupBlockerBrowserTest(const PopupBlockerBrowserTest&) = delete;
+  PopupBlockerBrowserTest& operator=(const PopupBlockerBrowserTest&) = delete;
+
   ~PopupBlockerBrowserTest() override {}
 
   // InProcessBrowserTest:
@@ -116,7 +122,7 @@ class PopupBlockerBrowserTest : public InProcessBrowserTest {
     ASSERT_TRUE(embedded_test_server()->Start());
   }
 
-#if defined(OS_CHROMEOS) || defined(OS_LINUX) || defined(OS_MAC)
+#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC)
   void SetUpCommandLine(base::CommandLine* command_line) override {
     // Testing on some platforms is flaky due to slower loading interacting with
     // deferred commits.
@@ -238,9 +244,6 @@ class PopupBlockerBrowserTest : public InProcessBrowserTest {
 
     return web_contents;
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(PopupBlockerBrowserTest);
 };
 
 IN_PROC_BROWSER_TEST_F(PopupBlockerBrowserTest, BlockWebContentsCreation) {
@@ -250,7 +253,7 @@ IN_PROC_BROWSER_TEST_F(PopupBlockerBrowserTest, BlockWebContentsCreation) {
 }
 
 // TODO(crbug.com/1115886): Flaky on Mac ASAN and Chrome OS.
-#if (defined(OS_MAC) && defined(ADDRESS_SANITIZER)) || \
+#if (BUILDFLAG(IS_MAC) && defined(ADDRESS_SANITIZER)) || \
     BUILDFLAG(IS_CHROMEOS_ASH)
 #define MAYBE_BlockWebContentsCreationIncognito \
   DISABLED_BlockWebContentsCreationIncognito
@@ -495,7 +498,7 @@ IN_PROC_BROWSER_TEST_F(PopupBlockerBrowserTest,
 // https://codereview.chromium.org/23903056
 // BUG=https://code.google.com/p/chromium/issues/detail?id=295299
 // TODO(ananta). Debug and fix this test.
-#if defined(USE_AURA) && (defined(OS_LINUX) || defined(OS_CHROMEOS))
+#if defined(USE_AURA) && (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS))
 #define MAYBE_WindowFeatures DISABLED_WindowFeatures
 #else
 #define MAYBE_WindowFeatures WindowFeatures
@@ -551,14 +554,14 @@ IN_PROC_BROWSER_TEST_F(PopupBlockerBrowserTest, ClosableAfterNavigation) {
 
   // Navigate it elsewhere.
   content::TestNavigationObserver nav_observer(popup);
-  popup->GetMainFrame()->ExecuteJavaScriptForTests(
+  popup->GetPrimaryMainFrame()->ExecuteJavaScriptForTests(
       u"location.href = '/empty.html'", base::NullCallback());
   nav_observer.Wait();
 
   // Have it close itself.
   CloseObserver close_observer(popup);
-  popup->GetMainFrame()->ExecuteJavaScriptForTests(u"window.close()",
-                                                   base::NullCallback());
+  popup->GetPrimaryMainFrame()->ExecuteJavaScriptForTests(u"window.close()",
+                                                          base::NullCallback());
   close_observer.Wait();
 }
 
@@ -640,41 +643,42 @@ IN_PROC_BROWSER_TEST_F(PopupBlockerBrowserTest, ModalPopUnder) {
   ASSERT_NE(popup_browser, browser());
 
 // Showing an alert will raise the tab over the popup.
-#if !defined(OS_MAC)
+#if !BUILDFLAG(IS_MAC)
   // Mac doesn't activate the browser during modal dialogs, see
   // https://crbug.com/687732 for details.
   ui_test_utils::BrowserActivationWaiter alert_waiter(browser());
 #endif
   bool ignored;
   javascript_dialogs::AppModalDialogManager::GetInstance()->RunJavaScriptDialog(
-      tab, tab->GetMainFrame(), content::JAVASCRIPT_DIALOG_TYPE_ALERT,
+      tab, tab->GetPrimaryMainFrame(), content::JAVASCRIPT_DIALOG_TYPE_ALERT,
       std::u16string(), std::u16string(), base::DoNothing(), &ignored);
   javascript_dialogs::AppModalDialogController* dialog =
       ui_test_utils::WaitForAppModalDialog();
   ASSERT_TRUE(dialog);
-#if !defined(OS_MAC)
+#if !BUILDFLAG(IS_MAC)
   if (chrome::FindLastActive() != browser())
     alert_waiter.WaitForActivation();
 #endif
 
 // Verify that after the dialog is closed, the popup is in front again.
-#if !defined(OS_MAC)
+#if !BUILDFLAG(IS_MAC)
   ui_test_utils::BrowserActivationWaiter waiter(popup_browser);
 #endif
   javascript_dialogs::AppModalDialogManager::GetInstance()
       ->HandleJavaScriptDialog(tab, true, nullptr);
-#if !defined(OS_MAC)
+#if !BUILDFLAG(IS_MAC)
   waiter.WaitForActivation();
 #endif
   ASSERT_EQ(popup_browser, chrome::FindLastActive());
 }
 
+#if BUILDFLAG(ENABLE_PRINT_PREVIEW)
 // Tests that the print preview dialog can't be used to create popunders. The
 // test was added due to a bug in MacViews that causes dialogs to activate
 // their parents (https://crbug.com/1073587).
 // TODO(weili): investigate why this failed on Linux and ChromeOS bots,
 // and why it was flaky on Windows. https://crbug.com/1241815.
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 #define MAYBE_PrintPreviewPopUnder PrintPreviewPopUnder
 #else
 #define MAYBE_PrintPreviewPopUnder DISABLED_PrintPreviewPopUnder
@@ -714,9 +718,16 @@ IN_PROC_BROWSER_TEST_F(PopupBlockerBrowserTest, MAYBE_PrintPreviewPopUnder) {
   // The popup is still in front and being activated.
   EXPECT_EQ(popup_browser, chrome::FindLastActive());
 }
+#endif  // BUILDFLAG(ENABLE_PRINT_PREVIEW)
 
+// Times out Windows 7. https://crbug.com/1291800
+#if BUILDFLAG(IS_WIN)
+#define MAYBE_CtrlEnterKey DISABLED_CtrlEnterKey
+#else
+#define MAYBE_CtrlEnterKey CtrlEnterKey
+#endif
 // Tests that Ctrl+Enter/Cmd+Enter keys on a link open the background tab.
-IN_PROC_BROWSER_TEST_F(PopupBlockerBrowserTest, CtrlEnterKey) {
+IN_PROC_BROWSER_TEST_F(PopupBlockerBrowserTest, MAYBE_CtrlEnterKey) {
   WebContents* tab = browser()->tab_strip_model()->GetActiveWebContents();
 
   GURL url(embedded_test_server()->GetURL(
@@ -726,7 +737,7 @@ IN_PROC_BROWSER_TEST_F(PopupBlockerBrowserTest, CtrlEnterKey) {
   ui_test_utils::TabAddedWaiter tab_add(browser());
 
   bool command = false;
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   command = true;
 #endif
 
@@ -742,8 +753,13 @@ IN_PROC_BROWSER_TEST_F(PopupBlockerBrowserTest, CtrlEnterKey) {
 }
 
 // Tests that the tapping gesture with cntl/cmd key on a link open the
-// backgournd tab.
-IN_PROC_BROWSER_TEST_F(PopupBlockerBrowserTest, TapGestureWithCtrlKey) {
+// background tab.
+#if BUILDFLAG(IS_WIN)
+#define MAYBE_TapGestureWithCtrlKey DISABLED_TapGestureWithCtrlKey
+#else
+#define MAYBE_TapGestureWithCtrlKey TapGestureWithCtrlKey
+#endif
+IN_PROC_BROWSER_TEST_F(PopupBlockerBrowserTest, MAYBE_TapGestureWithCtrlKey) {
   WebContents* tab = browser()->tab_strip_model()->GetActiveWebContents();
 
   GURL url(embedded_test_server()->GetURL(
@@ -752,7 +768,7 @@ IN_PROC_BROWSER_TEST_F(PopupBlockerBrowserTest, TapGestureWithCtrlKey) {
 
   ui_test_utils::TabAddedWaiter tab_add(browser());
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   unsigned modifiers = blink::WebInputEvent::kMetaKey;
 #else
   unsigned modifiers = blink::WebInputEvent::kControlKey;
@@ -807,8 +823,10 @@ IN_PROC_BROWSER_TEST_F(PopupBlockerBrowserTest, PopupsDisableBackForwardCache) {
   ASSERT_TRUE(ui_test_utils::NavigateToURL(
       browser(), embedded_test_server()->GetURL(
                      "a.com", "/popup_blocker/popup-many.html")));
-  content::RenderFrameHostWrapper rfh(
-      browser()->tab_strip_model()->GetActiveWebContents()->GetMainFrame());
+  content::RenderFrameHostWrapper rfh(browser()
+                                          ->tab_strip_model()
+                                          ->GetActiveWebContents()
+                                          ->GetPrimaryMainFrame());
   int process_id = rfh->GetProcess()->GetID();
   int frame_routing_id = rfh->GetRoutingID();
 
@@ -828,14 +846,23 @@ IN_PROC_BROWSER_TEST_F(PopupBlockerBrowserTest, PopupsDisableBackForwardCache) {
       browser(), embedded_test_server()->GetURL("b.com", "/title1.html")));
 
   // Because the original RFH is not cacheable it will be deleted.
-  rfh.WaitUntilRenderFrameDeleted();
+  ASSERT_TRUE(rfh.WaitUntilRenderFrameDeleted());
 }
+
+#if BUILDFLAG(IS_WIN)
+// Frequently timing out on Win7 CI builder. See https://crbug.com/1251717.
+#define MAYBE_PopupTriggeredFromDifferentWebContents \
+  DISABLED_PopupTriggeredFromDifferentWebContents
+#else
+#define MAYBE_PopupTriggeredFromDifferentWebContents \
+  PopupTriggeredFromDifferentWebContents
+#endif
 
 // Make sure the poput is attributed to the right WebContents when it is
 // triggered from a different WebContents. Regression test for
 // https://crbug.com/1128495
 IN_PROC_BROWSER_TEST_F(PopupBlockerBrowserTest,
-                       PopupTriggeredFromDifferentWebContents) {
+                       MAYBE_PopupTriggeredFromDifferentWebContents) {
   const GURL url(
       embedded_test_server()->GetURL("/popup_blocker/popup-in-href.html"));
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
@@ -860,11 +887,92 @@ IN_PROC_BROWSER_TEST_F(PopupBlockerBrowserTest,
   EXPECT_TRUE(content::ExecuteScriptWithoutUserGesture(tab_2, ""));
 
   EXPECT_FALSE(content_settings::PageSpecificContentSettings::GetForFrame(
-                   tab_1->GetMainFrame())
+                   tab_1->GetPrimaryMainFrame())
                    ->IsContentBlocked(ContentSettingsType::POPUPS));
   EXPECT_TRUE(content_settings::PageSpecificContentSettings::GetForFrame(
-                  tab_2->GetMainFrame())
+                  tab_2->GetPrimaryMainFrame())
                   ->IsContentBlocked(ContentSettingsType::POPUPS));
+}
+
+class PopupBlockerFencedFrameTest : public PopupBlockerBrowserTest {
+ public:
+  PopupBlockerFencedFrameTest() = default;
+  ~PopupBlockerFencedFrameTest() override = default;
+
+  content::RenderFrameHost* primary_main_frame_host() {
+    return browser()
+        ->tab_strip_model()
+        ->GetActiveWebContents()
+        ->GetPrimaryMainFrame();
+  }
+
+ protected:
+  content::test::FencedFrameTestHelper fenced_frame_helper_;
+};
+
+IN_PROC_BROWSER_TEST_F(PopupBlockerFencedFrameTest,
+                       AllowPopupThroughContentSettingFencedFrame) {
+  HostContentSettingsMap* content_settings =
+      HostContentSettingsMapFactory::GetForProfile(browser()->profile());
+
+  // The content setting of the main frame URL is set to allow popup.
+  const GURL main_frame_url(
+      embedded_test_server()->GetURL("a.com", "/title1.html"));
+  content_settings->SetContentSettingDefaultScope(main_frame_url, GURL(),
+                                                  ContentSettingsType::POPUPS,
+                                                  CONTENT_SETTING_ALLOW);
+
+  // The content setting of the fenced frame URL is set to block popup.
+  const GURL fenced_frame_url(embedded_test_server()->GetURL(
+      "b.com", "/popup_blocker/popup-window-open.html"));
+  content_settings->SetContentSettingDefaultScope(fenced_frame_url, GURL(),
+                                                  ContentSettingsType::POPUPS,
+                                                  CONTENT_SETTING_BLOCK);
+
+  EXPECT_TRUE(ui_test_utils::NavigateToURL(browser(), main_frame_url));
+
+  // Create a fenced frame opening a popup.
+  content::RenderFrameHost* fenced_frame_rfh =
+      fenced_frame_helper_.CreateFencedFrame(primary_main_frame_host(),
+                                             fenced_frame_url);
+  ASSERT_NE(nullptr, fenced_frame_rfh);
+
+  // The popup should be shown even the iframe URL is blocked, since the
+  // top-level URL allows popups.
+  ASSERT_EQ(2u, chrome::GetBrowserCount(browser()->profile()));
+  ASSERT_EQ(0, GetBlockedContentsCount());
+}
+
+IN_PROC_BROWSER_TEST_F(PopupBlockerFencedFrameTest,
+                       BlockPopupThroughContentSettingFencedFrame) {
+  HostContentSettingsMap* content_settings =
+      HostContentSettingsMapFactory::GetForProfile(browser()->profile());
+
+  // The content setting of the main frame URL is set to block popup.
+  const GURL main_frame_url(
+      embedded_test_server()->GetURL("a.com", "/title1.html"));
+  content_settings->SetContentSettingDefaultScope(main_frame_url, GURL(),
+                                                  ContentSettingsType::POPUPS,
+                                                  CONTENT_SETTING_BLOCK);
+
+  // The content setting of the fenced frame URL is set to allow popup.
+  const GURL fenced_frame_url(embedded_test_server()->GetURL(
+      "b.com", "/popup_blocker/popup-window-open.html"));
+  content_settings->SetContentSettingDefaultScope(fenced_frame_url, GURL(),
+                                                  ContentSettingsType::POPUPS,
+                                                  CONTENT_SETTING_ALLOW);
+
+  EXPECT_TRUE(ui_test_utils::NavigateToURL(browser(), main_frame_url));
+
+  // Create a fenced frame opening a popup.
+  content::RenderFrameHost* fenced_frame_rfh =
+      fenced_frame_helper_.CreateFencedFrame(primary_main_frame_host(),
+                                             fenced_frame_url);
+  ASSERT_NE(nullptr, fenced_frame_rfh);
+
+  // Popup should be blocked even the iframe URL is in AllowList, since the
+  // top-level URL blocks popups.
+  ASSERT_EQ(1, GetBlockedContentsCount());
 }
 
 }  // namespace

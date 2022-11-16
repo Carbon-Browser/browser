@@ -4,6 +4,7 @@
 
 #include "chrome/browser/ui/app_list/search/app_service_app_result.h"
 
+#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/app_list/app_list_config.h"
 #include "ash/public/cpp/app_list/app_list_types.h"
 #include "ash/public/cpp/app_list/internal_app_id_constants.h"
@@ -14,21 +15,22 @@
 #include "base/callback_helpers.h"
 #include "base/metrics/user_metrics.h"
 #include "base/strings/utf_string_conversions.h"
-#include "chrome/browser/apps/app_service/app_service_metrics.h"
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
 #include "chrome/browser/apps/app_service/launch_utils.h"
+#include "chrome/browser/apps/app_service/metrics/app_service_metrics.h"
 #include "chrome/browser/favicon/large_icon_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/app_list/app_list_client_impl.h"
 #include "chrome/browser/ui/app_list/app_service/app_service_app_item.h"
 #include "chrome/browser/ui/app_list/app_service/app_service_context_menu.h"
 #include "chrome/browser/ui/app_list/internal_app/internal_app_metadata.h"
+#include "chrome/browser/ui/app_list/search/common/icon_constants.h"
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_controller.h"
-#include "chrome/browser/ui/web_applications/system_web_app_ui_utils.h"
-#include "chrome/browser/web_applications/system_web_apps/system_web_app_manager.h"
 #include "components/favicon/core/large_icon_service.h"
+#include "components/services/app_service/public/cpp/app_launch_util.h"
 #include "components/services/app_service/public/cpp/app_update.h"
+#include "components/services/app_service/public/cpp/features.h"
 #include "components/services/app_service/public/mojom/types.mojom.h"
 #include "extensions/common/extension.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -42,23 +44,21 @@ AppServiceAppResult::AppServiceAppResult(Profile* profile,
                                          apps::IconLoader* icon_loader)
     : AppResult(profile, app_id, controller, is_recommendation),
       icon_loader_(icon_loader),
-      app_type_(apps::mojom::AppType::kUnknown),
+      app_type_(apps::AppType::kUnknown),
       is_platform_app_(false),
       show_in_launcher_(false) {
   apps::AppServiceProxyFactory::GetForProfile(profile)
       ->AppRegistryCache()
       .ForOneApp(app_id, [this](const apps::AppUpdate& update) {
         app_type_ = update.AppType();
-        is_platform_app_ =
-            update.IsPlatformApp() == apps::mojom::OptionalBool::kTrue;
-        show_in_launcher_ =
-            update.ShowInLauncher() == apps::mojom::OptionalBool::kTrue;
+        is_platform_app_ = update.IsPlatformApp().value_or(false);
+        show_in_launcher_ = update.ShowInLauncher().value_or(false);
 
-        if (update.Readiness() == apps::mojom::Readiness::kDisabledByPolicy) {
+        if (update.Readiness() == apps::Readiness::kDisabledByPolicy) {
           SetAccessibleName(l10n_util::GetStringFUTF16(
               IDS_APP_ACCESSIBILITY_BLOCKED_INSTALLED_APP_ANNOUNCEMENT,
               base::UTF8ToUTF16(update.ShortName())));
-        } else if (update.Paused() == apps::mojom::OptionalBool::kTrue) {
+        } else if (update.Paused().value_or(false)) {
           SetAccessibleName(l10n_util::GetStringFUTF16(
               IDS_APP_ACCESSIBILITY_PAUSED_INSTALLED_APP_ANNOUNCEMENT,
               base::UTF8ToUTF16(update.ShortName())));
@@ -72,16 +72,17 @@ AppServiceAppResult::AppServiceAppResult(Profile* profile,
   }
 
   SetMetricsType(GetSearchResultType());
+  SetCategory(Category::kApps);
 
   switch (app_type_) {
-    case apps::mojom::AppType::kBuiltIn:
+    case apps::AppType::kBuiltIn:
       set_id(app_id);
       // TODO(crbug.com/826982): Is this SetResultType call necessary?? Does
       // anyone care about the kInternalApp vs kInstalledApp distinction?
       SetResultType(ResultType::kInternalApp);
       apps::RecordBuiltInAppSearchResult(app_id);
       break;
-    case apps::mojom::AppType::kExtension:
+    case apps::AppType::kChromeApp:
       // TODO(crbug.com/826982): why do we pass the URL and not the app_id??
       // Can we replace this by the simpler "set_id(app_id)", and therefore
       // pull that out of the switch?
@@ -100,47 +101,49 @@ AppServiceAppResult::~AppServiceAppResult() = default;
 
 void AppServiceAppResult::Open(int event_flags) {
   Launch(event_flags,
-         (is_recommendation()
-              ? apps::mojom::LaunchSource::kFromAppListRecommendation
-              : apps::mojom::LaunchSource::kFromAppListQuery));
+         (is_recommendation() ? apps::LaunchSource::kFromAppListRecommendation
+                              : apps::LaunchSource::kFromAppListQuery));
 }
 
 void AppServiceAppResult::GetContextMenuModel(GetMenuModelCallback callback) {
   // TODO(crbug.com/826982): drop the (app_type_ == etc), and check
   // show_in_launcher_ for all app types?
-  if ((app_type_ == apps::mojom::AppType::kBuiltIn) && !show_in_launcher_) {
+  if ((app_type_ == apps::AppType::kBuiltIn) && !show_in_launcher_) {
     std::move(callback).Run(nullptr);
     return;
   }
 
   context_menu_ = std::make_unique<AppServiceContextMenu>(
-      this, profile(), app_id(), controller());
+      this, profile(), app_id(), controller(),
+      ash::AppListItemContext::kSearchResults);
   context_menu_->GetMenuModel(std::move(callback));
 }
 
 ash::SearchResultType AppServiceAppResult::GetSearchResultType() const {
   switch (app_type_) {
-    case apps::mojom::AppType::kArc:
+    case apps::AppType::kArc:
       return ash::PLAY_STORE_APP;
-    case apps::mojom::AppType::kBuiltIn:
+    case apps::AppType::kBuiltIn:
       return ash::INTERNAL_APP;
-    case apps::mojom::AppType::kPluginVm:
+    case apps::AppType::kPluginVm:
       return ash::PLUGIN_VM_APP;
-    case apps::mojom::AppType::kCrostini:
+    case apps::AppType::kCrostini:
       return ash::CROSTINI_APP;
-    case apps::mojom::AppType::kExtension:
-    case apps::mojom::AppType::kWeb:
-    case apps::mojom::AppType::kSystemWeb:
-    case apps::mojom::AppType::kStandaloneBrowserExtension:
+    case apps::AppType::kChromeApp:
+    case apps::AppType::kWeb:
+    case apps::AppType::kSystemWeb:
+    case apps::AppType::kStandaloneBrowserChromeApp:
       return ash::EXTENSION_APP;
-    case apps::mojom::AppType::kStandaloneBrowser:
+    case apps::AppType::kStandaloneBrowser:
       return ash::LACROS;
-    case apps::mojom::AppType::kRemote:
+    case apps::AppType::kRemote:
       return ash::REMOTE_APP;
-    case apps::mojom::AppType::kBorealis:
+    case apps::AppType::kBorealis:
       return ash::BOREALIS_APP;
-    case apps::mojom::AppType::kMacOs:
-    case apps::mojom::AppType::kUnknown:
+    case apps::AppType::kExtension:
+    case apps::AppType::kStandaloneBrowserExtension:
+    case apps::AppType::kMacOs:
+    case apps::AppType::kUnknown:
       NOTREACHED();
       return ash::SEARCH_RESULT_TYPE_BOUNDARY;
   }
@@ -151,11 +154,11 @@ AppContextMenu* AppServiceAppResult::GetAppContextMenu() {
 }
 
 void AppServiceAppResult::ExecuteLaunchCommand(int event_flags) {
-  Launch(event_flags, apps::mojom::LaunchSource::kFromAppListQueryContextMenu);
+  Launch(event_flags, apps::LaunchSource::kFromAppListQueryContextMenu);
 }
 
 void AppServiceAppResult::Launch(int event_flags,
-                                 apps::mojom::LaunchSource launch_source) {
+                                 apps::LaunchSource launch_source) {
   if (id() == ash::kInternalAppIdContinueReading &&
       url_for_continuous_reading_.is_valid()) {
     apps::RecordAppLaunch(id(), launch_source);
@@ -165,10 +168,10 @@ void AppServiceAppResult::Launch(int event_flags,
     return;
   }
 
-  apps::AppServiceProxyChromeOs* proxy =
+  apps::AppServiceProxy* proxy =
       apps::AppServiceProxyFactory::GetForProfile(profile());
 
-  // For Chrome apps or Web apps, if it is non-platform app, it could be
+  // For Crostini apps, non-platform Chrome apps, Web apps, it could be
   // selecting an existing delegate for the app, so call
   // ChromeShelfController's ActivateApp interface. Platform apps or ARC
   // apps, Crostini apps treat activations as a launch. The app can decide
@@ -179,11 +182,13 @@ void AppServiceAppResult::Launch(int event_flags,
   bool is_active_app = false;
   proxy->AppRegistryCache().ForOneApp(
       app_id(), [&is_active_app](const apps::AppUpdate& update) {
-        if (update.AppType() == apps::mojom::AppType::kCrostini ||
-            ((update.AppType() == apps::mojom::AppType::kExtension ||
-              update.AppType() == apps::mojom::AppType::kSystemWeb ||
-              update.AppType() == apps::mojom::AppType::kWeb) &&
-             update.IsPlatformApp() == apps::mojom::OptionalBool::kFalse)) {
+        if (update.AppType() == apps::AppType::kCrostini ||
+            update.AppType() == apps::AppType::kWeb ||
+            update.AppType() == apps::AppType::kSystemWeb ||
+            (update.AppType() == apps::AppType::kStandaloneBrowserChromeApp &&
+             !update.IsPlatformApp().value_or(true)) ||
+            (update.AppType() == apps::AppType::kChromeApp &&
+             update.IsPlatformApp().value_or(true))) {
           is_active_app = true;
         }
       });
@@ -203,39 +208,53 @@ void AppServiceAppResult::Launch(int event_flags,
     }
   }
 
-  proxy->Launch(app_id(), event_flags, launch_source,
-                apps::MakeWindowInfo(controller()->GetAppListDisplayId()));
-}
-
-void AppServiceAppResult::CallLoadIcon(bool chip, bool allow_placeholder_icon) {
-  if (icon_loader_) {
-    // If |icon_loader_releaser_| is non-null, assigning to it will signal to
-    // |icon_loader_| that the previous icon is no longer being used, as a hint
-    // that it could be flushed from any caches.
-    auto icon_type = apps::mojom::IconType::kStandard;
-    icon_loader_releaser_ = icon_loader_->LoadIcon(
-        app_type_, app_id(), icon_type,
-        chip ? ash::SharedAppListConfig::instance()
-                   .suggestion_chip_icon_dimension()
-             : ash::SharedAppListConfig::instance().GetPreferredIconDimension(
-                   display_type()),
-        allow_placeholder_icon,
-        base::BindOnce(&AppServiceAppResult::OnLoadIcon,
-                       weak_ptr_factory_.GetWeakPtr(), chip));
+  if (base::FeatureList::IsEnabled(apps::kAppServiceLaunchWithoutMojom)) {
+    proxy->Launch(app_id(), event_flags, launch_source,
+                  std::make_unique<apps::WindowInfo>(
+                      controller()->GetAppListDisplayId()));
+  } else {
+    proxy->Launch(app_id(), event_flags,
+                  apps::ConvertLaunchSourceToMojomLaunchSource(launch_source),
+                  apps::MakeWindowInfo(controller()->GetAppListDisplayId()));
   }
 }
 
-void AppServiceAppResult::OnLoadIcon(bool chip,
-                                     apps::mojom::IconValuePtr icon_value) {
-  auto icon_type = apps::mojom::IconType::kStandard;
-  if (icon_value->icon_type != icon_type) {
+// TODO(crbug.com/1258415): Remove this method when the productivity launcher is
+// enabled.
+int AppServiceAppResult::GetIconDimension(bool chip) {
+  if (ash::features::IsProductivityLauncherEnabled()) {
+    return GetAppIconDimension();
+  }
+  return chip ? ash::SharedAppListConfig::instance()
+                    .suggestion_chip_icon_dimension()
+              : ash::SharedAppListConfig::instance().GetPreferredIconDimension(
+                    display_type());
+}
+
+void AppServiceAppResult::CallLoadIcon(bool chip, bool allow_placeholder_icon) {
+  if (!icon_loader_) {
+    return;
+  }
+
+  // If |icon_loader_releaser_| is non-null, assigning to it will signal to
+  // |icon_loader_| that the previous icon is no longer being used, as a hint
+  // that it could be flushed from any caches.
+  icon_loader_releaser_ = icon_loader_->LoadIcon(
+      app_type_, app_id(), apps::IconType::kStandard, GetIconDimension(chip),
+      allow_placeholder_icon,
+      base::BindOnce(&AppServiceAppResult::OnLoadIcon,
+                     weak_ptr_factory_.GetWeakPtr(), chip));
+}
+
+void AppServiceAppResult::OnLoadIcon(bool chip, apps::IconValuePtr icon_value) {
+  if (!icon_value || icon_value->icon_type != apps::IconType::kStandard) {
     return;
   }
 
   if (chip) {
     SetChipIcon(icon_value->uncompressed);
   } else {
-    SetIcon(IconInfo(icon_value->uncompressed));
+    SetIcon(IconInfo(icon_value->uncompressed, GetIconDimension(chip)));
   }
 
   if (icon_value->is_placeholder_icon) {

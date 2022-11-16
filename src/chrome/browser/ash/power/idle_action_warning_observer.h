@@ -5,8 +5,6 @@
 #ifndef CHROME_BROWSER_ASH_POWER_IDLE_ACTION_WARNING_OBSERVER_H_
 #define CHROME_BROWSER_ASH_POWER_IDLE_ACTION_WARNING_OBSERVER_H_
 
-#include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "chromeos/dbus/power/power_manager_client.h"
 #include "ui/views/widget/widget_observer.h"
 
@@ -20,6 +18,11 @@ class IdleActionWarningObserver : public PowerManagerClient::Observer,
                                   public views::WidgetObserver {
  public:
   IdleActionWarningObserver();
+
+  IdleActionWarningObserver(const IdleActionWarningObserver&) = delete;
+  IdleActionWarningObserver& operator=(const IdleActionWarningObserver&) =
+      delete;
+
   ~IdleActionWarningObserver() override;
 
   // PowerManagerClient::Observer:
@@ -29,7 +32,7 @@ class IdleActionWarningObserver : public PowerManagerClient::Observer,
 
  private:
   // views::WidgetObserver:
-  void OnWidgetClosing(views::Widget* widget) override;
+  void OnWidgetDestroying(views::Widget* widget) override;
 
   void HideDialogIfPresent();
 
@@ -37,15 +40,8 @@ class IdleActionWarningObserver : public PowerManagerClient::Observer,
 
   // Used to derive the correct idle action (IdleActionAC/IdleActionBattery).
   bool on_battery_power_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(IdleActionWarningObserver);
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when ChromeOS code migration is done.
-namespace chromeos {
-using ::ash::IdleActionWarningObserver;
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_POWER_IDLE_ACTION_WARNING_OBSERVER_H_

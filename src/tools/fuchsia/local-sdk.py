@@ -34,16 +34,9 @@ def EnsureEmptyDir(path):
 
 
 def BuildForArch(arch):
-  Run(
-      'scripts/fx',
-      '--dir',
-      'out/release-{}'.format(arch),
-      'set',
-      'terminal.qemu-{}'.format(arch),
-      '--args=is_debug=false',
-      '--args=build_sdk_archives=true',
-      # Increase the size of the image to allow multiple test runs.
-      '--args=fvm_image_size={}'.format(512 * 1024 * 1024))
+  Run('scripts/fx', '--dir', 'out/release-{}'.format(arch), 'set',
+      'terminal.qemu-{}'.format(arch), '--args=is_debug=false',
+      '--args=build_sdk_archives=true')
   Run('scripts/fx', 'build', 'sdk', 'build/images')
 
 
@@ -98,7 +91,7 @@ def main(args):
 
     arch_output_dir = os.path.join(fuchsia_root, 'out', 'release-' + arch)
 
-    sdk_tarballs = ['core.tar.gz']
+    sdk_tarballs = ['core.tar.gz', 'core_testing.tar.gz']
 
     for sdk_tar in sdk_tarballs:
       sdk_tar_path = os.path.join(arch_output_dir, 'sdk', 'archive', sdk_tar)

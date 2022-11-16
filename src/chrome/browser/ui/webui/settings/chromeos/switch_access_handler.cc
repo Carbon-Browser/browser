@@ -22,7 +22,7 @@
 #include "ui/events/event.h"
 #include "ui/events/event_constants.h"
 #include "ui/events/keycodes/dom/dom_code.h"
-#include "ui/events/keycodes/dom/dom_codes.h"
+#include "ui/events/keycodes/dom/dom_codes_array.h"
 #include "ui/events/keycodes/dom/keycode_converter.h"
 #include "ui/events/ozone/layout/keyboard_layout_engine.h"
 #include "ui/events/ozone/layout/keyboard_layout_engine_manager.h"
@@ -39,7 +39,7 @@ struct AssignmentInfo {
 std::string GetStringForKeyboardCode(ui::KeyboardCode key_code) {
   ui::DomKey dom_key;
   ui::KeyboardCode key_code_to_compare = ui::VKEY_UNKNOWN;
-  for (const auto& dom_code : ui::dom_codes) {
+  for (const auto& dom_code : ui::kDomCodesArray) {
     if (!ui::KeyboardLayoutEngineManager::GetKeyboardLayoutEngine()->Lookup(
             dom_code, /*flags=*/ui::EF_NONE, &dom_key, &key_code_to_compare)) {
       continue;
@@ -86,18 +86,18 @@ SwitchAccessHandler::~SwitchAccessHandler() {
 }
 
 void SwitchAccessHandler::RegisterMessages() {
-  web_ui()->RegisterDeprecatedMessageCallback(
+  web_ui()->RegisterMessageCallback(
       "refreshAssignmentsFromPrefs",
       base::BindRepeating(
           &SwitchAccessHandler::HandleRefreshAssignmentsFromPrefs,
           base::Unretained(this)));
-  web_ui()->RegisterDeprecatedMessageCallback(
+  web_ui()->RegisterMessageCallback(
       "notifySwitchAccessActionAssignmentPaneActive",
       base::BindRepeating(
           &SwitchAccessHandler::
               HandleNotifySwitchAccessActionAssignmentPaneActive,
           base::Unretained(this)));
-  web_ui()->RegisterDeprecatedMessageCallback(
+  web_ui()->RegisterMessageCallback(
       "notifySwitchAccessActionAssignmentPaneInactive",
       base::BindRepeating(
           &SwitchAccessHandler::
@@ -155,13 +155,13 @@ void SwitchAccessHandler::OnKeyEvent(ui::KeyEvent* event) {
 }
 
 void SwitchAccessHandler::HandleRefreshAssignmentsFromPrefs(
-    const base::ListValue* args) {
+    const base::Value::List& args) {
   AllowJavascript();
   OnSwitchAccessAssignmentsUpdated();
 }
 
 void SwitchAccessHandler::HandleNotifySwitchAccessActionAssignmentPaneActive(
-    const base::ListValue* args) {
+    const base::Value::List& args) {
   AllowJavascript();
   OnSwitchAccessAssignmentsUpdated();
   web_ui()->GetWebContents()->GetNativeView()->AddPreTargetHandler(this);
@@ -169,7 +169,7 @@ void SwitchAccessHandler::HandleNotifySwitchAccessActionAssignmentPaneActive(
 }
 
 void SwitchAccessHandler::HandleNotifySwitchAccessActionAssignmentPaneInactive(
-    const base::ListValue* args) {
+    const base::Value::List& args) {
   web_ui()->GetWebContents()->GetNativeView()->RemovePreTargetHandler(this);
   ash::AccessibilityController::Get()->SuspendSwitchAccessKeyHandling(false);
 }
@@ -193,7 +193,7 @@ void SwitchAccessHandler::OnSwitchAccessAssignmentsUpdated() {
         NOTREACHED();
         return;
       }
-      for (const base::Value& device_type : item.second.GetList()) {
+      for (const base::Value& device_type : item.second.GetListDeprecated()) {
         base::DictionaryValue key;
         key.SetStringPath("key", GetStringForKeyboardCode(
                                      static_cast<ui::KeyboardCode>(key_code)));

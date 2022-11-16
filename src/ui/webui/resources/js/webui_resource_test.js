@@ -227,14 +227,7 @@ function startTesting() {
     setTimeout(startTesting, 1000);
     return;
   }
-
-  if (window.HTMLImports && window.HTMLImports.whenReady) {
-    /// When there is a HTML Import polyfill wait all imports to finish before
-    // starting the test.
-    window.HTMLImports.whenReady(continueTesting);
-  } else {
-    continueTesting();
-  }
+  continueTesting();
 }
 
 /**
@@ -246,7 +239,7 @@ function startTesting() {
 async function continueTesting(opt_asyncTestFailure) {
   const now = performance.now();
   if (testName) {
-    console.log(
+    console.info(
         'TEST ' + testName +
         ' complete, status=' + (opt_asyncTestFailure ? 'FAIL' : 'PASS') +
         ', duration=' + Math.round(now - testStartTime) + 'ms');
@@ -262,7 +255,7 @@ async function continueTesting(opt_asyncTestFailure) {
   if (testCases.length > 0) {
     testStartTime = now;
     testName = testCases.pop();
-    console.log('TEST ' + testName + ' starting...');
+    console.info('TEST ' + testName + ' starting...');
     const isAsyncTest = testScope[testName].length;
     let testError = false;
     try {
@@ -273,7 +266,7 @@ async function continueTesting(opt_asyncTestFailure) {
       await testScope[testName](continueTesting);
     } catch (err) {
       console.error('Failure in test ' + testName + '\n' + err);
-      console.log(err.stack);
+      console.info(err.stack);
       cleanTestRun = false;
       testError = true;
     }
@@ -298,7 +291,7 @@ async function continueTesting(opt_asyncTestFailure) {
 function endTests(success) {
   const duration =
       runnerStartTime === 0 ? 0 : performance.now() - runnerStartTime;
-  console.log(
+  console.info(
       'TEST all complete, status=' + (success ? 'PASS' : 'FAIL') +
       ', duration=' + Math.round(duration) + 'ms');
   testName = null;

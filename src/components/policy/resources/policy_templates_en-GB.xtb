@@ -125,13 +125,13 @@
       Determines the duration before the screen saver is shown on the sign-in screen for devices in retail mode.
 
       The policy value should be specified in milliseconds.</translation>
-<translation id="1141767714195601945">This policy controls command-line parameters for Carbon Browser Browser Browser from Internet Explorer.
+<translation id="1141767714195601945">This policy controls command-line parameters for Carbon Browser from Internet Explorer.
 
       If the 'Legacy Browser Support' add-in for Internet Explorer is not installed, this policy has no effect.
 
-      When this policy is left unset, Internet Explorer only passes the URL to Carbon Browser Browser Browser as a command-line parameter.
+      When this policy is left unset, Internet Explorer only passes the URL to Carbon Browser as a command-line parameter.
 
-      When this policy is set to a list of strings, the strings are joined with spaces and passed to Carbon Browser Browser Browser as command-line parameters.
+      When this policy is set to a list of strings, the strings are joined with spaces and passed to Carbon Browser as command-line parameters.
 
       If an element contains ${url}, it gets replaced with the URL of the page to open.
 
@@ -267,7 +267,7 @@
 
       Each list item of the policy is a string that contains an extension ID and an 'update' URL separated by a semi-colon (<ph name="SEMICOLON" />). The extension ID is the 32-letter string found, e.g. on <ph name="CHROME_EXTENSIONS_LINK" /> when in developer mode. The 'update' URL should point to an Update Manifest XML document as described at <ph name="LINK_TO_EXTENSION_DOC1" />. Note that the 'update' URL set in this policy is only used for the initial installation; subsequent updates of the extension employ the update URL indicated in the extension's manifest.
 
-      For example, <ph name="EXTENSION_POLICY_EXAMPLE" /> installs the <ph name="EXTENSION_POLICY_EXAMPLE_EXTENSION_NAME" /> app from the standard Carbon Browser Browser Browser Web Store 'update' URL. For more information about hosting extensions, see: <ph name="LINK_TO_EXTENSION_DOC2" />.</translation>
+      For example, <ph name="EXTENSION_POLICY_EXAMPLE" /> installs the <ph name="EXTENSION_POLICY_EXAMPLE_EXTENSION_NAME" /> app from the standard Carbon Browser Web Store 'update' URL. For more information about hosting extensions, see: <ph name="LINK_TO_EXTENSION_DOC2" />.</translation>
 <translation id="1435659902881071157">Device-level network configuration</translation>
 <translation id="1438739959477268107">Default key generation setting</translation>
 <translation id="1454846751303307294">Allows you to set a list of url patterns that specify sites which are not allowed to run JavaScript.
@@ -428,11 +428,11 @@
 
       If the policy is not set, <ph name="TPM_FIRMWARE_UPDATE_TPM" /> firmware update functionality will not be available.</translation>
 <translation id="1708496595873025510">Set the restriction on the fetching of the Variations seed</translation>
-<translation id="1717817358640580294">If unset, should Carbon Browser Browser Browser Clean-Up detect unwanted software, it may report metadata about the scan to Google, in accordance with policy set by SafeBrowsingExtendedReportingEnabled. Carbon Browser Browser Browser Clean-Up will then ask the user if they wish to clean up the unwanted software. The user can choose to share results of the clean up with Google to assist with future unwanted software detection. These results contain file metadata, automatically installed extensions and registry keys as described by the Carbon Browser Browser Browser Privacy Whitepaper.
+<translation id="1717817358640580294">If unset, should Carbon Browser Clean-Up detect unwanted software, it may report metadata about the scan to Google, in accordance with policy set by SafeBrowsingExtendedReportingEnabled. Carbon Browser Clean-Up will then ask the user if they wish to clean up the unwanted software. The user can choose to share results of the clean up with Google to assist with future unwanted software detection. These results contain file metadata, automatically installed extensions and registry keys as described by the Carbon Browser Privacy Whitepaper.
 
-      If disabled, should Carbon Browser Browser Browser Clean-Up detect unwanted software, it will not report metadata about the scan to Google, overriding any policy set by SafeBrowsingExtendedReportingEnabled. Carbon Browser Browser Browser Clean-Up will ask the user if they wish to clean up the unwanted software.  Results of the clean up will not be reported to Google and the user will not have the option to do so.
+      If disabled, should Carbon Browser Clean-Up detect unwanted software, it will not report metadata about the scan to Google, overriding any policy set by SafeBrowsingExtendedReportingEnabled. Carbon Browser Clean-Up will ask the user if they wish to clean up the unwanted software.  Results of the clean up will not be reported to Google and the user will not have the option to do so.
 
-      If enabled, should Carbon Browser Browser Browser Clean-Up detect unwanted software, it may report metadata about the scan to Google, in accordance with policy set by SafeBrowsingExtendedReportingEnabled. Carbon Browser Browser Browser Clean-Up will ask the user if they wish to clean up the unwanted software.  Results of the clean up will be reported to Google and the user will not have the option to prevent it.
+      If enabled, should Carbon Browser Clean-Up detect unwanted software, it may report metadata about the scan to Google, in accordance with policy set by SafeBrowsingExtendedReportingEnabled. Carbon Browser Clean-Up will ask the user if they wish to clean up the unwanted software.  Results of the clean up will be reported to Google and the user will not have the option to prevent it.
 
       This policy is available only on Windows instances that are joined to a <ph name="MS_AD_NAME" /> domain. It also applies to Windows 10 Pro or Enterprise instances that enrolled for device management.</translation>
 <translation id="172374442286684480">Allow all sites to set local data.</translation>
@@ -581,7 +581,7 @@
 
       If this setting is enabled or has no value, the user will be able to control AutoFill for addresses in the UI.</translation>
 <translation id="1962273523772270623">Allow collection of WebRTC event logs from Google services</translation>
-<translation id="1964634611280150550">Private mode disabled.</translation>
+<translation id="1964634611280150550">private mode disabled.</translation>
 <translation id="1964802606569741174">This policy has no effect on the Android YouTube app. If Safety Mode on YouTube should be enforced, installation of the Android YouTube app should be disallowed.</translation>
 <translation id="1969212217917526199">Overrides policies on Debug builds of the remote access host.
 
@@ -628,7 +628,7 @@
 <translation id="2073552873076775140">Allow sign-in to <ph name="PRODUCT_NAME" /></translation>
 <translation id="2077129598763517140">Use hardware acceleration when available</translation>
 <translation id="2077273864382355561">Screen off delay when running on battery power</translation>
-<translation id="2082205219176343977">Configure minimum allowed Carbon Browser Browser Browser version for the device.</translation>
+<translation id="2082205219176343977">Configure minimum allowed Carbon Browser version for the device.</translation>
 <translation id="209586405398070749">Stable channel</translation>
 <translation id="2098658257603918882">Enable reporting of usage and crash-related data</translation>
 <translation id="2104418465060359056">Report Extensions and Plug-in information</translation>
@@ -673,7 +673,7 @@
       If you disable this setting or leave it unset, any captive portal authentication pages will be shown in a (regular) new browser tab, using the current user's proxy settings.</translation>
 <translation id="21394354835637379">Allows you to specify which URLs are allowed to install extensions, apps and themes.
 
-          Starting in <ph name="PRODUCT_NAME" /> 21, it is more difficult to install extensions, apps and user scripts from outside the Carbon Browser Browser Browser Web Store. Previously, users could click on a link to a *.crx file, and <ph name="PRODUCT_NAME" /> would offer to install the file after a few warnings. After <ph name="PRODUCT_NAME" /> 21, such files must be downloaded and dragged onto the <ph name="PRODUCT_NAME" /> settings page. This setting allows specific URLs to have the old, easier installation flow.
+          Starting in <ph name="PRODUCT_NAME" /> 21, it is more difficult to install extensions, apps and user scripts from outside the Carbon Browser Web Store. Previously, users could click on a link to a *.crx file, and <ph name="PRODUCT_NAME" /> would offer to install the file after a few warnings. After <ph name="PRODUCT_NAME" /> 21, such files must be downloaded and dragged onto the <ph name="PRODUCT_NAME" /> settings page. This setting allows specific URLs to have the old, easier installation flow.
 
           Each item in this list is an extension-style match pattern (see https://developer.chrome.com/extensions/match_patterns). Users will be able to easily install items from any URL that matches an item in this list. Both the location of the *.crx file and the page where the download is started from (i.e. the referrer) must be allowed by these patterns.
 
@@ -746,11 +746,11 @@
 
       When the policy is set to disabled or not set, pages are not allowed to show pop-ups while they are being unloaded, as per the spec (https://html.spec.whatwg.org/#apis-for-creating-and-navigating-browsing-contexts-by-name).
 
-      This policy will be removed in Carbon Browser Browser Browser 82.
+      This policy will be removed in Carbon Browser 82.
 
       See https://www.chromestatus.com/feature/5989473649164288 .</translation>
 <translation id="2269319728625047531">Enable displaying Sync Consent during sign-in</translation>
-<translation id="2274864612594831715">This policy configures enabling the virtual keyboard as an input device on Carbon Browser Browser BrowserOS. Users cannot override this policy.
+<translation id="2274864612594831715">This policy configures enabling the virtual keyboard as an input device on Carbon BrowserOS. Users cannot override this policy.
 
       If the policy is set to true, the on-screen virtual keyboard will always be enabled.
 
@@ -820,9 +820,9 @@
 <translation id="2463034609187171371">Enable DHE cipher suites in TLS</translation>
 <translation id="2463365186486772703">Application locale</translation>
 <translation id="2466131534462628618">Captive portal authentication ignores proxy</translation>
-<translation id="2471748297300970300">If disabled, prevents security warnings from appearing when Carbon Browser Browser Browser is launched with some potentially dangerous command-line flags.
+<translation id="2471748297300970300">If disabled, prevents security warnings from appearing when Carbon Browser is launched with some potentially dangerous command-line flags.
 
-          If enabled or unset, security warnings are displayed when some command-line flags are used to launch Carbon Browser Browser Browser.
+          If enabled or unset, security warnings are displayed when some command-line flags are used to launch Carbon Browser.
 
           On Windows, this policy is only available on instances that are joined to a <ph name="MS_AD_NAME" /> domain or Windows 10 Pro or Enterprise instances that are enrolled for device management.</translation>
 <translation id="2482676533225429905">Native Messaging</translation>
@@ -944,7 +944,7 @@
           Google's search URL can be specified as: <ph name="GOOGLE_SEARCH_URL" />.
 
           This option must be set when the 'DefaultSearchProviderEnabled' policy is enabled and will only be respected if this is the case.</translation>
-<translation id="2659019163577049044">If this setting is enabled, users will be allowed to set up their devices to sync SMS messages between their phones and Carbon Browser Browser Browserbooks. Note that if this policy is allowed, users must explicitly opt into this feature by completing a setup flow. Once the setup flow is complete, users will be able to send and receive SMS messages on their Carbon Browser Browser Browserbooks.
+<translation id="2659019163577049044">If this setting is enabled, users will be allowed to set up their devices to sync SMS messages between their phones and Carbon Browserbooks. Note that if this policy is allowed, users must explicitly opt into this feature by completing a setup flow. Once the setup flow is complete, users will be able to send and receive SMS messages on their Carbon Browserbooks.
 
       If this setting is disabled, users will not be allowed to set up SMS syncing.
 
@@ -962,7 +962,7 @@
 <translation id="2706708761587205154">Allow printing only with PIN</translation>
 <translation id="2710534340210290498">If this policy is set to false, users will not be able to lock the screen (only signing out from the user session will be possible). If this setting is set to true or not set, users who authenticated with a password can lock the screen.</translation>
 <translation id="2731627323327011390">Disable usage of <ph name="PRODUCT_OS_NAME" /> certificates to ARC-apps</translation>
-<translation id="2742843273354638707">Hide the Carbon Browser Browser Browser Web Store app and footer link from the New Tab Page and <ph name="PRODUCT_OS_NAME" /> app launcher.
+<translation id="2742843273354638707">Hide the Carbon Browser Web Store app and footer link from the New Tab Page and <ph name="PRODUCT_OS_NAME" /> app launcher.
 
       When this policy is set to true, the icons are hidden.
 
@@ -1025,12 +1025,12 @@
       When this policy is set to a non-empty list of time intervals:
       Devices will not be able to check for updates automatically during the specified time intervals. Devices that require a rollback or are below the minimum <ph name="PRODUCT_OS_NAME" /> version will not be affected by this policy due to potential security issues. Furthermore, this policy will not block update checks requested by users or administrators.
       When this policy is unset or contains no time intervals:
-      No automatic update checks will be blocked by this policy, but they may be blocked by other policies. This feature is only enabled on Carbon Browser Browser Browser devices configured as auto-launch kiosks. Other devices will not be restricted by this policy.</translation>
+      No automatic update checks will be blocked by this policy, but they may be blocked by other policies. This feature is only enabled on Carbon Browser devices configured as auto-launch kiosks. Other devices will not be restricted by this policy.</translation>
 <translation id="2823870601012066791">Windows registry location for <ph name="PRODUCT_OS_NAME" /> clients:</translation>
-<translation id="2824715612115726353">Enable Private mode</translation>
+<translation id="2824715612115726353">Enable private mode</translation>
 <translation id="2836621397261130126">Controls whether approval by KDC policy is respected to decide whether to delegate <ph name="KERBEROS" /> tickets.
 
-          If this policy is true, HTTP authentication respects approval by KDC policy, i.e. Carbon Browser Browser Browser only delegates credentials if the KDC sets <ph name="OK_AS_DELEGATE" /> on a service ticket. Please see https://tools.ietf.org/html/rfc5896.html for more information. Service should also match 'AuthNegotiateDelegateWhitelist' policy.
+          If this policy is true, HTTP authentication respects approval by KDC policy, i.e. Carbon Browser only delegates credentials if the KDC sets <ph name="OK_AS_DELEGATE" /> on a service ticket. Please see https://tools.ietf.org/html/rfc5896.html for more information. Service should also match 'AuthNegotiateDelegateWhitelist' policy.
 
           If this policy is not set or set to false, KDC policy is ignored on supported platforms and 'AuthNegotiateDelegateWhitelist' policy only is respected.
 
@@ -1178,7 +1178,7 @@
           If this policy is left unset, 'AllowJavaScript' will be used and the user will be able to change it.</translation>
 <translation id="3038323923255997294">Continue running background apps when <ph name="PRODUCT_NAME" /> is closed</translation>
 <translation id="3046192273793919231">Send network packets to the management server to monitor online status</translation>
-<translation id="3047732214002457234">Control how Carbon Browser Browser Browser Cleanup reports data to Google</translation>
+<translation id="3047732214002457234">Control how Carbon Browser Cleanup reports data to Google</translation>
 <translation id="304775240152542058">This policy controls command-line parameters to launch to the alternative browser.
 
       When this policy is left unset, only the URL is passed as a command-line parameter.
@@ -1250,9 +1250,9 @@
       If the policy is not set, or is set to false, then DHE cipher suites in TLS will not be enabled. Otherwise it may be set to true to enable DHE cipher suites and retain compatibility with an outdated server. This is a stopgap measure and the server should be reconfigured.
 
       Servers are encouraged to migrate to ECDHE cipher suites. If these are unavailable, ensure a cipher suite using RSA key exchange is enabled.</translation>
-<translation id="3117706142826400449">If disabled, prevents Carbon Browser Browser Browser Clean-Up from scanning the system for unwanted software and performing clean ups. Manually triggering Carbon Browser Browser Browser Clean-Up from chrome://settings/cleanup is disabled.
+<translation id="3117706142826400449">If disabled, prevents Carbon Browser Clean-Up from scanning the system for unwanted software and performing clean ups. Manually triggering Carbon Browser Clean-Up from chrome://settings/cleanup is disabled.
 
-      If enabled or unset, Carbon Browser Browser Browser Clean-Up periodically scans the system for unwanted software and should any be found, will ask the user if they wish to remove it. Manually triggering Carbon Browser Browser Browser Clean-Up from chrome://settings is enabled.
+      If enabled or unset, Carbon Browser Clean-Up periodically scans the system for unwanted software and should any be found, will ask the user if they wish to remove it. Manually triggering Carbon Browser Clean-Up from chrome://settings is enabled.
 
       This policy is available only on Windows instances that are joined to a <ph name="MS_AD_NAME" /> domain. It also applies to Windows 10 Pro or Enterprise instances that enrolled for device management.</translation>
 <translation id="3152425128389603870">Make Unified Desktop available and turn on by default</translation>
@@ -1278,7 +1278,7 @@
       If disabled, the home page is not imported.
 
       If it is not set, the user may be asked whether to import or importing may happen automatically.</translation>
-<translation id="3219421230122020860">Private mode available.</translation>
+<translation id="3219421230122020860">private mode available.</translation>
 <translation id="3220624000494482595">If the kiosk app is an Android app, it will have no control over the <ph name="PRODUCT_OS_NAME" /> version, even if this policy is set to <ph name="TRUE" />.</translation>
 <translation id="3236046242843493070">URL patterns to allow extension, app, and user script installs from</translation>
 <translation id="3240609035816615922">Printer configuration access policy.</translation>
@@ -1367,7 +1367,7 @@
       If this setting is set to Off or no value is set, Restricted Mode on YouTube is not enforced by <ph name="PRODUCT_NAME" />. However, external policies such as YouTube policies might still enforce Restricted Mode.</translation>
 <translation id="3428247105888806363">Enable network prediction.</translation>
 <translation id="3432863169147125747">Controls printing settings.</translation>
-<translation id="3434932177006334880">This setting was named EnableWebBasedSignin prior to Carbon Browser Browser Browser 42, and support for it will be removed entirely in Carbon Browser Browser Browser 43.
+<translation id="3434932177006334880">This setting was named EnableWebBasedSignin prior to Carbon Browser 42, and support for it will be removed entirely in Carbon Browser 43.
 
       This setting is useful for enterprise customers who are using SSO solutions that are not compatible with the new inline sign-in flow yet.
       If you enable this setting, the old web-based sign-in flow would be used.
@@ -1462,9 +1462,9 @@
 <translation id="3646859102161347133">Set screen magnifier type</translation>
 <translation id="3653237928288822292">Default search provider icon</translation>
 <translation id="3660510274595679517">
-        If this policy is set to true, cloud management enrolment is mandatory and blocks Carbon Browser Browser Browser launch process if failed.
+        If this policy is set to true, cloud management enrolment is mandatory and blocks Carbon Browser launch process if failed.
 
-        If this policy is left unset or set to false, cloud management enrolment is optional and does not block Carbon Browser Browser Browser launch process if failed.
+        If this policy is left unset or set to false, cloud management enrolment is optional and does not block Carbon Browser launch process if failed.
 
         This policy is used by machine scope cloud policy enrolment on desktop and can be set by Registry or GPO on Windows, plist on Mac and JSON policy file on Linux.</translation>
 <translation id="3660562134618097814">Transfer SAML IdP cookies during login</translation>
@@ -1659,11 +1659,11 @@
 <translation id="3984028218719007910">Determines whether <ph name="PRODUCT_OS_NAME" /> keeps local account data after logout. If set to true, no persistent accounts are kept by <ph name="PRODUCT_OS_NAME" /> and all data from the user session will be discarded after logout. If this policy is set to false or not configured, the device may keep (encrypted) local user data.</translation>
 <translation id="398475542699441679">This policy controls whether to enable Legacy Browser Support.
 
-      When this policy is left unset, or is set to false, Carbon Browser Browser Browser will not attempt to launch designated URLs in an alternative browser.
+      When this policy is left unset, or is set to false, Carbon Browser will not attempt to launch designated URLs in an alternative browser.
 
-      When this policy is set to true, Carbon Browser Browser Browser will attempt to launch some URLs in an alternative browser (such as Internet Explorer). This feature is configured using the policies in the <ph name="LEGACY_BROWSER_SUPPORT_POLICY_GROUP" /> group.
+      When this policy is set to true, Carbon Browser will attempt to launch some URLs in an alternative browser (such as Internet Explorer). This feature is configured using the policies in the <ph name="LEGACY_BROWSER_SUPPORT_POLICY_GROUP" /> group.
 
-      This feature is a replacement for the <ph name="LEGACY_BROWSER_SUPPORT_EXTENSION_NAME" /> extension. Configuration from the extension will carry over to this feature, but it is strongly advisable to use the Carbon Browser Browser Browser policies instead. This ensures better compatibility in the future.</translation>
+      This feature is a replacement for the <ph name="LEGACY_BROWSER_SUPPORT_EXTENSION_NAME" /> extension. Configuration from the extension will carry over to this feature, but it is strongly advisable to use the Carbon Browser policies instead. This ensures better compatibility in the future.</translation>
 <translation id="3997519162482760140">URLs that will be granted access to video capture devices on SAML login pages</translation>
 <translation id="4001275826058808087">IT admins for enterprise devices can use this flag to control whether to allow users to redeem offers through Chrome OS Registration.
 
@@ -1682,13 +1682,13 @@
 
           This policy takes precedence over a potentially conflicting <ph name="EXTENSION_INSTALL_BLACKLIST_POLICY_NAME" /> policy. If an app or extension that previously had been force-installed is removed from this list, it is automatically uninstalled by <ph name="PRODUCT_NAME" />.
 
-          For Windows, instances that are not joined to a <ph name="MS_AD_NAME" /> domain, forced installation is limited to apps and extensions listed in the Carbon Browser Browser Browser Web Store.
+          For Windows, instances that are not joined to a <ph name="MS_AD_NAME" /> domain, forced installation is limited to apps and extensions listed in the Carbon Browser Web Store.
 
           Note that the source code of any extension may be altered by users via Developer Tools (potentially rendering the extension dysfunctional). If this is a concern, the <ph name="DEVELOPER_TOOLS_POLICY_NAME" /> policy should be set.
 
-          Each list item of the policy is a string that contains an extension ID and, optionally, an 'update' URL separated by a semicolon (<ph name="SEMICOLON" />). The extension ID is the 32-letter string found e.g. on <ph name="CHROME_EXTENSIONS_LINK" /> when in developer mode. The 'update' URL, if specified, should point to an Update Manifest XML document as described at <ph name="LINK_TO_EXTENSION_DOC1" />. By default, the Carbon Browser Browser Browser Web Store's update URL is used (which currently is "https://clients2.google.com/service/update2/crx"). Note that the 'update' URL set in this policy is only used for the initial installation; subsequent updates of the extension employ the update URL indicated in the extension's manifest. Note: Specifying the 'update' URL explicitly was mandatory in <ph name="PRODUCT_NAME" /> versions up to and including 67.
+          Each list item of the policy is a string that contains an extension ID and, optionally, an 'update' URL separated by a semicolon (<ph name="SEMICOLON" />). The extension ID is the 32-letter string found e.g. on <ph name="CHROME_EXTENSIONS_LINK" /> when in developer mode. The 'update' URL, if specified, should point to an Update Manifest XML document as described at <ph name="LINK_TO_EXTENSION_DOC1" />. By default, the Carbon Browser Web Store's update URL is used (which currently is "https://clients2.google.com/service/update2/crx"). Note that the 'update' URL set in this policy is only used for the initial installation; subsequent updates of the extension employ the update URL indicated in the extension's manifest. Note: Specifying the 'update' URL explicitly was mandatory in <ph name="PRODUCT_NAME" /> versions up to and including 67.
 
-          For example, <ph name="EXTENSION_POLICY_EXAMPLE" /> installs the extension with ID <ph name="EXTENSION_ID_SAMPLE" /> from the standard Carbon Browser Browser Browser Web Store 'update' URL. For more information about hosting extensions, see: <ph name="LINK_TO_EXTENSION_DOC2" />.
+          For example, <ph name="EXTENSION_POLICY_EXAMPLE" /> installs the extension with ID <ph name="EXTENSION_ID_SAMPLE" /> from the standard Carbon Browser Web Store 'update' URL. For more information about hosting extensions, see: <ph name="LINK_TO_EXTENSION_DOC2" />.
 
           If this policy is left not set, no apps or extensions are installed automatically and the user can uninstall any app or extension in <ph name="PRODUCT_NAME" />.
 
@@ -1724,7 +1724,7 @@
       Printers connected to <ph name="CLOUD_PRINT_NAME" /> are considered <ph name="PRINTER_TYPE_CLOUD" />; the rest of the printers are classified as <ph name="PRINTER_TYPE_LOCAL" />.
       Omitting a field means all values match, for example, not specifying connectivity will cause Print Preview to initiate the discovery of all kinds of printers, local and cloud.
       Regular expression patterns must follow the JavaScript RegExp syntax and matches are case sensitive.</translation>
-<translation id="4088589230932595924">Private mode forced.</translation>
+<translation id="4088589230932595924">private mode forced.</translation>
 <translation id="4088983553732356374">Allows you to set whether websites are allowed to set local data. Setting local data can be either allowed for all websites or denied for all websites.
 
           If this policy is set to 'Keep cookies for the duration of the session' then cookies will be cleared when the session closes. Note that if <ph name="PRODUCT_NAME" /> is running in 'background mode', the session may not close when the last window is closed. Please see the 'BackgroundModeEnabled' policy for more information about configuring this behaviour.
@@ -1795,7 +1795,7 @@
           If you set this policy, users cannot change or override it.
 
           If this policy is left unset, the sticky keys is disabled initially but can be enabled by the user at any time.</translation>
-<translation id="4171331498167688968">If the policy is set to false then third-party software will be allowed to inject executable code into Carbon Browser Browser Browser's processes. If the policy is unset or set to true then third-party software will be prevented from injecting executable code into Carbon Browser Browser Browser's processes.
+<translation id="4171331498167688968">If the policy is set to false then third-party software will be allowed to inject executable code into Carbon Browser's processes. If the policy is unset or set to true then third-party software will be prevented from injecting executable code into Carbon Browser's processes.
 
       Regardless of the value of this policy, the browser will not currently block third-party software from injecting executable code into its processes on a machine that is joined to a <ph name="MS_AD_NAME" /> domain.</translation>
 <translation id="4183229833636799228">Default <ph name="FLASH_PLUGIN_NAME" /> setting</translation>
@@ -1864,11 +1864,11 @@
 <translation id="4298509794364745131">Specifies list of apps that can be enabled as a note-taking app on the <ph name="PRODUCT_OS_NAME" /> lock screen.
 
       If the preferred note-taking app is enabled on the lock screen, the lock screen will contain UI element for launching the preferred note taking app.
-      When launched, the app will be able to create an app window on top of the lock screen and create data items (notes) in the lock screen context. The app will be able to import created notes to the primary user session, when the session is unlocked. Currently, only Carbon Browser Browser Browser note-taking apps are supported on the lock screen.
+      When launched, the app will be able to create an app window on top of the lock screen and create data items (notes) in the lock screen context. The app will be able to import created notes to the primary user session, when the session is unlocked. Currently, only Carbon Browser note-taking apps are supported on the lock screen.
 
       If the policy is set, the user will be allowed to enable an app on the lock screen only if the app's extension ID is contained in the policy list value.
       As a consequence, setting this policy to an empty list will disable note-taking on the lock screen entirely.
-      Note that the policy containing an app ID does not necessarily mean that the user will be able to enable the app as a note-taking app on the lock screen - for example, on Carbon Browser Browser Browser 61, the set of available apps is additionally restricted by the platform.
+      Note that the policy containing an app ID does not necessarily mean that the user will be able to enable the app as a note-taking app on the lock screen - for example, on Carbon Browser 61, the set of available apps is additionally restricted by the platform.
 
       If the policy is left unset, there will be no restrictions on the set of apps the user can enable on the lock screen imposed by the policy.</translation>
 <translation id="4313767483634435271">Device's designated dock MAC address</translation>
@@ -2025,7 +2025,7 @@
 <translation id="467236746355332046">Supported features:</translation>
 <translation id="4674167212832291997">Customise the list of URL patterns that should always be rendered by <ph name="PRODUCT_FRAME_NAME" />.
 
-          If this policy is not set the default renderer will be used for all sites as specified by the 'Carbon Browser Browser BrowserFrameRendererSettings' policy.
+          If this policy is not set the default renderer will be used for all sites as specified by the 'Carbon BrowserFrameRendererSettings' policy.
 
           For example patterns see https://www.chromium.org/developers/how-tos/chrome-frame-getting-started.</translation>
 <translation id="467449052039111439">Open a list of URLs</translation>
@@ -2123,10 +2123,10 @@
 
       If this policy is set to false, <ph name="PRODUCT_NAME" /> will not allow creation of new profiles from the user manager.</translation>
 <translation id="4970855112942626932">Disable browser sign-in</translation>
-<translation id="4978405676361550165">If 'OffHours' policy is set, then the specified device policies are ignored (use the default settings of these policies) during the defined time intervals. Device policies are re-applied by Carbon Browser Browser Browser on every event when 'OffHours' period starts or ends. User will be notified and forced to sign out when 'OffHours' time end and device policy settings are changed (e.g. when user is logged in with an unallowed account).</translation>
+<translation id="4978405676361550165">If 'OffHours' policy is set, then the specified device policies are ignored (use the default settings of these policies) during the defined time intervals. Device policies are re-applied by Carbon Browser on every event when 'OffHours' period starts or ends. User will be notified and forced to sign out when 'OffHours' time end and device policy settings are changed (e.g. when user is logged in with an unallowed account).</translation>
 <translation id="4980635395568992380">Data Types</translation>
 <translation id="4983201894483989687">Allow running plug-ins that are outdated</translation>
-<translation id="4986560318567565414">Path to Carbon Browser Browser Browser for switching from the alternative browser.</translation>
+<translation id="4986560318567565414">Path to Carbon Browser for switching from the alternative browser.</translation>
 <translation id="4988291787868618635">Action to take when the idle delay is reached</translation>
 <translation id="5034604678285451405">Set power peak shift battery threshold in per cent.
 
@@ -2197,11 +2197,11 @@
       If the policy is set to 0, machine account password change is disabled.
 
       Note that passwords might get older than the specified number of days if the client has been offline for a longer period of time.</translation>
-<translation id="510196893779239086">This policy controls whether to close Carbon Browser Browser Browser completely when the last tab would switch to another browser.
+<translation id="510196893779239086">This policy controls whether to close Carbon Browser completely when the last tab would switch to another browser.
 
-      When this policy is left unset, or is set to true, Carbon Browser Browser Browser will keep at least one tab open, after switching to an alternative browser.
+      When this policy is left unset, or is set to true, Carbon Browser will keep at least one tab open, after switching to an alternative browser.
 
-      When this policy is set to false, Carbon Browser Browser Browser will close the tab after switching to an alternative browser, even if it was the last tab. This will cause Carbon Browser Browser Browser to exit completely.</translation>
+      When this policy is set to false, Carbon Browser will close the tab after switching to an alternative browser, even if it was the last tab. This will cause Carbon Browser to exit completely.</translation>
 <translation id="5102203758995933166">Allows pushing network configuration to be applied per-user to a <ph name="PRODUCT_OS_NAME" /> device. The network configuration is a JSON-formatted string as defined by the Open Network Configuration format.</translation>
 <translation id="5105313908130842249">Screen lock delay when running on battery power</translation>
 <translation id="5108031557082757679">Disabled enterprise device printers</translation>
@@ -2216,7 +2216,7 @@
 <translation id="5148753489738115745">Allows you to specify additional parameters that are used when <ph name="PRODUCT_FRAME_NAME" /> launches <ph name="PRODUCT_NAME" />.
 
           If this policy is not set the default command line will be used.</translation>
-<translation id="5152787786897382519">Both Carbon Browser Browser Browser and Carbon Browser Browser Browser have some groups of policies that depend on each other to provide control over a feature. These sets are represented by the following policy groups. Given that policies can have multiple sources, only values coming from the highest priority source will be applied. Values coming from a lower priority source in the same group will be ignored. The order of priority is defined in <ph name="POLICY_PRIORITY_DOC_URL" />.</translation>
+<translation id="5152787786897382519">Both Carbon Browser and Carbon Browser have some groups of policies that depend on each other to provide control over a feature. These sets are represented by the following policy groups. Given that policies can have multiple sources, only values coming from the highest priority source will be applied. Values coming from a lower priority source in the same group will be ignored. The order of priority is defined in <ph name="POLICY_PRIORITY_DOC_URL" />.</translation>
 <translation id="5159469559091666409">How frequently monitoring network packets are sent, in milliseconds.
 
       If this policy is unset, the default interval is 3 minutes. The minimum
@@ -2331,7 +2331,7 @@
           A blacklist value of '*' means that all native messaging hosts are blacklisted unless they are explicitly listed in the whitelist.
 
           If this policy is left not set <ph name="PRODUCT_NAME" /> will load all installed native messaging hosts.</translation>
-<translation id="5272684451155669299">If true, the user can use the hardware on Carbon Browser Browser Browser devices to remotely attest its identity to the privacy CA via the <ph name="ENTERPRISE_PLATFORM_KEYS_API" /> using <ph name="CHALLENGE_USER_KEY_FUNCTION" />.
+<translation id="5272684451155669299">If true, the user can use the hardware on Carbon Browser devices to remotely attest its identity to the privacy CA via the <ph name="ENTERPRISE_PLATFORM_KEYS_API" /> using <ph name="CHALLENGE_USER_KEY_FUNCTION" />.
 
           If it is set to false, or if it is not set, calls to the API will fail with an error code.</translation>
 <translation id="5277806246014825877">Enable this user to run Crostini.
@@ -2346,7 +2346,7 @@
       If the policy is not set, or if it is set to the empty string or an invalid port range, WebRTC is allowed to use any available local UDP port.</translation>
 <translation id="5290940294294002042">Specify a list of plug-ins that the user can enable or disable</translation>
 <translation id="5306186200045823863">Enable trust in Symantec Corporation's Legacy PKI Infrastructure</translation>
-<translation id="5307432759655324440">Private mode availability</translation>
+<translation id="5307432759655324440">private mode availability</translation>
 <translation id="5318185076587284965">Enable the use of relay servers by the remote access host</translation>
 <translation id="5323128137188992869">Allow content to be cast to the device using <ph name="PRODUCT_NAME" />.
 
@@ -2545,7 +2545,7 @@
         If the policy is set to false, users cannot send feedback to Google.
 
         If the policy is unset or set to true, users can send feedback to Google via Menu-&gt;Help-&gt;Report an Issue or key combination.</translation>
-<translation id="5581292529942108810">Configure Carbon Browser Browser Browser Reporting Extension related policies.
+<translation id="5581292529942108810">Configure Carbon Browser Reporting Extension related policies.
 
       This policy is only effective when the <ph name="CHROME_REPORTING_EXTENSION_NAME" /> is enabled, and the machine is enrolled with <ph name="MACHINE_LEVEL_USER_CLOUD_POLICY_ENROLLMENT_TOKEN_POLICY_NAME" />.</translation>
 <translation id="5583806683960333345">If this setting is enabled, users will be allowed to use Instant Tethering, which allows their Google phone to share its mobile data with their device.
@@ -2575,7 +2575,7 @@
 
       NOTE: On Android, Site Isolation is experimental. Support will improve over time, but currently it may cause performance problems.
 
-      NOTE: This policy applies only to Carbon Browser Browser Browser on Android running on devices with strictly more than 1 GB of RAM. To apply the policy on non-Android platforms, use IsolateOrigins.
+      NOTE: This policy applies only to Carbon Browser on Android running on devices with strictly more than 1 GB of RAM. To apply the policy on non-Android platforms, use IsolateOrigins.
       </translation>
 <translation id="5599461642204007579"><ph name="MS_AD_NAME" /> management settings</translation>
 <translation id="5610104657949692379">When this policy is set, it specifies the action that <ph name="PRODUCT_OS_NAME" /> takes when the user remains idle for the length of time given by the idle delay, which can be configured separately.
@@ -2583,7 +2583,7 @@
           When this policy is unset, the default action is taken, which is suspend.
 
           If the action is suspend, <ph name="PRODUCT_OS_NAME" /> can be configured separately to either lock or not lock the screen before suspending.</translation>
-<translation id="5618398258385745432">The associated setting was used before re-authentication on viewing passwords was introduced. Since then, the setting and hence this policy had no effect on the behaviour of Carbon Browser Browser Browser. The current behaviour of Carbon Browser Browser Browser is now the same as if the policy was set to disable showing passwords in clear text in the password manager settings page. That means that the settings page contains just a placeholder, and only upon the user clicking 'Show' (and re-authenticating, if applicable) Carbon Browser Browser Browser shows the password. Original description of the policy follows below.
+<translation id="5618398258385745432">The associated setting was used before re-authentication on viewing passwords was introduced. Since then, the setting and hence this policy had no effect on the behaviour of Carbon Browser. The current behaviour of Carbon Browser is now the same as if the policy was set to disable showing passwords in clear text in the password manager settings page. That means that the settings page contains just a placeholder, and only upon the user clicking 'Show' (and re-authenticating, if applicable) Carbon Browser shows the password. Original description of the policy follows below.
 
           Controls whether the user may show passwords in clear text in the password manager.
 
@@ -2672,13 +2672,13 @@
       See https://www.chromium.org/administrators/policy-list-3/user-data-directory-variables for a list of variables that can be used.
 
       If this setting is left not set the default profile directory will be used.</translation>
-<translation id="5826047473100157858">Specifies whether the user may open pages in Private mode in <ph name="PRODUCT_NAME" />.
+<translation id="5826047473100157858">Specifies whether the user may open pages in private mode in <ph name="PRODUCT_NAME" />.
 
-      If 'Enabled' is selected or the policy is left unset, pages may be opened in Private mode.
+      If 'Enabled' is selected or the policy is left unset, pages may be opened in private mode.
 
-      If 'Disabled' is selected, pages may not be opened in Private mode.
+      If 'Disabled' is selected, pages may not be opened in private mode.
 
-      If 'Forced' is selected, pages may be opened ONLY in Private mode.</translation>
+      If 'Forced' is selected, pages may be opened ONLY in private mode.</translation>
 <translation id="582857022372205358">Enable short-edge duplex printing</translation>
 <translation id="583091600226586337">
       If the policy is enabled, the user will be asked where to save each file before downloading.
@@ -2686,7 +2686,7 @@
       If the policy is not configured, the user will be able to change this setting.
       </translation>
 <translation id="5832274826894536455">Deprecated policies</translation>
-<translation id="5835124959204887277">Specifies URLs and domains for which no prompt will be shown when attestation certificates from Security Keys are requested. Additionally, a signal will be sent to the Security Key indicating that individual attestation may be used. Without this, users will be prompted in Carbon Browser Browser Browser 65+ when sites request attestation of Security Keys.
+<translation id="5835124959204887277">Specifies URLs and domains for which no prompt will be shown when attestation certificates from Security Keys are requested. Additionally, a signal will be sent to the Security Key indicating that individual attestation may be used. Without this, users will be prompted in Carbon Browser 65+ when sites request attestation of Security Keys.
 
       URLs (like https://example.com/some/path) will only match as U2F appIDs. Domains (like example.com) only match as webauthn RP IDs. Thus, to cover both U2F and webauthn APIs for a given site, both the appID URL and domain would need to be listed.</translation>
 <translation id="5836064773277134605">Restrict the UDP port range used by the remote access host</translation>
@@ -2821,7 +2821,7 @@
 
       When this policy is left unset or set to False, there is no data collected or uploaded.
       When this policy is set to True, the data is collected and uploaded to Google Admin console.
-      To control what data is uploaded, please use policies in the group Carbon Browser Browser Browser Reporting Extension.
+      To control what data is uploaded, please use policies in the group Carbon Browser Reporting Extension.
 
       This policy is only effective when the machine is enrolled with <ph name="MACHINE_LEVEL_USER_CLOUD_POLICY_ENROLLMENT_TOKEN_POLICY_NAME" />.
 
@@ -2904,7 +2904,7 @@
 <translation id="6282799760374509080">Allow or deny audio capture</translation>
 <translation id="6284362063448764300">TLS 1.1</translation>
 <translation id="6310223829319187614">Enable domain name autocomplete during user sign in</translation>
-<translation id="6315673513957120120">Carbon Browser Browser Browser shows a warning page when users navigate to sites that have SSL errors. By default or when this policy is set to true, users are allowed to click through these warning pages.
+<translation id="6315673513957120120">Carbon Browser shows a warning page when users navigate to sites that have SSL errors. By default or when this policy is set to true, users are allowed to click through these warning pages.
       Setting this policy to false disallows users to click through any warning page.</translation>
 <translation id="6319198883324703402">Set the time of the first user relaunch notification</translation>
 <translation id="6352543686437322588">A device-local account to auto-login after a delay.
@@ -2946,7 +2946,7 @@
           If you choose to auto detect the proxy server, the script URL "http://wpad/wpad.dat" is provided to Android apps. No other part of the proxy auto-detection protocol is used.
 
           If you choose to use a .pac proxy script, the script URL is provided to Android apps.</translation>
-<translation id="6430366557948788869">Carbon Browser Browser Browser Reporting Extension</translation>
+<translation id="6430366557948788869">Carbon Browser Reporting Extension</translation>
 <translation id="6440051664870270040">Allow sites to simultaneously navigate and open pop-ups</translation>
 <translation id="6447948611083700881">Backup and restore disabled</translation>
 <translation id="6449476513004303784">Disallow users from managing certificates</translation>
@@ -3004,9 +3004,9 @@
 <translation id="6536600139108165863">Automatic reboot on device shutdown</translation>
 <translation id="6539246272469751178">This policy has no effect on Android apps. Android apps always use the default downloads directory and cannot access any files downloaded by <ph name="PRODUCT_OS_NAME" /> into a non-default downloads directory.</translation>
 <translation id="654303922206238013">Migration strategy for eCryptfs</translation>
-<translation id="6544897973797372144">If this policy is set to True and the Carbon Browser Browser BrowserOsReleaseChannel policy is not specified then users of the enrolling domain will be allowed to change the release channel of the device. If this policy is set to false the device will be locked in whatever channel it was last set.
+<translation id="6544897973797372144">If this policy is set to True and the Carbon BrowserOsReleaseChannel policy is not specified then users of the enrolling domain will be allowed to change the release channel of the device. If this policy is set to false the device will be locked in whatever channel it was last set.
 
-      The user selected channel will be overridden by the Carbon Browser Browser BrowserOsReleaseChannel policy, but if the policy channel is more stable than the one that was installed on the device, then the channel will only switch after the version of the more stable channel reaches a higher version number than the one installed on the device.</translation>
+      The user selected channel will be overridden by the Carbon BrowserOsReleaseChannel policy, but if the policy channel is more stable than the one that was installed on the device, then the channel will only switch after the version of the more stable channel reaches a higher version number than the one installed on the device.</translation>
 <translation id="6553143066970470539">Screen brightness per cent</translation>
 <translation id="6559057113164934677">Do not allow any site to access the camera and microphone</translation>
 <translation id="6561396069801924653">Show accessibility options in system tray menu</translation>
@@ -3085,15 +3085,15 @@
 <translation id="6698632841807204978">Enable monochrome printing</translation>
 <translation id="6699880231565102694">Enable two-factor authentication for remote access hosts</translation>
 <translation id="6731757988219967594">Filter top-level sites (but not embedded iframes) for adult content</translation>
-<translation id="6734521799274931721">Controls Network File Shares for Carbon Browser Browser BrowserOS availability</translation>
+<translation id="6734521799274931721">Controls Network File Shares for Carbon BrowserOS availability</translation>
 <translation id="6735701345096330595">Force enable spellcheck languages</translation>
 <translation id="673699536430961464">This setting allows users to switch between Google Accounts within the content area of their browser window after they sign in to their <ph name="PRODUCT_OS_NAME" /> device.
 
-      If this policy is set to false, signing in to a different account from non-Private browser content area will not be allowed.
+      If this policy is set to false, signing in to a different account from non-private browser content area will not be allowed.
 
-      If this policy is unset or set to true, the default behaviour will be used: signing in to a different account from the browser content area will be allowed, except for child accounts where it will be blocked for non-Private content area.
+      If this policy is unset or set to true, the default behaviour will be used: signing in to a different account from the browser content area will be allowed, except for child accounts where it will be blocked for non-private content area.
 
-      In case signing in to a different account shouldn't be allowed via the Private mode, consider blocking that mode using the PrivateModeAvailability policy.
+      In case signing in to a different account shouldn't be allowed via the private mode, consider blocking that mode using the privateModeAvailability policy.
 
       Note that users will be able to access Google services in an unauthenticated state by blocking their cookies.</translation>
 <translation id="6757438632136860443">Allows you to set a list of URL patterns that specify sites which are allowed to run the <ph name="FLASH_PLUGIN_NAME" /> plug-in.
@@ -3130,7 +3130,7 @@
 
       If this policy is set to false, the built-in DNS client will never be used.
 
-      If this policy is left not set, the built-in DNS client will be enabled by default on MacOS, Android (when neither Private DNS nor VPN are enabled) and Carbon Browser Browser BrowserOS, and the users will be able to change whether the built-in DNS client is used by editing chrome://flags or specifying a command-line flag.</translation>
+      If this policy is left not set, the built-in DNS client will be enabled by default on MacOS, Android (when neither Private DNS nor VPN are enabled) and Carbon BrowserOS, and the users will be able to change whether the built-in DNS client is used by editing chrome://flags or specifying a command-line flag.</translation>
 <translation id="6843296367238757293">This policy is deprecated. Its usage is discouraged. Read more at https://support.google.com/chrome/a/answer/7643500</translation>
 <translation id="684856667300805181">This policy was removed in <ph name="PRODUCT_NAME" /> 68 and replaced by <ph name="ARC_GLS_POLICY_NAME" />.</translation>
 <translation id="6856743875250214792">This policy is deprecated and removed in M66, because it was used only for internal testing and it is a security liability.
@@ -3173,7 +3173,7 @@
 
       NOTE: On Android, Site Isolation is experimental. Support will improve over time, but currently it may cause performance problems.
 
-      NOTE: This policy only applies to Carbon Browser Browser Browser on Android, running on devices with strictly more than 1 GB of RAM. To apply the policy on non-Android platforms, use SitePerProcess.
+      NOTE: This policy only applies to Carbon Browser on Android, running on devices with strictly more than 1 GB of RAM. To apply the policy on non-Android platforms, use SitePerProcess.
       </translation>
 <translation id="6922884955650325312">Block the <ph name="FLASH_PLUGIN_NAME" /> plug-in</translation>
 <translation id="6923366716660828830">Specifies the name of the default search provider. If left empty or not set, the host name specified by the search URL will be used.
@@ -3270,9 +3270,9 @@
 
       If the policy is set to false, or is unset, <ph name="PRODUCT_NAME" /> may not collect or upload such logs.
 
-      These logs contain diagnostic information helpful when debugging issues with audio or video calls in Carbon Browser Browser Browser, such as the time and size of sent and received RTP packets, feedback about congestion on the network, and metadata about time and quality of audio and video frames. These logs do not contain audio or video contents from the call.
+      These logs contain diagnostic information helpful when debugging issues with audio or video calls in Carbon Browser, such as the time and size of sent and received RTP packets, feedback about congestion on the network, and metadata about time and quality of audio and video frames. These logs do not contain audio or video contents from the call.
 
-      This data collection by Carbon Browser Browser Browser can only be triggered by Google's web services, such as Google Hangouts or Google Meet.
+      This data collection by Carbon Browser can only be triggered by Google's web services, such as Google Hangouts or Google Meet.
 
       Google may associate these logs, by means of a session ID, with other logs collected by the Google service itself; this is intended to make debugging easier.
       </translation>
@@ -3368,11 +3368,11 @@
 <translation id="7185078796915954712">TLS 1.3</translation>
 <translation id="718956142899066210">Connection types allowed for updates</translation>
 <translation id="7194407337890404814">Default search provider name</translation>
-<translation id="7199304109870655950">Configure remote access options in Carbon Browser Browser Browser Remote Desktop host.
+<translation id="7199304109870655950">Configure remote access options in Carbon Browser Remote Desktop host.
 
-      Carbon Browser Browser Browser Remote Desktop host is a native service that runs on the target machine that a user can connect to using Carbon Browser Browser Browser Remote Desktop application.  The native service is packaged and executed separately from the <ph name="PRODUCT_NAME" /> browser.
+      Carbon Browser Remote Desktop host is a native service that runs on the target machine that a user can connect to using Carbon Browser Remote Desktop application.  The native service is packaged and executed separately from the <ph name="PRODUCT_NAME" /> browser.
 
-      These policies are ignored unless the Carbon Browser Browser Browser Remote Desktop host is installed.</translation>
+      These policies are ignored unless the Carbon Browser Remote Desktop host is installed.</translation>
 <translation id="7202925763179776247">Allow download restrictions</translation>
 <translation id="7207095846245296855">Force Google SafeSearch</translation>
 <translation id="7211368186050418507">Never auto-detect timezone</translation>
@@ -3474,9 +3474,9 @@
 <translation id="7329968046053403405">Specifies the account type of the accounts provided by the Android authentication app that supports <ph name="HTTP_NEGOTIATE" /> authentication (e.g. Kerberos authentication). This information should be available from the supplier of the authentication app. For more details see https://goo.gl/hajyfN.
 
           If no setting is provided, <ph name="HTTP_NEGOTIATE" /> authentication is disabled on Android.</translation>
-<translation id="7331962793961469250">When set to True, promotions for Carbon Browser Browser Browser Web Store apps will not appear on the new tab page.
+<translation id="7331962793961469250">When set to True, promotions for Carbon Browser Web Store apps will not appear on the new tab page.
 
-      Setting this option to False or leaving it unset will make the promotions for Carbon Browser Browser Browser Web Store apps appear on the new tab page</translation>
+      Setting this option to False or leaving it unset will make the promotions for Carbon Browser Web Store apps appear on the new tab page</translation>
 <translation id="7332963785317884918">This policy is deprecated. <ph name="PRODUCT_OS_NAME" /> will always use the 'RemoveLRU' clean-up strategy.
 
       Controls the automatic clean-up behaviour on <ph name="PRODUCT_OS_NAME" /> devices. Automatic clean-up is triggered when the amount of free disk space reaches a critical level to recover some disk space.
@@ -3536,7 +3536,7 @@
       </translation>
 <translation id="7506269062143646163">Enable support for Signed HTTP Exchange (SXG).
 
-          If this policy is unset or set to Enabled, Carbon Browser Browser Browser will accept web contents served as Signed HTTP Exchanges.
+          If this policy is unset or set to Enabled, Carbon Browser will accept web contents served as Signed HTTP Exchanges.
 
           If this policy is set to Disabled, Signed HTTP Exchanges cannot be loaded.</translation>
 <translation id="7511361072385293666">If this policy is set to true or not set usage of QUIC protocol in <ph name="PRODUCT_NAME" /> is allowed.
@@ -3577,7 +3577,7 @@
 
       When this policy is left unset, or set to 0, navigating to a designated URL immediately opens it in an alternative browser.
 
-      When this policy is set to a number, Carbon Browser Browser Browser shows a message for that many milliseconds, and then opens the alternative browser.</translation>
+      When this policy is set to a number, Carbon Browser shows a message for that many milliseconds, and then opens the alternative browser.</translation>
 <translation id="7593523670408385997">Configures the cache size that <ph name="PRODUCT_NAME" /> will use for storing cached files on the disk.
 
       If you set this policy, <ph name="PRODUCT_NAME" /> will use the provided cache size regardless of whether the user has specified the '--disk-cache-size' flag or not. The value specified in this policy is not a hard boundary but rather a suggestion to the caching system, any value below a few megabytes is too small and will be rounded up to a sane minimum.
@@ -3762,7 +3762,7 @@
 
       NOTE: Until version 45, this policy was only supported in Kiosk mode.</translation>
 <translation id="7912255076272890813">Configure allowed app/extension types</translation>
-<translation id="7922358664346625612">Keep last tab open in Carbon Browser Browser Browser.</translation>
+<translation id="7922358664346625612">Keep last tab open in Carbon Browser.</translation>
 <translation id="793134539373873765">Specifies whether p2p is to be used for OS update payloads. If set to True, devices will share and attempt to consume update payloads on the LAN, potentially reducing Internet bandwidth usage and congestion. If the update payload is not available on the LAN, the device will fall back to downloading from an update server. If set to False or not configured, p2p will not be used.</translation>
 <translation id="7933141401888114454">Enable creation of supervised users</translation>
 <translation id="793473937901685727">Set certificate availability for ARC-apps</translation>
@@ -3893,7 +3893,7 @@
 
       In this mode the profile data is persisted on disk only for the length of the user session. Features like browser history, extensions and their data, web data like cookies and web databases are not preserved after the browser is closed. However this does not prevent the user from downloading any data to disk manually, save pages or print them.
 
-      If the user has enabled sync, all this data is preserved in their sync profile just as with regular profiles. Private mode is also available if not explicitly disabled by policy.
+      If the user has enabled sync, all this data is preserved in their sync profile just as with regular profiles. private mode is also available if not explicitly disabled by policy.
 
       If the policy is set to disabled or left not set signing in leads to regular profiles.</translation>
 <translation id="8158758865057576716">Enable the creation of roaming copies for <ph name="PRODUCT_NAME" /> profile data.</translation>
@@ -3925,7 +3925,7 @@
       If the policy is left not set, <ph name="PRODUCT_OS_NAME" /> will use the device-local account's email account ID as the display name on the login screen.
 
       This policy is ignored for regular user accounts.</translation>
-<translation id="8259375588339409826">Both Carbon Browser Browser Browser and Carbon Browser Browser Browser support the same set of policies. Please note that this document may include unreleased policies (i.e. their 'Supported on' entry refers to a not-yet released version of <ph name="PRODUCT_NAME" />) which are subject to change or removal without notice and for which no guarantees of any kind are provided, including no guarantees with respect to their security and privacy properties.
+<translation id="8259375588339409826">Both Carbon Browser and Carbon Browser support the same set of policies. Please note that this document may include unreleased policies (i.e. their 'Supported on' entry refers to a not-yet released version of <ph name="PRODUCT_NAME" />) which are subject to change or removal without notice and for which no guarantees of any kind are provided, including no guarantees with respect to their security and privacy properties.
 
 These policies are strictly intended to be used to configure instances of <ph name="PRODUCT_NAME" /> internal to your organisation. Use of these policies outside of your organisation (for example, in a publicly distributed program) is considered malware and will likely be labelled as malware by Google and anti-virus vendors.
 
@@ -3942,7 +3942,7 @@ The recommended way to configure policy on Windows is via GPO, although provisio
 
       If the policy is set to false, the statistics will not be reported.
       If set to true or left unset, statistics will be reported.</translation>
-<translation id="8294750666104911727">Normally pages with X-UA-Compatible set to chrome=1 will be rendered in <ph name="PRODUCT_FRAME_NAME" /> regardless of the 'Carbon Browser Browser BrowserFrameRendererSettings' policy.
+<translation id="8294750666104911727">Normally pages with X-UA-Compatible set to chrome=1 will be rendered in <ph name="PRODUCT_FRAME_NAME" /> regardless of the 'Carbon BrowserFrameRendererSettings' policy.
 
           If you enable this setting, pages will not be scanned for meta tags.
 
@@ -3968,7 +3968,7 @@ The recommended way to configure policy on Windows is via GPO, although provisio
 <translation id="8344454543174932833">Import bookmarks from default browser on first run</translation>
 <translation id="8357681633047935212">Limit the length of a user session</translation>
 <translation id="8359734107661430198">Enable ExampleDeprecatedFeature API through 2008/09/02</translation>
-<translation id="8367209241899435947">Enable Carbon Browser Browser Browser Cleanup on Windows</translation>
+<translation id="8367209241899435947">Enable Carbon Browser Cleanup on Windows</translation>
 <translation id="8369602308428138533">Screen off delay when running on AC power</translation>
 <translation id="8371178326720637170">Enables managed extensions to use the Enterprise Hardware Platform API</translation>
 <translation id="8374747520743832795">Report hardware statistics and identifiers related to power.
@@ -4040,13 +4040,13 @@ The recommended way to configure policy on Windows is via GPO, although provisio
       The policy will be removed in M75.</translation>
 <translation id="8484458986062090479">Customise the list of URL patterns that should always be rendered by the host browser.
 
-          If this policy is not set the default renderer will be used for all sites as specified by the 'Carbon Browser Browser BrowserFrameRendererSettings' policy.
+          If this policy is not set the default renderer will be used for all sites as specified by the 'Carbon BrowserFrameRendererSettings' policy.
 
           For example patterns see https://www.chromium.org/developers/how-tos/chrome-frame-getting-started.</translation>
 <translation id="8489964335640955763">PluginVm</translation>
 <translation id="8493645415242333585">Disable saving browser history</translation>
 <translation id="8499172469244085141">Default Settings (users can override)</translation>
-<translation id="849962487677588458">This policy is deprecated, and slated for removal in Carbon Browser Browser Browser 78, with no replacement.
+<translation id="849962487677588458">This policy is deprecated, and slated for removal in Carbon Browser 78, with no replacement.
 
       This policy enables HTTP/0.9 on ports other than 80 for HTTP and 443 for HTTPS.
 
@@ -4074,7 +4074,7 @@ The recommended way to configure policy on Windows is via GPO, although provisio
 
       Here 'Version' can be either an exact version such as '61.0.3163.120' or a version prefix, such as '61.0'  </translation>
 <translation id="8544375438507658205">Default HTML renderer for <ph name="PRODUCT_FRAME_NAME" /></translation>
-<translation id="8544465954173828789">Allow SMS messages to be synced from phone to Carbon Browser Browser Browserbook.</translation>
+<translation id="8544465954173828789">Allow SMS messages to be synced from phone to Carbon Browserbook.</translation>
 <translation id="8548832052135586762">Sets printing to colour only, monochrome only or no colour mode restriction. Unset policy is treated as no restriction.</translation>
 <translation id="8549772397068118889">Warn when visiting sites outside of content packs</translation>
 <translation id="8566729013138025202">Specifies a set of policies that will be handed over to the ARC runtime. The value must be valid JSON.
@@ -4289,7 +4289,7 @@ The recommended way to configure policy on Windows is via GPO, although provisio
 
           This policy maps an extension ID or an update URL to its configuration. With an extension ID, configuration will be applied to the specified extension only. A default configuration can be set for the special ID <ph name="DEFAULT_SCOPE" />, which will apply to all extensions that don't have a custom configuration set in this policy. With an update URL, configuration will be applied to all extensions with the exact update URL stated in manifest of this extension, as described at <ph name="LINK_TO_EXTENSION_DOC1" />.
 
-          For Windows instances that are not joined to a <ph name="MS_AD_NAME" /> domain, forced installation is limited to apps and extensions listed in the Carbon Browser Browser Browser Web Store.
+          For Windows instances that are not joined to a <ph name="MS_AD_NAME" /> domain, forced installation is limited to apps and extensions listed in the Carbon Browser Web Store.
           </translation>
 <translation id="8947415621777543415">Report device location</translation>
 <translation id="8951350807133946005">Set disk cache directory</translation>
@@ -4336,13 +4336,13 @@ The recommended way to configure policy on Windows is via GPO, although provisio
       If policy value is set to a token that maps to a Quick Fix Build, the device will be updated to the corresponding Quick Fix Build if the update is not blocked by another policy.
 
       If this policy is not set, or if its value does not map to a Quick Fix Build, then the device won't be updated to a Quick Fix Build. If the device is already running a Quick Fix Build and the policy is not set anymore or its value does not map to a Quick Fix Build anymore, then the device will be updated to a regular build if the update is not blocked by another policy.</translation>
-<translation id="9054012305936267950">This policy controls the sign-in behaviour of the browser. It allows you to specify if the user can sign in to <ph name="PRODUCT_NAME" /> with their account and use account-related services like Carbon Browser Browser Browser sync.
+<translation id="9054012305936267950">This policy controls the sign-in behaviour of the browser. It allows you to specify if the user can sign in to <ph name="PRODUCT_NAME" /> with their account and use account-related services like Carbon Browser sync.
 
-      If the policy is set to 'Disable browser sign-in' then the user cannot sign in to the browser and use account-based services. In this case, browser level features like Carbon Browser Browser Browser sync cannot be used and will be unavailable. If the user was signed in and the policy is set to 'Disabled' they will be signed out the next time that they run Carbon Browser Browser Browser, but their local profile data like bookmarks, passwords, etc. will be preserved. The user will still be able to sign in to and use Google web services like Gmail.
+      If the policy is set to 'Disable browser sign-in' then the user cannot sign in to the browser and use account-based services. In this case, browser level features like Carbon Browser sync cannot be used and will be unavailable. If the user was signed in and the policy is set to 'Disabled' they will be signed out the next time that they run Carbon Browser, but their local profile data like bookmarks, passwords, etc. will be preserved. The user will still be able to sign in to and use Google web services like Gmail.
 
-      If the policy is set to 'Enable browser sign-in', then the user is allowed to sign in to the browser and is automatically signed in to the browser when signed in to Google web services like Gmail. Being signed in to the browser means that the user's account information will be kept by the browser. However, it does not mean that Carbon Browser Browser Browser sync will be turned on by default; the user must separately opt in to use this feature. Enabling this policy will prevent the user from turning off the setting that allows browser sign-in. To control the availability of Carbon Browser Browser Browser sync, use the 'SyncDisabled' policy.
+      If the policy is set to 'Enable browser sign-in', then the user is allowed to sign in to the browser and is automatically signed in to the browser when signed in to Google web services like Gmail. Being signed in to the browser means that the user's account information will be kept by the browser. However, it does not mean that Carbon Browser sync will be turned on by default; the user must separately opt in to use this feature. Enabling this policy will prevent the user from turning off the setting that allows browser sign-in. To control the availability of Carbon Browser sync, use the 'SyncDisabled' policy.
 
-      If the policy is set to 'Force browser sign-in' the user is presented with an account selection dialogue and has to choose and sign in to an account to use the browser. This ensures that for managed accounts the policies associated with the account are applied and enforced. By default this turns on Carbon Browser Browser Browser sync for the account, except for the case when sync was disabled by the domain admin or via the 'SyncDisabled' policy. The default value of BrowserGuestModeEnabled will be set to false. Note that existing unsigned profiles will be locked and inaccessible after enabling this policy. For more information, see help centre article: https://support.google.com/chrome/a/answer/7572556. This option does not support Linux and will fall back to 'Enable browser sign-in' if used.
+      If the policy is set to 'Force browser sign-in' the user is presented with an account selection dialogue and has to choose and sign in to an account to use the browser. This ensures that for managed accounts the policies associated with the account are applied and enforced. By default this turns on Carbon Browser sync for the account, except for the case when sync was disabled by the domain admin or via the 'SyncDisabled' policy. The default value of BrowserGuestModeEnabled will be set to false. Note that existing unsigned profiles will be locked and inaccessible after enabling this policy. For more information, see help centre article: https://support.google.com/chrome/a/answer/7572556. This option does not support Linux and will fall back to 'Enable browser sign-in' if used.
 
       If this policy is not set then the user can decide if they want to enable the browser sign-in option and use it as they see fit.</translation>
 <translation id="9072600218500597787">Configures the required host domain names that will be imposed on remote access hosts and prevents users from changing it.
@@ -4389,8 +4389,8 @@ The recommended way to configure policy on Windows is via GPO, although provisio
 
       If this policy is set to true, system logs will be sent. If set
       to false or unset, then no system logs will be sent.</translation>
-<translation id="9150416707757015439">This policy is deprecated. Please, use PrivateModeAvailability instead.
-      Enables Private mode in <ph name="PRODUCT_NAME" />.
+<translation id="9150416707757015439">This policy is deprecated. Please, use privateModeAvailability instead.
+      Enables private mode in <ph name="PRODUCT_NAME" />.
 
       If this setting is enabled or not configured, users can open web pages in private mode.
 
@@ -4436,7 +4436,7 @@ The recommended way to configure policy on Windows is via GPO, although provisio
 
       When this policy is set, it will be used to launch <ph name="PRODUCT_NAME" /> when launching <ph name="PRODUCT_NAME" /> from Internet Explorer.
 
-      This policy can be set to an executable file path, or ${chrome} to auto-detect Carbon Browser Browser Browser's install location.</translation>
+      This policy can be set to an executable file path, or ${chrome} to auto-detect Carbon Browser's install location.</translation>
 <translation id="930930237275114205">Set <ph name="PRODUCT_FRAME_NAME" /> user data directory</translation>
 <translation id="943865157632139008">Allows you to configure the default HTML renderer when <ph name="PRODUCT_FRAME_NAME" /> is installed.
       The default setting is to allow the host browser do the rendering, but you can optionally override this and have <ph name="PRODUCT_FRAME_NAME" /> render HTML pages by default.</translation>

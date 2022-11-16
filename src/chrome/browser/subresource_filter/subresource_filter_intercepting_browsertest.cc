@@ -7,7 +7,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/macros.h"
+#include "base/time/time.h"
 #include "base/timer/elapsed_timer.h"
 #include "chrome/browser/safe_browsing/test_safe_browsing_database_helper.h"
 #include "chrome/browser/subresource_filter/subresource_filter_browser_test_harness.h"
@@ -34,6 +34,12 @@ class SubresourceFilterInterceptingBrowserTest
   SubresourceFilterInterceptingBrowserTest()
       : safe_browsing_test_server_(
             std::make_unique<net::test_server::EmbeddedTestServer>()) {}
+
+  SubresourceFilterInterceptingBrowserTest(
+      const SubresourceFilterInterceptingBrowserTest&) = delete;
+  SubresourceFilterInterceptingBrowserTest& operator=(
+      const SubresourceFilterInterceptingBrowserTest&) = delete;
+
   ~SubresourceFilterInterceptingBrowserTest() override {}
 
   net::test_server::EmbeddedTestServer* safe_browsing_test_server() {
@@ -107,7 +113,6 @@ class SubresourceFilterInterceptingBrowserTest
   // parent class' server.
   std::unique_ptr<net::test_server::EmbeddedTestServer>
       safe_browsing_test_server_;
-  DISALLOW_COPY_AND_ASSIGN(SubresourceFilterInterceptingBrowserTest);
 };
 
 IN_PROC_BROWSER_TEST_F(SubresourceFilterInterceptingBrowserTest,
@@ -144,7 +149,8 @@ IN_PROC_BROWSER_TEST_F(SubresourceFilterInterceptingBrowserTest,
         web_contents());
     enforce_console_observer.SetPattern(kActivationConsoleMessage);
     ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), enforce_url));
-    EXPECT_FALSE(WasParsedScriptElementLoaded(web_contents()->GetMainFrame()));
+    EXPECT_FALSE(
+        WasParsedScriptElementLoaded(web_contents()->GetPrimaryMainFrame()));
     EXPECT_EQ(kActivationConsoleMessage,
               enforce_console_observer.GetMessageAt(0u));
   }
@@ -154,7 +160,8 @@ IN_PROC_BROWSER_TEST_F(SubresourceFilterInterceptingBrowserTest,
     warn_console_observer.SetPattern(kActivationWarningConsoleMessage);
     ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), warn_url));
     warn_console_observer.Wait();
-    EXPECT_TRUE(WasParsedScriptElementLoaded(web_contents()->GetMainFrame()));
+    EXPECT_TRUE(
+        WasParsedScriptElementLoaded(web_contents()->GetPrimaryMainFrame()));
     EXPECT_EQ(kActivationWarningConsoleMessage,
               warn_console_observer.GetMessageAt(0u));
   }
@@ -170,7 +177,7 @@ IN_PROC_BROWSER_TEST_F(SubresourceFilterInterceptingBrowserTest,
   //   it's not ideal.  Look into using a ControllableHttpResponse for each
   //   request, and completing the first after we know the second got to
   //   the activation throttle and check that it didn't call NotifyResults.
-  base::TimeDelta delay = base::TimeDelta::FromSeconds(2);
+  base::TimeDelta delay = base::Seconds(2);
   ASSERT_NO_FATAL_FAILURE(
       SetRulesetToDisallowURLsWithPathSuffix("included_script.js"));
   GURL redirect_url(embedded_test_server()->GetURL(
@@ -191,10 +198,11 @@ IN_PROC_BROWSER_TEST_F(SubresourceFilterInterceptingBrowserTest,
       SetRulesetToDisallowURLsWithPathSuffix("included_script.js"));
   GURL redirect_url(embedded_test_server()->GetURL(
       "b.com", "/subresource_filter/frame_with_included_script.html"));
-  GURL url = InitializeSafeBrowsingForOutOfOrderResponses(
-      "a.com", redirect_url, base::TimeDelta::FromSeconds(0));
+  GURL url = InitializeSafeBrowsingForOutOfOrderResponses("a.com", redirect_url,
+                                                          base::Seconds(0));
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
-  EXPECT_TRUE(WasParsedScriptElementLoaded(web_contents()->GetMainFrame()));
+  EXPECT_TRUE(
+      WasParsedScriptElementLoaded(web_contents()->GetPrimaryMainFrame()));
 }
 
 }  // namespace subresource_filter

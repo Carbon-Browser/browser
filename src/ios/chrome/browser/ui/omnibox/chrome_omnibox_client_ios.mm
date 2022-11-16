@@ -4,15 +4,16 @@
 
 #include "ios/chrome/browser/ui/omnibox/chrome_omnibox_client_ios.h"
 
+#include "base/feature_list.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/task/post_task.h"
 #include "base/task/thread_pool.h"
 #include "components/favicon/ios/web_favicon_driver.h"
 #include "components/omnibox/browser/autocomplete_match.h"
 #include "components/omnibox/browser/autocomplete_result.h"
 #include "components/omnibox/browser/omnibox_edit_controller.h"
 #include "components/omnibox/browser/omnibox_log.h"
+#include "components/omnibox/common/omnibox_features.h"
 #include "components/search_engines/template_url_service.h"
 #include "ios/chrome/browser/autocomplete/autocomplete_classifier_factory.h"
 #include "ios/chrome/browser/autocomplete/autocomplete_provider_client_impl.h"
@@ -20,6 +21,7 @@
 #include "ios/chrome/browser/bookmarks/bookmarks_utils.h"
 #include "ios/chrome/browser/browser_state/chrome_browser_state.h"
 #include "ios/chrome/browser/chrome_url_constants.h"
+#include "ios/chrome/browser/https_upgrades/https_upgrade_service_factory.h"
 #include "ios/chrome/browser/prerender/prerender_service.h"
 #include "ios/chrome/browser/prerender/prerender_service_factory.h"
 #include "ios/chrome/browser/search_engines/template_url_service_factory.h"
@@ -46,17 +48,6 @@ ChromeOmniboxClientIOS::~ChromeOmniboxClientIOS() {}
 std::unique_ptr<AutocompleteProviderClient>
 ChromeOmniboxClientIOS::CreateAutocompleteProviderClient() {
   return std::make_unique<AutocompleteProviderClientImpl>(browser_state_);
-}
-
-std::unique_ptr<OmniboxNavigationObserver>
-ChromeOmniboxClientIOS::CreateOmniboxNavigationObserver(
-    const std::u16string& text,
-    const AutocompleteMatch& match,
-    const AutocompleteMatch& alternate_nav_match) {
-  // TODO(blundell): Bring up an OmniboxNavigationObserver implementation on
-  // iOS if/once iOS wants to start using the ShortcutsProvider.
-  // crbug.com/511965
-  return nullptr;
 }
 
 bool ChromeOmniboxClientIOS::CurrentPageExists() const {
@@ -104,12 +95,17 @@ AutocompleteClassifier* ChromeOmniboxClientIOS::GetAutocompleteClassifier() {
 }
 
 bool ChromeOmniboxClientIOS::ShouldDefaultTypedNavigationsToHttps() const {
-  // Defaulting omnibox navigations to HTTPS not yet supported on iOS.
-  return false;
+  return base::FeatureList::IsEnabled(omnibox::kDefaultTypedNavigationsToHttps);
 }
 
 int ChromeOmniboxClientIOS::GetHttpsPortForTesting() const {
-  return 0;
+  return HttpsUpgradeServiceFactory::GetForBrowserState(browser_state_)
+      ->GetHttpsPortForTesting();
+}
+
+bool ChromeOmniboxClientIOS::IsUsingFakeHttpsForHttpsUpgradeTesting() const {
+  return HttpsUpgradeServiceFactory::GetForBrowserState(browser_state_)
+      ->IsUsingFakeHttpsForTesting();
 }
 
 gfx::Image ChromeOmniboxClientIOS::GetIconIfExtensionMatch(
@@ -119,10 +115,10 @@ gfx::Image ChromeOmniboxClientIOS::GetIconIfExtensionMatch(
 }
 
 bool ChromeOmniboxClientIOS::ProcessExtensionKeyword(
+    const std::u16string& text,
     const TemplateURL* template_url,
     const AutocompleteMatch& match,
-    WindowOpenDisposition disposition,
-    OmniboxNavigationObserver* observer) {
+    WindowOpenDisposition disposition) {
   // Extensions are not supported on iOS.
   return false;
 }
@@ -147,6 +143,7 @@ void ChromeOmniboxClientIOS::OnFocusChanged(OmniboxFocusState state,
 void ChromeOmniboxClientIOS::OnResultChanged(
     const AutocompleteResult& result,
     bool default_match_changed,
+    bool should_prerender,
     const BitmapFetchedCallback& on_bitmap_fetched) {
   if (result.empty()) {
     return;

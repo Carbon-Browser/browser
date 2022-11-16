@@ -5,7 +5,7 @@
 package org.chromium.components.browser_ui.site_settings;
 
 import android.app.Activity;
-import android.graphics.Bitmap;
+import android.graphics.drawable.Drawable;
 
 import androidx.annotation.Nullable;
 
@@ -43,12 +43,17 @@ public interface SiteSettingsDelegate {
      * @param callback A callback that will be called with the favicon bitmap, or null if no
      *     favicon could be found or generated.
      */
-    void getFaviconImageForURL(GURL faviconUrl, Callback<Bitmap> callback);
+    void getFaviconImageForURL(GURL faviconUrl, Callback<Drawable> callback);
 
     /**
      * @return true if the given category type should be shown in the SiteSettings Fragment.
      */
     boolean isCategoryVisible(@SiteSettingsCategory.Type int type);
+
+    /**
+     * @return true if Incognito mode is enabled.
+     */
+    boolean isIncognitoModeEnabled();
 
     /**
      * @return true if the QuietNotificationPrompts Feature is enabled.
@@ -119,4 +124,20 @@ public interface SiteSettingsDelegate {
      * Dismisses the Privacy Sandbox snackbar, if active.
      */
     void dismissPrivacySandboxSnackbar();
+
+    /**
+     * Returns whether the current implementation of the delegate is able to launch the Clear
+     * Browsing Data dialog in Settings.
+     */
+    boolean canLaunchClearBrowsingDataDialog();
+
+    /**
+     * Launches the Clear Browsing Data dialog in Settings, if that is possible.
+     */
+    void launchClearBrowsingDataDialog(Activity currentActivity);
+
+    /**
+     * Called when the view this delegate is assigned to gets destroyed.
+     */
+    void onDestroyView();
 }

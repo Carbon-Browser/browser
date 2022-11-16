@@ -4,19 +4,28 @@
 
 #include "chrome/browser/signin/signin_features.h"
 
+#if BUILDFLAG(IS_ANDROID)
+// Enables the FamilyLink feedback collection in Chrome Settings feedback tool.
+const base::Feature kEnableFamilyInfoFeedback{"EnableFamilyInfoFeedback",
+                                              base::FEATURE_ENABLED_BY_DEFAULT};
+#endif
+
 // Enables the client-side processing of the HTTP response header
 // Google-Accounts-RemoveLocalAccount.
 const base::Feature kProcessGaiaRemoveLocalAccountHeader{
     "ProcessGaiaRemoveLocalAccountHeader", base::FEATURE_ENABLED_BY_DEFAULT};
 
-// Allows policies to be loaded on a managed account without activating sync.
-// Uses enterprise confirmation dialog for managed accounts signin outside of
-// the profile picker.
-const base::Feature kAccountPoliciesLoadedWithoutSync{
-    "AccountPoliciesLoadedWithoutSync", base::FEATURE_DISABLED_BY_DEFAULT};
+// Enables the sync promo after the sign-in intercept.
+const base::Feature kSyncPromoAfterSigninIntercept{
+    "SyncPromoAfterSigninIntercept", base::FEATURE_DISABLED_BY_DEFAULT};
 
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-// Enable support for account consistency across multiple profiles.
-const base::Feature kMultiProfileAccountConsistency{
-    "MultiProfileAccountConsistency", base::FEATURE_DISABLED_BY_DEFAULT};
-#endif
+// Enables using new style (strings, illustration, and disclaimer if needed)
+// for the sign-in intercept bubble.
+const base::Feature kSigninInterceptBubbleV2{"SigninInterceptBubbleV2",
+                                             base::FEATURE_DISABLED_BY_DEFAULT};
+
+// Enables showing the enterprise dialog after every signin into a managed
+// account.
+const base::Feature kShowEnterpriseDialogForAllManagedAccountsSignin{
+    "ShowEnterpriseDialogForAllManagedAccountsSignin",
+    base::FEATURE_DISABLED_BY_DEFAULT};

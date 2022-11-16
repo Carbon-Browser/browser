@@ -5,6 +5,7 @@
 #include "base/memory/ref_counted.h"
 
 #include <limits>
+#include <ostream>
 #include <type_traits>
 
 #include "base/threading/thread_collision_warner.h"
@@ -67,7 +68,7 @@ void RefCountedBase::ReleaseImpl() const {
 }
 #endif
 
-#if !defined(ARCH_CPU_X86_FAMILY)
+#if !(defined(ARCH_CPU_X86_FAMILY) || defined(__ARM_FEATURE_ATOMICS))
 bool RefCountedThreadSafeBase::Release() const {
   return ReleaseImpl();
 }

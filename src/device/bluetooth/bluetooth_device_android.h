@@ -11,7 +11,6 @@
 
 #include "base/android/jni_android.h"
 #include "base/android/scoped_java_ref.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "device/bluetooth/bluetooth_adapter_android.h"
 #include "device/bluetooth/bluetooth_device.h"
@@ -36,6 +35,9 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothDeviceAndroid final
       BluetoothAdapterAndroid* adapter,
       const base::android::JavaRef<jobject>&
           bluetooth_device_wrapper);  // Java Type: bluetoothDeviceWrapper
+
+  BluetoothDeviceAndroid(const BluetoothDeviceAndroid&) = delete;
+  BluetoothDeviceAndroid& operator=(const BluetoothDeviceAndroid&) = delete;
 
   ~BluetoothDeviceAndroid() override;
 
@@ -123,8 +125,6 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothDeviceAndroid final
   base::android::ScopedJavaGlobalRef<jobject> j_device_;
 
   bool gatt_connected_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(BluetoothDeviceAndroid);
 };
 
 }  // namespace device

@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "android_webview/browser/aw_browser_process.h"
+#include "android_webview/browser/enterprise_authentication_app_link_policy_handler.h"
 #include "base/bind.h"
 #include "components/policy/core/browser/configuration_policy_handler_list.h"
 #include "components/policy/core/browser/url_blocklist_policy_handler.h"
@@ -36,30 +37,24 @@ std::unique_ptr<policy::ConfigurationPolicyHandlerList> BuildHandlerList(
               channel != version_info::Channel::BETA));
 
   // URL Filtering
-  handlers->AddHandler(std::make_unique<policy::SimpleDeprecatingPolicyHandler>(
-      std::make_unique<policy::SimplePolicyHandler>(
-          policy::key::kURLWhitelist, policy::policy_prefs::kUrlAllowlist,
-          base::Value::Type::LIST),
-      std::make_unique<policy::SimplePolicyHandler>(
-          policy::key::kURLAllowlist, policy::policy_prefs::kUrlAllowlist,
-          base::Value::Type::LIST)));
-  handlers->AddHandler(std::make_unique<policy::SimpleDeprecatingPolicyHandler>(
-      std::make_unique<policy::URLBlocklistPolicyHandler>(
-          policy::key::kURLBlacklist),
-      std::make_unique<policy::URLBlocklistPolicyHandler>(
-          policy::key::kURLBlocklist)));
+  handlers->AddHandler(std::make_unique<policy::SimplePolicyHandler>(
+      policy::key::kURLAllowlist, policy::policy_prefs::kUrlAllowlist,
+      base::Value::Type::LIST));
+  handlers->AddHandler(std::make_unique<policy::URLBlocklistPolicyHandler>(
+      policy::key::kURLBlocklist));
 
   // HTTP Negotiate authentication
-  handlers->AddHandler(std::make_unique<policy::SimpleDeprecatingPolicyHandler>(
-      std::make_unique<policy::SimplePolicyHandler>(
-          policy::key::kAuthServerWhitelist, prefs::kAuthServerAllowlist,
-          base::Value::Type::STRING),
-      std::make_unique<policy::SimplePolicyHandler>(
-          policy::key::kAuthServerAllowlist, prefs::kAuthServerAllowlist,
-          base::Value::Type::STRING)));
+  handlers->AddHandler(std::make_unique<policy::SimplePolicyHandler>(
+      policy::key::kAuthServerAllowlist, prefs::kAuthServerAllowlist,
+      base::Value::Type::STRING));
   handlers->AddHandler(std::make_unique<policy::SimplePolicyHandler>(
       policy::key::kAuthAndroidNegotiateAccountType,
       prefs::kAuthAndroidNegotiateAccountType, base::Value::Type::STRING));
+
+  handlers->AddHandler(
+      std::make_unique<policy::EnterpriseAuthenticationAppLinkPolicyHandler>(
+          policy::key::kEnterpriseAuthenticationAppLinkPolicy,
+          prefs::kEnterpriseAuthAppLinkPolicy));
 
   return handlers;
 }

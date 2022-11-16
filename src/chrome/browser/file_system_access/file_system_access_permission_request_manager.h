@@ -93,8 +93,7 @@ class FileSystemAccessPermissionRequestManager
   void DequeueAndShowRequest();
 
   // WebContentsObserver
-  void DocumentOnLoadCompletedInMainFrame(
-      content::RenderFrameHost* render_frame_host) override;
+  void DocumentOnLoadCompletedInPrimaryMainFrame() override;
 
   void OnPermissionDialogResult(permissions::PermissionAction result);
 
@@ -103,9 +102,6 @@ class FileSystemAccessPermissionRequestManager
   std::unique_ptr<Request> current_request_;
   // Queued up requests.
   base::circular_deque<std::unique_ptr<Request>> queued_requests_;
-
-  // We only show new prompts when this is true.
-  bool main_frame_has_fully_loaded_ = false;
 
   absl::optional<permissions::PermissionAction> auto_response_for_test_;
 

@@ -11,6 +11,7 @@
 #include "ash/assistant/model/ui/assistant_card_element.h"
 #include "ash/assistant/ui/assistant_ui_constants.h"
 #include "ash/assistant/ui/main_stage/assistant_ui_element_view.h"
+#include "ash/components/login/auth/public/user_context.h"
 #include "ash/constants/ash_switches.h"
 #include "ash/public/cpp/assistant/assistant_state.h"
 #include "ash/public/cpp/test/assistant_test_api.h"
@@ -18,13 +19,12 @@
 #include "base/run_loop.h"
 #include "base/test/scoped_run_loop_timeout.h"
 #include "base/time/time.h"
-#include "chrome/browser/ash/login/test/embedded_test_server_mixin.h"
+#include "chrome/browser/ash/login/test/embedded_test_server_setup_mixin.h"
 #include "chrome/browser/ash/login/test/fake_gaia_mixin.h"
 #include "chrome/browser/ash/login/test/login_manager_mixin.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/ash/assistant/test_support/fake_s3_server.h"
 #include "chrome/test/base/mixin_based_in_process_browser_test.h"
-#include "chromeos/login/auth/user_context.h"
 #include "components/account_id/account_id.h"
 #include "components/language/core/browser/pref_names.h"
 #include "google_apis/gaia/gaia_urls.h"
@@ -310,7 +310,7 @@ class LoggedInUserMixin : public InProcessBrowserTestMixin {
       : InProcessBrowserTestMixin(host),
         login_manager_(host, {user}),
         test_server_(host, embedded_test_server),
-        fake_gaia_(host, embedded_test_server),
+        fake_gaia_(host),
         user_(user),
         test_base_(test_base),
         user_context_(LoginManagerMixin::CreateDefaultUserContext(user)) {
@@ -538,7 +538,7 @@ std::vector<base::TimeDelta> AssistantTestMixin::ExpectAndReturnTimersResponse(
                  [](const std::string& timer_as_string) {
                    int seconds_remaining = 0;
                    base::StringToInt(timer_as_string, &seconds_remaining);
-                   return base::TimeDelta::FromSeconds(seconds_remaining);
+                   return base::Seconds(seconds_remaining);
                  });
 
   return timers;

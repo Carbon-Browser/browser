@@ -6,7 +6,6 @@
 
 #include <memory>
 
-#include "base/macros.h"
 #include "base/no_destructor.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/simple_test_tick_clock.h"
@@ -91,6 +90,10 @@ class TabActivityWatcherTest : public ChromeRenderViewHostTestHarness {
                                                      params);
     TabActivityWatcher::GetInstance()->ResetForTesting();
   }
+
+  TabActivityWatcherTest(const TabActivityWatcherTest&) = delete;
+  TabActivityWatcherTest& operator=(const TabActivityWatcherTest&) = delete;
+
   ~TabActivityWatcherTest() override = default;
 
   LifecycleUnit* AddNewTab(TabStripModel* tab_strip_model, int i) {
@@ -116,9 +119,6 @@ class TabActivityWatcherTest : public ChromeRenderViewHostTestHarness {
   UkmEntryChecker ukm_entry_checker_;
   TabActivitySimulator tab_activity_simulator_;
   base::test::ScopedFeatureList feature_list_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(TabActivityWatcherTest);
 };
 
 class TabActivityWatcherScorerType0Test : public TabActivityWatcherTest {
@@ -324,6 +324,10 @@ class TabMetricsTest : public TabActivityWatcherTest {
     SetParams({{"scorer_type", "0"},
                {"disable_background_log_with_TabRanker", "false"}});
   }
+
+  TabMetricsTest(const TabMetricsTest&) = delete;
+  TabMetricsTest& operator=(const TabMetricsTest&) = delete;
+
   ~TabMetricsTest() override = default;
 
  protected:
@@ -340,9 +344,6 @@ class TabMetricsTest : public TabActivityWatcherTest {
  protected:
   const char* kEntryName = TabManager_TabMetrics::kEntryName;
   size_t num_previous_entries = 0;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(TabMetricsTest);
 };
 
 TEST_F(TabMetricsTest, Basic) {
@@ -382,8 +383,7 @@ TEST_F(TabMetricsTest, Basic) {
   }
 
   // Closing the tabs destroys the WebContentses but should not trigger logging.
-  // The TestWebContentsObserver simulates hiding these tabs as they are closed;
-  // we verify in TearDown() that no logging occurred.
+  // We verify in TearDown() that no logging occurred.
   tab_strip_model->CloseAllTabs();
 }
 
@@ -543,7 +543,7 @@ TEST_F(TabMetricsTest, InputEvents) {
 
   // Fake some input events.
   content::RenderWidgetHost* widget_1 =
-      test_contents_1->GetMainFrame()->GetRenderViewHost()->GetWidget();
+      test_contents_1->GetPrimaryMainFrame()->GetRenderViewHost()->GetWidget();
   widget_1->ForwardMouseEvent(
       CreateMouseEvent(WebInputEvent::Type::kMouseDown));
   widget_1->ForwardMouseEvent(CreateMouseEvent(WebInputEvent::Type::kMouseUp));
@@ -560,7 +560,7 @@ TEST_F(TabMetricsTest, InputEvents) {
 
   // The second tab's counts are independent of the other's.
   content::RenderWidgetHost* widget_2 =
-      test_contents_2->GetMainFrame()->GetRenderViewHost()->GetWidget();
+      test_contents_2->GetPrimaryMainFrame()->GetRenderViewHost()->GetWidget();
   widget_2->ForwardMouseEvent(
       CreateMouseEvent(WebInputEvent::Type::kMouseMove));
   expected_metrics_2[TabManager_TabMetrics::kMouseEventCountName] = 1;
@@ -592,7 +592,8 @@ TEST_F(TabMetricsTest, InputEvents) {
   // After a navigation, test that the counts are reset.
   WebContentsTester::For(test_contents_1)->NavigateAndCommit(TestUrls()[2]);
   // The widget may have been invalidated by the navigation.
-  widget_1 = test_contents_1->GetMainFrame()->GetRenderViewHost()->GetWidget();
+  widget_1 =
+      test_contents_1->GetPrimaryMainFrame()->GetRenderViewHost()->GetWidget();
   widget_1->ForwardMouseEvent(
       CreateMouseEvent(WebInputEvent::Type::kMouseMove));
   expected_metrics_1[TabManager_TabMetrics::kMouseEventCountName] = 1;
@@ -814,19 +815,21 @@ class ForegroundedOrClosedTest : public TabActivityWatcherTest {
     SetParams({{"scorer_type", "0"},
                {"disable_background_log_with_TabRanker", "false"}});
   }
+
+  ForegroundedOrClosedTest(const ForegroundedOrClosedTest&) = delete;
+  ForegroundedOrClosedTest& operator=(const ForegroundedOrClosedTest&) = delete;
+
   ~ForegroundedOrClosedTest() override = default;
 
  protected:
   const char* kEntryName = ForegroundedOrClosed::kEntryName;
 
-  void AdvanceClock() { test_clock_.Advance(base::TimeDelta::FromSeconds(1)); }
+  void AdvanceClock() { test_clock_.Advance(base::Seconds(1)); }
 
  private:
   base::SimpleTestTickClock test_clock_;
   resource_coordinator::ScopedSetTickClockForTesting
       scoped_set_tick_clock_for_testing_;
-
-  DISALLOW_COPY_AND_ASSIGN(ForegroundedOrClosedTest);
 };
 
 // Tests TabManager.Backgrounded.ForegroundedOrClosed UKM logging.

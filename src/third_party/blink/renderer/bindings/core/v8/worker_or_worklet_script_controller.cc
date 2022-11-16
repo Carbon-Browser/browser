@@ -31,6 +31,7 @@
 #include "third_party/blink/renderer/bindings/core/v8/worker_or_worklet_script_controller.h"
 
 #include <memory>
+#include <tuple>
 
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_controller.h"
@@ -42,8 +43,7 @@
 #include "third_party/blink/renderer/platform/bindings/origin_trial_features.h"
 #include "third_party/blink/renderer/platform/bindings/v8_dom_wrapper.h"
 #include "third_party/blink/renderer/platform/bindings/wrapper_type_info.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
-#include "third_party/blink/renderer/platform/heap/thread_state.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/scheduler/public/event_loop.h"
 #include "v8/include/v8.h"
 
@@ -202,6 +202,11 @@ void WorkerOrWorkletScriptController::Initialize(const KURL& url_for_debugger) {
     disable_eval_pending_ = String();
   }
 
+  if (!disable_wasm_eval_pending_.IsEmpty()) {
+    SetWasmEvalErrorMessageInternal(disable_wasm_eval_pending_);
+    disable_wasm_eval_pending_ = String();
+  }
+
   // This is a workaround for worker with on-the-main-thread script fetch and
   // worklets.
   // - For workers with off-the-main-thread worker script fetch,
@@ -255,8 +260,8 @@ void WorkerOrWorkletScriptController::PrepareForEvaluation() {
   v8::HandleScope handle_scope(isolate_);
 
   V8PerContextData* per_context_data = script_state_->PerContextData();
-  ignore_result(per_context_data->ConstructorForType(
-      global_scope_->GetWrapperTypeInfo()));
+  std::ignore =
+      per_context_data->ConstructorForType(global_scope_->GetWrapperTypeInfo());
   // Inform V8 that origin trial information is now connected with the context,
   // and V8 can extend the context with origin trial features.
   isolate_->InstallConditionalFeatures(script_state_->GetContext());
@@ -271,6 +276,16 @@ void WorkerOrWorkletScriptController::DisableEvalInternal(
   ScriptState::Scope scope(script_state_);
   script_state_->GetContext()->AllowCodeGenerationFromStrings(false);
   script_state_->GetContext()->SetErrorMessageForCodeGenerationFromStrings(
+      V8String(isolate_, error_message));
+}
+
+void WorkerOrWorkletScriptController::SetWasmEvalErrorMessageInternal(
+    const String& error_message) {
+  DCHECK(IsContextInitialized());
+  DCHECK(!error_message.IsEmpty());
+
+  ScriptState::Scope scope(script_state_);
+  script_state_->GetContext()->SetErrorMessageForWasmCodeGeneration(
       V8String(isolate_, error_message));
 }
 
@@ -303,6 +318,28 @@ void WorkerOrWorkletScriptController::DisableEval(const String& error_message) {
   // after returning here. Keep the error message until that time.
   DCHECK(disable_eval_pending_.IsEmpty());
   disable_eval_pending_ = error_message;
+}
+
+void WorkerOrWorkletScriptController::SetWasmEvalErrorMessage(
+    const String& error_message) {
+  DCHECK(!error_message.IsEmpty());
+  // Currently, this can be called before or after
+  // WorkerOrWorkletScriptController::Initialize() because of messy
+  // worker/worklet initialization sequences. Tidy them up after
+  // off-the-main-thread worker script fetch is enabled by default, make
+  // sure to call WorkerOrWorkletScriptController::SetWasmEvalErrorMessage()
+  // after WorkerOrWorkletScriptController::Initialize(), and remove
+  // |disable_wasm_eval_pending_| logic (https://crbug.com/960770).
+  if (IsContextInitialized()) {
+    SetWasmEvalErrorMessageInternal(error_message);
+    return;
+  }
+  // wasm-eval will actually be disabled on
+  // WorkerOrWorkletScriptController::Initialize() to be called from
+  // WorkerThread::InitializeOnWorkerThread() immediately and synchronously
+  // after returning here. Keep the error message until that time.
+  DCHECK(disable_wasm_eval_pending_.IsEmpty());
+  disable_wasm_eval_pending_ = error_message;
 }
 
 void WorkerOrWorkletScriptController::Trace(Visitor* visitor) const {

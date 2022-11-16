@@ -5,6 +5,8 @@
 #ifndef IOS_CHROME_TEST_APP_SIGNIN_TEST_UTIL_H_
 #define IOS_CHROME_TEST_APP_SIGNIN_TEST_UTIL_H_
 
+@class ChromeIdentity;
+
 namespace chrome_test_util {
 
 // Sets up mock authentication that will bypass the real ChromeIdentityService
@@ -33,7 +35,10 @@ void ResetUserApprovedAccountListManager();
 
 // Revokes the Sync consent of the primary account. The user will be in the
 // signed-in state.
-void RevokeSyncConsent();
+void SignInWithoutSync(ChromeIdentity* identity);
+
+// Resets all the selected data types to be turned on in the sync engine.
+void ResetSyncSelectedDataTypes();
 
 }  // namespace chrome_test_util
 

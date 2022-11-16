@@ -7,7 +7,6 @@
 #include <map>
 #include <string>
 
-#include "base/macros.h"
 #include "content/browser/background_fetch/background_fetch_request_info.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -28,6 +27,12 @@ class BackgroundFetchCrossOriginFilterTest : public ::testing::Test {
   BackgroundFetchCrossOriginFilterTest()
       : task_environment_(BrowserTaskEnvironment::REAL_IO_THREAD),
         source_(url::Origin::Create(GURL(kFirstOrigin))) {}
+
+  BackgroundFetchCrossOriginFilterTest(
+      const BackgroundFetchCrossOriginFilterTest&) = delete;
+  BackgroundFetchCrossOriginFilterTest& operator=(
+      const BackgroundFetchCrossOriginFilterTest&) = delete;
+
   ~BackgroundFetchCrossOriginFilterTest() override = default;
 
   // Creates a BackgroundFetchRequestInfo instance filled with the information
@@ -61,9 +66,6 @@ class BackgroundFetchCrossOriginFilterTest : public ::testing::Test {
   BrowserTaskEnvironment task_environment_;  // Must be first member.
 
   url::Origin source_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(BackgroundFetchCrossOriginFilterTest);
 };
 
 TEST_F(BackgroundFetchCrossOriginFilterTest, SameOrigin) {

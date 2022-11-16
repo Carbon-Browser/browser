@@ -7,8 +7,6 @@
 
 #include <memory>
 
-#include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/sequence_checker.h"
 #include "components/policy/core/common/cloud/cloud_external_data_manager.h"
@@ -35,6 +33,11 @@ class CloudExternalDataManagerBase : public CloudExternalDataManager {
   CloudExternalDataManagerBase(
       const GetChromePolicyDetailsCallback& get_policy_details,
       scoped_refptr<base::SequencedTaskRunner> backend_task_runner);
+
+  CloudExternalDataManagerBase(const CloudExternalDataManagerBase&) = delete;
+  CloudExternalDataManagerBase& operator=(const CloudExternalDataManagerBase&) =
+      delete;
+
   ~CloudExternalDataManagerBase() override;
 
   // Allows downloaded external data to be cached in |external_data_store|.
@@ -79,8 +82,6 @@ class CloudExternalDataManagerBase : public CloudExternalDataManager {
   std::unique_ptr<Backend> backend_;
 
   SEQUENCE_CHECKER(sequence_checker_);
-
-  DISALLOW_COPY_AND_ASSIGN(CloudExternalDataManagerBase);
 };
 
 }  // namespace policy

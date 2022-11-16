@@ -11,7 +11,6 @@
 #include "base/bind.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/json/json_reader.h"
-#include "base/macros.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/threading/thread_task_runner_handle.h"
@@ -62,6 +61,9 @@ class MenuManagerTest : public testing::Test {
         prefs_(base::ThreadTaskRunnerHandle::Get()),
         next_id_(1) {}
 
+  MenuManagerTest(const MenuManagerTest&) = delete;
+  MenuManagerTest& operator=(const MenuManagerTest&) = delete;
+
   void TearDown() override {
     prefs_.pref_service()->CommitPendingWrite();
     base::RunLoop().RunUntilIdle();
@@ -107,9 +109,6 @@ class MenuManagerTest : public testing::Test {
   ExtensionList extensions_;
   TestExtensionPrefs prefs_;
   int next_id_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(MenuManagerTest);
 };
 
 // Tests adding, getting, and removing items.
@@ -489,26 +488,25 @@ class MockEventRouter : public EventRouter {
  public:
   explicit MockEventRouter(Profile* profile) : EventRouter(profile, NULL) {}
 
+  MockEventRouter(const MockEventRouter&) = delete;
+  MockEventRouter& operator=(const MockEventRouter&) = delete;
+
   MOCK_METHOD6(DispatchEventToExtensionMock,
                void(const std::string& extension_id,
                     const std::string& event_name,
-                    base::ListValue* event_args,
+                    base::Value::List* event_args,
                     content::BrowserContext* source_context,
                     const GURL& event_url,
                     EventRouter::UserGestureState state));
 
   void DispatchEventToExtension(const std::string& extension_id,
                                 std::unique_ptr<Event> event) override {
-    DispatchEventToExtensionMock(extension_id,
-                                 event->event_name,
-                                 event->event_args.release(),
-                                 event->restrict_to_browser_context,
-                                 event->event_url,
-                                 event->user_gesture);
+    DispatchEventToExtensionMock(
+        extension_id, event->event_name,
+        new base::Value::List(std::move(event->event_args)),
+        event->restrict_to_browser_context, event->event_url,
+        event->user_gesture);
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(MockEventRouter);
 };
 
 // MockEventRouter factory function
@@ -601,7 +599,7 @@ TEST_F(MenuManagerTest, ExecuteCommand) {
 
   // Use the magic of googlemock to save a parameter to our mock's
   // DispatchEventToExtension method into event_args.
-  base::ListValue* list = NULL;
+  base::Value::List* list = nullptr;
   {
     InSequence s;
     EXPECT_CALL(*mock_event_router,
@@ -621,32 +619,30 @@ TEST_F(MenuManagerTest, ExecuteCommand) {
   manager_.ExecuteCommand(&profile, nullptr /* web_contents */,
                           nullptr /* render_frame_host */, params, id);
 
-  ASSERT_EQ(2u, list->GetList().size());
+  ASSERT_EQ(2u, list->size());
 
-  base::DictionaryValue* info;
-  ASSERT_TRUE(list->GetDictionary(0, &info));
+  const base::Value& info = (*list)[0];
+  ASSERT_TRUE(info.is_dict());
 
-  int tmp_id = 0;
-  ASSERT_TRUE(info->GetInteger("menuItemId", &tmp_id));
-  ASSERT_EQ(id.uid, tmp_id);
-  ASSERT_TRUE(info->GetInteger("parentMenuItemId", &tmp_id));
-  ASSERT_EQ(parent_id.uid, tmp_id);
+  ASSERT_EQ(id.uid, info.FindIntKey("menuItemId"));
+  ASSERT_EQ(parent_id.uid, info.FindIntKey("parentMenuItemId"));
 
-  std::string tmp;
-  ASSERT_TRUE(info->GetString("mediaType", &tmp));
-  ASSERT_EQ("image", tmp);
-  ASSERT_TRUE(info->GetString("srcUrl", &tmp));
-  ASSERT_EQ(params.src_url.spec(), tmp);
-  ASSERT_TRUE(info->GetString("pageUrl", &tmp));
-  ASSERT_EQ(params.page_url.spec(), tmp);
+  const std::string* tmp = info.FindStringKey("mediaType");
+  ASSERT_TRUE(tmp);
+  ASSERT_EQ("image", *tmp);
+  tmp = info.FindStringKey("srcUrl");
+  ASSERT_TRUE(tmp);
+  ASSERT_EQ(params.src_url.spec(), *tmp);
+  tmp = info.FindStringKey("pageUrl");
+  ASSERT_TRUE(tmp);
+  ASSERT_EQ(params.page_url.spec(), *tmp);
+  tmp = info.FindStringKey("selectionText");
+  ASSERT_TRUE(tmp);
+  ASSERT_EQ(params.selection_text, base::UTF8ToUTF16(*tmp));
 
-  std::u16string tmp16;
-  ASSERT_TRUE(info->GetString("selectionText", &tmp16));
-  ASSERT_EQ(params.selection_text, tmp16);
-
-  bool bool_tmp = true;
-  ASSERT_TRUE(info->GetBoolean("editable", &bool_tmp));
-  ASSERT_EQ(params.is_editable, bool_tmp);
+  absl::optional<bool> editable = info.FindBoolKey("editable");
+  ASSERT_TRUE(editable.has_value());
+  ASSERT_EQ(params.is_editable, editable.value());
 
   delete list;
 }

@@ -17,7 +17,7 @@ namespace content {
 // be empty or unused on some.
 //
 // This mapping can be passed to
-// |BrowserChildProcessHost::LaunchWithPreloadedFiles()|.
+// `BrowserChildProcessHost::LaunchWithPreloadedFiles()`.
 std::map<std::string, base::FilePath> GetV8SnapshotFilesToPreload();
 
 }  // namespace content

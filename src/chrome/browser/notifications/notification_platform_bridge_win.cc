@@ -12,17 +12,16 @@
 
 #include "base/bind.h"
 #include "base/command_line.h"
-#include "base/compiler_specific.h"
 #include "base/feature_list.h"
 #include "base/files/file_path.h"
 #include "base/hash/hash.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
-#include "base/sequenced_task_runner.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/win/core_winrt_util.h"
 #include "base/win/registry.h"
@@ -37,6 +36,8 @@
 #include "chrome/browser/notifications/win/notification_template_builder.h"
 #include "chrome/browser/notifications/win/notification_util.h"
 #include "chrome/browser/profiles/profile_manager.h"
+#include "chrome/browser/themes/theme_service.h"
+#include "chrome/browser/themes/theme_service_factory.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/notifications/notification_image_retainer.h"
@@ -299,9 +300,9 @@ class NotificationPlatformBridgeWinImpl
       std::vector<mswr::ComPtr<winui::Notifications::IToastNotification>>
           notifications = GetNotifications();
 
-      for (const auto& notification : notifications) {
+      for (const auto& n : notifications) {
         mswr::ComPtr<winui::Notifications::IToastNotification2> t2;
-        HRESULT hr = notification->QueryInterface(IID_PPV_ARGS(&t2));
+        hr = n->QueryInterface(IID_PPV_ARGS(&t2));
         if (FAILED(hr))
           continue;
 
@@ -441,8 +442,8 @@ class NotificationPlatformBridgeWinImpl
     }
   }
 
-  mswr::ComPtr<winui::Notifications::IToastNotificationHistory>
-  GetIToastNotificationHistory() const WARN_UNUSED_RESULT {
+  [[nodiscard]] mswr::ComPtr<winui::Notifications::IToastNotificationHistory>
+  GetIToastNotificationHistory() const {
     mswr::ComPtr<winui::Notifications::IToastNotificationManagerStatics>
         toast_manager;
     HRESULT hr = CreateActivationFactory(
@@ -860,8 +861,7 @@ class NotificationPlatformBridgeWinImpl
 
   static winui::Notifications::IToastNotifier* notifier_for_testing_;
 
-  const base::TimeDelta kSynchronizationInterval =
-      base::TimeDelta::FromMinutes(10);
+  const base::TimeDelta kSynchronizationInterval = base::Minutes(10);
 
   // Windows does not fire a close event when the notification closes. To work
   // around this, NotificationPlatformBridgeWinImpl simulates the close event by
@@ -923,7 +923,9 @@ void NotificationPlatformBridgeWin::Display(
   // Make a deep copy of the notification as its resources cannot safely
   // be passed between threads.
   auto notification_copy = message_center::Notification::DeepCopy(
-      notification, /*include_body_image=*/true, /*include_small_image=*/true,
+      notification,
+      ThemeServiceFactory::GetForProfile(profile)->GetColorProvider(),
+      /*include_body_image=*/true, /*include_small_image=*/true,
       /*include_icon_images=*/true);
 
   notification_task_runner_->PostTask(

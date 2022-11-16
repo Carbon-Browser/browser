@@ -6,7 +6,6 @@
 #define NET_SSL_CLIENT_CERT_STORE_WIN_H_
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/win/wincrypt_shim.h"
 #include "crypto/scoped_capi_types.h"
 #include "net/base/net_export.h"
@@ -24,6 +23,9 @@ class NET_EXPORT ClientCertStoreWin : public ClientCertStore {
   // certificate store.
   explicit ClientCertStoreWin(
       base::RepeatingCallback<crypto::ScopedHCERTSTORE()> cert_store_callback);
+
+  ClientCertStoreWin(const ClientCertStoreWin&) = delete;
+  ClientCertStoreWin& operator=(const ClientCertStoreWin&) = delete;
 
   ~ClientCertStoreWin() override;
 
@@ -51,8 +53,6 @@ class NET_EXPORT ClientCertStoreWin : public ClientCertStore {
                                    ClientCertIdentityList* selected_identities);
 
   base::RepeatingCallback<crypto::ScopedHCERTSTORE()> cert_store_callback_;
-
-  DISALLOW_COPY_AND_ASSIGN(ClientCertStoreWin);
 };
 
 }  // namespace net

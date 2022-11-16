@@ -7,15 +7,19 @@ import './repair_component_chip.js';
 import './shimless_rma_shared_css.js';
 
 import {assert} from 'chrome://resources/js/assert.m.js';
-import {html, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {I18nBehavior, I18nBehaviorInterface} from 'chrome://resources/js/i18n_behavior.m.js';
+import {html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
+import {ComponentTypeToId} from './data.js';
 import {getShimlessRmaService} from './mojo_interface_provider.js';
 import {Component, ComponentRepairStatus, ComponentType, ShimlessRmaServiceInterface, StateResult} from './shimless_rma_types.js';
+import {enableNextButton, executeThenTransitionState} from './shimless_rma_util.js';
 
 /**
  * @typedef {{
  *   component: !ComponentType,
  *   id: string,
+ *   identifier: string,
  *   name: string,
  *   checked: boolean,
  *   disabled: boolean
@@ -24,63 +28,22 @@ import {Component, ComponentRepairStatus, ComponentType, ShimlessRmaServiceInter
 let ComponentCheckbox;
 
 /**
- * @type {!Object<!ComponentType, string>}
- */
-const ComponentTypeToName = {
-  [ComponentType.kAudioCodec]: 'Audio',
-  [ComponentType.kBattery]: 'Battery',
-  [ComponentType.kStorage]: 'Storage',
-  [ComponentType.kVpdCached]: 'Vpd Cached',
-  [ComponentType.kNetwork]: 'Network',
-  [ComponentType.kCamera]: 'Camera',
-  [ComponentType.kStylus]: 'Stylus',
-  [ComponentType.kTouchpad]: 'Touchpad',
-  [ComponentType.kTouchsreen]: 'Touchscreen',
-  [ComponentType.kDram]: 'Memory',
-  [ComponentType.kDisplayPanel]: 'Display',
-  [ComponentType.kCellular]: 'Cellular',
-  [ComponentType.kEthernet]: 'Ethernet',
-  [ComponentType.kWireless]: 'Wireless',
-  [ComponentType.kGyroscope]: 'Gyroscope',
-  [ComponentType.kBaseAccelerometer]: 'Base Accelerometer',
-  [ComponentType.kLidAccelerometer]: 'Lid Accelerometer',
-  [ComponentType.kScreen]: 'Screen',
-  [ComponentType.kKeyboard]: 'Keyboard',
-  [ComponentType.kPowerButton]: 'Power Button'
-};
-
-/**
- * @type {!Object<!ComponentType, string>}
- */
-const ComponentTypeToId = {
-  [ComponentType.kAudioCodec]: 'componentAudio',
-  [ComponentType.kBattery]: 'componentBattery',
-  [ComponentType.kStorage]: 'componentStorage',
-  [ComponentType.kVpdCached]: 'componentVpd Cached',
-  [ComponentType.kNetwork]: 'componentNetwork',
-  [ComponentType.kCamera]: 'componentCamera',
-  [ComponentType.kStylus]: 'componentStylus',
-  [ComponentType.kTouchpad]: 'componentTouchpad',
-  [ComponentType.kTouchsreen]: 'componentTouchscreen',
-  [ComponentType.kDram]: 'componentDram',
-  [ComponentType.kDisplayPanel]: 'componentDisplayPanel',
-  [ComponentType.kCellular]: 'componentCellular',
-  [ComponentType.kEthernet]: 'componentEthernet',
-  [ComponentType.kWireless]: 'componentWireless',
-  [ComponentType.kGyroscope]: 'componentGyroscope',
-  [ComponentType.kBaseAccelerometer]: 'componentBaseAccelerometer',
-  [ComponentType.kLidAccelerometer]: 'componentLidAccelerometer',
-  [ComponentType.kScreen]: 'componentScreen',
-  [ComponentType.kKeyboard]: 'componentKeyboard',
-  [ComponentType.kPowerButton]: 'componentPowerButton'
-};
-
-/**
  * @fileoverview
  * 'onboarding-select-components-page' is the page for selecting the components
  * that were replaced during repair.
  */
-export class OnboardingSelectComponentsPageElement extends PolymerElement {
+
+/**
+ * @constructor
+ * @extends {PolymerElement}
+ * @implements {I18nBehaviorInterface}
+ */
+const OnboardingSelectComponentsPageElementBase =
+    mixinBehaviors([I18nBehavior], PolymerElement);
+
+/** @polymer */
+export class OnboardingSelectComponentsPageElement extends
+    OnboardingSelectComponentsPageElementBase {
   static get is() {
     return 'onboarding-select-components-page';
   }
@@ -91,25 +54,51 @@ export class OnboardingSelectComponentsPageElement extends PolymerElement {
 
   static get properties() {
     return {
-      /** @private {?ShimlessRmaServiceInterface} */
-      shimlessRmaService_: {
-        type: Object,
-        value: null,
-      },
+      /**
+       * Set by shimless_rma.js.
+       * @type {boolean}
+       */
+      allButtonsDisabled: Boolean,
 
-      /** @private {!Array<!ComponentCheckbox>} */
+      /** @protected {!Array<!ComponentCheckbox>} */
       componentCheckboxes_: {
         type: Array,
         value: () => [],
       },
+
+      /** @private {string} */
+      reworkFlowLinkText_: {type: String, value: ''},
     };
+  }
+
+  static get observers() {
+    return ['updateIsFirstClickableComponent_(componentCheckboxes_.*)'];
+  }
+
+  constructor() {
+    super();
+    /** @private {ShimlessRmaServiceInterface} */
+    this.shimlessRmaService_ = getShimlessRmaService();
   }
 
   /** @override */
   ready() {
     super.ready();
-    this.shimlessRmaService_ = getShimlessRmaService();
+    this.setReworkFlowLink_();
     this.getComponents_();
+    enableNextButton(this);
+
+    // Hide the gradient when the list is scrolled to the end.
+    this.shadowRoot.querySelector('.scroll-container')
+        .addEventListener('scroll', (event) => {
+          const gradient = this.shadowRoot.querySelector('.gradient');
+          if (event.target.scrollHeight - event.target.scrollTop ===
+              event.target.clientHeight) {
+            gradient.style.setProperty('visibility', 'hidden');
+          } else {
+            gradient.style.setProperty('visibility', 'visible');
+          }
+        });
   }
 
   /** @private */
@@ -121,25 +110,23 @@ export class OnboardingSelectComponentsPageElement extends PolymerElement {
         return;
       }
 
-      let componentList = [];
-      result.components.forEach(item => {
-        const component = assert(item.component);
-
-        componentList.push({
+      this.componentCheckboxes_ = result.components.map(item => {
+        assert(item.component);
+        return {
           component: item.component,
           id: ComponentTypeToId[item.component],
-          name: ComponentTypeToName[item.component],
+          identifier: item.identifier,
+          name: this.i18n(ComponentTypeToId[item.component]),
           checked: item.state === ComponentRepairStatus.kReplaced,
-          disabled: item.state === ComponentRepairStatus.kMissing
-        });
+          disabled: item.state === ComponentRepairStatus.kMissing,
+        };
       });
-      this.componentCheckboxes_ = componentList;
     });
   }
 
   /**
-   * @private
    * @return {!Array<!Component>}
+   * @private
    */
   getComponentRepairStateList_() {
     return this.componentCheckboxes_.map(item => {
@@ -150,25 +137,61 @@ export class OnboardingSelectComponentsPageElement extends PolymerElement {
       } else if (item.checked) {
         state = ComponentRepairStatus.kReplaced;
       }
-      return {component: item.component, state: state};
+      return {
+        component: item.component,
+        state: state,
+        identifier: item.identifier,
+      };
     });
   }
 
   /** @protected */
-  onReworkFlowButtonClicked_(e) {
+  onReworkFlowLinkClicked_(e) {
     e.preventDefault();
-    console.log('Rework flow clicked');
-    // TODO(gavindodd): call
-    // this.shimlessRmaService_.reworkMainboard().then((state)
-    //     => shimlessRma.loadNextState_(state));
+    executeThenTransitionState(
+        this, () => this.shimlessRmaService_.reworkMainboard());
   }
 
-  /** @return {!Promise<!StateResult>} */
+  /** @return {!Promise<!{stateResult: !StateResult}>} */
   onNextButtonClick() {
     return this.shimlessRmaService_.setComponentList(
         this.getComponentRepairStateList_());
   }
-};
+
+  /** @protected */
+  setReworkFlowLink_() {
+    this.reworkFlowLinkText_ =
+        this.i18nAdvanced('reworkFlowLinkText', {attrs: ['id']});
+    const linkElement = this.shadowRoot.querySelector('#reworkFlowLink');
+    linkElement.setAttribute('href', '#');
+    linkElement.addEventListener('click', e => {
+      if (this.allButtonsDisabled) {
+        return;
+      }
+
+      this.onReworkFlowLinkClicked_(e);
+    });
+  }
+
+  /**
+   * @param {boolean} componentDisabled
+   * @return {boolean}
+   * @protected
+   */
+  isComponentDisabled_(componentDisabled) {
+    return this.allButtonsDisabled || componentDisabled;
+  }
+
+  /** @private */
+  updateIsFirstClickableComponent_() {
+    const firstClickableComponent =
+        this.componentCheckboxes_.find(component => !component.disabled);
+    this.componentCheckboxes_.forEach(component => {
+      component.isFirstClickableComponent =
+          (component === firstClickableComponent) ? true : false;
+    });
+  }
+}
 
 customElements.define(
     OnboardingSelectComponentsPageElement.is,

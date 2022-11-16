@@ -4,12 +4,14 @@
 
 #include "components/certificate_transparency/ct_features.h"
 
+#include "build/build_config.h"
+
 namespace certificate_transparency {
 namespace features {
 
 const base::Feature kCertificateTransparencyComponentUpdater{
     "CertificateTransparencyComponentUpdater",
-    base::FEATURE_DISABLED_BY_DEFAULT};
+    base::FEATURE_ENABLED_BY_DEFAULT};
 
 }  // namespace features
 }  // namespace certificate_transparency

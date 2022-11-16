@@ -46,14 +46,13 @@ source_set("common") {
 
   sources = [
     "all_messages.h",
-    "appcache_interfaces.cc",
-    "appcache_interfaces.h",
     "ax_serialization_utils.cc",
     "ax_serialization_utils.h",
     "background_fetch/background_fetch_types.cc",
     "background_fetch/background_fetch_types.h",
     "child_process_host_impl.cc",
     "child_process_host_impl.h",
+    "color_parser.cc",
     "common_param_traits.cc",
     "common_param_traits.h",
     "common_param_traits_macros.h",
@@ -95,7 +94,6 @@ source_set("common") {
     "input/input_event_ack_state.cc",
     "input/input_event_stream_validator.cc",
     "input/input_event_stream_validator.h",
-    "input/input_injector_mojom_traits.cc",
     "input/synthetic_gesture_params.cc",
     "input/synthetic_gesture_params.h",
     "input/synthetic_pinch_gesture_params.cc",
@@ -133,8 +131,6 @@ source_set("common") {
     "process_visibility_tracker.h",
     "pseudonymization_salt.cc",
     "pseudonymization_salt.h",
-    "service_worker/service_worker_utils.cc",
-    "service_worker/service_worker_utils.h",
     "set_process_title.cc",
     "set_process_title.h",
     "shared_file_util.cc",
@@ -147,8 +143,6 @@ source_set("common") {
     "trace_utils.h",
     "url_schemes.cc",
     "url_schemes.h",
-    "url_utils.cc",
-    "url_utils.h",
     "user_agent.cc",
     "web_package/signed_exchange_utils.cc",
     "web_package/signed_exchange_utils.h",
@@ -172,7 +166,7 @@ source_set("common") {
     "//third_party/blink/public/common",
     "//ui/accessibility",
     "//ui/accessibility/mojom",
-    "//ui/base/cursor:cursor_base",
+    "//ui/base/cursor",
     "//ui/events/ipc",
   ]
   deps = [
@@ -189,7 +183,6 @@ source_set("common") {
     "//components/tracing:startup_tracing",
     "//content:content_resources",
     "//content:dev_ui_content_resources",
-    "//content/app/resources",
     "//content/common/fetch:fetch_api_request_proto",
     "//content/public/common:interfaces",
     "//content/public/common/zygote:buildflags",
@@ -228,6 +221,7 @@ source_set("common") {
     "//third_party/angle:angle_gpu_info_util",
     "//third_party/boringssl",
     "//third_party/icu",
+    "//third_party/re2",
     "//ui/base",
     "//ui/base/cursor/mojom:cursor_type",
     "//ui/base/ime",
@@ -275,7 +269,6 @@ source_set("common") {
       "android/surface_wrapper.h",
       "android/sync_compositor_statics.cc",
       "android/sync_compositor_statics.h",
-      "android/use_zoom_for_dsf_policy_android.cc",
       "cursors/webcursor_android.cc",
       "font_list_android.cc",
     ]
@@ -296,6 +289,8 @@ source_set("common") {
       "mac/attributed_string_type_converters.mm",
       "mac/font_loader.h",
       "mac/font_loader.mm",
+      "mac/task_port_policy.cc",
+      "mac/task_port_policy.h",
     ]
     deps += [
       ":mac_helpers",
@@ -327,19 +322,18 @@ source_set("common") {
     deps += [ "//ppapi/proxy:ipc_sources" ]
   }
 
-  if (!use_x11 && !use_ozone) {
+  if (!use_ozone) {
     sources -= [ "cursors/webcursor_ozone.cc" ]
   }
 
   if (use_aura) {
-    deps += [ "//ui/base/cursor" ]
+    deps += [ "//ui/wm" ]
   } else {
     sources -= [ "cursors/webcursor_aura.cc" ]
   }
 
   if (is_linux || is_chromeos) {
     sources += [
-      "sandbox_init_linux.cc",
       "zygote/sandbox_support_linux.cc",
       "zygote/send_zygote_child_ping_linux.cc",
       "zygote/zygote_commands_linux.h",
@@ -430,6 +424,7 @@ mojom("mojo_bindings") {
 
   sources = [
     "agent_scheduling_group.mojom",
+    "aggregatable_report.mojom",
     "associated_interfaces.mojom",
     "child_process.mojom",
     "dom_automation_controller.mojom",
@@ -442,7 +437,7 @@ mojom("mojo_bindings") {
     "media/media_log_records.mojom",
     "native_types.mojom",
     "navigation_client.mojom",
-    "render_accessibility.mojom",
+    "private_aggregation_host.mojom",
     "render_message_filter.mojom",
     "renderer.mojom",
     "renderer_host.mojom",
@@ -455,7 +450,7 @@ mojom("mojo_bindings") {
     enabled_features += [ "ipc_logging" ]
   }
   if (is_linux || is_chromeos) {
-    enabled_features += [ "supports_thread_priorities" ]
+    enabled_features += [ "supports_thread_types" ]
   }
   if (use_clang_profiling_inside_sandbox) {
     enabled_features += [ "clang_profiling_inside_sandbox" ]
@@ -471,6 +466,10 @@ mojom("mojo_bindings") {
   cpp_typemaps = [
     {
       types = [
+        {
+          mojom = "content.mojom.ChildFrameOwnerElementType"
+          cpp = "::blink::FrameOwnerElementType"
+        },
         {
           mojom = "content.mojom.ContentSecurityPolicy"
           cpp = "::content::ContentSecurityPolicy"
@@ -527,6 +526,7 @@ mojom("mojo_bindings") {
 
       traits_headers = [
         "//cc/input/touch_action.h",
+        "//content/common/frame_owner_element_type_mojom_traits.h",
         "//content/common/input/input_injector_mojom_traits.h",
         "//content/common/input/synthetic_pinch_gesture_params.h",
         "//content/common/input/synthetic_pointer_action_list_params.h",
@@ -552,6 +552,11 @@ mojom("mojo_bindings") {
         "//content/common/content_param_traits_macros.h",
         "//content/public/common/common_param_traits.h",
         "//services/network/public/cpp/p2p_param_traits.h",
+      ]
+
+      traits_sources = [
+        "//content/common/frame_owner_element_type_mojom_traits.cc",
+        "//content/common/input/input_injector_mojom_traits.cc",
       ]
 
       traits_public_deps = [
@@ -601,6 +606,7 @@ mojom("mojo_bindings") {
     "//cc/mojom",
     "//components/variations:variations_mojom",
     "//content/public/common:interfaces",
+    "//content/services/shared_storage_worklet/public/mojom:mojom",
     "//ipc:mojom",
     "//ipc:mojom_constants",
     "//media/capture/mojom:video_capture",
@@ -619,6 +625,7 @@ mojom("mojo_bindings") {
     "//ui/accessibility/mojom",
     "//ui/base/ime/mojom",
     "//ui/base/mojom",
+    "//ui/color:mojom",
     "//ui/display/mojom",
     "//ui/events/mojom",
     "//ui/gfx/geometry/mojom",

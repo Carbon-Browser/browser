@@ -6,11 +6,11 @@
 
 #include <utility>
 
+#include "ash/components/disks/mount_point.h"
 #include "ash/components/drivefs/drivefs_bootstrap.h"
 #include "base/bind.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/strcat.h"
-#include "chromeos/disks/mount_point.h"
 
 namespace drivefs {
 
@@ -20,13 +20,15 @@ using MountFailure = DriveFsSession::MountObserver::MountFailure;
 constexpr char kDataDirOption[] = "datadir=";
 constexpr char kMyFilesOption[] = "myfiles=";
 constexpr char kMountScheme[] = "drivefs://";
-constexpr base::TimeDelta kMountTimeout = base::TimeDelta::FromSeconds(20);
+constexpr base::TimeDelta kMountTimeout = base::Seconds(20);
 
 class DiskMounterImpl : public DiskMounter {
  public:
-  explicit DiskMounterImpl(
-      chromeos::disks::DiskMountManager* disk_mount_manager)
+  explicit DiskMounterImpl(ash::disks::DiskMountManager* disk_mount_manager)
       : disk_mount_manager_(disk_mount_manager) {}
+
+  DiskMounterImpl(const DiskMounterImpl&) = delete;
+  DiskMounterImpl& operator=(const DiskMounterImpl&) = delete;
 
   ~DiskMounterImpl() override = default;
 
@@ -43,7 +45,7 @@ class DiskMounterImpl : public DiskMounter {
     std::string datadir_option =
         base::StrCat({kDataDirOption, data_path.value()});
 
-    chromeos::disks::MountPoint::Mount(
+    ash::disks::MountPoint::Mount(
         disk_mount_manager_, source_path_, "", desired_mount_dir_name,
         {datadir_option, base::StrCat({kMyFilesOption, my_files_path.value()})},
         chromeos::MOUNT_TYPE_NETWORK_STORAGE,
@@ -55,7 +57,7 @@ class DiskMounterImpl : public DiskMounter {
  private:
   // MountPoint::Mount() done callback.
   void OnMountDone(chromeos::MountError error_code,
-                   std::unique_ptr<chromeos::disks::MountPoint> mount_point) {
+                   std::unique_ptr<ash::disks::MountPoint> mount_point) {
     DCHECK(callback_);
 
     if (error_code != chromeos::MOUNT_ERROR_NONE) {
@@ -69,21 +71,19 @@ class DiskMounterImpl : public DiskMounter {
     std::move(callback_).Run(mount_point_->mount_path());
   }
 
-  chromeos::disks::DiskMountManager* const disk_mount_manager_;
+  ash::disks::DiskMountManager* const disk_mount_manager_;
   base::OnceCallback<void(base::FilePath)> callback_;
   // The path passed to cros-disks to mount.
   std::string source_path_;
-  std::unique_ptr<chromeos::disks::MountPoint> mount_point_;
+  std::unique_ptr<ash::disks::MountPoint> mount_point_;
 
   base::WeakPtrFactory<DiskMounterImpl> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(DiskMounterImpl);
 };
 
 }  // namespace
 
 std::unique_ptr<DiskMounter> DiskMounter::Create(
-    chromeos::disks::DiskMountManager* disk_mount_manager) {
+    ash::disks::DiskMountManager* disk_mount_manager) {
   return std::make_unique<DiskMounterImpl>(disk_mount_manager);
 }
 

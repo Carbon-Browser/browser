@@ -82,7 +82,9 @@ public class TrustedCdnPublisherUrlTest {
     public CustomTabActivityTestRule mCustomTabActivityTestRule = new CustomTabActivityTestRule();
     @Rule
     public ChromeRenderTestRule mRenderTestRule =
-            ChromeRenderTestRule.Builder.withPublicCorpus().build();
+            ChromeRenderTestRule.Builder.withPublicCorpus()
+                    .setBugComponent(ChromeRenderTestRule.Component.UI_BROWSER_MOBILE_CUSTOM_TABS)
+                    .build();
 
     private static final String PAGE_WITH_TITLE =
             "<!DOCTYPE html><html><head><title>Example title</title></head></html>";
@@ -134,11 +136,11 @@ public class TrustedCdnPublisherUrlTest {
     }
 
     @Test
-    //@SmallTest
-    //@Feature({"UiCatalogue"})
+    @SmallTest
+    @Feature({"UiCatalogue"})
     @Features.EnableFeatures(ChromeFeatureList.SHOW_TRUSTED_PUBLISHER_URL)
     @OverrideTrustedCdn
-    @DisabledTest // Disabled for flakiness! See http://crbug.com/851950
+    @DisabledTest(message = "Disabled for flakiness! See http://crbug.com/847341")
     public void testHttps() throws Exception {
         runTrustedCdnPublisherUrlTest("https://www.example.com/test", "com.example.test",
                 "example.com", org.chromium.chrome.R.drawable.omnibox_https_valid);
@@ -150,7 +152,7 @@ public class TrustedCdnPublisherUrlTest {
     @Feature({"UiCatalogue"})
     @Features.EnableFeatures(ChromeFeatureList.SHOW_TRUSTED_PUBLISHER_URL)
     @OverrideTrustedCdn
-    @DisabledTest // Disabled for flakiness! See http://crbug.com/847341
+    @DisabledTest(message = "Disabled for flakiness! See http://crbug.com/847341")
     public void testHttp() throws Exception {
         runTrustedCdnPublisherUrlTest("http://example.com/test", "com.example.test", "example.com",
                 org.chromium.chrome.R.drawable.omnibox_info);
@@ -162,7 +164,7 @@ public class TrustedCdnPublisherUrlTest {
     @Feature({"UiCatalogue"})
     @Features.EnableFeatures(ChromeFeatureList.SHOW_TRUSTED_PUBLISHER_URL)
     @OverrideTrustedCdn
-    @DisabledTest // Disabled for flakiness! See http://crbug.com/847341
+    @DisabledTest(message = "Disabled for flakiness! See http://crbug.com/847341")
     public void testRtl() throws Exception {
         String publisher = "\u200e\u202b\u0645\u0648\u0642\u0639\u002e\u0648\u0632\u0627\u0631"
                 + "\u0629\u002d\u0627\u0644\u0623\u062a\u0635\u0627\u0644\u0627\u062a\u002e\u0645"
@@ -174,16 +176,6 @@ public class TrustedCdnPublisherUrlTest {
 
     private int getDefaultSecurityIcon() {
         return org.chromium.chrome.R.drawable.omnibox_info;
-    }
-
-    @Test
-    @SmallTest
-    @Feature({"UiCatalogue"})
-    @Features.EnableFeatures(ChromeFeatureList.SHOW_TRUSTED_PUBLISHER_URL)
-    @OverrideTrustedCdn
-    public void testUntrustedClient() throws Exception {
-        runTrustedCdnPublisherUrlTest(
-                "https://example.com/test", "com.someoneelse.bla", null, getDefaultSecurityIcon());
     }
 
     @Test
@@ -208,16 +200,6 @@ public class TrustedCdnPublisherUrlTest {
     @Test
     @SmallTest
     @Feature({"UiCatalogue"})
-    @Features.DisableFeatures(ChromeFeatureList.SHOW_TRUSTED_PUBLISHER_URL)
-    @OverrideTrustedCdn
-    public void testDisabled() throws Exception {
-        runTrustedCdnPublisherUrlTest(
-                "https://example.com/test", "com.example.test", null, getDefaultSecurityIcon());
-    }
-
-    @Test
-    @SmallTest
-    @Feature({"UiCatalogue"})
     @Features.EnableFeatures(ChromeFeatureList.SHOW_TRUSTED_PUBLISHER_URL)
     // No @OverrideTrustedCdn
     public void testUntrustedCdn() throws Exception {
@@ -230,7 +212,7 @@ public class TrustedCdnPublisherUrlTest {
     @Feature({"UiCatalogue"})
     @Features.EnableFeatures(ChromeFeatureList.SHOW_TRUSTED_PUBLISHER_URL)
     @OverrideTrustedCdn
-    @DisabledTest // Disabled for flakiness! See http://crbug.com/847341
+    @DisabledTest(message = "Disabled for flakiness! See http://crbug.com/847341")
     public void testPageInfo() throws Exception {
         runTrustedCdnPublisherUrlTest("https://example.com/test", "com.example.test", "example.com",
                 R.drawable.omnibox_https_valid);
@@ -247,7 +229,7 @@ public class TrustedCdnPublisherUrlTest {
     @Feature({"UiCatalogue"})
     @Features.EnableFeatures(ChromeFeatureList.SHOW_TRUSTED_PUBLISHER_URL)
     @OverrideTrustedCdn
-    @DisabledTest // Disabled for flakiness! See http://crbug.com/847341
+    @DisabledTest(message = "Disabled for flakiness! See http://crbug.com/847341")
     public void testNavigateAway() throws Exception {
         runTrustedCdnPublisherUrlTest("https://example.com/test", "com.example.test", "example.com",
                 R.drawable.omnibox_https_valid);
@@ -266,7 +248,7 @@ public class TrustedCdnPublisherUrlTest {
     @Feature({"UiCatalogue"})
     @Features.EnableFeatures(ChromeFeatureList.SHOW_TRUSTED_PUBLISHER_URL)
     @OverrideTrustedCdn
-    @DisabledTest // Disabled for flakiness! See http://crbug.com/847341
+    @DisabledTest(message = "Disabled for flakiness! See http://crbug.com/847341")
     public void testReparent() throws Exception {
         String publisherUrl = "https://example.com/test";
         runTrustedCdnPublisherUrlTest(
@@ -313,7 +295,7 @@ public class TrustedCdnPublisherUrlTest {
     @SmallTest
     @Features.EnableFeatures(ChromeFeatureList.SHOW_TRUSTED_PUBLISHER_URL)
     @OverrideTrustedCdn
-    @DisabledTest // Disabled for flakiness! See http://crbug.com/847341
+    @DisabledTest(message = "Disabled for flakiness! See http://crbug.com/847341")
     public void testOfflinePage() throws TimeoutException {
         String publisherUrl = "https://example.com/test";
         runTrustedCdnPublisherUrlTest(
@@ -381,7 +363,8 @@ public class TrustedCdnPublisherUrlTest {
         }
         String testUrl = mWebServer.setResponse("/test.html", PAGE_WITH_TITLE, headers);
         Context targetContext = InstrumentationRegistry.getTargetContext();
-        Intent intent = CustomTabsTestUtils.createMinimalCustomTabIntent(targetContext, testUrl);
+        Intent intent =
+                CustomTabsIntentTestUtils.createMinimalCustomTabIntent(targetContext, testUrl);
         intent.putExtra(
                 CustomTabsIntent.EXTRA_TITLE_VISIBILITY_STATE, CustomTabsIntent.SHOW_PAGE_TITLE);
         CustomTabsSessionToken token = CustomTabsSessionToken.getSessionTokenFromIntent(intent);

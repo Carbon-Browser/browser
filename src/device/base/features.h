@@ -12,14 +12,14 @@
 
 namespace device {
 
-#if defined(OS_WIN) || defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 DEVICE_BASE_EXPORT extern const base::Feature kNewUsbBackend;
-#endif  // defined(OS_WIN) || defined(OS_MAC)
+#endif  // BUILDFLAG(IS_MAC)
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 DEVICE_BASE_EXPORT extern const base::Feature kNewBLEWinImplementation;
 DEVICE_BASE_EXPORT extern const base::Feature kNewBLEGattSessionHandling;
-#endif  // defined(OS_WIN)
+#endif  // BUILDFLAG(IS_WIN)
 
 #if BUILDFLAG(ENABLE_VR)
 DEVICE_BASE_EXPORT extern const base::Feature kWebXrOrientationSensorDevice;
@@ -37,6 +37,11 @@ DEVICE_BASE_EXPORT extern const base::Feature kOpenXRSharedImages;
 DEVICE_BASE_EXPORT extern const base::Feature kWebXrHandInput;
 DEVICE_BASE_EXPORT extern const base::Feature kWebXrHitTest;
 DEVICE_BASE_EXPORT extern const base::Feature kWebXrIncubations;
+
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_LINUX)
+DEVICE_BASE_EXPORT extern const base::Feature
+    kWebBluetoothConfirmPairingSupport;
+#endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_LINUX)
 
 }  // namespace features
 }  // namespace device

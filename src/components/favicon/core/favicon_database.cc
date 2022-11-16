@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include <algorithm>
 #include <string>
+#include <tuple>
 #include <utility>
 
 #include "base/bind.h"
@@ -22,14 +23,15 @@
 #include "base/strings/stringprintf.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
+#include "components/database_utils/upper_bound_string.h"
 #include "components/database_utils/url_converter.h"
 #include "sql/recovery.h"
 #include "sql/statement.h"
 #include "sql/transaction.h"
 #include "third_party/sqlite/sqlite3.h"
 
-#if defined(OS_MAC)
-#include "base/mac/mac_util.h"
+#if BUILDFLAG(IS_APPLE)
+#include "base/mac/backup_util.h"
 #endif
 
 namespace favicon {
@@ -222,7 +224,7 @@ void DatabaseErrorCallback(sql::Database* db,
     // or hardware issues, not coding errors at the client level, so displaying
     // the error would probably lead to confusion.  The ignored call signals the
     // test-expectation framework that the error was handled.
-    ignore_result(sql::Database::IsExpectedSqliteError(extended_error));
+    std::ignore = sql::Database::IsExpectedSqliteError(extended_error);
     return;
   }
 
@@ -367,7 +369,7 @@ void FaviconDatabase::RollbackTransaction() {
 void FaviconDatabase::Vacuum() {
   DCHECK(db_.transaction_nesting() == 0)
       << "Can not have a transaction when vacuuming.";
-  ignore_result(db_.Execute("VACUUM"));
+  std::ignore = db_.Execute("VACUUM");
 }
 
 void FaviconDatabase::TrimMemory() {
@@ -443,7 +445,7 @@ bool FaviconDatabase::GetFaviconBitmaps(
     favicon_bitmap.bitmap_id = statement.ColumnInt64(0);
     favicon_bitmap.icon_id = icon_id;
     favicon_bitmap.last_updated = base::Time::FromDeltaSinceWindowsEpoch(
-        base::TimeDelta::FromMicroseconds(statement.ColumnInt64(1)));
+        base::Microseconds(statement.ColumnInt64(1)));
     std::vector<uint8_t> bitmap_data_blob;
     statement.ColumnBlobAsVector(2, &bitmap_data_blob);
     if (!bitmap_data_blob.empty()) {
@@ -453,7 +455,7 @@ bool FaviconDatabase::GetFaviconBitmaps(
     favicon_bitmap.pixel_size =
         gfx::Size(statement.ColumnInt(3), statement.ColumnInt(4));
     favicon_bitmap.last_requested = base::Time::FromDeltaSinceWindowsEpoch(
-        base::TimeDelta::FromMicroseconds(statement.ColumnInt64(5)));
+        base::Microseconds(statement.ColumnInt64(5)));
     favicon_bitmaps->push_back(favicon_bitmap);
   }
   return result;
@@ -477,7 +479,7 @@ bool FaviconDatabase::GetFaviconBitmap(
 
   if (last_updated) {
     *last_updated = base::Time::FromDeltaSinceWindowsEpoch(
-        base::TimeDelta::FromMicroseconds(statement.ColumnInt64(0)));
+        base::Microseconds(statement.ColumnInt64(0)));
   }
 
   if (png_icon_data) {
@@ -493,7 +495,7 @@ bool FaviconDatabase::GetFaviconBitmap(
 
   if (last_requested) {
     *last_requested = base::Time::FromDeltaSinceWindowsEpoch(
-        base::TimeDelta::FromMicroseconds(statement.ColumnInt64(4)));
+        base::Microseconds(statement.ColumnInt64(4)));
   }
 
   return true;
@@ -601,8 +603,7 @@ bool FaviconDatabase::TouchOnDemandFavicon(const GURL& icon_url,
       SQL_FROM_HERE, "SELECT id FROM favicons WHERE url=?"));
   id_statement.BindString(0, database_utils::GurlToDatabaseUrl(icon_url));
 
-  base::Time max_time =
-      time - base::TimeDelta::FromDays(kFaviconUpdateLastRequestedAfterDays);
+  base::Time max_time = time - base::Days(kFaviconUpdateLastRequestedAfterDays);
 
   while (id_statement.Step()) {
     favicon_base::FaviconID icon_id = id_statement.ColumnInt64(0);
@@ -658,7 +659,7 @@ bool FaviconDatabase::GetFaviconLastUpdatedTime(favicon_base::FaviconID icon_id,
 
   if (last_updated) {
     *last_updated = base::Time::FromDeltaSinceWindowsEpoch(
-        base::TimeDelta::FromMicroseconds(statement.ColumnInt64(0)));
+        base::Microseconds(statement.ColumnInt64(0)));
   }
   return true;
 }
@@ -798,12 +799,21 @@ absl::optional<GURL> FaviconDatabase::FindFirstPageURLForHost(
                              "FROM icon_mapping "
                              "INNER JOIN favicons "
                              "ON icon_mapping.icon_id = favicons.id "
-                             "WHERE icon_mapping.page_url LIKE ? "
+                             "WHERE (page_url >= ? AND page_url < ?) "
+                             "OR (page_url >= ? AND page_url < ?) "
                              "ORDER BY favicons.icon_type DESC"));
 
-  // Bind the host with a prefix of "://" and suffix of "/" to ensure the entire
-  // host name is matched.
-  statement.BindString(0, base::StringPrintf("%%://%s/%%", url.host().c_str()));
+  // This is an optimization to avoid using the LIKE operator which can be
+  // expensive. This statement finds all rows where page_url starts from either
+  // "http://<host>/" or "https://<host>/".
+  std::string http_prefix =
+      base::StringPrintf("http://%s/", url.host().c_str());
+  statement.BindString(0, http_prefix);
+  statement.BindString(1, database_utils::UpperBoundString(http_prefix));
+  std::string https_prefix =
+      base::StringPrintf("https://%s/", url.host().c_str());
+  statement.BindString(2, https_prefix);
+  statement.BindString(3, database_utils::UpperBoundString(https_prefix));
 
   while (statement.Step()) {
     favicon_base::IconType icon_type =
@@ -1080,13 +1090,13 @@ sql::InitStatus FaviconDatabase::InitImpl(const base::FilePath& db_name) {
     // TODO(shess): Failing Begin() implies that something serious is
     // wrong with the database.  Raze() may be in order.
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_APPLE)
   // Exclude the favicons file from backups.
-  base::mac::SetFileBackupExclusion(db_name);
+  base::mac::SetBackupExclusion(db_name);
 #endif
 
   // thumbnails table has been obsolete for a long time, remove any detritus.
-  ignore_result(db_.Execute("DROP TABLE IF EXISTS thumbnails"));
+  std::ignore = db_.Execute("DROP TABLE IF EXISTS thumbnails");
 
   // At some point, operations involving temporary tables weren't done
   // atomically and users have been stranded.  Drop those tables and
@@ -1094,9 +1104,9 @@ sql::InitStatus FaviconDatabase::InitImpl(const base::FilePath& db_name) {
   // TODO(shess): Prove it?  Audit all cases and see if it's possible
   // that this implies non-atomic update, and should thus be handled
   // via the corruption handler.
-  ignore_result(db_.Execute("DROP TABLE IF EXISTS temp_favicons"));
-  ignore_result(db_.Execute("DROP TABLE IF EXISTS temp_favicon_bitmaps"));
-  ignore_result(db_.Execute("DROP TABLE IF EXISTS temp_icon_mapping"));
+  std::ignore = db_.Execute("DROP TABLE IF EXISTS temp_favicons");
+  std::ignore = db_.Execute("DROP TABLE IF EXISTS temp_favicon_bitmaps");
+  std::ignore = db_.Execute("DROP TABLE IF EXISTS temp_icon_mapping");
 
   // Create the tables.
   if (!meta_table_.Init(&db_, kCurrentVersionNumber,

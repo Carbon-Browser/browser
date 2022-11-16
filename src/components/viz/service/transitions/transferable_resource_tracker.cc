@@ -39,16 +39,23 @@ TransferableResourceTracker::ImportResources(
 
   absl::optional<SurfaceSavedFrame::FrameResult> frame_copy =
       saved_frame->TakeResult();
+  const auto& directive = saved_frame->directive();
 
   ResourceFrame resource_frame;
   resource_frame.root = ImportResource(std::move(frame_copy->root_result));
-  resource_frame.shared.resize(frame_copy->shared_results.size());
 
+  resource_frame.shared.resize(frame_copy->shared_results.size());
   for (size_t i = 0; i < frame_copy->shared_results.size(); ++i) {
     auto& shared_result = frame_copy->shared_results[i];
     if (shared_result.has_value()) {
       resource_frame.shared[i].emplace(
           ImportResource(std::move(*shared_result)));
+      auto shared_element_resource_id =
+          directive.shared_elements()[i].shared_element_resource_id;
+      if (shared_element_resource_id.IsValid()) {
+        resource_frame.element_id_to_resource[shared_element_resource_id] =
+            resource_frame.shared[i]->resource;
+      }
     }
   }
   return resource_frame;
@@ -84,6 +91,7 @@ TransferableResourceTracker::ImportResource(
         output_copy.mailbox, GL_LINEAR, GL_TEXTURE_2D, output_copy.sync_token,
         output_copy.draw_data.size,
         /*is_overlay_candidate=*/false);
+    resource.color_space = output_copy.color_space;
 
     // Run the SingleReleaseCallback when no longer in use.
     if (output_copy.release_callback) {

@@ -51,8 +51,7 @@ class MockTabStripUIEmbedder : public TabStripUIEmbedder {
                void(gfx::Point, gfx::Rect, tab_groups::TabGroupId));
   MOCK_METHOD0(HideEditDialogForGroup, void());
   MOCK_METHOD0(GetLayout, TabStripUILayout());
-  MOCK_CONST_METHOD1(GetColor, SkColor(int));
-  MOCK_CONST_METHOD1(GetSystemColor, SkColor(ui::NativeTheme::ColorId));
+  MOCK_CONST_METHOD1(GetColorProviderColor, SkColor(ui::ColorId));
 };
 
 }  // namespace
@@ -109,7 +108,8 @@ const std::string TabStripUIBrowserTest::tab_query_js(
 
 // https://crbug.com/1246369: Test is flaky on Linux/Windows, disabled for
 // investigation.
-#if defined(OS_LINUX) || defined(OS_WIN)
+// https://crbug.com/1263485: Also flaky on chromeos.
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_CHROMEOS)
 #define MAYBE_ActivatingTabClosesEmbedder DISABLED_ActivatingTabClosesEmbedder
 #else
 #define MAYBE_ActivatingTabClosesEmbedder ActivatingTabClosesEmbedder

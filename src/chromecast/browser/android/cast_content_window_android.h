@@ -8,7 +8,6 @@
 #include <jni.h>
 
 #include "base/android/scoped_java_ref.h"
-#include "base/macros.h"
 #include "chromecast/browser/cast_content_window.h"
 
 namespace content {
@@ -21,8 +20,11 @@ namespace chromecast {
 // CastWebContentsActivity.
 class CastContentWindowAndroid : public CastContentWindow {
  public:
-  CastContentWindowAndroid(base::WeakPtr<Delegate> delegate,
-                           mojom::CastWebViewParamsPtr params);
+  explicit CastContentWindowAndroid(mojom::CastWebViewParamsPtr params);
+
+  CastContentWindowAndroid(const CastContentWindowAndroid&) = delete;
+  CastContentWindowAndroid& operator=(const CastContentWindowAndroid&) = delete;
+
   ~CastContentWindowAndroid() override;
 
   // CastContentWindow implementation:
@@ -34,7 +36,6 @@ class CastContentWindowAndroid : public CastContentWindow {
   void RequestVisibility(VisibilityPriority visibility_priority) override;
   void SetActivityContext(base::Value activity_context) override;
   void SetHostContext(base::Value host_context) override;
-  void NotifyVisibilityChange(VisibilityType visibility_type) override;
   void RequestMoveOut() override;
 
   // Called through JNI.
@@ -52,8 +53,6 @@ class CastContentWindowAndroid : public CastContentWindow {
  private:
   bool web_contents_attached_;
   base::android::ScopedJavaGlobalRef<jobject> java_window_;
-
-  DISALLOW_COPY_AND_ASSIGN(CastContentWindowAndroid);
 };
 
 }  // namespace chromecast

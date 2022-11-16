@@ -5,7 +5,6 @@
 #ifndef SANDBOX_MAC_SEATBELT_EXTENSION_H_
 #define SANDBOX_MAC_SEATBELT_EXTENSION_H_
 
-#include "base/macros.h"
 #include "sandbox/mac/seatbelt_export.h"
 
 #include <stddef.h>
@@ -34,6 +33,9 @@ class SEATBELT_EXPORT SeatbeltExtension {
 
     // TODO(rsesek): Potentially support MACH and GENERIC extension types.
   };
+
+  SeatbeltExtension(const SeatbeltExtension&) = delete;
+  SeatbeltExtension& operator=(const SeatbeltExtension&) = delete;
 
   // Before an extension is destroyed, it must be consumed or explicitly
   // revoked.
@@ -82,8 +84,6 @@ class SEATBELT_EXPORT SeatbeltExtension {
 
   // An opaque reference to a consumed extension, 0 if revoked or not consumed.
   int64_t handle_;
-
-  DISALLOW_COPY_AND_ASSIGN(SeatbeltExtension);
 };
 
 }  // namespace sandbox

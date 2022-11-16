@@ -10,7 +10,7 @@
 #include <unordered_map>
 
 #include "base/containers/flat_map.h"
-#include "base/macros.h"
+#include "base/trace_event/traced_value.h"
 #include "ui/gfx/native_widget_types.h"
 #include "ui/ozone/platform/drm/gpu/drm_display.h"
 #include "ui/ozone/platform/drm/gpu/hardware_display_controller.h"
@@ -39,7 +39,8 @@ class ScreenManager {
                            uint32_t crtc,
                            uint32_t connector,
                            gfx::Point origin,
-                           std::unique_ptr<drmModeModeInfo> pmode);
+                           std::unique_ptr<drmModeModeInfo> pmode,
+                           uint64_t base_connector_id = 0);
     ControllerConfigParams(const ControllerConfigParams& other);
     ControllerConfigParams(ControllerConfigParams&& other);
     ~ControllerConfigParams();
@@ -48,12 +49,17 @@ class ScreenManager {
     const scoped_refptr<DrmDevice> drm;
     const uint32_t crtc;
     const uint32_t connector;
+    const uint64_t base_connector_id;
     const gfx::Point origin;
     std::unique_ptr<drmModeModeInfo> mode;
   };
   using ControllerConfigsList = std::vector<ControllerConfigParams>;
 
   ScreenManager();
+
+  ScreenManager(const ScreenManager&) = delete;
+  ScreenManager& operator=(const ScreenManager&) = delete;
+
   virtual ~ScreenManager();
 
   // Register a display controller. This must be called before trying to
@@ -66,9 +72,12 @@ class ScreenManager {
   // controllers are removed since they were disconnected.
   void RemoveDisplayControllers(const CrtcsWithDrmList& controllers_to_remove);
 
-  // Enables/Disables the display controller based on if a mode exists.
+  // Enables/Disables the display controller based on if a mode exists. Adjusts
+  // the behavior of the commit according to |modeset_flag| (see
+  // display::ModesetFlag).
   bool ConfigureDisplayControllers(
-      const ControllerConfigsList& controllers_params);
+      const ControllerConfigsList& controllers_params,
+      uint32_t modeset_flag);
 
   // Returns a reference to the display controller configured to display within
   // |bounds|. If the caller caches the controller it must also register as an
@@ -92,6 +101,8 @@ class ScreenManager {
   // controller will be associated with at most one window.
   void UpdateControllerToWindowMapping();
 
+  void AsValueInto(base::trace_event::TracedValue* value) const;
+
  private:
   using HardwareDisplayControllers =
       std::vector<std::unique_ptr<HardwareDisplayController>>;
@@ -108,9 +119,10 @@ class ScreenManager {
       uint32_t crtc);
 
   bool TestAndSetPreferredModifiers(
-      const ControllerConfigsList& controllers_params);
-  bool TestAndSetLinearModifier(
-      const ControllerConfigsList& controllers_params);
+      const ControllerConfigsList& controllers_params,
+      bool is_seamless_modeset);
+  bool TestAndSetLinearModifier(const ControllerConfigsList& controllers_params,
+                                bool is_seamless_modeset);
   // Setting the Preferred modifiers that passed from one of the Modeset Test
   // functions. The preferred modifiers are used in Modeset.
   void SetPreferredModifiers(
@@ -119,9 +131,11 @@ class ScreenManager {
   // The planes used for modesetting can have overlays beside the primary, test
   // if we can modeset with them. If not, return false to indicate that we must
   // only use the primary plane.
-  bool TestModesetWithOverlays(const ControllerConfigsList& controllers_params);
+  bool TestModesetWithOverlays(const ControllerConfigsList& controllers_params,
+                               bool is_seamless_modeset);
   bool Modeset(const ControllerConfigsList& controllers_params,
-               bool can_modeset_with_overlays);
+               bool can_modeset_with_overlays,
+               bool is_seamless_modeset);
 
   // Configures a display controller to be enabled. The display controller is
   // identified by (|crtc|, |connector|) and the controller is to be modeset
@@ -187,8 +201,6 @@ class ScreenManager {
   HardwareDisplayControllers controllers_;
 
   WidgetToWindowMap window_map_;
-
-  DISALLOW_COPY_AND_ASSIGN(ScreenManager);
 };
 
 }  // namespace ui

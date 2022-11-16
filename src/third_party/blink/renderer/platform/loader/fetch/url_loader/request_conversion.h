@@ -8,7 +8,6 @@
 // This file consists of request conversion functions between blink and network.
 
 #include "base/memory/ref_counted.h"
-#include "third_party/blink/renderer/platform/platform_export.h"
 
 namespace network {
 class ResourceRequestBody;
@@ -17,14 +16,11 @@ struct ResourceRequest;
 
 namespace blink {
 
-PLATFORM_EXPORT const char* ImageAcceptHeader();
-
 class ResourceRequestHead;
 class ResourceRequestBody;
 
 scoped_refptr<network::ResourceRequestBody> NetworkResourceRequestBodyFor(
-    const ResourceRequestBody src_body,
-    bool allow_http1_for_streaming_upload);
+    const ResourceRequestBody src_body);
 
 void PopulateResourceRequest(const ResourceRequestHead& src,
                              ResourceRequestBody src_body,

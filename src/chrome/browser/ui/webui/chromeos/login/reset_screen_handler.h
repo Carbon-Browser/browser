@@ -5,29 +5,21 @@
 #ifndef CHROME_BROWSER_UI_WEBUI_CHROMEOS_LOGIN_RESET_SCREEN_HANDLER_H_
 #define CHROME_BROWSER_UI_WEBUI_CHROMEOS_LOGIN_RESET_SCREEN_HANDLER_H_
 
-#include "base/compiler_specific.h"
-#include "base/macros.h"
-#include "chrome/browser/chromeos/tpm_firmware_update.h"
+#include "base/memory/weak_ptr.h"
+#include "chrome/browser/ash/tpm_firmware_update.h"
 #include "chrome/browser/ui/webui/chromeos/login/base_screen_handler.h"
-
-namespace ash {
-class ResetScreen;
-}
 
 namespace chromeos {
 
 // Interface for dependency injection between ResetScreen and its actual
 // representation, either views based or WebUI.
-class ResetView {
+class ResetView : public base::SupportsWeakPtr<ResetView> {
  public:
-  constexpr static StaticOobeScreenId kScreenId{"reset"};
+  inline constexpr static StaticOobeScreenId kScreenId{"reset", "ResetScreen"};
 
-  virtual ~ResetView() {}
+  virtual ~ResetView() = default;
 
-  virtual void Bind(ash::ResetScreen* screen) = 0;
-  virtual void Unbind() = 0;
   virtual void Show() = 0;
-  virtual void Hide() = 0;
 
   enum class State {
     kRestartRequired = 0,
@@ -59,20 +51,18 @@ class ResetScreenHandler : public ResetView,
  public:
   using TView = ResetView;
 
-  explicit ResetScreenHandler(JSCallsContainer* js_calls_container);
+  ResetScreenHandler();
+
+  ResetScreenHandler(const ResetScreenHandler&) = delete;
+  ResetScreenHandler& operator=(const ResetScreenHandler&) = delete;
+
   ~ResetScreenHandler() override;
 
-  // ResetView implementation:
-  void Bind(ash::ResetScreen* screen) override;
-  void Unbind() override;
   void Show() override;
-  void Hide() override;
 
   // BaseScreenHandler implementation:
   void DeclareLocalizedValues(
       ::login::LocalizedValuesBuilder* builder) override;
-  void DeclareJSCallbacks() override;
-  void Initialize() override;
   void SetIsRollbackAvailable(bool value) override;
   void SetIsRollbackRequested(bool value) override;
   void SetIsTpmFirmwareUpdateAvailable(bool value) override;
@@ -91,19 +81,12 @@ class ResetScreenHandler : public ResetView,
  private:
   void HandleSetTpmFirmwareUpdateChecked(bool value);
 
-  ash::ResetScreen* screen_ = nullptr;
-
-  // If true, Initialize() will call Show().
-  bool show_on_init_ = false;
-
   ResetView::State state_ = ResetView::State::kRestartRequired;
   tpm_firmware_update::Mode mode_ = tpm_firmware_update::Mode::kNone;
   bool is_rollback_available_ = false;
   bool is_rollback_requested_ = false;
   bool is_tpm_firmware_update_checked_ = false;
   bool is_showing_confirmation_dialog_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(ResetScreenHandler);
 };
 
 }  // namespace chromeos

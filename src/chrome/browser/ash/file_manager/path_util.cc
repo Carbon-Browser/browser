@@ -7,23 +7,33 @@
 #include <memory>
 #include <utility>
 
+#include "ash/components/arc/arc_util.h"
+#include "ash/components/disks/disk.h"
+#include "ash/components/disks/disk_mount_manager.h"
 #include "base/barrier_closure.h"
 #include "base/base64.h"
 #include "base/bind.h"
 #include "base/check_op.h"
 #include "base/no_destructor.h"
+#include "base/strings/escape.h"
+#include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
+#include "base/strings/utf_string_conversions.h"
 #include "base/system/sys_info.h"
 #include "chrome/browser/ash/arc/fileapi/arc_content_file_system_url_util.h"
 #include "chrome/browser/ash/arc/fileapi/arc_documents_provider_root.h"
 #include "chrome/browser/ash/arc/fileapi/arc_documents_provider_root_map.h"
+#include "chrome/browser/ash/arc/fileapi/arc_media_view_util.h"
 #include "chrome/browser/ash/arc/fileapi/chrome_content_provider_url_util.h"
 #include "chrome/browser/ash/crostini/crostini_manager.h"
 #include "chrome/browser/ash/crostini/crostini_util.h"
 #include "chrome/browser/ash/drive/drive_integration_service.h"
 #include "chrome/browser/ash/drive/file_system_util.h"
 #include "chrome/browser/ash/file_manager/app_id.h"
+#include "chrome/browser/ash/file_manager/fileapi_util.h"
+#include "chrome/browser/ash/file_manager/volume_manager.h"
+#include "chrome/browser/ash/guest_os/public/guest_os_mount_provider.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/ash/smb_client/smb_service.h"
 #include "chrome/browser/ash/smb_client/smb_service_factory.h"
@@ -34,15 +44,11 @@
 #include "chrome/browser/download/download_prefs.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "chromeos/disks/disk.h"
-#include "chromeos/disks/disk_mount_manager.h"
-#include "components/arc/arc_util.h"
 #include "components/drive/file_system_core_util.h"
 #include "components/user_manager/user.h"
 #include "components/user_manager/user_manager.h"
 #include "content/public/browser/browser_thread.h"
 #include "extensions/common/extension.h"
-#include "net/base/escape.h"
 #include "net/base/filename_util.h"
 #include "storage/browser/file_system/external_mount_points.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
@@ -67,6 +73,9 @@ constexpr char kCrostiniMapSharedWithMe[] = "SharedWithMe";
 constexpr char kCrostiniMapShortcutsSharedWithMe[] = "ShortcutsSharedWithMe";
 constexpr char kFolderNameDownloads[] = "Downloads";
 constexpr char kFolderNameMyFiles[] = "MyFiles";
+constexpr char kFolderNamePvmDefault[] = "PvmDefault";
+constexpr char kFolderNameCamera[] = "Camera";
+constexpr char kFolderNameShareCache[] = "ShareCache";
 constexpr char kDisplayNameGoogleDrive[] = "Google Drive";
 constexpr char kDriveFsDirComputers[] = "Computers";
 constexpr char kDriveFsDirSharedWithMe[] = ".files-by-id";
@@ -82,14 +91,17 @@ constexpr base::FilePath::CharType kArcExternalFilesRoot[] =
 // Sync with the volume provider in ARC++ side.
 constexpr char kArcRemovableMediaContentUrlPrefix[] =
     "content://org.chromium.arc.volumeprovider/";
+// A predefined removable media UUID for testing. Defined in
+// ash/components/arc/volume_mounter/arc_volume_mounter_bridge.cc.
+// TODO(crbug.com/1274481): Move ash-wide constants to a common place.
+constexpr char kArcRemovableMediaUuidForTesting[] =
+    "00000000000000000000000000000000DEADBEEF";
 // The dummy UUID of the MyFiles volume is taken from
-// components/arc/volume_mounter/arc_volume_mounter_bridge.cc.
+// ash/components/arc/volume_mounter/arc_volume_mounter_bridge.cc.
 // TODO(crbug.com/929031): Move MyFiles constants to a common place.
 constexpr char kArcMyFilesContentUrlPrefix[] =
     "content://org.chromium.arc.volumeprovider/"
     "0000000000000000000000000000CAFEF00D2019/";
-constexpr char kArcDriveContentUrlPrefix[] =
-    "content://org.chromium.arc.volumeprovider/MyDrive/";
 
 // Helper function for |ConvertToContentUrls|.
 void OnSingleContentUrlResolved(const base::RepeatingClosure& barrier_closure,
@@ -114,7 +126,7 @@ bool ShouldMountPrimaryUserDownloads(Profile* profile) {
   if (!base::SysInfo::IsRunningOnChromeOS() &&
       user_manager::UserManager::IsInitialized()) {
     const user_manager::User* const user =
-        chromeos::ProfileHelper::Get()->GetUserByProfile(
+        ash::ProfileHelper::Get()->GetUserByProfile(
             profile->GetOriginalProfile());
     const user_manager::User* const primary_user =
         user_manager::UserManager::Get()->GetPrimaryUser();
@@ -130,8 +142,7 @@ bool ShouldMountPrimaryUserDownloads(Profile* profile) {
 // Example: ExtractLegacyDrivePath("/special/drive-xxx/foo.txt") =>
 //   "drive/foo.txt"
 base::FilePath ExtractLegacyDrivePath(const base::FilePath& path) {
-  std::vector<base::FilePath::StringType> components;
-  path.GetComponents(&components);
+  std::vector<base::FilePath::StringType> components = path.GetComponents();
   if (components.size() < 3)
     return base::FilePath();
   if (components[0] != FILE_PATH_LITERAL("/"))
@@ -139,7 +150,7 @@ base::FilePath ExtractLegacyDrivePath(const base::FilePath& path) {
   if (components[1] != FILE_PATH_LITERAL("special"))
     return base::FilePath();
   static const base::FilePath::CharType kPrefix[] = FILE_PATH_LITERAL("drive");
-  if (components[2].compare(0, base::size(kPrefix) - 1, kPrefix) != 0)
+  if (components[2].compare(0, std::size(kPrefix) - 1, kPrefix) != 0)
     return base::FilePath();
 
   base::FilePath drive_path = drive::util::GetDriveGrandRootPath();
@@ -152,8 +163,8 @@ base::FilePath ExtractLegacyDrivePath(const base::FilePath& path) {
 // to be of the form <volume name>/..., which is relative to /media/removable.
 std::string ExtractVolumeNameFromRelativePathForRemovableMedia(
     const base::FilePath& relative_path) {
-  std::vector<base::FilePath::StringType> components;
-  relative_path.GetComponents(&components);
+  std::vector<base::FilePath::StringType> components =
+      relative_path.GetComponents();
   if (components.empty()) {
     LOG(WARNING) << "Failed to extract volume name from relative path: "
                  << relative_path;
@@ -169,7 +180,7 @@ std::string GetSourcePathForRemovableMedia(const std::string& volume_name) {
   const std::string mount_path(
       base::StringPrintf("%s/%s", kRemovableMediaPath, volume_name.c_str()));
   const auto& mount_points =
-      chromeos::disks::DiskMountManager::GetInstance()->mount_points();
+      ash::disks::DiskMountManager::GetInstance()->mount_points();
   const auto found = mount_points.find(mount_path);
   return found == mount_points.end() ? std::string()
                                      : found->second.source_path;
@@ -184,8 +195,8 @@ std::string GetFsUuidForRemovableMedia(const std::string& volume_name) {
     LOG(WARNING) << "No source path is found for volume name: " << volume_name;
     return std::string();
   }
-  const chromeos::disks::Disk* disk =
-      chromeos::disks::DiskMountManager::GetInstance()->FindDiskBySourcePath(
+  const ash::disks::Disk* disk =
+      ash::disks::DiskMountManager::GetInstance()->FindDiskBySourcePath(
           source_path);
   std::string fs_uuid = disk == nullptr ? std::string() : disk->fs_uuid();
   if (fs_uuid.empty())
@@ -201,7 +212,38 @@ bool AppendRelativePath(const base::FilePath& parent,
   return child == parent || parent.AppendRelativePath(child, path);
 }
 
+// Translates known DriveFS folders into their localized message id.
+absl::optional<int> DriveFsFolderToMessageId(std::string folder) {
+  if (folder == kDriveFsDirRoot) {
+    return IDS_FILE_BROWSER_DRIVE_MY_DRIVE_LABEL;
+  } else if (folder == kDriveFsDirTeamDrives) {
+    return IDS_FILE_BROWSER_DRIVE_SHARED_DRIVES_LABEL;
+  } else if (folder == kDriveFsDirComputers) {
+    return IDS_FILE_BROWSER_DRIVE_COMPUTERS_LABEL;
+  } else if (folder == kDriveFsDirSharedWithMe) {
+    return IDS_FILE_BROWSER_DRIVE_SHARED_WITH_ME_COLLECTION_LABEL;
+  } else if (folder == kDriveFsDirShortcutsSharedWithMe) {
+    return IDS_FILE_BROWSER_DRIVE_SHARED_WITH_ME_COLLECTION_LABEL;
+  }
+  return absl::nullopt;
+}
+
+// Translates special My Files folders into their localized message id.
+absl::optional<int> MyFilesFolderToMessageId(std::string folder) {
+  if (folder == kFolderNameDownloads) {
+    return IDS_FILE_BROWSER_DOWNLOADS_DIRECTORY_LABEL;
+  } else if (folder == kFolderNamePvmDefault) {
+    return IDS_FILE_BROWSER_PLUGIN_VM_DIRECTORY_LABEL;
+  } else if (folder == kFolderNameCamera) {
+    return IDS_FILE_BROWSER_CAMERA_DIRECTORY_LABEL;
+  }
+  return absl::nullopt;
+}
+
 }  // namespace
+
+const base::FilePath::CharType kFuseBoxMediaPath[] =
+    FILE_PATH_LITERAL("/media/fuse/fusebox");
 
 const base::FilePath::CharType kRemovableMediaPath[] =
     FILE_PATH_LITERAL("/media/removable");
@@ -215,11 +257,13 @@ const base::FilePath::CharType kSystemFontsPath[] =
 const base::FilePath::CharType kArchiveMountPath[] =
     FILE_PATH_LITERAL("/media/archive");
 
+const char kFuseBox[] = "fusebox";
+
+const char kShareCacheMountPointName[] = "ShareCache";
+
 const url::Origin& GetFilesAppOrigin() {
-  static const base::NoDestructor<url::Origin> origin([] {
-    return url::Origin::Create(extensions::Extension::GetBaseURLFromExtensionId(
-        file_manager::kFileManagerAppId));
-  }());
+  static const base::NoDestructor<url::Origin> origin(
+      [] { return url::Origin::Create(GetFileManagerURL()); }());
   return *origin;
 }
 
@@ -261,6 +305,10 @@ base::FilePath GetMyFilesFolderForProfile(Profile* profile) {
   return profile->GetPath().AppendASCII(kFolderNameMyFiles);
 }
 
+base::FilePath GetShareCacheFilePath(Profile* profile) {
+  return profile->GetPath().AppendASCII(kFolderNameShareCache);
+}
+
 base::FilePath GetAndroidFilesPath() {
   // Check if Android has a registered path already. This happens for tests.
   const std::string mount_point_name = util::GetAndroidFilesMountPointName();
@@ -276,8 +324,6 @@ bool MigratePathFromOldFormat(Profile* profile,
                               const base::FilePath& old_base,
                               const base::FilePath& old_path,
                               base::FilePath* new_path) {
-  const base::FilePath new_base = GetMyFilesFolderForProfile(profile);
-
   // Special case, migrating /home/chronos/user which is set early (before a
   // profile is attached to the browser process) to default to
   // /home/chronos/u-{hash}/MyFiles/Downloads.
@@ -285,6 +331,12 @@ bool MigratePathFromOldFormat(Profile* profile,
       old_path == base::FilePath("/home/chronos/user")) {
     *new_path = GetDownloadsFolderForProfile(profile);
     return true;
+  }
+
+  // If the `new_base` is already parent of `old_path`, no need to migrate.
+  const base::FilePath new_base = GetMyFilesFolderForProfile(profile);
+  if (new_base.IsParent(old_path)) {
+    return false;
   }
 
   base::FilePath relative;
@@ -296,26 +348,10 @@ bool MigratePathFromOldFormat(Profile* profile,
   return false;
 }
 
-bool MigrateFromDownloadsToMyFiles(Profile* profile,
-                                   const base::FilePath& old_path,
-                                   base::FilePath* new_path) {
-  const base::FilePath old_base =
-      profile->GetPath().Append(kFolderNameDownloads);
-  const base::FilePath new_base = GetDownloadsFolderForProfile(profile);
-  if (new_base == old_base)
-    return false;
-  base::FilePath relative;
-  if (AppendRelativePath(old_base, old_path, &relative)) {
-    *new_path = new_base.Append(relative);
-    return old_path != *new_path;
-  }
-  return false;
-}
-
 bool MigrateToDriveFs(Profile* profile,
                       const base::FilePath& old_path,
                       base::FilePath* new_path) {
-  const auto* user = chromeos::ProfileHelper::Get()->GetUserByProfile(profile);
+  const auto* user = ash::ProfileHelper::Get()->GetUserByProfile(profile);
   auto* integration_service =
       drive::DriveIntegrationServiceFactory::FindForProfile(profile);
   if (!integration_service || !integration_service->is_enabled() || !user ||
@@ -334,14 +370,14 @@ std::string GetDownloadsMountPointName(Profile* profile) {
   // because such a profile never belongs to a multi-profile session.
   const user_manager::User* const user =
       user_manager::UserManager::IsInitialized()
-          ? chromeos::ProfileHelper::Get()->GetUserByProfile(
+          ? ash::ProfileHelper::Get()->GetUserByProfile(
                 profile->GetOriginalProfile())
           : nullptr;
   const std::string id = user ? "-" + user->username_hash() : "";
-  return net::EscapeQueryParamValue(kFolderNameDownloads + id, false);
+  return base::EscapeQueryParamValue(kFolderNameDownloads + id, false);
 }
 
-const std::string GetAndroidFilesMountPointName() {
+std::string GetAndroidFilesMountPointName() {
   return kAndroidFilesMountPointName;
 }
 
@@ -354,8 +390,21 @@ std::string GetCrostiniMountPointName(Profile* profile) {
       "_");
 }
 
+std::string GetGuestOsMountPointName(Profile* profile,
+                                     const guest_os::GuestId& id) {
+  return base::JoinString(
+      {"guestos", ash::ProfileHelper::GetUserIdHashFromProfile(profile),
+       base::EscapeAllExceptUnreserved(id.vm_name),
+       base::EscapeAllExceptUnreserved(id.container_name)},
+      "+");
+}
+
 base::FilePath GetCrostiniMountDirectory(Profile* profile) {
   return base::FilePath("/media/fuse/" + GetCrostiniMountPointName(profile));
+}
+
+base::FilePath GetGuestOsMountDirectory(std::string mountPointName) {
+  return base::FilePath("/media/fuse/" + mountPointName);
 }
 
 std::vector<std::string> GetCrostiniMountOptions(
@@ -408,8 +457,7 @@ bool ConvertFileSystemURLToPathInsideVM(
     *inside = vm_mount.Append(kFolderNameMyFiles);
   } else if (!mount_point_name_drive.empty() && id == mount_point_name_drive) {
     // DriveFS has some more complicated mappings.
-    std::vector<base::FilePath::StringType> components;
-    path.GetComponents(&components);
+    std::vector<base::FilePath::StringType> components = path.GetComponents();
     *inside = vm_mount.Append(kCrostiniMapGoogleDrive);
     if (components.size() >= 2 && components[1] == kDriveFsDirRoot) {
       // root -> MyDrive.
@@ -447,7 +495,7 @@ bool ConvertFileSystemURLToPathInsideVM(
     if (map_crostini_home) {
       absl::optional<crostini::ContainerInfo> container_info =
           crostini::CrostiniManager::GetForProfile(profile)->GetContainerInfo(
-              crostini::ContainerId::GetDefault());
+              crostini::DefaultContainerId());
       if (!container_info) {
         return false;
       }
@@ -502,7 +550,7 @@ bool ConvertPathInsideVMToFileSystemURL(
   if (map_crostini_home) {
     absl::optional<crostini::ContainerInfo> container_info =
         crostini::CrostiniManager::GetForProfile(profile)->GetContainerInfo(
-            crostini::ContainerId::GetDefault());
+            crostini::DefaultContainerId());
     if (container_info &&
         AppendRelativePath(container_info->homedir, inside, &relative_path)) {
       *file_system_url = mount_points->CreateExternalFileSystemURL(
@@ -570,8 +618,8 @@ bool ConvertPathInsideVMToFileSystemURL(
   } else if (base::FilePath(kCrostiniMapSmbFs)
                  .AppendRelativePath(path, &relative_path)) {
     // SMB.
-    std::vector<base::FilePath::StringType> components;
-    relative_path.GetComponents(&components);
+    std::vector<base::FilePath::StringType> components =
+        relative_path.GetComponents();
     if (components.size() < 1) {
       return false;
     }
@@ -583,16 +631,15 @@ bool ConvertPathInsideVMToFileSystemURL(
   }
 
   *file_system_url = mount_points->CreateExternalFileSystemURL(
-      blink::StorageKey(
-          url::Origin::Create(extensions::Extension::GetBaseURLFromExtensionId(
-              file_manager::kFileManagerAppId))),
-      mount_name, path);
+      blink::StorageKey(GetFilesAppOrigin()), mount_name, path);
   return file_system_url->is_valid();
 }
 
 bool ConvertPathToArcUrl(const base::FilePath& path,
-                         GURL* arc_url_out,
-                         bool* requires_sharing_out) {
+                         GURL* const arc_url_out,
+                         bool* const requires_sharing_out) {
+  DCHECK(arc_url_out);
+  DCHECK(requires_sharing_out);
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   *requires_sharing_out = false;
 
@@ -608,7 +655,7 @@ bool ConvertPathToArcUrl(const base::FilePath& path,
   base::FilePath result_path(kArcDownloadRoot);
   if (primary_downloads.AppendRelativePath(path, &result_path)) {
     *arc_url_out = GURL(arc::kFileSystemFileproviderUrl)
-                       .Resolve(net::EscapePath(result_path.AsUTF8Unsafe()));
+                       .Resolve(base::EscapePath(result_path.AsUTF8Unsafe()));
     return true;
   }
 
@@ -617,7 +664,7 @@ bool ConvertPathToArcUrl(const base::FilePath& path,
   if (base::FilePath(kAndroidFilesPath)
           .AppendRelativePath(path, &result_path)) {
     *arc_url_out = GURL(arc::kFileSystemFileproviderUrl)
-                       .Resolve(net::EscapePath(result_path.AsUTF8Unsafe()));
+                       .Resolve(base::EscapePath(result_path.AsUTF8Unsafe()));
     return true;
   }
 
@@ -630,10 +677,10 @@ bool ConvertPathToArcUrl(const base::FilePath& path,
     if (volume_name.empty())
       return false;
     const std::string fs_uuid = GetFsUuidForRemovableMedia(volume_name);
-    if (fs_uuid.empty())
-      return false;
     // Replace the volume name in the relative path with the UUID.
-    base::FilePath relative_path_with_uuid = base::FilePath(fs_uuid);
+    // When no UUID is found for the volume, use the predefined one for testing.
+    base::FilePath relative_path_with_uuid = base::FilePath(
+        fs_uuid.empty() ? kArcRemovableMediaUuidForTesting : fs_uuid);
     if (!base::FilePath(volume_name)
              .AppendRelativePath(relative_path, &relative_path_with_uuid)) {
       LOG(WARNING) << "Failed to replace volume name \"" << volume_name
@@ -643,15 +690,15 @@ bool ConvertPathToArcUrl(const base::FilePath& path,
     }
     *arc_url_out =
         GURL(kArcRemovableMediaContentUrlPrefix)
-            .Resolve(net::EscapePath(relative_path_with_uuid.AsUTF8Unsafe()));
+            .Resolve(base::EscapePath(relative_path_with_uuid.AsUTF8Unsafe()));
     return true;
   }
 
   // Convert paths under MyFiles.
-  if (base::FilePath(GetMyFilesFolderForProfile(primary_profile))
+  if (GetMyFilesFolderForProfile(primary_profile)
           .AppendRelativePath(path, &relative_path)) {
     *arc_url_out = GURL(kArcMyFilesContentUrlPrefix)
-                       .Resolve(net::EscapePath(relative_path.AsUTF8Unsafe()));
+                       .Resolve(base::EscapePath(relative_path.AsUTF8Unsafe()));
     return true;
   }
 
@@ -662,17 +709,18 @@ bool ConvertPathToArcUrl(const base::FilePath& path,
   if (integration_service &&
       integration_service->GetMountPointPath().AppendRelativePath(
           path, &relative_path)) {
+    // TODO(b/157297349) Remove this condition.
     if (arc::IsArcVmEnabled()) {
-      *requires_sharing_out = true;
       *arc_url_out =
-          GURL(kArcDriveContentUrlPrefix)
-              .Resolve(net::EscapePath(relative_path.AsUTF8Unsafe()));
+          GURL("content://org.chromium.arc.volumeprovider/MyDrive/")
+              .Resolve(base::EscapePath(relative_path.AsUTF8Unsafe()));
+      *requires_sharing_out = true;
       return true;
-    } else {
-      // TODO(b/157297349): For backward compatibility with ARC++ P, force
-      // external URL for DriveFS.
-      force_external = true;
     }
+
+    // TODO(b/157297349): For backward compatibility with ARC++ P, force
+    // external URL for DriveFS.
+    force_external = true;
   }
 
   // Force external URL for Crostini.
@@ -681,21 +729,48 @@ bool ConvertPathToArcUrl(const base::FilePath& path,
     force_external = true;
   }
 
-  // Force external URL for files under /media/archive.
+  // Convert path under /media/archive.
   if (base::FilePath(kArchiveMountPath)
           .AppendRelativePath(path, &relative_path)) {
+    // TODO(b/157297349) Remove this condition.
+    if (arc::IsArcVmEnabled()) {
+      *arc_url_out =
+          GURL("content://org.chromium.arc.volumeprovider/archive/")
+              .Resolve(base::EscapePath(relative_path.AsUTF8Unsafe()));
+      *requires_sharing_out = true;
+      return true;
+    }
+
     force_external = true;
   }
 
-  // Force external URL for smbfs.
-  ash::smb_client::SmbService* smb_service =
-      ash::smb_client::SmbServiceFactory::Get(primary_profile);
-  if (smb_service) {
-    ash::smb_client::SmbFsShare* share =
-        smb_service->GetSmbFsShareForPath(path);
-    if (share && share->mount_path().AppendRelativePath(path, &relative_path)) {
-      force_external = true;
+  // Convert path under /media/fuse/smb-...
+  if (ash::smb_client::SmbService* const service =
+          ash::smb_client::SmbServiceFactory::Get(primary_profile)) {
+    if (const ash::smb_client::SmbFsShare* const share =
+            service->GetSmbFsShareForPath(path)) {
+      if (share->mount_path().AppendRelativePath(path, &relative_path)) {
+        // TODO(b/157297349) Remove this condition.
+        if (arc::IsArcVmEnabled()) {
+          *arc_url_out =
+              GURL(base::StrCat(
+                       {"content://org.chromium.arc.volumeprovider/smb/",
+                        share->mount_id(), "/"}))
+                  .Resolve(base::EscapePath(relative_path.AsUTF8Unsafe()));
+          *requires_sharing_out = true;
+          return true;
+        }
+
+        force_external = true;
+      }
     }
+  }
+
+  // ShareCache files are not available as mount-passthrough and must be shared
+  // through ChromeContentProvider.
+  if (GetShareCacheFilePath(primary_profile)
+          .AppendRelativePath(path, &relative_path)) {
+    force_external = true;
   }
 
   // Convert paths under /special or other paths forced to use external URL.
@@ -922,6 +997,122 @@ bool ExtractMountNameFileSystemNameFullPath(const base::FilePath& absolute_path,
     *full_path = value.substr(slash_pos);
   }
   return true;
+}
+
+std::string GetDisplayableFileName(GURL file_url) {
+  // Try to convert %20 to spaces, if this produces any invalid char, use the
+  // file name URL encoded.
+  std::string file_name;
+  if (!base::UnescapeBinaryURLComponentSafe(file_url.ExtractFileName(),
+                                            /*fail_on_path_separators=*/true,
+                                            &file_name)) {
+    file_name = file_url.ExtractFileName();
+  }
+
+  return file_name;
+}
+
+std::string GetDisplayableFileName(storage::FileSystemURL file_url) {
+  return GetDisplayableFileName(file_url.ToGURL());
+}
+
+std::u16string GetDisplayableFileName16(GURL file_url) {
+  return base::UTF8ToUTF16(GetDisplayableFileName(file_url));
+}
+
+std::u16string GetDisplayableFileName16(storage::FileSystemURL file_url) {
+  return base::UTF8ToUTF16(GetDisplayableFileName(file_url.ToGURL()));
+}
+
+absl::optional<base::FilePath> GetDisplayablePath(Profile* profile,
+                                                  base::FilePath path) {
+  base::WeakPtr<Volume> volume =
+      file_manager::VolumeManager::Get(profile)->FindVolumeFromPath(path);
+  if (!volume) {
+    return absl::nullopt;
+  }
+
+  base::FilePath mount_relative_path;
+  // AppendRelativePath fails if |mount_path| is the same as |path|, but in that
+  // case |mount_relative_path| will be empty, which is what we want.
+  volume->mount_path().AppendRelativePath(path, &mount_relative_path);
+  auto path_components = mount_relative_path.GetComponents();
+
+  auto cur_component = path_components.begin();
+  base::FilePath result;
+  switch (volume->type()) {
+    case VOLUME_TYPE_GOOGLE_DRIVE: {
+      // Start with the Google Drive root.
+      result = base::FilePath(volume->volume_label());
+
+      // The first directory indicates which Drive the path is in, so check it
+      // against the expected directories. e.g. My Drive, Shared with me, etc.
+      if (cur_component == path_components.end()) {
+        return absl::nullopt;
+      }
+      auto maybe_id = DriveFsFolderToMessageId(*cur_component);
+      if (!maybe_id.has_value()) {
+        return absl::nullopt;
+      }
+      result = result.Append(l10n_util::GetStringUTF8(*maybe_id));
+      cur_component++;
+
+      // Skip the first directory in the Shared With Me folders as those are
+      // just an opaque id.
+      if (cur_component != path_components.end() &&
+          (path_components[0] == kDriveFsDirSharedWithMe ||
+           path_components[0] == kDriveFsDirShortcutsSharedWithMe)) {
+        ++cur_component;
+      }
+      break;
+    }
+    case VOLUME_TYPE_DOWNLOADS_DIRECTORY:
+      // Start with My Files root.
+      result = base::FilePath(volume->volume_label());
+
+      // Handle special folders under My Files.
+      if (cur_component != path_components.end()) {
+        auto maybe_id = MyFilesFolderToMessageId(*cur_component);
+        if (maybe_id.has_value()) {
+          result = result.Append(l10n_util::GetStringUTF8(*maybe_id));
+          ++cur_component;
+        }
+      }
+      break;
+    case VOLUME_TYPE_ANDROID_FILES:
+    case VOLUME_TYPE_CROSTINI:
+      result = base::FilePath(l10n_util::GetStringUTF8(
+                                  IDS_FILE_BROWSER_MY_FILES_ROOT_LABEL))
+                   .Append(volume->volume_label());
+      break;
+    case VOLUME_TYPE_MEDIA_VIEW:
+    case VOLUME_TYPE_REMOVABLE_DISK_PARTITION:
+    case VOLUME_TYPE_MOUNTED_ARCHIVE_FILE:
+    case VOLUME_TYPE_PROVIDED:
+    case VOLUME_TYPE_DOCUMENTS_PROVIDER:
+    case VOLUME_TYPE_GUEST_OS:
+    case VOLUME_TYPE_MTP:
+    case VOLUME_TYPE_SMB:
+      result = base::FilePath(volume->volume_label());
+      break;
+    case VOLUME_TYPE_TESTING:
+    case VOLUME_TYPE_SYSTEM_INTERNAL:
+      return absl::nullopt;
+    case NUM_VOLUME_TYPE:
+      NOTREACHED();
+      return absl::nullopt;
+  }
+  while (cur_component != path_components.end()) {
+    result = result.Append(*cur_component);
+    cur_component++;
+  }
+  return result;
+}
+
+absl::optional<base::FilePath> GetDisplayablePath(
+    Profile* profile,
+    storage::FileSystemURL file_url) {
+  return GetDisplayablePath(profile, file_url.path());
 }
 
 }  // namespace util

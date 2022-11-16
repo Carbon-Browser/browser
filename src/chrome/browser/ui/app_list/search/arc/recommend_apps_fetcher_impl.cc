@@ -39,7 +39,7 @@ constexpr int kResponseErrorNotFirstTimeChromebookUser = 6;
 // further parsing.
 constexpr base::StringPiece kJsonXssPreventionPrefix = ")]}'";
 
-constexpr base::TimeDelta kDownloadTimeOut = base::TimeDelta::FromMinutes(1);
+constexpr base::TimeDelta kDownloadTimeOut = base::Minutes(1);
 
 constexpr const int64_t kMaxDownloadBytes = 1024 * 1024;  // 1Mb
 
@@ -153,12 +153,10 @@ void RecommendAppsFetcherImpl::OnDownloaded(
   // TODO(thanhdng): Add a UMA histogram here recording the time difference.
 
   std::unique_ptr<network::SimpleURLLoader> loader(std::move(app_list_loader_));
-  int response_code = 0;
   if (!loader->ResponseInfo() || !loader->ResponseInfo()->headers) {
     delegate_->OnLoadError();
     return;
   }
-  response_code = loader->ResponseInfo()->headers->response_code();
   // TODO(thanhndng): Add a UMA histogram here recording the response code.
 
   // If the recommended app list could not be downloaded, show an error message
@@ -186,23 +184,24 @@ void RecommendAppsFetcherImpl::OnDownloaded(
 
 absl::optional<base::Value> RecommendAppsFetcherImpl::ParseResponse(
     base::StringPiece response) {
-  base::JSONReader::ValueWithError parsed_json =
-      base::JSONReader::ReadAndReturnValueWithError(response);
+  auto parsed_json = base::JSONReader::ReadAndReturnValueWithError(response);
 
-  if (!parsed_json.value ||
-      (!parsed_json.value->is_list() && !parsed_json.value->is_dict())) {
-    LOG(ERROR) << "Error parsing response JSON: " << parsed_json.error_message;
+  if (!parsed_json.has_value()) {
+    LOG(ERROR) << "Error parsing response JSON: "
+               << parsed_json.error().message;
     // TODO(thanhdng): Add a UMA histogram here.
+    return absl::nullopt;
+  } else if (!parsed_json->is_list() && !parsed_json->is_dict()) {
+    LOG(ERROR) << "Error parsing response JSON: Content malformed.";
     return absl::nullopt;
   }
 
   // If the response is a dictionary, it is an error message in the
   // following format:
   //   {"Error code":"error code","Error message":"Error message"}
-  if (parsed_json.value->is_dict()) {
+  if (parsed_json->is_dict()) {
     const base::Value* response_error_code_value =
-        parsed_json.value->FindKeyOfType("Error code",
-                                         base::Value::Type::STRING);
+        parsed_json->FindKeyOfType("Error code", base::Value::Type::STRING);
 
     if (!response_error_code_value) {
       LOG(ERROR) << "Unable to find error code: response="
@@ -233,33 +232,32 @@ absl::optional<base::Value> RecommendAppsFetcherImpl::ParseResponse(
   }
 
   // Otherwise, the response should return a list of apps.
-  base::Value::ConstListView app_list = parsed_json.value->GetList();
+  const auto& app_list = parsed_json->GetList();
   if (app_list.empty()) {
     DVLOG(1) << "No app in the response.";
     // TODO(thanhdng): Add a UMA histogram here.
     return absl::nullopt;
   }
 
-  base::Value output(base::Value::Type::LIST);
-  for (auto& item : app_list) {
-    base::Value output_map(base::Value::Type::DICTIONARY);
+  base::Value::List output;
+  for (const auto& item : app_list) {
+    base::Value::Dict output_map;
 
-    if (!item.is_dict()) {
+    const auto* dict = item.GetIfDict();
+    if (!dict) {
       DVLOG(1) << "Cannot parse item.";
       continue;
     }
 
     // Retrieve the app title.
-    const base::Value* title =
-        item.FindPathOfType({"title_", "name_"}, base::Value::Type::STRING);
+    const auto* title = dict->FindStringByDottedPath("title_.name_");
     if (title)
-      output_map.SetKey("name", base::Value(title->GetString()));
+      output_map.Set("name", *title);
 
     // Retrieve the package name.
-    const base::Value* package_name =
-        item.FindPathOfType({"id_", "id_"}, base::Value::Type::STRING);
+    const auto* package_name = dict->FindStringByDottedPath("id_.id_");
     if (package_name)
-      output_map.SetKey("package_name", base::Value(package_name->GetString()));
+      output_map.Set("package_name", *package_name);
 
     // Retrieve the icon URL for the app.
     //
@@ -269,13 +267,12 @@ absl::optional<base::Value> RecommendAppsFetcherImpl::ParseResponse(
     // a protobuf, we should not directly access this field but use the wrapper
     // method getSafeUrlString() to read it. In our case, we don't have the
     // option other than access it directly.
-    const base::Value* icon_url = item.FindPathOfType(
-        {"icon_", "url_", "privateDoNotAccessOrElseSafeUrlWrappedValue_"},
-        base::Value::Type::STRING);
+    const auto* icon_url = dict->FindStringByDottedPath(
+        "icon_.url_.privateDoNotAccessOrElseSafeUrlWrappedValue_");
     if (icon_url)
-      output_map.SetKey("icon", base::Value(icon_url->GetString()));
+      output_map.Set("icon", *icon_url);
 
-    if (output_map.DictEmpty()) {
+    if (output_map.empty()) {
       DVLOG(1) << "Invalid app item.";
       continue;
     }
@@ -285,7 +282,7 @@ absl::optional<base::Value> RecommendAppsFetcherImpl::ParseResponse(
 
   // TODO(thanhdng): Add a UMA histogram here to record the parse have completed
   // successfully.
-  return output;
+  return base::Value(std::move(output));
 }
 
 }  // namespace app_list

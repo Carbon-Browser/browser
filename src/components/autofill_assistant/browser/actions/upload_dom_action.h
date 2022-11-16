@@ -8,16 +8,18 @@
 #include <string>
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "components/autofill_assistant/browser/actions/action.h"
-#include "components/autofill_assistant/browser/web/element_finder.h"
 
 namespace autofill_assistant {
 
 class UploadDomAction : public Action {
  public:
   explicit UploadDomAction(ActionDelegate* delegate, const ActionProto& proto);
+
+  UploadDomAction(const UploadDomAction&) = delete;
+  UploadDomAction& operator=(const UploadDomAction&) = delete;
+
   ~UploadDomAction() override;
 
  private:
@@ -36,8 +38,6 @@ class UploadDomAction : public Action {
 
   ProcessActionCallback process_action_callback_;
   base::WeakPtrFactory<UploadDomAction> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(UploadDomAction);
 };
 
 }  // namespace autofill_assistant

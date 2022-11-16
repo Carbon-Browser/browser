@@ -15,6 +15,8 @@
 #ifndef CRASHPAD_UTIL_IOS_IOS_INTERMEDIATE_DUMP_FORMAT_H_
 #define CRASHPAD_UTIL_IOS_IOS_INTERMEDIATE_DUMP_FORMAT_H_
 
+#include <stdint.h>
+
 namespace crashpad {
 namespace internal {
 
@@ -97,6 +99,7 @@ namespace internal {
     TD(kThreadContextMemoryRegions, 6011) \
     TD(kThreadContextMemoryRegionAddress, 6012) \
     TD(kThreadContextMemoryRegionData, 6013) \
+    TD(kThreadName, 6014) \
   TD(kMaxValue, 65535) \
 // clang-format on
 

@@ -6,6 +6,7 @@
 
 #import <UIKit/UIKit.h>
 
+#include "base/bind.h"
 #include "base/strings/stringprintf.h"
 #import "base/strings/sys_string_conversions.h"
 #import "base/test/ios/wait_util.h"
@@ -15,11 +16,13 @@
 #include "ios/chrome/browser/browser_state/test_chrome_browser_state.h"
 #include "ios/chrome/browser/pref_names.h"
 #include "ios/chrome/browser/prefs/browser_prefs.h"
-#import "ios/chrome/browser/web/chrome_web_test.h"
 #include "ios/chrome/browser/web/features.h"
-#import "ios/public/provider/chrome/browser/font_size_java_script_feature.h"
+#import "ios/chrome/browser/web/font_size/font_size_java_script_feature.h"
 #import "ios/web/public/test/fakes/fake_web_client.h"
 #import "ios/web/public/test/fakes/fake_web_state.h"
+#import "ios/web/public/test/scoped_testing_web_client.h"
+#import "ios/web/public/test/web_state_test_util.h"
+#import "ios/web/public/test/web_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "testing/platform_test.h"
 #import "third_party/ocmock/OCMock/OCMock.h"
@@ -42,13 +45,17 @@ class FontSizeTabHelperFakeWebStateTest : public PlatformTest {
 
     FontSizeTabHelper::CreateForWebState(&web_state_);
   }
+
+  FontSizeTabHelperFakeWebStateTest(const FontSizeTabHelperFakeWebStateTest&) =
+      delete;
+  FontSizeTabHelperFakeWebStateTest& operator=(
+      const FontSizeTabHelperFakeWebStateTest&) = delete;
+
   ~FontSizeTabHelperFakeWebStateTest() override {}
 
  protected:
   base::test::ScopedFeatureList scoped_feature_list_;
   web::FakeWebState web_state_;
-
-  DISALLOW_COPY_AND_ASSIGN(FontSizeTabHelperFakeWebStateTest);
 };
 
 // Tests that zoom is only enabled if the page content is html.
@@ -64,10 +71,10 @@ TEST_F(FontSizeTabHelperFakeWebStateTest, CanZoomContent) {
 }
 
 // Test fixture for FontSizeTabHelper class with a real WebState.
-class FontSizeTabHelperTest : public ChromeWebTest {
+class FontSizeTabHelperTest : public PlatformTest {
  public:
   FontSizeTabHelperTest()
-      : ChromeWebTest(std::make_unique<web::FakeWebClient>()),
+      : web_client_(std::make_unique<web::FakeWebClient>()),
         application_(OCMPartialMock([UIApplication sharedApplication])) {
     scoped_feature_list_.InitAndEnableFeature(
         {web::kWebPageDefaultZoomFromDynamicType});
@@ -77,13 +84,24 @@ class FontSizeTabHelperTest : public ChromeWebTest {
           [invocation setReturnValue:&preferred_content_size_category_];
         });
   }
+
+  FontSizeTabHelperTest(const FontSizeTabHelperTest&) = delete;
+  FontSizeTabHelperTest& operator=(const FontSizeTabHelperTest&) = delete;
+
   ~FontSizeTabHelperTest() override { [application_ stopMocking]; }
 
   void SetUp() override {
-    ChromeWebTest::SetUp();
+    PlatformTest::SetUp();
+
+    browser_state_ = TestChromeBrowserState::Builder().Build();
+
+    web::WebState::CreateParams params(browser_state_.get());
+    web_state_ = web::WebState::Create(params);
+    web_state_->GetView();
+    web_state_->SetKeepRenderProcessAlive(true);
 
     web::FakeWebClient* web_client =
-        static_cast<web::FakeWebClient*>(WebTestWithWebState::GetWebClient());
+        static_cast<web::FakeWebClient*>(web_client_.Get());
     web_client->SetJavaScriptFeatures(
         {FontSizeJavaScriptFeature::GetInstance()});
 
@@ -101,7 +119,7 @@ class FontSizeTabHelperTest : public ChromeWebTest {
                     userInfo:nil];
 
     base::test::ios::SpinRunLoopWithMinDelay(
-        base::TimeDelta::FromSecondsD(base::test::ios::kSpinDelaySeconds));
+        base::Seconds(base::test::ios::kSpinDelaySeconds));
   }
 
   std::string ZoomMultiplierPrefKey(UIContentSizeCategory category, GURL url) {
@@ -124,22 +142,24 @@ class FontSizeTabHelperTest : public ChromeWebTest {
   }
 
   void LoadWebpage(const GURL& url) {
-    LoadHtml(@"<html><body>Content</body></html>", url);
+    web::test::LoadHtml(@"<html><body>Content</body></html>", url, web_state());
 
     base::test::ios::SpinRunLoopWithMinDelay(
-        base::TimeDelta::FromSecondsD(base::test::ios::kSpinDelaySeconds));
+        base::Seconds(base::test::ios::kSpinDelaySeconds));
   }
 
   // Returns the current value of the WebKit text size adjustment style.
   NSString* GetMainFrameTextSizeAdjustment() {
-    id result = ExecuteJavaScript(@"document.body.style.webkitTextSizeAdjust");
+    id result = web::test::ExecuteJavaScript(
+        @"document.body.style.webkitTextSizeAdjust", web_state());
     return static_cast<NSString*>(result);
   }
 
   // Returns the current value of the WebKit text size adjustment style.
   NSString* GetIframeTextSizeAdjusment() {
-    id result = ExecuteJavaScript(
-        @"window.frames[0].document.body.style.webkitTextSizeAdjust");
+    id result = web::test::ExecuteJavaScript(
+        @"window.frames[0].document.body.style.webkitTextSizeAdjust",
+        web_state());
     return static_cast<NSString*>(result);
   }
 
@@ -166,12 +186,17 @@ class FontSizeTabHelperTest : public ChromeWebTest {
   }
 
  protected:
+  web::WebState* web_state() { return web_state_.get(); }
+
+  web::ScopedTestingWebClient web_client_;
+  web::WebTaskEnvironment task_environment_;
+  std::unique_ptr<TestChromeBrowserState> browser_state_;
+  std::unique_ptr<web::WebState> web_state_;
+
   base::test::ScopedFeatureList scoped_feature_list_;
   UIContentSizeCategory preferred_content_size_category_ =
       UIContentSizeCategoryLarge;
   id application_ = nil;
-
-  DISALLOW_COPY_AND_ASSIGN(FontSizeTabHelperTest);
 };
 
 // Tests that a web page's font size is set properly in a procedure started
@@ -238,8 +263,9 @@ TEST_F(FontSizeTabHelperTest, PageLoadedWithUnrecognizableFontSize) {
 TEST_F(FontSizeTabHelperTest, ZoomInAllFrames) {
   preferred_content_size_category_ = UIContentSizeCategoryExtraLarge;
 
-  LoadHtml(@"<html><body>Content<iframe srcdoc=\"<html>iFrame "
-           @"Content</html>\"></iframe></body></html>");
+  web::test::LoadHtml(@"<html><body>Content<iframe srcdoc=\"<html>iFrame "
+                      @"Content</html>\"></iframe></body></html>",
+                      web_state());
 
   EXPECT_TRUE(WaitForMainFrameTextSizeAdjustmentEqualTo(112));
 
@@ -265,7 +291,7 @@ TEST_F(FontSizeTabHelperTest, ZoomIn) {
   std::string pref_key =
       ZoomMultiplierPrefKey(preferred_content_size_category_, test_url);
   const base::Value* pref =
-      chrome_browser_state_->GetPrefs()->Get(prefs::kIosUserZoomMultipliers);
+      browser_state_->GetPrefs()->Get(prefs::kIosUserZoomMultipliers);
   EXPECT_EQ(1.1, pref->FindDoublePath(pref_key));
 }
 
@@ -288,7 +314,7 @@ TEST_F(FontSizeTabHelperTest, ZoomOut) {
   std::string pref_key =
       ZoomMultiplierPrefKey(preferred_content_size_category_, test_url);
   const base::Value* pref =
-      chrome_browser_state_->GetPrefs()->Get(prefs::kIosUserZoomMultipliers);
+      browser_state_->GetPrefs()->Get(prefs::kIosUserZoomMultipliers);
   EXPECT_EQ(0.9, pref->FindDoublePath(pref_key));
 }
 
@@ -305,7 +331,7 @@ TEST_F(FontSizeTabHelperTest, ResetZoom) {
   std::string pref_key =
       ZoomMultiplierPrefKey(preferred_content_size_category_, test_url);
   const base::Value* pref =
-      chrome_browser_state_->GetPrefs()->Get(prefs::kIosUserZoomMultipliers);
+      browser_state_->GetPrefs()->Get(prefs::kIosUserZoomMultipliers);
   EXPECT_EQ(1.1, pref->FindDoublePath(pref_key));
 
   // Then reset. The pref key should be removed from the dictionary.
@@ -333,7 +359,7 @@ TEST_F(FontSizeTabHelperTest, ZoomAndAccessibilityTextSize) {
   EXPECT_TRUE(WaitForMainFrameTextSizeAdjustmentEqualTo(123));
   // Only the user zoom portion is stored in the preferences.
   const base::Value* pref =
-      chrome_browser_state_->GetPrefs()->Get(prefs::kIosUserZoomMultipliers);
+      browser_state_->GetPrefs()->Get(prefs::kIosUserZoomMultipliers);
   EXPECT_EQ(1.1, pref->FindDoublePath(pref_key));
 }
 
@@ -346,18 +372,19 @@ TEST_F(FontSizeTabHelperTest, ClearUserZoomPrefs) {
       FontSizeTabHelper::FromWebState(web_state());
   font_size_tab_helper->UserZoom(ZOOM_IN);
   base::test::ios::SpinRunLoopWithMinDelay(
-      base::TimeDelta::FromSecondsD(base::test::ios::kSpinDelaySeconds));
+      base::Seconds(base::test::ios::kSpinDelaySeconds));
 
   // Make sure the first value is stored in the pref store.
   const base::Value* pref =
-      chrome_browser_state_->GetPrefs()->Get(prefs::kIosUserZoomMultipliers);
+      browser_state_->GetPrefs()->Get(prefs::kIosUserZoomMultipliers);
   std::string pref_key =
       ZoomMultiplierPrefKey(preferred_content_size_category_, test_url);
   EXPECT_EQ(1.1, pref->FindDoublePath(pref_key));
 
-  FontSizeTabHelper::ClearUserZoomPrefs(chrome_browser_state_->GetPrefs());
+  FontSizeTabHelper::ClearUserZoomPrefs(browser_state_->GetPrefs());
 
-  EXPECT_TRUE(chrome_browser_state_->GetPrefs()
+  EXPECT_TRUE(browser_state_.get()
+                  ->GetPrefs()
                   ->Get(prefs::kIosUserZoomMultipliers)
                   ->DictEmpty());
 }
@@ -386,7 +413,7 @@ TEST_F(FontSizeTabHelperTest, GoogleCachedAMPPageHasSeparateKey) {
   EXPECT_NE(google_pref_key, google_amp_pref_key);
 
   const base::Value* pref =
-      chrome_browser_state_->GetPrefs()->Get(prefs::kIosUserZoomMultipliers);
+      browser_state_->GetPrefs()->Get(prefs::kIosUserZoomMultipliers);
   EXPECT_EQ(1.1, pref->FindDoublePath(google_pref_key));
   EXPECT_EQ(0.9, pref->FindDoublePath(google_amp_pref_key));
 }

@@ -94,6 +94,8 @@ std::string ItemTypeToString(HoldingSpaceItem::Type type) {
       return "ScreenRecording";
     case HoldingSpaceItem::Type::kScreenshot:
       return "Screenshot";
+    case HoldingSpaceItem::Type::kPhoneHubCameraRoll:
+      return "PhoneHubCameraRoll";
   }
   NOTREACHED();
   return std::string();
@@ -165,19 +167,22 @@ void RecordItemCounts(const std::vector<const HoldingSpaceItem*>& items) {
 }
 
 void RecordItemFailureToLaunch(HoldingSpaceItem::Type type,
-                               const base::FilePath& file_path) {
+                               const base::FilePath& file_path,
+                               ItemFailureToLaunchReason reason) {
   base::UmaHistogramEnumeration("HoldingSpace.Item.FailureToLaunch", type);
   base::UmaHistogramExactLinear("HoldingSpace.Item.FailureToLaunch.Extension",
                                 FilePathToExtension(file_path),
                                 kExtensionsSize);
+  base::UmaHistogramEnumeration("HoldingSpace.Item.FailureToLaunch.Reason",
+                                reason);
 }
 
 void RecordTimeFromFirstAvailabilityToFirstAdd(base::TimeDelta time_delta) {
   // NOTE: 24 days appears to be the max supported number of days.
   base::UmaHistogramCustomTimes(
       "HoldingSpace.TimeFromFirstAvailabilityToFirstAdd", time_delta,
-      /*min=*/base::TimeDelta::FromMinutes(1),
-      /*max=*/base::TimeDelta::FromDays(24),
+      /*min=*/base::Minutes(1),
+      /*max=*/base::Days(24),
       /*buckets=*/50);
 }
 
@@ -185,7 +190,7 @@ void RecordTimeFromFirstAvailabilityToFirstEntry(base::TimeDelta time_delta) {
   // NOTE: 24 days appears to be the max supported number of days.
   base::UmaHistogramCustomTimes(
       "HoldingSpace.TimeFromFirstAvailabilityToFirstEntry", time_delta,
-      /*min=*/base::TimeDelta(), /*max=*/base::TimeDelta::FromDays(24),
+      /*min=*/base::TimeDelta(), /*max=*/base::Days(24),
       /*buckets=*/50);
 }
 
@@ -194,7 +199,7 @@ void RecordTimeFromFirstEntryToFirstPin(base::TimeDelta time_delta) {
   base::UmaHistogramCustomTimes("HoldingSpace.TimeFromFirstEntryToFirstPin",
                                 time_delta,
                                 /*min=*/base::TimeDelta(),
-                                /*max=*/base::TimeDelta::FromDays(24),
+                                /*max=*/base::Days(24),
                                 /*buckets=*/50);
 }
 

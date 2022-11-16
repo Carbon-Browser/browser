@@ -13,19 +13,19 @@
 #include "base/base64.h"
 #include "base/bind.h"
 #include "base/command_line.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
+#include "base/strings/escape.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "base/values.h"
-#include "chrome/browser/android/contextualsearch/contextual_search_context.h"
-#include "chrome/browser/android/contextualsearch/resolved_search_term.h"
+#include "chrome/browser/android/contextualsearch/native_contextual_search_context.h"
 #include "chrome/browser/android/proto/client_discourse_context.pb.h"
 #include "chrome/browser/flags/android/chrome_feature_list.h"
 #include "chrome/common/chrome_switches.h"
+#include "components/contextual_search/core/browser/resolved_search_term.h"
 #include "components/search_engines/template_url_service.h"
 #include "components/variations/scoped_variations_ids_provider.h"
-#include "net/base/escape.h"
 #include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
 #include "services/network/test/test_url_loader_factory.h"
@@ -42,6 +42,11 @@ const char kDiscourseContextHeaderName[] = "X-Additional-Discourse-Context";
 class ContextualSearchDelegateTest : public testing::Test {
  public:
   ContextualSearchDelegateTest() {}
+
+  ContextualSearchDelegateTest(const ContextualSearchDelegateTest&) = delete;
+  ContextualSearchDelegateTest& operator=(const ContextualSearchDelegateTest&) =
+      delete;
+
   ~ContextualSearchDelegateTest() override {}
 
  protected:
@@ -93,7 +98,7 @@ class ContextualSearchDelegateTest : public testing::Test {
       const std::u16string& surrounding_text,
       int start_offset,
       int end_offset) {
-    test_context_ = new ContextualSearchContext(
+    test_context_ = new NativeContextualSearchContext(
         std::string(), GURL(kSomeSpecificBasePage), "utf-8");
     // ContextualSearchDelegate class takes ownership of the context.
     delegate_->SetContextForTesting(test_context_->GetWeakPtr());
@@ -130,7 +135,7 @@ class ContextualSearchDelegateTest : public testing::Test {
   // from tests, but can be called here because this is a friend class.
   //-------------------------------------------------------------------
   void CreateTestContext() {
-    test_context_ = new ContextualSearchContext(
+    test_context_ = new NativeContextualSearchContext(
         std::string(), GURL(kSomeSpecificBasePage), "utf-8");
     delegate_->SetContextForTesting(test_context_->GetWeakPtr());
   }
@@ -172,7 +177,7 @@ class ContextualSearchDelegateTest : public testing::Test {
   void SetSurroundingContext(const std::u16string& surrounding_text,
                              int start_offset,
                              int end_offset) {
-    test_context_ = new ContextualSearchContext(
+    test_context_ = new NativeContextualSearchContext(
         std::string(), GURL(kSomeSpecificBasePage), "utf-8");
     test_context_->SetSelectionSurroundings(start_offset, end_offset,
                                             surrounding_text);
@@ -232,7 +237,6 @@ class ContextualSearchDelegateTest : public testing::Test {
   std::string caption() { return caption_; }
   std::string quick_action_uri() { return quick_action_uri_; }
   QuickActionCategory quick_action_category() { return quick_action_category_; }
-  int64_t logged_event_id() { return logged_event_id_; }
   std::string search_url_full() { return search_url_full_; }
   std::string search_url_preload() { return search_url_preload_; }
   int coca_card_tag() { return coca_card_tag_; }
@@ -260,7 +264,6 @@ class ContextualSearchDelegateTest : public testing::Test {
     caption_ = resolved_search_term.caption;
     quick_action_uri_ = resolved_search_term.quick_action_uri;
     quick_action_category_ = resolved_search_term.quick_action_category;
-    logged_event_id_ = resolved_search_term.logged_event_id;
     search_url_full_ = resolved_search_term.search_url_full;
     search_url_preload_ = resolved_search_term.search_url_preload;
     coca_card_tag_ = resolved_search_term.coca_card_tag;
@@ -289,7 +292,6 @@ class ContextualSearchDelegateTest : public testing::Test {
   std::string caption_;
   std::string quick_action_uri_;
   QuickActionCategory quick_action_category_;
-  int64_t logged_event_id_;
   std::string search_url_full_;
   std::string search_url_preload_;
   int coca_card_tag_;
@@ -304,12 +306,10 @@ class ContextualSearchDelegateTest : public testing::Test {
       test_shared_url_loader_factory_;
 
   // Will be owned by the delegate.
-  ContextualSearchContext* test_context_;
+  raw_ptr<NativeContextualSearchContext> test_context_;
 
   // Features to enable
   base::test::ScopedFeatureList feature_list_;
-
-  DISALLOW_COPY_AND_ASSIGN(ContextualSearchDelegateTest);
 };
 
 TEST_F(ContextualSearchDelegateTest, NormalFetchWithXssiEscape) {
@@ -506,13 +506,12 @@ TEST_F(ContextualSearchDelegateTest, ContractSelectionInvalid) {
 }
 
 TEST_F(ContextualSearchDelegateTest, ExtractMentionsStartEnd) {
-  base::Value mentions_list(base::Value::Type::LIST);
+  base::Value::List mentions_list;
   mentions_list.Append(1);
   mentions_list.Append(2);
   int start = 0;
   int end = 0;
-  delegate_->ExtractMentionsStartEnd(std::move(mentions_list).TakeList(),
-                                     &start, &end);
+  delegate_->ExtractMentionsStartEnd(mentions_list, &start, &end);
   EXPECT_EQ(1, start);
   EXPECT_EQ(2, end);
 }
@@ -563,7 +562,6 @@ TEST_F(ContextualSearchDelegateTest, DecodeSearchTermFromJsonResponse) {
       "\"info_text\":\"44th U.S. President\","
       "\"display_text\":\"Barack Obama\", \"mentions\":[0,15],"
       "\"selected_text\":\"obama\", \"resolved_term\":\"barack obama\","
-      "\"logged_event_id\":\"1234567890123456789\","
       "\"search_url_full\":\"https://www.google.com/"
       "search?q=define+obscure&ctxs=2\","
       "\"search_url_preload\":\"https://www.google.com/"
@@ -583,7 +581,6 @@ TEST_F(ContextualSearchDelegateTest, DecodeSearchTermFromJsonResponse) {
   std::string thumbnail_url;
   std::string caption;
   std::string quick_action_uri;
-  int64_t logged_event_id;
   QuickActionCategory quick_action_category = QUICK_ACTION_CATEGORY_NONE;
   std::string search_url_full;
   std::string search_url_preload;
@@ -594,7 +591,7 @@ TEST_F(ContextualSearchDelegateTest, DecodeSearchTermFromJsonResponse) {
       json_with_escape, &search_term, &display_text, &alternate_term, &mid,
       &prevent_preload, &mention_start, &mention_end, &context_language,
       &thumbnail_url, &caption, &quick_action_uri, &quick_action_category,
-      &logged_event_id, &search_url_full, &search_url_preload, &coca_card_tag,
+      &search_url_full, &search_url_preload, &coca_card_tag,
       &related_searches_json);
 
   EXPECT_EQ("obama", search_term);
@@ -609,7 +606,6 @@ TEST_F(ContextualSearchDelegateTest, DecodeSearchTermFromJsonResponse) {
   EXPECT_EQ("", caption);
   EXPECT_EQ("", quick_action_uri);
   EXPECT_EQ(QUICK_ACTION_CATEGORY_NONE, quick_action_category);
-  EXPECT_EQ(1234567890123456789, logged_event_id);
   EXPECT_EQ("https://www.google.com/search?q=define+obscure&ctxs=2",
             search_url_full);
   EXPECT_EQ("https://www.google.com/search?q=define+obscure&ctxs=2&pf=c&sns=1",

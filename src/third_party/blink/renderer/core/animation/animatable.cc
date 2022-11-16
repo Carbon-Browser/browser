@@ -22,7 +22,7 @@
 #include "third_party/blink/renderer/core/permissions_policy/layout_animations_policy.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 
 namespace blink {
 namespace {
@@ -31,7 +31,7 @@ namespace {
 // the |element.animate| API is used to animate a CSS property which is blocked
 // by the permissions policy 'layout-animations'.
 void ReportPermissionsPolicyViolationsIfNecessary(
-    const ExecutionContext& context,
+    ExecutionContext& context,
     const KeyframeEffectModelBase& effect) {
   for (const auto& property_handle : effect.Properties()) {
     if (!property_handle.IsCSSProperty())
@@ -64,7 +64,7 @@ V8UnionKeyframeEffectOptionsOrUnrestrictedDouble* CoerceEffectOptions(
 
 }  // namespace
 
-// https://drafts.csswg.org/web-animations/#dom-animatable-animate
+// https://w3.org/TR/web-animations-1/#dom-animatable-animate
 Animation* Animatable::animate(
     ScriptState* script_state,
     const ScriptValue& keyframes,
@@ -89,15 +89,15 @@ Animation* Animatable::animate(
   ReportPermissionsPolicyViolationsIfNecessary(*element->GetExecutionContext(),
                                                *effect->Model());
   if (!options->IsKeyframeAnimationOptions())
-    return element->GetDocument().Timeline().Play(effect);
+    return element->GetDocument().Timeline().Play(effect, exception_state);
 
   Animation* animation;
   const KeyframeAnimationOptions* options_dict =
       options->GetAsKeyframeAnimationOptions();
   if (!options_dict->hasTimeline()) {
-    animation = element->GetDocument().Timeline().Play(effect);
+    animation = element->GetDocument().Timeline().Play(effect, exception_state);
   } else if (AnimationTimeline* timeline = options_dict->timeline()) {
-    animation = timeline->Play(effect);
+    animation = timeline->Play(effect, exception_state);
   } else {
     animation = Animation::Create(element->GetExecutionContext(), effect,
                                   nullptr, exception_state);
@@ -110,6 +110,7 @@ Animation* Animatable::animate(
   return animation;
 }
 
+// https://w3.org/TR/web-animations-1/#dom-animatable-animate
 Animation* Animatable::animate(ScriptState* script_state,
                                const ScriptValue& keyframes,
                                ExceptionState& exception_state) {
@@ -130,20 +131,27 @@ Animation* Animatable::animate(ScriptState* script_state,
 
   ReportPermissionsPolicyViolationsIfNecessary(*element->GetExecutionContext(),
                                                *effect->Model());
-  return element->GetDocument().Timeline().Play(effect);
+  return element->GetDocument().Timeline().Play(effect, exception_state);
 }
 
+// https://w3.org/TR/web-animations-1/#dom-animatable-getanimations
 HeapVector<Member<Animation>> Animatable::getAnimations(
     GetAnimationsOptions* options) {
   bool use_subtree = options && options->subtree();
+  return GetAnimationsInternal(
+      GetAnimationsOptionsResolved{.use_subtree = use_subtree});
+}
+
+HeapVector<Member<Animation>> Animatable::GetAnimationsInternal(
+    GetAnimationsOptionsResolved options) {
   Element* element = GetAnimationTarget();
-  if (use_subtree)
+  if (options.use_subtree)
     element->GetDocument().UpdateStyleAndLayoutTreeForSubtree(element);
   else
     element->GetDocument().UpdateStyleAndLayoutTreeForNode(element);
 
   HeapVector<Member<Animation>> animations;
-  if (!use_subtree && !element->HasAnimations())
+  if (!options.use_subtree && !element->HasAnimations())
     return animations;
 
   for (const auto& animation :
@@ -152,7 +160,8 @@ HeapVector<Member<Animation>> Animatable::getAnimations(
     DCHECK(animation->effect());
     // TODO(gtsteel) make this use the idl properties
     Element* target = To<KeyframeEffect>(animation->effect())->EffectTarget();
-    if (element == target || (use_subtree && element->contains(target))) {
+    if (element == target ||
+        (options.use_subtree && element->contains(target))) {
       // DocumentAnimations::getAnimations should only give us animations that
       // are either current or in effect.
       DCHECK(animation->effect()->IsCurrent() ||

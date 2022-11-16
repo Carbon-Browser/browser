@@ -66,6 +66,10 @@ class ASH_EXPORT HotseatWidget : public ShelfComponent,
   };
 
   HotseatWidget();
+
+  HotseatWidget(const HotseatWidget&) = delete;
+  HotseatWidget& operator=(const HotseatWidget&) = delete;
+
   ~HotseatWidget() override;
 
   // Returns whether the hotseat background should be shown.
@@ -169,7 +173,7 @@ class ASH_EXPORT HotseatWidget : public ShelfComponent,
   // manual user intervention (dragging the hotseat into its extended state).
   // This will return |false| after any visible change in the shelf
   // configuration.
-  bool is_manually_extended() { return is_manually_extended_; }
+  bool is_manually_extended() const { return is_manually_extended_; }
 
   void set_manually_extended(bool value) { is_manually_extended_ = value; }
 
@@ -257,8 +261,6 @@ class ASH_EXPORT HotseatWidget : public ShelfComponent,
   // on the non visible portion of the hotseat, or events that reach the hotseat
   // during an animation.
   std::unique_ptr<aura::ScopedWindowTargeter> hotseat_window_targeter_;
-
-  DISALLOW_COPY_AND_ASSIGN(HotseatWidget);
 };
 
 }  // namespace ash

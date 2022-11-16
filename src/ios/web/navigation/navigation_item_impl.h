@@ -10,6 +10,7 @@
 #include <memory>
 #include <string>
 
+#include "base/time/time.h"
 #include "ios/web/public/favicon/favicon_status.h"
 #import "ios/web/public/navigation/navigation_item.h"
 #include "ios/web/public/navigation/referrer.h"
@@ -49,8 +50,8 @@ class NavigationItemImpl : public web::NavigationItem {
   const std::u16string& GetTitleForDisplay() const override;
   void SetTransitionType(ui::PageTransition transition_type) override;
   ui::PageTransition GetTransitionType() const override;
-  const FaviconStatus& GetFavicon() const override;
-  FaviconStatus& GetFavicon() override;
+  const FaviconStatus& GetFaviconStatus() const override;
+  void SetFaviconStatus(const FaviconStatus& favicon_status) override;
   const SSLStatus& GetSSL() const override;
   SSLStatus& GetSSL() override;
   void SetTimestamp(base::Time timestamp) override;
@@ -60,8 +61,8 @@ class NavigationItemImpl : public web::NavigationItem {
   bool HasPostData() const override;
   NSDictionary* GetHttpRequestHeaders() const override;
   void AddHttpRequestHeaders(NSDictionary* additional_headers) override;
-  void SetUpgradedToHttps() override;
-  bool IsUpgradedToHttps() const override;
+  void SetHttpsUpgradeType(HttpsUpgradeType https_upgrade_type) override;
+  HttpsUpgradeType GetHttpsUpgradeType() const override;
 
   // Serialized representation of the state object that was used in conjunction
   // with a JavaScript window.history.pushState() or
@@ -135,7 +136,7 @@ class NavigationItemImpl : public web::NavigationItem {
   std::u16string title_;
   PageDisplayState page_display_state_;
   ui::PageTransition transition_type_;
-  FaviconStatus favicon_;
+  FaviconStatus favicon_status_;
   SSLStatus ssl_;
   base::Time timestamp_;
   UserAgentType user_agent_type_;
@@ -161,9 +162,8 @@ class NavigationItemImpl : public web::NavigationItem {
   // virtual URL, or title is set, this should be cleared to force a refresh.
   mutable std::u16string cached_display_title_;
 
-  // True if this navigation was typed without a scheme and its URL is using
-  // https:// as the default scheme.
-  bool is_upgraded_to_https_;
+  // Type of the HTTPS upgrade applied to this navigation, if any.
+  HttpsUpgradeType https_upgrade_type_;
 
   // Copy and assignment is explicitly allowed for this class.
 };

@@ -13,7 +13,6 @@
 #include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "base/json/json_reader.h"
-#include "base/macros.h"
 #include "base/values.h"
 #include "chrome/browser/ash/file_system_provider/icon_set.h"
 #include "chrome/browser/ash/file_system_provider/operations/get_metadata.h"
@@ -48,6 +47,10 @@ class CallbackLogger {
         : result_(result),
           entry_list_(std::move(entry_list)),
           has_more_(has_more) {}
+
+    Event(const Event&) = delete;
+    Event& operator=(const Event&) = delete;
+
     virtual ~Event() {}
 
     base::File::Error result() { return result_; }
@@ -60,11 +63,13 @@ class CallbackLogger {
     base::File::Error result_;
     storage::AsyncFileUtil::EntryList entry_list_;
     bool has_more_;
-
-    DISALLOW_COPY_AND_ASSIGN(Event);
   };
 
   CallbackLogger() {}
+
+  CallbackLogger(const CallbackLogger&) = delete;
+  CallbackLogger& operator=(const CallbackLogger&) = delete;
+
   virtual ~CallbackLogger() {}
 
   void OnReadDirectory(base::File::Error result,
@@ -78,8 +83,6 @@ class CallbackLogger {
 
  private:
   std::vector<std::unique_ptr<Event>> events_;
-
-  DISALLOW_COPY_AND_ASSIGN(CallbackLogger);
 };
 
 // Returns the request value as |result| in case of successful parse.
@@ -88,12 +91,11 @@ void CreateRequestValueFromJSON(const std::string& json,
   using extensions::api::file_system_provider_internal::
       ReadDirectoryRequestedSuccess::Params;
 
-  base::JSONReader::ValueWithError parsed_json =
-      base::JSONReader::ReadAndReturnValueWithError(json);
-  ASSERT_TRUE(parsed_json.value) << parsed_json.error_message;
+  auto parsed_json = base::JSONReader::ReadAndReturnValueWithError(json);
+  ASSERT_TRUE(parsed_json.has_value()) << parsed_json.error().message;
 
-  ASSERT_TRUE(parsed_json.value->is_list());
-  std::unique_ptr<Params> params(Params::Create(parsed_json.value->GetList()));
+  ASSERT_TRUE(parsed_json->is_list());
+  std::unique_ptr<Params> params(Params::Create(parsed_json->GetList()));
   ASSERT_TRUE(params.get());
   *result = RequestValue::CreateForReadDirectorySuccess(std::move(params));
   ASSERT_TRUE(result->get());
@@ -137,11 +139,11 @@ TEST_F(FileSystemProviderOperationsReadDirectoryTest, Execute) {
   EXPECT_EQ(extensions::api::file_system_provider::OnReadDirectoryRequested::
                 kEventName,
             event->event_name);
-  base::ListValue* event_args = event->event_args.get();
-  ASSERT_EQ(1u, event_args->GetList().size());
+  const base::Value::List& event_args = event->event_args;
+  ASSERT_EQ(1u, event_args.size());
 
-  const base::DictionaryValue* options_as_value = NULL;
-  ASSERT_TRUE(event_args->GetDictionary(0, &options_as_value));
+  const base::Value* options_as_value = &event_args[0];
+  ASSERT_TRUE(options_as_value->is_dict());
 
   ReadDirectoryRequestedOptions options;
   ASSERT_TRUE(

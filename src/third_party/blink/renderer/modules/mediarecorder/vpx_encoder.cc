@@ -7,12 +7,15 @@
 #include <algorithm>
 #include <utility>
 
+#include "base/numerics/safe_conversions.h"
 #include "base/system/sys_info.h"
 #include "media/base/video_frame.h"
 #include "media/base/video_util.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/trace_event.h"
 #include "third_party/blink/renderer/platform/scheduler/public/post_cross_thread_task.h"
 #include "third_party/blink/renderer/platform/scheduler/public/thread.h"
+#include "third_party/blink/renderer/platform/wtf/cross_thread_copier_base.h"
+#include "third_party/blink/renderer/platform/wtf/cross_thread_copier_std.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "ui/gfx/geometry/size.h"
@@ -47,7 +50,7 @@ void VpxEncoder::ShutdownEncoder(std::unique_ptr<Thread> encoding_thread,
 VpxEncoder::VpxEncoder(
     bool use_vp9,
     const VideoTrackRecorder::OnEncodedVideoCB& on_encoded_video_cb,
-    int32_t bits_per_second,
+    uint32_t bits_per_second,
     scoped_refptr<base::SequencedTaskRunner> main_task_runner)
     : VideoTrackRecorder::Encoder(on_encoded_video_cb,
                                   bits_per_second,
@@ -141,7 +144,7 @@ void VpxEncoder::EncodeOnEncodingTaskRunner(scoped_refptr<VideoFrame> frame,
         v_plane_offset_ = media::VideoFrame::PlaneSize(
                               frame->format(), VideoFrame::kUPlane, frame_size)
                               .GetArea();
-        alpha_dummy_planes_.resize(SafeCast<wtf_size_t>(
+        alpha_dummy_planes_.resize(base::checked_cast<wtf_size_t>(
             v_plane_offset_ + media::VideoFrame::PlaneSize(frame->format(),
                                                            VideoFrame::kVPlane,
                                                            frame_size)
@@ -166,10 +169,10 @@ void VpxEncoder::EncodeOnEncodingTaskRunner(scoped_refptr<VideoFrame> frame,
                frame->data(VideoFrame::kAPlane),
                frame->visible_data(VideoFrame::kAPlane),
                frame->stride(VideoFrame::kAPlane), alpha_dummy_planes_.data(),
-               SafeCast<int>(u_plane_stride_),
+               base::checked_cast<int>(u_plane_stride_),
                alpha_dummy_planes_.data() + v_plane_offset_,
-               SafeCast<int>(v_plane_stride_), duration, keyframe, alpha_data,
-               &alpha_keyframe, VPX_IMG_FMT_I420);
+               base::checked_cast<int>(v_plane_stride_), duration, keyframe,
+               alpha_data, &alpha_keyframe, VPX_IMG_FMT_I420);
       DCHECK_EQ(keyframe, alpha_keyframe);
       break;
     }
@@ -348,8 +351,6 @@ bool VpxEncoder::IsInitialized(const vpx_codec_enc_cfg_t& codec_config) const {
 base::TimeDelta VpxEncoder::EstimateFrameDuration(const VideoFrame& frame) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(encoding_sequence_checker_);
 
-  using base::TimeDelta;
-
   // If the source of the video frame did not provide the frame duration, use
   // the actual amount of time between the current and previous frame as a
   // prediction for the next frame's duration.
@@ -362,10 +363,8 @@ base::TimeDelta VpxEncoder::EstimateFrameDuration(const VideoFrame& frame) {
       frame.metadata().frame_duration.value_or(predicted_frame_duration);
   last_frame_timestamp_ = frame.timestamp();
   // Make sure |frame_duration| is in a safe range of values.
-  const base::TimeDelta kMaxFrameDuration =
-      base::TimeDelta::FromSecondsD(1.0 / 8);
-  const base::TimeDelta kMinFrameDuration =
-      base::TimeDelta::FromMilliseconds(1);
+  const base::TimeDelta kMaxFrameDuration = base::Seconds(1.0 / 8);
+  const base::TimeDelta kMinFrameDuration = base::Milliseconds(1);
   return std::min(kMaxFrameDuration,
                   std::max(frame_duration, kMinFrameDuration));
 }

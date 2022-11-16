@@ -9,8 +9,9 @@
 #include <set>
 
 #include "base/feature_list.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "components/keyed_service/core/keyed_service.h"
+#include "components/security_interstitials/core/https_only_mode_allowlist.h"
 #include "content/public/browser/ssl_host_state_delegate.h"
 
 class HostContentSettingsMap;
@@ -44,6 +45,11 @@ class StatefulSSLHostStateDelegate : public content::SSLHostStateDelegate,
       content::BrowserContext* browser_context,
       PrefService* pref_service,
       HostContentSettingsMap* host_content_settings_map);
+
+  StatefulSSLHostStateDelegate(const StatefulSSLHostStateDelegate&) = delete;
+  StatefulSSLHostStateDelegate& operator=(const StatefulSSLHostStateDelegate&) =
+      delete;
+
   ~StatefulSSLHostStateDelegate() override;
 
   static void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry);
@@ -130,13 +136,13 @@ class StatefulSSLHostStateDelegate : public content::SSLHostStateDelegate,
   // dictionary if they do not already exist. Otherwise will fail and return if
   // NULL if they do not exist.
   base::Value* GetValidCertDecisionsDict(
-      base::Value* dict,
-      CreateDictionaryEntriesDisposition create_entries);
+      CreateDictionaryEntriesDisposition create_entries,
+      base::Value& dict);
 
   std::unique_ptr<base::Clock> clock_;
-  content::BrowserContext* browser_context_;
-  PrefService* pref_service_;
-  HostContentSettingsMap* host_content_settings_map_;
+  raw_ptr<content::BrowserContext> browser_context_;
+  raw_ptr<PrefService> pref_service_;
+  raw_ptr<HostContentSettingsMap> host_content_settings_map_;
 
   using AllowedCert = std::pair<std::string /* certificate fingerprint */,
                                 base::FilePath /* StoragePartition path */>;
@@ -169,19 +175,9 @@ class StatefulSSLHostStateDelegate : public content::SSLHostStateDelegate,
   std::map<int /* error code */, int /* count */> recurrent_errors_;
 
   // Tracks sites that are allowed to load over HTTP when HTTPS-First Mode is
-  // enabled, for non-default storage partitions. Allowed hosts are exact
-  // hostname matches -- subdomains of a host on the allowlist must be
-  // separately allowlisted.
-  //
-  // In most cases, HTTP interstitial decisions are stored in ContentSettings
-  // and persisted to disk, like cert decisions. Similar to cert decisions, for
-  // non-default StoragePartitions the decisions should be isolated from normal
-  // browsing and don't need to be persisted to disk. For these cases, track
-  // allowlist decisions purely in memory.
-  std::set<std::string /* host */>
-      allowed_http_hosts_for_non_default_storage_partitions_;
-
-  DISALLOW_COPY_AND_ASSIGN(StatefulSSLHostStateDelegate);
+  // enabled. Allowed hosts are exact hostname matches -- subdomains of a host
+  // on the allowlist must be separately allowlisted.
+  security_interstitials::HttpsOnlyModeAllowlist https_only_mode_allowlist_;
 
   int recurrent_interstitial_threshold_for_testing;
   enum RecurrentInterstitialMode recurrent_interstitial_mode_for_testing;

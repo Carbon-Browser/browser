@@ -6,6 +6,7 @@
 #define IOS_WEB_WEB_STATE_UI_CRW_WEB_CONTROLLER_CONTAINER_VIEW_H_
 
 #import <UIKit/UIKit.h>
+#import <WebKit/WebKit.h>
 
 #import "ios/web/common/crw_content_view.h"
 
@@ -39,8 +40,6 @@
 // The web view content view being displayed.
 @property(nonatomic, strong, readonly)
     CRWWebViewContentView* webViewContentView;
-// The currently displayed transient content view.
-@property(nonatomic, strong, readonly) CRWContentView* transientContentView;
 @property(nonatomic, weak) id<CRWWebControllerContainerViewDelegate>
     delegate;  // weak
 
@@ -64,17 +63,15 @@
 // Replaces the currently displayed content with |webViewContentView|.
 - (void)displayWebViewContentView:(CRWWebViewContentView*)webViewContentView;
 
-// Adds |transientContentView| as a subview above previously displayed content.
-- (void)displayTransientContent:(CRWContentView*)transientContentView;
-
-// Removes the transient content view, if one is displayed.
-- (void)clearTransientContentView;
-
 // Updates the |webViewContentView|'s view hierarchy status based on the the
 // container view window status. If the current webView is active but the window
 // is nil, store the webView in the view hierarchy keyWindow so WKWebView
 // doesn't suspend it's counterpart process.
 - (void)updateWebViewContentViewForContainerWindow:(UIWindow*)window;
+
+// Updates |webViewContentView| with the current fullscreen state
+- (void)updateWebViewContentViewFullscreenState:
+    (CrFullscreenState)fullscreenState;
 
 @end
 

@@ -8,7 +8,6 @@
 #include <vector>
 
 #include "base/callback_forward.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/global_routing_id.h"
@@ -35,6 +34,10 @@ class CONTENT_EXPORT ManifestIconDownloader final {
   using IconFetchCallback = base::OnceCallback<void(const SkBitmap&)>;
 
   ManifestIconDownloader() = delete;
+
+  ManifestIconDownloader(const ManifestIconDownloader&) = delete;
+  ManifestIconDownloader& operator=(const ManifestIconDownloader&) = delete;
+
   ~ManifestIconDownloader() = delete;
 
   // Returns whether the download has started.
@@ -82,8 +85,6 @@ class CONTENT_EXPORT ManifestIconDownloader final {
                                     const std::vector<SkBitmap>& bitmaps);
 
   friend class ManifestIconDownloaderTest;
-
-  DISALLOW_COPY_AND_ASSIGN(ManifestIconDownloader);
 };
 
 }  // namespace content

@@ -12,7 +12,7 @@
 #include "base/command_line.h"
 #include "base/location.h"
 #include "base/notreached.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "cc/trees/layer_tree_frame_sink_client.h"
 #include "components/power_scheduler/power_mode.h"
@@ -30,7 +30,6 @@
 #include "components/viz/service/display/output_surface_frame.h"
 #include "components/viz/service/display/overlay_processor_stub.h"
 #include "components/viz/service/display/software_output_device.h"
-#include "components/viz/service/display/texture_deleter.h"
 #include "components/viz/service/frame_sinks/compositor_frame_sink_support.h"
 #include "components/viz/service/frame_sinks/frame_sink_manager_impl.h"
 #include "gpu/command_buffer/client/context_support.h"
@@ -39,8 +38,8 @@
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/skia/include/core/SkCanvas.h"
 #include "ui/gfx/geometry/rect_conversions.h"
-#include "ui/gfx/skia_util.h"
-#include "ui/gfx/transform.h"
+#include "ui/gfx/geometry/skia_conversions.h"
+#include "ui/gfx/geometry/transform.h"
 
 namespace blink {
 
@@ -109,19 +108,9 @@ class SynchronousLayerTreeFrameSink::SoftwareOutputSurface
   void BindToClient(viz::OutputSurfaceClient* client) override {}
   void EnsureBackbuffer() override {}
   void DiscardBackbuffer() override {}
-  void BindFramebuffer() override {}
   void SwapBuffers(viz::OutputSurfaceFrame frame) override {}
-  void Reshape(const gfx::Size& size,
-               float scale_factor,
-               const gfx::ColorSpace& color_space,
-               gfx::BufferFormat format,
-               bool use_stencil) override {}
-  uint32_t GetFramebufferCopyTextureFormat() override { return 0; }
+  void Reshape(const ReshapeParams& params) override {}
   bool IsDisplayedAsOverlayPlane() const override { return false; }
-  unsigned GetOverlayTextureId() const override { return 0; }
-  bool HasExternalStencilTest() const override { return false; }
-  void ApplyExternalStencil() override {}
-  unsigned UpdateGpuFence() override { return 0; }
   void SetUpdateVSyncParametersCallback(
       viz::UpdateVSyncParametersCallback callback) override {}
   void SetDisplayTransformHint(gfx::OverlayTransform transform) override {}
@@ -192,7 +181,8 @@ bool SynchronousLayerTreeFrameSink::BindToClient(
   // The SharedBitmapManager is null since software compositing is not supported
   // or used on Android.
   frame_sink_manager_ = std::make_unique<viz::FrameSinkManagerImpl>(
-      /*shared_bitmap_manager=*/nullptr);
+      viz::FrameSinkManagerImpl::InitParams(
+          /*shared_bitmap_manager=*/nullptr));
 
   if (synthetic_begin_frame_source_) {
     client_->SetBeginFrameSource(synthetic_begin_frame_source_.get());
@@ -280,8 +270,7 @@ void SynchronousLayerTreeFrameSink::SetLocalSurfaceId(
 
 void SynchronousLayerTreeFrameSink::SubmitCompositorFrame(
     viz::CompositorFrame frame,
-    bool hit_test_data_changed,
-    bool show_hit_test_borders) {
+    bool hit_test_data_changed) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   DCHECK(sync_client_);
 
@@ -374,22 +363,31 @@ void SynchronousLayerTreeFrameSink::SubmitCompositorFrame(
         viz::SurfaceRange(
             absl::nullopt,
             viz::SurfaceId(kChildFrameSinkId, child_local_surface_id_)),
-        SK_ColorWHITE, false /* stretch_content_to_fill_bounds */);
+        SkColors::kWhite, false /* stretch_content_to_fill_bounds */);
 
     child_support_->SubmitCompositorFrame(child_local_surface_id_,
                                           std::move(frame));
     root_support_->SubmitCompositorFrame(root_local_surface_id_,
                                          std::move(embed_frame));
-    display_->DrawAndSwap(base::TimeTicks::Now());
+    base::TimeTicks now = base::TimeTicks::Now();
+    display_->DrawAndSwap({now, now});
 
     // We don't track metrics for frames submitted to |display_| but it still
     // expects that every frame will receive a swap ack and presentation
     // feedback so we send null signals here.
-    base::TimeTicks now = base::TimeTicks::Now();
+    now = base::TimeTicks::Now();
     display_->DidReceiveSwapBuffersAck({now, now},
                                        /*release_fence=*/gfx::GpuFenceHandle());
     display_->DidReceivePresentationFeedback(
         gfx::PresentationFeedback::Failure());
+
+    viz::FrameTimingDetails details;
+    details.received_compositor_frame_timestamp = now;
+    details.draw_start_timestamp = now;
+    details.swap_timings = {now, now, now, now};
+    details.presentation_feedback = {now, base::TimeDelta(), 0};
+    client_->DidPresentCompositorFrame(submit_frame->metadata.frame_token,
+                                       details);
   } else {
     if (viz_frame_submission_enabled_) {
       frame.metadata.begin_frame_ack =
@@ -480,8 +478,8 @@ void SynchronousLayerTreeFrameSink::DemandDrawSw(SkCanvas* canvas) {
   SkIRect canvas_clip = canvas->getDeviceClipBounds();
   gfx::Rect viewport = gfx::SkIRectToRect(canvas_clip);
 
-  gfx::Transform transform(gfx::Transform::kSkipInitialization);
-  transform.matrix() = canvas->getTotalMatrix();  // Converts 3x3 matrix to 4x4.
+  // Converts 3x3 matrix to 4x4.
+  gfx::Transform transform(canvas->getTotalMatrix());
 
   // We will resize the Display to ensure it covers the entire |viewport|, so
   // save it for later.
@@ -532,6 +530,15 @@ void SynchronousLayerTreeFrameSink::ReclaimResources(
   client_->ReclaimResources(std::vector<viz::ReturnedResource>(
       std::make_move_iterator(resources.begin()),
       std::make_move_iterator(resources.end())));
+}
+
+void SynchronousLayerTreeFrameSink::
+    OnCompositorFrameTransitionDirectiveProcessed(
+        uint32_t layer_tree_frame_sink_id,
+        uint32_t sequence_id) {
+  if (layer_tree_frame_sink_id != layer_tree_frame_sink_id_)
+    return;
+  client_->OnCompositorFrameTransitionDirectiveProcessed(sequence_id);
 }
 
 void SynchronousLayerTreeFrameSink::SetMemoryPolicy(size_t bytes_limit) {

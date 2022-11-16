@@ -18,8 +18,7 @@
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/syslog_logging.h"
-#include "base/task/post_task.h"
-#include "base/task_runner_util.h"
+#include "base/task/task_runner_util.h"
 #include "base/threading/sequenced_task_runner_handle.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
@@ -106,7 +105,7 @@ void BrowserDMTokenStorage::StoreDMToken(const std::string& dm_token,
 
   if (dm_token.empty()) {
     dm_token_ = CreateEmptyToken();
-    SaveDMToken("");
+    DeleteDMToken();
   } else if (dm_token == kInvalidTokenValue) {
     dm_token_ = CreateInvalidToken();
     SaveDMToken(kInvalidTokenValue);
@@ -210,6 +209,15 @@ void BrowserDMTokenStorage::InitIfNeeded() {
 
 void BrowserDMTokenStorage::SaveDMToken(const std::string& token) {
   auto task = delegate_->SaveDMTokenTask(token, RetrieveClientId());
+  auto reply = base::BindOnce(&BrowserDMTokenStorage::OnDMTokenStored,
+                              weak_factory_.GetWeakPtr());
+  base::PostTaskAndReplyWithResult(delegate_->SaveDMTokenTaskRunner().get(),
+                                   FROM_HERE, std::move(task),
+                                   std::move(reply));
+}
+
+void BrowserDMTokenStorage::DeleteDMToken() {
+  auto task = delegate_->DeleteDMTokenTask(RetrieveClientId());
   auto reply = base::BindOnce(&BrowserDMTokenStorage::OnDMTokenStored,
                               weak_factory_.GetWeakPtr());
   base::PostTaskAndReplyWithResult(delegate_->SaveDMTokenTaskRunner().get(),

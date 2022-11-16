@@ -14,10 +14,6 @@ namespace features {
 // https://crbug.com/841105.
 extern const base::Feature kCrashOnUnexpectedURLChange;
 
-// Used to enable the workaround for WKWebView history clobber bug
-// (crbug.com/887497).
-extern const base::Feature kHistoryClobberWorkaround;
-
 // Used to prevent native apps from being opened when a universal link is tapped
 // and the user is browsing in off the record mode.
 extern const base::Feature kBlockUniversalLinksInOffTheRecordMode;
@@ -33,19 +29,10 @@ extern const base::Feature kClearOldNavigationRecordsWorkaround;
 // Feature flag enabling persistent downloads.
 extern const base::Feature kEnablePersistentDownloads;
 
-// When enabled, for each navigation, the default user agent is chosen by the
-// WebClient GetDefaultUserAgent() method. If it is disabled, the mobile version
-// is requested by default.
-// Use UseWebClientDefaultUserAgent() instead of checking this variable.
-extern const base::Feature kUseDefaultUserAgentInWebClient;
-
 // When enabled, preserves properties of the UIScrollView using CRWPropertyStore
 // when the scroll view is recreated. When disabled, only preserve a small set
 // of properties using hard coded logic.
 extern const base::Feature kPreserveScrollViewProperties;
-
-// When enabled, display an interstitial on legacy TLS connections.
-extern const base::Feature kIOSLegacyTLSInterstitial;
 
 // Records snapshot size of image (IOS.Snapshots.ImageSize histogram) and PDF
 // (IOS.Snapshots.PDFSize histogram) if enabled. Enabling this flag will
@@ -56,43 +43,48 @@ extern const base::Feature kRecordSnapshotSize;
 // WKWebView is set as NSURLRequestAttributionUser on iOS 15.
 extern const base::Feature kSetRequestAttribution;
 
-// When enabled, use the native context menu in web content.
-extern const base::Feature kWebViewNativeContextMenu;
-
-// When enabled, display non-live preview for context menus in web content.
-extern const base::Feature kWebViewNativeContextMenuPhase2;
-
-// When enabled, display previews for native context menu in web content.
-extern const base::Feature kWebViewNativeContextMenuPhase3;
-
 // When enabled, the default context menu from WKWebView is used.
 extern const base::Feature kDefaultWebViewContextMenu;
 
 // Disables the screenshots of non-HTML pages on iOS15.
 extern const base::Feature kDisableNonHTMLScreenshotOnIOS15;
 
-// When true, for each navigation, the default user agent is chosen by the
-// WebClient GetDefaultUserAgent() method. If it is false, the mobile version
-// is requested by default.
-bool UseWebClientDefaultUserAgent();
+// Feature flag that enable Shared Highlighting color change in iOS.
+extern const base::Feature kIOSSharedHighlightingColorChange;
+
+// Feature flag that enables native session restoration with a synthesized
+// interaction state.
+extern const base::Feature kSynthesizedRestoreSession;
+
+// Enables user control for camera and/or microphone access for a specific site
+// through site settings during its lifespan. When enabled, each web state will
+// keep track of whether camera and/or microphone access is granted by the user
+// for its current site.
+extern const base::Feature kMediaPermissionsControl;
+
+// Enables the Fullscreen API in WebKit (supported on iOS 16.0+). This API
+// allows web sites to enter fullscreen mode, with all browser UI hidden.
+extern const base::Feature kEnableFullscreenAPI;
+
+// Feature flag enabling use of new iOS 15
+// loadSimulatedRequest:responseHTMLString: API to display error pages in
+// CRWWKNavigationHandler. The helper method IsLoadSimulatedRequestAPIEnabled()
+// should be used instead of directly checking this feature.
+extern const base::Feature kUseLoadSimulatedRequestForOfflinePage;
 
 // When true, the native context menu for the web content are used.
 bool UseWebViewNativeContextMenuWeb();
 
-// When true, the custom implementation of context menu using native ContextMenu
-// for the web content is used.
-bool UseWebViewNativeContextMenuSystem();
-
 // When true, screenshots of non-HTML (e.g. PDF) pages should be taken.
 bool ShouldTakeScreenshotOnNonHTMLContent();
 
-// Feature flag that enable Shared Highlighting color change in iOS.
-extern const base::Feature kIOSSharedHighlightingColorChange;
+// When true, user control for camera and/or microphone access should be
+// enabled.
+bool IsMediaPermissionsControlEnabled();
 
-// Feature flag that enables creating pending item on POST form submission.
-// Also, for GET form submissions with same page navigation, retains the
-// transition type of new navigation item.
-extern const base::Feature kCreatePendingItemForPostFormSubmission;
+// When true, the new loadSimulatedRequest API should be used when displaying
+// error pages.
+bool IsLoadSimulatedRequestAPIEnabled();
 
 }  // namespace features
 }  // namespace web

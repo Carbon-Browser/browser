@@ -7,20 +7,11 @@
 
 #include <memory>
 
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "ios/web/public/download/download_task_observer.h"
 #import "ios/web/public/web_state_user_data.h"
 
 @protocol ARQuickLookTabHelperDelegate;
-
-namespace base {
-class FilePath;
-}  // namespace base
-
-namespace net {
-class URLFetcherFileWriter;
-}  // namespace net
 
 namespace web {
 class DownloadTask;
@@ -61,6 +52,10 @@ class ARQuickLookTabHelper
       public web::WebStateUserData<ARQuickLookTabHelper> {
  public:
   ARQuickLookTabHelper(web::WebState* web_state);
+
+  ARQuickLookTabHelper(const ARQuickLookTabHelper&) = delete;
+  ARQuickLookTabHelper& operator=(const ARQuickLookTabHelper&) = delete;
+
   ~ARQuickLookTabHelper() override;
 
   // Creates TabHelper. |delegate| is not retained by this instance. |web_state|
@@ -77,8 +72,6 @@ class ARQuickLookTabHelper
   // ownership of |download_task|.
   virtual void Download(std::unique_ptr<web::DownloadTask> download_task);
 
-  web::WebState* web_state() { return web_state_; }
-
  private:
   friend class web::WebStateUserData<ARQuickLookTabHelper>;
 
@@ -90,28 +83,17 @@ class ARQuickLookTabHelper
   // web::DownloadTaskObserver:
   void OnDownloadUpdated(web::DownloadTask* download_task) override;
 
-  // Asynchronously starts download operation in |destination_dir|.
-  void DownloadWithDestinationDir(const base::FilePath& destination_dir,
-                                  web::DownloadTask* download_task,
-                                  bool directory_created);
-
-  // Asynchronously starts download operation with |writer|.
-  void DownloadWithWriter(std::unique_ptr<net::URLFetcherFileWriter> writer,
-                          web::DownloadTask* download_task,
-                          int writer_initialization_status);
-
   // Previews the downloaded USDZ file or confirms the download if download has
   // not started.
   void ConfirmOrPreviewDownload(web::DownloadTask* download_task);
 
   web::WebState* web_state_ = nullptr;
   __weak id<ARQuickLookTabHelperDelegate> delegate_ = nil;
+
   // The current download task.
   std::unique_ptr<web::DownloadTask> download_task_;
 
   WEB_STATE_USER_DATA_KEY_DECL();
-
-  DISALLOW_COPY_AND_ASSIGN(ARQuickLookTabHelper);
 };
 
 #endif  // IOS_CHROME_BROWSER_DOWNLOAD_AR_QUICK_LOOK_TAB_HELPER_H_

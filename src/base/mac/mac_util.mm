@@ -27,10 +27,10 @@
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/strings/sys_string_conversions.h"
+#include "base/threading/scoped_blocking_call.h"
 #include "build/build_config.h"
 
-namespace base {
-namespace mac {
+namespace base::mac {
 
 namespace {
 
@@ -41,7 +41,7 @@ class LoginItemsFileList {
   LoginItemsFileList& operator=(const LoginItemsFileList&) = delete;
   ~LoginItemsFileList() = default;
 
-  bool Initialize() WARN_UNUSED_RESULT {
+  [[nodiscard]] bool Initialize() {
     DCHECK(!login_items_.get()) << __func__ << " called more than once.";
     // The LSSharedFileList suite of functions has been deprecated. Instead,
     // a LoginItems helper should be registered with SMLoginItemSetEnabled()
@@ -152,28 +152,6 @@ CGColorSpaceRef GetSystemColorSpace() {
   }
 
   return g_system_color_space;
-}
-
-bool GetFileBackupExclusion(const FilePath& file_path) {
-  return CSBackupIsItemExcluded(FilePathToCFURL(file_path), nullptr);
-}
-
-bool SetFileBackupExclusion(const FilePath& file_path) {
-  // When excludeByPath is true the application must be running with root
-  // privileges (admin for 10.6 and earlier) but the URL does not have to
-  // already exist. When excludeByPath is false the URL must already exist but
-  // can be used in non-root (or admin as above) mode. We use false so that
-  // non-root (or admin) users don't get their TimeMachine drive filled up with
-  // unnecessary backups.
-  OSStatus os_err = CSBackupSetItemExcluded(FilePathToCFURL(file_path),
-                                            /*exclude=*/TRUE,
-                                            /*excludeByPath=*/FALSE);
-  if (os_err != noErr) {
-    OSSTATUS_DLOG(WARNING, os_err)
-        << "Failed to set backup exclusion for file '"
-        << file_path.value().c_str() << "'";
-  }
-  return os_err == noErr;
 }
 
 bool CheckLoginItemStatus(bool* is_hidden) {
@@ -360,9 +338,10 @@ int DarwinMajorVersionInternal() {
   int darwin_major_version = 0;
   char* dot = strchr(uname_info.release, '.');
   if (dot) {
-    if (!base::StringToInt(base::StringPiece(uname_info.release,
-                                             dot - uname_info.release),
-                           &darwin_major_version)) {
+    if (!base::StringToInt(
+            base::StringPiece(uname_info.release,
+                              static_cast<size_t>(dot - uname_info.release)),
+            &darwin_major_version)) {
       dot = NULL;
     }
   }
@@ -463,10 +442,13 @@ bool ParseModelIdentifier(const std::string& ident,
     return false;
   int32_t major_tmp, minor_tmp;
   std::string::const_iterator begin = ident.begin();
-  if (!StringToInt(MakeStringPiece(begin + number_loc, begin + comma_loc),
+  if (!StringToInt(MakeStringPiece(begin + static_cast<ptrdiff_t>(number_loc),
+                                   begin + static_cast<ptrdiff_t>(comma_loc)),
                    &major_tmp) ||
-      !StringToInt(MakeStringPiece(begin + comma_loc + 1, ident.end()),
-                   &minor_tmp))
+      !StringToInt(
+          MakeStringPiece(begin + static_cast<ptrdiff_t>(comma_loc) + 1,
+                          ident.end()),
+          &minor_tmp))
     return false;
   *type = ident.substr(0, number_loc);
   *major = major_tmp;
@@ -475,14 +457,9 @@ bool ParseModelIdentifier(const std::string& ident,
 }
 
 std::string GetOSDisplayName() {
-  std::string os_name;
-  if (IsAtMostOS10_11())
-    os_name = "OS X";
-  else
-    os_name = "macOS";
   std::string version_string = base::SysNSStringToUTF8(
       [[NSProcessInfo processInfo] operatingSystemVersionString]);
-  return os_name + " " + version_string;
+  return "macOS " + version_string;
 }
 
 std::string GetPlatformSerialNumber() {
@@ -508,5 +485,4 @@ std::string GetPlatformSerialNumber() {
   return base::SysCFStringRefToUTF8(serial_number_cfstring);
 }
 
-}  // namespace mac
-}  // namespace base
+}  // namespace base::mac

@@ -18,6 +18,7 @@
 #include "components/viz/common/resources/resource_id.h"
 #include "components/viz/service/display/shared_bitmap_manager.h"
 #include "components/viz/service/surfaces/surface_saved_frame.h"
+#include "components/viz/service/surfaces/surface_saved_frame_storage.h"
 #include "components/viz/service/transitions/transferable_resource_tracker.h"
 #include "components/viz/service/viz_service_export.h"
 #include "ui/gfx/animation/keyframe/animation_curve.h"
@@ -28,7 +29,6 @@ namespace viz {
 
 class Surface;
 class CompositorFrame;
-class SurfaceSavedFrameStorage;
 struct ReturnedResource;
 struct TransferableResource;
 
@@ -58,7 +58,7 @@ class VIZ_SERVICE_EXPORT SurfaceAnimationManager {
   // normally not do so in the middle of the animation.
   bool ProcessTransitionDirectives(
       const std::vector<CompositorFrameTransitionDirective>& directives,
-      SurfaceSavedFrameStorage* storage);
+      Surface* active_surface);
 
   // Returns true if this manager needs to observe begin frames to advance
   // animations.
@@ -78,10 +78,18 @@ class VIZ_SERVICE_EXPORT SurfaceAnimationManager {
   // Updates the current frame time, without doing anything else.
   void UpdateFrameTime(base::TimeTicks now);
 
+  // Replaced SharedElementResourceIds with corresponding ResourceIds if
+  // necessary.
+  void ReplaceSharedElementResources(Surface* surface);
+
+  SurfaceSavedFrameStorage* GetSurfaceSavedFrameStorageForTesting();
+
  private:
   friend class SurfaceAnimationManagerTest;
   FRIEND_TEST_ALL_PREFIXES(SurfaceAnimationManagerTest, CustomRootConfig);
   FRIEND_TEST_ALL_PREFIXES(SurfaceAnimationManagerTest, CustomSharedConfig);
+
+  class StorageWithSurface;
 
   struct RenderPassDrawData {
     RenderPassDrawData();
@@ -100,11 +108,15 @@ class VIZ_SERVICE_EXPORT SurfaceAnimationManager {
 
   // Helpers to process specific directives.
   bool ProcessSaveDirective(const CompositorFrameTransitionDirective& directive,
-                            SurfaceSavedFrameStorage* storage);
+                            StorageWithSurface& storage);
   // Returns true if the animation has started.
   bool ProcessAnimateDirective(
       const CompositorFrameTransitionDirective& directive,
-      SurfaceSavedFrameStorage* storage);
+      StorageWithSurface& storage);
+  bool ProcessAnimateRendererDirective(
+      const CompositorFrameTransitionDirective& directive,
+      StorageWithSurface& storage);
+  bool ProcessReleaseDirective();
 
   // Finishes the animation and advance state to kLastFrame if it's time to do
   // so. This call is only valid if state is kAnimating.
@@ -131,7 +143,14 @@ class VIZ_SERVICE_EXPORT SurfaceAnimationManager {
   static bool FilterSharedElementQuads(
       base::flat_map<CompositorRenderPassId, RenderPassDrawData>*
           shared_draw_data,
-      const CompositorRenderPassDrawQuad& pass_quad,
+      const DrawQuad& quad,
+      CompositorRenderPass& copy_pass);
+
+  bool FilterSharedElementsWithRenderPassOrResource(
+      std::vector<TransferableResource>* resource_list,
+      const base::flat_map<SharedElementResourceId,
+                           const CompositorRenderPass*>* element_id_to_pass,
+      const DrawQuad& quad,
       CompositorRenderPass& copy_pass);
 
   // Tick both the root and shared animations.
@@ -140,15 +159,15 @@ class VIZ_SERVICE_EXPORT SurfaceAnimationManager {
   // Returns true if we have a running animation for root or shared elements.
   bool HasRunningAnimations() const;
 
-  base::TimeDelta ApplySlowdownFactor(base::TimeDelta original) const;
-
-  enum class State { kIdle, kAnimating, kLastFrame };
+  // The state machine can take the following paths :
+  // 1) Viz driven animation : kIdle -> kAnimating -> kLastFrame -> kIdle
+  // 2) Renderer driven animation : kIdle -> kAnimatingRenderer -> kIdle
+  enum class State { kIdle, kAnimatingRenderer, kAnimating, kLastFrame };
 
   TransitionDirectiveCompleteCallback sequence_id_finished_callback_;
 
   uint32_t last_processed_sequence_id_ = 0;
 
-  const int animation_slowdown_factor_ = 1;
   TransferableResourceTracker transferable_resource_tracker_;
 
   absl::optional<TransferableResourceTracker::ResourceFrame> saved_textures_;
@@ -261,6 +280,10 @@ class VIZ_SERVICE_EXPORT SurfaceAnimationManager {
     gfx::TransformOperations combined_transform_;
   };
 
+  // This is responsible for keeping track of the saved frame, accumulating copy
+  // output results.
+  SurfaceSavedFrameStorage surface_saved_frame_storage_;
+
   // This is the root animation state.
   RootAnimationState root_animation_;
 
@@ -271,6 +294,8 @@ class VIZ_SERVICE_EXPORT SurfaceAnimationManager {
   std::vector<SharedAnimationState> shared_animations_;
 
   base::TimeTicks latest_time_;
+
+  base::flat_set<SharedElementResourceId> empty_resource_ids_;
 };
 
 }  // namespace viz

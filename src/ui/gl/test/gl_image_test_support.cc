@@ -7,7 +7,6 @@
 #include <vector>
 
 #include "base/check_op.h"
-#include "base/containers/contains.h"
 #include "base/notreached.h"
 #include "ui/gfx/buffer_format_util.h"
 #include "ui/gfx/half_float.h"
@@ -35,14 +34,12 @@ void rgb_to_yuv(uint8_t r, uint8_t g, uint8_t b, T* y, T* u, T* v) {
 }  // namespace
 
 // static
-void GLImageTestSupport::InitializeGL(
+GLDisplay* GLImageTestSupport::InitializeGL(
     absl::optional<GLImplementationParts> prefered_impl) {
 #if defined(USE_OZONE)
-  if (features::IsUsingOzonePlatform()) {
-    ui::OzonePlatform::InitParams params;
-    params.single_process = true;
-    ui::OzonePlatform::InitializeForGPU(params);
-  }
+  ui::OzonePlatform::InitParams params;
+  params.single_process = true;
+  ui::OzonePlatform::InitializeForGPU(params);
 #endif
 
   std::vector<GLImplementationParts> allowed_impls =
@@ -53,19 +50,19 @@ void GLImageTestSupport::InitializeGL(
       prefered_impl ? *prefered_impl : allowed_impls[0];
   DCHECK(impl.IsAllowed(allowed_impls));
 
-  GLSurfaceTestSupport::InitializeOneOffImplementation(impl, true);
+  GLDisplay* display =
+      GLSurfaceTestSupport::InitializeOneOffImplementation(impl, true);
 #if defined(USE_OZONE)
-  if (features::IsUsingOzonePlatform()) {
-    // Make sure all the tasks posted to the current task runner by the
-    // initialization functions are run before running the tests.
-    base::RunLoop().RunUntilIdle();
-  }
+  // Make sure all the tasks posted to the current task runner by the
+  // initialization functions are run before running the tests.
+  base::RunLoop().RunUntilIdle();
 #endif
+  return display;
 }
 
 // static
-void GLImageTestSupport::CleanupGL() {
-  init::ShutdownGL(false);
+void GLImageTestSupport::CleanupGL(GLDisplay* display) {
+  GLSurfaceTestSupport::ShutdownGL(display);
 }
 
 // static
@@ -90,6 +87,16 @@ void GLImageTestSupport::SetBufferDataToColor(int width,
         uint16_t* row = reinterpret_cast<uint16_t*>(data + y * stride);
         for (int x = 0; x < width; ++x) {
           row[x] = static_cast<uint16_t>(color[0] << 8);
+        }
+      }
+      return;
+    case gfx::BufferFormat::RG_1616:
+      DCHECK_EQ(0, plane);
+      for (int y = 0; y < height; ++y) {
+        uint16_t* row = reinterpret_cast<uint16_t*>(data + y * stride);
+        for (int x = 0; x < width; ++x) {
+          row[2 * x + 0] = static_cast<uint16_t>(color[0] << 8);
+          row[2 * x + 1] = static_cast<uint16_t>(color[1] << 8);
         }
       }
       return;
@@ -279,5 +286,4 @@ void GLImageTestSupport::SetBufferDataToColor(int width,
   }
   NOTREACHED();
 }
-
 }  // namespace gl

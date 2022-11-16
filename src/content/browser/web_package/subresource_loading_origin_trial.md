@@ -10,7 +10,9 @@ This document is for web developers who want to participate in Origin Trial for
 
 ## Origin Trial timeline
 
-Chrome M90-M96.
+- Chrome M90-M101, M103-M104
+
+  Note: M102 is excluded.
 
 ## How to create a bundle
 
@@ -20,69 +22,64 @@ There are several tools available.
   tool in the WICG/webpackage repository.
 - npm: [wbn](https://www.npmjs.com/package/wbn)
 
-## What works in Chrome M90 or later.
+## What works in Chrome M97+
 
-Chrome M90 or later supports `<link>`-based API explained in the [Explainer]. In
-addition to `resources` attribute, `scopes` attribute is also supported.
+### `<script>`-based API
 
-### Examples
-
-Using `resources` attribute:
+Example:
 
 ```html
-<link
-  rel="webbundle"
-  href="https://example.com/dir/subresources.wbn"
-  resources="https://example.com/dir/a.js https://example.com/dir/b.js https://example.com/dir/c.png"
-/>
+<script type="webbundle">
+{
+  "source": "https://example.com/dir/subresources.wbn",
+  "credentials": "include",
+  "resources": ["a.js", "b.js", "c.png"],
+  "scopes": ["css"]
+}
+</script>
 ```
 
-Using `scopes` attribute:
+### `uuid-in-package` URL
+
+Example:
 
 ```html
-<link
-  rel="webbundle"
-  href="https://example.com/dir/subresources.wbn"
-  scopes="https://example.com/dir/js/
-          https://example.com/dir/img/
-          https://example.com/dir/css/"
-/>
+<script type="webbundle">
+{
+  "source": "https://example.com/dir/subresources.wbn",
+  "resources": ["uuid-in-package:f81d4fae-7dec-11d0-a765-00a0c91e6bf6"]
+}
+</script>
+
+<iframe src="uuid-in-package:f81d4fae-7dec-11d0-a765-00a0c91e6bf6"></iframe>
 ```
 
-Using both `resources` and `scopes` attribute also works:
+### Web Bundles format version "b2"
 
-```html
-<link
-  rel="webbundle"
-  href="https://example.com/dir/subresources.wbn"
-  resources="https://example.com/dir/a.js https://example.com/dir/b.js"
-  scopes="https://example.com/dir/js/
-          https://example.com/dir/img/
-          https://example.com/dir/css/"
-/>
-```
+Chrome M97+ supports
+[the latest Web Bundles format](https://wpack-wg.github.io/bundled-responses/draft-ietf-wpack-bundled-responses.html)
+(called as "b2").
 
-A `urn:uuid` URL is also supported:
+## The old APIs
 
-```html
-<link
-  rel="webbundle"
-  href="https://example.com/dir/subresources.wbn"
-  resources="urn:uuid:f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
-/>
+Chrome M90 - M101 supported `<link>`-based API, a `urn:uuid` URL and the old
+WebBundle format
+["b1"](https://wicg.github.io/webpackage/draft-yasskin-wpack-bundled-exchanges.html).
+however, they were removed in M102.
 
-<iframe src="urn:uuid:f81d4fae-7dec-11d0-a765-00a0c91e6bf6"></iframe>
-```
+This guide no longer covers the old APIs. If you are still using the old APIs,
+Please see
+[the previous revision of this guide](https://source.chromium.org/chromium/chromium/src/+/main:content/browser/web_package/subresource_loading_origin_trial.md;drc=1454cf984a485a136c4a525ab79f6cf0a3877504)
+for the old APIs and [the migration guide](https://docs.google.com/document/d/1hAl7jb-a9WET_mSeHBD9HxIBUwUe65Dbyn6u6LRB61s/edit?usp=sharing).
 
 ## Feature detection
 
 You can use
-[`HTMLLinkElement.relList`](https://html.spec.whatwg.org/multipage/semantics.html#dom-link-rellist)
+[`HTMLScriptElement.supports(type)`](https://html.spec.whatwg.org/multipage/scripting.html#dom-script-supports)
 for feature detection.
 
 ```js
-const link = document.createElement("link");
-if (link.relList.supports("webbundle")) {
+if (HTMLScriptElement.supports("webbundle")) {
    // Supported
    ...
 } else {
@@ -91,27 +88,6 @@ if (link.relList.supports("webbundle")) {
 }
 ```
 
-## Feature detection for `scopes` (which is available in M90 or later)
-
-If you want to make sure you can use `scopes` attribute, the following should
-work:
-
-```js
-if ("scopes" in HTMLLinkElement.prototype) {
-  // `scopes` attribute is supported. Chrome is in M90 or later.
-  ...
-} else {
-  // `scopes` attribute is not supported. Chrome is in M89 or earlier.
-  ...
-}
-```
-
-A `resources` attribute is always supported if
-`link.relList.supports("webbundle")` is true.
-
-Chrome M89 will show `ExternalProtocolDialog` for a iframe loading with
-`urn:uuid` URL. You should check Chrome is M90 or later to avoid that.
-
 # How to try this feature locally
 
 Enable _Experimental Web Platform Features_ flag
@@ -119,5 +95,4 @@ Enable _Experimental Web Platform Features_ flag
 Note that an earlier version of Chrome might not support this feature.
 
 [chrome status]: https://www.chromestatus.com/feature/5710618575241216
-[explainer]:
-  https://github.com/WICG/webpackage/blob/main/explainers/subresource-loading.md
+[explainer]: https://github.com/WICG/webpackage/blob/main/explainers/subresource-loading.md

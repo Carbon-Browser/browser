@@ -14,7 +14,6 @@
 
 #include "base/bind.h"
 #include "base/files/platform_file.h"
-#include "base/macros.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
@@ -40,8 +39,7 @@
 namespace {
 
 // Mode of size 6x4.
-const drmModeModeInfo kDefaultMode = {0, 6, 0, 0, 0, 0, 4,     0,
-                                      0, 0, 0, 0, 0, 0, {'\0'}};
+const drmModeModeInfo kDefaultMode = {.hdisplay = 6, .vdisplay = 4};
 
 const gfx::AcceleratedWidget kDefaultWidgetHandle = 1;
 const uint32_t kDefaultCrtc = 1;
@@ -75,6 +73,9 @@ SkBitmap AllocateBitmap(const gfx::Size& size) {
 class DrmWindowTest : public testing::Test {
  public:
   DrmWindowTest() = default;
+
+  DrmWindowTest(const DrmWindowTest&) = delete;
+  DrmWindowTest& operator=(const DrmWindowTest&) = delete;
 
   void SetUp() override;
   void TearDown() override;
@@ -118,8 +119,6 @@ class DrmWindowTest : public testing::Test {
   struct CrtcState {
     std::vector<PlaneState> planes;
   };
-
-  DISALLOW_COPY_AND_ASSIGN(DrmWindowTest);
 };
 
 void DrmWindowTest::SetUp() {
@@ -137,7 +136,8 @@ void DrmWindowTest::SetUp() {
   controllers_to_enable.emplace_back(
       1 /*display_id*/, drm_, kDefaultCrtc, kDefaultConnector, gfx::Point(),
       std::make_unique<drmModeModeInfo>(kDefaultMode));
-  screen_manager_->ConfigureDisplayControllers(controllers_to_enable);
+  screen_manager_->ConfigureDisplayControllers(
+      controllers_to_enable, display::kTestModeset | display::kCommitModeset);
 
   drm_device_manager_ = std::make_unique<ui::DrmDeviceManager>(nullptr);
 
@@ -158,15 +158,8 @@ void DrmWindowTest::TearDown() {
 void DrmWindowTest::InitializeDrmState(ui::MockDrmDevice* drm, bool is_atomic) {
   // A Sample of CRTC states.
   std::vector<CrtcState> crtc_states = {
-      {
-          /* .planes = */
-          {{/* .formats = */ {DRM_FORMAT_XRGB8888}}},
-      },
-      {
-          /* .planes = */
-          {{/* .formats = */ {DRM_FORMAT_XRGB8888}}},
-      },
-  };
+      {.planes = {{.formats = {DRM_FORMAT_XRGB8888}}}},
+      {.planes = {{.formats = {DRM_FORMAT_XRGB8888}}}}};
 
   constexpr uint32_t kPlaneIdBase = 300;
   constexpr uint32_t kInFormatsBlobPropIdBase = 400;
@@ -186,7 +179,7 @@ void DrmWindowTest::InitializeDrmState(ui::MockDrmDevice* drm, bool is_atomic) {
     connector_properties[i].id = kDefaultConnector + i;
     for (const auto& pair : connector_property_names) {
       connector_properties[i].properties.push_back(
-          {/* .id = */ pair.first, /* .value = */ 0});
+          {.id = pair.first, .value = 0});
     }
   }
 
@@ -215,7 +208,7 @@ void DrmWindowTest::InitializeDrmState(ui::MockDrmDevice* drm, bool is_atomic) {
     crtc_properties[crtc_idx].id = kDefaultCrtc + crtc_idx;
     for (const auto& pair : crtc_property_names) {
       crtc_properties[crtc_idx].properties.push_back(
-          {/* .id = */ pair.first, /* .value = */ 0});
+          {.id = pair.first, .value = 0});
     }
 
     std::vector<ui::MockDrmDevice::PlaneProperties> crtc_plane_properties(
@@ -240,7 +233,7 @@ void DrmWindowTest::InitializeDrmState(ui::MockDrmDevice* drm, bool is_atomic) {
         }
 
         crtc_plane_properties[plane_idx].properties.push_back(
-            {/* .id = */ pair.first, /* .value = */ value});
+            {.id = pair.first, .value = value});
       }
     }
 
@@ -304,7 +297,8 @@ TEST_F(DrmWindowTest, CheckCursorSurfaceAfterChangingDevice) {
       2 /*display_id*/, drm, kDefaultCrtc, kDefaultConnector,
       gfx::Point(0, kDefaultMode.vdisplay),
       std::make_unique<drmModeModeInfo>(kDefaultMode));
-  screen_manager_->ConfigureDisplayControllers(controllers_to_enable);
+  screen_manager_->ConfigureDisplayControllers(
+      controllers_to_enable, display::kTestModeset | display::kCommitModeset);
 
   // Move window to the display on the new device.
   screen_manager_->GetWindow(kDefaultWidgetHandle)

@@ -12,11 +12,10 @@
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/public/platform/web_url_request.h"
 #include "third_party/blink/renderer/bindings/core/v8/module_record.h"
-#include "third_party/blink/renderer/bindings/core/v8/script_source_code.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_value.h"
 #include "third_party/blink/renderer/bindings/core/v8/serialization/serialized_script_value.h"
 #include "third_party/blink/renderer/bindings/core/v8/source_location.h"
-#include "third_party/blink/renderer/bindings/core/v8/to_v8_for_core.h"
+#include "third_party/blink/renderer/bindings/core/v8/to_v8_traits.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_testing.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_gc_controller.h"
@@ -52,25 +51,24 @@ namespace blink {
 
 namespace {
 
-static const size_t kRenderQuantumFrames = 128;
+constexpr size_t kRenderQuantumFrames = 128;
 
 }  // namespace
 
 // The test uses OfflineAudioWorkletThread because the test does not have a
 // strict real-time constraint.
-class AudioWorkletGlobalScopeTest : public PageTestBase,
-                                    public ParametrizedModuleTest {
+class AudioWorkletGlobalScopeTest : public PageTestBase, public ModuleTestBase {
  public:
   void SetUp() override {
-    ParametrizedModuleTest::SetUp();
-    PageTestBase::SetUp(IntSize());
+    ModuleTestBase::SetUp();
+    PageTestBase::SetUp(gfx::Size());
     NavigateTo(KURL("https://example.com/"));
     reporting_proxy_ = std::make_unique<WorkerReportingProxy>();
   }
 
   void TearDown() override {
     PageTestBase::TearDown();
-    ParametrizedModuleTest::TearDown();
+    ModuleTestBase::TearDown();
   }
 
   std::unique_ptr<OfflineAudioWorkletThread> CreateAudioWorkletThread() {
@@ -84,10 +82,11 @@ class AudioWorkletGlobalScopeTest : public PageTestBase,
             window->GetFrame()->Loader().UserAgentMetadata(),
             nullptr /* web_worker_fetch_context */,
             Vector<network::mojom::blink::ContentSecurityPolicyPtr>(),
+            Vector<network::mojom::blink::ContentSecurityPolicyPtr>(),
             window->GetReferrerPolicy(), window->GetSecurityOrigin(),
             window->IsSecureContext(), window->GetHttpsState(),
             nullptr /* worker_clients */, nullptr /* content_settings_client */,
-            window->AddressSpace(), OriginTrialContext::GetTokens(window).get(),
+            OriginTrialContext::GetInheritedTrialFeatures(window).get(),
             base::UnguessableToken::Create(), nullptr /* worker_settings */,
             mojom::blink::V8CacheOptions::kDefault,
             MakeGarbageCollected<WorkletModuleResponsesMap>(),
@@ -163,7 +162,7 @@ class AudioWorkletGlobalScopeTest : public PageTestBase,
     ScriptEvaluationResult result =
         JSModuleScript::CreateForTest(Modulator::From(script_state), module,
                                       js_url)
-            ->RunScriptAndReturnValue();
+            ->RunScriptOnScriptStateAndReturnValue(script_state);
     if (expect_success) {
       EXPECT_FALSE(GetResult(script_state, result).IsEmpty());
     } else {
@@ -214,7 +213,8 @@ class AudioWorkletGlobalScopeTest : public PageTestBase,
     EXPECT_TRUE(processor);
     EXPECT_EQ(processor->Name(), "testProcessor");
     v8::Local<v8::Value> processor_value =
-        ToV8(processor, script_state->GetContext()->Global(), isolate);
+        ToV8Traits<AudioWorkletProcessor>::ToV8(script_state, processor)
+            .ToLocalChecked();
     EXPECT_TRUE(processor_value->IsObject());
 
     wait_event->Signal();
@@ -330,7 +330,7 @@ class AudioWorkletGlobalScopeTest : public PageTestBase,
     input_buses.push_back(input_bus.get());
     output_buses.push_back(output_bus.get());
 
-    // Fill |input_channel| with 1 and zero out |output_bus|.
+    // Fill `input_channel` with 1 and zero out `output_bus`.
     std::fill(input_channel->MutableData(),
               input_channel->MutableData() + input_channel->length(), 1);
     output_bus->Zero();
@@ -395,7 +395,7 @@ class AudioWorkletGlobalScopeTest : public PageTestBase,
   std::unique_ptr<WorkerReportingProxy> reporting_proxy_;
 };
 
-TEST_P(AudioWorkletGlobalScopeTest, Basic) {
+TEST_F(AudioWorkletGlobalScopeTest, Basic) {
   std::unique_ptr<OfflineAudioWorkletThread> thread
       = CreateAudioWorkletThread();
   RunBasicTest(thread.get());
@@ -403,7 +403,7 @@ TEST_P(AudioWorkletGlobalScopeTest, Basic) {
   thread->WaitForShutdownForTesting();
 }
 
-TEST_P(AudioWorkletGlobalScopeTest, Parsing) {
+TEST_F(AudioWorkletGlobalScopeTest, Parsing) {
   std::unique_ptr<OfflineAudioWorkletThread> thread
       = CreateAudioWorkletThread();
   RunParsingTest(thread.get());
@@ -411,7 +411,7 @@ TEST_P(AudioWorkletGlobalScopeTest, Parsing) {
   thread->WaitForShutdownForTesting();
 }
 
-TEST_P(AudioWorkletGlobalScopeTest, BufferProcessing) {
+TEST_F(AudioWorkletGlobalScopeTest, BufferProcessing) {
   std::unique_ptr<OfflineAudioWorkletThread> thread
       = CreateAudioWorkletThread();
   RunSimpleProcessTest(thread.get());
@@ -419,18 +419,12 @@ TEST_P(AudioWorkletGlobalScopeTest, BufferProcessing) {
   thread->WaitForShutdownForTesting();
 }
 
-TEST_P(AudioWorkletGlobalScopeTest, ParsingParameterDescriptor) {
+TEST_F(AudioWorkletGlobalScopeTest, ParsingParameterDescriptor) {
   std::unique_ptr<OfflineAudioWorkletThread> thread
       = CreateAudioWorkletThread();
   RunParsingParameterDescriptorTest(thread.get());
   thread->Terminate();
   thread->WaitForShutdownForTesting();
 }
-
-// Instantiate tests once with TLA and once without:
-INSTANTIATE_TEST_SUITE_P(AudioWorkletGlobalScopeTestGroup,
-                         AudioWorkletGlobalScopeTest,
-                         testing::Bool(),
-                         ParametrizedModuleTestParamName());
 
 }  // namespace blink

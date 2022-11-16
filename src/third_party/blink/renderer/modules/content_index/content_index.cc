@@ -8,6 +8,7 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/browser_interface_broker_proxy.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_throw_dom_exception.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_content_icon_definition.h"
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
@@ -93,6 +94,14 @@ ScriptPromise ContentIndex::add(ScriptState* script_state,
     return ScriptPromise();
   }
 
+  ExecutionContext* execution_context = ExecutionContext::From(script_state);
+  if (execution_context->IsInFencedFrame()) {
+    exception_state.ThrowDOMException(
+        DOMExceptionCode::kNotAllowedError,
+        "ContentIndex is not allowed in fenced frames.");
+    return ScriptPromise();
+  }
+
   WTF::String description_error =
       ValidateDescription(*description, registration_.Get());
   if (!description_error.IsNull()) {
@@ -106,30 +115,28 @@ ScriptPromise ContentIndex::add(ScriptState* script_state,
   auto mojo_description = mojom::blink::ContentDescription::From(description);
   auto category = mojo_description->category;
   GetService()->GetIconSizes(
-      category,
-      WTF::Bind(&ContentIndex::DidGetIconSizes, WrapPersistent(this),
-                WrapPersistent(resolver), std::move(mojo_description)));
+      category, resolver->WrapCallbackInScriptScope(WTF::Bind(
+                    &ContentIndex::DidGetIconSizes, WrapPersistent(this),
+                    std::move(mojo_description))));
 
   return promise;
 }
 
 void ContentIndex::DidGetIconSizes(
-    ScriptPromiseResolver* resolver,
     mojom::blink::ContentDescriptionPtr description,
+    ScriptPromiseResolver* resolver,
     const Vector<gfx::Size>& icon_sizes) {
-  ScriptState* script_state = resolver->GetScriptState();
-  ScriptState::Scope scope(script_state);
-
   if (!icon_sizes.IsEmpty() && description->icons.IsEmpty()) {
     resolver->Reject(V8ThrowException::CreateTypeError(
-        script_state->GetIsolate(), "icons must be provided"));
+        resolver->GetScriptState()->GetIsolate(), "icons must be provided"));
     return;
   }
 
   if (!registration_->GetExecutionContext()) {
     // The SW execution context is not valid for some reason. Bail out.
     resolver->Reject(V8ThrowException::CreateTypeError(
-        script_state->GetIsolate(), "Service worker is no longer valid."));
+        resolver->GetScriptState()->GetIsolate(),
+        "Service worker is no longer valid."));
     return;
   }
 
@@ -141,20 +148,18 @@ void ContentIndex::DidGetIconSizes(
   auto* icon_loader = MakeGarbageCollected<ContentIndexIconLoader>();
   icon_loader->Start(registration_->GetExecutionContext(),
                      std::move(description), icon_sizes,
-                     WTF::Bind(&ContentIndex::DidGetIcons, WrapPersistent(this),
-                               WrapPersistent(resolver)));
+                     resolver->WrapCallbackInScriptScope(WTF::Bind(
+                         &ContentIndex::DidGetIcons, WrapPersistent(this))));
 }
 
 void ContentIndex::DidGetIcons(ScriptPromiseResolver* resolver,
                                mojom::blink::ContentDescriptionPtr description,
                                Vector<SkBitmap> icons) {
-  ScriptState* script_state = resolver->GetScriptState();
-  ScriptState::Scope scope(script_state);
-
   for (const auto& icon : icons) {
     if (icon.isNull()) {
       resolver->Reject(V8ThrowException::CreateTypeError(
-          script_state->GetIsolate(), "Icon could not be loaded"));
+          resolver->GetScriptState()->GetIsolate(),
+          "Icon could not be loaded"));
       return;
     }
   }
@@ -162,7 +167,8 @@ void ContentIndex::DidGetIcons(ScriptPromiseResolver* resolver,
   if (!registration_->GetExecutionContext()) {
     // The SW execution context is not valid for some reason. Bail out.
     resolver->Reject(V8ThrowException::CreateTypeError(
-        script_state->GetIsolate(), "Service worker is no longer valid."));
+        resolver->GetScriptState()->GetIsolate(),
+        "Service worker is no longer valid."));
     return;
   }
 
@@ -172,50 +178,45 @@ void ContentIndex::DidGetIcons(ScriptPromiseResolver* resolver,
   if (base::FeatureList::IsEnabled(features::kContentIndexCheckOffline)) {
     GetService()->CheckOfflineCapability(
         registration_->RegistrationId(), launch_url,
-        WTF::Bind(&ContentIndex::DidCheckOfflineCapability,
-                  WrapPersistent(this), WrapPersistent(resolver), launch_url,
-                  std::move(description), std::move(icons)));
+        resolver->WrapCallbackInScriptScope(WTF::Bind(
+            &ContentIndex::DidCheckOfflineCapability, WrapPersistent(this),
+            launch_url, std::move(description), std::move(icons))));
     return;
   }
 
-  DidCheckOfflineCapability(resolver, std::move(launch_url),
-                            std::move(description), std::move(icons),
+  DidCheckOfflineCapability(std::move(launch_url), std::move(description),
+                            std::move(icons), resolver,
                             /* is_offline_capable= */ true);
 }
 
 void ContentIndex::DidCheckOfflineCapability(
-    ScriptPromiseResolver* resolver,
     KURL launch_url,
     mojom::blink::ContentDescriptionPtr description,
     Vector<SkBitmap> icons,
+    ScriptPromiseResolver* resolver,
     bool is_offline_capable) {
-  ScriptState* script_state = resolver->GetScriptState();
-  ScriptState::Scope scope(script_state);
-
   if (!is_offline_capable) {
     resolver->Reject(V8ThrowException::CreateTypeError(
-        script_state->GetIsolate(),
+        resolver->GetScriptState()->GetIsolate(),
         "The provided launch URL is not offline-capable."));
     return;
   }
 
   GetService()->Add(registration_->RegistrationId(), std::move(description),
                     icons, launch_url,
-                    WTF::Bind(&ContentIndex::DidAdd, WrapPersistent(this),
-                              WrapPersistent(resolver)));
+                    resolver->WrapCallbackInScriptScope(WTF::Bind(
+                        &ContentIndex::DidAdd, WrapPersistent(this))));
 }
 
 void ContentIndex::DidAdd(ScriptPromiseResolver* resolver,
                           mojom::blink::ContentIndexError error) {
-  ScriptState* script_state = resolver->GetScriptState();
-  ScriptState::Scope scope(script_state);
-
   switch (error) {
     case mojom::blink::ContentIndexError::NONE:
       resolver->Resolve();
       return;
     case mojom::blink::ContentIndexError::STORAGE_ERROR:
-      resolver->Reject(MakeGarbageCollected<DOMException>(
+      resolver->Reject(V8ThrowDOMException::CreateOrDie(
+          resolver->GetScriptState()->GetIsolate(),
           DOMExceptionCode::kAbortError,
           "Failed to add description due to I/O error."));
       return;
@@ -225,7 +226,8 @@ void ContentIndex::DidAdd(ScriptPromiseResolver* resolver,
       return;
     case mojom::blink::ContentIndexError::NO_SERVICE_WORKER:
       resolver->Reject(V8ThrowException::CreateTypeError(
-          script_state->GetIsolate(), "Service worker must be active"));
+          resolver->GetScriptState()->GetIsolate(),
+          "Service worker must be active"));
       return;
   }
 }
@@ -239,28 +241,34 @@ ScriptPromise ContentIndex::deleteDescription(ScriptState* script_state,
     return ScriptPromise();
   }
 
+  ExecutionContext* execution_context = ExecutionContext::From(script_state);
+  if (execution_context->IsInFencedFrame()) {
+    exception_state.ThrowDOMException(
+        DOMExceptionCode::kNotAllowedError,
+        "ContentIndex is not allowed in fenced frames.");
+    return ScriptPromise();
+  }
+
   auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
   ScriptPromise promise = resolver->Promise();
 
   GetService()->Delete(
       registration_->RegistrationId(), id,
-      WTF::Bind(&ContentIndex::DidDeleteDescription, WrapPersistent(this),
-                WrapPersistent(resolver)));
+      resolver->WrapCallbackInScriptScope(WTF::Bind(
+          &ContentIndex::DidDeleteDescription, WrapPersistent(this))));
 
   return promise;
 }
 
 void ContentIndex::DidDeleteDescription(ScriptPromiseResolver* resolver,
                                         mojom::blink::ContentIndexError error) {
-  ScriptState* script_state = resolver->GetScriptState();
-  ScriptState::Scope scope(script_state);
-
   switch (error) {
     case mojom::blink::ContentIndexError::NONE:
       resolver->Resolve();
       return;
     case mojom::blink::ContentIndexError::STORAGE_ERROR:
-      resolver->Reject(MakeGarbageCollected<DOMException>(
+      resolver->Reject(V8ThrowDOMException::CreateOrDie(
+          resolver->GetScriptState()->GetIsolate(),
           DOMExceptionCode::kAbortError,
           "Failed to delete description due to I/O error."));
       return;
@@ -283,13 +291,21 @@ ScriptPromise ContentIndex::getDescriptions(ScriptState* script_state,
     return ScriptPromise();
   }
 
+  ExecutionContext* execution_context = ExecutionContext::From(script_state);
+  if (execution_context->IsInFencedFrame()) {
+    exception_state.ThrowDOMException(
+        DOMExceptionCode::kNotAllowedError,
+        "ContentIndex is not allowed in fenced frames.");
+    return ScriptPromise();
+  }
+
   auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
   ScriptPromise promise = resolver->Promise();
 
   GetService()->GetDescriptions(
       registration_->RegistrationId(),
-      WTF::Bind(&ContentIndex::DidGetDescriptions, WrapPersistent(this),
-                WrapPersistent(resolver)));
+      resolver->WrapCallbackInScriptScope(
+          WTF::Bind(&ContentIndex::DidGetDescriptions, WrapPersistent(this))));
 
   return promise;
 }
@@ -298,9 +314,6 @@ void ContentIndex::DidGetDescriptions(
     ScriptPromiseResolver* resolver,
     mojom::blink::ContentIndexError error,
     Vector<mojom::blink::ContentDescriptionPtr> descriptions) {
-  ScriptState* script_state = resolver->GetScriptState();
-  ScriptState::Scope scope(script_state);
-
   HeapVector<Member<ContentDescription>> blink_descriptions;
   blink_descriptions.ReserveCapacity(descriptions.size());
   for (const auto& description : descriptions)
@@ -311,7 +324,8 @@ void ContentIndex::DidGetDescriptions(
       resolver->Resolve(std::move(blink_descriptions));
       return;
     case mojom::blink::ContentIndexError::STORAGE_ERROR:
-      resolver->Reject(MakeGarbageCollected<DOMException>(
+      resolver->Reject(V8ThrowDOMException::CreateOrEmpty(
+          resolver->GetScriptState()->GetIsolate(),
           DOMExceptionCode::kAbortError,
           "Failed to get descriptions due to I/O error."));
       return;

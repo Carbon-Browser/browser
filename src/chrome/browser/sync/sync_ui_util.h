@@ -10,7 +10,6 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 class Browser;
-class GURL;
 class Profile;
 class PrefService;
 
@@ -42,8 +41,6 @@ enum class SyncStatusActionType {
   kNoAction,
   // User needs to reauthenticate.
   kReauthenticate,
-  // User needs to sign out and sign in.
-  kSignoutAndSignin,
   // User needs to upgrade the client.
   kUpgradeClient,
   // User needs to enter their passphrase.
@@ -149,10 +146,5 @@ void OpenTabForSyncKeyRetrieval(
 void OpenTabForSyncKeyRecoverabilityDegraded(
     Browser* browser,
     syncer::TrustedVaultUserActionTriggerForUMA trigger);
-
-// Testing-only variant for the two above which allows the caller to specify the
-// URL.
-void OpenTabForSyncTrustedVaultUserActionForTesting(Browser* browser,
-                                                    const GURL& url);
 
 #endif  // CHROME_BROWSER_SYNC_SYNC_UI_UTIL_H_

@@ -46,7 +46,7 @@ CastFeedbackUI::CastFeedbackUI(content::WebUI* web_ui)
 
   static constexpr webui::LocalizedString kStrings[] = {
       {"additionalComments", IDS_MEDIA_ROUTER_FEEDBACK_ADDITIONAL_COMMENTS},
-      {"additionalComments", IDS_MEDIA_ROUTER_FEEDBACK_ADDITIONAL_COMMENTS},
+      {"allowContactByEmail", IDS_MEDIA_ROUTER_FEEDBACK_ALLOW_CONTACT_BY_EMAIL},
       {"audioAcceptable", IDS_MEDIA_ROUTER_FEEDBACK_AUDIO_ACCEPTABLE},
       {"audioGood", IDS_MEDIA_ROUTER_FEEDBACK_AUDIO_GOOD},
       {"audioPerfect", IDS_MEDIA_ROUTER_FEEDBACK_AUDIO_PERFECT},
@@ -105,6 +105,7 @@ CastFeedbackUI::CastFeedbackUI(content::WebUI* web_ui)
       {"videoUnwatchable", IDS_MEDIA_ROUTER_FEEDBACK_VIDEO_UNWATCHABLE},
       {"yes", IDS_MEDIA_ROUTER_FEEDBACK_YES},
       {"yourAnswer", IDS_MEDIA_ROUTER_FEEDBACK_YOUR_ANSWER},
+      {"yourEmailAddress", IDS_MEDIA_ROUTER_FEEDBACK_YOUR_EMAIL_ADDRESS},
   };
   source->AddLocalizedStrings(kStrings);
   source->AddString(
@@ -134,9 +135,11 @@ CastFeedbackUI::CastFeedbackUI(content::WebUI* web_ui)
     log_data.clear();
 
   LoggerImpl* const logger = router->GetLogger();
-  log_data += logger->GetLogsAsJson();
+  if (logger) {
+    log_data += logger->GetLogsAsJson();
 
-  source->AddString("logData", log_data);
+    source->AddString("logData", log_data);
+  }
 
   // Determine the category tag to use for the feedback report.  As the name
   // suggests, this value is used to categorize feedback reports for easier
@@ -162,7 +165,7 @@ CastFeedbackUI::CastFeedbackUI(content::WebUI* web_ui)
   source->AddString("categoryTag", categoryTag);
 
   source->AddBoolean("globalMediaControlsCastStartStop",
-                     GlobalMediaControlsCastStartStopEnabled());
+                     GlobalMediaControlsCastStartStopEnabled(profile_));
 
   webui::SetupWebUIDataSource(
       source,
@@ -172,7 +175,7 @@ CastFeedbackUI::CastFeedbackUI(content::WebUI* web_ui)
 
   content::WebUIDataSource::Add(profile_, source);
 
-  web_ui->RegisterDeprecatedMessageCallback(
+  web_ui->RegisterMessageCallback(
       "close", base::BindRepeating(&CastFeedbackUI::OnCloseMessage,
                                    base::Unretained(this)));
   web_ui->AddMessageHandler(std::make_unique<MetricsHandler>());
@@ -182,7 +185,7 @@ WEB_UI_CONTROLLER_TYPE_IMPL(CastFeedbackUI)
 
 CastFeedbackUI::~CastFeedbackUI() = default;
 
-void CastFeedbackUI::OnCloseMessage(const base::ListValue*) {
+void CastFeedbackUI::OnCloseMessage(const base::Value::List&) {
   web_contents_->GetDelegate()->CloseContents(web_contents_);
 }
 

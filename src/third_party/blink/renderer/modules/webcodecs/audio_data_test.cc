@@ -13,7 +13,6 @@
 #include "third_party/blink/renderer/core/typed_arrays/dom_array_buffer.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_buffer.h"
 #include "third_party/blink/renderer/modules/webcodecs/allow_shared_buffer_source_util.h"
-#include "third_party/blink/renderer/platform/heap/thread_state.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
 
@@ -117,7 +116,7 @@ TEST_F(AudioDataTest, ConstructFromMediaBuffer) {
       media::ChannelLayout::CHANNEL_LAYOUT_STEREO;
   const int channels = ChannelLayoutToChannelCount(channel_layout);
   constexpr base::TimeDelta timestamp =
-      base::TimeDelta::FromMicroseconds(kTimestampInMicroSeconds);
+      base::Microseconds(kTimestampInMicroSeconds);
   constexpr int kValueStart = 1;
   constexpr int kValueIncrement = 1;
   scoped_refptr<media::AudioBuffer> media_buffer =

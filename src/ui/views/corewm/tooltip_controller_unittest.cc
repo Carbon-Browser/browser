@@ -8,7 +8,7 @@
 #include <utility>
 
 #include "base/at_exit.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "ui/accessibility/ax_enums.mojom.h"
@@ -41,7 +41,7 @@
 #include "ui/wm/public/activation_client.h"
 #include "ui/wm/public/tooltip_client.h"
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include "ui/base/win/scoped_ole_initializer.h"
 #endif
 
@@ -60,7 +60,7 @@ views::Widget* CreateWidget(aura::Window* root) {
   params.type = views::Widget::InitParams::TYPE_WINDOW_FRAMELESS;
   params.accept_events = true;
   params.ownership = views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
-#if !BUILDFLAG(ENABLE_DESKTOP_AURA) || defined(OS_WIN)
+#if !BUILDFLAG(ENABLE_DESKTOP_AURA) || BUILDFLAG(IS_WIN)
   params.parent = root;
 #endif
   params.bounds = gfx::Rect(0, 0, 200, 100);
@@ -79,6 +79,10 @@ TooltipController* GetController(Widget* widget) {
 class TooltipControllerTest : public ViewsTestBase {
  public:
   TooltipControllerTest() = default;
+
+  TooltipControllerTest(const TooltipControllerTest&) = delete;
+  TooltipControllerTest& operator=(const TooltipControllerTest&) = delete;
+
   ~TooltipControllerTest() override = default;
 
   void SetUp() override {
@@ -89,7 +93,7 @@ class TooltipControllerTest : public ViewsTestBase {
     ViewsTestBase::SetUp();
 
     aura::Window* root_window = GetContext();
-#if !BUILDFLAG(ENABLE_DESKTOP_AURA) || defined(OS_WIN)
+#if !BUILDFLAG(ENABLE_DESKTOP_AURA) || BUILDFLAG(IS_WIN)
     if (root_window) {
       tooltip_aura_ = new views::corewm::TooltipAura();
       controller_ = std::make_unique<TooltipController>(
@@ -102,7 +106,7 @@ class TooltipControllerTest : public ViewsTestBase {
     widget_.reset(CreateWidget(root_window));
     widget_->SetContentsView(std::make_unique<View>());
     view_ = new TooltipTestView;
-    widget_->GetContentsView()->AddChildView(view_);
+    widget_->GetContentsView()->AddChildView(view_.get());
     view_->SetBoundsRect(widget_->GetContentsView()->GetLocalBounds());
     helper_ = std::make_unique<TooltipControllerTestHelper>(
         GetController(widget_.get()));
@@ -110,7 +114,7 @@ class TooltipControllerTest : public ViewsTestBase {
   }
 
   void TearDown() override {
-#if !BUILDFLAG(ENABLE_DESKTOP_AURA) || defined(OS_WIN)
+#if !BUILDFLAG(ENABLE_DESKTOP_AURA) || BUILDFLAG(IS_WIN)
     aura::Window* root_window = GetContext();
     if (root_window) {
       root_window->RemovePreTargetHandler(controller_.get());
@@ -153,23 +157,21 @@ class TooltipControllerTest : public ViewsTestBase {
   }
 
   std::unique_ptr<views::Widget> widget_;
-  TooltipTestView* view_ = nullptr;
+  raw_ptr<TooltipTestView> view_ = nullptr;
   std::unique_ptr<TooltipControllerTestHelper> helper_;
   std::unique_ptr<ui::test::EventGenerator> generator_;
 
  protected:
-#if !BUILDFLAG(ENABLE_DESKTOP_AURA) || defined(OS_WIN)
-  TooltipAura* tooltip_aura_;  // not owned.
+#if !BUILDFLAG(ENABLE_DESKTOP_AURA) || BUILDFLAG(IS_WIN)
+  raw_ptr<TooltipAura> tooltip_aura_;  // not owned.
 #endif
 
  private:
   std::unique_ptr<TooltipController> controller_;
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   ui::ScopedOleInitializer ole_initializer_;
 #endif
-
-  DISALLOW_COPY_AND_ASSIGN(TooltipControllerTest);
 };
 
 TEST_F(TooltipControllerTest, ViewTooltip) {
@@ -238,7 +240,7 @@ TEST_F(TooltipControllerTest, DontShowTooltipOnTouch) {
   EXPECT_EQ(GetWindow(), helper_->GetTooltipParentWindow());
 }
 
-#if !BUILDFLAG(ENABLE_DESKTOP_AURA) || defined(OS_WIN)
+#if !BUILDFLAG(ENABLE_DESKTOP_AURA) || BUILDFLAG(IS_WIN)
 // crbug.com/664370.
 TEST_F(TooltipControllerTest, MaxWidth) {
   std::u16string text =
@@ -763,10 +765,10 @@ TEST_F(TooltipControllerTest, DISABLED_CloseOnCaptureLost) {
   EXPECT_TRUE(helper_->GetTooltipParentWindow() == nullptr);
 }
 
-// Disabled on X11 as DesktopScreenX11::GetWindowAtScreenPoint() doesn't
-// consider z-order.
+// Disabled on Linux as X11ScreenOzone::GetAcceleratedWidgetAtScreenPoint
+// and WaylandScreen::GetAcceleratedWidgetAtScreenPoint don't consider z-order.
 // Disabled on Windows due to failing bots. http://crbug.com/604479
-#if defined(USE_X11) || defined(OS_WIN)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
 #define MAYBE_Capture DISABLED_Capture
 #else
 #define MAYBE_Capture Capture
@@ -942,6 +944,10 @@ namespace {
 class TestTooltip : public Tooltip {
  public:
   TestTooltip() = default;
+
+  TestTooltip(const TestTooltip&) = delete;
+  TestTooltip& operator=(const TestTooltip&) = delete;
+
   ~TestTooltip() override = default;
 
   const std::u16string& tooltip_text() const { return tooltip_text_; }
@@ -963,8 +969,6 @@ class TestTooltip : public Tooltip {
   bool is_visible_ = false;
   std::u16string tooltip_text_;
   TooltipPosition position_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestTooltip);
 };
 
 }  // namespace
@@ -973,6 +977,10 @@ class TestTooltip : public Tooltip {
 class TooltipControllerTest2 : public aura::test::AuraTestBase {
  public:
   TooltipControllerTest2() : test_tooltip_(new TestTooltip) {}
+
+  TooltipControllerTest2(const TooltipControllerTest2&) = delete;
+  TooltipControllerTest2& operator=(const TooltipControllerTest2&) = delete;
+
   ~TooltipControllerTest2() override = default;
 
   void SetUp() override {
@@ -999,7 +1007,7 @@ class TooltipControllerTest2 : public aura::test::AuraTestBase {
 
  protected:
   // Owned by |controller_|.
-  TestTooltip* test_tooltip_;
+  raw_ptr<TestTooltip> test_tooltip_;
   std::unique_ptr<TooltipControllerTestHelper> helper_;
   std::unique_ptr<ui::test::EventGenerator> generator_;
 
@@ -1007,8 +1015,6 @@ class TooltipControllerTest2 : public aura::test::AuraTestBase {
   // Needed to make sure the DeviceDataManager is cleaned up between test runs.
   std::unique_ptr<base::ShadowingAtExitManager> at_exit_manager_;
   std::unique_ptr<TooltipController> controller_;
-
-  DISALLOW_COPY_AND_ASSIGN(TooltipControllerTest2);
 };
 
 TEST_F(TooltipControllerTest2, VerifyLeadingTrailingWhitespaceStripped) {
@@ -1050,6 +1056,10 @@ TEST_F(TooltipControllerTest2, CloseOnCancelMode) {
 class TooltipControllerTest3 : public ViewsTestBase {
  public:
   TooltipControllerTest3() = default;
+
+  TooltipControllerTest3(const TooltipControllerTest3&) = delete;
+  TooltipControllerTest3& operator=(const TooltipControllerTest3&) = delete;
+
   ~TooltipControllerTest3() override = default;
 
   void SetUp() override {
@@ -1064,7 +1074,7 @@ class TooltipControllerTest3 : public ViewsTestBase {
     widget_.reset(CreateWidget(root_window));
     widget_->SetContentsView(std::make_unique<View>());
     view_ = new TooltipTestView;
-    widget_->GetContentsView()->AddChildView(view_);
+    widget_->GetContentsView()->AddChildView(view_.get());
     view_->SetBoundsRect(widget_->GetContentsView()->GetLocalBounds());
 
     generator_ = std::make_unique<ui::test::EventGenerator>(GetRootWindow());
@@ -1096,22 +1106,20 @@ class TooltipControllerTest3 : public ViewsTestBase {
 
  protected:
   // Owned by |controller_|.
-  TestTooltip* test_tooltip_ = nullptr;
+  raw_ptr<TestTooltip> test_tooltip_ = nullptr;
   std::unique_ptr<TooltipControllerTestHelper> helper_;
   std::unique_ptr<ui::test::EventGenerator> generator_;
   std::unique_ptr<views::Widget> widget_;
-  TooltipTestView* view_;
+  raw_ptr<TooltipTestView> view_;
 
  private:
   std::unique_ptr<TooltipController> controller_;
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   ui::ScopedOleInitializer ole_initializer_;
 #endif
 
   aura::Window* GetRootWindow() { return GetWindow()->GetRootWindow(); }
-
-  DISALLOW_COPY_AND_ASSIGN(TooltipControllerTest3);
 };
 
 TEST_F(TooltipControllerTest3, TooltipPositionChangesOnTwoViewsWithSameLabel) {
@@ -1224,9 +1232,11 @@ TEST_F(TooltipControllerTest3, TooltipPositionChangesOnTwoViewsWithSameLabel) {
 class TooltipStateManagerTest : public TooltipControllerTest {
  public:
   TooltipStateManagerTest() = default;
-  ~TooltipStateManagerTest() override = default;
 
-  DISALLOW_COPY_AND_ASSIGN(TooltipStateManagerTest);
+  TooltipStateManagerTest(const TooltipStateManagerTest&) = delete;
+  TooltipStateManagerTest& operator=(const TooltipStateManagerTest&) = delete;
+
+  ~TooltipStateManagerTest() override = default;
 };
 
 TEST_F(TooltipStateManagerTest, ShowAndHideTooltip) {

@@ -21,6 +21,10 @@ class AXPropertyNode;
 class AX_EXPORT AXTreeFormatterBase : public AXTreeFormatter {
  public:
   AXTreeFormatterBase();
+
+  AXTreeFormatterBase(const AXTreeFormatterBase&) = delete;
+  AXTreeFormatterBase& operator=(const AXTreeFormatterBase&) = delete;
+
   ~AXTreeFormatterBase() override;
 
   bool ShouldDumpNode(const AXPlatformNodeDelegate& node) const;
@@ -34,6 +38,9 @@ class AX_EXPORT AXTreeFormatterBase : public AXTreeFormatter {
   std::string FormatNode(AXPlatformNodeDelegate* node) const override;
   std::string FormatTree(const base::Value& tree_node) const override;
   base::Value BuildTreeForNode(ui::AXNode* root) const override;
+  std::string EvaluateScript(
+      const AXTreeSelector& selector,
+      const ui::AXInspectScenario& scenario) const override;
   std::string EvaluateScript(
       AXPlatformNodeDelegate* root,
       const std::vector<AXScriptInstruction>& instructions,
@@ -128,8 +135,6 @@ class AX_EXPORT AXTreeFormatterBase : public AXTreeFormatter {
 
   // Whether or not node ids should be included in the dump.
   bool show_ids_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(AXTreeFormatterBase);
 };
 
 }  // namespace ui

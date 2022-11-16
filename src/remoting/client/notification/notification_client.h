@@ -9,8 +9,7 @@
 #include <string>
 
 #include "base/callback_forward.h"
-#include "base/macros.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
@@ -31,6 +30,10 @@ class NotificationClient final {
 
   explicit NotificationClient(
       scoped_refptr<base::SingleThreadTaskRunner> network_task_runner);
+
+  NotificationClient(const NotificationClient&) = delete;
+  NotificationClient& operator=(const NotificationClient&) = delete;
+
   ~NotificationClient();
 
   // Fetches notifications from the server and calls |callback| with the
@@ -38,6 +41,10 @@ class NotificationClient final {
   // notification is found then absl::nullopt will be returned. |callback| will
   // be silently dropped if |this| is deleted before the notification is
   // fetched.
+  // |user_email| is used to determine if the notification is available to the
+  // user during percentage rollout. If |user_email| is empty (i.e. user not
+  // logged in), the notification percentage must be exactly 100 for the
+  // notification to become available.
   void GetNotification(const std::string& user_email,
                        NotificationCallback callback);
 
@@ -48,6 +55,7 @@ class NotificationClient final {
   NotificationClient(std::unique_ptr<JsonFetcher> fetcher,
                      const std::string& current_platform,
                      const std::string& current_version,
+                     const std::string& current_os_version,
                      const std::string& locale,
                      bool should_ignore_dev_messages);
 
@@ -72,10 +80,9 @@ class NotificationClient final {
   std::unique_ptr<JsonFetcher> fetcher_;
   std::string current_platform_;
   std::string current_version_;
+  std::string current_os_version_;
   std::string locale_;
   bool should_ignore_dev_messages_;
-
-  DISALLOW_COPY_AND_ASSIGN(NotificationClient);
 };
 
 }  // namespace remoting

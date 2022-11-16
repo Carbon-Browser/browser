@@ -6,12 +6,11 @@
 
 #include "base/bind.h"
 #include "base/location.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "chrome/app/vector_icons/vector_icons.h"
 #include "chrome/browser/ui/autofill/payments/create_card_unmask_prompt_view.h"
-#include "chrome/browser/ui/browser_dialogs.h"
 #include "chrome/browser/ui/views/autofill/payments/payments_view_util.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/browser/ui/views/chrome_typography.h"
@@ -27,10 +26,11 @@
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/models/image_model.h"
 #include "ui/base/resource/resource_bundle.h"
+#include "ui/color/color_id.h"
+#include "ui/color/color_provider.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/gfx/vector_icon_utils.h"
-#include "ui/native_theme/native_theme.h"
 #include "ui/views/background.h"
 #include "ui/views/border.h"
 #include "ui/views/bubble/bubble_frame_view.h"
@@ -41,38 +41,17 @@
 #include "ui/views/controls/textfield/textfield.h"
 #include "ui/views/controls/throbber.h"
 #include "ui/views/layout/box_layout.h"
+#include "ui/views/layout/box_layout_view.h"
 #include "ui/views/layout/fill_layout.h"
-#include "ui/views/layout/grid_layout.h"
 #include "ui/views/style/typography.h"
 #include "ui/views/widget/widget.h"
 
 namespace autofill {
 
-namespace {
-
-static views::GridLayout* ResetOverlayLayout(views::View* overlay) {
-  views::GridLayout* overlay_layout =
-      overlay->SetLayoutManager(std::make_unique<views::GridLayout>());
-  views::ColumnSet* columns = overlay_layout->AddColumnSet(0);
-  // The throbber's checkmark is 18dp.
-  columns->AddColumn(views::GridLayout::TRAILING, views::GridLayout::CENTER,
-                     0.5, views::GridLayout::ColumnSize::kFixed, 18, 0);
-  columns->AddPaddingColumn(views::GridLayout::kFixedSize,
-                            ChromeLayoutProvider::Get()->GetDistanceMetric(
-                                views::DISTANCE_RELATED_LABEL_HORIZONTAL));
-  columns->AddColumn(views::GridLayout::LEADING, views::GridLayout::CENTER, 0.5,
-                     views::GridLayout::ColumnSize::kUsePreferred, 0, 0);
-  overlay_layout->StartRow(1.0, 0);
-  return overlay_layout;
-}
-
-}  // namespace
-
 CardUnmaskPromptViews::CardUnmaskPromptViews(
     CardUnmaskPromptController* controller,
     content::WebContents* web_contents)
-    : controller_(controller), web_contents_(web_contents) {
-  chrome::RecordDialogCreation(chrome::DialogIdentifier::CARD_UNMASK);
+    : controller_(controller), web_contents_(web_contents->GetWeakPtr()) {
   UpdateButtons();
 
   SetModalType(ui::MODAL_TYPE_CHILD);
@@ -86,7 +65,14 @@ CardUnmaskPromptViews::~CardUnmaskPromptViews() {
 }
 
 void CardUnmaskPromptViews::Show() {
-  constrained_window::ShowWebModalDialogViews(this, web_contents_);
+  // Don't show the bubble if the web contents are or will soon be destroyed. 
+  // (e.g. when closing the platform authentication tab that usually triggers 
+  // the unmask flow as a fallback).
+  if (!web_contents_ || web_contents_->IsBeingDestroyed()) {
+    delete this;
+    return;
+  }
+  constrained_window::ShowWebModalDialogViews(this, web_contents_.get());
 }
 
 void CardUnmaskPromptViews::ControllerGone() {
@@ -137,28 +123,23 @@ void CardUnmaskPromptViews::GotVerificationResult(
       SetRetriableErrorMessage(error_message);
     } else {
       SetRetriableErrorMessage(std::u16string());
-
-      // Rows cannot be replaced in GridLayout, so we reset it.
       overlay_->RemoveAllChildViews();
-      views::GridLayout* layout = ResetOverlayLayout(overlay_);
 
       // The label of the overlay will now show the error in red.
       auto error_label = std::make_unique<views::Label>(error_message);
-      views::SetCascadingNativeThemeColor(
-          error_label.get(), views::kCascadingLabelEnabledColor,
-          ui::NativeTheme::kColorId_AlertSeverityHigh);
+      views::SetCascadingColorProviderColor(error_label.get(),
+                                            views::kCascadingLabelEnabledColor,
+                                            ui::kColorAlertHighSeverity);
       error_label->SetMultiLine(true);
 
       // Replace the throbber with a warning icon. Since this is a permanent
       // error we do not intend to return to a previous state.
       auto error_icon =
           std::make_unique<views::ImageView>(ui::ImageModel::FromVectorIcon(
-              kBrowserToolsErrorIcon,
-              ui::NativeTheme::kColorId_AlertSeverityHigh));
+              kBrowserToolsErrorIcon, ui::kColorAlertHighSeverity));
 
-      layout->StartRow(1.0, 0);
-      layout->AddView(std::move(error_icon));
-      layout->AddView(std::move(error_label));
+      overlay_->AddChildView(std::move(error_icon));
+      overlay_->AddChildView(std::move(error_label));
 
       // If it is a virtual card retrieval failure, we will need to update the
       // window title.
@@ -183,10 +164,10 @@ void CardUnmaskPromptViews::SetRetriableErrorMessage(
   // Update the dialog's size.
   if (GetWidget() && web_contents_) {
     constrained_window::UpdateWebContentsModalDialogPosition(
-        GetWidget(),
-        web_modal::WebContentsModalDialogManager::FromWebContents(web_contents_)
-            ->delegate()
-            ->GetWebContentsModalDialogHost());
+        GetWidget(), web_modal::WebContentsModalDialogManager::FromWebContents(
+                         web_contents_.get())
+                         ->delegate()
+                         ->GetWebContentsModalDialogHost());
   }
 
   Layout();
@@ -216,18 +197,19 @@ views::View* CardUnmaskPromptViews::GetContentsView() {
 
 void CardUnmaskPromptViews::AddedToWidget() {
   GetBubbleFrameView()->SetTitleView(
-      std::make_unique<TitleWithIconAndSeparatorView>(GetWindowTitle()));
+      std::make_unique<TitleWithIconAndSeparatorView>(
+          GetWindowTitle(), TitleWithIconAndSeparatorView::Icon::GOOGLE_PAY));
 }
 
 void CardUnmaskPromptViews::OnThemeChanged() {
   views::BubbleDialogDelegateView::OnThemeChanged();
-  SkColor bg_color = GetNativeTheme()->GetSystemColor(
-      ui::NativeTheme::kColorId_DialogBackground);
+  const auto* color_provider = GetColorProvider();
+  SkColor bg_color = color_provider->GetColor(ui::kColorDialogBackground);
   overlay_->SetBackground(views::CreateSolidBackground(bg_color));
   if (overlay_label_) {
     overlay_label_->SetBackgroundColor(bg_color);
-    overlay_label_->SetEnabledColor(GetNativeTheme()->GetSystemColor(
-        ui::NativeTheme::kColorId_ThrobberSpinningColor));
+    overlay_label_->SetEnabledColor(
+        color_provider->GetColor(ui::kColorThrobber));
   }
 }
 
@@ -265,11 +247,11 @@ bool CardUnmaskPromptViews::Accept() {
 
   controller_->OnUnmaskPromptAccepted(
       cvc_input_->GetText(),
-      month_input_->GetVisible()
-          ? month_input_->GetTextForRow(month_input_->GetSelectedIndex())
-          : std::u16string(),
+      month_input_->GetVisible() ? month_input_->GetTextForRow(
+                                       month_input_->GetSelectedIndex().value())
+                                 : std::u16string(),
       year_input_->GetVisible()
-          ? year_input_->GetTextForRow(year_input_->GetSelectedIndex())
+          ? year_input_->GetTextForRow(year_input_->GetSelectedIndex().value())
           : std::u16string(),
       /*enable_fido_auth=*/false);
   return false;
@@ -293,9 +275,9 @@ void CardUnmaskPromptViews::DateChanged() {
       SetRetriableErrorMessage(std::u16string());
     }
   } else if (month_input_->GetSelectedIndex() !=
-                 month_combobox_model_.GetDefaultIndex() &&
+                 month_combobox_model_.GetDefaultIndex().value() &&
              year_input_->GetSelectedIndex() !=
-                 year_combobox_model_.GetDefaultIndex()) {
+                 year_combobox_model_.GetDefaultIndex().value()) {
     month_input_->SetInvalid(true);
     year_input_->SetInvalid(true);
     SetRetriableErrorMessage(l10n_util::GetStringUTF16(
@@ -389,7 +371,7 @@ void CardUnmaskPromptViews::InitIfNecessary() {
   temporary_error->SetVisible(false);
   temporary_error->AddChildView(
       std::make_unique<views::ImageView>(ui::ImageModel::FromVectorIcon(
-          vector_icons::kErrorIcon, ui::NativeTheme::kColorId_AlertSeverityHigh,
+          vector_icons::kErrorIcon, ui::kColorAlertHighSeverity,
           gfx::GetDefaultSizeOfVectorIcon(vector_icons::kErrorIcon))));
 
   auto error_label = std::make_unique<views::Label>(
@@ -404,18 +386,22 @@ void CardUnmaskPromptViews::InitIfNecessary() {
 
   // On top of the main contents, we add the progress/error overlay and hide it.
   // A child view will be added to it when about to be shown.
-  auto overlay = std::make_unique<views::View>();
-  views::GridLayout* overlay_layout = ResetOverlayLayout(overlay.get());
-  overlay->SetVisible(false);
-
-  progress_throbber_ =
-      overlay_layout->AddView(std::make_unique<views::Throbber>());
-
-  auto overlay_label = std::make_unique<views::Label>(l10n_util::GetStringUTF16(
-      IDS_AUTOFILL_CARD_UNMASK_VERIFICATION_IN_PROGRESS));
-  overlay_label_ = overlay_layout->AddView(std::move(overlay_label));
-
-  overlay_ = AddChildView(std::move(overlay));
+  overlay_ = AddChildView(
+      views::Builder<views::BoxLayoutView>()
+          .SetBetweenChildSpacing(
+              ChromeLayoutProvider::Get()->GetDistanceMetric(
+                  views::DISTANCE_RELATED_LABEL_HORIZONTAL))
+          .SetMainAxisAlignment(views::BoxLayout::MainAxisAlignment::kCenter)
+          .SetCrossAxisAlignment(views::BoxLayout::CrossAxisAlignment::kCenter)
+          .SetVisible(false)
+          .AddChildren(
+              views::Builder<views::Throbber>().CopyAddressTo(
+                  &progress_throbber_),
+              views::Builder<views::Label>()
+                  .CopyAddressTo(&overlay_label_)
+                  .SetText(l10n_util::GetStringUTF16(
+                      IDS_AUTOFILL_CARD_UNMASK_VERIFICATION_IN_PROGRESS)))
+          .Build());
 }
 
 bool CardUnmaskPromptViews::ExpirationDateIsValid() const {
@@ -423,8 +409,8 @@ bool CardUnmaskPromptViews::ExpirationDateIsValid() const {
     return true;
 
   return controller_->InputExpirationIsValid(
-      month_input_->GetTextForRow(month_input_->GetSelectedIndex()),
-      year_input_->GetTextForRow(year_input_->GetSelectedIndex()));
+      month_input_->GetTextForRow(month_input_->GetSelectedIndex().value()),
+      year_input_->GetTextForRow(year_input_->GetSelectedIndex().value()));
 }
 
 void CardUnmaskPromptViews::ClosePrompt() {
@@ -435,10 +421,12 @@ void CardUnmaskPromptViews::UpdateButtons() {
   // In permanent error state, only the "close" button is shown.
   AutofillClient::PaymentsRpcResult result =
       controller_->GetVerificationResult();
-  bool has_ok = result != AutofillClient::PERMANENT_FAILURE &&
-                result != AutofillClient::NETWORK_ERROR &&
-                result != AutofillClient::VCN_RETRIEVAL_PERMANENT_FAILURE &&
-                result != AutofillClient::VCN_RETRIEVAL_TRY_AGAIN_FAILURE;
+  bool has_ok =
+      result != AutofillClient::PaymentsRpcResult::kPermanentFailure &&
+      result != AutofillClient::PaymentsRpcResult::kNetworkError &&
+      result !=
+          AutofillClient::PaymentsRpcResult::kVcnRetrievalPermanentFailure &&
+      result != AutofillClient::PaymentsRpcResult::kVcnRetrievalTryAgainFailure;
 
   SetButtons(has_ok ? ui::DIALOG_BUTTON_OK | ui::DIALOG_BUTTON_CANCEL
                     : ui::DIALOG_BUTTON_CANCEL);

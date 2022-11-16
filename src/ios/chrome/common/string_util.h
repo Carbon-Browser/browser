@@ -7,6 +7,7 @@
 
 #import <CoreGraphics/CoreGraphics.h>
 #import <Foundation/Foundation.h>
+#import <UIKit/UIKit.h>
 
 #include <string>
 #include <vector>
@@ -84,5 +85,15 @@ NSString* SubstringOfWidth(NSString* string,
                            NSDictionary* attributes,
                            CGFloat targetWidth,
                            BOOL trailing);
+
+// Returns the bound of an attributed string with NSRange
+// |characterRange| in the |textView|.
+CGRect TextViewLinkBound(UITextView* textView, NSRange characterRange);
+
+// Parses a string with an embedded bold part inside, delineated by
+// "BEGIN_BOLD" and "END_BOLD". Returns an attributed string with bold part and
+// the given font style.
+NSAttributedString* PutBoldPartInString(NSString* string,
+                                        UIFontTextStyle font_style);
 
 #endif  // IOS_CHROME_COMMON_STRING_UTIL_H_

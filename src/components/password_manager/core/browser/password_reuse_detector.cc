@@ -17,10 +17,6 @@
 #include "components/password_manager/core/browser/psl_matching_helper.h"
 #include "components/safe_browsing/core/common/safe_browsing_prefs.h"
 #include "google_apis/gaia/gaia_auth_util.h"
-#include "google_apis/gaia/gaia_urls.h"
-#include "url/origin.h"
-
-using url::Origin;
 
 namespace password_manager {
 
@@ -110,6 +106,17 @@ void PasswordReuseDetector::OnLoginsChanged(
   }
 }
 
+void PasswordReuseDetector::OnLoginsRetained(
+    const std::vector<PasswordForm>& retained_passwords) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  passwords_with_matching_reused_credentials_.clear();
+  // |retained_passwords| contains also blacklisted entities, but since they
+  // don't have password value they will be skipped inside AddPassword().
+  for (const auto& form : retained_passwords)
+    AddPassword(form);
+}
+
 void PasswordReuseDetector::ClearCachedAccountStorePasswords() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   for (auto& key_value : passwords_with_matching_reused_credentials_) {
@@ -184,9 +191,7 @@ absl::optional<PasswordHashData> PasswordReuseDetector::CheckGaiaPasswordReuse(
   }
 
   // Skips password reuse check if |domain| matches Gaia origin.
-  const Origin gaia_origin =
-      Origin::Create(GaiaUrls::GetInstance()->gaia_url().GetOrigin());
-  if (Origin::Create(GURL(domain)).IsSameOriginWith(gaia_origin))
+  if (gaia::HasGaiaSchemeHostPort(GURL(domain)))
     return absl::nullopt;
 
   return FindPasswordReuse(input, gaia_password_hash_data_list_.value());

@@ -8,7 +8,6 @@
 #include <string>
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/login/screens/base_screen.h"
 #include "chrome/browser/ui/webui/chromeos/login/enable_debugging_screen_handler.h"
@@ -19,19 +18,22 @@ namespace ash {
 // debugging screen to users.
 class EnableDebuggingScreen : public BaseScreen {
  public:
-  EnableDebuggingScreen(EnableDebuggingScreenView* view,
+  EnableDebuggingScreen(base::WeakPtr<EnableDebuggingScreenView> view,
                         const base::RepeatingClosure& exit_callback);
+
+  EnableDebuggingScreen(const EnableDebuggingScreen&) = delete;
+  EnableDebuggingScreen& operator=(const EnableDebuggingScreen&) = delete;
+
   ~EnableDebuggingScreen() override;
 
   // Called by EnableDebuggingScreenHandler.
-  void OnViewDestroyed(EnableDebuggingScreenView* view);
   void HandleSetup(const std::string& password);
 
  protected:
   // BaseScreen:
   void ShowImpl() override;
   void HideImpl() override;
-  void OnUserAction(const std::string& action_id) override;
+  void OnUserAction(const base::Value::List& args) override;
 
   base::RepeatingClosure* exit_callback() { return &exit_callback_; }
 
@@ -60,12 +62,10 @@ class EnableDebuggingScreen : public BaseScreen {
 
   void UpdateUIState(EnableDebuggingScreenView::UIState state);
 
-  EnableDebuggingScreenView* view_;
+  base::WeakPtr<EnableDebuggingScreenView> view_;
   base::RepeatingClosure exit_callback_;
 
   base::WeakPtrFactory<EnableDebuggingScreen> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(EnableDebuggingScreen);
 };
 
 }  // namespace ash

@@ -6,6 +6,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_ANIMATION_PATH_INTERPOLATION_FUNCTIONS_H_
 
 #include "third_party/blink/renderer/core/animation/interpolation_type.h"
+#include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/svg/svg_path_byte_stream.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 
@@ -17,7 +18,7 @@ class CORE_EXPORT PathInterpolationFunctions {
   STATIC_ONLY(PathInterpolationFunctions);
 
  public:
-  enum CoordinateConversion { PreserveCoordinates, ForceAbsolute };
+  enum CoordinateConversion { kPreserveCoordinates, kForceAbsolute };
 
   static scoped_refptr<StylePath> AppliedValue(const InterpolableValue&,
                                                const NonInterpolableValue*);

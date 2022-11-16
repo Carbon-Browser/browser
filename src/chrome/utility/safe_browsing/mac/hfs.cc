@@ -13,8 +13,8 @@
 #include <set>
 #include <vector>
 
-#include "base/cxx17_backports.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/numerics/safe_math.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/utility/safe_browsing/mac/convert_big_endian.h"
@@ -30,7 +30,7 @@ static void ConvertBigEndian(HFSPlusForkData* fork) {
   ConvertBigEndian(&fork->logicalSize);
   ConvertBigEndian(&fork->clumpSize);
   ConvertBigEndian(&fork->totalBlocks);
-  for (size_t i = 0; i < base::size(fork->extents); ++i) {
+  for (size_t i = 0; i < std::size(fork->extents); ++i) {
     ConvertBigEndian(&fork->extents[i].startBlock);
     ConvertBigEndian(&fork->extents[i].blockCount);
   }
@@ -129,6 +129,10 @@ static void ConvertBigEndian(HFSPlusCatalogFile* file) {
 class HFSForkReadStream : public ReadStream {
  public:
   HFSForkReadStream(HFSIterator* hfs, const HFSPlusForkData& fork);
+
+  HFSForkReadStream(const HFSForkReadStream&) = delete;
+  HFSForkReadStream& operator=(const HFSForkReadStream&) = delete;
+
   ~HFSForkReadStream() override;
 
   bool Read(uint8_t* buffer, size_t buffer_size, size_t* bytes_read) override;
@@ -136,14 +140,12 @@ class HFSForkReadStream : public ReadStream {
   off_t Seek(off_t offset, int whence) override;
 
  private:
-  HFSIterator* const hfs_;  // The HFS+ iterator.
+  const raw_ptr<HFSIterator> hfs_;  // The HFS+ iterator.
   const HFSPlusForkData fork_;  // The fork to be read.
   uint8_t current_extent_;  // The current extent index in the fork.
   bool read_current_extent_;  // Whether the current_extent_ has been read.
   std::vector<uint8_t> current_extent_data_;  // Data for |current_extent_|.
   size_t fork_logical_offset_;  // The logical offset into the fork.
-
-  DISALLOW_COPY_AND_ASSIGN(HFSForkReadStream);
 };
 
 // HFSBTreeIterator iterates over the HFS+ catalog file.
@@ -160,6 +162,10 @@ class HFSBTreeIterator {
   };
 
   HFSBTreeIterator();
+
+  HFSBTreeIterator(const HFSBTreeIterator&) = delete;
+  HFSBTreeIterator& operator=(const HFSBTreeIterator&) = delete;
+
   ~HFSBTreeIterator();
 
   bool Init(ReadStream* stream);
@@ -185,7 +191,7 @@ class HFSBTreeIterator {
   // have it or its contents iterated over.
   bool IsKeyUnexported(const std::u16string& path);
 
-  ReadStream* stream_;  // The stream backing the catalog file.
+  raw_ptr<ReadStream> stream_;  // The stream backing the catalog file.
   BTHeaderRec header_;  // The header B-tree node.
 
   // Maps CNIDs to their full path. This is used to construct full paths for
@@ -210,15 +216,13 @@ class HFSBTreeIterator {
   size_t current_leaf_offset_;  // The offset in |leaf_data_|.
 
   // Pointer to |leaf_data_| as a BTNodeDescriptor.
-  const BTNodeDescriptor* current_leaf_;
+  raw_ptr<const BTNodeDescriptor> current_leaf_;
   Entry current_record_;  // The record read at |current_leaf_offset_|.
 
   // Constant, string16 versions of the __APPLE_API_PRIVATE values.
   const std::u16string kHFSMetadataFolder{u"\0\0\0\0HFS+ Private Data", 21};
   const std::u16string kHFSDirMetadataFolder =
       u".HFS+ Private Directory Data\r";
-
-  DISALLOW_COPY_AND_ASSIGN(HFSBTreeIterator);
 };
 
 HFSIterator::HFSIterator(ReadStream* stream)
@@ -353,7 +357,7 @@ bool HFSForkReadStream::Read(uint8_t* buffer,
   if (fork_logical_offset_ == fork_.logicalSize)
     return true;
 
-  for (; current_extent_ < base::size(fork_.extents); ++current_extent_) {
+  for (; current_extent_ < std::size(fork_.extents); ++current_extent_) {
     // If the buffer is out of space, do not attempt any reads. Check this
     // here, so that current_extent_ is advanced by the loop if the last
     // extent was fully read.
@@ -426,7 +430,7 @@ off_t HFSForkReadStream::Seek(off_t offset, int whence) {
   DCHECK(offset == 0 || static_cast<uint64_t>(offset) < fork_.logicalSize);
   size_t target_block = offset / hfs_->block_size();
   size_t block_count = 0;
-  for (size_t i = 0; i < base::size(fork_.extents); ++i) {
+  for (size_t i = 0; i < std::size(fork_.extents); ++i) {
     const HFSPlusExtentDescriptor* extent = &fork_.extents[i];
 
     // An empty extent indicates end-of-fork.

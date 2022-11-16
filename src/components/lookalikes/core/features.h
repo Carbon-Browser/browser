@@ -11,14 +11,6 @@
 namespace lookalikes {
 namespace features {
 
-// This feature enables interstitial warnings for target embedding lookalikes.
-COMPONENT_EXPORT(LOOKALIKES_FEATURES)
-extern const base::Feature kDetectTargetEmbeddingLookalikes;
-
-// This feature enables interstitial warnings for certain punycode domains.
-COMPONENT_EXPORT(LOOKALIKES_FEATURES)
-extern const base::Feature kLookalikeInterstitialForPunycode;
-
 // This feature enables Digital Asset Link validations for lookalikes.
 COMPONENT_EXPORT(LOOKALIKES_FEATURES)
 extern const base::Feature kLookalikeDigitalAssetLinks;
@@ -28,6 +20,10 @@ extern const base::Feature kLookalikeDigitalAssetLinks;
 // fetch either manifest within this period, the validation is assumed to fail.
 COMPONENT_EXPORT(LOOKALIKES_FEATURES)
 extern const char kLookalikeDigitalAssetLinksTimeoutParameter[];
+
+// This feature enables warnings for Combo Squatting heuristic.
+COMPONENT_EXPORT(LOOKALIKES_FEATURES)
+extern const base::Feature kDetectComboSquattingLookalikes;
 
 }  // namespace features
 }  // namespace lookalikes

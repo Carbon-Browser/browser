@@ -12,29 +12,32 @@ import 'chrome://resources/cr_elements/shared_vars_css.m.js';
 import '../prefs/prefs.js';
 import '../settings_page/settings_animated_pages.js';
 import '../settings_page/settings_subpage.js';
-import '../settings_shared_css.js';
+import '../settings_shared.css.js';
 
-import {html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
+import {BaseMixin} from '../base_mixin.js';
 import {loadTimeData} from '../i18n_setup.js';
-import {PrefsBehavior} from '../prefs/prefs_behavior.js';
+import {PrefsMixin} from '../prefs/prefs_mixin.js';
 import {routes} from '../route.js';
 import {Router} from '../router.js';
 
-import {PasswordCheckMixin, PasswordCheckMixinInterface} from './password_check_mixin.js';
+import {getTemplate} from './autofill_page.html.js';
+import {MultiStorePasswordUiEntry} from './multi_store_password_ui_entry.js';
+import {PasswordCheckMixin} from './password_check_mixin.js';
 import {PasswordManagerImpl} from './password_manager_proxy.js';
 
 const SettingsAutofillPageElementBase =
-    mixinBehaviors([PrefsBehavior], PasswordCheckMixin(PolymerElement)) as
-    {new (): PolymerElement & PasswordCheckMixinInterface};
+    PrefsMixin(PasswordCheckMixin(BaseMixin(PolymerElement)));
 
-class SettingsAutofillPageElement extends SettingsAutofillPageElementBase {
+export class SettingsAutofillPageElement extends
+    SettingsAutofillPageElementBase {
   static get is() {
     return 'settings-autofill-page';
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
   }
 
   static get properties() {
@@ -63,12 +66,28 @@ class SettingsAutofillPageElement extends SettingsAutofillPageElementBase {
         type: String,
         computed: 'computePasswordManagerSubLabel_(compromisedPasswordsCount)',
       },
+
+      enablePasswordViewPage_: {
+        type: Boolean,
+        value() {
+          return loadTimeData.getBoolean('enablePasswordViewPage');
+        },
+      },
+
+      // The credential is only used to pass the credential from password-view
+      // to settings-subpage
+      credential: {
+        type: Object,
+        value: null,
+      },
     };
   }
 
   private passwordFilter_: string;
   private focusConfig_: Map<string, string>;
   private passwordManagerSubLabel_: string;
+  private enablePasswordViewPage_: string;
+  credential: MultiStorePasswordUiEntry|null;
 
   /**
    * Shows the manage addresses sub page.
@@ -98,6 +117,12 @@ class SettingsAutofillPageElement extends SettingsAutofillPageElementBase {
   private computePasswordManagerSubLabel_(): string {
     return this.leakedPasswords.length > 0 ? this.compromisedPasswordsCount :
                                              '';
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'settings-autofill-page': SettingsAutofillPageElement;
   }
 }
 

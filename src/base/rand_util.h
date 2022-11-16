@@ -15,12 +15,9 @@
 #include "base/gtest_prod_util.h"
 #include "build/build_config.h"
 
-namespace blink {
-namespace scheduler {
-class UkmTaskSampler;
-class MainThreadMetricsHelper;
-}
-}  // namespace blink
+namespace partition_alloc {
+class RandomGenerator;
+}  // namespace partition_alloc
 
 namespace base {
 
@@ -39,6 +36,12 @@ BASE_EXPORT double RandDouble();
 // Given input |bits|, convert with maximum precision to a double in
 // the range [0, 1). Thread-safe.
 BASE_EXPORT double BitsToOpenEndedUnitInterval(uint64_t bits);
+
+#if BUILDFLAG(IS_ANDROID)
+// Sets the implementation of RandBytes according to the corresponding
+// base::Feature. Thread safe: allows to switch while RandBytes() is in use.
+BASE_EXPORT void ConfigureRandBytesFieldTrial();
+#endif
 
 // Fills |output_length| bytes of |output| with random data. Thread-safe.
 //
@@ -77,19 +80,11 @@ void RandomShuffle(Itr first, Itr last) {
   std::shuffle(first, last, RandomBitGenerator());
 }
 
-#if defined(OS_POSIX)
+#if BUILDFLAG(IS_POSIX)
 BASE_EXPORT int GetUrandomFD();
 #endif
 
-namespace partition_alloc {
-class RandomGenerator;
-}
-
-namespace sequence_manager {
-namespace internal {
-class SequenceManagerImpl;
-}
-}  // namespace sequence_manager
+class MetricsSubSampler;
 
 // Fast, insecure pseudo-random number generator.
 //
@@ -140,21 +135,25 @@ class BASE_EXPORT InsecureRandomGenerator {
   // malloc()/free() pair, otherwise high-level benchmarks regress, and does not
   // need a secure PRNG, as it's used for ASLR and zeroing some allocations at
   // free() time.
-  friend class partition_alloc::RandomGenerator;
+  friend class ::partition_alloc::RandomGenerator;
 
-  // Friend classes below are using the generator to sub-sample metrics after
-  // task execution. Task execution overhead is ~1us on a Linux desktop, and yet
-  // accounts for multiple percentage points of total CPU usage. Keeping it low
-  // is thus important.
-  friend class sequence_manager::internal::SequenceManagerImpl;
-  friend class blink::scheduler::UkmTaskSampler;
-  friend class blink::scheduler::MainThreadMetricsHelper;
+  // Uses the generator to sub-sample metrics.
+  friend class MetricsSubSampler;
 
   FRIEND_TEST_ALL_PREFIXES(RandUtilTest,
                            InsecureRandomGeneratorProducesBothValuesOfAllBits);
   FRIEND_TEST_ALL_PREFIXES(RandUtilTest, InsecureRandomGeneratorChiSquared);
   FRIEND_TEST_ALL_PREFIXES(RandUtilTest, InsecureRandomGeneratorRandDouble);
   FRIEND_TEST_ALL_PREFIXES(RandUtilPerfTest, InsecureRandomRandUint64);
+};
+
+class BASE_EXPORT MetricsSubSampler {
+ public:
+  MetricsSubSampler();
+  bool ShouldSample(double probability);
+
+ private:
+  InsecureRandomGenerator generator_;
 };
 
 }  // namespace base

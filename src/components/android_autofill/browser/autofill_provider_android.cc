@@ -53,12 +53,6 @@ static jlong JNI_AutofillProvider_Init(
       AutofillProviderAndroid::Create(env, jcaller, web_contents));
 }
 
-static jboolean JNI_AutofillProvider_IsQueryServerFieldTypesEnabled(
-    JNIEnv* env) {
-  return base::FeatureList::IsEnabled(
-      features::kAndroidAutofillQueryServerFieldTypes);
-}
-
 // Static
 AutofillProviderAndroid* AutofillProviderAndroid::Create(
     JNIEnv* env,
@@ -108,16 +102,17 @@ void AutofillProviderAndroid::DetachFromJavaAutofillProvider(JNIEnv* env) {
 
 void AutofillProviderAndroid::OnAskForValuesToFill(
     AndroidAutofillManager* manager,
-    int32_t id,
     const FormData& form,
     const FormFieldData& field,
     const gfx::RectF& bounding_box,
-    bool /*unused_autoselect_first_suggestion*/) {
+    int32_t query_id,
+    bool /*unused_autoselect_first_suggestion*/,
+    TouchToFillEligible /*unused_touch_to_fill_eligible*/) {
   // The id isn't passed to Java side because Android API guarantees the
   // response is always for current session, so we just use the current id
   // in response, see OnAutofillAvailable.
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
-  id_ = id;
+  id_ = query_id;
 
   // Focus or field value change will also trigger the query, so it should be
   // ignored if the form is same.
@@ -181,7 +176,7 @@ void AutofillProviderAndroid::StartNewSession(AndroidAutofillManager* manager,
   gfx::RectF transformed_bounding = ToClientAreaBound(bounding_box);
 
   ScopedJavaLocalRef<jobject> form_obj = form_->GetJavaPeer(form_structure);
-  manager_ = manager->GetWeakPtr();
+  manager_ = manager->GetWeakPtrToLeafClass();
   Java_AutofillProvider_startAutofillSession(
       env, obj, form_obj, index, transformed_bounding.x(),
       transformed_bounding.y(), transformed_bounding.width(),

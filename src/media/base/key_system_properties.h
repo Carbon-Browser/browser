@@ -7,10 +7,12 @@
 
 #include <string>
 
+#include "base/callback.h"
 #include "build/build_config.h"
 #include "media/base/decrypt_config.h"
 #include "media/base/eme_constants.h"
 #include "media/base/media_export.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace media {
 
@@ -19,15 +21,25 @@ class MEDIA_EXPORT KeySystemProperties {
  public:
   virtual ~KeySystemProperties() {}
 
-  // Gets the name of this key system.
-  virtual std::string GetKeySystemName() const = 0;
+  // Gets the base key system name, e.g. "org.chromium.foo".
+  virtual std::string GetBaseKeySystemName() const = 0;
+
+  // Returns whether the `key_system` is supported. Only the base key system and
+  // some of its sub key systems should be supported, e.g. for base key system
+  // name "org.chromium.foo", "org.chromium.foo" and "org.chromium.foo.bar"
+  // could be supported, but "org.chromium.baz" should NOT be supported.
+  virtual bool IsSupportedKeySystem(const std::string& key_system) const;
+
+  // Whether the base key system should be used for all supported key systems
+  // when creating CDMs.
+  virtual bool ShouldUseBaseKeySystemName() const;
 
   // Returns whether |init_data_type| is supported by this key system.
   virtual bool IsSupportedInitDataType(
       EmeInitDataType init_data_type) const = 0;
 
   // Returns the configuration rule for supporting |encryption_scheme|.
-  virtual EmeConfigRule GetEncryptionSchemeConfigRule(
+  virtual absl::optional<EmeConfigRule> GetEncryptionSchemeConfigRule(
       EncryptionScheme encryption_scheme) const = 0;
 
   // Returns the codecs supported by this key system.
@@ -47,14 +59,21 @@ class MEDIA_EXPORT KeySystemProperties {
   // must be applied.
   // TODO(crbug.com/1204284): Refactor this and remove the
   // `hw_secure_requirement` argument.
-  virtual EmeConfigRule GetRobustnessConfigRule(
+  virtual absl::optional<EmeConfigRule> GetRobustnessConfigRule(
+      const std::string& key_system,
       EmeMediaType media_type,
       const std::string& requested_robustness,
       const bool* hw_secure_requirement) const = 0;
 
   // Returns the support this key system provides for persistent-license
-  // sessions.
-  virtual EmeSessionTypeSupport GetPersistentLicenseSessionSupport() const = 0;
+  // sessions. The returned `EmeConfigRule` (if supported) assumes persistence
+  // requirement, which is enforced by `KeySystemConfigSelector`. Therefore, the
+  // returned `EmeConfigRule` doesn't need to specify persistence requirement
+  // explicitly.
+  // TODO(crbug.com/1324262): Refactor `EmeConfigRule` to make it easier to
+  // express combinations of requirements.
+  virtual absl::optional<EmeConfigRule> GetPersistentLicenseSessionSupport()
+      const = 0;
 
   // Returns the support this key system provides for persistent state.
   virtual EmeFeatureSupport GetPersistentStateSupport() const = 0;
@@ -65,6 +84,12 @@ class MEDIA_EXPORT KeySystemProperties {
   // Returns whether AesDecryptor can be used for this key system.
   virtual bool UseAesDecryptor() const;
 };
+
+using KeySystemPropertiesVector =
+    std::vector<std::unique_ptr<KeySystemProperties>>;
+
+using GetSupportedKeySystemsCB =
+    base::RepeatingCallback<void(KeySystemPropertiesVector)>;
 
 }  // namespace media
 

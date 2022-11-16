@@ -21,8 +21,8 @@
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/message_loop/message_pump_type.h"
-#include "base/sequenced_task_runner.h"
 #include "base/strings/string_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_executor.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
 #include "base/threading/sequenced_task_runner_handle.h"
@@ -257,8 +257,7 @@ int APIENTRY wWinMain(HINSTANCE, HINSTANCE, wchar_t*, int) {
     interface_log_file = command_line->GetSwitchValueNative(
         chrome_cleaner::kLogInterfaceCallsToSwitch);
     base::FilePath passed_name(interface_log_file);
-    std::vector<std::wstring> components;
-    passed_name.GetComponents(&components);
+    std::vector<std::wstring> components = passed_name.GetComponents();
     if (components.size() != 1) {
       LOG(ERROR) << "Invalid file name passed for logging!";
       return FinalizeWithResultCode(chrome_cleaner::RESULT_CODE_FAILED,

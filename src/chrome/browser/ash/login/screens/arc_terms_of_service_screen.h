@@ -8,7 +8,6 @@
 #include <string>
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "chrome/browser/ash/login/screens/base_screen.h"
 #include "chrome/browser/ui/webui/chromeos/login/arc_terms_of_service_screen_handler.h"
 
@@ -19,7 +18,14 @@ namespace ash {
 class ArcTermsOfServiceScreen : public BaseScreen,
                                 public ArcTermsOfServiceScreenViewObserver {
  public:
-  enum class Result { ACCEPTED, BACK, NOT_APPLICABLE };
+  enum class Result {
+    ACCEPTED,
+    ACCEPTED_DEMO_ONLINE,
+    BACK,
+    NOT_APPLICABLE,
+    NOT_APPLICABLE_DEMO_ONLINE,
+    NOT_APPLICABLE_CONSOLIDATED_CONSENT_ARC_ENABLED,
+  };
 
   // This enum is tied directly to a UMA enum defined in
   // //tools/metrics/histograms/enums.xml, and should always reflect it (do not
@@ -47,6 +53,10 @@ class ArcTermsOfServiceScreen : public BaseScreen,
   using ScreenExitCallback = base::RepeatingCallback<void(Result result)>;
   ArcTermsOfServiceScreen(ArcTermsOfServiceScreenView* view,
                           const ScreenExitCallback& exit_callback);
+
+  ArcTermsOfServiceScreen(const ArcTermsOfServiceScreen&) = delete;
+  ArcTermsOfServiceScreen& operator=(const ArcTermsOfServiceScreen&) = delete;
+
   ~ArcTermsOfServiceScreen() override;
 
   void set_exit_callback_for_testing(const ScreenExitCallback& exit_callback) {
@@ -66,15 +76,13 @@ class ArcTermsOfServiceScreen : public BaseScreen,
   bool MaybeSkip(WizardContext* context) override;
   void ShowImpl() override;
   void HideImpl() override;
-  void OnUserAction(const std::string& action_id) override;
+  void OnUserActionDeprecated(const std::string& action_id) override;
 
   ScreenExitCallback* exit_callback() { return &exit_callback_; }
 
  private:
   ArcTermsOfServiceScreenView* view_;
   ScreenExitCallback exit_callback_;
-
-  DISALLOW_COPY_AND_ASSIGN(ArcTermsOfServiceScreen);
 };
 
 }  // namespace ash

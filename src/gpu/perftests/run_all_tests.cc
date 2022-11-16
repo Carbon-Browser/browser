@@ -13,7 +13,6 @@
 #include "ui/gl/init/gl_factory.h"
 
 #if defined(USE_OZONE)
-#include "ui/base/ui_base_features.h"  // nogncheck
 #include "ui/ozone/public/ozone_platform.h"
 #endif
 
@@ -21,20 +20,17 @@ static int RunHelper(base::TestSuite* test_suite) {
   base::FeatureList::InitializeInstance(std::string(), std::string());
   std::unique_ptr<base::SingleThreadTaskExecutor> executor;
 #if defined(USE_OZONE)
-  if (features::IsUsingOzonePlatform()) {
-    executor = std::make_unique<base::SingleThreadTaskExecutor>(
-        base::MessagePumpType::UI);
-    ui::OzonePlatform::InitParams params;
-    params.single_process = true;
-    ui::OzonePlatform::InitializeForGPU(params);
-  } else
+  executor = std::make_unique<base::SingleThreadTaskExecutor>(
+      base::MessagePumpType::UI);
+  ui::OzonePlatform::InitParams params;
+  params.single_process = true;
+  ui::OzonePlatform::InitializeForGPU(params);
+#else
+  executor = std::make_unique<base::SingleThreadTaskExecutor>(
+      base::MessagePumpType::IO);
 #endif
-  {
-    executor = std::make_unique<base::SingleThreadTaskExecutor>(
-        base::MessagePumpType::IO);
-  }
 
-  CHECK(gl::init::InitializeGLOneOff());
+  CHECK(gl::init::InitializeGLOneOff(/*system_device_id=*/0));
   return test_suite->Run();
 }
 

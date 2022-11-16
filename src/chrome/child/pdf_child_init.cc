@@ -6,7 +6,7 @@
 
 #include "build/build_config.h"
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include "base/command_line.h"
 #include "base/no_destructor.h"
 #include "base/win/current_module.h"
@@ -14,13 +14,15 @@
 #include "base/win/windows_version.h"
 #include "content/public/child/child_thread.h"
 #include "content/public/common/content_switches.h"
+#include "ppapi/buildflags/buildflags.h"
+#include "sandbox/policy/mojom/sandbox.mojom.h"
 #include "sandbox/policy/sandbox_type.h"
 #include "sandbox/policy/switches.h"
 #endif
 
 namespace {
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 typedef decltype(::GetFontData)* GetFontDataPtr;
 GetFontDataPtr g_original_get_font_data = nullptr;
 
@@ -45,21 +47,23 @@ DWORD WINAPI GetFontDataPatch(HDC hdc,
   }
   return rv;
 }
-#endif  // defined(OS_WIN)
+#endif  // BUILDFLAG(IS_WIN)
 
 }  // namespace
 
 void MaybePatchGdiGetFontData() {
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   // Only patch utility processes which explicitly need GDI.
   auto& command_line = *base::CommandLine::ForCurrentProcess();
-  sandbox::policy::SandboxType service_sandbox_type =
+  auto service_sandbox_type =
       sandbox::policy::SandboxTypeFromCommandLine(command_line);
   bool need_gdi =
-      service_sandbox_type == sandbox::policy::SandboxType::kPpapi ||
-      service_sandbox_type == sandbox::policy::SandboxType::kPrintCompositor ||
-      service_sandbox_type == sandbox::policy::SandboxType::kPdfConversion ||
-      (service_sandbox_type == sandbox::policy::SandboxType::kRenderer &&
+#if BUILDFLAG(ENABLE_PLUGINS)
+      service_sandbox_type == sandbox::mojom::Sandbox::kPpapi ||
+#endif
+      service_sandbox_type == sandbox::mojom::Sandbox::kPrintCompositor ||
+      service_sandbox_type == sandbox::mojom::Sandbox::kPdfConversion ||
+      (service_sandbox_type == sandbox::mojom::Sandbox::kRenderer &&
        command_line.HasSwitch(switches::kPdfRenderer));
   if (!need_gdi)
     return;
@@ -79,5 +83,5 @@ void MaybePatchGdiGetFontData() {
       reinterpret_cast<void*>(GetFontDataPatch));
   g_original_get_font_data = reinterpret_cast<GetFontDataPtr>(
       patch_get_font_data->original_function());
-#endif  // defined(OS_WIN)
+#endif  // BUILDFLAG(IS_WIN)
 }

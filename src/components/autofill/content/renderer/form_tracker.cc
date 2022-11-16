@@ -6,9 +6,9 @@
 
 #include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/observer_list.h"
 #include "components/autofill/content/renderer/form_autofill_util.h"
 #include "components/autofill/core/common/autofill_features.h"
-#include "content/public/renderer/document_state.h"
 #include "content/public/renderer/render_frame.h"
 #include "third_party/blink/public/web/modules/autofill/web_form_element_observer.h"
 #include "third_party/blink/public/web/web_input_element.h"
@@ -53,7 +53,8 @@ void FormTracker::AjaxSucceeded() {
 
 void FormTracker::TextFieldDidChange(const WebFormControlElement& element) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(form_tracker_sequence_checker_);
-  DCHECK(ToWebInputElement(&element) || form_util::IsTextAreaElement(element));
+  DCHECK(!element.DynamicTo<WebInputElement>().IsNull() ||
+         form_util::IsTextAreaElement(element));
 
   if (ignore_control_changes_)
     return;
@@ -63,8 +64,8 @@ void FormTracker::TextFieldDidChange(const WebFormControlElement& element) {
   if (!element.Focused())
     return;
 
-  const WebInputElement* input_element = ToWebInputElement(&element);
-  if (!input_element)
+  const WebInputElement input_element = element.DynamicTo<WebInputElement>();
+  if (input_element.IsNull())
     return;
 
   // Disregard text changes that aren't caused by user gestures or pastes. Note
@@ -129,8 +130,11 @@ void FormTracker::FormControlDidChangeImpl(
     const WebFormControlElement& element,
     Observer::ElementChangeSource change_source) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(form_tracker_sequence_checker_);
-  // Render frame could be gone as this is the post task.
-  if (!render_frame()) return;
+  // The frame or document could be null because this function is called
+  // asynchronously.
+  const blink::WebDocument& doc = element.GetDocument();
+  if (!render_frame() || doc.IsNull() || !doc.GetFrame())
+    return;
 
   if (element.Form().IsNull()) {
     last_interacted_formless_element_ = element;
@@ -158,8 +162,8 @@ void FormTracker::DidStartNavigation(
     absl::optional<blink::WebNavigationType> navigation_type) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(form_tracker_sequence_checker_);
   blink::WebLocalFrame* navigated_frame = render_frame()->GetWebFrame();
-  // Ony handle main frame.
-  if (navigated_frame->Parent())
+  // Ony handle primary main frame.
+  if (!navigated_frame->IsOutermostMainFrame())
     return;
 
   // Bug fix for crbug.com/368690. isProcessingUserGesture() is false when
@@ -247,10 +251,11 @@ bool FormTracker::CanInferFormSubmitted() {
   // form is now gone, either invisible or removed from the DOM.
   // Otherwise (i.e., there is no form tag), we check if the last element the
   // user has interacted with are gone, to decide if submission has occurred.
-  if (!last_interacted_form_.IsNull())
-    return !form_util::AreFormContentsVisible(last_interacted_form_);
-  else if (!last_interacted_formless_element_.IsNull())
-    return !form_util::IsWebElementVisible(last_interacted_formless_element_);
+  if (!last_interacted_form_.IsNull()) {
+    return !base::ranges::any_of(last_interacted_form_.GetFormControlElements(),
+                                 &form_util::IsWebElementFocusable);
+  } else if (!last_interacted_formless_element_.IsNull())
+    return !form_util::IsWebElementFocusable(last_interacted_formless_element_);
 
   return false;
 }

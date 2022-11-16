@@ -66,7 +66,7 @@ bool StatementHasMatchingRelationship(const base::Value& statement,
   if (!relations)
     return false;
 
-  for (const auto& relation : relations->GetList()) {
+  for (const auto& relation : relations->GetListDeprecated()) {
     if (relation.is_string() && relation.GetString() == target_relation)
       return true;
   }
@@ -93,7 +93,7 @@ bool StatementHasMatchingFingerprint(const base::Value& statement,
   if (!fingerprints)
     return false;
 
-  for (const auto& fingerprint : fingerprints->GetList()) {
+  for (const auto& fingerprint : fingerprints->GetListDeprecated()) {
     if (fingerprint.is_string() &&
         fingerprint.GetString() == target_fingerprint) {
       return true;
@@ -107,7 +107,7 @@ bool StatementHasMatchingFingerprint(const base::Value& statement,
 void AddMessageToConsole(content::WebContents* web_contents,
                          const std::string& message) {
   if (web_contents) {
-    web_contents->GetMainFrame()->AddMessageToConsole(
+    web_contents->GetPrimaryMainFrame()->AddMessageToConsole(
         blink::mojom::ConsoleMessageLevel::kWarning, message);
     return;
   }
@@ -175,16 +175,16 @@ void DigitalAssetLinksHandler::OnJSONParseResult(
     absl::optional<std::string> fingerprint,
     std::map<std::string, std::set<std::string>> target_values,
     data_decoder::DataDecoder::ValueOrError result) {
-  if (!result.value) {
+  if (!result.has_value()) {
     AddMessageToConsole(
         web_contents_.get(),
         "Digital Asset Links response parsing failed with message: " +
-            *result.error);
+            result.error());
     std::move(callback_).Run(RelationshipCheckResult::kFailure);
     return;
   }
 
-  auto& statement_list = *result.value;
+  auto& statement_list = *result;
   if (!statement_list.is_list()) {
     std::move(callback_).Run(RelationshipCheckResult::kFailure);
     AddMessageToConsole(web_contents_.get(), "Statement List is not a list.");
@@ -194,7 +194,7 @@ void DigitalAssetLinksHandler::OnJSONParseResult(
   // We only output individual statement failures if none match.
   std::vector<std::string> failures;
 
-  for (const auto& statement : statement_list.GetList()) {
+  for (const auto& statement : statement_list.GetListDeprecated()) {
     if (!statement.is_dict()) {
       failures.push_back("Statement is not a dictionary.");
       continue;

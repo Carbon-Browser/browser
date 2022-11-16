@@ -5,7 +5,7 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_AUTOFILL_PAYMENTS_LOCAL_CARD_MIGRATION_ERROR_DIALOG_VIEW_H_
 #define CHROME_BROWSER_UI_VIEWS_AUTOFILL_PAYMENTS_LOCAL_CARD_MIGRATION_ERROR_DIALOG_VIEW_H_
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/autofill/payments/local_card_migration_dialog.h"
 #include "chrome/browser/ui/views/autofill/payments/dialog_view_ids.h"
 #include "components/autofill/core/browser/ui/payments/local_card_migration_dialog_controller.h"
@@ -26,9 +26,8 @@ class LocalCardMigrationErrorDialogView
       public views::BubbleDialogDelegateView {
  public:
   METADATA_HEADER(LocalCardMigrationErrorDialogView);
-  LocalCardMigrationErrorDialogView(
-      LocalCardMigrationDialogController* controller,
-      content::WebContents* web_contents);
+  explicit LocalCardMigrationErrorDialogView(
+      LocalCardMigrationDialogController* controller);
   LocalCardMigrationErrorDialogView(const LocalCardMigrationErrorDialogView&) =
       delete;
   LocalCardMigrationErrorDialogView& operator=(
@@ -36,17 +35,14 @@ class LocalCardMigrationErrorDialogView
   ~LocalCardMigrationErrorDialogView() override;
 
   // LocalCardMigrationDialog:
-  void ShowDialog() override;
+  void ShowDialog(content::WebContents& web_contents) override;
   void CloseDialog() override;
 
   // views::BubbleDialogDelegateView:
   void Init() override;
-  void WindowClosing() override;
 
  private:
-  LocalCardMigrationDialogController* controller_;
-
-  content::WebContents* web_contents_;
+  raw_ptr<LocalCardMigrationDialogController> controller_;
 };
 
 }  // namespace autofill

@@ -5,19 +5,24 @@
 #ifndef GPU_IPC_SHARED_IMAGE_INTERFACE_IN_PROCESS_H_
 #define GPU_IPC_SHARED_IMAGE_INTERFACE_IN_PROCESS_H_
 
+#include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "gpu/command_buffer/client/shared_image_interface.h"
 #include "gpu/command_buffer/common/command_buffer_id.h"
 #include "gpu/ipc/in_process_command_buffer.h"
 
+namespace base {
+class WaitableEvent;
+}
+
 namespace gpu {
 class MailboxManager;
-class SyncPointClientState;
-struct SyncToken;
 class SharedContextState;
 class SharedImageFactory;
 class SharedImageManager;
 class SingleTaskSequence;
+class SyncPointClientState;
+struct SyncToken;
 
 // This is an implementation of the SharedImageInterface to be used on the viz
 // compositor thread. This class also implements the corresponding parts
@@ -29,10 +34,38 @@ class GL_IN_PROCESS_CONTEXT_EXPORT SharedImageInterfaceInProcess
  public:
   using CommandBufferHelper =
       InProcessCommandBuffer::SharedImageInterfaceHelper;
+  // The callers must guarantee that the instances passed via pointers are kept
+  // alive for as long as the instance of this class is alive. This can be
+  // achieved by ensuring that the ownership of the created
+  // SharedImageInterfaceInProcess is the same as the ownership of the passed in
+  // pointers.
   SharedImageInterfaceInProcess(
       SingleTaskSequence* task_sequence,
       DisplayCompositorMemoryAndTaskControllerOnGpu* display_controller,
       std::unique_ptr<CommandBufferHelper> command_buffer_helper);
+  // The callers must guarantee that the instances passed via pointers are kept
+  // alive for as long as the instance of this class is alive. This can be
+  // achieved by ensuring that the ownership of the created
+  // SharedImageInterfaceInProcess is the same as the ownership of the passed in
+  // pointers.
+  SharedImageInterfaceInProcess(
+      SingleTaskSequence* task_sequence,
+      SyncPointManager* sync_point_manager,
+      const GpuPreferences& gpu_preferences,
+      const GpuDriverBugWorkarounds& gpu_workarounds,
+      const GpuFeatureInfo& gpu_feature_info,
+      gpu::SharedContextState* context_state,
+      MailboxManager* mailbox_manager,
+      SharedImageManager* shared_image_manager,
+      ImageFactory* image_factory,
+      MemoryTracker* tracker,
+      bool is_for_display_compositor = false,
+      std::unique_ptr<CommandBufferHelper> command_buffer_helper = nullptr);
+
+  SharedImageInterfaceInProcess(const SharedImageInterfaceInProcess&) = delete;
+  SharedImageInterfaceInProcess& operator=(
+      const SharedImageInterfaceInProcess&) = delete;
+
   ~SharedImageInterfaceInProcess() override;
 
   // The |SharedImageInterface| keeps ownership of the image until
@@ -77,12 +110,6 @@ class GL_IN_PROCESS_CONTEXT_EXPORT SharedImageInterfaceInProcess
                             SkAlphaType alpha_type,
                             uint32_t usage) override;
 
-#if defined(OS_ANDROID)
-  Mailbox CreateSharedImageWithAHB(const Mailbox& mailbox,
-                                   uint32_t usage,
-                                   const SyncToken& sync_token) override;
-#endif
-
   // Updates a shared image after its GpuMemoryBuffer (if any) was modified on
   // the CPU or through external devices, after |sync_token| has been released.
   void UpdateSharedImage(const SyncToken& sync_token,
@@ -117,7 +144,7 @@ class GL_IN_PROCESS_CONTEXT_EXPORT SharedImageInterfaceInProcess
   void PresentSwapChain(const SyncToken& sync_token,
                         const Mailbox& mailbox) override;
 
-#if defined(OS_FUCHSIA)
+#if BUILDFLAG(IS_FUCHSIA)
   // Registers a sysmem buffer collection. Not reached in this implementation.
   void RegisterSysmemBufferCollection(gfx::SysmemBufferCollectionId id,
                                       zx::channel token,
@@ -127,7 +154,7 @@ class GL_IN_PROCESS_CONTEXT_EXPORT SharedImageInterfaceInProcess
 
   // Not reached in this implementation.
   void ReleaseSysmemBufferCollection(gfx::SysmemBufferCollectionId id) override;
-#endif  // defined(OS_FUCHSIA)
+#endif  // BUILDFLAG(IS_FUCHSIA)
 
   // Generates an unverified SyncToken that is released after all previous
   // commands on this interface have executed on the service side.
@@ -146,10 +173,12 @@ class GL_IN_PROCESS_CONTEXT_EXPORT SharedImageInterfaceInProcess
       const gpu::Mailbox& mailbox) override;
 
  private:
-  struct SharedImageFactoryInput;
+  // Parameters needed to be passed in to set up the class on the GPU.
+  // Needed since we cannot pass refcounted instances (e.g.
+  // gpu::SharedContextState) to base::BindOnce as raw pointers.
+  struct SetUpOnGpuParams;
 
-  void SetUpOnGpu(
-      DisplayCompositorMemoryAndTaskControllerOnGpu* display_controller);
+  void SetUpOnGpu(std::unique_ptr<SetUpOnGpuParams> params);
   void DestroyOnGpu(base::WaitableEvent* completion);
 
   SyncToken MakeSyncToken(uint64_t release_id) {
@@ -197,23 +226,15 @@ class GL_IN_PROCESS_CONTEXT_EXPORT SharedImageInterfaceInProcess
   void DestroySharedImageOnGpuThread(const Mailbox& mailbox);
   void WaitSyncTokenOnGpuThread(const SyncToken& sync_token);
   void WrapTaskWithGpuUrl(base::OnceClosure task);
-#if defined(OS_ANDROID)
-  void CreateSharedImageWithAHBOnGpuThread(const Mailbox& out_mailbox,
-                                           const Mailbox& in_mailbox,
-                                           uint32_t usage,
-                                           const SyncToken& sync_token);
-#endif
 
   // Used to schedule work on the gpu thread. This is a raw pointer for now
   // since the ownership of SingleTaskSequence would be the same as the
   // SharedImageInterfaceInProcess.
-  SingleTaskSequence* task_sequence_;
+  raw_ptr<SingleTaskSequence> task_sequence_;
   const CommandBufferId command_buffer_id_;
   std::unique_ptr<CommandBufferHelper> command_buffer_helper_;
 
-  base::OnceCallback<std::unique_ptr<SharedImageFactory>(
-      bool enable_wrapped_sk_image)>
-      create_factory_;
+  base::OnceCallback<std::unique_ptr<SharedImageFactory>()> create_factory_;
 
   // Sequence checker for tasks that run on the gpu "thread".
   SEQUENCE_CHECKER(gpu_sequence_checker_);
@@ -226,17 +247,15 @@ class GL_IN_PROCESS_CONTEXT_EXPORT SharedImageInterfaceInProcess
   // Accessed on compositor thread.
   // This is used to get NativePixmap, and is only used when SharedImageManager
   // is thread safe.
-  SharedImageManager* shared_image_manager_;
+  raw_ptr<SharedImageManager> shared_image_manager_;
 
   // Accessed on GPU thread.
-  MailboxManager* mailbox_manager_;
   scoped_refptr<SharedContextState> context_state_;
-  // Created and only used by this SharedImageInterface.
-  SyncPointManager* sync_point_manager_;
+  // This is a raw pointer for now since the ownership of SyncPointManager would
+  // be the same as the SharedImageInterfaceInProcess.
+  raw_ptr<SyncPointManager> sync_point_manager_;
   scoped_refptr<SyncPointClientState> sync_point_client_state_;
   std::unique_ptr<SharedImageFactory> shared_image_factory_;
-
-  DISALLOW_COPY_AND_ASSIGN(SharedImageInterfaceInProcess);
 };
 
 }  // namespace gpu

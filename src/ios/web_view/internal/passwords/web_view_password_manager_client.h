@@ -8,8 +8,8 @@
 #import <Foundation/Foundation.h>
 #include <memory>
 
-#include "base/macros.h"
 #include "components/autofill/core/browser/logging/log_manager.h"
+#include "components/password_manager/core/browser/password_change_success_tracker.h"
 #include "components/password_manager/core/browser/password_feature_manager.h"
 #include "components/password_manager/core/browser/password_form_manager_for_ui.h"
 #include "components/password_manager/core/browser/password_manager.h"
@@ -49,7 +49,12 @@ class WebViewPasswordManagerClient
       password_manager::PasswordStoreInterface* profile_store,
       password_manager::PasswordStoreInterface* account_store,
       password_manager::PasswordReuseManager* reuse_manager,
-      password_manager::PasswordRequirementsService* requirements_service);
+      password_manager::PasswordRequirementsService* requirements_service,
+      password_manager::PasswordChangeSuccessTracker* password_change_tracker);
+
+  WebViewPasswordManagerClient(const WebViewPasswordManagerClient&) = delete;
+  WebViewPasswordManagerClient& operator=(const WebViewPasswordManagerClient&) =
+      delete;
 
   ~WebViewPasswordManagerClient() override;
 
@@ -83,16 +88,17 @@ class WebViewPasswordManagerClient
   const password_manager::PasswordFeatureManager* GetPasswordFeatureManager()
       const override;
   PrefService* GetPrefs() const override;
-  // TODO(crbug.com/1218413): Remove the following two methods once migration
-  // from PasswordStore to PasswordStoreInterface is complete.
-  password_manager::PasswordStore* GetProfilePasswordStore() const override;
-  password_manager::PasswordStore* GetAccountPasswordStore() const override;
-  password_manager::PasswordStoreInterface* GetProfilePasswordStoreInterface()
+  const syncer::SyncService* GetSyncService() const override;
+  password_manager::PasswordStoreInterface* GetProfilePasswordStore()
       const override;
-  password_manager::PasswordStoreInterface* GetAccountPasswordStoreInterface()
+  password_manager::PasswordStoreInterface* GetAccountPasswordStore()
       const override;
   password_manager::PasswordReuseManager* GetPasswordReuseManager()
       const override;
+  password_manager::PasswordScriptsFetcher* GetPasswordScriptsFetcher()
+      override;
+  password_manager::PasswordChangeSuccessTracker*
+  GetPasswordChangeSuccessTracker() override;
   void NotifyUserAutoSignin(
       std::vector<std::unique_ptr<password_manager::PasswordForm>> local_forms,
       const url::Origin& origin) override;
@@ -127,7 +133,6 @@ class WebViewPasswordManagerClient
   bool IsAutofillAssistantUIVisible() const override;
 
   void set_bridge(id<PasswordManagerClientBridge> bridge) { bridge_ = bridge; }
-  const syncer::SyncService* GetSyncService();
 
   safe_browsing::PasswordProtectionService* GetPasswordProtectionService()
       const override;
@@ -155,6 +160,7 @@ class WebViewPasswordManagerClient
   WebViewPasswordFeatureManager password_feature_manager_;
   const password_manager::SyncCredentialsFilter credentials_filter_;
   password_manager::PasswordRequirementsService* requirements_service_;
+  password_manager::PasswordChangeSuccessTracker* password_change_tracker_;
 
   // The preference associated with
   // password_manager::prefs::kCredentialsEnableService.
@@ -163,8 +169,6 @@ class WebViewPasswordManagerClient
   // Helper for performing logic that is common between
   // ChromePasswordManagerClient and IOSChromePasswordManagerClient.
   password_manager::PasswordManagerClientHelper helper_;
-
-  DISALLOW_COPY_AND_ASSIGN(WebViewPasswordManagerClient);
 };
 }  // namespace ios_web_view
 

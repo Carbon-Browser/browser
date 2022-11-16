@@ -114,8 +114,12 @@ void NGInlineBoxState::ResetStyle(const ComputedStyle& style_ref,
 }
 
 void NGInlineBoxState::ComputeTextMetrics(const ComputedStyle& styleref,
-                                          const Font& fontref) {
-  const auto baseline_type = styleref.GetFontBaseline();
+                                          const Font& fontref,
+                                          FontBaseline ifc_baseline) {
+  const auto baseline_type =
+      styleref.CssDominantBaseline() == EDominantBaseline::kAuto
+          ? ifc_baseline
+          : styleref.GetFontBaseline();
   if (const SimpleFontData* font_data = fontref.PrimaryFont()) {
     if (is_svg_text) {
       text_metrics =
@@ -153,9 +157,10 @@ void NGInlineBoxState::ResetTextMetrics() {
 }
 
 void NGInlineBoxState::EnsureTextMetrics(const ComputedStyle& styleref,
-                                         const Font& fontref) {
+                                         const Font& fontref,
+                                         FontBaseline ifc_baseline) {
   if (text_metrics.IsEmpty())
-    ComputeTextMetrics(styleref, fontref);
+    ComputeTextMetrics(styleref, fontref, ifc_baseline);
 }
 
 void NGInlineBoxState::AccumulateUsedFonts(
@@ -198,6 +203,7 @@ NGInlineBoxState* NGInlineLayoutStateStack::OnBeginPlaceItems(
     FontBaseline baseline_type,
     bool line_height_quirk,
     NGLogicalLineItems* line_box) {
+  has_block_in_inline_ = false;
   is_svg_text_ = node.IsSvgText();
   if (stack_.IsEmpty()) {
     // For the first line, push a box state for the line itself.
@@ -239,7 +245,8 @@ NGInlineBoxState* NGInlineLayoutStateStack::OnBeginPlaceItems(
     // line height properties) as the initial metrics for the line box.
     // https://drafts.csswg.org/css2/visudet.html#strut
     if (!line_height_quirk) {
-      line_box_state.ComputeTextMetrics(line_style, *line_box_state.font);
+      line_box_state.ComputeTextMetrics(line_style, *line_box_state.font,
+                                        baseline_type);
     }
   }
 
@@ -337,6 +344,9 @@ void NGInlineLayoutStateStack::EndBoxState(const NGConstraintSpace& space,
 
 void NGInlineLayoutStateStack::OnBlockInInline(const FontHeight& metrics,
                                                NGLogicalLineItems* line_box) {
+  DCHECK(!has_block_in_inline_);
+  has_block_in_inline_ = true;
+
   for (NGInlineBoxState& box : stack_)
     box.metrics = metrics;
 
@@ -399,6 +409,7 @@ void NGInlineLayoutStateStack::AddBoxData(const NGConstraintSpace& space,
   DCHECK(box->item);
   BoxData& box_data = box_data_list_.emplace_back(
       box->fragment_start, fragment_end, box->item, placeholder.Size());
+  box_data.borders = box->borders;
   box_data.padding = box->padding;
   if (box->has_start_edge) {
     box_data.has_line_left_edge = true;
@@ -406,6 +417,9 @@ void NGInlineLayoutStateStack::AddBoxData(const NGConstraintSpace& space,
     box_data.margin_border_padding_line_left = box->margin_inline_start +
                                                box->borders.inline_start +
                                                box->padding.inline_start;
+  } else {
+    box_data.borders.inline_start = LayoutUnit();
+    box_data.padding.inline_start = LayoutUnit();
   }
   if (box->has_end_edge) {
     box_data.has_line_right_edge = true;
@@ -413,6 +427,9 @@ void NGInlineLayoutStateStack::AddBoxData(const NGConstraintSpace& space,
     box_data.margin_border_padding_line_right = box->margin_inline_end +
                                                 box->borders.inline_end +
                                                 box->padding.inline_end;
+  } else {
+    box_data.borders.inline_end = LayoutUnit();
+    box_data.padding.inline_end = LayoutUnit();
   }
   if (IsRtl(style.Direction())) {
     std::swap(box_data.has_line_left_edge, box_data.has_line_right_edge);
@@ -727,66 +744,49 @@ LayoutUnit NGInlineLayoutStateStack::ComputeInlinePositions(
 
 void NGInlineLayoutStateStack::ApplyRelativePositioning(
     const NGConstraintSpace& space,
-    NGLogicalLineItems* line_box,
-    Vector<LogicalOffset, 32>* oof_relative_offsets) {
+    NGLogicalLineItems* line_box) {
   if (box_data_list_.IsEmpty())
     return;
-
-  DCHECK(oof_relative_offsets);
-  DCHECK_EQ(oof_relative_offsets->size(), box_data_list_.size());
 
   // The final position of any inline boxes, (<span>, etc) are stored on
   // |BoxData::rect|. As we don't have a mapping from |NGLogicalLineItem| to
   // |BoxData| we store the accumulated relative offsets, and then apply the
   // final adjustment at the end of this function.
   Vector<LogicalOffset, 32> accumulated_offsets(line_box->size());
-  Vector<LogicalOffset, 32> oof_accumulated_offsets(line_box->size());
 
   for (BoxData& box_data : box_data_list_) {
     unsigned start = box_data.fragment_start;
     unsigned end = box_data.fragment_end;
     const LogicalOffset relative_offset =
         ComputeRelativeOffsetForInline(space, *box_data.item->Style());
-    const LogicalOffset relative_offset_for_oof =
-        ComputeRelativeOffsetForOOFInInline(space, *box_data.item->Style());
 
     // Move all children for this box.
     for (unsigned index = start; index < end; index++) {
       auto& child = (*line_box)[index];
       child.rect.offset += relative_offset;
       accumulated_offsets[index] += relative_offset;
-      oof_accumulated_offsets[index] += relative_offset_for_oof;
     }
   }
 
   // Apply the final accumulated relative position offset for each box.
-  for (wtf_size_t i = 0; i < box_data_list_.size(); i++) {
-    BoxData& box_data = box_data_list_[i];
+  for (BoxData& box_data : box_data_list_)
     box_data.rect.offset += accumulated_offsets[box_data.fragment_start];
-    (*oof_relative_offsets)[i] =
-        oof_accumulated_offsets[box_data.fragment_start];
-  }
 }
 
 void NGInlineLayoutStateStack::CreateBoxFragments(
     const NGConstraintSpace& space,
     NGLogicalLineItems* line_box,
-    bool is_opaque,
-    Vector<LogicalOffset, 32>* oof_relative_offsets) {
+    bool is_opaque) {
   DCHECK(!box_data_list_.IsEmpty());
-  DCHECK(oof_relative_offsets);
-  DCHECK_EQ(oof_relative_offsets->size(), box_data_list_.size());
 
-  for (wtf_size_t i = 0; i < box_data_list_.size(); i++) {
-    BoxData& box_data = box_data_list_[i];
+  for (BoxData& box_data : box_data_list_) {
     unsigned start = box_data.fragment_start;
     unsigned end = box_data.fragment_end;
     DCHECK_GT(end, start);
     NGLogicalLineItem* child = &(*line_box)[start];
     DCHECK(box_data.item->ShouldCreateBoxFragment());
-    scoped_refptr<const NGLayoutResult> box_fragment =
-        box_data.CreateBoxFragment(space, line_box, is_opaque,
-                                   (*oof_relative_offsets)[i]);
+    const NGLayoutResult* box_fragment =
+        box_data.CreateBoxFragment(space, line_box, is_opaque);
     if (child->IsPlaceholder()) {
       child->layout_result = std::move(box_fragment);
       child->rect = box_data.rect;
@@ -804,12 +804,10 @@ void NGInlineLayoutStateStack::CreateBoxFragments(
   box_data_list_.clear();
 }
 
-scoped_refptr<const NGLayoutResult>
-NGInlineLayoutStateStack::BoxData::CreateBoxFragment(
+const NGLayoutResult* NGInlineLayoutStateStack::BoxData::CreateBoxFragment(
     const NGConstraintSpace& space,
     NGLogicalLineItems* line_box,
-    bool is_opaque,
-    LogicalOffset oof_relative_offset) {
+    bool is_opaque) {
   DCHECK(item);
   DCHECK(item->Style());
   const ComputedStyle& style = *item->Style();
@@ -817,12 +815,14 @@ NGInlineLayoutStateStack::BoxData::CreateBoxFragment(
   NGFragmentGeometry fragment_geometry;
   fragment_geometry.border_box_size = {
       rect.size.inline_size.ClampNegativeToZero(), rect.size.block_size};
+  fragment_geometry.border =
+      NGBoxStrut(borders, IsFlippedLinesWritingMode(style.GetWritingMode()));
   fragment_geometry.padding =
       NGBoxStrut(padding, IsFlippedLinesWritingMode(style.GetWritingMode()));
 
   // Because children are already in the visual order, use LTR for the
   // fragment builder so that it should not transform the coordinates for RTL.
-  NGBoxFragmentBuilder box(item->GetLayoutObject(), &style,
+  NGBoxFragmentBuilder box(item->GetLayoutObject(), &style, space,
                            {style.GetWritingMode(), TextDirection::kLtr});
   box.SetInitialFragmentGeometry(fragment_geometry);
   box.SetBoxType(NGPhysicalFragment::kInlineBox);
@@ -856,7 +856,6 @@ NGInlineLayoutStateStack::BoxData::CreateBoxFragment(
       // this as a child of an inline level fragment, we adjust the static
       // position to be relative to this fragment.
       LogicalOffset static_offset = child.rect.offset - rect.offset;
-      static_offset += oof_relative_offset;
 
       box.AddOutOfFlowInlineChildCandidate(oof_box, static_offset,
                                            child.container_direction);
@@ -866,14 +865,12 @@ NGInlineLayoutStateStack::BoxData::CreateBoxFragment(
 
     // Propagate any OOF-positioned descendants from any atomic-inlines, etc.
     if (child.layout_result) {
-      // An accumulated relative offset is applied to an OOF once it reaches its
-      // inline container. Subtract out the relative offset to avoid adding it
-      // twice.
       box.PropagateChildData(child.layout_result->PhysicalFragment(),
                              child.rect.offset - rect.offset -
                                  ComputeRelativeOffsetForInline(
                                      space, child.PhysicalFragment()->Style()),
-                             /* relative_offset */ LogicalOffset());
+                             ComputeRelativeOffsetForOOFInInline(
+                                 space, child.PhysicalFragment()->Style()));
     }
 
     // |NGFragmentItems| has a flat list of all descendants, except
@@ -885,7 +882,7 @@ NGInlineLayoutStateStack::BoxData::CreateBoxFragment(
   // invalidations.
   item->GetLayoutObject()->SetShouldDoFullPaintInvalidation();
 
-  box.MoveOutOfFlowDescendantCandidatesToDescendants(oof_relative_offset);
+  box.MoveOutOfFlowDescendantCandidatesToDescendants();
   return box.ToInlineBoxFragment();
 }
 
@@ -893,6 +890,13 @@ NGInlineLayoutStateStack::PositionPending
 NGInlineLayoutStateStack::ApplyBaselineShift(NGInlineBoxState* box,
                                              NGLogicalLineItems* line_box,
                                              FontBaseline baseline_type) {
+  // The `vertical-align` property should not apply to the line wrapper for
+  // block-in-inline.
+  if (UNLIKELY(has_block_in_inline_)) {
+    DCHECK(box->pending_descendants.IsEmpty());
+    return kPositionNotPending;
+  }
+
   // Some 'vertical-align' values require the size of their parents. Align all
   // such descendant boxes that require the size of this box; they are queued in
   // |pending_descendants|.
@@ -999,12 +1003,16 @@ NGInlineLayoutStateStack::ApplyBaselineShift(NGInlineBoxState* box,
         break;
       }
       case EBaselineShiftType::kSub:
-        baseline_shift = LayoutUnit(
-            box->font->PrimaryFont()->GetFontMetrics().FloatHeight() / 2);
+        if (const auto* font_data = box->font->PrimaryFont()) {
+          baseline_shift =
+              LayoutUnit(font_data->GetFontMetrics().FloatHeight() / 2);
+        }
         break;
       case EBaselineShiftType::kSuper:
-        baseline_shift = LayoutUnit(
-            -box->font->PrimaryFont()->GetFontMetrics().FloatHeight() / 2);
+        if (const auto* font_data = box->font->PrimaryFont()) {
+          baseline_shift =
+              LayoutUnit(-font_data->GetFontMetrics().FloatHeight() / 2);
+        }
         break;
     }
     baseline_shift += ComputeAlignmentBaselineShift(box);
@@ -1082,13 +1090,17 @@ NGInlineLayoutStateStack::ApplyBaselineShift(NGInlineBoxState* box,
 
 LayoutUnit NGInlineLayoutStateStack::ComputeAlignmentBaselineShift(
     const NGInlineBoxState* box) {
-  const FontMetrics& metrics = box->font->PrimaryFont()->GetFontMetrics();
-  LayoutUnit result = metrics.FixedAscent(box->style->GetFontBaseline()) -
-                      metrics.FixedAscent(box->alignment_type);
+  LayoutUnit result;
+  if (const auto* font_data = box->font->PrimaryFont()) {
+    const FontMetrics& metrics = font_data->GetFontMetrics();
+    result = metrics.FixedAscent(box->style->GetFontBaseline()) -
+             metrics.FixedAscent(box->alignment_type);
+  }
 
-  if (box != stack_.begin()) {
-    const FontMetrics& parent_metrics =
-        box[-1].font->PrimaryFont()->GetFontMetrics();
+  if (box == stack_.begin())
+    return result;
+  if (const auto* font_data = box[-1].font->PrimaryFont()) {
+    const FontMetrics& parent_metrics = font_data->GetFontMetrics();
     result -= parent_metrics.FixedAscent(box[-1].style->GetFontBaseline()) -
               parent_metrics.FixedAscent(box[-1].alignment_type);
   }

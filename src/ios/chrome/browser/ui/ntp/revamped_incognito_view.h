@@ -7,11 +7,26 @@
 
 #import <UIKit/UIKit.h>
 
+@protocol NewTabPageURLLoaderDelegate;
+
 // The scrollview containing the views. Its content's size is constrained on its
 // superview's size.
 @interface RevampedIncognitoView : UIScrollView
 
-- (instancetype)initWithFrame:(CGRect)frame;
+// Initialize the view with a given `frame`.
+// Set `showTopIncognitoImageAndTitle` to `YES` to have the top Incognito
+// header (with a big icon and title) added at the top of the scroll view
+// content.
+- (instancetype)initWithFrame:(CGRect)frame
+    showTopIncognitoImageAndTitle:(BOOL)showTopIncognitoImageAndTitle
+    NS_DESIGNATED_INITIALIZER;
+
+- (instancetype)initWithFrame:(CGRect)frame NS_UNAVAILABLE;
+
+- (instancetype)initWithCoder:(NSCoder*)aDecoder NS_UNAVAILABLE;
+
+// Delegate to load urls in the current tab.
+@property(nonatomic, weak) id<NewTabPageURLLoaderDelegate> URLLoaderDelegate;
 
 @end
 

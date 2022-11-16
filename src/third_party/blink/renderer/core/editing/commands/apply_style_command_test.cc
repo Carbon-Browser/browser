@@ -12,9 +12,10 @@
 #include "third_party/blink/renderer/core/editing/frame_selection.h"
 #include "third_party/blink/renderer/core/editing/selection_template.h"
 #include "third_party/blink/renderer/core/editing/testing/editing_test_base.h"
+#include "third_party/blink/renderer/core/execution_context/security_context.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 
 namespace blink {
 
@@ -199,12 +200,32 @@ TEST_F(ApplyStyleCommandTest, ItalicCrossingIgnoredContentBoundary) {
       InputEvent::InputType::kFormatItalic)
       ->Apply();
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   EXPECT_EQ("|a<select multiple><option></option></select>b",
             GetSelectionTextFromBody());
 #else
   EXPECT_EQ("<i>^a<select multiple><option>|</option></select></i>b",
             GetSelectionTextFromBody());
 #endif
+}
+
+// This is a regression test for https://crbug.com/1246190
+TEST_F(ApplyStyleCommandTest, RemoveEmptyItalic) {
+  GetDocument().setDesignMode("on");
+  InsertStyleElement("i {display: inline-block; width: 1px; height: 1px}");
+  SetBodyContent("<div><input><i></i>&#x20;</div>A");
+
+  Element* div = GetDocument().QuerySelector("div");
+  Element* i = GetDocument().QuerySelector("i");
+  Selection().SetSelection(
+      SelectionInDOMTree::Builder().Collapse(Position(i, 0)).Build(),
+      SetSelectionOptions());
+  auto* command = MakeGarbageCollected<ApplyStyleCommand>(
+      GetDocument(), MakeGarbageCollected<EditingStyle>(div),
+      InputEvent::InputType::kFormatRemove);
+
+  // Shouldn't crash.
+  EXPECT_TRUE(command->Apply());
+  EXPECT_EQ("<div><input>| </div>A", GetSelectionTextFromBody());
 }
 }  // namespace blink

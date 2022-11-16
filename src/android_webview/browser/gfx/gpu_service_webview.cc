@@ -9,7 +9,7 @@
 #include "content/public/browser/gpu_data_manager.h"
 #include "content/public/browser/gpu_utils.h"
 #include "gpu/command_buffer/service/mailbox_manager_factory.h"
-#include "gpu/command_buffer/service/shared_image_manager.h"
+#include "gpu/command_buffer/service/shared_image/shared_image_manager.h"
 #include "gpu/command_buffer/service/sync_point_manager.h"
 #include "gpu/config/gpu_util.h"
 
@@ -29,9 +29,9 @@ GpuServiceWebView* GpuServiceWebView::CreateGpuServiceWebView() {
   gpu::GpuPreferences gpu_preferences =
       content::GetGpuPreferencesFromCommandLine();
   auto* command_line = base::CommandLine::ForCurrentProcess();
-  bool success = gpu::InitializeGLThreadSafe(command_line, gpu_preferences,
-                                             &gpu_info, &gpu_feature_info);
-  if (!success) {
+  gl::GLDisplay* display = gpu::InitializeGLThreadSafe(
+      command_line, gpu_preferences, &gpu_info, &gpu_feature_info);
+  if (!display) {
     LOG(FATAL) << "gpu::InitializeGLThreadSafe() failed.";
   }
   auto sync_point_manager = std::make_unique<gpu::SyncPointManager>();

@@ -17,11 +17,11 @@
 #include "base/callback_helpers.h"
 #include "base/files/file_path.h"
 #include "base/location.h"
-#include "base/macros.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
-#include "base/task_runner.h"
+#include "base/task/task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
 #include "base/threading/thread_task_runner_handle.h"
@@ -85,6 +85,9 @@ class FakeFileStreamReader : public FileStreamReader {
             contents.size())),
         net_error_(net::OK),
         size_(size) {}
+
+  FakeFileStreamReader(const FakeFileStreamReader&) = delete;
+  FakeFileStreamReader& operator=(const FakeFileStreamReader&) = delete;
 
   ~FakeFileStreamReader() override = default;
 
@@ -160,8 +163,6 @@ class FakeFileStreamReader : public FileStreamReader {
   scoped_refptr<base::SingleThreadTaskRunner> async_task_runner_;
   int net_error_;
   uint64_t size_;
-
-  DISALLOW_COPY_AND_ASSIGN(FakeFileStreamReader);
 };
 
 class MockFileStreamReaderProvider
@@ -205,6 +206,10 @@ class MockFileStreamReaderProvider
 class BlobReaderTest : public ::testing::Test {
  public:
   BlobReaderTest() = default;
+
+  BlobReaderTest(const BlobReaderTest&) = delete;
+  BlobReaderTest& operator=(const BlobReaderTest&) = delete;
+
   ~BlobReaderTest() override = default;
 
   void SetUp() override {
@@ -225,7 +230,7 @@ class BlobReaderTest : public ::testing::Test {
         builder ? context_.AddFinishedBlob(std::move(builder)) : nullptr;
     provider_ = new MockFileStreamReaderProvider();
     reader_.reset(new BlobReader(blob_handle_.get()));
-    reader_->SetFileStreamProviderForTesting(base::WrapUnique(provider_));
+    reader_->SetFileStreamProviderForTesting(base::WrapUnique(provider_.get()));
   }
 
   // Takes ownership of the file reader (the blob reader takes ownership).
@@ -284,12 +289,9 @@ class BlobReaderTest : public ::testing::Test {
 
   BlobStorageContext context_;
   std::unique_ptr<BlobDataHandle> blob_handle_;
-  MockFileStreamReaderProvider* provider_ = nullptr;
+  raw_ptr<MockFileStreamReaderProvider> provider_ = nullptr;
   std::unique_ptr<BlobReader> reader_;
   scoped_refptr<FileSystemContext> file_system_context_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(BlobReaderTest);
 };
 
 TEST_F(BlobReaderTest, BasicMemory) {
@@ -1157,7 +1159,7 @@ TEST_F(BlobReaderTest, HandleBeforeAsyncCancel) {
   EXPECT_EQ(BlobStatus::PENDING_TRANSPORT, can_populate_status);
   provider_ = new MockFileStreamReaderProvider();
   reader_.reset(new BlobReader(blob_handle_.get()));
-  reader_->SetFileStreamProviderForTesting(base::WrapUnique(provider_));
+  reader_->SetFileStreamProviderForTesting(base::WrapUnique(provider_.get()));
   int size_result = -1;
   EXPECT_EQ(
       BlobReader::Status::IO_PENDING,
@@ -1185,7 +1187,7 @@ TEST_F(BlobReaderTest, ReadFromIncompleteBlob) {
   EXPECT_EQ(BlobStatus::PENDING_TRANSPORT, can_populate_status);
   provider_ = new MockFileStreamReaderProvider();
   reader_.reset(new BlobReader(blob_handle_.get()));
-  reader_->SetFileStreamProviderForTesting(base::WrapUnique(provider_));
+  reader_->SetFileStreamProviderForTesting(base::WrapUnique(provider_.get()));
   int size_result = -1;
   EXPECT_EQ(
       BlobReader::Status::IO_PENDING,

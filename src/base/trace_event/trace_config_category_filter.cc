@@ -160,7 +160,7 @@ void TraceConfigCategoryFilter::Clear() {
   excluded_categories_.clear();
 }
 
-void TraceConfigCategoryFilter::ToDict(Value* dict) const {
+void TraceConfigCategoryFilter::ToDict(Value::Dict& dict) const {
   StringList categories(included_categories_);
   categories.insert(categories.end(), disabled_categories_.begin(),
                     disabled_categories_.end());
@@ -179,7 +179,7 @@ std::string TraceConfigCategoryFilter::ToFilterString() const {
 void TraceConfigCategoryFilter::SetCategoriesFromIncludedList(
     const Value& included_list) {
   included_categories_.clear();
-  for (const Value& item : included_list.GetList()) {
+  for (const Value& item : included_list.GetListDeprecated()) {
     if (!item.is_string())
       continue;
     const std::string& category = item.GetString();
@@ -195,7 +195,7 @@ void TraceConfigCategoryFilter::SetCategoriesFromIncludedList(
 void TraceConfigCategoryFilter::SetCategoriesFromExcludedList(
     const Value& excluded_list) {
   excluded_categories_.clear();
-  for (const Value& item : excluded_list.GetList()) {
+  for (const Value& item : excluded_list.GetListDeprecated()) {
     if (item.is_string())
       excluded_categories_.push_back(item.GetString());
   }
@@ -204,14 +204,14 @@ void TraceConfigCategoryFilter::SetCategoriesFromExcludedList(
 void TraceConfigCategoryFilter::AddCategoriesToDict(
     const StringList& categories,
     const char* param,
-    Value* dict) const {
+    Value::Dict& dict) const {
   if (categories.empty())
     return;
 
-  std::vector<base::Value> list;
+  Value::List list;
   for (const std::string& category : categories)
-    list.emplace_back(category);
-  dict->SetKey(param, base::Value(std::move(list)));
+    list.Append(category);
+  dict.Set(param, std::move(list));
 }
 
 void TraceConfigCategoryFilter::WriteCategoryFilterString(

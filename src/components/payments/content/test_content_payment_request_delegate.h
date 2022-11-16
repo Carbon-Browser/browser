@@ -28,6 +28,12 @@ class TestContentPaymentRequestDelegate : public ContentPaymentRequestDelegate {
   TestContentPaymentRequestDelegate(
       std::unique_ptr<base::SingleThreadTaskExecutor> task_executor,
       autofill::PersonalDataManager* pdm);
+
+  TestContentPaymentRequestDelegate(const TestContentPaymentRequestDelegate&) =
+      delete;
+  TestContentPaymentRequestDelegate& operator=(
+      const TestContentPaymentRequestDelegate&) = delete;
+
   ~TestContentPaymentRequestDelegate() override;
 
   // ContentPaymentRequestDelegate:
@@ -72,12 +78,13 @@ class TestContentPaymentRequestDelegate : public ContentPaymentRequestDelegate {
   const base::WeakPtr<PaymentUIObserver> GetPaymentUIObserver() const override;
   void ShowNoMatchingPaymentCredentialDialog(
       const std::u16string& merchant_name,
-      base::OnceClosure response_callback) override;
+      const std::string& rp_id,
+      base::OnceClosure response_callback,
+      base::OnceClosure opt_out_callback) override;
 
  private:
   TestPaymentRequestDelegate core_delegate_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestContentPaymentRequestDelegate);
+  PaymentRequestDisplayManager payment_request_display_manager_;
 };
 
 }  // namespace payments

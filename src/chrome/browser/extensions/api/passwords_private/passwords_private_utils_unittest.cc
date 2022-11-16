@@ -5,19 +5,26 @@
 #include "chrome/browser/extensions/api/passwords_private/passwords_private_utils.h"
 
 #include "components/password_manager/core/browser/password_form.h"
+#include "components/password_manager/core/browser/ui/credential_ui_entry.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/gurl.h"
 
 namespace extensions {
 
+namespace {
+
+using password_manager::CredentialUIEntry;
+
+}  // namespace
+
 TEST(CreateUrlCollectionFromFormTest, UrlsFromHtmlForm) {
   password_manager::PasswordForm html_form;
   html_form.url = GURL("http://example.com/LoginAuth");
-  html_form.signon_realm = html_form.url.GetOrigin().spec();
+  html_form.signon_realm = html_form.url.DeprecatedGetOriginAsURL().spec();
 
   api::passwords_private::UrlCollection html_urls =
-      CreateUrlCollectionFromForm(html_form);
+      CreateUrlCollectionFromCredential(CredentialUIEntry(html_form));
   EXPECT_EQ(html_urls.origin, "http://example.com/");
   EXPECT_EQ(html_urls.shown, "example.com");
   EXPECT_EQ(html_urls.link, "http://example.com/LoginAuth");
@@ -31,7 +38,7 @@ TEST(CreateUrlCollectionFromFormTest, UrlsFromFederatedForm) {
       url::Origin::Create(GURL("https://google.com/"));
 
   api::passwords_private::UrlCollection federated_urls =
-      CreateUrlCollectionFromForm(federated_form);
+      CreateUrlCollectionFromCredential(CredentialUIEntry(federated_form));
   EXPECT_EQ(federated_urls.origin, "federation://example.com/google.com");
   EXPECT_EQ(federated_urls.shown, "example.com");
   EXPECT_EQ(federated_urls.link, "https://example.com/");
@@ -43,7 +50,7 @@ TEST(CreateUrlCollectionFromFormTest, UrlsFromAndroidFormWithoutDisplayName) {
   android_form.app_display_name.clear();
 
   api::passwords_private::UrlCollection android_urls =
-      CreateUrlCollectionFromForm(android_form);
+      CreateUrlCollectionFromCredential(CredentialUIEntry(android_form));
   EXPECT_EQ("android://example@com.example.android", android_urls.origin);
   EXPECT_EQ("android.example.com", android_urls.shown);
   EXPECT_EQ("https://play.google.com/store/apps/details?id=com.example.android",
@@ -56,11 +63,20 @@ TEST(CreateUrlCollectionFromFormTest, UrlsFromAndroidFormWithAppName) {
   android_form.app_display_name = "Example Android App";
 
   api::passwords_private::UrlCollection android_urls =
-      CreateUrlCollectionFromForm(android_form);
+      CreateUrlCollectionFromCredential(CredentialUIEntry(android_form));
   EXPECT_EQ(android_urls.origin, "android://hash@com.example.android");
   EXPECT_EQ("Example Android App", android_urls.shown);
   EXPECT_EQ("https://play.google.com/store/apps/details?id=com.example.android",
             android_urls.link);
+}
+
+TEST(CreateUrlCollectionFromGURLTest, UrlsFromGURL) {
+  GURL url = GURL("https://example.com/login");
+  api::passwords_private::UrlCollection urls = CreateUrlCollectionFromGURL(url);
+
+  EXPECT_EQ(urls.shown, "example.com");
+  EXPECT_EQ(urls.origin, "https://example.com/");
+  EXPECT_EQ(urls.link, "https://example.com/login");
 }
 
 TEST(IdGeneratorTest, GenerateIds) {

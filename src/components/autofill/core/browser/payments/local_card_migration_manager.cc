@@ -16,9 +16,9 @@
 #include "base/strings/utf_string_conversions.h"
 #include "components/autofill/core/browser/autofill_client.h"
 #include "components/autofill/core/browser/autofill_experiments.h"
-#include "components/autofill/core/browser/autofill_metrics.h"
 #include "components/autofill/core/browser/data_model/credit_card.h"
 #include "components/autofill/core/browser/form_data_importer.h"
+#include "components/autofill/core/browser/metrics/autofill_metrics.h"
 #include "components/autofill/core/browser/payments/payments_client.h"
 #include "components/autofill/core/browser/payments/payments_util.h"
 #include "components/autofill/core/browser/personal_data_manager.h"
@@ -80,7 +80,7 @@ bool LocalCardMigrationManager::ShouldOfferLocalCardMigration(
   }
 
   // Don't show the prompt if max strike count was reached.
-  if (GetLocalCardMigrationStrikeDatabase()->IsMaxStrikesLimitReached()) {
+  if (GetLocalCardMigrationStrikeDatabase()->ShouldBlockFeature()) {
     switch (imported_credit_card_record_type_) {
       case FormDataImporter::ImportedCreditCardRecordType::LOCAL_CARD:
         AutofillMetrics::LogLocalCardMigrationNotOfferedDueToMaxStrikesMetric(
@@ -142,6 +142,7 @@ void LocalCardMigrationManager::AttemptToOfferLocalCardMigration(
       base::BindOnce(&LocalCardMigrationManager::OnDidGetUploadDetails,
                      weak_ptr_factory_.GetWeakPtr(), is_from_settings_page),
       payments::kMigrateCardsBillableServiceNumber,
+      payments::GetBillingCustomerId(personal_data_manager_),
       is_from_settings_page ? payments::PaymentsClient::UploadCardSource::
                                   LOCAL_CARD_MIGRATION_SETTINGS_PAGE
                             : payments::PaymentsClient::UploadCardSource::
@@ -205,7 +206,7 @@ void LocalCardMigrationManager::OnDidGetUploadDetails(
   if (observer_for_testing_)
     observer_for_testing_->OnReceivedGetUploadDetailsResponse();
 
-  if (result == AutofillClient::SUCCESS) {
+  if (result == AutofillClient::PaymentsRpcResult::kSuccess) {
     LegalMessageLine::Parse(*legal_message, &legal_message_lines_,
                             /*escape_apostrophes=*/true);
 
@@ -285,7 +286,7 @@ void LocalCardMigrationManager::OnDidMigrateLocalCards(
   if (!save_result)
     return;
 
-  if (result == AutofillClient::PaymentsRpcResult::SUCCESS) {
+  if (result == AutofillClient::PaymentsRpcResult::kSuccess) {
     std::vector<CreditCard> migrated_cards;
     // Traverse the migratable credit cards to update each migrated card status.
     for (MigratableCreditCard& card : migratable_credit_cards_) {
@@ -308,10 +309,10 @@ void LocalCardMigrationManager::OnDidMigrateLocalCards(
       if (it->second == kMigrationResultPermanentFailure ||
           it->second == kMigrationResultTemporaryFailure) {
         card.set_migration_status(
-            autofill::MigratableCreditCard::MigrationStatus::FAILURE_ON_UPLOAD);
+            MigratableCreditCard::MigrationStatus::FAILURE_ON_UPLOAD);
       } else if (it->second == kMigrationResultSuccess) {
         card.set_migration_status(
-            autofill::MigratableCreditCard::MigrationStatus::SUCCESS_ON_UPLOAD);
+            MigratableCreditCard::MigrationStatus::SUCCESS_ON_UPLOAD);
         migrated_cards.push_back(card.credit_card());
       } else {
         NOTREACHED();
@@ -328,7 +329,7 @@ void LocalCardMigrationManager::OnDidMigrateLocalCards(
   }
 
   client_->ShowLocalCardMigrationResults(
-      result != AutofillClient::PaymentsRpcResult::SUCCESS,
+      result != AutofillClient::PaymentsRpcResult::kSuccess,
       base::UTF8ToUTF16(display_text), migratable_credit_cards_,
       base::BindRepeating(
           &LocalCardMigrationManager::OnUserDeletedLocalCardViaMigrationDialog,

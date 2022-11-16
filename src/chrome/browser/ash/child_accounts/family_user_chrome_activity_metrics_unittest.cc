@@ -25,6 +25,7 @@
 #include "chrome/test/base/test_browser_window_aura.h"
 #include "chromeos/dbus/power/fake_power_manager_client.h"
 #include "chromeos/dbus/power_manager/idle.pb.h"
+#include "components/app_constants/constants.h"
 #include "components/services/app_service/public/cpp/app_registry_cache.h"
 #include "components/services/app_service/public/mojom/types.mojom.h"
 #include "components/session_manager/core/session_manager.h"
@@ -35,8 +36,8 @@ namespace ash {
 namespace {
 constexpr char kExtensionNameChrome[] = "Chrome";
 constexpr char kExtensionAppUrl[] = "https://example.com/";
-constexpr base::TimeDelta kHalfHour = base::TimeDelta::FromMinutes(30);
-constexpr base::TimeDelta kOneMinute = base::TimeDelta::FromMinutes(1);
+constexpr base::TimeDelta kHalfHour = base::Minutes(30);
+constexpr base::TimeDelta kOneMinute = base::Minutes(1);
 
 constexpr apps::InstanceState kActiveInstanceState =
     static_cast<apps::InstanceState>(
@@ -78,7 +79,7 @@ class FamilyUserChromeActivityMetricsTest
 
     // Install Chrome.
     scoped_refptr<extensions::Extension> chrome = app_time::CreateExtension(
-        extension_misc::kChromeAppId, kExtensionNameChrome, kExtensionAppUrl);
+        app_constants::kChromeAppId, kExtensionNameChrome, kExtensionAppUrl);
     extension_service_->AddComponentExtension(chrome.get());
 
     PushChromeApp();
@@ -113,15 +114,18 @@ class FamilyUserChromeActivityMetricsTest
   }
 
   void PushChromeApp() {
+    auto mojom_app_type = apps::ConvertAppTypeToMojomAppType(
+        app_time::GetChromeAppId().app_type());
+
     std::vector<apps::mojom::AppPtr> deltas;
     auto app = apps::mojom::App::New();
     app->app_id = app_time::GetChromeAppId().app_id();
-    app->app_type = app_time::GetChromeAppId().app_type();
+    app->app_type = mojom_app_type;
     deltas.push_back(std::move(app));
 
     apps::AppServiceProxyFactory::GetForProfile(profile())
         ->AppRegistryCache()
-        .OnApps(std::move(deltas), app_time::GetChromeAppId().app_type(),
+        .OnApps(std::move(deltas), mojom_app_type,
                 false /* should_notify_initialized */);
   }
 
@@ -132,17 +136,11 @@ class FamilyUserChromeActivityMetricsTest
   void OnNewDay() { family_user_chrome_activity_metrics_->OnNewDay(); }
 
   void PushChromeAppInstance(aura::Window* window, apps::InstanceState state) {
-    std::unique_ptr<apps::Instance> instance = std::make_unique<apps::Instance>(
-        app_time::GetChromeAppId().app_id(),
-        apps::Instance::InstanceKey::ForWindowBasedApp(window));
-    instance->UpdateState(state, base::Time::Now());
-
-    std::vector<std::unique_ptr<apps::Instance>> deltas;
-    deltas.push_back(std::move(instance));
-
+    apps::InstanceParams params(app_time::GetChromeAppId().app_id(), window);
+    params.state = std::make_pair(state, base::Time::Now());
     apps::AppServiceProxyFactory::GetForProfile(profile())
         ->InstanceRegistry()
-        .OnInstances(deltas);
+        .CreateOrUpdateInstance(std::move(params));
   }
 
   std::unique_ptr<Browser> CreateBrowserWithAuraWindow() {
@@ -197,12 +195,12 @@ TEST_F(FamilyUserChromeActivityMetricsTest, Basic) {
   task_environment()->FastForwardBy(kHalfHour);
   PushChromeAppInstance(another_browser->window()->GetNativeWindow(),
                         apps::InstanceState::kDestroyed);
-  EXPECT_EQ(base::TimeDelta::FromHours(1),
+  EXPECT_EQ(base::Hours(1),
             pref_service()->GetTimeDelta(
                 prefs::kFamilyUserMetricsChromeBrowserEngagementDuration));
 
   // Test date change.
-  task_environment()->FastForwardBy(base::TimeDelta::FromDays(1));
+  task_environment()->FastForwardBy(base::Days(1));
   OnNewDay();
 
   EXPECT_EQ(base::TimeDelta(),
@@ -211,7 +209,7 @@ TEST_F(FamilyUserChromeActivityMetricsTest, Basic) {
   histogram_tester.ExpectTimeBucketCount(
       FamilyUserChromeActivityMetrics::
           kChromeBrowserEngagementDurationHistogramName,
-      base::TimeDelta::FromHours(1), 1);
+      base::Hours(1), 1);
 }
 
 TEST_F(FamilyUserChromeActivityMetricsTest, ClockBackward) {
@@ -271,7 +269,7 @@ TEST_F(FamilyUserChromeActivityMetricsTest,
       FamilyUserChromeActivityMetrics::
           kChromeBrowserEngagementDurationHistogramName,
       0);
-  EXPECT_EQ(base::TimeDelta::FromHours(1),
+  EXPECT_EQ(base::Hours(1),
             pref_service()->GetTimeDelta(
                 prefs::kFamilyUserMetricsChromeBrowserEngagementDuration));
 }
@@ -297,7 +295,7 @@ TEST_F(FamilyUserChromeActivityMetricsTest, ScreenStateChange) {
   // Test the screen off for 1 day.
   SetScreenOff(true);
 
-  task_environment()->FastForwardBy(base::TimeDelta::FromDays(1));
+  task_environment()->FastForwardBy(base::Days(1));
   OnNewDay();
 
   EXPECT_EQ(base::TimeDelta(),
@@ -336,11 +334,11 @@ TEST_F(FamilyUserChromeActivityMetricsTest, MockLockAndUnclockScreen) {
   PushChromeAppInstance(test_browser_->window()->GetNativeWindow(),
                         kInactiveInstanceState);
 
-  EXPECT_EQ(base::TimeDelta::FromMinutes(2),
+  EXPECT_EQ(base::Minutes(2),
             pref_service()->GetTimeDelta(
                 prefs::kFamilyUserMetricsChromeBrowserEngagementDuration));
 
-  task_environment()->FastForwardBy(base::TimeDelta::FromDays(1));
+  task_environment()->FastForwardBy(base::Days(1));
   OnNewDay();
 
   EXPECT_EQ(base::TimeDelta(),
@@ -349,7 +347,7 @@ TEST_F(FamilyUserChromeActivityMetricsTest, MockLockAndUnclockScreen) {
   histogram_tester.ExpectTimeBucketCount(
       FamilyUserChromeActivityMetrics::
           kChromeBrowserEngagementDurationHistogramName,
-      base::TimeDelta::FromMinutes(2), 1);
+      base::Minutes(2), 1);
 }
 
 }  // namespace ash

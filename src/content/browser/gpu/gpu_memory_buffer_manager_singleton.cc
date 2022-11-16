@@ -12,13 +12,12 @@
 #include "content/browser/gpu/gpu_process_host.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
-#include "content/public/common/content_features.h"
 #include "gpu/ipc/common/gpu_memory_buffer_support.h"
 #include "ui/base/ui_base_features.h"
 
 #if defined(USE_OZONE)
 #include "ui/ozone/public/ozone_platform.h"
-#elif defined(OS_MAC)
+#elif BUILDFLAG(IS_MAC)
 #include "ui/accelerated_widget_mac/window_resize_helper_mac.h"
 #endif
 
@@ -37,24 +36,16 @@ viz::mojom::GpuService* GetGpuService(
   return nullptr;
 }
 
-#if defined(USE_X11) || defined(USE_OZONE_PLATFORM_X11)
+#if defined(USE_OZONE_PLATFORM_X11)
 bool ShouldSetBufferFormatsFromGpuExtraInfo() {
-#if defined(USE_OZONE)
-  if (features::IsUsingOzonePlatform()) {
-    return ui::OzonePlatform::GetInstance()
-        ->GetPlatformProperties()
-        .fetch_buffer_formats_for_gmb_on_gpu;
-  }
-#endif
-  return true;
+  return ui::OzonePlatform::GetInstance()
+      ->GetPlatformProperties()
+      .fetch_buffer_formats_for_gmb_on_gpu;
 }
 #endif
 
 scoped_refptr<base::SingleThreadTaskRunner> GetTaskRunner() {
-  if (!base::FeatureList::IsEnabled(features::kProcessHostOnUI))
-    return GetIOThreadTaskRunner({});
-
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   return ui::WindowResizeHelperMac::Get()->task_runner();
 #else
   return GetUIThreadTaskRunner({});
@@ -88,9 +79,8 @@ GpuMemoryBufferManagerSingleton::GetInstance() {
 }
 
 void GpuMemoryBufferManagerSingleton::OnGpuExtraInfoUpdate() {
-#if defined(USE_X11) || defined(USE_OZONE_PLATFORM_X11)
-  // X11 and non-Ozone/X11 fetch buffer formats on gpu and pass them via gpu
-  // extra info.
+#if defined(USE_OZONE_PLATFORM_X11)
+  // X11 fetches buffer formats on gpu and passes them via gpu extra info.
   if (!ShouldSetBufferFormatsFromGpuExtraInfo())
     return;
 

@@ -30,13 +30,12 @@ class AmbientBackendControllerImpl : public AmbientBackendController {
   // AmbientBackendController:
   void FetchScreenUpdateInfo(
       int num_topics,
+      bool show_pair_personal_portraits,
+      const gfx::Size& screen_size,
       OnScreenUpdateInfoFetchedCallback callback) override;
   void GetSettings(GetSettingsCallback callback) override;
   void UpdateSettings(const AmbientSettings& settings,
                       UpdateSettingsCallback callback) override;
-  void FetchSettingPreview(int preview_width,
-                           int preview_height,
-                           OnSettingPreviewFetchedCallback callback) override;
   void FetchPersonalAlbums(int banner_width,
                            int banner_height,
                            int num_albums,
@@ -50,11 +49,20 @@ class AmbientBackendControllerImpl : public AmbientBackendController {
   void FetchWeather(FetchWeatherCallback callback) override;
   const std::array<const char*, 2>& GetBackupPhotoUrls() const override;
 
+  void GetGooglePhotosAlbumsPreview(
+      const std::vector<std::string>& album_ids,
+      int preview_width,
+      int preview_height,
+      int num_previews,
+      GetGooglePhotosAlbumsPreviewCallback callback) override;
+
  private:
   using BackdropClientConfig = chromeos::ambient::BackdropClientConfig;
   void RequestAccessToken(AmbientClient::GetAccessTokenCallback callback);
 
   void FetchScreenUpdateInfoInternal(int num_topics,
+                                     bool show_pair_personal_portraits,
+                                     const gfx::Size& screen_size,
                                      OnScreenUpdateInfoFetchedCallback callback,
                                      const std::string& gaia_id,
                                      const std::string& access_token);
@@ -82,17 +90,6 @@ class AmbientBackendControllerImpl : public AmbientBackendController {
                         std::unique_ptr<BackdropURLLoader> backdrop_url_loader,
                         std::unique_ptr<std::string> response);
 
-  void FetchSettingPreviewInternal(int preview_width,
-                                   int preview_height,
-                                   OnSettingPreviewFetchedCallback callback,
-                                   const std::string& gaia_id,
-                                   const std::string& access_token);
-
-  void OnSettingPreviewFetched(
-      OnSettingPreviewFetchedCallback callback,
-      std::unique_ptr<BackdropURLLoader> backdrop_url_loader,
-      std::unique_ptr<std::string> response);
-
   void FetchPersonalAlbumsInternal(int banner_width,
                                    int banner_height,
                                    int num_albums,
@@ -113,6 +110,20 @@ class AmbientBackendControllerImpl : public AmbientBackendController {
                        ash::PersonalAlbums personal_albums);
 
   void OnSettingsAndAlbumsFetched(OnSettingsAndAlbumsFetchedCallback callback);
+
+  void StartToGetGooglePhotosAlbumsPreview(
+      const std::vector<std::string>& album_ids,
+      int preview_width,
+      int preview_height,
+      int num_previews,
+      GetGooglePhotosAlbumsPreviewCallback callback,
+      const std::string& gaia_id,
+      const std::string& access_token);
+
+  void OnGetGooglePhotosAlbumsPreview(
+      GetGooglePhotosAlbumsPreviewCallback callback,
+      std::unique_ptr<BackdropURLLoader> backdrop_url_loader,
+      std::unique_ptr<std::string> response);
 
   // Temporary store for FetchSettingsAndAlbums() when |GetSettingsCallback|
   // called. |settings_| will be absl::nullopt if server returns with error.

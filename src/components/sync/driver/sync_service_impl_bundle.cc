@@ -7,7 +7,6 @@
 #include <string>
 #include <utility>
 
-#include "base/callback_helpers.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/sync/base/sync_prefs.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
@@ -26,7 +25,7 @@ SyncServiceImplBundle::SyncServiceImplBundle()
   identity_test_env_.SetAutomaticIssueOfAccessTokens(true);
 }
 
-SyncServiceImplBundle::~SyncServiceImplBundle() {}
+SyncServiceImplBundle::~SyncServiceImplBundle() = default;
 
 std::unique_ptr<SyncClientMock> SyncServiceImplBundle::CreateSyncClientMock() {
   auto sync_client = std::make_unique<testing::NiceMock<SyncClientMock>>();
@@ -35,6 +34,8 @@ std::unique_ptr<SyncClientMock> SyncServiceImplBundle::CreateSyncClientMock() {
       .WillByDefault(Return(&component_factory_));
   ON_CALL(*sync_client, GetSyncInvalidationsService())
       .WillByDefault(Return(sync_invalidations_service()));
+  ON_CALL(*sync_client, GetTrustedVaultClient())
+      .WillByDefault(Return(trusted_vault_client()));
   return std::move(sync_client);
 }
 

@@ -13,7 +13,7 @@
 #include "components/sync/test/model/model_type_store_test_util.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace chromeos {
+namespace ash {
 namespace {
 
 using sync_pb::PrinterSpecifics;
@@ -28,7 +28,8 @@ class PrintersSyncBridgeTest : public testing::Test {
     bridge_ = std::make_unique<PrintersSyncBridge>(
         syncer::ModelTypeStoreTestUtil::FactoryForInMemoryStoreForTest(),
         base::BindRepeating(
-            base::IgnoreResult(&base::debug::DumpWithoutCrashing)));
+            base::IgnoreResult(&base::debug::DumpWithoutCrashing), FROM_HERE,
+            base::Minutes(5)));
   }
 
  protected:
@@ -103,4 +104,4 @@ TEST_F(PrintersSyncBridgeTest, UpdatePrinterNewPrinter) {
 }
 
 }  // namespace
-}  // namespace chromeos
+}  // namespace ash

@@ -9,19 +9,18 @@
 #include <unordered_map>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "cc/animation/animation_export.h"
 #include "cc/animation/keyframe_model.h"
+#include "cc/base/protected_sequence_synchronizer.h"
 #include "cc/trees/mutator_host.h"
 #include "cc/trees/mutator_host_client.h"
 #include "ui/gfx/geometry/box_f.h"
+#include "ui/gfx/geometry/point_f.h"
 #include "ui/gfx/geometry/vector2d_f.h"
-
-namespace gfx {
-class ScrollOffset;
-}
 
 namespace cc {
 
@@ -44,7 +43,8 @@ enum class ThreadInstance { MAIN, IMPL };
 // An AnimationHost talks to its correspondent LayerTreeHost via
 // MutatorHostClient interface.
 class CC_ANIMATION_EXPORT AnimationHost : public MutatorHost,
-                                          public LayerTreeMutatorClient {
+                                          public LayerTreeMutatorClient,
+                                          public ProtectedSequenceSynchronizer {
  public:
   using ElementToAnimationsMap =
       std::unordered_map<ElementId,
@@ -63,46 +63,56 @@ class CC_ANIMATION_EXPORT AnimationHost : public MutatorHost,
 
   void AddAnimationTimeline(scoped_refptr<AnimationTimeline> timeline);
   void RemoveAnimationTimeline(scoped_refptr<AnimationTimeline> timeline);
-  AnimationTimeline* GetTimelineById(int timeline_id) const;
+  const AnimationTimeline* GetTimelineById(int timeline_id) const;
+  AnimationTimeline* GetTimelineById(int timeline_id);
 
   void RegisterAnimationForElement(ElementId element_id, Animation* animation);
   void UnregisterAnimationForElement(ElementId element_id,
                                      Animation* animation);
 
-  scoped_refptr<ElementAnimations> GetElementAnimationsForElementId(
+  scoped_refptr<const ElementAnimations> GetElementAnimationsForElementId(
       ElementId element_id) const;
+  scoped_refptr<ElementAnimations> GetElementAnimationsForElementId(
+      ElementId element_id);
+
+  gfx::PointF GetScrollOffsetForAnimation(ElementId element_id) const;
 
   // Parent LayerTreeHost or LayerTreeHostImpl.
-  MutatorHostClient* mutator_host_client() { return mutator_host_client_; }
+  MutatorHostClient* mutator_host_client() {
+    DCHECK(IsOwnerThread() || InProtectedSequence());
+    return mutator_host_client_;
+  }
   const MutatorHostClient* mutator_host_client() const {
+    DCHECK(IsOwnerThread() || InProtectedSequence());
     return mutator_host_client_;
   }
 
+  // ProtectedSequenceSynchronizer implementation
+  bool IsOwnerThread() const override;
+  bool InProtectedSequence() const override;
+  void WaitForProtectedSequenceCompletion() const override;
+
   void SetNeedsCommit();
   void SetNeedsPushProperties();
-  bool needs_push_properties() const { return needs_push_properties_; }
+  bool needs_push_properties() const {
+    return needs_push_properties_.Read(*this);
+  }
 
   // MutatorHost implementation.
   std::unique_ptr<MutatorHost> CreateImplInstance() const override;
   void ClearMutators() override;
   base::TimeDelta MinimumTickInterval() const override;
 
-  // Processes the current |element_to_animations_map_|, registering animations
-  // which can now be animated and unregistering those that can't based on the
-  // elements in the |changed_list|.
-  void UpdateRegisteredElementIds(ElementListType changed_list) override;
   void InitClientAnimationState() override;
 
-  void RegisterElementId(ElementId element_id,
-                         ElementListType list_type) override;
-  void UnregisterElementId(ElementId element_id,
-                           ElementListType list_type) override;
+  void RemoveElementId(ElementId element_id) override;
 
   void SetMutatorHostClient(MutatorHostClient* client) override;
 
   void SetLayerTreeMutator(std::unique_ptr<LayerTreeMutator> mutator) override;
 
-  void PushPropertiesTo(MutatorHost* host_impl) override;
+  void PushPropertiesTo(MutatorHost* host_impl,
+                        const PropertyTrees& property_trees) override;
 
   void SetScrollAnimationDurationForTesting(base::TimeDelta duration) override;
   bool NeedsTickAnimations() const override;
@@ -126,28 +136,14 @@ class CC_ANIMATION_EXPORT AnimationHost : public MutatorHost,
 
   bool ScrollOffsetAnimationWasInterrupted(ElementId element_id) const override;
 
-  bool IsAnimatingFilterProperty(ElementId element_id,
-                                 ElementListType list_type) const override;
-  bool IsAnimatingBackdropFilterProperty(
-      ElementId element_id,
-      ElementListType list_type) const override;
-  bool IsAnimatingOpacityProperty(ElementId element_id,
-                                  ElementListType list_type) const override;
-  bool IsAnimatingTransformProperty(ElementId element_id,
-                                    ElementListType list_type) const override;
+  bool IsAnimatingProperty(ElementId element_id,
+                           ElementListType list_type,
+                           TargetProperty::Type property) const override;
 
-  bool HasPotentiallyRunningFilterAnimation(
+  bool HasPotentiallyRunningAnimationForProperty(
       ElementId element_id,
-      ElementListType list_type) const override;
-  bool HasPotentiallyRunningBackdropFilterAnimation(
-      ElementId element_id,
-      ElementListType list_type) const override;
-  bool HasPotentiallyRunningOpacityAnimation(
-      ElementId element_id,
-      ElementListType list_type) const override;
-  bool HasPotentiallyRunningTransformAnimation(
-      ElementId element_id,
-      ElementListType list_type) const override;
+      ElementListType list_type,
+      TargetProperty::Type property) const override;
 
   bool HasAnyAnimationTargetingProperty(
       ElementId element_id,
@@ -163,29 +159,29 @@ class CC_ANIMATION_EXPORT AnimationHost : public MutatorHost,
 
   void ImplOnlyAutoScrollAnimationCreate(
       ElementId element_id,
-      const gfx::ScrollOffset& target_offset,
-      const gfx::ScrollOffset& current_offset,
+      const gfx::PointF& target_offset,
+      const gfx::PointF& current_offset,
       float autoscroll_velocity,
       base::TimeDelta animation_start_offset) override;
 
   void ImplOnlyScrollAnimationCreate(
       ElementId element_id,
-      const gfx::ScrollOffset& target_offset,
-      const gfx::ScrollOffset& current_offset,
+      const gfx::PointF& target_offset,
+      const gfx::PointF& current_offset,
       base::TimeDelta delayed_by,
       base::TimeDelta animation_start_offset) override;
-  bool ImplOnlyScrollAnimationUpdateTarget(
-      const gfx::Vector2dF& scroll_delta,
-      const gfx::ScrollOffset& max_scroll_offset,
-      base::TimeTicks frame_monotonic_time,
-      base::TimeDelta delayed_by) override;
+  bool ImplOnlyScrollAnimationUpdateTarget(const gfx::Vector2dF& scroll_delta,
+                                           const gfx::PointF& max_scroll_offset,
+                                           base::TimeTicks frame_monotonic_time,
+                                           base::TimeDelta delayed_by) override;
 
   void ScrollAnimationAbort() override;
 
   ElementId ImplOnlyScrollAnimatingElement() const override;
+  void ImplOnlyScrollAnimatingElementRemoved() override;
 
   // This should only be called from the main thread.
-  ScrollOffsetAnimations& scroll_offset_animations() const;
+  ScrollOffsetAnimations& scroll_offset_animations();
 
   // Registers the given animation as ticking. A ticking animation is one that
   // has a running keyframe model.
@@ -203,13 +199,19 @@ class CC_ANIMATION_EXPORT AnimationHost : public MutatorHost,
       std::unique_ptr<MutatorOutputState> output_state) override;
 
   size_t MainThreadAnimationsCount() const override;
-  bool HasCustomPropertyAnimations() const override;
+  // Returns true if there is any animation that affects pending tree, such as
+  // custom property animations via paint worklet.
+  bool HasInvalidationAnimation() const override;
+  // Returns true if there is any animation that affects active tree, such as
+  // transform animation.
+  bool HasNativePropertyAnimation() const override;
   bool CurrentFrameHadRAF() const override;
   bool NextFrameHasPendingRAF() const override;
   PendingThroughputTrackerInfos TakePendingThroughputTrackerInfos() override;
   bool HasCanvasInvalidation() const override;
   bool HasJSAnimation() const override;
   bool HasSmilAnimation() const override;
+  bool HasSharedElementTransition() const override;
 
   // Starts/stops throughput tracking represented by |sequence_id|.
   void StartThroughputTracking(TrackedAnimationSequenceId sequence_id);
@@ -219,6 +221,7 @@ class CC_ANIMATION_EXPORT AnimationHost : public MutatorHost,
   void SetHasCanvasInvalidation(bool has_canvas_invalidation);
   void SetHasInlineStyleMutation(bool has_inline_style_mutation);
   void SetHasSmilAnimation(bool has_svg_smil_animation);
+  void SetHasSharedElementTransition(bool hash_shared_element_transition);
   void SetCurrentFrameHadRaf(bool current_frame_had_raf);
   void SetNextFrameHasPendingRaf(bool next_frame_has_pending_raf);
 
@@ -246,37 +249,47 @@ class CC_ANIMATION_EXPORT AnimationHost : public MutatorHost,
   // if there is no match.
   WorkletAnimation* FindWorkletAnimation(WorkletAnimationId id);
 
-  ElementToAnimationsMap element_to_animations_map_;
-  AnimationsList ticking_animations_;
+  ProtectedSequenceReadable<ElementToAnimationsMap> element_to_animations_map_;
+  ProtectedSequenceReadable<AnimationsList> ticking_animations_;
 
   // A list of all timelines which this host owns.
   using IdToTimelineMap =
       std::unordered_map<int, scoped_refptr<AnimationTimeline>>;
-  IdToTimelineMap id_to_timeline_map_;
+  ProtectedSequenceReadable<IdToTimelineMap> id_to_timeline_map_;
 
-  MutatorHostClient* mutator_host_client_;
+  // AnimationHosts's ProtectedSequenceSynchronizer implementation is
+  // implemented using this member. As such the various helpers can not be used
+  // to protect access (otherwise we would get infinite recursion).
+  raw_ptr<MutatorHostClient> mutator_host_client_ = nullptr;
+
+  // This is only non-null within the call scope of PushPropertiesTo().
+  const PropertyTrees* property_trees_ = nullptr;
 
   // Exactly one of scroll_offset_animations_ and scroll_offset_animations_impl_
   // will be non-null for a given AnimationHost instance (the former if
   // thread_instance_ == ThreadInstance::MAIN, the latter if thread_instance_ ==
   // ThreadInstance::IMPL).
-  std::unique_ptr<ScrollOffsetAnimations> scroll_offset_animations_;
-  std::unique_ptr<ScrollOffsetAnimationsImpl> scroll_offset_animations_impl_;
+  ProtectedSequenceWritable<std::unique_ptr<ScrollOffsetAnimations>>
+      scroll_offset_animations_;
+  ProtectedSequenceReadable<std::unique_ptr<ScrollOffsetAnimationsImpl>>
+      scroll_offset_animations_impl_;
 
   const ThreadInstance thread_instance_;
 
-  bool needs_push_properties_;
+  ProtectedSequenceWritable<bool> needs_push_properties_{false};
 
-  std::unique_ptr<LayerTreeMutator> mutator_;
+  ProtectedSequenceReadable<std::unique_ptr<LayerTreeMutator>> mutator_;
 
-  size_t main_thread_animations_count_ = 0;
-  bool current_frame_had_raf_ = false;
-  bool next_frame_has_pending_raf_ = false;
-  bool has_canvas_invalidation_ = false;
-  bool has_inline_style_mutation_ = false;
-  bool has_smil_animation_ = false;
+  ProtectedSequenceReadable<size_t> main_thread_animations_count_{0};
+  ProtectedSequenceReadable<bool> current_frame_had_raf_{false};
+  ProtectedSequenceReadable<bool> next_frame_has_pending_raf_{false};
+  ProtectedSequenceReadable<bool> has_canvas_invalidation_{false};
+  ProtectedSequenceReadable<bool> has_inline_style_mutation_{false};
+  ProtectedSequenceReadable<bool> has_smil_animation_{false};
+  ProtectedSequenceReadable<bool> has_shared_element_transition_{false};
 
-  PendingThroughputTrackerInfos pending_throughput_tracker_infos_;
+  ProtectedSequenceWritable<PendingThroughputTrackerInfos>
+      pending_throughput_tracker_infos_;
 
   base::WeakPtrFactory<AnimationHost> weak_factory_{this};
 };

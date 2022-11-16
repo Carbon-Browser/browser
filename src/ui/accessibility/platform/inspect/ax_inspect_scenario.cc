@@ -4,10 +4,12 @@
 
 #include "ui/accessibility/platform/inspect/ax_inspect_scenario.h"
 
+#include "base/files/file_util.h"
 #include "base/logging.h"
 #include "base/notreached.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
+#include "base/threading/thread_restrictions.h"
 #include "ui/accessibility/platform/inspect/ax_inspect.h"
 #include "ui/accessibility/platform/inspect/ax_script_instruction.h"
 
@@ -21,6 +23,43 @@ AXInspectScenario::~AXInspectScenario() = default;
 AXInspectScenario& AXInspectScenario::operator=(AXInspectScenario&&) = default;
 
 // static
+absl::optional<AXInspectScenario> AXInspectScenario::From(
+    const std::string& directive_prefix,
+    const base::FilePath& scenario_path,
+    const std::vector<ui::AXPropertyFilter>& default_filters) {
+  std::vector<std::string> lines;
+  std::string file_contents;
+  {
+    base::ScopedAllowBlockingForTesting allow_blocking;
+
+    if (!base::ReadFileToString(scenario_path, &file_contents)) {
+      LOG(ERROR) << "Failed to open a file to extract an inspect scenario: "
+                 << scenario_path;
+      return absl::nullopt;
+    }
+  }
+
+  // If the file is an HTML file, assume the directives are contained within
+  // the first comment.
+  if (scenario_path.Extension() == FILE_PATH_LITERAL(".html")) {
+    size_t scenario_start = file_contents.find("<!--");
+    size_t scenario_end = file_contents.find("-->", scenario_start);
+    if (scenario_start != std::string::npos &&
+        scenario_end != std::string::npos) {
+      auto start = file_contents.begin() + scenario_start;
+      auto end = start + (scenario_end - scenario_start);
+      lines = base::SplitString(base::MakeStringPiece(start, end), "\n",
+                                base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL);
+    }
+  } else {
+    // Otherwise, assume the whole file contains only directives
+    lines = base::SplitString(file_contents, "\n", base::TRIM_WHITESPACE,
+                              base::SPLIT_WANT_ALL);
+  }
+  return AXInspectScenario::From(directive_prefix, lines, default_filters);
+}
+
+// static
 AXInspectScenario AXInspectScenario::From(
     const std::string& directive_prefix,
     const std::vector<std::string>& lines,
@@ -29,8 +68,9 @@ AXInspectScenario AXInspectScenario::From(
   Directive directive = kNone;
   // Directives have format of @directive:value[..value], value per line.
   for (const std::string& line : lines) {
-    // Treat empty line the multiline directive end.
-    if (line.empty()) {
+    // Treat empty line the multiline directive end with exception of script
+    // directives which spans until a next directive.
+    if (line.empty() && directive != kScript) {
       directive = kNone;
     }
 
@@ -67,21 +107,23 @@ AXInspectScenario::Directive AXInspectScenario::ParseDirective(
     const std::string& directive) {
   if (directive == "@NO-LOAD-EXPECTED")
     return kNoLoadExpected;
-  if (directive == "@WAIT-FOR")
+  if (directive == "@WAIT-FOR" || directive == directive_prefix + "WAIT-FOR")
     return kWaitFor;
   if (directive == "@EXECUTE-AND-WAIT-FOR")
     return kExecuteAndWaitFor;
   if (directive == "@DEFAULT-ACTION-ON")
     return kDefaultActionOn;
-  if (directive == directive_prefix + "-ALLOW")
+  if (directive == directive_prefix + "ALLOW" || directive == "@ALLOW")
     return kPropertyFilterAllow;
-  if (directive == directive_prefix + "-ALLOW-EMPTY")
+  if (directive == directive_prefix + "ALLOW-EMPTY" ||
+      directive == "@ALLOW-EMPTY") {
     return kPropertyFilterAllowEmpty;
-  if (directive == directive_prefix + "-DENY")
+  }
+  if (directive == directive_prefix + "DENY" || directive == "@DENY")
     return kPropertyFilterDeny;
-  if (directive == directive_prefix + "-SCRIPT")
+  if (directive == directive_prefix + "SCRIPT" || directive == "@SCRIPT")
     return kScript;
-  if (directive == directive_prefix + "-DENY-NODE")
+  if (directive == directive_prefix + "DENY-NODE" || directive == "@DENY-NODE")
     return kNodeFilter;
 
   return kNone;

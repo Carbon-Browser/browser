@@ -11,7 +11,6 @@
 #include <string>
 
 #include "base/bind.h"
-#include "base/macros.h"
 #include "chrome/browser/speech/speech_recognizer_delegate.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
@@ -45,6 +44,9 @@ class NetworkSpeechRecognizer::EventListener
                     pending_shared_url_loader_factory,
                 const std::string& accept_language,
                 const std::string& locale);
+
+  EventListener(const EventListener&) = delete;
+  EventListener& operator=(const EventListener&) = delete;
 
   void StartOnIOThread(
       const std::string& auth_scope,
@@ -94,8 +96,6 @@ class NetworkSpeechRecognizer::EventListener
   std::u16string last_result_str_;
 
   base::WeakPtrFactory<EventListener> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(EventListener);
 };
 
 NetworkSpeechRecognizer::EventListener::EventListener(

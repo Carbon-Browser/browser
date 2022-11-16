@@ -8,12 +8,9 @@
 #include <memory>
 
 #include "base/callback.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
+#include "base/values.h"
 #include "components/prefs/pref_change_registrar.h"
-
-namespace base {
-class DictionaryValue;
-}
 
 namespace user_prefs {
 class PrefRegistrySyncable;
@@ -48,6 +45,7 @@ class DefaultSearchManager {
   static const char kSearchURLPostParams[];
   static const char kSuggestionsURLPostParams[];
   static const char kImageURLPostParams[];
+  static const char kSideSearchParam[];
 
   static const char kSafeForAutoReplace[];
   static const char kInputEncodings[];
@@ -62,7 +60,9 @@ class DefaultSearchManager {
   static const char kDisabledByPolicy[];
   static const char kCreatedFromPlayAPI[];
   static const char kPreconnectToSearchUrl[];
+  static const char kPrefetchLikelyNavigations[];
   static const char kIsActive[];
+  static const char kStarterPackId[];
 
   enum Source {
     // Default search engine chosen either from prepopulated engines set for
@@ -75,6 +75,9 @@ class DefaultSearchManager {
     // Search engine controlled externally through enterprise configuration
     // management (e.g. windows group policy).
     FROM_POLICY,
+    // Search engine recommended externally through enterprise configuration
+    // management but allows for user modification.
+    FROM_POLICY_RECOMMENDED,
   };
 
   using ObserverCallback =
@@ -83,13 +86,16 @@ class DefaultSearchManager {
   DefaultSearchManager(PrefService* pref_service,
                        const ObserverCallback& change_observer);
 
+  DefaultSearchManager(const DefaultSearchManager&) = delete;
+  DefaultSearchManager& operator=(const DefaultSearchManager&) = delete;
+
   ~DefaultSearchManager();
 
   // Register prefs needed for tracking the default search provider.
   static void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry);
 
   // Save default search provider pref values into the map provided.
-  static void AddPrefValueToMap(std::unique_ptr<base::DictionaryValue> value,
+  static void AddPrefValueToMap(base::Value::Dict value,
                                 PrefValueMap* pref_value_map);
 
   // Testing code can call this with |disabled| set to true to cause
@@ -137,7 +143,8 @@ class DefaultSearchManager {
   void MergePrefsDataWithPrepopulated();
 
   // Reads default search provider data from |pref_service_|, updating
-  // |prefs_default_search_| and |default_search_controlled_by_policy_|.
+  // |prefs_default_search_|, |default_search_mandatory_by_policy_|, and
+  // |default_search_recommended_by_policy_|.
   // Invokes MergePrefsDataWithPrepopulated().
   void LoadDefaultSearchEngineFromPrefs();
 
@@ -149,7 +156,7 @@ class DefaultSearchManager {
   // Invokes |change_observer_| if it is not NULL.
   void NotifyObserver();
 
-  PrefService* pref_service_;
+  raw_ptr<PrefService> pref_service_;
   const ObserverCallback change_observer_;
   PrefChangeRegistrar pref_change_registrar_;
 
@@ -168,9 +175,10 @@ class DefaultSearchManager {
   std::unique_ptr<TemplateURLData> prefs_default_search_;
 
   // True if the default search is currently enforced by policy.
-  bool default_search_controlled_by_policy_;
+  bool default_search_mandatory_by_policy_ = false;
 
-  DISALLOW_COPY_AND_ASSIGN(DefaultSearchManager);
+  // True if the default search is currently recommended by policy.
+  bool default_search_recommended_by_policy_ = false;
 };
 
 #endif  // COMPONENTS_SEARCH_ENGINES_DEFAULT_SEARCH_MANAGER_H_

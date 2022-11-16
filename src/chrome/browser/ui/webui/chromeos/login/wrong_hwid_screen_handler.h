@@ -5,32 +5,21 @@
 #ifndef CHROME_BROWSER_UI_WEBUI_CHROMEOS_LOGIN_WRONG_HWID_SCREEN_HANDLER_H_
 #define CHROME_BROWSER_UI_WEBUI_CHROMEOS_LOGIN_WRONG_HWID_SCREEN_HANDLER_H_
 
-#include "base/compiler_specific.h"
-#include "base/macros.h"
+#include "base/memory/weak_ptr.h"
 #include "chrome/browser/ui/webui/chromeos/login/base_screen_handler.h"
-
-namespace ash {
-class WrongHWIDScreen;
-}
 
 namespace chromeos {
 
 // Interface between wrong HWID screen and its representation.
 // Note, do not forget to call OnViewDestroyed in the dtor.
-class WrongHWIDScreenView {
+class WrongHWIDScreenView : public base::SupportsWeakPtr<WrongHWIDScreenView> {
  public:
-  constexpr static StaticOobeScreenId kScreenId{"wrong-hwid"};
+  inline constexpr static StaticOobeScreenId kScreenId{
+      "wrong-hwid", "WrongHWIDMessageScreen"};
 
-  virtual ~WrongHWIDScreenView() {}
+  virtual ~WrongHWIDScreenView() = default;
 
   virtual void Show() = 0;
-  virtual void Hide() = 0;
-
-  // Binds `screen` to the view.
-  virtual void Bind(ash::WrongHWIDScreen* screen) = 0;
-
-  // Unbinds the screen from the view.
-  virtual void Unbind() = 0;
 };
 
 // WebUI implementation of WrongHWIDScreenActor.
@@ -39,27 +28,20 @@ class WrongHWIDScreenHandler : public WrongHWIDScreenView,
  public:
   using TView = WrongHWIDScreenView;
 
-  explicit WrongHWIDScreenHandler(JSCallsContainer* js_calls_container);
+  WrongHWIDScreenHandler();
+
+  WrongHWIDScreenHandler(const WrongHWIDScreenHandler&) = delete;
+  WrongHWIDScreenHandler& operator=(const WrongHWIDScreenHandler&) = delete;
+
   ~WrongHWIDScreenHandler() override;
 
  private:
   // WrongHWIDScreenActor implementation:
   void Show() override;
-  void Hide() override;
-  void Bind(ash::WrongHWIDScreen* screen) override;
-  void Unbind() override;
 
   // BaseScreenHandler implementation:
   void DeclareLocalizedValues(
       ::login::LocalizedValuesBuilder* builder) override;
-  void Initialize() override;
-
-  ash::WrongHWIDScreen* screen_ = nullptr;
-
-  // Keeps whether screen should be shown right after initialization.
-  bool show_on_init_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(WrongHWIDScreenHandler);
 };
 
 }  // namespace chromeos

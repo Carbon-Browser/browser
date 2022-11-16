@@ -12,7 +12,6 @@
 #include "services/network/public/mojom/url_loader_factory.mojom-shared.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/service_worker/controller_service_worker_mode.mojom-shared.h"
-#include "third_party/blink/public/mojom/timing/worker_timing_container.mojom-shared.h"
 #include "third_party/blink/public/platform/cross_variant_mojo_util.h"
 #include "third_party/blink/public/platform/resource_load_info_notifier_wrapper.h"
 #include "third_party/blink/public/platform/web_code_cache_loader.h"
@@ -20,7 +19,6 @@
 #include "third_party/blink/public/platform/web_security_origin.h"
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/public/platform/web_url.h"
-#include "third_party/blink/public/platform/web_url_loader_factory.h"
 #include "third_party/blink/public/platform/websocket_handshake_throttle.h"
 
 namespace base {
@@ -33,8 +31,10 @@ class SiteForCookies;
 
 namespace blink {
 
-class WebURLRequest;
+class CodeCacheHost;
 class WebDocumentSubresourceFilter;
+class WebURLLoaderFactory;
+class WebURLRequest;
 
 // Helper class allowing DedicatedOrSharedWorkerFetchContextImpl to notify blink
 // upon an accept languages update. This class will be extended by
@@ -90,7 +90,7 @@ class WebWorkerFetchContext : public base::RefCounted<WebWorkerFetchContext> {
   // interface. Update worklets to use context specific interface and check that
   // code_cache_host is not a nullptr.
   virtual std::unique_ptr<WebCodeCacheLoader> CreateCodeCacheLoader(
-      blink::mojom::CodeCacheHost* code_cache_host) {
+      CodeCacheHost* code_cache_host) {
     return nullptr;
   }
 
@@ -149,12 +149,6 @@ class WebWorkerFetchContext : public base::RefCounted<WebWorkerFetchContext> {
 
   // Returns the current list of user preferred languages.
   virtual blink::WebString GetAcceptLanguages() const = 0;
-
-  // Returns the blink::mojom::WorkerTimingContainer receiver for the
-  // blink::ResourceResponse with the given |request_id|. Null if the
-  // request has not been intercepted by a service worker.
-  virtual CrossVariantMojoReceiver<mojom::WorkerTimingContainerInterfaceBase>
-  TakePendingWorkerTimingReceiver(int request_id) = 0;
 
   // This flag is set to disallow all network accesses in the context. Used for
   // offline capability detection in service workers.

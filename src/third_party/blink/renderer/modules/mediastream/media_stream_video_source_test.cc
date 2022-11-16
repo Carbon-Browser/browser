@@ -2,13 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <string>
 #include <utility>
 
 #include "base/memory/ptr_util.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/time/time.h"
 #include "build/build_config.h"
 #include "media/base/limits.h"
 #include "media/base/video_frame.h"
@@ -24,6 +24,7 @@
 #include "third_party/blink/renderer/platform/mediastream/media_stream_source.h"
 #include "third_party/blink/renderer/platform/testing/io_task_runner_testing_platform_support.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
+#include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 
 using ::testing::_;
 using ::testing::DoAll;
@@ -49,8 +50,7 @@ class MediaStreamVideoSourceTest : public testing::Test {
     mock_stream_video_source_->DisableStopForRestart();
     stream_source_ = MakeGarbageCollected<MediaStreamSource>(
         String::FromUTF8("dummy_source_id"), MediaStreamSource::kTypeVideo,
-        String::FromUTF8("dummy_source_name"), false /* remote */);
-    stream_source_->SetPlatformSource(
+        String::FromUTF8("dummy_source_name"), false /* remote */,
         base::WrapUnique(mock_stream_video_source_));
     ON_CALL(*mock_stream_video_source_, SetCanDiscardAlpha)
         .WillByDefault(Return());
@@ -69,7 +69,7 @@ class MediaStreamVideoSourceTest : public testing::Test {
   MediaStreamVideoSource* source() { return mock_stream_video_source_; }
 
   // Create a track that's associated with |stream_source_|.
-  WebMediaStreamTrack CreateTrack(const std::string& id) {
+  WebMediaStreamTrack CreateTrack(const String& id) {
     bool enabled = true;
     return MediaStreamVideoTrack::CreateVideoTrack(
         mock_stream_video_source_,
@@ -79,7 +79,7 @@ class MediaStreamVideoSourceTest : public testing::Test {
   }
 
   WebMediaStreamTrack CreateTrack(
-      const std::string& id,
+      const String& id,
       const VideoTrackAdapterSettings& adapter_settings,
       const absl::optional<bool>& noise_reduction,
       bool is_screencast,
@@ -440,6 +440,34 @@ TEST_F(MediaStreamVideoSourceTest, MutedSource) {
   EXPECT_EQ(track.Source().GetReadyState(),
             WebMediaStreamSource::kReadyStateLive);
 
+  sink.DisconnectFromTrack();
+}
+
+TEST_F(MediaStreamVideoSourceTest, NotifyFrameDropped) {
+  constexpr int kMaxFps = 10;
+  WebMediaStreamTrack track = CreateTrackAndStartSource(640, 480, kMaxFps);
+  MockMediaStreamVideoSink sink;
+  sink.ConnectToTrack(track);
+  MediaStreamVideoTrack* native_track = MediaStreamVideoTrack::From(track);
+  native_track->SetSinkNotifyFrameDroppedCallback(
+      &sink, sink.GetNotifyFrameDroppedCB());
+
+  // Drive two frames through whose timestamps are spaced too close for the max
+  // frame rate. The last one should be dropped and cause a notification.
+  base::RunLoop run_loop;
+  base::OnceClosure quit_closure = run_loop.QuitClosure();
+  EXPECT_CALL(sink, OnNotifyFrameDropped).WillOnce([&] {
+    std::move(quit_closure).Run();
+  });
+  scoped_refptr<media::VideoFrame> frame1 =
+      media::VideoFrame::CreateBlackFrame(gfx::Size(100, 100));
+  frame1->set_timestamp(base::Milliseconds(10));
+  mock_source()->DeliverVideoFrame(frame1);
+  scoped_refptr<media::VideoFrame> frame2 =
+      media::VideoFrame::CreateBlackFrame(gfx::Size(100, 100));
+  frame2->set_timestamp(base::Milliseconds(20));
+  mock_source()->DeliverVideoFrame(frame2);
+  run_loop.Run();
   sink.DisconnectFromTrack();
 }
 

@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "components/subresource_filter/content/browser/verified_ruleset_dealer.h"
 #include "components/subresource_filter/core/mojom/subresource_filter.mojom.h"
@@ -34,20 +34,26 @@ class AsyncDocumentSubresourceFilter;
 class ActivationStateComputingNavigationThrottle
     : public content::NavigationThrottle {
  public:
-  // For main frames, a verified ruleset handle is not readily available at
-  // construction time. Since it is expensive to "warm up" the ruleset, the
-  // ruleset handle will be injected in NotifyPageActivationWithRuleset once it
-  // has been established that activation computation is needed.
+  // For subresource filter root frames, a verified ruleset handle is not
+  // readily available at construction time. Since it is expensive to "warm up"
+  // the ruleset, the ruleset handle will be injected in
+  // NotifyPageActivationWithRuleset once it has been established that
+  // activation computation is needed.
   static std::unique_ptr<ActivationStateComputingNavigationThrottle>
-  CreateForMainFrame(content::NavigationHandle* navigation_handle);
+  CreateForRoot(content::NavigationHandle* navigation_handle);
 
-  // It is illegal to create an activation computing throttle for subframes
+  // It is illegal to create an activation computing throttle for frames
   // whose parents are not activated. Similarly, |ruleset_handle| should be
   // non-null.
   static std::unique_ptr<ActivationStateComputingNavigationThrottle>
-  CreateForSubframe(content::NavigationHandle* navigation_handle,
-                    VerifiedRuleset::Handle* ruleset_handle,
-                    const mojom::ActivationState& parent_activation_state);
+  CreateForChild(content::NavigationHandle* navigation_handle,
+                 VerifiedRuleset::Handle* ruleset_handle,
+                 const mojom::ActivationState& parent_activation_state);
+
+  ActivationStateComputingNavigationThrottle(
+      const ActivationStateComputingNavigationThrottle&) = delete;
+  ActivationStateComputingNavigationThrottle& operator=(
+      const ActivationStateComputingNavigationThrottle&) = delete;
 
   ~ActivationStateComputingNavigationThrottle() override;
 
@@ -107,7 +113,7 @@ class ActivationStateComputingNavigationThrottle
 
   // Must outlive this class. For main frame navigations, this member will be
   // nullptr until NotifyPageActivationWithRuleset is called.
-  VerifiedRuleset::Handle* ruleset_handle_;
+  raw_ptr<VerifiedRuleset::Handle> ruleset_handle_;
 
   // Will be set to true when DEFER is called in WillProcessResponse.
   bool deferred_ = false;
@@ -120,8 +126,6 @@ class ActivationStateComputingNavigationThrottle
 
   base::WeakPtrFactory<ActivationStateComputingNavigationThrottle>
       weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ActivationStateComputingNavigationThrottle);
 };
 
 }  // namespace subresource_filter

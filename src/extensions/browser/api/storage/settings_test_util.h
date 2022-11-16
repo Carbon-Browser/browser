@@ -11,12 +11,15 @@
 
 #include "base/compiler_specific.h"
 #include "base/memory/ref_counted.h"
-#include "chrome/test/base/testing_profile.h"
+#include "components/value_store/value_store_factory.h"
 #include "extensions/browser/api/storage/settings_namespace.h"
 #include "extensions/browser/event_router.h"
 #include "extensions/browser/mock_extension_system.h"
-#include "extensions/browser/value_store/value_store_factory.h"
 #include "extensions/common/extension.h"
+
+namespace base {
+class Value;
+}
 
 namespace value_store {
 class ValueStore;
@@ -29,10 +32,10 @@ class StorageFrontend;
 namespace settings_test_util {
 
 // Creates a kilobyte of data.
-std::unique_ptr<base::Value> CreateKilobyte();
+base::Value CreateKilobyte();
 
 // Creates a megabyte of data.
-std::unique_ptr<base::Value> CreateMegabyte();
+base::Value CreateMegabyte();
 
 // Synchronously gets the storage area for an extension from |frontend|.
 value_store::ValueStore* GetStorage(

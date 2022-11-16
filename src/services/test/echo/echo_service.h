@@ -5,7 +5,7 @@
 #ifndef SERVICES_TEST_ECHO_ECHO_SERVICE_H_
 #define SERVICES_TEST_ECHO_ECHO_SERVICE_H_
 
-#include "base/macros.h"
+#include "build/build_config.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "services/test/echo/public/mojom/echo.mojom.h"
@@ -15,6 +15,10 @@ namespace echo {
 class EchoService : public mojom::EchoService {
  public:
   explicit EchoService(mojo::PendingReceiver<mojom::EchoService> receiver);
+
+  EchoService(const EchoService&) = delete;
+  EchoService& operator=(const EchoService&) = delete;
+
   ~EchoService() override;
 
  private:
@@ -25,10 +29,11 @@ class EchoService : public mojom::EchoService {
                                 base::UnsafeSharedMemoryRegion region) override;
   void Quit() override;
   void Crash() override;
+#if BUILDFLAG(IS_WIN)
+  void DelayLoad() override;
+#endif
 
   mojo::Receiver<mojom::EchoService> receiver_;
-
-  DISALLOW_COPY_AND_ASSIGN(EchoService);
 };
 
 }  // namespace echo

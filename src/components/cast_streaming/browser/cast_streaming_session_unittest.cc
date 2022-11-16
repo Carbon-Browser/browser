@@ -73,10 +73,10 @@ class CastStreamingSessionTest : public testing::Test {
                                                      &receiver_message_port);
 
     receiver_.Start(std::move(receiver_message_port));
-    EXPECT_TRUE(sender_.Start(
-        std::move(sender_message_port), net::IPAddress::IPv6Localhost(),
-        GetDefaultAudioConfig(), GetDefaultVideoConfig()));
-    sender_.RunUntilStarted();
+    sender_.Start(std::move(sender_message_port),
+                  net::IPAddress::IPv6Localhost(), GetDefaultAudioConfig(),
+                  GetDefaultVideoConfig());
+    ASSERT_TRUE(sender_.RunUntilActive());
     receiver_.RunUntilStarted();
   }
 
@@ -119,12 +119,12 @@ TEST_F(CastStreamingSessionTest, SendAndReceiveBuffers) {
   const uint8_t kAudioData[] = {42};
   scoped_refptr<media::DataBuffer> audio_buffer =
       media::DataBuffer::CopyFrom(kAudioData, sizeof(kAudioData));
-  audio_buffer->set_timestamp(base::TimeDelta::FromSeconds(0));
+  audio_buffer->set_timestamp(base::Seconds(0));
 
   const uint8_t kVideoData[] = {42, 84};
   scoped_refptr<media::DataBuffer> video_buffer =
       media::DataBuffer::CopyFrom(kVideoData, sizeof(kVideoData));
-  video_buffer->set_timestamp(base::TimeDelta::FromSeconds(0));
+  video_buffer->set_timestamp(base::Seconds(0));
 
   sender_.SendAudioBuffer(audio_buffer);
   sender_.SendVideoBuffer(video_buffer, true);

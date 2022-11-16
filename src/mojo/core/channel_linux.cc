@@ -25,22 +25,22 @@
 #include "base/files/scoped_file.h"
 #include "base/location.h"
 #include "base/logging.h"
-#include "base/macros.h"
 #include "base/memory/page_size.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/shared_memory_security_policy.h"
 #include "base/message_loop/message_pump_for_io.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/posix/eintr_wrapper.h"
 #include "base/system/sys_info.h"
-#include "base/task_runner.h"
+#include "base/task/task_runner.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "mojo/core/core.h"
 #include "mojo/core/embedder/features.h"
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #include "base/android/build_info.h"
 #endif
 
@@ -181,6 +181,10 @@ class EventFDNotifier : public DataAvailableNotifier,
                         public base::MessagePumpForIO::FdWatcher {
  public:
   EventFDNotifier(EventFDNotifier&& efd) = default;
+
+  EventFDNotifier(const EventFDNotifier&) = delete;
+  EventFDNotifier& operator=(const EventFDNotifier&) = delete;
+
   ~EventFDNotifier() override { reset(); }
 
   static constexpr int kEfdFlags = EFD_CLOEXEC | EFD_NONBLOCK;
@@ -318,8 +322,6 @@ class EventFDNotifier : public DataAvailableNotifier,
   base::ScopedFD fd_;
   std::unique_ptr<base::MessagePumpForIO::FdWatchController> watcher_;
   scoped_refptr<base::SingleThreadTaskRunner> io_task_runner_;
-
-  DISALLOW_COPY_AND_ASSIGN(EventFDNotifier);
 };
 
 }  // namespace
@@ -331,6 +333,10 @@ class EventFDNotifier : public DataAvailableNotifier,
 class ChannelLinux::SharedBuffer {
  public:
   SharedBuffer(SharedBuffer&& other) = default;
+
+  SharedBuffer(const SharedBuffer&) = delete;
+  SharedBuffer& operator=(const SharedBuffer&) = delete;
+
   ~SharedBuffer() { reset(); }
 
   enum class Error { kSuccess = 0, kGeneralError = 1, kControlCorruption = 2 };
@@ -580,30 +586,28 @@ class ChannelLinux::SharedBuffer {
 
   std::atomic_flag& write_flag() {
     DCHECK(is_valid());
-    return reinterpret_cast<ControlStructure*>(base_ptr_)->write_flag;
+    return reinterpret_cast<ControlStructure*>(base_ptr_.get())->write_flag;
   }
 
   std::atomic_flag& read_flag() {
     DCHECK(is_valid());
-    return reinterpret_cast<ControlStructure*>(base_ptr_)->read_flag;
+    return reinterpret_cast<ControlStructure*>(base_ptr_.get())->read_flag;
   }
 
   std::atomic_uint32_t& read_pos() {
     DCHECK(is_valid());
-    return reinterpret_cast<ControlStructure*>(base_ptr_)->read_pos;
+    return reinterpret_cast<ControlStructure*>(base_ptr_.get())->read_pos;
   }
 
   std::atomic_uint32_t& write_pos() {
     DCHECK(is_valid());
-    return reinterpret_cast<ControlStructure*>(base_ptr_)->write_pos;
+    return reinterpret_cast<ControlStructure*>(base_ptr_.get())->write_pos;
   }
 
   SharedBuffer(uint8_t* ptr, size_t len) : base_ptr_(ptr), len_(len) {}
 
-  uint8_t* base_ptr_ = nullptr;
+  raw_ptr<uint8_t> base_ptr_ = nullptr;
   size_t len_ = 0;
-
-  DISALLOW_COPY_AND_ASSIGN(SharedBuffer);
 };
 
 ChannelLinux::ChannelLinux(
@@ -929,7 +933,7 @@ bool ChannelLinux::KernelSupportsUpgradeRequirements() {
       return false;
     }
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
     // Finally, if running on Android it must have API version of at
     // least 29 (Q). The reason for this was SELinux seccomp policies prior to
     // that API version wouldn't allow moving a memfd.

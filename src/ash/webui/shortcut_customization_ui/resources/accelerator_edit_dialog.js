@@ -11,7 +11,7 @@ import 'chrome://resources/cr_elements/cr_input/cr_input.m.js';
 import {flush, html, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {ViewState} from './accelerator_view.js';
-import {AcceleratorInfo} from './shortcut_types.js';
+import {AcceleratorInfo, AcceleratorSource} from './shortcut_types.js';
 
 /**
  * @fileoverview
@@ -46,13 +46,74 @@ export class AcceleratorEditDialogElement extends PolymerElement {
         type: Number,
         value: ViewState.VIEW,
       },
-    }
+
+      action: {
+        type: Number,
+        value: 0,
+      },
+
+      /** @type {!AcceleratorSource} */
+      source: {
+        type: Number,
+        value: 0,
+      },
+
+      /** @protected */
+      isAcceleratorCapturing_: {
+        type: Boolean,
+        value: false,
+      },
+    };
+  }
+
+  /** @override */
+  constructor() {
+    super();
+
+    /**
+     * Event callback for 'accelerator-capturing-started'.
+     * @private {!Function}
+     */
+    this.onAcceleratorCapturingStarted_ = () => {
+      this.isAcceleratorCapturing_ = true;
+    };
+
+    /**
+     * Event callback for 'accelerator-capturing-ended'.
+     * @private {!Function}
+     */
+    this.onAcceleratorCapturingEnded_ = () => {
+      this.isAcceleratorCapturing_ = false;
+    };
   }
 
   /** @override */
   connectedCallback() {
     super.connectedCallback();
     this.$.editDialog.showModal();
+
+    window.addEventListener(
+        'accelerator-capturing-started', this.onAcceleratorCapturingStarted_);
+    window.addEventListener(
+        'accelerator-capturing-ended', this.onAcceleratorCapturingEnded_);
+  }
+
+  /** @override */
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    window.removeEventListener(
+        'accelerator-capturing-started', this.onAcceleratorCapturingStarted_);
+    window.removeEventListener(
+        'accelerator-capturing-ended', this.onAcceleratorCapturingEnded_);
+  }
+
+  /**
+   * @param {!Array<AcceleratorInfo>} updatedAccels
+   */
+  updateDialogAccelerators(updatedAccels) {
+    this.set('acceleratorInfos', []);
+    this.shadowRoot.querySelector('#viewList').render();
+    this.acceleratorInfos = updatedAccels;
   }
 
   /** @protected */
@@ -73,7 +134,7 @@ export class AcceleratorEditDialogElement extends PolymerElement {
     // Flush the dom so that the AcceleratorEditView is ready to be focused.
     flush();
     const editView = this.$.editDialog.querySelector('#pendingAccelerator');
-    const accelItem = editView.shadowRoot.querySelector("#acceleratorItem");
+    const accelItem = editView.shadowRoot.querySelector('#acceleratorItem');
     accelItem.shadowRoot.querySelector('#container').focus();
   }
 
@@ -84,6 +145,11 @@ export class AcceleratorEditDialogElement extends PolymerElement {
   showAddButton_() {
     // If the state is VIEW, no new pending accelerators are being added.
     return this.pendingNewAcceleratorState_ === ViewState.VIEW;
+  }
+
+  /** @protected */
+  onRestoreDefaultButtonClicked_() {
+    // TODO(jimmyxgong): Implement this function.
   }
 }
 

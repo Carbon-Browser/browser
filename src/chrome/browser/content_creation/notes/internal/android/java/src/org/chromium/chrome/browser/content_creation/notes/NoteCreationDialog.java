@@ -11,9 +11,13 @@ import android.os.Bundle;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewGroup.MarginLayoutParams;
+import android.view.ViewTreeObserver;
 import android.view.accessibility.AccessibilityEvent;
 import android.widget.Button;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.RelativeLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AlertDialog;
@@ -25,6 +29,7 @@ import androidx.recyclerview.widget.RecyclerView.OnScrollListener;
 import androidx.recyclerview.widget.SnapHelper;
 
 import org.chromium.chrome.browser.content_creation.internal.R;
+import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.components.content_creation.notes.models.NoteTemplate;
 import org.chromium.ui.modelutil.LayoutViewBuilder;
 import org.chromium.ui.modelutil.MVCListAdapter.ModelList;
@@ -48,6 +53,7 @@ public class NoteCreationDialog extends DialogFragment {
     private boolean mIsPublishAvailable;
     private int mNbTemplateSwitches;
     private boolean mInitialized;
+    private Runnable mExecuteActionForAccessibility;
 
     interface NoteDialogObserver {
         void onViewCreated(View view);
@@ -55,13 +61,15 @@ public class NoteCreationDialog extends DialogFragment {
     private NoteDialogObserver mNoteDialogObserver;
 
     public void initDialog(NoteDialogObserver noteDialogObserver, String urlDomain, String title,
-            String selectedText, boolean isPublishAvailable) {
+            String selectedText, boolean isPublishAvailable,
+            Runnable executeActionForAccessibility) {
         mNoteDialogObserver = noteDialogObserver;
         mUrlDomain = urlDomain;
         mTitle = title;
         mSelectedText = selectedText;
         mIsPublishAvailable = isPublishAvailable;
         mInitialized = true;
+        mExecuteActionForAccessibility = executeActionForAccessibility;
     }
 
     @Override
@@ -75,15 +83,21 @@ public class NoteCreationDialog extends DialogFragment {
     @Override
     public Dialog onCreateDialog(Bundle savedInstanceState) {
         AlertDialog.Builder builder =
-                new AlertDialog.Builder(getActivity(), R.style.Theme_Chromium_Fullscreen);
+                new AlertDialog.Builder(getActivity(), R.style.ThemeOverlay_BrowserUI_Fullscreen);
         mContentView = getActivity().getLayoutInflater().inflate(R.layout.creation_dialog, null);
         builder.setView(mContentView);
 
-        setTitleTopMargin();
+        setTopMargin();
+        addOrRemoveScrollView();
 
         if (mIsPublishAvailable) {
             Button publishButton = (Button) mContentView.findViewById(R.id.publish);
             publishButton.setVisibility(View.VISIBLE);
+        }
+
+        if (ChromeFeatureList.isEnabled(ChromeFeatureList.WEBNOTES_DYNAMIC_TEMPLATES)) {
+            View titleView = mContentView.findViewById(R.id.title);
+            ((ViewGroup) titleView.getParent()).removeView(titleView);
         }
 
         if (mNoteDialogObserver != null) mNoteDialogObserver.onViewCreated(mContentView);
@@ -104,7 +118,10 @@ public class NoteCreationDialog extends DialogFragment {
         }
 
         // Title top margin depends on screen orientation.
-        setTitleTopMargin();
+        setTopMargin();
+
+        // Add or remove scroll view as needed.
+        addOrRemoveScrollView();
 
         // Force recycler view to redraw to recalculate the left/right paddings for first/last
         // items.
@@ -149,12 +166,14 @@ public class NoteCreationDialog extends DialogFragment {
 
                 int first_visible = layoutManager.findFirstCompletelyVisibleItemPosition();
                 int last_visible = layoutManager.findLastCompletelyVisibleItemPosition();
+
+                int newSelectedItemIndex = (last_visible - first_visible) / 2 + first_visible;
+                if (mSelectedItemIndex == newSelectedItemIndex) {
+                    return;
+                }
                 unFocus(mSelectedItemIndex);
-                mSelectedItemIndex = (last_visible - first_visible) / 2 + first_visible;
-                ((TextView) mContentView.findViewById(R.id.title))
-                        .setText(carouselItems.get(mSelectedItemIndex)
-                                         .model.get(NoteProperties.TEMPLATE)
-                                         .localizedName);
+                mSelectedItemIndex = newSelectedItemIndex;
+                setSelectedItemTitle(carouselItems.get(mSelectedItemIndex).model);
                 focus(mSelectedItemIndex);
             }
         });
@@ -186,6 +205,11 @@ public class NoteCreationDialog extends DialogFragment {
     }
 
     private void bindCarouselItem(PropertyModel model, ViewGroup parent, PropertyKey propertyKey) {
+        // If we are creating the first card and it is the selected one, we should update the title.
+        if (model.get(NoteProperties.IS_FIRST) && mSelectedItemIndex == 0) {
+            setSelectedItemTitle(model);
+        }
+
         NoteTemplate template = model.get(NoteProperties.TEMPLATE);
 
         View carouselItemView = parent.findViewById(R.id.item);
@@ -224,8 +248,12 @@ public class NoteCreationDialog extends DialogFragment {
                 int position;
                 switch (event.getEventType()) {
                     case AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED:
+                        host.setClickable(true);
                         mSelectedItemIndex = (Integer) host.getTag();
                         centerCurrentNote();
+                        break;
+                    case AccessibilityEvent.TYPE_VIEW_CLICKED:
+                        mExecuteActionForAccessibility.run();
                         break;
                 }
 
@@ -313,17 +341,91 @@ public class NoteCreationDialog extends DialogFragment {
         layoutManager.scrollToPositionWithOffset(mSelectedItemIndex, centerOfScreen);
     }
 
-    private void setTitleTopMargin() {
+    private void setTopMargin() {
         // Push down the note title depending on screensize.
         int minTopMargin = getActivity().getResources().getDimensionPixelSize(
                 R.dimen.note_title_min_top_margin);
         int screenHeight = getActivity().getResources().getDisplayMetrics().heightPixels;
         int topMarginOffset = getActivity().getResources().getDimensionPixelSize(
                 R.dimen.note_title_top_margin_offset);
-        View titleView = mContentView.findViewById(R.id.title);
-        MarginLayoutParams params = (MarginLayoutParams) titleView.getLayoutParams();
+        int templateWidth =
+                (int) getActivity().getResources().getDimensionPixelSize(R.dimen.note_width);
+
+        // For dynamically loaded templates the first view is the carousel, otherwise it's the title
+        if (ChromeFeatureList.isEnabled(ChromeFeatureList.WEBNOTES_DYNAMIC_TEMPLATES)) {
+            RelativeLayout mainContent = mContentView.findViewById(R.id.main_content);
+
+            // When setTopMargin is called, the UI is not drawn yet, so we override this function
+            // that is called after the UI is drawn so that we can get the height of the carousel.
+            mainContent.getViewTreeObserver().addOnGlobalLayoutListener(
+                    new ViewTreeObserver.OnGlobalLayoutListener() {
+                        @Override
+                        public void onGlobalLayout() {
+                            int viewHeight = mainContent.getMeasuredHeight();
+
+                            View carouselView = mContentView.findViewById(R.id.note_carousel);
+                            MarginLayoutParams params =
+                                    (MarginLayoutParams) carouselView.getLayoutParams();
+                            params.topMargin = (int) ((viewHeight - templateWidth) / 2);
+                            carouselView.setLayoutParams(params);
+                            carouselView.requestLayout();
+                        }
+                    });
+            return;
+        }
+
+        View firstView = mContentView.findViewById(R.id.title);
+        MarginLayoutParams params = (MarginLayoutParams) firstView.getLayoutParams();
         params.topMargin = (int) (minTopMargin + (screenHeight - topMarginOffset) * 0.15f);
-        titleView.setLayoutParams(params);
-        titleView.requestLayout();
+        firstView.setLayoutParams(params);
+        firstView.requestLayout();
+    }
+
+    private void addScrollView() {
+        assert mContentView.findViewById(R.id.scrollview) == null;
+
+        ScrollView scrollView = new ScrollView(getActivity());
+        scrollView.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        scrollView.setId(R.id.scrollview);
+
+        LinearLayout dialogLayout = mContentView.findViewById(R.id.dialog_layout);
+        RelativeLayout mainContent = dialogLayout.findViewById(R.id.main_content);
+        dialogLayout.removeView(mainContent);
+        scrollView.addView(mainContent);
+        dialogLayout.addView(scrollView);
+    }
+
+    private void removeScrollView() {
+        assert mContentView.findViewById(R.id.scrollview) != null;
+
+        LinearLayout dialogLayout = mContentView.findViewById(R.id.dialog_layout);
+        RelativeLayout mainContent = dialogLayout.findViewById(R.id.main_content);
+        ScrollView scrollView = dialogLayout.findViewById(R.id.scrollview);
+        scrollView.removeView(mainContent);
+        dialogLayout.removeView(scrollView);
+        dialogLayout.addView(mainContent);
+    }
+
+    private void addOrRemoveScrollView() {
+        int screenHeight = getActivity().getResources().getDisplayMetrics().heightPixels;
+        int dialogHeight =
+                (int) getActivity().getResources().getDimension(R.dimen.min_dialog_height);
+        if (dialogHeight < screenHeight && mContentView.findViewById(R.id.scrollview) != null) {
+            removeScrollView();
+        }
+
+        if (dialogHeight > screenHeight && mContentView.findViewById(R.id.scrollview) == null) {
+            addScrollView();
+        }
+    }
+
+    private void setSelectedItemTitle(PropertyModel model) {
+        if (ChromeFeatureList.isEnabled(ChromeFeatureList.WEBNOTES_DYNAMIC_TEMPLATES)) {
+            return;
+        }
+        assert mContentView != null;
+        ((TextView) mContentView.findViewById(R.id.title))
+                .setText(model.get(NoteProperties.TEMPLATE).localizedName);
     }
 }

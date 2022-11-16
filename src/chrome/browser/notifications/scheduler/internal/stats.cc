@@ -8,6 +8,7 @@
 
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/time/time.h"
 #include "chrome/browser/notifications/scheduler/public/notification_data.h"
 
 namespace notifications {
@@ -35,6 +36,8 @@ std::string ToHistogramSuffix(SchedulerClientType client_type) {
       return "Prefetch";
     case SchedulerClientType::kReadingList:
       return "ReadingList";
+    case SchedulerClientType::kFeatureGuide:
+      return "FeatureGuide";
   }
 }
 

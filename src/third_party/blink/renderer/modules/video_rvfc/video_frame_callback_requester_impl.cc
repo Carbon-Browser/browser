@@ -85,7 +85,6 @@ void VideoFrameCallbackRequesterImpl::cancelVideoFrameCallback(
 }
 
 void VideoFrameCallbackRequesterImpl::OnWebMediaPlayerCreated() {
-  DCHECK(RuntimeEnabledFeatures::RequestVideoFrameCallbackEnabled());
   if (!callback_collection_->IsEmpty())
     GetSupplementable()->GetWebMediaPlayer()->RequestVideoFrameCallback();
 }
@@ -192,7 +191,6 @@ bool VideoFrameCallbackRequesterImpl::TryScheduleImmersiveXRSessionRaf() {
 }
 
 void VideoFrameCallbackRequesterImpl::OnRequestVideoFrameCallback() {
-  DCHECK(RuntimeEnabledFeatures::RequestVideoFrameCallbackEnabled());
   TRACE_EVENT1("blink",
                "VideoFrameCallbackRequesterImpl::OnRequestVideoFrameCallback",
                "has_callbacks", !callback_collection_->IsEmpty());
@@ -317,12 +315,12 @@ double VideoFrameCallbackRequesterImpl::GetClampedTimeInMillis(
 // static
 double VideoFrameCallbackRequesterImpl::GetCoarseClampedTimeInSeconds(
     base::TimeDelta time) {
-  constexpr auto kCoarseResolution = base::TimeDelta::FromMicroseconds(100);
+  constexpr auto kCoarseResolution = base::Microseconds(100);
   // Add this assert, in case TimeClamper's resolution were to change to be
   // stricter.
   static_assert(
-      kCoarseResolution >= base::TimeDelta::FromMicrosecondsD(
-                               TimeClamper::kCoarseResolutionMicroseconds),
+      kCoarseResolution >=
+          base::Microseconds(TimeClamper::kCoarseResolutionMicroseconds),
       "kCoarseResolution should be at least as coarse as other clock "
       "resolutions");
 

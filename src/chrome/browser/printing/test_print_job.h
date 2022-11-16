@@ -8,12 +8,11 @@
 #include <memory>
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "build/build_config.h"
 #include "chrome/browser/printing/print_job.h"
 #include "printing/print_settings.h"
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include "printing/mojom/print.mojom.h"
 #endif
 
@@ -31,14 +30,9 @@ class TestPrintJob : public PrintJob {
   const gfx::Size& page_size() const { return page_size_; }
   const gfx::Rect& content_area() const { return content_area_; }
   const gfx::Point& physical_offsets() const { return physical_offsets_; }
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   mojom::PrinterLanguageType type() const { return type_; }
 #endif
-
-  // `content::NotificationObserver` implementation. Deliberately empty.
-  void Observe(int type,
-               const content::NotificationSource& source,
-               const content::NotificationDetails& details) override {}
 
   // All remaining functions are `PrintJob` implementation.
   void Initialize(std::unique_ptr<PrinterQuery> query,
@@ -54,10 +48,14 @@ class TestPrintJob : public PrintJob {
   // Sets `job_pending_` to false and deletes the worker.
   void Cancel() override;
 
+  void OnFailed() override;
+
+  void OnDocDone(int job_id, PrintedDocument* document) override;
+
   // Intentional no-op, returns true.
   bool FlushJob(base::TimeDelta timeout) override;
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   // These functions fill in the corresponding member variables based on the
   // arguments passed in.
   void StartPdfToEmfConversion(scoped_refptr<base::RefCountedMemory> bytes,
@@ -72,7 +70,7 @@ class TestPrintJob : public PrintJob {
 
   void StartPdfToTextConversion(scoped_refptr<base::RefCountedMemory> bytes,
                                 const gfx::Size& page_size) override;
-#endif  // defined(OS_WIN)
+#endif  // BUILDFLAG(IS_WIN)
 
  private:
   ~TestPrintJob() override;
@@ -80,7 +78,7 @@ class TestPrintJob : public PrintJob {
   gfx::Size page_size_;
   gfx::Rect content_area_;
   gfx::Point physical_offsets_;
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   mojom::PrinterLanguageType type_;
 #endif
 };

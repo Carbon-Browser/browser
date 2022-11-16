@@ -40,6 +40,8 @@ message UrlInfo {
 // Request to return a set of hints that guide what optimizations to perform
 // on those hosts.
 message GetHintsRequest {
+  reserved 6;
+
   // Information about the set of hosts to retrieve hints for.
   repeated HostInfo hosts = 1;
 
@@ -62,9 +64,6 @@ message GetHintsRequest {
 
   // Context in which this request is made.
   optional RequestContext context = 3;
-
-  // The field trials that are currently active when this request is made.
-  repeated FieldTrial active_field_trials = 6;
 
   // The locale to associate with this request.
   //
@@ -99,7 +98,7 @@ message GetHintsResponse {
   repeated MatchedHintInfo hints_to_remove = 3;
 }
 
-
+// Must sync with enum OptimizationType in enums.xml for metric recording.
 enum OptimizationType {
   // Values for obsolete optimizations.
   reserved 11, 12;
@@ -112,8 +111,8 @@ enum OptimizationType {
   RESOURCE_LOADING = 2;
   // This optimization redirects the navigation through a lite page server.
   LITE_PAGE_REDIRECT = 3;
-  // This optimization does nothing (no-op).
-  OPTIMIZATION_NONE = 4;
+  // This optimization does validation of metadata fetch on navigation.
+  METADATA_FETCH_VALIDATION = 4;
   // This optimization defers execution of parser-blocking script until after
   // parsing completes.
   DEFER_ALL_SCRIPT = 5;
@@ -150,6 +149,20 @@ enum OptimizationType {
   MERCHANT_TRUST_SIGNALS = 17;
   // Provides pricing data so the user can track prices and price updates.
   PRICE_TRACKING = 18;
+  // This optimization does validation of bloom filter.
+  BLOOM_FILTER_VALIDATION = 19;
+  // Provides 'About this site' data about the site being visited.
+  ABOUT_THIS_SITE = 20;
+  // Provides key information about the merchant represented by the current
+  // host -- VERSION 2.
+  MERCHANT_TRUST_SIGNALS_V2 = 21;
+  // Provides the entities that are present on the page.
+  PAGE_ENTITIES = 22;
+  // This optimization provides information for whether a page should be
+  // included in a history cluster.
+  HISTORY_CLUSTERS = 23;
+  // Determines if a page is eligible for 'Thank creator' functionality.
+  THANK_CREATOR_ELIGIBLE = 24;
 }
 
 // Presents semantics for how page load URLs should be matched.
@@ -305,19 +318,6 @@ message Configuration {
   // It is guaranteed that an optimization type will not have filters in both
   // |optimization_blocklists| and |optimization_allowlists|.
   repeated OptimizationFilter optimization_allowlists = 3;
-}
-
-message Timestamp {
-  // Represents seconds of UTC time since Unix epoch
-  // 1970-01-01T00:00:00Z. Must be from 0001-01-01T00:00:00Z to
-  // 9999-12-31T23:59:59Z inclusive.
-  optional int64 seconds = 1;
-
-  // Non-negative fractions of a second at nanosecond resolution. Negative
-  // second values with fractions must still have non-negative nanos values
-  // that count forward in time. Must be from 0 to 999,999,999
-  // inclusive.
-  optional int32 nanos = 2;
 }
 
 enum HintSource {

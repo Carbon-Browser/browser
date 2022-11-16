@@ -94,6 +94,7 @@ content::WebUIDataSource* CreateDownloadsUIHTMLSource(Profile* profile) {
       {"dangerSave", IDS_CONFIRM_DOWNLOAD},
       {"dangerRestore", IDS_CONFIRM_DOWNLOAD_RESTORE},
       {"dangerDiscard", IDS_DISCARD_DOWNLOAD},
+      {"dangerReview", IDS_REVIEW_DOWNLOAD},
 
       // Deep scanning strings.
       {"deepScannedSafeDesc", IDS_DEEP_SCANNED_SAFE_DESCRIPTION},
@@ -152,7 +153,7 @@ content::WebUIDataSource* CreateDownloadsUIHTMLSource(Profile* profile) {
   PrefService* prefs = profile->GetPrefs();
   source->AddBoolean("allowDeletingHistory",
                      prefs->GetBoolean(prefs::kAllowDeletingBrowserHistory) &&
-                         !profile->IsSupervised());
+                         !profile->IsChild());
 
   source->AddLocalizedString("inIncognito", IDS_DOWNLOAD_IN_INCOGNITO);
 
@@ -162,11 +163,6 @@ content::WebUIDataSource* CreateDownloadsUIHTMLSource(Profile* profile) {
            profile)
            ->DelayUntilVerdict(
                enterprise_connectors::AnalysisConnector::FILE_DOWNLOADED));
-
-  source->AddString("enableBrandingUpdateAttribute",
-                    base::FeatureList::IsEnabled(features::kWebUIBrandingUpdate)
-                        ? "enable-branding-update"
-                        : "");
 
   return source;
 }

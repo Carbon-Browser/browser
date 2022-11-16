@@ -14,10 +14,9 @@
 #include "base/files/file_util.h"
 #include "base/posix/eintr_wrapper.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "components/device_event_log/device_event_log.h"
 
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 #include <asm-generic/ioctls.h>
 #include <linux/serial.h>
 
@@ -36,9 +35,9 @@ struct termios2 {
 };
 }
 
-#endif  // defined(OS_LINUX) || defined(OS_CHROMEOS)
+#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 #include <IOKit/serial/ioss.h>
 #endif
 
@@ -68,7 +67,7 @@ bool BitrateToSpeedConstant(int bitrate, speed_t* speed) {
     BITRATE_TO_SPEED_CASE(9600)
     BITRATE_TO_SPEED_CASE(19200)
     BITRATE_TO_SPEED_CASE(38400)
-#if !defined(OS_MAC)
+#if !BUILDFLAG(IS_MAC)
     BITRATE_TO_SPEED_CASE(57600)
     BITRATE_TO_SPEED_CASE(115200)
     BITRATE_TO_SPEED_CASE(230400)
@@ -82,7 +81,7 @@ bool BitrateToSpeedConstant(int bitrate, speed_t* speed) {
 #undef BITRATE_TO_SPEED_CASE
 }
 
-#if !defined(OS_LINUX) && !defined(OS_CHROMEOS)
+#if !BUILDFLAG(IS_LINUX) && !BUILDFLAG(IS_CHROMEOS)
 // Convert a known nominal speed into an integral bitrate. Returns |true|
 // if the conversion was successful and |false| otherwise.
 bool SpeedConstantToBitrate(speed_t speed, int* bitrate) {
@@ -129,26 +128,16 @@ void SerialIoHandlerPosix::ReadImpl() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(IsReadPending());
 
-  if (!file().IsValid()) {
-    QueueReadCompleted(0, mojom::SerialReceiveError::DISCONNECTED);
-    return;
-  }
-
   // Try to read immediately. This is needed because on some platforms
   // (e.g., OSX) there may not be a notification from the message loop
   // when the fd is ready to read immediately after it is opened. There
   // is no danger of blocking because the fd is opened with async flag.
-  AttemptRead(true);
+  AttemptRead();
 }
 
 void SerialIoHandlerPosix::WriteImpl() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(IsWritePending());
-
-  if (!file().IsValid()) {
-    QueueWriteCompleted(0, mojom::SerialSendError::DISCONNECTED);
-    return;
-  }
 
   EnsureWatchingWrites();
 }
@@ -156,17 +145,17 @@ void SerialIoHandlerPosix::WriteImpl() {
 void SerialIoHandlerPosix::CancelReadImpl() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   StopWatchingFileRead();
-  QueueReadCompleted(0, read_cancel_reason());
+  ReadCompleted(0, read_cancel_reason());
 }
 
 void SerialIoHandlerPosix::CancelWriteImpl() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   StopWatchingFileWrite();
-  QueueWriteCompleted(0, write_cancel_reason());
+  WriteCompleted(0, write_cancel_reason());
 }
 
 bool SerialIoHandlerPosix::ConfigurePortImpl() {
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   struct termios2 config;
   if (ioctl(file().GetPlatformFile(), TCGETS2, &config) < 0) {
 #else
@@ -189,11 +178,11 @@ bool SerialIoHandlerPosix::ConfigurePortImpl() {
 
   DCHECK(options().bitrate);
   speed_t bitrate_opt = B0;
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   bool need_iossiospeed = false;
 #endif
   if (BitrateToSpeedConstant(options().bitrate, &bitrate_opt)) {
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
     config.c_cflag &= ~CBAUD;
     config.c_cflag |= bitrate_opt;
 #else
@@ -202,11 +191,11 @@ bool SerialIoHandlerPosix::ConfigurePortImpl() {
 #endif
   } else {
     // Attempt to set a custom speed.
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
     config.c_cflag &= ~CBAUD;
     config.c_cflag |= CBAUDEX;
     config.c_ispeed = config.c_ospeed = options().bitrate;
-#elif defined(OS_MAC)
+#elif BUILDFLAG(IS_MAC)
     // cfsetispeed and cfsetospeed sometimes work for custom baud rates on OS
     // X but the IOSSIOSPEED ioctl is more reliable but has to be done after
     // the rest of the port parameters are set or else it will be overwritten.
@@ -274,7 +263,7 @@ bool SerialIoHandlerPosix::ConfigurePortImpl() {
     config.c_cflag &= ~CRTSCTS;
   }
 
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   if (ioctl(file().GetPlatformFile(), TCSETS2, &config) < 0) {
 #else
   if (tcsetattr(file().GetPlatformFile(), TCSANOW, &config) != 0) {
@@ -283,7 +272,7 @@ bool SerialIoHandlerPosix::ConfigurePortImpl() {
     return false;
   }
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   if (need_iossiospeed) {
     speed_t bitrate = options().bitrate;
     if (ioctl(file().GetPlatformFile(), IOSSIOSPEED, &bitrate) == -1) {
@@ -297,7 +286,15 @@ bool SerialIoHandlerPosix::ConfigurePortImpl() {
 }
 
 bool SerialIoHandlerPosix::PostOpen() {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+  // The base::File::FLAG_WIN_EXCLUSIVE_READ and
+  // base::File::FLAG_WIN_EXCLUSIVE_WRITE flags do nothing on POSIX-based
+  // systems. Request exclusive access to the terminal device here.
+  if (HANDLE_EINTR(ioctl(file().GetPlatformFile(), TIOCEXCL)) == -1) {
+    SERIAL_PLOG(DEBUG) << "Failed to put terminal in exclusive mode";
+    return false;
+  }
+
+#if BUILDFLAG(IS_CHROMEOS)
   // The Chrome OS permission broker does not open devices in async mode.
   return base::SetNonBlocking(file().GetPlatformFile());
 #else
@@ -317,7 +314,7 @@ SerialIoHandlerPosix::SerialIoHandlerPosix(
 
 SerialIoHandlerPosix::~SerialIoHandlerPosix() = default;
 
-void SerialIoHandlerPosix::AttemptRead(bool within_read) {
+void SerialIoHandlerPosix::AttemptRead() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (IsReadPending()) {
     int bytes_read = HANDLE_EINTR(read(file().GetPlatformFile(),
@@ -328,17 +325,15 @@ void SerialIoHandlerPosix::AttemptRead(bool within_read) {
         // The fd does not have data to read yet so continue waiting.
         EnsureWatchingReads();
       } else if (errno == ENXIO) {
-        RunReadCompleted(within_read, 0,
-                         mojom::SerialReceiveError::DEVICE_LOST);
         StopWatchingFileRead();
+        ReadCompleted(0, mojom::SerialReceiveError::DEVICE_LOST);
       } else {
         SERIAL_PLOG(DEBUG) << "Read failed";
-        RunReadCompleted(within_read, 0,
-                         mojom::SerialReceiveError::SYSTEM_ERROR);
+        ReadCompleted(0, mojom::SerialReceiveError::SYSTEM_ERROR);
       }
     } else if (bytes_read == 0) {
-      RunReadCompleted(within_read, 0, mojom::SerialReceiveError::DEVICE_LOST);
       StopWatchingFileRead();
+      ReadCompleted(0, mojom::SerialReceiveError::DEVICE_LOST);
     } else {
       bool break_detected = false;
       bool parity_error_detected = false;
@@ -347,34 +342,17 @@ void SerialIoHandlerPosix::AttemptRead(bool within_read) {
                             parity_error_detected);
 
       if (break_detected) {
-        RunReadCompleted(within_read, new_bytes_read,
-                         mojom::SerialReceiveError::BREAK);
+        ReadCompleted(new_bytes_read, mojom::SerialReceiveError::BREAK);
       } else if (parity_error_detected) {
-        RunReadCompleted(within_read, new_bytes_read,
-                         mojom::SerialReceiveError::PARITY_ERROR);
+        ReadCompleted(new_bytes_read, mojom::SerialReceiveError::PARITY_ERROR);
       } else {
-        RunReadCompleted(within_read, new_bytes_read,
-                         mojom::SerialReceiveError::NONE);
+        ReadCompleted(new_bytes_read, mojom::SerialReceiveError::NONE);
       }
     }
   } else {
     // Stop watching the fd if we get notifications with no pending
     // reads or writes to avoid starving the message loop.
     StopWatchingFileRead();
-  }
-}
-
-void SerialIoHandlerPosix::RunReadCompleted(bool within_read,
-                                            int bytes_read,
-                                            mojom::SerialReceiveError error) {
-  if (within_read) {
-    // Stop watching the fd to avoid more reads until the queued ReadCompleted()
-    // completes and releases the pending_read_buffer.
-    StopWatchingFileRead();
-
-    QueueReadCompleted(bytes_read, error);
-  } else {
-    ReadCompleted(bytes_read, error);
   }
 }
 
@@ -385,9 +363,9 @@ void SerialIoHandlerPosix::OnFileCanWriteWithoutBlocking() {
                                            pending_write_buffer().data(),
                                            pending_write_buffer().size()));
     if (bytes_written < 0) {
-      if (errno == ENXIO) {
-        WriteCompleted(0, mojom::SerialSendError::DISCONNECTED);
+      if (errno == EIO || errno == ENXIO) {
         StopWatchingFileWrite();
+        WriteCompleted(0, mojom::SerialSendError::DISCONNECTED);
       } else {
         SERIAL_PLOG(DEBUG) << "Write failed";
         WriteCompleted(0, mojom::SerialSendError::SYSTEM_ERROR);
@@ -409,7 +387,7 @@ void SerialIoHandlerPosix::EnsureWatchingReads() {
     file_read_watcher_ = base::FileDescriptorWatcher::WatchReadable(
         file().GetPlatformFile(),
         base::BindRepeating(&SerialIoHandlerPosix::AttemptRead,
-                            base::Unretained(this), false));
+                            base::Unretained(this)));
   }
 }
 
@@ -534,7 +512,7 @@ bool SerialIoHandlerPosix::SetControlSignals(
 }
 
 mojom::SerialConnectionInfoPtr SerialIoHandlerPosix::GetPortInfo() const {
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   struct termios2 config;
   if (ioctl(file().GetPlatformFile(), TCGETS2, &config) < 0) {
 #else
@@ -546,7 +524,7 @@ mojom::SerialConnectionInfoPtr SerialIoHandlerPosix::GetPortInfo() const {
   }
 
   auto info = mojom::SerialConnectionInfo::New();
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   // Linux forces c_ospeed to contain the correct value, which is nice.
   info->bitrate = config.c_ospeed;
 #else

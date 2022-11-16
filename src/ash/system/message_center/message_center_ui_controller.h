@@ -11,7 +11,6 @@
 #include "ash/public/cpp/session/session_observer.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/system/message_center/message_center_ui_delegate.h"
-#include "base/macros.h"
 #include "base/scoped_observation.h"
 #include "base/timer/timer.h"
 #include "ui/message_center/message_center_export.h"
@@ -33,6 +32,11 @@ class ASH_EXPORT MessageCenterUiController
       public SessionObserver {
  public:
   explicit MessageCenterUiController(MessageCenterUiDelegate* delegate);
+
+  MessageCenterUiController(const MessageCenterUiController&) = delete;
+  MessageCenterUiController& operator=(const MessageCenterUiController&) =
+      delete;
+
   ~MessageCenterUiController() override;
 
   // Shows or updates the message center bubble and hides the popup bubble.
@@ -82,6 +86,7 @@ class ASH_EXPORT MessageCenterUiController
       message_center::NotificationBlocker* blocker) override;
   void OnNotificationPopupShown(const std::string& notification_id,
                                 bool mark_notification_as_read) override;
+  void OnMessageViewHovered(const std::string& notification_id) override;
 
   // SessionObserver:
   void OnFirstSessionStarted() override;
@@ -105,8 +110,6 @@ class ASH_EXPORT MessageCenterUiController
 
   base::ScopedObservation<SessionController, SessionObserver> session_observer_{
       this};
-
-  DISALLOW_COPY_AND_ASSIGN(MessageCenterUiController);
 };
 
 }  // namespace ash

@@ -17,14 +17,14 @@
 #include "base/json/json_file_value_serializer.h"
 #include "base/json/json_string_value_serializer.h"
 #include "base/logging.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/metrics/histogram.h"
+#include "base/observer_list.h"
 #include "base/ranges/algorithm.h"
-#include "base/sequenced_task_runner.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
-#include "base/task_runner_util.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/task_runner_util.h"
 #include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/default_clock.h"
 #include "base/values.h"
@@ -148,11 +148,12 @@ const char* GetHistogramSuffix(const base::FilePath& path) {
 JsonPrefStore::JsonPrefStore(
     const base::FilePath& pref_filename,
     std::unique_ptr<PrefFilter> pref_filter,
-    scoped_refptr<base::SequencedTaskRunner> file_task_runner)
+    scoped_refptr<base::SequencedTaskRunner> file_task_runner,
+    bool read_only)
     : path_(pref_filename),
       file_task_runner_(std::move(file_task_runner)),
       prefs_(new base::DictionaryValue()),
-      read_only_(false),
+      read_only_(read_only),
       writer_(pref_filename,
               file_task_runner_,
               GetHistogramSuffix(pref_filename)),
@@ -169,8 +170,8 @@ bool JsonPrefStore::GetValue(const std::string& key,
                              const base::Value** result) const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  base::Value* tmp = nullptr;
-  if (!prefs_->Get(key, &tmp))
+  base::Value* tmp = prefs_->FindPath(key);
+  if (!tmp)
     return false;
 
   if (result)
@@ -209,7 +210,13 @@ bool JsonPrefStore::GetMutableValue(const std::string& key,
                                     base::Value** result) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  return prefs_->Get(key, result);
+  base::Value* tmp = prefs_->FindPath(key);
+  if (!tmp)
+    return false;
+
+  if (result)
+    *result = tmp;
+  return true;
 }
 
 void JsonPrefStore::SetValue(const std::string& key,
@@ -218,8 +225,7 @@ void JsonPrefStore::SetValue(const std::string& key,
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   DCHECK(value);
-  base::Value* old_value = nullptr;
-  prefs_->Get(key, &old_value);
+  base::Value* old_value = prefs_->FindPath(key);
   if (!old_value || *value != *old_value) {
     prefs_->SetPath(key, std::move(*value));
     ReportValueChanged(key, flags);
@@ -232,8 +238,7 @@ void JsonPrefStore::SetValueSilently(const std::string& key,
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   DCHECK(value);
-  base::Value* old_value = nullptr;
-  prefs_->Get(key, &old_value);
+  base::Value* old_value = prefs_->FindPath(key);
   if (!old_value || *value != *old_value) {
     prefs_->SetPath(key, std::move(*value));
     ScheduleWrite(flags);
@@ -318,28 +323,6 @@ void JsonPrefStore::CommitPendingWrite(
   if (reply_callback) {
     file_task_runner_->PostTaskAndReply(FROM_HERE, base::DoNothing(),
                                         std::move(reply_callback));
-  }
-}
-
-void JsonPrefStore::CommitPendingWriteSynchronously() {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-
-  // Schedule a write for any lossy writes that are outstanding to ensure that
-  // they get flushed when this function is called.
-  SchedulePendingLossyWrites();
-  if (!writer_.HasPendingWrite() || read_only_)
-    return;
-
-  const base::FilePath path = writer_.path();
-  std::string data;
-  if (!SerializeData(&data)) {
-    DVLOG(1) << "Failed to serialize data to be saved in " << path.value();
-    return;
-  }
-
-  const std::string suffix = GetHistogramSuffix(path);
-  if (!base::ImportantFileWriter::WriteFileAtomically(path, data, suffix)) {
-    DVLOG(1) << "Could not write " << suffix << " into " << path.value();
   }
 }
 

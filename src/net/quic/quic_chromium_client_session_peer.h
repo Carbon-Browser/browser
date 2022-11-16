@@ -9,8 +9,7 @@
 
 #include <string>
 
-#include "base/macros.h"
-#include "net/third_party/quiche/src/quic/core/quic_packets.h"
+#include "net/third_party/quiche/src/quiche/quic/core/quic_packets.h"
 
 namespace net {
 
@@ -21,6 +20,10 @@ namespace test {
 
 class QuicChromiumClientSessionPeer {
  public:
+  QuicChromiumClientSessionPeer(const QuicChromiumClientSessionPeer&) = delete;
+  QuicChromiumClientSessionPeer& operator=(
+      const QuicChromiumClientSessionPeer&) = delete;
+
   static void SetHostname(QuicChromiumClientSession* session,
                           const std::string& hostname);
 
@@ -33,11 +36,6 @@ class QuicChromiumClientSessionPeer {
       QuicChromiumClientSession* session);
 
   static bool GetSessionGoingAway(QuicChromiumClientSession* session);
-
-  static bool DoesSessionAllowPortMigration(QuicChromiumClientSession* session);
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(QuicChromiumClientSessionPeer);
 };
 
 }  // namespace test

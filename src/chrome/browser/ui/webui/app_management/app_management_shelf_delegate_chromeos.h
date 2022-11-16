@@ -8,8 +8,8 @@
 #include <memory>
 
 #include "ash/public/cpp/shelf_model_observer.h"
-#include "base/macros.h"
-#include "chrome/browser/ui/webui/app_management/app_management.mojom.h"
+#include "base/memory/raw_ptr.h"
+#include "ui/webui/resources/cr_components/app_management/app_management.mojom.h"
 
 class AppManagementPageHandler;
 class ShelfControllerHelper;
@@ -23,10 +23,16 @@ class AppManagementShelfDelegate : public ash::ShelfModelObserver {
  public:
   explicit AppManagementShelfDelegate(AppManagementPageHandler* page_handler,
                                       Profile* profile);
+
+  AppManagementShelfDelegate(const AppManagementShelfDelegate&) = delete;
+  AppManagementShelfDelegate& operator=(const AppManagementShelfDelegate&) =
+      delete;
+
   ~AppManagementShelfDelegate() override;
 
   bool IsPinned(const std::string& app_id);
-  void SetPinned(const std::string& app_id, apps::mojom::OptionalBool pinned);
+  void SetPinned(const std::string& app_id,
+                 app_management::mojom::OptionalBool pinned);
 
   bool IsPolicyPinned(const std::string& app_id) const;
 
@@ -36,10 +42,8 @@ class AppManagementShelfDelegate : public ash::ShelfModelObserver {
   void ShelfItemRemoved(int index, const ash::ShelfItem& old_item) override;
   void ShelfItemChanged(int index, const ash::ShelfItem& old_item) override;
 
-  AppManagementPageHandler* page_handler_;
+  raw_ptr<AppManagementPageHandler> page_handler_;
   std::unique_ptr<ShelfControllerHelper> shelf_controller_helper_;
-
-  DISALLOW_COPY_AND_ASSIGN(AppManagementShelfDelegate);
 };
 
 #endif  // CHROME_BROWSER_UI_WEBUI_APP_MANAGEMENT_APP_MANAGEMENT_SHELF_DELEGATE_CHROMEOS_H_

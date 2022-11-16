@@ -1,4 +1,7 @@
-<style include="diagnostics-shared diagnostics-fonts">
+<style include="diagnostics-shared">
+  :host {
+    --divider-horizontal-height: 100%;
+  }
 </style>
 <div id="cellularInfoContainer">
   <div class="horizontal-data-point-container">
@@ -8,7 +11,8 @@
         orientation="horizontal">
       </data-point>
       <data-point id="technology" header="[[i18n('networkTechnologyLabel')]]"
-          value="[[network.typeProperties.cellular.networkTechnology]]"
+          value="[[computeNetworkTechnologyText_(
+            network.typeProperties.cellular.networkTechnology)]]"
           orientation="horizontal">
       </data-point>
       <data-point id="roaming" header="[[i18n('networkRoamingStateLabel')]]"
@@ -18,7 +22,8 @@
           orientation="horizontal">
       </data-point>
       <data-point id="signalStrength" header="[[i18n('networkSignalStrengthLabel')]]"
-          value="[[network.typeProperties.cellular.signalStrength]]"
+          value="[[computeSignalStrength_(
+            network.typeProperties.cellular.signalStrength)]]"
           orientation="horizontal">
       </data-point>
     </div>

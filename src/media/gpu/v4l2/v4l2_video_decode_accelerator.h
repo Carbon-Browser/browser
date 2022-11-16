@@ -12,7 +12,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include <list>
 #include <map>
 #include <memory>
 #include <queue>
@@ -22,7 +21,6 @@
 #include "base/callback_forward.h"
 #include "base/cancelable_callback.h"
 #include "base/containers/queue.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/threading/thread.h"
@@ -111,6 +109,11 @@ class MEDIA_GPU_EXPORT V4L2VideoDecodeAccelerator
       const GetGLContextCallback& get_gl_context_cb,
       const MakeGLContextCurrentCallback& make_context_current_cb,
       scoped_refptr<V4L2Device> device);
+
+  V4L2VideoDecodeAccelerator(const V4L2VideoDecodeAccelerator&) = delete;
+  V4L2VideoDecodeAccelerator& operator=(const V4L2VideoDecodeAccelerator&) =
+      delete;
+
   ~V4L2VideoDecodeAccelerator() override;
 
   // VideoDecodeAccelerator implementation.
@@ -311,7 +314,7 @@ class MEDIA_GPU_EXPORT V4L2VideoDecodeAccelerator
   void NofityFlushDone();
   // Returns true if VIDIOC_DECODER_CMD is supported.
   bool IsDecoderCmdSupported();
-  // Send V4L2_DEC_CMD_START to the driver. Return true if success.
+  // Send V4L2_DEC_CMD_STOP to the driver. Return true if success.
   bool SendDecoderCmdStop();
 
   // Reset() task.  Drop all input buffers. If V4L2VDA is not doing resolution
@@ -531,6 +534,9 @@ class MEDIA_GPU_EXPORT V4L2VideoDecodeAccelerator
   // workaround is necessary for the V4L2VideoDecodeAccelerator.
   std::vector<std::unique_ptr<V4L2StatefulWorkaround>> workarounds_;
 
+  // Color space passed in from Initialize().
+  VideoColorSpace container_color_space_;
+
   //
   // Hardware state and associated queues.  Since decoder_thread_ services
   // the hardware, decoder_thread_ owns these too.
@@ -618,8 +624,6 @@ class MEDIA_GPU_EXPORT V4L2VideoDecodeAccelerator
 
   // The WeakPtrFactory for |weak_this_|.
   base::WeakPtrFactory<V4L2VideoDecodeAccelerator> weak_this_factory_;
-
-  DISALLOW_COPY_AND_ASSIGN(V4L2VideoDecodeAccelerator);
 };
 
 }  // namespace media

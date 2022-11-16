@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/timer/timer.h"
 #include "net/socket/socket_test_util.h"
@@ -38,6 +38,11 @@ class WebSocketStreamCreateTestBase : public WithTaskEnvironment {
   using HeaderKeyValuePair = std::pair<std::string, std::string>;
 
   WebSocketStreamCreateTestBase();
+
+  WebSocketStreamCreateTestBase(const WebSocketStreamCreateTestBase&) = delete;
+  WebSocketStreamCreateTestBase& operator=(
+      const WebSocketStreamCreateTestBase&) = delete;
+
   virtual ~WebSocketStreamCreateTestBase();
 
   // A wrapper for CreateAndConnectStreamForTesting that knows about our default
@@ -78,14 +83,14 @@ class WebSocketStreamCreateTestBase : public WithTaskEnvironment {
   // Only set if the connection failed.
   std::string failure_message_;
   int failure_response_code_ = -1;
-  bool has_failed_;
+  bool has_failed_ = false;
   std::unique_ptr<WebSocketHandshakeRequestInfo> request_info_;
   std::unique_ptr<WebSocketHandshakeResponseInfo> response_info_;
   std::unique_ptr<WebSocketEventInterface::SSLErrorCallbacks>
       ssl_error_callbacks_;
   SSLInfo ssl_info_;
-  bool ssl_fatal_;
-  URLRequest* url_request_;
+  bool ssl_fatal_ = false;
+  raw_ptr<URLRequest> url_request_ = nullptr;
   AuthChallengeInfo auth_challenge_info_;
   base::OnceCallback<void(const AuthCredentials*)> on_auth_required_callback_;
 
@@ -100,7 +105,6 @@ class WebSocketStreamCreateTestBase : public WithTaskEnvironment {
 
  private:
   class TestConnectDelegate;
-  DISALLOW_COPY_AND_ASSIGN(WebSocketStreamCreateTestBase);
 };
 
 }  // namespace net

@@ -6,16 +6,17 @@
 #define DEVICE_FIDO_MAC_FAKE_TOUCH_ID_CONTEXT_H_
 
 #include "base/component_export.h"
-#include "base/macros.h"
 #include "device/fido/mac/touch_id_context.h"
 
 namespace device {
 namespace fido {
 namespace mac {
 
-class API_AVAILABLE(macosx(10.12.2)) FakeTouchIdContext
-    : public TouchIdContext {
+class FakeTouchIdContext : public TouchIdContext {
  public:
+  FakeTouchIdContext(const FakeTouchIdContext&) = delete;
+  FakeTouchIdContext& operator=(const FakeTouchIdContext&) = delete;
+
   ~FakeTouchIdContext() override;
 
   // TouchIdContext:
@@ -31,8 +32,6 @@ class API_AVAILABLE(macosx(10.12.2)) FakeTouchIdContext
   FakeTouchIdContext();
 
   bool callback_result_ = true;
-
-  DISALLOW_COPY_AND_ASSIGN(FakeTouchIdContext);
 };
 
 }  // namespace mac

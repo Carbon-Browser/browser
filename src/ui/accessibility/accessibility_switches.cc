@@ -13,11 +13,6 @@ namespace switches {
 const char kEnableExperimentalAccessibilityAutoclick[] =
     "enable-experimental-accessibility-autoclick";
 
-// Enables the experimental dictation extension on Chrome OS that hasn't
-// launched yet.
-const char kEnableExperimentalAccessibilityDictationExtension[] =
-    "enable-experimental-accessibility-dictation-extension";
-
 // Enables support for visually debugging the accessibility labels
 // feature, which provides images descriptions for screen reader users.
 const char kEnableExperimentalAccessibilityLabelsDebugging[] =
@@ -41,15 +36,6 @@ const char kEnableExperimentalAccessibilitySwitchAccessText[] =
 // zooming in.
 const char kEnableMagnifierDebugDrawRect[] = "enable-magnifier-debug-draw-rect";
 
-// Enables the Switch Access setup guide that hasn't launched yet.
-const char kEnableExperimentalAccessibilitySwitchAccessSetupGuide[] =
-    "enable-experimental-accessibility-switch-access-setup-guide";
-
-bool IsExperimentalAccessibilityDictationExtensionEnabled() {
-  return base::CommandLine::ForCurrentProcess()->HasSwitch(
-      ::switches::kEnableExperimentalAccessibilityDictationExtension);
-}
-
 bool IsExperimentalAccessibilityLanguageDetectionEnabled() {
   return base::CommandLine::ForCurrentProcess()->HasSwitch(
       ::switches::kEnableExperimentalAccessibilityLanguageDetection);
@@ -70,14 +56,14 @@ bool IsMagnifierDebugDrawRectEnabled() {
       ::switches::kEnableMagnifierDebugDrawRect);
 }
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 // Enables UI Automation platform API in addition to the IAccessible API.
 const char kEnableExperimentalUIAutomation[] =
     "enable-experimental-ui-automation";
 #endif
 
 bool IsExperimentalAccessibilityPlatformUIAEnabled() {
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   return base::CommandLine::ForCurrentProcess()->HasSwitch(
       ::switches::kEnableExperimentalUIAutomation);
 #else
@@ -88,5 +74,8 @@ bool IsExperimentalAccessibilityPlatformUIAEnabled() {
 // Optionally disable AXMenuList, which makes the internal pop-up menu
 // UI for a select element directly accessible.
 const char kDisableAXMenuList[] = "disable-ax-menu-list";
+
+const char kGenerateAccessibilityTestExpectations[] =
+    "generate-accessibility-test-expectations";
 
 }  // namespace switches

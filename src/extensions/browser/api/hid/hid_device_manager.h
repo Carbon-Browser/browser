@@ -11,7 +11,7 @@
 #include <vector>
 
 #include "base/callback.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/threading/thread_checker.h"
 #include "base/values.h"
@@ -44,6 +44,10 @@ class HidDeviceManager : public BrowserContextKeyedAPI,
   using ConnectCallback = device::mojom::HidManager::ConnectCallback;
 
   explicit HidDeviceManager(content::BrowserContext* context);
+
+  HidDeviceManager(const HidDeviceManager&) = delete;
+  HidDeviceManager& operator=(const HidDeviceManager&) = delete;
+
   ~HidDeviceManager() override;
 
   // BrowserContextKeyedAPI implementation.
@@ -121,12 +125,12 @@ class HidDeviceManager : public BrowserContextKeyedAPI,
 
   void DispatchEvent(events::HistogramValue histogram_value,
                      const std::string& event_name,
-                     std::vector<base::Value> event_args,
+                     base::Value::List event_args,
                      const device::mojom::HidDeviceInfo& device_info);
 
   base::ThreadChecker thread_checker_;
-  content::BrowserContext* browser_context_ = nullptr;
-  EventRouter* event_router_ = nullptr;
+  raw_ptr<content::BrowserContext> browser_context_ = nullptr;
+  raw_ptr<EventRouter> event_router_ = nullptr;
   bool initialized_ = false;
   mojo::Remote<device::mojom::HidManager> hid_manager_;
   mojo::AssociatedReceiver<device::mojom::HidManagerClient> receiver_{this};
@@ -136,8 +140,6 @@ class HidDeviceManager : public BrowserContextKeyedAPI,
   ResourceIdToDeviceInfoMap devices_;
   DeviceIdToResourceIdMap resource_ids_;
   base::WeakPtrFactory<HidDeviceManager> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(HidDeviceManager);
 };
 
 }  // namespace extensions

@@ -18,7 +18,6 @@
 #include "base/callback.h"
 #include "base/check_op.h"
 #include "base/containers/span.h"
-#include "base/cxx17_backports.h"
 #include "base/files/file_path.h"
 #include "base/i18n/file_util_icu.h"
 #include "base/no_destructor.h"
@@ -39,6 +38,7 @@
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/l10n/l10n_util_win.h"
 #include "ui/gfx/geometry/point.h"
+#include "ui/gfx/geometry/size.h"
 #include "ui/gfx/image/image_skia.h"
 #include "ui/gfx/skbitmap_operations.h"
 #include "ui/strings/grit/ui_strings.h"
@@ -62,6 +62,8 @@ STGMEDIUM CreateIdListStorageForFileName(const base::FilePath& path);
 STGMEDIUM CreateStorageForFileDescriptor(const base::FilePath& path);
 
 const ClipboardFormatType& GetRendererTaintFormatType();
+const ClipboardFormatType& GetFromPrivilegedFormatType();
+const ClipboardFormatType& GetIgnoreFileContentsFormatType();
 // Creates the contents of an Internet Shortcut file for the given URL.
 std::string GetInternetShortcutFileContents(const GURL& url);
 // Creates a valid file name given a suggested title and URL.
@@ -87,6 +89,10 @@ class FormatEtcEnumerator final : public IEnumFORMATETC {
  public:
   FormatEtcEnumerator(DataObjectImpl::StoredData::const_iterator begin,
                       DataObjectImpl::StoredData::const_iterator end);
+
+  FormatEtcEnumerator(const FormatEtcEnumerator&) = delete;
+  FormatEtcEnumerator& operator=(const FormatEtcEnumerator&) = delete;
+
   ~FormatEtcEnumerator();
 
   // IEnumFORMATETC implementation:
@@ -122,8 +128,6 @@ class FormatEtcEnumerator final : public IEnumFORMATETC {
   size_t cursor_;
 
   ULONG ref_count_;
-
-  DISALLOW_COPY_AND_ASSIGN(FormatEtcEnumerator);
 };
 
 // Safely makes a copy of all of the relevant bits of a FORMATETC object.
@@ -302,6 +306,16 @@ bool OSExchangeDataProviderWin::DidOriginateFromRenderer() const {
   return HasCustomFormat(GetRendererTaintFormatType());
 }
 
+void OSExchangeDataProviderWin::MarkAsFromPrivileged() {
+  STGMEDIUM storage = CreateStorageForString(std::string());
+  data_->contents_.push_back(DataObjectImpl::StoredDataInfo::TakeStorageMedium(
+      GetFromPrivilegedFormatType().ToFormatEtc(), storage));
+}
+
+bool OSExchangeDataProviderWin::IsFromPrivileged() const {
+  return HasCustomFormat(GetFromPrivilegedFormatType());
+}
+
 void OSExchangeDataProviderWin::SetString(const std::u16string& data) {
   STGMEDIUM storage = CreateStorageForString(data);
   data_->contents_.push_back(DataObjectImpl::StoredDataInfo::TakeStorageMedium(
@@ -329,11 +343,23 @@ void OSExchangeDataProviderWin::SetURL(const GURL& url,
   data_->contents_.push_back(DataObjectImpl::StoredDataInfo::TakeStorageMedium(
       ClipboardFormatType::MozUrlType().ToFormatEtc(), storage));
 
-  // Add a .URL shortcut file for dragging to Explorer.
-  std::wstring valid_file_name =
-      CreateValidFileNameFromTitle(url, base::AsWString(title));
-  std::string shortcut_url_file_contents = GetInternetShortcutFileContents(url);
-  SetFileContents(base::FilePath(valid_file_name), shortcut_url_file_contents);
+  // Add a .URL shortcut file for dragging to Explorer if there is not already
+  // FileContents from dragging an image.  Also mark the synthesized file
+  // contents to be ignored if the drag ends up targeting Chrome. Otherwise,
+  // this may confuse some web pages into dropping a file rather than a link.
+  // See https://crbug.com/1274395 for background.
+  if (!HasFileContents()) {
+    std::wstring valid_file_name =
+        CreateValidFileNameFromTitle(url, base::AsWString(title));
+    std::string shortcut_url_file_contents =
+        GetInternetShortcutFileContents(url);
+    SetFileContents(base::FilePath(valid_file_name),
+                    shortcut_url_file_contents);
+    STGMEDIUM storage = CreateStorageForString(std::string());
+    data_->contents_.push_back(
+        DataObjectImpl::StoredDataInfo::TakeStorageMedium(
+            GetIgnoreFileContentsFormatType().ToFormatEtc(), storage));
+  }
 
   // Add a UniformResourceLocator link for apps like IE and Word.
   storage = CreateStorageForString(base::UTF8ToUTF16(url.spec()));
@@ -620,6 +646,9 @@ bool OSExchangeDataProviderWin::GetPickledData(
 bool OSExchangeDataProviderWin::GetFileContents(
     base::FilePath* filename,
     std::string* file_contents) const {
+  if (HasCustomFormat(GetIgnoreFileContentsFormatType()))
+    return false;
+
   std::wstring filename_str;
   if (!ClipboardUtil::GetFileContents(source_object_.Get(), &filename_str,
                                       file_contents)) {
@@ -655,7 +684,8 @@ bool OSExchangeDataProviderWin::HasFile() const {
 }
 
 bool OSExchangeDataProviderWin::HasFileContents() const {
-  return ClipboardUtil::HasFileContents(source_object_.Get());
+  return ClipboardUtil::HasFileContents(source_object_.Get()) &&
+         !HasCustomFormat(GetIgnoreFileContentsFormatType());
 }
 
 bool OSExchangeDataProviderWin::HasHtml() const {
@@ -1181,6 +1211,23 @@ const ClipboardFormatType& GetRendererTaintFormatType() {
   return *format;
 }
 
+const ClipboardFormatType& GetFromPrivilegedFormatType() {
+  static base::NoDestructor<ClipboardFormatType> format(
+      ClipboardFormatType::GetType("chromium/from-privileged"));
+  return *format;
+}
+
+// Used to mark file content as synthesized by Chrome itself during a non-file
+// drag for interoperating with the native OS. Synthesized file contents will be
+// treated as non-existent for the purposes of GetFileContent() to avoid
+// confusing web pages that might not expect the synthesized file. See
+// https://crbug.com/1274395 for background.
+const ClipboardFormatType& GetIgnoreFileContentsFormatType() {
+  static base::NoDestructor<ClipboardFormatType> format(
+      ClipboardFormatType::GetType("chromium/x-ignore-file-contents"));
+  return *format;
+}
+
 std::string GetInternetShortcutFileContents(const GURL& url) {
   static constexpr char kInternetShortcutFileStart[] =
       "[InternetShortcut]\r\nURL=";
@@ -1214,7 +1261,7 @@ std::wstring CreateValidFileNameFromTitle(const GURL& url,
 
   // Maximum length of title after truncation.
   static constexpr size_t kMaxFileTitleLength =
-      kMaxFileNameLength - base::size(kExtension);
+      kMaxFileNameLength - std::size(kExtension);
 
   if (validated.size() > kMaxFileTitleLength)
     validated.erase(kMaxFileTitleLength);

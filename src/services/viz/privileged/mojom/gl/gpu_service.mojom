@@ -5,13 +5,15 @@
 module viz.mojom;
 
 [EnableIf=is_chromeos_ash]
-import "components/arc/mojom/protected_buffer_manager.mojom";
+import "ash/components/arc/mojom/protected_buffer_manager.mojom";
 [EnableIf=is_chromeos_ash]
-import "components/arc/mojom/video_decode_accelerator.mojom";
+import "ash/components/arc/mojom/video_decode_accelerator.mojom";
 [EnableIf=is_chromeos_ash]
-import "components/arc/mojom/video_encode_accelerator.mojom";
+import "ash/components/arc/mojom/video_decoder.mojom";
 [EnableIf=is_chromeos_ash]
-import "components/arc/mojom/video_protected_buffer_allocator.mojom";
+import "ash/components/arc/mojom/video_encode_accelerator.mojom";
+[EnableIf=is_chromeos_ash]
+import "ash/components/arc/mojom/video_protected_buffer_allocator.mojom";
 [EnableIf=is_chromeos_ash]
 import "components/chromeos_camera/common/mjpeg_decode_accelerator.mojom";
 [EnableIf=is_chromeos_ash]
@@ -35,6 +37,8 @@ import "mojo/public/mojom/base/shared_memory.mojom";
 import "mojo/public/mojom/base/string16.mojom";
 [EnableIf=is_win]
 import "mojo/public/mojom/base/unguessable_token.mojom";
+[EnableIf=is_win]
+import "ui/gfx/mojom/dxgi_info.mojom";
 
 interface GpuService {
   // Tells the GPU service to create a new channel for communication with a
@@ -61,22 +65,27 @@ interface GpuService {
   CloseChannel(int32 client_id);
 
   // Create a new ARC VideoDecodeAccelerator and binds it to |vda|.
-  [EnableIf=is_chromeos_ash]
+  [EnableIf=enable_arc_media]
   CreateArcVideoDecodeAccelerator(
       pending_receiver<arc.mojom.VideoDecodeAccelerator> vda);
 
+  // Create a new ARC VideoDecoder and binds it to |vd|.
+  [EnableIf=enable_arc_media]
+  CreateArcVideoDecoder(
+      pending_receiver<arc.mojom.VideoDecoder> vd);
+
   // Create a new ARC VideoEncodeAccelerator and binds it to |vea|.
-  [EnableIf=is_chromeos_ash]
+  [EnableIf=enable_arc_media]
   CreateArcVideoEncodeAccelerator(
       pending_receiver<arc.mojom.VideoEncodeAccelerator> vea);
 
   // Create a new ARC VideoProtectedBufferAllocator and binds it to |pba|.
-  [EnableIf=is_chromeos_ash]
+  [EnableIf=enable_arc_media ]
   CreateArcVideoProtectedBufferAllocator(
       pending_receiver<arc.mojom.VideoProtectedBufferAllocator> pba);
 
   // Create a new ARC ProtectedBufferManager and binds it to |pbm|.
-  [EnableIf=is_chromeos_ash]
+  [EnableIf=enable_arc_media ]
   CreateArcProtectedBufferManager(
       pending_receiver<arc.mojom.ProtectedBufferManager> pbm);
 
@@ -143,9 +152,10 @@ interface GpuService {
       map<gpu.mojom.GpuPeakMemoryAllocationSource, uint64>
           memory_per_allocation_source);
 
-  // Requests that the GPU process query system availability of HDR output and
-  // return it.
-  RequestHDRStatus() => (bool hdr_enabled);
+  // Requests that the GPU process query DXGI adapter and output information
+  // and return it.
+  [EnableIf=is_win]
+  RequestDXGIInfo() => (gfx.mojom.DXGIInfo dxgi_info);
 
   // Notify GPU that a shader program was loaded from disk. Key is an
   // SHA-1 hash, and data a binary blob with serialized program info.

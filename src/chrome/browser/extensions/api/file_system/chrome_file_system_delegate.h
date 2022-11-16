@@ -9,7 +9,6 @@
 
 #include <memory>
 
-#include "base/macros.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 
@@ -28,10 +27,17 @@ void DispatchVolumeListChangeEvent(content::BrowserContext* browser_context);
 class ChromeFileSystemDelegate : public FileSystemDelegate {
  public:
   ChromeFileSystemDelegate();
+
+  ChromeFileSystemDelegate(const ChromeFileSystemDelegate&) = delete;
+  ChromeFileSystemDelegate& operator=(const ChromeFileSystemDelegate&) = delete;
+
   ~ChromeFileSystemDelegate() override;
 
   // FileSystemDelegate:
   base::FilePath GetDefaultDirectory() override;
+  base::FilePath GetManagedSaveAsDirectory(
+      content::BrowserContext* browser_context,
+      const Extension& extension) override;
   bool ShowSelectFileDialog(
       scoped_refptr<ExtensionFunction> extension_function,
       ui::SelectFileDialog::Type type,
@@ -46,10 +52,8 @@ class ChromeFileSystemDelegate : public FileSystemDelegate {
                                        base::OnceClosure on_cancel) override;
   int GetDescriptionIdForAcceptType(const std::string& accept_type) override;
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  FileSystemDelegate::GrantVolumesMode GetGrantVolumesMode(
-      content::BrowserContext* browser_context,
-      content::RenderFrameHost* render_frame_host,
-      const Extension& extension) override;
+  bool IsGrantable(content::BrowserContext* browser_context,
+                   const Extension& extension) override;
   void RequestFileSystem(content::BrowserContext* browser_context,
                          scoped_refptr<ExtensionFunction> requester,
                          const Extension& extension,
@@ -58,15 +62,11 @@ class ChromeFileSystemDelegate : public FileSystemDelegate {
                          FileSystemCallback success_callback,
                          ErrorCallback error_callback) override;
   void GetVolumeList(content::BrowserContext* browser_context,
-                     const Extension& extension,
                      VolumeListCallback success_callback,
                      ErrorCallback error_callback) override;
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
   SavedFilesServiceInterface* GetSavedFilesService(
       content::BrowserContext* browser_context) override;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ChromeFileSystemDelegate);
 };
 
 }  // namespace extensions

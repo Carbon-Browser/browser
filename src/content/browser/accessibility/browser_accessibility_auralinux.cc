@@ -15,11 +15,22 @@ BrowserAccessibilityAuraLinux* ToBrowserAccessibilityAuraLinux(
 }
 
 // static
-BrowserAccessibility* BrowserAccessibility::Create() {
-  return new BrowserAccessibilityAuraLinux();
+std::unique_ptr<BrowserAccessibility> BrowserAccessibility::Create(
+    BrowserAccessibilityManager* manager,
+    ui::AXNode* node) {
+  BrowserAccessibility* wrapper = manager->GetFromAXNode(node);
+  bool is_focused_node = wrapper && wrapper == manager->GetLastFocusedNode();
+  auto platform_node =
+      std::make_unique<BrowserAccessibilityAuraLinux>(manager, node);
+  if (is_focused_node)
+    platform_node->GetNode()->SetAsCurrentlyFocusedNode();
+  return platform_node;
 }
 
-BrowserAccessibilityAuraLinux::BrowserAccessibilityAuraLinux() {
+BrowserAccessibilityAuraLinux::BrowserAccessibilityAuraLinux(
+    BrowserAccessibilityManager* manager,
+    ui::AXNode* node)
+    : BrowserAccessibility(manager, node) {
   node_ = static_cast<ui::AXPlatformNodeAuraLinux*>(
       ui::AXPlatformNode::Create(this));
 }
@@ -27,6 +38,7 @@ BrowserAccessibilityAuraLinux::BrowserAccessibilityAuraLinux() {
 BrowserAccessibilityAuraLinux::~BrowserAccessibilityAuraLinux() {
   DCHECK(node_);
   node_->Destroy();
+  node_ = nullptr;
 }
 
 ui::AXPlatformNodeAuraLinux* BrowserAccessibilityAuraLinux::GetNode() const {

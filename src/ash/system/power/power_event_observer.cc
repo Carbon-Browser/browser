@@ -21,7 +21,7 @@
 #include "base/location.h"
 #include "base/scoped_multi_source_observation.h"
 #include "base/threading/thread_task_runner_handle.h"
-#include "chromeos/components/feature_usage/feature_usage_metrics.h"
+#include "chromeos/ash/components/feature_usage/feature_usage_metrics.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_tree_host.h"
 #include "ui/base/user_activity/user_activity_detector.h"
@@ -67,6 +67,10 @@ class CompositorWatcher : public ui::CompositorObserver {
       : callback_(std::move(callback)), compositor_observations_(this) {
     Start();
   }
+
+  CompositorWatcher(const CompositorWatcher&) = delete;
+  CompositorWatcher& operator=(const CompositorWatcher&) = delete;
+
   ~CompositorWatcher() override = default;
 
   // ui::CompositorObserver:
@@ -207,8 +211,6 @@ class CompositorWatcher : public ui::CompositorObserver {
       compositor_observations_;
 
   base::WeakPtrFactory<CompositorWatcher> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(CompositorWatcher);
 };
 
 const char kLockOnSuspendFeature[] = "LockOnSuspend";

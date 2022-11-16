@@ -135,7 +135,7 @@ class BottomSheetManager extends EmptyBottomSheetObserver implements DestroyObse
                 mCallbackController.makeCancelable(this::addStartSurfaceStateObserver));
 
         mSheetController.addObserver(this);
-        mSheetController.setAccssibilityUtil(ChromeAccessibilityUtil.get());
+        mSheetController.setAccessibilityUtil(ChromeAccessibilityUtil.get());
 
         // TODO(1092686): We should wait to instantiate all of these observers until the bottom
         //                sheet is actually used.
@@ -211,7 +211,7 @@ class BottomSheetManager extends EmptyBottomSheetObserver implements DestroyObse
         updateSuppressionForTabSwitcher(tab,
                 mStartSurfaceSupplier.get() == null
                         ? null
-                        : mStartSurfaceSupplier.get().getController().getStartSurfaceState());
+                        : mStartSurfaceSupplier.get().getStartSurfaceState());
 
         if (tab == null) return;
 
@@ -278,7 +278,7 @@ class BottomSheetManager extends EmptyBottomSheetObserver implements DestroyObse
                     int startSurfaceState, boolean shouldShowTabSwitcherToolbar) {
                 if (mStartSurfaceState == startSurfaceState) return;
 
-                assert startSurfaceState == startSurface.getController().getStartSurfaceState();
+                assert startSurfaceState == startSurface.getStartSurfaceState();
                 mStartSurfaceState = startSurfaceState;
                 updateSuppressionForTabSwitcher(mTabProvider.get(), startSurfaceState);
 

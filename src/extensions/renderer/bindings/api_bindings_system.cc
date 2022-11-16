@@ -4,8 +4,11 @@
 
 #include "extensions/renderer/bindings/api_bindings_system.h"
 
+#include <utility>
+
 #include "base/bind.h"
 #include "base/values.h"
+#include "extensions/common/mojom/event_dispatcher.mojom.h"
 #include "extensions/renderer/bindings/api_binding_hooks.h"
 #include "extensions/renderer/bindings/api_binding_util.h"
 #include "extensions/renderer/bindings/api_response_validator.h"
@@ -41,6 +44,8 @@ APIBindingsSystem::APIBindingsSystem(
       on_silent_request_(std::move(on_silent_request)) {
   if (binding::IsResponseValidationEnabled()) {
     request_handler_.SetResponseValidator(
+        std::make_unique<APIResponseValidator>(&type_reference_map_));
+    event_handler_.SetResponseValidator(
         std::make_unique<APIResponseValidator>(&type_reference_map_));
   }
 }
@@ -82,7 +87,7 @@ std::unique_ptr<APIBinding> APIBindingsSystem::CreateNewAPIBinding(
     hooks = std::move(iter->second);
     binding_hooks_.erase(iter);
   } else {
-    hooks = std::make_unique<APIBindingHooks>(api_name);
+    hooks = std::make_unique<APIBindingHooks>(api_name, &request_handler_);
   }
 
   return std::make_unique<APIBinding>(
@@ -114,16 +119,18 @@ void APIBindingsSystem::InitializeType(const std::string& type_name) {
 }
 
 void APIBindingsSystem::CompleteRequest(int request_id,
-                                        const base::ListValue& response,
+                                        const base::Value::List& response,
                                         const std::string& error) {
   request_handler_.CompleteRequest(request_id, response, error);
 }
 
-void APIBindingsSystem::FireEventInContext(const std::string& event_name,
-                                           v8::Local<v8::Context> context,
-                                           const base::ListValue& response,
-                                           const EventFilteringInfo* filter) {
-  event_handler_.FireEventInContext(event_name, context, response, filter);
+void APIBindingsSystem::FireEventInContext(
+    const std::string& event_name,
+    v8::Local<v8::Context> context,
+    const base::Value::List& response,
+    mojom::EventFilteringInfoPtr filter) {
+  event_handler_.FireEventInContext(event_name, context, response,
+                                    std::move(filter));
 }
 
 APIBindingHooks* APIBindingsSystem::GetHooksForAPI(
@@ -132,7 +139,7 @@ APIBindingHooks* APIBindingsSystem::GetHooksForAPI(
       << "Hook registration must happen before creating any binding instances.";
   std::unique_ptr<APIBindingHooks>& hooks = binding_hooks_[api_name];
   if (!hooks)
-    hooks = std::make_unique<APIBindingHooks>(api_name);
+    hooks = std::make_unique<APIBindingHooks>(api_name, &request_handler_);
   return hooks.get();
 }
 

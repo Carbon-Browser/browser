@@ -18,6 +18,7 @@
 #include "components/user_prefs/user_prefs.h"
 #include "content/public/browser/back_forward_cache.h"
 #include "content/public/browser/browser_context.h"
+#include "content/public/browser/frame_type.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
@@ -106,15 +107,20 @@ bool SafeBrowsingTriggeredPopupBlocker::ShouldApplyAbusivePopupBlocker(
 SafeBrowsingTriggeredPopupBlocker::SafeBrowsingTriggeredPopupBlocker(
     content::WebContents* web_contents,
     subresource_filter::SubresourceFilterObserverManager* observer_manager)
-    : content::WebContentsObserver(web_contents) {
+    : content::WebContentsObserver(web_contents),
+      content::WebContentsUserData<SafeBrowsingTriggeredPopupBlocker>(
+          *web_contents) {
   DCHECK(observer_manager);
   scoped_observation_.Observe(observer_manager);
 }
 
 void SafeBrowsingTriggeredPopupBlocker::DidFinishNavigation(
     content::NavigationHandle* navigation_handle) {
-  if (!navigation_handle->IsInMainFrame())
+  if (!navigation_handle->IsInMainFrame() ||
+      navigation_handle->GetNavigatingFrameType() ==
+          content::FrameType::kFencedFrameRoot) {
     return;
+  }
 
   absl::optional<SubresourceFilterLevel> level;
   NavigationHandleData* data =
@@ -152,7 +158,7 @@ void SafeBrowsingTriggeredPopupBlocker::DidFinishNavigation(
             back_forward_cache::DisabledReasonId::
                 kSafeBrowsingTriggeredPopupBlocker));
   } else if (level == SubresourceFilterLevel::WARN) {
-    web_contents()->GetMainFrame()->AddMessageToConsole(
+    navigation_handle->GetRenderFrameHost()->AddMessageToConsole(
         blink::mojom::ConsoleMessageLevel::kWarning, kAbusiveWarnMessage);
     LogAction(Action::kWarningSite);
   }
@@ -169,6 +175,11 @@ void SafeBrowsingTriggeredPopupBlocker::OnSafeBrowsingChecksComplete(
     const subresource_filter::SubresourceFilterSafeBrowsingClient::CheckResult&
         result) {
   DCHECK(navigation_handle->IsInMainFrame());
+  // TODO(crbug.com/1263541): Replace it with DCHECK.
+  if (navigation_handle->GetNavigatingFrameType() ==
+      content::FrameType::kFencedFrameRoot) {
+    return;
+  }
   absl::optional<safe_browsing::SubresourceFilterLevel> match_level;
   if (result.threat_type ==
       safe_browsing::SBThreatType::SB_THREAT_TYPE_SUBRESOURCE_FILTER) {
@@ -209,9 +220,9 @@ SafeBrowsingTriggeredPopupBlocker::GetPageData(content::Page& page) {
   return *PageData::GetOrCreateForPage(page);
 }
 
-PAGE_USER_DATA_KEY_IMPL(SafeBrowsingTriggeredPopupBlocker::PageData)
+PAGE_USER_DATA_KEY_IMPL(SafeBrowsingTriggeredPopupBlocker::PageData);
 NAVIGATION_HANDLE_USER_DATA_KEY_IMPL(
-    SafeBrowsingTriggeredPopupBlocker::NavigationHandleData)
-WEB_CONTENTS_USER_DATA_KEY_IMPL(SafeBrowsingTriggeredPopupBlocker)
+    SafeBrowsingTriggeredPopupBlocker::NavigationHandleData);
+WEB_CONTENTS_USER_DATA_KEY_IMPL(SafeBrowsingTriggeredPopupBlocker);
 
 }  // namespace blocked_content

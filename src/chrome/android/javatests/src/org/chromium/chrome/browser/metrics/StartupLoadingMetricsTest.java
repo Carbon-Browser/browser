@@ -55,6 +55,8 @@ public class StartupLoadingMetricsTest {
             "Startup.Android.Cold.TimeToFirstVisibleContent";
     private static final String VISIBLE_CONTENT_HISTOGRAM =
             "Startup.Android.Cold.TimeToVisibleContent";
+    private static final String FIRST_COMMIT_OCCURRED_PRE_FOREGROUND_HISTOGRAM =
+            "Startup.Android.Cold.FirstNavigationCommitOccurredPreForeground";
 
     private static final String TABBED_SUFFIX = ChromeTabbedActivity.STARTUP_UMA_HISTOGRAM_SUFFIX;
     private static final String WEBAPK_SUFFIX =
@@ -122,6 +124,24 @@ public class StartupLoadingMetricsTest {
                             FIRST_VISIBLE_CONTENT_HISTOGRAM));
             Assert.assertEquals(expectedCount,
                     RecordHistogram.getHistogramTotalCountForTesting(VISIBLE_CONTENT_HISTOGRAM));
+        }
+
+        if (expectedCount > 0) {
+            // If the first nav commit was recorded, it should have also been registered as having
+            // occurred post-foregrounding (since otherwise it would not have been recorded).
+            Assert.assertEquals(expectedCount,
+                    RecordHistogram.getHistogramValueCountForTesting(
+                            FIRST_COMMIT_OCCURRED_PRE_FOREGROUND_HISTOGRAM, 0));
+            Assert.assertEquals(0,
+                    RecordHistogram.getHistogramValueCountForTesting(
+                            FIRST_COMMIT_OCCURRED_PRE_FOREGROUND_HISTOGRAM, 1));
+        } else {
+            // Note that the first commit might or might not have occurred in this case depending on
+            // the test. However, if it occurred it must have occurred pre-foregrounding (since
+            // otherwise the core metric would have been recorded).
+            Assert.assertEquals(0,
+                    RecordHistogram.getHistogramValueCountForTesting(
+                            FIRST_COMMIT_OCCURRED_PRE_FOREGROUND_HISTOGRAM, 0));
         }
     }
 
@@ -248,5 +268,52 @@ public class StartupLoadingMetricsTest {
             mTabbedActivityTestRule.loadUrl(mTestPage);
         });
         assertHistogramsRecorded(0, TABBED_SUFFIX);
+    }
+
+    @Test
+    @LargeTest
+    @DisabledTest(message = "https://crbug.com/1313210")
+    public void testRecordingOfFirstNavigationCommitPreForeground() throws Exception {
+        UmaUtils.skipRecordingNextForegroundStartTimeForTesting();
+
+        runAndWaitForPageLoadMetricsRecorded(() -> {
+            Intent intent = new Intent(Intent.ACTION_VIEW);
+            intent.addCategory(Intent.CATEGORY_LAUNCHER);
+            mTabbedActivityTestRule.startMainActivityFromIntent(intent, mTestPage);
+        });
+
+        ActivityTabStartupMetricsTracker startupMetricsTracker =
+                mTabbedActivityTestRule.getActivity().getActivityTabStartupMetricsTracker();
+
+        // Startup metrics should not have been recorded since the browser is not in the
+        // foreground.
+        Assert.assertEquals(0,
+                RecordHistogram.getHistogramTotalCountForTesting(
+                        FIRST_COMMIT_HISTOGRAM + TABBED_SUFFIX));
+        Assert.assertEquals(0,
+                RecordHistogram.getHistogramTotalCountForTesting(FIRST_VISIBLE_CONTENT_HISTOGRAM));
+
+        // The metric for the first navigation commit having occurred
+        // pre-foregrounding should also not have been recorded at this point, as there hasn't yet
+        // been a notification that the browser has come to the foreground.
+        Assert.assertEquals(0,
+                RecordHistogram.getHistogramValueCountForTesting(
+                        FIRST_COMMIT_OCCURRED_PRE_FOREGROUND_HISTOGRAM, 1));
+
+        // Trigger the come-to-foreground event.
+        TestThreadUtils.runOnUiThreadBlocking(() -> UmaUtils.recordForegroundStartTime());
+
+        // Startup metrics should still not have been recorded...
+        Assert.assertEquals(0,
+                RecordHistogram.getHistogramTotalCountForTesting(
+                        FIRST_COMMIT_HISTOGRAM + TABBED_SUFFIX));
+        Assert.assertEquals(0,
+                RecordHistogram.getHistogramTotalCountForTesting(FIRST_VISIBLE_CONTENT_HISTOGRAM));
+
+        // ...but the metric for the first navigation commit having occurred
+        // pre-foregrounding *should* now have been recorded.
+        Assert.assertEquals(1,
+                RecordHistogram.getHistogramValueCountForTesting(
+                        FIRST_COMMIT_OCCURRED_PRE_FOREGROUND_HISTOGRAM, 1));
     }
 }

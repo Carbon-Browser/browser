@@ -4,7 +4,6 @@
 
 #include "third_party/blink/renderer/core/layout/ng/table/layout_ng_table.h"
 
-#include "third_party/blink/renderer/core/layout/layout_analyzer.h"
 #include "third_party/blink/renderer/core/layout/layout_object_factory.h"
 #include "third_party/blink/renderer/core/layout/layout_view.h"
 #include "third_party/blink/renderer/core/layout/ng/ng_block_node.h"
@@ -121,7 +120,6 @@ bool LayoutNGTable::HasBackgroundForPaint() const {
 
 void LayoutNGTable::UpdateBlockLayout(bool relayout_children) {
   NOT_DESTROYED();
-  LayoutAnalyzer::BlockScope analyzer(*this);
 
   if (IsOutOfFlowPositioned()) {
     UpdateOutOfFlowBlockLayout();
@@ -202,9 +200,7 @@ void LayoutNGTable::StyleDidChange(StyleDifference diff,
         !old_style->BorderVisuallyEqual(StyleRef()) ||
         old_style->GetWritingDirection() != StyleRef().GetWritingDirection() ||
         old_style->IsFixedTableLayout() != StyleRef().IsFixedTableLayout() ||
-        old_style->EmptyCells() != StyleRef().EmptyCells() ||
-        (diff.TextDecorationOrColorChanged() &&
-         StyleRef().HasBorderColorReferencingCurrentColor());
+        old_style->EmptyCells() != StyleRef().EmptyCells();
     bool collapse_changed =
         StyleRef().BorderCollapse() != old_style->BorderCollapse();
     if (borders_changed || collapse_changed)
@@ -227,14 +223,14 @@ PhysicalRect LayoutNGTable::OverflowClipRect(
   if (StyleRef().BorderCollapse() == EBorderCollapse::kCollapse) {
     clip_rect = PhysicalRect(location, Size());
     const auto overflow_clip = GetOverflowClipAxes();
-    IntRect infinite_rect = PhysicalRect::InfiniteIntRect();
+    gfx::Rect infinite_rect = PhysicalRect::InfiniteIntRect();
     if ((overflow_clip & kOverflowClipX) == kNoOverflowClip) {
-      clip_rect.offset.left = LayoutUnit(infinite_rect.X());
-      clip_rect.size.width = LayoutUnit(infinite_rect.Width());
+      clip_rect.offset.left = LayoutUnit(infinite_rect.x());
+      clip_rect.size.width = LayoutUnit(infinite_rect.width());
     }
     if ((overflow_clip & kOverflowClipY) == kNoOverflowClip) {
-      clip_rect.offset.top = LayoutUnit(infinite_rect.Y());
-      clip_rect.size.height = LayoutUnit(infinite_rect.Height());
+      clip_rect.offset.top = LayoutUnit(infinite_rect.y());
+      clip_rect.size.height = LayoutUnit(infinite_rect.height());
     }
   } else {
     clip_rect = LayoutNGMixin<LayoutBlock>::OverflowClipRect(
@@ -406,7 +402,7 @@ LayoutNGTableSectionInterface* LayoutNGTable::FirstBodyInterface() const {
 }
 
 // Called from many AXLayoutObject methods.
-LayoutNGTableSectionInterface* LayoutNGTable::TopSectionInterface() const {
+LayoutNGTableSectionInterface* LayoutNGTable::FirstSectionInterface() const {
   NOT_DESTROYED();
   NGTableGroupedChildren grouped_children(
       NGBlockNode(const_cast<LayoutNGTable*>(this)));
@@ -418,8 +414,55 @@ LayoutNGTableSectionInterface* LayoutNGTable::TopSectionInterface() const {
   return nullptr;
 }
 
-// Called from many AXLayoutObject methods.
-LayoutNGTableSectionInterface* LayoutNGTable::SectionBelowInterface(
+LayoutNGTableSectionInterface* LayoutNGTable::FirstNonEmptySectionInterface()
+    const {
+  NOT_DESTROYED();
+  NGTableGroupedChildren grouped_children(
+      NGBlockNode(const_cast<LayoutNGTable*>(this)));
+  auto first_section = grouped_children.begin();
+  if (first_section == grouped_children.end())
+    return nullptr;
+
+  auto* first_section_interface = ToInterface<LayoutNGTableSectionInterface>(
+      (*first_section).GetLayoutBox());
+  if ((*first_section).IsEmptyTableSection()) {
+    return NextSectionInterface(first_section_interface, kSkipEmptySections);
+  }
+
+  return first_section_interface;
+}
+
+LayoutNGTableSectionInterface* LayoutNGTable::LastSectionInterface() const {
+  NOT_DESTROYED();
+  NGTableGroupedChildren grouped_children(
+      NGBlockNode(const_cast<LayoutNGTable*>(this)));
+  auto last_section = --grouped_children.end();
+  if (last_section != grouped_children.end()) {
+    return ToInterface<LayoutNGTableSectionInterface>(
+        (*last_section).GetLayoutBox());
+  }
+  return nullptr;
+}
+
+LayoutNGTableSectionInterface* LayoutNGTable::LastNonEmptySectionInterface()
+    const {
+  NOT_DESTROYED();
+  NGTableGroupedChildren grouped_children(
+      NGBlockNode(const_cast<LayoutNGTable*>(this)));
+  auto last_section = --grouped_children.end();
+  if (last_section == grouped_children.end())
+    return nullptr;
+
+  auto* last_section_interface = ToInterface<LayoutNGTableSectionInterface>(
+      (*last_section).GetLayoutBox());
+  if ((*last_section).IsEmptyTableSection()) {
+    return PreviousSectionInterface(last_section_interface, kSkipEmptySections);
+  }
+
+  return last_section_interface;
+}
+
+LayoutNGTableSectionInterface* LayoutNGTable::NextSectionInterface(
     const LayoutNGTableSectionInterface* target,
     SkipEmptySectionsValue skip) const {
   NOT_DESTROYED();
@@ -427,6 +470,26 @@ LayoutNGTableSectionInterface* LayoutNGTable::SectionBelowInterface(
       NGBlockNode(const_cast<LayoutNGTable*>(this)));
   bool found = false;
   for (NGBlockNode section : grouped_children) {
+    if (found &&
+        ((skip == kDoNotSkipEmptySections) || (!section.IsEmptyTableSection())))
+      return To<LayoutNGTableSection>(section.GetLayoutBox());
+    if (target == To<LayoutNGTableSection>(section.GetLayoutBox())
+                      ->ToLayoutNGTableSectionInterface())
+      found = true;
+  }
+  return nullptr;
+}
+
+LayoutNGTableSectionInterface* LayoutNGTable::PreviousSectionInterface(
+    const LayoutNGTableSectionInterface* target,
+    SkipEmptySectionsValue skip) const {
+  NOT_DESTROYED();
+  NGTableGroupedChildren grouped_children(
+      NGBlockNode(const_cast<LayoutNGTable*>(this)));
+  auto stop = --grouped_children.begin();
+  bool found = false;
+  for (auto it = --grouped_children.end(); it != stop; --it) {
+    NGBlockNode section = *it;
     if (found &&
         ((skip == kDoNotSkipEmptySections) || (!section.IsEmptyTableSection())))
       return To<LayoutNGTableSection>(section.GetLayoutBox());

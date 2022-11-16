@@ -18,7 +18,7 @@
 #include "base/containers/circular_deque.h"
 #include "base/files/file_path.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
@@ -91,6 +91,9 @@ class CONTENT_EXPORT SavePackage
   // in the "Save As" dialog box.
   explicit SavePackage(Page& page);
 
+  SavePackage(const SavePackage&) = delete;
+  SavePackage& operator=(const SavePackage&) = delete;
+
   // Initialize the SavePackage. Returns true if it initializes properly.  Need
   // to make sure that this method must be called in the UI thread because using
   // g_browser_process on a non-UI thread can cause crashes during shutdown.
@@ -144,8 +147,11 @@ class CONTENT_EXPORT SavePackage
   friend class WebContentsImpl;
   FRIEND_TEST_ALL_PREFIXES(SavePackageTest, TestSuggestedSaveNames);
   FRIEND_TEST_ALL_PREFIXES(SavePackageTest, TestLongSafePureFilename);
+  FRIEND_TEST_ALL_PREFIXES(SavePackageFencedFrameTest,
+                           DontRequestSavableResourcesFromFencedFrames);
   FRIEND_TEST_ALL_PREFIXES(SavePackageBrowserTest, ImplicitCancel);
   FRIEND_TEST_ALL_PREFIXES(SavePackageBrowserTest, ExplicitCancel);
+  FRIEND_TEST_ALL_PREFIXES(SavePackageBrowserTest, Reload);
   FRIEND_TEST_ALL_PREFIXES(SavePackageBrowserTest, DownloadItemDestroyed);
 
   // Map from SaveItem::id() (aka save_item_id) into a SaveItem.
@@ -185,6 +191,15 @@ class CONTENT_EXPORT SavePackage
 
   void Stop(bool cancel_download_item);
   void CheckFinish();
+
+  // Callback used to check if renaming is allowed once paths to saved filed
+  // have been obtained from `file_manager`.
+  void CheckRenameAllowedForPaths(
+      base::flat_map<base::FilePath, base::FilePath> tmp_paths_to_final_paths);
+
+  // Called by CheckRenameAllowedForPaths after checking if the final renaming
+  // step should happen or not.
+  void RenameIfAllowed(bool allowed);
 
   // Clears the associated page.
   void ClearPage();
@@ -348,7 +363,7 @@ class CONTENT_EXPORT SavePackage
 
   // The current page, may be null if the primary page has been navigated away
   // or destroyed.
-  Page* page_;
+  base::WeakPtr<Page> page_;
 
   // A queue for items we are about to start saving.
   base::circular_deque<std::unique_ptr<SaveItem>> waiting_item_queue_;
@@ -386,11 +401,11 @@ class CONTENT_EXPORT SavePackage
   SaveItemIdMap saved_success_items_;
 
   // Non-owning pointer for handling file writing on the download sequence.
-  SaveFileManager* file_manager_ = nullptr;
+  raw_ptr<SaveFileManager> file_manager_ = nullptr;
 
   // DownloadManager owns the download::DownloadItem and handles history and UI.
-  DownloadManagerImpl* download_manager_ = nullptr;
-  download::DownloadItemImpl* download_ = nullptr;
+  raw_ptr<DownloadManagerImpl> download_manager_ = nullptr;
+  raw_ptr<download::DownloadItemImpl> download_ = nullptr;
 
   // The URL of the page the user wants to save.
   const GURL page_url_;
@@ -439,8 +454,6 @@ class CONTENT_EXPORT SavePackage
   // UKM IDs for reporting.
   ukm::SourceId ukm_source_id_;
   uint64_t ukm_download_id_;
-
-  DISALLOW_COPY_AND_ASSIGN(SavePackage);
 };
 
 }  // namespace content

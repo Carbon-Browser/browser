@@ -25,10 +25,10 @@ using java_script_dialog_overlays::JavaScriptDialogResponse;
 namespace {
 // Completion callback for JavaScript dialog overlays.
 void HandleJavaScriptDialogResponse(web::DialogClosedCallback callback,
-                                    web::WebState::Getter web_state_getter,
+                                    base::WeakPtr<web::WebState> weak_web_state,
                                     OverlayResponse* response) {
   // Notify the blocking state that the dialog was shown.
-  web::WebState* web_state = web_state_getter.Run();
+  web::WebState* web_state = weak_web_state.get();
   JavaScriptDialogBlockingState* blocking_state =
       web_state ? JavaScriptDialogBlockingState::FromWebState(web_state)
                 : nullptr;
@@ -82,14 +82,15 @@ void OverlayJavaScriptDialogPresenter::RunJavaScriptDialog(
   }
 
   bool from_main_frame_origin =
-      origin_url.GetOrigin() == web_state->GetLastCommittedURL().GetOrigin();
+      origin_url.DeprecatedGetOriginAsURL() ==
+      web_state->GetLastCommittedURL().DeprecatedGetOriginAsURL();
   std::unique_ptr<OverlayRequest> request =
       OverlayRequest::CreateWithConfig<JavaScriptDialogRequest>(
           dialog_type, web_state, origin_url, from_main_frame_origin,
           message_text, default_prompt_text);
   request->GetCallbackManager()->AddCompletionCallback(
       base::BindOnce(&HandleJavaScriptDialogResponse, std::move(callback),
-                     web_state->CreateDefaultGetter()));
+                     web_state->GetWeakPtr()));
   OverlayRequestQueue::FromWebState(web_state, OverlayModality::kWebContentArea)
       ->AddRequest(std::move(request));
 }

@@ -50,42 +50,6 @@ bool IsFrameworkIDUsed(Document& document, const AtomicString& framework_id) {
   return false;
 }
 
-void CheckForGatsby(Document& document, v8::Local<v8::Context> context) {
-  if (IsFrameworkIDUsed(document, kGatsbyId)) {
-    document.Loader()->DidObserveLoadingBehavior(
-        kLoadingBehaviorGatsbyFrameworkUsed);
-  }
-}
-
-void CheckForNextJS(Document& document, v8::Local<v8::Context> context) {
-  if (IsFrameworkIDUsed(document, kNextjsId) &&
-      IsFrameworkVariableUsed(context, kNextjsData)) {
-    document.Loader()->DidObserveLoadingBehavior(
-        LoadingBehaviorFlag::kLoadingBehaviorNextJSFrameworkUsed);
-  }
-}
-
-void CheckForNuxtJS(Document& document, v8::Local<v8::Context> context) {
-  if (IsFrameworkVariableUsed(context, kNuxtjsData)) {
-    document.Loader()->DidObserveLoadingBehavior(
-        kLoadingBehaviorNuxtJSFrameworkUsed);
-  }
-}
-
-void CheckForSapper(Document& document, v8::Local<v8::Context> context) {
-  if (IsFrameworkVariableUsed(context, kSapperData)) {
-    document.Loader()->DidObserveLoadingBehavior(
-        kLoadingBehaviorSapperFrameworkUsed);
-  }
-}
-
-void CheckForVuePress(Document& document, v8::Local<v8::Context> context) {
-  if (IsFrameworkVariableUsed(context, kVuepressData)) {
-    document.Loader()->DidObserveLoadingBehavior(
-        kLoadingBehaviorVuePressFrameworkUsed);
-  }
-}
-
 inline void CheckIdMatches(Document& document,
                            int& loading_behavior_flag,
                            bool& has_nextjs_id) {
@@ -222,6 +186,7 @@ void DetectJavascriptFrameworksOnLoad(Document& document) {
   // executing JavaScript. See the document that explains this in more detail:
   // https://docs.google.com/document/d/1R5170is5vY425OO2Ru-HJBEraEKu0HjQEakcYldcSzM/edit?usp=sharing
   if (!document.GetFrame() || !document.GetFrame()->IsMainFrame() ||
+      document.GetFrame()->IsInFencedFrameTree() ||
       !document.Url().ProtocolIsInHTTPFamily() ||
       !document.BaseURL().ProtocolIsInHTTPFamily()) {
     return;
@@ -235,16 +200,7 @@ void DetectJavascriptFrameworksOnLoad(Document& document) {
 
   ScriptState::Scope scope(script_state);
   v8::Local<v8::Context> context = script_state->GetContext();
-
-  if (base::FeatureList::IsEnabled(features::kReportAllJavaScriptFrameworks)) {
-    TraverseTreeForFrameworks(document, context);
-  } else {
-    CheckForGatsby(document, context);
-    CheckForNextJS(document, context);
-    CheckForNuxtJS(document, context);
-    CheckForSapper(document, context);
-    CheckForVuePress(document, context);
-  }
+  TraverseTreeForFrameworks(document, context);
 }
 
 }  // namespace blink

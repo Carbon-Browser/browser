@@ -9,7 +9,6 @@
 #include <string>
 #include <unordered_map>
 
-#include "base/macros.h"
 #include "base/memory/ref_counted_memory.h"
 #include "ui/base/resource/resource_bundle.h"
 
@@ -31,6 +30,10 @@ class CastResourceDelegate : public ui::ResourceBundle::Delegate {
   static CastResourceDelegate* GetInstance();
 
   CastResourceDelegate();
+
+  CastResourceDelegate(const CastResourceDelegate&) = delete;
+  CastResourceDelegate& operator=(const CastResourceDelegate&) = delete;
+
   ~CastResourceDelegate() override;
 
   // ui:ResourceBundle::Delegate implementation:
@@ -61,8 +64,6 @@ class CastResourceDelegate : public ui::ResourceBundle::Delegate {
   using ExtraLocaledStringMap = std::unordered_map<int, std::u16string>;
 
   ExtraLocaledStringMap extra_localized_strings_;
-
-  DISALLOW_COPY_AND_ASSIGN(CastResourceDelegate);
 };
 
 }  // namespace chromecast

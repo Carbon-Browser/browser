@@ -9,7 +9,6 @@
 
 #include "base/base_export.h"
 #include "base/check_op.h"
-#include "base/macros.h"
 #include "base/win/variant_util.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -58,6 +57,9 @@ class BASE_EXPORT ScopedSafearray {
       return *this;
     }
 
+    LockScope(const LockScope&) = delete;
+    LockScope& operator=(const LockScope&) = delete;
+
     ~LockScope() { Reset(); }
 
     VARTYPE Type() const { return vartype_; }
@@ -72,8 +74,8 @@ class BASE_EXPORT ScopedSafearray {
     pointer data() { return array_; }
     const_pointer data() const { return array_; }
 
-    reference operator[](int index) { return at(index); }
-    const_reference operator[](int index) const { return at(index); }
+    reference operator[](size_t index) { return at(index); }
+    const_reference operator[](size_t index) const { return at(index); }
 
     reference at(size_t index) {
       DCHECK_NE(array_, nullptr);
@@ -109,11 +111,13 @@ class BASE_EXPORT ScopedSafearray {
     size_t array_size_ = 0U;
 
     friend class ScopedSafearray;
-    DISALLOW_COPY_AND_ASSIGN(LockScope);
   };
 
   explicit ScopedSafearray(SAFEARRAY* safearray = nullptr)
       : safearray_(safearray) {}
+
+  ScopedSafearray(const ScopedSafearray&) = delete;
+  ScopedSafearray& operator=(const ScopedSafearray&) = delete;
 
   // Move constructor
   ScopedSafearray(ScopedSafearray&& r) noexcept : safearray_(r.safearray_) {
@@ -198,7 +202,10 @@ class BASE_EXPORT ScopedSafearray {
     DCHECK(SUCCEEDED(hr));
     hr = SafeArrayGetUBound(safearray_, dimension + 1, &upper);
     DCHECK(SUCCEEDED(hr));
-    return (upper - lower + 1);
+    LONG count = upper - lower + 1;
+    // SafeArrays may have negative lower bounds, so check for wraparound.
+    DCHECK_GT(count, 0);
+    return static_cast<size_t>(count);
   }
 
   // Returns the internal pointer.
@@ -211,7 +218,6 @@ class BASE_EXPORT ScopedSafearray {
 
  private:
   SAFEARRAY* safearray_;
-  DISALLOW_COPY_AND_ASSIGN(ScopedSafearray);
 };
 
 }  // namespace win

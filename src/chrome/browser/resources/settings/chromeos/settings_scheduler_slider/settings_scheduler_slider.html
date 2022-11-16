@@ -97,7 +97,6 @@
 
   .active-marker,
   .inactive-marker {
-    background-color: rgba(255, 255, 255, 0.54);
     border-radius: 50%;
     display: block;
     height: 100%;
@@ -108,8 +107,21 @@
     z-index: 2;
   }
 
+  .active-marker {
+    background-color: rgba(var(--cros-bg-color-rgb), 0.6);
+  }
+
   .inactive-marker {
-    background-color: rgba(26, 115, 232, 0.54);
+    --background-color-opacity: 0.6;
+    background-color: rgba(
+      var(--cros-button-background-color-primary-rgb),
+      var(--background-color-opacity));
+  }
+
+  @media(prefers-color-scheme: dark) {
+    .inactive-marker {
+      --background-color-opacity: 1;
+    }
   }
 
   #legendContainer {
@@ -135,12 +147,10 @@
 </style>
 <div id="sliderContainer">
   <div id="labelContainer">
-    <div id="startLabel" class="label"
-        aria-label="$i18n{startTime}">
+    <div id="startLabel" class="label" aria-hidden="true">
       [[getTimeString_(prefStartTime.value, shouldUse24Hours_, prefs.*)]]
     </div>
-    <div id="endLabel" class="label"
-        aria-label="$i18n{endTime}">
+    <div id="endLabel" class="label" aria-hidden="true">
       [[getTimeString_(prefEndTime.value, shouldUse24Hours_, prefs.*)]]
     </div>
   </div>
@@ -152,11 +162,15 @@
     <div id="markersContainer">
     </div>
     <div id="startKnob" class="knob" tabindex="1" on-down="startDrag_"
-        on-up="endDrag_" on-track="continueDrag_">
+        on-up="endDrag_" on-track="continueDrag_"
+        aria-label="[[getAriaLabelStartTime_(
+            prefStartTime, shouldUse24Hours_, prefs.*)]]">
       <div class="knob-inner" tabindex="-1"></div>
     </div>
     <div id="endKnob" class="knob" tabindex="2" on-down="startDrag_"
-        on-up="endDrag_" on-track="continueDrag_">
+        on-up="endDrag_" on-track="continueDrag_"
+        aria-label="[[getAriaLabelEndTime_(
+            prefEndTime, shouldUse24Hours_, prefs.*)]]">
       <div class="knob-inner" tabindex="-1"></div>
     </div>
   </div>

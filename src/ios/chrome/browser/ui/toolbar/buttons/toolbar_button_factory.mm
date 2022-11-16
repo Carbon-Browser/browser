@@ -5,6 +5,7 @@
 #import "ios/chrome/browser/ui/toolbar/buttons/toolbar_button_factory.h"
 
 #include "components/strings/grit/components_strings.h"
+#import "ios/chrome/browser/ui/icons/chrome_symbol.h"
 #import "ios/chrome/browser/ui/toolbar/buttons/toolbar_button.h"
 #import "ios/chrome/browser/ui/toolbar/buttons/toolbar_button_actions_handler.h"
 #import "ios/chrome/browser/ui/toolbar/buttons/toolbar_button_visibility_configuration.h"
@@ -25,6 +26,17 @@
 #error "This file requires ARC support."
 #endif
 
+namespace {
+
+// The size of the symbol image.
+const CGFloat kSymbolToolbarPointSize = 24;
+
+// Specific symbols used in the toolbar.
+NSString* const kToolbarArrowBackwardSymbol = @"arrow.backward";
+NSString* const kToolbarArrowForwardSymbol = @"arrow.forward";
+
+}  // namespace
+
 @implementation ToolbarButtonFactory
 
 - (instancetype)initWithStyle:(ToolbarStyle)style {
@@ -39,8 +51,13 @@
 #pragma mark - Buttons
 
 - (ToolbarButton*)backButton {
+  UIImage* backImage;
+  backImage = UseSymbols()
+                  ? DefaultSymbolWithPointSize(kToolbarArrowBackwardSymbol,
+                                               kSymbolToolbarPointSize)
+                  : [UIImage imageNamed:@"toolbar_back"];
   ToolbarButton* backButton = [ToolbarButton
-      toolbarButtonWithImage:[[UIImage imageNamed:@"toolbar_back"]
+      toolbarButtonWithImage:[backImage
                                  imageFlippedForRightToLeftLayoutDirection]];
   [self configureButton:backButton width:kAdaptiveToolbarButtonWidth];
   backButton.accessibilityLabel = l10n_util::GetNSString(IDS_ACCNAME_BACK);
@@ -53,8 +70,12 @@
 
 // Returns a forward button without visibility mask configured.
 - (ToolbarButton*)forwardButton {
+  UIImage* forwardImage =
+      UseSymbols() ? DefaultSymbolWithPointSize(kToolbarArrowForwardSymbol,
+                                                kSymbolToolbarPointSize)
+                   : [UIImage imageNamed:@"toolbar_forward"];
   ToolbarButton* forwardButton = [ToolbarButton
-      toolbarButtonWithImage:[[UIImage imageNamed:@"toolbar_forward"]
+      toolbarButtonWithImage:[forwardImage
                                  imageFlippedForRightToLeftLayoutDirection]];
   [self configureButton:forwardButton width:kAdaptiveToolbarButtonWidth];
   forwardButton.visibilityMask =
@@ -68,8 +89,12 @@
 }
 
 - (ToolbarTabGridButton*)tabGridButton {
-  ToolbarTabGridButton* tabGridButton = [ToolbarTabGridButton
-      toolbarButtonWithImage:[UIImage imageNamed:@"toolbar_switcher"]];
+  UIImage* tabGridImage =
+      UseSymbols() ? CustomSymbolWithPointSize(kSquareNumberSymbol,
+                                               kSymbolToolbarPointSize)
+                   : tabGridImage = [UIImage imageNamed:@"toolbar_switcher"];
+  ToolbarTabGridButton* tabGridButton =
+      [ToolbarTabGridButton toolbarButtonWithImage:tabGridImage];
   [self configureButton:tabGridButton width:kAdaptiveToolbarButtonWidth];
   SetA11yLabelAndUiAutomationName(tabGridButton, IDS_IOS_TOOLBAR_SHOW_TABS,
                                   kToolbarStackButtonIdentifier);
@@ -103,8 +128,12 @@
 }
 
 - (ToolbarButton*)shareButton {
-  ToolbarButton* shareButton = [ToolbarButton
-      toolbarButtonWithImage:[UIImage imageNamed:@"toolbar_share"]];
+  UIImage* shareImage =
+      UseSymbols()
+          ? DefaultSymbolWithPointSize(kShareSymbol, kSymbolToolbarPointSize)
+          : [UIImage imageNamed:@"toolbar_share"];
+  ToolbarButton* shareButton =
+      [ToolbarButton toolbarButtonWithImage:shareImage];
   [self configureButton:shareButton width:kAdaptiveToolbarButtonWidth];
   SetA11yLabelAndUiAutomationName(shareButton, IDS_IOS_TOOLS_MENU_SHARE,
                                   kToolbarShareButtonIdentifier);
@@ -118,8 +147,12 @@
 }
 
 - (ToolbarButton*)reloadButton {
+  UIImage* reloadImage =
+      UseSymbols() ? CustomSymbolWithPointSize(kArrowClockWiseSymbol,
+                                               kSymbolToolbarPointSize)
+                   : [UIImage imageNamed:@"toolbar_reload"];
   ToolbarButton* reloadButton = [ToolbarButton
-      toolbarButtonWithImage:[[UIImage imageNamed:@"toolbar_reload"]
+      toolbarButtonWithImage:[reloadImage
                                  imageFlippedForRightToLeftLayoutDirection]];
   [self configureButton:reloadButton width:kAdaptiveToolbarButtonWidth];
   reloadButton.accessibilityLabel =
@@ -133,8 +166,10 @@
 }
 
 - (ToolbarButton*)stopButton {
-  ToolbarButton* stopButton = [ToolbarButton
-      toolbarButtonWithImage:[UIImage imageNamed:@"toolbar_stop"]];
+  UIImage* stopImage = UseSymbols() ? DefaultSymbolWithPointSize(
+                                          kXMarkSymbol, kSymbolToolbarPointSize)
+                                    : [UIImage imageNamed:@"toolbar_stop"];
+  ToolbarButton* stopButton = [ToolbarButton toolbarButtonWithImage:stopImage];
   [self configureButton:stopButton width:kAdaptiveToolbarButtonWidth];
   stopButton.accessibilityLabel = l10n_util::GetNSString(IDS_IOS_ACCNAME_STOP);
   [stopButton addTarget:self.actionHandler
@@ -145,8 +180,12 @@
 }
 
 - (ToolbarButton*)openNewTabButton {
-  ToolbarNewTabButton* newTabButton = [ToolbarNewTabButton
-      toolbarButtonWithImage:[UIImage imageNamed:@"toolbar_new_tab_page"]];
+  UIImage* newTabImage =
+      UseSymbols()
+          ? DefaultSymbolWithPointSize(kPlusSymbol, kSymbolToolbarPointSize)
+          : [UIImage imageNamed:@"toolbar_new_tab_page"];
+  ToolbarNewTabButton* newTabButton =
+      [ToolbarNewTabButton toolbarButtonWithImage:newTabImage];
 
   [newTabButton addTarget:self.actionHandler
                    action:@selector(searchAction:)
@@ -190,8 +229,8 @@
 
 #pragma mark - Helpers
 
-// Sets the |button| width to |width| with a priority of
-// UILayoutPriorityRequired - 1. If the priority is |UILayoutPriorityRequired|,
+// Sets the `button` width to `width` with a priority of
+// UILayoutPriorityRequired - 1. If the priority is `UILayoutPriorityRequired`,
 // there is a conflict when the buttons are hidden as the stack view is setting
 // their width to 0. Setting the priority to UILayoutPriorityDefaultHigh doesn't
 // work as they would have a lower priority than other elements.
@@ -202,18 +241,16 @@
   constraint.active = YES;
   button.toolbarConfiguration = self.toolbarConfiguration;
   button.exclusiveTouch = YES;
-  if (@available(iOS 13.4, *)) {
-      button.pointerInteractionEnabled = YES;
-      button.pointerStyleProvider =
-          ^UIPointerStyle*(UIButton* button, UIPointerEffect* proposedEffect,
-                           UIPointerShape* proposedShape) {
-        // This gets rid of a thin border on a spotlighted bookmarks button.
-        // This is applied to all toolbar buttons for consistency.
-        CGRect rect = CGRectInset(button.frame, 1, 1);
-        UIPointerShape* shape = [UIPointerShape shapeWithRoundedRect:rect];
-        return [UIPointerStyle styleWithEffect:proposedEffect shape:shape];
-      };
-  }
+  button.pointerInteractionEnabled = YES;
+  button.pointerStyleProvider =
+      ^UIPointerStyle*(UIButton* button, UIPointerEffect* proposedEffect,
+                       UIPointerShape* proposedShape) {
+    // This gets rid of a thin border on a spotlighted bookmarks button.
+    // This is applied to all toolbar buttons for consistency.
+    CGRect rect = CGRectInset(button.frame, 1, 1);
+    UIPointerShape* shape = [UIPointerShape shapeWithRoundedRect:rect];
+    return [UIPointerStyle styleWithEffect:proposedEffect shape:shape];
+  };
 }
 
 @end

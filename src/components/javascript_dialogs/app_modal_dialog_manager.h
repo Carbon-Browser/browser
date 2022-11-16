@@ -9,7 +9,6 @@
 
 #include "base/callback.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
 #include "base/memory/singleton.h"
 #include "components/javascript_dialogs/app_modal_dialog_controller.h"
 #include "content/public/browser/javascript_dialog_manager.h"
@@ -31,6 +30,9 @@ class AppModalDialogManager : public content::JavaScriptDialogManager {
       base::RepeatingCallback<AppModalDialogView*(AppModalDialogController*)>;
 
   static AppModalDialogManager* GetInstance();
+
+  AppModalDialogManager(const AppModalDialogManager&) = delete;
+  AppModalDialogManager& operator=(const AppModalDialogManager&) = delete;
 
   // Sets the AppModalViewFactory used to create platform specific
   // dialog window instances.
@@ -97,8 +99,6 @@ class AppModalDialogManager : public content::JavaScriptDialogManager {
 
   AppModalViewFactory view_factory_;
   std::unique_ptr<ExtensionsClient> extensions_client_;
-
-  DISALLOW_COPY_AND_ASSIGN(AppModalDialogManager);
 };
 
 }  // namespace javascript_dialogs

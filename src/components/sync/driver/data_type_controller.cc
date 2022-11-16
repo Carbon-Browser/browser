@@ -4,11 +4,13 @@
 
 #include "components/sync/driver/data_type_controller.h"
 
+#include "base/notreached.h"
+
 namespace syncer {
 
 DataTypeController::DataTypeController(ModelType type) : type_(type) {}
 
-DataTypeController::~DataTypeController() {}
+DataTypeController::~DataTypeController() = default;
 
 // static
 std::string DataTypeController::StateToString(State state) {

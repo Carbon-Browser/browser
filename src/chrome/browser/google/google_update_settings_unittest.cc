@@ -5,7 +5,6 @@
 #include "chrome/installer/util/google_update_settings.h"
 #include "base/compiler_specific.h"
 #include "base/files/file_util.h"
-#include "base/macros.h"
 #include "base/path_service.h"
 #include "base/test/scoped_path_override.h"
 #include "build/build_config.h"
@@ -16,14 +15,16 @@
 #include "testing/platform_test.h"
 
 class GoogleUpdateTest : public PlatformTest {
+ public:
+  GoogleUpdateTest(const GoogleUpdateTest&) = delete;
+  GoogleUpdateTest& operator=(const GoogleUpdateTest&) = delete;
+
  protected:
   GoogleUpdateTest() : user_data_dir_override_(chrome::DIR_USER_DATA) {}
   ~GoogleUpdateTest() override {}
 
  private:
   base::ScopedPathOverride user_data_dir_override_;
-
-  DISALLOW_COPY_AND_ASSIGN(GoogleUpdateTest);
 };
 
 TEST_F(GoogleUpdateTest, StatsConsent) {
@@ -37,7 +38,7 @@ TEST_F(GoogleUpdateTest, StatsConsent) {
   EXPECT_FALSE(GoogleUpdateSettings::GetCollectStatsConsent());
 }
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 
 TEST_F(GoogleUpdateTest, LastRunTime) {
   // Querying the value that does not exists should fail.
@@ -49,7 +50,7 @@ TEST_F(GoogleUpdateTest, LastRunTime) {
   EXPECT_EQ(0, GoogleUpdateSettings::GetLastRunTime());
 }
 
-#endif  // defined(OS_WIN)
+#endif  // BUILDFLAG(IS_WIN)
 
 TEST_F(GoogleUpdateTest, IsOrganic) {
   // Test some brand codes to ensure that future changes to this method won't
@@ -73,7 +74,7 @@ TEST_F(GoogleUpdateTest, IsOrganicFirstRunBrandCodes) {
   EXPECT_TRUE(google_brand::IsOrganicFirstRun("EUBA"));
   EXPECT_TRUE(google_brand::IsOrganicFirstRun("GGRA"));
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   // An empty brand string on Mac is used for channels other than stable,
   // which are always organic.
   EXPECT_TRUE(google_brand::IsOrganicFirstRun(""));

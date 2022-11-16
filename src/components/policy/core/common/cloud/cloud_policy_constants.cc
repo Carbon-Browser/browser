@@ -36,6 +36,7 @@ const char kEnrollmentTokenAuthHeaderPrefix[] = "GoogleEnrollmentToken token=";
 
 // String constants for the device and app type we report to the server.
 const char kValueAppType[] = "Chrome";
+const char kValueBrowserUploadPublicKey[] = "browser_public_key_upload";
 const char kValueDeviceType[] = "2";
 const char kValueRequestAutoEnrollment[] = "enterprise_check";
 const char kValueRequestPsmHasDeviceState[] = "enterprise_psm_check";
@@ -45,6 +46,7 @@ const char kValueRequestRegister[] = "register";
 const char kValueRequestApiAuthorization[] = "api_authorization";
 const char kValueRequestUnregister[] = "unregister";
 const char kValueRequestUploadCertificate[] = "cert_upload";
+const char kValueRequestUploadEuiccInfo[] = "upload_euicc_info";
 const char kValueRequestDeviceStateRetrieval[] = "device_state_retrieval";
 const char kValueRequestUploadStatus[] = "status_upload";
 const char kValueRequestRemoteCommands[] = "remote_commands";
@@ -68,13 +70,14 @@ const char kValueRequestUploadPolicyValidationReport[] =
     "policy_validation_report";
 const char kValueRequestPublicSamlUser[] = "public_saml_user_request";
 const char kValueRequestCertProvisioningRequest[] = "client_cert_provisioning";
+const char kValueRequestChromeProfileReport[] = "chrome_profile_report";
 
 const char kChromeDevicePolicyType[] = "google/chromeos/device";
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 const char kChromeUserPolicyType[] = "google/chromeos/user";
-#elif defined(OS_ANDROID)
+#elif BUILDFLAG(IS_ANDROID)
 const char kChromeUserPolicyType[] = "google/android/user";
-#elif defined(OS_IOS)
+#elif BUILDFLAG(IS_IOS)
 const char kChromeUserPolicyType[] = "google/ios/user";
 #else
 const char kChromeUserPolicyType[] = "google/chrome/user";

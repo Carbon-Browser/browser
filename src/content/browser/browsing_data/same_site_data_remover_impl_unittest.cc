@@ -34,17 +34,23 @@ namespace content {
 struct StoragePartitionSameSiteRemovalData {
   uint32_t removal_mask = 0;
   uint32_t quota_storage_removal_mask = 0;
-  StoragePartition::OriginMatcherFunction origin_matcher;
+  StoragePartition::StorageKeyPolicyMatcherFunction storage_key_matcher;
 };
 
 class SameSiteRemoverTestStoragePartition : public TestStoragePartition {
  public:
   SameSiteRemoverTestStoragePartition() {}
+
+  SameSiteRemoverTestStoragePartition(
+      const SameSiteRemoverTestStoragePartition&) = delete;
+  SameSiteRemoverTestStoragePartition& operator=(
+      const SameSiteRemoverTestStoragePartition&) = delete;
+
   ~SameSiteRemoverTestStoragePartition() override {}
 
   void ClearData(uint32_t removal_mask,
                  uint32_t quota_storage_removal_mask,
-                 OriginMatcherFunction origin_matcher,
+                 StorageKeyPolicyMatcherFunction storage_key_matcher,
                  network::mojom::CookieDeletionFilterPtr cookie_deletion_filter,
                  bool perform_storage_cleanup,
                  const base::Time begin,
@@ -53,7 +59,8 @@ class SameSiteRemoverTestStoragePartition : public TestStoragePartition {
     storage_partition_removal_data_.removal_mask = removal_mask;
     storage_partition_removal_data_.quota_storage_removal_mask =
         quota_storage_removal_mask;
-    storage_partition_removal_data_.origin_matcher = std::move(origin_matcher);
+    storage_partition_removal_data_.storage_key_matcher =
+        std::move(storage_key_matcher);
     std::move(callback).Run();
   }
 
@@ -63,8 +70,6 @@ class SameSiteRemoverTestStoragePartition : public TestStoragePartition {
 
  private:
   StoragePartitionSameSiteRemovalData storage_partition_removal_data_;
-
-  DISALLOW_COPY_AND_ASSIGN(SameSiteRemoverTestStoragePartition);
 };
 
 class SameSiteDataRemoverImplTest : public testing::Test {
@@ -74,6 +79,10 @@ class SameSiteDataRemoverImplTest : public testing::Test {
         same_site_remover_(
             std::make_unique<SameSiteDataRemoverImpl>(browser_context_.get())) {
   }
+
+  SameSiteDataRemoverImplTest(const SameSiteDataRemoverImplTest&) = delete;
+  SameSiteDataRemoverImplTest& operator=(const SameSiteDataRemoverImplTest&) =
+      delete;
 
   void TearDown() override { browser_context_.reset(); }
 
@@ -102,9 +111,10 @@ class SameSiteDataRemoverImplTest : public testing::Test {
     GetSameSiteDataRemoverImpl()->ClearStoragePartitionForOrigins(
         run_loop.QuitClosure(),
         base::BindLambdaForTesting(
-            [&origins](const url::Origin& origin,
+            [&origins](const blink::StorageKey& storage_key,
                        storage::SpecialStoragePolicy* policy) {
-              return origins.find(origin.Serialize()) != origins.end();
+              return origins.find(storage_key.origin().Serialize()) !=
+                     origins.end();
             }));
     run_loop.Run();
   }
@@ -113,8 +123,6 @@ class SameSiteDataRemoverImplTest : public testing::Test {
   BrowserTaskEnvironment task_environment_;
   std::unique_ptr<BrowserContext> browser_context_;
   std::unique_ptr<SameSiteDataRemoverImpl> same_site_remover_;
-
-  DISALLOW_COPY_AND_ASSIGN(SameSiteDataRemoverImplTest);
 };
 
 TEST_F(SameSiteDataRemoverImplTest, TestRemoveSameSiteNoneCookies) {
@@ -231,8 +239,9 @@ TEST_F(SameSiteDataRemoverImplTest, TestCookieRemovalUnaffectedByParameters) {
   bool result_out = false;
   auto cookie1 = net::CanonicalCookie::CreateUnsafeCookieForTesting(
       "TestCookie1", "20", "google.com", "/", base::Time::Now(), base::Time(),
-      base::Time(), true, true, net::CookieSameSite::NO_RESTRICTION,
-      net::COOKIE_PRIORITY_HIGH, /*same_party=*/true);
+      base::Time(), base::Time(), true, true,
+      net::CookieSameSite::NO_RESTRICTION, net::COOKIE_PRIORITY_HIGH,
+      /*same_party=*/true);
   cookie_manager->SetCanonicalCookie(
       *cookie1, net::cookie_util::SimulatedCookieSource(*cookie1, "https"),
       options, base::BindLambdaForTesting([&](net::CookieAccessResult result) {
@@ -250,8 +259,8 @@ TEST_F(SameSiteDataRemoverImplTest, TestCookieRemovalUnaffectedByParameters) {
   result_out = false;
   auto cookie2 = net::CanonicalCookie::CreateUnsafeCookieForTesting(
       "TestCookie2", "10", "gmail.google.com", "/", base::Time(),
-      base::Time::Max(), base::Time(), false, true,
-      net::CookieSameSite::LAX_MODE, net::COOKIE_PRIORITY_HIGH, false);
+      base::Time::Now() + base::Days(100), base::Time(), base::Time(), false,
+      true, net::CookieSameSite::LAX_MODE, net::COOKIE_PRIORITY_HIGH, false);
   cookie_manager->SetCanonicalCookie(
       *cookie2, net::cookie_util::SimulatedCookieSource(*cookie2, "https"),
       options, base::BindLambdaForTesting([&](net::CookieAccessResult result) {
@@ -304,14 +313,15 @@ TEST_F(SameSiteDataRemoverImplTest, TestStoragePartitionDataRemoval) {
 
   auto special_storage_policy =
       base::MakeRefCounted<storage::MockSpecialStoragePolicy>();
-  EXPECT_TRUE(removal_data.origin_matcher.Run(
-      url::Origin::Create(GURL("http://www.google.com/test")),
+  EXPECT_TRUE(removal_data.storage_key_matcher.Run(
+      blink::StorageKey::CreateFromStringForTesting(
+          "http://www.google.com/test"),
       special_storage_policy.get()));
-  EXPECT_TRUE(removal_data.origin_matcher.Run(
-      url::Origin::Create(GURL("http://google.com")),
+  EXPECT_TRUE(removal_data.storage_key_matcher.Run(
+      blink::StorageKey::CreateFromStringForTesting("http://google.com"),
       special_storage_policy.get()));
-  EXPECT_FALSE(removal_data.origin_matcher.Run(
-      url::Origin::Create(GURL("http://youtube.com")),
+  EXPECT_FALSE(removal_data.storage_key_matcher.Run(
+      blink::StorageKey::CreateFromStringForTesting("http://youtube.com"),
       special_storage_policy.get()));
 }
 
@@ -341,12 +351,73 @@ TEST_F(SameSiteDataRemoverImplTest, TestClearStoragePartitionsForOrigins) {
 
   auto special_storage_policy =
       base::MakeRefCounted<storage::MockSpecialStoragePolicy>();
-  EXPECT_TRUE(removal_data.origin_matcher.Run(
-      url::Origin::Create(GURL("https://a.com")),
+  EXPECT_TRUE(removal_data.storage_key_matcher.Run(
+      blink::StorageKey::CreateFromStringForTesting("https://a.com"),
       special_storage_policy.get()));
-  EXPECT_FALSE(removal_data.origin_matcher.Run(
-      url::Origin::Create(GURL("http://youtube.com")),
+  EXPECT_FALSE(removal_data.storage_key_matcher.Run(
+      blink::StorageKey::CreateFromStringForTesting("http://youtube.com"),
       special_storage_policy.get()));
+}
+
+TEST_F(SameSiteDataRemoverImplTest, TestDoesNotDeletePartitionedCookies) {
+  BrowserContext* browser_context = GetBrowserContext();
+  network::mojom::CookieManager* cookie_manager =
+      GetCookieManager(browser_context);
+  SameSiteRemoverTestStoragePartition storage_partition;
+  storage_partition.set_cookie_manager_for_browser_process(cookie_manager);
+  GetSameSiteDataRemoverImpl()->OverrideStoragePartitionForTesting(
+      &storage_partition);
+
+  // Set an unpartitioned cookie.
+  CreateCookieForTest(
+      "unpartitioned", "www.google.com", net::CookieSameSite::NO_RESTRICTION,
+      net::CookieOptions::SameSiteCookieContext(
+          net::CookieOptions::SameSiteCookieContext::ContextType::CROSS_SITE),
+      /*is_cookie_secure=*/true, browser_context);
+
+  // Set a partitioned cookie.
+  base::RunLoop run_loop;
+  net::CookieOptions options;
+  options.set_same_site_cookie_context(
+      net::CookieOptions::SameSiteCookieContext(
+          net::CookieOptions::SameSiteCookieContext::ContextType::CROSS_SITE));
+  bool result_out;
+  auto cookie = net::CanonicalCookie::CreateUnsafeCookieForTesting(
+      "__Host-partitioned", "1", "www.partitioned.com", "/", base::Time(),
+      base::Time(), base::Time(), base::Time(), /*secure=*/true,
+      /*httponly=*/false, net::CookieSameSite::NO_RESTRICTION,
+      net::COOKIE_PRIORITY_LOW,
+      /*same_party=*/false,
+      net::CookiePartitionKey::FromURLForTesting(
+          GURL("https://toplevel.site")));
+  cookie_manager->SetCanonicalCookie(
+      *cookie, net::cookie_util::SimulatedCookieSource(*cookie, "https"),
+      options, base::BindLambdaForTesting([&](net::CookieAccessResult result) {
+        result_out = result.status.IsInclude();
+        run_loop.Quit();
+      }));
+  run_loop.Run();
+  EXPECT_TRUE(result_out);
+
+  DeleteSameSiteNoneCookies();
+  ClearStoragePartitionData();
+  StoragePartitionSameSiteRemovalData removal_data =
+      storage_partition.GetStoragePartitionRemovalData();
+
+  const std::vector<net::CanonicalCookie>& cookies =
+      GetAllCookies(browser_context);
+  ASSERT_EQ(1u, cookies.size());
+  ASSERT_EQ(cookies[0].Name(), "__Host-partitioned");
+
+  auto storage_policy =
+      base::MakeRefCounted<storage::MockSpecialStoragePolicy>();
+  EXPECT_TRUE(removal_data.storage_key_matcher.Run(
+      blink::StorageKey::CreateFromStringForTesting("https://www.google.com"),
+      storage_policy.get()));
+  EXPECT_FALSE(removal_data.storage_key_matcher.Run(
+      blink::StorageKey::CreateFromStringForTesting(
+          "https://www.partitioned.com"),
+      storage_policy.get()));
 }
 
 }  // namespace content

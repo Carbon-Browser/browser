@@ -60,7 +60,7 @@ public class ChromeActionModeHandlerUnitTest {
 
     private class TestChromeActionModeCallback extends ChromeActionModeHandler.ActionModeCallback {
         TestChromeActionModeCallback(Tab tab, ActionModeCallbackHelper helper) {
-            super(tab, null, visible -> {}, urlParams -> {}, null);
+            super(tab, null, urlParams -> {}, null, false);
         }
 
         @Override
@@ -149,8 +149,7 @@ public class ChromeActionModeHandlerUnitTest {
         }
 
         // Mock intent for querying web browsers.
-        packageManager.addResolveInfoForIntent(
-                PackageManagerUtils.getQueryInstalledBrowsersIntent(), browsersList);
+        packageManager.addResolveInfoForIntent(PackageManagerUtils.BROWSER_INTENT, browsersList);
 
         // Mock intent for querying home launchers.
         packageManager.addResolveInfoForIntent(

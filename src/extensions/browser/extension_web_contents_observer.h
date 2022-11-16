@@ -9,8 +9,9 @@
 #include <string>
 
 #include "base/compiler_specific.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/types/pass_key.h"
+#include "components/sessions/core/session_id.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "extensions/browser/extension_function_dispatcher.h"
 #include "extensions/common/mojom/frame.mojom.h"
@@ -20,6 +21,10 @@ namespace content {
 class BrowserContext;
 class RenderFrameHost;
 class WebContents;
+}
+
+namespace sessions {
+class SessionTabHelper;
 }
 
 namespace extensions {
@@ -55,6 +60,10 @@ class ExtensionWebContentsObserver
     : public content::WebContentsObserver,
       public ExtensionFunctionDispatcher::Delegate {
  public:
+  ExtensionWebContentsObserver(const ExtensionWebContentsObserver&) = delete;
+  ExtensionWebContentsObserver& operator=(const ExtensionWebContentsObserver&) =
+      delete;
+
   // Returns the ExtensionWebContentsObserver for the given |web_contents|.
   static ExtensionWebContentsObserver* GetForWebContents(
       content::WebContents* web_contents);
@@ -84,6 +93,17 @@ class ExtensionWebContentsObserver
   // doesn't have it. Note that it could return nullptr if |render_frame_host|
   // is not live.
   mojom::LocalFrame* GetLocalFrame(content::RenderFrameHost* render_frame_host);
+
+  // Tells the receiver to start listening to window ID changes from the
+  // supplied SessionTabHelper. This method is public to allow the code that
+  // installs new SessionTabHelpers to call it; that in turn is required because
+  // SessionTabHelpers may be created after the corresponding
+  // ExtensionWebContentsObserver has already been initialized.
+  void ListenToWindowIdChangesFrom(sessions::SessionTabHelper* helper);
+
+  ExtensionFrameHost* extension_frame_host_for_testing() {
+    return extension_frame_host_.get();
+  }
 
  protected:
   explicit ExtensionWebContentsObserver(content::WebContents* web_contents);
@@ -128,9 +148,10 @@ class ExtensionWebContentsObserver
  private:
   using PassKey = base::PassKey<ExtensionWebContentsObserver>;
 
-  friend class ExtensionFrameHostBrowserTest;
+  void OnWindowIdChanged(const SessionID& id);
+
   // The BrowserContext associated with the WebContents being observed.
-  content::BrowserContext* browser_context_;
+  raw_ptr<content::BrowserContext> browser_context_;
 
   ExtensionFunctionDispatcher dispatcher_;
 
@@ -139,11 +160,11 @@ class ExtensionWebContentsObserver
 
   std::unique_ptr<ExtensionFrameHost> extension_frame_host_;
 
+  base::CallbackListSubscription window_id_subscription_;
+
   // A map of render frame host to mojo remotes.
   std::map<content::RenderFrameHost*, mojo::AssociatedRemote<mojom::LocalFrame>>
       local_frame_map_;
-
-  DISALLOW_COPY_AND_ASSIGN(ExtensionWebContentsObserver);
 };
 
 }  // namespace extensions

@@ -10,7 +10,6 @@
 #include <string>
 
 #include "base/json/json_writer.h"
-#include "base/macros.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/values.h"
@@ -134,12 +133,12 @@ INSTANTIATE_TEST_SUITE_P(
 // A test fixture to check ParseSupportedMethods() correctly returns the card
 // networks for the "basic-card" payment method.
 typedef ::testing::TestWithParam<const char*> SupportedNetworksTest;
-#if defined(OS_IOS) && !TARGET_OS_SIMULATOR
+#if BUILDFLAG(IS_IOS) && !TARGET_OS_SIMULATOR
 // TODO(crbug.com/1008023): Enable this test on iOS devices.
 #define MAYBE_SupportedNetworks DISABLED_SupportedNetworks
 #else
 #define MAYBE_SupportedNetworks SupportedNetworks
-#endif  // defined(OS_IOS) && !TARGET_OS_SIMULATOR
+#endif  // BUILDFLAG(IS_IOS) && !TARGET_OS_SIMULATOR
 TEST_P(SupportedNetworksTest, MAYBE_SupportedNetworks) {
   PaymentMethodData method_data;
   method_data.supported_method = kBasicCardMethodName;

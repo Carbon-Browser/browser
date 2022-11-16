@@ -40,8 +40,9 @@ class ExecutionContextCSPDelegate final
                            bool use_reporting_api) override;
   void Count(WebFeature) override;
   void AddConsoleMessage(ConsoleMessage*) override;
-  void AddInspectorIssue(mojom::blink::InspectorIssueInfoPtr) override;
+  void AddInspectorIssue(AuditsIssue) override;
   void DisableEval(const String& error_message) override;
+  void SetWasmEvalErrorMessage(const String& error_message) override;
   void ReportBlockedScriptExecutionToInspector(
       const String& directive_text) override;
   void DidAddContentSecurityPolicies(

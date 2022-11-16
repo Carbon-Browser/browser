@@ -5,6 +5,7 @@
 #include "chrome/browser/ui/webui/settings/chromeos/about_section.h"
 
 #include "ash/constants/ash_features.h"
+#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/feature_list.h"
 #include "base/i18n/message_formatter.h"
@@ -13,11 +14,15 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/system/sys_info.h"
 #include "chrome/browser/ash/arc/arc_util.h"
+#include "chrome/browser/ash/policy/core/browser_policy_connector_ash.h"
+#include "chrome/browser/browser_process.h"
+#include "chrome/browser/browser_process_platform_part.h"
 #include "chrome/browser/obsolete_system/obsolete_system.h"
+#include "chrome/browser/signin/identity_manager_factory.h"
 #include "chrome/browser/ui/webui/management/management_ui.h"
 #include "chrome/browser/ui/webui/settings/about_handler.h"
+#include "chrome/browser/ui/webui/settings/ash/search/search_tag_registry.h"
 #include "chrome/browser/ui/webui/settings/chromeos/device_name_handler.h"
-#include "chrome/browser/ui/webui/settings/chromeos/search/search_tag_registry.h"
 #include "chrome/browser/ui/webui/version/version_ui.h"
 #include "chrome/browser/ui/webui/webui_util.h"
 #include "chrome/common/channel_info.h"
@@ -27,6 +32,8 @@
 #include "chrome/grit/generated_resources.h"
 #include "chromeos/dbus/constants/dbus_switches.h"
 #include "components/prefs/pref_service.h"
+#include "components/signin/public/identity_manager/identity_manager.h"
+#include "components/signin/public/identity_manager/tribool.h"
 #include "components/strings/grit/components_chromium_strings.h"
 #include "components/strings/grit/components_strings.h"
 #include "components/user_manager/user_manager.h"
@@ -113,6 +120,18 @@ const std::vector<SearchConcept>& GetDiagnosticsAppSearchConcepts() {
   return *tags;
 }
 
+const std::vector<SearchConcept>& GetFirmwareUpdatesAppSearchConcepts() {
+  static const base::NoDestructor<std::vector<SearchConcept>> tags({
+      {IDS_OS_SETTINGS_TAG_ABOUT_FIRMWARE_UPDATES,
+       mojom::kAboutChromeOsDetailsSubpagePath,
+       mojom::SearchResultIcon::kChrome,
+       mojom::SearchResultDefaultRank::kMedium,
+       mojom::SearchResultType::kSetting,
+       {.setting = mojom::Setting::kFirmwareUpdates}},
+  });
+  return *tags;
+}
+
 const std::vector<SearchConcept>& GetDeviceNameSearchConcepts() {
   static const base::NoDestructor<std::vector<SearchConcept>> tags({
       {IDS_OS_SETTINGS_TAG_ABOUT_DEVICE_NAME,
@@ -169,6 +188,13 @@ std::string GetSafetyInfoLink() {
   return std::string();
 }
 
+std::string GetDeviceManager() {
+  policy::BrowserPolicyConnectorAsh* connector =
+      g_browser_process->platform_part()->browser_policy_connector_ash();
+  DCHECK(connector);
+  return connector->GetEnterpriseDomainManager();
+}
+
 }  // namespace
 
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
@@ -187,6 +213,9 @@ AboutSection::AboutSection(Profile* profile,
       base::BindRepeating(&AboutSection::UpdateReportIssueSearchTags,
                           base::Unretained(this)));
   UpdateReportIssueSearchTags();
+
+  pref_change_registrar_.Add(prefs::kConsumerAutoUpdateToggle,
+                             base::DoNothingAs<void()>());
 }
 #endif  // BUILDFLAG(GOOGLE_CHROME_BRANDING)
 
@@ -196,8 +225,10 @@ AboutSection::AboutSection(Profile* profile,
   SearchTagRegistry::ScopedTagUpdater updater = registry()->StartUpdate();
   updater.AddSearchTags(GetAboutSearchConcepts());
 
-  if (base::FeatureList::IsEnabled(chromeos::features::kDiagnosticsApp)) {
-    updater.AddSearchTags(GetDiagnosticsAppSearchConcepts());
+  updater.AddSearchTags(GetDiagnosticsAppSearchConcepts());
+
+  if (base::FeatureList::IsEnabled(chromeos::features::kFirmwareUpdaterApp)) {
+    updater.AddSearchTags(GetFirmwareUpdatesAppSearchConcepts());
   }
 
   if (base::FeatureList::IsEnabled(
@@ -214,8 +245,10 @@ void AboutSection::AddLoadTimeData(content::WebUIDataSource* html_source) {
     {"aboutProductLogoAlt", IDS_SHORT_PRODUCT_LOGO_ALT_TEXT},
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
     {"aboutReportAnIssue", IDS_SETTINGS_ABOUT_PAGE_REPORT_AN_ISSUE},
+    {"aboutSendFeedback", IDS_SETTINGS_ABOUT_PAGE_SEND_FEEDBACK},
 #endif
     {"aboutDiagnostics", IDS_SETTINGS_ABOUT_PAGE_DIAGNOSTICS},
+    {"aboutFirmwareUpdates", IDS_SETTINGS_ABOUT_PAGE_FIRMWARE_UPDATES},
     {"aboutRelaunch", IDS_SETTINGS_ABOUT_PAGE_RELAUNCH},
     {"aboutUpgradeCheckStarted", IDS_SETTINGS_ABOUT_UPGRADE_CHECK_STARTED},
     {"aboutUpgradeRelaunch", IDS_SETTINGS_UPGRADE_SUCCESSFUL_RELAUNCH},
@@ -289,10 +322,11 @@ void AboutSection::AddLoadTimeData(content::WebUIDataSource* html_source) {
     {"aboutChannelDev", IDS_SETTINGS_ABOUT_PAGE_CURRENT_CHANNEL_DEV},
     {"aboutChannelLabel", IDS_SETTINGS_ABOUT_PAGE_CHANNEL},
     {"aboutChannelStable", IDS_SETTINGS_ABOUT_PAGE_CURRENT_CHANNEL_STABLE},
-    {"aboutChannelLongTermStable",
-     IDS_SETTINGS_ABOUT_PAGE_CURRENT_CHANNEL_STABLE_TT},
+    {"aboutChannelLongTermSupport",
+     IDS_SETTINGS_ABOUT_PAGE_CURRENT_CHANNEL_LTS},
     {"aboutCheckForUpdates", IDS_SETTINGS_ABOUT_PAGE_CHECK_FOR_UPDATES},
-    {"aboutCurrentlyOnChannel", IDS_SETTINGS_ABOUT_PAGE_CURRENT_CHANNEL},
+    {"aboutCurrentlyOnChannelInfo",
+     IDS_SETTINGS_ABOUT_PAGE_CURRENT_CHANNEL_INFO},
     {"aboutDetailedBuildInfo", IDS_SETTINGS_ABOUT_PAGE_DETAILED_BUILD_INFO},
     {version_ui::kApplicationLabel, IDS_PRODUCT_NAME},
     {version_ui::kPlatform, IDS_PLATFORM_LABEL},
@@ -314,6 +348,20 @@ void AboutSection::AddLoadTimeData(content::WebUIDataSource* html_source) {
     {"aboutUpgradeTryAgain", IDS_SETTINGS_UPGRADE_TRY_AGAIN},
     {"aboutUpgradeDownloadError", IDS_SETTINGS_UPGRADE_DOWNLOAD_ERROR},
     {"aboutUpgradeAdministrator", IDS_SETTINGS_UPGRADE_ADMINISTRATOR_ERROR},
+
+    // About page auto update toggle.
+    {"aboutConsumerAutoUpdateToggleTitle",
+     IDS_SETTINGS_ABOUT_PAGE_CONSUMER_AUTO_UPDATE_TOGGLE_TITLE},
+    {"aboutConsumerAutoUpdateToggleDescription",
+     IDS_SETTINGS_ABOUT_PAGE_CONSUMER_AUTO_UPDATE_TOGGLE_DESCRIPTION},
+    {"aboutConsumerAutoUpdateToggleDialogTitle",
+     IDS_SETTINGS_ABOUT_PAGE_CONSUMER_AUTO_UPDATE_TOGGLE_DIALOG_TITLE},
+    {"aboutConsumerAutoUpdateToggleDialogDescription",
+     IDS_SETTINGS_ABOUT_PAGE_CONSUMER_AUTO_UPDATE_TOGGLE_DIALOG_DESCRIPTION},
+    {"aboutConsumerAutoUpdateToggleTurnOffButton",
+     IDS_SETTINGS_ABOUT_PAGE_CONSUMER_AUTO_UPDATE_TOGGLE_TURN_OFF_BUTTON},
+    {"aboutConsumerAutoUpdateToggleKeepUpdatesButton",
+     IDS_SETTINGS_ABOUT_PAGE_CONSUMER_AUTO_UPDATE_TOGGLE_KEEP_UPDATES_BUTTON},
   };
   html_source->AddLocalizedStrings(kLocalizedStrings);
 
@@ -325,12 +373,39 @@ void AboutSection::AddLoadTimeData(content::WebUIDataSource* html_source) {
   html_source->AddString("managementPage",
                          ManagementUI::GetManagementPageSubtitle(profile()));
 
+  html_source->AddString("deviceManager", GetDeviceManager());
+
   if (user_manager::UserManager::IsInitialized()) {
+    bool is_enterprise_managed = webui::IsEnterpriseManaged();
     user_manager::UserManager* user_manager = user_manager::UserManager::Get();
-    if (!webui::IsEnterpriseManaged() && !user_manager->IsCurrentUserOwner()) {
+    bool is_current_owner = user_manager->IsCurrentUserOwner();
+
+    if (!is_enterprise_managed && !is_current_owner) {
       html_source->AddString("ownerEmail",
                              user_manager->GetOwnerAccountId().GetUserEmail());
     }
+
+    // Hide toggle by default.
+    bool show_cau_toggle = false;
+    auto* identity_manager = IdentityManagerFactory::GetForProfile(profile());
+    if (identity_manager && !is_enterprise_managed) {
+      const std::string& gaia_id =
+          user_manager->GetActiveUser()->GetAccountId().GetGaiaId();
+      const AccountInfo account_info =
+          identity_manager->FindExtendedAccountInfoByGaiaId(gaia_id);
+      // If the user falls under New Deal..
+      if (account_info.capabilities.can_toggle_auto_updates() ==
+          signin::Tribool::kTrue) {
+        // Show toggle based on user's capabilities.
+        show_cau_toggle = true;
+      }
+    }
+
+    show_cau_toggle = show_cau_toggle &&
+                      chromeos::features::IsConsumerAutoUpdateToggleAllowed();
+    html_source->AddBoolean("isConsumerAutoUpdateTogglingAllowed",
+                            show_cau_toggle && is_current_owner);
+    html_source->AddBoolean("showConsumerAutoUpdateToggle", show_cau_toggle);
   }
 
   html_source->AddString(
@@ -386,8 +461,12 @@ void AboutSection::AddLoadTimeData(content::WebUIDataSource* html_source) {
   html_source->AddBoolean("shouldShowSafetyInfo", !safetyInfoLink.empty());
 
   html_source->AddBoolean(
-      "diagnosticsAppEnabled",
-      base::FeatureList::IsEnabled(chromeos::features::kDiagnosticsApp));
+      "isFirmwareUpdaterAppEnabled",
+      base::FeatureList::IsEnabled(chromeos::features::kFirmwareUpdaterApp));
+
+  html_source->AddBoolean(
+      "isOsFeedbackEnabled",
+      base::FeatureList::IsEnabled(chromeos::features::kOsFeedback));
 
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
   html_source->AddString("aboutTermsURL", chrome::kChromeUITermsURL);
@@ -438,7 +517,8 @@ void AboutSection::RegisterHierarchy(HierarchyGenerator* generator) const {
   static constexpr mojom::Setting kAboutChromeOsDetailsSettings[] = {
       mojom::Setting::kCheckForOsUpdate,    mojom::Setting::kSeeWhatsNew,
       mojom::Setting::kGetHelpWithChromeOs, mojom::Setting::kReportAnIssue,
-      mojom::Setting::kTermsOfService,      mojom::Setting::kDiagnostics};
+      mojom::Setting::kTermsOfService,      mojom::Setting::kDiagnostics,
+      mojom::Setting::kFirmwareUpdates};
   RegisterNestedSettingBulk(mojom::Subpage::kAboutChromeOsDetails,
                             kAboutChromeOsDetailsSettings, generator);
 

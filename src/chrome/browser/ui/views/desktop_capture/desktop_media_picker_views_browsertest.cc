@@ -29,6 +29,11 @@ class DesktopMediaPickerViewsBrowserTest : public DialogBrowserTest {
  public:
   DesktopMediaPickerViewsBrowserTest() {}
 
+  DesktopMediaPickerViewsBrowserTest(
+      const DesktopMediaPickerViewsBrowserTest&) = delete;
+  DesktopMediaPickerViewsBrowserTest& operator=(
+      const DesktopMediaPickerViewsBrowserTest&) = delete;
+
   // DialogBrowserTest:
   void ShowUi(const std::string& name) override {
     picker_ = std::make_unique<DesktopMediaPickerViews>();
@@ -84,14 +89,12 @@ class DesktopMediaPickerViewsBrowserTest : public DialogBrowserTest {
   // tests to update the UI state after showing it.
   base::OnceCallback<void(const std::vector<FakeDesktopMediaList*>&)>
       after_show_callback_;
-
-  DISALLOW_COPY_AND_ASSIGN(DesktopMediaPickerViewsBrowserTest);
 };
 
 // Invokes a dialog that allows the user to select what view of their desktop
 // they would like to share.
 // TODO(crbug.com/1238879): Test is flaky on Win.
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #define MAYBE_InvokeUi_default DISABLED_InvokeUi_default
 #else
 #define MAYBE_InvokeUi_default InvokeUi_default
@@ -123,7 +126,14 @@ IN_PROC_BROWSER_TEST_F(DesktopMediaPickerViewsBrowserTest,
 
 // Show the picker UI with only one source type: TYPE_WEB_CONTENTS, aka the
 // tab picker.
-IN_PROC_BROWSER_TEST_F(DesktopMediaPickerViewsBrowserTest, InvokeUi_tabs) {
+// crbug.com/1261820: flaky on Win
+#if BUILDFLAG(IS_WIN)
+#define MAYBE_InvokeUi_tabs DISABLED_InvokeUi_tabs
+#else
+#define MAYBE_InvokeUi_tabs InvokeUi_tabs
+#endif
+IN_PROC_BROWSER_TEST_F(DesktopMediaPickerViewsBrowserTest,
+                       MAYBE_InvokeUi_tabs) {
   after_show_callback_ =
       base::BindOnce([](const std::vector<FakeDesktopMediaList*>& sources) {
         sources[0]->AddSource(0);

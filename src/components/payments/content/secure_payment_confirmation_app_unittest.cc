@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "base/base64.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/scoped_feature_list.h"
@@ -55,7 +56,7 @@ class MockAuthenticator : public webauthn::InternalAuthenticator {
   MOCK_METHOD1(VerifyChallenge, void(const std::vector<uint8_t>&));
 
   content::RenderFrameHost* GetRenderFrameHost() override {
-    return web_contents_->GetMainFrame();
+    return web_contents_->GetPrimaryMainFrame();
   }
 
   // Implements an webauthn::InternalAuthenticator method to delegate fields of
@@ -67,7 +68,8 @@ class MockAuthenticator : public webauthn::InternalAuthenticator {
     std::move(callback).Run(
         should_succeed_ ? blink::mojom::AuthenticatorStatus::SUCCESS
                         : blink::mojom::AuthenticatorStatus::NOT_ALLOWED_ERROR,
-        blink::mojom::GetAssertionAuthenticatorResponse::New());
+        blink::mojom::GetAssertionAuthenticatorResponse::New(),
+        /*dom_exception_details=*/nullptr);
   }
 
   content::WebContents* web_contents() { return web_contents_; }
@@ -76,7 +78,8 @@ class MockAuthenticator : public webauthn::InternalAuthenticator {
   content::BrowserTaskEnvironment task_environment_;
   content::TestBrowserContext context_;
   content::TestWebContentsFactory web_contents_factory_;
-  content::WebContents* web_contents_;  // Owned by `web_contents_factory_`.
+  raw_ptr<content::WebContents>
+      web_contents_;  // Owned by `web_contents_factory_`.
   bool should_succeed_;
 };
 
@@ -123,7 +126,10 @@ class SecurePaymentConfirmationAppTest : public testing::Test,
   }
 
   void OnInstrumentDetailsError(const std::string& error_message) override {
-    EXPECT_EQ(error_message, "Authenticator returned NOT_ALLOWED_ERROR.");
+    EXPECT_EQ(error_message,
+              "The operation either timed out or was not allowed. See: "
+              "https://www.w3.org/TR/webauthn-2/"
+              "#sctn-privacy-considerations-client.");
     on_instrument_details_error_called_ = true;
   }
 

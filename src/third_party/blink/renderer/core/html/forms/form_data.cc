@@ -39,7 +39,7 @@
 #include "third_party/blink/renderer/core/html/forms/form_controller.h"
 #include "third_party/blink/renderer/core/html/forms/html_form_element.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
 #include "third_party/blink/renderer/platform/network/form_data_encoder.h"
 #include "third_party/blink/renderer/platform/wtf/text/line_ending.h"
@@ -51,7 +51,9 @@ namespace {
 
 class FormDataIterationSource final
     : public PairIterable<String,
-                          Member<V8FormDataEntryValue>>::IterationSource {
+                          IDLString,
+                          Member<V8FormDataEntryValue>,
+                          V8FormDataEntryValue>::IterationSource {
  public:
   FormDataIterationSource(FormData* form_data)
       : form_data_(form_data), current_(0) {}
@@ -76,19 +78,14 @@ class FormDataIterationSource final
 
   void Trace(Visitor* visitor) const override {
     visitor->Trace(form_data_);
-    PairIterable<String, Member<V8FormDataEntryValue>>::IterationSource::Trace(
-        visitor);
+    PairIterable<String, IDLString, Member<V8FormDataEntryValue>,
+                 V8FormDataEntryValue>::IterationSource::Trace(visitor);
   }
 
  private:
   const Member<FormData> form_data_;
   wtf_size_t current_;
 };
-
-String Normalize(const String& input) {
-  // https://html.spec.whatwg.org/C/#append-an-entry
-  return ReplaceUnmatchedSurrogates(NormalizeLineEndingsToCRLF(input));
-}
 
 }  // namespace
 
@@ -218,17 +215,17 @@ void FormData::append(const String& name, Blob* blob, const String& filename) {
 }
 
 void FormData::AppendFromElement(const String& name, int value) {
-  append(Normalize(name), String::Number(value));
+  append(ReplaceUnmatchedSurrogates(name), String::Number(value));
 }
 
 void FormData::AppendFromElement(const String& name, File* file) {
-  entries_.push_back(
-      MakeGarbageCollected<Entry>(Normalize(name), file, String()));
+  entries_.push_back(MakeGarbageCollected<Entry>(
+      ReplaceUnmatchedSurrogates(name), file, String()));
 }
 
 void FormData::AppendFromElement(const String& name, const String& value) {
-  entries_.push_back(
-      MakeGarbageCollected<Entry>(Normalize(name), Normalize(value)));
+  entries_.push_back(MakeGarbageCollected<Entry>(
+      ReplaceUnmatchedSurrogates(name), ReplaceUnmatchedSurrogates(value)));
 }
 
 std::string FormData::Encode(const String& string) const {
@@ -242,8 +239,9 @@ scoped_refptr<EncodedFormData> FormData::EncodeFormData(
   for (const auto& entry : Entries()) {
     FormDataEncoder::AddKeyValuePairAsFormData(
         encoded_data, Encode(entry->name()),
-        entry->isFile() ? Encode(Normalize(entry->GetFile()->name()))
-                        : Encode(entry->Value()),
+        entry->isFile()
+            ? Encode(ReplaceUnmatchedSurrogates(entry->GetFile()->name()))
+            : Encode(entry->Value()),
         encoding_type);
   }
   form_data->AppendData(encoded_data.data(), encoded_data.size());
@@ -312,7 +310,8 @@ scoped_refptr<EncodedFormData> FormData::EncodeMultiPartFormData() {
                               entry->GetBlob()->GetBlobDataHandle());
       }
     } else {
-      std::string encoded_value = Encode(entry->Value());
+      std::string encoded_value =
+          Encode(NormalizeLineEndingsToCRLF(entry->Value()));
       form_data->AppendData(
           encoded_value.c_str(),
           base::checked_cast<wtf_size_t>(encoded_value.length()));
@@ -325,7 +324,10 @@ scoped_refptr<EncodedFormData> FormData::EncodeMultiPartFormData() {
   return form_data;
 }
 
-PairIterable<String, Member<V8FormDataEntryValue>>::IterationSource*
+PairIterable<String,
+             IDLString,
+             Member<V8FormDataEntryValue>,
+             V8FormDataEntryValue>::IterationSource*
 FormData::StartIteration(ScriptState*, ExceptionState&) {
   return MakeGarbageCollected<FormDataIterationSource>(this);
 }

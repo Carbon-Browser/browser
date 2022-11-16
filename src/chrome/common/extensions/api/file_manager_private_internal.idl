@@ -13,6 +13,10 @@ namespace fileManagerPrivateInternal {
     DOMString fileFullPath;
     boolean fileIsDirectory;
   };
+  dictionary IOTaskParams {
+    DOMString? destinationFolderUrl;
+    DOMString? password;
+  };
 
   callback SimpleCallback = void();
   callback ResolveIsolatedEntriesCallback = void(EntryDescription[] entries);
@@ -30,7 +34,12 @@ namespace fileManagerPrivateInternal {
   callback GetFileTasksCallback = void(fileManagerPrivate.FileTask[] tasks);
   callback GetUrlCallback = void(DOMString url);
   callback GetUrlCallback = void(DOMString url);
+  callback GetDisallowedTransfersCallback =
+      void(EntryDescription[] entries);
+  callback GetDlpMetadataCallback =
+      void(fileManagerPrivate.DlpMetadata[] entries);
   callback StartCopyCallback = void(long copyId);
+  callback IOTaskIdCallback = void(long taskId);
   callback ZipSelectionCallback = void(long zipId, double totalBytes);
   callback ValidatePathNameLengthCallback = void(boolean result);
   callback GetDirectorySizeCallback = void(double size);
@@ -86,6 +95,11 @@ namespace fileManagerPrivateInternal {
     static void getFileTasks(DOMString[] urls,
                              GetFileTasksCallback callback);
     static void getDownloadUrl(DOMString url, GetUrlCallback callback);
+    static void getDisallowedTransfers(DOMString[] entries,
+                                       DOMString destinationEntry,
+                                       GetDisallowedTransfersCallback callback);
+    static void getDlpMetadata(DOMString[] entries,
+                               GetDlpMetadataCallback callback);
     static void startCopy(DOMString url,
                           DOMString parentUrl,
                           DOMString newName,
@@ -104,6 +118,7 @@ namespace fileManagerPrivateInternal {
                               GetVolumeRootCallback callback);
     static void getRecentFiles(fileManagerPrivate.SourceRestriction restriction,
                                fileManagerPrivate.RecentFileType file_type,
+                               boolean invalidate_cache,
                                GetRecentFilesCallback callback);
     static void sharePathsWithCrostini(DOMString vmName, DOMString[] urls,
                                        boolean persist,
@@ -136,5 +151,9 @@ namespace fileManagerPrivateInternal {
         SimpleCallback callback);
     static void toggleAddedToHoldingSpace(DOMString[] urls, boolean add,
                                           optional SimpleCallback callback);
+    static void startIOTask(fileManagerPrivate.IOTaskType type,
+                            DOMString[] urls,
+                            IOTaskParams params,
+                            optional IOTaskIdCallback callback);
   };
 };

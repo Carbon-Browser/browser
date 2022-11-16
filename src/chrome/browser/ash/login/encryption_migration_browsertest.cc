@@ -4,6 +4,8 @@
 
 #include <string>
 
+#include "ash/components/login/auth/public/user_context.h"
+#include "ash/components/login/auth/stub_authenticator_builder.h"
 #include "ash/constants/ash_switches.h"
 #include "ash/public/cpp/login_screen_test_api.h"
 #include "base/command_line.h"
@@ -16,26 +18,24 @@
 #include "chrome/browser/ash/login/test/login_manager_mixin.h"
 #include "chrome/browser/ash/login/test/oobe_base_test.h"
 #include "chrome/browser/ash/login/test/oobe_screen_waiter.h"
+#include "chrome/browser/ash/login/test/oobe_screens_utils.h"
 #include "chrome/browser/ash/login/test/user_policy_mixin.h"
 #include "chrome/browser/ash/login/ui/login_display_host.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
+#include "chrome/browser/browser_process.h"
 #include "chrome/browser/ui/webui/chromeos/login/gaia_screen_handler.h"
 #include "chrome/browser/ui/webui/chromeos/login/oobe_ui.h"
+#include "chromeos/ash/components/dbus/userdataauth/fake_userdataauth_client.h"
 #include "chromeos/dbus/cryptohome/account_identifier_operators.h"
 #include "chromeos/dbus/cryptohome/rpc.pb.h"
 #include "chromeos/dbus/power/fake_power_manager_client.h"
-#include "chromeos/dbus/session_manager/fake_session_manager_client.h"
-#include "chromeos/dbus/userdataauth/fake_userdataauth_client.h"
-#include "chromeos/login/auth/stub_authenticator_builder.h"
-#include "chromeos/login/auth/user_context.h"
 #include "components/account_id/account_id.h"
 #include "components/user_manager/known_user.h"
 #include "content/public/test/browser_test.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/cros_system_api/dbus/cryptohome/dbus-constants.h"
 
-namespace chromeos {
-
+namespace ash {
 namespace {
 
 constexpr char kEncryptionMigrationId[] = "encryption-migration";
@@ -67,6 +67,7 @@ class EncryptionMigrationTestBase
   explicit EncryptionMigrationTestBase(
       const LoginManagerMixin::TestUserInfo& test_user)
       : test_user_(test_user) {}
+
   ~EncryptionMigrationTestBase() override = default;
 
   // OobeBaseTest:
@@ -79,9 +80,11 @@ class EncryptionMigrationTestBase
   void SetUpOnMainThread() override {
     OobeBaseTest::SetUpOnMainThread();
 
-    FakeUserDataAuthClient::Get()->SetEcryptfsUserHome(GetTestCryptohomeId(),
-                                                       true);
-    FakeUserDataAuthClient::Get()->set_run_default_dircrypto_migration(false);
+    FakeUserDataAuthClient::TestApi::Get()->SetHomeEncryptionMethod(
+        GetTestCryptohomeId(),
+        FakeUserDataAuthClient::HomeEncryptionMethod::kEcryptfs);
+    FakeUserDataAuthClient::TestApi::Get()->set_run_default_dircrypto_migration(
+        false);
 
     // Configure encryption migration screen for test.
     EncryptionMigrationScreen::SetEncryptionMigrationScreenTestDelegate(this);
@@ -113,7 +116,8 @@ class EncryptionMigrationTestBase
   }
 
   void MarkUserHasEnterprisePolicy() {
-    user_manager::known_user::SetProfileRequiresPolicy(
+    user_manager::KnownUser known_user(g_browser_process->local_state());
+    known_user.SetProfileRequiresPolicy(
         test_user_.account_id,
         user_manager::ProfileRequiresPolicy::kPolicyRequired);
   }
@@ -220,9 +224,9 @@ IN_PROC_BROWSER_TEST_F(EncryptionMigrationTest, SkipWithNoPolicySet) {
   SetUpStubAuthenticatorAndAttemptLogin(false /* has_incomplete_migration */);
   encryption_migration_screen_waiter.Wait();
 
-  EXPECT_FALSE(ash::LoginScreenTestApi::IsShutdownButtonShown());
-  EXPECT_FALSE(ash::LoginScreenTestApi::IsGuestButtonShown());
-  EXPECT_FALSE(ash::LoginScreenTestApi::IsAddUserButtonShown());
+  EXPECT_FALSE(LoginScreenTestApi::IsShutdownButtonShown());
+  EXPECT_FALSE(LoginScreenTestApi::IsGuestButtonShown());
+  EXPECT_FALSE(LoginScreenTestApi::IsAddUserButtonShown());
 
   test::OobeJS().CreateVisibilityWaiter(true, kReadyDialog)->Wait();
 
@@ -355,7 +359,7 @@ IN_PROC_BROWSER_TEST_F(EncryptionMigrationTest, MigrateWithInsuficientSpace) {
   test::OobeJS().ExpectVisiblePath(kInsufficientSpaceRestartButton);
   test::OobeJS().ExpectHiddenPath(kInsufficientSpaceSkipButton);
 
-  test::OobeJS().TapOnPath(kInsufficientSpaceRestartButton);
+  test::TapOnPathAndWaitForOobeToBeDestroyed(kInsufficientSpaceRestartButton);
 
   EXPECT_EQ(1, FakePowerManagerClient::Get()->num_request_restart_calls());
   EXPECT_FALSE(FakeUserDataAuthClient::Get()
@@ -381,7 +385,7 @@ IN_PROC_BROWSER_TEST_F(EncryptionMigrationTest, InsufficientSpaceOnResume) {
   test::OobeJS().ExpectVisiblePath(kInsufficientSpaceRestartButton);
   test::OobeJS().ExpectHiddenPath(kInsufficientSpaceSkipButton);
 
-  test::OobeJS().TapOnPath(kInsufficientSpaceRestartButton);
+  test::TapOnPathAndWaitForOobeToBeDestroyed(kInsufficientSpaceRestartButton);
 
   EXPECT_EQ(1, FakePowerManagerClient::Get()->num_request_restart_calls());
   EXPECT_FALSE(FakeUserDataAuthClient::Get()
@@ -417,7 +421,7 @@ IN_PROC_BROWSER_TEST_F(EncryptionMigrationTest, MigrationFailure) {
   test::OobeJS().ExpectHiddenPath(kInsufficientSpaceDialog);
 
   test::OobeJS().ExpectVisiblePath(kRestartButton);
-  test::OobeJS().TapOnPath(kRestartButton);
+  test::TapOnPathAndWaitForOobeToBeDestroyed(kRestartButton);
 
   EXPECT_EQ(1, FakePowerManagerClient::Get()->num_request_restart_calls());
 }
@@ -500,4 +504,4 @@ IN_PROC_BROWSER_TEST_F(EncryptionMigrationTest,
   RunFullMigrationFlowTest();
 }
 
-}  // namespace chromeos
+}  // namespace ash

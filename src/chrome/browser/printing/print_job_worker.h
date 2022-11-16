@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/threading/thread.h"
@@ -20,6 +20,7 @@
 
 namespace content {
 class WebContents;
+struct GlobalRenderFrameHostId;
 }
 
 namespace printing {
@@ -29,39 +30,41 @@ class PrintedDocument;
 class PrintedPage;
 
 // Worker thread code. It manages the PrintingContext, which can be blocking
-// and/or run a message loop. This is the object that generates most
-// NOTIFY_PRINT_JOB_EVENT notifications, but they are generated through a
-// NotificationTask task to be executed from the right thread, the UI thread.
+// and/or run a message loop. This object calls back into the PrintJob in order
+// to update the print job status. The callbacks all happen on the UI thread.
 // PrintJob always outlives its worker instance.
 class PrintJobWorker {
  public:
   using SettingsCallback =
       base::OnceCallback<void(std::unique_ptr<PrintSettings>,
-                              PrintingContext::Result)>;
+                              mojom::ResultCode)>;
 
-  PrintJobWorker(int render_process_id, int render_frame_id);
+  explicit PrintJobWorker(content::GlobalRenderFrameHostId rfh_id);
+
+  PrintJobWorker(const PrintJobWorker&) = delete;
+  PrintJobWorker& operator=(const PrintJobWorker&) = delete;
+
   virtual ~PrintJobWorker();
 
   void SetPrintJob(PrintJob* print_job);
 
   /* The following functions may only be called before calling SetPrintJob(). */
 
-  // Initializes the print settings. If |ask_user_for_settings| is true, a
-  // Print... dialog box will be shown to ask the user their preference.
-  // |is_scripted| should be true for calls coming straight from window.print().
-  // |is_modifiable| implies HTML and not other formats like PDF.
-  void GetSettings(bool ask_user_for_settings,
-                   uint32_t document_page_count,
-                   bool has_selection,
-                   mojom::MarginType margin_type,
-                   bool is_scripted,
-                   bool is_modifiable,
-                   SettingsCallback callback);
+  void GetDefaultSettings(SettingsCallback callback);
+
+  // Initializes the print settings. A Print... dialog box will be shown to ask
+  // the user their preference.
+  // `is_scripted` should be true for calls coming straight from window.print().
+  void GetSettingsFromUser(uint32_t document_page_count,
+                           bool has_selection,
+                           mojom::MarginType margin_type,
+                           bool is_scripted,
+                           SettingsCallback callback);
 
   // Set the new print settings from a dictionary value.
-  void SetSettings(base::Value new_settings, SettingsCallback callback);
+  void SetSettings(base::Value::Dict new_settings, SettingsCallback callback);
 
-#if defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_CHROMEOS)
   // Set the new print settings from a POD type.
   void SetSettingsFromPOD(std::unique_ptr<printing::PrintSettings> new_settings,
                           SettingsCallback callback);
@@ -71,7 +74,7 @@ class PrintJobWorker {
 
   // Starts the printing loop. Every pages are printed as soon as the data is
   // available. Makes sure the new_document is the right one.
-  void StartPrinting(PrintedDocument* new_document);
+  virtual void StartPrinting(PrintedDocument* new_document);
 
   // Updates the printed document.
   void OnDocumentChanged(PrintedDocument* new_document);
@@ -96,7 +99,8 @@ class PrintJobWorker {
   void StopSoon();
 
   // Signals the thread to exit and returns once the thread has exited.
-  void Stop();
+  // Virtual to support testing.
+  virtual void Stop();
 
   // Starts the thread.
   bool Start();
@@ -105,38 +109,64 @@ class PrintJobWorker {
   content::WebContents* GetWebContents();
 
  protected:
-  // Retrieves the context for testing only.
+  // Sanity check that it is okay to proceed with starting a print job.
+  bool StartPrintingSanityCheck(const PrintedDocument* new_document) const;
+
+  // Get the document name to be used when initiating printing.
+  std::u16string GetDocumentName(const PrintedDocument* new_document) const;
+
+#if BUILDFLAG(IS_WIN)
+  // Renders a page in the printer.  Returns false if any errors occur.
+  // This is applicable when using the Windows GDI print API.
+  virtual bool SpoolPage(PrintedPage* page);
+#endif
+
+  // Renders the document to the printer.  Returns false if any errors occur.
+  virtual bool SpoolDocument();
+
+  // Internal state verification that spooling of the document is complete.
+  void CheckDocumentSpoolingComplete();
+
+  // Closes the job since spooling is done.
+  virtual void OnDocumentDone();
+
+  // Helper function for document done processing.
+  void FinishDocumentDone(int job_id);
+
+  // Reports settings back to `callback`.
+  void GetSettingsDone(SettingsCallback callback, mojom::ResultCode result);
+
+  // Helper functions to invoke the desired way of getting system print
+  // settings.
+  virtual void InvokeUseDefaultSettings(SettingsCallback callback);
+  virtual void InvokeGetSettingsWithUI(uint32_t document_page_count,
+                                       bool has_selection,
+                                       bool is_scripted,
+                                       SettingsCallback callback);
+
+  // Called on the UI thread to update the print settings.
+  virtual void UpdatePrintSettings(base::Value::Dict new_settings,
+                                   SettingsCallback callback);
+
+  // Discards the current document, the current page and cancels the printing
+  // context.
+  virtual void OnFailure();
+
   PrintingContext* printing_context() { return printing_context_.get(); }
+  PrintedDocument* document() { return document_.get(); }
+  PrintJob* print_job() { return print_job_; }
+  const PageNumber& page_number() { return page_number_; }
+  base::SequencedTaskRunner* task_runner() { return task_runner_.get(); }
 
  private:
-  // The shared NotificationService service can only be accessed from the UI
-  // thread, so this class encloses the necessary information to send the
-  // notification from the right thread. All NOTIFY_PRINT_JOB_EVENT
-  // notifications are sent this way.
-  class NotificationTask;
-
   // Posts a task to call OnNewPage(). Used to wait for pages/document to be
   // available.
   void PostWaitForPage();
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   // Windows print GDI-specific handling for OnNewPage().
   bool OnNewPageHelperGdi();
-
-  // Renders a page in the printer.
-  // This is applicable when using the Windows GDI print API.
-  void SpoolPage(PrintedPage* page);
-#endif  // defined(OS_WIN)
-
-  // Renders the document to the printer.
-  void SpoolJob();
-
-  // Closes the job since spooling is done.
-  void OnDocumentDone();
-
-  // Discards the current document, the current page and cancels the printing
-  // context.
-  void OnFailure();
+#endif  // BUILDFLAG(IS_WIN)
 
   // Asks the user for print settings. Must be called on the UI thread.
   // Required on Mac and Linux. Windows can display UI from non-main threads,
@@ -146,19 +176,12 @@ class PrintJobWorker {
                          bool is_scripted,
                          SettingsCallback callback);
 
-  // Called on the UI thread to update the print settings.
-  void UpdatePrintSettings(base::Value new_settings, SettingsCallback callback);
-
-#if defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_CHROMEOS)
   // Called on the UI thread to update the print settings.
   void UpdatePrintSettingsFromPOD(
       std::unique_ptr<printing::PrintSettings> new_settings,
       SettingsCallback callback);
 #endif
-
-  // Reports settings back to |callback|.
-  void GetSettingsDone(SettingsCallback callback,
-                       PrintingContext::Result result);
 
   // Use the default settings. When using GTK+ or Mac, this can still end up
   // displaying a dialog. So this needs to happen from the UI thread on these
@@ -176,7 +199,7 @@ class PrintJobWorker {
 
   // The print job owning this worker thread. It is guaranteed to outlive this
   // object and should be set with SetPrintJob().
-  PrintJob* print_job_ = nullptr;
+  raw_ptr<PrintJob> print_job_ = nullptr;
 
   // Current page number to print.
   PageNumber page_number_;
@@ -184,13 +207,11 @@ class PrintJobWorker {
   // Thread to run worker tasks.
   base::Thread thread_;
 
-  // Thread-safe pointer to task runner of the |thread_|.
+  // Thread-safe pointer to task runner of the `thread_`.
   scoped_refptr<base::SequencedTaskRunner> task_runner_;
 
   // Used to generate a WeakPtr for callbacks.
   base::WeakPtrFactory<PrintJobWorker> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(PrintJobWorker);
 };
 
 }  // namespace printing

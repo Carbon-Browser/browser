@@ -10,7 +10,6 @@
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/extension_service_test_with_install.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/supervised_user/supervised_user_constants.h"
 #include "chrome/browser/supervised_user/supervised_user_extensions_metrics_recorder.h"
 #include "chrome/browser/supervised_user/supervised_user_service.h"
 #include "chrome/browser/supervised_user/supervised_user_service_factory.h"
@@ -226,8 +225,7 @@ TEST_F(SupervisedUserExtensionTest, ExtensionsDisabledAfterGellerization) {
   CheckEnabled(id);
 
   // Now make the profile supervised.
-  profile()->AsTestingProfile()->SetSupervisedUserId(
-      supervised_users::kChildAccountSUID);
+  profile()->AsTestingProfile()->SetIsSupervisedProfile();
 
   // The extension should be disabled now pending custodian approval.
   CheckDisabledForCustodianApproval(id);
@@ -446,9 +444,9 @@ TEST_F(SupervisedUserExtensionTest, UpdateWithoutPermissionIncrease) {
   // Prefs are updated via sync.
   PrefService* pref_service = profile()->GetPrefs();
   ASSERT_TRUE(pref_service);
-  const base::DictionaryValue* approved_extensions =
-      pref_service->GetDictionary(prefs::kSupervisedUserApprovedExtensions);
-  EXPECT_TRUE(approved_extensions->FindStringKey(id));
+  const base::Value::Dict& approved_extensions =
+      pref_service->GetValueDict(prefs::kSupervisedUserApprovedExtensions);
+  EXPECT_TRUE(approved_extensions.FindString(id));
 }
 
 // Tests that the kApprovalGranted UMA metric only increments once without

@@ -8,17 +8,21 @@
 #include "base/callback.h"
 #include "base/gtest_prod_util.h"
 #include "build/build_config.h"
-#include "mojo/public/cpp/bindings/remote.h"
 #include "third_party/blink/public/mojom/mediastream/media_devices.mojom-blink.h"
 #include "third_party/blink/renderer/bindings/core/v8/active_script_wrappable.h"
+#include "third_party/blink/renderer/core/dom/element.h"
 #include "third_party/blink/renderer/core/dom/events/event_target.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context_lifecycle_observer.h"
 #include "third_party/blink/renderer/modules/event_target_modules.h"
 #include "third_party/blink/renderer/modules/mediastream/media_device_info.h"
+#include "third_party/blink/renderer/modules/mediastream/media_stream_track.h"
 #include "third_party/blink/renderer/modules/mediastream/user_media_request.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
-#include "third_party/blink/renderer/platform/heap/heap_allocator.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_map.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_receiver.h"
+#include "third_party/blink/renderer/platform/mojo/heap_mojo_remote.h"
 #include "third_party/blink/renderer/platform/scheduler/public/post_cancellable_task.h"
 #include "third_party/blink/renderer/platform/supplementable.h"
 
@@ -58,6 +62,10 @@ class MODULES_EXPORT MediaDevices final
                                      const MediaStreamConstraints*,
                                      ExceptionState&);
 
+  ScriptPromise getDisplayMediaSet(ScriptState*,
+                                   const MediaStreamConstraints*,
+                                   ExceptionState&);
+
   ScriptPromise getDisplayMedia(ScriptState*,
                                 const MediaStreamConstraints*,
                                 ExceptionState&);
@@ -65,6 +73,12 @@ class MODULES_EXPORT MediaDevices final
   void setCaptureHandleConfig(ScriptState*,
                               const CaptureHandleConfig*,
                               ExceptionState&);
+
+  // Using ProduceCropTarget(), CropTarget.fromElement() can communicate
+  // with the browser process through the mojom pipe that `this` owns.
+  // TODO(crbug.com/1332628): Move most of the logic into crop_target.cc/h,
+  // leaving only communication in MediaDevices.
+  ScriptPromise ProduceCropTarget(ScriptState*, Element*, ExceptionState&);
 
   // EventTarget overrides.
   const AtomicString& InterfaceName() const override;
@@ -123,16 +137,22 @@ class MODULES_EXPORT MediaDevices final
                          Vector<mojom::blink::VideoInputDeviceCapabilitiesPtr>,
                          Vector<mojom::blink::AudioInputDeviceCapabilitiesPtr>);
   void OnDispatcherHostConnectionError();
-  const mojo::Remote<mojom::blink::MediaDevicesDispatcherHost>&
-  GetDispatcherHost(LocalFrame*);
+  mojom::blink::MediaDevicesDispatcherHost& GetDispatcherHost(LocalFrame*);
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
   // Manage the window of opportunity that occurs immediately after
   // display-capture starts. The application can call MediaStreamTrack.focus()
-  // on the microtask where the Promise<MediaStream> was resolved.
-  void EnqueueMicrotaskToCloseFocusWindowOfOpportunity(
-      MediaStream* media_stream);
-  void CloseFocusWindowOfOpportunity(MediaStream* media_stream);
+  // on the microtask where the Promise<MediaStream> was resolved; later calls
+  // raise an exception.
+  // |id| identifies the source, and therefore the track, on the browser-side.
+  void EnqueueMicrotaskToCloseFocusWindowOfOpportunity(const String&,
+                                                       MediaStreamTrack*);
+  void CloseFocusWindowOfOpportunity(const String&, MediaStreamTrack*);
+
+  // Receives a message from the browser process with the crop-ID it has
+  // assigned to |element|.
+  void ResolveProduceCropIdPromise(Element* element,
+                                   const WTF::String& crop_id);
 #endif
 
   bool stopped_;
@@ -140,9 +160,28 @@ class MODULES_EXPORT MediaDevices final
   // No async work may be posted in this scenario.
   TaskHandle dispatch_scheduled_events_task_handle_;
   HeapVector<Member<Event>> scheduled_events_;
-  mojo::Remote<mojom::blink::MediaDevicesDispatcherHost> dispatcher_host_;
+  HeapMojoRemote<mojom::blink::MediaDevicesDispatcherHost> dispatcher_host_;
   HeapMojoReceiver<mojom::blink::MediaDevicesListener, MediaDevices> receiver_;
   HeapHashSet<Member<ScriptPromiseResolver>> requests_;
+
+#if !BUILDFLAG(IS_ANDROID)
+  // 1. When produceCropId() is first called for an Element, it has no crop-ID
+  //    associated. We produce a Resolver, map the Element to it, and fire
+  //    off a message to the browser process, asking for a new crop-ID to be
+  //    generated.
+  // 2. Subsequent calls to produceCropId(), which occur before the browser
+  //    process has had time to respond, yield a copy of the original Promise
+  //    associated with this Element.
+  // 3. When the message browser process responds with a crop-ID for the
+  //    Element, we store the new crop-ID on the Element itself, resolve all
+  //    Promises returned for this Element, and eject the resolver from this
+  //    container.
+  // 4. Later calls to produceCropId() for this given Element discover that
+  //    a crop-ID is already assigned. They immediately return a resolved
+  //    Promise with the crop-ID.
+  HeapHashMap<Member<Element>, Member<ScriptPromiseResolver>>
+      crop_id_resolvers_;
+#endif
 
   EnumerateDevicesTestCallback enumerate_devices_test_callback_;
   base::OnceClosure connection_error_test_callback_;

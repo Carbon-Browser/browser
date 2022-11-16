@@ -11,7 +11,6 @@
 #include <vector>
 
 #include "base/containers/flat_set.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/login/users/affiliation.h"
@@ -22,19 +21,16 @@
 class PrefRegistrySimple;
 class PrefService;
 
-namespace enterprise_management {
-class PolicyData;
-}
-
-namespace chromeos {
-
-class InstallAttributes;
-
+namespace ash {
 namespace attestation {
 class AttestationFlow;
 }
+class InstallAttributes;
+}  // namespace ash
 
-}  // namespace chromeos
+namespace enterprise_management {
+class PolicyData;
+}  // namespace enterprise_management
 
 namespace policy {
 
@@ -45,13 +41,13 @@ class AffiliatedRemoteCommandsInvalidator;
 class BluetoothPolicyHandler;
 class DeviceActiveDirectoryPolicyManager;
 class DeviceCloudPolicyInitializer;
-class DeviceCloudStateKeysUploader;
+class ActiveDirectoryDeviceStateUploader;
+class ActiveDirectoryMigrationManager;
 class DeviceDockMacAddressHandler;
 class DeviceLocalAccountPolicyService;
 class DeviceNamePolicyHandler;
-class DeviceNetworkConfigurationUpdater;
+class DeviceNetworkConfigurationUpdaterAsh;
 class DeviceWiFiAllowedHandler;
-struct EnrollmentConfig;
 class MinimumVersionPolicyHandler;
 class MinimumVersionPolicyHandlerDelegateImpl;
 class ProxyPolicyProvider;
@@ -67,6 +63,10 @@ class BrowserPolicyConnectorAsh : public ChromeBrowserPolicyConnector,
                                   public DeviceCloudPolicyManagerAsh::Observer {
  public:
   BrowserPolicyConnectorAsh();
+
+  BrowserPolicyConnectorAsh(const BrowserPolicyConnectorAsh&) = delete;
+  BrowserPolicyConnectorAsh& operator=(const BrowserPolicyConnectorAsh&) =
+      delete;
 
   ~BrowserPolicyConnectorAsh() override;
 
@@ -86,7 +86,7 @@ class BrowserPolicyConnectorAsh : public ChromeBrowserPolicyConnector,
 
   // Shutdown() is called from BrowserProcessImpl::StartTearDown() but |this|
   // observes some objects that get destroyed earlier. PreShutdown() is called
-  // from ChromeBrowserMainPartsChromeos::PostMainMessageLoopRun(), allowing the
+  // from `ChromeBrowserMainPartsAsh::PostMainMessageLoopRun()`, allowing the
   // connection to these dependencies to be severed earlier.
   void PreShutdown();
 
@@ -101,15 +101,9 @@ class BrowserPolicyConnectorAsh : public ChromeBrowserPolicyConnector,
   // Returns the enterprise enrollment domain if device is managed.
   std::string GetEnterpriseEnrollmentDomain() const;
 
-  // Custom enterprise display domain used in UI if specified, otherwise
-  // defaults to enterprise enrollment domain. The policy needs to be loaded
-  // before the custom display domain can be used.
-  std::string GetEnterpriseDisplayDomain() const;
-
   // Returns the manager of the domain for use in UI if specified, otherwise the
   // enterprise display domain.
-  // TODO(crbug.com/1081272): refactor localization hints for all strings that
-  // depend on this method
+  // The policy needs to be loaded before the display manager can be used.
   std::string GetEnterpriseDomainManager() const;
 
   // Returns the SSO profile id for the managing OU of this device. Currently
@@ -132,6 +126,12 @@ class BrowserPolicyConnectorAsh : public ChromeBrowserPolicyConnector,
   // Returns the cloud directory API ID or an empty string if it is not set.
   std::string GetDirectoryApiID() const;
 
+  // Returns the obfuscated customer's ID or an empty string if it not set.
+  std::string GetObfuscatedCustomerID() const;
+
+  // Returns whether device is enrolled in Kiosk SKU.
+  bool IsKioskEnrolled() const;
+
   // Returns the organization logo URL or an empty string if it is not set.
   std::string GetCustomerLogoURL() const;
 
@@ -141,13 +141,8 @@ class BrowserPolicyConnectorAsh : public ChromeBrowserPolicyConnector,
   // For other OSes the function will always return DEVICE_MODE_CONSUMER.
   DeviceMode GetDeviceMode() const;
 
-  // Delegates to chromeos::InstallAttributes::Get()
-  chromeos::InstallAttributes* GetInstallAttributes() const;
-
-  // Get the enrollment configuration for the device as decided by various
-  // factors. See DeviceCloudPolicyInitializer::GetPrescribedEnrollmentConfig()
-  // for details.
-  EnrollmentConfig GetPrescribedEnrollmentConfig() const;
+  // Delegates to `ash::InstallAttributes::Get()`.
+  ash::InstallAttributes* GetInstallAttributes() const;
 
   // May be nullptr, e.g. for devices managed by Active Directory.
   DeviceCloudPolicyManagerAsh* GetDeviceCloudPolicyManager() const {
@@ -174,7 +169,7 @@ class BrowserPolicyConnectorAsh : public ChromeBrowserPolicyConnector,
     return minimum_version_policy_handler_.get();
   }
 
-  DeviceNetworkConfigurationUpdater* GetDeviceNetworkConfigurationUpdater()
+  DeviceNetworkConfigurationUpdaterAsh* GetDeviceNetworkConfigurationUpdater()
       const {
     return device_network_configuration_updater_.get();
   }
@@ -208,13 +203,13 @@ class BrowserPolicyConnectorAsh : public ChromeBrowserPolicyConnector,
   // attestation flow is needed for testing.
   // TODO(crbug.com/1235325): Remove AttestationFlow completely from the
   // connector and a fake one directly to |EnterpriseEnrollmentHelperImpl|.
-  chromeos::attestation::AttestationFlow* GetAttestationFlow() const {
+  ash::attestation::AttestationFlow* GetAttestationFlow() const {
     return attestation_flow_.get();
   }
 
   // Sets the attestation flow for testing.
   void SetAttestationFlowForTesting(
-      std::unique_ptr<chromeos::attestation::AttestationFlow> attestation_flow);
+      std::unique_ptr<ash::attestation::AttestationFlow> attestation_flow);
 
   // Returns device's market segment.
   MarketSegment GetEnterpriseMarketSegment() const;
@@ -243,6 +238,7 @@ class BrowserPolicyConnectorAsh : public ChromeBrowserPolicyConnector,
   // DeviceCloudPolicyManagerAsh::Observer:
   void OnDeviceCloudPolicyManagerConnected() override;
   void OnDeviceCloudPolicyManagerDisconnected() override;
+  void OnDeviceCloudPolicyManagerGotRegistry() override;
 
   // TODO(crbug.com/1187628): Combine the following two functions into one to
   // simplify the API.
@@ -255,7 +251,7 @@ class BrowserPolicyConnectorAsh : public ChromeBrowserPolicyConnector,
 
  protected:
   // ChromeBrowserPolicyConnector:
-  std::vector<std::unique_ptr<policy::ConfigurationPolicyProvider>>
+  std::vector<std::unique_ptr<ConfigurationPolicyProvider>>
   CreatePolicyProviders() override;
 
  private:
@@ -276,8 +272,10 @@ class BrowserPolicyConnectorAsh : public ChromeBrowserPolicyConnector,
   DeviceCloudPolicyManagerAsh* device_cloud_policy_manager_ = nullptr;
   DeviceActiveDirectoryPolicyManager* device_active_directory_policy_manager_ =
       nullptr;
-  std::unique_ptr<DeviceCloudStateKeysUploader>
-      state_keys_uploader_for_active_directory_;
+  std::unique_ptr<ActiveDirectoryDeviceStateUploader>
+      active_directory_device_state_uploader_;
+  std::unique_ptr<ActiveDirectoryMigrationManager>
+      active_directory_migration_manager_;
   PrefService* local_state_ = nullptr;
   std::unique_ptr<DeviceCloudPolicyInitializer>
       device_cloud_policy_initializer_;
@@ -300,7 +298,7 @@ class BrowserPolicyConnectorAsh : public ChromeBrowserPolicyConnector,
       tpm_auto_update_mode_policy_handler_;
   std::unique_ptr<DeviceScheduledUpdateChecker>
       device_scheduled_update_checker_;
-  std::vector<std::unique_ptr<policy::DeviceCloudExternalDataPolicyHandler>>
+  std::vector<std::unique_ptr<DeviceCloudExternalDataPolicyHandler>>
       device_cloud_external_data_policy_handlers_;
   std::unique_ptr<SystemProxyHandler> system_proxy_handler_;
   std::unique_ptr<AdbSideloadingAllowanceModePolicyHandler>
@@ -316,11 +314,11 @@ class BrowserPolicyConnectorAsh : public ChromeBrowserPolicyConnector,
   // pointer to get to the ProxyPolicyProvider at SetUserPolicyDelegate().
   ProxyPolicyProvider* global_user_cloud_policy_provider_ = nullptr;
 
-  std::unique_ptr<DeviceNetworkConfigurationUpdater>
+  std::unique_ptr<DeviceNetworkConfigurationUpdaterAsh>
       device_network_configuration_updater_;
 
   // The ConfigurationPolicyProviders created in the constructor are initially
-  // added here, and then pushed to the super class in BuildPolicyProviders().
+  // added here, and then pushed to the super class in CreatePolicyProviders().
   std::vector<std::unique_ptr<ConfigurationPolicyProvider>> providers_for_init_;
 
   // Manages provisioning of certificates from
@@ -333,11 +331,9 @@ class BrowserPolicyConnectorAsh : public ChromeBrowserPolicyConnector,
   // needed for testing.
   // TODO(crbug.com/1235325): Remove AttestationFlow completely from the
   // connector and a fake one directly to |EnterpriseEnrollmentHelperImpl|.
-  std::unique_ptr<chromeos::attestation::AttestationFlow> attestation_flow_;
+  std::unique_ptr<ash::attestation::AttestationFlow> attestation_flow_;
 
   base::WeakPtrFactory<BrowserPolicyConnectorAsh> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(BrowserPolicyConnectorAsh);
 };
 
 }  // namespace policy

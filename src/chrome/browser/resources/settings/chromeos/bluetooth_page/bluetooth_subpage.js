@@ -3,252 +3,283 @@
 // found in the LICENSE file.
 
 /**
+ * @fileoverview
+ * 'settings-bluetooth-subpage' is the settings subpage for managing bluetooth
+ *  properties and devices.
+ */
+
+import 'chrome://resources/cr_components/chromeos/bluetooth/bluetooth_dialog.js';
+import 'chrome://resources/cr_elements/cr_toggle/cr_toggle.m.js';
+import 'chrome://resources/cr_elements/shared_style_css.m.js';
+import 'chrome://resources/polymer/v3_0/iron-flex-layout/iron-flex-layout-classes.js';
+import 'chrome://resources/polymer/v3_0/iron-list/iron-list.js';
+import 'chrome://resources/polymer/v3_0/paper-spinner/paper-spinner-lite.js';
+import 'chrome://resources/polymer/v3_0/paper-tooltip/paper-tooltip.js';
+import '../../settings_shared.css.js';
+import './bluetooth_device_list_item.js';
+
+import {BluetoothUiSurface, recordBluetoothUiSurfaceMetrics, recordUserInitiatedReconnectionAttemptDuration} from 'chrome://resources/cr_components/chromeos/bluetooth/bluetooth_metrics_utils.js';
+import {CrScrollableBehavior, CrScrollableBehaviorInterface} from 'chrome://resources/cr_elements/cr_scrollable_behavior.m.js';
+import {I18nBehavior, I18nBehaviorInterface} from 'chrome://resources/js/i18n_behavior.m.js';
+import {ListPropertyUpdateBehavior, ListPropertyUpdateBehaviorInterface} from 'chrome://resources/js/list_property_update_behavior.m.js';
+import {flush, html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+
+import {Setting} from '../../mojom-webui/setting.mojom-webui.js';
+import {Route, Router} from '../../router.js';
+import {DeepLinkingBehavior, DeepLinkingBehaviorInterface} from '../deep_linking_behavior.js';
+import {recordSettingChange} from '../metrics_recorder.js';
+import {routes} from '../os_route.js';
+import {RouteObserverBehavior, RouteObserverBehaviorInterface} from '../route_observer_behavior.js';
+
+/**
  * Maximum number of bluetooth devices shown in bluetooth subpage.
  * @type {number}
  */
 const MAX_NUMBER_DEVICE_SHOWN = 50;
 
 /**
- * @fileoverview
- * 'settings-bluetooth-subpage' is the settings subpage for managing bluetooth
- *  properties and devices.
+ * @constructor
+ * @extends {PolymerElement}
+ * @implements {I18nBehaviorInterface}
+ * @implements {CrScrollableBehaviorInterface}
+ * @implements {DeepLinkingBehaviorInterface}
+ * @implements {ListPropertyUpdateBehaviorInterface}
+ * @implements {RouteObserverBehaviorInterface}
  */
+const SettingsBluetoothSubpageElementBase = mixinBehaviors(
+    [
+      I18nBehavior,
+      CrScrollableBehavior,
+      DeepLinkingBehavior,
+      ListPropertyUpdateBehavior,
+      RouteObserverBehavior,
+    ],
+    PolymerElement);
 
-import {Polymer, html, flush} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+/** @polymer */
+class SettingsBluetoothSubpageElement extends
+    SettingsBluetoothSubpageElementBase {
+  static get is() {
+    return 'settings-bluetooth-subpage';
+  }
 
-import '//resources/cr_components/chromeos/bluetooth/bluetooth_dialog.js';
-import {CrScrollableBehavior} from '//resources/cr_elements/cr_scrollable_behavior.m.js';
-import {BluetoothUiSurface, recordBluetoothUiSurfaceMetrics, recordUserInitiatedReconnectionAttemptDuration} from '//resources/cr_components/chromeos/bluetooth/bluetooth_metrics_utils.js';
-import '//resources/cr_elements/cr_toggle/cr_toggle.m.js';
-import '//resources/cr_elements/shared_style_css.m.js';
-import {I18nBehavior} from '//resources/js/i18n_behavior.m.js';
-import {ListPropertyUpdateBehavior} from '//resources/js/list_property_update_behavior.m.js';
-import '//resources/polymer/v3_0/iron-flex-layout/iron-flex-layout-classes.js';
-import '//resources/polymer/v3_0/iron-list/iron-list.js';
-import '//resources/polymer/v3_0/paper-spinner/paper-spinner-lite.js';
-import '//resources/polymer/v3_0/paper-tooltip/paper-tooltip.js';
-import {loadTimeData} from '../../i18n_setup.js';
-import {DeepLinkingBehavior} from '../deep_linking_behavior.m.js';
-import {routes} from '../os_route.m.js';
-import {Router, Route, RouteObserverBehavior} from '../../router.js';
-import '../../settings_shared_css.js';
-import {recordSettingChange} from '../metrics_recorder.m.js';
-import './bluetooth_device_list_item.js';
+  static get template() {
+    return html`{__html_template__}`;
+  }
 
-Polymer({
-  _template: html`{__html_template__}`,
-  is: 'settings-bluetooth-subpage',
-
-  behaviors: [
-    I18nBehavior,
-    CrScrollableBehavior,
-    DeepLinkingBehavior,
-    ListPropertyUpdateBehavior,
-    RouteObserverBehavior,
-  ],
-
-  properties: {
-    /** Reflects the bluetooth-page property. */
-    bluetoothToggleState: {
-      type: Boolean,
-      notify: true,
-    },
-
-    /** Reflects the bluetooth-page property. */
-    stateChangeInProgress: {
-      type: Boolean,
-      reflectToAttribute: true,
-    },
-
-    /**
-     * The bluetooth adapter state, cached by bluetooth-page.
-     * @type {!chrome.bluetooth.AdapterState|undefined}
-     */
-    adapterState: Object,
-
-    /** Informs bluetooth-page whether to show the spinner in the header. */
-    showSpinner_: {
-      type: Boolean,
-      notify: true,
-      computed: 'computeShowSpinner_(adapterState.*, dialogShown_)',
-    },
-
-    /**
-     * The ordered list of bluetooth devices.
-     * @type {!Array<!chrome.bluetooth.Device>}
-     * @private
-     */
-    deviceList_: {
-      type: Array,
-      value() {
-        return [];
+  static get properties() {
+    return {
+      /** Reflects the bluetooth-page property. */
+      bluetoothToggleState: {
+        type: Boolean,
+        notify: true,
       },
-    },
 
-    /**
-     * The ordered list of paired or connecting bluetooth devices.
-     * @type {!Array<!chrome.bluetooth.Device>}
-     */
-    pairedDeviceList_: {
-      type: Array,
-      value: /** @return {Array} */ function() {
-        return [];
+      /** Reflects the bluetooth-page property. */
+      stateChangeInProgress: {
+        type: Boolean,
+        reflectToAttribute: true,
       },
-    },
 
-    /**
-     * The ordered list of unpaired bluetooth devices.
-     * @type {!Array<!chrome.bluetooth.Device>}
-     */
-    unpairedDeviceList_: {
-      type: Array,
-      value: /** @return {Array} */ function() {
-        return [];
+      /**
+       * The bluetooth adapter state, cached by bluetooth-page.
+       * @type {!chrome.bluetooth.AdapterState|undefined}
+       */
+      adapterState: Object,
+
+      /** Informs bluetooth-page whether to show the spinner in the header. */
+      showSpinner_: {
+        type: Boolean,
+        notify: true,
+        computed: 'computeShowSpinner_(adapterState.*, dialogShown_)',
       },
-    },
+
+      /**
+       * The ordered list of bluetooth devices.
+       * @type {!Array<!chrome.bluetooth.Device>}
+       * @private
+       */
+      deviceList_: {
+        type: Array,
+        value() {
+          return [];
+        },
+      },
+
+      /**
+       * The ordered list of paired or connecting bluetooth devices.
+       * @type {!Array<!chrome.bluetooth.Device>}
+       */
+      pairedDeviceList_: {
+        type: Array,
+        value: /** @return {Array} */ function() {
+          return [];
+        },
+      },
+
+      /**
+       * The ordered list of unpaired bluetooth devices.
+       * @type {!Array<!chrome.bluetooth.Device>}
+       */
+      unpairedDeviceList_: {
+        type: Array,
+        value: /** @return {Array} */ function() {
+          return [];
+        },
+      },
+
+      /**
+       * Whether or not the dialog is shown.
+       * @private
+       */
+      dialogShown_: {
+        type: Boolean,
+        value: false,
+      },
+
+      /**
+       * Current Pairing device.
+       * @type {!chrome.bluetooth.Device|undefined}
+       * @private
+       */
+      pairingDevice_: Object,
+
+      /**
+       * Interface for bluetooth calls. Set in bluetooth-page.
+       * @type {Bluetooth}
+       * @private
+       */
+      bluetooth: {
+        type: Object,
+        value: chrome.bluetooth,
+      },
+
+      /**
+       * Interface for bluetoothPrivate calls. Set in bluetooth-page.
+       * @type {BluetoothPrivate}
+       * @private
+       */
+      bluetoothPrivate: {
+        type: Object,
+        value: chrome.bluetoothPrivate,
+      },
+
+      /**
+       * Update frequency of the bluetooth list.
+       * @type {number}
+       */
+      listUpdateFrequencyMs: {
+        type: Number,
+        value: 1000,
+      },
+
+      /**
+       * The time in milliseconds at which discovery was started attempt (when
+       * the page was opened with Bluetooth on, or when Bluetooth turned on
+       * while the page was active).
+       * @private {?number}
+       */
+      discoveryStartTimestampMs_: {
+        type: Number,
+        value: null,
+      },
+
+      /**
+       * Used by FocusRowBehavior to track the last focused element on a row.
+       * @private {?Object}
+       */
+      lastFocused_: Object,
+
+      /**
+       * Used by FocusRowBehavior to track if the list has been blurred.
+       * @private
+       */
+      listBlurred_: Boolean,
+
+      /**
+       * Contains the settingId of any deep link that wasn't able to be shown,
+       * null otherwise.
+       * @private {?Setting}
+       */
+      pendingSettingId_: {
+        type: Number,
+        value: null,
+      },
+
+      /**
+       * Used by DeepLinkingBehavior to focus this page's deep links.
+       * @type {!Set<!Setting>}
+       */
+      supportedSettingIds: {
+        type: Object,
+        value: () => new Set([
+          Setting.kBluetoothOnOff,
+          Setting.kBluetoothConnectToDevice,
+          Setting.kBluetoothDisconnectFromDevice,
+          Setting.kBluetoothPairDevice,
+          Setting.kBluetoothUnpairDevice,
+        ]),
+      },
+
+    };
+  }
+
+  static get observers() {
+    return [
+      'deviceListChanged_(deviceList_.*)',
+      'listUpdateFrequencyMsChanged_(listUpdateFrequencyMs)',
+      'updateDiscoveryAndMaybeRefreshDeviceList_(adapterState.*)',
+
+    ];
+  }
+
+  constructor() {
+    super();
 
     /**
-     * Whether or not the dialog is shown.
+     * Timer ID for bluetooth list update.
+     * @type {number|undefined}
      * @private
      */
-    dialogShown_: {
-      type: Boolean,
-      value: false,
-    },
+    this.updateTimerId_ = undefined;
 
     /**
-     * Current Pairing device.
-     * @type {!chrome.bluetooth.Device|undefined}
+     * Used to prevent duplicate event listeners being added for the focus
+     * event.
+     * @type {function(Event)|undefined}
      * @private
      */
-    pairingDevice_: Object,
+    this.onWindowFocusedListener_ = undefined;
 
     /**
-     * Interface for bluetooth calls. Set in bluetooth-page.
-     * @type {Bluetooth}
+     * Used to prevent duplicate event listeners being added for the blur event.
+     * @type {function(Event)|undefined}
      * @private
      */
-    bluetooth: {
-      type: Object,
-      value: chrome.bluetooth,
-    },
+    this.onWindowBlurredListener_ = undefined;
 
     /**
-     * Interface for bluetoothPrivate calls. Set in bluetooth-page.
-     * @type {BluetoothPrivate}
+     * The address of the device corresponding to the tooltip if it is currently
+     * showing. If undefined, the tooltip is not showing.
+     * @type {string|undefined}
      * @private
      */
-    bluetoothPrivate: {
-      type: Object,
-      value: chrome.bluetoothPrivate,
-    },
-
-    /**
-     * Update frequency of the bluetooth list.
-     * @type {number}
-     */
-    listUpdateFrequencyMs: {
-      type: Number,
-      value: 1000,
-    },
-
-    /**
-     * The time in milliseconds at which discovery was started attempt (when the
-     * page was opened with Bluetooth on, or when Bluetooth turned on while the
-     * page was active).
-     * @private {?number}
-     */
-    discoveryStartTimestampMs_: {
-      type: Number,
-      value: null,
-    },
-
-    /**
-     * Used by FocusRowBehavior to track the last focused element on a row.
-     * @private {?Object}
-     */
-    lastFocused_: Object,
-
-    /**
-     * Used by FocusRowBehavior to track if the list has been blurred.
-     * @private
-     */
-    listBlurred_: Boolean,
-
-    /**
-     * Contains the settingId of any deep link that wasn't able to be shown,
-     * null otherwise.
-     * @private {?chromeos.settings.mojom.Setting}
-     */
-    pendingSettingId_: {
-      type: Number,
-      value: null,
-    },
-
-    /**
-     * Used by DeepLinkingBehavior to focus this page's deep links.
-     * @type {!Set<!chromeos.settings.mojom.Setting>}
-     */
-    supportedSettingIds: {
-      type: Object,
-      value: () => new Set([
-        chromeos.settings.mojom.Setting.kBluetoothOnOff,
-        chromeos.settings.mojom.Setting.kBluetoothConnectToDevice,
-        chromeos.settings.mojom.Setting.kBluetoothDisconnectFromDevice,
-        chromeos.settings.mojom.Setting.kBluetoothPairDevice,
-        chromeos.settings.mojom.Setting.kBluetoothUnpairDevice,
-      ]),
-    },
-  },
-
-  observers: [
-    'deviceListChanged_(deviceList_.*)',
-    'listUpdateFrequencyMsChanged_(listUpdateFrequencyMs)',
-    'updateDiscoveryAndMaybeRefreshDeviceList_(adapterState.*)',
-  ],
-
-  /**
-   * Timer ID for bluetooth list update.
-   * @type {number|undefined}
-   * @private
-   */
-  updateTimerId_: undefined,
-
-  /**
-   * Used to prevent duplicate event listeners being added for the focus event.
-   * @type {function(Event)|undefined}
-   * @private
-   */
-  onWindowFocusedListener_: undefined,
-
-  /**
-   * Used to prevent duplicate event listeners being added for the blur event.
-   * @type {function(Event)|undefined}
-   * @private
-   */
-  onWindowBlurredListener_: undefined,
+    this.currentTooltipDeviceAddress_ = undefined;
+  }
 
   /**
    * Used to determine if the window has focus. This is overridden by tests so
    * that focus logic can be better encapsulated in this element.
-   * @type {function():boolean}
+   * @return {boolean}
    * @private
    */
-  isWindowFocusedFunction_: function() {
+  isWindowFocusedFunction_() {
     return document.hasFocus();
-  },
-
-  /**
-   * The address of the device corresponding to the tooltip if it is currently
-   * showing. If undefined, the tooltip is not showing.
-   * @type {string|undefined}
-   * @private
-   */
-  currentTooltipDeviceAddress_: undefined,
+  }
 
   /**
    * Overridden from DeepLinkingBehavior.
-   * @param {!chromeos.settings.mojom.Setting} settingId
+   * @param {!Setting} settingId
    * @return {boolean}
    */
   beforeDeepLinkAttempt(settingId) {
@@ -256,33 +287,34 @@ Polymer({
     // button on a paired device), FocusRowBehavior prevents the Focus Row from
     // being focused. We clear lastFocused_ so that we can focus the row (such
     // as a paired/unpaired device).
-    if (settingId ===
-            chromeos.settings.mojom.Setting.kBluetoothConnectToDevice ||
-        settingId ===
-            chromeos.settings.mojom.Setting.kBluetoothDisconnectFromDevice ||
-        settingId === chromeos.settings.mojom.Setting.kBluetoothPairDevice ||
-        settingId === chromeos.settings.mojom.Setting.kBluetoothUnpairDevice) {
+    if (settingId === Setting.kBluetoothConnectToDevice ||
+        settingId === Setting.kBluetoothDisconnectFromDevice ||
+        settingId === Setting.kBluetoothPairDevice ||
+        settingId === Setting.kBluetoothUnpairDevice) {
       this.lastFocused_ = null;
     }
     // Should continue with deep link attempt.
     return true;
-  },
+  }
 
   /** @override */
-  detached() {
+  disconnectedCallback() {
+    super.disconnectedCallback();
+
     if (this.updateTimerId_ !== undefined) {
       window.clearInterval(this.updateTimerId_);
       this.updateTimerId_ = undefined;
       this.deviceList_ = [];
     }
-  },
+  }
 
   /**
    * RouteObserverBehavior
    * @param {!Route} route
+   * @param {!Route=} oldRoute
    * @protected
    */
-  currentRouteChanged(route) {
+  currentRouteChanged(route, oldRoute) {
     // Any navigation resets the previous attempt to deep link.
     this.pendingSettingId_ = null;
     this.updateDiscoveryAndMaybeRefreshDeviceList_();
@@ -304,19 +336,19 @@ Polymer({
         this.pendingSettingId_ = result.pendingSettingId;
       }
     });
-  },
+  }
 
   /** @private */
   computeShowSpinner_() {
     return !this.dialogShown_ && this.adapterState &&
         this.adapterState.discovering;
-  },
+  }
 
   /** @private */
   updateDiscoveryAndMaybeRefreshDeviceList_() {
     this.updateDiscovery_();
     this.startOrStopRefreshingDeviceList_();
-  },
+  }
 
   /** @private */
   deviceListChanged_() {
@@ -331,7 +363,7 @@ Polymer({
             this.unpairedDeviceList_,
             this.deviceList_.filter(d => !(d.paired || d.connecting))));
     this.updateScrollableContents();
-  },
+  }
 
   /**
    * Returns a copy of |oldDeviceList| but:
@@ -367,7 +399,7 @@ Polymer({
     }
 
     return updatedDeviceList;
-  },
+  }
 
   /** @private */
   updateDiscovery_() {
@@ -383,7 +415,7 @@ Polymer({
     } else {
       this.stopDiscovery_();
     }
-  },
+  }
 
   /** @private */
   startDiscovery_() {
@@ -400,7 +432,7 @@ Polymer({
         console.error('startDiscovery Error: ' + lastError.message);
       }
     });
-  },
+  }
 
   /** @private */
   stopDiscovery_() {
@@ -417,7 +449,7 @@ Polymer({
         console.error('stopDiscovery Error: ' + lastError.message);
       }
     });
-  },
+  }
 
   /**
    * @param {!CustomEvent<!{
@@ -438,7 +470,7 @@ Polymer({
     } else {
       console.error('Unexected action: ' + action);
     }
-  },
+  }
 
   /**
    * @param {!Event} event
@@ -449,7 +481,7 @@ Polymer({
       this.bluetoothToggleState = !this.bluetoothToggleState;
     }
     event.stopPropagation();
-  },
+  }
 
   /** @private */
   addWindowFocusEventListeners_() {
@@ -465,7 +497,7 @@ Polymer({
     }
     window.addEventListener('focus', this.onWindowFocusedListener_);
     window.addEventListener('blur', this.onWindowBlurredListener_);
-  },
+  }
 
   /** @private */
   removeWindowFocusEventListeners_() {
@@ -475,7 +507,7 @@ Polymer({
     if (this.onWindowBlurredListener_) {
       window.removeEventListener('blur', this.onWindowBlurredListener_);
     }
-  },
+  }
 
   /**
    * @param {boolean} enabled
@@ -489,7 +521,7 @@ Polymer({
     // and "Off" in the future, revisit the a11y implementation to ensure no
     // meaningful information is skipped.
     return enabled ? onstr : offstr;
-  },
+  }
 
   /**
    * @return {boolean}
@@ -497,7 +529,7 @@ Polymer({
    */
   isAdapterAvailable_() {
     return !!this.adapterState && this.adapterState.available;
-  },
+  }
 
   /**
    * @param {boolean} bluetoothToggleState
@@ -507,7 +539,7 @@ Polymer({
    */
   showDevices_(bluetoothToggleState, deviceList) {
     return bluetoothToggleState && deviceList.length > 0;
-  },
+  }
 
   /**
    * @param {boolean} bluetoothToggleState
@@ -517,7 +549,7 @@ Polymer({
    */
   showNoDevices_(bluetoothToggleState, deviceList) {
     return bluetoothToggleState && deviceList.length === 0;
-  },
+  }
 
   /**
    * @param {!chrome.bluetooth.Device} device
@@ -568,7 +600,7 @@ Polymer({
       }
     });
     recordSettingChange();
-  },
+  }
 
   /**
    * @param {!chrome.bluetooth.Device} device
@@ -583,7 +615,7 @@ Polymer({
       }
     });
     recordSettingChange();
-  },
+  }
 
   /**
    * @param {!chrome.bluetooth.Device} device
@@ -598,7 +630,7 @@ Polymer({
       }
     });
     recordSettingChange();
-  },
+  }
 
   /** @private */
   openDialog_() {
@@ -610,18 +642,19 @@ Polymer({
     this.$.deviceDialog.open();
     recordBluetoothUiSurfaceMetrics(BluetoothUiSurface.SETTINGS_PAIRING_DIALOG);
     this.dialogShown_ = true;
-  },
+  }
 
   /** @private */
   onDialogClose_() {
     this.dialogShown_ = false;
     this.pairingDevice_ = undefined;
     // The list is dynamic so focus the first item.
-    const device = this.$$('#unpairedContainer bluetooth-device-list-item');
+    const device = this.shadowRoot.querySelector(
+        '#unpairedContainer bluetooth-device-list-item');
     if (device) {
       device.focus();
     }
-  },
+  }
 
   /**
    * Return the sorted devices based on the connected statuses, connected
@@ -633,7 +666,7 @@ Polymer({
    */
   sortDevices_(devices) {
     return devices.sort((a, b) => a.connected ? -1 : (b.connected ? 1 : 0));
-  },
+  }
 
   /**
    * Requests bluetooth device list from Chrome. Update deviceList_ once the
@@ -643,7 +676,7 @@ Polymer({
   refreshBluetoothList_() {
     const filter = {
       filterType: chrome.bluetooth.FilterType.KNOWN,
-      limit: MAX_NUMBER_DEVICE_SHOWN
+      limit: MAX_NUMBER_DEVICE_SHOWN,
     };
     this.bluetooth.getDevices(filter, devices => {
       this.deviceList_ = this.sortDevices_(devices);
@@ -660,7 +693,7 @@ Polymer({
         }
       });
     });
-  },
+  }
 
   /** @private */
   startOrStopRefreshingDeviceList_() {
@@ -679,7 +712,7 @@ Polymer({
     this.updateTimerId_ = undefined;
     this.discoveryStartTimestampMs_ = null;
     this.deviceList_ = [];
-  },
+  }
 
   /**
    * Restarts the timer when the frequency changes, which happens
@@ -694,7 +727,7 @@ Polymer({
     this.updateTimerId_ = undefined;
 
     this.startOrStopRefreshingDeviceList_();
-  },
+  }
 
   /**
    * Record metrics for how long it took between when discovery started on the
@@ -720,7 +753,7 @@ Polymer({
         Date.now() - this.discoveryStartTimestampMs_, wasPaired, transport);
 
     this.discoveryStartTimestampMs_ = null;
-  },
+  }
 
   /**
    * Updates the visibility of the enterprise policy UI tooltip. This is
@@ -737,7 +770,7 @@ Polymer({
    *     e
    * @private
    */
-  onBlockedTooltipStateChange_: function(e) {
+  onBlockedTooltipStateChange_(e) {
     const target = e.detail.element;
     const hide = () => {
       /** @type {{hide: Function}} */ (this.$.tooltip).hide();
@@ -771,5 +804,8 @@ Polymer({
     this.$.tooltip.addEventListener('mouseenter', hide);
     this.$.tooltip.show();
     this.currentTooltipDeviceAddress_ = e.detail.address;
-  },
-});
+  }
+}
+
+customElements.define(
+    SettingsBluetoothSubpageElement.is, SettingsBluetoothSubpageElement);

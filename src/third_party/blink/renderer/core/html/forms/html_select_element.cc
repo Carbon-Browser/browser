@@ -67,12 +67,25 @@
 #include "third_party/blink/renderer/core/page/page.h"
 #include "third_party/blink/renderer/core/page/spatial_navigation.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/trace_event.h"
 #include "third_party/blink/renderer/platform/text/platform_locale.h"
 #include "ui/base/ui_base_features.h"
 
 namespace blink {
+
+namespace {
+
+bool CanAssignToSelectSlot(const Node& node) {
+  // Even if options/optgroups are not rendered as children of menulist SELECT,
+  // we still need to add them to the flat tree through slotting since we need
+  // their ComputedStyle for popup rendering.
+  return node.HasTagName(html_names::kOptionTag) ||
+         node.HasTagName(html_names::kOptgroupTag) ||
+         node.HasTagName(html_names::kHrTag);
+}
+
+}  // namespace
 
 // Upper limit of list_items_. According to the HTML standard, options larger
 // than this limit doesn't work well because |selectedIndex| IDL attribute is
@@ -90,25 +103,15 @@ HTMLSelectElement::HTMLSelectElement(Document& document)
       last_on_change_option_(nullptr),
       is_multiple_(false),
       should_recalc_list_items_(false),
-      is_autofilled_by_preview_(false),
       index_to_select_on_cancel_(-1) {
   // Make sure SelectType is created after initializing |uses_menu_list_|.
   select_type_ = SelectType::Create(*this);
   SetHasCustomStyleCallbacks();
-  EnsureUserAgentShadowRoot();
+  EnsureUserAgentShadowRoot().SetSlotAssignmentMode(
+      SlotAssignmentMode::kManual);
 }
 
 HTMLSelectElement::~HTMLSelectElement() = default;
-
-// static
-bool HTMLSelectElement::CanAssignToSelectSlot(const Node& node) {
-  // Even if options/optgroups are not rendered as children of menulist SELECT,
-  // we still need to add them to the flat tree through slotting since we need
-  // their ComputedStyle for popup rendering.
-  return node.HasTagName(html_names::kOptionTag) ||
-         node.HasTagName(html_names::kOptgroupTag) ||
-         node.HasTagName(html_names::kHrTag);
-}
 
 const AtomicString& HTMLSelectElement::FormControlType() const {
   DEFINE_STATIC_LOCAL(const AtomicString, select_multiple, ("select-multiple"));
@@ -164,7 +167,7 @@ bool HTMLSelectElement::ValueMissing() const {
 
   int first_selection_index = selectedIndex();
 
-  // If a non-placeholer label option is selected (firstSelectionIndex > 0),
+  // If a non-placeholder label option is selected (firstSelectionIndex > 0),
   // it's not value-missing.
   return first_selection_index < 0 ||
          (!first_selection_index && HasPlaceholderLabelOption());
@@ -273,13 +276,30 @@ void HTMLSelectElement::remove(int option_index) {
     option->remove(IGNORE_EXCEPTION_FOR_TESTING);
 }
 
-String HTMLSelectElement::value() const {
+String HTMLSelectElement::Value() const {
   if (HTMLOptionElement* option = SelectedOption())
     return option->value();
   return "";
 }
 
-void HTMLSelectElement::setValue(const String& value, bool send_events) {
+void HTMLSelectElement::setValueForBinding(const String& value) {
+  if (GetAutofillState() != WebAutofillState::kAutofilled) {
+    SetValue(value);
+  } else {
+    String old_value = this->Value();
+    SetValue(value, false,
+             value != old_value ? WebAutofillState::kNotFilled
+                                : WebAutofillState::kAutofilled);
+    if (Page* page = GetDocument().GetPage()) {
+      page->GetChromeClient().JavaScriptChangedAutofilledValue(*this,
+                                                               old_value);
+    }
+  }
+}
+
+void HTMLSelectElement::SetValue(const String& value,
+                                 bool send_events,
+                                 WebAutofillState autofill_state) {
   HTMLOptionElement* option = nullptr;
   // Find the option with value() matching the given parameter and make it the
   // current selection.
@@ -292,15 +312,18 @@ void HTMLSelectElement::setValue(const String& value, bool send_events) {
 
   HTMLOptionElement* previous_selected_option = SelectedOption();
   SetSuggestedOption(nullptr);
-  if (is_autofilled_by_preview_)
-    SetAutofillState(WebAutofillState::kNotFilled);
   SelectOptionFlags flags = kDeselectOtherOptionsFlag | kMakeOptionDirtyFlag;
   if (send_events)
     flags |= kDispatchInputAndChangeEventFlag;
-  SelectOption(option, flags);
+  SelectOption(option, flags, autofill_state);
 
   if (send_events && previous_selected_option != option)
     select_type_->ListBoxOnChange();
+}
+
+void HTMLSelectElement::SetAutofillValue(const String& value,
+                                         WebAutofillState autofill_state) {
+  SetValue(value, true, autofill_state);
 }
 
 String HTMLSelectElement::SuggestedValue() const {
@@ -316,7 +339,6 @@ void HTMLSelectElement::SetSuggestedValue(const String& value) {
   for (auto* const option : GetOptionList()) {
     if (option->value() == value) {
       SetSuggestedOption(option);
-      is_autofilled_by_preview_ = true;
       return;
     }
   }
@@ -406,7 +428,7 @@ void HTMLSelectElement::OptionElementChildrenChanged(
 
 void HTMLSelectElement::AccessKeyAction(
     SimulatedClickCreationScope creation_scope) {
-  focus();
+  Focus();
   DispatchSimulatedClick(nullptr, creation_scope);
 }
 
@@ -614,7 +636,6 @@ void HTMLSelectElement::ResetToDefaultSelection(ResetReason reason) {
   HTMLOptionElement* first_enabled_option = nullptr;
   HTMLOptionElement* last_selected_option = nullptr;
   bool did_change = false;
-  int option_index = 0;
   // We can't use HTMLSelectElement::options here because this function is
   // called in Node::insertedInto and Node::removedFrom before invalidating
   // node collections.
@@ -633,7 +654,6 @@ void HTMLSelectElement::ResetToDefaultSelection(ResetReason reason) {
         break;
       }
     }
-    ++option_index;
   }
   if (!last_selected_option && size_ <= 1 &&
       (!first_enabled_option ||
@@ -689,6 +709,8 @@ int HTMLSelectElement::SelectedListIndex() const {
 void HTMLSelectElement::SetSuggestedOption(HTMLOptionElement* option) {
   if (suggested_option_ == option)
     return;
+  SetAutofillState(option ? WebAutofillState::kPreviewed
+                          : WebAutofillState::kNotFilled);
   suggested_option_ = option;
 
   select_type_->DidSetSuggestedOption(option);
@@ -809,14 +831,13 @@ void HTMLSelectElement::HrInsertedOrRemoved(HTMLHRElement& hr) {
 // TODO(tkent): This function is not efficient.  It contains multiple O(N)
 // operations. crbug.com/577989.
 void HTMLSelectElement::SelectOption(HTMLOptionElement* element,
-                                     SelectOptionFlags flags) {
+                                     SelectOptionFlags flags,
+                                     WebAutofillState autofill_state) {
   TRACE_EVENT0("blink", "HTMLSelectElement::selectOption");
 
   bool should_update_popup = false;
 
-  // SelectedOption() is O(N).
-  if (IsAutofilled() && SelectedOption() != element)
-    SetAutofillState(WebAutofillState::kNotFilled);
+  SetAutofillState(element ? autofill_state : WebAutofillState::kNotFilled);
 
   if (element) {
     if (!element->Selected())
@@ -840,6 +861,13 @@ void HTMLSelectElement::SelectOption(HTMLOptionElement* element,
         ->GetChromeClient()
         .DidChangeSelectionInSelectControl(*this);
   }
+
+  // We set the Autofilled state again because setting the autofill value
+  // triggers JavaScript events and the site may override the autofilled value,
+  // which resets the autofill state. Even if the website modifies the from
+  // control element's content during the autofill operation, we want the state
+  // to show as as autofilled.
+  SetAutofillState(element ? autofill_state : WebAutofillState::kNotFilled);
 }
 
 void HTMLSelectElement::DispatchFocusEvent(
@@ -993,10 +1021,14 @@ void HTMLSelectElement::ParseMultipleAttribute(const AtomicString& value) {
     // Preserving the first selection is compatible with Firefox and
     // WebKit. However Edge seems to "ask for a reset" simply.  As of 2016
     // March, the HTML specification says nothing about this.
-    if (old_selected_option)
+    if (old_selected_option) {
+      // Clear last_on_change_option_ in order to disable an optimization in
+      // DeselectItemsWithoutValidation().
+      last_on_change_option_ = nullptr;
       SelectOption(old_selected_option, kDeselectOtherOptionsFlag);
-    else
+    } else {
       ResetToDefaultSelection();
+    }
   }
   select_type_->UpdateTextStyleAndContent();
 }
@@ -1021,6 +1053,7 @@ void HTMLSelectElement::ResetImpl() {
   ResetToDefaultSelection();
   select_type_->UpdateTextStyleAndContent();
   SetNeedsValidityCheck();
+  HTMLFormControlElementWithState::ResetImpl();
 }
 
 bool HTMLSelectElement::PopupIsVisible() const {
@@ -1149,8 +1182,7 @@ void HTMLSelectElement::SelectOptionByAccessKey(HTMLOptionElement* option) {
 
 unsigned HTMLSelectElement::length() const {
   unsigned options = 0;
-  for (auto* const option : GetOptionList()) {
-    ALLOW_UNUSED_LOCAL(option);
+  for ([[maybe_unused]] auto* const option : GetOptionList()) {
     ++options;
   }
   return options;
@@ -1183,6 +1215,7 @@ bool HTMLSelectElement::IsInteractiveContent() const {
 
 void HTMLSelectElement::Trace(Visitor* visitor) const {
   visitor->Trace(list_items_);
+  visitor->Trace(option_slot_);
   visitor->Trace(last_on_change_option_);
   visitor->Trace(suggested_option_);
   visitor->Trace(select_type_);
@@ -1193,10 +1226,25 @@ void HTMLSelectElement::DidAddUserAgentShadowRoot(ShadowRoot& root) {
   // Even if UsesMenuList(), the <slot> is necessary to have ComputedStyles
   // for <option>s. LayoutFlexibleBox::IsChildAllowed() rejects all of
   // LayoutObject children except for MenuListInnerElement's.
-  root.AppendChild(
-      HTMLSlotElement::CreateUserAgentCustomAssignSlot(GetDocument()));
+
+  option_slot_ = MakeGarbageCollected<HTMLSlotElement>(GetDocument());
+  root.AppendChild(option_slot_);
   UpdateUserAgentShadowTree(root);
   select_type_->UpdateTextStyleAndContent();
+}
+
+void HTMLSelectElement::ManuallyAssignSlots() {
+  ShadowRoot* shadow_root = UserAgentShadowRoot();
+  DCHECK(shadow_root);
+
+  HeapVector<Member<Node>> option_nodes;
+  for (Node& child : NodeTraversal::ChildrenOf(*this)) {
+    if (!child.IsSlotable())
+      continue;
+    if (CanAssignToSelectSlot(child))
+      option_nodes.push_back(child);
+  }
+  option_slot_->Assign(option_nodes);
 }
 
 void HTMLSelectElement::UpdateUserAgentShadowTree(ShadowRoot& root) {
@@ -1326,7 +1374,7 @@ void HTMLSelectElement::ProvisionalSelectionChanged(unsigned list_index) {
 }
 
 void HTMLSelectElement::ShowPopup() {
-  select_type_->ShowPopup();
+  select_type_->ShowPopup(PopupMenu::kOther);
 }
 
 void HTMLSelectElement::HidePopup() {

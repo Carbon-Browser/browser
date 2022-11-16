@@ -20,6 +20,7 @@
 #include "chrome/browser/download/download_crx_util.h"
 #include "chrome/browser/download/download_item_model.h"
 #include "chrome/browser/download/download_query.h"
+#include "chrome/browser/enterprise/connectors/common.h"
 #include "chrome/browser/extensions/api/downloads/downloads_api.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/webui/downloads/downloads.mojom.h"
@@ -56,6 +57,7 @@ const char* GetDangerTypeString(download::DownloadDangerType danger_type) {
       return "DANGEROUS_FILE";
     case download::DOWNLOAD_DANGER_TYPE_DANGEROUS_URL:
       return "DANGEROUS_URL";
+    case download::DOWNLOAD_DANGER_TYPE_DANGEROUS_ACCOUNT_COMPROMISE:
     case download::DOWNLOAD_DANGER_TYPE_DANGEROUS_CONTENT:
       return "DANGEROUS_CONTENT";
     case download::DOWNLOAD_DANGER_TYPE_UNCOMMON_CONTENT:
@@ -80,11 +82,6 @@ const char* GetDangerTypeString(download::DownloadDangerType danger_type) {
       return "DEEP_SCANNED_OPENED_DANGEROUS";
     case download::DOWNLOAD_DANGER_TYPE_BLOCKED_UNSUPPORTED_FILETYPE:
       return "BLOCKED_UNSUPPORTED_FILE_TYPE";
-    case download::DOWNLOAD_DANGER_TYPE_DANGEROUS_ACCOUNT_COMPROMISE:
-      return base::FeatureList::IsEnabled(
-                 safe_browsing::kSafeBrowsingCTDownloadWarning)
-                 ? "DANGEROUS_ACCOUNT_COMPROMISE"
-                 : "DANGEROUS_CONTENT";
     case download::DOWNLOAD_DANGER_TYPE_PROMPT_FOR_SCANNING:
     case download::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS:
     case download::DOWNLOAD_DANGER_TYPE_MAYBE_DANGEROUS_CONTENT:
@@ -340,6 +337,12 @@ downloads::mojom::DataPtr DownloadsListTracker::CreateDownloadData(
   file_value->danger_type = danger_type;
   file_value->is_dangerous = download_item->IsDangerous();
   file_value->is_mixed_content = download_item->IsMixedContent();
+  file_value->is_reviewable =
+      enterprise_connectors::ShouldPromptReviewForDownload(
+          Profile::FromBrowserContext(
+              content::DownloadItemUtils::GetBrowserContext(download_item)),
+          download_item->GetDangerType());
+
   file_value->last_reason_text = base::UTF16ToUTF8(last_reason_text);
   file_value->percent = percent;
   file_value->progress_status_text = base::UTF16ToUTF8(progress_status_text);

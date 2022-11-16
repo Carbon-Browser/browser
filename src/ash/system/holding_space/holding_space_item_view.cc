@@ -12,6 +12,7 @@
 #include "ash/public/cpp/shelf_config.h"
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/style/ash_color_provider.h"
+#include "ash/style/dark_light_mode_controller_impl.h"
 #include "ash/system/holding_space/holding_space_util.h"
 #include "ash/system/holding_space/holding_space_view_delegate.h"
 #include "base/bind.h"
@@ -132,7 +133,16 @@ HoldingSpaceItemView::HoldingSpaceItemView(HoldingSpaceViewDelegate* delegate,
   SetNotifyEnterExitOnChild(true);
 
   // Accessibility.
-  GetViewAccessibility().OverrideName(item->GetText());
+  GetViewAccessibility().OverrideName(item->GetAccessibleName());
+
+  // When the description is not specified, tooltip text will be used.
+  // That text is redundant to the name, but different enough that it is
+  // still exposed to assistive technologies which may then present both.
+  // To avoid that redundant presentation, set the description explicitly
+  // to the empty string. See crrev.com/c/3218112.
+  GetViewAccessibility().OverrideDescription(
+      std::u16string(), ax::mojom::DescriptionFrom::kAttributeExplicitlyEmpty);
+
   GetViewAccessibility().OverrideRole(ax::mojom::Role::kListItem);
 
   // Layer.
@@ -266,8 +276,9 @@ void HoldingSpaceItemView::OnThemeChanged() {
       kCheckmarkBackgroundSize));
   checkmark_->SetImage(gfx::CreateVectorIcon(
       kCheckIcon, kHoldingSpaceIconSize,
-      ash_color_provider->IsDarkModeEnabled() ? gfx::kGoogleGrey900
-                                              : SK_ColorWHITE));
+      DarkLightModeControllerImpl::Get()->IsDarkModeEnabled()
+          ? gfx::kGoogleGrey900
+          : SK_ColorWHITE));
 
   // Focused/selected layers.
   InvalidateLayer(focused_layer_owner_->layer());
@@ -296,10 +307,17 @@ void HoldingSpaceItemView::OnThemeChanged() {
 void HoldingSpaceItemView::OnHoldingSpaceItemUpdated(
     const HoldingSpaceItem* item,
     uint32_t updated_fields) {
-  if (item_ == item) {
-    GetViewAccessibility().OverrideName(item->GetText());
-    UpdatePrimaryAction();
+  if (item_ != item)
+    return;
+
+  // Accessibility.
+  if (updated_fields & UpdatedField::kAccessibleName) {
+    GetViewAccessibility().OverrideName(item_->GetAccessibleName());
+    NotifyAccessibilityEvent(ax::mojom::Event::kTextChanged, true);
   }
+
+  // Primary action.
+  UpdatePrimaryAction();
 }
 
 void HoldingSpaceItemView::StartDrag(const ui::LocatedEvent& event,
@@ -406,7 +424,7 @@ void HoldingSpaceItemView::OnPaintFocus(gfx::Canvas* canvas, gfx::Size size) {
   flags.setAntiAlias(true);
   flags.setColor(AshColorProvider::Get()->GetControlsLayerColor(
       AshColorProvider::ControlsLayerType::kFocusRingColor));
-  flags.setStrokeWidth(views::FocusRing::kHaloThickness);
+  flags.setStrokeWidth(views::FocusRing::kDefaultHaloThickness);
   flags.setStyle(cc::PaintFlags::kStroke_Style);
 
   gfx::Rect bounds = gfx::Rect(size);
@@ -477,8 +495,10 @@ void HoldingSpaceItemView::UpdatePrimaryAction() {
   }
 
   // Cancel.
+  // NOTE: Only download type items currently support cancellation.
   const bool is_item_in_progress = !item()->progress().IsComplete();
-  primary_action_cancel_->SetVisible(is_item_in_progress);
+  primary_action_cancel_->SetVisible(
+      is_item_in_progress && HoldingSpaceItem::IsDownload(item()->type()));
 
   // Pin.
   const bool is_item_pinned =
@@ -487,8 +507,10 @@ void HoldingSpaceItemView::UpdatePrimaryAction() {
   primary_action_pin_->SetToggled(!is_item_pinned);
   primary_action_pin_->SetVisible(!is_item_in_progress);
 
-  primary_action_container_->SetVisible(true);
-  OnPrimaryActionVisibilityChanged(true);
+  // Container.
+  primary_action_container_->SetVisible(primary_action_cancel_->GetVisible() ||
+                                        primary_action_pin_->GetVisible());
+  OnPrimaryActionVisibilityChanged(primary_action_container_->GetVisible());
 }
 
 BEGIN_METADATA(HoldingSpaceItemView, views::View)

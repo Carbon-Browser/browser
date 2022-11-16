@@ -5,6 +5,7 @@
 #import "ios/chrome/browser/ui/badges/badge_view_controller.h"
 
 #include "base/check.h"
+#import "ios/chrome/browser/infobars/badge_state.h"
 #import "ios/chrome/browser/ui/badges/badge_button.h"
 #import "ios/chrome/browser/ui/badges/badge_button_factory.h"
 #import "ios/chrome/browser/ui/badges/badge_constants.h"
@@ -24,11 +25,11 @@ namespace {
 // off mode for the badge view.
 const CGFloat kFullScreenProgressThreshold = 0.85;
 
-// Spacing between the top and trailing anchors of |unreadIndicatorView| and
-// |displayedBadge|.
+// Spacing between the top and trailing anchors of `unreadIndicatorView` and
+// `displayedBadge`.
 const CGFloat kUnreadIndicatorViewSpacing = 10.0;
 
-// Height of |unreadIndicatorView|.
+// Height of `unreadIndicatorView`.
 const CGFloat kUnreadIndicatorViewHeight = 6.0;
 
 // Damping ratio of animating a change to the displayed badge.
@@ -48,9 +49,6 @@ const CGFloat kUpdateDisplayedBadgeAnimationDamping = 0.85;
 
 // BadgeButton to show in both FullScreen and non FullScreen.
 @property(nonatomic, strong) BadgeButton* fullScreenBadge;
-
-// Array of all available badges.
-@property(nonatomic, strong) NSMutableArray<BadgeButton*>* badges;
 
 // StackView holding the displayedBadge and fullScreenBadge.
 @property(nonatomic, strong) UIStackView* stackView;

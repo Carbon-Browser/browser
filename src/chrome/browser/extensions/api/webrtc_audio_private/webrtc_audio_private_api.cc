@@ -11,8 +11,7 @@
 #include "base/bind.h"
 #include "base/lazy_instance.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/task_runner_util.h"
-#include "chrome/browser/extensions/api/tabs/tabs_constants.h"
+#include "base/task/task_runner_util.h"
 #include "chrome/browser/extensions/extension_tab_util.h"
 #include "content/public/browser/audio_service.h"
 #include "content/public/browser/browser_context.h"
@@ -94,7 +93,7 @@ void WebrtcAudioPrivateEventService::SignalEvent() {
         extension->permissions_data()->HasAPIPermission("webrtcAudioPrivate")) {
       std::unique_ptr<Event> event =
           std::make_unique<Event>(events::WEBRTC_AUDIO_PRIVATE_ON_SINKS_CHANGED,
-                                  kEventName, std::vector<base::Value>());
+                                  kEventName, base::Value::List());
       router->DispatchEventToExtension(extension_id, std::move(event));
     }
   }
@@ -116,7 +115,8 @@ std::string WebrtcAudioPrivateFunction::CalculateHMAC(
   if (media::AudioDeviceDescription::IsDefaultDevice(raw_id))
     return media::AudioDeviceDescription::kDefaultDeviceId;
 
-  url::Origin security_origin = url::Origin::Create(source_url().GetOrigin());
+  url::Origin security_origin =
+      url::Origin::Create(source_url().DeprecatedGetOriginAsURL());
   return content::GetHMACForMediaDeviceID(device_id_salt(), security_origin,
                                           raw_id);
 }

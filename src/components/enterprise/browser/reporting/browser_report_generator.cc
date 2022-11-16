@@ -6,8 +6,10 @@
 
 #include <utility>
 
+#include "base/notreached.h"
 #include "base/version.h"
 #include "build/chromeos_buildflags.h"
+#include "components/enterprise/browser/reporting/report_util.h"
 #include "components/enterprise/browser/reporting/reporting_delegate_factory.h"
 #include "components/policy/core/common/cloud/cloud_policy_util.h"
 #include "components/policy/proto/device_management_backend.pb.h"
@@ -26,24 +28,20 @@ BrowserReportGenerator::~BrowserReportGenerator() = default;
 void BrowserReportGenerator::Generate(ReportType report_type,
                                       ReportCallback callback) {
   auto report = std::make_unique<em::BrowserReport>();
-  GenerateProfileInfo(report_type, report.get());
-  delegate_->OnProfileInfoGenerated(report_type);
+  GenerateBasicInfo(report.get(), report_type);
 
-  if (report_type == ReportType::kExtensionRequest) {
-    report->set_executable_path(delegate_->GetExecutablePath());
+  if (report_type != ReportType::kProfileReport) {
+    GenerateProfileInfo(report.get());
+    // std::move is required here because the function completes the report
+    // asynchronously.
+    delegate_->GeneratePluginsIfNeeded(std::move(callback), std::move(report));
+  } else {
     std::move(callback).Run(std::move(report));
-    return;
   }
-  GenerateBasicInfo(report.get());
-
-  // std::move is required here because the function completes the report
-  // asynchronously.
-  delegate_->GeneratePluginsIfNeeded(std::move(callback), std::move(report));
 }
 
-void BrowserReportGenerator::GenerateProfileInfo(ReportType report_type,
-                                                 em::BrowserReport* report) {
-  for (auto entry : delegate_->GetReportedProfiles(report_type)) {
+void BrowserReportGenerator::GenerateProfileInfo(em::BrowserReport* report) {
+  for (auto entry : delegate_->GetReportedProfiles()) {
     em::ChromeUserProfileInfo* profile =
         report->add_chrome_user_profile_infos();
     profile->set_id(entry.id);
@@ -52,16 +50,36 @@ void BrowserReportGenerator::GenerateProfileInfo(ReportType report_type,
   }
 }
 
-void BrowserReportGenerator::GenerateBasicInfo(em::BrowserReport* report) {
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
-  report->set_browser_version(version_info::GetVersionNumber());
-  report->set_channel(policy::ConvertToProtoChannel(delegate_->GetChannel()));
-  if (delegate_->IsExtendedStableChannel())
-    report->set_is_extended_stable_channel(true);
-  delegate_->GenerateBuildStateInfo(report);
-#endif
+void BrowserReportGenerator::GenerateBasicInfo(em::BrowserReport* report,
+                                               ReportType report_type) {
+  // Chrome OS user session report doesn't include version and channel
+  // information.
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  bool contains_version_and_channel = report_type == ReportType::kProfileReport;
+#else
+  bool contains_version_and_channel = true;
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
-  report->set_executable_path(delegate_->GetExecutablePath());
+  if (contains_version_and_channel) {
+    report->set_browser_version(version_info::GetVersionNumber());
+    report->set_channel(policy::ConvertToProtoChannel(delegate_->GetChannel()));
+    if (delegate_->IsExtendedStableChannel())
+      report->set_is_extended_stable_channel(true);
+    delegate_->GenerateBuildStateInfo(report);
+  }
+
+  switch (report_type) {
+    case ReportType::kFull:
+      report->set_executable_path(delegate_->GetExecutablePath());
+      break;
+    case ReportType::kProfileReport:
+      report->set_executable_path(
+          ObfuscateFilePath(delegate_->GetExecutablePath()));
+      break;
+    case ReportType::kBrowserVersion:
+      NOTREACHED();
+      break;
+  }
 }
 
 }  // namespace enterprise_reporting

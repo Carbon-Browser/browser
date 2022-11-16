@@ -8,8 +8,8 @@
 #include <map>
 #include <string>
 
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
+#include "base/time/time.h"
 #include "components/services/language_detection/public/cpp/language_detection_service.h"
 #include "components/translate/content/browser/content_translate_driver.h"
 #include "components/translate/content/common/translate.mojom.h"
@@ -23,7 +23,6 @@
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_provider.h"
 
 namespace content {
-class NavigationController;
 class WebContents;
 }  // namespace content
 
@@ -41,8 +40,13 @@ class PerFrameContentTranslateDriver : public ContentTranslateDriver {
  public:
   PerFrameContentTranslateDriver(
       content::WebContents& web_contents,
-      content::NavigationController* nav_controller,
       language::UrlLanguageHistogram* url_language_histogram);
+
+  PerFrameContentTranslateDriver(const PerFrameContentTranslateDriver&) =
+      delete;
+  PerFrameContentTranslateDriver& operator=(
+      const PerFrameContentTranslateDriver&) = delete;
+
   ~PerFrameContentTranslateDriver() override;
 
   // TranslateDriver methods.
@@ -56,8 +60,7 @@ class PerFrameContentTranslateDriver : public ContentTranslateDriver {
   void DidFinishNavigation(
       content::NavigationHandle* navigation_handle) override;
   void DOMContentLoaded(content::RenderFrameHost* render_frame_host) override;
-  void DocumentOnLoadCompletedInMainFrame(
-      content::RenderFrameHost* render_frame_host) override;
+  void DocumentOnLoadCompletedInPrimaryMainFrame() override;
 
   void OnPageLanguageDetermined(const LanguageDetectionDetails& details,
                                 bool page_level_translation_critiera_met);
@@ -75,10 +78,10 @@ class PerFrameContentTranslateDriver : public ContentTranslateDriver {
     void Report();
 
     int pending_request_count = 0;
-    bool main_frame_success = false;
+    bool outermost_main_frame_success = false;
     int frame_request_count = 0;
     int frame_success_count = 0;
-    TranslateErrors::Type main_frame_error = TranslateErrors::NONE;
+    TranslateErrors::Type outermost_main_frame_error = TranslateErrors::NONE;
     std::vector<TranslateErrors::Type> frame_errors;
   };
 
@@ -155,8 +158,6 @@ class PerFrameContentTranslateDriver : public ContentTranslateDriver {
 
   base::WeakPtrFactory<PerFrameContentTranslateDriver> weak_pointer_factory_{
       this};
-
-  DISALLOW_COPY_AND_ASSIGN(PerFrameContentTranslateDriver);
 };
 
 }  // namespace translate

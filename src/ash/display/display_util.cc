@@ -8,6 +8,7 @@
 #include <memory>
 #include <utility>
 
+#include "ash/constants/notifier_catalogs.h"
 #include "ash/display/display_configuration_controller.h"
 #include "ash/display/extended_mouse_warp_controller.h"
 #include "ash/display/null_mouse_warp_controller.h"
@@ -18,6 +19,7 @@
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
+#include "ash/wm/tablet_mode/tablet_mode_controller.h"
 #include "base/bind.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
@@ -28,6 +30,7 @@
 #include "ui/aura/window_tree_host.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/display/display.h"
+#include "ui/display/manager/display_layout_store.h"
 #include "ui/display/manager/display_manager.h"
 #include "ui/display/manager/managed_display_info.h"
 #include "ui/gfx/geometry/point.h"
@@ -114,7 +117,7 @@ void MoveCursorTo(AshWindowTreeHost* ash_host,
   // Shrink further so that the mouse doesn't warp on the
   // edge. The right/bottom needs to be shrink by 2 to subtract
   // the 1 px from width/height value.
-  native_bounds.Inset(1, 1, 2, 2);
+  native_bounds.Inset(gfx::Insets::TLBR(1, 1, 2, 2));
 
   // Ensure that |point_in_native| is inside the |native_bounds|.
   point_in_native.SetToMax(native_bounds.origin());
@@ -165,7 +168,7 @@ void ShowDisplayErrorNotification(const std::u16string& message,
           GURL(),
           message_center::NotifierId(
               message_center::NotifierType::SYSTEM_COMPONENT,
-              kNotifierDisplayError),
+              kNotifierDisplayError, NotificationCatalogName::kDisplayError),
           data,
           base::MakeRefCounted<message_center::HandleNotificationClickDelegate>(
               base::BindRepeating([](absl::optional<int> button_index) {
@@ -208,70 +211,8 @@ std::u16string GetDisplayErrorNotificationMessageForTest() {
   return std::u16string();
 }
 
-OrientationLockType GetDisplayNaturalOrientation(
-    const display::Display& display) {
-  const display::ManagedDisplayInfo& info =
-      Shell::Get()->display_manager()->GetDisplayInfo(display.id());
-  const gfx::Size size = info.GetSizeInPixelWithPanelOrientation();
-  return size.width() > size.height() ? OrientationLockType::kLandscape
-                                      : OrientationLockType::kPortrait;
-}
-
-OrientationLockType RotationToOrientation(OrientationLockType natural,
-                                          display::Display::Rotation rotation) {
-  if (natural == OrientationLockType::kLandscape) {
-    // To be consistent with Android, the rotation of the primary portrait
-    // on naturally landscape device is 270.
-    switch (rotation) {
-      case display::Display::ROTATE_0:
-        return OrientationLockType::kLandscapePrimary;
-      case display::Display::ROTATE_90:
-        return OrientationLockType::kPortraitSecondary;
-      case display::Display::ROTATE_180:
-        return OrientationLockType::kLandscapeSecondary;
-      case display::Display::ROTATE_270:
-        return OrientationLockType::kPortraitPrimary;
-    }
-  } else {  // Natural portrait
-    switch (rotation) {
-      case display::Display::ROTATE_0:
-        return OrientationLockType::kPortraitPrimary;
-      case display::Display::ROTATE_90:
-        return OrientationLockType::kLandscapePrimary;
-      case display::Display::ROTATE_180:
-        return OrientationLockType::kPortraitSecondary;
-      case display::Display::ROTATE_270:
-        return OrientationLockType::kLandscapeSecondary;
-    }
-  }
-  NOTREACHED();
-  return OrientationLockType::kAny;
-}
-
-bool IsPrimaryOrientation(OrientationLockType type) {
-  return type == OrientationLockType::kLandscapePrimary ||
-         type == OrientationLockType::kPortraitPrimary;
-}
-
-bool IsLandscapeOrientation(OrientationLockType type) {
-  return type == OrientationLockType::kLandscape ||
-         type == OrientationLockType::kLandscapePrimary ||
-         type == OrientationLockType::kLandscapeSecondary;
-}
-
-bool IsPortraitOrientation(OrientationLockType type) {
-  return type == OrientationLockType::kPortrait ||
-         type == OrientationLockType::kPortraitPrimary ||
-         type == OrientationLockType::kPortraitSecondary;
-}
-
-bool IsDisplayLayoutHorizontal(const display::Display& display) {
-  DCHECK(display.is_valid());
-  const display::Display::Rotation rotation =
-      Shell::Get()->display_configuration_controller()->GetTargetRotation(
-          display.id());
-  return IsLandscapeOrientation(
-      RotationToOrientation(GetDisplayNaturalOrientation(display), rotation));
+bool ShouldUndoRotationForMirror() {
+  return Shell::Get()->tablet_mode_controller()->is_in_tablet_physical_state();
 }
 
 }  // namespace ash

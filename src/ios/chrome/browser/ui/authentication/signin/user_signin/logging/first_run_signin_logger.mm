@@ -4,18 +4,9 @@
 
 #import "ios/chrome/browser/ui/authentication/signin/user_signin/logging/first_run_signin_logger.h"
 
-#import "base/metrics/user_metrics.h"
-#include "components/version_info/version_info.h"
-#import "ios/chrome/browser/ui/authentication/signin/signin_utils.h"
-
 #if !defined(__has_feature) || !__has_feature(objc_arc)
 #error "This file requires ARC support."
 #endif
-
-using signin_metrics::AccessPoint;
-using signin_metrics::LogSigninAccessPointStarted;
-using signin_metrics::PromoAction;
-using signin_metrics::RecordSigninUserActionForAccessPoint;
 
 @interface FirstRunSigninLogger ()
 
@@ -28,15 +19,22 @@ using signin_metrics::RecordSigninUserActionForAccessPoint;
 
 #pragma mark - Public
 
+- (instancetype)initWithPromoAction:(signin_metrics::PromoAction)promoAction
+              accountManagerService:
+                  (ChromeAccountManagerService*)accountManagerService {
+  return [super
+        initWithAccessPoint:signin_metrics::AccessPoint::ACCESS_POINT_START_PAGE
+                promoAction:promoAction
+      accountManagerService:accountManagerService];
+}
+
 - (void)logSigninStarted {
   if (!self.hasRecordedSigninStarted) {
     self.hasRecordedSigninStarted = YES;
-    LogSigninAccessPointStarted(self.accessPoint, self.promoAction);
-    RecordSigninUserActionForAccessPoint(self.accessPoint, self.promoAction);
+    signin_metrics::LogSigninAccessPointStarted(self.accessPoint,
+                                                self.promoAction);
+    signin_metrics::RecordSigninUserActionForAccessPoint(self.accessPoint);
   }
-  if (self.accountManagerService)
-    signin::RecordVersionSeen(self.accountManagerService,
-                              version_info::GetVersion());
 }
 
 @end

@@ -10,6 +10,7 @@
 
 #include "base/check_op.h"
 #include "base/containers/cxx20_erase.h"
+#include "base/observer_list.h"
 #include "base/trace_event/trace_event.h"
 #include "cc/animation/animation.h"
 #include "cc/animation/animation_host.h"
@@ -46,14 +47,7 @@ const int kLayerAnimatorDefaultTransitionDurationMs = 120;
 // LayerAnimator public --------------------------------------------------------
 
 LayerAnimator::LayerAnimator(base::TimeDelta transition_duration)
-    : delegate_(nullptr),
-      preemption_strategy_(IMMEDIATELY_SET_NEW_TARGET),
-      is_transition_duration_locked_(false),
-      transition_duration_(transition_duration),
-      tween_type_(gfx::Tween::LINEAR),
-      is_started_(false),
-      disable_timer_for_test_(false),
-      adding_animations_(false) {
+    : transition_duration_(transition_duration) {
   animation_ =
       cc::Animation::Create(cc::AnimationIdProvider::NextAnimationId());
 }
@@ -70,13 +64,13 @@ LayerAnimator::~LayerAnimator() {
 
 // static
 LayerAnimator* LayerAnimator::CreateDefaultAnimator() {
-  return new LayerAnimator(base::TimeDelta::FromMilliseconds(0));
+  return new LayerAnimator(base::Milliseconds(0));
 }
 
 // static
 LayerAnimator* LayerAnimator::CreateImplicitAnimator() {
-  return new LayerAnimator(base::TimeDelta::FromMilliseconds(
-      kLayerAnimatorDefaultTransitionDurationMs));
+  return new LayerAnimator(
+      base::Milliseconds(kLayerAnimatorDefaultTransitionDurationMs));
 }
 
 // This macro provides the implementation for the setter and getter (well,
@@ -90,8 +84,10 @@ LayerAnimator* LayerAnimator::CreateImplicitAnimator() {
     base::TimeDelta duration = GetTransitionDuration();                \
     if (duration.is_zero() && delegate() &&                            \
         (preemption_strategy_ != ENQUEUE_NEW_ANIMATION)) {             \
+      /* Stopping an animation may result in destruction of `this`. */ \
+      const auto weak_ptr = weak_ptr_factory_.GetWeakPtr();            \
       StopAnimatingProperty(LayerAnimationElement::property);          \
-      if (!delegate())                                                 \
+      if (!weak_ptr || !delegate())                                    \
         return;                                                        \
       delegate()->Set##name##FromAnimation(                            \
           value, PropertyChangeReason::NOT_FROM_ANIMATION);            \
@@ -126,6 +122,11 @@ ANIMATED_PROPERTY(const gfx::RoundedCornersF&,
                   RoundedCorners,
                   gfx::RoundedCornersF,
                   rounded_corners)
+ANIMATED_PROPERTY(const gfx::LinearGradient&,
+                  GRADIENT_MASK,
+                  GradientMask,
+                  gfx::LinearGradient,
+                  gradient_mask)
 
 #undef ANIMATED_PROPERTY
 
@@ -402,6 +403,11 @@ void LayerAnimator::RemoveAndDestroyOwnedObserver(
   });
 }
 
+base::CallbackListSubscription LayerAnimator::AddSequenceScheduledCallback(
+    SequenceScheduledCallback callback) {
+  return sequence_scheduled_callbacks_.Add(std::move(callback));
+}
+
 void LayerAnimator::OnThreadedAnimationStarted(
     base::TimeTicks monotonic_time,
     cc::TargetProperty::Type target_property,
@@ -444,6 +450,7 @@ void LayerAnimator::OnThreadedAnimationStarted(
 }
 
 void LayerAnimator::AddToCollection(LayerAnimatorCollection* collection) {
+  DCHECK_EQ(collection, GetLayerAnimatorCollection());
   if (is_animating() && !is_started_) {
     collection->StartAnimator(this);
     is_started_ = true;
@@ -451,10 +458,13 @@ void LayerAnimator::AddToCollection(LayerAnimatorCollection* collection) {
 }
 
 void LayerAnimator::RemoveFromCollection(LayerAnimatorCollection* collection) {
+  DCHECK_EQ(collection, GetLayerAnimatorCollection());
   if (is_started_) {
     collection->StopAnimator(this);
     is_started_ = false;
   }
+  DCHECK(!animation_->element_animations() ||
+         !animation_->element_animations()->HasTickingKeyframeEffect());
 }
 
 // LayerAnimator protected -----------------------------------------------------
@@ -911,6 +921,7 @@ void LayerAnimator::GetTargetValue(
 }
 
 void LayerAnimator::OnScheduled(LayerAnimationSequence* sequence) {
+  sequence_scheduled_callbacks_.Notify(sequence);
   for (LayerAnimationObserver& observer : observers_)
     sequence->AddObserver(&observer);
   sequence->OnScheduled();

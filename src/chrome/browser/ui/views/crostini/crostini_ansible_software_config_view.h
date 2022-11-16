@@ -6,6 +6,7 @@
 #define CHROME_BROWSER_UI_VIEWS_CROSTINI_CROSTINI_ANSIBLE_SOFTWARE_CONFIG_VIEW_H_
 
 #include "chrome/browser/ash/crostini/ansible/ansible_management_service.h"
+#include "chrome/browser/ash/guest_os/guest_id.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/ui_base_types.h"
 #include "ui/views/bubble/bubble_dialog_delegate_view.h"
@@ -21,14 +22,22 @@ class CrostiniAnsibleSoftwareConfigView
     : public views::BubbleDialogDelegateView,
       public crostini::AnsibleManagementService::Observer {
  public:
+  CrostiniAnsibleSoftwareConfigView(const CrostiniAnsibleSoftwareConfigView&) =
+      delete;
+  CrostiniAnsibleSoftwareConfigView& operator=(
+      const CrostiniAnsibleSoftwareConfigView&) = delete;
+
   METADATA_HEADER(CrostiniAnsibleSoftwareConfigView);
 
   // views::DialogDelegateView:
   bool Accept() override;
 
   // crostini::AnsibleManagementService::Observer:
-  void OnAnsibleSoftwareConfigurationStarted() override;
-  void OnAnsibleSoftwareConfigurationFinished(bool success) override;
+  void OnAnsibleSoftwareConfigurationStarted(
+      const guest_os::GuestId& container_id) override;
+  void OnAnsibleSoftwareConfigurationFinished(
+      const guest_os::GuestId& container_id,
+      bool success) override;
 
   std::u16string GetSubtextLabelStringForTesting();
 
@@ -53,10 +62,9 @@ class CrostiniAnsibleSoftwareConfigView
 
   views::Label* subtext_label_ = nullptr;
   views::ProgressBar* progress_bar_ = nullptr;
+  base::FilePath default_container_ansible_filepath_;
 
   ~CrostiniAnsibleSoftwareConfigView() override;
-
-  DISALLOW_COPY_AND_ASSIGN(CrostiniAnsibleSoftwareConfigView);
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_CROSTINI_CROSTINI_ANSIBLE_SOFTWARE_CONFIG_VIEW_H_

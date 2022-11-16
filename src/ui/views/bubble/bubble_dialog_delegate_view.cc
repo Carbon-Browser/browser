@@ -5,12 +5,17 @@
 #include "ui/views/bubble/bubble_dialog_delegate_view.h"
 
 #include <algorithm>
+#include <set>
 #include <utility>
 #include <vector>
 
 #include "base/bind.h"
+#include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
 #include "base/metrics/histogram_macros.h"
 #include "build/build_config.h"
+#include "build/chromeos_buildflags.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/accessibility/ax_role_properties.h"
@@ -18,14 +23,17 @@
 #include "ui/base/default_style.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/resource/resource_bundle.h"
+#include "ui/color/color_id.h"
+#include "ui/color/color_provider.h"
+#include "ui/color/color_provider_manager.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_animation_element.h"
+#include "ui/compositor/layer_animator.h"
 #include "ui/display/screen.h"
 #include "ui/gfx/color_utils.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/rounded_corners_f.h"
 #include "ui/gfx/geometry/vector2d_conversions.h"
-#include "ui/native_theme/native_theme.h"
 #include "ui/views/bubble/bubble_frame_view.h"
 #include "ui/views/layout/layout_manager.h"
 #include "ui/views/layout/layout_provider.h"
@@ -34,11 +42,11 @@
 #include "ui/views/widget/widget.h"
 #include "ui/views/widget/widget_observer.h"
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include "ui/base/win/shell.h"
 #endif
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 #include "ui/views/widget/widget_utils_mac.h"
 #else
 #include "ui/aura/window.h"
@@ -70,44 +78,48 @@ std::vector<BubbleDialogDelegate*>& GetAnchorVector(View* view) {
   return *(view->GetProperty(kAnchorVector));
 }
 
-// A BubbleFrameView will apply a masking path to its ClientView to ensure
-// contents are appropriately clipped to the frame's rounded corners. If the
-// bubble uses layers in its views hierarchy, these will not be clipped to
-// the client mask unless the ClientView is backed by a textured ui::Layer.
-// This flag tracks whether or not to to create a layer backed ClientView.
-//
-// TODO(tluk): Fix all cases where bubble transparency is used and have bubble
-// ClientViews always paint to a layer.
-// TODO(tluk): Flip this to true for all bubbles.
-DEFINE_UI_CLASS_PROPERTY_KEY(bool, kPaintClientToLayer, false)
-
 // Override base functionality of Widget to give bubble dialogs access to the
 // theme provider of the window they're anchored to.
 class BubbleWidget : public Widget {
  public:
   BubbleWidget() = default;
 
+  BubbleWidget(const BubbleWidget&) = delete;
+  BubbleWidget& operator=(const BubbleWidget&) = delete;
+
   // Widget:
   const ui::ThemeProvider* GetThemeProvider() const override {
-    // TODO(pbos): Could this use Widget::parent() instead of anchor_widget()?
-    BubbleDialogDelegate* const bubble_delegate =
-        static_cast<BubbleDialogDelegate*>(widget_delegate());
-    if (!bubble_delegate || !bubble_delegate->anchor_widget())
-      return Widget::GetThemeProvider();
-    return bubble_delegate->anchor_widget()->GetThemeProvider();
+    const Widget* const anchor = GetAnchorWidget();
+    return anchor ? anchor->GetThemeProvider() : Widget::GetThemeProvider();
+  }
+
+  ui::ColorProviderManager::ThemeInitializerSupplier* GetCustomTheme()
+      const override {
+    const Widget* const anchor = GetAnchorWidget();
+    return anchor ? anchor->GetCustomTheme() : Widget::GetCustomTheme();
+  }
+
+  const ui::NativeTheme* GetNativeTheme() const override {
+    const Widget* const anchor = GetAnchorWidget();
+    return anchor ? anchor->GetNativeTheme() : Widget::GetNativeTheme();
   }
 
   Widget* GetPrimaryWindowWidget() override {
-    // TODO(pbos): Could this use Widget::parent() instead of anchor_widget()?
-    BubbleDialogDelegate* const bubble_delegate =
-        static_cast<BubbleDialogDelegate*>(widget_delegate());
-    if (!bubble_delegate || !bubble_delegate->anchor_widget())
-      return Widget::GetPrimaryWindowWidget();
-    return bubble_delegate->anchor_widget()->GetPrimaryWindowWidget();
+    Widget* const anchor = GetAnchorWidget();
+    return anchor ? anchor->GetPrimaryWindowWidget()
+                  : Widget::GetPrimaryWindowWidget();
   }
 
  private:
-  DISALLOW_COPY_AND_ASSIGN(BubbleWidget);
+  const Widget* GetAnchorWidget() const {
+    // TODO(pbos): Could this use Widget::parent() instead of anchor_widget()?
+    BubbleDialogDelegate* const bubble_delegate =
+        static_cast<BubbleDialogDelegate*>(widget_delegate());
+    return bubble_delegate ? bubble_delegate->anchor_widget() : nullptr;
+  }
+  Widget* GetAnchorWidget() {
+    return const_cast<Widget*>(base::as_const(*this).GetAnchorWidget());
+  }
 };
 
 // The frame view for bubble dialog widgets. These are not user-sizable so have
@@ -118,16 +130,16 @@ class BubbleDialogFrameView : public BubbleFrameView {
   explicit BubbleDialogFrameView(const gfx::Insets& title_margins)
       : BubbleFrameView(title_margins, gfx::Insets()) {}
 
+  BubbleDialogFrameView(const BubbleDialogFrameView&) = delete;
+  BubbleDialogFrameView& operator=(const BubbleDialogFrameView&) = delete;
+
   // View:
   gfx::Size GetMinimumSize() const override { return gfx::Size(); }
   gfx::Size GetMaximumSize() const override { return gfx::Size(); }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(BubbleDialogFrameView);
 };
 
 bool CustomShadowsSupported() {
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   return ui::win::IsAeroGlassEnabled();
 #else
   return true;
@@ -154,6 +166,10 @@ Widget* CreateBubbleWidget(BubbleDialogDelegate* bubble) {
     bubble_params.shadow_type = Widget::InitParams::ShadowType::kNone;
   else
     bubble_params.shadow_type = Widget::InitParams::ShadowType::kDrop;
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  bubble_params.background_elevation =
+      ui::ColorProviderManager::ElevationMode::kHigh;
+#endif
   gfx::NativeView parent = nullptr;
   if (bubble->has_parent()) {
     if (bubble->parent_window()) {
@@ -169,7 +185,7 @@ Widget* CreateBubbleWidget(BubbleDialogDelegate* bubble) {
   bubble->OnBeforeBubbleWidgetInit(&bubble_params, bubble_widget);
   DCHECK(bubble_params.parent || !bubble->has_parent());
   bubble_widget->Init(std::move(bubble_params));
-#if !defined(OS_MAC)
+#if !BUILDFLAG(IS_MAC)
   // On Mac, having a parent window creates a permanent stacking order, so
   // there's no need to do this. Also, calling StackAbove() on Mac shows the
   // bubble implicitly, for which the bubble is currently not ready.
@@ -241,13 +257,13 @@ class BubbleDialogDelegate::AnchorViewObserver : public ViewObserver {
       vector.back()->NotifyAnchoredBubbleIsPrimary();
   }
 
-  BubbleDialogDelegate* const parent_;
-  View* const anchor_view_;
+  const raw_ptr<BubbleDialogDelegate> parent_;
+  const raw_ptr<View> anchor_view_;
 };
 
 // This class is responsible for observing events on a BubbleDialogDelegate's
 // anchor widget and notifying the BubbleDialogDelegate of them.
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 class BubbleDialogDelegate::AnchorWidgetObserver : public WidgetObserver {
 #else
 class BubbleDialogDelegate::AnchorWidgetObserver : public WidgetObserver,
@@ -258,7 +274,7 @@ class BubbleDialogDelegate::AnchorWidgetObserver : public WidgetObserver,
   AnchorWidgetObserver(BubbleDialogDelegate* owner, Widget* widget)
       : owner_(owner) {
     widget_observation_.Observe(widget);
-#if !defined(OS_MAC)
+#if !BUILDFLAG(IS_MAC)
     window_observation_.Observe(widget->GetNativeWindow());
 #endif
   }
@@ -266,7 +282,7 @@ class BubbleDialogDelegate::AnchorWidgetObserver : public WidgetObserver,
 
   // WidgetObserver:
   void OnWidgetDestroying(Widget* widget) override {
-#if !defined(OS_MAC)
+#if !BUILDFLAG(IS_MAC)
     DCHECK(window_observation_.IsObservingSource(widget->GetNativeWindow()));
     window_observation_.Reset();
 #endif
@@ -284,7 +300,7 @@ class BubbleDialogDelegate::AnchorWidgetObserver : public WidgetObserver,
     owner_->OnAnchorBoundsChanged();
   }
 
-#if !defined(OS_MAC)
+#if !BUILDFLAG(IS_MAC)
   // aura::WindowObserver:
   void OnWindowTransformed(aura::Window* window,
                            ui::PropertyChangeReason reason) override {
@@ -301,10 +317,10 @@ class BubbleDialogDelegate::AnchorWidgetObserver : public WidgetObserver,
 #endif
 
  private:
-  BubbleDialogDelegate* owner_;
+  raw_ptr<BubbleDialogDelegate> owner_;
   base::ScopedObservation<views::Widget, views::WidgetObserver>
       widget_observation_{this};
-#if !defined(OS_MAC)
+#if !BUILDFLAG(IS_MAC)
   base::ScopedObservation<aura::Window, aura::WindowObserver>
       window_observation_{this};
 #endif
@@ -350,7 +366,7 @@ class BubbleDialogDelegate::BubbleWidgetObserver : public WidgetObserver {
   }
 
  private:
-  BubbleDialogDelegate* const owner_;
+  const raw_ptr<BubbleDialogDelegate> owner_;
   base::ScopedObservation<views::Widget, views::WidgetObserver> observation_{
       this};
 };
@@ -366,14 +382,53 @@ class BubbleDialogDelegate::ThemeObserver : public ViewObserver {
   }
 
  private:
-  BubbleDialogDelegate* const delegate_;
+  const raw_ptr<BubbleDialogDelegate> delegate_;
   base::ScopedObservation<View, ViewObserver> observation_{this};
 };
+
+class BubbleDialogDelegateView::CloseOnDeactivatePin::Pins {
+ public:
+  Pins() = default;
+  ~Pins() = default;
+
+  bool is_pinned() const { return !pins_.empty(); }
+
+  base::WeakPtr<Pins> GetWeakPtr() { return weak_ptr_factory_.GetWeakPtr(); }
+
+  void AddPin(CloseOnDeactivatePin* pin) {
+    const auto result = pins_.insert(pin);
+    DCHECK(result.second);
+  }
+
+  void RemovePin(CloseOnDeactivatePin* pin) {
+    const auto result = pins_.erase(pin);
+    DCHECK(result);
+  }
+
+ protected:
+  std::set<CloseOnDeactivatePin*> pins_;
+  base::WeakPtrFactory<Pins> weak_ptr_factory_{this};
+};
+
+BubbleDialogDelegate::CloseOnDeactivatePin::CloseOnDeactivatePin(
+    base::WeakPtr<Pins> pins)
+    : pins_(pins) {
+  pins_->AddPin(this);
+}
+
+BubbleDialogDelegate::CloseOnDeactivatePin::~CloseOnDeactivatePin() {
+  Pins* const pins = pins_.get();
+  if (pins)
+    pins->RemovePin(this);
+}
 
 BubbleDialogDelegate::BubbleDialogDelegate(View* anchor_view,
                                            BubbleBorder::Arrow arrow,
                                            BubbleBorder::Shadow shadow)
-    : arrow_(arrow), shadow_(shadow) {
+    : arrow_(arrow),
+      shadow_(shadow),
+      close_on_deactivate_pins_(
+          std::make_unique<CloseOnDeactivatePin::Pins>()) {
   SetOwnedByWidget(true);
   SetAnchorView(anchor_view);
   SetArrow(arrow);
@@ -477,7 +532,8 @@ BubbleDialogDelegate::CreateNonClientFrameView(Widget* widget) {
   frame->SetFootnoteView(DisownFootnoteView());
 
   std::unique_ptr<BubbleBorder> border =
-      std::make_unique<BubbleBorder>(arrow(), GetShadow(), color());
+      std::make_unique<BubbleBorder>(arrow(), GetShadow());
+  border->SetColor(color());
   if (CustomShadowsSupported() && GetParams().round_corners)
     border->SetCornerRadius(GetCornerRadius());
 
@@ -491,7 +547,7 @@ ClientView* BubbleDialogDelegate::CreateClientView(Widget* widget) {
   // rounded corner clip we must paint the client view to a layer. This is
   // necessary because layers do not respect the clip of a non-layer backed
   // parent.
-  if (GetProperty(kPaintClientToLayer)) {
+  if (paint_client_to_layer_) {
     client_view_->SetPaintToLayer();
     client_view_->layer()->SetRoundedCornerRadius(
         gfx::RoundedCornersF(GetCornerRadius()));
@@ -533,7 +589,7 @@ void BubbleDialogDelegate::OnAnchorWidgetDestroying() {
 }
 
 void BubbleDialogDelegate::OnBubbleWidgetActivationChanged(bool active) {
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   // Install |mac_bubble_closer_| the first time the widget becomes active.
   if (active && !mac_bubble_closer_) {
     mac_bubble_closer_ = std::make_unique<ui::BubbleCloser>(
@@ -563,6 +619,16 @@ View* BubbleDialogDelegate::GetAnchorView() const {
   if (!anchor_view_observer_)
     return nullptr;
   return anchor_view_observer_->anchor_view();
+}
+
+bool BubbleDialogDelegate::ShouldCloseOnDeactivate() const {
+  return close_on_deactivate_ && !close_on_deactivate_pins_->is_pinned();
+}
+
+std::unique_ptr<BubbleDialogDelegate::CloseOnDeactivatePin>
+BubbleDialogDelegate::PreventCloseOnDeactivate() {
+  return base::WrapUnique(
+      new CloseOnDeactivatePin(close_on_deactivate_pins_->GetWeakPtr()));
 }
 
 void BubbleDialogDelegate::SetHighlightedButton(Button* highlighted_button) {
@@ -605,7 +671,7 @@ gfx::Rect BubbleDialogDelegate::GetAnchorRect() const {
 
   anchor_rect_ = GetAnchorView()->GetAnchorBoundsInScreen();
 
-#if !defined(OS_MAC)
+#if !BUILDFLAG(IS_MAC)
   // GetAnchorBoundsInScreen returns values that take anchor widget's
   // translation into account, so undo that here. Without this, features which
   // apply transforms on windows such as ChromeOS overview mode will see bubbles
@@ -613,13 +679,21 @@ gfx::Rect BubbleDialogDelegate::GetAnchorRect() const {
   // TODO(sammiequon): Investigate if we can remove |anchor_widget_| and just
   // replace its calls with GetAnchorView()->GetWidget().
   DCHECK_EQ(anchor_widget_, GetAnchorView()->GetWidget());
-  gfx::Transform transform =
-      anchor_widget_->GetNativeWindow()->layer()->GetTargetTransform();
-  if (!transform.IsIdentity())
-    anchor_rect_->Offset(-gfx::ToRoundedVector2d(transform.To2dTranslation()));
+  if (anchor_widget_) {
+    gfx::Transform transform =
+        anchor_widget_->GetNativeWindow()->layer()->GetTargetTransform();
+    if (!transform.IsIdentity())
+      anchor_rect_->Offset(
+          -gfx::ToRoundedVector2d(transform.To2dTranslation()));
+  }
 #endif
 
   return anchor_rect_.value();
+}
+
+SkColor BubbleDialogDelegate::GetBackgroundColor() {
+  UpdateColorsFromTheme();
+  return color();
 }
 
 ui::LayerType BubbleDialogDelegate::GetLayerType() const {
@@ -628,7 +702,7 @@ ui::LayerType BubbleDialogDelegate::GetLayerType() const {
 
 void BubbleDialogDelegate::SetPaintClientToLayer(bool paint_client_to_layer) {
   DCHECK(!client_view_);
-  SetProperty(kPaintClientToLayer, paint_client_to_layer);
+  paint_client_to_layer_ = paint_client_to_layer;
 }
 
 void BubbleDialogDelegate::UseCompactMargins() {
@@ -795,7 +869,7 @@ void BubbleDialogDelegate::SetAnchorRect(const gfx::Rect& rect) {
 
 void BubbleDialogDelegate::SizeToContents() {
   gfx::Rect bubble_bounds = GetBubbleBounds();
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   // GetBubbleBounds() doesn't take the Mac NativeWindow's style mask into
   // account, so we need to adjust the size.
   gfx::Size actual_size =
@@ -810,8 +884,8 @@ void BubbleDialogDelegate::UpdateColorsFromTheme() {
   View* const contents_view = GetContentsView();
   DCHECK(contents_view);
   if (!color_explicitly_set()) {
-    set_color_internal(contents_view->GetNativeTheme()->GetSystemColor(
-        ui::NativeTheme::kColorId_BubbleBackground));
+    set_color_internal(contents_view->GetColorProvider()->GetColor(
+        ui::kColorBubbleBackground));
   }
   BubbleFrameView* frame_view = GetBubbleFrameView();
   if (frame_view)
@@ -819,10 +893,12 @@ void BubbleDialogDelegate::UpdateColorsFromTheme() {
 
   // When there's an opaque layer, the bubble border background won't show
   // through, so explicitly paint a background color.
-  contents_view->SetBackground(
-      contents_view->layer() && contents_view->layer()->fills_bounds_opaquely()
-          ? CreateSolidBackground(color())
-          : nullptr);
+  const bool contents_layer_opaque =
+      contents_view->layer() && contents_view->layer()->fills_bounds_opaquely();
+  contents_view->SetBackground(contents_layer_opaque ||
+                                       force_create_contents_background_
+                                   ? CreateSolidBackground(color())
+                                   : nullptr);
 }
 
 void BubbleDialogDelegate::OnBubbleWidgetVisibilityChanged(bool visible) {
@@ -839,7 +915,7 @@ void BubbleDialogDelegate::OnBubbleWidgetVisibilityChanged(bool visible) {
 }
 
 void BubbleDialogDelegate::OnDeactivate() {
-  if (close_on_deactivate_ && GetWidget())
+  if (ShouldCloseOnDeactivate() && GetWidget())
     GetWidget()->CloseWithReason(views::Widget::ClosedReason::kLostFocus);
 }
 

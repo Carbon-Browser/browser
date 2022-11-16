@@ -5,7 +5,6 @@
 #include "extensions/renderer/gc_callback.h"
 
 #include "base/bind.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
@@ -36,6 +35,9 @@ enum CallbackType { NATIVE, NATIVE_WITH_NO_FALLBACK, JS, JS_WITH_NO_FALLBACK };
 class GCCallbackTest : public testing::TestWithParam<CallbackType> {
  public:
   GCCallbackTest() : script_context_set_(&active_extensions_) {}
+
+  GCCallbackTest(const GCCallbackTest&) = delete;
+  GCCallbackTest& operator=(const GCCallbackTest&) = delete;
 
  protected:
   ScriptContextSet& script_context_set() { return script_context_set_; }
@@ -126,8 +128,6 @@ class GCCallbackTest : public testing::TestWithParam<CallbackType> {
   ScriptContextSet script_context_set_;
   v8::Global<v8::Context> v8_context_;
   std::unique_ptr<TestJSRunner::Scope> test_js_runner_;
-
-  DISALLOW_COPY_AND_ASSIGN(GCCallbackTest);
 };
 
 TEST_P(GCCallbackTest, GCBeforeContextInvalidated) {

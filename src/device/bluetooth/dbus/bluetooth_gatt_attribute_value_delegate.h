@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "base/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "device/bluetooth/bluetooth_gatt_characteristic.h"
 #include "device/bluetooth/bluetooth_local_gatt_service.h"
 
@@ -30,6 +31,12 @@ class BluetoothGattAttributeValueDelegate {
  public:
   explicit BluetoothGattAttributeValueDelegate(
       BluetoothLocalGattServiceBlueZ* service);
+
+  BluetoothGattAttributeValueDelegate(
+      const BluetoothGattAttributeValueDelegate&) = delete;
+  BluetoothGattAttributeValueDelegate& operator=(
+      const BluetoothGattAttributeValueDelegate&) = delete;
+
   virtual ~BluetoothGattAttributeValueDelegate();
 
   // This method will be called when a remote device requests to read the
@@ -92,9 +99,7 @@ class BluetoothGattAttributeValueDelegate {
   const BluetoothLocalGattServiceBlueZ* service() { return service_; }
 
  private:
-  const BluetoothLocalGattServiceBlueZ* service_;
-
-  DISALLOW_COPY_AND_ASSIGN(BluetoothGattAttributeValueDelegate);
+  raw_ptr<const BluetoothLocalGattServiceBlueZ> service_;
 };
 
 }  // namespace bluez

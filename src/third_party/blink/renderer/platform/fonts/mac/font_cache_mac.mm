@@ -51,6 +51,7 @@
 #include "third_party/blink/renderer/platform/web_test_support.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
+#include "third_party/blink/renderer/platform/wtf/wtf.h"
 
 // Forward declare Mac SPIs.
 // Request for public API: rdar://13803570
@@ -79,7 +80,7 @@ static void InvalidateFontCache() {
         FROM_HERE, WTF::Bind(&InvalidateFontCache));
     return;
   }
-  FontCache::GetFontCache()->Invalidate();
+  FontCache::Get().Invalidate();
 }
 
 static void FontCacheRegisteredFontsChangedNotificationCallback(
@@ -88,7 +89,7 @@ static void FontCacheRegisteredFontsChangedNotificationCallback(
     CFStringRef name,
     const void*,
     CFDictionaryRef) {
-  DCHECK_EQ(observer, FontCache::GetFontCache());
+  DCHECK_EQ(observer, &FontCache::Get());
   DCHECK(CFEqual(name, kCTFontManagerRegisteredFontsChangedNotification));
   InvalidateFontCache();
 }
@@ -225,7 +226,8 @@ scoped_refptr<SimpleFontData> FontCache::PlatformFallbackFontForCharacter(
       synthetic_bold,
       (traits & NSFontItalicTrait) &&
           !(substitute_font_traits & NSFontItalicTrait),
-      platform_data.Orientation(), font_description.FontOpticalSizing(),
+      font_description.TextRendering(), platform_data.Orientation(),
+      font_description.FontOpticalSizing(),
       nullptr);  // No variation paramaters in fallback.
 
   if (!alternate_font)
@@ -306,8 +308,8 @@ std::unique_ptr<FontPlatformData> FontCache::CreateFontPlatformData(
   // the returned FontPlatformData since it will not have a valid SkTypeface.
   std::unique_ptr<FontPlatformData> platform_data = FontPlatformDataFromNSFont(
       platform_font, size, font_description.SpecifiedSize(), synthetic_bold,
-      synthetic_italic, font_description.Orientation(),
-      font_description.FontOpticalSizing(),
+      synthetic_italic, font_description.TextRendering(),
+      font_description.Orientation(), font_description.FontOpticalSizing(),
       font_description.VariationSettings());
   if (!platform_data || !platform_data->Typeface()) {
     return nullptr;

@@ -11,11 +11,11 @@
 #include "chrome/browser/ash/plugin_vm/plugin_vm_manager.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_metrics_util.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_uninstaller_notification.h"
-#include "chrome/browser/chromeos/vm_starting_observer.h"
-#include "chromeos/dbus/concierge/concierge_service.pb.h"
+#include "chrome/browser/ash/vm_starting_observer.h"
+#include "chromeos/ash/components/dbus/concierge/concierge_service.pb.h"
+#include "chromeos/ash/components/dbus/vm_plugin_dispatcher/vm_plugin_dispatcher.pb.h"
+#include "chromeos/ash/components/dbus/vm_plugin_dispatcher/vm_plugin_dispatcher_client.h"
 #include "chromeos/dbus/dlcservice/dlcservice_client.h"
-#include "chromeos/dbus/vm_plugin_dispatcher/vm_plugin_dispatcher.pb.h"
-#include "chromeos/dbus/vm_plugin_dispatcher/vm_plugin_dispatcher_client.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 class Profile;
@@ -40,13 +40,16 @@ constexpr int PRL_ERR_NOT_ENOUGH_DISK_SPACE_TO_START_VM = 0x80000456;
 // The PluginVmManagerImpl is responsible for connecting to the D-Bus services
 // to manage the Plugin Vm.
 
-class PluginVmManagerImpl
-    : public PluginVmManager,
-      public chromeos::VmPluginDispatcherClient::Observer {
+class PluginVmManagerImpl : public PluginVmManager,
+                            public ash::VmPluginDispatcherClient::Observer {
  public:
   using LaunchPluginVmCallback = base::OnceCallback<void(bool success)>;
 
   explicit PluginVmManagerImpl(Profile* profile);
+
+  PluginVmManagerImpl(const PluginVmManagerImpl&) = delete;
+  PluginVmManagerImpl& operator=(const PluginVmManagerImpl&) = delete;
+
   ~PluginVmManagerImpl() override;
 
   void OnPrimaryUserSessionStarted() override;
@@ -60,7 +63,7 @@ class PluginVmManagerImpl
 
   uint64_t seneschal_server_handle() const override;
 
-  // chromeos::VmPluginDispatcherClient::Observer:
+  // ash::VmPluginDispatcherClient::Observer:
   void OnVmToolsStateChanged(
       const vm_tools::plugin_dispatcher::VmToolsStateChangedSignal& signal)
       override;
@@ -74,9 +77,8 @@ class PluginVmManagerImpl
 
   bool IsRelaunchNeededForNewPermissions() const override;
 
-  void AddVmStartingObserver(chromeos::VmStartingObserver* observer) override;
-  void RemoveVmStartingObserver(
-      chromeos::VmStartingObserver* observer) override;
+  void AddVmStartingObserver(ash::VmStartingObserver* observer) override;
+  void RemoveVmStartingObserver(ash::VmStartingObserver* observer) override;
 
   PluginVmUninstallerNotification* uninstaller_notification_for_testing()
       const {
@@ -151,7 +153,7 @@ class PluginVmManagerImpl
   vm_tools::plugin_dispatcher::VmState vm_state_ =
       vm_tools::plugin_dispatcher::VmState::VM_STATE_UNKNOWN;
 
-  base::ObserverList<chromeos::VmStartingObserver> vm_starting_observers_;
+  base::ObserverList<ash::VmStartingObserver> vm_starting_observers_;
 
   // Members used in the launch flow.
 
@@ -186,8 +188,6 @@ class PluginVmManagerImpl
   bool pending_destroy_disk_image_ = false;
 
   base::WeakPtrFactory<PluginVmManagerImpl> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(PluginVmManagerImpl);
 };
 
 }  // namespace plugin_vm

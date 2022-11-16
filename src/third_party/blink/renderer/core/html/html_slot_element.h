@@ -31,6 +31,8 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_HTML_HTML_SLOT_ELEMENT_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_HTML_HTML_SLOT_ELEMENT_H_
 
+#include "base/check_op.h"
+#include "base/numerics/safe_conversions.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_element_text.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/html/html_element.h"
@@ -43,9 +45,6 @@ class CORE_EXPORT HTMLSlotElement final : public HTMLElement {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
-  static HTMLSlotElement* CreateUserAgentDefaultSlot(Document&);
-  static HTMLSlotElement* CreateUserAgentCustomAssignSlot(Document&);
-
   HTMLSlotElement(Document&);
 
   const HeapVector<Member<Node>>& AssignedNodes() const;
@@ -93,6 +92,11 @@ class CORE_EXPORT HTMLSlotElement final : public HTMLElement {
   // dirty.  e.g. To detect a slotchange event in DOM mutations.
   bool HasAssignedNodesSlow() const;
 
+  // Returns true if the slot has assigned nodes, without doing assignment
+  // recalc. Used by FlatTreeParentForChildDirty() which needs to avoid doing
+  // slot assignments while marking the tree style-dirty.
+  bool HasAssignedNodesNoRecalc() const { return !assigned_nodes_.IsEmpty(); }
+
   bool SupportsAssignment() const { return IsInShadowTree(); }
 
   void CheckFallbackAfterInsertedIntoShadowTree();
@@ -114,7 +118,11 @@ class CORE_EXPORT HTMLSlotElement final : public HTMLElement {
   static const AtomicString& UserAgentDefaultSlotName();
 
   // For imperative Shadow DOM distribution APIs
-  void assign(HeapVector<Member<V8UnionElementOrText>> nodes, ExceptionState&);
+  // IDL assign() implementation.
+  void assign(HeapVector<Member<V8UnionElementOrText>>& nodes, ExceptionState&);
+  // assign() c++ implementation.
+  void Assign(const HeapVector<Member<Node>>& nodes);
+
   const HeapLinkedHashSet<WeakMember<Node>>& ManuallyAssignedNodes() const {
     return manually_assigned_nodes_;
   }
@@ -174,8 +182,8 @@ class CORE_EXPORT HTMLSlotElement final : public HTMLElement {
       const Container& seq2,
       LCSTable& lcs_table,
       BacktrackTable& backtrack_table) {
-    const wtf_size_t rows = SafeCast<wtf_size_t>(seq1.size());
-    const wtf_size_t columns = SafeCast<wtf_size_t>(seq2.size());
+    const wtf_size_t rows = base::checked_cast<wtf_size_t>(seq1.size());
+    const wtf_size_t columns = base::checked_cast<wtf_size_t>(seq2.size());
 
     DCHECK_GT(lcs_table.size(), rows);
     DCHECK_GT(lcs_table[0].size(), columns);

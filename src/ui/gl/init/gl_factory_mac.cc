@@ -5,7 +5,6 @@
 #include "ui/gl/init/gl_factory.h"
 
 #include "base/check_op.h"
-#include "base/macros.h"
 #include "base/notreached.h"
 #include "base/trace_event/trace_event.h"
 #include "ui/gl/buildflags.h"
@@ -36,6 +35,9 @@ class NoOpGLSurface : public GLSurface {
  public:
   explicit NoOpGLSurface(const gfx::Size& size) : size_(size) {}
 
+  NoOpGLSurface(const NoOpGLSurface&) = delete;
+  NoOpGLSurface& operator=(const NoOpGLSurface&) = delete;
+
   // Implement GLSurface.
   bool Initialize(GLSurfaceFormat format) override { return true; }
   void Destroy() override {}
@@ -46,7 +48,7 @@ class NoOpGLSurface : public GLSurface {
   }
   gfx::Size GetSize() override { return size_; }
   void* GetHandle() override { return nullptr; }
-  void* GetDisplay() override { return nullptr; }
+  GLDisplay* GetGLDisplay() override { return nullptr; }
   bool IsSurfaceless() const override { return true; }
   GLSurfaceFormat GetFormat() override { return GLSurfaceFormat(); }
 
@@ -55,8 +57,6 @@ class NoOpGLSurface : public GLSurface {
 
  private:
   gfx::Size size_;
-
-  DISALLOW_COPY_AND_ASSIGN(NoOpGLSurface);
 };
 
 }  // namespace
@@ -66,11 +66,9 @@ std::vector<GLImplementationParts> GetAllowedGLImplementations() {
   impls.emplace_back(
       GLImplementationParts(kGLImplementationDesktopGLCoreProfile));
   impls.emplace_back(GLImplementationParts(kGLImplementationDesktopGL));
-  impls.emplace_back(GLImplementationParts(kGLImplementationAppleGL));
 #if defined(USE_EGL)
   impls.emplace_back(GLImplementationParts(kGLImplementationEGLGLES2));
   impls.emplace_back(GLImplementationParts(kGLImplementationEGLANGLE));
-  impls.emplace_back(GLImplementationParts(kGLImplementationSwiftShaderGL));
 #endif  // defined(USE_EGL)
   return impls;
 }
@@ -87,13 +85,11 @@ scoped_refptr<GLContext> CreateGLContext(GLShareGroup* share_group,
   switch (GetGLImplementation()) {
     case kGLImplementationDesktopGL:
     case kGLImplementationDesktopGLCoreProfile:
-    case kGLImplementationAppleGL:
       return InitializeGLContext(new GLContextCGL(share_group),
                                  compatible_surface, attribs);
 #if defined(USE_EGL)
     case kGLImplementationEGLGLES2:
     case kGLImplementationEGLANGLE:
-    case kGLImplementationSwiftShaderGL:
       return InitializeGLContext(new GLContextEGL(share_group),
                                  compatible_surface, attribs);
 #endif  // defined(USE_EGL)
@@ -116,10 +112,8 @@ scoped_refptr<GLSurface> CreateViewGLSurface(gfx::AcceleratedWidget window) {
   switch (GetGLImplementation()) {
     case kGLImplementationDesktopGL:
     case kGLImplementationDesktopGLCoreProfile:
-    case kGLImplementationAppleGL:
     case kGLImplementationEGLGLES2:
-    case kGLImplementationEGLANGLE:
-    case kGLImplementationSwiftShaderGL: {
+    case kGLImplementationEGLANGLE: {
       NOTIMPLEMENTED() << "No onscreen support on Mac.";
       return nullptr;
     }
@@ -138,19 +132,19 @@ scoped_refptr<GLSurface> CreateOffscreenGLSurfaceWithFormat(
   switch (GetGLImplementation()) {
     case kGLImplementationDesktopGL:
     case kGLImplementationDesktopGLCoreProfile:
-    case kGLImplementationAppleGL:
       return InitializeGLSurfaceWithFormat(
           new NoOpGLSurface(size), format);
 #if defined(USE_EGL)
     case kGLImplementationEGLGLES2:
     case kGLImplementationEGLANGLE:
-    case kGLImplementationSwiftShaderGL:
-      if (GLSurfaceEGL::IsEGLSurfacelessContextSupported() &&
+      if (GLSurfaceEGL::GetGLDisplayEGL()->IsEGLSurfacelessContextSupported() &&
           size.width() == 0 && size.height() == 0) {
-        return InitializeGLSurfaceWithFormat(new SurfacelessEGL(size), format);
+        return InitializeGLSurfaceWithFormat(
+            new SurfacelessEGL(GLSurfaceEGL::GetGLDisplayEGL(), size), format);
       } else {
-        return InitializeGLSurfaceWithFormat(new PbufferGLSurfaceEGL(size),
-                                             format);
+        return InitializeGLSurfaceWithFormat(
+            new PbufferGLSurfaceEGL(GLSurfaceEGL::GetGLDisplayEGL(), size),
+            format);
       }
 #endif  // defined(USE_EGL)
     case kGLImplementationMockGL:
@@ -168,7 +162,7 @@ void SetDisabledExtensionsPlatform(const std::string& disabled_extensions) {
   // TODO(zmo): Implement this if needs arise.
 }
 
-bool InitializeExtensionSettingsOneOffPlatform() {
+bool InitializeExtensionSettingsOneOffPlatform(GLDisplay* display) {
   GLImplementation implementation = GetGLImplementation();
   DCHECK_NE(kGLImplementationNone, implementation);
   // TODO(zmo): Implement this if needs arise.

@@ -7,10 +7,10 @@
 #include <memory>
 #include <string>
 
+#include "ash/components/settings/cros_settings_names.h"
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/values.h"
-#include "chromeos/settings/cros_settings_names.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace ash {
@@ -32,7 +32,7 @@ class StubCrosSettingsProviderTest : public testing::Test {
   void AssertPref(const std::string& prefName, const base::Value* value) {
     const base::Value* pref = provider_->Get(prefName);
     ASSERT_TRUE(pref);
-    ASSERT_TRUE(pref->Equals(value));
+    ASSERT_EQ(*pref, *value);
   }
 
   void ExpectObservers(const std::string& prefName, int count) {

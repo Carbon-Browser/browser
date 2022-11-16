@@ -3,12 +3,14 @@
 // found in the LICENSE file.
 
 import './strings.m.js';
+import './omnibox_input.js';
+import './omnibox_output.js';
 
-import {OmniboxPageCallbackRouter, OmniboxPageHandler, OmniboxPageHandlerRemote, OmniboxResponse} from '/chrome/browser/ui/webui/omnibox/omnibox.mojom-webui.js';
 import {sendWithPromise} from 'chrome://resources/js/cr.m.js';
 import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
 import {$} from 'chrome://resources/js/util.m.js';
 
+import {OmniboxPageCallbackRouter, OmniboxPageHandler, OmniboxPageHandlerRemote, OmniboxResponse} from './omnibox.mojom-webui.js';
 import {DisplayInputs, OmniboxInput, QueryInputs} from './omnibox_input.js';
 import {OmniboxOutput} from './omnibox_output.js';
 
@@ -37,11 +39,11 @@ import {OmniboxOutput} from './omnibox_output.js';
 let OmniboxRequest;
 
 /**
-  * @typedef {{
-  *   batchMode: string,
-  *   batchQueryInputs: Array<QueryInputs>,
-  * }}
-  */
+ * @typedef {{
+ *   batchMode: string,
+ *   batchQueryInputs: Array<QueryInputs>,
+ * }}
+ */
 let BatchSpecifier;
 
 /**
@@ -66,7 +68,7 @@ class BrowserProxy {
   /** @param {!OmniboxOutput} omniboxOutput */
   constructor(omniboxOutput) {
     /** @private {!OmniboxPageCallbackRouter} */
-    this.callbackRouter_ = new OmniboxPageCallbackRouter;
+    this.callbackRouter_ = new OmniboxPageCallbackRouter();
 
     this.callbackRouter_.handleNewAutocompleteResponse.addListener(
         this.handleNewAutocompleteResponse.bind(this));
@@ -243,21 +245,20 @@ class ExportDelegate {
   async processBatch(batchQueryInputs, batchName) {
     const batchExports = [];
     for (const queryInputs of batchQueryInputs) {
-      const omniboxResponse = await browserProxy
-        .makeRequest(
-          queryInputs.inputText, queryInputs.resetAutocompleteController,
-          queryInputs.cursorPosition, queryInputs.zeroSuggest,
-          queryInputs.preventInlineAutocomplete, queryInputs.preferKeyword,
-          queryInputs.currentUrl, queryInputs.pageClassification, false);
-      const exportData = {
-        queryInputs,
-        // TODO(orinj|manukh): Make the schema consistent and remove
-        // the extra level of array nesting.  [[This]] is done for now
-        // so that elements can be extracted in the form import expects.
-        responsesHistory: [[omniboxResponse]],
-        displayInputs: this.omniboxInput_.displayInputs,
-      };
-      batchExports.push(exportData);
+    const omniboxResponse = await browserProxy.makeRequest(
+        queryInputs.inputText, queryInputs.resetAutocompleteController,
+        queryInputs.cursorPosition, queryInputs.zeroSuggest,
+        queryInputs.preventInlineAutocomplete, queryInputs.preferKeyword,
+        queryInputs.currentUrl, queryInputs.pageClassification, false);
+    const exportData = {
+      queryInputs,
+      // TODO(orinj|manukh): Make the schema consistent and remove
+      // the extra level of array nesting.  [[This]] is done for now
+      // so that elements can be extracted in the form import expects.
+      responsesHistory: [[omniboxResponse]],
+      displayInputs: this.omniboxInput_.displayInputs,
+    };
+    batchExports.push(exportData);
     }
     const variationInfo =
         await sendWithPromise('requestVariationInfo', true);
@@ -274,11 +275,11 @@ class ExportDelegate {
       description: '',
       authorTool: 'chrome://omnibox',
       batchName,
-      versionDetails : ExportDelegate.getVersionDetails_(),
+      versionDetails: ExportDelegate.getVersionDetails_(),
       variationInfo,
       pathInfo,
       appVersion: navigator.appVersion,
-      batchExports
+      batchExports,
     };
     ExportDelegate.download_(batchData, fileName);
   }
@@ -294,25 +295,23 @@ class ExportDelegate {
       this.processBatch(
           processBatchData.batchQueryInputs, processBatchData.batchName);
     } else {
-      const expected = {
-        batchMode: "combined",
-        batchName: "name for this batch of queries",
-        batchQueryInputs: [
-          {
-            inputText: "example input text",
-            cursorPosition: 18,
-            resetAutocompleteController: false,
-            cursorLock: false,
-            zeroSuggest: false,
-            preventInlineAutocomplete: false,
-            preferKeyword: false,
-            currentUrl: "",
-            pageClassification: "4"
-          }
-        ],
-      };
-      console.error(`Invalid batch specifier data.  Expected format: \n${
-          JSON.stringify(expected, null, 2)}`);
+    const expected = {
+      batchMode: 'combined',
+      batchName: 'name for this batch of queries',
+      batchQueryInputs: [{
+        inputText: 'example input text',
+        cursorPosition: 18,
+        resetAutocompleteController: false,
+        cursorLock: false,
+        zeroSuggest: false,
+        preventInlineAutocomplete: false,
+        preferKeyword: false,
+        currentUrl: '',
+        pageClassification: '4',
+      }],
+    };
+    console.error(`Invalid batch specifier data.  Expected format: \n${
+        JSON.stringify(expected, null, 2)}`);
     }
   }
 
@@ -332,7 +331,7 @@ class ExportDelegate {
   /** @private @return {OmniboxExport} */
   get exportData_() {
     return {
-      versionDetails : ExportDelegate.getVersionDetails_(),
+      versionDetails: ExportDelegate.getVersionDetails_(),
       queryInputs: this.omniboxInput_.queryInputs,
       displayInputs: this.omniboxInput_.displayInputs,
       responsesHistory: this.omniboxOutput_.responsesHistory,
@@ -355,9 +354,9 @@ class ExportDelegate {
   }
 
   /**
-    * @param {Date=} date
-    * @return {string} A sortable timestamp string for use in filenames.
-    */
+   * @param {Date=} date
+   * @return {string} A sortable timestamp string for use in filenames.
+   */
   static getTimeStamp(date) {
     if (!date) {
       date = new Date();
@@ -372,7 +371,15 @@ class ExportDelegate {
       'language', 'official', 'os_type', 'profile_path', 'useragent',
       'version', 'version_processor_variation', 'version_modifier'];
     return Object.fromEntries(
-        loadTimeDataKeys.map(key => [key, loadTimeData.getValue(key)]));
+        loadTimeDataKeys.map(key => {
+    let valueOrError;
+    try {
+      valueOrError = loadTimeData.getValue(key);
+    } catch (e) {
+      valueOrError = e.toString();
+    }
+    return [key, valueOrError];
+        }));
   }
 }
 
@@ -389,7 +396,7 @@ function validateImportData_(importData) {
   const EXPECTED_FORMAT = {
     queryInputs: {},
     displayInputs: {},
-    responsesHistory: [[{combinedResults: [], resultsByProvider: []}]]
+    responsesHistory: [[{combinedResults: [], resultsByProvider: []}]],
   };
   const INVALID_MESSAGE = `Invalid import format; expected \n${
       JSON.stringify(EXPECTED_FORMAT, null, 2)};\n`;
@@ -417,10 +424,10 @@ function validateImportData_(importData) {
   }
 
   if (!importData.responsesHistory.every(
-          responses => responses.every(
-              ({combinedResults, resultsByProvider}) =>
-                  Array.isArray(combinedResults) &&
-                  Array.isArray(resultsByProvider)))) {
+      responses => responses.every(
+          ({combinedResults, resultsByProvider}) =>
+              Array.isArray(combinedResults) &&
+              Array.isArray(resultsByProvider)))) {
     console.error(
         INVALID_MESSAGE +
         'responsesHistory items\' items missing combinedResults and ' +

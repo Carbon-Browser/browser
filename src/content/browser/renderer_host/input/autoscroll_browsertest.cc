@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <tuple>
+
 #include "base/feature_list.h"
 #include "build/build_config.h"
 #include "content/browser/web_contents/web_contents_impl.h"
@@ -89,6 +91,10 @@ class GestureScrollEventWatcher : public RenderWidgetHost::InputEventObserver {
 class AutoscrollBrowserTest : public ContentBrowserTest {
  public:
   AutoscrollBrowserTest() {}
+
+  AutoscrollBrowserTest(const AutoscrollBrowserTest&) = delete;
+  AutoscrollBrowserTest& operator=(const AutoscrollBrowserTest&) = delete;
+
   ~AutoscrollBrowserTest() override {}
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
@@ -100,7 +106,7 @@ class AutoscrollBrowserTest : public ContentBrowserTest {
   RenderWidgetHostImpl* GetWidgetHost() {
     return RenderWidgetHostImpl::From(shell()
                                           ->web_contents()
-                                          ->GetMainFrame()
+                                          ->GetPrimaryMainFrame()
                                           ->GetRenderViewHost()
                                           ->GetWidget());
   }
@@ -114,7 +120,7 @@ class AutoscrollBrowserTest : public ContentBrowserTest {
 
     std::u16string ready_title(u"ready");
     TitleWatcher watcher(shell()->web_contents(), ready_title);
-    ignore_result(watcher.WaitAndGetTitle());
+    std::ignore = watcher.WaitAndGetTitle();
 
     MainThreadFrameObserver main_thread_sync(host);
     main_thread_sync.Wait();
@@ -159,21 +165,18 @@ class AutoscrollBrowserTest : public ContentBrowserTest {
   }
 
   void WaitForScroll(RenderFrameSubmissionObserver& observer) {
-    gfx::Vector2dF default_scroll_offset;
+    gfx::PointF default_scroll_offset;
     while (observer.LastRenderFrameMetadata()
                .root_scroll_offset.value_or(default_scroll_offset)
                .y() <= 0) {
       observer.WaitForMetadataChange();
     }
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(AutoscrollBrowserTest);
 };
 
 // We don't plan on supporting middle click autoscroll on Android.
 // See https://crbug.com/686223
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
 IN_PROC_BROWSER_TEST_F(AutoscrollBrowserTest, AutoscrollFling) {
   LoadURL(kAutoscrollDataURL);
 
@@ -297,7 +300,7 @@ IN_PROC_BROWSER_TEST_F(AutoscrollBrowserTest,
 
   // Wait for 4 commits, then verify that the page has not scrolled.
   WaitForCommitFrames(4);
-  gfx::Vector2dF default_scroll_offset;
+  gfx::PointF default_scroll_offset;
   DCHECK_EQ(observer.LastRenderFrameMetadata()
                 .root_scroll_offset.value_or(default_scroll_offset)
                 .y(),
@@ -343,6 +346,6 @@ IN_PROC_BROWSER_TEST_F(AutoscrollBrowserTest,
   GetWidgetHost()->ForwardMouseEvent(move_down);
   WaitForScroll(observer);
 }
-#endif  // !defined(OS_ANDROID)
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 }  // namespace content

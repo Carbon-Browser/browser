@@ -27,8 +27,8 @@
 #include "base/files/file_util.h"
 #include "base/location.h"
 #include "base/run_loop.h"
-#include "base/single_thread_task_runner.h"
 #include "base/task/single_thread_task_executor.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "gpu/tools/compositor_model_bench/render_model_utils.h"
@@ -187,7 +187,7 @@ class Simulator {
 
   // Initialize the OpenGL context.
   bool InitGLContext() {
-    if (!gl::init::InitializeGLOneOff()) {
+    if (!gl::init::InitializeGLOneOff(/*system_device_id=*/0)) {
       LOG(FATAL) << "gl::init::InitializeGLOneOff failed";
       return false;
     }

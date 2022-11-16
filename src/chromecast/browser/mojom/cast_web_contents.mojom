@@ -5,8 +5,8 @@
 module chromecast.mojom;
 
 import "chromecast/bindings/public/mojom/api_bindings.mojom";
-import "chromecast/common/mojom/identification_settings.mojom";
 import "chromecast/mojo/mojom/remote_interfaces.mojom";
+import "components/url_rewrite/mojom/url_request_rewrite.mojom";
 import "mojo/public/mojom/base/values.mojom";
 import "url/mojom/url.mojom";
 
@@ -43,9 +43,7 @@ interface CastWebContentsObserver {
   // provided by the frame.
   RenderFrameCreated(
       int32 render_process_id,
-      int32 render_frame_id,
-      pending_associated_remote<chromecast.mojom.IdentificationSettingsManager>
-          settings_manager);
+      int32 render_frame_id);
 
   // A navigation has finished in the WebContents' main frame.
   MainFrameFinishedNavigation();
@@ -89,7 +87,14 @@ interface CastWebContents {
   SetAppProperties(string app_id,
                    string session_id,
                    bool is_audio_app,
-                   url.mojom.Url app_web_url);
+                   url.mojom.Url app_web_url,
+                   bool enforce_feature_permissions,
+                   array<int32> feature_permissions,
+                   array<string> additional_feature_permission_origins);
+
+  // Specify if the app session is for a multizone group. |session_id| should
+  // match the one which is set in SetAppProperties() above.
+  SetGroupInfo(string session_id, bool is_multizone_launch);
 
   // Dictionary of renderer feature configurations.
   AddRendererFeatures(mojo_base.mojom.Value features);
@@ -98,6 +103,11 @@ interface CastWebContents {
   // used as backends for built-in Cast V8 bindings. Sensitive APIs should
   // *never* be exposed through |remote_interfaces|.
   SetInterfacesForRenderer(pending_remote<RemoteInterfaces> remote_interfaces);
+
+  // Sets URL rewrite rules for modifying navigation requests.
+  // Note: this must be called before LoadUrl in order for the rules to take
+  // effect on the requests.
+  SetUrlRewriteRules(url_rewrite.mojom.UrlRequestRewriteRules rules);
 
   // ===========================================================================
   // Page Lifetime

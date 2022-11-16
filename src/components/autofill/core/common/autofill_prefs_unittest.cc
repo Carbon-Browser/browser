@@ -80,7 +80,7 @@ TEST_F(AutofillPrefsTest, MigrateDeprecatedAutofillPrefs) {
 // expected.
 // On mobile, no dedicated opt-in is required for WalletSyncTransport - the
 // user is always considered opted-in and thus this test doesn't make sense.
-#if !defined(OS_ANDROID) && !defined(OS_IOS)
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
 TEST_F(AutofillPrefsTest, WalletSyncTransportPref_GetAndSet) {
   const CoreAccountId account1("account1");
   const CoreAccountId account2("account2");
@@ -129,7 +129,7 @@ TEST_F(AutofillPrefsTest, WalletSyncTransportPref_GetAndSet) {
                     ->GetDictionary(prefs::kAutofillSyncTransportOptIn)
                     ->DictSize());
 }
-#endif  // !defined(OS_ANDROID) && !defined(OS_IOS)
+#endif  // !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
 
 // Tests that AutofillSyncTransportOptIn is not stored using the plain text
 // account id.
@@ -194,13 +194,12 @@ TEST_F(AutofillPrefsTest, WalletSyncTransportPref_CanBeSetAndReadFromJSON) {
                    ->GetDictionary(prefs::kAutofillSyncTransportOptIn)
                    ->DictEmpty());
 
-  const base::Value* dictionary =
-      pref_service()->GetDictionary(prefs::kAutofillSyncTransportOptIn);
-  ASSERT_TRUE(dictionary);
+  const base::Value::Dict& dictionary =
+      pref_service()->GetValueDict(prefs::kAutofillSyncTransportOptIn);
 
   std::string output_js;
-  ASSERT_TRUE(base::JSONWriter::Write(*dictionary, &output_js));
-  EXPECT_EQ(*dictionary, *base::JSONReader::Read(output_js));
+  ASSERT_TRUE(base::JSONWriter::Write(dictionary, &output_js));
+  EXPECT_EQ(dictionary, *base::JSONReader::Read(output_js));
 }
 
 }  // namespace prefs

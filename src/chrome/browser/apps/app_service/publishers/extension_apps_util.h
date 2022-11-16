@@ -13,7 +13,6 @@ namespace apps {
 // Converts an apps UninstallSource to an extension uninstall reason.
 extensions::UninstallReason GetExtensionUninstallReason(
     apps::mojom::UninstallSource uninstall_source);
-
 }  // namespace apps
 
 #endif  // CHROME_BROWSER_APPS_APP_SERVICE_PUBLISHERS_EXTENSION_APPS_UTIL_H_

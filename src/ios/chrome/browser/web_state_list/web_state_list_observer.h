@@ -5,7 +5,7 @@
 #ifndef IOS_CHROME_BROWSER_WEB_STATE_LIST_WEB_STATE_LIST_OBSERVER_H_
 #define IOS_CHROME_BROWSER_WEB_STATE_LIST_WEB_STATE_LIST_OBSERVER_H_
 
-#include "base/macros.h"
+#include "base/observer_list_types.h"
 
 class WebStateList;
 
@@ -32,10 +32,14 @@ enum class ActiveWebStateChangeReason {
 };
 
 // Interface for listening to events occurring to WebStateLists.
-class WebStateListObserver {
+class WebStateListObserver : public base::CheckedObserver {
  public:
   WebStateListObserver();
-  virtual ~WebStateListObserver();
+
+  WebStateListObserver(const WebStateListObserver&) = delete;
+  WebStateListObserver& operator=(const WebStateListObserver&) = delete;
+
+  ~WebStateListObserver() override;
 
   // Invoked after a new WebState has been added to the WebStateList at the
   // specified index. |activating| will be true if the WebState will become
@@ -99,9 +103,6 @@ class WebStateListObserver {
   // were performed on it during the batch (e.g. detect that all tabs were
   // closed at once).
   virtual void BatchOperationEnded(WebStateList* web_state_list);
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(WebStateListObserver);
 };
 
 #endif  // IOS_CHROME_BROWSER_WEB_STATE_LIST_WEB_STATE_LIST_OBSERVER_H_

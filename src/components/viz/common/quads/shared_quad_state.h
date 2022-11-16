@@ -8,10 +8,10 @@
 #include "components/viz/common/viz_common_export.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkBlendMode.h"
+#include "ui/gfx/geometry/mask_filter_info.h"
 #include "ui/gfx/geometry/rect.h"
-#include "ui/gfx/mask_filter_info.h"
-#include "ui/gfx/rrect_f.h"
-#include "ui/gfx/transform.h"
+#include "ui/gfx/geometry/rrect_f.h"
+#include "ui/gfx/geometry/transform.h"
 
 namespace base {
 namespace trace_event {
@@ -20,6 +20,7 @@ class TracedValue;
 }  // namespace base
 
 namespace viz {
+
 
 // SharedQuadState holds a set of properties that are common across multiple
 // DrawQuads. It's purely an optimization - the properties behave in exactly the
@@ -54,7 +55,8 @@ class VIZ_COMMON_EXPORT SharedQuadState {
   // of the quad rects.
   gfx::Rect visible_quad_layer_rect;
   // This mask filter's coordinates is in the target content space. It defines
-  // the corner radius to clip the quads with.
+  // the corner radius to clip the quads with, and the gradient mask applied to
+  // the clip rect given by the Rect part of |roudned_corner_bounds|.
   gfx::MaskFilterInfo mask_filter_info;
   // This rect lives in the target content space.
   absl::optional<gfx::Rect> clip_rect;

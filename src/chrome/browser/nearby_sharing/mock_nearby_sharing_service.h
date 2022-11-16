@@ -78,6 +78,7 @@ class MockNearbySharingService : public NearbySharingService {
               GetNotificationDelegate,
               (const std::string&),
               (override));
+  MOCK_METHOD(void, RecordFastInitiationNotificationUsage, (bool), (override));
   MOCK_METHOD(NearbyShareSettings*, GetSettings, (), (override));
   MOCK_METHOD(NearbyShareHttpNotifier*, GetHttpNotifier, (), (override));
   MOCK_METHOD(NearbyShareLocalDeviceDataManager*,
@@ -89,7 +90,6 @@ class MockNearbySharingService : public NearbySharingService {
               GetCertificateManager,
               (),
               (override));
-  MOCK_METHOD(bool, AreFastInitiationDevicesDetected, (), (const override));
 };
 
 #endif  // CHROME_BROWSER_NEARBY_SHARING_MOCK_NEARBY_SHARING_SERVICE_H_

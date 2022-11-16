@@ -9,9 +9,11 @@
 
 namespace testing {
 
+extern const char kCalendarFilePath[];
 extern const char kMobileConfigFilePath[];
 extern const char kPkPassFilePath[];
 extern const char kUsdzFilePath[];
+extern const char kVcardFilePath[];
 
 // Returns contents of the test file at the given relative path in the chrome
 // test directory.

@@ -10,7 +10,8 @@
 #include <vector>
 
 #include "base/callback.h"
-#include "base/no_destructor.h"
+#include "base/memory/raw_ptr.h"
+#include "base/time/time.h"
 #include "base/types/pass_key.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/compositor/layer_animation_observer.h"
@@ -20,9 +21,6 @@
 #include "ui/views/animation/animation_sequence_block.h"
 #include "ui/views/views_export.h"
 
-// This AnimationBuilder API is currently in the experimental phase and only
-// used within ui/views/examples/.
-
 namespace ui {
 class Layer;
 }
@@ -31,6 +29,7 @@ namespace views {
 
 class AnimationAbortHandle;
 
+// Provides an unfinalized animation sequence block if any to build animations.
 class VIEWS_EXPORT AnimationBuilder {
  public:
   class Observer : public ui::LayerAnimationObserver {
@@ -57,7 +56,10 @@ class VIEWS_EXPORT AnimationBuilder {
     void OnLayerAnimationScheduled(
         ui::LayerAnimationSequence* sequence) override;
 
+    bool GetAttachedToSequence() const { return attached_to_sequence_; }
+
    protected:
+    void OnAttachedToSequence(ui::LayerAnimationSequence* sequence) override;
     void OnDetachedFromSequence(ui::LayerAnimationSequence* sequence) override;
     bool RequiresNotificationWhenAnimatorDestroyed() const override;
 
@@ -70,25 +72,52 @@ class VIEWS_EXPORT AnimationBuilder {
     base::OnceClosure on_aborted_;
     base::OnceClosure on_scheduled_;
 
-    AnimationAbortHandle* abort_handle_ = nullptr;
+    bool attached_to_sequence_ = false;
+    // Incremented when a sequence is attached and decremented when a sequence
+    // ends. Does not account for aborted sequences. This provides a more
+    // reliable way of tracking when all sequences have ended since IsFinished
+    // can return true before a sequence is started if the duration is zero.
+    int sequences_to_run_ = 0;
+
+    raw_ptr<AnimationAbortHandle> abort_handle_ = nullptr;
   };
 
   AnimationBuilder();
+  AnimationBuilder(AnimationBuilder&& rhs);
+  AnimationBuilder& operator=(AnimationBuilder&& rhs);
   ~AnimationBuilder();
 
   // Options for the whole animation
   AnimationBuilder& SetPreemptionStrategy(
       ui::LayerAnimator::PreemptionStrategy preemption_strategy);
-
-  // Creates a new sequence (that optionally repeats).
-  AnimationSequenceBlock Once();
-  AnimationSequenceBlock Repeatedly();
+  // Registers |callback| to be called when the animation starts.
+  // Must use before creating a sequence block.
+  AnimationBuilder& OnStarted(base::OnceClosure callback);
+  // Registers |callback| to be called when the animation ends. Not called if
+  // animation is aborted.
+  // Must use before creating a sequence block.
+  AnimationBuilder& OnEnded(base::OnceClosure callback);
+  // Registers |callback| to be called when a sequence repetition ends and will
+  // repeat. Not called if sequence is aborted.
+  // Must use before creating a sequence block.
+  AnimationBuilder& OnWillRepeat(base::RepeatingClosure callback);
+  // Registers |callback| to be called if animation is aborted for any reason.
+  // Should never do anything that may cause another animation to be started.
+  // Must use before creating a sequence block.
+  AnimationBuilder& OnAborted(base::OnceClosure callback);
+  // Registers |callback| to be called when the animation is scheduled.
+  // Must use before creating a sequence block.
+  AnimationBuilder& OnScheduled(base::OnceClosure callback);
 
   // Returns a handle that can be destroyed later to abort all running
-  // animations.
+  // animations. Must use before creating a sequence block.
   // Caveat: ALL properties will be aborted, including those not initiated
   // by the builder.
   std::unique_ptr<AnimationAbortHandle> GetAbortHandle();
+
+  // Creates a new sequence (that optionally repeats).
+  AnimationSequenceBlock& Once();
+  AnimationSequenceBlock& Repeatedly();
 
   // Adds an animation element `element` for `key` at `start` to `values`.
   void AddLayerAnimationElement(
@@ -98,25 +127,25 @@ class VIEWS_EXPORT AnimationBuilder {
       base::TimeDelta original_duration,
       std::unique_ptr<ui::LayerAnimationElement> element);
 
+  // Swaps `current_sequence_` with `new_sequence` and returns the old one.
+  [[nodiscard]] std::unique_ptr<AnimationSequenceBlock> SwapCurrentSequence(
+      base::PassKey<AnimationSequenceBlock>,
+      std::unique_ptr<AnimationSequenceBlock> new_sequence);
+
   // Called when a block ends.  Ensures all animations in the sequence will run
   // until at least `end`.
   void BlockEndedAt(base::PassKey<AnimationSequenceBlock>, base::TimeDelta end);
 
   // Called when the sequence is ended. Converts `values_` to
   // `layer_animation_sequences_`.
-  void TerminateSequence(base::PassKey<AnimationSequenceBlock>);
+  void TerminateSequence(base::PassKey<AnimationSequenceBlock>, bool repeating);
 
-  // Called through the corresponding functions on AnimationSequenceBlock.
-  void SetOnStarted(base::PassKey<AnimationSequenceBlock>,
-                    base::OnceClosure callback);
-  void SetOnEnded(base::PassKey<AnimationSequenceBlock>,
-                  base::OnceClosure callback);
-  void SetOnWillRepeat(base::PassKey<AnimationSequenceBlock>,
-                       base::RepeatingClosure callback);
-  void SetOnAborted(base::PassKey<AnimationSequenceBlock>,
-                    base::OnceClosure callback);
-  void SetOnScheduled(base::PassKey<AnimationSequenceBlock>,
-                      base::OnceClosure callback);
+  // Returns a left value reference to the object held by `current_sequence_`.
+  // Assumes that `current_sequence_` is set.
+  // NOTE: be wary when keeping this method's return value because the current
+  // sequence held by an `AnimationBuilder` instance could be destroyed during
+  // `AnimationBuilder` instance's life cycle.
+  AnimationSequenceBlock& GetCurrentSequence();
 
   static void SetObserverDeletedCallbackForTesting(
       base::RepeatingClosure deleted_closure);
@@ -126,9 +155,9 @@ class VIEWS_EXPORT AnimationBuilder {
 
   Observer* GetObserver();
 
-  // Resets data for the current sequence as necessary, creates and returns the
-  // initial block.
-  AnimationSequenceBlock NewSequence();
+  // Resets data for the current sequence as necessary, creates a new sequence
+  // block and returns the new block's left value reference.
+  AnimationSequenceBlock& NewSequence(bool repeating);
 
   // Returns a reference to the observer deleted callback used for testing.
   static base::RepeatingClosure& GetObserverDeletedCallback();
@@ -137,15 +166,27 @@ class VIEWS_EXPORT AnimationBuilder {
   std::multimap<ui::Layer*, std::unique_ptr<ui::LayerAnimationSequence>>
       layer_animation_sequences_;
   std::unique_ptr<Observer> animation_observer_;
+  // Sets up observer callbacks before .Once() or .Repeatedly() is called to
+  // start the sequence. next_animation_observer_ is moved to
+  // animation_observer_ once .Once() or Repeatedly() is called.
+  std::unique_ptr<Observer> next_animation_observer_;
   absl::optional<ui::LayerAnimator::PreemptionStrategy> preemption_strategy_;
 
   // Data for the current sequence.
-  bool repeating_;
   base::TimeDelta end_;
   // Each vector is kept in sorted order.
   std::map<AnimationKey, std::vector<Value>> values_;
 
-  AnimationAbortHandle* abort_handle_ = nullptr;
+  raw_ptr<AnimationAbortHandle> abort_handle_ = nullptr;
+
+  // An unfinalized sequence block currently used to build animations. NOTE: the
+  // animation effects carried by `current_sequence_` attach to a layer only
+  // after `current_sequence_` is destroyed.
+  // The life cycle of `current_sequence_`:
+  // (1) The old sequence is replaced by a new one. When being replaced, the
+  // old sequence is destroyed.
+  // (2) Gets destroyed when the host `AnimationBuilder` is destroyed.
+  std::unique_ptr<AnimationSequenceBlock> current_sequence_;
 };
 
 }  // namespace views

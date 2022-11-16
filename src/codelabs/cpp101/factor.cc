@@ -69,17 +69,16 @@ int main(int argc, char* argv[]) {
 
   absl::optional<int> result;
   // Notice that we're posting the long-running factoring operation to
-  // |base::ThreadPool| to avoid blocking the main thread
+  // `base::ThreadPool` to avoid blocking the main thread.
   //
-  // |run_loop.QuitClosure()| will be called once the factoring task completes.
+  // `run_loop.QuitClosure()` will be called once the factoring task completes.
   base::ThreadPool::PostTaskAndReply(
       FROM_HERE, base::BindOnce(&FindNonTrivialFactorHelper, n, &result),
       run_loop.QuitClosure());
 
   base::ThreadPool::PostTask(
-      FROM_HERE,
-      base::BindOnce(&PrintStatusUpdateRepeatedly, base::TimeTicks::Now(),
-                     base::TimeDelta::FromSeconds(1)));
+      FROM_HERE, base::BindOnce(&PrintStatusUpdateRepeatedly,
+                                base::TimeTicks::Now(), base::Seconds(1)));
 
   run_loop.Run();
 

@@ -12,25 +12,24 @@
 #include "base/bind.h"
 #include "base/command_line.h"
 #include "base/containers/flat_map.h"
-#include "base/cxx17_backports.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/json/json_file_value_serializer.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/singleton.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/path_service.h"
-#include "base/sequenced_task_runner.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/synchronization/atomic_flag.h"
 #include "base/synchronization/lock.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/system/sys_info.h"
-#include "base/task/post_task.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
-#include "base/task_runner.h"
 #include "base/threading/sequenced_task_runner_handle.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/time/time.h"
@@ -43,12 +42,9 @@ namespace system {
 
 namespace {
 
-// Path to the tool used to get system info, and delimiters for the output
-// format of the tool.
+// Path to the tool used to get system info, and special values for the
+// output of the tool.
 const char* kCrosSystemTool[] = {"/usr/bin/crossystem"};
-const char kCrosSystemEq[] = "=";
-const char kCrosSystemDelim[] = "\n";
-const char kCrosSystemCommentDelim[] = "#";
 const char kCrosSystemValueError[] = "(error)";
 
 const char kHardwareClassCrosSystemKey[] = "hwid";
@@ -56,22 +52,10 @@ const char kHardwareClassValueUnknown[] = "unknown";
 
 const char kIsVmCrosSystemKey[] = "inside_vm";
 
-// Key/value delimiters of machine hardware info file. machine-info is generated
-// only for OOBE and enterprise enrollment and may not be present. See
-// login-manager/init/machine-info.conf.
-const char kMachineHardwareInfoEq[] = "=";
-const char kMachineHardwareInfoDelim[] = " \n";
-
 // File to get ECHO coupon info from, and key/value delimiters of
 // the file.
 const char kEchoCouponFile[] =
     "/mnt/stateful_partition/unencrypted/cache/vpd/echo/vpd_echo.txt";
-const char kEchoCouponEq[] = "=";
-const char kEchoCouponDelim[] = "\n";
-
-// Key/value delimiters for VPD file.
-const char kVpdEq[] = "=";
-const char kVpdDelim[] = "\n";
 
 // File to get regional data from.
 const char kCrosRegions[] = "/usr/share/misc/cros-regions.json";
@@ -107,6 +91,7 @@ const char kKeyboardMechanicalLayoutPath[] = "keyboard_mechanical_layout";
 // devices. It's known *not* to be present on caroline.
 // TODO(tnagel): Remove "Product_S/N" after all devices that have it are AUE.
 const char* const kMachineInfoSerialNumberKeys[] = {
+    "flex_id",        // Used by Reven devices
     "Product_S/N",    // Samsung legacy
     "serial_number",  // VPD v2+ devices (Samsung: caroline and later)
 };
@@ -123,7 +108,7 @@ bool JoinListValuesToString(const base::Value& dictionary,
 
   std::string buffer;
   bool first = true;
-  for (const auto& v : list_value->GetList()) {
+  for (const auto& v : list_value->GetListDeprecated()) {
     const std::string* value = v.GetIfString();
     if (!value)
       return false;
@@ -147,10 +132,10 @@ bool GetFirstListValueAsString(const base::Value& dictionary,
                                const std::string key,
                                std::string* result) {
   const base::Value* list_value = dictionary.FindListKey(key);
-  if (list_value == nullptr || list_value->GetList().empty())
+  if (list_value == nullptr || list_value->GetListDeprecated().empty())
     return false;
 
-  const std::string* value = list_value->GetList()[0].GetIfString();
+  const std::string* value = list_value->GetListDeprecated()[0].GetIfString();
   if (value == nullptr)
     return false;
   if (result != nullptr)
@@ -181,6 +166,19 @@ bool GetInitialTimezoneFromRegionalData(const base::Value& region_dict,
 bool GetInitialLocaleFromRegionalData(const base::Value& region_dict,
                                       std::string* result) {
   return JoinListValuesToString(region_dict, kLocalesPath, result);
+}
+
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+enum class VpdCacheReadResult {
+  kSuccess = 0,
+  KMissing = 1,
+  kParseFailed = 2,
+  kMaxValue = kParseFailed,
+};
+
+void ReportVpdCacheReadResult(VpdCacheReadResult result) {
+  base::UmaHistogramEnumeration("Enterprise.VPDCacheReadResult", result);
 }
 
 }  // namespace
@@ -251,6 +249,9 @@ class StatisticsProviderImpl : public StatisticsProvider {
 
   static StatisticsProviderImpl* GetInstance();
 
+  StatisticsProviderImpl(const StatisticsProviderImpl&) = delete;
+  StatisticsProviderImpl& operator=(const StatisticsProviderImpl&) = delete;
+
  private:
   typedef std::map<std::string, bool> MachineFlags;
   typedef bool (*RegionDataExtractor)(const base::Value&, std::string*);
@@ -306,8 +307,6 @@ class StatisticsProviderImpl : public StatisticsProvider {
   std::vector<
       std::pair<base::OnceClosure, scoped_refptr<base::SequencedTaskRunner>>>
       statistics_loaded_callbacks_;
-
-  DISALLOW_COPY_AND_ASSIGN(StatisticsProviderImpl);
 };
 
 void StatisticsProviderImpl::SignalStatisticsLoaded() {
@@ -323,8 +322,7 @@ void StatisticsProviderImpl::SignalStatisticsLoaded() {
     // and unblock pending WaitForStatisticsLoaded() calls.
     statistics_loaded_.Signal();
 
-    // TODO(crbug.com/1123153): Downgrade to VLOG(1) after the bug is fixed.
-    LOG(WARNING) << "Finished loading statistics.";
+    VLOG(1) << "Finished loading statistics.";
   }
 
   // Schedule callbacks that were in |statistics_loaded_callbacks_|.
@@ -341,7 +339,7 @@ bool StatisticsProviderImpl::WaitForStatisticsLoaded() {
   // happen except during OOBE.
   base::Time start_time = base::Time::Now();
   base::ScopedAllowBaseSyncPrimitives allow_wait;
-  statistics_loaded_.TimedWait(base::TimeDelta::FromSeconds(kTimeoutSecs));
+  statistics_loaded_.TimedWait(base::Seconds(kTimeoutSecs));
 
   base::TimeDelta dtime = base::Time::Now() - start_time;
   if (statistics_loaded_.IsSignaled()) {
@@ -385,25 +383,11 @@ bool StatisticsProviderImpl::GetMachineStatistic(const std::string& name,
     return false;
   }
 
-  base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
-  std::string cros_regions_mode;
-  if (command_line->HasSwitch(chromeos::switches::kCrosRegionsMode)) {
-    cros_regions_mode =
-        command_line->GetSwitchValueASCII(chromeos::switches::kCrosRegionsMode);
-  }
-
-  // These two modes override existing machine statistics keys.
-  // By default (cros_regions_mode is empty), the same keys are emulated if
-  // they do not exist in machine statistics.
-  if (cros_regions_mode == chromeos::switches::kCrosRegionsModeOverride ||
-      cros_regions_mode == chromeos::switches::kCrosRegionsModeHide) {
-    if (GetRegionalInformation(name, result))
-      return true;
-  }
-
-  if (cros_regions_mode == chromeos::switches::kCrosRegionsModeHide &&
-      GetRegionalDataExtractor(name)) {
-    return false;
+  // Test region should override VPD values.
+  if (base::CommandLine::ForCurrentProcess()->HasSwitch(
+          ash::switches::kCrosRegion) &&
+      GetRegionalInformation(name, result)) {
+    return true;
   }
 
   NameValuePairsParser::NameValueMap::iterator iter = machine_info_.find(name);
@@ -522,8 +506,8 @@ void StatisticsProviderImpl::LoadMachineStatistics(bool load_oem_manifest) {
   if (base::SysInfo::IsRunningOnChromeOS()) {
     // Parse all of the key/value pairs from the crossystem tool.
     if (!parser.ParseNameValuePairsFromTool(
-            base::size(kCrosSystemTool), kCrosSystemTool, kCrosSystemEq,
-            kCrosSystemDelim, kCrosSystemCommentDelim)) {
+            std::size(kCrosSystemTool), kCrosSystemTool,
+            NameValuePairsFormat::kCrossystem)) {
       LOG(ERROR) << "Errors parsing output from: " << kCrosSystemTool;
     }
     // Drop useless "(error)" values so they don't displace valid values
@@ -538,7 +522,7 @@ void StatisticsProviderImpl::LoadMachineStatistics(bool load_oem_manifest) {
   }
 
   base::FilePath machine_info_path;
-  base::PathService::Get(chromeos::FILE_MACHINE_INFO, &machine_info_path);
+  base::PathService::Get(FILE_MACHINE_INFO, &machine_info_path);
   if (!base::SysInfo::IsRunningOnChromeOS() &&
       !base::PathExists(machine_info_path)) {
     // Use time value to create an unique stub serial because clashes of the
@@ -557,21 +541,37 @@ void StatisticsProviderImpl::LoadMachineStatistics(bool load_oem_manifest) {
   }
 
   base::FilePath vpd_path;
-  base::PathService::Get(chromeos::FILE_VPD, &vpd_path);
-  if (!base::SysInfo::IsRunningOnChromeOS() && !base::PathExists(vpd_path)) {
-    std::string stub_contents = "\"ActivateDate\"=\"2000-01\"\n";
-    int bytes_written =
-        base::WriteFile(vpd_path, stub_contents.c_str(), stub_contents.size());
-    if (bytes_written < static_cast<int>(stub_contents.size())) {
-      PLOG(ERROR) << "Error writing vpd stub " << vpd_path.value();
+  base::PathService::Get(FILE_VPD, &vpd_path);
+  if (!base::PathExists(vpd_path)) {
+    if (base::SysInfo::IsRunningOnChromeOS()) {
+      ReportVpdCacheReadResult(VpdCacheReadResult::KMissing);
+      LOG(ERROR) << "Missing FILE_VPD: " << vpd_path;
+    } else {
+      std::string stub_contents = "\"ActivateDate\"=\"2000-01\"\n";
+      int bytes_written = base::WriteFile(vpd_path, stub_contents.c_str(),
+                                          stub_contents.size());
+      if (bytes_written < static_cast<int>(stub_contents.size())) {
+        PLOG(ERROR) << "Error writing VPD stub " << vpd_path.value();
+      }
     }
   }
 
-  parser.GetNameValuePairsFromFile(machine_info_path, kMachineHardwareInfoEq,
-                                   kMachineHardwareInfoDelim);
-  parser.GetNameValuePairsFromFile(base::FilePath(kEchoCouponFile),
-                                   kEchoCouponEq, kEchoCouponDelim);
-  parser.GetNameValuePairsFromFile(vpd_path, kVpdEq, kVpdDelim);
+  // The machine-info file is generated only for OOBE and enterprise enrollment
+  // and may not be present. See login-manager/init/machine-info.conf.
+  parser.ParseNameValuePairsFromFile(machine_info_path,
+                                     NameValuePairsFormat::kMachineInfo);
+  parser.ParseNameValuePairsFromFile(base::FilePath(kEchoCouponFile),
+                                     NameValuePairsFormat::kVpdDump);
+  bool vpd_parse_result = parser.ParseNameValuePairsFromFile(
+      vpd_path, NameValuePairsFormat::kVpdDump);
+  if (base::SysInfo::IsRunningOnChromeOS()) {
+    if (vpd_parse_result) {
+      ReportVpdCacheReadResult(VpdCacheReadResult::kSuccess);
+    } else {
+      ReportVpdCacheReadResult(VpdCacheReadResult::kParseFailed);
+      LOG(ERROR) << "Failed to parse FILE_VPD: " << vpd_path;
+    }
+  }
 
   // Ensure that the hardware class key is present with the expected
   // key name, and if it couldn't be retrieved, that the value is "unknown".
@@ -618,12 +618,10 @@ void StatisticsProviderImpl::LoadMachineStatistics(bool load_oem_manifest) {
     region_ = std::string();
 
   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
-  if (command_line->HasSwitch(chromeos::switches::kCrosRegion)) {
-    region_ =
-        command_line->GetSwitchValueASCII(chromeos::switches::kCrosRegion);
+  if (command_line->HasSwitch(ash::switches::kCrosRegion)) {
+    region_ = command_line->GetSwitchValueASCII(ash::switches::kCrosRegion);
     machine_info_[kRegionKey] = region_;
-    // TODO(crbug.com/1123153): Downgrade to VLOG(1) after the bug is fixed.
-    LOG(WARNING) << "CrOS region set to '" << region_ << "'";
+    VLOG(1) << "CrOS region set to '" << region_ << "'";
   }
 
   LoadRegionsFile(base::FilePath(kCrosRegions));
@@ -676,8 +674,7 @@ void StatisticsProviderImpl::LoadOemManifestFromFile(
   machine_flags_[kOemKeyboardDrivenOobeKey] = oem_manifest.keyboard_driven_oobe;
 
   oem_manifest_loaded_ = true;
-  // TODO(crbug.com/1123153): Downgrade to VLOG(1) after the bug is fixed.
-  LOG(WARNING) << "Loaded OEM Manifest statistics from " << file.value();
+  VLOG(1) << "Loaded OEM Manifest statistics from " << file.value();
 }
 
 StatisticsProviderImpl* StatisticsProviderImpl::GetInstance() {

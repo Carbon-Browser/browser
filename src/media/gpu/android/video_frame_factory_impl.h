@@ -8,7 +8,7 @@
 #include <memory>
 
 #include "base/memory/weak_ptr.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "gpu/config/gpu_preferences.h"
 #include "media/base/video_frame.h"
 #include "media/gpu/android/codec_buffer_wait_coordinator.h"
@@ -55,6 +55,10 @@ class MEDIA_GPU_EXPORT VideoFrameFactoryImpl
       std::unique_ptr<MaybeRenderEarlyManager> mre_manager,
       std::unique_ptr<FrameInfoHelper> frame_info_helper,
       scoped_refptr<gpu::RefCountedLock> drdc_lock);
+
+  VideoFrameFactoryImpl(const VideoFrameFactoryImpl&) = delete;
+  VideoFrameFactoryImpl& operator=(const VideoFrameFactoryImpl&) = delete;
+
   ~VideoFrameFactoryImpl() override;
 
   void Initialize(OverlayMode overlay_mode, InitCB init_cb) override;
@@ -97,7 +101,7 @@ class MEDIA_GPU_EXPORT VideoFrameFactoryImpl
       PromotionHintAggregator::NotifyPromotionHintCB promotion_hint_cb,
       VideoPixelFormat pixel_format,
       OverlayMode overlay_mode,
-      const absl::optional<VideoFrameMetadata::CopyMode>& copy_mode,
+      bool video_frame_copy_required,
       scoped_refptr<base::SequencedTaskRunner> gpu_task_runner,
       std::unique_ptr<CodecOutputBufferRenderer> output_buffer_renderer,
       FrameInfoHelper::FrameInfo frame_info,
@@ -118,8 +122,8 @@ class MEDIA_GPU_EXPORT VideoFrameFactoryImpl
 
   OverlayMode overlay_mode_ = OverlayMode::kDontRequestPromotionHints;
 
-  // Indicates how video frame needs to be copied when required.
-  absl::optional<VideoFrameMetadata::CopyMode> copy_mode_;
+  // Is the video frame copy required?
+  bool video_frame_copy_required_ = false;
 
   // Current group that new CodecImages should belong to.  Do not use this on
   // our thread; everything must be posted to the gpu main thread, including
@@ -137,8 +141,6 @@ class MEDIA_GPU_EXPORT VideoFrameFactoryImpl
   SEQUENCE_CHECKER(sequence_checker_);
 
   base::WeakPtrFactory<VideoFrameFactoryImpl> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(VideoFrameFactoryImpl);
 };
 
 }  // namespace media

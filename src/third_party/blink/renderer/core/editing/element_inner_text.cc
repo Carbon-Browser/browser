@@ -6,7 +6,6 @@
 
 #include <algorithm>
 
-#include "base/auto_reset.h"
 #include "third_party/blink/renderer/core/display_lock/display_lock_utilities.h"
 #include "third_party/blink/renderer/core/dom/node_computed_style.h"
 #include "third_party/blink/renderer/core/dom/node_traversal.h"
@@ -97,7 +96,7 @@ String ElementInnerTextCollector::RunOn(const Element& element) {
   // 1. If this element is locked or a part of a locked subtree, then it is
   // hidden from view (and also possibly not laid out) and innerText should be
   // empty.
-  if (DisplayLockUtilities::NearestLockedInclusiveAncestor(element))
+  if (DisplayLockUtilities::LockedInclusiveAncestorPreventingPaint(element))
     return {};
 
   // 2. If this element is not being rendered, or if the user agent is a non-CSS
@@ -267,7 +266,7 @@ void ElementInnerTextCollector::ProcessNode(const Node& node) {
 
   // 2. If the node is display locked, then we should not process it or its
   // children, since they are not visible or accessible via innerText.
-  if (DisplayLockUtilities::NearestLockedInclusiveAncestor(node))
+  if (DisplayLockUtilities::LockedInclusiveAncestorPreventingPaint(node))
     return;
 
   // 3. If node's computed value of 'visibility' is not 'visible', then return

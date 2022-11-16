@@ -19,7 +19,7 @@
 #include "base/logging.h"
 #include "base/numerics/checked_math.h"
 #include "base/numerics/safe_conversions.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "gpu/command_buffer/common/constants.h"
@@ -42,6 +42,7 @@
 #include "gpu/ipc/service/gpu_channel.h"
 #include "gpu/ipc/service/gpu_channel_manager.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/skia/include/core/SkColorSpace.h"
 #include "third_party/skia/include/core/SkImage.h"
 #include "third_party/skia/include/core/SkImageInfo.h"
 #include "third_party/skia/include/core/SkRefCnt.h"
@@ -326,7 +327,7 @@ void ImageDecodeAcceleratorStub::ProcessCompletedDecode(
       plane_image =
           external_image_factory_for_testing_->CreateImageForGpuMemoryBuffer(
               std::move(plane_handle), plane_size, plane_format,
-              gfx::BufferPlane::DEFAULT, -1 /* client_id */,
+              gfx::ColorSpace(), gfx::BufferPlane::DEFAULT, -1 /* client_id */,
               kNullSurfaceHandle);
     } else {
       auto plane_pixmap = base::MakeRefCounted<gfx::NativePixmapDmaBuf>(

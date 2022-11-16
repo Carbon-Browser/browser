@@ -11,12 +11,12 @@
 
 #include "base/bind.h"
 #include "base/logging.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/strings/stringprintf.h"
 #include "base/win/scoped_co_mem.h"
 #include "base/win/scoped_propvariant.h"
 #include "base/win/win_util.h"
 #include "base/win/windows_version.h"
-#include "media/base/bind_to_current_loop.h"
 #include "media/base/cdm_promise.h"
 #include "media/base/win/media_foundation_cdm_proxy.h"
 #include "media/base/win/mf_helpers.h"
@@ -33,18 +33,6 @@ using Microsoft::WRL::Make;
 using Microsoft::WRL::RuntimeClass;
 using Microsoft::WRL::RuntimeClassFlags;
 using Exception = CdmPromise::Exception;
-
-// GUID is little endian. The byte array in network order is big endian.
-std::vector<uint8_t> ByteArrayFromGUID(REFGUID guid) {
-  std::vector<uint8_t> byte_array(sizeof(GUID));
-  GUID* reversed_guid = reinterpret_cast<GUID*>(byte_array.data());
-  *reversed_guid = guid;
-  reversed_guid->Data1 = _byteswap_ulong(guid.Data1);
-  reversed_guid->Data2 = _byteswap_ushort(guid.Data2);
-  reversed_guid->Data3 = _byteswap_ushort(guid.Data3);
-  // Data4 is already a byte array so no need to byte swap.
-  return byte_array;
-}
 
 HRESULT CreatePolicySetEvent(ComPtr<IMFMediaEvent>& policy_set_event) {
   base::win::ScopedPropVariant policy_set_prop;
@@ -126,9 +114,11 @@ int GetHdcpValue(HdcpVersion hdcp_version) {
 class CdmProxyImpl : public MediaFoundationCdmProxy {
  public:
   CdmProxyImpl(ComPtr<IMFContentDecryptionModule> mf_cdm,
-               base::RepeatingClosure hardware_context_reset_cb)
+               base::RepeatingClosure hardware_context_reset_cb,
+               MediaFoundationCdm::CdmEventCB cdm_event_cb)
       : mf_cdm_(mf_cdm),
-        hardware_context_reset_cb_(std::move(hardware_context_reset_cb)) {}
+        hardware_context_reset_cb_(std::move(hardware_context_reset_cb)),
+        cdm_event_cb_(std::move(cdm_event_cb)) {}
 
   // MediaFoundationCdmProxy implementation
 
@@ -228,6 +218,14 @@ class CdmProxyImpl : public MediaFoundationCdmProxy {
     hardware_context_reset_cb_.Run();
   }
 
+  void OnSignificantPlayback() override {
+    cdm_event_cb_.Run(CdmEvent::kSignificantPlayback);
+  }
+
+  void OnPlaybackError() override {
+    cdm_event_cb_.Run(CdmEvent::kPlaybackError);
+  }
+
  private:
   ~CdmProxyImpl() override = default;
 
@@ -250,8 +248,9 @@ class CdmProxyImpl : public MediaFoundationCdmProxy {
 
   ComPtr<IMFContentDecryptionModule> mf_cdm_;
 
-  // A callback to notify hardware context reset.
+  // Callbacks to notify hardware context reset and playback error.
   base::RepeatingClosure hardware_context_reset_cb_;
+  MediaFoundationCdm::CdmEventCB cdm_event_cb_;
 
   // Store IMFTrustedInput to avoid potential performance cost.
   ComPtr<IMFTrustedInput> trusted_input_;
@@ -274,21 +273,26 @@ bool MediaFoundationCdm::IsAvailable() {
 }
 
 MediaFoundationCdm::MediaFoundationCdm(
+    const std::string& uma_prefix,
     const CreateMFCdmCB& create_mf_cdm_cb,
     const IsTypeSupportedCB& is_type_supported_cb,
     const StoreClientTokenCB& store_client_token_cb,
+    const CdmEventCB& cdm_event_cb,
     const SessionMessageCB& session_message_cb,
     const SessionClosedCB& session_closed_cb,
     const SessionKeysChangeCB& session_keys_change_cb,
     const SessionExpirationUpdateCB& session_expiration_update_cb)
-    : create_mf_cdm_cb_(create_mf_cdm_cb),
+    : uma_prefix_(uma_prefix),
+      create_mf_cdm_cb_(create_mf_cdm_cb),
       is_type_supported_cb_(is_type_supported_cb),
       store_client_token_cb_(store_client_token_cb),
+      cdm_event_cb_(cdm_event_cb),
       session_message_cb_(session_message_cb),
       session_closed_cb_(session_closed_cb),
       session_keys_change_cb_(session_keys_change_cb),
       session_expiration_update_cb_(session_expiration_update_cb) {
   DVLOG_FUNC(1);
+  DCHECK(!uma_prefix_.empty());
   DCHECK(create_mf_cdm_cb_);
   DCHECK(is_type_supported_cb_);
   DCHECK(session_message_cb_);
@@ -307,6 +311,10 @@ HRESULT MediaFoundationCdm::Initialize() {
   create_mf_cdm_cb_.Run(hresult, mf_cdm);
   if (!mf_cdm) {
     DCHECK(FAILED(hresult));
+    // Only report CdmEvent::kCdmError here as this is where most failures
+    // happen, and other errors can be easily triggered by sites, e.g. a bad
+    // server certificate or a bad license.
+    OnCdmEvent(CdmEvent::kCdmError);
     return hresult;
   }
 
@@ -324,8 +332,11 @@ void MediaFoundationCdm::SetServerCertificate(
     return;
   }
 
-  if (FAILED(mf_cdm_->SetServerCertificate(certificate.data(),
-                                           certificate.size()))) {
+  auto hr =
+      mf_cdm_->SetServerCertificate(certificate.data(), certificate.size());
+  base::UmaHistogramSparse(uma_prefix_ + "SetServerCertificate", hr);
+
+  if (FAILED(hr)) {
     promise->reject(Exception::NOT_SUPPORTED_ERROR, 0, "Failed to set cert");
     return;
   }
@@ -373,7 +384,7 @@ void MediaFoundationCdm::CreateSessionAndGenerateRequest(
 
   // TODO(xhwang): Implement session expiration update.
   auto session = std::make_unique<MediaFoundationCdmSession>(
-      session_message_cb_, session_keys_change_cb_,
+      uma_prefix_, session_message_cb_, session_keys_change_cb_,
       session_expiration_update_cb_);
 
   if (FAILED(session->Initialize(mf_cdm_.Get(), session_type))) {
@@ -485,24 +496,25 @@ bool MediaFoundationCdm::RequiresMediaFoundationRenderer() {
   return true;
 }
 
-bool MediaFoundationCdm::GetMediaFoundationCdmProxy(
-    GetMediaFoundationCdmProxyCB get_mf_cdm_proxy_cb) {
+scoped_refptr<MediaFoundationCdmProxy>
+MediaFoundationCdm::GetMediaFoundationCdmProxy() {
   DVLOG_FUNC(1);
 
   if (!mf_cdm_) {
     DLOG(ERROR) << __func__ << ": Invalid state with null `mf_cdm_`";
-    return false;
+    return nullptr;
   }
 
   if (!cdm_proxy_) {
     cdm_proxy_ = base::MakeRefCounted<CdmProxyImpl>(
         mf_cdm_,
         base::BindRepeating(&MediaFoundationCdm::OnHardwareContextReset,
+                            weak_factory_.GetWeakPtr()),
+        base::BindRepeating(&MediaFoundationCdm::OnCdmEvent,
                             weak_factory_.GetWeakPtr()));
   }
 
-  BindToCurrentLoop(std::move(get_mf_cdm_proxy_cb)).Run(cdm_proxy_);
-  return true;
+  return cdm_proxy_;
 }
 
 bool MediaFoundationCdm::OnSessionId(
@@ -570,7 +582,8 @@ void MediaFoundationCdm::CloseSessionInternal(
     return;
   }
 
-  // EME requires running session closed algorithm before resolving the promise.
+  // EME requires running session closed algorithm before resolving the
+  // promise.
   sessions_.erase(session_id);
   session_closed_cb_.Run(session_id, reason);
   promise->resolve();
@@ -603,6 +616,11 @@ void MediaFoundationCdm::OnHardwareContextReset() {
     DLOG(ERROR) << __func__ << ": Re-initialization failed";
     DCHECK(!mf_cdm_);
   }
+}
+
+void MediaFoundationCdm::OnCdmEvent(CdmEvent event) {
+  DVLOG_FUNC(1);
+  cdm_event_cb_.Run(event);
 }
 
 void MediaFoundationCdm::OnIsTypeSupportedResult(

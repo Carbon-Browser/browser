@@ -6,21 +6,23 @@
 
 #include <memory>
 
+#include "ash/constants/ash_features.h"
 #include "base/bind.h"
 #include "base/test/task_environment.h"
+#include "chromeos/ash/components/dbus/update_engine/fake_update_engine_client.h"
+#include "chromeos/ash/components/dbus/update_engine/update_engine.pb.h"
+#include "chromeos/ash/components/dbus/update_engine/update_engine_client.h"
+#include "chromeos/ash/components/network/managed_network_configuration_handler.h"
+#include "chromeos/ash/components/network/network_cert_loader.h"
+#include "chromeos/ash/components/network/network_certificate_handler.h"
+#include "chromeos/ash/components/network/network_configuration_handler.h"
+#include "chromeos/ash/components/network/network_device_handler.h"
+#include "chromeos/ash/components/network/network_handler.h"
+#include "chromeos/ash/components/network/network_profile_handler.h"
+#include "chromeos/ash/components/network/network_state_test_helper.h"
+#include "chromeos/ash/components/network/onc/network_onc_utils.h"
+#include "chromeos/ash/components/network/proxy/ui_proxy_config_service.h"
 #include "chromeos/dbus/dbus_thread_manager.h"
-#include "chromeos/dbus/update_engine/fake_update_engine_client.h"
-#include "chromeos/dbus/update_engine/update_engine_client.h"
-#include "chromeos/network/managed_network_configuration_handler.h"
-#include "chromeos/network/network_cert_loader.h"
-#include "chromeos/network/network_certificate_handler.h"
-#include "chromeos/network/network_configuration_handler.h"
-#include "chromeos/network/network_device_handler.h"
-#include "chromeos/network/network_handler.h"
-#include "chromeos/network/network_profile_handler.h"
-#include "chromeos/network/network_state_test_helper.h"
-#include "chromeos/network/onc/onc_utils.h"
-#include "chromeos/network/proxy/ui_proxy_config_service.h"
 #include "chromeos/services/network_config/public/cpp/cros_network_config_test_helper.h"
 #include "chromeos/services/network_config/public/mojom/cros_network_config.mojom.h"
 #include "chromeos/services/network_config/public/mojom/network_types.mojom-shared.h"
@@ -40,9 +42,7 @@ class VersionUpdaterTest : public testing::Test {
  public:
   VersionUpdaterTest() {
     chromeos::DBusThreadManager::Initialize();
-    fake_update_engine_client_ = new FakeUpdateEngineClient();
-    DBusThreadManager::GetSetterForTesting()->SetUpdateEngineClient(
-        std::unique_ptr<UpdateEngineClient>(fake_update_engine_client_));
+    fake_update_engine_client_ = UpdateEngineClient::InitializeFakeForTest();
     cros_network_config_test_helper_ =
         std::make_unique<network_config::CrosNetworkConfigTestHelper>(false);
     InitializeManagedNetworkConfigurationHandler();
@@ -57,12 +57,12 @@ class VersionUpdaterTest : public testing::Test {
     base::RunLoop().RunUntilIdle();
     version_updater_.reset();
     NetworkHandler::Shutdown();
+    cros_network_config_test_helper_.reset();
     managed_network_configuration_handler_.reset();
     network_configuration_handler_.reset();
     network_profile_handler_.reset();
     ui_proxy_config_service_.reset();
-    cros_network_config_test_helper_.reset();
-    // This will delete `fake_update_engine_client_`.
+    UpdateEngineClient::Shutdown();
     chromeos::DBusThreadManager::Shutdown();
   }
 
@@ -85,7 +85,7 @@ class VersionUpdaterTest : public testing::Test {
   }
 
   void SetCallback() {
-    version_updater().SetStatusCallback(
+    version_updater().SetOsUpdateStatusCallback(
         base::BindRepeating(&VersionUpdaterTest::OnOsUpdateStatusCallback,
                             weak_ptr_factory_.GetWeakPtr()));
   }
@@ -103,10 +103,9 @@ class VersionUpdaterTest : public testing::Test {
   void InitializeManagedNetworkConfigurationHandler() {
     network_profile_handler_ = NetworkProfileHandler::InitializeForTesting();
     network_configuration_handler_ =
-        base::WrapUnique<NetworkConfigurationHandler>(
-            NetworkConfigurationHandler::InitializeForTest(
-                network_state_helper().network_state_handler(),
-                cros_network_config_test_helper().network_device_handler()));
+        NetworkConfigurationHandler::InitializeForTest(
+            network_state_helper().network_state_handler(),
+            cros_network_config_test_helper().network_device_handler());
 
     PrefProxyConfigTrackerImpl::RegisterProfilePrefs(user_prefs_.registry());
     PrefProxyConfigTrackerImpl::RegisterPrefs(local_state_.registry());
@@ -142,14 +141,18 @@ class VersionUpdaterTest : public testing::Test {
                                 bool rollback,
                                 bool powerwash,
                                 const std::string& version,
-                                int64_t update_size) {
+                                int64_t update_size,
+                                update_engine::ErrorCode error_code) {
     callback_count_++;
+    error_code_ = error_code;
   }
 
   uint32_t callback_count_ = 0;
   FakeUpdateEngineClient& fake_update_engine_client() {
     return *fake_update_engine_client_;
   }
+
+  update_engine::ErrorCode error_code() { return error_code_; }
 
  private:
   std::unique_ptr<VersionUpdater> version_updater_;
@@ -164,6 +167,7 @@ class VersionUpdaterTest : public testing::Test {
   sync_preferences::TestingPrefServiceSyncable user_prefs_;
   TestingPrefServiceSimple local_state_;
   FakeUpdateEngineClient* fake_update_engine_client_;
+  update_engine::ErrorCode error_code_;
 
   base::test::TaskEnvironment task_environment_;
 
@@ -176,48 +180,55 @@ TEST_F(VersionUpdaterTest, IsIdleWhenUpdateEngineIdle) {
   update_engine::StatusResult status;
   status.set_current_operation(update_engine::Operation::IDLE);
   fake_update_engine_client().set_default_status(status);
-  EXPECT_TRUE(version_updater().IsIdle());
+  EXPECT_TRUE(version_updater().IsUpdateEngineIdle());
 }
 
 TEST_F(VersionUpdaterTest, IsNotIdleWhenUpdateEngineNotIdle) {
   update_engine::StatusResult status;
   status.set_current_operation(update_engine::Operation::CHECKING_FOR_UPDATE);
   fake_update_engine_client().set_default_status(status);
-  EXPECT_FALSE(version_updater().IsIdle());
-}
-
-TEST_F(VersionUpdaterTest, NoCallbackFailsGracefully) {
-  SetupWiFiNetwork();
-  EXPECT_FALSE(version_updater().UpdateOs());
+  EXPECT_FALSE(version_updater().IsUpdateEngineIdle());
 }
 
 TEST_F(VersionUpdaterTest, WithoutNetworkUpdateOsFails) {
   SetCallback();
   EXPECT_FALSE(version_updater().UpdateOs());
-  EXPECT_EQ(1u, callback_count_);
 }
 
 TEST_F(VersionUpdaterTest, WithNetworkUpdateOsOk) {
   SetCallback();
   SetupWiFiNetwork();
   EXPECT_TRUE(version_updater().UpdateOs());
-  EXPECT_EQ(0u, callback_count_);
 }
 
 TEST_F(VersionUpdaterTest, WithMeteredNetworkUpdateOsFails) {
   SetCallback();
   SetupMeteredNetwork();
   EXPECT_FALSE(version_updater().UpdateOs());
-  EXPECT_EQ(1u, callback_count_);
 }
 
 TEST_F(VersionUpdaterTest, CallbackFiresWhenUpdateEngineStatusChanges) {
+  if (!features::IsShimlessRMAOsUpdateEnabled()) {
+    return;
+  }
+
   SetCallback();
   SetupWiFiNetwork();
   update_engine::StatusResult status;
   status.set_current_operation(update_engine::Operation::CHECKING_FOR_UPDATE);
   fake_update_engine_client().NotifyObserversThatStatusChanged(status);
   EXPECT_EQ(1u, callback_count_);
+}
+
+TEST_F(VersionUpdaterTest, UpdateStatusChangedGetError) {
+  SetCallback();
+  update_engine::StatusResult status;
+  status.set_current_operation(update_engine::Operation::REPORTING_ERROR_EVENT);
+  status.set_last_attempt_error(
+      static_cast<int32_t>(update_engine::ErrorCode::kError));
+  version_updater().UpdateStatusChangedForTesting(status);
+  EXPECT_EQ(1u, callback_count_);
+  EXPECT_EQ(update_engine::ErrorCode::kError, error_code());
 }
 
 }  // namespace

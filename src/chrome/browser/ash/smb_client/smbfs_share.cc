@@ -26,8 +26,7 @@ namespace {
 
 constexpr char kMountDirPrefix[] = "smbfs-";
 constexpr char kMountIdHashSeparator[] = "#";
-constexpr base::TimeDelta kAllowCredentialsTimeout =
-    base::TimeDelta::FromSeconds(5);
+constexpr base::TimeDelta kAllowCredentialsTimeout = base::Seconds(5);
 
 SmbMountResult MountErrorToMountResult(smbfs::mojom::MountError mount_error) {
   switch (mount_error) {
@@ -88,7 +87,7 @@ void SmbFsShare::Mount(SmbFsShare::MountCallback callback) {
   } else {
     mounter_ = std::make_unique<smbfs::SmbFsMounter>(
         share_url_.ToString(), mount_dir, options_, this,
-        chromeos::disks::DiskMountManager::GetInstance());
+        disks::DiskMountManager::GetInstance());
   }
   mounter_->Mount(base::BindOnce(&SmbFsShare::OnMountDone,
                                  base::Unretained(this), std::move(callback)));

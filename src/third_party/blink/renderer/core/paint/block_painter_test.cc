@@ -11,7 +11,6 @@
 #include "third_party/blink/renderer/core/dom/events/add_event_listener_options_resolved.h"
 #include "third_party/blink/renderer/core/dom/events/native_event_listener.h"
 #include "third_party/blink/renderer/core/frame/local_frame_view.h"
-#include "third_party/blink/renderer/core/paint/compositing/composited_layer_mapping.h"
 #include "third_party/blink/renderer/core/paint/paint_controller_paint_test.h"
 #include "third_party/blink/renderer/platform/graphics/paint/drawing_display_item.h"
 #include "third_party/blink/renderer/platform/graphics/paint/paint_chunk.h"
@@ -32,13 +31,8 @@ TEST_P(BlockPainterTest, OverflowRectForCullRectTesting) {
     </div>
   )HTML");
   auto* scroller = To<LayoutBlock>(GetLayoutObjectByElementId("scroller"));
-  if (RuntimeEnabledFeatures::CompositeAfterPaintEnabled()) {
-    EXPECT_EQ(PhysicalRect(0, 0, 50, 5000),
-              BlockPainter(*scroller).OverflowRectForCullRectTesting());
-  } else {
-    EXPECT_EQ(PhysicalRect(0, 0, 50, 50),
-              BlockPainter(*scroller).OverflowRectForCullRectTesting());
-  }
+  EXPECT_EQ(PhysicalRect(0, 0, 50, 5000),
+            BlockPainter(*scroller).OverflowRectForCullRectTesting());
 }
 
 TEST_P(BlockPainterTest, OverflowRectCompositedScrollingForCullRectTesting) {
@@ -71,8 +65,6 @@ void SetWheelEventListener(const Document& document, const char* element_id) {
 }  // namespace
 
 TEST_P(BlockPainterTest, BlockingWheelRectsWithoutPaint) {
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitAndEnableFeature(::features::kWheelEventRegions);
   SetBodyInnerHTML(R"HTML(
     <style>
       ::-webkit-scrollbar { display: none; }
@@ -103,8 +95,8 @@ TEST_P(BlockPainterTest, BlockingWheelRectsWithoutPaint) {
               ElementsAre(VIEW_SCROLLING_BACKGROUND_DISPLAY_ITEM));
 
   HitTestData hit_test_data;
-  hit_test_data.wheel_event_rects = {{IntRect(0, 0, 100, 100)},
-                                     {IntRect(0, 0, 200, 25)}};
+  hit_test_data.wheel_event_rects = {{gfx::Rect(0, 0, 100, 100)},
+                                     {gfx::Rect(0, 0, 200, 25)}};
   ContentPaintChunks(),
       ElementsAre(VIEW_SCROLLING_BACKGROUND_CHUNK(1, &hit_test_data));
 
@@ -120,8 +112,6 @@ TEST_P(BlockPainterTest, BlockingWheelRectsWithoutPaint) {
 }
 
 TEST_P(BlockPainterTest, BlockingWheelEventRectSubsequenceCaching) {
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitAndEnableFeature(::features::kWheelEventRegions);
   SetBodyInnerHTML(R"HTML(
     <style>
       body { margin: 0; }
@@ -156,14 +146,14 @@ TEST_P(BlockPainterTest, BlockingWheelEventRectSubsequenceCaching) {
                                        .FirstFragment()
                                        .ContentsProperties();
   HitTestData hit_test_data;
-  hit_test_data.wheel_event_rects = {{IntRect(0, 0, 100, 100)}};
+  hit_test_data.wheel_event_rects = {{gfx::Rect(0, 0, 100, 100)}};
 
   EXPECT_THAT(
       ContentPaintChunks(),
       ElementsAre(
           VIEW_SCROLLING_BACKGROUND_CHUNK_COMMON,
           IsPaintChunk(1, 1, hit_test_chunk_id, hit_test_chunk_properties,
-                       &hit_test_data, IntRect(0, 0, 100, 100))));
+                       &hit_test_data, gfx::Rect(0, 0, 100, 100))));
 
   // Trigger a repaint with the whole stacking-context subsequence cached.
   GetLayoutView().Layer()->SetNeedsRepaint();
@@ -180,12 +170,10 @@ TEST_P(BlockPainterTest, BlockingWheelEventRectSubsequenceCaching) {
       ElementsAre(
           VIEW_SCROLLING_BACKGROUND_CHUNK_COMMON,
           IsPaintChunk(1, 1, hit_test_chunk_id, hit_test_chunk_properties,
-                       &hit_test_data, IntRect(0, 0, 100, 100))));
+                       &hit_test_data, gfx::Rect(0, 0, 100, 100))));
 }
 
 TEST_P(BlockPainterTest, WheelEventRectPaintCaching) {
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitAndEnableFeature(::features::kWheelEventRegions);
   SetBodyInnerHTML(R"HTML(
     <style>
       body { margin: 0; }
@@ -212,7 +200,7 @@ TEST_P(BlockPainterTest, WheelEventRectPaintCaching) {
                           IsSameId(sibling->Id(), kBackgroundType)));
 
   HitTestData hit_test_data;
-  hit_test_data.wheel_event_rects = {{IntRect(0, 0, 100, 100)}};
+  hit_test_data.wheel_event_rects = {{gfx::Rect(0, 0, 100, 100)}};
 
   EXPECT_THAT(ContentPaintChunks(),
               ElementsAre(VIEW_SCROLLING_BACKGROUND_CHUNK(2, &hit_test_data)));
@@ -228,8 +216,6 @@ TEST_P(BlockPainterTest, WheelEventRectPaintCaching) {
 }
 
 TEST_P(BlockPainterTest, BlockingWheelRectScrollingContents) {
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitAndEnableFeature(::features::kWheelEventRegions);
   SetBodyInnerHTML(R"HTML(
     <style>
       ::-webkit-scrollbar { display: none; }
@@ -260,49 +246,26 @@ TEST_P(BlockPainterTest, BlockingWheelRectScrollingContents) {
   SetWheelEventListener(GetDocument(), "scroller");
 
   HitTestData hit_test_data;
-  hit_test_data.wheel_event_rects = {{IntRect(0, 0, 100, 400)},
-                                     {IntRect(0, 0, 10, 400)}};
-  if (RuntimeEnabledFeatures::CompositeAfterPaintEnabled()) {
-    EXPECT_THAT(
-        ContentDisplayItems(),
-        ElementsAre(VIEW_SCROLLING_BACKGROUND_DISPLAY_ITEM,
-                    IsSameId(scroller->Id(), kBackgroundType),
-                    IsSameId(scroller_scrolling_client.Id(), kBackgroundType)));
-    EXPECT_THAT(
-        ContentPaintChunks(),
-        ElementsAre(VIEW_SCROLLING_BACKGROUND_CHUNK_COMMON,
-                    IsPaintChunk(1, 2),  // scroller background.
-                    IsPaintChunk(2, 2),  // scroller scroll hit test.
-                    IsPaintChunk(2, 3,
-                                 PaintChunk::Id(scroller->Id(),
-                                                kScrollingBackgroundChunkType),
-                                 scroller->FirstFragment().ContentsProperties(),
-                                 &hit_test_data)));
-
-  } else {
-    EXPECT_THAT(ContentDisplayItems(),
-                ElementsAre(VIEW_SCROLLING_BACKGROUND_DISPLAY_ITEM));
-    EXPECT_THAT(ContentPaintChunks(),
-                ElementsAre(VIEW_SCROLLING_BACKGROUND_CHUNK_COMMON));
-
-    auto& scroller_paint_controller = scroller->GetScrollableArea()
-                                          ->Layer()
-                                          ->GraphicsLayerBacking()
-                                          ->GetPaintController();
-    EXPECT_THAT(
-        scroller_paint_controller.GetDisplayItemList(),
-        ElementsAre(IsSameId(scroller_scrolling_client.Id(), kBackgroundType)));
-    EXPECT_THAT(
-        scroller_paint_controller.PaintChunks(),
-        ElementsAre(IsPaintChunk(
-            0, 1, PaintChunk::Id(scroller->Id(), kScrollingBackgroundChunkType),
-            scroller->FirstFragment().ContentsProperties(), &hit_test_data)));
-  }
+  hit_test_data.wheel_event_rects = {{gfx::Rect(0, 0, 100, 400)},
+                                     {gfx::Rect(0, 0, 10, 400)}};
+  EXPECT_THAT(
+      ContentDisplayItems(),
+      ElementsAre(VIEW_SCROLLING_BACKGROUND_DISPLAY_ITEM,
+                  IsSameId(scroller->Id(), kBackgroundType),
+                  IsSameId(scroller_scrolling_client.Id(), kBackgroundType)));
+  EXPECT_THAT(
+      ContentPaintChunks(),
+      ElementsAre(
+          VIEW_SCROLLING_BACKGROUND_CHUNK_COMMON,
+          IsPaintChunk(1, 2),  // scroller background.
+          IsPaintChunk(2, 2),  // scroller scroll hit test.
+          IsPaintChunk(
+              2, 3,
+              PaintChunk::Id(scroller->Id(), kScrollingBackgroundChunkType),
+              scroller->FirstFragment().ContentsProperties(), &hit_test_data)));
 }
 
 TEST_P(BlockPainterTest, WheelEventRectPaintChunkChanges) {
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitAndEnableFeature(::features::kWheelEventRegions);
   SetBodyInnerHTML(R"HTML(
     <style>
       body { margin: 0; }
@@ -314,8 +277,6 @@ TEST_P(BlockPainterTest, WheelEventRectPaintChunkChanges) {
     <div id='wheelevent'></div>
   )HTML");
 
-  auto* wheelevent_element = GetElementById("wheelevent");
-  auto* wheelevent = wheelevent_element->GetLayoutObject();
   EXPECT_THAT(ContentDisplayItems(),
               ElementsAre(VIEW_SCROLLING_BACKGROUND_DISPLAY_ITEM));
 
@@ -327,15 +288,13 @@ TEST_P(BlockPainterTest, WheelEventRectPaintChunkChanges) {
   EXPECT_THAT(ContentDisplayItems(),
               ElementsAre(VIEW_SCROLLING_BACKGROUND_DISPLAY_ITEM));
 
-  PaintChunk::Id hit_test_chunk_id(wheelevent->EnclosingLayer()->Id(),
-                                   kNonScrollingBackgroundChunkType);
   HitTestData hit_test_data;
-  hit_test_data.wheel_event_rects = {{IntRect(0, 0, 100, 100)}};
+  hit_test_data.wheel_event_rects = {{gfx::Rect(0, 0, 100, 100)}};
 
   EXPECT_THAT(ContentPaintChunks(),
               ElementsAre(VIEW_SCROLLING_BACKGROUND_CHUNK(1, &hit_test_data)));
 
-  wheelevent_element->RemoveAllEventListeners();
+  GetElementById("wheelevent")->RemoveAllEventListeners();
   UpdateAllLifecyclePhasesForTest();
   EXPECT_THAT(ContentDisplayItems(),
               ElementsAre(VIEW_SCROLLING_BACKGROUND_DISPLAY_ITEM));
@@ -375,8 +334,8 @@ TEST_P(BlockPainterTest, TouchActionRectsWithoutPaint) {
   EXPECT_THAT(ContentDisplayItems(),
               ElementsAre(VIEW_SCROLLING_BACKGROUND_DISPLAY_ITEM));
   HitTestData hit_test_data;
-  hit_test_data.touch_action_rects = {{IntRect(0, 0, 100, 100)},
-                                      {IntRect(0, 0, 200, 25)}};
+  hit_test_data.touch_action_rects = {{gfx::Rect(0, 0, 100, 100)},
+                                      {gfx::Rect(0, 0, 200, 25)}};
   ContentPaintChunks(),
       ElementsAre(VIEW_SCROLLING_BACKGROUND_CHUNK(1, &hit_test_data));
 
@@ -423,14 +382,14 @@ TEST_P(BlockPainterTest, TouchActionRectSubsequenceCaching) {
                                        .FirstFragment()
                                        .ContentsProperties();
   HitTestData hit_test_data;
-  hit_test_data.touch_action_rects = {{IntRect(0, 0, 100, 100)}};
+  hit_test_data.touch_action_rects = {{gfx::Rect(0, 0, 100, 100)}};
 
   EXPECT_THAT(
       ContentPaintChunks(),
       ElementsAre(
           VIEW_SCROLLING_BACKGROUND_CHUNK_COMMON,
           IsPaintChunk(1, 1, hit_test_chunk_id, hit_test_chunk_properties,
-                       &hit_test_data, IntRect(0, 0, 100, 100))));
+                       &hit_test_data, gfx::Rect(0, 0, 100, 100))));
 
   // Trigger a repaint with the whole stacking-context subsequence cached.
   GetLayoutView().Layer()->SetNeedsRepaint();
@@ -447,7 +406,7 @@ TEST_P(BlockPainterTest, TouchActionRectSubsequenceCaching) {
       ElementsAre(
           VIEW_SCROLLING_BACKGROUND_CHUNK_COMMON,
           IsPaintChunk(1, 1, hit_test_chunk_id, hit_test_chunk_properties,
-                       &hit_test_data, IntRect(0, 0, 100, 100))));
+                       &hit_test_data, gfx::Rect(0, 0, 100, 100))));
 }
 
 TEST_P(BlockPainterTest, TouchActionRectPaintCaching) {
@@ -476,7 +435,7 @@ TEST_P(BlockPainterTest, TouchActionRectPaintCaching) {
                           IsSameId(sibling->Id(), kBackgroundType)));
 
   HitTestData hit_test_data;
-  hit_test_data.touch_action_rects = {{IntRect(0, 0, 100, 100)}};
+  hit_test_data.touch_action_rects = {{gfx::Rect(0, 0, 100, 100)}};
 
   EXPECT_THAT(ContentPaintChunks(),
               ElementsAre(VIEW_SCROLLING_BACKGROUND_CHUNK(2, &hit_test_data)));
@@ -520,45 +479,23 @@ TEST_P(BlockPainterTest, TouchActionRectScrollingContents) {
   const auto& scroller_scrolling_client =
       scroller->GetScrollableArea()->GetScrollingBackgroundDisplayItemClient();
   HitTestData hit_test_data;
-  hit_test_data.touch_action_rects = {{IntRect(0, 0, 100, 400)},
-                                      {IntRect(0, 0, 10, 400)}};
-
-  if (RuntimeEnabledFeatures::CompositeAfterPaintEnabled()) {
-    EXPECT_THAT(
-        ContentDisplayItems(),
-        ElementsAre(VIEW_SCROLLING_BACKGROUND_DISPLAY_ITEM,
-                    IsSameId(scroller->Id(), kBackgroundType),
-                    IsSameId(scroller_scrolling_client.Id(), kBackgroundType)));
-    EXPECT_THAT(
-        ContentPaintChunks(),
-        ElementsAre(VIEW_SCROLLING_BACKGROUND_CHUNK_COMMON,
-                    IsPaintChunk(1, 2),  // scroller background.
-                    IsPaintChunk(2, 2),  // scroller scroll hit test.
-                    IsPaintChunk(2, 3,
-                                 PaintChunk::Id(scroller->Id(),
-                                                kScrollingBackgroundChunkType),
-                                 scroller->FirstFragment().ContentsProperties(),
-                                 &hit_test_data)));
-
-  } else {
-    EXPECT_THAT(ContentDisplayItems(),
-                ElementsAre(VIEW_SCROLLING_BACKGROUND_DISPLAY_ITEM));
-    EXPECT_THAT(ContentPaintChunks(),
-                ElementsAre(VIEW_SCROLLING_BACKGROUND_CHUNK_COMMON));
-
-    auto& scroller_paint_controller = scroller->GetScrollableArea()
-                                          ->Layer()
-                                          ->GraphicsLayerBacking()
-                                          ->GetPaintController();
-    EXPECT_THAT(
-        scroller_paint_controller.GetDisplayItemList(),
-        ElementsAre(IsSameId(scroller_scrolling_client.Id(), kBackgroundType)));
-    EXPECT_THAT(
-        scroller_paint_controller.PaintChunks(),
-        ElementsAre(IsPaintChunk(
-            0, 1, PaintChunk::Id(scroller->Id(), kScrollingBackgroundChunkType),
-            scroller->FirstFragment().ContentsProperties(), &hit_test_data)));
-  }
+  hit_test_data.touch_action_rects = {{gfx::Rect(0, 0, 100, 400)},
+                                      {gfx::Rect(0, 0, 10, 400)}};
+  EXPECT_THAT(
+      ContentDisplayItems(),
+      ElementsAre(VIEW_SCROLLING_BACKGROUND_DISPLAY_ITEM,
+                  IsSameId(scroller->Id(), kBackgroundType),
+                  IsSameId(scroller_scrolling_client.Id(), kBackgroundType)));
+  EXPECT_THAT(
+      ContentPaintChunks(),
+      ElementsAre(
+          VIEW_SCROLLING_BACKGROUND_CHUNK_COMMON,
+          IsPaintChunk(1, 2),  // scroller background.
+          IsPaintChunk(2, 2),  // scroller scroll hit test.
+          IsPaintChunk(
+              2, 3,
+              PaintChunk::Id(scroller->Id(), kScrollingBackgroundChunkType),
+              scroller->FirstFragment().ContentsProperties(), &hit_test_data)));
 }
 
 TEST_P(BlockPainterTest, TouchActionRectPaintChunkChanges) {
@@ -588,9 +525,9 @@ TEST_P(BlockPainterTest, TouchActionRectPaintChunkChanges) {
               ElementsAre(VIEW_SCROLLING_BACKGROUND_DISPLAY_ITEM));
 
   PaintChunk::Id hit_test_chunk_id(touchaction->EnclosingLayer()->Id(),
-                                   kNonScrollingBackgroundChunkType);
+                                   kHitTestChunkType);
   HitTestData hit_test_data;
-  hit_test_data.touch_action_rects = {{IntRect(0, 0, 100, 100)}};
+  hit_test_data.touch_action_rects = {{gfx::Rect(0, 0, 100, 100)}};
 
   EXPECT_THAT(ContentPaintChunks(),
               ElementsAre(VIEW_SCROLLING_BACKGROUND_CHUNK(1, &hit_test_data)));
@@ -639,8 +576,8 @@ TEST_P(BlockPainterTest, TouchHandlerRectsWithoutPaint) {
   EXPECT_THAT(ContentDisplayItems(),
               ElementsAre(VIEW_SCROLLING_BACKGROUND_DISPLAY_ITEM));
   HitTestData hit_test_data;
-  hit_test_data.touch_action_rects = {{IntRect(0, 0, 100, 100)},
-                                      {IntRect(0, 0, 200, 50)}};
+  hit_test_data.touch_action_rects = {{gfx::Rect(0, 0, 100, 100)},
+                                      {gfx::Rect(0, 0, 200, 50)}};
   EXPECT_THAT(ContentPaintChunks(),
               ElementsAre(VIEW_SCROLLING_BACKGROUND_CHUNK(1, &hit_test_data)));
 
@@ -669,11 +606,11 @@ TEST_P(BlockPainterTest, TouchActionRectsAcrossPaintChanges) {
   EXPECT_THAT(ContentDisplayItems(),
               ElementsAre(VIEW_SCROLLING_BACKGROUND_DISPLAY_ITEM));
   HitTestData hit_test_data;
-  hit_test_data.touch_action_rects = {{IntRect(0, 0, 100, 100)},
-                                      {IntRect(0, 0, 200, 50)}};
+  hit_test_data.touch_action_rects = {{gfx::Rect(0, 0, 100, 100)},
+                                      {gfx::Rect(0, 0, 200, 50)}};
   EXPECT_THAT(ContentPaintChunks(),
               ElementsAre(VIEW_SCROLLING_BACKGROUND_CHUNK(
-                  1, &hit_test_data, IntRect(0, 0, 800, 600))));
+                  1, &hit_test_data, gfx::Rect(0, 0, 800, 600))));
 
   auto* child_element = GetElementById("child");
   child_element->setAttribute("style", "background: blue;");
@@ -715,13 +652,13 @@ TEST_P(BlockPainterTest, ScrolledHitTestChunkProperties) {
 
   HitTestData scroller_touch_action_hit_test_data;
   scroller_touch_action_hit_test_data.touch_action_rects = {
-      {IntRect(0, 0, 100, 100)}};
+      {gfx::Rect(0, 0, 100, 100)}};
   HitTestData scroll_hit_test_data;
   scroll_hit_test_data.scroll_translation =
       scroller->FirstFragment().PaintProperties()->ScrollTranslation();
-  scroll_hit_test_data.scroll_hit_test_rect = IntRect(0, 0, 100, 100);
+  scroll_hit_test_data.scroll_hit_test_rect = gfx::Rect(0, 0, 100, 100);
   HitTestData scrolled_hit_test_data;
-  scrolled_hit_test_data.touch_action_rects = {{IntRect(0, 0, 200, 50)}};
+  scrolled_hit_test_data.touch_action_rects = {{gfx::Rect(0, 0, 200, 50)}};
 
   const auto& paint_chunks = ContentPaintChunks();
   EXPECT_THAT(
@@ -729,19 +666,18 @@ TEST_P(BlockPainterTest, ScrolledHitTestChunkProperties) {
       ElementsAre(
           VIEW_SCROLLING_BACKGROUND_CHUNK_COMMON,
           IsPaintChunk(
-              1, 1,
-              PaintChunk::Id(scroller->Layer()->Id(), DisplayItem::kLayerChunk),
+              1, 1, PaintChunk::Id(scroller->Id(), kBackgroundChunkType),
               scroller->FirstFragment().LocalBorderBoxProperties(),
-              &scroller_touch_action_hit_test_data, IntRect(0, 0, 100, 100)),
+              &scroller_touch_action_hit_test_data, gfx::Rect(0, 0, 100, 100)),
           IsPaintChunk(
               1, 1, PaintChunk::Id(scroller->Id(), DisplayItem::kScrollHitTest),
               scroller->FirstFragment().LocalBorderBoxProperties(),
-              &scroll_hit_test_data, IntRect(0, 0, 100, 100)),
+              &scroll_hit_test_data, gfx::Rect(0, 0, 100, 100)),
           IsPaintChunk(1, 1,
                        PaintChunk::Id(scroller->Id(),
                                       kClippedContentsBackgroundChunkType),
                        scroller->FirstFragment().ContentsProperties(),
-                       &scrolled_hit_test_data, IntRect(0, 0, 200, 50))));
+                       &scrolled_hit_test_data, gfx::Rect(0, 0, 200, 50))));
 
   const auto& scroller_paint_chunk = *(paint_chunks.begin() + 1);
   // The hit test rect for the scroller itself should not be scrolled.

@@ -9,7 +9,9 @@
 
 #include "base/bind.h"
 #include "base/check.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/observer_list.h"
 #include "cc/animation/animation.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/compositor/callback_layer_animation_observer.h"
@@ -49,8 +51,11 @@ class AnimationThroughputReporter::AnimationTracker
 
   ~AnimationTracker() override = default;
 
-  // Whether there are/will be animations to track.
-  bool HasAnimationsToTrack() const { return !attached_sequences().empty(); }
+  // Whether there are/will be animations to track and the track is actively
+  // tracking them.
+  bool HasAnimationsToTrack() const {
+    return active() && !attached_sequences().empty();
+  }
 
   void set_should_delete(bool should_delete) { should_delete_ = should_delete; }
 
@@ -129,7 +134,7 @@ class AnimationThroughputReporter::AnimationTracker
   // Whether this class should delete itself on animation ended.
   bool should_delete_ = false;
 
-  LayerAnimator* const animator_;
+  const raw_ptr<LayerAnimator> animator_;
 
   absl::optional<ThroughputTracker> throughput_tracker_;
 

@@ -1,2 +1,0 @@
-CONSOLE MESSAGE: line 9: SecurityError: Blocked a frame with origin "null" from accessing a cross-origin frame.
-

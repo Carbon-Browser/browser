@@ -8,10 +8,8 @@
 
 #include "base/big_endian.h"
 #include "base/bind.h"
-#include "base/cxx17_backports.h"
 #include "base/files/file_util.h"
 #include "base/logging.h"
-#include "base/task/post_task.h"
 #include "base/task/thread_pool.h"
 #include "content/public/browser/browser_thread.h"
 #include "third_party/zlib/zlib.h"
@@ -109,6 +107,9 @@ class WebRtcRtpDumpWriter::FileWorker {
                               Z_DEFAULT_STRATEGY);
     DCHECK_EQ(Z_OK, result);
   }
+
+  FileWorker(const FileWorker&) = delete;
+  FileWorker& operator=(const FileWorker&) = delete;
 
   ~FileWorker() {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -243,8 +244,6 @@ class WebRtcRtpDumpWriter::FileWorker {
   z_stream stream_;
 
   SEQUENCE_CHECKER(sequence_checker_);
-
-  DISALLOW_COPY_AND_ASSIGN(FileWorker);
 };
 
 WebRtcRtpDumpWriter::WebRtcRtpDumpWriter(
@@ -293,7 +292,7 @@ void WebRtcRtpDumpWriter::WriteRtpPacket(const uint8_t* packet_header,
 
     // Writes the dump file header.
     AppendToBuffer(kRtpDumpFileHeaderFirstLine,
-                   base::size(kRtpDumpFileHeaderFirstLine) - 1, dest_buffer);
+                   std::size(kRtpDumpFileHeaderFirstLine) - 1, dest_buffer);
     WriteRtpDumpFileHeaderBigEndian(start_time_, dest_buffer);
   }
 

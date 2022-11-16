@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "net/base/net_export.h"
 
@@ -22,6 +22,10 @@ class NET_EXPORT_PRIVATE HttpNetworkSessionPeer {
  public:
   // |session| should outlive the HttpNetworkSessionPeer.
   explicit HttpNetworkSessionPeer(HttpNetworkSession* session);
+
+  HttpNetworkSessionPeer(const HttpNetworkSessionPeer&) = delete;
+  HttpNetworkSessionPeer& operator=(const HttpNetworkSessionPeer&) = delete;
+
   ~HttpNetworkSessionPeer();
 
   void SetClientSocketPoolManager(
@@ -33,9 +37,7 @@ class NET_EXPORT_PRIVATE HttpNetworkSessionPeer {
   HttpNetworkSessionParams* params();
 
  private:
-  HttpNetworkSession* const session_;
-
-  DISALLOW_COPY_AND_ASSIGN(HttpNetworkSessionPeer);
+  const raw_ptr<HttpNetworkSession> session_;
 };
 
 }  // namespace net

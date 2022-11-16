@@ -20,6 +20,7 @@ import static org.chromium.chrome.browser.download.DownloadNotificationService.E
 import static org.chromium.chrome.browser.download.DownloadNotificationService.EXTRA_NOTIFICATION_BUNDLE_ICON_ID;
 import static org.chromium.chrome.browser.download.DownloadNotificationService.EXTRA_OTR_PROFILE_ID;
 
+import android.app.DownloadManager;
 import android.app.Notification;
 import android.app.PendingIntent;
 import android.content.ComponentName;
@@ -27,6 +28,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
+import android.text.TextUtils;
 
 import androidx.core.app.NotificationCompat;
 
@@ -47,7 +49,6 @@ import org.chromium.components.offline_items_collection.ContentId;
 import org.chromium.components.offline_items_collection.LegacyHelpers;
 import org.chromium.components.offline_items_collection.OfflineItem;
 import org.chromium.components.offline_items_collection.PendingState;
-import org.chromium.url.GURL;
 
 /**
  * Creates and updates notifications related to downloads.
@@ -263,8 +264,15 @@ public final class DownloadNotificationFactory {
                 }
 
                 iconId = R.drawable.offline_pin;
-
-                if (downloadUpdate.getIsOpenable()) {
+                // Download from Android DownloadManager carries an empty namespace.
+                if (TextUtils.isEmpty(downloadUpdate.getContentId().namespace)) {
+                    // Create an intent to view all Android downloads.
+                    Intent intent = new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS);
+                    intent.setFlags(
+                            Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                    builder.setContentIntent(PendingIntentProvider.getActivity(
+                            context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT));
+                } else if (downloadUpdate.getIsOpenable()) {
                     Intent intent;
                     if (LegacyHelpers.isLegacyDownload(downloadUpdate.getContentId())
                             && !ChromeFeatureList.isEnabled(
@@ -290,7 +298,8 @@ public final class DownloadNotificationFactory {
                         intent.putExtra(NotificationConstants.EXTRA_NOTIFICATION_ID,
                                 downloadUpdate.getNotificationId());
                         MediaViewerUtils.setOriginalUrlAndReferralExtraToIntent(intent,
-                                downloadUpdate.getOriginalUrl(), downloadUpdate.getReferrer());
+                                downloadUpdate.getOriginalUrl().getSpec(),
+                                downloadUpdate.getReferrer().getSpec());
                     } else {
                         intent = buildActionIntent(
                                 context, ACTION_DOWNLOAD_OPEN, downloadUpdate.getContentId(), null);
@@ -356,7 +365,7 @@ public final class DownloadNotificationFactory {
         } else if (downloadUpdate.getShouldPromoteOrigin()) {
             // Always show the origin URL if available (for normal profiles).
             String formattedUrl = DownloadUtils.formatUrlForDisplayInNotification(
-                    new GURL(downloadUpdate.getOriginalUrl()));
+                    downloadUpdate.getOriginalUrl());
             if (formattedUrl != null) setSubText(builder, formattedUrl);
         }
 

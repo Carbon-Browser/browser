@@ -11,7 +11,6 @@
 #include "base/values.h"
 #include "content/public/renderer/v8_value_converter.h"
 #include "gin/converter.h"
-#include "testing/gtest/include/gtest/gtest.h"
 
 namespace extensions {
 
@@ -54,20 +53,59 @@ std::string ReplaceSingleQuotes(base::StringPiece str) {
   return result;
 }
 
-std::unique_ptr<base::Value> ValueFromString(base::StringPiece str) {
+base::Value ValueFromString(base::StringPiece str) {
+  absl::optional<base::Value> value =
+      base::JSONReader::Read(ReplaceSingleQuotes(str));
+  if (!value) {
+    ADD_FAILURE() << "Failed to parse " << str;
+    return base::Value();
+  }
+  return std::move(value.value());
+}
+
+base::Value::List ListValueFromString(base::StringPiece str) {
+  base::Value value = ValueFromString(str);
+  if (value.is_none()) {
+    return base::Value::List();
+  }
+
+  if (!value.is_list()) {
+    ADD_FAILURE() << "Not a list: " << str;
+    return base::Value::List();
+  }
+
+  return std::move(value.GetList());
+}
+
+base::Value::Dict DictValueFromString(base::StringPiece str) {
+  base::Value value = ValueFromString(str);
+  if (value.is_none()) {
+    return base::Value::Dict();
+  }
+
+  if (!value.is_dict()) {
+    ADD_FAILURE() << "Not a dict: " << str;
+    return base::Value::Dict();
+  }
+
+  return std::move(value.GetDict());
+}
+
+std::unique_ptr<base::Value> DeprecatedValueFromString(base::StringPiece str) {
   std::unique_ptr<base::Value> value =
       base::JSONReader::ReadDeprecated(ReplaceSingleQuotes(str));
   EXPECT_TRUE(value) << str;
   return value;
 }
 
-std::unique_ptr<base::ListValue> ListValueFromString(base::StringPiece str) {
-  return base::ListValue::From(ValueFromString(str));
+std::unique_ptr<base::ListValue> DeprecatedListValueFromString(
+    base::StringPiece str) {
+  return base::ListValue::From(DeprecatedValueFromString(str));
 }
 
-std::unique_ptr<base::DictionaryValue> DictionaryValueFromString(
+std::unique_ptr<base::DictionaryValue> DeprecatedDictionaryValueFromString(
     base::StringPiece str) {
-  return base::DictionaryValue::From(ValueFromString(str));
+  return base::DictionaryValue::From(DeprecatedValueFromString(str));
 }
 
 std::string ValueToString(const base::Value& value) {
@@ -205,6 +243,22 @@ std::string GetStringPropertyFromObject(v8::Local<v8::Object> object,
                                         v8::Local<v8::Context> context,
                                         base::StringPiece key) {
   return V8ToString(GetPropertyFromObject(object, context, key), context);
+}
+
+bool ValueTypeChecker<v8::Function>::IsType(v8::Local<v8::Value> value) {
+  return value->IsFunction();
+}
+
+bool ValueTypeChecker<v8::Object>::IsType(v8::Local<v8::Value> value) {
+  return value->IsObject();
+}
+
+bool ValueTypeChecker<v8::Promise>::IsType(v8::Local<v8::Value> value) {
+  return value->IsPromise();
+}
+
+bool ValueTypeChecker<v8::Array>::IsType(v8::Local<v8::Value> value) {
+  return value->IsArray();
 }
 
 }  // namespace extensions

@@ -4,6 +4,7 @@
 
 #include "components/os_crypt/key_storage_kwallet.h"
 
+#include "base/memory/raw_ptr.h"
 #include "base/nix/xdg_util.h"
 #include "build/branding_buildflags.h"
 #include "dbus/message.h"
@@ -97,6 +98,9 @@ class KeyStorageKWalletTest : public testing::Test {
  public:
   KeyStorageKWalletTest() : key_storage_kwallet_(kDesktopEnv, "test-app") {}
 
+  KeyStorageKWalletTest(const KeyStorageKWalletTest&) = delete;
+  KeyStorageKWalletTest& operator=(const KeyStorageKWalletTest&) = delete;
+
   void SetUp() override {
     kwallet_dbus_mock_ = new StrictMock<MockKWalletDBus>();
 
@@ -119,12 +123,9 @@ class KeyStorageKWalletTest : public testing::Test {
   }
 
  protected:
-  StrictMock<MockKWalletDBus>* kwallet_dbus_mock_;
+  raw_ptr<StrictMock<MockKWalletDBus>> kwallet_dbus_mock_;
   KeyStorageKWallet key_storage_kwallet_;
   const std::string wallet_name_ = "mollet";
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(KeyStorageKWalletTest);
 };
 
 TEST_F(KeyStorageKWalletTest, InitializeFolder) {
@@ -232,6 +233,10 @@ class KeyStorageKWalletFailuresTest
   KeyStorageKWalletFailuresTest()
       : key_storage_kwallet_(kDesktopEnv, "test-app") {}
 
+  KeyStorageKWalletFailuresTest(const KeyStorageKWalletFailuresTest&) = delete;
+  KeyStorageKWalletFailuresTest& operator=(
+      const KeyStorageKWalletFailuresTest&) = delete;
+
   void SetUp() override {
     // |key_storage_kwallet_| will take ownership of |kwallet_dbus_mock_|.
     kwallet_dbus_mock_ = new StrictMock<MockKWalletDBus>();
@@ -254,12 +259,9 @@ class KeyStorageKWalletFailuresTest
   }
 
  protected:
-  StrictMock<MockKWalletDBus>* kwallet_dbus_mock_;
+  raw_ptr<StrictMock<MockKWalletDBus>> kwallet_dbus_mock_;
   KeyStorageKWallet key_storage_kwallet_;
   const std::string wallet_name_ = "mollet";
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(KeyStorageKWalletFailuresTest);
 };
 
 INSTANTIATE_TEST_SUITE_P(All,

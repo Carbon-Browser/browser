@@ -26,7 +26,7 @@ void Dactyloscoper::Record(WebFeature feature) {
 namespace {
 
 bool ShouldSample(WebFeature feature) {
-  return IdentifiabilityStudySettings::Get()->ShouldSample(
+  return IdentifiabilityStudySettings::Get()->ShouldSampleSurface(
       IdentifiableSurface::FromTypeAndToken(
           IdentifiableSurface::Type::kWebFeature, feature));
 }
@@ -55,7 +55,7 @@ void Dactyloscoper::RecordDirectSurface(ExecutionContext* context,
     return;
   Document* document = window->document();
   IdentifiabilityMetricBuilder(document->UkmSourceID())
-      .SetWebfeature(feature, value)
+      .AddWebFeature(feature, value)
       .Record(document->UkmRecorder());
 }
 

@@ -23,13 +23,10 @@ const char kBlinkSettings[] = "blink-settings";
 // the default dark mode settings is used. Valid params are given below.
 // "InversionAlgorithm" takes int value of DarkModeInversionAlgorithm enum.
 // "ImagePolicy" takes int value of DarkModeImagePolicy enum.
-// "IsGrayScale" takes 1 or 0, 1 means grayscale is true, false otherwise.
-// "TextBrightnessThreshold" takes 0 to 255 int value.
+// "ForegroundBrightnessThreshold" takes 0 to 255 int value.
 // "BackgroundBrightnessThreshold" takes 0 to 255 int value.
 // "ContrastPercent" takes -1.0 to 1.0 float value. Higher the value, more
 // the contrast.
-// "ImageGrayScalePercent" takes 0.0 to 1.0 float value. Higher the value,
-// image would be more grayish.
 const char kDarkModeSettings[] = "dark-mode-settings";
 
 // Sets the tile size used by composited layers.
@@ -61,6 +58,10 @@ const char kDisableThreadedScrolling[] = "disable-threaded-scrolling";
 
 // Disable rasterizer that writes directly to GPU memory associated with tiles.
 const char kDisableZeroCopy[] = "disable-zero-copy";
+
+// Logs Runtime Call Stats. --single-process also needs to be used along with
+// this for the stats to be logged.
+const char kDumpRuntimeCallStats[] = "dump-blink-runtime-call-stats";
 
 // Specify that all compositor resources should be backed by GPU memory buffers.
 const char kEnableGpuMemoryBufferCompositorResources[] =
@@ -113,6 +114,9 @@ const char kMinHeightForGpuRasterTile[] = "min-height-for-gpu-raster-tile";
 // signal to dismiss a splash screen.
 const char kNetworkQuietTimeout[] = "network-quiet-timeout";
 
+// Number of worker threads used to rasterize content.
+const char kNumRasterThreads[] = "num-raster-threads";
+
 // Visibly render a border around layout shift rects in the web page to help
 // debug and study layout shifts.
 const char kShowLayoutShiftRegions[] = "show-layout-shift-regions";
@@ -126,6 +130,26 @@ const char kShowPaintRects[] = "show-paint-rects";
 // the platform default is used.
 const char kTouchTextSelectionStrategy[] = "touch-selection-strategy";
 
+// Used to communicate managed policy for the SetTimeoutWithoutClamp feature.
+// This feature is typically controlled by base::Feature (see
+// blink/common/features.*) but requires an enterprise policy override.
+// This is implicitly a tri-state, and can be either unset, or
+// set to "1" for force enable, or "0" for force disable.
+extern const char kSetTimeoutWithout1MsClampPolicy[] =
+    "set-timeout-without-1ms-clamp-policy";
+extern const char kSetTimeoutWithout1MsClampPolicy_ForceDisable[] = "0";
+extern const char kSetTimeoutWithout1MsClampPolicy_ForceEnable[] = "1";
+
+// Used to communicate managed policy for the MaxUnthrottledTimeoutNestingLevel
+// feature. This feature is typically controlled by base::Feature (see
+// blink/common/features.*) but requires an enterprise policy override. This is
+// implicitly a tri-state, and can be either unset, or set to "1" for force
+// enable, or "0" for force disable.
+extern const char kUnthrottledNestedTimeoutPolicy[] =
+    "unthrottled-nested-timeout-level-policy";
+extern const char kUnthrottledNestedTimeoutPolicy_ForceDisable[] = "0";
+extern const char kUnthrottledNestedTimeoutPolicy_ForceEnable[] = "1";
+
 // Comma-separated list of origins that can use SharedArrayBuffer without
 // enabling cross-origin isolation.
 const char kSharedArrayBufferAllowedOrigins[] =
@@ -133,6 +157,25 @@ const char kSharedArrayBufferAllowedOrigins[] =
 
 // Allows overriding the conditional focus window's length.
 const char kConditionalFocusWindowMs[] = "conditional-focus-window-ms";
+
+// Specifies the flags passed to JS engine.
+const char kJavaScriptFlags[] = "js-flags";
+
+// Controls whether WebSQL is force enabled.
+const char kWebSQLAccess[] = "web-sql-access";
+
+// Controls whether WebSQL for non-secure context is force enabled.
+const char kWebSQLNonSecureContextEnabled[] =
+    "web-sql-non-secure-context-enabled";
+
+// Used to communicate managed policy for the EventPath feature. This feature is
+// typically controlled by base::Feature (see blink/common/features.*) but
+// requires an enterprise policy override. This is implicitly a tri-state, and
+// can be either unset, or set to "1" for force enable, or "0" for force
+// disable.
+extern const char kEventPathPolicy[] = "event-path-policy";
+extern const char kEventPathPolicy_ForceDisable[] = "0";
+extern const char kEventPathPolicy_ForceEnable[] = "1";
 
 }  // namespace switches
 }  // namespace blink

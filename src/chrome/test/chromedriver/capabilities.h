@@ -15,6 +15,7 @@
 
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/time/time.h"
 #include "base/values.h"
 #include "chrome/test/chromedriver/chrome/device_metrics.h"
 #include "chrome/test/chromedriver/chrome/devtools_http_client.h"
@@ -38,6 +39,8 @@ class Switches {
   void SetSwitch(const std::string& name);
   void SetSwitch(const std::string& name, const std::string& value);
   void SetSwitch(const std::string& name, const base::FilePath& value);
+
+  void SetMultivaluedSwitch(const std::string& name, const std::string& value);
 
   // In case of same key, |switches| will override.
   void SetFromSwitches(const Switches& switches);
@@ -138,6 +141,8 @@ struct Capabilities {
   std::string android_exec_name;
 
   bool android_use_running_app;
+
+  bool android_keep_app_data_dir = false;
 
   int android_devtools_port = 0;
 

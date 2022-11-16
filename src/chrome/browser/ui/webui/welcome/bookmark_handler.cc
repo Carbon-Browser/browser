@@ -17,32 +17,31 @@ BookmarkHandler::BookmarkHandler(PrefService* prefs) : prefs_(prefs) {}
 BookmarkHandler::~BookmarkHandler() {}
 
 void BookmarkHandler::RegisterMessages() {
-  web_ui()->RegisterDeprecatedMessageCallback(
+  web_ui()->RegisterMessageCallback(
       "toggleBookmarkBar",
       base::BindRepeating(&BookmarkHandler::HandleToggleBookmarkBar,
                           base::Unretained(this)));
 
-  web_ui()->RegisterDeprecatedMessageCallback(
+  web_ui()->RegisterMessageCallback(
       "isBookmarkBarShown",
       base::BindRepeating(&BookmarkHandler::HandleIsBookmarkBarShown,
                           base::Unretained(this)));
 }
 
-void BookmarkHandler::HandleToggleBookmarkBar(const base::ListValue* args) {
-  bool show;
-  CHECK(args->GetBoolean(0, &show));
+void BookmarkHandler::HandleToggleBookmarkBar(const base::Value::List& args) {
+  CHECK(!args.empty());
+  const bool show = args[0].GetBool();
   prefs_->SetBoolean(bookmarks::prefs::kShowBookmarkBar, show);
 }
 
-void BookmarkHandler::HandleIsBookmarkBarShown(const base::ListValue* args) {
+void BookmarkHandler::HandleIsBookmarkBarShown(const base::Value::List& args) {
   AllowJavascript();
 
-  CHECK_EQ(1U, args->GetList().size());
-  const base::Value* callback_id;
-  CHECK(args->Get(0, &callback_id));
+  CHECK_EQ(1U, args.size());
+  const base::Value& callback_id = args[0];
 
   ResolveJavascriptCallback(
-      *callback_id,
+      callback_id,
       base::Value(prefs_->GetBoolean(bookmarks::prefs::kShowBookmarkBar)));
 }
 

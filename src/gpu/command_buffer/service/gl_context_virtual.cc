@@ -107,7 +107,7 @@ void GLContextVirtual::ForceReleaseVirtuallyCurrent() {
   shared_context_->OnReleaseVirtuallyCurrent(this);
 }
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 uint64_t GLContextVirtual::BackpressureFenceCreate() {
   return shared_context_->BackpressureFenceCreate();
 }
@@ -118,6 +118,12 @@ void GLContextVirtual::BackpressureFenceWait(uint64_t fence) {
 
 void GLContextVirtual::FlushForDriverCrashWorkaround() {
   shared_context_->FlushForDriverCrashWorkaround();
+}
+#endif
+
+#if defined(USE_EGL)
+gl::GLDisplayEGL* GLContextVirtual::GetGLDisplayEGL() {
+  return shared_context_->GetGLDisplayEGL();
 }
 #endif
 

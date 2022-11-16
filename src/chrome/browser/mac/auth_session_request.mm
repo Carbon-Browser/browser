@@ -12,6 +12,7 @@
 
 #include "base/no_destructor.h"
 #include "base/strings/sys_string_conversions.h"
+#include "chrome/browser/prefs/incognito_mode_prefs.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_tabstrip.h"
@@ -50,6 +51,12 @@ class AuthNavigationThrottle : public content::NavigationThrottle {
 
  private:
   ThrottleCheckResult HandleRequest() {
+    // Cancel any prerendering.
+    if (!navigation_handle()->IsInPrimaryMainFrame()) {
+      DCHECK(navigation_handle()->IsInPrerenderedMainFrame());
+      return CANCEL_AND_IGNORE;
+    }
+
     GURL url = navigation_handle()->GetURL();
     if (!url.SchemeIs(scheme_))
       return PROCEED;
@@ -174,8 +181,16 @@ absl::optional<std::string> AuthSessionRequest::CanonicalizeScheme(
 
 std::unique_ptr<content::NavigationThrottle> AuthSessionRequest::CreateThrottle(
     content::NavigationHandle* handle) {
-  if (!handle->IsInMainFrame())
-    return nil;
+  // Only attach a throttle to outermost main frames. Note non-primary main
+  // frames will cancel the navigation in the throttle.
+  switch (handle->GetNavigatingFrameType()) {
+    case content::FrameType::kSubframe:
+    case content::FrameType::kFencedFrameRoot:
+      return nil;
+    case content::FrameType::kPrimaryMainFrame:
+    case content::FrameType::kPrerenderMainFrame:
+      break;
+  }
 
   // base::Unretained is safe because throttles are owned by the
   // NavigationRequest, which won't outlive the WebContents, whose lifetime this
@@ -193,6 +208,7 @@ AuthSessionRequest::AuthSessionRequest(
     ASWebAuthenticationSessionRequest* request,
     std::string scheme)
     : content::WebContentsObserver(web_contents),
+      content::WebContentsUserData<AuthSessionRequest>(*web_contents),
       browser_(browser),
       request_(request, base::scoped_policy::RETAIN),
       scheme_(scheme) {
@@ -207,8 +223,22 @@ Browser* AuthSessionRequest::CreateBrowser(
   if (!profile)
     return nullptr;
 
-  if (request.shouldUseEphemeralSession)
+  bool ephemeral_sessions_allowed_by_policy =
+      IncognitoModePrefs::GetAvailability(profile->GetPrefs()) !=
+      IncognitoModePrefs::Availability::kDisabled;
+
+  // As per the documentation for `shouldUseEphemeralSession`: "Whether the
+  // request is honored depends on the user’s default web browser." If policy
+  // does not allow for the use of an ephemeral session, the options would be
+  // either to use a non-ephemeral session, or to error out. However, erroring
+  // out would leave any app that uses `ASWebAuthenticationSession` unable to do
+  // any sign-in at all via this API. Given that the docs do not actually
+  // provide a guarantee of an ephemeral session if requested, take advantage of
+  // that to not block the user's ability to sign in.
+  if (request.shouldUseEphemeralSession &&
+      ephemeral_sessions_allowed_by_policy) {
     profile = profile->GetPrimaryOTRProfile(/*create_if_needed=*/true);
+  }
   if (!profile)
     return nullptr;
 
@@ -306,7 +336,7 @@ void AuthSessionRequest::WebContentsDestroyed() {
   }
 }
 
-WEB_CONTENTS_USER_DATA_KEY_IMPL(AuthSessionRequest)
+WEB_CONTENTS_USER_DATA_KEY_IMPL(AuthSessionRequest);
 
 std::unique_ptr<content::NavigationThrottle> MaybeCreateAuthSessionThrottleFor(
     content::NavigationHandle* handle) API_AVAILABLE(macos(10.15)) {

@@ -116,28 +116,28 @@ bool LoadFileHandler(const std::string& handler_id,
   }
 
   if (mime_types) {
-    base::Value::ConstListView list_storage = mime_types->GetList();
-    for (size_t i = 0; i < list_storage.size(); ++i) {
-      if (!list_storage[i].is_string()) {
+    const base::Value::List& list = mime_types->GetList();
+    for (size_t i = 0; i < list.size(); ++i) {
+      if (!list[i].is_string()) {
         *error = ErrorUtils::FormatErrorMessageUTF16(
             errors::kInvalidFileHandlerTypeElement, handler_id,
             base::NumberToString(i));
         return false;
       }
-      handler.types.insert(list_storage[i].GetString());
+      handler.types.insert(list[i].GetString());
     }
   }
 
   if (file_extensions) {
-    base::Value::ConstListView list_storage = file_extensions->GetList();
-    for (size_t i = 0; i < list_storage.size(); ++i) {
-      if (!list_storage[i].is_string()) {
+    const base::Value::List& list = file_extensions->GetList();
+    for (size_t i = 0; i < list.size(); ++i) {
+      if (!list[i].is_string()) {
         *error = ErrorUtils::FormatErrorMessageUTF16(
             errors::kInvalidFileHandlerExtensionElement, handler_id,
             base::NumberToString(i));
         return false;
       }
-      handler.extensions.insert(list_storage[i].GetString());
+      handler.extensions.insert(list[i].GetString());
     }
   }
 
@@ -163,14 +163,14 @@ bool FileHandlersParser::Parse(Extension* extension, std::u16string* error) {
   const base::Value* all_handlers = nullptr;
   if (!extension->manifest()->GetDictionary(keys::kFileHandlers,
                                             &all_handlers)) {
-    *error = base::ASCIIToUTF16(errors::kInvalidFileHandlers);
+    *error = errors::kInvalidFileHandlers;
     return false;
   }
 
   std::vector<InstallWarning> install_warnings;
   for (auto entry : all_handlers->DictItems()) {
     if (!entry.second.is_dict()) {
-      *error = base::ASCIIToUTF16(errors::kInvalidFileHandlers);
+      *error = errors::kInvalidFileHandlers;
       return false;
     }
     if (!LoadFileHandler(entry.first, entry.second, &info->file_handlers, error,
@@ -188,8 +188,7 @@ bool FileHandlersParser::Parse(Extension* extension, std::u16string* error) {
   }
 
   if (filter_count > kMaxTypeAndExtensionHandlers) {
-    *error = base::ASCIIToUTF16(
-        errors::kInvalidFileHandlersTooManyTypesAndExtensions);
+    *error = errors::kInvalidFileHandlersTooManyTypesAndExtensions;
     return false;
   }
 

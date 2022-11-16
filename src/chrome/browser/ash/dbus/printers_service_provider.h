@@ -5,12 +5,11 @@
 #ifndef CHROME_BROWSER_ASH_DBUS_PRINTERS_SERVICE_PROVIDER_H_
 #define CHROME_BROWSER_ASH_DBUS_PRINTERS_SERVICE_PROVIDER_H_
 
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/scoped_observation.h"
-#include "chrome/browser/chromeos/printing/cups_printers_manager.h"
-#include "chrome/browser/chromeos/printing/cups_printers_manager_proxy.h"
-#include "chromeos/dbus/services/cros_dbus_service.h"
+#include "chrome/browser/ash/printing/cups_printers_manager.h"
+#include "chrome/browser/ash/printing/cups_printers_manager_proxy.h"
+#include "chromeos/ash/components/dbus/services/cros_dbus_service.h"
 #include "dbus/exported_object.h"
 
 namespace ash {
@@ -20,9 +19,13 @@ namespace ash {
 // make a request for more printers through a side channel e.g. cups_proxy.
 class PrintersServiceProvider
     : public CrosDBusService::ServiceProviderInterface,
-      public chromeos::CupsPrintersManager::Observer {
+      public CupsPrintersManager::Observer {
  public:
   PrintersServiceProvider();
+
+  PrintersServiceProvider(const PrintersServiceProvider&) = delete;
+  PrintersServiceProvider& operator=(const PrintersServiceProvider&) = delete;
+
   ~PrintersServiceProvider() override;
 
   // CrosDBusService::ServiceProviderInterface overrides:
@@ -40,11 +43,9 @@ class PrintersServiceProvider
   // A reference on ExportedObject for sending signals.
   scoped_refptr<dbus::ExportedObject> exported_object_;
 
-  base::ScopedObservation<chromeos::CupsPrintersManagerProxy,
-                          chromeos::CupsPrintersManager::Observer>
+  base::ScopedObservation<CupsPrintersManagerProxy,
+                          CupsPrintersManager::Observer>
       printers_manager_observation_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(PrintersServiceProvider);
 };
 
 }  // namespace ash

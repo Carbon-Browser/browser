@@ -5,6 +5,7 @@
 #ifndef EXTENSIONS_BROWSER_EXTENSION_FRAME_HOST_H_
 #define EXTENSIONS_BROWSER_EXTENSION_FRAME_HOST_H_
 
+#include "base/memory/raw_ptr.h"
 #include "content/public/browser/render_frame_host_receiver_set.h"
 #include "extensions/common/mojom/frame.mojom.h"
 #include "extensions/common/mojom/injection_type.mojom-shared.h"
@@ -30,6 +31,11 @@ class ExtensionFrameHost : public mojom::LocalFrameHost {
       mojo::PendingAssociatedReceiver<mojom::LocalFrameHost> receiver,
       content::RenderFrameHost* rfh);
 
+  content::RenderFrameHostReceiverSet<mojom::LocalFrameHost>&
+  receivers_for_testing() {
+    return receivers_;
+  }
+
   // mojom::LocalFrameHost:
   void RequestScriptInjectionPermission(
       const std::string& extension_id,
@@ -49,7 +55,7 @@ class ExtensionFrameHost : public mojom::LocalFrameHost {
  private:
   // This raw pointer is safe to use because ExtensionWebContentsObserver whose
   // lifetime is tied to the WebContents owns this instance.
-  content::WebContents* web_contents_;
+  raw_ptr<content::WebContents> web_contents_;
   content::RenderFrameHostReceiverSet<mojom::LocalFrameHost> receivers_;
 };
 

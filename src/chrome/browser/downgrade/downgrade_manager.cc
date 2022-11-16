@@ -12,7 +12,6 @@
 #include "base/callback.h"
 #include "base/command_line.h"
 #include "base/enterprise_util.h"
-#include "base/feature_list.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
@@ -21,11 +20,9 @@
 #include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
 #include "base/syslog_logging.h"
-#include "base/task/post_task.h"
 #include "base/task/thread_pool.h"
 #include "base/version.h"
 #include "build/build_config.h"
-#include "chrome/browser/browser_features.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/downgrade/downgrade_utils.h"
 #include "chrome/browser/downgrade/snapshot_manager.h"
@@ -40,7 +37,7 @@
 #include "content/public/browser/browser_thread.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include "chrome/installer/util/install_util.h"
 #endif
 
@@ -54,8 +51,7 @@ bool g_snapshots_enabled_for_testing = false;
 // exception of files/directories that should be left behind for a full data
 // wipe. Returns no value if the target directory could not be created, or the
 // number of items that could not be moved.
-absl::optional<int> MoveUserData(const base::FilePath& source,
-                                 const base::FilePath& target) {
+void MoveUserData(const base::FilePath& source, const base::FilePath& target) {
   // Returns true to exclude a file.
   auto exclusion_predicate =
       base::BindRepeating([](const base::FilePath& name) -> bool {
@@ -85,8 +81,6 @@ absl::optional<int> MoveUserData(const base::FilePath& source,
   if (!result ||
       !MoveWithoutFallback(source.Append(kDowngradeLastVersionFile),
                            target.Append(kDowngradeLastVersionFile))) {
-    if (result)
-      *result += 1;
     // Attempt to delete Last Version if all else failed so that Chrome does not
     // continually attempt to perform a migration.
     base::DeleteFile(source.Append(kDowngradeLastVersionFile));
@@ -98,7 +92,6 @@ absl::optional<int> MoveUserData(const base::FilePath& source,
     // switch suppresses downgrade processing, so that launch will go through
     // normal startup.
   }
-  return result;
 }
 
 // Renames |disk_cache_dir| in its containing folder. If that fails, an attempt
@@ -158,18 +151,14 @@ void DeleteMovedUserData(const base::FilePath& user_data_dir,
 }
 
 bool UserDataSnapshotEnabled() {
-  if (g_snapshots_enabled_for_testing)
-    return true;
-  bool is_enterprise_managed =
-#if defined(OS_WIN) || defined(OS_MAC)
-      base::IsMachineExternallyManaged() ||
+  return g_snapshots_enabled_for_testing ||
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
+         base::IsEnterpriseDevice() ||
 #endif
-      policy::BrowserDMTokenStorage::Get()->RetrieveDMToken().is_valid();
-  return is_enterprise_managed &&
-         base::FeatureList::IsEnabled(features::kUserDataSnapshot);
+         policy::BrowserDMTokenStorage::Get()->RetrieveDMToken().is_valid();
 }
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 bool IsAdministratorDrivenDowngrade(uint16_t current_milestone) {
   const auto downgrade_version = InstallUtil::GetDowngradeVersion();
   return downgrade_version &&
@@ -256,7 +245,7 @@ void DowngradeManager::DeleteMovedUserDataSoon(
     const base::FilePath& user_data_dir) {
   DCHECK(!user_data_dir.empty());
   // IWYU note: base/location.h and base/task/task_traits.h are guaranteed to be
-  // available via base/task/post_task.h.
+  // available via base/task/thread_pool.h.
   content::BrowserThread::PostBestEffortTask(
       FROM_HERE,
       base::ThreadPool::CreateTaskRunner(
@@ -277,26 +266,14 @@ void DowngradeManager::ProcessDowngrade(const base::FilePath& user_data_dir) {
   // be left behind. Furthermore, User Data is moved to a new directory within
   // itself (for example, to User Data/User Data.CHROME_DELETE) to guarantee
   // that the movement isn't across volumes.
-  const auto failure_count = MoveUserData(
-      user_data_dir,
-      GetTempDirNameForDelete(user_data_dir, user_data_dir.BaseName()));
-  enum class UserDataMoveResult {
-    kCreateTargetFailure = 0,
-    kSuccess = 1,
-    kPartialSuccess = 2,
-    kMaxValue = kPartialSuccess
-  };
-  UserDataMoveResult move_result =
-      !failure_count ? UserDataMoveResult::kCreateTargetFailure
-                     : (*failure_count ? UserDataMoveResult::kPartialSuccess
-                                       : UserDataMoveResult::kSuccess);
-  base::UmaHistogramEnumeration("Downgrade.UserDataDirMove.Result",
-                                move_result);
-  if (failure_count && *failure_count) {
-    // Report precise values rather than an exponentially bucketed histogram.
-    base::UmaHistogramExactLinear("Downgrade.UserDataDirMove.FailureCount",
-                                  *failure_count, 50);
-  }
+  // This has a 95% success rate according to the histogram
+  // "Downgrade.UserDataDirMove.Result" which is acceptable in this case since
+  // the files (usually under 5 files according to
+  // "Downgrade.UserDataDirMove.FailureCount") left behind 5% of the time might
+  // be overridden by `SnapshotManager::RestoreSnapshot` or updated following a
+  // version upgrade.
+  MoveUserData(user_data_dir, GetTempDirNameForDelete(
+                                  user_data_dir, user_data_dir.BaseName()));
 
   if (type_ == Type::kSnapshotRestore) {
     SnapshotManager snapshot_manager(user_data_dir);
@@ -323,9 +300,9 @@ DowngradeManager::Type DowngradeManager::GetDowngradeType(
   DCHECK(!user_data_dir.empty());
   DCHECK_LT(current_version, last_version);
 
-#if defined(OS_WIN)
-    // Move User Data aside for a clean launch if it follows an
-    // administrator-driven downgrade.
+#if BUILDFLAG(IS_WIN)
+  // Move User Data aside for a clean launch if it follows an
+  // administrator-driven downgrade.
   if (IsAdministratorDrivenDowngrade(current_version.components()[0]))
     return Type::kAdministrativeWipe;
 #endif
@@ -347,7 +324,7 @@ DowngradeManager::Type DowngradeManager::GetDowngradeTypeWithSnapshot(
   const auto snapshot_to_restore =
       GetSnapshotToRestore(current_version, user_data_dir);
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   // Move User Data aside for a clean launch if it follows an
   // administrator-driven downgrade when no snapshot is found.
   if (!snapshot_to_restore && IsAdministratorDrivenDowngrade(milestone))

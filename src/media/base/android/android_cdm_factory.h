@@ -10,7 +10,6 @@
 #include <utility>
 
 #include "base/containers/flat_map.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "media/base/android/media_drm_bridge_factory.h"
 #include "media/base/cdm_factory.h"
@@ -25,11 +24,14 @@ class MEDIA_EXPORT AndroidCdmFactory final : public CdmFactory {
  public:
   AndroidCdmFactory(CreateFetcherCB create_fetcher_cb,
                     CreateStorageCB create_storage_cb);
+
+  AndroidCdmFactory(const AndroidCdmFactory&) = delete;
+  AndroidCdmFactory& operator=(const AndroidCdmFactory&) = delete;
+
   ~AndroidCdmFactory() override;
 
   // CdmFactory implementation.
-  void Create(const std::string& key_system,
-              const CdmConfig& cdm_config,
+  void Create(const CdmConfig& cdm_config,
               const SessionMessageCB& session_message_cb,
               const SessionClosedCB& session_closed_cb,
               const SessionKeysChangeCB& session_keys_change_cb,
@@ -53,8 +55,6 @@ class MEDIA_EXPORT AndroidCdmFactory final : public CdmFactory {
   base::flat_map<uint32_t, PendingCreation> pending_creations_;
 
   base::WeakPtrFactory<AndroidCdmFactory> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(AndroidCdmFactory);
 };
 
 }  // namespace media

@@ -5,7 +5,6 @@
 #ifndef CHROME_BROWSER_ASH_INPUT_METHOD_MOCK_CANDIDATE_WINDOW_CONTROLLER_H_
 #define CHROME_BROWSER_ASH_INPUT_METHOD_MOCK_CANDIDATE_WINDOW_CONTROLLER_H_
 
-#include "base/macros.h"
 #include "base/observer_list.h"
 #include "chrome/browser/ash/input_method/candidate_window_controller.h"
 
@@ -16,6 +15,11 @@ namespace input_method {
 class MockCandidateWindowController : public CandidateWindowController {
  public:
   MockCandidateWindowController();
+
+  MockCandidateWindowController(const MockCandidateWindowController&) = delete;
+  MockCandidateWindowController& operator=(
+      const MockCandidateWindowController&) = delete;
+
   ~MockCandidateWindowController() override;
 
   // CandidateWindowController overrides:
@@ -33,8 +37,6 @@ class MockCandidateWindowController : public CandidateWindowController {
 
  private:
   base::ObserverList<CandidateWindowController::Observer>::Unchecked observers_;
-
-  DISALLOW_COPY_AND_ASSIGN(MockCandidateWindowController);
 };
 
 }  // namespace input_method

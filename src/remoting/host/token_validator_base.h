@@ -8,7 +8,6 @@
 #include <memory>
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "net/ssl/client_cert_identity.h"
 #include "net/url_request/url_request.h"
@@ -31,6 +30,10 @@ class TokenValidatorBase
       const ThirdPartyAuthConfig& third_party_auth_config,
       const std::string& token_scope,
       scoped_refptr<net::URLRequestContextGetter> request_context_getter);
+
+  TokenValidatorBase(const TokenValidatorBase&) = delete;
+  TokenValidatorBase& operator=(const TokenValidatorBase&) = delete;
+
   ~TokenValidatorBase() override;
 
   // TokenValidator interface.
@@ -87,8 +90,6 @@ class TokenValidatorBase
   TokenValidatedCallback on_token_validated_;
 
   base::WeakPtrFactory<TokenValidatorBase> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(TokenValidatorBase);
 };
 
 }  // namespace remoting

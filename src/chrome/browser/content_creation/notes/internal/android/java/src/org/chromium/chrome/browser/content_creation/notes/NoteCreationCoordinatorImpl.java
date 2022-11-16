@@ -18,11 +18,10 @@ import org.chromium.chrome.browser.content_creation.notes.fonts.GoogleFontServic
 import org.chromium.chrome.browser.content_creation.notes.images.ImageService;
 import org.chromium.chrome.browser.content_creation.notes.top_bar.TopBarCoordinator;
 import org.chromium.chrome.browser.content_creation.notes.top_bar.TopBarDelegate;
-import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileKey;
 import org.chromium.chrome.browser.share.ChromeShareExtras;
 import org.chromium.chrome.browser.share.ChromeShareExtras.DetailedContentType;
 import org.chromium.chrome.browser.share.share_sheet.ChromeOptionShareCallback;
-import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.components.browser_ui.share.ShareImageFileUtils;
 import org.chromium.components.browser_ui.share.ShareParams;
 import org.chromium.components.content_creation.notes.NoteService;
@@ -30,6 +29,7 @@ import org.chromium.components.image_fetcher.ImageFetcher;
 import org.chromium.components.image_fetcher.ImageFetcherConfig;
 import org.chromium.components.image_fetcher.ImageFetcherFactory;
 import org.chromium.components.url_formatter.UrlFormatter;
+import org.chromium.ui.base.WindowAndroid;
 import org.chromium.ui.modelutil.MVCListAdapter.ModelList;
 import org.chromium.url.GURL;
 
@@ -46,7 +46,7 @@ public class NoteCreationCoordinatorImpl implements NoteCreationCoordinator, Top
     private static final String PNG_MIME_TYPE = "image/PNG";
 
     private final Activity mActivity;
-    private final Tab mTab;
+    private final WindowAndroid mWindowAndroid;
     private final ModelList mListModel;
     private final NoteCreationMediator mMediator;
     private final NoteCreationDialog mDialog;
@@ -58,11 +58,11 @@ public class NoteCreationCoordinatorImpl implements NoteCreationCoordinator, Top
 
     private TopBarCoordinator mTopBarCoordinator;
 
-    public NoteCreationCoordinatorImpl(Activity activity, Tab tab, NoteService noteService,
-            ChromeOptionShareCallback chromeOptionShareCallback, String shareUrl, String title,
-            String selectedText) {
+    public NoteCreationCoordinatorImpl(Activity activity, WindowAndroid windowAndroid,
+            NoteService noteService, ChromeOptionShareCallback chromeOptionShareCallback,
+            String shareUrl, String title, String selectedText) {
         mActivity = activity;
-        mTab = tab;
+        mWindowAndroid = windowAndroid;
         mChromeOptionShareCallback = chromeOptionShareCallback;
         mShareUrl = shareUrl;
         mSelectedText = selectedText;
@@ -71,17 +71,16 @@ public class NoteCreationCoordinatorImpl implements NoteCreationCoordinator, Top
 
         mListModel = new ModelList();
 
-        Profile profile = Profile.fromWebContents(tab.getWebContents());
         ImageFetcher imageFetcher = ImageFetcherFactory.createImageFetcher(
-                ImageFetcherConfig.DISK_CACHE_ONLY, profile.getProfileKey());
+                ImageFetcherConfig.DISK_CACHE_ONLY, ProfileKey.getLastUsedRegularProfileKey());
         mMediator = new NoteCreationMediator(mListModel, new GoogleFontService(mActivity),
                 noteService, new ImageService(imageFetcher));
 
-        String urlDomain =
-                UrlFormatter.formatUrlForDisplayOmitSchemeOmitTrivialSubdomains(mShareUrl);
+        String urlDomain = UrlFormatter.formatUrlForDisplayOmitSchemePathAndTrivialSubdomains(
+                new GURL(mShareUrl));
         mDialog = new NoteCreationDialog();
         mDialog.initDialog(this::onViewCreated, urlDomain, title, selectedText,
-                noteService.isPublishAvailable());
+                noteService.isPublishAvailable(), this::executeAction);
     }
 
     @Override
@@ -94,7 +93,7 @@ public class NoteCreationCoordinatorImpl implements NoteCreationCoordinator, Top
     }
 
     /**
-     * Dismiss the main dialog.
+     * Dismiss the main dialog from top bar.
      */
     @Override
     public void dismiss() {
@@ -121,7 +120,8 @@ public class NoteCreationCoordinatorImpl implements NoteCreationCoordinator, Top
         int selectedNoteIndex = mDialog.getSelectedItemIndex();
         NoteCreationMetrics.recordNoteTemplateSelected(getTimeElapsedSinceCreationStart(),
                 mDialog.getNbTemplateSwitches(),
-                mListModel.get(selectedNoteIndex).model.get(NoteProperties.TEMPLATE).id);
+                mListModel.get(selectedNoteIndex).model.get(NoteProperties.TEMPLATE).id,
+                selectedNoteIndex);
 
         View noteView = mDialog.getNoteViewAt(selectedNoteIndex);
 
@@ -136,7 +136,7 @@ public class NoteCreationCoordinatorImpl implements NoteCreationCoordinator, Top
                 getNoteFilenamePrefix(), bitmap, (imageUri) -> {
                     final String sheetTitle = getShareSheetTitle();
                     ShareParams params =
-                            new ShareParams.Builder(mTab.getWindowAndroid(), sheetTitle, mShareUrl)
+                            new ShareParams.Builder(mWindowAndroid, sheetTitle, mShareUrl)
                                     .setFileUris(
                                             new ArrayList<>(Collections.singletonList(imageUri)))
                                     .setFileAltTexts(new ArrayList<>(
@@ -167,7 +167,7 @@ public class NoteCreationCoordinatorImpl implements NoteCreationCoordinator, Top
                                     .build();
 
                     // Dismiss current dialog before showing the share sheet.
-                    this.dismiss();
+                    mDialog.dismiss();
                     mChromeOptionShareCallback.showShareSheet(params, extras, shareStartTime);
                 });
     }
@@ -226,18 +226,17 @@ public class NoteCreationCoordinatorImpl implements NoteCreationCoordinator, Top
      */
     private void resolvePublishedNote(String noteUrl) {
         final String sheetTitle = getShareSheetTitle();
-        ShareParams params =
-                new ShareParams.Builder(mTab.getWindowAndroid(), sheetTitle, noteUrl).build();
+        ShareParams params = new ShareParams.Builder(mWindowAndroid, sheetTitle, noteUrl).build();
 
         long shareStartTime = System.currentTimeMillis();
         ChromeShareExtras extras = new ChromeShareExtras.Builder()
-                                           .setSkipPageSharingActions(true)
+                                           .setSkipPageSharingActions(false)
                                            .setContentUrl(new GURL(noteUrl))
                                            .setDetailedContentType(DetailedContentType.WEB_NOTES)
                                            .build();
 
         // Dismiss current dialog before showing the share sheet.
-        this.dismiss();
+        mDialog.dismiss();
         mChromeOptionShareCallback.showShareSheet(params, extras, shareStartTime);
     }
 

@@ -12,9 +12,9 @@
 #include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
+#include "base/test/metrics/histogram_tester.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/predictors/loading_test_util.h"
-#include "chrome/browser/predictors/predictors_features.h"
 #include "chrome/browser/predictors/proxy_lookup_client_impl.h"
 #include "chrome/browser/predictors/resolve_host_client_impl.h"
 #include "chrome/test/base/testing_profile.h"
@@ -181,6 +181,10 @@ net::NetworkIsolationKey CreateNetworkIsolationKey(const GURL& main_frame_url) {
 class PreconnectManagerTest : public testing::Test {
  public:
   PreconnectManagerTest();
+
+  PreconnectManagerTest(const PreconnectManagerTest&) = delete;
+  PreconnectManagerTest& operator=(const PreconnectManagerTest&) = delete;
+
   ~PreconnectManagerTest() override;
 
   void VerifyAndClearExpectations() const {
@@ -195,9 +199,6 @@ class PreconnectManagerTest : public testing::Test {
   std::unique_ptr<StrictMock<MockNetworkContext>> mock_network_context_;
   std::unique_ptr<StrictMock<MockPreconnectManagerDelegate>> mock_delegate_;
   std::unique_ptr<PreconnectManager> preconnect_manager_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(PreconnectManagerTest);
 };
 
 PreconnectManagerTest::PreconnectManagerTest()
@@ -292,16 +293,16 @@ TEST_F(PreconnectManagerTest, TestStartOneUrlPreconnect_MultipleTimes) {
   GURL main_frame_url("http://google.com");
   net::NetworkIsolationKey network_isolation_key =
       CreateNetworkIsolationKey(main_frame_url);
-  size_t count = features::GetMaxInflightPreresolves();
+  size_t count = PreconnectManager::kMaxInflightPreresolves;
   std::vector<PreconnectRequest> requests;
   for (size_t i = 0; i < count + 1; ++i) {
-    // Exactly features::GetMaxInflightPreresolves() should be preresolved.
+    // Exactly PreconnectManager::kMaxInflightPreresolves should be preresolved.
     std::string url = base::StringPrintf("http://cdn%" PRIuS ".google.com", i);
     requests.emplace_back(url::Origin::Create(GURL(url)), 1,
                           network_isolation_key);
   }
   for (size_t i = 0; i < count; ++i) {
-    // Exactly features::GetMaxInflightPreresolves() should be initiated
+    // Exactly PreconnectManager::kMaxInflightPreresolves should be initiated
     // and preresolved.
     EXPECT_CALL(
         *mock_delegate_,
@@ -357,7 +358,7 @@ TEST_F(PreconnectManagerTest, TestTwoConcurrentMainFrameUrls_MultipleTimes) {
   GURL main_frame_url_1("http://google.com");
   net::NetworkIsolationKey network_isolation_key_1 =
       CreateNetworkIsolationKey(main_frame_url_1);
-  size_t count = features::GetMaxInflightPreresolves();
+  size_t count = PreconnectManager::kMaxInflightPreresolves;
   std::vector<PreconnectRequest> requests;
   for (size_t i = 0; i < count + 1; ++i) {
     std::string url = base::StringPrintf("http://cdn%" PRIuS ".google.com", i);
@@ -456,7 +457,7 @@ TEST_F(PreconnectManagerTest,
   GURL main_frame_url_1("http://google1.com");
   net::NetworkIsolationKey network_isolation_key_1 =
       CreateNetworkIsolationKey(main_frame_url_1);
-  size_t count = features::GetMaxInflightPreresolves();
+  size_t count = PreconnectManager::kMaxInflightPreresolves;
   std::vector<PreconnectRequest> requests;
   for (size_t i = 0; i < count - 1; ++i) {
     std::string url =
@@ -649,10 +650,10 @@ TEST_F(PreconnectManagerTest, TestUnqueuedPreresolvesCanceled) {
   GURL main_frame_url("http://google.com");
   net::NetworkIsolationKey network_isolation_key =
       CreateNetworkIsolationKey(main_frame_url);
-  size_t count = features::GetMaxInflightPreresolves();
+  size_t count = PreconnectManager::kMaxInflightPreresolves;
   std::vector<PreconnectRequest> requests;
   for (size_t i = 0; i < count; ++i) {
-    // Exactly features::GetMaxInflightPreresolves() should be preresolved.
+    // Exactly PreconnectManager::kMaxInflightPreresolves should be preresolved.
     std::string url = base::StringPrintf("http://cdn%" PRIuS ".google.com", i);
     requests.emplace_back(url::Origin::Create(GURL(url)), 1,
                           network_isolation_key);
@@ -669,6 +670,45 @@ TEST_F(PreconnectManagerTest, TestUnqueuedPreresolvesCanceled) {
   preconnect_manager_->Stop(main_frame_url);
   EXPECT_CALL(*mock_delegate_, PreconnectFinishedProxy(main_frame_url));
   for (size_t i = 0; i < count; ++i) {
+    mock_network_context_->CompleteHostLookup(requests[i].origin.host(),
+                                              network_isolation_key, net::OK);
+  }
+}
+
+TEST_F(PreconnectManagerTest, TestQueueingMetricsRecorded) {
+  base::HistogramTester histogram_tester;
+
+  GURL main_frame_url("http://google.com");
+  net::NetworkIsolationKey network_isolation_key =
+      CreateNetworkIsolationKey(main_frame_url);
+  size_t num_preresolves = PreconnectManager::kMaxInflightPreresolves;
+  std::vector<PreconnectRequest> requests;
+  for (size_t i = 0; i < num_preresolves; ++i) {
+    // Exactly PreconnectManager::kMaxInflightPreresolves should be preresolved.
+    std::string url = base::StringPrintf("http://cdn%" PRIuS ".google.com", i);
+    requests.emplace_back(url::Origin::Create(GURL(url)), 1,
+                          network_isolation_key);
+    EXPECT_CALL(*mock_delegate_,
+                PreconnectInitiated(main_frame_url, GURL(url)));
+    EXPECT_CALL(*mock_network_context_,
+                ResolveHostProxy(requests.back().origin.host()));
+  }
+  // This url shouldn't be preresolved.
+  requests.emplace_back(url::Origin::Create(GURL("http://no.preresolve.com")),
+                        1, network_isolation_key);
+  preconnect_manager_->Start(main_frame_url, requests);
+
+  // The number of queued jobs should have been recorded.
+  histogram_tester.ExpectUniqueSample(
+      "Navigation.Preconnect.PreresolveJobQueueLength", num_preresolves + 1, 1);
+  // Each job that was actually executed should have had its queueing time
+  // recorded.
+  histogram_tester.ExpectTotalCount(
+      "Navigation.Preconnect.PreresolveJobQueueingTime", num_preresolves);
+
+  preconnect_manager_->Stop(main_frame_url);
+  EXPECT_CALL(*mock_delegate_, PreconnectFinishedProxy(main_frame_url));
+  for (size_t i = 0; i < num_preresolves; ++i) {
     mock_network_context_->CompleteHostLookup(requests[i].origin.host(),
                                               network_isolation_key, net::OK);
   }
@@ -846,7 +886,7 @@ TEST_F(PreconnectManagerTest, TestDetachedRequestHasHigherPriority) {
   GURL main_frame_url("http://google.com");
   net::NetworkIsolationKey network_isolation_key =
       CreateNetworkIsolationKey(main_frame_url);
-  size_t count = features::GetMaxInflightPreresolves();
+  size_t count = PreconnectManager::kMaxInflightPreresolves;
   std::vector<PreconnectRequest> requests;
   // Create enough asynchronous jobs to leave the last one in the queue.
   for (size_t i = 0; i < count; ++i) {

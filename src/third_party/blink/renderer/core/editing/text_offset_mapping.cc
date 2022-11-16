@@ -96,10 +96,10 @@ bool ShouldSkipChildren(const Node& node) {
 LayoutObject* NextForInlineContents(const LayoutObject& layout_object,
                                     const LayoutObject& container) {
   if (layout_object.IsBlockInInline())
-    return layout_object.NextSibling();
+    return layout_object.NextInPreOrderAfterChildren(&container);
   const Node* const node = layout_object.NonPseudoNode();
   if (node && ShouldSkipChildren(*node))
-    return layout_object.NextSibling();
+    return layout_object.NextInPreOrderAfterChildren(&container);
   return layout_object.NextInPreOrder(&container);
 }
 
@@ -195,6 +195,14 @@ TextOffsetMapping::InlineContents CreateInlineContentsFromBlockFlow(
       break;
     }
     if (layout_object->IsBlockInInline()) {
+      if (target.IsDescendantOf(layout_object)) {
+        // Note: We reach here when `target` is `position:absolute` or
+        // `position:fixed`, aka `IsOutOfFlowPositioned()`, because
+        // `LayoutObject::ContainingBlock()` handles them specially.
+        // See http://crbug.com/1324970
+        last = first;
+        break;
+      }
       block_in_inline_before = layout_object;
       first = last = nullptr;
     }

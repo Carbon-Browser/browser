@@ -11,11 +11,11 @@
 
 #include "base/bind.h"
 #include "base/callback_helpers.h"
-#include "base/macros.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/system/sys_info.h"
 #include "base/values.h"
 #include "components/crash/core/browser/crashes_ui_util.h"
+#include "components/crash/core/common/reporter_running_ios.h"
 #include "components/grit/dev_ui_components_resources.h"
 #include "components/strings/grit/components_chromium_strings.h"
 #include "components/strings/grit/components_strings.h"
@@ -65,6 +65,10 @@ web::WebUIIOSDataSource* CreateCrashesUIHTMLSource() {
 class CrashesDOMHandler : public web::WebUIIOSMessageHandler {
  public:
   CrashesDOMHandler();
+
+  CrashesDOMHandler(const CrashesDOMHandler&) = delete;
+  CrashesDOMHandler& operator=(const CrashesDOMHandler&) = delete;
+
   ~CrashesDOMHandler() override;
 
   // WebUIMessageHandler implementation.
@@ -76,7 +80,10 @@ class CrashesDOMHandler : public web::WebUIIOSMessageHandler {
   void OnUploadListAvailable();
 
   // Asynchronously fetches the list of crashes. Called from JS.
-  void HandleRequestCrashes(const base::ListValue* args);
+  void HandleRequestCrashes(const base::Value::List& args);
+
+  // Asynchronously requests a user triggered upload. Called from JS.
+  void HandleRequestSingleCrashUpload(const base::Value::List& args);
 
   // Sends the recent crashes list JS.
   void UpdateUI();
@@ -84,8 +91,6 @@ class CrashesDOMHandler : public web::WebUIIOSMessageHandler {
   scoped_refptr<UploadList> upload_list_;
   bool list_available_;
   bool first_load_;
-
-  DISALLOW_COPY_AND_ASSIGN(CrashesDOMHandler);
 };
 
 CrashesDOMHandler::CrashesDOMHandler()
@@ -100,13 +105,17 @@ CrashesDOMHandler::~CrashesDOMHandler() {
 void CrashesDOMHandler::RegisterMessages() {
   upload_list_->Load(base::BindOnce(&CrashesDOMHandler::OnUploadListAvailable,
                                     base::Unretained(this)));
-  web_ui()->RegisterDeprecatedMessageCallback(
+  web_ui()->RegisterMessageCallback(
       crash_reporter::kCrashesUIRequestCrashList,
       base::BindRepeating(&CrashesDOMHandler::HandleRequestCrashes,
                           base::Unretained(this)));
+  web_ui()->RegisterMessageCallback(
+      crash_reporter::kCrashesUIRequestSingleCrashUpload,
+      base::BindRepeating(&CrashesDOMHandler::HandleRequestSingleCrashUpload,
+                          base::Unretained(this)));
 }
 
-void CrashesDOMHandler::HandleRequestCrashes(const base::ListValue* args) {
+void CrashesDOMHandler::HandleRequestCrashes(const base::Value::List& args) {
   if (first_load_) {
     first_load_ = false;
     if (list_available_)
@@ -118,6 +127,17 @@ void CrashesDOMHandler::HandleRequestCrashes(const base::ListValue* args) {
   }
 }
 
+void CrashesDOMHandler::HandleRequestSingleCrashUpload(
+    const base::Value::List& args) {
+  DCHECK(crash_reporter::IsCrashpadRunning());
+  if (!IOSChromeMetricsServiceAccessor::IsMetricsAndCrashReportingEnabled()) {
+    return;
+  }
+
+  std::string local_id = args[0].GetString();
+  upload_list_->RequestSingleUploadAsync(local_id);
+}
+
 void CrashesDOMHandler::OnUploadListAvailable() {
   list_available_ = true;
   if (!first_load_)
@@ -127,17 +147,17 @@ void CrashesDOMHandler::OnUploadListAvailable() {
 void CrashesDOMHandler::UpdateUI() {
   bool crash_reporting_enabled =
       IOSChromeMetricsServiceAccessor::IsMetricsAndCrashReportingEnabled();
-  base::ListValue crash_list;
+  base::Value::List crash_list;
   if (crash_reporting_enabled)
     crash_reporter::UploadListToValue(upload_list_.get(), &crash_list);
 
   base::Value result(base::Value::Type::DICTIONARY);
-  result.SetBoolPath("enabled", crash_reporting_enabled);
-  result.SetBoolPath("dynamicBackend", false);
-  result.SetBoolPath("manualUploads", false);
-  result.SetPath("crashes", std::move(crash_list));
-  result.SetStringPath("version", version_info::GetVersionNumber());
-  result.SetStringPath("os", base::SysInfo::OperatingSystemName() + " " +
+  result.GetDict().Set("enabled", crash_reporting_enabled);
+  result.GetDict().Set("dynamicBackend", false);
+  result.GetDict().Set("manualUploads", crash_reporter::IsCrashpadRunning());
+  result.GetDict().Set("crashes", std::move(crash_list));
+  result.GetDict().Set("version", version_info::GetVersionNumber());
+  result.GetDict().Set("os", base::SysInfo::OperatingSystemName() + " " +
                                  base::SysInfo::OperatingSystemVersion());
 
   base::Value event_name(crash_reporter::kCrashesUIUpdateCrashList);

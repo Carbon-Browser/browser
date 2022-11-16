@@ -2,18 +2,18 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "ui/shell_dialogs/select_file_dialog_win.h"
+
 #include <stddef.h>
 
 #include <memory>
 #include <string>
 #include <vector>
 
-#include "base/cxx17_backports.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/logging.h"
-#include "base/macros.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
@@ -21,10 +21,10 @@
 #include "base/test/test_timeouts.h"
 #include "base/threading/platform_thread.h"
 #include "base/win/scoped_com_initializer.h"
+#include "base/win/windows_version.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/shell_dialogs/select_file_dialog.h"
-#include "ui/shell_dialogs/select_file_dialog_win.h"
 #include "ui/shell_dialogs/select_file_policy.h"
 #include "ui/strings/grit/ui_strings.h"
 
@@ -38,7 +38,7 @@ constexpr wchar_t kSaveFileDefaultTitle[] = L"Save As";
 // Returns the title of |window|.
 std::wstring GetWindowTitle(HWND window) {
   wchar_t buffer[256];
-  UINT count = ::GetWindowText(window, buffer, base::size(buffer));
+  UINT count = ::GetWindowText(window, buffer, std::size(buffer));
   return std::wstring(buffer, count);
 }
 
@@ -50,7 +50,7 @@ HWND WaitForDialogWindow(const std::wstring& dialog_title) {
 
   HWND result = nullptr;
   base::TimeDelta max_wait_time = TestTimeouts::action_timeout();
-  base::TimeDelta retry_interval = base::TimeDelta::FromMilliseconds(20);
+  base::TimeDelta retry_interval = base::Milliseconds(20);
   while (!result && (max_wait_time.InMilliseconds() > 0)) {
     result = ::FindWindow(kDialogClassName, dialog_title.c_str());
     base::PlatformThread::Sleep(retry_interval);
@@ -104,7 +104,7 @@ HWND WaitForDialogPrompt(HWND owner) {
   // whose owner is the file dialog.
   EnumWindowsParam param = {owner, nullptr};
   base::TimeDelta max_wait_time = TestTimeouts::action_timeout();
-  base::TimeDelta retry_interval = base::TimeDelta::FromMilliseconds(20);
+  base::TimeDelta retry_interval = base::Milliseconds(20);
   while (!param.result && (max_wait_time.InMilliseconds() > 0)) {
     ::EnumWindows(&EnumWindowsCallback, reinterpret_cast<LPARAM>(&param));
     base::PlatformThread::Sleep(retry_interval);
@@ -123,7 +123,7 @@ std::wstring GetDialogItemText(HWND window, int dialog_item_id) {
 
   wchar_t buffer[256];
   UINT count =
-      ::GetDlgItemText(window, dialog_item_id, buffer, base::size(buffer));
+      ::GetDlgItemText(window, dialog_item_id, buffer, std::size(buffer));
   return std::wstring(buffer, count);
 }
 
@@ -134,7 +134,7 @@ void SendCommand(HWND window, int id) {
   // Make sure the window is visible first or the WM_COMMAND may not have any
   // effect.
   base::TimeDelta max_wait_time = TestTimeouts::action_timeout();
-  base::TimeDelta retry_interval = base::TimeDelta::FromMilliseconds(20);
+  base::TimeDelta retry_interval = base::Milliseconds(20);
   while (!::IsWindowVisible(window) && (max_wait_time.InMilliseconds() > 0)) {
     base::PlatformThread::Sleep(retry_interval);
     max_wait_time -= retry_interval;
@@ -151,6 +151,10 @@ class SelectFileDialogWinTest : public ::testing::Test,
                                 public ui::SelectFileDialog::Listener {
  public:
   SelectFileDialogWinTest() = default;
+
+  SelectFileDialogWinTest(const SelectFileDialogWinTest&) = delete;
+  SelectFileDialogWinTest& operator=(const SelectFileDialogWinTest&) = delete;
+
   ~SelectFileDialogWinTest() override = default;
 
   // ui::SelectFileDialog::Listener:
@@ -192,11 +196,13 @@ class SelectFileDialogWinTest : public ::testing::Test,
 
   std::vector<base::FilePath> selected_paths_;
   bool was_cancelled_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(SelectFileDialogWinTest);
 };
 
 TEST_F(SelectFileDialogWinTest, CancelAllDialogs) {
+  // TODO(crbug.com/1265379): Flaky on Windows 7.
+  if (base::win::GetVersion() <= base::win::Version::WIN7)
+    GTEST_SKIP() << "Skipping test for Windows 7";
+
   // Intentionally not testing SELECT_UPLOAD_FOLDER because the dialog is
   // customized for that case.
   struct {
@@ -220,7 +226,7 @@ TEST_F(SelectFileDialogWinTest, CancelAllDialogs) {
           ui::SelectFileDialog::SELECT_OPEN_MULTI_FILE, kSelectFileDefaultTitle,
       }};
 
-  for (size_t i = 0; i < base::size(kTestCases); ++i) {
+  for (size_t i = 0; i < std::size(kTestCases); ++i) {
     SCOPED_TRACE(base::StringPrintf("i=%zu", i));
 
     const auto& test_case = kTestCases[i];

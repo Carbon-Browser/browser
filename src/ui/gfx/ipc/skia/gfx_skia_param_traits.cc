@@ -10,7 +10,7 @@
 #include "ipc/ipc_message_utils.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "third_party/skia/include/core/SkImageInfo.h"
-#include "ui/gfx/transform.h"
+#include "ui/gfx/geometry/transform.h"
 
 // Generate param traits write methods.
 #include "ipc/param_traits_write_macros.h"
@@ -65,8 +65,7 @@ void ParamTraits<SkImageInfo>::Log(const SkImageInfo& p, std::string* l) {
 void ParamTraits<SkBitmap>::Write(base::Pickle* m, const SkBitmap& p) {
   WriteParam(m, p.info());
   size_t pixel_size = p.computeByteSize();
-  m->WriteData(reinterpret_cast<const char*>(p.getPixels()),
-               static_cast<int>(pixel_size));
+  m->WriteData(reinterpret_cast<const char*>(p.getPixels()), pixel_size);
 }
 
 bool ParamTraits<SkBitmap>::Read(const base::Pickle* m,
@@ -77,15 +76,14 @@ bool ParamTraits<SkBitmap>::Read(const base::Pickle* m,
     return false;
 
   const char* bitmap_data;
-  int bitmap_data_size = 0;
+  size_t bitmap_data_size = 0;
   if (!iter->ReadData(&bitmap_data, &bitmap_data_size))
     return false;
-  // ReadData() only returns true if bitmap_data_size >= 0.
 
   if (!r->tryAllocPixels(image_info))
     return false;
 
-  if (static_cast<size_t>(bitmap_data_size) != r->computeByteSize())
+  if (bitmap_data_size != r->computeByteSize())
     return false;
   memcpy(r->getPixels(), bitmap_data, bitmap_data_size);
   return true;
@@ -98,7 +96,7 @@ void ParamTraits<SkBitmap>::Log(const SkBitmap& p, std::string* l) {
 
 void ParamTraits<gfx::Transform>::Write(base::Pickle* m, const param_type& p) {
   SkScalar column_major_data[16];
-  p.matrix().asColMajorf(column_major_data);
+  p.matrix().getColMajor(column_major_data);
   // We do this in a single write for performance reasons.
   m->WriteBytes(&column_major_data, sizeof(SkScalar) * 16);
 }
@@ -113,15 +111,9 @@ bool ParamTraits<gfx::Transform>::Read(const base::Pickle* m,
   return true;
 }
 
-void ParamTraits<gfx::Transform>::Log(
-    const param_type& p, std::string* l) {
-#ifdef SK_SCALAR_IS_FLOAT
+void ParamTraits<gfx::Transform>::Log(const param_type& p, std::string* l) {
   float row_major_data[16];
-  p.matrix().asRowMajorf(row_major_data);
-#else
-  double row_major_data[16];
-  p.matrix().asRowMajord(row_major_data);
-#endif
+  p.matrix().getRowMajor(row_major_data);
   l->append("(");
   for (int i = 0; i < 16; ++i) {
     if (i > 0)

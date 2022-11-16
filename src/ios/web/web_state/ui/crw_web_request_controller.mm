@@ -297,23 +297,20 @@ enum class BackForwardNavigationType {
     // pending navigation item.
     // Do not do it for localhost address as this is needed to have
     // pre-rendering in tests.
-    if (item->GetURL().GetOrigin() == requestURL.GetOrigin() &&
+    if (item->GetURL().DeprecatedGetOriginAsURL() ==
+            requestURL.DeprecatedGetOriginAsURL() &&
         !net::IsLocalhost(requestURL)) {
       self.navigationManagerImpl->UpdatePendingItemUrl(requestURL);
     }
   } else {
-    BOOL isPostNavigation = NO;
-    if (base::FeatureList::IsEnabled(
-            web::features::kCreatePendingItemForPostFormSubmission)) {
-      isPostNavigation =
-          [self.navigationHandler.pendingNavigationInfo.HTTPMethod
-              isEqual:@"POST"];
-    }
+    BOOL isPostNavigation =
+        [self.navigationHandler.pendingNavigationInfo.HTTPMethod
+            isEqual:@"POST"];
     self.navigationManagerImpl->AddPendingItem(
         requestURL, referrer, transition,
         rendererInitiated ? web::NavigationInitiationType::RENDERER_INITIATED
                           : web::NavigationInitiationType::BROWSER_INITIATED,
-        isPostNavigation, /*is_using_https_as_default_scheme=*/false);
+        isPostNavigation, web::HttpsUpgradeType::kNone);
     item =
         self.navigationManagerImpl->GetPendingItemInCurrentOrRestoredSession();
   }
@@ -361,9 +358,6 @@ enum class BackForwardNavigationType {
                  context:(nullable const web::NavigationContextImpl*)context {
   DCHECK_EQ(web::WKNavigationState::FINISHED,
             self.navigationHandler.navigationState);
-
-  [_delegate webRequestControllerRestoreStateFromHistory:self];
-
   // Placeholder and restore session URLs are implementation details so should
   // not notify WebStateObservers. If |context| is nullptr, don't skip
   // placeholder URLs because this may be the only opportunity to update
@@ -394,6 +388,14 @@ enum class BackForwardNavigationType {
     } else {
       UMA_HISTOGRAM_MEDIUM_TIMES("PLT.iOS.BrowserInitiatedPageLoadTime2",
                                  context->GetElapsedTimeSinceCreation());
+    }
+
+    // Use the Session Restoration User Agent as it is the only way to know if
+    // it is automatic or not.
+    if (self.webState->GetUserAgentForSessionRestoration() ==
+        web::UserAgentType::AUTOMATIC) {
+      web::GetWebClient()->LogDefaultUserAgent(self.webState,
+                                               context->GetUrl());
     }
   }
 }
@@ -498,8 +500,8 @@ enum class BackForwardNavigationType {
                     rendererInitiated:NO];
 
   if (self.navigationManagerImpl->IsRestoreSessionInProgress()) {
-    if (self.navigationManagerImpl->RestoreSessionFromCache(navigationURL)) {
-      // Return early if the session was restored from cache.
+    if (self.navigationManagerImpl->RestoreNativeSession(navigationURL)) {
+      // Return early if the session was restored via native API.
       return;
     }
     [self.delegate
@@ -508,21 +510,35 @@ enum class BackForwardNavigationType {
   }
 
   WKNavigation* navigation = nil;
+#if defined(__IPHONE_15_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_15_0
+  if (@available(iOS 15, *)) {
+    if (base::FeatureList::IsEnabled(web::features::kSetRequestAttribution)) {
+      request.attribution = NSURLRequestAttributionUser;
+    }
+  }
+#endif
+
   if (navigationURL.SchemeIsFile() &&
       web::GetWebClient()->IsAppSpecificURL(virtualURL)) {
     // file:// URL navigations are allowed for app-specific URLs, which
     // already have elevated privileges.
+    // TODO(crbug.com/1267899): Remove this #if once Xcode 13 is required for
+    // building iOS-related code.
+#if defined(__IPHONE_15_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_15_0
+    if (@available(iOS 15, *)) {
+      navigation = [self.webView loadFileRequest:request
+                         allowingReadAccessToURL:request.URL];
+    } else {
+      NSURL* navigationNSURL = net::NSURLWithGURL(navigationURL);
+      navigation = [self.webView loadFileURL:navigationNSURL
+                     allowingReadAccessToURL:navigationNSURL];
+    }
+#else
     NSURL* navigationNSURL = net::NSURLWithGURL(navigationURL);
     navigation = [self.webView loadFileURL:navigationNSURL
                    allowingReadAccessToURL:navigationNSURL];
-  } else {
-#if defined(__IPHONE_15_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_15_0
-    if (@available(iOS 15, *)) {
-      if (base::FeatureList::IsEnabled(web::features::kSetRequestAttribution)) {
-        request.attribution = NSURLRequestAttributionUser;
-      }
-    }
 #endif
+  } else {
     navigation = [self.webView loadRequest:request];
   }
   [self.navigationHandler.navigationStates

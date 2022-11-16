@@ -80,7 +80,7 @@ static bool IsInZeroToOneRange(float value) {
 }
 
 static bool ParseKeyTimes(const String& string,
-                          Vector<float>& result,
+                          HeapVector<float>& result,
                           bool verify_order) {
   result.clear();
   Vector<String> parse_list;
@@ -161,6 +161,13 @@ static bool ParseKeySplines(const String& string,
     return false;
   }
   return true;
+}
+
+void SVGAnimationElement::Trace(Visitor* visitor) const {
+  visitor->Trace(key_times_from_attribute_);
+  visitor->Trace(key_times_for_paced_);
+  visitor->Trace(key_points_);
+  SVGSMILElement::Trace(visitor);
 }
 
 void SVGAnimationElement::ParseAttribute(
@@ -264,11 +271,11 @@ float SVGAnimationElement::getStartTime(ExceptionState& exception_state) const {
                                       "No current interval.");
     return 0;
   }
-  return clampTo<float>(start_time.InSecondsF());
+  return ClampTo<float>(start_time.InSecondsF());
 }
 
 float SVGAnimationElement::getCurrentTime() const {
-  return clampTo<float>(Elapsed().InSecondsF());
+  return ClampTo<float>(Elapsed().InSecondsF());
 }
 
 float SVGAnimationElement::getSimpleDuration(
@@ -279,7 +286,7 @@ float SVGAnimationElement::getSimpleDuration(
                                       "No simple duration defined.");
     return 0;
   }
-  return clampTo<float>(duration.InSecondsF());
+  return ClampTo<float>(duration.InSecondsF());
 }
 
 void SVGAnimationElement::beginElementAt(float offset) {
@@ -372,7 +379,7 @@ void SVGAnimationElement::CalculateKeyTimesForCalcModePaced() {
   use_paced_key_times_ = true;
   key_times_for_paced_.clear();
 
-  Vector<float> calculated_key_times;
+  HeapVector<float> calculated_key_times;
   float total_distance = 0;
   calculated_key_times.push_back(0);
   for (unsigned n = 0; n < values_count - 1; ++n) {
@@ -424,7 +431,7 @@ float SVGAnimationElement::CalculatePercentForSpline(
   SMILTime duration = SimpleDuration();
   if (!duration.IsFinite())
     duration = SMILTime::FromSecondsD(100.0);
-  return clampTo<float>(
+  return ClampTo<float>(
       bezier.SolveWithEpsilon(percent, SolveEpsilon(duration.InSecondsF())));
 }
 

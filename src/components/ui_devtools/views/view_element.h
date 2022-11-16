@@ -5,7 +5,6 @@
 #ifndef COMPONENTS_UI_DEVTOOLS_VIEWS_VIEW_ELEMENT_H_
 #define COMPONENTS_UI_DEVTOOLS_VIEWS_VIEW_ELEMENT_H_
 
-#include "base/macros.h"
 #include "base/scoped_observation.h"
 #include "components/ui_devtools/ui_element.h"
 #include "components/ui_devtools/views/ui_element_with_metadata.h"
@@ -42,6 +41,7 @@ class ViewElement : public views::ViewObserver, public UIElementWithMetaData {
       const override;
   static views::View* From(const UIElement* element);
   void PaintRect() const override;
+  bool FindMatchByElementID(const ui::ElementIdentifier& identifier) override;
   bool DispatchMouseEvent(protocol::DOM::MouseEvent* event) override;
   bool DispatchKeyEvent(protocol::DOM::KeyEvent* event) override;
 
@@ -51,6 +51,10 @@ class ViewElement : public views::ViewObserver, public UIElementWithMetaData {
   ui::Layer* GetLayer() const override;
 
  private:
+  // Clears children and rebuilds ViewElement subtree from scratch. Called if an
+  // inconsistency is detected between the current tree and the tree of the
+  // backing view.
+  void RebuildTree();
   views::View* view_;
   base::ScopedObservation<views::View, views::ViewObserver> observer_{this};
 };

@@ -54,8 +54,8 @@ struct BLINK_COMMON_EXPORT StructTraits<blink::mojom::MediaStreamDeviceDataView,
     return device.serializable_session_id();
   }
 
-  static const absl::optional<media::mojom::DisplayMediaInformationPtr>&
-  display_media_info(const blink::MediaStreamDevice& device) {
+  static const media::mojom::DisplayMediaInformationPtr& display_media_info(
+      const blink::MediaStreamDevice& device) {
     return device.display_media_info;
   }
 
@@ -104,9 +104,17 @@ struct BLINK_COMMON_EXPORT
     return controls.disable_local_echo;
   }
 
+  static bool exclude_system_audio(const blink::StreamControls& controls) {
+    return controls.exclude_system_audio;
+  }
+
   static bool request_pan_tilt_zoom_permission(
       const blink::StreamControls& controls) {
     return controls.request_pan_tilt_zoom_permission;
+  }
+
+  static bool request_all_screens(const blink::StreamControls& controls) {
+    return controls.request_all_screens;
   }
 
   static bool Read(blink::mojom::StreamControlsDataView input,

@@ -11,9 +11,9 @@ import {DropPosition, IncognitoAvailability, MenuSource} from './constants.js';
 // A normalized version of chrome.bookmarks.BookmarkTreeNode.
 export type BookmarkNode = {
   id: string,
+  title: string,
   parentId?: string,
   url?: string,
-  title: string,
   dateAdded?: number,
   dateGroupModified?: number,
   unmodifiable?: string,
@@ -61,7 +61,8 @@ export type SearchState = {
 export type FolderOpenState = Map<string, boolean>;
 
 export type PreferencesState = {
-  canEdit: boolean, incognitoAvailability: IncognitoAvailability;
+  canEdit: boolean,
+  incognitoAvailability: IncognitoAvailability,
 };
 
 export type BookmarksPageState = {

@@ -9,8 +9,12 @@
 #include <string>
 
 #include "base/callback.h"
+#include "base/callback_forward.h"
 #include "base/component_export.h"
+#include "base/memory/raw_ptr.h"
 #include "base/types/pass_key.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/base/interaction/element_identifier.h"
 #include "ui/base/models/dialog_model_field.h"
 #include "ui/base/models/dialog_model_host.h"
 #include "ui/base/models/image_model.h"
@@ -36,7 +40,7 @@ class COMPONENT_EXPORT(UI_BASE) DialogModelDelegate {
   friend class DialogModel;
   void set_dialog_model(DialogModel* model) { dialog_model_ = model; }
 
-  DialogModel* dialog_model_ = nullptr;
+  raw_ptr<DialogModel> dialog_model_ = nullptr;
 };
 
 // DialogModel represents a platform-and-toolkit agnostic data + behavior
@@ -99,7 +103,7 @@ class COMPONENT_EXPORT(UI_BASE) DialogModel final {
 
     ~Builder();
 
-    std::unique_ptr<DialogModel> Build() WARN_UNUSED_RESULT;
+    [[nodiscard]] std::unique_ptr<DialogModel> Build();
 
     // Gets the DialogModel. Used for setting up callbacks that make use of the
     // model later once it's fully constructed. This is useful for dialogs or
@@ -131,8 +135,17 @@ class COMPONENT_EXPORT(UI_BASE) DialogModel final {
       return *this;
     }
 
-    Builder& SetIcon(ImageModel icon) {
+    Builder& SetBannerImage(ImageModel banner,
+                            ImageModel dark_mode_banner = ImageModel()) {
+      model_->banner_ = std::move(banner);
+      model_->dark_mode_banner_ = std::move(dark_mode_banner);
+      return *this;
+    }
+
+    Builder& SetIcon(ImageModel icon,
+                     ImageModel dark_mode_icon = ImageModel()) {
       model_->icon_ = std::move(icon);
+      model_->dark_mode_icon_ = std::move(dark_mode_icon);
       return *this;
     }
 
@@ -151,17 +164,20 @@ class COMPONENT_EXPORT(UI_BASE) DialogModel final {
 
     // Called when the dialog is explicitly closed (Esc, close-x). Not called
     // during accept/cancel.
-    Builder& SetCloseCallback(base::OnceClosure callback) {
-      model_->close_callback_ = std::move(callback);
+    Builder& SetCloseActionCallback(base::OnceClosure callback) {
+      model_->close_action_callback_ = std::move(callback);
       return *this;
     }
 
     // TODO(pbos): Clarify and enforce (through tests) that this is called after
     // {accept,cancel,close} callbacks.
-    // Unconditionally called when the dialog closes. Called on top of
-    // {accept,cancel,close} callbacks.
-    Builder& SetWindowClosingCallback(base::OnceClosure callback) {
-      model_->window_closing_callback_ = std::move(callback);
+    // Unconditionally called when the dialog destroys. Happens after
+    // user-action callbacks (accept, cancel, close), or as a result of dialog
+    // destruction. The latter can happen without a user action, for instance as
+    // a result of the OS destroying a native Widget in which this dialog is
+    // hosted.
+    Builder& SetDialogDestroyingCallback(base::OnceClosure callback) {
+      model_->dialog_destroying_callback_ = std::move(callback);
       return *this;
     }
 
@@ -171,6 +187,9 @@ class COMPONENT_EXPORT(UI_BASE) DialogModel final {
     // result, besides the dialog closing.
     // If no |label| is provided, default strings are chosen by the
     // DialogModelHost implementation.
+    // TODO(pbos): Reconsider this API, a DialogModelHost does not need to use
+    // buttons for accepting/cancelling. Also "ok" should be "accept" to be in
+    // sync with other APIs?
     Builder& AddOkButton(
         base::OnceClosure callback,
         std::u16string label = std::u16string(),
@@ -183,47 +202,79 @@ class COMPONENT_EXPORT(UI_BASE) DialogModel final {
     // Use of the extra button in new dialogs are discouraged. If this is deemed
     // necessary please double-check with UX before adding any new dialogs with
     // them.
-    Builder& AddDialogExtraButton(
+    Builder& AddExtraButton(
         base::RepeatingCallback<void(const Event&)> callback,
         std::u16string label,
         const DialogModelButton::Params& params = DialogModelButton::Params());
 
+    // Adds an extra link to the dialog.
+    Builder& AddExtraLink(ui::DialogModelLabel::Link link);
+
     // Adds body text. See DialogModel::AddBodyText().
-    Builder& AddBodyText(const DialogModelLabel& label) {
-      model_->AddBodyText(label);
+    Builder& AddBodyText(const DialogModelLabel& label,
+                         ElementIdentifier id = ElementIdentifier()) {
+      model_->AddBodyText(label, id);
       return *this;
     }
 
     // Adds a checkbox. See DialogModel::AddCheckbox().
-    Builder& AddCheckbox(int unique_id,
+    Builder& AddCheckbox(ElementIdentifier id,
                          const DialogModelLabel& label,
                          const DialogModelCheckbox::Params& params =
                              DialogModelCheckbox::Params()) {
-      model_->AddCheckbox(unique_id, label, params);
+      model_->AddCheckbox(id, label, params);
       return *this;
     }
 
     // Adds a combobox. See DialogModel::AddCombobox().
-    Builder& AddCombobox(std::u16string label,
+    Builder& AddCombobox(ElementIdentifier id,
+                         std::u16string label,
                          std::unique_ptr<ui::ComboboxModel> combobox_model,
                          const DialogModelCombobox::Params& params =
                              DialogModelCombobox::Params()) {
-      model_->AddCombobox(std::move(label), std::move(combobox_model), params);
+      model_->AddCombobox(id, std::move(label), std::move(combobox_model),
+                          params);
+      return *this;
+    }
+
+    // Adds a menu item. See DialogModel::AddMenuItem().
+    Builder& AddMenuItem(ImageModel icon,
+                         std::u16string label,
+                         base::RepeatingCallback<void(int)> callback,
+                         const DialogModelMenuItem::Params& params =
+                             DialogModelMenuItem::Params()) {
+      model_->AddMenuItem(std::move(icon), std::move(label),
+                          std::move(callback), params);
+      return *this;
+    }
+
+    // Adds a separator. See DialogModel::AddSeparator().
+    Builder& AddSeparator() {
+      model_->AddSeparator();
       return *this;
     }
 
     // Adds a textfield. See DialogModel::AddTextfield().
-    Builder& AddTextfield(std::u16string label,
+    Builder& AddTextfield(ElementIdentifier id,
+                          std::u16string label,
                           std::u16string text,
                           const DialogModelTextfield::Params& params =
                               DialogModelTextfield::Params()) {
-      model_->AddTextfield(std::move(label), std::move(text), params);
+      model_->AddTextfield(id, std::move(label), std::move(text), params);
+      return *this;
+    }
+
+    // Adds a custom field. See DialogModel::AddCustomField().
+    Builder& AddCustomField(
+        std::unique_ptr<DialogModelCustomField::Field> field,
+        ElementIdentifier id = ElementIdentifier()) {
+      model_->AddCustomField(std::move(field), id);
       return *this;
     }
 
     // Sets which field should be initially focused in the dialog model. Must be
     // called after that field has been added. Can only be called once.
-    Builder& SetInitiallyFocusedField(int unique_id);
+    Builder& SetInitiallyFocusedField(ElementIdentifier id);
 
    private:
     std::unique_ptr<DialogModel> model_;
@@ -242,46 +293,66 @@ class COMPONENT_EXPORT(UI_BASE) DialogModel final {
   DialogModelHost* host() { return host_; }
 
   // Adds body text at the end of the dialog model.
-  void AddBodyText(const DialogModelLabel& label);
+  void AddBodyText(const DialogModelLabel& label,
+                   ElementIdentifier id = ElementIdentifier());
 
   // Adds a checkbox ([checkbox] label) at the end of the dialog model.
-  void AddCheckbox(int unique_id,
+  void AddCheckbox(ElementIdentifier id,
                    const DialogModelLabel& label,
                    const DialogModelCheckbox::Params& params =
                        DialogModelCheckbox::Params());
 
   // Adds a labeled combobox (label: [model]) at the end of the dialog model.
-  void AddCombobox(std::u16string label,
+  void AddCombobox(ElementIdentifier id,
+                   std::u16string label,
                    std::unique_ptr<ui::ComboboxModel> combobox_model,
                    const DialogModelCombobox::Params& params =
                        DialogModelCombobox::Params());
 
+  // Adds a menu item at the end of the dialog model.
+  void AddMenuItem(ImageModel icon,
+                   std::u16string label,
+                   base::RepeatingCallback<void(int)> callback,
+                   const DialogModelMenuItem::Params& params =
+                       DialogModelMenuItem::Params());
+
+  // Adds a separator at the end of the dialog model.
+  void AddSeparator();
+
   // Adds a labeled textfield (label: [text]) at the end of the dialog model.
-  void AddTextfield(std::u16string label,
+  void AddTextfield(ElementIdentifier id,
+                    std::u16string label,
                     std::u16string text,
                     const DialogModelTextfield::Params& params =
                         DialogModelTextfield::Params());
 
+  // Adds a custom field at the end of the dialog model. This is used to inject
+  // framework-specific custom UI into dialogs that are otherwise constructed as
+  // DialogModels.
+  void AddCustomField(std::unique_ptr<DialogModelCustomField::Field> field,
+                      ElementIdentifier id = ElementIdentifier());
+
   // Check for the existence of a field. Should not be used if the code path
   // expects the |unique_id| to always be present, as GetFieldByUniqueId() and
   // friends will NOTREACHED() if |unique_id| is not present, detecting the bug.
-  bool HasField(int unique_id) const;
+  bool HasField(ElementIdentifier id) const;
 
   // Gets DialogModelFields from their unique identifier. |unique_id| is
   // supplied to the ::Params class during construction. Supplying a |unique_id|
   // not present in the model is a bug, and the methods will NOTREACHED(). If
   // you have unique fields that are conditionally present, see HasField().
-  DialogModelField* GetFieldByUniqueId(int unique_id);
-  DialogModelCheckbox* GetCheckboxByUniqueId(int unique_id);
-  DialogModelCombobox* GetComboboxByUniqueId(int unique_id);
-  DialogModelTextfield* GetTextfieldByUniqueId(int unique_id);
+  DialogModelField* GetFieldByUniqueId(ElementIdentifier id);
+  DialogModelCheckbox* GetCheckboxByUniqueId(ElementIdentifier id);
+  DialogModelCombobox* GetComboboxByUniqueId(ElementIdentifier id);
+  DialogModelTextfield* GetTextfieldByUniqueId(ElementIdentifier id);
 
   // Methods with base::PassKey<DialogModelHost> are only intended to be called
   // by the DialogModelHost implementation.
-  void OnDialogAccepted(base::PassKey<DialogModelHost>);
-  void OnDialogCancelled(base::PassKey<DialogModelHost>);
-  void OnDialogClosed(base::PassKey<DialogModelHost>);
-  void OnWindowClosing(base::PassKey<DialogModelHost>);
+  void OnDialogAcceptAction(base::PassKey<DialogModelHost>);
+  void OnDialogCancelAction(base::PassKey<DialogModelHost>);
+  void OnDialogCloseAction(base::PassKey<DialogModelHost>);
+
+  void OnDialogDestroying(base::PassKey<DialogModelHost>);
 
   // Called when added to a DialogModelHost.
   void set_host(base::PassKey<DialogModelHost>, DialogModelHost* host) {
@@ -303,7 +374,19 @@ class COMPONENT_EXPORT(UI_BASE) DialogModel final {
 
   const ImageModel& icon(base::PassKey<DialogModelHost>) const { return icon_; }
 
-  absl::optional<int> initially_focused_field(
+  const ImageModel& dark_mode_icon(base::PassKey<DialogModelHost>) const {
+    return dark_mode_icon_;
+  }
+
+  const ImageModel& banner(base::PassKey<DialogModelHost>) const {
+    return banner_;
+  }
+
+  const ImageModel& dark_mode_banner(base::PassKey<DialogModelHost>) const {
+    return dark_mode_banner_;
+  }
+
+  ElementIdentifier initially_focused_field(
       base::PassKey<DialogModelHost>) const {
     return initially_focused_field_;
   }
@@ -322,6 +405,10 @@ class COMPONENT_EXPORT(UI_BASE) DialogModel final {
 
   DialogModelButton* extra_button(base::PassKey<DialogModelHost>) {
     return extra_button_.has_value() ? &extra_button_.value() : nullptr;
+  }
+
+  DialogModelLabel::Link* extra_link(base::PassKey<DialogModelHost>) {
+    return extra_link_.has_value() ? &extra_link_.value() : nullptr;
   }
 
   bool close_on_deactivate(base::PassKey<DialogModelHost>) const {
@@ -344,27 +431,32 @@ class COMPONENT_EXPORT(UI_BASE) DialogModel final {
   void AddField(std::unique_ptr<DialogModelField> field);
 
   std::unique_ptr<DialogModelDelegate> delegate_;
-  DialogModelHost* host_ = nullptr;
+  raw_ptr<DialogModelHost> host_ = nullptr;
 
   absl::optional<bool> override_show_close_button_;
   bool close_on_deactivate_ = true;
   std::string internal_name_;
   std::u16string title_;
   ImageModel icon_;
+  ImageModel dark_mode_icon_;
+
+  ImageModel banner_;
+  ImageModel dark_mode_banner_;
 
   std::vector<std::unique_ptr<DialogModelField>> fields_;
-  absl::optional<int> initially_focused_field_;
+  ElementIdentifier initially_focused_field_;
   bool is_alert_dialog_ = false;
 
   absl::optional<DialogModelButton> ok_button_;
   absl::optional<DialogModelButton> cancel_button_;
   absl::optional<DialogModelButton> extra_button_;
+  absl::optional<DialogModelLabel::Link> extra_link_;
 
-  base::OnceClosure accept_callback_;
-  base::OnceClosure cancel_callback_;
-  base::OnceClosure close_callback_;
+  base::OnceClosure accept_action_callback_;
+  base::OnceClosure cancel_action_callback_;
+  base::OnceClosure close_action_callback_;
 
-  base::OnceClosure window_closing_callback_;
+  base::OnceClosure dialog_destroying_callback_;
 };
 
 }  // namespace ui

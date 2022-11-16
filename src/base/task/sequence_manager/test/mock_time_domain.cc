@@ -14,11 +14,7 @@ MockTimeDomain::MockTimeDomain(TimeTicks initial_now_ticks)
 
 MockTimeDomain::~MockTimeDomain() = default;
 
-LazyNow MockTimeDomain::CreateLazyNow() const {
-  return LazyNow(now_ticks_);
-}
-
-TimeTicks MockTimeDomain::Now() const {
+TimeTicks MockTimeDomain::NowTicks() const {
   return now_ticks_;
 }
 
@@ -26,16 +22,11 @@ void MockTimeDomain::SetNowTicks(TimeTicks now_ticks) {
   now_ticks_ = now_ticks;
 }
 
-absl::optional<TimeDelta> MockTimeDomain::DelayTillNextTask(LazyNow* lazy_now) {
-  return absl::nullopt;
-}
-
-bool MockTimeDomain::MaybeFastForwardToNextTask(bool quit_when_idle_requested) {
+bool MockTimeDomain::MaybeFastForwardToWakeUp(
+    absl::optional<WakeUp> next_wake_up,
+    bool quit_when_idle_requested) {
   return false;
 }
-
-void MockTimeDomain::SetNextDelayedDoWork(LazyNow* lazy_now,
-                                          TimeTicks run_time) {}
 
 const char* MockTimeDomain::GetName() const {
   return "MockTimeDomain";

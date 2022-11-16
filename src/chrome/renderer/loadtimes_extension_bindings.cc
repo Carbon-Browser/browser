@@ -12,7 +12,11 @@
 #include "third_party/blink/public/platform/web_url_response.h"
 #include "third_party/blink/public/web/web_local_frame.h"
 #include "third_party/blink/public/web/web_performance.h"
-#include "v8/include/v8.h"
+#include "v8/include/v8-extension.h"
+#include "v8/include/v8-isolate.h"
+#include "v8/include/v8-object.h"
+#include "v8/include/v8-primitive.h"
+#include "v8/include/v8-template.h"
 
 using blink::WebDocumentLoader;
 using blink::WebLocalFrame;
@@ -131,7 +135,7 @@ class LoadTimesExtensionWrapper : public v8::Extension {
     if (!document_loader) {
       return;
     }
-    const blink::WebURLResponse& response = document_loader->GetResponse();
+    const blink::WebURLResponse& response = document_loader->GetWebResponse();
     WebPerformance web_performance = frame->Performance();
     // Though request time now tends to be used to describe the time that the
     // request for the main resource was issued, when chrome.loadTimes() was

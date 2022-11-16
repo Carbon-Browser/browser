@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include <map>
+#include <tuple>
 
 #include "base/feature_list.h"
 #import "base/ios/ios_util.h"
@@ -32,12 +33,6 @@
 
 @implementation BrowserViewControllerTestCase
 
-- (AppLaunchConfiguration)appConfigurationForTestCase {
-  AppLaunchConfiguration config;
-  config.features_disabled.push_back(kStartSurface);
-  return config;
-}
-
 // Tests that the NTP is interactable even when multiple NTP are opened during
 // the animation of the first NTP opening. See crbug.com/1032544.
 - (void)testPageInteractable {
@@ -52,8 +47,7 @@
                                                             block:^BOOL {
                                                               return NO;
                                                             }];
-    BOOL success = [myCondition waitWithTimeout:0.05];
-    success = NO;
+    std::ignore = [myCondition waitWithTimeout:0.05];
 
     [ChromeEarlGrey openNewTab];
   }  // End of the sync disabler scope.
@@ -151,17 +145,12 @@
   // Invoke the file picker.
   [ChromeEarlGrey tapWebStateElementWithID:@"file"];
 
-  if (@available(iOS 14, *)) {
-    // Tap on the toolbar to dismiss the file picker on iOS14.  In iOS14 a
-    // UIDropShadowView covers the entire app, so tapping anywhere should
-    // dismiss the file picker.
-    [[EarlGrey selectElementWithMatcher:chrome_test_util::PrimaryToolbar()]
-        performAction:grey_tap()];
-  } else {
-    // Tap on the "Cancel" button to dismiss the file picker before iOS14.
-    [[EarlGrey selectElementWithMatcher:chrome_test_util::CancelButton()]
-        performAction:grey_tap()];
-  }
+  // Tap on the toolbar to dismiss the file picker on iOS14.  In iOS14 a
+  // UIDropShadowView covers the entire app, so tapping anywhere should
+  // dismiss the file picker.
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::PrimaryToolbar()]
+      performAction:grey_tap()];
+
   [ChromeEarlGreyUI waitForAppToIdle];
 }
 

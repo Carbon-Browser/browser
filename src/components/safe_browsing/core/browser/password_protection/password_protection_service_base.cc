@@ -12,10 +12,12 @@
 #include "base/bind.h"
 #include "base/callback.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/strings/escape.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/threading/sequenced_task_runner_handle.h"
+#include "build/build_config.h"
 #include "components/password_manager/core/browser/password_manager_metrics_util.h"
 #include "components/password_manager/core/browser/password_reuse_detector.h"
 #include "components/safe_browsing/core/browser/db/database_manager.h"
@@ -24,7 +26,6 @@
 #include "components/safe_browsing/core/common/features.h"
 #include "components/safe_browsing/core/common/utils.h"
 #include "google_apis/google_api_keys.h"
-#include "net/base/escape.h"
 #include "net/base/url_util.h"
 
 using password_manager::metrics_util::PasswordType;
@@ -40,6 +41,31 @@ const int kRequestTimeoutMs = 10000;
 const char kPasswordProtectionRequestUrl[] =
     "https://sb-ssl.google.com/safebrowsing/clientreport/login";
 
+// Check if the verdict makes this a security sensitive event.
+bool IsSecuritySensitiveVerdict(
+    LoginReputationClientResponse::VerdictType verdict_type) {
+  switch (verdict_type) {
+    case LoginReputationClientResponse::SAFE:
+      return false;
+    case LoginReputationClientResponse::LOW_REPUTATION:
+    case LoginReputationClientResponse::PHISHING:
+    case LoginReputationClientResponse::VERDICT_TYPE_UNSPECIFIED:
+      return true;
+  }
+  NOTREACHED() << "Unexpected verdict_type: " << verdict_type;
+  return false;
+}
+
+// Log security sensitive event if required.
+void MaybeRecordSecuritySensitiveEvent(
+    SafeBrowsingMetricsCollector* metrics_collector,
+    LoginReputationClientResponse::VerdictType verdict_type) {
+  if (metrics_collector && IsSecuritySensitiveVerdict(verdict_type)) {
+    metrics_collector->AddSafeBrowsingEventToPref(
+        SafeBrowsingMetricsCollector::EventType::
+            SECURITY_SENSITIVE_PASSWORD_PROTECTION);
+  }
+}
 }  // namespace
 
 PasswordProtectionServiceBase::PasswordProtectionServiceBase(
@@ -50,21 +76,18 @@ PasswordProtectionServiceBase::PasswordProtectionServiceBase(
     std::unique_ptr<SafeBrowsingTokenFetcher> token_fetcher,
     bool is_off_the_record,
     signin::IdentityManager* identity_manager,
-    bool try_token_fetch)
+    bool try_token_fetch,
+    SafeBrowsingMetricsCollector* metrics_collector)
     : database_manager_(database_manager),
       url_loader_factory_(url_loader_factory),
       pref_service_(pref_service),
       token_fetcher_(std::move(token_fetcher)),
       is_off_the_record_(is_off_the_record),
       identity_manager_(identity_manager),
-      try_token_fetch_(try_token_fetch) {
+      try_token_fetch_(try_token_fetch),
+      metrics_collector_(metrics_collector) {
   if (history_service)
     history_service_observation_.Observe(history_service);
-
-  common_spoofed_domains_ = {"login.live.com", "facebook.com", "box.com",
-                             "google.com",     "paypal.com",   "apple.com",
-                             "yahoo.com",      "adobe.com",    "amazon.com",
-                             "linkedin.com"};
 }
 
 PasswordProtectionServiceBase::~PasswordProtectionServiceBase() {
@@ -119,15 +142,18 @@ bool PasswordProtectionServiceBase::CanSendPing(
     ReusedPasswordAccountType password_type) {
   return IsPingingEnabled(trigger_type, password_type) &&
          !IsURLAllowlistedForPasswordEntry(main_frame_url) &&
-         !IsInExcludedCountry();
+         !IsInExcludedCountry() &&
+         // Although we can't get the reputation of the main frame URL for
+         // password reuse on about:blank, the referrer chain still provides
+         // enough useful information that we should send the ping.
+         (main_frame_url == GURL("about:blank") ||
+          CanGetReputationOfURL(main_frame_url));
 }
 
 bool PasswordProtectionServiceBase::
     IsSyncingGMAILPasswordWithSignedInProtectionEnabled(
         ReusedPasswordAccountType password_type) const {
-  return base::FeatureList::IsEnabled(
-             safe_browsing::kPasswordProtectionForSignedInUsers) &&
-         password_type.account_type() == ReusedPasswordAccountType::GMAIL &&
+  return password_type.account_type() == ReusedPasswordAccountType::GMAIL &&
          password_type.is_account_syncing();
 }
 
@@ -138,6 +164,9 @@ void PasswordProtectionServiceBase::RequestFinished(
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(request);
 
+#if !BUILDFLAG(IS_ANDROID)
+  bool warning_shown = false;
+#endif
   if (response) {
     ReusedPasswordAccountType password_type =
         GetPasswordProtectionReusedPasswordAccountType(request->password_type(),
@@ -145,12 +174,6 @@ void PasswordProtectionServiceBase::RequestFinished(
     if (outcome != RequestOutcome::RESPONSE_ALREADY_CACHED) {
       CacheVerdict(request->main_frame_url(), request->trigger_type(),
                    password_type, *response, base::Time::Now());
-    }
-    bool enable_warning_for_non_sync_users = base::FeatureList::IsEnabled(
-        safe_browsing::kPasswordProtectionForSignedInUsers);
-    if (!enable_warning_for_non_sync_users &&
-        request->password_type() == PasswordType::OTHER_GAIA_PASSWORD) {
-      return;
     }
 
     // If it's password alert mode and a Gsuite/enterprise account, we do not
@@ -170,10 +193,13 @@ void PasswordProtectionServiceBase::RequestFinished(
       ShowModalWarning(request, response->verdict_type(),
                        response->verdict_token(), password_type);
       request->set_is_modal_warning_showing(true);
+#if !BUILDFLAG(IS_ANDROID)
+      warning_shown = true;
+#endif
     }
   }
 
-  MaybeHandleDeferredNavigations(request);
+  ResumeDeferredNavigationsIfNeeded(request);
 
   // If the request is canceled, the PasswordProtectionServiceBase is already
   // partially destroyed, and we won't be able to log accurate metrics.
@@ -182,11 +208,14 @@ void PasswordProtectionServiceBase::RequestFinished(
         response ? response->verdict_type()
                  : LoginReputationClientResponse::VERDICT_TYPE_UNSPECIFIED;
 
+    // If verdict declares a security sensitive event, log accordingly.
+    MaybeRecordSecuritySensitiveEvent(metrics_collector_, verdict);
+
 // Disabled on Android, because enterprise reporting extension is not supported.
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
     MaybeReportPasswordReuseDetected(
         request, request->username(), request->password_type(),
-        verdict == LoginReputationClientResponse::PHISHING);
+        verdict == LoginReputationClientResponse::PHISHING, warning_shown);
 #endif
 
     // Persist a bit in CompromisedCredentials table when saved password is
@@ -241,7 +270,7 @@ GURL PasswordProtectionServiceBase::GetPasswordProtectionRequestUrl() {
   GURL url(kPasswordProtectionRequestUrl);
   std::string api_key = google_apis::GetAPIKey();
   DCHECK(!api_key.empty());
-  return url.Resolve("?key=" + net::EscapeQueryParamValue(api_key, true));
+  return url.Resolve("?key=" + base::EscapeQueryParamValue(api_key, true));
 }
 
 // static
@@ -373,8 +402,7 @@ bool PasswordProtectionServiceBase::IsSupportedPasswordTypeForPinging(
     case PasswordType::ENTERPRISE_PASSWORD:
       return true;
     case PasswordType::OTHER_GAIA_PASSWORD:
-      return base::FeatureList::IsEnabled(
-          safe_browsing::kPasswordProtectionForSignedInUsers);
+      return true;
     case PasswordType::PASSWORD_TYPE_UNKNOWN:
     case PasswordType::PASSWORD_TYPE_COUNT:
       return false;
@@ -390,7 +418,7 @@ bool PasswordProtectionServiceBase::IsSupportedPasswordTypeForModalWarning(
 
 // Currently password reuse warnings are only supported for saved passwords
 // and GAIA passwords on Android.
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   return IsSyncingGMAILPasswordWithSignedInProtectionEnabled(password_type);
 #else
   if (password_type.account_type() ==
@@ -401,9 +429,7 @@ bool PasswordProtectionServiceBase::IsSupportedPasswordTypeForModalWarning(
       password_type.account_type() != ReusedPasswordAccountType::GSUITE)
     return false;
 
-  return password_type.is_account_syncing() ||
-         base::FeatureList::IsEnabled(
-             safe_browsing::kPasswordProtectionForSignedInUsers);
+  return true;
 #endif
 }
 
@@ -411,10 +437,8 @@ bool PasswordProtectionServiceBase::CanGetAccessToken() {
   if (!try_token_fetch_ || is_off_the_record_)
     return false;
 
-  // Return true if the finch feature is enabled for an ESB user, and if the
-  // primary user account is signed in.
-  return base::FeatureList::IsEnabled(kPasswordProtectionWithToken) &&
-         pref_service_ && IsEnhancedProtectionEnabled(*pref_service_) &&
+  // Return true if the primary user account of an ESB user is signed in.
+  return pref_service_ && IsEnhancedProtectionEnabled(*pref_service_) &&
          identity_manager_ &&
          safe_browsing::SyncUtils::IsPrimaryAccountSignedIn(identity_manager_);
 }

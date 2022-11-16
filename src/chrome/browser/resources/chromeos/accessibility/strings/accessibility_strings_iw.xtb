@@ -30,7 +30,9 @@
 <translation id="1189258430971676908">אזור תרגול: רשימות נפתחות</translation>
 <translation id="1195238899008218998">אחרית דבר</translation>
 <translation id="1197088940767939838">כתום</translation>
+<translation id="1198865190323699001">פקודות מגע</translation>
 <translation id="1201402288615127009">הבא</translation>
+<translation id="1202112913213080585">cancel</translation>
 <translation id="1206619573307042055">marquee</translation>
 <translation id="1207086294218137981">אין עוד כותרות מרמה 4</translation>
 <translation id="1212770441379271564">‏מקשי הקיצור הבאים אינם פקודות ChromeVox, אבל הם עדיין שימושיים מאוד אם רוצים לנצל את כל היתרונות של Chrome.
@@ -42,6 +44,7 @@
     כדי לפתוח את התפריט של דפדפן Chrome, מקישים על Alt+F.</translation>
 <translation id="1213216066620407844">‏ChromeVox - מתן קול ל-Chrome</translation>
 <translation id="1225969361094801578">אפור תכלת כהה</translation>
+<translation id="122928249241119550">move to the previous sentence</translation>
 <translation id="1230503547248836149">התחלת בחירה</translation>
 <translation id="1236794971743289975">הערת סיום</translation>
 <translation id="1237797094773582699">אפשר גם להחליק בעזרת ארבע אצבעות משמאל לימין כדי לעבור לקטע הקודם. אפשר לנסות עכשיו!</translation>
@@ -66,8 +69,10 @@
 <translation id="133801305381959373">אין עוד שדות טקסט ניתנים לעריכה</translation>
 <translation id="1342835525016946179">article</translation>
 <translation id="1346059596910821859">טיפ</translation>
+<translation id="1354356357730355833">העתקה</translation>
 <translation id="135978014023467274">‏ChromeVox עודכן לגירסה 63.</translation>
 <translation id="1360699455582016846">יש ללחוץ על הפריט שמתחת למפתח הניתוב <ph name="ROUTING_KEY_NUMBER" /></translation>
+<translation id="1376703628032300005">מעבר לתו הבא</translation>
 <translation id="1377925789329510816">‏זו הכותרת האחרונה. יש ללחוץ על מקש החיפוש ועל H כדי לחזור לכותרת הראשונה. לחלופין, יש ללחוץ על מקש החיפוש, על Shift ועל H כדי לעבור אל הכותרת השנייה בדף הזה.</translation>
 <translation id="138218114945450791">כחול בהיר</translation>
 <translation id="1383876407941801731">חיפוש</translation>
@@ -210,8 +215,10 @@
 <translation id="2435422727584637732">כחול בהיר</translation>
 <translation id="2438712309510062123">הצעה</translation>
 <translation id="2450814015951372393">תיבת סימון</translation>
+<translation id="2450992626945324272">move to the next sentence</translation>
 <translation id="2461822463642141190">כרגע</translation>
 <translation id="2462626033734746142">קבוצת לחצני בחירה</translation>
+<translation id="2467741090055146971">ביטול הבחירה</translation>
 <translation id="2471138580042810658">כותרת 6</translation>
 <translation id="248982282205370495">{COUNT,plural, =1{כוכבית}two{# סימני כוכבית}many{# סימני כוכבית}other{# סימני כוכבית}}</translation>
 <translation id="2490721194269245365">חום ורוד</translation>
@@ -242,6 +249,7 @@
 <translation id="267442004702508783">רענון</translation>
 <translation id="2675533876313964202">ירקרק</translation>
 <translation id="2684412629217766642">‏סגירת מערך השיעור של ChromeVox</translation>
+<translation id="2692503699962701720">שינוי גובה הצליל כשמזכירים סוגים שונים של רכיבים וטקסט מעוצב</translation>
 <translation id="2697408785920771974">autoinl</translation>
 <translation id="2697786971245905543">מועמד להמרת טקסט</translation>
 <translation id="2704429362613743330">{COUNT,plural, =1{פתח סוגריים}two{# סימני פתח סוגריים}many{# סימני פתח סוגריים}other{# סימני פתח סוגריים}}</translation>
@@ -352,6 +360,7 @@
 <translation id="3286372614333682499">לאורך</translation>
 <translation id="3286390186030710347">מחוון</translation>
 <translation id="3300348286427369683">‏תמיכה בטקסט עשיר. ChromeVox תומך עכשיו בשדות טקסט עשיר, כולל פקודות דילוג, ניתוב סמן ברייל, בחירה ועוד.</translation>
+<translation id="3300733168898541351">בטל</translation>
 <translation id="3307886118343381874">מעבר לסוף הטבלה</translation>
 <translation id="3312997241656799641">הקישור הבא שבו ביקרת</translation>
 <translation id="3313245066383501820">‏מקש הצירוף של ChromeVox</translation>
@@ -372,6 +381,7 @@
 <translation id="3406283310380167331">הצגת רשימת הטפסים</translation>
 <translation id="3414400929511680526">תכלת אליס</translation>
 <translation id="3418936350470374046">אין תא למטה</translation>
+<translation id="3419269701801640163">הדבקה</translation>
 <translation id="3435494200763325275">ניווט בכרטיסיות (המשך)</translation>
 <translation id="344800400831402066">פרו</translation>
 <translation id="3457000393508828486">לחוץ חלקית</translation>
@@ -383,7 +393,9 @@
 <translation id="3492609944033322585">{COUNT,plural, =1{סוגר מרובע ימני}two{# סימני סוגר מרובע ימני}many{# סימני סוגר מרובע ימני}other{# סימני סוגר מרובע ימני}}</translation>
 <translation id="3494946239022273294">mnuitm</translation>
 <translation id="3497063866483065785">{COUNT,plural, =1{סימן שאלה}two{# סימני שאלה}many{# סימני שאלה}other{# סימני שאלה}}</translation>
+<translation id="3505359110822747654">‏כיווץ של תפריטי ChromeVox</translation>
 <translation id="3514822174137761109">{COUNT,plural, =1{סימן קארה (^)}two{# סימני קארה (^)}many{# סימני קארה (^)}other{# סימני קארה (^)}}</translation>
+<translation id="3518600448524470129">{COUNT,plural, =1{תבליט לבן}two{# תבליטים לבנים}many{# תבליטים לבנים}other{# תבליטים לבנים}}</translation>
 <translation id="352577523970648069">שדה טקסט שניתן לעריכה</translation>
 <translation id="3538907380453898475">רשימת תיאורים</translation>
 <translation id="3549141990712742152">גזירה של <ph name="TEXT" />.</translation>
@@ -452,6 +464,7 @@
 <translation id="4006140876663370126">img</translation>
 <translation id="4021716437419160885">גלילה למטה</translation>
 <translation id="4035381225449278841">אביב</translation>
+<translation id="4038098586530338813">ביצוע מחדש</translation>
 <translation id="4047216625641135770">סימון</translation>
 <translation id="4047910800766704982">‏ניתן להשתמש בקול דמוי-אנושי שנשמע טבעי כשהמכשיר מחובר לאינטרנט. הטקסט יישלח אל Google לעיבוד. אפשר להשבית את ההגדרה הזו בכל שלב בהגדרות.</translation>
 <translation id="4053520724192563562">ירוק ליים</translation>
@@ -479,6 +492,7 @@
 <translation id="42164919740161077">כחול אפרפר</translation>
 <translation id="4217571870635786043">הכתבה</translation>
 <translation id="4218529045364428769">{COUNT,plural, =1{מקף}two{# סימני מקף}many{# סימני מקף}other{# סימני מקף}}</translation>
+<translation id="4220024144662591089">select from <ph name="START_PHRASE" /> to <ph name="END_PHRASE" /></translation>
 <translation id="4221012616705981690">אין רשימה קודמת</translation>
 <translation id="4225355998815256469">פקדי טופס</translation>
 <translation id="4230834257931120629">אפור תכלת בהיר</translation>
@@ -497,6 +511,7 @@
 <translation id="4300318234632215983">הכרזה על כתובת האתר של קישור</translation>
 <translation id="4322625298640984693">סיינה</translation>
 <translation id="4342180618051828363">{COUNT,plural, =1{נקודה}=3{שלוש נקודות}two{# נקודות}many{# נקודות}other{# נקודות}}</translation>
+<translation id="4352022650330571548">הקלדת <ph name="PHRASE" /></translation>
 <translation id="4372435075475052704">min:<ph name="X" /></translation>
 <translation id="4372705107434148843">הפסקת הדיבור</translation>
 <translation id="4376316291247992553">הגת גרפיקה כברייל</translation>
@@ -526,6 +541,7 @@
 <translation id="4601367666219428522">‏טבלה <ph name="TABLENAME" /> <ph name="TABLEROWS" />x<ph name="TABLECOLS" /></translation>
 <translation id="4615592953348396470">התעלמות מלחיצת המקש הבאה</translation>
 <translation id="4623097797855662355">קולופון</translation>
+<translation id="4624970070706497034">‏אין יותר ב-TalkBack אפשרויות להתאמה אישית במכשירי Chromebook. עדיין אפשר להשתמש ב-TalkBack, אבל רק עם מקשי קיצור המוגדרים כברירת מחדל. כדי לראות את מקשי הקיצור הזמינים, מקישים על מקש החיפוש + A ואז על K. אם רוצים להמשיך להשתמש ב-TalkBack, מקישים שוב על הפקודה.</translation>
 <translation id="463135993322337640">‏לחיצה על ChromeVox+o+n תציג את העדכונים</translation>
 <translation id="4649220074413114917">‏מקישים על המסך בעזרת שתי אצבעות כדי להפסיק את הדיבור המופעל. אפשר לעשות זאת כשלא רוצים ש-ChromeVox יקריא טקסט. כדי להמשיך יש להקיש על המסך בעזרת שתי אצבעות.</translation>
 <translation id="4660783501463101648">‏הגרסה הקלאסית הוסרה. לחצן החלפת המצב במקלדת למעבר חזרה אל הגרסה הקלאסית של ChromeVox הוסר.</translation>
@@ -560,6 +576,7 @@
 <translation id="4854380505292502090">אין ווידג'ט קודם של מדיה</translation>
 <translation id="4855927945655956315">‏מקשים חיוניים: Control</translation>
 <translation id="4862744964787595316">לא מודגש</translation>
+<translation id="4865995900839719272">מעבר לשורה הקודמת</translation>
 <translation id="4866956062845190338">rdmnuitm</translation>
 <translation id="4867316986324544967">‏אפשר רישום TTS</translation>
 <translation id="4886524826165775965"><ph name="INDEX" />/<ph name="TOTAL" /></translation>
@@ -617,6 +634,7 @@
 <translation id="5304943142864553931"><ph name="TITLE" />, כרטיסייה</translation>
 <translation id="5308380583665731573">התחברות</translation>
 <translation id="5310788376443009632">הוסר:</translation>
+<translation id="5316825363044614340">מעבר לשורה הבאה</translation>
 <translation id="5320727453979144100">מצב דביק מופעל</translation>
 <translation id="5321085947096604457">{COUNT,plural, =1{פסיק}two{# פסיקים}many{# פסיקים}other{# פסיקים}}</translation>
 <translation id="532485153932049746">עיצוב טקסט
@@ -653,6 +671,7 @@
 <translation id="5522423213731659107">השלמת את ההדרכה המהירה!</translation>
 <translation id="5534303576632885660">hdr</translation>
 <translation id="5539820223028224601">גיינסבורו</translation>
+<translation id="554893713779400387">הפעלת הכתבה או הפסקתה</translation>
 <translation id="5549179427201066174">הפעלה או השבתה של המשוב הקולי (צלילי חיווי)</translation>
 <translation id="556042886152191864">לחצן</translation>
 <translation id="5561345396546889625">הרשימה הבאה</translation>
@@ -663,6 +682,7 @@
 <translation id="5597170376237141345">תיבת הסימון הבאה</translation>
 <translation id="5598905979683743333"><ph name="NAME" />, לחצן הבחירה לא נבחר</translation>
 <translation id="5601172225407283979">ביצוע פעולת ברירת המחדל</translation>
+<translation id="5604302400025591178">{COUNT,plural, =1{תבליט מרובע}two{# תבליטים מרובעים}many{# תבליטים מרובעים}other{# תבליטים מרובעים}}</translation>
 <translation id="5608798115546226984">השלמה אוטומטית מוטבעת</translation>
 <translation id="5616029807486814372">השיעור הבא</translation>
 <translation id="561939826962581046">time</translation>
@@ -670,6 +690,8 @@
 <translation id="5623842676595125836">יומן</translation>
 <translation id="5628125749885014029">h4</translation>
 <translation id="5632083598315326067">סמל גרפי</translation>
+<translation id="5648939288050772726">‏כל הכבוד! למדת את כל המידע הבסיסי שיאפשר לך להשתמש ב-ChromeVox. חשוב לזכור שאפשר לפתוח את תפריט הפקודות של ChromeVox בכל שלב על ידי הקשה על Search+מקש הנקודה. כדי לקבל מידע נוסף על ChromeVox ו-ChromeOS, אפשר לעיין במאמרים הבאים.
+    אם סיימת עם המדריך, אפשר להשתמש ב-ChromeVox כדי לנווט ללחצן 'סגירה' וללחוץ עליו.</translation>
 <translation id="5653397561111110475">‏שימוש בתכונות הנגישות של מסך המגע ב-Chromebook</translation>
 <translation id="5655682562155942719">פקודות דילוג</translation>
 <translation id="56637627897541303">אזור טקסט</translation>
@@ -721,7 +743,7 @@
 <translation id="5956928062748260866">דו-שיח</translation>
 <translation id="5963413905009737549">קטע</translation>
 <translation id="5968607524793740041">הצגת תפריט הקשר</translation>
-<translation id="597121107011153418">{COUNT,plural, =1{עם פריט אחד}two{with # items}many{with # items}other{עם # פריטים}}</translation>
+<translation id="597121107011153418">{COUNT,plural, =1{עם פריט אחד}two{עם # פריטים}many{עם # פריטים}other{עם # פריטים}}</translation>
 <translation id="5981446804259161541">ציאן בהיר</translation>
 <translation id="5983179082906765664">העמקת רמת הפירוט של הניווט</translation>
 <translation id="5992285135956208197">מסמך גרפי</translation>
@@ -734,6 +756,7 @@
 <translation id="6034000775414344507">אפור בהיר</translation>
 <translation id="6036135911048686884">עיון במגע</translation>
 <translation id="6037602951055904232">הזזה קדימה</translation>
+<translation id="604240746417122825">שגיאת דקדוק</translation>
 <translation id="6082768461603900813">ניווט בסיסי</translation>
 <translation id="609281021724813947">אין מחוון קודם</translation>
 <translation id="6100239002225743044">העברת הסמן שורה אחת למעלה</translation>
@@ -741,6 +764,7 @@
 <translation id="611827076493383239">vtd</translation>
 <translation id="6122013438240733403">btn</translation>
 <translation id="6132506484792346370">תיבת רשימה או תיבה משולבת</translation>
+<translation id="613344593214611552">delete the previous sentence</translation>
 <translation id="6142308968191113180">כותרת 4</translation>
 <translation id="6150023170003443621">ירוק צהוב</translation>
 <translation id="6158882249329863701">שורה <ph name="TABLECELLROWINDEX" /> עמודה <ph name="TABLECELLCOLUMNINDEX" /></translation>
@@ -750,6 +774,7 @@
 <translation id="6186305613600865047">דילוג לתחתית הדף</translation>
 <translation id="6187190722927752226">ירוק כחלחל</translation>
 <translation id="6197361807490522975">כחול כהה</translation>
+<translation id="6218813441317556731">replace <ph name="DELETE_PHRASE" /> with <ph name="INSERT_PHRASE" /></translation>
 <translation id="6236061028292614533">הכותרת הבאה</translation>
 <translation id="6254901459154107917">האזור הבא בטקסט הניתן לעריכה</translation>
 <translation id="6259464875943891919">יצאת מ-<ph name="TYPE" />.</translation>
@@ -790,6 +815,7 @@
 <translation id="6544923685317771506">צדפה</translation>
 <translation id="6551185905438378412">שנהב</translation>
 <translation id="6561818612645211875">מעבר לתחילת השורה הנוכחית</translation>
+<translation id="6563126228219321999">אין פריט לא תקין</translation>
 <translation id="6579990219486187401">ורוד בהיר</translation>
 <translation id="6583174818554398774">מעבר לפריט הבא ברמת הפירוט הספציפית</translation>
 <translation id="6584162722998608255">עכשיו נראה איך לנוע במסך. ניתן להחליק בעזרת אצבע אחת מימין לשמאל כדי לעבור לפריט הבא. אפשר לנסות זאת עכשיו כדי לעבור לשלב הבא.</translation>
@@ -820,6 +846,7 @@
 <translation id="6815255864998354418">לימון שיפון</translation>
 <translation id="6816066673340002913">מטה-זהב חיוור</translation>
 <translation id="6826226459053491773">החלקה מטה עם שתי אצבעות</translation>
+<translation id="6826669432862053130">הפריט הלא תקין הבא</translation>
 <translation id="6833103209700200188">כותרת תחתונה</translation>
 <translation id="6837853484260746864">בחירת קול:</translation>
 <translation id="6858047746862060282">פרולוג</translation>
@@ -833,6 +860,7 @@
 <translation id="6910211073230771657">נמחק</translation>
 <translation id="6910969481785184048">הפעלה, כיבוי והפסקה</translation>
 <translation id="6919104639734799681">הצגת רשימת הטבלאות</translation>
+<translation id="692135145298539227">מחק</translation>
 <translation id="6945221475159498467">בחירה</translation>
 <translation id="6949846980769640811">ירוק כחלחל בינוני</translation>
 <translation id="6951482098621102657">אין עוד כותרות מרמה 5</translation>
@@ -892,6 +920,7 @@
 <translation id="7292195267473691167"><ph name="LOCALE" /> (<ph name="VARIANT" />)</translation>
 <translation id="7308519659008003150">אין שדה טופס קודם</translation>
 <translation id="731121099745151312">tritm</translation>
+<translation id="7313717760367325059">עזרה</translation>
 <translation id="7317017974771324508">נבחר באופן חלקי</translation>
 <translation id="7322442671176251901">גילוי באמצעות מגע</translation>
 <translation id="7344012264516629579">‏דוגמאות לפקודות קפיצה נוספות: קפיצה באמצעות קישור, לחצן או תיבת סימון. רשימה מלאה של פקודות קפיצה מופיעה בתפריטי ChromeVox, שאותם ניתן לפתוח על ידי הקשה על מקש החיפוש ועל מקש הנקודה.</translation>
@@ -913,13 +942,13 @@
 <translation id="7439060726180460871">ספרייה</translation>
 <translation id="744163271241493234">pwded</translation>
 <translation id="7465123027577412805">להשתמש בקול טבעי?</translation>
-<translation id="7484805699335881122">שינוי גובה הצליל בעת אמירת סוגי אלמנטים, כמו גם בהקראה של טקסט מועתק במירכאות, מחוק, מודגש, בסוגריים או באותיות גדולות.</translation>
 <translation id="7491962110804786152">tab</translation>
 <translation id="7492497529767769458">מעבר לקטע הבא. הדוגמאות כוללות את מגש הסטטוס ואת מרכז האפליקציות.</translation>
 <translation id="7505149250476994901">יש לומר "גדולה" אחרי האות</translation>
 <translation id="7533226154149229506">צהוב מטה-זהב בהיר</translation>
 <translation id="7543255924852002459">מחיקת תווית</translation>
 <translation id="7552432549459840808">‏מקשי קיצור מועילים ב-Chrome</translation>
+<translation id="7553679324939294712">insert <ph name="INSERT_PHRASE" /> before <ph name="BEFORE_PHRASE" /></translation>
 <translation id="7569983096843329377">שחור</translation>
 <translation id="7579911500627256166">נקודה <ph name="DOT" /></translation>
 <translation id="7592060599656252486">חלק</translation>
@@ -943,12 +972,11 @@
 <translation id="7684431668231950609">עריכת טקסט, רשומת כתובת אתר</translation>
 <translation id="7685589220304187312">tlbar</translation>
 <translation id="7693840228159394336">לחצן הבחירה הקודם</translation>
+<translation id="7696631298608145306">move to the next word</translation>
 <translation id="7701040980221191251">אין</translation>
 <translation id="7701196182766842984">autolst</translation>
 <translation id="7713139339518499741">קול טבעי</translation>
 <translation id="7714340021005120797">אין עוד תיבות משולבות</translation>
-<translation id="772146615414628379">‏מזל טוב! למדת את כל המידע הבסיסי שיאפשר לך להשתמש ב-ChromeVox. חשוב לזכור שאפשר לפתוח את תפריט הפקודות של ChromeVox בכל שלב על ידי הקשה על Search+מקש הנקודה. כדי לקבל מידע נוסף על ChromeVox ו-Chrome OS, אפשר לעיין במאמרים הבאים.
-    אם סיימת עם המדריך, אפשר להשתמש ב-ChromeVox כדי לנווט ללחצן 'סגירה' וללחוץ עליו.</translation>
 <translation id="7724603315864178912">חיתוך</translation>
 <translation id="7731785449856576010">אין עוד ווידג'טים של מדיה</translation>
 <translation id="7735498529470878067">בעזרת 'גילוי באמצעות מגע', קל להבין במהירות מה מוצג במסך.</translation>
@@ -1009,8 +1037,10 @@
 <translation id="8126386426083591964">אין כותרת קודמת מרמה 5</translation>
 <translation id="812886159861361726">ההורדה של <ph name="FILE_NAME" /> נפסקה</translation>
 <translation id="8129445297241948503">אין תא מלמעלה</translation>
+<translation id="8132248161074464367">הפריט הלא תקין הקודם</translation>
 <translation id="8138880386467279117">מגע</translation>
 <translation id="8146613869421949343">‏בשלב זה נסביר על מקש החיפוש. לביצוע פקודות ChromeVox, משתמשים במקש החיפוש בשילוב עם מקשים אחרים. מקש החיפוש נמצא בדיוק מעל מקש Shift השמאלי. כדי להמשיך, יש להקיש על מקש החיפוש.</translation>
+<translation id="8158033275290782295">בחירת הכול</translation>
 <translation id="816818801578874684">‏זו הכותרת הראשונה. יש להקיש על מקש החיפוש + H כדי לעבור לכותרת הבאה.</translation>
 <translation id="8173092779156526980">החלקה שמאלה עם ארבע אצבעות</translation>
 <translation id="817440585505441544">{COUNT,plural, =1{קו תחתון}two{# סימני קו תחתון}many{# סימני קו תחתון}other{# סימני קו תחתון}}</translation>
@@ -1050,6 +1080,7 @@
 <translation id="8455868257606149352">מקסימום <ph name="X" /></translation>
 <translation id="84575901236241018">כולל מקש גישה, <ph name="KEY" /></translation>
 <translation id="8463645336674919227">יציאה משגיאת דקדוק</translation>
+<translation id="8465573210279050749">delete the previous word</translation>
 <translation id="847040613207937740">אין עוד תיבות סימון</translation>
 <translation id="8473540203671727883">הקראת הטקסט שנמצא מתחת לסמן של העכבר</translation>
 <translation id="8476408756881832830">‏אני רוצה להשהות את ההשמעה כשתוסף ה-ChromeVox מקריא</translation>
@@ -1080,11 +1111,13 @@
 <translation id="8659501358298941449">רשימות נפתחות</translation>
 <translation id="8666733765751421568"><ph name="TYPE" /> סיום</translation>
 <translation id="867187640362843212">כותרת 5</translation>
+<translation id="8690400660839620419">{COUNT,plural, =1{}two{# רמות מקוננות}many{# רמות מקוננות}other{# רמות מקוננות}}</translation>
 <translation id="8693391540059827073">העונה האהובה עליי</translation>
 <translation id="8696284982970258155">טל דבש</translation>
 <translation id="8697111817566059991">{COUNT,plural, =1{קו ניצב}two{# סימני קו ניצב}many{# סימני קו ניצב}other{# סימני קו ניצב}}</translation>
 <translation id="8741370088760768424">רמז: עליך להקיש על מקש החיפוש ועל הרווח כדי להפעיל את הפריט הנוכחי.</translation>
 <translation id="8743786158317878347">כניסה לתוכן מובנה, כמו טבלאות</translation>
+<translation id="8746846427395705317">move to the previous word</translation>
 <translation id="8747966237988593539">רשימה לפי סדר</translation>
 <translation id="8749988712346667988">כסף</translation>
 <translation id="875769700429317857">ההורדה של <ph name="FILE_NAME" /> הושלמה</translation>
@@ -1112,12 +1145,14 @@
 <translation id="8970172509886453271">אין קטע קודם</translation>
 <translation id="89720367119469899">Esc</translation>
 <translation id="8978496506222343566">tltip</translation>
+<translation id="898089897833732740">delete <ph name="PHRASE" /></translation>
 <translation id="8986362086234534611">לשכוח</translation>
 <translation id="8989104346085848538">‏כדי להפסיק את הדיבור הפעיל של ChromeVox, יש להקיש על מקש Control.</translation>
 <translation id="8993737615451556423">מספקת פקדים כדי להאיץ, להאט ולהשהות את קול ההקראה</translation>
 <translation id="9014206344398081366">‏מדריך של ChromeVox</translation>
 <translation id="9040132695316389094">כותרת 1</translation>
 <translation id="9061884144798498064">יש לבחור טבלת ברייל 8 נקודות:</translation>
+<translation id="9063946545000394379">מעבר לתו הקודם</translation>
 <translation id="9065283790526219006">‎+popup‎</translation>
 <translation id="9065912140022662363">אין עוד לחצני בחירה</translation>
 <translation id="9067522039955793016">מעבר דף</translation>
@@ -1126,6 +1161,7 @@
 <translation id="9077305471618729969">ירוק ים בהיר</translation>
 <translation id="9080299285199342830">העברת הסמן לסוף</translation>
 <translation id="9089864840575085222">הד הקלדה מחזורית</translation>
+<translation id="9099429023611373837">גזירה</translation>
 <translation id="9108370397979208512">math</translation>
 <translation id="9108589040018540527">scbr</translation>
 <translation id="911476240645808512">{COUNT,plural, =1{אחוז}two{# סימני אחוז}many{# סימני אחוז}other{# סימני אחוז}}</translation>
@@ -1145,6 +1181,7 @@
 <translation id="9223032053830369045">אדום כהה</translation>
 <translation id="923331726185079994">‏ChromeVox עודכן</translation>
 <translation id="93384979447910801">ירוק ים כהה</translation>
+<translation id="937605981140327129">‏TalkBack לא מותקן כרגע. עליך להתקין את תכונות הנגישות של Android מחנות Play ולנסות שוב.</translation>
 <translation id="948171205378458592">האטת קצב הדיבור</translation>
 <translation id="957570623732056069">יש להחליק שמאלה או ימינה בעזרת אצבע אחת כדי לעבור בין הקטעים בשיעור הזה</translation>
 <translation id="958854023026327378">החלקה מטה עם אצבע אחת</translation>

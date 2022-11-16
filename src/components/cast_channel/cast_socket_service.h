@@ -8,10 +8,9 @@
 #include <map>
 #include <memory>
 
-#include "base/macros.h"
 #include "base/observer_list.h"
 #include "base/sequence_checker.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "components/cast_channel/cast_socket.h"
 #include "services/network/public/mojom/network_context.mojom.h"
 
@@ -30,6 +29,10 @@ class CastSocketService {
   // Removes the CastSocket corresponding to |channel_id| from the
   // CastSocketRegistry. Returns nullptr if no such CastSocket exists.
   virtual std::unique_ptr<CastSocket> RemoveSocket(int channel_id) = 0;
+
+  // Attempts to close an open CastSocket connection corresponding to the given
+  // |ip_endpoint|. Does nothing if the socket_id doesn't exist.
+  virtual void CloseSocket(int channel_id);
 
   // Returns the socket corresponding to |channel_id| if one exists, or nullptr
   // otherwise.
@@ -92,6 +95,9 @@ class CastSocketServiceImpl : public CastSocketService {
  public:
   using CastSocketService::NetworkContextGetter;
 
+  CastSocketServiceImpl(const CastSocketServiceImpl&) = delete;
+  CastSocketServiceImpl& operator=(const CastSocketServiceImpl&) = delete;
+
   ~CastSocketServiceImpl() override;
 
   // CastSocketService overrides.
@@ -123,8 +129,6 @@ class CastSocketServiceImpl : public CastSocketService {
 
   // List of socket observers.
   base::ObserverList<CastSocket::Observer>::Unchecked observers_;
-
-  DISALLOW_COPY_AND_ASSIGN(CastSocketServiceImpl);
 };
 
 }  // namespace cast_channel

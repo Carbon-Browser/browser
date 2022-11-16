@@ -19,9 +19,9 @@
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/string_split.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/timer/elapsed_timer.h"
 #include "build/build_config.h"
@@ -51,6 +51,7 @@
 #include "ui/accessibility/ax_node.h"
 #include "ui/accessibility/ax_role_properties.h"
 #include "ui/accessibility/ax_tree_id.h"
+#include "ui/gfx/geometry/vector2d_conversions.h"
 
 using blink::WebAXContext;
 using blink::WebAXObject;
@@ -65,13 +66,12 @@ namespace {
 
 // The minimum amount of time that should be spent in serializing code in order
 // to report the elapsed time as a URL-keyed metric.
-constexpr base::TimeDelta kMinSerializationTimeToSend =
-    base::TimeDelta::FromMilliseconds(100);
+constexpr base::TimeDelta kMinSerializationTimeToSend = base::Milliseconds(100);
 
 // When URL-keyed metrics for the amount of time spent in serializing code
 // are sent, the minimum amount of time to wait, in seconds, before
 // sending metrics. Metrics may also be sent once per page transition.
-constexpr base::TimeDelta kMinUKMDelay = base::TimeDelta::FromSeconds(300);
+constexpr base::TimeDelta kMinUKMDelay = base::Seconds(300);
 
 void SetAccessibilityCrashKey(ui::AXMode mode) {
   // Add a crash key with the ax_mode, to enable searching for top crashes that
@@ -114,24 +114,24 @@ RenderAccessibilityImpl::RenderAccessibilityImpl(
   WebSettings* settings = web_view->GetSettings();
 
   SetAccessibilityCrashKey(mode);
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   // Password values are only passed through on Android.
   settings->SetAccessibilityPasswordValuesEnabled(true);
 #endif
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
   // Inline text boxes can be enabled globally on all except Android.
   // On Android they can be requested for just a specific node.
   if (mode.has_mode(ui::AXMode::kInlineTextBoxes))
     settings->SetInlineTextBoxAccessibilityEnabled(true);
 #endif
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   // aria-modal currently prunes the accessibility tree on Mac only.
   settings->SetAriaModalPrunesAXTree(true);
 #endif
 
-#if defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_CHROMEOS)
   // Do not ignore SVG grouping (<g>) elements on ChromeOS, which is needed so
   // Select-to-Speak can read SVG text nodes in natural reading order.
   settings->SetAccessibilityIncludeSvgGElement(true);
@@ -143,7 +143,7 @@ RenderAccessibilityImpl::RenderAccessibilityImpl(
   // UI for a select element directly accessible. Disable by default on
   // Chrome OS, but some tests may override.
   bool disable_ax_menu_list = false;
-#if defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_CHROMEOS)
   disable_ax_menu_list = true;
 #endif
   auto* command_line = base::CommandLine::ForCurrentProcess();
@@ -200,7 +200,7 @@ void RenderAccessibilityImpl::DidCommitProvisionalLoad(
       GetAccessibilityMode().has_mode(ui::AXMode::kLabelImages)) {
     return;
   }
-  tree_source_->RemoveImageAnnotator();
+  tree_source_->RemoveBlinkImageAnnotator();
   ax_image_annotator_->Destroy();
   ax_image_annotator_.reset();
   page_language_.clear();
@@ -214,7 +214,7 @@ void RenderAccessibilityImpl::AccessibilityModeChanged(const ui::AXMode& mode) {
 
   SetAccessibilityCrashKey(mode);
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
   // Inline text boxes can be enabled globally on all except Android.
   // On Android they can be requested for just a specific node.
   WebView* web_view = render_frame_->GetWebView();
@@ -230,7 +230,7 @@ void RenderAccessibilityImpl::AccessibilityModeChanged(const ui::AXMode& mode) {
       }
     }
   }
-#endif  // !defined(OS_ANDROID)
+#endif  // !BUILDFLAG(IS_ANDROID)
 
   serializer_->Reset();
   const WebDocument& document = GetMainDocument();
@@ -243,17 +243,38 @@ void RenderAccessibilityImpl::AccessibilityModeChanged(const ui::AXMode& mode) {
   }
 }
 
+// This function expects the |point| passed by parameter to be relative to the
+// page viewport, always. This means that when the position is within a popup,
+// the |point| should still be relative to the web page's viewport.
 void RenderAccessibilityImpl::HitTest(
     const gfx::Point& point,
     ax::mojom::Event event_to_fire,
     int request_id,
-    mojom::RenderAccessibility::HitTestCallback callback) {
+    blink::mojom::RenderAccessibility::HitTestCallback callback) {
   WebAXObject ax_object;
+
   const WebDocument& document = GetMainDocument();
   if (!document.IsNull()) {
     auto root_obj = WebAXObject::FromWebDocument(document);
-    if (root_obj.MaybeUpdateLayoutAndCheckValidity())
-      ax_object = root_obj.HitTest(point);
+    if (root_obj.MaybeUpdateLayoutAndCheckValidity()) {
+      // 1. Now that layout has been updated for the entire document, try to run
+      // the hit test operation on the popup root element, if there's a popup
+      // opened. This is needed to allow hit testing within web content popups.
+      absl::optional<gfx::RectF> popup_bounds = GetPopupBounds();
+      if (popup_bounds.has_value()) {
+        auto popup_root_obj = WebAXObject::FromWebDocument(GetPopupDocument());
+        // WebAXObject::HitTest expects the point passed by parameter to be
+        // relative to the instance we call it from.
+        ax_object = popup_root_obj.HitTest(
+            point - ToRoundedVector2d(popup_bounds->OffsetFromOrigin()));
+      }
+
+      // 2. If running the hit test operation on the popup didn't returned any
+      // result (or if there was no popup), run the hit test operation from the
+      // main element.
+      if (ax_object.IsNull())
+        ax_object = root_obj.HitTest(point);
+    }
   }
 
   // Return if no attached accessibility object was found for the main document.
@@ -284,8 +305,8 @@ void RenderAccessibilityImpl::HitTest(
 
     // Reply with the result.
     const auto& frame_token = render_frame_->GetWebFrame()->GetFrameToken();
-    std::move(callback).Run(
-        mojom::HitTestResponse::New(frame_token, point, ax_object.AxID()));
+    std::move(callback).Run(blink::mojom::HitTestResponse::New(
+        frame_token, point, ax_object.AxID()));
     return;
   }
 
@@ -313,7 +334,7 @@ void RenderAccessibilityImpl::HitTest(
         rect.OffsetFromOrigin();
   }
 
-  std::move(callback).Run(mojom::HitTestResponse::New(
+  std::move(callback).Run(blink::mojom::HitTestResponse::New(
       child_frame->GetFrameToken(), transformed_point, ax_object.AxID()));
 }
 
@@ -342,6 +363,9 @@ void RenderAccessibilityImpl::PerformAction(const ui::AXActionData& data) {
   if (target->PerformAction(data))
     return;
 
+  if (!root.MaybeUpdateLayoutAndCheckValidity())
+    return;
+
   switch (data.action) {
     case ax::mojom::Action::kBlur: {
       ui::AXActionData action_data;
@@ -358,13 +382,6 @@ void RenderAccessibilityImpl::PerformAction(const ui::AXActionData& data) {
     case ax::mojom::Action::kSetSelection:
       anchor->SetSelection(anchor.get(), data.anchor_offset, focus.get(),
                            data.focus_offset);
-      // Selection alters layout, so update layout before firing an
-      // event or we'll hit an assertion failure when trying to access
-      // |root| because layout isn't clean.
-      if (root.MaybeUpdateLayoutAndCheckValidity()) {
-        HandleAXEvent(
-            ui::AXEvent(root.AxID(), ax::mojom::Event::kLayoutComplete));
-      }
       break;
     case ax::mojom::Action::kScrollToMakeVisible:
       target->ScrollToMakeVisibleWithSubFocus(
@@ -416,7 +433,7 @@ void RenderAccessibilityImpl::PerformAction(const ui::AXActionData& data) {
       break;
     case ax::mojom::Action::kSignalEndOfTest:
       // Wait for 100ms to allow pending events to come in
-      base::PlatformThread::Sleep(base::TimeDelta::FromMilliseconds(100));
+      base::PlatformThread::Sleep(base::Milliseconds(100));
 
       HandleAXEvent(ui::AXEvent(root.AxID(), ax::mojom::Event::kEndOfTest));
       break;
@@ -452,11 +469,14 @@ void RenderAccessibilityImpl::Reset(int32_t reset_token) {
 void RenderAccessibilityImpl::MarkWebAXObjectDirty(
     const WebAXObject& obj,
     bool subtree,
+    ax::mojom::EventFrom event_from,
     ax::mojom::Action event_from_action,
     std::vector<ui::AXEventIntent> event_intents,
     ax::mojom::Event event_type) {
-  EnqueueDirtyObject(obj, ax::mojom::EventFrom::kAction, event_from_action,
-                     event_intents, dirty_objects_.end());
+  DCHECK(obj.AccessibilityIsIncludedInTree())
+      << "Cannot serialize unincluded object: " << obj.ToString(true).Utf8();
+  EnqueueDirtyObject(obj, event_from, event_from_action, event_intents,
+                     dirty_objects_.end());
 
   if (subtree)
     serializer_->InvalidateSubtree(obj);
@@ -479,7 +499,7 @@ void RenderAccessibilityImpl::HandleAXEvent(const ui::AXEvent& event) {
   if (obj.IsDetached())
     return;
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   // Inline text boxes are needed to support moving by character/word/line.
   // On Android, we don't load inline text boxes by default, only on-demand, or
   // when part of the focused object. So, when focus moves to an editable text
@@ -513,8 +533,9 @@ void RenderAccessibilityImpl::HandleAXEvent(const ui::AXEvent& event) {
     event_schedule_mode_ = EventScheduleMode::kProcessEventsImmediately;
 
   if (ShouldSerializeNodeForEvent(obj, event)) {
-    MarkWebAXObjectDirty(obj, false, event.event_from_action,
-                         event.event_intents, event.event_type);
+    MarkWebAXObjectDirty(obj, /* subtree= */ false, event.event_from,
+                         event.event_from_action, event.event_intents,
+                         event.event_type);
   }
 
   ScheduleSendPendingAccessibilityEvents();
@@ -547,6 +568,7 @@ bool RenderAccessibilityImpl::IsImmediateProcessingRequiredForEvent(
     case ax::mojom::Event::kExpandedChanged:
     case ax::mojom::Event::kHide:
     case ax::mojom::Event::kLayoutComplete:
+    case ax::mojom::Event::kLoadStart:
     case ax::mojom::Event::kLocationChanged:
     case ax::mojom::Event::kMenuListValueChanged:
     case ax::mojom::Event::kRowCollapsed:
@@ -567,7 +589,6 @@ bool RenderAccessibilityImpl::IsImmediateProcessingRequiredForEvent(
     case ax::mojom::Event::kFocusContext:
     case ax::mojom::Event::kHitTestResult:
     case ax::mojom::Event::kImageFrameUpdated:
-    case ax::mojom::Event::kLoadStart:
     case ax::mojom::Event::kLiveRegionCreated:
     case ax::mojom::Event::kLiveRegionChanged:
     case ax::mojom::Event::kMediaStartedPlaying:
@@ -707,7 +728,7 @@ void RenderAccessibilityImpl::ScheduleSendPendingAccessibilityEvents(
       // Where the user is not currently navigating or typing,
       // process changes on a delay so that they occur in larger batches,
       // improving efficiency of repetitive mutations.
-      delay = base::TimeDelta::FromMilliseconds(GetDeferredEventsDelay());
+      delay = base::Milliseconds(GetDeferredEventsDelay());
       break;
     case EventScheduleMode::kProcessEventsImmediately:
       // This set of events needed to be processed immediately because of a
@@ -862,76 +883,22 @@ bool RenderAccessibilityImpl::SerializeUpdatesAndEvents(
     if (!obj.MaybeUpdateLayoutAndCheckValidity())
       continue;
 
-    // If the object in question is not included in the tree, get the
-    // nearest ancestor that is (ParentObject() will do this for us).
-    // Otherwise this can lead to the serializer doing extra work because
-    // the object won't be in |already_serialized_ids|.
-    if (!obj.AccessibilityIsIncludedInTree()) {
-      obj = obj.ParentObject();
-      if (obj.IsDetached())
-        continue;
-    }
-
-    if (already_serialized_ids.find(obj.AxID()) != already_serialized_ids.end())
+    // Cannot serialize unincluded object.
+    // Only included objects are marked dirty, but this can happen if the object
+    // becomes unincluded after it was originally marked dirty, in which case a
+    // children changed will also be fired on the included ancestor. The
+    // children changed event on the ancestor means that attempting to serialize
+    // this unincluded object is not necessary.
+    if (!obj.AccessibilityIsIncludedInTree())
       continue;
 
-    // Further down the page, we update |already_serialized_ids| with all IDs
+    // Further down this loop, we update |already_serialized_ids| with all IDs
     // actually serialized. However, add this object's ID first because there's
     // a chance that we try to serialize this object but the serializer ends up
     // skipping it. That's probably a Blink bug if that happens, but still we
     // need to make sure we don't keep trying the same object over again.
-    already_serialized_ids.insert(obj.AxID());
-
-    // If it's ignored, find the first ancestor that's not ignored and
-    // mark all ancestors along the way as dirty.
-    if (obj.AccessibilityIsIgnored()) {
-      WebAXObject ancestor = obj;
-      std::list<std::unique_ptr<AXDirtyObject>>::iterator insertion_point =
-          std::next(dirty_objects_.begin());
-      for (; !ancestor.IsDetached() && ancestor.AccessibilityIsIgnored();
-           ancestor = ancestor.ParentObject()) {
-        // There are 3 states of nodes that we care about here.
-        // (x) Unignored, included in tree
-        // [x] Ignored, included in tree
-        // <x> Ignored, excluded from tree
-        //
-        // Consider the following tree :
-        // ++(0) Role::kRootWebArea
-        // ++++<1> Role::kNone
-        // ++++++[2] Role::kGenericContainer <body>
-        // ++++++++[3] Role::kGenericContainer with 'visibility: hidden'
-        //
-        // If we modify [3] to be 'visibility: visible', we will receive
-        // Event::kChildrenChanged here for the Ignored parent [2].
-        // We must re-serialize the Unignored parent node (0) due to this
-        // change, but we must also re-serialize [2] since its children
-        // have changed. <1> was never part of the ax tree, and therefore
-        // does not need to be serialized.
-        // Note that [3] will be serialized to (3) during :
-        // |AXTreeSerializer<>::SerializeChangedNodes| when node [2] is
-        // being serialized, since it will detect the Ignored state had
-        // changed.
-        //
-        // Similarly, during Event::kTextChanged, if any Ignored,
-        // but included in tree ancestor uses NameFrom::kContents,
-        // they must also be re-serialized in case the name changed.
-        //
-        // Insert just after the object currently being serialized.
-        insertion_point = EnqueueDirtyObject(
-            ancestor, current_dirty_object->event_from,
-            current_dirty_object->event_from_action,
-            current_dirty_object->event_intents, insertion_point);
-        // Increment remaining objects to serialize to ensure that it's
-        // serialized now, not in a subsequent message.
-        ++num_remaining_objects_to_serialize;
-      }
-      EnqueueDirtyObject(ancestor, current_dirty_object->event_from,
-                         current_dirty_object->event_from_action,
-                         current_dirty_object->event_intents, insertion_point);
-      // Increment remaining objects to serialize to ensure that it's
-      // serialized now, not in a subsequent message.
-      ++num_remaining_objects_to_serialize;
-    }
+    if (!already_serialized_ids.insert(obj.AxID()).second)
+      continue;  // No insertion, was already present.
 
     ui::AXTreeUpdate update;
     update.event_from = current_dirty_object->event_from;
@@ -990,6 +957,13 @@ void RenderAccessibilityImpl::SendPendingAccessibilityEvents() {
   WebDocument document = GetMainDocument();
   if (document.IsNull())
     return;
+
+  // Don't serialize child trees without an embedding token. These are
+  // unrendered child frames. This prevents a situation where child trees can't
+  // be linked to their parent, leading to a dangerous situation for some
+  // platforms, where events are fired on objects not connected to the root. For
+  // example, on Mac, this can lead to a lockup in AppKit.
+  CHECK(document.GetFrame()->GetEmbeddingToken());
 
   DCHECK(document.IsAccessibilityEnabled())
       << "SendPendingAccessibilityEvents should not do any work when nothing "
@@ -1084,8 +1058,8 @@ void RenderAccessibilityImpl::SendPendingAccessibilityEvents() {
   }
 
   // The serialized list of updates and events to send to the browser.
-  mojom::AXUpdatesAndEventsPtr updates_and_events =
-      mojom::AXUpdatesAndEvents::New();
+  blink::mojom::AXUpdatesAndEventsPtr updates_and_events =
+      blink::mojom::AXUpdatesAndEvents::New();
 
   bool need_to_send_location_changes = SerializeUpdatesAndEvents(
       document, root, updates_and_events->events, updates_and_events->updates,
@@ -1115,7 +1089,6 @@ void RenderAccessibilityImpl::SendPendingAccessibilityEvents() {
   base::TimeDelta elapsed_time_ms = timer.Elapsed();
   if (elapsed_time_ms > slowest_serialization_time_) {
     last_ukm_source_id_ = document.GetUkmSourceId();
-    last_ukm_url_ = document.CanonicalUrlForSharing().GetString().Utf8();
     slowest_serialization_time_ = elapsed_time_ms;
   }
   // Also log the time taken in this function to track serialization
@@ -1130,9 +1103,6 @@ void RenderAccessibilityImpl::SendPendingAccessibilityEvents() {
 
 void RenderAccessibilityImpl::SendLocationChanges() {
   TRACE_EVENT0("accessibility", "RenderAccessibilityImpl::SendLocationChanges");
-
-  std::vector<mojom::LocationChangesPtr> changes;
-
   // Update layout on the root of the tree.
   WebAXObject root = tree_source_->GetRoot();
 
@@ -1141,37 +1111,7 @@ void RenderAccessibilityImpl::SendLocationChanges() {
   if (!root.MaybeUpdateLayoutAndCheckValidity())
     return;
 
-  blink::WebVector<WebAXObject> changed_bounds_objects;
-  root.GetAllObjectsWithChangedBounds(changed_bounds_objects);
-  for (const WebAXObject& obj : changed_bounds_objects) {
-    // See if we had a previous location. If not, this whole subtree must
-    // be new, so no need to update.
-    int id = obj.AxID();
-    if (!tree_source_->HasCachedBoundingBox(id))
-      continue;
-
-    // If the location has changed, append it to the IPC message.
-    ui::AXRelativeBounds new_location;
-    tree_source_->PopulateAXRelativeBounds(obj, &new_location);
-    if (new_location != tree_source_->GetCachedBoundingBox(id))
-      changes.push_back(mojom::LocationChanges::New(id, new_location));
-
-    // Save the new location.
-    tree_source_->SetCachedBoundingBox(id, new_location);
-  }
-
-  if (changes.empty())
-    return;
-
-  // Ensure that the number of cached bounding boxes doesn't exceed the
-  // number of nodes in the tree, that would indicate the cache could
-  // grow without bounds. Calls from the serializer to
-  // BlinkAXTreeSerializer::SerializerClearedNode are supposed to keep the
-  // cache trimmed to only actual nodes in the tree.
-  DCHECK_LE(tree_source_->GetCachedBoundingBoxCount(),
-            serializer_->ClientTreeNodeCount());
-
-  render_accessibility_manager_->HandleLocationChanges(std::move(changes));
+  root.SerializeLocationChanges();
 }
 
 void RenderAccessibilityImpl::OnAccessibilityEventsHandled() {
@@ -1282,7 +1222,7 @@ void RenderAccessibilityImpl::CreateAXImageAnnotator() {
 
   ax_image_annotator_ =
       std::make_unique<AXImageAnnotator>(this, std::move(annotator));
-  tree_source_->AddImageAnnotator(ax_image_annotator_.get());
+  tree_source_->AddBlinkImageAnnotator(ax_image_annotator_.get());
 }
 
 void RenderAccessibilityImpl::StartOrStopLabelingImages(ui::AXMode old_mode,
@@ -1295,7 +1235,7 @@ void RenderAccessibilityImpl::StartOrStopLabelingImages(ui::AXMode old_mode,
     CreateAXImageAnnotator();
   } else if (old_mode.has_mode(ui::AXMode::kLabelImages) &&
              !new_mode.has_mode(ui::AXMode::kLabelImages)) {
-    tree_source_->RemoveImageAnnotator();
+    tree_source_->RemoveBlinkImageAnnotator();
     ax_image_annotator_->Destroy();
     ax_image_annotator_.reset();
   }
@@ -1312,7 +1252,8 @@ void RenderAccessibilityImpl::MarkAllAXObjectsDirty(
     objs_to_explore.pop();
 
     if (obj.Role() == role)
-      MarkWebAXObjectDirty(obj, /* subtree */ false, event_from_action);
+      MarkWebAXObjectDirty(obj, /* subtree */ false,
+                           ax::mojom::EventFrom::kNone, event_from_action);
 
     std::vector<blink::WebAXObject> children;
     tree_source_->GetChildren(obj, &children);
@@ -1323,57 +1264,9 @@ void RenderAccessibilityImpl::MarkAllAXObjectsDirty(
 
 void RenderAccessibilityImpl::Scroll(const ui::AXActionTarget* target,
                                      ax::mojom::Action scroll_action) {
-  gfx::Rect bounds = target->GetRelativeBounds();
-  if (bounds.IsEmpty())
-    return;
-
-  gfx::Point initial = target->GetScrollOffset();
-  gfx::Point min = target->MinimumScrollOffset();
-  gfx::Point max = target->MaximumScrollOffset();
-
-  // TODO(anastasi): This 4/5ths came from the Android implementation, revisit
-  // to find the appropriate modifier to keep enough context onscreen after
-  // scrolling.
-  int page_x = std::max((int)(bounds.width() * 4 / 5), 1);
-  int page_y = std::max((int)(bounds.height() * 4 / 5), 1);
-
-  // Forward/backward defaults to down/up unless it can only be scrolled
-  // horizontally.
-  if (scroll_action == ax::mojom::Action::kScrollForward)
-    scroll_action = max.y() > min.y() ? ax::mojom::Action::kScrollDown
-                                      : ax::mojom::Action::kScrollRight;
-  if (scroll_action == ax::mojom::Action::kScrollBackward)
-    scroll_action = max.y() > min.y() ? ax::mojom::Action::kScrollUp
-                                      : ax::mojom::Action::kScrollLeft;
-
-  int x = initial.x();
-  int y = initial.y();
-  switch (scroll_action) {
-    case ax::mojom::Action::kScrollUp:
-      if (initial.y() == min.y())
-        return;
-      y = std::max(initial.y() - page_y, min.y());
-      break;
-    case ax::mojom::Action::kScrollDown:
-      if (initial.y() == max.y())
-        return;
-      y = std::min(initial.y() + page_y, max.y());
-      break;
-    case ax::mojom::Action::kScrollLeft:
-      if (initial.x() == min.x())
-        return;
-      x = std::max(initial.x() - page_x, min.x());
-      break;
-    case ax::mojom::Action::kScrollRight:
-      if (initial.x() == max.x())
-        return;
-      x = std::min(initial.x() + page_x, max.x());
-      break;
-    default:
-      NOTREACHED();
-  }
-
-  target->SetScrollOffset(gfx::Point(x, y));
+  ui::AXActionData action_data;
+  action_data.action = scroll_action;
+  target->PerformAction(action_data);
 }
 
 void RenderAccessibilityImpl::AddImageAnnotationDebuggingAttributes(
@@ -1455,6 +1348,25 @@ blink::WebDocument RenderAccessibilityImpl::GetPopupDocument() {
   return WebDocument();
 }
 
+absl::optional<gfx::RectF> RenderAccessibilityImpl::GetPopupBounds() {
+  const WebDocument& popup_document = GetPopupDocument();
+  if (popup_document.IsNull())
+    return absl::nullopt;
+
+  auto obj = WebAXObject::FromWebDocument(popup_document);
+
+  gfx::RectF popup_bounds;
+  WebAXObject popup_container;
+  gfx::Transform transform;
+  obj.GetRelativeBounds(popup_container, popup_bounds, transform);
+
+  // The |popup_container| will never be set for a popup element. See
+  // `AXObject::GetRelativeBounds`.
+  DCHECK(popup_container.IsNull());
+
+  return popup_bounds;
+}
+
 WebAXObject RenderAccessibilityImpl::GetPluginRoot() {
   ScopedFreezeBlinkAXTreeSource freeze(tree_source_.get());
   WebAXObject root = tree_source_->GetRoot();
@@ -1517,7 +1429,6 @@ void RenderAccessibilityImpl::ResetUKMData() {
   slowest_serialization_time_ = base::TimeDelta();
   ukm_timer_ = std::make_unique<base::ElapsedTimer>();
   last_ukm_source_id_ = ukm::kInvalidSourceId;
-  last_ukm_url_ = "";
 }
 
 AXDirtyObject::AXDirtyObject() = default;

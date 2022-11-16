@@ -40,6 +40,7 @@
 #include "content/public/common/url_constants.h"
 #include "services/tracing/public/cpp/perfetto/perfetto_config.h"
 #include "services/tracing/public/cpp/perfetto/perfetto_session.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/perfetto/include/perfetto/tracing/tracing.h"
 #include "third_party/perfetto/protos/perfetto/common/trace_stats.gen.h"
 
@@ -235,10 +236,8 @@ TracingUI::TracingUI(WebUI* web_ui)
     : WebUIController(web_ui),
       delegate_(GetContentClient()->browser()->GetTracingDelegate()) {
   // Set up the chrome://tracing/ source.
-  BrowserContext* browser_context =
-      web_ui->GetWebContents()->GetBrowserContext();
-
-  WebUIDataSource* source = WebUIDataSource::Create(kChromeUITracingHost);
+  WebUIDataSource* source = WebUIDataSource::CreateAndAdd(
+      web_ui->GetWebContents()->GetBrowserContext(), kChromeUITracingHost);
   source->DisableTrustedTypesCSP();
   source->UseStringsJs();
   source->SetDefaultResource(IDR_TRACING_ABOUT_TRACING_HTML);
@@ -246,7 +245,6 @@ TracingUI::TracingUI(WebUI* web_ui)
 
   source->SetRequestFilter(base::BindRepeating(OnShouldHandleRequest),
                            base::BindRepeating(OnTracingRequest));
-  WebUIDataSource::Add(browser_context, source);
 }
 
 TracingUI::~TracingUI() = default;
@@ -261,20 +259,19 @@ bool TracingUI::GetTracingOptions(const std::string& data64,
     return false;
   }
 
-  std::unique_ptr<base::Value> optionsRaw =
-      base::JSONReader::ReadDeprecated(data);
-  if (!optionsRaw) {
+  absl::optional<base::Value> options = base::JSONReader::Read(data);
+  if (!options) {
     LOG(ERROR) << "Options were not valid JSON";
     return false;
   }
-  base::DictionaryValue* options;
-  if (!optionsRaw->GetAsDictionary(&options)) {
+  if (!options->is_dict()) {
     LOG(ERROR) << "Options must be dict";
     return false;
   }
 
-  if (options->HasKey(kStreamFormat)) {
-    options->GetString(kStreamFormat, &out_stream_format);
+  if (const std::string* stream_format =
+          options->FindStringKey(kStreamFormat)) {
+    out_stream_format = *stream_format;
   } else {
     out_stream_format = kStreamFormatJSON;
   }

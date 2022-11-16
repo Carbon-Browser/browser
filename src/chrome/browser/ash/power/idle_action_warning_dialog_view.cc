@@ -7,8 +7,6 @@
 #include <algorithm>
 
 #include "base/location.h"
-#include "base/macros.h"
-#include "chrome/browser/ui/browser_dialogs.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/grit/generated_resources.h"
 #include "ui/aura/window_event_dispatcher.h"
@@ -55,10 +53,8 @@ IdleActionWarningDialogView::IdleActionWarningDialogView(
                                             nullptr /* parent */)
       ->Show();
 
-  update_timer_.Start(
-      FROM_HERE, base::TimeDelta::FromMilliseconds(kCountdownUpdateIntervalMs),
-      this, &IdleActionWarningDialogView::UpdateTitle);
-  chrome::RecordDialogCreation(chrome::DialogIdentifier::IDLE_ACTION_WARNING);
+  update_timer_.Start(FROM_HERE, base::Milliseconds(kCountdownUpdateIntervalMs),
+                      this, &IdleActionWarningDialogView::UpdateTitle);
 }
 
 void IdleActionWarningDialogView::CloseDialog() {

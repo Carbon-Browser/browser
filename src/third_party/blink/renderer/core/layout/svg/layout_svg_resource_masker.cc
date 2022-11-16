@@ -54,13 +54,13 @@ sk_sp<const PaintRecord> LayoutSVGResourceMasker::CreatePaintRecord(
     return cached_paint_record_;
 
   SubtreeContentTransformScope content_transform_scope(content_transformation);
-  PaintRecordBuilder builder(context);
+  auto* builder = MakeGarbageCollected<PaintRecordBuilder>(context);
 
   ColorFilter mask_content_filter =
       StyleRef().ColorInterpolation() == EColorInterpolation::kLinearrgb
           ? kColorFilterSRGBToLinearRGB
           : kColorFilterNone;
-  builder.Context().SetColorFilter(mask_content_filter);
+  builder->Context().SetColorFilter(mask_content_filter);
 
   for (const SVGElement& child_element :
        Traversal<SVGElement>::ChildrenOf(*GetElement())) {
@@ -70,10 +70,10 @@ sk_sp<const PaintRecord> LayoutSVGResourceMasker::CreatePaintRecord(
     if (DisplayLockUtilities::LockedAncestorPreventingLayout(*layout_object) ||
         layout_object->StyleRef().Display() == EDisplay::kNone)
       continue;
-    SVGObjectPainter(*layout_object).PaintResourceSubtree(builder.Context());
+    SVGObjectPainter(*layout_object).PaintResourceSubtree(builder->Context());
   }
 
-  cached_paint_record_ = builder.EndRecording();
+  cached_paint_record_ = builder->EndRecording();
   return cached_paint_record_;
 }
 
@@ -89,8 +89,8 @@ SVGUnitTypes::SVGUnitType LayoutSVGResourceMasker::MaskContentUnits() const {
       ->CurrentEnumValue();
 }
 
-FloatRect LayoutSVGResourceMasker::ResourceBoundingBox(
-    const FloatRect& reference_box,
+gfx::RectF LayoutSVGResourceMasker::ResourceBoundingBox(
+    const gfx::RectF& reference_box,
     float reference_box_zoom) {
   NOT_DESTROYED();
   DCHECK(!SelfNeedsLayout());
@@ -98,7 +98,7 @@ FloatRect LayoutSVGResourceMasker::ResourceBoundingBox(
   DCHECK(mask_element);
 
   SVGUnitTypes::SVGUnitType mask_units = MaskUnits();
-  FloatRect mask_boundaries = SVGLengthContext::ResolveRectangle(
+  gfx::RectF mask_boundaries = SVGLengthContext::ResolveRectangle(
       mask_element, mask_units, reference_box);
   // If the mask bounds were resolved relative to the current userspace we need
   // to adjust/scale with the zoom to get to the same space as the reference

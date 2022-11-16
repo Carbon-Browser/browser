@@ -34,7 +34,7 @@ const audioPlayerCreateOptions = {
   minWidth: 320,
   height: 4 + 48 + 96,  // collapsed
   width: 320,
-  frame: {color: '#fafafa'}
+  frame: {color: '#fafafa'},
 };
 
 class AudioPlayerBackground extends BackgroundBaseImpl {
@@ -122,7 +122,7 @@ export async function open(urls) {
     });
 
     // Omits non-audio files.
-    const audioEntries = entries.filter(FileType.isAudio);
+    const audioEntries = entries.filter(entry => FileType.isAudio(entry));
 
     // Adjusts the position to start playing.
     const maybePosition = util.entriesToURLs(audioEntries).indexOf(startUrl);

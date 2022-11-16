@@ -19,6 +19,7 @@
 #include "base/synchronization/waitable_event.h"
 #include "base/system/sys_info.h"
 #include "base/threading/thread_task_runner_handle.h"
+#include "base/time/time.h"
 #include "base/values.h"
 #include "chrome/test/chromedriver/basic_types.h"
 #include "chrome/test/chromedriver/capabilities.h"
@@ -235,7 +236,6 @@ std::unique_ptr<base::DictionaryValue> CreateCapabilities(
     caps->SetBoolKey("locationContextEnabled", true);
     caps->SetBoolKey("mobileEmulationEnabled",
                      session->chrome->IsMobileEmulationEnabled());
-    caps->SetBoolKey("applicationCacheEnabled", false);
     caps->SetBoolKey("browserConnectionEnabled", false);
     caps->SetBoolKey("cssSelectorsEnabled", true);
     caps->SetBoolKey("webStorageEnabled", true);
@@ -431,11 +431,10 @@ bool MergeCapabilities(const base::DictionaryValue* always_match,
   CHECK(always_match);
   CHECK(first_match);
   CHECK(merged);
-  merged->Clear();
+  merged->DictClear();
 
-  for (base::DictionaryValue::Iterator it(*first_match); !it.IsAtEnd();
-       it.Advance()) {
-    if (always_match->HasKey(it.key())) {
+  for (auto kv : first_match->DictItems()) {
+    if (always_match->FindKey(kv.first)) {
       // firstMatch cannot have the same |keys| as alwaysMatch.
       return false;
     }
@@ -453,8 +452,8 @@ bool MergeCapabilities(const base::DictionaryValue* always_match,
 // Currently, we only check "browserName", "platformName", and webauthn
 // capabilities but more can be added as necessary.
 bool MatchCapabilities(const base::DictionaryValue* capabilities) {
-  const base::Value* name;
-  if (capabilities->Get("browserName", &name) && !name->is_none()) {
+  const base::Value* name = capabilities->FindKey("browserName");
+  if (name && !name->is_none()) {
     if (!(name->is_string() && name->GetString() == kBrowserCapabilityName))
       return false;
   }
@@ -466,9 +465,9 @@ bool MatchCapabilities(const base::DictionaryValue* capabilities) {
   bool is_android = has_chrome_options &&
                     chrome_options->FindStringKey("androidPackage") != nullptr;
 
-  const base::Value* platform_name_value;
-  if (capabilities->Get("platformName", &platform_name_value) &&
-      !platform_name_value->is_none()) {
+  const base::Value* platform_name_value =
+      capabilities->FindPath("platformName");
+  if (platform_name_value && !platform_name_value->is_none()) {
     if (platform_name_value->is_string()) {
       std::string requested_platform_name = platform_name_value->GetString();
       std::string requested_first_token =
@@ -879,15 +878,14 @@ Status ExecuteSetTimeoutLegacy(Session* session,
     return Status(kInvalidArgument, "'type' must be a string");
 
   base::TimeDelta timeout =
-      base::TimeDelta::FromMilliseconds(static_cast<int>(maybe_ms.value()));
+      base::Milliseconds(static_cast<int>(maybe_ms.value()));
   if (*type == "implicit") {
     session->implicit_wait = timeout;
   } else if (*type == "script") {
     session->script_timeout = timeout;
   } else if (*type == "page load") {
     session->page_load_timeout =
-        ((timeout < base::TimeDelta()) ? Session::kDefaultPageLoadTimeout
-                                       : timeout);
+        ((timeout.is_negative()) ? Session::kDefaultPageLoadTimeout : timeout);
   } else {
     return Status(kInvalidArgument, "unknown type of timeout:" + *type);
   }
@@ -912,7 +910,7 @@ Status ExecuteSetTimeoutsW3C(Session* session,
             return Status(kInvalidArgument,
                           "value must be a non-negative integer");
         else
-            timeout = base::TimeDelta::FromMilliseconds(timeout_ms_int64);
+          timeout = base::Milliseconds(timeout_ms_int64);
     }
     if (type == "script") {
       session->script_timeout = timeout;
@@ -931,7 +929,7 @@ Status ExecuteSetTimeouts(Session* session,
   // TODO(crbug.com/chromedriver/2596): Remove legacy version support when we
   // stop supporting non-W3C protocol. At that time, we can delete the legacy
   // function and merge the W3C function into this function.
-  if (params.HasKey("ms")) {
+  if (params.FindKey("ms")) {
     return ExecuteSetTimeoutLegacy(session, params, value);
   } else {
     return ExecuteSetTimeoutsW3C(session, params, value);
@@ -962,7 +960,7 @@ Status ExecuteSetScriptTimeout(Session* session,
   if (!maybe_ms.has_value() || maybe_ms.value() < 0)
     return Status(kInvalidArgument, "'ms' must be a non-negative number");
   session->script_timeout =
-      base::TimeDelta::FromMilliseconds(static_cast<int>(maybe_ms.value()));
+      base::Milliseconds(static_cast<int>(maybe_ms.value()));
   return Status(kOk);
 }
 
@@ -973,7 +971,7 @@ Status ExecuteImplicitlyWait(Session* session,
   if (!maybe_ms.has_value() || maybe_ms.value() < 0)
     return Status(kInvalidArgument, "'ms' must be a non-negative number");
   session->implicit_wait =
-      base::TimeDelta::FromMilliseconds(static_cast<int>(maybe_ms.value()));
+      base::Milliseconds(static_cast<int>(maybe_ms.value()));
   return Status(kOk);
 }
 
@@ -1269,6 +1267,26 @@ Status ExecuteUnimplementedCommand(Session* session,
                                    const base::DictionaryValue& params,
                                    std::unique_ptr<base::Value>* value) {
   return Status(kUnknownCommand);
+}
+
+Status ExecuteSetSPCTransactionMode(Session* session,
+                                    const base::DictionaryValue& params,
+                                    std::unique_ptr<base::Value>* value) {
+  WebView* web_view = nullptr;
+  Status status = session->GetTargetWindow(&web_view);
+  if (status.IsError())
+    return status;
+
+  const std::string* mode = params.FindStringKey("mode");
+  if (!mode)
+    return Status(kInvalidArgument, "missing parameter 'mode'");
+
+  base::Value body(base::Value::Type::DICTIONARY);
+  body.SetStringKey("mode", *mode);
+
+  return web_view->SendCommandAndGetResult("Page.setSPCTransactionMode",
+                                           base::Value::AsDictionaryValue(body),
+                                           value);
 }
 
 Status ExecuteGenerateTestReport(Session* session,

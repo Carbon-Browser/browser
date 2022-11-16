@@ -16,6 +16,8 @@
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/scoped_user_pref_update.h"
+#include "components/value_store/value_store.h"
+#include "components/value_store/value_store_factory_impl.h"
 #include "extensions/browser/api/lock_screen_data/data_item.h"
 #include "extensions/browser/api/lock_screen_data/lock_screen_value_store_migrator.h"
 #include "extensions/browser/api/lock_screen_data/lock_screen_value_store_migrator_impl.h"
@@ -24,8 +26,6 @@
 #include "extensions/browser/api/storage/local_value_store_cache.h"
 #include "extensions/browser/event_router.h"
 #include "extensions/browser/extensions_browser_client.h"
-#include "extensions/browser/value_store/value_store.h"
-#include "extensions/browser/value_store/value_store_factory_impl.h"
 #include "extensions/common/api/lock_screen_data.h"
 
 namespace extensions {
@@ -597,22 +597,22 @@ std::set<std::string> LockScreenItemStorage::GetExtensionsWithDataItems(
     bool include_empty) {
   std::set<std::string> result;
 
-  const base::DictionaryValue* user_data = nullptr;
-  const base::DictionaryValue* items =
+  const base::Value* items =
       local_state_->GetDictionary(kLockScreenDataPrefKey);
-  if (!items || !items->GetDictionary(user_id_, &user_data) || !user_data)
+  if (!items)
+    return result;
+  const base::Value* user_data = items->FindDictPath(user_id_);
+  if (!user_data)
     return result;
 
-  for (base::DictionaryValue::Iterator extension_iter(*user_data);
-       !extension_iter.IsAtEnd(); extension_iter.Advance()) {
-    if (extension_iter.value().is_int() &&
-        (include_empty || extension_iter.value().GetInt() > 0)) {
-      result.insert(extension_iter.key());
-    } else if (extension_iter.value().is_dict()) {
-      const base::Value* count = extension_iter.value().FindKeyOfType(
+  for (auto it : user_data->DictItems()) {
+    if (it.second.is_int() && (include_empty || it.second.GetInt() > 0)) {
+      result.insert(it.first);
+    } else if (it.second.is_dict()) {
+      const base::Value* count = it.second.FindKeyOfType(
           kExtensionItemCountPrefKey, base::Value::Type::INTEGER);
       if (include_empty || (count && count->GetInt() > 0)) {
-        result.insert(extension_iter.key());
+        result.insert(it.first);
       }
     }
   }
@@ -622,16 +622,18 @@ std::set<std::string> LockScreenItemStorage::GetExtensionsWithDataItems(
 std::set<ExtensionId> LockScreenItemStorage::GetExtensionsToMigrate() {
   std::set<ExtensionId> result;
 
-  const base::DictionaryValue* user_data = nullptr;
-  const base::DictionaryValue* items =
+  const base::Value* items =
       local_state_->GetDictionary(kLockScreenDataPrefKey);
-  if (!items || !items->GetDictionary(user_id_, &user_data) || !user_data)
+
+  if (!items)
+    return result;
+  const base::Value* user_data = items->FindDictPath(user_id_);
+  if (!user_data)
     return result;
 
-  for (base::DictionaryValue::Iterator extension_iter(*user_data);
-       !extension_iter.IsAtEnd(); extension_iter.Advance()) {
-    if (extension_iter.value().is_int())
-      result.insert(extension_iter.key());
+  for (auto it : user_data->DictItems()) {
+    if (it.second.is_int())
+      result.insert(it.first);
   }
   return result;
 }

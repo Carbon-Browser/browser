@@ -8,12 +8,14 @@
 #include <string>
 
 #include "base/base_export.h"
-#include "base/check_op.h"
+#include "base/check.h"
 #include "base/containers/linked_list.h"
+#include "base/dcheck_is_on.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list_types.h"
 
-#if DCHECK_IS_ON()
+#if EXPENSIVE_DCHECKS_ARE_ON()
 #include "base/debug/stack_trace.h"
 #endif
 
@@ -104,13 +106,13 @@ class BASE_EXPORT CheckedObserverAdapter {
     return static_cast<ObserverType*>(adapter.weak_ptr_.get());
   }
 
-#if DCHECK_IS_ON()
+#if EXPENSIVE_DCHECKS_ARE_ON()
   std::string GetCreationStackString() const { return stack_.ToString(); }
 #endif
 
  private:
   WeakPtr<CheckedObserver> weak_ptr_;
-#if DCHECK_IS_ON()
+#if EXPENSIVE_DCHECKS_ARE_ON()
   base::debug::StackTrace stack_;
 #endif
 };
@@ -158,7 +160,9 @@ class WeakLinkNode : public base::LinkNode<WeakLinkNode<ObserverList>> {
   explicit operator bool() const { return get(); }
 
  private:
-  ObserverList* list_ = nullptr;
+  // `list_` is not a raw_ptr<...> for performance reasons: on-stack pointer +
+  // based on analysis of sampling profiler data and tab_search:top100:2020.
+  RAW_PTR_EXCLUSION ObserverList* list_ = nullptr;
 };
 
 }  // namespace internal

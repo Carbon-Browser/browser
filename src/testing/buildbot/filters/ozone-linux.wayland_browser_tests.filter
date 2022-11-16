@@ -2,8 +2,6 @@
 # to position top level windows, activate them, and set focus.
 -All/HostedOrWebAppTest.CtrlClickLink/HostedApp
 -All/HostedOrWebAppTest.CtrlClickLink/WebApp
--All/HostedOrWebAppTest.OpenLinkInNewTab/HostedApp
--All/HostedOrWebAppTest.OpenLinkInNewTab/WebApp
 -All/PopupBrowserTest.MoveClampedToCurrentDisplay/0
 -All/PopupBrowserTest.MoveClampedToCurrentDisplay/1
 -AutomationManagerAuraBrowserTest.EventFromAction
@@ -13,6 +11,8 @@
 -ChromeSitePerProcessTest.PopupWindowFocus
 -ExternalProtocolDialogBrowserTest.TestFocus
 -FolderUploadConfirmationViewTest.InitiallyFocusesCancel
+-JavaScriptTabModalDialogViewViewsBrowserTest.AlertDialogAccessibleNameDescriptionAndRole
+-JavaScriptTabModalDialogViewViewsBrowserTest.AlertDialogCloseButtonAccessibilityIgnored
 -PreservedWindowPlacement.Test
 -ProfileHelperTest.OpenNewWindowForProfile
 -TabHoverCardBubbleViewBrowserTest.WidgetNotVisibleOnMousePressAfterTabFocus
@@ -34,8 +34,8 @@
 -BrowserViewTest.GetAccessibleTabModalDialogTree
 -OmniboxPopupContentsViewTest.ClickOmnibox
 -OmniboxPopupContentsViewTest.PopupMatchesLocationBarBackground
--All/PageInfoBubbleViewBrowserTest.FocusDoesNotReturnToContentsOnReloadPrompt/*
--All/PageInfoBubbleViewBrowserTest.FocusReturnsToContentOnClose/*
+-PageInfoBubbleViewBrowserTest.FocusDoesNotReturnToContentsOnReloadPrompt
+-PageInfoBubbleViewBrowserTest.FocusReturnsToContentOnClose
 -PrintBrowserTest.PDFPluginNotKeyboardFocusable
 
 # These tests fail when run either with weston's test-plugin module or with
@@ -47,3 +47,10 @@
 # the problems.
 -AudioFocusWebContentsObserverBrowserTest.PlatformAppHasDifferentAudioFocus
 -BrowserNavigatorTest.SwitchToTabLatestWindow
+
+# #TODO (b/235882005): These tests fail due to a NOT_IMPLEMENTED_LOG_ONCE()
+# within the  wayland_surface.cc implementation. This causes our focused
+# dialog object to instantly close and causes these tests to fail. Until a
+# solution is introduced with wayland support or a workaround can be discovered
+# in the browser tests, simply disable them.
+-AccessCodeCastHandlerBrowserTest.*

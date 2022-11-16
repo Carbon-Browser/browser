@@ -16,9 +16,9 @@
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
+#include "chromeos/ash/components/network/network_handler_test_helper.h"
 #include "chromeos/dbus/power/fake_power_manager_client.h"
 #include "chromeos/dbus/shill/shill_service_client.h"
-#include "chromeos/network/network_handler_test_helper.h"
 #include "components/policy/proto/device_management_backend.pb.h"
 #include "components/prefs/testing_pref_service.h"
 #include "components/user_manager/scoped_user_manager.h"
@@ -308,7 +308,7 @@ TEST_F(ExtensionInstallEventLogCollectorTest, LoginTypes) {
     ExtensionInstallEventLogCollector collector(registry(), delegate(),
                                                 profile());
     base::CommandLine::ForCurrentProcess()->AppendSwitch(
-        chromeos::switches::kLoginUser);
+        ash::switches::kLoginUser);
     collector.OnLogin();
     EXPECT_EQ(1, delegate()->add_for_all_count());
   }

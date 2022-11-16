@@ -2,13 +2,12 @@
 <!DOCTYPE translationbundle>
 <translationbundle lang="sr-Latn">
 <translation id="130631256467250065">Promene će stupiti na snagu kada sledeći put ponovo pokrenete uređaj.</translation>
-<translation id="275588974610408078">Izveštavanje o otkazivanjima nije dostupno u Carbon Browser Browser Browser-u.</translation>
-<translation id="3064346599913645280">Gledate bezbednu Carbon Browser Browser Browser stranicu.</translation>
-<translation id="3550966579244642892">Google Chrome OS nije dovršio početno podešavanje.</translation>
-<translation id="358997566136285270">Carbon Browser Browser Browser logotip</translation>
-<translation id="4365115785552740256">Carbon Browser Browser Browser omogućavaju <ph name="BEGIN_LINK_CHROMIUM" />Carbon Browser Browser Browser<ph name="END_LINK_CHROMIUM" /> projekat otvorenog koda i drugi <ph name="BEGIN_LINK_OSS" />softver otvorenog koda<ph name="END_LINK_OSS" />.</translation>
+<translation id="275588974610408078">Izveštavanje o otkazivanjima nije dostupno u Carbon Browser-u.</translation>
+<translation id="3064346599913645280">Gledate bezbednu Carbon Browser stranicu.</translation>
+<translation id="358997566136285270">Carbon Browser logotip</translation>
+<translation id="4365115785552740256">Carbon Browser omogućavaju <ph name="BEGIN_LINK_CHROMIUM" />Carbon Browser<ph name="END_LINK_CHROMIUM" /> projekat otvorenog koda i drugi <ph name="BEGIN_LINK_OSS" />softver otvorenog koda<ph name="END_LINK_OSS" />.</translation>
 <translation id="4559775032954821361">Idite u
-          Carbon Browser Browser Browser meni &gt;
+          Carbon Browser meni &gt;
           <ph name="SETTINGS_TITLE" />
           &gt;
           <ph name="ADVANCED_TITLE" />
@@ -17,20 +16,21 @@
           &gt;
           LAN Settings (Podešavanja lokalne mreže)
           i opozovite izbor u polju za potvrdu „Use a proxy server for your LAN“ (Koristi proksi server za lokalnu mrežu).</translation>
-<translation id="4622039161600275920">Carbon Browser Browser Browser blokira ovu stranicu</translation>
-<translation id="48558539577516920">Dozvolite Carbon Browser Browser Browser-u da pristupa mreži u zaštitnom zidu ili antivirusnim
+<translation id="4622039161600275920">Carbon Browser blokira ovu stranicu</translation>
+<translation id="48558539577516920">Dozvolite Carbon Browser-u da pristupa mreži u zaštitnom zidu ili antivirusnim
           podešavanjima.</translation>
+<translation id="4918837013875648434">Google Chrome OS nije dovršio početno podešavanje.</translation>
 <translation id="580822234363523061">Idite u
-          Carbon Browser Browser Browser meni &gt;
+          Carbon Browser meni &gt;
           <ph name="SETTINGS_TITLE" />
           &gt;
           <ph name="ADVANCED_TITLE" />
           &gt;
           <ph name="PROXIES_TITLE" />
           i proverite da li je konfiguracija podešena na „no proxy“ (bez proksija) ili „direct“ (direktno).</translation>
-<translation id="6613594504749178791">Promene će stupiti na snagu kada sledeći put ponovo pokrenete Carbon Browser Browser Browser.</translation>
+<translation id="6613594504749178791">Promene će stupiti na snagu kada sledeći put ponovo pokrenete Carbon Browser.</translation>
 <translation id="7861509383340276692">Otvorite
-          Carbon Browser Browser Browser meni &gt;
+          Carbon Browser meni &gt;
           <ph name="SETTINGS_TITLE" />
           &gt;
           <ph name="ADVANCED_TITLE" />
@@ -38,5 +38,5 @@
           Ako vam to ne reši problem, preporučujemo da ponovo izaberete
           ovu opciju radi boljih performansi.</translation>
 <translation id="8187289872471304532">Idite na Applications (Aplikacije) &gt; System Preferences (Podešavanja sistema) &gt; Network (Mreža) &gt; Advanced (Više opcija) &gt; Proxies (Proksiji) i opozovite izbor svih proksija koji su izabrani.</translation>
-<translation id="8684913864886094367">Carbon Browser Browser Browser se nije ispravno zatvorio.</translation>
+<translation id="8684913864886094367">Carbon Browser se nije ispravno zatvorio.</translation>
 </translationbundle>

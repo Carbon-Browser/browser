@@ -7,7 +7,6 @@
 
 #import <UIKit/UIKit.h>
 
-#include "base/macros.h"
 #include "base/supports_user_data.h"
 
 class Browser;
@@ -23,7 +22,7 @@ class FullscreenController : public base::SupportsUserData::Data {
  public:
   explicit FullscreenController() = default;
 
-  // Retrieves the FullscreenController for |browser|. This should only be
+  // Retrieves the FullscreenController for `browser`. This should only be
   // called with the kFullscreenControllerBrowserScoped turned on.
   static FullscreenController* FromBrowser(Browser* browser);
 

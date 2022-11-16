@@ -9,7 +9,6 @@
 #include <map>
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "components/browsing_data/content/local_storage_helper.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
 
@@ -21,6 +20,9 @@ namespace browsing_data {
 class MockLocalStorageHelper : public browsing_data::LocalStorageHelper {
  public:
   explicit MockLocalStorageHelper(content::BrowserContext* context);
+
+  MockLocalStorageHelper(const MockLocalStorageHelper&) = delete;
+  MockLocalStorageHelper& operator=(const MockLocalStorageHelper&) = delete;
 
   // browsing_data::LocalStorageHelper implementation.
   void StartFetching(FetchCallback callback) override;
@@ -54,8 +56,6 @@ class MockLocalStorageHelper : public browsing_data::LocalStorageHelper {
   std::map<const blink::StorageKey, bool> storage_keys_;
 
   std::list<content::StorageUsageInfo> response_;
-
-  DISALLOW_COPY_AND_ASSIGN(MockLocalStorageHelper);
 };
 
 }  // namespace browsing_data

@@ -3,7 +3,6 @@
 // found in the LICENSE file.
 
 import './d3.min.js';
-import './diagnostics_fonts_css.js';
 import './diagnostics_shared_css.js';
 import './strings.m.js';
 
@@ -11,6 +10,8 @@ import {assert} from 'chrome://resources/js/assert.m.js';
 import {I18nBehavior} from 'chrome://resources/js/i18n_behavior.m.js';
 import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
 import {html, Polymer} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+
+import {isNavEnabled} from './diagnostics_utils.js';
 
 /**
  * @fileoverview
@@ -127,15 +128,15 @@ Polymer({
     graphWidth_: {
       readOnly: true,
       type: Number,
-      computed: 'getGraphDimension_(width_, padding_.left, padding_.right)'
+      computed: 'getGraphDimension_(width_, padding_.left, padding_.right)',
     },
 
     /** @private {number} */
     graphHeight_: {
       readOnly: true,
       type: Number,
-      computed: 'getGraphDimension_(height_, padding_.top, padding_.bottom)'
-    }
+      computed: 'getGraphDimension_(height_, padding_.top, padding_.bottom)',
+    },
   },
 
   observers: ['setScaling_(graphWidth_)'],
@@ -146,7 +147,7 @@ Polymer({
     // Note that with side nav DOM manipulation, created() isn't guaranteed to
     // be called only once.
     this.data_ = [];
-    for (var i = 0; i < this.numDataPoints_; ++i) {
+    for (let i = 0; i < this.numDataPoints_; ++i) {
       this.data_.push({user: -1, system: -1});
     }
   },
@@ -165,7 +166,8 @@ Polymer({
   updateChartWidth_() {
     // parseFloat() is used to convert the string returned by
     // getComputedStyleValue() into a number ("642px" --> 642).
-    this.width_ = parseFloat(this.getComputedStyleValue('--chart-width'));
+    const chartVar = isNavEnabled() ? '--chart-width-nav' : '--chart-width';
+    this.width_ = parseFloat(this.getComputedStyleValue(chartVar));
   },
 
   /**
@@ -207,7 +209,8 @@ Polymer({
     // 2) to smooth out the curve function.
     this.xAxisScaleFn_ =
         d3.scaleLinear().domain([0, this.numDataPoints_ - 2]).range([
-          0, this.graphWidth_
+          0,
+          this.graphWidth_,
         ]);
 
     // Draw the y-axis legend and also draw the horizontal gridlines by
@@ -219,8 +222,8 @@ Polymer({
                 .tickValues(this.yAxisTicks_)
                 .tickFormat((y) => this.getPercentageLabel_(y))
                 .tickPadding(this.padding_.tick)
-                .tickSize(-this.graphWidth_)  // Extend the ticks into the
-                                              // entire graph as gridlines.
+                .tickSize(-this.graphWidth_),  // Extend the ticks into the
+                                               // entire graph as gridlines.
         );
   },
 
@@ -333,5 +336,5 @@ Polymer({
    */
   getPercentageLabel_(value) {
     return loadTimeData.getStringF('percentageLabel', value);
-  }
+  },
 });

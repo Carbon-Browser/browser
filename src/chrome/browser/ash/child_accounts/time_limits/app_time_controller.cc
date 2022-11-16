@@ -6,6 +6,7 @@
 
 #include <string>
 
+#include "ash/constants/notifier_catalogs.h"
 #include "ash/public/cpp/notification_utils.h"
 #include "base/bind.h"
 #include "base/containers/contains.h"
@@ -37,6 +38,7 @@
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
+#include "components/services/app_service/public/cpp/app_launch_util.h"
 #include "components/services/app_service/public/mojom/types.mojom.h"
 #include "extensions/browser/extension_prefs.h"
 #include "extensions/browser/extension_registry.h"
@@ -63,7 +65,7 @@ const char kEngagementMetric[] = "SupervisedUsers.PerAppTimeLimits.Engagement";
 
 namespace {
 
-constexpr base::TimeDelta kDay = base::TimeDelta::FromHours(24);
+constexpr base::TimeDelta kDay = base::Hours(24);
 
 // Family link notifier id.
 constexpr char kFamilyLinkSourceId[] = "family-link";
@@ -113,11 +115,11 @@ std::u16string GetNotificationMessageFor(
     case AppNotification::kFiveMinutes:
       return l10n_util::GetStringFUTF16(
           IDS_APP_TIME_LIMIT_APP_WILL_PAUSE_SYSTEM_NOTIFICATION_MESSAGE,
-          GetTimeLimitMessage(base::TimeDelta::FromMinutes(5), /* cutoff */ 1));
+          GetTimeLimitMessage(base::Minutes(5), /* cutoff */ 1));
     case AppNotification::kOneMinute:
       return l10n_util::GetStringFUTF16(
           IDS_APP_TIME_LIMIT_APP_WILL_PAUSE_SYSTEM_NOTIFICATION_MESSAGE,
-          GetTimeLimitMessage(base::TimeDelta::FromMinutes(1), /* cutoff */ 1));
+          GetTimeLimitMessage(base::Minutes(1), /* cutoff */ 1));
     case AppNotification::kTimeLimitChanged:
       return time_limit
                  ? l10n_util::GetStringFUTF16(
@@ -162,8 +164,8 @@ std::string GetNotificationIdFor(const std::string& app_name,
 }
 
 bool IsAppOpenedInChrome(const AppId& app_id, Profile* profile) {
-  if (app_id.app_type() != apps::mojom::AppType::kExtension &&
-      app_id.app_type() != apps::mojom::AppType::kWeb) {
+  if (app_id.app_type() != apps::AppType::kChromeApp &&
+      app_id.app_type() != apps::AppType::kWeb) {
     return false;
   }
 
@@ -174,9 +176,9 @@ bool IsAppOpenedInChrome(const AppId& app_id, Profile* profile) {
   if (!extension)
     return false;
 
-  extensions::LaunchContainer launch_container = extensions::GetLaunchContainer(
+  apps::LaunchContainer launch_container = extensions::GetLaunchContainer(
       extensions::ExtensionPrefs::Get(profile), extension);
-  return launch_container == extensions::LaunchContainer::kLaunchContainerTab;
+  return launch_container == apps::LaunchContainer::kLaunchContainerTab;
 }
 
 }  // namespace
@@ -292,7 +294,7 @@ bool AppTimeController::IsExtensionAllowlisted(
 
 absl::optional<base::TimeDelta> AppTimeController::GetTimeLimitForApp(
     const std::string& app_service_id,
-    apps::mojom::AppType app_type) const {
+    apps::AppType app_type) const {
   const app_time::AppId app_id =
       app_service_wrapper_->AppIdFromAppServiceId(app_service_id, app_type);
   return app_registry_->GetTimeLimit(app_id);
@@ -402,7 +404,7 @@ void AppTimeController::TimeLimitsAllowlistPolicyUpdated(
     const std::string& pref_name) {
   DCHECK_EQ(pref_name, prefs::kPerAppTimeLimitsAllowlistPolicy);
 
-  const base::DictionaryValue* policy = pref_registrar_->prefs()->GetDictionary(
+  const base::Value* policy = pref_registrar_->prefs()->GetDictionary(
       prefs::kPerAppTimeLimitsAllowlistPolicy);
 
   // Figure out a way to avoid cloning
@@ -499,7 +501,7 @@ base::Time AppTimeController::GetNextResetTime() const {
   if (now > nearest_midnight)
     prev_midnight = nearest_midnight;
   else
-    prev_midnight = nearest_midnight - base::TimeDelta::FromHours(24);
+    prev_midnight = nearest_midnight - base::Hours(24);
 
   base::Time next_reset_time = prev_midnight + limits_reset_time_;
 
@@ -507,7 +509,7 @@ base::Time AppTimeController::GetNextResetTime() const {
     return next_reset_time;
 
   // We have already reset for this day. The reset time is the next day.
-  return next_reset_time + base::TimeDelta::FromHours(24);
+  return next_reset_time + base::Hours(24);
 }
 
 void AppTimeController::ScheduleForTimeLimitReset() {
@@ -538,8 +540,8 @@ void AppTimeController::RestoreLastResetTime() {
   if (reset_time == 0) {
     SetLastResetTime(base::Time::Now());
   } else {
-    last_limits_reset_time_ = base::Time::FromDeltaSinceWindowsEpoch(
-        base::TimeDelta::FromMicroseconds(reset_time));
+    last_limits_reset_time_ =
+        base::Time::FromDeltaSinceWindowsEpoch(base::Microseconds(reset_time));
   }
 
   if (HasTimeCrossedResetBoundary()) {
@@ -557,13 +559,13 @@ void AppTimeController::SetLastResetTime(base::Time timestamp) {
   if (timestamp > nearest_midnight)
     prev_midnight = nearest_midnight;
   else
-    prev_midnight = nearest_midnight - base::TimeDelta::FromHours(24);
+    prev_midnight = nearest_midnight - base::Hours(24);
 
   base::Time reset_time = prev_midnight + limits_reset_time_;
   if (reset_time <= timestamp)
     last_limits_reset_time_ = reset_time;
   else
-    last_limits_reset_time_ = reset_time - base::TimeDelta::FromHours(24);
+    last_limits_reset_time_ = reset_time - base::Hours(24);
 
   PrefService* service = profile_->GetPrefs();
   DCHECK(service);
@@ -635,7 +637,7 @@ void AppTimeController::ShowNotificationForApp(
           message, notification_source, GURL(),
           message_center::NotifierId(
               message_center::NotifierType::SYSTEM_COMPONENT,
-              kFamilyLinkSourceId),
+              kFamilyLinkSourceId, NotificationCatalogName::kAppTime),
           option_fields,
           notification == AppNotification::kTimeLimitChanged
               ? base::MakeRefCounted<
@@ -646,8 +648,10 @@ void AppTimeController::ShowNotificationForApp(
           chromeos::kNotificationSupervisedUserIcon,
           message_center::SystemNotificationWarningLevel::NORMAL);
 
-  if (icon.has_value())
-    message_center_notification->set_icon(gfx::Image(icon.value()));
+  if (icon.has_value()) {
+    message_center_notification->set_icon(
+        ui::ImageModel::FromImageSkia(icon.value()));
+  }
 
   auto* notification_display_service =
       NotificationDisplayService::GetForProfile(profile_);

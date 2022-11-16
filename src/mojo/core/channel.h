@@ -8,12 +8,12 @@
 #include <vector>
 
 #include "base/containers/span.h"
-#include "base/macros.h"
 #include "base/memory/nonscannable_memory.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/process/process.h"
 #include "base/process/process_handle.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "mojo/core/connection_params.h"
 #include "mojo/core/platform_handle_in_transit.h"
@@ -62,6 +62,9 @@ class MOJO_SYSTEM_IMPL_EXPORT Channel
 
   // A message to be written to a channel.
   struct MOJO_SYSTEM_IMPL_EXPORT Message {
+    Message(const Message&) = delete;
+    Message& operator=(const Message&) = delete;
+
     virtual ~Message() = default;
 
     enum class MessageType : uint16_t {
@@ -70,7 +73,7 @@ class MOJO_SYSTEM_IMPL_EXPORT Channel
       // TODO(https://crbug.com/695645): remove legacy support when Arc++ has
       // updated to Mojo with normal versioned messages.
       NORMAL_LEGACY = 0,
-#if defined(OS_IOS)
+#if BUILDFLAG(IS_IOS)
       // A control message containing handles to echo back.
       HANDLES_SENT,
       // A control message containing handles that can now be closed.
@@ -124,7 +127,7 @@ class MOJO_SYSTEM_IMPL_EXPORT Channel
       char padding[6];
     };
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
     struct MachPortsEntry {
       // The PlatformHandle::Type.
       uint8_t type;
@@ -143,12 +146,12 @@ class MOJO_SYSTEM_IMPL_EXPORT Channel
     };
     static_assert(sizeof(MachPortsExtraHeader) == 2,
                   "sizeof(MachPortsExtraHeader) must be 2 bytes");
-#elif defined(OS_FUCHSIA)
+#elif BUILDFLAG(IS_FUCHSIA)
     struct HandleInfoEntry {
       // True if the handle represents an FDIO file-descriptor, false otherwise.
       bool is_file_descriptor;
     };
-#elif defined(OS_WIN)
+#elif BUILDFLAG(IS_WIN)
     struct HandleEntry {
       // The windows HANDLE. HANDLEs are guaranteed to fit inside 32-bits.
       // See: https://msdn.microsoft.com/en-us/library/aa384203(VS.85).aspx
@@ -234,8 +237,6 @@ class MOJO_SYSTEM_IMPL_EXPORT Channel
     // be transmitted if the message is written to a channel. Includes all
     // headers and user payload.
     size_t size_ = 0;
-
-    DISALLOW_COPY_AND_ASSIGN(Message);
   };
 
   // Error types which may be reported by a Channel instance to its delegate.
@@ -280,10 +281,13 @@ class MOJO_SYSTEM_IMPL_EXPORT Channel
       HandlePolicy handle_policy,
       scoped_refptr<base::SingleThreadTaskRunner> io_task_runner);
 
-#if defined(OS_POSIX) && !defined(OS_NACL) && !defined(OS_MAC)
+  Channel(const Channel&) = delete;
+  Channel& operator=(const Channel&) = delete;
+
+#if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_NACL) && !BUILDFLAG(IS_MAC)
   // At this point only ChannelPosix needs InitFeatures.
   static void set_posix_use_writev(bool use_writev);
-#endif  // defined(OS_POSIX) && !defined(OS_NACL) && !defined(OS_MAC)
+#endif  // BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_NACL) && !BUILDFLAG(IS_MAC)
 
   static void set_use_trivial_messages(bool use_trivial_messages);
 
@@ -420,14 +424,12 @@ class MOJO_SYSTEM_IMPL_EXPORT Channel
 
   class ReadBuffer;
 
-  Delegate* delegate_;
+  raw_ptr<Delegate> delegate_;
   HandlePolicy handle_policy_;
   const std::unique_ptr<ReadBuffer> read_buffer_;
 
   // Handle to the process on the other end of this Channel, iff known.
   base::Process remote_process_;
-
-  DISALLOW_COPY_AND_ASSIGN(Channel);
 };
 
 }  // namespace core

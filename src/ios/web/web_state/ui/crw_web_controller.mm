@@ -43,6 +43,7 @@
 #import "ios/web/public/deprecated/crw_js_injection_evaluator.h"
 #import "ios/web/public/deprecated/crw_js_injection_receiver.h"
 #include "ios/web/public/js_messaging/web_frame_util.h"
+#import "ios/web/public/permissions/permissions.h"
 #import "ios/web/public/ui/crw_web_view_scroll_view_proxy.h"
 #import "ios/web/public/ui/page_display_state.h"
 #import "ios/web/public/web_client.h"
@@ -50,9 +51,7 @@
 #import "ios/web/security/crw_ssl_status_updater.h"
 #import "ios/web/text_fragments/text_fragments_manager_impl.h"
 #import "ios/web/web_state/page_viewport_state.h"
-#import "ios/web/web_state/ui/cookie_blocking_error_logger.h"
 #import "ios/web/web_state/ui/crw_context_menu_controller.h"
-#import "ios/web/web_state/ui/crw_legacy_context_menu_controller.h"
 #import "ios/web/web_state/ui/crw_swipe_recognizer_provider.h"
 #import "ios/web/web_state/ui/crw_web_controller_container_view.h"
 #import "ios/web/web_state/ui/crw_web_request_controller.h"
@@ -97,7 +96,6 @@ using web::wk_navigation_util::IsWKInternalUrl;
                                 CRWWebControllerContainerViewDelegate,
                                 CRWWebViewNavigationObserverDelegate,
                                 CRWWebRequestControllerDelegate,
-                                CRWJSNavigationHandlerDelegate,
                                 CRWWebViewScrollViewProxyObserver,
                                 CRWWKNavigationHandlerDelegate,
                                 CRWWKUIHandlerDelegate,
@@ -120,7 +118,7 @@ using web::wk_navigation_util::IsWKInternalUrl;
   // The web::PageDisplayState recorded when the page starts loading.
   web::PageDisplayState _displayStateOnStartLoading;
   // Whether or not the page has zoomed since the current navigation has been
-  // committed, either by user interaction or via |-restoreStateFromHistory|.
+  // committed by user interaction.
   BOOL _pageHasZoomed;
   // Whether a PageDisplayState is currently being applied.
   BOOL _applyingPageState;
@@ -141,16 +139,13 @@ using web::wk_navigation_util::IsWKInternalUrl;
 
   // State of user interaction with web content.
   web::UserInteractionState _userInteractionState;
-
-  // Logger for cookie;.error message.
-  std::unique_ptr<web::CookieBlockingErrorLogger> _cookieBlockingErrorLogger;
 }
 
 // The WKNavigationDelegate handler class.
 @property(nonatomic, readonly, strong)
     CRWWKNavigationHandler* navigationHandler;
 @property(nonatomic, readonly, strong)
-    CRWJSNavigationHandler* JSNavigationHandler;
+    CRWJSNavigationHandler* jsNavigationHandler;
 // The WKUIDelegate handler class.
 @property(nonatomic, readonly, strong) CRWWKUIHandler* UIHandler;
 
@@ -215,8 +210,7 @@ using web::wk_navigation_util::IsWKInternalUrl;
 @property(nonatomic, readonly) web::NavigationItemImpl* currentNavItem;
 
 // ContextMenu controller, handling the interactions with the context menu.
-@property(nonatomic, strong)
-    CRWContextMenuController* contextMenuController API_AVAILABLE(ios(13.0));
+@property(nonatomic, strong) CRWContextMenuController* contextMenuController;
 
 // Script manager for setting the windowID.
 @property(nonatomic, strong) CRWJSWindowIDManager* windowIDJSManager;
@@ -236,9 +230,6 @@ using web::wk_navigation_util::IsWKInternalUrl;
 // may be called multiple times and thus must be idempotent.
 - (void)loadCompleteWithSuccess:(BOOL)loadSuccess
                      forContext:(web::NavigationContextImpl*)context;
-
-// Restores the state for this page from session history.
-- (void)restoreStateFromHistory;
 // Extracts the current page's viewport tag information and calls |completion|.
 // If the page has changed before the viewport tag is successfully extracted,
 // |completion| is called with nullptr.
@@ -302,13 +293,10 @@ typedef void (^ViewportStateCompletion)(const web::PageViewportState*);
         initWithBrowserState:browserState];
     web::FindInPageManagerImpl::CreateForWebState(_webStateImpl);
     web::TextFragmentsManagerImpl::CreateForWebState(_webStateImpl);
-    _cookieBlockingErrorLogger =
-        std::make_unique<web::CookieBlockingErrorLogger>(_webStateImpl);
 
     _navigationHandler = [[CRWWKNavigationHandler alloc] initWithDelegate:self];
 
-    _JSNavigationHandler =
-        [[CRWJSNavigationHandler alloc] initWithDelegate:self];
+    _jsNavigationHandler = [[CRWJSNavigationHandler alloc] init];
 
     _UIHandler = [[CRWWKUIHandler alloc] init];
     _UIHandler.delegate = self;
@@ -479,11 +467,28 @@ typedef void (^ViewportStateCompletion)(const web::PageViewportState*);
 }
 
 - (NSDictionary*)WKWebViewObservers {
-  return @{
-    @"serverTrust" : @"webViewSecurityFeaturesDidChange",
-    @"hasOnlySecureContent" : @"webViewSecurityFeaturesDidChange",
-    @"title" : @"webViewTitleDidChange",
-  };
+  NSMutableDictionary<NSString*, NSString*>* observers =
+      [[NSMutableDictionary alloc] initWithDictionary:@{
+        @"serverTrust" : @"webViewSecurityFeaturesDidChange",
+        @"hasOnlySecureContent" : @"webViewSecurityFeaturesDidChange",
+        @"title" : @"webViewTitleDidChange",
+      }];
+  if (web::features::IsMediaPermissionsControlEnabled()) {
+    [observers addEntriesFromDictionary:@{
+      @"cameraCaptureState" : @"webViewCameraCaptureStateDidChange",
+      @"microphoneCaptureState" : @"webViewMicrophoneCaptureStateDidChange",
+    }];
+  }
+
+  if (@available(iOS 16.0, *)) {
+    if (base::FeatureList::IsEnabled(web::features::kEnableFullscreenAPI)) {
+      [observers addEntriesFromDictionary:@{
+        @"fullscreenState" : @"fullscreenStateDidChange"
+      }];
+    }
+  }
+
+  return observers;
 }
 
 - (GURL)currentURL {
@@ -536,24 +541,6 @@ typedef void (^ViewportStateCompletion)(const web::PageViewportState*);
   return context->GetItem();
 }
 
-- (void)showTransientContentView:(UIView<CRWScrollableContent>*)contentView {
-  DCHECK(contentView);
-  DCHECK(contentView.scrollView);
-  // TODO(crbug.com/556848) Reenable DCHECK when |CRWWebControllerContainerView|
-  // is restructured so that subviews are not added during |layoutSubviews|.
-  // DCHECK([contentView.scrollView isDescendantOfView:contentView]);
-  [_containerView displayTransientContent:contentView];
-}
-
-- (void)clearTransientContentView {
-  // Early return if there is no transient content view.
-  if (![_containerView transientContentView])
-    return;
-
-  // Remove the transient content view from the hierarchy.
-  [_containerView clearTransientContentView];
-}
-
 // Caller must reset the delegate before calling.
 - (void)close {
   self.webStateImpl->CancelDialogs();
@@ -561,7 +548,7 @@ typedef void (^ViewportStateCompletion)(const web::PageViewportState*);
   _SSLStatusUpdater = nil;
   [self.navigationHandler close];
   [self.UIHandler close];
-  [self.JSNavigationHandler close];
+  [self.jsNavigationHandler close];
   [self.requestController close];
   self.swipeRecognizerProvider = nil;
   [self.requestController close];
@@ -703,6 +690,30 @@ typedef void (^ViewportStateCompletion)(const web::PageViewportState*);
   [_requestController loadData:data MIMEType:MIMEType forURL:URL];
 }
 
+- (void)loadSimulatedRequest:(const GURL&)URL
+          responseHTMLString:(NSString*)responseHTMLString {
+  NSURLRequest* request =
+      [[NSURLRequest alloc] initWithURL:net::NSURLWithGURL(URL)];
+  [self.webView loadSimulatedRequest:request
+                  responseHTMLString:responseHTMLString];
+}
+
+- (void)loadSimulatedRequest:(const GURL&)URL
+                responseData:(NSData*)responseData
+                    MIMEType:(NSString*)MIMEType {
+  NSURL* url = net::NSURLWithGURL(URL);
+  NSURLRequest* request = [[NSURLRequest alloc] initWithURL:url];
+  NSURLResponse* response =
+      [[NSURLResponse alloc] initWithURL:url
+                                MIMEType:MIMEType
+                   expectedContentLength:responseData.length
+                        textEncodingName:nil];
+
+  [self.webView loadSimulatedRequest:request
+                            response:response
+                        responseData:responseData];
+}
+
 // Loads the HTML into the page at the given URL. Only for testing purpose.
 - (void)loadHTML:(NSString*)HTML forURL:(const GURL&)URL {
   [_requestController loadHTML:HTML forURL:URL];
@@ -796,11 +807,7 @@ typedef void (^ViewportStateCompletion)(const web::PageViewportState*);
 
 - (void)takeSnapshotWithRect:(CGRect)rect
                   completion:(void (^)(UIImage*))completion {
-  // On iOS 15, web process will die if a snapshot is taken on a PDF file.
-  // TODO(crbug.com/1233014): reenable PDF snapshots.
-  if (!self.webView ||
-      (![self contentIsHTML] &&
-       !web::features::ShouldTakeScreenshotOnNonHTMLContent())) {
+  if (!self.webView) {
     dispatch_async(dispatch_get_main_queue(), ^{
       completion(nil);
     });
@@ -873,6 +880,20 @@ typedef void (^ViewportStateCompletion)(const web::PageViewportState*);
   web::CreateFullPagePdf(self.webView, base::BindOnce(completionBlock));
 }
 
+- (void)closeMediaPresentations {
+  if (@available(iOS 15, *)) {
+    [self.webView requestMediaPlaybackStateWithCompletionHandler:^(
+                      WKMediaPlaybackState mediaPlaybackState) {
+      if (mediaPlaybackState == WKMediaPlaybackStateNone)
+        return;
+
+      // Completion handler is needed to avoid a crash when called.
+      [self.webView closeAllMediaPresentationsWithCompletionHandler:^{
+      }];
+    }];
+  }
+}
+
 - (void)removeWebViewFromViewHierarchy {
   [_containerView resetContent];
 }
@@ -883,22 +904,34 @@ typedef void (^ViewportStateCompletion)(const web::PageViewportState*);
 
 - (BOOL)setSessionStateData:(NSData*)data {
   if (@available(iOS 15, *)) {
-    NSError* error = nil;
-    NSKeyedUnarchiver* unarchiver =
-        [[NSKeyedUnarchiver alloc] initForReadingFromData:data error:&error];
-    if (!unarchiver || error) {
-      DLOG(WARNING) << "Error creating unarchiver for session state data: "
-                    << base::SysNSStringToUTF8([error description]);
-      return NO;
-    }
-    unarchiver.requiresSecureCoding = NO;
-    id interactionState =
-        [unarchiver decodeObjectForKey:NSKeyedArchiveRootObjectKey];
-    if (!interactionState) {
-      DLOG(WARNING) << "Error decoding interactionState.";
-      return NO;
+    NSData* interactionState = data;
+
+    // Old versions of chrome wrapped interactionState in a keyed unarchiver.
+    // This step was unnecessary. Rather than migrate all blobs over, simply
+    // check for an unarchiver here. NSKeyed data will start with 'bplist00',
+    // which differs from the header of a WebKit session coding (0x00000002).
+    // This logic can be removed after this change has gone live for a while.
+    constexpr char kArchiveHeader[] = "bplist00";
+    if (data.length > strlen(kArchiveHeader) &&
+        memcmp(data.bytes, kArchiveHeader, strlen(kArchiveHeader)) == 0) {
+      NSError* error = nil;
+      NSKeyedUnarchiver* unarchiver =
+          [[NSKeyedUnarchiver alloc] initForReadingFromData:data error:&error];
+      if (!unarchiver || error) {
+        DLOG(WARNING) << "Error creating unarchiver for session state data: "
+                      << base::SysNSStringToUTF8([error description]);
+        return NO;
+      }
+      unarchiver.requiresSecureCoding = NO;
+      interactionState =
+          [unarchiver decodeObjectForKey:NSKeyedArchiveRootObjectKey];
+      if (!interactionState) {
+        DLOG(WARNING) << "Error decoding interactionState.";
+        return NO;
+      }
     }
     [self ensureWebViewCreated];
+    DCHECK_EQ(self.webView.backForwardList.currentItem, nil);
     self.navigationHandler.blockUniversalLinksOnNextDecidePolicy = true;
     [self.webView setInteractionState:interactionState];
     return YES;
@@ -906,15 +939,95 @@ typedef void (^ViewportStateCompletion)(const web::PageViewportState*);
   return NO;
 }
 
+- (web::PermissionState)stateForPermission:(web::Permission)permission {
+  WKMediaCaptureState captureState;
+  switch (permission) {
+    case web::PermissionCamera:
+      captureState = self.webView.cameraCaptureState;
+      break;
+    case web::PermissionMicrophone:
+      captureState = self.webView.microphoneCaptureState;
+      break;
+  }
+  switch (captureState) {
+    case WKMediaCaptureStateActive:
+      return web::PermissionStateAllowed;
+    case WKMediaCaptureStateMuted:
+      return web::PermissionStateBlocked;
+    case WKMediaCaptureStateNone:
+      return web::PermissionStateNotAccessible;
+  }
+}
+
+- (void)setState:(web::PermissionState)state
+    forPermission:(web::Permission)permission {
+  WKMediaCaptureState captureState;
+  switch (state) {
+    case web::PermissionStateAllowed:
+      captureState = WKMediaCaptureStateActive;
+      break;
+    case web::PermissionStateBlocked:
+      captureState = WKMediaCaptureStateMuted;
+      break;
+    case web::PermissionStateNotAccessible:
+      captureState = WKMediaCaptureStateNone;
+      break;
+  }
+  switch (permission) {
+    case web::PermissionCamera:
+      [self.webView setCameraCaptureState:captureState completionHandler:nil];
+      break;
+    case web::PermissionMicrophone:
+      [self.webView setMicrophoneCaptureState:captureState
+                            completionHandler:nil];
+      break;
+  }
+}
+
+- (NSDictionary<NSNumber*, NSNumber*>*)statesForAllPermissions {
+  return @{
+    @(web::PermissionCamera) :
+        @([self stateForPermission:web::PermissionCamera]),
+    @(web::PermissionMicrophone) :
+        @([self stateForPermission:web::PermissionMicrophone])
+  };
+}
+
 - (NSData*)sessionStateData {
   if (@available(iOS 15, *)) {
-    NSError* error = nil;
-    return [NSKeyedArchiver
-        archivedDataWithRootObject:self.webView.interactionState
-             requiringSecureCoding:NO
-                             error:&error];
+    return self.webView.interactionState;
   }
   return nil;
+}
+
+- (void)handleNavigationHashChange {
+  web::NavigationItemImpl* currentItem = self.currentNavItem;
+  if (currentItem) {
+    currentItem->SetIsCreatedFromHashChange(true);
+  }
+}
+
+- (void)handleNavigationWillChangeState {
+  [self.jsNavigationHandler handleNavigationWillChangeState];
+}
+
+- (void)handleNavigationDidPushStateMessage:(base::Value*)message {
+  [self.jsNavigationHandler
+      handleNavigationDidPushStateMessage:message
+                                 webState:_webStateImpl
+                           hasUserGesture:self.isUserInteracting
+                     userInteractionState:&_userInteractionState
+                               currentURL:self.currentURL];
+  [self updateSSLStatusForCurrentNavigationItem];
+}
+
+- (void)handleNavigationDidReplaceStateMessage:(base::Value*)message {
+  [self.jsNavigationHandler
+      handleNavigationDidReplaceStateMessage:message
+                                    webState:_webStateImpl
+                              hasUserGesture:self.isUserInteracting
+                        userInteractionState:&_userInteractionState
+                                  currentURL:self.currentURL];
 }
 
 #pragma mark - JavaScript
@@ -1007,7 +1120,7 @@ typedef void (^ViewportStateCompletion)(const web::PageViewportState*);
     // opening a new tab and then writing to it, e.g.
     // window.open('javascript:document.write(1)').  This URL is never commited,
     // so it should be OK to ignore this URL change.
-    if (base::ios::IsRunningOnIOS13OrLater() && oldDocumentURL.IsAboutBlank() &&
+    if (oldDocumentURL.IsAboutBlank() &&
         !self.webStateImpl->GetNavigationManager()->GetLastCommittedItem() &&
         !self.webView.loading) {
       return;
@@ -1019,12 +1132,13 @@ typedef void (^ViewportStateCompletion)(const web::PageViewportState*);
       return;
     }
 
-    GURL documentOrigin = newURL.GetOrigin();
+    GURL documentOrigin = newURL.DeprecatedGetOriginAsURL();
     web::NavigationItem* committedItem =
         self.webStateImpl->GetNavigationManager()->GetLastCommittedItem();
     GURL committedURL =
         committedItem ? committedItem->GetURL() : GURL::EmptyGURL();
-    GURL committedOrigin = committedURL.GetOrigin();
+    GURL committedOrigin = committedURL.DeprecatedGetOriginAsURL();
+
     DCHECK_EQ(documentOrigin, committedOrigin)
         << "Old and new URL detection system have a mismatch";
 
@@ -1176,19 +1290,6 @@ typedef void (^ViewportStateCompletion)(const web::PageViewportState*);
 - (void)webViewScrollViewDidZoom:
     (CRWWebViewScrollViewProxy*)webViewScrollViewProxy {
   _pageHasZoomed = YES;
-
-  __weak UIScrollView* weakScrollView = self.webScrollView;
-  [self extractViewportTagWithCompletion:^(
-            const web::PageViewportState* viewportState) {
-    if (!weakScrollView)
-      return;
-    UIScrollView* scrollView = weakScrollView;
-    if (viewportState && !viewportState->viewport_tag_present() &&
-        [scrollView minimumZoomScale] == [scrollView maximumZoomScale] &&
-        [scrollView zoomScale] > 1.0) {
-      UMA_HISTOGRAM_BOOLEAN("Renderer.ViewportZoomBugCount", true);
-    }
-  }];
 }
 
 - (void)webViewScrollViewDidResetContentSize:
@@ -1232,12 +1333,6 @@ typedef void (^ViewportStateCompletion)(const web::PageViewportState*);
 }
 
 #pragma mark - Page State
-
-- (void)restoreStateFromHistory {
-  web::NavigationItem* item = self.currentNavItem;
-  if (item)
-    self.pageDisplayState = item->GetPageDisplayState();
-}
 
 - (void)extractViewportTagWithCompletion:(ViewportStateCompletion)completion {
   DCHECK(completion);
@@ -1409,6 +1504,25 @@ typedef void (^ViewportStateCompletion)(const web::PageViewportState*);
   }
 }
 
+#if defined(__IPHONE_16_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_16_0
+CrFullscreenState CrFullscreenStateFromWKFullscreenState(
+    WKFullscreenState state) API_AVAILABLE(ios(16.0)) {
+  switch (state) {
+    case WKFullscreenStateEnteringFullscreen:
+      return CrFullscreenState::kEnteringFullscreen;
+    case WKFullscreenStateExitingFullscreen:
+      return CrFullscreenState::kExitingFullscreen;
+    case WKFullscreenStateInFullscreen:
+      return CrFullscreenState::kInFullscreen;
+    case WKFullscreenStateNotInFullscreen:
+      return CrFullscreenState::kNotInFullScreen;
+    default:
+      NOTREACHED();
+      return CrFullscreenState::kNotInFullScreen;
+  }
+}
+#endif  // defined (__IPHONE_16_0)
+
 #pragma mark - Security Helpers
 
 - (void)updateSSLStatusForCurrentNavigationItem {
@@ -1506,16 +1620,11 @@ typedef void (^ViewportStateCompletion)(const web::PageViewportState*);
           requireGestureRecognizerToFail:swipeRecognizer];
     }
 
-    if (web::GetWebClient()->EnableLongPressUIContextMenu()) {
-        self.contextMenuController = [[CRWContextMenuController alloc]
-            initWithWebView:self.webView
-                   webState:self.webStateImpl];
-    } else {
-      // Default to legacy implementation.
-      self.UIHandler.contextMenuController =
-          [[CRWLegacyContextMenuController alloc]
-              initWithWebView:self.webView
-                     webState:self.webStateImpl];
+    if (web::GetWebClient()->EnableLongPressUIContextMenu() &&
+        web::GetWebClient()->EnableLongPressAndForceTouchHandling()) {
+      self.contextMenuController =
+          [[CRWContextMenuController alloc] initWithWebView:self.webView
+                                                   webState:self.webStateImpl];
     }
 
     // WKWebViews with invalid or empty frames have exhibited rendering bugs, so
@@ -1537,16 +1646,13 @@ typedef void (^ViewportStateCompletion)(const web::PageViewportState*);
 - (WKWebView*)webViewWithConfiguration:(WKWebViewConfiguration*)config {
   // Do not attach the context menu controller immediately as the JavaScript
   // delegate must be specified.
-  web::UserAgentType defaultUserAgent =
-      web::features::UseWebClientDefaultUserAgent()
-          ? web::UserAgentType::AUTOMATIC
-          : web::UserAgentType::MOBILE;
+  web::UserAgentType defaultUserAgent = web::UserAgentType::AUTOMATIC;
   web::NavigationItem* item = self.currentNavItem;
   web::UserAgentType userAgentType =
       item ? item->GetUserAgentType() : defaultUserAgent;
   if (userAgentType == web::UserAgentType::AUTOMATIC) {
     userAgentType =
-        web::GetWebClient()->GetDefaultUserAgent(_containerView, GURL());
+        web::GetWebClient()->GetDefaultUserAgent(self.webStateImpl, GURL());
   }
 
   return web::BuildWKWebView(CGRectZero, config,
@@ -1560,9 +1666,23 @@ typedef void (^ViewportStateCompletion)(const web::PageViewportState*);
   if (!self.webView || [_containerView webViewContentView])
     return;
 
-  CRWWebViewContentView* webViewContentView =
-      [[CRWWebViewContentView alloc] initWithWebView:self.webView
-                                          scrollView:self.webScrollView];
+#if defined(__IPHONE_16_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_16_0
+  if (@available(iOS 16.0, *)) {
+    CRWWebViewContentView* webViewContentView = [[CRWWebViewContentView alloc]
+        initWithWebView:self.webView
+             scrollView:self.webScrollView
+        fullscreenState:CrFullscreenStateFromWKFullscreenState(
+                            self.webView.fullscreenState)];
+    [_containerView displayWebViewContentView:webViewContentView];
+    return;
+  }
+#endif  // defined(__IPHONE_16_0)
+
+  CRWWebViewContentView* webViewContentView = [[CRWWebViewContentView alloc]
+      initWithWebView:self.webView
+           scrollView:self.webScrollView
+      fullscreenState:CrFullscreenState::kNotInFullScreen];
+
   [_containerView displayWebViewContentView:webViewContentView];
 }
 
@@ -1713,6 +1833,26 @@ typedef void (^ViewportStateCompletion)(const web::PageViewportState*);
   }
 }
 
+// Called when WKWebView cameraCaptureState property has changed.
+- (void)webViewCameraCaptureStateDidChange API_AVAILABLE(ios(15.0)) {
+  self.webStateImpl->OnStateChangedForPermission(web::PermissionCamera);
+}
+
+// Called when WKWebView microphoneCaptureState property has changed.
+- (void)webViewMicrophoneCaptureStateDidChange API_AVAILABLE(ios(15.0)) {
+  self.webStateImpl->OnStateChangedForPermission(web::PermissionMicrophone);
+}
+
+- (void)fullscreenStateDidChange {
+#if defined(__IPHONE_16_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_16_0
+  if (@available(iOS 16.0, *)) {
+    [_containerView updateWebViewContentViewFullscreenState:
+                        CrFullscreenStateFromWKFullscreenState(
+                            self.webView.fullscreenState)];
+  }
+#endif  // defined (__IPHONE_16_0)
+}
+
 #pragma mark - CRWWebViewHandlerDelegate
 
 - (web::WebStateImpl*)webStateImplForWebViewHandler:
@@ -1793,7 +1933,8 @@ typedef void (^ViewportStateCompletion)(const web::PageViewportState*);
 
   if (base::FeatureList::IsEnabled(
           web::features::kCrashOnUnexpectedURLChange)) {
-    if (_documentURL.GetOrigin() != newURL.GetOrigin()) {
+    if (_documentURL.DeprecatedGetOriginAsURL() !=
+        newURL.DeprecatedGetOriginAsURL()) {
       if (!_documentURL.host().empty() &&
           (newURL.username().find(_documentURL.host()) != std::string::npos ||
            newURL.password().find(_documentURL.host()) != std::string::npos)) {
@@ -1806,8 +1947,7 @@ typedef void (^ViewportStateCompletion)(const web::PageViewportState*);
   if (!IsRestoreSessionUrl(_documentURL) && !IsRestoreSessionUrl(newURL)) {
     bool ignore_host_change =
         // On iOS13 document.write() can change URL origin for about:blank page.
-        (_documentURL.IsAboutBlank() && base::ios::IsRunningOnIOS13OrLater() &&
-         !self.webView.loading);
+        (_documentURL.IsAboutBlank() && !self.webView.loading);
     if (!ignore_host_change) {
       DCHECK_EQ(_documentURL.host(), newURL.host());
     }
@@ -1832,7 +1972,7 @@ typedef void (^ViewportStateCompletion)(const web::PageViewportState*);
   // |newNavigationContext| only exists if this method has to create a new
   // context object.
   std::unique_ptr<web::NavigationContextImpl> newNavigationContext;
-  if (!self.JSNavigationHandler.changingHistoryState) {
+  if (!self.jsNavigationHandler.changingHistoryState) {
     if ([self.navigationHandler
             contextForPendingMainFrameNavigationWithURL:newURL]) {
       // NavigationManager::LoadURLWithParams() was called with URL that has
@@ -1853,7 +1993,7 @@ typedef void (^ViewportStateCompletion)(const web::PageViewportState*);
 
   [self setDocumentURL:newURL context:newNavigationContext.get()];
 
-  if (!self.JSNavigationHandler.changingHistoryState) {
+  if (!self.jsNavigationHandler.changingHistoryState) {
     // Pass either newly created context (if it exists) or context that already
     // existed before.
     web::NavigationContextImpl* navigationContext = newNavigationContext.get();
@@ -1932,6 +2072,18 @@ typedef void (^ViewportStateCompletion)(const web::PageViewportState*);
   [self loadCompleteWithSuccess:loadSuccess forContext:context];
 }
 
+- (void)resumeDownloadWithData:(NSData*)data
+             completionHandler:(void (^)(WKDownload*))completionHandler
+    API_AVAILABLE(ios(15)) {
+  // Reports some failure to higher level code if |webView| doesn't exist
+  if (!_webView) {
+    completionHandler(nil);
+    return;
+  }
+  [_webView resumeDownloadFromResumeData:data
+                       completionHandler:completionHandler];
+}
+
 #pragma mark - CRWWebRequestControllerDelegate
 
 - (void)webRequestControllerStopLoading:
@@ -1952,11 +2104,6 @@ typedef void (^ViewportStateCompletion)(const web::PageViewportState*);
   self.webView.allowsBackForwardNavigationGestures = NO;
 }
 
-- (void)webRequestControllerRestoreStateFromHistory:
-    (CRWWebRequestController*)requestController {
-  [self restoreStateFromHistory];
-}
-
 - (CRWWKNavigationHandler*)webRequestControllerNavigationHandler:
     (CRWWebRequestController*)requestController {
   return self.navigationHandler;
@@ -1970,23 +2117,6 @@ typedef void (^ViewportStateCompletion)(const web::PageViewportState*);
     return webState->GetDelegate()->GetResponderInputView(webState);
   }
   return nil;
-}
-
-#pragma mark - CRWJSNavigationHandlerDelegate
-
-- (GURL)currentURLForJSNavigationHandler:
-    (CRWJSNavigationHandler*)navigationHandler {
-  return self.currentURL;
-}
-
-- (void)JSNavigationHandlerUpdateSSLStatusForCurrentNavigationItem:
-    (CRWJSNavigationHandler*)navigationHandler {
-  [self updateSSLStatusForCurrentNavigationItem];
-}
-
-- (void)JSNavigationHandlerOptOutScrollsToTopForSubviews:
-    (CRWJSNavigationHandler*)navigationHandler {
-  return [self optOutScrollsToTopForSubviews];
 }
 
 #pragma mark - UIDropInteractionDelegate

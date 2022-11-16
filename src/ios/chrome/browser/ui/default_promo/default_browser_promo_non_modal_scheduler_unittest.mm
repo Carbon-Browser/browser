@@ -26,7 +26,6 @@
 #import "ios/chrome/browser/ui/default_promo/default_browser_utils.h"
 #import "ios/chrome/browser/ui/main/scene_state.h"
 #include "ios/chrome/browser/ui/ui_feature_flags.h"
-#include "ios/chrome/browser/web_state_list/fake_web_state_list_delegate.h"
 #include "ios/chrome/browser/web_state_list/web_state_list.h"
 #import "ios/chrome/browser/web_state_list/web_state_opener.h"
 #import "ios/web/public/test/fakes/fake_navigation_manager.h"
@@ -45,22 +44,14 @@ namespace {
 
 class DefaultBrowserPromoNonModalSchedulerTest : public PlatformTest {
  protected:
-  DefaultBrowserPromoNonModalSchedulerTest()
-      : web_state_list_(&web_state_list_delegate_) {}
-  void SetUp() override {
-    // Turn on instructions because that is easier to unittest.
-    const std::map<std::string, std::string> feature_params = {
-        {"instructions_enabled", "true"},
-    };
-    feature_list_.InitAndEnableFeatureWithParameters(kDefaultPromoNonModal,
-                                                     feature_params);
+  DefaultBrowserPromoNonModalSchedulerTest() {}
 
+  void SetUp() override {
     TestChromeBrowserState::Builder test_cbs_builder;
     std::unique_ptr<TestChromeBrowserState> chrome_browser_state =
         test_cbs_builder.Build();
 
-    browser_ = std::make_unique<TestBrowser>(chrome_browser_state.get(),
-                                             &web_state_list_);
+    browser_ = std::make_unique<TestBrowser>(chrome_browser_state.get());
 
     OverlayPresenter::FromBrowser(browser_.get(),
                                   OverlayModality::kInfobarBanner)
@@ -72,9 +63,9 @@ class DefaultBrowserPromoNonModalSchedulerTest : public PlatformTest {
     test_web_state_->SetNavigationManager(
         std::make_unique<web::FakeNavigationManager>());
     InfoBarManagerImpl::CreateForWebState(test_web_state_);
-    web_state_list_.InsertWebState(0, std::move(web_state),
-                                   WebStateList::INSERT_ACTIVATE,
-                                   WebStateOpener());
+    browser_->GetWebStateList()->InsertWebState(0, std::move(web_state),
+                                                WebStateList::INSERT_ACTIVATE,
+                                                WebStateOpener());
 
     ClearUserDefaults();
 
@@ -88,7 +79,16 @@ class DefaultBrowserPromoNonModalSchedulerTest : public PlatformTest {
     scheduler_ = [[DefaultBrowserPromoNonModalScheduler alloc] init];
     scheduler_.browser = browser_.get();
     scheduler_.dispatcher = browser_->GetCommandDispatcher();
+
+    // Stub application so the settings panel doesn't actually open.
+    application_ = OCMClassMock([UIApplication class]);
+    OCMStub([application_ sharedApplication]).andReturn(application_);
   }
+
+  ~DefaultBrowserPromoNonModalSchedulerTest() override {
+    [application_ stopMocking];
+  }
+
   void TearDown() override {
     ClearUserDefaults();
     OverlayPresenter::FromBrowser(browser_.get(),
@@ -113,20 +113,15 @@ class DefaultBrowserPromoNonModalSchedulerTest : public PlatformTest {
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
   base::test::ScopedFeatureList feature_list_;
   web::FakeWebState* test_web_state_;
-  FakeWebStateListDelegate web_state_list_delegate_;
-  WebStateList web_state_list_;
   std::unique_ptr<Browser> browser_;
   FakeOverlayPresentationContext overlay_presentation_context_;
   id promo_commands_handler_;
   DefaultBrowserPromoNonModalScheduler* scheduler_;
+  id application_ = nil;
 };
 
 // Tests that the omnibox paste event triggers the promo to show.
 TEST_F(DefaultBrowserPromoNonModalSchedulerTest, TestOmniboxPasteShowsPromo) {
-  // Default promo is not supported on iOS < 14
-  if (!base::ios::IsRunningOnIOS14OrLater()) {
-    return;
-  }
 
   [scheduler_ logUserPastedInOmnibox];
 
@@ -137,12 +132,12 @@ TEST_F(DefaultBrowserPromoNonModalSchedulerTest, TestOmniboxPasteShowsPromo) {
 
   // First advance the timer by a small delay. This should not trigger the
   // promo.
-  task_env_.FastForwardBy(base::TimeDelta::FromSeconds(1));
+  task_env_.FastForwardBy(base::Seconds(1));
 
   // Then advance the timer by the remaining post-load delay. This should
   // trigger the promo.
   [[promo_commands_handler_ expect] showDefaultBrowserNonModalPromo];
-  task_env_.FastForwardBy(base::TimeDelta::FromSeconds(2));
+  task_env_.FastForwardBy(base::Seconds(2));
 
   [promo_commands_handler_ verify];
 }
@@ -151,10 +146,6 @@ TEST_F(DefaultBrowserPromoNonModalSchedulerTest, TestOmniboxPasteShowsPromo) {
 // promo.
 TEST_F(DefaultBrowserPromoNonModalSchedulerTest,
        TestFirstPartySchemeShowsPromo) {
-  // Default promo is not supported on iOS < 14
-  if (!base::ios::IsRunningOnIOS14OrLater()) {
-    return;
-  }
 
   [scheduler_ logUserEnteredAppViaFirstPartyScheme];
 
@@ -165,22 +156,18 @@ TEST_F(DefaultBrowserPromoNonModalSchedulerTest,
 
   // First advance the timer by a small delay. This should not trigger the
   // promo.
-  task_env_.FastForwardBy(base::TimeDelta::FromSeconds(1));
+  task_env_.FastForwardBy(base::Seconds(1));
 
   // Then advance the timer by the remaining post-load delay. This should
   // trigger the promo.
   [[promo_commands_handler_ expect] showDefaultBrowserNonModalPromo];
-  task_env_.FastForwardBy(base::TimeDelta::FromSeconds(2));
+  task_env_.FastForwardBy(base::Seconds(2));
 
   [promo_commands_handler_ verify];
 }
 
 // Tests that the completed share event triggers the promo.
 TEST_F(DefaultBrowserPromoNonModalSchedulerTest, TestShareCompletedShowsPromo) {
-  // Default promo is not supported on iOS < 14
-  if (!base::ios::IsRunningOnIOS14OrLater()) {
-    return;
-  }
 
   [scheduler_ logUserFinishedActivityFlow];
 
@@ -191,7 +178,7 @@ TEST_F(DefaultBrowserPromoNonModalSchedulerTest, TestShareCompletedShowsPromo) {
 
   // Advance the timer by the post-share delay. This should trigger the promo.
   [[promo_commands_handler_ expect] showDefaultBrowserNonModalPromo];
-  task_env_.FastForwardBy(base::TimeDelta::FromSeconds(1));
+  task_env_.FastForwardBy(base::Seconds(1));
 
   [promo_commands_handler_ verify];
 }
@@ -199,10 +186,6 @@ TEST_F(DefaultBrowserPromoNonModalSchedulerTest, TestShareCompletedShowsPromo) {
 // Tests that the promo dismisses automatically after the dismissal time and
 // the event is stored.
 TEST_F(DefaultBrowserPromoNonModalSchedulerTest, TestTimeoutDismissesPromo) {
-  // Default promo is not supported on iOS < 14
-  if (!base::ios::IsRunningOnIOS14OrLater()) {
-    return;
-  }
 
   [scheduler_ logUserPastedInOmnibox];
 
@@ -213,7 +196,7 @@ TEST_F(DefaultBrowserPromoNonModalSchedulerTest, TestTimeoutDismissesPromo) {
 
   // Advance the timer by the post-load delay. This should trigger the promo.
   [[promo_commands_handler_ expect] showDefaultBrowserNonModalPromo];
-  task_env_.FastForwardBy(base::TimeDelta::FromSeconds(3));
+  task_env_.FastForwardBy(base::Seconds(3));
 
   [promo_commands_handler_ verify];
 
@@ -221,7 +204,7 @@ TEST_F(DefaultBrowserPromoNonModalSchedulerTest, TestTimeoutDismissesPromo) {
   // promo.
   [[promo_commands_handler_ expect]
       dismissDefaultBrowserNonModalPromoAnimated:YES];
-  task_env_.FastForwardBy(base::TimeDelta::FromSeconds(15));
+  task_env_.FastForwardBy(base::Seconds(60));
   [promo_commands_handler_ verify];
 
   // Check that NSUserDefaults has been updated.
@@ -230,10 +213,6 @@ TEST_F(DefaultBrowserPromoNonModalSchedulerTest, TestTimeoutDismissesPromo) {
 
 // Tests that if the user takes the promo action, that is handled correctly.
 TEST_F(DefaultBrowserPromoNonModalSchedulerTest, TestActionDismissesPromo) {
-  // Default promo is not supported on iOS < 14
-  if (!base::ios::IsRunningOnIOS14OrLater()) {
-    return;
-  }
 
   [scheduler_ logUserPastedInOmnibox];
 
@@ -244,19 +223,17 @@ TEST_F(DefaultBrowserPromoNonModalSchedulerTest, TestActionDismissesPromo) {
 
   // Advance the timer by the post-load delay. This should trigger the promo.
   [[promo_commands_handler_ expect] showDefaultBrowserNonModalPromo];
-  task_env_.FastForwardBy(base::TimeDelta::FromSeconds(3));
+  task_env_.FastForwardBy(base::Seconds(3));
 
   [promo_commands_handler_ verify];
 
-  id settings_commands_handler =
-      OCMStrictProtocolMock(@protocol(ApplicationSettingsCommands));
-  [browser_->GetCommandDispatcher()
-      startDispatchingToTarget:settings_commands_handler
-                   forProtocol:@protocol(ApplicationSettingsCommands)];
-  [[settings_commands_handler expect]
-      showDefaultBrowserSettingsFromViewController:nil];
+  [[application_ expect]
+                openURL:[NSURL URLWithString:UIApplicationOpenSettingsURLString]
+                options:@{}
+      completionHandler:nil];
   [scheduler_ logUserPerformedPromoAction];
-  [settings_commands_handler verify];
+
+  [application_ verify];
 
   // Check that NSUserDefaults has been updated.
   EXPECT_EQ(UserInteractionWithNonModalPromoCount(), 1);
@@ -266,10 +243,6 @@ TEST_F(DefaultBrowserPromoNonModalSchedulerTest, TestActionDismissesPromo) {
 // finishes, the promo does not show.
 TEST_F(DefaultBrowserPromoNonModalSchedulerTest,
        TestTabSwitchPreventsPromoShown) {
-  // Default promo is not supported on iOS < 14
-  if (!base::ios::IsRunningOnIOS14OrLater()) {
-    return;
-  }
 
   [scheduler_ logUserPastedInOmnibox];
 
@@ -281,20 +254,16 @@ TEST_F(DefaultBrowserPromoNonModalSchedulerTest,
   // Switch to a new tab.
   auto web_state = std::make_unique<web::FakeWebState>();
   test_web_state_ = web_state.get();
-  web_state_list_.InsertWebState(
+  browser_->GetWebStateList()->InsertWebState(
       1, std::move(web_state), WebStateList::INSERT_ACTIVATE, WebStateOpener());
 
   // Advance the timer and the mock handler should not have any interactions.
-  task_env_.FastForwardBy(base::TimeDelta::FromSeconds(60));
+  task_env_.FastForwardBy(base::Seconds(60));
 }
 
 // Tests that if a message is triggered on page load, the promo is not shown.
 TEST_F(DefaultBrowserPromoNonModalSchedulerTest,
        TestMessagePreventsPromoShown) {
-  // Default promo is not supported on iOS < 14
-  if (!base::ios::IsRunningOnIOS14OrLater()) {
-    return;
-  }
 
   [scheduler_ logUserPastedInOmnibox];
 
@@ -324,17 +293,13 @@ TEST_F(DefaultBrowserPromoNonModalSchedulerTest,
   [promo_commands_handler_ verify];
 
   // Advance the timer and the mock handler not have any interaction.
-  task_env_.FastForwardBy(base::TimeDelta::FromSeconds(60));
+  task_env_.FastForwardBy(base::Seconds(60));
 }
 
 // Tests that backgrounding the app with the promo showing hides the promo but
 // does not update the shown promo count.
 TEST_F(DefaultBrowserPromoNonModalSchedulerTest,
        TestBackgroundingDismissesPromo) {
-  // Default promo is not supported on iOS < 14
-  if (!base::ios::IsRunningOnIOS14OrLater()) {
-    return;
-  }
 
   [scheduler_ logUserPastedInOmnibox];
 
@@ -345,7 +310,7 @@ TEST_F(DefaultBrowserPromoNonModalSchedulerTest,
 
   // Advance the timer by the post-load delay. This should trigger the promo.
   [[promo_commands_handler_ expect] showDefaultBrowserNonModalPromo];
-  task_env_.FastForwardBy(base::TimeDelta::FromSeconds(3));
+  task_env_.FastForwardBy(base::Seconds(3));
 
   [promo_commands_handler_ verify];
 
@@ -363,10 +328,6 @@ TEST_F(DefaultBrowserPromoNonModalSchedulerTest,
 // Tests that entering the tab grid with the promo showing hides the promo but
 // does not update the shown promo count.
 TEST_F(DefaultBrowserPromoNonModalSchedulerTest, TestTabGridDismissesPromo) {
-  // Default promo is not supported on iOS < 14
-  if (!base::ios::IsRunningOnIOS14OrLater()) {
-    return;
-  }
 
   [scheduler_ logUserPastedInOmnibox];
 
@@ -377,7 +338,7 @@ TEST_F(DefaultBrowserPromoNonModalSchedulerTest, TestTabGridDismissesPromo) {
 
   // Advance the timer by the post-load delay. This should trigger the promo.
   [[promo_commands_handler_ expect] showDefaultBrowserNonModalPromo];
-  task_env_.FastForwardBy(base::TimeDelta::FromSeconds(3));
+  task_env_.FastForwardBy(base::Seconds(3));
 
   [promo_commands_handler_ verify];
 
@@ -393,10 +354,6 @@ TEST_F(DefaultBrowserPromoNonModalSchedulerTest, TestTabGridDismissesPromo) {
 
 // Tests background cancel metric logs correctly.
 TEST_F(DefaultBrowserPromoNonModalSchedulerTest, TestBackgroundCancelMetric) {
-  // Default promo is not supported on iOS < 14
-  if (!base::ios::IsRunningOnIOS14OrLater()) {
-    return;
-  }
 
   base::HistogramTester histogram_tester;
   histogram_tester.ExpectUniqueSample(
@@ -419,10 +376,6 @@ TEST_F(DefaultBrowserPromoNonModalSchedulerTest, TestBackgroundCancelMetric) {
 // Tests background cancel metric is not logged after a promo is shown.
 TEST_F(DefaultBrowserPromoNonModalSchedulerTest,
        TestBackgroundCancelMetricNotLogAfterPromoShown) {
-  // Default promo is not supported on iOS < 14
-  if (!base::ios::IsRunningOnIOS14OrLater()) {
-    return;
-  }
 
   base::HistogramTester histogram_tester;
   histogram_tester.ExpectUniqueSample(
@@ -438,7 +391,7 @@ TEST_F(DefaultBrowserPromoNonModalSchedulerTest,
 
   // Advance the timer by the post-load delay. This should trigger the promo.
   [[promo_commands_handler_ expect] showDefaultBrowserNonModalPromo];
-  task_env_.FastForwardBy(base::TimeDelta::FromSeconds(3));
+  task_env_.FastForwardBy(base::Seconds(3));
   [promo_commands_handler_ verify];
 
   [[promo_commands_handler_ expect]
@@ -455,10 +408,6 @@ TEST_F(DefaultBrowserPromoNonModalSchedulerTest,
 // Tests background cancel metric is not logged after a promo is dismissed.
 TEST_F(DefaultBrowserPromoNonModalSchedulerTest,
        TestBackgroundCancelMetricNotLogAfterPromoDismiss) {
-  // Default promo is not supported on iOS < 14
-  if (!base::ios::IsRunningOnIOS14OrLater()) {
-    return;
-  }
 
   base::HistogramTester histogram_tester;
   histogram_tester.ExpectUniqueSample(
@@ -474,13 +423,13 @@ TEST_F(DefaultBrowserPromoNonModalSchedulerTest,
 
   // Advance the timer by the post-load delay. This should trigger the promo.
   [[promo_commands_handler_ expect] showDefaultBrowserNonModalPromo];
-  task_env_.FastForwardBy(base::TimeDelta::FromSeconds(3));
+  task_env_.FastForwardBy(base::Seconds(3));
   [promo_commands_handler_ verify];
 
   [[promo_commands_handler_ expect]
       dismissDefaultBrowserNonModalPromoAnimated:YES];
 
-  task_env_.FastForwardBy(base::TimeDelta::FromSeconds(100));
+  task_env_.FastForwardBy(base::Seconds(100));
 
   [[promo_commands_handler_ expect]
       dismissDefaultBrowserNonModalPromoAnimated:NO];
@@ -497,10 +446,6 @@ TEST_F(DefaultBrowserPromoNonModalSchedulerTest,
 // Prevents crbug.com/1221379 regression.
 TEST_F(DefaultBrowserPromoNonModalSchedulerTest,
        TestBackgroundCancelMetricDoesNotLogWhenPromoNotShown) {
-  // Default promo is not supported on iOS < 14
-  if (!base::ios::IsRunningOnIOS14OrLater()) {
-    return;
-  }
 
   base::HistogramTester histogram_tester;
   histogram_tester.ExpectUniqueSample(
@@ -521,10 +466,10 @@ TEST_F(DefaultBrowserPromoNonModalSchedulerTest,
 
   // Advance the timer by the post-load delay. This should not trigger the
   // promo.
-  task_env_.FastForwardBy(base::TimeDelta::FromSeconds(3));
+  task_env_.FastForwardBy(base::Seconds(3));
   // Advance the timer by the post-load delay. This should not dismiss the
   // promo.
-  task_env_.FastForwardBy(base::TimeDelta::FromSeconds(100));
+  task_env_.FastForwardBy(base::Seconds(100));
 
   [[promo_commands_handler_ expect]
       dismissDefaultBrowserNonModalPromoAnimated:NO];
@@ -540,10 +485,6 @@ TEST_F(DefaultBrowserPromoNonModalSchedulerTest,
 // Tests that if the user currently has Chrome as default, the promo does not
 // show. Prevents regression of crbug.com/1224875
 TEST_F(DefaultBrowserPromoNonModalSchedulerTest, NoPromoIfDefault) {
-  // Default promo is not supported on iOS < 14
-  if (!base::ios::IsRunningOnIOS14OrLater()) {
-    return;
-  }
 
   // Mark Chrome as currently default
   [[NSUserDefaults standardUserDefaults]
@@ -558,28 +499,24 @@ TEST_F(DefaultBrowserPromoNonModalSchedulerTest, NoPromoIfDefault) {
   test_web_state_->SetLoading(false);
 
   // Advance the timer and the mock handler should not have any interactions.
-  task_env_.FastForwardBy(base::TimeDelta::FromSeconds(60));
+  task_env_.FastForwardBy(base::Seconds(60));
 }
 
 // Tests that if the promo can't be shown, the state is cleaned up, so a
 // DCHECK is not fired on the next page load. Prevents regression of
 // crbug.com/1224427
 TEST_F(DefaultBrowserPromoNonModalSchedulerTest, NoDCHECKIfPromoNotShown) {
-  // Default promo is not supported on iOS < 14
-  if (!base::ios::IsRunningOnIOS14OrLater()) {
-    return;
-  }
 
   [scheduler_ logUserPastedInOmnibox];
 
   // Switch to a new tab before loading a page. This will prevent the promo from
   // showing.
   auto web_state = std::make_unique<web::FakeWebState>();
-  web_state_list_.InsertWebState(
+  browser_->GetWebStateList()->InsertWebState(
       1, std::move(web_state), WebStateList::INSERT_ACTIVATE, WebStateOpener());
 
   // Activate the first page again.
-  web_state_list_.ActivateWebStateAt(0);
+  browser_->GetWebStateList()->ActivateWebStateAt(0);
 
   // Finish loading the page.
   test_web_state_->SetLoading(true);
@@ -588,7 +525,7 @@ TEST_F(DefaultBrowserPromoNonModalSchedulerTest, NoDCHECKIfPromoNotShown) {
 
   // Advance the timer and the mock handler should not have any interactions and
   // there should be no DCHECK.
-  task_env_.FastForwardBy(base::TimeDelta::FromSeconds(60));
+  task_env_.FastForwardBy(base::Seconds(60));
 }
 
 }  // namespace

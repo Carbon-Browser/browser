@@ -20,7 +20,7 @@
 #include "base/test/task_environment.h"
 #include "components/services/storage/indexed_db/leveldb/leveldb_factory.h"
 #include "components/services/storage/indexed_db/leveldb/leveldb_state.h"
-#include "components/services/storage/indexed_db/scopes/disjoint_range_lock_manager.h"
+#include "components/services/storage/indexed_db/locks/disjoint_range_lock_manager.h"
 #include "components/services/storage/indexed_db/scopes/leveldb_scopes.h"
 #include "components/services/storage/indexed_db/scopes/leveldb_scopes_test_utils.h"
 #include "components/services/storage/indexed_db/transactional_leveldb/leveldb_write_batch.h"
@@ -181,7 +181,7 @@ TEST_F(TransactionalLevelDBDatabaseTest, LastModified) {
   std::string put_value;
   auto test_clock = std::make_unique<base::SimpleTestClock>();
   base::SimpleTestClock* clock_ptr = test_clock.get();
-  clock_ptr->Advance(base::TimeDelta::FromHours(2));
+  clock_ptr->Advance(base::Hours(2));
 
   leveldb::Status status = OpenLevelDBDatabase();
   ASSERT_TRUE(status.ok());
@@ -194,14 +194,14 @@ TEST_F(TransactionalLevelDBDatabaseTest, LastModified) {
   EXPECT_EQ(now_time, transactional_leveldb_database_->LastModified());
 
   // Calling |Remove| sets time modified.
-  clock_ptr->Advance(base::TimeDelta::FromSeconds(200));
+  clock_ptr->Advance(base::Seconds(200));
   now_time = clock_ptr->Now();
   status = transactional_leveldb_database_->Remove(key);
   EXPECT_TRUE(status.ok());
   EXPECT_EQ(now_time, transactional_leveldb_database_->LastModified());
 
   // Calling |Write| sets time modified
-  clock_ptr->Advance(base::TimeDelta::FromMinutes(15));
+  clock_ptr->Advance(base::Minutes(15));
   now_time = clock_ptr->Now();
   auto batch = LevelDBWriteBatch::Create();
   batch->Put(key, value);

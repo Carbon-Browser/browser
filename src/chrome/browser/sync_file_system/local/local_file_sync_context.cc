@@ -10,10 +10,12 @@
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/containers/contains.h"
+#include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/location.h"
-#include "base/single_thread_task_runner.h"
-#include "base/task_runner_util.h"
+#include "base/observer_list.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/task/task_runner_util.h"
 #include "chrome/browser/sync_file_system/file_change.h"
 #include "chrome/browser/sync_file_system/local/local_file_change_tracker.h"
 #include "chrome/browser/sync_file_system/local/local_origin_change_observer.h"
@@ -28,7 +30,10 @@
 #include "storage/browser/file_system/file_system_file_util.h"
 #include "storage/browser/file_system/file_system_operation_context.h"
 #include "storage/browser/file_system/file_system_operation_runner.h"
+#include "storage/browser/file_system/file_system_url.h"
+#include "storage/common/file_system/file_system_types.h"
 #include "storage/common/file_system/file_system_util.h"
+#include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "url/origin.h"
 
 using storage::FileSystemContext;
@@ -88,7 +93,7 @@ void LocalFileSyncContext::MaybeInitializeFileSystemContext(
   // for writable way (even when MaybeInitializeFileSystemContext is called
   // from read-only OpenFileSystem), so open the filesystem with
   // CREATE_IF_NONEXISTENT here.
-  storage::FileSystemBackend::OpenFileSystemCallback open_filesystem_callback =
+  storage::FileSystemBackend::ResolveURLCallback open_filesystem_callback =
       base::BindOnce(
           &LocalFileSyncContext::InitializeFileSystemContextOnIOThread, this,
           source_url, base::RetainedRef(file_system_context));
@@ -96,7 +101,8 @@ void LocalFileSyncContext::MaybeInitializeFileSystemContext(
       FROM_HERE,
       base::BindOnce(&storage::SandboxFileSystemBackendDelegate::OpenFileSystem,
                      base::Unretained(file_system_context->sandbox_delegate()),
-                     url::Origin::Create(source_url),
+                     blink::StorageKey(url::Origin::Create(source_url)),
+                     /*bucket_locator=*/absl::nullopt,
                      storage::kFileSystemTypeSyncable,
                      storage::OPEN_FILE_SYSTEM_CREATE_IF_NONEXISTENT,
                      std::move(open_filesystem_callback), GURL()));
@@ -1041,8 +1047,8 @@ void LocalFileSyncContext::DidGetFileMetadata(
 
 base::TimeDelta LocalFileSyncContext::NotifyChangesDuration() {
   if (mock_notify_changes_duration_in_sec_ >= 0)
-    return base::TimeDelta::FromSeconds(mock_notify_changes_duration_in_sec_);
-  return base::TimeDelta::FromSeconds(kNotifyChangesDurationInSec);
+    return base::Seconds(mock_notify_changes_duration_in_sec_);
+  return base::Seconds(kNotifyChangesDurationInSec);
 }
 
 void LocalFileSyncContext::DidCreateDirectoryForCopyIn(

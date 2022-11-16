@@ -10,7 +10,7 @@
 #include <memory>
 #include <vector>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/events/event.h"
 #include "ui/events/events_export.h"
 #include "ui/events/gesture_detection/filtered_gesture_provider.h"
@@ -27,6 +27,10 @@ class EVENTS_EXPORT GestureProviderAuraClient {
   virtual ~GestureProviderAuraClient() {}
   virtual void OnGestureEvent(GestureConsumer* consumer,
                               GestureEvent* event) = 0;
+
+  // Called when `gesture_provider` will be destroyed.
+  virtual void OnGestureProviderAuraWillBeDestroyed(
+      GestureProviderAura* gesture_provider) {}
 };
 
 // Provides gesture detection and dispatch given a sequence of touch events
@@ -35,6 +39,10 @@ class EVENTS_EXPORT GestureProviderAura : public GestureProviderClient {
  public:
   GestureProviderAura(GestureConsumer* consumer,
                       GestureProviderAuraClient* client);
+
+  GestureProviderAura(const GestureProviderAura&) = delete;
+  GestureProviderAura& operator=(const GestureProviderAura&) = delete;
+
   ~GestureProviderAura() override;
 
   void set_gesture_consumer(GestureConsumer* consumer) {
@@ -63,7 +71,7 @@ class EVENTS_EXPORT GestureProviderAura : public GestureProviderClient {
   bool RequiresDoubleTapGestureEvents() const override;
 
  private:
-  GestureProviderAuraClient* client_;
+  raw_ptr<GestureProviderAuraClient> client_;
   MotionEventAura pointer_state_;
   FilteredGestureProvider filtered_gesture_provider_;
 
@@ -71,9 +79,7 @@ class EVENTS_EXPORT GestureProviderAura : public GestureProviderClient {
   std::vector<std::unique_ptr<GestureEvent>> pending_gestures_;
 
   // |gesture_consumer_| must outlive this object.
-  GestureConsumer* gesture_consumer_;
-
-  DISALLOW_COPY_AND_ASSIGN(GestureProviderAura);
+  raw_ptr<GestureConsumer> gesture_consumer_;
 };
 
 }  // namespace ui

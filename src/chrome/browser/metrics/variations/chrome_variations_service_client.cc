@@ -4,58 +4,44 @@
 
 #include "chrome/browser/metrics/variations/chrome_variations_service_client.h"
 
-#include "base/bind.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
+#include "build/config/chromebox_for_meetings/buildflags.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/google/google_brand.h"
 #include "chrome/browser/net/system_network_context_manager.h"
 #include "chrome/common/channel_info.h"
-#include "chromeos/components/chromebox_for_meetings/buildflags/buildflags.h"
 #include "components/variations/service/variations_service_client.h"
 #include "components/version_info/version_info.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 
-#if !defined(OS_ANDROID) && !BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chrome/browser/upgrade_detector/upgrade_detector_impl.h"
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_CHROMEOS_ASH)
+#include "chrome/browser/upgrade_detector/build_state.h"
 #endif
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "ash/components/tpm/install_attributes.h"
 #include "chrome/browser/ash/settings/cros_settings.h"
 #endif
 
-#if defined(OS_WIN) || defined(OS_MAC)
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
 #include "base/enterprise_util.h"
-#elif BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chromeos/tpm/install_attributes.h"
 #endif
 
-namespace {
+ChromeVariationsServiceClient::ChromeVariationsServiceClient() = default;
 
-// Gets the version number to use for variations seed simulation. Must be called
-// on a thread where IO is allowed.
-base::Version GetVersionForSimulation() {
-#if !defined(OS_ANDROID) && !BUILDFLAG(IS_CHROMEOS_ASH)
-  const base::Version installed_version =
-      UpgradeDetectorImpl::GetCurrentlyInstalledVersion();
-  if (installed_version.IsValid())
-    return installed_version;
-#endif  // !defined(OS_ANDROID) && !BUILDFLAG(IS_CHROMEOS_ASH)
+ChromeVariationsServiceClient::~ChromeVariationsServiceClient() = default;
+
+base::Version ChromeVariationsServiceClient::GetVersionForSimulation() {
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_CHROMEOS_ASH)
+  const auto* build_state = g_browser_process->GetBuildState();
+  if (build_state->installed_version().has_value())
+    return *build_state->installed_version();
+#endif  // !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_CHROMEOS_ASH)
 
   // TODO(asvitkine): Get the version that will be used on restart instead of
   // the current version on Android, iOS and ChromeOS.
   return version_info::GetVersion();
-}
-
-}  // namespace
-
-ChromeVariationsServiceClient::ChromeVariationsServiceClient() {}
-
-ChromeVariationsServiceClient::~ChromeVariationsServiceClient() {}
-
-ChromeVariationsServiceClient::VersionCallback
-ChromeVariationsServiceClient::GetVersionForSimulationCallback() {
-  return base::BindOnce(&GetVersionForSimulation);
 }
 
 scoped_refptr<network::SharedURLLoaderFactory>
@@ -72,7 +58,7 @@ ChromeVariationsServiceClient::GetNetworkTimeTracker() {
 bool ChromeVariationsServiceClient::OverridesRestrictParameter(
     std::string* parameter) {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  ash::CrosSettings::Get()->GetString(chromeos::kVariationsRestrictParameter,
+  ash::CrosSettings::Get()->GetString(ash::kVariationsRestrictParameter,
                                       parameter);
   return true;
 #else
@@ -82,7 +68,7 @@ bool ChromeVariationsServiceClient::OverridesRestrictParameter(
 
 variations::Study::FormFactor
 ChromeVariationsServiceClient::GetCurrentFormFactor() {
-#if BUILDFLAG(IS_CHROMEOS_ASH) && BUILDFLAG(PLATFORM_CFM)
+#if BUILDFLAG(PLATFORM_CFM)
   return variations::Study::MEET_DEVICE;
 #else
   return variations::VariationsServiceClient::GetCurrentFormFactor();
@@ -90,10 +76,10 @@ ChromeVariationsServiceClient::GetCurrentFormFactor() {
 }
 
 bool ChromeVariationsServiceClient::IsEnterprise() {
-#if defined(OS_WIN) || defined(OS_MAC)
-  return base::IsMachineExternallyManaged();
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
+  return base::IsEnterpriseDevice();
 #elif BUILDFLAG(IS_CHROMEOS_ASH)
-  return chromeos::InstallAttributes::Get()->IsEnterpriseManaged();
+  return ash::InstallAttributes::Get()->IsEnterpriseManaged();
 #else
   return false;
 #endif

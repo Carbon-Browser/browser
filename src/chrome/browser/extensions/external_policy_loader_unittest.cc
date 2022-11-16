@@ -6,7 +6,6 @@
 #include <set>
 #include <string>
 
-#include "base/macros.h"
 #include "base/values.h"
 #include "base/version.h"
 #include "chrome/browser/extensions/extension_management.h"
@@ -46,6 +45,11 @@ class MockExternalPolicyProviderVisitor
   MockExternalPolicyProviderVisitor() {
   }
 
+  MockExternalPolicyProviderVisitor(const MockExternalPolicyProviderVisitor&) =
+      delete;
+  MockExternalPolicyProviderVisitor& operator=(
+      const MockExternalPolicyProviderVisitor&) = delete;
+
   // Initialize a provider with |policy_forcelist|, and check that it installs
   // exactly the extensions specified in |expected_extensions|.
   void Visit(const base::DictionaryValue& policy_forcelist,
@@ -77,7 +81,7 @@ class MockExternalPolicyProviderVisitor
 
   bool OnExternalExtensionUpdateUrlFound(
       const extensions::ExternalInstallInfoUpdateUrl& info,
-      bool is_initial_load) override {
+      bool force_update) override {
     // Extension has the correct location.
     EXPECT_EQ(ManifestLocation::kExternalPolicyDownload,
               info.download_location);
@@ -114,8 +118,6 @@ class MockExternalPolicyProviderVisitor
   std::unique_ptr<TestingProfile> profile_;
 
   std::unique_ptr<ExternalProviderImpl> provider_;
-
-  DISALLOW_COPY_AND_ASSIGN(MockExternalPolicyProviderVisitor);
 };
 
 TEST_F(ExternalPolicyLoaderTest, PolicyIsParsed) {
@@ -144,10 +146,10 @@ TEST_F(ExternalPolicyLoaderTest, InvalidEntriesIgnored) {
   expected_extensions.insert("cccccccccccccccccccccccccccccccc");
 
   // Add invalid entries.
-  forced_extensions.SetString("invalid", "http://www.example.com/crx");
-  forced_extensions.SetString("dddddddddddddddddddddddddddddddd",
-                              std::string());
-  forced_extensions.SetString("invalid", "bad");
+  forced_extensions.SetStringKey("invalid", "http://www.example.com/crx");
+  forced_extensions.SetStringKey("dddddddddddddddddddddddddddddddd",
+                                 std::string());
+  forced_extensions.SetStringKey("invalid", "bad");
 
   MockExternalPolicyProviderVisitor mv;
   mv.Visit(forced_extensions, expected_extensions);

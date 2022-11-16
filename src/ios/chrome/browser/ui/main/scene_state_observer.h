@@ -32,7 +32,7 @@ enum SceneActivationLevel : NSUInteger;
 // Notifies when UIEnabled has been set to false. Is only fired once during the
 // scene's life period when the scene UI is tearing down.
 - (void)sceneStateDidDisableUI:(SceneState*)sceneState;
-// Notifies when URLContexts have been added to |URLContextsToOpen|.
+// Notifies when URLContexts have been added to `URLContextsToOpen`.
 - (void)sceneState:(SceneState*)sceneState
     hasPendingURLs:(NSSet<UIOpenURLContext*>*)URLContexts;
 // Notifies that a new activity request has been received.
@@ -41,6 +41,10 @@ enum SceneActivationLevel : NSUInteger;
 // Notifies that the scene switched between incognito/normal mode.
 - (void)sceneState:(SceneState*)sceneState
     isDisplayingIncognitoContent:(BOOL)incognitoContentVisible;
+// Notifies that prompting to sign-in did start.
+- (void)signinDidStart:(SceneState*)sceneState;
+// Notifies that prompting to sign-in and the authentication flow are done.
+- (void)signinDidEnd:(SceneState*)sceneState;
 
 @end
 

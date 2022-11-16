@@ -15,6 +15,7 @@
 #include "base/notreached.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/threading/thread_task_runner_handle.h"
 #include "components/translate/content/renderer/isolated_world_util.h"
 #include "components/translate/core/common/translate_constants.h"
 #include "components/translate/core/common/translate_metrics.h"
@@ -190,7 +191,7 @@ std::string PerFrameTranslateAgent::GetPageSourceLanguage() {
 base::TimeDelta PerFrameTranslateAgent::AdjustDelay(int delay_in_milliseconds) {
   // Just converts |delay_in_milliseconds| without any modification in practical
   // cases. Tests will override this function to return modified value.
-  return base::TimeDelta::FromMilliseconds(delay_in_milliseconds);
+  return base::Milliseconds(delay_in_milliseconds);
 }
 
 void PerFrameTranslateAgent::ExecuteScript(const std::string& script) {

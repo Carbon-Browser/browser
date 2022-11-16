@@ -10,7 +10,6 @@
 #include <memory>
 
 #include "base/files/file_path.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "storage/browser/file_system/async_file_util_adapter.h"
 #include "storage/browser/file_system/file_system_backend.h"
@@ -34,6 +33,10 @@ class TestFileSystemBackend : public FileSystemBackend {
  public:
   TestFileSystemBackend(base::SequencedTaskRunner* task_runner,
                         const base::FilePath& base_path);
+
+  TestFileSystemBackend(const TestFileSystemBackend&) = delete;
+  TestFileSystemBackend& operator=(const TestFileSystemBackend&) = delete;
+
   ~TestFileSystemBackend() override;
 
   // FileSystemBackend implementation.
@@ -41,7 +44,7 @@ class TestFileSystemBackend : public FileSystemBackend {
   void Initialize(FileSystemContext* context) override;
   void ResolveURL(const FileSystemURL& url,
                   OpenFileSystemMode mode,
-                  OpenFileSystemCallback callback) override;
+                  ResolveURLCallback callback) override;
   AsyncFileUtil* GetAsyncFileUtil(FileSystemType type) override;
   WatcherManager* GetWatcherManager(FileSystemType type) override;
   CopyOrMoveFileValidatorFactory* GetCopyOrMoveFileValidatorFactory(
@@ -98,8 +101,6 @@ class TestFileSystemBackend : public FileSystemBackend {
   bool require_copy_or_move_validator_;
   std::unique_ptr<CopyOrMoveFileValidatorFactory>
       copy_or_move_file_validator_factory_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestFileSystemBackend);
 };
 
 }  // namespace storage

@@ -7,6 +7,7 @@
 #include "base/check.h"
 #include "base/containers/contains.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/unguessable_token.h"
 #include "chrome/browser/ash/child_accounts/time_limits/app_time_limit_utils.h"
 #include "chrome/browser/ash/child_accounts/time_limits/app_types.h"
 #include "chrome/browser/profiles/profile.h"
@@ -19,8 +20,8 @@ namespace ash {
 
 namespace {
 
-constexpr base::TimeDelta kMinChromeDuration = base::TimeDelta::FromMinutes(1);
-constexpr base::TimeDelta kMaxChromeDuration = base::TimeDelta::FromDays(7);
+constexpr base::TimeDelta kMinChromeDuration = base::Minutes(1);
+constexpr base::TimeDelta kMaxChromeDuration = base::Days(7);
 constexpr int kChromeDurationBuckets = 100;
 
 }  // namespace
@@ -71,7 +72,7 @@ void FamilyUserChromeActivityMetrics::SetActiveSessionStartForTesting(
 
 void FamilyUserChromeActivityMetrics::OnAppActive(
     const app_time::AppId& app_id,
-    const apps::Instance::InstanceKey& instance_key,
+    const base::UnguessableToken& instance_id,
     base::Time timestamp) {
   if (app_id != app_time::GetChromeAppId())
     return;
@@ -79,12 +80,12 @@ void FamilyUserChromeActivityMetrics::OnAppActive(
   if (active_browser_instances_.empty())
     UpdateUserEngagement(/*is_user_active=*/true);
 
-  active_browser_instances_.insert(instance_key);
+  active_browser_instances_.insert(instance_id);
 }
 
 void FamilyUserChromeActivityMetrics::OnAppInactive(
     const app_time::AppId& app_id,
-    const apps::Instance::InstanceKey& instance_key,
+    const base::UnguessableToken& instance_id,
     base::Time timestamp) {
   if (app_id != app_time::GetChromeAppId())
     return;
@@ -92,10 +93,10 @@ void FamilyUserChromeActivityMetrics::OnAppInactive(
   // OnAppInactive might get called for the same instance multiple times. The
   // |instance| might have already been removed from
   // |active_browser_instances_|.
-  if (!base::Contains(active_browser_instances_, instance_key))
+  if (!base::Contains(active_browser_instances_, instance_id))
     return;
 
-  active_browser_instances_.erase(instance_key);
+  active_browser_instances_.erase(instance_id);
   if (active_browser_instances_.empty())
     UpdateUserEngagement(/*is_user_active=*/false);
 }

@@ -92,9 +92,6 @@ enum class DeviceBatteryState {
 @property(nonatomic, assign, readonly)
     previous_session_info_constants::DeviceThermalState deviceThermalState;
 
-// Whether the device was in low power mode at the end of the previous session.
-@property(nonatomic, assign, readonly) BOOL deviceWasInLowPowerMode;
-
 // Whether the app received a memory warning seconds before being terminated.
 @property(nonatomic, assign, readonly)
     BOOL didSeeMemoryWarningShortlyBeforeTerminating;
@@ -109,14 +106,6 @@ enum class DeviceBatteryState {
 // Whether or not the OS was restarted between the previous and the current
 // session.
 @property(nonatomic, assign, readonly) BOOL OSRestartedAfterPreviousSession;
-
-// Whether the previous session was on Multi Window enabled version of the
-// application. A previous session doesn't have to be from a previous run, in
-// the case of single window to multiple windows migration, after the first
-// session created/restored the flag value should be updated to |YES|.
-// TODO(crbug.com/1109280): Remove after the migration to Multi-Window sessions
-// is done.
-@property(nonatomic, assign, readonly) BOOL isMultiWindowEnabledSession;
 
 // The OS version during the previous session or nil if no previous session data
 // is available.
@@ -185,9 +174,6 @@ enum class DeviceBatteryState {
 // Updates the saved last known battery state of the device.
 - (void)updateStoredBatteryState;
 
-// Updates the saved last known low power mode setting of the device.
-- (void)updateStoredLowPowerMode;
-
 // Updates the saved last known thermal state of the device.
 - (void)updateStoredThermalState;
 
@@ -206,11 +192,6 @@ enum class DeviceBatteryState {
 
 // Empties the list of connected session.
 - (void)resetConnectedSceneSessionIDs;
-
-// Updates the local and the saved Multi Window support status.
-// TODO(crbug.com/1109280): Remove after the migration to Multi-Window
-// sessions is done.
-- (void)updateMultiWindowSupportStatus;
 
 // Must be called when Chrome starts session restoration. The returned closure
 // runner will clear up the flag when destroyed. Can be used on different

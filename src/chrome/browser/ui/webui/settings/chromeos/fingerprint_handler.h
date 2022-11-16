@@ -16,10 +16,6 @@
 
 class Profile;
 
-namespace base {
-class ListValue;
-}  // namespace base
-
 namespace chromeos {
 namespace settings {
 
@@ -29,6 +25,10 @@ class FingerprintHandler : public ::settings::SettingsPageUIHandler,
                            public session_manager::SessionManagerObserver {
  public:
   explicit FingerprintHandler(Profile* profile);
+
+  FingerprintHandler(const FingerprintHandler&) = delete;
+  FingerprintHandler& operator=(const FingerprintHandler&) = delete;
+
   ~FingerprintHandler() override;
 
   // SettingsPageUIHandler overrides:
@@ -42,7 +42,7 @@ class FingerprintHandler : public ::settings::SettingsPageUIHandler,
                         bool enroll_session_complete,
                         int percent_complete) override;
   void OnAuthScanDone(
-      device::mojom::ScanResult scan_result,
+      const device::mojom::FingerprintMessagePtr msg,
       const base::flat_map<std::string, std::vector<std::string>>& matches)
       override;
   void OnSessionFailed() override;
@@ -51,15 +51,13 @@ class FingerprintHandler : public ::settings::SettingsPageUIHandler,
   void OnSessionStateChanged() override;
 
  private:
-  void HandleGetFingerprintsList(const base::ListValue* args);
-  void HandleGetNumFingerprints(const base::ListValue* args);
-  void HandleStartEnroll(const base::ListValue* args);
-  void HandleCancelCurrentEnroll(const base::ListValue* args);
-  void HandleGetEnrollmentLabel(const base::ListValue* args);
-  void HandleRemoveEnrollment(const base::ListValue* args);
-  void HandleChangeEnrollmentLabel(const base::ListValue* args);
-  void HandleStartAuthentication(const base::ListValue* args);
-  void HandleEndCurrentAuthentication(const base::ListValue* args);
+  void HandleGetFingerprintsList(const base::Value::List& args);
+  void HandleGetNumFingerprints(const base::Value::List& args);
+  void HandleStartEnroll(const base::Value::List& args);
+  void HandleCancelCurrentEnroll(const base::Value::List& args);
+  void HandleGetEnrollmentLabel(const base::Value::List& args);
+  void HandleRemoveEnrollment(const base::Value::List& args);
+  void HandleChangeEnrollmentLabel(const base::Value::List& args);
 
   void OnGetFingerprintsList(const std::string& callback_id,
                              const base::flat_map<std::string, std::string>&
@@ -84,8 +82,6 @@ class FingerprintHandler : public ::settings::SettingsPageUIHandler,
       session_observation_{this};
 
   base::WeakPtrFactory<FingerprintHandler> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(FingerprintHandler);
 };
 
 }  // namespace settings

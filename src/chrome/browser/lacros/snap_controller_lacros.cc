@@ -7,7 +7,7 @@
 #include "base/notreached.h"
 #include "ui/aura/window.h"
 #include "ui/platform_window/extensions/wayland_extension.h"
-#include "ui/views/widget/desktop_aura/desktop_window_tree_host_linux.h"
+#include "ui/views/widget/desktop_aura/desktop_window_tree_host_lacros.h"
 
 namespace {
 
@@ -16,18 +16,18 @@ ui::WaylandWindowSnapDirection ToWaylandWindowSnapDirection(
   switch (snap) {
     case chromeos::SnapDirection::kNone:
       return ui::WaylandWindowSnapDirection::kNone;
-    case chromeos::SnapDirection::kLeft:
-      return ui::WaylandWindowSnapDirection::kLeft;
-    case chromeos::SnapDirection::kRight:
-      return ui::WaylandWindowSnapDirection::kRight;
+    case chromeos::SnapDirection::kPrimary:
+      return ui::WaylandWindowSnapDirection::kPrimary;
+    case chromeos::SnapDirection::kSecondary:
+      return ui::WaylandWindowSnapDirection::kSecondary;
   }
 }
 
 ui::WaylandExtension* WaylandExtensionForAuraWindow(aura::Window* window) {
   // Lacros is based on Ozone/Wayland, which uses ui::PlatformWindow and
-  // views::DesktopWindowTreeHostLinux.
-  auto* dwth_linux = views::DesktopWindowTreeHostLinux::From(window->GetHost());
-  return dwth_linux->GetWaylandExtension();
+  // views::DesktopWindowTreeHostLacros.
+  return views::DesktopWindowTreeHostLacros::From(window->GetHost())
+      ->GetWaylandExtension();
 }
 
 }  // namespace
@@ -41,9 +41,11 @@ bool SnapControllerLacros::CanSnap(aura::Window* window) {
   return true;
 }
 void SnapControllerLacros::ShowSnapPreview(aura::Window* window,
-                                           chromeos::SnapDirection snap) {
+                                           chromeos::SnapDirection snap,
+                                           bool allow_haptic_feedback) {
   auto* wayland_extension = WaylandExtensionForAuraWindow(window);
-  wayland_extension->ShowSnapPreview(ToWaylandWindowSnapDirection(snap));
+  wayland_extension->ShowSnapPreview(ToWaylandWindowSnapDirection(snap),
+                                     allow_haptic_feedback);
 }
 
 void SnapControllerLacros::CommitSnap(aura::Window* window,

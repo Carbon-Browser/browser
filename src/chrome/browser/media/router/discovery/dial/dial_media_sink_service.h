@@ -8,11 +8,10 @@
 #include <memory>
 
 #include "base/callback_list.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
-#include "base/sequenced_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/media_router/common/discovery/media_sink_internal.h"
 #include "components/media_router/common/discovery/media_sink_service_util.h"
 #include "components/media_router/common/mojom/logger.mojom.h"
@@ -25,15 +24,19 @@ class DialMediaSinkServiceImpl;
 using OnDialSinkAddedCallback =
     base::RepeatingCallback<void(const MediaSinkInternal&)>;
 
-// Service to discover DIAL media sinks.  All public methods must be invoked on
-// the UI thread.  Delegates to DialMediaSinkServiceImpl by posting tasks to its
-// SequencedTaskRunner.
+// Service to discover DIAL media sinks. All public methods must be invoked on
+// the UI thread. Delegates to DialMediaSinkServiceImpl by posting tasks to its
+// SequencedTaskRunner. It is owned by a singleton that is never freed.
 // TODO(imcheng): Remove this class and moving the logic into a part
 // of DialMediaSinkServiceImpl that runs on the UI thread, and renaming
 // DialMediaSinkServiceImpl to DialMediaSinkService.
 class DialMediaSinkService {
  public:
   DialMediaSinkService();
+
+  DialMediaSinkService(const DialMediaSinkService&) = delete;
+  DialMediaSinkService& operator=(const DialMediaSinkService&) = delete;
+
   virtual ~DialMediaSinkService();
 
   // Starts discovery of DIAL sinks. Can only be called once.
@@ -41,6 +44,8 @@ class DialMediaSinkService {
   // discovered sinks has been updated.
   // Marked virtual for tests.
   virtual void Start(const OnSinksDiscoveredCallback& sink_discovery_cb);
+
+  virtual void OnUserGesture();
 
   // Returns a raw pointer to |impl_|. This method is only valid to call after
   // |Start()| has been called. Always returns non-null.
@@ -68,8 +73,6 @@ class DialMediaSinkService {
 
   SEQUENCE_CHECKER(sequence_checker_);
   base::WeakPtrFactory<DialMediaSinkService> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(DialMediaSinkService);
 };
 
 }  // namespace media_router

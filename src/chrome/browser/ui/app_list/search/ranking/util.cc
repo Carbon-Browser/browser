@@ -4,11 +4,8 @@
 
 #include "chrome/browser/ui/app_list/search/ranking/util.h"
 
-#include <string>
-
-#include "base/strings/utf_string_conversions.h"
+#include "base/strings/string_number_conversions.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/app_list/search/ranking/constants.h"
 
 namespace app_list {
 namespace {
@@ -22,15 +19,28 @@ base::FilePath RankerStateDirectory(Profile* profile) {
   return profile->GetPath().AppendASCII(kRankerStateDirectory);
 }
 
+std::string CategoryToString(const Category value) {
+  return base::NumberToString(static_cast<int>(value));
+}
+
+Category StringToCategory(const std::string& value) {
+  int number;
+  base::StringToInt(value, &number);
+  return static_cast<Category>(number);
+}
+
 Category ResultTypeToCategory(ResultType result_type) {
   switch (result_type) {
     case ResultType::kInstalledApp:
     case ResultType::kInstantApp:
     case ResultType::kInternalApp:
+    case ResultType::kGames:
+      return Category::kApps;
     case ResultType::kArcAppShortcut:
-      return Category::kApp;
+      return Category::kAppShortcuts;
     case ResultType::kOmnibox:
     case ResultType::kAnswerCard:
+    case ResultType::kOpenTab:
       return Category::kWeb;
     case ResultType::kZeroStateFile:
     case ResultType::kZeroStateDrive:
@@ -39,16 +49,19 @@ Category ResultTypeToCategory(ResultType result_type) {
     case ResultType::kFileSearch:
     case ResultType::kDriveSearch:
       return Category::kFiles;
-    case ResultType::kAssistantChip:
-    case ResultType::kAssistantText:
-      return Category::kAssistant;
     case ResultType::kOsSettings:
+    case ResultType::kPersonalization:
       return Category::kSettings;
     case ResultType::kHelpApp:
+    case ResultType::kZeroStateHelpApp:
+    case ResultType::kKeyboardShortcut:
       return Category::kHelp;
     case ResultType::kPlayStoreReinstallApp:
     case ResultType::kPlayStoreApp:
       return Category::kPlayStore;
+    case ResultType::kAssistantChip:
+    case ResultType::kAssistantText:
+      return Category::kSearchAndAssistant;
     // Never used in the search backend.
     case ResultType::kUnknown:
     // Suggested content toggle fake result type. Used only in ash, not in the
@@ -56,51 +69,8 @@ Category ResultTypeToCategory(ResultType result_type) {
     case ResultType::kInternalPrivacyInfo:
     // Deprecated.
     case ResultType::kLauncher:
-      NOTREACHED();
-      return Category::kApp;
+      return Category::kUnknown;
   }
-}
-
-std::u16string CategoryDebugString(const Category category) {
-  switch (category) {
-    case Category::kApp:
-      return u"(apps) ";
-    case Category::kWeb:
-      return u"(web) ";
-    case Category::kFiles:
-      return u"(files) ";
-    case Category::kAssistant:
-      return u"(assistant) ";
-    case Category::kSettings:
-      return u"(settings) ";
-    case Category::kHelp:
-      return u"(help) ";
-    case Category::kPlayStore:
-      return u"(play store) ";
-  }
-}
-
-std::u16string RemoveDebugPrefix(const std::u16string str) {
-  std::string result = base::UTF16ToUTF8(str);
-
-  if (result.empty() || result[0] != '(')
-    return str;
-
-  const std::size_t delimiter_index = result.find(") ");
-  if (delimiter_index != std::string::npos)
-    result.erase(0, delimiter_index + 2);
-  return base::UTF8ToUTF16(result);
-}
-
-std::u16string RemoveTopMatchPrefix(const std::u16string str) {
-  const std::string top_match_details = kTopMatchDetails;
-  std::string result = base::UTF16ToUTF8(str);
-
-  if (result.empty() || result.rfind(top_match_details, 0u) != 0)
-    return str;
-
-  result.erase(0, top_match_details.size());
-  return base::UTF8ToUTF16(result);
 }
 
 }  // namespace app_list

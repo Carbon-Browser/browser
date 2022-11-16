@@ -37,8 +37,6 @@ import org.chromium.base.annotations.JNINamespace;
 import org.chromium.base.annotations.NativeMethods;
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.metrics.RecordUserAction;
-import org.chromium.chrome.browser.attribution_reporting.AttributionIntentHandlerFactory;
-import org.chromium.chrome.browser.attribution_reporting.AttributionParameters;
 import org.chromium.chrome.browser.browserservices.intents.WebappConstants;
 import org.chromium.chrome.browser.customtabs.CustomTabsConnection;
 import org.chromium.chrome.browser.document.ChromeLauncherActivity;
@@ -53,7 +51,6 @@ import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab.TabLaunchType;
 import org.chromium.chrome.browser.translate.TranslateIntentHandler;
 import org.chromium.chrome.browser.webapps.WebappActivity;
-import org.chromium.chrome.features.start_surface.StartSurfaceConfiguration;
 import org.chromium.components.embedder_support.util.UrlConstants;
 import org.chromium.components.embedder_support.util.UrlUtilities;
 import org.chromium.components.external_intents.ExternalNavigationHandler;
@@ -159,6 +156,21 @@ public class IntentHandler {
             "android.support.browser.extra.referrer_policy";
 
     /**
+     * Extra specifying additional urls that should each be opened in a new tab. If
+     * EXTRA_OPEN_ADDITIONAL_URLS_IN_TAB_GROUP is present and true, these will be opened in a tab
+     * group.
+     */
+    public static final String EXTRA_ADDITIONAL_URLS =
+            "org.chromium.chrome.browser.additional_urls";
+
+    /**
+     * Extra specifying that additional urls opened should be part of a tab group parented to the
+     * root url of the intent. Only valid if EXTRA_ADDITIONAL_URLS is present.
+     */
+    public static final String EXTRA_OPEN_ADDITIONAL_URLS_IN_TAB_GROUP =
+            "org.chromium.chrome.browser.open_additional_urls_in_tab_group";
+
+    /**
      * Key to associate a timestamp with an intent.
      */
     private static final String EXTRA_TIMESTAMP_MS = "org.chromium.chrome.browser.timestamp";
@@ -169,6 +181,12 @@ public class IntentHandler {
      * switcher UI, ranging from 0 ~ max_instances - 1. -1 for an invalid id.
      */
     public static final String EXTRA_WINDOW_ID = "org.chromium.chrome.browser.window_id";
+
+    /**
+     * A boolean to indicate whether the source of the Intent was a dragged link.
+     */
+    public static final String EXTRA_SOURCE_DRAG_DROP =
+            "org.chromium.chrome.browser.source_drag_drop";
 
     /**
      * Extra to indicate the launch type of the tab to be created.
@@ -747,7 +765,18 @@ public class IntentHandler {
      * token.
      */
     public static void startActivityForTrustedIntent(Intent intent) {
-        startActivityForTrustedIntentInternal(intent, null);
+        startActivityForTrustedIntentInternal(null, intent, null);
+    }
+
+    /**
+     * Start activity for the given trusted Intent.
+     *
+     * To make sure the intent is not dropped by Chrome, we send along an authentication token to
+     * identify ourselves as a trusted sender. The method {@link #shouldIgnoreIntent} validates the
+     * token.
+     */
+    public static void startActivityForTrustedIntent(Context context, Intent intent) {
+        startActivityForTrustedIntentInternal(context, intent, null);
     }
 
     /**
@@ -763,12 +792,12 @@ public class IntentHandler {
     public static void startChromeLauncherActivityForTrustedIntent(Intent intent) {
         // Specify the exact component that will handle creating a new tab.  This allows specifying
         // URLs that are not exposed in the intent filters (i.e. chrome://).
-        startActivityForTrustedIntentInternal(intent, ChromeLauncherActivity.class.getName());
+        startActivityForTrustedIntentInternal(null, intent, ChromeLauncherActivity.class.getName());
     }
 
     private static void startActivityForTrustedIntentInternal(
-            Intent intent, String componentClassName) {
-        Context appContext = ContextUtils.getApplicationContext();
+            Context context, Intent intent, String componentClassName) {
+        Context appContext = context == null ? ContextUtils.getApplicationContext() : context;
         // The caller might want to re-use the Intent, so we'll use a copy.
         Intent copiedIntent = new Intent(intent);
 
@@ -1064,44 +1093,6 @@ public class IntentHandler {
                 != 0;
     }
 
-    /**
-     * @return Whether the {@link Intent} will open a new tab with the omnibox focused.
-     */
-    public static boolean shouldIntentShowNewTabOmniboxFocused(Intent intent) {
-        final String intentUrl = IntentHandler.getUrlFromIntent(intent);
-        // If Chrome is launched by tapping the New tab item from the launch icon and
-        // OMNIBOX_FOCUSED_ON_NEW_TAB is enabled, a new Tab with omnibox focused will be shown on
-        // Startup.
-        final boolean isCanonicalizedNTPUrl = UrlUtilities.isCanonicalizedNTPUrl(intentUrl);
-
-        final boolean isFromShortcutOrWidget = IntentHandler.isTabOpenAsNewTabFromLauncher(intent)
-                || IntentHandler.isTabOpenAsNewTabFromAppWidget(intent);
-
-        return isCanonicalizedNTPUrl && isFromShortcutOrWidget
-                && StartSurfaceConfiguration.OMNIBOX_FOCUSED_ON_NEW_TAB.getValue()
-                && IntentHandler.wasIntentSenderChrome(intent);
-    }
-
-    /**
-     * @param intent The {@link Intent} to extract the info from.
-     * @return Whether the Intent specifies to create a new Tab from the launcher shortcut.
-     */
-    public static boolean isTabOpenAsNewTabFromLauncher(Intent intent) {
-        return IntentUtils.safeGetBooleanExtra(intent, Browser.EXTRA_CREATE_NEW_TAB, false)
-                && IntentUtils.safeGetBooleanExtra(
-                        intent, IntentHandler.EXTRA_INVOKED_FROM_SHORTCUT, false);
-    }
-
-    /**
-     * @param intent The {@link Intent} to extract the info from.
-     * @return Whether the Intent specifies to create a new Tab from an app widget.
-     */
-    public static boolean isTabOpenAsNewTabFromAppWidget(Intent intent) {
-        return IntentUtils.safeGetBooleanExtra(intent, Browser.EXTRA_CREATE_NEW_TAB, false)
-                && IntentUtils.safeGetBooleanExtra(
-                        intent, IntentHandler.EXTRA_INVOKED_FROM_APP_WIDGET, false);
-    }
-
     /*
      * The default behavior here is to open in a new tab.  If this is changed, ensure
      * intents with action NDEF_DISCOVERED (links beamed over NFC) are handled properly.
@@ -1167,7 +1158,8 @@ public class IntentHandler {
         // except dash, plus and period. Those are the only valid scheme chars:
         // https://tools.ietf.org/html/rfc3986#section-3.1
         boolean nonAlphaNum = false;
-        for (char ch : scheme.toCharArray()) {
+        for (int i = 0; i < scheme.length(); i++) {
+            char ch = scheme.charAt(i);
             if (!Character.isLetterOrDigit(ch) && ch != '-' && ch != '+' && ch != '.') {
                 nonAlphaNum = true;
                 break;
@@ -1577,22 +1569,7 @@ public class IntentHandler {
                 metadata == null ? false : metadata.isRendererInitiated());
         loadUrlParams.setInitiatorOrigin(metadata == null ? null : metadata.getInitiatorOrigin());
 
-        setAttributionParamsFromIntent(loadUrlParams, intent);
         return loadUrlParams;
-    }
-
-    /**
-     * Fills out the AttributionParameters for a LoadUrlParams from the provided Intent.
-     */
-    public static void setAttributionParamsFromIntent(LoadUrlParams loadUrlParams, Intent intent) {
-        AttributionParameters attributionParams =
-                AttributionIntentHandlerFactory.getInstance()
-                        .getAndClearPendingAttributionParameters(intent);
-        if (attributionParams != null) {
-            loadUrlParams.setAttributionParameters(attributionParams.getSourcePackageName(),
-                    attributionParams.getSourceEventId(), attributionParams.getDestination(),
-                    attributionParams.getReportTo(), attributionParams.getExpiry());
-        }
     }
 
     /**

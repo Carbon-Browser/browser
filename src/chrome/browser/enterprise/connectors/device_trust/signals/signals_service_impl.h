@@ -8,6 +8,9 @@
 #include <memory>
 #include <vector>
 
+#include "base/memory/weak_ptr.h"
+#include "base/time/time.h"
+#include "base/values.h"
 #include "chrome/browser/enterprise/connectors/device_trust/signals/signals_service.h"
 
 namespace enterprise_connectors {
@@ -25,10 +28,16 @@ class SignalsServiceImpl : public SignalsService {
   ~SignalsServiceImpl() override;
 
   // SignalsService:
-  std::unique_ptr<DeviceTrustSignals> CollectSignals() override;
+  void CollectSignals(CollectSignalsCallback callback) override;
 
  private:
+  void OnSignalsDecorated(CollectSignalsCallback callback,
+                          base::TimeTicks start_time,
+                          std::unique_ptr<base::Value::Dict> signals);
+
   std::vector<std::unique_ptr<SignalsDecorator>> signals_decorators_;
+
+  base::WeakPtrFactory<SignalsServiceImpl> weak_ptr_factory_{this};
 };
 
 }  // namespace enterprise_connectors

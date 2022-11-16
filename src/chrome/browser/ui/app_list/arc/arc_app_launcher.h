@@ -9,11 +9,12 @@
 
 #include <string>
 
-#include "base/macros.h"
+#include "ash/components/arc/metrics/arc_metrics_constants.h"
 #include "chrome/browser/ui/app_list/arc/arc_app_list_prefs.h"
 #include "chrome/browser/ui/app_list/arc/arc_app_utils.h"
-#include "components/arc/metrics/arc_metrics_constants.h"
+#include "components/services/app_service/public/cpp/app_launch_util.h"
 #include "components/services/app_service/public/cpp/app_registry_cache.h"
+#include "components/services/app_service/public/cpp/app_types.h"
 #include "components/services/app_service/public/mojom/types.mojom.h"
 
 namespace content {
@@ -30,7 +31,11 @@ class ArcAppLauncher : public ArcAppListPrefs::Observer,
                  apps::mojom::IntentPtr launch_intent,
                  bool deferred_launch_allowed,
                  int64_t display_id,
-                 apps::mojom::LaunchSource launch_source);
+                 apps::LaunchSource launch_source);
+
+  ArcAppLauncher(const ArcAppLauncher&) = delete;
+  ArcAppLauncher& operator=(const ArcAppLauncher&) = delete;
+
   ~ArcAppLauncher() override;
 
   bool app_launched() const { return app_launched_; }
@@ -49,7 +54,7 @@ class ArcAppLauncher : public ArcAppListPrefs::Observer,
  private:
   bool MaybeLaunchApp(const std::string& app_id,
                       const ArcAppListPrefs::AppInfo& app_info,
-                      apps::mojom::Readiness readiness);
+                      apps::Readiness readiness);
 
   // Unowned pointer.
   content::BrowserContext* context_;
@@ -67,9 +72,7 @@ class ArcAppLauncher : public ArcAppListPrefs::Observer,
   // Flag indicating that ARC app was launched.
   bool app_launched_ = false;
   // Enum that indicates what type of metric to record to UMA on launch.
-  apps::mojom::LaunchSource launch_source_;
-
-  DISALLOW_COPY_AND_ASSIGN(ArcAppLauncher);
+  apps::LaunchSource launch_source_;
 };
 
 #endif  // CHROME_BROWSER_UI_APP_LIST_ARC_ARC_APP_LAUNCHER_H_

@@ -6,10 +6,10 @@
 
 #include <utility>
 
+#include "ash/services/nearby/public/mojom/nearby_connections.mojom.h"
+#include "ash/services/nearby/public/mojom/nearby_connections_types.mojom.h"
 #include "base/callback.h"
 #include "base/files/file_path.h"
-#include "chromeos/services/nearby/public/mojom/nearby_connections.mojom.h"
-#include "chromeos/services/nearby/public/mojom/nearby_connections_types.mojom.h"
 
 namespace location {
 namespace nearby {
@@ -124,6 +124,8 @@ mojom::Medium MediumToMojom(Medium medium) {
       return mojom::Medium::kWebRtc;
     case Medium::BLE_L2CAP:
       return mojom::Medium::kBleL2Cap;
+    case Medium::USB:
+      return mojom::Medium::kUsb;
   }
 }
 

@@ -13,13 +13,10 @@
 
 #include "base/callback.h"
 #include "base/containers/circular_deque.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/login/easy_unlock/easy_unlock_get_keys_operation.h"
 #include "chrome/browser/ash/login/easy_unlock/easy_unlock_refresh_keys_operation.h"
 #include "chrome/browser/ash/login/easy_unlock/easy_unlock_types.h"
-// TODO(https://crbug.com/1164001): move to forward declaration
-#include "chromeos/login/auth/user_context.h"
 
 class AccountId;
 
@@ -30,6 +27,8 @@ class ListValue;
 
 namespace ash {
 
+class UserContext;
+
 // A class to manage Easy unlock cryptohome keys.
 class EasyUnlockKeyManager {
  public:
@@ -38,6 +37,10 @@ class EasyUnlockKeyManager {
   using GetDeviceDataListCallback = EasyUnlockGetKeysOperation::GetKeysCallback;
 
   EasyUnlockKeyManager();
+
+  EasyUnlockKeyManager(const EasyUnlockKeyManager&) = delete;
+  EasyUnlockKeyManager& operator=(const EasyUnlockKeyManager&) = delete;
+
   ~EasyUnlockKeyManager();
 
   // Clears existing Easy unlock keys and creates new ones for the given
@@ -110,8 +113,6 @@ class EasyUnlockKeyManager {
   std::unique_ptr<EasyUnlockGetKeysOperation> pending_read_operation_;
 
   base::WeakPtrFactory<EasyUnlockKeyManager> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(EasyUnlockKeyManager);
 };
 
 }  // namespace ash

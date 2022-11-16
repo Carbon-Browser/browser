@@ -12,7 +12,7 @@
 #include "base/bind.h"
 #include "base/location.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/sequenced_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/clock.h"
 #include "base/time/tick_clock.h"
 #include "base/time/time.h"
@@ -103,12 +103,53 @@ void AffiliationBackend::CancelPrefetch(const FacetURI& facet_uri,
     facet_managers_.erase(facet_uri);
 }
 
+void AffiliationBackend::KeepPrefetchForFacets(
+    std::vector<FacetURI> facet_uris) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  // Firstly, check which facets are missing from the |facet_managers_| and
+  // schedule Prefetch() for them.
+  for (const auto& facet : facet_uris) {
+    if (facet_managers_.find(facet) == facet_managers_.end()) {
+      Prefetch(facet, base::Time::Max());
+    }
+  }
+
+  // Now remove facets which which aren't retained anymore.
+  auto retained_facets = base::MakeFlatSet<std::string>(
+      facet_uris, {}, &FacetURI::potentially_invalid_spec);
+
+  std::vector<FacetURI> facets_to_remove;
+  for (const auto& facet_manager_pair : facet_managers_) {
+    if (retained_facets.contains(
+            facet_manager_pair.first.potentially_invalid_spec())) {
+      continue;
+    }
+
+    facet_manager_pair.second->CancelPrefetch(base::Time::Max());
+
+    if (facet_manager_pair.second->CanBeDiscarded())
+      facets_to_remove.push_back(facet_manager_pair.first);
+  }
+
+  for (const auto& facet : facets_to_remove) {
+    facet_managers_.erase(facet);
+    TrimCacheForFacetURI(facet);
+  }
+}
+
 void AffiliationBackend::TrimCacheForFacetURI(const FacetURI& facet_uri) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   AffiliatedFacetsWithUpdateTime affiliation;
   if (cache_->GetAffiliationsAndBrandingForFacetURI(facet_uri, &affiliation))
     DiscardCachedDataIfNoLongerNeeded(affiliation.facets);
+}
+
+void AffiliationBackend::TrimUnusedCache(std::vector<FacetURI> facet_uris) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  cache_->RemoveMissingFacetURI(facet_uris);
 }
 
 // static
@@ -279,12 +320,12 @@ void AffiliationBackend::ReportStatistics(size_t requested_facet_uri_count) {
     base::TimeDelta delay = clock_->Now() - construction_time_;
     UMA_HISTOGRAM_CUSTOM_TIMES(
         "PasswordManager.AffiliationBackend.FirstFetchDelay", delay,
-        base::TimeDelta::FromSeconds(1), base::TimeDelta::FromDays(3), 50);
+        base::Seconds(1), base::Days(3), 50);
   } else {
     base::TimeDelta delay = clock_->Now() - last_request_time_;
     UMA_HISTOGRAM_CUSTOM_TIMES(
         "PasswordManager.AffiliationBackend.SubsequentFetchDelay", delay,
-        base::TimeDelta::FromSeconds(1), base::TimeDelta::FromDays(3), 50);
+        base::Seconds(1), base::Days(3), 50);
   }
   last_request_time_ = clock_->Now();
 }

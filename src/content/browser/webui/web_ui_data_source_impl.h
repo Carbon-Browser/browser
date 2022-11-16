@@ -11,10 +11,8 @@
 #include <string>
 
 #include "base/callback.h"
-#include "base/compiler_specific.h"
 #include "base/containers/flat_map.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
 #include "base/values.h"
 #include "content/browser/webui/url_data_manager.h"
 #include "content/browser/webui/url_data_source_impl.h"
@@ -29,14 +27,16 @@ namespace content {
 class CONTENT_EXPORT WebUIDataSourceImpl : public URLDataSourceImpl,
                                            public WebUIDataSource {
  public:
+  WebUIDataSourceImpl(const WebUIDataSourceImpl&) = delete;
+  WebUIDataSourceImpl& operator=(const WebUIDataSourceImpl&) = delete;
+
   // WebUIDataSource:
   void AddString(base::StringPiece name, const std::u16string& value) override;
   void AddString(base::StringPiece name, const std::string& value) override;
   void AddLocalizedString(base::StringPiece name, int ids) override;
   void AddLocalizedStrings(
       base::span<const webui::LocalizedString> strings) override;
-  void AddLocalizedStrings(
-      const base::DictionaryValue& localized_strings) override;
+  void AddLocalizedStrings(const base::Value::Dict& localized_strings) override;
   void AddBoolean(base::StringPiece name, bool value) override;
   void AddInteger(base::StringPiece name, int32_t value) override;
   void AddDouble(base::StringPiece name, double value) override;
@@ -75,7 +75,10 @@ class CONTENT_EXPORT WebUIDataSourceImpl : public URLDataSourceImpl,
                                   bool from_js_module);
 
   // Protected for testing.
-  virtual const base::DictionaryValue* GetLocalizedStrings() const;
+  virtual const base::Value::Dict* GetLocalizedStrings() const;
+
+  // Protected for testing.
+  int PathToIdrOrDefault(const std::string& path) const;
 
  private:
   class InternalDataSource;
@@ -89,8 +92,6 @@ class CONTENT_EXPORT WebUIDataSourceImpl : public URLDataSourceImpl,
   void StartDataRequest(const GURL& url,
                         const WebContents::Getter& wc_getter,
                         URLDataSource::GotDataCallback callback);
-
-  int PathToIdrOrDefault(const std::string& path) const;
 
   // Note: this must be called before StartDataRequest() to have an effect.
   void disable_load_time_data_defaults_for_testing() {
@@ -106,14 +107,14 @@ class CONTENT_EXPORT WebUIDataSourceImpl : public URLDataSourceImpl,
   int default_resource_;
   bool use_strings_js_ = false;
   std::map<std::string, int> path_to_idr_map_;
-  // The replacements are initiallized in the main thread and then used in the
+  // The replacements are initialized in the main thread and then used in the
   // IO thread. The map is safe to read from multiple threads as long as no
   // futher changes are made to it after initialization.
   ui::TemplateReplacements replacements_;
   // The |replacements_| is intended to replace |localized_strings_|.
   // TODO(dschuyler): phase out |localized_strings_| in Q1 2017. (Or rename
   // to |load_time_flags_| if the usage is reduced to storing flags only).
-  base::DictionaryValue localized_strings_;
+  base::Value::Dict localized_strings_;
   WebUIDataSource::HandleRequestCallback filter_callback_;
   WebUIDataSource::ShouldHandleRequestCallback should_handle_request_callback_;
 
@@ -128,8 +129,6 @@ class CONTENT_EXPORT WebUIDataSourceImpl : public URLDataSourceImpl,
   bool replace_existing_source_ = true;
   bool should_replace_i18n_in_js_ = false;
   std::set<GURL> frame_ancestors_;
-
-  DISALLOW_COPY_AND_ASSIGN(WebUIDataSourceImpl);
 };
 
 }  // namespace content

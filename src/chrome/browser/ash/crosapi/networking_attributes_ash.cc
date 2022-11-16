@@ -5,17 +5,17 @@
 #include "chrome/browser/ash/crosapi/networking_attributes_ash.h"
 
 #include "base/values.h"
-#include "chrome/browser/ash/crosapi/browser_util.h"
+#include "chrome/browser/ash/crosapi/crosapi_util.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
+#include "chromeos/ash/components/network/device_state.h"
+#include "chromeos/ash/components/network/network_handler.h"
+#include "chromeos/ash/components/network/network_state.h"
+#include "chromeos/ash/components/network/network_state_handler.h"
+#include "chromeos/ash/components/network/network_util.h"
 #include "chromeos/crosapi/mojom/networking_attributes.mojom.h"
-#include "chromeos/network/device_state.h"
-#include "chromeos/network/network_handler.h"
-#include "chromeos/network/network_state.h"
-#include "chromeos/network/network_state_handler.h"
-#include "chromeos/network/network_util.h"
 #include "components/user_manager/user.h"
 #include "third_party/cros_system_api/dbus/shill/dbus-constants.h"
 
@@ -65,7 +65,7 @@ void NetworkingAttributesAsh::GetNetworkDetails(
 
   mojom::NetworkDetailsPtr details = mojom::NetworkDetails::New();
   details->mac_address =
-      chromeos::network_util::FormattedMacAddress(device->mac_address());
+      ash::network_util::FormattedMacAddress(device->mac_address());
   net::IPAddress ipv4_address;
   if (ipv4_address.AssignFromIPLiteral(
           device->GetIpAddressByType(shill::kTypeIPv4))) {
@@ -77,10 +77,8 @@ void NetworkingAttributesAsh::GetNetworkDetails(
     details->ipv6_address = ipv6_address;
   }
 
-  mojom::GetNetworkDetailsResultPtr result_ptr =
-      mojom::GetNetworkDetailsResult::New();
-  result_ptr->set_network_details(std::move(details));
-  std::move(callback).Run(std::move(result_ptr));
+  std::move(callback).Run(
+      mojom::GetNetworkDetailsResult::NewNetworkDetails(std::move(details)));
 }
 
 }  // namespace crosapi

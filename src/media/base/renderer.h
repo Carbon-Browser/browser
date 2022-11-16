@@ -6,7 +6,6 @@
 #define MEDIA_BASE_RENDERER_H_
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/time/time.h"
 #include "media/base/buffering_state.h"
@@ -24,6 +23,9 @@ class RendererClient;
 class MEDIA_EXPORT Renderer {
  public:
   Renderer();
+
+  Renderer(const Renderer&) = delete;
+  Renderer& operator=(const Renderer&) = delete;
 
   // Stops rendering and fires any pending callbacks.
   virtual ~Renderer();
@@ -55,8 +57,10 @@ class MEDIA_EXPORT Renderer {
   // different than 1.0.
   virtual void SetPreservesPitch(bool preserves_pitch);
 
-  // Sets a flag indicating whether the audio stream was initiated by autoplay.
-  virtual void SetAutoplayInitiated(bool autoplay_initiated);
+  // Sets a flag indicating whether the audio stream was played with user
+  // activation.
+  virtual void SetWasPlayedWithUserActivation(
+      bool was_played_with_user_activation);
 
   // The following functions must be called after Initialize().
 
@@ -89,8 +93,16 @@ class MEDIA_EXPORT Renderer {
       const std::vector<DemuxerStream*>& enabled_tracks,
       base::OnceClosure change_completed_cb);
 
- private:
-  DISALLOW_COPY_AND_ASSIGN(Renderer);
+  // Signal to the renderer that there has been a client request to access a
+  // VideoFrame. This signal may be used by the renderer to ensure it is
+  // operating in a mode which produces a VideoFrame usable by the client.
+  // E.g., the MediaFoundationRendererClient on Windows has two modes
+  // of operation: Frame Server & Direct Composition. Direct Composition mode
+  // does not produce a VideoFrame with an accessible 'data' buffer, so clients
+  // cannot access the underlying image data. In order for
+  // MediaFoundationRendererClient to produce a VideoFrame with 'data'
+  // accessible by the client it must switch to operate in Frame Server mode.
+  virtual void OnExternalVideoFrameRequest();
 };
 
 }  // namespace media

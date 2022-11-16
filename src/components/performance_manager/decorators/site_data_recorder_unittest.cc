@@ -7,8 +7,8 @@
 #include <memory>
 
 #include "base/location.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
-#include "base/task/post_task.h"
 #include "base/test/bind.h"
 #include "base/threading/sequence_bound.h"
 #include "components/performance_manager/graph/page_node_impl.h"
@@ -31,9 +31,9 @@
 namespace performance_manager {
 
 constexpr base::TimeDelta kTitleOrFaviconChangePostLoadGracePeriod =
-    base::TimeDelta::FromSeconds(20);
+    base::Seconds(20);
 constexpr base::TimeDelta kFeatureUsagePostBackgroundGracePeriod =
-    base::TimeDelta::FromSeconds(10);
+    base::Seconds(10);
 
 // A mock implementation of a SiteDataWriter.
 class LenientMockDataWriter : public SiteDataWriter {
@@ -68,7 +68,7 @@ class LenientMockDataWriter : public SiteDataWriter {
   const url::Origin& Origin() const { return origin_; }
 
  private:
-  bool* on_destroy_indicator_ = nullptr;
+  raw_ptr<bool> on_destroy_indicator_ = nullptr;
   url::Origin origin_;
 };
 using MockDataWriter = ::testing::StrictMock<LenientMockDataWriter>;
@@ -172,7 +172,7 @@ class SiteDataRecorderTest : public PerformanceManagerTestHarness {
   const GURL kTestUrl2 = GURL("http://bar.com");
 
  private:
-  SiteDataRecorder* recorder_ = nullptr;
+  raw_ptr<SiteDataRecorder> recorder_ = nullptr;
   base::SequenceBound<SiteDataCacheFactory> cache_factory_;
 };
 

@@ -30,6 +30,9 @@ class CookieStoreSameSiteTest : public InProcessBrowserTest,
   CookieStoreSameSiteTest()
       : https_server_(net::EmbeddedTestServer::TYPE_HTTPS) {}
 
+  CookieStoreSameSiteTest(const CookieStoreSameSiteTest&) = delete;
+  CookieStoreSameSiteTest& operator=(const CookieStoreSameSiteTest&) = delete;
+
   void SetUpOnMainThread() override {
     host_resolver()->AddRule("*", "127.0.0.1");
     base::FilePath path;
@@ -66,7 +69,7 @@ class CookieStoreSameSiteTest : public InProcessBrowserTest,
   content::RenderFrameHost* GetFrame() {
     content::WebContents* web_contents =
         browser()->tab_strip_model()->GetActiveWebContents();
-    return ChildFrameAt(web_contents->GetMainFrame(), 0);
+    return ChildFrameAt(web_contents->GetPrimaryMainFrame(), 0);
   }
 
   std::string GetCookieSameSite(const std::string& cookie_name) {
@@ -85,9 +88,6 @@ class CookieStoreSameSiteTest : public InProcessBrowserTest,
 
   mojo::Remote<network::mojom::CookieManager> cookie_manager_remote_;
   net::test_server::EmbeddedTestServer https_server_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(CookieStoreSameSiteTest);
 };
 
 IN_PROC_BROWSER_TEST_P(CookieStoreSameSiteTest,

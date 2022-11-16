@@ -10,11 +10,11 @@
 #include <vector>
 
 #include "base/memory/weak_ptr.h"
-#include "chrome/browser/chromeos/printing/cups_print_job_manager.h"
+#include "chrome/browser/ash/printing/cups_print_job_manager.h"
 
 class Profile;
 
-namespace chromeos {
+namespace ash {
 
 class FakeCupsPrintJobManager : public CupsPrintJobManager {
  public:
@@ -44,6 +44,6 @@ class FakeCupsPrintJobManager : public CupsPrintJobManager {
   base::WeakPtrFactory<FakeCupsPrintJobManager> weak_ptr_factory_{this};
 };
 
-}  // namespace chromeos
+}  // namespace ash
 
 #endif  // CHROME_BROWSER_ASH_PRINTING_FAKE_CUPS_PRINT_JOB_MANAGER_H_

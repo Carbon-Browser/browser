@@ -20,12 +20,12 @@ var<private> quadUV : array<vec2<f32>, 4> = array<vec2<f32>, 4>(
     vec2<f32>(1.0, 1.0));
 
 struct VertexOutput {
-  [[builtin(position)]] Position : vec4<f32>;
-  [[location(0)]] fragUV : vec2<f32>;
-};
+  @builtin(position) Position : vec4<f32>,
+  @location(0) fragUV : vec2<f32>,
+}
 
-[[stage(vertex)]]
-fn main([[builtin(vertex_index)]] VertexIndex : u32) -> VertexOutput {
+@vertex
+fn main(@builtin(vertex_index) VertexIndex : u32) -> VertexOutput {
   var output: VertexOutput;
   output.Position = quadPos[VertexIndex];
   output.fragUV = quadUV[VertexIndex];
@@ -34,19 +34,29 @@ fn main([[builtin(vertex_index)]] VertexIndex : u32) -> VertexOutput {
 `,
 
     fragmentBlit: `
-[[binding(0), group(0)]] var mySampler: sampler;
-[[binding(1), group(0)]] var myTexture: texture_2d<f32>;
+@group(0) @binding(0) var mySampler: sampler;
+@group(0) @binding(1) var myTexture: texture_2d<f32>;
 
-[[stage(fragment)]]
-fn main([[location(0)]] fragUV : vec2<f32>) -> [[location(0)]] vec4<f32> {
+@fragment
+fn main(@location(0) fragUV : vec2<f32>) -> @location(0) vec4<f32> {
   return textureSample(myTexture, mySampler, fragUV);
 }
 `,
 
     fragmentClear: `
-[[stage(fragment)]]
-fn main([[location(0)]] fragUV : vec2<f32>) -> [[location(0)]] vec4<f32> {
+@fragment
+fn main(@location(0) fragUV : vec2<f32>) -> @location(0) vec4<f32> {
   return vec4<f32>(1.0, 1.0, 1.0, 1.0);
+}
+`,
+
+    fragmentImport: `
+@group(0) @binding(0) var mySampler: sampler;
+@group(0) @binding(1) var myTexture: texture_external;
+
+@fragment
+fn main(@location(0) fragUV : vec2<f32>) -> @location(0) vec4<f32> {
+  return textureSampleLevel(myTexture, mySampler, fragUV);
 }
 `,
   };
@@ -80,7 +90,76 @@ fn main([[location(0)]] fragUV : vec2<f32>) -> [[location(0)]] vec4<f32> {
       return [device, context];
     },
 
-    importCanvasTest: function(device, context, sourceCanvas) {
+    importExternalTextureTest: function(
+      device, context, video) {
+        const blitPipeline = device.createRenderPipeline({
+          vertex: {
+            module: device.createShaderModule({
+              code: wgslShaders.vertex,
+            }),
+            entryPoint: 'main',
+          },
+          fragment: {
+            module: device.createShaderModule({
+              code: wgslShaders.fragmentImport,
+            }),
+            entryPoint: 'main',
+            targets: [
+              {
+                format: outputFormat,
+              },
+            ],
+          },
+          primitive: {
+            topology: 'triangle-strip',
+            stripIndexFormat: 'uint16',
+          },
+        });
+
+        const sampler = device.createSampler({
+          magFilter: 'linear',
+          minFilter: 'linear',
+        });
+        const externalTextureDescriptor = { source: video };
+        const externalTexture =
+            device.importExternalTexture(externalTextureDescriptor);
+
+        const bindGroup = device.createBindGroup({
+          layout: blitPipeline.getBindGroupLayout(0),
+          entries: [
+            {
+              binding: 0,
+              resource: sampler,
+            },
+            {
+              binding: 1,
+              resource: externalTexture,
+            },
+          ],
+        });
+
+        const renderPassDescriptor = {
+          colorAttachments: [
+            {
+              view: context.getCurrentTexture().createView(),
+              loadValue: {r: 0.0, g: 0.0, b: 0.0, a: 1.0},
+            },
+          ],
+        };
+
+        const commandEncoder = device.createCommandEncoder();
+        const passEncoder =
+            commandEncoder.beginRenderPass(renderPassDescriptor);
+        passEncoder.setPipeline(blitPipeline);
+        passEncoder.setBindGroup(0, bindGroup);
+        passEncoder.draw(4, 1, 0, 0);
+        passEncoder.endPass();
+
+        device.queue.submit([commandEncoder.finish()]);
+    },
+
+    uploadToGPUTextureTest: function(
+      device, context, canvasImageSource, options) {
       const blitPipeline = device.createRenderPipeline({
         vertex: {
           module: device.createShaderModule({
@@ -110,8 +189,47 @@ fn main([[location(0)]] fragUV : vec2<f32>) -> [[location(0)]] vec4<f32> {
         minFilter: 'linear',
       });
 
-      const texture = device.experimentalImportTexture(
-          sourceCanvas, GPUTextureUsage.TEXTURE_BINDING);
+      let texture;
+
+      if (options.useImport) {
+        texture = device.experimentalImportTexture(
+          canvasImageSource,
+          GPUTextureUsage.TEXTURE_BINDING
+        );
+      } else {
+        texture = device.createTexture({
+          size: [canvasImageSource.width, canvasImageSource.height],
+          format: 'rgba8unorm',
+          usage: GPUTextureUsage.COPY_DST |
+                 GPUTextureUsage.RENDER_ATTACHMENT |
+                 GPUTextureUsage.TEXTURE_BINDING
+        });
+      }
+
+      // Use copyExternalImageToTexture()
+      if (!options.useImport) {
+        let imageCopyExternalImage;
+
+        // TODO(crbug.com/1257856): This test use the temporary origin
+        // config to fix flip issue. It should be removed when we change
+        // the default behaviour.
+        if (options.isWebGLCanvas) {
+          imageCopyExternalImage = { source: canvasImageSource,
+                                     origin: {x: 0, y: 0},
+                                     temporaryOriginBottomLeftIfWebGL: false
+                                   };
+        } else {
+          imageCopyExternalImage = { source: canvasImageSource,
+                                     origin: {x: 0, y: 0}
+                                   };
+        }
+
+        device.queue.copyExternalImageToTexture(
+          imageCopyExternalImage,
+          {texture},
+          [canvasImageSource.width, canvasImageSource.height]
+        );
+      }
 
       const bindGroup = device.createBindGroup({
         layout: blitPipeline.getBindGroupLayout(0),

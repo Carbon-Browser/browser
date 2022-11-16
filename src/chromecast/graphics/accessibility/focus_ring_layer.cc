@@ -6,9 +6,10 @@
 // chromecast.
 
 #include "chromecast/graphics/accessibility/focus_ring_layer.h"
-#include "chromecast/graphics/accessibility/accessibility_layer.h"
 
+#include "chromecast/graphics/accessibility/accessibility_layer.h"
 #include "ui/aura/window.h"
+#include "ui/compositor/compositor.h"
 #include "ui/compositor/compositor_animation_observer.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/paint_recorder.h"
@@ -73,7 +74,7 @@ void FocusRingLayer::OnPaintLayer(const ui::PaintContext& context) {
     // Fade out alpha quadratically.
     flags.setAlpha((kShadowAlpha * (r - i) * (r - i)) / (r * r));
     gfx::Rect outsetRect = bounds;
-    outsetRect.Inset(-i, -i, -i, -i);
+    outsetRect.Inset(-i);
     recorder.canvas()->DrawRect(outsetRect, flags);
   }
 }

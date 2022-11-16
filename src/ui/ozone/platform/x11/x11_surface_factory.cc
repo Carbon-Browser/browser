@@ -12,16 +12,18 @@
 #include "ui/gfx/linux/gpu_memory_buffer_support_x11.h"
 #include "ui/gfx/linux/native_pixmap_dmabuf.h"
 #include "ui/gfx/x/connection.h"
+#include "ui/gl/gl_bindings.h"
 #include "ui/gl/gl_surface_egl.h"
 #include "ui/gl/gl_surface_egl_x11_gles2.h"
 #include "ui/ozone/common/egl_util.h"
 #include "ui/ozone/common/gl_ozone_egl.h"
 #include "ui/ozone/platform/x11/gl_ozone_glx.h"
 #include "ui/ozone/platform/x11/gl_surface_egl_readback_x11.h"
+#include "ui/ozone/platform/x11/native_pixmap_egl_x11_binding.h"
 #include "ui/ozone/platform/x11/x11_canvas_surface.h"
 
 #if BUILDFLAG(ENABLE_VULKAN)
-#include "gpu/vulkan/x/vulkan_implementation_x11.h"
+#include "ui/ozone/platform/x11/vulkan_implementation_x11.h"
 #endif
 
 namespace ui {
@@ -30,6 +32,10 @@ namespace {
 class GLOzoneEGLX11 : public GLOzoneEGL {
  public:
   GLOzoneEGLX11() = default;
+
+  GLOzoneEGLX11(const GLOzoneEGLX11&) = delete;
+  GLOzoneEGLX11& operator=(const GLOzoneEGLX11&) = delete;
+
   ~GLOzoneEGLX11() override = default;
 
   // GLOzone:
@@ -37,6 +43,24 @@ class GLOzoneEGLX11 : public GLOzoneEGL {
       const gl::GLImplementationParts& implementation) override {
     is_swiftshader_ = gl::IsSoftwareGLImplementation(implementation);
     return GLOzoneEGL::InitializeStaticGLBindings(implementation);
+  }
+
+  bool CanImportNativePixmap() override { return false; }
+
+  // This implementation is used when ANGLE supports pixmaps through
+  // eglCreatePixmapSurface and exposes it through EGL extension
+  // EGL_NOK_texture_from_pixmap to chrome. This can then be used to create
+  // native bindings using GLImageEGLPixmap.
+  std::unique_ptr<NativePixmapGLBinding> ImportNativePixmap(
+      scoped_refptr<gfx::NativePixmap> pixmap,
+      gfx::BufferFormat plane_format,
+      gfx::BufferPlane plane,
+      gfx::Size plane_size,
+      const gfx::ColorSpace& color_space,
+      GLenum target,
+      GLuint texture_id) override {
+    return NativePixmapEGLX11Binding::Create(pixmap, plane_format, plane_size,
+                                             target, texture_id);
   }
 
   scoped_refptr<gl::GLSurface> CreateViewGLSurface(
@@ -49,10 +73,12 @@ class GLOzoneEGLX11 : public GLOzoneEGL {
         case gl::kGLImplementationEGLGLES2:
           DCHECK(window != gfx::kNullAcceleratedWidget);
           return gl::InitializeGLSurface(new gl::NativeViewGLSurfaceEGLX11GLES2(
+              gl::GLSurfaceEGL::GetGLDisplayEGL(),
               static_cast<x11::Window>(window)));
         case gl::kGLImplementationEGLANGLE:
           DCHECK(window != gfx::kNullAcceleratedWidget);
           return gl::InitializeGLSurface(new gl::NativeViewGLSurfaceEGLX11(
+              gl::GLSurfaceEGL::GetGLDisplayEGL(),
               static_cast<x11::Window>(window)));
         default:
           NOTREACHED();
@@ -63,11 +89,14 @@ class GLOzoneEGLX11 : public GLOzoneEGL {
 
   scoped_refptr<gl::GLSurface> CreateOffscreenGLSurface(
       const gfx::Size& size) override {
-    if (gl::GLSurfaceEGL::IsEGLSurfacelessContextSupported() &&
+    if (gl::GLSurfaceEGL::GetGLDisplayEGL()
+            ->IsEGLSurfacelessContextSupported() &&
         size.width() == 0 && size.height() == 0) {
-      return InitializeGLSurface(new gl::SurfacelessEGL(size));
+      return InitializeGLSurface(
+          new gl::SurfacelessEGL(gl::GLSurfaceEGL::GetGLDisplayEGL(), size));
     } else {
-      return InitializeGLSurface(new gl::PbufferGLSurfaceEGL(size));
+      return InitializeGLSurface(new gl::PbufferGLSurfaceEGL(
+          gl::GLSurfaceEGL::GetGLDisplayEGL(), size));
     }
   }
 
@@ -85,8 +114,6 @@ class GLOzoneEGLX11 : public GLOzoneEGL {
 
  private:
   bool is_swiftshader_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(GLOzoneEGLX11);
 };
 
 }  // namespace
@@ -105,7 +132,7 @@ X11SurfaceFactory::GetAllowedGLImplementations() {
       gl::GLImplementationParts(gl::kGLImplementationDesktopGL),
       gl::GLImplementationParts(gl::kGLImplementationEGLGLES2),
       gl::GLImplementationParts(gl::kGLImplementationEGLANGLE),
-      gl::GLImplementationParts(gl::kGLImplementationSwiftShaderGL)};
+      gl::GLImplementationParts(gl::ANGLEImplementation::kSwiftShader)};
 }
 
 GLOzone* X11SurfaceFactory::GetGLOzone(
@@ -115,7 +142,6 @@ GLOzone* X11SurfaceFactory::GetGLOzone(
       return glx_implementation_.get();
     case gl::kGLImplementationEGLGLES2:
     case gl::kGLImplementationEGLANGLE:
-    case gl::kGLImplementationSwiftShaderGL:
       return egl_implementation_.get();
     default:
       return nullptr;
@@ -126,7 +152,7 @@ GLOzone* X11SurfaceFactory::GetGLOzone(
 std::unique_ptr<gpu::VulkanImplementation>
 X11SurfaceFactory::CreateVulkanImplementation(bool use_swiftshader,
                                               bool allow_protected_memory) {
-  return std::make_unique<gpu::VulkanImplementationX11>(use_swiftshader);
+  return std::make_unique<VulkanImplementationX11>(use_swiftshader);
 }
 #endif
 
@@ -174,6 +200,24 @@ void X11SurfaceFactory::CreateNativePixmapAsync(gfx::AcceleratedWidget widget,
   // and return the result with the provided callback.
   std::move(callback).Run(
       CreateNativePixmap(widget, vk_device, size, format, usage));
+}
+
+scoped_refptr<gfx::NativePixmap>
+X11SurfaceFactory::CreateNativePixmapFromHandle(
+    gfx::AcceleratedWidget widget,
+    gfx::Size size,
+    gfx::BufferFormat format,
+    gfx::NativePixmapHandle handle) {
+  scoped_refptr<gfx::NativePixmapDmaBuf> pixmap;
+  auto buffer =
+      ui::GpuMemoryBufferSupportX11::GetInstance()->CreateBufferFromHandle(
+          size, format, std::move(handle));
+  if (buffer) {
+    gfx::NativePixmapHandle handle = buffer->ExportHandle();
+    pixmap = base::MakeRefCounted<gfx::NativePixmapDmaBuf>(size, format,
+                                                           std::move(handle));
+  }
+  return pixmap;
 }
 
 }  // namespace ui

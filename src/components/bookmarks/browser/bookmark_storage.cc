@@ -16,13 +16,14 @@
 #include "base/json/json_file_value_serializer.h"
 #include "base/json/json_string_value_serializer.h"
 #include "base/numerics/safe_conversions.h"
-#include "base/sequenced_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "components/bookmarks/browser/bookmark_codec.h"
 #include "components/bookmarks/browser/bookmark_model.h"
 #include "components/bookmarks/browser/bookmark_node.h"
 #include "components/bookmarks/common/bookmark_constants.h"
+#include "components/bookmarks/common/bookmark_metrics.h"
 
 namespace bookmarks {
 
@@ -50,7 +51,8 @@ BookmarkStorage::BookmarkStorage(BookmarkModel* model,
       writer_(profile_path.Append(kBookmarksFileName),
               backend_task_runner_,
               kSaveDelay,
-              "BookmarkStorage") {}
+              "BookmarkStorage"),
+      last_scheduled_save_(base::TimeTicks::Now()) {}
 
 BookmarkStorage::~BookmarkStorage() {
   if (writer_.HasPendingWrite())
@@ -67,6 +69,11 @@ void BookmarkStorage::ScheduleSave() {
   }
 
   writer_.ScheduleWriteWithBackgroundDataSerializer(this);
+
+  const base::TimeDelta schedule_delta =
+      base::TimeTicks::Now() - last_scheduled_save_;
+  metrics::RecordTimeSinceLastScheduledSave(schedule_delta);
+  last_scheduled_save_ = base::TimeTicks::Now();
 }
 
 void BookmarkStorage::BookmarkModelDeleted() {

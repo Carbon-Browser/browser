@@ -26,25 +26,34 @@
 #include "third_party/blink/renderer/core/css/style_engine.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/element_traversal.h"
+#include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/frame/local_frame_client.h"
 #include "third_party/blink/renderer/core/frame/settings.h"
 #include "third_party/blink/renderer/core/frame/viewport_data.h"
+#include "third_party/blink/renderer/core/html/client_hints_util.h"
 #include "third_party/blink/renderer/core/html/html_head_element.h"
 #include "third_party/blink/renderer/core/html/parser/html_parser_idioms.h"
 #include "third_party/blink/renderer/core/html_names.h"
 #include "third_party/blink/renderer/core/inspector/console_message.h"
+#include "third_party/blink/renderer/core/loader/frame_client_hints_preferences_context.h"
+#include "third_party/blink/renderer/core/loader/frame_fetch_context.h"
 #include "third_party/blink/renderer/core/loader/http_equiv.h"
 #include "third_party/blink/renderer/core/page/chrome_client.h"
 #include "third_party/blink/renderer/core/page/page.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/loader/fetch/client_hints_preferences.h"
 #include "third_party/blink/renderer/platform/weborigin/security_policy.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_to_number.h"
 
 namespace blink {
 
-HTMLMetaElement::HTMLMetaElement(Document& document)
-    : HTMLElement(html_names::kMetaTag, document) {}
+HTMLMetaElement::HTMLMetaElement(Document& document,
+                                 const CreateElementFlags flags)
+    : HTMLElement(html_names::kMetaTag, document),
+      is_sync_parser_(flags.IsCreatedByParser() &&
+                      !flags.IsAsyncCustomElements() &&
+                      !document.IsInDocumentWrite()) {}
 
 static bool IsInvalidSeparator(UChar c) {
   return c == ';';
@@ -487,8 +496,8 @@ void HTMLMetaElement::NameRemoved(const AtomicString& name_value) {
         /*update_theme_color_cache=*/true);
   } else if (EqualIgnoringASCIICase(name_value, "color-scheme")) {
     GetDocument().ColorSchemeMetaChanged();
-  } else if (EqualIgnoringASCIICase(name_value, "battery-savings")) {
-    GetDocument().BatterySavingsMetaChanged();
+  } else if (EqualIgnoringASCIICase(name_value, "supports-reduced-motion")) {
+    GetDocument().SupportsReducedMotionMetaChanged();
   }
 }
 
@@ -549,7 +558,7 @@ void HTMLMetaElement::ProcessHttpEquiv() {
   if (http_equiv_value.IsEmpty())
     return;
   HttpEquiv::Process(GetDocument(), http_equiv_value, content_value,
-                     InDocumentHead(this), this);
+                     InDocumentHead(this), is_sync_parser_, this);
 }
 
 void HTMLMetaElement::ProcessContent() {
@@ -573,8 +582,9 @@ void HTMLMetaElement::ProcessContent() {
     GetDocument().ColorSchemeMetaChanged();
     return;
   }
-  if (EqualIgnoringASCIICase(name_value, "battery-savings")) {
-    GetDocument().BatterySavingsMetaChanged();
+
+  if (EqualIgnoringASCIICase(name_value, "supports-reduced-motion")) {
+    GetDocument().SupportsReducedMotionMetaChanged();
     return;
   }
 
@@ -608,10 +618,13 @@ void HTMLMetaElement::ProcessContent() {
     // TODO(1031476): The Web Monetization specification is an unofficial draft,
     // available at https://webmonetization.org/specification.html
     // For now, only use counters are implemented in Blink.
-    if (!GetDocument().ParentDocument()) {
+    if (GetDocument().IsInOutermostMainFrame()) {
       UseCounter::Count(&GetDocument(),
                         WebFeature::kHTMLMetaElementMonetization);
     }
+  } else if (EqualIgnoringASCIICase(name_value, http_names::kAcceptCH)) {
+    ProcessMetaCH(GetDocument(), content_value,
+                  network::MetaCHType::NameAcceptCH, is_sync_parser_);
   }
 }
 
@@ -638,4 +651,72 @@ const AtomicString& HTMLMetaElement::Media() const {
 const AtomicString& HTMLMetaElement::GetName() const {
   return FastGetAttribute(html_names::kNameAttr);
 }
+
+const AtomicString& HTMLMetaElement::Property() const {
+  return FastGetAttribute(html_names::kPropertyAttr);
+}
+
+const AtomicString& HTMLMetaElement::Itemprop() const {
+  return FastGetAttribute(html_names::kItempropAttr);
+}
+
+// static
+void HTMLMetaElement::ProcessMetaCH(Document& document,
+                                    const AtomicString& content,
+                                    network::MetaCHType type,
+                                    bool is_doc_preloader_or_sync_parser) {
+  switch (type) {
+    case network::MetaCHType::HttpEquivAcceptCH:
+      if (!RuntimeEnabledFeatures::ClientHintsMetaHTTPEquivAcceptCHEnabled())
+        return;
+      break;
+    case network::MetaCHType::NameAcceptCH:
+      if (!RuntimeEnabledFeatures::ClientHintsMetaNameAcceptCHEnabled())
+        return;
+      break;
+    case network::MetaCHType::HttpEquivDelegateCH:
+      if (!RuntimeEnabledFeatures::ClientHintsMetaEquivDelegateCHEnabled())
+        return;
+      break;
+  }
+
+  LocalFrame* frame = document.GetFrame();
+  if (!frame)
+    return;
+
+  if (!frame->IsMainFrame()) {
+    return;
+  }
+
+  if (!FrameFetchContext::AllowScriptFromSourceWithoutNotifying(
+          document.Url(), frame->GetContentSettingsClient(),
+          frame->GetSettings())) {
+    // Do not allow configuring client hints if JavaScript is disabled.
+    return;
+  }
+
+  switch (type) {
+    case network::MetaCHType::HttpEquivAcceptCH:
+      UseCounter::Count(document,
+                        WebFeature::kClientHintsMetaHTTPEquivAcceptCH);
+      break;
+    case network::MetaCHType::NameAcceptCH:
+      UseCounter::Count(document, WebFeature::kClientHintsMetaNameAcceptCH);
+      break;
+    case network::MetaCHType::HttpEquivDelegateCH:
+      UseCounter::Count(document, WebFeature::kClientHintsMetaEquivDelegateCH);
+      break;
+  }
+  FrameClientHintsPreferencesContext hints_context(frame);
+  UpdateWindowPermissionsPolicyWithDelegationSupportForClientHints(
+      frame->GetClientHintsPreferences(), document.domWindow(), content,
+      document.Url(), &hints_context, type, is_doc_preloader_or_sync_parser);
+}
+
+void HTMLMetaElement::FinishParsingChildren() {
+  // Flag the tag was parsed so if it's re-read we know it was modified.
+  is_sync_parser_ = false;
+  HTMLElement::FinishParsingChildren();
+}
+
 }  // namespace blink

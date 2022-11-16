@@ -12,7 +12,6 @@
 
 #include "base/callback.h"
 #include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "base/threading/thread_checker.h"
 #include "base/unguessable_token.h"
 #include "extensions/common/features/feature.h"
@@ -23,7 +22,10 @@
 #include "extensions/renderer/safe_builtins.h"
 #include "extensions/renderer/script_injection_callback.h"
 #include "url/gurl.h"
-#include "v8/include/v8.h"
+#include "v8-exception.h"
+#include "v8/include/v8-context.h"
+#include "v8/include/v8-forward.h"
+#include "v8/include/v8-script.h"
 
 namespace blink {
 class WebDocumentLoader;
@@ -56,6 +58,10 @@ class ScriptContext {
                 Feature::Context context_type,
                 const Extension* effective_extension,
                 Feature::Context effective_context_type);
+
+  ScriptContext(const ScriptContext&) = delete;
+  ScriptContext& operator=(const ScriptContext&) = delete;
+
   ~ScriptContext();
 
   // Returns whether |url| from any Extension in |extension_set| is sandboxed,
@@ -186,12 +192,16 @@ class ScriptContext {
    public:
     ScopedFrameDocumentLoader(blink::WebLocalFrame* frame,
                               blink::WebDocumentLoader* document_loader);
+
+    ScopedFrameDocumentLoader(const ScopedFrameDocumentLoader&) = delete;
+    ScopedFrameDocumentLoader& operator=(const ScopedFrameDocumentLoader&) =
+        delete;
+
     ~ScopedFrameDocumentLoader();
 
    private:
     blink::WebLocalFrame* frame_;
     blink::WebDocumentLoader* document_loader_;
-    DISALLOW_COPY_AND_ASSIGN(ScopedFrameDocumentLoader);
   };
 
   // TODO(devlin): Move all these Get*URL*() methods out of here? While they are
@@ -258,6 +268,9 @@ class ScriptContext {
   // Gets the current stack trace as a multi-line string to be logged.
   std::string GetStackTraceAsString() const;
 
+  // Generate a unique integer value. This is only unique within this instance.
+  int32_t GetNextIdFromCounter() { return id_counter++; }
+
   // Runs |code|, labelling the script that gets created as |name| (the name is
   // used in the devtools and stack traces). |exception_handler| will be called
   // re-entrantly if an exception is thrown during the script's execution.
@@ -269,11 +282,6 @@ class ScriptContext {
           v8::ScriptCompiler::NoCacheReason::kNoCacheNoReason);
 
  private:
-  // DEPRECATED.
-  v8::Local<v8::Value> CallFunction(const v8::Local<v8::Function>& function,
-                                    int argc,
-                                    v8::Local<v8::Value> argv[]) const;
-
   // Whether this context is valid.
   bool is_valid_;
 
@@ -323,9 +331,10 @@ class ScriptContext {
 
   int64_t service_worker_version_id_;
 
-  base::ThreadChecker thread_checker_;
+  // A counter to generate unique IDs. IDs must start at 1.
+  int32_t id_counter = 1;
 
-  DISALLOW_COPY_AND_ASSIGN(ScriptContext);
+  base::ThreadChecker thread_checker_;
 };
 
 }  // namespace extensions

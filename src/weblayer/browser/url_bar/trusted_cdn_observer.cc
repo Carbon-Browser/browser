@@ -11,7 +11,8 @@
 namespace weblayer {
 
 TrustedCDNObserver::TrustedCDNObserver(content::WebContents* web_contents)
-    : WebContentsObserver(web_contents) {}
+    : WebContentsObserver(web_contents),
+      content::WebContentsUserData<TrustedCDNObserver>(*web_contents) {}
 
 TrustedCDNObserver::~TrustedCDNObserver() = default;
 
@@ -24,6 +25,6 @@ void TrustedCDNObserver::PrimaryPageChanged(content::Page& page) {
   web_contents()->DidChangeVisibleSecurityState();
 }
 
-WEB_CONTENTS_USER_DATA_KEY_IMPL(TrustedCDNObserver)
+WEB_CONTENTS_USER_DATA_KEY_IMPL(TrustedCDNObserver);
 
 }  // namespace weblayer

@@ -9,7 +9,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/sequence_checker.h"
 #include "net/base/net_export.h"
 #include "net/base/network_isolation_key.h"
@@ -44,6 +44,10 @@ class NET_EXPORT ContextHostResolver : public HostResolver {
   // Same except the created resolver will own its own HostResolverManager.
   ContextHostResolver(std::unique_ptr<HostResolverManager> owned_manager,
                       std::unique_ptr<ResolveContext> resolve_context);
+
+  ContextHostResolver(const ContextHostResolver&) = delete;
+  ContextHostResolver& operator=(const ContextHostResolver&) = delete;
+
   ~ContextHostResolver() override;
 
   // HostResolver methods:
@@ -68,6 +72,8 @@ class NET_EXPORT ContextHostResolver : public HostResolver {
   void SetRequestContext(URLRequestContext* request_context) override;
   HostResolverManager* GetManagerForTesting() override;
   const URLRequestContext* GetContextForTesting() const override;
+  NetworkChangeNotifier::NetworkHandle GetTargetNetworkForTesting()
+      const override;
 
   // Returns the number of host cache entries that were restored, or 0 if there
   // is no cache.
@@ -77,25 +83,13 @@ class NET_EXPORT ContextHostResolver : public HostResolver {
 
   void SetProcParamsForTesting(const ProcTaskParams& proc_params);
   void SetTickClockForTesting(const base::TickClock* tick_clock);
-
-  size_t GetNumActiveRequestsForTesting() const {
-    return handed_out_requests_.size();
+  ResolveContext* resolve_context_for_testing() {
+    return resolve_context_.get();
   }
 
  private:
-  class WrappedRequest;
-  class WrappedResolveHostRequest;
-  class WrappedProbeRequest;
-
-  HostResolverManager* const manager_;
+  const raw_ptr<HostResolverManager, DanglingUntriaged> manager_;
   std::unique_ptr<HostResolverManager> owned_manager_;
-
-  // Requests are expected to clear themselves from this set on destruction or
-  // cancellation.  Requests in an early shutdown state (from
-  // HostResolver::OnShutdown()) are still in this set, so they can be notified
-  // on resolver destruction.
-  std::unordered_set<WrappedRequest*> handed_out_requests_;
-
   std::unique_ptr<ResolveContext> resolve_context_;
 
   // If true, the context is shutting down. Subsequent request Start() calls
@@ -103,8 +97,6 @@ class NET_EXPORT ContextHostResolver : public HostResolver {
   bool shutting_down_ = false;
 
   SEQUENCE_CHECKER(sequence_checker_);
-
-  DISALLOW_COPY_AND_ASSIGN(ContextHostResolver);
 };
 
 }  // namespace net

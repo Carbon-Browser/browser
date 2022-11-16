@@ -8,9 +8,8 @@
 #include <map>
 #include <vector>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/threading/thread_checker.h"
-#include "net/base/address_list.h"
 #include "net/base/ip_address.h"
 #include "net/base/net_export.h"
 #include "net/base/network_change_notifier.h"
@@ -60,10 +59,15 @@ class NET_EXPORT_PRIVATE AddressSorterPosix
   typedef std::map<IPAddress, SourceAddressInfo> SourceAddressMap;
 
   explicit AddressSorterPosix(ClientSocketFactory* socket_factory);
+
+  AddressSorterPosix(const AddressSorterPosix&) = delete;
+  AddressSorterPosix& operator=(const AddressSorterPosix&) = delete;
+
   ~AddressSorterPosix() override;
 
   // AddressSorter:
-  void Sort(const AddressList& list, CallbackType callback) const override;
+  void Sort(const std::vector<IPEndPoint>& endpoints,
+            CallbackType callback) const override;
 
  private:
   friend class AddressSorterPosixTest;
@@ -78,14 +82,12 @@ class NET_EXPORT_PRIVATE AddressSorterPosix
   // found in most recent OnIPAddressChanged.
   mutable SourceAddressMap source_map_;
 
-  ClientSocketFactory* socket_factory_;
+  raw_ptr<ClientSocketFactory> socket_factory_;
   PolicyTable precedence_table_;
   PolicyTable label_table_;
   PolicyTable ipv4_scope_table_;
 
   THREAD_CHECKER(thread_checker_);
-
-  DISALLOW_COPY_AND_ASSIGN(AddressSorterPosix);
 };
 
 }  // namespace net

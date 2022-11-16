@@ -11,7 +11,6 @@
 #include "base/callback.h"
 #include "base/callback_helpers.h"
 #include "base/location.h"
-#include "base/macros.h"
 #include "base/memory/ptr_util.h"
 #include "base/threading/sequenced_task_runner_handle.h"
 #include "net/base/net_errors.h"
@@ -34,10 +33,10 @@ WebrtcDataStreamAdapter::~WebrtcDataStreamAdapter() {
     channel_->Close();
 
     // Destroy |channel_| asynchronously as it may be on stack.
+    // TODO(dcheng): This could probably be ReleaseSoon.
     base::SequencedTaskRunnerHandle::Get()->PostTask(
         FROM_HERE,
-        base::BindOnce(base::DoNothing::Once<
-                           rtc::scoped_refptr<webrtc::DataChannelInterface>>(),
+        base::BindOnce([](rtc::scoped_refptr<webrtc::DataChannelInterface>) {},
                        std::move(channel_)));
   }
 }

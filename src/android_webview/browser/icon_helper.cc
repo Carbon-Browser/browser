@@ -90,7 +90,7 @@ void IconHelper::DidUpdateFaviconURL(
         web_contents()->DownloadImage(
             candidate->icon_url,
             true,              // Is a favicon
-            0,                 // No preferred size
+            gfx::Size(),       // No preferred size
             kLargestIconSize,  // Max bitmap size
             false,             // Normal cache policy
             base::BindOnce(&IconHelper::DownloadFaviconCallback,
@@ -115,8 +115,10 @@ void IconHelper::DidUpdateFaviconURL(
 }
 
 void IconHelper::DidStartNavigation(content::NavigationHandle* navigation) {
-  if (navigation->GetReloadType() == content::ReloadType::BYPASSING_CACHE)
+  if (navigation->IsInPrimaryMainFrame() &&
+      navigation->GetReloadType() == content::ReloadType::BYPASSING_CACHE) {
     ClearUnableToDownloadFavicons();
+  }
 }
 
 void IconHelper::MarkUnableToDownloadFavicon(const GURL& icon_url) {

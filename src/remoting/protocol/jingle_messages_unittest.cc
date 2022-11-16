@@ -6,13 +6,12 @@
 
 #include <stddef.h>
 
-#include "base/cxx17_backports.h"
 #include "base/strings/string_util.h"
 #include "remoting/protocol/content_description.h"
+#include "remoting/signaling/xmpp_constants.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/libjingle_xmpp/xmllite/xmlelement.h"
-#include "third_party/libjingle_xmpp/xmpp/constants.h"
 
 using jingle_xmpp::QName;
 using jingle_xmpp::XmlAttr;
@@ -480,7 +479,7 @@ TEST(JingleMessageReplyTest, ToXml) {
        kTestIncomingMessage2},
   };
 
-  for (size_t i = 0; i < base::size(tests); ++i) {
+  for (size_t i = 0; i < std::size(tests); ++i) {
     std::unique_ptr<XmlElement> incoming_message(
         XmlElement::ForStr(tests[i].incoming_message));
     ASSERT_TRUE(incoming_message.get());
@@ -571,7 +570,7 @@ TEST(JingleMessageTest, RemotingErrorCode) {
 }
 
 TEST(JingleMessageTest, AttachmentsMessage) {
-  // Ordering of the "attachments" tag and other tags are irrelevent. But the
+  // Ordering of the "attachments" tag and other tags are irrelevant. But the
   // JingleMessage implementation always puts it before other tags, so we do the
   // same thing in test cases.
   const char* kMessageWithPluginTag =

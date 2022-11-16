@@ -10,7 +10,6 @@
 #include <string>
 #include <vector>
 
-#include "base/compiler_specific.h"
 #include "base/files/file_path.h"
 #include "base/synchronization/lock.h"
 #include "build/branding_buildflags.h"
@@ -18,12 +17,11 @@
 #include "chrome/common/buildflags.h"
 #include "components/nacl/common/buildflags.h"
 #include "content/public/common/content_client.h"
-#include "pdf/buildflags.h"
 #include "ppapi/buildflags/buildflags.h"
 
-#if BUILDFLAG(ENABLE_PLUGINS)
+#if BUILDFLAG(ENABLE_PPAPI)
 #include "content/public/common/pepper_plugin_info.h"
-#endif
+#endif  // BUILDFLAG(ENABLE_PPAPI)
 
 namespace embedder_support {
 class OriginTrialPolicyImpl;
@@ -60,14 +58,7 @@ class ChromeContentClient : public content::ContentClient {
       content::PepperPluginInfo::PPP_ShutdownModuleFunc shutdown_module);
 #endif
 
-#if BUILDFLAG(ENABLE_PLUGINS) && BUILDFLAG(ENABLE_PDF)
-  static void SetPDFEntryFunctions(
-      content::PepperPluginInfo::GetInterfaceFunc get_interface,
-      content::PepperPluginInfo::PPP_InitializeModuleFunc initialize_module,
-      content::PepperPluginInfo::PPP_ShutdownModuleFunc shutdown_module);
-#endif
-
-#if BUILDFLAG(ENABLE_PLUGINS)
+#if BUILDFLAG(ENABLE_PPAPI)
   // This returns the most recent plugin based on the plugin versions. In the
   // event of a tie, a debug plugin will be considered more recent than a
   // non-debug plugin.
@@ -76,7 +67,7 @@ class ChromeContentClient : public content::ContentClient {
   // The method is only visible for testing purposes.
   static content::PepperPluginInfo* FindMostRecentPlugin(
       const std::vector<std::unique_ptr<content::PepperPluginInfo>>& plugins);
-#endif
+#endif  // BUILDFLAG(ENABLE_PPAPI)
 
   void SetActiveURL(const GURL& url, std::string top_origin) override;
   void SetGpuInfo(const gpu::GPUInfo& gpu_info) override;
@@ -89,22 +80,22 @@ class ChromeContentClient : public content::ContentClient {
   std::u16string GetLocalizedString(int message_id) override;
   std::u16string GetLocalizedString(int message_id,
                                     const std::u16string& replacement) override;
-  std::u16string GetLocalizedProtocolName(const std::string& protocol) override;
   base::StringPiece GetDataResource(
       int resource_id,
       ui::ResourceScaleFactor scale_factor) override;
   base::RefCountedMemory* GetDataResourceBytes(int resource_id) override;
+  std::string GetDataResourceString(int resource_id) override;
   gfx::Image& GetNativeImageNamed(int resource_id) override;
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   base::FilePath GetChildProcessPath(
       int child_flags,
       const base::FilePath& helpers_path) override;
-#endif  // OS_MAC
+#endif  // BUILDFLAG(IS_MAC)
   std::string GetProcessTypeNameInEnglish(int type) override;
   blink::OriginTrialPolicy* GetOriginTrialPolicy() override;
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   media::MediaDrmBridgeClient* GetMediaDrmBridgeClient() override;
-#endif  // OS_ANDROID
+#endif  // BUILDFLAG(IS_ANDROID)
   void ExposeInterfacesToBrowser(
       scoped_refptr<base::SequencedTaskRunner> io_task_runner,
       mojo::BinderMap* binders) override;

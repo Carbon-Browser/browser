@@ -26,7 +26,7 @@ export const FilesTooltip = Polymer({
     showTimeout: {
       type: Number,
       value: 500,  // ms
-      readOnly: true
+      readOnly: true,
     },
 
     /**
@@ -35,8 +35,8 @@ export const FilesTooltip = Polymer({
     hideTimeout: {
       type: Number,
       value: 250,  // ms
-      readOnly: true
-    }
+      readOnly: true,
+    },
   },
 
   /**
@@ -115,6 +115,15 @@ export const FilesTooltip = Polymer({
   },
 
   /**
+   * Update the tooltip text with the passed-in target.
+   *
+   * @param {!HTMLElement} target
+   */
+  updateTooltipText: function(target) {
+    this.initShowingTooltip_(target);
+  },
+
+  /**
    * @param {!HTMLElement} target
    * @private
    */
@@ -127,7 +136,11 @@ export const FilesTooltip = Polymer({
       }
     }
 
-    if (this.visibleTooltipTarget_ === target) {
+    // Even the current target is the visible tooltip target, we still need to
+    // check if the label is different from the existing tooltip text, because
+    // if label text changes, we need to show the tooltip.
+    if (this.visibleTooltipTarget_ === target &&
+        this.$.label.textContent === target.getAttribute('aria-label')) {
       return;
     }
 
@@ -324,7 +337,7 @@ export const FilesTooltip = Polymer({
   cleanupCardTooltip_: function() {
     this.className = '';
     this.$.label.className = '';
-  }
+  },
 });
 
 //# sourceURL=//ui/file_manager/file_manager/foreground/elements/files_tooltip.js

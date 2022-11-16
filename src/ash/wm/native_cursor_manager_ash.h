@@ -6,9 +6,8 @@
 #define ASH_WM_NATIVE_CURSOR_MANAGER_ASH_H_
 
 #include "ash/ash_export.h"
-#include "base/macros.h"
-#include "ui/base/cursor/cursor_loader.h"
 #include "ui/display/display.h"
+#include "ui/wm/core/cursor_loader.h"
 #include "ui/wm/core/native_cursor_manager.h"
 
 namespace ash {
@@ -20,11 +19,15 @@ namespace ash {
 class ASH_EXPORT NativeCursorManagerAsh : public ::wm::NativeCursorManager {
  public:
   NativeCursorManagerAsh();
+
+  NativeCursorManagerAsh(const NativeCursorManagerAsh&) = delete;
+  NativeCursorManagerAsh& operator=(const NativeCursorManagerAsh&) = delete;
+
   ~NativeCursorManagerAsh() override;
 
   // Toggle native cursor enabled/disabled.
   // The native cursor is enabled by default. When disabled, we hide the native
-  // cursor regardless of visibility state, and let CursorWindowManager draw
+  // cursor regardless of visibility state, and let CursorWindowController draw
   // the cursor.
   void SetNativeCursorEnabled(bool enabled);
 
@@ -52,9 +55,7 @@ class ASH_EXPORT NativeCursorManagerAsh : public ::wm::NativeCursorManager {
 
   bool native_cursor_enabled_;
 
-  ui::CursorLoader cursor_loader_{/*use_platform_cursors=*/false};
-
-  DISALLOW_COPY_AND_ASSIGN(NativeCursorManagerAsh);
+  wm::CursorLoader cursor_loader_{/*use_platform_cursors=*/false};
 };
 
 }  // namespace ash

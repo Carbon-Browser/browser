@@ -22,8 +22,11 @@ class CORE_EXPORT FencedFrameShadowDOMDelegate
  public:
   explicit FencedFrameShadowDOMDelegate(HTMLFencedFrameElement* outer_element);
 
-  void DidGetInserted() override;
   void Navigate(const KURL&) override;
+  void FreezeFrameSize() override;
+
+ private:
+  void AddUserAgentShadowContent(ShadowRoot&);
 };
 
 }  // namespace blink

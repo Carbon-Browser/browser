@@ -37,7 +37,7 @@ cr.define('multidevice_setup', function() {
         type: Boolean,
         computed: 'shouldForwardButtonBeDisabled_(' +
             'passwordPageForwardButtonDisabled_, visiblePageName)',
-        notify: true
+        notify: true,
       },
 
       /**
@@ -91,7 +91,7 @@ cr.define('multidevice_setup', function() {
       /**
        * Array of objects representing all potential MultiDevice hosts.
        *
-       * @private {!Array<!chromeos.multideviceSetup.mojom.HostDevice>}
+       * @private {!Array<!ash.multideviceSetup.mojom.HostDevice>}
        */
       devices_: Array,
 

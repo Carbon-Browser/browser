@@ -8,7 +8,6 @@
 
 #include "base/bind.h"
 #include "base/files/file_path.h"
-#include "base/macros.h"
 #include "chrome/browser/ash/file_manager/fileapi_util.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/chromeos/fileapi/external_file_resolver.h"
@@ -51,14 +50,14 @@ class MojoPipeIOBuffer : public net::IOBuffer {
   explicit MojoPipeIOBuffer(void* data)
       : net::IOBuffer(static_cast<char*>(data)) {}
 
+  MojoPipeIOBuffer(const MojoPipeIOBuffer&) = delete;
+  MojoPipeIOBuffer& operator=(const MojoPipeIOBuffer&) = delete;
+
  protected:
   ~MojoPipeIOBuffer() override {
     // Set data_ to null so ~IOBuffer won't try to delete it.
     data_ = nullptr;
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(MojoPipeIOBuffer);
 };
 
 // A helper class to read data from a FileStreamReader, and write it to a
@@ -85,6 +84,11 @@ class FileSystemReaderDataPipeProducer {
         base::BindRepeating(&FileSystemReaderDataPipeProducer::OnHandleReady,
                             weak_ptr_factory_.GetWeakPtr()));
   }
+
+  FileSystemReaderDataPipeProducer(const FileSystemReaderDataPipeProducer&) =
+      delete;
+  FileSystemReaderDataPipeProducer& operator=(
+      const FileSystemReaderDataPipeProducer&) = delete;
 
   void Write() {
     while (remaining_bytes_ > 0) {
@@ -193,8 +197,6 @@ class FileSystemReaderDataPipeProducer {
   base::OnceCallback<void(net::Error)> callback_;
   base::WeakPtrFactory<FileSystemReaderDataPipeProducer> weak_ptr_factory_{
       this};
-
-  DISALLOW_COPY_AND_ASSIGN(FileSystemReaderDataPipeProducer);
 };
 
 class ExternalFileURLLoader : public network::mojom::URLLoader {
@@ -211,6 +213,9 @@ class ExternalFileURLLoader : public network::mojom::URLLoader {
         profile_id, std::move(loader), std::move(client_remote));
     external_file_url_loader->Start(request);
   }
+
+  ExternalFileURLLoader(const ExternalFileURLLoader&) = delete;
+  ExternalFileURLLoader& operator=(const ExternalFileURLLoader&) = delete;
 
   // network::mojom::URLLoader:
   void FollowRedirect(
@@ -283,8 +288,7 @@ class ExternalFileURLLoader : public network::mojom::URLLoader {
       return;
     }
     head_.response_start = base::TimeTicks::Now();
-    client_->OnReceiveResponse(head_.Clone());
-    client_->OnStartLoadingResponseBody(std::move(consumer_handle));
+    client_->OnReceiveResponse(head_.Clone(), std::move(consumer_handle));
 
     data_producer_ = std::make_unique<FileSystemReaderDataPipeProducer>(
         std::move(producer_handle), std::move(stream_reader), size,
@@ -336,8 +340,6 @@ class ExternalFileURLLoader : public network::mojom::URLLoader {
   std::unique_ptr<FileSystemReaderDataPipeProducer> data_producer_;
 
   base::WeakPtrFactory<ExternalFileURLLoader> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ExternalFileURLLoader);
 };
 
 }  // namespace

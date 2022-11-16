@@ -44,7 +44,7 @@ DeclarativeContentCssPredicate::Create(ContentPredicateEvaluator* evaluator,
                                        std::string* error) {
   std::vector<std::string> css_rules;
   if (value.is_list()) {
-    for (const base::Value& css_rule_value : value.GetList()) {
+    for (const base::Value& css_rule_value : value.GetListDeprecated()) {
       if (!css_rule_value.is_string()) {
         *error = base::StringPrintf(kCssInvalidTypeOfParameter,
                                     declarative_content_constants::kCss);
@@ -175,10 +175,10 @@ void DeclarativeContentCssConditionTracker::StopTrackingPredicates(
     const std::vector<const void*>& predicate_groups) {
   bool watched_selectors_updated = false;
   for (const void* group : predicate_groups) {
-    auto loc = tracked_predicates_.find(group);
-    if (loc == tracked_predicates_.end())
+    auto it = tracked_predicates_.find(group);
+    if (it == tracked_predicates_.end())
       continue;
-    for (const DeclarativeContentCssPredicate* predicate : loc->second) {
+    for (const DeclarativeContentCssPredicate* predicate : it->second) {
       for (const std::string& selector : predicate->css_selectors()) {
         auto loc = watched_css_selector_predicate_count_.find(selector);
         DCHECK(loc != watched_css_selector_predicate_count_.end());

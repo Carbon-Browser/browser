@@ -8,14 +8,12 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/css/native_paint_image_generator.h"
-#include "third_party/blink/renderer/platform/geometry/float_size.h"
 #include "third_party/blink/renderer/platform/graphics/color.h"
 #include "third_party/skia/include/core/SkColor.h"
+#include "ui/gfx/geometry/size_f.h"
 
 namespace blink {
 
-class Animation;
-class Element;
 class Image;
 class LocalFrame;
 class Node;
@@ -33,7 +31,7 @@ class CORE_EXPORT BackgroundColorPaintImageGenerator
       BackgroundColorPaintImageGeneratorCreateFunction create_function);
 
   virtual scoped_refptr<Image> Paint(
-      const FloatSize& container_size,
+      const gfx::SizeF& container_size,
       const Node*,
       const Vector<Color>& animated_colors,
       const Vector<double>& offsets,
@@ -47,8 +45,6 @@ class CORE_EXPORT BackgroundColorPaintImageGenerator
       Vector<Color>* animated_colors,
       Vector<double>* offsets,
       absl::optional<double>* progress) = 0;
-
-  virtual Animation* GetAnimationIfCompositable(const Element* element) = 0;
 };
 
 }  // namespace blink

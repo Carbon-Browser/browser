@@ -17,7 +17,7 @@ class BrowserVersionServiceAsh
     : public mojom::BrowserVersionService,
       public component_updater::ComponentUpdateService::Observer {
  public:
-  BrowserVersionServiceAsh(
+  explicit BrowserVersionServiceAsh(
       component_updater::ComponentUpdateService* component_updater_service);
 
   BrowserVersionServiceAsh(const BrowserVersionServiceAsh&) = delete;
@@ -30,6 +30,8 @@ class BrowserVersionServiceAsh
   // crosapi::mojom::BrowserVersionService:
   void AddBrowserVersionObserver(
       mojo::PendingRemote<mojom::BrowserVersionObserver> observer) override;
+  void GetInstalledBrowserVersion(
+      GetInstalledBrowserVersionCallback callback) override;
 
  private:
   // component_updater::ComponentUpdateService::Observer:

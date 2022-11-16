@@ -9,6 +9,7 @@
     <title>$i18n{FILEMANAGER_APP_NAME}</title>
 
     <meta name="google" value="notranslate">
+    <meta name="color-scheme" content="light dark">
 
     <link rel="stylesheet" href="chrome://resources/css/action_link.css">
     <link rel="stylesheet" href="chrome://resources/css/text_defaults.css">
@@ -30,29 +31,15 @@
     <custom-style>
       <style>
         .dialog-footer cr-input {
-          --cr-input-border-bottom: 1px solid var(--google-grey-800);
+          --cr-input-background-color: var(--cros-textfield-background-color);
           --cr-input-border-radius: 0;
+          --cr-input-color: var(--cros-textfield-input-color);
+          --cr-input-error-color: var(--cros-textfield-label-color-error);
           --cr-input-error-display: none;
-          --cr-input-padding-end: 0;
-          --cr-input-padding-start: 0;
-          --cr-input-padding-bottom: 2px;
+          --cr-input-focus-color: var(--cros-textfield-label-color-focus);
+          --cr-input-min-height: 32px;
           width: 100%;
         }
-
-        paper-progress {
-          --paper-progress-active-color: rgb(26, 194, 34);
-        }
-
-        body.check-select .dialog-header files-toggle-ripple {
-          --files-toggle-ripple-bg-color: black;
-          --files-toggle-ripple-activated-bg-color: black;
-          --files-toggle-ripple-activated-opacity: 0.08;
-        }
-
-        body.check-select .dialog-header files-ripple {
-          --files-ripple-bg-color: black;
-        }
-
       </style>
     </custom-style>
 
@@ -135,14 +122,14 @@
 
       <command id="default-task">
       <command id="open-with" label="$i18n{OPEN_WITH_BUTTON_LABEL}">
-      <command id="more-actions" label="$i18n{MORE_ACTIONS_BUTTON_LABEL}">
-      <command id="show-submenu" label="$i18n{MORE_ACTIONS_BUTTON_LABEL}">
       <command id="invoke-sharesheet" label="$i18n{SHARESHEET_BUTTON_LABEL}">
       <command id="toggle-holding-space">
       <command id="go-to-file-location"
                label="$i18n{GO_TO_FILE_LOCATION_BUTTON_LABEL}">
       <command id="zip-selection"
                label="$i18n{ZIP_SELECTION_BUTTON_LABEL}">
+      <command id="extract-all"
+               label="$i18n{EXTRACT_ALL_BUTTON_LABEL}">
       <command id="set-wallpaper"
                label="$i18n{SET_WALLPAPER_BUTTON_LABEL}">
 
@@ -150,6 +137,8 @@
                shortcut="." hide-shortcut-text>
       <command id="manage-in-drive"
                label="$i18n{MANAGE_IN_DRIVE_BUTTON_LABEL}" disabled hidden>
+      <command id="manage-mirrorsync"
+               label="$i18n{DRIVE_MANAGE_MIRRORSYNC}" disabled hidden>
       <command id="share-with-linux" label="$i18n{SHARE_WITH_LINUX_BUTTON_LABEL}" disabled hidden>
       <command id="manage-linux-sharing" label="$i18n{MANAGE_LINUX_SHARING_BUTTON_LABEL}" disabled hidden>
       <command id="manage-linux-sharing-gear" label="$i18n{MANAGE_LINUX_SHARING_BUTTON_LABEL}" disabled hidden>
@@ -188,12 +177,8 @@
                   visibleif="full-page" class="hide-on-toolbar" hidden></cr-menu-item>
         <cr-menu-item command="#open-with"
                   visibleif="full-page" class="hide-on-toolbar" sub-menu="#tasks-menu" hidden></cr-menu-item>
-        <cr-menu-item command="#more-actions"
-                  visibleif="full-page" class="hide-on-toolbar" sub-menu="#share-menu" hidden></cr-menu-item>
         <cr-menu-item command="#invoke-sharesheet"
-                  visibleif="full-page" class="hide-on-toolbar">
-                    $i18n{SHARE_BUTTON_TOOLTIP}
-                  </cr-menu-item>
+                  visibleif="full-page" class="hide-on-toolbar">$i18n{SHARESHEET_BUTTON_LABEL}</cr-menu-item>
         <cr-menu-item command="#go-to-file-location"
                   visibleif="full-page" class="hide-on-toolbar" hidden></cr-menu-item>
         <hr id="tasks-separator" visibleif="full-page" class="hide-on-toolbar" hidden>
@@ -210,6 +195,7 @@
         <cr-menu-item command="#delete" class="hide-on-toolbar">$i18n{DELETE_BUTTON_LABEL}</cr-menu-item>
         <cr-menu-item command="#restore-from-trash"></cr-menu-item>
         <cr-menu-item command="#zip-selection"></cr-menu-item>
+        <cr-menu-item command="#extract-all"></cr-menu-item>
         <cr-menu-item command="#toggle-holding-space" visibleif="full-page">
             </cr-menu-item>
         <cr-menu-item command="#share-with-linux"></cr-menu-item>
@@ -292,6 +278,8 @@
                       command="#manage-plugin-vm-sharing-gear"></cr-menu-item>
         <cr-menu-item id="gear-menu-drive-sync-settings"
                       command="#drive-sync-settings"></cr-menu-item>
+        <cr-menu-item id="gear-menu-manage-mirrorsync"
+                      command="#manage-mirrorsync"></cr-menu-item>
         <hr id="help-separator">
         <cr-menu-item id="gear-menu-drive-buy-more-space"
                       command="#drive-buy-more-space"></cr-menu-item>
@@ -316,24 +304,9 @@
         </cr-menu-item>
       </cr-menu>
 
-      <cr-menu id="tasks-menu" class="chrome-menu files-menu"
+      <cr-menu id="tasks-menu" class="chrome-menu files-menu has-icon-start"
                aria-label="$i18n{OPEN_WITH_BUTTON_LABEL}"
                menu-item-selector="cr-menu-item, hr">
-      </cr-menu>
-
-      <cr-menu id="share-menu" class="chrome-menu files-menu"
-               aria-label="$i18n{MORE_ACTIONS_BUTTON_LABEL}"
-               menu-item-selector="cr-menu-item, hr">
-        <cr-menu-item command="#share"></cr-menu-item>
-        <cr-menu-item command="#share-with-linux"></cr-menu-item>
-        <cr-menu-item command="#manage-linux-sharing"></cr-menu-item>
-        <cr-menu-item command="#share-with-plugin-vm"></cr-menu-item>
-        <cr-menu-item command="#manage-plugin-vm-sharing"></cr-menu-item>
-        <hr id="drive-share-separator">
-        <hr id="more-actions-separator">
-        <cr-menu-item command="#show-submenu"
-                  visibleif="full-page" class="hide-on-toolbar"
-                  sub-menu="#share-sub-menu" hidden></cr-menu-item>
       </cr-menu>
 
       <cr-menu id="providers-menu"
@@ -350,8 +323,6 @@
         <cr-menu-item command="#delete">$i18n{DELETE_BUTTON_LABEL}</cr-menu-item>
       </cr-menu>
 
-      <cr-menu id="share-sub-menu" class="chrome-menu files-menu"
-               menu-item-selector="cr-menu-item">
       </cr-menu>
     </menus>
 
@@ -366,10 +337,10 @@
           <div class="content"></div>
         </div>
         <div class="progress"><div class="value"></div></div>
-        <cr-button class="import" tabindex="0">
+        <cr-button class="import action-button" tabindex="0">
           <span>$i18n{CLOUD_IMPORT_COMMAND}</span>
         </cr-button>
-        <cr-button class="cancel" tabindex="0">
+        <cr-button class="cancel cancel-button" tabindex="0">
           <span>$i18n{CLOUD_IMPORT_CANCEL_COMMAND}</span>
         </cr-button>
       </div>
@@ -413,14 +384,6 @@
             <button id="tasks" class="combobutton menu-button" menu="#tasks-menu"
                     tabindex="0" hidden
                     aria-label="$i18n{TASKS_BUTTON_LABEL}">
-            </button>
-            <button id="share-menu-button" class="icon-button menu-button" tabindex="0" hidden
-                    menu="#share-menu"
-                    aria-label="$i18n{SHARE_BUTTON_TOOLTIP}"
-                    aria-activedescendant="share-menu"
-                    has-tooltip>
-              <files-toggle-ripple></files-toggle-ripple>
-              <div class="icon"></div>
             </button>
             <cr-button id="sharesheet-button" class="icon-button menu-button" tabindex="0" hidden
                     aria-label="$i18n{SHARESHEET_BUTTON_LABEL}"
@@ -466,7 +429,7 @@
                 <div class="icon"></div>
               </cr-button>
               <div id="search-box">
-                <cr-input type="search" tabindex="0" disabled
+                <cr-input type="search" disabled
                     aria-label="$i18n{SEARCH_TEXT_LABEL}" placeholder="$i18n{SEARCH_TEXT_LABEL}">
                   <cr-button class="clear" slot="suffix" tabindex="0"
                     aria-label="$i18n{SEARCH_CLEAR_LABEL}" has-tooltip>
@@ -544,52 +507,27 @@
           <div class="main-panel">
             <div class="filelist-panel">
               <div id="banners"></div>
-              <div class="drive-welcome header"></div>
-              <div id="photos-welcome" class="photos-welcome-hidden" hidden></div>
-              <div class="holding-space-welcome" hidden style="height: 0; opacity: 0;"></div>
-              <div class="volume-warning banner-cloud-bg" id="volume-space-warning" hidden></div>
-              <div class="volume-warning banner-cloud-bg" id="drive-auth-failed-warning" hidden>
-                <div class="drive-icon"></div>
-                <div class="drive-text" id="drive-auth-failed-warning-text"></div>
-              </div>
-              <div class="volume-warning" id="offline-info-banner" hidden>
-                <div class="info-icon"></div>
-                <div id="offline-info-banner-text" class="body2-primary">
-                  $i18n{OFFLINE_BANNER_MESSAGE}
-                </div>
-                <div class="button-group">
-                  <cr-button id="offline-learn-more" class="banner-close text-button"
-                             aria-labelledby="offline-info-banner-text"
-                             aria-describedby="offline-learn-more"
-                             aria-disabled="false" role="button" tabindex="0">
-                    $i18n{DRIVE_LEARN_MORE}
-                  </cr-button>
-                </div>
-              </div>
-              <div class="downloads-warning" hidden></div>
-              <div id="trash-deleted-forever" class="trash-warning" hidden>
-                  $i18n{TRASH_DELETED_FOREVER}
-              </div>
-              <files-message id='files-message' hidden></files-message>
               <div id="file-type-filter-container" hidden></div>
               <div id="list-container" role="main">
                 <div id="more-actions-info" hidden>$i18n{SEE_MENU_FOR_ACTIONS}</div>
                 <div id="sort-column-asc" hidden>$i18n{COLUMN_ASC_SORT_MESSAGE}</div>
                 <div id="sort-column-desc" hidden>$i18n{COLUMN_DESC_SORT_MESSAGE}</div>
                 <div id="external-link-label" hidden>$i18n{EXTERNAL_LINK_MESSAGE}</div>
+                <div id="empty-folder" hidden>
+                  <div class="image">
+                    <svg>
+                      <use xlink:href="foreground/images/files/ui/empty_folder.svg#empty_folder"></use>
+                    </svg>
+                  </div>
+                  <span class="label"></span>
+                </div>
                 <div class="detail-table" id="detail-table" tabindex="0">
                 </div>
                 <grid class="thumbnail-grid" tabindex="0" hidden></grid>
-                <paper-progress class="loading-indicator" indeterminate hidden></paper-progress>
                 <files-spinner class="loading-indicator" hidden></files-spinner>
                 <div class="drive-welcome page"></div>
               </div>
             </div>
-          </div>
-          <div id="unmounted-panel"></div>
-          <div id="format-panel">
-            <div class="error"></div>
-            <button id="format-button" command="#format"></button>
           </div>
         </div>
         <div class="files-feedback-panels" visibleif="full-page">
@@ -616,7 +554,7 @@
           <div class="options" id="file-type-options" role="listbox"></div>
         </div>
         <div id="filename-input-box" visibleif="saveas-file">
-          <cr-input id="filename-input-textbox" tabindex="0" class="entry-name"
+          <cr-input id="filename-input-textbox" class="entry-name"
               type="text" spellcheck="false"
               placeholder="$i18n{FILENAME_LABEL}"></cr-input>
         </div>

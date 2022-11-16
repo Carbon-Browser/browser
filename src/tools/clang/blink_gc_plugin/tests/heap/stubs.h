@@ -181,8 +181,6 @@ class Visitor {
 };
 
 namespace internal {
-class GarbageCollectedBase {};
-
 class StrongMemberTag;
 class WeakMemberTag;
 
@@ -223,9 +221,9 @@ class BasicCrossThreadPersistent : public PersistentBase {
 }  // namespace internal
 
 template <typename T>
-class GarbageCollected : public internal::GarbageCollectedBase {};
+class GarbageCollected {};
 
-class GarbageCollectedMixin : public internal::GarbageCollectedBase {
+class GarbageCollectedMixin {
  public:
   virtual void AdjustAndMark(Visitor*) const = 0;
   virtual bool IsHeapObjectAlive(Visitor*) const = 0;
@@ -352,13 +350,12 @@ using namespace WTF;
   void* operator new(size_t) = delete; \
   void* operator new(size_t, void*) = delete;
 
-#define STACK_ALLOCATED()                                                \
- public:                                                                 \
-  using IsStackAllocatedTypeMarker [[maybe_unused]] = int;               \
-                                                                         \
- private:                                                                \
-  __attribute__((annotate("blink_stack_allocated"))) void* operator new( \
-      size_t) = delete;                                                  \
+#define STACK_ALLOCATED()                                  \
+ public:                                                   \
+  using IsStackAllocatedTypeMarker [[maybe_unused]] = int; \
+                                                           \
+ private:                                                  \
+  void* operator new(size_t) = delete;                     \
   void* operator new(size_t, void*) = delete;
 
 #define DISALLOW_NEW_EXCEPT_PLACEMENT_NEW() \

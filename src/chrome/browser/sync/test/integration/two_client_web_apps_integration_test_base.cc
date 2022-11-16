@@ -4,23 +4,16 @@
 
 #include "chrome/browser/sync/test/integration/two_client_web_apps_integration_test_base.h"
 
-#include "build/chromeos_buildflags.h"
 #include "chrome/browser/sync/test/integration/apps_helper.h"
 #include "chrome/browser/sync/test/integration/sync_service_impl_harness.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
-#include "chrome/common/chrome_features.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "services/network/public/cpp/network_switches.h"
 
-namespace web_app {
+namespace web_app::integration_tests {
 
 TwoClientWebAppsIntegrationTestBase::TwoClientWebAppsIntegrationTestBase()
-    : SyncTest(TWO_CLIENT), helper_(this) {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  // Disable WebAppsCrosapi, so that Web Apps get synced in the Ash browser.
-  scoped_feature_list_.InitAndDisableFeature(features::kWebAppsCrosapi);
-#endif
-}
+    : WebAppsSyncTestBase(TWO_CLIENT), helper_(this) {}
 
 // WebAppIntegrationBrowserTestBase::TestDelegate
 Browser* TwoClientWebAppsIntegrationTestBase::CreateBrowser(Profile* profile) {
@@ -31,8 +24,8 @@ void TwoClientWebAppsIntegrationTestBase::AddBlankTabAndShow(Browser* browser) {
   InProcessBrowserTest::AddBlankTabAndShow(browser);
 }
 
-net::EmbeddedTestServer*
-TwoClientWebAppsIntegrationTestBase::EmbeddedTestServer() {
+const net::EmbeddedTestServer*
+TwoClientWebAppsIntegrationTestBase::EmbeddedTestServer() const {
   return embedded_test_server();
 }
 
@@ -45,21 +38,20 @@ bool TwoClientWebAppsIntegrationTestBase::IsSyncTest() {
 }
 
 void TwoClientWebAppsIntegrationTestBase::SyncTurnOff() {
-  for (auto* client : GetSyncClients()) {
+  for (SyncServiceImplHarness* client : GetSyncClients()) {
     client->StopSyncServiceAndClearData();
   }
 }
 
 void TwoClientWebAppsIntegrationTestBase::SyncTurnOn() {
-  for (auto* client : GetSyncClients()) {
+  for (SyncServiceImplHarness* client : GetSyncClients()) {
     client->StartSyncService();
   }
   AwaitWebAppQuiescence();
 }
 
 void TwoClientWebAppsIntegrationTestBase::AwaitWebAppQuiescence() {
-  ASSERT_TRUE(AwaitQuiescence());
-  apps_helper::AwaitWebAppQuiescence(GetAllProfiles());
+  ASSERT_TRUE(apps_helper::AwaitWebAppQuiescence(GetAllProfiles()));
 }
 
 void TwoClientWebAppsIntegrationTestBase::SetUp() {
@@ -74,8 +66,9 @@ void TwoClientWebAppsIntegrationTestBase::SetUpOnMainThread() {
 }
 
 bool TwoClientWebAppsIntegrationTestBase::SetupClients() {
-  if (!SyncTest::SetupClients())
+  if (!SyncTest::SetupClients()) {
     return false;
+  }
 
   for (Profile* profile : GetAllProfiles()) {
     auto* web_app_provider = WebAppProvider::GetForTest(profile);
@@ -95,10 +88,7 @@ void TwoClientWebAppsIntegrationTestBase::SetUpCommandLine(
     base::CommandLine* command_line) {
   SyncTest::SetUpCommandLine(command_line);
   ASSERT_TRUE(embedded_test_server()->Start());
-  command_line->AppendSwitchASCII(
-      network::switches::kUnsafelyTreatInsecureOriginAsSecure,
-      helper_.GetInstallableAppURL("SiteA").GetOrigin().spec());
   command_line->AppendSwitch("disable-fake-server-failure-output");
 }
 
-}  // namespace web_app
+}  // namespace web_app::integration_tests

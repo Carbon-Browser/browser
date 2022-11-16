@@ -11,8 +11,8 @@
 #include <vector>
 
 #include "base/check.h"
-#include "base/containers/mru_cache.h"
-#include "base/macros.h"
+#include "base/containers/lru_cache.h"
+#include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
 #include "base/rand_util.h"
 #include "base/time/tick_clock.h"
@@ -48,6 +48,10 @@ class ReportingEndpointManagerImpl : public ReportingEndpointManager {
     DCHECK(delegate);
     DCHECK(cache);
   }
+
+  ReportingEndpointManagerImpl(const ReportingEndpointManagerImpl&) = delete;
+  ReportingEndpointManagerImpl& operator=(const ReportingEndpointManagerImpl&) =
+      delete;
 
   ~ReportingEndpointManagerImpl() override = default;
 
@@ -108,8 +112,7 @@ class ReportingEndpointManagerImpl : public ReportingEndpointManager {
 
     int random_index = rand_callback_.Run(0, total_weight - 1);
     int weight_so_far = 0;
-    for (size_t i = 0; i < available_endpoints.size(); ++i) {
-      const ReportingEndpoint& endpoint = available_endpoints[i];
+    for (const auto& endpoint : available_endpoints) {
       weight_so_far += endpoint.info.weight;
       if (random_index < weight_so_far) {
         return endpoint;
@@ -139,10 +142,10 @@ class ReportingEndpointManagerImpl : public ReportingEndpointManager {
  private:
   using EndpointBackoffKey = std::pair<NetworkIsolationKey, GURL>;
 
-  const ReportingPolicy* const policy_;
-  const base::TickClock* const tick_clock_;
-  const ReportingDelegate* const delegate_;
-  ReportingCache* const cache_;
+  const raw_ptr<const ReportingPolicy> policy_;
+  const raw_ptr<const base::TickClock> tick_clock_;
+  const raw_ptr<const ReportingDelegate> delegate_;
+  const raw_ptr<ReportingCache> cache_;
 
   RandIntCallback rand_callback_;
 
@@ -151,10 +154,8 @@ class ReportingEndpointManagerImpl : public ReportingEndpointManager {
   // to be cleared as well.
   // TODO(chlily): clear this data when endpoints are deleted to avoid unbounded
   // growth of this map.
-  base::MRUCache<EndpointBackoffKey, std::unique_ptr<net::BackoffEntry>>
+  base::LRUCache<EndpointBackoffKey, std::unique_ptr<net::BackoffEntry>>
       endpoint_backoff_;
-
-  DISALLOW_COPY_AND_ASSIGN(ReportingEndpointManagerImpl);
 };
 
 }  // namespace

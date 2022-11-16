@@ -27,7 +27,7 @@ class SourceUrlRecorderWebContentsObserverTest
 
   GURL GetAssociatedURLForWebContentsDocument() {
     const ukm::UkmSource* src = test_ukm_recorder_.GetSourceForSourceId(
-        ukm::GetSourceIdForWebContentsDocument(web_contents()));
+        web_contents()->GetPrimaryMainFrame()->GetPageUkmSourceId());
     return src ? src->url() : GURL();
   }
 
@@ -196,32 +196,6 @@ TEST_F(SourceUrlRecorderWebContentsObserverTest, SameDocumentNavigation) {
             full_nav_source2.navigation_time_msec());
   EXPECT_LE(full_nav_source2.navigation_time_msec(),
             same_doc_source2.navigation_time_msec());
-}
-
-TEST_F(SourceUrlRecorderWebContentsObserverTest,
-       SameDocumentNavigationDisabled) {
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitAndEnableFeatureWithParameters(
-      ukm::kUkmFeature, {{"MaxSameDocumentSourcesPerFullSource", "0"}});
-
-  GURL url("https://www.example.com/");
-  GURL same_document_url("https://www.example.com/#samedocument");
-  NavigationSimulator::NavigateAndCommitFromBrowser(web_contents(), url);
-  NavigationSimulator::CreateRendererInitiated(same_document_url, main_rfh())
-      ->CommitSameDocument();
-
-  EXPECT_EQ(same_document_url, web_contents()->GetLastCommittedURL());
-
-  const auto& sources = test_ukm_recorder_.GetSources();
-  // Expect two sources, one for navigation, one for document.
-  EXPECT_EQ(2ul, sources.size());
-  for (auto& kv : sources) {
-    EXPECT_EQ(url, kv.second->url());
-    EXPECT_EQ(1u, kv.second->urls().size());
-    EXPECT_FALSE(kv.second->navigation_data().is_same_document_navigation);
-  }
-
-  EXPECT_EQ(url, GetAssociatedURLForWebContentsDocument());
 }
 
 TEST_F(SourceUrlRecorderWebContentsObserverTest, NavigationMetadata) {

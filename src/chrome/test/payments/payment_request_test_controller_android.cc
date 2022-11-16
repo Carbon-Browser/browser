@@ -37,12 +37,9 @@ bool PaymentRequestTestController::ConfirmPayment() {
   return false;
 }
 
-bool PaymentRequestTestController::ConfirmMinimalUI() {
-  return ConfirmMinimalUIForTest();
-}
-
-bool PaymentRequestTestController::DismissMinimalUI() {
-  return DismissMinimalUIForTest();
+bool PaymentRequestTestController::ClickOptOut() {
+  NOTIMPLEMENTED();
+  return false;
 }
 
 bool PaymentRequestTestController::IsAndroidMarshmallowOrLollipop() {
@@ -79,8 +76,6 @@ void PaymentRequestTestController::SetUpOnMainThread() {
       base::BindRepeating(&PaymentRequestTestController::OnAbortCalled,
                           base::Unretained(this)),
       base::BindRepeating(&PaymentRequestTestController::OnCompleteCalled,
-                          base::Unretained(this)),
-      base::BindRepeating(&PaymentRequestTestController::OnMinimalUIReady,
                           base::Unretained(this)),
       base::BindRepeating(&PaymentRequestTestController::OnUIDisplayed,
                           base::Unretained(this)));
@@ -186,11 +181,6 @@ void PaymentRequestTestController::OnAbortCalled() {
 void PaymentRequestTestController::OnCompleteCalled() {
   if (observer_)
     observer_->OnCompleteCalled();
-}
-
-void PaymentRequestTestController::OnMinimalUIReady() {
-  if (observer_)
-    observer_->OnMinimalUIReady();
 }
 
 void PaymentRequestTestController::OnUIDisplayed() {

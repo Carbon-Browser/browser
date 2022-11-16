@@ -19,6 +19,7 @@
 #include "ash/shelf/shelf_navigation_widget.h"
 #include "ash/shelf/shelf_widget.h"
 #include "ash/shell.h"
+#include "ash/style/style_util.h"
 #include "ash/system/model/system_tray_model.h"
 #include "ash/system/status_area_widget.h"
 #include "ash/system/status_area_widget_delegate.h"
@@ -35,23 +36,21 @@
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/models/menu_model.h"
 #include "ui/base/ui_base_types.h"
+#include "ui/color/color_id.h"
+#include "ui/compositor/animation_throughput_reporter.h"
 #include "ui/compositor/layer.h"
-#include "ui/compositor/layer_animation_element.h"
-#include "ui/compositor/layer_animation_sequence.h"
-#include "ui/compositor/scoped_layer_animation_settings.h"
 #include "ui/gfx/animation/tween.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/color_utils.h"
 #include "ui/gfx/geometry/rect.h"
+#include "ui/gfx/geometry/rounded_corners_f.h"
 #include "ui/gfx/geometry/size.h"
+#include "ui/gfx/geometry/transform.h"
 #include "ui/gfx/interpolated_transform.h"
 #include "ui/gfx/scoped_canvas.h"
-#include "ui/gfx/transform.h"
 #include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/animation/animation_builder.h"
-#include "ui/views/animation/flood_fill_ink_drop_ripple.h"
 #include "ui/views/animation/ink_drop.h"
-#include "ui/views/animation/ink_drop_highlight.h"
 #include "ui/views/background.h"
 #include "ui/views/controls/focus_ring.h"
 #include "ui/views/controls/highlight_path_generator.h"
@@ -69,15 +68,14 @@ const int kAnimationDurationForBubblePopupMs = 200;
 
 // Duration of opacity animation for visibility changes.
 constexpr base::TimeDelta kAnimationDurationForVisibilityMs =
-    base::TimeDelta::FromMilliseconds(250);
+    base::Milliseconds(250);
 
 // Duration of opacity animation for hide animation.
-constexpr base::TimeDelta kAnimationDurationForHideMs =
-    base::TimeDelta::FromMilliseconds(100);
+constexpr base::TimeDelta kAnimationDurationForHideMs = base::Milliseconds(100);
 
 // Bounce animation constants
 const base::TimeDelta kAnimationDurationForBounceElement =
-    base::TimeDelta::FromMilliseconds(250);
+    base::Milliseconds(250);
 const int kAnimationBounceUpDistance = 16;
 const int kAnimationBounceDownDistance = 8;
 const float kAnimationBounceScaleFactor = 0.5;
@@ -85,14 +83,23 @@ const float kAnimationBounceScaleFactor = 0.5;
 // When becoming visible delay the animation so that StatusAreaWidgetDelegate
 // can animate sibling views out of the position to be occupied by the
 // TrayBackgroundView.
-const base::TimeDelta kShowAnimationDelayMs =
-    base::TimeDelta::FromMilliseconds(100);
+const base::TimeDelta kShowAnimationDelayMs = base::Milliseconds(100);
+
+// Number of active requests to disable CloseBubble().
+int g_disable_close_bubble_on_window_activated = 0;
+
+constexpr char kFadeInAnimationSmoothnessHistogramName[] =
+    "Ash.StatusArea.TrayBackgroundView.FadeIn";
+constexpr char kBounceInAnimationSmoothnessHistogramName[] =
+    "Ash.StatusArea.TrayBackgroundView.BounceIn";
+constexpr char kHideAnimationSmoothnessHistogramName[] =
+    "Ash.StatusArea.TrayBackgroundView.Hide";
 
 // Switches left and right insets if RTL mode is active.
 void MirrorInsetsIfNecessary(gfx::Insets* insets) {
   if (base::i18n::IsRTL()) {
-    insets->Set(insets->top(), insets->right(), insets->bottom(),
-                insets->left());
+    *insets = gfx::Insets::TLBR(insets->top(), insets->right(),
+                                insets->bottom(), insets->left());
   }
 }
 
@@ -106,11 +113,13 @@ gfx::Insets GetMirroredBackgroundInsets(bool is_shelf_horizontal) {
       -ash::ShelfConfig::Get()->status_area_hit_region_padding();
 
   if (is_shelf_horizontal) {
-    insets.Set(secondary_padding, primary_padding, secondary_padding,
-               primary_padding + ash::kTraySeparatorWidth);
+    insets =
+        gfx::Insets::TLBR(secondary_padding, primary_padding, secondary_padding,
+                          primary_padding + ash::kTraySeparatorWidth);
   } else {
-    insets.Set(primary_padding, secondary_padding,
-               primary_padding + ash::kTraySeparatorWidth, secondary_padding);
+    insets = gfx::Insets::TLBR(primary_padding, secondary_padding,
+                               primary_padding + ash::kTraySeparatorWidth,
+                               secondary_padding);
   }
   MirrorInsetsIfNecessary(&insets);
   return insets;
@@ -131,8 +140,8 @@ class HighlightPathGenerator : public views::HighlightPathGenerator {
   // HighlightPathGenerator:
   absl::optional<gfx::RRectF> GetRoundRect(const gfx::RectF& rect) override {
     gfx::RectF bounds(tray_background_view_->GetBackgroundBounds());
-    bounds.Inset(insets_);
-    return gfx::RRectF(bounds, ShelfConfig::Get()->control_border_radius());
+    bounds.Inset(gfx::InsetsF(insets_));
+    return gfx::RRectF(bounds, tray_background_view_->GetRoundedCorners());
   }
 
  private:
@@ -147,6 +156,9 @@ class HighlightPathGenerator : public views::HighlightPathGenerator {
 class TrayBackgroundView::TrayWidgetObserver : public views::WidgetObserver {
  public:
   explicit TrayWidgetObserver(TrayBackgroundView* host) : host_(host) {}
+
+  TrayWidgetObserver(const TrayWidgetObserver&) = delete;
+  TrayWidgetObserver& operator=(const TrayWidgetObserver&) = delete;
 
   void OnWidgetBoundsChanged(views::Widget* widget,
                              const gfx::Rect& new_bounds) override {
@@ -163,8 +175,6 @@ class TrayBackgroundView::TrayWidgetObserver : public views::WidgetObserver {
   TrayBackgroundView* host_;
   base::ScopedMultiSourceObservation<views::Widget, views::WidgetObserver>
       observations_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(TrayWidgetObserver);
 };
 
 // Handles `TrayBackgroundView`'s animation on session changed.
@@ -205,68 +215,36 @@ class TrayBackgroundView::TrayBackgroundViewSessionChangeHandler
 ////////////////////////////////////////////////////////////////////////////////
 // TrayBackgroundView
 
-TrayBackgroundView::TrayBackgroundView(Shelf* shelf)
+TrayBackgroundView::TrayBackgroundView(Shelf* shelf,
+                                       RoundedCornerBehavior corner_behavior)
     // Note the ink drop style is ignored.
     : ActionableView(TrayPopupInkDropStyle::FILL_BOUNDS),
       shelf_(shelf),
-      tray_container_(new TrayContainer(shelf)),
+      tray_container_(new TrayContainer(shelf, this)),
       is_active_(false),
       separator_visible_(true),
       visible_preferred_(false),
       show_with_virtual_keyboard_(false),
       show_when_collapsed_(true),
+      corner_behavior_(corner_behavior),
       widget_observer_(new TrayWidgetObserver(this)),
       handler_(new TrayBackgroundViewSessionChangeHandler(this)) {
   DCHECK(shelf_);
   SetNotifyEnterExitOnChild(true);
 
-  auto ripple_attributes = AshColorProvider::Get()->GetRippleAttributes();
-  views::InkDrop::Get(this)->SetBaseColor(ripple_attributes.base_color);
-  views::InkDrop::Get(this)->SetVisibleOpacity(
-      ripple_attributes.inkdrop_opacity);
-
+  // Override the settings of inkdrop ripple only since others like Highlight
+  // has been set up in the base class ActionableView.
+  StyleUtil::SetRippleParams(this, GetBackgroundInsets());
   views::InkDrop::Get(this)->SetMode(
       views::InkDropHost::InkDropMode::ON_NO_GESTURE_HANDLER);
-  views::InkDrop::Get(this)->SetCreateHighlightCallback(base::BindRepeating(
-      [](TrayBackgroundView* host) {
-        gfx::Rect bounds = host->GetBackgroundBounds();
-        // Currently, we don't handle view resize. To compensate for that,
-        // enlarge the bounds by two tray icons so that the highlight looks good
-        // even if two more icons are added when it is visible. Note that ink
-        // drop mask handles resize correctly, so the extra highlight would be
-        // clipped.
-        // TODO(mohsen): Remove this extra size when resize is handled properly
-        // (see https://crbug.com/669253).
-        const int icon_size = kTrayIconSize + 2 * kTrayImageItemPadding;
-        bounds.set_width(bounds.width() + 2 * icon_size);
-        bounds.set_height(bounds.height() + 2 * icon_size);
-        const AshColorProvider::RippleAttributes ripple_attributes =
-            AshColorProvider::Get()->GetRippleAttributes();
-        auto highlight = std::make_unique<views::InkDropHighlight>(
-            gfx::SizeF(bounds.size()), ripple_attributes.base_color);
-        highlight->set_visible_opacity(ripple_attributes.highlight_opacity);
-        return highlight;
-      },
-      this));
-  views::InkDrop::Get(this)->SetCreateRippleCallback(base::BindRepeating(
-      [](TrayBackgroundView* host) -> std::unique_ptr<views::InkDropRipple> {
-        const AshColorProvider::RippleAttributes ripple_attributes =
-            AshColorProvider::Get()->GetRippleAttributes();
-        return std::make_unique<views::FloodFillInkDropRipple>(
-            host->size(), host->GetBackgroundInsets(),
-            views::InkDrop::Get(host)->GetInkDropCenterBasedOnLastEvent(),
-            ripple_attributes.base_color, ripple_attributes.inkdrop_opacity);
-      },
-      this));
 
   SetLayoutManager(std::make_unique<views::FillLayout>());
   SetInstallFocusRingOnFocus(true);
 
-  views::FocusRing* const focus_ring = views::FocusRing::Get(this);
-  focus_ring->SetColor(AshColorProvider::Get()->GetControlsLayerColor(
-      AshColorProvider::ControlsLayerType::kFocusRingColor));
-  focus_ring->SetPathGenerator(std::make_unique<HighlightPathGenerator>(
-      this, kTrayBackgroundFocusPadding));
+  views::FocusRing::Get(this)->SetPathGenerator(
+      std::make_unique<HighlightPathGenerator>(this,
+                                               kTrayBackgroundFocusPadding));
+  views::FocusRing::Get(this)->SetColorId(ui::kColorAshFocusRing);
   SetFocusPainter(nullptr);
 
   views::HighlightPathGenerator::Install(
@@ -306,8 +284,7 @@ void TrayBackgroundView::InitializeBubbleAnimations(
       window, ::wm::WINDOW_VISIBILITY_ANIMATION_TYPE_FADE);
   ::wm::SetWindowVisibilityAnimationTransition(window, ::wm::ANIMATE_HIDE);
   ::wm::SetWindowVisibilityAnimationDuration(
-      window,
-      base::TimeDelta::FromMilliseconds(kAnimationDurationForBubblePopupMs));
+      window, base::Milliseconds(kAnimationDurationForBubblePopupMs));
 }
 
 void TrayBackgroundView::SetVisiblePreferred(bool visible_preferred) {
@@ -325,6 +302,37 @@ void TrayBackgroundView::SetVisiblePreferred(bool visible_preferred) {
 
 bool TrayBackgroundView::IsShowingMenu() const {
   return context_menu_runner_ && context_menu_runner_->IsRunning();
+}
+
+gfx::RoundedCornersF TrayBackgroundView::GetRoundedCorners() {
+  const float radius = ShelfConfig::Get()->control_border_radius();
+  if (shelf_->IsHorizontalAlignment()) {
+    gfx::RoundedCornersF start_rounded = {
+        radius, kUnifiedTrayNonRoundedSideRadius,
+        kUnifiedTrayNonRoundedSideRadius, radius};
+    gfx::RoundedCornersF end_rounded = {kUnifiedTrayNonRoundedSideRadius,
+                                        radius, radius,
+                                        kUnifiedTrayNonRoundedSideRadius};
+    switch (corner_behavior_) {
+      case kAllRounded:
+        return {radius, radius, radius, radius};
+      case kStartRounded:
+        return base::i18n::IsRTL() ? end_rounded : start_rounded;
+      case kEndRounded:
+        return base::i18n::IsRTL() ? start_rounded : end_rounded;
+    }
+  }
+
+  switch (corner_behavior_) {
+    case kAllRounded:
+      return {radius, radius, radius, radius};
+    case kStartRounded:
+      return {radius, radius, kUnifiedTrayNonRoundedSideRadius,
+              kUnifiedTrayNonRoundedSideRadius};
+    case kEndRounded:
+      return {kUnifiedTrayNonRoundedSideRadius,
+              kUnifiedTrayNonRoundedSideRadius, radius, radius};
+  }
 }
 
 void TrayBackgroundView::StartVisibilityAnimation(bool visible) {
@@ -378,6 +386,18 @@ base::ScopedClosureRunner TrayBackgroundView::DisableShowAnimation() {
       weak_factory_.GetWeakPtr()));
 }
 
+base::ScopedClosureRunner
+TrayBackgroundView::DisableCloseBubbleOnWindowActivated() {
+  ++g_disable_close_bubble_on_window_activated;
+  return base::ScopedClosureRunner(
+      base::BindOnce([]() { --g_disable_close_bubble_on_window_activated; }));
+}
+
+// static
+bool TrayBackgroundView::ShouldCloseBubbleOnWindowActivated() {
+  return g_disable_close_bubble_on_window_activated == 0;
+}
+
 void TrayBackgroundView::UpdateStatusArea(bool should_log_visible_pod_count) {
   auto* status_area_widget = shelf_->GetStatusAreaWidget();
   if (status_area_widget) {
@@ -406,7 +426,7 @@ void TrayBackgroundView::ShowContextMenuForViewImpl(
   if (!context_menu_model_)
     return;
 
-  const int run_types = views::MenuRunner::USE_TOUCHABLE_LAYOUT |
+  const int run_types = views::MenuRunner::USE_ASH_SYS_UI_LAYOUT |
                         views::MenuRunner::CONTEXT_MENU |
                         views::MenuRunner::FIXED_ANCHOR;
   context_menu_runner_ = std::make_unique<views::MenuRunner>(
@@ -471,6 +491,9 @@ std::unique_ptr<ui::Layer> TrayBackgroundView::RecreateLayer() {
 void TrayBackgroundView::OnThemeChanged() {
   ActionableView::OnThemeChanged();
   UpdateBackground();
+  StyleUtil::ConfigureInkDropAttributes(this, StyleUtil::kBaseColor |
+                                                  StyleUtil::kInkDropOpacity |
+                                                  StyleUtil::kHighlightOpacity);
 }
 
 void TrayBackgroundView::OnVirtualKeyboardVisibilityChanged() {
@@ -486,8 +509,6 @@ TrayBubbleView* TrayBackgroundView::GetBubbleView() {
 views::Widget* TrayBackgroundView::GetBubbleWidget() const {
   return nullptr;
 }
-
-void TrayBackgroundView::CloseBubble() {}
 
 void TrayBackgroundView::ShowBubble() {}
 
@@ -510,29 +531,17 @@ void TrayBackgroundView::UpdateAfterStatusAreaCollapseChange() {
 
 void TrayBackgroundView::BubbleResized(const TrayBubbleView* bubble_view) {}
 
+void TrayBackgroundView::OnAnyBubbleVisibilityChanged(
+    views::Widget* bubble_widget,
+    bool visible) {}
+
 void TrayBackgroundView::UpdateBackground() {
-  const float radius = ShelfConfig::Get()->control_border_radius();
-  gfx::RoundedCornersF rounded_corners = {radius, radius, radius, radius};
-  layer()->SetRoundedCornerRadius(rounded_corners);
+  layer()->SetRoundedCornerRadius(GetRoundedCorners());
   layer()->SetIsFastRoundedCorner(true);
   layer()->SetBackgroundBlur(
       ShelfConfig::Get()->GetShelfControlButtonBlurRadius());
   layer()->SetColor(ShelfConfig::Get()->GetShelfControlButtonColor());
   layer()->SetClipRect(GetBackgroundBounds());
-}
-
-// TODO(crbug.com/1236069): Remove the need to subclass LayerAnimationObserver
-// after converting animations to use builder.
-void TrayBackgroundView::OnLayerAnimationEnded(
-    ui::LayerAnimationSequence* sequence) {
-  OnAnimationEnded();
-}
-
-// TODO(crbug.com/1236069): Remove the need to subclass LayerAnimationObserver
-// after converting animations to use builder.
-void TrayBackgroundView::OnLayerAnimationAborted(
-    ui::LayerAnimationSequence* sequence) {
-  OnAnimationAborted();
 }
 
 void TrayBackgroundView::OnAnimationAborted() {
@@ -545,39 +554,45 @@ void TrayBackgroundView::OnAnimationEnded() {
 }
 
 void TrayBackgroundView::FadeInAnimation() {
-  std::unique_ptr<ui::LayerAnimationSequence> fade_sequence =
-      std::make_unique<ui::LayerAnimationSequence>();
-  fade_sequence->AddObserver(this);
-  std::unique_ptr<ui::LayerAnimationElement> fade_in =
-      ui::LayerAnimationElement::CreateOpacityElement(
-          1.0f, kAnimationDurationForVisibilityMs);
-  fade_sequence->AddElement(ui::LayerAnimationElement::CreatePauseElement(
-      ui::LayerAnimationElement::OPACITY, kShowAnimationDelayMs));
-  fade_sequence->AddElement(
-      ui::LayerAnimationElement::CreateOpacityElement(0.0f, base::TimeDelta()));
-  fade_sequence->AddElement(std::move(fade_in));
-
   gfx::Transform transform;
   if (shelf_->IsHorizontalAlignment())
     transform.Translate(width(), 0.0f);
   else
     transform.Translate(0.0f, height());
 
-  std::unique_ptr<ui::LayerAnimationSequence> translate_sequence =
-      std::make_unique<ui::LayerAnimationSequence>();
-  translate_sequence->AddElement(ui::LayerAnimationElement::CreatePauseElement(
-      ui::LayerAnimationElement::TRANSFORM, kShowAnimationDelayMs));
-  translate_sequence->AddElement(
-      ui::LayerAnimationElement::CreateTransformElement(transform,
-                                                        base::TimeDelta()));
-  translate_sequence->AddElement(
-      ui::LayerAnimationElement::CreateTransformElement(
-          gfx::Transform(), kAnimationDurationForVisibilityMs));
+  ui::AnimationThroughputReporter reporter(
+      layer()->GetAnimator(),
+      metrics_util::ForSmoothness(base::BindRepeating([](int smoothness) {
+        DCHECK(0 <= smoothness && smoothness <= 100);
+        base::UmaHistogramPercentage(kFadeInAnimationSmoothnessHistogramName,
+                                     smoothness);
+      })));
 
-  layer()->GetAnimator()->set_preemption_strategy(
-      ui::LayerAnimator::IMMEDIATELY_ANIMATE_TO_NEW_TARGET);
-  layer()->GetAnimator()->StartTogether(
-      {fade_sequence.release(), translate_sequence.release()});
+  views::AnimationBuilder()
+      .SetPreemptionStrategy(
+          ui::LayerAnimator::IMMEDIATELY_ANIMATE_TO_NEW_TARGET)
+      .OnAborted(base::BindOnce(
+          [](base::WeakPtr<TrayBackgroundView> view) {
+            if (view)
+              view->OnAnimationAborted();
+          },
+          weak_factory_.GetWeakPtr()))
+      .OnEnded(base::BindOnce(
+          [](base::WeakPtr<TrayBackgroundView> view) {
+            if (view)
+              view->OnAnimationEnded();
+          },
+          weak_factory_.GetWeakPtr()))
+      .Once()
+      .SetDuration(kShowAnimationDelayMs)
+      .Then()
+      .SetDuration(base::TimeDelta())
+      .SetOpacity(this, 0.0f)
+      .SetTransform(this, transform)
+      .Then()
+      .SetDuration(kAnimationDurationForVisibilityMs)
+      .SetOpacity(this, 1.0f)
+      .SetTransform(this, gfx::Transform());
 }
 
 void TrayBackgroundView::BounceInAnimation() {
@@ -614,9 +629,29 @@ void TrayBackgroundView::BounceInAnimation() {
   gfx::Transform move_down;
   move_down.Translate(bounce_down_location);
 
+  ui::AnimationThroughputReporter reporter(
+      layer()->GetAnimator(),
+      metrics_util::ForSmoothness(base::BindRepeating([](int smoothness) {
+        DCHECK(0 <= smoothness && smoothness <= 100);
+        base::UmaHistogramPercentage(kBounceInAnimationSmoothnessHistogramName,
+                                     smoothness);
+      })));
+
   views::AnimationBuilder()
       .SetPreemptionStrategy(
           ui::LayerAnimator::IMMEDIATELY_ANIMATE_TO_NEW_TARGET)
+      .OnAborted(base::BindOnce(
+          [](base::WeakPtr<TrayBackgroundView> view) {
+            if (view)
+              view->OnAnimationAborted();
+          },
+          weak_factory_.GetWeakPtr()))
+      .OnEnded(base::BindOnce(
+          [](base::WeakPtr<TrayBackgroundView> view) {
+            if (view)
+              view->OnAnimationEnded();
+          },
+          weak_factory_.GetWeakPtr()))
       .Once()
       .SetDuration(base::TimeDelta())
       .SetOpacity(this, 1.0)
@@ -630,52 +665,47 @@ void TrayBackgroundView::BounceInAnimation() {
       .SetTransform(this, std::move(move_down), gfx::Tween::EASE_OUT_4)
       .Then()
       .SetDuration(kAnimationDurationForBounceElement)
-      .SetTransform(this, gfx::Transform(), gfx::Tween::FAST_OUT_SLOW_IN_3)
-      .OnAborted(base::BindOnce(&TrayBackgroundView::OnAnimationAborted,
-                                base::Unretained(this)))
-      .OnEnded(base::BindOnce(&TrayBackgroundView::OnAnimationEnded,
-                              base::Unretained(this)));
+      .SetTransform(this, gfx::Transform(), gfx::Tween::FAST_OUT_SLOW_IN_3);
 }
 
 // Any visibility updates should be called after the hide animation is
 // finished, otherwise the view will disappear immediately without animation
 // once the view's visibility is set to false.
 void TrayBackgroundView::HideAnimation() {
-  std::unique_ptr<ui::LayerAnimationSequence> visible_sequence =
-      std::make_unique<ui::LayerAnimationSequence>();
-  // Sets animator's target visibility to false.
-  std::unique_ptr<ui::LayerAnimationElement> visible_element =
-      ui::LayerAnimationElement::CreateVisibilityElement(
-          false, kAnimationDurationForHideMs);
-  visible_sequence->AddElement(std::move(visible_element));
+  gfx::Transform scale;
+  scale.Scale3d(kAnimationBounceScaleFactor, kAnimationBounceScaleFactor, 1);
 
-  std::unique_ptr<ui::InterpolatedTransform> scale =
-      std::make_unique<ui::InterpolatedScale>(
-          gfx::Point3F(1, 1, 1), gfx::Point3F(kAnimationBounceScaleFactor,
-                                              kAnimationBounceScaleFactor, 1));
-  std::unique_ptr<ui::InterpolatedTransform> scale_about_pivot =
-      std::make_unique<ui::InterpolatedTransformAboutPivot>(
-          GetLocalBounds().CenterPoint(), std::move(scale));
-  std::unique_ptr<ui::LayerAnimationElement> scale_down =
-      ui::LayerAnimationElement::CreateInterpolatedTransformElement(
-          std::move(scale_about_pivot), kAnimationDurationForHideMs);
-  std::unique_ptr<ui::LayerAnimationSequence> scale_sequence =
-      std::make_unique<ui::LayerAnimationSequence>();
-  scale_sequence->AddElement(std::move(scale_down));
+  gfx::Transform scale_about_pivot =
+      gfx::TransformAboutPivot(GetLocalBounds().CenterPoint(), scale);
 
-  std::unique_ptr<ui::LayerAnimationSequence> fade_sequence =
-      std::make_unique<ui::LayerAnimationSequence>();
-  std::unique_ptr<ui::LayerAnimationElement> fade_out =
-      ui::LayerAnimationElement::CreateOpacityElement(
-          0.0f, kAnimationDurationForHideMs);
-  fade_sequence->AddElement(std::move(fade_out));
-  fade_sequence->AddObserver(this);
+  ui::AnimationThroughputReporter reporter(
+      layer()->GetAnimator(),
+      metrics_util::ForSmoothness(base::BindRepeating([](int smoothness) {
+        DCHECK(0 <= smoothness && smoothness <= 100);
+        base::UmaHistogramPercentage(kHideAnimationSmoothnessHistogramName,
+                                     smoothness);
+      })));
 
-  layer()->GetAnimator()->set_preemption_strategy(
-      ui::LayerAnimator::IMMEDIATELY_ANIMATE_TO_NEW_TARGET);
-  layer()->GetAnimator()->StartTogether({visible_sequence.release(),
-                                         fade_sequence.release(),
-                                         scale_sequence.release()});
+  views::AnimationBuilder()
+      .SetPreemptionStrategy(
+          ui::LayerAnimator::IMMEDIATELY_ANIMATE_TO_NEW_TARGET)
+      .OnAborted(base::BindOnce(
+          [](base::WeakPtr<TrayBackgroundView> view) {
+            if (view)
+              view->OnAnimationAborted();
+          },
+          weak_factory_.GetWeakPtr()))
+      .OnEnded(base::BindOnce(
+          [](base::WeakPtr<TrayBackgroundView> view) {
+            if (view)
+              view->OnAnimationEnded();
+          },
+          weak_factory_.GetWeakPtr()))
+      .Once()
+      .SetDuration(kAnimationDurationForHideMs)
+      .SetVisibility(this, false)
+      .SetTransform(this, std::move(scale_about_pivot))
+      .SetOpacity(this, 0.0f);
 }
 
 void TrayBackgroundView::SetIsActive(bool is_active) {
@@ -697,11 +727,11 @@ gfx::Insets TrayBackgroundView::GetBubbleAnchorInsets() const {
   gfx::Insets tray_bg_insets = GetInsets();
   if (shelf_->alignment() == ShelfAlignment::kBottom ||
       shelf_->alignment() == ShelfAlignment::kBottomLocked) {
-    return gfx::Insets(-tray_bg_insets.top(), anchor_insets.left(),
-                       -tray_bg_insets.bottom(), anchor_insets.right());
+    return gfx::Insets::TLBR(-tray_bg_insets.top(), anchor_insets.left(),
+                             -tray_bg_insets.bottom(), anchor_insets.right());
   } else {
-    return gfx::Insets(anchor_insets.top(), -tray_bg_insets.left(),
-                       anchor_insets.bottom(), -tray_bg_insets.right());
+    return gfx::Insets::TLBR(anchor_insets.top(), -tray_bg_insets.left(),
+                             anchor_insets.bottom(), -tray_bg_insets.right());
   }
 }
 
@@ -767,7 +797,7 @@ gfx::Insets TrayBackgroundView::GetBackgroundInsets() const {
   insets += local_contents_insets;
 
   if (Shell::Get()->IsInTabletMode() && ShelfConfig::Get()->is_in_app()) {
-    insets += gfx::Insets(
+    insets += gfx::Insets::VH(
         ShelfConfig::Get()->in_app_control_button_height_inset(), 0);
   }
 
@@ -777,8 +807,12 @@ gfx::Insets TrayBackgroundView::GetBackgroundInsets() const {
 bool TrayBackgroundView::GetEffectiveVisibility() {
   // When the virtual keyboard is visible, the effective visibility of the view
   // is solely determined by |show_with_virtual_keyboard_|.
-  if (Shell::Get()->system_tray_model()->virtual_keyboard()->visible())
+  if (Shell::Get()
+          ->system_tray_model()
+          ->virtual_keyboard()
+          ->arc_keyboard_visible()) {
     return show_with_virtual_keyboard_;
+  }
 
   if (!visible_preferred_)
     return false;

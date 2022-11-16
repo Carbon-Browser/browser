@@ -1,6 +1,6 @@
 # CRDTP - Chrome DevTools Protocol Library.
 
-[Canonical location for this library.](https://chromium.googlesource.com/deps/inspector_protocol/+/refs/heads/master)
+[Canonical location for this library.](https://chromium.googlesource.com/deps/inspector_protocol/+/refs/heads/main)
 
 This is a support library for the Chrome DevTools protocol implementation.
 
@@ -41,7 +41,7 @@ For output parameters:
 # Building and running the tests.
 
 If you're familiar with
-[Chromium's development process](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/docs/contributing.md)
+[Chromium's development process](https://www.chromium.org/developers/contributing-code)
 and have the depot_tools installed, you may use these commands
 to fetch the package (and dependencies) and build and run the tests:
 

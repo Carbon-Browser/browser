@@ -16,7 +16,6 @@
 #include "base/guid.h"
 #include "base/i18n/case_conversion.h"
 #include "base/i18n/string_search.h"
-#include "base/macros.h"
 #include "base/metrics/user_metrics_action.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
@@ -25,7 +24,6 @@
 #include "build/build_config.h"
 #include "components/bookmarks/browser/bookmark_client.h"
 #include "components/bookmarks/browser/bookmark_model.h"
-#include "components/bookmarks/browser/features.h"
 #include "components/bookmarks/browser/scoped_group_bookmark_actions.h"
 #include "components/bookmarks/common/bookmark_pref_names.h"
 #include "components/pref_registry/pref_registry_syncable.h"
@@ -61,8 +59,10 @@ void CloneBookmarkNodeImpl(BookmarkModel* model,
     Time date_added = reset_node_times ? Time::Now() : element.date_added;
     DCHECK(!date_added.is_null());
 
-    model->AddURL(parent, index_to_add_at, element.title, element.url,
-                  &meta_info_map, date_added);
+    const BookmarkNode* node = model->AddNewURL(
+        parent, index_to_add_at, element.title, element.url, &meta_info_map);
+    model->SetDateAdded(node, date_added);
+
   } else {
     const BookmarkNode* cloned_node = model->AddFolder(
         parent, index_to_add_at, element.title, &meta_info_map);
@@ -146,7 +146,7 @@ std::string TruncateUrl(const std::string& url) {
 // returned.
 GURL GetUrlFromClipboard(bool notify_if_restricted) {
   std::u16string url_text;
-#if !defined(OS_IOS)
+#if !BUILDFLAG(IS_IOS)
   ui::DataTransferEndpoint data_dst = ui::DataTransferEndpoint(
       ui::EndpointType::kDefault, notify_if_restricted);
   ui::Clipboard::GetForCurrentThread()->ReadText(
@@ -180,7 +180,7 @@ void GetBookmarksMatchingPropertiesImpl(
   }
 }
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 // Returns whether or not a bookmark model contains any bookmarks aside of the
 // permanent nodes.
 bool HasUserCreatedBookmarks(BookmarkModel* model) {
@@ -199,6 +199,8 @@ QueryFields::~QueryFields() {}
 
 VectorIterator::VectorIterator(std::vector<const BookmarkNode*>* nodes)
     : nodes_(nodes), current_(nodes->begin()) {}
+
+VectorIterator::~VectorIterator() = default;
 
 bool VectorIterator::has_next() {
   return (current_ != nodes_->end());
@@ -429,28 +431,21 @@ bool DoesBookmarkContainWords(const std::u16string& title,
          DoesBookmarkTextContainWords(base::UTF8ToUTF16(url.spec()), words) ||
          DoesBookmarkTextContainWords(
              url_formatter::FormatUrl(url, url_formatter::kFormatUrlOmitNothing,
-                                      net::UnescapeRule::NORMAL, nullptr,
+                                      base::UnescapeRule::NORMAL, nullptr,
                                       nullptr, nullptr),
              words);
 }
 
 void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry) {
   registry->RegisterBooleanPref(
-      prefs::kShowBookmarkBar,
-      false,
+      prefs::kShowBookmarkBar, false,
       user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
   registry->RegisterBooleanPref(prefs::kEditBookmarksEnabled, true);
   registry->RegisterBooleanPref(
-      prefs::kShowAppsShortcutInBookmarkBar,
-      base::FeatureList::IsEnabled(features::kAppsShortcutDefaultOff) ? false
-                                                                      : true,
+      prefs::kShowAppsShortcutInBookmarkBar, false,
       user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
   registry->RegisterBooleanPref(
-      prefs::kShowReadingListInBookmarkBar, true,
-      user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
-  registry->RegisterBooleanPref(
-      prefs::kShowManagedBookmarksInBookmarkBar,
-      true,
+      prefs::kShowManagedBookmarksInBookmarkBar, true,
       user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
   RegisterManagedBookmarksPrefs(registry);
 }
@@ -506,7 +501,7 @@ void AddIfNotBookmarked(BookmarkModel* model,
     return;  // Nothing to do, a user bookmark with that url already exists.
   model->client()->RecordAction(base::UserMetricsAction("BookmarkAdded"));
   const BookmarkNode* parent = GetParentForNewNodes(model);
-  model->AddURL(parent, parent->children().size(), title, url);
+  model->AddNewURL(parent, parent->children().size(), title, url);
 }
 
 void RemoveAllBookmarks(BookmarkModel* model, const GURL& url) {
@@ -529,8 +524,8 @@ std::u16string CleanUpUrlForMatching(
   return base::i18n::ToLower(url_formatter::FormatUrlWithAdjustments(
       GURL(TruncateUrl(gurl.spec())),
       url_formatter::kFormatUrlOmitUsernamePassword,
-      net::UnescapeRule::SPACES | net::UnescapeRule::PATH_SEPARATORS |
-          net::UnescapeRule::URL_SPECIAL_CHARS_EXCEPT_PATH_SEPARATORS,
+      base::UnescapeRule::SPACES | base::UnescapeRule::PATH_SEPARATORS |
+          base::UnescapeRule::URL_SPECIAL_CHARS_EXCEPT_PATH_SEPARATORS,
       nullptr, nullptr, adjustments ? adjustments : &tmp_adjustments));
 }
 
@@ -577,7 +572,7 @@ bool HasDescendantsOf(const std::vector<const BookmarkNode*>& list,
 }
 
 const BookmarkNode* GetParentForNewNodes(BookmarkModel* model) {
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   if (!HasUserCreatedBookmarks(model))
     return model->mobile_node();
 #endif

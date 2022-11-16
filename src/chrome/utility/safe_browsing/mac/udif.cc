@@ -13,11 +13,12 @@
 #include <memory>
 #include <utility>
 
-#include "base/cxx17_backports.h"
 #include "base/logging.h"
 #include "base/mac/foundation_util.h"
 #include "base/mac/scoped_cftyperef.h"
+#include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
+#include "base/numerics/ostream_operators.h"
 #include "base/numerics/safe_math.h"
 #include "base/strings/sys_string_conversions.h"
 #include "chrome/utility/safe_browsing/mac/convert_big_endian.h"
@@ -43,7 +44,7 @@ struct UDIFChecksum {
 static void ConvertBigEndian(UDIFChecksum* checksum) {
   ConvertBigEndian(&checksum->type);
   ConvertBigEndian(&checksum->size);
-  for (size_t i = 0; i < base::size(checksum->data); ++i) {
+  for (size_t i = 0; i < std::size(checksum->data); ++i) {
     ConvertBigEndian(&checksum->data[i]);
   }
 }
@@ -191,6 +192,9 @@ class UDIFBlock {
  public:
   UDIFBlock() : block_() {}
 
+  UDIFBlock(const UDIFBlock&) = delete;
+  UDIFBlock& operator=(const UDIFBlock&) = delete;
+
   bool ParseBlockData(const UDIFBlockData* block_data,
                       size_t block_data_size,
                       uint16_t sector_size) {
@@ -265,8 +269,6 @@ class UDIFBlock {
  private:
   UDIFBlockData block_;
   std::vector<UDIFBlockChunk> chunks_;
-
-  DISALLOW_COPY_AND_ASSIGN(UDIFBlock);
 };
 
 #pragma pack(pop)
@@ -284,6 +286,10 @@ class UDIFPartitionReadStream : public ReadStream {
   UDIFPartitionReadStream(ReadStream* stream,
                           uint16_t block_size,
                           const UDIFBlock* partition_block);
+
+  UDIFPartitionReadStream(const UDIFPartitionReadStream&) = delete;
+  UDIFPartitionReadStream& operator=(const UDIFPartitionReadStream&) = delete;
+
   ~UDIFPartitionReadStream() override;
 
   bool Read(uint8_t* buffer, size_t buffer_size, size_t* bytes_read) override;
@@ -291,14 +297,12 @@ class UDIFPartitionReadStream : public ReadStream {
   off_t Seek(off_t offset, int whence) override;
 
  private:
-  ReadStream* const stream_;  // The UDIF stream.
+  const raw_ptr<ReadStream> stream_;  // The UDIF stream.
   const uint16_t block_size_;  // The UDIF block size.
-  const UDIFBlock* const block_;  // The block for this partition.
+  const raw_ptr<const UDIFBlock> block_;  // The block for this partition.
   uint64_t current_chunk_;  // The current chunk number.
   // The current chunk stream.
   std::unique_ptr<UDIFBlockChunkReadStream> chunk_stream_;
-
-  DISALLOW_COPY_AND_ASSIGN(UDIFPartitionReadStream);
 };
 
 // A ReadStream for a single block chunk, which transparently handles
@@ -308,6 +312,10 @@ class UDIFBlockChunkReadStream : public ReadStream {
   UDIFBlockChunkReadStream(ReadStream* stream,
                            uint16_t block_size,
                            const UDIFBlockChunk* chunk);
+
+  UDIFBlockChunkReadStream(const UDIFBlockChunkReadStream&) = delete;
+  UDIFBlockChunkReadStream& operator=(const UDIFBlockChunkReadStream&) = delete;
+
   ~UDIFBlockChunkReadStream() override;
 
   bool Read(uint8_t* buffer, size_t buffer_size, size_t* bytes_read) override;
@@ -333,14 +341,12 @@ class UDIFBlockChunkReadStream : public ReadStream {
   // |chunk_->compressed_offset| into |out_data|.
   bool ReadCompressedData(std::vector<uint8_t>* out_data);
 
-  ReadStream* const stream_;  // The UDIF stream.
-  const UDIFBlockChunk* const chunk_;  // The chunk to be read.
+  const raw_ptr<ReadStream> stream_;           // The UDIF stream.
+  const raw_ptr<const UDIFBlockChunk> chunk_;  // The chunk to be read.
   size_t length_in_bytes_;  // The decompressed length in bytes.
   size_t offset_;  // The offset into the decompressed buffer.
   std::vector<uint8_t> decompress_buffer_;  // Decompressed data buffer.
   bool did_decompress_;  // Whether or not the chunk has been decompressed.
-
-  DISALLOW_COPY_AND_ASSIGN(UDIFBlockChunkReadStream);
 };
 
 }  // namespace

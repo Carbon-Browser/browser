@@ -4,6 +4,7 @@
 
 #import "ios/web/find_in_page/find_in_page_java_script_feature.h"
 
+#include "base/no_destructor.h"
 #import "ios/web/find_in_page/find_in_page_constants.h"
 #include "ios/web/public/js_messaging/java_script_feature_util.h"
 #include "ios/web/public/js_messaging/web_frame.h"
@@ -13,8 +14,8 @@
 #endif
 
 namespace {
-const char kScriptName[] = "find_in_page_js";
-const char kEventListenersScriptName[] = "find_in_page_event_listeners_js";
+const char kScriptName[] = "find_in_page";
+const char kEventListenersScriptName[] = "find_in_page_event_listeners";
 
 // Timeout for the find within JavaScript in milliseconds.
 const double kFindInPageFindTimeout = 100.0;
@@ -69,7 +70,7 @@ bool FindInPageJavaScriptFeature::Search(
       frame, kFindInPageSearch, params,
       base::BindOnce(&FindInPageJavaScriptFeature::ProcessSearchResult,
                      base::Unretained(GetInstance()), std::move(callback)),
-      base::TimeDelta::FromMilliseconds(kJavaScriptFunctionCallTimeout));
+      base::Milliseconds(kJavaScriptFunctionCallTimeout));
 }
 
 void FindInPageJavaScriptFeature::Pump(
@@ -81,7 +82,7 @@ void FindInPageJavaScriptFeature::Pump(
       frame, kFindInPagePump, params,
       base::BindOnce(&FindInPageJavaScriptFeature::ProcessSearchResult,
                      base::Unretained(GetInstance()), std::move(callback)),
-      base::TimeDelta::FromMilliseconds(kJavaScriptFunctionCallTimeout));
+      base::Milliseconds(kJavaScriptFunctionCallTimeout));
 }
 
 void FindInPageJavaScriptFeature::SelectMatch(
@@ -90,9 +91,9 @@ void FindInPageJavaScriptFeature::SelectMatch(
     base::OnceCallback<void(const base::Value*)> callback) {
   std::vector<base::Value> params;
   params.push_back(base::Value(index));
-  CallJavaScriptFunction(
-      frame, kFindInPageSelectAndScrollToMatch, params, std::move(callback),
-      base::TimeDelta::FromMilliseconds(kJavaScriptFunctionCallTimeout));
+  CallJavaScriptFunction(frame, kFindInPageSelectAndScrollToMatch, params,
+                         std::move(callback),
+                         base::Milliseconds(kJavaScriptFunctionCallTimeout));
 }
 
 void FindInPageJavaScriptFeature::Stop(WebFrame* frame) {

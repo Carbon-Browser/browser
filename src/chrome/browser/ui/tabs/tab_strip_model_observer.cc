@@ -13,6 +13,18 @@
 
 using content::WebContents;
 
+TabStripModelChange::RemovedTab::RemovedTab(
+    content::WebContents* contents,
+    int index,
+    RemoveReason remove_reason,
+    absl::optional<SessionID> session_id)
+    : contents(contents),
+      index(index),
+      remove_reason(remove_reason),
+      session_id(session_id) {}
+TabStripModelChange::RemovedTab::~RemovedTab() = default;
+TabStripModelChange::RemovedTab::RemovedTab(RemovedTab&& other) = default;
+
 TabStripModelChange::Insert::Insert() = default;
 TabStripModelChange::Insert::Insert(Insert&& other) = default;
 TabStripModelChange::Insert& TabStripModelChange::Insert::operator=(Insert&&) =
@@ -141,10 +153,11 @@ TabStripSelectionChange& TabStripSelectionChange::operator=(
 ////////////////////////////////////////////////////////////////////////////////
 // TabGroupChange
 //
-TabGroupChange::TabGroupChange(tab_groups::TabGroupId group,
+TabGroupChange::TabGroupChange(TabStripModel* model,
+                               tab_groups::TabGroupId group,
                                Type type,
                                std::unique_ptr<Delta> deltap)
-    : group(group), type(type), delta(std::move(deltap)) {}
+    : group(group), model(model), type(type), delta(std::move(deltap)) {}
 
 TabGroupChange::~TabGroupChange() = default;
 
@@ -156,9 +169,11 @@ const TabGroupChange::VisualsChange* TabGroupChange::GetVisualsChange() const {
   return static_cast<const VisualsChange*>(delta.get());
 }
 
-TabGroupChange::TabGroupChange(tab_groups::TabGroupId group,
+TabGroupChange::TabGroupChange(TabStripModel* model,
+                               tab_groups::TabGroupId group,
                                VisualsChange deltap)
-    : TabGroupChange(group,
+    : TabGroupChange(model,
+                     group,
                      Type::kVisualsChanged,
                      std::make_unique<VisualsChange>(std::move(deltap))) {}
 
@@ -179,6 +194,11 @@ void TabStripModelObserver::OnTabStripModelChanged(
     TabStripModel* tab_strip_model,
     const TabStripModelChange& change,
     const TabStripSelectionChange& selection) {}
+
+void TabStripModelObserver::OnTabWillBeAdded() {}
+
+void TabStripModelObserver::OnTabWillBeRemoved(content::WebContents* contents,
+                                               int index) {}
 
 void TabStripModelObserver::OnTabGroupChanged(const TabGroupChange& change) {}
 

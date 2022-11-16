@@ -5,15 +5,14 @@
 #include "third_party/blink/renderer/platform/graphics/animation_worklet_mutator_dispatcher_impl.h"
 
 #include "base/run_loop.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/simple_test_tick_clock.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/platform/graphics/animation_worklet_mutator.h"
 #include "third_party/blink/renderer/platform/graphics/compositor_mutator_client.h"
-#include "third_party/blink/renderer/platform/heap/handle.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/heap/persistent.h"
 #include "third_party/blink/renderer/platform/scheduler/public/post_cross_thread_task.h"
 #include "third_party/blink/renderer/platform/scheduler/public/thread.h"
@@ -38,7 +37,7 @@ namespace blink {
 namespace {
 
 std::unique_ptr<Thread> CreateThread(const char* name) {
-  return Platform::Current()->CreateThread(
+  return Thread::CreateThread(
       ThreadCreationParams(ThreadType::kTestThread).SetThreadNameForTest(name));
 }
 
@@ -784,7 +783,7 @@ TEST_F(AnimationWorkletMutatorDispatcherImplAsyncTest, HistogramTester) {
   // Block Responses until all requests have been queued.
   mutator->BlockWorkletThread();
 
-  base::TimeDelta time_delta = base::TimeDelta::FromMilliseconds(10);
+  base::TimeDelta time_delta = base::Milliseconds(10);
 
   // Expected Elapsed time is the sum of all clock advancements until unblocked,
   // which totals to 30 ms.

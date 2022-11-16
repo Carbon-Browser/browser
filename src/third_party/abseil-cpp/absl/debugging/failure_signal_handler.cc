@@ -42,7 +42,6 @@
 #include <ctime>
 
 #include "absl/base/attributes.h"
-#include "absl/base/internal/errno_saver.h"
 #include "absl/base/internal/raw_logging.h"
 #include "absl/base/internal/sysinfo.h"
 #include "absl/debugging/internal/examine_stack.h"
@@ -51,8 +50,10 @@
 #ifndef _WIN32
 #define ABSL_HAVE_SIGACTION
 // Apple WatchOS and TVOS don't allow sigaltstack
-#if !(defined(TARGET_OS_WATCH) && TARGET_OS_WATCH) && \
-    !(defined(TARGET_OS_TV) && TARGET_OS_TV)
+// Apple macOS has sigaltstack, but using it makes backtrace() unusable.
+#if !(defined(TARGET_OS_OSX) && TARGET_OS_OSX) &&     \
+    !(defined(TARGET_OS_WATCH) && TARGET_OS_WATCH) && \
+    !(defined(TARGET_OS_TV) && TARGET_OS_TV) && !defined(__QNX__)
 #define ABSL_HAVE_SIGALTSTACK
 #endif
 #endif
@@ -217,8 +218,7 @@ static void InstallOneFailureHandler(FailureSignalData* data,
 #endif
 
 static void WriteToStderr(const char* data) {
-  absl::base_internal::ErrnoSaver errno_saver;
-  absl::raw_logging_internal::SafeWriteToStderr(data, strlen(data));
+  absl::raw_logging_internal::AsyncSignalSafeWriteToStderr(data, strlen(data));
 }
 
 static void WriteSignalMessage(int signo, int cpu,

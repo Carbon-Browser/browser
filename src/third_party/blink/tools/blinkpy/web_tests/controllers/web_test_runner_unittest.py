@@ -31,6 +31,8 @@ import mock
 import sys
 import unittest
 
+import six
+
 from blinkpy.common.host_mock import MockHost
 from blinkpy.common.system.system_host_mock import MockSystemHost
 from blinkpy.web_tests import run_web_tests

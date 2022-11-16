@@ -8,6 +8,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <array>
+
 #include "base/bind.h"
 #include "base/cpu.h"
 #include "base/files/file_enumerator.h"
@@ -20,23 +22,26 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/system/sys_info.h"
-#include "base/task/post_task.h"
+#include "base/task/task_runner_util.h"
 #include "base/task/thread_pool.h"
-#include "base/task_runner_util.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "base/threading/thread_restrictions.h"
+#include "base/time/time.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "chrome/browser/ash/arc/tracing/arc_system_model.h"
 #include "chrome/browser/ash/arc/tracing/arc_value_event_trimmer.h"
+
+// Enable VLOG level 1.
+#undef ENABLED_VLOG_LEVEL
+#define ENABLED_VLOG_LEVEL 1
 
 namespace arc {
 
 namespace {
 
 // Interval to update system stats.
-constexpr base::TimeDelta kSystemStatUpdateInterval =
-    base::TimeDelta::FromMilliseconds(10);
+constexpr base::TimeDelta kSystemStatUpdateInterval = base::Milliseconds(10);
 
 const base::FilePath::CharType kZramPath[] =
     FILE_PATH_LITERAL("/sys/block/zram0/stat");
@@ -117,12 +122,14 @@ class CpuTemperaturePathDetector {
     LOG(WARNING) << "Not detected path to read CPU temperature.";
   }
 
+  CpuTemperaturePathDetector(const CpuTemperaturePathDetector&) = delete;
+  CpuTemperaturePathDetector& operator=(const CpuTemperaturePathDetector&) =
+      delete;
+
   const base::FilePath& path() const { return path_; }
 
  private:
   base::FilePath path_;
-
-  DISALLOW_COPY_AND_ASSIGN(CpuTemperaturePathDetector);
 };
 
 const base::FilePath& GetCpuTemperaturePathOnFileThread() {
@@ -196,7 +203,6 @@ struct OneValueReaderInfo {
   SystemReader reader = SystemReader::kTotal;
   int64_t* value = nullptr;
   int64_t default_value = 0;
-  bool error_reported = false;
 };
 
 struct ArcSystemStatCollector::SystemReadersContext {
@@ -528,14 +534,14 @@ bool ArcSystemStatCollector::LoadFromValue(const base::Value& root) {
     return false;
   }
 
-  max_interval_ = base::TimeDelta::FromMicroseconds(max_interval_mcs);
+  max_interval_ = base::Microseconds(max_interval_mcs);
 
   const base::Value* sample_list =
       root.FindKeyOfType(kKeySamples, base::Value::Type::LIST);
   if (!sample_list)
     return false;
 
-  for (const auto& sample_entry : sample_list->GetList()) {
+  for (const auto& sample_entry : sample_list->GetListDeprecated()) {
     if (!sample_entry.is_dict())
       return false;
 
@@ -547,8 +553,7 @@ bool ArcSystemStatCollector::LoadFromValue(const base::Value& root) {
         !base::StringToInt64(timestamp->GetString(), &timestamp_mcs))
       return false;
 
-    sample.timestamp =
-        base::TimeTicks() + base::TimeDelta::FromMicroseconds(timestamp_mcs);
+    sample.timestamp = base::TimeTicks() + base::Microseconds(timestamp_mcs);
 
     if (!ReadNonNegativeInt(sample_entry, kKeySwapSectorsRead,
                             &sample.swap_sectors_read) ||
@@ -658,28 +663,29 @@ ArcSystemStatCollector::ReadSystemStatOnBackgroundThread(
 
   OneValueReaderInfo one_value_readers[] = {
       {SystemReader::kCpuTemperature, &context->current_frame.cpu_temperature,
-       std::numeric_limits<int>::min(), false},
-      {SystemReader::kCpuFrequency, &context->current_frame.cpu_frequency, 0,
-       false},
+       std::numeric_limits<int>::min()},
+      {SystemReader::kCpuFrequency, &context->current_frame.cpu_frequency, 0},
       {SystemReader::kPackagePowerConstraint,
-       &context->current_frame.package_power_constraint, 0, false},
-      {SystemReader::kCpuEnergy, &context->current_frame.cpu_energy, 0, false},
-      {SystemReader::kGpuEnergy, &context->current_frame.gpu_energy, 0, false},
-      {SystemReader::kMemoryEnergy, &context->current_frame.memory_energy, 0,
-       false},
+       &context->current_frame.package_power_constraint, 0},
+      {SystemReader::kCpuEnergy, &context->current_frame.cpu_energy, 0},
+      {SystemReader::kGpuEnergy, &context->current_frame.gpu_energy, 0},
+      {SystemReader::kMemoryEnergy, &context->current_frame.memory_energy, 0},
   };
 
-  for (size_t i = 0; i < base::size(one_value_readers); ++i) {
+  static bool one_value_readers_error_reported[std::size(one_value_readers)] = {
+      false};
+
+  for (size_t i = 0; i < std::size(one_value_readers); ++i) {
     if (!context->system_readers[one_value_readers[i].reader].is_valid() ||
         !ParseStatFile(
             context->system_readers[one_value_readers[i].reader].get(),
             kOneValueColumns, one_value_readers[i].value)) {
       *one_value_readers[i].value = one_value_readers[i].default_value;
-      if (one_value_readers[i].error_reported)
+      if (one_value_readers_error_reported[i])
         continue;
       LOG(ERROR) << "Failed to read one value system stat: "
                  << one_value_readers[i].reader;
-      one_value_readers[i].error_reported = true;
+      one_value_readers_error_reported[i] = true;
     }
   }
 

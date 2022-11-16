@@ -8,6 +8,7 @@
 
 #include <limits>
 #include <memory>
+#include <tuple>
 #include <utility>
 
 #include "base/auto_reset.h"
@@ -17,7 +18,6 @@
 #include "base/logging.h"
 #include "base/mac/mac_util.h"
 #include "base/mac/scoped_cftyperef.h"
-#include "base/macros.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
@@ -40,15 +40,19 @@
 #include "content/browser/renderer_host/render_widget_host_input_event_router.h"
 #import "content/browser/renderer_host/text_input_client_mac.h"
 #import "content/browser/renderer_host/ui_events_helper.h"
+#include "content/browser/renderer_host/visible_time_request_trigger.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_plugin_guest_manager.h"
 #include "content/public/browser/native_web_keyboard_event.h"
 #include "content/public/browser/render_widget_host.h"
 #include "content/public/browser/web_contents.h"
+#include "content/public/common/page_visibility_state.h"
+#include "media/base/media_switches.h"
 #include "skia/ext/platform_canvas.h"
 #include "skia/ext/skia_utils_mac.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/input/web_input_event.h"
+#include "third_party/blink/public/mojom/widget/record_content_to_visible_time_request.mojom.h"
 #import "ui/base/clipboard/clipboard_util_mac.h"
 #include "ui/base/cocoa/animation_utils.h"
 #include "ui/base/cocoa/cocoa_base_utils.h"
@@ -111,6 +115,17 @@ RenderWidgetHostViewMac::CollectSurfaceIdsForEviction() {
   return host()->CollectSurfaceIdsForEviction();
 }
 
+display::ScreenInfo RenderWidgetHostViewMac::GetCurrentScreenInfo() const {
+  return screen_infos_.current();
+}
+
+void RenderWidgetHostViewMac::SetCurrentDeviceScaleFactor(
+    float device_scale_factor) {
+  // TODO(https://crbug.com/1337094): does this need to be upscaled by
+  // scale_override_for_capture_ for HiDPI capture mode?
+  screen_infos_.mutable_current().device_scale_factor = device_scale_factor;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // AcceleratedWidgetMacNSView, public:
 
@@ -156,7 +171,7 @@ id RenderWidgetHostViewMac::GetAccessibilityFocusedUIElement() {
     DCHECK(focused_item);
     if (focused_item) {
       BrowserAccessibilityCocoa* focused_item_cocoa =
-          ToBrowserAccessibilityCocoa(focused_item);
+          focused_item->GetNativeViewAccessible();
       DCHECK(focused_item_cocoa);
       if (focused_item_cocoa)
         return focused_item_cocoa;
@@ -179,23 +194,26 @@ RenderWidgetHostViewMac::RenderWidgetHostViewMac(RenderWidgetHost* widget)
                             ui::GestureProviderConfigType::CURRENT_PLATFORM),
                         this),
       accessibility_focus_overrider_(this),
+      ns_view_id_(remote_cocoa::GetNewNSViewId()),
       weak_factory_(this) {
   // The NSView is on the other side of |ns_view_|.
   in_process_ns_view_bridge_ =
-      std::make_unique<remote_cocoa::RenderWidgetHostNSViewBridge>(this, this);
+      std::make_unique<remote_cocoa::RenderWidgetHostNSViewBridge>(this, this,
+                                                                   ns_view_id_);
   ns_view_ = in_process_ns_view_bridge_.get();
 
   // Guess that the initial screen we will be on is the screen of the current
   // window (since that's the best guess that we have, and is usually right).
   // https://crbug.com/357443
-  display_list_ =
-      display::Screen::GetScreen()->GetDisplayListNearestWindowWithFallbacks(
-          [NSApp keyWindow]);
+  auto* screen = display::Screen::GetScreen();
+  screen_infos_ = screen->GetScreenInfosNearestDisplay(
+      screen->GetDisplayNearestWindow([NSApp keyWindow]).id());
+  original_screen_infos_ = screen_infos_;
 
   viz::FrameSinkId frame_sink_id = host()->GetFrameSinkId();
 
   browser_compositor_ = std::make_unique<BrowserCompositorMac>(
-      this, this, host()->is_hidden(), display_list_, frame_sink_id);
+      this, this, host()->is_hidden(), frame_sink_id);
   DCHECK(![GetInProcessNSView() window]);
 
   host()->SetView(this);
@@ -213,7 +231,7 @@ RenderWidgetHostViewMac::RenderWidgetHostViewMac(RenderWidgetHost* widget)
     // first to rebaseline some unreliable web tests.
     // NOTE: This will not be run for child frame widgets, which do not have
     // an owner delegate and won't get a RenderViewHost here.
-    ignore_result(owner_delegate->GetWebkitPreferencesForWidget());
+    std::ignore = owner_delegate->GetWebkitPreferencesForWidget();
   }
 
   cursor_manager_ = std::make_unique<CursorManager>(this);
@@ -285,7 +303,7 @@ void RenderWidgetHostViewMac::MigrateNSViewBridge(
   mojo::PendingAssociatedReceiver<remote_cocoa::mojom::StubInterface>
       stub_bridge_receiver(view_receiver.PassHandle());
   remote_cocoa_application->CreateRenderWidgetHostNSView(
-      std::move(stub_client), std::move(stub_bridge_receiver));
+      ns_view_id_, std::move(stub_client), std::move(stub_bridge_receiver));
 
   ns_view_ = remote_ns_view_.get();
 
@@ -302,14 +320,16 @@ void RenderWidgetHostViewMac::MigrateNSViewBridge(
 }
 
 void RenderWidgetHostViewMac::SetParentUiLayer(ui::Layer* parent_ui_layer) {
-  if (parent_ui_layer && !display_only_using_parent_ui_layer_) {
+  if (parent_ui_layer) {
     // The first time that we display using a parent ui::Layer, permanently
     // switch from drawing using Cocoa to only drawing using ui::Views. Erase
     // the existing content being drawn by Cocoa (which may have been set due
     // to races, e.g, in https://crbug.com/845807). Note that this transition
     // must be done lazily because not all code has been updated to use
-    // ui::Views (e.g, content_shell).
-    display_only_using_parent_ui_layer_ = true;
+    // ui::Views (e.g, content_shell). Also note that this call must be done
+    // every time the RenderWidgetHostNSViewBridge that `ns_view` points to
+    // changes (e.g, due to MigrateNSViewBridge), see
+    // https://crbug.com/1222976#c49.
     ns_view_->DisableDisplay();
   }
   if (browser_compositor_)
@@ -385,7 +405,7 @@ void RenderWidgetHostViewMac::InitAsPopup(
   SetContentBackgroundColor(SK_ColorTRANSPARENT);
 
   // This path is used by the time/date picker.
-  ns_view_->InitAsPopup(pos);
+  ns_view_->InitAsPopup(pos, popup_parent_host_view_->ns_view_id_);
 }
 
 RenderWidgetHostViewBase*
@@ -414,29 +434,12 @@ RenderWidgetHostImpl* RenderWidgetHostViewMac::GetWidgetForIme() {
   return GetActiveWidget();
 }
 
-void RenderWidgetHostViewMac::GetScreenInfo(display::ScreenInfo* screen_info) {
-  const display::DisplayList& displays = browser_compositor_->display_list();
-  DCHECK(displays.IsValidAndHasPrimaryAndCurrentDisplays());
-  const display::Display& display = displays.GetCurrentDisplay();
-  display::DisplayUtil::DisplayToScreenInfo(screen_info, display);
-  // Recalculate some ScreenInfo properties from the cached screen info, which
-  // may originate from a remote process that hosts the associated NSWindow.
-  // DisplayToScreenInfo derives some properties from the latest display::Screen
-  // info observed directly in this process, which may be intermittently
-  // out-of-sync with remote info. Also, BrowserCompositorMac and
-  // RenderWidgetHostViewMac do not update their cached screen info during
-  // auto-resize.
-  // TODO(crbug.com/1194700): Pass cached remote process screen info to
-  // DisplayToScreenInfo; it should not use local process info internally.
-  screen_info->is_extended = displays.displays().size() > 1;
-  screen_info->is_primary = display.id() == displays.primary_id();
-}
-
-void RenderWidgetHostViewMac::Show() {
+void RenderWidgetHostViewMac::ShowWithVisibility(
+    PageVisibilityState page_visibility) {
   is_visible_ = true;
   ns_view_->SetVisible(is_visible_);
   browser_compositor_->SetViewVisible(is_visible_);
-  WasUnOccluded();
+  OnShowWithPageVisibility(page_visibility);
 }
 
 void RenderWidgetHostViewMac::Hide() {
@@ -447,15 +450,21 @@ void RenderWidgetHostViewMac::Hide() {
 }
 
 void RenderWidgetHostViewMac::WasUnOccluded() {
-  if (!host()->is_hidden())
-    return;
+  OnShowWithPageVisibility(PageVisibilityState::kVisible);
+}
+
+void RenderWidgetHostViewMac::NotifyHostAndDelegateOnWasShown(
+    blink::mojom::RecordContentToVisibleTimeRequestPtr tab_switch_start_state) {
+  DCHECK(host_->is_hidden());
+
+  // SetRenderWidgetHostIsHidden may cause a state transition that switches to
+  // a new instance of DelegatedFrameHost and calls WasShown, which causes
+  // HasSavedFrame to always return true. So cache the HasSavedFrame result
+  // before the transition, and do not save this DelegatedFrameHost* locally.
+  const bool has_saved_frame =
+      browser_compositor_->GetDelegatedFrameHost()->HasSavedFrame();
 
   browser_compositor_->SetRenderWidgetHostIsHidden(false);
-
-  bool has_saved_frame =
-      browser_compositor_->has_saved_frame_before_state_transition();
-
-  auto tab_switch_start_state = TakeRecordContentToVisibleTimeRequest();
 
   const bool renderer_should_record_presentation_time = !has_saved_frame;
   host()->WasShown(renderer_should_record_presentation_time
@@ -464,16 +473,38 @@ void RenderWidgetHostViewMac::WasUnOccluded() {
 
   // If the frame for the renderer is already available, then the
   // tab-switching time is the presentation time for the browser-compositor.
-  DelegatedFrameHost* delegated_frame_host =
-      browser_compositor_->GetDelegatedFrameHost();
-  DCHECK(delegated_frame_host);
-  const bool record_presentation_time = has_saved_frame;
-  delegated_frame_host->WasShown(
-      browser_compositor_->GetRendererLocalSurfaceId(),
-      browser_compositor_->GetRendererSize(),
-      record_presentation_time
-          ? std::move(tab_switch_start_state)
-          : blink::mojom::RecordContentToVisibleTimeRequestPtr());
+  // SetRenderWidgetHostIsHidden above will show the DelegatedFrameHost
+  // in this state, but doesn't include the presentation time request.
+  if (has_saved_frame && tab_switch_start_state) {
+    browser_compositor_->GetDelegatedFrameHost()
+        ->RequestPresentationTimeForNextFrame(
+            std::move(tab_switch_start_state));
+  }
+}
+
+void RenderWidgetHostViewMac::RequestPresentationTimeFromHostOrDelegate(
+    blink::mojom::RecordContentToVisibleTimeRequestPtr visible_time_request) {
+  DCHECK(!host_->is_hidden());
+  DCHECK(visible_time_request);
+
+  // No state transition here so don't use
+  // has_saved_frame_before_state_transition.
+  if (browser_compositor_->GetDelegatedFrameHost()->HasSavedFrame()) {
+    // If the frame for the renderer is already available, then the
+    // tab-switching time is the presentation time for the browser-compositor.
+    browser_compositor_->GetDelegatedFrameHost()
+        ->RequestPresentationTimeForNextFrame(std::move(visible_time_request));
+  } else {
+    host()->RequestPresentationTimeForNextFrame(
+        std::move(visible_time_request));
+  }
+}
+
+void RenderWidgetHostViewMac::
+    CancelPresentationTimeRequestForHostAndDelegate() {
+  DCHECK(!host_->is_hidden());
+  host()->CancelPresentationTimeRequest();
+  browser_compositor_->GetDelegatedFrameHost()->CancelPresentationTimeRequest();
 }
 
 void RenderWidgetHostViewMac::WasOccluded() {
@@ -681,10 +712,11 @@ void RenderWidgetHostViewMac::OnGestureEvent(
 
 void RenderWidgetHostViewMac::OnRenderFrameMetadataChangedAfterActivation(
     base::TimeTicks activation_time) {
+  // TODO(crbug/1308932): Remove toSkColor and make all SkColor4f.
   last_frame_root_background_color_ = host()
                                           ->render_frame_metadata_provider()
                                           ->LastRenderFrameMetadata()
-                                          .root_background_color;
+                                          .root_background_color.toSkColor();
 }
 
 void RenderWidgetHostViewMac::RenderProcessGone() {
@@ -738,22 +770,13 @@ void RenderWidgetHostViewMac::UpdateTooltip(
   SetTooltipText(tooltip_text);
 }
 
-const std::vector<display::Display>& RenderWidgetHostViewMac::GetDisplays()
-    const {
-  // Return cached screen info, which may originate from a remote process that
-  // hosts the associated NSWindow. The latest display::Screen info observed
-  // directly in this process may be intermittently out-of-sync with that info.
-  // Also, BrowserCompositorMac and RenderWidgetHostViewMac do not update their
-  // cached screen info during auto-resize.
-  return browser_compositor_->display_list().displays();
-}
-
 void RenderWidgetHostViewMac::UpdateScreenInfo() {
   // Update the size, scale factor, color profile, vsync parameters, and any
   // other properties of the NSView or pertinent NSScreens. Propagate these to
   // the RenderWidgetHostImpl as well.
 
-  display_link_ = ui::DisplayLinkMac::GetForDisplay(display_list_.current_id());
+  display_link_ =
+      ui::DisplayLinkMac::GetForDisplay(screen_infos_.current().display_id);
   if (!display_link_) {
     // Note that on some headless systems, the display link will fail to be
     // created, so this should not be a fatal error.
@@ -770,16 +793,61 @@ void RenderWidgetHostViewMac::UpdateScreenInfo() {
   else
     host()->SendScreenRects();
 
+  // Update with the latest display list from the remote process if needed.
+  bool current_display_changed = false;
+  bool any_display_changed = false;
+  if (new_screen_infos_from_shim_.has_value()) {
+    current_display_changed =
+        new_screen_infos_from_shim_->current() != screen_infos_.current();
+    any_display_changed = new_screen_infos_from_shim_.value() != screen_infos_;
+
+    screen_infos_ = new_screen_infos_from_shim_.value();
+    original_screen_infos_ = screen_infos_;
+    new_screen_infos_from_shim_.reset();
+  }
+
+  if (base::FeatureList::IsEnabled(media::kWebContentsCaptureHiDpi)) {
+    // If HiDPI capture mode is active, adjust the device scale factor to
+    // increase the rendered pixel count. |new_screen_infos| always contains
+    // the unmodified original values for the display, and a copy of it is
+    // saved in |screen_infos_|, with a modification applied if applicable.
+    // When HiDPI mode is turned off (the scale override is 1.0), the original
+    // |new_screen_infos| value gets copied unchanged to |screen_infos_|.
+    display::ScreenInfos new_screen_infos = original_screen_infos_;
+    const float old_device_scale_factor =
+        new_screen_infos.current().device_scale_factor;
+    // On MacOS, device_scale_factor needs to be an integer value, so
+    // we need to round the final scale to the nearest whole number.
+    new_screen_infos.mutable_current().device_scale_factor =
+        std::round(old_device_scale_factor * scale_override_for_capture_);
+    if (screen_infos_ != new_screen_infos) {
+      DVLOG(1) << __func__ << ": Overriding device_scale_factor from "
+               << old_device_scale_factor << " to "
+               << new_screen_infos.current().device_scale_factor
+               << " for capture.";
+      any_display_changed = true;
+      current_display_changed |=
+          new_screen_infos.current() != screen_infos_.current();
+      screen_infos_ = new_screen_infos;
+    }
+  }
+
+  bool dip_size_changed = view_bounds_in_window_dip_.size() !=
+                          browser_compositor_->GetRendererSize();
+
+  if (dip_size_changed || current_display_changed) {
+    browser_compositor_->UpdateSurfaceFromNSView(
+        view_bounds_in_window_dip_.size());
+  }
+
   // TODO(crbug.com/1169312): Unify display info caching and change detection.
   // Notify the associated RenderWidgetHostImpl when screen info has changed.
   // That will synchronize visual properties needed for frame tree rendering
   // and for web platform APIs that expose screen and window info and events.
   // RenderWidgetHostImpl will query BrowserCompositorMac for the dimensions
   // to send to the renderer, so BrowserCompositorMac must be updated first.
-  if (browser_compositor_->UpdateSurfaceFromNSView(
-          view_bounds_in_window_dip_.size(), display_list_)) {
+  if (dip_size_changed || any_display_changed)
     host()->NotifyScreenInfoChanged();
-  }
 }
 
 viz::ScopedSurfaceIdAllocator
@@ -809,18 +877,17 @@ namespace {
 // TODO(avi): Move this to be a lambda when P0839R0 lands in C++.
 void AddTextNodesToVector(const ui::AXNode* node,
                           std::vector<std::u16string>* strings) {
-  const ui::AXNodeData& node_data = node->data();
-
-  if (node_data.role == ax::mojom::Role::kStaticText) {
-    if (node_data.HasStringAttribute(ax::mojom::StringAttribute::kName)) {
-      strings->emplace_back(
-          node_data.GetString16Attribute(ax::mojom::StringAttribute::kName));
-    }
+  if (node->GetRole() == ax::mojom::Role::kStaticText) {
+    std::u16string value;
+    if (node->GetString16Attribute(ax::mojom::StringAttribute::kName, &value))
+      strings->emplace_back(value);
     return;
   }
 
-  for (const auto* child : node->children())
-    AddTextNodesToVector(child, strings);
+  for (auto iter = node->UnignoredChildrenBegin();
+       iter != node->UnignoredChildrenEnd(); ++iter) {
+    AddTextNodesToVector(iter.get(), strings);
+  }
 }
 
 using SpeechCallback = base::OnceCallback<void(const std::u16string&)>;
@@ -911,7 +978,7 @@ void RenderWidgetHostViewMac::CopyFromSurface(
   RenderWidgetHostViewBase::CopyMainAndPopupFromSurface(
       host()->GetWeakPtr(),
       browser_compositor_->GetDelegatedFrameHost()->GetWeakPtr(), popup_host,
-      popup_frame_host, src_subrect, dst_size, GetCurrentDeviceScaleFactor(),
+      popup_frame_host, src_subrect, dst_size, GetDeviceScaleFactor(),
       std::move(callback));
 }
 
@@ -949,6 +1016,10 @@ void RenderWidgetHostViewMac::TakeFallbackContentFrom(
       view_mac->browser_compositor_.get());
 }
 
+bool RenderWidgetHostViewMac::IsHTMLFormPopup() const {
+  return !!popup_parent_host_view_;
+}
+
 bool RenderWidgetHostViewMac::GetLineBreakIndex(
     const std::vector<gfx::Rect>& bounds,
     const gfx::Range& range,
@@ -984,6 +1055,10 @@ bool RenderWidgetHostViewMac::GetLineBreakIndex(
 gfx::Rect RenderWidgetHostViewMac::GetFirstRectForCompositionRange(
     const gfx::Range& range,
     gfx::Range* actual_range) {
+  TRACE_EVENT1("ime",
+               "RenderWidgetHostViewMac::GetFirstRectForCompositionRange",
+               "range", range.ToString());
+
   const TextInputManager::CompositionRangeInfo* composition_info =
       GetCompositionRangeInfo();
   if (!composition_info)
@@ -1034,14 +1109,17 @@ gfx::Range RenderWidgetHostViewMac::ConvertCharacterRangeToCompositionRange(
   if (composition_info->range.is_reversed())
     return gfx::Range::InvalidRange();
 
-  if (request_range.start() < composition_info->range.start() ||
-      request_range.start() > composition_info->range.end() ||
-      request_range.end() > composition_info->range.end()) {
+  if (request_range.start() < composition_info->range.start())
     return gfx::Range::InvalidRange();
-  }
 
-  return gfx::Range(request_range.start() - composition_info->range.start(),
-                    request_range.end() - composition_info->range.start());
+  // Heuristic: truncate the request range within the composition range.
+  uint32_t truncated_request_start =
+      std::min(request_range.start(), composition_info->range.end());
+  uint32_t truncated_request_end =
+      std::min(request_range.end(), composition_info->range.end());
+
+  return gfx::Range(truncated_request_start - composition_info->range.start(),
+                    truncated_request_end - composition_info->range.start());
 }
 
 WebContents* RenderWidgetHostViewMac::GetWebContents() {
@@ -1057,21 +1135,40 @@ bool RenderWidgetHostViewMac::GetCachedFirstRectForCharacterRange(
 
   DCHECK(rect);
   // This exists to make IMEs more responsive, see http://crbug.com/115920
-  TRACE_EVENT0("browser",
-               "RenderWidgetHostViewMac::GetFirstRectForCharacterRange");
+  TRACE_EVENT1("ime",
+               "RenderWidgetHostViewMac::GetCachedFirstRectForCharacterRange",
+               "requested range", requested_range.ToString());
 
   const TextInputManager::TextSelection* selection = GetTextSelection();
   if (!selection)
     return false;
 
-  // If requested range is same as caret location, we can just return it.
-  if (selection->range().is_empty() && requested_range == selection->range()) {
+  // If requested range is right after caret, we can just return it.
+  if (selection->range().is_empty() &&
+      requested_range.start() == selection->range().end()) {
     DCHECK(GetFocusedWidget());
     if (actual_range)
       *actual_range = requested_range;
+
+    // Check selection bounds first (currently populated only for EditContext)
+    const absl::optional<gfx::Rect> text_selection_bound =
+        GetTextInputManager()->GetTextSelectionBounds();
+    if (text_selection_bound) {
+      *rect = text_selection_bound.value();
+      TRACE_EVENT1(
+          "ime",
+          "RenderWidgetHostViewMac::GetCachedFirstRectForCharacterRange",
+          "GetTextSelectionBounds", rect->ToString());
+      return true;
+    }
+
+    // If no selection bounds, fall back to use selection region.
     *rect = GetTextInputManager()
                 ->GetSelectionRegion(GetFocusedWidget()->GetView())
                 ->caret_rect;
+    TRACE_EVENT1(
+        "ime", "RenderWidgetHostViewMac::GetCachedFirstRectForCharacterRange",
+        "caret_rect", rect->ToString());
     return true;
   }
 
@@ -1086,24 +1183,33 @@ bool RenderWidgetHostViewMac::GetCachedFirstRectForCharacterRange(
     *rect = GetTextInputManager()
                 ->GetSelectionRegion(GetFocusedWidget()->GetView())
                 ->first_selection_rect;
+    TRACE_EVENT1(
+        "ime", "RenderWidgetHostViewMac::GetCachedFirstRectForCharacterRange",
+        "first_selection_rect", rect->ToString());
     return true;
   }
+
+  // If firstRectForCharacterRange in WebFrame is failed in renderer,
+  // ImeCompositionRangeChanged will be sent with empty vector.
+  if (!composition_info || composition_info->character_bounds.empty())
+    return false;
 
   const gfx::Range request_range_in_composition =
       ConvertCharacterRangeToCompositionRange(requested_range);
   if (request_range_in_composition == gfx::Range::InvalidRange())
     return false;
 
-  // If firstRectForCharacterRange in WebFrame is failed in renderer,
-  // ImeCompositionRangeChanged will be sent with empty vector.
-  if (!composition_info || composition_info->character_bounds.empty())
-    return false;
   DCHECK_EQ(composition_info->character_bounds.size(),
             composition_info->range.length());
 
   gfx::Range ui_actual_range;
   *rect = GetFirstRectForCompositionRange(request_range_in_composition,
                                           &ui_actual_range);
+
+  TRACE_EVENT1("ime",
+               "RenderWidgetHostViewMac::GetCachedFirstRectForCharacterRange",
+               "GetFirstRectForCompositionRange", rect->ToString());
+
   if (actual_range) {
     *actual_range =
         gfx::Range(composition_info->range.start() + ui_actual_range.start(),
@@ -1125,6 +1231,12 @@ void RenderWidgetHostViewMac::FocusedNodeChanged(
     NSRect bounds = NSRectFromCGRect(node_bounds_in_screen.ToCGRect());
     UAZoomChangeFocus(&bounds, NULL, kUAZoomFocusTypeOther);
   }
+}
+
+void RenderWidgetHostViewMac::ClearFallbackSurfaceForCommitPending() {
+  browser_compositor_->GetDelegatedFrameHost()
+      ->ClearFallbackSurfaceForCommitPending();
+  browser_compositor_->InvalidateLocalSurfaceIdOnEviction();
 }
 
 void RenderWidgetHostViewMac::ResetFallbackToFirstNavigationSurface() {
@@ -1204,6 +1316,10 @@ bool RenderWidgetHostViewMac::IsUnadjustedMouseMovementSupported() {
     return true;
   }
   return false;
+}
+
+bool RenderWidgetHostViewMac::CanBeMouseLocked() {
+  return HasFocus() && is_window_key_;
 }
 
 bool RenderWidgetHostViewMac::LockKeyboard(
@@ -1373,7 +1489,7 @@ void RenderWidgetHostViewMac::ShutdownHost() {
 
 void RenderWidgetHostViewMac::SetActive(bool active) {
   if (host()) {
-    host()->SetActive(active);
+    UpdateActiveState(active);
     if (active) {
       if (HasFocus())
         host()->Focus();
@@ -1475,7 +1591,7 @@ void RenderWidgetHostViewMac::ShowSharePicker(
 
 id RenderWidgetHostViewMac::GetRootBrowserAccessibilityElement() {
   if (auto* manager = host()->GetRootBrowserAccessibilityManager())
-    return ToBrowserAccessibilityCocoa(manager->GetRoot());
+    return manager->GetRoot()->GetNativeViewAccessible();
   return nil;
 }
 
@@ -1565,15 +1681,14 @@ void RenderWidgetHostViewMac::OnWindowFrameInScreenChanged(
     host()->SendScreenRects();
 }
 
-void RenderWidgetHostViewMac::OnDisplaysChanged(
-    const display::DisplayList& display_list) {
-  // Cache this screen info, which may originate from a remote process that
+void RenderWidgetHostViewMac::OnScreenInfosChanged(
+    const display::ScreenInfos& screen_infos) {
+  // Cache the screen infos, which may originate from a remote process that
   // hosts the associated NSWindow. The latest display::Screen info observed
   // directly in this process may be intermittently out-of-sync with that info.
   // Also, BrowserCompositorMac and RenderWidgetHostViewMac do not update their
   // cached screen info during auto-resize.
-  // TODO(crbug.com/1169291): Unify screen info plumbing, caching, etc.
-  display_list_ = display_list;
+  new_screen_infos_from_shim_ = screen_infos;
   UpdateScreenInfo();
 }
 
@@ -1799,10 +1914,15 @@ void RenderWidgetHostViewMac::LookUpDictionaryOverlayFromRange(
 }
 
 void RenderWidgetHostViewMac::LookUpDictionaryOverlayAtPoint(
-    const gfx::PointF& root_point) {
+    const gfx::PointF& root_point_in_dips) {
   if (!host() || !host()->delegate() ||
       !host()->delegate()->GetInputEventRouter())
     return;
+
+  // With zoom-for-dsf, RenderWidgetHost coordinate system is physical points,
+  // which means we have to scale the point by device scale factor.
+  gfx::PointF root_point = root_point_in_dips;
+  root_point.Scale(GetDeviceScaleFactor());
 
   gfx::PointF transformed_point;
   RenderWidgetHostImpl* widget_host =
@@ -1855,13 +1975,13 @@ void RenderWidgetHostViewMac::SyncGetCharacterIndexAtPoint(
 
 bool RenderWidgetHostViewMac::SyncGetFirstRectForRange(
     const gfx::Range& requested_range,
-    const gfx::Rect& in_rect,
-    const gfx::Range& in_actual_range,
     gfx::Rect* rect,
     gfx::Range* actual_range,
     bool* success) {
-  *rect = in_rect;
-  *actual_range = in_actual_range;
+  TRACE_EVENT1("ime", "RenderWidgetHostViewMac::SyncGetFirstRectForRange",
+               "requested range", requested_range.ToString());
+
+  *actual_range = requested_range;
   if (!GetFocusedWidget()) {
     *success = false;
     return true;
@@ -1871,24 +1991,21 @@ bool RenderWidgetHostViewMac::SyncGetFirstRectForRange(
                                            actual_range)) {
     // https://crbug.com/121917
     base::ScopedAllowBlocking allow_wait;
+    // TODO(thakis): Pipe |actualRange| through TextInputClientMac machinery.
     *rect = TextInputClientMac::GetInstance()->GetFirstRectForRange(
         GetFocusedWidget(), requested_range);
-    // TODO(thakis): Pipe |actualRange| through TextInputClientMac machinery.
-    *actual_range = requested_range;
   }
   return true;
 }
 
 void RenderWidgetHostViewMac::SyncGetFirstRectForRange(
     const gfx::Range& requested_range,
-    const gfx::Rect& rect,
-    const gfx::Range& actual_range,
     SyncGetFirstRectForRangeCallback callback) {
   gfx::Rect out_rect;
   gfx::Range out_actual_range;
   bool success;
-  SyncGetFirstRectForRange(requested_range, rect, actual_range, &out_rect,
-                           &out_actual_range, &success);
+  SyncGetFirstRectForRange(requested_range, &out_rect, &out_actual_range,
+                           &success);
   std::move(callback).Run(out_rect, out_actual_range, success);
 }
 
@@ -2131,7 +2248,7 @@ void RenderWidgetHostViewMac::OnGotStringForDictionaryOverlay(
     int32_t target_widget_process_id,
     int32_t target_widget_routing_id,
     ui::mojom::AttributedStringPtr attributed_string,
-    const gfx::Point& baseline_point) {
+    const gfx::Point& baseline_point_in_layout_space) {
   if (!attributed_string || attributed_string->string.empty()) {
     // The PDF plugin does not support getting the attributed string at point.
     // Until it does, use NSPerformService(), which opens Dictionary.app.
@@ -2158,13 +2275,17 @@ void RenderWidgetHostViewMac::OnGotStringForDictionaryOverlay(
     // https://crbug.com/737032
     auto* widget_host = content::RenderWidgetHost::FromID(
         target_widget_process_id, target_widget_routing_id);
-    gfx::Point updated_baseline_point = baseline_point;
+    gfx::Point updated_baseline_point = baseline_point_in_layout_space;
     if (widget_host) {
       if (auto* rwhv = widget_host->GetView()) {
-        updated_baseline_point =
-            rwhv->TransformPointToRootCoordSpace(baseline_point);
+        updated_baseline_point = rwhv->TransformPointToRootCoordSpace(
+            baseline_point_in_layout_space);
       }
     }
+    // Layout space is physical pixels. Scale
+    // it to get DIPs, which is what ns_view_ expects.
+    updated_baseline_point = gfx::ScaleToRoundedPoint(
+        updated_baseline_point, 1.f / GetDeviceScaleFactor());
     ns_view_->ShowDictionaryOverlay(std::move(attributed_string),
                                     updated_baseline_point);
   }

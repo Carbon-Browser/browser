@@ -7,10 +7,7 @@
 
 #include <memory>
 
-#include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "chrome/browser/ui/webui/chromeos/login/base_screen_handler.h"
-#include "components/prefs/pref_registry_simple.h"
 
 namespace ash {
 class HIDDetectionScreen;
@@ -49,7 +46,12 @@ class HIDDetectionScreenHandler
  public:
   using TView = HIDDetectionView;
 
-  explicit HIDDetectionScreenHandler(JSCallsContainer* js_calls_container);
+  HIDDetectionScreenHandler();
+
+  HIDDetectionScreenHandler(const HIDDetectionScreenHandler&) = delete;
+  HIDDetectionScreenHandler& operator=(const HIDDetectionScreenHandler&) =
+      delete;
+
   ~HIDDetectionScreenHandler() override;
 
   // HIDDetectionView implementation:
@@ -71,10 +73,7 @@ class HIDDetectionScreenHandler
   void DeclareLocalizedValues(
       ::login::LocalizedValuesBuilder* builder) override;
   void DeclareJSCallbacks() override;
-  void Initialize() override;
-
-  // Registers the preference for derelict state.
-  static void RegisterPrefs(PrefRegistrySimple* registry);
+  void InitializeDeprecated() override;
 
   // Emulate that a USB Mouse and a USB Keyboard are connected for testing.
   void HandleEmulateDevicesConnectedForTesting();
@@ -114,10 +113,8 @@ class HIDDetectionScreenHandler
 
   ash::HIDDetectionScreen* screen_ = nullptr;
 
-  // If true, Initialize() will call Show().
+  // If true, InitializeDeprecated() will call Show().
   bool show_on_init_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(HIDDetectionScreenHandler);
 };
 
 }  // namespace chromeos

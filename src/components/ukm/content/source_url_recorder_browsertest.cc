@@ -24,6 +24,12 @@
 
 class SourceUrlRecorderWebContentsObserverBrowserTest
     : public content::ContentBrowserTest {
+ public:
+  SourceUrlRecorderWebContentsObserverBrowserTest(
+      const SourceUrlRecorderWebContentsObserverBrowserTest&) = delete;
+  SourceUrlRecorderWebContentsObserverBrowserTest& operator=(
+      const SourceUrlRecorderWebContentsObserverBrowserTest&) = delete;
+
  protected:
   SourceUrlRecorderWebContentsObserverBrowserTest() {
     scoped_feature_list_.InitWithFeatures(
@@ -53,7 +59,7 @@ class SourceUrlRecorderWebContentsObserverBrowserTest
 
   GURL GetAssociatedURLForWebContentsDocument() {
     const ukm::UkmSource* src = test_ukm_recorder_->GetSourceForSourceId(
-        ukm::GetSourceIdForWebContentsDocument(shell()->web_contents()));
+        shell()->web_contents()->GetPrimaryMainFrame()->GetPageUkmSourceId());
     return src ? src->url() : GURL();
   }
 
@@ -64,8 +70,6 @@ class SourceUrlRecorderWebContentsObserverBrowserTest
  private:
   base::test::ScopedFeatureList scoped_feature_list_;
   std::unique_ptr<ukm::TestAutoSetUkmRecorder> test_ukm_recorder_;
-
-  DISALLOW_COPY_AND_ASSIGN(SourceUrlRecorderWebContentsObserverBrowserTest);
 };
 
 class SourceUrlRecorderWebContentsObserverDownloadBrowserTest
@@ -322,6 +326,10 @@ IN_PROC_BROWSER_TEST_F(SourceUrlRecorderWebContentsObserverPrerenderBrowserTest,
       GetSourceForNavigationId(prerender_observer.navigation_id());
   EXPECT_EQ(1u, source2->urls().size());
   EXPECT_EQ(prerender_url, source2->url());
-  EXPECT_EQ(prerender_url, GetAssociatedURLForWebContentsDocument());
+  GURL expected_ukm_url;
+  // TODO(crbug.com/1245014): The URL is not assigned yet for prerendering
+  // UKM source ids, so expect it to not be set.
+  // expected_ukm_url = prerender_url;
+  EXPECT_EQ(expected_ukm_url, GetAssociatedURLForWebContentsDocument());
   EXPECT_NE(source1, source2);
 }

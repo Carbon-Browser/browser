@@ -5,8 +5,10 @@
 #include "weblayer/browser/webui/web_ui_controller_factory.h"
 
 #include "base/memory/ptr_util.h"
+#include "base/no_destructor.h"
 #include "content/public/browser/web_ui.h"
 #include "url/gurl.h"
+#include "weblayer/browser/webui/net_export_ui.h"
 #include "weblayer/browser/webui/weblayer_internals_ui.h"
 
 namespace weblayer {
@@ -29,12 +31,16 @@ WebUIFactoryFunctionPointer GetWebUIFactoryFunctionPointer(const GURL& url) {
   if (url.host() == kChromeUIWebLayerHost) {
     return &NewWebUI<WebLayerInternalsUI>;
   }
+  if (url.host() == kChromeUINetExportHost) {
+    return &NewWebUI<NetExportUI>;
+  }
 
   return nullptr;
 }
 
 content::WebUI::TypeID GetWebUITypeID(const GURL& url) {
-  if (url.host() == kChromeUIWebLayerHost) {
+  if (url.host() == kChromeUIWebLayerHost ||
+      url.host() == kChromeUINetExportHost) {
     return kWebLayerID;
   }
 

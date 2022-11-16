@@ -42,14 +42,15 @@ class PerformanceManagerTest : public PerformanceManagerTestHarness {
     EXPECT_FALSE(PerformanceManager::IsAvailable());
   }
 
-  ~PerformanceManagerTest() override {}
+  PerformanceManagerTest(const PerformanceManagerTest&) = delete;
+  PerformanceManagerTest& operator=(const PerformanceManagerTest&) = delete;
 
-  DISALLOW_COPY_AND_ASSIGN(PerformanceManagerTest);
+  ~PerformanceManagerTest() override {}
 };
 
 TEST_F(PerformanceManagerTest, NodeAccessors) {
   auto contents = CreateTestWebContents();
-  content::RenderFrameHost* rfh = contents->GetMainFrame();
+  content::RenderFrameHost* rfh = contents->GetPrimaryMainFrame();
   ASSERT_TRUE(rfh);
   content::RenderProcessHost* rph = rfh->GetProcess();
   ASSERT_TRUE(rph);

@@ -11,7 +11,7 @@
 #include <vector>
 
 #include "base/callback_forward.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "media/base/audio_decoder_config.h"
 #include "media/base/demuxer_stream.h"
@@ -71,6 +71,10 @@ class DemuxerStreamAdapter {
       mojo::PendingRemote<mojom::RemotingDataStreamSender> stream_sender_remote,
       mojo::ScopedDataPipeProducerHandle producer_handle,
       ErrorCallback error_callback);
+
+  DemuxerStreamAdapter(const DemuxerStreamAdapter&) = delete;
+  DemuxerStreamAdapter& operator=(const DemuxerStreamAdapter&) = delete;
+
   ~DemuxerStreamAdapter();
 
   // Rpc handle for this class. This is used for sending/receiving RPC message
@@ -146,7 +150,7 @@ class DemuxerStreamAdapter {
   const int rpc_handle_;
 
   // Demuxer stream and stream type.
-  DemuxerStream* const demuxer_stream_;
+  const raw_ptr<DemuxerStream> demuxer_stream_;
   const DemuxerStream::Type type_;
 
   // Run by OnFatalError to propagate StopTriggers back to the
@@ -201,8 +205,6 @@ class DemuxerStreamAdapter {
   base::WeakPtrFactory<DemuxerStreamAdapter> request_buffer_weak_factory_{this};
   // WeakPtrFactory for normal usage.
   base::WeakPtrFactory<DemuxerStreamAdapter> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(DemuxerStreamAdapter);
 };
 
 }  // namespace remoting

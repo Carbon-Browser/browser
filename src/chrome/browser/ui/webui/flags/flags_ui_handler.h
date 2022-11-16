@@ -19,6 +19,10 @@ class FlagsStorage;
 class FlagsUIHandler : public content::WebUIMessageHandler {
  public:
   FlagsUIHandler();
+
+  FlagsUIHandler(const FlagsUIHandler&) = delete;
+  FlagsUIHandler& operator=(const FlagsUIHandler&) = delete;
+
   ~FlagsUIHandler() override;
 
   // Initializes the UI handler with the provided flags storage and flags
@@ -39,27 +43,30 @@ class FlagsUIHandler : public content::WebUIMessageHandler {
   void RegisterMessages() override;
 
   // Callback for the "requestExperimentFeatures" message.
-  void HandleRequestExperimentalFeatures(const base::ListValue* args);
+  void HandleRequestExperimentalFeatures(const base::Value::List& args);
 
   // Callback for the "enableExperimentalFeature" message.
-  void HandleEnableExperimentalFeatureMessage(const base::ListValue* args);
+  void HandleEnableExperimentalFeatureMessage(const base::Value::List& args);
 
   // Callback for the "setOriginListFlag" message.
-  void HandleSetOriginListFlagMessage(const base::ListValue* args);
+  void HandleSetOriginListFlagMessage(const base::Value::List& args);
 
   // Callback for the "restartBrowser" message. Restores all tabs on restart.
-  void HandleRestartBrowser(const base::ListValue* args);
+  void HandleRestartBrowser(const base::Value::List& args);
 
   // Callback for the "resetAllFlags" message.
-  void HandleResetAllFlags(const base::ListValue* args);
+  void HandleResetAllFlags(const base::Value::List& args);
+
+#if BUILDFLAG(IS_CHROMEOS)
+  // Callback for the "CrosUrlFlagsRedirect" message.
+  void HandleCrosUrlFlagsRedirect(const base::Value::List& args);
+#endif
 
  private:
   std::unique_ptr<flags_ui::FlagsStorage> flags_storage_;
   flags_ui::FlagAccess access_;
   std::string experimental_features_callback_id_;
   bool deprecated_features_only_;
-
-  DISALLOW_COPY_AND_ASSIGN(FlagsUIHandler);
 };
 
 #endif  // CHROME_BROWSER_UI_WEBUI_FLAGS_FLAGS_UI_HANDLER_H_

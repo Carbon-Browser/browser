@@ -15,6 +15,7 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/simple_test_clock.h"
 #include "build/build_config.h"
+#include "build/chromeos_buildflags.h"
 #include "chrome/browser/crash_upload_list/crash_upload_list.h"
 #include "chrome/browser/error_reporting/mock_chrome_js_error_report_processor.h"
 #include "chrome/common/chrome_paths.h"
@@ -120,6 +121,9 @@ TEST_F(ChromeJsErrorReportProcessorTest, Basic) {
   ASSERT_TRUE(actual_report);
   EXPECT_THAT(actual_report->query, HasSubstr("error_message=Hello%20World"));
   EXPECT_THAT(actual_report->query, HasSubstr("type=JavascriptError"));
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  EXPECT_THAT(actual_report->query, HasSubstr("build_time_millis="));
+#endif
   EXPECT_THAT(actual_report->query, HasSubstr("browser_process_uptime_ms="));
   EXPECT_THAT(actual_report->query, HasSubstr("renderer_process_uptime_ms=0"));
   // TODO(iby) research why URL is repeated...
@@ -137,14 +141,14 @@ TEST_F(ChromeJsErrorReportProcessorTest, Basic) {
           {"variations=",
            MockChromeJsErrorReportProcessor::kDefaultExperimentListString})));
 
-#if !BUILDFLAG(IS_CHROMEOS_ASH) && !BUILDFLAG(IS_CHROMEOS_LACROS)
+#if !BUILDFLAG(IS_CHROMEOS)
   // This is from MockChromeJsErrorReportProcessor::GetOsVersion()
   EXPECT_THAT(actual_report->query, HasSubstr("os_version=7.20.1"));
 #endif
   // These are from MockCrashEndpoint::Client::GetProductNameAndVersion, which
   // is only defined for non-MAC POSIX systems. TODO(https://crbug.com/1121816):
   // Get this info for non-POSIX platforms.
-#if defined(OS_POSIX) && !defined(OS_MAC)
+#if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_MAC)
   EXPECT_THAT(actual_report->query, HasSubstr("prod=Chrome_ChromeOS"));
   EXPECT_THAT(actual_report->query, HasSubstr("ver=1.2.3.4"));
   EXPECT_THAT(actual_report->query, HasSubstr("browser_version=1.2.3.4"));
@@ -205,14 +209,14 @@ void ChromeJsErrorReportProcessorTest::TestAllFields() {
           {"variations=",
            MockChromeJsErrorReportProcessor::kDefaultExperimentListString})));
 
-#if !BUILDFLAG(IS_CHROMEOS_ASH) && !BUILDFLAG(IS_CHROMEOS_LACROS)
+#if !BUILDFLAG(IS_CHROMEOS)
   // This is from MockChromeJsErrorReportProcessor::GetOsVersion()
   EXPECT_THAT(actual_report->query, HasSubstr("os_version=7.20.1"));
 #endif
   // These are from MockCrashEndpoint::Client::GetProductNameAndVersion, which
   // is only defined for non-MAC POSIX systems. TODO(https://crbug.com/1121816):
   // Get this info for non-POSIX platforms.
-#if defined(OS_POSIX) && !defined(OS_MAC)
+#if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_MAC)
   EXPECT_THAT(actual_report->query, HasSubstr("browser_version=1.2.3.4"));
   EXPECT_THAT(actual_report->query, HasSubstr("channel=Stable"));
 #endif
@@ -223,7 +227,7 @@ TEST_F(ChromeJsErrorReportProcessorTest, AllFields) {
   TestAllFields();
 }
 
-#if !BUILDFLAG(IS_CHROMEOS_ASH) && !BUILDFLAG(IS_CHROMEOS_LACROS)
+#if !BUILDFLAG(IS_CHROMEOS)
 // On Chrome OS, consent checks are handled in the crash_reporter, not in the
 // browser.
 TEST_F(ChromeJsErrorReportProcessorTest, NoConsent) {
@@ -236,7 +240,7 @@ TEST_F(ChromeJsErrorReportProcessorTest, NoConsent) {
 
   EXPECT_FALSE(endpoint_->last_report());
 }
-#endif  // !BUILDFLAG(IS_CHROMEOS_ASH) && !BUILDFLAG(IS_CHROMEOS_LACROS)
+#endif  // !BUILDFLAG(IS_CHROMEOS)
 
 TEST_F(ChromeJsErrorReportProcessorTest, StackTraceWithErrorMessage) {
   auto report = MakeErrorReport("Hello World");
@@ -280,7 +284,7 @@ TEST_F(ChromeJsErrorReportProcessorTest, NoMoreThanOneDuplicatePerHour) {
   EXPECT_EQ(endpoint_->report_count(), 1);
 
   finish_callback_was_called_ = false;
-  test_clock_.SetNow(test_clock_.Now() + base::TimeDelta::FromMinutes(1));
+  test_clock_.SetNow(test_clock_.Now() + base::Minutes(1));
   SendErrorReport(MakeErrorReport(kFirstMessage));
   EXPECT_TRUE(finish_callback_was_called_);
   EXPECT_EQ(endpoint_->report_count(), 1);
@@ -299,11 +303,11 @@ TEST_F(ChromeJsErrorReportProcessorTest, DuplicatesAllowedAfterAnHour) {
   SendErrorReport(MakeErrorReport(kFirstMessage));
   EXPECT_EQ(endpoint_->report_count(), 1);
 
-  test_clock_.SetNow(test_clock_.Now() + base::TimeDelta::FromMinutes(45));
+  test_clock_.SetNow(test_clock_.Now() + base::Minutes(45));
   SendErrorReport(MakeErrorReport(kFirstMessage));
   EXPECT_EQ(endpoint_->report_count(), 1);
 
-  test_clock_.SetNow(test_clock_.Now() + base::TimeDelta::FromMinutes(20));
+  test_clock_.SetNow(test_clock_.Now() + base::Minutes(20));
   SendErrorReport(MakeErrorReport(kFirstMessage));
   EXPECT_EQ(endpoint_->report_count(), 2);
 }
@@ -312,15 +316,15 @@ TEST_F(ChromeJsErrorReportProcessorTest, DuplicateTimingIsIndependent) {
   SendErrorReport(MakeErrorReport(kFirstMessage));
   EXPECT_EQ(endpoint_->report_count(), 1);
 
-  test_clock_.SetNow(test_clock_.Now() + base::TimeDelta::FromMinutes(15));
+  test_clock_.SetNow(test_clock_.Now() + base::Minutes(15));
   SendErrorReport(MakeErrorReport(kSecondMessage));
   EXPECT_EQ(endpoint_->report_count(), 2);
 
-  test_clock_.SetNow(test_clock_.Now() + base::TimeDelta::FromMinutes(15));
+  test_clock_.SetNow(test_clock_.Now() + base::Minutes(15));
   SendErrorReport(MakeErrorReport(kThirdMessage));
   EXPECT_EQ(endpoint_->report_count(), 3);
 
-  test_clock_.SetNow(test_clock_.Now() + base::TimeDelta::FromMinutes(15));
+  test_clock_.SetNow(test_clock_.Now() + base::Minutes(15));
   // 45 minutes from first error, all of these should be ignored.
   SendErrorReport(MakeErrorReport(kFirstMessage));
   SendErrorReport(MakeErrorReport(kSecondMessage));
@@ -329,7 +333,7 @@ TEST_F(ChromeJsErrorReportProcessorTest, DuplicateTimingIsIndependent) {
 
   // An hour+ from first error. First error should be OK to send again, others
   // should not.
-  test_clock_.SetNow(test_clock_.Now() + base::TimeDelta::FromMinutes(20));
+  test_clock_.SetNow(test_clock_.Now() + base::Minutes(20));
   SendErrorReport(MakeErrorReport(kFirstMessage));
   SendErrorReport(MakeErrorReport(kSecondMessage));
   SendErrorReport(MakeErrorReport(kThirdMessage));
@@ -338,7 +342,7 @@ TEST_F(ChromeJsErrorReportProcessorTest, DuplicateTimingIsIndependent) {
 
   // An hour+ from second error. First error should be back in cooldown, and
   // third error should still be blocked from its original send.
-  test_clock_.SetNow(test_clock_.Now() + base::TimeDelta::FromMinutes(15));
+  test_clock_.SetNow(test_clock_.Now() + base::Minutes(15));
   SendErrorReport(MakeErrorReport(kFirstMessage));
   SendErrorReport(MakeErrorReport(kSecondMessage));
   SendErrorReport(MakeErrorReport(kThirdMessage));
@@ -346,7 +350,7 @@ TEST_F(ChromeJsErrorReportProcessorTest, DuplicateTimingIsIndependent) {
   EXPECT_THAT(endpoint_->last_report()->query, HasSubstr(kSecondMessageQuery));
 
   // An hour+ from third error. First and second are still in cooldown.
-  test_clock_.SetNow(test_clock_.Now() + base::TimeDelta::FromMinutes(15));
+  test_clock_.SetNow(test_clock_.Now() + base::Minutes(15));
   SendErrorReport(MakeErrorReport(kFirstMessage));
   SendErrorReport(MakeErrorReport(kSecondMessage));
   SendErrorReport(MakeErrorReport(kThirdMessage));
@@ -359,28 +363,28 @@ TEST_F(ChromeJsErrorReportProcessorTest,
   SendErrorReport(MakeErrorReport(kFirstMessage));
   EXPECT_EQ(endpoint_->report_count(), 1);
 
-  test_clock_.SetNow(test_clock_.Now() + base::TimeDelta::FromMinutes(15));
+  test_clock_.SetNow(test_clock_.Now() + base::Minutes(15));
   SendErrorReport(MakeErrorReport(kSecondMessage));
   EXPECT_EQ(endpoint_->report_count(), 2);
 
-  test_clock_.SetNow(test_clock_.Now() + base::TimeDelta::FromMinutes(15));
+  test_clock_.SetNow(test_clock_.Now() + base::Minutes(15));
   SendErrorReport(MakeErrorReport(kThirdMessage));
   EXPECT_EQ(endpoint_->report_count(), 3);
 
   // Move clock back 10 hours.
-  test_clock_.SetNow(test_clock_.Now() + base::TimeDelta::FromMinutes(-600));
+  test_clock_.SetNow(test_clock_.Now() + base::Minutes(-600));
   SendErrorReport(MakeErrorReport(kFirstMessage));
   EXPECT_EQ(endpoint_->report_count(), 4);
   EXPECT_THAT(endpoint_->last_report()->query, HasSubstr(kFirstMessageQuery));
 
-  test_clock_.SetNow(test_clock_.Now() + base::TimeDelta::FromMinutes(15));
+  test_clock_.SetNow(test_clock_.Now() + base::Minutes(15));
   SendErrorReport(MakeErrorReport(kFirstMessage));
   SendErrorReport(MakeErrorReport(kSecondMessage));
   EXPECT_EQ(endpoint_->report_count(), 5);
   EXPECT_THAT(endpoint_->last_report()->query, HasSubstr(kSecondMessageQuery));
 
   // First and second are still in cooldown.
-  test_clock_.SetNow(test_clock_.Now() + base::TimeDelta::FromMinutes(15));
+  test_clock_.SetNow(test_clock_.Now() + base::Minutes(15));
   SendErrorReport(MakeErrorReport(kFirstMessage));
   SendErrorReport(MakeErrorReport(kSecondMessage));
   SendErrorReport(MakeErrorReport(kThirdMessage));
@@ -393,16 +397,16 @@ TEST_F(ChromeJsErrorReportProcessorTest,
   SendErrorReport(MakeErrorReport(kFirstMessage));
   EXPECT_EQ(endpoint_->report_count(), 1);
 
-  test_clock_.SetNow(test_clock_.Now() + base::TimeDelta::FromMinutes(15));
+  test_clock_.SetNow(test_clock_.Now() + base::Minutes(15));
   SendErrorReport(MakeErrorReport(kSecondMessage));
   EXPECT_EQ(endpoint_->report_count(), 2);
 
-  test_clock_.SetNow(test_clock_.Now() + base::TimeDelta::FromMinutes(15));
+  test_clock_.SetNow(test_clock_.Now() + base::Minutes(15));
   SendErrorReport(MakeErrorReport(kThirdMessage));
   EXPECT_EQ(endpoint_->report_count(), 3);
 
   // Move clock back before 3rd message was sent.
-  test_clock_.SetNow(test_clock_.Now() + base::TimeDelta::FromMinutes(-10));
+  test_clock_.SetNow(test_clock_.Now() + base::Minutes(-10));
   SendErrorReport(MakeErrorReport(kFirstMessage));
   SendErrorReport(MakeErrorReport(kSecondMessage));
   SendErrorReport(MakeErrorReport(kThirdMessage));
@@ -413,7 +417,7 @@ TEST_F(ChromeJsErrorReportProcessorTest, DuplicateMapIsCleanedUpAfterAnHour) {
   SendErrorReport(MakeErrorReport(kFirstMessage));
   SendErrorReport(MakeErrorReport(kSecondMessage));
 
-  test_clock_.SetNow(test_clock_.Now() + base::TimeDelta::FromMinutes(70));
+  test_clock_.SetNow(test_clock_.Now() + base::Minutes(70));
   SendErrorReport(MakeErrorReport(kThirdMessage));
   // Only record for third message should be present now.
   EXPECT_THAT(processor_->get_recent_error_reports_for_testing(), SizeIs(1));
@@ -472,7 +476,7 @@ TEST_F(ChromeJsErrorReportProcessorTest, DifferentColumnNumbersAreDistinct) {
   EXPECT_EQ(endpoint_->report_count(), 3);
 }
 
-#if !BUILDFLAG(IS_CHROMEOS_ASH) && !BUILDFLAG(IS_CHROMEOS_LACROS)
+#if !BUILDFLAG(IS_CHROMEOS)
 static std::string UploadInfoStateToString(
     UploadList::UploadInfo::State state) {
   switch (state) {
@@ -543,11 +547,11 @@ TEST_F(ChromeJsErrorReportProcessorTest, UpdatesUploadsLog) {
   EXPECT_TRUE(found) << "Didn't find upload record in "
                      << UploadInfoVectorToString(uploads);
 }
-#endif  // !BUILDFLAG(IS_CHROMEOS_ASH) && !BUILDFLAG(IS_CHROMEOS_LACROS)
+#endif  // !BUILDFLAG(IS_CHROMEOS)
 
-#if BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_CHROMEOS_LACROS)
+#if BUILDFLAG(IS_CHROMEOS)
 TEST_F(ChromeJsErrorReportProcessorTest, WorksWithoutMemfdCreate) {
   processor_->set_force_non_memfd_for_test();
   TestAllFields();
 }
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_CHROMEOS_LACROS)
+#endif  // BUILDFLAG(IS_CHROMEOS)

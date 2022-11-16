@@ -15,6 +15,7 @@
 #include "base/check.h"
 #include "base/command_line.h"
 #include "base/feature_list.h"
+#include "base/no_destructor.h"
 #include "base/notreached.h"
 #include "base/threading/sequenced_task_runner_handle.h"
 #include "base/win/scoped_gdi_object.h"
@@ -35,13 +36,14 @@
 #include "third_party/skia/include/core/SkSurface.h"
 #include "ui/base/ui_base_features.h"
 #include "ui/base/ui_base_switches.h"
+#include "ui/color/color_provider.h"
 #include "ui/display/win/screen_win.h"
 #include "ui/gfx/color_palette.h"
 #include "ui/gfx/color_utils.h"
 #include "ui/gfx/gdi_util.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/rect_conversions.h"
-#include "ui/gfx/skia_util.h"
+#include "ui/gfx/geometry/skia_conversions.h"
 #include "ui/native_theme/common_theme.h"
 
 // This was removed from Winvers.h but is still used.
@@ -112,6 +114,9 @@ class ScopedCreateDCWithBitmap {
   explicit ScopedCreateDCWithBitmap(base::win::ScopedCreateDC::Handle hdc)
       : dc_(hdc) {}
 
+  ScopedCreateDCWithBitmap(const ScopedCreateDCWithBitmap&) = delete;
+  ScopedCreateDCWithBitmap& operator=(const ScopedCreateDCWithBitmap&) = delete;
+
   ~ScopedCreateDCWithBitmap() {
     // Delete DC before the bitmap, since objects should not be deleted while
     // selected into a DC.
@@ -135,8 +140,6 @@ class ScopedCreateDCWithBitmap {
  private:
   base::win::ScopedCreateDC dc_;
   base::win::ScopedBitmap bitmap_;
-
-  DISALLOW_COPY_AND_ASSIGN(ScopedCreateDCWithBitmap);
 };
 
 base::win::RegKey OpenThemeRegKey(REGSAM access) {
@@ -243,6 +246,7 @@ gfx::Size NativeThemeWin::GetPartSize(Part part,
 }
 
 void NativeThemeWin::Paint(cc::PaintCanvas* canvas,
+                           const ui::ColorProvider* color_provider,
                            Part part,
                            State state,
                            const gfx::Rect& rect,
@@ -254,17 +258,17 @@ void NativeThemeWin::Paint(cc::PaintCanvas* canvas,
 
   switch (part) {
     case kMenuPopupGutter:
-      PaintMenuGutter(canvas, rect, color_scheme);
+      PaintMenuGutter(canvas, color_provider, rect);
       return;
     case kMenuPopupSeparator:
-      PaintMenuSeparator(canvas, extra.menu_separator, color_scheme);
+      PaintMenuSeparator(canvas, color_provider, extra.menu_separator);
       return;
     case kMenuPopupBackground:
-      PaintMenuBackground(canvas, rect, color_scheme);
+      PaintMenuBackground(canvas, color_provider, rect);
       return;
     case kMenuItemBackground:
-      CommonThemePaintMenuItemBackground(this, canvas, state, rect,
-                                         extra.menu_item, color_scheme);
+      CommonThemePaintMenuItemBackground(this, color_provider, canvas, state,
+                                         rect, extra.menu_item);
       return;
     default:
       PaintIndirect(canvas, part, state, rect, extra);
@@ -323,23 +327,6 @@ void NativeThemeWin::ConfigureWebInstance() {
   web_instance->set_system_colors(GetSystemColors());
 }
 
-bool NativeThemeWin::AllowColorPipelineRedirection(
-    ColorScheme color_scheme) const {
-  return true;
-}
-
-SkColor NativeThemeWin::GetSystemColorDeprecated(ColorId color_id,
-                                                 ColorScheme color_scheme,
-                                                 bool apply_processing) const {
-  absl::optional<SkColor> color;
-  if (color_scheme == ColorScheme::kPlatformHighContrast &&
-      (color = GetPlatformHighContrastColor(color_id))) {
-    return color.value();
-  }
-  return NativeTheme::GetSystemColorDeprecated(color_id, color_scheme,
-                                               apply_processing);
-}
-
 NativeThemeWin::~NativeThemeWin() {
   // TODO(https://crbug.com/787692): Calling CloseHandles() here breaks
   // certain tests and the reliability bots.
@@ -377,9 +364,11 @@ void NativeThemeWin::UpdateSystemColors() {
         color_utils::GetSysSkColor(sys_color);
 }
 
-void NativeThemeWin::PaintMenuSeparator(cc::PaintCanvas* canvas,
-                                        const MenuSeparatorExtraParams& params,
-                                        ColorScheme color_scheme) const {
+void NativeThemeWin::PaintMenuSeparator(
+    cc::PaintCanvas* canvas,
+    const ColorProvider* color_provider,
+    const MenuSeparatorExtraParams& params) const {
+  DCHECK(color_provider);
   const gfx::RectF rect(*params.paint_rect);
   gfx::PointF start = rect.CenterPoint();
   gfx::PointF end = start;
@@ -392,27 +381,26 @@ void NativeThemeWin::PaintMenuSeparator(cc::PaintCanvas* canvas,
   }
 
   cc::PaintFlags flags;
-  flags.setColor(
-      GetSystemColor(NativeTheme::kColorId_MenuSeparatorColor, color_scheme));
+  flags.setColor(color_provider->GetColor(kColorMenuSeparator));
   canvas->drawLine(start.x(), start.y(), end.x(), end.y(), flags);
 }
 
 void NativeThemeWin::PaintMenuGutter(cc::PaintCanvas* canvas,
-                                     const gfx::Rect& rect,
-                                     ColorScheme color_scheme) const {
+                                     const ColorProvider* color_provider,
+                                     const gfx::Rect& rect) const {
+  DCHECK(color_provider);
   cc::PaintFlags flags;
-  flags.setColor(
-      GetSystemColor(NativeTheme::kColorId_MenuSeparatorColor, color_scheme));
+  flags.setColor(color_provider->GetColor(kColorMenuSeparator));
   int position_x = rect.x() + rect.width() / 2;
   canvas->drawLine(position_x, rect.y(), position_x, rect.bottom(), flags);
 }
 
 void NativeThemeWin::PaintMenuBackground(cc::PaintCanvas* canvas,
-                                         const gfx::Rect& rect,
-                                         ColorScheme color_scheme) const {
+                                         const ColorProvider* color_provider,
+                                         const gfx::Rect& rect) const {
+  DCHECK(color_provider);
   cc::PaintFlags flags;
-  flags.setColor(
-      GetSystemColor(NativeTheme::kColorId_MenuBackgroundColor, color_scheme));
+  flags.setColor(color_provider->GetColor(kColorMenuBackground));
   canvas->drawRect(gfx::RectToSkRect(rect), flags);
 }
 
@@ -456,7 +444,7 @@ void NativeThemeWin::PaintDirect(SkCanvas* destination_canvas,
           PaintLeftMenuArrowThemed(hdc, handle, part_id, state_id, rect);
           return;
         }
-        FALLTHROUGH;
+        [[fallthrough]];
       case kCheckbox:
       case kInnerSpinButton:
       case kMenuCheck:
@@ -605,112 +593,6 @@ void NativeThemeWin::PaintDirect(SkCanvas* destination_canvas,
     case kSliderThumb:
     case kMaxPart:
       NOTREACHED();
-  }
-}
-
-absl::optional<SkColor> NativeThemeWin::GetPlatformHighContrastColor(
-    ColorId color_id) const {
-  switch (color_id) {
-    // Window Background
-    case kColorId_WindowBackground:
-    case kColorId_DialogBackground:
-    case kColorId_BubbleBackground:
-    case kColorId_BubbleFooterBackground:
-    case kColorId_TreeBackground:
-    case kColorId_TableHeaderBackground:
-    case kColorId_TableBackground:
-    case kColorId_TableBackgroundAlternate:
-    case kColorId_TooltipBackground:
-    case kColorId_ProminentButtonDisabledColor:
-    case kColorId_NotificationBackground:
-      return system_colors_[SystemThemeColor::kWindow];
-
-    // Window Text
-    case kColorId_MenuIconColor:
-    case kColorId_DialogForeground:
-    case kColorId_LabelEnabledColor:
-    case kColorId_LabelSecondaryColor:
-    case kColorId_TreeText:
-    case kColorId_TableText:
-    case kColorId_TableHeaderText:
-    case kColorId_TableGroupingIndicatorColor:
-    case kColorId_TableHeaderSeparator:
-    case kColorId_TooltipIcon:
-    case kColorId_TooltipText:
-    case kColorId_ThrobberSpinningColor:
-    case kColorId_AlertSeverityLow:
-    case kColorId_AlertSeverityMedium:
-    case kColorId_AlertSeverityHigh:
-    case kColorId_DefaultIconColor:
-      return system_colors_[SystemThemeColor::kWindowText];
-
-    // Hyperlinks
-    case kColorId_LinkEnabled:
-    case kColorId_LinkPressed:
-    case kColorId_HighlightedMenuItemForegroundColor:
-      return system_colors_[SystemThemeColor::kHotlight];
-
-    // Gray/Disabled Text
-    case kColorId_DisabledMenuItemForegroundColor:
-    case kColorId_LinkDisabled:
-    case kColorId_LabelDisabledColor:
-    case kColorId_ButtonDisabledColor:
-    case kColorId_ThrobberWaitingColor:
-      return system_colors_[SystemThemeColor::kGrayText];
-
-    // Button Background
-    case kColorId_ButtonColor:
-    case kColorId_MenuBackgroundColor:
-    case kColorId_HighlightedMenuItemBackgroundColor:
-    case kColorId_TextfieldDefaultBackground:
-    case kColorId_TextfieldReadOnlyBackground:
-      return system_colors_[SystemThemeColor::kButtonFace];
-
-    // Button Text Foreground
-    case kColorId_EnabledMenuItemForegroundColor:
-    case kColorId_MenuItemMinorTextColor:
-    case kColorId_MenuBorderColor:
-    case kColorId_MenuSeparatorColor:
-    case kColorId_SeparatorColor:
-    case kColorId_TextfieldDefaultColor:
-    case kColorId_ButtonEnabledColor:
-    case kColorId_UnfocusedBorderColor:
-    case kColorId_TextfieldPlaceholderColor:
-    case kColorId_TextfieldReadOnlyColor:
-    case kColorId_FocusedBorderColor:
-    case kColorId_TabTitleColorActive:
-    case kColorId_TabTitleColorInactive:
-    case kColorId_TabBottomBorder:
-      return system_colors_[SystemThemeColor::kButtonText];
-
-    // Highlight/Selected Background
-    case kColorId_ProminentButtonColor:
-    case kColorId_ProminentButtonFocusedColor:
-    case kColorId_ButtonBorderColor:
-    case kColorId_DropdownSelectedBackgroundColor:
-    case kColorId_FocusedMenuItemBackgroundColor:
-    case kColorId_LabelTextSelectionBackgroundFocused:
-    case kColorId_TextfieldSelectionBackgroundFocused:
-    case kColorId_TooltipIconHovered:
-    case kColorId_TreeSelectionBackgroundFocused:
-    case kColorId_TreeSelectionBackgroundUnfocused:
-    case kColorId_TableSelectionBackgroundFocused:
-    case kColorId_TableSelectionBackgroundUnfocused:
-      return system_colors_[SystemThemeColor::kHighlight];
-
-    // Highlight/Selected Text Foreground
-    case kColorId_TextOnProminentButtonColor:
-    case kColorId_SelectedMenuItemForegroundColor:
-    case kColorId_TextfieldSelectionColor:
-    case kColorId_LabelTextSelectionColor:
-    case kColorId_TreeSelectedText:
-    case kColorId_TreeSelectedTextUnfocused:
-    case kColorId_TableSelectedText:
-    case kColorId_TableSelectedTextUnfocused:
-      return system_colors_[SystemThemeColor::kHighlightText];
-
-    default:
-      return absl::nullopt;
   }
 }
 
@@ -1496,7 +1378,7 @@ int NativeThemeWin::GetWindowsState(Part part,
     case kScrollbarVerticalThumb:
       if ((state == kHovered) && !extra.scrollbar_thumb.is_hovering)
         return SCRBS_HOT;
-      FALLTHROUGH;
+      [[fallthrough]];
     case kScrollbarHorizontalTrack:
     case kScrollbarVerticalTrack:
       switch (state) {

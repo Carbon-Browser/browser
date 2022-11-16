@@ -9,6 +9,7 @@
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
+#include "components/services/storage/public/cpp/buckets/constants.h"
 #include "content/browser/native_io/native_io_manager.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -53,7 +54,7 @@ class NativeIOManagerBrowserTest : public ContentBrowserTest {
   base::FilePath GetNativeIODir(base::FilePath user_data_dir,
                                 const GURL& test_url) {
     std::string origin_identifier =
-        storage::GetIdentifierFromOrigin(test_url.GetOrigin());
+        storage::GetIdentifierFromOrigin(test_url.DeprecatedGetOriginAsURL());
     base::FilePath root_dir =
         NativeIOManager::GetNativeIORootPath(user_data_dir);
     return root_dir.AppendASCII(origin_identifier);
@@ -70,12 +71,8 @@ class NativeIOManagerBrowserTest : public ContentBrowserTest {
       scoped_refptr<storage::QuotaManager> quota_manager,
       const blink::StorageKey& storage_key,
       base::OnceCallback<void(blink::mojom::QuotaStatusCode)> callback) {
-    storage::QuotaClientTypes nativeio_quota_client_type;
-    nativeio_quota_client_type.insert(storage::QuotaClientType::kNativeIO);
-
-    quota_manager->DeleteStorageKeyData(
-        storage_key, blink::mojom::StorageType::kTemporary,
-        nativeio_quota_client_type, std::move(callback));
+    quota_manager->FindAndDeleteBucketData(
+        storage_key, storage::kDefaultBucketName, std::move(callback));
   }
 
  private:
@@ -100,7 +97,7 @@ IN_PROC_BROWSER_TEST_F(NativeIOManagerBrowserTest, ReadFromDeletedFile) {
 
 // This test depends on POSIX file permissions, which do not work on Windows,
 // Android, or Fuchsia.
-#if !defined(OS_WIN) && !defined(OS_ANDROID) && !defined(OS_FUCHSIA)
+#if !BUILDFLAG(IS_WIN) && !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_FUCHSIA)
 IN_PROC_BROWSER_TEST_F(NativeIOManagerBrowserTest, TryOpenProtectedFileTest) {
   const GURL& test_url = embedded_test_server()->GetURL(
       "/native_io/try_open_protected_file_test.html");
@@ -119,11 +116,12 @@ IN_PROC_BROWSER_TEST_F(NativeIOManagerBrowserTest, TryOpenProtectedFileTest) {
   EXPECT_EQ(EvalJs(browser, "tryOpeningFile()").ExtractString(),
             expected_caught_error);
 }
-#endif  // !defined(OS_WIN) && !defined(OS_ANDROID) && !defined(OS_FUCHSIA)
+#endif  // !BUILDFLAG(IS_WIN) && !BUILDFLAG(IS_ANDROID) &&
+        // !BUILDFLAG(IS_FUCHSIA)
 
 // TODO(http://crbug.com/1177307): This test might be flaky on some Windows
 // configurations.
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #define MAYBE_FileUsageAfterOriginRemoval DISABLED_FileUsageAfterOriginRemoval
 #else
 #define MAYBE_FileUsageAfterOriginRemoval FileUsageAfterOriginRemoval

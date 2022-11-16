@@ -11,7 +11,7 @@
 
 #include "base/callback_forward.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "components/webapps/browser/installable/installable_data.h"
@@ -38,6 +38,10 @@ class InstallableManager
       public content::WebContentsUserData<InstallableManager> {
  public:
   explicit InstallableManager(content::WebContents* web_contents);
+
+  InstallableManager(const InstallableManager&) = delete;
+  InstallableManager& operator=(const InstallableManager&) = delete;
+
   ~InstallableManager() override;
 
   // Returns the minimum icon size in pixels for a site to be installable.
@@ -146,32 +150,34 @@ class InstallableManager
 
   struct IconProperty {
     IconProperty();
-    IconProperty(IconProperty&& other);
-    ~IconProperty();
+
+    // This class contains a std::unique_ptr and therefore must be move-only.
+    IconProperty(const IconProperty&) = delete;
+    IconProperty& operator=(const IconProperty&) = delete;
+
+    IconProperty(IconProperty&& other) noexcept;
     IconProperty& operator=(IconProperty&& other);
 
-    InstallableStatusCode error;
-    IconPurpose purpose;
+    ~IconProperty();
+
+    InstallableStatusCode error = NO_ERROR_DETECTED;
+    IconPurpose purpose = blink::mojom::ManifestImageResource_Purpose::ANY;
     GURL url;
     std::unique_ptr<SkBitmap> icon;
-    bool fetched;
-
-   private:
-    // This class contains a std::unique_ptr and therefore must be move-only.
-    DISALLOW_COPY_AND_ASSIGN(IconProperty);
+    bool fetched = false;
   };
 
   // Returns true if an icon for the given usage is fetched successfully, or
   // doesn't need to fallback to another icon purpose (i.e. MASKABLE icon
   // allback to ANY icon).
-  bool IsIconFetchComplete(const IconUsage usage) const;
+  bool IsIconFetchComplete(IconUsage usage) const;
 
   // Returns true if we have tried fetching maskable icon. Note that this also
   // returns true if the fallback icon(IconPurpose::ANY) is fetched.
-  bool IsMaskableIconFetched(const IconUsage usage) const;
+  bool IsMaskableIconFetched(IconUsage usage) const;
 
   // Sets the icon matching |usage| as fetched.
-  void SetIconFetched(const IconUsage usage);
+  void SetIconFetched(IconUsage usage);
 
   // Returns a vector with all errors encountered for the resources requested in
   // |params|, or an empty vector if there is no error.
@@ -183,9 +189,9 @@ class InstallableManager
   InstallableStatusCode valid_manifest_error() const;
   void set_valid_manifest_error(InstallableStatusCode error_code);
   InstallableStatusCode worker_error() const;
-  InstallableStatusCode icon_error(const IconUsage usage);
-  GURL& icon_url(const IconUsage usage);
-  const SkBitmap* icon(const IconUsage usage);
+  InstallableStatusCode icon_error(IconUsage usage);
+  GURL& icon_url(IconUsage usage);
+  const SkBitmap* icon(IconUsage usage);
 
   // Returns the WebContents to which this object is attached, or nullptr if the
   // WebContents doesn't exist or is currently being destroyed.
@@ -231,21 +237,19 @@ class InstallableManager
 
   void CheckAndFetchBestIcon(int ideal_icon_size_in_px,
                              int minimum_icon_size_in_px,
-                             const IconPurpose purpose,
-                             const IconUsage usage);
-  void OnIconFetched(const GURL icon_url,
-                     const IconUsage usage,
-                     const SkBitmap& bitmap);
+                             IconPurpose purpose,
+                             IconUsage usage);
+  void OnIconFetched(GURL icon_url, IconUsage usage, const SkBitmap& bitmap);
 
   void CheckAndFetchScreenshots();
-  void OnScreenshotFetched(const GURL screenshot_url, const SkBitmap& bitmap);
+  void OnScreenshotFetched(GURL screenshot_url, const SkBitmap& bitmap);
 
   // content::ServiceWorkerContextObserver overrides
   void OnRegistrationCompleted(const GURL& pattern) override;
   void OnDestruct(content::ServiceWorkerContext* context) override;
 
   // content::WebContentsObserver overrides
-  void DidFinishNavigation(content::NavigationHandle* handle) override;
+  void PrimaryPageChanged(content::Page& page) override;
   void DidUpdateWebManifestURL(content::RenderFrameHost* rfh,
                                const GURL& manifest_url) override;
   void WebContentsDestroyed() override;
@@ -278,13 +282,11 @@ class InstallableManager
 
   // Owned by the storage partition attached to the content::WebContents which
   // this object is scoped to.
-  content::ServiceWorkerContext* service_worker_context_;
+  raw_ptr<content::ServiceWorkerContext> service_worker_context_;
 
   base::WeakPtrFactory<InstallableManager> weak_factory_{this};
 
   WEB_CONTENTS_USER_DATA_KEY_DECL();
-
-  DISALLOW_COPY_AND_ASSIGN(InstallableManager);
 };
 
 }  // namespace webapps

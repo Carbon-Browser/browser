@@ -5,6 +5,7 @@
 #ifndef CHROME_BROWSER_UI_COCOA_KEYSTONE_INFOBAR_DELEGATE_H_
 #define CHROME_BROWSER_UI_COCOA_KEYSTONE_INFOBAR_DELEGATE_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "components/infobars/core/confirm_infobar_delegate.h"
 
@@ -17,6 +18,11 @@ class WebContents;
 
 class KeystonePromotionInfoBarDelegate : public ConfirmInfoBarDelegate {
  public:
+  KeystonePromotionInfoBarDelegate(const KeystonePromotionInfoBarDelegate&) =
+      delete;
+  KeystonePromotionInfoBarDelegate& operator=(
+      const KeystonePromotionInfoBarDelegate&) = delete;
+
   // Creates a keystone promotion delegate and adds it to the
   // infobars::ContentInfoBarManager associated with |webContents|.
   static void Create(content::WebContents* webContents);
@@ -39,15 +45,13 @@ class KeystonePromotionInfoBarDelegate : public ConfirmInfoBarDelegate {
   bool Cancel() override;
 
   // The prefs to use.
-  PrefService* prefs_;  // weak
+  raw_ptr<PrefService> prefs_;  // weak
 
   // Whether the info bar should be dismissed on the next navigation.
   bool can_expire_;
 
   // Used to delay the expiration of the info bar.
   base::WeakPtrFactory<KeystonePromotionInfoBarDelegate> weak_ptr_factory_;
-
-  DISALLOW_COPY_AND_ASSIGN(KeystonePromotionInfoBarDelegate);
 };
 
 class KeystoneInfoBar {

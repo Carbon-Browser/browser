@@ -9,6 +9,9 @@
 namespace site_isolation {
 namespace features {
 
+const base::Feature kCacheSiteIsolationMemoryThreshold{
+    "CacheSiteIsolationMemoryThreshold", base::FEATURE_DISABLED_BY_DEFAULT};
+
 // Controls a mode for dynamically process-isolating sites where the user has
 // entered a password.  This is intended to be used primarily when full site
 // isolation is turned off.  To check whether this mode is enabled, use
@@ -19,7 +22,7 @@ const base::Feature kSiteIsolationForPasswordSites {
   "site-isolation-for-password-sites",
 // Enabled by default on Android; see https://crbug.com/849815.  Note that this
 // should not affect Android Webview, which does not include this code.
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
       base::FEATURE_ENABLED_BY_DEFAULT
 #else
       base::FEATURE_DISABLED_BY_DEFAULT
@@ -40,26 +43,31 @@ const base::Feature kSiteIsolationForPasswordSites {
 const base::Feature kSiteIsolationForOAuthSites{
   "SiteIsolationForOAuthSites",
 // Enabled by default on Android only; see https://crbug.com/1206770.
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
       base::FEATURE_ENABLED_BY_DEFAULT
 #else
       base::FEATURE_DISABLED_BY_DEFAULT
 #endif
 };
 
-// kSitePerProcessOnlyForHighMemoryClients is checked before kSitePerProcess,
-// and (if enabled) can restrict if kSitePerProcess feature is checked at all -
-// no check will be made on devices with low memory (these devices will have no
-// Site Isolation via kSitePerProcess trials and won't activate either the
-// control or the experiment group).  The threshold for what is considered a
-// "low memory" device is set (in MB) via a field trial param with the name
-// defined below ("site-per-process-low-memory-cutoff-mb") and compared against
-// base::SysInfo::AmountOfPhysicalMemoryMB().
-const base::Feature kSitePerProcessOnlyForHighMemoryClients{
-    "site-per-process-only-for-high-memory-clients",
-    base::FEATURE_DISABLED_BY_DEFAULT};
-const char kSitePerProcessOnlyForHighMemoryClientsParamName[] =
-    "site-per-process-low-memory-cutoff-mb";
+// kSiteIsolationMemoryThresholds is checked before individual site isolation
+// mode base::Features (such as kSitePerProcess or
+// kSiteIsolationForPasswordSites), and (if enabled) can restrict those modes
+// to not apply to low-memory devices below a certain memory threshold.  The
+// threshold for what is considered a "low memory" device can be set (in MB)
+// via field trial params with the names defined below, with independent params
+// for strict site isolation (kSitePerProcess) and partial site isolation modes
+// (kSiteIsolationForPasswordSites, kSiteIsolationForOAuthSites, etc). These
+// thresholds are compared against base::SysInfo::AmountOfPhysicalMemoryMB().
+// On devices below the memory threshold, the site isolation features such as
+// kSitePerProcess won't be checked at all, and field trials won't activate
+// either the control or the experiment group.
+const base::Feature kSiteIsolationMemoryThresholds{
+    "SiteIsolationMemoryThresholds", base::FEATURE_DISABLED_BY_DEFAULT};
+const char kStrictSiteIsolationMemoryThresholdParamName[] =
+    "strict_site_isolation_threshold_mb";
+const char kPartialSiteIsolationMemoryThresholdParamName[] =
+    "partial_site_isolation_threshold_mb";
 
 }  // namespace features
 }  // namespace site_isolation

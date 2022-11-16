@@ -14,6 +14,7 @@
 #include "components/autofill/core/browser/data_model/autofill_profile.h"
 #include "components/autofill/core/browser/data_model/credit_card.h"
 #include "components/autofill/core/browser/data_model/credit_card_cloud_token_data.h"
+#include "components/autofill/core/browser/data_model/iban.h"
 #include "components/autofill/core/browser/field_types.h"
 #include "components/autofill/core/browser/form_structure.h"
 #include "components/autofill/core/browser/proto/api_v1.pb.h"
@@ -68,8 +69,12 @@ struct FormGroupValue {
 // Convenience declaration for multiple FormGroup values.
 using FormGroupValues = std::vector<FormGroupValue>;
 
-// Creates a non-empty LocalFrameToken (no variation among different calls).
-LocalFrameToken GetLocalFrameToken();
+using RandomizeFrame = base::StrongAlias<struct RandomizeFrameTag, bool>;
+
+// Creates non-empty LocalFrameToken. If `randomize` is false, the
+// LocalFrameToken is stable across multiple calls.
+LocalFrameToken MakeLocalFrameToken(
+    RandomizeFrame randomize = RandomizeFrame(false));
 
 // Creates new, pairwise distinct FormRendererIds.
 FormRendererId MakeFormRendererId();
@@ -77,11 +82,16 @@ FormRendererId MakeFormRendererId();
 // Creates new, pairwise distinct FieldRendererIds.
 FieldRendererId MakeFieldRendererId();
 
-// Creates new, pairwise distinct FormGlobalIds.
-FormGlobalId MakeFormGlobalId();
+// Creates new, pairwise distinct FormGlobalIds. If `randomize` is true, the
+// LocalFrameToken is generated randomly, otherwise it is stable across multiple
+// calls.
+FormGlobalId MakeFormGlobalId(
+    RandomizeFrame randomize_frame = RandomizeFrame(false));
 
-// Creates new, pairwise distinct FieldGlobalIds.
-FieldGlobalId MakeFieldGlobalId();
+// Creates new, pairwise distinct FieldGlobalIds. If `randomize` is true, the
+// LocalFrameToken is generated randomly, otherwise it is stable.
+FieldGlobalId MakeFieldGlobalId(
+    RandomizeFrame randomize_frame = RandomizeFrame(false));
 
 // Helper function to set values and verification statuses to a form group.
 void SetFormGroupValues(FormGroup& form_group,
@@ -193,6 +203,9 @@ AutofillProfile GetServerProfile();
 // Returns a server profile full of dummy info, different to the above.
 AutofillProfile GetServerProfile2();
 
+// Returns an IBAN full of dummy info.
+Iban GetIban();
+
 // Returns a credit card full of dummy info.
 CreditCard GetCreditCard();
 
@@ -208,12 +221,17 @@ CreditCard GetIncompleteCreditCard();
 
 // Returns a masked server card full of dummy info.
 CreditCard GetMaskedServerCard();
+CreditCard GetMaskedServerCardWithNonLegacyId();
+CreditCard GetMaskedServerCardWithLegacyId();
 CreditCard GetMaskedServerCardAmex();
 CreditCard GetMaskedServerCardWithNickname();
 CreditCard GetMaskedServerCardWithInvalidNickname();
 
 // Returns a full server card full of dummy info.
 CreditCard GetFullServerCard();
+
+// Returns a virtual card full of dummy info.
+CreditCard GetVirtualCard();
 
 // Returns a randomly generated credit card of |record_type|. Note that the
 // card is not guaranteed to be valid/sane from a card validation standpoint.
@@ -226,18 +244,21 @@ CreditCardCloudTokenData GetCreditCardCloudTokenData1();
 // one above.
 CreditCardCloudTokenData GetCreditCardCloudTokenData2();
 
-// Returns an Autofill card-linked offer data full of dummy info.
-AutofillOfferData GetCardLinkedOfferData1();
+// Returns an Autofill card-linked offer data full of dummy info. Use
+// |offer_id| to optionally set the offer id.
+AutofillOfferData GetCardLinkedOfferData1(int64_t offer_id = 111);
 
 // Returns an Autofill card-linked offer data full of dummy info, different from
-// the one above.
-AutofillOfferData GetCardLinkedOfferData2();
+// the one above. Use |offer_id| to optionally set the offer id.
+AutofillOfferData GetCardLinkedOfferData2(int64_t offer_id = 222);
 
 // Returns an Autofill promo code offer data full of dummy info, using |origin|
-// if provided and expired if |is_expired| is true.
+// if provided and expired if |is_expired| is true. Use |offer_id| to optionally
+// set the offer id.
 AutofillOfferData GetPromoCodeOfferData(
     GURL origin = GURL("http://www.example.com"),
-    bool is_expired = false);
+    bool is_expired = false,
+    int64_t offer_id = 333);
 
 // A unit testing utility that is common to a number of the Autofill unit
 // tests.  |SetProfileInfo| provides a quick way to populate a profile with

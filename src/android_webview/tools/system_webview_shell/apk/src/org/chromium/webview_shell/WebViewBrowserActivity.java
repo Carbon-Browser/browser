@@ -6,7 +6,6 @@ package org.chromium.webview_shell;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
-import android.annotation.TargetApi;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
@@ -39,6 +38,7 @@ import android.view.inputmethod.InputMethodManager;
 import android.webkit.CookieManager;
 import android.webkit.GeolocationPermissions;
 import android.webkit.PermissionRequest;
+import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -47,12 +47,16 @@ import android.widget.FrameLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultCallback;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 import androidx.webkit.TracingConfig;
 import androidx.webkit.TracingController;
 import androidx.webkit.WebSettingsCompat;
 import androidx.webkit.WebViewClientCompat;
+import androidx.webkit.WebViewCompat;
 import androidx.webkit.WebViewFeature;
 
 import org.chromium.base.ContextUtils;
@@ -109,14 +113,12 @@ public class WebViewBrowserActivity extends AppCompatActivity {
                 Manifest.permission.CAMERA);
     }
 
-    private static final Pattern WEBVIEW_VERSION_PATTERN =
-            Pattern.compile("(Chrome/)([\\d\\.]+)\\s");
-
     private EditText mUrlBar;
     private WebView mWebView;
     private View mFullscreenView;
     private String mWebViewVersion;
     private boolean mEnableTracing;
+    private boolean mIsStoppingTracing;
 
     // Each time we make a request, store it here with an int key. onRequestPermissionsResult will
     // look up the request in order to grant the approprate permissions.
@@ -126,6 +128,14 @@ public class WebViewBrowserActivity extends AppCompatActivity {
     // Permit any number of slashes, since chromium seems to canonicalize bad values.
     private static final Pattern FILE_ANDROID_ASSET_PATTERN =
             Pattern.compile("^file:///android_(asset|res)/.*");
+
+    private ActivityResultLauncher<Void> mFileContents;
+    private ValueCallback<Uri[]> mFilePathCallback;
+    private MultiFileSelector mMultiFileSelector;
+
+    public void setFilePathCallback(ValueCallback<Uri[]> inCallback) {
+        mFilePathCallback = inCallback;
+    };
 
     // Work around our wonky API by wrapping a geo permission prompt inside a regular
     // PermissionRequest.
@@ -196,7 +206,7 @@ public class WebViewBrowserActivity extends AppCompatActivity {
         }
     }
 
-    private static class TracingLogger extends FileOutputStream {
+    private class TracingLogger extends FileOutputStream {
         private long mByteCount;
         private long mChunkCount;
         private final Activity mActivity;
@@ -217,6 +227,7 @@ public class WebViewBrowserActivity extends AppCompatActivity {
         public void close() throws IOException {
             super.close();
             showDialog(mByteCount);
+            mIsStoppingTracing = false;
         }
 
         private void showDialog(long nbBytes) {
@@ -345,6 +356,15 @@ public class WebViewBrowserActivity extends AppCompatActivity {
         setUrlBarText(url);
         setUrlFail(false);
         loadUrlFromUrlBar(mUrlBar);
+
+        mMultiFileSelector = new MultiFileSelector();
+        mFileContents =
+                registerForActivityResult(mMultiFileSelector, new ActivityResultCallback<Uri[]>() {
+                    @Override
+                    public void onActivityResult(Uri[] result) {
+                        mFilePathCallback.onReceiveValue(result);
+                    }
+                });
     }
 
     @Override
@@ -387,13 +407,7 @@ public class WebViewBrowserActivity extends AppCompatActivity {
             // turn them on for consistency with normal browsers.
             CookieManager.getInstance().setAcceptThirdPartyCookies(webview, true);
         }
-
-        Matcher matcher = WEBVIEW_VERSION_PATTERN.matcher(settings.getUserAgentString());
-        if (matcher.find()) {
-            mWebViewVersion = matcher.group(2);
-        } else {
-            mWebViewVersion = "-";
-        }
+        mWebViewVersion = WebViewCompat.getCurrentWebViewPackage(this).versionName;
         getSupportActionBar().setTitle(getResources().getString(R.string.title_activity_browser));
         getSupportActionBar().setSubtitle(mWebViewVersion);
 
@@ -477,6 +491,15 @@ public class WebViewBrowserActivity extends AppCompatActivity {
                 ((ViewGroup) mFullscreenView.getParent()).removeView(mFullscreenView);
                 mFullscreenView = null;
             }
+
+            @Override
+            public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback,
+                    WebChromeClient.FileChooserParams fileChooserParams) {
+                setFilePathCallback(filePathCallback);
+                mMultiFileSelector.setFileChooserParams(fileChooserParams);
+                mFileContents.launch(null);
+                return true;
+            }
         });
 
         mWebView = webview;
@@ -487,7 +510,7 @@ public class WebViewBrowserActivity extends AppCompatActivity {
 
     // WebKit permissions which can be granted because either they have no associated Android
     // permission or the associated Android permission has been granted
-    @TargetApi(Build.VERSION_CODES.M)
+    @RequiresApi(Build.VERSION_CODES.M)
     private boolean canGrant(String webkitPermission) {
         String androidPermission = sPermissions.get(webkitPermission);
         if (androidPermission.equals(NO_ANDROID_PERMISSION)) {
@@ -582,13 +605,17 @@ public class WebViewBrowserActivity extends AppCompatActivity {
             menu.findItem(R.id.menu_force_dark_auto).setEnabled(false);
             menu.findItem(R.id.menu_force_dark_on).setEnabled(false);
         }
-        return true;
+        return super.onCreateOptionsMenu(menu);
     }
 
     @Override
     public boolean onPrepareOptionsMenu(Menu menu) {
-        if (WebViewFeature.isFeatureSupported(WebViewFeature.TRACING_CONTROLLER_BASIC_USAGE)) {
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.TRACING_CONTROLLER_BASIC_USAGE)
+                && !mIsStoppingTracing) {
+            menu.findItem(R.id.menu_enable_tracing).setEnabled(true);
             menu.findItem(R.id.menu_enable_tracing).setChecked(mEnableTracing);
+        } else {
+            menu.findItem(R.id.menu_enable_tracing).setEnabled(false);
         }
         if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
             int forceDarkState = WebSettingsCompat.getForceDark(mWebView.getSettings());
@@ -643,6 +670,7 @@ public class WebViewBrowserActivity extends AppCompatActivity {
                     try {
                         tracingController.stop(new TracingLogger(outFileName, this),
                                 Executors.newSingleThreadExecutor());
+                        mIsStoppingTracing = true;
                     } catch (FileNotFoundException e) {
                         throw new RuntimeException(e);
                     }
@@ -694,26 +722,25 @@ public class WebViewBrowserActivity extends AppCompatActivity {
     // but we still use it because we support api level 19 and up.
     @SuppressWarnings("deprecation")
     private void initializeSettings(WebSettings settings) {
-        File appcache = null;
         File geolocation = null;
         try (StrictModeContext ignored = StrictModeContext.allowDiskWrites()) {
-            appcache = getDir("appcache", 0);
             geolocation = getDir("geolocation", 0);
         }
 
         settings.setJavaScriptEnabled(true);
 
         // configure local storage apis and their database paths.
-        settings.setAppCachePath(appcache.getPath());
         settings.setGeolocationDatabasePath(geolocation.getPath());
 
-        settings.setAppCacheEnabled(true);
         settings.setGeolocationEnabled(true);
         settings.setDatabaseEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setAllowFileAccess(true);
+        settings.setAllowContentAccess(true);
 
         // Default layout behavior for chrome on android.
+        settings.setBuiltInZoomControls(true);
+        settings.setDisplayZoomControls(false);
         settings.setUseWideViewPort(true);
         settings.setLoadWithOverviewMode(true);
         settings.setLayoutAlgorithm(WebSettings.LayoutAlgorithm.TEXT_AUTOSIZING);

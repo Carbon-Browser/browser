@@ -5,15 +5,13 @@
 #ifndef COMPONENTS_REPORTING_ENCRYPTION_ENCRYPTION_MODULE_H_
 #define COMPONENTS_REPORTING_ENCRYPTION_ENCRYPTION_MODULE_H_
 
-#include <atomic>
-
 #include "base/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/strings/string_piece.h"
 #include "base/time/time.h"
 #include "components/reporting/encryption/encryption.h"
 #include "components/reporting/encryption/encryption_module_interface.h"
-#include "components/reporting/proto/record.pb.h"
+#include "components/reporting/proto/synced/record.pb.h"
 #include "components/reporting/util/status.h"
 #include "components/reporting/util/statusor.h"
 
@@ -26,8 +24,7 @@ class EncryptionModule : public EncryptionModuleInterface {
 
   // Factory method creates |EncryptionModule| object.
   static scoped_refptr<EncryptionModuleInterface> Create(
-      base::TimeDelta renew_encryption_key_period =
-          base::TimeDelta::FromDays(1));
+      base::TimeDelta renew_encryption_key_period = base::Days(1));
 
  protected:
   // Constructor can only be called by |Create| factory method.

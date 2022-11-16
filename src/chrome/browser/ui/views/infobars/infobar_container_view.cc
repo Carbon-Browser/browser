@@ -9,6 +9,7 @@
 #include "cc/paint/paint_flags.h"
 #include "cc/paint/paint_shader.h"
 #include "chrome/browser/themes/theme_properties.h"
+#include "chrome/browser/ui/color/chrome_color_id.h"
 #include "chrome/browser/ui/view_ids.h"
 #include "chrome/browser/ui/views/infobars/infobar_view.h"
 #include "chrome/grit/generated_resources.h"
@@ -50,10 +51,11 @@ void ContentShadow::OnPaint(gfx::Canvas* canvas) {
   // Outdent the sides to make the shadow appear uniform in the corners.
   gfx::RectF container_bounds(parent()->GetLocalBounds());
   View::ConvertRectToTarget(parent(), this, &container_bounds);
-  container_bounds.Inset(-views::BubbleBorder::kShadowBlur, 0);
+  container_bounds.Inset(
+      gfx::InsetsF::VH(0, -views::BubbleBorder::kShadowBlur));
 
   views::BubbleBorder::DrawBorderAndShadow(gfx::RectFToSkRect(container_bounds),
-                                           canvas, GetNativeTheme());
+                                           canvas, GetColorProvider());
 }
 
 BEGIN_METADATA(ContentShadow, views::View)
@@ -65,9 +67,9 @@ InfoBarContainerView::InfoBarContainerView(Delegate* delegate)
     : infobars::InfoBarContainer(delegate),
       content_shadow_(new ContentShadow()) {
   SetID(VIEW_ID_INFO_BAR_CONTAINER);
-  AddChildView(content_shadow_);
-  views::SetCascadingThemeProviderColor(this, views::kCascadingBackgroundColor,
-                                        ThemeProperties::COLOR_TOOLBAR);
+  AddChildView(content_shadow_.get());
+  views::SetCascadingColorProviderColor(this, views::kCascadingBackgroundColor,
+                                        kColorToolbar);
 }
 
 InfoBarContainerView::~InfoBarContainerView() {

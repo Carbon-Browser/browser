@@ -6,7 +6,7 @@
 
 #include "base/bind.h"
 #include "base/location.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 
 namespace ash {
@@ -33,6 +33,20 @@ void SearchResultContainerView::SetResults(
 
   Update();
 }
+
+absl::optional<SearchResultContainerView::ResultsAnimationInfo>
+SearchResultContainerView::ScheduleResultAnimations(
+    const ResultsAnimationInfo& aggregate_animation_info) {
+  NOTREACHED();
+  return absl::nullopt;
+}
+
+bool SearchResultContainerView::HasAnimatingChildView() {
+  NOTREACHED();
+  return false;
+}
+
+void SearchResultContainerView::OnSelectedResultChanged() {}
 
 void SearchResultContainerView::Update() {
   update_factory_.InvalidateWeakPtrs();

@@ -13,7 +13,6 @@
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/command_line.h"
-#include "base/containers/contains.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/apps/app_service/web_contents_app_id_utils.h"
@@ -40,7 +39,7 @@
 #include "content/public/browser/notification_service.h"
 #include "content/public/browser/session_storage_namespace.h"
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 #include "chrome/browser/app_controller_mac.h"
 #endif
 
@@ -182,7 +181,8 @@ void SessionServiceBase::SetWindowVisibleOnAllWorkspaces(
 }
 
 void SessionServiceBase::ResetFromCurrentBrowsers() {
-  ScheduleResetCommands();
+  if (is_saving_enabled_)
+    ScheduleResetCommands();
 }
 
 void SessionServiceBase::SetTabWindow(const SessionID& window_id,
@@ -266,6 +266,9 @@ void SessionServiceBase::TabClosing(WebContents* contents) {
 }
 
 void SessionServiceBase::TabRestored(WebContents* tab, bool pinned) {
+  if (!is_saving_enabled_)
+    return;
+
   sessions::SessionTabHelper* session_tab_helper =
       sessions::SessionTabHelper::FromWebContents(tab);
   if (!ShouldTrackChangesToWindow(session_tab_helper->window_id()))
@@ -333,7 +336,12 @@ bool SessionServiceBase::ShouldUseDelayedSave() {
 }
 
 void SessionServiceBase::OnWillSaveCommands() {
+  if (!is_saving_enabled_)
+    return;
+
   RebuildCommandsIfRequired();
+  did_save_commands_at_least_once_ |=
+      !command_storage_manager()->pending_commands().empty();
 }
 
 void SessionServiceBase::OnErrorWritingSessionCommands() {
@@ -522,7 +530,11 @@ void SessionServiceBase::BuildCommandsForTab(
                                  ? tab->GetController().GetPendingEntry()
                                  : tab->GetController().GetEntryAtIndex(i);
     DCHECK(entry);
-    if (ShouldTrackURLForRestore(entry->GetVirtualURL())) {
+    if (ShouldTrackURLForRestore(entry->GetVirtualURL()) &&
+        !entry->IsInitialEntry()) {
+      // Don't try to persist initial NavigationEntry, as it is not actually
+      // associated with any navigation and will just result in about:blank on
+      // session restore.
       const SerializedNavigationEntry navigation =
           ContentSerializedNavigationBuilder::FromNavigationEntry(i, entry);
       command_storage_manager()->AppendRebuildCommand(
@@ -550,6 +562,7 @@ void SessionServiceBase::BuildCommandsForBrowser(
     Browser* browser,
     IdToRange* tab_to_available_range,
     std::set<SessionID>* windows_to_track) {
+  DCHECK(is_saving_enabled_);
   DCHECK(browser);
   DCHECK(browser->session_id().is_valid());
 
@@ -589,12 +602,15 @@ void SessionServiceBase::BuildCommandsForBrowser(
 
   // Set the visual data for each tab group.
   TabStripModel* tab_strip = browser->tab_strip_model();
-  TabGroupModel* group_model = tab_strip->group_model();
-  for (const tab_groups::TabGroupId& group_id : group_model->ListTabGroups()) {
-    const tab_groups::TabGroupVisualData* visual_data =
-        group_model->GetTabGroup(group_id)->visual_data();
-    command_storage_manager()->AppendRebuildCommand(
-        sessions::CreateTabGroupMetadataUpdateCommand(group_id, visual_data));
+  if (tab_strip->SupportsTabGroups()) {
+    TabGroupModel* group_model = tab_strip->group_model();
+    for (const tab_groups::TabGroupId& group_id :
+         group_model->ListTabGroups()) {
+      const tab_groups::TabGroupVisualData* visual_data =
+          group_model->GetTabGroup(group_id)->visual_data();
+      command_storage_manager()->AppendRebuildCommand(
+          sessions::CreateTabGroupMetadataUpdateCommand(group_id, visual_data));
+    }
   }
 
   for (int i = 0; i < tab_strip->count(); ++i) {
@@ -612,6 +628,7 @@ void SessionServiceBase::BuildCommandsForBrowser(
 void SessionServiceBase::BuildCommandsFromBrowsers(
     IdToRange* tab_to_available_range,
     std::set<SessionID>* windows_to_track) {
+  DCHECK(is_saving_enabled_);
   for (auto* browser : *BrowserList::GetInstance()) {
     // Make sure the browser has tabs and a window. Browser's destructor
     // removes itself from the BrowserList. When a browser is closed the
@@ -629,6 +646,9 @@ void SessionServiceBase::BuildCommandsFromBrowsers(
 
 void SessionServiceBase::ScheduleCommand(
     std::unique_ptr<sessions::SessionCommand> command) {
+  if (!is_saving_enabled_)
+    return;
+
   DCHECK(command);
   if (ReplacePendingCommand(command_storage_manager_.get(), &command))
     return;
@@ -687,4 +707,20 @@ bool SessionServiceBase::GetAvailableRangeForTest(const SessionID& tab_id,
 
   *range = i->second;
   return true;
+}
+
+void SessionServiceBase::SetSavingEnabled(bool enabled) {
+  if (is_saving_enabled_ == enabled)
+    return;
+  is_saving_enabled_ = enabled;
+  if (!is_saving_enabled_) {
+    // Transitioning from enabled to disabled should happen very early on,
+    // before any commands are actually written. If commands are written, then
+    // the purpose of disabling will have failed (because by writing some
+    // commands the previous session is going to be lost on exit).
+    DCHECK(!did_save_commands_at_least_once_);
+    command_storage_manager()->ClearPendingCommands();
+  } else {
+    ScheduleResetCommands();
+  }
 }

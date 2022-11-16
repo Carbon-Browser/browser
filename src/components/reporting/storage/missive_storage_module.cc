@@ -10,8 +10,8 @@
 #include "base/bind.h"
 #include "base/callback.h"
 #include "base/memory/ptr_util.h"
-#include "components/reporting/proto/record.pb.h"
-#include "components/reporting/proto/record_constants.pb.h"
+#include "components/reporting/proto/synced/record.pb.h"
+#include "components/reporting/proto/synced/record_constants.pb.h"
 #include "components/reporting/util/status.h"
 
 namespace reporting {
@@ -36,22 +36,20 @@ scoped_refptr<MissiveStorageModule> MissiveStorageModule::Create(
   return base::WrapRefCounted(new MissiveStorageModule(std::move(delegate)));
 }
 
-void MissiveStorageModule::AddRecord(
-    Priority priority,
-    Record record,
-    base::OnceCallback<void(Status)> callback) {
+void MissiveStorageModule::AddRecord(Priority priority,
+                                     Record record,
+                                     EnqueueCallback callback) {
   delegate_->AddRecord(priority, std::move(record), std::move(callback));
 }
 
-void MissiveStorageModule::Flush(Priority priority,
-                                 base::OnceCallback<void(Status)> callback) {
+void MissiveStorageModule::Flush(Priority priority, FlushCallback callback) {
   delegate_->Flush(priority, std::move(callback));
 }
 
 void MissiveStorageModule::ReportSuccess(
-    SequencingInformation sequencing_information,
+    SequenceInformation sequence_information,
     bool force) {
-  delegate_->ReportSuccess(sequencing_information, force);
+  delegate_->ReportSuccess(sequence_information, force);
 }
 
 void MissiveStorageModule::UpdateEncryptionKey(

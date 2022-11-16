@@ -5,25 +5,28 @@
 #ifndef CHROME_BROWSER_ASH_WEB_APPLICATIONS_FILE_MANAGER_WEB_APP_INFO_H_
 #define CHROME_BROWSER_ASH_WEB_APPLICATIONS_FILE_MANAGER_WEB_APP_INFO_H_
 
+#include <vector>
+
 #include "ash/webui/shortcut_customization_ui/url_constants.h"
-#include "chrome/browser/web_applications/system_web_apps/system_web_app_delegate.h"
-#include "chrome/browser/web_applications/system_web_apps/system_web_app_types.h"
+#include "chrome/browser/ash/system_web_apps/types/system_web_app_delegate.h"
+#include "chrome/browser/ash/system_web_apps/types/system_web_app_type.h"
 
-struct WebApplicationInfo;
+struct WebAppInstallInfo;
 
-class FileManagerSystemAppDelegate : public web_app::SystemWebAppDelegate {
+class FileManagerSystemAppDelegate : public ash::SystemWebAppDelegate {
  public:
   explicit FileManagerSystemAppDelegate(Profile* profile);
 
-  // web_app::SystemWebAppDelegate overrides:
-  std::unique_ptr<WebApplicationInfo> GetWebAppInfo() const override;
+  // ash::SystemWebAppDelegate overrides:
+  std::unique_ptr<WebAppInstallInfo> GetWebAppInfo() const override;
   bool ShouldCaptureNavigations() const override;
-  bool ShouldBeSingleWindow() const override;
+  bool ShouldReuseExistingWindow() const override;
   bool ShouldShowNewWindowMenuOption() const override;
   bool IsAppEnabled() const override;
+  std::vector<std::string> GetAppIdsToUninstallAndReplace() const override;
 };
 
-// Return a WebApplicationInfo used to install the app.
-std::unique_ptr<WebApplicationInfo> CreateWebAppInfoForFileManager();
+// Return a WebAppInstallInfo used to install the app.
+std::unique_ptr<WebAppInstallInfo> CreateWebAppInfoForFileManager();
 
 #endif  // CHROME_BROWSER_ASH_WEB_APPLICATIONS_FILE_MANAGER_WEB_APP_INFO_H_

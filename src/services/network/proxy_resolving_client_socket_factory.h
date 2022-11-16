@@ -8,7 +8,7 @@
 #include <memory>
 
 #include "base/component_export.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "net/socket/connect_job_factory.h"
 #include "net/ssl/ssl_config.h"
@@ -32,14 +32,20 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) ProxyResolvingClientSocketFactory {
   // pools by instantiating and owning a separate |network_session_|.
   explicit ProxyResolvingClientSocketFactory(
       net::URLRequestContext* request_context);
+
+  ProxyResolvingClientSocketFactory(const ProxyResolvingClientSocketFactory&) =
+      delete;
+  ProxyResolvingClientSocketFactory& operator=(
+      const ProxyResolvingClientSocketFactory&) = delete;
+
   ~ProxyResolvingClientSocketFactory();
 
   // Creates a socket. |url|'s host and port specify where a connection will be
   // established to. The full URL will be only used for proxy resolution. Caller
   // doesn't need to explicitly sanitize the url, any sensitive data (like
   // embedded usernames and passwords), and local data (i.e. reference fragment)
-  // will be sanitized by net::ProxyService::ResolveProxyHelper() before the url
-  // is disclosed to the proxy.
+  // will be sanitized by net::ProxyResolutionService before the url is
+  // disclosed to the PAC script.
   //
   // |network_isolation_key| indicates the network shard to use for storing
   // shared network state (DNS cache entries, shared H2/QUIC proxy connections,
@@ -57,11 +63,9 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) ProxyResolvingClientSocketFactory {
  private:
   std::unique_ptr<net::HttpNetworkSession> network_session_;
   std::unique_ptr<net::CommonConnectJobParams> common_connect_job_params_;
-  net::URLRequestContext* request_context_;
+  raw_ptr<net::URLRequestContext> request_context_;
   std::unique_ptr<net::ConnectJobFactory> connect_job_factory_ =
       std::make_unique<net::ConnectJobFactory>();
-
-  DISALLOW_COPY_AND_ASSIGN(ProxyResolvingClientSocketFactory);
 };
 
 }  // namespace network

@@ -358,10 +358,9 @@ TEST_F(OmniboxFieldTrialTest, LocalZeroSuggestAgeThreshold) {
   base::test::ScopedFeatureList scoped_feature_list_;
 
   // The default value can be overridden.
-  scoped_feature_list_.InitWithFeaturesAndParameters(
-      {{omnibox::kOmniboxLocalZeroSuggestAgeThreshold,
-        {{OmniboxFieldTrial::kOmniboxLocalZeroSuggestAgeThresholdParam, "3"}}}},
-      {});
+  scoped_feature_list_.InitAndEnableFeatureWithParameters(
+      omnibox::kOmniboxLocalZeroSuggestAgeThreshold,
+      {{OmniboxFieldTrial::kOmniboxLocalZeroSuggestAgeThresholdParam, "3"}});
   base::Time age_threshold =
       OmniboxFieldTrial::GetLocalHistoryZeroSuggestAgeThreshold();
   EXPECT_EQ(3, base::TimeDelta(base::Time::Now() - age_threshold).InDays());
@@ -369,12 +368,13 @@ TEST_F(OmniboxFieldTrialTest, LocalZeroSuggestAgeThreshold) {
   // If the age threshold is not parsable to an unsigned integer, the default
   // value is used.
   scoped_feature_list_.Reset();
-  scoped_feature_list_.InitWithFeaturesAndParameters(
-      {{omnibox::kOmniboxLocalZeroSuggestAgeThreshold,
-        {{OmniboxFieldTrial::kOmniboxLocalZeroSuggestAgeThresholdParam, "j"}}}},
-      {});
+  scoped_feature_list_.InitAndEnableFeatureWithParameters(
+      omnibox::kOmniboxLocalZeroSuggestAgeThreshold,
+      {{OmniboxFieldTrial::kOmniboxLocalZeroSuggestAgeThresholdParam, "j"}});
+  const int expected_age_threshold_days = 60;
   age_threshold = OmniboxFieldTrial::GetLocalHistoryZeroSuggestAgeThreshold();
-  EXPECT_EQ(7, base::TimeDelta(base::Time::Now() - age_threshold).InDays());
+  EXPECT_EQ(expected_age_threshold_days,
+            base::TimeDelta(base::Time::Now() - age_threshold).InDays());
 }
 
 TEST_F(OmniboxFieldTrialTest, HUPNewScoringFieldTrial) {
@@ -445,13 +445,13 @@ TEST_F(OmniboxFieldTrialTest, HalfLifeTimeDecay) {
   HUPScoringParams::ScoreBuckets buckets;
 
   // No decay by default.
-  EXPECT_EQ(1.0, buckets.HalfLifeTimeDecay(base::TimeDelta::FromDays(7)));
+  EXPECT_EQ(1.0, buckets.HalfLifeTimeDecay(base::Days(7)));
 
   buckets.set_half_life_days(7);
-  EXPECT_EQ(0.5, buckets.HalfLifeTimeDecay(base::TimeDelta::FromDays(7)));
-  EXPECT_EQ(0.25, buckets.HalfLifeTimeDecay(base::TimeDelta::FromDays(14)));
-  EXPECT_EQ(1.0, buckets.HalfLifeTimeDecay(base::TimeDelta::FromDays(0)));
-  EXPECT_EQ(1.0, buckets.HalfLifeTimeDecay(base::TimeDelta::FromDays(-1)));
+  EXPECT_EQ(0.5, buckets.HalfLifeTimeDecay(base::Days(7)));
+  EXPECT_EQ(0.25, buckets.HalfLifeTimeDecay(base::Days(14)));
+  EXPECT_EQ(1.0, buckets.HalfLifeTimeDecay(base::Days(0)));
+  EXPECT_EQ(1.0, buckets.HalfLifeTimeDecay(base::Days(-1)));
 }
 
 TEST_F(OmniboxFieldTrialTest, GetSuggestPollingStrategy) {

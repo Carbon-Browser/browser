@@ -7,6 +7,7 @@
 
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "chromeos/crosapi/mojom/select_file.mojom-forward.h"
 #include "ui/shell_dialogs/select_file_dialog.h"
 #include "ui/shell_dialogs/select_file_dialog_factory.h"
@@ -48,7 +49,7 @@ class SHELL_DIALOGS_EXPORT SelectFileDialogLacros : public SelectFileDialog {
                       void* params) override;
   bool HasMultipleFileTypeChoicesImpl() override;
   bool IsRunning(gfx::NativeWindow owning_window) const override;
-  void ListenerDestroyed() override {}
+  void ListenerDestroyed() override;
 
  private:
   // Private because SelectFileDialog is ref-counted.
@@ -60,7 +61,10 @@ class SHELL_DIALOGS_EXPORT SelectFileDialogLacros : public SelectFileDialog {
                   int file_type_index);
 
   // Cached parameters from the call to SelectFileImpl.
-  void* params_ = nullptr;
+  raw_ptr<void> params_ = nullptr;
+
+  // The unique ID of the wayland shell surface that owns this dialog.
+  std::string owning_shell_window_id_;
 };
 
 }  // namespace ui

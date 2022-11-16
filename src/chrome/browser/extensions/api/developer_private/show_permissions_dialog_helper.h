@@ -8,7 +8,7 @@
 #include <memory>
 
 #include "base/bind.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/extensions/extension_install_prompt.h"
 
 class Profile;
@@ -26,6 +26,10 @@ class Extension;
 // install-prompt style dialog.
 class ShowPermissionsDialogHelper {
  public:
+  ShowPermissionsDialogHelper(const ShowPermissionsDialogHelper&) = delete;
+  ShowPermissionsDialogHelper& operator=(const ShowPermissionsDialogHelper&) =
+      delete;
+
   static void Show(content::BrowserContext* browser_context,
                    content::WebContents* web_contents,
                    const Extension* extension,
@@ -43,13 +47,11 @@ class ShowPermissionsDialogHelper {
 
   std::unique_ptr<ExtensionInstallPrompt> prompt_;
 
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
 
   base::OnceClosure on_complete_;
 
   std::string extension_id_;
-
-  DISALLOW_COPY_AND_ASSIGN(ShowPermissionsDialogHelper);
 };
 
 }  // namespace extensions

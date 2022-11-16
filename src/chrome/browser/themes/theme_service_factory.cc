@@ -19,21 +19,24 @@
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/extension_registry_factory.h"
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include "chrome/browser/themes/theme_helper_win.h"
 #endif
 
 // TODO(crbug.com/1052397): Revisit the macro expression once build flag switch
 // of lacros-chrome is complete.
-#if defined(OS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
 #include "chrome/browser/themes/theme_service_aura_linux.h"
-#include "ui/views/linux_ui/linux_ui.h"
+#endif
+
+#if BUILDFLAG(IS_LINUX)
+#include "ui/linux/linux_ui.h"
 #endif
 
 namespace {
 
 const ThemeHelper& GetThemeHelper() {
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   using ThemeHelper = ThemeHelperWin;
 #endif
 
@@ -76,13 +79,13 @@ ThemeServiceFactory::ThemeServiceFactory()
   DependsOn(extensions::ExtensionSystemFactory::GetInstance());
 }
 
-ThemeServiceFactory::~ThemeServiceFactory() {}
+ThemeServiceFactory::~ThemeServiceFactory() = default;
 
 KeyedService* ThemeServiceFactory::BuildServiceInstanceFor(
     content::BrowserContext* profile) const {
 // TODO(crbug.com/1052397): Revisit the macro expression once build flag switch
 // of lacros-chrome is complete.
-#if defined(OS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
   using ThemeService = ThemeServiceAuraLinux;
 #endif
 
@@ -96,13 +99,13 @@ void ThemeServiceFactory::RegisterProfilePrefs(
     user_prefs::PrefRegistrySyncable* registry) {
 // TODO(crbug.com/1052397): Revisit the macro expression once build flag switch
 // of lacros-chrome is complete.
-#if defined(OS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
   bool default_uses_system_theme = false;
-
-  const views::LinuxUI* linux_ui = views::LinuxUI::instance();
+#if BUILDFLAG(IS_LINUX)
+  const ui::LinuxUi* linux_ui = ui::LinuxUi::instance();
   if (linux_ui)
     default_uses_system_theme = linux_ui->GetDefaultUsesSystemTheme();
-
+#endif
   registry->RegisterBooleanPref(prefs::kUsesSystemTheme,
                                 default_uses_system_theme);
 #endif

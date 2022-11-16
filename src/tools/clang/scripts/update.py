@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # Copyright (c) 2012 The Chromium Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -9,41 +9,37 @@
 It can also be run stand-alone as a convenient way of installing a well-tested
 near-tip-of-tree clang version:
 
-  $ curl -s https://raw.githubusercontent.com/chromium/chromium/main/tools/clang/scripts/update.py | python - --output-dir=/tmp/clang
+  $ curl -s https://raw.githubusercontent.com/chromium/chromium/main/tools/clang/scripts/update.py | python3 - --output-dir=/tmp/clang
 
 (Note that the output dir may be deleted and re-created if it exists.)
 """
 
-from __future__ import division
-from __future__ import print_function
+import sys
+assert sys.version_info >= (3, 0), 'This script requires Python 3.'
+
 import argparse
 import os
 import platform
 import shutil
 import stat
-import sys
 import tarfile
 import tempfile
 import time
-
-try:
-  from urllib2 import HTTPError, URLError, urlopen
-except ImportError: # For Py3 compatibility
-  from urllib.error import HTTPError, URLError
-  from urllib.request import urlopen
-
+import urllib.request
+import urllib.error
 import zipfile
+import zlib
 
 
 # Do NOT CHANGE this if you don't know what you're doing -- see
 # https://chromium.googlesource.com/chromium/src/+/main/docs/updating_clang.md
 # Reverting problematic clang rolls is safe, though.
 # This is the output of `git describe` and is usable as a commit-ish.
-CLANG_REVISION = 'llvmorg-14-init-3191-g0e03450a'
+CLANG_REVISION = 'llvmorg-15-init-15652-g89a99ec9'
 CLANG_SUB_REVISION = 1
 
 PACKAGE_VERSION = '%s-%s' % (CLANG_REVISION, CLANG_SUB_REVISION)
-RELEASE_VERSION = '14.0.0'
+RELEASE_VERSION = '15.0.0'
 
 CDS_URL = os.environ.get('CDS_CLANG_BUCKET_OVERRIDE',
     'https://commondatastorage.googleapis.com/chromium-browser-clang')
@@ -101,29 +97,47 @@ def DownloadUrl(url, output_file):
     try:
       sys.stdout.write('Downloading %s ' % url)
       sys.stdout.flush()
-      response = urlopen(url)
-      total_size = int(response.info().get('Content-Length').strip())
+      request = urllib.request.Request(url)
+      request.add_header('Accept-Encoding', 'gzip')
+      response = urllib.request.urlopen(request)
+      total_size = None
+      if 'Content-Length' in response.headers:
+        total_size = int(response.headers['Content-Length'].strip())
+
+      is_gzipped = response.headers.get('Content-Encoding',
+                                        '').strip() == 'gzip'
+      if is_gzipped:
+        gzip_decode = zlib.decompressobj(zlib.MAX_WBITS + 16)
+
       bytes_done = 0
       dots_printed = 0
       while True:
         chunk = response.read(CHUNK_SIZE)
         if not chunk:
           break
-        output_file.write(chunk)
         bytes_done += len(chunk)
-        num_dots = TOTAL_DOTS * bytes_done // total_size
-        sys.stdout.write('.' * (num_dots - dots_printed))
-        sys.stdout.flush()
-        dots_printed = num_dots
-      if bytes_done != total_size:
-        raise URLError("only got %d of %d bytes" %
-                       (bytes_done, total_size))
+
+        if is_gzipped:
+          chunk = gzip_decode.decompress(chunk)
+        output_file.write(chunk)
+
+        if total_size is not None:
+          num_dots = TOTAL_DOTS * bytes_done // total_size
+          sys.stdout.write('.' * (num_dots - dots_printed))
+          sys.stdout.flush()
+          dots_printed = num_dots
+      if total_size is not None and bytes_done != total_size:
+        raise urllib.error.URLError("only got %d of %d bytes" %
+                                    (bytes_done, total_size))
+      if is_gzipped:
+        output_file.write(gzip_decode.flush())
       print(' Done.')
       return
-    except URLError as e:
+    except urllib.error.URLError as e:
       sys.stdout.write('\n')
       print(e)
-      if num_retries == 0 or isinstance(e, HTTPError) and e.code == 404:
+      if num_retries == 0 or isinstance(
+          e, urllib.error.HTTPError) and e.code == 404:
         raise e
       num_retries -= 1
       print('Retrying in %d s ...' % retry_wait_s)
@@ -149,7 +163,7 @@ def DownloadAndUnpack(url, output_dir, path_prefixes=None):
       assert path_prefixes is None
       zipfile.ZipFile(f).extractall(path=output_dir)
     else:
-      t = tarfile.open(mode='r:gz', fileobj=f)
+      t = tarfile.open(mode='r:*', fileobj=f)
       members = None
       if path_prefixes is not None:
         members = [m for m in t.getmembers()
@@ -172,7 +186,7 @@ def DownloadAndUnpackPackage(package_file, output_dir, host_os):
   cds_full_url = GetPlatformUrlPrefix(host_os) + cds_file
   try:
     DownloadAndUnpack(cds_full_url, output_dir)
-  except URLError:
+  except urllib.error.URLError:
     print('Failed to download prebuilt clang package %s' % cds_file)
     print('Use build.py if you want to build locally.')
     print('Exiting.')
@@ -190,7 +204,7 @@ def DownloadAndUnpackClangMacRuntime(output_dir):
   ]
   try:
     DownloadAndUnpack(cds_full_url, output_dir, path_prefixes)
-  except URLError:
+  except urllib.error.URLError:
     print('Failed to download prebuilt clang %s' % cds_file)
     print('Use build.py if you want to build locally.')
     print('Exiting.')
@@ -206,7 +220,7 @@ def DownloadAndUnpackClangWinRuntime(output_dir):
   ]
   try:
     DownloadAndUnpack(cds_full_url, output_dir, path_prefixes)
-  except URLError:
+  except urllib.error.URLError:
     print('Failed to download prebuilt clang %s' % cds_file)
     print('Use build.py if you want to build locally.')
     print('Exiting.')
@@ -223,6 +237,8 @@ def UpdatePackage(package_name, host_os):
     package_file = 'clang'
   elif package_name == 'clang-tidy':
     package_file = 'clang-tidy'
+  elif package_name == 'clang-libs':
+    package_file = 'clang-libs'
   elif package_name == 'objdump':
     package_file = 'llvmobjdump'
   elif package_name == 'translation_unit':
@@ -278,7 +294,7 @@ def UpdatePackage(package_name, host_os):
   return 0
 
 
-def main():
+def GetDefaultHostOs():
   _PLATFORM_HOST_OS_MAP = {
       'darwin': 'mac',
       'cygwin': 'win',
@@ -288,7 +304,10 @@ def main():
   default_host_os = _PLATFORM_HOST_OS_MAP.get(sys.platform, sys.platform)
   if default_host_os == 'mac' and platform.machine() == 'arm64':
     default_host_os = 'mac-arm64'
+  return default_host_os
 
+
+def main():
   parser = argparse.ArgumentParser(description='Update clang.')
   parser.add_argument('--output-dir',
                       help='Where to extract the package.')
@@ -296,9 +315,9 @@ def main():
                       help='What package to update (default: clang)',
                       default='clang')
   parser.add_argument('--host-os',
-                      help='Which host OS to download for (default: %s)' %
-                      default_host_os,
-                      default=default_host_os,
+                      help=('Which host OS to download for '
+                            '(default: %(default)s)'),
+                      default=GetDefaultHostOs(),
                       choices=('linux', 'mac', 'mac-arm64', 'win'))
   parser.add_argument('--print-revision', action='store_true',
                       help='Print current clang revision and exit.')

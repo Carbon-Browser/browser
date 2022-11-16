@@ -9,7 +9,6 @@ import android.os.Bundle;
 import android.os.Parcel;
 import android.os.ParcelFileDescriptor;
 import android.os.Parcelable;
-import android.os.SystemClock;
 
 import androidx.annotation.IntDef;
 import androidx.annotation.NonNull;
@@ -17,8 +16,10 @@ import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.Log;
 import org.chromium.base.StreamUtil;
+import org.chromium.base.TimeUtils.UptimeMillisTimer;
 import org.chromium.base.annotations.AccessedByNative;
 import org.chromium.base.annotations.JniIgnoreNatives;
+import org.chromium.base.metrics.RecordHistogram;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -82,7 +83,8 @@ abstract class Linker {
     protected static final boolean DEBUG = LibraryLoader.DEBUG;
 
     // Constants used to pass the shared RELRO Bundle through Binder.
-    private static final String SHARED_RELROS = "org.chromium.base.android.linker.shared_relros";
+    @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    static final String SHARED_RELROS = "org.chromium.base.android.linker.shared_relros";
     private static final String BASE_LOAD_ADDRESS =
             "org.chromium.base.android.linker.base_load_address";
 
@@ -111,6 +113,12 @@ abstract class Linker {
 
     @GuardedBy("mLock")
     private boolean mLinkerWasWaitingSynchronously;
+
+    // Keeps stats about searching the WebView memory reservation. After each _successful_ library
+    // load a UMA histogram is recorded using this data.
+    @GuardedBy("mLock")
+    @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    WebViewReservationSearchResult mWebviewReservationSearchResult;
 
     /**
      * The state machine of library loading.
@@ -153,6 +161,12 @@ abstract class Linker {
     @State
     protected int mState = State.UNINITIALIZED;
 
+    void pretendLibraryIsLoadedForTesting() {
+        synchronized (mLock) {
+            mState = State.DONE;
+        }
+    }
+
     private static Linker sLinkerForAssert;
 
     protected Linker() {
@@ -179,6 +193,28 @@ abstract class Linker {
                 return "RESERVE_RANDOM";
             default:
                 return String.valueOf(a);
+        }
+    }
+
+    /**
+     * A helper class to group a couple of stats related to WebView reservation lookup, and
+     * recording a histogram after that.
+     */
+    private static class WebViewReservationSearchResult {
+        private final boolean mSuccess;
+        private final long mDurationMs;
+
+        WebViewReservationSearchResult(boolean searchSucceeded, long searchDurationMs) {
+            mSuccess = searchSucceeded;
+            mDurationMs = searchDurationMs;
+        }
+
+        private void recordHistograms(String suffix) {
+            String successAsString = mSuccess ? "Found" : "NotFound";
+            RecordHistogram.recordTimesHistogram(
+                    "ChromiumAndroidLinker.TimeToFindWebViewReservation." + successAsString + "."
+                            + suffix,
+                    mDurationMs);
         }
     }
 
@@ -267,7 +303,7 @@ abstract class Linker {
     // Initializes the |mLocalLibInfo| and reserves the address range chosen (only when
     // keepMemoryReservationUntilLoad() returns true).
     @GuardedBy("mLock")
-    final void chooseAndReserveMemoryRange(
+    private void chooseAndReserveMemoryRange(
             boolean asRelroProducer, @PreferAddress int preference, long addressHint) {
         mLocalLibInfo = new LibInfo();
         mRelroProducer = asRelroProducer;
@@ -275,7 +311,11 @@ abstract class Linker {
         boolean keepReservation = keepMemoryReservationUntilLoad();
         switch (preference) {
             case PreferAddress.FIND_RESERVED:
-                if (getLinkerJni().findRegionReservedByWebViewZygote(mLocalLibInfo)) {
+                UptimeMillisTimer timer = new UptimeMillisTimer();
+                boolean reservationFound =
+                        getLinkerJni().findRegionReservedByWebViewZygote(mLocalLibInfo);
+                saveWebviewReservationSearchStats(reservationFound, timer.getElapsedMillis());
+                if (reservationFound) {
                     assert isNonZeroLoadAddress(mLocalLibInfo);
                     if (addressHint == 0 || addressHint == mLocalLibInfo.mLoadAddress) {
                         // Subtle: Both the producer and the consumer are expected to find the same
@@ -301,6 +341,26 @@ abstract class Linker {
                 // Intentional fallthrough.
             case PreferAddress.RESERVE_RANDOM:
                 getLinkerJni().findMemoryRegionAtRandomAddress(mLocalLibInfo, keepReservation);
+        }
+    }
+
+    @GuardedBy("mLock")
+    private void saveWebviewReservationSearchStats(boolean succeeded, long durationMs) {
+        assert mState == State.UNINITIALIZED;
+        assert mWebviewReservationSearchResult == null;
+        mWebviewReservationSearchResult = new WebViewReservationSearchResult(succeeded, durationMs);
+    }
+
+    /**
+     * Records UMA histograms related to library loading.
+     *
+     * @param suffix to append to the histogram name before recording it. A process type
+     * (e.g. "Browser") can be used here to avoid making the Linker aware of the process type.
+     */
+    void recordHistograms(String suffix) {
+        synchronized (mLock) {
+            if (mWebviewReservationSearchResult == null) return;
+            mWebviewReservationSearchResult.recordHistograms(suffix);
         }
     }
 
@@ -338,6 +398,40 @@ abstract class Linker {
     void setApkFilePath(String path) {}
 
     /**
+     * Tells whether atomic replacement of RELRO after library load should be performed. It is only
+     * supported by the ModernLinker. The latter should give up with RELRO on the retry that uses
+     * the RelroSharingMode.NO_SHARING.  This method should be called after loading the library.
+     */
+    @GuardedBy("mLock")
+    private boolean shouldAtomicallyReplaceRelroAfterLoad() {
+        // This is a demonstration of the unfortunate tight coupling between the Linker, and the
+        // implementation details in loadLibraryImplLocked() for each of the two subclasses.
+        // Decoupling it would be nontrivial given the reuse of |mLock| in the subclasses.
+        // Improvements of this kind will soon become unnecessary because the LegacyLinker will go
+        // away with the deprecation of the LegacyLinker in Android M.
+        if (mLinkerWasWaitingSynchronously) {
+            // The LegacyLinker was blocked waiting for |mRemoteLibInfo| to arrive, used it and
+            // nullified immediately.
+            return false;
+        }
+        if (mRemoteLibInfo != null && mState == State.DONE) {
+            // Only the ModernLinker can end up in the State.DONE while mRemoteLibInfo is not
+            // nullified yet. With an invalid load address it is impossible to locate the RELRO
+            // region in the current process. This could happen when the library loaded successfully
+            // only after the fallback to no sharing.
+            //
+            // TODO(pasko): There is no need to check for |mLoadAddress| here because in the worst
+            // case the zero address will be ignored on the native side of the
+            // atomicReplaceRelroLocked(). The takeSharedRelrosFromBundle() relies on zero addresses
+            // being ignored in native anyway. It seems the only effect of removing this check here
+            // will be extra added samples to the RelroSharingStatus2 histogram. This will be a tiny
+            // bit smoother to do after M99.
+            return mLocalLibInfo.mLoadAddress != 0;
+        }
+        return false;
+    }
+
+    /**
      * Loads the native library using a given mode.
      *
      * @param library The library name to load.
@@ -349,8 +443,12 @@ abstract class Linker {
         assert !library.equals(LINKER_JNI_LIBRARY);
         try {
             loadLibraryImplLocked(library, relroMode);
-            if (!mLinkerWasWaitingSynchronously && mRemoteLibInfo != null && mState == State.DONE) {
-                atomicReplaceRelroLocked(true /* relroAvailableImmediately */);
+            if (DEBUG) {
+                Log.i(TAG, "Attempt to replace RELRO: waswaiting=%b, remotenonnull=%b, state=%d",
+                        mLinkerWasWaitingSynchronously, mRemoteLibInfo != null, mState);
+            }
+            if (shouldAtomicallyReplaceRelroAfterLoad()) {
+                atomicReplaceRelroLocked(/* relroAvailableImmediately= */ true);
             }
         } finally {
             // Reset the state to serve the retry in loadLibrary().
@@ -400,6 +498,7 @@ abstract class Linker {
     void putSharedRelrosToBundle(Bundle bundle) {
         Bundle relros = null;
         synchronized (mLock) {
+            if (DEBUG) Log.i(TAG, "putSharedRelrosToBundle: state=%d", mState);
             if (mState == State.DONE_PROVIDE_RELRO) {
                 assert mRelroProducer;
                 relros = mLocalLibInfo.toBundle();
@@ -479,7 +578,7 @@ abstract class Linker {
      *
      * @param libraryName The name of the library to load.
      * @param relroMode Tells whether to use RELRO sharing and whether to produce or consume the
-     *          RELRO region.
+     *                  RELRO region.
      */
     protected abstract void loadLibraryImplLocked(
             String libraryName, @RelroSharingMode int relroMode);
@@ -536,7 +635,7 @@ abstract class Linker {
 
         // Most likely the relocations already have been provided at this point. If not, wait until
         // takeSharedRelrosFromBundle() notifies about RELROs arrival.
-        long startTime = DEBUG ? SystemClock.uptimeMillis() : 0;
+        UptimeMillisTimer timer = DEBUG ? new UptimeMillisTimer() : null;
         while (mRemoteLibInfo == null) {
             try {
                 mLock.wait();
@@ -546,8 +645,7 @@ abstract class Linker {
         }
 
         if (DEBUG) {
-            Log.i(TAG, "Time to wait for shared RELRO: %d ms",
-                    SystemClock.uptimeMillis() - startTime);
+            Log.i(TAG, "Time to wait for shared RELRO: %d ms", timer.getElapsedMillis());
         }
     }
 
@@ -594,6 +692,7 @@ abstract class Linker {
         }
 
         public static LibInfo fromBundle(Bundle bundle) {
+            bundle.setClassLoader(Linker.class.getClassLoader());
             return bundle.getParcelable(EXTRA_LINKER_LIB_INFO);
         }
 
@@ -693,7 +792,7 @@ abstract class Linker {
         /**
          * Finds the (named) address range reservation made by the system zygote and dedicated for
          * loading the native library. Reads /proc/self/maps, which is a slow operation (up to a few
-         * ms). TODO(pasko): collect measurements of the duration.
+         * ms).
          *
          * @param libInfo holds the output values: |mLoadAddress| and |mLoadSize|. On success saves
          *                the start address and the size of the webview memory reservation to them.

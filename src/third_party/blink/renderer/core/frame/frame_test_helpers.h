@@ -46,10 +46,10 @@
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "third_party/blink/public/common/input/web_mouse_event.h"
 #include "third_party/blink/public/mojom/fetch/fetch_api_request.mojom-blink-forward.h"
-#include "third_party/blink/public/mojom/frame/frame_owner_element_type.mojom-blink.h"
 #include "third_party/blink/public/mojom/frame/tree_scope_type.mojom-blink.h"
 #include "third_party/blink/public/mojom/input/input_handler.mojom-blink.h"
 #include "third_party/blink/public/mojom/page/widget.mojom-blink.h"
+#include "third_party/blink/public/mojom/widget/platform_widget.mojom-blink.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/scheduler/test/web_fake_thread_scheduler.h"
 #include "third_party/blink/public/platform/web_string.h"
@@ -70,26 +70,6 @@
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
-#define EXPECT_FLOAT_POINT_EQ(expected, actual)    \
-  do {                                             \
-    EXPECT_FLOAT_EQ((expected).X(), (actual).X()); \
-    EXPECT_FLOAT_EQ((expected).Y(), (actual).Y()); \
-  } while (false)
-
-#define EXPECT_FLOAT_SIZE_EQ(expected, actual)               \
-  do {                                                       \
-    EXPECT_FLOAT_EQ((expected).Width(), (actual).Width());   \
-    EXPECT_FLOAT_EQ((expected).Height(), (actual).Height()); \
-  } while (false)
-
-#define EXPECT_FLOAT_RECT_EQ(expected, actual)               \
-  do {                                                       \
-    EXPECT_FLOAT_EQ((expected).X(), (actual).X());           \
-    EXPECT_FLOAT_EQ((expected).Y(), (actual).Y());           \
-    EXPECT_FLOAT_EQ((expected).Width(), (actual).Width());   \
-    EXPECT_FLOAT_EQ((expected).Height(), (actual).Height()); \
-  } while (false)
-
 namespace base {
 class TickClock;
 }
@@ -100,6 +80,7 @@ class WebLocalFrameImpl;
 struct WebNavigationParams;
 class WebRemoteFrameImpl;
 class WebSettings;
+class WidgetInputHandlerManager;
 
 namespace frame_test_helpers {
 class TestWebFrameClient;
@@ -137,7 +118,7 @@ void PumpPendingRequestsForFrameToLoad(WebLocalFrame*);
 
 WebMouseEvent CreateMouseEvent(WebInputEvent::Type,
                                WebMouseEvent::Button,
-                               const IntPoint&,
+                               const gfx::Point&,
                                int modifiers);
 
 // Helpers for creating frames for test purposes. All methods that accept raw
@@ -173,6 +154,14 @@ WebRemoteFrameImpl* CreateRemoteChild(WebRemoteFrame& parent,
                                       const WebString& name = WebString(),
                                       scoped_refptr<SecurityOrigin> = nullptr,
                                       TestWebRemoteFrameClient* = nullptr);
+
+// Call Swap with a `new_remote_frame` stubbing out the mojo channels if
+// necessary.
+void SwapRemoteFrame(
+    WebFrame* old_frame,
+    WebRemoteFrame* new_remote_frame,
+    mojo::PendingAssociatedRemote<mojom::blink::RemoteFrameHost> =
+        mojo::NullAssociatedRemote());
 
 class TestWebFrameWidgetHost : public mojom::blink::WidgetHost,
                                public mojom::blink::FrameWidgetHost {
@@ -277,6 +266,24 @@ class TestWebFrameWidget : public WebFrameWidgetImpl {
       mojo::PendingAssociatedReceiver<mojom::blink::WidgetHost>,
       mojo::PendingAssociatedReceiver<mojom::blink::FrameWidgetHost>);
 
+  WidgetInputHandlerManager* GetWidgetInputHandlerManager() const;
+  void FlushInputHandlerTasks();
+
+  // Simulates an input event arriving at the WidgetInputHandlerManager from the
+  // browser process.  The event will run synchronously through the compositor's
+  // real input handling code (InputHandlerProxy and ThreadedInputHandler).
+  //
+  // Note that with scroll unification, tests should send gesture scroll events
+  // using this method, and not through WebFrameWidgetImpl::HandleInputEvent or
+  // EventHandler::HandleGestureEvent.  Tests that use this method for scrolling
+  // should also use SimTest::ResizeView or WebViewHelper::Resize (not directly
+  // WebFrameWidgetImpl::Resize) to set the initial size of the viewport.
+  //
+  void DispatchThroughCcInputHandler(const WebInputEvent& event);
+  const mojom::blink::DidOverscrollParamsPtr& last_overscroll() const {
+    return last_overscroll_;
+  }
+
   using WebFrameWidgetImpl::GetOriginalScreenInfo;
 
  protected:
@@ -290,6 +297,7 @@ class TestWebFrameWidget : public WebFrameWidgetImpl {
   bool ShouldAutoDetermineCompositingToLCDTextSetting() override {
     return false;
   }
+  bool AllowsScrollResampling() override { return false; }
 
  private:
   cc::FakeLayerTreeFrameSink* last_created_frame_sink_ = nullptr;
@@ -301,6 +309,7 @@ class TestWebFrameWidget : public WebFrameWidgetImpl {
   std::unique_ptr<TestWidgetInputHandlerHost> widget_input_handler_host_;
   viz::FrameSinkId frame_sink_id_;
   std::unique_ptr<TestWebFrameWidgetHost> widget_host_;
+  mojom::blink::DidOverscrollParamsPtr last_overscroll_;
 };
 
 class TestWebViewClient : public WebViewClient {
@@ -311,15 +320,17 @@ class TestWebViewClient : public WebViewClient {
   void DestroyChildViews();
 
   // WebViewClient overrides.
-  WebView* CreateView(WebLocalFrame* opener,
-                      const WebURLRequest&,
-                      const WebWindowFeatures&,
-                      const WebString& name,
-                      WebNavigationPolicy,
-                      network::mojom::blink::WebSandboxFlags,
-                      const SessionStorageNamespaceId&,
-                      bool& consumed_user_gesture,
-                      const absl::optional<WebImpression>&) override;
+  WebView* CreateView(
+      WebLocalFrame* opener,
+      const WebURLRequest&,
+      const WebWindowFeatures&,
+      const WebString& name,
+      WebNavigationPolicy,
+      network::mojom::blink::WebSandboxFlags,
+      const SessionStorageNamespaceId&,
+      bool& consumed_user_gesture,
+      const absl::optional<Impression>&,
+      const absl::optional<WebPictureInPictureWindowOptions>&) override;
 
  private:
   WTF::Vector<std::unique_ptr<WebViewHelper>> child_web_views_;
@@ -340,7 +351,8 @@ using CreateTestWebFrameWidgetCallback =
         bool hidden,
         bool never_composited,
         bool is_for_child_local_root,
-        bool is_for_nested_main_frame)>;
+        bool is_for_nested_main_frame,
+        bool is_for_scalable_page)>;
 
 // Convenience class for handling the lifetime of a WebView and its associated
 // mainframe in tests.
@@ -365,7 +377,9 @@ class WebViewHelper : public ScopedMockOverlayScrollbars {
       WebFrame* opener,
       TestWebFrameClient* = nullptr,
       TestWebViewClient* = nullptr,
-      void (*update_settings_func)(WebSettings*) = nullptr);
+      void (*update_settings_func)(WebSettings*) = nullptr,
+      absl::optional<mojom::blink::FencedFrameMode> fenced_frame_mode =
+          absl::nullopt);
 
   // Same as InitializeWithOpener(), but always sets the opener to null.
   WebViewImpl* Initialize(TestWebFrameClient* = nullptr,
@@ -434,6 +448,7 @@ class WebViewHelper : public ScopedMockOverlayScrollbars {
   WebLocalFrameImpl* LocalMainFrame() const;
   WebRemoteFrameImpl* RemoteMainFrame() const;
   TestWebFrameWidget* GetMainFrameWidget() const;
+  WidgetInputHandlerManager* GetWidgetInputHandlerManager() const;
 
   void set_viewport_enabled(bool viewport) {
     DCHECK(!web_view_)
@@ -457,12 +472,14 @@ class WebViewHelper : public ScopedMockOverlayScrollbars {
       bool hidden,
       bool never_composited,
       bool is_for_child_local_root,
-      bool is_for_nested_main_frame) {
+      bool is_for_nested_main_frame,
+      bool is_for_scalable_page) {
     return MakeGarbageCollected<C>(
         std::move(pass_key), std::move(frame_widget_host),
         std::move(frame_widget), std::move(widget_host), std::move(widget),
         std::move(task_runner), frame_sink_id, hidden, never_composited,
-        is_for_child_local_root, is_for_nested_main_frame);
+        is_for_child_local_root, is_for_nested_main_frame,
+        is_for_scalable_page);
   }
 
   blink::scheduler::WebAgentGroupScheduler& GetAgentGroupScheduler() {
@@ -470,8 +487,10 @@ class WebViewHelper : public ScopedMockOverlayScrollbars {
   }
 
  private:
-  void InitializeWebView(TestWebViewClient*,
-                         class WebView* opener);
+  void InitializeWebView(
+      TestWebViewClient*,
+      class WebView* opener,
+      absl::optional<mojom::blink::FencedFrameMode> fenced_frame_mode);
   void CheckFrameIsAssociatedWithWebView(WebFrame* frame);
 
   bool viewport_enabled_ = false;
@@ -514,7 +533,7 @@ class TestWebFrameClient : public WebLocalFrameClient {
       const WebString& fallback_name,
       const FramePolicy&,
       const WebFrameOwnerProperties&,
-      mojom::blink::FrameOwnerElementType,
+      FrameOwnerElementType,
       WebPolicyContainerBindParams policy_container_bind_params) override;
   void InitializeAsChildFrame(WebLocalFrame* parent) override;
   void DidStartLoading() override;
@@ -595,15 +614,10 @@ class TestWebRemoteFrameClient : public WebRemoteFrameClient {
 
   // WebRemoteFrameClient:
   void FrameDetached(DetachType) override;
-  AssociatedInterfaceProvider* GetRemoteAssociatedInterfaces() override {
-    return associated_interface_provider_.get();
-  }
 
  private:
   // If set to a non-null value, self-deletes on frame detach.
   std::unique_ptr<TestWebRemoteFrameClient> self_owned_;
-
-  std::unique_ptr<AssociatedInterfaceProvider> associated_interface_provider_;
 
   // This is null from when the client is created until it is initialized with
   // Bind().
@@ -615,6 +629,7 @@ class TestWidgetInputHandlerHost : public mojom::blink::WidgetInputHandlerHost {
   mojo::PendingRemote<mojom::blink::WidgetInputHandlerHost> BindNewRemote();
 
   void SetTouchActionFromMain(cc::TouchAction touch_action) override;
+  void SetPanAction(mojom::blink::PanAction pan_action) override;
   void DidOverscroll(mojom::blink::DidOverscrollParamsPtr params) override;
   void DidStartScrollingViewport() override;
   void ImeCancelComposition() override;

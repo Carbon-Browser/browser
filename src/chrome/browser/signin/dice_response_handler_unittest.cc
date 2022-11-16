@@ -11,7 +11,7 @@
 #include "base/check.h"
 #include "base/command_line.h"
 #include "base/files/scoped_temp_dir.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/notreached.h"
 #include "base/test/scoped_feature_list.h"
@@ -48,6 +48,9 @@ class DiceTestSigninClient : public TestSigninClient, public GaiaAuthConsumer {
   explicit DiceTestSigninClient(PrefService* pref_service)
       : TestSigninClient(pref_service), consumer_(nullptr) {}
 
+  DiceTestSigninClient(const DiceTestSigninClient&) = delete;
+  DiceTestSigninClient& operator=(const DiceTestSigninClient&) = delete;
+
   ~DiceTestSigninClient() override {}
 
   std::unique_ptr<GaiaAuthFetcher> CreateGaiaAuthFetcher(
@@ -73,9 +76,7 @@ class DiceTestSigninClient : public TestSigninClient, public GaiaAuthConsumer {
   }
 
  private:
-  GaiaAuthConsumer* consumer_;
-
-  DISALLOW_COPY_AND_ASSIGN(DiceTestSigninClient);
+  raw_ptr<GaiaAuthConsumer> consumer_;
 };
 
 class DiceResponseHandlerTest : public testing::Test,
@@ -117,8 +118,7 @@ class DiceResponseHandlerTest : public testing::Test,
     AboutSigninInternals::RegisterPrefs(pref_service_.registry());
     auto account_reconcilor_delegate =
         std::make_unique<signin::DiceAccountReconcilorDelegate>(
-            &signin_client_,
-            /*migration_completed=*/false);
+            identity_manager());
     account_reconcilor_ = std::make_unique<AccountReconcilor>(
         identity_test_env_.identity_manager(), &signin_client_,
         std::move(account_reconcilor_delegate));
@@ -224,7 +224,7 @@ class TestProcessDiceHeaderDelegate : public ProcessDiceHeaderDelegate {
   }
 
  private:
-  DiceResponseHandlerTest* owner_;
+  raw_ptr<DiceResponseHandlerTest> owner_;
 };
 
 // Checks that a SIGNIN action triggers a token exchange request.
@@ -275,7 +275,7 @@ TEST_F(DiceResponseHandlerTest, SupportOAuthOutageInDice) {
   EXPECT_EQ(1, reconcilor_blocked_count_);
   EXPECT_EQ(0, reconcilor_unblocked_count_);
   task_environment_.FastForwardBy(
-      base::TimeDelta::FromHours(kLockAccountReconcilorTimeoutHours + 1));
+      base::Hours(kLockAccountReconcilorTimeoutHours + 1));
   // Check that the reconcilor was unblocked.
   EXPECT_EQ(1, reconcilor_unblocked_count_);
   EXPECT_EQ(1, reconcilor_blocked_count_);
@@ -298,21 +298,21 @@ TEST_F(DiceResponseHandlerTest, CheckTimersDuringOutageinDice) {
   EXPECT_EQ(0, reconcilor_unblocked_count_);
   // Wait half of the timeout.
   task_environment_.FastForwardBy(
-      base::TimeDelta::FromHours(kLockAccountReconcilorTimeoutHours / 2));
+      base::Hours(kLockAccountReconcilorTimeoutHours / 2));
   // Create params for the second header with no authorization code.
   DiceResponseParams dice_params_2 = MakeDiceParams(DiceAction::SIGNIN);
   dice_params_2.signin_info->authorization_code.clear();
   dice_params_2.signin_info->no_authorization_code = true;
   dice_response_handler_->ProcessDiceHeader(
       dice_params_2, std::make_unique<TestProcessDiceHeaderDelegate>(this));
-  task_environment_.FastForwardBy(base::TimeDelta::FromHours(
-      (kLockAccountReconcilorTimeoutHours + 1) / 2 + 1));
+  task_environment_.FastForwardBy(
+      base::Hours((kLockAccountReconcilorTimeoutHours + 1) / 2 + 1));
   // Check that the reconcilor was not unblocked after the first timeout
   // passed, timer should be restarted after getting the second header.
   EXPECT_EQ(1, reconcilor_blocked_count_);
   EXPECT_EQ(0, reconcilor_unblocked_count_);
   task_environment_.FastForwardBy(
-      base::TimeDelta::FromHours((kLockAccountReconcilorTimeoutHours + 1) / 2));
+      base::Hours((kLockAccountReconcilorTimeoutHours + 1) / 2));
   // Check that the reconcilor was unblocked.
   EXPECT_EQ(1, reconcilor_blocked_count_);
   EXPECT_EQ(1, reconcilor_unblocked_count_);
@@ -361,7 +361,7 @@ TEST_F(DiceResponseHandlerTest, CheckSigninAfterOutageInDice) {
                   ->FindExtendedAccountInfoByAccountId(account_id_2)
                   .is_under_advanced_protection);
   task_environment_.FastForwardBy(
-      base::TimeDelta::FromHours(kLockAccountReconcilorTimeoutHours + 1));
+      base::Hours(kLockAccountReconcilorTimeoutHours + 1));
   // Check that the reconcilor was unblocked.
   EXPECT_EQ(1, reconcilor_unblocked_count_);
   EXPECT_EQ(1, reconcilor_blocked_count_);
@@ -592,9 +592,39 @@ TEST_F(DiceResponseHandlerTest, Timeout) {
       1u, dice_response_handler_->GetPendingDiceTokenFetchersCountForTesting());
   // Force a timeout.
   task_environment_.FastForwardBy(
-      base::TimeDelta::FromSeconds(kDiceTokenFetchTimeoutSeconds + 1));
+      base::Seconds(kDiceTokenFetchTimeoutSeconds + 1));
   EXPECT_EQ(
       0u, dice_response_handler_->GetPendingDiceTokenFetchersCountForTesting());
+  // Check that the token has not been inserted in the token service.
+  EXPECT_FALSE(identity_manager()->HasAccountWithRefreshToken(account_id));
+  // Check that the reconcilor was blocked and unblocked exactly once.
+  EXPECT_EQ(1, reconcilor_blocked_count_);
+  EXPECT_EQ(1, reconcilor_unblocked_count_);
+}
+
+// Checks that there is no crash if the DiceResponseHandler is deleted before
+// the timeout expires. Tests the scenario from https://crbug.com/1290214
+TEST_F(DiceResponseHandlerTest, DeleteBeforeTimeout) {
+  DiceResponseParams dice_params = MakeDiceParams(DiceAction::SIGNIN);
+  const auto& account_info = dice_params.signin_info->account_info;
+  CoreAccountId account_id = identity_manager()->PickAccountIdForAccount(
+      account_info.gaia_id, account_info.email);
+  ASSERT_FALSE(identity_manager()->HasAccountWithRefreshToken(account_id));
+  dice_response_handler_->ProcessDiceHeader(
+      dice_params, std::make_unique<TestProcessDiceHeaderDelegate>(this));
+  // Check that a GaiaAuthFetcher has been created.
+  GaiaAuthConsumer* consumer = signin_client_.GetAndClearConsumer();
+  ASSERT_THAT(consumer, testing::NotNull());
+  EXPECT_EQ(
+      1u, dice_response_handler_->GetPendingDiceTokenFetchersCountForTesting());
+
+  // Delete the handler.
+  dice_response_handler_.reset();
+
+  // Force a timeout, this should not crash.
+  task_environment_.FastForwardBy(
+      base::Seconds(kDiceTokenFetchTimeoutSeconds + 1));
+
   // Check that the token has not been inserted in the token service.
   EXPECT_FALSE(identity_manager()->HasAccountWithRefreshToken(account_id));
   // Check that the reconcilor was blocked and unblocked exactly once.

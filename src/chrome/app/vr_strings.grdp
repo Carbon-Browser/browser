@@ -93,13 +93,13 @@
   <message name="IDS_VR_SHELL_EXIT_PROMPT_DESCRIPTION_SITE_INFO" desc="Text on the exit prompt that shows up when the user clicks on URL bar security icon in VR">
     Site information is not available in VR
   </message>
-  <message name="IDS_VR_SHELL_AUDIO_PERMISSION_PROMPT_DESCRIPTION" desc="Text on the exit prompt in VR that shows up when the user needs to grant audio permission to Carbon Browser Browser Browser">
-    Allow Carbon Browser Browser Browser to record audio?
+  <message name="IDS_VR_SHELL_AUDIO_PERMISSION_PROMPT_DESCRIPTION" desc="Text on the exit prompt in VR that shows up when the user needs to grant audio permission to Carbon Browser">
+    Allow Carbon Browser to record audio?
   </message>
-  <message name="IDS_VR_SHELL_AUDIO_PERMISSION_PROMPT_ABORT_BUTTON" desc="Text on the cancel button of the prompt that shows up in VR when user needs to grant audio permission to Carbon Browser Browser Browser">
+  <message name="IDS_VR_SHELL_AUDIO_PERMISSION_PROMPT_ABORT_BUTTON" desc="Text on the cancel button of the prompt that shows up in VR when user needs to grant audio permission to Carbon Browser">
     Cancel
   </message>
-  <message name="IDS_VR_SHELL_AUDIO_PERMISSION_PROMPT_CONTINUE_BUTTON" desc="Text on the exit button of the prompt that shows up when user needs to grant audio permission to Carbon Browser Browser Browser to perform a voice search">
+  <message name="IDS_VR_SHELL_AUDIO_PERMISSION_PROMPT_CONTINUE_BUTTON" desc="Text on the exit button of the prompt that shows up when user needs to grant audio permission to Carbon Browser to perform a voice search">
     Continue
   </message>
   <!-- TODO(https://crbug.com/787654): Make mixed case before using in production on a non-Android platform. -->
@@ -142,19 +142,19 @@
   <message name="IDS_VR_BUTTON_APP_REPOSITION" desc="This is the label for the app button while in reposition mode">
     Finish
   </message>
-  <message name="IDS_VR_MENU_NEW_INCOGNITO_TAB" desc="Menu item for opening a new Private tab that facilitates pseudononymous browsing. [CHAR_LIMIT=27]">
+  <message name="IDS_VR_MENU_NEW_INCOGNITO_TAB" desc="Menu item for opening a new private tab that facilitates pseudononymous browsing. [CHAR_LIMIT=27]">
     New private tab
   </message>
   <message name="IDS_VR_MENU_PREFERENCES" desc="Menu item for opening browser preferences. [CHAR_LIMIT=27]">
     Settings
   </message>
-  <message name="IDS_VR_MENU_CLOSE_INCOGNITO_TABS" desc="Menu item for closing all open Private tabs. [CHAR_LIMIT=27]">
-    Close Private tabs
+  <message name="IDS_VR_MENU_CLOSE_INCOGNITO_TABS" desc="Menu item for closing all open private tabs. [CHAR_LIMIT=27]">
+    Close private tabs
   </message>
   <message name="IDS_VR_TABS_BUTTON_REGULAR" desc="Text on button for selecting regular tabs">
     Tabs
   </message>
-  <message name="IDS_VR_TABS_BUTTON_INCOGNITO" desc="Text on button for selecting Private tabs">
-    Private
+  <message name="IDS_VR_TABS_BUTTON_INCOGNITO" desc="Text on button for selecting private tabs">
+    private
   </message>
 </grit-part>

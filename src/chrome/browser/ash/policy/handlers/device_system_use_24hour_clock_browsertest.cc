@@ -7,7 +7,6 @@
 #include "base/bind.h"
 #include "base/command_line.h"
 #include "base/location.h"
-#include "base/macros.h"
 #include "base/run_loop.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/ash/login/ui/login_display_host.h"
@@ -29,6 +28,11 @@ class SystemUse24HourClockPolicyTest : public DevicePolicyCrosBrowserTest {
  public:
   SystemUse24HourClockPolicyTest() = default;
 
+  SystemUse24HourClockPolicyTest(const SystemUse24HourClockPolicyTest&) =
+      delete;
+  SystemUse24HourClockPolicyTest& operator=(
+      const SystemUse24HourClockPolicyTest&) = delete;
+
   // DevicePolicyCrosBrowserTest:
   void SetUpOnMainThread() override {
     DevicePolicyCrosBrowserTest::SetUpOnMainThread();
@@ -37,7 +41,7 @@ class SystemUse24HourClockPolicyTest : public DevicePolicyCrosBrowserTest {
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
     command_line->AppendSwitch(ash::switches::kLoginManager);
-    command_line->AppendSwitch(chromeos::switches::kForceLoginManagerInTests);
+    command_line->AppendSwitch(ash::switches::kForceLoginManagerInTests);
   }
 
   void TearDownOnMainThread() override {
@@ -72,8 +76,6 @@ class SystemUse24HourClockPolicyTest : public DevicePolicyCrosBrowserTest {
 
  private:
   std::unique_ptr<ash::SystemTrayTestApi> tray_test_api_;
-
-  DISALLOW_COPY_AND_ASSIGN(SystemUse24HourClockPolicyTest);
 };
 
 IN_PROC_BROWSER_TEST_F(SystemUse24HourClockPolicyTest, CheckUnset) {

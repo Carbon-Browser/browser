@@ -10,8 +10,8 @@
 #include "chrome/browser/ash/login/quick_unlock/quick_unlock_storage.h"
 #include "chrome/browser/ash/login/startup_utils.h"
 #include "chrome/test/base/in_process_browser_test.h"
+#include "chromeos/ash/components/dbus/userdataauth/fake_userdataauth_client.h"
 #include "chromeos/dbus/dbus_thread_manager.h"
-#include "chromeos/dbus/userdataauth/fake_userdataauth_client.h"
 #include "components/account_id/account_id.h"
 #include "content/public/test/browser_test.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -26,19 +26,18 @@ constexpr char kTestUserGaiaId[] = "1234567890";
 class PinMigrationTest : public LoginManagerTest {
  public:
   PinMigrationTest() = default;
+
+  PinMigrationTest(const PinMigrationTest&) = delete;
+  PinMigrationTest& operator=(const PinMigrationTest&) = delete;
+
   ~PinMigrationTest() override = default;
 
   void SetUp() override {
-    // Initialize UserDataAuthClient and configure it for testing. It will be
-    // destroyed in ChromeBrowserMain.
     UserDataAuthClient::InitializeFake();
-    FakeUserDataAuthClient::Get()->set_supports_low_entropy_credentials(true);
-
+    FakeUserDataAuthClient::TestApi::Get()
+        ->set_supports_low_entropy_credentials(true);
     LoginManagerTest::SetUp();
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(PinMigrationTest);
 };
 
 // Step 1/3: Register a new user.

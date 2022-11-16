@@ -10,6 +10,7 @@
 
 #include "ash/constants/ash_features.h"
 #include "ash/public/cpp/ambient/ambient_backend_controller.h"
+#include "ash/public/cpp/ambient/ambient_client.h"
 #include "ash/public/cpp/ambient/ambient_metrics.h"
 #include "ash/public/cpp/ambient/ambient_prefs.h"
 #include "ash/public/cpp/ambient/common/ambient_settings.h"
@@ -22,8 +23,13 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/threading/sequenced_task_runner_handle.h"
 #include "base/values.h"
+#include "chrome/browser/ash/web_applications/personalization_app/personalization_app_manager.h"
+#include "chrome/browser/ash/web_applications/personalization_app/personalization_app_manager_factory.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/prefs/pref_service.h"
+#include "content/public/browser/browser_context.h"
+#include "content/public/browser/web_contents.h"
+#include "net/http/http_request_headers.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkBitmap.h"
@@ -60,7 +66,7 @@ constexpr net::BackoffEntry::Policy kRetryBackoffPolicy = {
 };
 
 ash::AmbientModeTemperatureUnit ExtractTemperatureUnit(
-    base::Value::ConstListView args) {
+    const base::Value::List& args) {
   auto temperature_unit = args[0].GetString();
   if (temperature_unit == kCelsius)
     return ash::AmbientModeTemperatureUnit::kCelsius;
@@ -90,8 +96,7 @@ ash::AmbientModeTopicSource ExtractTopicSource(const base::Value& value) {
   return topic_source;
 }
 
-ash::AmbientModeTopicSource ExtractTopicSource(
-    base::Value::ConstListView args) {
+ash::AmbientModeTopicSource ExtractTopicSource(const base::Value::List& args) {
   CHECK_EQ(args.size(), 1U);
   return ExtractTopicSource(args[0]);
 }
@@ -130,7 +135,14 @@ AmbientModeHandler::AmbientModeHandler(PrefService* pref_service)
       update_settings_retry_backoff_(&kRetryBackoffPolicy),
       pref_service_(pref_service) {}
 
-AmbientModeHandler::~AmbientModeHandler() = default;
+AmbientModeHandler::~AmbientModeHandler() {
+  if (IsJavascriptAllowed()) {
+    ::ash::personalization_app::PersonalizationAppManagerFactory::
+        GetForBrowserContext(web_ui()->GetWebContents()->GetBrowserContext())
+            ->MaybeStartHatsTimer(
+                ::ash::personalization_app::HatsSurveyType::kScreensaver);
+  }
+}
 
 void AmbientModeHandler::RegisterMessages() {
   web_ui()->RegisterMessageCallback(
@@ -180,8 +192,7 @@ void AmbientModeHandler::OnEnabledPrefChanged() {
     UpdateSettings();
 }
 
-void AmbientModeHandler::HandleRequestSettings(
-    base::Value::ConstListView args) {
+void AmbientModeHandler::HandleRequestSettings(const base::Value::List& args) {
   CHECK(args.empty());
 
   AllowJavascript();
@@ -193,7 +204,7 @@ void AmbientModeHandler::HandleRequestSettings(
   RequestSettingsAndAlbums(/*topic_source=*/absl::nullopt);
 }
 
-void AmbientModeHandler::HandleRequestAlbums(base::Value::ConstListView args) {
+void AmbientModeHandler::HandleRequestAlbums(const base::Value::List& args) {
   CHECK_EQ(args.size(), 1U);
 
   AllowJavascript();
@@ -206,7 +217,7 @@ void AmbientModeHandler::HandleRequestAlbums(base::Value::ConstListView args) {
 }
 
 void AmbientModeHandler::HandleSetSelectedTemperatureUnit(
-    base::Value::ConstListView args) {
+    const base::Value::List& args) {
   DCHECK(settings_);
   CHECK_EQ(1U, args.size());
 
@@ -218,7 +229,7 @@ void AmbientModeHandler::HandleSetSelectedTemperatureUnit(
 }
 
 void AmbientModeHandler::HandleSetSelectedAlbums(
-    base::Value::ConstListView args) {
+    const base::Value::List& args) {
   CHECK_EQ(args.size(), 1U);
   const base::Value& dictionary = args[0];
   const base::Value* topic_source_value = dictionary.FindKey("topicSource");
@@ -232,7 +243,7 @@ void AmbientModeHandler::HandleSetSelectedAlbums(
       // For Google Photos, we will populate the |selected_album_ids| with IDs
       // of selected albums.
       settings_->selected_album_ids.clear();
-      for (const auto& album : albums->GetList()) {
+      for (const auto& album : albums->GetListDeprecated()) {
         const base::Value* album_id = album.FindKey("albumId");
         const std::string& id = album_id->GetString();
         ash::PersonalAlbum* personal_album = FindPersonalAlbumById(id);
@@ -257,11 +268,11 @@ void AmbientModeHandler::HandleSetSelectedAlbums(
       for (auto& art_setting : settings_->art_settings) {
         const std::string& album_id = art_setting.album_id;
         auto it = std::find_if(
-            albums->GetList().begin(), albums->GetList().end(),
-            [&album_id](const auto& album) {
+            albums->GetListDeprecated().begin(),
+            albums->GetListDeprecated().end(), [&album_id](const auto& album) {
               return album.FindKey("albumId")->GetString() == album_id;
             });
-        const bool checked = it != albums->GetList().end();
+        const bool checked = it != albums->GetListDeprecated().end();
         art_setting.enabled = checked;
         // A setting must be visible to be enabled.
         if (art_setting.enabled)
@@ -388,7 +399,10 @@ void AmbientModeHandler::UpdateSettings() {
   settings_->show_weather = true;
 
   settings_sent_for_update_ = settings_;
-  ash::AmbientBackendController::Get()->UpdateSettings(
+  auto* ambient_backend_controller = ash::AmbientBackendController::Get();
+  CHECK(ambient_backend_controller)
+      << "Ambient backend controller required to update settings";
+  ambient_backend_controller->UpdateSettings(
       *settings_, base::BindOnce(&AmbientModeHandler::OnUpdateSettings,
                                  backend_weak_factory_.GetWeakPtr()));
 }
@@ -561,7 +575,9 @@ void AmbientModeHandler::MaybeUpdateTopicSource(
     return;
 
   settings_->topic_source = topic_source;
-  UpdateSettings();
+  if (IsAmbientModeEnabled()) {
+    UpdateSettings();
+  }
   SendTopicSource();
 }
 
@@ -577,8 +593,8 @@ void AmbientModeHandler::DownloadAlbumPreviewImage(
           continue;
         }
 
-        ash::ImageDownloader::Get()->Download(
-            GURL(album.banner_image_url), NO_TRAFFIC_ANNOTATION_YET,
+        ash::AmbientClient::Get()->DownloadImage(
+            album.banner_image_url,
             base::BindOnce(&AmbientModeHandler::OnAlbumPreviewImageDownloaded,
                            backend_weak_factory_.GetWeakPtr(), topic_source,
                            album.album_id));
@@ -586,8 +602,9 @@ void AmbientModeHandler::DownloadAlbumPreviewImage(
       break;
     case ash::AmbientModeTopicSource::kArtGallery:
       for (const auto& album : settings_->art_settings) {
-        ash::ImageDownloader::Get()->Download(
-            GURL(album.preview_image_url), NO_TRAFFIC_ANNOTATION_YET,
+        ash::AmbientClient::Get()->DownloadImage(
+            album.preview_image_url,
+
             base::BindOnce(&AmbientModeHandler::OnAlbumPreviewImageDownloaded,
                            backend_weak_factory_.GetWeakPtr(), topic_source,
                            album.album_id));
@@ -638,21 +655,20 @@ void AmbientModeHandler::DownloadRecentHighlightsPreviewImages(
 
   for (int url_index = 0; url_index < total_previews; ++url_index) {
     const auto& url = urls[url_index];
-    ash::ImageDownloader::Get()->Download(
-        GURL(url), NO_TRAFFIC_ANNOTATION_YET,
-        base::BindOnce(
-            [](std::vector<gfx::ImageSkia>* preview_images, int url_index,
-               base::RepeatingClosure on_done,
-               base::WeakPtr<AmbientModeHandler> weak_ptr,
-               const gfx::ImageSkia& image) {
-              if (!weak_ptr)
-                return;
+    ash::AmbientClient::Get()->DownloadImage(
+        url, base::BindOnce(
+                 [](std::vector<gfx::ImageSkia>* preview_images, int url_index,
+                    base::RepeatingClosure on_done,
+                    base::WeakPtr<AmbientModeHandler> weak_ptr,
+                    const gfx::ImageSkia& image) {
+                   if (!weak_ptr)
+                     return;
 
-              (*preview_images)[url_index] = image;
-              on_done.Run();
-            },
-            &recent_highlights_preview_images_, url_index, on_done,
-            recent_highlights_previews_weak_factory_.GetWeakPtr()));
+                   (*preview_images)[url_index] = image;
+                   on_done.Run();
+                 },
+                 &recent_highlights_preview_images_, url_index, on_done,
+                 recent_highlights_previews_weak_factory_.GetWeakPtr()));
   }
 }
 

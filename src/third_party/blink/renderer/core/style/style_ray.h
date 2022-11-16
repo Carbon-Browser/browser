@@ -27,10 +27,12 @@ class StyleRay : public BasicShape {
   RaySize Size() const { return size_; }
   bool Contain() const { return contain_; }
 
-  void GetPath(Path&, const FloatRect&, float) override;
-  bool operator==(const BasicShape&) const override;
+  void GetPath(Path&, const gfx::RectF&, float) override;
 
   ShapeType GetType() const override { return kStyleRayType; }
+
+ protected:
+  bool IsEqualAssumingSameType(const BasicShape&) const override;
 
  private:
   StyleRay(float angle, RaySize, bool contain);

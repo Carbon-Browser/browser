@@ -52,11 +52,11 @@ class CONTENT_EXPORT BaseBrowserTaskExecutor : public base::TaskExecutor {
       const base::TaskTraits& traits,
       base::SingleThreadTaskRunnerThreadMode thread_mode) override;
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   scoped_refptr<base::SingleThreadTaskRunner> CreateCOMSTATaskRunner(
       const base::TaskTraits& traits,
       base::SingleThreadTaskRunnerThreadMode thread_mode) override;
-#endif  // defined(OS_WIN)
+#endif  // BUILDFLAG(IS_WIN)
 
   // Returns the task runner for |traits| under |identifier|. Note: during the
   // migration away from task traits extension, |traits| may also contain a
@@ -84,11 +84,15 @@ class CONTENT_EXPORT BrowserTaskExecutor : public BaseBrowserTaskExecutor {
   // Creates and registers a BrowserTaskExecutor on the current thread which
   // owns a BrowserUIThreadScheduler. This facilitates posting tasks to a
   // BrowserThread via //base/task/post_task.h.
+  // TODO(crbug.com/1026641): Clean this up now that post_task.h is deprecated.
   // All BrowserThread::UI task queues except best effort ones are also enabled.
   // TODO(carlscab): These queues should be enabled in
   // BrowserMainLoop::InitializeMainThread() but some Android tests fail if we
   // do so.
   static void Create();
+
+  BrowserTaskExecutor(const BrowserTaskExecutor&) = delete;
+  BrowserTaskExecutor& operator=(const BrowserTaskExecutor&) = delete;
 
   // Creates the IO thread using the scheduling infrastructure set up in the
   // Create() method. That means that clients have access to TaskRunners
@@ -125,9 +129,10 @@ class CONTENT_EXPORT BrowserTaskExecutor : public BaseBrowserTaskExecutor {
   // BrowserMainLoop::CreateThreads.
   static void InitializeIOThread();
 
-  // Enables all queues on all threads.
+  // Informs BrowserTaskExecutor that startup is complete.
+  // It will communicate that to UI and IO thread BrowserTaskQueues.
   // Can be called multiple times.
-  static void EnableAllQueues();
+  static void OnStartupComplete();
 
   // Helpers to statically call into BaseBrowserTaskExecutor::GetTaskRunner()
   // from browser_thread_impl.cc. Callers should use browser_thread.h's
@@ -255,8 +260,6 @@ class CONTENT_EXPORT BrowserTaskExecutor : public BaseBrowserTaskExecutor {
 
   std::unique_ptr<UIThreadExecutor> ui_thread_executor_;
   std::unique_ptr<IOThreadExecutor> io_thread_executor_;
-
-  DISALLOW_COPY_AND_ASSIGN(BrowserTaskExecutor);
 };
 
 }  // namespace content

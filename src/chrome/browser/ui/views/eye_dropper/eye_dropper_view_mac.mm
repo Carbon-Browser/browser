@@ -15,12 +15,17 @@
 #include "ui/base/ui_base_features.h"
 
 EyeDropperViewMac::EyeDropperViewMac(content::EyeDropperListener* listener)
-    : listener_(listener) {
+    : listener_(listener), weak_ptr_factory_(this) {
   if (!listener_)
     return;
   if (@available(macOS 10.15, *)) {
     color_sampler_.reset([[NSColorSampler alloc] init]);
+    // Used to ensure that EyeDropperViewMac is still alive when the handler is
+    // called.
+    base::WeakPtr<EyeDropperViewMac> weak_this = weak_ptr_factory_.GetWeakPtr();
     [color_sampler_ showSamplerWithSelectionHandler:^(NSColor* selectedColor) {
+      if (!weak_this)
+        return;
       if (!selectedColor) {
         listener_->ColorSelectionCanceled();
       } else {
@@ -38,11 +43,13 @@ EyeDropperView::PreEventDispatchHandler::PreEventDispatchHandler(
     : view_(view) {
   // Ensure that this handler is called before color popup handler.
   clickEventTap_ = [NSEvent
-      addLocalMonitorForEventsMatchingMask:NSAnyEventMask
+      addLocalMonitorForEventsMatchingMask:NSEventMaskAny
                                    handler:^NSEvent*(NSEvent* event) {
                                      NSEventType eventType = [event type];
-                                     if (eventType == NSLeftMouseDown ||
-                                         eventType == NSRightMouseDown) {
+                                     if (eventType ==
+                                             NSEventTypeLeftMouseDown ||
+                                         eventType ==
+                                             NSEventTypeRightMouseDown) {
                                        view_->OnColorSelected();
                                        return nil;
                                      } else if (eventType ==

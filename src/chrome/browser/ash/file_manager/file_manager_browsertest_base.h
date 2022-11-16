@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 
+#include "base/containers/flat_map.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/metrics/user_action_tester.h"
 #include "base/test/scoped_feature_list.h"
@@ -49,6 +50,8 @@ class RemovableTestVolume;
 class DocumentsProviderTestVolume;
 class MediaViewTestVolume;
 class SmbfsTestVolume;
+class HiddenTestVolume;
+class GuestOsTestVolume;
 
 class FileManagerBrowserTestBase : public content::DevToolsAgentHostObserver,
                                    public extensions::ExtensionApiTest {
@@ -78,11 +81,17 @@ class FileManagerBrowserTestBase : public content::DevToolsAgentHostObserver,
     // Whether test should enable drive dss pinning.
     bool drive_dss_pin = false;
 
+    // Whether test needs the extract-archive feature.
+    bool extract_archive = false;
+
     // Whether Drive should act as if offline.
     bool offline = false;
 
     // Whether test needs the files-swa feature.
     bool files_swa = false;
+
+    // Whether test needs the files-app-experimental feature.
+    bool files_experimental = false;
 
     // Whether test needs the media-swa apps.
     bool media_swa = false;
@@ -107,7 +116,36 @@ class FileManagerBrowserTestBase : public content::DevToolsAgentHostObserver,
 
     // Whether test should run Files app UI as JS modules.
     bool enable_js_modules = true;
+
+    // Whether test should run with the new Banners framework feature.
+    bool enable_banners_framework = false;
+
+    // Whether test should enable DLP (Data Leak Prevention) files restrictions
+    // feature.
+    bool enable_dlp_files_restriction = false;
+
+    // Whether test should run with the Web Drive Office feature.
+    bool enable_web_drive_office = false;
+
+    // Whether test should run with the Upload Office to Cloud feature.
+    bool enable_upload_office_to_cloud = false;
+
+    // Whether test should run with the GuestOs <-> Files app integration.
+    bool enable_guest_os_files = false;
+
+    // Whether test needs the files-filters-in-recents flag.
+    bool enable_filters_in_recents = false;
+
+    // Whether test needs the files-filters-in-recents-v2 flag.
+    bool enable_filters_in_recents_v2 = false;
+
+    // Whether test should run with the DriveFsMirroring flag.
+    bool enable_mirrorsync = false;
   };
+
+  FileManagerBrowserTestBase(const FileManagerBrowserTestBase&) = delete;
+  FileManagerBrowserTestBase& operator=(const FileManagerBrowserTestBase&) =
+      delete;
 
  protected:
   FileManagerBrowserTestBase();
@@ -158,8 +196,20 @@ class FileManagerBrowserTestBase : public content::DevToolsAgentHostObserver,
   // Process test extension command |name|, with arguments |value|. Write the
   // results to |output|.
   void OnCommand(const std::string& name,
-                 const base::DictionaryValue& value,
+                 const base::Value::Dict& value,
                  std::string* output);
+
+  // Checks if the command is a GuestOs one. If so, handles it and returns
+  // true, otherwise it returns false.
+  bool HandleGuestOsCommands(const std::string& name,
+                             const base::Value::Dict& value,
+                             std::string* output);
+
+  // Checks if the command is a DLP one. If so, handles it and returns true,
+  // otherwise it returns false.
+  virtual bool HandleDlpCommands(const std::string& name,
+                                 const base::Value::Dict& value,
+                                 std::string* output);
 
   // Called during setup if needed, to create a drive integration service for
   // the given |profile|. Caller owns the return result.
@@ -169,6 +219,10 @@ class FileManagerBrowserTestBase : public content::DevToolsAgentHostObserver,
   // Called during tests if needed to mount a crostini volume, and return the
   // mount path of the volume.
   base::FilePath MaybeMountCrostini(
+      const std::string& source_path,
+      const std::vector<std::string>& mount_options);
+
+  base::FilePath MaybeMountGuestOs(
       const std::string& source_path,
       const std::vector<std::string>& mount_options);
 
@@ -216,7 +270,13 @@ class FileManagerBrowserTestBase : public content::DevToolsAgentHostObserver,
   std::unique_ptr<MediaViewTestVolume> media_view_images_;
   std::unique_ptr<MediaViewTestVolume> media_view_videos_;
   std::unique_ptr<MediaViewTestVolume> media_view_audio_;
+  std::unique_ptr<MediaViewTestVolume> media_view_documents_;
   std::unique_ptr<SmbfsTestVolume> smbfs_volume_;
+  std::unique_ptr<HiddenTestVolume> hidden_volume_;
+
+  // Map from source path (e.g. sftp://1:2) to volume.
+  base::flat_map<std::string, std::unique_ptr<GuestOsTestVolume>>
+      guest_os_volumes_;
 
   drive::DriveIntegrationServiceFactory::FactoryCallback
       create_drive_integration_service_;
@@ -238,8 +298,6 @@ class FileManagerBrowserTestBase : public content::DevToolsAgentHostObserver,
   base::FilePath devtools_code_coverage_dir_;
   DevToolsAgentMap devtools_agent_;
   uint32_t process_id_ = 0;
-
-  DISALLOW_COPY_AND_ASSIGN(FileManagerBrowserTestBase);
 };
 
 std::ostream& operator<<(std::ostream& out, GuestMode mode);

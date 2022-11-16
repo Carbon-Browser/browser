@@ -8,7 +8,6 @@
 #include <utility>
 
 #include "base/bind.h"
-#include "base/bind_post_task.h"
 #include "base/bits.h"
 #include "base/callback.h"
 #include "base/callback_helpers.h"
@@ -17,7 +16,9 @@
 #include "base/message_loop/message_pump_type.h"
 #include "base/synchronization/lock.h"
 #include "base/synchronization/waitable_event.h"
+#include "base/task/bind_post_task.h"
 #include "base/threading/thread_task_runner_handle.h"
+#include "base/time/time.h"
 #include "chromecast/base/bind_to_task_runner.h"
 #include "chromecast/base/metrics/cast_metrics_helper.h"
 #include "chromecast/common/mojom/constants.mojom.h"
@@ -55,11 +56,10 @@
 
 namespace {
 // Below are settings for MixerService and the DirectAudio it uses.
-constexpr base::TimeDelta kFadeTime = base::TimeDelta::FromMilliseconds(5);
+constexpr base::TimeDelta kFadeTime = base::Milliseconds(5);
 constexpr base::TimeDelta kCommunicationsMaxBufferedFrames =
-    base::TimeDelta::FromMilliseconds(50);
-constexpr base::TimeDelta kMediaMaxBufferedFrames =
-    base::TimeDelta::FromMilliseconds(70);
+    base::Milliseconds(50);
+constexpr base::TimeDelta kMediaMaxBufferedFrames = base::Milliseconds(70);
 }  // namespace
 
 namespace chromecast {
@@ -92,6 +92,10 @@ class CastAudioOutputStream::MixerServiceWrapper
  public:
   MixerServiceWrapper(const ::media::AudioParameters& audio_params,
                       const std::string& device_id);
+
+  MixerServiceWrapper(const MixerServiceWrapper&) = delete;
+  MixerServiceWrapper& operator=(const MixerServiceWrapper&) = delete;
+
   ~MixerServiceWrapper() override = default;
 
   void SetRunning(bool running);
@@ -130,8 +134,6 @@ class CastAudioOutputStream::MixerServiceWrapper
   // Task runner on |io_thread_|.
   scoped_refptr<base::SingleThreadTaskRunner> io_task_runner_;
   THREAD_CHECKER(io_thread_checker_);
-
-  DISALLOW_COPY_AND_ASSIGN(MixerServiceWrapper);
 };
 
 CastAudioOutputStream::MixerServiceWrapper::MixerServiceWrapper(
@@ -147,7 +149,7 @@ CastAudioOutputStream::MixerServiceWrapper::MixerServiceWrapper(
 
   base::Thread::Options options;
   options.message_pump_type = base::MessagePumpType::IO;
-  options.priority = base::ThreadPriority::REALTIME_AUDIO;
+  options.thread_type = base::ThreadType::kRealtimeAudio;
   CHECK(io_thread_.StartWithOptions(std::move(options)));
   io_task_runner_ = io_thread_.task_runner();
   DCHECK(io_task_runner_);
@@ -287,7 +289,7 @@ void CastAudioOutputStream::MixerServiceWrapper::FillNextBuffer(
   base::TimeDelta reported_delay = ::media::AudioTimestampHelper::FramesToTime(
       max_buffered_frames_, audio_params_.sample_rate());
   base::TimeTicks reported_delay_timestamp =
-      base::TimeTicks() + base::TimeDelta::FromMicroseconds(playout_timestamp);
+      base::TimeTicks() + base::Microseconds(playout_timestamp);
 
   int frames_filled = source_callback_->OnMoreData(
       reported_delay, reported_delay_timestamp, 0, audio_bus_.get());

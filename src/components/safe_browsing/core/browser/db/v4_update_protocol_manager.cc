@@ -8,7 +8,6 @@
 
 #include "base/base64url.h"
 #include "base/bind.h"
-#include "base/macros.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/rand_util.h"
@@ -17,6 +16,7 @@
 #include "components/safe_browsing/buildflags.h"
 #include "components/safe_browsing/core/browser/db/safebrowsing.pb.h"
 #include "components/safe_browsing/core/common/features.h"
+#include "components/safe_browsing/core/common/utils.h"
 #include "net/base/load_flags.h"
 #include "net/http/http_response_headers.h"
 #include "net/http/http_status_code.h"
@@ -27,7 +27,6 @@
 #include "services/network/public/mojom/url_response_head.mojom.h"
 
 using base::Time;
-using base::TimeDelta;
 
 namespace {
 
@@ -99,6 +98,12 @@ class V4UpdateProtocolManagerFactoryImpl
     : public V4UpdateProtocolManagerFactory {
  public:
   V4UpdateProtocolManagerFactoryImpl() {}
+
+  V4UpdateProtocolManagerFactoryImpl(
+      const V4UpdateProtocolManagerFactoryImpl&) = delete;
+  V4UpdateProtocolManagerFactoryImpl& operator=(
+      const V4UpdateProtocolManagerFactoryImpl&) = delete;
+
   ~V4UpdateProtocolManagerFactoryImpl() override {}
   std::unique_ptr<V4UpdateProtocolManager> CreateProtocolManager(
       scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
@@ -110,9 +115,6 @@ class V4UpdateProtocolManagerFactoryImpl
         new V4UpdateProtocolManager(url_loader_factory, config, update_callback,
                                     extended_reporting_level_callback));
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(V4UpdateProtocolManagerFactoryImpl);
 };
 
 // V4UpdateProtocolManager implementation --------------------------------
@@ -146,9 +148,9 @@ V4UpdateProtocolManager::V4UpdateProtocolManager(
     ExtendedReportingLevelCallback extended_reporting_level_callback)
     : update_error_count_(0),
       update_back_off_mult_(1),
-      next_update_interval_(base::TimeDelta::FromSeconds(
-          base::RandInt(kV4TimerStartIntervalSecMin,
-                        kV4TimerStartIntervalSecMax))),
+      next_update_interval_(
+          base::Seconds(base::RandInt(kV4TimerStartIntervalSecMin,
+                                      kV4TimerStartIntervalSecMax))),
       config_(config),
       url_loader_factory_(url_loader_factory),
       update_callback_(update_callback),
@@ -188,7 +190,7 @@ void V4UpdateProtocolManager::ScheduleNextUpdateWithBackoff(bool back_off) {
 // back off after a certain number of errors.
 base::TimeDelta V4UpdateProtocolManager::GetNextUpdateInterval(bool back_off) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK(next_update_interval_ > base::TimeDelta());
+  DCHECK(next_update_interval_.is_positive());
 
   base::TimeDelta next = next_update_interval_;
   if (back_off) {
@@ -282,8 +284,7 @@ bool V4UpdateProtocolManager::ParseUpdateResponse(
     if (minimum_wait_duration_seconds < kV4TimerStartIntervalSecMin) {
       minimum_wait_duration_seconds = kV4TimerStartIntervalSecMin;
     }
-    next_update_interval_ =
-        base::TimeDelta::FromSeconds(minimum_wait_duration_seconds);
+    next_update_interval_ = base::Seconds(minimum_wait_duration_seconds);
   }
 
   for (ListUpdateResponse& list_update_response :
@@ -347,8 +348,7 @@ void V4UpdateProtocolManager::IssueUpdateRequest() {
   GetUpdateUrlAndHeaders(req_base64, &resource_request->url,
                          &resource_request->headers);
   resource_request->load_flags = net::LOAD_DISABLE_CACHE;
-  if (base::FeatureList::IsEnabled(kSafeBrowsingRemoveCookies))
-    resource_request->credentials_mode = network::mojom::CredentialsMode::kOmit;
+  resource_request->credentials_mode = network::mojom::CredentialsMode::kOmit;
   std::unique_ptr<network::SimpleURLLoader> loader =
       network::SimpleURLLoader::Create(std::move(resource_request),
                                        traffic_annotation);
@@ -360,8 +360,7 @@ void V4UpdateProtocolManager::IssueUpdateRequest() {
   request_ = std::move(loader);
 
   // Begin the update request timeout.
-  timeout_timer_.Start(FROM_HERE,
-                       TimeDelta::FromSeconds(kV4TimerUpdateWaitSecMax), this,
+  timeout_timer_.Start(FROM_HERE, base::Seconds(kV4TimerUpdateWaitSecMax), this,
                        &V4UpdateProtocolManager::HandleTimeout);
 }
 
@@ -392,8 +391,8 @@ void V4UpdateProtocolManager::OnURLLoaderCompleteInternal(
   timeout_timer_.Stop();
 
   last_response_code_ = response_code;
-  V4ProtocolManagerUtil::RecordHttpResponseOrErrorCode(
-      "SafeBrowsing.V4Update.Network.Result", net_error, last_response_code_);
+  RecordHttpResponseOrErrorCode("SafeBrowsing.V4Update.Network.Result",
+                                net_error, last_response_code_);
 
   last_response_time_ = Time::Now();
 

@@ -10,32 +10,32 @@
 #include "build/build_config.h"
 #include "media/base/key_system_properties.h"
 #include "media/media_buildflags.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace cdm {
 
 // KeySystemProperties implementation for external Clear Key key systems.
 class ExternalClearKeyProperties : public media::KeySystemProperties {
  public:
-  explicit ExternalClearKeyProperties(const std::string& key_system_name);
+  ExternalClearKeyProperties();
   ~ExternalClearKeyProperties() override;
 
-  std::string GetKeySystemName() const override;
+  std::string GetBaseKeySystemName() const override;
+  bool IsSupportedKeySystem(const std::string& key_system) const override;
   bool IsSupportedInitDataType(
       media::EmeInitDataType init_data_type) const override;
-  media::EmeConfigRule GetEncryptionSchemeConfigRule(
+  absl::optional<media::EmeConfigRule> GetEncryptionSchemeConfigRule(
       media::EncryptionScheme encryption_scheme) const override;
   media::SupportedCodecs GetSupportedCodecs() const override;
-  media::EmeConfigRule GetRobustnessConfigRule(
+  absl::optional<media::EmeConfigRule> GetRobustnessConfigRule(
+      const std::string& key_system,
       media::EmeMediaType media_type,
       const std::string& requested_robustness,
       const bool* hw_secure_requirement) const override;
-  media::EmeSessionTypeSupport GetPersistentLicenseSessionSupport()
+  absl::optional<media::EmeConfigRule> GetPersistentLicenseSessionSupport()
       const override;
   media::EmeFeatureSupport GetPersistentStateSupport() const override;
   media::EmeFeatureSupport GetDistinctiveIdentifierSupport() const override;
-
- private:
-  const std::string key_system_name_;
 };
 
 }  // namespace cdm

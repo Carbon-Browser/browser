@@ -11,11 +11,10 @@
 
 #include "ash/ash_export.h"
 #include "ash/detachable_base/detachable_base_pairing_status.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/scoped_observation.h"
-#include "chromeos/dbus/hammerd/hammerd_client.h"
+#include "chromeos/ash/components/dbus/hammerd/hammerd_client.h"
 #include "chromeos/dbus/power/power_manager_client.h"
 #include "components/account_id/account_id.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -45,11 +44,15 @@ struct UserInfo;
 // DetachableBaseHandler clients are expected to determine for which users the
 // detachable base state should be set or retrieved.
 class ASH_EXPORT DetachableBaseHandler
-    : public chromeos::HammerdClient::Observer,
+    : public HammerdClient::Observer,
       public chromeos::PowerManagerClient::Observer {
  public:
   // |local_state| - PrefService of Local state. May be null in tests.
   explicit DetachableBaseHandler(PrefService* local_state);
+
+  DetachableBaseHandler(const DetachableBaseHandler&) = delete;
+  DetachableBaseHandler& operator=(const DetachableBaseHandler&) = delete;
+
   ~DetachableBaseHandler() override;
 
   // Registers the local state prefs for detachable base devices.
@@ -82,7 +85,7 @@ class ASH_EXPORT DetachableBaseHandler
   // paired) - setting the last used base can be retried at that point.
   bool SetPairedBaseAsLastUsedByUser(const UserInfo& user);
 
-  // chromeos::HammerdClient::Observer:
+  // HammerdClient::Observer:
   void BaseFirmwareUpdateNeeded() override;
   void BaseFirmwareUpdateStarted() override;
   void BaseFirmwareUpdateSucceeded() override;
@@ -135,8 +138,7 @@ class ASH_EXPORT DetachableBaseHandler
   DetachableBasePairingStatus pairing_status_ =
       DetachableBasePairingStatus::kNone;
 
-  base::ScopedObservation<chromeos::HammerdClient,
-                          chromeos::HammerdClient::Observer>
+  base::ScopedObservation<HammerdClient, HammerdClient::Observer>
       hammerd_observation_;
   base::ScopedObservation<chromeos::PowerManagerClient,
                           chromeos::PowerManagerClient::Observer>
@@ -150,8 +152,6 @@ class ASH_EXPORT DetachableBaseHandler
   base::ObserverList<DetachableBaseObserver>::Unchecked observers_;
 
   base::WeakPtrFactory<DetachableBaseHandler> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(DetachableBaseHandler);
 };
 
 }  // namespace ash

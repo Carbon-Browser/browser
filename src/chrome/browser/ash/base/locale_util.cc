@@ -9,7 +9,6 @@
 
 #include "base/bind.h"
 #include "base/containers/contains.h"
-#include "base/task/post_task.h"
 #include "base/task/thread_pool.h"
 #include "chrome/browser/ash/login/session/user_session_manager.h"
 #include "chrome/browser/browser_process.h"
@@ -21,8 +20,8 @@
 #include "components/translate/core/browser/translate_prefs.h"
 #include "content/public/browser/browser_thread.h"
 #include "extensions/common/extension_l10n_util.h"
-#include "ui/base/ime/chromeos/input_method_manager.h"
-#include "ui/base/ime/chromeos/input_method_util.h"
+#include "ui/base/ime/ash/input_method_manager.h"
+#include "ui/base/ime/ash/input_method_util.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/gfx/platform_font_skia.h"
@@ -77,10 +76,9 @@ void FinishSwitchLanguage(std::unique_ptr<SwitchLanguageData> data) {
     extension_l10n_util::SetPreferredLocale(data->result.requested_locale);
 
     if (data->enable_locale_keyboard_layouts) {
-      auto* manager = chromeos::input_method::InputMethodManager::Get();
-      scoped_refptr<chromeos::input_method::InputMethodManager::State>
-          ime_state = UserSessionManager::GetInstance()->GetDefaultIMEState(
-              data->profile);
+      auto* manager = input_method::InputMethodManager::Get();
+      scoped_refptr<input_method::InputMethodManager::State> ime_state =
+          UserSessionManager::GetInstance()->GetDefaultIMEState(data->profile);
       if (data->login_layouts_only) {
         // Enable the hardware keyboard layouts and locale-specific layouts
         // suitable for use on the login screen. This will also switch to the
@@ -98,8 +96,8 @@ void FinishSwitchLanguage(std::unique_ptr<SwitchLanguageData> data) {
         // Enable all locale-specific layouts.
         std::vector<std::string> input_methods;
         manager->GetInputMethodUtil()->GetInputMethodIdsFromLanguageCode(
-            data->result.loaded_locale,
-            chromeos::input_method::kKeyboardLayoutsOnly, &input_methods);
+            data->result.loaded_locale, input_method::kKeyboardLayoutsOnly,
+            &input_methods);
         for (std::vector<std::string>::const_iterator it =
                 input_methods.begin(); it != input_methods.end(); ++it) {
           ime_state->EnableInputMethod(*it);
@@ -157,7 +155,7 @@ void SwitchLanguage(const std::string& locale,
 
 bool IsAllowedLanguage(const std::string& language, const PrefService* prefs) {
   base::Value::ConstListView allowed_languages =
-      prefs->GetList(prefs::kAllowedLanguages)->GetList();
+      prefs->GetList(prefs::kAllowedLanguages)->GetListDeprecated();
 
   // Empty list means all languages are allowed.
   if (allowed_languages.empty())
@@ -181,7 +179,7 @@ bool IsNativeUILanguage(const std::string& locale) {
 
 void RemoveDisallowedLanguagesFromPreferred(PrefService* prefs) {
   // Do nothing if all languages are allowed
-  if (prefs->GetList(prefs::kAllowedLanguages)->GetList().empty())
+  if (prefs->GetList(prefs::kAllowedLanguages)->GetListDeprecated().empty())
     return;
 
   std::vector<std::string> preferred_languages =
@@ -219,7 +217,7 @@ std::string GetAllowedFallbackUILanguage(const PrefService* prefs) {
 
   // Check the allowed UI locales and return the first valid entry.
   base::Value::ConstListView allowed_languages =
-      prefs->GetList(prefs::kAllowedLanguages)->GetList();
+      prefs->GetList(prefs::kAllowedLanguages)->GetListDeprecated();
   for (const base::Value& value : allowed_languages) {
     const std::string& locale = value.GetString();
     if (IsAllowedUILanguage(locale, prefs))

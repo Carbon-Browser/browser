@@ -7,9 +7,10 @@ import 'chrome://resources/cr_elements/shared_vars_css.m.js';
 import 'chrome://resources/polymer/v3_0/paper-styles/color.js';
 import './strings.m.js';
 
-import {I18nBehavior} from 'chrome://resources/js/i18n_behavior.m.js';
+import {I18nMixin} from 'chrome://resources/js/i18n_mixin.js';
 import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
-import {html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {getTemplate} from './code_section.html.js';
 
 
 function visibleLineCount(totalCount: number, oppositeCount: number): number {
@@ -20,9 +21,7 @@ function visibleLineCount(totalCount: number, oppositeCount: number): number {
   return Math.min(max, totalCount);
 }
 
-const ExtensionsCodeSectionElementBase =
-    mixinBehaviors([I18nBehavior], PolymerElement) as
-    {new (): PolymerElement & I18nBehavior};
+const ExtensionsCodeSectionElementBase = I18nMixin(PolymerElement);
 
 export class ExtensionsCodeSectionElement extends
     ExtensionsCodeSectionElementBase {
@@ -31,7 +30,7 @@ export class ExtensionsCodeSectionElement extends
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
   }
 
   static get properties() {
@@ -180,6 +179,13 @@ export class ExtensionsCodeSectionElement extends
     return this.isActive && !this.highlighted_;
   }
 }
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'extensions-code-section': ExtensionsCodeSectionElement;
+  }
+}
+
 
 customElements.define(
     ExtensionsCodeSectionElement.is, ExtensionsCodeSectionElement);

@@ -129,26 +129,25 @@ void ArgumentSpec::InitializeType(const base::DictionaryValue* dict) {
   else
     NOTREACHED();
 
-  int min = 0;
-  if (dict->GetInteger("minimum", &min))
-    minimum_ = min;
+  if (absl::optional<int> minimum = dict->FindIntKey("minimum"))
+    minimum_ = *minimum;
+  if (absl::optional<int> maximum = dict->FindIntKey("maximum"))
+    maximum_ = *maximum;
 
-  int max = 0;
-  if (dict->GetInteger("maximum", &max))
-    maximum_ = max;
-
-  int min_length = 0;
-  if (dict->GetInteger("minLength", &min_length) ||
-      dict->GetInteger("minItems", &min_length)) {
-    DCHECK_GE(min_length, 0);
-    min_length_ = min_length;
+  absl::optional<int> min_length = dict->FindIntKey("minLength");
+  if (!min_length)
+    min_length = dict->FindIntKey("minItems");
+  if (min_length) {
+    DCHECK_GE(*min_length, 0);
+    min_length_ = *min_length;
   }
 
-  int max_length = 0;
-  if (dict->GetInteger("maxLength", &max_length) ||
-      dict->GetInteger("maxItems", &max_length)) {
-    DCHECK_GE(max_length, 0);
-    max_length_ = max_length;
+  absl::optional<int> max_length = dict->FindIntKey("maxLength");
+  if (!max_length)
+    max_length = dict->FindIntKey("maxItems");
+  if (max_length) {
+    DCHECK_GE(*max_length, 0);
+    max_length_ = *max_length;
   }
 
   if (type_ == ArgumentType::OBJECT) {
@@ -177,18 +176,17 @@ void ArgumentSpec::InitializeType(const base::DictionaryValue* dict) {
     // always update this if need be.
     const base::ListValue* enums = nullptr;
     if (dict->GetList("enum", &enums)) {
-      size_t size = enums->GetList().size();
-      CHECK_GT(size, 0u);
-      for (size_t i = 0; i < size; ++i) {
-        std::string enum_value;
+      CHECK(!enums->GetList().empty());
+      for (const base::Value& value : enums->GetList()) {
+        const std::string* enum_str = value.GetIfString();
         // Enum entries come in two versions: a list of possible strings, and
         // a dictionary with a field 'name'.
-        if (!enums->GetString(i, &enum_value)) {
-          const base::DictionaryValue* enum_value_dictionary = nullptr;
-          CHECK(enums->GetDictionary(i, &enum_value_dictionary));
-          CHECK(enum_value_dictionary->GetString("name", &enum_value));
+        if (!enum_str) {
+          CHECK(value.is_dict());
+          enum_str = value.FindStringKey("name");
+          CHECK(enum_str);
         }
-        enum_values_.insert(std::move(enum_value));
+        enum_values_.insert(*enum_str);
       }
     }
   } else if (type_ == ArgumentType::FUNCTION) {
@@ -699,7 +697,7 @@ bool ArgumentSpec::ParseArgumentToArray(v8::Local<v8::Context> context,
       return false;
     }
     if (out_value)
-      result->Append(std::move(item));
+      result->Append(base::Value::FromUniquePtrValue(std::move(item)));
     if (v8_out_value) {
       // This should never fail, since it's a newly-created array with
       // CreateDataProperty().

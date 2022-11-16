@@ -9,20 +9,25 @@
 #include <string>
 #include <vector>
 
+#include "ash/components/arc/arc_features_parser.h"
 #include "ash/public/mojom/cros_display_config.mojom.h"
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
+#include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "chrome/browser/ash/login/screens/recommend_apps/device_configuration.pb.h"
 #include "chrome/browser/ash/login/screens/recommend_apps/recommend_apps_fetcher.h"
-#include "components/arc/arc_features_parser.h"
 #include "extensions/browser/api/system_display/display_info_provider.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
+#include "services/data_decoder/public/cpp/data_decoder.h"
 
 namespace base {
 class Value;
+}
+
+namespace gpu {
+struct GPUInfo;
 }
 
 namespace network {
@@ -58,10 +63,20 @@ class RecommendAppsFetcherDelegate;
 // 13. gl_extension
 class RecommendAppsFetcherImpl : public RecommendAppsFetcher {
  public:
+  class ScopedGpuInfoForTest {
+   public:
+    explicit ScopedGpuInfoForTest(const gpu::GPUInfo* gpu_info);
+    ~ScopedGpuInfoForTest();
+  };
+
   RecommendAppsFetcherImpl(
       RecommendAppsFetcherDelegate* delegate,
       mojo::PendingRemote<mojom::CrosDisplayConfigController> display_config,
       network::mojom::URLLoaderFactory* url_loader_factory);
+
+  RecommendAppsFetcherImpl(const RecommendAppsFetcherImpl&) = delete;
+  RecommendAppsFetcherImpl& operator=(const RecommendAppsFetcherImpl&) = delete;
+
   ~RecommendAppsFetcherImpl() override;
 
   // Provide a retry method to download the app list again.
@@ -124,13 +139,17 @@ class RecommendAppsFetcherImpl : public RecommendAppsFetcher {
   //  {"title_" : "title of second app",
   //   "packageName_": "second package name.",
   //  }]
-  absl::optional<base::Value> ParseResponse(base::StringPiece response);
+  absl::optional<base::Value> ParseResponse(const base::Value& parsed_json);
+
+  void OnJsonParsed(data_decoder::DataDecoder::ValueOrError result);
 
   device_configuration::DeviceConfigurationProto device_config_;
 
   std::string android_sdk_version_;
 
   std::string play_store_version_;
+
+  std::string device_fingerprint_;
 
   std::string encoded_device_configuration_proto_;
 
@@ -154,8 +173,6 @@ class RecommendAppsFetcherImpl : public RecommendAppsFetcher {
 
   mojo::Remote<mojom::CrosDisplayConfigController> cros_display_config_;
   base::WeakPtrFactory<RecommendAppsFetcherImpl> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(RecommendAppsFetcherImpl);
 };
 
 }  // namespace ash

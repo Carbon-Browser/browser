@@ -23,38 +23,38 @@
 # which we want to keep.
 -keep @interface androidx.annotation.Keep
 -keep @androidx.annotation.Keep class *
--keepclasseswithmembers class * {
+-keepclasseswithmembers,allowaccessmodification class * {
   @androidx.annotation.Keep <fields>;
 }
--keepclasseswithmembers class * {
+-keepclasseswithmembers,allowaccessmodification class * {
   @androidx.annotation.Keep <methods>;
 }
 
 # Keeps for class level annotations.
--keep @org.chromium.base.annotations.UsedByReflection class ** {}
+-keep,allowaccessmodification @org.chromium.base.annotations.UsedByReflection class ** {}
 
 # Keeps for method level annotations.
--keepclasseswithmembers class ** {
+-keepclasseswithmembers,allowaccessmodification class ** {
   @org.chromium.base.annotations.AccessedByNative <fields>;
 }
--keepclasseswithmembers,includedescriptorclasses class ** {
+-keepclasseswithmembers,includedescriptorclasses,allowaccessmodification class ** {
   @org.chromium.base.annotations.CalledByNative <methods>;
 }
--keepclasseswithmembers,includedescriptorclasses class ** {
+-keepclasseswithmembers,includedescriptorclasses,allowaccessmodification class ** {
   @org.chromium.base.annotations.CalledByNativeUnchecked <methods>;
 }
--keepclasseswithmembers class ** {
+-keepclasseswithmembers,allowaccessmodification class ** {
   @org.chromium.base.annotations.UsedByReflection <methods>;
 }
--keepclasseswithmembers class ** {
+-keepclasseswithmembers,allowaccessmodification class ** {
   @org.chromium.base.annotations.UsedByReflection <fields>;
 }
 # Even unused methods kept due to explicit jni registration:
 # https://crbug.com/688465.
--keepclasseswithmembers,includedescriptorclasses class !org.chromium.base.library_loader.**,** {
+-keepclasseswithmembers,includedescriptorclasses,allowaccessmodification class !org.chromium.base.library_loader.**,** {
   native <methods>;
 }
--keepclasseswithmembernames,includedescriptorclasses class org.chromium.base.library_loader.** {
+-keepclasseswithmembernames,includedescriptorclasses,allowaccessmodification class org.chromium.base.library_loader.** {
   native <methods>;
 }
 
@@ -64,22 +64,26 @@
   static boolean isDebug() return false;
 }
 
-# Never inline classes, methods, or fields  with this annotation, but allow
+# Never inline classes, methods, or fields with this annotation, but allow
 # shrinking and obfuscation.
-# Relevant to fields when they are needed to store strong refrences to objects
+# Relevant to fields when they are needed to store strong references to objects
 # that are held as weak references by native code.
 -if @org.chromium.base.annotations.DoNotInline class * {
     *** *(...);
 }
--keep,allowobfuscation class <1> {
+-keep,allowobfuscation,allowaccessmodification class <1> {
     *** <2>(...);
 }
--keepclassmembers,allowobfuscation class * {
+-keepclassmembers,allowobfuscation,allowaccessmodification class * {
    @org.chromium.base.annotations.DoNotInline <methods>;
 }
--keepclassmembers,allowobfuscation class * {
+-keepclassmembers,allowobfuscation,allowaccessmodification class * {
    @org.chromium.base.annotations.DoNotInline <fields>;
 }
+
+# Never merge classes horizontally or vertically with this annotation.
+# Relevant to classes being used as a key in maps or sets.
+-keep,allowaccessmodification,allowobfuscation,allowshrinking @org.chromium.base.annotations.DoNotClassMerge class *
 
 # Keep all CREATOR fields within Parcelable that are kept.
 -keepclassmembers class org.chromium.** implements android.os.Parcelable {
@@ -90,7 +94,7 @@
 # If we annotated all Parcelables that get put into Bundles other than
 # for saveInstanceState (e.g. PendingIntents), then we could actually keep the
 # names of just those ones. For now, we'll just keep them all.
--keepnames class org.chromium.** implements android.os.Parcelable {}
+-keepnames,allowaccessmodification class org.chromium.** implements android.os.Parcelable {}
 
 # Keep all enum values and valueOf methods. See
 # http://proguard.sourceforge.net/index.html#manual/examples.html
@@ -102,4 +106,11 @@
 # Mark members annotated with IdentifierNameString as identifier name strings
 -identifiernamestring class * {
     @org.chromium.base.annotations.IdentifierNameString *;
+}
+
+# -identifiernamestring doesn't keep the module impl around, we have to
+# explicitly keep it.
+-if @org.chromium.components.module_installer.builder.ModuleInterface interface *
+-keep,allowobfuscation,allowaccessmodification class * extends <1> {
+  <init>();
 }

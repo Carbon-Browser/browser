@@ -5,6 +5,8 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_PASSWORDS_PASSWORD_GENERATION_CONFIRMATION_VIEW_H_
 #define CHROME_BROWSER_UI_VIEWS_PASSWORDS_PASSWORD_GENERATION_CONFIRMATION_VIEW_H_
 
+#include "base/timer/timer.h"
+
 #include "chrome/browser/ui/passwords/bubble_controllers/generation_confirmation_bubble_controller.h"
 #include "chrome/browser/ui/views/passwords/password_bubble_view_base.h"
 #include "ui/views/view.h"
@@ -17,18 +19,25 @@ class PasswordGenerationConfirmationView : public PasswordBubbleViewBase {
       content::WebContents* web_contents,
       views::View* anchor_view,
       DisplayReason reason);
+
+  PasswordGenerationConfirmationView(
+      const PasswordGenerationConfirmationView&) = delete;
+  PasswordGenerationConfirmationView& operator=(
+      const PasswordGenerationConfirmationView&) = delete;
+
   ~PasswordGenerationConfirmationView() override;
 
  private:
   // PasswordBubbleViewBase:
   PasswordBubbleControllerBase* GetController() override;
   const PasswordBubbleControllerBase* GetController() const override;
+  ui::ImageModel GetWindowIcon() override;
 
   void StyledLabelLinkClicked();
 
-  GenerationConfirmationBubbleController controller_;
+  base::OneShotTimer timer_;
 
-  DISALLOW_COPY_AND_ASSIGN(PasswordGenerationConfirmationView);
+  GenerationConfirmationBubbleController controller_;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_PASSWORDS_PASSWORD_GENERATION_CONFIRMATION_VIEW_H_

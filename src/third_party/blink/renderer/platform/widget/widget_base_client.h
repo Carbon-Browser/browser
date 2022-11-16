@@ -14,11 +14,11 @@
 #include "cc/paint/element_id.h"
 #include "cc/trees/layer_tree_host_client.h"
 #include "third_party/blink/public/common/metrics/document_update_reason.h"
-#include "third_party/blink/public/mojom/page/widget.mojom-blink.h"
-#include "third_party/blink/public/platform/input/input_handler_proxy.h"
+#include "third_party/blink/public/mojom/input/input_handler.mojom-blink.h"
 #include "third_party/blink/public/platform/web_input_event_result.h"
 #include "third_party/blink/public/platform/web_text_input_type.h"
 #include "third_party/blink/public/web/web_lifecycle_update.h"
+#include "third_party/blink/renderer/platform/widget/input/input_handler_proxy.h"
 #include "ui/display/mojom/screen_orientation.mojom-blink.h"
 
 namespace cc {
@@ -64,6 +64,12 @@ class WidgetBaseClient {
       base::TimeTicks frame_begin_time,
       cc::ActiveFrameSequenceTrackers trackers) {}
 
+  // Called when the commit is deferred or restarted
+  virtual void OnDeferCommitsChanged(
+      bool defer_status,
+      cc::PaintHoldingReason reason,
+      absl::optional<cc::PaintHoldingCommitTrigger> trigger) {}
+
   // Return metrics information for the stages of BeginMainFrame. This is
   // ultimately implemented by Blink's LocalFrameUKMAggregator. It must be a
   // distinct call from the FrameMetrics above because the BeginMainFrameMetrics
@@ -91,7 +97,8 @@ class WidgetBaseClient {
   // UMA and UKM. That is, when RecordStartOfFrameMetrics has been called, and
   // before RecordEndOfFrameMetrics has been called.
   virtual void BeginCommitCompositorFrame() {}
-  virtual void EndCommitCompositorFrame(base::TimeTicks commit_start_time) {}
+  virtual void EndCommitCompositorFrame(base::TimeTicks commit_start_time,
+                                        base::TimeTicks commit_finish_time) {}
 
   // Applies viewport related properties during a commit from the compositor
   // thread.
@@ -147,7 +154,7 @@ class WidgetBaseClient {
   virtual blink::FrameWidget* FrameWidget() { return nullptr; }
 
   // Called to inform the Widget that it has gained or lost keyboard focus.
-  virtual void FocusChanged(bool) {}
+  virtual void FocusChanged(mojom::blink::FocusState focus_state) {}
 
   // Call to request an animation frame from the compositor.
   virtual void ScheduleAnimation() {}
@@ -177,12 +184,12 @@ class WidgetBaseClient {
   // Signal the orientation has changed.
   virtual void OrientationChanged() {}
 
-  // Return the original (non-emulated) screen info.
-  virtual const display::ScreenInfo& GetOriginalScreenInfo() = 0;
+  // Return the original (non-emulated) screen infos.
+  virtual const display::ScreenInfos& GetOriginalScreenInfos() = 0;
 
   // Indication that the surface and screen were updated.
   virtual void DidUpdateSurfaceAndScreen(
-      const display::ScreenInfo& previous_original_screen_info) {}
+      const display::ScreenInfos& previous_original_screen_infos) {}
 
   // Return the viewport visible rect.
   virtual gfx::Rect ViewportVisibleRect() = 0;
@@ -228,6 +235,10 @@ class WidgetBaseClient {
   // touchstart. But we still want to count those touchstart, pointerdown and
   // touchend.
   virtual void CountDroppedPointerDownForEventTiming(unsigned count) {}
+
+  // Whether to use ScrollPredictor to resample scroll events. This is false for
+  // web_tests to ensure that scroll deltas are not timing-dependent.
+  virtual bool AllowsScrollResampling() { return true; }
 };
 
 }  // namespace blink

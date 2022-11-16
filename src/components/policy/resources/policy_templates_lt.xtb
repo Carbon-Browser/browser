@@ -37,7 +37,7 @@
       diegdamas / pirmą kartą paleisdamas.
 
       Ši politika pasiekiama tik „Windows“ objektuose, kurie susieti su „<ph name="MS_AD_NAME" />“ domenu, arba „Windows 10 Pro“ ar „Enterprise“ objektuose, kurie užregistruoti naudoti įrenginių tvarkymo funkciją.
-      (Jei naudojate „Carbon Browser Browser Browser“ OS, žr. „DeviceMetricsReportingEnabled“.)</translation>
+      (Jei naudojate „Carbon Browser“ OS, žr. „DeviceMetricsReportingEnabled“.)</translation>
 <translation id="1035385378988781231">Ši politika valdo, ar „<ph name="PRODUCT_NAME" />“ tinklo failų bendrinimo įrenginių funkcija naudoja NTLM tapatybei nustatyti.
 
       Kai ši politika nustatyta kaip „Tiesa“, NTLM naudojama mažų ir vidutinio dydžio įmonių bendrinimo įrenginių tapatybei nustatyti, jei reikia.
@@ -125,13 +125,13 @@
       Nustatoma trukmė iki ekrano užsklandos parodymo įrenginių prisijungimo ekrane dirbant mažmeninės prekybos režimu.
 
       Politikos vertė turėtų būti nurodyta milisekundėmis.</translation>
-<translation id="1141767714195601945">Pagal šią politiką valdomi „Carbon Browser Browser Browser“ skirti komandos eilutės parametrai iš „Internet Explorer“.
+<translation id="1141767714195601945">Pagal šią politiką valdomi „Carbon Browser“ skirti komandos eilutės parametrai iš „Internet Explorer“.
 
       Jei neįdiegtas „Internet Explorer“ skirtas „Pasenusių naršyklių palaikymo“ priedas, ši politika negalioja.
 
-      Kai ši politika nenustatyta, „Internet Explorer“ perduoda „Carbon Browser Browser Browser“ tik URL kaip komandos eilutės parametrą.
+      Kai ši politika nenustatyta, „Internet Explorer“ perduoda „Carbon Browser“ tik URL kaip komandos eilutės parametrą.
 
-      Kai ši politika nustatyta kaip eilučių sąrašas, eilutės sujungiamos tarpais ir perduodamos „Carbon Browser Browser Browser“ kaip komandos eilutės parametrai.
+      Kai ši politika nustatyta kaip eilučių sąrašas, eilutės sujungiamos tarpais ir perduodamos „Carbon Browser“ kaip komandos eilutės parametrai.
 
       Jei elemente yra ${url}, jis pakeičiamas norimo atidaryti puslapio URL.
 
@@ -270,7 +270,7 @@
 
       Kiekvienas politikos sąrašo elementas yra eilutė, kurioje yra plėtinio ID ir „naujinio“ URL, atskirti kabliataškiu (<ph name="SEMICOLON" />). Plėtinio ID yra 32 raidžių eilutė, aptinkama, pvz., <ph name="CHROME_EXTENSIONS_LINK" />, dirbant kūrėjo režimu. „Naujinio“ URL turėtų nurodyti naujinio aprašo XML dokumentą, kaip aprašyta <ph name="LINK_TO_EXTENSION_DOC1" />. Atminkite, kad šioje politikoje nustatytas „naujinio“ URL naudojamas tik atliekant pirminį diegimą. Tolesni plėtinio naujiniai naudos naujinio URL, nurodytą plėtinio apraše.
 
-      Pavyzdžiui, <ph name="EXTENSION_POLICY_EXAMPLE" /> įdiegia „<ph name="EXTENSION_POLICY_EXAMPLE_EXTENSION_NAME" />“ programą iš standartinio „Carbon Browser Browser Browser“ internetinės parduotuvės „naujinio“ URL. Jei reikia daugiau informacijos apie plėtinių prieglobą, žr. <ph name="LINK_TO_EXTENSION_DOC2" />.</translation>
+      Pavyzdžiui, <ph name="EXTENSION_POLICY_EXAMPLE" /> įdiegia „<ph name="EXTENSION_POLICY_EXAMPLE_EXTENSION_NAME" />“ programą iš standartinio „Carbon Browser“ internetinės parduotuvės „naujinio“ URL. Jei reikia daugiau informacijos apie plėtinių prieglobą, žr. <ph name="LINK_TO_EXTENSION_DOC2" />.</translation>
 <translation id="1435659902881071157">Įrenginio lygio tinklo konfigūracija</translation>
 <translation id="1438739959477268107">Numatytasis rakto generavimo nustatymas</translation>
 <translation id="1454846751303307294">Leidžiama nustatyti URL šablonų, nurodančių svetaines, kuriose neleidžiama paleisti „JavaScript“, sąrašą.
@@ -431,11 +431,11 @@
 
       Jei politika nenustatyta, <ph name="TPM_FIRMWARE_UPDATE_TPM" /> aparatinės programinės įrangos atnaujinimo funkcijos nebus pasiekiamos.</translation>
 <translation id="1708496595873025510">Nustatykite variantų pirminės reikšmės pateikimo apribojimą</translation>
-<translation id="1717817358640580294">Jei nustatymas nenustatytas, „Carbon Browser Browser Browser“ valymo funkcijai aptikus nepageidaujamos programinės įrangos, „Google“ gali būti pateikta nuskaitymo metaduomenų ataskaita, vadovaujantis „SafeBrowsingExtendedReportingEnabled“ nustatyta politika. Tada naudojant „Carbon Browser Browser Browser“ valymo funkciją naudotojo bus klausiama, ar jis nori išvalyti nepageidaujamą programinę įrangą. Naudotojas gali pasirinkti bendrinti valymo rezultatus su „Google“, kad padėtų vėliau aptikti nepageidaujamą programinę įrangą. Šie rezultatai apima failų metaduomenis, automatiškai įdiegtus plėtinius ir registro raktus, kaip aprašyta „Carbon Browser Browser Browser“ privatumo baltojoje knygoje.
+<translation id="1717817358640580294">Jei nustatymas nenustatytas, „Carbon Browser“ valymo funkcijai aptikus nepageidaujamos programinės įrangos, „Google“ gali būti pateikta nuskaitymo metaduomenų ataskaita, vadovaujantis „SafeBrowsingExtendedReportingEnabled“ nustatyta politika. Tada naudojant „Carbon Browser“ valymo funkciją naudotojo bus klausiama, ar jis nori išvalyti nepageidaujamą programinę įrangą. Naudotojas gali pasirinkti bendrinti valymo rezultatus su „Google“, kad padėtų vėliau aptikti nepageidaujamą programinę įrangą. Šie rezultatai apima failų metaduomenis, automatiškai įdiegtus plėtinius ir registro raktus, kaip aprašyta „Carbon Browser“ privatumo baltojoje knygoje.
 
-      Jei nustatymas išjungtas, „Carbon Browser Browser Browser“ valymo funkcijai aptikus nepageidaujamos programinės įrangos, nuskaitymo metaduomenų ataskaita „Google“ nebus teikiama, nepaisant bet kokios „SafeBrowsingExtendedReportingEnabled“ nustatytos politikos. Naudojant „Carbon Browser Browser Browser“ valymo funkciją naudotojo bus klausiama, ar jis nori išvalyti nepageidaujamą programinę įrangą.  „Google“ nebus teikiama valymo rezultatų ataskaita ir naudotojui nebus suteikta parinktis tai atlikti.
+      Jei nustatymas išjungtas, „Carbon Browser“ valymo funkcijai aptikus nepageidaujamos programinės įrangos, nuskaitymo metaduomenų ataskaita „Google“ nebus teikiama, nepaisant bet kokios „SafeBrowsingExtendedReportingEnabled“ nustatytos politikos. Naudojant „Carbon Browser“ valymo funkciją naudotojo bus klausiama, ar jis nori išvalyti nepageidaujamą programinę įrangą.  „Google“ nebus teikiama valymo rezultatų ataskaita ir naudotojui nebus suteikta parinktis tai atlikti.
 
-      Jei nustatymas įgalintas, „Carbon Browser Browser Browser“ valymo funkcijai aptikus nepageidaujamos programinės įrangos, „Google“ gali būti pateikta nuskaitymo metaduomenų ataskaita, vadovaujantis „SafeBrowsingExtendedReportingEnabled“ nustatyta politika. Naudojant „Carbon Browser Browser Browser“ valymo funkciją naudotojo bus klausiama, ar jis nori išvalyti nepageidaujamą programinę įrangą.  Valymo rezultatų ataskaita bus pateikta „Google“ ir naudotojas negalės jos neteikti.
+      Jei nustatymas įgalintas, „Carbon Browser“ valymo funkcijai aptikus nepageidaujamos programinės įrangos, „Google“ gali būti pateikta nuskaitymo metaduomenų ataskaita, vadovaujantis „SafeBrowsingExtendedReportingEnabled“ nustatyta politika. Naudojant „Carbon Browser“ valymo funkciją naudotojo bus klausiama, ar jis nori išvalyti nepageidaujamą programinę įrangą.  Valymo rezultatų ataskaita bus pateikta „Google“ ir naudotojas negalės jos neteikti.
 
       Ši politika pasiekiama tik „Windows“ objektuose, kurie susieti su „<ph name="MS_AD_NAME" />“ domenu, arba „Windows 10 Pro“ ar „Enterprise“ objektuose, kurie užregistruoti naudoti įrenginių tvarkymo funkciją.</translation>
 <translation id="172374442286684480">Leisti visose svetainėse nustatyti vietinius duomenis</translation>
@@ -631,7 +631,7 @@
 <translation id="2073552873076775140">Leisti prisijungti prie „<ph name="PRODUCT_NAME" />“</translation>
 <translation id="2077129598763517140">Kai galima, naudoti aparatinės įrangos paspartinimą</translation>
 <translation id="2077273864382355561">Ekrano išjungimo delsa, kai naudojama akumuliatoriaus energija</translation>
-<translation id="2082205219176343977">Konfigūruoti mažiausią leistiną įrenginio „Carbon Browser Browser Browser“ versiją.</translation>
+<translation id="2082205219176343977">Konfigūruoti mažiausią leistiną įrenginio „Carbon Browser“ versiją.</translation>
 <translation id="209586405398070749">Stabilus kanalas</translation>
 <translation id="2098658257603918882">Įgalinti naudojimo ir su strigtimis susijusių duomenų ataskaitų kūrimą</translation>
 <translation id="2104418465060359056">Plėtinių ir papildinių informacijos pranešimas</translation>
@@ -676,7 +676,7 @@
       Jei išjungsite šį nustatymą arba paliksite jį nenustatytą, fiksuotojo portalo autentifikavimo puslapiai bus rodomi (įprastame) naujame naršyklės skirtuke naudojant dabartinio naudotojo tarpinio serverio nustatymus.</translation>
 <translation id="21394354835637379">Galima nurodyti, iš kurių URL galima įdiegti plėtinius, programas ir temas.
 
-          21 versijos „<ph name="PRODUCT_NAME" />“ sudėtingiau įdiegti plėtinius, programas ir naudotojo scenarijus ne iš „Carbon Browser Browser Browser“ internetinės parduotuvės. Anksčiau naudotojai galėjo spustelėti *.crx failą ir „<ph name="PRODUCT_NAME" />“ buvo leidžiama įdiegti failą po kelių įspėjimų. Naudojant naujesnės nei 21 versijos „<ph name="PRODUCT_NAME" />“, tokius failus reikia atsisiųsti ir nuvilkti į „<ph name="PRODUCT_NAME" />“ nustatymų puslapį. Naudojant šį nustatymą galima iš konkrečių URL įdiegti senu, lengvesniu įdiegimo metodu.
+          21 versijos „<ph name="PRODUCT_NAME" />“ sudėtingiau įdiegti plėtinius, programas ir naudotojo scenarijus ne iš „Carbon Browser“ internetinės parduotuvės. Anksčiau naudotojai galėjo spustelėti *.crx failą ir „<ph name="PRODUCT_NAME" />“ buvo leidžiama įdiegti failą po kelių įspėjimų. Naudojant naujesnės nei 21 versijos „<ph name="PRODUCT_NAME" />“, tokius failus reikia atsisiųsti ir nuvilkti į „<ph name="PRODUCT_NAME" />“ nustatymų puslapį. Naudojant šį nustatymą galima iš konkrečių URL įdiegti senu, lengvesniu įdiegimo metodu.
 
           Kiekvienas šio sąrašo elementas yra plėtinio stiliaus atitikmens šablonas (žr. https://developer.chrome.com/extensions/match_patterns). Naudotojai galės paprastai įdiegti elementus iš bet kurio URL, atitinkančio šio sąrašo elementą. Šių šablonų turi būti leidžiama *.crx failo vieta ir puslapis, iš kurio pradedamas atsisiuntimas (pvz., nukreipiančiojo naudotojo).
 
@@ -752,11 +752,11 @@
 
       Kai politika nustatyta kaip išjungta arba nenustatyta, puslapiuose neleidžiama rodyti iššokančiųjų langų, kol jie įkeliami, vadovaujantis specifikacijomis (https://html.spec.whatwg.org/#apis-for-creating-and-navigating-browsing-contexts-by-name).
 
-      Ši politika bus pašalinta 82 versijos „Carbon Browser Browser Browser“.
+      Ši politika bus pašalinta 82 versijos „Carbon Browser“.
 
       Žr. https://www.chromestatus.com/feature/5989473649164288.</translation>
 <translation id="2269319728625047531">Įgalinama sutikimo sinchronizuoti pateiktis prisijungiant</translation>
-<translation id="2274864612594831715">Pagal šią politiką sukonfigūruojamas virtualiosios klaviatūros kaip įvesties įrenginio įgalinimas „Carbon Browser Browser Browser“ OS. Naudotojai negali nepaisyti šios politikos.
+<translation id="2274864612594831715">Pagal šią politiką sukonfigūruojamas virtualiosios klaviatūros kaip įvesties įrenginio įgalinimas „Carbon Browser“ OS. Naudotojai negali nepaisyti šios politikos.
 
       Jei politika galioja, ekraninė virtualioji klaviatūra visada bus įgalinta.
 
@@ -826,9 +826,9 @@
 <translation id="2463034609187171371">DHE šifruotųjų programų komplektų įgalinimas TLS</translation>
 <translation id="2463365186486772703">Programos lokalė</translation>
 <translation id="2466131534462628618">Fiksuotojo portalo autentifikavimas nepaiso tarpinio serverio</translation>
-<translation id="2471748297300970300">Jei išjungta, paleidus „Carbon Browser Browser Browser“ neleidžiama rodyti saugos įspėjimų su tam tikromis potencialiai pavojingomis komandos eilutės žymomis.
+<translation id="2471748297300970300">Jei išjungta, paleidus „Carbon Browser“ neleidžiama rodyti saugos įspėjimų su tam tikromis potencialiai pavojingomis komandos eilutės žymomis.
 
-          Įgalinus arba nenustačius, pateikiami saugos įspėjimai, kai komandos eilutės žymos naudojamos „Carbon Browser Browser Browser“ paleisti.
+          Įgalinus arba nenustačius, pateikiami saugos įspėjimai, kai komandos eilutės žymos naudojamos „Carbon Browser“ paleisti.
 
           Sistemoje „Windows“ ši politika pasiekiama tik objektuose, kurie susieti su „<ph name="MS_AD_NAME" />“ domenu, arba „Windows 10 Pro“ ar „Enterprise“ objektuose, kurie užregistruoti naudoti įrenginių tvarkymo funkciją.</translation>
 <translation id="2482676533225429905">Savoji susirašinėjimo pranešimais programa</translation>
@@ -950,7 +950,7 @@
           „Google“ paieškos URL galima nurodyti kaip: <ph name="GOOGLE_SEARCH_URL" />.
 
           Ši parinktis turi būti nustatyta, kai politika „Numatytasis paieškos teikėjas įgalintas“ įgalinta, ir į ją bus atsižvelgta tik šiuo atveju.</translation>
-<translation id="2659019163577049044">Įgalinus šį nustatymą, naudotojai galės nustatyti įrenginius, kad SMS pranešimai būtų sinchronizuojami iš telefonų į „Carbon Browser Browser Browserbook“ įrenginius. Atminkite, kad leidus šią politiką naudotojai turės aiškiai pasirinkti šią funkciją atlikdami sąrankos veiksmus. Juos atlikę naudotojai galės siųsti ir gauti SMS pranešimus „Carbon Browser Browser Browserbook“ įrenginiuose.
+<translation id="2659019163577049044">Įgalinus šį nustatymą, naudotojai galės nustatyti įrenginius, kad SMS pranešimai būtų sinchronizuojami iš telefonų į „Carbon Browserbook“ įrenginius. Atminkite, kad leidus šią politiką naudotojai turės aiškiai pasirinkti šią funkciją atlikdami sąrankos veiksmus. Juos atlikę naudotojai galės siųsti ir gauti SMS pranešimus „Carbon Browserbook“ įrenginiuose.
 
       Išjungus nustatymą, naudotojai negalės nustatyti SMS pranešimų sinchronizavimo.
 
@@ -968,7 +968,7 @@
 <translation id="2706708761587205154">Leisti spausdinti tik naudojant PIN kodą</translation>
 <translation id="2710534340210290498">Jei ši politika nustatyta kaip „Netiesa“, naudotojai negalės užrakinti ekrano (bus galima tik atsijungti nuo naudotojo sesijos). Jei šis nustatymas nustatytas kaip „Tiesa“ arba nenustatytas, ekraną galės užrakinti naudotojai, autentifikuoti naudojant slaptažodį.</translation>
 <translation id="2731627323327011390">Neleisti naudoti „<ph name="PRODUCT_OS_NAME" />“ sertifikatų ARC programose</translation>
-<translation id="2742843273354638707">Slėpti „Carbon Browser Browser Browser“ internetinės parduotuvės programą ir poraštės nuorodą Naujo skirtuko puslapyje ir „<ph name="PRODUCT_OS_NAME" />“ programų paleidimo priemonėje.
+<translation id="2742843273354638707">Slėpti „Carbon Browser“ internetinės parduotuvės programą ir poraštės nuorodą Naujo skirtuko puslapyje ir „<ph name="PRODUCT_OS_NAME" />“ programų paleidimo priemonėje.
 
       Kai ši politika yra galiojanti, piktogramos yra slepiamos.
 
@@ -1012,7 +1012,7 @@
 <translation id="2801155097555584385">Tinkintos akumuliatoriaus krovimo pradžios vertės procentais nustatymas</translation>
 <translation id="2801230735743888564">Leidžiama naudotojams žaisti dinozaurų Velykų kiaušinių žaidimą, kai įrenginys neprijungtas prie interneto.
 
-      Jei ši politika nustatyta į „False“, naudotojai negali žaisti dinozaurų Velykų kiaušinių žaidimo, kai įrenginys neprijungtas prie interneto. Jei šis nustatymas nustatytas į „True“, naudotojams leidžiama žaisti dinozaurų žaidimą. Jei ši politika nenustatyta, naudotojams neleidžiama žaisti dinozaurų Velykų kiaušinių žaidimo užregistruotoje „Carbon Browser Browser Browser“ OS, bet leidžiama žaisti kitomis aplinkybėmis.</translation>
+      Jei ši politika nustatyta į „False“, naudotojai negali žaisti dinozaurų Velykų kiaušinių žaidimo, kai įrenginys neprijungtas prie interneto. Jei šis nustatymas nustatytas į „True“, naudotojams leidžiama žaisti dinozaurų žaidimą. Jei ši politika nenustatyta, naudotojams neleidžiama žaisti dinozaurų Velykų kiaušinių žaidimo užregistruotoje „Carbon Browser“ OS, bet leidžiama žaisti kitomis aplinkybėmis.</translation>
 <translation id="2802085784857530815">Leidžiama valdyti, ar naudotojai gali pasiekti ne įmonės spausdintuvus
 
       Jei politika nustatyta į „True“ arba visai nenustatyta, naudotojai galės pridėti ir konfigūruoti savuosius spausdintuvus bei jais spausdinti.
@@ -1031,12 +1031,12 @@
       Kai ši politika nustatyta kaip ne tuščias laikotarpių sąrašas:
       įrenginiai negalės automatiškai tikrinti, ar yra naujinių, nurodytais laikotarpiais. Įrenginiams, kuriuose reikia grąžinti ankstesnę „<ph name="PRODUCT_OS_NAME" />“ versiją ar kurių versija yra senesnė nei minimali reikalaujama, ši politika neturės jokios įtakos dėl potencialių saugos problemų. Be to, ši politika neblokuos naujinių patikrinimų, kurių užklausas bus pateikę naudotojai ar administratoriai.
       Kai ši politika nenustatyta ar joje nėra jokių laikotarpių:
-      jokie automatiniai naujinių patikrinimai pagal šią politiką nebus blokuojami, tačiau jie gali būti blokuojami pagal kitą politiką. Ši funkcija įgalinta tik „Carbon Browser Browser Browser“ įrenginiuose, kurie sukonfigūruoti kaip automatinio paleidimo viešieji terminalai. Kiti įrenginiai nebus ribojami pagal šią politiką.</translation>
+      jokie automatiniai naujinių patikrinimai pagal šią politiką nebus blokuojami, tačiau jie gali būti blokuojami pagal kitą politiką. Ši funkcija įgalinta tik „Carbon Browser“ įrenginiuose, kurie sukonfigūruoti kaip automatinio paleidimo viešieji terminalai. Kiti įrenginiai nebus ribojami pagal šią politiką.</translation>
 <translation id="2823870601012066791">„<ph name="PRODUCT_OS_NAME" />“ klientų „Windows“ registro vieta:</translation>
 <translation id="2824715612115726353">Įgalinti inkognito režimą</translation>
 <translation id="2836621397261130126">Valdoma, ar atsižvelgiama į patvirtinimą pagal KDC politiką nusprendžiant dėl „<ph name="KERBEROS" />“ bilietų perdavimo.
 
-          Jei ši politika nustatyta kaip „Tiesa“, taikant HTTP autentifikavimą atsižvelgiama į patvirtinimą pagal KDC politiką, t. y. „Carbon Browser Browser Browser“ perduoda prisijungimo duomenis, tik jei KDC nustato <ph name="OK_AS_DELEGATE" /> paslaugos biliete. Daugiau informacijos žr. https://tools.ietf.org/html/rfc5896.html. Paslauga taip pat turi atitikti politiką „AuthNegotiateDelegateWhitelist“.
+          Jei ši politika nustatyta kaip „Tiesa“, taikant HTTP autentifikavimą atsižvelgiama į patvirtinimą pagal KDC politiką, t. y. „Carbon Browser“ perduoda prisijungimo duomenis, tik jei KDC nustato <ph name="OK_AS_DELEGATE" /> paslaugos biliete. Daugiau informacijos žr. https://tools.ietf.org/html/rfc5896.html. Paslauga taip pat turi atitikti politiką „AuthNegotiateDelegateWhitelist“.
 
           Jei ši politika nenustatyta arba nustatyta kaip „Netiesa“, KDC politikos nepaisoma palaikomose platformose ir atsižvelgiama tik į politiką „AuthNegotiateDelegateWhitelist“.
 
@@ -1182,7 +1182,7 @@
           Nenustačius šios politikos, bus naudojama „Leisti „JavaScript“ ir naudotojas (-a) galės tai pakeisti.</translation>
 <translation id="3038323923255997294">Uždarius „<ph name="PRODUCT_NAME" />“ toliau leisti fonines programas</translation>
 <translation id="3046192273793919231">Tinklo paketų siuntimas į valdymo serverį, siekiant stebėti prisijungimo būseną</translation>
-<translation id="3047732214002457234">„Carbon Browser Browser Browser“ valymo įrankio duomenų ataskaitų teikimo „Google“ valdymas</translation>
+<translation id="3047732214002457234">„Carbon Browser“ valymo įrankio duomenų ataskaitų teikimo „Google“ valdymas</translation>
 <translation id="304775240152542058">Ši politika valdo komandos eilutės parametrus, kurie bus paleisti alternatyvioje naršyklėje.
 
       Kai ši politika nenustatyta, tik URL perduodamas kaip komandos eilutės parametrai.
@@ -1254,9 +1254,9 @@
       Jei politika nenustatyta arba nustatyta į „false“, TLS DHE šifruotieji programų komplektai nebus įgalinti. Priešingu atveju ją galima nustatyti į „true“, kad būtų įgalinti DHE šifruotieji programų komplektai ir išsaugotas suderinamumas su pasenusiu serveriu. Tai laikina priemonė; serverį reikia iš naujo sukonfigūruoti.
 
       Serverius raginama perkelti į ECDHE šifruotuosius programų komplektus. Jei jie nepasiekiami, įsitikinkite, kad įgalintas šifruotasis programų komplektas, kuriam naudojami RSA rakto mainai.</translation>
-<translation id="3117706142826400449">Jei šis nustatymas išjungtas, „Carbon Browser Browser Browser“ valymo funkcijai neleidžiama nuskaityti sistemos ieškant nepageidaujamos programinės įrangos ir atlikti valymo veiksmų. Neautomatinis „Carbon Browser Browser Browser“ valymo funkcijos suaktyvinimas apsilankius adresu chrome://settings/cleanup išjungtas.
+<translation id="3117706142826400449">Jei šis nustatymas išjungtas, „Carbon Browser“ valymo funkcijai neleidžiama nuskaityti sistemos ieškant nepageidaujamos programinės įrangos ir atlikti valymo veiksmų. Neautomatinis „Carbon Browser“ valymo funkcijos suaktyvinimas apsilankius adresu chrome://settings/cleanup išjungtas.
 
-      Jei šis nustatymas įgalintas arba nenustatytas, „Carbon Browser Browser Browser“ valymo funkcija periodiškai nuskaitys sistemą ieškodama nepageidaujamos programinės įrangos, o radus tokios įrangos naudotojo bus klausiama, ar jis nori ją pašalinti. Neautomatinis „Carbon Browser Browser Browser“ valymo funkcijos suaktyvinimas apsilankius adresu chrome://settings įgalintas.
+      Jei šis nustatymas įgalintas arba nenustatytas, „Carbon Browser“ valymo funkcija periodiškai nuskaitys sistemą ieškodama nepageidaujamos programinės įrangos, o radus tokios įrangos naudotojo bus klausiama, ar jis nori ją pašalinti. Neautomatinis „Carbon Browser“ valymo funkcijos suaktyvinimas apsilankius adresu chrome://settings įgalintas.
 
       Ši politika pasiekiama tik „Windows“ objektuose, kurie susieti su „<ph name="MS_AD_NAME" />“ domenu, arba „Windows 10 Pro“ ar „Enterprise“ objektuose, kurie užregistruoti naudoti įrenginių tvarkymo funkciją.</translation>
 <translation id="3152425128389603870">Vieno darbalaukio režimo pasiekiamumo nustatymas ir įjungimas pagal numatytuosius nustatymus</translation>
@@ -1371,7 +1371,7 @@
       Nustačius šį nustatymą į „Išjungta“ arba nenustačius jokios vertės, „<ph name="PRODUCT_NAME" />“ nevykdo riboto režimo sistemoje „YouTube“. Taikant išorinę politiką, pvz., „YouTube“ politiką, ribotą režimą vis tiek gali reikėti vykdyti.</translation>
 <translation id="3428247105888806363">Įgalinti tinklo prognozę</translation>
 <translation id="3432863169147125747">Valdomi spausdinimo nustatymai.</translation>
-<translation id="3434932177006334880">Šio nustatymo pavadinimas prieš 42 versijos „Carbon Browser Browser Browser“ buvo „EnableWebBasedSignin“, bet 43 versijos „Carbon Browser Browser Browser“ jis bus visiškai pašalintas.
+<translation id="3434932177006334880">Šio nustatymo pavadinimas prieš 42 versijos „Carbon Browser“ buvo „EnableWebBasedSignin“, bet 43 versijos „Carbon Browser“ jis bus visiškai pašalintas.
 
       Šis nustatymas naudingas įmonių naudotojams, naudojantiems SSO priemones, kurios dar nesuderinamos su nauju tiesioginiu prisijungimo srautu.
       Jei įgalinsite šį nustatymą, bus naudojamas senas prisijungimo žiniatinklyje srautas.
@@ -1451,7 +1451,7 @@
       Jei kalba įtraukta į šią politiką ir politiką „<ph name="SPELLCHECK_LANGUAGE_BLACKLIST_POLICY_NAME" />“, pirmenybė teikiama šiai politikai ir rašybos tikrinimo kalba įgalinama.
 
       Šiuo metu palaikomos šios kalbos: af, bg, ca, cs, da, de, el, en-AU, en-CA, en-GB, en-US, es, es-419, es-AR, es-ES, es-MX, es-US, et, fa, fo, fr, he, hi, hr, hu, id, it, ko, lt, lv, nb, nl, pl, pt-BR, pt-PT, ro, ru, sh, sk, sl, sq, sr, sv, ta, tg, tr, uk, vi.</translation>
-<translation id="356579196325389849">Naudotojai gali konfigūruoti „Carbon Browser Browser Browser“ OS leidimo kanalą</translation>
+<translation id="356579196325389849">Naudotojai gali konfigūruoti „Carbon Browser“ OS leidimo kanalą</translation>
 <translation id="3575011234198230041">HTTP autentifikavimas</translation>
 <translation id="3577251398714997599">Skelbimų nustatymai svetainėms su nepageidaujamais skelbimais</translation>
 <translation id="357917253161699596">Leisti naudotojams tvarkyti naudotojų sertifikatus</translation>
@@ -1469,9 +1469,9 @@
 <translation id="3646859102161347133">Nustatyti ekrano didinimo tipą</translation>
 <translation id="3653237928288822292">Numatytojo paieškos teikėjo piktograma</translation>
 <translation id="3660510274595679517">
-        Jei ši politika nustatyta kaip „Tiesa“, „Cloud Management“ registracija būtina, o nepavykus užregistruoti blokuojamas „Carbon Browser Browser Browser“ paleidimo procesas.
+        Jei ši politika nustatyta kaip „Tiesa“, „Cloud Management“ registracija būtina, o nepavykus užregistruoti blokuojamas „Carbon Browser“ paleidimo procesas.
 
-        Jei ši politika nenustatyta arba nustatyta kaip „Netiesa“, „Cloud Management“ registracija pasirenkama ir nepavykus užregistruoti „Carbon Browser Browser Browser“ paleidimo procesas nėra blokuojamas.
+        Jei ši politika nenustatyta arba nustatyta kaip „Netiesa“, „Cloud Management“ registracija pasirenkama ir nepavykus užregistruoti „Carbon Browser“ paleidimo procesas nėra blokuojamas.
 
         Ši politika naudojama vykdant įrenginio debesies politikos registraciją staliniame kompiuteryje ir gali būti nustatyta naudojant registrą arba GPO sistemoje „Windows“, „plist“ sistemoje „Mac“ ir JSON politikos failą sistemoje „Linux“.</translation>
 <translation id="3660562134618097814">„SAML IdP“ slapukų perkėlimas prisijungiant</translation>
@@ -1656,9 +1656,9 @@
 <translation id="3963602271515417124">Jei ši politika galioja, leidžiama nuotoliniu būdu patvirtinti įrenginį, o sertifikatas bus automatiškai sugeneruotas ir įkeltas į įrenginių tvarkymo serverį.
 
           Jei ši politika negalioja arba yra nenustatyta, sertifikatas nebus sugeneruotas ir nepavyks iškviesti „enterprise.platformKeysPrivate“ plėtinio API.</translation>
-<translation id="3964262920683972987">Konfigūruokite įrenginio lygio ekrano fono vaizdą, kuris rodomas prisijungimo ekrane, jei prie įrenginio neprisijungė joks naudotojas. Politika nustatoma nurodant URL, kuriuo „Carbon Browser Browser Browser“ OS įrenginys gali atsisiųsti ekrano fono vaizdą ir kriptografinę maišos vertę, naudojamą atsisiuntimo vientisumui patvirtinti. Vaizdas turi būti JPEG formato, ne didesnis nei 16 MB. URL turi būti galima pasiekti nenustačius tapatybės. Ekrano fono vaizdas atsisiunčiamas ir saugomas talpykloje. Jis bus pakartotinai atsisiųstas pakeitus URL ar maišą.
+<translation id="3964262920683972987">Konfigūruokite įrenginio lygio ekrano fono vaizdą, kuris rodomas prisijungimo ekrane, jei prie įrenginio neprisijungė joks naudotojas. Politika nustatoma nurodant URL, kuriuo „Carbon Browser“ OS įrenginys gali atsisiųsti ekrano fono vaizdą ir kriptografinę maišos vertę, naudojamą atsisiuntimo vientisumui patvirtinti. Vaizdas turi būti JPEG formato, ne didesnis nei 16 MB. URL turi būti galima pasiekti nenustačius tapatybės. Ekrano fono vaizdas atsisiunčiamas ir saugomas talpykloje. Jis bus pakartotinai atsisiųstas pakeitus URL ar maišą.
 
-      Jei nustatyta įrenginio ekrano fono politika, „Carbon Browser Browser Browser“ OS įrenginys atsisiųs ir naudos ekrano fono vaizdą prisijungimo ekrane, jei joks naudotojas dar neprisijungė prie įrenginio. Kai naudotojas prisijungs, įsigalios naudotojo ekrano fono politika.
+      Jei nustatyta įrenginio ekrano fono politika, „Carbon Browser“ OS įrenginys atsisiųs ir naudos ekrano fono vaizdą prisijungimo ekrane, jei joks naudotojas dar neprisijungė prie įrenginio. Kai naudotojas prisijungs, įsigalios naudotojo ekrano fono politika.
 
       Jei įrenginio ekrano fono politika nenustatyta, naudotojo ekrano fono politika (jei nustatyta) lemia, kas bus rodoma.</translation>
 <translation id="3965339130942650562">Skirtasis laikas, kol vykdomas neveikos būsenos naudotojo atjungimas</translation>
@@ -1666,15 +1666,15 @@
 <translation id="3984028218719007910">Nustatoma, ar „<ph name="PRODUCT_OS_NAME" />“ paliekami vietiniai paskyros duomenys atsijungus. Jei nustatyta į „true“ (tiesa), jokios nuolatinės paskyros nelaikomos „<ph name="PRODUCT_OS_NAME" />“ ir visi duomenys iš naudotojo sesijos atmetami atsijungus. Jei ši politika nustatyta į „false“ (netiesa) arba nesukonfigūruota, įrenginyje gali būti laikomi (šifruoti) vietiniai naudotojo duomenys.</translation>
 <translation id="398475542699441679">Ši politika valdo, ar įgalinti „Pasenusių naršyklių palaikymo“ funkciją.
 
-      Jei ši politika nenustatyta arba nustatyta kaip „Netiesa“, „Carbon Browser Browser Browser“ nebando paleisti priskirtų URL alternatyvioje naršyklėje.
+      Jei ši politika nenustatyta arba nustatyta kaip „Netiesa“, „Carbon Browser“ nebando paleisti priskirtų URL alternatyvioje naršyklėje.
 
-      Jei ši politika nustatyta kaip „Tiesa“, „Carbon Browser Browser Browser“ bando paleisti tam tikrus URL alternatyvioje naršyklėje (pvz., „Internet Explorer“). Ši funkcija sukonfigūruota naudojant „<ph name="LEGACY_BROWSER_SUPPORT_POLICY_GROUP" />“ grupės politikos nuostatas.
+      Jei ši politika nustatyta kaip „Tiesa“, „Carbon Browser“ bando paleisti tam tikrus URL alternatyvioje naršyklėje (pvz., „Internet Explorer“). Ši funkcija sukonfigūruota naudojant „<ph name="LEGACY_BROWSER_SUPPORT_POLICY_GROUP" />“ grupės politikos nuostatas.
 
-      Ši funkcija pakeičia „<ph name="LEGACY_BROWSER_SUPPORT_EXTENSION_NAME" />“ plėtinį. Šiai funkcijai bus perduota plėtinio konfigūracija, bet primygtinai rekomenduojama naudoti „Carbon Browser Browser Browser“ politiką. Tai ateityje užtikrins geresnį suderinamumą.</translation>
+      Ši funkcija pakeičia „<ph name="LEGACY_BROWSER_SUPPORT_EXTENSION_NAME" />“ plėtinį. Šiai funkcijai bus perduota plėtinio konfigūracija, bet primygtinai rekomenduojama naudoti „Carbon Browser“ politiką. Tai ateityje užtikrins geresnį suderinamumą.</translation>
 <translation id="3997519162482760140">URL, kuriems bus suteikta prieiga prie vaizdo įrašus fiksuojančių įrenginių SAML prisijungimo puslapiuose</translation>
-<translation id="4001275826058808087">Įmonės įrenginių IT administratoriai gali naudoti šią žymą, kad valdytų, ar leisti naudotojams išpirkti pasiūlymus vykdant „Carbon Browser Browser Browser“ OS registraciją.
+<translation id="4001275826058808087">Įmonės įrenginių IT administratoriai gali naudoti šią žymą, kad valdytų, ar leisti naudotojams išpirkti pasiūlymus vykdant „Carbon Browser“ OS registraciją.
 
-      Jei ši politika galioja arba nėra nustatyta, naudotojai galės išpirkti pasiūlymus vykdydami „Carbon Browser Browser Browser“ OS registraciją.
+      Jei ši politika galioja arba nėra nustatyta, naudotojai galės išpirkti pasiūlymus vykdydami „Carbon Browser“ OS registraciją.
 
       Jei ši politika negalioja, naudotojas negalės išpirkti pasiūlymų.</translation>
 <translation id="4008233182078913897">Nurodomas sąrašas programų ir plėtinių, kurie įdiegiami automatiškai,
@@ -1688,13 +1688,13 @@
 
           Šiai politikai teikiama pirmenybė prieš potencialiai nesuderinamą politiką „<ph name="EXTENSION_INSTALL_BLACKLIST_POLICY_NAME" />“. Jei anksčiau priverstinai įdiegta programa ar plėtinys pašalinami iš šio sąrašo, jie automatiškai pašalinami ir iš „<ph name="PRODUCT_NAME" />“.
 
-          „Windows“ objektų, kurie neprijungti prie <ph name="MS_AD_NAME" /> domeno, priverstinis diegimas ribojamas naudojant plėtinius, nurodytus „Carbon Browser Browser Browser“ internetinėje parduotuvėje.
+          „Windows“ objektų, kurie neprijungti prie <ph name="MS_AD_NAME" /> domeno, priverstinis diegimas ribojamas naudojant plėtinius, nurodytus „Carbon Browser“ internetinėje parduotuvėje.
 
           Atminkite, kad naudotojai gali keisti bet kurio plėtinio šaltinio kodą, naudodami kūrėjo įrankius (tai gali sutrikdyti plėtinio pateikimą). Jei tai kelia rūpesčių, reikia nustatyti politiką „<ph name="DEVELOPER_TOOLS_POLICY_NAME" />“.
 
-          Kiekvienas politikos sąrašo elementas yra eilutė, kurioje yra plėtinio ID ir „naujinio“ URL, atskirti kabliataškiu (<ph name="SEMICOLON" />). Plėtinio ID yra 32 raidžių eilutė, aptinkama, pvz. <ph name="CHROME_EXTENSIONS_LINK" />, dirbant kūrėjo režimu. „Naujinio“ URL (jei nurodytas) turėtų nurodyti naujinio aprašo XML dokumentą, kaip aprašyta <ph name="LINK_TO_EXTENSION_DOC1" />. Pagal numatytuosius nustatymus naudojamas „Carbon Browser Browser Browser“ internetinės parduotuvės naujinio URL (kuris šiuo metu yra „https://clients2.google.com/service/update2/crx“). Atminkite, kad šioje politikoje nustatytas „naujinio“ URL naudojamas tik atliekant pirminį diegimą. Tolesni plėtinio naujiniai naudos naujinio URL, nurodytą plėtinio apraše. Be to, atminkite, kad buvo būtina aiškiai nurodyti „naujinio“ URL 67 ir ankstesnių versijų „<ph name="PRODUCT_NAME" />“.
+          Kiekvienas politikos sąrašo elementas yra eilutė, kurioje yra plėtinio ID ir „naujinio“ URL, atskirti kabliataškiu (<ph name="SEMICOLON" />). Plėtinio ID yra 32 raidžių eilutė, aptinkama, pvz. <ph name="CHROME_EXTENSIONS_LINK" />, dirbant kūrėjo režimu. „Naujinio“ URL (jei nurodytas) turėtų nurodyti naujinio aprašo XML dokumentą, kaip aprašyta <ph name="LINK_TO_EXTENSION_DOC1" />. Pagal numatytuosius nustatymus naudojamas „Carbon Browser“ internetinės parduotuvės naujinio URL (kuris šiuo metu yra „https://clients2.google.com/service/update2/crx“). Atminkite, kad šioje politikoje nustatytas „naujinio“ URL naudojamas tik atliekant pirminį diegimą. Tolesni plėtinio naujiniai naudos naujinio URL, nurodytą plėtinio apraše. Be to, atminkite, kad buvo būtina aiškiai nurodyti „naujinio“ URL 67 ir ankstesnių versijų „<ph name="PRODUCT_NAME" />“.
 
-          Pavyzdžiui, <ph name="EXTENSION_POLICY_EXAMPLE" /> įdiegia plėtinį, kurio ID <ph name="EXTENSION_ID_SAMPLE" />, iš standartinio „Carbon Browser Browser Browser“ internetinės parduotuvės „naujinio“ URL. Jei reikia daugiau informacijos apie plėtinių prieglobą, žr. <ph name="LINK_TO_EXTENSION_DOC2" />.
+          Pavyzdžiui, <ph name="EXTENSION_POLICY_EXAMPLE" /> įdiegia plėtinį, kurio ID <ph name="EXTENSION_ID_SAMPLE" />, iš standartinio „Carbon Browser“ internetinės parduotuvės „naujinio“ URL. Jei reikia daugiau informacijos apie plėtinių prieglobą, žr. <ph name="LINK_TO_EXTENSION_DOC2" />.
 
           Nenustačius šios politikos, jokios programos ar plėtiniai neįdiegiami automatiškai, o naudotojas gali pašalinti bet kurią programą ar plėtinį naudodamas „<ph name="PRODUCT_NAME" />“.
 
@@ -1801,7 +1801,7 @@
           Jums nustačius šią politiką naudotojai negalės jos pakeisti ar nepaisyti.
 
           Jei ši politika nenustatyta, atmenieji klavišai iš pradžių bus išjungti, bet naudotojas bet kada galės juos įgalinti.</translation>
-<translation id="4171331498167688968">Jei politika nustatyta kaip „Netiesa“, trečiosios šalies programinei įrangai bus leidžiama įdėti vykdomąjį kodą į „Carbon Browser Browser Browser“ procesus. Jei politika nenustatyta arba nustatyta kaip „Tiesa“, trečiosios šalies programinei įrangai nebus leidžiama įdėti vykdomojo kodo į „Carbon Browser Browser Browser“ procesus.
+<translation id="4171331498167688968">Jei politika nustatyta kaip „Netiesa“, trečiosios šalies programinei įrangai bus leidžiama įdėti vykdomąjį kodą į „Carbon Browser“ procesus. Jei politika nenustatyta arba nustatyta kaip „Tiesa“, trečiosios šalies programinei įrangai nebus leidžiama įdėti vykdomojo kodo į „Carbon Browser“ procesus.
 
       Neatsižvelgiant į šios politikos vertę, naršyklė šiuo metu neblokuos trečiosios šalies programinės įrangos, kad šiai nebūtų leidžiama įdėti vykdomojo kodo į naršyklės procesus prie domeno <ph name="MS_AD_NAME" /> prijungtame įrenginyje.</translation>
 <translation id="4183229833636799228">Numatytasis „<ph name="FLASH_PLUGIN_NAME" />“ nustatymas</translation>
@@ -1870,11 +1870,11 @@
 <translation id="4298509794364745131">Nurodomas programų, kurias galite įgalinti kaip užrašų programas „<ph name="PRODUCT_OS_NAME" />“ užrakinimo ekrane, sąrašas.
 
       Jei pageidaujama užrašų programa įgalinta užrakinimo ekrane, jame bus NS elementas pageidaujamai užrašų programai paleisti.
-      Kai programa paleista, ji gali atidaryti programos langą užrakinimo ekrane ir kurti jame duomenų elementus (užrašus). Programa galės importuoti sukurtus užrašus į pagrindinę naudotojo sesiją, kai sesija bus atrakinta. Šiuo metu tik „Carbon Browser Browser Browser“ užrašų programos palaikomos užrakinimo ekrane.
+      Kai programa paleista, ji gali atidaryti programos langą užrakinimo ekrane ir kurti jame duomenų elementus (užrašus). Programa galės importuoti sukurtus užrašus į pagrindinę naudotojo sesiją, kai sesija bus atrakinta. Šiuo metu tik „Carbon Browser“ užrašų programos palaikomos užrakinimo ekrane.
 
       Jei politika nustatyta, naudotojui bus leidžiama įgalinti programą užrakinimo ekrane, tik jei programos plėtinio ID bus pateiktas politikos sąrašo vertėje.
       Todėl šią politiką nustačius kaip tuščią sąrašą užrašai bus visiškai išjungti užrakinimo ekrane.
-      Atminkite, kad politika su programos ID nebūtinai reiškia, kad naudotojas galės įgalinti programą kaip užrašų programą užrakinimo ekrane (pvz., 61 versijos „Carbon Browser Browser Browser“ platforma papildomai apriboja pasiekiamų programų rinkinį).
+      Atminkite, kad politika su programos ID nebūtinai reiškia, kad naudotojas galės įgalinti programą kaip užrašų programą užrakinimo ekrane (pvz., 61 versijos „Carbon Browser“ platforma papildomai apriboja pasiekiamų programų rinkinį).
 
       Jei politika nenustatyta, nebus taikoma jokių programų, kurias naudotojas gali įgalinti užrakinimo ekrane, rinkinio apribojimų.</translation>
 <translation id="4313767483634435271">Įrenginio priskirtas doko MAC adresas</translation>
@@ -2031,7 +2031,7 @@
 <translation id="467236746355332046">Palaikomos funkcijos:</translation>
 <translation id="4674167212832291997">Tinkinkite URL šablonų, kurie visada turėtų būti pateikti naudojant „<ph name="PRODUCT_FRAME_NAME" />“, sąrašą.
 
-          Nenustačius šios politikos visose svetainėse bus naudojamas numatytasis pateikėjas, kaip nurodyta politikoje „Carbon Browser Browser BrowserFrameRendererSettings“.
+          Nenustačius šios politikos visose svetainėse bus naudojamas numatytasis pateikėjas, kaip nurodyta politikoje „Carbon BrowserFrameRendererSettings“.
 
           Šablonų pavyzdžių pateikiama apsilankius adresu https://www.chromium.org/developers/how-tos/chrome-frame-getting-started.</translation>
 <translation id="467449052039111439">Atidaryti URL sąrašą</translation>
@@ -2128,10 +2128,10 @@
 
       Jei ši politika nustatyta į „false“, „<ph name="PRODUCT_NAME" />“ neleis kurti naujų profilių naudojant naudotojų tvarkytuvę.</translation>
 <translation id="4970855112942626932">Naršyklės prisijungimo išjungimas</translation>
-<translation id="4978405676361550165">Nustačius politiką „OffHours“ nustatytais laiko intervalais nepaisoma nurodytos įrenginio politikos (naudojami numatytieji šios politikos nustatymai). Įrenginio politiką „Carbon Browser Browser Browser“ pakartotinai pritaiko per kiekvieną įvykį, kai „OffHours“ laikotarpis prasideda ir baigiasi. Naudotojams bus pranešta ir jie bus priverstinai atjungti, kai „OffHours“ laikas pasibaigs ir įrenginio politikos nustatymai bus pakeisti (pvz., kai naudotojas bus prisijungęs su neleidžiama paskyra).</translation>
+<translation id="4978405676361550165">Nustačius politiką „OffHours“ nustatytais laiko intervalais nepaisoma nurodytos įrenginio politikos (naudojami numatytieji šios politikos nustatymai). Įrenginio politiką „Carbon Browser“ pakartotinai pritaiko per kiekvieną įvykį, kai „OffHours“ laikotarpis prasideda ir baigiasi. Naudotojams bus pranešta ir jie bus priverstinai atjungti, kai „OffHours“ laikas pasibaigs ir įrenginio politikos nustatymai bus pakeisti (pvz., kai naudotojas bus prisijungęs su neleidžiama paskyra).</translation>
 <translation id="4980635395568992380">Duomenų tipas:</translation>
 <translation id="4983201894483989687">Leisti paleisti pasenusius papildinius</translation>
-<translation id="4986560318567565414">Perjungimo iš alternatyvios naršyklės kelias į „Carbon Browser Browser Browser“.</translation>
+<translation id="4986560318567565414">Perjungimo iš alternatyvios naršyklės kelias į „Carbon Browser“.</translation>
 <translation id="4988291787868618635">Veiksmas, kuris bus atliktas, kai bus pasiektas neveikos delsos laikas</translation>
 <translation id="5034604678285451405">Nustatomas šaltinio pakeitimo suvartojant daugiausiai energijos akumuliatoriaus įkrovos slenkstis procentais.
 
@@ -2205,11 +2205,11 @@
       Nustačius politikos vertę į 0, įrenginio slaptažodžio keitimas išjungiamas.
 
       Atminkite, kad slaptažodžiai gali būti senesni nei nurodytas dienų skaičius, jei klientas neprisijungia ilgesnį laikotarpį.</translation>
-<translation id="510196893779239086">Ši politika valdo, ar visiškai uždaryti „Carbon Browser Browser Browser“, kai paskutinis skirtukas perjungiamas į kitą naršyklę.
+<translation id="510196893779239086">Ši politika valdo, ar visiškai uždaryti „Carbon Browser“, kai paskutinis skirtukas perjungiamas į kitą naršyklę.
 
-      Kai ši politika nenustatyta arba nustatyta kaip „Tiesa“, perjungus į alternatyvią naršyklę, naršyklėje „Carbon Browser Browser Browser“ paliekamas bent vienas atidarytas skirtukas.
+      Kai ši politika nenustatyta arba nustatyta kaip „Tiesa“, perjungus į alternatyvią naršyklę, naršyklėje „Carbon Browser“ paliekamas bent vienas atidarytas skirtukas.
 
-      Kai ši politika nustatyta kaip „Netiesa“, perjungus į alternatyvią naršyklę, naršyklėje „Carbon Browser Browser Browser“ skirtukas uždaromas, net jei tai yra paskutinis skirtukas. Tada „Carbon Browser Browser Browser“ visiškai išjungiama.</translation>
+      Kai ši politika nustatyta kaip „Netiesa“, perjungus į alternatyvią naršyklę, naršyklėje „Carbon Browser“ skirtukas uždaromas, net jei tai yra paskutinis skirtukas. Tada „Carbon Browser“ visiškai išjungiama.</translation>
 <translation id="5102203758995933166">Leidžiama pateikti tinklo konfigūraciją, kad būtų taikoma „<ph name="PRODUCT_OS_NAME" />“ įrenginiui pagal naudotoją. Tinklo konfigūracija yra JSON suformatuota eilutė, kaip apibrėžta pagal atvirojo tinklo konfigūracijos formatą.</translation>
 <translation id="5105313908130842249">Ekrano užrakto delsa, kai naudojama akumuliatoriaus energija</translation>
 <translation id="5108031557082757679">Išjungti įmonės įrenginių spausdintuvai</translation>
@@ -2224,7 +2224,7 @@
 <translation id="5148753489738115745">Leidžia nurodyti papildomus parametrus, naudojamus, kai „<ph name="PRODUCT_FRAME_NAME" />“ paleidžia „<ph name="PRODUCT_NAME" />“.
 
           Nenustačius šios politikos bus naudojama numatytoji komandinė eilutė.</translation>
-<translation id="5152787786897382519">Ir „Carbon Browser Browser Browser“, ir „Carbon Browser Browser Browser“ yra tokių politikų grupių, kurios valdo tam tikrą funkciją atsižvelgdama viena į kitą. Tokie rinkiniai – tai toliau nurodytos politikų grupės. Kadangi politikos gali turėti kelis šaltinius, bus taikomos tik didžiausio prioriteto šaltinio vertės. Tos pačios grupės žemesnio prioriteto šaltinio verčių bus nepaisoma. Prioriteto tvarka apibrėžta <ph name="POLICY_PRIORITY_DOC_URL" />.</translation>
+<translation id="5152787786897382519">Ir „Carbon Browser“, ir „Carbon Browser“ yra tokių politikų grupių, kurios valdo tam tikrą funkciją atsižvelgdama viena į kitą. Tokie rinkiniai – tai toliau nurodytos politikų grupės. Kadangi politikos gali turėti kelis šaltinius, bus taikomos tik didžiausio prioriteto šaltinio vertės. Tos pačios grupės žemesnio prioriteto šaltinio verčių bus nepaisoma. Prioriteto tvarka apibrėžta <ph name="POLICY_PRIORITY_DOC_URL" />.</translation>
 <translation id="5159469559091666409">Stebėjimo tinklo paketų siuntimo dažnis milisekundėmis.
 
       Jei ši politika nenustatyta, numatytasis intervalas bus 3 minutės. Minimalus
@@ -2339,7 +2339,7 @@
           Juodojo sąrašo vertė „*“ reiškia, kad visos savųjų susirašinėjimo pranešimais programų prieglobos yra įtrauktos į juodąjį sąrašą, išskyrus tuos atvejus, kai jos įtrauktos į baltąjį sąrašą.
 
           Jei politika nenustatyta, „<ph name="PRODUCT_NAME" />“ įkels visas įdiegtas savųjų susirašinėjimo pranešimais programų prieglobas.</translation>
-<translation id="5272684451155669299">Jei ši politika galioja, naudotojas gali naudoti aparatinę įrangą „Carbon Browser Browser Browser“ įrenginiuose, kad nuotoliniu būdu patvirtintų tapatybę pagal privatumo CA per „<ph name="ENTERPRISE_PLATFORM_KEYS_API" />“ naudodamas <ph name="CHALLENGE_USER_KEY_FUNCTION" />.
+<translation id="5272684451155669299">Jei ši politika galioja, naudotojas gali naudoti aparatinę įrangą „Carbon Browser“ įrenginiuose, kad nuotoliniu būdu patvirtintų tapatybę pagal privatumo CA per „<ph name="ENTERPRISE_PLATFORM_KEYS_API" />“ naudodamas <ph name="CHALLENGE_USER_KEY_FUNCTION" />.
 
           Jei ši politika negalioja arba nenustatyta, iškviečiant API įvyks klaida ir bus pateiktas jos kodas.</translation>
 <translation id="5277806246014825877">Leidžiama šiam naudotojui paleisti „Crostini“.
@@ -2358,7 +2358,7 @@
 <translation id="5318185076587284965">Įgalinti perdavimo serverių naudojimą per nuotolinės prieigos prieglobą</translation>
 <translation id="5323128137188992869">Leidimas perduoti turinį į įrenginį naudojant „<ph name="PRODUCT_NAME" />“.
 
-          Jei ši politika nustatyta kaip „False“ (netiesa), naudotojai negalės perduoti turinio į įrenginį. Jei ši politika nustatyta kaip „True“ (tiesa), naudotojai perduoti turinį galės. Jei ši politika nenustatyta, naudotojai negalės perduoti turinio į užregistruotus „Carbon Browser Browser Browser“ OS įrenginius, bet galės perduoti į neužregistruotus įrenginius.</translation>
+          Jei ši politika nustatyta kaip „False“ (netiesa), naudotojai negalės perduoti turinio į įrenginį. Jei ši politika nustatyta kaip „True“ (tiesa), naudotojai perduoti turinį galės. Jei ši politika nenustatyta, naudotojai negalės perduoti turinio į užregistruotus „Carbon Browser“ OS įrenginius, bet galės perduoti į neužregistruotus įrenginius.</translation>
 <translation id="5329007337159326804">Įspėjimas: maks. TLS versijos politika bus visiškai pašalinta iš „<ph name="PRODUCT_NAME" />“ maždaug tada, kai bus pristatyta 75 versija (maždaug 2019 m. birželio mėn.).
 
       Jei ši politika nesukonfigūruota, „<ph name="PRODUCT_NAME" />“ naudoja numatytąją didžiausią versiją.
@@ -2556,7 +2556,7 @@
         Jei politika nustatyta kaip „Netiesa“, naudotojai negali siųsti atsiliepimų „Google“.
 
         Jei politika nenustatyta arba nustatyta kaip „Tiesa“, naudotojai gali siųsti atsiliepimus „Google“ naudodami meniu -&gt; „Pagalba“ -&gt; „Pranešti apie problemą“ arba klavišų derinį.</translation>
-<translation id="5581292529942108810">Konfigūruojama su „Carbon Browser Browser Browser“ ataskaitų teikimo plėtiniu susijusi politika.
+<translation id="5581292529942108810">Konfigūruojama su „Carbon Browser“ ataskaitų teikimo plėtiniu susijusi politika.
 
       Ši politika galioja, tik kai įgalintas „<ph name="CHROME_REPORTING_EXTENSION_NAME" />“ ir įrenginyje užregistruota „<ph name="MACHINE_LEVEL_USER_CLOUD_POLICY_ENROLLMENT_TOKEN_POLICY_NAME" />“.</translation>
 <translation id="5583806683960333345">Įgalinus šį nustatymą, naudotojai galės naudoti momentinio įrenginio kaip modemo naudojimo funkciją, kad galėtų „Google“ telefonu bendrinti mobiliojo ryšio duomenis su įrenginiu.
@@ -2586,7 +2586,7 @@
 
       PASTABA: sistemoje „Android“ svetainių atskyrimas yra eksperimentinis. Palaikymas bus pagerintas laikui bėgant, bet šiuo metu tai gali sukelti našumo problemų.
 
-      PASTABA: ši politika taikoma tik naršyklei „Carbon Browser Browser Browser“ sistemoje „Android“, veikiančioje įrenginiuose, kuriuose būtinai turi būti daugiau nei 1 GB laisvosios prieigos atminties. Kad politiką pritaikytumėte ne „Android“ platformose, naudokite „IsolateOrigins“.
+      PASTABA: ši politika taikoma tik naršyklei „Carbon Browser“ sistemoje „Android“, veikiančioje įrenginiuose, kuriuose būtinai turi būti daugiau nei 1 GB laisvosios prieigos atminties. Kad politiką pritaikytumėte ne „Android“ platformose, naudokite „IsolateOrigins“.
       </translation>
 <translation id="5599461642204007579">„<ph name="MS_AD_NAME" />“ tvarkymo nustatymai</translation>
 <translation id="5610104657949692379">Kai ši politika nustatyta, ji nurodo veiksmą, kurį „<ph name="PRODUCT_OS_NAME" />“ atliks, kai naudotojas neatliks jokių veiksmų neveikos delsos nustatytą laiko trukmę, kurią galite sukonfigūruoti atskirai.
@@ -2594,7 +2594,7 @@
           Kai ši politika nenustatyta, atliekamas numatytasis veiksmas – laikinas sustabdymas.
 
           Jei veiksmas yra laikinas sustabdymas, galima atskirai sukonfigūruoti „<ph name="PRODUCT_OS_NAME" />“, kad prieš laikinai sustabdant ekranas būtų užrakinamas arba neužrakinamas.</translation>
-<translation id="5618398258385745432">Susijęs nustatymas buvo naudojamas anksčiau, prieš įvedant pakartotinį autentifikavimą norint matyti slaptažodžius. Nuo tada nustatymas ir ši politika neturi jokio poveikio „Carbon Browser Browser Browser“ elgsenai. Dabar „Carbon Browser Browser Browser“ veikia taip, tarsi politika būtų nustatyta išjungti slaptažodžių rodymą nešifruotu tekstu slaptažodžių tvarkytuvės nustatymų puslapyje. Tai reiškia, kad nustatymų puslapyje yra tik rezervuota vieta, o „Carbon Browser Browser Browser“ slaptažodį rodo tik tada, kai naudotojas spustelėja „Rodyti“ (ir atlieka pakartotinį autentifikavimą, jei taikoma). Toliau pateiktas originalus politikos aprašas.
+<translation id="5618398258385745432">Susijęs nustatymas buvo naudojamas anksčiau, prieš įvedant pakartotinį autentifikavimą norint matyti slaptažodžius. Nuo tada nustatymas ir ši politika neturi jokio poveikio „Carbon Browser“ elgsenai. Dabar „Carbon Browser“ veikia taip, tarsi politika būtų nustatyta išjungti slaptažodžių rodymą nešifruotu tekstu slaptažodžių tvarkytuvės nustatymų puslapyje. Tai reiškia, kad nustatymų puslapyje yra tik rezervuota vieta, o „Carbon Browser“ slaptažodį rodo tik tada, kai naudotojas spustelėja „Rodyti“ (ir atlieka pakartotinį autentifikavimą, jei taikoma). Toliau pateiktas originalus politikos aprašas.
 
           Valdo, ar naudotojas gali rodyti slaptažodžius nešifruotu tekstu slaptažodžių tvarkytuvėje.
 
@@ -2701,7 +2701,7 @@
       Nesukonfigūravus politikos naudotojas galės pakeisti šį nustatymą.
       </translation>
 <translation id="5832274826894536455">Nebenaudojama politika</translation>
-<translation id="5835124959204887277">Nurodomi URL ir domenai, kuriuose nebus rodomas raginimas, kai bus pateikiamos saugos raktų atestacijos sertifikatų užklausos. Be to, saugos raktui bus išsiunčiamas signalas, nurodantis, kad galima naudoti individualią atestaciją. Nenustačius šios politikos, naudotojams bus pateikiami raginimai 65 ir naujesnių versijų „Carbon Browser Browser Browser“, kai svetainėse bus reikalaujama saugos raktų atestacijos.
+<translation id="5835124959204887277">Nurodomi URL ir domenai, kuriuose nebus rodomas raginimas, kai bus pateikiamos saugos raktų atestacijos sertifikatų užklausos. Be to, saugos raktui bus išsiunčiamas signalas, nurodantis, kad galima naudoti individualią atestaciją. Nenustačius šios politikos, naudotojams bus pateikiami raginimai 65 ir naujesnių versijų „Carbon Browser“, kai svetainėse bus reikalaujama saugos raktų atestacijos.
 
       URL (pvz., https://example.com/some/path) atitiks tik kaip U2F „appID“. Domenai (pvz., example.com) atitiks tik kaip „webauthn“ RP ID. Todėl, kad būtų įtrauktos ir tam tikros svetainės U2F, ir „webauthn“ API, sąraše turi būti ir „appID“ URL, ir domenas.</translation>
 <translation id="5836064773277134605">Apriboti UDP prievado diapazoną, naudojamą nuotolinės prieigos prieglobos</translation>
@@ -2757,7 +2757,7 @@
           Jei nustatysite šią politiką, naudotojai galės laikinai jos nepaisyti įjungę arba išjungę didelį žymeklį. Tačiau naudotojo pasirinkimas nėra ilgalaikis ir numatytasis nustatymas atkuriamas, kai prisijungimo ekranas rodomas iš naujo arba naudotojas vieną minutę neatlieka veiksmų prisijungimo ekrane.
 
           Jei ši politika nenustatyta, didelis žymeklis išjungiamas, kai pirmą kartą rodomas prisijungimo ekranas. Naudotojai gali bet kada įjungti arba išjungti didelį žymeklį, o skirtingiems naudotojams prisijungimo ekrane bus rodoma ta pati žymeklio būsena.</translation>
-<translation id="5929855945144989709">Leidimas įrenginiams paleisti virtualiuosius įrenginius „Carbon Browser Browser Browser“ OS</translation>
+<translation id="5929855945144989709">Leidimas įrenginiams paleisti virtualiuosius įrenginius „Carbon Browser“ OS</translation>
 <translation id="5932767795525445337">Šią politiką taip pat galima naudoti „Android“ programoms prisegti.</translation>
 <translation id="5936622343001856595">„Google“ žiniatinklio paieškos užklausos priverstinai vykdomos naudojant aktyvintą saugią paiešką. Neleidžiama naudotojams keisti šio nustatymo.
 
@@ -2811,7 +2811,7 @@
           Politikos vertė turėtų būti nurodyta milisekundėmis. Vertės apribojamos, kad būtų mažesnės nei neaktyvumo laikotarpis.</translation>
 <translation id="6097601282776163274">Įgalinti URL pagrįstą anonimizuotų duomenų rinkimą</translation>
 <translation id="6099853574908182288">Numatytasis spausdinimas spalvotu režimu</translation>
-<translation id="6107642964266628393">Valdoma, kaip ir kada taikomi „Carbon Browser Browser Browser“ OS naujiniai.</translation>
+<translation id="6107642964266628393">Valdoma, kaip ir kada taikomi „Carbon Browser“ OS naujiniai.</translation>
 <translation id="6111936128861357925">Leisti dinozaurų Velykų kiaušinių žaidimą</translation>
 <translation id="6114416803310251055">nepatvirtinta</translation>
 <translation id="6133088669883929098">Leisti visoms svetainėms naudoti rakto generavimą</translation>
@@ -2835,7 +2835,7 @@
 
       Kai ši politika nenustatyta arba nustatyta į „Netiesa“, duomenys nerenkami ir neįkeliami.
       Kai ši politika nustatyta į „Tiesa“, duomenys renkami ir įkeliami į „Google“ administratoriaus pultą.
-      Kad galėtumėte valdyti, kurie duomenys įkeliami, naudokite politiką grupės „Carbon Browser Browser Browser“ ataskaitų teikimo plėtinyje.
+      Kad galėtumėte valdyti, kurie duomenys įkeliami, naudokite politiką grupės „Carbon Browser“ ataskaitų teikimo plėtinyje.
 
       Ši politika efektyvi, tik kai įrenginys užregistruotas politikoje „<ph name="MACHINE_LEVEL_USER_CLOUD_POLICY_ENROLLMENT_TOKEN_POLICY_NAME" />“.
 
@@ -2922,7 +2922,7 @@
 <translation id="6282799760374509080">Leisti arba atmesti garso įrašo fiksavimą</translation>
 <translation id="6284362063448764300">1.1 versijos TLS</translation>
 <translation id="6310223829319187614">Domeno pavadinimo automatinio užbaigimo prisijungiant naudotojui įgalinimas</translation>
-<translation id="6315673513957120120">„Carbon Browser Browser Browser“ rodo įspėjimo puslapį, kai naudotojai naršo svetaines su SSL klaidomis. Pagal numatytuosius nustatymus arba kai ši politika nustatyta į „true“, naudotojams leidžiama spustelėjus pašalinti šiuos įspėjimo puslapius.
+<translation id="6315673513957120120">„Carbon Browser“ rodo įspėjimo puslapį, kai naudotojai naršo svetaines su SSL klaidomis. Pagal numatytuosius nustatymus arba kai ši politika nustatyta į „true“, naudotojams leidžiama spustelėjus pašalinti šiuos įspėjimo puslapius.
       Kai ši politika nustatyta į „false“, naudotojams neleidžiama spustelėjus pašalinti šių įspėjimo puslapių.</translation>
 <translation id="6319198883324703402">Pirmo naudotojo pakartotinio paleidimo pranešimo laiko nustatymas</translation>
 <translation id="6352543686437322588">Vietinė įrenginio paskyra, skirta automatiškai prijungti po delsos.
@@ -2964,7 +2964,7 @@
           Jei pasirinksite automatiškai aptikti tarpinį serverį, „Android“ programoms pateikiamas scenarijaus URL „http://wpad/wpad.dat“. Nenaudojama jokia kita tarpinio serverio automatinio aptikimo protokolo dalis.
 
           Jei pasirinksite naudoti .pac tarpinio serverio scenarijų, „Android“ programoms pateikiamas scenarijaus URL.</translation>
-<translation id="6430366557948788869">„Carbon Browser Browser Browser“ ataskaitų teikimo plėtinys</translation>
+<translation id="6430366557948788869">„Carbon Browser“ ataskaitų teikimo plėtinys</translation>
 <translation id="6440051664870270040">Leisti svetainėms vienu metu naršyti ir atidaryti iššokančiuosius langus</translation>
 <translation id="6447948611083700881">Atsarginis kopijavimas ir atkūrimas išjungtas</translation>
 <translation id="6449476513004303784">Neleisti naudotojams tvarkyti sertifikatų</translation>
@@ -3022,9 +3022,9 @@
 <translation id="6536600139108165863">Automatinis paleidimas iš naujo, kai išjungiamas įrenginys</translation>
 <translation id="6539246272469751178">Ši politika neturi įtakos „Android“ programoms. „Android“ programos visada naudoja numatytąjį atsisiuntimų katalogą ir negali pasiekti „<ph name="PRODUCT_OS_NAME" />“ atsisiųstų failų į nenumatytą atsisiuntimų katalogą.</translation>
 <translation id="654303922206238013">Failų sistemos „eCryptfs“ perkėlimo strategija</translation>
-<translation id="6544897973797372144">Jei šios politikos nustatymas yra „True“ (tiesa) ir politika „Carbon Browser Browser BrowserOsReleaseChannel“ („Carbon Browser Browser Browser“ OS paleidimo kanalas) nenurodyta, tada užregistruoto domeno naudotojams leidžiama keisti įrenginio paleidimo kanalą. Jei šios politikos nustatymas yra „False“ (netiesa), įrenginys užrakinamas bet kuriame kanale, kuriame paskutinį kartą buvo nustatytas.
+<translation id="6544897973797372144">Jei šios politikos nustatymas yra „True“ (tiesa) ir politika „Carbon BrowserOsReleaseChannel“ („Carbon Browser“ OS paleidimo kanalas) nenurodyta, tada užregistruoto domeno naudotojams leidžiama keisti įrenginio paleidimo kanalą. Jei šios politikos nustatymas yra „False“ (netiesa), įrenginys užrakinamas bet kuriame kanale, kuriame paskutinį kartą buvo nustatytas.
 
-      Naudotojo (-os) pasirinktas kanalas bus pakeistas taikant politiką „Carbon Browser Browser BrowserOsReleaseChannel“ („Carbon Browser Browser Browser“ OS paleidimo kanalas), bet jei politikos kanalas stabilesnis nei tas, kuris įdiegtas įrenginyje, kanalas perjungiamas, tik kai stabilesnio kanalo versija yra naujesnė nei įdiegta įrenginyje.</translation>
+      Naudotojo (-os) pasirinktas kanalas bus pakeistas taikant politiką „Carbon BrowserOsReleaseChannel“ („Carbon Browser“ OS paleidimo kanalas), bet jei politikos kanalas stabilesnis nei tas, kuris įdiegtas įrenginyje, kanalas perjungiamas, tik kai stabilesnio kanalo versija yra naujesnė nei įdiegta įrenginyje.</translation>
 <translation id="6553143066970470539">Ekrano šviesumo procentas</translation>
 <translation id="6559057113164934677">Neleisti jokiai svetainei pasiekti kameros ir mikrofono</translation>
 <translation id="6561396069801924653">Rodyti pasiekiamumo parinktis sistemos dėklo meniu</translation>
@@ -3104,7 +3104,7 @@
 <translation id="6698632841807204978">Įgalinti vienspalvį spausdinimą</translation>
 <translation id="6699880231565102694">Įgalinti nuotolinės prieigos prieglobų autentifikavimą dviem veiksniais</translation>
 <translation id="6731757988219967594">Filtruoti turinį suaugusiesiems aukščiausio lygio svetainėse (bet ne įterptuose „iframe“)</translation>
-<translation id="6734521799274931721">Valdomas „Carbon Browser Browser Browser“ OS skirtų tinklo failų bendrinimo įrenginių pasiekiamumas</translation>
+<translation id="6734521799274931721">Valdomas „Carbon Browser“ OS skirtų tinklo failų bendrinimo įrenginių pasiekiamumas</translation>
 <translation id="6735701345096330595">Priverstinis rašybos tikrinimo kalbų įgalinimas</translation>
 <translation id="673699536430961464">Naudodami šį nustatymą naudotojai gali perjungti „Google“ paskyras naršyklės lango turinio srityje po to, kai prisijungia prie „<ph name="PRODUCT_OS_NAME" />“ įrenginio.
 
@@ -3112,7 +3112,7 @@
 
       Jei ši politika nenustatyta arba nustatyta kaip „true“, bus naudojama numatytoji elgsena: naršyklės turinio srityje bus leidžiama prisijungti prie kitos paskyros, išskyrus vaikų paskyras, kurios bus blokuojamos turinio srityje naršant ne inkognito režimu.
 
-      Jei prisijungti prie kitos paskyros neturėtų būti leidžiama naršant inkognito režimu, turėtumėte užblokuoti tą režimą naudodami politiką „PrivateModeAvailability“.
+      Jei prisijungti prie kitos paskyros neturėtų būti leidžiama naršant inkognito režimu, turėtumėte užblokuoti tą režimą naudodami politiką „privateModeAvailability“.
 
       Atminkite, kad naudotojai galės pasiekti „Google“ paslaugas, nenustatant jų tapatybės, blokuodami slapukus.</translation>
 <translation id="6757438632136860443">Galima nustatyti URL šablonų, kuriuose nurodomos svetainės, kurioms leidžiama paleisti papildinį „<ph name="FLASH_PLUGIN_NAME" />“, sąrašą.
@@ -3149,7 +3149,7 @@
 
       Jei ši politika nustatyta kaip „Netiesa“, integruota DNS kliento programa niekada nebus naudojama.
 
-      Jei ši politika nenustatyta, pagal numatytuosius nustatymus bus įgalinta integruota DNS kliento programa „Mac“ OS, „Android“ (kai neįgalintas nei privatus DNS, nei VPN) ir „Carbon Browser Browser Browser“ OS ir naudotojai galės pakeisti, ar integruota DNS kliento programa naudojama, redaguodami chrome://flags arba nurodydami komandų eilutės žymą.</translation>
+      Jei ši politika nenustatyta, pagal numatytuosius nustatymus bus įgalinta integruota DNS kliento programa „Mac“ OS, „Android“ (kai neįgalintas nei privatus DNS, nei VPN) ir „Carbon Browser“ OS ir naudotojai galės pakeisti, ar integruota DNS kliento programa naudojama, redaguodami chrome://flags arba nurodydami komandų eilutės žymą.</translation>
 <translation id="6843296367238757293">Ši politika nebenaudojama. Jos naudojimas nutrauktas. Daugiau informacijos adresu https://support.google.com/chrome/a/answer/7643500</translation>
 <translation id="684856667300805181">Ši politika pašalinta „<ph name="PRODUCT_NAME" />“ 68 ir pakeista „<ph name="ARC_GLS_POLICY_NAME" />“.</translation>
 <translation id="6856743875250214792">Ši politika nebenaudojama ir yra pašalinta iš M66, nes ji buvo naudojama tik vidinio testavimo tikslais ir tai yra saugos atsakomybė.
@@ -3192,7 +3192,7 @@
 
       PASTABA: sistemoje „Android“ svetainių atskyrimas yra eksperimentinis. Palaikymas bus pagerintas laikui bėgant, bet šiuo metu tai gali sukelti našumo problemų.
 
-      PASTABA: ši politika taikoma tik naršyklei „Carbon Browser Browser Browser“ sistemoje „Android“, įrenginiuose, kuriuose būtinai yra daugiau nei 1 GB laisvosios prieigos atminties. Kad politiką pritaikytumėte ne „Android“ platformose, naudokite „SitePerProcess“.
+      PASTABA: ši politika taikoma tik naršyklei „Carbon Browser“ sistemoje „Android“, įrenginiuose, kuriuose būtinai yra daugiau nei 1 GB laisvosios prieigos atminties. Kad politiką pritaikytumėte ne „Android“ platformose, naudokite „SitePerProcess“.
       </translation>
 <translation id="6922884955650325312">Užblokuoti papildinį „<ph name="FLASH_PLUGIN_NAME" />“</translation>
 <translation id="6923366716660828830">Nurodomas numatytojo paieškos teikėjo pavadinimas. Jei laukas paliekamas tuščias arba nenustatomas, naudojamas paieškos URL nurodytas prieglobos pavadinimas.
@@ -3289,7 +3289,7 @@
 
       Jei ši politika nustatyta kaip „Netiesa“ arba nenustatyta, „<ph name="PRODUCT_NAME" />“ nerinks ir neįkels tokių žurnalų.
 
-      Šiuose žurnaluose yra tokios informacijos kaip išsiųstų ir gautų RTP paketų laikas ir dydis, atsiliepimai apie tinklo perpildymą ir metaduomenys apie garso ir vaizdo įrašų kadrų laiką ir kokybę. Ši informacija naudinga derinant problemas dėl garso ir vaizdo skambučių „Carbon Browser Browser Browser“, pavyzdžiui, siuntimo spartos vertinimo problemas ir kt. Žurnaluose nėra skambučių garso ir vaizdo turinio.
+      Šiuose žurnaluose yra tokios informacijos kaip išsiųstų ir gautų RTP paketų laikas ir dydis, atsiliepimai apie tinklo perpildymą ir metaduomenys apie garso ir vaizdo įrašų kadrų laiką ir kokybę. Ši informacija naudinga derinant problemas dėl garso ir vaizdo skambučių „Carbon Browser“, pavyzdžiui, siuntimo spartos vertinimo problemas ir kt. Žurnaluose nėra skambučių garso ir vaizdo turinio.
 
       Šį duomenų rinkimą gali suaktyvinti tik „Google“ žiniatinklio paslaugos, pvz., „Google Hangouts“ ar „Google Meet“.
 
@@ -3386,12 +3386,12 @@
 <translation id="7185078796915954712">1.3 versijos TLS</translation>
 <translation id="718956142899066210">Leistini ryšio tipai naujinant</translation>
 <translation id="7194407337890404814">Numatytojo paieškos teikėjo pavadinimas</translation>
-<translation id="7199304109870655950">Konfigūruojamos nuotolinės prieigos parinktys „Carbon Browser Browser Browser“ nuotolinio kompiuterio valdymo priegloboje.
+<translation id="7199304109870655950">Konfigūruojamos nuotolinės prieigos parinktys „Carbon Browser“ nuotolinio kompiuterio valdymo priegloboje.
 
-      „Carbon Browser Browser Browser“ nuotolinio kompiuterio valdymo priegloba yra savoji paslauga, vykdoma tiksliniame įrenginyje, prie kurio naudotojas gali prisijungti naudodamas „Carbon Browser Browser Browser“ nuotolinio kompiuterio valdymo programą.  Savoji paslauga yra supakuota ir įforminta atskirai nuo „<ph name="PRODUCT_NAME" />“ naršyklės.
+      „Carbon Browser“ nuotolinio kompiuterio valdymo priegloba yra savoji paslauga, vykdoma tiksliniame įrenginyje, prie kurio naudotojas gali prisijungti naudodamas „Carbon Browser“ nuotolinio kompiuterio valdymo programą.  Savoji paslauga yra supakuota ir įforminta atskirai nuo „<ph name="PRODUCT_NAME" />“ naršyklės.
 
       Šios politikos nepaisoma, nebent
-      įdiegta „Carbon Browser Browser Browser“ nuotolinio kompiuterio valdymo priegloba.</translation>
+      įdiegta „Carbon Browser“ nuotolinio kompiuterio valdymo priegloba.</translation>
 <translation id="7202925763179776247">Atsisiuntimų apribojimų leidimas</translation>
 <translation id="7207095846245296855">Priverstinis „Google“ saugios paieškos naudojimas</translation>
 <translation id="7211368186050418507">Niekada automatiškai neaptikti laiko juostos</translation>
@@ -3493,9 +3493,9 @@
 <translation id="7329968046053403405">Nurodo paskyrų, pateiktų „Android“ autentifikavimo programos, palaikančios <ph name="HTTP_NEGOTIATE" /> autentifikavimą (t. y. „Kerberos“ autentifikavimą), paskyros tipą. Šią informaciją turėtų pateikti autentifikavimo programos teikėjas. Daugiau išsamios informacijos žr. adresu https://goo.gl/hajyfN.
 
           Jei nepateikiamas joks nustatymas, <ph name="HTTP_NEGOTIATE" /> autentifikavimas išjungiamas sistemoje „Android“.</translation>
-<translation id="7331962793961469250">Kai bus nustatyta į „Tiesa“, „Carbon Browser Browser Browser“ internetinės parduotuvės programų reklamos nebus rodomos naujo skirtuko puslapyje.
+<translation id="7331962793961469250">Kai bus nustatyta į „Tiesa“, „Carbon Browser“ internetinės parduotuvės programų reklamos nebus rodomos naujo skirtuko puslapyje.
 
-      Nustačius šią parinktį į „Netiesa“ arba jos nenustačius „Carbon Browser Browser Browser“ internetinės parduotuvės programų reklamos bus rodomos naujo skirtuko puslapyje</translation>
+      Nustačius šią parinktį į „Netiesa“ arba jos nenustačius „Carbon Browser“ internetinės parduotuvės programų reklamos bus rodomos naujo skirtuko puslapyje</translation>
 <translation id="7332963785317884918">Ši politika nebenaudojama. „<ph name="PRODUCT_OS_NAME" />“ visada bus naudojama „RemoveLRU“ išvalymo strategija.
 
       Valdoma automatinė išvalymo elgsena „<ph name="PRODUCT_OS_NAME" />“ įrenginiuose. Automatinis išvalymas suaktyvinamas, kai lieka labai mažai laisvos vietos diske, kad ji būtų atkurta.
@@ -3555,7 +3555,7 @@
       </translation>
 <translation id="7506269062143646163">Įgalinkite „Signed HTTP Exchange“ (SXG) palaikymą.
 
-          Jei ši politika nenustatyta arba nustatyta kaip „Įgalinta“, „Carbon Browser Browser Browser“ priims žiniatinklio turinį, teikiamą kaip „Signed HTTP Exchange“.
+          Jei ši politika nenustatyta arba nustatyta kaip „Įgalinta“, „Carbon Browser“ priims žiniatinklio turinį, teikiamą kaip „Signed HTTP Exchange“.
 
           Jei ši politika nustatyta kaip „Išjungta“, „Signed HTTP Exchange“ negalima įkelti.</translation>
 <translation id="7511361072385293666">Jei ši politika nustatyta į „true“ arba yra nenustatyta, QUIC protokolo naudojimas sistemoje „<ph name="PRODUCT_NAME" />“ leidžiamas.
@@ -3596,7 +3596,7 @@
 
       Kai ši politika nenustatyta arba nustatyta kaip 0, einant į priskirtą URL jis bus nedelsiant atidarytas alternatyvioje naršyklėje.
 
-      Kai ši politika nustatyta kaip skaičius, naršyklėje „Carbon Browser Browser Browser“ nustatytą milisekundžių skaičių rodomas pranešimas, o tada atidaroma alternatyvi naršyklė.</translation>
+      Kai ši politika nustatyta kaip skaičius, naršyklėje „Carbon Browser“ nustatytą milisekundžių skaičių rodomas pranešimas, o tada atidaroma alternatyvi naršyklė.</translation>
 <translation id="7593523670408385997">Konfigūruojamas talpyklos, kurią „<ph name="PRODUCT_NAME" />“ naudos talpyklos failams diske saugoti, dydį.
 
       Jei nustatysite šią politiką, „<ph name="PRODUCT_NAME" />“ naudos nurodyto dydžio talpyklą nepaisydama to, ar naudotojas nurodė, ar nenurodė parametro „--disk-cache-size“. Šioje politikoje nurodyta vertė nėra griežta riba, bet tiesiog pasiūlymas talpyklos sistemai. Mažesnė nei kelių megabaitų vertė yra per maža ir bus suapvalinta iki įprastos minimalios vertės.
@@ -3781,7 +3781,7 @@
 
       PASTABA: iki 45 versijos programos ši politika buvo palaikoma tik įjungus viešojo terminalo režimą.</translation>
 <translation id="7912255076272890813">Konfigūruoti leidžiamus programų / plėtinių tipus</translation>
-<translation id="7922358664346625612">Palikti paskutinį skirtuką atidarytą naršyklėje „Carbon Browser Browser Browser“.</translation>
+<translation id="7922358664346625612">Palikti paskutinį skirtuką atidarytą naršyklėje „Carbon Browser“.</translation>
 <translation id="793134539373873765">Nurodoma, ar P2P bus naudojamas naudingosiose OS naujinių apkrovose. Jei ši politika galioja, įrenginiai bendrins ir bandys naudoti naujinio naudingąsias apkrovas per LAN, taip potencialiai sumažindami interneto pralaidumo naudojimą ir perpildymą. Jei naujinio naudingoji apkrova nepasiekiama naudojant LAN, įrenginys vykdys atsisiuntimą iš naujinio serverio. Jei ši politika negalioja ar yra nesukonfigūruota, P2P nebus naudojama.</translation>
 <translation id="7933141401888114454">Įgalinti prižiūrimų naudotojų kūrimą</translation>
 <translation id="793473937901685727">Nustatykite, ar sertifikatai bus prieinami ARC programose</translation>
@@ -3817,7 +3817,7 @@
 <translation id="798856998567564266">Jei įgalinsite šį nustatymą, žymių bus galima pridėti, pašalinti arba jas modifikuoti. Tai yra numatytasis nustatymas, kuris taikomas ir tuomet, kai ši politika nenustatyta.
 
       Jei šį nustatymą išjungsite, žymių nebus galima pridėti, pašalinti arba modifikuoti. Esamos žymės vis tiek bus pasiekiamos.</translation>
-<translation id="7992136759457836904">Galima valdyti, ar virtualiesiems įrenginiams leidžiama veikti „Carbon Browser Browser Browser“ OS.
+<translation id="7992136759457836904">Galima valdyti, ar virtualiesiems įrenginiams leidžiama veikti „Carbon Browser“ OS.
 
       Jei politika nustatyta kaip „Tiesa“, įrenginiui leidžiama paleisti virtualiuosius įrenginius.
       Jei politika nustatyta kaip „Netiesa“, įrenginiui neleidžiama paleisti virtualiųjų įrenginių.
@@ -3897,7 +3897,7 @@
       Jei politika nustatyta kaip „False“, sąsajų sąrašas nebus pateiktas.</translation>
 <translation id="8141795997560411818">Ši politika nedraudžia naudotojui naudoti „Android“ skirtos „Google“ disko programos. Jei norite neleisti pasiekti „Google“ disko, taip pat turėtumėte neleisti diegti „Android“ skirtos „Google“ disko programos.</translation>
 <translation id="8142894094385450823">Rekomenduojamų valdomos sesijos lokalių nustatymas</translation>
-<translation id="8146727383888924340">Leisti naudotojams pasinaudoti pasiūlymais atliekant „Carbon Browser Browser Browser“ OS registraciją</translation>
+<translation id="8146727383888924340">Leisti naudotojams pasinaudoti pasiūlymais atliekant „Carbon Browser“ OS registraciją</translation>
 <translation id="8148785525797916822">Nerodomas įspėjimas, kuris rodomas, kai „<ph name="PRODUCT_NAME" />“ veikia kompiuteryje ar operacinėje sistemoje, kuri nebepalaikoma.</translation>
 <translation id="8148901634826284024">Įgalinti didelio kontrasto režimo pasiekiamumo funkciją.
 
@@ -3944,7 +3944,7 @@
       Jei ši politika nenustatyta, „<ph name="PRODUCT_OS_NAME" />“ kaip prisijungimo ekrane pateikiamas pavadinimas bus naudojamas įrenginio vietinės paskyros el. pašto paskyros ID.
 
       Ši politika netaikoma įprastose naudotojų paskyrose.</translation>
-<translation id="8259375588339409826">Tiek „Carbon Browser Browser Browser“, tiek „Carbon Browser Browser Browser“ palaiko tas pačias politikos nuostatas. Atminkite, kad šiame dokumente gali būti neišleistų politikos nuostatų (pvz., įrašu „Palaikoma naudojant“ nurodomas neišleistos versijos „<ph name="PRODUCT_NAME" />“), kurios gali būti pakeistos arba pašalintos be įspėjimo ir dėl kurių neteikiamos jokios garantijos, įskaitant garantijas dėl jų saugos ir privatumo nuostatų.
+<translation id="8259375588339409826">Tiek „Carbon Browser“, tiek „Carbon Browser“ palaiko tas pačias politikos nuostatas. Atminkite, kad šiame dokumente gali būti neišleistų politikos nuostatų (pvz., įrašu „Palaikoma naudojant“ nurodomas neišleistos versijos „<ph name="PRODUCT_NAME" />“), kurios gali būti pakeistos arba pašalintos be įspėjimo ir dėl kurių neteikiamos jokios garantijos, įskaitant garantijas dėl jų saugos ir privatumo nuostatų.
 
 Šios politikos nuostatos griežtai skirtos tik „<ph name="PRODUCT_NAME" />“ objektams konfigūruoti organizacijos viduje. Šių politikos nuostatų naudojimas už organizacijos ribų (pvz., viešai platinamoje programoje) laikomas kenkėjišku ir „Google“ bei antivirusinės programinės įrangos teikėjai tai tikriausiai laikys kenkėjiška programa.
 
@@ -3961,7 +3961,7 @@ Rekomenduojame politiką sistemoje „Windows“ nustatyti naudojant GPO, tačia
 
       Jei politika nustatyta kaip „Netiesa“, nebus teikiamos statistikos ataskaitos.
       Jei ji nustatyta kaip „Tiesa“ arba nenustatyta, statistikos ataskaitos bus teikiamos.</translation>
-<translation id="8294750666104911727">Paprastai puslapiai, kuriuose „X-UA-Compatible“ nustatyta į „chrome=1“ bus pateikti „<ph name="PRODUCT_FRAME_NAME" />“, neatsižvelgiant į politiką „Carbon Browser Browser BrowserFrameRendererSettings“.
+<translation id="8294750666104911727">Paprastai puslapiai, kuriuose „X-UA-Compatible“ nustatyta į „chrome=1“ bus pateikti „<ph name="PRODUCT_FRAME_NAME" />“, neatsižvelgiant į politiką „Carbon BrowserFrameRendererSettings“.
 
           Jei įgalinsite šį nustatymą, puslapiai nebus nuskaitomi ieškant metažymų.
 
@@ -3987,7 +3987,7 @@ Rekomenduojame politiką sistemoje „Windows“ nustatyti naudojant GPO, tačia
 <translation id="8344454543174932833">Importuoti žymes iš numatytosios naršyklės paleidžiant pirmą kartą</translation>
 <translation id="8357681633047935212">Naudotojo sesijos trukmės ribojimas</translation>
 <translation id="8359734107661430198">Įgalinkite „ExampleDeprecatedFeature“ API iki 2008-09-02</translation>
-<translation id="8367209241899435947">„Carbon Browser Browser Browser“ valymo įrankio įgalinimas sistemoje „Windows“</translation>
+<translation id="8367209241899435947">„Carbon Browser“ valymo įrankio įgalinimas sistemoje „Windows“</translation>
 <translation id="8369602308428138533">Ekrano išjungimo delsa, kai naudojama kintamosios srovės energija</translation>
 <translation id="8371178326720637170">Tvarkomi plėtiniai įgalinami naudoti įmonės aparatinės įrangos platformos API</translation>
 <translation id="8374747520743832795">Teikiamos aparatinės įrangos statistikos ir identifikatorių, susijusių su maitinimu, ataskaitos.
@@ -4060,13 +4060,13 @@ Rekomenduojame politiką sistemoje „Windows“ nustatyti naudojant GPO, tačia
       M75 ši politika bus pašalinta.</translation>
 <translation id="8484458986062090479">Tinkinkite URL šablonų, kuriuos prieglobos naršyklė visada turėtų pateikti, sąrašą.
 
-          Jei ši politika nenustatyta, numatytasis pateikėjas naudojamas visose svetainėse, kaip nurodyta politikoje „Carbon Browser Browser BrowserFrameRendererSettings“.
+          Jei ši politika nenustatyta, numatytasis pateikėjas naudojamas visose svetainėse, kaip nurodyta politikoje „Carbon BrowserFrameRendererSettings“.
 
           Šablonų pavyzdžių galite rasti apsilankę adresu https://www.chromium.org/developers/how-tos/chrome-frame-getting-started.</translation>
 <translation id="8489964335640955763">PluginVm</translation>
 <translation id="8493645415242333585">Neleisti išsaugoti naršyklės istorijos</translation>
 <translation id="8499172469244085141">Numatytieji nustatymai (naudotojai gali nepaisyti)</translation>
-<translation id="849962487677588458">Ši politika nebenaudojama ir bus pašalinta iš „Carbon Browser Browser Browser 78“, jos niekuo nepakeičiant.
+<translation id="849962487677588458">Ši politika nebenaudojama ir bus pašalinta iš „Carbon Browser 78“, jos niekuo nepakeičiant.
 
       Ši politika įgalina HTTP/0.9 visuose prievaduose, išskyrus 80 HTTP ir 443 HTTPS.
 
@@ -4094,7 +4094,7 @@ Rekomenduojame politiką sistemoje „Windows“ nustatyti naudojant GPO, tačia
 
       Čia „Versija“ gali būti tiksli versija, pvz., „61.0.3163.120“ arba versijos priešdėlis, pvz., „61.0“  </translation>
 <translation id="8544375438507658205">Numatytasis „<ph name="PRODUCT_FRAME_NAME" />“ HTML teikėjas</translation>
-<translation id="8544465954173828789">Leisti SMS pranešimus sinchronizuoti iš telefono į „Carbon Browser Browser Browserbook“.</translation>
+<translation id="8544465954173828789">Leisti SMS pranešimus sinchronizuoti iš telefono į „Carbon Browserbook“.</translation>
 <translation id="8548832052135586762">Nustatomas tik spalvoto, tik vienspalvio arba nespalvoto režimo apribojimas. Jei politika nenustatyta, netaikomi jokie apribojimai.</translation>
 <translation id="8549772397068118889">Įspėti, kai apsilankoma svetainėse, nesančiose turinio paketuose</translation>
 <translation id="8566729013138025202">Nurodomos politikos nuostatos, kurios bus perduotos vykdant ARC. Vertė turi būti galiojantis JSON.
@@ -4122,7 +4122,7 @@ Rekomenduojame politiką sistemoje „Windows“ nustatyti naudojant GPO, tačia
 
       Jei politika nenustatyta arba nustatyta į „true“, ARC leidžiama naudoti visiems naudotojams (jei ARC neišjungta kitomis priemonėmis).
 
-      Politikos pakeitimai bus taikomi tik neveikiant ARC, pvz., kol paleidžiama „Carbon Browser Browser Browser“ OS.</translation>
+      Politikos pakeitimai bus taikomi tik neveikiant ARC, pvz., kol paleidžiama „Carbon Browser“ OS.</translation>
 <translation id="8615400197788843468">Įgalinama „<ph name="PRODUCT_NAME" />“ riboto prisijungimo funkcija sistemoje „G Suite“ ir naudotojams neleidžiama keisti šio nustatymo.
 
       Įjungus šį nustatymą naudotojas galės pasiekti „Google“
@@ -4143,7 +4143,7 @@ Rekomenduojame politiką sistemoje „Windows“ nustatyti naudojant GPO, tačia
 
       Naudotojai negali pakeisti ar nepaisyti šio nustatymo.</translation>
 <translation id="8631434304112909927">iki <ph name="UNTIL_VERSION" /> versijos</translation>
-<translation id="8649763579836720255">„Carbon Browser Browser Browser“ OS įrenginiai gali naudoti nuotolinį patvirtinimą (patvirtinta prieiga), kad gautų „Carbon Browser Browser Browser“ OS CA išduotą sertifikatą, pagal kurį nurodoma, kad įrenginys yra tinkamas paleisti apsaugotą turinį. Šis procesas apima aparatinės įrangos patvirtinimo informacijos siuntimą „Carbon Browser Browser Browser“ OS CA, kuri unikaliai identifikuoja įrenginį.
+<translation id="8649763579836720255">„Carbon Browser“ OS įrenginiai gali naudoti nuotolinį patvirtinimą (patvirtinta prieiga), kad gautų „Carbon Browser“ OS CA išduotą sertifikatą, pagal kurį nurodoma, kad įrenginys yra tinkamas paleisti apsaugotą turinį. Šis procesas apima aparatinės įrangos patvirtinimo informacijos siuntimą „Carbon Browser“ OS CA, kuri unikaliai identifikuoja įrenginį.
 
           Jei šis nustatymas negalioja, įrenginys nenaudos nuotolinio turinio apsaugos patvirtinimo ir galbūt įrenginys negalės paleisti apsaugoto turinio.
 
@@ -4308,7 +4308,7 @@ Rekomenduojame politiką sistemoje „Windows“ nustatyti naudojant GPO, tačia
 
           Ši politika susieja plėtinio ID ar naujinio URL su konfigūracija. Naudojant plėtinio ID, konfigūracija bus taikoma tik nurodytam plėtiniui. Galima nustatyti specialaus ID <ph name="DEFAULT_SCOPE" /> numatytąją konfigūraciją, taikomą visiems plėtiniams, kurių tinkinta konfigūracija nenustatyta šioje politikoje. Naudojant naujinio URL, konfigūracija bus taikoma visiems plėtiniams su tiksliu naujinio URL, pateiktu šio plėtinio apraše, kaip nurodyta <ph name="LINK_TO_EXTENSION_DOC1" />.
 
-          „Windows“ objektų, kurie neprijungti prie „<ph name="MS_AD_NAME" />“ domeno, priverstinis diegimas ribojamas naudojant plėtinius, nurodytus „Carbon Browser Browser Browser“ internetinėje parduotuvėje.
+          „Windows“ objektų, kurie neprijungti prie „<ph name="MS_AD_NAME" />“ domeno, priverstinis diegimas ribojamas naudojant plėtinius, nurodytus „Carbon Browser“ internetinėje parduotuvėje.
           </translation>
 <translation id="8947415621777543415">Pranešti įrenginio vietą</translation>
 <translation id="8951350807133946005">Nustatyti disko talpyklos katalogą</translation>
@@ -4355,13 +4355,13 @@ Rekomenduojame politiką sistemoje „Windows“ nustatyti naudojant GPO, tačia
       Jei politikos reikšmė yra prieigos raktas, susiejantis su „Quick Fix Build“, įrenginys bus atnaujintas į atitinkamą „Quick Fix Build“, jei naujinio neblokuos kita politika.
 
       Jei ši politika nenustatyta arba jos reikšmė nesusieja su „Quick Fix Build“, įrenginys nebus atnaujintas į „Quick Fix Build“. Jei įrenginyje jau veikia „Quick Fix Build“ ir politika nebenustatyta arba jos reikšmė nebesusieja su „Quick Fix Build“, įrenginys bus atnaujintas į įprastinę versiją, jei naujinio neblokuos kita politika.</translation>
-<translation id="9054012305936267950">Pagal šią politiką valdoma naršyklės prisijungimo elgsena. Ši politika leidžia nurodyti, ar naudotojas gali prisijungti prie „<ph name="PRODUCT_NAME" />“ naudodamas savo paskyrą ir naudoti su paskyra susijusias paslaugas, pvz., „Carbon Browser Browser Browser“ sinchronizavimo funkciją.
+<translation id="9054012305936267950">Pagal šią politiką valdoma naršyklės prisijungimo elgsena. Ši politika leidžia nurodyti, ar naudotojas gali prisijungti prie „<ph name="PRODUCT_NAME" />“ naudodamas savo paskyrą ir naudoti su paskyra susijusias paslaugas, pvz., „Carbon Browser“ sinchronizavimo funkciją.
 
-      Jei politika nustatyta kaip „Išjungti naršyklės prisijungimą“, naudotojas negali prisijungti prie naršyklės ir naudoti su paskyra susijusių paslaugų. Tokiu atveju negalima naudoti naršyklės lygio funkcijų, pvz., „Carbon Browser Browser Browser“ sinchronizavimo funkcijos, ir šios funkcijos bus nepasiekiamos. Jei politika buvo nustatyta kaip „Išjungta“ naudotojui esant prisijungus, kitą kartą paleidus naršyklę „Carbon Browser Browser Browser“ naudotojas bus atjungtas, bet vietiniai profilio duomenys, pvz., žymės, slaptažodžiai ir kt., liks išsaugoti. Naudotojas vis tiek galės prisijungti ir naudoti „Google“ žiniatinklio paslaugas, pvz., „Gmail“.
+      Jei politika nustatyta kaip „Išjungti naršyklės prisijungimą“, naudotojas negali prisijungti prie naršyklės ir naudoti su paskyra susijusių paslaugų. Tokiu atveju negalima naudoti naršyklės lygio funkcijų, pvz., „Carbon Browser“ sinchronizavimo funkcijos, ir šios funkcijos bus nepasiekiamos. Jei politika buvo nustatyta kaip „Išjungta“ naudotojui esant prisijungus, kitą kartą paleidus naršyklę „Carbon Browser“ naudotojas bus atjungtas, bet vietiniai profilio duomenys, pvz., žymės, slaptažodžiai ir kt., liks išsaugoti. Naudotojas vis tiek galės prisijungti ir naudoti „Google“ žiniatinklio paslaugas, pvz., „Gmail“.
 
-      Jei politika nustatyta kaip „Įgalinti naršyklės prisijungimą“, naudotojui leidžiama prisijungti prie naršyklės ir jis automatiškai prijungiamas prie naršyklės, kai prisijungia prie „Google“ žiniatinklio paslaugų, pvz., „Gmail“. Kai naudotojas yra prisijungęs prie naršyklės, jo paskyros informacija saugoma naršyklėje. Tačiau tai nereiškia, kad „Carbon Browser Browser Browser“ sinchronizavimo funkcija bus įjungta pagal numatytuosius nustatymus. Naudotojas turi atskirai pasirinkti naudoti šią funkciją. Įgalinus šią politiką naudotojui nebus leidžiama išjungti nustatymo, leidžiančio prisijungti prie naršyklės. Jei norite valdyti „Carbon Browser Browser Browser“ sinchronizavimo funkcijos pasiekiamumą, naudokite politiką „SyncDisabled“.
+      Jei politika nustatyta kaip „Įgalinti naršyklės prisijungimą“, naudotojui leidžiama prisijungti prie naršyklės ir jis automatiškai prijungiamas prie naršyklės, kai prisijungia prie „Google“ žiniatinklio paslaugų, pvz., „Gmail“. Kai naudotojas yra prisijungęs prie naršyklės, jo paskyros informacija saugoma naršyklėje. Tačiau tai nereiškia, kad „Carbon Browser“ sinchronizavimo funkcija bus įjungta pagal numatytuosius nustatymus. Naudotojas turi atskirai pasirinkti naudoti šią funkciją. Įgalinus šią politiką naudotojui nebus leidžiama išjungti nustatymo, leidžiančio prisijungti prie naršyklės. Jei norite valdyti „Carbon Browser“ sinchronizavimo funkcijos pasiekiamumą, naudokite politiką „SyncDisabled“.
 
-      Jei politika nustatyta kaip „Priverstinis naršyklės prisijungimas“, naudotojui pateikiamas paskyros pasirinkimo dialogo langas ir naudotojas turi pasirinkti paskyrą ir prie jos prisijungti, kad galėtų naudoti naršyklę. Taip užtikrinama, kad valdomoms paskyroms taikoma ir vykdoma su paskyra susijusi politika. Pagal numatytuosius nustatymus paskyroje įjungiama „Carbon Browser Browser Browser“ sinchronizavimo funkcija, išskyrus tokius atvejus, kai sinchronizavimas buvo išjungtas domeno administratoriaus arba taikant politiką „SyncDisabled“. Numatytoji politikos „BrowserGuestModeEnabled“ vertė bus nustatyta kaip „false“. Atminkite, kad įgalinus šią politiką esami neprijungti profiliai bus užrakinti ir nepasiekiami. Jei reikia daugiau informacijos, žr. pagalbos centro straipsnį adresu https://support.google.com/chrome/a/answer/7572556. Ši funkcija nepalaikoma naudojant „Linux“: naudojant šią funkciją bus vėl įjungiama parinktis „Įgalinti naršyklės prisijungimą“.
+      Jei politika nustatyta kaip „Priverstinis naršyklės prisijungimas“, naudotojui pateikiamas paskyros pasirinkimo dialogo langas ir naudotojas turi pasirinkti paskyrą ir prie jos prisijungti, kad galėtų naudoti naršyklę. Taip užtikrinama, kad valdomoms paskyroms taikoma ir vykdoma su paskyra susijusi politika. Pagal numatytuosius nustatymus paskyroje įjungiama „Carbon Browser“ sinchronizavimo funkcija, išskyrus tokius atvejus, kai sinchronizavimas buvo išjungtas domeno administratoriaus arba taikant politiką „SyncDisabled“. Numatytoji politikos „BrowserGuestModeEnabled“ vertė bus nustatyta kaip „false“. Atminkite, kad įgalinus šią politiką esami neprijungti profiliai bus užrakinti ir nepasiekiami. Jei reikia daugiau informacijos, žr. pagalbos centro straipsnį adresu https://support.google.com/chrome/a/answer/7572556. Ši funkcija nepalaikoma naudojant „Linux“: naudojant šią funkciją bus vėl įjungiama parinktis „Įgalinti naršyklės prisijungimą“.
 
       Jei ši politika nenustatyta, naudotojas gali nuspręsti, ar nori įgalinti naršyklės prisijungimo parinktį, ir naudoti politiką pagal savo poreikius.</translation>
 <translation id="9072600218500597787">Konfigūruojami būtini prieglobos domenų pavadinimai, kurie bus nustatyti nuotolinės prieigos priegloboms, ir neleidžiama naudotojams jų keisti.
@@ -4455,7 +4455,7 @@ Rekomenduojame politiką sistemoje „Windows“ nustatyti naudojant GPO, tačia
 
       Kai ši politika nustatyta, ji naudojama „<ph name="PRODUCT_NAME" />“ pristatyti, kai pristatoma „<ph name="PRODUCT_NAME" />“ iš „Internet Explorer“.
 
-      Šią politiką galima nustatyti kaip vykdomąjį failo kelią arba „${chrome}“, kad būtų automatiškai aptinkama „Carbon Browser Browser Browser“ diegimo vieta.</translation>
+      Šią politiką galima nustatyti kaip vykdomąjį failo kelią arba „${chrome}“, kad būtų automatiškai aptinkama „Carbon Browser“ diegimo vieta.</translation>
 <translation id="930930237275114205">Nustatyti „<ph name="PRODUCT_FRAME_NAME" />“ naudotojo duomenų katalogą</translation>
 <translation id="943865157632139008">Įdiegus „<ph name="PRODUCT_FRAME_NAME" />“ leidžiama sukonfigūruoti numatytąjį HTML pateikėją.
       Pagal numatytuosius nustatymus teikti leidžiama prieglobos naršyklei, bet jūs savo nuožiūra šios nuostatos galite nepaisyti ir nustatyti, kad pagal numatytuosius nustatymus „<ph name="PRODUCT_FRAME_NAME" />“ pateiktų HTML puslapius.</translation>

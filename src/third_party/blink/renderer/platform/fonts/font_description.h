@@ -34,6 +34,7 @@
 #include "third_party/blink/renderer/platform/fonts/font_family.h"
 #include "third_party/blink/renderer/platform/fonts/font_optical_sizing.h"
 #include "third_party/blink/renderer/platform/fonts/font_orientation.h"
+#include "third_party/blink/renderer/platform/fonts/font_palette.h"
 #include "third_party/blink/renderer/platform/fonts/font_selection_types.h"
 #include "third_party/blink/renderer/platform/fonts/font_smoothing_mode.h"
 #include "third_party/blink/renderer/platform/fonts/font_variant_east_asian.h"
@@ -44,6 +45,7 @@
 #include "third_party/blink/renderer/platform/fonts/typesetting_features.h"
 #include "third_party/blink/renderer/platform/text/layout_locale.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
+#include "third_party/blink/renderer/platform/wtf/cross_thread_copier.h"
 #include "third_party/blink/renderer/platform/wtf/math_extras.h"
 #include "third_party/skia/include/core/SkFontStyle.h"
 
@@ -62,9 +64,10 @@ class PLATFORM_EXPORT FontDescription {
     kHashRegularValue
   };
 
-  enum GenericFamilyType {
+  enum GenericFamilyType : uint8_t {
     kNoFamily,
     kStandardFamily,
+    kWebkitBodyFamily,
     kSerifFamily,
     kSansSerifFamily,
     kMonospaceFamily,
@@ -105,6 +108,12 @@ class PLATFORM_EXPORT FontDescription {
 
   enum FontSynthesisStyle { kAutoFontSynthesisStyle, kNoneFontSynthesisStyle };
   static String ToString(FontSynthesisStyle);
+
+  enum FontSynthesisSmallCaps {
+    kAutoFontSynthesisSmallCaps,
+    kNoneFontSynthesisSmallCaps
+  };
+  static String ToString(FontSynthesisSmallCaps);
 
   FontDescription();
   FontDescription(const FontDescription&);
@@ -177,6 +186,11 @@ class PLATFORM_EXPORT FontDescription {
     return Size(KeywordSize(), SpecifiedSize(), IsAbsoluteSize());
   }
   float SpecifiedSize() const { return specified_size_; }
+  // Returns the result of applying font-size-adjust to the specified size. This
+  // is useful as an input to optical sizing and takes zooming out of the
+  // equation for determining the font size to be used for font-optical-sizing:
+  // auto;.
+  float AdjustedSpecifiedSize() const;
   float ComputedSize() const { return computed_size_; }
 
   // TODO(xiaochengh): The functions and members for size-adjust descriptor and
@@ -246,6 +260,7 @@ class PLATFORM_EXPORT FontDescription {
   OpticalSizing FontOpticalSizing() const {
     return static_cast<OpticalSizing>(fields_.font_optical_sizing_);
   }
+  FontPalette* GetFontPalette() const { return font_palette_.get(); }
   TextRenderingMode TextRendering() const {
     return static_cast<TextRenderingMode>(fields_.text_rendering_);
   }
@@ -271,6 +286,10 @@ class PLATFORM_EXPORT FontDescription {
   }
   bool SyntheticItalicAllowed() const {
     return fields_.font_synthesis_style_ == kAutoFontSynthesisStyle;
+  }
+  FontSynthesisSmallCaps GetFontSynthesisSmallCaps() const {
+    return static_cast<FontSynthesisSmallCaps>(
+        fields_.font_synthesis_small_caps_);
   }
 
   FontSelectionRequest GetFontSelectionRequest() const;
@@ -307,10 +326,10 @@ class PLATFORM_EXPORT FontDescription {
                         bool is_unique_match) const;
 
   void SetFamily(const FontFamily& family) { family_list_ = family; }
-  void SetComputedSize(float s) { computed_size_ = clampTo<float>(s); }
-  void SetSpecifiedSize(float s) { specified_size_ = clampTo<float>(s); }
-  void SetAdjustedSize(float s) { adjusted_size_ = clampTo<float>(s); }
-  void SetSizeAdjust(float aspect) { size_adjust_ = clampTo<float>(aspect); }
+  void SetComputedSize(float s) { computed_size_ = ClampTo<float>(s); }
+  void SetSpecifiedSize(float s) { specified_size_ = ClampTo<float>(s); }
+  void SetAdjustedSize(float s) { adjusted_size_ = ClampTo<float>(s); }
+  void SetSizeAdjust(float aspect) { size_adjust_ = ClampTo<float>(aspect); }
 
   void SetStyle(FontSelectionValue i);
   void SetWeight(FontSelectionValue w) { font_selection_request_.weight = w; }
@@ -336,6 +355,9 @@ class PLATFORM_EXPORT FontDescription {
   void SetFontOpticalSizing(OpticalSizing font_optical_sizing) {
     fields_.font_optical_sizing_ = font_optical_sizing;
   }
+  void SetFontPalette(scoped_refptr<FontPalette> palette) {
+    font_palette_ = std::move(palette);
+  }
   void SetTextRendering(TextRenderingMode rendering) {
     fields_.text_rendering_ = rendering;
     UpdateTypesettingFeatures();
@@ -358,6 +380,10 @@ class PLATFORM_EXPORT FontDescription {
   }
   void SetFontSynthesisStyle(FontSynthesisStyle font_synthesis_style) {
     fields_.font_synthesis_style_ = font_synthesis_style;
+  }
+  void SetFontSynthesisSmallCaps(
+      FontSynthesisSmallCaps font_synthesis_small_caps) {
+    fields_.font_synthesis_small_caps_ = font_synthesis_small_caps;
   }
   void SetFeatureSettings(scoped_refptr<FontFeatureSettings> settings) {
     feature_settings_ = std::move(settings);
@@ -432,6 +458,7 @@ class PLATFORM_EXPORT FontDescription {
   scoped_refptr<FontFeatureSettings> feature_settings_;
   scoped_refptr<FontVariationSettings> variation_settings_;
   scoped_refptr<const LayoutLocale> locale_;
+  scoped_refptr<FontPalette> font_palette_;
 
   void UpdateTypesettingFeatures();
 
@@ -492,6 +519,7 @@ class PLATFORM_EXPORT FontDescription {
     unsigned synthetic_oblique_ : 1;
     unsigned font_synthesis_weight_ : 1;
     unsigned font_synthesis_style_ : 1;
+    unsigned font_synthesis_small_caps_ : 1;
     unsigned subpixel_text_position_ : 1;
     unsigned typesetting_features_ : 3;
     unsigned variant_numeric_ : 8;
@@ -552,6 +580,12 @@ struct HashTraits<blink::FontDescription>
   static blink::FontDescription EmptyValue() {
     return blink::FontDescription::CreateHashTableEmptyValue();
   }
+};
+
+template <>
+struct CrossThreadCopier<blink::FontDescription>
+    : public CrossThreadCopierPassThrough<blink::FontDescription> {
+  STATIC_ONLY(CrossThreadCopier);
 };
 
 }  // namespace WTF

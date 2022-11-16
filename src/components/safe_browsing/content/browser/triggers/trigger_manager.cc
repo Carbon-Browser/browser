@@ -7,6 +7,7 @@
 #include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/memory/ptr_util.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "components/prefs/pref_service.h"
 #include "components/safe_browsing/content/browser/base_ui_manager.h"
@@ -192,15 +193,23 @@ bool TriggerManager::FinishCollectingThreatDetails(
     int num_visits,
     const SBErrorOptions& error_display_options) {
   DCHECK(content::BrowserThread::CurrentlyOn(content::BrowserThread::UI));
+  // Determine whether a report should be sent.
+  bool should_send_report = CanSendReport(error_display_options, trigger_type);
+  bool has_threat_details_in_map =
+      base::Contains(data_collectors_map_, web_contents);
+
+  if (should_send_report) {
+    base::UmaHistogramBoolean(
+        "SafeBrowsing.ClientSafeBrowsingReport.HasThreatDetailsForTab",
+        has_threat_details_in_map);
+  }
+
   // Make sure there's a ThreatDetails collector running on this tab.
-  if (!base::Contains(data_collectors_map_, web_contents))
+  if (!has_threat_details_in_map)
     return false;
   DataCollectorsContainer* collectors = &data_collectors_map_[web_contents];
   if (collectors->threat_details == nullptr)
     return false;
-
-  // Determine whether a report should be sent.
-  bool should_send_report = CanSendReport(error_display_options, trigger_type);
 
   if (should_send_report) {
     // Find the data collector and tell it to finish collecting data. We expect
@@ -245,6 +254,8 @@ TriggerManagerWebContentsHelper::TriggerManagerWebContentsHelper(
     content::WebContents* web_contents,
     TriggerManager* trigger_manager)
     : content::WebContentsObserver(web_contents),
+      content::WebContentsUserData<TriggerManagerWebContentsHelper>(
+          *web_contents),
       trigger_manager_(trigger_manager) {}
 
 TriggerManagerWebContentsHelper::~TriggerManagerWebContentsHelper() {}
@@ -253,6 +264,6 @@ void TriggerManagerWebContentsHelper::WebContentsDestroyed() {
   trigger_manager_->WebContentsDestroyed(web_contents());
 }
 
-WEB_CONTENTS_USER_DATA_KEY_IMPL(TriggerManagerWebContentsHelper)
+WEB_CONTENTS_USER_DATA_KEY_IMPL(TriggerManagerWebContentsHelper);
 
 }  // namespace safe_browsing

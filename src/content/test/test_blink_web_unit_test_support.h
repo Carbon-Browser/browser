@@ -7,8 +7,6 @@
 
 #include <memory>
 
-#include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "build/build_config.h"
 #include "cc/test/test_task_graph_runner.h"
@@ -41,9 +39,15 @@ class TestBlinkWebUnitTestSupport : public BlinkPlatformImpl {
 
   explicit TestBlinkWebUnitTestSupport(
       SchedulerType scheduler_type = SchedulerType::kMockScheduler);
+
+  TestBlinkWebUnitTestSupport(const TestBlinkWebUnitTestSupport&) = delete;
+  TestBlinkWebUnitTestSupport& operator=(const TestBlinkWebUnitTestSupport&) =
+      delete;
+
   ~TestBlinkWebUnitTestSupport() override;
 
   blink::WebString UserAgent() override;
+  blink::WebString FullUserAgent() override;
   blink::WebString ReducedUserAgent() override;
   blink::WebString QueryLocalizedString(int resource_id) override;
   blink::WebString QueryLocalizedString(int resource_id,
@@ -55,8 +59,6 @@ class TestBlinkWebUnitTestSupport : public BlinkPlatformImpl {
   blink::WebString DefaultLocale() override;
   scoped_refptr<base::SingleThreadTaskRunner> GetIOTaskRunner() const override;
   bool IsThreadedAnimationEnabled() override;
-  bool IsUseZoomForDSFEnabled() override;
-  cc::TaskGraphRunner* GetTaskGraphRunner() override;
 
   // May be called when |this| is registered as the active blink Platform
   // implementation. Overrides the result of IsThreadedAnimationEnabled() to
@@ -65,19 +67,13 @@ class TestBlinkWebUnitTestSupport : public BlinkPlatformImpl {
   // cross-test side effects.
   static bool SetThreadedAnimationEnabled(bool enabled);
 
-  static bool SetUseZoomForDsfEnabled(bool enabled);
-
  private:
   void BindClipboardHost(mojo::ScopedMessagePipeHandle handle);
 
   std::unique_ptr<blink::scheduler::WebThreadScheduler> main_thread_scheduler_;
   bool threaded_animation_ = true;
-  bool use_zoom_for_dsf_ = true;
-  cc::TestTaskGraphRunner test_task_graph_runner_;
 
   base::WeakPtrFactory<TestBlinkWebUnitTestSupport> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(TestBlinkWebUnitTestSupport);
 };
 
 }  // namespace content

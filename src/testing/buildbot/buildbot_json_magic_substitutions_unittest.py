@@ -10,13 +10,14 @@ import buildbot_json_magic_substitutions as magic_substitutions
 
 def CreateConfigWithPool(pool, device_type=None):
   dims = {
-    'swarming': {
-      'dimension_sets': [
-        {
-          'pool': pool,
-        },
-      ],
-    },
+      'name': 'test_name',
+      'swarming': {
+          'dimension_sets': [
+              {
+                  'pool': pool,
+              },
+          ],
+      },
   }
   if device_type:
     dims['swarming']['dimension_sets'][0]['device_type'] = device_type
@@ -27,26 +28,55 @@ class ChromeOSTelemetryRemoteTest(unittest.TestCase):
 
   def testVirtualMachineSubstitutions(self):
     test_config = CreateConfigWithPool('chromium.tests.cros.vm')
-    self.assertEqual(magic_substitutions.ChromeOSTelemetryRemote(test_config),
-                     [
-                       '--remote=127.0.0.1',
-                       '--remote-ssh-port=9222',
-                     ])
+    self.assertEqual(
+        magic_substitutions.ChromeOSTelemetryRemote(test_config, None), [
+            '--remote=127.0.0.1',
+            '--remote-ssh-port=9222',
+        ])
 
   def testPhysicalHardwareSubstitutions(self):
     test_config = CreateConfigWithPool('chromium.tests', device_type='eve')
-    self.assertEqual(magic_substitutions.ChromeOSTelemetryRemote(test_config),
-                     ['--remote=variable_chromeos_device_hostname'])
+    self.assertEqual(
+        magic_substitutions.ChromeOSTelemetryRemote(test_config, None),
+        ['--remote=variable_chromeos_device_hostname'])
 
   def testNoPool(self):
     test_config = CreateConfigWithPool(None)
-    with self.assertRaisesRegexp(RuntimeError, 'No pool *'):
-      magic_substitutions.ChromeOSTelemetryRemote(test_config)
+    with self.assertRaisesRegex(RuntimeError, 'No pool *'):
+      magic_substitutions.ChromeOSTelemetryRemote(test_config, None)
 
   def testUnknownPool(self):
     test_config = CreateConfigWithPool('totally-legit-pool')
-    with self.assertRaisesRegexp(RuntimeError, 'Unknown CrOS pool *'):
-      magic_substitutions.ChromeOSTelemetryRemote(test_config)
+    with self.assertRaisesRegex(RuntimeError, 'Unknown CrOS pool *'):
+      magic_substitutions.ChromeOSTelemetryRemote(test_config, None)
+
+
+class ChromeOSGtestFilterFileTest(unittest.TestCase):
+  def testVirtualMachineFile(self):
+    test_config = CreateConfigWithPool('chromium.tests.cros.vm')
+    self.assertEqual(
+        magic_substitutions.ChromeOSGtestFilterFile(test_config, None), [
+            '--test-launcher-filter-file=../../testing/buildbot/filters/'
+            'chromeos.amd64-generic.test_name.filter',
+        ])
+
+  def testPhysicalHardwareFile(self):
+    test_config = CreateConfigWithPool('chromium.tests', device_type='eve')
+    self.assertEqual(
+        magic_substitutions.ChromeOSGtestFilterFile(test_config, None), [
+            '--test-launcher-filter-file=../../testing/buildbot/filters/'
+            'chromeos.eve.test_name.filter',
+        ])
+
+  def testNoPool(self):
+    test_config = CreateConfigWithPool(None)
+    with self.assertRaisesRegex(RuntimeError, 'No pool *'):
+      magic_substitutions.ChromeOSTelemetryRemote(test_config, None)
+
+  def testUnknownPool(self):
+    test_config = CreateConfigWithPool('totally-legit-pool')
+    with self.assertRaisesRegex(RuntimeError, 'Unknown CrOS pool *'):
+      magic_substitutions.ChromeOSTelemetryRemote(test_config, None)
 
 
 def CreateConfigWithGpus(gpus):
@@ -71,20 +101,20 @@ class GPUExpectedDeviceId(unittest.TestCase):
   def testSingleGpuSingleDimension(self):
     test_config = CreateConfigWithGpus(['vendor:device1-driver'])
     self.assertDeviceIdCorrectness(
-        magic_substitutions.GPUExpectedDeviceId(test_config), ['device1'])
+        magic_substitutions.GPUExpectedDeviceId(test_config, None), ['device1'])
 
   def testSingleGpuDoubleDimension(self):
     test_config = CreateConfigWithGpus(
         ['vendor:device1-driver', 'vendor:device2-driver'])
     self.assertDeviceIdCorrectness(
-        magic_substitutions.GPUExpectedDeviceId(test_config),
+        magic_substitutions.GPUExpectedDeviceId(test_config, None),
         ['device1', 'device2'])
 
   def testDoubleGpuSingleDimension(self):
     test_config = CreateConfigWithGpus(
         ['vendor:device1-driver|vendor:device2-driver'])
     self.assertDeviceIdCorrectness(
-        magic_substitutions.GPUExpectedDeviceId(test_config),
+        magic_substitutions.GPUExpectedDeviceId(test_config, None),
         ['device1', 'device2'])
 
   def testDoubleGpuDoubleDimension(self):
@@ -93,7 +123,7 @@ class GPUExpectedDeviceId(unittest.TestCase):
         'vendor:device1-driver|vendor:device3-driver'
     ])
     self.assertDeviceIdCorrectness(
-        magic_substitutions.GPUExpectedDeviceId(test_config),
+        magic_substitutions.GPUExpectedDeviceId(test_config, None),
         ['device1', 'device2', 'device3'])
 
   def testNoGpu(self):
@@ -101,11 +131,29 @@ class GPUExpectedDeviceId(unittest.TestCase):
         magic_substitutions.GPUExpectedDeviceId(
             {'swarming': {
                 'dimension_sets': [{}]
-            }}), ['0'])
+            }}, None), ['0'])
 
   def testNoDimensions(self):
     with self.assertRaises(AssertionError):
-      magic_substitutions.GPUExpectedDeviceId({})
+      magic_substitutions.GPUExpectedDeviceId({}, None)
+
+
+class GPUParallelJobs(unittest.TestCase):
+  def testNoOsType(self):
+    with self.assertRaises(AssertionError):
+      magic_substitutions.GPUParallelJobs(None, None, {})
+
+  def testParallelJobs(self):
+    for os_type in ['lacros', 'linux', 'mac', 'win']:
+      retval = magic_substitutions.GPUParallelJobs(None, None,
+                                                   {'os_type': os_type})
+      self.assertEqual(retval, ['--jobs=4'])
+
+  def testSerialJobs(self):
+    for os_type in ['android', 'chromeos', 'fuchsia']:
+      retval = magic_substitutions.GPUParallelJobs(None, None,
+                                                   {'os_type': os_type})
+      self.assertEqual(retval, ['--jobs=1'])
 
 
 if __name__ == '__main__':

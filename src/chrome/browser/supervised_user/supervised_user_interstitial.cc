@@ -21,6 +21,7 @@
 #include "chrome/browser/supervised_user/supervised_user_navigation_observer.h"
 #include "chrome/browser/supervised_user/supervised_user_service.h"
 #include "chrome/browser/supervised_user/supervised_user_service_factory.h"
+#include "chrome/browser/supervised_user/web_approvals_manager.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/infobars/content/content_infobar_manager.h"
@@ -37,7 +38,7 @@
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/resource/resource_bundle.h"
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/supervised_user/child_accounts/child_account_feedback_reporter_android.h"
 #else
 #include "chrome/browser/ui/browser.h"
@@ -64,6 +65,9 @@ enum class RequestPermissionSource {
 
 class TabCloser : public content::WebContentsUserData<TabCloser> {
  public:
+  TabCloser(const TabCloser&) = delete;
+  TabCloser& operator=(const TabCloser&) = delete;
+
   ~TabCloser() override {}
 
   static void MaybeClose(WebContents* web_contents) {
@@ -71,7 +75,7 @@ class TabCloser : public content::WebContentsUserData<TabCloser> {
 
     // Close the tab only if there is a browser for it (which is not the case
     // for example in a <webview>).
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
     if (!chrome::FindBrowserWithWebContents(web_contents))
       return;
 #endif
@@ -81,7 +85,8 @@ class TabCloser : public content::WebContentsUserData<TabCloser> {
  private:
   friend class content::WebContentsUserData<TabCloser>;
 
-  explicit TabCloser(WebContents* web_contents) : web_contents_(web_contents) {
+  explicit TabCloser(WebContents* web_contents)
+      : content::WebContentsUserData<TabCloser>(*web_contents) {
     content::GetUIThreadTaskRunner({})->PostTask(
         FROM_HERE, base::BindOnce(&TabCloser::CloseTabImpl,
                                   weak_ptr_factory_.GetWeakPtr()));
@@ -89,30 +94,27 @@ class TabCloser : public content::WebContentsUserData<TabCloser> {
 
   void CloseTabImpl() {
     // On Android, FindBrowserWithWebContents and TabStripModel don't exist.
-#if !defined(OS_ANDROID)
-    Browser* browser = chrome::FindBrowserWithWebContents(web_contents_);
+#if !BUILDFLAG(IS_ANDROID)
+    Browser* browser = chrome::FindBrowserWithWebContents(&GetWebContents());
     DCHECK(browser);
     TabStripModel* tab_strip = browser->tab_strip_model();
     DCHECK_NE(TabStripModel::kNoTab,
-              tab_strip->GetIndexOfWebContents(web_contents_));
+              tab_strip->GetIndexOfWebContents(&GetWebContents()));
     if (tab_strip->count() <= 1) {
       // Don't close the last tab in the window.
-      web_contents_->RemoveUserData(UserDataKey());
+      GetWebContents().RemoveUserData(UserDataKey());
       return;
     }
 #endif
-    web_contents_->Close();
+    GetWebContents().Close();
   }
 
-  WebContents* web_contents_;
   base::WeakPtrFactory<TabCloser> weak_ptr_factory_{this};
 
   WEB_CONTENTS_USER_DATA_KEY_DECL();
-
-  DISALLOW_COPY_AND_ASSIGN(TabCloser);
 };
 
-WEB_CONTENTS_USER_DATA_KEY_IMPL(TabCloser)
+WEB_CONTENTS_USER_DATA_KEY_IMPL(TabCloser);
 
 // Removes all the infobars which are attached to |web_contents| and for
 // which ShouldExpire() returns true.
@@ -132,7 +134,7 @@ void CleanUpInfoBar(content::WebContents* web_contents) {
       details.previous_main_frame_url =
           controller.GetLastCommittedEntry()->GetURL();
     }
-    details.type = content::NAVIGATION_TYPE_NEW_ENTRY;
+    details.type = content::NAVIGATION_TYPE_MAIN_FRAME_NEW_ENTRY;
     for (int i = manager->infobar_count() - 1; i >= 0; --i) {
       infobars::InfoBar* infobar = manager->infobar_at(i);
       if (infobar->delegate()->ShouldExpire(
@@ -156,7 +158,7 @@ std::unique_ptr<SupervisedUserInterstitial> SupervisedUserInterstitial::Create(
       base::WrapUnique(new SupervisedUserInterstitial(
           web_contents, url, reason, frame_id, interstitial_navigation_id));
 
-  if (web_contents->GetMainFrame()->GetFrameTreeNodeId() == frame_id)
+  if (web_contents->GetPrimaryMainFrame()->GetFrameTreeNodeId() == frame_id)
     CleanUpInfoBar(web_contents);
 
   // Caller is responsible for deleting the interstitial.
@@ -184,10 +186,6 @@ std::string SupervisedUserInterstitial::GetHTMLContents(
     supervised_user_error_page::FilteringBehaviorReason reason,
     bool already_sent_request,
     bool is_main_frame) {
-  bool is_child_account = profile->IsChild();
-
-  bool is_deprecated = !is_child_account;
-
   SupervisedUserService* supervised_user_service =
       SupervisedUserServiceFactory::GetForProfile(profile);
 
@@ -203,19 +201,20 @@ std::string SupervisedUserInterstitial::GetHTMLContents(
   std::string profile_image_url2 = profile->GetPrefs()->GetString(
       prefs::kSupervisedUserSecondCustodianProfileImageURL);
 
-  bool allow_access_requests = supervised_user_service->AccessRequestsEnabled();
+  bool allow_access_requests = supervised_user_service->web_approvals_manager()
+                                   .AreRemoteApprovalRequestsEnabled();
 
   return supervised_user_error_page::BuildHtml(
       allow_access_requests, profile_image_url, profile_image_url2, custodian,
-      custodian_email, second_custodian, second_custodian_email,
-      is_child_account, is_deprecated, reason,
+      custodian_email, second_custodian, second_custodian_email, reason,
       g_browser_process->GetApplicationLocale(), already_sent_request,
       is_main_frame);
 }
 
 void SupervisedUserInterstitial::GoBack() {
   // GoBack only for main frame.
-  DCHECK_EQ(web_contents()->GetMainFrame()->GetFrameTreeNodeId(), frame_id());
+  DCHECK_EQ(web_contents()->GetPrimaryMainFrame()->GetFrameTreeNodeId(),
+            frame_id());
 
   UMA_HISTOGRAM_ENUMERATION("ManagedMode.BlockingInterstitialCommand", BACK,
                             HISTOGRAM_BOUNDING_VALUE);
@@ -223,13 +222,13 @@ void SupervisedUserInterstitial::GoBack() {
   OnInterstitialDone();
 }
 
-void SupervisedUserInterstitial::RequestPermission(
-    base::OnceCallback<void(bool)> RequestCallback) {
+void SupervisedUserInterstitial::RequestUrlAccessRemote(
+    base::OnceCallback<void(bool)> callback) {
   UMA_HISTOGRAM_ENUMERATION("ManagedMode.BlockingInterstitialCommand",
                             ACCESS_REQUEST, HISTOGRAM_BOUNDING_VALUE);
 
   RequestPermissionSource source;
-  if (web_contents()->GetMainFrame()->GetFrameTreeNodeId() == frame_id())
+  if (web_contents()->GetPrimaryMainFrame()->GetFrameTreeNodeId() == frame_id())
     source = RequestPermissionSource::MAIN_FRAME;
   else
     source = RequestPermissionSource::SUB_FRAME;
@@ -239,15 +238,21 @@ void SupervisedUserInterstitial::RequestPermission(
 
   SupervisedUserService* supervised_user_service =
       SupervisedUserServiceFactory::GetForProfile(profile_);
-  supervised_user_service->AddURLAccessRequest(url_,
-                                               std::move(RequestCallback));
+  supervised_user_service->web_approvals_manager().RequestRemoteApproval(
+      url_, std::move(callback));
+}
+
+void SupervisedUserInterstitial::RequestUrlAccessLocal(
+    base::OnceCallback<void(bool)> callback) {
+  // TODO(b/195461480): Log metrics.
+
+  SupervisedUserService* supervised_user_service =
+      SupervisedUserServiceFactory::GetForProfile(profile_);
+  supervised_user_service->web_approvals_manager().RequestLocalApproval(
+      web_contents(), url_, std::move(callback));
 }
 
 void SupervisedUserInterstitial::ShowFeedback() {
-  // TODO(yilkal): Remove checking IsChild since legacy supervised users are
-  // deprecated.
-  bool is_child_account = profile_->IsChild();
-
   SupervisedUserService* supervised_user_service =
       SupervisedUserServiceFactory::GetForProfile(profile_);
   std::string second_custodian =
@@ -255,11 +260,10 @@ void SupervisedUserInterstitial::ShowFeedback() {
 
   std::u16string reason =
       l10n_util::GetStringUTF16(supervised_user_error_page::GetBlockMessageID(
-          reason_, is_child_account, second_custodian.empty()));
+          reason_, second_custodian.empty()));
   std::string message = l10n_util::GetStringFUTF8(
       IDS_BLOCK_INTERSTITIAL_DEFAULT_FEEDBACK_TEXT, reason);
-#if defined(OS_ANDROID)
-  DCHECK(is_child_account);
+#if BUILDFLAG(IS_ANDROID)
   ReportChildAccountFeedback(web_contents_, message, url_);
 #else
   chrome::ShowFeedbackPage(

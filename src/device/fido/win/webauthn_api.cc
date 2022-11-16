@@ -81,6 +81,16 @@ class WinWebAuthnApiImpl : public WinWebAuthnApi {
                       "WebAuthNFreeCredentialAttestation");
     BIND_FN_OR_RETURN(free_assertion_, webauthn_dll_, "WebAuthNFreeAssertion");
 
+    // The platform credential list set of functions was added in version 4.
+    BIND_FN(get_platform_credential_list_, webauthn_dll_,
+            "WebAuthNGetPlatformCredentialList");
+    if (get_platform_credential_list_) {
+      BIND_FN_OR_RETURN(free_platform_credential_list_, webauthn_dll_,
+                        "WebAuthNFreePlatformCredentialList");
+      BIND_FN_OR_RETURN(delete_platform_credential_, webauthn_dll_,
+                        "WebAuthNDeletePlatformCredential");
+    }
+
     is_bound_ = true;
 
     // Determine the API version of webauthn.dll. There is a version currently
@@ -99,6 +109,10 @@ class WinWebAuthnApiImpl : public WinWebAuthnApi {
   // WinWebAuthnApi:
   bool IsAvailable() const override {
     return is_bound_ && (api_version_ >= WEBAUTHN_API_VERSION_1);
+  }
+
+  bool SupportsSilentDiscovery() const override {
+    return get_platform_credential_list_;
   }
 
   HRESULT IsUserVerifyingPlatformAuthenticatorAvailable(
@@ -146,6 +160,19 @@ class WinWebAuthnApiImpl : public WinWebAuthnApi {
     return cancel_current_operation_(cancellation_id);
   }
 
+  HRESULT GetPlatformCredentialList(
+      PCWEBAUTHN_GET_CREDENTIALS_OPTIONS options,
+      PWEBAUTHN_CREDENTIAL_DETAILS_LIST* credentials) override {
+    DCHECK(is_bound_ && get_platform_credential_list_);
+    return get_platform_credential_list_(options, credentials);
+  }
+
+  HRESULT DeletePlatformCredential(
+      base::span<const uint8_t> credential_id) override {
+    return delete_platform_credential_(credential_id.size(),
+                                       credential_id.data());
+  }
+
   PCWSTR GetErrorName(HRESULT hr) override {
     DCHECK(is_bound_);
     return get_error_name_(hr);
@@ -160,6 +187,12 @@ class WinWebAuthnApiImpl : public WinWebAuthnApi {
   void FreeAssertion(PWEBAUTHN_ASSERTION assertion_ptr) override {
     DCHECK(is_bound_);
     return free_assertion_(assertion_ptr);
+  }
+
+  void FreePlatformCredentialList(
+      PWEBAUTHN_CREDENTIAL_DETAILS_LIST credentials) override {
+    DCHECK(is_bound_ && free_platform_credential_list_);
+    free_platform_credential_list_(credentials);
   }
 
   int Version() override { return api_version_; }
@@ -177,10 +210,16 @@ class WinWebAuthnApiImpl : public WinWebAuthnApi {
   decltype(&WebAuthNAuthenticatorGetAssertion) authenticator_get_assertion_ =
       nullptr;
   decltype(&WebAuthNCancelCurrentOperation) cancel_current_operation_ = nullptr;
+  decltype(&WebAuthNGetPlatformCredentialList) get_platform_credential_list_ =
+      nullptr;
+  decltype(&WebAuthNDeletePlatformCredential) delete_platform_credential_ =
+      nullptr;
   decltype(&WebAuthNGetErrorName) get_error_name_ = nullptr;
   decltype(&WebAuthNFreeCredentialAttestation) free_credential_attestation_ =
       nullptr;
   decltype(&WebAuthNFreeAssertion) free_assertion_ = nullptr;
+  decltype(&WebAuthNFreePlatformCredentialList) free_platform_credential_list_ =
+      nullptr;
 
   // This method is not available in all versions of webauthn.dll.
   decltype(&WebAuthNGetApiVersionNumber) get_api_version_number_ = nullptr;
@@ -285,12 +324,12 @@ AuthenticatorMakeCredentialBlocking(WinWebAuthnApi* webauthn_api,
   if (request_options.make_u2f_api_credential) {
     authenticator_attachment =
         WEBAUTHN_AUTHENTICATOR_ATTACHMENT_CROSS_PLATFORM_U2F_V2;
-  } else if (request_options.is_off_the_record_context) {
-    // Disable all platform authenticators in off-the-record contexts.
-    //
-    // TODO(crbug.com/908622): Revisit this if the Windows WebAuthn API supports
-    // showing an equivalent dialog to what Chrome is displaying before creating
-    // a platform credential in Incognito mode.
+  } else if (request_options.is_off_the_record_context &&
+             api_version < WEBAUTHN_API_VERSION_4) {
+    // API versions before `WEBAUTHN_API_VERSION_4` don't have support for
+    // showing a warning message that platform credentials will out last the
+    // Incognito session. Thus, in this case, only external authenticators are
+    // enabled.
     authenticator_attachment = WEBAUTHN_AUTHENTICATOR_ATTACHMENT_CROSS_PLATFORM;
   } else {
     authenticator_attachment =
@@ -310,6 +349,17 @@ AuthenticatorMakeCredentialBlocking(WinWebAuthnApi* webauthn_api,
         /*pwszExtensionIdentifier=*/WEBAUTHN_EXTENSIONS_IDENTIFIER_CRED_BLOB,
         /*cbExtension=*/sizeof(cred_blob_ext),
         /*pvExtension=*/&cred_blob_ext,
+    });
+  }
+
+  if (request.min_pin_length_requested &&
+      api_version >= WEBAUTHN_API_VERSION_3) {
+    static const BOOL kRequestMinPINLength = TRUE;
+    extensions.emplace_back(WEBAUTHN_EXTENSION{
+        /*pwszExtensionIdentifier=*/
+        WEBAUTHN_EXTENSIONS_IDENTIFIER_MIN_PIN_LENGTH,
+        /*cbExtension=*/sizeof(kRequestMinPINLength),
+        /*pvExtension=*/const_cast<BOOL*>(&kRequestMinPINLength),
     });
   }
 
@@ -339,7 +389,7 @@ AuthenticatorMakeCredentialBlocking(WinWebAuthnApi* webauthn_api,
       exclude_list_ptrs.data()};
 
   WEBAUTHN_AUTHENTICATOR_MAKE_CREDENTIAL_OPTIONS options{
-      WEBAUTHN_AUTHENTICATOR_MAKE_CREDENTIAL_OPTIONS_VERSION_4,
+      WEBAUTHN_AUTHENTICATOR_MAKE_CREDENTIAL_OPTIONS_VERSION_5,
       kWinWebAuthnTimeoutMilliseconds,
       WEBAUTHN_CREDENTIALS{
           0, nullptr},  // Ignored because pExcludeCredentialList is set.
@@ -355,7 +405,9 @@ AuthenticatorMakeCredentialBlocking(WinWebAuthnApi* webauthn_api,
       &exclude_credential_list,
       enterprise_attestation,
       WEBAUTHN_LARGE_BLOB_SUPPORT_NONE,
-      /*bPreferResidentKey=*/FALSE,
+      /*bPreferResidentKey=*/request_options.resident_key ==
+          ResidentKeyRequirement::kPreferred,
+      request_options.is_off_the_record_context,
   };
 
   WEBAUTHN_CREDENTIAL_ATTESTATION* credential_attestation = nullptr;
@@ -398,6 +450,7 @@ AuthenticatorGetAssertionBlocking(WinWebAuthnApi* webauthn_api,
                                   CtapGetAssertionRequest request,
                                   CtapGetAssertionOptions request_options) {
   DCHECK(webauthn_api->IsAvailable());
+  const int api_version = webauthn_api->Version();
 
   std::u16string rp_id16 = base::UTF8ToUTF16(request.rp_id);
   std::string client_data_json = request.client_data_json;
@@ -435,20 +488,12 @@ AuthenticatorGetAssertionBlocking(WinWebAuthnApi* webauthn_api,
   if (request.is_u2f_only) {
     authenticator_attachment =
         WEBAUTHN_AUTHENTICATOR_ATTACHMENT_CROSS_PLATFORM_U2F_V2;
-  } else if (request.is_off_the_record_context) {
-    // Disable all platform authenticators in off-the-record contexts.
-    //
-    // TODO(crbug.com/908622): Revisit this if the Windows WebAuthn API supports
-    // showing an equivalent dialog to what Chrome is displaying before creating
-    // a platform credential in Incognito mode.
-    authenticator_attachment = WEBAUTHN_AUTHENTICATOR_ATTACHMENT_CROSS_PLATFORM;
   } else {
     authenticator_attachment = WEBAUTHN_AUTHENTICATOR_ATTACHMENT_ANY;
   }
 
   std::vector<WEBAUTHN_EXTENSION> extensions;
-  if (webauthn_api->Version() >= WEBAUTHN_API_VERSION_3 &&
-      request.get_cred_blob) {
+  if (api_version >= WEBAUTHN_API_VERSION_3 && request.get_cred_blob) {
     static const BOOL kCredBlobTrue = TRUE;
     extensions.emplace_back(WEBAUTHN_EXTENSION{
         /*pwszExtensionIdentifier=*/WEBAUTHN_EXTENSIONS_IDENTIFIER_CRED_BLOB,

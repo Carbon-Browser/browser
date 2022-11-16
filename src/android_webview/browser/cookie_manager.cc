@@ -29,9 +29,9 @@
 #include "base/metrics/histogram_functions.h"
 #include "base/no_destructor.h"
 #include "base/path_service.h"
-#include "base/single_thread_task_runner.h"
 #include "base/synchronization/lock.h"
 #include "base/synchronization/waitable_event.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/time/time.h"
@@ -313,9 +313,12 @@ net::CookieStore* CookieManager::GetCookieStore() {
   DCHECK(cookie_store_task_runner_->RunsTasksInCurrentSequence());
 
   if (!cookie_store_) {
+    // TODO(https://crbug.com/1286070): Provide a non-hardcoded value for
+    // the 'first_party_sets_enabled' argument below.
     content::CookieStoreConfig cookie_config(
-        cookie_store_path_, true /* restore_old_session_cookies */,
-        true /* persist_session_cookies */);
+        cookie_store_path_, /* restore_old_session_cookies= */ true,
+        /* persist_session_cookies= */ true,
+        /* first_party_sets_enabled= */ false);
     cookie_config.client_task_runner = cookie_store_task_runner_;
     cookie_config.background_task_runner =
         cookie_store_backend_thread_.task_runner();
@@ -466,7 +469,7 @@ void CookieManager::SetCookieHelper(const GURL& host,
 
   std::unique_ptr<net::CanonicalCookie> cc(net::CanonicalCookie::Create(
       new_host, value, base::Time::Now(), absl::nullopt /* server_time */,
-      net::CookiePartitionKey::Todo()));
+      absl::nullopt /* cookie_partition_key */));
 
   if (!cc || !should_allow_cookie) {
     MaybeRunCookieCallback(std::move(callback), false);
@@ -512,12 +515,12 @@ void CookieManager::GetCookieListAsyncHelper(const GURL& host,
 
   if (GetMojoCookieManager()) {
     GetMojoCookieManager()->GetCookieList(
-        host, options,
+        host, options, net::CookiePartitionKeyCollection::Todo(),
         base::BindOnce(&CookieManager::GetCookieListCompleted,
                        base::Unretained(this), std::move(complete), result));
   } else {
     GetCookieStore()->GetCookieListWithOptionsAsync(
-        host, options,
+        host, options, net::CookiePartitionKeyCollection::Todo(),
         base::BindOnce(&CookieManager::GetCookieListCompleted,
                        base::Unretained(this), std::move(complete), result));
   }

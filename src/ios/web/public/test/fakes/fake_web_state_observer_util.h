@@ -5,6 +5,7 @@
 #ifndef IOS_WEB_PUBLIC_TEST_FAKES_FAKE_WEB_STATE_OBSERVER_UTIL_H_
 #define IOS_WEB_PUBLIC_TEST_FAKES_FAKE_WEB_STATE_OBSERVER_UTIL_H_
 
+#include <Foundation/Foundation.h>
 #include <memory>
 
 #include "ios/web/public/favicon/favicon_url.h"
@@ -13,6 +14,7 @@
 namespace web {
 
 class NavigationContext;
+enum Permission : NSUInteger;
 struct SSLStatus;
 class WebFrame;
 class WebState;
@@ -35,6 +37,14 @@ struct TestDidStartNavigationInfo {
   std::unique_ptr<web::NavigationContext> context;
 };
 
+// Arguments passed to |DidRedirectNavigation|.
+struct TestDidRedirectNavigationInfo {
+  TestDidRedirectNavigationInfo();
+  ~TestDidRedirectNavigationInfo();
+  WebState* web_state = nullptr;
+  std::unique_ptr<web::NavigationContext> context;
+};
+
 // Arguments passed to |DidFinishNavigation|.
 struct TestDidFinishNavigationInfo {
   TestDidFinishNavigationInfo();
@@ -43,16 +53,31 @@ struct TestDidFinishNavigationInfo {
   std::unique_ptr<web::NavigationContext> context;
 };
 
+// Arguments passed to |DidStartLoading|.
+struct TestStartLoadingInfo {
+  WebState* web_state = nullptr;
+};
+
+// Arguments passed to |DidStopLoading|.
+struct TestStopLoadingInfo {
+  WebState* web_state = nullptr;
+};
+
 // Arguments passed to |PageLoaded|.
 struct TestLoadPageInfo {
   WebState* web_state = nullptr;
-  bool success;
+  bool success = false;
 };
 
 // Arguments passed to |LoadProgressChanged|.
 struct TestChangeLoadingProgressInfo {
   WebState* web_state = nullptr;
-  double progress;
+  double progress = 0.0;
+};
+
+// Arguments passed to |DidChangeBackForwardState|.
+struct TestDidChangeBackForwardStateInfo {
+  WebState* web_state = nullptr;
 };
 
 // Arguments passed to |TitleWasSet|.
@@ -92,19 +117,20 @@ struct TestRenderProcessGoneInfo {
   WebState* web_state = nullptr;
 };
 
+// Arguments passed to |WebStateRealized|.
+struct TestWebStateRealizedInfo {
+  WebState* web_state = nullptr;
+};
+
 // Arguments passed to |WebStateDestroyed|.
 struct TestWebStateDestroyedInfo {
   WebState* web_state = nullptr;
 };
 
-// Arguments passed to |DidStartLoading|.
-struct TestStartLoadingInfo {
+// Arguments passed to |PermissionStateChanged|.
+struct TestWebStatePermissionStateChangedInfo {
   WebState* web_state = nullptr;
-};
-
-// Arguments passed to |DidStopLoading|.
-struct TestStopLoadingInfo {
-  WebState* web_state = nullptr;
+  web::Permission permission;
 };
 
 }  // namespace web

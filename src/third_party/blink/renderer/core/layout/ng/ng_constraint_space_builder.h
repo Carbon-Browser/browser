@@ -5,8 +5,10 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_LAYOUT_NG_NG_CONSTRAINT_SPACE_BUILDER_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_LAYOUT_NG_NG_CONSTRAINT_SPACE_BUILDER_H_
 
+#include "base/check_op.h"
 #include "base/dcheck_is_on.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/layout/geometry/logical_size.h"
 #include "third_party/blink/renderer/core/layout/ng/geometry/ng_bfc_offset.h"
 #include "third_party/blink/renderer/core/layout/ng/ng_constraint_space.h"
@@ -34,8 +36,10 @@ class CORE_EXPORT NGConstraintSpaceBuilder final {
                                  is_new_fc,
                                  /* force_orthogonal_writing_mode_root */ false,
                                  adjust_inline_size_if_needed) {
-    if (parent_space.IsInsideBalancedColumns())
-      space_.EnsureRareData()->is_inside_balanced_columns = true;
+    if (parent_space.ShouldPropagateChildBreakValues())
+      SetShouldPropagateChildBreakValues();
+    if (parent_space.IsRepeatable())
+      SetIsRepeatable(/*is_repeatable*/ true);
   }
 
   // The setters on this builder are in the writing mode of parent_writing_mode.
@@ -78,10 +82,12 @@ class CORE_EXPORT NGConstraintSpaceBuilder final {
 #if DCHECK_IS_ON()
     is_available_size_set_ = true;
 #endif
-    space_.available_size_ = available_size;
 
-    if (UNLIKELY(!is_in_parallel_flow_)) {
-      space_.available_size_.Transpose();
+    if (LIKELY(is_in_parallel_flow_)) {
+      space_.available_size_ = available_size;
+    } else {
+      space_.available_size_ = {available_size.block_size,
+                                available_size.inline_size};
       if (adjust_inline_size_if_needed_)
         AdjustInlineSizeIfNeeded(&space_.available_size_.inline_size);
     }
@@ -120,6 +126,16 @@ class CORE_EXPORT NGConstraintSpaceBuilder final {
       space_.EnsureRareData()->fragmentainer_block_size = size;
   }
 
+  // Shrink the fragmentainer block-size, to reserve space at the end. This is
+  // needed for repeated table footers.
+  void ReserveSpaceAtFragmentainerEnd(LayoutUnit space) {
+#if DCHECK_IS_ON()
+    DCHECK(is_fragmentainer_block_size_set_);
+#endif
+    DCHECK_GE(space_.rare_data_->fragmentainer_block_size, space);
+    space_.rare_data_->fragmentainer_block_size -= space;
+  }
+
   void SetFragmentainerOffsetAtBfc(LayoutUnit offset) {
 #if DCHECK_IS_ON()
     DCHECK(!is_fragmentainer_offset_at_bfc_set_);
@@ -127,6 +143,14 @@ class CORE_EXPORT NGConstraintSpaceBuilder final {
 #endif
     if (offset != LayoutUnit())
       space_.EnsureRareData()->fragmentainer_offset_at_bfc = offset;
+  }
+
+  void SetIsAtFragmentainerStart() {
+    space_.EnsureRareData()->is_at_fragmentainer_start = true;
+  }
+
+  void SetIsRepeatable(bool is_repeatable) {
+    space_.EnsureRareData()->is_repeatable = is_repeatable;
   }
 
   void SetIsFixedInlineSize(bool b) {
@@ -183,11 +207,26 @@ class CORE_EXPORT NGConstraintSpaceBuilder final {
     }
   }
 
+  void SetRequiresContentBeforeBreaking(bool b) {
+    if (!b && !space_.HasRareData())
+      return;
+    space_.EnsureRareData()->requires_content_before_breaking = b;
+  }
+
   void SetIsInsideBalancedColumns() {
     space_.EnsureRareData()->is_inside_balanced_columns = true;
   }
 
+  void SetShouldIgnoreForcedBreaks() {
+    space_.EnsureRareData()->should_ignore_forced_breaks = true;
+  }
+
   void SetIsInColumnBfc() { space_.EnsureRareData()->is_in_column_bfc = true; }
+
+  void SetMinBlockSizeShouldEncompassIntrinsicSize() {
+    space_.EnsureRareData()->min_block_size_should_encompass_intrinsic_size =
+        true;
+  }
 
   void SetMinBreakAppeal(NGBreakAppeal min_break_appeal) {
     if (!space_.HasRareData() && min_break_appeal == kBreakAppealLastResort)
@@ -195,16 +234,12 @@ class CORE_EXPORT NGConstraintSpaceBuilder final {
     space_.EnsureRareData()->min_break_appeal = min_break_appeal;
   }
 
-  void SetIsTableCell(bool is_table_cell, bool is_legacy_table_cell) {
-#if DCHECK_IS_ON()
-    DCHECK(!is_table_cell_set_);
-    is_table_cell_set_ = true;
-#endif
+  void SetShouldPropagateChildBreakValues() {
+    space_.EnsureRareData()->propagate_child_break_values = true;
+  }
+
+  void SetIsTableCell(bool is_table_cell) {
     space_.bitfields_.is_table_cell = is_table_cell;
-    if (is_legacy_table_cell) {
-      DCHECK(is_table_cell);
-      space_.EnsureRareData()->is_legacy_table_cell = is_legacy_table_cell;
-    }
   }
 
   void SetIsRestrictedBlockSizeTableCell(bool b) {
@@ -316,18 +351,6 @@ class CORE_EXPORT NGConstraintSpaceBuilder final {
 #endif
     if (table_cell_borders != NGBoxStrut())
       space_.EnsureRareData()->SetTableCellBorders(table_cell_borders);
-  }
-
-  void SetTableCellIntrinsicPadding(
-      const NGBoxStrut& table_cell_intrinsic_padding) {
-#if DCHECK_IS_ON()
-    DCHECK(!is_table_cell_intrinsic_padding_set_);
-    is_table_cell_intrinsic_padding_set_ = true;
-#endif
-    if (table_cell_intrinsic_padding != NGBoxStrut()) {
-      space_.EnsureRareData()->SetTableCellIntrinsicPadding(
-          table_cell_intrinsic_padding);
-    }
   }
 
   void SetTableCellAlignmentBaseline(
@@ -451,6 +474,23 @@ class CORE_EXPORT NGConstraintSpaceBuilder final {
         target_stretch_block_sizes);
   }
 
+  void SetSubgriddedColumns(
+      std::unique_ptr<NGGridLayoutTrackCollection> columns) {
+#if DCHECK_IS_ON()
+    DCHECK(!is_subgridded_columns_set_);
+    is_subgridded_columns_set_ = true;
+#endif
+    space_.EnsureRareData()->SetSubgriddedColumns(std::move(columns));
+  }
+
+  void SetSubgriddedRows(std::unique_ptr<NGGridLayoutTrackCollection> rows) {
+#if DCHECK_IS_ON()
+    DCHECK(!is_subgridded_rows_set_);
+    is_subgridded_rows_set_ = true;
+#endif
+    space_.EnsureRareData()->SetSubgriddedRows(std::move(rows));
+  }
+
   // Creates a new constraint space.
   const NGConstraintSpace ToConstraintSpace() {
 #if DCHECK_IS_ON()
@@ -494,9 +534,7 @@ class CORE_EXPORT NGConstraintSpaceBuilder final {
   bool is_optimistic_bfc_block_offset_set_ = false;
   bool is_forced_bfc_block_offset_set_ = false;
   bool is_clearance_offset_set_ = false;
-  bool is_table_cell_set_ = false;
   bool is_table_cell_borders_set_ = false;
-  bool is_table_cell_intrinsic_padding_set_ = false;
   bool is_table_cell_alignment_baseline_set_ = false;
   bool is_table_cell_column_index_set_ = false;
   bool is_table_cell_hidden_for_paint_set_ = false;
@@ -506,6 +544,8 @@ class CORE_EXPORT NGConstraintSpaceBuilder final {
   bool is_table_row_data_set_ = false;
   bool is_table_section_data_set_ = false;
   bool is_line_clamp_context_set_ = false;
+  bool is_subgridded_columns_set_ = false;
+  bool is_subgridded_rows_set_ = false;
 
   bool to_constraint_space_called_ = false;
 #endif

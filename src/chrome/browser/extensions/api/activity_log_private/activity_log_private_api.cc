@@ -22,9 +22,6 @@
 #include "content/public/browser/browser_context.h"
 #include "extensions/browser/extension_system_provider.h"
 #include "extensions/browser/extensions_browser_client.h"
-#include "extensions/common/features/feature.h"
-#include "extensions/common/features/feature_provider.h"
-#include "extensions/common/hashed_extension_id.h"
 
 namespace extensions {
 
@@ -74,14 +71,6 @@ void ActivityLogAPI::Shutdown() {
   activity_log_->RemoveObserver(this);
 }
 
-// static
-bool ActivityLogAPI::IsExtensionAllowlisted(const std::string& extension_id) {
-  // TODO(devlin): Pass in a HashedExtensionId to avoid this conversion.
-  return FeatureProvider::GetPermissionFeatures()
-      ->GetFeature("activityLogPrivate")
-      ->IsIdInAllowlist(HashedExtensionId(extension_id));
-}
-
 void ActivityLogAPI::OnListenerAdded(const EventListenerInfo& details) {
   if (activity_log_->has_listeners())
     return;
@@ -99,13 +88,13 @@ void ActivityLogAPI::StartOrStopListeningForExtensionActivities() {
 }
 
 void ActivityLogAPI::OnExtensionActivity(scoped_refptr<Action> activity) {
-  std::unique_ptr<base::ListValue> value(new base::ListValue());
+  base::Value::List value;
   ExtensionActivity activity_arg = activity->ConvertToExtensionActivity();
-  value->Append(activity_arg.ToValue());
+  value.Append(base::Value::FromUniquePtrValue(activity_arg.ToValue()));
   auto event = std::make_unique<Event>(
       events::ACTIVITY_LOG_PRIVATE_ON_EXTENSION_ACTIVITY,
-      activity_log_private::OnExtensionActivity::kEventName,
-      std::move(*value).TakeList(), browser_context_);
+      activity_log_private::OnExtensionActivity::kEventName, std::move(value),
+      browser_context_);
   EventRouter::Get(browser_context_)->BroadcastEvent(std::move(event));
 }
 

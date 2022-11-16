@@ -9,9 +9,7 @@
 
 #include <set>
 
-#include "base/compiler_specific.h"
 #include "base/containers/queue.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/timer/timer.h"
@@ -21,11 +19,6 @@
 #include "content/public/browser/notification_registrar.h"
 
 namespace extensions {
-
-// TODO(hendrich, https://crbug.com/1046302)
-// Add a test for the InstallLimiter, which checks that small extensions are
-// installed before large extensions and that we don't have to wait the entire
-// 5s when the OnAllExternalProvidersReady() signal was called.
 
 // InstallLimiter defers big app installs after all small app installs and then
 // runs big app installs one by one. This improves first-time login experience.
@@ -42,6 +35,10 @@ class InstallLimiter : public KeyedService,
   static bool ShouldDeferInstall(int64_t app_size, const std::string& app_id);
 
   InstallLimiter();
+
+  InstallLimiter(const InstallLimiter&) = delete;
+  InstallLimiter& operator=(const InstallLimiter&) = delete;
+
   ~InstallLimiter() override;
 
   void DisableForTest();
@@ -106,8 +103,6 @@ class InstallLimiter : public KeyedService,
 
   bool all_external_providers_ready_ = false;
   int num_installs_waiting_for_file_size_ = 0;
-
-  DISALLOW_COPY_AND_ASSIGN(InstallLimiter);
 };
 
 }  // namespace extensions

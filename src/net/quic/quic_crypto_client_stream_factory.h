@@ -8,7 +8,7 @@
 #include <memory>
 
 #include "net/base/net_export.h"
-#include "net/third_party/quiche/src/quic/core/quic_server_id.h"
+#include "net/third_party/quiche/src/quiche/quic/core/quic_server_id.h"
 
 namespace quic {
 class ProofVerifyContext;
@@ -27,9 +27,10 @@ namespace net {
 // to facilitate testing code with mock implementations.
 class NET_EXPORT QuicCryptoClientStreamFactory {
  public:
-  virtual ~QuicCryptoClientStreamFactory() {}
+  virtual ~QuicCryptoClientStreamFactory() = default;
 
-  virtual quic::QuicCryptoClientStream* CreateQuicCryptoClientStream(
+  virtual std::unique_ptr<quic::QuicCryptoClientStream>
+  CreateQuicCryptoClientStream(
       const quic::QuicServerId& server_id,
       QuicChromiumClientSession* session,
       std::unique_ptr<quic::ProofVerifyContext> proof_verify_context,

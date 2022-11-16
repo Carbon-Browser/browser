@@ -4,7 +4,7 @@
 
 (async function() {
   TestRunner.addResult(`Tests that paint profiler is properly update when an event is selected in Flame Chart\n`);
-  await TestRunner.loadModule('timeline'); await TestRunner.loadTestModule('performance_test_runner');
+  await TestRunner.loadLegacyModule('timeline'); await TestRunner.loadTestModule('performance_test_runner');
   await TestRunner.showPanel('timeline');
   await TestRunner.loadHTML(`
     <div id="square" style="width: 40px; height: 40px"></div>
@@ -41,10 +41,13 @@
   await PerformanceTestRunner.invokeAsyncWithTimeline('performActions');
   var events = PerformanceTestRunner.mainTrackEvents();
   for (var event of events) {
-    if (event.name === TimelineModel.TimelineModel.RecordType.Paint) {
+    // When CompositeAfterPaint is enabled, a Paint trace event will be
+    // generated which encompasses the entire paint cycle for the page. That
+    // event will not correspond to any captured picture, and we just ignore it
+    // for the purpose of this test.
+    if (event.name === TimelineModel.TimelineModel.RecordType.Paint &&
+        TimelineModel.TimelineData.forEvent(event).picture) {
       paintEvents.push(event);
-      if (!TimelineModel.TimelineData.forEvent(event).picture)
-        TestRunner.addResult('Event without picture at ' + paintEvents.length);
     }
   }
 

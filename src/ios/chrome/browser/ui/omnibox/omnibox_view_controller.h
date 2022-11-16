@@ -15,6 +15,7 @@
 @protocol BrowserCommands;
 @protocol LoadQueryCommands;
 @protocol OmniboxCommands;
+@protocol OmniboxReturnDelegate;
 @class OmniboxViewController;
 class OmniboxTextChangeDelegate;
 
@@ -27,6 +28,10 @@ class OmniboxTextChangeDelegate;
 
 // Called after the user uses the "Visit copied link" context menu entry.
 - (void)omniboxViewControllerUserDidVisitCopiedLink:
+    (OmniboxViewController*)omniboxViewController;
+
+// Starts a reverse image search for the image currently in the pasteboard.
+- (void)omniboxViewControllerSearchCopiedImage:
     (OmniboxViewController*)omniboxViewController;
 
 @end
@@ -57,6 +62,7 @@ class OmniboxTextChangeDelegate;
 
 // The delegate for this object.
 @property(nonatomic, weak) id<OmniboxViewControllerDelegate> delegate;
+@property(nonatomic, weak) id<OmniboxReturnDelegate> returnKeyDelegate;
 
 // Designated initializer.
 - (instancetype)initWithIncognito:(BOOL)isIncognito;

@@ -5,12 +5,13 @@
 #ifndef MEDIA_GPU_ANDROID_DIRECT_SHARED_IMAGE_VIDEO_PROVIDER_H_
 #define MEDIA_GPU_ANDROID_DIRECT_SHARED_IMAGE_VIDEO_PROVIDER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/sequence_bound.h"
 #include "gpu/command_buffer/service/gles2_cmd_decoder.h"
 #include "gpu/command_buffer/service/ref_counted_lock.h"
-#include "gpu/command_buffer/service/shared_image_representation.h"
+#include "gpu/command_buffer/service/shared_image/shared_image_representation.h"
 #include "gpu/command_buffer/service/texture_manager.h"
 #include "gpu/command_buffer/service/texture_owner.h"
 #include "gpu/ipc/common/vulkan_ycbcr_info.h"
@@ -37,6 +38,12 @@ class MEDIA_GPU_EXPORT DirectSharedImageVideoProvider
       scoped_refptr<base::SingleThreadTaskRunner> gpu_task_runner,
       GetStubCB get_stub_cb,
       scoped_refptr<gpu::RefCountedLock> drdc_lock);
+
+  DirectSharedImageVideoProvider(const DirectSharedImageVideoProvider&) =
+      delete;
+  DirectSharedImageVideoProvider& operator=(
+      const DirectSharedImageVideoProvider&) = delete;
+
   ~DirectSharedImageVideoProvider() override;
 
   // SharedImageVideoProvider
@@ -47,8 +54,6 @@ class MEDIA_GPU_EXPORT DirectSharedImageVideoProvider
   base::SequenceBound<GpuSharedImageVideoFactory> gpu_factory_;
 
   scoped_refptr<base::SingleThreadTaskRunner> gpu_task_runner_;
-
-  DISALLOW_COPY_AND_ASSIGN(DirectSharedImageVideoProvider);
 };
 
 // GpuSharedImageVideoFactory creates SharedImageVideo objects.  It must be run
@@ -62,6 +67,11 @@ class GpuSharedImageVideoFactory
  public:
   explicit GpuSharedImageVideoFactory(
       SharedImageVideoProvider::GetStubCB get_stub_cb);
+
+  GpuSharedImageVideoFactory(const GpuSharedImageVideoFactory&) = delete;
+  GpuSharedImageVideoFactory& operator=(const GpuSharedImageVideoFactory&) =
+      delete;
+
   ~GpuSharedImageVideoFactory() override;
 
   // Will run |init_cb| with the shared context current.  |init_cb| should not
@@ -89,14 +99,12 @@ class GpuSharedImageVideoFactory
 
   void OnWillDestroyStub(bool have_context) override;
 
-  gpu::CommandBufferStub* stub_ = nullptr;
+  raw_ptr<gpu::CommandBufferStub> stub_ = nullptr;
   bool is_vulkan_ = false;
 
   THREAD_CHECKER(thread_checker_);
 
   base::WeakPtrFactory<GpuSharedImageVideoFactory> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(GpuSharedImageVideoFactory);
 };
 
 }  // namespace media

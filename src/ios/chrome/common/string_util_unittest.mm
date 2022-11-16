@@ -9,6 +9,7 @@
 #include "base/ios/ns_range.h"
 #include "base/test/gtest_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
+#import "ios/chrome/common/ui/util/text_view_util.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "testing/gtest_mac.h"
 #include "testing/platform_test.h"
@@ -429,5 +430,23 @@ TEST_F(StringUtilTest, SubstringOfWidth) {
   NSString* trailing_calculated =
       SubstringOfWidth(long_string, attributes, trailing_width, YES);
   EXPECT_NSEQ(trailing, trailing_calculated);
+}
+
+// Verifies when it should return CGRectNull and when it shouldn't.
+TEST_F(StringUtilTest, TextViewLinkBound) {
+  UITextView* text_view = CreateUITextViewWithTextKit1();
+  text_view.text = @"Some text.";
+
+  // Returns CGRectNull for empty NSRange.
+  EXPECT_TRUE(CGRectEqualToRect(
+      TextViewLinkBound(text_view, NSMakeRange(-1, -1)), CGRectNull));
+
+  // Returns CGRectNull for a range out of bound.
+  EXPECT_TRUE(CGRectEqualToRect(
+      TextViewLinkBound(text_view, NSMakeRange(20, 5)), CGRectNull));
+
+  // Returns a CGRect diffent from CGRectNull when there is a range in bound.
+  EXPECT_FALSE(CGRectEqualToRect(
+      TextViewLinkBound(text_view, NSMakeRange(0, 5)), CGRectNull));
 }
 }  // namespace

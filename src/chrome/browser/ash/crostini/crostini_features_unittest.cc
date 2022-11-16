@@ -17,7 +17,6 @@
 #include "components/policy/proto/chrome_device_policy.pb.h"
 #include "components/prefs/pref_service.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
-#include "components/user_manager/fake_user_manager.h"
 #include "components/user_manager/scoped_user_manager.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -207,7 +206,7 @@ class CrostiniFeaturesAdbSideloadingTest : public testing::Test {
   void AllowAdbSideloadingByDevicePolicy() {
     scoped_settings_helper_.ReplaceDeviceSettingsProviderWithStub();
     scoped_settings_helper_.SetInteger(
-        chromeos::kDeviceCrostiniArcAdbSideloadingAllowed,
+        ash::kDeviceCrostiniArcAdbSideloadingAllowed,
         enterprise_management::DeviceCrostiniArcAdbSideloadingAllowedProto::
             ALLOW_FOR_AFFILIATED_USERS);
   }
@@ -215,7 +214,7 @@ class CrostiniFeaturesAdbSideloadingTest : public testing::Test {
   void DisallowAdbSideloadingByDevicePolicy() {
     scoped_settings_helper_.ReplaceDeviceSettingsProviderWithStub();
     scoped_settings_helper_.SetInteger(
-        chromeos::kDeviceCrostiniArcAdbSideloadingAllowed,
+        ash::kDeviceCrostiniArcAdbSideloadingAllowed,
         enterprise_management::DeviceCrostiniArcAdbSideloadingAllowedProto::
             DISALLOW);
   }

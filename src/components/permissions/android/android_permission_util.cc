@@ -68,4 +68,14 @@ PermissionRepromptState ShouldRepromptUserForPermissions(
   return PermissionRepromptState::kNoNeed;
 }
 
+bool DoesAppLevelSettingsAllowSiteNotifications() {
+  JNIEnv* env = base::android::AttachCurrentThread();
+  return Java_PermissionUtil_doesAppLevelSettingsAllowSiteNotifications(env);
+}
+
+bool AreAppLevelNotificationsEnabled() {
+  JNIEnv* env = base::android::AttachCurrentThread();
+  return Java_PermissionUtil_areAppLevelNotificationsEnabled(env);
+}
+
 }  // namespace permissions

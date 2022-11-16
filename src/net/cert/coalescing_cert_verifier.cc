@@ -9,6 +9,7 @@
 #include "base/bind.h"
 #include "base/containers/linked_list.h"
 #include "base/containers/unique_ptr_adapters.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/string_number_conversions.h"
@@ -71,21 +72,20 @@ namespace net {
 namespace {
 
 base::Value CertVerifierParams(const CertVerifier::RequestParams& params) {
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetKey("certificates",
-              NetLogX509CertificateList(params.certificate().get()));
+  base::Value::Dict dict;
+  dict.Set("certificates",
+           NetLogX509CertificateList(params.certificate().get()));
   if (!params.ocsp_response().empty()) {
-    dict.SetStringPath("ocsp_response", PEMEncode(params.ocsp_response(),
-                                                  "NETLOG OCSP RESPONSE"));
+    dict.Set("ocsp_response",
+             PEMEncode(params.ocsp_response(), "NETLOG OCSP RESPONSE"));
   }
   if (!params.sct_list().empty()) {
-    dict.SetStringPath("sct_list",
-                       PEMEncode(params.sct_list(), "NETLOG SCT LIST"));
+    dict.Set("sct_list", PEMEncode(params.sct_list(), "NETLOG SCT LIST"));
   }
-  dict.SetPath("host", NetLogStringValue(params.hostname()));
-  dict.SetIntPath("verifier_flags", params.flags());
+  dict.Set("host", NetLogStringValue(params.hostname()));
+  dict.Set("verifier_flags", params.flags());
 
-  return dict;
+  return base::Value(std::move(dict));
 }
 
 }  // namespace
@@ -123,7 +123,7 @@ class CoalescingCertVerifier::Job {
 
   void LogMetrics();
 
-  CoalescingCertVerifier* parent_verifier_;
+  raw_ptr<CoalescingCertVerifier> parent_verifier_;
   const CertVerifier::RequestParams params_;
   const NetLogWithSource net_log_;
   bool is_first_job_ = false;
@@ -173,9 +173,9 @@ class CoalescingCertVerifier::Request
   void OnJobAbort();
 
  private:
-  CoalescingCertVerifier::Job* job_;
+  raw_ptr<CoalescingCertVerifier::Job> job_;
 
-  CertVerifyResult* verify_result_;
+  raw_ptr<CertVerifyResult> verify_result_;
   CompletionOnceCallback callback_;
   const NetLogWithSource net_log_;
 };
@@ -319,12 +319,10 @@ void CoalescingCertVerifier::Job::OnVerifyComplete(int result) {
 void CoalescingCertVerifier::Job::LogMetrics() {
   base::TimeDelta latency = base::TimeTicks::Now() - start_time_;
   UMA_HISTOGRAM_CUSTOM_TIMES("Net.CertVerifier_Job_Latency", latency,
-                             base::TimeDelta::FromMilliseconds(1),
-                             base::TimeDelta::FromMinutes(10), 100);
+                             base::Milliseconds(1), base::Minutes(10), 100);
   if (is_first_job_) {
     UMA_HISTOGRAM_CUSTOM_TIMES("Net.CertVerifier_First_Job_Latency", latency,
-                               base::TimeDelta::FromMilliseconds(1),
-                               base::TimeDelta::FromMinutes(10), 100);
+                               base::Milliseconds(1), base::Minutes(10), 100);
   }
 }
 
@@ -382,10 +380,7 @@ void CoalescingCertVerifier::Request::OnJobAbort() {
 
 CoalescingCertVerifier::CoalescingCertVerifier(
     std::unique_ptr<CertVerifier> verifier)
-    : verifier_(std::move(verifier)),
-      config_id_(0),
-      requests_(0),
-      inflight_joins_(0) {}
+    : verifier_(std::move(verifier)) {}
 
 CoalescingCertVerifier::~CoalescingCertVerifier() = default;
 

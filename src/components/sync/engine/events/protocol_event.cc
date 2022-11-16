@@ -4,19 +4,18 @@
 
 #include "components/sync/engine/events/protocol_event.h"
 
-
 namespace syncer {
 
-ProtocolEvent::ProtocolEvent() {}
+ProtocolEvent::ProtocolEvent() = default;
 
-ProtocolEvent::~ProtocolEvent() {}
+ProtocolEvent::~ProtocolEvent() = default;
 
 std::unique_ptr<base::DictionaryValue> ProtocolEvent::ToValue(
     bool include_specifics) const {
   auto dict = std::make_unique<base::DictionaryValue>();
-  dict->SetDouble("time", GetTimestamp().ToJsTime());
-  dict->SetString("type", GetType());
-  dict->SetString("details", GetDetails());
+  dict->SetDoubleKey("time", GetTimestamp().ToJsTime());
+  dict->SetStringKey("type", GetType());
+  dict->SetStringKey("details", GetDetails());
   dict->SetKey("proto", base::Value::FromUniquePtrValue(
                             GetProtoMessage(include_specifics)));
   return dict;

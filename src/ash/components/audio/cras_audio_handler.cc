@@ -19,10 +19,10 @@
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/logging.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/system/sys_info.h"
 #include "base/system/system_monitor.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "device/bluetooth/floss/floss_features.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
@@ -30,9 +30,6 @@
 namespace ash {
 namespace {
 
-using ::chromeos::AudioNode;
-using ::chromeos::AudioNodeList;
-using ::chromeos::CrasAudioClient;
 using ::std::max;
 using ::std::min;
 
@@ -114,6 +111,9 @@ void CrasAudioHandler::AudioObserver::
 void CrasAudioHandler::AudioObserver::OnOutputStarted() {}
 
 void CrasAudioHandler::AudioObserver::OnOutputStopped() {}
+
+void CrasAudioHandler::AudioObserver::OnSurveyTriggered(
+    const AudioSurveyData& /*survey_specific_data */) {}
 
 // static
 void CrasAudioHandler::Initialize(
@@ -266,20 +266,10 @@ void CrasAudioHandler::MediaSessionInfoChanged(
   if (!session_info)
     return;
 
-  std::string state;
-
-  switch (session_info->state) {
-    case media_session::mojom::MediaSessionInfo::SessionState::kActive:
-    case media_session::mojom::MediaSessionInfo::SessionState::kDucking:
-      state = "playing";
-      break;
-    case media_session::mojom::MediaSessionInfo::SessionState::kSuspended:
-      state = "paused";
-      break;
-    case media_session::mojom::MediaSessionInfo::SessionState::kInactive:
-      state = "stopped";
-      break;
-  }
+  std::string state = session_info->playback_state ==
+                              media_session::mojom::MediaPlaybackState::kPlaying
+                          ? "playing"
+                          : "paused";
 
   CrasAudioClient::Get()->SetPlayerPlaybackStatus(state);
 }
@@ -456,6 +446,23 @@ bool CrasAudioHandler::GetNoiseCancellationState() const {
   return audio_pref_handler_->GetNoiseCancellationState();
 }
 
+void CrasAudioHandler::RefreshNoiseCancellationState() {
+  if (!noise_cancellation_supported()) {
+    return;
+  }
+
+  const AudioDevice* internal_mic =
+      GetDeviceByType(AudioDeviceType::kInternalMic);
+
+  if (!internal_mic) {
+    return;
+  }
+
+  SetNoiseCancellationState(
+      GetNoiseCancellationState() &&
+      (internal_mic->audio_effect & cras::EFFECT_TYPE_NOISE_CANCELLATION));
+}
+
 void CrasAudioHandler::SetNoiseCancellationState(bool state) {
   CrasAudioClient::Get()->SetNoiseCancellationEnabled(state);
 }
@@ -468,19 +475,20 @@ void CrasAudioHandler::RequestNoiseCancellationSupported(
     OnNoiseCancellationSupportedCallback callback) {
   CrasAudioClient::Get()->GetNoiseCancellationSupported(
       base::BindOnce(&CrasAudioHandler::HandleGetNoiseCancellationSupported,
-                     weak_ptr_factory_.GetWeakPtr()));
-
-  std::move(callback).Run();
+                     weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
 }
 
 void CrasAudioHandler::HandleGetNoiseCancellationSupported(
+    OnNoiseCancellationSupportedCallback callback,
     absl::optional<bool> noise_cancellation_supported) {
   if (!noise_cancellation_supported.has_value()) {
     LOG(ERROR)
         << "cras_audio_handler: Failed to retrieve noise cancellation support";
-    return;
+  } else {
+    noise_cancellation_supported_ = noise_cancellation_supported.value();
   }
-  noise_cancellation_supported_ = noise_cancellation_supported.value();
+
+  std::move(callback).Run();
 }
 
 void CrasAudioHandler::SetKeyboardMicActive(bool active) {
@@ -947,6 +955,12 @@ void CrasAudioHandler::NumberOfInputStreamsWithPermissionChanged(
     observer.OnNumberOfInputStreamsWithPermissionChanged();
 }
 
+void CrasAudioHandler::SurveyTriggered(
+    const base::flat_map<std::string, std::string>& survey_specific_data) {
+  for (auto& observer : observers_)
+    observer.OnSurveyTriggered(survey_specific_data);
+}
+
 void CrasAudioHandler::ResendBluetoothBattery() {
   CrasAudioClient::Get()->ResendBluetoothBattery();
 }
@@ -1099,7 +1113,8 @@ void CrasAudioHandler::InitializeAudioAfterCrasServiceAvailable(
   GetSystemAecGroupId();
   GetSystemNsSupported();
   GetSystemAgcSupported();
-  GetNodes();
+  RequestNoiseCancellationSupported(base::BindOnce(
+      &CrasAudioHandler::GetNodes, weak_ptr_factory_.GetWeakPtr()));
   GetNumberOfOutputStreams();
   GetNumberOfInputStreamsWithPermissionInternal();
   CrasAudioClient::Get()->SetFixA2dpPacketSize(base::FeatureList::IsEnabled(
@@ -1116,8 +1131,7 @@ void CrasAudioHandler::InitializeAudioAfterCrasServiceAvailable(
   }
 
   // Sets Floss enabled based on feature flag.
-  CrasAudioClient::Get()->SetFlossEnabled(
-      base::FeatureList::IsEnabled(floss::features::kFlossEnabled));
+  CrasAudioClient::Get()->SetFlossEnabled(floss::features::IsFlossEnabled());
 
   input_muted_by_microphone_mute_switch_ = IsMicrophoneMuteSwitchOn();
   if (input_muted_by_microphone_mute_switch_)
@@ -1576,16 +1590,6 @@ void CrasAudioHandler::SwitchToPreviousActiveDeviceIfAvailable(bool is_input) {
 
 void CrasAudioHandler::UpdateDevicesAndSwitchActive(
     const AudioNodeList& nodes) {
-  size_t old_output_device_size = 0;
-  size_t old_input_device_size = 0;
-  for (const auto& item : audio_devices_) {
-    const AudioDevice& device = item.second;
-    if (device.is_input)
-      ++old_input_device_size;
-    else
-      ++old_output_device_size;
-  }
-
   AudioDevicePriorityQueue hotplug_output_nodes;
   AudioDevicePriorityQueue hotplug_input_nodes;
   bool has_output_removed = false;
@@ -1618,8 +1622,6 @@ void CrasAudioHandler::UpdateDevicesAndSwitchActive(
   while (!output_devices_pq_.empty())
     output_devices_pq_.pop();
 
-  size_t new_output_device_size = 0;
-  size_t new_input_device_size = 0;
   for (size_t i = 0; i < nodes.size(); ++i) {
     AudioDevice device = ConvertAudioNodeWithModifiedPriority(nodes[i]);
     audio_devices_[device.id] = device;
@@ -1633,10 +1635,8 @@ void CrasAudioHandler::UpdateDevicesAndSwitchActive(
 
     if (device.is_input) {
       input_devices_pq_.push(device);
-      ++new_input_device_size;
     } else {
       output_devices_pq_.push(device);
-      ++new_output_device_size;
     }
   }
 
@@ -1707,16 +1707,7 @@ void CrasAudioHandler::HandleGetNodes(absl::optional<AudioNodeList> node_list) {
   UpdateDevicesAndSwitchActive(node_list.value());
 
   // Always set the input noise cancellation state on NodesChange event.
-  if (features::IsInputNoiseCancellationUiEnabled() &&
-      noise_cancellation_supported()) {
-    const AudioDevice* internal_mic =
-        GetDeviceByType(AudioDeviceType::kInternalMic);
-    if (internal_mic) {
-      SetNoiseCancellationState(
-          GetNoiseCancellationState() &&
-          (internal_mic->audio_effect & cras::EFFECT_TYPE_NOISE_CANCELLATION));
-    }
-  }
+  RefreshNoiseCancellationState();
 
   for (auto& observer : observers_)
     observer.OnAudioNodesChanged();
@@ -1822,9 +1813,8 @@ void CrasAudioHandler::StartHDMIRediscoverGracePeriod() {
   hdmi_rediscover_timer_.Stop();
   hdmi_rediscover_timer_.Start(
       FROM_HERE,
-      base::TimeDelta::FromMilliseconds(
-          hdmi_rediscover_grace_period_duration_in_ms_),
-      this, &CrasAudioHandler::UpdateAudioAfterHDMIRediscoverGracePeriod);
+      base::Milliseconds(hdmi_rediscover_grace_period_duration_in_ms_), this,
+      &CrasAudioHandler::UpdateAudioAfterHDMIRediscoverGracePeriod);
 }
 
 void CrasAudioHandler::SetHDMIRediscoverGracePeriodForTesting(

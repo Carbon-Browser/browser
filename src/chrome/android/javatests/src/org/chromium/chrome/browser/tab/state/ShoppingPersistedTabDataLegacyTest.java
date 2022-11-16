@@ -67,8 +67,10 @@ public class ShoppingPersistedTabDataLegacyTest {
                 mOptimizationGuideBridgeJniMock,
                 HintsProto.OptimizationType.SHOPPING_PAGE_PREDICTOR.getNumber(),
                 OptimizationGuideDecision.TRUE, null);
-        TestThreadUtils.runOnUiThreadBlocking(
-                () -> PersistedTabDataConfiguration.setUseTestConfig(true));
+        TestThreadUtils.runOnUiThreadBlocking(() -> {
+            ShoppingPersistedTabData.onDeferredStartup();
+            PersistedTabDataConfiguration.setUseTestConfig(true);
+        });
     }
 
     @SmallTest
@@ -159,7 +161,7 @@ public class ShoppingPersistedTabDataLegacyTest {
         ShoppingPersistedTabDataTestUtils.acquireSemaphore(updateSemaphore);
         return ShoppingPersistedTabDataTestUtils.getTimeLastUpdatedOnUiThread(tab);
     }
-    @UiThreadTest
+
     @SmallTest
     @Test
     @CommandLineFlags.

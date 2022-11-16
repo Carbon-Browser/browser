@@ -6,13 +6,11 @@
 
 #include "ash/style/ash_color_provider.h"
 #include "ash/system/tray/tray_popup_utils.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/color/color_id.h"
 #include "ui/compositor/paint_recorder.h"
 #include "ui/gfx/image/image_skia_operations.h"
 #include "ui/gfx/skbitmap_operations.h"
-#include "ui/views/animation/flood_fill_ink_drop_ripple.h"
-#include "ui/views/animation/ink_drop_highlight.h"
-#include "ui/views/animation/ink_drop_impl.h"
-#include "ui/views/animation/ink_drop_mask.h"
 #include "ui/views/border.h"
 #include "ui/views/controls/focus_ring.h"
 #include "ui/views/controls/highlight_path_generator.h"
@@ -23,13 +21,15 @@ class CustomShapeButtonHighlightPathGenerator
  public:
   CustomShapeButtonHighlightPathGenerator() = default;
 
+  CustomShapeButtonHighlightPathGenerator(
+      const CustomShapeButtonHighlightPathGenerator&) = delete;
+  CustomShapeButtonHighlightPathGenerator& operator=(
+      const CustomShapeButtonHighlightPathGenerator&) = delete;
+
   SkPath GetHighlightPath(const views::View* view) override {
     return static_cast<const ash::CustomShapeButton*>(view)
         ->CreateCustomShapePath(view->GetLocalBounds());
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(CustomShapeButtonHighlightPathGenerator);
 };
 }  // namespace
 
@@ -40,6 +40,7 @@ CustomShapeButton::CustomShapeButton(PressedCallback callback)
   TrayPopupUtils::ConfigureTrayPopupButton(this);
   views::HighlightPathGenerator::Install(
       this, std::make_unique<CustomShapeButtonHighlightPathGenerator>());
+  views::FocusRing::Get(this)->SetColorId(ui::kColorAshFocusRing);
 }
 
 CustomShapeButton::~CustomShapeButton() = default;
@@ -47,18 +48,6 @@ CustomShapeButton::~CustomShapeButton() = default;
 void CustomShapeButton::PaintButtonContents(gfx::Canvas* canvas) {
   PaintCustomShapePath(canvas);
   views::ImageButton::PaintButtonContents(canvas);
-}
-
-const char* CustomShapeButton::GetClassName() const {
-  return "CustomShapeButton";
-}
-
-void CustomShapeButton::OnThemeChanged() {
-  ImageButton::OnThemeChanged();
-  views::FocusRing::Get(this)->SetColor(
-      AshColorProvider::Get()->GetControlsLayerColor(
-          AshColorProvider::ControlsLayerType::kFocusRingColor));
-  SchedulePaint();
 }
 
 void CustomShapeButton::PaintCustomShapePath(gfx::Canvas* canvas) {
@@ -73,5 +62,8 @@ void CustomShapeButton::PaintCustomShapePath(gfx::Canvas* canvas) {
 
   canvas->DrawPath(CreateCustomShapePath(GetLocalBounds()), flags);
 }
+
+BEGIN_METADATA(CustomShapeButton, views::ImageButton)
+END_METADATA
 
 }  // namespace ash

@@ -47,6 +47,10 @@ class TargetHandler : public DevToolsDomainHandler,
                 const std::string& owner_target_id,
                 TargetAutoAttacher* auto_attacher,
                 DevToolsSession* root_session);
+
+  TargetHandler(const TargetHandler&) = delete;
+  TargetHandler& operator=(const TargetHandler&) = delete;
+
   ~TargetHandler() override;
 
   static std::vector<TargetHandler*> ForAgentHost(DevToolsAgentHostImpl* host);
@@ -95,6 +99,7 @@ class TargetHandler : public DevToolsDomainHandler,
       Maybe<bool> in_disposeOnDetach,
       Maybe<String> in_proxyServer,
       Maybe<String> in_proxyBypassList,
+      Maybe<protocol::Array<String>> in_originsToGrantUniversalNetworkAccess,
       std::unique_ptr<CreateBrowserContextCallback> callback) override;
   void DisposeBrowserContext(
       const std::string& context_id,
@@ -117,11 +122,11 @@ class TargetHandler : public DevToolsDomainHandler,
       BrowserContext* browser_context,
       network::mojom::NetworkContextParams* network_context_params);
 
-  // Adds a ServiceWorker throttle for an auto attaching session. If none is
-  // known for this `agent_host`, is a no-op.
-  void AddServiceWorkerThrottle(
-      DevToolsAgentHost* agent_host,
-      scoped_refptr<DevToolsThrottleHandle> throttle_handle);
+  // Adds a ServiceWorker or DedicatedWorker throttle for an auto attaching
+  // session. If none is known for this `agent_host`, is a no-op.
+  // TODO(crbug.com/1143100): support SharedWorker.
+  void AddWorkerThrottle(DevToolsAgentHost* agent_host,
+                         scoped_refptr<DevToolsThrottleHandle> throttle_handle);
 
  private:
   class Session;
@@ -189,8 +194,6 @@ class TargetHandler : public DevToolsDomainHandler,
   base::flat_set<Throttle*> throttles_;
   absl::optional<net::ProxyConfig> pending_proxy_config_;
   base::WeakPtrFactory<TargetHandler> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(TargetHandler);
 };
 
 }  // namespace protocol

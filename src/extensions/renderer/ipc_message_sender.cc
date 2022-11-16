@@ -39,6 +39,11 @@ namespace {
 class MainThreadIPCMessageSender : public IPCMessageSender {
  public:
   MainThreadIPCMessageSender() : render_thread_(content::RenderThread::Get()) {}
+
+  MainThreadIPCMessageSender(const MainThreadIPCMessageSender&) = delete;
+  MainThreadIPCMessageSender& operator=(const MainThreadIPCMessageSender&) =
+      delete;
+
   ~MainThreadIPCMessageSender() override {}
 
   void SendRequestIPC(ScriptContext* context,
@@ -56,21 +61,21 @@ class MainThreadIPCMessageSender : public IPCMessageSender {
 
   void SendOnRequestResponseReceivedIPC(int request_id) override {}
 
+  mojom::EventListenerParamPtr GetEventListenerParam(ScriptContext* context) {
+    return !context->GetExtensionID().empty()
+               ? mojom::EventListenerParam::NewExtensionId(
+                     context->GetExtensionID())
+               : mojom::EventListenerParam::NewListenerUrl(context->url());
+  }
+
   void SendAddUnfilteredEventListenerIPC(
       ScriptContext* context,
       const std::string& event_name) override {
     DCHECK(!context->IsForServiceWorker());
     DCHECK_EQ(kMainThreadId, content::WorkerThread::GetCurrentId());
 
-    if (!context->GetExtensionID().empty()) {
-      GetEventRouter()->AddListenerForMainThread(
-          mojom::EventListenerParam::NewExtensionId(context->GetExtensionID()),
-          event_name);
-    } else {
-      GetEventRouter()->AddListenerForMainThread(
-          mojom::EventListenerParam::NewListenerUrl(context->url()),
-          event_name);
-    }
+    GetEventRouter()->AddListenerForMainThread(GetEventListenerParam(context),
+                                               event_name);
   }
 
   void SendRemoveUnfilteredEventListenerIPC(
@@ -79,15 +84,8 @@ class MainThreadIPCMessageSender : public IPCMessageSender {
     DCHECK(!context->IsForServiceWorker());
     DCHECK_EQ(kMainThreadId, content::WorkerThread::GetCurrentId());
 
-    if (!context->GetExtensionID().empty()) {
-      GetEventRouter()->RemoveListenerForMainThread(
-          mojom::EventListenerParam::NewExtensionId(context->GetExtensionID()),
-          event_name);
-    } else {
-      GetEventRouter()->RemoveListenerForMainThread(
-          mojom::EventListenerParam::NewListenerUrl(context->url()),
-          event_name);
-    }
+    GetEventRouter()->RemoveListenerForMainThread(
+        GetEventListenerParam(context), event_name);
   }
 
   void SendAddUnfilteredLazyEventListenerIPC(
@@ -118,7 +116,7 @@ class MainThreadIPCMessageSender : public IPCMessageSender {
     DCHECK_EQ(kMainThreadId, content::WorkerThread::GetCurrentId());
 
     GetEventRouter()->AddFilteredListenerForMainThread(
-        context->GetExtensionID(), event_name, filter.Clone(), is_lazy);
+        GetEventListenerParam(context), event_name, filter.Clone(), is_lazy);
   }
 
   void SendRemoveFilteredEventListenerIPC(ScriptContext* context,
@@ -129,7 +127,7 @@ class MainThreadIPCMessageSender : public IPCMessageSender {
     DCHECK_EQ(kMainThreadId, content::WorkerThread::GetCurrentId());
 
     GetEventRouter()->RemoveFilteredListenerForMainThread(
-        context->GetExtensionID(), event_name, filter.Clone(),
+        GetEventListenerParam(context), event_name, filter.Clone(),
         remove_lazy_listener);
   }
 
@@ -171,6 +169,8 @@ class MainThreadIPCMessageSender : public IPCMessageSender {
         ExtensionMsg_TabTargetConnectionInfo info;
         info.tab_id = *target.tab_id;
         info.frame_id = *target.frame_id;
+        if (target.document_id)
+          info.document_id = *target.document_id;
         render_frame->Send(new ExtensionHostMsg_OpenChannelToTab(
             frame_context, info, extension->id(), channel_name, port_id));
         break;
@@ -199,6 +199,12 @@ class MainThreadIPCMessageSender : public IPCMessageSender {
     render_thread_->Send(new ExtensionHostMsg_PostMessage(port_id, message));
   }
 
+  void SendMessageResponsePending(int routing_id,
+                                  const PortId& port_id) override {
+    render_thread_->Send(new ExtensionHostMsg_ResponsePending(
+        PortContext::ForFrame(routing_id), port_id));
+  }
+
   void SendActivityLogIPC(
       const ExtensionId& extension_id,
       ActivityLogCallType call_type,
@@ -218,13 +224,12 @@ class MainThreadIPCMessageSender : public IPCMessageSender {
  private:
   void OnResponse(int request_id,
                   bool success,
-                  base::Value response,
+                  base::Value::List response,
                   const std::string& error) {
     ExtensionsRendererClient::Get()
         ->GetDispatcher()
         ->bindings_system()
-        ->HandleResponse(request_id, success,
-                         base::Value::AsListValue(response), error);
+        ->HandleResponse(request_id, success, std::move(response), error);
   }
 
   mojom::EventRouter* GetEventRouter() {
@@ -239,8 +244,6 @@ class MainThreadIPCMessageSender : public IPCMessageSender {
   mojo::AssociatedRemote<mojom::EventRouter> event_router_remote_;
 
   base::WeakPtrFactory<MainThreadIPCMessageSender> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(MainThreadIPCMessageSender);
 };
 
 class WorkerThreadIPCMessageSender : public IPCMessageSender {
@@ -249,6 +252,11 @@ class WorkerThreadIPCMessageSender : public IPCMessageSender {
                                int64_t service_worker_version_id)
       : dispatcher_(dispatcher),
         service_worker_version_id_(service_worker_version_id) {}
+
+  WorkerThreadIPCMessageSender(const WorkerThreadIPCMessageSender&) = delete;
+  WorkerThreadIPCMessageSender& operator=(const WorkerThreadIPCMessageSender&) =
+      delete;
+
   ~WorkerThreadIPCMessageSender() override {}
 
   void SendRequestIPC(ScriptContext* context,
@@ -419,6 +427,13 @@ class WorkerThreadIPCMessageSender : public IPCMessageSender {
     dispatcher_->Send(new ExtensionHostMsg_PostMessage(port_id, message));
   }
 
+  void SendMessageResponsePending(int routing_id,
+                                  const PortId& port_id) override {
+    DCHECK_EQ(MSG_ROUTING_NONE, routing_id);
+    dispatcher_->Send(new ExtensionHostMsg_ResponsePending(
+        PortContextForCurrentWorker(), port_id));
+  }
+
   void SendActivityLogIPC(
       const ExtensionId& extension_id,
       ActivityLogCallType call_type,
@@ -453,8 +468,6 @@ class WorkerThreadIPCMessageSender : public IPCMessageSender {
 
   // request id -> GUID map for each outstanding requests.
   std::map<int, std::string> request_id_to_guid_;
-
-  DISALLOW_COPY_AND_ASSIGN(WorkerThreadIPCMessageSender);
 };
 
 }  // namespace

@@ -10,17 +10,11 @@ set -o pipefail
 PREFIX="$1"
 DEPS_PREFIX="$2"
 
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null && pwd )"
-
-curl -O https://downloads.apache.org/maven/maven-3/3.8.1/binaries/apache-maven-3.8.1-bin.tar.gz
-tar xzf apache-maven-3.8.1-bin.tar.gz
-mv apache-maven-3.8.1 $SCRIPT_DIR/
-
 # Verify mvn works
-JAVA_HOME=$DEPS_PREFIX/current PATH=$SCRIPT_DIR/apache-maven-3.8.1/bin:$PATH mvn -v
+JAVA_HOME=$DEPS_PREFIX/current mvn -v
 
 # Build
-JAVA_HOME=$DEPS_PREFIX/current PATH=$SCRIPT_DIR/apache-maven-3.8.1/bin:$PATH mvn package -DskipTests=true -q -f pom.xml
+JAVA_HOME=$DEPS_PREFIX/current mvn package -DskipTests=true -q -f pom.xml
 cp target/turbine-HEAD-SNAPSHOT-all-deps.jar turbine.jar
 
 mkdir -p $PREFIX/

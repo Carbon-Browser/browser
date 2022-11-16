@@ -8,14 +8,14 @@
 #ifndef NET_QUIC_QUIC_CHROMIUM_CONNECTION_HELPER_H_
 #define NET_QUIC_QUIC_CHROMIUM_CONNECTION_HELPER_H_
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "net/base/ip_endpoint.h"
 #include "net/base/net_export.h"
 #include "net/socket/datagram_client_socket.h"
-#include "net/third_party/quiche/src/quic/core/quic_connection.h"
-#include "net/third_party/quiche/src/quic/core/quic_packets.h"
-#include "net/third_party/quiche/src/quic/core/quic_simple_buffer_allocator.h"
-#include "net/third_party/quiche/src/quic/core/quic_time.h"
+#include "net/third_party/quiche/src/quiche/common/simple_buffer_allocator.h"
+#include "net/third_party/quiche/src/quiche/quic/core/quic_connection.h"
+#include "net/third_party/quiche/src/quiche/quic/core/quic_packets.h"
+#include "net/third_party/quiche/src/quiche/quic/core/quic_time.h"
 
 namespace quic {
 class QuicClock;
@@ -29,18 +29,21 @@ class NET_EXPORT_PRIVATE QuicChromiumConnectionHelper
  public:
   QuicChromiumConnectionHelper(const quic::QuicClock* clock,
                                quic::QuicRandom* random_generator);
+
+  QuicChromiumConnectionHelper(const QuicChromiumConnectionHelper&) = delete;
+  QuicChromiumConnectionHelper& operator=(const QuicChromiumConnectionHelper&) =
+      delete;
+
   ~QuicChromiumConnectionHelper() override;
 
   // quic::QuicConnectionHelperInterface
   const quic::QuicClock* GetClock() const override;
   quic::QuicRandom* GetRandomGenerator() override;
-  quic::QuicBufferAllocator* GetStreamSendBufferAllocator() override;
+  quiche::QuicheBufferAllocator* GetStreamSendBufferAllocator() override;
 
  private:
-  const quic::QuicClock* clock_;
-  quic::QuicRandom* random_generator_;
-
-  DISALLOW_COPY_AND_ASSIGN(QuicChromiumConnectionHelper);
+  raw_ptr<const quic::QuicClock> clock_;
+  raw_ptr<quic::QuicRandom> random_generator_;
 };
 
 }  // namespace net

@@ -4,6 +4,7 @@
 
 #import "ui/base/clipboard/clipboard_util_mac.h"
 
+#include "base/mac/mac_util.h"
 #include "base/mac/scoped_nsobject.h"
 #include "base/memory/ref_counted.h"
 #include "build/build_config.h"
@@ -17,7 +18,7 @@ namespace {
 
 class ClipboardUtilMacTest : public PlatformTest {
  public:
-  ClipboardUtilMacTest() { }
+  ClipboardUtilMacTest() = default;
 
   // Given a pasteboard, returns a dictionary of the contents of the pasteboard
   // for use in deep comparisons. This fully unpacks any plist-encoded items.

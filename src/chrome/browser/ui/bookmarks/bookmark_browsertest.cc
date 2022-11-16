@@ -3,11 +3,12 @@
 // found in the LICENSE file.
 
 #include "base/bind.h"
-#include "base/macros.h"
 #include "base/run_loop.h"
+#include "base/scoped_observation.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/timer/timer.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -20,10 +21,12 @@
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/bookmarks/bookmark_drag_drop.h"
 #include "chrome/browser/ui/bookmarks/bookmark_tab_helper.h"
+#include "chrome/browser/ui/bookmarks/bookmark_utils_desktop.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
+#include "chrome/common/webui_url_constants.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/bookmarks/browser/bookmark_model.h"
@@ -41,6 +44,7 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "ui/base/dragdrop/mojom/drag_drop_types.mojom-shared.h"
 #include "ui/base/dragdrop/os_exchange_data.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/gfx/image/image_skia.h"
 
 using bookmarks::BookmarkModel;
@@ -63,7 +67,15 @@ bool IsShowingInterstitial(content::WebContents* tab) {
 
 class TestBookmarkTabHelperObserver : public BookmarkTabHelperObserver {
  public:
-  TestBookmarkTabHelperObserver() : starred_(false) {}
+  explicit TestBookmarkTabHelperObserver(BookmarkTabHelper* helper)
+      : starred_(false) {
+    observation_.Observe(helper);
+  }
+
+  TestBookmarkTabHelperObserver(const TestBookmarkTabHelperObserver&) = delete;
+  TestBookmarkTabHelperObserver& operator=(
+      const TestBookmarkTabHelperObserver&) = delete;
+
   ~TestBookmarkTabHelperObserver() override {}
 
   void URLStarredChanged(content::WebContents*, bool starred) override {
@@ -72,14 +84,24 @@ class TestBookmarkTabHelperObserver : public BookmarkTabHelperObserver {
   bool is_starred() const { return starred_; }
 
  private:
-  bool starred_;
+  base::ScopedObservation<BookmarkTabHelper, BookmarkTabHelperObserver>
+      observation_{this};
 
-  DISALLOW_COPY_AND_ASSIGN(TestBookmarkTabHelperObserver);
+  bool starred_;
 };
 
 class BookmarkBrowsertest : public InProcessBrowserTest {
  public:
-  BookmarkBrowsertest() {}
+  BookmarkBrowsertest() {
+    // This needs to be disabled so that animations are guaranteed to work.
+#if BUILDFLAG(IS_WIN)
+    feature_list_.InitWithFeatures(
+        {}, {features::kApplyNativeOcclusionToCompositor});
+#endif
+  }
+
+  BookmarkBrowsertest(const BookmarkBrowsertest&) = delete;
+  BookmarkBrowsertest& operator=(const BookmarkBrowsertest&) = delete;
 
   bool IsVisible() {
     return browser()->bookmark_bar_state() == BookmarkBar::SHOW;
@@ -95,7 +117,7 @@ class BookmarkBrowsertest : public InProcessBrowserTest {
     {
       base::RunLoop loop;
       base::RepeatingTimer timer;
-      timer.Start(FROM_HERE, base::TimeDelta::FromMilliseconds(15),
+      timer.Start(FROM_HERE, base::Milliseconds(15),
                   base::BindRepeating(&CheckAnimation, browser(), &loop));
       loop.Run();
     }
@@ -112,11 +134,13 @@ class BookmarkBrowsertest : public InProcessBrowserTest {
   base::HistogramTester* histogram_tester() { return &histogram_tester_; }
 
  private:
+#if BUILDFLAG(IS_WIN)
+  base::test::ScopedFeatureList feature_list_;
+#endif
+
   // We make the histogram tester a member field to make sure it starts
   // recording as early as possible.
   base::HistogramTester histogram_tester_;
-
-  DISALLOW_COPY_AND_ASSIGN(BookmarkBrowsertest);
 };
 
 // Test of bookmark bar toggling, visibility, and animation.
@@ -140,7 +164,7 @@ IN_PROC_BROWSER_TEST_F(BookmarkBrowsertest, PRE_Persist) {
                                 kPersistBookmarkTitle);
 }
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 // TODO(crbug.com/935607): The test fails on Windows.
 #define MAYBE_Persist DISABLED_Persist
 #else
@@ -218,6 +242,47 @@ IN_PROC_BROWSER_TEST_F(BookmarkBrowsertest, IncognitoPersistence) {
   ASSERT_EQ(1u, urls.size());
 }
 
+// Regression for crash caused by opening folder as a group in an incognito
+// window when the folder contains URLs that cannot be displayed in incognito.
+// See discussion starting at crbug.com/1242351#c15
+IN_PROC_BROWSER_TEST_F(
+    BookmarkBrowsertest,
+    OpenFolderAsGroupInIncognitoWhenBookmarksCantOpenInIncognito) {
+  BookmarkModel* bookmark_model = WaitForBookmarkModel(browser()->profile());
+  const BookmarkNode* const folder = bookmark_model->AddFolder(
+      bookmark_model->bookmark_bar_node(), 0, u"Folder");
+  const BookmarkNode* const page1 = bookmark_model->AddURL(
+      folder, 0, u"BookmarkManager", GURL(chrome::kChromeUIBookmarksURL));
+  const BookmarkNode* const page2 = bookmark_model->AddURL(
+      folder, 1, u"Settings", GURL(chrome::kChromeUISettingsURL));
+
+  Browser* incognito_browser = CreateIncognitoBrowser();
+  BookmarkModel* incognito_model =
+      WaitForBookmarkModel(incognito_browser->profile());
+  ASSERT_FALSE(incognito_model->root_node()->children().empty());
+  ASSERT_TRUE(incognito_model->root_node()->children()[0]->is_folder());
+  BookmarkNode* const incognito_folder =
+      incognito_model->bookmark_bar_node()->children()[0].get();
+  ASSERT_EQ(2U, incognito_folder->children().size());
+  EXPECT_EQ(page1->url(), incognito_folder->children()[0]->url());
+  EXPECT_EQ(page2->url(), incognito_folder->children()[1]->url());
+
+  const int browser_tabs = browser()->tab_strip_model()->GetTabCount();
+  const int incognito_tabs =
+      incognito_browser->tab_strip_model()->GetTabCount();
+
+  chrome::OpenAllIfAllowed(
+      incognito_browser, base::BindLambdaForTesting([=]() {
+        return static_cast<content::PageNavigator*>(incognito_browser);
+      }),
+      {incognito_folder}, WindowOpenDisposition::NEW_BACKGROUND_TAB,
+      /* add_to_group =*/true);
+
+  EXPECT_EQ(incognito_tabs,
+            incognito_browser->tab_strip_model()->GetTabCount());
+  EXPECT_EQ(browser_tabs + 2, browser()->tab_strip_model()->GetTabCount());
+}
+
 IN_PROC_BROWSER_TEST_F(BookmarkBrowsertest,
                        HideStarOnNonbookmarkedInterstitial) {
   // Start an HTTPS server with a certificate error.
@@ -231,12 +296,11 @@ IN_PROC_BROWSER_TEST_F(BookmarkBrowsertest,
   GURL bookmark_url = embedded_test_server()->GetURL("example.test", "/");
   bookmarks::AddIfNotBookmarked(bookmark_model, bookmark_url, u"Bookmark");
 
-  TestBookmarkTabHelperObserver bookmark_observer;
   content::WebContents* web_contents =
       browser()->tab_strip_model()->GetActiveWebContents();
   BookmarkTabHelper* tab_helper =
       BookmarkTabHelper::FromWebContents(web_contents);
-  tab_helper->AddObserver(&bookmark_observer);
+  TestBookmarkTabHelperObserver bookmark_observer(tab_helper);
 
   // Go to a bookmarked url. Bookmark star should show.
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), bookmark_url));
@@ -249,8 +313,6 @@ IN_PROC_BROWSER_TEST_F(BookmarkBrowsertest,
   web_contents = browser()->tab_strip_model()->GetActiveWebContents();
   EXPECT_TRUE(IsShowingInterstitial(web_contents));
   EXPECT_FALSE(bookmark_observer.is_starred());
-
-  tab_helper->RemoveObserver(&bookmark_observer);
 }
 
 // Provides coverage for the Bookmark Manager bookmark drag and drag image
@@ -276,7 +338,7 @@ IN_PROC_BROWSER_TEST_F(BookmarkBrowsertest, DragSingleBookmark) {
             ui::FilenameToURLPolicy::DO_NOT_CONVERT_FILENAMES, &url, &title));
         EXPECT_EQ(page_url, url);
         EXPECT_EQ(page_title, title);
-#if !defined(OS_WIN)
+#if !BUILDFLAG(IS_WIN)
         // On Windows, GetDragImage() is a NOTREACHED() as the Windows
         // implementation of OSExchangeData just sets the drag image on the OS
         // API.
@@ -318,7 +380,7 @@ IN_PROC_BROWSER_TEST_F(BookmarkBrowsertest, DragMultipleBookmarks) {
                                   gfx::NativeView native_view,
                                   ui::mojom::DragEventSource source,
                                   gfx::Point point, int operation) {
-#if !defined(OS_MAC)
+#if !BUILDFLAG(IS_MAC)
         GURL url;
         std::u16string title;
         // On Mac 10.11 and 10.12, this returns true, even though we set no url.
@@ -326,7 +388,7 @@ IN_PROC_BROWSER_TEST_F(BookmarkBrowsertest, DragMultipleBookmarks) {
         EXPECT_FALSE(drag_data->provider().GetURLAndTitle(
             ui::FilenameToURLPolicy::DO_NOT_CONVERT_FILENAMES, &url, &title));
 #endif
-#if !defined(OS_WIN)
+#if !BUILDFLAG(IS_WIN)
         // On Windows, GetDragImage() is a NOTREACHED() as the Windows
         // implementation of OSExchangeData just sets the drag image on the OS
         // API.
@@ -418,9 +480,100 @@ IN_PROC_BROWSER_TEST_F(BookmarkBrowsertest, EmitUmaForDuplicates) {
   EXPECT_THAT(histogram_tester()->GetAllSamples(
                   "Bookmarks.Count.OnProfileLoad.UniqueUrlAndTitleAndParent"),
               testing::ElementsAre(base::Bucket(/*min=*/6, /*count=*/1)));
+  EXPECT_THAT(histogram_tester()->GetAllSamples(
+                  "Bookmarks.Times.OnProfileLoad.TimeSinceAdded"),
+              testing::ElementsAre(base::Bucket(/*min=*/0, /*count=*/1)));
 }
 
 #endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
+
+// Test that the bookmark star state updates in response to same document
+// navigations that change the URL
+IN_PROC_BROWSER_TEST_F(BookmarkBrowsertest, SameDocumentNavigation) {
+  ASSERT_TRUE(embedded_test_server()->Start());
+
+  BookmarkModel* bookmark_model = WaitForBookmarkModel(browser()->profile());
+  GURL bookmark_url = embedded_test_server()->GetURL("/title1.html");
+  bookmarks::AddIfNotBookmarked(bookmark_model, bookmark_url, u"Bookmark");
+
+  content::WebContents* web_contents =
+      browser()->tab_strip_model()->GetActiveWebContents();
+  BookmarkTabHelper* tab_helper =
+      BookmarkTabHelper::FromWebContents(web_contents);
+  TestBookmarkTabHelperObserver bookmark_observer(tab_helper);
+
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), bookmark_url));
+  EXPECT_TRUE(bookmark_observer.is_starred());
+
+  GURL same_document_url = embedded_test_server()->GetURL("/title1.html#test");
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), same_document_url));
+  EXPECT_FALSE(bookmark_observer.is_starred());
+}
+
+IN_PROC_BROWSER_TEST_F(BookmarkBrowsertest,
+                       DifferentDocumentNavigationWithoutFinishing) {
+  ASSERT_TRUE(embedded_test_server()->Start());
+
+  BookmarkModel* bookmark_model = WaitForBookmarkModel(browser()->profile());
+  GURL bookmark_url = embedded_test_server()->GetURL("/title1.html");
+  bookmarks::AddIfNotBookmarked(bookmark_model, bookmark_url, u"Bookmark");
+
+  content::WebContents* web_contents =
+      browser()->tab_strip_model()->GetActiveWebContents();
+  BookmarkTabHelper* tab_helper =
+      BookmarkTabHelper::FromWebContents(web_contents);
+  TestBookmarkTabHelperObserver bookmark_observer(tab_helper);
+
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), bookmark_url));
+  EXPECT_TRUE(bookmark_observer.is_starred());
+
+  // Navigate to the second page and check that the bookmark is not starred even
+  // when the navigation is not finished.
+  GURL different_document_url = embedded_test_server()->GetURL("/title2.html");
+  content::TestNavigationManager manager(web_contents, different_document_url);
+  web_contents->GetController().LoadURL(
+      different_document_url, content::Referrer(), ui::PAGE_TRANSITION_TYPED,
+      std::string());
+  EXPECT_TRUE(manager.WaitForRequestStart());
+  EXPECT_FALSE(manager.was_committed());
+  EXPECT_EQ(web_contents->GetVisibleURL(), different_document_url);
+  EXPECT_EQ(web_contents->GetLastCommittedURL(), bookmark_url);
+  EXPECT_FALSE(bookmark_observer.is_starred());
+}
+
+IN_PROC_BROWSER_TEST_F(BookmarkBrowsertest, NonCommitURLNavigation) {
+  ASSERT_TRUE(embedded_test_server()->Start());
+
+  BookmarkModel* bookmark_model = WaitForBookmarkModel(browser()->profile());
+  GURL bookmark_url = embedded_test_server()->GetURL("/title1.html");
+  bookmarks::AddIfNotBookmarked(bookmark_model, bookmark_url, u"Bookmark");
+
+  content::WebContents* web_contents =
+      browser()->tab_strip_model()->GetActiveWebContents();
+  BookmarkTabHelper* tab_helper =
+      BookmarkTabHelper::FromWebContents(web_contents);
+  TestBookmarkTabHelperObserver bookmark_observer(tab_helper);
+
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), bookmark_url));
+  EXPECT_TRUE(bookmark_observer.is_starred());
+
+  const GURL non_commit_url = embedded_test_server()->GetURL("/page204.html");
+  content::TestNavigationManager manager(web_contents, non_commit_url);
+  web_contents->GetController().LoadURL(non_commit_url, content::Referrer(),
+                                        ui::PAGE_TRANSITION_TYPED,
+                                        std::string());
+  EXPECT_TRUE(manager.WaitForRequestStart());
+  EXPECT_FALSE(manager.was_committed());
+  EXPECT_EQ(web_contents->GetVisibleURL(), non_commit_url);
+  EXPECT_EQ(web_contents->GetLastCommittedURL(), bookmark_url);
+  EXPECT_FALSE(bookmark_observer.is_starred());
+
+  // Since the navigation did not commit, the last committed URL becomes the
+  // visible URL again, so the starred state should be restored.
+  manager.WaitForNavigationFinished();
+  EXPECT_FALSE(manager.was_committed());
+  EXPECT_TRUE(bookmark_observer.is_starred());
+}
 
 class BookmarkPrerenderBrowsertest : public BookmarkBrowsertest {
  public:
@@ -466,10 +619,9 @@ IN_PROC_BROWSER_TEST_F(BookmarkPrerenderBrowsertest,
   GURL bookmark_url = embedded_test_server()->GetURL("/title1.html");
   bookmarks::AddIfNotBookmarked(bookmark_model, bookmark_url, u"Bookmark");
 
-  TestBookmarkTabHelperObserver bookmark_observer;
   BookmarkTabHelper* tab_helper =
       BookmarkTabHelper::FromWebContents(GetWebContents());
-  tab_helper->AddObserver(&bookmark_observer);
+  TestBookmarkTabHelperObserver bookmark_observer(tab_helper);
 
   // Load a prerender page and prerendering should not notify to
   // URLStarredChanged listener.
@@ -483,6 +635,4 @@ IN_PROC_BROWSER_TEST_F(BookmarkPrerenderBrowsertest,
   prerender_test_helper().NavigatePrimaryPage(bookmark_url);
   EXPECT_TRUE(host_observer.was_activated());
   EXPECT_TRUE(bookmark_observer.is_starred());
-
-  tab_helper->RemoveObserver(&bookmark_observer);
 }

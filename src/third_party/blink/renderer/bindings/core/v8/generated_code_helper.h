@@ -11,12 +11,10 @@
 
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/bindings/core/v8/idl_types.h"
-#include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/dom/events/event_target.h"
 #include "third_party/blink/renderer/platform/bindings/exception_messages.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
-#include "third_party/blink/renderer/platform/bindings/v8_binding.h"
 #include "v8/include/v8.h"
 
 namespace blink {
@@ -33,7 +31,7 @@ class ScriptState;
 //
 // Promise-returning DOM operations are required to always return a promise
 // and to never throw an exception.
-// See also http://heycam.github.io/webidl/#es-operations
+// See also https://webidl.spec.whatwg.org/#es-operations
 class CORE_EXPORT ExceptionToRejectPromiseScope final {
   STACK_ALLOCATED();
 
@@ -45,15 +43,12 @@ class CORE_EXPORT ExceptionToRejectPromiseScope final {
     if (LIKELY(!exception_state_.HadException()))
       return;
 
-    // As exceptions must always be created in the current realm, reject
-    // promises must also be created in the current realm while regular promises
-    // are created in the relevant realm of the context object.
-    ScriptState* script_state = ScriptState::ForCurrentRealm(info_);
-    V8SetReturnValue(
-        info_, ScriptPromise::Reject(script_state, exception_state_).V8Value());
+    ConvertExceptionToRejectPromise();
   }
 
  private:
+  void ConvertExceptionToRejectPromise();
+
   const v8::FunctionCallbackInfo<v8::Value>& info_;
   ExceptionState& exception_state_;
 };
@@ -65,20 +60,6 @@ CORE_EXPORT bool IsCallbackFunctionRunnable(
 CORE_EXPORT bool IsCallbackFunctionRunnableIgnoringPause(
     const ScriptState* callback_relevant_script_state,
     const ScriptState* incumbent_script_state);
-
-using InstallTemplateFunction =
-    void (*)(v8::Isolate* isolate,
-             const DOMWrapperWorld& world,
-             v8::Local<v8::FunctionTemplate> interface_template);
-
-using InstallRuntimeEnabledFeaturesFunction =
-    void (*)(v8::Isolate*,
-             const DOMWrapperWorld&,
-             v8::Local<v8::Object> instance_object,
-             v8::Local<v8::Object> prototype_object,
-             v8::Local<v8::Function> interface_object);
-
-using InstallRuntimeEnabledFeaturesOnTemplateFunction = InstallTemplateFunction;
 
 namespace bindings {
 
@@ -98,6 +79,12 @@ CORE_EXPORT void SetupIDLNamespaceTemplate(
 CORE_EXPORT void SetupIDLCallbackInterfaceTemplate(
     v8::Isolate* isolate,
     const WrapperTypeInfo* wrapper_type_info,
+    v8::Local<v8::FunctionTemplate> interface_template);
+
+CORE_EXPORT void SetupIDLObservableArrayBackingListTemplate(
+    v8::Isolate* isolate,
+    const WrapperTypeInfo* wrapper_type_info,
+    v8::Local<v8::ObjectTemplate> instance_template,
     v8::Local<v8::FunctionTemplate> interface_template);
 
 // Returns the length of arguments ignoring the undefined values at the end.
@@ -209,10 +196,7 @@ bool GetDictionaryMemberFromV8Object(v8::Isolate* isolate,
 
   if (v8_value->IsUndefined()) {
     if (is_required) {
-      exception_state.ThrowTypeError(ExceptionMessages::FailedToGet(
-          exception_state.GetInnerMostContext().GetPropertyName(),
-          exception_state.GetInnerMostContext().GetClassName(),
-          "Required member is undefined."));
+      exception_state.ThrowTypeError("Required member is undefined.");
       return false;
     }
     return true;

@@ -9,7 +9,6 @@
 #include "ash/constants/ash_pref_names.h"
 #include "ash/wm/window_state.h"
 #include "base/bind.h"
-#include "base/macros.h"
 #include "base/run_loop.h"
 #include "chrome/browser/ash/login/lock/screen_locker.h"
 #include "chrome/browser/ash/login/lock/screen_locker_tester.h"
@@ -22,8 +21,8 @@
 #include "chrome/browser/ui/exclusive_access/exclusive_access_test.h"
 #include "chrome/browser/ui/exclusive_access/fullscreen_controller.h"
 #include "chrome/test/base/in_process_browser_test.h"
-#include "chromeos/dbus/biod/fake_biod_client.h"
-#include "chromeos/dbus/session_manager/fake_session_manager_client.h"
+#include "chromeos/ash/components/dbus/biod/fake_biod_client.h"
+#include "chromeos/ash/components/dbus/session_manager/fake_session_manager_client.h"
 #include "components/prefs/pref_service.h"
 #include "components/session_manager/core/session_manager.h"
 #include "components/user_manager/user_names.h"
@@ -40,6 +39,10 @@ constexpr char kFingerprint[] = "pinky";
 class ScreenLockerTest : public InProcessBrowserTest {
  public:
   ScreenLockerTest() = default;
+
+  ScreenLockerTest(const ScreenLockerTest&) = delete;
+  ScreenLockerTest& operator=(const ScreenLockerTest&) = delete;
+
   ~ScreenLockerTest() override = default;
 
   FakeSessionManagerClient* session_manager_client() {
@@ -53,10 +56,10 @@ class ScreenLockerTest : public InProcessBrowserTest {
             ui::ScopedAnimationDurationScaleMode::ZERO_DURATION);
   }
 
-  void TearDown() override { quick_unlock::EnabledForTesting(false); }
-
   void EnrollFingerprint() {
-    quick_unlock::EnabledForTesting(true);
+    test_api_ = std::make_unique<quick_unlock::TestApi>(
+        /*override_quick_unlock=*/true);
+    test_api_->EnableFingerprintByPolicy(quick_unlock::Purpose::kUnlock);
 
     FakeBiodClient::Get()->StartEnrollSession(
         "test-user", std::string(),
@@ -74,8 +77,9 @@ class ScreenLockerTest : public InProcessBrowserTest {
   }
 
   void AuthenticateWithFingerprint() {
-    FakeBiodClient::Get()->SendAuthScanDone(kFingerprint,
-                                            biod::SCAN_RESULT_SUCCESS);
+    biod::FingerprintMessage msg;
+    msg.set_scan_result(biod::SCAN_RESULT_SUCCESS);
+    FakeBiodClient::Get()->SendAuthScanDone(kFingerprint, msg);
     base::RunLoop().RunUntilIdle();
   }
 
@@ -83,8 +87,7 @@ class ScreenLockerTest : public InProcessBrowserTest {
   void OnStartSession(const dbus::ObjectPath& path) {}
 
   std::unique_ptr<ui::ScopedAnimationDurationScaleMode> zero_duration_mode_;
-
-  DISALLOW_COPY_AND_ASSIGN(ScreenLockerTest);
+  std::unique_ptr<quick_unlock::TestApi> test_api_;
 };
 
 IN_PROC_BROWSER_TEST_F(ScreenLockerTest, TestBadThenGoodPassword) {
@@ -154,7 +157,7 @@ IN_PROC_BROWSER_TEST_F(ScreenLockerTest, TestFullscreenExit) {
     browser()
         ->exclusive_access_manager()
         ->fullscreen_controller()
-        ->EnterFullscreenModeForTab(web_contents->GetMainFrame());
+        ->EnterFullscreenModeForTab(web_contents->GetPrimaryMainFrame());
     fullscreen_waiter.Wait();
     EXPECT_TRUE(browser_window->IsFullscreen());
     EXPECT_TRUE(window_state->GetHideShelfWhenFullscreen());
@@ -206,8 +209,7 @@ IN_PROC_BROWSER_TEST_F(ScreenLockerTest, PasswordAuthWhenAuthDisabled) {
   ScreenLocker::default_screen_locker()->TemporarilyDisableAuthForUser(
       user_manager::StubAccountId(),
       AuthDisabledData(AuthDisabledReason::kTimeWindowLimit,
-                       base::Time::Now() + base::TimeDelta::FromHours(1),
-                       base::TimeDelta::FromHours(1),
+                       base::Time::Now() + base::Hours(1), base::Hours(1),
                        true /*disable_lock_screen_media*/));
 
   // Try to authenticate with password.
@@ -244,8 +246,7 @@ IN_PROC_BROWSER_TEST_F(ScreenLockerTest, FingerprintAuthWhenAuthDisabled) {
   ScreenLocker::default_screen_locker()->TemporarilyDisableAuthForUser(
       user_manager::StubAccountId(),
       AuthDisabledData(AuthDisabledReason::kTimeUsageLimit,
-                       base::Time::Now() + base::TimeDelta::FromHours(1),
-                       base::TimeDelta::FromHours(3),
+                       base::Time::Now() + base::Hours(1), base::Hours(3),
                        true /*disable_lock_screen_media*/));
 
   // Try to authenticate with fingerprint.

@@ -10,7 +10,6 @@
 #include <memory>
 #include <string>
 
-#include "base/macros.h"
 #include "components/infobars/core/confirm_infobar_delegate.h"
 #include "url/gurl.h"
 
@@ -27,6 +26,12 @@ class IOSSendTabToSelfInfoBarDelegate : public ConfirmInfoBarDelegate {
 
   explicit IOSSendTabToSelfInfoBarDelegate(const SendTabToSelfEntry* entry,
                                            SendTabToSelfModel* model);
+
+  IOSSendTabToSelfInfoBarDelegate(const IOSSendTabToSelfInfoBarDelegate&) =
+      delete;
+  IOSSendTabToSelfInfoBarDelegate& operator=(
+      const IOSSendTabToSelfInfoBarDelegate&) = delete;
+
   ~IOSSendTabToSelfInfoBarDelegate() override;
 
  private:
@@ -54,8 +59,6 @@ class IOSSendTabToSelfInfoBarDelegate : public ConfirmInfoBarDelegate {
   __strong id<NSObject> registration_ = nil;
 
   base::WeakPtrFactory<IOSSendTabToSelfInfoBarDelegate> weak_ptr_factory_;
-
-  DISALLOW_COPY_AND_ASSIGN(IOSSendTabToSelfInfoBarDelegate);
 };
 
 }  // namespace send_tab_to_self

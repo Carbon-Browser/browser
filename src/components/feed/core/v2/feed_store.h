@@ -12,7 +12,7 @@
 #include "base/callback_forward.h"
 #include "base/containers/flat_set.h"
 #include "base/memory/weak_ptr.h"
-#include "base/sequenced_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/feed/core/proto/v2/store.pb.h"
 #include "components/feed/core/v2/public/feed_api.h"
 #include "components/feed/core/v2/types.h"
@@ -52,8 +52,14 @@ class FeedStore {
     std::vector<feedstore::StreamData> stream_data;
   };
   struct WebFeedStartupData {
+    WebFeedStartupData();
+    WebFeedStartupData(WebFeedStartupData&&);
+    ~WebFeedStartupData();
+    WebFeedStartupData& operator=(WebFeedStartupData&&);
+
     feedstore::SubscribedWebFeeds subscribed_web_feeds;
     feedstore::RecommendedWebFeedIndex recommended_feed_index;
+    std::vector<feedstore::PendingWebFeedOperation> pending_operations;
   };
 
   explicit FeedStore(
@@ -136,6 +142,12 @@ class FeedStore {
       const std::string& web_feed_id,
       base::OnceCallback<void(std::unique_ptr<feedstore::WebFeedInfo>)>
           callback);
+  void ReadAllPendingWebFeedOperations(
+      base::OnceCallback<
+          void(std::vector<feedstore::PendingWebFeedOperation>)>);
+  void RemovePendingWebFeedOperation(int64_t operation_id);
+  void WritePendingWebFeedOperation(
+      feedstore::PendingWebFeedOperation operation);
 
   bool IsInitializedForTesting() const;
 

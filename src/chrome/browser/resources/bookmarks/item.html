@@ -1,5 +1,6 @@
 <style include="shared-style cr-icons">
   :host {
+    --iron-icon-fill-color: var(--google-grey-700);
     align-items: center;
     color: inherit;
     display: flex;
@@ -12,6 +13,7 @@
   }
 
   :host([is-selected-item_]) {
+    --iron-icon-fill-color: var(--google-blue-600);
     background-color: var(--highlight-color);
   }
 
@@ -19,7 +21,12 @@
     :host([is-selected-item_]),
     :host([is-selected-item_]) .folder-icon {
       --cr-icon-button-focus-outline-color: white;
-      color: var(--google-grey-refresh-700);
+      --iron-icon-fill-color: var(--google-grey-500);
+      color: var(--google-grey-700);
+    }
+
+    :host([is-selected-item_]) {
+      --iron-icon-fill-color: black;
     }
   }
 

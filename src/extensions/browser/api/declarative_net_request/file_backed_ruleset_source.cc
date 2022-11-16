@@ -69,38 +69,6 @@ InstallWarning CreateInstallWarning(const base::FilePath& json_path,
                         dnr_api::DNRInfo::kRuleResources);
 }
 
-// Adds install warnings for rules which exceed the per-rule regex memory limit.
-// TODO(kzar) Combine this special logic for regex warnings with the logic for
-//            other rule parsing warnings.
-void AddRegexLimitExceededWarnings(
-    const base::FilePath& json_path,
-    std::vector<InstallWarning>* warnings,
-    const std::vector<int>& regex_limit_exceeded_rule_ids) {
-  DCHECK(warnings);
-
-  std::vector<std::string> rule_ids;
-  rule_ids.reserve(regex_limit_exceeded_rule_ids.size());
-  for (int rule_id : regex_limit_exceeded_rule_ids)
-    rule_ids.push_back(base::NumberToString(rule_id));
-
-  constexpr size_t kMaxRegexLimitExceededWarnings = 10;
-  if (rule_ids.size() <= kMaxRegexLimitExceededWarnings) {
-    for (const std::string& rule_id : rule_ids) {
-      warnings->push_back(CreateInstallWarning(
-          json_path, ErrorUtils::FormatErrorMessage(kErrorRegexTooLarge,
-                                                    rule_id, kRegexFilterKey)));
-    }
-
-    return;
-  }
-
-  warnings->push_back(CreateInstallWarning(
-      json_path,
-      ErrorUtils::FormatErrorMessage(
-          kErrorRegexesTooLarge,
-          base::JoinString(rule_ids, ", " /* separator */), kRegexFilterKey)));
-}
-
 ReadJSONRulesResult ParseRulesFromJSON(const RulesetID& ruleset_id,
                                        const base::FilePath& json_path,
                                        const base::Value& rules,
@@ -119,7 +87,7 @@ ReadJSONRulesResult ParseRulesFromJSON(const RulesetID& ruleset_id,
   // We don't use json_schema_compiler::util::PopulateArrayFromList since it
   // fails if a single Value can't be deserialized. However we want to ignore
   // values which can't be parsed to maintain backwards compatibility.
-  const auto& rules_list = rules.GetList();
+  const base::Value::List& rules_list = rules.GetList();
 
   // Ignore any rulesets which exceed the static rule count limit (This is
   // defined as dnr_api::GUARANTEED_MINIMUM_STATIC_RULES + the global rule count
@@ -187,7 +155,7 @@ IndexAndPersistJSONRulesetResult IndexAndPersistRuleset(
     const FileBackedRulesetSource& source,
     ReadJSONRulesResult read_result,
     const base::ElapsedTimer& timer,
-    RulesetSource::InvalidRuleParseBehavior invalid_rule_parse_behavior) {
+    uint8_t parse_flags) {
   // Rulesets which exceed the rule limit are ignored because they can never be
   // enabled without breaking the limit.
   if (read_result.status == Status::kRuleCountLimitExceeded) {
@@ -204,8 +172,8 @@ IndexAndPersistJSONRulesetResult IndexAndPersistRuleset(
 
   DCHECK_EQ(Status::kSuccess, read_result.status);
 
-  const ParseInfo info = source.IndexRules(std::move(read_result.rules),
-                                           invalid_rule_parse_behavior);
+  const ParseInfo info =
+      source.IndexRules(std::move(read_result.rules), parse_flags);
 
   if (info.has_error()) {
     return IndexAndPersistJSONRulesetResult::CreateErrorResult(
@@ -223,17 +191,10 @@ IndexAndPersistJSONRulesetResult IndexAndPersistRuleset(
   std::vector<InstallWarning> warnings =
       std::move(read_result.rule_parse_warnings);
 
-  for (const auto& warning : info.rule_ignored_warnings())
-    warnings.push_back(CreateInstallWarning(source.json_path(), warning));
-
-  // Don't cause a hard error if the regex failed compilation due to
-  // exceeding the memory limit. This is because it's not a syntactical
-  // error and the developers don't have an easy way to determine whether
-  // the regex filter will exceed the memory limit or not. Also, the re2
-  // implementation can change causing the memory consumption of a regex to
-  // change as well.
-  AddRegexLimitExceededWarnings(source.json_path(), &warnings,
-                                info.regex_limit_exceeded_rules());
+  for (const auto& warning : info.rule_ignored_warnings()) {
+    warnings.push_back(
+        CreateInstallWarning(source.json_path(), warning.message));
+  }
 
   // Limit the maximum number of rule parsing warnings to 5.
   const size_t kMaxUnparsedRulesWarnings = 5;
@@ -254,22 +215,22 @@ IndexAndPersistJSONRulesetResult IndexAndPersistRuleset(
 void OnSafeJSONParse(
     const base::FilePath& json_path,
     const FileBackedRulesetSource& source,
-    RulesetSource::InvalidRuleParseBehavior invalid_rule_parse_behavior,
+    uint8_t parse_flags,
     FileBackedRulesetSource::IndexAndPersistJSONRulesetCallback callback,
     data_decoder::DataDecoder::ValueOrError result) {
-  if (!result.value) {
+  if (!result.has_value()) {
     std::move(callback).Run(IndexAndPersistJSONRulesetResult::CreateErrorResult(
-        GetErrorWithFilename(json_path, *result.error)));
+        GetErrorWithFilename(json_path, result.error())));
     return;
   }
 
   base::ElapsedTimer timer;
   ReadJSONRulesResult read_result = ParseRulesFromJSON(
-      source.id(), json_path, *result.value, source.rule_count_limit(),
+      source.id(), json_path, *result, source.rule_count_limit(),
       source.is_dynamic_ruleset());
 
-  std::move(callback).Run(IndexAndPersistRuleset(
-      source, std::move(read_result), timer, invalid_rule_parse_behavior));
+  std::move(callback).Run(IndexAndPersistRuleset(source, std::move(read_result),
+                                                 timer, parse_flags));
 }
 
 }  // namespace
@@ -409,15 +370,15 @@ FileBackedRulesetSource FileBackedRulesetSource::Clone() const {
 
 IndexAndPersistJSONRulesetResult
 FileBackedRulesetSource::IndexAndPersistJSONRulesetUnsafe(
-    RulesetSource::InvalidRuleParseBehavior invalid_rule_parse_behavior) const {
+    uint8_t parse_flags) const {
   base::ElapsedTimer timer;
   return IndexAndPersistRuleset(*this, ReadJSONRulesUnsafe(), timer,
-                                invalid_rule_parse_behavior);
+                                parse_flags);
 }
 
 void FileBackedRulesetSource::IndexAndPersistJSONRuleset(
     data_decoder::DataDecoder* decoder,
-    RulesetSource::InvalidRuleParseBehavior invalid_rule_parse_behavior,
+    uint8_t parse_flags,
     IndexAndPersistJSONRulesetCallback callback) const {
   if (!base::PathExists(json_path_)) {
     std::move(callback).Run(IndexAndPersistJSONRulesetResult::CreateErrorResult(
@@ -432,10 +393,9 @@ void FileBackedRulesetSource::IndexAndPersistJSONRuleset(
     return;
   }
 
-  decoder->ParseJson(
-      json_contents,
-      base::BindOnce(&OnSafeJSONParse, json_path_, Clone(),
-                     invalid_rule_parse_behavior, std::move(callback)));
+  decoder->ParseJson(json_contents,
+                     base::BindOnce(&OnSafeJSONParse, json_path_, Clone(),
+                                    parse_flags, std::move(callback)));
 }
 
 ReadJSONRulesResult FileBackedRulesetSource::ReadJSONRulesUnsafe() const {
@@ -452,15 +412,14 @@ ReadJSONRulesResult FileBackedRulesetSource::ReadJSONRulesUnsafe() const {
                                                   kFileReadError);
   }
 
-  base::JSONReader::ValueWithError value_with_error =
-      base::JSONReader::ReadAndReturnValueWithError(
-          json_contents, base::JSON_PARSE_RFC /* options */);
-  if (!value_with_error.value) {
+  auto value_with_error = base::JSONReader::ReadAndReturnValueWithError(
+      json_contents, base::JSON_PARSE_RFC /* options */);
+  if (!value_with_error.has_value()) {
     return ReadJSONRulesResult::CreateErrorResult(
-        Status::kJSONParseError, std::move(value_with_error.error_message));
+        Status::kJSONParseError, std::move(value_with_error.error().message));
   }
 
-  return ParseRulesFromJSON(id(), json_path(), *value_with_error.value,
+  return ParseRulesFromJSON(id(), json_path(), *value_with_error,
                             rule_count_limit(), is_dynamic_ruleset());
 }
 

@@ -32,7 +32,7 @@ const char AXTreeFormatterBase::kChildrenDictAttr[] = "children";
 bool AXTreeFormatterBase::ShouldDumpNode(
     const AXPlatformNodeDelegate& node) const {
   for (const std::pair<ax::mojom::StringAttribute, std::string>&
-           string_attribute : node.GetData().string_attributes) {
+           string_attribute : node.GetStringAttributes()) {
     if (string_attribute.second.find(kSkipString) != std::string::npos)
       return false;
   }
@@ -42,7 +42,7 @@ bool AXTreeFormatterBase::ShouldDumpNode(
 bool AXTreeFormatterBase::ShouldDumpChildren(
     const AXPlatformNodeDelegate& node) const {
   for (const std::pair<ax::mojom::StringAttribute, std::string>&
-           string_attribute : node.GetData().string_attributes) {
+           string_attribute : node.GetStringAttributes()) {
     if (string_attribute.second.find(kSkipChildren) != std::string::npos)
       return false;
   }
@@ -73,6 +73,13 @@ base::Value AXTreeFormatterBase::BuildTreeForNode(ui::AXNode* root) const {
   NOTREACHED()
       << "Only supported when called on AccessibilityTreeFormatterBlink.";
   return base::Value();
+}
+
+std::string AXTreeFormatterBase::EvaluateScript(
+    const AXTreeSelector& selector,
+    const ui::AXInspectScenario& scenario) const {
+  NOTIMPLEMENTED();
+  return {};
 }
 
 std::string AXTreeFormatterBase::EvaluateScript(
@@ -118,8 +125,8 @@ void AXTreeFormatterBase::RecursiveFormatTree(const base::Value& dict,
     return;
 
   const base::Value* children = dict.FindListPath(kChildrenDictAttr);
-  if (children && !children->GetList().empty()) {
-    for (const auto& child_dict : children->GetList()) {
+  if (children && !children->GetListDeprecated().empty()) {
+    for (const auto& child_dict : children->GetListDeprecated()) {
       RecursiveFormatTree(child_dict, contents, depth + 1);
     }
   }

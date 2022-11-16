@@ -67,7 +67,7 @@ void PagedViewStructure::LoadFromMetadata() {
   if (mode_ == Mode::kSinglePage) {
     // Copy the view model to a single page.
     pages_[0].reserve(view_model->view_size());
-    for (int i = 0; i < view_model->view_size(); ++i) {
+    for (size_t i = 0; i < view_model->view_size(); ++i) {
       pages_[0].push_back(view_model->view_at(i));
     }
     return;
@@ -75,7 +75,7 @@ void PagedViewStructure::LoadFromMetadata() {
 
   if (mode_ == Mode::kFullPages) {
     // Copy the view model to N full pages.
-    for (int i = 0; i < view_model->view_size(); ++i) {
+    for (size_t i = 0; i < view_model->view_size(); ++i) {
       if (pages_.back().size() ==
           static_cast<size_t>(TilesPerPage(pages_.size() - 1))) {
         pages_.emplace_back();
@@ -86,7 +86,10 @@ void PagedViewStructure::LoadFromMetadata() {
   }
 
   int model_index = 0;
-  for (size_t i = 0; i < apps_grid_view_->item_list_->item_count(); ++i) {
+  const size_t item_count = apps_grid_view_->item_list_
+                                ? apps_grid_view_->item_list_->item_count()
+                                : 0;
+  for (size_t i = 0; i < item_count; ++i) {
     const auto* item = apps_grid_view_->item_list_->item_at(i);
     if (item->is_page_break()) {
       // Create a new page if a "page break" item is detected and current page
@@ -156,7 +159,7 @@ void PagedViewStructure::SaveToMetadata() {
     // the last one should be full (i.e. no empty spaces). Therefore page break
     // items are useless. It is why we should only create page break items when
     // the feature flag is disabled.
-    if (!features::IsLauncherRemoveEmptySpaceEnabled() &&
+    if (!features::IsProductivityLauncherEnabled() &&
         item_index < item_list->item_count() &&
         !item_list->item_at(item_index)->is_page_break()) {
       // Remove AppListItemListObserver temporarily to avoid |pages_| being
@@ -261,7 +264,7 @@ int PagedViewStructure::GetModelIndexFromIndex(const GridIndex& index) const {
     return view_model->view_size();
 
   AppListItemView* view = pages_[index.page][index.slot];
-  return view_model->GetIndexOfView(view);
+  return view_model->GetIndexOfView(view).value();
 }
 
 GridIndex PagedViewStructure::GetLastTargetIndex() const {
@@ -269,7 +272,7 @@ GridIndex PagedViewStructure::GetLastTargetIndex() const {
     return GridIndex(0, 0);
 
   if (mode_ == Mode::kSinglePage || mode_ == Mode::kFullPages) {
-    int view_index = apps_grid_view_->view_model()->view_size();
+    size_t view_index = apps_grid_view_->view_model()->view_size();
 
     // If a view in the current view model is being dragged, then ignore it.
     if (apps_grid_view_->drag_view())
@@ -301,7 +304,7 @@ GridIndex PagedViewStructure::GetLastTargetIndexOfPage(int page_index) const {
   }
 
   const int page_size = total_pages();
-  DCHECK_LT(0, apps_grid_view_->view_model()->view_size());
+  DCHECK_LT(0u, apps_grid_view_->view_model()->view_size());
   DCHECK_LE(page_index, page_size);
 
   if (page_index == page_size)
@@ -424,7 +427,8 @@ bool PagedViewStructure::IsValidReorderTargetIndex(
   // The user can drag an item view to another page's end. Also covers the case
   // where a dragged folder item is being reparented to the last target index of
   // the root level grid.
-  if (index.page <= total_pages() &&
+  if ((index.page < total_pages() ||
+       (index.page == total_pages() && mode_ == Mode::kPartialPages)) &&
       GetLastTargetIndexOfPage(index.page) == index) {
     return true;
   }

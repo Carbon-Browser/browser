@@ -45,7 +45,7 @@ using NotificationOperationCallbackWithContext =
 // Derives a PersistentNotificationStatus from the ServiceWorkerStatusCode.
 PersistentNotificationStatus ConvertServiceWorkerStatus(
     blink::ServiceWorkerStatusCode service_worker_status) {
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   // This LOG(INFO) deliberately exists to help track down the cause of
   // https://crbug.com/534537, where notifications sometimes do not react to
   // the user clicking on them. It should be removed once that's fixed.
@@ -96,8 +96,7 @@ void ServiceWorkerNotificationEventFinished(
 }
 
 // Dispatches the given notification action event on
-// |service_worker_registration| if the registration was available. Must be
-// called on the service worker core thread.
+// |service_worker_registration| if the registration was available.
 void DispatchNotificationEventOnRegistration(
     const NotificationDatabaseData& notification_database_data,
     NotificationOperationCallback dispatch_event_action,
@@ -105,7 +104,7 @@ void DispatchNotificationEventOnRegistration(
     blink::ServiceWorkerStatusCode service_worker_status,
     scoped_refptr<ServiceWorkerRegistration> service_worker_registration) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   // This LOG(INFO) deliberately exists to help track down the cause of
   // https://crbug.com/534537, where notifications sometimes do not react to
   // the user clicking on them. It should be removed once that's fixed.
@@ -167,7 +166,7 @@ void FindServiceWorkerRegistration(
     bool success,
     const NotificationDatabaseData& notification_database_data) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   // This LOG(INFO) deliberately exists to help track down the cause of
   // https://crbug.com/534537, where notifications sometimes do not react to
   // the user clicking on them. It should be removed once that's fixed.
@@ -213,7 +212,6 @@ void ReadNotificationDatabaseData(
 // -----------------------------------------------------------------------------
 
 // Dispatches the notificationclick event on |service_worker|.
-// Must be called on the service worker core thread.
 void DispatchNotificationClickEventOnWorker(
     const scoped_refptr<ServiceWorkerVersion>& service_worker,
     const NotificationDatabaseData& notification_database_data,
@@ -298,7 +296,6 @@ void DeleteNotificationDataFromDatabase(
 }
 
 // Dispatches the notificationclose event on |service_worker|.
-// Must be called on the service worker core thread.
 void DispatchNotificationCloseEventOnWorker(
     const scoped_refptr<ServiceWorkerVersion>& service_worker,
     const NotificationDatabaseData& notification_database_data,

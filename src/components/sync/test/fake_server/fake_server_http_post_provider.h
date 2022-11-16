@@ -8,32 +8,35 @@
 #include <atomic>
 #include <string>
 
-#include "base/callback.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
-#include "base/sequenced_task_runner.h"
 #include "base/synchronization/waitable_event.h"
+#include "base/task/sequenced_task_runner.h"
+#include "components/sync/engine/net/http_post_provider.h"
 #include "components/sync/engine/net/http_post_provider_factory.h"
-#include "components/sync/engine/net/http_post_provider_interface.h"
 
 namespace fake_server {
 
 class FakeServer;
 
-class FakeServerHttpPostProvider : public syncer::HttpPostProviderInterface {
+class FakeServerHttpPostProvider : public syncer::HttpPostProvider {
  public:
   FakeServerHttpPostProvider(
       const base::WeakPtr<FakeServer>& fake_server,
       scoped_refptr<base::SequencedTaskRunner> fake_server_task_runner);
 
-  // HttpPostProviderInterface implementation.
+  FakeServerHttpPostProvider(const FakeServerHttpPostProvider&) = delete;
+  FakeServerHttpPostProvider& operator=(const FakeServerHttpPostProvider&) =
+      delete;
+
+  // HttpPostProvider implementation.
   void SetExtraRequestHeaders(const char* headers) override;
   void SetURL(const GURL& url) override;
   void SetPostPayload(const char* content_type,
                       int content_length,
                       const char* content) override;
+  void SetAllowBatching(bool allow_batching) override;
   bool MakeSynchronousPost(int* net_error_code, int* http_status_code) override;
   void Abort() override;
   int GetResponseContentLength() const override;
@@ -74,8 +77,6 @@ class FakeServerHttpPostProvider : public syncer::HttpPostProviderInterface {
   std::string extra_request_headers_;
 
   SEQUENCE_CHECKER(sequence_checker_);
-
-  DISALLOW_COPY_AND_ASSIGN(FakeServerHttpPostProvider);
 };
 
 class FakeServerHttpPostProviderFactory
@@ -84,18 +85,22 @@ class FakeServerHttpPostProviderFactory
   FakeServerHttpPostProviderFactory(
       const base::WeakPtr<FakeServer>& fake_server,
       scoped_refptr<base::SequencedTaskRunner> fake_server_task_runner);
+
+  FakeServerHttpPostProviderFactory(const FakeServerHttpPostProviderFactory&) =
+      delete;
+  FakeServerHttpPostProviderFactory& operator=(
+      const FakeServerHttpPostProviderFactory&) = delete;
+
   ~FakeServerHttpPostProviderFactory() override;
 
   // HttpPostProviderFactory:
-  scoped_refptr<syncer::HttpPostProviderInterface> Create() override;
+  scoped_refptr<syncer::HttpPostProvider> Create() override;
 
  private:
   // |fake_server_| should only be dereferenced on the same thread as
   // |fake_server_task_runner_| runs on.
   base::WeakPtr<FakeServer> fake_server_;
   scoped_refptr<base::SequencedTaskRunner> fake_server_task_runner_;
-
-  DISALLOW_COPY_AND_ASSIGN(FakeServerHttpPostProviderFactory);
 };
 
 }  // namespace fake_server

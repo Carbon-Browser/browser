@@ -5,9 +5,10 @@
 #include "content/public/test/mock_render_thread.h"
 
 #include <memory>
+#include <tuple>
 
 #include "base/logging.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/unguessable_token.h"
 #include "build/build_config.h"
@@ -26,7 +27,7 @@
 #include "third_party/blink/public/common/dom_storage/session_storage_namespace_id.h"
 #include "third_party/blink/public/common/user_agent/user_agent_metadata.h"
 #include "third_party/blink/public/mojom/page/widget.mojom.h"
-#include "third_party/blink/public/web/web_script_controller.h"
+#include "third_party/blink/public/mojom/widget/platform_widget.mojom.h"
 
 namespace content {
 
@@ -62,9 +63,9 @@ class MockRenderMessageFilterImpl : public mojom::RenderMessageFilter {
     std::move(callback).Run(false);
   }
 
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
-  void SetThreadPriority(int32_t platform_thread_id,
-                         base::ThreadPriority thread_priority) override {}
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+  void SetThreadType(int32_t platform_thread_id,
+                     base::ThreadType thread_type) override {}
 #endif
 };
 
@@ -191,11 +192,6 @@ void MockRenderThread::RecordAction(const base::UserMetricsAction& action) {
 void MockRenderThread::RecordComputedAction(const std::string& action) {
 }
 
-void MockRenderThread::RegisterExtension(
-    std::unique_ptr<v8::Extension> extension) {
-  blink::WebScriptController::RegisterExtension(std::move(extension));
-}
-
 int MockRenderThread::PostTaskToAllWebWorkers(base::RepeatingClosure closure) {
   return 0;
 }
@@ -215,6 +211,10 @@ blink::WebString MockRenderThread::GetUserAgent() {
   return blink::WebString();
 }
 
+blink::WebString MockRenderThread::GetFullUserAgent() {
+  return blink::WebString();
+}
+
 blink::WebString MockRenderThread::GetReducedUserAgent() {
   return blink::WebString();
 }
@@ -223,11 +223,7 @@ const blink::UserAgentMetadata& MockRenderThread::GetUserAgentMetadata() {
   return kUserAgentMetadata;
 }
 
-bool MockRenderThread::IsUseZoomForDSF() {
-  return zoom_for_dsf_;
-}
-
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 void MockRenderThread::PreCacheFont(const LOGFONT& log_font) {
 }
 
@@ -237,10 +233,6 @@ void MockRenderThread::ReleaseCachedFonts() {
 
 void MockRenderThread::SetFieldTrialGroup(const std::string& trial_name,
                                           const std::string& group_name) {}
-
-void MockRenderThread::SetUseZoomForDSFEnabled(bool zoom_for_dsf) {
-  zoom_for_dsf_ = zoom_for_dsf;
-}
 
 void MockRenderThread::WriteIntoTrace(
     perfetto::TracedProto<perfetto::protos::pbzero::RenderProcessHost> proto) {
@@ -308,13 +300,13 @@ void MockRenderThread::OnCreateWindow(
       blink_frame_widget_receiver =
           blink_frame_widget.BindNewEndpointAndPassDedicatedReceiver();
   mojo::AssociatedRemote<blink::mojom::FrameWidgetHost> blink_frame_widget_host;
-  ignore_result(
-      blink_frame_widget_host.BindNewEndpointAndPassDedicatedReceiver());
+  std::ignore =
+      blink_frame_widget_host.BindNewEndpointAndPassDedicatedReceiver();
   mojo::AssociatedRemote<blink::mojom::Widget> blink_widget;
   mojo::PendingAssociatedReceiver<blink::mojom::Widget> blink_widget_receiver =
       blink_widget.BindNewEndpointAndPassDedicatedReceiver();
   mojo::AssociatedRemote<blink::mojom::WidgetHost> blink_widget_host;
-  ignore_result(blink_widget_host.BindNewEndpointAndPassDedicatedReceiver());
+  std::ignore = blink_widget_host.BindNewEndpointAndPassDedicatedReceiver();
 
   widget_params->frame_widget = std::move(blink_frame_widget_receiver);
   widget_params->frame_widget_host = blink_frame_widget_host.Unbind();

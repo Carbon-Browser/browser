@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "build/buildflag.h"
 #include "net/base/net_export.h"
@@ -32,6 +32,7 @@ class SCTAuditingDelegate;
 class SSLConfigService;
 class TransportSecurityState;
 class URLRequestContext;
+class ClientSocketFactory;
 class URLRequestJobFactory;
 class URLRequestThrottlerManager;
 
@@ -49,6 +50,10 @@ class NET_EXPORT URLRequestContextStorage {
   // URLRequestContext, since it is often designed to be embedded in a
   // URLRequestContext subclass.
   explicit URLRequestContextStorage(URLRequestContext* context);
+
+  URLRequestContextStorage(const URLRequestContextStorage&) = delete;
+  URLRequestContextStorage& operator=(const URLRequestContextStorage&) = delete;
+
   ~URLRequestContextStorage();
 
   // These setters will set both the member variables and call the setter on the
@@ -95,6 +100,9 @@ class NET_EXPORT URLRequestContextStorage {
           network_error_logging_service);
 #endif  // BUILDFLAG(ENABLE_REPORTING)
 
+  void set_client_socket_factory(
+      std::unique_ptr<ClientSocketFactory> client_socket_factory);
+
   // Everything else can be access through the URLRequestContext, but this
   // cannot.  Having an accessor for it makes usage a little cleaner.
   HttpNetworkSession* http_network_session() const {
@@ -103,7 +111,7 @@ class NET_EXPORT URLRequestContextStorage {
 
  private:
   // Not owned.
-  URLRequestContext* const context_;
+  const raw_ptr<URLRequestContext> context_;
 
   // Owned members.
   std::unique_ptr<HostResolver> host_resolver_;
@@ -120,6 +128,7 @@ class NET_EXPORT URLRequestContextStorage {
   std::unique_ptr<CTPolicyEnforcer> ct_policy_enforcer_;
   std::unique_ptr<SCTAuditingDelegate> sct_auditing_delegate_;
   std::unique_ptr<QuicContext> quic_context_;
+  std::unique_ptr<ClientSocketFactory> client_socket_factory_;
 
   // Not actually pointed at by the URLRequestContext, but may be used (but not
   // owned) by the HttpTransactionFactory.
@@ -137,8 +146,6 @@ class NET_EXPORT URLRequestContextStorage {
   std::unique_ptr<ReportingService> reporting_service_;
   std::unique_ptr<NetworkErrorLoggingService> network_error_logging_service_;
 #endif  // BUILDFLAG(ENABLE_REPORTING)
-
-  DISALLOW_COPY_AND_ASSIGN(URLRequestContextStorage);
 };
 
 }  // namespace net

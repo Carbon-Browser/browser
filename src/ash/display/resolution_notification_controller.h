@@ -13,7 +13,6 @@
 #include "ash/public/mojom/cros_display_config.mojom.h"
 #include "base/callback.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "ui/display/display_observer.h"
 #include "ui/gfx/geometry/size.h"
@@ -29,6 +28,12 @@ class ASH_EXPORT ResolutionNotificationController
       public WindowTreeHostManager::Observer {
  public:
   ResolutionNotificationController();
+
+  ResolutionNotificationController(const ResolutionNotificationController&) =
+      delete;
+  ResolutionNotificationController& operator=(
+      const ResolutionNotificationController&) = delete;
+
   ~ResolutionNotificationController() override;
 
   // If |display_id| is not the internal display and |source| is |kSourceUser|
@@ -54,12 +59,12 @@ class ASH_EXPORT ResolutionNotificationController
   // |accept_callback| will be called when the user accepts the resoltion change
   // by closing the notification bubble or clicking on the accept button (if
   // any).
-  bool PrepareNotificationAndSetDisplayMode(
+  [[nodiscard]] bool PrepareNotificationAndSetDisplayMode(
       int64_t display_id,
       const display::ManagedDisplayMode& old_resolution,
       const display::ManagedDisplayMode& new_resolution,
       mojom::DisplayConfigSource source,
-      base::OnceClosure accept_callback) WARN_UNUSED_RESULT;
+      base::OnceClosure accept_callback);
 
   DisplayChangeDialog* dialog_for_testing() const {
     return confirmation_dialog_.get();
@@ -98,8 +103,6 @@ class ASH_EXPORT ResolutionNotificationController
   base::WeakPtr<DisplayChangeDialog> confirmation_dialog_;
 
   base::WeakPtrFactory<ResolutionNotificationController> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ResolutionNotificationController);
 };
 
 }  // namespace ash

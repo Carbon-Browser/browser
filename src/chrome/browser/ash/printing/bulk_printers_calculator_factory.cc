@@ -4,16 +4,15 @@
 
 #include "chrome/browser/ash/printing/bulk_printers_calculator_factory.h"
 
-#include "base/no_destructor.h"
 #include "chrome/browser/ash/printing/bulk_printers_calculator.h"
 #include "components/account_id/account_id.h"
 #include "components/user_manager/user.h"
 
-namespace chromeos {
+namespace ash {
 
 namespace {
 
-// This class is owned by ChromeBrowserMainPartsChromeos.
+// This class is owned by `ChromeBrowserMainPartsAsh`.
 static BulkPrintersCalculatorFactory* g_bulk_printers_factory = nullptr;
 
 }  // namespace
@@ -71,4 +70,4 @@ BulkPrintersCalculatorFactory::~BulkPrintersCalculatorFactory() {
   g_bulk_printers_factory = nullptr;
 }
 
-}  // namespace chromeos
+}  // namespace ash

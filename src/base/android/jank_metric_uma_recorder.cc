@@ -23,7 +23,9 @@ namespace {
 
 void AddFrameToTrace(int64_t timestamp_ns, int64_t durations_ns) {
 #if BUILDFLAG(ENABLE_BASE_TRACING)
-  auto t = perfetto::Track(timestamp_ns);
+  if (timestamp_ns < 0)
+    return;
+  auto t = perfetto::Track(static_cast<uint64_t>(timestamp_ns));
   TRACE_EVENT_BEGIN(
       "ui", "AndroidFrameVsync", t, [&](perfetto::EventContext ctx) {
         ctx.event()->set_timestamp_absolute_us(timestamp_ns / 1000);
@@ -75,20 +77,18 @@ void RecordJankMetrics(
   std::string missed_frames_histogram_name =
       base::StrCat({"Android.Jank.MissedFrames.", scenario_name});
 
-  for (unsigned i = 0; i < timestamps_ns.size(); ++i) {
+  for (size_t i = 0; i < timestamps_ns.size(); ++i) {
     AddFrameToTrace(timestamps_ns[i], durations_ns[i]);
   }
 
   for (const int64_t frame_duration_ns : durations_ns) {
-    base::UmaHistogramTimes(
-        frame_duration_histogram_name,
-        base::TimeDelta::FromNanoseconds(frame_duration_ns));
+    base::UmaHistogramTimes(frame_duration_histogram_name,
+                            base::Nanoseconds(frame_duration_ns));
   }
 
   for (const int64_t jank_burst_duration_ns : jank_bursts_ns) {
-    base::UmaHistogramTimes(
-        jank_burst_histogram_name,
-        base::TimeDelta::FromNanoseconds(jank_burst_duration_ns));
+    base::UmaHistogramTimes(jank_burst_histogram_name,
+                            base::Nanoseconds(jank_burst_duration_ns));
   }
 
   base::UmaHistogramCounts1000(missed_frames_histogram_name,

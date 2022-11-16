@@ -44,6 +44,8 @@ AwNetworkChangeNotifier::GetCurrentDefaultNetwork() const {
 
 void AwNetworkChangeNotifier::OnConnectionTypeChanged() {}
 
+void AwNetworkChangeNotifier::OnConnectionCostChanged() {}
+
 void AwNetworkChangeNotifier::OnMaxBandwidthChanged(
     double max_bandwidth_mbps,
     ConnectionType type) {
@@ -60,6 +62,8 @@ void AwNetworkChangeNotifier::OnNetworkDisconnected(
     NetworkHandle network) {}
 void AwNetworkChangeNotifier::OnNetworkMadeDefault(NetworkHandle network) {}
 
+void AwNetworkChangeNotifier::OnDefaultNetworkActive() {}
+
 AwNetworkChangeNotifier::AwNetworkChangeNotifier(
     net::NetworkChangeNotifierDelegateAndroid* delegate)
     : net::NetworkChangeNotifier(DefaultNetworkChangeCalculatorParams()),
@@ -72,10 +76,10 @@ net::NetworkChangeNotifier::NetworkChangeCalculatorParams
 AwNetworkChangeNotifier::DefaultNetworkChangeCalculatorParams() {
   net::NetworkChangeNotifier::NetworkChangeCalculatorParams params;
   // Use defaults as in network_change_notifier_android.cc
-  params.ip_address_offline_delay_ = base::TimeDelta::FromSeconds(1);
-  params.ip_address_online_delay_ = base::TimeDelta::FromSeconds(1);
-  params.connection_type_offline_delay_ = base::TimeDelta::FromSeconds(0);
-  params.connection_type_online_delay_ = base::TimeDelta::FromSeconds(0);
+  params.ip_address_offline_delay_ = base::Seconds(1);
+  params.ip_address_online_delay_ = base::Seconds(1);
+  params.connection_type_offline_delay_ = base::Seconds(0);
+  params.connection_type_online_delay_ = base::Seconds(0);
   return params;
 }
 

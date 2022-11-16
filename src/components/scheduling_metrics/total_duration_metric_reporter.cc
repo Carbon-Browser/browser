@@ -4,12 +4,14 @@
 
 #include "components/scheduling_metrics/total_duration_metric_reporter.h"
 
+#include "base/cpu_reduction_experiment.h"
+
 namespace scheduling_metrics {
 
 namespace {
 
-constexpr base::TimeDelta kMinimalValue = base::TimeDelta::FromSeconds(1);
-constexpr base::TimeDelta kMaximalValue = base::TimeDelta::FromHours(1);
+constexpr base::TimeDelta kMinimalValue = base::Seconds(1);
+constexpr base::TimeDelta kMaximalValue = base::Hours(1);
 constexpr int kBucketCount = 50;
 
 }  // namespace
@@ -30,8 +32,13 @@ TotalDurationMetricReporter::TotalDurationMetricReporter(
           kBucketCount,
           base::Histogram::kUmaTargetedHistogramFlag)) {}
 
+TotalDurationMetricReporter::~TotalDurationMetricReporter() = default;
+
 void TotalDurationMetricReporter::RecordAdditionalDuration(
     base::TimeDelta duration) {
+  static base::CpuReductionExperimentFilter filter;
+  if (!filter.ShouldLogHistograms())
+    return;
   if (reported_value_)
     negative_histogram_->Add(reported_value_->InSeconds());
   reported_value_ = reported_value_.value_or(base::TimeDelta()) + duration;

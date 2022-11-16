@@ -8,8 +8,8 @@
 
 #include "base/bind.h"
 #include "base/callback_helpers.h"
-#include "base/cxx17_backports.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "net/base/io_buffer.h"
@@ -18,30 +18,34 @@
 #include "net/quic/quic_chromium_client_session.h"
 #include "net/test/gtest_util.h"
 #include "net/test/test_with_task_environment.h"
-#include "net/third_party/quiche/src/quic/core/crypto/null_encrypter.h"
-#include "net/third_party/quiche/src/quic/core/http/quic_spdy_client_session_base.h"
-#include "net/third_party/quiche/src/quic/core/http/quic_spdy_client_stream.h"
-#include "net/third_party/quiche/src/quic/core/http/spdy_utils.h"
-#include "net/third_party/quiche/src/quic/core/quic_utils.h"
-#include "net/third_party/quiche/src/quic/test_tools/crypto_test_utils.h"
-#include "net/third_party/quiche/src/quic/test_tools/quic_config_peer.h"
-#include "net/third_party/quiche/src/quic/test_tools/quic_connection_peer.h"
-#include "net/third_party/quiche/src/quic/test_tools/quic_spdy_session_peer.h"
-#include "net/third_party/quiche/src/quic/test_tools/quic_test_utils.h"
+#include "net/third_party/quiche/src/quiche/quic/core/crypto/null_encrypter.h"
+#include "net/third_party/quiche/src/quiche/quic/core/http/quic_spdy_client_session_base.h"
+#include "net/third_party/quiche/src/quiche/quic/core/http/quic_spdy_client_stream.h"
+#include "net/third_party/quiche/src/quiche/quic/core/http/spdy_utils.h"
+#include "net/third_party/quiche/src/quiche/quic/core/quic_utils.h"
+#include "net/third_party/quiche/src/quiche/quic/test_tools/crypto_test_utils.h"
+#include "net/third_party/quiche/src/quiche/quic/test_tools/quic_config_peer.h"
+#include "net/third_party/quiche/src/quiche/quic/test_tools/quic_connection_peer.h"
+#include "net/third_party/quiche/src/quiche/quic/test_tools/quic_spdy_session_peer.h"
+#include "net/third_party/quiche/src/quiche/quic/test_tools/quic_test_utils.h"
 #include "net/traffic_annotation/network_traffic_annotation_test_helper.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
 using testing::_;
 using testing::Return;
 
-namespace net {
-namespace test {
+namespace net::test {
 namespace {
 
 class MockQuicClientSessionBase : public quic::QuicSpdyClientSessionBase {
  public:
   explicit MockQuicClientSessionBase(quic::QuicConnection* connection,
                                      quic::QuicClientPushPromiseIndex* index);
+
+  MockQuicClientSessionBase(const MockQuicClientSessionBase&) = delete;
+  MockQuicClientSessionBase& operator=(const MockQuicClientSessionBase&) =
+      delete;
+
   ~MockQuicClientSessionBase() override;
 
   const quic::QuicCryptoStream* GetCryptoStream() const override {
@@ -100,7 +104,7 @@ class MockQuicClientSessionBase : public quic::QuicSpdyClientSessionBase {
       spdy::Http2HeaderBlock headers,
       bool fin,
       const spdy::SpdyStreamPrecedence& precedence,
-      quic::QuicReferenceCountedPointer<quic::QuicAckListenerInterface>
+      quiche::QuicheReferenceCountedPointer<quic::QuicAckListenerInterface>
           ack_listener) override {
     return WriteHeadersOnHeadersStreamMock(id, headers, fin, precedence,
                                            std::move(ack_listener));
@@ -110,7 +114,7 @@ class MockQuicClientSessionBase : public quic::QuicSpdyClientSessionBase {
                       const spdy::Http2HeaderBlock& headers,
                       bool fin,
                       const spdy::SpdyStreamPrecedence& precedence,
-                      const quic::QuicReferenceCountedPointer<
+                      const quiche::QuicheReferenceCountedPointer<
                           quic::QuicAckListenerInterface>& ack_listener));
   MOCK_METHOD1(OnHeadersHeadOfLineBlocking, void(quic::QuicTime::Delta delta));
 
@@ -138,8 +142,6 @@ class MockQuicClientSessionBase : public quic::QuicSpdyClientSessionBase {
 
  private:
   std::unique_ptr<quic::QuicCryptoStream> crypto_stream_;
-
-  DISALLOW_COPY_AND_ASSIGN(MockQuicClientSessionBase);
 };
 
 MockQuicClientSessionBase::MockQuicClientSessionBase(
@@ -155,7 +157,7 @@ MockQuicClientSessionBase::MockQuicClientSessionBase(
       .WillByDefault(testing::Return(quic::QuicConsumedData(0, false)));
 }
 
-MockQuicClientSessionBase::~MockQuicClientSessionBase() {}
+MockQuicClientSessionBase::~MockQuicClientSessionBase() = default;
 
 class QuicChromiumClientStreamTest
     : public ::testing::TestWithParam<quic::ParsedQuicVersion>,
@@ -184,7 +186,7 @@ class QuicChromiumClientStreamTest
             version_.transport_version, 0),
         &session_, quic::BIDIRECTIONAL, NetLogWithSource(),
         TRAFFIC_ANNOTATION_FOR_TESTS);
-    session_.ActivateStream(base::WrapUnique(stream_));
+    session_.ActivateStream(base::WrapUnique(stream_.get()));
     handle_ = stream_->CreateHandle();
     helper_.AdvanceTime(quic::QuicTime::Delta::FromSeconds(1));
     session_.connection()->SetEncrypter(
@@ -279,8 +281,8 @@ class QuicChromiumClientStreamTest
     if (!version_.HasIetfQuicFrames()) {
       return "";
     }
-    quic::QuicBuffer buffer = quic::HttpEncoder::SerializeDataFrameHeader(
-        body_len, quic::SimpleBufferAllocator::Get());
+    quiche::QuicheBuffer buffer = quic::HttpEncoder::SerializeDataFrameHeader(
+        body_len, quiche::SimpleBufferAllocator::Get());
     return std::string(buffer.data(), buffer.size());
   }
 
@@ -291,7 +293,7 @@ class QuicChromiumClientStreamTest
   quic::test::MockQuicConnectionHelper helper_;
   quic::test::MockAlarmFactory alarm_factory_;
   MockQuicClientSessionBase session_;
-  QuicChromiumClientStream* stream_;
+  raw_ptr<QuicChromiumClientStream> stream_;
   spdy::Http2HeaderBlock headers_;
   spdy::Http2HeaderBlock trailers_;
   quic::QuicClientPushPromiseIndex push_promise_index_;
@@ -330,7 +332,7 @@ TEST_P(QuicChromiumClientStreamTest, Handle) {
   handle_->OnFinRead();
 
   const char kData1[] = "hello world";
-  const size_t kDataLen = base::size(kData1);
+  const size_t kDataLen = std::size(kData1);
 
   // All data written.
   std::string header = ConstructDataHeader(kDataLen);
@@ -746,7 +748,7 @@ TEST_P(QuicChromiumClientStreamTest, ReadAfterTrailersReceivedButNotDelivered) {
 TEST_P(QuicChromiumClientStreamTest, WriteStreamData) {
   testing::InSequence seq;
   const char kData1[] = "hello world";
-  const size_t kDataLen = base::size(kData1);
+  const size_t kDataLen = std::size(kData1);
 
   // All data written.
   if (version_.HasIetfQuicFrames()) {
@@ -766,7 +768,7 @@ TEST_P(QuicChromiumClientStreamTest, WriteStreamData) {
 TEST_P(QuicChromiumClientStreamTest, WriteStreamDataAsync) {
   testing::InSequence seq;
   const char kData1[] = "hello world";
-  const size_t kDataLen = base::size(kData1);
+  const size_t kDataLen = std::size(kData1);
 
   // No data written.
   EXPECT_CALL(session_,
@@ -938,7 +940,7 @@ TEST_P(QuicChromiumClientStreamTest, HeadersAndDataBeforeHandle) {
   base::RunLoop().RunUntilIdle();
 
   // Now explicitly read the data.
-  int data_len = base::size(data) - 1;
+  int data_len = std::size(data) - 1;
   scoped_refptr<IOBuffer> buffer = base::MakeRefCounted<IOBuffer>(data_len + 1);
   ASSERT_EQ(data_len, stream2->Read(buffer.get(), data_len + 1));
   EXPECT_EQ(absl::string_view(data),
@@ -1129,6 +1131,51 @@ TEST_P(QuicChromiumClientStreamTest, EarlyHintsAfterInitialHeadersWithoutRead) {
   base::RunLoop().RunUntilIdle();
 }
 
+// Regression test for https://crbug.com/1248970. Write an Early Hints headers,
+// an initial response headers and trailers in succession without reading in
+// the middle of writings.
+TEST_P(QuicChromiumClientStreamTest, TrailersAfterEarlyHintsWithoutRead) {
+  // Process an Early Hints response headers on the stream.
+  spdy::Http2HeaderBlock hints_headers = CreateResponseHeaders("103");
+  quic::QuicHeaderList hints_header_list = ProcessHeaders(hints_headers);
+
+  // Process an initial response headers on the stream.
+  InitializeHeaders();
+  quic::QuicHeaderList header_list = ProcessHeaders(headers_);
+
+  // Process a trailer headers on the stream. This should not hit any DCHECK.
+  spdy::Http2HeaderBlock trailers;
+  trailers["bar"] = "foo";
+  quic::QuicHeaderList trailer_header_list = ProcessTrailers(trailers);
+  base::RunLoop().RunUntilIdle();
+
+  // Read the Early Hints response from the handle.
+  {
+    spdy::Http2HeaderBlock headers;
+    TestCompletionCallback callback;
+    EXPECT_EQ(static_cast<int>(hints_header_list.uncompressed_header_bytes()),
+              handle_->ReadInitialHeaders(&headers, callback.callback()));
+    EXPECT_EQ(headers, hints_headers);
+  }
+
+  // Read the initial headers from the handle.
+  {
+    spdy::Http2HeaderBlock headers;
+    TestCompletionCallback callback;
+    EXPECT_EQ(static_cast<int>(header_list.uncompressed_header_bytes()),
+              handle_->ReadInitialHeaders(&headers, callback.callback()));
+    EXPECT_EQ(headers, headers_);
+  }
+
+  // Read trailers from the handle.
+  {
+    spdy::Http2HeaderBlock headers;
+    TestCompletionCallback callback;
+    EXPECT_EQ(static_cast<int>(trailer_header_list.uncompressed_header_bytes()),
+              handle_->ReadTrailingHeaders(&headers, callback.callback()));
+    EXPECT_EQ(headers, trailers);
+  }
+}
+
 }  // namespace
-}  // namespace test
-}  // namespace net
+}  // namespace net::test

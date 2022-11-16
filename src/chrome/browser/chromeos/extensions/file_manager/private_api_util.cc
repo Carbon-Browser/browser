@@ -13,7 +13,7 @@
 #include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/location.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/ash/drive/drive_integration_service.h"
 #include "chrome/browser/ash/drive/file_system_util.h"
@@ -23,6 +23,10 @@
 #include "chrome/browser/ash/file_manager/path_util.h"
 #include "chrome/browser/ash/file_manager/snapshot_manager.h"
 #include "chrome/browser/ash/file_manager/volume_manager.h"
+#include "chrome/browser/ash/guest_os/public/guest_os_mount_provider.h"
+#include "chrome/browser/ash/guest_os/public/guest_os_mount_provider_registry.h"
+#include "chrome/browser/ash/guest_os/public/guest_os_service.h"
+#include "chrome/browser/ash/guest_os/public/types.h"
 #include "chrome/browser/chromeos/fileapi/external_file_url_util.h"
 #include "chrome/browser/chromeos/fileapi/file_system_backend.h"
 #include "chrome/browser/profiles/profile.h"
@@ -213,6 +217,27 @@ std::unique_ptr<std::string> GetShareUrlFromAlternateUrl(
       alternate_url.ReplaceComponents(replacements).spec());
 }
 
+extensions::api::file_manager_private::VmType VmTypeToJs(
+    guest_os::VmType vm_type) {
+  switch (vm_type) {
+    case guest_os::VmType::TERMINA:
+      return extensions::api::file_manager_private::VM_TYPE_TERMINA;
+    case guest_os::VmType::PLUGIN_VM:
+      return extensions::api::file_manager_private::VM_TYPE_PLUGIN_VM;
+    case guest_os::VmType::BOREALIS:
+      return extensions::api::file_manager_private::VM_TYPE_BOREALIS;
+    case guest_os::VmType::BRUSCHETTA:
+      return extensions::api::file_manager_private::VM_TYPE_BRUSCHETTA;
+    case guest_os::VmType::ARCVM:
+      return extensions::api::file_manager_private::VM_TYPE_ARCVM;
+    case guest_os::VmType::UNKNOWN:
+    case guest_os::VmType::VmType_INT_MIN_SENTINEL_DO_NOT_USE_:
+    case guest_os::VmType::VmType_INT_MAX_SENTINEL_DO_NOT_USE_:
+      NOTREACHED();
+      return extensions::api::file_manager_private::VM_TYPE_NONE;
+  }
+}
+
 }  // namespace
 
 // Creates an instance and starts the process.
@@ -349,6 +374,9 @@ void SingleEntryPropertiesGetterForDriveFs::OnGetFileInfo(
       !*properties_->hosted || metadata->capabilities->can_copy);
   properties_->can_share =
       std::make_unique<bool>(metadata->capabilities->can_share);
+
+  properties_->can_pin = std::make_unique<bool>(
+      metadata->can_pin == drivefs::mojom::FileMetadata::CanPinStatus::kOk);
 
   if (drivefs::IsAFile(metadata->type)) {
     properties_->thumbnail_url = std::make_unique<std::string>(
@@ -497,6 +525,13 @@ void VolumeToVolumeMetadata(
     case VOLUME_TYPE_SMB:
       volume_metadata->volume_type = file_manager_private::VOLUME_TYPE_SMB;
       break;
+    case VOLUME_TYPE_SYSTEM_INTERNAL:
+      volume_metadata->volume_type =
+          file_manager_private::VOLUME_TYPE_SYSTEM_INTERNAL;
+      break;
+    case VOLUME_TYPE_GUEST_OS:
+      volume_metadata->volume_type = file_manager_private::VOLUME_TYPE_GUEST_OS;
+      break;
     case NUM_VOLUME_TYPE:
       NOTREACHED();
       break;
@@ -535,17 +570,18 @@ void VolumeToVolumeMetadata(
 
   volume_metadata->is_read_only = volume.is_read_only();
   volume_metadata->has_media = volume.has_media();
+  volume_metadata->hidden = volume.hidden();
 
   switch (volume.mount_condition()) {
-    case chromeos::disks::MOUNT_CONDITION_NONE:
+    case ash::disks::MOUNT_CONDITION_NONE:
       volume_metadata->mount_condition =
           file_manager_private::MOUNT_CONDITION_NONE;
       break;
-    case chromeos::disks::MOUNT_CONDITION_UNKNOWN_FILESYSTEM:
+    case ash::disks::MOUNT_CONDITION_UNKNOWN_FILESYSTEM:
       volume_metadata->mount_condition =
           file_manager_private::MOUNT_CONDITION_UNKNOWN;
       break;
-    case chromeos::disks::MOUNT_CONDITION_UNSUPPORTED_FILESYSTEM:
+    case ash::disks::MOUNT_CONDITION_UNSUPPORTED_FILESYSTEM:
       volume_metadata->mount_condition =
           file_manager_private::MOUNT_CONDITION_UNSUPPORTED;
       break;
@@ -561,6 +597,9 @@ void VolumeToVolumeMetadata(
       break;
     case MOUNT_CONTEXT_UNKNOWN:
       break;
+  }
+  if (volume.vm_type()) {
+    volume_metadata->vm_type = VmTypeToJs(*volume.vm_type());
   }
 }
 
@@ -610,9 +649,27 @@ void GetSelectedFileInfo(content::RenderFrameHost* render_frame_host,
 }
 
 drive::EventLogger* GetLogger(Profile* profile) {
+  if (!profile)
+    return nullptr;
   drive::DriveIntegrationService* service =
       drive::DriveIntegrationServiceFactory::FindForProfile(profile);
   return service ? service->event_logger() : nullptr;
+}
+
+std::vector<extensions::api::file_manager_private::MountableGuest>
+CreateMountableGuestList(Profile* profile) {
+  auto* registry =
+      guest_os::GuestOsService::GetForProfile(profile)->MountProviderRegistry();
+  std::vector<file_manager_private::MountableGuest> guests;
+  for (const auto id : registry->List()) {
+    file_manager_private::MountableGuest guest;
+    auto* provider = registry->Get(id);
+    guest.id = id;
+    guest.display_name = provider->DisplayName();
+    guest.vm_type = VmTypeToJs(provider->vm_type());
+    guests.push_back(std::move(guest));
+  }
+  return guests;
 }
 
 }  // namespace util

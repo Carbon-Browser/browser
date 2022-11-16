@@ -6,7 +6,6 @@
 #define COMPONENTS_PREFS_PREF_SERVICE_FACTORY_H_
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "components/prefs/persistent_pref_store.h"
 #include "components/prefs/pref_registry.h"
@@ -25,6 +24,10 @@ class SequencedTaskRunner;
 class COMPONENTS_PREFS_EXPORT PrefServiceFactory {
  public:
   PrefServiceFactory();
+
+  PrefServiceFactory(const PrefServiceFactory&) = delete;
+  PrefServiceFactory& operator=(const PrefServiceFactory&) = delete;
+
   virtual ~PrefServiceFactory();
 
   // Functions for setting the various parameters of the PrefService to build.
@@ -38,6 +41,10 @@ class COMPONENTS_PREFS_EXPORT PrefServiceFactory {
 
   void set_extension_prefs(scoped_refptr<PrefStore> prefs) {
     extension_prefs_.swap(prefs);
+  }
+
+  void set_standalone_browser_prefs(scoped_refptr<PersistentPrefStore> prefs) {
+    standalone_browser_prefs_.swap(prefs);
   }
 
   void set_command_line_prefs(scoped_refptr<PrefStore> prefs) {
@@ -84,6 +91,7 @@ class COMPONENTS_PREFS_EXPORT PrefServiceFactory {
   scoped_refptr<PrefStore> managed_prefs_;
   scoped_refptr<PrefStore> supervised_user_prefs_;
   scoped_refptr<PrefStore> extension_prefs_;
+  scoped_refptr<PersistentPrefStore> standalone_browser_prefs_;
   scoped_refptr<PrefStore> command_line_prefs_;
   scoped_refptr<PersistentPrefStore> user_prefs_;
   scoped_refptr<PrefStore> recommended_prefs_;
@@ -93,9 +101,6 @@ class COMPONENTS_PREFS_EXPORT PrefServiceFactory {
 
   // Defaults to false.
   bool async_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(PrefServiceFactory);
 };
 
 #endif  // COMPONENTS_PREFS_PREF_SERVICE_FACTORY_H_

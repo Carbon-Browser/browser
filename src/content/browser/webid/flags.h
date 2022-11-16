@@ -9,8 +9,14 @@
 
 namespace content {
 
-// Whether WebID is enabled or not.
-bool IsWebIDEnabled();
+// Whether FedCM auto sign-in is enabled.
+bool IsFedCmAutoSigninEnabled();
+
+// Whether FedCM IDP sign-out is enabled.
+bool IsFedCmIdpSignoutEnabled();
+
+// Whether manifest list fetching and validation is enabled.
+bool IsFedCmManifestValidationEnabled();
 
 }  // namespace content
 

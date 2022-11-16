@@ -6,7 +6,6 @@
 #define COMPONENTS_PASSWORD_MANAGER_CORE_BROWSER_INSECURE_CREDENTIALS_TABLE_H_
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/time/time.h"
 #include "base/types/strong_alias.h"
 #include "components/password_manager/core/browser/password_form.h"
@@ -73,6 +72,10 @@ class InsecureCredentialsTable {
   static const char kTableName[];
 
   InsecureCredentialsTable() = default;
+
+  InsecureCredentialsTable(const InsecureCredentialsTable&) = delete;
+  InsecureCredentialsTable& operator=(const InsecureCredentialsTable&) = delete;
+
   ~InsecureCredentialsTable() = default;
 
   // Initializes |db_|.
@@ -92,8 +95,6 @@ class InsecureCredentialsTable {
 
  private:
   sql::Database* db_ = nullptr;
-
-  DISALLOW_COPY_AND_ASSIGN(InsecureCredentialsTable);
 };
 
 }  // namespace password_manager

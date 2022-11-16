@@ -2,8 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "chrome/browser/ui/ash/holding_space/holding_space_browsertest_base.h"
-
 #include <set>
 #include <unordered_map>
 #include <vector>
@@ -22,7 +20,9 @@
 #include "ash/public/cpp/holding_space/holding_space_test_api.h"
 #include "ash/public/cpp/holding_space/mock_holding_space_client.h"
 #include "ash/public/cpp/holding_space/mock_holding_space_model_observer.h"
+#include "ash/style/dark_light_mode_controller_impl.h"
 #include "ash/test/view_drawn_waiter.h"
+#include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/containers/contains.h"
 #include "base/files/file_util.h"
@@ -30,16 +30,23 @@
 #include "base/scoped_observation.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_locale.h"
+#include "build/build_config.h"
 #include "chrome/browser/ash/crosapi/crosapi_ash.h"
 #include "chrome/browser/ash/crosapi/crosapi_manager.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
+#include "chrome/browser/download/chrome_download_manager_delegate.h"
+#include "chrome/browser/download/download_core_service.h"
+#include "chrome/browser/download/download_core_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
+#include "chrome/browser/ui/ash/holding_space/holding_space_browsertest_base.h"
 #include "chrome/browser/ui/ash/holding_space/holding_space_downloads_delegate.h"
 #include "chrome/browser/ui/ash/holding_space/holding_space_keyed_service_factory.h"
 #include "chrome/browser/ui/ash/holding_space/holding_space_util.h"
 #include "chrome/browser/ui/browser_window.h"
 #include "components/download/public/common/mock_download_item.h"
+#include "content/public/browser/download_item_utils.h"
+#include "content/public/browser/download_manager_delegate.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/mock_download_manager.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -53,6 +60,7 @@
 #include "ui/events/base_event_utils.h"
 #include "ui/events/test/event_generator.h"
 #include "ui/gfx/image/image_unittest_util.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/controls/menu/menu_controller.h"
 #include "ui/views/controls/menu/menu_item_view.h"
@@ -68,6 +76,15 @@ namespace ash {
 namespace {
 
 // Helpers ---------------------------------------------------------------------
+
+// Returns the accessible name of the specified `view`.
+std::string GetAccessibleName(const views::View* view) {
+  ui::AXNodeData a11y_data;
+  view->GetViewAccessibility().GetAccessibleNodeData(&a11y_data);
+  std::string a11y_name;
+  a11y_data.GetStringAttribute(ax::mojom::StringAttribute::kName, &a11y_name);
+  return a11y_name;
+}
 
 // Returns all holding space item types.
 std::vector<HoldingSpaceItem::Type> GetHoldingSpaceItemTypes() {
@@ -409,10 +426,14 @@ class DropTargetView : public views::WidgetDelegateView {
     return ui::DragDropTypes::DRAG_COPY;
   }
 
-  ui::mojom::DragOperation OnPerformDrop(
-      const ui::DropTargetEvent& event) override {
+  DropCallback GetDropCallback(const ui::DropTargetEvent& event) override {
+    return base::BindOnce(&DropTargetView::PerformDrop, base::Unretained(this));
+  }
+
+  void PerformDrop(const ui::DropTargetEvent& event,
+                   ui::mojom::DragOperation& output_drag_op) {
     EXPECT_TRUE(event.data().GetFilename(&copied_file_path_));
-    return ui::mojom::DragOperation::kCopy;
+    output_drag_op = ui::mojom::DragOperation::kCopy;
   }
 
   void InitWidget(aura::Window* context) {
@@ -484,6 +505,12 @@ class HoldingSpaceUiDragAndDropBrowserTest
       public testing::WithParamInterface<
           std::tuple<PerformDragAndDropCallback, StorageLocationFlags>> {
  public:
+  HoldingSpaceUiDragAndDropBrowserTest() {
+    // Drag-and-drop tests will close the browser because browser events
+    // sometimes get in the way of drag-and-drop events, causing test flakiness.
+    set_exit_when_last_browser_closes(false);
+  }
+
   // Asserts expectations that the holding space tray is or isn't a drop target.
   void ExpectTrayIsDropTarget(bool is_drop_target) {
     EXPECT_EQ(
@@ -575,6 +602,11 @@ class HoldingSpaceUiDragAndDropBrowserTest
   void SetUpOnMainThread() override {
     HoldingSpaceUiBrowserTest::SetUpOnMainThread();
 
+    // Close the browser because browser events sometimes get in the way of
+    // drag-and-drop events, causing test flakiness.
+    CloseBrowserSynchronously(browser());
+    content::RunAllTasksUntilIdle();
+
     // Initialize `drop_sender_view_`.
     drop_sender_view_ = DropSenderView::Create(GetRootWindowForNewWindows());
     drop_sender_view_->GetWidget()->SetBounds(gfx::Rect(0, 0, 100, 100));
@@ -608,8 +640,15 @@ class HoldingSpaceUiDragAndDropBrowserTest
   DropTargetView* drop_target_view_ = nullptr;
 };
 
+// Flaky on ChromeOS bots: crbug.com/1338054
+#if BUILDFLAG(IS_CHROMEOS)
+#define MAYBE_DragAndDrop DISABLED_DragAndDrop
+#else
+#define MAYBE_DragAndDrop DragAndDrop
+#endif
 // Verifies that drag-and-drop of holding space items works.
-IN_PROC_BROWSER_TEST_P(HoldingSpaceUiDragAndDropBrowserTest, DragAndDrop) {
+IN_PROC_BROWSER_TEST_P(HoldingSpaceUiDragAndDropBrowserTest,
+                       MAYBE_DragAndDrop) {
   ui::ScopedAnimationDurationScaleMode scoped_animation_duration_scale_mode(
       ui::ScopedAnimationDurationScaleMode::ZERO_DURATION);
 
@@ -618,9 +657,6 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiDragAndDropBrowserTest, DragAndDrop) {
 
   test_api().Show();
   ASSERT_TRUE(test_api().IsShowing());
-
-  // Let the message loop run so that resize of status tray takes effect.
-  base::RunLoop().RunUntilIdle();
 
   std::vector<views::View*> download_chips = test_api().GetDownloadChips();
   ASSERT_EQ(1u, download_chips.size());
@@ -679,9 +715,6 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiDragAndDropBrowserTest, DragAndDropToPin) {
   // Add an item to holding space to cause the holding space tray to appear.
   AddDownloadFile();
   ASSERT_TRUE(test_api().IsShowingInShelf());
-
-  // Let the message loop run so that resize of status tray takes effect.
-  base::RunLoop().RunUntilIdle();
 
   // Bind an observer to watch for updates to the holding space model.
   testing::NiceMock<MockHoldingSpaceModelObserver> mock;
@@ -1314,10 +1347,6 @@ class HoldingSpaceUiInProgressDownloadsBrowserTestBase
   explicit HoldingSpaceUiInProgressDownloadsBrowserTestBase(
       DownloadTypeToUse download_type_to_use)
       : download_type_to_use_(download_type_to_use) {
-    // Enable in-progress downloads integration.
-    scoped_feature_list_.InitAndEnableFeature(
-        features::kHoldingSpaceInProgressDownloadsIntegration);
-
     // Use a testing factory to give us a chance to swap out the production
     // download manager for a given browser `context` with a mock prior to
     // holding space keyed service creation.
@@ -1325,11 +1354,18 @@ class HoldingSpaceUiInProgressDownloadsBrowserTestBase
         base::BindLambdaForTesting([&](content::BrowserContext* context) {
           DCHECK(!download_manager_);
 
-          // Swap out production download manager for a mock.
+          // Create a mock download manager.
           download_manager_ =
               new testing::NiceMock<content::MockDownloadManager>();
-          context->SetDownloadManagerForTesting(
-              base::WrapUnique(download_manager_));
+
+          // Mock `content::DownloadManager::Shutdown()`.
+          ON_CALL(*download_manager_, Shutdown)
+              .WillByDefault(testing::Invoke([&]() {
+                if (download_manager_->GetDelegate()) {
+                  download_manager_->GetDelegate()->Shutdown();
+                  download_manager_->SetDelegate(nullptr);
+                }
+              }));
 
           // Mock `content::DownloadManager::IsManagerInitialized()`.
           ON_CALL(*download_manager_, IsManagerInitialized())
@@ -1348,6 +1384,34 @@ class HoldingSpaceUiInProgressDownloadsBrowserTestBase
                   &download_manager_observers_,
                   &base::ObserverList<content::DownloadManager::Observer>::
                       Unchecked::RemoveObserver));
+
+          // Mock `content::DownloadManager::GetBrowserContext()`.
+          ON_CALL(*download_manager_, GetBrowserContext)
+              .WillByDefault(testing::Return(context));
+
+          // Mock `content::DownloadManager::SetDelegate()`.
+          ON_CALL(*download_manager_, SetDelegate)
+              .WillByDefault(testing::Invoke(
+                  [&](content::DownloadManagerDelegate* delegate) {
+                    download_manager_delegate_ = delegate;
+                  }));
+
+          // Mock `content::DownloadManager::GetDelegate()`.
+          ON_CALL(*download_manager_, GetDelegate)
+              .WillByDefault(testing::Invoke(
+                  [&]() { return download_manager_delegate_; }));
+
+          // Swap out the production download manager for the mock.
+          context->SetDownloadManagerForTesting(
+              base::WrapUnique(download_manager_));
+
+          // Install a new download manager delegate after swapping out the
+          // production download manager so it will properly register itself
+          // with the mock.
+          DownloadCoreServiceFactory::GetForBrowserContext(context)
+              ->SetDownloadManagerDelegateForTesting(
+                  std::make_unique<ChromeDownloadManagerDelegate>(
+                      Profile::FromBrowserContext(context)));
 
           // Resume default construction sequence.
           return HoldingSpaceKeyedServiceFactory::GetDefaultTestingFactory()
@@ -1532,15 +1596,27 @@ class HoldingSpaceUiInProgressDownloadsBrowserTestBase
   }
 
   // Updates whether the specified `in_progress_download` of the appropriate
-  // type for Ash or Lacros given test parameterization is dangerous or mixed
-  // content.
-  void UpdateInProgressDownloadIsDangerousOrMixedContent(
+  // type for Ash or Lacros given test parameterization is dangerous, mixed
+  // content, or might be malicious.
+  void UpdateInProgressDownloadIsDangerousMixedContentOrMightBeMalicious(
       AshOrLacrosDownload* in_progress_download,
       bool is_dangerous,
-      bool is_mixed_content) {
+      bool is_mixed_content,
+      bool might_be_malicious) {
+    ASSERT_TRUE(is_dangerous || !might_be_malicious);
     switch (GetDownloadTypeToUse()) {
       case DownloadTypeToUse::kAsh: {
         auto& in_progress_ash_download = absl::get<0>(*in_progress_download);
+        ON_CALL(*in_progress_ash_download, GetDangerType())
+            .WillByDefault(testing::Return(
+                is_dangerous
+                    ? might_be_malicious
+                          ? download::DownloadDangerType::
+                                DOWNLOAD_DANGER_TYPE_MAYBE_DANGEROUS_CONTENT
+                          : download::DownloadDangerType::
+                                DOWNLOAD_DANGER_TYPE_DANGEROUS_FILE
+                    : download::DownloadDangerType::
+                          DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS));
         ON_CALL(*in_progress_ash_download, IsDangerous())
             .WillByDefault(testing::Return(is_dangerous));
         ON_CALL(*in_progress_ash_download, IsMixedContent())
@@ -1550,9 +1626,61 @@ class HoldingSpaceUiInProgressDownloadsBrowserTestBase
       }
       case DownloadTypeToUse::kLacros: {
         auto& in_progress_lacros_download = absl::get<1>(*in_progress_download);
+        in_progress_lacros_download->danger_type =
+            is_dangerous ? might_be_malicious
+                               ? crosapi::mojom::DownloadDangerType::
+                                     kDownloadDangerTypeMaybeDangerousContent
+                               : crosapi::mojom::DownloadDangerType::
+                                     kDownloadDangerTypeDangerousFile
+                         : crosapi::mojom::DownloadDangerType::
+                               kDownloadDangerTypeNotDangerous;
         in_progress_lacros_download->is_dangerous = is_dangerous;
         in_progress_lacros_download->is_mixed_content = is_mixed_content;
         NotifyObserversLacrosDownloadUpdated(in_progress_lacros_download.get());
+        return;
+      }
+    }
+  }
+
+  // Updates whether the specified `in_progress_download` of the appropriate
+  // type for Ash or Lacros given test parameterization is scanning.
+  void UpdateInProgressDownloadIsScanning(
+      AshOrLacrosDownload* in_progress_download,
+      bool is_scanning) {
+    switch (GetDownloadTypeToUse()) {
+      case DownloadTypeToUse::kAsh: {
+        auto& in_progress_ash_download = absl::get<0>(*in_progress_download);
+        const bool was_scanning =
+            in_progress_ash_download->GetDangerType() ==
+            download::DownloadDangerType::DOWNLOAD_DANGER_TYPE_ASYNC_SCANNING;
+        if (is_scanning != was_scanning) {
+          ON_CALL(*in_progress_ash_download, GetDangerType())
+              .WillByDefault(testing::Return(
+                  is_scanning ? download::DownloadDangerType::
+                                    DOWNLOAD_DANGER_TYPE_ASYNC_SCANNING
+                              : download::DownloadDangerType::
+                                    DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS));
+          ON_CALL(*in_progress_ash_download, IsDangerous())
+              .WillByDefault(testing::Return(false));
+          NotifyObserversAshDownloadUpdated(in_progress_ash_download.get());
+        }
+        return;
+      }
+      case DownloadTypeToUse::kLacros: {
+        auto& in_progress_lacros_download = absl::get<1>(*in_progress_download);
+        const bool was_scanning = in_progress_lacros_download->danger_type ==
+                                  crosapi::mojom::DownloadDangerType::
+                                      kDownloadDangerTypeAsyncScanning;
+        if (is_scanning != was_scanning) {
+          in_progress_lacros_download->danger_type =
+              is_scanning ? crosapi::mojom::DownloadDangerType::
+                                kDownloadDangerTypeAsyncScanning
+                          : crosapi::mojom::DownloadDangerType::
+                                kDownloadDangerTypeNotDangerous;
+          in_progress_lacros_download->is_dangerous = false;
+          NotifyObserversLacrosDownloadUpdated(
+              in_progress_lacros_download.get());
+        }
         return;
       }
     }
@@ -1589,6 +1717,10 @@ class HoldingSpaceUiInProgressDownloadsBrowserTestBase
     auto ash_download_item =
         std::make_unique<testing::NiceMock<download::MockDownloadItem>>();
 
+    content::DownloadItemUtils::AttachInfo(
+        ash_download_item.get(), GetProfile(),
+        /*web_contents=*/nullptr, content::GlobalRenderFrameHostId());
+
     // Mock `download::DownloadItem::Cancel()`.
     ON_CALL(*ash_download_item, Cancel(/*from_user=*/testing::Eq(true)))
         .WillByDefault(testing::InvokeWithoutArgs(
@@ -1608,10 +1740,9 @@ class HoldingSpaceUiInProgressDownloadsBrowserTestBase
               ash_download_item->NotifyObserversDownloadUpdated();
             }));
 
-    // Mock `download::DownloadItem::GetGuid()`.
-    ON_CALL(*ash_download_item, GetGuid)
-        .WillByDefault(testing::ReturnRefOfCopy(
-            base::GUID::GenerateRandomV4().AsLowercaseString()));
+    // Mock `download::DownloadItem::GetETag()`.
+    ON_CALL(*ash_download_item, GetETag)
+        .WillByDefault(testing::ReturnRefOfCopy(std::string()));
 
     // Mock `download::DownloadItem::GetFullPath()`.
     ON_CALL(*ash_download_item, GetFullPath)
@@ -1624,14 +1755,67 @@ class HoldingSpaceUiInProgressDownloadsBrowserTestBase
                          : file_path;
             }));
 
+    // Mock `download::DownloadItem::GetGuid()`.
+    ON_CALL(*ash_download_item, GetGuid)
+        .WillByDefault(testing::ReturnRefOfCopy(
+            base::GUID::GenerateRandomV4().AsLowercaseString()));
+
+    // Mock `download::DownloadItem::GetId()`.
+    ON_CALL(*ash_download_item, GetId).WillByDefault(testing::Invoke([]() {
+      static uint32_t kNextId = 1u;
+      return kNextId++;
+    }));
+
+    // Mock `download::DownloadItem::GetLastModifiedTime()`.
+    ON_CALL(*ash_download_item, GetLastModifiedTime)
+        .WillByDefault(testing::ReturnRefOfCopy(std::string()));
+
+    // Mock `download::DownloadItem::GetLastReason()`.
+    ON_CALL(*ash_download_item, GetLastReason)
+        .WillByDefault(
+            testing::Invoke([ash_download_item = ash_download_item.get()]() {
+              return ash_download_item->GetState() ==
+                             download::DownloadItem::CANCELLED
+                         ? download::DownloadInterruptReason::
+                               DOWNLOAD_INTERRUPT_REASON_USER_CANCELED
+                         : download::DownloadInterruptReason::
+                               DOWNLOAD_INTERRUPT_REASON_NONE;
+            }));
+
     // Mock `download::DownloadItem::GetOpenWhenComplete()`.
     auto open_when_complete = std::make_unique<bool>(false);
     ON_CALL(*ash_download_item, GetOpenWhenComplete)
         .WillByDefault(testing::ReturnPointee(open_when_complete.get()));
 
+    // Mock `download::DownloadItem::GetRerouteInfo()`.
+    ON_CALL(*ash_download_item, GetRerouteInfo)
+        .WillByDefault(
+            testing::ReturnRefOfCopy(download::DownloadItemRerouteInfo()));
+
     // Mock `download::DownloadItem::GetReceivedBytes()`.
     ON_CALL(*ash_download_item, GetReceivedBytes)
         .WillByDefault(testing::Return(received_bytes));
+
+    // Mock `download::DownloadItem::GetReceivedSlices()`.
+    ON_CALL(*ash_download_item, GetReceivedSlices)
+        .WillByDefault(testing::ReturnRefOfCopy(
+            std::vector<download::DownloadItem::ReceivedSlice>()));
+
+    // Mock `download::DownloadItem::GetSerializedEmbedderDownloadData()`.
+    ON_CALL(*ash_download_item, GetSerializedEmbedderDownloadData)
+        .WillByDefault(testing::ReturnRefOfCopy(std::string()));
+
+    // Mock `download::DownloadItem::GetReferrerUrl()`.
+    ON_CALL(*ash_download_item, GetReferrerUrl)
+        .WillByDefault(testing::ReturnRefOfCopy(GURL()));
+
+    // Mock `download::DownloadItem::GetTabUrl()`.
+    ON_CALL(*ash_download_item, GetTabUrl)
+        .WillByDefault(testing::ReturnRefOfCopy(GURL()));
+
+    // Mock `download::DownloadItem::GetTabReferrerUrl()`.
+    ON_CALL(*ash_download_item, GetTabReferrerUrl)
+        .WillByDefault(testing::ReturnRefOfCopy(GURL()));
 
     // Mock `download::DownloadItem::GetState()`.
     ON_CALL(*ash_download_item, GetState).WillByDefault(testing::Return(state));
@@ -1643,6 +1827,22 @@ class HoldingSpaceUiInProgressDownloadsBrowserTestBase
     // Mock `download::DownloadItem::GetTotalBytes()`.
     ON_CALL(*ash_download_item, GetTotalBytes)
         .WillByDefault(testing::Return(total_bytes));
+
+    // Mock `download::DownloadItem::GetURL()`.
+    ON_CALL(*ash_download_item, GetURL)
+        .WillByDefault(testing::ReturnRefOfCopy(GURL()));
+
+    // Mock `download::DownloadItem::GetUrlChain()`.
+    ON_CALL(*ash_download_item, GetUrlChain)
+        .WillByDefault(testing::ReturnRefOfCopy(std::vector<GURL>()));
+
+    // Mock `download::DownloadItem::IsDone()`.
+    ON_CALL(*ash_download_item, IsDone)
+        .WillByDefault(
+            testing::Invoke([ash_download_item = ash_download_item.get()]() {
+              return ash_download_item->GetState() ==
+                     download::DownloadItem::COMPLETE;
+            }));
 
     // Mock `download::DownloadItem::IsPaused()`.
     auto paused = std::make_unique<bool>(false);
@@ -1806,6 +2006,7 @@ class HoldingSpaceUiInProgressDownloadsBrowserTestBase
   const DownloadTypeToUse download_type_to_use_;
   base::test::ScopedFeatureList scoped_feature_list_;
   testing::NiceMock<content::MockDownloadManager>* download_manager_ = nullptr;
+  content::DownloadManagerDelegate* download_manager_delegate_ = nullptr;
   base::ObserverList<content::DownloadManager::Observer>::Unchecked
       download_manager_observers_;
   testing::NiceMock<MockDownloadControllerClient> download_controller_client_;
@@ -1829,9 +2030,9 @@ INSTANTIATE_TEST_SUITE_P(All,
                          testing::ValuesIn({DownloadTypeToUse::kAsh,
                                             DownloadTypeToUse::kLacros}));
 
-// Verifies that primary and secondary text are displayed as intended.
+// Verifies that primary, secondary, and accessible text work as intended.
 IN_PROC_BROWSER_TEST_P(HoldingSpaceUiInProgressDownloadsBrowserTest,
-                       PrimaryAndSecondaryText) {
+                       PrimarySecondaryAndAccessibleText) {
   ui::ScopedAnimationDurationScaleMode scoped_animation_duration_scale_mode(
       ui::ScopedAnimationDurationScaleMode::ZERO_DURATION);
 
@@ -1868,10 +2069,18 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiInProgressDownloadsBrowserTest,
   EXPECT_TRUE(primary_label->GetVisible());
   EXPECT_EQ(primary_label->GetText(), target_file_name);
 
+  const bool is_dark_mode_state =
+      DarkLightModeControllerImpl::Get()->IsDarkModeEnabled();
   // Initially, no bytes have been received so `secondary_label` should display
   // `0 B` as there is no knowledge of the total number of bytes expected.
   EXPECT_TRUE(secondary_label->GetVisible());
   EXPECT_EQ(secondary_label->GetText(), u"0 B");
+  EXPECT_EQ(secondary_label->GetEnabledColor(),
+            is_dark_mode_state ? gfx::kGoogleGrey400 : gfx::kGoogleGrey700);
+
+  // The accessible name should indicate that the download is in progress.
+  EXPECT_EQ(GetAccessibleName(download_chips.at(0)),
+            base::UTF16ToUTF8(u"Downloading " + target_file_name));
 
   // Pause the download.
   RightClick(download_chips.at(0));
@@ -1885,6 +2094,13 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiInProgressDownloadsBrowserTest,
   EXPECT_EQ(primary_label->GetText(), target_file_name);
   EXPECT_TRUE(secondary_label->GetVisible());
   WaitForText(secondary_label, u"Paused, 0 B");
+  EXPECT_EQ(secondary_label->GetEnabledColor(),
+            is_dark_mode_state ? gfx::kGoogleGrey400 : gfx::kGoogleGrey700);
+
+  // The accessible name should indicate that the download is in progress and
+  // that progress is paused.
+  EXPECT_EQ(GetAccessibleName(download_chips.at(0)),
+            base::UTF16ToUTF8(u"Download paused " + target_file_name));
 
   // Update received bytes.
   received_bytes = 1024 * 1024;
@@ -1897,6 +2113,13 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiInProgressDownloadsBrowserTest,
   EXPECT_EQ(primary_label->GetText(), target_file_name);
   EXPECT_TRUE(secondary_label->GetVisible());
   WaitForText(secondary_label, u"Paused, 1,024 KB");
+  EXPECT_EQ(secondary_label->GetEnabledColor(),
+            is_dark_mode_state ? gfx::kGoogleGrey400 : gfx::kGoogleGrey700);
+
+  // The accessible name should indicate that the download is in progress and
+  // that progress is paused.
+  EXPECT_EQ(GetAccessibleName(download_chips.at(0)),
+            base::UTF16ToUTF8(u"Download paused " + target_file_name));
 
   // Resume the download.
   RightClick(download_chips.at(0));
@@ -1909,6 +2132,12 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiInProgressDownloadsBrowserTest,
   EXPECT_EQ(primary_label->GetText(), target_file_name);
   EXPECT_TRUE(secondary_label->GetVisible());
   WaitForText(secondary_label, u"1,024 KB");
+  EXPECT_EQ(secondary_label->GetEnabledColor(),
+            is_dark_mode_state ? gfx::kGoogleGrey400 : gfx::kGoogleGrey700);
+
+  // The accessible name should indicate that the download is in progress.
+  EXPECT_EQ(GetAccessibleName(download_chips.at(0)),
+            base::UTF16ToUTF8(u"Downloading " + target_file_name));
 
   // Update total bytes.
   total_bytes = 2 * received_bytes;
@@ -1922,6 +2151,12 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiInProgressDownloadsBrowserTest,
   EXPECT_EQ(primary_label->GetText(), target_file_name);
   EXPECT_TRUE(secondary_label->GetVisible());
   WaitForText(secondary_label, u"1.0/2.0 MB");
+  EXPECT_EQ(secondary_label->GetEnabledColor(),
+            is_dark_mode_state ? gfx::kGoogleGrey400 : gfx::kGoogleGrey700);
+
+  // The accessible name should indicate that the download is in progress.
+  EXPECT_EQ(GetAccessibleName(download_chips.at(0)),
+            base::UTF16ToUTF8(u"Downloading " + target_file_name));
 
   // Pause the download.
   RightClick(download_chips.at(0));
@@ -1935,6 +2170,13 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiInProgressDownloadsBrowserTest,
   EXPECT_EQ(primary_label->GetText(), target_file_name);
   EXPECT_TRUE(secondary_label->GetVisible());
   WaitForText(secondary_label, u"Paused, 1.0/2.0 MB");
+  EXPECT_EQ(secondary_label->GetEnabledColor(),
+            is_dark_mode_state ? gfx::kGoogleGrey400 : gfx::kGoogleGrey700);
+
+  // The accessible name should indicate that the download is in progress and
+  // that progress is paused.
+  EXPECT_EQ(GetAccessibleName(download_chips.at(0)),
+            base::UTF16ToUTF8(u"Download paused " + target_file_name));
 
   // Update received bytes to indicate that all bytes have been received.
   received_bytes = total_bytes;
@@ -1950,11 +2192,20 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiInProgressDownloadsBrowserTest,
   EXPECT_EQ(primary_label->GetText(), target_file_name);
   EXPECT_TRUE(secondary_label->GetVisible());
   WaitForText(secondary_label, u"Paused, 2.0/2.0 MB");
+  EXPECT_EQ(secondary_label->GetEnabledColor(),
+            is_dark_mode_state ? gfx::kGoogleGrey400 : gfx::kGoogleGrey700);
+
+  // The accessible name should indicate that the download is in progress and
+  // that progress is paused.
+  EXPECT_EQ(GetAccessibleName(download_chips.at(0)),
+            base::UTF16ToUTF8(u"Download paused " + target_file_name));
 
   // Mark the download as dangerous.
-  UpdateInProgressDownloadIsDangerousOrMixedContent(in_progress_download.get(),
-                                                    /*is_dangerous=*/true,
-                                                    /*is_mixed_content=*/false);
+  UpdateInProgressDownloadIsDangerousMixedContentOrMightBeMalicious(
+      in_progress_download.get(),
+      /*is_dangerous=*/true,
+      /*is_mixed_content=*/false,
+      /*might_be_malicious=*/true);
 
   // Because the download is marked as dangerous, that should be indicated in
   // the `secondary_label` of the holding space item chip view.
@@ -1962,11 +2213,54 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiInProgressDownloadsBrowserTest,
   EXPECT_EQ(primary_label->GetText(), target_file_name);
   EXPECT_TRUE(secondary_label->GetVisible());
   WaitForText(secondary_label, u"Dangerous file");
+  EXPECT_EQ(secondary_label->GetEnabledColor(),
+            is_dark_mode_state ? gfx::kGoogleRed300 : gfx::kGoogleRed600);
+
+  // The accessible name should indicate that the download is dangerous.
+  EXPECT_EQ(GetAccessibleName(download_chips.at(0)),
+            base::UTF16ToUTF8(u"Download dangerous " + target_file_name));
+
+  // Mark the download as being scanned.
+  UpdateInProgressDownloadIsScanning(in_progress_download.get(), true);
+
+  // Because the download is marked as being scanned, that should be indicated
+  // in the `secondary_label` of the holding space item chip view.
+  EXPECT_TRUE(primary_label->GetVisible());
+  EXPECT_EQ(primary_label->GetText(), target_file_name);
+  EXPECT_TRUE(secondary_label->GetVisible());
+  WaitForText(secondary_label, u"Scanning");
+  EXPECT_EQ(secondary_label->GetEnabledColor(),
+            is_dark_mode_state ? gfx::kGoogleBlue300 : gfx::kGoogleBlue600);
+
+  // The accessible name should indicate that the download is being scanning.
+  EXPECT_EQ(GetAccessibleName(download_chips.at(0)),
+            base::UTF16ToUTF8(u"Download scanning " + target_file_name));
+
+  // Stop scanning and mark that the download is *not* malicious.
+  UpdateInProgressDownloadIsDangerousMixedContentOrMightBeMalicious(
+      in_progress_download.get(), /*is_dangerous=*/true,
+      /*is_mixed_content=*/false, /*might_be_malicious=*/false);
+
+  // Because the download is *not* malicious, the user will be able to keep/
+  // discard the download via notification. That should be indicated in the
+  // `secondary_label` of the holding space item chip view.
+  EXPECT_TRUE(primary_label->GetVisible());
+  EXPECT_EQ(primary_label->GetText(), target_file_name);
+  EXPECT_TRUE(secondary_label->GetVisible());
+  WaitForText(secondary_label, u"Confirm download");
+  EXPECT_EQ(secondary_label->GetEnabledColor(),
+            is_dark_mode_state ? gfx::kGoogleYellow300 : gfx::kGoogleYellow900);
+
+  // The accessible name should indicate that the download must be confirmed.
+  EXPECT_EQ(GetAccessibleName(download_chips.at(0)),
+            base::UTF16ToUTF8(u"Confirm download " + target_file_name));
 
   // Mark the download as safe.
-  UpdateInProgressDownloadIsDangerousOrMixedContent(in_progress_download.get(),
-                                                    /*is_dangerous=*/false,
-                                                    /*is_mixed_content=*/false);
+  UpdateInProgressDownloadIsDangerousMixedContentOrMightBeMalicious(
+      in_progress_download.get(),
+      /*is_dangerous=*/false,
+      /*is_mixed_content=*/false,
+      /*might_be_malicious=*/false);
 
   // Because the download is no longer marked as dangerous, that should be
   // indicated in the `secondary_label` of the holding space item chip view.
@@ -1974,11 +2268,20 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiInProgressDownloadsBrowserTest,
   EXPECT_EQ(primary_label->GetText(), target_file_name);
   EXPECT_TRUE(secondary_label->GetVisible());
   WaitForText(secondary_label, u"Paused, 2.0/2.0 MB");
+  EXPECT_EQ(secondary_label->GetEnabledColor(),
+            is_dark_mode_state ? gfx::kGoogleGrey400 : gfx::kGoogleGrey700);
+
+  // The accessible name should indicate that the download is in progress and
+  // that progress is paused.
+  EXPECT_EQ(GetAccessibleName(download_chips.at(0)),
+            base::UTF16ToUTF8(u"Download paused " + target_file_name));
 
   // Mark the download as mixed content.
-  UpdateInProgressDownloadIsDangerousOrMixedContent(in_progress_download.get(),
-                                                    /*is_dangerous=*/false,
-                                                    /*is_mixed_content=*/true);
+  UpdateInProgressDownloadIsDangerousMixedContentOrMightBeMalicious(
+      in_progress_download.get(),
+      /*is_dangerous=*/false,
+      /*is_mixed_content=*/true,
+      /*might_be_malicious=*/false);
 
   // Because the download is marked as mixed content, that should be indicated
   // in the `secondary_label` of the holding space item chip view.
@@ -1986,11 +2289,19 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiInProgressDownloadsBrowserTest,
   EXPECT_EQ(primary_label->GetText(), target_file_name);
   EXPECT_TRUE(secondary_label->GetVisible());
   WaitForText(secondary_label, u"Dangerous file");
+  EXPECT_EQ(secondary_label->GetEnabledColor(),
+            is_dark_mode_state ? gfx::kGoogleRed300 : gfx::kGoogleRed600);
+
+  // The accessible name should indicate that the download is dangerous.
+  EXPECT_EQ(GetAccessibleName(download_chips.at(0)),
+            base::UTF16ToUTF8(u"Download dangerous " + target_file_name));
 
   // Mark the download as *not* mixed content.
-  UpdateInProgressDownloadIsDangerousOrMixedContent(in_progress_download.get(),
-                                                    /*is_dangerous=*/false,
-                                                    /*is_mixed_content=*/false);
+  UpdateInProgressDownloadIsDangerousMixedContentOrMightBeMalicious(
+      in_progress_download.get(),
+      /*is_dangerous=*/false,
+      /*is_mixed_content=*/false,
+      /*might_be_malicious=*/false);
 
   // Because the download is no longer marked as mixed content, that should be
   // indicated in the `secondary_label` of the holding space item chip view.
@@ -1998,6 +2309,13 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiInProgressDownloadsBrowserTest,
   EXPECT_EQ(primary_label->GetText(), target_file_name);
   EXPECT_TRUE(secondary_label->GetVisible());
   WaitForText(secondary_label, u"Paused, 2.0/2.0 MB");
+  EXPECT_EQ(secondary_label->GetEnabledColor(),
+            is_dark_mode_state ? gfx::kGoogleGrey400 : gfx::kGoogleGrey700);
+
+  // The accessible name should indicate that the download is in progress and
+  // that progress is paused.
+  EXPECT_EQ(GetAccessibleName(download_chips.at(0)),
+            base::UTF16ToUTF8(u"Download paused " + target_file_name));
 
   // Complete the download.
   CompleteInProgressDownload(in_progress_download.get());
@@ -2006,6 +2324,12 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiInProgressDownloadsBrowserTest,
   EXPECT_TRUE(primary_label->GetVisible());
   EXPECT_EQ(primary_label->GetText(), target_file_name);
   EXPECT_FALSE(secondary_label->GetVisible());
+  EXPECT_EQ(secondary_label->GetEnabledColor(),
+            is_dark_mode_state ? gfx::kGoogleGrey400 : gfx::kGoogleGrey700);
+
+  // The accessible name should indicate the target file name.
+  EXPECT_EQ(GetAccessibleName(download_chips.at(0)),
+            base::UTF16ToUTF8(target_file_name));
 }
 
 // Verifies that canceling holding space items works as intended.
@@ -2595,8 +2919,7 @@ IN_PROC_BROWSER_TEST_F(HoldingSpaceUiBrowserTest, AddScreenRecording) {
   // Record a 100 ms long video.
   base::RunLoop video_recording_time;
   base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
-      FROM_HERE, video_recording_time.QuitClosure(),
-      base::TimeDelta::FromMilliseconds(100));
+      FROM_HERE, video_recording_time.QuitClosure(), base::Milliseconds(100));
   video_recording_time.Run();
   capture_mode_test_api.StopVideoRecording();
 

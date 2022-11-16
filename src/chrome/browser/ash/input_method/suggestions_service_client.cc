@@ -15,15 +15,15 @@ namespace ash {
 namespace input_method {
 namespace {
 
-using ::chromeos::ime::TextSuggestion;
-using ::chromeos::ime::TextSuggestionMode;
-using ::chromeos::ime::TextSuggestionType;
 using ::chromeos::machine_learning::mojom::MultiWordExperimentGroup;
 using ::chromeos::machine_learning::mojom::NextWordCompletionCandidate;
 using ::chromeos::machine_learning::mojom::TextSuggesterQuery;
 using ::chromeos::machine_learning::mojom::TextSuggesterResultPtr;
 using ::chromeos::machine_learning::mojom::TextSuggesterSpec;
 using ::chromeos::machine_learning::mojom::TextSuggestionCandidatePtr;
+using ime::TextSuggestion;
+using ime::TextSuggestionMode;
+using ime::TextSuggestionType;
 
 constexpr size_t kMaxNumberCharsSent = 100;
 
@@ -85,17 +85,17 @@ SuggestionsServiceClient::SuggestionsServiceClient() {
       ->GetMachineLearningService()
       .LoadTextSuggester(
           text_suggester_.BindNewPipeAndPassReceiver(), std::move(spec),
-          base::BindOnce(
-              [](bool* text_suggester_loaded_,
-                 chromeos::machine_learning::mojom::LoadModelResult result) {
-                *text_suggester_loaded_ =
-                    result ==
-                    chromeos::machine_learning::mojom::LoadModelResult::OK;
-              },
-              &text_suggester_loaded_));
+          base::BindOnce(&SuggestionsServiceClient::OnTextSuggesterLoaded,
+                         weak_ptr_factory_.GetWeakPtr()));
 }
 
 SuggestionsServiceClient::~SuggestionsServiceClient() = default;
+
+void SuggestionsServiceClient::OnTextSuggesterLoaded(
+    chromeos::machine_learning::mojom::LoadModelResult result) {
+  text_suggester_loaded_ =
+      result == chromeos::machine_learning::mojom::LoadModelResult::OK;
+}
 
 void SuggestionsServiceClient::RequestSuggestions(
     const std::string& preceding_text,

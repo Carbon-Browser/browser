@@ -6,7 +6,6 @@
 #include <utility>
 
 #include "ash/public/cpp/login_screen_test_api.h"
-#include "base/macros.h"
 #include "base/values.h"
 #include "chrome/browser/ash/login/test/session_manager_state_waiter.h"
 #include "chrome/browser/ash/policy/login/login_policy_test_base.h"
@@ -38,23 +37,23 @@ class RestoreOnStartupTest : public LoginPolicyTestBase {
  public:
   RestoreOnStartupTest() = default;
 
+  RestoreOnStartupTest(const RestoreOnStartupTest&) = delete;
+  RestoreOnStartupTest& operator=(const RestoreOnStartupTest&) = delete;
+
   // LoginPolicyTestBase:
-  void GetMandatoryPoliciesValue(base::DictionaryValue* policy) const override;
+  void GetPolicySettings(
+      enterprise_management::CloudPolicySettings* policy) const override;
 
   void VerifyStartUpURLs();
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(RestoreOnStartupTest);
 };
 
-void RestoreOnStartupTest::GetMandatoryPoliciesValue(
-    base::DictionaryValue* policy) const {
-  policy->SetInteger(key::kRestoreOnStartup,
-                     SessionStartupPref::kPrefValueURLs);
-  base::ListValue urls;
-  urls.Append(kStartUpURL1);
-  urls.Append(kStartUpURL2);
-  policy->SetKey(key::kRestoreOnStartupURLs, std::move(urls));
+void RestoreOnStartupTest::GetPolicySettings(
+    enterprise_management::CloudPolicySettings* policy) const {
+  policy->mutable_restoreonstartup()->set_value(
+      SessionStartupPref::kPrefValueURLs);
+  auto* urls = policy->mutable_restoreonstartupurls()->mutable_value();
+  urls->add_entries(kStartUpURL1);
+  urls->add_entries(kStartUpURL2);
 }
 
 void RestoreOnStartupTest::VerifyStartUpURLs() {
@@ -80,7 +79,7 @@ IN_PROC_BROWSER_TEST_F(RestoreOnStartupTest, PRE_LogInAndVerify) {
 IN_PROC_BROWSER_TEST_F(RestoreOnStartupTest, LogInAndVerify) {
   ash::LoginScreenTestApi::SubmitPassword(account_id(), "7654321",
                                           true /* check_if_submittable */);
-  chromeos::test::WaitForPrimaryUserSessionStart();
+  ash::test::WaitForPrimaryUserSessionStart();
   VerifyStartUpURLs();
 }
 

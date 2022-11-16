@@ -8,7 +8,6 @@
 
 #include "ash/public/cpp/test/test_system_tray_client.h"
 #include "ash/strings/grit/ash_strings.h"
-#include "base/macros.h"
 #include "base/memory/ptr_util.h"
 #include "base/run_loop.h"
 #include "chrome/browser/notifications/notification_display_service_tester.h"
@@ -16,18 +15,15 @@
 #include "chrome/grit/generated_resources.h"
 #include "chrome/test/base/browser_with_test_window_test.h"
 #include "chrome/test/base/testing_browser_process.h"
-#include "chromeos/dbus/hermes/hermes_clients.h"
+#include "chromeos/ash/components/dbus/hermes/hermes_clients.h"
+#include "chromeos/ash/components/network/cellular_metrics_logger.h"
+#include "chromeos/ash/components/network/network_connect.h"
+#include "chromeos/ash/components/network/network_handler.h"
+#include "chromeos/ash/components/network/network_handler_test_helper.h"
+#include "chromeos/ash/components/network/network_state_handler.h"
+#include "chromeos/ash/components/network/network_state_test_helper.h"
 #include "chromeos/dbus/shill/shill_device_client.h"
 #include "chromeos/dbus/shill/shill_service_client.h"
-#include "chromeos/network/cellular_esim_profile_handler_impl.h"
-#include "chromeos/network/cellular_metrics_logger.h"
-#include "chromeos/network/network_connect.h"
-#include "chromeos/network/network_handler.h"
-#include "chromeos/network/network_handler_test_helper.h"
-#include "chromeos/network/network_metadata_store.h"
-#include "chromeos/network/network_state_handler.h"
-#include "chromeos/network/network_state_test_helper.h"
-#include "chromeos/network/test_cellular_esim_profile_handler.h"
 #include "components/prefs/testing_pref_service.h"
 #include "testing/platform_test.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
@@ -52,6 +48,11 @@ class NetworkConnectTestDelegate : public NetworkConnect::Delegate {
   NetworkConnectTestDelegate(
       std::unique_ptr<NetworkStateNotifier> network_state_notifier)
       : network_state_notifier_(std::move(network_state_notifier)) {}
+
+  NetworkConnectTestDelegate(const NetworkConnectTestDelegate&) = delete;
+  NetworkConnectTestDelegate& operator=(const NetworkConnectTestDelegate&) =
+      delete;
+
   ~NetworkConnectTestDelegate() override = default;
 
   // NetworkConnect::Delegate
@@ -71,8 +72,6 @@ class NetworkConnectTestDelegate : public NetworkConnect::Delegate {
 
  private:
   std::unique_ptr<NetworkStateNotifier> network_state_notifier_;
-
-  DISALLOW_COPY_AND_ASSIGN(NetworkConnectTestDelegate);
 };
 
 }  // namespace
@@ -80,16 +79,19 @@ class NetworkConnectTestDelegate : public NetworkConnect::Delegate {
 class NetworkStateNotifierTest : public BrowserWithTestWindowTest {
  public:
   NetworkStateNotifierTest() = default;
+
+  NetworkStateNotifierTest(const NetworkStateNotifierTest&) = delete;
+  NetworkStateNotifierTest& operator=(const NetworkStateNotifierTest&) = delete;
+
   ~NetworkStateNotifierTest() override = default;
 
   void SetUp() override {
     BrowserWithTestWindowTest::SetUp();
     network_handler_test_helper_ = std::make_unique<NetworkHandlerTestHelper>();
-    CellularESimProfileHandlerImpl::RegisterLocalStatePrefs(
-        local_state_.registry());
-    NetworkMetadataStore::RegisterPrefs(user_prefs_.registry());
-    NetworkMetadataStore::RegisterPrefs(local_state_.registry());
-    NetworkHandler::Get()->InitializePrefServices(&user_prefs_, &local_state_);
+    network_handler_test_helper_->RegisterPrefs(user_prefs_.registry(),
+                                                local_state_.registry());
+
+    network_handler_test_helper_->InitializePrefs(&user_prefs_, &local_state_);
 
     SetupDefaultShillState();
     base::RunLoop().RunUntilIdle();
@@ -149,11 +151,11 @@ class NetworkStateNotifierTest : public BrowserWithTestWindowTest {
         network_handler_test_helper_->device_test();
 
     std::string lock_pin = is_locked ? shill::kSIMLockPin : "";
-    base::Value sim_lock_status(base::Value::Type::DICTIONARY);
-    sim_lock_status.SetKey(shill::kSIMLockTypeProperty, base::Value(lock_pin));
+    base::Value::Dict sim_lock_status;
+    sim_lock_status.Set(shill::kSIMLockTypeProperty, lock_pin);
     device_test->SetDeviceProperty(
         kCellularDevicePath, shill::kSIMLockStatusProperty,
-        std::move(sim_lock_status), /*notify_changed=*/true);
+        base::Value(std::move(sim_lock_status)), /*notify_changed=*/true);
     base::RunLoop().RunUntilIdle();
   }
 
@@ -194,21 +196,19 @@ class NetworkStateNotifierTest : public BrowserWithTestWindowTest {
     service_test->SetServiceProperty(
         kCellular1ServicePath, shill::kActivationStateProperty,
         base::Value(shill::kActivationStateActivated));
-    base::Value sim_lock_status(base::Value::Type::DICTIONARY);
-    sim_lock_status.SetKey(shill::kSIMLockTypeProperty,
-                           base::Value(shill::kSIMLockPin));
+    base::Value::Dict sim_lock_status;
+    sim_lock_status.Set(shill::kSIMLockTypeProperty, shill::kSIMLockPin);
     device_test->SetDeviceProperty(
         kCellularDevicePath, shill::kSIMLockStatusProperty,
-        std::move(sim_lock_status), /*notify_changed=*/true);
-    base::Value::ListStorage sim_slot_infos;
-    base::Value slot_info_item(base::Value::Type::DICTIONARY);
-    slot_info_item.SetKey(shill::kSIMSlotInfoICCID,
-                          base::Value(kCellular1Iccid));
-    slot_info_item.SetBoolKey(shill::kSIMSlotInfoPrimary, true);
-    sim_slot_infos.push_back(std::move(slot_info_item));
+        base::Value(std::move(sim_lock_status)), /*notify_changed=*/true);
+    base::Value::List sim_slot_infos;
+    base::Value::Dict slot_info_item;
+    slot_info_item.Set(shill::kSIMSlotInfoICCID, kCellular1Iccid);
+    slot_info_item.Set(shill::kSIMSlotInfoPrimary, true);
+    sim_slot_infos.Append(std::move(slot_info_item));
     device_test->SetDeviceProperty(
         kCellularDevicePath, shill::kSIMSlotInfoProperty,
-        base::Value(sim_slot_infos), /*notify_changed=*/true);
+        base::Value(std::move(sim_slot_infos)), /*notify_changed=*/true);
 
     base::RunLoop().RunUntilIdle();
   }
@@ -220,9 +220,6 @@ class NetworkStateNotifierTest : public BrowserWithTestWindowTest {
   std::unique_ptr<NetworkConnectTestDelegate> network_connect_delegate_;
   TestingPrefServiceSimple user_prefs_;
   TestingPrefServiceSimple local_state_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(NetworkStateNotifierTest);
 };
 
 TEST_F(NetworkStateNotifierTest, WiFiConnectionFailure) {

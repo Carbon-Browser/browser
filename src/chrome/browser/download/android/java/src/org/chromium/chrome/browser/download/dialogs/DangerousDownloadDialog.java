@@ -69,15 +69,15 @@ public class DangerousDownloadDialog {
                                     @Override
                                     public void onClick(PropertyModel model, int buttonType) {
                                         boolean acceptDownload = buttonType
-                                                == ModalDialogProperties.ButtonType.NEGATIVE;
+                                                == ModalDialogProperties.ButtonType.POSITIVE;
                                         if (callback != null) {
                                             callback.onResult(acceptDownload);
                                         }
                                         modalDialogManager.dismissDialog(model,
                                                 acceptDownload ? DialogDismissalCause
-                                                                         .NEGATIVE_BUTTON_CLICKED
+                                                                         .POSITIVE_BUTTON_CLICKED
                                                                : DialogDismissalCause
-                                                                         .POSITIVE_BUTTON_CLICKED);
+                                                                         .NEGATIVE_BUTTON_CLICKED);
                                         recordDangerousDownloadDialogEvent(acceptDownload
                                                         ? DangerousDownloadDialogEvent
                                                                   .DANGEROUS_DOWNLOAD_DIALOG_CONFIRM
@@ -103,19 +103,20 @@ public class DangerousDownloadDialog {
                         .with(ModalDialogProperties.TITLE,
                                 context.getResources().getString(
                                         R.string.dangerous_download_dialog_title))
-                        .with(ModalDialogProperties.MESSAGE, message)
+                        .with(ModalDialogProperties.MESSAGE_PARAGRAPH_1, message)
                         .with(ModalDialogProperties.POSITIVE_BUTTON_TEXT,
-                                context.getResources().getString(R.string.cancel))
-                        .with(ModalDialogProperties.NEGATIVE_BUTTON_TEXT,
                                 context.getResources().getString(
                                         R.string.dangerous_download_dialog_confirm_text))
+                        .with(ModalDialogProperties.NEGATIVE_BUTTON_TEXT,
+                                context.getResources().getString(R.string.cancel))
                         .with(ModalDialogProperties.TITLE_ICON,
                                 ResourcesCompat.getDrawable(
                                         context.getResources(), iconId, context.getTheme()))
-                        .with(ModalDialogProperties.PRIMARY_BUTTON_FILLED, true)
+                        .with(ModalDialogProperties.BUTTON_STYLES,
+                                ModalDialogProperties.ButtonStyles.PRIMARY_OUTLINE_NEGATIVE_OUTLINE)
                         .build();
 
-        modalDialogManager.showDialog(propertyModel, ModalDialogManager.ModalDialogType.APP);
+        modalDialogManager.showDialog(propertyModel, ModalDialogManager.ModalDialogType.TAB);
         recordDangerousDownloadDialogEvent(
                 DangerousDownloadDialogEvent.DANGEROUS_DOWNLOAD_DIALOG_SHOW);
     }

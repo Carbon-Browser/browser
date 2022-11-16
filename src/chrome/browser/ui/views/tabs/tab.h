@@ -5,12 +5,13 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_TABS_TAB_H_
 #define CHROME_BROWSER_UI_VIEWS_TABS_TAB_H_
 
-#include <list>
 #include <memory>
 #include <string>
 
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
+#include "chrome/browser/ui/tabs/tab_enums.h"
 #include "chrome/browser/ui/tabs/tab_renderer_data.h"
 #include "chrome/browser/ui/views/tabs/tab_slot_view.h"
 #include "components/performance_manager/public/freezing/freezing.h"
@@ -28,9 +29,9 @@
 #include "ui/views/masked_targeter_delegate.h"
 #include "ui/views/view_observer.h"
 
-class AlertIndicator;
+class AlertIndicatorButton;
 class TabCloseButton;
-class TabController;
+class TabSlotController;
 class TabIcon;
 struct TabSizeInfo;
 class TabStyleViews;
@@ -66,7 +67,7 @@ class Tab : public gfx::AnimationDelegate,
   // tests to prevent them from interfering with unrelated tests.
   static void SetShowHoverCardOnMouseHoverForTesting(bool value);
 
-  explicit Tab(TabController* controller);
+  explicit Tab(TabSlotController* controller);
   Tab(const Tab&) = delete;
   Tab& operator=(const Tab&) = delete;
   ~Tab() override;
@@ -102,7 +103,7 @@ class Tab : public gfx::AnimationDelegate,
   TabSlotView::ViewType GetTabSlotViewType() const override;
   TabSizeInfo GetTabSizeInfo() const override;
 
-  TabController* controller() const { return controller_; }
+  TabSlotController* controller() const { return controller_; }
 
   // Used to set/check whether this Tab is being animated closed.
   void SetClosing(bool closing);
@@ -152,6 +153,10 @@ class Tab : public gfx::AnimationDelegate,
   void ReleaseFreezingVoteToken();
   bool HasFreezingVoteToken() const { return freezing_token_ ? true : false; }
 
+  // Returns the width of the largest part of the tab that is available for the
+  // user to click to select/activate the tab.
+  int GetWidthOfLargestSelectableRegion() const;
+
   // Returns true if this tab became the active tab selected in
   // response to the last ui::ET_TAP_DOWN gesture dispatched to
   // this tab. Only used for collecting UMA metrics.
@@ -183,13 +188,10 @@ class Tab : public gfx::AnimationDelegate,
 
  private:
   class TabCloseButtonObserver;
-  friend class AlertIndicatorTest;
+  friend class AlertIndicatorButtonTest;
   friend class TabTest;
   friend class TabStripTestBase;
-  FRIEND_TEST_ALL_PREFIXES(TabStripTestWithScrollingDisabled,
-                           TabCloseButtonVisibilityWhenStacked);
-  FRIEND_TEST_ALL_PREFIXES(TabStripTest,
-                           TabCloseButtonVisibilityWhenNotStacked);
+  FRIEND_TEST_ALL_PREFIXES(TabStripTest, TabCloseButtonVisibility);
   FRIEND_TEST_ALL_PREFIXES(TabTest, TitleTextHasSufficientContrast);
   FRIEND_TEST_ALL_PREFIXES(TabHoverCardBubbleViewBrowserTest,
                            WidgetVisibleOnTabCloseButtonFocusAfterTabFocus);
@@ -224,7 +226,7 @@ class Tab : public gfx::AnimationDelegate,
   void CloseButtonPressed(const ui::Event& event);
 
   // The controller, never nullptr.
-  TabController* const controller_;
+  const raw_ptr<TabSlotController> controller_;
 
   TabRendererData data_;
 
@@ -233,11 +235,11 @@ class Tab : public gfx::AnimationDelegate,
   // True if the tab is being animated closed.
   bool closing_ = false;
 
-  TabIcon* icon_ = nullptr;
-  AlertIndicator* alert_indicator_ = nullptr;
-  TabCloseButton* close_button_ = nullptr;
+  raw_ptr<TabIcon> icon_ = nullptr;
+  raw_ptr<AlertIndicatorButton> alert_indicator_button_ = nullptr;
+  raw_ptr<TabCloseButton> close_button_ = nullptr;
 
-  views::Label* title_;
+  raw_ptr<views::Label> title_;
   // The title's bounds are animated when switching between showing and hiding
   // the tab's favicon/throbber.
   gfx::Rect start_title_bounds_;
@@ -276,9 +278,6 @@ class Tab : public gfx::AnimationDelegate,
   // When both the close button and alert indicator are visible, we add extra
   // padding between them to space them out visually.
   bool extra_alert_indicator_padding_ = false;
-
-  // The tab foreground color (title, buttons).
-  SkColor foreground_color_ = SK_ColorTRANSPARENT;
 
   // Indicates whether the mouse is currently hovered over the tab. This is
   // different from View::IsMouseHovered() which does a naive intersection with

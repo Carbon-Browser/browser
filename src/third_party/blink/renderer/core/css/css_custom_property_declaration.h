@@ -6,6 +6,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_CSS_CSS_CUSTOM_PROPERTY_DECLARATION_H_
 
 #include "base/memory/scoped_refptr.h"
+#include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/css/css_value.h"
 #include "third_party/blink/renderer/core/css/css_variable_data.h"
 #include "third_party/blink/renderer/core/css/properties/css_parsing_utils.h"
@@ -40,6 +41,7 @@ class CORE_EXPORT CSSCustomPropertyDeclaration : public CSSValue {
            (!is_inherited_property && value_id_ == CSSValueID::kUnset);
   }
   bool IsRevert() const { return value_id_ == CSSValueID::kRevert; }
+  bool IsRevertLayer() const { return value_id_ == CSSValueID::kRevertLayer; }
 
   String CustomCSSText() const;
 

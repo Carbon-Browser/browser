@@ -8,17 +8,27 @@
 #include <memory>
 #include <vector>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
+#include "build/build_config.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/optimization_guide/content/browser/optimization_guide_decider.h"
+#include "components/optimization_guide/core/new_optimization_guide_decider.h"
 #include "components/optimization_guide/core/optimization_guide_model_provider.h"
 #include "components/optimization_guide/proto/hints.pb.h"
 #include "components/optimization_guide/proto/models.pb.h"
+
+#if BUILDFLAG(IS_ANDROID)
+#include "chrome/browser/bookmarks/android/bookmark_bridge.h"
+#endif
 
 namespace content {
 class BrowserContext;
 class NavigationHandle;
 }  // namespace content
+
+namespace download {
+class BackgroundDownloadService;
+}  // namespace download
 
 namespace optimization_guide {
 namespace android {
@@ -30,13 +40,16 @@ class OptimizationGuideStore;
 class PredictionManager;
 class PredictionManagerBrowserTestBase;
 class PredictionModelDownloadClient;
+class PushNotificationManager;
 class ModelInfo;
 class TabUrlProvider;
 class TopHostProvider;
 }  // namespace optimization_guide
 
 class GURL;
+class OptimizationGuideLogger;
 class OptimizationGuideNavigationData;
+class Profile;
 
 // Keyed service that can be used to get information received from the remote
 // Optimization Guide Service. For regular profiles, this will do the work to
@@ -47,12 +60,27 @@ class OptimizationGuideNavigationData;
 // and no information will be retrieved.
 class OptimizationGuideKeyedService
     : public KeyedService,
+      public optimization_guide::NewOptimizationGuideDecider,
       public optimization_guide::OptimizationGuideDecider,
       public optimization_guide::OptimizationGuideModelProvider {
  public:
   explicit OptimizationGuideKeyedService(
       content::BrowserContext* browser_context);
+
+  OptimizationGuideKeyedService(const OptimizationGuideKeyedService&) = delete;
+  OptimizationGuideKeyedService& operator=(
+      const OptimizationGuideKeyedService&) = delete;
+
   ~OptimizationGuideKeyedService() override;
+
+  // optimization_guide::NewOptimizationGuideDecider implementation:
+  // WARNING: This API is not quite ready for general use. Use
+  // CanApplyOptimizationAsync or CanApplyOptimization using NavigationHandle
+  // instead.
+  void CanApplyOptimization(
+      const GURL& url,
+      optimization_guide::proto::OptimizationType optimization_type,
+      optimization_guide::OptimizationGuideDecisionCallback callback) override;
 
   // optimization_guide::OptimizationGuideDecider implementation:
   void RegisterOptimizationTypes(
@@ -92,10 +120,26 @@ class OptimizationGuideKeyedService
       optimization_guide::proto::OptimizationTarget optimization_target,
       std::unique_ptr<optimization_guide::ModelInfo> model_info);
 
+  // Creates the platform specific push notification manager. May returns
+  // nullptr for desktop or when the push notification feature is disabled.
+  static std::unique_ptr<optimization_guide::PushNotificationManager>
+  MaybeCreatePushNotificationManager(Profile* profile);
+
+  OptimizationGuideLogger* GetOptimizationGuideLogger() {
+    return optimization_guide_logger_.get();
+  }
+
  private:
+  // BookmarkBridge is a friend class since it is a consumer of the
+  // CanApplyOptimizationOnDemand API.
+#if BUILDFLAG(IS_ANDROID)
+  friend class BookmarkBridge;
+#endif
+
   friend class ChromeBrowsingDataRemoverDelegate;
   friend class HintsFetcherBrowserTest;
   friend class OptimizationGuideKeyedServiceBrowserTest;
+  friend class OptimizationGuideMessageHandler;
   friend class OptimizationGuideWebContentsObserver;
   friend class optimization_guide::PredictionModelDownloadClient;
   friend class optimization_guide::PredictionManagerBrowserTestBase;
@@ -132,7 +176,20 @@ class OptimizationGuideKeyedService
   // KeyedService implementation:
   void Shutdown() override;
 
-  content::BrowserContext* browser_context_;
+  // optimization_guide::OptimizationGuideDecider implementation:
+  void CanApplyOptimizationOnDemand(
+      const std::vector<GURL>& urls,
+      const base::flat_set<optimization_guide::proto::OptimizationType>&
+          optimization_types,
+      optimization_guide::proto::RequestContext request_context,
+      optimization_guide::OnDemandOptimizationGuideDecisionRepeatingCallback
+          callback) override;
+
+  download::BackgroundDownloadService* BackgroundDownloadServiceProvider();
+
+  bool ComponentUpdatesEnabledProvider() const;
+
+  raw_ptr<content::BrowserContext> browser_context_;
 
   // The store of hints.
   std::unique_ptr<optimization_guide::OptimizationGuideStore> hint_store_;
@@ -157,7 +214,9 @@ class OptimizationGuideKeyedService
   // tabs. Will be null if the user is off the record.
   std::unique_ptr<optimization_guide::TabUrlProvider> tab_url_provider_;
 
-  DISALLOW_COPY_AND_ASSIGN(OptimizationGuideKeyedService);
+  // The logger that plumbs the debug logs to the optimization guide
+  // internals page.
+  std::unique_ptr<OptimizationGuideLogger> optimization_guide_logger_;
 };
 
 #endif  // CHROME_BROWSER_OPTIMIZATION_GUIDE_OPTIMIZATION_GUIDE_KEYED_SERVICE_H_

@@ -12,7 +12,7 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
+#include "base/values.h"
 #include "components/guest_view/browser/guest_view.h"
 #include "content/public/browser/javascript_dialog_manager.h"
 #include "extensions/browser/guest_view/web_view/javascript_dialog_helper.h"
@@ -23,10 +23,6 @@
 #include "extensions/browser/script_executor.h"
 #include "extensions/common/mojom/frame.mojom.h"
 #include "third_party/blink/public/mojom/frame/find_in_page.mojom.h"
-
-namespace content {
-class StoragePartitionConfig;
-}  // namespace content
 
 namespace extensions {
 
@@ -40,6 +36,9 @@ class WebViewInternalFindFunction;
 // a particular <webview>.
 class WebViewGuest : public guest_view::GuestView<WebViewGuest> {
  public:
+  WebViewGuest(const WebViewGuest&) = delete;
+  WebViewGuest& operator=(const WebViewGuest&) = delete;
+
   // Clean up state when this GuestView is being destroyed. See
   // GuestViewBase::CleanUp().
   static void CleanUp(content::BrowserContext* browser_context,
@@ -47,24 +46,6 @@ class WebViewGuest : public guest_view::GuestView<WebViewGuest> {
                       int view_instance_id);
 
   static GuestViewBase* Create(content::WebContents* owner_web_contents);
-
-  // For WebViewGuest, we create special guest processes, which host the
-  // tag content separately from the main application that embeds the tag.
-  // A <webview> can specify both the partition name and whether the storage
-  // for that partition should be persisted. Each tag gets a SiteInstance with
-  // a specially formatted URL, based on the application it is hosted by and
-  // the partition requested by it. The format for that URL is:
-  // chrome-guest://partition_domain/persist?partition_name
-  static bool GetGuestPartitionConfigForSite(
-      content::BrowserContext* browser_context,
-      const GURL& site,
-      content::StoragePartitionConfig* storage_partition_config);
-
-  // Opposite of GetGuestPartitionConfigForSite: Creates a specially formatted
-  // URL used by the SiteInstance associated with the WebViewGuest. See
-  // GetGuestPartitionConfigForSite for the URL format.
-  static GURL GetSiteForGuestPartitionConfig(
-      const content::StoragePartitionConfig& storage_partition_config);
 
   // Returns the WebView partition ID associated with the render process
   // represented by |render_process_host|, if any. Otherwise, an empty string is
@@ -187,10 +168,10 @@ class WebViewGuest : public guest_view::GuestView<WebViewGuest> {
                                     base::OnceCallback<void(bool)> callback);
 
   // GuestViewBase implementation.
-  void CreateWebContents(const base::DictionaryValue& create_params,
+  void CreateWebContents(const base::Value::Dict& create_params,
                          WebContentsCreatedCallback callback) final;
   void DidAttachToEmbedder() final;
-  void DidInitialize(const base::DictionaryValue& create_params) final;
+  void DidInitialize(const base::Value::Dict& create_params) final;
   void EmbedderFullscreenToggled(bool entered_fullscreen) final;
   void FindReply(content::WebContents* source,
                  int request_id,
@@ -214,7 +195,7 @@ class WebViewGuest : public guest_view::GuestView<WebViewGuest> {
 
   // WebContentsDelegate implementation.
   void CloseContents(content::WebContents* source) final;
-  bool HandleContextMenu(content::RenderFrameHost* render_frame_host,
+  bool HandleContextMenu(content::RenderFrameHost& render_frame_host,
                          const content::ContextMenuParams& params) final;
   bool HandleKeyboardEvent(content::WebContents* source,
                            const content::NativeWebKeyboardEvent& event) final;
@@ -270,9 +251,8 @@ class WebViewGuest : public guest_view::GuestView<WebViewGuest> {
       content::NavigationHandle* navigation_handle) final;
   void DidFinishNavigation(content::NavigationHandle* navigation_handle) final;
   void LoadProgressChanged(double progress) final;
-  void DocumentOnLoadCompletedInMainFrame(
-      content::RenderFrameHost* render_frame_host) final;
-  void RenderProcessGone(base::TerminationStatus status) final;
+  void DocumentOnLoadCompletedInPrimaryMainFrame() final;
+  void PrimaryMainFrameRenderProcessGone(base::TerminationStatus status) final;
   void UserAgentOverrideSet(const blink::UserAgentOverride& ua_override) final;
   void FrameNameChanged(content::RenderFrameHost* render_frame_host,
                         const std::string& name) final;
@@ -284,11 +264,15 @@ class WebViewGuest : public guest_view::GuestView<WebViewGuest> {
       int32_t line_no,
       const std::u16string& source_id,
       const absl::optional<std::u16string>& untrusted_stack_trace) final;
+  void RenderFrameCreated(content::RenderFrameHost* render_frame_host) final;
+  void RenderFrameDeleted(content::RenderFrameHost* render_frame_host) final;
+  void RenderFrameHostChanged(content::RenderFrameHost* old_host,
+                              content::RenderFrameHost* new_host) final;
 
   // Informs the embedder of a frame name change.
   void ReportFrameNameChange(const std::string& name);
 
-  void PushWebViewStateToIOThread();
+  void PushWebViewStateToIOThread(content::RenderFrameHost* guest_host);
 
   // Loads the |url| provided. |force_navigation| indicates whether to reload
   // the content if the provided |url| matches the current page of the guest.
@@ -318,7 +302,7 @@ class WebViewGuest : public guest_view::GuestView<WebViewGuest> {
 
   bool HandleKeyboardShortcuts(const content::NativeWebKeyboardEvent& event);
 
-  void ApplyAttributes(const base::DictionaryValue& params);
+  void ApplyAttributes(const base::Value::Dict& params);
 
   void SetTransparency();
 
@@ -394,8 +378,6 @@ class WebViewGuest : public guest_view::GuestView<WebViewGuest> {
   // This is used to ensure pending tasks will not fire after this object is
   // destroyed.
   base::WeakPtrFactory<WebViewGuest> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(WebViewGuest);
 };
 
 }  // namespace extensions

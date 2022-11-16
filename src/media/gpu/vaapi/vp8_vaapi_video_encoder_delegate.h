@@ -5,15 +5,20 @@
 #ifndef MEDIA_GPU_VAAPI_VP8_VAAPI_VIDEO_ENCODER_DELEGATE_H_
 #define MEDIA_GPU_VAAPI_VP8_VAAPI_VIDEO_ENCODER_DELEGATE_H_
 
-#include <list>
 #include <vector>
 
-#include "base/macros.h"
 #include "media/base/video_bitrate_allocation.h"
 #include "media/gpu/vaapi/vaapi_video_encoder_delegate.h"
 #include "media/gpu/vp8_picture.h"
 #include "media/gpu/vp8_reference_frame_vector.h"
+#include "media/gpu/vpx_rate_control.h"
 #include "media/parsers/vp8_parser.h"
+
+namespace libvpx {
+struct VP8FrameParamsQpRTC;
+class VP8RateControlRTC;
+struct VP8RateControlRtcConfig;
+}  // namespace libvpx
 
 namespace media {
 class VaapiWrapper;
@@ -32,23 +37,19 @@ class VP8VaapiVideoEncoderDelegate : public VaapiVideoEncoderDelegate {
     // Framerate in FPS.
     uint32_t framerate;
 
-    // Bitrate window size in ms.
-    unsigned int cpb_window_size_ms;
-
-    // Coded picture buffer size in bits.
-    unsigned int cpb_size_bits;
-
     // Quantization parameter. They are vp8 ac/dc indices and their ranges are
     // 0-127.
-    uint8_t initial_qp;
     uint8_t min_qp;
     uint8_t max_qp;
-
-    bool error_resilient_mode;
   };
 
   VP8VaapiVideoEncoderDelegate(scoped_refptr<VaapiWrapper> vaapi_wrapper,
                                base::RepeatingClosure error_cb);
+
+  VP8VaapiVideoEncoderDelegate(const VP8VaapiVideoEncoderDelegate&) = delete;
+  VP8VaapiVideoEncoderDelegate& operator=(const VP8VaapiVideoEncoderDelegate&) =
+      delete;
+
   ~VP8VaapiVideoEncoderDelegate() override;
 
   // VaapiVideoEncoderDelegate implementation.
@@ -59,18 +60,24 @@ class VP8VaapiVideoEncoderDelegate : public VaapiVideoEncoderDelegate {
   gfx::Size GetCodedSize() const override;
   size_t GetMaxNumOfRefFrames() const override;
   std::vector<gfx::Size> GetSVCLayerResolutions() override;
-  bool PrepareEncodeJob(EncodeJob* encode_job) override;
 
  private:
   void InitializeFrameHeader();
-  void UpdateFrameHeader(bool keyframe);
+
+  void SetFrameHeader(
+      size_t frame_num,
+      VP8Picture& picture,
+      std::array<bool, kNumVp8ReferenceBuffers>& ref_frames_used);
   void UpdateReferenceFrames(scoped_refptr<VP8Picture> picture);
   void Reset();
 
-  scoped_refptr<VP8Picture> GetPicture(EncodeJob* job);
+  bool PrepareEncodeJob(EncodeJob& encode_job) override;
+  BitstreamBufferMetadata GetMetadata(const EncodeJob& encode_job,
+                                      size_t payload_size) override;
+  void BitrateControlUpdate(uint64_t encoded_chunk_size_bytes) override;
 
   bool SubmitFrameParameters(
-      EncodeJob* job,
+      EncodeJob& job,
       const EncodeParams& encode_params,
       scoped_refptr<VP8Picture> pic,
       const Vp8ReferenceFrameVector& ref_frames,
@@ -79,15 +86,19 @@ class VP8VaapiVideoEncoderDelegate : public VaapiVideoEncoderDelegate {
   gfx::Size visible_size_;
   gfx::Size coded_size_;  // Macroblock-aligned.
 
+  uint8_t num_temporal_layers_ = 1;
+
   // Frame count since last keyframe, reset to 0 every keyframe period.
   size_t frame_num_ = 0;
 
   EncodeParams current_params_;
 
-  Vp8FrameHeader current_frame_hdr_;
   Vp8ReferenceFrameVector reference_frames_;
 
-  DISALLOW_COPY_AND_ASSIGN(VP8VaapiVideoEncoderDelegate);
+  using VP8RateControl = VPXRateControl<libvpx::VP8RateControlRtcConfig,
+                                        libvpx::VP8RateControlRTC,
+                                        libvpx::VP8FrameParamsQpRTC>;
+  std::unique_ptr<VP8RateControl> rate_ctrl_;
 };
 
 }  // namespace media

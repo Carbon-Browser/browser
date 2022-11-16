@@ -10,7 +10,6 @@
 
 #import <UIKit/UIKit.h>
 
-#include "base/macros.h"
 #include "ios/chrome/browser/notification_promo.h"
 #include "url/gurl.h"
 
@@ -35,6 +34,11 @@ class NotificationPromoWhatsNew {
   };
 
   explicit NotificationPromoWhatsNew(PrefService* local_state);
+
+  NotificationPromoWhatsNew(const NotificationPromoWhatsNew&) = delete;
+  NotificationPromoWhatsNew& operator=(const NotificationPromoWhatsNew&) =
+      delete;
+
   ~NotificationPromoWhatsNew();
 
   // Initialize from variations/prefs/JSON.
@@ -114,8 +118,6 @@ class NotificationPromoWhatsNew {
 
   // The lower-level notification promo.
   ios::NotificationPromo notification_promo_;
-
-  DISALLOW_COPY_AND_ASSIGN(NotificationPromoWhatsNew);
 };
 
 #endif  // IOS_CHROME_BROWSER_UI_NTP_NOTIFICATION_PROMO_WHATS_NEW_H_

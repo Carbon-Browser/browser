@@ -10,6 +10,7 @@
 
 #include "base/callback.h"
 #include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/time/time.h"
@@ -55,6 +56,11 @@ class RealTimeUrlLookupServiceBase : public KeyedService {
       base::RepeatingCallback<ChromeUserPopulation()>
           get_user_population_callback,
       ReferrerChainProvider* referrer_chain_provider);
+
+  RealTimeUrlLookupServiceBase(const RealTimeUrlLookupServiceBase&) = delete;
+  RealTimeUrlLookupServiceBase& operator=(const RealTimeUrlLookupServiceBase&) =
+      delete;
+
   ~RealTimeUrlLookupServiceBase() override;
 
   // Returns true if |url|'s scheme can be checked.
@@ -75,11 +81,24 @@ class RealTimeUrlLookupServiceBase : public KeyedService {
   // |callback_task_runner| when response is received.
   // Note that |request_callback| is not called if there's a valid entry in the
   // cache for |url|.
+  // |last_committed_url| and |is_mainframe| are for obtaining page load token
+  // for the request.
   // This function is overridden in unit tests.
   virtual void StartLookup(
       const GURL& url,
+      const GURL& last_committed_url,
+      bool is_mainframe,
       RTLookupRequestCallback request_callback,
       RTLookupResponseCallback response_callback,
+      scoped_refptr<base::SequencedTaskRunner> callback_task_runner);
+
+  // Similar to the function StartLookup above,
+  // but to send Protego sampled request specifically.
+  virtual void SendSampledRequest(
+      const GURL& url,
+      const GURL& last_committed_url,
+      bool is_mainframe,
+      RTLookupRequestCallback request_callback,
       scoped_refptr<base::SequencedTaskRunner> callback_task_runner);
 
   // Helper function to return a weak pointer.
@@ -97,6 +116,9 @@ class RealTimeUrlLookupServiceBase : public KeyedService {
   // check is enabled.
   virtual bool CanCheckSafeBrowsingDb() const = 0;
 
+  // Checks if a sample ping can be sent to Safe Browsing.
+  virtual bool CanSendRTSampleRequest() const = 0;
+
   // KeyedService:
   // Called before the actual deletion of the object.
   void Shutdown() override;
@@ -111,10 +133,13 @@ class RealTimeUrlLookupServiceBase : public KeyedService {
   // It also attached an auth header if |access_token_string| has a value.
   void SendRequest(
       const GURL& url,
+      const GURL& last_committed_url,
+      bool is_mainframe,
       absl::optional<std::string> access_token_string,
       RTLookupRequestCallback request_callback,
       RTLookupResponseCallback response_callback,
-      scoped_refptr<base::SequencedTaskRunner> callback_task_runner);
+      scoped_refptr<base::SequencedTaskRunner> callback_task_runner,
+      bool is_sampled_report);
 
  private:
   using PendingRTLookupRequests =
@@ -136,16 +161,18 @@ class RealTimeUrlLookupServiceBase : public KeyedService {
   // Returns true if real time URL lookup with GAIA token is enabled.
   virtual bool CanPerformFullURLLookupWithToken() const = 0;
 
-  // Returns true if referrer chain should be attached to requests.
-  virtual bool CanAttachReferrerChain() const = 0;
-
   // Returns the user gesture limit of the referrer chain.
   virtual int GetReferrerUserGestureLimit() const = 0;
+
+  // Returns true if page load tokens can be attached to requests.
+  virtual bool CanSendPageLoadToken() const = 0;
 
   // Gets access token, called if |CanPerformFullURLLookupWithToken| returns
   // true.
   virtual void GetAccessToken(
       const GURL& url,
+      const GURL& last_committed_url,
+      bool is_mainframe,
       RTLookupRequestCallback request_callback,
       RTLookupResponseCallback response_callback,
       scoped_refptr<base::SequencedTaskRunner> callback_task_runner) = 0;
@@ -201,7 +228,9 @@ class RealTimeUrlLookupServiceBase : public KeyedService {
       const GURL& url,
       absl::optional<std::string> access_token_string,
       RTLookupResponseCallback response_callback,
-      scoped_refptr<base::SequencedTaskRunner> callback_task_runner);
+      scoped_refptr<base::SequencedTaskRunner> callback_task_runner,
+      ChromeUserPopulation::UserPopulation user_population,
+      bool is_sampled_report);
 
   // Called when the response from the real-time lookup remote endpoint is
   // received. |url_loader| is the unowned loader that was used to send the
@@ -213,12 +242,18 @@ class RealTimeUrlLookupServiceBase : public KeyedService {
       const GURL& url,
       absl::optional<std::string> access_token_string,
       network::SimpleURLLoader* url_loader,
+      ChromeUserPopulation::UserPopulation user_population,
       base::TimeTicks request_start_time,
+      bool is_sampled_report,
       scoped_refptr<base::SequencedTaskRunner> response_callback_task_runner,
       std::unique_ptr<std::string> response_body);
 
   // Fills in fields in |RTLookupRequest|.
-  std::unique_ptr<RTLookupRequest> FillRequestProto(const GURL& url);
+  std::unique_ptr<RTLookupRequest> FillRequestProto(
+      const GURL& url,
+      const GURL& last_committed_url,
+      bool is_mainframe,
+      bool is_sampled_report);
 
   SEQUENCE_CHECKER(sequence_checker_);
 
@@ -245,7 +280,7 @@ class RealTimeUrlLookupServiceBase : public KeyedService {
   scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory_;
 
   // Unowned object used for getting and storing real time url check cache.
-  VerdictCacheManager* cache_manager_;
+  raw_ptr<VerdictCacheManager> cache_manager_;
 
   // All requests that are sent but haven't received a response yet.
   PendingRTLookupRequests pending_requests_;
@@ -254,14 +289,12 @@ class RealTimeUrlLookupServiceBase : public KeyedService {
   base::RepeatingCallback<ChromeUserPopulation()> get_user_population_callback_;
 
   // Unowned object used to retrieve referrer chains.
-  ReferrerChainProvider* referrer_chain_provider_;
+  raw_ptr<ReferrerChainProvider> referrer_chain_provider_;
 
   friend class RealTimeUrlLookupServiceTest;
   friend class ChromeEnterpriseRealTimeUrlLookupServiceTest;
 
   base::WeakPtrFactory<RealTimeUrlLookupServiceBase> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(RealTimeUrlLookupServiceBase);
 
 };  // class RealTimeUrlLookupServiceBase
 

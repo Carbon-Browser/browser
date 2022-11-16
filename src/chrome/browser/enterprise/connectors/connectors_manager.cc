@@ -6,25 +6,24 @@
 
 #include <memory>
 
-#include "base/feature_list.h"
-#include "base/no_destructor.h"
 #include "base/values.h"
-#include "chrome/browser/browser_process.h"
-#include "chrome/browser/enterprise/connectors/connectors_prefs.h"
-#include "components/policy/core/browser/url_util.h"
+#include "chrome/browser/enterprise/connectors/reporting/extension_install_event_router.h"
 #include "components/prefs/pref_service.h"
-#include "components/safe_browsing/core/common/safe_browsing_prefs.h"
-#include "components/url_matcher/url_matcher.h"
 #include "url/gurl.h"
 
 namespace enterprise_connectors {
 
-ConnectorsManager::ConnectorsManager(PrefService* pref_service,
-                                     ServiceProviderConfig* config,
-                                     bool observe_prefs)
-    : service_provider_config_(config) {
+ConnectorsManager::ConnectorsManager(
+    ExtensionInstallEventRouter extension_install_event_router,
+    PrefService* pref_service,
+    const ServiceProviderConfig* config,
+    bool observe_prefs)
+    : service_provider_config_(config),
+      extension_install_event_router_(
+          std::move(extension_install_event_router)) {
   if (observe_prefs)
     StartObservingPrefs(pref_service);
+  extension_install_event_router_.StartObserving();
 }
 
 ConnectorsManager::~ConnectorsManager() = default;
@@ -151,10 +150,11 @@ void ConnectorsManager::CacheAnalysisConnectorPolicy(
   const char* pref = ConnectorPref(connector);
   DCHECK(pref);
 
-  const base::ListValue* policy_value =
+  const base::Value* policy_value =
       pref_change_registrar_.prefs()->GetList(pref);
   if (policy_value && policy_value->is_list()) {
-    for (const base::Value& service_settings : policy_value->GetList())
+    for (const base::Value& service_settings :
+         policy_value->GetListDeprecated())
       analysis_connector_settings_[connector].emplace_back(
           service_settings, *service_provider_config_);
   }
@@ -168,10 +168,11 @@ void ConnectorsManager::CacheReportingConnectorPolicy(
   const char* pref = ConnectorPref(connector);
   DCHECK(pref);
 
-  const base::ListValue* policy_value =
+  const base::Value* policy_value =
       pref_change_registrar_.prefs()->GetList(pref);
   if (policy_value && policy_value->is_list()) {
-    for (const base::Value& service_settings : policy_value->GetList())
+    for (const base::Value& service_settings :
+         policy_value->GetListDeprecated())
       reporting_connector_settings_[connector].emplace_back(
           service_settings, *service_provider_config_);
   }
@@ -185,10 +186,11 @@ void ConnectorsManager::CacheFileSystemConnectorPolicy(
   const char* pref = ConnectorPref(connector);
   DCHECK(pref);
 
-  const base::ListValue* policy_value =
+  const base::Value* policy_value =
       pref_change_registrar_.prefs()->GetList(pref);
   if (policy_value && policy_value->is_list()) {
-    for (const base::Value& service_settings : policy_value->GetList())
+    for (const base::Value& service_settings :
+         policy_value->GetListDeprecated())
       file_system_connector_settings_[connector].emplace_back(
           service_settings, *service_provider_config_);
   }
@@ -241,6 +243,23 @@ absl::optional<GURL> ConnectorsManager::GetLearnMoreUrl(
   return absl::nullopt;
 }
 
+bool ConnectorsManager::GetBypassJustificationRequired(
+    AnalysisConnector connector,
+    const std::string& tag) {
+  if (IsConnectorEnabled(connector)) {
+    if (analysis_connector_settings_.count(connector) == 0)
+      CacheAnalysisConnectorPolicy(connector);
+
+    if (analysis_connector_settings_.count(connector) &&
+        !analysis_connector_settings_.at(connector).empty()) {
+      return analysis_connector_settings_.at(connector)
+          .at(0)
+          .GetBypassJustificationRequired(tag);
+    }
+  }
+  return false;
+}
+
 std::vector<std::string> ConnectorsManager::GetAnalysisServiceProviderNames(
     AnalysisConnector connector) {
   if (IsConnectorEnabled(connector)) {
@@ -286,6 +305,7 @@ void ConnectorsManager::StartObservingPrefs(PrefService* pref_service) {
   StartObservingPref(AnalysisConnector::FILE_ATTACHED);
   StartObservingPref(AnalysisConnector::FILE_DOWNLOADED);
   StartObservingPref(AnalysisConnector::BULK_DATA_ENTRY);
+  StartObservingPref(AnalysisConnector::PRINT);
   StartObservingPref(ReportingConnector::SECURITY_EVENT);
   StartObservingPref(FileSystemConnector::SEND_DOWNLOAD_TO_CLOUD);
 }

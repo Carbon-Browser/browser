@@ -5,7 +5,9 @@
 // This is a "No Compile Test" suite.
 // http://dev.chromium.org/developers/testing/no-compile-tests
 
+#include <memory>
 #include <tuple>  // for std::ignore
+#include <type_traits>  // for std::remove_pointer_t
 
 #include "base/memory/raw_ptr.h"
 
@@ -16,6 +18,10 @@ struct DerivedProducer : Producer {};
 struct OtherDerivedProducer : Producer {};
 struct Unrelated {};
 struct DerivedUnrelated : Unrelated {};
+struct PmfTest {
+ public:
+  int Func(char, double) const { return 11; }
+};
 
 #if defined(NCTEST_AUTO_DOWNCAST)  // [r"no viable conversion from 'raw_ptr<\(anonymous namespace\)::Producer>' to 'raw_ptr<\(anonymous namespace\)::DerivedProducer>'"]
 
@@ -79,6 +85,29 @@ void WontCompile() {
   const char foo[] = "42";
   raw_ptr<const void> ptr = foo;
   std::ignore = *ptr;
+}
+
+#elif defined(NCTEST_FUNCTION_POINTER) // [r"raw_ptr<T> doesn't work with this kind of pointee type T"]
+
+void WontCompile() {
+  raw_ptr<void(int)> raw_ptr_var;
+  std::ignore = raw_ptr_var.get();
+}
+
+#elif defined(NCTEST_POINTER_TO_MEMBER) // [r"overload resolution selected deleted operator '->\*'"]
+
+void WontCompile() {
+  PmfTest object;
+  int (PmfTest::*pmf_func)(char, double) const = &PmfTest::Func;
+
+  raw_ptr<PmfTest> object_ptr = &object;
+  std::ignore = object_ptr->*pmf_func;
+}
+
+#elif defined(NCTEST_DANGLING_GSL) // [r"object backing the pointer will be destroyed at the end of the full-expression"]
+
+void WontCompile() {
+  [[maybe_unused]] raw_ptr<int> ptr = std::make_unique<int>(2).get();
 }
 
 #endif

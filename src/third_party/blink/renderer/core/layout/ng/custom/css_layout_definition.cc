@@ -17,6 +17,7 @@
 #include "third_party/blink/renderer/bindings/core/v8/v8_intrinsic_sizes_result_options.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_layout_callback.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_no_argument_constructor.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_script_runner.h"
 #include "third_party/blink/renderer/core/css/cssom/prepopulated_computed_style_property_map.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/inspector/console_message.h"
@@ -31,7 +32,7 @@
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/bindings/v8_binding_macros.h"
 #include "third_party/blink/renderer/platform/bindings/v8_object_constructor.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 
 namespace blink {
 
@@ -126,7 +127,7 @@ bool CSSLayoutDefinition::Instance::Layout(
     v8::MicrotasksScope microtasks_scope(isolate, microtask_queue,
                                          v8::MicrotasksScope::kRunMicrotasks);
     if (!definition_->layout_
-             ->Invoke(instance_.NewLocal(isolate), children, edges, constraints,
+             ->Invoke(instance_.Get(isolate), children, edges, constraints,
                       style_map)
              .To(&return_value)) {
       return false;
@@ -264,7 +265,7 @@ bool CSSLayoutDefinition::Instance::IntrinsicSizes(
     v8::MicrotasksScope microtasks_scope(isolate, microtask_queue,
                                          v8::MicrotasksScope::kRunMicrotasks);
     if (!definition_->intrinsic_sizes_
-             ->Invoke(instance_.NewLocal(isolate), children, edges, style_map)
+             ->Invoke(instance_.Get(isolate), children, edges, style_map)
              .To(&return_value)) {
       return false;
     }

@@ -19,6 +19,7 @@
 
 #include "base/bind.h"
 #include "base/check_op.h"
+#include "base/cpu_reduction_experiment.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
@@ -30,7 +31,6 @@
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/synchronization/lock.h"
-#include "base/task/post_task.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/platform_thread.h"
 #include "base/threading/scoped_blocking_call.h"
@@ -54,10 +54,10 @@ constexpr char kConciergeCmdline[] = "/usr/bin/vm_concierge";
 constexpr char kChromeCmdPath[] = "/opt/google/chrome/chrome";
 
 // Sampling frequency.
-constexpr base::TimeDelta kSampleDelay = base::TimeDelta::FromSeconds(15);
+constexpr base::TimeDelta kSampleDelay = base::Seconds(15);
 
 // Time after which a sample is invalid. Must be greater than |kSampleDelay|.
-constexpr base::TimeDelta kExcessiveDelay = base::TimeDelta::FromSeconds(30);
+constexpr base::TimeDelta kExcessiveDelay = base::Seconds(30);
 
 // Represents a map of all processes; maps a PPID to a PID.
 using PpidToPidMap = std::unordered_multimap<pid_t, pid_t>;
@@ -264,7 +264,14 @@ void ProcessDataCollector::Initialize() {
       ProcessDataCollector::Config::AveragingTechnique::AVERAGE);
 
   g_process_data_collector = new ProcessDataCollector(kRealConfig);
-  g_process_data_collector->StartSamplingCpuUsage();
+
+  if (!base::IsRunningCpuReductionExperiment()) {
+    // Don't gather the metrics to evaluate impact of CPU reduction.
+    // This code is deemed not useful anymore (crbug.com/1295807).
+    // TODO(crbug.com/1295441: Fully remove the code once the experiment is
+    // over.
+    g_process_data_collector->StartSamplingCpuUsage();
+  }
 }
 
 // static

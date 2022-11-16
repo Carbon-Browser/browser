@@ -4,12 +4,13 @@
 
 #include "chrome/browser/ui/autofill/payments/virtual_card_manual_fallback_bubble_controller_impl.h"
 
+#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/ui/autofill/autofill_bubble_base.h"
 #include "chrome/browser/ui/autofill/autofill_bubble_handler.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/browser_window.h"
-#include "components/autofill/core/browser/autofill_metrics.h"
+#include "components/autofill/core/browser/metrics/autofill_metrics.h"
 #include "components/strings/grit/components_strings.h"
 #include "ui/base/clipboard/clipboard.h"
 #include "ui/base/clipboard/scoped_clipboard_writer.h"
@@ -18,8 +19,7 @@
 namespace autofill {
 
 // The delay between card being fetched and manual fallback bubble being shown.
-constexpr base::TimeDelta kManualFallbackBubbleDelay =
-    base::TimeDelta::FromSeconds(1);
+constexpr base::TimeDelta kManualFallbackBubbleDelay = base::Seconds(1.5);
 
 // static
 VirtualCardManualFallbackBubbleController*
@@ -49,6 +49,7 @@ VirtualCardManualFallbackBubbleControllerImpl::
     ~VirtualCardManualFallbackBubbleControllerImpl() = default;
 
 void VirtualCardManualFallbackBubbleControllerImpl::ShowBubble(
+    const std::u16string& masked_card_identifier_string,
     const CreditCard* virtual_card,
     const std::u16string& virtual_card_cvc,
     const gfx::Image& virtual_card_image) {
@@ -57,6 +58,7 @@ void VirtualCardManualFallbackBubbleControllerImpl::ShowBubble(
   if (bubble_view())
     HideBubble();
 
+  masked_card_identifier_string_ = masked_card_identifier_string;
   virtual_card_ = *virtual_card;
   virtual_card_cvc_ = virtual_card_cvc;
   virtual_card_image_ = virtual_card_image;
@@ -94,8 +96,22 @@ VirtualCardManualFallbackBubbleControllerImpl::GetBubbleTitleIcon() const {
 
 std::u16string
 VirtualCardManualFallbackBubbleControllerImpl::GetBubbleTitleText() const {
+  return l10n_util::GetStringFUTF16(
+      IDS_AUTOFILL_VIRTUAL_CARD_MANUAL_FALLBACK_BUBBLE_TITLE,
+      masked_card_identifier_string_);
+}
+
+std::u16string
+VirtualCardManualFallbackBubbleControllerImpl::GetLearnMoreLinkText() const {
   return l10n_util::GetStringUTF16(
-      IDS_AUTOFILL_VIRTUAL_CARD_MANUAL_FALLBACK_BUBBLE_TITLE);
+      IDS_AUTOFILL_VIRTUAL_CARD_MANUAL_FALLBACK_BUBBLE_LEARN_MORE_LINK_LABEL);
+}
+
+std::u16string
+VirtualCardManualFallbackBubbleControllerImpl::GetEducationalBodyLabel() const {
+  return l10n_util::GetStringFUTF16(
+      IDS_AUTOFILL_VIRTUAL_CARD_MANUAL_FALLBACK_BUBBLE_EDUCATIONAL_BODY_LABEL,
+      GetLearnMoreLinkText());
 }
 
 std::u16string
@@ -160,6 +176,13 @@ bool VirtualCardManualFallbackBubbleControllerImpl::ShouldIconBeVisible()
   return should_icon_be_visible_;
 }
 
+void VirtualCardManualFallbackBubbleControllerImpl::OnLinkClicked(
+    const GURL& url) {
+  web_contents()->OpenURL(content::OpenURLParams(
+      url, content::Referrer(), WindowOpenDisposition::NEW_FOREGROUND_TAB,
+      ui::PAGE_TRANSITION_LINK, false));
+}
+
 void VirtualCardManualFallbackBubbleControllerImpl::OnBubbleClosed(
     PaymentsBubbleClosedReason closed_reason) {
   set_bubble_view(nullptr);
@@ -174,10 +197,6 @@ void VirtualCardManualFallbackBubbleControllerImpl::OnBubbleClosed(
     case PaymentsBubbleClosedReason::kNotInteracted:
       metric = AutofillMetrics::VirtualCardManualFallbackBubbleResultMetric::
           VIRTUAL_CARD_MANUAL_FALLBACK_BUBBLE_NOT_INTERACTED;
-      break;
-    case PaymentsBubbleClosedReason::kLostFocus:
-      metric = AutofillMetrics::VirtualCardManualFallbackBubbleResultMetric::
-          VIRTUAL_CARD_MANUAL_FALLBACK_BUBBLE_LOST_FOCUS;
       break;
     default:
       metric = AutofillMetrics::VirtualCardManualFallbackBubbleResultMetric::
@@ -244,21 +263,12 @@ void VirtualCardManualFallbackBubbleControllerImpl::
 VirtualCardManualFallbackBubbleControllerImpl::
     VirtualCardManualFallbackBubbleControllerImpl(
         content::WebContents* web_contents)
-    : AutofillBubbleControllerBase(web_contents) {}
+    : AutofillBubbleControllerBase(web_contents),
+      content::WebContentsUserData<
+          VirtualCardManualFallbackBubbleControllerImpl>(*web_contents) {}
 
-void VirtualCardManualFallbackBubbleControllerImpl::DidFinishNavigation(
-    content::NavigationHandle* navigation_handle) {
-  // TODO(https://crbug.com/1218946): With MPArch there may be multiple main
-  // frames. This caller was converted automatically to the primary main frame
-  // to preserve its semantics. Follow up to confirm correctness.
-  if (!navigation_handle->IsInPrimaryMainFrame() ||
-      !navigation_handle->HasCommitted())
-    return;
-
-  // Don't react to same-document (fragment) navigations.
-  if (navigation_handle->IsSameDocument())
-    return;
-
+void VirtualCardManualFallbackBubbleControllerImpl::PrimaryPageChanged(
+    content::Page& page) {
   should_icon_be_visible_ = false;
   bubble_has_been_shown_ = false;
   UpdatePageActionIcon();
@@ -319,6 +329,6 @@ void VirtualCardManualFallbackBubbleControllerImpl::SetEventObserverForTesting(
   observer_for_test_ = observer_for_test;
 }
 
-WEB_CONTENTS_USER_DATA_KEY_IMPL(VirtualCardManualFallbackBubbleControllerImpl)
+WEB_CONTENTS_USER_DATA_KEY_IMPL(VirtualCardManualFallbackBubbleControllerImpl);
 
 }  // namespace autofill

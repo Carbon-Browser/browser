@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "base/strings/stringprintf.h"
+#include "base/time/time.h"
 #include "content/browser/accessibility/browser_accessibility.h"
 #include "content/browser/accessibility/browser_accessibility_manager.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -96,13 +97,16 @@ class TestTouchPassthroughManager : public TouchPassthroughManager {
 class TouchPassthroughManagerTest : public testing::Test {
  public:
   TouchPassthroughManagerTest() = default;
+
+  TouchPassthroughManagerTest(const TouchPassthroughManagerTest&) = delete;
+  TouchPassthroughManagerTest& operator=(const TouchPassthroughManagerTest&) =
+      delete;
+
   ~TouchPassthroughManagerTest() override = default;
 
  protected:
  private:
   void SetUp() override {}
-
-  DISALLOW_COPY_AND_ASSIGN(TouchPassthroughManagerTest);
 };
 
 TEST_F(TouchPassthroughManagerTest, TapOutsidePassthroughRegion) {

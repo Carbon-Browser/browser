@@ -19,7 +19,7 @@ namespace {
 
 // Converts |date_time| in Study date format to base::Time.
 base::Time ConvertStudyDateToBaseTime(int64_t date_time) {
-  return base::Time::UnixEpoch() + base::TimeDelta::FromSeconds(date_time);
+  return base::Time::UnixEpoch() + base::Seconds(date_time);
 }
 
 // Similar to base::Contains(), but specifically for ASCII strings and
@@ -42,11 +42,7 @@ bool CheckStudyChannel(const Study::Filter& filter, Study::Channel channel) {
   if (filter.channel_size() == 0)
     return true;
 
-  for (int i = 0; i < filter.channel_size(); ++i) {
-    if (filter.channel(i) == channel)
-      return true;
-  }
-  return false;
+  return base::Contains(filter.channel(), channel);
 }
 
 bool CheckStudyFormFactor(const Study::Filter& filter,

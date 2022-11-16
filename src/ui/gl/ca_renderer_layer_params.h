@@ -7,12 +7,15 @@
 
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/rect_f.h"
-#include "ui/gfx/rrect_f.h"
-#include "ui/gfx/transform.h"
+#include "ui/gfx/geometry/rrect_f.h"
+#include "ui/gfx/geometry/transform.h"
+#include "ui/gfx/hdr_metadata.h"
 #include "ui/gfx/video_types.h"
 #include "ui/gl/gl_export.h"
 
@@ -21,6 +24,14 @@ class GLImage;
 }
 
 namespace ui {
+
+// Mirrors core animation layer edge constants.
+enum CALayerEdge : uint32_t {
+  kLayerEdgeLeft = 0x1,
+  kLayerEdgeRight = 0x2,
+  kLayerEdgeBottom = 0x4,
+  kLayerEdgeTop = 0x8,
+};
 
 struct GL_EXPORT CARendererLayerParams {
   CARendererLayerParams(bool is_clipped,
@@ -35,6 +46,7 @@ struct GL_EXPORT CARendererLayerParams {
                         unsigned edge_aa_mask,
                         float opacity,
                         unsigned filter,
+                        absl::optional<gfx::HDRMetadata> hdr_metadata,
                         gfx::ProtectedVideoType protected_video_type);
   CARendererLayerParams(const CARendererLayerParams& other);
   ~CARendererLayerParams();
@@ -44,13 +56,14 @@ struct GL_EXPORT CARendererLayerParams {
   const gfx::RRectF rounded_corner_bounds;
   unsigned sorting_context_id;
   const gfx::Transform transform;
-  gl::GLImage* image;
+  raw_ptr<gl::GLImage> image;
   const gfx::RectF contents_rect;
   const gfx::Rect rect;
   unsigned background_color;
   unsigned edge_aa_mask;
   float opacity;
   unsigned filter;
+  absl::optional<gfx::HDRMetadata> hdr_metadata;
   gfx::ProtectedVideoType protected_video_type;
 
   // This is a subset of cc::FilterOperation::FilterType.

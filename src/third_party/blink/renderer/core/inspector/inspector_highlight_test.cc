@@ -36,9 +36,11 @@ void AssertValueEqualsJSON(const std::unique_ptr<protocol::Value>& actual_value,
 }  // namespace
 
 class InspectorHighlightTest : public testing::Test,
-                               private ScopedCSSContainerQueriesForTest {
+                               private ScopedCSSContainerQueriesForTest,
+                               private ScopedLayoutNGForTest {
  public:
-  InspectorHighlightTest() : ScopedCSSContainerQueriesForTest(true) {}
+  InspectorHighlightTest()
+      : ScopedCSSContainerQueriesForTest(true), ScopedLayoutNGForTest(true) {}
 
  protected:
   void SetUp() override;
@@ -50,7 +52,7 @@ class InspectorHighlightTest : public testing::Test,
 };
 
 void InspectorHighlightTest::SetUp() {
-  dummy_page_holder_ = std::make_unique<DummyPageHolder>(IntSize(800, 600));
+  dummy_page_holder_ = std::make_unique<DummyPageHolder>(gfx::Size(800, 600));
 }
 
 TEST_F(InspectorHighlightTest, BuildSnapContainerInfoNoSnapAreas) {
@@ -234,6 +236,44 @@ TEST_F(InspectorHighlightTest,
   AssertValueEqualsJSON(protocol::ValueConversions<protocol::Value>::fromValue(
                             info.get(), &errors),
                         expected_container);
+}
+
+TEST_F(InspectorHighlightTest, BuildIsolatedElementInfo) {
+  GetDocument().body()->setInnerHTML(R"HTML(
+    <style>
+      #element {
+        width: 400px;
+        height: 500px;
+      }
+    </style>
+    <div id="element"></div>
+  )HTML");
+  GetDocument().View()->UpdateAllLifecyclePhasesForTest();
+  Element* element = GetDocument().getElementById("element");
+  auto info = BuildIsolatedElementInfo(
+      *element, InspectorIsolationModeHighlightConfig(), 1.0f);
+  EXPECT_TRUE(info);
+
+  protocol::ErrorSupport errors;
+  std::string expected_isolated_element = R"JSON(
+    {
+      "bidirectionResizerBorder": [ "M", 408, 508, "L", 428, 508, "L", 428, 528, "L", 408, 528, "Z" ],
+      "currentHeight": 500,
+      "currentWidth": 400,
+      "currentX": 8,
+      "currentY": 8,
+      "heightResizerBorder": [ "M", 8, 508, "L", 408, 508, "L", 408, 528, "L", 8, 528, "Z" ],
+      "isolationModeHighlightConfig": {
+          "maskColor": "rgba(0, 0, 0, 0)",
+          "resizerColor": "rgba(0, 0, 0, 0)",
+          "resizerHandleColor": "rgba(0, 0, 0, 0)"
+      },
+      "widthResizerBorder": [ "M", 408, 8, "L", 428, 8, "L", 428, 508, "L", 408, 508, "Z" ]
+    }
+  )JSON";
+  AssertValueEqualsJSON(protocol::ValueConversions<protocol::Value>::fromValue(
+                            info.get(), &errors),
+                        expected_isolated_element);
 }
 
 }  // namespace blink

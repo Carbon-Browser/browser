@@ -12,13 +12,12 @@
 #include <string>
 #include <vector>
 
+#include "ash/components/arc/mojom/policy.mojom.h"
+#include "ash/components/arc/session/connection_observer.h"
 #include "base/callback_forward.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/time/time.h"
-#include "components/arc/mojom/policy.mojom.h"
-#include "components/arc/session/connection_observer.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/policy/core/common/policy_namespace.h"
 #include "components/policy/core/common/policy_service.h"
@@ -58,6 +57,9 @@ class ArcPolicyBridge : public KeyedService,
  public:
   class Observer {
    public:
+    Observer(const Observer&) = delete;
+    Observer& operator=(const Observer&) = delete;
+
     // Called when policy is sent to CloudDPC.
     virtual void OnPolicySent(const std::string& policy) {}
 
@@ -95,15 +97,18 @@ class ArcPolicyBridge : public KeyedService,
         base::Time time,
         const std::set<std::string>& package_names) {}
 
+    // Called when ARC DPC starts.
+    virtual void OnReportDPCVersion(const std::string& version) {}
+
    protected:
     Observer() = default;
     virtual ~Observer() = default;
-
-    DISALLOW_COPY_AND_ASSIGN(Observer);
   };
 
   // Policy constants.
   static const char kApplications[];
+  static const char kPackageName[];
+  static const char kManagedConfiguration[];
   static const char kResetAndroidIdEnabled[];
 
   // Returns singleton instance for the given BrowserContext,
@@ -124,6 +129,10 @@ class ArcPolicyBridge : public KeyedService,
   ArcPolicyBridge(content::BrowserContext* context,
                   ArcBridgeService* bridge_service,
                   policy::PolicyService* policy_service);
+
+  ArcPolicyBridge(const ArcPolicyBridge&) = delete;
+  ArcPolicyBridge& operator=(const ArcPolicyBridge&) = delete;
+
   ~ArcPolicyBridge() override;
 
   const std::string& GetInstanceGuidForTesting();
@@ -156,6 +165,7 @@ class ArcPolicyBridge : public KeyedService,
   void ReportForceInstallMainLoopFailed(
       base::Time time,
       const std::vector<std::string>& package_names) override;
+  void ReportDPCVersion(const std::string& version) override;
 
   // PolicyService::Observer overrides.
   void OnPolicyUpdated(const policy::PolicyNamespace& ns,
@@ -172,6 +182,7 @@ class ArcPolicyBridge : public KeyedService,
   const std::string& get_arc_policy_compliance_report() {
     return arc_policy_compliance_report_;
   }
+  const std::string& get_arc_dpc_version() { return arc_dpc_version_; }
 
  private:
   void InitializePolicyService();
@@ -222,11 +233,11 @@ class ArcPolicyBridge : public KeyedService,
   // Saved last received compliance report. Should be used only for feedback
   // reporting.
   std::string arc_policy_compliance_report_;
+  // Saved ARC DPC version.
+  std::string arc_dpc_version_;
 
   // Must be the last member.
   base::WeakPtrFactory<ArcPolicyBridge> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ArcPolicyBridge);
 };
 
 }  // namespace arc

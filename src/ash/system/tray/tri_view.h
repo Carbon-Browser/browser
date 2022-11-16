@@ -8,7 +8,6 @@
 #include <memory>
 
 #include "ash/ash_export.h"
-#include "base/macros.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/views/view.h"
@@ -67,6 +66,9 @@ class ASH_EXPORT TriView : public views::View {
   // Creates this with the specified |orientation| and
   // |padding_between_containers|.
   TriView(Orientation orientation, int padding_between_containers);
+
+  TriView(const TriView&) = delete;
+  TriView& operator=(const TriView&) = delete;
 
   ~TriView() override;
 
@@ -148,8 +150,6 @@ class ASH_EXPORT TriView : public views::View {
   // to manipulate the child views during construction/destruction so this flag
   // is used to disable the DCHECK during construction/destruction.
   bool enable_hierarchy_changed_dcheck_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(TriView);
 };
 
 }  // namespace ash

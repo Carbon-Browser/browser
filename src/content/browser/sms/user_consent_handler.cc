@@ -5,6 +5,7 @@
 #include "content/browser/sms/user_consent_handler.h"
 #include "base/callback.h"
 #include "content/browser/sms/webotp_service.h"
+#include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_delegate.h"
 
@@ -28,16 +29,20 @@ bool NoopUserConsentHandler::is_async() const {
 }
 
 PromptBasedUserConsentHandler::PromptBasedUserConsentHandler(
-    RenderFrameHost* frame_host,
+    RenderFrameHost& frame_host,
     const OriginList& origin_list)
-    : frame_host_{frame_host}, origin_list_{origin_list} {}
+    : frame_host_(frame_host), origin_list_(origin_list) {}
 PromptBasedUserConsentHandler::~PromptBasedUserConsentHandler() = default;
 
 void PromptBasedUserConsentHandler::RequestUserConsent(
     const std::string& one_time_code,
     CompletionCallback on_complete) {
+  // This function cannot be called during prerendering as
+  // WebOTPService::OnReceive calls this, so the DCHECK is transitively true.
+  DCHECK_NE(frame_host_->GetLifecycleState(),
+            RenderFrameHost::LifecycleState::kPrerendering);
   WebContents* web_contents =
-      content::WebContents::FromRenderFrameHost(frame_host_);
+      content::WebContents::FromRenderFrameHost(&*frame_host_);
   if (!web_contents->GetDelegate()) {
     std::move(on_complete).Run(UserConsentResult::kNoDelegate);
     return;
@@ -55,7 +60,7 @@ void PromptBasedUserConsentHandler::RequestUserConsent(
   on_complete_ = std::move(on_complete);
   is_prompt_open_ = true;
   web_contents->GetDelegate()->CreateSmsPrompt(
-      frame_host_, origin_list_, one_time_code,
+      &*frame_host_, origin_list_, one_time_code,
       base::BindOnce(&PromptBasedUserConsentHandler::OnConfirm,
                      weak_ptr_factory_.GetWeakPtr()),
       base::BindOnce(&PromptBasedUserConsentHandler::OnCancel,

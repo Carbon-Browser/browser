@@ -6,6 +6,7 @@
 
 #include <memory>
 
+#include "ash/components/login/auth/public/user_context.h"
 #include "ash/constants/ash_pref_names.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/login/quick_unlock/auth_token.h"
@@ -14,7 +15,6 @@
 #include "chrome/browser/ash/login/quick_unlock/quick_unlock_factory.h"
 #include "chrome/browser/ash/login/quick_unlock/quick_unlock_utils.h"
 #include "chrome/test/base/testing_profile.h"
-#include "chromeos/login/auth/user_context.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -38,13 +38,18 @@ base::TimeDelta GetExpirationTime(PrefService* pref_service) {
 }  // namespace
 
 class QuickUnlockStorageUnitTest : public testing::Test {
+ public:
+  QuickUnlockStorageUnitTest(const QuickUnlockStorageUnitTest&) = delete;
+  QuickUnlockStorageUnitTest& operator=(const QuickUnlockStorageUnitTest&) =
+      delete;
+
  protected:
   QuickUnlockStorageUnitTest() : profile_(std::make_unique<TestingProfile>()) {}
   ~QuickUnlockStorageUnitTest() override {}
 
   // testing::Test:
-  void SetUp() override { EnabledForTesting(true); }
-  void TearDown() override { EnabledForTesting(false); }
+  void SetUp() override {}
+  void TearDown() override {}
 
   void ExpireAuthToken() {
     QuickUnlockFactory::GetForProfile(profile_.get())->auth_token_->Reset();
@@ -52,8 +57,6 @@ class QuickUnlockStorageUnitTest : public testing::Test {
 
   content::BrowserTaskEnvironment task_environment_;
   std::unique_ptr<TestingProfile> profile_;
-
-  DISALLOW_COPY_AND_ASSIGN(QuickUnlockStorageUnitTest);
 };
 
 // Provides test-only QuickUnlockStorage APIs.
@@ -62,6 +65,10 @@ class QuickUnlockStorageTestApi {
   // Does *not* take ownership over `quick_unlock_storage`.
   explicit QuickUnlockStorageTestApi(QuickUnlockStorage* quick_unlock_storage)
       : quick_unlock_storage_(quick_unlock_storage) {}
+
+  QuickUnlockStorageTestApi(const QuickUnlockStorageTestApi&) = delete;
+  QuickUnlockStorageTestApi& operator=(const QuickUnlockStorageTestApi&) =
+      delete;
 
   // Reduces the amount of strong auth time available by `time_delta`.
   void ReduceRemainingStrongAuthTimeBy(const base::TimeDelta& time_delta) {
@@ -80,8 +87,6 @@ class QuickUnlockStorageTestApi {
 
  private:
   QuickUnlockStorage* quick_unlock_storage_;
-
-  DISALLOW_COPY_AND_ASSIGN(QuickUnlockStorageTestApi);
 };
 
 // Verifies that marking the strong auth makes TimeSinceLastStrongAuth a > zero
@@ -170,7 +175,7 @@ TEST_F(QuickUnlockStorageUnitTest, AuthToken) {
       QuickUnlockFactory::GetForProfile(profile_.get());
   EXPECT_FALSE(quick_unlock_storage->GetAuthToken());
 
-  chromeos::UserContext context;
+  UserContext context;
   std::string auth_token = quick_unlock_storage->CreateAuthToken(context);
   EXPECT_NE(std::string(), auth_token);
   EXPECT_TRUE(quick_unlock_storage->GetAuthToken());

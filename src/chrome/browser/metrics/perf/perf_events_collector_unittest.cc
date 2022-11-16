@@ -13,14 +13,14 @@
 
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
-#include "base/macros.h"
 #include "base/memory/ptr_util.h"
-#include "base/metrics/field_trial.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
-#include "base/task/post_task.h"
+#include "base/system/sys_info.h"
 #include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
+#include "base/time/time.h"
 #include "chrome/browser/metrics/perf/cpu_identity.h"
 #include "chrome/browser/metrics/perf/windowed_incognito_observer.h"
 #include "components/variations/variations_associated_data.h"
@@ -35,32 +35,33 @@ namespace {
 
 const char kPerfCommandDelimiter[] = " ";
 
-const char kPerfCyclesCmd[] = "perf record -a -e cycles -c 1000003";
-const char kPerfCyclesHGCmd[] = "perf record -a -e cycles:HG -c 1000003";
-const char kPerfFPCallgraphCmd[] = "perf record -a -e cycles -g -c 4000037";
-const char kPerfFPCallgraphHGCmd[] =
-    "perf record -a -e cycles:HG -g -c 4000037";
+const char kPerfCyclesCmd[] = "-- record -a -e cycles -c 1000003";
+const char kPerfCyclesHGCmd[] = "-- record -a -e cycles:HG -c 1000003";
+const char kPerfFPCallgraphCmd[] = "-- record -a -e cycles -g -c 4000037";
+const char kPerfFPCallgraphHGCmd[] = "-- record -a -e cycles:HG -g -c 4000037";
 const char kPerfLBRCallgraphCmd[] =
-    "perf record -a -e cycles -c 4000037 --call-graph lbr";
-const char kPerfCyclesPPPCmd[] = "perf record -a -e cycles:ppp -c 1000003";
-const char kPerfCyclesPPPHGCmd[] = "perf record -a -e cycles:pppHG -c 1000003";
+    "-- record -a -e cycles -c 6000011 --call-graph lbr";
+const char kPerfCyclesPPPCmd[] = "-- record -a -e cycles:ppp -c 1000003";
+const char kPerfCyclesPPPHGCmd[] = "-- record -a -e cycles:pppHG -c 1000003";
 const char kPerfFPCallgraphPPPCmd[] =
-    "perf record -a -e cycles:ppp -g -c 4000037";
+    "-- record -a -e cycles:ppp -g -c 4000037";
 const char kPerfFPCallgraphPPPHGCmd[] =
-    "perf record -a -e cycles:pppHG -g -c 4000037";
+    "-- record -a -e cycles:pppHG -g -c 4000037";
 const char kPerfLBRCallgraphPPPCmd[] =
-    "perf record -a -e cycles:ppp -c 4000037 --call-graph lbr";
-const char kPerfLBRCmd[] = "perf record -a -e r20c4 -b -c 200011";
-const char kPerfLBRCmdAtom[] = "perf record -a -e rc4 -b -c 300001";
+    "-- record -a -e cycles:ppp -c 4000037 --call-graph lbr";
+const char kPerfLBRCmd[] = "-- record -a -e r20c4 -b -c 800011";
+const char kPerfLBRCmdAtom[] = "-- record -a -e rc4 -b -c 800011";
 const char kPerfITLBMissCyclesCmdIvyBridge[] =
-    "perf record -a -e itlb_misses.walk_duration -c 30001";
+    "-- record -a -e itlb_misses.walk_duration -c 30001";
 const char kPerfITLBMissCyclesCmdSkylake[] =
-    "perf record -a -e itlb_misses.walk_pending -c 30001";
+    "-- record -a -e itlb_misses.walk_pending -c 30001";
 const char kPerfITLBMissCyclesCmdAtom[] =
-    "perf record -a -e page_walks.i_side_cycles -c 30001";
-const char kPerfLLCMissesCmd[] = "perf record -a -e r412e -g -c 30007";
-const char kPerfLLCMissesPreciseCmd[] =
-    "perf record -a -e r412e:pp -g -c 30007";
+    "-- record -a -e page_walks.i_side_cycles -c 30001";
+const char kPerfLLCMissesCmd[] = "-- record -a -e r412e -g -c 30007";
+const char kPerfLLCMissesPreciseCmd[] = "-- record -a -e r412e:pp -g -c 30007";
+const char kPerfETMCmd[] =
+    "--run_inject --inject_args inject;--itrace=i512il;--strip -- record -a -e "
+    "cs_etm/autofdo/";
 
 // Converts a protobuf to serialized format as a byte vector.
 std::vector<uint8_t> SerializeMessageToVector(
@@ -99,6 +100,17 @@ PerfDataProto GetExamplePerfDataProto() {
   return proto;
 }
 
+base::TimeDelta GetDuration(const std::vector<std::string>& quipper_args) {
+  for (auto it = quipper_args.begin(); it != quipper_args.end(); ++it) {
+    if (*it == "--duration" && it != quipper_args.end()) {
+      int dur;
+      if (base::StringToInt(*(it + 1), &dur))
+        return base::Seconds(dur);
+    }
+  }
+  return base::Seconds(0);
+}
+
 // A mock PerfOutputCall class for testing, which outputs example perf data
 // after the profile duration elapses.
 class FakePerfOutputCall : public PerfOutputCall {
@@ -114,6 +126,10 @@ class FakePerfOutputCall : public PerfOutputCall {
     collection_done_timer_.Start(FROM_HERE, duration, this,
                                  &FakePerfOutputCall::OnCollectionDone);
   }
+
+  FakePerfOutputCall(const FakePerfOutputCall&) = delete;
+  FakePerfOutputCall& operator=(const FakePerfOutputCall&) = delete;
+
   ~FakePerfOutputCall() override = default;
 
   void Stop() override {
@@ -135,8 +151,6 @@ class FakePerfOutputCall : public PerfOutputCall {
   DoneCallback done_callback_;
   base::OneShotTimer collection_done_timer_;
   base::OnceClosure on_stop_;
-
-  DISALLOW_COPY_AND_ASSIGN(FakePerfOutputCall);
 };
 
 // Allows testing of PerfCollector behavior when an incognito window is opened.
@@ -151,6 +165,9 @@ class TestIncognitoObserver : public WindowedIncognitoObserver {
     return base::WrapUnique(new TestIncognitoObserver(incognito_launched));
   }
 
+  TestIncognitoObserver(const TestIncognitoObserver&) = delete;
+  TestIncognitoObserver& operator=(const TestIncognitoObserver&) = delete;
+
   bool IncognitoLaunched() const override { return incognito_launched_; }
 
  private:
@@ -159,14 +176,15 @@ class TestIncognitoObserver : public WindowedIncognitoObserver {
         incognito_launched_(incognito_launched) {}
 
   bool incognito_launched_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestIncognitoObserver);
 };
 
 // Allows access to some private methods for testing.
 class TestPerfCollector : public PerfCollector {
  public:
   TestPerfCollector() = default;
+
+  TestPerfCollector(const TestPerfCollector&) = delete;
+  TestPerfCollector& operator=(const TestPerfCollector&) = delete;
 
   using MetricCollector::CollectionAttemptStatus;
   using MetricCollector::CollectPerfDataAfterSessionRestore;
@@ -178,9 +196,13 @@ class TestPerfCollector : public PerfCollector {
   using PerfCollector::collection_params;
   using PerfCollector::CollectPSICPU;
   using PerfCollector::command_selector;
+  using PerfCollector::CommandEventType;
+  using PerfCollector::EventType;
   using PerfCollector::Init;
   using PerfCollector::IsRunning;
+  using PerfCollector::LacrosChannelAndVersion;
   using PerfCollector::max_frequencies_mhz;
+  using PerfCollector::ParseLacrosPath;
   using PerfCollector::ParseOutputProtoIfValid;
   using PerfCollector::ParsePSICPUStatus;
   using PerfCollector::RecordUserLogin;
@@ -189,15 +211,18 @@ class TestPerfCollector : public PerfCollector {
   bool collection_stopped() { return collection_stopped_; }
   bool collection_done() { return !real_callback_; }
 
+  base::TimeDelta elapsed_duration;
+
  protected:
   std::unique_ptr<PerfOutputCall> CreatePerfOutputCall(
-      base::TimeDelta duration,
-      const std::vector<std::string>& perf_args,
+      const std::vector<std::string>& quipper_args,
+      bool disable_cpu_idle,
       PerfOutputCall::DoneCallback callback) override {
     real_callback_ = std::move(callback);
+    elapsed_duration = GetDuration(quipper_args);
 
     return std::make_unique<FakePerfOutputCall>(
-        duration,
+        elapsed_duration,
         base::BindOnce(&TestPerfCollector::OnCollectionDone,
                        base::Unretained(this)),
         base::BindOnce(&TestPerfCollector::OnCollectionStopped,
@@ -212,22 +237,31 @@ class TestPerfCollector : public PerfCollector {
 
   PerfOutputCall::DoneCallback real_callback_;
   bool collection_stopped_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(TestPerfCollector);
 };
 
-const base::TimeDelta kPeriodicCollectionInterval =
-    base::TimeDelta::FromHours(1);
-const base::TimeDelta kCollectionDuration = base::TimeDelta::FromSeconds(2);
+const base::TimeDelta kPeriodicCollectionInterval = base::Hours(1);
+const base::TimeDelta kCollectionDuration = base::Seconds(2);
 
-// A wrapper around internal::CommandSamplesCPUCycles, to test if a perf command
-// samples the cycles event. The wrapper takes a command as a string, while the
-// wrapped internal::CommandSamplesCPUCycles takes the command split into words.
+// A wrapper around CommandEventType, to test if a perf command samples
+// the cycles event. The wrapper takes a command as a string, while the
+// wrapped CommandEventType takes the command split into words.
 bool DoesCommandSampleCycles(std::string command) {
+  using EventType = TestPerfCollector::EventType;
   std::vector<std::string> cmd_args =
       base::SplitString(command, kPerfCommandDelimiter, base::KEEP_WHITESPACE,
                         base::SPLIT_WANT_ALL);
-  return internal::CommandSamplesCPUCycles(cmd_args);
+  return TestPerfCollector::CommandEventType(cmd_args) == EventType::kCycles;
+}
+
+// A wrapper around CommandEventType, to test if a perf command samples
+// the etm event. The wrapper takes a command as a string, while the
+// wrapped CommandEventType takes the command split into words.
+bool DoesCommandSampleETM(std::string command) {
+  using EventType = TestPerfCollector::EventType;
+  std::vector<std::string> cmd_args =
+      base::SplitString(command, kPerfCommandDelimiter, base::KEEP_WHITESPACE,
+                        base::SPLIT_WANT_ALL);
+  return TestPerfCollector::CommandEventType(cmd_args) == EventType::kETM;
 }
 
 }  // namespace
@@ -236,6 +270,9 @@ class PerfCollectorTest : public testing::Test {
  public:
   PerfCollectorTest()
       : task_environment_(base::test::TaskEnvironment::TimeSource::MOCK_TIME) {}
+
+  PerfCollectorTest(const PerfCollectorTest&) = delete;
+  PerfCollectorTest& operator=(const PerfCollectorTest&) = delete;
 
   void SaveProfile(std::unique_ptr<SampledProfile> sampled_profile) {
     cached_profile_data_.resize(cached_profile_data_.size() + 1);
@@ -258,6 +295,8 @@ class PerfCollectorTest : public testing::Test {
     perf_collector_->Init();
     // PerfCollector requires the user to be logged in.
     perf_collector_->RecordUserLogin(base::TimeTicks::Now());
+
+    perf_collector_->elapsed_duration = base::Seconds(0);
   }
 
   void TearDown() override {
@@ -276,8 +315,6 @@ class PerfCollectorTest : public testing::Test {
   std::unique_ptr<TestPerfCollector> perf_collector_;
 
   base::test::ScopedFeatureList feature_list_;
-
-  DISALLOW_COPY_AND_ASSIGN(PerfCollectorTest);
 };
 
 TEST_F(PerfCollectorTest, CheckSetup) {
@@ -290,6 +327,20 @@ TEST_F(PerfCollectorTest, CheckSetup) {
                   ->IncognitoLaunched());
   task_environment_.RunUntilIdle();
   EXPECT_GT(perf_collector_->max_frequencies_mhz().size(), 0u);
+}
+
+TEST_F(PerfCollectorTest, PrependDuration) {
+  // Timer is active after login and a periodic collection is scheduled.
+  EXPECT_TRUE(perf_collector_->IsRunning());
+  base::HistogramTester histogram_tester;
+
+  // Advance the clock by a periodic collection interval to trigger
+  // a collection.
+  task_environment_.FastForwardBy(kPeriodicCollectionInterval);
+  EXPECT_EQ(perf_collector_->elapsed_duration, kCollectionDuration);
+  histogram_tester.ExpectUniqueSample(
+      "ChromeOS.CWP.CollectPerf",
+      TestPerfCollector::CollectionAttemptStatus::SUCCESS, 1);
 }
 
 TEST_F(PerfCollectorTest, NoCollectionWhenProfileCacheFull) {
@@ -441,7 +492,7 @@ TEST_F(PerfCollectorTest, DefaultCommandsBasedOnUarch_IvyBridge) {
   cpuid.model_name = "";
   cpuid.release = "3.8.11";
   std::vector<RandomSelector::WeightAndValue> cmds =
-      internal::GetDefaultCommandsForCpu(cpuid);
+      internal::GetDefaultCommandsForCpuModel(cpuid, "");
   ASSERT_GE(cmds.size(), 2UL);
   EXPECT_EQ(cmds[0].value, kPerfCyclesCmd);
   EXPECT_TRUE(DoesCommandSampleCycles(cmds[0].value));
@@ -477,7 +528,7 @@ TEST_F(PerfCollectorTest, DefaultCommandsBasedOnUarch_IvyBridge_HostAndGuest) {
   cpuid.model_name = "";
   cpuid.release = "3.8.11";
   std::vector<RandomSelector::WeightAndValue> cmds =
-      internal::GetDefaultCommandsForCpu(cpuid);
+      internal::GetDefaultCommandsForCpuModel(cpuid, "");
   ASSERT_GE(cmds.size(), 2UL);
   EXPECT_EQ(cmds[0].value, kPerfCyclesHGCmd);
   EXPECT_TRUE(DoesCommandSampleCycles(cmds[0].value));
@@ -494,7 +545,7 @@ TEST_F(PerfCollectorTest, DefaultCommandsBasedOnUarch_SandyBridge) {
   cpuid.model_name = "";
   cpuid.release = "3.8.11";
   std::vector<RandomSelector::WeightAndValue> cmds =
-      internal::GetDefaultCommandsForCpu(cpuid);
+      internal::GetDefaultCommandsForCpuModel(cpuid, "");
   ASSERT_GE(cmds.size(), 2UL);
   EXPECT_EQ(cmds[0].value, kPerfCyclesCmd);
   EXPECT_TRUE(DoesCommandSampleCycles(cmds[0].value));
@@ -527,7 +578,7 @@ TEST_F(PerfCollectorTest, DefaultCommandsBasedOnUarch_Haswell) {
   cpuid.model_name = "";
   cpuid.release = "3.8.11";
   std::vector<RandomSelector::WeightAndValue> cmds =
-      internal::GetDefaultCommandsForCpu(cpuid);
+      internal::GetDefaultCommandsForCpuModel(cpuid, "");
   ASSERT_GE(cmds.size(), 2UL);
   EXPECT_EQ(cmds[0].value, kPerfCyclesCmd);
   EXPECT_TRUE(DoesCommandSampleCycles(cmds[0].value));
@@ -566,7 +617,7 @@ TEST_F(PerfCollectorTest, DefaultCommandsBasedOnUarch_Skylake) {
   cpuid.model_name = "";
   cpuid.release = "3.18.0";
   std::vector<RandomSelector::WeightAndValue> cmds =
-      internal::GetDefaultCommandsForCpu(cpuid);
+      internal::GetDefaultCommandsForCpuModel(cpuid, "");
   ASSERT_GE(cmds.size(), 3UL);
   EXPECT_EQ(cmds[0].value, kPerfCyclesCmd);
   // We have both FP and LBR based callstacks.
@@ -601,7 +652,7 @@ TEST_F(PerfCollectorTest, DefaultCommandsBasedOnUarch_Tigerlake) {
   cpuid.model_name = "";
   cpuid.release = "5.4.64";
   std::vector<RandomSelector::WeightAndValue> cmds =
-      internal::GetDefaultCommandsForCpu(cpuid);
+      internal::GetDefaultCommandsForCpuModel(cpuid, "");
   ASSERT_GE(cmds.size(), 3UL);
   EXPECT_EQ(cmds[0].value, kPerfCyclesPPPCmd);
   // We have both FP and LBR based callstacks.
@@ -639,7 +690,7 @@ TEST_F(PerfCollectorTest, DefaultCommandsBasedOnUarch_Tigerlake_HostAndGuest) {
   cpuid.model_name = "";
   cpuid.release = "5.4.64";
   std::vector<RandomSelector::WeightAndValue> cmds =
-      internal::GetDefaultCommandsForCpu(cpuid);
+      internal::GetDefaultCommandsForCpuModel(cpuid, "");
   ASSERT_GE(cmds.size(), 3UL);
   EXPECT_EQ(cmds[0].value, kPerfCyclesPPPHGCmd);
   // We have both FP and LBR based callstacks.
@@ -658,7 +709,7 @@ TEST_F(PerfCollectorTest, DefaultCommandsBasedOnUarch_Goldmont) {
   cpuid.model_name = "";
   cpuid.release = "4.4.196";
   std::vector<RandomSelector::WeightAndValue> cmds =
-      internal::GetDefaultCommandsForCpu(cpuid);
+      internal::GetDefaultCommandsForCpuModel(cpuid, "");
   ASSERT_GE(cmds.size(), 2UL);
   EXPECT_EQ(cmds[0].value, kPerfCyclesCmd);
   EXPECT_TRUE(DoesCommandSampleCycles(cmds[0].value));
@@ -697,7 +748,7 @@ TEST_F(PerfCollectorTest, DefaultCommandsBasedOnUarch_GoldmontPlus) {
   cpuid.model_name = "";
   cpuid.release = "4.14.214";
   std::vector<RandomSelector::WeightAndValue> cmds =
-      internal::GetDefaultCommandsForCpu(cpuid);
+      internal::GetDefaultCommandsForCpuModel(cpuid, "");
   ASSERT_GE(cmds.size(), 2UL);
   EXPECT_EQ(cmds[0].value, kPerfCyclesPPPCmd);
   EXPECT_TRUE(DoesCommandSampleCycles(cmds[0].value));
@@ -735,7 +786,7 @@ TEST_F(PerfCollectorTest, DefaultCommandsBasedOnUarch_Excavator) {
   cpuid.model = 0x70;  // Excavator
   cpuid.model_name = "";
   std::vector<RandomSelector::WeightAndValue> cmds =
-      internal::GetDefaultCommandsForCpu(cpuid);
+      internal::GetDefaultCommandsForCpuModel(cpuid, "");
   ASSERT_GE(cmds.size(), 2UL);
   EXPECT_EQ(cmds[0].value, kPerfCyclesCmd);
   EXPECT_TRUE(DoesCommandSampleCycles(cmds[0].value));
@@ -757,7 +808,7 @@ TEST_F(PerfCollectorTest, DefaultCommandsBasedOnArch_Arm32) {
   cpuid.model = 0;
   cpuid.model_name = "";
   std::vector<RandomSelector::WeightAndValue> cmds =
-      internal::GetDefaultCommandsForCpu(cpuid);
+      internal::GetDefaultCommandsForCpuModel(cpuid, "");
   ASSERT_GE(cmds.size(), 2UL);
   EXPECT_EQ(cmds[0].value, kPerfCyclesCmd);
   EXPECT_TRUE(DoesCommandSampleCycles(cmds[0].value));
@@ -784,11 +835,11 @@ TEST_F(PerfCollectorTest, DefaultCommandsBasedOnArch_Arm64) {
   cpuid.model = 0;
   cpuid.model_name = "";
   std::vector<RandomSelector::WeightAndValue> cmds =
-      internal::GetDefaultCommandsForCpu(cpuid);
+      internal::GetDefaultCommandsForCpuModel(cpuid, "");
   ASSERT_GE(cmds.size(), 2UL);
-  EXPECT_EQ(cmds[0].value, kPerfCyclesCmd);
+  EXPECT_EQ(cmds[0].value, kPerfCyclesHGCmd);
   EXPECT_TRUE(DoesCommandSampleCycles(cmds[0].value));
-  EXPECT_EQ(cmds[1].value, kPerfFPCallgraphCmd);
+  EXPECT_EQ(cmds[1].value, kPerfFPCallgraphHGCmd);
   EXPECT_TRUE(DoesCommandSampleCycles(cmds[1].value));
   auto found =
       std::find_if(cmds.begin(), cmds.end(),
@@ -814,12 +865,33 @@ TEST_F(PerfCollectorTest, DefaultCommandsBasedOnArch_Arm64_HostAndGuest) {
   cpuid.model = 0;
   cpuid.model_name = "";
   std::vector<RandomSelector::WeightAndValue> cmds =
-      internal::GetDefaultCommandsForCpu(cpuid);
+      internal::GetDefaultCommandsForCpuModel(cpuid, "");
   ASSERT_GE(cmds.size(), 2UL);
   EXPECT_EQ(cmds[0].value, kPerfCyclesHGCmd);
   EXPECT_TRUE(DoesCommandSampleCycles(cmds[0].value));
   EXPECT_EQ(cmds[1].value, kPerfFPCallgraphHGCmd);
   EXPECT_TRUE(DoesCommandSampleCycles(cmds[1].value));
+}
+
+TEST_F(PerfCollectorTest, DefaultCommandsBasedOnArch_Arm64_ETM) {
+  const base::Feature kCWPCollectsETM{"CWPCollectsETM",
+                                      base::FEATURE_DISABLED_BY_DEFAULT};
+  feature_list_.InitAndEnableFeature(kCWPCollectsETM);
+  CPUIdentity cpuid;
+  cpuid.arch = "aarch64";
+  cpuid.vendor = "";
+  cpuid.family = 0;
+  cpuid.model = 0;
+  cpuid.model_name = "";
+  std::vector<RandomSelector::WeightAndValue> cmds =
+      internal::GetDefaultCommandsForCpuModel(cpuid, "TROGDOR");
+  ASSERT_GE(cmds.size(), 3UL);
+  EXPECT_EQ(cmds[0].value, kPerfCyclesHGCmd);
+  EXPECT_TRUE(DoesCommandSampleCycles(cmds[0].value));
+  EXPECT_EQ(cmds[1].value, kPerfFPCallgraphHGCmd);
+  EXPECT_TRUE(DoesCommandSampleCycles(cmds[1].value));
+  EXPECT_EQ(cmds[2].value, kPerfETMCmd);
+  EXPECT_TRUE(DoesCommandSampleETM(cmds[2].value));
 }
 
 TEST_F(PerfCollectorTest, DefaultCommandsBasedOnArch_x86_32) {
@@ -830,7 +902,7 @@ TEST_F(PerfCollectorTest, DefaultCommandsBasedOnArch_x86_32) {
   cpuid.model = 0x2f;  // Westmere
   cpuid.model_name = "";
   std::vector<RandomSelector::WeightAndValue> cmds =
-      internal::GetDefaultCommandsForCpu(cpuid);
+      internal::GetDefaultCommandsForCpuModel(cpuid, "");
   ASSERT_GE(cmds.size(), 2UL);
   EXPECT_EQ(cmds[0].value, kPerfCyclesCmd);
   EXPECT_TRUE(DoesCommandSampleCycles(cmds[0].value));
@@ -857,7 +929,7 @@ TEST_F(PerfCollectorTest, DefaultCommandsBasedOnArch_Unknown) {
   cpuid.model = 0;
   cpuid.model_name = "";
   std::vector<RandomSelector::WeightAndValue> cmds =
-      internal::GetDefaultCommandsForCpu(cpuid);
+      internal::GetDefaultCommandsForCpuModel(cpuid, "");
   EXPECT_EQ(1UL, cmds.size());
   EXPECT_EQ(cmds[0].value, kPerfCyclesCmd);
   EXPECT_TRUE(DoesCommandSampleCycles(cmds[0].value));
@@ -1003,18 +1075,18 @@ TEST_F(PerfCollectorTest, CommandMatching_SpecificModel_LongestMatch) {
 TEST_F(PerfCollectorTest, StopCollection_AnotherTrigger) {
   const int kRestoredTabs = 1;
 
-  perf_collector_->CollectPerfDataAfterSessionRestore(
-      base::TimeDelta::FromSeconds(1), kRestoredTabs);
+  perf_collector_->CollectPerfDataAfterSessionRestore(base::Seconds(1),
+                                                      kRestoredTabs);
   // Timer is active after the OnSessionRestoreDone call.
   EXPECT_TRUE(perf_collector_->IsRunning());
   // A collection in action: should reject another collection request.
   EXPECT_FALSE(perf_collector_->ShouldCollect());
 
-  task_environment_.FastForwardBy(base::TimeDelta::FromMilliseconds(100));
+  task_environment_.FastForwardBy(base::Milliseconds(100));
   // A collection is ongoing. Triggering a jankiness collection should have no
   // effect on the existing collection.
   perf_collector_->OnJankStarted();
-  task_environment_.FastForwardBy(base::TimeDelta::FromMilliseconds(100));
+  task_environment_.FastForwardBy(base::Milliseconds(100));
   // This doesn't stop the existing collection.
   perf_collector_->OnJankStopped();
   task_environment_.RunUntilIdle();
@@ -1048,7 +1120,7 @@ TEST_F(PerfCollectorTest, JankinessCollectionStopped) {
   // A collection in action: should reject another collection request.
   EXPECT_FALSE(perf_collector_->ShouldCollect());
 
-  task_environment_.FastForwardBy(base::TimeDelta::FromMilliseconds(100));
+  task_environment_.FastForwardBy(base::Milliseconds(100));
 
   perf_collector_->OnJankStopped();
   task_environment_.RunUntilIdle();
@@ -1101,9 +1173,170 @@ TEST_F(PerfCollectorTest, JankinessCollectionDurationElapsed) {
   EXPECT_FALSE(perf_collector_->collection_stopped());
 }
 
+TEST_F(PerfCollectorTest, LacrosPathRootfs) {
+  base::HistogramTester histogram_tester;
+  const char rootfs_path[] = "/run/lacros/chrome";
+  metrics::SystemProfileProto_Channel rootfs_lacros_channel;
+  std::string rootfs_lacros_version;
+  EXPECT_FALSE(TestPerfCollector::LacrosChannelAndVersion(
+      rootfs_path, rootfs_lacros_channel, rootfs_lacros_version));
+  histogram_tester.ExpectUniqueSample(
+      "ChromeOS.CWP.ParseLacrosPath",
+      TestPerfCollector::ParseLacrosPath::kRootfs, 1);
+}
+
+TEST_F(PerfCollectorTest, LacrosChannelAndVersion) {
+  base::HistogramTester histogram_tester;
+
+  const char stable_path[] =
+      "/run/imageloader/lacros-dogfood-stable/95.0.4623.2/chrome";
+  metrics::SystemProfileProto_Channel stable_channel;
+  std::string stable_version;
+  EXPECT_TRUE(TestPerfCollector::LacrosChannelAndVersion(
+      stable_path, stable_channel, stable_version));
+  EXPECT_EQ(stable_channel, metrics::SystemProfileProto_Channel_CHANNEL_STABLE);
+  EXPECT_EQ(stable_version, "95.0.4623.2");
+
+  const char beta_path[] =
+      "/run/imageloader/lacros-dogfood-beta/97.0.4623.2/chrome";
+  metrics::SystemProfileProto_Channel beta_channel;
+  std::string beta_version;
+  EXPECT_TRUE(TestPerfCollector::LacrosChannelAndVersion(
+      beta_path, beta_channel, beta_version));
+  EXPECT_EQ(beta_channel, metrics::SystemProfileProto_Channel_CHANNEL_BETA);
+  EXPECT_EQ(beta_version, "97.0.4623.2");
+
+  const char dev_path[] =
+      "/run/imageloader/lacros-dogfood-dev/99.0.4623.2/chrome";
+  metrics::SystemProfileProto_Channel dev_channel;
+  std::string dev_version;
+  EXPECT_TRUE(TestPerfCollector::LacrosChannelAndVersion(dev_path, dev_channel,
+                                                         dev_version));
+  EXPECT_EQ(dev_channel, metrics::SystemProfileProto_Channel_CHANNEL_DEV);
+  EXPECT_EQ(dev_version, "99.0.4623.2");
+
+  const char canary_path[] =
+      "/run/imageloader/lacros-dogfood-canary/100.0.4623.2/chrome";
+  metrics::SystemProfileProto_Channel canary_channel;
+  std::string canary_version;
+  EXPECT_TRUE(TestPerfCollector::LacrosChannelAndVersion(
+      canary_path, canary_channel, canary_version));
+  EXPECT_EQ(canary_channel, metrics::SystemProfileProto_Channel_CHANNEL_CANARY);
+  EXPECT_EQ(canary_version, "100.0.4623.2");
+
+  histogram_tester.ExpectUniqueSample(
+      "ChromeOS.CWP.ParseLacrosPath",
+      TestPerfCollector::ParseLacrosPath::kStateful, 4);
+}
+
+TEST_F(PerfCollectorTest, LacrosPathUnrecognized) {
+  base::HistogramTester histogram_tester;
+  const char unrecognized_path[] = "/run/imageloader/lacros/chrome";
+  metrics::SystemProfileProto_Channel unrecognized_channel;
+  std::string unrecognized_version;
+  EXPECT_FALSE(TestPerfCollector::LacrosChannelAndVersion(
+      unrecognized_path, unrecognized_channel, unrecognized_version));
+  histogram_tester.ExpectUniqueSample(
+      "ChromeOS.CWP.ParseLacrosPath",
+      TestPerfCollector::ParseLacrosPath::kUnrecognized, 1);
+}
+
+TEST_F(PerfCollectorTest, CommandEventType) {
+  using EventType = TestPerfCollector::EventType;
+  EXPECT_EQ(TestPerfCollector::CommandEventType({"--duration", "0", "--",
+                                                 "record", "-a", "-e", "cycles",
+                                                 "-c", "1000003"}),
+            EventType::kCycles);
+  EXPECT_EQ(TestPerfCollector::CommandEventType({"--duration", "0", "--",
+                                                 "record", "-a", "-e", "cycles",
+                                                 "-g", "-c", "4000037"}),
+            EventType::kCycles);
+  EXPECT_EQ(TestPerfCollector::CommandEventType(
+                {"--duration", "0", "--", "record", "-a", "-e", "cycles", "-c",
+                 "4000037", "--call-graph", "lbr"}),
+            EventType::kCycles);
+  EXPECT_EQ(TestPerfCollector::CommandEventType(
+                {"--duration", "0", "--", "record", "-a", "-e", "cycles:ppp",
+                 "-c", "1000003"}),
+            EventType::kCycles);
+  EXPECT_EQ(TestPerfCollector::CommandEventType(
+                {"--duration", "0", "--", "record", "-a", "-e", "cycles:ppp",
+                 "-g", "-c", "4000037"}),
+            EventType::kCycles);
+  EXPECT_EQ(TestPerfCollector::CommandEventType(
+                {"--duration", "0", "--", "record", "-a", "-e", "cycles:ppp",
+                 "-c", "4000037", "--call-graph", "lbr"}),
+            EventType::kCycles);
+
+  EXPECT_EQ(TestPerfCollector::CommandEventType({"--duration", "0", "--",
+                                                 "record", "-a", "-e", "r20c4",
+                                                 "-b", "-c", "200011"}),
+            EventType::kOther);
+  EXPECT_EQ(TestPerfCollector::CommandEventType({"--duration", "0", "--",
+                                                 "record", "-a", "-e", "rc4",
+                                                 "-b", "-c", "300001"}),
+            EventType::kOther);
+  EXPECT_EQ(
+      TestPerfCollector::CommandEventType({"--duration", "0", "--", "record",
+                                           "-a", "-e", "r0481", "-c", "2003"}),
+      EventType::kOther);
+  EXPECT_EQ(
+      TestPerfCollector::CommandEventType({"--duration", "0", "--", "record",
+                                           "-a", "-e", "r13d0", "-c", "2003"}),
+      EventType::kOther);
+  EXPECT_EQ(TestPerfCollector::CommandEventType({"--duration", "0", "--",
+                                                 "record", "-a", "-e",
+                                                 "iTLB-misses", "-c", "2003"}),
+            EventType::kOther);
+  EXPECT_EQ(TestPerfCollector::CommandEventType({"--duration", "0", "--",
+                                                 "record", "-a", "-e",
+                                                 "dTLB-misses", "-c", "2003"}),
+            EventType::kOther);
+  EXPECT_EQ(TestPerfCollector::CommandEventType(
+                {"--duration", "0", "--", "record", "-a", "-e", "cache-misses",
+                 "-c", "10007"}),
+            EventType::kOther);
+
+  EXPECT_EQ(TestPerfCollector::CommandEventType(
+                {"--duration", "0", "--", "record", "-a", "-e", "instructions",
+                 "-e", "cycles", "-c", "1000003"}),
+            EventType::kCycles);
+  EXPECT_EQ(TestPerfCollector::CommandEventType(
+                {"--duration", "0", "--", "record", "-a", "-e", "instructions",
+                 "-e", "cycles:ppp", "-c", "1000003"}),
+            EventType::kCycles);
+
+  EXPECT_EQ(TestPerfCollector::CommandEventType({"--duration", "0", "--",
+                                                 "stat", "-a", "-e", "cycles",
+                                                 "-e", "instructions"}),
+            EventType::kOther);
+
+  EXPECT_EQ(
+      TestPerfCollector::CommandEventType(
+          {"--duration", "0", "--", "record", "-e", "cs_etm/autofdo/", "-a"}),
+      EventType::kETM);
+  EXPECT_EQ(
+      TestPerfCollector::CommandEventType(
+          {"--duration", "0", "--", "record", "-e", "cs_etm/autofdo/u", "-a"}),
+      EventType::kETM);
+  EXPECT_EQ(TestPerfCollector::CommandEventType(
+                {"--duration", "0", "--", "record", "-e",
+                 "cs_etm/autofdo,preset=1/", "-a"}),
+            EventType::kETM);
+  EXPECT_EQ(TestPerfCollector::CommandEventType(
+                {"--duration", "0", "--run_inject", "--inject_args", "-b", "--",
+                 "record", "-e", "cs_etm/autofdo/", "-a"}),
+            EventType::kETM);
+}
+
 class PerfCollectorCollectionParamsTest : public testing::Test {
  public:
   PerfCollectorCollectionParamsTest() {}
+
+  PerfCollectorCollectionParamsTest(const PerfCollectorCollectionParamsTest&) =
+      delete;
+  PerfCollectorCollectionParamsTest& operator=(
+      const PerfCollectorCollectionParamsTest&) = delete;
 
   void TearDown() override {
     variations::testing::ClearAllVariationParams();
@@ -1111,8 +1344,6 @@ class PerfCollectorCollectionParamsTest : public testing::Test {
 
  protected:
   content::BrowserTaskEnvironment task_environment_;
-
-  DISALLOW_COPY_AND_ASSIGN(PerfCollectorCollectionParamsTest);
 };
 
 TEST_F(PerfCollectorCollectionParamsTest, Commands_InitializedAfterVariations) {
@@ -1125,7 +1356,8 @@ TEST_F(PerfCollectorCollectionParamsTest, Commands_InitializedAfterVariations) {
 
 TEST_F(PerfCollectorCollectionParamsTest, Commands_EmptyExperiment) {
   std::vector<RandomSelector::WeightAndValue> default_cmds =
-      internal::GetDefaultCommandsForCpu(GetCPUIdentity());
+      internal::GetDefaultCommandsForCpuModel(
+          GetCPUIdentity(), base::SysInfo::HardwareModelName());
   std::map<std::string, std::string> params;
   ASSERT_TRUE(variations::AssociateVariationParams(
       "ChromeOSWideProfilingCollection", "group_name", params));
@@ -1140,7 +1372,8 @@ TEST_F(PerfCollectorCollectionParamsTest, Commands_EmptyExperiment) {
 
 TEST_F(PerfCollectorCollectionParamsTest, Commands_InvalidValues) {
   std::vector<RandomSelector::WeightAndValue> default_cmds =
-      internal::GetDefaultCommandsForCpu(GetCPUIdentity());
+      internal::GetDefaultCommandsForCpuModel(
+          GetCPUIdentity(), base::SysInfo::HardwareModelName());
   std::map<std::string, std::string> params;
   // Use the "default" cpu specifier since we don't want to predict what CPU
   // this test is running on. (CPU detection is tested above.)
@@ -1167,7 +1400,8 @@ TEST_F(PerfCollectorCollectionParamsTest, Commands_InvalidValues) {
 TEST_F(PerfCollectorCollectionParamsTest, Commands_Override) {
   using WeightAndValue = RandomSelector::WeightAndValue;
   std::vector<RandomSelector::WeightAndValue> default_cmds =
-      internal::GetDefaultCommandsForCpu(GetCPUIdentity());
+      internal::GetDefaultCommandsForCpuModel(
+          GetCPUIdentity(), base::SysInfo::HardwareModelName());
   std::map<std::string, std::string> params;
   // Use the "default" cpu specifier since we don't want to predict what CPU
   // this test is running on. (CPU detection is tested above.)
@@ -1213,69 +1447,25 @@ TEST_F(PerfCollectorCollectionParamsTest, Parameters_Override) {
   const auto& parsed_params = perf_collector->collection_params();
 
   // Not initialized yet:
-  EXPECT_NE(base::TimeDelta::FromSeconds(15),
-            parsed_params.collection_duration);
-  EXPECT_NE(base::TimeDelta::FromHours(1), parsed_params.periodic_interval);
+  EXPECT_NE(base::Seconds(15), parsed_params.collection_duration);
+  EXPECT_NE(base::Hours(1), parsed_params.periodic_interval);
   EXPECT_NE(1, parsed_params.resume_from_suspend.sampling_factor);
-  EXPECT_NE(base::TimeDelta::FromSeconds(10),
+  EXPECT_NE(base::Seconds(10),
             parsed_params.resume_from_suspend.max_collection_delay);
   EXPECT_NE(2, parsed_params.restore_session.sampling_factor);
-  EXPECT_NE(base::TimeDelta::FromSeconds(20),
+  EXPECT_NE(base::Seconds(20),
             parsed_params.restore_session.max_collection_delay);
 
   perf_collector->Init();
 
-  EXPECT_EQ(base::TimeDelta::FromSeconds(15),
-            parsed_params.collection_duration);
-  EXPECT_EQ(base::TimeDelta::FromHours(1), parsed_params.periodic_interval);
+  EXPECT_EQ(base::Seconds(15), parsed_params.collection_duration);
+  EXPECT_EQ(base::Hours(1), parsed_params.periodic_interval);
   EXPECT_EQ(1, parsed_params.resume_from_suspend.sampling_factor);
-  EXPECT_EQ(base::TimeDelta::FromSeconds(10),
+  EXPECT_EQ(base::Seconds(10),
             parsed_params.resume_from_suspend.max_collection_delay);
   EXPECT_EQ(2, parsed_params.restore_session.sampling_factor);
-  EXPECT_EQ(base::TimeDelta::FromSeconds(20),
+  EXPECT_EQ(base::Seconds(20),
             parsed_params.restore_session.max_collection_delay);
-}
-
-TEST(PerfCollectorInternalTest, CommandSamplesCPUCycles) {
-  EXPECT_TRUE(internal::CommandSamplesCPUCycles(
-      {"perf", "record", "-a", "-e", "cycles", "-c", "1000003"}));
-  EXPECT_TRUE(internal::CommandSamplesCPUCycles(
-      {"perf", "record", "-a", "-e", "cycles", "-g", "-c", "4000037"}));
-  EXPECT_TRUE(internal::CommandSamplesCPUCycles({"perf", "record", "-a", "-e",
-                                                 "cycles", "-c", "4000037",
-                                                 "--call-graph", "lbr"}));
-  EXPECT_TRUE(internal::CommandSamplesCPUCycles(
-      {"perf", "record", "-a", "-e", "cycles:ppp", "-c", "1000003"}));
-  EXPECT_TRUE(internal::CommandSamplesCPUCycles(
-      {"perf", "record", "-a", "-e", "cycles:ppp", "-g", "-c", "4000037"}));
-  EXPECT_TRUE(internal::CommandSamplesCPUCycles({"perf", "record", "-a", "-e",
-                                                 "cycles:ppp", "-c", "4000037",
-                                                 "--call-graph", "lbr"}));
-
-  EXPECT_FALSE(internal::CommandSamplesCPUCycles(
-      {"perf", "record", "-a", "-e", "r20c4", "-b", "-c", "200011"}));
-  EXPECT_FALSE(internal::CommandSamplesCPUCycles(
-      {"perf", "record", "-a", "-e", "rc4", "-b", "-c", "300001"}));
-  EXPECT_FALSE(internal::CommandSamplesCPUCycles(
-      {"perf", "record", "-a", "-e", "r0481", "-c", "2003"}));
-  EXPECT_FALSE(internal::CommandSamplesCPUCycles(
-      {"perf", "record", "-a", "-e", "r13d0", "-c", "2003"}));
-  EXPECT_FALSE(internal::CommandSamplesCPUCycles(
-      {"perf", "record", "-a", "-e", "iTLB-misses", "-c", "2003"}));
-  EXPECT_FALSE(internal::CommandSamplesCPUCycles(
-      {"perf", "record", "-a", "-e", "dTLB-misses", "-c", "2003"}));
-  EXPECT_FALSE(internal::CommandSamplesCPUCycles(
-      {"perf", "record", "-a", "-e", "cache-misses", "-c", "10007"}));
-
-  EXPECT_TRUE(internal::CommandSamplesCPUCycles({"perf", "record", "-a", "-e",
-                                                 "instructions", "-e", "cycles",
-                                                 "-c", "1000003"}));
-  EXPECT_TRUE(internal::CommandSamplesCPUCycles(
-      {"perf", "record", "-a", "-e", "instructions", "-e", "cycles:ppp", "-c",
-       "1000003"}));
-
-  EXPECT_FALSE(internal::CommandSamplesCPUCycles(
-      {"perf", "stat", "-a", "-e", "cycles", "-e", "instructions"}));
 }
 
 }  // namespace metrics

@@ -16,7 +16,8 @@
 #include "base/no_destructor.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
-#include "chrome/browser/apps/app_service/app_service_metrics.h"
+#include "base/time/time.h"
+#include "chrome/browser/apps/app_service/metrics/app_service_metrics.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_util.h"
 #include "chrome/browser/ash/release_notes/release_notes_storage.h"
 #include "chrome/browser/profiles/profile.h"
@@ -76,7 +77,8 @@ const std::vector<InternalApp>& GetInternalAppList(const Profile* profile) {
 }
 
 bool IsSuggestionChip(const std::string& app_id) {
-  return base::LowerCaseEqualsASCII(app_id, ash::kInternalAppIdContinueReading);
+  return base::EqualsCaseInsensitiveASCII(app_id,
+                                          ash::kInternalAppIdContinueReading);
 }
 
 const InternalApp* FindInternalApp(const std::string& app_id) {
@@ -133,7 +135,7 @@ bool HasRecommendableForeignTab(
 
         // Only show pages recently opened.
         const base::TimeDelta tab_age = base::Time::Now() - tab->timestamp;
-        if (tab_age > base::TimeDelta::FromMinutes(kMaxForeignTabAgeInMinutes))
+        if (tab_age > base::Minutes(kMaxForeignTabAgeInMinutes))
           continue;
 
         if (latest_timestamp < tab->timestamp) {

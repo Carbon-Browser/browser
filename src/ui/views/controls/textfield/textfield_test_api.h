@@ -5,6 +5,8 @@
 #ifndef UI_VIEWS_CONTROLS_TEXTFIELD_TEXTFIELD_TEST_API_H_
 #define UI_VIEWS_CONTROLS_TEXTFIELD_TEXTFIELD_TEST_API_H_
 
+#include "base/memory/raw_ptr.h"
+#include "ui/compositor/layer.h"
 #include "ui/views/controls/textfield/textfield.h"
 
 namespace views {
@@ -56,11 +58,23 @@ class TextfieldTestApi {
 
   bool ShouldShowCursor() const;
 
+  float CursorLayerOpacity() {
+    return textfield_->cursor_view_->layer()->opacity();
+  }
+
+  void SetCursorLayerOpacity(float opacity) {
+    textfield_->cursor_view_->layer()->SetOpacity(opacity);
+  }
+
+  void UpdateCursorVisibility() { textfield_->UpdateCursorVisibility(); }
+
+  void FlashCursor() { textfield_->OnCursorBlinkTimerFired(); }
+
   int GetDisplayOffsetX() const;
   void SetDisplayOffsetX(int x) const;
 
  private:
-  Textfield* textfield_;
+  raw_ptr<Textfield> textfield_;
 };
 
 }  // namespace views

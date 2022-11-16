@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "components/password_manager/core/browser/password_store.h"
 #include "components/password_manager/core/browser/password_store_backend.h"
 
 namespace password_manager {
@@ -21,45 +22,64 @@ using PasswordMap = std::
 // Fake password store backend to be used in tests.
 class FakePasswordStoreBackend : public PasswordStoreBackend {
  public:
+  using UpdateAlwaysSucceeds =
+      base::StrongAlias<struct UpdateAlwaysSucceedsTab, bool>;
+
+  // The default Fake password store is a profile store that treats update calls
+  // like the built-in backend and only updates existing credentials. If the
+  // backend should behave like the Android backend which uses an underlying
+  // "upsert" mechanism to create non-existing credentials, use the constructor
+  // that allows to pass `UpdateAlwaysSucceeds(true)`.
   FakePasswordStoreBackend();
+  explicit FakePasswordStoreBackend(IsAccountStore is_account_store);
+  FakePasswordStoreBackend(IsAccountStore is_account_store,
+                           UpdateAlwaysSucceeds update_always_succeeds);
   ~FakePasswordStoreBackend() override;
 
+  void Clear();
+
   const PasswordMap& stored_passwords() const { return stored_passwords_; }
+  IsAccountStore is_account_store() const { return is_account_store_; }
 
  private:
   // Implements PasswordStoreBackend interface.
   void InitBackend(RemoteChangesReceived remote_form_changes_received,
                    base::RepeatingClosure sync_enabled_or_disabled_cb,
                    base::OnceCallback<void(bool)> completion) override;
-  void GetAllLoginsAsync(LoginsReply callback) override;
-  void GetAutofillableLoginsAsync(LoginsReply callback) override;
+  void Shutdown(base::OnceClosure shutdown_completed) override;
+  void GetAllLoginsAsync(LoginsOrErrorReply callback) override;
+  void GetAutofillableLoginsAsync(LoginsOrErrorReply callback) override;
+  void GetAllLoginsForAccountAsync(absl::optional<std::string> account,
+                                   LoginsOrErrorReply callback) override;
   void FillMatchingLoginsAsync(
-      LoginsReply callback,
+      LoginsOrErrorReply callback,
       bool include_psl,
       const std::vector<PasswordFormDigest>& forms) override;
   void AddLoginAsync(const PasswordForm& form,
-                     PasswordStoreChangeListReply callback) override;
+                     PasswordChangesOrErrorReply callback) override;
   void UpdateLoginAsync(const PasswordForm& form,
-                        PasswordStoreChangeListReply callback) override;
+                        PasswordChangesOrErrorReply callback) override;
   void RemoveLoginAsync(const PasswordForm& form,
-                        PasswordStoreChangeListReply callback) override;
+                        PasswordChangesOrErrorReply callback) override;
   void RemoveLoginsByURLAndTimeAsync(
       const base::RepeatingCallback<bool(const GURL&)>& url_filter,
       base::Time delete_begin,
       base::Time delete_end,
       base::OnceCallback<void(bool)> sync_completion,
-      PasswordStoreChangeListReply callback) override;
+      PasswordChangesOrErrorReply callback) override;
   void RemoveLoginsCreatedBetweenAsync(
       base::Time delete_begin,
       base::Time delete_end,
-      PasswordStoreChangeListReply callback) override;
+      PasswordChangesOrErrorReply callback) override;
   void DisableAutoSignInForOriginsAsync(
       const base::RepeatingCallback<bool(const GURL&)>& origin_filter,
       base::OnceClosure completion) override;
   SmartBubbleStatsStore* GetSmartBubbleStatsStore() override;
   FieldInfoStore* GetFieldInfoStore() override;
   std::unique_ptr<syncer::ProxyModelTypeControllerDelegate>
-  CreateSyncControllerDelegateFactory() override;
+  CreateSyncControllerDelegate() override;
+  void ClearAllLocalPasswords() override;
+  void OnSyncServiceInitialized(syncer::SyncService* sync_service) override;
 
   LoginsResult GetAllLoginsInternal();
   LoginsResult GetAutofillableLoginsInternal();
@@ -72,6 +92,10 @@ class FakePasswordStoreBackend : public PasswordStoreBackend {
   PasswordStoreChangeList UpdateLoginInternal(const PasswordForm& form);
   void DisableAutoSignInForOriginsInternal(
       const base::RepeatingCallback<bool(const GURL&)>& origin_filter);
+  PasswordStoreChangeList RemoveLoginInternal(const PasswordForm& form);
+
+  const IsAccountStore is_account_store_{false};
+  const UpdateAlwaysSucceeds update_always_succeeds_{false};
 
   PasswordMap stored_passwords_;
 };

@@ -11,7 +11,7 @@
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/smb_client/discovery/netbios_client_interface.h"
 // TODO(https://crbug.com/1164001): remove and use forward declaration.
-#include "chromeos/network/firewall_hole.h"
+#include "chromeos/ash/components/network/firewall_hole.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
@@ -51,6 +51,9 @@ class NetBiosClient : public network::mojom::UDPSocketListener,
       void(const std::vector<uint8_t>&, uint16_t, const net::IPEndPoint&)>;
 
   explicit NetBiosClient(network::mojom::NetworkContext* network_context);
+
+  NetBiosClient(const NetBiosClient&) = delete;
+  NetBiosClient& operator=(const NetBiosClient&) = delete;
 
   ~NetBiosClient() override;
 
@@ -103,8 +106,6 @@ class NetBiosClient : public network::mojom::UDPSocketListener,
   std::unique_ptr<FirewallHole> firewall_hole_;
   mojo::Remote<network::mojom::UDPSocket> server_socket_;
   mojo::Receiver<network::mojom::UDPSocketListener> listener_receiver_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(NetBiosClient);
 };
 
 }  // namespace smb_client

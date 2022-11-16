@@ -10,13 +10,14 @@
 #include <memory>
 
 #include "base/cancelable_callback.h"
-#include "base/compiler_specific.h"
-#include "base/macros.h"
+#include "base/containers/flat_set.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "cc/paint/element_id.h"
 #include "cc/trees/layer_tree_host_client.h"
 #include "cc/trees/layer_tree_host_single_thread_client.h"
+#include "cc/trees/paint_holding_commit_trigger.h"
 #include "cc/trees/paint_holding_reason.h"
 #include "components/viz/common/frame_sinks/begin_frame_source.h"
 #include "components/viz/common/surfaces/frame_sink_id.h"
@@ -29,6 +30,7 @@
 #include "gpu/command_buffer/common/capabilities.h"
 #include "gpu/ipc/common/surface_handle.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
+#include "services/viz/privileged/mojom/compositing/begin_frame_observer.mojom.h"
 #include "services/viz/privileged/mojom/compositing/display_private.mojom.h"
 #include "services/viz/public/cpp/gpu/context_provider_command_buffer.h"
 #include "third_party/khronos/GLES2/gl2.h"
@@ -45,6 +47,8 @@ namespace cc {
 class AnimationHost;
 class Layer;
 class LayerTreeHost;
+
+struct CommitState;
 }
 
 namespace viz {
@@ -69,6 +73,10 @@ class CONTENT_EXPORT CompositorImpl
       public display::DisplayObserver {
  public:
   CompositorImpl(CompositorClient* client, gfx::NativeWindow root_window);
+
+  CompositorImpl(const CompositorImpl&) = delete;
+  CompositorImpl& operator=(const CompositorImpl&) = delete;
+
   ~CompositorImpl() override;
 
   static bool IsInitialized();
@@ -85,8 +93,17 @@ class CONTENT_EXPORT CompositorImpl
     swap_completed_with_size_for_testing_ = std::move(cb);
   }
 
+  class SimpleBeginFrameObserver {
+   public:
+    virtual ~SimpleBeginFrameObserver() = default;
+    virtual void OnBeginFrame(base::TimeTicks frame_begin_time) = 0;
+  };
+  void AddSimpleBeginFrameObserver(SimpleBeginFrameObserver* obs);
+  void RemoveSimpleBeginFrameObserver(SimpleBeginFrameObserver* obs);
+
  private:
   class AndroidHostDisplayClient;
+  class HostBeginFrameObserver;
   class ScopedCachedBackBuffer;
   class ReadbackRefImpl;
 
@@ -108,6 +125,7 @@ class CONTENT_EXPORT CompositorImpl
   void PreserveChildSurfaceControls() override;
   void RequestPresentationTimeForNextFrame(
       PresentationTimeCallback callback) override;
+  void SetDidSwapBuffersCallbackEnabled(bool enable) override;
 
   // LayerTreeHostClient implementation.
   void WillBeginMainFrame() override {}
@@ -116,7 +134,10 @@ class CONTENT_EXPORT CompositorImpl
   void DidUpdateLayers() override;
   void BeginMainFrame(const viz::BeginFrameArgs& args) override;
   void OnDeferMainFrameUpdatesChanged(bool) override {}
-  void OnDeferCommitsChanged(bool, cc::PaintHoldingReason) override {}
+  void OnDeferCommitsChanged(
+      bool,
+      cc::PaintHoldingReason,
+      absl::optional<cc::PaintHoldingCommitTrigger>) override {}
   void BeginMainFrameNotExpectedSoon() override {}
   void BeginMainFrameNotExpectedUntil(base::TimeTicks time) override {}
   void UpdateLayerTreeHost() override;
@@ -127,8 +148,8 @@ class CONTENT_EXPORT CompositorImpl
   void RequestNewLayerTreeFrameSink() override;
   void DidInitializeLayerTreeFrameSink() override;
   void DidFailToInitializeLayerTreeFrameSink() override;
-  void WillCommit() override {}
-  void DidCommit(base::TimeTicks) override;
+  void WillCommit(const cc::CommitState&) override {}
+  void DidCommit(base::TimeTicks, base::TimeTicks) override;
   void DidCommitAndDrawFrame() override {}
   void DidReceiveCompositorFrameAck() override;
   void DidCompletePageScaleAnimation() override {}
@@ -147,6 +168,8 @@ class CONTENT_EXPORT CompositorImpl
   void DidObserveFirstScrollDelay(
       base::TimeDelta first_scroll_delay,
       base::TimeTicks first_scroll_timestamp) override {}
+  void ReportEventLatency(
+      std::vector<cc::EventLatencyTracker::LatencyData> latencies) override {}
 
   // LayerTreeHostSingleThreadClient implementation.
   void DidSubmitCompositorFrame() override;
@@ -165,6 +188,8 @@ class CONTENT_EXPORT CompositorImpl
   void OnUpdateRefreshRate(float refresh_rate) override;
   void OnUpdateSupportedRefreshRates(
       const std::vector<float>& supported_refresh_rates) override;
+  std::unique_ptr<ui::CompositorLock> GetCompositorLock(
+      base::TimeDelta timeout) override;
 
   // viz::HostFrameSinkClient implementation.
   void OnFirstSurfaceActivation(const viz::SurfaceInfo& surface_info) override;
@@ -216,6 +241,8 @@ class CONTENT_EXPORT CompositorImpl
 
   void DecrementPendingReadbacks();
 
+  void MaybeUpdateObserveBeginFrame();
+
   viz::FrameSinkId frame_sink_id_;
 
   // root_layer_ is the persistent internal root layer, while subroot_layer_
@@ -231,11 +258,11 @@ class CONTENT_EXPORT CompositorImpl
   gfx::Size size_;
   bool requires_alpha_channel_ = false;
 
-  ANativeWindow* window_;
+  raw_ptr<ANativeWindow> window_;
   gpu::SurfaceHandle surface_handle_;
   std::unique_ptr<ScopedCachedBackBuffer> cached_back_buffer_;
 
-  CompositorClient* client_;
+  raw_ptr<CompositorClient> client_;
 
   gfx::NativeWindow root_window_ = nullptr;
 
@@ -274,13 +301,18 @@ class CONTENT_EXPORT CompositorImpl
 
   uint32_t pending_readbacks_ = 0u;
 
+  bool enable_swap_completion_callbacks_ = false;
+
   // Listen to display density change events and update painted device scale
   // factor accordingly.
   display::ScopedDisplayObserver display_observer_{this};
 
-  base::WeakPtrFactory<CompositorImpl> weak_factory_{this};
+  ui::CompositorLockManager lock_manager_;
 
-  DISALLOW_COPY_AND_ASSIGN(CompositorImpl);
+  base::flat_set<SimpleBeginFrameObserver*> simple_begin_frame_observers_;
+  std::unique_ptr<HostBeginFrameObserver> host_begin_frame_observer_;
+
+  base::WeakPtrFactory<CompositorImpl> weak_factory_{this};
 };
 
 }  // namespace content

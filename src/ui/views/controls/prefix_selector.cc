@@ -6,10 +6,6 @@
 
 #include <algorithm>
 
-#if defined(OS_WIN)
-#include <vector>
-#endif
-
 #include "base/i18n/case_conversion.h"
 #include "base/time/default_tick_clock.h"
 #include "build/build_config.h"
@@ -20,6 +16,10 @@
 #include "ui/views/controls/prefix_delegate.h"
 #include "ui/views/view.h"
 #include "ui/views/widget/widget.h"
+
+#if BUILDFLAG(IS_WIN)
+#include <vector>
+#endif
 
 namespace views {
 
@@ -36,7 +36,7 @@ void PrefixSelector::OnViewBlur() {
 
 bool PrefixSelector::ShouldContinueSelection() const {
   const base::TimeTicks now(tick_clock_->NowTicks());
-  constexpr auto kTimeBeforeClearing = base::TimeDelta::FromSeconds(1);
+  constexpr auto kTimeBeforeClearing = base::Seconds(1);
   return (now - time_of_last_key_) < kTimeBeforeClearing;
 }
 
@@ -129,9 +129,11 @@ bool PrefixSelector::SetEditableSelectionRange(const gfx::Range& range) {
   return false;
 }
 
+#if BUILDFLAG(IS_MAC)
 bool PrefixSelector::DeleteRange(const gfx::Range& range) {
   return false;
 }
+#endif
 
 bool PrefixSelector::GetTextFromRange(const gfx::Range& range,
                                       std::u16string* text) const {
@@ -171,7 +173,7 @@ bool PrefixSelector::ShouldDoLearning() {
   return false;
 }
 
-#if defined(OS_WIN) || BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 bool PrefixSelector::SetCompositionFromExistingText(
     const gfx::Range& range,
     const std::vector<ui::ImeTextSpan>& ui_ime_text_spans) {
@@ -181,7 +183,7 @@ bool PrefixSelector::SetCompositionFromExistingText(
 }
 #endif
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 gfx::Range PrefixSelector::GetAutocorrectRange() const {
   NOTIMPLEMENTED_LOG_ONCE();
   return gfx::Range();
@@ -199,12 +201,14 @@ bool PrefixSelector::SetAutocorrectRange(const gfx::Range& range) {
 }
 #endif
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 void PrefixSelector::SetActiveCompositionForAccessibility(
     const gfx::Range& range,
     const std::u16string& active_composition_text,
     bool is_composition_committed) {}
+#endif
 
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_CHROMEOS)
 void PrefixSelector::GetActiveTextInputControlLayoutBounds(
     absl::optional<gfx::Rect>* control_bounds,
     absl::optional<gfx::Rect>* selection_bounds) {}
@@ -218,7 +222,7 @@ void PrefixSelector::OnTextInput(const std::u16string& text) {
       (text[0] == L'\t' || text[0] == L'\r' || text[0] == L'\n'))
     return;
 
-  const int row_count = prefix_delegate_->GetRowCount();
+  const size_t row_count = prefix_delegate_->GetRowCount();
   if (row_count == 0)
     return;
 
@@ -226,17 +230,17 @@ void PrefixSelector::OnTextInput(const std::u16string& text) {
   // append |text| to |current_text_| and search for that. If it has been a
   // while search after the current row, otherwise search starting from the
   // current row.
-  int row = std::max(0, prefix_delegate_->GetSelectedRow());
+  size_t row = prefix_delegate_->GetSelectedRow().value_or(0);
   if (ShouldContinueSelection()) {
     current_text_ += text;
   } else {
     current_text_ = text;
-    if (prefix_delegate_->GetSelectedRow() >= 0)
+    if (prefix_delegate_->GetSelectedRow().has_value())
       row = (row + 1) % row_count;
   }
   time_of_last_key_ = tick_clock_->NowTicks();
 
-  const int start_row = row;
+  const size_t start_row = row;
   const std::u16string lower_text(base::i18n::ToLower(current_text_));
   do {
     if (TextAtRowMatchesText(row, lower_text)) {
@@ -247,7 +251,7 @@ void PrefixSelector::OnTextInput(const std::u16string& text) {
   } while (row != start_row);
 }
 
-bool PrefixSelector::TextAtRowMatchesText(int row,
+bool PrefixSelector::TextAtRowMatchesText(size_t row,
                                           const std::u16string& lower_text) {
   const std::u16string model_text(
       base::i18n::ToLower(prefix_delegate_->GetTextForRow(row)));

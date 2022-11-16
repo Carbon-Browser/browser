@@ -6,8 +6,11 @@
 
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
+#include "components/autofill/core/browser/autofill_suggestion_generator.h"
 #include "components/autofill/core/browser/field_types.h"
 #include "components/autofill/core/browser/mock_single_field_form_fill_router.h"
+#include "components/autofill/core/browser/test_autofill_client.h"
+#include "components/autofill/core/browser/test_autofill_driver.h"
 #include "components/autofill/core/browser/test_form_structure.h"
 #include "components/autofill/core/browser/test_personal_data_manager.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
@@ -16,13 +19,16 @@
 namespace autofill {
 
 TestBrowserAutofillManager::TestBrowserAutofillManager(
-    AutofillDriver* driver,
-    AutofillClient* client,
-    TestPersonalDataManager* personal_data)
-    : BrowserAutofillManager(driver, client, personal_data),
-      personal_data_(personal_data) {}
+    TestAutofillDriver* driver,
+    TestAutofillClient* client)
+    : BrowserAutofillManager(driver,
+                             client,
+                             "en-US",
+                             EnableDownloadManager(false)),
+      client_(client),
+      driver_(driver) {}
 
-TestBrowserAutofillManager::~TestBrowserAutofillManager() {}
+TestBrowserAutofillManager::~TestBrowserAutofillManager() = default;
 
 bool TestBrowserAutofillManager::IsAutofillProfileEnabled() const {
   return autofill_profile_enabled_;
@@ -39,6 +45,10 @@ void TestBrowserAutofillManager::UploadFormData(
 
   if (call_parent_upload_form_data_)
     BrowserAutofillManager::UploadFormData(submitted_form, observed_submission);
+}
+
+void TestBrowserAutofillManager::ScheduleRefill(const FormData& form) {
+  TriggerRefillForTest(form);
 }
 
 bool TestBrowserAutofillManager::MaybeStartVoteUploadProcess(
@@ -75,10 +85,9 @@ void TestBrowserAutofillManager::UploadFormDataAsyncCallback(
           submitted_form->field(i)->possible_types();
       EXPECT_EQ(expected_submitted_field_types_[i].size(),
                 possible_types.size());
-      for (auto it = expected_submitted_field_types_[i].begin();
-           it != expected_submitted_field_types_[i].end(); ++it) {
-        EXPECT_TRUE(possible_types.count(*it))
-            << "Expected type: " << AutofillType(*it).ToString();
+      for (auto it : expected_submitted_field_types_[i]) {
+        EXPECT_TRUE(possible_types.count(it))
+            << "Expected type: " << AutofillType(it).ToString();
       }
     }
   }
@@ -91,20 +100,43 @@ int TestBrowserAutofillManager::GetPackedCreditCardID(int credit_card_id) {
   std::string credit_card_guid =
       base::StringPrintf("00000000-0000-0000-0000-%012d", credit_card_id);
 
-  return MakeFrontendID(credit_card_guid, std::string());
+  return suggestion_generator()->MakeFrontendId(credit_card_guid,
+                                                std::string());
 }
 
 void TestBrowserAutofillManager::AddSeenForm(
     const FormData& form,
     const std::vector<ServerFieldType>& heuristic_types,
-    const std::vector<ServerFieldType>& server_types) {
-  FormData empty_form = form;
-  for (size_t i = 0; i < empty_form.fields.size(); ++i) {
-    empty_form.fields[i].value = std::u16string();
+    const std::vector<ServerFieldType>& server_types,
+    bool preserve_values_in_form_structure) {
+  std::vector<std::vector<std::pair<PatternSource, ServerFieldType>>>
+      all_heuristic_types;
+
+  base::ranges::transform(
+      heuristic_types, std::back_inserter(all_heuristic_types),
+      [](ServerFieldType type)
+          -> std::vector<std::pair<PatternSource, ServerFieldType>> {
+        return {{GetActivePatternSource(), type}};
+      });
+
+  AddSeenForm(form, all_heuristic_types, server_types,
+              preserve_values_in_form_structure);
+}
+
+void TestBrowserAutofillManager::AddSeenForm(
+    const FormData& form,
+    const std::vector<std::vector<std::pair<PatternSource, ServerFieldType>>>&
+        heuristic_types,
+    const std::vector<ServerFieldType>& server_types,
+    bool preserve_values_in_form_structure) {
+  FormData form_with_empty_fields = form;
+  for (auto& field : form_with_empty_fields.fields) {
+    field.value = std::u16string();
   }
 
   std::unique_ptr<TestFormStructure> form_structure =
-      std::make_unique<TestFormStructure>(empty_form);
+      std::make_unique<TestFormStructure>(
+          preserve_values_in_form_structure ? form : form_with_empty_fields);
   form_structure->SetFieldTypes(heuristic_types, server_types);
   form_structure->identify_sections_for_testing();
   AddSeenFormStructure(std::move(form_structure));
@@ -126,20 +158,34 @@ const std::string TestBrowserAutofillManager::GetSubmittedFormSignature() {
   return submitted_form_signature_;
 }
 
+void TestBrowserAutofillManager::OnAskForValuesToFillTest(
+    const FormData& form,
+    const FormFieldData& field,
+    int query_id,
+    const gfx::RectF& bounding_box,
+    bool autoselect_first_suggestion,
+    TouchToFillEligible touch_to_fill_eligible) {
+  BrowserAutofillManager::OnAskForValuesToFill(
+      form, field, bounding_box, query_id, autoselect_first_suggestion,
+      touch_to_fill_eligible);
+}
+
 void TestBrowserAutofillManager::SetAutofillProfileEnabled(
     bool autofill_profile_enabled) {
   autofill_profile_enabled_ = autofill_profile_enabled;
-  if (!autofill_profile_enabled_)
+  if (!autofill_profile_enabled_) {
     // Profile data is refreshed when this pref is changed.
-    personal_data_->ClearProfiles();
+    client()->GetPersonalDataManager()->ClearProfiles();
+  }
 }
 
 void TestBrowserAutofillManager::SetAutofillCreditCardEnabled(
     bool autofill_credit_card_enabled) {
   autofill_credit_card_enabled_ = autofill_credit_card_enabled;
-  if (!autofill_credit_card_enabled_)
+  if (!autofill_credit_card_enabled_) {
     // Credit card data is refreshed when this pref is changed.
-    personal_data_->ClearCreditCards();
+    client()->GetPersonalDataManager()->ClearCreditCards();
+  }
 }
 
 void TestBrowserAutofillManager::SetExpectedSubmittedFieldTypes(

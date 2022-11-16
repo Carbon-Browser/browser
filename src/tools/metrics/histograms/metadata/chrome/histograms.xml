@@ -11,10 +11,11 @@ along with a detailed description for each histogram.
 For best practices on writing histogram descriptions, see
 https://chromium.googlesource.com/chromium/src.git/+/HEAD/tools/metrics/histograms/README.md
 
-Please send CLs to chromium-metrics-reviews@google.com rather than to specific
-individuals. These CLs will be automatically reassigned to a reviewer within
-about 5 minutes. This approach helps the metrics team to load-balance incoming
-reviews. Googlers can read more about this at go/gwsq-gerrit.
+Please follow the instructions in the OWNERS file in this directory to find a
+reviewer. If no OWNERS file exists, please consider signing up at
+go/reviewing-metrics (Googlers only), as all subdirectories are expected to
+have an OWNERS file. As a last resort you can send the CL to
+chromium-metrics-reviews@google.com.
 -->
 
 <histogram-configuration>
@@ -33,24 +34,25 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Chrome.ProcessSingleton.NotifyResult" enum="NotifyResult"
-    expires_after="2018-08-30">
+    expires_after="2023-05-31">
   <owner>gab@chromium.org</owner>
+  <owner>etienneb@chromium.org</owner>
   <summary>
     The result of every rendez-vous reported once per browser process launch.
   </summary>
 </histogram>
 
 <histogram name="Chrome.ProcessSingleton.RemoteHungProcessTerminateReason"
-    enum="RemoteHungProcessTerminateReason" expires_after="M77">
+    enum="RemoteHungProcessTerminateReason" expires_after="2023-05-31">
   <owner>gab@chromium.org</owner>
-  <owner>aseren@yandex-team.ru</owner>
+  <owner>etienneb@chromium.org</owner>
   <summary>The reason of remote hang processes termination.</summary>
 </histogram>
 
 <histogram name="Chrome.ProcessSingleton.RemoteProcessInteractionResult"
-    enum="RemoteProcessInteractionResult" expires_after="M81">
+    enum="RemoteProcessInteractionResult" expires_after="2023-05-31">
   <owner>gab@chromium.org</owner>
-  <owner>aseren@yandex-team.ru</owner>
+  <owner>etienneb@chromium.org</owner>
   <summary>
     Used to send the result of interaction with remote process as histograms in
     case when remote process influences on start.
@@ -58,9 +60,9 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Chrome.ProcessSingleton.TerminateProcessErrorCode.Posix"
-    enum="PopularOSErrno" expires_after="M77">
+    enum="PopularOSErrno" expires_after="2023-05-31">
   <owner>gab@chromium.org</owner>
-  <owner>aseren@yandex-team.ru</owner>
+  <owner>etienneb@chromium.org</owner>
   <summary>
     The error code of remote process termination on Posix in case when remote
     process hung.
@@ -68,9 +70,9 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Chrome.ProcessSingleton.TerminateProcessErrorCode.Windows"
-    enum="WinGetLastError" expires_after="M81">
+    enum="WinGetLastError" expires_after="2023-05-31">
   <owner>gab@chromium.org</owner>
-  <owner>aseren@yandex-team.ru</owner>
+  <owner>etienneb@chromium.org</owner>
   <summary>
     The error code of remote process termination on Windows in case when remote
     process hung.
@@ -78,9 +80,9 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Chrome.ProcessSingleton.TerminateProcessTime" units="ms"
-    expires_after="2020-03-08">
+    expires_after="2023-05-31">
   <owner>gab@chromium.org</owner>
-  <owner>aseren@yandex-team.ru</owner>
+  <owner>etienneb@chromium.org</owner>
   <summary>
     Time it takes from TerminateProcess call to the moment when we stop waiting
     for remote process switches to signal state.
@@ -88,16 +90,17 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Chrome.ProcessSingleton.TerminationWaitErrorCode.Windows"
-    enum="WinGetLastError" expires_after="M81">
+    enum="WinGetLastError" expires_after="2023-05-31">
   <owner>gab@chromium.org</owner>
-  <owner>aseren@yandex-team.ru</owner>
+  <owner>etienneb@chromium.org</owner>
   <summary>
     The error code of wating for remote process termination on Windows.
   </summary>
 </histogram>
 
 <histogram name="Chrome.ProcessSingleton.TimeToCreate" units="ms"
-    expires_after="2018-08-30">
+    expires_after="2023-05-31">
+  <owner>etienneb@chromium.org</owner>
   <owner>gab@chromium.org</owner>
   <summary>
     Time it takes to grab the process singleton. Reported once per successful
@@ -106,7 +109,8 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Chrome.ProcessSingleton.TimeToFailure" units="ms"
-    expires_after="2018-08-30">
+    expires_after="2023-05-31">
+  <owner>etienneb@chromium.org</owner>
   <owner>gab@chromium.org</owner>
   <summary>
     Time it takes to return an error from the process singleton algorithm (nor
@@ -116,7 +120,8 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Chrome.ProcessSingleton.TimeToNotify" units="ms"
-    expires_after="2018-08-30">
+    expires_after="2023-05-31">
+  <owner>etienneb@chromium.org</owner>
   <owner>gab@chromium.org</owner>
   <summary>
     Time it takes to find the process singleton owner and notify it. Reported
@@ -125,8 +130,47 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
   </summary>
 </histogram>
 
+<histogram
+    name="Chrome.SystemNetworkContextManager.NetworkSandboxLaunchFailed.ErrorCode"
+    enum="LaunchErrorCodes" expires_after="2022-12-31">
+  <owner>wfh@chromium.org</owner>
+  <owner>mmenke@chromium.org</owner>
+  <summary>
+    The platform-specific error code returned from a failed attempt to launch
+    the network service process sandboxed. This is recorded if an attempt is
+    made to launch a sandboxed network service process, and the launch fails.
+    See also ChildProcess.LaunchFailed.UtilityProcessErrorCode.
+  </summary>
+</histogram>
+
+<histogram
+    name="Chrome.SystemNetworkContextManager.NetworkSandboxLaunchFailed.WinLastError"
+    enum="WinGetLastError" expires_after="2022-12-31">
+  <owner>wfh@chromium.org</owner>
+  <owner>mmenke@chromium.org</owner>
+  <summary>
+    The Windows last error obtained from a call to GetLastError after a failed
+    attempt to launch the network service process sandboxed. This is recorded if
+    an attempt is made to launch a sandboxed network service process on Windows,
+    and the launch fails. See also ChildProcess.LaunchFailed.WinLastError.
+  </summary>
+</histogram>
+
+<histogram name="Chrome.SystemNetworkContextManager.NetworkSandboxState"
+    enum="NetworkSandboxState" expires_after="2022-12-31">
+  <owner>wfh@chromium.org</owner>
+  <owner>mmenke@chromium.org</owner>
+  <summary>
+    The operational state of the network sandbox. This is recorded each time the
+    browser attempts to launch the network service process. This might be
+    recorded multiple times from the same client if the network service process
+    crashes or does not launch correctly. This is not recorded if the network
+    service is running in-process.
+  </summary>
+</histogram>
+
 <histogram name="Chrome.Tabs.AnimationSmoothness.HoverCard.FadeIn" units="%"
-    expires_after="2022-08-29">
+    expires_after="2023-01-15">
   <owner>yichenz@chromium.org</owner>
   <owner>chromeos-wmp@google.com</owner>
   <summary>
@@ -135,7 +179,7 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Chrome.Tabs.AnimationSmoothness.HoverCard.FadeOut" units="%"
-    expires_after="2022-06-04">
+    expires_after="2022-12-04">
   <owner>yichenz@chromium.org</owner>
   <owner>chromeos-wmp@google.com</owner>
   <summary>
@@ -145,7 +189,7 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Chrome.Tabs.AnimationSmoothness.TabLoading" units="%"
-    expires_after="2022-02-20">
+    expires_after="2022-04-24">
   <owner>yichenz@chromium.org</owner>
   <owner>chromeos-wmp@google.com</owner>
   <summary>
@@ -155,21 +199,8 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
   </summary>
 </histogram>
 
-<histogram name="ChromeColors.ColorApplied" enum="ChromeColorsInfo"
-    expires_after="2021-08-22">
-  <obsolete>
-    Removed 2021-07.
-  </obsolete>
-  <owner>alexilin@chromium.org</owner>
-  <owner>jkrcal@chromium.org</owner>
-  <summary>
-    Records the theme color every time the user clicks on a color icon in the
-    color picker.
-  </summary>
-</histogram>
-
 <histogram name="ChromeColors.ColorOnLoad" enum="ChromeColorsInfo"
-    expires_after="2022-01-23">
+    expires_after="2022-12-11">
   <owner>gayane@chromium.org</owner>
   <owner>yyushkina@chromium.org</owner>
   <summary>
@@ -255,114 +286,6 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
     For Custom Tabs generated by Chrome itself instead of external apps, this
     shows time between the intent arrival in the CCT and the first &quot;page
     loaded&quot; event, if the navigation is successful.
-  </summary>
-</histogram>
-
-<histogram base="true" name="ChromeMLService.EvaluationLatency" units="ms"
-    expires_after="M91">
-  <obsolete>
-    Obsolete as of 04/2021.
-  </obsolete>
-  <owner>mcrouse@chromium.org</owner>
-  <owner>sophiechang@chromium.org</owner>
-  <summary>
-    Measures the model evaluation latency in the Chrome ML Service. This will be
-    recorded whenever a model evaluation call is invoked on a valid model,
-    regardless of whether the evaluation result is valid or not.
-  </summary>
-</histogram>
-
-<histogram base="true" name="ChromeMLService.LoadModelResult"
-    enum="ChromeMLServiceLoadModelResult" expires_after="M91">
-  <obsolete>
-    Obsolete as of 04/2021.
-  </obsolete>
-  <owner>mcrouse@chromium.org</owner>
-  <owner>sophiechang@chromium.org</owner>
-  <summary>
-    Records the model loading result status from the Chrome ML Service.
-  </summary>
-</histogram>
-
-<histogram name="ChromeMLService.PredictionResult.DecisionTreeModel"
-    enum="ChromeMLServiceDecisionTreePredictionResult" expires_after="M91">
-  <obsolete>
-    Obsolete as of 04/2021.
-  </obsolete>
-  <owner>mcrouse@chromium.org</owner>
-  <owner>sophiechang@chromium.org</owner>
-  <summary>
-    Records the decision model prediction result from the Chrome ML Service.
-  </summary>
-</histogram>
-
-<histogram name="ChromeMLService.ServiceAliveDuration" units="ms"
-    expires_after="M91">
-  <obsolete>
-    Obsolete as of 04/2021.
-  </obsolete>
-  <owner>mcrouse@chromium.org</owner>
-  <owner>sophiechang@chromium.org</owner>
-  <summary>
-    Measures the duration in which the Chrome ML Service is alive. This is
-    monitored by a service observer in the browser process, and should be
-    recorded correctly when the service exits either gracefully or unexpectedly.
-  </summary>
-</histogram>
-
-<histogram name="ChromeMLService.ServiceCrash" enum="Boolean"
-    expires_after="M91">
-  <obsolete>
-    Obsolete as of 04/2021.
-  </obsolete>
-  <owner>mcrouse@chromium.org</owner>
-  <owner>sophiechang@chromium.org</owner>
-  <summary>Records if the Chrome ML Service crashed.</summary>
-</histogram>
-
-<histogram name="ChromeMLService.ServiceLaunch" enum="Boolean"
-    expires_after="M91">
-  <obsolete>
-    Obsolete as of 04/2021.
-  </obsolete>
-  <owner>mcrouse@chromium.org</owner>
-  <owner>sophiechang@chromium.org</owner>
-  <summary>Records if the Chrome ML Service launched successfully.</summary>
-</histogram>
-
-<histogram name="ChromeMLService.ServiceNormalTermination" enum="Boolean"
-    expires_after="M91">
-  <obsolete>
-    Obsolete as of 04/2021.
-  </obsolete>
-  <owner>mcrouse@chromium.org</owner>
-  <owner>sophiechang@chromium.org</owner>
-  <summary>Records if the Chrome ML Service terminated normally.</summary>
-</histogram>
-
-<histogram name="ChromeMLService.ServiceStatusWhenRequested"
-    enum="ChromeMLServiceRequestStatus" expires_after="M91">
-  <obsolete>
-    Obsolete as of 04/2021.
-  </obsolete>
-  <owner>mcrouse@chromium.org</owner>
-  <owner>sophiechang@chromium.org</owner>
-  <summary>
-    Whether the ML Service is already running when it is requested.
-  </summary>
-</histogram>
-
-<histogram base="true" name="ChromeMLService.ValidationLatency" units="ms"
-    expires_after="M91">
-  <obsolete>
-    Obsolete as of 04/2021.
-  </obsolete>
-  <owner>mcrouse@chromium.org</owner>
-  <owner>sophiechang@chromium.org</owner>
-  <summary>
-    Measures the model validation latency in the Chrome ML Service. This is
-    recorded when the ML service receives a model and evaluates it, regardless
-    of whether the model turns out to be valid or not.
   </summary>
 </histogram>
 

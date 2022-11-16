@@ -24,7 +24,6 @@
 #include "chromeos/dbus/power/power_manager_client.h"
 #include "chromeos/dbus/power_manager/backlight.pb.h"
 #include "chromeos/dbus/power_manager/power_supply_properties.pb.h"
-#include "components/ukm/content/source_url_recorder.h"
 #include "content/public/test/web_contents_tester.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
@@ -55,6 +54,12 @@ class TestingAdaptiveScreenBrightnessUkmLogger
     : public AdaptiveScreenBrightnessUkmLogger {
  public:
   TestingAdaptiveScreenBrightnessUkmLogger() = default;
+
+  TestingAdaptiveScreenBrightnessUkmLogger(
+      const TestingAdaptiveScreenBrightnessUkmLogger&) = delete;
+  TestingAdaptiveScreenBrightnessUkmLogger& operator=(
+      const TestingAdaptiveScreenBrightnessUkmLogger&) = delete;
+
   ~TestingAdaptiveScreenBrightnessUkmLogger() override = default;
 
   const std::vector<LogActivityInfo>& log_activity_info() const {
@@ -71,8 +76,6 @@ class TestingAdaptiveScreenBrightnessUkmLogger
 
  private:
   std::vector<LogActivityInfo> log_activity_info_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestingAdaptiveScreenBrightnessUkmLogger);
 };
 
 }  // namespace
@@ -85,6 +88,11 @@ class AdaptiveScreenBrightnessManagerTest
             base::test::TaskEnvironment::MainThreadType::UI,
             base::test::TaskEnvironment::TimeSource::MOCK_TIME,
             base::test::TaskEnvironment::ThreadPoolExecutionMode::QUEUED) {}
+
+  AdaptiveScreenBrightnessManagerTest(
+      const AdaptiveScreenBrightnessManagerTest&) = delete;
+  AdaptiveScreenBrightnessManagerTest& operator=(
+      const AdaptiveScreenBrightnessManagerTest&) = delete;
 
   ~AdaptiveScreenBrightnessManagerTest() override = default;
 
@@ -160,7 +168,7 @@ class AdaptiveScreenBrightnessManagerTest
   }
 
   void FastForwardTimeBySecs(const int seconds) {
-    task_environment()->FastForwardBy(base::TimeDelta::FromSeconds(seconds));
+    task_environment()->FastForwardBy(base::Seconds(seconds));
   }
 
   // Creates a test browser window and sets its visibility, activity and
@@ -211,7 +219,7 @@ class AdaptiveScreenBrightnessManagerTest
       tab_strip_model->ActivateTabAt(tab_strip_model->count() - 1);
     }
     content::WebContentsTester::For(contents)->TestSetIsLoading(false);
-    return ukm::GetSourceIdForWebContentsDocument(contents);
+    return contents->GetPrimaryMainFrame()->GetPageUkmSourceId();
   }
 
   const gfx::Point kEventLocation = gfx::Point(90, 90);
@@ -233,8 +241,6 @@ class AdaptiveScreenBrightnessManagerTest
   ui::UserActivityDetector user_activity_detector_;
   std::unique_ptr<AdaptiveScreenBrightnessManager> screen_brightness_manager_;
   TestingAdaptiveScreenBrightnessUkmLogger* ukm_logger_;
-
-  DISALLOW_COPY_AND_ASSIGN(AdaptiveScreenBrightnessManagerTest);
 };
 
 TEST_F(AdaptiveScreenBrightnessManagerTest, PeriodicLogging) {

@@ -8,6 +8,7 @@
 
 #include "mojo/public/cpp/bindings/remote.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/blink/public/mojom/frame/lifecycle.mojom-blink.h"
 #include "third_party/blink/public/platform/web_audio_device.h"
 #include "third_party/blink/public/platform/web_audio_latency_hint.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_union_audiocontextlatencycategory_double.h"
@@ -22,7 +23,8 @@
 namespace blink {
 
 namespace {
-static bool web_audio_device_paused_;
+
+bool web_audio_device_paused_;
 
 class MockWebAudioDeviceForAudioContext : public WebAudioDevice {
  public:
@@ -67,7 +69,7 @@ class AudioContextTestPlatform : public TestingPlatformSupport {
         break;
       case WebAudioLatencyHint::kCategoryExact:
         buffer_size =
-            clampTo(latency_hint.Seconds() * AudioHardwareSampleRate(),
+            ClampTo(latency_hint.Seconds() * AudioHardwareSampleRate(),
                     static_cast<double>(AudioHardwareBufferSize()),
                     static_cast<double>(playback_size));
         break;
@@ -84,7 +86,7 @@ class AudioContextTestPlatform : public TestingPlatformSupport {
   size_t AudioHardwareBufferSize() override { return 128; }
 };
 
-}  // anonymous namespace
+}  // namespace
 
 class AudioContextTest : public PageTestBase {
  protected:
@@ -94,7 +96,7 @@ class AudioContextTest : public PageTestBase {
   ~AudioContextTest() override { platform_.reset(); }
 
   void SetUp() override {
-    PageTestBase::SetUp(IntSize());
+    PageTestBase::SetUp(gfx::Size());
     CoreInitializer::GetInstance().ProvideModulesToPage(GetPage(),
                                                         base::EmptyString());
   }

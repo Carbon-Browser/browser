@@ -30,7 +30,6 @@
 
 #include "third_party/blink/public/web/web_ax_object.h"
 
-#include "skia/ext/skia_matrix_44.h"
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/public/platform/web_url.h"
 #include "third_party/blink/public/web/web_document.h"
@@ -189,7 +188,7 @@ bool WebAXObject::CheckValidity() {
   // is handled as a special case inside of accessibility code.
   Document* document = private_->GetDocument();
   DCHECK(!document->NeedsLayoutTreeUpdateForNodeIncludingDisplayLocked(*node) ||
-         DisplayLockUtilities::NearestLockedExclusiveAncestor(*node))
+         DisplayLockUtilities::LockedAncestorPreventingPaint(*node))
       << "Node needs layout update and is not display locked";
 #endif  // DCHECK_IS_ON()
 
@@ -201,14 +200,6 @@ ax::mojom::DefaultActionVerb WebAXObject::Action() const {
     return ax::mojom::DefaultActionVerb::kNone;
 
   return private_->Action();
-}
-
-bool WebAXObject::CanPress() const {
-  if (IsDetached())
-    return false;
-
-  return private_->ActionElement() || private_->IsButton() ||
-         private_->IsMenuRelated();
 }
 
 bool WebAXObject::CanSetValueAttribute() const {
@@ -247,6 +238,10 @@ void WebAXObject::Serialize(ui::AXNodeData* node_data,
   private_->Serialize(node_data, accessibility_mode);
 }
 
+BLINK_EXPORT void WebAXObject::SerializerClearedNode(int node_id) const {
+  private_->AXObjectCache().SerializerClearedNode(node_id);
+}
+
 WebString WebAXObject::AutoComplete() const {
   if (IsDetached())
     return WebString();
@@ -272,7 +267,13 @@ bool WebAXObject::IsClickable() const {
   if (IsDetached())
     return false;
 
-  return private_->IsClickable();
+  // Filter out any action = kClickAncestor.
+  // Explanation: although elements are technically clickable if an ancestor is
+  // clickable, we do not expose them as such unless they have a widget role,
+  // otherwise there would often be an overwhelming number of clickable nodes.
+  ax::mojom::blink::DefaultActionVerb action = Action();
+  return action != ax::mojom::blink::DefaultActionVerb::kNone &&
+         action != ax::mojom::blink::DefaultActionVerb::kClickAncestor;
 }
 
 bool WebAXObject::IsControl() const {
@@ -472,7 +473,7 @@ WebString WebAXObject::ImageDataUrl(const gfx::Size& max_size) const {
   if (IsDetached())
     return WebString();
 
-  return private_->ImageDataUrl(IntSize(max_size));
+  return private_->ImageDataUrl(max_size);
 }
 
 ax::mojom::InvalidState WebAXObject::InvalidState() const {
@@ -514,9 +515,9 @@ WebAXObject WebAXObject::HitTest(const gfx::Point& point) const {
 
   ScopedActionAnnotator annotater(private_.Get(),
                                   ax::mojom::blink::Action::kHitTest);
-  IntPoint contents_point =
+  gfx::Point contents_point =
       private_->DocumentFrameView()->SoonToBeRemovedUnscaledViewportToContents(
-          IntPoint(point));
+          point);
 
   Document* document = private_->GetDocument();
   if (!document || !document->View())
@@ -534,7 +535,8 @@ WebAXObject WebAXObject::HitTest(const gfx::Point& point) const {
   if (hit)
     return WebAXObject(hit);
 
-  if (private_->GetBoundsInFrameCoordinates().Contains(contents_point))
+  if (private_->GetBoundsInFrameCoordinates().Contains(
+          LayoutPoint(contents_point)))
     return *this;
 
   return WebAXObject();
@@ -542,36 +544,7 @@ WebAXObject WebAXObject::HitTest(const gfx::Point& point) const {
 
 gfx::Rect WebAXObject::GetBoundsInFrameCoordinates() const {
   LayoutRect rect = private_->GetBoundsInFrameCoordinates();
-  return EnclosingIntRect(rect);
-}
-
-WebString WebAXObject::KeyboardShortcut() const {
-  if (IsDetached())
-    return WebString();
-
-  String access_key = private_->AccessKey();
-  if (access_key.IsNull())
-    return WebString();
-
-  DEFINE_STATIC_LOCAL(String, modifier_string, ());
-  if (modifier_string.IsNull()) {
-    unsigned modifiers = KeyboardEventManager::kAccessKeyModifiers;
-    // Follow the same order as Mozilla MSAA implementation:
-    // Ctrl+Alt+Shift+Meta+key. MSDN states that keyboard shortcut strings
-    // should not be localized and defines the separator as "+".
-    StringBuilder modifier_string_builder;
-    if (modifiers & WebInputEvent::kControlKey)
-      modifier_string_builder.Append("Ctrl+");
-    if (modifiers & WebInputEvent::kAltKey)
-      modifier_string_builder.Append("Alt+");
-    if (modifiers & WebInputEvent::kShiftKey)
-      modifier_string_builder.Append("Shift+");
-    if (modifiers & WebInputEvent::kMetaKey)
-      modifier_string_builder.Append("Win+");
-    modifier_string = modifier_string_builder.ToString();
-  }
-
-  return String(modifier_string + access_key);
+  return ToEnclosingRect(rect);
 }
 
 WebString WebAXObject::Language() const {
@@ -788,7 +761,7 @@ WebURL WebAXObject::Url() const {
 
 WebString WebAXObject::GetName(ax::mojom::NameFrom& out_name_from,
                                WebVector<WebAXObject>& out_name_objects) const {
-  out_name_from = ax::mojom::blink::NameFrom::kUninitialized;
+  out_name_from = ax::mojom::blink::NameFrom::kNone;
 
   if (IsDetached())
     return WebString();
@@ -902,29 +875,6 @@ WebDocument WebAXObject::GetDocument() const {
     return WebDocument();
 
   return WebDocument(document);
-}
-
-WebString WebAXObject::ComputedStyleDisplay() const {
-  if (IsDetached())
-    return WebString();
-
-#if DCHECK_IS_ON()
-  CheckLayoutClean(private_->GetDocument());
-#endif
-
-  Node* node = private_->GetNode();
-  if (!node || node->IsDocumentNode())
-    return WebString();
-
-  const ComputedStyle* computed_style = node->GetComputedStyle();
-  if (!computed_style)
-    return WebString();
-
-  return WebString(CSSProperty::Get(CSSPropertyID::kDisplay)
-                       .CSSValueFromComputedStyle(
-                           *computed_style, /* layout_object */ nullptr,
-                           /* allow_visited_style */ false)
-                       ->CssText());
 }
 
 bool WebAXObject::AccessibilityIsIgnored() const {
@@ -1159,7 +1109,7 @@ void WebAXObject::SetScrollOffset(const gfx::Point& offset) const {
   if (IsDetached())
     return;
 
-  private_->SetScrollOffset(IntPoint(offset));
+  private_->SetScrollOffset(offset);
 }
 
 void WebAXObject::Dropeffects(
@@ -1179,7 +1129,7 @@ void WebAXObject::Dropeffects(
 
 void WebAXObject::GetRelativeBounds(WebAXObject& offset_container,
                                     gfx::RectF& bounds_in_container,
-                                    skia::Matrix44& container_transform,
+                                    gfx::Transform& container_transform,
                                     bool* clips_children) const {
   if (IsDetached())
     return;
@@ -1189,25 +1139,18 @@ void WebAXObject::GetRelativeBounds(WebAXObject& offset_container,
 #endif
 
   AXObject* container = nullptr;
-  FloatRect bounds;
+  gfx::RectF bounds;
   private_->GetRelativeBounds(&container, bounds, container_transform,
                               clips_children);
   offset_container = WebAXObject(container);
-  bounds_in_container = gfx::RectF(bounds);
+  bounds_in_container = bounds;
 }
 
-void WebAXObject::GetAllObjectsWithChangedBounds(
-    WebVector<WebAXObject>& out_changed_bounds_objects) const {
+void WebAXObject::SerializeLocationChanges() const {
   if (IsDetached())
     return;
 
-  HeapVector<Member<AXObject>> changed_bounds_objects =
-      private_->AXObjectCache().GetAllObjectsWithChangedBounds();
-
-  out_changed_bounds_objects.reserve(changed_bounds_objects.size());
-  out_changed_bounds_objects.resize(changed_bounds_objects.size());
-  std::copy(changed_bounds_objects.begin(), changed_bounds_objects.end(),
-            out_changed_bounds_objects.begin());
+  private_->AXObjectCache().SerializeLocationChanges();
 }
 
 bool WebAXObject::ScrollToMakeVisible() const {
@@ -1248,7 +1191,7 @@ bool WebAXObject::ScrollToMakeVisibleWithSubFocus(
   blink::mojom::blink::ScrollAlignment blink_vertical_scroll_alignment = {
       visible_vertical_behavior, vertical_behavior, vertical_behavior};
   return private_->RequestScrollToMakeVisibleWithSubFocusAction(
-      IntRect(subfocus), blink_horizontal_scroll_alignment,
+      subfocus, blink_horizontal_scroll_alignment,
       blink_vertical_scroll_alignment);
 }
 
@@ -1377,8 +1320,7 @@ void WebAXObject::UpdateLayout(const WebDocument& web_document) {
   if (!document || !document->View() || !document->ExistingAXObjectCache())
     return;
   if (document->NeedsLayoutTreeUpdate() || document->View()->NeedsLayout() ||
-      document->Lifecycle().GetState() <
-          DocumentLifecycle::kCompositingAssignmentsClean ||
+      document->Lifecycle().GetState() < DocumentLifecycle::kPrePaintClean ||
       document->ExistingAXObjectCache()->IsDirty()) {
     document->View()->UpdateAllLifecyclePhasesExceptPaint(
         DocumentUpdateReason::kAccessibility);

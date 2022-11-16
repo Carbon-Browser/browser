@@ -1,4 +1,0 @@
-include_rules = [
-  "+components/cast",
-  "+content/public/test",
-]

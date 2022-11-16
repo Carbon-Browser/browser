@@ -18,6 +18,9 @@ std::ostream& operator<<(std::ostream& stream, DiscoveryAction action) {
     case DiscoveryAction::kDismissed:
       stream << "[Dismissed]";
       break;
+    case DiscoveryAction::kLearnMore:
+      stream << "[Learn more]";
+      break;
   }
 
   return stream;
@@ -27,6 +30,9 @@ std::ostream& operator<<(std::ostream& stream, AssociateAccountAction action) {
   switch (action) {
     case AssociateAccountAction::kAssoicateAccount:
       stream << "[Associate account]";
+      break;
+    case AssociateAccountAction::kLearnMore:
+      stream << "[Learn more]";
       break;
     case AssociateAccountAction::kDismissedByUser:
       stream << "[Dismissed by user]";

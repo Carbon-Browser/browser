@@ -9,17 +9,12 @@ source_set("elements") {
     "extended_touch_target_button.mm",
     "fade_truncating_label.h",
     "fade_truncating_label.mm",
-    "favicon_container_view.h",
-    "favicon_container_view.mm",
     "gray_highlight_button.h",
     "gray_highlight_button.mm",
     "home_waiting_view.h",
     "home_waiting_view.mm",
-    "selector_picker_presentation_controller.h",
-    "selector_picker_presentation_controller.mm",
-    "selector_picker_view_controller.h",
-    "selector_picker_view_controller.mm",
-    "selector_view_controller_delegate.h",
+    "instruction_view.h",
+    "instruction_view.mm",
     "self_sizing_table_view.h",
     "self_sizing_table_view.mm",
     "text_field_configuration.h",
@@ -34,28 +29,12 @@ source_set("elements") {
   deps = [
     "//base",
     "//ios/chrome/browser/ui:feature_flags",
-    "//ios/chrome/browser/ui/colors",
-    "//ios/chrome/browser/ui/material_components",
     "//ios/chrome/browser/ui/util",
+    "//ios/chrome/common:string_util",
     "//ios/chrome/common/ui/colors",
-    "//ios/chrome/common/ui/favicon",
     "//ios/chrome/common/ui/util",
-  ]
-}
-
-source_set("selector_coordinator") {
-  configs += [ "//build/config/compiler:enable_arc" ]
-  sources = [
-    "selector_coordinator.h",
-    "selector_coordinator.mm",
-  ]
-  deps = [
-    ":elements",
-    "//base",
-    "//ios/chrome/browser",
-    "//ios/chrome/browser/ui/coordinators:chrome_coordinators",
-    "//ios/chrome/browser/ui/util",
-    "//ios/chrome/common/ui/colors",
+    "//ios/chrome/common/ui/util:dynamic_type_util",
+    "//ios/third_party/material_components_ios",
   ]
 }
 
@@ -65,17 +44,15 @@ source_set("unit_tests") {
   sources = [
     "activity_overlay_coordinator_unittest.mm",
     "chrome_activity_overlay_coordinator_unittest.mm",
-    "selector_coordinator_unittest.mm",
-    "selector_picker_view_controller_unittest.mm",
     "text_field_configuration_unittest.mm",
     "windowed_container_view_unittest.mm",
   ]
   deps = [
     ":elements",
     ":elements_internal",
-    ":selector_coordinator",
     "//base",
     "//base/test:test_support",
+    "//ios/chrome/browser/browser_state:test_support",
     "//ios/chrome/browser/main:test_support",
     "//ios/chrome/test:test_support",
     "//testing/gtest",
@@ -102,7 +79,6 @@ source_set("elements_internal") {
     "//ios/chrome/browser",
     "//ios/chrome/browser/ui/coordinators:chrome_coordinators",
     "//ios/chrome/browser/ui/main:scene_state_header",
-    "//ios/chrome/browser/ui/material_components",
     "//ios/chrome/browser/ui/scoped_ui_blocker:scoped_ui_blocker",
     "//ios/chrome/browser/ui/util",
     "//ios/chrome/common/ui/colors",

@@ -9,6 +9,7 @@
 #include <memory>
 #include <vector>
 
+#include "base/callback.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
 #include "content/browser/renderer_host/input/touch_emulator_client.h"
@@ -36,7 +37,7 @@ class TouchEmulatorTest : public testing::Test,
       : task_environment_(
             base::test::SingleThreadTaskEnvironment::MainThreadType::UI),
         last_event_time_(base::TimeTicks::Now()),
-        event_time_delta_(base::TimeDelta::FromMilliseconds(100)),
+        event_time_delta_(base::Milliseconds(100)),
         shift_pressed_(false),
         mouse_pressed_(false),
         ack_touches_synchronously_(true),
@@ -447,7 +448,7 @@ TEST_F(TouchEmulatorTest, MouseMovesDropped) {
   EXPECT_EQ("TouchStart GestureTapDown", ExpectedEvents());
 
   // Mouse move after mouse down is never dropped.
-  set_event_time_delta(base::TimeDelta::FromMilliseconds(1));
+  set_event_time_delta(base::Milliseconds(1));
   MouseDrag(200, 200);
   EXPECT_EQ(
       "TouchMove GestureTapCancel GestureScrollBegin GestureScrollUpdate",
@@ -460,7 +461,7 @@ TEST_F(TouchEmulatorTest, MouseMovesDropped) {
   EXPECT_EQ("", ExpectedEvents());
 
   // Dispatching again.
-  set_event_time_delta(base::TimeDelta::FromMilliseconds(100));
+  set_event_time_delta(base::Milliseconds(100));
   MouseDrag(400, 200);
   EXPECT_EQ(
       "TouchMove GestureScrollUpdate",

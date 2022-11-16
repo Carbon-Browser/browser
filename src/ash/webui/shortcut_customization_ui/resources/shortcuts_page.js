@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 import './accelerator_subsection.js';
+import './shortcut_customization_shared_css.js';
 import './shortcut_input.js';
 
 import {assert} from 'chrome://resources/js/assert.m.js';
@@ -45,7 +46,7 @@ export class ShortcutsPageElement extends PolymerElement {
         type: Array,
         value: [],
       },
-    }
+    };
   }
 
   /** @override */
@@ -69,11 +70,19 @@ export class ShortcutsPageElement extends PolymerElement {
       return;
     }
 
-    let subcategories = [];
+    const subcategories = [];
     for (const key of subcatMap.keys()) {
       subcategories.push(key);
     }
     this.subcategories_ = subcategories;
+  }
+
+  updateSubsections() {
+    const subsections =
+        this.shadowRoot.querySelectorAll('accelerator-subsection');
+    for (const subsection of subsections) {
+      subsection.updateSubsection();
+    }
   }
 }
 

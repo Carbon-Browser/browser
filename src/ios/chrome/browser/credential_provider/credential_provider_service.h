@@ -7,14 +7,20 @@
 
 #include "base/memory/ref_counted.h"
 #include "components/keyed_service/core/keyed_service.h"
-#include "components/password_manager/core/browser/password_store.h"
 #include "components/password_manager/core/browser/password_store_consumer.h"
+#include "components/password_manager/core/browser/password_store_interface.h"
 #include "components/prefs/pref_member.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/sync/driver/sync_service_observer.h"
 #import "ios/chrome/browser/signin/authentication_service.h"
 
+class FaviconLoader;
+
 @protocol MutableCredentialStore;
+
+namespace password_manager {
+class AffiliationService;
+}
 
 namespace syncer {
 class SyncService;
@@ -32,11 +38,18 @@ class CredentialProviderService
   // Initializes the service.
   CredentialProviderService(
       PrefService* prefs,
-      scoped_refptr<password_manager::PasswordStore> password_store,
+      scoped_refptr<password_manager::PasswordStoreInterface> password_store,
       AuthenticationService* authentication_service,
       id<MutableCredentialStore> credential_store,
       signin::IdentityManager* identity_manager,
-      syncer::SyncService* sync_service);
+      syncer::SyncService* sync_service,
+      password_manager::AffiliationService* affiliation_service,
+      FaviconLoader* favicon_loader);
+
+  CredentialProviderService(const CredentialProviderService&) = delete;
+  CredentialProviderService& operator=(const CredentialProviderService&) =
+      delete;
+
   ~CredentialProviderService() override;
 
   // KeyedService:
@@ -104,7 +117,7 @@ class CredentialProviderService
   void OnSavingPasswordsEnabledChanged();
 
   // The interface for getting and manipulating a user's saved passwords.
-  scoped_refptr<password_manager::PasswordStore> password_store_;
+  scoped_refptr<password_manager::PasswordStoreInterface> password_store_;
 
   // The interface for getting the primary account identifier.
   AuthenticationService* authentication_service_ = nullptr;
@@ -114,6 +127,13 @@ class CredentialProviderService
 
   // Sync Service to observe.
   syncer::SyncService* sync_service_ = nullptr;
+
+  // Affiliation service to provide affiliations.
+  password_manager::AffiliationService* affiliation_service_ = nullptr;
+
+  // FaviconLoader is a keyed service that uses LargeIconService to retrieve
+  // favicon images.
+  FaviconLoader* favicon_loader_ = nullptr;
 
   // The interface for saving and updating credentials.
   id<MutableCredentialStore> credential_store_ = nil;
@@ -126,9 +146,7 @@ class CredentialProviderService
   BooleanPrefMember saving_passwords_enabled_;
 
   // Weak pointer factory.
-  base::WeakPtrFactory<CredentialProviderService> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(CredentialProviderService);
+  base::WeakPtrFactory<CredentialProviderService> weak_ptr_factory_{this};
 };
 
 #endif  // IOS_CHROME_BROWSER_CREDENTIAL_PROVIDER_CREDENTIAL_PROVIDER_SERVICE_H_

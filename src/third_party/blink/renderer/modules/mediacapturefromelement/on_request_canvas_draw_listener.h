@@ -9,7 +9,7 @@
 #include "base/memory/weak_ptr.h"
 #include "third_party/blink/renderer/modules/mediacapturefromelement/auto_canvas_draw_listener.h"
 #include "third_party/blink/renderer/modules/mediacapturefromelement/canvas_capture_handler.h"
-#include "third_party/blink/renderer/platform/heap/handle.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/skia/include/core/SkRefCnt.h"
 
 namespace blink {
@@ -19,8 +19,7 @@ class OnRequestCanvasDrawListener : public AutoCanvasDrawListener {
   explicit OnRequestCanvasDrawListener(std::unique_ptr<CanvasCaptureHandler>);
   ~OnRequestCanvasDrawListener() override;
 
-  void SendNewFrame(scoped_refptr<StaticBitmapImage>,
-                    base::WeakPtr<WebGraphicsContext3DProviderWrapper>) final;
+  NewFrameCallback GetNewFrameCallback() final;
 
   void Trace(Visitor*) const override;
 };

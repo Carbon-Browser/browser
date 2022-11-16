@@ -7,9 +7,9 @@
 #include "base/base64.h"
 #include "base/command_line.h"
 #include "base/logging.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "build/build_config.h"
-#include "components/optimization_guide/core/optimization_guide_util.h"
 #include "components/optimization_guide/proto/hints.pb.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -27,12 +27,6 @@ const char kHintsProtoOverride[] = "optimization_guide_hints_override";
 // fetch immediately on start up using the provided comma separate lists of
 // hosts.
 const char kFetchHintsOverride[] = "optimization-guide-fetch-hints-override";
-
-// Overrides scheduling and time delays for fetching prediction models and host
-// model features. This causes a prediction model and host model features fetch
-// immediately on start up.
-const char kFetchModelsAndHostModelFeaturesOverrideTimer[] =
-    "optimization-guide-fetch-models-and-features-override";
 
 // Overrides the hints fetch scheduling and delay, causing a hints fetch
 // immediately on start up using the TopHostProvider. This is meant for testing.
@@ -65,10 +59,6 @@ const char kPurgeModelAndFeaturesStore[] = "purge-model-and-features-store";
 const char kDisableFetchingHintsAtNavigationStartForTesting[] =
     "disable-fetching-hints-at-navigation-start";
 
-// Disables fetching hints for active tabs on deferred startup.
-const char kDisableFetchHintsForActiveTabsOnDeferredStartup[] =
-    "optimization-guide-disable-hints-for-active-tabs-on-deferred-startup";
-
 const char kDisableCheckingUserPermissionsForTesting[] =
     "disable-checking-optimization-guide-user-permissions";
 
@@ -91,6 +81,29 @@ const char kModelOverride[] = "optimization-guide-model-override";
 
 // Triggers validation of the model. Used for manual testing.
 const char kModelValidate[] = "optimization-guide-model-validate";
+
+const char kPageContentAnnotationsLoggingEnabled[] =
+    "enable-page-content-annotations-logging";
+
+const char kPageContentAnnotationsValidationStartupDelaySeconds[] =
+    "page-content-annotations-validation-startup-delay-seconds";
+
+const char kPageContentAnnotationsValidationBatchSizeOverride[] =
+    "page-content-annotations-validation-batch-size";
+
+// Enables the specific annotation type to run validation at startup after a
+// delay. A comma separated list of inputs can be given as a value which will be
+// used as input for the validation job.
+const char kPageContentAnnotationsValidationPageTopics[] =
+    "page-content-annotations-validation-page-topics";
+const char kPageContentAnnotationsValidationPageEntities[] =
+    "page-content-annotations-validation-page-entities";
+const char kPageContentAnnotationsValidationContentVisibility[] =
+    "page-content-annotations-validation-content-visibility";
+
+// Writes the output of page content annotation validations to the given file.
+const char kPageContentAnnotationsValidationWriteToFile[] =
+    "page-content-annotations-validation-write-to-file";
 
 bool IsHintComponentProcessingDisabled() {
   return base::CommandLine::ForCurrentProcess()->HasSwitch(kHintsProtoOverride);
@@ -137,16 +150,6 @@ ParseHintsFetchOverrideFromCommandLine() {
 bool ShouldOverrideFetchHintsTimer() {
   return base::CommandLine::ForCurrentProcess()->HasSwitch(
       kFetchHintsOverrideTimer);
-}
-
-bool ShouldOverrideFetchModelsAndFeaturesTimer() {
-  return base::CommandLine::ForCurrentProcess()->HasSwitch(
-      kFetchModelsAndHostModelFeaturesOverrideTimer);
-}
-
-bool DisableFetchHintsForActiveTabsOnDeferredStartup() {
-  return base::CommandLine::ForCurrentProcess()->HasSwitch(
-      kDisableFetchHintsForActiveTabsOnDeferredStartup);
 }
 
 std::unique_ptr<optimization_guide::proto::Configuration>
@@ -200,74 +203,97 @@ bool ShouldValidateModel() {
   return command_line->HasSwitch(kModelValidate);
 }
 
-absl::optional<
-    std::pair<std::string, absl::optional<optimization_guide::proto::Any>>>
-GetModelOverrideForOptimizationTarget(
-    optimization_guide::proto::OptimizationTarget optimization_target) {
-#if defined(OS_WIN)
-  // TODO(crbug/1227996): The parsing below is not supported on Windows because
-  // ':' is used as a delimiter, but this must be used in the absolute file path
-  // on Windows.
-  DLOG(ERROR)
-      << "--optimization-guide-model-override is not available on Windows";
-  return absl::nullopt;
-#else
+absl::optional<std::string> GetModelOverride() {
   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
   if (!command_line->HasSwitch(kModelOverride))
     return absl::nullopt;
+  return command_line->GetSwitchValueASCII(kModelOverride);
+}
 
-  std::string model_override_switch_value =
-      command_line->GetSwitchValueASCII(kModelOverride);
-  std::vector<std::string> model_overrides =
-      base::SplitString(model_override_switch_value, ",", base::TRIM_WHITESPACE,
-                        base::SPLIT_WANT_NONEMPTY);
-  for (const auto& model_override : model_overrides) {
-    std::vector<std::string> override_parts = base::SplitString(
-        model_override, ":", base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
-    if (override_parts.size() != 2 && override_parts.size() != 3) {
-      // Input is malformed.
-      DLOG(ERROR) << "Invalid string format provided to the Model Override";
-      return absl::nullopt;
-    }
+bool ShouldLogPageContentAnnotationsInput() {
+  return base::CommandLine::ForCurrentProcess()->HasSwitch(
+      kPageContentAnnotationsLoggingEnabled);
+}
 
-    optimization_guide::proto::OptimizationTarget recv_optimization_target;
-    if (!optimization_guide::proto::OptimizationTarget_Parse(
-            override_parts[0], &recv_optimization_target)) {
-      // Optimization target is invalid.
-      DLOG(ERROR)
-          << "Invalid optimization target provided to the Model Override";
-      return absl::nullopt;
-    }
-    if (optimization_target != recv_optimization_target)
-      continue;
+absl::optional<base::TimeDelta> PageContentAnnotationsValidationStartupDelay() {
+  base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
+  if (!command_line->HasSwitch(
+          kPageContentAnnotationsValidationStartupDelaySeconds)) {
+    return absl::nullopt;
+  }
 
-    std::string file_name = override_parts[1];
-    if (!base::FilePath(file_name).IsAbsolute()) {
-      DLOG(ERROR) << "Provided model file path must be absolute " << file_name;
-      return absl::nullopt;
-    }
+  std::string value = command_line->GetSwitchValueASCII(
+      kPageContentAnnotationsValidationStartupDelaySeconds);
 
-    if (override_parts.size() == 2) {
-      std::pair<std::string, absl::optional<optimization_guide::proto::Any>>
-          file_path_and_metadata = std::make_pair(file_name, absl::nullopt);
-      return file_path_and_metadata;
-    }
-    std::string binary_pb;
-    if (!base::Base64Decode(override_parts[2], &binary_pb)) {
-      DLOG(ERROR) << "Invalid base64 encoding of the Model Override";
-      return absl::nullopt;
-    }
-    optimization_guide::proto::Any model_metadata;
-    if (!model_metadata.ParseFromString(binary_pb)) {
-      DLOG(ERROR) << "Invalid model metadata provided to the Model Override";
-      return absl::nullopt;
-    }
-    std::pair<std::string, absl::optional<optimization_guide::proto::Any>>
-        file_path_and_metadata = std::make_pair(file_name, model_metadata);
-    return file_path_and_metadata;
+  size_t seconds = 0;
+  if (base::StringToSizeT(value, &seconds)) {
+    return base::Seconds(seconds);
   }
   return absl::nullopt;
-#endif
+}
+
+absl::optional<size_t> PageContentAnnotationsValidationBatchSize() {
+  base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
+  if (!command_line->HasSwitch(
+          kPageContentAnnotationsValidationBatchSizeOverride)) {
+    return absl::nullopt;
+  }
+
+  std::string value = command_line->GetSwitchValueASCII(
+      kPageContentAnnotationsValidationBatchSizeOverride);
+
+  size_t size = 0;
+  if (base::StringToSizeT(value, &size)) {
+    return size;
+  }
+  return absl::nullopt;
+}
+
+bool LogPageContentAnnotationsValidationToConsole() {
+  base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
+  return command_line->HasSwitch(kPageContentAnnotationsValidationPageTopics) ||
+         command_line->HasSwitch(
+             kPageContentAnnotationsValidationPageEntities) ||
+         command_line->HasSwitch(
+             kPageContentAnnotationsValidationContentVisibility);
+}
+
+absl::optional<std::vector<std::string>>
+PageContentAnnotationsValidationInputForType(AnnotationType type) {
+  base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
+
+  std::string value;
+  switch (type) {
+    case AnnotationType::kPageTopics:
+      value = command_line->GetSwitchValueASCII(
+          kPageContentAnnotationsValidationPageTopics);
+      break;
+    case AnnotationType::kPageEntities:
+      value = command_line->GetSwitchValueASCII(
+          kPageContentAnnotationsValidationPageEntities);
+      break;
+    case AnnotationType::kContentVisibility:
+      value = command_line->GetSwitchValueASCII(
+          kPageContentAnnotationsValidationContentVisibility);
+      break;
+    default:
+      break;
+  }
+  if (value.empty()) {
+    return absl::nullopt;
+  }
+
+  return base::SplitString(value, ",", base::KEEP_WHITESPACE,
+                           base::SPLIT_WANT_ALL);
+}
+
+absl::optional<base::FilePath> PageContentAnnotationsValidationWriteToFile() {
+  base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
+  if (!command_line->HasSwitch(kPageContentAnnotationsValidationWriteToFile)) {
+    return absl::nullopt;
+  }
+  return command_line->GetSwitchValuePath(
+      kPageContentAnnotationsValidationWriteToFile);
 }
 
 }  // namespace switches

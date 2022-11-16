@@ -10,6 +10,7 @@
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
@@ -41,6 +42,11 @@ class BluetoothServiceRecordBlueZTest : public device::BluetoothTestBlueZ {
         success_callbacks_(0),
         error_callbacks_(0),
         last_seen_handle_(0) {}
+
+  BluetoothServiceRecordBlueZTest(const BluetoothServiceRecordBlueZTest&) =
+      delete;
+  BluetoothServiceRecordBlueZTest& operator=(
+      const BluetoothServiceRecordBlueZTest&) = delete;
 
   void SetUp() override {
     BluetoothTestBlueZ::SetUp();
@@ -112,10 +118,9 @@ class BluetoothServiceRecordBlueZTest : public device::BluetoothTestBlueZ {
 
     BluetoothServiceAttributeValueBlueZ service_class_list =
         records_[0].GetAttributeValue(ids0[1]);
-    std::string str_value;
-    EXPECT_TRUE(
-        service_class_list.sequence()[0].value().GetAsString(&str_value));
-    EXPECT_EQ("1802", str_value);
+    const base::Value& value = service_class_list.sequence()[0].value();
+    EXPECT_TRUE(value.is_string());
+    EXPECT_EQ("1802", value.GetString());
 
     std::vector<uint16_t> ids1 = records_[1].GetAttributeIds();
     EXPECT_EQ(1u, ids1.size());
@@ -137,7 +142,7 @@ class BluetoothServiceRecordBlueZTest : public device::BluetoothTestBlueZ {
     return record;
   }
 
-  BluetoothAdapterBlueZ* adapter_bluez_;
+  raw_ptr<BluetoothAdapterBlueZ> adapter_bluez_;
   size_t success_callbacks_;
   size_t error_callbacks_;
 
@@ -161,8 +166,6 @@ class BluetoothServiceRecordBlueZTest : public device::BluetoothTestBlueZ {
 
   uint32_t last_seen_handle_;
   std::vector<BluetoothServiceRecordBlueZ> records_;
-
-  DISALLOW_COPY_AND_ASSIGN(BluetoothServiceRecordBlueZTest);
 };
 
 TEST_F(BluetoothServiceRecordBlueZTest, CreateAndRemove) {

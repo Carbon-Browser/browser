@@ -9,7 +9,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/web_contents_observer.h"  // For MediaPlayerId.
 
@@ -32,6 +32,12 @@ class WebContentsImpl;
 class CONTENT_EXPORT MediaSessionControllersManager {
  public:
   explicit MediaSessionControllersManager(WebContentsImpl* web_contents);
+
+  MediaSessionControllersManager(const MediaSessionControllersManager&) =
+      delete;
+  MediaSessionControllersManager& operator=(
+      const MediaSessionControllersManager&) = delete;
+
   ~MediaSessionControllersManager();
 
   // Clear all the MediaSessionController associated with the given
@@ -91,11 +97,9 @@ class CONTENT_EXPORT MediaSessionControllersManager {
   // one and placing it in |controllers_map_| if necessary.
   MediaSessionController* FindOrCreateController(const MediaPlayerId& id);
 
-  WebContentsImpl* const web_contents_;
+  const raw_ptr<WebContentsImpl> web_contents_;
 
   ControllersMap controllers_map_;
-
-  DISALLOW_COPY_AND_ASSIGN(MediaSessionControllersManager);
 };
 
 }  // namespace content

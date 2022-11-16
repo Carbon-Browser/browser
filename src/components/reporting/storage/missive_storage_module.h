@@ -5,23 +5,21 @@
 #ifndef COMPONENTS_REPORTING_STORAGE_MISSIVE_STORAGE_MODULE_H_
 #define COMPONENTS_REPORTING_STORAGE_MISSIVE_STORAGE_MODULE_H_
 
+#include <memory>
 #include <utility>
 
 #include "base/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/scoped_refptr.h"
-#include "components/reporting/proto/record.pb.h"
-#include "components/reporting/proto/record_constants.pb.h"
+#include "components/reporting/proto/synced/record.pb.h"
+#include "components/reporting/proto/synced/record_constants.pb.h"
 #include "components/reporting/storage/storage_module_interface.h"
 #include "components/reporting/util/status.h"
 
 namespace reporting {
 
-// MissiveStorageModule is initialized by the |MissiveClient|, in order to get a
-// copy call |MissiveClient::GetMissiveStorageModule|.
-//
-// MissiveStorageModule utilizes a Delegate and forwards all calls to the
-// delegate.
+// MissiveStorageModule is a StorageModuleInterface implementation forwarded to
+// MissiveClient (it utilizes a Delegate and channels all calls through it).
 class MissiveStorageModule : public StorageModuleInterface {
  public:
   // MissiveStorageModuleDelegateInterface has the same interface as
@@ -39,12 +37,10 @@ class MissiveStorageModule : public StorageModuleInterface {
 
     virtual void AddRecord(const Priority priority,
                            Record record,
-                           base::OnceCallback<void(Status)> callback) = 0;
-    virtual void Flush(Priority priority,
-                       base::OnceCallback<void(Status)> callback) = 0;
-    virtual void ReportSuccess(
-        const SequencingInformation& sequencing_information,
-        bool force) = 0;
+                           EnqueueCallback callback) = 0;
+    virtual void Flush(Priority priority, FlushCallback callback) = 0;
+    virtual void ReportSuccess(const SequenceInformation& sequence_information,
+                               bool force) = 0;
     virtual void UpdateEncryptionKey(
         const SignedEncryptionInfo& signed_encryption_key) = 0;
   };
@@ -59,21 +55,20 @@ class MissiveStorageModule : public StorageModuleInterface {
   // Calls |missive_delegate_->AddRecord| forwarding the arguments.
   void AddRecord(Priority priority,
                  Record record,
-                 base::OnceCallback<void(Status)> callback) override;
+                 EnqueueCallback callback) override;
 
   // Calls |missive_delegate_->Flush| to initiate upload of collected records
   // according to the priority. Called usually for a queue with an infinite or
   // very large upload period. Multiple |Flush| calls can safely run in
   // parallel. Returns error if cannot start upload.
-  void Flush(Priority priority,
-             base::OnceCallback<void(Status)> callback) override;
+  void Flush(Priority priority, FlushCallback callback) override;
 
-  // Once a record has been successfully uploaded, the sequencing information
+  // Once a record has been successfully uploaded, the sequence information
   // can be passed back to the StorageModule here for record deletion.
-  // If |force| is false (which is used in most cases), |sequencing_information|
-  // only affects Storage if no higher sequeincing was confirmed before;
+  // If |force| is false (which is used in most cases), |sequence_information|
+  // only affects Storage if no higher sequencing was confirmed before;
   // otherwise it is accepted unconditionally.
-  void ReportSuccess(SequencingInformation sequencing_information,
+  void ReportSuccess(SequenceInformation sequence_information,
                      bool force) override;
 
   // If the server attached signed encryption key to the response, it needs to

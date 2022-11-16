@@ -14,9 +14,9 @@
 #include "ash/test/ash_test_base.h"
 #include "base/logging.h"
 #include "base/run_loop.h"
-#include "chromeos/network/network_state_handler.h"
-#include "chromeos/network/network_state_test_helper.h"
-#include "chromeos/network/tether_constants.h"
+#include "chromeos/ash/components/network/network_state_handler.h"
+#include "chromeos/ash/components/network/network_state_test_helper.h"
+#include "chromeos/ash/components/network/tether_constants.h"
 #include "chromeos/services/network_config/public/cpp/cros_network_config_test_helper.h"
 #include "third_party/cros_system_api/dbus/shill/dbus-constants.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -37,6 +37,10 @@ namespace network_icon {
 class NetworkIconTest : public AshTestBase {
  public:
   NetworkIconTest() = default;
+
+  NetworkIconTest(const NetworkIconTest&) = delete;
+  NetworkIconTest& operator=(const NetworkIconTest&) = delete;
+
   ~NetworkIconTest() override = default;
 
   void SetUp() override {
@@ -160,8 +164,6 @@ class NetworkIconTest : public AshTestBase {
   std::string wifi1_path_;
   std::string wifi2_path_;
   std::string cellular_path_;
-
-  DISALLOW_COPY_AND_ASSIGN(NetworkIconTest);
 };
 
 // This tests that the correct icons are being generated for the correct

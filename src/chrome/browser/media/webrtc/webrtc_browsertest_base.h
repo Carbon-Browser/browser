@@ -8,7 +8,6 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "chrome/browser/media/webrtc/test_stats_dictionary.h"
 #include "chrome/test/base/in_process_browser_test.h"
@@ -60,6 +59,9 @@ class WebRtcTestBase : public InProcessBrowserTest {
     SHARED_STREAM,
     INDIVIDUAL_STREAMS
   };
+
+  WebRtcTestBase(const WebRtcTestBase&) = delete;
+  WebRtcTestBase& operator=(const WebRtcTestBase&) = delete;
 
  protected:
   WebRtcTestBase();
@@ -257,8 +259,6 @@ class WebRtcTestBase : public InProcessBrowserTest {
 
   bool detect_errors_in_javascript_;
   scoped_refptr<const extensions::Extension> desktop_capture_extension_;
-
-  DISALLOW_COPY_AND_ASSIGN(WebRtcTestBase);
 };
 
 #endif  // CHROME_BROWSER_MEDIA_WEBRTC_WEBRTC_BROWSERTEST_BASE_H_

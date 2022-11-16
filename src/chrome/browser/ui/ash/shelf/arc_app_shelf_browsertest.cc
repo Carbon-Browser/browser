@@ -7,6 +7,11 @@
 #include <tuple>
 #include <vector>
 
+#include "ash/components/arc/metrics/arc_metrics_constants.h"
+#include "ash/components/arc/session/arc_bridge_service.h"
+#include "ash/components/arc/session/arc_service_manager.h"
+#include "ash/components/arc/test/arc_util_test_support.h"
+#include "ash/components/arc/test/fake_app_instance.h"
 #include "ash/public/cpp/shelf_item_delegate.h"
 #include "ash/public/cpp/shelf_model.h"
 #include "ash/shelf/shelf.h"
@@ -15,7 +20,6 @@
 #include "ash/shell.h"
 #include "ash/system/status_area_widget_test_helper.h"
 #include "base/callback_helpers.h"
-#include "base/macros.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
@@ -35,11 +39,6 @@
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_controller_test_util.h"
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_controller_util.h"
 #include "chrome/browser/ui/ash/shelf/shelf_spinner_controller.h"
-#include "components/arc/arc_service_manager.h"
-#include "components/arc/metrics/arc_metrics_constants.h"
-#include "components/arc/session/arc_bridge_service.h"
-#include "components/arc/test/arc_util_test_support.h"
-#include "components/arc/test/fake_app_instance.h"
 #include "components/exo/shell_surface.h"
 #include "components/exo/shell_surface_util.h"
 #include "components/exo/test/shell_surface_builder.h"
@@ -143,7 +142,7 @@ class AppAnimatedWaiter {
 
   void Wait() {
     const base::TimeDelta threshold =
-        base::TimeDelta::FromMilliseconds(kAppAnimatedThresholdMs);
+        base::Milliseconds(kAppAnimatedThresholdMs);
     ShelfSpinnerController* controller =
         ChromeShelfController::instance()->GetShelfSpinnerController();
     while (controller->GetActiveTime(app_id_) < threshold) {
@@ -196,6 +195,10 @@ ash::ShelfItemDelegate::AppMenuItems GetAppMenuItems(
 class ArcAppShelfBrowserTest : public extensions::ExtensionBrowserTest {
  public:
   ArcAppShelfBrowserTest() = default;
+
+  ArcAppShelfBrowserTest(const ArcAppShelfBrowserTest&) = delete;
+  ArcAppShelfBrowserTest& operator=(const ArcAppShelfBrowserTest&) = delete;
+
   ~ArcAppShelfBrowserTest() override = default;
 
  protected:
@@ -245,7 +248,7 @@ class ArcAppShelfBrowserTest : public extensions::ExtensionBrowserTest {
     shortcut.name = name;
     shortcut.package_name = kTestAppPackage;
     shortcut.intent_uri = CreateIntentUriWithShelfGroup(shelf_group);
-    const std::string shortcut_id =
+    std::string shortcut_id =
         ArcAppListPrefs::GetAppId(shortcut.package_name, shortcut.intent_uri);
     app_host()->OnInstallShortcut(arc::mojom::ShortcutInfo::From(shortcut));
     base::RunLoop().RunUntilIdle();
@@ -355,17 +358,18 @@ class ArcAppShelfBrowserTest : public extensions::ExtensionBrowserTest {
  private:
   std::unique_ptr<arc::FakeAppInstance> app_instance_;
   std::unique_ptr<exo::WMHelper> wm_helper_;
-
-  DISALLOW_COPY_AND_ASSIGN(ArcAppShelfBrowserTest);
 };
 
 class ArcAppDeferredShelfBrowserTest : public ArcAppShelfBrowserTest {
  public:
   ArcAppDeferredShelfBrowserTest() = default;
-  ~ArcAppDeferredShelfBrowserTest() override = default;
 
- private:
-  DISALLOW_COPY_AND_ASSIGN(ArcAppDeferredShelfBrowserTest);
+  ArcAppDeferredShelfBrowserTest(const ArcAppDeferredShelfBrowserTest&) =
+      delete;
+  ArcAppDeferredShelfBrowserTest& operator=(
+      const ArcAppDeferredShelfBrowserTest&) = delete;
+
+  ~ArcAppDeferredShelfBrowserTest() override = default;
 };
 
 IN_PROC_BROWSER_TEST_F(ArcAppDeferredShelfBrowserTest,
@@ -420,15 +424,18 @@ class ArcAppDeferredShelfWithParamsBrowserTest
       public testing::WithParamInterface<TestParameter> {
  public:
   ArcAppDeferredShelfWithParamsBrowserTest() = default;
+
+  ArcAppDeferredShelfWithParamsBrowserTest(
+      const ArcAppDeferredShelfWithParamsBrowserTest&) = delete;
+  ArcAppDeferredShelfWithParamsBrowserTest& operator=(
+      const ArcAppDeferredShelfWithParamsBrowserTest&) = delete;
+
   ~ArcAppDeferredShelfWithParamsBrowserTest() override = default;
 
  protected:
   bool is_pinned() const { return std::get<1>(GetParam()); }
 
   TestAction test_action() const { return std::get<0>(GetParam()); }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ArcAppDeferredShelfWithParamsBrowserTest);
 };
 
 // This tests simulates normal workflow for starting ARC app in deferred mode.
@@ -649,6 +656,11 @@ IN_PROC_BROWSER_TEST_F(ArcAppShelfBrowserTest, ShelfGroup) {
 
   // Disable ARC, this removes app and as result kills shelf group 3.
   arc::SetArcPlayStoreEnabledForProfile(profile(), false);
+  // Wait for the asynchronous ArcAppListPrefs::RemoveAllAppsAndPackages to be
+  // called.
+  base::RunLoop run_loop;
+  app_prefs()->SetRemoveAllCallbackForTesting(run_loop.QuitClosure());
+  run_loop.Run();
   EXPECT_FALSE(GetShelfItemDelegate(shelf_id3));
 }
 
@@ -698,12 +710,12 @@ IN_PROC_BROWSER_TEST_F(ArcAppShelfBrowserTest, LogicalWindow) {
                                         kTestLogicalWindow};
   // Create windows that will be associated with the tasks. Without this,
   // GetAppMenuItems() will only return an empty list.
-  std::vector<std::unique_ptr<exo::ShellSurface>> test_windows;
+  std::vector<std::unique_ptr<exo::ClientControlledShellSurface>> test_windows;
 
   for (int task_id = 1; task_id <= 7; task_id++) {
     test_windows.push_back(exo::test::ShellSurfaceBuilder({640, 480})
                                .SetCentered()
-                               .BuildShellSurface());
+                               .BuildClientControlledShellSurface());
 
     aura::Window* aura_window =
         test_windows[task_id - 1]->GetWidget()->GetNativeWindow();

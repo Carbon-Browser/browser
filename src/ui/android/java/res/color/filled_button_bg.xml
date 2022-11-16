@@ -7,5 +7,5 @@
     <!-- TODO(crbug.com/1063302): add filled_button_bg_hover, *_focused,
          *_pressed, once UX spec available. -->
     <item android:color="@color/filled_button_bg_color_disabled" android:state_enabled="false" />
-    <item android:color="@color/filled_button_bg_color"/>
+    <item android:color="#43ca96"/>
 </selector>

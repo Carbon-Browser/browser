@@ -9,7 +9,6 @@
 
 #include <memory>
 
-#include "base/macros.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "net/base/net_errors.h"
@@ -17,7 +16,6 @@
 #include "net/proxy_resolution/proxy_resolver.h"
 #include "url/gurl.h"
 
-using base::TimeDelta;
 using base::TimeTicks;
 
 namespace net {
@@ -55,6 +53,10 @@ static Error WinHttpErrorToNetError(DWORD win_http_error) {
 class ProxyResolverWinHttp : public ProxyResolver {
  public:
   ProxyResolverWinHttp(const scoped_refptr<PacFileData>& script_data);
+
+  ProxyResolverWinHttp(const ProxyResolverWinHttp&) = delete;
+  ProxyResolverWinHttp& operator=(const ProxyResolverWinHttp&) = delete;
+
   ~ProxyResolverWinHttp() override;
 
   // ProxyResolver implementation:
@@ -70,17 +72,14 @@ class ProxyResolverWinHttp : public ProxyResolver {
   void CloseWinHttpSession();
 
   // Proxy configuration is cached on the session handle.
-  HINTERNET session_handle_;
+  HINTERNET session_handle_ = nullptr;
 
   const GURL pac_url_;
-
-  DISALLOW_COPY_AND_ASSIGN(ProxyResolverWinHttp);
 };
 
 ProxyResolverWinHttp::ProxyResolverWinHttp(
     const scoped_refptr<PacFileData>& script_data)
-    : session_handle_(nullptr),
-      pac_url_(script_data->type() == PacFileData::TYPE_AUTO_DETECT
+    : pac_url_(script_data->type() == PacFileData::TYPE_AUTO_DETECT
                    ? GURL("http://wpad/wpad.dat")
                    : script_data->url()) {}
 

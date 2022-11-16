@@ -4,6 +4,7 @@
 
 #include "chrome/browser/ui/views/location_bar/location_icon_view.h"
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/location_bar/location_bar_view.h"
 #include "chrome/test/base/in_process_browser_test.h"
@@ -16,6 +17,11 @@
 class LocationIconViewBrowserTest : public InProcessBrowserTest {
  public:
   LocationIconViewBrowserTest() {}
+
+  LocationIconViewBrowserTest(const LocationIconViewBrowserTest&) = delete;
+  LocationIconViewBrowserTest& operator=(const LocationIconViewBrowserTest&) =
+      delete;
+
   ~LocationIconViewBrowserTest() override {}
 
  protected:
@@ -24,8 +30,8 @@ class LocationIconViewBrowserTest : public InProcessBrowserTest {
     BrowserView* browser_view =
         BrowserView::GetBrowserViewForBrowser(browser());
     location_bar_ = browser_view->GetLocationBarView();
-    icon_view_ = std::make_unique<LocationIconView>(
-        font_list, location_bar_, location_bar_, browser()->profile());
+    icon_view_ = std::make_unique<LocationIconView>(font_list, location_bar_,
+                                                    location_bar_);
   }
 
   LocationBarView* location_bar() const { return location_bar_; }
@@ -33,11 +39,9 @@ class LocationIconViewBrowserTest : public InProcessBrowserTest {
   LocationIconView* icon_view() const { return icon_view_.get(); }
 
  private:
-  LocationBarView* location_bar_;
+  raw_ptr<LocationBarView> location_bar_;
 
   std::unique_ptr<LocationIconView> icon_view_;
-
-  DISALLOW_COPY_AND_ASSIGN(LocationIconViewBrowserTest);
 };
 
 // Check to see if the InkDropMode is off when the omnibox is editing.

@@ -4,23 +4,22 @@
 
 #include "content/public/browser/background_sync_parameters.h"
 
+#include "build/build_config.h"
+
 namespace content {
 
 namespace {
 const int kMaxSyncAttempts = 3;
 const int kRetryDelayFactor = 3;
-constexpr base::TimeDelta kInitialRetryDelay = base::TimeDelta::FromMinutes(5);
-constexpr base::TimeDelta kMaxSyncEventDuration =
-    base::TimeDelta::FromMinutes(3);
-constexpr base::TimeDelta kMinSyncRecoveryTime =
-    base::TimeDelta::FromMinutes(6);
-constexpr base::TimeDelta kMinPeriodicSyncEventsInterval =
-    base::TimeDelta::FromHours(12);
+constexpr base::TimeDelta kInitialRetryDelay = base::Minutes(5);
+constexpr base::TimeDelta kMaxSyncEventDuration = base::Minutes(3);
+constexpr base::TimeDelta kMinSyncRecoveryTime = base::Minutes(6);
+constexpr base::TimeDelta kMinPeriodicSyncEventsInterval = base::Hours(12);
 }
 
 BackgroundSyncParameters::BackgroundSyncParameters()
     : disable(false),
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
       rely_on_android_network_detection(false),
 #endif
       keep_browser_awake_till_events_complete(false),
@@ -43,7 +42,7 @@ BackgroundSyncParameters& BackgroundSyncParameters::operator=(
 bool BackgroundSyncParameters::operator==(
     const BackgroundSyncParameters& other) const {
   return disable == other.disable &&
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
          rely_on_android_network_detection ==
              other.rely_on_android_network_detection &&
 #endif

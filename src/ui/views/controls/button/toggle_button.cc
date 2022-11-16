@@ -14,6 +14,9 @@
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/color/color_id.h"
+#include "ui/color/color_provider.h"
+#include "ui/events/event.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/color_palette.h"
 #include "ui/gfx/color_utils.h"
@@ -69,8 +72,8 @@ class ToggleButton::ThumbView : public View {
   // Returns the extra space needed to draw the shadows around the thumb. Since
   // the extra space is around the thumb, the insets will be negative.
   static gfx::Insets GetShadowOutsets() {
-    return gfx::Insets(-kShadowBlur)
-        .Offset(gfx::Vector2d(kShadowOffsetX, kShadowOffsetY));
+    return gfx::Insets(-kShadowBlur) +
+           gfx::Vector2d(kShadowOffsetX, kShadowOffsetY);
   }
 
   void SetThumbColor(bool is_on, const absl::optional<SkColor>& thumb_color) {
@@ -89,37 +92,34 @@ class ToggleButton::ThumbView : public View {
   // views::View:
   void OnPaint(gfx::Canvas* canvas) override {
     const float dsf = canvas->UndoDeviceScaleFactor();
-    const ui::NativeTheme* theme = GetNativeTheme();
+    const ui::ColorProvider* color_provider = GetColorProvider();
     std::vector<gfx::ShadowValue> shadows;
     gfx::ShadowValue shadow(
         gfx::Vector2d(kShadowOffsetX, kShadowOffsetY), 2 * kShadowBlur,
-        theme->GetSystemColor(
-            ui::NativeTheme::kColorId_ToggleButtonShadowColor));
+        color_provider->GetColor(ui::kColorToggleButtonShadow));
     shadows.push_back(shadow.Scale(dsf));
     cc::PaintFlags thumb_flags;
     thumb_flags.setLooper(gfx::CreateShadowDrawLooper(shadows));
     thumb_flags.setAntiAlias(true);
-    const SkColor thumb_on_color =
-        thumb_on_color_.value_or(theme->GetSystemColor(
-            ui::NativeTheme::kColorId_ToggleButtonThumbColorOn));
-    const SkColor thumb_off_color =
-        thumb_off_color_.value_or(theme->GetSystemColor(
-            ui::NativeTheme::kColorId_ToggleButtonThumbColorOff));
+    const SkColor thumb_on_color = thumb_on_color_.value_or(
+        color_provider->GetColor(ui::kColorToggleButtonThumbOn));
+    const SkColor thumb_off_color = thumb_off_color_.value_or(
+        color_provider->GetColor(ui::kColorToggleButtonThumbOff));
     thumb_flags.setColor(
         color_utils::AlphaBlend(thumb_on_color, thumb_off_color, color_ratio_));
 
     // We want the circle to have an integer pixel diameter and to be aligned
     // with pixel boundaries, so we scale dip bounds to pixel bounds and round.
     gfx::RectF thumb_bounds(GetLocalBounds());
-    thumb_bounds.Inset(-GetShadowOutsets());
-    thumb_bounds.Inset(gfx::InsetsF(0.5f));
+    thumb_bounds.Inset(-gfx::InsetsF(GetShadowOutsets()));
+    thumb_bounds.Inset(0.5f);
     thumb_bounds.Scale(dsf);
     thumb_bounds = gfx::RectF(gfx::ToEnclosingRect(thumb_bounds));
     canvas->DrawCircle(thumb_bounds.CenterPoint(), thumb_bounds.height() / 2.f,
                        thumb_flags);
   }
 
-  // Colors used for the thumb, defaults to NativeTheme if not set explicitly.
+  // Colors used for the thumb.
   absl::optional<SkColor> thumb_on_color_;
   absl::optional<SkColor> thumb_off_color_;
 
@@ -129,7 +129,7 @@ class ToggleButton::ThumbView : public View {
 
 ToggleButton::ToggleButton(PressedCallback callback)
     : Button(std::move(callback)) {
-  slide_animation_.SetSlideDuration(base::TimeDelta::FromMilliseconds(80));
+  slide_animation_.SetSlideDuration(base::Milliseconds(80));
   slide_animation_.SetTweenType(gfx::Tween::LINEAR);
   thumb_view_ = AddChildView(std::make_unique<ThumbView>());
   InkDrop::Get(this)->SetMode(views::InkDropHost::InkDropMode::ON);
@@ -248,7 +248,7 @@ void ToggleButton::RemoveLayerBeneathView(ui::Layer* layer) {
 
 gfx::Size ToggleButton::CalculatePreferredSize() const {
   gfx::Rect rect(kTrackSize);
-  rect.Inset(gfx::Insets(-kTrackVerticalMargin, -kTrackHorizontalMargin));
+  rect.Inset(gfx::Insets::VH(-kTrackVerticalMargin, -kTrackHorizontalMargin));
   rect.Inset(-GetInsets());
   return rect.size();
 }
@@ -284,9 +284,8 @@ void ToggleButton::UpdateThumb() {
 
 SkColor ToggleButton::GetTrackColor(bool is_on) const {
   absl::optional<SkColor> color = is_on ? track_on_color_ : track_off_color_;
-  return color.value_or(GetNativeTheme()->GetSystemColor(
-      is_on ? ui::NativeTheme::kColorId_ToggleButtonTrackColorOn
-            : ui::NativeTheme::kColorId_ToggleButtonTrackColorOff));
+  return color.value_or(GetColorProvider()->GetColor(
+      is_on ? ui::kColorToggleButtonTrackOn : ui::kColorToggleButtonTrackOff));
 }
 
 bool ToggleButton::CanAcceptEvent(const ui::Event& event) {
@@ -300,6 +299,23 @@ void ToggleButton::OnBoundsChanged(const gfx::Rect& previous_bounds) {
 void ToggleButton::OnThemeChanged() {
   Button::OnThemeChanged();
   SchedulePaint();
+}
+
+void ToggleButton::NotifyClick(const ui::Event& event) {
+  AnimateIsOn(!GetIsOn());
+
+  // Only trigger the action when we don't have focus. This lets the InkDrop
+  // remain and match the focus ring.
+  // TODO(pbos): Investigate triggering the ripple but returning back to the
+  // focused state correctly. This is set up to highlight on focus, but the
+  // highlight does not come back after the ripple is triggered. Then remove
+  // this and add back SetHasInkDropActionOnClick(true) in the constructor.
+  if (!HasFocus()) {
+    InkDrop::Get(this)->AnimateToState(InkDropState::ACTION_TRIGGERED,
+                                       ui::LocatedEvent::FromIfValid(&event));
+  }
+
+  Button::NotifyClick(event);
 }
 
 SkPath ToggleButton::GetFocusRingPath() const {
@@ -335,23 +351,6 @@ void ToggleButton::OnBlur() {
                                        nullptr);
   }
   SchedulePaint();
-}
-
-void ToggleButton::NotifyClick(const ui::Event& event) {
-  AnimateIsOn(!GetIsOn());
-
-  // Only trigger the action when we don't have focus. This lets the InkDrop
-  // remain and match the focus ring.
-  // TODO(pbos): Investigate triggering the ripple but returning back to the
-  // focused state correctly. This is set up to highlight on focus, but the
-  // highlight does not come back after the ripple is triggered. Then remove
-  // this and add back SetHasInkDropActionOnClick(true) in the constructor.
-  if (!HasFocus()) {
-    InkDrop::Get(this)->AnimateToState(InkDropState::ACTION_TRIGGERED,
-                                       ui::LocatedEvent::FromIfValid(&event));
-  }
-
-  Button::NotifyClick(event);
 }
 
 void ToggleButton::PaintButtonContents(gfx::Canvas* canvas) {

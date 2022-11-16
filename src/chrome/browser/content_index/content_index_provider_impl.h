@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/content_index/content_index_metrics.h"
 #include "components/keyed_service/core/keyed_service.h"
@@ -38,6 +38,10 @@ class ContentIndexProviderImpl
   static const char kProviderNamespace[];
 
   explicit ContentIndexProviderImpl(Profile* profile);
+
+  ContentIndexProviderImpl(const ContentIndexProviderImpl&) = delete;
+  ContentIndexProviderImpl& operator=(const ContentIndexProviderImpl&) = delete;
+
   ~ContentIndexProviderImpl() override;
 
   // KeyedService implementation.
@@ -70,10 +74,6 @@ class ContentIndexProviderImpl
   void RenameItem(const offline_items_collection::ContentId& id,
                   const std::string& name,
                   RenameCallback callback) override;
-  void ChangeSchedule(
-      const offline_items_collection::ContentId& id,
-      absl::optional<offline_items_collection::OfflineItemSchedule> schedule)
-      override;
 
   void SetIconSizesForTesting(std::vector<gfx::Size> icon_sizes) {
     icon_sizes_for_testing_ = std::move(icon_sizes);
@@ -98,14 +98,12 @@ class ContentIndexProviderImpl
   offline_items_collection::OfflineItem EntryToOfflineItem(
       const content::ContentIndexEntry& entry);
 
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
   ContentIndexMetrics metrics_;
-  offline_items_collection::OfflineContentAggregator* aggregator_;
-  site_engagement::SiteEngagementService* site_engagement_service_;
+  raw_ptr<offline_items_collection::OfflineContentAggregator> aggregator_;
+  raw_ptr<site_engagement::SiteEngagementService> site_engagement_service_;
   absl::optional<std::vector<gfx::Size>> icon_sizes_for_testing_;
   base::WeakPtrFactory<ContentIndexProviderImpl> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ContentIndexProviderImpl);
 };
 
 #endif  // CHROME_BROWSER_CONTENT_INDEX_CONTENT_INDEX_PROVIDER_IMPL_H_

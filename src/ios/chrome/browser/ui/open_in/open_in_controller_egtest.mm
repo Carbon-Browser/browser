@@ -36,11 +36,7 @@ const char kMOVPath[] = "/video_sample.mov";
 
 // Matcher for the Cancel button.
 id<GREYMatcher> ShareMenuDismissButton() {
-  if (@available(iOS 13, *)) {
-    return chrome_test_util::CloseButton();
-  } else {
-    return chrome_test_util::CancelButton();
-  }
+  return chrome_test_util::CloseButton();
 }
 
 }  // namespace
@@ -138,6 +134,10 @@ using base::test::ios::WaitUntilConditionOrTimeout;
 
 // Tests that open in button do not appears when opening a MOV file.
 - (void)testOpenInMOV {
+  // TODO(crbug.com/1346136): Opening this mov is crashing WebContent on iOS16.
+  if (@available(iOS 16, *)) {
+    EARL_GREY_TEST_DISABLED(@"testOpenInMOV crashing WebContent on iOS16");
+  }
   [ChromeEarlGrey loadURL:self.testServer->GetURL(kMOVPath)];
   [[EarlGrey selectElementWithMatcher:chrome_test_util::OpenInButton()]
       assertWithMatcher:grey_nil()];

@@ -4,7 +4,7 @@
 
 #include "components/autofill/core/browser/logging/log_manager.h"
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "components/autofill/core/browser/logging/log_router.h"
 
 namespace autofill {
@@ -16,19 +16,22 @@ class LogManagerImpl : public LogManager {
   LogManagerImpl(LogRouter* log_router,
                  base::RepeatingClosure notification_callback);
 
+  LogManagerImpl(const LogManagerImpl&) = delete;
+  LogManagerImpl& operator=(const LogManagerImpl&) = delete;
+
   ~LogManagerImpl() override;
 
   // LogManager
   void OnLogRouterAvailabilityChanged(bool router_can_be_used) override;
   void SetSuspended(bool suspended) override;
   void LogTextMessage(const std::string& text) const override;
-  void LogEntry(base::Value&& entry) const override;
+  void LogEntry(const base::Value& entry) const override;
   bool IsLoggingActive() const override;
   LogBufferSubmitter Log() override;
 
  private:
   // A LogRouter instance obtained on construction. May be null.
-  LogRouter* const log_router_;
+  const raw_ptr<LogRouter> log_router_;
 
   // True if |this| is registered with some LogRouter which can accept logs.
   bool can_use_log_router_;
@@ -37,8 +40,6 @@ class LogManagerImpl : public LogManager {
 
   // Called every time the logging activity status changes.
   base::RepeatingClosure notification_callback_;
-
-  DISALLOW_COPY_AND_ASSIGN(LogManagerImpl);
 };
 
 LogManagerImpl::LogManagerImpl(LogRouter* log_router,
@@ -82,10 +83,10 @@ void LogManagerImpl::LogTextMessage(const std::string& text) const {
   log_router_->ProcessLog(text);
 }
 
-void LogManagerImpl::LogEntry(base::Value&& entry) const {
+void LogManagerImpl::LogEntry(const base::Value& entry) const {
   if (!IsLoggingActive())
     return;
-  log_router_->ProcessLog(std::move(entry));
+  log_router_->ProcessLog(entry);
 }
 
 bool LogManagerImpl::IsLoggingActive() const {

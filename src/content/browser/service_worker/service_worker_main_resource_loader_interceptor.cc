@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "base/bind.h"
+#include "base/memory/ptr_util.h"
 #include "base/stl_util.h"
 #include "build/chromeos_buildflags.h"
 #include "content/browser/renderer_host/frame_tree_node.h"
@@ -22,8 +23,14 @@
 #include "content/public/common/url_constants.h"
 #include "mojo/public/cpp/bindings/pending_associated_receiver.h"
 #include "mojo/public/cpp/bindings/pending_associated_remote.h"
+#include "net/base/isolation_info.h"
+#include "net/cookies/site_for_cookies.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/blink/public/common/loader/resource_type_util.h"
+#include "third_party/blink/public/common/storage_key/storage_key.h"
+#include "third_party/blink/public/mojom/storage_key/ancestor_chain_bit.mojom.h"
 #include "url/origin.h"
+#include "url/url_constants.h"
 
 namespace content {
 
@@ -70,23 +77,24 @@ ServiceWorkerMainResourceLoaderInterceptor::CreateForNavigation(
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
   if (!ShouldCreateForNavigation(
-          url, request_info.begin_params->request_destination,
+          url, request_info.common_params->request_destination,
           navigation_handle->context_wrapper()->browser_context())) {
     return nullptr;
   }
 
   return base::WrapUnique(new ServiceWorkerMainResourceLoaderInterceptor(
       std::move(navigation_handle),
-      request_info.is_main_frame ? network::mojom::RequestDestination::kDocument
-                                 : network::mojom::RequestDestination::kIframe,
+      request_info.common_params->request_destination,
       request_info.begin_params->skip_service_worker,
       request_info.are_ancestors_secure, request_info.frame_tree_node_id,
-      ChildProcessHost::kInvalidUniqueID, /* worker_token = */ nullptr));
+      ChildProcessHost::kInvalidUniqueID, /* worker_token = */ nullptr,
+      request_info.isolation_info));
 }
 
 std::unique_ptr<NavigationLoaderInterceptor>
 ServiceWorkerMainResourceLoaderInterceptor::CreateForWorker(
     const network::ResourceRequest& resource_request,
+    const net::IsolationInfo& isolation_info,
     int process_id,
     const DedicatedOrSharedWorkerToken& worker_token,
     base::WeakPtr<ServiceWorkerMainResourceHandle> navigation_handle) {
@@ -105,7 +113,8 @@ ServiceWorkerMainResourceLoaderInterceptor::CreateForWorker(
   return base::WrapUnique(new ServiceWorkerMainResourceLoaderInterceptor(
       std::move(navigation_handle), resource_request.destination,
       resource_request.skip_service_worker, /*are_ancestors_secure=*/false,
-      FrameTreeNode::kFrameTreeNodeInvalidId, process_id, &worker_token));
+      FrameTreeNode::kFrameTreeNodeInvalidId, process_id, &worker_token,
+      isolation_info));
 }
 
 ServiceWorkerMainResourceLoaderInterceptor::
@@ -150,8 +159,7 @@ void ServiceWorkerMainResourceLoaderInterceptor::MaybeCreateLoader(
     base::WeakPtr<ServiceWorkerContainerHost> container_host;
     bool inherit_controller_only = false;
 
-    if (request_destination_ == network::mojom::RequestDestination::kDocument ||
-        request_destination_ == network::mojom::RequestDestination::kIframe) {
+    if (blink::IsRequestDestinationFrame(request_destination_)) {
       container_host = context_core->CreateContainerHostForWindow(
           std::move(host_receiver), are_ancestors_secure_,
           std::move(client_remote), frame_tree_node_id_);
@@ -193,22 +201,47 @@ void ServiceWorkerMainResourceLoaderInterceptor::MaybeCreateLoader(
     }
   }
 
-  // If we know there's no service worker for the origin, let's skip asking
+  // Update `isolation_info_`  to equal the net::IsolationInfo needed for any
+  // service worker intercepting this request. Here, `isolation_info_` directly
+  // corresponds to the StorageKey used to look up the service worker's
+  // registration. That StorageKey will then be used later to recreate this
+  // net::IsolationInfo for use by the ServiceWorker itself.
+  url::Origin new_origin = url::Origin::Create(tentative_resource_request.url);
+  net::SiteForCookies new_site_for_cookies = isolation_info_.site_for_cookies();
+  new_site_for_cookies.CompareWithFrameTreeOriginAndRevise(new_origin);
+  isolation_info_ = net::IsolationInfo::Create(
+      isolation_info_.request_type(),
+      isolation_info_.top_frame_origin().value(), new_origin,
+      new_site_for_cookies, absl::nullopt,
+      isolation_info_.nonce().has_value() ? &(isolation_info_.nonce().value())
+                                          : nullptr);
+
+  // If we know there's no service worker for the storage key, let's skip asking
   // the storage to check the existence.
+  blink::StorageKey storage_key = blink::StorageKey::CreateWithOptionalNonce(
+      new_origin,
+      net::SchemefulSite(isolation_info_.top_frame_origin().value()),
+      base::OptionalOrNullptr(isolation_info_.nonce()),
+      isolation_info_.site_for_cookies().IsNull()
+          ? blink::mojom::AncestorChainBit::kCrossSite
+          : blink::mojom::AncestorChainBit::kSameSite);
+
   bool skip_service_worker =
       skip_service_worker_ ||
-      !handle_->context_wrapper()->MaybeHasRegistrationForOrigin(
-          url::Origin::Create(tentative_resource_request.url));
+      !OriginCanAccessServiceWorkers(tentative_resource_request.url) ||
+      !handle_->context_wrapper()->MaybeHasRegistrationForStorageKey(
+          storage_key);
 
   // Create and start the handler for this request. It will invoke the loader
   // callback or fallback callback.
   request_handler_ = std::make_unique<ServiceWorkerControlleeRequestHandler>(
       context_core->AsWeakPtr(), handle_->container_host(),
-      request_destination_, skip_service_worker,
+      request_destination_, skip_service_worker, frame_tree_node_id_,
       handle_->service_worker_accessed_callback());
+
   request_handler_->MaybeCreateLoader(
-      tentative_resource_request, browser_context, std::move(loader_callback),
-      std::move(fallback_callback));
+      tentative_resource_request, storage_key, browser_context,
+      std::move(loader_callback), std::move(fallback_callback));
 }
 
 absl::optional<SubresourceLoaderParams>
@@ -269,10 +302,12 @@ ServiceWorkerMainResourceLoaderInterceptor::
         bool are_ancestors_secure,
         int frame_tree_node_id,
         int process_id,
-        const DedicatedOrSharedWorkerToken* worker_token)
+        const DedicatedOrSharedWorkerToken* worker_token,
+        const net::IsolationInfo& isolation_info)
     : handle_(std::move(handle)),
       request_destination_(request_destination),
       skip_service_worker_(skip_service_worker),
+      isolation_info_(isolation_info),
       are_ancestors_secure_(are_ancestors_secure),
       frame_tree_node_id_(frame_tree_node_id),
       process_id_(process_id),

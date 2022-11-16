@@ -11,6 +11,7 @@
 #include "third_party/blink/renderer/core/layout/ng/ng_physical_box_fragment.h"
 #include "third_party/blink/renderer/core/layout/svg/layout_svg_inline_text.h"
 #include "third_party/blink/renderer/core/layout/svg/layout_svg_resource_container.h"
+#include "third_party/blink/renderer/core/layout/svg/layout_svg_root.h"
 #include "third_party/blink/renderer/core/layout/svg/svg_layout_support.h"
 #include "third_party/blink/renderer/core/layout/svg/svg_resources.h"
 #include "third_party/blink/renderer/core/layout/svg/transformed_hit_test_location.h"
@@ -31,6 +32,8 @@ LayoutNGSVGText::LayoutNGSVGText(Element* element)
 void LayoutNGSVGText::StyleDidChange(StyleDifference diff,
                                      const ComputedStyle* old_style) {
   NOT_DESTROYED();
+  if (needs_text_metrics_update_ && diff.HasDifference())
+    diff.SetNeedsFullLayout();
   LayoutNGBlockFlowMixin<LayoutSVGBlock>::StyleDidChange(diff, old_style);
   SVGResources::UpdatePaints(*GetElement(), old_style, StyleRef());
 }
@@ -81,6 +84,36 @@ void LayoutNGSVGText::RemoveChild(LayoutObject* child) {
   NOT_DESTROYED();
   SubtreeStructureChanged(layout_invalidation_reason::kChildChanged);
   LayoutSVGBlock::RemoveChild(child);
+}
+
+void LayoutNGSVGText::InsertedIntoTree() {
+  NOT_DESTROYED();
+  LayoutNGBlockFlowMixin<LayoutSVGBlock>::InsertedIntoTree();
+  bool seen_svg_root = false;
+  for (auto* ancestor = Parent(); ancestor; ancestor = ancestor->Parent()) {
+    auto* root = DynamicTo<LayoutSVGRoot>(ancestor);
+    if (!seen_svg_root && root) {
+      root->AddSvgTextDescendant(*this);
+      seen_svg_root = true;
+    } else if (auto* block = DynamicTo<LayoutBlock>(ancestor)) {
+      block->AddSvgTextDescendant(*this);
+    }
+  }
+}
+
+void LayoutNGSVGText::WillBeRemovedFromTree() {
+  NOT_DESTROYED();
+  bool seen_svg_root = false;
+  for (auto* ancestor = Parent(); ancestor; ancestor = ancestor->Parent()) {
+    auto* root = DynamicTo<LayoutSVGRoot>(ancestor);
+    if (!seen_svg_root && root) {
+      root->RemoveSvgTextDescendant(*this);
+      seen_svg_root = true;
+    } else if (auto* block = DynamicTo<LayoutBlock>(ancestor)) {
+      block->RemoveSvgTextDescendant(*this);
+    }
+  }
+  LayoutNGBlockFlowMixin<LayoutSVGBlock>::WillBeRemovedFromTree();
 }
 
 void LayoutNGSVGText::SubtreeStructureChanged(
@@ -134,9 +167,10 @@ void LayoutNGSVGText::Paint(const PaintInfo& paint_info) const {
   }
   ScopedSVGTransformState transform_state(block_info, *this);
 
-  if (block_info.phase == PaintPhase::kForeground)
+  if (block_info.phase == PaintPhase::kForeground) {
     SVGModelObjectPainter::RecordHitTestData(*this, block_info);
-
+    SVGModelObjectPainter::RecordRegionCaptureData(*this, block_info);
+  }
   LayoutNGBlockFlowMixin<LayoutSVGBlock>::Paint(block_info);
 
   // Svg doesn't follow HTML PaintPhases, but is implemented with HTML classes.
@@ -156,7 +190,7 @@ void LayoutNGSVGText::UpdateBlockLayout(bool relayout_children) {
   // scale factor has changed, then recompute the on-screen font size. Since
   // the computation of layout attributes uses the text metrics, we need to
   // update them before updating the layout attributes.
-  if (needs_text_metrics_update_) {
+  if (needs_text_metrics_update_ || needs_transform_update_) {
     // Recompute the transform before updating font and corresponding
     // metrics. At this point our bounding box may be incorrect, so
     // any box relative transforms will be incorrect. Since the scaled
@@ -170,24 +204,31 @@ void LayoutNGSVGText::UpdateBlockLayout(bool relayout_children) {
     }
 
     UpdateFont();
+    SetNeedsCollectInlines(true);
     needs_text_metrics_update_ = false;
   }
 
-  FloatRect old_boundaries = ObjectBoundingBox();
-
-  // Make sure we don't wrap text.
-  SetOverrideLogicalWidth(LayoutUnit::Max());
+  gfx::RectF old_boundaries = ObjectBoundingBox();
 
   UpdateNGBlockLayout();
   needs_update_bounding_box_ = true;
 
-  FloatRect boundaries = ObjectBoundingBox();
+  gfx::RectF boundaries = ObjectBoundingBox();
   const bool bounds_changed = old_boundaries != boundaries;
+  if (bounds_changed) {
+    // Invalidate all resources of this client if our reference box changed.
+    SVGResourceInvalidator resource_invalidator(*this);
+    resource_invalidator.InvalidateEffects();
+    resource_invalidator.InvalidatePaints();
+  }
+
   // If our bounds changed, notify the parents.
   if (UpdateTransformAfterLayout(bounds_changed) || bounds_changed)
     SetNeedsBoundariesUpdate();
-  if (bounds_changed)
-    SetSize(LayoutSize(boundaries.MaxX(), boundaries.MaxY()));
+  if (bounds_changed) {
+    SetSize(LayoutSize(LayoutUnit(boundaries.right()),
+                       LayoutUnit(boundaries.bottom())));
+  }
 
   UpdateTransformAffectsVectorEffect();
 }
@@ -197,14 +238,14 @@ bool LayoutNGSVGText::IsObjectBoundingBoxValid() const {
   return PhysicalFragments().HasFragmentItems();
 }
 
-FloatRect LayoutNGSVGText::ObjectBoundingBox() const {
+gfx::RectF LayoutNGSVGText::ObjectBoundingBox() const {
   NOT_DESTROYED();
   if (needs_update_bounding_box_) {
     // Compute a box containing repositioned text in the non-scaled coordinate.
     // We don't need to take into account of ink overflow here. We should
     // return a union of "advance x EM height".
     // https://svgwg.org/svg2-draft/coords.html#BoundingBoxes
-    FloatRect bbox;
+    gfx::RectF bbox;
     DCHECK_LE(PhysicalFragmentCount(), 1u);
     for (const auto& fragment : PhysicalFragments()) {
       if (!fragment.Items())
@@ -214,7 +255,7 @@ FloatRect LayoutNGSVGText::ObjectBoundingBox() const {
           continue;
         // Do not use item.RectInContainerFragment() in order to avoid
         // precision loss.
-        bbox.Unite(item.ObjectBoundingBox());
+        bbox.Union(item.ObjectBoundingBox(*fragment.Items()));
       }
     }
     bounding_box_ = bbox;
@@ -223,38 +264,49 @@ FloatRect LayoutNGSVGText::ObjectBoundingBox() const {
   return bounding_box_;
 }
 
-FloatRect LayoutNGSVGText::StrokeBoundingBox() const {
+gfx::RectF LayoutNGSVGText::StrokeBoundingBox() const {
   NOT_DESTROYED();
-  FloatRect box = ObjectBoundingBox();
+  gfx::RectF box = ObjectBoundingBox();
   if (box.IsEmpty())
-    return FloatRect();
+    return gfx::RectF();
   return SVGLayoutSupport::ExtendTextBBoxWithStroke(*this, box);
 }
 
-FloatRect LayoutNGSVGText::VisualRectInLocalSVGCoordinates() const {
+gfx::RectF LayoutNGSVGText::VisualRectInLocalSVGCoordinates() const {
   NOT_DESTROYED();
   // TODO(crbug.com/1179585): Just use ink overflow?
-  FloatRect box = ObjectBoundingBox();
+  gfx::RectF box = ObjectBoundingBox();
   if (box.IsEmpty())
-    return FloatRect();
+    return gfx::RectF();
   return SVGLayoutSupport::ComputeVisualRectForText(*this, box);
+}
+
+void LayoutNGSVGText::AbsoluteQuads(Vector<gfx::QuadF>& quads,
+                                    MapCoordinatesFlags mode) const {
+  NOT_DESTROYED();
+  quads.push_back(LocalToAbsoluteQuad(gfx::QuadF(StrokeBoundingBox()), mode));
+}
+
+gfx::RectF LayoutNGSVGText::LocalBoundingBoxRectForAccessibility() const {
+  NOT_DESTROYED();
+  return StrokeBoundingBox();
 }
 
 bool LayoutNGSVGText::NodeAtPoint(HitTestResult& result,
                                   const HitTestLocation& hit_test_location,
                                   const PhysicalOffset& accumulated_offset,
-                                  HitTestAction action) {
+                                  HitTestPhase phase) {
   TransformedHitTestLocation local_location(hit_test_location,
                                             LocalToSVGParentTransform());
   return local_location &&
          LayoutNGBlockFlowMixin<LayoutSVGBlock>::NodeAtPoint(
-             result, *local_location, accumulated_offset, action);
+             result, *local_location, accumulated_offset, phase);
 }
 
 PositionWithAffinity LayoutNGSVGText::PositionForPoint(
     const PhysicalOffset& point_in_contents) const {
   NOT_DESTROYED();
-  FloatPoint point(point_in_contents.left, point_in_contents.top);
+  gfx::PointF point(point_in_contents.left, point_in_contents.top);
   float min_distance = std::numeric_limits<float>::max();
   const LayoutSVGInlineText* closest_inline_text = nullptr;
   for (const LayoutObject* descendant = FirstChild(); descendant;
@@ -262,7 +314,9 @@ PositionWithAffinity LayoutNGSVGText::PositionForPoint(
     const auto* text = DynamicTo<LayoutSVGInlineText>(descendant);
     if (!text)
       continue;
-    float distance = descendant->ObjectBoundingBox().SquaredDistanceTo(point);
+    float distance =
+        (descendant->ObjectBoundingBox().ClosestPoint(point) - point)
+            .LengthSquared();
     if (distance >= min_distance)
       continue;
     min_distance = distance;
@@ -285,6 +339,11 @@ void LayoutNGSVGText::SetNeedsTextMetricsUpdate() {
   needs_text_metrics_update_ = true;
   // We need to re-shape text.
   SetNeedsCollectInlines(true);
+}
+
+bool LayoutNGSVGText::NeedsTextMetricsUpdate() const {
+  NOT_DESTROYED();
+  return needs_text_metrics_update_;
 }
 
 }  // namespace blink

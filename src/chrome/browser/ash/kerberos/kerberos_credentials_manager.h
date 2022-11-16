@@ -9,16 +9,16 @@
 #include <vector>
 
 #include "base/callback.h"
-#include "base/macros.h"
+#include "base/callback_list.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
 #include "base/timer/timer.h"
 #include "chrome/browser/ash/authpolicy/kerberos_files_handler.h"
-#include "chromeos/dbus/kerberos/kerberos_service.pb.h"
+#include "chromeos/ash/components/dbus/kerberos/kerberos_service.pb.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 // TODO(https://crbug.com/1164001): forward declare when moved ash
-#include "chromeos/network/onc/variable_expander.h"
+#include "chromeos/components/onc/variable_expander.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/policy/core/common/policy_namespace.h"
 #include "components/policy/core/common/policy_service.h"
@@ -49,6 +49,10 @@ class KerberosCredentialsManager : public KeyedService,
   class Observer : public base::CheckedObserver {
    public:
     Observer();
+
+    Observer(const Observer&) = delete;
+    Observer& operator=(const Observer&) = delete;
+
     ~Observer() override;
 
     // Called when the set of accounts was changed through Kerberos credentials
@@ -58,9 +62,6 @@ class KerberosCredentialsManager : public KeyedService,
     // Called when Kerberos enabled/disabled state changes. The new state is
     // available via IsKerberosEnabled().
     virtual void OnKerberosEnabledStateChanged() {}
-
-   private:
-    DISALLOW_COPY_AND_ASSIGN(Observer);
   };
 
   // Maximum number of managed accounts addition retries per prefs change.
@@ -68,6 +69,11 @@ class KerberosCredentialsManager : public KeyedService,
 
   KerberosCredentialsManager(PrefService* local_state,
                              Profile* primary_profile);
+
+  KerberosCredentialsManager(const KerberosCredentialsManager&) = delete;
+  KerberosCredentialsManager& operator=(const KerberosCredentialsManager&) =
+      delete;
+
   ~KerberosCredentialsManager() override;
 
   // Registers prefs stored in local state.
@@ -130,23 +136,17 @@ class KerberosCredentialsManager : public KeyedService,
   void ListAccounts(ListAccountsCallback callback);
 
   // Sets the contents of the Kerberos configuration (krb5.conf) to |krb5_conf|
-  // for the account  with given |principal_name|.
+  // for the account with given |principal_name|.
   void SetConfig(std::string principal_name,
                  const std::string& krb5_conf,
                  ResultCallback callback);
 
-  // Verifies that only whitelisted configuration options are used in the
+  // Verifies that only allowlisted configuration options are used in the
   // Kerberos configuration |krb5_conf|. The Kerberos daemon does not allow all
   // options for security reasons. Also performs basic syntax checks. Returns
   // useful error information.
   void ValidateConfig(const std::string& krb5_conf,
                       ValidateConfigCallback callback);
-
-  // Gets a Kerberos ticket-granting-ticket for the account with given
-  // |principal_name|.
-  void AcquireKerberosTgt(std::string principal_name,
-                          const std::string& password,
-                          ResultCallback callback);
 
   // Sets the currently active account.
   kerberos::ErrorType SetActiveAccount(std::string principal_name);
@@ -206,11 +206,6 @@ class KerberosCredentialsManager : public KeyedService,
   // Callback for ValidateConfig().
   void OnValidateConfig(ValidateConfigCallback callback,
                         const kerberos::ValidateConfigResponse& response);
-
-  // Callback for AcquireKerberosTgt().
-  void OnAcquireKerberosTgt(
-      ResultCallback callback,
-      const kerberos::AcquireKerberosTgtResponse& response);
 
   // Calls KerberosClient::GetKerberosFiles().
   void GetKerberosFiles();
@@ -281,6 +276,11 @@ class KerberosCredentialsManager : public KeyedService,
   // Observer for Kerberos-related prefs.
   std::unique_ptr<PrefChangeRegistrar> pref_change_registrar_;
 
+  // Subscriptions whose destruction will cancel the corresponding callbacks.
+  // The callbacks are used to listen to signals from KerberosClient.
+  base::CallbackListSubscription kerberos_file_changed_signal_subscription_;
+  base::CallbackListSubscription kerberos_ticket_expiring_signal_subscription_;
+
   // Keeps track of accounts currently being added.
   std::vector<std::unique_ptr<KerberosAddAccountRunner>> add_account_runners_;
 
@@ -301,7 +301,6 @@ class KerberosCredentialsManager : public KeyedService,
       add_managed_account_callback_for_testing_;
 
   base::WeakPtrFactory<KerberosCredentialsManager> weak_factory_{this};
-  DISALLOW_COPY_AND_ASSIGN(KerberosCredentialsManager);
 };
 
 }  // namespace ash

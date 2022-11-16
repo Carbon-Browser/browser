@@ -2,8 +2,9 @@ Name: Android Multi-Dex Library
 Short Name: multidex
 URL: http://developer.android.com/tools/extras/support-library.html
 Version: 1.0.0
-License: 
+License: Apache Version 2.0
 License File: LICENSE
+CPEPrefix: unknown
 Security Critical: yes
 
 Description:

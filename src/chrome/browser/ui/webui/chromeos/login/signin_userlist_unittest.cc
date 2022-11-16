@@ -6,8 +6,8 @@
 
 #include <memory>
 
+#include "ash/components/proximity_auth/screenlock_bridge.h"
 #include "base/compiler_specific.h"
-#include "base/cxx17_backports.h"
 #include "base/memory/ptr_util.h"
 #include "base/strings/string_number_conversions.h"
 #include "chrome/browser/ash/login/screens/user_selection_screen.h"
@@ -17,7 +17,6 @@
 #include "chrome/browser/ash/settings/scoped_cros_settings_test_helper.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile_manager.h"
-#include "chromeos/components/proximity_auth/screenlock_bridge.h"
 #include "components/account_id/account_id.h"
 #include "components/user_manager/scoped_user_manager.h"
 #include "components/user_manager/user.h"
@@ -48,6 +47,10 @@ class SigninPrepareUserListTest : public testing::Test,
       : fake_user_manager_(new FakeChromeUserManager()),
         user_manager_enabler_(base::WrapUnique(fake_user_manager_)) {}
 
+  SigninPrepareUserListTest(const SigninPrepareUserListTest&) = delete;
+  SigninPrepareUserListTest& operator=(const SigninPrepareUserListTest&) =
+      delete;
+
   ~SigninPrepareUserListTest() override {}
 
   // testing::Test:
@@ -60,7 +63,7 @@ class SigninPrepareUserListTest : public testing::Test,
         this, TestingBrowserProcess::GetGlobal()->local_state());
     fake_user_manager_->set_multi_profile_user_controller(controller_.get());
 
-    for (size_t i = 0; i < base::size(kUsersPublic); ++i)
+    for (size_t i = 0; i < std::size(kUsersPublic); ++i)
       fake_user_manager_->AddPublicAccountUser(
           AccountId::FromUserEmail(kUsersPublic[i]));
 
@@ -94,8 +97,6 @@ class SigninPrepareUserListTest : public testing::Test,
   std::unique_ptr<TestingProfileManager> profile_manager_;
   std::map<std::string, proximity_auth::mojom::AuthType> user_auth_type_map;
   std::unique_ptr<MultiProfileUserController> controller_;
-
-  DISALLOW_COPY_AND_ASSIGN(SigninPrepareUserListTest);
 };
 
 TEST_F(SigninPrepareUserListTest, AlwaysKeepOwnerInList) {

@@ -24,18 +24,22 @@
 #include "ash/session/test_session_controller_client.h"
 #include "ash/shell.h"
 #include "ash/shell_init_params.h"
+#include "ash/style/dark_light_mode_controller_impl.h"
 #include "ash/system/message_center/session_state_notification_blocker.h"
 #include "ash/system/model/system_tray_model.h"
 #include "ash/system/screen_layout_observer.h"
 #include "ash/test/ash_test_views_delegate.h"
 #include "ash/test/toplevel_window.h"
 #include "ash/test_shell_delegate.h"
+#include "ash/wallpaper/test_wallpaper_controller_client.h"
 #include "ash/wallpaper/wallpaper_controller_impl.h"
 #include "ash/wm/overview/overview_controller.h"
 #include "ash/wm/tablet_mode/tablet_mode_controller.h"
 #include "base/run_loop.h"
 #include "base/system/sys_info.h"
-#include "chromeos/dbus/audio/cras_audio_client.h"
+#include "base/system/system_monitor.h"
+#include "chromeos/ash/components/dbus/audio/cras_audio_client.h"
+#include "chromeos/ash/components/dbus/rgbkbd/rgbkbd_client.h"
 #include "chromeos/dbus/power/power_policy_controller.h"
 #include "chromeos/login/login_state/login_state.h"
 #include "device/bluetooth/bluetooth_adapter_factory.h"
@@ -43,11 +47,11 @@
 #include "ui/aura/test/test_windows.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_tree_host.h"
-#include "ui/base/ime/chromeos/mock_input_method_manager.h"
-#include "ui/display/display.h"
+#include "ui/base/ime/ash/mock_input_method_manager.h"
 #include "ui/display/display_switches.h"
 #include "ui/display/manager/display_manager.h"
 #include "ui/display/test/display_manager_test_api.h"
+#include "ui/display/util/display_util.h"
 #include "ui/events/gesture_detection/gesture_configuration.h"
 #include "ui/gfx/geometry/point.h"
 #include "ui/platform_window/common/platform_window_defaults.h"
@@ -89,7 +93,8 @@ class AshTestHelper::PowerPolicyControllerInitializer {
 };
 
 AshTestHelper::AshTestHelper(ui::ContextFactory* context_factory)
-    : AuraTestHelper(context_factory) {
+    : AuraTestHelper(context_factory),
+      system_monitor_(std::make_unique<base::SystemMonitor>()) {
   views::ViewsTestHelperAura::SetFallbackTestViewsDelegateFactory(
       &MakeTestViewsDelegate);
 
@@ -107,8 +112,9 @@ AshTestHelper::AshTestHelper(ui::ContextFactory* context_factory)
   TabletModeController::SetUseScreenshotForTest(false);
 
   display::ResetDisplayIdForTest();
+  display::SetInternalDisplayIds({});
 
-  chromeos::CrasAudioClient::InitializeFake();
+  CrasAudioClient::InitializeFake();
   // Create CrasAudioHandler for testing since g_browser_process is not
   // created in AshTestBase tests.
   CrasAudioHandler::InitializeForTesting();
@@ -148,6 +154,9 @@ void AshTestHelper::TearDown() {
   // owns, so shut the test helper down first.
   app_list_test_helper_.reset();
 
+  // Stop event dispatch like we do in ChromeBrowserMainExtraPartsAsh.
+  Shell::Get()->ShutdownEventDispatch();
+
   Shell::DeleteInstance();
   // Suspend the tear down until all resources are returned via
   // CompositorFrameSinkClient::ReclaimResources()
@@ -156,12 +165,13 @@ void AshTestHelper::TearDown() {
   chromeos::LoginState::Shutdown();
 
   CrasAudioHandler::Shutdown();
-  chromeos::CrasAudioClient::Shutdown();
+  CrasAudioClient::Shutdown();
 
   // The PowerPolicyController holds a pointer to the PowerManagementClient, so
   // shut the controller down first.
   power_policy_controller_initializer_.reset();
   chromeos::PowerManagerClient::Shutdown();
+  RgbkbdClient::Shutdown();
 
   TabletModeController::SetUseScreenshotForTest(true);
 
@@ -186,7 +196,7 @@ void AshTestHelper::TearDown() {
   // their own override, and in that case we shouldn't call Shutdown
   // otherwise the global state will be deleted twice.
   if (input_method_manager_) {
-    chromeos::input_method::InputMethodManager::Shutdown();
+    input_method::InputMethodManager::Shutdown();
     input_method_manager_ = nullptr;
   }
 }
@@ -227,8 +237,7 @@ void AshTestHelper::SetUp(InitParams init_params) {
   if (!input_method::InputMethodManager::Get()) {
     // |input_method_manager_| is not owned and is cleaned up in TearDown()
     // by calling InputMethodManager::Shutdown().
-    input_method_manager_ =
-        new chromeos::input_method::MockInputMethodManager();
+    input_method_manager_ = new input_method::MockInputMethodManager();
     input_method::InputMethodManager::Initialize(input_method_manager_);
   }
 
@@ -236,6 +245,8 @@ void AshTestHelper::SetUp(InitParams init_params) {
     bluez_dbus_manager_initializer_ =
         std::make_unique<BluezDBusManagerInitializer>();
   }
+  if (!RgbkbdClient::Get())
+    RgbkbdClient::InitializeFake();
   if (!chromeos::PowerManagerClient::Get())
     chromeos::PowerManagerClient::InitializeFake();
   if (!chromeos::PowerPolicyController::IsInitialized()) {
@@ -254,11 +265,6 @@ void AshTestHelper::SetUp(InitParams init_params) {
 
   ambient_ash_test_helper_ = std::make_unique<AmbientAshTestHelper>();
 
-  // There is a temporary M92-M94 notification that shows once to users
-  // at startup, but this interferes with many tests that expect a
-  // specific active window, or a certain number of notifications.
-  AcceleratorControllerImpl::SetShouldShowShortcutNotificationForTest(false);
-
   ShellInitParams shell_init_params;
   shell_init_params.delegate = std::move(init_params.delegate);
   if (!shell_init_params.delegate)
@@ -269,6 +275,22 @@ void AshTestHelper::SetUp(InitParams init_params) {
       std::make_unique<TestKeyboardUIFactory>();
   Shell::CreateInstance(std::move(shell_init_params));
   Shell* shell = Shell::Get();
+
+  // The dark/light mode educational nudge is expected to be shown when session
+  // state changed to ACTIVE. This means it might be shown above the shelf in
+  // all the tests with an active user session. This setting here make it will
+  // not be shown by default in tests. As keep it shown will change the
+  // operations needed in many of the tests, e.g, when productive launcher is
+  // shown as well, we need one more click outside of the launcher to dismiss
+  // the nudge first before dismissing the launcher.
+  shell->dark_light_mode_controller()->SetShowNudgeForTesting(false);
+
+  // Set up a test wallpaper controller client before signing in any users. At
+  // the time a user logs in, Wallpaper controller relies on
+  // WallpaperControllerClient to check if user data should be synced.
+  wallpaper_controller_client_ =
+      std::make_unique<TestWallpaperControllerClient>();
+  shell->wallpaper_controller()->SetClient(wallpaper_controller_client_.get());
 
   // Disable the notification delay timer used to prevent non system
   // notifications from showing up right after login. This needs to be done
@@ -324,7 +346,7 @@ void AshTestHelper::SetUp(InitParams init_params) {
   // Move the mouse cursor to far away so that native events don't interfere
   // with test expectations.
   Shell::GetPrimaryRootWindow()->MoveCursorTo(gfx::Point(-1000, -1000));
-  Shell::Get()->cursor_manager()->EnableMouseEvents();
+  shell->cursor_manager()->EnableMouseEvents();
 
   // Changing GestureConfiguration shouldn't make tests fail. These values
   // prevent unexpected events from being generated during tests. Such as

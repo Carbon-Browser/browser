@@ -10,13 +10,13 @@
 #include <lib/zx/job.h>
 
 #include "base/memory/ref_counted.h"
+#include "base/threading/sequence_bound.h"
 #include "sandbox/policy/export.h"
-#include "sandbox/policy/sandbox_type.h"
+#include "sandbox/policy/mojom/sandbox.mojom.h"
 
 namespace base {
 class FilteredServiceDirectory;
 struct LaunchOptions;
-class SequencedTaskRunner;
 }  // namespace base
 
 namespace sandbox {
@@ -25,7 +25,7 @@ namespace policy {
 class SANDBOX_POLICY_EXPORT SandboxPolicyFuchsia {
  public:
   // Must be called on the IO thread.
-  explicit SandboxPolicyFuchsia(SandboxType type);
+  explicit SandboxPolicyFuchsia(sandbox::mojom::Sandbox type);
   ~SandboxPolicyFuchsia();
 
   SandboxPolicyFuchsia(const SandboxPolicyFuchsia&) = delete;
@@ -38,12 +38,12 @@ class SANDBOX_POLICY_EXPORT SandboxPolicyFuchsia {
   void UpdateLaunchOptionsForSandbox(base::LaunchOptions* options);
 
  private:
-  SandboxType type_;
+  sandbox::mojom::Sandbox type_;
 
   // Services directory used for the /svc namespace of the child process.
-  std::unique_ptr<base::FilteredServiceDirectory> service_directory_;
+  base::SequenceBound<base::FilteredServiceDirectory>
+      filtered_service_directory_;
   fidl::InterfaceHandle<::fuchsia::io::Directory> service_directory_client_;
-  scoped_refptr<base::SequencedTaskRunner> service_directory_task_runner_;
 
   // Job in which the child process is launched.
   zx::job job_;

@@ -6,124 +6,165 @@
  * 'settings-personalization-page' is the settings page containing
  * personalization settings.
  */
-Polymer({
-  is: 'settings-personalization-page',
+import '../ambient_mode_page/ambient_mode_page.js';
+import '../ambient_mode_page/ambient_mode_photos_page.js';
+import 'chrome://resources/cr_elements/cr_link_row/cr_link_row.js';
+import './change_picture.js';
+import '../../settings_page/settings_animated_pages.js';
+import '../../settings_page/settings_subpage.js';
+import '../../settings_shared.css.js';
 
-  behaviors: [
-    DeepLinkingBehavior,
-    I18nBehavior,
-    settings.RouteObserverBehavior,
-  ],
+import {I18nBehavior, I18nBehaviorInterface} from 'chrome://resources/js/i18n_behavior.m.js';
+import {html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-  properties: {
-    /**
-     * Preferences state.
-     */
-    prefs: Object,
+import {loadTimeData} from '../../i18n_setup.js';
+import {Setting} from '../../mojom-webui/setting.mojom-webui.js';
+import {Route, Router} from '../../router.js';
+import {DeepLinkingBehavior, DeepLinkingBehaviorInterface} from '../deep_linking_behavior.js';
+import {routes} from '../os_route.js';
+import {RouteObserverBehavior, RouteObserverBehaviorInterface} from '../route_observer_behavior.js';
 
-    /** @private */
-    showWallpaperRow_: {type: Boolean, value: true},
+import {PersonalizationHubBrowserProxy, PersonalizationHubBrowserProxyImpl} from './personalization_hub_browser_proxy.js';
+import {WallpaperBrowserProxy, WallpaperBrowserProxyImpl} from './wallpaper_browser_proxy.js';
 
-    /** @private */
-    isWallpaperPolicyControlled_: {type: Boolean, value: true},
+/**
+ * @constructor
+ * @extends {PolymerElement}
+ * @implements {DeepLinkingBehaviorInterface}
+ * @implements {I18nBehaviorInterface}
+ * @implements {RouteObserverBehaviorInterface}
+ */
+const SettingsPersonalizationPageElementBase = mixinBehaviors(
+    [DeepLinkingBehavior, I18nBehavior, RouteObserverBehavior], PolymerElement);
 
-    /** @private */
-    isAmbientModeEnabled_: {
-      type: Boolean,
-      value() {
-        return loadTimeData.getBoolean('isAmbientModeEnabled');
+/** @polymer */
+class SettingsPersonalizationPageElement extends
+    SettingsPersonalizationPageElementBase {
+  static get is() {
+    return 'settings-personalization-page';
+  }
+
+  static get template() {
+    return html`{__html_template__}`;
+  }
+
+  static get properties() {
+    return {
+      /**
+       * Preferences state.
+       */
+      prefs: Object,
+
+      /** @private */
+      showWallpaperRow_: {type: Boolean, value: true},
+
+      /** @private */
+      isWallpaperPolicyControlled_: {type: Boolean, value: true},
+
+      /** @private */
+      isAmbientModeEnabled_: {
+        type: Boolean,
+        value() {
+          return loadTimeData.getBoolean('isAmbientModeEnabled');
+        },
+        readOnly: true,
       },
-      readOnly: true,
-    },
 
-    /** @private */
-    isDarkModeAllowed_: {
-      type: Boolean,
-      value() {
-        return loadTimeData.getBoolean('isDarkModeAllowed');
+      /** @private */
+      isPersonalizationHubEnabled_: {
+        type: Boolean,
+        value() {
+          return loadTimeData.getBoolean('isPersonalizationHubEnabled');
+        },
+        readOnly: true,
       },
-      readOnly: true,
-    },
 
-    /** @private {!Map<string, string>} */
-    focusConfig_: {
-      type: Object,
-      value() {
-        const map = new Map();
-        if (settings.routes.CHANGE_PICTURE) {
-          map.set(settings.routes.CHANGE_PICTURE.path, '#changePictureRow');
-        } else if (settings.routes.AMBIENT_MODE) {
-          map.set(settings.routes.AMBIENT_MODE.path, '#ambientModeRow');
-        }
+      /** @private {!Map<string, string>} */
+      focusConfig_: {
+        type: Object,
+        value() {
+          const map = new Map();
+          if (routes.CHANGE_PICTURE) {
+            map.set(routes.CHANGE_PICTURE.path, '#changePictureRow');
+          } else if (routes.AMBIENT_MODE) {
+            map.set(routes.AMBIENT_MODE.path, '#ambientModeRow');
+          }
 
-        return map;
-      }
-    },
+          return map;
+        },
+      },
 
-    /**
-     * Used by DeepLinkingBehavior to focus this page's deep links.
-     * @type {!Set<!chromeos.settings.mojom.Setting>}
-     */
-    supportedSettingIds: {
-      type: Object,
-      value: () => new Set([chromeos.settings.mojom.Setting.kOpenWallpaper]),
-    },
-  },
-
-  /** @private {?settings.WallpaperBrowserProxy} */
-  browserProxy_: null,
+      /**
+       * Used by DeepLinkingBehavior to focus this page's deep links.
+       * @type {!Set<!Setting>}
+       */
+      supportedSettingIds: {
+        type: Object,
+        value: () => new Set([Setting.kOpenWallpaper]),
+      },
+    };
+  }
 
   /** @override */
-  created() {
-    this.browserProxy_ = settings.WallpaperBrowserProxyImpl.getInstance();
-  },
+  constructor() {
+    super();
+
+    /** @private {!WallpaperBrowserProxy} */
+    this.wallpaperBrowserProxy_ = WallpaperBrowserProxyImpl.getInstance();
+
+    /** @private {!PersonalizationHubBrowserProxy} */
+    this.personalizationHubBrowserProxy_ =
+        PersonalizationHubBrowserProxyImpl.getInstance();
+  }
 
   /** @override */
   ready() {
-    this.browserProxy_.isWallpaperSettingVisible().then(
+    super.ready();
+
+    this.wallpaperBrowserProxy_.isWallpaperSettingVisible().then(
         isWallpaperSettingVisible => {
           this.showWallpaperRow_ = isWallpaperSettingVisible;
         });
-    this.browserProxy_.isWallpaperPolicyControlled().then(
+    this.wallpaperBrowserProxy_.isWallpaperPolicyControlled().then(
         isPolicyControlled => {
           this.isWallpaperPolicyControlled_ = isPolicyControlled;
         });
-  },
+  }
 
   /**
-   * @param {!settings.Route} route
-   * @param {!settings.Route} oldRoute
+   * @param {!Route} route
+   * @param {!Route=} oldRoute
    */
   currentRouteChanged(route, oldRoute) {
     // Does not apply to this page.
-    if (route !== settings.routes.PERSONALIZATION) {
+    if (route !== routes.PERSONALIZATION) {
       return;
     }
 
     this.attemptDeepLink();
-  },
+  }
 
   /**
    * @private
    */
   openWallpaperManager_() {
-    this.browserProxy_.openWallpaperManager();
-  },
+    this.wallpaperBrowserProxy_.openWallpaperManager();
+  }
+
+  /** @private */
+  openPersonalizationHub_() {
+    this.personalizationHubBrowserProxy_.openPersonalizationHub();
+  }
 
   /** @private */
   navigateToChangePicture_() {
-    settings.Router.getInstance().navigateTo(settings.routes.CHANGE_PICTURE);
-  },
+    Router.getInstance().navigateTo(routes.CHANGE_PICTURE);
+  }
 
   /** @private */
   navigateToAmbientMode_() {
-    settings.Router.getInstance().navigateTo(settings.routes.AMBIENT_MODE);
-  },
-
-  /** @private */
-  navigateToDarkMode_() {
-    settings.Router.getInstance().navigateTo(settings.routes.DARK_MODE);
-  },
+    Router.getInstance().navigateTo(routes.AMBIENT_MODE);
+  }
 
   /**
    * @param {boolean} toggleValue
@@ -133,5 +174,8 @@ Polymer({
   getAmbientModeRowSubLabel_(toggleValue) {
     return this.i18n(
         toggleValue ? 'ambientModeEnabled' : 'ambientModeDisabled');
-  },
-});
+  }
+}
+
+customElements.define(
+    SettingsPersonalizationPageElement.is, SettingsPersonalizationPageElement);

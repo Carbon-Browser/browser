@@ -10,7 +10,6 @@
 #include <lib/ui/scenic/cpp/view_ref_pair.h>
 
 #include "base/component_export.h"
-#include "base/macros.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/ime/fuchsia/virtual_keyboard_controller_fuchsia.h"
 #include "ui/base/ime/input_method_base.h"
@@ -37,7 +36,7 @@ class COMPONENT_EXPORT(UI_BASE_IME_FUCHSIA) InputMethodFuchsia
   VirtualKeyboardController* GetVirtualKeyboardController() final;
   ui::EventDispatchDetails DispatchKeyEvent(ui::KeyEvent* event) final;
   void CancelComposition(const TextInputClient* client) final;
-  void OnTextInputTypeChanged(const TextInputClient* client) final;
+  void OnTextInputTypeChanged(TextInputClient* client) final;
   void OnCaretBoundsChanged(const TextInputClient* client) final;
   bool IsCandidatePopupOpen() const final;
 

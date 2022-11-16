@@ -11,10 +11,10 @@
 
 #include "base/bind.h"
 #include "base/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
-#include "build/chromeos_buildflags.h"
 #include "dbus/object_path.h"
 #include "device/bluetooth/bluetooth_adapter.h"
 #include "device/bluetooth/bluetooth_adapter_factory.h"
@@ -313,11 +313,12 @@ class BluetoothGattBlueZTest : public testing::Test {
 
   base::test::SingleThreadTaskEnvironment task_environment_;
 
-  bluez::FakeBluetoothDeviceClient* fake_bluetooth_device_client_;
-  bluez::FakeBluetoothGattServiceClient* fake_bluetooth_gatt_service_client_;
-  bluez::FakeBluetoothGattCharacteristicClient*
+  raw_ptr<bluez::FakeBluetoothDeviceClient> fake_bluetooth_device_client_;
+  raw_ptr<bluez::FakeBluetoothGattServiceClient>
+      fake_bluetooth_gatt_service_client_;
+  raw_ptr<bluez::FakeBluetoothGattCharacteristicClient>
       fake_bluetooth_gatt_characteristic_client_;
-  bluez::FakeBluetoothGattDescriptorClient*
+  raw_ptr<bluez::FakeBluetoothGattDescriptorClient>
       fake_bluetooth_gatt_descriptor_client_;
   std::unique_ptr<device::BluetoothGattConnection> gatt_conn_;
   std::vector<std::unique_ptr<BluetoothGattNotifySession>> update_sessions_;
@@ -2226,7 +2227,7 @@ TEST_F(BluetoothGattBlueZTest, NotifySessionsMadeInactive) {
   EXPECT_TRUE(update_sessions_[0]->IsActive());
 }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 TEST_F(BluetoothGattBlueZTest, ReliableWrite) {
   fake_bluetooth_device_client_->CreateDevice(
       dbus::ObjectPath(bluez::FakeBluetoothAdapterClient::kAdapterPath),
@@ -2373,7 +2374,7 @@ TEST_F(BluetoothGattBlueZTest, NotificationType) {
   base::RunLoop().Run();
   EXPECT_EQ(2, observer.gatt_characteristic_value_changed_count());
 }
-#endif
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 TEST_F(BluetoothGattBlueZTest, MultipleDevices) {
   fake_bluetooth_device_client_->CreateDevice(

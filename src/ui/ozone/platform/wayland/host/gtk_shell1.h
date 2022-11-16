@@ -15,10 +15,12 @@ class GtkSurface1;
 
 class GtkShell1 : public wl::GlobalObjectRegistrar<GtkShell1> {
  public:
-  static void Register(WaylandConnection* connection);
+  static constexpr char kInterfaceName[] = "gtk_shell1";
+
   static void Instantiate(WaylandConnection* connection,
                           wl_registry* registry,
                           uint32_t name,
+                          const std::string& interface,
                           uint32_t version);
 
   explicit GtkShell1(gtk_shell1* shell1);
@@ -28,6 +30,8 @@ class GtkShell1 : public wl::GlobalObjectRegistrar<GtkShell1> {
 
   std::unique_ptr<GtkSurface1> GetGtkSurface1(
       wl_surface* top_level_window_surface);
+
+  void SetStartupId(const std::string& startup_id);
 
  private:
   wl::Object<gtk_shell1> shell1_;

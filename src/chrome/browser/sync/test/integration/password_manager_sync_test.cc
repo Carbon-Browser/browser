@@ -17,6 +17,7 @@
 #include "chrome/browser/password_manager/account_password_store_factory.h"
 #include "chrome/browser/password_manager/password_manager_test_base.h"
 #include "chrome/browser/password_manager/password_store_factory.h"
+#include "chrome/browser/password_manager/passwords_navigation_observer.h"
 #include "chrome/browser/sync/test/integration/passwords_helper.h"
 #include "chrome/browser/sync/test/integration/secondary_account_helper.h"
 #include "chrome/browser/sync/test/integration/single_client_status_change_checker.h"
@@ -34,7 +35,6 @@
 #include "components/password_manager/core/common/password_manager_features.h"
 #include "components/prefs/pref_service.h"
 #include "components/signin/public/identity_manager/account_info.h"
-#include "components/sync/driver/sync_driver_switches.h"
 #include "components/sync/driver/sync_service_impl.h"
 #include "components/sync/test/fake_server/fake_server_nigori_helper.h"
 #include "content/public/browser/browser_context.h"
@@ -89,8 +89,10 @@ class PasswordManagerSyncTest : public SyncTest {
     // all Javascript changes to it are discarded, and thus any tests that cover
     // updating a password become flaky.
     feature_list_.InitWithFeatures(
-        {password_manager::features::kEnablePasswordsAccountStorage,
-         password_manager::features::kFillOnAccountSelect},
+        {
+            password_manager::features::kEnablePasswordsAccountStorage,
+            password_manager::features::kFillOnAccountSelect,
+        },
         {});
   }
 
@@ -141,7 +143,8 @@ class PasswordManagerSyncTest : public SyncTest {
     host_resolver()->AddRule("*", "127.0.0.1");
 
     // Whitelist all certs for the HTTPS server.
-    auto cert = https_test_server()->GetCertificate();
+    scoped_refptr<net::X509Certificate> cert =
+        https_test_server()->GetCertificate();
     net::CertVerifyResult verify_result;
     verify_result.cert_status = 0;
     verify_result.verified_cert = cert;
@@ -161,8 +164,8 @@ class PasswordManagerSyncTest : public SyncTest {
   // |signed_in_account_| as a side effect.
   void SetupSyncTransportWithoutPasswordAccountStorage() {
     ASSERT_TRUE(signed_in_account_.IsEmpty());
-    // Setup Sync for a secondary account (i.e. in transport mode).
-    signed_in_account_ = secondary_account_helper::SignInSecondaryAccount(
+    // Setup Sync for an unconsented account (i.e. in transport mode).
+    signed_in_account_ = secondary_account_helper::SignInUnconsentedAccount(
         GetProfile(0), &test_url_loader_factory_, kTestUserEmail);
     ASSERT_TRUE(GetClient(0)->AwaitSyncTransportActive());
     ASSERT_FALSE(GetSyncService(0)->IsSyncFeatureEnabled());
@@ -182,9 +185,9 @@ class PasswordManagerSyncTest : public SyncTest {
   // Should only be called after SetupSyncTransportWithPasswordAccountStorage().
   void SignOut() {
     ASSERT_FALSE(signed_in_account_.IsEmpty());
-    secondary_account_helper::SignOutSecondaryAccount(
-        GetProfile(0), &test_url_loader_factory_,
-        signed_in_account_.account_id);
+    secondary_account_helper::SignOutAccount(GetProfile(0),
+                                             &test_url_loader_factory_,
+                                             signed_in_account_.account_id);
     signed_in_account_ = AccountInfo();
   }
 
@@ -215,12 +218,6 @@ class PasswordManagerSyncTest : public SyncTest {
     form.username_value = base::UTF8ToUTF16(username);
     form.password_value = base::UTF8ToUTF16(password);
     form.date_created = base::Time::Now();
-    // TODO(crbug.com/1223022): Once all places that operate changes on forms
-    // via UpdateLogin properly set |password_issues|, setting them to an empty
-    // map should be part of the default constructor.
-    form.password_issues =
-        base::flat_map<password_manager::InsecureType,
-                       password_manager::InsecurityMetadata>();
     return form;
   }
 
@@ -268,7 +265,8 @@ class PasswordManagerSyncTest : public SyncTest {
     scoped_refptr<password_manager::PasswordStoreInterface> password_store =
         passwords_helper::GetProfilePasswordStoreInterface(0);
     PasswordStoreResultsObserver syncer;
-    password_store->GetAllLoginsWithAffiliationAndBrandingInformation(&syncer);
+    password_store->GetAllLoginsWithAffiliationAndBrandingInformation(
+        syncer.GetWeakPtr());
     return syncer.WaitForResults();
   }
 
@@ -279,7 +277,8 @@ class PasswordManagerSyncTest : public SyncTest {
     scoped_refptr<password_manager::PasswordStoreInterface> password_store =
         passwords_helper::GetAccountPasswordStoreInterface(0);
     PasswordStoreResultsObserver syncer;
-    password_store->GetAllLoginsWithAffiliationAndBrandingInformation(&syncer);
+    password_store->GetAllLoginsWithAffiliationAndBrandingInformation(
+        syncer.GetWeakPtr());
     return syncer.WaitForResults();
   }
 
@@ -300,7 +299,7 @@ class PasswordManagerSyncTest : public SyncTest {
   void FillAndSubmitPasswordForm(content::WebContents* web_contents,
                                  const std::string& username,
                                  const std::string& password) {
-    NavigationObserver observer(web_contents);
+    PasswordsNavigationObserver observer(web_contents);
     std::string fill_and_submit = base::StringPrintf(
         "document.getElementById('username_field').value = '%s';"
         "document.getElementById('password_field').value = '%s';"
@@ -316,7 +315,7 @@ class PasswordManagerSyncTest : public SyncTest {
   void NavigateToFileImpl(content::WebContents* web_contents, const GURL& url) {
     ASSERT_EQ(web_contents,
               GetBrowser(0)->tab_strip_model()->GetActiveWebContents());
-    NavigationObserver observer(web_contents);
+    PasswordsNavigationObserver observer(web_contents);
     ASSERT_TRUE(ui_test_utils::NavigateToURL(GetBrowser(0), url));
     observer.Wait();
     // After navigation, the password manager retrieves any matching credentials
@@ -771,6 +770,8 @@ IN_PROC_BROWSER_TEST_F(PasswordManagerSyncTest,
   EXPECT_TRUE(bubble_observer.IsUpdatePromptAvailable());
 }
 
+// Signing out on Lacros is not possible,
+#if !BUILDFLAG(IS_CHROMEOS_LACROS)
 IN_PROC_BROWSER_TEST_F(PasswordManagerSyncTest,
                        SignOutWithUnsyncedPasswordsOpensBubble) {
   ASSERT_TRUE(SetupClients()) << "SetupClients() failed.";
@@ -797,6 +798,7 @@ IN_PROC_BROWSER_TEST_F(PasswordManagerSyncTest,
   SignOut();
   bubble_observer.WaitForSaveUnsyncedCredentialsPrompt();
 }
+#endif  // !BUILDFLAG(IS_CHROMEOS_LACROS)
 
 IN_PROC_BROWSER_TEST_F(PasswordManagerSyncTest,
                        PasswordDeletionsPropagateToServer) {
@@ -806,7 +808,8 @@ IN_PROC_BROWSER_TEST_F(PasswordManagerSyncTest,
   AddCredentialToFakeServer(CreateTestPasswordForm("user", "pass"));
 
   SetupSyncTransportWithPasswordAccountStorage();
-  auto* account_store = passwords_helper::GetAccountPasswordStoreInterface(0);
+  password_manager::PasswordStoreInterface* account_store =
+      passwords_helper::GetAccountPasswordStoreInterface(0);
 
   // Make sure the password show up in the account store and on the server.
   ASSERT_EQ(passwords_helper::GetAllLogins(account_store).size(), 1u);
@@ -849,7 +852,8 @@ IN_PROC_BROWSER_TEST_F(PasswordManagerSyncTest,
   // This simulates the case (for the following test) where the user revoked
   // their opt-in, but the account store was *not* cleared correctly, e.g. due
   // to a poorly-timed crash.
-  auto* account_store = passwords_helper::GetAccountPasswordStoreInterface(0);
+  password_manager::PasswordStoreInterface* account_store =
+      passwords_helper::GetAccountPasswordStoreInterface(0);
   account_store->AddLogin(CreateTestPasswordForm("accountuser", "accountpass"));
 
   // Also add a credential to the profile store.

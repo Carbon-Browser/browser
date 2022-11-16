@@ -12,7 +12,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "components/sessions/core/session_id.h"
 #include "components/web_modal/web_contents_modal_dialog_manager_delegate.h"
@@ -54,6 +54,10 @@ struct DraggableRegion;
 class AppWindowContents {
  public:
   AppWindowContents() {}
+
+  AppWindowContents(const AppWindowContents&) = delete;
+  AppWindowContents& operator=(const AppWindowContents&) = delete;
+
   virtual ~AppWindowContents() {}
 
   // Called to initialize the WebContents, before the app window is created.
@@ -75,9 +79,6 @@ class AppWindowContents {
   virtual content::WebContents* GetWebContents() const = 0;
 
   virtual extensions::WindowController* GetWindowController() const = 0;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(AppWindowContents);
 };
 
 // AppWindow is the type of window used by platform apps. App windows
@@ -226,6 +227,9 @@ class AppWindow : public content::WebContentsDelegate,
             AppDelegate* app_delegate,
             const Extension* extension);
 
+  AppWindow(const AppWindow&) = delete;
+  AppWindow& operator=(const AppWindow&) = delete;
+
   // Initializes the render interface, web contents, and native window.
   // |app_window_contents| will become owned by AppWindow.
   void Init(const GURL& url,
@@ -244,7 +248,10 @@ class AppWindow : public content::WebContentsDelegate,
   const GURL& initial_url() const { return initial_url_; }
   bool is_hidden() const { return is_hidden_; }
 
+  // Calls to this should always be guarded by a nullptr check as this can
+  // return nullptr if the extension is no longer installed.
   const Extension* GetExtension() const;
+
   NativeAppWindow* GetBaseWindow();
   gfx::NativeWindow GetNativeWindow();
 
@@ -439,9 +446,7 @@ class AppWindow : public content::WebContentsDelegate,
                              const blink::WebGestureEvent& event) override;
   bool TakeFocus(content::WebContents* source, bool reverse) override;
   content::PictureInPictureResult EnterPictureInPicture(
-      content::WebContents* web_contents,
-      const viz::SurfaceId& surface_id,
-      const gfx::Size& natural_size) override;
+      content::WebContents* web_contents) override;
   void ExitPictureInPicture() override;
   bool ShouldShowStaleContentOnEviction(content::WebContents* source) override;
 
@@ -517,7 +522,7 @@ class AppWindow : public content::WebContentsDelegate,
 
   // The browser context with which this window is associated. AppWindow does
   // not own this object.
-  content::BrowserContext* browser_context_;
+  raw_ptr<content::BrowserContext> browser_context_;
 
   const std::string extension_id_;
 
@@ -589,8 +594,6 @@ class AppWindow : public content::WebContentsDelegate,
   bool did_finish_first_navigation_ = false;
 
   base::WeakPtrFactory<AppWindow> image_loader_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(AppWindow);
 };
 
 }  // namespace extensions

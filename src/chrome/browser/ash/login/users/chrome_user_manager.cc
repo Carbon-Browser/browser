@@ -4,10 +4,10 @@
 
 #include "chrome/browser/ash/login/users/chrome_user_manager.h"
 
+#include "ash/components/settings/cros_settings_names.h"
 #include "ash/constants/ash_switches.h"
 #include "base/command_line.h"
 #include "chrome/browser/browser_process.h"
-#include "chromeos/settings/cros_settings_names.h"
 #include "components/policy/core/common/policy_map.h"
 #include "components/policy/policy_constants.h"
 #include "components/user_manager/user.h"
@@ -25,7 +25,7 @@ ChromeUserManager::~ChromeUserManager() {}
 
 bool ChromeUserManager::IsCurrentUserNew() const {
   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
-  if (command_line->HasSwitch(chromeos::switches::kForceFirstRunUI))
+  if (command_line->HasSwitch(switches::kForceFirstRunUI))
     return true;
 
   return UserManagerBase::IsCurrentUserNew();
@@ -95,16 +95,16 @@ LoginState::LoggedInUserType ChromeUserManager::GetLoggedInUserType(
                  ? LoginState::LOGGED_IN_USER_PUBLIC_ACCOUNT_MANAGED
                  : LoginState::LOGGED_IN_USER_PUBLIC_ACCOUNT;
     case user_manager::USER_TYPE_KIOSK_APP:
-      return LoginState::LOGGED_IN_USER_KIOSK_APP;
+      return LoginState::LOGGED_IN_USER_KIOSK;
     case user_manager::USER_TYPE_CHILD:
       return LoginState::LOGGED_IN_USER_CHILD;
     case user_manager::USER_TYPE_ARC_KIOSK_APP:
-      return LoginState::LOGGED_IN_USER_KIOSK_APP;
+      return LoginState::LOGGED_IN_USER_KIOSK;
     case user_manager::USER_TYPE_ACTIVE_DIRECTORY:
       // NOTE(olsen) There's no LOGGED_IN_USER_ACTIVE_DIRECTORY - is it needed?
       return LoginState::LOGGED_IN_USER_REGULAR;
     case user_manager::USER_TYPE_WEB_KIOSK_APP:
-      return LoginState::LOGGED_IN_USER_KIOSK_APP;
+      return LoginState::LOGGED_IN_USER_KIOSK;
     case user_manager::NUM_USER_TYPES:
       break;  // Go to invalid-type handling code.
       // Since there is no default, the compiler warns about unhandled types.

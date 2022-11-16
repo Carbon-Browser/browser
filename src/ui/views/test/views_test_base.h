@@ -9,7 +9,6 @@
 #include <utility>
 
 #include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "base/test/task_environment.h"
 #include "build/build_config.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -19,7 +18,7 @@
 #include "ui/views/test/test_views_delegate.h"
 #include "ui/views/widget/widget.h"
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include "ui/base/win/scoped_ole_initializer.h"
 #endif
 
@@ -61,6 +60,9 @@ class ViewsTestBase : public PlatformTest {
   // Alternatively a subclass may pass a TaskEnvironment directly.
   explicit ViewsTestBase(
       std::unique_ptr<base::test::TaskEnvironment> task_environment);
+
+  ViewsTestBase(const ViewsTestBase&) = delete;
+  ViewsTestBase& operator=(const ViewsTestBase&) = delete;
 
   ~ViewsTestBase() override;
 
@@ -161,11 +163,9 @@ class ViewsTestBase : public PlatformTest {
   bool teardown_called_ = false;
   bool has_compositing_manager_ = false;
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   ui::ScopedOleInitializer ole_initializer_;
 #endif
-
-  DISALLOW_COPY_AND_ASSIGN(ViewsTestBase);
 };
 
 class ViewsTestBaseWithNativeWidgetType
@@ -173,13 +173,16 @@ class ViewsTestBaseWithNativeWidgetType
       public testing::WithParamInterface<ViewsTestBase::NativeWidgetType> {
  public:
   using ViewsTestBase::ViewsTestBase;
+
+  ViewsTestBaseWithNativeWidgetType(const ViewsTestBaseWithNativeWidgetType&) =
+      delete;
+  ViewsTestBaseWithNativeWidgetType& operator=(
+      const ViewsTestBaseWithNativeWidgetType&) = delete;
+
   ~ViewsTestBaseWithNativeWidgetType() override = default;
 
   // ViewsTestBase:
   void SetUp() override;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ViewsTestBaseWithNativeWidgetType);
 };
 
 // A helper that makes it easier to declare basic views tests that want to test
@@ -191,13 +194,16 @@ class ViewsTestBaseWithNativeWidgetType
 class ViewsTestWithDesktopNativeWidget : public ViewsTestBase {
  public:
   using ViewsTestBase::ViewsTestBase;
+
+  ViewsTestWithDesktopNativeWidget(const ViewsTestWithDesktopNativeWidget&) =
+      delete;
+  ViewsTestWithDesktopNativeWidget& operator=(
+      const ViewsTestWithDesktopNativeWidget&) = delete;
+
   ~ViewsTestWithDesktopNativeWidget() override = default;
 
   // ViewsTestBase:
   void SetUp() override;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ViewsTestWithDesktopNativeWidget);
 };
 
 }  // namespace views

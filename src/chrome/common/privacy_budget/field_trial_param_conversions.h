@@ -35,10 +35,12 @@ bool DecodeIdentifiabilityType(const base::StringPiece,
 bool DecodeIdentifiabilityType(const base::StringPiece,
                                blink::IdentifiableSurface::Type*);
 bool DecodeIdentifiabilityType(const base::StringPiece, int*);
+bool DecodeIdentifiabilityType(const base::StringPiece, uint64_t*);
 bool DecodeIdentifiabilityType(const base::StringPiece, unsigned int*);
 bool DecodeIdentifiabilityType(const base::StringPiece, double*);
 bool DecodeIdentifiabilityType(const base::StringPiece,
                                std::vector<blink::IdentifiableSurface>*);
+bool DecodeIdentifiabilityType(const base::StringPiece, std::string*);
 
 // V is a std::pair<P,R> where P and R are types known to
 // DecodeIdentifiabilityType().
@@ -64,6 +66,9 @@ bool DecodeIdentifiabilityType(base::StringPiece s, V* result) {
 std::string EncodeIdentifiabilityType(const blink::IdentifiableSurface&);
 std::string EncodeIdentifiabilityType(const blink::IdentifiableSurface::Type&);
 std::string EncodeIdentifiabilityType(const unsigned int&);
+std::string EncodeIdentifiabilityType(const double&);
+std::string EncodeIdentifiabilityType(const uint64_t&);
+std::string EncodeIdentifiabilityType(const int&);
 template <typename T, typename U>
 std::string EncodeIdentifiabilityType(const std::pair<T, U>& v) {
   return base::StrCat({EncodeIdentifiabilityType(v.first), ";",
@@ -71,6 +76,7 @@ std::string EncodeIdentifiabilityType(const std::pair<T, U>& v) {
 }
 std::string EncodeIdentifiabilityType(
     const std::vector<blink::IdentifiableSurface>& value);
+std::string EncodeIdentifiabilityType(const std::string& value);
 
 template <typename T>
 struct NoOpFilter {
@@ -110,6 +116,8 @@ T DecodeIdentifiabilityFieldTrialParam(base::StringPiece encoded_value) {
   return result;
 }
 
+std::string EncodeIdentifiabilityFieldTrialParam(bool source);
+
 // Encodes a field trial parameter that will contain a list of values taken from
 // a container. The container must satisfy the named requirement Container. Its
 // value_type must have a corresponding EncodeIdentifiabilityType
@@ -119,9 +127,10 @@ template <typename T,
               privacy_budget_internal::EncodeIdentifiabilityType>
 std::string EncodeIdentifiabilityFieldTrialParam(const T& source) {
   std::vector<std::string> encoded_elements;
-  std::transform(source.begin(), source.end(),
-                 std::back_inserter(encoded_elements),
-                 [](auto& v) { return ElementEncoder(v); });
+  encoded_elements.reserve(source.size());
+  for (const auto& v : source) {
+    encoded_elements.emplace_back(ElementEncoder(v));
+  }
   if (privacy_budget_internal::SortWhenSerializing<
           typename std::remove_cv<T>::type>::value) {
     base::ranges::sort(encoded_elements);

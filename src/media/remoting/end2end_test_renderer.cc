@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "media/remoting/end2end_test_renderer.h"
+#include "base/memory/raw_ptr.h"
 
 #include <memory>
 
@@ -12,12 +13,12 @@
 #include "base/check.h"
 #include "base/notreached.h"
 #include "base/threading/thread_task_runner_handle.h"
+#include "components/cast_streaming/public/remoting_proto_utils.h"
 #include "media/base/demuxer_stream.h"
 #include "media/mojo/common/mojo_data_pipe_read_write.h"
 #include "media/mojo/common/mojo_decoder_buffer_converter.h"
 #include "media/mojo/mojom/remoting.mojom.h"
 #include "media/remoting/courier_renderer.h"
-#include "media/remoting/proto_utils.h"
 #include "media/remoting/receiver.h"
 #include "media/remoting/receiver_controller.h"
 #include "media/remoting/renderer_controller.h"
@@ -53,6 +54,9 @@ class TestStreamSender final : public mojom::RemotingDataStreamSender {
         type_(type),
         send_frame_to_sink_cb_(std::move(callback)) {}
 
+  TestStreamSender(const TestStreamSender&) = delete;
+  TestStreamSender& operator=(const TestStreamSender&) = delete;
+
   ~TestStreamSender() override = default;
 
   // mojom::RemotingDataStreamSender implementation.
@@ -80,8 +84,6 @@ class TestStreamSender final : public mojom::RemotingDataStreamSender {
   const DemuxerStream::Type type_;
   const SendFrameToSinkCallback send_frame_to_sink_cb_;
   std::vector<uint8_t> next_frame_data_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestStreamSender);
 };
 
 class TestRemoter final : public mojom::Remoter {
@@ -94,6 +96,9 @@ class TestRemoter final : public mojom::Remoter {
       : source_(std::move(source)),
         send_message_to_sink_cb_(std::move(send_message_to_sink_cb)),
         send_frame_to_sink_cb_(std::move(send_frame_to_sink_cb)) {}
+
+  TestRemoter(const TestRemoter&) = delete;
+  TestRemoter& operator=(const TestRemoter&) = delete;
 
   ~TestRemoter() override = default;
 
@@ -144,8 +149,6 @@ class TestRemoter final : public mojom::Remoter {
   const TestStreamSender::SendFrameToSinkCallback send_frame_to_sink_cb_;
   std::unique_ptr<TestStreamSender> audio_stream_sender_;
   std::unique_ptr<TestStreamSender> video_stream_sender_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestRemoter);
 };
 
 std::unique_ptr<RendererController> CreateController(
@@ -239,7 +242,7 @@ class End2EndTestRenderer::TestRemotee : public mojom::Remotee {
   void OnVideoNaturalSizeChange(const gfx::Size& size) override {}
 
  private:
-  RendererController* controller_;
+  raw_ptr<RendererController> controller_;
 
   std::unique_ptr<MojoDecoderBufferWriter> audio_buffer_writer_;
   std::unique_ptr<MojoDecoderBufferWriter> video_buffer_writer_;
@@ -314,21 +317,21 @@ void End2EndTestRenderer::Initialize(MediaResource* media_resource,
 }
 
 void End2EndTestRenderer::InitializeReceiverRenderer(PipelineStatus status) {
-  DCHECK_EQ(PIPELINE_OK, status);
+  DCHECK(status == PIPELINE_OK);
   receiver_->Initialize(
       stream_provider_.get(), nullptr,
-      base::BindOnce(&End2EndTestRenderer::OnReceiverInitalized,
+      base::BindOnce(&End2EndTestRenderer::OnReceiverInitialized,
                      weak_factory_.GetWeakPtr()));
 }
 
 void End2EndTestRenderer::OnCourierRendererInitialized(PipelineStatus status) {
-  DCHECK_EQ(PIPELINE_OK, status);
+  DCHECK(status == PIPELINE_OK);
   courier_renderer_initialized_ = true;
   CompleteInitialize();
 }
 
-void End2EndTestRenderer::OnReceiverInitalized(PipelineStatus status) {
-  DCHECK_EQ(PIPELINE_OK, status);
+void End2EndTestRenderer::OnReceiverInitialized(PipelineStatus status) {
+  DCHECK(status == PIPELINE_OK);
   receiver_initialized_ = true;
   CompleteInitialize();
 }
@@ -405,7 +408,8 @@ void End2EndTestRenderer::SendFrameToSink(uint32_t frame_count,
                                           const std::vector<uint8_t>& frame,
                                           DemuxerStream::Type type) {
   scoped_refptr<DecoderBuffer> decoder_buffer =
-      ByteArrayToDecoderBuffer(frame.data(), frame.size());
+      cast_streaming::remoting::ByteArrayToDecoderBuffer(frame.data(),
+                                                         frame.size());
   if (type == DemuxerStream::Type::AUDIO) {
     media_remotee_->OnAudioFrame(frame_count, decoder_buffer);
   } else if (type == DemuxerStream::Type::VIDEO) {

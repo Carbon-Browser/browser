@@ -6,6 +6,7 @@
 
 #include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/logging.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
@@ -39,8 +40,7 @@ void StartSyncOnUIThread(const base::FilePath& profile,
   service->OnDataTypeRequestsSyncStartup(type);
 }
 
-void StartSyncProxy(const base::FilePath& profile,
-                    syncer::ModelType type) {
+void StartSyncProxy(const base::FilePath& profile, syncer::ModelType type) {
   content::GetUIThreadTaskRunner({})->PostTask(
       FROM_HERE, base::BindOnce(&StartSyncOnUIThread, profile, type));
 }

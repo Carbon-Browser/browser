@@ -35,6 +35,8 @@ embedder.setUp_ = function(config) {
       '/extensions/platform_apps/web_view/shim/guest_from_opener.html';
   embedder.noReferrerGuestURL = embedder.baseGuestURL +
       '/extensions/platform_apps/web_view/shim/guest_noreferrer.html';
+  embedder.windowOpenMessageURL = embedder.baseGuestURL +
+      '/extensions/platform_apps/web_view/shim/window_open_message.html';
   embedder.detectUserAgentURL = embedder.baseGuestURL + '/detect-user-agent';
   embedder.redirectGuestURL = embedder.baseGuestURL + '/server-redirect';
   embedder.redirectGuestURLDest = embedder.baseGuestURL +
@@ -3326,6 +3328,33 @@ function testWebViewAndEmbedderInNewWindow() {
   document.body.appendChild(webview);
 }
 
+function testNewWindowNoDeadlock() {
+  let webview = document.createElement('webview');
+  let newwindowEvent = null;
+  webview.addEventListener('loadstop', () => {
+    // First, we send a message to the guest, which will perform a window.open.
+    webview.contentWindow.postMessage('', '*');
+  });
+  webview.addEventListener('newwindow', (e) => {
+    // Once the guest calls window.open, we receive the request here.
+    // However, we postpone the attachment until we get a message back from the
+    // guest. The implementation cannot delay responding to the sync window.open
+    // IPC until attachment, because the message handler below performs the
+    // attachment, and that does not run until the guest's window.open call
+    // returns and it sends a message back to this embedder.
+    e.preventDefault();
+    newwindowEvent = e;
+  });
+  window.addEventListener('message', (e) => {
+    let newwebview = document.createElement('webview');
+    newwindowEvent.window.attach(newwebview);
+    document.body.appendChild(newwebview);
+    embedder.test.succeed();
+  });
+  webview.src = embedder.windowOpenMessageURL;
+  document.body.appendChild(webview);
+}
+
 function testSelectPopupPositionInMac() {
   var webview = document.createElement('webview');
   webview.id = 'popup-test-mac';
@@ -3373,6 +3402,48 @@ function testWebRequestBlockedNavigation() {
   document.body.appendChild(webview);
 }
 
+function testBlankWebview() {
+  var webview = new WebView();
+  webview.src = "about:blank";
+  document.body.appendChild(webview);
+  webview.addEventListener('loadstop', function() {
+    // This lets the browser know that it can start sending down input events
+    // for the remainder of the test.
+    embedder.test.succeed();
+  });
+}
+
+function testAddFencedFrame() {
+  let fencedFrameHostURL = embedder.baseGuestURL +
+      '/extensions/platform_apps/web_view/shim/fenced_frame_host.html';
+
+  let webview = new WebView();
+  webview.src = fencedFrameHostURL;
+  webview.addEventListener('loadstop', () => {
+    embedder.test.succeed();
+  });
+  document.body.appendChild(webview);
+}
+
+function testActivatePortal() {
+  let portalHostURL = embedder.baseGuestURL +
+      '/extensions/platform_apps/web_view/shim/portal_host.html';
+  let webview = new WebView();
+  webview.src = portalHostURL;
+  webview.addEventListener('loadstop', () => {
+    webview.contentWindow.postMessage('activate', '*');
+  });
+  window.addEventListener('message', (e) => {
+    // TODO(crbug.com/942534): Support portals in guest views.
+    // Once we do, update this test to check for correct behaviour. For now,
+    // we're basically just checking that attempting this doesn't cause a crash.
+    embedder.test.assertTrue(e.data.includes('Not implemented'));
+    embedder.test.succeed();
+  });
+
+  document.body.appendChild(webview);
+}
+
 embedder.test.testList = {
   'testAllowTransparencyAttribute': testAllowTransparencyAttribute,
   'testAutosizeHeight': testAutosizeHeight,
@@ -3381,6 +3452,7 @@ embedder.test.testList = {
   'testAutosizeRemoveAttributes': testAutosizeRemoveAttributes,
   'testAutosizeWithPartialAttributes': testAutosizeWithPartialAttributes,
   'testAPIMethodExistence': testAPIMethodExistence,
+  'testBlankWebview': testBlankWebview,
   'testCustomElementCallbacksInaccessible':
       testCustomElementCallbacksInaccessible,
   'testChromeExtensionURL': testChromeExtensionURL,
@@ -3499,8 +3571,11 @@ embedder.test.testList = {
        testRendererNavigationRedirectWhileUnattached,
   'testBlobURL': testBlobURL,
   'testWebViewAndEmbedderInNewWindow': testWebViewAndEmbedderInNewWindow,
+  'testNewWindowNoDeadlock': testNewWindowNoDeadlock,
   'testSelectPopupPositionInMac': testSelectPopupPositionInMac,
-  'testWebRequestBlockedNavigation': testWebRequestBlockedNavigation
+  'testWebRequestBlockedNavigation': testWebRequestBlockedNavigation,
+  'testAddFencedFrame': testAddFencedFrame,
+  'testActivatePortal': testActivatePortal,
 };
 
 onload = function() {

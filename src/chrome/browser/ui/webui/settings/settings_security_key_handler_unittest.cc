@@ -14,6 +14,8 @@
 #include "device/fido/fido_constants.h"
 #include "device/fido/fido_discovery_factory.h"
 #include "device/fido/fido_types.h"
+#include "device/fido/public_key_credential_rp_entity.h"
+#include "device/fido/public_key_credential_user_entity.h"
 #include "device/fido/virtual_fido_device_factory.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -24,6 +26,14 @@ namespace {
 
 constexpr size_t kBioEnrollCapacity = 3;
 constexpr char kTestPIN[] = "1234";
+constexpr uint8_t kCredentialID[] = {0xa, 0xa, 0xa, 0xa, 0xa, 0xa, 0xa, 0xa,
+                                     0xa, 0xa, 0xa, 0xa, 0xa, 0xa, 0xa, 0xa};
+constexpr char kRPID[] = "example.com";
+constexpr char kRPName[] = "Example Corp";
+constexpr uint8_t kUserID[] = {0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1,
+                               0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1};
+constexpr char kUserName[] = "alice@example.com";
+constexpr char kUserDisplayName[] = "Alice Example <alice@example.com>";
 
 class TestSecurityKeysCredentialHandler : public SecurityKeysCredentialHandler {
  public:
@@ -34,11 +44,36 @@ class TestSecurityKeysCredentialHandler : public SecurityKeysCredentialHandler {
     AllowJavascriptForTesting();
   }
 
+  using SecurityKeysCredentialHandler::HandlePIN;
   using SecurityKeysCredentialHandler::HandleStart;
+  using SecurityKeysCredentialHandler::HandleUpdateUserInformation;
 
   device::test::VirtualFidoDeviceFactory* GetDiscoveryFactory() {
     return static_cast<device::test::VirtualFidoDeviceFactory*>(
         discovery_factory());
+  }
+
+  // Simulates a call to HandleStart() and returns the ID of the completed
+  // callback.
+  std::string SimulateStart() {
+    constexpr char kCallbackId[] = "securityKeyCredentialManagementStart";
+    base::Value::List args;
+    args.Append(kCallbackId);
+    HandleStart(args);
+    base::RunLoop().RunUntilIdle();
+    return kCallbackId;
+  }
+
+  // Simulates a call to HandleProvidePIN() and returns the ID of the completed
+  // callback.
+  std::string SimulateProvidePIN() {
+    constexpr char kCallbackId[] = "securityKeyCredentialManagementPIN";
+    base::Value::List args;
+    args.Append(kCallbackId);
+    args.Append(kTestPIN);
+    HandlePIN(args);
+    base::RunLoop().RunUntilIdle();
+    return kCallbackId;
   }
 };
 
@@ -63,9 +98,9 @@ class TestSecurityKeysBioEnrollmentHandler
   // callback.
   std::string SimulateStart() {
     constexpr char kCallbackId[] = "bioEnrollStart";
-    base::ListValue args;
+    base::Value::List args;
     args.Append(kCallbackId);
-    HandleStart(&args);
+    HandleStart(args);
     base::RunLoop().RunUntilIdle();
     return kCallbackId;
   }
@@ -74,10 +109,10 @@ class TestSecurityKeysBioEnrollmentHandler
   // callback.
   std::string SimulateProvidePIN() {
     constexpr char kCallbackId[] = "bioEnrollProvidePIN";
-    base::ListValue args;
+    base::Value::List args;
     args.Append(kCallbackId);
     args.Append(kTestPIN);
-    HandleProvidePIN(&args);
+    HandleProvidePIN(args);
     base::RunLoop().RunUntilIdle();
     return kCallbackId;
   }
@@ -86,9 +121,9 @@ class TestSecurityKeysBioEnrollmentHandler
   // completed callback.
   std::string SimulateStartEnrolling() {
     constexpr char kCallbackId[] = "bioEnrollStartEnrolling";
-    base::ListValue args;
+    base::Value::List args;
     args.Append(kCallbackId);
-    HandleStartEnrolling(&args);
+    HandleStartEnrolling(args);
     base::RunLoop().RunUntilIdle();
     return kCallbackId;
   }
@@ -110,6 +145,88 @@ class SecurityKeysCredentialHandlerTest
   std::unique_ptr<content::TestWebUI> web_ui_;
 };
 
+TEST_F(SecurityKeysCredentialHandlerTest,
+       TestUpdateUserInformationNotSupported) {
+  handler_->GetDiscoveryFactory()->mutable_state()->pin = kTestPIN;
+  device::VirtualCtap2Device::Config config;
+  config.pin_support = true;
+  config.credential_management_support = true;
+  config.ctap2_versions = {device::Ctap2Version::kCtap2_0};
+  handler_->GetDiscoveryFactory()->SetCtap2Config(config);
+
+  std::string start_callback_id = handler_->SimulateStart();
+  ASSERT_EQ(web_ui_->call_data()[0]->arg1()->GetString(), start_callback_id);
+  ASSERT_TRUE(web_ui_->call_data()[0]->arg3()->is_dict());
+  const base::Value::Dict& response =
+      web_ui_->call_data()[0]->arg3()->GetDict();
+  EXPECT_FALSE(*response.FindBool("supportsUpdateUserInformation"));
+}
+
+TEST_F(SecurityKeysCredentialHandlerTest, TestUpdateUserInformation) {
+  handler_->GetDiscoveryFactory()->mutable_state()->pin = kTestPIN;
+  device::VirtualCtap2Device::Config config;
+  config.pin_support = true;
+  config.pin_uv_auth_token_support = true;
+  config.min_pin_length_support = true;
+  config.credential_management_support = true;
+  config.ctap2_versions = {device::Ctap2Version::kCtap2_1};
+  handler_->GetDiscoveryFactory()->SetCtap2Config(config);
+
+  std::vector<uint8_t> credential_id =
+      device::fido_parsing_utils::Materialize(kCredentialID);
+
+  device::PublicKeyCredentialRpEntity rp(kRPID, kRPName,
+                                         /*icon_url=*/absl::nullopt);
+  device::PublicKeyCredentialUserEntity user(
+      device::fido_parsing_utils::Materialize(kUserID), kUserName,
+      kUserDisplayName,
+      /*icon_url=*/absl::nullopt);
+
+  ASSERT_TRUE(
+      handler_->GetDiscoveryFactory()->mutable_state()->InjectResidentKey(
+          kCredentialID, rp, user));
+
+  EXPECT_EQ(handler_->GetDiscoveryFactory()
+                ->mutable_state()
+                ->registrations[credential_id]
+                .user,
+            user);
+
+  std::string credential_id_hex = base::HexEncode(credential_id);
+  std::string user_id_hex = base::HexEncode(kUserID);
+  std::string new_username = "jsapple@example.com";
+  std::string new_displayname = "John S. Apple";
+
+  base::Value::List args;
+  args.Append("securityKeyCredentialManagementUpdate");
+  args.Append(credential_id_hex);
+  args.Append(user_id_hex);
+  args.Append(new_username);
+  args.Append(new_displayname);
+
+  std::string start_callback_id = handler_->SimulateStart();
+  ASSERT_EQ(web_ui_->call_data()[0]->arg1()->GetString(), start_callback_id);
+  ASSERT_TRUE(web_ui_->call_data()[0]->arg3()->is_dict());
+  const base::Value::Dict& response =
+      web_ui_->call_data()[0]->arg3()->GetDict();
+  EXPECT_TRUE(*response.FindBool("supportsUpdateUserInformation"));
+
+  handler_->SimulateProvidePIN();
+  handler_->HandleUpdateUserInformation(args);
+  base::RunLoop().RunUntilIdle();
+
+  device::PublicKeyCredentialUserEntity updated_user(
+      device::fido_parsing_utils::Materialize(kUserID), new_username,
+      new_displayname,
+      /*icon_url=*/absl::nullopt);
+
+  EXPECT_EQ(handler_->GetDiscoveryFactory()
+                ->mutable_state()
+                ->registrations[credential_id]
+                .user,
+            updated_user);
+}
+
 TEST_F(SecurityKeysCredentialHandlerTest, TestForcePINChange) {
   handler_->GetDiscoveryFactory()->mutable_state()->force_pin_change = true;
   handler_->GetDiscoveryFactory()->mutable_state()->pin = kTestPIN;
@@ -122,9 +239,9 @@ TEST_F(SecurityKeysCredentialHandlerTest, TestForcePINChange) {
   handler_->GetDiscoveryFactory()->SetCtap2Config(config);
 
   std::string callback_id("start_callback_id");
-  base::ListValue args;
+  base::Value::List args;
   args.Append(callback_id);
-  handler_->HandleStart(&args);
+  handler_->HandleStart(args);
   base::RunLoop().RunUntilIdle();
 
   EXPECT_EQ(web_ui_->call_data()[0]->arg1()->GetString(),
@@ -201,11 +318,11 @@ TEST_F(SecurityKeysBioEnrollmentHandlerTest, TestStorageFullError) {
   EXPECT_EQ(web_ui_->call_data()[2]->arg1()->GetString(), callback_id);
   EXPECT_EQ(web_ui_->call_data()[2]->arg2()->GetBool(), true);
   EXPECT_TRUE(web_ui_->call_data()[2]->arg3()->is_dict());
-  base::Value expected(base::Value::Type::DICTIONARY);
-  expected.SetKey(
-      "code", base::Value(static_cast<int>(
-                  device::CtapDeviceResponseCode::kCtap2ErrFpDatabaseFull)));
-  expected.SetKey("remaining", base::Value(0));
+  base::Value::Dict expected;
+  expected.Set("code",
+               static_cast<int>(
+                   device::CtapDeviceResponseCode::kCtap2ErrFpDatabaseFull));
+  expected.Set("remaining", 0);
   EXPECT_EQ(*web_ui_->call_data()[2]->arg3(), expected);
 }
 

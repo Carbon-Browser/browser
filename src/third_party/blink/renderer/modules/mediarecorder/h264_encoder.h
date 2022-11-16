@@ -5,7 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_MEDIARECORDER_H264_ENCODER_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_MEDIARECORDER_H264_ENCODER_H_
 
-#include "base/sequenced_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 #include "third_party/blink/renderer/modules/mediarecorder/buildflags.h"
 
 #if !BUILDFLAG(RTC_USE_H264)
@@ -31,8 +31,11 @@ class MODULES_EXPORT H264Encoder final : public VideoTrackRecorder::Encoder {
 
   H264Encoder(const VideoTrackRecorder::OnEncodedVideoCB& on_encoded_video_cb,
               VideoTrackRecorder::CodecProfile codec_profile,
-              int32_t bits_per_second,
+              uint32_t bits_per_second,
               scoped_refptr<base::SequencedTaskRunner> task_runner);
+
+  H264Encoder(const H264Encoder&) = delete;
+  H264Encoder& operator=(const H264Encoder&) = delete;
 
  private:
   friend class H264EncoderFixture;
@@ -42,7 +45,7 @@ class MODULES_EXPORT H264Encoder final : public VideoTrackRecorder::Encoder {
   void EncodeOnEncodingTaskRunner(scoped_refptr<media::VideoFrame> frame,
                                   base::TimeTicks capture_timestamp) override;
 
-  WARN_UNUSED_RESULT bool ConfigureEncoderOnEncodingTaskRunner(
+  [[nodiscard]] bool ConfigureEncoderOnEncodingTaskRunner(
       const gfx::Size& size);
 
   SEncParamExt GetEncoderOptionForTesting();
@@ -59,8 +62,6 @@ class MODULES_EXPORT H264Encoder final : public VideoTrackRecorder::Encoder {
   // The |VideoFrame::timestamp()| of the first received frame. Only used on
   // VideoTrackRecorder::Encoder::encoding_thread_.
   base::TimeTicks first_frame_timestamp_;
-
-  DISALLOW_COPY_AND_ASSIGN(H264Encoder);
 };
 
 }  // namespace blink

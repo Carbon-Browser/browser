@@ -12,16 +12,18 @@
 
 #include "base/base64.h"
 #include "base/bind.h"
+#include "base/containers/cxx20_erase_vector.h"
 #include "base/json/values_util.h"
 #include "base/lazy_instance.h"
-#include "base/macros.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/scoped_multi_source_observation.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
 #include "base/version.h"
+#include "build/chromeos_buildflags.h"
 #include "chrome/browser/bitmap_fetcher/bitmap_fetcher.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/extensions/api/webstore_private/extension_install_status.h"
@@ -32,6 +34,7 @@
 #include "chrome/browser/extensions/install_tracker.h"
 #include "chrome/browser/extensions/scoped_active_install.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/profiles/profile_observer.h"
 #include "chrome/browser/safe_browsing/safe_browsing_metrics_collector_factory.h"
 #include "chrome/browser/safe_browsing/safe_browsing_navigation_observer_manager_factory.h"
 #include "chrome/browser/safe_browsing/safe_browsing_service.h"
@@ -44,8 +47,8 @@
 #include "components/crx_file/id_util.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/scoped_user_pref_update.h"
-#include "components/safe_browsing/content/browser/safe_browsing_metrics_collector.h"
 #include "components/safe_browsing/content/browser/safe_browsing_navigation_observer_manager.h"
+#include "components/safe_browsing/core/browser/safe_browsing_metrics_collector.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "content/public/browser/gpu_feature_checker.h"
 #include "content/public/browser/storage_partition.h"
@@ -65,7 +68,7 @@
 
 #if BUILDFLAG(ENABLE_SUPERVISED_USERS)
 // TODO(https://crbug.com/1060801): Here and elsewhere, possibly switch build
-// flag to #if defined(OS_CHROMEOS)
+// flag to #if BUILDFLAG(IS_CHROMEOS)
 #include "chrome/browser/supervised_user/supervised_user_service.h"
 #include "chrome/browser/supervised_user/supervised_user_service_factory.h"
 #endif  // BUILDFLAG(ENABLE_SUPERVISED_USERS)
@@ -94,10 +97,14 @@ namespace SetStoreLogin = api::webstore_private::SetStoreLogin;
 namespace {
 
 // Holds the Approvals between the time we prompt and start the installs.
-class PendingApprovals {
+class PendingApprovals : public ProfileObserver {
  public:
-  PendingApprovals();
-  ~PendingApprovals();
+  PendingApprovals() = default;
+
+  PendingApprovals(const PendingApprovals&) = delete;
+  PendingApprovals& operator=(const PendingApprovals&) = delete;
+
+  ~PendingApprovals() override = default;
 
   void PushApproval(std::unique_ptr<WebstoreInstaller::Approval> approval);
   std::unique_ptr<WebstoreInstaller::Approval> PopApproval(
@@ -105,20 +112,44 @@ class PendingApprovals {
       const std::string& id);
   void Clear();
 
+  int GetCount() const { return approvals_.size(); }
+
  private:
+  // ProfileObserver
+  // Remove pending approvals if the Profile is being destroyed.
+  void OnProfileWillBeDestroyed(Profile* profile) override {
+    base::EraseIf(approvals_, [profile](const auto& approval) {
+      return approval->profile == profile;
+    });
+    observation_.RemoveObservation(profile);
+  }
+
+  void MaybeAddObservation(Profile* profile) {
+    if (!observation_.IsObservingSource(profile))
+      observation_.AddObservation(profile);
+  }
+
+  // Remove observation if there are no pending approvals
+  // for the Profile.
+  void MaybeRemoveObservation(Profile* profile) {
+    for (const auto& entry : approvals_) {
+      if (entry->profile == profile)
+        return;
+    }
+    observation_.RemoveObservation(profile);
+  }
+
   using ApprovalList =
       std::vector<std::unique_ptr<WebstoreInstaller::Approval>>;
 
   ApprovalList approvals_;
-
-  DISALLOW_COPY_AND_ASSIGN(PendingApprovals);
+  base::ScopedMultiSourceObservation<Profile, ProfileObserver> observation_{
+      this};
 };
-
-PendingApprovals::PendingApprovals() {}
-PendingApprovals::~PendingApprovals() {}
 
 void PendingApprovals::PushApproval(
     std::unique_ptr<WebstoreInstaller::Approval> approval) {
+  MaybeAddObservation(approval->profile);
   approvals_.push_back(std::move(approval));
 }
 
@@ -130,6 +161,7 @@ std::unique_ptr<WebstoreInstaller::Approval> PendingApprovals::PopApproval(
         profile->IsSameOrParent(iter->get()->profile)) {
       std::unique_ptr<WebstoreInstaller::Approval> approval = std::move(*iter);
       approvals_.erase(iter);
+      MaybeRemoveObservation(approval->profile);
       return approval;
     }
   }
@@ -173,6 +205,10 @@ const char kWebstoreBlockByPolicy[] =
     "Extension installation is blocked by policy";
 const char kIncognitoError[] =
     "Apps cannot be installed in guest/incognito mode";
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+const char kSecondaryProfileError[] =
+    "Apps may only be installed using the main profile";
+#endif
 const char kEphemeralAppLaunchingNotSupported[] =
     "Ephemeral launching of apps is no longer supported.";
 
@@ -395,6 +431,10 @@ WebstorePrivateApi::PopApprovalForTesting(Profile* profile,
 
 void WebstorePrivateApi::ClearPendingApprovalsForTesting() {
   g_pending_approvals.Get().Clear();
+}
+
+int WebstorePrivateApi::GetPendingApprovalsCountForTesting() {
+  return g_pending_approvals.Get().GetCount();
 }
 
 WebstorePrivateBeginInstallWithManifest3Function::
@@ -913,6 +953,11 @@ WebstorePrivateCompleteInstallFunction::Run() {
   if (profile->IsGuestSession() || profile->IsOffTheRecord()) {
     return RespondNow(Error(kIncognitoError));
   }
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  if (!profile->IsMainProfile()) {
+    return RespondNow(Error(kSecondaryProfileError));
+  }
+#endif
 
   if (!crx_file::id_util::IdIsValid(params->expected_id))
     return RespondNow(Error(kWebstoreInvalidIdError));
@@ -1120,7 +1165,7 @@ WebstorePrivateIsPendingCustodianApprovalFunction::Run() {
       IsPendingCustodianApproval::Params::Create(args()));
   EXTENSION_FUNCTION_VALIDATE(params);
 
-  if (!Profile::FromBrowserContext(browser_context())->IsSupervised())
+  if (!Profile::FromBrowserContext(browser_context())->IsChild())
     return RespondNow(BuildResponse(false));
 
   ExtensionRegistry* registry = ExtensionRegistry::Get(browser_context());
@@ -1163,8 +1208,11 @@ WebstorePrivateGetReferrerChainFunction::Run() {
     return RespondNow(ArgumentList(
         api::webstore_private::GetReferrerChain::Results::Create("")));
 
-  content::WebContents* web_contents = GetSenderWebContents();
-  if (!web_contents) {
+  content::RenderFrameHost* rfh = render_frame_host();
+  content::RenderFrameHost* outermost_rfh =
+      rfh ? rfh->GetOutermostMainFrame() : nullptr;
+
+  if (!outermost_rfh) {
     return RespondNow(ErrorWithArguments(
         api::webstore_private::GetReferrerChain::Results::Create(""),
         kWebstoreUserCancelledError));
@@ -1176,8 +1224,8 @@ WebstorePrivateGetReferrerChainFunction::Run() {
 
   safe_browsing::ReferrerChain referrer_chain;
   SafeBrowsingNavigationObserverManager::AttributionResult result =
-      navigation_observer_manager->IdentifyReferrerChainByWebContents(
-          web_contents, kExtensionReferrerUserGestureLimit, &referrer_chain);
+      navigation_observer_manager->IdentifyReferrerChainByRenderFrameHost(
+          outermost_rfh, kExtensionReferrerUserGestureLimit, &referrer_chain);
 
   // If the referrer chain is incomplete we'll append the most recent
   // navigations to referrer chain for diagnostic purposes. This only happens if
@@ -1246,7 +1294,7 @@ WebstorePrivateGetExtensionStatusFunction::BuildResponseWithoutManifest(
 void WebstorePrivateGetExtensionStatusFunction::OnManifestParsed(
     const ExtensionId& extension_id,
     data_decoder::DataDecoder::ValueOrError result) {
-  if (!result.value || !result.value->is_dict()) {
+  if (!result.has_value() || !result->is_dict()) {
     Respond(Error(kWebstoreInvalidManifestError));
     return;
   }
@@ -1259,7 +1307,7 @@ void WebstorePrivateGetExtensionStatusFunction::OnManifestParsed(
   std::string error;
   auto dummy_extension =
       Extension::Create(base::FilePath(), mojom::ManifestLocation::kInternal,
-                        base::Value::AsDictionaryValue(*result.value),
+                        base::Value::AsDictionaryValue(*result),
                         Extension::FROM_WEBSTORE, extension_id, &error);
 
   if (!dummy_extension) {

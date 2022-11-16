@@ -9,7 +9,6 @@
 #include <memory>
 #include <string>
 
-#include "base/macros.h"
 #include "base/memory/ptr_util.h"
 #include "base/run_loop.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
@@ -40,6 +39,10 @@ class ExtensionEventObserverTest : public ChromeRenderViewHostTestHarness {
   ExtensionEventObserverTest()
       : fake_user_manager_(new FakeChromeUserManager()),
         scoped_user_manager_enabler_(base::WrapUnique(fake_user_manager_)) {}
+
+  ExtensionEventObserverTest(const ExtensionEventObserverTest&) = delete;
+  ExtensionEventObserverTest& operator=(const ExtensionEventObserverTest&) =
+      delete;
 
   ~ExtensionEventObserverTest() override = default;
 
@@ -131,8 +134,6 @@ class ExtensionEventObserverTest : public ChromeRenderViewHostTestHarness {
   user_manager::ScopedUserManager scoped_user_manager_enabler_;
 
   std::vector<scoped_refptr<const extensions::Extension>> created_apps_;
-
-  DISALLOW_COPY_AND_ASSIGN(ExtensionEventObserverTest);
 };
 
 // Tests that the ExtensionEventObserver reports readiness for suspend when
@@ -296,12 +297,7 @@ TEST_F(ExtensionEventObserverTest, DeletedExtensionHostDoesNotBlockSuspend) {
   scoped_refptr<const extensions::Extension> app =
       CreateApp("DeletedExtensionHost", true);
 
-  // The easiest way to delete an extension host is to delete the Profile it is
-  // associated with so we create a new Profile here.
-  const char kProfileName[] = "DeletedExtensionHostProfile";
-  Profile* new_profile = profile_manager_->CreateTestingProfile(kProfileName);
-
-  extensions::ExtensionHost* host = CreateHostForApp(new_profile, app.get());
+  extensions::ExtensionHost* host = CreateHostForApp(profile_, app.get());
   ASSERT_TRUE(host);
   EXPECT_TRUE(test_api_->WillDelaySuspendForExtensionHost(host));
 
@@ -311,9 +307,8 @@ TEST_F(ExtensionEventObserverTest, DeletedExtensionHostDoesNotBlockSuspend) {
       host, extensions::api::gcm::OnMessage::kEventName, kPushId);
   extension_event_observer_->OnNetworkRequestStarted(host, kNetworkId);
 
-  // Now delete the Profile.  This has the side-effect of also deleting all the
-  // ExtensionHosts.
-  profile_manager_->DeleteTestingProfile(kProfileName);
+  // Now delete the ExtensionHosts.
+  host->Close();
 
   FakePowerManagerClient::Get()->SendSuspendImminent(
       power_manager::SuspendImminent_Reason_OTHER);

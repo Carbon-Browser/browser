@@ -11,12 +11,12 @@
 #include <vector>
 
 #include "base/location.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/sequence_checker.h"
-#include "base/sequenced_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/thread.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
@@ -77,31 +77,36 @@ class SyncServiceImpl : public SyncService,
   // explicitly defined.
   struct InitParams {
     InitParams();
+
+    InitParams(const InitParams&) = delete;
+    InitParams& operator=(const InitParams&) = delete;
+
     InitParams(InitParams&& other);
+
     ~InitParams();
 
     std::unique_ptr<SyncClient> sync_client;
     // TODO(treib): Remove this and instead retrieve it via
     // SyncClient::GetIdentityManager (but mind LocalSync).
-    signin::IdentityManager* identity_manager = nullptr;
+    raw_ptr<signin::IdentityManager> identity_manager = nullptr;
     StartBehavior start_behavior = MANUAL_START;
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory;
-    network::NetworkConnectionTracker* network_connection_tracker = nullptr;
+    raw_ptr<network::NetworkConnectionTracker> network_connection_tracker =
+        nullptr;
     version_info::Channel channel = version_info::Channel::UNKNOWN;
     std::string debug_identifier;
-    policy::PolicyService* policy_service = nullptr;
-
-   private:
-    DISALLOW_COPY_AND_ASSIGN(InitParams);
+    raw_ptr<policy::PolicyService> policy_service = nullptr;
   };
 
   explicit SyncServiceImpl(InitParams init_params);
+
+  SyncServiceImpl(const SyncServiceImpl&) = delete;
+  SyncServiceImpl& operator=(const SyncServiceImpl&) = delete;
 
   ~SyncServiceImpl() override;
 
   // Initializes the object. This must be called at most once, and
   // immediately after an object of this class is constructed.
-  // TODO(mastiz): Rename this to Start().
   void Initialize();
 
   // SyncService implementation
@@ -110,8 +115,8 @@ class SyncServiceImpl : public SyncService,
   DisableReasonSet GetDisableReasons() const override;
   TransportState GetTransportState() const override;
   bool IsLocalSyncEnabled() const override;
-  CoreAccountInfo GetAuthenticatedAccountInfo() const override;
-  bool IsAuthenticatedAccountPrimary() const override;
+  CoreAccountInfo GetAccountInfo() const override;
+  bool HasSyncConsent() const override;
   GoogleServiceAuthError GetAuthError() const override;
   base::Time GetAuthErrorTime() const override;
   bool RequiresClientUpgrade() const override;
@@ -121,7 +126,6 @@ class SyncServiceImpl : public SyncService,
   ModelTypeSet GetPreferredDataTypes() const override;
   ModelTypeSet GetActiveDataTypes() const override;
   void StopAndClear() override;
-  void SetSyncAllowedByPlatform(bool allowed) override;
   void OnDataTypeRequestsSyncStartup(ModelType type) override;
   void TriggerRefresh(const ModelTypeSet& types) override;
   void DataTypePreconditionChanged(ModelType type) override;
@@ -156,10 +160,8 @@ class SyncServiceImpl : public SyncService,
       override;
 
   // SyncEngineHost implementation.
-  void OnEngineInitialized(
-      const WeakHandle<DataTypeDebugInfoListener>& debug_info_listener,
-      bool success,
-      bool is_first_time_sync_configure) override;
+  void OnEngineInitialized(bool success,
+                           bool is_first_time_sync_configure) override;
   void OnSyncCycleCompleted(const SyncCycleSnapshot& snapshot) override;
   void OnProtocolEvent(const ProtocolEvent& event) override;
   void OnConnectionStatusChange(ConnectionStatus status) override;
@@ -175,12 +177,15 @@ class SyncServiceImpl : public SyncService,
   void CryptoStateChanged() override;
   void CryptoRequiredUserActionChanged() override;
   void ReconfigureDataTypesDueToCrypto() override;
-  void EncryptionBootstrapTokenChanged(
-      const std::string& bootstrap_token) override;
+  void SetEncryptionBootstrapToken(const std::string& bootstrap_token) override;
+  std::string GetEncryptionBootstrapToken() override;
 
   // IdentityManager::Observer implementation.
   void OnAccountsInCookieUpdated(
       const signin::AccountsInCookieJarInfo& accounts_in_cookie_jar_info,
+      const GoogleServiceAuthError& error) override;
+  void OnErrorStateOfRefreshTokenUpdatedForAccount(
+      const CoreAccountInfo& account_info,
       const GoogleServiceAuthError& error) override;
 
   // Similar to above but with a callback that will be invoked on completion.
@@ -202,17 +207,6 @@ class SyncServiceImpl : public SyncService,
   // KeyedService implementation.  This must be called exactly
   // once (before this object is destroyed).
   void Shutdown() override;
-
-#if defined(OS_ANDROID)
-  // Persists the fact that sync should no longer respect whether Android master
-  // sync is enabled. This will be respected for the current syncing account
-  // (if one exists) and any future ones. Only called on Android.
-  void SetDecoupledFromAndroidMasterSync();
-
-  // Gets the persisted information of whether sync should no longer respect
-  // if Android master sync is enabled. Only called on Android.
-  bool GetDecoupledFromAndroidMasterSync();
-#endif  // defined(OS_ANDROID)
 
   // Returns whether or not the underlying sync engine has made any
   // local changes to items that have not yet been synced with the
@@ -257,6 +251,21 @@ class SyncServiceImpl : public SyncService,
     ERROR_REASON_ACTIONABLE_ERROR,
   };
 
+  // These values are persisted to logs. Entries should not be renumbered and
+  // numeric values should never be reused.
+  enum class ResetEngineReason {
+    kShutdown = 0,
+    kUnrecoverableError = 1,
+    kDisabledAccount = 2,
+    kRequestedPrefChange = 3,
+    kStopAndClear = 4,
+    // kSetSyncAllowedByPlatform = 5,
+    kCredentialsChanged = 6,
+    kResetLocalData = 7,
+
+    kMaxValue = kResetLocalData
+  };
+
   // Callbacks for SyncAuthManager.
   void AccountStateChanged();
   void CredentialsChanged();
@@ -299,7 +308,8 @@ class SyncServiceImpl : public SyncService,
   // should be kept or not.
   // If the engine is still allowed to run (per IsEngineAllowedToRun()), it will
   // soon start up again (possibly in transport-only mode).
-  void ResetEngine(ShutdownReason reason);
+  void ResetEngine(ShutdownReason shutdown_reason,
+                   ResetEngineReason reset_reason);
 
   // Helper for OnUnrecoverableError.
   void OnUnrecoverableErrorImpl(const base::Location& from_here,
@@ -347,7 +357,7 @@ class SyncServiceImpl : public SyncService,
   // Encapsulates user signin - used to set/get the user's authenticated
   // email address and sign-out upon error.
   // May be null (if local Sync is enabled).
-  signin::IdentityManager* const identity_manager_;
+  const raw_ptr<signin::IdentityManager> identity_manager_;
 
   // The user-configurable knobs. Non-null between Initialize() and Shutdown().
   std::unique_ptr<SyncUserSettingsImpl> user_settings_;
@@ -382,7 +392,7 @@ class SyncServiceImpl : public SyncService,
   scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory_;
 
   // The global NetworkConnectionTracker instance.
-  network::NetworkConnectionTracker* network_connection_tracker_;
+  raw_ptr<network::NetworkConnectionTracker> network_connection_tracker_;
 
   // Indicates if this is the first time sync is being configured.
   // This is set to true if last synced time is not set at the time of
@@ -397,10 +407,6 @@ class SyncServiceImpl : public SyncService,
   // Prevents SyncServiceImpl from starting engine till browser restarted
   // or user signed out.
   bool sync_disabled_by_admin_;
-
-  // Whether Sync is allowed at the platform level (e.g. Android's "MasterSync"
-  // toggle). Maps to DISABLE_REASON_PLATFORM_OVERRIDE.
-  bool sync_allowed_by_platform_ = true;
 
   // Information describing an unrecoverable error.
   absl::optional<UnrecoverableErrorReason> unrecoverable_error_reason_ =
@@ -459,12 +465,12 @@ class SyncServiceImpl : public SyncService,
   // other platforms.
   bool sessions_invalidations_enabled_;
 
+  GoogleServiceAuthError last_error_state_of_refresh_token_;
+
   // This weak factory invalidates its issued pointers when Sync is disabled.
   base::WeakPtrFactory<SyncServiceImpl> sync_enabled_weak_factory_{this};
 
   base::WeakPtrFactory<SyncServiceImpl> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(SyncServiceImpl);
 };
 
 }  // namespace syncer

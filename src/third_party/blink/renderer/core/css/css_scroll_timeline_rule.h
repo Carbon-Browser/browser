@@ -6,7 +6,8 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_CSS_CSS_SCROLL_TIMELINE_RULE_H_
 
 #include "third_party/blink/renderer/core/css/css_rule.h"
-#include "third_party/blink/renderer/platform/heap/handle.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/wtf/casting.h"
 
 namespace blink {
@@ -28,7 +29,6 @@ class CSSScrollTimelineRule final : public CSSRule {
   String orientation() const;
   String start() const;
   String end() const;
-  String timeRange() const;
 
   void Trace(Visitor*) const override;
 

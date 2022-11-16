@@ -8,7 +8,6 @@
 #include <utility>
 
 #include "base/check_op.h"
-#include "base/cxx17_backports.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/strings/string_piece.h"
 #include "build/build_config.h"
@@ -36,7 +35,7 @@ int g_max_sockets_per_pool[] = {
   256   // WEBSOCKET_SOCKET_POOL
 };
 
-static_assert(base::size(g_max_sockets_per_pool) ==
+static_assert(std::size(g_max_sockets_per_pool) ==
                   HttpNetworkSession::NUM_SOCKET_POOL_TYPES,
               "max sockets per pool length mismatch");
 
@@ -53,7 +52,7 @@ int g_max_sockets_per_group[] = {
     255  // WEBSOCKET_SOCKET_POOL
 };
 
-static_assert(base::size(g_max_sockets_per_group) ==
+static_assert(std::size(g_max_sockets_per_group) ==
                   HttpNetworkSession::NUM_SOCKET_POOL_TYPES,
               "max sockets per group length mismatch");
 
@@ -65,7 +64,7 @@ int g_max_sockets_per_proxy_server[] = {
   kDefaultMaxSocketsPerProxyServer   // WEBSOCKET_SOCKET_POOL
 };
 
-static_assert(base::size(g_max_sockets_per_proxy_server) ==
+static_assert(std::size(g_max_sockets_per_proxy_server) ==
                   HttpNetworkSession::NUM_SOCKET_POOL_TYPES,
               "max sockets per proxy server length mismatch");
 
@@ -134,9 +133,9 @@ int InitSocketPoolHelper(
                              : absl::optional<NetworkTrafficAnnotationTag>(
                                    proxy_info.traffic_annotation());
   if (num_preconnect_streams) {
-    pool->RequestSockets(connection_group, std::move(socket_params),
-                         proxy_annotation, num_preconnect_streams, net_log);
-    return OK;
+    return pool->RequestSockets(connection_group, std::move(socket_params),
+                                proxy_annotation, num_preconnect_streams,
+                                std::move(callback), net_log);
   }
 
   return socket_handle->Init(connection_group, std::move(socket_params),
@@ -215,11 +214,9 @@ void ClientSocketPoolManager::set_max_sockets_per_proxy_server(
 // static
 base::TimeDelta ClientSocketPoolManager::unused_idle_socket_timeout(
     HttpNetworkSession::SocketPoolType pool_type) {
-  return base::TimeDelta::FromSeconds(base::GetFieldTrialParamByFeatureAsInt(
+  return base::Seconds(base::GetFieldTrialParamByFeatureAsInt(
       net::features::kNetUnusedIdleSocketTimeout,
-      "unused_idle_socket_timeout_seconds",
-      60
-      ));
+      "unused_idle_socket_timeout_seconds", 60));
 }
 
 int InitSocketHandleForHttpRequest(
@@ -292,7 +289,8 @@ int PreconnectSocketsForHttpRequest(url::SchemeHostPort endpoint,
                                     NetworkIsolationKey network_isolation_key,
                                     SecureDnsPolicy secure_dns_policy,
                                     const NetLogWithSource& net_log,
-                                    int num_preconnect_streams) {
+                                    int num_preconnect_streams,
+                                    CompletionOnceCallback callback) {
   // QUIC proxies are currently not supported through this method.
   DCHECK(!proxy_info.is_quic());
 
@@ -306,7 +304,7 @@ int PreconnectSocketsForHttpRequest(url::SchemeHostPort endpoint,
       proxy_info, ssl_config_for_origin, ssl_config_for_proxy,
       false /* force_tunnel */, privacy_mode, std::move(network_isolation_key),
       secure_dns_policy, SocketTag(), net_log, num_preconnect_streams, nullptr,
-      HttpNetworkSession::NORMAL_SOCKET_POOL, CompletionOnceCallback(),
+      HttpNetworkSession::NORMAL_SOCKET_POOL, std::move(callback),
       ClientSocketPool::ProxyAuthCallback());
 }
 

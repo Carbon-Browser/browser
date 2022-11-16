@@ -8,7 +8,7 @@
 #include "base/callback.h"
 #include "chrome/browser/ash/printing/history/print_job_history_service.h"
 
-namespace chromeos {
+namespace ash {
 
 // Observer that counts the number of times it has been called.
 class TestPrintJobHistoryServiceObserver
@@ -17,7 +17,7 @@ class TestPrintJobHistoryServiceObserver
   TestPrintJobHistoryServiceObserver(
       PrintJobHistoryService* print_job_history_service,
       base::RepeatingClosure run_loop_closure);
-  ~TestPrintJobHistoryServiceObserver();
+  ~TestPrintJobHistoryServiceObserver() override;
 
   int num_print_jobs() { return num_print_jobs_; }
 
@@ -26,13 +26,13 @@ class TestPrintJobHistoryServiceObserver
   void OnPrintJobFinished(
       const printing::proto::PrintJobInfo& print_job_info) override;
 
-  chromeos::PrintJobHistoryService* print_job_history_service_;
+  PrintJobHistoryService* print_job_history_service_;
   base::RepeatingClosure run_loop_closure_;
 
   // The number of times the observer is called.
   int num_print_jobs_ = 0;
 };
 
-}  // namespace chromeos
+}  // namespace ash
 
 #endif  // CHROME_BROWSER_ASH_PRINTING_HISTORY_TEST_PRINT_JOB_HISTORY_SERVICE_OBSERVER_H_

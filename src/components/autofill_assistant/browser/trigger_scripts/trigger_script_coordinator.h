@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "base/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list_types.h"
 #include "base/time/time.h"
@@ -59,7 +60,7 @@ class TriggerScriptCoordinator : public content::WebContentsObserver {
 
   // |web_contents| must outlive this instance.
   TriggerScriptCoordinator(
-      StarterPlatformDelegate* starter_delegate,
+      base::WeakPtr<StarterPlatformDelegate> starter_delegate,
       content::WebContents* web_contents,
       std::unique_ptr<WebController> web_controller,
       std::unique_ptr<ServiceRequestSender> request_sender,
@@ -124,10 +125,7 @@ class TriggerScriptCoordinator : public content::WebContentsObserver {
   friend class TriggerScriptCoordinatorTest;
 
   // From content::WebContentsObserver.
-  void DidStartNavigation(
-      content::NavigationHandle* navigation_handle) override;
-  void DidFinishNavigation(
-      content::NavigationHandle* navigation_handle) override;
+  void PrimaryPageChanged(content::Page& page) override;
   void OnVisibilityChanged(content::Visibility visibility) override;
   void WebContentsDestroyed() override;
 
@@ -139,7 +137,12 @@ class TriggerScriptCoordinator : public content::WebContentsObserver {
   void OnDynamicTriggerConditionsEvaluated(
       bool is_out_of_schedule,
       absl::optional<base::TimeTicks> start_time);
-  void OnGetTriggerScripts(int http_status, const std::string& response);
+  void OnGetTriggerScripts(
+      int http_status,
+      const std::string& response,
+      const ServiceRequestSender::ResponseInfo& response_info);
+  void RegisterExperimentSyntheticFieldTrial(
+      const std::vector<std::string>& experiments) const;
   GURL GetCurrentURL() const;
   void OnEffectiveVisibilityChanged();
   void OnOnboardingFinished(bool onboardingShown, OnboardingResult result);
@@ -161,7 +164,7 @@ class TriggerScriptCoordinator : public content::WebContentsObserver {
   TriggerScriptProto::TriggerUIType GetTriggerUiTypeForVisibleScript() const;
 
   // Delegate used to access settings and show the onboarding.
-  StarterPlatformDelegate* starter_delegate_ = nullptr;
+  base::WeakPtr<StarterPlatformDelegate> starter_delegate_;
 
   // Delegate used to show and hide the UI.
   std::unique_ptr<UiDelegate> ui_delegate_;
@@ -218,8 +221,7 @@ class TriggerScriptCoordinator : public content::WebContentsObserver {
   std::unique_ptr<DynamicTriggerConditions> dynamic_trigger_conditions_;
 
   // The time between consecutive evaluations of dynamic trigger conditions.
-  base::TimeDelta trigger_condition_check_interval_ =
-      base::TimeDelta::FromMilliseconds(1000);
+  base::TimeDelta trigger_condition_check_interval_ = base::Milliseconds(1000);
 
   // The number of times the trigger condition may be evaluated. If this reaches
   // 0, the trigger script stops with |TRIGGER_CONDITION_TIMEOUT|.
@@ -235,7 +237,7 @@ class TriggerScriptCoordinator : public content::WebContentsObserver {
   int64_t initial_trigger_condition_evaluations_ = -1;
 
   // The UKM recorder to use for metrics.
-  ukm::UkmRecorder* const ukm_recorder_;
+  const raw_ptr<ukm::UkmRecorder> ukm_recorder_;
 
   // The UKM source id to record. This can change over time as the user
   // navigates around, but will always point to a source-id on a supported

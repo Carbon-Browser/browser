@@ -5,25 +5,33 @@
 #include "chrome/browser/ash/borealis/borealis_game_mode_controller.h"
 
 #include "ash/shell.h"
+#include "base/time/time.h"
+#include "chrome/browser/ash/borealis/borealis_metrics.h"
 #include "chrome/browser/ash/borealis/borealis_service.h"
 #include "chrome/browser/ash/borealis/borealis_window_manager.h"
-#include "chromeos/dbus/resourced/resourced_client.h"
+#include "chromeos/ash/components/dbus/resourced/resourced_client.h"
 #include "ui/views/widget/widget.h"
 
 namespace borealis {
 
-BorealisGameModeController::BorealisGameModeController()
-    : root_focus_observer_(this) {
+constexpr int kRefreshSec = 60;
+constexpr int kTimeoutSec = kRefreshSec + 10;
+
+BorealisGameModeController::BorealisGameModeController() {
   if (!ash::Shell::HasInstance())
     return;
   aura::client::FocusClient* focus_client =
       aura::client::GetFocusClient(ash::Shell::GetPrimaryRootWindow());
-  root_focus_observer_.Observe(focus_client);
+  focus_client->AddObserver(this);
   // In case a window is already focused when this is constructed.
   OnWindowFocused(focus_client->GetFocusedWindow(), nullptr);
 }
 
-BorealisGameModeController::~BorealisGameModeController() = default;
+BorealisGameModeController::~BorealisGameModeController() {
+  if (ash::Shell::HasInstance())
+    aura::client::GetFocusClient(ash::Shell::GetPrimaryRootWindow())
+        ->RemoveObserver(this);
+}
 
 void BorealisGameModeController::OnWindowFocused(aura::Window* gained_focus,
                                                  aura::Window* lost_focus) {
@@ -79,30 +87,50 @@ void BorealisGameModeController::WindowTracker::OnWindowDestroying(
   game_mode_.reset();
 }
 
+bool BorealisGameModeController::GameModeEnabler::should_record_failure;
+
 BorealisGameModeController::GameModeEnabler::GameModeEnabler() {
-  if (chromeos::ResourcedClient::Get()) {
-    chromeos::ResourcedClient::Get()->SetGameMode(
-        true, base::BindOnce(&GameModeEnabler::OnSetGameMode));
+  GameModeEnabler::should_record_failure = true;
+  RecordBorealisGameModeResultHistogram(BorealisGameModeResult::kAttempted);
+  if (ash::ResourcedClient::Get()) {
+    ash::ResourcedClient::Get()->SetGameModeWithTimeout(
+        ash::ResourcedClient::GameMode::BOREALIS, kTimeoutSec,
+        base::BindOnce(&GameModeEnabler::OnSetGameMode, false));
   }
+  timer_.Start(FROM_HERE, base::Seconds(kRefreshSec), this,
+               &GameModeEnabler::RefreshGameMode);
 }
 
 BorealisGameModeController::GameModeEnabler::~GameModeEnabler() {
-  if (chromeos::ResourcedClient::Get()) {
-    chromeos::ResourcedClient::Get()->SetGameMode(
-        false, base::BindOnce(&GameModeEnabler::OnSetGameMode));
+  timer_.Stop();
+  if (ash::ResourcedClient::Get()) {
+    ash::ResourcedClient::Get()->SetGameModeWithTimeout(
+        ash::ResourcedClient::GameMode::OFF, 0,
+        base::BindOnce(&GameModeEnabler::OnSetGameMode, true));
   }
 }
 
-// State is true if entering game mode, false if exiting.
+void BorealisGameModeController::GameModeEnabler::RefreshGameMode() {
+  if (ash::ResourcedClient::Get()) {
+    ash::ResourcedClient::Get()->SetGameModeWithTimeout(
+        ash::ResourcedClient::GameMode::BOREALIS, kTimeoutSec,
+        base::BindOnce(&GameModeEnabler::OnSetGameMode, true));
+  }
+}
+
+// Previous is whether game mode was enabled previous to this call.
 void BorealisGameModeController::GameModeEnabler::OnSetGameMode(
-    absl::optional<bool> state) {
-  if (!state.has_value()) {
+    bool was_refresh,
+    absl::optional<ash::ResourcedClient::GameMode> previous) {
+  if (!previous.has_value()) {
     LOG(ERROR) << "Failed to set Game Mode";
-    // TODO(b/186184700): Remove logging for entering/exiting game mode.
-  } else if (state.value()) {
-    LOG(ERROR) << "Entered Game Mode";
-  } else {
-    LOG(ERROR) << "Exited Game Mode";
+  } else if (GameModeEnabler::should_record_failure && was_refresh &&
+             previous.value() != ash::ResourcedClient::GameMode::BOREALIS) {
+    // If game mode was not on and it was not the initial call,
+    // it means the previous call failed/timed out.
+    RecordBorealisGameModeResultHistogram(BorealisGameModeResult::kFailed);
+    // Only record failures once per entry into gamemode.
+    GameModeEnabler::should_record_failure = false;
   }
 }
 

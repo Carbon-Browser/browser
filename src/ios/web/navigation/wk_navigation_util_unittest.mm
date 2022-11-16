@@ -8,14 +8,15 @@
 #include <vector>
 
 #include "base/json/json_reader.h"
+#include "base/strings/escape.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/values.h"
 #include "ios/web/common/features.h"
 #import "ios/web/navigation/navigation_item_impl.h"
+#import "ios/web/public/navigation/navigation_item.h"
 #include "ios/web/test/test_url_constants.h"
-#include "net/base/escape.h"
 #import "net/base/mac/url_conversions.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "testing/platform_test.h"
@@ -44,12 +45,12 @@ void CreateTestNavigationItems(
 }
 
 // Extracts session dictionary from |restore_session_url|.
-base::JSONReader::ValueWithError ExtractSessionDict(GURL restore_session_url) {
+base::JSONReader::Result ExtractSessionDict(GURL restore_session_url) {
   NSString* fragment = net::NSURLWithGURL(restore_session_url).fragment;
   NSString* encoded_session =
       [fragment substringFromIndex:strlen(kRestoreSessionSessionHashPrefix)];
-  std::string session_json =
-      net::UnescapeBinaryURLComponent(base::SysNSStringToUTF8(encoded_session));
+  std::string session_json = base::UnescapeBinaryURLComponent(
+      base::SysNSStringToUTF8(encoded_session));
   return base::JSONReader::ReadAndReturnValueWithError(session_json,
                                                        base::JSON_PARSE_RFC);
 }
@@ -143,7 +144,7 @@ TEST_F(WKNavigationUtilTest, CreateRestoreSessionUrl) {
   ASSERT_TRUE(IsRestoreSessionUrl(net::NSURLWithGURL(restore_session_url)));
 
   std::string session_json =
-      net::UnescapeBinaryURLComponent(restore_session_url.ref());
+      base::UnescapeBinaryURLComponent(restore_session_url.ref());
 
   EXPECT_EQ("session={\"offset\":-2,\"titles\":[\"Test Website 0\",\"\",\"\"],"
             "\"urls\":[\"http://www.0.com/\",\"http://www.1.com/\","
@@ -165,15 +166,15 @@ TEST_F(WKNavigationUtilTest, CreateRestoreSessionBruteForce) {
       CreateRestoreSessionUrl(last_committed_index, items, &restore_session_url,
                               &first_index);
       // Extract session JSON from restoration URL.
-      base::JSONReader::ValueWithError value_with_error =
-          ExtractSessionDict(restore_session_url);
+      auto value_with_error = ExtractSessionDict(restore_session_url);
 
-      base::Value* urls_value = value_with_error.value->FindKey("urls");
+      base::Value* urls_value = value_with_error->FindKey("urls");
       if (num_items > kMaxSessionSize) {
         ASSERT_EQ(kMaxSessionSize,
-                  static_cast<int>(urls_value->GetList().size()));
+                  static_cast<int>(urls_value->GetListDeprecated().size()));
       } else {
-        ASSERT_EQ(num_items, static_cast<int>(urls_value->GetList().size()));
+        ASSERT_EQ(num_items,
+                  static_cast<int>(urls_value->GetListDeprecated().size()));
       }
     }
   }
@@ -195,20 +196,19 @@ TEST_F(WKNavigationUtilTest, CreateRestoreSessionUrlForLargeSession) {
   ASSERT_TRUE(IsRestoreSessionUrl(net::NSURLWithGURL(restore_session_url)));
 
   // Extract session JSON from restoration URL.
-  base::JSONReader::ValueWithError value_with_error =
-      ExtractSessionDict(restore_session_url);
-  ASSERT_TRUE(value_with_error.value.has_value());
+  auto value_with_error = ExtractSessionDict(restore_session_url);
+  ASSERT_TRUE(value_with_error.has_value());
 
   // Verify that all titles and URLs are present.
-  base::Value* titles_value = value_with_error.value->FindKey("titles");
+  base::Value* titles_value = value_with_error->FindKey("titles");
   ASSERT_TRUE(titles_value);
   ASSERT_TRUE(titles_value->is_list());
-  ASSERT_EQ(kItemCount, titles_value->GetList().size());
+  ASSERT_EQ(kItemCount, titles_value->GetListDeprecated().size());
 
-  base::Value* urls_value = value_with_error.value->FindKey("urls");
+  base::Value* urls_value = value_with_error->FindKey("urls");
   ASSERT_TRUE(urls_value);
   ASSERT_TRUE(urls_value->is_list());
-  ASSERT_EQ(kItemCount, urls_value->GetList().size());
+  ASSERT_EQ(kItemCount, urls_value->GetListDeprecated().size());
 }
 
 // Verifies that large session can be stored in NSURL and that extra items
@@ -229,30 +229,31 @@ TEST_F(WKNavigationUtilTest, CreateRestoreSessionUrlForExtraLargeForwardList) {
   ASSERT_TRUE(IsRestoreSessionUrl(net::NSURLWithGURL(restore_session_url)));
 
   // Extract session JSON from restoration URL.
-  base::JSONReader::ValueWithError value_with_error =
-      ExtractSessionDict(restore_session_url);
-  ASSERT_TRUE(value_with_error.value.has_value());
+  auto value_with_error = ExtractSessionDict(restore_session_url);
+  ASSERT_TRUE(value_with_error.has_value());
 
   // Verify that first kMaxSessionSize titles and URLs are present.
-  base::Value* titles_value = value_with_error.value->FindKey("titles");
+  base::Value* titles_value = value_with_error->FindKey("titles");
   ASSERT_TRUE(titles_value);
   ASSERT_TRUE(titles_value->is_list());
   ASSERT_EQ(static_cast<size_t>(kMaxSessionSize),
-            titles_value->GetList().size());
-  ASSERT_EQ("Test0", titles_value->GetList()[0].GetString());
-  ASSERT_EQ("Test74", titles_value->GetList()[kMaxSessionSize - 1].GetString());
+            titles_value->GetListDeprecated().size());
+  ASSERT_EQ("Test0", titles_value->GetListDeprecated()[0].GetString());
+  ASSERT_EQ("Test74",
+            titles_value->GetListDeprecated()[kMaxSessionSize - 1].GetString());
 
-  base::Value* urls_value = value_with_error.value->FindKey("urls");
+  base::Value* urls_value = value_with_error->FindKey("urls");
   ASSERT_TRUE(urls_value);
   ASSERT_TRUE(urls_value->is_list());
-  ASSERT_EQ(static_cast<size_t>(kMaxSessionSize), urls_value->GetList().size());
-  ASSERT_EQ("http://www.0.com/", urls_value->GetList()[0].GetString());
+  ASSERT_EQ(static_cast<size_t>(kMaxSessionSize),
+            urls_value->GetListDeprecated().size());
+  ASSERT_EQ("http://www.0.com/",
+            urls_value->GetListDeprecated()[0].GetString());
   ASSERT_EQ("http://www.74.com/",
-            urls_value->GetList()[kMaxSessionSize - 1].GetString());
+            urls_value->GetListDeprecated()[kMaxSessionSize - 1].GetString());
 
   // Verify the offset is correct.
-  ASSERT_EQ(1 - kMaxSessionSize,
-            value_with_error.value->FindKey("offset")->GetInt());
+  ASSERT_EQ(1 - kMaxSessionSize, value_with_error->FindKey("offset")->GetInt());
 }
 
 // Verifies that large session can be stored in NSURL and that extra items
@@ -273,30 +274,31 @@ TEST_F(WKNavigationUtilTest, CreateRestoreSessionUrlForExtraLargeBackList) {
   ASSERT_TRUE(IsRestoreSessionUrl(net::NSURLWithGURL(restore_session_url)));
 
   // Extract session JSON from restoration URL.
-  base::JSONReader::ValueWithError value_with_error =
-      ExtractSessionDict(restore_session_url);
-  ASSERT_TRUE(value_with_error.value.has_value());
+  auto value_with_error = ExtractSessionDict(restore_session_url);
+  ASSERT_TRUE(value_with_error.has_value());
 
   // Verify that last kMaxSessionSize titles and URLs are present.
-  base::Value* titles_value = value_with_error.value->FindKey("titles");
+  base::Value* titles_value = value_with_error->FindKey("titles");
   ASSERT_TRUE(titles_value);
   ASSERT_TRUE(titles_value->is_list());
   ASSERT_EQ(static_cast<size_t>(kMaxSessionSize),
-            titles_value->GetList().size());
-  ASSERT_EQ("Test150", titles_value->GetList()[0].GetString());
+            titles_value->GetListDeprecated().size());
+  ASSERT_EQ("Test150", titles_value->GetListDeprecated()[0].GetString());
   ASSERT_EQ("Test224",
-            titles_value->GetList()[kMaxSessionSize - 1].GetString());
+            titles_value->GetListDeprecated()[kMaxSessionSize - 1].GetString());
 
-  base::Value* urls_value = value_with_error.value->FindKey("urls");
+  base::Value* urls_value = value_with_error->FindKey("urls");
   ASSERT_TRUE(urls_value);
   ASSERT_TRUE(urls_value->is_list());
-  ASSERT_EQ(static_cast<size_t>(kMaxSessionSize), urls_value->GetList().size());
-  ASSERT_EQ("http://www.150.com/", urls_value->GetList()[0].GetString());
+  ASSERT_EQ(static_cast<size_t>(kMaxSessionSize),
+            urls_value->GetListDeprecated().size());
+  ASSERT_EQ("http://www.150.com/",
+            urls_value->GetListDeprecated()[0].GetString());
   ASSERT_EQ("http://www.224.com/",
-            urls_value->GetList()[kMaxSessionSize - 1].GetString());
+            urls_value->GetListDeprecated()[kMaxSessionSize - 1].GetString());
 
   // Verify the offset is correct.
-  ASSERT_EQ(0, value_with_error.value->FindKey("offset")->GetInt());
+  ASSERT_EQ(0, value_with_error->FindKey("offset")->GetInt());
 }
 
 // Verifies that large session can be stored in NSURL and that extra items
@@ -318,31 +320,32 @@ TEST_F(WKNavigationUtilTest,
   ASSERT_TRUE(IsRestoreSessionUrl(net::NSURLWithGURL(restore_session_url)));
 
   // Extract session JSON from restoration URL.
-  base::JSONReader::ValueWithError value_with_error =
-      ExtractSessionDict(restore_session_url);
-  ASSERT_TRUE(value_with_error.value.has_value());
+  auto value_with_error = ExtractSessionDict(restore_session_url);
+  ASSERT_TRUE(value_with_error.has_value());
 
   // Verify that last kMaxSessionSize titles and URLs are present.
-  base::Value* titles_value = value_with_error.value->FindKey("titles");
+  base::Value* titles_value = value_with_error->FindKey("titles");
   ASSERT_TRUE(titles_value);
   ASSERT_TRUE(titles_value->is_list());
   ASSERT_EQ(static_cast<size_t>(kMaxSessionSize),
-            titles_value->GetList().size());
-  ASSERT_EQ("Test38", titles_value->GetList()[0].GetString());
+            titles_value->GetListDeprecated().size());
+  ASSERT_EQ("Test38", titles_value->GetListDeprecated()[0].GetString());
   ASSERT_EQ("Test112",
-            titles_value->GetList()[kMaxSessionSize - 1].GetString());
+            titles_value->GetListDeprecated()[kMaxSessionSize - 1].GetString());
 
-  base::Value* urls_value = value_with_error.value->FindKey("urls");
+  base::Value* urls_value = value_with_error->FindKey("urls");
   ASSERT_TRUE(urls_value);
   ASSERT_TRUE(urls_value->is_list());
-  ASSERT_EQ(static_cast<size_t>(kMaxSessionSize), urls_value->GetList().size());
-  ASSERT_EQ("http://www.38.com/", urls_value->GetList()[0].GetString());
+  ASSERT_EQ(static_cast<size_t>(kMaxSessionSize),
+            urls_value->GetListDeprecated().size());
+  ASSERT_EQ("http://www.38.com/",
+            urls_value->GetListDeprecated()[0].GetString());
   ASSERT_EQ("http://www.112.com/",
-            urls_value->GetList()[kMaxSessionSize - 1].GetString());
+            urls_value->GetListDeprecated()[kMaxSessionSize - 1].GetString());
 
   // Verify the offset is correct.
   ASSERT_EQ((1 - kMaxSessionSize) / 2,
-            value_with_error.value->FindKey("offset")->GetInt());
+            value_with_error->FindKey("offset")->GetInt());
 }
 
 TEST_F(WKNavigationUtilTest, IsNotRestoreSessionUrl) {

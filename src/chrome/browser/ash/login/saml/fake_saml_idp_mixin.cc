@@ -14,7 +14,7 @@
 #include "chrome/browser/ash/login/test/fake_gaia_mixin.h"
 #include "chrome/browser/ash/login/users/test_users.h"
 #include "chrome/common/chrome_paths.h"
-#include "chromeos/dbus/attestation/fake_attestation_client.h"
+#include "chromeos/ash/components/dbus/attestation/fake_attestation_client.h"
 #include "net/base/url_util.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -53,7 +53,7 @@ constexpr char kTpmChallenge[] = {0,   1,   2,      'c',    'h',
                                   'a', 'l', '\xFD', '\xFE', '\xFF'};
 
 std::string GetTpmChallenge() {
-  return std::string(kTpmChallenge, base::size(kTpmChallenge));
+  return std::string(kTpmChallenge, std::size(kTpmChallenge));
 }
 
 std::string GetTpmChallengeBase64() {
@@ -110,6 +110,16 @@ void FakeSamlIdpMixin::SetUpCommandLine(base::CommandLine* command_line) {
   // NOTE: Ideally testdata would all be in chromeos/login, to match the test.
   html_template_dir_ = test_data_dir.Append("login");
   saml_response_dir_ = test_data_dir.Append("chromeos").Append("login");
+
+  {
+    base::ScopedAllowBlockingForTesting allow_io;
+    std::string fake_saml_continue_response;
+    EXPECT_TRUE(base::ReadFileToString(
+        html_template_dir_.Append("gaia_finish_after_saml.html"),
+        &fake_saml_continue_response));
+    gaia_mixin_->fake_gaia()->SetFakeSamlContinueResponse(
+        fake_saml_continue_response);
+  }
 
   ASSERT_TRUE(saml_server_.Start());
   ASSERT_TRUE(saml_http_server_.Start());
@@ -256,8 +266,7 @@ std::unique_ptr<HttpResponse> FakeSamlIdpMixin::BuildResponseForLoginAuth(
     const HttpRequest& request,
     const GURL& request_url) {
   const std::string relay_state = GetRelayState(request);
-  GURL redirect_url =
-      gaia_mixin_->gaia_https_forwarder()->GetURLForSSLHost("").Resolve("/SSO");
+  GURL redirect_url = gaia_mixin_->GetFakeGaiaURL("/SSO");
 
   if (!login_auth_html_template_.empty()) {
     return BuildHTMLResponse(login_auth_html_template_, relay_state,

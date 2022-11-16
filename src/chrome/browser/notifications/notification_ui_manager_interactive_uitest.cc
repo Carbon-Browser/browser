@@ -64,14 +64,15 @@ class NotificationUIManagerInteractiveUITest : public InProcessBrowserTest {
   // page that's being used in this browser test.
   void GrantNotificationPermissionForTest() const {
     NotificationPermissionContext::UpdatePermission(
-        browser()->profile(), TestPageUrl().GetOrigin(), CONTENT_SETTING_ALLOW);
+        browser()->profile(), TestPageUrl().DeprecatedGetOriginAsURL(),
+        CONTENT_SETTING_ALLOW);
   }
 
   // Executes |script| and stores the result as a string in |result|. A boolean
   // will be returned, indicating whether the script was executed successfully.
   bool RunScript(const std::string& script, std::string* result) const {
     return content::ExecuteScriptAndExtractString(
-        GetActiveWebContents()->GetMainFrame(), script, result);
+        GetActiveWebContents()->GetPrimaryMainFrame(), script, result);
   }
 
   GURL TestPageUrl() const {

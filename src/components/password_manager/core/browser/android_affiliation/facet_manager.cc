@@ -66,7 +66,7 @@
 
 #include "base/bind.h"
 #include "base/location.h"
-#include "base/task_runner.h"
+#include "base/task/task_runner.h"
 #include "base/time/clock.h"
 #include "base/time/time.h"
 #include "components/password_manager/core/browser/android_affiliation/facet_manager_host.h"
@@ -208,13 +208,11 @@ bool FacetManager::IsCachedDataNearStale() const {
 }
 
 base::Time FacetManager::GetCacheSoftExpiryTime() const {
-  return last_update_time_ +
-         base::TimeDelta::FromHours(kCacheSoftExpiryInHours);
+  return last_update_time_ + base::Hours(kCacheSoftExpiryInHours);
 }
 
 base::Time FacetManager::GetCacheHardExpiryTime() const {
-  return last_update_time_ +
-         base::TimeDelta::FromHours(kCacheHardExpiryInHours);
+  return last_update_time_ + base::Hours(kCacheHardExpiryInHours);
 }
 
 base::Time FacetManager::GetMaximumKeepFreshUntilThreshold() const {

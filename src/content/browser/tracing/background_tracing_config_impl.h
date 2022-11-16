@@ -10,7 +10,6 @@
 #include <vector>
 
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
 #include "base/trace_event/trace_config.h"
 #include "build/build_config.h"
 #include "content/common/content_export.h"
@@ -24,10 +23,16 @@ class CONTENT_EXPORT BackgroundTracingConfigImpl
  public:
   explicit BackgroundTracingConfigImpl(TracingMode tracing_mode);
 
+  BackgroundTracingConfigImpl(const BackgroundTracingConfigImpl&) = delete;
+  BackgroundTracingConfigImpl& operator=(const BackgroundTracingConfigImpl&) =
+      delete;
+
   ~BackgroundTracingConfigImpl() override;
 
   // From BackgroundTracingConfig
-  void IntoDict(base::DictionaryValue* dict) override;
+  base::Value ToDict() override;
+
+  void SetPackageNameFilteringEnabled(bool) override;
 
   enum CategoryPreset {
     CATEGORY_PRESET_UNSET,
@@ -45,11 +50,11 @@ class CONTENT_EXPORT BackgroundTracingConfigImpl
     return rules_;
   }
 
-  void AddPreemptiveRule(const base::Value* dict);
+  void AddPreemptiveRule(const base::Value& dict);
   void AddReactiveRule(
-      const base::Value* dict,
+      const base::Value& dict,
       BackgroundTracingConfigImpl::CategoryPreset category_preset);
-  void AddSystemRule(const base::Value* dict);
+  void AddSystemRule(const base::Value& dict);
 
   base::trace_event::TraceConfig GetTraceConfig() const;
   const std::string& enabled_data_sources() const {
@@ -67,11 +72,11 @@ class CONTENT_EXPORT BackgroundTracingConfigImpl
   bool requires_anonymized_data() const { return requires_anonymized_data_; }
 
   static std::unique_ptr<BackgroundTracingConfigImpl> PreemptiveFromDict(
-      const base::Value* dict);
+      const base::Value& dict);
   static std::unique_ptr<BackgroundTracingConfigImpl> ReactiveFromDict(
-      const base::Value* dict);
+      const base::Value& dict);
   static std::unique_ptr<BackgroundTracingConfigImpl> SystemFromDict(
-      const base::Value* dict);
+      const base::Value& dict);
 
   static std::unique_ptr<BackgroundTracingConfigImpl> FromDict(
       base::Value&& dict);
@@ -86,7 +91,7 @@ class CONTENT_EXPORT BackgroundTracingConfigImpl
   FRIEND_TEST_ALL_PREFIXES(BackgroundTracingConfigTest,
                            ValidPreemptiveConfigToString);
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   constexpr static int kMaxBufferSizeKb = 4 * 1024;
   // ~1MB compressed size.
   constexpr static int kUploadLimitKb = 5 * 1024;
@@ -100,7 +105,7 @@ class CONTENT_EXPORT BackgroundTracingConfigImpl
       BackgroundTracingConfigImpl::CategoryPreset,
       base::trace_event::TraceRecordMode);
 
-  BackgroundTracingRule* AddRule(const base::Value* dict);
+  BackgroundTracingRule* AddRule(const base::Value& dict);
   void SetBufferSizeLimits(const base::Value* dict);
   int GetMaximumTraceBufferSizeKb() const;
 
@@ -113,7 +118,6 @@ class CONTENT_EXPORT BackgroundTracingConfigImpl
   std::string enabled_data_sources_;
 
   bool requires_anonymized_data_ = false;
-  bool trace_browser_process_only_ = false;
 
   // The default memory overhead of running background tracing for various
   // scenarios. These are configurable by experiments.
@@ -131,8 +135,6 @@ class CONTENT_EXPORT BackgroundTracingConfigImpl
   int upload_limit_network_kb_ = 1024;
   int upload_limit_kb_ = kUploadLimitKb;
   int interning_reset_interval_ms_ = 5000;
-
-  DISALLOW_COPY_AND_ASSIGN(BackgroundTracingConfigImpl);
 };
 
 }  // namespace content

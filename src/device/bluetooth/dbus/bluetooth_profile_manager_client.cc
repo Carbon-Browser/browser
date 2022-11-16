@@ -6,7 +6,7 @@
 
 #include "base/bind.h"
 #include "base/check.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "dbus/bus.h"
 #include "dbus/message.h"
@@ -27,6 +27,11 @@ BluetoothProfileManagerClient::Options::~Options() = default;
 class BluetoothProfileManagerClientImpl : public BluetoothProfileManagerClient {
  public:
   BluetoothProfileManagerClientImpl() {}
+
+  BluetoothProfileManagerClientImpl(const BluetoothProfileManagerClientImpl&) =
+      delete;
+  BluetoothProfileManagerClientImpl& operator=(
+      const BluetoothProfileManagerClientImpl&) = delete;
 
   ~BluetoothProfileManagerClientImpl() override = default;
 
@@ -243,7 +248,7 @@ class BluetoothProfileManagerClientImpl : public BluetoothProfileManagerClient {
     std::move(error_callback).Run(error_name, error_message);
   }
 
-  dbus::ObjectProxy* object_proxy_;
+  raw_ptr<dbus::ObjectProxy> object_proxy_;
 
   // Weak pointer factory for generating 'this' pointers that might live longer
   // than we do.
@@ -251,8 +256,6 @@ class BluetoothProfileManagerClientImpl : public BluetoothProfileManagerClient {
   // invalidate its weak pointers before any other members are destroyed.
   base::WeakPtrFactory<BluetoothProfileManagerClientImpl> weak_ptr_factory_{
       this};
-
-  DISALLOW_COPY_AND_ASSIGN(BluetoothProfileManagerClientImpl);
 };
 
 BluetoothProfileManagerClient::BluetoothProfileManagerClient() = default;

@@ -4,6 +4,7 @@
 
 #include "components/segmentation_platform/internal/database/segment_info_database.h"
 
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/test/task_environment.h"
 #include "components/leveldb_proto/public/proto_database.h"
@@ -17,16 +18,15 @@ namespace segmentation_platform {
 namespace {
 
 // Test Ids.
-const OptimizationTarget kSegmentId =
-    OptimizationTarget::OPTIMIZATION_TARGET_SEGMENTATION_NEW_TAB;
-const OptimizationTarget kSegmentId2 =
-    OptimizationTarget::OPTIMIZATION_TARGET_SEGMENTATION_SHARE;
+const SegmentId kSegmentId =
+    SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_NEW_TAB;
+const SegmentId kSegmentId2 = SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_SHARE;
 
-std::string ToString(OptimizationTarget segment_id) {
+std::string ToString(SegmentId segment_id) {
   return base::NumberToString(static_cast<int>(segment_id));
 }
 
-proto::SegmentInfo CreateSegment(OptimizationTarget segment_id,
+proto::SegmentInfo CreateSegment(SegmentId segment_id,
                                  absl::optional<int> result = absl::nullopt) {
   proto::SegmentInfo info;
   info.set_segment_id(segment_id);
@@ -45,8 +45,8 @@ class SegmentInfoDatabaseTest : public testing::Test {
   ~SegmentInfoDatabaseTest() override = default;
 
   void OnGetAllSegments(
-      std::vector<std::pair<OptimizationTarget, proto::SegmentInfo>> entries) {
-    get_all_segment_result_ = entries;
+      std::unique_ptr<SegmentInfoDatabase::SegmentInfoList> entries) {
+    get_all_segment_result_.swap(entries);
   }
 
   void OnGetSegment(absl::optional<proto::SegmentInfo> result) {
@@ -70,14 +70,13 @@ class SegmentInfoDatabaseTest : public testing::Test {
     segment_db_.reset();
   }
 
-  void VerifyDb(std::vector<OptimizationTarget> expected_ids) {
+  void VerifyDb(std::vector<SegmentId> expected_ids) {
     EXPECT_EQ(expected_ids.size(), db_entries_.size());
     for (auto segment_id : expected_ids)
       EXPECT_TRUE(db_entries_.find(ToString(segment_id)) != db_entries_.end());
   }
 
-  void WriteResult(OptimizationTarget segment_id,
-                   absl::optional<float> result) {
+  void WriteResult(SegmentId segment_id, absl::optional<float> result) {
     proto::PredictionResult prediction_result;
     if (result.has_value())
       prediction_result.set_result(result.value());
@@ -91,8 +90,7 @@ class SegmentInfoDatabaseTest : public testing::Test {
     db_->UpdateCallback(true);
   }
 
-  void VerifyResult(OptimizationTarget segment_id,
-                    absl::optional<float> result) {
+  void VerifyResult(SegmentId segment_id, absl::optional<float> result) {
     segment_db_->GetSegmentInfo(
         segment_id, base::BindOnce(&SegmentInfoDatabaseTest::OnGetSegment,
                                    base::Unretained(this)));
@@ -106,12 +104,15 @@ class SegmentInfoDatabaseTest : public testing::Test {
     }
   }
 
+  const SegmentInfoDatabase::SegmentInfoList& get_all_segment_result() const {
+    return *get_all_segment_result_;
+  }
+
   base::test::TaskEnvironment task_environment_;
-  std::vector<std::pair<OptimizationTarget, proto::SegmentInfo>>
-      get_all_segment_result_;
+  std::unique_ptr<SegmentInfoDatabase::SegmentInfoList> get_all_segment_result_;
   absl::optional<proto::SegmentInfo> get_segment_result_;
   std::map<std::string, proto::SegmentInfo> db_entries_;
-  leveldb_proto::test::FakeDB<proto::SegmentInfo>* db_{nullptr};
+  raw_ptr<leveldb_proto::test::FakeDB<proto::SegmentInfo>> db_{nullptr};
   std::unique_ptr<SegmentInfoDatabase> segment_db_;
 };
 
@@ -129,7 +130,7 @@ TEST_F(SegmentInfoDatabaseTest, Get) {
   segment_db_->GetAllSegmentInfo(base::BindOnce(
       &SegmentInfoDatabaseTest::OnGetAllSegments, base::Unretained(this)));
   db_->LoadCallback(true);
-  EXPECT_EQ(1u, get_all_segment_result_.size());
+  EXPECT_EQ(1u, get_all_segment_result().size());
 
   // Get a single segment.
   segment_db_->GetSegmentInfo(
@@ -171,24 +172,24 @@ TEST_F(SegmentInfoDatabaseTest, Update) {
       {kSegmentId2}, base::BindOnce(&SegmentInfoDatabaseTest::OnGetAllSegments,
                                     base::Unretained(this)));
   db_->LoadCallback(true);
-  EXPECT_EQ(1u, get_all_segment_result_.size());
-  EXPECT_EQ(kSegmentId2, get_all_segment_result_[0].first);
+  EXPECT_EQ(1u, get_all_segment_result().size());
+  EXPECT_EQ(kSegmentId2, get_all_segment_result()[0].first);
 
   segment_db_->GetSegmentInfoForSegments(
       {kSegmentId}, base::BindOnce(&SegmentInfoDatabaseTest::OnGetAllSegments,
                                    base::Unretained(this)));
   db_->LoadCallback(true);
-  EXPECT_EQ(1u, get_all_segment_result_.size());
-  EXPECT_EQ(kSegmentId, get_all_segment_result_[0].first);
+  EXPECT_EQ(1u, get_all_segment_result().size());
+  EXPECT_EQ(kSegmentId, get_all_segment_result()[0].first);
 
   segment_db_->GetSegmentInfoForSegments(
       {kSegmentId, kSegmentId2},
       base::BindOnce(&SegmentInfoDatabaseTest::OnGetAllSegments,
                      base::Unretained(this)));
   db_->LoadCallback(true);
-  EXPECT_EQ(2u, get_all_segment_result_.size());
-  EXPECT_EQ(kSegmentId, get_all_segment_result_[0].first);
-  EXPECT_EQ(kSegmentId2, get_all_segment_result_[1].first);
+  EXPECT_EQ(2u, get_all_segment_result().size());
+  EXPECT_EQ(kSegmentId, get_all_segment_result()[0].first);
+  EXPECT_EQ(kSegmentId2, get_all_segment_result()[1].first);
 }
 
 TEST_F(SegmentInfoDatabaseTest, WriteResult) {

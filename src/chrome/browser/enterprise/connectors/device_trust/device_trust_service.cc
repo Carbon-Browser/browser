@@ -5,11 +5,14 @@
 #include "chrome/browser/enterprise/connectors/device_trust/device_trust_service.h"
 
 #include "base/base64.h"
+#include "base/values.h"
 #include "chrome/browser/enterprise/connectors/connectors_prefs.h"
 #include "chrome/browser/enterprise/connectors/device_trust/attestation/common/attestation_service.h"
 #include "chrome/browser/enterprise/connectors/device_trust/attestation/common/attestation_utils.h"
-#include "chrome/browser/enterprise/connectors/device_trust/attestation/common/proto/device_trust_attestation_ca.pb.h"
-#include "chrome/browser/enterprise/connectors/device_trust/signal_reporter.h"
+#include "chrome/browser/enterprise/connectors/device_trust/attestation/common/signals_type.h"
+#include "chrome/browser/enterprise/connectors/device_trust/common/metrics_utils.h"
+#include "chrome/browser/enterprise/connectors/device_trust/device_trust_connector_service.h"
+#include "chrome/browser/enterprise/connectors/device_trust/device_trust_features.h"
 #include "chrome/browser/enterprise/connectors/device_trust/signals/signals_service.h"
 #include "components/prefs/pref_service.h"
 
@@ -17,151 +20,94 @@ namespace enterprise_connectors {
 
 namespace {
 
-const base::ListValue& GetTrustedUrlPatterns(PrefService* prefs) {
-  return *prefs->GetList(kContextAwareAccessSignalsAllowlistPref);
+// Runs the `callback` to return the `result` from the data decoder
+// service after it is validated and decoded.
+void OnJsonParsed(DeviceTrustService::ParseJsonChallengeCallback callback,
+                  data_decoder::DataDecoder::ValueOrError result) {
+  if (!result.has_value()) {
+    std::move(callback).Run(std::string());
+    return;
+  }
+
+  // Check if json is malformed or it doesn't include the needed field.
+  const std::string* challenge = result->FindStringPath("challenge");
+  if (!challenge) {
+    std::move(callback).Run(std::string());
+    return;
+  }
+
+  std::string serialized_signed_challenge;
+  if (!base::Base64Decode(*challenge, &serialized_signed_challenge)) {
+    std::move(callback).Run(std::string());
+    return;
+  }
+  std::move(callback).Run(serialized_signed_challenge);
+  return;
 }
 
 }  // namespace
 
-// static
-bool DeviceTrustService::IsEnabled(PrefService* prefs) {
-  const auto& list = GetTrustedUrlPatterns(prefs);
-  return !list.GetList().empty();
-}
+using CollectSignalsCallback = SignalsService::CollectSignalsCallback;
 
 DeviceTrustService::DeviceTrustService(
-    PrefService* profile_prefs,
     std::unique_ptr<AttestationService> attestation_service,
-    std::unique_ptr<DeviceTrustSignalReporter> signal_reporter,
-    std::unique_ptr<SignalsService> signals_service)
-    : DeviceTrustService(profile_prefs,
-                         std::move(attestation_service),
-                         std::move(signal_reporter),
-                         std::move(signals_service),
-                         base::BindOnce(&DeviceTrustService::OnSignalReported,
-                                        base::Unretained(this))) {}
-
-DeviceTrustService::DeviceTrustService(
-    PrefService* profile_prefs,
-    std::unique_ptr<AttestationService> attestation_service,
-    std::unique_ptr<DeviceTrustSignalReporter> signal_reporter,
     std::unique_ptr<SignalsService> signals_service,
-    SignalReportCallback signal_report_callback)
-    : profile_prefs_(profile_prefs),
-      attestation_service_(std::move(attestation_service)),
-      signal_reporter_(std::move(signal_reporter)),
+    DeviceTrustConnectorService* connector)
+    : attestation_service_(std::move(attestation_service)),
       signals_service_(std::move(signals_service)),
-      signal_report_callback_(std::move(signal_report_callback)) {
-  // Using Unretained is ok here because pref_observer_ is owned by this class,
-  // and we Remove() this path from pref_observer_ in Shutdown().
-  pref_observer_.Init(profile_prefs_);
-  pref_observer_.Add(kContextAwareAccessSignalsAllowlistPref,
-                     base::BindRepeating(&DeviceTrustService::OnPolicyUpdated,
-                                         base::Unretained(this)));
-
-  // OnPolicyUpdated() won't get called until the policy actually changes.
-  // To make sure everything is initialized on start up, call it now to kick
-  // things off.
-  OnPolicyUpdated();
+      connector_(connector) {
+  DCHECK(attestation_service_);
+  DCHECK(signals_service_);
+  DCHECK(connector_);
 }
 
-DeviceTrustService::DeviceTrustService(PrefService* profile_prefs)
-    : profile_prefs_(profile_prefs) {}
+DeviceTrustService::DeviceTrustService() = default;
 
-DeviceTrustService::~DeviceTrustService() {
-  DCHECK(callbacks_.empty());
-}
-
-void DeviceTrustService::Shutdown() {
-  pref_observer_.Remove(kContextAwareAccessSignalsAllowlistPref);
-}
+DeviceTrustService::~DeviceTrustService() = default;
 
 bool DeviceTrustService::IsEnabled() const {
-  return is_enabled_;
-}
-
-// static
-base::RepeatingCallback<bool()> DeviceTrustService::MakePolicyCheck() {
-  // Have to make lambda here because weak_ptrs can only bind to methods without
-  // return values. Unretained is ok here since this callback is only used in
-  // signal_reporter_.Init(), and signal_reporter_ is owned by this class.
-  return base::BindRepeating(
-      [](DeviceTrustService* self) { return self->IsEnabled(); },
-      base::Unretained(this));
-}
-
-void DeviceTrustService::OnPolicyUpdated() {
-  DVLOG(1) << "DeviceTrustService::OnPolicyUpdated";
-
-  // Cache "is enabled" because some callers of IsEnabled() cannot access the
-  // PrefService.
-  is_enabled_ = IsEnabled(profile_prefs_);
-
-  if (IsEnabled() && !callbacks_.empty()) {
-    callbacks_.Notify(GetTrustedUrlPatterns(profile_prefs_));
-  }
-
-  if (!signal_reporter_) {
-    // Bypass reporter initialization because it already failed previously.
-    OnReporterInitialized(false);
-    return;
-  }
-
-  if (!first_report_sent_ && IsEnabled()) {  // Policy enabled for the 1st time.
-    signal_reporter_->Init(
-        MakePolicyCheck(),
-        base::BindOnce(&DeviceTrustService::OnReporterInitialized,
-                       weak_factory_.GetWeakPtr()));
-  }
-}
-
-void DeviceTrustService::OnReporterInitialized(bool success) {
-  DVLOG(1) << "DeviceTrustService::OnReporterInitialized success=" << success;
-
-  if (!success) {
-    // Initialization failed, so reset signal_reporter_ to prevent retrying
-    // Init().
-    signal_reporter_.reset();
-    // Bypass SendReport and run callback with report failure.
-    if (signal_report_callback_) {
-      std::move(signal_report_callback_).Run(false);
-    }
-    return;
-  }
-
-  DeviceTrustReportEvent report;
-  attestation_service_->StampReport(report);
-
-  DVLOG(1) << "DeviceTrustService::OnReporterInitialized report sent";
-  signal_reporter_->SendReport(&report, std::move(signal_report_callback_));
-}
-
-void DeviceTrustService::OnSignalReported(bool success) {
-  if (!success) {
-    LOG(ERROR) << "Failed to send device trust signal report. Reason: "
-               << (signal_reporter_.get() ? "Reporter failure"
-                                          : "<no reporter>");
-    // TODO(https://crbug.com/1186413) Handle failure cases.
-  } else {
-    first_report_sent_ = true;
-  }
+  return connector_ && connector_->IsConnectorEnabled();
 }
 
 void DeviceTrustService::BuildChallengeResponse(const std::string& challenge,
                                                 AttestationCallback callback) {
-  attestation_service_->BuildChallengeResponseForVAChallenge(
-      challenge, signals_service_->CollectSignals(), std::move(callback));
+  ParseJsonChallenge(
+      challenge,
+      base::BindOnce(&DeviceTrustService::OnChallengeParsed,
+                     weak_factory_.GetWeakPtr(), std::move(callback)));
 }
 
-base::CallbackListSubscription
-DeviceTrustService::RegisterTrustedUrlPatternsChangedCallback(
-    TrustedUrlPatternsChangedCallback callback) {
-  // Notify the callback right away so that caller can initialize itself.
-  if (IsEnabled()) {
-    callback.Run(GetTrustedUrlPatterns(profile_prefs_));
-  }
+bool DeviceTrustService::Watches(const GURL& url) const {
+  return connector_ && connector_->Watches(url);
+}
 
-  return callbacks_.Add(callback);
+void DeviceTrustService::ParseJsonChallenge(
+    const std::string& challenge,
+    ParseJsonChallengeCallback callback) {
+  data_decoder_.ParseJson(challenge,
+                          base::BindOnce(&OnJsonParsed, std::move(callback)));
+}
+
+void DeviceTrustService::OnChallengeParsed(
+    AttestationCallback callback,
+    const std::string& serialized_signed_challenge) {
+  GetSignals(base::BindOnce(&DeviceTrustService::OnSignalsCollected,
+                            weak_factory_.GetWeakPtr(),
+                            serialized_signed_challenge, std::move(callback)));
+}
+
+void DeviceTrustService::GetSignals(CollectSignalsCallback callback) {
+  return signals_service_->CollectSignals(std::move(callback));
+}
+
+void DeviceTrustService::OnSignalsCollected(
+    const std::string& serialized_signed_challenge,
+    AttestationCallback callback,
+    base::Value::Dict signals) {
+  LogAttestationFunnelStep(DTAttestationFunnelStep::kSignalsCollected);
+
+  attestation_service_->BuildChallengeResponseForVAChallenge(
+      serialized_signed_challenge, std::move(signals), std::move(callback));
 }
 
 }  // namespace enterprise_connectors

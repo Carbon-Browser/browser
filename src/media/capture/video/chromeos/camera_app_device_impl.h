@@ -11,12 +11,12 @@
 #include <utility>
 #include <vector>
 
+#include "ash/webui/camera_app_ui/document_scanner_service_client.h"
 #include "base/containers/queue.h"
 #include "base/memory/weak_ptr.h"
-#include "base/single_thread_task_runner.h"
 #include "base/synchronization/lock.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/timer/elapsed_timer.h"
-#include "chromeos/components/camera_app_ui/document_scanner_service_client.h"
 #include "media/base/video_transformation.h"
 #include "media/capture/capture_export.h"
 #include "media/capture/mojom/image_capture.mojom.h"
@@ -73,6 +73,10 @@ class CAPTURE_EXPORT CameraAppDeviceImpl : public cros::mojom::CameraAppDevice {
 
   CameraAppDeviceImpl(const std::string& device_id,
                       cros::mojom::CameraInfoPtr camera_info);
+
+  CameraAppDeviceImpl(const CameraAppDeviceImpl&) = delete;
+  CameraAppDeviceImpl& operator=(const CameraAppDeviceImpl&) = delete;
+
   ~CameraAppDeviceImpl() override;
 
   // Binds the mojo receiver to this implementation.
@@ -126,6 +130,8 @@ class CAPTURE_EXPORT CameraAppDeviceImpl : public cros::mojom::CameraAppDevice {
   void MaybeDetectDocumentCorners(std::unique_ptr<gpu::GpuMemoryBufferImpl> gmb,
                                   VideoRotation rotation);
 
+  bool IsMultipleStreamsEnabled();
+
   // cros::mojom::CameraAppDevice implementations.
   void GetCameraInfo(GetCameraInfoCallback callback) override;
   void SetReprocessOptions(
@@ -153,6 +159,9 @@ class CAPTURE_EXPORT CameraAppDeviceImpl : public cros::mojom::CameraAppDevice {
   void RegisterDocumentCornersObserver(
       mojo::PendingRemote<cros::mojom::DocumentCornersObserver> observer,
       RegisterDocumentCornersObserverCallback callback) override;
+  void SetMultipleStreamsEnabled(
+      bool enabled,
+      SetMultipleStreamsEnabledCallback callback) override;
 
  private:
   static void DisableEeNr(ReprocessTask* task);
@@ -222,15 +231,18 @@ class CAPTURE_EXPORT CameraAppDeviceImpl : public cros::mojom::CameraAppDevice {
   CameraDeviceContext* camera_device_context_
       GUARDED_BY(camera_device_context_lock_);
 
+  base::Lock document_corners_observers_lock_;
   mojo::RemoteSet<cros::mojom::DocumentCornersObserver>
-      document_corners_observers_;
+      document_corners_observers_ GUARDED_BY(document_corners_observers_lock_);
   bool has_ongoing_document_detection_task_ = false;
   std::unique_ptr<base::ElapsedTimer> document_detection_timer_ = nullptr;
 
   // Client to connect to document detection service. It should only be
   // used/destructed on the Mojo thread.
-  std::unique_ptr<chromeos::DocumentScannerServiceClient>
-      document_scanner_service_;
+  std::unique_ptr<ash::DocumentScannerServiceClient> document_scanner_service_;
+
+  base::Lock multi_stream_lock_;
+  bool multi_stream_enabled_ GUARDED_BY(multi_stream_lock_) = false;
 
   // The weak pointers should be dereferenced and invalidated on camera device
   // ipc thread.
@@ -239,8 +251,6 @@ class CAPTURE_EXPORT CameraAppDeviceImpl : public cros::mojom::CameraAppDevice {
   // The weak pointers should be dereferenced and invalidated on the Mojo
   // thread.
   base::WeakPtrFactory<CameraAppDeviceImpl> weak_ptr_factory_for_mojo_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(CameraAppDeviceImpl);
 };
 
 }  // namespace media

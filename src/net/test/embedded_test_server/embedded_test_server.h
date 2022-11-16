@@ -13,11 +13,11 @@
 #include <vector>
 
 #include "base/callback.h"
-#include "base/compiler_specific.h"
 #include "base/files/file_path.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
+#include "base/strings/string_piece.h"
 #include "base/threading/thread.h"
 #include "base/threading/thread_checker.h"
 #include "net/base/address_list.h"
@@ -44,6 +44,7 @@ namespace test_server {
 class EmbeddedTestServerConnectionListener;
 class HttpConnection;
 class HttpResponse;
+class HttpResponseDelegate;
 struct HttpRequest;
 
 class EmbeddedTestServer;
@@ -299,6 +300,12 @@ class EmbeddedTestServer {
     // non-empty, the policies will be added to the leaf cert and the
     // intermediate cert (if an intermediate is configured).
     std::vector<std::string> policy_oids;
+
+    // A list of DNS names to include in the leaf subjectAltName extension.
+    std::vector<std::string> dns_names;
+
+    // A list of IP addresses to include in the leaf subjectAltName extension.
+    std::vector<net::IPAddress> ip_addresses;
   };
 
   typedef base::RepeatingCallback<std::unique_ptr<HttpResponse>(
@@ -319,12 +326,14 @@ class EmbeddedTestServer {
   // in any process where CertVerifiers are expected to accept the
   // EmbeddedTestServer's certs.
   EmbeddedTestServer();
-  explicit EmbeddedTestServer(Type type);
+  explicit EmbeddedTestServer(
+      Type type,
+      HttpConnection::Protocol protocol = HttpConnection::Protocol::kHttp1);
   ~EmbeddedTestServer();
 
   //  Send a request to the server to be handled. If a response is created,
   //  SendResponseBytes() should be called on the provided HttpConnection.
-  void HandleRequest(HttpConnection* connection,
+  void HandleRequest(base::WeakPtr<HttpResponseDelegate> connection,
                      std::unique_ptr<HttpRequest> request);
 
   // Notify the server that a connection is no longer usable and is safe to
@@ -350,20 +359,19 @@ class EmbeddedTestServer {
   // StartAcceptingConnectionsAndReturnHandle().
   // Returns a "handle" which will ShutdownAndWaitUntilComplete() when
   // destroyed, or null if the listening socket could not be created.
-  EmbeddedTestServerHandle StartAndReturnHandle(int port = 0)
-      WARN_UNUSED_RESULT;
+  [[nodiscard]] EmbeddedTestServerHandle StartAndReturnHandle(int port = 0);
 
   // Equivalent of StartAndReturnHandle(), but requires manual Shutdown() by
   // the caller.
-  bool Start(int port = 0) WARN_UNUSED_RESULT;
+  [[nodiscard]] bool Start(int port = 0);
 
   // Starts listening for incoming connections but will not yet accept them.
   // Returns whether a listening socket has been succesfully created.
-  bool InitializeAndListen(int port = 0) WARN_UNUSED_RESULT;
+  [[nodiscard]] bool InitializeAndListen(int port = 0);
 
   // Starts the Accept IO Thread and begins accepting connections.
-  EmbeddedTestServerHandle StartAcceptingConnectionsAndReturnHandle()
-      WARN_UNUSED_RESULT;
+  [[nodiscard]] EmbeddedTestServerHandle
+  StartAcceptingConnectionsAndReturnHandle();
 
   // Equivalent of StartAcceptingConnectionsAndReturnHandle(), but requires
   // manual Shutdown() by the caller.
@@ -372,7 +380,7 @@ class EmbeddedTestServer {
   // Shuts down the http server and waits until the shutdown is complete.
   // Prefer to use the Start*AndReturnHandle() APIs to manage shutdown, if
   // possible.
-  bool ShutdownAndWaitUntilComplete() WARN_UNUSED_RESULT;
+  [[nodiscard]] bool ShutdownAndWaitUntilComplete();
 
   // Checks if the server has started listening for incoming connections.
   bool Started() const { return listen_socket_.get() != nullptr; }
@@ -391,13 +399,12 @@ class EmbeddedTestServer {
   // Returns a URL to the server based on the given relative URL, which
   // should start with '/'. For example: GetURL("/path?query=foo") =>
   // http://127.0.0.1:<port>/path?query=foo.
-  GURL GetURL(const std::string& relative_url) const;
+  GURL GetURL(base::StringPiece relative_url) const;
 
   // Similar to the above method with the difference that it uses the supplied
   // |hostname| for the URL instead of 127.0.0.1. The hostname should be
   // resolved to 127.0.0.1.
-  GURL GetURL(const std::string& hostname,
-              const std::string& relative_url) const;
+  GURL GetURL(base::StringPiece hostname, base::StringPiece relative_url) const;
 
   // Convenience function equivalent to calling url::Origin::Create(base_url()).
   // Will use the GetURL() variant that takes a hostname as the base URL, if
@@ -406,7 +413,7 @@ class EmbeddedTestServer {
       const absl::optional<std::string>& hostname = absl::nullopt) const;
 
   // Returns the address list needed to connect to the server.
-  bool GetAddressList(AddressList* address_list) const WARN_UNUSED_RESULT;
+  [[nodiscard]] bool GetAddressList(AddressList* address_list) const;
 
   // Returns the IP Address to connect to the server as a string.
   std::string GetIPLiteralString() const;
@@ -423,7 +430,7 @@ class EmbeddedTestServer {
                     const SSLServerConfig& ssl_config);
   void SetSSLConfig(const ServerCertificateConfig& cert_config);
 
-  // TODO(mattm): make this WARN_UNUSED_RESULT
+  // TODO(mattm): make this [[nodiscard]]
   bool ResetSSLConfig(ServerCertificate cert,
                       const SSLServerConfig& ssl_config);
 
@@ -441,7 +448,7 @@ class EmbeddedTestServer {
   void ServeFilesFromDirectory(const base::FilePath& directory);
 
   // Serves files relative to DIR_SOURCE_ROOT.
-  void ServeFilesFromSourceDirectory(const std::string& relative);
+  void ServeFilesFromSourceDirectory(base::StringPiece relative);
   void ServeFilesFromSourceDirectory(const base::FilePath& relative);
 
   // Registers the default handlers and serve additional files from the
@@ -477,6 +484,18 @@ class EmbeddedTestServer {
 
   bool FlushAllSocketsAndConnectionsOnUIThread();
   void FlushAllSocketsAndConnections();
+
+  // Adds an origin/accept_ch pair to add to an ACCEPT_CH HTTP/2 frame. If any
+  // pairs have been added, the ALPS TLS extension will be populated, which
+  // will act as though an ACCEPT_CH frame was sent by the server before the
+  // first frame is sent by a client. For more information, see
+  // draft-vvv-tls-alps-01 and section 4.1 (HTTP/2 ACCEPT_CH Frame) of
+  // draft-davidben-http-client-hint-reliability
+  //
+  // Only valid before Start() or ResetSSLServerConfig(). Only valid when
+  // constructed with PROTOCOL_HTTP2. For the default host, use an empty
+  // string.
+  void SetAlpsAcceptCH(std::string hostname, std::string accept_ch);
 
  private:
   // Returns the file name of the certificate the server is using. The test
@@ -520,45 +539,41 @@ class EmbeddedTestServer {
   // Handles async callback when new data has been read from the |connection|.
   void OnReadCompleted(HttpConnection* connection, int rv);
 
-  // Called when |connection| is finished writing the response and the socket
-  // can be closed, allowing for |connnection_listener_| to take it if the
-  // socket is still open.
-  void OnResponseCompleted(HttpConnection* connection,
-                           std::unique_ptr<HttpResponse> response);
-
   // Returns true if the current |cert_| configuration uses a static
   // pre-generated cert loaded from the filesystem.
   bool UsingStaticCert() const;
 
   // Reads server certificate and private key from file. May only be called if
   // |cert_| refers to a file-based cert & key.
-  bool InitializeCertAndKeyFromFile() WARN_UNUSED_RESULT;
+  [[nodiscard]] bool InitializeCertAndKeyFromFile();
 
   // Generate server certificate and private key. May only be called if |cert_|
   // refers to a generated cert & key.
-  bool GenerateCertAndKey() WARN_UNUSED_RESULT;
+  [[nodiscard]] bool GenerateCertAndKey();
 
   // Initializes the SSLServerContext so that SSLServerSocket connections may
   // share the same cache
-  bool InitializeSSLServerContext() WARN_UNUSED_RESULT;
+  [[nodiscard]] bool InitializeSSLServerContext();
 
   // Posts a task to the |io_thread_| and waits for a reply.
-  bool PostTaskToIOThreadAndWait(base::OnceClosure closure) WARN_UNUSED_RESULT;
+  [[nodiscard]] bool PostTaskToIOThreadAndWait(base::OnceClosure closure);
 
   // Posts a task that returns a true/false success/fail value to the
   // |io_thread_| and waits for a reply.
-  bool PostTaskToIOThreadAndWaitWithResult(base::OnceCallback<bool()> task)
-      WARN_UNUSED_RESULT;
+  [[nodiscard]] bool PostTaskToIOThreadAndWaitWithResult(
+      base::OnceCallback<bool()> task);
 
   const bool is_using_ssl_;
+  const HttpConnection::Protocol protocol_;
 
   std::unique_ptr<base::Thread> io_thread_;
 
   std::unique_ptr<TCPServerSocket> listen_socket_;
   std::unique_ptr<StreamSocket> accepted_socket_;
 
-  EmbeddedTestServerConnectionListener* connection_listener_;
-  uint16_t port_;
+  raw_ptr<EmbeddedTestServerConnectionListener, DanglingUntriaged>
+      connection_listener_ = nullptr;
+  uint16_t port_ = 0;
   GURL base_url_;
   IPEndPoint local_endpoint_;
 
@@ -572,10 +587,11 @@ class EmbeddedTestServer {
   base::ThreadChecker thread_checker_;
 
   net::SSLServerConfig ssl_config_;
-  ServerCertificate cert_;
+  ServerCertificate cert_ = CERT_OK;
   ServerCertificateConfig cert_config_;
   scoped_refptr<X509Certificate> x509_cert_;
   bssl::UniquePtr<EVP_PKEY> private_key_;
+  base::flat_map<std::string, std::string> alps_accept_ch_;
   std::unique_ptr<SSLServerContext> context_;
 
   // HTTP server that handles AIA URLs that are embedded in this test server's

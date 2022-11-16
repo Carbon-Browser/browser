@@ -14,12 +14,14 @@
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
 #include "base/containers/id_map.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/timer/timer.h"
+#include "build/build_config.h"
 #include "content/browser/media/session/audio_focus_delegate.h"
 #include "content/browser/media/session/media_session_uma_helper.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/media_session.h"
+#include "content/public/browser/page_user_data.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "content/public/browser/web_contents_user_data.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
@@ -29,13 +31,9 @@
 #include "third_party/blink/public/mojom/favicon/favicon_url.mojom.h"
 #include "third_party/blink/public/mojom/mediasession/media_session.mojom.h"
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #include "base/android/scoped_java_ref.h"
-#endif  // defined(OS_ANDROID)
-
-namespace media {
-enum class MediaContentType;
-}  // namespace media
+#endif  // BUILDFLAG(IS_ANDROID)
 
 namespace media_session {
 struct MediaMetadata;
@@ -52,9 +50,9 @@ class MediaSessionPlayerObserver;
 class MediaSessionServiceImpl;
 class MediaSessionServiceImplBrowserTest;
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 class MediaSessionAndroid;
-#endif  // defined(OS_ANDROID)
+#endif  // BUILDFLAG(IS_ANDROID)
 
 // MediaSessionImpl is the implementation of MediaSession. It manages the media
 // session and audio focus for a given WebContents. It is requesting the audio
@@ -81,15 +79,18 @@ class MediaSessionImpl : public MediaSession,
   // none is currently available.
   CONTENT_EXPORT static MediaSessionImpl* Get(WebContents* web_contents);
 
+  MediaSessionImpl(const MediaSessionImpl&) = delete;
+  MediaSessionImpl& operator=(const MediaSessionImpl&) = delete;
+
   ~MediaSessionImpl() override;
 
   CONTENT_EXPORT void SetDelegateForTests(
       std::unique_ptr<AudioFocusDelegate> delegate);
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   void ClearMediaSessionAndroid();
   MediaSessionAndroid* GetMediaSessionAndroid();
-#endif  // defined(OS_ANDROID)
+#endif  // BUILDFLAG(IS_ANDROID)
 
   void NotifyMediaSessionMetadataChange();
 
@@ -97,8 +98,7 @@ class MediaSessionImpl : public MediaSession,
   // player was successfully added. If it returns false, AddPlayer() should be
   // called again later.
   CONTENT_EXPORT bool AddPlayer(MediaSessionPlayerObserver* observer,
-                                int player_id,
-                                media::MediaContentType media_content_type);
+                                int player_id);
 
   // Removes the given player from the current media session. Abandons audio
   // focus if that was the last player in the session.
@@ -141,6 +141,10 @@ class MediaSessionImpl : public MediaSession,
       RenderFrameHost* rfh,
       const std::vector<blink::mojom::FaviconURLPtr>& candidates) override;
   void MediaPictureInPictureChanged(bool is_picture_in_picture) override;
+  void RenderFrameHostStateChanged(
+      RenderFrameHost* host,
+      RenderFrameHost::LifecycleState old_state,
+      RenderFrameHost::LifecycleState new_state) override;
 
   // MediaSessionService-related methods
 
@@ -318,6 +322,8 @@ class MediaSessionImpl : public MediaSession,
   // Returns the Audio Focus request ID associated with this media session.
   const base::UnguessableToken& GetRequestId() const;
 
+  CONTENT_EXPORT bool HasImageCacheForTest(const GURL& image_url) const;
+
  private:
   friend class content::WebContentsUserData<MediaSessionImpl>;
   friend class MediaSessionImplBrowserTest;
@@ -468,8 +474,7 @@ class MediaSessionImpl : public MediaSession,
   // between two updates is greater than 20 seconds.
   CONTENT_EXPORT static constexpr int kDurationUpdateMaxAllowance = 3;
   CONTENT_EXPORT static constexpr base::TimeDelta
-      kDurationUpdateAllowanceIncreaseInterval =
-          base::TimeDelta::FromSeconds(20);
+      kDurationUpdateAllowanceIncreaseInterval = base::Seconds(20);
 
   // A set of actions supported by |routed_service_| and the current media
   // session.
@@ -483,6 +488,11 @@ class MediaSessionImpl : public MediaSession,
   // Players that are playing in the web contents but we cannot control (e.g.
   // WebAudio or MediaStream).
   base::flat_set<PlayerIdentifier> one_shot_players_;
+
+  // Players that are removed from |normal_players_| temporarily when the page
+  // goes to back-forward cache. When the page is restored from the cache, these
+  // players are also restored to |normal_players_|.
+  base::flat_set<PlayerIdentifier> hidden_players_;
 
   State audio_focus_state_ = State::INACTIVE;
   MediaSession::SuspendType suspend_type_;
@@ -518,9 +528,40 @@ class MediaSessionImpl : public MediaSession,
   url::Origin origin_;
   absl::optional<std::string> audio_device_id_for_origin_;
 
-#if defined(OS_ANDROID)
+  class PageData : public content::PageUserData<PageData> {
+   public:
+    explicit PageData(content::Page& page);
+
+    PageData(const PageData&) = delete;
+    PageData& operator=(const PageData&) = delete;
+
+    ~PageData() override;
+
+    void AddImageCache(const GURL& image_url, const SkBitmap& bitmap) {
+      image_cache_.emplace(image_url, bitmap);
+    }
+
+    const SkBitmap* GetImageCache(const GURL& image_url) const {
+      auto it = image_cache_.find(image_url);
+      if (it == image_cache_.end())
+        return nullptr;
+
+      return &it->second;
+    }
+
+    PAGE_USER_DATA_KEY_DECL();
+
+   private:
+    // Cache of images that have been requested by clients.
+    base::flat_map<GURL, SkBitmap> image_cache_;
+  };
+
+  // Returns the PageData for the specified |page|.
+  PageData& GetPageData(content::Page& page) const;
+
+#if BUILDFLAG(IS_ANDROID)
   std::unique_ptr<MediaSessionAndroid> session_android_;
-#endif  // defined(OS_ANDROID)
+#endif  // BUILDFLAG(IS_ANDROID)
 
   // MediaSessionService-related fields
   using ServicesMap =
@@ -532,15 +573,12 @@ class MediaSessionImpl : public MediaSession,
                  std::vector<media_session::MediaImage>>
       images_;
 
-  // Cache of images that have been requested by clients.
-  base::flat_map<GURL, SkBitmap> image_cache_;
-
   // The collection of all managed services (non-owned pointers). The services
   // are owned by RenderFrameHost and should be registered on creation and
   // unregistered on destroy.
   ServicesMap services_;
   // The currently routed service (non-owned pointer).
-  MediaSessionServiceImpl* routed_service_;
+  raw_ptr<MediaSessionServiceImpl> routed_service_;
 
   // Bindings for Mojo pointers to |this| held by media route providers.
   mojo::ReceiverSet<media_session::mojom::MediaSession> receivers_;
@@ -561,8 +599,6 @@ class MediaSessionImpl : public MediaSession,
   absl::optional<PlayerIdentifier> guarding_player_id_;
 
   WEB_CONTENTS_USER_DATA_KEY_DECL();
-
-  DISALLOW_COPY_AND_ASSIGN(MediaSessionImpl);
 };
 
 }  // namespace content

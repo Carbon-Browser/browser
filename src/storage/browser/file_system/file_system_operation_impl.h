@@ -11,7 +11,7 @@
 #include <vector>
 
 #include "base/component_export.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/types/pass_key.h"
@@ -41,6 +41,9 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) FileSystemOperationImpl
       std::unique_ptr<FileSystemOperationContext> operation_context,
       base::PassKey<FileSystemOperation>);
 
+  FileSystemOperationImpl(const FileSystemOperationImpl&) = delete;
+  FileSystemOperationImpl& operator=(const FileSystemOperationImpl&) = delete;
+
   ~FileSystemOperationImpl() override;
 
   // FileSystemOperation overrides.
@@ -53,15 +56,15 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) FileSystemOperationImpl
                        StatusCallback callback) override;
   void Copy(const FileSystemURL& src_url,
             const FileSystemURL& dest_url,
-            CopyOrMoveOption option,
+            CopyOrMoveOptionSet options,
             ErrorBehavior error_behavior,
-            const CopyOrMoveProgressCallback& progress_callback,
+            std::unique_ptr<CopyOrMoveHookDelegate> copy_or_move_hook_delegate,
             StatusCallback callback) override;
   void Move(const FileSystemURL& src_url,
             const FileSystemURL& dest_url,
-            CopyOrMoveOption option,
+            CopyOrMoveOptionSet options,
             ErrorBehavior error_behavior,
-            const CopyOrMoveProgressCallback& progress_callback,
+            std::unique_ptr<CopyOrMoveHookDelegate> copy_or_move_hook_delegate,
             StatusCallback callback) override;
   void DirectoryExists(const FileSystemURL& url,
                        StatusCallback callback) override;
@@ -90,7 +93,7 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) FileSystemOperationImpl
                  const base::Time& last_modified_time,
                  StatusCallback callback) override;
   void OpenFile(const FileSystemURL& url,
-                int file_flags,
+                uint32_t file_flags,
                 OpenFileCallback callback) override;
   void Cancel(StatusCallback cancel_callback) override;
   void CreateSnapshotFile(const FileSystemURL& path,
@@ -103,12 +106,12 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) FileSystemOperationImpl
                        StatusCallback callback) override;
   void CopyFileLocal(const FileSystemURL& src_url,
                      const FileSystemURL& dest_url,
-                     CopyOrMoveOption option,
+                     CopyOrMoveOptionSet options,
                      const CopyFileProgressCallback& progress_callback,
                      StatusCallback callback) override;
   void MoveFileLocal(const FileSystemURL& src_url,
                      const FileSystemURL& dest_url,
-                     CopyOrMoveOption option,
+                     CopyOrMoveOptionSet options,
                      StatusCallback callback) override;
   base::File::Error SyncGetPlatformPath(const FileSystemURL& url,
                                         base::FilePath* platform_path) override;
@@ -148,12 +151,12 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) FileSystemOperationImpl
                          bool recursive);
   void DoCopyFileLocal(const FileSystemURL& src,
                        const FileSystemURL& dest,
-                       CopyOrMoveOption option,
+                       CopyOrMoveOptionSet options,
                        const CopyFileProgressCallback& progress_callback,
                        StatusCallback callback);
   void DoMoveFileLocal(const FileSystemURL& src,
                        const FileSystemURL& dest,
-                       CopyOrMoveOption option,
+                       CopyOrMoveOptionSet options,
                        StatusCallback callback);
   void DoCopyInForeignFile(const base::FilePath& src_local_disk_file_path,
                            const FileSystemURL& dest,
@@ -163,7 +166,7 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) FileSystemOperationImpl
                   int64_t length);
   void DoOpenFile(const FileSystemURL& url,
                   OpenFileCallback callback,
-                  int file_flags);
+                  uint32_t file_flags);
 
   // Callback for CreateFile for |exclusive|=true cases.
   void DidEnsureFileExistsExclusive(StatusCallback callback,
@@ -198,7 +201,7 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) FileSystemOperationImpl
   scoped_refptr<FileSystemContext> file_system_context_;
 
   std::unique_ptr<FileSystemOperationContext> operation_context_;
-  AsyncFileUtil* async_file_util_;  // Not owned.
+  raw_ptr<AsyncFileUtil> async_file_util_;  // Not owned.
 
   std::unique_ptr<FileWriterDelegate> file_writer_delegate_;
   std::unique_ptr<RecursiveOperationDelegate> recursive_operation_delegate_;
@@ -210,8 +213,6 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) FileSystemOperationImpl
 
   base::WeakPtr<FileSystemOperationImpl> weak_ptr_;
   base::WeakPtrFactory<FileSystemOperationImpl> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(FileSystemOperationImpl);
 };
 
 }  // namespace storage

@@ -5,12 +5,13 @@
 #include "chrome/browser/ui/webui/chromeos/cryptohome_web_ui_handler.h"
 
 #include "base/bind.h"
+#include "base/logging.h"
 #include "base/values.h"
+#include "chromeos/ash/components/dbus/userdataauth/cryptohome_pkcs11_client.h"
+#include "chromeos/ash/components/dbus/userdataauth/userdataauth_client.h"
 #include "chromeos/dbus/cryptohome/rpc.pb.h"
 #include "chromeos/dbus/dbus_thread_manager.h"
 #include "chromeos/dbus/tpm_manager/tpm_manager_client.h"
-#include "chromeos/dbus/userdataauth/cryptohome_pkcs11_client.h"
-#include "chromeos/dbus/userdataauth/userdataauth_client.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/web_ui.h"
@@ -20,17 +21,28 @@ using content::BrowserThread;
 
 namespace chromeos {
 
+namespace {
+
+void ForwardToUIThread(base::OnceCallback<void(bool)> ui_callback,
+                       bool result) {
+  DCHECK_CURRENTLY_ON(BrowserThread::IO);
+  content::GetUIThreadTaskRunner({})->PostTask(
+      FROM_HERE, base::BindOnce(std::move(ui_callback), result));
+}
+
+}  // namespace
+
 CryptohomeWebUIHandler::CryptohomeWebUIHandler() {}
 
 CryptohomeWebUIHandler::~CryptohomeWebUIHandler() {}
 
 void CryptohomeWebUIHandler::RegisterMessages() {
-  web_ui()->RegisterDeprecatedMessageCallback(
+  web_ui()->RegisterMessageCallback(
       "pageLoaded", base::BindRepeating(&CryptohomeWebUIHandler::OnPageLoaded,
                                         weak_ptr_factory_.GetWeakPtr()));
 }
 
-void CryptohomeWebUIHandler::OnPageLoaded(const base::ListValue* args) {
+void CryptohomeWebUIHandler::OnPageLoaded(const base::Value::List& args) {
   UserDataAuthClient* userdataauth_client = UserDataAuthClient::Get();
   CryptohomePkcs11Client* cryptohome_pkcs11_client =
       CryptohomePkcs11Client::Get();
@@ -48,18 +60,23 @@ void CryptohomeWebUIHandler::OnPageLoaded(const base::ListValue* args) {
       base::BindOnce(&CryptohomeWebUIHandler::OnPkcs11IsTpmTokenReady,
                      weak_ptr_factory_.GetWeakPtr()));
 
-  content::GetIOThreadTaskRunner({})->PostTaskAndReplyWithResult(
-      FROM_HERE, base::BindOnce(&crypto::IsTPMTokenReady, base::OnceClosure()),
-      base::BindOnce(&CryptohomeWebUIHandler::DidGetNSSUtilInfoOnUIThread,
-                     weak_ptr_factory_.GetWeakPtr()));
+  auto ui_callback =
+      base::BindOnce(&CryptohomeWebUIHandler::GotIsTPMTokenEnabledOnUIThread,
+                     weak_ptr_factory_.GetWeakPtr());
+
+  content::GetIOThreadTaskRunner({})->PostTask(
+      FROM_HERE, base::BindOnce(&crypto::IsTPMTokenEnabled,
+                                base::BindOnce(&ForwardToUIThread,
+                                               std::move(ui_callback))));
 }
 
-void CryptohomeWebUIHandler::DidGetNSSUtilInfoOnUIThread(
-    bool is_tpm_token_ready) {
+void CryptohomeWebUIHandler::GotIsTPMTokenEnabledOnUIThread(
+    bool is_tpm_token_enabled) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
-  base::Value is_tpm_token_ready_value(is_tpm_token_ready);
-  SetCryptohomeProperty("is-tpm-token-ready", is_tpm_token_ready_value);
+  base::Value is_tpm_token_enabled_value(is_tpm_token_enabled);
+  SetCryptohomeProperty("is-tpm-token-ready",
+                        std::move(is_tpm_token_enabled_value));
 }
 
 void CryptohomeWebUIHandler::OnGetTpmStatus(

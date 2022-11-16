@@ -15,7 +15,6 @@
 
 #include "base/bind.h"
 #include "base/command_line.h"
-#include "base/macros.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/test/test_mock_time_task_runner.h"
@@ -30,6 +29,10 @@
 #include "third_party/webrtc/modules/desktop_capture/desktop_capturer.h"
 #include "third_party/webrtc/modules/desktop_capture/desktop_frame.h"
 #include "third_party/webrtc/modules/desktop_capture/desktop_geometry.h"
+
+#if defined(USE_OZONE)
+#include "ui/ozone/buildflags.h"
+#endif  // defined(USE_OZONE)
 
 using ::testing::_;
 using ::testing::AnyNumber;
@@ -53,8 +56,7 @@ const int kTestFrameHeight3 = 64;
 
 const int kFrameRate = 30;
 
-constexpr base::TimeDelta kVirtualTestDurationSeconds =
-    base::TimeDelta::FromSeconds(100);
+constexpr base::TimeDelta kVirtualTestDurationSeconds = base::Seconds(100);
 
 // The value of the padding bytes in unpacked frames.
 const uint8_t kFramePaddingValue = 0;
@@ -99,12 +101,14 @@ class InvertedDesktopFrame : public webrtc::DesktopFrame {
     mutable_updated_region()->Swap(frame->mutable_updated_region());
     original_frame_ = std::move(frame);
   }
+
+  InvertedDesktopFrame(const InvertedDesktopFrame&) = delete;
+  InvertedDesktopFrame& operator=(const InvertedDesktopFrame&) = delete;
+
   ~InvertedDesktopFrame() override {}
 
  private:
   std::unique_ptr<webrtc::DesktopFrame> original_frame_;
-
-  DISALLOW_COPY_AND_ASSIGN(InvertedDesktopFrame);
 };
 
 // DesktopFrame wrapper that copies the input frame and doubles the stride.
@@ -121,12 +125,13 @@ class UnpackedDesktopFrame : public webrtc::DesktopFrame {
     CopyPixelsFrom(*frame, webrtc::DesktopVector(),
                    webrtc::DesktopRect::MakeSize(size()));
   }
+
+  UnpackedDesktopFrame(const UnpackedDesktopFrame&) = delete;
+  UnpackedDesktopFrame& operator=(const UnpackedDesktopFrame&) = delete;
+
   ~UnpackedDesktopFrame() override {
     delete[] data_;
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(UnpackedDesktopFrame);
 };
 
 // TODO(sergeyu): Move this to a separate file where it can be reused.
@@ -265,18 +270,22 @@ class DesktopCaptureDeviceTest : public testing::Test {
   std::unique_ptr<webrtc::DesktopFrame> output_frame_;
 };
 
-// There is currently no screen capturer implementation for ozone. So disable
-// the test that uses a real screen-capturer instead of FakeScreenCapturer.
-// http://crbug.com/260318
-#if defined(USE_OZONE)
-#define MAYBE_Capture DISABLED_Capture
-#else
-#define MAYBE_Capture Capture
-#endif
-TEST_F(DesktopCaptureDeviceTest, MAYBE_Capture) {
+TEST_F(DesktopCaptureDeviceTest, Capture) {
   std::unique_ptr<webrtc::DesktopCapturer> capturer(
       webrtc::DesktopCapturer::CreateScreenCapturer(
           webrtc::DesktopCaptureOptions::CreateDefault()));
+
+#if defined(USE_OZONE)
+#if !BUILDFLAG(OZONE_PLATFORM_X11)
+  // webrtc::DesktopCapturer is only supported on Ozone X11 by default.
+  // TODO(webrtc/13429): Enable for Wayland.
+  EXPECT_FALSE(capturer);
+  // Check return value to avoid compiler warnings.
+  if (!capturer)
+    return;
+#endif  // !BUILDFLAG(OZONE_PLATFORM_X11)
+#endif  // defined(USE_OZONE)
+
   CreateScreenCaptureDevice(std::move(capturer));
 
   media::VideoCaptureFormat format;
@@ -608,7 +617,7 @@ class DesktopCaptureDeviceThrottledTest : public DesktopCaptureDeviceTest {
               // here in OnIncomingCapturedData is take into account for
               // the capture duration
               const base::TimeDelta device_capture_duration =
-                  base::TimeDelta::FromMicroseconds(static_cast<int64_t>(
+                  base::Microseconds(static_cast<int64_t>(
                       static_cast<double>(base::Time::kMicrosecondsPerSecond) /
                           kFrameRate +
                       0.5 /* round to nearest int */));

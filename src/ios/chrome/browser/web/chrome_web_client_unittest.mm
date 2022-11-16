@@ -14,25 +14,27 @@
 #include "base/strings/sys_string_conversions.h"
 #import "base/test/ios/wait_util.h"
 #include "base/test/scoped_feature_list.h"
-#include "base/test/task_environment.h"
 #include "components/captive_portal/core/captive_portal_detector.h"
+#include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "components/lookalikes/core/lookalike_url_util.h"
 #import "components/safe_browsing/ios/browser/safe_browsing_url_allow_list.h"
 #include "components/security_interstitials/core/unsafe_resource.h"
 #include "components/strings/grit/components_strings.h"
 #include "ios/chrome/browser/browser_state/test_chrome_browser_state.h"
 #include "ios/chrome/browser/chrome_url_constants.h"
+#include "ios/chrome/browser/content_settings/host_content_settings_map_factory.h"
 #import "ios/chrome/browser/safe_browsing/safe_browsing_blocking_page.h"
-#import "ios/chrome/browser/safe_browsing/safe_browsing_error.h"
-#import "ios/chrome/browser/safe_browsing/safe_browsing_unsafe_resource_container.h"
-#import "ios/chrome/browser/ssl/captive_portal_detector_tab_helper.h"
-#import "ios/chrome/browser/ssl/captive_portal_detector_tab_helper_delegate.h"
+#import "ios/chrome/browser/ssl/captive_portal_tab_helper.h"
 #include "ios/chrome/browser/web/error_page_controller_bridge.h"
 #import "ios/chrome/browser/web/error_page_util.h"
 #include "ios/chrome/browser/web/features.h"
+#import "ios/components/security_interstitials/https_only_mode/https_only_mode_container.h"
+#import "ios/components/security_interstitials/https_only_mode/https_only_mode_error.h"
 #import "ios/components/security_interstitials/ios_blocking_page_tab_helper.h"
 #import "ios/components/security_interstitials/lookalikes/lookalike_url_container.h"
 #import "ios/components/security_interstitials/lookalikes/lookalike_url_error.h"
+#import "ios/components/security_interstitials/safe_browsing/safe_browsing_error.h"
+#import "ios/components/security_interstitials/safe_browsing/safe_browsing_unsafe_resource_container.h"
 #import "ios/net/protocol_handler_util.h"
 #include "ios/web/common/features.h"
 #import "ios/web/common/web_view_creation_util.h"
@@ -41,11 +43,13 @@
 #import "ios/web/public/test/fakes/fake_web_state.h"
 #import "ios/web/public/test/js_test_util.h"
 #include "ios/web/public/test/scoped_testing_web_client.h"
+#include "ios/web/public/test/web_task_environment.h"
 #include "net/base/net_errors.h"
 #include "net/http/http_status_code.h"
 #include "net/ssl/ssl_info.h"
 #include "net/test/cert_test_util.h"
 #include "net/test/test_data_directory.h"
+#include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
 #include "services/network/public/mojom/fetch_api.mojom.h"
 #include "services/network/test/test_url_loader_factory.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -78,19 +82,21 @@ NSError* CreateTestError() {
 
 class ChromeWebClientTest : public PlatformTest {
  public:
-  ChromeWebClientTest() {
+  ChromeWebClientTest()
+      : environment_(web::WebTaskEnvironment::Options::IO_MAINLOOP) {
     browser_state_ = TestChromeBrowserState::Builder().Build();
   }
+
+  ChromeWebClientTest(const ChromeWebClientTest&) = delete;
+  ChromeWebClientTest& operator=(const ChromeWebClientTest&) = delete;
 
   ~ChromeWebClientTest() override = default;
 
   ChromeBrowserState* browser_state() { return browser_state_.get(); }
 
- private:
-  base::test::TaskEnvironment environment_;
-  std::unique_ptr<ChromeBrowserState> browser_state_;
-
-  DISALLOW_COPY_AND_ASSIGN(ChromeWebClientTest);
+ protected:
+  web::WebTaskEnvironment environment_;
+  std::unique_ptr<TestChromeBrowserState> browser_state_;
 };
 
 TEST_F(ChromeWebClientTest, UserAgent) {
@@ -275,12 +281,11 @@ TEST_F(ChromeWebClientTest, PrepareErrorPageWithSSLInfo) {
   test_loader_factory.AddResponse(
       captive_portal::CaptivePortalDetector::kDefaultURL, "",
       net::HTTP_NO_CONTENT);
-  id captive_portal_detector_tab_helper_delegate = [OCMockObject
-      mockForProtocol:@protocol(CaptivePortalDetectorTabHelperDelegate)];
-  CaptivePortalDetectorTabHelper::CreateForWebState(
-      &web_state, captive_portal_detector_tab_helper_delegate,
-      &test_loader_factory);
+  browser_state_->SetSharedURLLoaderFactory(
+      base::MakeRefCounted<network::WeakWrapperSharedURLLoaderFactory>(
+          &test_loader_factory));
 
+  CaptivePortalTabHelper::CreateForWebState(&web_state);
   web_state.SetBrowserState(browser_state());
   web_client.PrepareErrorPage(&web_state, GURL(kTestUrl), error,
                               /*is_post=*/false,
@@ -311,7 +316,7 @@ TEST_F(ChromeWebClientTest, PrepareErrorPageForSafeBrowsingError) {
   resource.threat_type = safe_browsing::SB_THREAT_TYPE_URL_PHISHING;
   resource.url = GURL("http://www.chromium.test");
   resource.request_destination = network::mojom::RequestDestination::kDocument;
-  resource.web_state_getter = web_state.CreateDefaultGetter();
+  resource.weak_web_state = web_state.GetWeakPtr();
   SafeBrowsingUrlAllowList::FromWebState(&web_state)
       ->AddPendingUnsafeNavigationDecision(resource.url, resource.threat_type);
   SafeBrowsingUnsafeResourceContainer::FromWebState(&web_state)
@@ -425,18 +430,21 @@ TEST_F(ChromeWebClientTest, PrepareErrorPageForLookalikeUrlErrorNoSuggestion) {
       << base::SysNSStringToUTF8(page);
 }
 
-// Tests PrepareErrorPage for a legacy TLS error, which results in a
-// committed legacy TLS interstitial.
-TEST_F(ChromeWebClientTest, PrepareErrorPageForLegacyTLSError) {
+// Tests PrepareErrorPage for a HTTPS-Only Mode error, which results in a
+// committed HTTPS-Only Mode interstitial that has a 'Go back'.
+TEST_F(ChromeWebClientTest, PrepareErrorPageForHttpsOnlyModeError) {
   web::FakeWebState web_state;
   web_state.SetBrowserState(browser_state());
+  HttpsOnlyModeContainer::CreateForWebState(&web_state);
   security_interstitials::IOSBlockingPageTabHelper::CreateForWebState(
       &web_state);
   auto navigation_manager = std::make_unique<web::FakeNavigationManager>();
   web_state.SetNavigationManager(std::move(navigation_manager));
 
-  NSError* error = [NSError errorWithDomain:net::kNSErrorDomain
-                                       code:net::ERR_SSL_OBSOLETE_VERSION
+  HttpsOnlyModeContainer::FromWebState(&web_state)->SetHttpUrl(GURL(kTestUrl));
+
+  NSError* error = [NSError errorWithDomain:kHttpsOnlyModeErrorDomain
+                                       code:kHttpsOnlyModeErrorCode
                                    userInfo:nil];
   __block bool callback_called = false;
   __block NSString* page = nil;
@@ -454,126 +462,31 @@ TEST_F(ChromeWebClientTest, PrepareErrorPageForLegacyTLSError) {
                               /*navigation_id=*/0, std::move(callback));
 
   EXPECT_TRUE(callback_called);
-  NSString* error_string =
-      l10n_util::GetNSString(IDS_LEGACY_TLS_PRIMARY_PARAGRAPH);
-  EXPECT_TRUE([page containsString:error_string])
+  NSString* back_to_safety_string =
+      l10n_util::GetNSString(IDS_HTTPS_ONLY_MODE_BACK_BUTTON);
+  EXPECT_TRUE([page containsString:back_to_safety_string])
       << base::SysNSStringToUTF8(page);
-}
-
-// Tests PrepareErrorPage for a legacy TLS error in a WebState that doesn't
-// have an IOSBlockingPageTabHelper, ensuring that there is no crash.
-TEST_F(ChromeWebClientTest,
-       PrepareErrorPageForLegacyTLSErrorNotInWebStateList) {
-  web::FakeWebState web_state;
-  web_state.SetBrowserState(browser_state());
-  auto navigation_manager = std::make_unique<web::FakeNavigationManager>();
-  web_state.SetNavigationManager(std::move(navigation_manager));
-
-  NSError* error = [NSError errorWithDomain:net::kNSErrorDomain
-                                       code:net::ERR_SSL_OBSOLETE_VERSION
-                                   userInfo:nil];
-  __block bool callback_called = false;
-  __block NSString* page = nil;
-  base::OnceCallback<void(NSString*)> callback =
-      base::BindOnce(^(NSString* error_html) {
-        callback_called = true;
-        page = error_html;
-      });
-
-  ChromeWebClient web_client;
-  web_client.PrepareErrorPage(&web_state, GURL(kTestUrl), error,
-                              /*is_post=*/false,
-                              /*is_off_the_record=*/false,
-                              /*info=*/absl::optional<net::SSLInfo>(),
-                              /*navigation_id=*/0, std::move(callback));
-
-  EXPECT_TRUE(callback_called);
-  EXPECT_EQ(page.length, 0u);
 }
 
 // Tests the default user agent for different views.
 TEST_F(ChromeWebClientTest, DefaultUserAgent) {
-  if (@available(iOS 13, *)) {
-  } else {
-    // The feature is only available on iOS 13.
-    return;
-  }
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitWithFeatures(
-      {web::features::kUseDefaultUserAgentInWebClient, web::kMobileGoogleSRP},
-      {});
-
   ChromeWebClient web_client;
-  const GURL google_url = GURL("https://www.google.com/search?q=test");
-  const GURL non_google_url = GURL("http://wikipedia.org");
+  web::FakeWebState web_state;
+  web_state.SetBrowserState(browser_state());
 
-  UITraitCollection* regular_vertical_size_class = [UITraitCollection
-      traitCollectionWithVerticalSizeClass:UIUserInterfaceSizeClassRegular];
-  UITraitCollection* regular_horizontal_size_class = [UITraitCollection
-      traitCollectionWithHorizontalSizeClass:UIUserInterfaceSizeClassRegular];
-  UITraitCollection* compact_vertical_size_class = [UITraitCollection
-      traitCollectionWithVerticalSizeClass:UIUserInterfaceSizeClassCompact];
-  UITraitCollection* compact_horizontal_size_class = [UITraitCollection
-      traitCollectionWithHorizontalSizeClass:UIUserInterfaceSizeClassCompact];
+  scoped_refptr<HostContentSettingsMap> settings_map(
+      ios::HostContentSettingsMapFactory::GetForBrowserState(browser_state()));
+  settings_map->SetContentSettingCustomScope(
+      ContentSettingsPattern::Wildcard(), ContentSettingsPattern::Wildcard(),
+      ContentSettingsType::REQUEST_DESKTOP_SITE, CONTENT_SETTING_BLOCK);
 
-  UIView* view = [[UIView alloc] init];
-  UITraitCollection* original_traits = view.traitCollection;
+  EXPECT_EQ(web::UserAgentType::MOBILE,
+            web_client.GetDefaultUserAgent(&web_state, GURL()));
 
-  UITraitCollection* regular_regular =
-      [UITraitCollection traitCollectionWithTraitsFromCollections:@[
-        original_traits, regular_vertical_size_class,
-        regular_horizontal_size_class
-      ]];
-  UITraitCollection* regular_compact =
-      [UITraitCollection traitCollectionWithTraitsFromCollections:@[
-        original_traits, regular_vertical_size_class,
-        compact_horizontal_size_class
-      ]];
-  UITraitCollection* compact_regular =
-      [UITraitCollection traitCollectionWithTraitsFromCollections:@[
-        original_traits, compact_vertical_size_class,
-        regular_horizontal_size_class
-      ]];
-  UITraitCollection* compact_compact =
-      [UITraitCollection traitCollectionWithTraitsFromCollections:@[
-        original_traits, compact_vertical_size_class,
-        compact_horizontal_size_class
-      ]];
+  settings_map->SetContentSettingCustomScope(
+      ContentSettingsPattern::Wildcard(), ContentSettingsPattern::Wildcard(),
+      ContentSettingsType::REQUEST_DESKTOP_SITE, CONTENT_SETTING_ALLOW);
 
-  // Check that desktop is returned for Regular x Regular on non-Google URLs.
-  id mock_regular_regular_view = OCMClassMock([UIView class]);
-  OCMStub([mock_regular_regular_view traitCollection])
-      .andReturn(regular_regular);
   EXPECT_EQ(web::UserAgentType::DESKTOP,
-            web_client.GetDefaultUserAgent(mock_regular_regular_view,
-                                           non_google_url));
-
-  EXPECT_EQ(
-      web::UserAgentType::MOBILE,
-      web_client.GetDefaultUserAgent(mock_regular_regular_view, google_url));
-
-  // Check that mobile is returned for all other combinations.
-  id mock_regular_compact_view = OCMClassMock([UIView class]);
-  OCMStub([mock_regular_compact_view traitCollection])
-      .andReturn(regular_compact);
-  EXPECT_EQ(web::UserAgentType::MOBILE,
-            web_client.GetDefaultUserAgent(mock_regular_compact_view,
-                                           non_google_url));
-  EXPECT_EQ(
-      web::UserAgentType::MOBILE,
-      web_client.GetDefaultUserAgent(mock_regular_regular_view, google_url));
-
-  id mock_compact_regular_view = OCMClassMock([UIView class]);
-  OCMStub([mock_compact_regular_view traitCollection])
-      .andReturn(compact_regular);
-  EXPECT_EQ(web::UserAgentType::MOBILE,
-            web_client.GetDefaultUserAgent(mock_compact_regular_view,
-                                           non_google_url));
-
-  id mock_compact_compact_view = OCMClassMock([UIView class]);
-  OCMStub([mock_compact_compact_view traitCollection])
-      .andReturn(compact_compact);
-  EXPECT_EQ(web::UserAgentType::MOBILE,
-            web_client.GetDefaultUserAgent(mock_compact_compact_view,
-                                           non_google_url));
+            web_client.GetDefaultUserAgent(&web_state, GURL()));
 }

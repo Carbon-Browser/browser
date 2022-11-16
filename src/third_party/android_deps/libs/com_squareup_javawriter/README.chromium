@@ -2,8 +2,9 @@ Name: JavaWriter
 Short Name: javawriter
 URL: http://github.com/square/javawriter/
 Version: 2.1.1
-License: 
+License: Apache 2.0
 License File: NOT_SHIPPED
+CPEPrefix: unknown
 Security Critical: no
 
 Description:

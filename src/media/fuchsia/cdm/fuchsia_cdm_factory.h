@@ -9,7 +9,6 @@
 #include <memory>
 
 #include "base/containers/flat_map.h"
-#include "base/macros.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "media/base/cdm_factory.h"
@@ -23,11 +22,14 @@ class MEDIA_EXPORT FuchsiaCdmFactory final : public CdmFactory {
  public:
   // |interface_provider| must outlive this class.
   explicit FuchsiaCdmFactory(std::unique_ptr<FuchsiaCdmProvider> provider);
+
+  FuchsiaCdmFactory(const FuchsiaCdmFactory&) = delete;
+  FuchsiaCdmFactory& operator=(const FuchsiaCdmFactory&) = delete;
+
   ~FuchsiaCdmFactory() override;
 
   // CdmFactory implementation.
-  void Create(const std::string& key_system,
-              const CdmConfig& cdm_config,
+  void Create(const CdmConfig& cdm_config,
               const SessionMessageCB& session_message_cb,
               const SessionClosedCB& session_closed_cb,
               const SessionKeysChangeCB& session_keys_change_cb,
@@ -48,8 +50,6 @@ class MEDIA_EXPORT FuchsiaCdmFactory final : public CdmFactory {
       pending_cdms_;
 
   base::WeakPtrFactory<FuchsiaCdmFactory> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(FuchsiaCdmFactory);
 };
 
 }  // namespace media

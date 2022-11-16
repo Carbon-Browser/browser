@@ -10,12 +10,14 @@
 #include "base/base64.h"
 #include "base/containers/contains.h"
 #include "base/run_loop.h"
+#include "base/strings/escape.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/threading/thread_restrictions.h"
+#include "build/build_config.h"
 #include "content/browser/web_contents/web_contents_impl.h"
 #include "content/public/browser/network_service_instance.h"
 #include "content/public/test/browser_test.h"
@@ -27,7 +29,6 @@
 #include "content/public/test/url_loader_monitor.h"
 #include "content/shell/browser/shell.h"
 #include "crypto/sha2.h"
-#include "net/base/escape.h"
 #include "net/base/filename_util.h"
 #include "net/dns/mock_host_resolver.h"
 #include "net/test/embedded_test_server/http_request.h"
@@ -38,10 +39,10 @@
 #include "services/network/public/cpp/trust_token_http_headers.h"
 #include "services/network/public/cpp/trust_token_parameterization.h"
 #include "services/network/public/mojom/trust_tokens.mojom.h"
+#include "services/network/test/trust_token_request_handler.h"
+#include "services/network/test/trust_token_test_server_handler_registration.h"
+#include "services/network/test/trust_token_test_util.h"
 #include "services/network/trust_tokens/test/signed_request_verification_util.h"
-#include "services/network/trust_tokens/test/test_server_handler_registration.h"
-#include "services/network/trust_tokens/test/trust_token_request_handler.h"
-#include "services/network/trust_tokens/test/trust_token_test_util.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/gurl.h"
@@ -1031,8 +1032,8 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest,
       shell(), server_.GetURL("a.test", "/page_with_sandboxed_iframe.html")));
 
   FrameTreeNode* root = static_cast<WebContentsImpl*>(shell()->web_contents())
-                            ->GetFrameTree()
-                            ->root();
+                            ->GetPrimaryFrameTree()
+                            .root();
 
   EXPECT_EQ("Success",
             EvalJs(root->child_at(0)->current_frame_host(),
@@ -1051,8 +1052,8 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest,
       shell(), server_.GetURL("a.test", "/page_with_sandboxed_iframe.html")));
 
   FrameTreeNode* root = static_cast<WebContentsImpl*>(shell()->web_contents())
-                            ->GetFrameTree()
-                            ->root();
+                            ->GetPrimaryFrameTree()
+                            .root();
 
   EXPECT_EQ("Success", EvalJs(root->child_at(0)->current_frame_host(),
                               JsReplace(R"(
@@ -1105,8 +1106,8 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest,
   // For good measure, make sure the analogous signing operation works from
   // fetch, too, even though it wasn't broken by the same bug.
   FrameTreeNode* root = static_cast<WebContentsImpl*>(shell()->web_contents())
-                            ->GetFrameTree()
-                            ->root();
+                            ->GetPrimaryFrameTree()
+                            .root();
 
   EXPECT_EQ("Success", EvalJs(root->child_at(0)->current_frame_host(),
                               JsReplace(R"(
@@ -1675,6 +1676,48 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, ShouldntSignUnsignableHeader) {
               Optional(ReflectsSigningFailure()));
 }
 
+IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, FetchEndToEndWithServiceWorker) {
+  ASSERT_TRUE(embedded_test_server()->Start());
+  const char* const hostname = "a.test";
+  ProvideRequestHandlerKeyCommitmentsToNetworkService({hostname});
+  const std::string origin = IssuanceOriginFromHost(hostname);
+  const GURL create_sw_url =
+      server_.GetURL(hostname, "/service_worker/create_service_worker.html");
+  EXPECT_TRUE(NavigateToURL(shell(), create_sw_url));
+  // call register function defined in create_sw_url with the service worker js
+  // file path
+  EXPECT_EQ("DONE",
+            EvalJs(shell(), "register('fetch_event_respond_with_fetch.js');"));
+  // Following navigate to empty html page makes fetch requests go through
+  // service worker. Requests do not go through service workers when commented
+  // out.
+  const GURL empty_page_url =
+      server_.GetURL(hostname, "/service_worker/empty.html");
+  EXPECT_TRUE(NavigateToURL(shell(), empty_page_url));
+  const std::string trust_token_fetch_snippet = R"(
+  (async () => {
+    if (navigator.serviceWorker.controller === null) return "NotServiceWorker";
+    await fetch("/issue", {trustToken: {type: 'token-request'}});
+    await fetch("/redeem", {trustToken: {type: 'token-redemption'}});
+    await fetch("/sign", {trustToken: {type: 'send-redemption-record',
+                                  signRequestData: 'include',
+                                  issuers: [$1]}});
+    return "TTSuccess"; })(); )";
+
+  EXPECT_EQ("TTSuccess",
+            EvalJs(shell(), JsReplace(trust_token_fetch_snippet, origin)));
+
+  EXPECT_THAT(
+      request_handler_.last_incoming_signed_request(),
+      Optional(AllOf(
+          Not(HasHeader(network::kTrustTokensRequestHeaderSecTime)),
+          HasHeader(network::kTrustTokensRequestHeaderSecRedemptionRecord),
+          HasHeader(network::kTrustTokensSecTrustTokenVersionHeader),
+          SignaturesAreWellFormedAndVerify(),
+          SecSignatureHeaderKeyHashes(IsSubsetOf(
+              request_handler_.hashes_of_redemption_bound_public_keys())))));
+}
+
 class TrustTokenBrowsertestWithPlatformIssuance : public TrustTokenBrowsertest {
  public:
   TrustTokenBrowsertestWithPlatformIssuance() {
@@ -1697,7 +1740,7 @@ class TrustTokenBrowsertestWithPlatformIssuance : public TrustTokenBrowsertest {
   base::test::ScopedFeatureList features_;
 };
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 HandlerWrappingLocalTrustTokenFulfiller::
     HandlerWrappingLocalTrustTokenFulfiller(TrustTokenRequestHandler& handler)
     : handler_(handler) {
@@ -1830,8 +1873,8 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertestWithPlatformIssuance,
                     "PlatformProvided"}),
       1);
 }
-#endif  // defined(OS_ANDROID)
-#if !defined(OS_ANDROID)
+#endif  // BUILDFLAG(IS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
 IN_PROC_BROWSER_TEST_F(
     TrustTokenBrowsertestWithPlatformIssuance,
     IssuanceOnOsNotSpecifiedInKeyCommitmentsReturnsErrorIfConfiguredToDoSo) {
@@ -1922,6 +1965,6 @@ IN_PROC_BROWSER_TEST_F(
                     "PlatformProvided"}),
       0);  // No platform-provided operation was attempted.
 }
-#endif  // !defined(OS_ANDROID)
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 }  // namespace content

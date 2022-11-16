@@ -14,23 +14,53 @@
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
 #include "net/cert/mock_cert_verifier.h"
+#include "net/cert/pem.h"
 #include "net/dns/mock_host_resolver.h"
 #include "net/log/test_net_log.h"
 #include "net/quic/crypto/proof_source_chromium.h"
+#include "net/quic/quic_context.h"
 #include "net/test/test_data_directory.h"
-#include "net/third_party/quiche/src/quic/test_tools/crypto_test_utils.h"
-#include "net/third_party/quiche/src/quic/test_tools/quic_test_backend.h"
+#include "net/third_party/quiche/src/quiche/quic/core/crypto/proof_source_x509.h"
+#include "net/third_party/quiche/src/quiche/quic/test_tools/crypto_test_utils.h"
+#include "net/third_party/quiche/src/quiche/quic/test_tools/quic_test_backend.h"
 #include "net/tools/quic/quic_simple_server.h"
-#include "net/tools/quic/quic_transport_simple_server.h"
 #include "net/url_request/url_request_context.h"
 #include "services/network/network_context.h"
 #include "services/network/network_service.h"
 #include "services/network/public/mojom/network_context.mojom.h"
 #include "services/network/test/fake_test_cert_verifier_params_factory.h"
+#include "services/network/url_request_context_builder_mojo.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace network {
 namespace {
+
+class HostResolverFactory final : public net::HostResolver::Factory {
+ public:
+  explicit HostResolverFactory(std::unique_ptr<net::HostResolver> resolver)
+      : resolver_(std::move(resolver)) {}
+
+  std::unique_ptr<net::HostResolver> CreateResolver(
+      net::HostResolverManager* manager,
+      base::StringPiece host_mapping_rules,
+      bool enable_caching) override {
+    DCHECK(resolver_);
+    return std::move(resolver_);
+  }
+
+  // See HostResolver::CreateStandaloneResolver.
+  std::unique_ptr<net::HostResolver> CreateStandaloneResolver(
+      net::NetLog* net_log,
+      const net::HostResolver::ManagerOptions& options,
+      base::StringPiece host_mapping_rules,
+      bool enable_caching) override {
+    NOTREACHED();
+    return nullptr;
+  }
+
+ private:
+  std::unique_ptr<net::HostResolver> resolver_;
+};
 
 // A clock that only mocks out WallNow(), but uses real Now() and
 // ApproximateNow().  Useful for certificate verification.
@@ -56,7 +86,7 @@ class TestConnectionHelper : public quic::QuicConnectionHelperInterface {
   quic::QuicRandom* GetRandomGenerator() override {
     return quic::QuicRandom::GetInstance();
   }
-  quic::QuicBufferAllocator* GetStreamSendBufferAllocator() override {
+  quiche::QuicheBufferAllocator* GetStreamSendBufferAllocator() override {
     return &allocator_;
   }
 
@@ -64,7 +94,7 @@ class TestConnectionHelper : public quic::QuicConnectionHelperInterface {
 
  private:
   TestWallClock clock_;
-  quic::SimpleBufferAllocator allocator_;
+  quiche::SimpleBufferAllocator allocator_;
 };
 
 mojom::NetworkContextParamsPtr CreateNetworkContextParams() {
@@ -113,7 +143,8 @@ class TestHandshakeClient final : public mojom::WebTransportHandshakeClient {
 
   void OnConnectionEstablished(
       mojo::PendingRemote<mojom::WebTransport> transport,
-      mojo::PendingReceiver<mojom::WebTransportClient> client_receiver)
+      mojo::PendingReceiver<mojom::WebTransportClient> client_receiver,
+      const scoped_refptr<net::HttpResponseHeaders>& response_headers)
       override {
     transport_ = std::move(transport);
     client_receiver_ = std::move(client_receiver);
@@ -186,6 +217,15 @@ class TestClient final : public mojom::WebTransportClient {
       std::move(quit_closure_for_incoming_stream_closure_).Run();
     }
   }
+  void OnOutgoingStreamClosed(uint32_t stream_id) override {
+    closed_outgoing_streams_.insert(stream_id);
+    if (quit_closure_for_outgoing_stream_closure_) {
+      std::move(quit_closure_for_outgoing_stream_closure_).Run();
+    }
+  }
+  void OnReceivedResetStream(uint32_t stream_id, uint8_t) override {}
+  void OnReceivedStopSending(uint32_t stream_id, uint8_t) override {}
+  void OnClosed(mojom::WebTransportCloseInfoPtr close_info) override {}
 
   void WaitUntilMojoConnectionError() {
     base::RunLoop run_loop;
@@ -203,6 +243,15 @@ class TestClient final : public mojom::WebTransportClient {
     }
   }
 
+  void WaitUntilOutgoingStreamIsClosed(uint32_t stream_id) {
+    while (!stream_is_closed_as_outgoing_stream(stream_id)) {
+      base::RunLoop run_loop;
+
+      quit_closure_for_outgoing_stream_closure_ = run_loop.QuitClosure();
+      run_loop.Run();
+    }
+  }
+
   const std::vector<std::vector<uint8_t>>& received_datagrams() const {
     return received_datagrams_;
   }
@@ -213,6 +262,10 @@ class TestClient final : public mojom::WebTransportClient {
   bool stream_is_closed_as_incoming_stream(uint32_t stream_id) {
     return closed_incoming_streams_.find(stream_id) !=
            closed_incoming_streams_.end();
+  }
+  bool stream_is_closed_as_outgoing_stream(uint32_t stream_id) {
+    return closed_outgoing_streams_.find(stream_id) !=
+           closed_outgoing_streams_.end();
   }
   bool has_seen_mojo_connection_error() const {
     return has_seen_mojo_connection_error_;
@@ -230,14 +283,16 @@ class TestClient final : public mojom::WebTransportClient {
 
   base::OnceClosure quit_closure_for_mojo_connection_error_;
   base::OnceClosure quit_closure_for_incoming_stream_closure_;
+  base::OnceClosure quit_closure_for_outgoing_stream_closure_;
 
   std::vector<std::vector<uint8_t>> received_datagrams_;
   std::map<uint32_t, bool> closed_incoming_streams_;
+  std::set<uint32_t> closed_outgoing_streams_;
   bool has_seen_mojo_connection_error_ = false;
 };
 
 quic::ParsedQuicVersion GetTestVersion() {
-  quic::ParsedQuicVersion version = quic::DefaultVersionForQuicTransport();
+  quic::ParsedQuicVersion version = quic::ParsedQuicVersion::RFCv1();
   quic::QuicEnableVersion(version);
   return version;
 }
@@ -252,33 +307,30 @@ class WebTransportTest : public testing::TestWithParam<base::StringPiece> {
         origin_(url::Origin::Create(GURL("https://example.org/"))),
         task_environment_(base::test::TaskEnvironment::MainThreadType::IO),
         network_service_(NetworkService::CreateForTesting()),
-        network_context_remote_(mojo::NullRemote()),
-        network_context_(network_service_.get(),
-                         network_context_remote_.BindNewPipeAndPassReceiver(),
-                         CreateNetworkContextParams()) {
-    if (GetParam() == "https") {
-      backend_.set_enable_webtransport(true);
-      http_server_ = std::make_unique<net::QuicSimpleServer>(
-          std::move(proof_source), quic::QuicConfig(),
-          quic::QuicCryptoServerConfig::ConfigOptions(),
-          quic::AllSupportedVersions(), &backend_);
-      EXPECT_TRUE(http_server_->CreateUDPSocketAndListen(
-          quic::QuicSocketAddress(quic::QuicSocketAddress(
-              quic::QuicIpAddress::Any6(), /*port=*/0))));
-    } else {
-      quic_transport_server_ = std::make_unique<net::QuicTransportSimpleServer>(
-          /* port= */ 0, std::vector<url::Origin>({origin_}),
-          std::move(proof_source));
-      EXPECT_EQ(EXIT_SUCCESS, quic_transport_server_->Start());
-    }
+        network_context_remote_(mojo::NullRemote()) {
+    auto host_resolver = std::make_unique<net::MockHostResolver>();
+    host_resolver->rules()->AddRule("test.example.com", "127.0.0.1");
+    network_service_->set_host_resolver_factory_for_testing(
+        std::make_unique<HostResolverFactory>(std::move(host_resolver)));
+    network_context_ = NetworkContext::CreateForTesting(
+        network_service_.get(),
+        network_context_remote_.BindNewPipeAndPassReceiver(),
+        CreateNetworkContextParams(),
+        base::BindOnce([](net::URLRequestContextBuilder* builder) {
+          auto cert_verifier = std::make_unique<net::MockCertVerifier>();
+          cert_verifier->set_default_result(net::OK);
+          builder->SetCertVerifier(std::move(cert_verifier));
+        }));
+    backend_.set_enable_webtransport(true);
+    http_server_ = std::make_unique<net::QuicSimpleServer>(
+        std::move(proof_source), quic::QuicConfig(),
+        quic::QuicCryptoServerConfig::ConfigOptions(),
+        quic::AllSupportedVersions(), &backend_);
+    EXPECT_TRUE(http_server_->CreateUDPSocketAndListen(quic::QuicSocketAddress(
+        quic::QuicSocketAddress(quic::QuicIpAddress::Any6(), /*port=*/0))));
 
-    cert_verifier_.set_default_result(net::OK);
-    host_resolver_.rules()->AddRule("test.example.com", "127.0.0.1");
-
-    network_context_.url_request_context()->set_cert_verifier(&cert_verifier_);
-    network_context_.url_request_context()->set_host_resolver(&host_resolver_);
-    network_context_.url_request_context()->set_net_log(&net_log_);
-    auto* quic_context = network_context_.url_request_context()->quic_context();
+    auto* quic_context =
+        network_context_->url_request_context()->quic_context();
     quic_context->params()->supported_versions.push_back(version_);
     quic_context->params()->origins_to_force_quic_on.insert(
         net::HostPortPair("test.example.com", 0));
@@ -292,7 +344,7 @@ class WebTransportTest : public testing::TestWithParam<base::StringPiece> {
       std::vector<mojom::WebTransportCertificateFingerprintPtr> fingerprints,
       mojo::PendingRemote<mojom::WebTransportHandshakeClient>
           handshake_client) {
-    network_context_.CreateWebTransport(
+    network_context_->CreateWebTransport(
         url, origin, key, std::move(fingerprints), std::move(handshake_client));
   }
   void CreateWebTransport(
@@ -315,17 +367,15 @@ class WebTransportTest : public testing::TestWithParam<base::StringPiece> {
   }
 
   GURL GetURL(base::StringPiece suffix) {
-    int port = GetParam() == "https"
-                   ? http_server_->server_address().port()
-                   : quic_transport_server_->server_address().port();
-    return GURL(base::StrCat({GetParam(), "://test.example.com:",
-                              base::NumberToString(port), suffix}));
+    int port = http_server_->server_address().port();
+    return GURL(base::StrCat(
+        {"https://test.example.com:", base::NumberToString(port), suffix}));
   }
 
   const url::Origin& origin() const { return origin_; }
-  const NetworkContext& network_context() const { return network_context_; }
-  NetworkContext& mutable_network_context() { return network_context_; }
-  net::RecordingTestNetLog& net_log() { return net_log_; }
+  const NetworkContext& network_context() const { return *network_context_; }
+  NetworkContext& mutable_network_context() { return *network_context_; }
+  net::RecordingNetLogObserver& net_log_observer() { return net_log_observer_; }
 
   void RunPendingTasks() {
     base::RunLoop run_loop;
@@ -335,39 +385,22 @@ class WebTransportTest : public testing::TestWithParam<base::StringPiece> {
   }
 
  private:
-  QuicFlagSaver flags_;  // Save/restore all QUIC flag values.
+  quic::test::QuicFlagSaver flags_;  // Save/restore all QUIC flag values.
   quic::ParsedQuicVersion version_;
   const url::Origin origin_;
   base::test::TaskEnvironment task_environment_;
   std::unique_ptr<NetworkService> network_service_;
   mojo::Remote<mojom::NetworkContext> network_context_remote_;
 
-  net::MockCertVerifier cert_verifier_;
-  net::MockHostResolver host_resolver_;
-  net::RecordingTestNetLog net_log_;
+  net::RecordingNetLogObserver net_log_observer_;
 
-  NetworkContext network_context_;
+  std::unique_ptr<NetworkContext> network_context_;
 
-  std::unique_ptr<net::QuicTransportSimpleServer> quic_transport_server_;
   std::unique_ptr<net::QuicSimpleServer> http_server_;
   quic::test::QuicTestBackend backend_;
 };
 
-struct PrintStringPiece {
-  std::string operator()(
-      const testing::TestParamInfo<base::StringPiece>& info) const {
-    std::string output;
-    base::ReplaceChars(info.param, "-", "_", &output);
-    return output;
-  }
-};
-
-INSTANTIATE_TEST_SUITE_P(WebTransportTests,
-                         WebTransportTest,
-                         testing::Values("quic-transport", "https"),
-                         PrintStringPiece());
-
-TEST_P(WebTransportTest, ConnectSuccessfully) {
+TEST_F(WebTransportTest, ConnectSuccessfully) {
   base::RunLoop run_loop_for_handshake;
   mojo::PendingRemote<mojom::WebTransportHandshakeClient> handshake_client;
   TestHandshakeClient test_handshake_client(
@@ -384,39 +417,7 @@ TEST_P(WebTransportTest, ConnectSuccessfully) {
   EXPECT_EQ(1u, network_context().NumOpenWebTransports());
 }
 
-TEST_P(WebTransportTest, ConnectWithWrongOrigin) {
-  // HTTP/3 test server currently does not do the origin check.
-  // TODO(vasilvv): fix this.
-  if (GetParam() == "https") {
-    return;
-  }
-  base::RunLoop run_loop_for_handshake;
-  mojo::PendingRemote<mojom::WebTransportHandshakeClient> handshake_client;
-  TestHandshakeClient test_handshake_client(
-      handshake_client.InitWithNewPipeAndPassReceiver(),
-      run_loop_for_handshake.QuitClosure());
-
-  CreateWebTransport(GetURL("/echo"),
-                     url::Origin::Create(GURL("https://evil.com")),
-                     std::move(handshake_client));
-
-  run_loop_for_handshake.Run();
-
-  EXPECT_TRUE(test_handshake_client.has_seen_connection_establishment());
-  EXPECT_FALSE(test_handshake_client.has_seen_handshake_failure());
-  EXPECT_FALSE(test_handshake_client.has_seen_mojo_connection_error());
-
-  // Server resets the connection due to origin mismatch.
-  TestClient client(test_handshake_client.PassClientReceiver());
-  client.WaitUntilMojoConnectionError();
-
-  EXPECT_EQ(0u, network_context().NumOpenWebTransports());
-}
-
-TEST_P(WebTransportTest, ConnectHandles404) {
-  if (GetParam() == "quic-transport") {
-    return;
-  }
+TEST_F(WebTransportTest, ConnectHandles404) {
   base::RunLoop run_loop_for_handshake;
   mojo::PendingRemote<mojom::WebTransportHandshakeClient> handshake_client;
   TestHandshakeClient test_handshake_client(
@@ -435,11 +436,7 @@ TEST_P(WebTransportTest, ConnectHandles404) {
   EXPECT_EQ(0u, network_context().NumOpenWebTransports());
 }
 
-TEST_P(WebTransportTest, ConnectToBannedPort) {
-  if (GetParam() == "quic-transport") {
-    return;
-  }
-
+TEST_F(WebTransportTest, ConnectToBannedPort) {
   base::RunLoop run_loop_for_handshake;
   mojo::PendingRemote<mojom::WebTransportHandshakeClient> handshake_client;
   TestHandshakeClient test_handshake_client(
@@ -462,7 +459,7 @@ TEST_P(WebTransportTest, ConnectToBannedPort) {
             net::ERR_UNSAFE_PORT);
 }
 
-TEST_P(WebTransportTest, SendDatagram) {
+TEST_F(WebTransportTest, SendDatagram) {
   base::RunLoop run_loop_for_handshake;
   mojo::PendingRemote<mojom::WebTransportHandshakeClient> handshake_client;
   TestHandshakeClient test_handshake_client(
@@ -507,7 +504,7 @@ TEST_P(WebTransportTest, SendDatagram) {
   EXPECT_TRUE(base::Contains(sent_data, client.received_datagrams()[0]));
 }
 
-TEST_P(WebTransportTest, SendToolargeDatagram) {
+TEST_F(WebTransportTest, SendToolargeDatagram) {
   base::RunLoop run_loop_for_handshake;
   mojo::PendingRemote<mojom::WebTransportHandshakeClient> handshake_client;
   TestHandshakeClient test_handshake_client(
@@ -537,7 +534,7 @@ TEST_P(WebTransportTest, SendToolargeDatagram) {
   EXPECT_FALSE(result);
 }
 
-TEST_P(WebTransportTest, EchoOnUnidirectionalStreams) {
+TEST_F(WebTransportTest, EchoOnUnidirectionalStreams) {
   base::RunLoop run_loop_for_handshake;
   mojo::PendingRemote<mojom::WebTransportHandshakeClient> handshake_client;
   TestHandshakeClient test_handshake_client(
@@ -580,9 +577,10 @@ TEST_P(WebTransportTest, EchoOnUnidirectionalStreams) {
   run_loop_for_stream_creation.Run();
   ASSERT_TRUE(stream_created);
 
-  // Signal the end-of-data.
-  writable_for_outgoing.reset();
   transport_remote->SendFin(stream_id);
+  writable_for_outgoing.reset();
+
+  client.WaitUntilOutgoingStreamIsClosed(stream_id);
 
   mojo::ScopedDataPipeConsumerHandle readable_for_incoming;
   uint32_t incoming_stream_id = stream_id;
@@ -607,13 +605,14 @@ TEST_P(WebTransportTest, EchoOnUnidirectionalStreams) {
   EXPECT_TRUE(client.has_received_fin_for(incoming_stream_id));
   EXPECT_FALSE(client.has_seen_mojo_connection_error());
 
-  std::vector<net::NetLogEntry> resets_sent = net_log().GetEntriesWithType(
-      net::NetLogEventType::QUIC_SESSION_RST_STREAM_FRAME_SENT);
+  std::vector<net::NetLogEntry> resets_sent =
+      net_log_observer().GetEntriesWithType(
+          net::NetLogEventType::QUIC_SESSION_RST_STREAM_FRAME_SENT);
   EXPECT_EQ(0u, resets_sent.size());
 }
 
 // crbug.com/1129847: disabled because it is flaky.
-TEST_P(WebTransportTest, DISABLED_EchoOnBidirectionalStream) {
+TEST_F(WebTransportTest, DISABLED_EchoOnBidirectionalStream) {
   base::RunLoop run_loop_for_handshake;
   mojo::PendingRemote<mojom::WebTransportHandshakeClient> handshake_client;
   TestHandshakeClient test_handshake_client(
@@ -693,20 +692,40 @@ class WebTransportWithCustomCertificateTest : public WebTransportTest {
   static std::unique_ptr<quic::ProofSource> CreateProofSource() {
     auto proof_source = std::make_unique<net::ProofSourceChromium>();
     base::FilePath certs_dir = net::GetTestCertsDirectory();
-    EXPECT_TRUE(proof_source->Initialize(
-        certs_dir.AppendASCII("quic-short-lived.pem"),
-        certs_dir.AppendASCII("quic-leaf-cert.key"),
-        certs_dir.AppendASCII("quic-leaf-cert.key.sct")));
-    return proof_source;
+    base::FilePath cert_path = certs_dir.AppendASCII("quic-short-lived.pem");
+    base::FilePath key_path = certs_dir.AppendASCII("quic-ecdsa-leaf.key");
+
+    std::string cert_pem, key_raw;
+    if (!base::ReadFileToString(cert_path, &cert_pem)) {
+      ADD_FAILURE() << "Failed to load the certificate from " << cert_path;
+      return nullptr;
+    }
+    if (!base::ReadFileToString(key_path, &key_raw)) {
+      ADD_FAILURE() << "Failed to load the private key from " << key_path;
+      return nullptr;
+    }
+
+    net::PEMTokenizer pem_tokenizer(cert_pem, {"CERTIFICATE"});
+    if (!pem_tokenizer.GetNext()) {
+      ADD_FAILURE() << "No certificates found in " << cert_path;
+      return nullptr;
+    }
+    auto chain =
+        quiche::QuicheReferenceCountedPointer<quic::ProofSource::Chain>(
+            new quic::ProofSource::Chain(
+                std::vector<std::string>{pem_tokenizer.data()}));
+    std::unique_ptr<quic::CertificatePrivateKey> key =
+        quic::CertificatePrivateKey::LoadFromDer(key_raw);
+    if (!key) {
+      ADD_FAILURE() << "Failed to parse the key file " << key_path;
+      return nullptr;
+    }
+
+    return quic::ProofSourceX509::Create(std::move(chain), std::move(*key));
   }
 };
 
-INSTANTIATE_TEST_SUITE_P(WebTransportWithCustomCertificateTests,
-                         WebTransportWithCustomCertificateTest,
-                         testing::Values("quic-transport", "https"),
-                         PrintStringPiece());
-
-TEST_P(WebTransportWithCustomCertificateTest, WithValidFingerprint) {
+TEST_F(WebTransportWithCustomCertificateTest, WithValidFingerprint) {
   base::RunLoop run_loop_for_handshake;
   mojo::PendingRemote<mojom::WebTransportHandshakeClient> handshake_client;
   TestHandshakeClient test_handshake_client(
@@ -715,8 +734,8 @@ TEST_P(WebTransportWithCustomCertificateTest, WithValidFingerprint) {
 
   auto fingerprint = mojom::WebTransportCertificateFingerprint::New(
       "sha-256",
-      "ED:3D:D7:C3:67:10:94:68:D1:DC:D1:26:5C:B2:74:D7:1C:"
-      "A2:63:3E:94:94:C0:84:39:D6:64:FA:08:B9:77:37");
+      "6E:8E:7B:43:2A:30:B2:A8:5F:59:56:85:64:C2:48:E9:35:"
+      "CB:63:B0:7A:E9:F5:CA:3C:35:6F:CB:CC:E8:8D:1B");
   std::vector<mojom::WebTransportCertificateFingerprintPtr> fingerprints;
   fingerprints.push_back(std::move(fingerprint));
 
@@ -731,7 +750,7 @@ TEST_P(WebTransportWithCustomCertificateTest, WithValidFingerprint) {
   EXPECT_EQ(1u, network_context().NumOpenWebTransports());
 }
 
-TEST_P(WebTransportWithCustomCertificateTest, WithInvalidFingerprint) {
+TEST_F(WebTransportWithCustomCertificateTest, WithInvalidFingerprint) {
   base::RunLoop run_loop_for_handshake;
   mojo::PendingRemote<mojom::WebTransportHandshakeClient> handshake_client;
   TestHandshakeClient test_handshake_client(

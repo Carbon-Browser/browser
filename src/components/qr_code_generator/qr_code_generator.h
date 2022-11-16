@@ -12,6 +12,7 @@
 
 #include "base/containers/span.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 struct QRVersionInfo;
@@ -27,6 +28,10 @@ class QRCodeGenerator {
    public:
     GeneratedCode();
     GeneratedCode(GeneratedCode&&);
+
+    GeneratedCode(const GeneratedCode&) = delete;
+    GeneratedCode& operator=(const GeneratedCode&) = delete;
+
     ~GeneratedCode();
 
     // Pixel data; pointer to an array of bytes, where the least-significant
@@ -37,8 +42,6 @@ class QRCodeGenerator {
 
     // Width and height (which are equal) of the generated data, in tiles.
     int qr_size = 0;
-
-    DISALLOW_COPY_AND_ASSIGN(GeneratedCode);
   };
 
   // Static parameters for V5 QR codes.
@@ -202,7 +205,7 @@ class QRCodeGenerator {
   // Parameters for the currently-selected version of the QR code.
   // Generate() will pick a version that can contain enough data.
   // Unowned; nullptr until initialized in Generate().
-  const QRVersionInfo* version_info_ = nullptr;
+  raw_ptr<const QRVersionInfo> version_info_ = nullptr;
 
   // d_ represents a QR code with one byte per pixel. Each byte is one pixel.
   // The LSB is set if the pixel is "black". The second bit is set if the pixel

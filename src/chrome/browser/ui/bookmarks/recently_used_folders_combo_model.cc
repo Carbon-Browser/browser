@@ -7,6 +7,7 @@
 #include <stddef.h>
 
 #include "base/metrics/user_metrics.h"
+#include "base/observer_list.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/bookmarks/browser/bookmark_model.h"
 #include "components/bookmarks/browser/bookmark_utils.h"
@@ -92,11 +93,11 @@ RecentlyUsedFoldersComboModel::~RecentlyUsedFoldersComboModel() {
   bookmark_model_->RemoveObserver(this);
 }
 
-int RecentlyUsedFoldersComboModel::GetItemCount() const {
-  return static_cast<int>(items_.size());
+size_t RecentlyUsedFoldersComboModel::GetItemCount() const {
+  return items_.size();
 }
 
-std::u16string RecentlyUsedFoldersComboModel::GetItemAt(int index) const {
+std::u16string RecentlyUsedFoldersComboModel::GetItemAt(size_t index) const {
   switch (items_[index].type) {
     case Item::TYPE_NODE:
       return items_[index].node->GetTitle();
@@ -112,11 +113,11 @@ std::u16string RecentlyUsedFoldersComboModel::GetItemAt(int index) const {
   return std::u16string();
 }
 
-bool RecentlyUsedFoldersComboModel::IsItemSeparatorAt(int index) const {
+bool RecentlyUsedFoldersComboModel::IsItemSeparatorAt(size_t index) const {
   return items_[index].type == Item::TYPE_SEPARATOR;
 }
 
-int RecentlyUsedFoldersComboModel::GetDefaultIndex() const {
+absl::optional<size_t> RecentlyUsedFoldersComboModel::GetDefaultIndex() const {
   // TODO(pbos): Ideally we shouldn't have to handle `parent_node_` removal
   // here, the dialog should instead close immediately (and destroy `this`).
   // If that can be resolved, this should DCHECK that it != items_.end() and
@@ -127,16 +128,6 @@ int RecentlyUsedFoldersComboModel::GetDefaultIndex() const {
   auto it = std::find(items_.begin(), items_.end(),
                       Item(parent_node_, Item::TYPE_NODE));
   return it == items_.end() ? 0 : static_cast<int>(it - items_.begin());
-}
-
-void RecentlyUsedFoldersComboModel::AddObserver(
-    ui::ComboboxModelObserver* observer) {
-  observers_.AddObserver(observer);
-}
-
-void RecentlyUsedFoldersComboModel::RemoveObserver(
-    ui::ComboboxModelObserver* observer) {
-  observers_.RemoveObserver(observer);
 }
 
 void RecentlyUsedFoldersComboModel::BookmarkModelLoaded(BookmarkModel* model,
@@ -175,7 +166,7 @@ void RecentlyUsedFoldersComboModel::OnWillRemoveBookmarks(
     }
   }
   if (changed) {
-    for (ui::ComboboxModelObserver& observer : observers_)
+    for (ui::ComboboxModelObserver& observer : observers())
       observer.OnComboboxModelChanged(this);
   }
 }
@@ -218,15 +209,14 @@ void RecentlyUsedFoldersComboModel::BookmarkAllUserNodesRemoved(
     }
   }
   if (changed) {
-    for (ui::ComboboxModelObserver& observer : observers_)
+    for (ui::ComboboxModelObserver& observer : observers())
       observer.OnComboboxModelChanged(this);
   }
 }
 
-void RecentlyUsedFoldersComboModel::MaybeChangeParent(
-    const BookmarkNode* node,
-    int selected_index) {
-  DCHECK_LT(selected_index, static_cast<int>(items_.size()));
+void RecentlyUsedFoldersComboModel::MaybeChangeParent(const BookmarkNode* node,
+                                                      size_t selected_index) {
+  DCHECK_LT(selected_index, items_.size());
   if (items_[selected_index].type != Item::TYPE_NODE)
     return;
 
@@ -237,10 +227,8 @@ void RecentlyUsedFoldersComboModel::MaybeChangeParent(
   }
 }
 
-const BookmarkNode* RecentlyUsedFoldersComboModel::GetNodeAt(int index) {
-  if (index < 0 || index >= static_cast<int>(items_.size()))
-    return nullptr;
-  return items_[index].node;
+const BookmarkNode* RecentlyUsedFoldersComboModel::GetNodeAt(size_t index) {
+  return (index < items_.size()) ? items_[index].node : nullptr;
 }
 
 void RecentlyUsedFoldersComboModel::RemoveNode(const BookmarkNode* node) {

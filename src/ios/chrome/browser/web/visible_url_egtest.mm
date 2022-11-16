@@ -2,21 +2,24 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#import <objc/runtime.h>
+
 #include <memory>
 
 #include "base/compiler_specific.h"
+#include "base/ios/ios_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "components/version_info/version_info.h"
 #include "ios/chrome/browser/chrome_url_constants.h"
-#include "ios/chrome/browser/web/features.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey_ui.h"
 #import "ios/chrome/test/earl_grey/chrome_matchers.h"
 #import "ios/chrome/test/earl_grey/web_http_server_chrome_test_case.h"
 #import "ios/chrome/test/scoped_eg_synchronization_disabler.h"
 #import "ios/testing/earl_grey/earl_grey_test.h"
+#import "ios/web/common/features.h"
 #include "ios/web/public/test/http_server/html_response_provider.h"
 #import "ios/web/public/test/http_server/http_server.h"
 #include "ios/web/public/test/http_server/http_server_util.h"
@@ -36,6 +39,7 @@ const char kTestPage3[] = "Test Page 3";
 const char kGoBackLink[] = "go-back";
 const char kGoForwardLink[] = "go-forward";
 const char kGoNegativeDeltaLink[] = "go-negative-delta";
+const char kGoNegativeDeltaTwiceLink[] = "go-negative-delta-twice";
 const char kGoPositiveDeltaLink[] = "go-positive-delta";
 const char kPage1Link[] = "page-1";
 const char kPage2Link[] = "page-2";
@@ -117,17 +121,6 @@ class PausableResponseProvider : public HtmlResponseProvider {
 
 @implementation VisibleURLTestCase
 
-- (AppLaunchConfiguration)appConfigurationForTestCase {
-  AppLaunchConfiguration config;
-  // TOOD(crbug.com/1221250): Re-enable this test when iOS 15 native session
-  // restore is fixed. Many of the assumptions made in VisibuleURLTestCase may
-  // not be correct with native session restore.
-  if (@available(iOS 15, *)) {
-    config.features_disabled.push_back(web::kRestoreSessionFromCache);
-  }
-  return config;
-}
-
 - (void)setUp {
   [super setUp];
 
@@ -158,15 +151,16 @@ class PausableResponseProvider : public HtmlResponseProvider {
       "<a onclick='window.history.back()' id='%s'>Go Back</a><br/>"
       "<a onclick='window.history.forward()' id='%s'>Go Forward</a><br/>"
       "<a onclick='window.history.go(-1)' id='%s'>Go Delta -1</a><br/>"
+      "<a onclick='window.history.go(-2)' id='%s'>Go Delta -2</a><br/>"
       "<a onclick='window.history.go(1)' id='%s'>Go Delta +1</a><br/>"
       "<a href='%s' id='%s'>Page 1</a><br/>"
       "<a href='%s' id='%s'>Page 2</a><br/>"
       "<a href='%s' id='%s'>Page 3</a><br/>"
       "</body>",
       title, title, kGoBackLink, kGoForwardLink, kGoNegativeDeltaLink,
-      kGoPositiveDeltaLink, _testURL1.spec().c_str(), kPage1Link,
-      _testURL2.spec().c_str(), kPage2Link, _testURL3.spec().c_str(),
-      kPage3Link);
+      kGoNegativeDeltaTwiceLink, kGoPositiveDeltaLink, _testURL1.spec().c_str(),
+      kPage1Link, _testURL2.spec().c_str(), kPage2Link,
+      _testURL3.spec().c_str(), kPage3Link);
 }
 
 #pragma mark -
@@ -190,9 +184,6 @@ class PausableResponseProvider : public HtmlResponseProvider {
         performAction:grey_tap()];
     GREYAssert([self waitForServerToReceiveRequestWithURL:_testURL1],
                @"Last request URL: %@", self.lastRequestURLSpec);
-    [[EarlGrey selectElementWithMatcher:OmniboxText(_testURL1.GetContent())]
-        assertWithMatcher:grey_notNil()];
-
     // Make server respond so URL1 becomes committed.
     [self setServerPaused:NO];
   }
@@ -215,9 +206,6 @@ class PausableResponseProvider : public HtmlResponseProvider {
         performAction:grey_tap()];
     GREYAssert([self waitForServerToReceiveRequestWithURL:_testURL2],
                @"Last request URL: %@", self.lastRequestURLSpec);
-    [[EarlGrey selectElementWithMatcher:OmniboxText(_testURL2.GetContent())]
-        assertWithMatcher:grey_notNil()];
-
     // Make server respond so URL2 becomes committed.
     [self setServerPaused:NO];
   }
@@ -254,8 +242,6 @@ class PausableResponseProvider : public HtmlResponseProvider {
     ScopedSynchronizationDisabler disabler;
     GREYAssert([self waitForServerToReceiveRequestWithURL:_testURL1],
                @"Last request URL: %@", self.lastRequestURLSpec);
-    [[EarlGrey selectElementWithMatcher:OmniboxText(_testURL1.GetContent())]
-        assertWithMatcher:grey_notNil()];
 
     // Make server respond so URL1 becomes committed.
     [self setServerPaused:NO];
@@ -271,7 +257,7 @@ class PausableResponseProvider : public HtmlResponseProvider {
   // With iPhone, Stop and Reload are in the tool menu. There's no easy way to
   // track some animations (opening a popop) and not others (load progress bar)
   // which makes this test fail.
-  if (![ChromeEarlGrey isIPadIdiom]) {
+  if ([ChromeEarlGrey isCompactWidth]) {
     EARL_GREY_TEST_SKIPPED(@"Skipped for iPhone (sync issues)");
   }
   // Purge web view caches and pause the server to make sure that tests can
@@ -296,10 +282,21 @@ class PausableResponseProvider : public HtmlResponseProvider {
     // Makes server respond.
     [self setServerPaused:NO];
   }
-  // Verifies that page1 was reloaded, not page2.
-  [ChromeEarlGrey waitForWebStateContainingText:kTestPage1];
-  [[EarlGrey selectElementWithMatcher:OmniboxText(_testURL1.GetContent())]
-      assertWithMatcher:grey_notNil()];
+
+  if (![ChromeEarlGrey isSynthesizedRestoreSessionEnabled] ||
+      !base::ios::IsRunningOnIOS15OrLater()) {
+    // In this case, legacy restore will commit page1 with the pushState
+    // empty page (see restore_session.html). With legacy restore check that
+    // page1 was reloaded, not page2.
+    [ChromeEarlGrey waitForWebStateContainingText:kTestPage1];
+    [[EarlGrey selectElementWithMatcher:OmniboxText(_testURL1.GetContent())]
+        assertWithMatcher:grey_notNil()];
+  } else {
+    // Verifies that page2 was reloaded.
+    [ChromeEarlGrey waitForWebStateContainingText:kTestPage2];
+    [[EarlGrey selectElementWithMatcher:OmniboxText(_testURL2.GetContent())]
+        assertWithMatcher:grey_notNil()];
+  }
 }
 
 // Tests that visible URL is always the same as last pending URL during
@@ -321,8 +318,6 @@ class PausableResponseProvider : public HtmlResponseProvider {
         tapWebStateElementWithID:base::SysUTF8ToNSString(kGoBackLink)];
     GREYAssert([self waitForServerToReceiveRequestWithURL:_testURL1],
                @"Last request URL: %@", self.lastRequestURLSpec);
-    [[EarlGrey selectElementWithMatcher:OmniboxText(_testURL1.GetContent())]
-        assertWithMatcher:grey_notNil()];
 
     // Make server respond so URL1 becomes committed.
     [self setServerPaused:NO];
@@ -347,8 +342,6 @@ class PausableResponseProvider : public HtmlResponseProvider {
         tapWebStateElementWithID:base::SysUTF8ToNSString(kGoForwardLink)];
     GREYAssert([self waitForServerToReceiveRequestWithURL:_testURL2],
                @"Last request URL: %@", self.lastRequestURLSpec);
-    [[EarlGrey selectElementWithMatcher:OmniboxText(_testURL2.GetContent())]
-        assertWithMatcher:grey_notNil()];
 
     // Make server respond so URL2 becomes committed.
     [self setServerPaused:NO];
@@ -377,8 +370,6 @@ class PausableResponseProvider : public HtmlResponseProvider {
         tapWebStateElementWithID:base::SysUTF8ToNSString(kGoNegativeDeltaLink)];
     GREYAssert([self waitForServerToReceiveRequestWithURL:_testURL1],
                @"Last request URL: %@", self.lastRequestURLSpec);
-    [[EarlGrey selectElementWithMatcher:OmniboxText(_testURL1.GetContent())]
-        assertWithMatcher:grey_notNil()];
 
     // Make server respond so URL1 becomes committed.
     [self setServerPaused:NO];
@@ -403,8 +394,6 @@ class PausableResponseProvider : public HtmlResponseProvider {
         tapWebStateElementWithID:base::SysUTF8ToNSString(kGoPositiveDeltaLink)];
     GREYAssert([self waitForServerToReceiveRequestWithURL:_testURL2],
                @"Last request URL: %@", self.lastRequestURLSpec);
-    [[EarlGrey selectElementWithMatcher:OmniboxText(_testURL2.GetContent())]
-        assertWithMatcher:grey_notNil()];
 
     // Make server respond so URL2 becomes committed.
     [self setServerPaused:NO];
@@ -458,22 +447,14 @@ class PausableResponseProvider : public HtmlResponseProvider {
     ScopedSynchronizationDisabler disabler;
     [self setServerPaused:YES];
 
-    // Tap the back button twice on the page and verify that URL1 (pending
-    // URL) is displayed.
-    [ChromeEarlGrey
-        tapWebStateElementWithID:base::SysUTF8ToNSString(kGoBackLink)];
-    [ChromeEarlGrey
-        tapWebStateElementWithID:base::SysUTF8ToNSString(kGoBackLink)];
-    // Server will receive only one request either for |_testURL2| or for
-    // |_testURL1| depending on load timing and then will pause. So there is no
-    // need to wait for particular request.
-    [[EarlGrey selectElementWithMatcher:OmniboxText(_testURL2.GetContent())]
-        assertWithMatcher:grey_notNil()];
+    // Tap the window.history.go(-2) link.
+    [ChromeEarlGrey tapWebStateElementWithID:base::SysUTF8ToNSString(
+                                                 kGoNegativeDeltaTwiceLink)];
 
     // Make server respond so URL1 becomes committed.
     [self setServerPaused:NO];
   }
-  // TODO(crbug.com/866406): fix the test to have documented behavior.
+
   [ChromeEarlGrey waitForWebStateContainingText:kTestPage1];
   [[EarlGrey selectElementWithMatcher:OmniboxText(_testURL1.GetContent())]
       assertWithMatcher:grey_notNil()];

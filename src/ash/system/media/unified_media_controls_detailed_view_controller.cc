@@ -4,14 +4,14 @@
 
 #include "ash/system/media/unified_media_controls_detailed_view_controller.h"
 
-#include "ash/public/cpp/media_notification_provider.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/style/ash_color_provider.h"
+#include "ash/system/media/media_notification_provider.h"
 #include "ash/system/media/unified_media_controls_detailed_view.h"
 #include "ash/system/tray/detailed_view_delegate.h"
 #include "ash/system/tray/tray_constants.h"
 #include "base/metrics/histogram_functions.h"
-#include "components/media_message_center/media_notification_view_impl.h"
+#include "components/media_message_center/notification_theme.h"
 #include "ui/base/l10n/l10n_util.h"
 
 namespace ash {

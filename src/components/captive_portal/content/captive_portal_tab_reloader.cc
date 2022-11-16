@@ -7,7 +7,7 @@
 #include "base/bind.h"
 #include "base/callback.h"
 #include "base/location.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "components/captive_portal/core/captive_portal_types.h"
 #include "content/public/browser/navigation_controller.h"
@@ -53,8 +53,7 @@ CaptivePortalTabReloader::CaptivePortalTabReloader(
       state_(STATE_NONE),
       provisional_main_frame_load_(false),
       ssl_url_in_redirect_chain_(false),
-      slow_ssl_load_time_(
-          base::TimeDelta::FromSeconds(kDefaultSlowSSLTimeSeconds)),
+      slow_ssl_load_time_(base::Seconds(kDefaultSlowSSLTimeSeconds)),
       open_login_tab_callback_(open_login_tab_callback) {}
 
 CaptivePortalTabReloader::~CaptivePortalTabReloader() {}

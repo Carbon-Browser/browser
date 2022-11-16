@@ -5,18 +5,27 @@
 #ifndef CONTENT_BROWSER_MEDIA_MEDIA_INTERNALS_UI_H_
 #define CONTENT_BROWSER_MEDIA_MEDIA_INTERNALS_UI_H_
 
-#include "base/macros.h"
 #include "content/public/browser/web_ui_controller.h"
+#include "content/public/browser/webui_config.h"
+#include "content/public/common/url_constants.h"
 
 namespace content {
+
+class MediaInternalsUI;
+
+class MediaInternalsUIConfig : public DefaultWebUIConfig<MediaInternalsUI> {
+ public:
+  MediaInternalsUIConfig()
+      : DefaultWebUIConfig(kChromeUIScheme, kChromeUIMediaInternalsHost) {}
+};
 
 // The implementation for the chrome://media-internals page.
 class MediaInternalsUI : public WebUIController {
  public:
   explicit MediaInternalsUI(WebUI* web_ui);
 
- private:
-  DISALLOW_COPY_AND_ASSIGN(MediaInternalsUI);
+  MediaInternalsUI(const MediaInternalsUI&) = delete;
+  MediaInternalsUI& operator=(const MediaInternalsUI&) = delete;
 };
 
 }  // namespace content

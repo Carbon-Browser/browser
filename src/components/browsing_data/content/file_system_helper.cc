@@ -11,7 +11,7 @@
 #include "base/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/scoped_refptr.h"
-#include "base/sequenced_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/browsing_data/content/browsing_data_helper.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
@@ -20,12 +20,13 @@
 #include "storage/browser/file_system/file_system_quota_util.h"
 #include "storage/common/file_system/file_system_types.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
+#include "url/origin.h"
 
 using content::BrowserThread;
 
 namespace storage {
 class FileSystemContext;
-}
+}  // namespace storage
 
 namespace browsing_data {
 
@@ -61,8 +62,9 @@ void FileSystemHelper::DeleteFileSystemOrigin(const url::Origin& origin) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   file_task_runner()->PostTask(
       FROM_HERE,
-      base::BindOnce(&FileSystemHelper::DeleteFileSystemOriginInFileThread,
-                     this, origin));
+      base::BindOnce(
+          &FileSystemHelper::DeleteFileSystemForStorageKeyInFileThread, this,
+          blink::StorageKey(origin)));
   native_io_context_->DeleteStorageKeyData(blink::StorageKey(origin),
                                            base::DoNothing());
 }
@@ -77,16 +79,17 @@ void FileSystemHelper::FetchFileSystemInfoInFileThread(FetchCallback callback) {
     storage::FileSystemQuotaUtil* quota_util =
         filesystem_context_->GetQuotaUtil(type);
     DCHECK(quota_util);
-    std::vector<url::Origin> origins =
-        quota_util->GetOriginsForTypeOnFileTaskRunner(type);
-    for (const auto& current : origins) {
-      if (!HasWebScheme(current.GetURL()))
+    std::vector<blink::StorageKey> storage_keys =
+        quota_util->GetStorageKeysForTypeOnFileTaskRunner(type);
+    for (const auto& current : storage_keys) {
+      if (!HasWebScheme(current.origin().GetURL()))
         continue;  // Non-websafe state is not considered browsing data.
-      int64_t usage = quota_util->GetOriginUsageOnFileTaskRunner(
+      int64_t usage = quota_util->GetStorageKeyUsageOnFileTaskRunner(
           filesystem_context_.get(), current, type);
       auto inserted =
           file_system_info_map
-              .insert(std::make_pair(current.GetURL(), FileSystemInfo(current)))
+              .insert(std::make_pair(current.origin().GetURL(),
+                                     FileSystemInfo(current.origin())))
               .first;
       inserted->second.usage_map[type] = usage;
     }
@@ -99,10 +102,10 @@ void FileSystemHelper::FetchFileSystemInfoInFileThread(FetchCallback callback) {
       FROM_HERE, base::BindOnce(std::move(callback), result));
 }
 
-void FileSystemHelper::DeleteFileSystemOriginInFileThread(
-    const url::Origin& origin) {
+void FileSystemHelper::DeleteFileSystemForStorageKeyInFileThread(
+    const blink::StorageKey& storage_key) {
   DCHECK(file_task_runner()->RunsTasksInCurrentSequence());
-  filesystem_context_->DeleteDataForOriginOnFileTaskRunner(origin);
+  filesystem_context_->DeleteDataForStorageKeyOnFileTaskRunner(storage_key);
 }
 
 void FileSystemHelper::DidFetchFileSystemInfo(

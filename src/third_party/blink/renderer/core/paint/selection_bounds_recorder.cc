@@ -64,33 +64,33 @@ BoundEdges GetBoundEdges(WritingMode writing_mode, bool is_ltr) {
 
 // Set the given bound's edge_start and edge_end, based on the provided
 // selection rect and edge.
-void SetBoundEdge(IntRect selection_rect,
+void SetBoundEdge(gfx::Rect selection_rect,
                   RectEdge edge,
                   PaintedSelectionBound& bound) {
   switch (edge) {
     case RectEdge::kTopLeftToBottomLeft:
-      bound.edge_start = selection_rect.MinXMinYCorner();
-      bound.edge_end = selection_rect.MinXMaxYCorner();
+      bound.edge_start = selection_rect.origin();
+      bound.edge_end = selection_rect.bottom_left();
       return;
     case RectEdge::kTopRightToBottomRight:
-      bound.edge_start = selection_rect.MaxXMinYCorner();
-      bound.edge_end = selection_rect.MaxXMaxYCorner();
+      bound.edge_start = selection_rect.top_right();
+      bound.edge_end = selection_rect.bottom_right();
       return;
     case RectEdge::kTopLeftToTopRight:
-      bound.edge_start = selection_rect.MinXMinYCorner();
-      bound.edge_end = selection_rect.MaxXMinYCorner();
+      bound.edge_start = selection_rect.origin();
+      bound.edge_end = selection_rect.top_right();
       return;
     case RectEdge::kBottomLeftToBottomRight:
-      bound.edge_start = selection_rect.MinXMaxYCorner();
-      bound.edge_end = selection_rect.MaxXMaxYCorner();
+      bound.edge_start = selection_rect.bottom_left();
+      bound.edge_end = selection_rect.bottom_right();
       return;
     case RectEdge::kTopRightToTopLeft:
-      bound.edge_start = selection_rect.MaxXMinYCorner();
-      bound.edge_end = selection_rect.MinXMinYCorner();
+      bound.edge_start = selection_rect.top_right();
+      bound.edge_end = selection_rect.origin();
       return;
     case RectEdge::kBottomRightToBottomLeft:
-      bound.edge_start = selection_rect.MaxXMaxYCorner();
-      bound.edge_end = selection_rect.MinXMaxYCorner();
+      bound.edge_start = selection_rect.bottom_right();
+      bound.edge_end = selection_rect.bottom_left();
       return;
     default:
       NOTREACHED();
@@ -100,12 +100,12 @@ void SetBoundEdge(IntRect selection_rect,
 PhysicalOffset GetSamplePointForVisibility(const PhysicalOffset& edge_start,
                                            const PhysicalOffset& edge_end,
                                            float zoom_factor) {
-  FloatSize diff(edge_start - edge_end);
+  gfx::Vector2dF diff(edge_start - edge_end);
   // Adjust by ~1px to avoid integer snapping error. This logic is the same
   // as that in ComputeViewportSelectionBound in cc.
-  diff.Scale(zoom_factor / diff.DiagonalLength());
+  diff.Scale(zoom_factor / diff.Length());
   PhysicalOffset sample_point = edge_end;
-  sample_point += PhysicalOffset::FromFloatSizeRound(diff);
+  sample_point += PhysicalOffset::FromVector2dFRound(diff);
   return sample_point;
 }
 
@@ -123,14 +123,17 @@ SelectionBoundsRecorder::SelectionBoundsRecorder(
       paint_controller_(paint_controller),
       text_direction_(text_direction),
       writing_mode_(writing_mode),
-      selection_layout_object_(layout_object) {
-  DCHECK(RuntimeEnabledFeatures::CompositeAfterPaintEnabled());
-}
+      selection_layout_object_(layout_object) {}
 
 SelectionBoundsRecorder::~SelectionBoundsRecorder() {
+  paint_controller_.RecordAnySelectionWasPainted();
+
+  if (state_ == SelectionState::kInside)
+    return;
+
   absl::optional<PaintedSelectionBound> start;
   absl::optional<PaintedSelectionBound> end;
-  auto selection_rect = PixelSnappedIntRect(selection_rect_);
+  gfx::Rect selection_rect = ToPixelSnappedRect(selection_rect_);
   const bool is_ltr = IsLtr(text_direction_);
   BoundEdges edges = GetBoundEdges(writing_mode_, is_ltr);
   if (state_ == SelectionState::kStart ||
@@ -161,9 +164,6 @@ SelectionBoundsRecorder::~SelectionBoundsRecorder() {
 bool SelectionBoundsRecorder::ShouldRecordSelection(
     const FrameSelection& frame_selection,
     SelectionState state) {
-  if (!RuntimeEnabledFeatures::CompositeAfterPaintEnabled())
-    return false;
-
   if (!frame_selection.IsHandleVisible() || frame_selection.IsHidden())
     return false;
 
@@ -177,7 +177,7 @@ bool SelectionBoundsRecorder::ShouldRecordSelection(
   if (local_frame != focused_frame)
     return false;
 
-  if (state == SelectionState::kInside || state == SelectionState::kNone)
+  if (state == SelectionState::kNone)
     return false;
 
   return true;

@@ -4,8 +4,11 @@
 
 #include <string>
 
+#include "base/command_line.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
+#include "build/chromeos_buildflags.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/common/chrome_switches.h"
@@ -35,6 +38,10 @@ namespace {
 // with and without the experimental WindowPlacement blink feature.
 class PopupBrowserTest : public InProcessBrowserTest,
                          public ::testing::WithParamInterface<bool> {
+ public:
+  PopupBrowserTest(const PopupBrowserTest&) = delete;
+  PopupBrowserTest& operator=(const PopupBrowserTest&) = delete;
+
  protected:
   PopupBrowserTest() = default;
   ~PopupBrowserTest() override = default;
@@ -60,12 +67,9 @@ class PopupBrowserTest : public InProcessBrowserTest,
     Browser* popup = ui_test_utils::WaitForBrowserToOpen();
     EXPECT_NE(popup, browser);
     auto* popup_contents = popup->tab_strip_model()->GetActiveWebContents();
-    EXPECT_TRUE(WaitForRenderFrameReady(popup_contents->GetMainFrame()));
+    EXPECT_TRUE(WaitForRenderFrameReady(popup_contents->GetPrimaryMainFrame()));
     return popup;
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(PopupBrowserTest);
 };
 
 INSTANTIATE_TEST_SUITE_P(All, PopupBrowserTest, ::testing::Bool());
@@ -108,7 +112,7 @@ class WidgetBoundsChangeWaiter final : public views::WidgetObserver {
             std::abs(rect.height() - initial_bounds_.height()) >= resize_by_);
   }
 
-  views::Widget* const widget_;
+  const raw_ptr<views::Widget> widget_;
   const int move_by_, resize_by_;
   const gfx::Rect initial_bounds_;
   base::RunLoop run_loop_;
@@ -158,12 +162,12 @@ IN_PROC_BROWSER_TEST_P(PopupBrowserTest, DISABLED_OpenClampedToCurrentDisplay) {
 
 // Ensure popups cannot be moved beyond the available display space by script.
 // TODO(crbug.com/1228795): Flaking on Linux Ozone
-#if defined(OS_LINUX) && defined(USE_OZONE)
-#define Maybe_MoveClampedToCurrentDisplay DISABLED_MoveClampedToCurrentDisplay
+#if BUILDFLAG(IS_LINUX) && defined(USE_OZONE)
+#define MAYBE_MoveClampedToCurrentDisplay DISABLED_MoveClampedToCurrentDisplay
 #else
-#define Maybe_MoveClampedToCurrentDisplay MoveClampedToCurrentDisplay
+#define MAYBE_MoveClampedToCurrentDisplay MoveClampedToCurrentDisplay
 #endif
-IN_PROC_BROWSER_TEST_P(PopupBrowserTest, Maybe_MoveClampedToCurrentDisplay) {
+IN_PROC_BROWSER_TEST_P(PopupBrowserTest, MAYBE_MoveClampedToCurrentDisplay) {
   const auto display = GetDisplayNearestBrowser(browser());
   const char kOpenPopup[] =
       "open('.', '', 'left=' + (screen.availLeft + 50) + "
@@ -277,7 +281,11 @@ IN_PROC_BROWSER_TEST_P(PopupBrowserTest, MAYBE_AboutBlankCrossScreenPlacement) {
         permissions::PermissionRequestManager::ACCEPT_ALL);
     constexpr char kGetScreensLength[] = R"(
       (async () => {
-        try { return (await getScreens()).screens.length; } catch { return 0; }
+        try {
+          return (await getScreenDetails()).screens.length;
+        } catch {
+          return 0;
+        }
       })();
     )";
     EXPECT_EQ(2, EvalJs(opener, kGetScreensLength));
@@ -308,6 +316,19 @@ IN_PROC_BROWSER_TEST_P(PopupBrowserTest, MAYBE_AboutBlankCrossScreenPlacement) {
   EXPECT_TRUE(new_popup_display.work_area().Contains(popup_bounds))
       << " work_area: " << new_popup_display.work_area().ToString()
       << " popup: " << popup_bounds.ToString();
+}
+
+// Opens two popups with custom position and size, but one has noopener. They
+// should both have the same position and size. http://crbug.com/1011688
+IN_PROC_BROWSER_TEST_P(PopupBrowserTest, NoopenerPositioning) {
+  Browser* noopener_popup = OpenPopup(
+      browser(),
+      "open('.', '', 'noopener=1,height=200,width=200,top=100,left=100')");
+  Browser* opener_popup = OpenPopup(
+      browser(),
+      "open('.', '', 'height=200,width=200,top=100,left=100')");
+  EXPECT_EQ(noopener_popup->window()->GetBounds(),
+            opener_popup->window()->GetBounds());
 }
 
 }  // namespace

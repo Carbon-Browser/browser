@@ -12,8 +12,8 @@
 #include "ash/frame/header_view.h"
 #include "ash/wm/overview/overview_observer.h"
 #include "base/bind.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
+#include "chromeos/ui/frame/highlight_border_overlay.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/widget/widget.h"
@@ -22,11 +22,11 @@
 namespace chromeos {
 class FrameCaptionButtonContainerView;
 class ImmersiveFullscreenController;
-}
+}  // namespace chromeos
 
 namespace views {
 class Widget;
-}
+}  // namespace views
 
 namespace ash {
 
@@ -88,12 +88,11 @@ class ASH_EXPORT NonClientFrameViewAsh
   void UpdateWindowTitle() override;
   void SizeConstraintsChanged() override;
   views::View::Views GetChildrenInZOrder() override;
-
-  // views::View:
   gfx::Size CalculatePreferredSize() const override;
   void Layout() override;
   gfx::Size GetMinimumSize() const override;
   gfx::Size GetMaximumSize() const override;
+  void OnThemeChanged() override;
 
   // FrameContextMenuController::Delegate:
   bool ShouldShowContextMenu(views::View* source,
@@ -131,6 +130,7 @@ class ASH_EXPORT NonClientFrameViewAsh
  protected:
   // views::View:
   void OnDidSchedulePaint(const gfx::Rect& r) override;
+  void AddedToWidget() override;
 
  private:
   class OverlayView;
@@ -149,6 +149,12 @@ class ASH_EXPORT NonClientFrameViewAsh
 
   // Called when |frame_|'s "paint as active" state has changed.
   void PaintAsActiveChanged();
+
+  // Updates the windows default frame colors if necessary.
+  void UpdateDefaultFrameColors();
+
+  // Generates a nine patch layer painted with a highlight border.
+  std::unique_ptr<HighlightBorderOverlay> highlight_border_overlay_;
 
   // Not owned.
   views::Widget* const frame_;

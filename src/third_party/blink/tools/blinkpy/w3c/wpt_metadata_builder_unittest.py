@@ -44,7 +44,7 @@ def _append_to_expectation_dict(exp_dict,
         trailing_comments: str, comments at the end of the expectation line.
     """
     if exp_file not in exp_dict:
-        exp_dict[exp_file] = "# results: [ PASS FAILURE TIMEOUT CRASH SKIP ]\n"
+        exp_dict[exp_file] = "# results: [ Pass Failure Timeout Crash Skip ]\n"
     if is_default_pass:
         return
     exp_dict[exp_file] += ("%s [ %s ]%s\n" %
@@ -140,7 +140,7 @@ class WPTMetadataBuilderTest(unittest.TestCase):
     def test_non_wpt_test(self):
         """A non-WPT test should not get any metadata."""
         test_name = "some/other/test.html"
-        expectations = _make_expectation(self.port, test_name, "SKIP")
+        expectations = _make_expectation(self.port, test_name, "Skip")
         metadata_builder = WPTMetadataBuilder(expectations, self.port)
         filename, contents = metadata_builder.get_metadata_filename_and_contents(
             test_name, SKIP_TEST)
@@ -150,7 +150,7 @@ class WPTMetadataBuilderTest(unittest.TestCase):
     def test_wpt_test_without_manifest_entry(self):
         """A WPT test that is not in the manifest should not get a baseline."""
         test_name = "external/wpt/test-not-in-manifest.html"
-        expectations = _make_expectation(self.port, test_name, "SKIP")
+        expectations = _make_expectation(self.port, test_name, "Skip")
         metadata_builder = WPTMetadataBuilder(expectations, self.port)
         filename, contents = metadata_builder.get_metadata_filename_and_contents(
             test_name, SKIP_TEST)
@@ -160,7 +160,7 @@ class WPTMetadataBuilderTest(unittest.TestCase):
     def test_wpt_test_not_skipped(self):
         """A WPT test that is not skipped should not get a SKIP metadata."""
         test_name = "external/wpt/test.html"
-        expectations = _make_expectation(self.port, test_name, "TIMEOUT")
+        expectations = _make_expectation(self.port, test_name, "Timeout")
         metadata_builder = WPTMetadataBuilder(expectations, self.port)
         test_names = metadata_builder.get_tests_needing_metadata()
         # The test will appear in the result but won't have a SKIP status
@@ -177,9 +177,9 @@ class WPTMetadataBuilderTest(unittest.TestCase):
         test_name2 = "external/wpt/variant.html?foo=baz"
         expectation_dict = OrderedDict()
         _append_to_expectation_dict(expectation_dict, "TestExpectations",
-                                    test_name1, "FAILURE")
+                                    test_name1, "Failure")
         _append_to_expectation_dict(expectation_dict, "TestExpectations",
-                                    test_name2, "TIMEOUT")
+                                    test_name2, "Timeout")
         expectations = _make_expectation_with_dict(self.port, expectation_dict)
         metadata_builder = WPTMetadataBuilder(expectations, self.port)
         metadata_builder.metadata_output_dir = "out"
@@ -189,13 +189,16 @@ class WPTMetadataBuilderTest(unittest.TestCase):
         # Both the tests go into the same metadata file, named without any
         # variants.
         metadata_file = os.path.join("out", "variant.html.ini")
+        with metadata_builder.fs.open_text_file_for_reading(
+                metadata_file) as f:
+            data = f.read()
         # Inside the metadata file, we have separate entries for each variant
         self.assertEqual(
-            "[variant.html?foo=baz]\n  blink_expect_any_subtest_status: True # wpt_metadata_builder.py\n"
-            "  expected: [TIMEOUT]\n"
             "[variant.html?foo=bar/abc]\n  blink_expect_any_subtest_status: True # wpt_metadata_builder.py\n"
-            "  expected: [FAIL, ERROR]\n",
-            metadata_builder.fs.read_text_file(metadata_file))
+            "  expected: [FAIL, ERROR]\n"
+            "[variant.html?foo=baz]\n  blink_expect_any_subtest_status: True # wpt_metadata_builder.py\n"
+            "  expected: [TIMEOUT]\n",
+            data)
 
     def test_parse_baseline_all_pass(self):
         """A WPT test with an all-pass baseline doesn't get metadata."""
@@ -295,7 +298,7 @@ class WPTMetadataBuilderTest(unittest.TestCase):
     def test_metadata_for_flaky_test(self):
         """A WPT test that is flaky has multiple statuses in metadata."""
         test_name = "external/wpt/test.html"
-        expectations = _make_expectation(self.port, test_name, "PASS FAILURE")
+        expectations = _make_expectation(self.port, test_name, "Pass Failure")
         metadata_builder = WPTMetadataBuilder(expectations, self.port)
         filename, contents = metadata_builder.get_metadata_filename_and_contents(
             test_name, TEST_PASS | TEST_FAIL)
@@ -309,7 +312,7 @@ class WPTMetadataBuilderTest(unittest.TestCase):
     def test_metadata_for_skipped_test(self):
         """A skipped WPT test should get a test-specific metadata file."""
         test_name = "external/wpt/test.html"
-        expectations = _make_expectation(self.port, test_name, "SKIP")
+        expectations = _make_expectation(self.port, test_name, "Skip")
         metadata_builder = WPTMetadataBuilder(expectations, self.port)
         filename, contents = metadata_builder.get_metadata_filename_and_contents(
             test_name, SKIP_TEST)
@@ -320,7 +323,7 @@ class WPTMetadataBuilderTest(unittest.TestCase):
     def test_metadata_for_skipped_test_with_variants(self):
         """A skipped WPT tests with variants should get a test-specific metadata file."""
         test_name = "external/wpt/variant.html?foo=bar/abc"
-        expectations = _make_expectation(self.port, test_name, "SKIP")
+        expectations = _make_expectation(self.port, test_name, "Skip")
         metadata_builder = WPTMetadataBuilder(expectations, self.port)
         filename, contents = metadata_builder.get_metadata_filename_and_contents(
             test_name, SKIP_TEST)
@@ -334,7 +337,7 @@ class WPTMetadataBuilderTest(unittest.TestCase):
     def test_metadata_for_skipped_directory(self):
         """A skipped WPT directory should get a dir-wide metadata file."""
         test_dir = "external/wpt/test_dir/"
-        expectations = _make_expectation(self.port, test_dir, "SKIP")
+        expectations = _make_expectation(self.port, test_dir, "Skip")
         metadata_builder = WPTMetadataBuilder(expectations, self.port)
         filename, contents = metadata_builder.get_metadata_filename_and_contents(
             test_dir, SKIP_TEST)
@@ -426,7 +429,7 @@ class WPTMetadataBuilderTest(unittest.TestCase):
         expectations = _make_expectation(
             self.port,
             test_name,
-            "PASS",
+            "Pass",
             trailing_comments=" # wpt_subtest_failure")
         metadata_builder = WPTMetadataBuilder(expectations, self.port)
         test_and_status_dict = metadata_builder.get_tests_needing_metadata()
@@ -441,7 +444,7 @@ class WPTMetadataBuilderTest(unittest.TestCase):
         expectations = _make_expectation(
             self.port,
             test_name,
-            "PASS",
+            "Pass",
             trailing_comments=" # wpt_precondition_failed")
         metadata_builder = WPTMetadataBuilder(expectations, self.port)
         test_and_status_dict = metadata_builder.get_tests_needing_metadata()
@@ -498,15 +501,15 @@ class WPTMetadataBuilderTest(unittest.TestCase):
         mb.checked_in_metadata_dir = "src"
         mb.metadata_output_dir = "out"
         mock_checked_in_files = {
-            "src/a/b/c.html": "",
-            "src/a/b/c.html.ini": "",
-            "src/a/d/e.html": "",
-            "src/a/d/e.html.ini": "checked-in",
-            "src/a/tox.ini": "",
+            "src/a/b/c.html": b"",
+            "src/a/b/c.html.ini": b"",
+            "src/a/d/e.html": b"",
+            "src/a/d/e.html.ini": b"checked-in",
+            "src/a/tox.ini": b"",
 
             # Put one duplicate file in the output directory to simulate a test
             # with both legacy expectations and checked-in metadata
-            "out/a/d/e.html.ini": "legacy",
+            "out/a/d/e.html.ini": b"legacy",
         }
         mb.fs = MockFileSystem(files=mock_checked_in_files)
 
@@ -535,7 +538,7 @@ class WPTMetadataBuilderTest(unittest.TestCase):
         self.host.filesystem.write_text_file(
             baseline_filename,
             "This is a test\nFAIL some subtest\nPASS another subtest\n")
-        expectations = _make_expectation(self.port, test_name, "TIMEOUT")
+        expectations = _make_expectation(self.port, test_name, "Timeout")
         metadata_builder = WPTMetadataBuilder(expectations, self.port)
         test_and_status_dict = metadata_builder.get_tests_needing_metadata()
         self.assertEqual(1, len(test_and_status_dict))
@@ -547,10 +550,10 @@ class WPTMetadataBuilderTest(unittest.TestCase):
         test_name = "external/wpt/test.html"
         expectation_dict = OrderedDict()
         _append_to_expectation_dict(expectation_dict, "TestExpectations",
-                                    test_name, "FAILURE")
+                                    test_name, "Failure")
         _append_to_expectation_dict(expectation_dict,
                                     "WPTOverrideExpectations", test_name,
-                                    "TIMEOUT")
+                                    "Timeout")
         expectations = _make_expectation_with_dict(self.port, expectation_dict)
         metadata_builder = WPTMetadataBuilder(expectations, self.port)
         test_and_status_dict = metadata_builder.get_tests_needing_metadata()
@@ -571,10 +574,10 @@ class WPTMetadataBuilderTest(unittest.TestCase):
         test_name = "external/wpt/test.html"
         expectation_dict = OrderedDict()
         _append_to_expectation_dict(expectation_dict, "NeverFixTests",
-                                    test_name, "SKIP")
+                                    test_name, "Skip")
         _append_to_expectation_dict(expectation_dict,
                                     "WPTOverrideExpectations", test_name,
-                                    "FAILURE")
+                                    "Failure")
         expectations = _make_expectation_with_dict(self.port, expectation_dict)
         metadata_builder = WPTMetadataBuilder(expectations, self.port)
         test_and_status_dict = metadata_builder.get_tests_needing_metadata()
@@ -595,12 +598,12 @@ class WPTMetadataBuilderTest(unittest.TestCase):
         test_name = "external/wpt/test.html"
         expectation_dict = OrderedDict()
         _append_to_expectation_dict(expectation_dict, "NeverFixTests",
-                                    test_name, "SKIP")
+                                    test_name, "Skip")
         _append_to_expectation_dict(
             expectation_dict,
             "WPTOverrideExpectations",
             test_name,
-            "PASS",
+            "Pass",
             trailing_comments=" # wpt_use_checked_in_metadata")
         expectations = _make_expectation_with_dict(self.port, expectation_dict)
         metadata_builder = WPTMetadataBuilder(expectations, self.port)
@@ -618,7 +621,7 @@ class WPTMetadataBuilderTest(unittest.TestCase):
         When an expectation has no annotation to use checked-in metadata then
         the expectation will overwrite any checked-in metadata."""
         test_name = "external/wpt/test.html"
-        expectations = _make_expectation(self.port, test_name, "TIMEOUT")
+        expectations = _make_expectation(self.port, test_name, "Timeout")
         mb = WPTMetadataBuilder(expectations, self.port)
         # Set the metadata builder to use mock filesystem populated with some
         # test data
@@ -634,9 +637,11 @@ class WPTMetadataBuilderTest(unittest.TestCase):
         # Ensure that the data written to the metadata file is the translated
         # status, not the checked-in contents.
         resulting_ini_file = os.path.join("out", "test.html.ini")
+        with mb.fs.open_text_file_for_reading(resulting_ini_file) as f:
+            data = f.read()
         self.assertEqual(
             "[test.html]\n  blink_expect_any_subtest_status: True # wpt_metadata_builder.py\n  expected: [TIMEOUT]\n",
-            mb.fs.read_text_file(resulting_ini_file))
+            data)
 
     def test_use_subtest_results_flag_with_expectation(self):
         """Test that the --use-subtest-results flag updates metadata correctly.
@@ -645,7 +650,7 @@ class WPTMetadataBuilderTest(unittest.TestCase):
         blink_expect_any_subtest_status tag not being applied to metadata for
         any tests."""
         test_name = "external/wpt/test.html"
-        expectations = _make_expectation(self.port, test_name, "FAILURE")
+        expectations = _make_expectation(self.port, test_name, "Failure")
         metadata_builder = WPTMetadataBuilder(expectations, self.port)
         metadata_builder.use_subtest_results = True
         filename, contents = metadata_builder.get_metadata_filename_and_contents(
@@ -663,7 +668,7 @@ class WPTMetadataBuilderTest(unittest.TestCase):
             baseline_filename,
             "This is a test\nFAIL some subtest\nPASS another subtest\n")
 
-        expectations = _make_expectation(self.port, test_name, "TIMEOUT")
+        expectations = _make_expectation(self.port, test_name, "Timeout")
 
         metadata_builder = WPTMetadataBuilder(expectations, self.port)
         metadata_builder.use_subtest_results = True
@@ -719,7 +724,7 @@ class WPTMetadataBuilderTest(unittest.TestCase):
             baseline_filename,
             "This is a test\nFAIL some subtest\nPASS another subtest\n")
 
-        expectations = _make_expectation(self.port, test_name, "TIMEOUT")
+        expectations = _make_expectation(self.port, test_name, "Timeout")
 
         metadata_builder = WPTMetadataBuilder(expectations, self.port)
 

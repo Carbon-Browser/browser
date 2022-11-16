@@ -9,13 +9,17 @@
 
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "base/values.h"
-#include "headless/lib/browser/protocol/base_string_adapter.h"
+#include "third_party/inspector_protocol/crdtp/chromium/protocol_traits.h"
+
 {% for domain_name in domain.dependencies %}
 #include "headless/public/devtools/internal/types_forward_declarations_{{domain_name | camelcase_to_hacker_style}}.h"
 {% endfor %}
 #include "headless/public/headless_export.h"
 
 namespace headless {
+namespace protocol {
+using Binary = crdtp::Binary;
+}
 
 class ErrorReporter;
 
@@ -29,7 +33,12 @@ namespace {{domain.domain | camelcase_to_hacker_style}} {
 class HEADLESS_EXPORT {{type.id}} {
  public:
   static {{resolve_type(type).pass_type}} Parse(const base::Value& value, ErrorReporter* errors);
+
+  {{type.id}}(const {{type.id}}&) = delete;
+  {{type.id}}& operator=(const {{type.id}}&) = delete;
+
   ~{{type.id}}() { }
+
   {% for property in type.properties %}
 
   {% if property.description %}
@@ -107,8 +116,6 @@ class HEADLESS_EXPORT {{type.id}} {
   {{resolve_type(property).type}} {{property.name | camelcase_to_hacker_style}}_;
     {% endif %}
   {% endfor %}
-
-  DISALLOW_COPY_AND_ASSIGN({{type.id}});
 };
 
 {% endfor %}

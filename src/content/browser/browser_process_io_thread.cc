@@ -13,6 +13,7 @@
 #include "base/threading/hang_watcher.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/trace_event/memory_dump_manager.h"
+#include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "content/browser/browser_child_process_host_impl.h"
 #include "content/browser/browser_thread_impl.h"
@@ -20,16 +21,14 @@
 #include "content/browser/utility_process_host.h"
 #include "content/common/child_process_host_impl.h"
 #include "content/public/browser/browser_child_process_host_iterator.h"
-#include "content/public/common/content_features.h"
 #include "content/public/common/process_type.h"
-#include "net/url_request/url_fetcher.h"
 #include "services/network/public/mojom/network_service.mojom.h"
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #include "base/android/jni_android.h"
 #endif
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include "base/win/scoped_com_initializer.h"
 #endif
 
@@ -68,7 +67,7 @@ void BrowserProcessIOThread::AllowBlockingForTesting() {
 void BrowserProcessIOThread::Init() {
   DCHECK_CALLED_ON_VALID_THREAD(browser_thread_checker_);
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   com_initializer_ = std::make_unique<base::win::ScopedCOMInitializer>();
 #endif
 
@@ -80,7 +79,7 @@ void BrowserProcessIOThread::Init() {
 void BrowserProcessIOThread::Run(base::RunLoop* run_loop) {
   DCHECK_CALLED_ON_VALID_THREAD(browser_thread_checker_);
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   // Not to reset thread name to "Thread-???" by VM, attach VM with thread name.
   // Though it may create unnecessary VM thread objects, keeping thread name
   // gives more benefit in debugging in the platform.
@@ -95,17 +94,9 @@ void BrowserProcessIOThread::Run(base::RunLoop* run_loop) {
 void BrowserProcessIOThread::CleanUp() {
   DCHECK_CALLED_ON_VALID_THREAD(browser_thread_checker_);
 
-  // Run extra cleanup if this thread represents BrowserThread::IO.
-  if (BrowserThread::CurrentlyOn(BrowserThread::IO)) {
-    IOThreadCleanUp();
-
-    if (!base::FeatureList::IsEnabled(features::kProcessHostOnUI))
-      ProcessHostCleanUp();
-  }
-
   notification_service_.reset();
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   com_initializer_.reset();
 #endif
 }
@@ -130,16 +121,6 @@ void BrowserProcessIOThread::IOThreadRun(base::RunLoop* run_loop) {
   // Inhibit tail calls of Run and inhibit code folding.
   const int line_number = __LINE__;
   base::debug::Alias(&line_number);
-}
-
-void BrowserProcessIOThread::IOThreadCleanUp() {
-  DCHECK_CALLED_ON_VALID_THREAD(browser_thread_checker_);
-
-  // Kill all things that might be holding onto
-  // net::URLRequest/net::URLRequestContexts.
-
-  // Destroy all URLRequests started by URLFetchers.
-  net::URLFetcher::CancelAll();
 }
 
 void BrowserProcessIOThread::ProcessHostCleanUp() {
@@ -168,8 +149,7 @@ void BrowserProcessIOThread::ProcessHostCleanUp() {
       base::ScopedAllowBaseSyncPrimitives scoped_allow_base_sync_primitives;
       const base::TimeTicks start_time = base::TimeTicks::Now();
       process.WaitForExitWithTimeout(
-          base::TimeDelta::FromSeconds(kMaxSecondsToWaitForNetworkProcess),
-          nullptr);
+          base::Seconds(kMaxSecondsToWaitForNetworkProcess), nullptr);
       // Record time spent for the method call.
       base::TimeDelta network_wait_time = base::TimeTicks::Now() - start_time;
       UMA_HISTOGRAM_TIMES("NetworkService.ShutdownTime", network_wait_time);

@@ -23,22 +23,22 @@
 
 #include "third_party/blink/renderer/core/html/html_html_element.h"
 
+#include "third_party/blink/renderer/core/css/css_property_value_set.h"
+#include "third_party/blink/renderer/core/css/resolver/style_resolver.h"
 #include "third_party/blink/renderer/core/css/style_engine.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/document_parser.h"
 #include "third_party/blink/renderer/core/dom/node_computed_style.h"
-#include "third_party/blink/renderer/core/frame/deprecation.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/frame/web_feature.h"
 #include "third_party/blink/renderer/core/html/html_body_element.h"
 #include "third_party/blink/renderer/core/html_names.h"
 #include "third_party/blink/renderer/core/layout/layout_object.h"
 #include "third_party/blink/renderer/core/layout/ng/inline/layout_ng_text_combine.h"
-#include "third_party/blink/renderer/core/loader/appcache/application_cache_host_for_frame.h"
 #include "third_party/blink/renderer/core/loader/document_loader.h"
 #include "third_party/blink/renderer/core/loader/frame_loader.h"
 #include "third_party/blink/renderer/core/style/computed_style.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 
 namespace blink {
 
@@ -55,7 +55,6 @@ void HTMLHtmlElement::InsertedByParser() {
   if (!GetDocument().Parser())
     return;
 
-  MaybeSetupApplicationCache();
   if (!GetDocument().Parser())
     return;
 
@@ -66,50 +65,6 @@ void HTMLHtmlElement::InsertedByParser() {
     // RunScriptsAtDocumentElementAvailable might have invalidated
     // GetDocument().
   }
-}
-
-void HTMLHtmlElement::MaybeSetupApplicationCache() {
-  if (!GetDocument().GetFrame())
-    return;
-
-  DocumentLoader* document_loader =
-      GetDocument().GetFrame()->Loader().GetDocumentLoader();
-  if (!document_loader ||
-      !GetDocument().Parser()->DocumentWasLoadedAsPartOfNavigation())
-    return;
-
-  if (!GetExecutionContext()->IsSecureContext())
-    return;
-
-  ApplicationCacheHostForFrame* host =
-      document_loader->GetApplicationCacheHost();
-  DCHECK(host);
-
-  const AtomicString& manifest = FastGetAttribute(html_names::kManifestAttr);
-  if (manifest.IsEmpty())
-    host->SelectCacheWithoutManifest();
-  else
-    host->SelectCacheWithManifest(GetDocument().CompleteURL(manifest));
-  bool app_cache_installed =
-      host->GetStatus() !=
-      blink::mojom::AppCacheStatus::APPCACHE_STATUS_UNCACHED;
-  if (app_cache_installed && manifest.IsEmpty()) {
-    UseCounter::Count(GetDocument(),
-                      WebFeature::kApplicationCacheInstalledButNoManifest);
-  }
-}
-
-const CSSPropertyValueSet*
-HTMLHtmlElement::AdditionalPresentationAttributeStyle() {
-  if (const CSSValue* color_scheme =
-          GetDocument().GetStyleEngine().GetMetaColorSchemeValue()) {
-    DEFINE_STATIC_LOCAL(
-        Persistent<MutableCSSPropertyValueSet>, color_scheme_style,
-        (MakeGarbageCollected<MutableCSSPropertyValueSet>(kHTMLStandardMode)));
-    color_scheme_style->SetProperty(CSSPropertyID::kColorScheme, *color_scheme);
-    return color_scheme_style;
-  }
-  return nullptr;
 }
 
 namespace {
@@ -126,6 +81,7 @@ scoped_refptr<const ComputedStyle> CreateLayoutStyle(
   scoped_refptr<ComputedStyle> layout_style = ComputedStyle::Clone(style);
   layout_style->SetDirection(propagated_style.Direction());
   layout_style->SetWritingMode(propagated_style.GetWritingMode());
+  layout_style->UpdateFontOrientation();
   return layout_style;
 }
 
@@ -163,29 +119,49 @@ void HTMLHtmlElement::PropagateWritingModeAndDirectionFromBody() {
       return;
   }
 
-  if (auto* layout_object = GetLayoutObject()) {
-    scoped_refptr<const ComputedStyle> new_style =
-        LayoutStyleForElement(layout_object->Style());
-    layout_object->SetStyle(new_style);
-    // We need to propagate the style to text children because the used
-    // writing-mode and direction affects text children. Child elements,
-    // however, inherit the computed value, which is unaffected by the
-    // propagated used value from body.
-    for (Node* node = firstChild(); node; node = node->nextSibling()) {
-      if (!node->IsTextNode() || node->NeedsReattachLayoutTree())
-        continue;
-      LayoutObject* const layout_text = node->GetLayoutObject();
-      if (!layout_text)
-        continue;
-      auto* const text_combine =
-          DynamicTo<LayoutNGTextCombine>(layout_text->Parent());
-      if (UNLIKELY(text_combine)) {
-        layout_text->SetStyle(text_combine->Style());
-        continue;
-      }
-      layout_text->SetStyle(new_style);
+  auto* const layout_object = GetLayoutObject();
+  if (!layout_object)
+    return;
+
+  const ComputedStyle* const old_style = layout_object->Style();
+  scoped_refptr<const ComputedStyle> new_style =
+      LayoutStyleForElement(layout_object->Style());
+
+  if (old_style == new_style)
+    return;
+
+  const bool is_orthogonal = old_style->IsHorizontalWritingMode() !=
+                             new_style->IsHorizontalWritingMode();
+
+  // We need to propagate the style to text children because the used
+  // writing-mode and direction affects text children. Child elements,
+  // however, inherit the computed value, which is unaffected by the
+  // propagated used value from body.
+  for (Node* node = firstChild(); node; node = node->nextSibling()) {
+    if (!node->IsTextNode() || node->NeedsReattachLayoutTree())
+      continue;
+    LayoutObject* const layout_text = node->GetLayoutObject();
+    if (!layout_text)
+      continue;
+    if (is_orthogonal) {
+      // If the old and new writing-modes are orthogonal, reattach the layout
+      // objects to make sure we create or remove any LayoutNGTextCombine.
+      node->SetNeedsReattachLayoutTree();
+      continue;
     }
+    auto* const text_combine =
+        DynamicTo<LayoutNGTextCombine>(layout_text->Parent());
+    if (UNLIKELY(text_combine)) {
+      layout_text->SetStyle(text_combine->Style());
+      continue;
     }
+    layout_text->SetStyle(new_style);
   }
+
+  // Note: We should not call |Node::SetComputedStyle()| because computed
+  // style keeps original style instead.
+  // See wm-propagation-body-computed-root.html
+  layout_object->SetStyle(new_style);
+}
 
 }  // namespace blink

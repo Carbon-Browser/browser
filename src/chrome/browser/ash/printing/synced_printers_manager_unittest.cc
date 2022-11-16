@@ -26,9 +26,11 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
-namespace chromeos {
+namespace ash {
 
 namespace {
+
+using ::chromeos::Printer;
 
 constexpr char kTestPrinterId[] = "UUID-UUID-UUID-PRINTER";
 constexpr char kTestPrinterId2[] = "UUID-UUID-UUID-PRINTR2";
@@ -58,12 +60,13 @@ class LoggingObserver : public SyncedPrintersManager::Observer {
 class SyncedPrintersManagerTest : public testing::Test {
  protected:
   SyncedPrintersManagerTest()
-      : manager_(SyncedPrintersManager::Create(
-            std::make_unique<PrintersSyncBridge>(
-                syncer::ModelTypeStoreTestUtil::
-                    FactoryForInMemoryStoreForTest(),
-                base::BindRepeating(
-                    base::IgnoreResult(&base::debug::DumpWithoutCrashing))))) {
+      : manager_(SyncedPrintersManager::Create(std::make_unique<
+                                               PrintersSyncBridge>(
+            syncer::ModelTypeStoreTestUtil::FactoryForInMemoryStoreForTest(),
+            base::BindRepeating(
+                base::IgnoreResult(&base::debug::DumpWithoutCrashing),
+                FROM_HERE,
+                base::Minutes(5))))) {
     base::RunLoop().RunUntilIdle();
   }
 
@@ -168,4 +171,4 @@ TEST_F(SyncedPrintersManagerTest, UpdateSavedPrinterSavesPrinter) {
 }
 
 }  // namespace
-}  // namespace chromeos
+}  // namespace ash

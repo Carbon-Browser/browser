@@ -11,17 +11,16 @@
 #include <vector>
 
 #include "base/containers/flat_map.h"
-#include "base/macros.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/thread_annotations.h"
 #include "base/threading/thread_checker.h"
 #include "gpu/vulkan/buildflags.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/system/handle.h"
+#include "ui/ozone/platform/scenic/mojom/scenic_gpu_host.mojom.h"
 #include "ui/ozone/platform/scenic/sysmem_buffer_manager.h"
 #include "ui/ozone/public/gl_ozone.h"
-#include "ui/ozone/public/mojom/scenic_gpu_host.mojom.h"
 #include "ui/ozone/public/surface_factory_ozone.h"
 
 namespace ui {
@@ -31,6 +30,10 @@ class ScenicSurface;
 class ScenicSurfaceFactory : public SurfaceFactoryOzone {
  public:
   ScenicSurfaceFactory();
+
+  ScenicSurfaceFactory(const ScenicSurfaceFactory&) = delete;
+  ScenicSurfaceFactory& operator=(const ScenicSurfaceFactory&) = delete;
+
   ~ScenicSurfaceFactory() override;
 
   // Initializes the surface factory. Binds the surface factory to the
@@ -61,6 +64,11 @@ class ScenicSurfaceFactory : public SurfaceFactoryOzone {
                                gfx::BufferFormat format,
                                gfx::BufferUsage usage,
                                NativePixmapCallback callback) override;
+  scoped_refptr<gfx::NativePixmap> CreateNativePixmapFromHandle(
+      gfx::AcceleratedWidget widget,
+      gfx::Size size,
+      gfx::BufferFormat format,
+      gfx::NativePixmapHandle handle) override;
 #if BUILDFLAG(ENABLE_VULKAN)
   std::unique_ptr<gpu::VulkanImplementation> CreateVulkanImplementation(
       bool use_swiftshader,
@@ -111,8 +119,6 @@ class ScenicSurfaceFactory : public SurfaceFactoryOzone {
   THREAD_CHECKER(thread_checker_);
 
   base::WeakPtrFactory<ScenicSurfaceFactory> weak_ptr_factory_;
-
-  DISALLOW_COPY_AND_ASSIGN(ScenicSurfaceFactory);
 };
 
 }  // namespace ui

@@ -13,20 +13,29 @@
 #include "base/files/file_path.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
+#include "base/values.h"
 #include "content/public/browser/web_ui_controller.h"
 #include "content/public/browser/web_ui_message_handler.h"
+#include "content/public/browser/webui_config.h"
+#include "content/public/common/url_constants.h"
 #include "third_party/blink/public/common/service_worker/service_worker_status_code.h"
-
-namespace base {
-class ListValue;
-}
+#include "third_party/blink/public/common/storage_key/storage_key.h"
 
 namespace content {
 
 class StoragePartition;
+class ServiceWorkerInternalsUI;
 class ServiceWorkerContextWrapper;
 struct ServiceWorkerRegistrationInfo;
 struct ServiceWorkerVersionInfo;
+
+class ServiceWorkerInternalsUIConfig
+    : public DefaultWebUIConfig<ServiceWorkerInternalsUI> {
+ public:
+  ServiceWorkerInternalsUIConfig()
+      : DefaultWebUIConfig(kChromeUIScheme,
+                           kChromeUIServiceWorkerInternalsHost) {}
+};
 
 class ServiceWorkerInternalsUI : public WebUIController {
  public:
@@ -50,11 +59,11 @@ class ServiceWorkerInternalsHandler : public WebUIMessageHandler {
                     base::Value details);
   void OnRegistrationEvent(const std::string& event_name, const GURL& scope);
   void OnDidGetRegistrations(
+      int partition_id,
+      const base::FilePath& context_path,
       const std::vector<ServiceWorkerRegistrationInfo>& live_registrations,
       const std::vector<ServiceWorkerVersionInfo>& live_versions,
-      const std::vector<ServiceWorkerRegistrationInfo>& stored_registrations,
-      int partition_id,
-      const base::FilePath& context_path);
+      const std::vector<ServiceWorkerRegistrationInfo>& stored_registrations);
   void OnOperationComplete(int status, const std::string& callback_id);
 
   // WebUIMessageHandler implementation.
@@ -70,13 +79,13 @@ class ServiceWorkerInternalsHandler : public WebUIMessageHandler {
   void RemoveObserverFromStoragePartition(StoragePartition* partition);
 
   // Called from Javascript.
-  void HandleGetOptions(const base::ListValue* args);
-  void HandleSetOption(const base::ListValue* args);
-  void HandleGetAllRegistrations(const base::ListValue* args);
-  void HandleStopWorker(const base::ListValue* args);
-  void HandleInspectWorker(const base::ListValue* args);
-  void HandleUnregister(const base::ListValue* args);
-  void HandleStartWorker(const base::ListValue* args);
+  void HandleGetOptions(const base::Value::List& args);
+  void HandleSetOption(const base::Value::List& args);
+  void HandleGetAllRegistrations(const base::Value::List& args);
+  void HandleStopWorker(const base::Value::List& args);
+  void HandleInspectWorker(const base::Value::List& args);
+  void HandleUnregister(const base::Value::List& args);
+  void HandleStartWorker(const base::Value::List& args);
 
   bool GetServiceWorkerContext(
       int partition_id,
@@ -90,6 +99,7 @@ class ServiceWorkerInternalsHandler : public WebUIMessageHandler {
                         StatusCallback callback);
   void UnregisterWithScope(scoped_refptr<ServiceWorkerContextWrapper> context,
                            const GURL& scope,
+                           blink::StorageKey& storage_key,
                            StatusCallback callback) const;
 
   std::unordered_map<uintptr_t, std::unique_ptr<PartitionObserver>> observers_;

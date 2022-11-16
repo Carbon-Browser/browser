@@ -25,7 +25,7 @@ export function AudioPlayer(container) {
   this.container_ = container;
 
   this.volumeManager_ = new FilteredVolumeManager(
-      AllowedPaths.ANY_PATH, false, appUtil.getVolumeManager());
+      AllowedPaths.ANY_PATH, false, appUtil.getVolumeManager(), []);
 
   this.resolveMetadataModel_ = null;
   this.metadataModelReady_ = new Promise(resolve => {
@@ -78,8 +78,11 @@ export function AudioPlayer(container) {
   // if the states are changed.
   const STORAGE_PREFIX = 'audioplayer-';
   const KEYS_TO_SAVE_STATES = [
-    'shuffle', 'repeat-mode', 'volume', 'playlist-expanded',
-    'track-info-expanded'
+    'shuffle',
+    'repeat-mode',
+    'volume',
+    'playlist-expanded',
+    'track-info-expanded',
   ];
   const storageKeys = KEYS_TO_SAVE_STATES.map(a => STORAGE_PREFIX + a);
   chrome.storage.local.get(storageKeys, function(results) {
@@ -137,7 +140,7 @@ export function AudioPlayer(container) {
         seekSlider: strings['MEDIA_PLAYER_SEEK_SLIDER_LABEL'],
         mute: strings['MEDIA_PLAYER_MUTE_BUTTON_LABEL'],
         unmute: strings['MEDIA_PLAYER_UNMUTE_BUTTON_LABEL'],
-        volumeSlider: strings['MEDIA_PLAYER_VOLUME_SLIDER_LABEL']
+        volumeSlider: strings['MEDIA_PLAYER_VOLUME_SLIDER_LABEL'],
       };
       this.player_.ariaExpandArtworkLabel =
           strings['AUDIO_PLAYER_ARTWORK_EXPAND_BUTTON_LABEL'];
@@ -672,7 +675,7 @@ AudioPlayer.TrackInfo = function(entry) {
   this.title = this.getDefaultTitle();
   this.artist = this.getDefaultArtist();
 
-  this.artworkUrl = "";
+  this.artworkUrl = '';
   this.active = false;
 };
 
@@ -710,7 +713,7 @@ AudioPlayer.TrackInfo.prototype.setMetadata = function(
   // TODO(yoshiki): Handle error in better way.
   this.title = metadata.mediaTitle || this.getDefaultTitle();
   this.artist = error || metadata.mediaArtist || this.getDefaultArtist();
-  this.artworkUrl = metadata.contentThumbnailUrl || "";
+  this.artworkUrl = metadata.contentThumbnailUrl || '';
 };
 
 AudioPlayer.load();

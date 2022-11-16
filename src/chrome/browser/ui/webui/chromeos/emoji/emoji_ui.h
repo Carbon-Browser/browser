@@ -7,7 +7,6 @@
 
 #include <memory>
 
-#include "base/macros.h"
 #include "chrome/browser/ui/webui/chromeos/emoji/emoji_page_handler.h"
 #include "chrome/browser/ui/webui/chromeos/emoji/emoji_picker.mojom.h"
 #include "chrome/browser/ui/webui/webui_load_timer.h"
@@ -46,8 +45,17 @@ class EmojiUI : public ui::MojoBubbleWebUIController,
   mojo::Receiver<emoji_picker::mojom::PageHandlerFactory>
       page_factory_receiver_{this};
   bool incognito_mode_;
+  bool no_text_field_;
 
   WEB_UI_CONTROLLER_TYPE_DECL();
 };
+
 }  // namespace chromeos
+
+// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
+// source migration is finished.
+namespace ash {
+using ::chromeos::EmojiUI;
+}
+
 #endif  // CHROME_BROWSER_UI_WEBUI_CHROMEOS_EMOJI_EMOJI_UI_H_

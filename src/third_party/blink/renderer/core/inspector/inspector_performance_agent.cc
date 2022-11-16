@@ -6,7 +6,6 @@
 
 #include <utility>
 
-#include "base/cxx17_backports.h"
 #include "base/process/process.h"
 #include "base/process/process_metrics.h"
 #include "base/time/time_override.h"
@@ -41,7 +40,7 @@ static constexpr const char* kInstanceCounterNames[] = {
 
 std::unique_ptr<base::ProcessMetrics> GetCurrentProcessMetrics() {
   base::ProcessHandle handle = base::Process::Current().Handle();
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   // Port provider can be null if querying the current process.
   return base::ProcessMetrics::CreateProcessMetrics(handle, nullptr);
 #else
@@ -146,7 +145,7 @@ base::TimeTicks InspectorPerformanceAgent::GetTimeTicksNow() {
 
 base::TimeTicks InspectorPerformanceAgent::GetThreadTimeNow() {
   return base::TimeTicks() +
-         base::TimeDelta::FromMicroseconds(
+         base::Microseconds(
              base::ThreadTicks::Now().since_origin().InMicroseconds());
 }
 
@@ -193,7 +192,7 @@ Response InspectorPerformanceAgent::getMetrics(
                base::TimeTicks::Now().since_origin().InSecondsF());
 
   // Renderer instance counters.
-  for (size_t i = 0; i < base::size(kInstanceCounterNames); ++i) {
+  for (size_t i = 0; i < std::size(kInstanceCounterNames); ++i) {
     AppendMetric(result.get(), kInstanceCounterNames[i],
                  InstanceCounters::CounterValue(
                      static_cast<InstanceCounters::CounterType>(i)));

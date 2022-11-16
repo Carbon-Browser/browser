@@ -5,7 +5,6 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_ACCESSIBILITY_AX_VALIDATION_MESSAGE_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_ACCESSIBILITY_AX_VALIDATION_MESSAGE_H_
 
-#include "base/macros.h"
 #include "third_party/blink/renderer/modules/accessibility/ax_mock_object.h"
 
 namespace blink {
@@ -20,6 +19,10 @@ class ListedElement;
 class AXValidationMessage final : public AXMockObject {
  public:
   explicit AXValidationMessage(AXObjectCacheImpl&);
+
+  AXValidationMessage(const AXValidationMessage&) = delete;
+  AXValidationMessage& operator=(const AXValidationMessage&) = delete;
+
   ~AXValidationMessage() override;
 
  private:
@@ -29,8 +32,8 @@ class AXValidationMessage final : public AXMockObject {
   void AddChildren() override {}
   bool ComputeAccessibilityIsIgnored(IgnoredReasons* = nullptr) const override;
   void GetRelativeBounds(AXObject** out_container,
-                         FloatRect& out_bounds_in_container,
-                         skia::Matrix44& out_container_transform,
+                         gfx::RectF& out_bounds_in_container,
+                         gfx::Transform& out_container_transform,
                          bool* clips_children) const override;
   const AtomicString& LiveRegionStatus() const override;
   const AtomicString& LiveRegionRelevant() const override;
@@ -46,8 +49,6 @@ class AXValidationMessage final : public AXMockObject {
   ax::mojom::blink::Role NativeRoleIgnoringAria() const override;
 
   ListedElement* RelatedFormControlIfVisible() const;
-
-  DISALLOW_COPY_AND_ASSIGN(AXValidationMessage);
 };
 
 }  // namespace blink

@@ -7,6 +7,7 @@
 
 #include "ash/app_list/model/search/search_result_observer.h"
 #include "ash/ash_export.h"
+#include "base/time/time.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/views/controls/button/button.h"
 
@@ -20,6 +21,9 @@ class ASH_EXPORT SearchResultBaseView : public views::Button,
                                         public SearchResultObserver {
  public:
   SearchResultBaseView();
+
+  SearchResultBaseView(const SearchResultBaseView&) = delete;
+  SearchResultBaseView& operator=(const SearchResultBaseView&) = delete;
 
   // Set whether the result is selected. It updates the background highlight,
   // and selects the result action associated with the result if
@@ -63,7 +67,7 @@ class ASH_EXPORT SearchResultBaseView : public views::Button,
   void OnResultDestroying() override;
 
   // Computes the button's spoken feedback name.
-  virtual std::u16string ComputeAccessibleName() const;
+  std::u16string ComputeAccessibleName() const;
 
   // Clears the result without calling |OnResultChanged| or |OnResultChanging|
   void ClearResult();
@@ -128,8 +132,6 @@ class ASH_EXPORT SearchResultBaseView : public views::Button,
   // activated by user by pressing ENTER key.
   bool is_default_result_ = false;
   SearchResult* result_ = nullptr;  // Owned by SearchModel::SearchResults.
-
-  DISALLOW_COPY_AND_ASSIGN(SearchResultBaseView);
 };
 
 }  // namespace ash

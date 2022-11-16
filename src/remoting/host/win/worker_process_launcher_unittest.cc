@@ -10,10 +10,10 @@
 #include <utility>
 
 #include "base/bind.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "base/win/scoped_handle.h"
 #include "base/win/scoped_process_information.h"
@@ -21,10 +21,13 @@
 #include "ipc/ipc_channel_proxy.h"
 #include "ipc/ipc_listener.h"
 #include "ipc/ipc_message.h"
+#include "mojo/public/cpp/bindings/associated_remote.h"
+#include "mojo/public/cpp/bindings/scoped_interface_endpoint_handle.h"
 #include "mojo/public/cpp/system/message_pipe.h"
 #include "remoting/base/auto_thread_task_runner.h"
+#include "remoting/host/base/host_exit_codes.h"
 #include "remoting/host/chromoting_messages.h"
-#include "remoting/host/host_exit_codes.h"
+#include "remoting/host/mojom/desktop_session.mojom.h"
 #include "remoting/host/win/launch_process_with_token.h"
 #include "remoting/host/worker_process_ipc_delegate.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -44,45 +47,59 @@ namespace {
 class MockProcessLauncherDelegate : public WorkerProcessLauncher::Delegate {
  public:
   MockProcessLauncherDelegate() {}
+
+  MockProcessLauncherDelegate(const MockProcessLauncherDelegate&) = delete;
+  MockProcessLauncherDelegate& operator=(const MockProcessLauncherDelegate&) =
+      delete;
+
   ~MockProcessLauncherDelegate() override {}
 
   // WorkerProcessLauncher::Delegate interface.
-  MOCK_METHOD1(LaunchProcess, void(WorkerProcessLauncher*));
-  MOCK_METHOD1(Send, void(IPC::Message*));
-  MOCK_METHOD0(CloseChannel, void());
-  MOCK_METHOD0(KillProcess, void());
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(MockProcessLauncherDelegate);
+  MOCK_METHOD(void, LaunchProcess, (WorkerProcessLauncher*), (override));
+  MOCK_METHOD(void, Send, (IPC::Message*), (override));
+  MOCK_METHOD(void,
+              GetRemoteAssociatedInterface,
+              (mojo::GenericPendingAssociatedReceiver),
+              (override));
+  MOCK_METHOD(void, CloseChannel, (), (override));
+  MOCK_METHOD(void, KillProcess, (), (override));
 };
 
 class MockIpcDelegate : public WorkerProcessIpcDelegate {
  public:
   MockIpcDelegate() {}
+
+  MockIpcDelegate(const MockIpcDelegate&) = delete;
+  MockIpcDelegate& operator=(const MockIpcDelegate&) = delete;
+
   ~MockIpcDelegate() override {}
 
   // WorkerProcessIpcDelegate interface.
-  MOCK_METHOD1(OnChannelConnected, void(int32_t));
-  MOCK_METHOD1(OnMessageReceived, bool(const IPC::Message&));
-  MOCK_METHOD1(OnPermanentError, void(int));
-  MOCK_METHOD0(OnWorkerProcessStopped, void());
+  MOCK_METHOD(void, OnChannelConnected, (int32_t), (override));
+  MOCK_METHOD(bool, OnMessageReceived, (const IPC::Message&), (override));
+  MOCK_METHOD(void, OnPermanentError, (int), (override));
+  MOCK_METHOD(void, OnWorkerProcessStopped, (), (override));
+  MOCK_METHOD(void,
+              OnAssociatedInterfaceRequest,
+              (const std::string& interface_name,
+               mojo::ScopedInterfaceEndpointHandle handle),
+              (override));
 
- private:
-  DISALLOW_COPY_AND_ASSIGN(MockIpcDelegate);
 };
 
 class MockWorkerListener : public IPC::Listener {
  public:
   MockWorkerListener() {}
+
+  MockWorkerListener(const MockWorkerListener&) = delete;
+  MockWorkerListener& operator=(const MockWorkerListener&) = delete;
+
   ~MockWorkerListener() override {}
 
-  MOCK_METHOD3(OnCrash, void(const std::string&, const std::string&, int));
+  MOCK_METHOD(void, OnCrash, (const std::string&, const std::string&, int));
 
   // IPC::Listener implementation
   bool OnMessageReceived(const IPC::Message& message) override;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(MockWorkerListener);
 };
 
 bool MockWorkerListener::OnMessageReceived(const IPC::Message& message) {
@@ -175,10 +192,13 @@ class WorkerProcessLauncherTest
   std::unique_ptr<IPC::ChannelProxy> channel_client_;
   std::unique_ptr<IPC::ChannelProxy> channel_server_;
 
-  WorkerProcessLauncher* event_handler_;
+  raw_ptr<WorkerProcessLauncher> event_handler_;
 
   // The worker process launcher.
   std::unique_ptr<WorkerProcessLauncher> launcher_;
+
+  mojo::AssociatedRemote<mojom::DesktopSessionStateHandler>
+      desktop_session_state_handler_;
 
   // An event that is used to emulate the worker process's handle.
   ScopedHandle worker_process_;
@@ -281,6 +301,10 @@ void WorkerProcessLauncherTest::ConnectClient() {
       client_channel_handle_.release(), IPC::Channel::MODE_CLIENT,
       &client_listener_, task_runner_, base::ThreadTaskRunnerHandle::Get());
 
+  desktop_session_state_handler_.reset();
+  channel_client_->GetRemoteAssociatedInterface(
+      &desktop_session_state_handler_);
+
   // Pretend that |kLaunchSuccessTimeoutSeconds| passed since launching
   // the worker process. This will make the backoff algorithm think that this
   // launch attempt was successful and it will not delay the next launch.
@@ -291,6 +315,7 @@ void WorkerProcessLauncherTest::DisconnectClient() {
   if (channel_client_) {
     channel_client_->Close();
     channel_client_.reset();
+    desktop_session_state_handler_.reset();
   }
 }
 
@@ -311,9 +336,8 @@ void WorkerProcessLauncherTest::SendToProcess(IPC::Message* message) {
 }
 
 void WorkerProcessLauncherTest::SendFakeMessageToLauncher() {
-  if (channel_client_) {
-    channel_client_->Send(
-        new ChromotingDesktopNetworkMsg_DisconnectSession(protocol::OK));
+  if (desktop_session_state_handler_) {
+    desktop_session_state_handler_->DisconnectSession(protocol::OK);
   }
 }
 
@@ -325,8 +349,7 @@ void WorkerProcessLauncherTest::StartWorker() {
   launcher_ = std::make_unique<WorkerProcessLauncher>(
       std::move(launcher_delegate_), &server_listener_);
 
-  launcher_->SetKillProcessTimeoutForTest(
-      base::TimeDelta::FromMilliseconds(100));
+  launcher_->SetKillProcessTimeoutForTest(base::Milliseconds(100));
 }
 
 void WorkerProcessLauncherTest::StopWorker() {
@@ -356,8 +379,8 @@ void WorkerProcessLauncherTest::DoLaunchProcess() {
   PROCESS_INFORMATION temp_process_info = {};
   ASSERT_TRUE(CreateProcess(nullptr,
                             notepad,
-                            nullptr,   // default process attibutes
-                            nullptr,   // default thread attibutes
+                            nullptr,   // default process attributes
+                            nullptr,   // default thread attributes
                             FALSE,  // do not inherit handles
                             CREATE_SUSPENDED,
                             nullptr,   // no environment

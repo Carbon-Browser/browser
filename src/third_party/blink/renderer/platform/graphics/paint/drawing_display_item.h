@@ -5,6 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_GRAPHICS_PAINT_DRAWING_DISPLAY_ITEM_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_GRAPHICS_PAINT_DRAWING_DISPLAY_ITEM_H_
 
+#include "base/check_op.h"
 #include "base/compiler_specific.h"
 #include "third_party/blink/renderer/platform/graphics/paint/display_item.h"
 #include "third_party/blink/renderer/platform/graphics/paint/paint_record.h"
@@ -12,6 +13,7 @@
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/wtf/casting.h"
 #include "third_party/skia/include/core/SkRefCnt.h"
+#include "ui/gfx/geometry/rect.h"
 
 namespace blink {
 
@@ -22,7 +24,7 @@ class PLATFORM_EXPORT DrawingDisplayItem : public DisplayItem {
   DISABLE_CFI_PERF
   DrawingDisplayItem(DisplayItemClientId client_id,
                      Type type,
-                     const IntRect& visual_rect,
+                     const gfx::Rect& visual_rect,
                      sk_sp<const PaintRecord> record,
                      RasterEffectOutset raster_effect_outset,
                      PaintInvalidationReason paint_invalidation_reason =
@@ -33,7 +35,7 @@ class PLATFORM_EXPORT DrawingDisplayItem : public DisplayItem {
     return record_;
   }
 
-  IntRect RectKnownToBeOpaque() const;
+  gfx::Rect RectKnownToBeOpaque() const;
   SkColor BackgroundColor(float& area) const;
 
   bool IsSolidColor() const;
@@ -54,14 +56,14 @@ class PLATFORM_EXPORT DrawingDisplayItem : public DisplayItem {
     opaqueness_ = static_cast<unsigned>(opaqueness);
     DCHECK_EQ(GetOpaqueness(), opaqueness);
   }
-  IntRect CalculateRectKnownToBeOpaque() const;
-  IntRect CalculateRectKnownToBeOpaqueForRecord(const PaintRecord*) const;
+  gfx::Rect CalculateRectKnownToBeOpaque() const;
+  gfx::Rect CalculateRectKnownToBeOpaqueForRecord(const PaintRecord*) const;
 
   // Improve the visual rect using the paint record. This can improve solid
   // color analysis in cases when the painted content was snapped but the
   // visual rect was not. Check |ShouldTightenVisualRect| before calling.
-  static IntRect TightenVisualRect(const IntRect& visual_rect,
-                                   sk_sp<const PaintRecord>& record);
+  static gfx::Rect TightenVisualRect(const gfx::Rect& visual_rect,
+                                     sk_sp<const PaintRecord>& record);
   static bool ShouldTightenVisualRect(sk_sp<const PaintRecord>& record) {
     // We only have an optimization to tighten the visual rect for a single op.
     return record && record->size() == 1;
@@ -75,7 +77,7 @@ DISABLE_CFI_PERF
 inline DrawingDisplayItem::DrawingDisplayItem(
     DisplayItemClientId client_id,
     Type type,
-    const IntRect& visual_rect,
+    const gfx::Rect& visual_rect,
     sk_sp<const PaintRecord> record,
     RasterEffectOutset raster_effect_outset,
     PaintInvalidationReason paint_invalidation_reason)
@@ -92,11 +94,11 @@ inline DrawingDisplayItem::DrawingDisplayItem(
   DCHECK_EQ(GetOpaqueness(), Opaqueness::kOther);
 }
 
-inline IntRect DrawingDisplayItem::RectKnownToBeOpaque() const {
+inline gfx::Rect DrawingDisplayItem::RectKnownToBeOpaque() const {
   if (GetOpaqueness() == Opaqueness::kFull)
     return VisualRect();
   if (GetOpaqueness() == Opaqueness::kNone)
-    return IntRect();
+    return gfx::Rect();
   return CalculateRectKnownToBeOpaque();
 }
 

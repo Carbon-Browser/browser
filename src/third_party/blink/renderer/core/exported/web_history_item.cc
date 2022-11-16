@@ -38,8 +38,10 @@
 #include "third_party/blink/renderer/core/loader/history_item.h"
 #include "third_party/blink/renderer/platform/network/encoded_form_data.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
+#include "third_party/blink/renderer/platform/wtf/hash_set.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_hash.h"
 #include "ui/gfx/geometry/point.h"
+#include "ui/gfx/geometry/point_conversions.h"
 
 namespace blink {
 
@@ -66,17 +68,20 @@ void WebHistoryItem::SetURLString(const WebString& url) {
 }
 
 WebString WebHistoryItem::GetReferrer() const {
-  return private_->GetReferrer().referrer;
+  return private_->GetReferrer();
 }
 
 network::mojom::ReferrerPolicy WebHistoryItem::GetReferrerPolicy() const {
-  return private_->GetReferrer().referrer_policy;
+  return private_->GetReferrerPolicy();
 }
 
-void WebHistoryItem::SetReferrer(
-    const WebString& referrer,
+void WebHistoryItem::SetReferrer(const WebString& referrer) {
+  private_->SetReferrer(referrer);
+}
+
+void WebHistoryItem::SetReferrerPolicy(
     network::mojom::ReferrerPolicy referrer_policy) {
-  private_->SetReferrer(Referrer(referrer, referrer_policy));
+  private_->SetReferrerPolicy(referrer_policy);
 }
 
 const WebString& WebHistoryItem::Target() const {
@@ -89,28 +94,37 @@ void WebHistoryItem::SetTarget(const WebString& target) {
 
 gfx::PointF WebHistoryItem::VisualViewportScrollOffset() const {
   const auto& scroll_and_view_state = private_->GetViewState();
-  ScrollOffset offset =
-      scroll_and_view_state
-          ? scroll_and_view_state->visual_viewport_scroll_offset_
-          : ScrollOffset();
-  return gfx::PointF(offset.Width(), offset.Height());
+  if (!scroll_and_view_state)
+    return gfx::PointF();
+
+  // TODO(crbug.com/1274078): Is this conversion from blink scroll offset to
+  // gfx::PointF correct?
+  return gfx::PointAtOffsetFromOrigin(
+      scroll_and_view_state->visual_viewport_scroll_offset_);
 }
 
 void WebHistoryItem::SetVisualViewportScrollOffset(
     const gfx::PointF& scroll_offset) {
-  private_->SetVisualViewportScrollOffset(ToScrollOffset(scroll_offset));
+  // TODO(crbug.com/1274078): Is this conversion from gfx::PointF to blink
+  // scroll offset correct?
+  private_->SetVisualViewportScrollOffset(scroll_offset.OffsetFromOrigin());
 }
 
 gfx::Point WebHistoryItem::GetScrollOffset() const {
   const auto& scroll_and_view_state = private_->GetViewState();
-  ScrollOffset offset = scroll_and_view_state
-                            ? scroll_and_view_state->scroll_offset_
-                            : ScrollOffset();
-  return gfx::Point(offset.Width(), offset.Height());
+  if (!scroll_and_view_state)
+    return gfx::Point();
+
+  // TODO(crbug.com/1274078): Is this conversion from blink scroll offset to
+  // gfx::Point correct?
+  return gfx::ToFlooredPoint(
+      gfx::PointAtOffsetFromOrigin(scroll_and_view_state->scroll_offset_));
 }
 
 void WebHistoryItem::SetScrollOffset(const gfx::Point& scroll_offset) {
-  private_->SetScrollOffset(ScrollOffset(scroll_offset.x(), scroll_offset.y()));
+  // TODO(crbug.com/1274078): Is this conversion from gfx::Point to blink
+  // scroll offset correct?
+  private_->SetScrollOffset(ScrollOffset(scroll_offset.OffsetFromOrigin()));
 }
 
 float WebHistoryItem::PageScaleFactor() const {
@@ -223,28 +237,29 @@ void WebHistoryItem::SetScrollAnchorData(
   private_->SetScrollAnchorData(scroll_anchor_data);
 }
 
-WebString WebHistoryItem::GetAppHistoryKey() const {
-  return private_->GetAppHistoryKey();
+WebString WebHistoryItem::GetNavigationApiKey() const {
+  return private_->GetNavigationApiKey();
 }
 
-void WebHistoryItem::SetAppHistoryKey(const WebString& key) {
-  private_->SetAppHistoryKey(key);
+void WebHistoryItem::SetNavigationApiKey(const WebString& key) {
+  private_->SetNavigationApiKey(key);
 }
 
-WebString WebHistoryItem::GetAppHistoryId() const {
-  return private_->GetAppHistoryId();
+WebString WebHistoryItem::GetNavigationApiId() const {
+  return private_->GetNavigationApiId();
 }
 
-void WebHistoryItem::SetAppHistoryId(const WebString& id) {
-  private_->SetAppHistoryId(id);
+void WebHistoryItem::SetNavigationApiId(const WebString& id) {
+  private_->SetNavigationApiId(id);
 }
 
-WebSerializedScriptValue WebHistoryItem::GetAppHistoryState() const {
-  return WebSerializedScriptValue(private_->GetAppHistoryState());
+WebSerializedScriptValue WebHistoryItem::GetNavigationApiState() const {
+  return WebSerializedScriptValue(private_->GetNavigationApiState());
 }
 
-void WebHistoryItem::SetAppHistoryState(const WebSerializedScriptValue& state) {
-  private_->SetAppHistoryState(state);
+void WebHistoryItem::SetNavigationApiState(
+    const WebSerializedScriptValue& state) {
+  private_->SetNavigationApiState(state);
 }
 
 WebHistoryItem::WebHistoryItem(HistoryItem* item) : private_(item) {}

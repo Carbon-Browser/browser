@@ -56,16 +56,15 @@ class MojoPageTimingSender : public PageTimingSender {
       std::vector<mojom::ResourceDataUpdatePtr> resources,
       const mojom::FrameRenderDataUpdate& render_data,
       const mojom::CpuTimingPtr& cpu_timing,
-      mojom::DeferredResourceCountsPtr new_deferred_resource_data,
       mojom::InputTimingPtr input_timing_delta,
-      const blink::MobileFriendliness& mobile_friendliness) override {
+      const absl::optional<blink::MobileFriendliness>& mobile_friendliness,
+      uint32_t soft_navigation_count) override {
     DCHECK(page_load_metrics_);
     page_load_metrics_->UpdateTiming(
         limited_sending_mode_ ? CreatePageLoadTiming() : timing->Clone(),
         metadata->Clone(), new_features, std::move(resources),
-        render_data.Clone(), cpu_timing->Clone(),
-        std::move(new_deferred_resource_data), std::move(input_timing_delta),
-        std::move(mobile_friendliness));
+        render_data.Clone(), cpu_timing->Clone(), std::move(input_timing_delta),
+        std::move(mobile_friendliness), soft_navigation_count);
   }
 
   void SetUpSmoothnessReporting(
@@ -111,6 +110,16 @@ void MetricsRenderFrameObserver::DidObserveInputDelay(
   page_timing_metrics_sender_->DidObserveInputDelay(input_delay);
 }
 
+void MetricsRenderFrameObserver::DidObserveUserInteraction(
+    base::TimeDelta max_event_duration,
+    blink::UserInteractionType interaction_type) {
+  if (!page_timing_metrics_sender_ || HasNoRenderFrame()) {
+    return;
+  }
+  page_timing_metrics_sender_->DidObserveUserInteraction(max_event_duration,
+                                                         interaction_type);
+}
+
 void MetricsRenderFrameObserver::DidChangeCpuTiming(base::TimeDelta time) {
   if (!page_timing_metrics_sender_)
     return;
@@ -131,6 +140,12 @@ void MetricsRenderFrameObserver::DidObserveNewFeatureUsage(
     page_timing_metrics_sender_->DidObserveNewFeatureUsage(feature);
 }
 
+void MetricsRenderFrameObserver::DidObserveSoftNavigation(uint32_t count) {
+  if (page_timing_metrics_sender_) {
+    page_timing_metrics_sender_->DidObserveSoftNavigation(count);
+  }
+}
+
 void MetricsRenderFrameObserver::DidObserveLayoutShift(
     double score,
     bool after_input_or_scroll) {
@@ -139,31 +154,20 @@ void MetricsRenderFrameObserver::DidObserveLayoutShift(
                                                        after_input_or_scroll);
 }
 
-void MetricsRenderFrameObserver::DidObserveLayoutNg(
-    uint32_t all_block_count,
-    uint32_t ng_block_count,
-    uint32_t all_call_count,
-    uint32_t ng_call_count,
-    uint32_t flexbox_ng_block_count,
-    uint32_t grid_ng_block_count) {
+void MetricsRenderFrameObserver::DidObserveLayoutNg(uint32_t all_block_count,
+                                                    uint32_t ng_block_count,
+                                                    uint32_t all_call_count,
+                                                    uint32_t ng_call_count) {
   if (page_timing_metrics_sender_)
     page_timing_metrics_sender_->DidObserveLayoutNg(
-        all_block_count, ng_block_count, all_call_count, ng_call_count,
-        flexbox_ng_block_count, grid_ng_block_count);
-}
-
-void MetricsRenderFrameObserver::DidObserveLazyLoadBehavior(
-    blink::WebLocalFrameClient::LazyLoadBehavior lazy_load_behavior) {
-  if (page_timing_metrics_sender_)
-    page_timing_metrics_sender_->DidObserveLazyLoadBehavior(lazy_load_behavior);
+        all_block_count, ng_block_count, all_call_count, ng_call_count);
 }
 
 void MetricsRenderFrameObserver::DidStartResponse(
-    const GURL& response_url,
+    const url::SchemeHostPort& final_response_url,
     int request_id,
     const network::mojom::URLResponseHead& response_head,
-    network::mojom::RequestDestination request_destination,
-    blink::PreviewsState previews_state) {
+    network::mojom::RequestDestination request_destination) {
   if (provisional_frame_resource_data_use_ &&
       blink::IsRequestDestinationFrame(request_destination)) {
     // TODO(rajendrant): This frame request might start before the provisional
@@ -171,10 +175,10 @@ void MetricsRenderFrameObserver::DidStartResponse(
     // case. There should be a guarantee that DidStartProvisionalLoad be called
     // before DidStartResponse for the frame request.
     provisional_frame_resource_data_use_->DidStartResponse(
-        response_url, request_id, response_head, request_destination);
+        final_response_url, request_id, response_head, request_destination);
   } else if (page_timing_metrics_sender_) {
     page_timing_metrics_sender_->DidStartResponse(
-        response_url, request_id, response_head, request_destination);
+        final_response_url, request_id, response_head, request_destination);
     UpdateResourceMetadata(request_id);
   }
 }
@@ -317,10 +321,8 @@ void MetricsRenderFrameObserver::DidCreateDocumentElement() {
       CreatePageTimingSender(true /* limited_sending_mode */), CreateTimer(),
       std::move(timing.relative_timing), timing.monotonic_timing,
       std::make_unique<PageResourceDataUse>());
-  if (ukm_smoothness_data_.IsValid()) {
-    page_timing_metrics_sender_->SetUpSmoothnessReporting(
-        std::move(ukm_smoothness_data_));
-  }
+
+  OnMetricsSenderCreated();
 }
 
 void MetricsRenderFrameObserver::DidCommitProvisionalLoad(
@@ -345,10 +347,8 @@ void MetricsRenderFrameObserver::DidCommitProvisionalLoad(
       CreatePageTimingSender(false /* limited_sending_mode*/), CreateTimer(),
       std::move(timing.relative_timing), timing.monotonic_timing,
       std::move(provisional_frame_resource_data_use_));
-  if (ukm_smoothness_data_.IsValid()) {
-    page_timing_metrics_sender_->SetUpSmoothnessReporting(
-        std::move(ukm_smoothness_data_));
-  }
+
+  OnMetricsSenderCreated();
 }
 
 void MetricsRenderFrameObserver::SetAdResourceTracker(
@@ -369,10 +369,23 @@ void MetricsRenderFrameObserver::OnAdResourceObserved(int request_id) {
 }
 
 void MetricsRenderFrameObserver::OnMainFrameIntersectionChanged(
-    const gfx::Rect& main_frame_intersection) {
-  if (page_timing_metrics_sender_)
+    const gfx::Rect& main_frame_intersection_rect) {
+  if (page_timing_metrics_sender_) {
     page_timing_metrics_sender_->OnMainFrameIntersectionChanged(
-        main_frame_intersection);
+        main_frame_intersection_rect);
+    return;
+  }
+
+  main_frame_intersection_rect_before_metrics_sender_created_ =
+      main_frame_intersection_rect;
+}
+
+void MetricsRenderFrameObserver::OnMainFrameViewportRectangleChanged(
+    const gfx::Rect& main_frame_viewport_rect) {
+  if (page_timing_metrics_sender_) {
+    page_timing_metrics_sender_->OnMainFrameViewportRectangleChanged(
+        main_frame_viewport_rect);
+  }
 }
 
 void MetricsRenderFrameObserver::OnMobileFriendlinessChanged(
@@ -473,6 +486,21 @@ void MetricsRenderFrameObserver::SendMetrics() {
                                       timing.monotonic_timing);
 }
 
+void MetricsRenderFrameObserver::OnMetricsSenderCreated() {
+  if (ukm_smoothness_data_.IsValid()) {
+    page_timing_metrics_sender_->SetUpSmoothnessReporting(
+        std::move(ukm_smoothness_data_));
+  }
+
+  // Send the latest the frame intersection update, as otherwise we may miss
+  // this information for a frame completely if there are no future updates.
+  if (main_frame_intersection_rect_before_metrics_sender_created_) {
+    page_timing_metrics_sender_->OnMainFrameIntersectionChanged(
+        *main_frame_intersection_rect_before_metrics_sender_created_);
+    main_frame_intersection_rect_before_metrics_sender_created_.reset();
+  }
+}
+
 MetricsRenderFrameObserver::Timing MetricsRenderFrameObserver::GetTiming()
     const {
   const blink::WebPerformance& perf =
@@ -489,10 +517,15 @@ MetricsRenderFrameObserver::Timing MetricsRenderFrameObserver::GetTiming()
   }
   if (perf.FirstInputDelay().has_value()) {
     timing->interactive_timing->first_input_delay = *perf.FirstInputDelay();
+    monotonic_timing.first_input_delay = perf.FirstInputDelay();
   }
   if (perf.FirstInputTimestamp().has_value()) {
     timing->interactive_timing->first_input_timestamp =
         ClampDelta((*perf.FirstInputTimestamp()).InSecondsF(), start);
+  }
+  if (perf.FirstInputTimestampAsMonotonicTime()) {
+    monotonic_timing.first_input_timestamp =
+        perf.FirstInputTimestampAsMonotonicTime();
   }
   if (perf.LongestInputDelay().has_value()) {
     timing->interactive_timing->longest_input_delay = *perf.LongestInputDelay();
@@ -582,6 +615,10 @@ MetricsRenderFrameObserver::Timing MetricsRenderFrameObserver::GetTiming()
         perf.LargestImagePaint() == 0.0
             ? base::TimeDelta()
             : ClampDelta(perf.LargestImagePaint(), start);
+    timing->paint_timing->largest_contentful_paint->type =
+        LargestContentfulPaintTypeToUKMFlags(perf.LargestContentfulPaintType());
+    timing->paint_timing->largest_contentful_paint->image_bpp =
+        perf.LargestContentfulPaintImageBPP();
   }
   if (perf.LargestTextPaintSize() > 0) {
     // LargestTextPaint and LargestTextPaintSize should be available at the
@@ -604,6 +641,8 @@ MetricsRenderFrameObserver::Timing MetricsRenderFrameObserver::GetTiming()
         perf.ExperimentalLargestImagePaint() == 0.0
             ? base::TimeDelta()
             : ClampDelta(perf.ExperimentalLargestImagePaint(), start);
+    timing->paint_timing->experimental_largest_contentful_paint->type =
+        LargestContentfulPaintTypeToUKMFlags(perf.LargestContentfulPaintType());
   }
   if (perf.ExperimentalLargestTextPaintSize() > 0) {
     // ExperimentalLargestTextPaint and ExperimentalLargestTextPaintSize should
@@ -637,17 +676,15 @@ MetricsRenderFrameObserver::Timing MetricsRenderFrameObserver::GetTiming()
     // If we started parsing, record all parser durations such as the amount of
     // time blocked on script load, even if those values are zero.
     timing->parse_timing->parse_blocked_on_script_load_duration =
-        base::TimeDelta::FromSecondsD(perf.ParseBlockedOnScriptLoadDuration());
+        base::Seconds(perf.ParseBlockedOnScriptLoadDuration());
     timing->parse_timing
         ->parse_blocked_on_script_load_from_document_write_duration =
-        base::TimeDelta::FromSecondsD(
-            perf.ParseBlockedOnScriptLoadFromDocumentWriteDuration());
+        base::Seconds(perf.ParseBlockedOnScriptLoadFromDocumentWriteDuration());
     timing->parse_timing->parse_blocked_on_script_execution_duration =
-        base::TimeDelta::FromSecondsD(
-            perf.ParseBlockedOnScriptExecutionDuration());
+        base::Seconds(perf.ParseBlockedOnScriptExecutionDuration());
     timing->parse_timing
         ->parse_blocked_on_script_execution_from_document_write_duration =
-        base::TimeDelta::FromSecondsD(
+        base::Seconds(
             perf.ParseBlockedOnScriptExecutionFromDocumentWriteDuration());
   }
   if (perf.LastPortalActivatedPaint().has_value()) {

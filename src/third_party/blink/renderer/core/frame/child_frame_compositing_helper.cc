@@ -17,7 +17,7 @@
 #include "third_party/skia/include/core/SkImage.h"
 #include "ui/gfx/geometry/point_f.h"
 #include "ui/gfx/geometry/size.h"
-#include "ui/gfx/skia_util.h"
+#include "ui/gfx/geometry/skia_conversions.h"
 
 namespace blink {
 
@@ -55,7 +55,7 @@ void ChildFrameCompositingHelper::SetSurfaceId(
   surface_layer_ = cc::SurfaceLayer::Create();
   surface_layer_->SetMasksToBounds(true);
   surface_layer_->SetSurfaceHitTestable(true);
-  surface_layer_->SetBackgroundColor(SK_ColorTRANSPARENT);
+  surface_layer_->SetBackgroundColor(SkColors::kTransparent);
 
   // If we're synchronizing surfaces, then use an infinite deadline to ensure
   // everything is synchronized.
@@ -91,7 +91,7 @@ ChildFrameCompositingHelper::PaintContentsToDisplayList() {
   auto layer_size = crash_ui_layer_->bounds();
   auto display_list = base::MakeRefCounted<cc::DisplayItemList>();
   display_list->StartPaint();
-  display_list->push<cc::DrawColorOp>(SK_ColorGRAY, SkBlendMode::kSrc);
+  display_list->push<cc::DrawColorOp>(SkColors::kGray, SkBlendMode::kSrc);
 
   SkBitmap* sad_bitmap = child_frame_compositor_->GetSadPageBitmap();
   if (sad_bitmap) {

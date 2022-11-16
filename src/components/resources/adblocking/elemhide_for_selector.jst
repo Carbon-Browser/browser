@@ -1,0 +1,53 @@
+/*
+ * This file is part of eyeo Chromium SDK,
+ * Copyright (C) 2006-present eyeo GmbH
+ *
+ * eyeo Chromium SDK is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 3 as
+ * published by the Free Software Foundation.
+ *
+ * eyeo Chromium SDK is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with eyeo Chromium SDK.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+// {{filename_with_query}} and {{url}} will be replaced with actual variable values
+
+if (typeof(elemhideForSelector) !== typeof(Function))
+{
+  function elemhideForSelector(url, selector, attempt)
+  {
+    if (attempt == 50) // time-out = 50 attempts with 100 ms delay = 5 seconds
+    {
+      console.log("Too many attempts for selector " + selector + " with url " + url + ", exiting");
+      return;
+    }
+
+    let elements = document.querySelectorAll(selector);
+
+    // for some reason it can happen that no elements are found by selectors (DOM not ready?)
+    // so the idea is to retry with some delay
+    if (elements.length > 0)
+    {
+      for (let element of elements)
+      {
+        if (element.src == url)
+        {
+          hideElement(element);
+        }
+      }
+    }
+    else
+    {
+      console.log("Nothing found for selector " + selector + ", retrying elemhide in 100 millis");
+      setTimeout(elemhideForSelector, 100, url, selector, attempt + 1);
+    }
+  }
+}
+
+
+elemhideForSelector("{{url}}", "[src$='{{filename_with_query}}'], [srcset$='{{filename_with_query}}']", 0);

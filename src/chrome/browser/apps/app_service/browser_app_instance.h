@@ -7,11 +7,11 @@
 
 #include <string>
 
-#include "base/process/process_handle.h"
+#include "base/memory/raw_ptr.h"
 #include "base/unguessable_token.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
-
-class Browser;
+#include "build/chromeos_buildflags.h"
+#include "components/services/app_service/public/cpp/browser_app_instance_update.h"
+#include "components/services/app_service/public/cpp/browser_window_instance_update.h"
 
 namespace aura {
 class Window;
@@ -23,33 +23,84 @@ class WebContents;
 
 namespace apps {
 
-typedef base::UnguessableToken BrowserAppInstanceId;
-
-// An instance of a browser-based app. Can represent either of:
-// - apps running inside Browser->WebContents (in a tab or in a window),
-// - Chrome browser instances (a single browser window). In this case the app ID
-//   will be set to |extension_misc::kChromeAppId|.
+// An instance of an app running in WebContents, either a tab or a window (PWA,
+// SWA, hosted app, packaged v1 app).
 struct BrowserAppInstance {
-  enum class Type {
-    kAppTab,
-    kAppWindow,
-    kChromeWindow,
-  };
+  using Type = BrowserAppInstanceUpdate::Type;
 
+  // Update message from Lacros.
+
+  BrowserAppInstance(base::UnguessableToken id,
+                     Type type,
+                     std::string app_id,
+                     aura::Window* window,
+                     std::string title,
+                     bool is_browser_active,
+                     bool is_web_contents_active,
+                     uint32_t browser_session_id,
+                     uint32_t restored_browser_session_id);
+  BrowserAppInstance(BrowserAppInstanceUpdate update, aura::Window* window);
   ~BrowserAppInstance();
   BrowserAppInstance(const BrowserAppInstance&) = delete;
   BrowserAppInstance& operator=(const BrowserAppInstance&) = delete;
 
-  BrowserAppInstanceId id;
-  Type type;
-  std::string app_id;
-  aura::Window* window;
-  // Set for apps of type kAppTab or kAppWindow, nil for kChromeWindow.
-  absl::optional<std::string> title;
-  bool is_browser_visible;
+  // Updates mutable attributes and returns true if any were updated.
+  bool MaybeUpdate(aura::Window* window,
+                   std::string title,
+                   bool is_browser_active,
+                   bool is_web_contents_active,
+                   uint32_t browser_session_id,
+                   uint32_t restored_browser_session_id);
+
+  BrowserAppInstanceUpdate ToUpdate() const;
+
+  // Immutable attributes.
+  const base::UnguessableToken id;
+  const Type type;
+  const std::string app_id;
+
+  // Mutable attributes.
+  // Window may change for an app tab when a window gets dragged, but stays the
+  // same for an app window.
+  raw_ptr<aura::Window> window;
+  std::string title;
   bool is_browser_active;
-  // Set for apps of type kAppTab or kAppWindow, nil for kChromeWindow.
-  absl::optional<bool> is_web_contents_active;
+  // If a tab is active in the browser's tab strip. Only applicable to instances
+  // with type kAppTab. Always set to true for app instances of type kAppWindow.
+  bool is_web_contents_active;
+  uint32_t browser_session_id;
+  uint32_t restored_browser_session_id;
+};
+
+// An instance representing a single Chrome browser window.
+struct BrowserWindowInstance {
+  BrowserWindowInstance(base::UnguessableToken id,
+                        aura::Window* window,
+                        uint32_t browser_session_id,
+                        uint32_t restored_browser_session_id,
+                        bool is_active);
+  BrowserWindowInstance(BrowserWindowInstanceUpdate update,
+                        aura::Window* window);
+  ~BrowserWindowInstance();
+  BrowserWindowInstance(const BrowserWindowInstance&) = delete;
+  BrowserWindowInstance& operator=(const BrowserWindowInstance&) = delete;
+
+  bool MaybeUpdate(bool is_active);
+
+  BrowserWindowInstanceUpdate ToUpdate() const;
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  std::string GetAppId() const;
+#endif
+
+  // Immutable attributes.
+  const base::UnguessableToken id;
+  const raw_ptr<aura::Window> window;
+  uint32_t browser_session_id;
+  uint32_t restored_browser_session_id;
+
+  // Mutable attributes.
+  bool is_active;
 };
 
 }  // namespace apps

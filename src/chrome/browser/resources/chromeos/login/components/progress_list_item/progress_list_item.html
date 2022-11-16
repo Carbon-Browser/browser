@@ -7,8 +7,8 @@
 <link rel="import" href="chrome://resources/polymer/v1_0/iron-icon/iron-icon.html">
 <link rel="import" href="chrome://resources/polymer/v1_0/paper-spinner/paper-spinner-lite.html">
 
-<link rel="import" href="/components/behaviors/oobe_i18n_behavior.html">
-<link rel="import" href="/components/common_styles/common_styles.html">
+<link rel="import" href="../behaviors/oobe_i18n_behavior.html">
+<link rel="import" href="../common_styles/common_styles.html">
 
 <!--
   Element for list of tasks with tri-state icon (pending, active, completed)
@@ -39,7 +39,7 @@
       }
 
       #icon-pending {
-        background-color: var(--google-grey-500);
+        background-color: var(--cros-icon-color-disabled);
         border-radius: 50%;
         height: 8px;
         margin-inline-start: 8px;
@@ -52,7 +52,7 @@
       }
 
       #icon-completed {
-        color: var(--google-blue-600);
+        color: var(--cros-icon-color-blue);
       }
 
       #text {
@@ -63,7 +63,7 @@
       }
 
       #text-active {
-        color: black;
+        color: var(--cros-text-color-primary);
       }
     </style>
 

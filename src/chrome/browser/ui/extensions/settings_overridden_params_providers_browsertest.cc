@@ -87,7 +87,7 @@ class SettingsOverriddenParamsProvidersBrowserTest
 
 // The chrome_settings_overrides API that allows extensions to override the
 // default search provider is only available on Windows and Mac.
-#if defined(OS_WIN) || defined(OS_MAC)
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
 
 // NOTE: It's very unfortunate that this has to be a browsertest. Unfortunately,
 // a few bits here - the TemplateURLService in particular - don't play nicely
@@ -114,14 +114,13 @@ IN_PROC_BROWSER_TEST_F(SettingsOverriddenParamsProvidersBrowserTest,
   ASSERT_TRUE(params);
   EXPECT_EQ(search_extension->id(), params->controlling_extension_id);
 
-  EXPECT_EQ("Change back to Google Search?",
-            base::UTF16ToUTF8(params->dialog_title));
+  EXPECT_EQ(u"Change back to Google Search?", params->dialog_title);
 
   // Validate the body message, since it has a bit of formatting applied.
   EXPECT_EQ(
-      "The \"Search Override Extension\" extension changed search to use "
+      u"The \"Search Override Extension\" extension changed search to use "
       "example.com",
-      base::UTF16ToUTF8(params->dialog_message));
+      params->dialog_message);
 }
 
 IN_PROC_BROWSER_TEST_F(SettingsOverriddenParamsProvidersBrowserTest,
@@ -176,8 +175,8 @@ IN_PROC_BROWSER_TEST_F(
   absl::optional<ExtensionSettingsOverriddenDialog::Params> params =
       settings_overridden_params::GetSearchOverriddenParams(profile());
   ASSERT_TRUE(params);
-  EXPECT_EQ("Did you mean to change your search provider?",
-            base::UTF16ToUTF8(params->dialog_title));
+  EXPECT_EQ(u"Did you mean to change your search provider?",
+            params->dialog_title);
 }
 
 // Tests that null params are returned (indicating no dialog should be shown)
@@ -211,7 +210,7 @@ IN_PROC_BROWSER_TEST_F(SettingsOverriddenParamsProvidersBrowserTest,
   GURL search_url =
       new_turl->GenerateSearchURL(GetTemplateURLService()->search_terms_data());
   test_dir.WriteManifest(base::StringPrintf(
-      kManifestTemplate, search_url.GetOrigin().spec().c_str(),
+      kManifestTemplate, search_url.DeprecatedGetOriginAsURL().spec().c_str(),
       new_turl->prepopulate_id()));
 
   const extensions::Extension* extension =
@@ -260,7 +259,7 @@ IN_PROC_BROWSER_TEST_F(SettingsOverriddenParamsProvidersBrowserTest,
   GURL search_url =
       new_turl->GenerateSearchURL(GetTemplateURLService()->search_terms_data());
   test_dir.WriteManifest(base::StringPrintf(
-      kManifestTemplate, search_url.GetOrigin().spec().c_str()));
+      kManifestTemplate, search_url.DeprecatedGetOriginAsURL().spec().c_str()));
 
   const extensions::Extension* extension =
       InstallExtensionWithPermissionsGranted(test_dir.UnpackedPath(), 1);
@@ -273,7 +272,7 @@ IN_PROC_BROWSER_TEST_F(SettingsOverriddenParamsProvidersBrowserTest,
   EXPECT_FALSE(params) << "Unexpected params: " << params->dialog_title;
 }
 
-#endif  // defined(OS_WIN) || defined(OS_MAC)
+#endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
 
 // Tests the dialog display when the default search engine has changed; in this
 // case, we should display the generic dialog.
@@ -302,6 +301,5 @@ IN_PROC_BROWSER_TEST_F(SettingsOverriddenParamsProvidersBrowserTest,
       settings_overridden_params::GetNtpOverriddenParams(profile());
   ASSERT_TRUE(params);
   EXPECT_EQ(extension->id(), params->controlling_extension_id);
-  EXPECT_EQ("Did you mean to change this page?",
-            base::UTF16ToUTF8(params->dialog_title));
+  EXPECT_EQ(u"Did you mean to change this page?", params->dialog_title);
 }

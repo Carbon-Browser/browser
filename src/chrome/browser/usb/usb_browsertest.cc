@@ -6,8 +6,12 @@
 #include <string>
 #include <utility>
 
+#include "base/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
+#include "base/strings/stringprintf.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
+#include "base/test/metrics/histogram_tester.h"
 #include "chrome/browser/chrome_content_browser_client.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/profiles/profile.h"
@@ -15,30 +19,40 @@
 #include "chrome/browser/ui/browser_dialogs.h"
 #include "chrome/browser/ui/chooser_bubble_testapi.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
+#include "chrome/browser/ui/web_applications/test/isolated_app_test_utils.h"
 #include "chrome/browser/usb/usb_chooser_context_factory.h"
 #include "chrome/browser/usb/usb_chooser_controller.h"
 #include "chrome/browser/usb/web_usb_chooser.h"
+#include "chrome/browser/usb/web_usb_histograms.h"
 #include "chrome/browser/usb/web_usb_service_impl.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "content/public/browser/render_frame_host.h"
+#include "content/public/browser/usb_chooser.h"
 #include "content/public/common/content_client.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/test_navigation_observer.h"
+#include "extensions/buildflags/buildflags.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
+#include "net/test/embedded_test_server/embedded_test_server.h"
+#include "services/device/public/cpp/test/fake_usb_device_info.h"
 #include "services/device/public/cpp/test/fake_usb_device_manager.h"
 #include "services/device/public/mojom/usb_device.mojom.h"
+#include "services/device/public/mojom/usb_enumeration_options.mojom.h"
 #include "services/service_manager/public/cpp/binder_registry.h"
+#include "third_party/blink/public/mojom/usb/web_usb_service.mojom.h"
 
-namespace blink {
-namespace mojom {
-class WebUsbService;
-}
-}  // namespace blink
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+#include "chrome/browser/extensions/extension_browsertest.h"
+#include "extensions/common/extension.h"
+#include "extensions/test/extension_test_message_listener.h"
+#include "extensions/test/result_catcher.h"
+#include "extensions/test/test_extension_dir.h"
+#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
 using content::RenderFrameHost;
 using device::FakeUsbDeviceManager;
@@ -47,6 +61,22 @@ using device::mojom::UsbDeviceManager;
 
 namespace {
 
+constexpr char kIsolatedAppHost[] = "app.com";
+constexpr char kNonAppHost[] = "nonapp.com";
+constexpr char kNonAppHost2[] = "nonapp2.com";
+constexpr char OpenAndClaimDeviceScript[] = R"((async () => {
+    try {
+      const devices = await navigator.usb.getDevices();
+      const device = devices[0];
+      await device.open();
+      await device.selectConfiguration(1);
+      await device.claimInterface(0);
+      return "Success";
+    } catch (e) {
+      return e.message;
+    }
+  })();)";
+
 class FakeChooserView : public permissions::ChooserController::View {
  public:
   explicit FakeChooserView(
@@ -54,6 +84,9 @@ class FakeChooserView : public permissions::ChooserController::View {
       : controller_(std::move(controller)) {
     controller_->set_view(this);
   }
+
+  FakeChooserView(const FakeChooserView&) = delete;
+  FakeChooserView& operator=(const FakeChooserView&) = delete;
 
   ~FakeChooserView() override { controller_->set_view(nullptr); }
 
@@ -73,18 +106,19 @@ class FakeChooserView : public permissions::ChooserController::View {
 
  private:
   std::unique_ptr<permissions::ChooserController> controller_;
-
-  DISALLOW_COPY_AND_ASSIGN(FakeChooserView);
 };
 
 class FakeUsbChooser : public WebUsbChooser {
  public:
-  explicit FakeUsbChooser(RenderFrameHost* render_frame_host)
-      : WebUsbChooser(render_frame_host) {}
+  FakeUsbChooser() = default;
 
-  ~FakeUsbChooser() override {}
+  FakeUsbChooser(const FakeUsbChooser&) = delete;
+  FakeUsbChooser& operator=(const FakeUsbChooser&) = delete;
 
-  void ShowChooser(std::unique_ptr<UsbChooserController> controller) override {
+  ~FakeUsbChooser() override = default;
+
+  void ShowChooser(content::RenderFrameHost* render_frame_host,
+                   std::unique_ptr<UsbChooserController> controller) override {
     // Device list initialization in UsbChooserController may completed before
     // having a valid view in which case OnOptionsInitialized() has no chance to
     // be triggered, so select the first option directly if options are ready.
@@ -93,20 +127,33 @@ class FakeUsbChooser : public WebUsbChooser {
     else
       new FakeChooserView(std::move(controller));
   }
+};
 
-  base::WeakPtr<WebUsbChooser> GetWeakPtr() override {
-    return weak_factory_.GetWeakPtr();
+class TestUsbDelegate : public ChromeUsbDelegate {
+ public:
+  TestUsbDelegate() = default;
+  TestUsbDelegate(TestUsbDelegate&) = delete;
+  TestUsbDelegate& operator=(TestUsbDelegate&) = delete;
+  ~TestUsbDelegate() override = default;
+
+  std::unique_ptr<content::UsbChooser> RunChooser(
+      content::RenderFrameHost& frame,
+      std::vector<device::mojom::UsbDeviceFilterPtr> filters,
+      blink::mojom::WebUsbService::GetPermissionCallback callback) override {
+    auto controller = std::make_unique<UsbChooserController>(
+        &frame, std::move(filters), std::move(callback));
+    auto chooser = std::make_unique<FakeUsbChooser>();
+    chooser->ShowChooser(&frame, std::move(controller));
+    return chooser;
   }
-
- private:
-  base::WeakPtrFactory<FakeUsbChooser> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(FakeUsbChooser);
 };
 
 class TestContentBrowserClient : public ChromeContentBrowserClient {
  public:
   TestContentBrowserClient() {}
+
+  TestContentBrowserClient(const TestContentBrowserClient&) = delete;
+  TestContentBrowserClient& operator=(const TestContentBrowserClient&) = delete;
 
   ~TestContentBrowserClient() override {}
 
@@ -118,22 +165,44 @@ class TestContentBrowserClient : public ChromeContentBrowserClient {
       ChromeContentBrowserClient::CreateWebUsbService(render_frame_host,
                                                       std::move(receiver));
     } else {
-      usb_chooser_ = std::make_unique<FakeUsbChooser>(render_frame_host);
-      web_usb_service_ = std::make_unique<WebUsbServiceImpl>(
-          render_frame_host, usb_chooser_->GetWeakPtr());
+      web_usb_service_ = std::make_unique<WebUsbServiceImpl>(render_frame_host);
+      web_usb_service_->SetUsbDelegateForTesting(
+          std::make_unique<TestUsbDelegate>());
       web_usb_service_->BindReceiver(std::move(receiver));
     }
   }
 
   void UseRealChooser() { use_real_chooser_ = true; }
 
+  void ResetUsbDelegate() {
+    if (web_usb_service_)
+      web_usb_service_->SetUsbDelegateForTesting(nullptr);
+  }
+
  private:
   bool use_real_chooser_ = false;
   std::unique_ptr<WebUsbServiceImpl> web_usb_service_;
-  std::unique_ptr<WebUsbChooser> usb_chooser_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestContentBrowserClient);
 };
+
+scoped_refptr<device::FakeUsbDeviceInfo> CreateSmartCardDevice() {
+  auto alternate_setting = device::mojom::UsbAlternateInterfaceInfo::New();
+  alternate_setting->alternate_setting = 0;
+  alternate_setting->class_code = 0x0B;  // Smart Card
+
+  auto interface = device::mojom::UsbInterfaceInfo::New();
+  interface->interface_number = 0;
+  interface->alternates.push_back(std::move(alternate_setting));
+
+  auto config = device::mojom::UsbConfigurationInfo::New();
+  config->configuration_value = 1;
+  config->interfaces.push_back(std::move(interface));
+
+  std::vector<device::mojom::UsbConfigurationInfoPtr> configs;
+  configs.push_back(std::move(config));
+
+  return base::MakeRefCounted<device::FakeUsbDeviceInfo>(
+      0x4321, 0x8765, "ACME", "Frobinator", "ABCDEF", std::move(configs));
+}
 
 class WebUsbTest : public InProcessBrowserTest {
  public:
@@ -154,14 +223,17 @@ class WebUsbTest : public InProcessBrowserTest {
 
     GURL url = embedded_test_server()->GetURL("localhost", "/simple_page.html");
     ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
-    origin_ = url.GetOrigin();
+    origin_ = url.DeprecatedGetOriginAsURL();
 
-    RenderFrameHost* render_frame_host =
-        browser()->tab_strip_model()->GetActiveWebContents()->GetMainFrame();
+    RenderFrameHost* render_frame_host = browser()
+                                             ->tab_strip_model()
+                                             ->GetActiveWebContents()
+                                             ->GetPrimaryMainFrame();
     EXPECT_EQ(origin_, render_frame_host->GetLastCommittedOrigin().GetURL());
   }
 
-  void TearDown() override {
+  void TearDownOnMainThread() override {
+    test_content_browser_client_.ResetUsbDelegate();
     content::SetBrowserClientForTesting(original_content_browser_client_);
   }
 
@@ -185,7 +257,7 @@ class WebUsbTest : public InProcessBrowserTest {
   FakeUsbDeviceManager device_manager_;
   UsbDeviceInfoPtr fake_device_info_;
   TestContentBrowserClient test_content_browser_client_;
-  content::ContentBrowserClient* original_content_browser_client_;
+  raw_ptr<content::ContentBrowserClient> original_content_browser_client_;
   GURL origin_;
 };
 
@@ -351,6 +423,475 @@ IN_PROC_BROWSER_TEST_F(WebUsbTest, ShowChooserInBackgroundTab) {
             return `${e.name}: ${e.message}`;
           }
         })())"));
+}
+
+class WebUsbDeviceForgetTest : public WebUsbTest {
+ public:
+  void SetUpCommandLine(base::CommandLine* command_line) override {
+    WebUsbTest::SetUpCommandLine(command_line);
+    command_line->AppendSwitchASCII(switches::kEnableBlinkFeatures,
+                                    "WebUsbDeviceForget");
+  }
+};
+
+IN_PROC_BROWSER_TEST_F(WebUsbDeviceForgetTest, ForgetDevice) {
+  base::HistogramTester histogram_tester;
+  content::WebContents* web_contents =
+      browser()->tab_strip_model()->GetActiveWebContents();
+
+  EXPECT_EQ(1, content::EvalJs(web_contents,
+                               R"((async () => {
+        await navigator.usb.requestDevice({ filters: [{ vendorId: 0 }] });
+        const devices = await navigator.usb.getDevices();
+        return devices.length;
+      })())"));
+
+  EXPECT_EQ(0, content::EvalJs(web_contents,
+                               R"((async () => {
+        const [device] = await navigator.usb.getDevices();
+        await device.forget();
+        const devices = await navigator.usb.getDevices();
+        return devices.length;
+      })())"));
+  histogram_tester.ExpectUniqueSample("WebUsb.PermissionRevoked",
+                                      WEBUSB_PERMISSION_REVOKED_BY_WEBSITE, 1);
+}
+
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+class WebUsbChromeAppTest : public extensions::ExtensionBrowserTest {
+ public:
+  void SetUpOnMainThread() override {
+    ExtensionBrowserTest::SetUpOnMainThread();
+
+    mojo::PendingRemote<UsbDeviceManager> remote;
+    device_manager_.AddReceiver(remote.InitWithNewPipeAndPassReceiver());
+    GetChooserContext()->SetDeviceManagerForTesting(std::move(remote));
+  }
+
+ protected:
+  UsbChooserContext* GetChooserContext() {
+    return UsbChooserContextFactory::GetForProfile(browser()->profile());
+  }
+
+  FakeUsbDeviceManager& device_manager() { return device_manager_; }
+
+ private:
+  FakeUsbDeviceManager device_manager_;
+};
+
+IN_PROC_BROWSER_TEST_F(WebUsbChromeAppTest, AllowProtectedInterfaces) {
+  extensions::TestExtensionDir dir;
+  dir.WriteManifest(R"(
+    {
+      "name": "WebUsbTest App",
+      "version": "1.0",
+      "manifest_version": 2,
+      "app": {
+        "background": {
+          "scripts": ["background_script.js"]
+        }
+      }
+    }
+  )");
+
+  dir.WriteFile(FILE_PATH_LITERAL("background_script.js"), R"(
+    chrome.test.sendMessage("ready", async () => {
+      try {
+        const devices = await navigator.usb.getDevices();
+        const device = devices[0];
+        await device.open();
+        await device.selectConfiguration(1);
+        await device.claimInterface(0);
+        chrome.test.notifyPass();
+      } catch (e) {
+        chrome.test.fail(e.name + ':' + e.message);
+      }
+    });
+  )");
+
+  // Launch the test app.
+  ExtensionTestMessageListener ready_listener("ready",
+                                              ReplyBehavior::kWillReply);
+  extensions::ResultCatcher result_catcher;
+  scoped_refptr<const extensions::Extension> extension =
+      LoadExtension(dir.UnpackedPath());
+
+  // Configure the test device.
+  auto fake_device_info = CreateSmartCardDevice();
+  auto device_info = device_manager().AddDevice(fake_device_info);
+  GetChooserContext()->GrantDevicePermission(extension->origin(), *device_info);
+
+  // Run the test.
+  EXPECT_TRUE(ready_listener.WaitUntilSatisfied());
+  ready_listener.Reply("ok");
+  EXPECT_TRUE(result_catcher.GetNextResult()) << result_catcher.message();
+}
+#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
+
+class IsolatedAppUsbBrowserTest
+    : public web_app::IsolatedAppBrowserTestHarness {
+ public:
+  IsolatedAppUsbBrowserTest() = default;
+  ~IsolatedAppUsbBrowserTest() override = default;
+
+  void SetUpCommandLine(base::CommandLine* command_line) override {
+    IsolatedAppBrowserTestHarness::SetUpCommandLine(command_line);
+
+    command_line->AppendSwitchASCII(switches::kIsolatedAppOrigins,
+                                    std::string("https://") + kIsolatedAppHost);
+  }
+
+  void SetUpOnMainThread() override {
+    IsolatedAppBrowserTestHarness::SetUpOnMainThread();
+
+    mojo::PendingRemote<device::mojom::UsbDeviceManager> remote;
+    device_manager_.AddReceiver(remote.InitWithNewPipeAndPassReceiver());
+    chooser_context()->SetDeviceManagerForTesting(std::move(remote));
+  }
+
+ protected:
+  UsbChooserContext* chooser_context() {
+    return UsbChooserContextFactory::GetForProfile(profile());
+  }
+  device::FakeUsbDeviceManager& device_manager() { return device_manager_; }
+
+ private:
+  device::FakeUsbDeviceManager device_manager_;
+};
+
+IN_PROC_BROWSER_TEST_F(IsolatedAppUsbBrowserTest, ClaimInterface) {
+  auto* non_app_frame = ui_test_utils::NavigateToURL(
+      browser(), https_server()->GetURL("/banners/isolated/simple.html"));
+
+  web_app::AppId app_id = InstallIsolatedApp(kIsolatedAppHost);
+  auto* app_frame = OpenApp(app_id);
+
+  auto fake_device_info = CreateSmartCardDevice();
+  auto device_info = device_manager().AddDevice(std::move(fake_device_info));
+  chooser_context()->GrantDevicePermission(
+      non_app_frame->GetLastCommittedOrigin(), *device_info);
+  chooser_context()->GrantDevicePermission(app_frame->GetLastCommittedOrigin(),
+                                           *device_info);
+
+  EXPECT_EQ("SecurityError", EvalJs(non_app_frame, R"((async () => {
+    const devices = await navigator.usb.getDevices();
+    const device = devices[0];
+    await device.open();
+    await device.selectConfiguration(1);
+    try {
+      await device.claimInterface(0);
+    } catch (e) {
+      return e.name;
+    }
+  })();)"));
+
+  EXPECT_TRUE(ExecJs(app_frame, R"((async () => {
+    const devices = await navigator.usb.getDevices();
+    const device = devices[0];
+    await device.open();
+    await device.selectConfiguration(1);
+    await device.claimInterface(0);
+  })();)"));
+}
+
+class IsolatedAppPermissionsPolicyBrowserTest
+    : public IsolatedAppUsbBrowserTest {
+ public:
+  void SetUpCommandLine(base::CommandLine* command_line) override {
+    IsolatedAppUsbBrowserTest::SetUpCommandLine(command_line);
+    command_line->AppendSwitchASCII(switches::kEnableBlinkFeatures,
+                                    "FeaturePolicyReporting");
+    command_line->AppendSwitch(
+        switches::kEnableExperimentalWebPlatformFeatures);
+  }
+};
+
+IN_PROC_BROWSER_TEST_F(IsolatedAppPermissionsPolicyBrowserTest,
+                       PermissionsPolicy_Iframe_NoAllowAttribute) {
+  // Install an isolated app that has usb turned on for all origins in its
+  // manifest. Create a same-origin iframe on the page that does not specify an
+  // allow attribute, and expect that usb is accessible on the main frame, as
+  // well as in the iframe.
+  web_app::AppId app_id = InstallIsolatedApp(kIsolatedAppHost);
+
+  GURL app_url =
+      https_server()->GetURL(kIsolatedAppHost, "/banners/isolated/simple.html");
+  GURL non_app_url =
+      https_server()->GetURL(kNonAppHost, "/banners/isolated/simple.html");
+
+  auto* app_frame = OpenApp(app_id);
+  auto* app_browser = GetBrowserFromFrame(app_frame);
+  app_frame = ui_test_utils::NavigateToURL(app_browser, app_url);
+  const std::string permissions_policy = "";
+  CreateIframe(app_frame, "child", app_url, permissions_policy);
+  auto* iframe = ChildFrameAt(app_frame, 0);
+
+  auto fake_device_info = CreateSmartCardDevice();
+  auto device_info = device_manager().AddDevice(std::move(fake_device_info));
+  chooser_context()->GrantDevicePermission(app_frame->GetLastCommittedOrigin(),
+                                           *device_info);
+  EXPECT_EQ("Success", EvalJs(app_frame, OpenAndClaimDeviceScript));
+  EXPECT_EQ("Success", EvalJs(iframe, OpenAndClaimDeviceScript));
+
+  // Create a cross-origin iframe and expect usb to be disabled in that context
+  // since it does not specify usb in the allowlist.
+  CreateIframe(app_frame, "child2", non_app_url, permissions_policy);
+  iframe = ChildFrameAt(app_frame, 1);
+
+  EXPECT_THAT(EvalJs(iframe, OpenAndClaimDeviceScript).ExtractString(),
+              testing::EndsWith("permissions policy."));
+}
+
+IN_PROC_BROWSER_TEST_F(IsolatedAppPermissionsPolicyBrowserTest,
+                       PermissionsPolicy_Iframe_Self) {
+  // Install an isolated app that has usb turned on for all origins in its
+  // manifest. Create a same-origin iframe on the page that specifies an allow
+  // attribute allowing usb for 'self', and expect that usb is accessible on the
+  // main frame, as well as in the iframe.
+  web_app::AppId app_id = InstallIsolatedApp(kIsolatedAppHost);
+
+  const url::Origin app_origin = https_server()->GetOrigin(kIsolatedAppHost);
+  GURL app_url =
+      https_server()->GetURL(kIsolatedAppHost, "/banners/isolated/simple.html");
+  GURL non_app_url =
+      https_server()->GetURL(kNonAppHost, "/banners/isolated/simple.html");
+
+  auto* app_frame = OpenApp(app_id);
+  auto* app_browser = GetBrowserFromFrame(app_frame);
+  app_frame = ui_test_utils::NavigateToURL(app_browser, app_url);
+  const std::string permissions_policy = "usb 'self'";
+  CreateIframe(app_frame, "child", app_url, permissions_policy);
+  auto* iframe = ChildFrameAt(app_frame, 0);
+
+  auto fake_device_info = CreateSmartCardDevice();
+  auto device_info = device_manager().AddDevice(std::move(fake_device_info));
+  chooser_context()->GrantDevicePermission(app_frame->GetLastCommittedOrigin(),
+                                           *device_info);
+
+  EXPECT_EQ("Success", EvalJs(app_frame, OpenAndClaimDeviceScript));
+  EXPECT_EQ("Success", EvalJs(iframe, OpenAndClaimDeviceScript));
+
+  // Perform a cross-origin navigation in the iframe, which should no longer
+  // match the 'self' permissions policy token, and verify the permissions
+  // policy blocks access to usb.
+  EXPECT_TRUE(content::NavigateToURLFromRenderer(iframe, non_app_url));
+  iframe = ChildFrameAt(app_frame, 0);
+
+  EXPECT_THAT(EvalJs(iframe, OpenAndClaimDeviceScript).ExtractString(),
+              testing::EndsWith("permissions policy."));
+}
+
+IN_PROC_BROWSER_TEST_F(IsolatedAppPermissionsPolicyBrowserTest,
+                       PermissionsPolicy_Iframe_Src) {
+  // Install an isolated app that has usb turned on for all origins in its
+  // manifest. Create a cross-origin iframe on the page that specifies an allow
+  // attribute allowing usb for 'src', and expect that usb is accessible on the
+  // main frame, as well as in the iframe.
+  web_app::AppId app_id = InstallIsolatedApp(kIsolatedAppHost);
+
+  const url::Origin app_origin = https_server()->GetOrigin(kIsolatedAppHost);
+  GURL app_url =
+      https_server()->GetURL(kIsolatedAppHost, "/banners/isolated/simple.html");
+  GURL non_app_url =
+      https_server()->GetURL(kNonAppHost, "/banners/isolated/simple.html");
+  GURL non_app_url_2 =
+      https_server()->GetURL(kNonAppHost2, "/banners/isolated/simple.html");
+
+  auto* app_frame = OpenApp(app_id);
+  auto* app_browser = GetBrowserFromFrame(app_frame);
+  app_frame = ui_test_utils::NavigateToURL(app_browser, app_url);
+  const std::string permissions_policy = "usb 'src'";
+  CreateIframe(app_frame, "child", non_app_url, permissions_policy);
+  auto* iframe = ChildFrameAt(app_frame, 0);
+
+  auto fake_device_info = CreateSmartCardDevice();
+  auto device_info = device_manager().AddDevice(std::move(fake_device_info));
+  chooser_context()->GrantDevicePermission(app_frame->GetLastCommittedOrigin(),
+                                           *device_info);
+
+  EXPECT_EQ("Success", EvalJs(app_frame, OpenAndClaimDeviceScript));
+  EXPECT_EQ("Success", EvalJs(iframe, OpenAndClaimDeviceScript));
+
+  // Perform a navigation in the iframe to a cross-origin resource (a distinct
+  // origin from that which the iframe originally loaded, as well as the main
+  // frame), which should no longer match the 'src' permissions policy token,
+  // and verify the permissions policy blocks access to usb.
+  EXPECT_TRUE(content::NavigateToURLFromRenderer(iframe, non_app_url_2));
+  iframe = ChildFrameAt(app_frame, 0);
+
+  EXPECT_THAT(EvalJs(iframe, OpenAndClaimDeviceScript).ExtractString(),
+              testing::EndsWith("permissions policy."));
+}
+
+IN_PROC_BROWSER_TEST_F(IsolatedAppPermissionsPolicyBrowserTest,
+                       PermissionsPolicy_Iframe_None) {
+  // Install an isolated app that has usb turned on for all origins in its
+  // manifest. Create a cross-origin iframe on the page that specifies an allow
+  // attribute allowing usb with the 'none' token, and expect that usb is
+  // accessible on the main frame, but is blocked by permissions policy in the
+  // iframe.
+  web_app::AppId app_id = InstallIsolatedApp(kIsolatedAppHost);
+
+  GURL app_url =
+      https_server()->GetURL(kIsolatedAppHost, "/banners/isolated/simple.html");
+
+  auto* app_frame = OpenApp(app_id);
+  auto* app_browser = GetBrowserFromFrame(app_frame);
+  app_frame = ui_test_utils::NavigateToURL(app_browser, app_url);
+  const std::string permissions_policy = "usb 'none'";
+  CreateIframe(app_frame, "child", app_url, permissions_policy);
+  auto* iframe = ChildFrameAt(app_frame, 0);
+
+  auto fake_device_info = CreateSmartCardDevice();
+  auto device_info = device_manager().AddDevice(std::move(fake_device_info));
+  chooser_context()->GrantDevicePermission(app_frame->GetLastCommittedOrigin(),
+                                           *device_info);
+  EXPECT_EQ("Success", EvalJs(app_frame, OpenAndClaimDeviceScript));
+
+  EXPECT_THAT(EvalJs(iframe, OpenAndClaimDeviceScript).ExtractString(),
+              testing::EndsWith("permissions policy."));
+}
+
+IN_PROC_BROWSER_TEST_F(IsolatedAppPermissionsPolicyBrowserTest,
+                       PermissionsPolicy_Iframe_CrossOrigin) {
+  // Install an isolated app that has usb turned on for all origins in its
+  // manifest. Create a cross-origin iframe on the page that specifies an allow
+  // attribute allowing usb for the iframe by explicitly listing the iframe
+  // origin in the allowlist, and expect that usb is accessible on the main
+  // frame as well as in the iframe.
+  web_app::AppId app_id = InstallIsolatedApp(kIsolatedAppHost);
+
+  GURL app_url =
+      https_server()->GetURL(kIsolatedAppHost, "/banners/isolated/simple.html");
+  GURL non_app_url =
+      https_server()->GetURL(kNonAppHost, "/banners/isolated/simple.html");
+
+  auto* app_frame = OpenApp(app_id);
+  auto* app_browser = GetBrowserFromFrame(app_frame);
+  app_frame = ui_test_utils::NavigateToURL(app_browser, app_url);
+  const std::string permissions_policy = base::StringPrintf(
+      "usb %s", https_server()->GetURL(kNonAppHost, "/").spec().c_str());
+  CreateIframe(app_frame, "child", non_app_url, permissions_policy);
+  auto* iframe = ChildFrameAt(app_frame, 0);
+
+  auto fake_device_info = CreateSmartCardDevice();
+  auto device_info = device_manager().AddDevice(std::move(fake_device_info));
+  chooser_context()->GrantDevicePermission(app_frame->GetLastCommittedOrigin(),
+                                           *device_info);
+  EXPECT_EQ("Success", EvalJs(app_frame, OpenAndClaimDeviceScript));
+  EXPECT_EQ("Success", EvalJs(iframe, OpenAndClaimDeviceScript));
+}
+
+IN_PROC_BROWSER_TEST_F(IsolatedAppPermissionsPolicyBrowserTest,
+                       PermissionsPolicy_Headers_None) {
+  // Install an isolated app that has usb turned on for all origins in its
+  // manifest. Load a page in the app window that has a Permissions Policy
+  // header which does not allow usb on any origin (using an empty allowlist).
+  // Create a same-origin iframe on the page that does not specify an allow
+  // attribute, and expect that usb is not accessible on the main frame or in
+  // the iframe.
+  web_app::AppId app_id = InstallIsolatedApp(kIsolatedAppHost);
+
+  GURL app_url = https_server()->GetURL(kIsolatedAppHost,
+                                        "/banners/isolated/usb-none.html");
+  GURL non_app_url =
+      https_server()->GetURL(kNonAppHost, "/banners/isolated/usb-none.html");
+
+  auto* app_frame = OpenApp(app_id);
+  auto* app_browser = GetBrowserFromFrame(app_frame);
+  app_frame = ui_test_utils::NavigateToURL(app_browser, app_url);
+  const std::string permissions_policy = "";
+  CreateIframe(app_frame, "child", app_url, permissions_policy);
+  auto* iframe = ChildFrameAt(app_frame, 0);
+
+  auto fake_device_info = CreateSmartCardDevice();
+  auto device_info = device_manager().AddDevice(std::move(fake_device_info));
+  chooser_context()->GrantDevicePermission(app_frame->GetLastCommittedOrigin(),
+                                           *device_info);
+  EXPECT_THAT(EvalJs(app_frame, OpenAndClaimDeviceScript).ExtractString(),
+              testing::EndsWith("permissions policy."));
+  EXPECT_THAT(EvalJs(iframe, OpenAndClaimDeviceScript).ExtractString(),
+              testing::EndsWith("permissions policy."));
+
+  // Create a cross-origin iframe and expect usb to be disabled in that context.
+  CreateIframe(app_frame, "child2", non_app_url, permissions_policy);
+  iframe = ChildFrameAt(app_frame, 1);
+
+  EXPECT_THAT(EvalJs(iframe, OpenAndClaimDeviceScript).ExtractString(),
+              testing::EndsWith("permissions policy."));
+}
+
+IN_PROC_BROWSER_TEST_F(IsolatedAppPermissionsPolicyBrowserTest,
+                       PermissionsPolicy_Headers_Self) {
+  // Install an isolated app that has usb turned on for all origins in its
+  // manifest. Load a page in the app window that has a Permissions Policy
+  // header which allows usb on the same origin using the 'self' token. Create a
+  // same-origin iframe on the page that does not specify an allow attribute,
+  // and expect that usb is accessible on the main frame, as well as in the
+  // iframe.
+  web_app::AppId app_id = InstallIsolatedApp(kIsolatedAppHost);
+
+  GURL app_url = https_server()->GetURL(kIsolatedAppHost,
+                                        "/banners/isolated/usb-self.html");
+  GURL non_app_url =
+      https_server()->GetURL(kNonAppHost, "/banners/isolated/usb-self.html");
+
+  auto* app_frame = OpenApp(app_id);
+  auto* app_browser = GetBrowserFromFrame(app_frame);
+  app_frame = ui_test_utils::NavigateToURL(app_browser, app_url);
+  const std::string permissions_policy = "";
+  CreateIframe(app_frame, "child", app_url, permissions_policy);
+  auto* iframe = ChildFrameAt(app_frame, 0);
+
+  auto fake_device_info = CreateSmartCardDevice();
+  auto device_info = device_manager().AddDevice(std::move(fake_device_info));
+  chooser_context()->GrantDevicePermission(app_frame->GetLastCommittedOrigin(),
+                                           *device_info);
+  EXPECT_EQ("Success", EvalJs(app_frame, OpenAndClaimDeviceScript));
+  EXPECT_EQ("Success", EvalJs(iframe, OpenAndClaimDeviceScript));
+
+  // Create a cross-origin iframe and expect usb to be disabled in that context.
+  CreateIframe(app_frame, "child2", non_app_url, permissions_policy);
+  iframe = ChildFrameAt(app_frame, 1);
+
+  EXPECT_THAT(EvalJs(iframe, OpenAndClaimDeviceScript).ExtractString(),
+              testing::EndsWith("permissions policy."));
+}
+
+IN_PROC_BROWSER_TEST_F(IsolatedAppPermissionsPolicyBrowserTest,
+                       PermissionsPolicy_Headers_All) {
+  // Install an isolated app that has usb turned on for all origins in its
+  // manifest. Load a page in the app window that has a Permissions Policy
+  // header which allows usb on any origin. Create a same-origin iframe on the
+  // page that does not specify an allow attribute, and expect that usb is
+  // accessible on the main frame, as well as in the iframe.
+  web_app::AppId app_id = InstallIsolatedApp(kIsolatedAppHost);
+
+  GURL app_url = https_server()->GetURL(kIsolatedAppHost,
+                                        "/banners/isolated/usb-all.html");
+  GURL non_app_url =
+      https_server()->GetURL(kNonAppHost, "/banners/isolated/usb-all.html");
+
+  auto* app_frame = OpenApp(app_id);
+  auto* app_browser = GetBrowserFromFrame(app_frame);
+  app_frame = ui_test_utils::NavigateToURL(app_browser, app_url);
+  const std::string permissions_policy = "";
+  CreateIframe(app_frame, "child", app_url, permissions_policy);
+  auto* iframe = ChildFrameAt(app_frame, 0);
+
+  auto fake_device_info = CreateSmartCardDevice();
+  auto device_info = device_manager().AddDevice(std::move(fake_device_info));
+  chooser_context()->GrantDevicePermission(app_frame->GetLastCommittedOrigin(),
+                                           *device_info);
+  EXPECT_EQ("Success", EvalJs(app_frame, OpenAndClaimDeviceScript));
+  EXPECT_EQ("Success", EvalJs(iframe, OpenAndClaimDeviceScript));
+
+  // Create a cross-origin iframe with "usb" in the allow attribute and expect
+  // usb to be enabled in that context.
+  CreateIframe(app_frame, "child2", non_app_url, "usb");
+  iframe = ChildFrameAt(app_frame, 1);
+
+  EXPECT_EQ("Success", EvalJs(iframe, OpenAndClaimDeviceScript));
 }
 
 }  // namespace

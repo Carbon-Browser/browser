@@ -8,26 +8,27 @@
  */
 import '../../cr_elements/cr_button/cr_button.m.js';
 import '../../cr_elements/cr_dialog/cr_dialog.m.js';
-import './certificate_shared_css.js';
+import './certificate_shared.css.js';
 
-import {html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {CrDialogElement} from '../../cr_elements/cr_dialog/cr_dialog.m.js';
-import {assertNotReached} from '../../js/assert.m.js';
-import {I18nBehavior} from '../../js/i18n_behavior.m.js';
+import {assertNotReached} from '../../js/assert_ts.js';
+import {I18nMixin} from '../../js/i18n_mixin.js';
 import {loadTimeData} from '../../js/load_time_data.m.js';
 
-import {CertificatesBrowserProxy, CertificatesBrowserProxyImpl, CertificateSubnode, CertificateType} from './certificates_browser_proxy.js';
+import {getTemplate} from './certificate_delete_confirmation_dialog.html.js';
+import {CertificatesBrowserProxyImpl, CertificateSubnode, CertificateType} from './certificates_browser_proxy.js';
 
 export interface CertificateDeleteConfirmationDialogElement {
   $: {
     dialog: CrDialogElement,
+    ok: HTMLElement,
   };
 }
 
 const CertificateDeleteConfirmationDialogElementBase =
-    mixinBehaviors([I18nBehavior], PolymerElement) as
-    {new (): PolymerElement & I18nBehavior};
+    I18nMixin(PolymerElement);
 
 export class CertificateDeleteConfirmationDialogElement extends
     CertificateDeleteConfirmationDialogElementBase {
@@ -36,7 +37,7 @@ export class CertificateDeleteConfirmationDialogElement extends
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
   }
 
   static get properties() {
@@ -49,7 +50,7 @@ export class CertificateDeleteConfirmationDialogElement extends
   model: CertificateSubnode;
   certificateType: CertificateType;
 
-  connectedCallback() {
+  override connectedCallback() {
     super.connectedCallback();
     this.$.dialog.showModal();
   }
@@ -67,9 +68,9 @@ export class CertificateDeleteConfirmationDialogElement extends
         return getString('certificateManagerDeleteCaTitle');
       case CertificateType.OTHER:
         return getString('certificateManagerDeleteOtherTitle');
+      default:
+        assertNotReached();
     }
-    assertNotReached();
-    return '';
   }
 
   private getDescriptionText_(): string {
@@ -83,9 +84,9 @@ export class CertificateDeleteConfirmationDialogElement extends
         return getString('certificateManagerDeleteCaDescription');
       case CertificateType.OTHER:
         return '';
+      default:
+        assertNotReached();
     }
-    assertNotReached();
-    return '';
   }
 
   private onCancelTap_() {
@@ -100,6 +101,9 @@ export class CertificateDeleteConfirmationDialogElement extends
               this.$.dialog.close();
             },
             error => {
+              if (error === null) {
+                return;
+              }
               this.$.dialog.close();
               this.dispatchEvent(new CustomEvent('certificates-error', {
                 bubbles: true,
@@ -107,6 +111,13 @@ export class CertificateDeleteConfirmationDialogElement extends
                 detail: {error: error, anchor: null},
               }));
             });
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'certificate-delete-confirmation-dialog':
+        CertificateDeleteConfirmationDialogElement;
   }
 }
 

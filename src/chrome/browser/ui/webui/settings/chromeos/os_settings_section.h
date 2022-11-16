@@ -11,10 +11,10 @@
 #include "base/containers/span.h"
 #include "base/gtest_prod_util.h"
 #include "base/values.h"
+#include "chrome/browser/ui/webui/settings/ash/search/search.mojom.h"
+#include "chrome/browser/ui/webui/settings/ash/search/search_concept.h"
 #include "chrome/browser/ui/webui/settings/chromeos/constants/routes.mojom.h"
 #include "chrome/browser/ui/webui/settings/chromeos/constants/setting.mojom.h"
-#include "chrome/browser/ui/webui/settings/chromeos/search/search.mojom.h"
-#include "chrome/browser/ui/webui/settings/chromeos/search/search_concept.h"
 
 class Profile;
 
@@ -123,7 +123,9 @@ class OsSettingsSection {
   // whether the setting change was logged.
   virtual bool LogMetric(mojom::Setting setting, base::Value& value) const = 0;
 
-  // Registers the subpages and/or settings which reside in this section.
+  // Registers the subpages and/or settings which reside in this section. Every
+  // subpage and setting within a section must be registered, regardless of
+  // whether or not the subpage or setting is gated behind a feature flag.
   virtual void RegisterHierarchy(HierarchyGenerator* generator) const = 0;
 
   // Modifies a URL to be used by settings search. Some URLs require dynamic

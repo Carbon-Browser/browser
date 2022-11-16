@@ -19,41 +19,38 @@ import 'chrome://resources/polymer/v3_0/paper-spinner/paper-spinner-lite.js';
 import 'chrome://resources/polymer/v3_0/paper-styles/color.js';
 import './host_permissions_toggle_list.js';
 import './runtime_host_permissions.js';
-import './shared_style.js';
-import './shared_vars.js';
+import './shared_style.css.js';
+import './shared_vars.css.js';
 import './strings.m.js';
 import './toggle_row.js';
 
-import {CrContainerShadowMixin, CrContainerShadowMixinInterface} from 'chrome://resources/cr_elements/cr_container_shadow_mixin.js';
+import {CrLinkRowElement} from 'chrome://resources/cr_elements/cr_link_row/cr_link_row.js';
 import {CrToggleElement} from 'chrome://resources/cr_elements/cr_toggle/cr_toggle.m.js';
+import {CrTooltipIconElement} from 'chrome://resources/cr_elements/policy/cr_tooltip_icon.m.js';
 import {focusWithoutInk} from 'chrome://resources/js/cr/ui/focus_without_ink.m.js';
 import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
-import {afterNextRender, html, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {afterNextRender, DomRepeatEvent, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
+import {getTemplate} from './detail_view.html.js';
 import {ItemDelegate} from './item.js';
 import {ItemMixin} from './item_mixin.js';
-import {computeInspectableViewLabel, EnableControl, getEnableControl, getItemSource, getItemSourceString, isEnabled, userCanChangeEnablement} from './item_util.js';
+import {computeInspectableViewLabel, EnableControl, getEnableControl, getItemSource, getItemSourceString, isEnabled, sortViews, userCanChangeEnablement} from './item_util.js';
 import {navigation, Page} from './navigation_helper.js';
 import {ExtensionsToggleRowElement} from './toggle_row.js';
 
 export interface ExtensionsDetailViewElement {
   $: {
     closeButton: HTMLElement,
+    description: HTMLElement,
     enableToggle: CrToggleElement,
     extensionsActivityLogLink: HTMLElement,
+    extensionsOptions: CrLinkRowElement,
+    parentDisabledPermissionsToolTip: CrTooltipIconElement,
+    source: HTMLElement,
   };
 }
 
-/** Event interface for dom-repeat. */
-interface RepeaterEvent extends CustomEvent {
-  model: {
-    item: chrome.developerPrivate.ExtensionView,
-  };
-}
-
-const ExtensionsDetailViewElementBase =
-    CrContainerShadowMixin(ItemMixin(PolymerElement)) as
-    {new (): PolymerElement & CrContainerShadowMixinInterface};
+const ExtensionsDetailViewElementBase = ItemMixin(PolymerElement);
 
 export class ExtensionsDetailViewElement extends
     ExtensionsDetailViewElementBase {
@@ -62,7 +59,7 @@ export class ExtensionsDetailViewElement extends
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
   }
 
   static get properties() {
@@ -79,6 +76,13 @@ export class ExtensionsDetailViewElement extends
       /** Whether the user has enabled the UI's developer mode. */
       inDevMode: Boolean,
 
+      /**
+       * Whether enhanced site controls have been enabled (through a feature
+       * flag). For this page, there are some changes to the site permissions
+       * section.
+       */
+      enableEnhancedSiteControls: Boolean,
+
       /** Whether "allow in incognito" option should be shown. */
       incognitoAvailable: Boolean,
 
@@ -87,6 +91,12 @@ export class ExtensionsDetailViewElement extends
 
       /** Whether the user navigated to this page from the activity log page. */
       fromActivityLog: Boolean,
+
+      /** Inspectable views sorted to put background/service workers first */
+      sortedViews_: {
+        type: Array,
+        computed: 'computeSortedViews_(data.views)',
+      },
     };
   }
 
@@ -97,24 +107,14 @@ export class ExtensionsDetailViewElement extends
   data: chrome.developerPrivate.ExtensionInfo;
   delegate: ItemDelegate;
   inDevMode: boolean;
+  enableEnhancedSiteControls: boolean;
   incognitoAvailable: boolean;
   showActivityLog: boolean;
   fromActivityLog: boolean;
   private size_: string;
+  private sortedViews_: chrome.developerPrivate.ExtensionView[];
 
-  connectedCallback() {
-    super.connectedCallback();
-
-    if (document.documentElement.hasAttribute('enable-branding-update')) {
-      // Always show the top shadow, regardless of scroll position.
-      // TODO(crbug.com/1177509): Remove CrContainerShadowMixin completely and
-      // add a fixed shadow after feature is launched.
-      this.enableShadowBehavior(false);
-      this.showDropShadows();
-    }
-  }
-
-  ready() {
+  override ready() {
     super.ready();
     this.addEventListener('view-enter-start', this.onViewEnterStart_);
   }
@@ -124,7 +124,7 @@ export class ExtensionsDetailViewElement extends
    * dialog closes.
    */
   focusOptionsButton() {
-    this.shadowRoot!.querySelector<HTMLElement>('#extensions-options')!.focus();
+    this.$.extensionsOptions.focus();
   }
 
   /**
@@ -153,6 +153,16 @@ export class ExtensionsDetailViewElement extends
 
   private getDescription_(description: string, fallback: string): string {
     return description || fallback;
+  }
+
+  private getBackButtonAriaLabel_(): string {
+    return loadTimeData.getStringF(
+        'itemDetailsBackButtonAriaLabel', this.data.name);
+  }
+
+  private getBackButtonAriaRoleDescription_(): string {
+    return loadTimeData.getStringF(
+        'itemDetailsBackButtonRoleDescription', this.data.name);
   }
 
   private onCloseButtonTap_() {
@@ -189,6 +199,10 @@ export class ExtensionsDetailViewElement extends
     return isEnabled(state) ? onText : offText;
   }
 
+  private computeSortedViews_(): chrome.developerPrivate.ExtensionView[] {
+    return sortViews(this.data.views);
+  }
+
   private computeInspectLabel_(view: chrome.developerPrivate.ExtensionView):
       string {
     return computeInspectableViewLabel(view);
@@ -212,7 +226,8 @@ export class ExtensionsDetailViewElement extends
     this.$.enableToggle.checked = this.isEnabled_();
   }
 
-  private onInspectTap_(e: RepeaterEvent) {
+  private onInspectTap_(
+      e: DomRepeatEvent<chrome.developerPrivate.ExtensionView>) {
     this.delegate.inspectItemView(this.data.id, e.model.item);
   }
 
@@ -286,8 +301,24 @@ export class ExtensionsDetailViewElement extends
         this.hasRuntimeHostPermissions_();
   }
 
+  private getNoPermissionsString_(): string {
+    const showPermissionsAndSiteAccessStrings =
+        this.enableEnhancedSiteControls && !this.showSiteAccessContent_();
+    return loadTimeData.getString(
+        showPermissionsAndSiteAccessStrings ?
+            'itemPermissionsAndSiteAccessEmpty' :
+            'itemPermissionsEmpty');
+  }
+
   private hasRuntimeHostPermissions_(): boolean {
     return !!this.data.permissions.runtimeHostPermissions;
+  }
+
+  // Returns whether the site access section should be shown. This includes the
+  // "no site access" message shown in the section if
+  // |enableEnhancedSiteControls| is not enabled.
+  private showSiteAccessSection_(): boolean {
+    return !this.enableEnhancedSiteControls || this.showSiteAccessContent_();
   }
 
   private showSiteAccessContent_(): boolean {

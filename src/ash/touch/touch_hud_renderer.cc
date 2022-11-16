@@ -15,7 +15,7 @@
 #include "ui/gfx/animation/linear_animation.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/geometry/size.h"
-#include "ui/gfx/skia_util.h"
+#include "ui/gfx/geometry/skia_conversions.h"
 #include "ui/views/animation/animation_delegate_views.h"
 #include "ui/views/view.h"
 #include "ui/views/widget/widget.h"
@@ -24,11 +24,10 @@
 namespace ash {
 
 constexpr int kPointRadius = 20;
-constexpr SkColor kProjectionFillColor = SkColorSetRGB(0xF5, 0xF5, 0xDC);
-constexpr SkColor kProjectionStrokeColor = SK_ColorGRAY;
+constexpr SkColor4f kProjectionFillColor{0.96f, 0.96f, 0.86f, 1.0f};
+constexpr SkColor4f kProjectionStrokeColor = SkColors::kGray;
 constexpr int kProjectionAlpha = 0xB0;
-constexpr base::TimeDelta kFadeoutDuration =
-    base::TimeDelta::FromMilliseconds(250);
+constexpr base::TimeDelta kFadeoutDuration = base::Milliseconds(250);
 constexpr int kFadeoutFrameRate = 60;
 
 // TouchPointView draws a single touch point.
@@ -45,6 +44,9 @@ class TouchPointView : public views::View,
 
     widget_observation_.Observe(parent_widget);
   }
+
+  TouchPointView(const TouchPointView&) = delete;
+  TouchPointView& operator=(const TouchPointView&) = delete;
 
   ~TouchPointView() override = default;
 
@@ -76,15 +78,15 @@ class TouchPointView : public views::View,
     cc::PaintFlags fill_flags;
     fill_flags.setAlpha(alpha);
 
-    constexpr SkColor gradient_colors[2] = {kProjectionFillColor,
-                                            kProjectionStrokeColor};
+    constexpr SkColor4f gradient_colors[2] = {kProjectionFillColor,
+                                              kProjectionStrokeColor};
     constexpr SkScalar gradient_pos[2] = {SkFloatToScalar(0.9f),
                                           SkFloatToScalar(1.0f)};
     constexpr gfx::Point center(kPointRadius + 1, kPointRadius + 1);
 
     fill_flags.setShader(cc::PaintShader::MakeRadialGradient(
         gfx::PointToSkPoint(center), SkIntToScalar(kPointRadius),
-        gradient_colors, gradient_pos, base::size(gradient_colors),
+        gradient_colors, gradient_pos, std::size(gradient_colors),
         SkTileMode::kMirror));
     canvas->DrawCircle(center, SkIntToScalar(kPointRadius), fill_flags);
 
@@ -123,8 +125,6 @@ class TouchPointView : public views::View,
 
   base::ScopedObservation<views::Widget, views::WidgetObserver>
       widget_observation_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(TouchPointView);
 };
 
 TouchHudRenderer::TouchHudRenderer(views::Widget* parent_widget)

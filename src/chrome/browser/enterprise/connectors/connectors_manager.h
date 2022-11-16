@@ -5,9 +5,11 @@
 #ifndef CHROME_BROWSER_ENTERPRISE_CONNECTORS_CONNECTORS_MANAGER_H_
 #define CHROME_BROWSER_ENTERPRISE_CONNECTORS_CONNECTORS_MANAGER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/enterprise/connectors/analysis/analysis_service_settings.h"
 #include "chrome/browser/enterprise/connectors/common.h"
 #include "chrome/browser/enterprise/connectors/file_system/service_settings.h"
+#include "chrome/browser/enterprise/connectors/reporting/extension_install_event_router.h"
 #include "chrome/browser/enterprise/connectors/reporting/reporting_service_settings.h"
 #include "chrome/browser/enterprise/connectors/service_provider_config.h"
 #include "components/prefs/pref_change_registrar.h"
@@ -30,8 +32,9 @@ class ConnectorsManager {
   using FileSystemConnectorsSettings =
       std::map<FileSystemConnector, std::vector<FileSystemServiceSettings>>;
 
-  ConnectorsManager(PrefService* pref_service,
-                    ServiceProviderConfig* config,
+  ConnectorsManager(ExtensionInstallEventRouter extension_install_router,
+                    PrefService* pref_service,
+                    const ServiceProviderConfig* config,
                     bool observe_prefs = true);
   ~ConnectorsManager();
 
@@ -67,6 +70,8 @@ class ConnectorsManager {
                                                   const std::string& tag);
   absl::optional<GURL> GetLearnMoreUrl(AnalysisConnector connector,
                                        const std::string& tag);
+  bool GetBypassJustificationRequired(AnalysisConnector connector,
+                                      const std::string& tag);
 
   std::vector<std::string> GetAnalysisServiceProviderNames(
       AnalysisConnector connector);
@@ -115,7 +120,7 @@ class ConnectorsManager {
 
   // Cached values of available service providers. This information validates
   // the Connector policies have a valid provider.
-  ServiceProviderConfig* service_provider_config_;
+  raw_ptr<const ServiceProviderConfig> service_provider_config_;
 
   // Cached values of the connector policies. Updated when a connector is first
   // used or when a policy is updated.
@@ -126,6 +131,9 @@ class ConnectorsManager {
   // Used to track changes of connector policies and propagate them in
   // |connector_settings_|.
   PrefChangeRegistrar pref_change_registrar_;
+
+  // An observer to report extension install events via the reporting pipeline.
+  ExtensionInstallEventRouter extension_install_event_router_;
 };
 
 }  // namespace enterprise_connectors

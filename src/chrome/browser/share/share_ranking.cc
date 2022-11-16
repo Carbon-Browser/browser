@@ -4,24 +4,28 @@
 
 #include "chrome/browser/share/share_ranking.h"
 
-#include "base/android/callback_android.h"
-#include "base/android/jni_array.h"
-#include "base/android/jni_string.h"
 #include "base/strings/string_util.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "build/build_config.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/profiles/profile_android.h"
 #include "chrome/browser/share/default_ranking.h"
 #include "chrome/browser/share/share_history.h"
 #include "components/leveldb_proto/public/proto_database_provider.h"
 #include "content/public/browser/storage_partition.h"
 #include "ui/base/l10n/l10n_util.h"
 
+#if BUILDFLAG(IS_ANDROID)
+#include "base/android/callback_android.h"
+#include "base/android/jni_array.h"
+#include "base/android/jni_string.h"
+#include "base/android/locale_utils.h"
+#include "chrome/browser/profiles/profile_android.h"
+
 #include "chrome/browser/share/jni_headers/ShareRankingBridge_jni.h"
 
 using base::android::JavaParamRef;
+#endif
 
 namespace sharing {
 
@@ -41,7 +45,7 @@ std::unique_ptr<ShareRanking::BackingDb> MakeDefaultDbForProfile(
       ->GetProtoDatabaseProvider()
       ->GetDB<proto::ShareRanking>(
           leveldb_proto::ProtoDbType::SHARE_RANKING_DATABASE,
-          profile->GetPath().Append(kShareRankingFolder),
+          profile->GetPath().AppendASCII(kShareRankingFolder),
           base::ThreadPool::CreateSequencedTaskRunner(
               {base::MayBlock(), base::TaskPriority::BEST_EFFORT}));
 }
@@ -115,10 +119,9 @@ void FillGaps(std::vector<std::string>& ranking,
                                             ranking.end());
 
   unused_available.erase(
-      std::remove_if(unused_available.begin(), unused_available.end(),
-                     [&](const std::string& e) {
-                       return RankingContains(ranking, e, length);
-                     }),
+      std::remove_if(
+          unused_available.begin(), unused_available.end(),
+          [&](const std::string& e) { return !RankingContains(available, e); }),
       unused_available.end());
 
   // Now, append the rest of the system apps (those not already included) to
@@ -183,12 +186,32 @@ std::vector<std::string> MaybeUpdateRankingFromHistory(
   return new_ranking;
 }
 
+ShareRanking::Ranking AppendUpToLength(
+    const ShareRanking::Ranking& ranking,
+    const std::map<std::string, int>& history,
+    unsigned int length) {
+  std::vector<std::string> history_keys;
+  for (const auto& it : history)
+    history_keys.push_back(it.first);
+  ShareRanking::Ranking all = OrderByUses(history_keys, history);
+  ShareRanking::Ranking result = ranking;
+  while (result.size() < length && !all.empty()) {
+    if (!RankingContains(result, all.front())) {
+      result.push_back(all.front());
+      all.erase(all.begin());
+    }
+  }
+  return result;
+}
+
+#if BUILDFLAG(IS_ANDROID)
 void RunJniRankCallback(base::android::ScopedJavaGlobalRef<jobject> callback,
                         JNIEnv* env,
                         absl::optional<ShareRanking::Ranking> ranking) {
   auto result = base::android::ToJavaArrayOfStrings(env, ranking.value());
   base::android::RunObjectCallbackAndroid(callback, result);
 }
+#endif
 
 #if DCHECK_IS_ON()
 bool EveryElementInList(const std::vector<std::string>& ranking,
@@ -247,8 +270,7 @@ std::map<std::string, int> BuildHistoryMap(
 
 std::vector<std::string> AddMissingItemsFromHistory(
     const std::vector<std::string> existing,
-    const std::map<std::string, int> history,
-    unsigned int length) {
+    const std::map<std::string, int> history) {
   std::vector<std::string> updated = existing;
   for (const auto& item : history) {
     if (!RankingContains(updated, item.first))
@@ -324,12 +346,14 @@ void ShareRanking::GetRanking(const std::string& type,
 void ShareRanking::Rank(ShareHistory* history,
                         const std::string& type,
                         const std::vector<std::string>& available_on_system,
+                        unsigned int fold,
                         unsigned int length,
                         bool persist_update,
                         GetRankingCallback callback) {
   auto pending_call = std::make_unique<PendingRankCall>();
   pending_call->type = type;
   pending_call->available_on_system = available_on_system;
+  pending_call->fold = fold;
   pending_call->length = length;
   pending_call->persist_update = persist_update;
   pending_call->callback = std::move(callback);
@@ -359,20 +383,33 @@ void ShareRanking::ComputeRanking(
     const std::map<std::string, int>& recent_share_history,
     const Ranking& old_ranking,
     const std::vector<std::string>& available_on_system,
+    unsigned int fold,
     unsigned int length,
     Ranking* display_ranking,
     Ranking* persisted_ranking) {
   // Preconditions:
+  DCHECK_LE(fold, length);
   DCHECK_GE(old_ranking.size(), length - 1);
   DCHECK_GE(available_on_system.size(), length - 1);
 
   Ranking augmented_old_ranking = AddMissingItemsFromHistory(
-      AddMissingItemsFromHistory(old_ranking, all_share_history, length - 1),
-      recent_share_history, length - 1);
+      AddMissingItemsFromHistory(old_ranking, all_share_history),
+      recent_share_history);
 
-  std::vector<std::string> new_ranking =
-      MaybeUpdateRankingFromHistory(augmented_old_ranking, all_share_history,
-                                    recent_share_history, length - 1);
+  // If the fold and the length are equal, fill up to length - 1 from history,
+  // leaving the last slot for $more. If they aren't equal, the fold must be
+  // lower, so fill all the way up to the fold. After that, the code right below
+  // will fill the slots between fold and length - 1 with more entries, leaving
+  // the length - 1 slot for $more.
+  std::vector<std::string> new_ranking = MaybeUpdateRankingFromHistory(
+      augmented_old_ranking, all_share_history, recent_share_history,
+      fold < length ? fold : length - 1);
+
+  if (fold != length) {
+    new_ranking =
+        AppendUpToLength(new_ranking, recent_share_history, length - 1);
+    new_ranking = AppendUpToLength(new_ranking, all_share_history, length - 1);
+  }
 
   Ranking computed_display_ranking =
       ReplaceUnavailableEntries(new_ranking, available_on_system);
@@ -392,9 +429,8 @@ void ShareRanking::ComputeRanking(
     available.push_back(kMoreTarget);
 
     DCHECK(EveryElementInList(*display_ranking, available));
-    DCHECK(
-        ElementIndexesAreUnchanged(*display_ranking, old_ranking, length - 1));
-    DCHECK(AtMostOneSlotChanged(old_ranking, *persisted_ranking, length - 1));
+    DCHECK(ElementIndexesAreUnchanged(*display_ranking, old_ranking, fold - 1));
+    DCHECK(AtMostOneSlotChanged(old_ranking, *persisted_ranking, fold - 1));
     DCHECK(NoEmptySlots(*display_ranking, length));
 
     DCHECK(RankingContains(*display_ranking, kMoreTarget));
@@ -454,7 +490,8 @@ void ShareRanking::OnRankGetAllDone(std::unique_ptr<PendingRankCall> pending,
                                     std::vector<ShareHistory::Target> history) {
   pending->all_history = history;
   if (pending->history_db) {
-    pending->history_db->GetFlatShareHistory(
+    auto history_db = pending->history_db;
+    history_db->GetFlatShareHistory(
         base::BindOnce(&ShareRanking::OnRankGetRecentDone,
                        weak_factory_.GetWeakPtr(), std::move(pending)),
         kRecentWindowDays);
@@ -466,7 +503,9 @@ void ShareRanking::OnRankGetRecentDone(
     std::unique_ptr<PendingRankCall> pending,
     std::vector<ShareHistory::Target> history) {
   pending->recent_history = history;
-  GetRanking(pending->type,
+  // Grab the type out of pending before std::move()ing from it.
+  std::string type = pending->type;
+  GetRanking(type,
              base::BindOnce(&ShareRanking::OnRankGetOldRankingDone,
                             weak_factory_.GetWeakPtr(), std::move(pending)));
 }
@@ -479,8 +518,8 @@ void ShareRanking::OnRankGetOldRankingDone(
   Ranking display, persisted;
   ComputeRanking(BuildHistoryMap(pending->all_history),
                  BuildHistoryMap(pending->recent_history), *ranking,
-                 pending->available_on_system, pending->length, &display,
-                 &persisted);
+                 pending->available_on_system, pending->fold, pending->length,
+                 &display, &persisted);
 
   if (pending->persist_update)
     UpdateRanking(pending->type, persisted);
@@ -490,18 +529,30 @@ void ShareRanking::OnRankGetOldRankingDone(
 
 ShareRanking::Ranking ShareRanking::GetDefaultInitialRankingForType(
     const std::string& type) {
+#if BUILDFLAG(IS_ANDROID)
+  // On Android, just use the app's default locale string - we don't have a pref
+  // locale to consult regardless, and l10n_util::GetApplicationLocale can do
+  // blocking disk IO (!) while it checks whether we have a string pack for the
+  // various eligible locales. We don't care about strings here, so just go with
+  // what the system is set to, and don't block on the UI thread.
+  std::string locale = base::android::GetDefaultLocaleString();
+#else
   std::string locale = l10n_util::GetApplicationLocale("", false);
+#endif
   return initial_ranking_for_test_.value_or(
       DefaultRankingForLocaleAndType(locale, type));
 }
 
 }  // namespace sharing
 
+#if BUILDFLAG(IS_ANDROID)
+
 void JNI_ShareRankingBridge_Rank(JNIEnv* env,
                                  const JavaParamRef<jobject>& jprofile,
                                  const JavaParamRef<jstring>& jtype,
                                  const JavaParamRef<jobjectArray>& javailable,
                                  jint jfold,
+                                 jint jlength,
                                  jboolean jpersist,
                                  const JavaParamRef<jobject>& jcallback) {
   base::android::ScopedJavaGlobalRef<jobject> callback(jcallback);
@@ -529,8 +580,10 @@ void JNI_ShareRankingBridge_Rank(JNIEnv* env,
                                                      &available);
 
   ranking->Rank(
-      history, type, available, jfold, jpersist,
+      history, type, available, jfold, jlength, jpersist,
       base::BindOnce(&sharing::RunJniRankCallback, std::move(callback),
                      // TODO(ellyjones): Is it safe to unretained env here?
                      base::Unretained(env)));
 }
+
+#endif  // BUILDFLAG(IS_ANDROID)

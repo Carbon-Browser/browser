@@ -11,13 +11,16 @@
 #include "base/callback.h"
 #include "base/clang_profiling_buildflags.h"
 #include "base/compiler_specific.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/observer_list.h"
-#include "base/single_thread_task_runner.h"
+#include "base/process/process_handle.h"
 #include "base/synchronization/atomic_flag.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/task/cancelable_task_tracker.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread.h"
+#include "base/time/time.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "components/viz/service/display_embedder/compositor_gpu_thread.h"
@@ -45,6 +48,10 @@
 #include "ui/gfx/gpu_extra_info.h"
 #include "ui/gfx/native_widget_types.h"
 
+#if BUILDFLAG(IS_WIN)
+#include "ui/gl/direct_composition_surface_win.h"
+#endif
+
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 namespace arc {
 class ProtectedBufferManager;
@@ -56,18 +63,15 @@ class GpuMemoryBufferFactory;
 class GpuWatchdogThread;
 class ImageDecodeAcceleratorWorker;
 class Scheduler;
-class SyncPointManager;
+class SharedContextState;
 class SharedImageManager;
+class SyncPointManager;
 class VulkanImplementation;
 }  // namespace gpu
 
 namespace media {
 class MediaGpuChannelManager;
-}
-
-namespace gpu {
-class SharedContextState;
-}  // namespace gpu
+}  // namespace media
 
 namespace viz {
 
@@ -85,8 +89,12 @@ enum class ExitCode {
 // This runs in the GPU process, and communicates with the gpu host (which is
 // the window server) over the mojom APIs. This is responsible for setting up
 // the connection to clients, allocating/free'ing gpu memory etc.
-class VIZ_SERVICE_EXPORT GpuServiceImpl : public gpu::GpuChannelManagerDelegate,
-                                          public mojom::GpuService {
+class VIZ_SERVICE_EXPORT GpuServiceImpl
+    : public gpu::GpuChannelManagerDelegate,
+#if BUILDFLAG(IS_WIN)
+      public gl::DirectCompositionOverlayCapsObserver,
+#endif
+      public mojom::GpuService {
  public:
   GpuServiceImpl(const gpu::GPUInfo& gpu_info,
                  std::unique_ptr<gpu::GpuWatchdogThread> watchdog,
@@ -99,6 +107,9 @@ class VIZ_SERVICE_EXPORT GpuServiceImpl : public gpu::GpuChannelManagerDelegate,
                  const gfx::GpuExtraInfo& gpu_extra_info,
                  gpu::VulkanImplementation* vulkan_implementation,
                  base::OnceCallback<void(ExitCode)> exit_callback);
+
+  GpuServiceImpl(const GpuServiceImpl&) = delete;
+  GpuServiceImpl& operator=(const GpuServiceImpl&) = delete;
 
   ~GpuServiceImpl() override;
 
@@ -122,6 +133,9 @@ class VIZ_SERVICE_EXPORT GpuServiceImpl : public gpu::GpuChannelManagerDelegate,
   // accordingly. This can safely be called from any thread.
   void DisableGpuCompositing();
 
+  // Set a closure to be called on each WakeUpGpu on the IO thread.
+  void SetWakeUpGpuClosure(base::RepeatingClosure closure);
+
   // mojom::GpuService:
   void EstablishGpuChannel(int32_t client_id,
                            uint64_t client_tracing_id,
@@ -132,9 +146,12 @@ class VIZ_SERVICE_EXPORT GpuServiceImpl : public gpu::GpuChannelManagerDelegate,
                            base::ProcessId client_pid) override;
   void CloseChannel(int32_t client_id) override;
 #if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(USE_CHROMEOS_MEDIA_ACCELERATION)
   void CreateArcVideoDecodeAccelerator(
       mojo::PendingReceiver<arc::mojom::VideoDecodeAccelerator> vda_receiver)
       override;
+  void CreateArcVideoDecoder(
+      mojo::PendingReceiver<arc::mojom::VideoDecoder> vd_receiver) override;
   void CreateArcVideoEncodeAccelerator(
       mojo::PendingReceiver<arc::mojom::VideoEncodeAccelerator> vea_receiver)
       override;
@@ -144,6 +161,7 @@ class VIZ_SERVICE_EXPORT GpuServiceImpl : public gpu::GpuChannelManagerDelegate,
   void CreateArcProtectedBufferManager(
       mojo::PendingReceiver<arc::mojom::ProtectedBufferManager> pbm_receiver)
       override;
+#endif  // BUILDFLAG(USE_CHROMEOS_MEDIA_ACCELERATION)
   void CreateJpegDecodeAccelerator(
       mojo::PendingReceiver<chromeos_camera::mojom::MjpegDecodeAccelerator>
           jda_receiver) override;
@@ -152,13 +170,13 @@ class VIZ_SERVICE_EXPORT GpuServiceImpl : public gpu::GpuChannelManagerDelegate,
           jea_receiver) override;
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   void RegisterDCOMPSurfaceHandle(
       mojo::PlatformHandle surface_handle,
       RegisterDCOMPSurfaceHandleCallback callback) override;
   void UnregisterDCOMPSurfaceHandle(
       const base::UnguessableToken& token) override;
-#endif  // defined(OS_WIN)
+#endif  // BUILDFLAG(IS_WIN)
 
   void CreateVideoEncodeAcceleratorProvider(
       mojo::PendingReceiver<media::mojom::VideoEncodeAcceleratorProvider>
@@ -181,8 +199,9 @@ class VIZ_SERVICE_EXPORT GpuServiceImpl : public gpu::GpuChannelManagerDelegate,
   void StartPeakMemoryMonitor(uint32_t sequence_num) override;
   void GetPeakMemoryUsage(uint32_t sequence_num,
                           GetPeakMemoryUsageCallback callback) override;
-
-  void RequestHDRStatus(RequestHDRStatusCallback callback) override;
+#if BUILDFLAG(IS_WIN)
+  void RequestDXGIInfo(RequestDXGIInfoCallback callback) override;
+#endif
   void LoadedShader(int32_t client_id,
                     const std::string& key,
                     const std::string& data) override;
@@ -195,11 +214,11 @@ class VIZ_SERVICE_EXPORT GpuServiceImpl : public gpu::GpuChannelManagerDelegate,
   void OnBackgroundCleanup() override;
   void OnBackgrounded() override;
   void OnForegrounded() override;
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
   void OnMemoryPressure(
       base::MemoryPressureListener::MemoryPressureLevel level) override;
 #endif
-#if defined(OS_APPLE)
+#if BUILDFLAG(IS_APPLE)
   void BeginCATransaction() override;
   void CommitCATransaction(CommitCATransactionCallback callback) override;
 #endif
@@ -223,10 +242,6 @@ class VIZ_SERVICE_EXPORT GpuServiceImpl : public gpu::GpuChannelManagerDelegate,
   void DidLoseContext(bool offscreen,
                       gpu::error::ContextLostReason reason,
                       const GURL& active_url) override;
-#if defined(OS_WIN)
-  void DidUpdateOverlayInfo(const gpu::OverlayInfo& overlay_info) override;
-  void DidUpdateHDRStatus(bool hdr_enabled) override;
-#endif
   void GetDawnInfo(GetDawnInfoCallback callback) override;
 
   void StoreShaderToDisk(int client_id,
@@ -238,9 +253,14 @@ class VIZ_SERVICE_EXPORT GpuServiceImpl : public gpu::GpuChannelManagerDelegate,
   bool IsExiting() const override;
   gpu::Scheduler* GetGpuScheduler() override;
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   void SendCreatedChildWindow(gpu::SurfaceHandle parent_window,
                               gpu::SurfaceHandle child_window) override;
+
+  // DirectCompositionOverlayCapsObserver implementation.
+  // Update overlay info and HDR status on the GPU process and send the updated
+  // info back to the browser process if there is a change.
+  void OnOverlayCapsChanged() override;
 #endif
 
   // Installs a base::LogMessageHandlerFunction which ensures messages are sent
@@ -343,6 +363,12 @@ class VIZ_SERVICE_EXPORT GpuServiceImpl : public gpu::GpuChannelManagerDelegate,
   DawnContextProvider* dawn_context_provider() { return nullptr; }
 #endif
 
+  base::ProcessId host_process_id() const { return host_process_id_; }
+
+#if BUILDFLAG(IS_ANDROID)
+  void SetHostProcessId(base::ProcessId pid);
+#endif
+
   using VisibilityChangedCallback =
       base::RepeatingCallback<void(bool /*visible*/)>;
   void SetVisibilityChangedCallback(VisibilityChangedCallback);
@@ -352,9 +378,11 @@ class VIZ_SERVICE_EXPORT GpuServiceImpl : public gpu::GpuChannelManagerDelegate,
                         const std::string& header,
                         const std::string& message);
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS_ASH) && BUILDFLAG(USE_CHROMEOS_MEDIA_ACCELERATION)
   void CreateArcVideoDecodeAcceleratorOnMainThread(
       mojo::PendingReceiver<arc::mojom::VideoDecodeAccelerator> vda_receiver);
+  void CreateArcVideoDecoderOnMainThread(
+      mojo::PendingReceiver<arc::mojom::VideoDecoder> vd_receiver);
   void CreateArcVideoEncodeAcceleratorOnMainThread(
       mojo::PendingReceiver<arc::mojom::VideoEncodeAccelerator> vea_receiver);
   void CreateArcVideoProtectedBufferAllocatorOnMainThread(
@@ -362,12 +390,18 @@ class VIZ_SERVICE_EXPORT GpuServiceImpl : public gpu::GpuChannelManagerDelegate,
           pba_receiver);
   void CreateArcProtectedBufferManagerOnMainThread(
       mojo::PendingReceiver<arc::mojom::ProtectedBufferManager> pbm_receiver);
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH) &&
+        // BUILDFLAG(USE_CHROMEOS_MEDIA_ACCELERATION)
 
-  void RequestHDRStatusOnMainThread(RequestHDRStatusCallback callback);
+#if BUILDFLAG(IS_WIN)
+  void RequestDXGIInfoOnMainThread(RequestDXGIInfoCallback callback);
+#endif
 
   void OnBackgroundedOnMainThread();
   void OnForegroundedOnMainThread();
+
+  void OnBackgroundCleanupGpuMainThread();
+  void OnBackgroundCleanupCompositorGpuThread();
 
   // Ensure that all peak memory tracking occurs on the main thread as all
   // MemoryTracker are created on that thread. All requests made before
@@ -376,10 +410,12 @@ class VIZ_SERVICE_EXPORT GpuServiceImpl : public gpu::GpuChannelManagerDelegate,
   void GetPeakMemoryUsageOnMainThread(uint32_t sequence_num,
                                       GetPeakMemoryUsageCallback callback);
 
+  void WakeUpGpuOnMainThread();
+
   // Update overlay info and HDR status on the GPU process and send the updated
   // info back to the browser process if there is a change.
-#if defined(OS_WIN)
-  void UpdateOverlayAndHDRInfo();
+#if BUILDFLAG(IS_WIN)
+  void UpdateOverlayAndDXGIInfo();
 #endif
 
   void GetDawnInfoOnMain(GetDawnInfoCallback callback);
@@ -397,11 +433,13 @@ class VIZ_SERVICE_EXPORT GpuServiceImpl : public gpu::GpuChannelManagerDelegate,
   gpu::GPUInfo gpu_info_;
 
   // Information about general chrome feature support for the GPU.
-  gpu::GpuFeatureInfo gpu_feature_info_;
+  const gpu::GpuFeatureInfo gpu_feature_info_;
 
   const gpu::GpuDriverBugWorkarounds gpu_driver_bug_workarounds_;
 
-  bool hdr_enabled_ = false;
+#if BUILDFLAG(IS_WIN)
+  gfx::mojom::DXGIInfoPtr dxgi_info_;
+#endif
 
   // What we would have gotten if we haven't fallen back to SwiftShader or
   // pure software (in the viz case).
@@ -427,7 +465,7 @@ class VIZ_SERVICE_EXPORT GpuServiceImpl : public gpu::GpuChannelManagerDelegate,
   std::unique_ptr<gpu::Scheduler> scheduler_;
 
 #if BUILDFLAG(ENABLE_VULKAN)
-  gpu::VulkanImplementation* vulkan_implementation_;
+  raw_ptr<gpu::VulkanImplementation> vulkan_implementation_;
   scoped_refptr<VulkanContextProvider> vulkan_context_provider_;
 #endif
   std::unique_ptr<MetalContextProvider> metal_context_provider_;
@@ -440,7 +478,7 @@ class VIZ_SERVICE_EXPORT GpuServiceImpl : public gpu::GpuChannelManagerDelegate,
   // An event that will be signalled when we shutdown. On some platforms it
   // comes from external sources.
   std::unique_ptr<base::WaitableEvent> owned_shutdown_event_;
-  base::WaitableEvent* shutdown_event_ = nullptr;
+  raw_ptr<base::WaitableEvent> shutdown_event_ = nullptr;
 
   // Callback that safely exits GPU process.
   base::OnceCallback<void(ExitCode)> exit_callback_;
@@ -458,19 +496,22 @@ class VIZ_SERVICE_EXPORT GpuServiceImpl : public gpu::GpuChannelManagerDelegate,
   // Should only be accessed on the IO thread after creation.
   mojo::Receiver<mojom::GpuService> receiver_{this};
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS_ASH) && BUILDFLAG(USE_CHROMEOS_MEDIA_ACCELERATION)
   scoped_refptr<arc::ProtectedBufferManager> protected_buffer_manager_;
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH) &&
+        // BUILDFLAG(USE_CHROMEOS_MEDIA_ACCELERATION)
 
   // Display compositor contexts that don't have a corresponding GPU channel.
   base::ObserverList<gpu::DisplayContext>::Unchecked display_contexts_;
 
   VisibilityChangedCallback visibility_changed_callback_;
 
+  base::ProcessId host_process_id_ = base::kNullProcessId;
+
+  base::RepeatingClosure wake_up_closure_;
+
   base::WeakPtr<GpuServiceImpl> weak_ptr_;
   base::WeakPtrFactory<GpuServiceImpl> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(GpuServiceImpl);
 };
 
 }  // namespace viz

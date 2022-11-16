@@ -7,35 +7,57 @@
  * 'nearby-share-data-usage-dialog' allows editing of the data usage setting
  * when using Nearby Share.
  */
-Polymer({
-  is: 'nearby-share-data-usage-dialog',
 
-  behaviors: [
-    I18nBehavior,
-    PrefsBehavior,
-  ],
+import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
+import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
+import 'chrome://resources/cr_elements/cr_radio_button/cr_radio_button.m.js';
+import 'chrome://resources/cr_elements/cr_radio_group/cr_radio_group.m.js';
 
-  properties: {
-    /** Preferences state. */
-    prefs: {
-      type: Object,
-      notify: true,
-    },
+import {I18nBehavior, I18nBehaviorInterface} from 'chrome://resources/js/i18n_behavior.m.js';
+import {html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-    /** @type {!Object<string, number>} */
-    NearbyShareDataUsage: {
-      type: Object,
-      value: NearbyShareDataUsage,
-    },
-  },
+import {getNearbyShareSettings} from '../../shared/nearby_share_settings.js';
+
+import {dataUsageStringToEnum, NearbyShareDataUsage} from './types.js';
+
+/**
+ * @constructor
+ * @extends {PolymerElement}
+ * @implements {I18nBehaviorInterface}
+ */
+const NearbyShareDataUsageDialogElementBase =
+    mixinBehaviors([I18nBehavior], PolymerElement);
+
+/** @polymer */
+class NearbyShareDataUsageDialogElement extends
+    NearbyShareDataUsageDialogElementBase {
+  static get is() {
+    return 'nearby-share-data-usage-dialog';
+  }
+
+  static get template() {
+    return html`{__html_template__}`;
+  }
+
+  static get properties() {
+    return {
+      /** @type {!Object<string, number>} */
+      NearbyShareDataUsage: {
+        type: Object,
+        value: NearbyShareDataUsage,
+      },
+    };
+  }
 
   /** @override */
-  attached() {
+  connectedCallback() {
+    super.connectedCallback();
+
     const dialog = /** @type {!CrDialogElement} */ (this.$.dialog);
     if (!dialog.open) {
       dialog.showModal();
     }
-  },
+  }
 
   /** @private */
   close() {
@@ -43,20 +65,19 @@ Polymer({
     if (dialog.open) {
       dialog.close();
     }
-  },
+  }
 
   /** @private */
   onCancelClick_() {
     this.close();
-  },
+  }
 
   /** @private */
   onSaveClick_() {
-    this.setPrefValue(
-        'nearby_sharing.data_usage',
-        dataUsageStringToEnum(this.$$('cr-radio-group').selected));
+    getNearbyShareSettings().setDataUsage((dataUsageStringToEnum(
+        this.shadowRoot.querySelector('cr-radio-group').selected)));
     this.close();
-  },
+  }
 
   /** @private */
   selectedDataUsage_(dataUsageValue) {
@@ -65,5 +86,8 @@ Polymer({
     }
 
     return dataUsageValue;
-  },
-});
+  }
+}
+
+customElements.define(
+    NearbyShareDataUsageDialogElement.is, NearbyShareDataUsageDialogElement);

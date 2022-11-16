@@ -7,6 +7,8 @@
 
 #include <vector>
 
+#include "base/observer_list.h"
+#include "base/observer_list_types.h"
 #include "chromeos/services/bluetooth_config/public/mojom/cros_bluetooth_config.mojom.h"
 
 namespace chromeos {
@@ -16,8 +18,6 @@ class AdapterStateController;
 
 // Caches known Bluetooth devices, providing getters and an observer interface
 // for receiving updates when devices change.
-//
-// TODO(khorimoto): Also add support for tracking non-paired devices.
 class DeviceCache {
  public:
   class Observer : public base::CheckedObserver {

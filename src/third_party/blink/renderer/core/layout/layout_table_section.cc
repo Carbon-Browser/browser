@@ -30,7 +30,6 @@
 #include <limits>
 #include "third_party/blink/renderer/core/frame/web_feature.h"
 #include "third_party/blink/renderer/core/layout/hit_test_result.h"
-#include "third_party/blink/renderer/core/layout/layout_analyzer.h"
 #include "third_party/blink/renderer/core/layout/layout_object_factory.h"
 #include "third_party/blink/renderer/core/layout/layout_table_cell.h"
 #include "third_party/blink/renderer/core/layout/layout_table_col.h"
@@ -127,8 +126,7 @@ void LayoutTableSection::StyleDidChange(StyleDifference diff,
   if (StyleRef().HasInFlowPosition()) {
     scoped_refptr<ComputedStyle> new_style = ComputedStyle::Clone(StyleRef());
     new_style->SetPosition(EPosition::kStatic);
-    SetModifiedStyleOutsideStyleRecalc(new_style,
-                                       LayoutObject::ApplyStyleChanges::kNo);
+    SetStyle(new_style, LayoutObject::ApplyStyleChanges::kNo);
   }
 
   LayoutTableBoxComponent::StyleDidChange(diff, old_style);
@@ -218,6 +216,9 @@ void LayoutTableSection::AddChild(LayoutObject* child,
 
   EnsureRows(c_row_);
 
+  // TODO(crbug.com/1345894): See the TODO in |LayoutTable::AddChild|.
+  // |LayoutNGTableRow| is not a subclass of |LayoutTableRow|.
+  CHECK(IsA<LayoutTableRow>(child));
   LayoutTableRow* row = To<LayoutTableRow>(child);
   grid_[insertion_row].row = row;
   row->SetRowIndex(insertion_row);
@@ -1011,7 +1012,6 @@ int LayoutTableSection::CalcRowLogicalHeight() {
 void LayoutTableSection::UpdateLayout() {
   NOT_DESTROYED();
   DCHECK(NeedsLayout());
-  LayoutAnalyzer::Scope analyzer(*this);
   CHECK(!NeedsCellRecalc());
   DCHECK(!Table()->NeedsSectionRecalc());
 
@@ -1211,8 +1211,6 @@ void LayoutTableSection::LayoutRows() {
 #endif
 
   DCHECK(!NeedsLayout());
-
-  LayoutAnalyzer::Scope analyzer(*this);
 
   // FIXME: Changing the height without a layout can change the overflow so it
   // seems wrong.
@@ -1869,7 +1867,7 @@ void LayoutTableSection::SplitEffectiveColumn(unsigned pos, unsigned first) {
 bool LayoutTableSection::NodeAtPoint(HitTestResult& result,
                                      const HitTestLocation& hit_test_location,
                                      const PhysicalOffset& accumulated_offset,
-                                     HitTestAction action) {
+                                     HitTestPhase phase) {
   NOT_DESTROYED();
   // If we have no children then we have nothing to do.
   if (!FirstRow())
@@ -1886,7 +1884,7 @@ bool LayoutTableSection::NodeAtPoint(HitTestResult& result,
       PhysicalOffset row_accumulated_offset =
           accumulated_offset + row->PhysicalLocation(this);
       if (row->NodeAtPoint(result, hit_test_location, row_accumulated_offset,
-                           action)) {
+                           phase)) {
         UpdateHitTestResult(result,
                             hit_test_location.Point() - accumulated_offset);
         return true;
@@ -1923,7 +1921,7 @@ bool LayoutTableSection::NodeAtPoint(HitTestResult& result,
         PhysicalOffset cell_accumulated_offset =
             accumulated_offset + cell->PhysicalLocation(this);
         if (static_cast<LayoutObject*>(cell)->NodeAtPoint(
-                result, hit_test_location, cell_accumulated_offset, action)) {
+                result, hit_test_location, cell_accumulated_offset, phase)) {
           UpdateHitTestResult(result,
                               hit_test_location.Point() - accumulated_offset);
           return true;
@@ -2176,9 +2174,9 @@ bool LayoutTableSection::MapToVisualRectInAncestorSpaceInternal(
   // enclosing LayoutFlowThread will convert to visual coordinates.
   if (IsRepeatingHeaderGroup() || IsRepeatingFooterGroup()) {
     transform_state.Flatten();
-    FloatRect rect = transform_state.LastPlanarQuad().BoundingBox();
-    rect.SetHeight(Table()->LogicalHeight());
-    transform_state.SetQuad(FloatQuad(rect));
+    gfx::RectF rect = transform_state.LastPlanarQuad().BoundingBox();
+    rect.set_height(Table()->LogicalHeight());
+    transform_state.SetQuad(gfx::QuadF(rect));
     return Table()->MapToVisualRectInAncestorSpaceInternal(
         ancestor, transform_state, flags);
   }

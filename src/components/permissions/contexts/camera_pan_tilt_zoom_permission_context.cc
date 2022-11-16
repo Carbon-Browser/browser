@@ -6,14 +6,33 @@
 
 #include "components/permissions/permission_manager.h"
 #include "components/permissions/permission_request_id.h"
+#include "components/permissions/permission_util.h"
 #include "components/permissions/permissions_client.h"
 #include "components/webrtc/media_stream_device_enumerator.h"
+#include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_thread.h"
+#include "content/public/browser/permission_controller.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
+#include "third_party/blink/public/common/permissions/permission_utils.h"
 #include "third_party/blink/public/mojom/permissions_policy/permissions_policy_feature.mojom-shared.h"
 
 namespace permissions {
+
+// TODO(crbug.com/1271543): This method is a temporary solution because of
+// inconsistency between the new permissions API that is migrated to
+// `blink::mojom::PermissionStatus` and its callsites that still use
+// `ContentSetting`.
+void CallbackWrapper(base::OnceCallback<void(ContentSetting)> callback,
+                     blink::mojom::PermissionStatus status) {
+  ContentSetting result = CONTENT_SETTING_ASK;
+  if (status == blink::mojom::PermissionStatus::GRANTED) {
+    result = CONTENT_SETTING_ALLOW;
+  } else if (status == blink::mojom::PermissionStatus::DENIED) {
+    result = CONTENT_SETTING_BLOCK;
+  }
+  std::move(callback).Run(result);
+}
 
 CameraPanTiltZoomPermissionContext::CameraPanTiltZoomPermissionContext(
     content::BrowserContext* browser_context,
@@ -36,7 +55,6 @@ CameraPanTiltZoomPermissionContext::~CameraPanTiltZoomPermissionContext() {
 }
 
 void CameraPanTiltZoomPermissionContext::RequestPermission(
-    content::WebContents* web_contents,
     const permissions::PermissionRequestID& id,
     const GURL& requesting_frame_origin,
     bool user_gesture,
@@ -44,22 +62,27 @@ void CameraPanTiltZoomPermissionContext::RequestPermission(
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
   if (HasAvailableCameraPtzDevices()) {
-    PermissionContextBase::RequestPermission(web_contents, id,
-                                             requesting_frame_origin,
+    PermissionContextBase::RequestPermission(id, requesting_frame_origin,
                                              user_gesture, std::move(callback));
     return;
   }
 
   // If there is no camera with PTZ capabilities, let's request a "regular"
   // camera permission instead.
-  content::RenderFrameHost* frame = content::RenderFrameHost::FromID(
-      id.render_process_id(), id.render_frame_id());
-  permissions::PermissionManager* permission_manager =
-      permissions::PermissionsClient::Get()->GetPermissionManager(
-          web_contents->GetBrowserContext());
-  permission_manager->RequestPermission(ContentSettingsType::MEDIASTREAM_CAMERA,
-                                        frame, requesting_frame_origin,
-                                        user_gesture, std::move(callback));
+  content::RenderFrameHost* render_frame_host =
+      content::RenderFrameHost::FromID(id.render_process_id(),
+                                       id.render_frame_id());
+
+  if (requesting_frame_origin !=
+      render_frame_host->GetLastCommittedOrigin().GetURL()) {
+    std::move(callback).Run(CONTENT_SETTING_BLOCK);
+    return;
+  }
+  render_frame_host->GetBrowserContext()
+      ->GetPermissionController()
+      ->RequestPermissionFromCurrentDocument(
+          blink::PermissionType::VIDEO_CAPTURE, render_frame_host, user_gesture,
+          base::BindOnce(&CallbackWrapper, std::move(callback)));
 }
 
 ContentSetting CameraPanTiltZoomPermissionContext::GetPermissionStatusInternal(
@@ -82,12 +105,12 @@ bool CameraPanTiltZoomPermissionContext::IsRestrictedToSecureOrigins() const {
 void CameraPanTiltZoomPermissionContext::OnContentSettingChanged(
     const ContentSettingsPattern& primary_pattern,
     const ContentSettingsPattern& secondary_pattern,
-    ContentSettingsType content_type) {
+    ContentSettingsTypeSet content_type_set) {
   PermissionContextBase::OnContentSettingChanged(
-      primary_pattern, secondary_pattern, content_type);
+      primary_pattern, secondary_pattern, content_type_set);
 
-  if (content_type != ContentSettingsType::MEDIASTREAM_CAMERA &&
-      content_type != ContentSettingsType::CAMERA_PAN_TILT_ZOOM) {
+  if (!content_type_set.Contains(ContentSettingsType::MEDIASTREAM_CAMERA) &&
+      !content_type_set.Contains(ContentSettingsType::CAMERA_PAN_TILT_ZOOM)) {
     return;
   }
 
@@ -118,7 +141,7 @@ void CameraPanTiltZoomPermissionContext::OnContentSettingChanged(
       host_content_settings_map_->GetContentSetting(url, url,
                                                     content_settings_type());
 
-  if (content_type == ContentSettingsType::CAMERA_PAN_TILT_ZOOM) {
+  if (content_type_set.Contains(ContentSettingsType::CAMERA_PAN_TILT_ZOOM)) {
     // Automatically update camera permission to camera PTZ permission as any
     // change to camera PTZ should be reflected to camera.
     updating_mediastream_camera_permission_ = true;
@@ -136,7 +159,8 @@ void CameraPanTiltZoomPermissionContext::OnContentSettingChanged(
   }
 
   ContentSetting mediastream_camera_setting =
-      host_content_settings_map_->GetContentSetting(url, url, content_type);
+      host_content_settings_map_->GetContentSetting(
+          url, url, ContentSettingsType::MEDIASTREAM_CAMERA);
   if (mediastream_camera_setting == CONTENT_SETTING_BLOCK ||
       mediastream_camera_setting == CONTENT_SETTING_ASK) {
     // Automatically reset camera PTZ permission if camera permission

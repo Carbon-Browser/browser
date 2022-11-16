@@ -90,7 +90,7 @@ bool WebInputMethodControllerImpl::SetComposition(
   if (range.IsNotNull()) {
     Node* node = range.StartPosition().ComputeContainerNode();
     GetFrame()->GetDocument()->UpdateStyleAndLayoutTree();
-    if (!node || !HasEditableStyle(*node))
+    if (!node || !IsEditable(*node))
       return false;
   }
 
@@ -224,8 +224,11 @@ WebRange WebInputMethodControllerImpl::CompositionRange() {
 
 bool WebInputMethodControllerImpl::GetCompositionCharacterBounds(
     WebVector<gfx::Rect>& bounds) {
-  if (IsEditContextActive())
-    return false;
+  if (IsEditContextActive()) {
+    return GetInputMethodController()
+        .GetActiveEditContext()
+        ->GetCompositionCharacterBounds(bounds);
+  }
 
   WebRange range = CompositionRange();
   if (range.IsEmpty())

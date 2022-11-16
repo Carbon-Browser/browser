@@ -4,8 +4,9 @@
 
 #import "ios/chrome/browser/ui/activity_services/activities/print_activity.h"
 
+#import "ios/chrome/browser/ui/activity_services/data/share_image_data.h"
 #import "ios/chrome/browser/ui/activity_services/data/share_to_data.h"
-#include "ios/chrome/browser/ui/commands/browser_commands.h"
+#import "ios/chrome/browser/ui/commands/browser_coordinator_commands.h"
 #include "ios/chrome/grit/ios_strings.h"
 #include "ui/base/l10n/l10n_util_mac.h"
 
@@ -20,20 +21,37 @@ NSString* const kPrintActivityType = @"com.google.chrome.printActivity";
 }  // namespace
 
 @interface PrintActivity ()
-// The data object targeted by this activity.
-@property(nonatomic, strong, readonly) ShareToData* data;
+// The data object targeted by this activity if it comes from a tab.
+@property(nonatomic, strong, readonly) ShareToData* webData;
+// The data object targeted by this activity if it comes from an image.
+@property(nonatomic, strong, readonly) ShareImageData* imageData;
 // The handler to be invoked when the activity is performed.
-@property(nonatomic, weak, readonly) id<BrowserCommands> handler;
+@property(nonatomic, weak, readonly) id<BrowserCoordinatorCommands> handler;
+// The base VC to present print preview.
+@property(nonatomic, weak) UIViewController* baseViewController;
 
 @end
 
 @implementation PrintActivity
 
-- (instancetype)initWithData:(ShareToData*)data
-                     handler:(id<BrowserCommands>)handler {
+- (instancetype)initWithData:(ShareToData*)webData
+                     handler:(id<BrowserCoordinatorCommands>)handler
+          baseViewController:(UIViewController*)baseViewController {
   if (self = [super init]) {
-    _data = data;
+    _webData = webData;
     _handler = handler;
+    _baseViewController = baseViewController;
+  }
+  return self;
+}
+
+- (instancetype)initWithImageData:(ShareImageData*)imageData
+                          handler:(id<BrowserCoordinatorCommands>)handler
+               baseViewController:(UIViewController*)baseViewController {
+  if (self = [super init]) {
+    _imageData = imageData;
+    _handler = handler;
+    _baseViewController = baseViewController;
   }
   return self;
 }
@@ -53,7 +71,11 @@ NSString* const kPrintActivityType = @"com.google.chrome.printActivity";
 }
 
 - (BOOL)canPerformWithActivityItems:(NSArray*)activityItems {
-  return self.data.isPagePrintable;
+  if (self.webData) {
+    return self.webData.isPagePrintable;
+  } else {
+    return self.imageData.image != nil;
+  }
 }
 
 - (void)prepareWithActivityItems:(NSArray*)activityItems {
@@ -72,7 +94,13 @@ NSString* const kPrintActivityType = @"com.google.chrome.printActivity";
   // parent VC.
   // To avoid this issue, dismiss first and present print after.
   [self activityDidFinish:YES];
-  [self.handler printTab];
+  if (self.webData) {
+    [self.handler printTabWithBaseViewController:self.baseViewController];
+  } else {
+    [self.handler printImage:self.imageData.image
+                       title:self.imageData.title
+          baseViewController:self.baseViewController];
+  }
 }
 
 @end

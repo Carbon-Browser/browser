@@ -13,7 +13,6 @@
 
 #include "base/callback_forward.h"
 #include "base/component_export.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "storage/browser/blob/blob_memory_controller.h"
@@ -35,6 +34,10 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) BlobEntry {
     ItemCopyEntry(scoped_refptr<ShareableBlobDataItem> source_item,
                   size_t source_item_offset,
                   scoped_refptr<ShareableBlobDataItem> dest_item);
+
+    ItemCopyEntry(const ItemCopyEntry&) = delete;
+    ItemCopyEntry& operator=(const ItemCopyEntry&) = delete;
+
     ~ItemCopyEntry();
     ItemCopyEntry(ItemCopyEntry&& other);
     BlobEntry::ItemCopyEntry& operator=(BlobEntry::ItemCopyEntry&& rhs);
@@ -42,9 +45,6 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) BlobEntry {
     scoped_refptr<ShareableBlobDataItem> source_item;
     size_t source_item_offset = 0;
     scoped_refptr<ShareableBlobDataItem> dest_item;
-
-   private:
-    DISALLOW_COPY_AND_ASSIGN(ItemCopyEntry);
   };
 
   // Building state for pending blobs. State can include:
@@ -58,6 +58,10 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) BlobEntry {
     BuildingState(bool transport_items_present,
                   TransportAllowedCallback transport_allowed_callback,
                   size_t num_building_dependent_blobs);
+
+    BuildingState(const BuildingState&) = delete;
+    BuildingState& operator=(const BuildingState&) = delete;
+
     ~BuildingState();
 
     // Cancels pending memory or file requests, and calls aborted callback if it
@@ -93,13 +97,14 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) BlobEntry {
     // When our blob is no longer in PENDING_CONSTRUCTION state these callbacks
     // are called.
     std::vector<BlobStatusCallback> build_started_callbacks;
-
-   private:
-    DISALLOW_COPY_AND_ASSIGN(BuildingState);
   };
 
   BlobEntry(const std::string& content_type,
             const std::string& content_disposition);
+
+  BlobEntry(const BlobEntry&) = delete;
+  BlobEntry& operator=(const BlobEntry&) = delete;
+
   ~BlobEntry();
 
   // Appends the given shared blob data item to this object.
@@ -170,8 +175,6 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) BlobEntry {
 
   // Only populated if our status is PENDING_*.
   std::unique_ptr<BuildingState> building_state_;
-
-  DISALLOW_COPY_AND_ASSIGN(BlobEntry);
 };
 
 }  // namespace storage

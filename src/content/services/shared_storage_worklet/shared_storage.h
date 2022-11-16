@@ -5,7 +5,7 @@
 #ifndef CONTENT_SERVICES_SHARED_STORAGE_WORKLET_SHARED_STORAGE_H_
 #define CONTENT_SERVICES_SHARED_STORAGE_WORKLET_SHARED_STORAGE_H_
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "content/services/shared_storage_worklet/public/mojom/shared_storage_worklet_service.mojom.h"
 #include "gin/object_template_builder.h"
 #include "gin/wrappable.h"
@@ -34,7 +34,8 @@ class SharedStorage final : public gin::Wrappable<SharedStorage> {
   v8::Local<v8::Promise> Delete(gin::Arguments* args);
   v8::Local<v8::Promise> Clear(gin::Arguments* args);
   v8::Local<v8::Promise> Get(gin::Arguments* args);
-  v8::Local<v8::Promise> Key(gin::Arguments* args);
+  v8::Local<v8::Object> Keys(gin::Arguments* args);
+  v8::Local<v8::Object> Entries(gin::Arguments* args);
   v8::Local<v8::Promise> Length(gin::Arguments* args);
 
   void OnVoidOperationFinished(
@@ -46,9 +47,9 @@ class SharedStorage final : public gin::Wrappable<SharedStorage> {
   void OnStringRetrievalOperationFinished(
       v8::Isolate* isolate,
       v8::Global<v8::Promise::Resolver> global_resolver,
-      bool success,
+      shared_storage_worklet::mojom::SharedStorageGetStatus status,
       const std::string& error_message,
-      const std::string& result);
+      const std::u16string& result);
 
   void OnLengthOperationFinished(
       v8::Isolate* isolate,
@@ -57,7 +58,7 @@ class SharedStorage final : public gin::Wrappable<SharedStorage> {
       const std::string& error_message,
       uint32_t length);
 
-  mojom::SharedStorageWorkletServiceClient* client_;
+  raw_ptr<mojom::SharedStorageWorkletServiceClient> client_;
 
   base::WeakPtrFactory<SharedStorage> weak_ptr_factory_{this};
 };

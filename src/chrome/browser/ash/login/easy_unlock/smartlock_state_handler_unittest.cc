@@ -10,8 +10,9 @@
 #include <string>
 #include <vector>
 
+#include "ash/components/proximity_auth/proximity_auth_pref_manager.h"
+#include "ash/components/proximity_auth/screenlock_bridge.h"
 #include "ash/public/cpp/smartlock_state.h"
-#include "base/macros.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
@@ -19,8 +20,6 @@
 #include "chrome/browser/ash/login/easy_unlock/easy_unlock_metrics.h"
 #include "chrome/browser/ash/login/easy_unlock/easy_unlock_service.h"
 #include "chrome/grit/generated_resources.h"
-#include "chromeos/components/proximity_auth/proximity_auth_pref_manager.h"
-#include "chromeos/components/proximity_auth/screenlock_bridge.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/l10n/l10n_util.h"
 
@@ -39,6 +38,11 @@ class FakeProximityAuthPrefManager
     : public proximity_auth::ProximityAuthPrefManager {
  public:
   FakeProximityAuthPrefManager() = default;
+
+  FakeProximityAuthPrefManager(const FakeProximityAuthPrefManager&) = delete;
+  FakeProximityAuthPrefManager& operator=(const FakeProximityAuthPrefManager&) =
+      delete;
+
   ~FakeProximityAuthPrefManager() override = default;
 
   // proximity_auth::ProximityAuthPrefManager:
@@ -70,8 +74,6 @@ class FakeProximityAuthPrefManager
 
  private:
   bool has_shown_login_disabled_message_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(FakeProximityAuthPrefManager);
 };
 
 // Checks if `input` string has any unreplaced placeholders.
@@ -92,6 +94,10 @@ class TestLockHandler : public proximity_auth::ScreenlockBridge::LockHandler {
       : account_id_(account_id),
         show_icon_count_(0u),
         auth_type_(proximity_auth::mojom::AuthType::OFFLINE_PASSWORD) {}
+
+  TestLockHandler(const TestLockHandler&) = delete;
+  TestLockHandler& operator=(const TestLockHandler&) = delete;
+
   ~TestLockHandler() override {}
 
   // proximity_auth::ScreenlockBridge::LockHandler implementation:
@@ -157,6 +163,20 @@ class TestLockHandler : public proximity_auth::ScreenlockBridge::LockHandler {
     ASSERT_FALSE(true) << "Should not be reached.";
   }
 
+  // These Smart Lock methods were added as part of the new state management
+  // plumbing for the UI revamp. These methods must be implemented but should
+  // not be called when the revamp is flagged off and the SmartLockStateHandler
+  // is being used, since the SmartLockStateHandler is deprecated with this new
+  // state management system.
+  void SetSmartLockState(const AccountId& account_id,
+                         ash::SmartLockState state) override {
+    GTEST_FAIL();
+  }
+
+  void NotifySmartLockAuthResult(const AccountId& account_id,
+                                 bool successful) override {
+    GTEST_FAIL();
+  }
   // Utility methods used by tests:
 
   // Gets last set auth value.
@@ -181,39 +201,46 @@ class TestLockHandler : public proximity_auth::ScreenlockBridge::LockHandler {
   // string.
   std::string GetCustomIconId() const {
     std::string result;
-    if (last_custom_icon_)
-      last_custom_icon_->GetString("id", &result);
+    if (last_custom_icon_) {
+      const std::string* result_ptr = last_custom_icon_->FindStringKey("id");
+      if (result_ptr)
+        result = *result_ptr;
+    }
     return result;
   }
 
   // Whether the custom icon is set and it has a tooltip.
   bool CustomIconHasTooltip() const {
-    return last_custom_icon_ && last_custom_icon_->HasKey("tooltip");
+    return last_custom_icon_ && last_custom_icon_->FindKey("tooltip");
   }
 
   // Gets the custom icon's tooltip text, if one is set.
   std::u16string GetCustomIconTooltip() const {
     std::u16string result;
-    if (last_custom_icon_)
-      last_custom_icon_->GetString("tooltip.text", &result);
+    if (last_custom_icon_) {
+      const std::string* result_ptr =
+          last_custom_icon_->FindStringPath("tooltip.text");
+      if (result_ptr)
+        result = base::UTF8ToUTF16(*result_ptr);
+    }
     return result;
   }
 
   // Whether the custom icon's tooltip should be autoshown. If the icon is not
   // set, or it doesn't have a tooltip, returns false.
   bool IsCustomIconTooltipAutoshown() const {
-    bool result = false;
-    if (last_custom_icon_)
-      last_custom_icon_->GetBoolean("tooltip.autoshow", &result);
-    return result;
+    if (!last_custom_icon_)
+      return false;
+
+    return last_custom_icon_->FindBoolPath("tooltip.autoshow").value_or(false);
   }
 
   // Whether the custom icon is set and if has hardlock capability enabed.
   bool CustomIconHardlocksOnClick() const {
-    bool result = false;
-    if (last_custom_icon_)
-      last_custom_icon_->GetBoolean("hardlockOnClick", &result);
-    return result;
+    if (!last_custom_icon_)
+      return false;
+
+    return last_custom_icon_->FindBoolKey("hardlockOnClick").value_or(false);
   }
 
  private:
@@ -222,11 +249,14 @@ class TestLockHandler : public proximity_auth::ScreenlockBridge::LockHandler {
   void ValidateCustomIcon() {
     ASSERT_TRUE(last_custom_icon_.get());
 
-    EXPECT_TRUE(last_custom_icon_->HasKey("id"));
+    EXPECT_TRUE(last_custom_icon_->FindKey("id") != nullptr);
 
-    if (last_custom_icon_->HasKey("tooltip")) {
+    if (last_custom_icon_->FindKey("tooltip")) {
       std::u16string tooltip;
-      EXPECT_TRUE(last_custom_icon_->GetString("tooltip.text", &tooltip));
+      const std::string* tooltip_ptr =
+          last_custom_icon_->FindStringPath("tooltip.text");
+      EXPECT_TRUE(tooltip_ptr);
+      tooltip = base::UTF8ToUTF16(*tooltip_ptr);
       EXPECT_FALSE(tooltip.empty());
       EXPECT_FALSE(StringHasPlaceholders(tooltip));
     }
@@ -244,8 +274,6 @@ class TestLockHandler : public proximity_auth::ScreenlockBridge::LockHandler {
   // Auth type and value set using `SetAuthType`.
   proximity_auth::mojom::AuthType auth_type_;
   std::u16string auth_value_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestLockHandler);
 };
 
 class SmartLockStateHandlerTest : public testing::Test {

@@ -4,13 +4,18 @@
 
 #include "components/sync/driver/sync_user_settings_impl.h"
 
+#include <utility>
+
+#include "base/feature_list.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/version.h"
 #include "build/chromeos_buildflags.h"
+#include "components/sync/base/features.h"
 #include "components/sync/base/sync_prefs.h"
 #include "components/sync/base/user_selectable_type.h"
 #include "components/sync/driver/sync_service_crypto.h"
+#include "components/sync/engine/nigori/nigori.h"
 #include "components/version_info/version_info.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -21,7 +26,10 @@ namespace syncer {
 
 namespace {
 
-ModelTypeSet ResolvePreferredTypes(UserSelectableTypeSet selected_types) {
+// Converts |selected_types| to the corresponding ModelTypeSet (e.g.
+// {kExtensions} becomes {EXTENSIONS, EXTENSION_SETTINGS}).
+ModelTypeSet UserSelectableTypesToModelTypes(
+    UserSelectableTypeSet selected_types) {
   ModelTypeSet preferred_types;
   for (UserSelectableType type : selected_types) {
     preferred_types.PutAll(UserSelectableTypeToAllModelTypes(type));
@@ -30,7 +38,8 @@ ModelTypeSet ResolvePreferredTypes(UserSelectableTypeSet selected_types) {
 }
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-ModelTypeSet ResolvePreferredOsTypes(UserSelectableOsTypeSet selected_types) {
+ModelTypeSet UserSelectableOsTypesToModelTypes(
+    UserSelectableOsTypeSet selected_types) {
   ModelTypeSet preferred_types;
   for (UserSelectableOsType type : selected_types) {
     preferred_types.PutAll(UserSelectableOsTypeToAllModelTypes(type));
@@ -88,6 +97,19 @@ bool SyncUserSettingsImpl::IsSyncEverythingEnabled() const {
 UserSelectableTypeSet SyncUserSettingsImpl::GetSelectedTypes() const {
   UserSelectableTypeSet types = prefs_->GetSelectedTypes();
   types.RetainAll(GetRegisteredSelectableTypes());
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  if (base::FeatureList::IsEnabled(kSyncChromeOSAppsToggleSharing) &&
+      GetRegisteredSelectableTypes().Has(UserSelectableType::kApps)) {
+    // Apps sync is controlled by dedicated preference on Lacros, corresponding
+    // to Apps toggle in OS Sync settings.
+    types.Remove(UserSelectableType::kApps);
+    if (prefs_->IsAppsSyncEnabledByOs()) {
+      types.Put(UserSelectableType::kApps);
+    }
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+
   return types;
 }
 
@@ -104,26 +126,25 @@ UserSelectableTypeSet SyncUserSettingsImpl::GetRegisteredSelectableTypes()
     const {
   UserSelectableTypeSet registered_types;
   for (UserSelectableType type : UserSelectableTypeSet::All()) {
-    if (registered_model_types_.Has(
-            UserSelectableTypeToCanonicalModelType(type))) {
+    if (!base::Intersection(registered_model_types_,
+                            UserSelectableTypeToAllModelTypes(type))
+             .Empty()) {
       registered_types.Put(type);
     }
   }
+  // TODO(crbug.com/1330894): Apps datatypes shouldn't be registered on
+  // secondary Lacros profiles.
   return registered_types;
 }
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 bool SyncUserSettingsImpl::IsSyncAllOsTypesEnabled() const {
-  // TODO(https://crbug.com/1227417): Remove SplitSettingsSync from this check.
-  DCHECK(chromeos::features::IsSplitSettingsSyncEnabled() ||
-         chromeos::features::IsSyncSettingsCategorizationEnabled());
+  DCHECK(chromeos::features::IsSyncSettingsCategorizationEnabled());
   return prefs_->IsSyncAllOsTypesEnabled();
 }
 
 UserSelectableOsTypeSet SyncUserSettingsImpl::GetSelectedOsTypes() const {
-  // TODO(https://crbug.com/1227417): Remove SplitSettingsSync from this check.
-  DCHECK(chromeos::features::IsSplitSettingsSyncEnabled() ||
-         chromeos::features::IsSyncSettingsCategorizationEnabled());
+  DCHECK(chromeos::features::IsSyncSettingsCategorizationEnabled());
   UserSelectableOsTypeSet types = prefs_->GetSelectedOsTypes();
   types.RetainAll(GetRegisteredSelectableOsTypes());
   return types;
@@ -131,9 +152,7 @@ UserSelectableOsTypeSet SyncUserSettingsImpl::GetSelectedOsTypes() const {
 
 void SyncUserSettingsImpl::SetSelectedOsTypes(bool sync_all_os_types,
                                               UserSelectableOsTypeSet types) {
-  // TODO(https://crbug.com/1227417): Remove SplitSettingsSync from this check.
-  DCHECK(chromeos::features::IsSplitSettingsSyncEnabled() ||
-         chromeos::features::IsSyncSettingsCategorizationEnabled());
+  DCHECK(chromeos::features::IsSyncSettingsCategorizationEnabled());
   UserSelectableOsTypeSet registered_types = GetRegisteredSelectableOsTypes();
   DCHECK(registered_types.HasAll(types));
   prefs_->SetSelectedOsTypes(sync_all_os_types, registered_types, types);
@@ -141,33 +160,25 @@ void SyncUserSettingsImpl::SetSelectedOsTypes(bool sync_all_os_types,
 
 UserSelectableOsTypeSet SyncUserSettingsImpl::GetRegisteredSelectableOsTypes()
     const {
-  // TODO(https://crbug.com/1227417): Remove SplitSettingsSync from this check.
-  DCHECK(chromeos::features::IsSplitSettingsSyncEnabled() ||
-         chromeos::features::IsSyncSettingsCategorizationEnabled());
+  DCHECK(chromeos::features::IsSyncSettingsCategorizationEnabled());
   UserSelectableOsTypeSet registered_types;
   for (UserSelectableOsType type : UserSelectableOsTypeSet::All()) {
-    if (registered_model_types_.Has(
-            UserSelectableOsTypeToCanonicalModelType(type))) {
+    if (!base::Intersection(registered_model_types_,
+                            UserSelectableOsTypeToAllModelTypes(type))
+             .Empty()) {
       registered_types.Put(type);
     }
   }
   return registered_types;
 }
-
-bool SyncUserSettingsImpl::IsOsSyncFeatureEnabled() const {
-  // TODO(https://crbug.com/1227417): Remove SplitSettingsSync from this check.
-  DCHECK(chromeos::features::IsSplitSettingsSyncEnabled() ||
-         chromeos::features::IsSyncSettingsCategorizationEnabled());
-  return prefs_->IsOsSyncFeatureEnabled();
-}
-
-void SyncUserSettingsImpl::SetOsSyncFeatureEnabled(bool enabled) {
-  DCHECK(chromeos::features::IsSyncSettingsCategorizationEnabled());
-  // OsSyncFeature can't be disabled unless SyncConsentOptional is on.
-  DCHECK(enabled || chromeos::features::IsSyncConsentOptionalEnabled());
-  prefs_->SetOsSyncFeatureEnabled(enabled);
-}
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+void SyncUserSettingsImpl::SetAppsSyncEnabledByOs(bool apps_sync_enabled) {
+  DCHECK(base::FeatureList::IsEnabled(kSyncChromeOSAppsToggleSharing));
+  prefs_->SetAppsSyncEnabledByOs(apps_sync_enabled);
+}
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 
 bool SyncUserSettingsImpl::IsCustomPassphraseAllowed() const {
   return !preference_provider_ ||
@@ -242,23 +253,30 @@ bool SyncUserSettingsImpl::SetDecryptionPassphrase(
   return crypto_->SetDecryptionPassphrase(passphrase);
 }
 
+void SyncUserSettingsImpl::SetDecryptionNigoriKey(
+    std::unique_ptr<Nigori> nigori) {
+  return crypto_->SetDecryptionNigoriKey(std::move(nigori));
+}
+
+std::unique_ptr<Nigori> SyncUserSettingsImpl::GetDecryptionNigoriKey() const {
+  return crypto_->GetDecryptionNigoriKey();
+}
+
 void SyncUserSettingsImpl::SetSyncRequestedIfNotSetExplicitly() {
   prefs_->SetSyncRequestedIfNotSetExplicitly();
 }
 
 ModelTypeSet SyncUserSettingsImpl::GetPreferredDataTypes() const {
-  ModelTypeSet types = ResolvePreferredTypes(GetSelectedTypes());
+  ModelTypeSet types = UserSelectableTypesToModelTypes(GetSelectedTypes());
   types.PutAll(AlwaysPreferredUserTypes());
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  // TODO(https://crbug.com/1227417): Remove SplitSettingsSync from this check.
-  if (chromeos::features::IsSplitSettingsSyncEnabled() ||
-      chromeos::features::IsSyncSettingsCategorizationEnabled()) {
-    types.PutAll(ResolvePreferredOsTypes(GetSelectedOsTypes()));
+  if (chromeos::features::IsSyncSettingsCategorizationEnabled()) {
+    types.PutAll(UserSelectableOsTypesToModelTypes(GetSelectedOsTypes()));
   }
 #endif
   types.RetainAll(registered_model_types_);
 
-  static_assert(38 == GetNumModelTypes(),
+  static_assert(40 == GetNumModelTypes(),
                 "If adding a new sync data type, update the list below below if"
                 " you want to disable the new data type for local sync.");
   types.PutAll(ControlTypes());
@@ -284,12 +302,6 @@ bool SyncUserSettingsImpl::IsEncryptedDatatypeEnabled() const {
   const ModelTypeSet encrypted_types = GetEncryptedDataTypes();
   DCHECK(encrypted_types.HasAll(AlwaysEncryptedUserTypes()));
   return !Intersection(preferred_types, encrypted_types).Empty();
-}
-
-// static
-ModelTypeSet SyncUserSettingsImpl::ResolvePreferredTypesForTesting(
-    UserSelectableTypeSet selected_types) {
-  return ResolvePreferredTypes(selected_types);
 }
 
 }  // namespace syncer

@@ -8,8 +8,10 @@
 #include <utility>
 #include <vector>
 
+#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/time/time.h"
 #include "base/unguessable_token.h"
-#include "chromeos/services/assistant/public/cpp/assistant_service.h"
+#include "chromeos/ash/services/assistant/public/cpp/assistant_service.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -29,6 +31,11 @@ using chromeos::assistant::AssistantSuggestion;
 class LibassistantContractChecker : public AssistantInteractionSubscriber {
  public:
   LibassistantContractChecker() = default;
+
+  LibassistantContractChecker(const LibassistantContractChecker&) = delete;
+  LibassistantContractChecker& operator=(const LibassistantContractChecker&) =
+      delete;
+
   ~LibassistantContractChecker() override = default;
 
   // DefaultAssistantInteractionSubscriber implementation:
@@ -88,8 +95,6 @@ class LibassistantContractChecker : public AssistantInteractionSubscriber {
   };
 
   ConversationState current_state_ = ConversationState::kNotStarted;
-
-  DISALLOW_COPY_AND_ASSIGN(LibassistantContractChecker);
 };
 
 // Subscriber that tracks the current interaction.
@@ -133,6 +138,10 @@ class InteractionResponse::Response {
 class TextResponse : public InteractionResponse::Response {
  public:
   explicit TextResponse(const std::string& text) : text_(text) {}
+
+  TextResponse(const TextResponse&) = delete;
+  TextResponse& operator=(const TextResponse&) = delete;
+
   ~TextResponse() override = default;
 
   void SendTo(
@@ -142,8 +151,6 @@ class TextResponse : public InteractionResponse::Response {
 
  private:
   std::string text_;
-
-  DISALLOW_COPY_AND_ASSIGN(TextResponse);
 };
 
 class SuggestionsResponse : public InteractionResponse::Response {
@@ -173,6 +180,10 @@ class ResolutionResponse : public InteractionResponse::Response {
 
   explicit ResolutionResponse(Resolution resolution)
       : resolution_(resolution) {}
+
+  ResolutionResponse(const ResolutionResponse&) = delete;
+  ResolutionResponse& operator=(const ResolutionResponse&) = delete;
+
   ~ResolutionResponse() override = default;
 
   void SendTo(
@@ -182,8 +193,6 @@ class ResolutionResponse : public InteractionResponse::Response {
 
  private:
   Resolution resolution_;
-
-  DISALLOW_COPY_AND_ASSIGN(ResolutionResponse);
 };
 
 TestAssistantService::TestAssistantService()
@@ -211,7 +220,6 @@ void TestAssistantService::StartEditReminderInteraction(
     const std::string& client_id) {}
 
 void TestAssistantService::StartScreenContextInteraction(
-    ax::mojom::AssistantStructurePtr assistant_structure,
     const std::vector<uint8_t>& assistant_screenshot) {}
 
 void TestAssistantService::StartTextInteraction(
@@ -219,14 +227,10 @@ void TestAssistantService::StartTextInteraction(
     chromeos::assistant::AssistantQuerySource source,
     bool allow_tts) {
   StartInteraction(AssistantInteractionType::kText, source, query);
-  if (interaction_response_)
-    SendInteractionResponse();
 }
 
 void TestAssistantService::StartVoiceInteraction() {
   StartInteraction(AssistantInteractionType::kVoice);
-  if (interaction_response_)
-    SendInteractionResponse();
 }
 
 void TestAssistantService::StopActiveInteraction(bool cancel_conversation) {
@@ -286,12 +290,30 @@ void TestAssistantService::StartInteraction(
     chromeos::assistant::AssistantInteractionType type,
     chromeos::assistant::AssistantQuerySource source,
     const std::string& query) {
+  if (running_active_interaction_) {
+    StopActiveInteraction(/*cancel_conversation=*/false);
+  }
+
+  // Pretend to respond asynchronously.
+  base::SequencedTaskRunnerHandle::Get()->PostTask(
+      FROM_HERE,
+      base::BindOnce(&TestAssistantService::InteractionStarted,
+                     weak_factory_.GetWeakPtr(), type, source, query));
+}
+
+void TestAssistantService::InteractionStarted(
+    chromeos::assistant::AssistantInteractionType type,
+    chromeos::assistant::AssistantQuerySource source,
+    const std::string& query) {
   DCHECK(!running_active_interaction_);
   AssistantInteractionMetadata metadata{type, source, query};
   for (auto& subscriber : interaction_subscribers_) {
     subscriber.OnInteractionStarted(metadata);
   }
   running_active_interaction_ = true;
+
+  if (interaction_response_)
+    SendInteractionResponse();
 }
 
 void TestAssistantService::SendInteractionResponse() {

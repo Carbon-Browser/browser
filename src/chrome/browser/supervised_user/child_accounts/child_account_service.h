@@ -10,7 +10,7 @@
 
 #include "base/callback_forward.h"
 #include "base/callback_list.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
@@ -35,6 +35,9 @@ class ChildAccountService : public KeyedService,
                             public SupervisedUserService::Delegate {
  public:
   enum class AuthState { AUTHENTICATED, NOT_AUTHENTICATED, PENDING };
+
+  ChildAccountService(const ChildAccountService&) = delete;
+  ChildAccountService& operator=(const ChildAccountService&) = delete;
 
   ~ChildAccountService() override;
 
@@ -65,6 +68,7 @@ class ChildAccountService : public KeyedService,
       const base::RepeatingCallback<void()>& callback);
 
  private:
+  friend class ChildAccountServiceTest;
   friend class ChildAccountServiceFactory;
   // Use |ChildAccountServiceFactory::GetForProfile(...)| to get an instance of
   // this service.
@@ -96,7 +100,11 @@ class ChildAccountService : public KeyedService,
   void CancelFetchingFamilyInfo();
   void ScheduleNextFamilyInfoUpdate(base::TimeDelta delay);
 
-  void PropagateChildStatusToUser(bool is_child);
+  // Asserts that `is_child` matches the child status of the primary user.
+  // Terminates user session in case of status mismatch in order to prevent
+  // supervision incidents. Relevant on Chrome OS platform that has the concept
+  // of the user.
+  void AssertChildStatusOfTheUser(bool is_child);
 
   void SetFirstCustodianPrefs(const FamilyInfoFetcher::FamilyMember& custodian);
   void SetSecondCustodianPrefs(
@@ -105,7 +113,7 @@ class ChildAccountService : public KeyedService,
   void ClearSecondCustodianPrefs();
 
   // Owns us via the KeyedService mechanism.
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
 
   bool active_;
 
@@ -114,7 +122,7 @@ class ChildAccountService : public KeyedService,
   base::OneShotTimer family_fetch_timer_;
   net::BackoffEntry family_fetch_backoff_;
 
-  signin::IdentityManager* identity_manager_;
+  raw_ptr<signin::IdentityManager> identity_manager_;
 
   base::RepeatingClosureList google_auth_state_observers_;
 
@@ -122,8 +130,6 @@ class ChildAccountService : public KeyedService,
   std::vector<base::OnceClosure> status_received_callback_list_;
 
   base::WeakPtrFactory<ChildAccountService> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ChildAccountService);
 };
 
 #endif  // CHROME_BROWSER_SUPERVISED_USER_CHILD_ACCOUNTS_CHILD_ACCOUNT_SERVICE_H_

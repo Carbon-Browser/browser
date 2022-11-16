@@ -4,7 +4,6 @@
 
 #include "content/web_test/renderer/accessibility_controller.h"
 
-#include "base/cxx17_backports.h"
 #include "content/web_test/renderer/web_frame_test_proxy.h"
 #include "gin/handle.h"
 #include "gin/object_template_builder.h"
@@ -25,6 +24,11 @@ class AccessibilityControllerBindings
     : public gin::Wrappable<AccessibilityControllerBindings> {
  public:
   static gin::WrapperInfo kWrapperInfo;
+
+  AccessibilityControllerBindings(const AccessibilityControllerBindings&) =
+      delete;
+  AccessibilityControllerBindings& operator=(
+      const AccessibilityControllerBindings&) = delete;
 
   static void Install(base::WeakPtr<AccessibilityController> controller,
                       blink::WebLocalFrame* frame);
@@ -48,8 +52,6 @@ class AccessibilityControllerBindings
   void Reset();
 
   base::WeakPtr<AccessibilityController> controller_;
-
-  DISALLOW_COPY_AND_ASSIGN(AccessibilityControllerBindings);
 };
 
 gin::WrapperInfo AccessibilityControllerBindings::kWrapperInfo = {
@@ -232,7 +234,7 @@ void AccessibilityController::PostNotification(
   };
   local_frame->CallFunctionEvenIfScriptDisabled(
       v8::Local<v8::Function>::New(isolate, notification_callback_),
-      context->Global(), base::size(argv), argv);
+      context->Global(), std::size(argv), argv);
 }
 
 void AccessibilityController::LogAccessibilityEvents() {

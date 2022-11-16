@@ -54,7 +54,7 @@
 }
 
 + (BOOL)fieldTrialExistsForTestSeed {
-  return base::FieldTrialList::TrialExists(variations::kTestSeedStudyName);
+  return variations::FieldTrialListHasAllStudiesFrom(variations::kTestSeedData);
 }
 
 + (BOOL)hasSafeSeed {
@@ -66,10 +66,14 @@
 
 + (void)setTestSafeSeedAndSignature {
   PrefService* prefService = GetApplicationContext()->GetLocalState();
-  prefService->SetString(variations::prefs::kVariationsSafeCompressedSeed,
-                         variations::kCompressedBase64TestSeedData);
-  prefService->SetString(variations::prefs::kVariationsSafeSeedSignature,
-                         variations::kBase64TestSeedSignature);
+  variations::WriteSeedData(prefService, variations::kTestSeedData,
+                            variations::kSafeSeedPrefKeys);
+}
+
++ (void)setCrashingRegularSeedAndSignature {
+  PrefService* prefService = GetApplicationContext()->GetLocalState();
+  variations::WriteSeedData(prefService, variations::kCrashingSeedData,
+                            variations::kRegularSeedPrefKeys);
 }
 
 + (int)crashStreak {

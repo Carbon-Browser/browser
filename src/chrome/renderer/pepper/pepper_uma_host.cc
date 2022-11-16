@@ -75,11 +75,11 @@ PepperUMAHost::PepperUMAHost(content::RendererPpapiHost* host,
         host->GetPluginInstance(instance)->GetModulePath().BaseName();
   }
 
-  for (size_t i = 0; i < base::size(kPredefinedAllowedUMAOrigins); ++i)
+  for (size_t i = 0; i < std::size(kPredefinedAllowedUMAOrigins); ++i)
     allowed_origins_.insert(kPredefinedAllowedUMAOrigins[i]);
-  for (size_t i = 0; i < base::size(kAllowedHistogramPrefixes); ++i)
+  for (size_t i = 0; i < std::size(kAllowedHistogramPrefixes); ++i)
     allowed_histogram_prefixes_.insert(kAllowedHistogramPrefixes[i]);
-  for (size_t i = 0; i < base::size(kAllowedPluginBaseNames); ++i)
+  for (size_t i = 0; i < std::size(kAllowedPluginBaseNames); ++i)
     allowed_plugin_base_names_.insert(kAllowedPluginBaseNames[i]);
 }
 
@@ -147,15 +147,12 @@ int32_t PepperUMAHost::OnHistogramCustomTimes(
   RETURN_IF_BAD_ARGS(min, max, bucket_count);
 
   base::HistogramBase* counter = base::Histogram::FactoryTimeGet(
-      name,
-      base::TimeDelta::FromMilliseconds(min),
-      base::TimeDelta::FromMilliseconds(max),
-      bucket_count,
+      name, base::Milliseconds(min), base::Milliseconds(max), bucket_count,
       base::HistogramBase::kUmaTargetedHistogramFlag);
   // The histogram can be NULL if it is constructed with bad arguments.  Ignore
   // that data for this API.  An error message will be logged.
   if (counter)
-    counter->AddTime(base::TimeDelta::FromMilliseconds(sample));
+    counter->AddTime(base::Milliseconds(sample));
   return PP_OK;
 }
 

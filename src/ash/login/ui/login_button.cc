@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "ash/login/ui/views_utils.h"
+#include "ash/style/ash_color_provider.h"
 #include "base/bind.h"
 #include "ui/views/animation/flood_fill_ink_drop_ripple.h"
 #include "ui/views/animation/ink_drop.h"
@@ -53,6 +54,7 @@ LoginButton::LoginButton(PressedCallback callback)
       this));
 
   SetInstallFocusRingOnFocus(true);
+  views::FocusRing::Get(this)->SetColorId(ui::kColorAshFocusRing);
   login_views_utils::ConfigureRectFocusRingCircleInkDrop(
       this, views::FocusRing::Get(this), absl::nullopt);
 }

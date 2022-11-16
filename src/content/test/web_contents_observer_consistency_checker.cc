@@ -25,6 +25,7 @@
 #include "content/public/browser/web_contents_observer.h"
 #include "content/public/test/test_utils.h"
 #include "net/base/net_errors.h"
+#include "third_party/blink/public/common/frame/frame_owner_element_type.h"
 
 namespace content {
 
@@ -65,9 +66,6 @@ void WebContentsObserverConsistencyChecker::RenderFrameCreated(
                  << Format(render_frame_host);
   }
 
-  CHECK(render_frame_host->IsRenderFrameCreated())
-      << "RenderFrameCreated was called for a RenderFrameHost that has not been"
-         "marked created.";
   CHECK(render_frame_host->GetProcess()->IsInitializedAndNotDead())
       << "RenderFrameCreated was called for a RenderFrameHost whose render "
          "process is not currently live, so there's no way for the RenderFrame "
@@ -94,9 +92,6 @@ void WebContentsObserverConsistencyChecker::RenderFrameCreated(
 void WebContentsObserverConsistencyChecker::RenderFrameDeleted(
     RenderFrameHost* render_frame_host) {
   CHECK(!web_contents_destroyed_);
-  CHECK(!render_frame_host->IsRenderFrameCreated())
-      << "RenderFrameDeleted was called for a RenderFrameHost that is"
-         "(still) marked as created.";
   CHECK(!render_frame_host->IsRenderFrameLive())
       << "RenderFrameDeleted was called for a RenderFrameHost that is"
          "still live.";
@@ -164,11 +159,11 @@ void WebContentsObserverConsistencyChecker::RenderFrameHostChanged(
     // in the renderer process.
     bool is_render_frame_created_needed_for_child =
         (new_host->GetFrameOwnerElementType() !=
-             blink::mojom::FrameOwnerElementType::kPortal &&
+             blink::FrameOwnerElementType::kPortal &&
          new_host->GetFrameOwnerElementType() !=
-             blink::mojom::FrameOwnerElementType::kFencedframe) ||
+             blink::FrameOwnerElementType::kFencedframe) ||
         (new_host->GetFrameOwnerElementType() ==
-             blink::mojom::FrameOwnerElementType::kFencedframe &&
+             blink::FrameOwnerElementType::kFencedframe &&
          blink::features::kFencedFramesImplementationTypeParam.Get() ==
              blink::features::FencedFramesImplementationType::kShadowDOM);
     if (is_render_frame_created_needed_for_child) {
@@ -329,14 +324,14 @@ void WebContentsObserverConsistencyChecker::DidFinishNavigation(
   ongoing_navigations_.erase(navigation_handle);
 }
 
-void WebContentsObserverConsistencyChecker::DocumentAvailableInMainFrame(
-    RenderFrameHost* render_frame_host) {
+void WebContentsObserverConsistencyChecker::
+    PrimaryMainDocumentElementAvailable() {
   AssertMainFrameExists();
 }
 
-void WebContentsObserverConsistencyChecker::DocumentOnLoadCompletedInMainFrame(
-    RenderFrameHost* render_frame_host) {
-  CHECK(static_cast<PageImpl&>(render_frame_host->GetPage())
+void WebContentsObserverConsistencyChecker::
+    DocumentOnLoadCompletedInPrimaryMainFrame() {
+  CHECK(static_cast<PageImpl&>(web_contents()->GetPrimaryPage())
             .is_on_load_completed_in_main_document());
   AssertMainFrameExists();
 }
@@ -453,7 +448,7 @@ void WebContentsObserverConsistencyChecker::AssertRenderFrameExists(
 }
 
 void WebContentsObserverConsistencyChecker::AssertMainFrameExists() {
-  AssertRenderFrameExists(web_contents()->GetMainFrame());
+  AssertRenderFrameExists(web_contents()->GetPrimaryMainFrame());
 }
 
 std::string WebContentsObserverConsistencyChecker::Format(
@@ -529,15 +524,9 @@ class WebContentsObserverConsistencyChecker::TestInputEventObserver
     if (render_frame_host_wrapper_.IsDestroyed())
       return;
 
-    // TODO(crbug.com/1183639): Use RenderFrameHost::GetLifecycleState() if it
-    // is possible.
-    int frame_tree_node_id =
-        content::RenderFrameHost::GetFrameTreeNodeIdForRoutingId(
-            render_frame_host_wrapper_->GetProcess()->GetID(),
-            render_frame_host_wrapper_->GetRoutingID());
-    CHECK(!FrameTreeNode::GloballyFindByID(frame_tree_node_id)
-               ->frame_tree()
-               ->is_prerendering());
+    CHECK_NE(static_cast<RenderFrameHostImpl*>(render_frame_host_wrapper_.get())
+                 ->lifecycle_state(),
+             RenderFrameHostImpl::LifecycleStateImpl::kPrerendering);
   }
 
   RenderFrameHostWrapper render_frame_host_wrapper_;

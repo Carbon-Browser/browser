@@ -3,8 +3,8 @@
 // found in the LICENSE file.
 
 import 'chrome://resources/cr_components/chromeos/network/network_select.m.js';
-import 'chrome://resources/cr_components/chromeos/network_health/network_diagnostics.m.js';
-import 'chrome://resources/cr_components/chromeos/network_health/network_health_summary.m.js';
+import 'chrome://resources/cr_components/chromeos/network_health/network_diagnostics.js';
+import 'chrome://resources/cr_components/chromeos/network_health/network_health_summary.js';
 import 'chrome://resources/cr_components/chromeos/traffic_counters/traffic_counters.js';
 import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
 import 'chrome://resources/cr_elements/cr_input/cr_input.m.js';
@@ -19,7 +19,9 @@ import './network_logs_ui.js';
 
 import {OncMojo} from 'chrome://resources/cr_components/chromeos/network/onc_mojo.m.js';
 import {I18nBehavior} from 'chrome://resources/js/i18n_behavior.m.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
 import {html, Polymer} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+
 import {NetworkUIBrowserProxy, NetworkUIBrowserProxyImpl} from './network_ui_browser_proxy.js';
 
 
@@ -64,9 +66,19 @@ Polymer({
       value: 0,
     },
 
+    /** @private */
     hostname_: {
       type: String,
       value: '',
+    },
+
+    /** @private */
+    isGuestModeActive_: {
+      type: Boolean,
+      value() {
+        return loadTimeData.valueExists('isGuestModeActive') &&
+            loadTimeData.getBoolean('isGuestModeActive');
+      },
     },
   },
 
@@ -86,7 +98,7 @@ Polymer({
       {
         customItemName: 'addWiFiListItemName',
         polymerIcon: 'cr:add',
-        customData: 'WiFi'
+        customData: 'WiFi',
       },
     ];
 
@@ -103,8 +115,9 @@ Polymer({
   /** @private */
   selectTabFromHash_() {
     const selectedTab = window.location.hash.substring(1);
-    if (!selectedTab)
+    if (!selectedTab) {
       return;
+    }
     const tabpanels = this.$$('iron-pages').querySelectorAll('.tabpanel');
     for (let idx = 0; idx < tabpanels.length; ++idx) {
       if (tabpanels[idx].id == selectedTab) {
@@ -127,6 +140,16 @@ Polymer({
   },
 
   /** @private */
+  onDisableActiveESimProfileClick_() {
+    this.browserProxy_.disableActiveESimProfile();
+  },
+
+  /** @private */
+  onResetEuiccClick_() {
+    this.browserProxy_.resetEuicc();
+  },
+
+  /** @private */
   showAddNewWifi_() {
     this.browserProxy_.showAddNewWifi();
   },
@@ -139,8 +162,9 @@ Polymer({
   onImportOncChange_(event) {
     const file = event.target.files[0];
     event.stopPropagation();
-    if (!file)
+    if (!file) {
       return;
+    }
     const reader = new FileReader();
     reader.onloadend = (e) => {
       const content = reader.result;

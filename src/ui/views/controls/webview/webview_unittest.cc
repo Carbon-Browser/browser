@@ -11,11 +11,12 @@
 
 #include "base/bind.h"
 #include "base/command_line.h"
-#include "base/macros.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "content/public/common/content_client.h"
+#include "content/public/common/content_features.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/mock_render_process_host.h"
@@ -48,6 +49,11 @@ class WebViewTestWebContentsObserver : public content::WebContentsObserver {
         valid_root_while_shown_(true) {
     content::WebContentsObserver::Observe(web_contents);
   }
+
+  WebViewTestWebContentsObserver(const WebViewTestWebContentsObserver&) =
+      delete;
+  WebViewTestWebContentsObserver& operator=(
+      const WebViewTestWebContentsObserver&) = delete;
 
   ~WebViewTestWebContentsObserver() override {
     if (web_contents_)
@@ -92,20 +98,24 @@ class WebViewTestWebContentsObserver : public content::WebContentsObserver {
   bool valid_root_while_shown() const { return valid_root_while_shown_; }
 
  private:
-  content::WebContents* web_contents_;
+  raw_ptr<content::WebContents> web_contents_;
   bool was_shown_;
   int32_t shown_count_;
   int32_t hidden_count_;
   // Set to true if the view containing the webcontents has a valid root window.
   bool valid_root_while_shown_;
-
-  DISALLOW_COPY_AND_ASSIGN(WebViewTestWebContentsObserver);
 };
 
 // Fakes the fullscreen browser state reported to WebContents and WebView.
 class WebViewTestWebContentsDelegate : public content::WebContentsDelegate {
  public:
   WebViewTestWebContentsDelegate() = default;
+
+  WebViewTestWebContentsDelegate(const WebViewTestWebContentsDelegate&) =
+      delete;
+  WebViewTestWebContentsDelegate& operator=(
+      const WebViewTestWebContentsDelegate&) = delete;
+
   ~WebViewTestWebContentsDelegate() override = default;
 
   void set_is_fullscreened(bool fs) { is_fullscreened_ = fs; }
@@ -118,8 +128,6 @@ class WebViewTestWebContentsDelegate : public content::WebContentsDelegate {
 
  private:
   bool is_fullscreened_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(WebViewTestWebContentsDelegate);
 };
 
 }  // namespace
@@ -130,6 +138,9 @@ class WebViewUnitTest : public views::test::WidgetTest {
   WebViewUnitTest()
       : views::test::WidgetTest(std::unique_ptr<base::test::TaskEnvironment>(
             std::make_unique<content::BrowserTaskEnvironment>())) {}
+
+  WebViewUnitTest(const WebViewUnitTest&) = delete;
+  WebViewUnitTest& operator=(const WebViewUnitTest&) = delete;
 
   ~WebViewUnitTest() override = default;
 
@@ -164,7 +175,7 @@ class WebViewUnitTest : public views::test::WidgetTest {
         top_level_widget_->SetContentsView(std::make_unique<View>());
     web_view_ = new WebView(browser_context_.get());
     web_view_->SetBoundsRect(gfx::Rect(contents_view->size()));
-    contents_view->AddChildView(web_view_);
+    contents_view->AddChildView(web_view_.get());
     top_level_widget_->Show();
     ASSERT_EQ(gfx::Rect(0, 0, 100, 100), web_view_->bounds());
   }
@@ -205,10 +216,8 @@ class WebViewUnitTest : public views::test::WidgetTest {
   std::unique_ptr<views::WebView::ScopedWebContentsCreatorForTesting>
       scoped_web_contents_creator_;
 
-  Widget* top_level_widget_ = nullptr;
-  WebView* web_view_ = nullptr;
-
-  DISALLOW_COPY_AND_ASSIGN(WebViewUnitTest);
+  raw_ptr<Widget> top_level_widget_ = nullptr;
+  raw_ptr<WebView> web_view_ = nullptr;
 };
 
 // Tests that attaching and detaching a WebContents to a WebView makes the
@@ -352,7 +361,7 @@ TEST_F(WebViewUnitTest, CrashedOverlayView) {
   tester->SetIsCrashed(base::TERMINATION_STATUS_PROCESS_CRASHED, -1);
   EXPECT_TRUE(web_contents->IsCrashed());
   static_cast<content::WebContentsObserver*>(web_view.get())
-      ->RenderFrameDeleted(web_contents->GetMainFrame());
+      ->RenderFrameDeleted(web_contents->GetPrimaryMainFrame());
   EXPECT_TRUE(crashed_overlay_view->IsDrawn());
 }
 
@@ -377,7 +386,7 @@ TEST_F(WebViewUnitTest, CrashedOverlayViewOwnedbyClient) {
   tester->SetIsCrashed(base::TERMINATION_STATUS_PROCESS_CRASHED, -1);
   EXPECT_TRUE(web_contents->IsCrashed());
   static_cast<content::WebContentsObserver*>(web_view.get())
-      ->RenderFrameDeleted(web_contents->GetMainFrame());
+      ->RenderFrameDeleted(web_contents->GetPrimaryMainFrame());
   EXPECT_TRUE(crashed_overlay_view->IsDrawn());
 
   web_view->SetCrashedOverlayView(nullptr);

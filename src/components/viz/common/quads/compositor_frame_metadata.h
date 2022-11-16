@@ -15,6 +15,7 @@
 #include "components/viz/common/frame_sinks/begin_frame_args.h"
 #include "components/viz/common/quads/compositor_frame_transition_directive.h"
 #include "components/viz/common/quads/frame_deadline.h"
+#include "components/viz/common/surfaces/region_capture_bounds.h"
 #include "components/viz/common/surfaces/surface_id.h"
 #include "components/viz/common/surfaces/surface_range.h"
 #include "components/viz/common/viz_common_export.h"
@@ -27,10 +28,10 @@
 #include "ui/gfx/overlay_transform.h"
 #include "ui/latency/latency_info.h"
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #include "components/viz/common/quads/selection.h"
 #include "ui/gfx/selection_bound.h"
-#endif  // defined(OS_ANDROID)
+#endif  // BUILDFLAG(IS_ANDROID)
 
 namespace viz {
 
@@ -72,7 +73,7 @@ class VIZ_COMMON_EXPORT CompositorFrameMetadata {
 
   // Scroll offset and scale of the root layer. This can be used for tasks
   // like positioning windowed plugins.
-  gfx::Vector2dF root_scroll_offset;
+  gfx::PointF root_scroll_offset;
   float page_scale_factor = 0.f;
 
   gfx::SizeF scrollable_viewport_size;
@@ -92,7 +93,7 @@ class VIZ_COMMON_EXPORT CompositorFrameMetadata {
   // This color is usually obtained from the background color of the <body>
   // element. It can be used for filling in gutter areas around the frame when
   // it's too small to fill the box the parent reserved for it.
-  SkColor root_background_color = SK_ColorWHITE;
+  SkColor4f root_background_color = SkColors::kWhite;
 
   std::vector<ui::LatencyInfo> latency_info;
 
@@ -170,6 +171,14 @@ class VIZ_COMMON_EXPORT CompositorFrameMetadata {
   // This represents a list of directives to execute in order to support the
   // document transitions.
   std::vector<CompositorFrameTransitionDirective> transition_directives;
+
+  // A map of region capture crop ids associated with this frame to the
+  // gfx::Rect of the region that they represent.
+  RegionCaptureBounds capture_bounds;
+
+  // Indicates if this frame references shared element resources that need to
+  // be replaced with ResourceIds in the Viz process.
+  bool has_shared_element_resources = false;
 
  private:
   CompositorFrameMetadata(const CompositorFrameMetadata& other);

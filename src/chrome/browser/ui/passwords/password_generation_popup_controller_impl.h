@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "build/build_config.h"
 #include "chrome/browser/ui/autofill/popup_controller_common.h"
@@ -23,9 +23,9 @@
 #include "ui/gfx/geometry/rect_f.h"
 #include "ui/gfx/native_widget_types.h"
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
 #include "components/zoom/zoom_observer.h"
-#endif  // !defined(OS_ANDROID)
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 namespace content {
 struct NativeWebKeyboardEvent;
@@ -58,10 +58,10 @@ class PasswordGenerationPopupView;
 class PasswordGenerationPopupControllerImpl
     : public PasswordGenerationPopupController,
       public content::WebContentsObserver
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
     ,
       public zoom::ZoomObserver
-#endif  // !defined(OS_ANDROID)
+#endif  // !BUILDFLAG(IS_ANDROID)
 {
  public:
   // Create a controller or return |previous| if it is suitable. Will hide
@@ -77,6 +77,12 @@ class PasswordGenerationPopupControllerImpl
       PasswordGenerationPopupObserver* observer,
       content::WebContents* web_contents,
       content::RenderFrameHost* frame);
+
+  PasswordGenerationPopupControllerImpl(
+      const PasswordGenerationPopupControllerImpl&) = delete;
+  PasswordGenerationPopupControllerImpl& operator=(
+      const PasswordGenerationPopupControllerImpl&) = delete;
+
   ~PasswordGenerationPopupControllerImpl() override;
 
   // Create a PasswordGenerationPopupView if one doesn't already exist.
@@ -102,14 +108,13 @@ class PasswordGenerationPopupControllerImpl
 
   // content::WebContentsObserver overrides
   void WebContentsDestroyed() override;
-  void DidFinishNavigation(
-      content::NavigationHandle* navigation_handle) override;
+  void PrimaryPageChanged(content::Page& page) override;
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
   // ZoomObserver implementation.
   void OnZoomChanged(
       const zoom::ZoomController::ZoomChangedEventData& data) override;
-#endif  // !defined(OS_ANDROID)
+#endif  // !BUILDFLAG(IS_ANDROID)
 
  protected:
   PasswordGenerationPopupControllerImpl(
@@ -121,7 +126,7 @@ class PasswordGenerationPopupControllerImpl
       content::RenderFrameHost* frame);
 
   // Handle to the popup. May be NULL if popup isn't showing.
-  PasswordGenerationPopupView* view_;
+  raw_ptr<PasswordGenerationPopupView> view_;
 
  private:
   class KeyPressRegistrator;
@@ -130,6 +135,10 @@ class PasswordGenerationPopupControllerImpl
   void ViewDestroyed() override;
   void SelectionCleared() override;
   void SetSelected() override;
+#if !BUILDFLAG(IS_ANDROID)
+  void OnGooglePasswordManagerLinkClicked() override;
+  std::u16string GetPrimaryAccountEmail() override;
+#endif  // !BUILDFLAG(IS_ANDROID)
   void PasswordAccepted() override;
   gfx::NativeView container_view() const override;
   content::WebContents* GetWebContents() const override;
@@ -159,7 +168,7 @@ class PasswordGenerationPopupControllerImpl
   base::WeakPtr<password_manager::PasswordManagerDriver> const driver_;
 
   // May be NULL.
-  PasswordGenerationPopupObserver* const observer_;
+  const raw_ptr<PasswordGenerationPopupObserver> observer_;
 
   // Signature of the form for which password generation is triggered.
   const autofill::FormSignature form_signature_;
@@ -192,8 +201,6 @@ class PasswordGenerationPopupControllerImpl
 
   base::WeakPtrFactory<PasswordGenerationPopupControllerImpl> weak_ptr_factory_{
       this};
-
-  DISALLOW_COPY_AND_ASSIGN(PasswordGenerationPopupControllerImpl);
 };
 
 #endif  // CHROME_BROWSER_UI_PASSWORDS_PASSWORD_GENERATION_POPUP_CONTROLLER_IMPL_H_

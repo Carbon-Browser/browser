@@ -6,13 +6,15 @@
 
 #include <memory>
 
+#include "ash/components/arc/metrics/arc_metrics_constants.h"
 #include "ash/constants/ash_features.h"
 #include "ash/public/cpp/external_arc/message_center/arc_notification_surface.h"
 #include "ash/public/cpp/external_arc/message_center/arc_notification_view.h"
 #include "ash/public/cpp/style/color_provider.h"
+#include "ash/style/ash_color_provider.h"
+#include "ash/system/message_center/message_center_constants.h"
 #include "base/auto_reset.h"
 #include "base/metrics/histogram_macros.h"
-#include "components/arc/metrics/arc_metrics_constants.h"
 #include "components/exo/notification_surface.h"
 #include "components/exo/surface.h"
 #include "third_party/skia/include/core/SkColor.h"
@@ -20,17 +22,20 @@
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/color/color_id.h"
+#include "ui/color/color_provider.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_animation_observer.h"
 #include "ui/compositor/layer_tree_owner.h"
 #include "ui/events/event_handler.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/geometry/insets.h"
-#include "ui/gfx/transform.h"
+#include "ui/gfx/geometry/transform.h"
 #include "ui/message_center/message_center.h"
 #include "ui/message_center/public/cpp/message_center_constants.h"
 #include "ui/message_center/public/cpp/notification.h"
 #include "ui/strings/grit/ui_strings.h"
+#include "ui/views/accessibility/accessibility_paint_checks.h"
 #include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/focus/focus_manager.h"
 #include "ui/views/widget/root_view.h"
@@ -47,6 +52,10 @@ class ArcNotificationContentView::MouseEnterExitHandler
       : owner_(owner) {
     DCHECK(owner);
   }
+
+  MouseEnterExitHandler(const MouseEnterExitHandler&) = delete;
+  MouseEnterExitHandler& operator=(const MouseEnterExitHandler&) = delete;
+
   ~MouseEnterExitHandler() override = default;
 
   // ui::EventHandler
@@ -60,13 +69,15 @@ class ArcNotificationContentView::MouseEnterExitHandler
 
  private:
   ArcNotificationContentView* const owner_;
-
-  DISALLOW_COPY_AND_ASSIGN(MouseEnterExitHandler);
 };
 
 class ArcNotificationContentView::EventForwarder : public ui::EventHandler {
  public:
   explicit EventForwarder(ArcNotificationContentView* owner) : owner_(owner) {}
+
+  EventForwarder(const EventForwarder&) = delete;
+  EventForwarder& operator=(const EventForwarder&) = delete;
+
   ~EventForwarder() override = default;
 
  private:
@@ -202,8 +213,6 @@ class ArcNotificationContentView::EventForwarder : public ui::EventHandler {
 
   ArcNotificationContentView* const owner_;
   bool is_current_slide_handled_by_android_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(EventForwarder);
 };
 
 class ArcNotificationContentView::SlideHelper {
@@ -217,6 +226,10 @@ class ArcNotificationContentView::SlideHelper {
       owner_->surface_->GetWindow()->layer()->SetOpacity(1.0f);
     }
   }
+
+  SlideHelper(const SlideHelper&) = delete;
+  SlideHelper& operator=(const SlideHelper&) = delete;
+
   virtual ~SlideHelper() = default;
 
   void Update(bool slide_in_progress) {
@@ -236,10 +249,14 @@ class ArcNotificationContentView::SlideHelper {
 
   // True if the view is not at the original position.
   bool slide_in_progress_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(SlideHelper);
 };
 
+// static
+int ArcNotificationContentView::GetNotificationContentViewWidth() {
+  return features::IsNotificationsRefreshEnabled()
+             ? kNotificationInMessageCenterWidth
+             : message_center::kNotificationWidth;
+}
 
 ArcNotificationContentView::ArcNotificationContentView(
     ArcNotificationItem* item,
@@ -250,15 +267,23 @@ ArcNotificationContentView::ArcNotificationContentView(
       event_forwarder_(new EventForwarder(this)),
       mouse_enter_exit_handler_(new MouseEnterExitHandler(this)),
       message_view_(message_view),
-      control_buttons_view_(message_view) {
+      control_buttons_view_(message_view),
+      notification_width_(GetNotificationContentViewWidth()) {
   DCHECK(message_view);
 
-  // kNotificationWidth must be 360, since this value is separately defined in
-  // ArcNotificationWrapperView class in Android side.
-  DCHECK_EQ(360, message_center::kNotificationWidth);
+  // |notification_width_| must be 360 (or 344 for refreshed notifications),
+  // since this value is separately defined in ArcNotificationWrapperView class
+  // in Android side.
+  DCHECK_EQ(features::IsNotificationsRefreshEnabled() ? 344 : 360,
+            notification_width_);
 
   SetFocusBehavior(FocusBehavior::ALWAYS);
   SetNotifyEnterExitOnChild(true);
+
+  // TODO(crbug.com/1218186): Remove this, this is in place temporarily to be
+  // able to submit accessibility checks, but this focusable View needs to
+  // add a name so that the screen reader knows what to announce.
+  SetProperty(views::kSkipAccessibilityPaintChecks, true);
 
   item_->IncrementWindowRefCount();
   item_->AddObserver(this);
@@ -461,6 +486,15 @@ void ArcNotificationContentView::SetSurface(ArcNotificationSurface* surface) {
       }
     }
   }
+
+  // Maybe this if-branch is not needed but if the refresh flag is disabled we
+  // don't have to call |SchedulePaint()| because the notification background is
+  // opaque. Let's keep this if-branch not to break any existing behavior.
+  if (ash::features::IsNotificationsRefreshEnabled()) {
+    // Setting/resetting |surface_| changes the visibility of the snapshot so we
+    // here request to paint.
+    SchedulePaint();
+  }
 }
 
 void ArcNotificationContentView::UpdatePreferredSize() {
@@ -473,10 +507,10 @@ void ArcNotificationContentView::UpdatePreferredSize() {
   if (preferred_size.IsEmpty())
     return;
 
-  if (preferred_size.width() != message_center::kNotificationWidth) {
-    const float scale = static_cast<float>(message_center::kNotificationWidth) /
-                        preferred_size.width();
-    preferred_size.SetSize(message_center::kNotificationWidth,
+  if (preferred_size.width() != notification_width_) {
+    const float scale =
+        static_cast<float>(notification_width_) / preferred_size.width();
+    preferred_size.SetSize(notification_width_,
                            preferred_size.height() * scale);
   }
 
@@ -557,14 +591,12 @@ void ArcNotificationContentView::UpdateMask(bool force_update) {
     return;
   mask_insets_ = new_insets;
 
-  SkColor color = GetNativeTheme()->GetSystemColor(
-      ui::NativeTheme::kColorId_NotificationBackground);
-  if (ash::features::IsNotificationsRefreshEnabled())
-    color = SK_ColorTRANSPARENT;
-
+  // The color of the mask, which is used only for corner-rounding, should be
+  // pure opaque white.
+  const SkColor mask_color = SK_ColorWHITE;
   auto mask_painter =
       std::make_unique<message_center::NotificationBackgroundPainter>(
-          top_radius_, bottom_radius_, color);
+          top_radius_, bottom_radius_, mask_color);
   // Set insets to round visible notification corners. https://crbug.com/866777
   mask_painter->set_insets(new_insets);
 
@@ -639,8 +671,7 @@ void ArcNotificationContentView::Layout() {
     const gfx::Size surface_size = surface_->GetSize();
     if (!surface_size.IsEmpty()) {
       const float factor =
-          static_cast<float>(message_center::kNotificationWidth) /
-          surface_size.width();
+          static_cast<float>(notification_width_) / surface_size.width();
       transform.Scale(factor, factor);
     }
 
@@ -671,9 +702,6 @@ void ArcNotificationContentView::Layout() {
 }
 
 void ArcNotificationContentView::OnPaint(gfx::Canvas* canvas) {
-  if (ash::features::IsNotificationsRefreshEnabled())
-    return;
-
   views::NativeViewHost::OnPaint(canvas);
 
   SkScalar radii[8] = {top_radius_,    top_radius_,      // top-left
@@ -699,7 +727,9 @@ void ArcNotificationContentView::OnPaint(gfx::Canvas* canvas) {
     // area out of the surface.
     // TODO: This can be removed once both ARC and Chrome notifications have
     // smooth expansion animations.
-    canvas->DrawColor(SK_ColorWHITE);
+    canvas->DrawColor(ash::features::IsNotificationsRefreshEnabled()
+                          ? SK_ColorTRANSPARENT
+                          : SK_ColorWHITE);
   }
 }
 
@@ -740,6 +770,13 @@ void ArcNotificationContentView::OnThemeChanged() {
   // OnThemeChanged may be called before container is set.
   if (GetWidget() && GetNativeViewContainer())
     UpdateMask(true);
+
+  if (ash::features::IsNotificationsRefreshEnabled()) {
+    // Adjust control button color.
+    control_buttons_view_.SetButtonIconColors(
+        AshColorProvider::Get()->GetContentLayerColor(
+            AshColorProvider::ContentLayerType::kIconColorPrimary));
+  }
 }
 
 void ArcNotificationContentView::OnRemoteInputActivationChanged(
@@ -824,7 +861,7 @@ void ArcNotificationContentView::OnWindowDestroying(aura::Window* window) {
   SetSurface(nullptr);
 }
 
-void ArcNotificationContentView::OnWidgetClosing(views::Widget* widget) {
+void ArcNotificationContentView::OnWidgetDestroying(views::Widget* widget) {
   // Actually this code doesn't show copied surface. Since it looks it doesn't
   // work during closing. This just hides the surface and revails hidden
   // snapshot: https://crbug.com/890701.

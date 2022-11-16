@@ -17,11 +17,13 @@
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/style/ash_color_provider.h"
+#include "ash/style/style_util.h"
 #include "ash/system/holding_space/holding_space_item_chip_view.h"
 #include "ash/system/holding_space/holding_space_view_delegate.h"
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/color/color_id.h"
 #include "ui/compositor/layer.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/views/accessibility/view_accessibility.h"
@@ -42,7 +44,7 @@ namespace {
 constexpr int kFilesAppChipChildSpacing = 8;
 constexpr int kFilesAppChipHeight = 32;
 constexpr int kFilesAppChipIconSize = 20;
-constexpr gfx::Insets kFilesAppChipInsets(0, 8, 0, 16);
+constexpr auto kFilesAppChipInsets = gfx::Insets::TLBR(0, 8, 0, 16);
 constexpr int kPlaceholderChildSpacing = 16;
 
 // FilesAppChip ----------------------------------------------------------------
@@ -81,16 +83,12 @@ class FilesAppChip : public views::Button {
         kFilesAppChipHeight / 2));
 
     // Focus ring.
-    views::FocusRing::Get(this)->SetColor(
-        ash_color_provider->GetControlsLayerColor(
-            AshColorProvider::ControlsLayerType::kFocusRingColor));
+    views::FocusRing::Get(this)->SetColorId(ui::kColorAshFocusRing);
 
     // Ink drop.
-    const AshColorProvider::RippleAttributes ripple_attributes =
-        ash_color_provider->GetRippleAttributes();
-    views::InkDrop::Get(this)->SetBaseColor(ripple_attributes.base_color);
-    views::InkDrop::Get(this)->SetVisibleOpacity(
-        ripple_attributes.inkdrop_opacity);
+    StyleUtil::ConfigureInkDropAttributes(
+        this, StyleUtil::kBaseColor | StyleUtil::kInkDropOpacity |
+                  StyleUtil::kHighlightOpacity);
   }
 
   void Init() {

@@ -51,7 +51,12 @@ class CastRenderer final : public ::media::Renderer,
                VideoResolutionPolicy* video_resolution_policy,
                const base::UnguessableToken& overlay_plane_id,
                ::media::mojom::FrameInterfaceFactory* frame_interfaces,
-               external_service_support::ExternalConnector* connector);
+               external_service_support::ExternalConnector* connector,
+               bool is_buffering_enabled);
+
+  CastRenderer(const CastRenderer&) = delete;
+  CastRenderer& operator=(const CastRenderer&) = delete;
+
   ~CastRenderer() override;
   // For CmaBackend implementation, CastRenderer must be connected to
   // VideoGeometrySetterService.
@@ -146,8 +151,9 @@ class CastRenderer final : public ::media::Renderer,
 
   absl::optional<float> pending_volume_;
 
+  const bool is_buffering_enabled_;
+
   base::WeakPtrFactory<CastRenderer> weak_factory_;
-  DISALLOW_COPY_AND_ASSIGN(CastRenderer);
 };
 
 }  // namespace media

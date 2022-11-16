@@ -41,9 +41,6 @@ void ParamTraits<net::CertVerifyResult>::Write(base::Pickle* m,
                                                const param_type& p) {
   WriteParam(m, p.verified_cert);
   WriteParam(m, p.cert_status);
-  WriteParam(m, p.has_md2);
-  WriteParam(m, p.has_md4);
-  WriteParam(m, p.has_md5);
   WriteParam(m, p.has_sha1);
   WriteParam(m, p.has_sha1_leaf);
   WriteParam(m, p.public_key_hashes);
@@ -59,8 +56,7 @@ bool ParamTraits<net::CertVerifyResult>::Read(const base::Pickle* m,
                                               param_type* r) {
   return ReadParam(m, iter, &r->verified_cert) &&
          ReadParam(m, iter, &r->cert_status) &&
-         ReadParam(m, iter, &r->has_md2) && ReadParam(m, iter, &r->has_md4) &&
-         ReadParam(m, iter, &r->has_md5) && ReadParam(m, iter, &r->has_sha1) &&
+         ReadParam(m, iter, &r->has_sha1) &&
          ReadParam(m, iter, &r->has_sha1_leaf) &&
          ReadParam(m, iter, &r->public_key_hashes) &&
          ReadParam(m, iter, &r->is_issued_by_known_root) &&
@@ -167,10 +163,10 @@ bool ParamTraits<net::HttpRequestHeaders>::Read(const base::Pickle* m,
                                                 base::PickleIterator* iter,
                                                 param_type* r) {
   // Sanity check.
-  int size;
+  size_t size;
   if (!iter->ReadLength(&size))
     return false;
-  for (int i = 0; i < size; ++i) {
+  for (size_t i = 0; i < size; ++i) {
     net::HttpRequestHeaders::HeaderKeyValuePair pair;
     if (!ReadParam(m, iter, &pair) ||
         !net::HttpUtil::IsValidHeaderName(pair.key) ||
@@ -324,6 +320,7 @@ void ParamTraits<net::SSLInfo>::Write(base::Pickle* m, const param_type& p) {
   WriteParam(m, p.is_issued_by_known_root);
   WriteParam(m, p.pkp_bypassed);
   WriteParam(m, p.client_cert_sent);
+  WriteParam(m, p.encrypted_client_hello);
   WriteParam(m, p.handshake_type);
   WriteParam(m, p.public_key_hashes);
   WriteParam(m, p.pinning_failure_log);
@@ -350,6 +347,7 @@ bool ParamTraits<net::SSLInfo>::Read(const base::Pickle* m,
          ReadParam(m, iter, &r->is_issued_by_known_root) &&
          ReadParam(m, iter, &r->pkp_bypassed) &&
          ReadParam(m, iter, &r->client_cert_sent) &&
+         ReadParam(m, iter, &r->encrypted_client_hello) &&
          ReadParam(m, iter, &r->handshake_type) &&
          ReadParam(m, iter, &r->public_key_hashes) &&
          ReadParam(m, iter, &r->pinning_failure_log) &&
@@ -557,7 +555,14 @@ void ParamTraits<url::Origin>::Write(base::Pickle* m, const url::Origin& p) {
   WriteParam(m, p.GetTupleOrPrecursorTupleIfOpaque().scheme());
   WriteParam(m, p.GetTupleOrPrecursorTupleIfOpaque().host());
   WriteParam(m, p.GetTupleOrPrecursorTupleIfOpaque().port());
-  WriteParam(m, p.GetNonceForSerialization());
+  // Note: this is somewhat asymmetric with Read() to avoid extra copies during
+  // serialization. The actual serialized wire format matches how absl::optional
+  // values are normally serialized: see `ParamTraits<absl::optional<P>>`.
+  const base::UnguessableToken* nonce = p.GetNonceForSerialization();
+  WriteParam(m, nonce != nullptr);
+  if (nonce) {
+    WriteParam(m, *nonce);
+  }
 }
 
 bool ParamTraits<url::Origin>::Read(const base::Pickle* m,

@@ -7,6 +7,7 @@
 
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
+#include "chrome/browser/download/download_commands.h"
 #include "chrome/browser/download/download_prompt_status.h"
 #include "chrome/browser/profiles/profile.h"
 #include "components/download/public/common/download_danger_type.h"
@@ -149,37 +150,83 @@ void RecordDownloadPathValidation(download::PathValidationResult result,
 // Record download cancel reason.
 void RecordDownloadCancelReason(DownloadCancelReason reason);
 
-// Records drags of completed downloads from the shelf. Used in UMA, do not
-// remove, change or reuse existing entries. Update histograms.xml and
-// enums.xml when adding entries.
-enum class DownloadShelfDragEvent {
-  // A download was dragged. All platforms.
-  STARTED,
-  // The download was dropped somewhere that isn't a drag target. Currently
-  // only recorded on Mac.
-  CANCELED,
-  // The download was dropped somewhere useful (a folder, an application,
-  // etc.). Currently only recorded on Mac.
-  DROPPED,
+// Records information related to dragging completed downloads from the
+// shelf/bubble. Used in UMA. Do not remove, change or reuse existing entries.
+// Update histograms.xml and enums.xml when adding entries.
+enum class DownloadDragInfo {
+  // A download starting to be dragged. It is possible the drag-and-drop will
+  // not complete depending on the user's actions.
+  DRAG_STARTED,
+  // As a point of reference for dragged downloads, this represents when a
+  // download completes on the shelf/bubble. This omits downloads that are
+  // immediately removed from the shelf/bubble when they complete.
+  DOWNLOAD_COMPLETE,
 
   COUNT
 };
 
-void RecordDownloadShelfDragEvent(DownloadShelfDragEvent drag_event);
+// Records either when a drag event is initiated by the user or, as a point of
+// reference, when a download completes on the shelf/bubble.
+void RecordDownloadShelfDragInfo(DownloadDragInfo drag_info);
+void RecordDownloadBubbleDragInfo(DownloadDragInfo drag_info);
 
 void RecordDownloadStartPerProfileType(Profile* profile);
 
-#ifdef OS_ANDROID
+#if BUILDFLAG(IS_ANDROID)
 // Records whether the download dialog is shown to the user.
 void RecordDownloadPromptStatus(DownloadPromptStatus status);
+#endif  // BUILDFLAG(IS_ANDROID)
 
-// Records whether the download later dialog is shown to the user.
-void RecordDownloadLaterPromptStatus(DownloadLaterPromptStatus status);
-#endif  // OS_ANDROID
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 // Records that a notification for a download was suppressed.
 void RecordDownloadNotificationSuppressed();
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
+
+enum class DownloadShelfContextMenuAction {
+  // Drop down button for download shelf context menu is visible
+  kDropDownShown = 0,
+  // Drop down button was pressed
+  kDropDownPressed = 1,
+  kShowInFolderEnabled = 2,
+  kShowInFolderClicked = 3,
+  kOpenWhenCompleteEnabled = 4,
+  kOpenWhenCompleteClicked = 5,
+  kAlwaysOpenTypeEnabled = 6,
+  kAlwaysOpenTypeClicked = 7,
+  kPlatformOpenEnabled = 8,
+  kPlatformOpenClicked = 9,
+  kCancelEnabled = 10,
+  kCancelClicked = 11,
+  kPauseEnabled = 12,
+  kPauseClicked = 13,
+  kResumeEnabled = 14,
+  kResumeClicked = 15,
+  kDiscardEnabled = 16,
+  kDiscardClicked = 17,
+  kKeepEnabled = 18,
+  kKeepClicked = 19,
+  kLearnMoreScanningEnabled = 20,
+  kLearnMoreScanningClicked = 21,
+  kLearnMoreInterruptedEnabled = 22,
+  kLearnMoreInterruptedClicked = 23,
+  kLearnMoreMixedContentEnabled = 24,
+  kLearnMoreMixedContentClicked = 25,
+  kCopyToClipboardEnabled = 26,
+  kCopyToClipboardClicked = 27,
+  // kAnnotateEnabled = 28,
+  // kAnnotateClicked = 29,
+  kDeepScanEnabled = 30,
+  kDeepScanClicked = 31,
+  kBypassDeepScanningEnabled = 32,
+  kBypassDeepScanningClicked = 33,
+  // kReviewEnabled = 34,
+  // kReviewClicked = 35,
+  kNotReached = 36,  // Should not be possible to hit
+  kMaxValue = kNotReached
+};
+
+DownloadShelfContextMenuAction DownloadCommandToShelfAction(
+    DownloadCommands::Command download_command,
+    bool clicked);
 
 #endif  // CHROME_BROWSER_DOWNLOAD_DOWNLOAD_STATS_H_

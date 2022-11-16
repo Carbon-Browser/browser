@@ -11,6 +11,7 @@
 #include "base/android/jni_android.h"
 #include "base/android/jni_string.h"
 #include "base/base_paths_android.h"
+#include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/i18n/rtl.h"
 #include "base/metrics/field_trial_params.h"
@@ -22,6 +23,7 @@
 #include "base/task/thread_pool.h"
 #include "base/threading/thread_restrictions.h"
 #include "build/build_config.h"
+#include "cc/base/switches.h"
 #include "components/embedder_support/android/metrics/android_metrics_log_uploader.h"
 #include "components/embedder_support/android/metrics/jni/AndroidMetricsServiceClient_jni.h"
 #include "components/metrics/android_metrics_provider.h"
@@ -35,6 +37,7 @@
 #include "components/metrics/drive_metrics_provider.h"
 #include "components/metrics/entropy_state_provider.h"
 #include "components/metrics/file_metrics_provider.h"
+#include "components/metrics/form_factor_metrics_provider.h"
 #include "components/metrics/metrics_pref_names.h"
 #include "components/metrics/metrics_service.h"
 #include "components/metrics/metrics_state_manager.h"
@@ -54,7 +57,10 @@
 #include "content/public/browser/notification_service.h"
 #include "content/public/browser/notification_types.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
+
 namespace metrics {
+
+using InstallerPackageType = AndroidMetricsServiceClient::InstallerPackageType;
 
 namespace {
 
@@ -63,17 +69,6 @@ namespace {
 const int kMaxHistogramGatheringWaitDuration = 60000;  // 60 seconds.
 
 const int kMaxHistogramStorageKiB = 100 << 10;  // 100 MiB
-
-// Callbacks for MetricsStateManager::Create. Store/LoadClientInfo
-// allow Windows Chrome to back up ClientInfo. They're no-ops for
-// AndroidMetricsServiceClient.
-
-void StoreClientInfo(const ClientInfo& client_info) {}
-
-std::unique_ptr<ClientInfo> LoadClientInfo() {
-  std::unique_ptr<ClientInfo> client_info;
-  return client_info;
-}
 
 // Divides the spectrum of uint32_t values into 1000 ~equal-sized buckets (range
 // [0, 999] inclusive), and returns which bucket |value| falls into. Ex. given
@@ -137,7 +132,7 @@ void RegisterOrRemovePreviousRunMetricsFile(
         FROM_HERE,
         {base::MayBlock(), base::TaskPriority::BEST_EFFORT,
          base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN},
-        base::BindOnce(base::GetDeleteFileCallback(), metrics_file));
+        base::GetDeleteFileCallback(metrics_file));
   }
 }
 
@@ -198,8 +193,8 @@ std::unique_ptr<metrics::FileMetricsProvider> CreateFileMetricsProvider(
         FROM_HERE,
         {base::MayBlock(), base::TaskPriority::BEST_EFFORT,
          base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN},
-        base::BindOnce(base::GetDeletePathRecursivelyCallback(),
-                       std::move(browser_metrics_upload_dir)));
+        base::GetDeletePathRecursivelyCallback(
+            std::move(browser_metrics_upload_dir)));
   }
 
   return file_metrics_provider;
@@ -240,20 +235,39 @@ void AndroidMetricsServiceClient::RegisterPrefs(PrefRegistrySimple* registry) {
   ukm::UkmService::RegisterPrefs(registry);
 }
 
-void AndroidMetricsServiceClient::Initialize(
-    const base::FilePath& user_data_dir,
-    PrefService* pref_service) {
+void AndroidMetricsServiceClient::Initialize(PrefService* pref_service) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(!init_finished_);
 
   pref_service_ = pref_service;
 
+  // TODO(crbug/1245347): If and when the Extended Variations Safe Mode
+  // experiment is enabled on Android WebLayer, pass the channel to the
+  // MetricsStateManager.
+  //
+  // Pass an empty file path since the path is for the Extended Variations Safe
+  // Mode experiment and Android embedders are excluded from this experiment.
   metrics_state_manager_ = MetricsStateManager::Create(
-      pref_service_, this, std::wstring(), user_data_dir,
-      base::BindRepeating(&StoreClientInfo),
-      base::BindRepeating(&LoadClientInfo));
+      pref_service_, this, std::wstring(), base::FilePath());
+
+  // Creates the FieldTrialList using the low entropy provider. The low entropy
+  // provider is used instead of the default provider because the default
+  // provider needs to know if UMA is enabled and querying GMS to determine
+  // whether UMA is enabled is slow.
+  //
+  // Both entropy providers guarantee permanent consistency, which is the main
+  // requirement. The difference is that the low entropy provider has fewer
+  // unique experiment combinations. This is better for privacy (since
+  // experiment state doesn't identify users), but also means fewer combinations
+  // are tested in the wild.
+  metrics_state_manager_->InstantiateFieldTrialList(
+      cc::switches::kEnableGpuBenchmarking, EntropyProviderType::kLow);
 
   init_finished_ = true;
+
+  synthetic_trial_registry_ =
+      std::make_unique<variations::SyntheticTrialRegistry>(
+          IsExternalExperimentAllowlistEnabled());
 
   // Create the MetricsService immediately so that other code can make use of
   // it. Chrome always creates the MetricsService as well.
@@ -310,6 +324,7 @@ void AndroidMetricsServiceClient::MaybeStartMetrics() {
         pref_service_, /* metrics_reporting_enabled */ false));
     OnMetricsNotStarted();
     pref_service_->ClearPref(prefs::kMetricsClientID);
+    pref_service_->ClearPref(prefs::kMetricsProvisionalClientID);
   }
 }
 
@@ -325,6 +340,8 @@ void AndroidMetricsServiceClient::RegisterMetricsProvidersAndInitState() {
       std::make_unique<EntropyStateProvider>(pref_service_));
   metrics_service_->RegisterMetricsProvider(
       std::make_unique<ScreenInfoMetricsProvider>());
+  metrics_service_->RegisterMetricsProvider(
+      std::make_unique<metrics::FormFactorMetricsProvider>());
   metrics_service_->RegisterMetricsProvider(CreateFileMetricsProvider(
       pref_service_, metrics_state_manager_->IsMetricsReportingEnabled()));
   metrics_service_->RegisterMetricsProvider(
@@ -368,7 +385,11 @@ void AndroidMetricsServiceClient::CreateUkmService() {
   ukm_service_->RegisterMetricsProvider(
       std::make_unique<metrics::ScreenInfoMetricsProvider>());
 
-  ukm_service_->RegisterMetricsProvider(ukm::CreateFieldTrialsProviderForUkm());
+  ukm_service_->RegisterMetricsProvider(
+      std::make_unique<metrics::FormFactorMetricsProvider>());
+
+  ukm_service_->RegisterMetricsProvider(
+      ukm::CreateFieldTrialsProviderForUkm(synthetic_trial_registry_.get()));
 
   UpdateUkmService();
 }
@@ -403,12 +424,6 @@ void AndroidMetricsServiceClient::SetUploadIntervalForTesting(
     const base::TimeDelta& upload_interval) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   overridden_upload_interval_ = upload_interval;
-}
-
-std::unique_ptr<const base::FieldTrial::EntropyProvider>
-AndroidMetricsServiceClient::CreateLowEntropyProvider() {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return metrics_state_manager_->CreateLowEntropyProvider();
 }
 
 void AndroidMetricsServiceClient::UpdateUkm(bool must_purge) {
@@ -461,6 +476,11 @@ MetricsService* AndroidMetricsServiceClient::GetMetricsServiceIfStarted() {
   return did_start_metrics_ ? metrics_service_.get() : nullptr;
 }
 
+variations::SyntheticTrialRegistry*
+AndroidMetricsServiceClient::GetSyntheticTrialRegistry() {
+  return synthetic_trial_registry_.get();
+}
+
 MetricsService* AndroidMetricsServiceClient::GetMetricsService() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   // This will be null if initialization hasn't finished.
@@ -480,6 +500,11 @@ void AndroidMetricsServiceClient::SetMetricsClientId(
 
 std::string AndroidMetricsServiceClient::GetApplicationLocale() {
   return base::i18n::GetConfiguredLocale();
+}
+
+const network_time::NetworkTimeTracker*
+AndroidMetricsServiceClient::GetNetworkTimeTracker() {
+  return nullptr;
 }
 
 bool AndroidMetricsServiceClient::GetBrand(std::string* brand_code) {
@@ -505,7 +530,7 @@ void AndroidMetricsServiceClient::CollectFinalMetricsForLog(
   base::StatisticsRecorder::ImportProvidedHistograms();
 
   base::TimeDelta timeout =
-      base::TimeDelta::FromMilliseconds(kMaxHistogramGatheringWaitDuration);
+      base::Milliseconds(kMaxHistogramGatheringWaitDuration);
 
   // Set up the callback task to call after we receive histograms from all
   // child processes. |timeout| specifies how long to wait before absolutely
@@ -608,20 +633,19 @@ bool AndroidMetricsServiceClient::IsInSample() const {
   return GetSampleBucketValue() < GetSampleRatePerMille();
 }
 
-bool AndroidMetricsServiceClient::CanRecordPackageNameForAppType() {
+InstallerPackageType AndroidMetricsServiceClient::GetInstallerPackageType() {
   // Check with Java side, to see if it's OK to log the package name for this
   // type of app (see Java side for the specific requirements).
   JNIEnv* env = base::android::AttachCurrentThread();
-  return Java_AndroidMetricsServiceClient_canRecordPackageNameForAppType(env);
+  int type = Java_AndroidMetricsServiceClient_getInstallerPackageType(env);
+  return static_cast<InstallerPackageType>(type);
+}
+
+bool AndroidMetricsServiceClient::CanRecordPackageNameForAppType() {
+  return GetInstallerPackageType() != InstallerPackageType::OTHER;
 }
 
 bool AndroidMetricsServiceClient::ShouldRecordPackageName() {
-  // Check if this client falls within the group for which it's acceptable to
-  // log package name. This guarantees we enforce the privacy requirement
-  // because we never log package names for more than kPackageNameLimitRate
-  // percent of clients. We'll actually log package name for less than this,
-  // because we also filter out packages for certain types of apps (see
-  // CanRecordPackageNameForAppType()).
   return GetSampleBucketValue() < GetPackageNameLimitRatePerMille();
 }
 

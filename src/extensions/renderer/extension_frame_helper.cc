@@ -6,15 +6,16 @@
 
 #include <set>
 
+#include "base/feature_list.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/string_util.h"
 #include "base/timer/elapsed_timer.h"
 #include "content/public/renderer/render_frame.h"
-#include "content/public/renderer/render_view.h"
 #include "extensions/common/api/messaging/message.h"
 #include "extensions/common/api/messaging/port_id.h"
 #include "extensions/common/constants.h"
+#include "extensions/common/extension_features.h"
 #include "extensions/common/extension_messages.h"
 #include "extensions/common/manifest_handlers/background_info.h"
 #include "extensions/renderer/api/automation/automation_api_helper.h"
@@ -34,6 +35,11 @@
 #include "third_party/blink/public/web/web_local_frame.h"
 #include "third_party/blink/public/web/web_settings.h"
 #include "third_party/blink/public/web/web_view.h"
+#include "v8/include/v8-container.h"
+#include "v8/include/v8-context.h"
+#include "v8/include/v8-isolate.h"
+#include "v8/include/v8-object.h"
+#include "v8/include/v8-primitive.h"
 
 namespace extensions {
 
@@ -128,7 +134,7 @@ ExtensionFrameHelper::ExtensionFrameHelper(content::RenderFrame* render_frame,
       content::RenderFrameObserverTracker<ExtensionFrameHelper>(render_frame),
       extension_dispatcher_(extension_dispatcher) {
   g_frame_helpers.Get().insert(this);
-  if (render_frame->IsMainFrame()) {
+  if (render_frame->GetWebFrame()->IsOutermostMainFrame()) {
     // Manages its own lifetime.
     new AutomationApiHelper(render_frame);
   }
@@ -173,10 +179,10 @@ v8::Local<v8::Array> ExtensionFrameHelper::GetV8MainFrames(
 
   int v8_index = 0;
   for (content::RenderFrame* frame : render_frames) {
-    if (!frame->IsMainFrame())
+    blink::WebLocalFrame* web_frame = frame->GetWebFrame();
+    if (!web_frame->IsOutermostMainFrame())
       continue;
 
-    blink::WebLocalFrame* web_frame = frame->GetWebFrame();
     if (!blink::WebFrame::ScriptCanAccess(web_frame))
       continue;
 
@@ -201,8 +207,9 @@ content::RenderFrame* ExtensionFrameHelper::GetBackgroundPageFrame(
                            extension_misc::kUnknownWindowId,
                            extension_misc::kUnknownTabId, extension_id)) {
       blink::WebLocalFrame* web_frame = helper->render_frame()->GetWebFrame();
-      // Check if this is the top frame.
-      if (web_frame->Top() == web_frame)
+      // Check if this is the outermost main frame (do not return embedded
+      // main frames like portals or fenced frames).
+      if (web_frame->IsOutermostMainFrame())
         return helper->render_frame();
     }
   }
@@ -322,7 +329,8 @@ void ExtensionFrameHelper::ReadyToCommitNavigation(
   // needs to be called prior to the new window's 'load' event. The parser will
   // be resumed when it happens. It doesn't apply to sandboxed pages.
   if (view_type_ == mojom::ViewType::kAppWindow &&
-      render_frame()->IsMainFrame() && !has_started_first_navigation_ &&
+      render_frame()->GetWebFrame()->IsOutermostMainFrame() &&
+      !has_started_first_navigation_ &&
       GURL(document_loader->GetUrl()).SchemeIs(kExtensionScheme) &&
       !ScriptContext::IsSandboxedPage(document_loader->GetUrl())) {
     document_loader->BlockParser();
@@ -333,6 +341,8 @@ void ExtensionFrameHelper::ReadyToCommitNavigation(
   if (!delayed_main_world_script_initialization_)
     return;
 
+  base::AutoReset<bool> auto_reset(&is_initializing_main_world_script_context_,
+                                   true);
   delayed_main_world_script_initialization_ = false;
   v8::HandleScope handle_scope(v8::Isolate::GetCurrent());
   v8::Local<v8::Context> context =
@@ -355,6 +365,10 @@ void ExtensionFrameHelper::ReadyToCommitNavigation(
 
 void ExtensionFrameHelper::DidCommitProvisionalLoad(
     ui::PageTransition transition) {
+  if (base::FeatureList::IsEnabled(
+          extensions_features::kAvoidEarlyExtensionScriptContextCreation)) {
+    return;
+  }
   // Grant cross browsing instance frame lookup if we are an extension. This
   // should match the conditions in FindFrame.
   content::RenderFrame* frame = render_frame();
@@ -366,6 +380,11 @@ void ExtensionFrameHelper::DidCreateScriptContext(
     v8::Local<v8::Context> context,
     int32_t world_id) {
   if (world_id == blink::kMainDOMWorldId) {
+    // Accessing MainWorldScriptContext() in ReadyToCommitNavigation() may
+    // trigger the script context initializing, so we don't want to initialize a
+    // second time here.
+    if (is_initializing_main_world_script_context_)
+      return;
     if (render_frame()->IsBrowserSideNavigationPending()) {
       // Defer initializing the extensions script context now because it depends
       // on having the URL of the provisional load which isn't available at this
@@ -404,8 +423,6 @@ bool ExtensionFrameHelper::OnMessageReceived(const IPC::Message& message) {
     IPC_MESSAGE_HANDLER(ExtensionMsg_DeliverMessage, OnExtensionDeliverMessage)
     IPC_MESSAGE_HANDLER(ExtensionMsg_DispatchOnDisconnect,
                         OnExtensionDispatchOnDisconnect)
-    IPC_MESSAGE_HANDLER(ExtensionMsg_UpdateBrowserWindowId,
-                        OnUpdateBrowserWindowId)
     IPC_MESSAGE_UNHANDLED(handled = false)
   IPC_END_MESSAGE_MAP()
   return handled;
@@ -462,10 +479,6 @@ void ExtensionFrameHelper::SetTabId(int32_t tab_id) {
   tab_id_ = tab_id;
 }
 
-void ExtensionFrameHelper::OnUpdateBrowserWindowId(int browser_window_id) {
-  browser_window_id_ = browser_window_id;
-}
-
 void ExtensionFrameHelper::NotifyRenderViewType(mojom::ViewType type) {
   // TODO(devlin): It'd be really nice to be able to
   // DCHECK_EQ(mojom::ViewType::kInvalid, view_type_) here.
@@ -475,10 +488,9 @@ void ExtensionFrameHelper::NotifyRenderViewType(mojom::ViewType type) {
 void ExtensionFrameHelper::MessageInvoke(const std::string& extension_id,
                                          const std::string& module_name,
                                          const std::string& function_name,
-                                         const base::Value args) {
+                                         base::Value::List args) {
   extension_dispatcher_->InvokeModuleSystemMethod(
-      render_frame(), extension_id, module_name, function_name,
-      base::Value::AsListValue(args));
+      render_frame(), extension_id, module_name, function_name, args);
 }
 
 void ExtensionFrameHelper::ExecuteCode(mojom::ExecuteCodeParamsPtr param,
@@ -486,7 +498,8 @@ void ExtensionFrameHelper::ExecuteCode(mojom::ExecuteCodeParamsPtr param,
   // Sanity checks.
   if (param->injection->is_css()) {
     if (param->injection->get_css()->sources.empty()) {
-      mojo::ReportBadMessage("At least one CSS source must be specified.");
+      local_frame_receiver_.ReportBadMessage(
+          "At least one CSS source must be specified.");
       return;
     }
 
@@ -496,14 +509,15 @@ void ExtensionFrameHelper::ExecuteCode(mojom::ExecuteCodeParamsPtr param,
                               [](const mojom::CSSSourcePtr& source) {
                                 return source->key.has_value();
                               })) {
-      mojo::ReportBadMessage(
+      local_frame_receiver_.ReportBadMessage(
           "An injection key must be specified for CSS removal.");
       return;
     }
   } else {
     DCHECK(param->injection->is_js());  // Enforced by mojo.
     if (param->injection->get_js()->sources.empty()) {
-      mojo::ReportBadMessage("At least one JS source must be specified.");
+      local_frame_receiver_.ReportBadMessage(
+          "At least one JS source must be specified.");
       return;
     }
   }
@@ -517,7 +531,7 @@ void ExtensionFrameHelper::SetFrameName(const std::string& name) {
 }
 
 void ExtensionFrameHelper::AppWindowClosed(bool send_onclosed) {
-  DCHECK(render_frame()->IsMainFrame());
+  DCHECK(render_frame()->GetWebFrame()->IsOutermostMainFrame());
 
   if (!send_onclosed)
     return;
@@ -555,12 +569,20 @@ void ExtensionFrameHelper::ExecuteDeclarativeScript(
   }
 }
 
+void ExtensionFrameHelper::UpdateBrowserWindowId(int32_t window_id) {
+  browser_window_id_ = window_id;
+}
+
+void ExtensionFrameHelper::NotifyDidCreateScriptContext(int32_t world_id) {
+  did_create_script_context_ = true;
+}
+
 void ExtensionFrameHelper::OnDestruct() {
   delete this;
 }
 
 void ExtensionFrameHelper::DraggableRegionsChanged() {
-  if (!render_frame()->IsMainFrame())
+  if (!render_frame()->GetWebFrame()->IsOutermostMainFrame())
     return;
 
   blink::WebVector<blink::WebDraggableRegion> webregions =
@@ -575,6 +597,25 @@ void ExtensionFrameHelper::DraggableRegionsChanged() {
     region.draggable = webregion.draggable;
   }
   Send(new ExtensionHostMsg_UpdateDraggableRegions(routing_id(), regions));
+}
+
+void ExtensionFrameHelper::DidClearWindowObject() {
+  // DidClearWindowObject() is called right at the end of
+  // DocumentLoader::CreateParserPostCommit(). This is late enough in the commit
+  // process that it won't interfere with any optimizations, since the code
+  // below may cause the V8 context to be initialized.
+  //
+  // Calling this multiple times in a page load is safe because
+  // SetAllowsCrossBrowsingInstanceFrameLookup() just sets a bool to true on the
+  // SecurityOrigin.
+  if (base::FeatureList::IsEnabled(
+          extensions_features::kAvoidEarlyExtensionScriptContextCreation)) {
+    // Grant cross browsing instance frame lookup if we are an extension. This
+    // should match the conditions in FindFrame.
+    content::RenderFrame* frame = render_frame();
+    if (GetExtensionFromFrame(frame))
+      frame->SetAllowsCrossBrowsingInstanceFrameLookup();
+  }
 }
 
 }  // namespace extensions

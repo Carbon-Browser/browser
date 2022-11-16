@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_util.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/test_simple_task_runner.h"
@@ -29,6 +29,12 @@ class InitAwareBackgroundDownloadServiceTest : public testing::Test {
       : controller_(nullptr),
         task_runner_(new base::TestSimpleTaskRunner),
         handle_(task_runner_) {}
+
+  InitAwareBackgroundDownloadServiceTest(
+      const InitAwareBackgroundDownloadServiceTest&) = delete;
+  InitAwareBackgroundDownloadServiceTest& operator=(
+      const InitAwareBackgroundDownloadServiceTest&) = delete;
+
   ~InitAwareBackgroundDownloadServiceTest() override = default;
 
   void SetUp() override {
@@ -39,12 +45,10 @@ class InitAwareBackgroundDownloadServiceTest : public testing::Test {
   }
 
  protected:
-  test::MockController* controller_;
+  raw_ptr<test::MockController> controller_;
   std::unique_ptr<InitAwareBackgroundDownloadService> service_;
   scoped_refptr<base::TestSimpleTaskRunner> task_runner_;
   base::ThreadTaskRunnerHandle handle_;
-
-  DISALLOW_COPY_AND_ASSIGN(InitAwareBackgroundDownloadServiceTest);
 };
 
 }  // namespace

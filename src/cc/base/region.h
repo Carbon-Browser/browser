@@ -11,7 +11,7 @@
 #include "cc/base/base_export.h"
 #include "third_party/skia/include/core/SkRegion.h"
 #include "ui/gfx/geometry/rect.h"
-#include "ui/gfx/skia_util.h"
+#include "ui/gfx/geometry/skia_conversions.h"
 
 class SkPath;
 
@@ -40,6 +40,11 @@ class CC_BASE_EXPORT Region {
   const Region& operator=(const gfx::Rect& rect);
   const Region& operator=(const Region& region);
   const Region& operator+=(const gfx::Vector2d& offset);
+
+  // Returns a reference to a global empty Region. This should only be used for
+  // functions that need to return a reference to a Region, not instead of the
+  // default constructor.
+  static const Region& Empty();
 
   void Swap(Region* region);
   void Clear();

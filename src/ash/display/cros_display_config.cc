@@ -31,7 +31,7 @@
 #include "ui/display/display_layout_builder.h"
 #include "ui/display/display_observer.h"
 #include "ui/display/manager/display_manager.h"
-#include "ui/display/manager/display_util.h"
+#include "ui/display/manager/display_manager_util.h"
 #include "ui/display/mojom/display_mojom_traits.h"
 #include "ui/display/screen.h"
 
@@ -210,7 +210,7 @@ mojom::DisplayConfigResult SetDisplayLayoutMode(
       absl::in_place, source.id(), destination_ids);
   const display::MixedMirrorModeParamsErrors error_type =
       display::ValidateParamsForMixedMirrorMode(
-          display_manager->GetCurrentDisplayIdList(), *mixed_params);
+          display_manager->GetConnectedDisplayIdList(), *mixed_params);
   switch (error_type) {
     case display::MixedMirrorModeParamsErrors::kErrorSingleDisplay:
       return mojom::DisplayConfigResult::kMirrorModeSingleDisplayError;
@@ -347,11 +347,9 @@ mojom::DisplayUnitInfoPtr GetDisplayUnitInfo(const display::Display& display,
   info->display_zoom_factor = display_info.zoom_factor();
   if (has_active_mode) {
     auto zoom_levels = display::GetDisplayZoomFactors(active_mode);
-    // Ensure that the current zoom factor is in the list.
-    display::InsertDsfIntoList(&zoom_levels, display_info.zoom_factor());
+    info->available_display_zoom_factors.reserve(zoom_levels.size());
     info->available_display_zoom_factors.assign(zoom_levels.begin(),
                                                 zoom_levels.end());
-
   } else {
     info->available_display_zoom_factors.push_back(display_info.zoom_factor());
   }
@@ -519,6 +517,9 @@ class CrosDisplayConfig::ObserverImpl
     Shell::Get()->screen_orientation_controller()->AddObserver(this);
   }
 
+  ObserverImpl(const ObserverImpl&) = delete;
+  ObserverImpl& operator=(const ObserverImpl&) = delete;
+
   ~ObserverImpl() override {
     Shell::Get()->screen_orientation_controller()->RemoveObserver(this);
     Shell::Get()->tablet_mode_controller()->RemoveObserver(this);
@@ -563,8 +564,6 @@ class CrosDisplayConfig::ObserverImpl
 
   mojo::AssociatedRemoteSet<mojom::CrosDisplayConfigObserver> observers_;
   display::ScopedDisplayObserver display_observer_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ObserverImpl);
 };
 
 // -----------------------------------------------------------------------------
@@ -644,7 +643,7 @@ mojom::DisplayConfigResult SetDisplayLayouts(
   }
 
   const display::DisplayIdList display_ids =
-      display_manager->GetCurrentDisplayIdList();
+      display_manager->GetConnectedDisplayIdList();
   std::unique_ptr<display::DisplayLayout> layout = builder.Build();
   if (display_manager->IsInUnifiedMode()) {
     if (root_id == display::kInvalidDisplayId) {

@@ -11,6 +11,7 @@ import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.Callback;
 import org.chromium.base.Log;
+import org.chromium.base.StreamUtil;
 import org.chromium.base.task.PostTask;
 import org.chromium.base.task.TaskTraits;
 import org.chromium.content_public.browser.UiThreadTaskTraits;
@@ -49,10 +50,11 @@ public class CachedImageFetcher extends ImageFetcher {
          *         failed.
          */
         BaseGifImage tryToLoadGifFromDisk(String filePath) {
+            FileInputStream fileInputStream = null;
             try {
                 File file = new File(filePath);
                 byte[] fileBytes = new byte[(int) file.length()];
-                FileInputStream fileInputStream = new FileInputStream(filePath);
+                fileInputStream = new FileInputStream(filePath);
 
                 int bytesRead = fileInputStream.read(fileBytes);
                 if (bytesRead != fileBytes.length) return null;
@@ -61,6 +63,8 @@ public class CachedImageFetcher extends ImageFetcher {
             } catch (IOException e) {
                 Log.w(TAG, "Failed to read: %s", filePath, e);
                 return null;
+            } finally {
+                StreamUtil.closeQuietly(fileInputStream);
             }
         }
     }
@@ -133,7 +137,9 @@ public class CachedImageFetcher extends ImageFetcher {
             Bitmap cachedBitmap, long startTimeMillis) {
         if (cachedBitmap != null) {
             // In case the image's dimensions on disk don't match the desired dimensions.
-            cachedBitmap = ImageFetcher.resizeImage(cachedBitmap, params.width, params.height);
+            if (params.shouldResize) {
+                cachedBitmap = ImageFetcher.resizeImage(cachedBitmap, params.width, params.height);
+            }
             callback.onResult(cachedBitmap);
             reportEvent(params.clientName, ImageFetcherEvent.JAVA_DISK_CACHE_HIT);
             getImageFetcherBridge().reportCacheHitTime(params.clientName, startTimeMillis);

@@ -12,6 +12,7 @@
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
 #import "ios/chrome/test/earl_grey/chrome_matchers.h"
 #import "ios/chrome/test/earl_grey/chrome_test_case.h"
+#include "ios/chrome/test/earl_grey/scoped_block_popups_pref.h"
 #include "ios/net/url_test_util.h"
 #import "ios/testing/earl_grey/earl_grey_test.h"
 #include "ios/web/public/test/element_selector.h"
@@ -40,23 +41,18 @@ id<GREYMatcher> PopupBlocker() {
 }  // namespace
 
 // Test case for opening child windows by DOM.
-@interface WindowOpenByDOMTestCase : ChromeTestCase
+@interface WindowOpenByDOMTestCase : ChromeTestCase {
+  std::unique_ptr<ScopedBlockPopupsPref> _blockPopupsPref;
+}
+
 @end
 
 @implementation WindowOpenByDOMTestCase
 
-+ (void)setUpForTestCase {
-  [super setUpForTestCase];
-  [ChromeEarlGrey setContentSettings:CONTENT_SETTING_ALLOW];
-}
-
-+ (void)tearDown {
-  [ChromeEarlGrey setContentSettings:CONTENT_SETTING_DEFAULT];
-  [super tearDown];
-}
-
 - (void)setUp {
   [super setUp];
+  _blockPopupsPref =
+      std::make_unique<ScopedBlockPopupsPref>(CONTENT_SETTING_ALLOW);
   GREYAssertTrue(self.testServer->Start(), @"Server did not start.");
 
   // Open the test page. There should only be one tab open.
@@ -83,24 +79,16 @@ id<GREYMatcher> PopupBlocker() {
 - (void)testWindowOpenWithSpecialURL {
   [ChromeEarlGrey
       tapWebStateElementWithID:@"webScenarioWindowOpenWithSpecialURL"];
-  if (@available(iOS 13, *)) {
-    // Starting from iOS 13 WebKit does not rewrite URL that ends with /..;
-    [ChromeEarlGrey waitForMainTabCount:2];
-  } else {
-    // Prior to iOS 13 WebKit rewries URL that ends with /..; to invalid URL
-    // so Chrome opens about:blank for that invalid URL.
-    [ChromeEarlGrey waitForMainTabCount:2];
-    [[EarlGrey selectElementWithMatcher:OmniboxText("about:blank")]
-        assertWithMatcher:grey_notNil()];
-  }
+  // Starting from iOS 13 WebKit does not rewrite URL that ends with /..;
+  [ChromeEarlGrey waitForMainTabCount:2];
 }
 
 // Tests executing script that clicks a link with target="_blank".
 - (void)testLinkWithBlankTargetWithoutUserGesture {
-  [ChromeEarlGrey setContentSettings:CONTENT_SETTING_BLOCK];
-  [ChromeEarlGrey
-      executeJavaScript:@"document.getElementById('"
-                        @"webScenarioWindowOpenRegularLink').click()"];
+  ScopedBlockPopupsPref prefSetter(CONTENT_SETTING_BLOCK);
+  [ChromeEarlGrey evaluateJavaScriptForSideEffect:
+                      @"document.getElementById('"
+                      @"webScenarioWindowOpenRegularLink').click()"];
   [ChromeEarlGrey waitForSufficientlyVisibleElementWithMatcher:PopupBlocker()];
   [ChromeEarlGrey waitForMainTabCount:1];
 }
@@ -171,7 +159,7 @@ id<GREYMatcher> PopupBlocker() {
   [ChromeEarlGrey
       tapWebStateElementWithID:@"webScenarioWindowOpenWithDelayedClose"];
   [ChromeEarlGrey waitForMainTabCount:2];
-  base::test::ios::SpinRunLoopWithMinDelay(base::TimeDelta::FromSecondsD(5));
+  base::test::ios::SpinRunLoopWithMinDelay(base::Seconds(5));
   [ChromeEarlGrey waitForMainTabCount:1];
 }
 
@@ -247,7 +235,7 @@ id<GREYMatcher> PopupBlocker() {
 // Tests that popup blocking works when a popup is injected into a window before
 // its initial load is committed.
 - (void)testBlockPopupInjectedIntoOpenedWindow {
-  [ChromeEarlGrey setContentSettings:CONTENT_SETTING_BLOCK];
+  ScopedBlockPopupsPref prefSetter(CONTENT_SETTING_BLOCK);
   [ChromeEarlGrey
       tapWebStateElementWithID:@"webScenarioOpenWindowAndInjectPopup"];
   [[EarlGrey selectElementWithMatcher:PopupBlocker()]

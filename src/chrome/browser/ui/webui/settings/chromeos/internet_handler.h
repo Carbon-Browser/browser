@@ -7,18 +7,13 @@
 
 #include <memory>
 
-#include "base/macros.h"
+#include "ash/components/tether/gms_core_notifications_state_tracker.h"
 #include "chrome/browser/ui/webui/settings/settings_page_ui_handler.h"
-#include "chromeos/components/tether/gms_core_notifications_state_tracker.h"
 #include "ui/gfx/native_widget_types.h"
 
 class Profile;
 
 namespace chromeos {
-
-namespace tether {
-class GmsCoreNotificationsStateTracker;
-}  // namespace tether
 
 namespace settings {
 
@@ -28,6 +23,10 @@ class InternetHandler
       public ::settings::SettingsPageUIHandler {
  public:
   explicit InternetHandler(Profile* profile);
+
+  InternetHandler(const InternetHandler&) = delete;
+  InternetHandler& operator=(const InternetHandler&) = delete;
+
   ~InternetHandler() override;
 
   // SettingsPageUIHandler implementation.
@@ -42,12 +41,12 @@ class InternetHandler
   friend class InternetHandlerTest;
 
   // Settings JS handlers.
-  void AddThirdPartyVpn(const base::ListValue* args);
-  void ConfigureThirdPartyVpn(const base::ListValue* args);
+  void AddThirdPartyVpn(const base::Value::List& args);
+  void ConfigureThirdPartyVpn(const base::Value::List& args);
   void RequestGmsCoreNotificationsDisabledDeviceNames(
-      const base::ListValue* args);
-  void ShowCarrierAccountDetail(const base::ListValue* args);
-  void ShowCellularSetupUI(const base::ListValue* args);
+      const base::Value::List& args);
+  void ShowCarrierAccountDetail(const base::Value::List& args);
+  void ShowCellularSetupUI(const base::Value::List& args);
 
   // Sets list of names of devices whose "Google Play Services" notifications
   // are disabled.
@@ -62,14 +61,12 @@ class InternetHandler
       chromeos::tether::GmsCoreNotificationsStateTracker*
           gms_core_notifications_state_tracker);
 
-  std::vector<std::unique_ptr<base::Value>> device_names_without_notifications_;
+  std::vector<base::Value> device_names_without_notifications_;
 
   Profile* const profile_;
 
   chromeos::tether::GmsCoreNotificationsStateTracker*
       gms_core_notifications_state_tracker_;
-
-  DISALLOW_COPY_AND_ASSIGN(InternetHandler);
 };
 
 }  // namespace settings

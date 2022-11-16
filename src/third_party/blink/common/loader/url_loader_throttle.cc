@@ -15,7 +15,8 @@ void URLLoaderThrottle::Delegate::UpdateDeferredRequestHeaders(
     const net::HttpRequestHeaders& modified_request_headers,
     const net::HttpRequestHeaders& modified_cors_exempt_request_headers) {}
 void URLLoaderThrottle::Delegate::UpdateDeferredResponseHead(
-    network::mojom::URLResponseHeadPtr new_response_head) {}
+    network::mojom::URLResponseHeadPtr new_response_head,
+    mojo::ScopedDataPipeConsumerHandle body) {}
 void URLLoaderThrottle::Delegate::PauseReadingBodyFromNet() {}
 void URLLoaderThrottle::Delegate::ResumeReadingBodyFromNet() {}
 
@@ -24,7 +25,8 @@ void URLLoaderThrottle::Delegate::InterceptResponse(
     mojo::PendingReceiver<network::mojom::URLLoaderClient> new_client_receiver,
     mojo::PendingRemote<network::mojom::URLLoader>* original_loader,
     mojo::PendingReceiver<network::mojom::URLLoaderClient>*
-        original_client_receiver) {
+        original_client_receiver,
+    mojo::ScopedDataPipeConsumerHandle* body) {
   NOTIMPLEMENTED();
 }
 
@@ -34,16 +36,6 @@ void URLLoaderThrottle::Delegate::RestartWithFlags(int additional_load_flags) {
 
 void URLLoaderThrottle::Delegate::RestartWithURLResetAndFlags(
     int additional_load_flags) {
-  NOTIMPLEMENTED();
-}
-
-void URLLoaderThrottle::Delegate::RestartWithURLResetAndFlagsNow(
-    int additional_load_flags) {
-  NOTIMPLEMENTED();
-}
-
-void URLLoaderThrottle::Delegate::RestartWithModifiedHeadersNow(
-    const net::HttpRequestHeaders& modified_headers) {
   NOTIMPLEMENTED();
 }
 
@@ -84,13 +76,17 @@ void URLLoaderThrottle::BeforeWillProcessResponse(
     const network::mojom::URLResponseHead& response_head,
     bool* defer) {}
 
+void URLLoaderThrottle::BeforeWillRedirectRequest(
+    net::RedirectInfo* redirect_info,
+    const network::mojom::URLResponseHead& response_head,
+    bool* defer,
+    std::vector<std::string>* to_be_removed_request_headers,
+    net::HttpRequestHeaders* modified_request_headers,
+    net::HttpRequestHeaders* modified_cors_exempt_request_headers) {}
+
 void URLLoaderThrottle::WillOnCompleteWithError(
     const network::URLLoaderCompletionStatus& status,
     bool* defer) {}
-
-void URLLoaderThrottle::HandleAcceptCHFrameReceived(
-    const GURL& url,
-    const std::vector<network::mojom::WebClientHintsType>& accept_ch_frame) {}
 
 bool URLLoaderThrottle::makes_unsafe_redirect() {
   return false;

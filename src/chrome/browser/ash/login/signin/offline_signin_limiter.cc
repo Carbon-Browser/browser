@@ -7,6 +7,7 @@
 #include <string>
 #include <utility>
 
+#include "ash/components/proximity_auth/screenlock_bridge.h"
 #include "ash/constants/ash_switches.h"
 #include "base/bind.h"
 #include "base/callback_helpers.h"
@@ -22,8 +23,8 @@
 #include "chrome/browser/ash/login/login_pref_names.h"
 #include "chrome/browser/ash/login/reauth_stats.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
+#include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chromeos/components/proximity_auth/screenlock_bridge.h"
 #include "components/prefs/pref_service.h"
 #include "components/session_manager/core/session_manager.h"
 #include "components/session_manager/core/session_manager_observer.h"
@@ -273,7 +274,7 @@ absl::optional<base::TimeDelta> OfflineSigninLimiter::GetGaiaNoSamlTimeLimit() {
     return absl::nullopt;
 
   return absl::make_optional<base::TimeDelta>(
-      base::TimeDelta::FromDays(no_saml_offline_limit));
+      base::Days(no_saml_offline_limit));
 }
 
 absl::optional<base::TimeDelta> OfflineSigninLimiter::GetGaiaSamlTimeLimit() {
@@ -288,7 +289,7 @@ absl::optional<base::TimeDelta> OfflineSigninLimiter::GetGaiaSamlTimeLimit() {
     return absl::nullopt;
 
   return absl::make_optional<base::TimeDelta>(
-      base::TimeDelta::FromSeconds(saml_offline_limit));
+      base::Seconds(saml_offline_limit));
 }
 
 absl::optional<base::TimeDelta>
@@ -313,7 +314,7 @@ OfflineSigninLimiter::GetGaiaNoSamlLockScreenTimeLimit() {
   }
 
   return absl::make_optional<base::TimeDelta>(
-      base::TimeDelta::FromDays(no_saml_lock_screen_offline_limit));
+      base::Days(no_saml_lock_screen_offline_limit));
 }
 
 absl::optional<base::TimeDelta>
@@ -338,7 +339,7 @@ OfflineSigninLimiter::GetGaiaSamlLockScreenTimeLimit() {
   }
 
   return absl::make_optional<base::TimeDelta>(
-      base::TimeDelta::FromDays(saml_lock_screen_offline_limit));
+      base::Days(saml_lock_screen_offline_limit));
 }
 
 absl::optional<base::TimeDelta>
@@ -350,8 +351,7 @@ OfflineSigninLimiter::GetTimeLimitOverrideForTesting() {
             switches::kOfflineSignInTimeLimitInSecondsOverrideForTesting);
     int numeric_val = 0;
     if (base::StringToInt(ascii_value, &numeric_val) && numeric_val >= 0) {
-      return absl::make_optional<base::TimeDelta>(
-          base::TimeDelta::FromSeconds(numeric_val));
+      return absl::make_optional<base::TimeDelta>(base::Seconds(numeric_val));
     }
     LOG(WARNING)
         << "Manual offline signin time limit override requested but failed.";
@@ -411,8 +411,9 @@ void OfflineSigninLimiter::UpdateOnlineSigninData(
     return;
   }
 
-  user_manager::known_user::SetLastOnlineSignin(user->GetAccountId(), time);
-  user_manager::known_user::SetOfflineSigninLimit(user->GetAccountId(), limit);
+  user_manager::KnownUser known_user(g_browser_process->local_state());
+  known_user.SetLastOnlineSignin(user->GetAccountId(), time);
+  known_user.SetOfflineSigninLimit(user->GetAccountId(), limit);
 }
 
 }  // namespace ash

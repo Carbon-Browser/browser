@@ -7,7 +7,6 @@
 #include <utility>
 
 #include "base/bind.h"
-#include "base/task/post_task.h"
 #include "components/image_fetcher/core/image_fetcher_metrics_reporter.h"
 #include "net/base/data_url.h"
 #include "net/base/load_flags.h"
@@ -134,8 +133,7 @@ void ImageDataFetcher::FetchImageData(const GURL& image_url,
   // body will get thrown out anyway, though.
   loader->SetAllowHttpErrorResults(true);
 
-  loader->SetTimeoutDuration(
-      base::TimeDelta::FromSeconds(kDownloadTimeoutSeconds));
+  loader->SetTimeoutDuration(base::Seconds(kDownloadTimeoutSeconds));
 
   if (max_download_bytes_.has_value()) {
     loader->DownloadToString(

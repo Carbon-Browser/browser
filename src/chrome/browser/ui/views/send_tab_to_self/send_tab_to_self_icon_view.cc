@@ -9,8 +9,8 @@
 #include "chrome/browser/send_tab_to_self/send_tab_to_self_util.h"
 #include "chrome/browser/sharing_hub/sharing_hub_features.h"
 #include "chrome/browser/ui/browser_command_controller.h"
-#include "chrome/browser/ui/send_tab_to_self/send_tab_to_self_bubble_controller.h"
-#include "chrome/browser/ui/views/send_tab_to_self/send_tab_to_self_bubble_view_impl.h"
+#include "chrome/browser/ui/views/send_tab_to_self/send_tab_to_self_bubble_controller.h"
+#include "chrome/browser/ui/views/send_tab_to_self/send_tab_to_self_device_picker_bubble_view.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/omnibox/browser/omnibox_edit_model.h"
 #include "components/omnibox/browser/omnibox_view.h"
@@ -43,8 +43,7 @@ views::BubbleDialogDelegate* SendTabToSelfIconView::GetBubble() const {
     return nullptr;
   }
 
-  return static_cast<SendTabToSelfBubbleViewImpl*>(
-      controller->send_tab_to_self_bubble_view());
+  return controller->send_tab_to_self_bubble_view();
 }
 
 void SendTabToSelfIconView::UpdateImpl() {
@@ -87,7 +86,6 @@ void SendTabToSelfIconView::UpdateImpl() {
   }
   if (!GetVisible() && omnibox_view->model()->has_focus() &&
       !omnibox_view->model()->user_input_in_progress()) {
-    SendTabToSelfBubbleController* controller = GetController();
     // Shows the "Send" animation once per profile.
     if (controller && !controller->InitialSendAnimationShown() &&
         initial_animation_state_ == AnimationState::kNotShown) {

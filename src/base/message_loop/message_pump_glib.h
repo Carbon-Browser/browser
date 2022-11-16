@@ -8,7 +8,7 @@
 #include <memory>
 
 #include "base/base_export.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/message_loop/message_pump.h"
 #include "base/message_loop/watchable_io_message_pump_posix.h"
 #include "base/threading/thread_checker.h"
@@ -28,6 +28,10 @@ class BASE_EXPORT MessagePumpGlib : public MessagePump,
   class FdWatchController : public FdWatchControllerInterface {
    public:
     explicit FdWatchController(const Location& from_here);
+
+    FdWatchController(const FdWatchController&) = delete;
+    FdWatchController& operator=(const FdWatchController&) = delete;
+
     ~FdWatchController() override;
 
     // FdWatchControllerInterface:
@@ -59,17 +63,19 @@ class BASE_EXPORT MessagePumpGlib : public MessagePump,
     void NotifyCanRead();
     void NotifyCanWrite();
 
-    FdWatcher* watcher_ = nullptr;
-    GSource* source_ = nullptr;
+    raw_ptr<FdWatcher> watcher_ = nullptr;
+    raw_ptr<GSource> source_ = nullptr;
     std::unique_ptr<GPollFD> poll_fd_;
     // If this pointer is non-null, the pointee is set to true in the
     // destructor.
-    bool* was_destroyed_ = nullptr;
-
-    DISALLOW_COPY_AND_ASSIGN(FdWatchController);
+    raw_ptr<bool> was_destroyed_ = nullptr;
   };
 
   MessagePumpGlib();
+
+  MessagePumpGlib(const MessagePumpGlib&) = delete;
+  MessagePumpGlib& operator=(const MessagePumpGlib&) = delete;
+
   ~MessagePumpGlib() override;
 
   // Part of WatchableIOMessagePumpPosix interface.
@@ -94,7 +100,8 @@ class BASE_EXPORT MessagePumpGlib : public MessagePump,
   void Run(Delegate* delegate) override;
   void Quit() override;
   void ScheduleWork() override;
-  void ScheduleDelayedWork(const TimeTicks& delayed_work_time) override;
+  void ScheduleDelayedWork(
+      const Delegate::NextWorkInfo& next_work_info) override;
 
   // Internal methods used for processing the FdWatchSource callbacks. As for
   // main pump callbacks, they are public for simplicity but should not be used
@@ -109,17 +116,17 @@ class BASE_EXPORT MessagePumpGlib : public MessagePump,
   // separate between them in this structure type.
   struct RunState;
 
-  RunState* state_;
+  raw_ptr<RunState> state_;
 
   // This is a GLib structure that we can add event sources to.  On the main
   // thread, we use the default GLib context, which is the one to which all GTK
   // events are dispatched.
-  GMainContext* context_ = nullptr;
+  raw_ptr<GMainContext, DanglingUntriaged> context_ = nullptr;
   bool context_owned_ = false;
 
   // The work source.  It is shared by all calls to Run and destroyed when
   // the message pump is destroyed.
-  GSource* work_source_;
+  raw_ptr<GSource, DanglingUntriaged> work_source_;
 
   // We use a wakeup pipe to make sure we'll get out of the glib polling phase
   // when another thread has scheduled us to do some work.  There is a glib
@@ -131,8 +138,6 @@ class BASE_EXPORT MessagePumpGlib : public MessagePump,
   std::unique_ptr<GPollFD> wakeup_gpollfd_;
 
   THREAD_CHECKER(watch_fd_caller_checker_);
-
-  DISALLOW_COPY_AND_ASSIGN(MessagePumpGlib);
 };
 
 }  // namespace base

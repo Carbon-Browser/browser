@@ -52,6 +52,11 @@ void DuplicateDownloadDialogBridge::Show(
   JNIEnv* env = base::android::AttachCurrentThread();
   base::android::ScopedJavaLocalRef<jobject> j_otr_profile_id;
   ui::WindowAndroid* window_android = web_contents->GetTopLevelNativeWindow();
+  if (!window_android) {
+    base::ThreadTaskRunnerHandle::Get()->PostTask(
+        FROM_HERE, base::BindOnce(std::move(callback), false));
+    return;
+  }
   // If belongs to an off-the-record profile, then the OTRProfileID should be
   // taken from the browser context to support multiple off-the-record profiles.
   content::BrowserContext* browser_context = web_contents->GetBrowserContext();
@@ -62,19 +67,25 @@ void DuplicateDownloadDialogBridge::Show(
       j_otr_profile_id = otr_profile_id->ConvertToJavaOTRProfileID(env);
     }
   }
+  // Copy |callback| on the heap to pass the pointer through JNI. This callback
+  // will be deleted when it's run.
+  CHECK(!callback.is_null());
+  jlong callback_id = reinterpret_cast<jlong>(
+      new DuplicateDownloadDialogCallback(std::move(callback)));
+  validator_.AddJavaCallback(callback_id);
   Java_DuplicateDownloadDialogBridge_showDialog(
       env, java_object_, window_android->GetJavaObject(),
       base::android::ConvertUTF16ToJavaString(env,
                                               base::UTF8ToUTF16(file_path)),
       base::android::ConvertUTF16ToJavaString(env, base::UTF8ToUTF16(page_url)),
-      total_bytes, duplicate_request_exists, j_otr_profile_id,
-      reinterpret_cast<intptr_t>(
-          new DuplicateDownloadDialogCallback(std::move(callback))));
+      total_bytes, duplicate_request_exists, j_otr_profile_id, callback_id);
 }
 
 void DuplicateDownloadDialogBridge::OnConfirmed(JNIEnv* env,
                                                 jlong callback_id,
                                                 jboolean accepted) {
+  if (!validator_.ValidateAndClearJavaCallback(callback_id))
+    return;
   // Convert java long long int to c++ pointer, take ownership.
   std::unique_ptr<DuplicateDownloadDialogCallback> cb(
       reinterpret_cast<DuplicateDownloadDialogCallback*>(callback_id));

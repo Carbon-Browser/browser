@@ -13,15 +13,12 @@
 #include <vector>
 
 #include "base/callback.h"
-#include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
-#include "chrome/browser/ash/login/demo_mode/demo_mode_detector.h"
 #include "chrome/browser/ash/login/screens/base_screen.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 // TODO(https://crbug.com/1164001): move to forward declaration.
 #include "chrome/browser/ash/login/wizard_context.h"
 // TODO(https://crbug.com/1164001): move to forward declaration.
+#include "ash/components/hid_detection/hid_detection_manager.h"
 #include "chrome/browser/ui/webui/chromeos/login/hid_detection_screen_handler.h"
 #include "device/bluetooth/bluetooth_adapter.h"
 #include "device/bluetooth/bluetooth_device.h"
@@ -39,7 +36,7 @@ class HIDDetectionScreen : public BaseScreen,
                            public device::BluetoothAdapter::Observer,
                            public device::BluetoothDevice::PairingDelegate,
                            public device::mojom::InputDeviceManagerClient,
-                           public DemoModeDetector::Observer {
+                           public hid_detection::HidDetectionManager::Delegate {
  public:
   using TView = HIDDetectionView;
   using InputDeviceInfoPtr = device::mojom::InputDeviceInfoPtr;
@@ -51,9 +48,18 @@ class HIDDetectionScreen : public BaseScreen,
 
   HIDDetectionScreen(HIDDetectionView* view,
                      const ScreenExitCallback& exit_callback);
+
+  HIDDetectionScreen(const HIDDetectionScreen&) = delete;
+  HIDDetectionScreen& operator=(const HIDDetectionScreen&) = delete;
+
   ~HIDDetectionScreen() override;
 
   static std::string GetResultString(Result result);
+
+  // The HID detection screen is only allowed for form factors without built-in
+  // inputs: Chromebases, Chromebits, and Chromeboxes (crbug.com/965765).
+  // Also different testing flags might forcefully skip the screen
+  static bool CanShowScreen();
 
   // This method is called when the view is being destroyed.
   void OnViewDestroyed(HIDDetectionView* view);
@@ -69,6 +75,12 @@ class HIDDetectionScreen : public BaseScreen,
   static void OverrideInputDeviceManagerBinderForTesting(
       InputDeviceManagerBinder binder);
 
+  // Allows tests to override what HidDetectionManager implementation is used
+  // when the kOobeHidDetectionRevamp flag is enabled.
+  static void OverrideHidDetectionManagerForTesting(
+      std::unique_ptr<hid_detection::HidDetectionManager>
+          hid_detection_manager);
+
   void InputDeviceAddedForTesting(InputDeviceInfoPtr info);
   const absl::optional<Result>& get_exit_result_for_testing() const {
     return exit_result_for_testing_;
@@ -81,7 +93,7 @@ class HIDDetectionScreen : public BaseScreen,
   bool MaybeSkip(WizardContext* context) override;
   void ShowImpl() override;
   void HideImpl() override;
-  void OnUserAction(const std::string& action_id) override;
+  void OnUserActionDeprecated(const std::string& action_id) override;
 
   // device::BluetoothDevice::PairingDelegate:
   void RequestPinCode(device::BluetoothDevice* device) override;
@@ -108,6 +120,10 @@ class HIDDetectionScreen : public BaseScreen,
   // device::mojom::InputDeviceManagerClient:
   void InputDeviceAdded(InputDeviceInfoPtr info) override;
   void InputDeviceRemoved(const std::string& id) override;
+
+  // hid_detection::HidDetectionManager::Delegate:
+  void OnHidDetectionStatusChanged(
+      hid_detection::HidDetectionManager::HidDetectionStatus status) override;
 
   // Called when continue button was clicked.
   void OnContinueButtonClicked();
@@ -214,8 +230,6 @@ class HIDDetectionScreen : public BaseScreen,
   const ScreenExitCallback exit_callback_;
   absl::optional<Result> exit_result_for_testing_;
 
-  std::unique_ptr<DemoModeDetector> demo_mode_detector_;
-
   // Default bluetooth adapter, used for all operations.
   scoped_refptr<device::BluetoothAdapter> adapter_;
 
@@ -256,9 +270,11 @@ class HIDDetectionScreen : public BaseScreen,
 
   bool devices_enumerated_ = false;
 
-  base::WeakPtrFactory<HIDDetectionScreen> weak_ptr_factory_{this};
+  size_t num_pairing_attempts_ = 0;
 
-  DISALLOW_COPY_AND_ASSIGN(HIDDetectionScreen);
+  std::unique_ptr<hid_detection::HidDetectionManager> hid_detection_manager_;
+
+  base::WeakPtrFactory<HIDDetectionScreen> weak_ptr_factory_{this};
 };
 
 }  // namespace ash

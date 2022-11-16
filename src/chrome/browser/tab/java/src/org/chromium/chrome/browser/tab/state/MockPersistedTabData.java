@@ -5,14 +5,18 @@
 package org.chromium.chrome.browser.tab.state;
 
 import org.chromium.base.Callback;
-import org.chromium.base.supplier.Supplier;
+import org.chromium.base.annotations.DoNotClassMerge;
 import org.chromium.chrome.browser.tab.Tab;
 
 import java.nio.ByteBuffer;
 
 /**
  * MockPersistedTabData object used for testing
+ *
+ * This class should not be merged because it is being used as a key in a Map
+ * in PersistedTabDataConfiguration.java.
  */
+@DoNotClassMerge
 public class MockPersistedTabData extends PersistedTabData {
     private int mField;
 
@@ -42,8 +46,8 @@ public class MockPersistedTabData extends PersistedTabData {
      * @param callback callback {@link MockPersistedTabData} will be passed back in
      */
     public static void from(Tab tab, Callback<MockPersistedTabData> callback) {
-        PersistedTabData.from(tab, (data, storage, id) -> {
-            return new MockPersistedTabData(tab, data, storage, id);
+        PersistedTabData.from(tab, (data, storage, id, factoryCallback) -> {
+            factoryCallback.onResult(new MockPersistedTabData(tab, data, storage, id));
         }, null, MockPersistedTabData.class, callback);
     }
 
@@ -64,7 +68,7 @@ public class MockPersistedTabData extends PersistedTabData {
     }
 
     @Override
-    public Supplier<ByteBuffer> getSerializeSupplier() {
+    public Serializer<ByteBuffer> getSerializer() {
         ByteBuffer byteBuffer = ByteBuffer.allocate(4).putInt(mField);
         byteBuffer.rewind();
         return () -> {

@@ -3,7 +3,6 @@
 // found in the LICENSE file.
 
 #include "base/command_line.h"
-#include "base/metrics/field_trial.h"
 #include "base/path_service.h"
 #include "base/posix/global_descriptors.h"
 #include "base/strings/stringprintf.h"
@@ -53,9 +52,6 @@ bool ChildProcessLauncherHelper::BeforeLaunchOnLauncherThread(
   options->fds_to_remap = files_to_register.GetMappingWithIDAdjustment(
       base::GlobalDescriptors::kBaseDescriptor);
 
-  base::FieldTrialList::InsertFieldTrialHandleIfNeeded(
-      &options->mach_ports_for_rendezvous);
-
   mojo::PlatformHandle endpoint =
       mojo_channel_->TakeRemoteEndpoint().TakePlatformHandle();
   DCHECK(endpoint.is_valid_mach_receive());
@@ -101,6 +97,11 @@ bool ChildProcessLauncherHelper::BeforeLaunchOnLauncherThread(
     // communication FD to the helper executable.
     command_line_->AppendArg(
         base::StringPrintf("%s%d", sandbox::switches::kSeatbeltClient, pipe));
+  }
+
+  for (const auto& remapped_fd : file_data_->additional_remapped_fds) {
+    options->fds_to_remap.emplace_back(remapped_fd.second.get(),
+                                       remapped_fd.first);
   }
 
   return true;

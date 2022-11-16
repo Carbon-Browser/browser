@@ -16,6 +16,10 @@ namespace settings {
 class PluginVmHandler : public ::settings::SettingsPageUIHandler {
  public:
   explicit PluginVmHandler(Profile* profile);
+
+  PluginVmHandler(const PluginVmHandler&) = delete;
+  PluginVmHandler& operator=(const PluginVmHandler&) = delete;
+
   ~PluginVmHandler() override;
 
   // SettingsPageUIHandler
@@ -26,15 +30,13 @@ class PluginVmHandler : public ::settings::SettingsPageUIHandler {
  private:
   // Checks if Plugin VM would need to be relaunched if the proposed changes are
   // made.
-  void HandleIsRelaunchNeededForNewPermissions(const base::ListValue* args);
+  void HandleIsRelaunchNeededForNewPermissions(const base::Value::List& args);
   // Relaunches Plugin VM.
-  void HandleRelaunchPluginVm(const base::ListValue* args);
+  void HandleRelaunchPluginVm(const base::Value::List& args);
 
   Profile* profile_;
   // weak_ptr_factory_ should always be last member.
   base::WeakPtrFactory<PluginVmHandler> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(PluginVmHandler);
 };
 
 }  // namespace settings

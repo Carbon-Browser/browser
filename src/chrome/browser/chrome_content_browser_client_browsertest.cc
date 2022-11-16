@@ -9,15 +9,13 @@
 
 #include "base/bind.h"
 #include "base/command_line.h"
-#include "base/macros.h"
-#include "base/no_destructor.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/custom_handlers/protocol_handler_registry.h"
 #include "chrome/browser/custom_handlers/protocol_handler_registry_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
@@ -34,6 +32,8 @@
 #include "chrome/common/url_constants.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
+#include "components/custom_handlers/protocol_handler.h"
+#include "components/custom_handlers/protocol_handler_registry.h"
 #include "components/network_session_configurator/common/network_switches.h"
 #include "components/policy/core/common/cloud/cloud_policy_constants.h"
 #include "components/prefs/pref_service.h"
@@ -65,7 +65,7 @@
 #include "url/url_constants.h"
 #endif
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 #include "chrome/test/base/launchservices_utils_mac.h"
 #endif
 
@@ -77,12 +77,14 @@ class ChromeContentBrowserClientBrowserTest : public InProcessBrowserTest {
  public:
   ChromeContentBrowserClientBrowserTest() {}
 
+  ChromeContentBrowserClientBrowserTest(
+      const ChromeContentBrowserClientBrowserTest&) = delete;
+  ChromeContentBrowserClientBrowserTest& operator=(
+      const ChromeContentBrowserClientBrowserTest&) = delete;
+
   void SetUpCommandLine(base::CommandLine* command_line) override {
     content::IsolateAllSitesForTesting(command_line);
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ChromeContentBrowserClientBrowserTest);
 };
 
 // Test that a basic navigation works in --site-per-process mode.  This prevents
@@ -111,6 +113,10 @@ class IsolatedOriginNTPBrowserTest : public InProcessBrowserTest,
  public:
   IsolatedOriginNTPBrowserTest() {}
 
+  IsolatedOriginNTPBrowserTest(const IsolatedOriginNTPBrowserTest&) = delete;
+  IsolatedOriginNTPBrowserTest& operator=(const IsolatedOriginNTPBrowserTest&) =
+      delete;
+
   void SetUpCommandLine(base::CommandLine* command_line) override {
     ASSERT_TRUE(https_test_server().InitializeAndListen());
 
@@ -127,9 +133,6 @@ class IsolatedOriginNTPBrowserTest : public InProcessBrowserTest,
     host_resolver()->AddRule("*", "127.0.0.1");
     https_test_server().StartAcceptingConnections();
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(IsolatedOriginNTPBrowserTest);
 };
 
 // Verifies that when the remote NTP URL has an origin which is also marked as
@@ -170,16 +173,16 @@ IN_PROC_BROWSER_TEST_F(IsolatedOriginNTPBrowserTest,
   InstantService* instant_service =
       InstantServiceFactory::GetForProfile(browser()->profile());
   EXPECT_TRUE(instant_service->IsInstantProcess(
-      contents->GetMainFrame()->GetProcess()->GetID()));
-  EXPECT_EQ(contents->GetMainFrame()->GetSiteInstance()->GetSiteURL(),
+      contents->GetPrimaryMainFrame()->GetProcess()->GetID()));
+  EXPECT_EQ(contents->GetPrimaryMainFrame()->GetSiteInstance()->GetSiteURL(),
             ntp_site_instance->GetSiteURL());
 
   // Navigating to a non-NTP URL on ntp.com should not result in an Instant
   // process.
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), isolated_url));
   EXPECT_FALSE(instant_service->IsInstantProcess(
-      contents->GetMainFrame()->GetProcess()->GetID()));
-  EXPECT_EQ(contents->GetMainFrame()->GetSiteInstance()->GetSiteURL(),
+      contents->GetPrimaryMainFrame()->GetProcess()->GetID()));
+  EXPECT_EQ(contents->GetPrimaryMainFrame()->GetSiteInstance()->GetSiteURL(),
             site_instance->GetSiteURL());
 }
 
@@ -188,6 +191,10 @@ class OpenWindowFromNTPBrowserTest : public InProcessBrowserTest,
                                      public InstantTestBase {
  public:
   OpenWindowFromNTPBrowserTest() {}
+
+  OpenWindowFromNTPBrowserTest(const OpenWindowFromNTPBrowserTest&) = delete;
+  OpenWindowFromNTPBrowserTest& operator=(const OpenWindowFromNTPBrowserTest&) =
+      delete;
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
     command_line->AppendSwitch(switches::kIgnoreCertificateErrors);
@@ -199,9 +206,6 @@ class OpenWindowFromNTPBrowserTest : public InProcessBrowserTest,
     ASSERT_TRUE(https_test_server().InitializeAndListen());
     https_test_server().StartAcceptingConnections();
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(OpenWindowFromNTPBrowserTest);
 };
 
 // Test checks that navigations from NTP tab to URLs with same host as NTP but
@@ -223,7 +227,7 @@ IN_PROC_BROWSER_TEST_F(OpenWindowFromNTPBrowserTest,
   InstantService* instant_service =
       InstantServiceFactory::GetForProfile(browser()->profile());
   EXPECT_TRUE(instant_service->IsInstantProcess(
-      ntp_tab->GetMainFrame()->GetProcess()->GetID()));
+      ntp_tab->GetPrimaryMainFrame()->GetProcess()->GetID()));
 
   // Execute script that creates new window from ntp tab with
   // ntp.com/title1.html as target url. Host is same as remote-ntp host, yet
@@ -246,7 +250,7 @@ IN_PROC_BROWSER_TEST_F(OpenWindowFromNTPBrowserTest,
   EXPECT_EQ(generic_url, opened_tab->GetLastCommittedURL());
   // New created tab should not reside in an Instant process.
   EXPECT_FALSE(instant_service->IsInstantProcess(
-      opened_tab->GetMainFrame()->GetProcess()->GetID()));
+      opened_tab->GetPrimaryMainFrame()->GetProcess()->GetID()));
 }
 
 class PrefersColorSchemeTest : public testing::WithParamInterface<bool>,
@@ -273,7 +277,7 @@ class PrefersColorSchemeTest : public testing::WithParamInterface<bool>,
   ui::TestNativeTheme test_theme_;
 
  private:
-  content::ContentBrowserClient* original_client_ = nullptr;
+  raw_ptr<content::ContentBrowserClient> original_client_ = nullptr;
 
   class ChromeContentBrowserClientWithWebTheme
       : public ChromeContentBrowserClient {
@@ -286,7 +290,7 @@ class PrefersColorSchemeTest : public testing::WithParamInterface<bool>,
     const ui::NativeTheme* GetWebTheme() const override { return theme_; }
 
    private:
-    const ui::NativeTheme* const theme_;
+    const raw_ptr<const ui::NativeTheme> theme_;
   };
 
   base::test::ScopedFeatureList feature_list_;
@@ -395,7 +399,7 @@ class PrefersContrastTest
   ui::TestNativeTheme test_theme_;
 
  private:
-  content::ContentBrowserClient* original_client_ = nullptr;
+  raw_ptr<content::ContentBrowserClient> original_client_ = nullptr;
 
   class ChromeContentBrowserClientWithWebTheme
       : public ChromeContentBrowserClient {
@@ -408,7 +412,7 @@ class PrefersContrastTest
     const ui::NativeTheme* GetWebTheme() const override { return theme_; }
 
    private:
-    const ui::NativeTheme* const theme_;
+    const raw_ptr<const ui::NativeTheme> theme_;
   };
 
   ChromeContentBrowserClientWithWebTheme theme_client_;
@@ -442,6 +446,9 @@ class ProtocolHandlerTest : public InProcessBrowserTest {
  public:
   ProtocolHandlerTest() = default;
 
+  ProtocolHandlerTest(const ProtocolHandlerTest&) = delete;
+  ProtocolHandlerTest& operator=(const ProtocolHandlerTest&) = delete;
+
   void SetUpOnMainThread() override {
     InProcessBrowserTest::SetUpOnMainThread();
     host_resolver()->AddRule("*", "127.0.0.1");
@@ -452,21 +459,18 @@ class ProtocolHandlerTest : public InProcessBrowserTest {
   void AddProtocolHandler(const std::string& scheme,
                           const std::string& redirect_template) {
     protocol_handler_registry()->OnAcceptRegisterProtocolHandler(
-        ProtocolHandler::CreateProtocolHandler(scheme,
-                                               GURL(redirect_template)));
+        custom_handlers::ProtocolHandler::CreateProtocolHandler(
+            scheme, GURL(redirect_template)));
   }
 
-  ProtocolHandlerRegistry* protocol_handler_registry() {
+  custom_handlers::ProtocolHandlerRegistry* protocol_handler_registry() {
     return ProtocolHandlerRegistryFactory::GetInstance()->GetForBrowserContext(
         browser()->profile());
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ProtocolHandlerTest);
 };
 
 IN_PROC_BROWSER_TEST_F(ProtocolHandlerTest, CustomHandler) {
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   ASSERT_TRUE(test::RegisterAppWithLaunchServices());
 #endif
   AddProtocolHandler("news", "https://abc.xyz/?url=%s");
@@ -511,7 +515,7 @@ IN_PROC_BROWSER_TEST_F(ProtocolHandlerTest, ExternalProgramNotLaunched) {
 }
 #endif
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
 class KeepaliveDurationOnShutdownTest : public InProcessBrowserTest,
                                         public InstantTestBase {
  public:
@@ -526,38 +530,32 @@ class KeepaliveDurationOnShutdownTest : public InProcessBrowserTest,
     InProcessBrowserTest::TearDownOnMainThread();
   }
 
-  ChromeContentBrowserClient* client_ = nullptr;
+  raw_ptr<ChromeContentBrowserClient> client_ = nullptr;
 };
 
 IN_PROC_BROWSER_TEST_F(KeepaliveDurationOnShutdownTest, DefaultValue) {
-  Profile* profile =
-      g_browser_process->profile_manager()->GetPrimaryUserProfile();
+  Profile* profile = browser()->profile();
   EXPECT_EQ(client_->GetKeepaliveTimerTimeout(profile), base::TimeDelta());
 }
 
 IN_PROC_BROWSER_TEST_F(KeepaliveDurationOnShutdownTest, PolicySettings) {
-  Profile* profile =
-      g_browser_process->profile_manager()->GetPrimaryUserProfile();
+  Profile* profile = browser()->profile();
   profile->GetPrefs()->SetInteger(prefs::kFetchKeepaliveDurationOnShutdown, 2);
 
-  EXPECT_EQ(client_->GetKeepaliveTimerTimeout(profile),
-            base::TimeDelta::FromSeconds(2));
+  EXPECT_EQ(client_->GetKeepaliveTimerTimeout(profile), base::Seconds(2));
 }
 
 IN_PROC_BROWSER_TEST_F(KeepaliveDurationOnShutdownTest, DynamicUpdate) {
-  Profile* profile =
-      g_browser_process->profile_manager()->GetPrimaryUserProfile();
+  Profile* profile = browser()->profile();
   profile->GetPrefs()->SetInteger(prefs::kFetchKeepaliveDurationOnShutdown, 2);
 
-  EXPECT_EQ(client_->GetKeepaliveTimerTimeout(profile),
-            base::TimeDelta::FromSeconds(2));
+  EXPECT_EQ(client_->GetKeepaliveTimerTimeout(profile), base::Seconds(2));
 
   profile->GetPrefs()->SetInteger(prefs::kFetchKeepaliveDurationOnShutdown, 3);
 
-  EXPECT_EQ(client_->GetKeepaliveTimerTimeout(profile),
-            base::TimeDelta::FromSeconds(3));
+  EXPECT_EQ(client_->GetKeepaliveTimerTimeout(profile), base::Seconds(3));
 }
 
-#endif  // !defined(OS_ANDROID)
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 }  // namespace

@@ -22,6 +22,7 @@
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/models/image_model.h"
 #include "ui/base/resource/resource_bundle.h"
+#include "ui/color/color_id.h"
 #include "ui/gfx/color_palette.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/native_theme/native_theme.h"
@@ -31,9 +32,9 @@
 #include "ui/views/controls/image_view.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/controls/throbber.h"
-#include "ui/views/layout/grid_layout.h"
+#include "ui/views/layout/box_layout.h"
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 #include "base/task/current_thread.h"
 #include "chrome/browser/ui/views/policy/enterprise_startup_dialog_mac_util.h"
 #endif
@@ -99,6 +100,15 @@ END_METADATA
 EnterpriseStartupDialogView::EnterpriseStartupDialogView(
     EnterpriseStartupDialog::DialogResultCallback callback)
     : callback_(std::move(callback)) {
+  views::BoxLayout* layout =
+      SetLayoutManager(std::make_unique<views::BoxLayout>());
+  layout->set_main_axis_alignment(views::BoxLayout::MainAxisAlignment::kCenter);
+  layout->set_cross_axis_alignment(
+      views::BoxLayout::CrossAxisAlignment::kCenter);
+  layout->set_between_child_spacing(
+      ChromeLayoutProvider::Get()->GetDistanceMetric(
+          views::DISTANCE_TEXTFIELD_HORIZONTAL_TEXT_PADDING));
+
   set_draggable(true);
   SetButtons(ui::DIALOG_BUTTON_OK);
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
@@ -117,7 +127,7 @@ EnterpriseStartupDialogView::EnterpriseStartupDialogView(
                      base::Unretained(this), false));
   SetBorder(views::CreateEmptyBorder(GetDialogInsets()));
   CreateDialogWidget(this, nullptr, nullptr)->Show();
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   base::ThreadTaskRunnerHandle::Get()->PostTask(
       FROM_HERE, base::BindOnce(&EnterpriseStartupDialogView::StartModalDialog,
                                 weak_factory_.GetWeakPtr()));
@@ -136,7 +146,7 @@ void EnterpriseStartupDialogView::DisplayLaunchingInformationWithThrobber(
   throbber->SetPreferredSize(throbber_size);
   throbber->Start();
 
-  SetupLayout(std::move(throbber), std::move(text));
+  AddContent(std::move(throbber), std::move(text));
 }
 
 void EnterpriseStartupDialogView::DisplayErrorMessage(
@@ -146,8 +156,7 @@ void EnterpriseStartupDialogView::DisplayErrorMessage(
   std::unique_ptr<views::Label> text = CreateText(error_message);
   auto error_icon =
       std::make_unique<views::ImageView>(ui::ImageModel::FromVectorIcon(
-          kBrowserToolsErrorIcon, ui::NativeTheme::kColorId_AlertSeverityHigh,
-          kIconSize));
+          kBrowserToolsErrorIcon, ui::kColorAlertHighSeverity, kIconSize));
 
   if (accept_button) {
     // TODO(ellyjones): This should use SetButtonLabel()
@@ -155,7 +164,7 @@ void EnterpriseStartupDialogView::DisplayErrorMessage(
     // dialog's layout.
     GetOkButton()->SetText(*accept_button);
   }
-  SetupLayout(std::move(error_icon), std::move(text));
+  AddContent(std::move(error_icon), std::move(text));
 }
 
 void EnterpriseStartupDialogView::CloseDialog() {
@@ -173,14 +182,14 @@ void EnterpriseStartupDialogView::RemoveWidgetObserver(
 }
 
 void EnterpriseStartupDialogView::StartModalDialog() {
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   base::CurrentThread::ScopedNestableTaskAllower allow_nested;
   StartModal(GetWidget()->GetNativeWindow());
 #endif
 }
 
 void EnterpriseStartupDialogView::RunDialogCallback(bool was_accepted) {
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   // On mac, we need to stop the modal message loop before returning the result
   // to the caller who controls its own run loop.
   StopModal();
@@ -211,34 +220,15 @@ void EnterpriseStartupDialogView::ResetDialog(bool show_accept_button) {
   RemoveAllChildViews();
 }
 
-void EnterpriseStartupDialogView::SetupLayout(
+void EnterpriseStartupDialogView::AddContent(
     std::unique_ptr<views::View> icon,
     std::unique_ptr<views::View> text) {
-  // Padding between icon and text
-  int text_padding = ChromeLayoutProvider::Get()->GetDistanceMetric(
-      views::DISTANCE_TEXTFIELD_HORIZONTAL_TEXT_PADDING);
+  AddChildView(std::move(icon));
+  AddChildView(std::move(text));
 
-  views::GridLayout* layout =
-      SetLayoutManager(std::make_unique<views::GridLayout>());
-  auto* columnset = layout->AddColumnSet(0);
-  // Horizontally centre the content.
-  columnset->AddPaddingColumn(1.0, 0);
-  columnset->AddColumn(views::GridLayout::FILL, views::GridLayout::FILL,
-                       views::GridLayout::kFixedSize,
-                       views::GridLayout::ColumnSize::kUsePreferred, 0, 0);
-  columnset->AddPaddingColumn(views::GridLayout::kFixedSize, text_padding);
-  columnset->AddColumn(views::GridLayout::FILL, views::GridLayout::FILL,
-                       views::GridLayout::kFixedSize,
-                       views::GridLayout::ColumnSize::kUsePreferred, 0, 0);
-  columnset->AddPaddingColumn(1.0, 0);
-
-  layout->AddPaddingRow(1.0, 0);
-  layout->StartRow(views::GridLayout::kFixedSize, 0);
-  layout->AddView(std::move(icon));
-  layout->AddView(std::move(text));
-  layout->AddPaddingRow(1.0, 0);
-
-  // TODO(ellyjones): Why is this being done here?
+  // TODO(weili): The child views are added after the dialog shows. So it
+  // requires relayout and repaint. Consider a refactoring to add content
+  // before showing.
   GetWidget()->GetRootView()->Layout();
   GetWidget()->GetRootView()->SchedulePaint();
 }
@@ -276,12 +266,13 @@ void EnterpriseStartupDialogImpl::DisplayErrorMessage(
   if (dialog_view_)
     dialog_view_->DisplayErrorMessage(error_message, accept_button);
 }
+
 bool EnterpriseStartupDialogImpl::IsShowing() {
   return dialog_view_;
 }
 
 // views::WidgetObserver:
-void EnterpriseStartupDialogImpl::OnWidgetClosing(views::Widget* widget) {
+void EnterpriseStartupDialogImpl::OnWidgetDestroying(views::Widget* widget) {
   dialog_view_->RemoveWidgetObserver(this);
   dialog_view_ = nullptr;
 }

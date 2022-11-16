@@ -7,10 +7,10 @@
 
 #include <memory>
 
+#include "ash/components/login/auth/login_performer.h"
 #include "base/callback_list.h"
-#include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
+#include "chrome/browser/ash/login/help_app_launcher.h"
 #include "chrome/browser/ash/login/screens/base_screen.h"
 #include "chrome/browser/ash/login/screens/network_error.h"
 // TODO(https://crbug.com/1164001): move to forward declaration.
@@ -19,8 +19,7 @@
 // TODO(https://crbug.com/1164001): move to forward declaration.
 #include "chrome/browser/ui/webui/chromeos/login/error_screen_handler.h"
 #include "chrome/browser/ui/webui/chromeos/login/network_state_informer.h"
-#include "chromeos/login/auth/login_performer.h"
-#include "chromeos/network/network_connection_observer.h"
+#include "chromeos/ash/components/network/network_connection_observer.h"
 #include "components/web_modal/web_contents_modal_dialog_manager_delegate.h"
 
 namespace ash {
@@ -30,20 +29,11 @@ class ErrorScreen : public BaseScreen,
                     public LoginPerformer::Delegate,
                     public NetworkConnectionObserver {
  public:
-  // TODO(jdufault): Some of these are no longer used and can be removed. See
-  // crbug.com/672142.
-  static const char kUserActionConfigureCertsButtonClicked[];
-  static const char kUserActionDiagnoseButtonClicked[];
-  static const char kUserActionLaunchOobeGuestSessionClicked[];
-  static const char kUserActionLocalStateErrorPowerwashButtonClicked[];
-  static const char kUserActionRebootButtonClicked[];
-  static const char kUserActionShowCaptivePortalClicked[];
-  static const char kUserActionNetworkConnected[];
-  static const char kUserActionReloadGaia[];
-  static const char kUserActionCancelReset[];
-  static const char kUserActionCancel[];
+  explicit ErrorScreen(base::WeakPtr<ErrorScreenView> view);
 
-  explicit ErrorScreen(ErrorScreenView* view);
+  ErrorScreen(const ErrorScreen&) = delete;
+  ErrorScreen& operator=(const ErrorScreen&) = delete;
+
   ~ErrorScreen() override;
 
   CaptivePortalWindowProxy* captive_portal_window_proxy() {
@@ -66,16 +56,12 @@ class ErrorScreen : public BaseScreen,
   NetworkError::ErrorState GetErrorState() const;
 
   // Returns id of the screen behind error screen ("caller" screen).
-  // Returns OobeScreen::SCREEN_UNKNOWN if error screen isn't the current
+  // Returns ash::OOBE_SCREEN_UNKNOWN if error screen isn't the current
   // screen.
   OobeScreenId GetParentScreen() const;
 
   // Called when we're asked to hide captive portal dialog.
   void HideCaptivePortal();
-
-  // This method is called, when view is being destroyed. Note, if model
-  // is destroyed earlier then it has to call Unbind().
-  void OnViewDestroyed(ErrorScreenView* view);
 
   // Sets current UI state.
   virtual void SetUIState(NetworkError::UIState ui_state);
@@ -110,12 +96,6 @@ class ErrorScreen : public BaseScreen,
   // been created.
   void MaybeInitCaptivePortalWindowProxy(content::WebContents* web_contents);
 
-  // Actually show or hide the screen. These are called by ErrorScreenHandler;
-  // having two show methods (Show/Hide from BaseScreen below) is confusing
-  // and this should be cleaned up.
-  void DoShow();
-  void DoHide();
-
   void ShowNetworkErrorMessage(NetworkStateInformer::State state,
                                NetworkError::ErrorReason reason);
 
@@ -123,7 +103,7 @@ class ErrorScreen : public BaseScreen,
   // BaseScreen:
   void ShowImpl() override;
   void HideImpl() override;
-  void OnUserAction(const std::string& action_id) override;
+  void OnUserAction(const base::Value::List& args) override;
 
  private:
   // LoginPerformer::Delegate overrides:
@@ -162,15 +142,24 @@ class ErrorScreen : public BaseScreen,
   // Handle user action to reload gaia.
   void OnReloadGaiaClicked();
 
+  // Handle user action to continue app launch.
+  void OnContinueAppLaunchButtonClicked();
+
+  // Handle user action to open learn more.
+  void LaunchHelpApp(int help_topic_id);
+
   // If show is true offline login flow is enabled from the error screen.
   void ShowOfflineLoginOption(bool show);
+
+  // Handle user action to login in offline mode.
+  void OnOfflineLoginClicked();
 
   // Handles the response of an ownership check and starts the guest session if
   // applicable.
   void StartGuestSessionAfterOwnershipCheck(
       DeviceSettingsService::OwnershipStatus ownership_status);
 
-  ErrorScreenView* view_ = nullptr;
+  base::WeakPtr<ErrorScreenView> view_;
 
   // We have the guest login logic in this screen because it might be required
   // quite early during OOBE. When Login screen is not yet shown and existing
@@ -188,7 +177,7 @@ class ErrorScreen : public BaseScreen,
   NetworkError::UIState ui_state_ = NetworkError::UI_STATE_UNKNOWN;
   NetworkError::ErrorState error_state_ = NetworkError::ERROR_STATE_UNKNOWN;
 
-  OobeScreenId parent_screen_ = OobeScreen::SCREEN_UNKNOWN;
+  OobeScreenId parent_screen_ = ash::OOBE_SCREEN_UNKNOWN;
 
   // Optional callback that is called when NetworkError screen is hidden.
   base::OnceClosure on_hide_callback_;
@@ -196,9 +185,10 @@ class ErrorScreen : public BaseScreen,
   // Callbacks to be invoked when a connection attempt is requested.
   base::RepeatingCallbackList<void()> connect_request_callbacks_;
 
-  base::WeakPtrFactory<ErrorScreen> weak_factory_{this};
+  // Help application used for help dialogs.
+  scoped_refptr<HelpAppLauncher> help_app_;
 
-  DISALLOW_COPY_AND_ASSIGN(ErrorScreen);
+  base::WeakPtrFactory<ErrorScreen> weak_factory_{this};
 };
 
 }  // namespace ash

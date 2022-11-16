@@ -23,6 +23,10 @@ class MockSyncService : public syncer::TestSyncService {
     SetTransportState(TransportState::INITIALIZING);
     SetLastCycleSnapshot(syncer::SyncCycleSnapshot());
   }
+
+  MockSyncService(const MockSyncService&) = delete;
+  MockSyncService& operator=(const MockSyncService&) = delete;
+
   ~MockSyncService() override { Shutdown(); }
 
   void SetStatus(bool has_passphrase, bool history_enabled, bool active) {
@@ -38,12 +42,9 @@ class MockSyncService : public syncer::TestSyncService {
     // SyncCycleSnapshot is initialized at all.
     SetLastCycleSnapshot(syncer::SyncCycleSnapshot(
         /*birthday=*/std::string(), /*bag_of_chips=*/std::string(),
-        syncer::ModelNeutralState(), syncer::ProgressMarkerMap(), false, 0, 0,
-        0, true, 0, base::Time::Now(), base::Time::Now(),
-        std::vector<int>(syncer::GetNumModelTypes(), 0),
-        std::vector<int>(syncer::GetNumModelTypes(), 0),
-        sync_pb::SyncEnums::UNKNOWN_ORIGIN, base::TimeDelta::FromMinutes(1),
-        false));
+        syncer::ModelNeutralState(), syncer::ProgressMarkerMap(), false, 0,
+        true, base::Time::Now(), base::Time::Now(),
+        sync_pb::SyncEnums::UNKNOWN_ORIGIN, base::Minutes(1), false));
 
     NotifyObserversOfStateChanged();
   }
@@ -76,13 +77,16 @@ class MockSyncService : public syncer::TestSyncService {
 
   // The list of observers of the SyncService state.
   base::ObserverList<syncer::SyncServiceObserver>::Unchecked observers_;
-
-  DISALLOW_COPY_AND_ASSIGN(MockSyncService);
 };
 
 class TestUkmConsentStateObserver : public UkmConsentStateObserver {
  public:
   TestUkmConsentStateObserver() : purged_(false), notified_(false) {}
+
+  TestUkmConsentStateObserver(const TestUkmConsentStateObserver&) = delete;
+  TestUkmConsentStateObserver& operator=(const TestUkmConsentStateObserver&) =
+      delete;
+
   ~TestUkmConsentStateObserver() override {}
 
   bool ResetPurged() {
@@ -105,12 +109,16 @@ class TestUkmConsentStateObserver : public UkmConsentStateObserver {
   }
   bool purged_;
   bool notified_;
-  DISALLOW_COPY_AND_ASSIGN(TestUkmConsentStateObserver);
 };
 
 class UkmConsentStateObserverTest : public testing::Test {
  public:
   UkmConsentStateObserverTest() {}
+
+  UkmConsentStateObserverTest(const UkmConsentStateObserverTest&) = delete;
+  UkmConsentStateObserverTest& operator=(const UkmConsentStateObserverTest&) =
+      delete;
+
   void RegisterUrlKeyedAnonymizedDataCollectionPref(
       sync_preferences::TestingPrefServiceSyncable& prefs) {
     unified_consent::UnifiedConsentService::RegisterPrefs(prefs.registry());
@@ -122,9 +130,6 @@ class UkmConsentStateObserverTest : public testing::Test {
         unified_consent::prefs::kUrlKeyedAnonymizedDataCollectionEnabled,
         enabled);
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(UkmConsentStateObserverTest);
 };
 
 }  // namespace

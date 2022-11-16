@@ -114,7 +114,8 @@ libgav1::StatusCode GetFrameBufferImpl(void* callback_private_data,
   // VideoFramePool creates frames with a fixed alignment of
   // VideoFrame::kFrameAddressAlignment. If libgav1 requests a larger
   // alignment, it cannot be supported.
-  CHECK_LE(stride_alignment, VideoFrame::kFrameAddressAlignment);
+  CHECK_LE(static_cast<size_t>(stride_alignment),
+           VideoFrame::kFrameAddressAlignment);
 
   const VideoPixelFormat format =
       Libgav1ImageFormatToVideoPixelFormat(image_format, bitdepth);
@@ -208,8 +209,7 @@ scoped_refptr<VideoFrame> FormatVideoFrame(
     const VideoColorSpace& container_color_space) {
   scoped_refptr<VideoFrame> frame =
       static_cast<VideoFrame*>(buffer.buffer_private_data);
-  frame->set_timestamp(
-      base::TimeDelta::FromMicroseconds(buffer.user_private_data));
+  frame->set_timestamp(base::Microseconds(buffer.user_private_data));
 
   // AV1 color space defines match ISO 23001-8:2016 via ISO/IEC 23091-4/ITU-T
   // H.273. https://aomediacodec.github.io/av1-spec/#color-config-semantics
@@ -270,7 +270,8 @@ void Gav1VideoDecoder::Initialize(const VideoDecoderConfig& config,
   InitCB bound_init_cb = bind_callbacks_ ? BindToCurrentLoop(std::move(init_cb))
                                          : std::move(init_cb);
   if (config.is_encrypted() || config.codec() != VideoCodec::kAV1) {
-    std::move(bound_init_cb).Run(StatusCode::kEncryptedContentUnsupported);
+    std::move(bound_init_cb)
+        .Run(DecoderStatus::Codes::kUnsupportedEncryptionMode);
     return;
   }
 
@@ -296,7 +297,7 @@ void Gav1VideoDecoder::Initialize(const VideoDecoderConfig& config,
   if (status != kLibgav1StatusOk) {
     MEDIA_LOG(ERROR, media_log_) << "libgav1::Decoder::Init() failed, "
                                  << "status=" << status;
-    std::move(bound_init_cb).Run(StatusCode::kDecoderFailedInitialization);
+    std::move(bound_init_cb).Run(DecoderStatus::Codes::kFailedToCreateDecoder);
     return;
   }
 
@@ -304,7 +305,7 @@ void Gav1VideoDecoder::Initialize(const VideoDecoderConfig& config,
   state_ = DecoderState::kDecoding;
   color_space_ = config.color_space_info();
   aspect_ratio_ = config.aspect_ratio();
-  std::move(bound_init_cb).Run(OkStatus());
+  std::move(bound_init_cb).Run(DecoderStatus::Codes::kOk);
 }
 
 void Gav1VideoDecoder::Decode(scoped_refptr<DecoderBuffer> buffer,
@@ -321,18 +322,18 @@ void Gav1VideoDecoder::Decode(scoped_refptr<DecoderBuffer> buffer,
                                  : std::move(decode_cb);
 
   if (state_ == DecoderState::kError) {
-    std::move(bound_decode_cb).Run(DecodeStatus::DECODE_ERROR);
+    std::move(bound_decode_cb).Run(DecoderStatus::Codes::kFailed);
     return;
   }
 
   if (!DecodeBuffer(std::move(buffer))) {
     state_ = DecoderState::kError;
-    std::move(bound_decode_cb).Run(DecodeStatus::DECODE_ERROR);
+    std::move(bound_decode_cb).Run(DecoderStatus::Codes::kFailed);
     return;
   }
 
   // VideoDecoderShim expects |decode_cb| call after |output_cb_|.
-  std::move(bound_decode_cb).Run(DecodeStatus::OK);
+  std::move(bound_decode_cb).Run(DecoderStatus::Codes::kOk);
 }
 
 bool Gav1VideoDecoder::DecodeBuffer(scoped_refptr<DecoderBuffer> buffer) {
@@ -419,10 +420,6 @@ void Gav1VideoDecoder::Reset(base::OnceClosure reset_cb) {
   } else {
     std::move(reset_cb).Run();
   }
-}
-
-bool Gav1VideoDecoder::IsOptimizedForRTC() const {
-  return true;
 }
 
 void Gav1VideoDecoder::Detach() {

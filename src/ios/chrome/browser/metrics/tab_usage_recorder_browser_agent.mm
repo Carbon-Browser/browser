@@ -314,8 +314,8 @@ void TabUsageRecorderBrowserAgent::RendererTerminated(
 
   // Clear |termination_timestamps_| of timestamps older than
   // |kSecondsBeforeRendererTermination| ago.
-  base::TimeDelta seconds_before = base::TimeDelta::FromSeconds(
-      tab_usage_recorder::kSecondsBeforeRendererTermination);
+  base::TimeDelta seconds_before =
+      base::Seconds(tab_usage_recorder::kSecondsBeforeRendererTermination);
   base::TimeTicks timestamp_boundary = now - seconds_before;
   while (termination_timestamps_.front() < timestamp_boundary) {
     termination_timestamps_.pop_front();
@@ -509,7 +509,7 @@ bool TabUsageRecorderBrowserAgent::ShouldRecordPageLoadStartForNavigation(
       ui::PAGE_TRANSITION_KEYWORD_GENERATED,
   };
 
-  for (size_t i = 0; i < base::size(kRecordedPageTransitionTypes); ++i) {
+  for (size_t i = 0; i < std::size(kRecordedPageTransitionTypes); ++i) {
     const ui::PageTransition recorded_type = kRecordedPageTransitionTypes[i];
     if (ui::PageTransitionCoreTypeIs(transition, recorded_type)) {
       return true;

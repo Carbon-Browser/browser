@@ -7,9 +7,8 @@
 
 #include <map>
 
-#include "base/compiler_specific.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/media_galleries/media_galleries_dialog_controller.h"
 #include "ui/views/context_menu_controller.h"
 #include "ui/views/window/dialog_delegate.h"
@@ -31,6 +30,11 @@ class MediaGalleriesDialogViews : public MediaGalleriesDialog,
  public:
   explicit MediaGalleriesDialogViews(
       MediaGalleriesDialogController* controller);
+
+  MediaGalleriesDialogViews(const MediaGalleriesDialogViews&) = delete;
+  MediaGalleriesDialogViews& operator=(const MediaGalleriesDialogViews&) =
+      delete;
+
   ~MediaGalleriesDialogViews() override;
 
   // MediaGalleriesDialog:
@@ -82,17 +86,17 @@ class MediaGalleriesDialogViews : public MediaGalleriesDialog,
   // Callback for MenuRunner.
   void OnMenuClosed();
 
-  MediaGalleriesDialogController* controller_;
+  raw_ptr<MediaGalleriesDialogController> controller_;
 
   // The contents of the dialog. Owned by the view hierarchy, except in tests.
-  views::View* contents_;
+  raw_ptr<views::View> contents_;
 
   // A map from gallery ID to views::Checkbox view.
   CheckboxMap checkbox_map_;
 
   // Pointer to the controller specific auxiliary button, NULL otherwise.
   // Owned by parent in the dialog views tree.
-  views::LabelButton* auxiliary_button_;
+  raw_ptr<views::LabelButton> auxiliary_button_;
 
   // This tracks whether the confirm button can be clicked. It starts as false
   // if no checkboxes are ticked. After there is any interaction, or some
@@ -103,8 +107,6 @@ class MediaGalleriesDialogViews : public MediaGalleriesDialog,
   bool accepted_;
 
   std::unique_ptr<views::MenuRunner> context_menu_runner_;
-
-  DISALLOW_COPY_AND_ASSIGN(MediaGalleriesDialogViews);
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_EXTENSIONS_MEDIA_GALLERIES_DIALOG_VIEWS_H_

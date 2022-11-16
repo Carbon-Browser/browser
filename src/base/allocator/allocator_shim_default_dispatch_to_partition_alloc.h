@@ -12,13 +12,15 @@
 namespace base {
 namespace internal {
 
+void PartitionAllocSetCallNewHandlerOnMallocFailure(bool value);
+
 class BASE_EXPORT PartitionAllocMalloc {
  public:
-  static ThreadSafePartitionRoot* Allocator();
+  static partition_alloc::ThreadSafePartitionRoot* Allocator();
   // May return |nullptr|, will never return the same pointer as |Allocator()|.
-  static ThreadSafePartitionRoot* OriginalAllocator();
+  static partition_alloc::ThreadSafePartitionRoot* OriginalAllocator();
   // May return the same pointer as |Allocator()|.
-  static ThreadSafePartitionRoot* AlignedAllocator();
+  static partition_alloc::ThreadSafePartitionRoot* AlignedAllocator();
 };
 
 BASE_EXPORT void* PartitionMalloc(const base::allocator::AllocatorDispatch*,
@@ -59,7 +61,7 @@ BASE_EXPORT void* PartitionRealloc(const base::allocator::AllocatorDispatch*,
                                    void* context);
 
 BASE_EXPORT void PartitionFree(const base::allocator::AllocatorDispatch*,
-                               void* address,
+                               void* object,
                                void* context);
 
 BASE_EXPORT size_t

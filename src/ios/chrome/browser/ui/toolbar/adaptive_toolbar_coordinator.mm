@@ -8,7 +8,17 @@
 #include "ios/chrome/browser/browser_state/chrome_browser_state.h"
 #import "ios/chrome/browser/main/browser.h"
 #import "ios/chrome/browser/overlays/public/overlay_presenter.h"
+#import "ios/chrome/browser/search_engines/template_url_service_factory.h"
+#import "ios/chrome/browser/ui/commands/activity_service_commands.h"
+#import "ios/chrome/browser/ui/commands/application_commands.h"
 #import "ios/chrome/browser/ui/commands/command_dispatcher.h"
+#import "ios/chrome/browser/ui/commands/find_in_page_commands.h"
+#import "ios/chrome/browser/ui/commands/omnibox_commands.h"
+#import "ios/chrome/browser/ui/commands/popup_menu_commands.h"
+#import "ios/chrome/browser/ui/main/layout_guide_scene_agent.h"
+#import "ios/chrome/browser/ui/main/scene_state.h"
+#import "ios/chrome/browser/ui/main/scene_state_browser_agent.h"
+#import "ios/chrome/browser/ui/menu/browser_action_factory.h"
 #import "ios/chrome/browser/ui/ntp/ntp_util.h"
 #import "ios/chrome/browser/ui/toolbar/adaptive_toolbar_coordinator+subclassing.h"
 #import "ios/chrome/browser/ui/toolbar/adaptive_toolbar_view_controller.h"
@@ -18,6 +28,7 @@
 #import "ios/chrome/browser/ui/toolbar/buttons/toolbar_tools_menu_button.h"
 #import "ios/chrome/browser/ui/toolbar/toolbar_mediator.h"
 #import "ios/chrome/browser/ui/util/uikit_ui_util.h"
+#import "ios/chrome/browser/url_loading/url_loading_browser_agent.h"
 #import "ios/chrome/browser/web/web_navigation_browser_agent.h"
 #import "ios/chrome/browser/web_state_list/web_state_list.h"
 
@@ -33,6 +44,8 @@
 @property(nonatomic, strong) ToolbarMediator* mediator;
 // Actions handler for the toolbar buttons.
 @property(nonatomic, strong) ToolbarButtonActionsHandler* actionHandler;
+// The layout guide center to use to coordinate views.
+@property(nonatomic, readonly) LayoutGuideCenter* layoutGuideCenter;
 
 @end
 
@@ -56,6 +69,7 @@
       self.browser->GetBrowserState()->IsOffTheRecord()
           ? UIUserInterfaceStyleDark
           : UIUserInterfaceStyleUnspecified;
+  self.viewController.layoutGuideCenter = self.layoutGuideCenter;
 
   self.mediator = [[ToolbarMediator alloc] init];
   self.mediator.incognito = self.browser->GetBrowserState()->IsOffTheRecord();
@@ -63,6 +77,14 @@
   self.mediator.webStateList = self.browser->GetWebStateList();
   self.mediator.webContentAreaOverlayPresenter = OverlayPresenter::FromBrowser(
       self.browser, OverlayModality::kWebContentArea);
+  self.mediator.templateURLService =
+      ios::TemplateURLServiceFactory::GetForBrowserState(
+          self.browser->GetBrowserState());
+  self.mediator.actionFactory =
+      [[BrowserActionFactory alloc] initWithBrowser:self.browser
+                                           scenario:MenuScenario::kToolbarMenu];
+
+  self.viewController.menuProvider = self.mediator;
 }
 
 - (void)stop {
@@ -72,6 +94,18 @@
 }
 
 #pragma mark - Properties
+
+- (LayoutGuideCenter*)layoutGuideCenter {
+  SceneState* sceneState =
+      SceneStateBrowserAgent::FromBrowser(self.browser)->GetSceneState();
+  LayoutGuideSceneAgent* layoutGuideSceneAgent =
+      [LayoutGuideSceneAgent agentFromScene:sceneState];
+  if (self.browser->GetBrowserState()->IsOffTheRecord()) {
+    return layoutGuideSceneAgent.incognitoLayoutGuideCenter;
+  } else {
+    return layoutGuideSceneAgent.layoutGuideCenter;
+  }
+}
 
 - (void)setLongPressDelegate:(id<PopupMenuLongPressDelegate>)longPressDelegate {
   _longPressDelegate = longPressDelegate;
@@ -121,20 +155,30 @@
   BOOL isIncognito = self.browser->GetBrowserState()->IsOffTheRecord();
   ToolbarStyle style = isIncognito ? INCOGNITO : NORMAL;
 
-  self.actionHandler = [[ToolbarButtonActionsHandler alloc] init];
-  // TODO(crbug.com/1045047): Use HandlerForProtocol after commands protocol
-  // clean up.
-  self.actionHandler.dispatcher =
-      static_cast<id<ApplicationCommands, BrowserCommands, FindInPageCommands,
-                     OmniboxCommands>>(self.browser->GetCommandDispatcher());
-  self.actionHandler.incognito =
-      self.browser->GetBrowserState()->IsOffTheRecord();
-  self.actionHandler.navigationAgent =
+  ToolbarButtonActionsHandler* actionHandler =
+      [[ToolbarButtonActionsHandler alloc] init];
+
+  CommandDispatcher* dispatcher = self.browser->GetCommandDispatcher();
+
+  actionHandler.applicationHandler =
+      HandlerForProtocol(dispatcher, ApplicationCommands);
+  actionHandler.activityHandler =
+      HandlerForProtocol(dispatcher, ActivityServiceCommands);
+  actionHandler.menuHandler = HandlerForProtocol(dispatcher, PopupMenuCommands);
+  actionHandler.findHandler =
+      HandlerForProtocol(dispatcher, FindInPageCommands);
+  actionHandler.omniboxHandler =
+      HandlerForProtocol(dispatcher, OmniboxCommands);
+
+  actionHandler.incognito = isIncognito;
+  actionHandler.navigationAgent =
       WebNavigationBrowserAgent::FromBrowser(self.browser);
+
+  self.actionHandler = actionHandler;
 
   ToolbarButtonFactory* buttonFactory =
       [[ToolbarButtonFactory alloc] initWithStyle:style];
-  buttonFactory.actionHandler = self.actionHandler;
+  buttonFactory.actionHandler = actionHandler;
   buttonFactory.visibilityConfiguration =
       [[ToolbarButtonVisibilityConfiguration alloc] initWithType:type];
 

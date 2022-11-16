@@ -142,7 +142,7 @@ public class TranslateCompactInfoBar extends InfoBar
                 (TranslateTabLayout) content.findViewById(R.id.weblayer_translate_infobar_tabs);
         if (mDefaultTextColor > 0) {
             mTabLayout.setTabTextColors(
-                    ContextCompat.getColor(getContext(), R.color.default_text_color),
+                    ContextCompat.getColor(getContext(), R.color.default_text_color_baseline),
                     ContextCompat.getColor(
                             getContext(), R.color.weblayer_tab_layout_selected_tab_color));
         }
@@ -206,13 +206,13 @@ public class TranslateCompactInfoBar extends InfoBar
         switch (menuType) {
             case TranslateMenu.MENU_OVERFLOW:
                 mOverflowMenuHelper = new TranslateMenuHelper(getContext(), mMenuButton, mOptions,
-                        this, isIncognito, isSourceLangUnknown);
+                        this, isIncognito, isSourceLangUnknown, () -> null);
                 return;
             case TranslateMenu.MENU_TARGET_LANGUAGE:
             case TranslateMenu.MENU_SOURCE_LANGUAGE:
                 if (mLanguageMenuHelper == null) {
                     mLanguageMenuHelper = new TranslateMenuHelper(getContext(), mMenuButton,
-                            mOptions, this, isIncognito, isSourceLangUnknown);
+                            mOptions, this, isIncognito, isSourceLangUnknown, () -> null);
                 }
                 return;
             default:

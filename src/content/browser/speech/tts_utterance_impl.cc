@@ -67,7 +67,6 @@ TtsUtteranceImpl::TtsUtteranceImpl(BrowserContext* browser_context,
       should_clear_queue_(true),
       char_index_(0),
       finished_(false) {
-  options_ = std::make_unique<base::DictionaryValue>();
   if (web_contents) {
     web_contents_ = web_contents->GetWeakPtr();
   }
@@ -88,11 +87,13 @@ void TtsUtteranceImpl::OnTtsEvent(TtsEventType event_type,
   if (IsFinalTtsEventType(event_type))
     finished_ = true;
 
-  if (event_delegate_)
-    event_delegate_->OnTtsEvent(this, event_type, char_index, length,
-                                error_message);
+  UtteranceEventDelegate* delegate = event_delegate_;
+
   if (finished_)
     event_delegate_ = nullptr;
+
+  if (delegate)
+    delegate->OnTtsEvent(this, event_type, char_index, length, error_message);
 }
 
 void TtsUtteranceImpl::Finish() {
@@ -107,12 +108,12 @@ const std::string& TtsUtteranceImpl::GetText() {
   return text_;
 }
 
-void TtsUtteranceImpl::SetOptions(const base::Value* options) {
-  options_ = base::Value::ToUniquePtrValue(options->Clone());
+void TtsUtteranceImpl::SetOptions(base::Value::Dict options) {
+  options_ = std::move(options);
 }
 
-const base::Value* TtsUtteranceImpl::GetOptions() {
-  return options_.get();
+const base::Value::Dict* TtsUtteranceImpl::GetOptions() {
+  return &options_;
 }
 
 void TtsUtteranceImpl::SetSrcId(int src_id) {

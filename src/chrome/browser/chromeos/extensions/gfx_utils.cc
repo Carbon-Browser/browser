@@ -5,7 +5,6 @@
 #include "chrome/browser/chromeos/extensions/gfx_utils.h"
 
 #include "base/containers/cxx20_erase.h"
-#include "base/cxx17_backports.h"
 #include "base/lazy_instance.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/profiles/profile.h"
@@ -13,11 +12,11 @@
 #include "chrome/browser/ui/ash/multi_user/multi_user_util.h"
 #include "chrome/common/extensions/extension_constants.h"
 #include "chrome/common/pref_names.h"
+#include "chrome/grit/app_icon_resources.h"
 #include "components/prefs/pref_service.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/common/constants.h"
 #include "ui/base/resource/resource_bundle.h"
-#include "ui/chromeos/resources/grit/ui_chromeos_resources.h"
 #include "ui/gfx/image/image_skia.h"
 #include "ui/gfx/image/image_skia_operations.h"
 
@@ -39,7 +38,7 @@ const struct {
     {"com.google.android.gm", extension_misc::kGmailAppId},
     {"com.google.android.gm", "bjdhhokmhgelphffoafoejjmlfblpdha"},
     // Google Drive
-    {"com.google.android.apps.docs", extension_misc::kDriveHostedAppId},
+    {"com.google.android.apps.docs", extension_misc::kGoogleDriveAppId},
     {"com.google.android.apps.docs", "mdhnphfgagkpdhndljccoackjjhghlif"},
     // Google Maps
     {"com.google.android.apps.maps", "lneaknkopdijkpnocmklfnjbeapigfbh"},
@@ -50,7 +49,7 @@ const struct {
     {"com.google.android.calendar", "fpgfohogebplgnamlafljlcidjedbdeb"},
     // Google Docs
     {"com.google.android.apps.docs.editors.docs",
-     extension_misc::kGoogleDocAppId},
+     extension_misc::kGoogleDocsAppId},
     {"com.google.android.apps.docs.editors.docs",
      "npnjdccdffhdndcbeappiamcehbhjibf"},
     // Google Slides
@@ -107,13 +106,16 @@ class AppDualBadgeMap {
   using ExtensionToArcAppMap = std::unordered_map<std::string, std::string>;
 
   AppDualBadgeMap() {
-    for (size_t i = 0; i < base::size(kDualBadgeMap); ++i) {
+    for (size_t i = 0; i < std::size(kDualBadgeMap); ++i) {
       arc_app_to_extensions_map_[kDualBadgeMap[i].arc_package_name].push_back(
           kDualBadgeMap[i].extension_id);
       extension_to_arc_app_map_[kDualBadgeMap[i].extension_id] =
           kDualBadgeMap[i].arc_package_name;
     }
   }
+
+  AppDualBadgeMap(const AppDualBadgeMap&) = delete;
+  AppDualBadgeMap& operator=(const AppDualBadgeMap&) = delete;
 
   std::vector<std::string> GetExtensionIdsForArcPackageName(
       std::string arc_package_name) {
@@ -133,8 +135,6 @@ class AppDualBadgeMap {
  private:
   ArcAppToExtensionsMap arc_app_to_extensions_map_;
   ExtensionToArcAppMap extension_to_arc_app_map_;
-
-  DISALLOW_COPY_AND_ASSIGN(AppDualBadgeMap);
 };
 
 base::LazyInstance<AppDualBadgeMap>::DestructorAtExit g_dual_badge_map =
@@ -199,7 +199,7 @@ bool ShouldApplyChromeBadge(content::BrowserContext* context,
 
   Profile* profile = Profile::FromBrowserContext(context);
   // Only apply Chrome badge for the primary profile.
-  if (!chromeos::ProfileHelper::IsPrimaryProfile(profile) ||
+  if (!ash::ProfileHelper::IsPrimaryProfile(profile) ||
       !multi_user_util::IsProfileFromActiveUser(profile)) {
     return false;
   }
@@ -220,7 +220,7 @@ bool ShouldApplyChromeBadgeToWebApp(content::BrowserContext* context,
 
   Profile* profile = Profile::FromBrowserContext(context);
   // Only apply Chrome badge for the primary profile.
-  if (!chromeos::ProfileHelper::IsPrimaryProfile(profile) ||
+  if (!ash::ProfileHelper::IsPrimaryProfile(profile) ||
       !multi_user_util::IsProfileFromActiveUser(profile)) {
     return false;
   }

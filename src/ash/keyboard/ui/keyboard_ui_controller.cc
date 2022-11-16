@@ -6,7 +6,6 @@
 
 #include <set>
 
-#include "ash/constants/ash_features.h"
 #include "ash/keyboard/ui/container_floating_behavior.h"
 #include "ash/keyboard/ui/container_full_width_behavior.h"
 #include "ash/keyboard/ui/display_util.h"
@@ -23,7 +22,6 @@
 #include "base/bind.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
-#include "base/macros.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/threading/thread_task_runner_handle.h"
@@ -59,21 +57,18 @@ namespace {
 KeyboardUIController* g_keyboard_controller = nullptr;
 
 // How long the keyboard stays in WILL_HIDE state before moving to HIDDEN.
-constexpr base::TimeDelta kHideKeyboardDelay =
-    base::TimeDelta::FromMilliseconds(100);
+constexpr base::TimeDelta kHideKeyboardDelay = base::Milliseconds(100);
 
 // Reports an error histogram if the keyboard state is lingering in an
 // intermediate state for more than 5 seconds.
-constexpr base::TimeDelta kReportLingeringStateDelay =
-    base::TimeDelta::FromMilliseconds(5000);
+constexpr base::TimeDelta kReportLingeringStateDelay = base::Milliseconds(5000);
 
 // Delay threshold after the keyboard enters the WILL_HIDE state. If text focus
 // is regained during this threshold, the keyboard will show again, even if it
 // is an asynchronous event. This is for the benefit of things like login flow
 // where the password field may get text focus after an animation that plays
 // after the user enters their username.
-constexpr base::TimeDelta kTransientBlurThreshold =
-    base::TimeDelta::FromMilliseconds(3500);
+constexpr base::TimeDelta kTransientBlurThreshold = base::Milliseconds(3500);
 
 // An enumeration of different keyboard control events that should be logged.
 // These values are persisted to logs. Entries should not be renumbered and
@@ -146,6 +141,10 @@ class CallbackAnimationObserver : public ui::ImplicitAnimationObserver {
   explicit CallbackAnimationObserver(base::OnceClosure callback)
       : callback_(std::move(callback)) {}
 
+  CallbackAnimationObserver(const CallbackAnimationObserver&) = delete;
+  CallbackAnimationObserver& operator=(const CallbackAnimationObserver&) =
+      delete;
+
  private:
   // ui::ImplicitAnimationObserver:
   void OnImplicitAnimationsCompleted() override {
@@ -161,8 +160,6 @@ class CallbackAnimationObserver : public ui::ImplicitAnimationObserver {
   }
 
   base::OnceClosure callback_;
-
-  DISALLOW_COPY_AND_ASSIGN(CallbackAnimationObserver);
 };
 
 KeyboardUIController::KeyboardUIController()
@@ -834,7 +831,8 @@ void KeyboardUIController::OnTextInputStateChanged(
     // of hiding or the hide duration was very short (transient blur). Instead,
     // the virtual keyboard is shown in response to a user gesture (mouse or
     // touch) that is received while an element has input focus. Showing the
-    // keyboard requires an explicit call to OnShowVirtualKeyboardIfEnabled.
+    // keyboard requires an explicit call to
+    // OnVirtualKeyboardVisibilityChangedIfEnabled.
   }
 }
 
@@ -843,21 +841,15 @@ void KeyboardUIController::ShowKeyboardIfWithinTransientBlurThreshold() {
     ShowKeyboard(false);
 }
 
-void KeyboardUIController::OnShowVirtualKeyboardIfEnabled() {
-  DVLOG(1) << "OnShowVirtualKeyboardIfEnabled: " << IsEnabled();
-  // Calling |ShowKeyboardInternal| may move the keyboard to another display.
-  if (IsEnabled() && !keyboard_locked_)
-    ShowKeyboardInternal(layout_delegate_->GetContainerForDefaultDisplay());
-}
-
 void KeyboardUIController::OnVirtualKeyboardVisibilityChangedIfEnabled(
     bool should_show) {
-  if (base::FeatureList::IsEnabled(chromeos::features::kVirtualKeyboardApi)) {
-    if (should_show) {
-      OnShowVirtualKeyboardIfEnabled();
-    } else {
-      HideKeyboardExplicitlyBySystem();
-    }
+  if (should_show) {
+    DVLOG(1) << "OnVirtualKeyboardVisibilityChangedIfEnabled: " << IsEnabled();
+    // Calling |ShowKeyboardInternal| may move the keyboard to another display.
+    if (IsEnabled() && !keyboard_locked_)
+      ShowKeyboardInternal(layout_delegate_->GetContainerForDefaultDisplay());
+  } else {
+    HideKeyboardExplicitlyBySystem();
   }
 }
 

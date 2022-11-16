@@ -12,7 +12,7 @@
 #include <string>
 
 #include "base/compiler_specific.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/threading/thread.h"
 #include "base/time/time.h"
@@ -42,6 +42,9 @@ class MEDIA_EXPORT AlsaPcmInputStream
                      const std::string& device_name,
                      const AudioParameters& params,
                      AlsaWrapper* wrapper);
+
+  AlsaPcmInputStream(const AlsaPcmInputStream&) = delete;
+  AlsaPcmInputStream& operator=(const AlsaPcmInputStream&) = delete;
 
   ~AlsaPcmInputStream() override;
 
@@ -75,25 +78,25 @@ class MEDIA_EXPORT AlsaPcmInputStream
   // want circular references.  Additionally, stream objects live on the audio
   // thread, which is owned by the audio manager and we don't want to addref
   // the manager from that thread.
-  AudioManagerBase* audio_manager_;
+  raw_ptr<AudioManagerBase> audio_manager_;
   std::string device_name_;
   AudioParameters params_;
   int bytes_per_buffer_;
-  AlsaWrapper* wrapper_;
+  raw_ptr<AlsaWrapper> wrapper_;
   base::TimeDelta buffer_duration_;  // Length of each recorded buffer.
-  AudioInputCallback* callback_;  // Valid during a recording session.
+  raw_ptr<AudioInputCallback> callback_;  // Valid during a recording session.
   base::TimeTicks next_read_time_;  // Scheduled time for next read callback.
-  snd_pcm_t* device_handle_;  // Handle to the ALSA PCM recording device.
-  snd_mixer_t* mixer_handle_; // Handle to the ALSA microphone mixer.
-  snd_mixer_elem_t* mixer_element_handle_; // Handle to the capture element.
+  raw_ptr<snd_pcm_t>
+      device_handle_;  // Handle to the ALSA PCM recording device.
+  raw_ptr<snd_mixer_t> mixer_handle_;  // Handle to the ALSA microphone mixer.
+  raw_ptr<snd_mixer_elem_t>
+      mixer_element_handle_;  // Handle to the capture element.
   // Buffer used for reading audio data.
   std::unique_ptr<uint8_t[]> audio_buffer_;
   bool read_callback_behind_schedule_;
   std::unique_ptr<AudioBus> audio_bus_;
   base::Thread capture_thread_;
   bool running_;
-
-  DISALLOW_COPY_AND_ASSIGN(AlsaPcmInputStream);
 };
 
 }  // namespace media

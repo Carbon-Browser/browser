@@ -9,7 +9,7 @@
 #include "base/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/policy/off_hours/device_off_hours_controller.h"
@@ -96,7 +96,7 @@ DeviceSettingsService::~DeviceSettingsService() {
 }
 
 void DeviceSettingsService::SetSessionManager(
-    chromeos::SessionManagerClient* session_manager_client,
+    SessionManagerClient* session_manager_client,
     scoped_refptr<OwnerKeyUtil> owner_key_util) {
   DCHECK(session_manager_client);
   DCHECK(owner_key_util.get());
@@ -185,7 +185,9 @@ void DeviceSettingsService::GetOwnershipStatusAsync(
   if (GetOwnershipStatus() != OWNERSHIP_UNKNOWN) {
     // Report status immediately.
     base::ThreadTaskRunnerHandle::Get()->PostTask(
-        FROM_HERE, base::BindOnce(std::move(callback), GetOwnershipStatus()));
+        FROM_HERE,
+        base::BindOnce(&DeviceSettingsService::ValidateOwnershipStatusAndNotify,
+                       weak_factory_.GetWeakPtr(), std::move(callback)));
   } else {
     // If the key hasn't been loaded yet, enqueue the callback to be fired when
     // the next SessionManagerOperation completes. If no operation is pending,
@@ -194,6 +196,18 @@ void DeviceSettingsService::GetOwnershipStatusAsync(
     if (pending_operations_.empty())
       EnqueueLoad(false);
   }
+}
+
+void DeviceSettingsService::ValidateOwnershipStatusAndNotify(
+    OwnershipStatusCallback callback) {
+  if (GetOwnershipStatus() == OWNERSHIP_UNKNOWN) {
+    // OwnerKeySet() could be called upon user sign-in while event was in queue,
+    // which resets status to OWNERSHIP_UNKNOWN.
+    // We need to retry the logic in this case.
+    GetOwnershipStatusAsync(std::move(callback));
+    return;
+  }
+  std::move(callback).Run(GetOwnershipStatus());
 }
 
 bool DeviceSettingsService::HasPrivateOwnerKey() {
@@ -318,6 +332,7 @@ void DeviceSettingsService::HandleCompletedOperation(
     Status status) {
   store_status_ = status;
   if (status == STORE_SUCCESS) {
+    policy_fetch_response_ = std::move(operation->policy_fetch_response());
     policy_data_ = std::move(operation->policy_data());
     device_settings_ = std::move(operation->device_settings());
     // Update "OffHours" policy state and apply "OffHours" policy to current

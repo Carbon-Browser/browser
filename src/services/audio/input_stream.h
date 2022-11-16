@@ -22,14 +22,13 @@
 #include "services/audio/input_controller.h"
 
 namespace media {
-
 class AudioManager;
 class AudioParameters;
-
 }  // namespace media
 
 namespace audio {
-
+class AecdumpRecordingManager;
+class DeviceOutputListener;
 class InputStreamActivityMonitor;
 class InputSyncWriter;
 class UserInputMonitor;
@@ -51,12 +50,19 @@ class InputStream final : public media::mojom::AudioInputStream,
       mojo::PendingRemote<media::mojom::AudioInputStreamObserver> observer,
       mojo::PendingRemote<media::mojom::AudioLog> log,
       media::AudioManager* manager,
+      AecdumpRecordingManager* aecdump_recording_manager,
       std::unique_ptr<UserInputMonitor> user_input_monitor,
       InputStreamActivityMonitor* activity_monitor,
+      DeviceOutputListener* device_output_listener,
+      media::mojom::AudioProcessingConfigPtr processing_config,
       const std::string& device_id,
       const media::AudioParameters& params,
       uint32_t shared_memory_count,
       bool enable_agc);
+
+  InputStream(const InputStream&) = delete;
+  InputStream& operator=(const InputStream&) = delete;
+
   ~InputStream() override;
 
   const base::UnguessableToken& id() const { return id_; }
@@ -80,6 +86,8 @@ class InputStream final : public media::mojom::AudioInputStream,
   void CallDeleter();
   void SendLogMessage(const char* format, ...) PRINTF_FORMAT(2, 3);
 
+  SEQUENCE_CHECKER(owning_sequence_);
+
   const base::UnguessableToken id_;
 
   mojo::Receiver<media::mojom::AudioInputStream> receiver_;
@@ -98,11 +106,7 @@ class InputStream final : public media::mojom::AudioInputStream,
   std::unique_ptr<InputController> controller_;
   const std::unique_ptr<UserInputMonitor> user_input_monitor_;
 
-  SEQUENCE_CHECKER(owning_sequence_);
-
   base::WeakPtrFactory<InputStream> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(InputStream);
 };
 
 }  // namespace audio

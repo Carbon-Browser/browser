@@ -14,6 +14,7 @@
 #include "components/download/public/common/download_item.h"
 #include "components/download/public/common/download_path_reservation_tracker.h"
 #include "components/download/public/common/download_schedule.h"
+#include "components/download/public/common/download_utils.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
@@ -55,11 +56,12 @@ class DownloadTargetDeterminerDelegate {
       const base::FilePath& virtual_path,
       absl::optional<download::DownloadSchedule> download_schedule)>;
 
-  // Callback to be invoked when DetermineLocalPath() completes. The argument
-  // should be the determined local path. It should be non-empty on success. If
-  // |virtual_path| is already a local path, then |virtual_path| should be
-  // returned as-is.
-  using LocalPathCallback = base::OnceCallback<void(const base::FilePath&)>;
+  // Callback to be invoked when RequestIncognitoWarningConfirmation()
+  // completes.
+  // |accepted|: boolean saying if user accepted or the prompt was
+  // dismissed.
+  using IncognitoWarningConfirmationCallback =
+      base::OnceCallback<void(bool /*accepted*/)>;
 
   // Callback to be invoked after CheckDownloadUrl() completes. The parameter to
   // the callback should indicate the danger type of the download based on the
@@ -113,14 +115,19 @@ class DownloadTargetDeterminerDelegate {
                                    const base::FilePath& virtual_path,
                                    DownloadConfirmationReason reason,
                                    ConfirmationCallback callback) = 0;
-
+#if BUILDFLAG(IS_ANDROID)
+  // Display a message prompt to the user containing an incognito warning.
+  // Should invoke |callback| upon completion.
+  virtual void RequestIncognitoWarningConfirmation(
+      IncognitoWarningConfirmationCallback callback) = 0;
+#endif
   // If |virtual_path| is not a local path, should return a possibly temporary
   // local path to use for storing the downloaded file. If |virtual_path| is
   // already local, then it should return the same path. |callback| should be
   // invoked to return the path.
   virtual void DetermineLocalPath(download::DownloadItem* download,
                                   const base::FilePath& virtual_path,
-                                  LocalPathCallback callback) = 0;
+                                  download::LocalPathCallback callback) = 0;
 
   // Check whether the download URL is malicious and invoke |callback| with a
   // suggested danger type for the download.

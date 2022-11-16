@@ -8,39 +8,60 @@
 
 #include <string>
 
+#include "ash/components/settings/cros_settings_names.h"
+#include "ash/components/tpm/install_attributes.h"
 #include "ash/constants/ash_paths.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/path_service.h"
 #include "base/threading/thread_restrictions.h"
+#include "chrome/browser/ash/policy/core/browser_policy_connector_ash.h"
+#include "chrome/browser/ash/policy/core/device_cloud_policy_store_ash.h"
 #include "chrome/browser/ash/policy/core/device_policy_builder.h"
 #include "chrome/browser/ash/settings/cros_settings.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/browser_process_platform_part_ash.h"
 #include "chrome/common/chrome_paths.h"
+#include "chromeos/ash/components/dbus/session_manager/fake_session_manager_client.h"
 #include "chromeos/dbus/constants/dbus_paths.h"
-#include "chromeos/dbus/session_manager/fake_session_manager_client.h"
-#include "chromeos/settings/cros_settings_names.h"
-#include "chromeos/tpm/install_attributes.h"
+#include "components/policy/core/common/cloud/cloud_policy_store.h"
+#include "components/policy/core/common/cloud/mock_cloud_policy_store.h"
 #include "components/prefs/pref_service.h"
 #include "crypto/rsa_private_key.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-using ::testing::_;
-using ::testing::AnyNumber;
-using ::testing::Return;
-
-namespace em = enterprise_management;
-
 namespace policy {
+namespace {
+
+namespace em = ::enterprise_management;
+
+class CloudPolicyStoreWaiter : public CloudPolicyStore::Observer {
+ public:
+  CloudPolicyStoreWaiter() = default;
+  CloudPolicyStoreWaiter(const CloudPolicyStoreWaiter&) = delete;
+  CloudPolicyStoreWaiter& operator=(const CloudPolicyStoreWaiter&) = delete;
+  ~CloudPolicyStoreWaiter() override = default;
+
+  void OnStoreLoaded(CloudPolicyStore* store) override { loop_.Quit(); }
+
+  void OnStoreError(CloudPolicyStore* store) override { FAIL(); }
+
+  void Wait() { loop_.Run(); }
+
+ private:
+  base::RunLoop loop_;
+};
+
+}  // namespace
 
 void DeviceLocalAccountTestHelper::SetupDeviceLocalAccount(
     UserPolicyBuilder* policy_builder,
     const std::string& kAccountId,
     const std::string& kDisplayName) {
   policy_builder->policy_data().set_policy_type(
-      policy::dm_protocol::kChromePublicAccountPolicyType);
+      dm_protocol::kChromePublicAccountPolicyType);
   policy_builder->policy_data().set_username(kAccountId);
   policy_builder->policy_data().set_settings_entity_id(kAccountId);
   policy_builder->policy_data().set_public_key_version(1);
@@ -107,7 +128,7 @@ DictionaryLocalStateValueWaiter::DictionaryLocalStateValueWaiter(
 DictionaryLocalStateValueWaiter::~DictionaryLocalStateValueWaiter() {}
 
 bool DictionaryLocalStateValueWaiter::ExpectedValueFound() {
-  const base::DictionaryValue* pref =
+  const base::Value* pref =
       pref_change_registrar_.prefs()->GetDictionary(pref_.c_str());
   if (!pref) {
     // Can't use ASSERT_* in non-void functions so this is the next best
@@ -138,13 +159,13 @@ void DevicePolicyCrosTestHelper::InstallOwnerKey() {
 
 // static
 void DevicePolicyCrosTestHelper::OverridePaths() {
-  // This is usually done by ChromeBrowserMainChromeOS, but some tests
+  // This is usually done by `ChromeBrowserMainPartsAsh`, but some tests
   // use the overridden paths before ChromeBrowserMain starts. Make sure that
   // the paths are overridden before using them.
   base::FilePath user_data_dir;
   ASSERT_TRUE(base::PathService::Get(chrome::DIR_USER_DATA, &user_data_dir));
   base::ScopedAllowBlockingForTesting allow_io;
-  chromeos::RegisterStubPathOverrides(user_data_dir);
+  ash::RegisterStubPathOverrides(user_data_dir);
   chromeos::dbus_paths::RegisterStubPathOverrides(user_data_dir);
 }
 
@@ -156,9 +177,8 @@ const std::string DevicePolicyCrosTestHelper::device_policy_blob() {
 }
 
 void DevicePolicyCrosTestHelper::RefreshDevicePolicy() {
-  chromeos::FakeSessionManagerClient::Get()->set_device_policy(
-      device_policy_blob());
-  chromeos::FakeSessionManagerClient::Get()->OnPropertyChangeComplete(true);
+  ash::FakeSessionManagerClient::Get()->set_device_policy(device_policy_blob());
+  ash::FakeSessionManagerClient::Get()->OnPropertyChangeComplete(true);
 }
 
 void DevicePolicyCrosTestHelper::RefreshPolicyAndWaitUntilDeviceSettingsUpdated(
@@ -178,6 +198,22 @@ void DevicePolicyCrosTestHelper::RefreshPolicyAndWaitUntilDeviceSettingsUpdated(
   base::RunLoop().RunUntilIdle();
 }
 
+void DevicePolicyCrosTestHelper::
+    RefreshPolicyAndWaitUntilDeviceCloudPolicyUpdated() {
+  policy::DeviceCloudPolicyStoreAsh* policy_store =
+      g_browser_process->platform_part()
+          ->browser_policy_connector_ash()
+          ->GetDeviceCloudPolicyManager()
+          ->device_store();
+  if (!policy_store->has_policy()) {
+    CloudPolicyStoreWaiter waiter;
+    policy_store->AddObserver(&waiter);
+    RefreshDevicePolicy();
+    waiter.Wait();
+    policy_store->RemoveObserver(&waiter);
+  }
+}
+
 void DevicePolicyCrosTestHelper::UnsetPolicy(
     const std::vector<std::string>& settings) {
   em::ChromeDeviceSettingsProto& proto(device_policy()->payload());
@@ -190,9 +226,9 @@ DevicePolicyCrosBrowserTest::DevicePolicyCrosBrowserTest() {}
 
 DevicePolicyCrosBrowserTest::~DevicePolicyCrosBrowserTest() = default;
 
-chromeos::FakeSessionManagerClient*
+ash::FakeSessionManagerClient*
 DevicePolicyCrosBrowserTest::session_manager_client() {
-  return chromeos::FakeSessionManagerClient::Get();
+  return ash::FakeSessionManagerClient::Get();
 }
 
 }  // namespace policy

@@ -11,14 +11,13 @@
 #include "base/compiler_specific.h"
 #include "base/location.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/string_util.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/time/default_tick_clock.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
 #include "components/safe_browsing/content/renderer/phishing_classifier/features.h"
-#include "content/public/renderer/render_view.h"
 #include "net/base/registry_controlled_domains/registry_controlled_domain.h"
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/public/web/web_element.h"
@@ -109,11 +108,7 @@ PhishingDOMFeatureExtractor::PhishingDOMFeatureExtractor()
 }
 
 PhishingDOMFeatureExtractor::~PhishingDOMFeatureExtractor() {
-  // The RenderView should have called CancelPendingExtraction() before
-  // we are destroyed.
-  DCHECK(done_callback_.is_null());
-  DCHECK(!cur_frame_data_.get());
-  DCHECK(cur_document_.IsNull());
+  CancelPendingExtraction();
 }
 
 void PhishingDOMFeatureExtractor::ExtractFeatures(blink::WebDocument document,
@@ -198,15 +193,14 @@ void PhishingDOMFeatureExtractor::ExtractFeaturesWithTimeout() {
         num_elements = 0;
         base::TimeTicks now = clock_->NowTicks();
         if (now - page_feature_state_->start_time >=
-            base::TimeDelta::FromMilliseconds(kMaxTotalTimeMs)) {
+            base::Milliseconds(kMaxTotalTimeMs)) {
           // We expect this to happen infrequently, so record when it does.
           UMA_HISTOGRAM_COUNTS_1M("SBClientPhishing.DOMFeatureTimeout", 1);
           RunCallback(false);
           return;
         }
         base::TimeDelta chunk_elapsed = now - current_chunk_start_time;
-        if (chunk_elapsed >=
-            base::TimeDelta::FromMilliseconds(kMaxTimePerChunkMs)) {
+        if (chunk_elapsed >= base::Milliseconds(kMaxTimePerChunkMs)) {
           // The time limit for the current chunk is up, so post a task to
           // continue extraction.
           //

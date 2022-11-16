@@ -7,7 +7,6 @@
 
 #include "base/bind.h"
 #include "base/callback_helpers.h"
-#include "base/macros.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/simple_test_tick_clock.h"
@@ -110,6 +109,10 @@ class ServiceWorkerObjectHostTest : public testing::Test {
  public:
   ServiceWorkerObjectHostTest()
       : task_environment_(BrowserTaskEnvironment::IO_MAINLOOP) {}
+
+  ServiceWorkerObjectHostTest(const ServiceWorkerObjectHostTest&) = delete;
+  ServiceWorkerObjectHostTest& operator=(const ServiceWorkerObjectHostTest&) =
+      delete;
 
   void Initialize(std::unique_ptr<EmbeddedWorkerTestHelper> helper) {
     helper_ = std::move(helper);
@@ -234,9 +237,6 @@ class ServiceWorkerObjectHostTest : public testing::Test {
   std::unique_ptr<EmbeddedWorkerTestHelper> helper_;
   scoped_refptr<ServiceWorkerRegistration> registration_;
   scoped_refptr<ServiceWorkerVersion> version_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ServiceWorkerObjectHostTest);
 };
 
 TEST_F(ServiceWorkerObjectHostTest, OnVersionStateChanged) {
@@ -254,8 +254,8 @@ TEST_F(ServiceWorkerObjectHostTest, OnVersionStateChanged) {
                                   /*mock frame_routing_id=*/1),
           /*is_parent_frame_secure=*/true, helper_->context()->AsWeakPtr(),
           &remote_endpoint);
-  container_host->UpdateUrls(scope, net::SiteForCookies::FromUrl(scope),
-                             url::Origin::Create(scope));
+  container_host->UpdateUrls(scope, url::Origin::Create(scope),
+                             blink::StorageKey(url::Origin::Create(scope)));
   blink::mojom::ServiceWorkerRegistrationObjectInfoPtr registration_info =
       GetRegistrationFromRemote(remote_endpoint.host_remote()->get(), scope);
   // |version_| is the installing version of |registration_| now.
@@ -291,8 +291,8 @@ TEST_F(ServiceWorkerObjectHostTest,
   ASSERT_EQ(blink::ServiceWorkerStatusCode::kOk,
             StartServiceWorker(version_.get()));
 
-  const base::TimeDelta kRequestTimeout = base::TimeDelta::FromMinutes(5);
-  const base::TimeDelta kFourSeconds = base::TimeDelta::FromSeconds(4);
+  const base::TimeDelta kRequestTimeout = base::Minutes(5);
+  const base::TimeDelta kFourSeconds = base::Seconds(4);
 
   // After startup, the remaining timeout is expected to be kRequestTimeout.
   EXPECT_EQ(kRequestTimeout, version_->remaining_timeout());
@@ -400,14 +400,13 @@ TEST_F(ServiceWorkerObjectHostTest, DispatchExtendableMessageEvent_FromClient) {
   std::unique_ptr<WebContents> web_contents(
       WebContentsTester::CreateTestWebContents(helper_->browser_context(),
                                                nullptr));
-  RenderFrameHost* frame_host = web_contents->GetMainFrame();
+  RenderFrameHost* frame_host = web_contents->GetPrimaryMainFrame();
   ServiceWorkerRemoteContainerEndpoint remote_endpoint;
   base::WeakPtr<ServiceWorkerContainerHost> container_host =
       CreateContainerHostForWindow(
           frame_host->GetGlobalId(), /*is_parent_frame_secure=*/true,
           helper_->context()->AsWeakPtr(), &remote_endpoint);
-  container_host->UpdateUrls(scope, net::SiteForCookies::FromUrl(scope),
-                             url::Origin::Create(scope));
+  container_host->UpdateUrls(scope, url::Origin::Create(scope), key);
 
   // Prepare a ServiceWorkerObjectHost for the worker.
   blink::mojom::ServiceWorkerObjectInfoPtr info =

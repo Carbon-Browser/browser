@@ -29,21 +29,27 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_ACCESSIBILITY_AX_LAYOUT_OBJECT_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_ACCESSIBILITY_AX_LAYOUT_OBJECT_H_
 
-#include "base/macros.h"
 #include "third_party/blink/renderer/modules/accessibility/ax_node_object.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
 #include "third_party/blink/renderer/platform/geometry/layout_rect.h"
+
+namespace gfx {
+class Point;
+}
 
 namespace blink {
 
 class AXObjectCacheImpl;
 class HTMLAreaElement;
-class IntPoint;
 class Node;
 
 class MODULES_EXPORT AXLayoutObject : public AXNodeObject {
  public:
   AXLayoutObject(LayoutObject*, AXObjectCacheImpl&);
+
+  AXLayoutObject(const AXLayoutObject&) = delete;
+  AXLayoutObject& operator=(const AXLayoutObject&) = delete;
+
   ~AXLayoutObject() override;
   void Trace(Visitor*) const override;
 
@@ -96,7 +102,7 @@ class MODULES_EXPORT AXLayoutObject : public AXNodeObject {
                          NameSources*) const override;
 
   // Hit testing.
-  AXObject* AccessibilityHitTest(const IntPoint&) const override;
+  AXObject* AccessibilityHitTest(const gfx::Point&) const override;
 
   // Called when autofill/autocomplete state changes on a form control.
   void HandleAutofillStateChanged(WebAXAutofillState state) override;
@@ -135,13 +141,11 @@ class MODULES_EXPORT AXLayoutObject : public AXNodeObject {
 
  private:
   AXObject* AccessibilityImageMapHitTest(HTMLAreaElement*,
-                                         const IntPoint&) const;
+                                         const gfx::Point&) const;
   bool FindAllTableCellsWithRole(ax::mojom::blink::Role, AXObjectVector&) const;
 
   LayoutRect ComputeElementRect() const;
   bool IsPlaceholder() const;
-
-  DISALLOW_COPY_AND_ASSIGN(AXLayoutObject);
 };
 
 template <>

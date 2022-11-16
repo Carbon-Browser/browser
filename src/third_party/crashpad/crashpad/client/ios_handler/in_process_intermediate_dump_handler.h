@@ -20,6 +20,8 @@
 #include <signal.h>
 #include <sys/types.h>
 
+#include <map>
+
 #include "client/crashpad_info.h"
 #include "util/ios/ios_intermediate_dump_writer.h"
 #include "util/ios/ios_system_data_collector.h"
@@ -32,6 +34,12 @@ namespace internal {
 //! Note: All methods are `RUNS-DURING-CRASH`.
 class InProcessIntermediateDumpHandler final {
  public:
+  InProcessIntermediateDumpHandler() = delete;
+  InProcessIntermediateDumpHandler(const InProcessIntermediateDumpHandler&) =
+      delete;
+  InProcessIntermediateDumpHandler& operator=(
+      const InProcessIntermediateDumpHandler&) = delete;
+
   //! \brief Set kVersion to 1.
   //!
   //! \param[in] writer The dump writer
@@ -40,7 +48,10 @@ class InProcessIntermediateDumpHandler final {
   //! \brief Write ProcessSnapshot data to the intermediate dump.
   //!
   //! \param[in] writer The dump writer
-  static void WriteProcessInfo(IOSIntermediateDumpWriter* writer);
+  //! \param[in] annotations The simple map annotations.
+  static void WriteProcessInfo(
+      IOSIntermediateDumpWriter* writer,
+      const std::map<std::string, std::string>& annotations);
 
   //! \brief Write SystemSnapshot data to the intermediate dump.
   //!
@@ -128,16 +139,16 @@ class InProcessIntermediateDumpHandler final {
                                        bool is_dyld);
 
   //! \brief Extract and write Apple crashreporter_annotations_t data and
-  //!     Crashpad annotations.
-  static void WriteDataSegmentAnnotations(IOSIntermediateDumpWriter* writer,
-                                          const segment_command_64* segment_ptr,
-                                          vm_size_t slide);
+  //!     Crashpad annotations. Note that \a segment_vm_read_ptr has already
+  //!     been read via vm_read and may be dereferenced without a ScopedVMRead.
+  static void WriteDataSegmentAnnotations(
+      IOSIntermediateDumpWriter* writer,
+      const segment_command_64* segment_vm_read_ptr,
+      vm_size_t slide);
 
   //! \brief Write Crashpad annotations list.
   static void WriteCrashpadAnnotationsList(IOSIntermediateDumpWriter* writer,
                                            CrashpadInfo* crashpad_info);
-
-  DISALLOW_IMPLICIT_CONSTRUCTORS(InProcessIntermediateDumpHandler);
 };
 
 }  // namespace internal

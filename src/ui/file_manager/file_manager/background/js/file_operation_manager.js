@@ -4,9 +4,11 @@
 
 import {assert} from 'chrome://resources/js/assert.m.js';
 
+import {startIOTask} from '../../common/js/api.js';
 import {AsyncUtil} from '../../common/js/async_util.js';
 import {FileOperationError, FileOperationProgressEvent} from '../../common/js/file_operation_common.js';
-import {TrashEntry, TrashRootEntry} from '../../common/js/trash.js';
+import {CombinedReaders} from '../../common/js/files_app_entry_types.js';
+import {createTrashReaders, TrashEntry} from '../../common/js/trash.js';
 import {util} from '../../common/js/util.js';
 import {VolumeManagerCommon} from '../../common/js/volume_manager_types.js';
 import {xfm} from '../../common/js/xfm.js';
@@ -26,6 +28,12 @@ import {volumeManagerFactory} from './volume_manager_factory.js';
  */
 export class FileOperationManagerImpl {
   constructor() {
+    /**
+     * TODO(crbug.com/953256) Add closure annotation.
+     * @private
+     */
+    this.fileManager_ = null;
+
     /**
      * @private {VolumeManager}
      */
@@ -66,6 +74,16 @@ export class FileOperationManagerImpl {
      * @const
      */
     this.trash_ = new Trash();
+  }
+
+  /**
+   * Store a reference to our owning File Manager.
+   * @param {Object} fileManager reference to the 'foreground' app.
+   */
+  setFileManager(fileManager) {
+    if (window.isSWA) {
+      this.fileManager_ = fileManager;
+    }
   }
 
   /**
@@ -215,7 +233,7 @@ export class FileOperationManagerImpl {
               }
             },
             error => {
-              console.error(error.stack || error);
+              console.warn(error.stack || error);
               resolve(null);
             });
       });
@@ -261,7 +279,7 @@ export class FileOperationManagerImpl {
           this.queueCopy_(targetEntry, entries, isMove, opt_taskId);
         })
         .catch(error => {
-          console.error(error.stack || error);
+          console.warn(error.stack || error);
         });
   }
 
@@ -450,6 +468,12 @@ export class FileOperationManagerImpl {
    *     than moved to trash.
    */
   deleteEntries(entries, permanentlyDelete = false) {
+    if (permanentlyDelete) {
+      if (window.isSWA) {
+        startIOTask(chrome.fileManagerPrivate.IOTaskType.DELETE, entries, {});
+        return;
+      }
+    }
     this.deleteOrRestore_(
         util.FileOperationType.DELETE, entries, permanentlyDelete);
   }
@@ -474,7 +498,7 @@ export class FileOperationManagerImpl {
           processedBytes: 0,
           cancelRequested: false,
           trashedEntries: [],
-          permanentlyDelete
+          permanentlyDelete,
         }));
 
     // Obtains entry size and sum them up.
@@ -519,8 +543,7 @@ export class FileOperationManagerImpl {
       return;
     }
 
-    const root = new TrashRootEntry(this.volumeManager_);
-    const reader = root.createReader();
+    const reader = new CombinedReaders(createTrashReaders(this.volumeManager_));
     const onRead = (entries) => {
       if (entries.length > 0) {
         this.deleteEntries(entries, /*permanentlyDelete=*/ true);
@@ -659,6 +682,55 @@ export class FileOperationManagerImpl {
     zipTask.initialize(() => {
       this.pendingCopyTasks_.push(zipTask);
       this.serviceAllTasks_();
+    });
+  }
+
+  /**
+   * Notifies File Manager that an extraction operation has finished.
+   *
+   * @param {number} taskId The unique task id for the IO operation.
+   * @suppress {missingProperties}
+   */
+  notifyExtractDone(taskId) {
+    if (window.isSWA) {
+      // TODO(crbug.com/953256) Add closure annotation.
+      this.fileManager_.taskController.deleteExtractTaskDetails(taskId);
+    }
+  }
+
+  /**
+   * Called when an IOTask finished with a NEED_PASSWORD status.
+   * Delegate it to the task controller to deal with it.
+   *
+   * @param {number} taskId The unique task id for the IO operation.
+   * @suppress {missingProperties}
+   */
+  handleMissingPassword(taskId) {
+    // TODO(crbug.com/953256) Add closure annotation.
+    this.fileManager_.taskController.handleMissingPassword(taskId);
+  }
+
+  /**
+   * Writes file to destination dir. This function is called when an image is
+   * dragged from a web page. In this case there is no FileSystem Entry to copy
+   * or move, just the JS File object with attached Blob. This operation does
+   * not use EventRouter or queue the task since it is not possible to track
+   * progress of the FileWriter.write().
+   *
+   * @param {!File} file The file entry to be written.
+   * @param {!DirectoryEntry} dir The destination directory to write to.
+   * @return {!Promise<!FileEntry>}
+   */
+  async writeFile(file, dir) {
+    const name = await fileOperationUtil.deduplicatePath(dir, file.name);
+    return new Promise((resolve, reject) => {
+      dir.getFile(name, {create: true, exclusive: true}, f => {
+        f.createWriter(writer => {
+          writer.onwriteend = () => resolve(f);
+          writer.onerror = reject;
+          writer.write(file);
+        }, reject);
+      }, reject);
     });
   }
 

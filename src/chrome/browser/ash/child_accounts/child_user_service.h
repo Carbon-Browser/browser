@@ -11,8 +11,10 @@
 
 #include "chrome/browser/ash/child_accounts/time_limits/app_activity_report_interface.h"
 #include "chrome/browser/ash/child_accounts/time_limits/app_time_limit_interface.h"
+#include "chrome/browser/ash/child_accounts/website_approval_notifier.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/prefs/pref_change_registrar.h"
+#include "components/services/app_service/public/cpp/app_types.h"
 
 namespace base {
 class TimeDelta;
@@ -92,7 +94,7 @@ class ChildUserService : public KeyedService,
   void ResumeWebActivity(const std::string& app_service_id) override;
   absl::optional<base::TimeDelta> GetTimeLimitForApp(
       const std::string& app_service_id,
-      apps::mojom::AppType app_type) override;
+      apps::AppType app_type) override;
 
   // app_time::AppActivityReportInterface:
   app_time::AppActivityReportInterface::ReportParams GenerateAppActivityReport(
@@ -131,6 +133,9 @@ class ChildUserService : public KeyedService,
 
   // Preference changes observer.
   PrefChangeRegistrar pref_change_registrar_;
+
+  // Used to display notifications when new websites are approved.
+  WebsiteApprovalNotifier website_approval_notifier_;
 };
 
 }  // namespace ash

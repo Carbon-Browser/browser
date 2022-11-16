@@ -59,8 +59,7 @@ ExtensionFunction::ResponseAction GuestViewInternalCreateGuestFunction::Run() {
   create_params.SetBoolKey(guest_view::kElementSizeIsLogical, true);
 
   guest_view_manager->CreateGuest(view_type, sender_web_contents,
-                                  base::Value::AsDictionaryValue(create_params),
-                                  std::move(callback));
+                                  create_params.GetDict(), std::move(callback));
   return did_respond() ? AlreadyResponded() : RespondLater();
 }
 
@@ -71,11 +70,11 @@ void GuestViewInternalCreateGuestFunction::CreateGuestCallback(
     GuestViewBase* guest = GuestViewBase::FromWebContents(guest_web_contents);
     guest_instance_id = guest->guest_instance_id();
   }
-  auto return_params = std::make_unique<base::DictionaryValue>();
-  return_params->SetInteger(guest_view::kID, guest_instance_id);
 
-  Respond(
-      OneArgument(base::Value::FromUniquePtrValue(std::move(return_params))));
+  base::Value::Dict return_params;
+  return_params.Set(guest_view::kID, guest_instance_id);
+
+  Respond(OneArgument(base::Value(std::move(return_params))));
 }
 
 GuestViewInternalDestroyGuestFunction::

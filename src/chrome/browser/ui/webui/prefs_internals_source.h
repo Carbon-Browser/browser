@@ -5,7 +5,7 @@
 #ifndef CHROME_BROWSER_UI_WEBUI_PREFS_INTERNALS_SOURCE_H_
 #define CHROME_BROWSER_UI_WEBUI_PREFS_INTERNALS_SOURCE_H_
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "content/public/browser/url_data_source.h"
 
 class Profile;
@@ -14,20 +14,22 @@ class Profile;
 class PrefsInternalsSource : public content::URLDataSource {
  public:
   explicit PrefsInternalsSource(Profile* profile);
+
+  PrefsInternalsSource(const PrefsInternalsSource&) = delete;
+  PrefsInternalsSource& operator=(const PrefsInternalsSource&) = delete;
+
   ~PrefsInternalsSource() override;
 
   // content::URLDataSource:
   std::string GetSource() override;
-  std::string GetMimeType(const std::string& path) override;
+  std::string GetMimeType(const GURL& url) override;
   void StartDataRequest(
       const GURL& url,
       const content::WebContents::Getter& wc_getter,
       content::URLDataSource::GotDataCallback callback) override;
 
  private:
-  Profile* profile_;
-
-  DISALLOW_COPY_AND_ASSIGN(PrefsInternalsSource);
+  raw_ptr<Profile> profile_;
 };
 
 #endif  // CHROME_BROWSER_UI_WEBUI_PREFS_INTERNALS_SOURCE_H_

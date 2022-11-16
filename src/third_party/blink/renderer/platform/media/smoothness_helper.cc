@@ -2,9 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "third_party/blink/public/platform/media/smoothness_helper.h"
+#include "third_party/blink/renderer/platform/media/smoothness_helper.h"
 
 #include "base/bind.h"
+#include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "base/unguessable_token.h"
 #include "media/learning/common/learning_task_controller.h"
@@ -17,12 +18,10 @@ using ::media::learning::FeatureVector;
 using ::media::learning::LearningTaskController;
 using ::media::learning::TargetValue;
 
-static constexpr base::TimeDelta kSegmentSize =
-    base::TimeDelta::FromSeconds(5);
+static constexpr base::TimeDelta kSegmentSize = base::Seconds(5);
 
 // Maximum distance between NNRs for them to be consecutive.
-static constexpr base::TimeDelta kMaxNNRDistance =
-    base::TimeDelta::FromSeconds(60);
+static constexpr base::TimeDelta kMaxNNRDistance = base::Seconds(60);
 
 // Max proportion of dropped frames in a window before we call it "not smooth".
 static constexpr float kMaxDroppedFramesPerWindow = 0.2;

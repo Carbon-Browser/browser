@@ -25,6 +25,12 @@ constexpr char kTestHistogramAllocatorName[] = "TestMetrics";
 }  // namespace
 
 class PersistentHistogramStorageTest : public testing::Test {
+ public:
+  PersistentHistogramStorageTest(const PersistentHistogramStorageTest&) =
+      delete;
+  PersistentHistogramStorageTest& operator=(
+      const PersistentHistogramStorageTest&) = delete;
+
  protected:
   PersistentHistogramStorageTest() = default;
   ~PersistentHistogramStorageTest() override = default;
@@ -47,11 +53,9 @@ class PersistentHistogramStorageTest : public testing::Test {
 
   // The directory into which metrics files are written.
   FilePath test_storage_dir_;
-
-  DISALLOW_COPY_AND_ASSIGN(PersistentHistogramStorageTest);
 };
 
-#if !defined(OS_NACL)
+#if !BUILDFLAG(IS_NACL)
 TEST_F(PersistentHistogramStorageTest, HistogramWriteTest) {
   auto persistent_histogram_storage =
       std::make_unique<PersistentHistogramStorage>(
@@ -74,6 +78,6 @@ TEST_F(PersistentHistogramStorageTest, HistogramWriteTest) {
   // Clean up for subsequent tests.
   GlobalHistogramAllocator::ReleaseForTesting();
 }
-#endif  // !defined(OS_NACL)
+#endif  // !BUILDFLAG(IS_NACL)
 
 }  // namespace base

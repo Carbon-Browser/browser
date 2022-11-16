@@ -12,7 +12,6 @@
 #include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/files/file_util.h"
-#include "base/macros.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
@@ -103,6 +102,11 @@ void FakeFenceFD::Signal() const {
 class HardwareDisplayControllerTest : public testing::Test {
  public:
   HardwareDisplayControllerTest() = default;
+
+  HardwareDisplayControllerTest(const HardwareDisplayControllerTest&) = delete;
+  HardwareDisplayControllerTest& operator=(
+      const HardwareDisplayControllerTest&) = delete;
+
   ~HardwareDisplayControllerTest() override = default;
 
   void SetUp() override;
@@ -143,9 +147,6 @@ class HardwareDisplayControllerTest : public testing::Test {
   int successful_page_flips_count_ = 0;
   gfx::SwapResult last_swap_result_;
   gfx::PresentationFeedback last_presentation_feedback_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(HardwareDisplayControllerTest);
 };
 
 void HardwareDisplayControllerTest::SetUp() {
@@ -178,7 +179,7 @@ void HardwareDisplayControllerTest::InitializeDrmDevice(bool use_atomic) {
     connector_properties[i].id = kConnectorIdBase + i;
     for (const auto& pair : connector_property_names) {
       connector_properties[i].properties.push_back(
-          {/* .id = */ pair.first, /* .value = */ 0});
+          {.id = pair.first, .value = 0});
     }
   }
 
@@ -204,8 +205,7 @@ void HardwareDisplayControllerTest::InitializeDrmDevice(bool use_atomic) {
   for (size_t i = 0; i < crtc_properties.size(); ++i) {
     crtc_properties[i].id = kCrtcIdBase + i;
     for (const auto& pair : crtc_property_names) {
-      crtc_properties[i].properties.push_back(
-          {/* .id = */ pair.first, /* .value = */ 0});
+      crtc_properties[i].properties.push_back({.id = pair.first, .value = 0});
     }
 
     for (size_t j = 0; j < 2; ++j) {
@@ -221,8 +221,7 @@ void HardwareDisplayControllerTest::InitializeDrmDevice(bool use_atomic) {
         else if (pair.first == kInFormatsPropId)
           value = kInFormatsBlobPropId;
 
-        plane.properties.push_back(
-            {/* .id = */ pair.first, /*.value = */ value});
+        plane.properties.push_back({.id = pair.first, .value = value});
       }
 
       drm_->SetPropertyBlob(ui::MockDrmDevice::AllocateInFormatsBlob(
@@ -910,7 +909,7 @@ TEST_F(HardwareDisplayControllerTest, FailPageFlippingWithSavingModeset) {
   EXPECT_EQ(0, successful_page_flips_count_);
 
   // Some time passes.
-  task_environment_.FastForwardBy(base::TimeDelta::FromMilliseconds(1623));
+  task_environment_.FastForwardBy(base::Milliseconds(1623));
 
   // A modeset event occurs and prevents the GPU process from crashing.
   modeset_planes.clear();

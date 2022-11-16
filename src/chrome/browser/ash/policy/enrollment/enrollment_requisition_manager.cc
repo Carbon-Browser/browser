@@ -52,7 +52,7 @@ const char EnrollmentRequisitionManager::kRialtoRequisition[] = "rialto";
 // static
 void EnrollmentRequisitionManager::Initialize() {
   // OEM statistics are only loaded when OOBE is not completed.
-  if (chromeos::StartupUtils::IsOobeCompleted())
+  if (ash::StartupUtils::IsOobeCompleted())
     return;
 
   // Demo requisition may have been set in a prior enrollment attempt that was
@@ -103,7 +103,10 @@ std::string EnrollmentRequisitionManager::GetDeviceRequisition() {
 // static
 void EnrollmentRequisitionManager::SetDeviceRequisition(
     const std::string& requisition) {
-  VLOG(1) << "SetDeviceRequisition " << requisition;
+  // TODO(crbug.com/1271134): Logging as "WARNING" to make sure it's preserved
+  // in the logs.
+  LOG(WARNING) << "SetDeviceRequisition " << requisition;
+
   auto* local_state = g_browser_process->local_state();
   if (requisition.empty()) {
     local_state->ClearPref(prefs::kDeviceEnrollmentRequisition);

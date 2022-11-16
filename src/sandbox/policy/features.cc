@@ -4,22 +4,20 @@
 
 #include "sandbox/policy/features.h"
 
-#include "base/win/windows_version.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
+#include "sandbox/features.h"
 
-namespace sandbox {
-namespace policy {
-namespace features {
+namespace sandbox::policy::features {
 
-#if !defined(OS_MAC) && !defined(OS_FUCHSIA)
+#if !BUILDFLAG(IS_MAC) && !BUILDFLAG(IS_FUCHSIA)
 // Enables network service sandbox.
 // (Only causes an effect when feature kNetworkService is enabled.)
 const base::Feature kNetworkServiceSandbox{"NetworkServiceSandbox",
                                            base::FEATURE_DISABLED_BY_DEFAULT};
-#endif  // !defined(OS_MAC) && !defined(OS_FUCHSIA)
+#endif  // !BUILDFLAG(IS_MAC) && !BUILDFLAG(IS_FUCHSIA)
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 // Emergency "off switch" for new Windows KTM security mitigation,
 // sandbox::MITIGATION_KTM_COMPONENT.
 const base::Feature kWinSboxDisableKtmComponent{
@@ -37,12 +35,16 @@ const base::Feature kGpuAppContainer{"GpuAppContainer",
 // Enables GPU Low Privilege AppContainer when combined with kGpuAppContainer.
 const base::Feature kGpuLPAC{"GpuLPAC", base::FEATURE_ENABLED_BY_DEFAULT};
 
-#endif  // defined(OS_WIN)
+// Enables Renderer AppContainer
+const base::Feature kRendererAppContainer{"RendererAppContainer",
+                                          base::FEATURE_DISABLED_BY_DEFAULT};
 
-#if !defined(OS_ANDROID)
+#endif  // BUILDFLAG(IS_WIN)
+
+#if !BUILDFLAG(IS_ANDROID)
 // Controls whether the isolated XR service is sandboxed.
 const base::Feature kXRSandbox{"XRSandbox", base::FEATURE_ENABLED_BY_DEFAULT};
-#endif  // !defined(OS_ANDROID)
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 // Controls whether the Spectre variant 2 mitigation is enabled. We use a USE
@@ -58,31 +60,17 @@ const base::Feature kForceSpectreVariant2Mitigation{
     "ForceSpectreVariant2Mitigation", base::FEATURE_DISABLED_BY_DEFAULT};
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
-#if defined(OS_WIN)
-bool IsNetworkServiceSandboxLPACSupported() {
-  // Since some APIs used for LPAC are unsupported below Windows 10, place a
-  // check here in a central place.
-  if (base::win::GetVersion() < base::win::Version::WIN10)
-    return false;
+bool IsNetworkSandboxEnabled() {
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_FUCHSIA)
   return true;
-}
-
-bool IsNetworkServiceSandboxLPACEnabled() {
-  // Use LPAC for network sandbox instead of restricted token. Relies on
-  // NetworkServiceSandbox being also enabled.
-  const base::Feature kNetworkServiceSandboxLPAC{
-      "NetworkServiceSandboxLPAC", base::FEATURE_DISABLED_BY_DEFAULT};
-
-  // Check platform support.
-  if (!IsNetworkServiceSandboxLPACSupported())
+#else
+#if BUILDFLAG(IS_WIN)
+  if (!sandbox::features::IsAppContainerSandboxSupported())
     return false;
-
+#endif  // BUILDFLAG(IS_WIN)
   // Check feature status.
-  return base::FeatureList::IsEnabled(kNetworkServiceSandbox) &&
-         base::FeatureList::IsEnabled(kNetworkServiceSandboxLPAC);
+  return base::FeatureList::IsEnabled(kNetworkServiceSandbox);
+#endif  // BUILDFLAG(IS_MAC) || BUILDFLAG(IS_FUCHSIA)
 }
-#endif  // defined(OS_WIN)
 
-}  // namespace features
-}  // namespace policy
-}  // namespace sandbox
+}  // namespace sandbox::policy::features

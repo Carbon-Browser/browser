@@ -88,7 +88,7 @@ std::unique_ptr<wchar_t[]> ToCStr(const std::basic_string<wchar_t>& str) {
 bool DieFileDie(const FilePath& file, bool recurse) {
   // It turns out that to not induce flakiness a long timeout is needed.
   const int kIterations = 25;
-  const TimeDelta kTimeout = TimeDelta::FromSeconds(10) / kIterations;
+  const TimeDelta kTimeout = Seconds(10) / kIterations;
 
   if (!PathExists(file))
     return true;
@@ -116,10 +116,14 @@ void SyncPageCacheToDisk() {
 }
 
 bool EvictFileFromSystemCache(const FilePath& file) {
+  FilePath::StringType file_value = file.value();
+  if (file_value.length() >= MAX_PATH && file.IsAbsolute()) {
+    file_value.insert(0, L"\\\\?\\");
+  }
   win::ScopedHandle file_handle(
-      CreateFile(file.value().c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr,
+      CreateFile(file_value.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr,
                  OPEN_EXISTING, FILE_FLAG_NO_BUFFERING, nullptr));
-  if (!file_handle.IsValid())
+  if (!file_handle.is_valid())
     return false;
 
   // Re-write the file time information to trigger cache eviction for the file.
@@ -128,8 +132,8 @@ bool EvictFileFromSystemCache(const FilePath& file) {
   // [1] Sysinternals RamMap no longer lists these files as cached afterwards.
   // [2] Telemetry performance test startup.cold.blank_page reports sane values.
   BY_HANDLE_FILE_INFORMATION bhi = {0};
-  CHECK(::GetFileInformationByHandle(file_handle.Get(), &bhi));
-  CHECK(::SetFileTime(file_handle.Get(), &bhi.ftCreationTime,
+  CHECK(::GetFileInformationByHandle(file_handle.get(), &bhi));
+  CHECK(::SetFileTime(file_handle.get(), &bhi.ftCreationTime,
                       &bhi.ftLastAccessTime, &bhi.ftLastWriteTime));
   return true;
 }

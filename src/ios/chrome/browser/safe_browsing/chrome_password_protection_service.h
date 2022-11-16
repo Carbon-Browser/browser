@@ -25,12 +25,17 @@ class GURL;
 class PrefService;
 class SafeBrowsingService;
 
+namespace history {
+class HistoryService;
+}
+
 namespace password_manager {
 class PasswordStore;
 }  // namespace password_manager
 
 namespace safe_browsing {
 class PasswordProtectionRequest;
+class SafeBrowsingMetricsCollector;
 }  // namespace safe_browsing
 
 namespace web {
@@ -47,6 +52,9 @@ class ChromePasswordProtectionService
   ChromePasswordProtectionService(
       SafeBrowsingService* sb_service,
       ChromeBrowserState* browser_state,
+      history::HistoryService* history_service,
+      safe_browsing::SafeBrowsingMetricsCollector*
+          safe_browsing_metrics_collector,
       ChangePhishedCredentialsCallback add_phished_credentials =
           base::BindRepeating(&password_manager::AddPhishedCredentials),
       ChangePhishedCredentialsCallback remove_phished_credentials =
@@ -92,7 +100,8 @@ class ChromePasswordProtectionService
       safe_browsing::PasswordProtectionRequest* request,
       const std::string& username,
       safe_browsing::PasswordType password_type,
-      bool is_phishing_url) override;
+      bool is_phishing_url,
+      bool warning_shown) override;
 
   void ReportPasswordChanged() override;
 
@@ -133,6 +142,9 @@ class ChromePasswordProtectionService
   GetUrlDisplayExperiment() const override;
 
   AccountInfo GetAccountInfo() const override;
+
+  safe_browsing::ChromeUserPopulation::UserPopulation GetUserPopulationPref()
+      const override;
 
   AccountInfo GetAccountInfoForUsername(
       const std::string& username) const override;
@@ -198,30 +210,9 @@ class ChromePasswordProtectionService
           InteractionResult interaction_result);
 
   // Gets the detailed warning text that should show in the modal warning
-  // dialog. |placeholder_offsets| are the start points/indices of the
-  // placeholders that are passed into the resource string. It is only set for
-  // saved passwords.
+  // dialog.
   std::u16string GetWarningDetailText(
-      safe_browsing::ReusedPasswordAccountType password_type,
-      std::vector<size_t>* placeholder_offsets) const;
-
-  // Gets the warning text for saved password reuse warnings.
-  // |placeholder_offsets| are the start points/indices of the placeholders that
-  // are passed into the resource string.
-  std::u16string GetWarningDetailTextForSavedPasswords(
-      std::vector<size_t>* placeholder_offsets) const;
-
-  // Gets the warning text of the saved password reuse warnings that tells the
-  // user to check their saved passwords. |placeholder_offsets| are the start
-  // points/indices of the placeholders that are passed into the resource
-  // string.
-  std::u16string GetWarningDetailTextToCheckSavedPasswords(
-      std::vector<size_t>* placeholder_offsets) const;
-
-  // Get placeholders for the warning detail text for saved password reuse
-  // warnings.
-  std::vector<std::u16string> GetPlaceholdersForSavedPasswordWarningText()
-      const;
+      safe_browsing::ReusedPasswordAccountType password_type) const;
 
   // Creates, starts, and tracks a new request.
   void StartRequest(
@@ -246,6 +237,7 @@ class ChromePasswordProtectionService
                            VerifySendsPingForAboutBlank);
 
   void FillUserPopulation(
+      const GURL& main_frame_url,
       safe_browsing::LoginReputationClientRequest* request_proto) override;
 
  private:

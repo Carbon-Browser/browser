@@ -20,52 +20,6 @@ const base::Feature kBestEffortPriorityForFindInPage{
     "BlinkSchedulerBestEffortPriorityForFindInPage",
     base::FEATURE_DISABLED_BY_DEFAULT};
 
-// COMPOSITING PRIORITY EXPERIMENT CONTROLS
-
-// If enabled, the compositor will always be set to kVeryHighPriority if it
-// is not already set to kHighestPriority.
-const base::Feature kVeryHighPriorityForCompositingAlways{
-    "BlinkSchedulerVeryHighPriorityForCompositingAlways",
-    base::FEATURE_DISABLED_BY_DEFAULT};
-
-// If enabled, compositor priority will be set to kVeryHighPriority if it will
-// be fast and is not already set to kHighestPriority.
-const base::Feature kVeryHighPriorityForCompositingWhenFast{
-    "BlinkSchedulerVeryHighPriorityForCompositingWhenFast",
-    base::FEATURE_DISABLED_BY_DEFAULT};
-
-// If enabled, compositor priority will be set to kVeryHighPriority if the last
-// task completed was not a compositor task, and kNormalPriority if the last
-// task completed was a compositor task.
-const base::Feature kVeryHighPriorityForCompositingAlternating{
-    "BlinkSchedulerVeryHighPriorityForCompositingAlternating",
-    base::FEATURE_DISABLED_BY_DEFAULT};
-
-// If enabled, compositor priority will be set to kVeryHighPriority if no
-// compositor task has run for some time determined by the finch parameter
-// kCompositingDelayLength. Once a compositor task runs, it will be reset
-// to kNormalPriority.
-const base::Feature kVeryHighPriorityForCompositingAfterDelay{
-    "BlinkSchedulerVeryHighPriorityForCompositingAfterDelay",
-    base::FEATURE_ENABLED_BY_DEFAULT};
-
-// Param for kVeryHighPriorityForCompositingAfterDelay experiment. How long
-// in ms the compositor will wait to be prioritized if no compositor tasks run.
-constexpr base::FeatureParam<int> kCompositingDelayLength{
-    &kVeryHighPriorityForCompositingAfterDelay, "CompositingDelayLength", 100};
-
-// This feature functions as an experiment parameter for the
-// VeryHighPriorityForCompositing alternating, delay, and budget experiments.
-// When enabled, it does nothing unless one of these experiments is also
-// enabled. If one of these experiments is enabled it will change the behavior
-// of that experiment such that the stop signal for prioritzation of the
-// compositor is a BeginMainFrame task instead of any compositor task.
-const base::Feature kPrioritizeCompositingUntilBeginMainFrame{
-    "BlinkSchedulerPrioritizeCompositingUntilBeginMainFrame",
-    base::FEATURE_ENABLED_BY_DEFAULT};
-
-// LOAD PRIORITY EXPERIMENT CONTROLS
-
 // Enables setting the priority of background (with no audio) pages'
 // task queues to low priority.
 const base::Feature kLowPriorityForBackgroundPages{
@@ -178,6 +132,7 @@ const base::Feature kHighPriorityDatabaseTaskType{
 //
 // Parameter name and default values, exposed for testing.
 constexpr int kIntensiveWakeUpThrottling_GracePeriodSeconds_Default = 5 * 60;
+constexpr int kIntensiveWakeUpThrottling_GracePeriodSeconds_Loaded = 10;
 
 // Exposed so that multiple tests can tinker with the policy override.
 PLATFORM_EXPORT void
@@ -187,7 +142,11 @@ ClearIntensiveWakeUpThrottlingPolicyOverrideCacheForTesting();
 PLATFORM_EXPORT bool IsIntensiveWakeUpThrottlingEnabled();
 // Grace period after hiding a page during which there is no intensive wake up
 // throttling for the kIntensiveWakeUpThrottling feature.
-PLATFORM_EXPORT base::TimeDelta GetIntensiveWakeUpThrottlingGracePeriod();
+// |loading| is the loading state of the page, used to determine if the grace
+// period should be overwritten when kQuickIntensiveWakeUpThrottlingAfterLoading
+// is enabled.
+PLATFORM_EXPORT base::TimeDelta GetIntensiveWakeUpThrottlingGracePeriod(
+    bool loading);
 
 // If enabled, base::ThreadTaskRunnerHandle::Get() and
 // base::SequencedTaskRunnerHandle::Get() returns the current active
@@ -201,9 +160,8 @@ const base::Feature kMbiCompositorTaskRunnerPerAgentSchedulingGroup{
     "MbiCompositorTaskRunnerPerAgentSchedulingGroup",
     base::FEATURE_DISABLED_BY_DEFAULT};
 
-// If enabled, Javascript timers are throttled to 1 wake up per
-// GetForegroundTimersThrottledWakeUpInterval() on foreground pages.
-PLATFORM_EXPORT extern const base::Feature kThrottleForegroundTimers;
+// Interval between Javascript timer wake ups when the "ThrottleForegroundTimers"
+// feature is enabled.
 PLATFORM_EXPORT base::TimeDelta GetForegroundTimersThrottledWakeUpInterval();
 
 // Deprioritizes JS timer tasks during a particular phase of page loading.

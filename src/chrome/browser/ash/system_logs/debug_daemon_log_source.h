@@ -11,7 +11,6 @@
 #include <vector>
 
 #include "base/files/file_path.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "components/feedback/system_logs/system_logs_source.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -27,10 +26,20 @@ bool ReadEndOfFile(const base::FilePath& path,
                    std::string* contents,
                    size_t max_size);
 
+// Exposes the utility methods only for unittests.
+#if defined(UNIT_TEST)
+std::string ReadUserLogFile(const base::FilePath& log_file_path);
+std::string ReadUserLogFilePattern(const base::FilePath& log_file_path_pattern);
+#endif  // defined(UNIT_TEST)
+
 // Gathers log data from Debug Daemon.
 class DebugDaemonLogSource : public SystemLogsSource {
  public:
   explicit DebugDaemonLogSource(bool scrub);
+
+  DebugDaemonLogSource(const DebugDaemonLogSource&) = delete;
+  DebugDaemonLogSource& operator=(const DebugDaemonLogSource&) = delete;
+
   ~DebugDaemonLogSource() override;
 
   // SystemLogsSource override:
@@ -73,8 +82,6 @@ class DebugDaemonLogSource : public SystemLogsSource {
   int num_pending_requests_;
   bool scrub_;
   base::WeakPtrFactory<DebugDaemonLogSource> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(DebugDaemonLogSource);
 };
 
 

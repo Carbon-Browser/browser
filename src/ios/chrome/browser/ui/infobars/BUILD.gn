@@ -3,7 +3,7 @@
 # found in the LICENSE file.
 
 source_set("public") {
-  sources = [ "infobar_positioner.h" ]
+  sources = []
 }
 
 source_set("constants") {
@@ -14,21 +14,7 @@ source_set("constants") {
   ]
 }
 
-source_set("feature_flags") {
-  configs += [ "//build/config/compiler:enable_arc" ]
-  sources = [
-    "infobar_feature.h",
-    "infobar_feature.mm",
-  ]
-  public_deps = [ "//base" ]
-  deps = [
-    "//components/version_info",
-    "//ios/chrome/common",
-  ]
-}
-
 source_set("eg2_tests") {
-  defines = [ "CHROME_EARL_GREY_2" ]
   configs += [
     "//build/config/compiler:enable_arc",
     "//build/config/ios:xctest_config",
@@ -50,7 +36,6 @@ source_set("eg2_tests") {
     "//ios/chrome/browser/translate:eg_test_support+eg2",
     "//ios/chrome/browser/ui/badges:public",
     "//ios/chrome/browser/ui/infobars:constants",
-    "//ios/chrome/browser/ui/infobars:feature_flags",
     "//ios/chrome/browser/ui/infobars/banners:public",
     "//ios/chrome/browser/ui/infobars/modals:public",
     "//ios/chrome/browser/ui/popup_menu:constants",
@@ -71,6 +56,8 @@ source_set("test_support") {
   configs += [ "//build/config/compiler:enable_arc" ]
   testonly = true
   sources = [
+    "test_infobar_badge_tab_helper_delegate.h",
+    "test_infobar_badge_tab_helper_delegate.mm",
     "test_infobar_delegate.h",
     "test_infobar_delegate.mm",
   ]
@@ -78,11 +65,13 @@ source_set("test_support") {
     "//base",
     "//components/infobars/core",
     "//ios/chrome/browser/infobars",
+    "//ios/chrome/browser/infobars:badge",
+    "//ios/chrome/browser/infobars:public",
+    "//ios/chrome/browser/ui/badges",
   ]
 }
 
 source_set("eg_app_support+eg2") {
-  defines = [ "CHROME_EARL_GREY_2" ]
   configs += [
     "//build/config/compiler:enable_arc",
     "//build/config/ios:xctest_config",
@@ -107,11 +96,14 @@ source_set("eg_app_support+eg2") {
 }
 
 source_set("eg_test_support+eg2") {
-  defines = [ "CHROME_EARL_GREY_2" ]
   configs += [
     "//build/config/compiler:enable_arc",
     "//build/config/ios:xctest_config",
   ]
   testonly = true
-  sources = [ "infobar_manager_app_interface.h" ]
+  sources = [
+    "infobar_manager_app_interface.h",
+    "infobar_manager_app_interface_stub.mm",
+  ]
+  deps = [ "//ios/third_party/earl_grey2:test_lib" ]
 }

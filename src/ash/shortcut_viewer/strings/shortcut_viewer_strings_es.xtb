@@ -14,10 +14,10 @@
 <translation id="1477442857810932985">Ir al final de la línea</translation>
 <translation id="1499072997694708844">Cerrar todas las ventanas de búsqueda abiertas o detener la carga de la página actual</translation>
 <translation id="1510238584712386396">Menú de aplicaciones</translation>
-<translation id="1516966594427080024">Abrir una ventana nueva en modo de incógnito</translation>
+<translation id="1516966594427080024">Abrir una ventana nueva en modo Incógnito</translation>
 <translation id="152892567002884378">Subir el volumen</translation>
 <translation id="1560480564179555003"><ph name="SHIFT" /><ph name="SEPARATOR1" /><ph name="ALT" /><ph name="SEPARATOR2" /><ph name="L" /> y <ph name="ESC" /></translation>
-<translation id="1633761758045565086">Selecciona un cuadro de diálogo de ayuda</translation>
+<translation id="1586324912145647027">Va a un escritorio del 1 al 8</translation>
 <translation id="1652741121070700329">Desplazarse al principio de la palabra anterior</translation>
 <translation id="1679841710523778799">Aumentar el brillo</translation>
 <translation id="168356808214100546">Mantén pulsada la tecla <ph name="ALT" />, pulsa <ph name="TAB" /> hasta llegar a la ventana que quieras abrir y suelta las teclas.</translation>
@@ -71,6 +71,7 @@
 <translation id="3140353188828248647">Activar barra de direcciones</translation>
 <translation id="3256109297135787951">Dejar de destacar un elemento de la estantería</translation>
 <translation id="3288816184963444640">Cerrar la ventana actual</translation>
+<translation id="3322797428033495633">Enfocar la ventana de imagen en imagen</translation>
 <translation id="3350805006883559974">Traer una ventana al frente</translation>
 <translation id="3407560819924487926">Abrir el administrador de tareas</translation>
 <translation id="3417835166382867856">Buscar pestañas</translation>
@@ -130,6 +131,7 @@
 <translation id="5563050856984839829">Pulsa <ph name="CTRL" /><ph name="SEPARATOR" /><ph name="SHIFT" /> y haz clic en un enlace</translation>
 <translation id="561814908794220892">Abrir la página web en una pestaña nueva</translation>
 <translation id="5620219513321115856">Mover la ventana activa al escritorio de la derecha</translation>
+<translation id="5699366815052349604">Asigna la ventana activa a todos los escritorios</translation>
 <translation id="5710621673935162997"><ph name="CTRL" /><ph name="SEPARATOR1" /><ph name="L" /> o <ph name="ALT" /><ph name="SEPARATOR2" /><ph name="D" /></translation>
 <translation id="5757111373163288447">Abrir el enlace en la pestaña</translation>
 <translation id="5757474750054631686">Atenuar la luz del teclado (solo para teclados retroiluminados)</translation>
@@ -156,6 +158,7 @@
 <translation id="6445033640292336367">Volver a colocar la pestaña en su posición original</translation>
 <translation id="6474744297082284761">Reducir (si la lupa fijada o la lupa de pantalla completa están habilitadas)</translation>
 <translation id="649811797655257835">Selecciona el archivo y pulsa <ph name="SPACE" /></translation>
+<translation id="6515089016094047210">Abre o cierra el widget del calendario.</translation>
 <translation id="6551886416582667425">Hacer una captura/grabación de pantalla parcial</translation>
 <translation id="6556040137485212400">Abrir la ventana que lleva más tiempo sin usarse</translation>
 <translation id="666343722268997814">Abrir el menú del botón derecho del elemento destacado</translation>
@@ -205,6 +208,7 @@
 <translation id="8644639153978066712">Mostrar archivos ocultos en la aplicación Archivos</translation>
 <translation id="8717459106217102612">Seleccionar la palabra o la letra anterior</translation>
 <translation id="8727232706774971183">Ver las notificaciones</translation>
+<translation id="8855548128280178372"><ph name="SHIFT" /><ph name="SEPARATOR1" /><ph name="SEARCH" /><ph name="SEPARATOR2" /> del 1 al 8</translation>
 <translation id="8855885154700222542">Tecla de pantalla completa</translation>
 <translation id="8881584919399569791">Mover la ventana activa al escritorio de la izquierda</translation>
 <translation id="88986195241502842">Avanzar página</translation>

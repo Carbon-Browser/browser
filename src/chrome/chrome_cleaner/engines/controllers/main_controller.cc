@@ -12,6 +12,7 @@
 
 #include "base/bind.h"
 #include "base/callback.h"
+#include "base/command_line.h"
 #include "base/logging.h"
 #include "base/process/process_handle.h"
 #include "base/process/process_metrics.h"
@@ -43,9 +44,8 @@
 namespace chrome_cleaner {
 
 namespace {
-const base::TimeDelta kUserResponseWatchdogTimeout =
-    base::TimeDelta::FromHours(2);
-const base::TimeDelta kCleanerWatchdogTimeout = base::TimeDelta::FromHours(2);
+const base::TimeDelta kUserResponseWatchdogTimeout = base::Hours(2);
+const base::TimeDelta kCleanerWatchdogTimeout = base::Hours(2);
 
 // Log memory usage, CPU usage and various IO counters.
 void LogSystemResourceUsage() {

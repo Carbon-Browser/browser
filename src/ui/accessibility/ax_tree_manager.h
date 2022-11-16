@@ -20,6 +20,7 @@ class AX_EXPORT AXTreeManager {
   // Returns the AXNode with the given |node_id| from the tree that has the
   // given |tree_id|. This allows for callers to access nodes outside of their
   // own tree. Returns nullptr if |tree_id| or |node_id| is not found.
+  // TODO(kschmi): Remove |tree_id| parameter, as it's unnecessary.
   virtual AXNode* GetNodeFromTree(const AXTreeID tree_id,
                                   const AXNodeID node_id) const = 0;
 
@@ -50,6 +51,11 @@ class AX_EXPORT AXTreeManager {
   // Called when the tree manager is about to be removed from the tree map,
   // `AXTreeManagerMap`.
   virtual void WillBeRemovedFromMap() {}
+
+  // For debugging.
+  // TODO(benjamin.beaudry) Instead of this, implement GetTreeData() on all
+  // AXTreeManager subclasses, and have callers use GetTreeData().ToString();
+  virtual std::string ToString() const = 0;
 };
 
 }  // namespace ui

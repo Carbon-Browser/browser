@@ -12,36 +12,41 @@ import 'chrome://resources/cr_elements/cr_input/cr_input.m.js';
 import 'chrome://resources/cr_elements/shared_style_css.m.js';
 import 'chrome://resources/cr_elements/shared_vars_css.m.js';
 import 'chrome://resources/cr_elements/md_select_css.m.js';
-import '../settings_shared_css.js';
-import '../settings_vars_css.js';
+import '../settings_shared.css.js';
+import '../settings_vars.css.js';
 import '../controls/settings_textarea.js';
 
+import {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
 import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
 import {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.m.js';
-import {assertNotReached} from 'chrome://resources/js/assert.m.js';
-import {I18nBehavior} from 'chrome://resources/js/i18n_behavior.m.js';
-import {flush, html, microTask, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {assertNotReached} from 'chrome://resources/js/assert_ts.js';
+import {I18nMixin} from 'chrome://resources/js/i18n_mixin.js';
+import {flush, microTask, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {loadTimeData} from '../i18n_setup.js';
 
-interface SettingsAddressEditDialogElement {
+import {getTemplate} from './address_edit_dialog.html.js';
+
+export interface SettingsAddressEditDialogElement {
   $: {
     dialog: CrDialogElement,
+    emailInput: CrInputElement,
+    phoneInput: CrInputElement,
+    saveButton: CrButtonElement,
+    cancelButton: CrButtonElement,
   };
 }
 
-const SettingsAddressEditDialogElementBase =
-    mixinBehaviors([I18nBehavior], PolymerElement) as
-    {new (): PolymerElement & I18nBehavior};
+const SettingsAddressEditDialogElementBase = I18nMixin(PolymerElement);
 
-class SettingsAddressEditDialogElement extends
+export class SettingsAddressEditDialogElement extends
     SettingsAddressEditDialogElementBase {
   static get is() {
     return 'settings-address-edit-dialog';
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
   }
 
   static get properties() {
@@ -72,16 +77,16 @@ class SettingsAddressEditDialogElement extends
         type: Boolean,
         value() {
           return loadTimeData.getBoolean('showHonorific');
-        }
-      }
+        },
+      },
     };
   }
 
   address: chrome.autofillPrivate.AddressEntry;
   private title_: string;
-  private countries_: Array<chrome.autofillPrivate.CountryEntry>;
+  private countries_: chrome.autofillPrivate.CountryEntry[];
   private countryCode_: string|undefined;
-  private addressWrapper_: Array<Array<AddressComponentUI>>;
+  private addressWrapper_: AddressComponentUI[][];
   private phoneNumber_: string;
   private email_: string;
   private canSave_: boolean;
@@ -89,7 +94,7 @@ class SettingsAddressEditDialogElement extends
   private countryInfo_: CountryDetailManager =
       CountryDetailManagerImpl.getInstance();
 
-  connectedCallback() {
+  override connectedCallback() {
     super.connectedCallback();
 
     this.countryInfo_.getCountryList().then(countryList => {
@@ -143,6 +148,7 @@ class SettingsAddressEditDialogElement extends
     // Default to the last country used if no country code is provided.
     const countryCode = this.countryCode_ || this.countries_[0].countryCode;
     this.countryInfo_.getAddressFormat(countryCode as string).then(format => {
+      this.address.languageCode = format.languageCode;
       this.addressWrapper_ = format.components.flatMap(component => {
         // If this is the name field, add a honorific title row before the
         // name.
@@ -236,24 +242,6 @@ class SettingsAddressEditDialogElement extends
     this.countryCode_ = countrySelect!.value;
   }
 
-  /**
-   * Propagates focus to the <select> when country row is focused
-   * (e.g. using tab navigation).
-   */
-  private onCountryRowFocus_() {
-    this.shadowRoot!.querySelector('select')!.focus();
-  }
-
-  /**
-   * Prevents clicking random spaces within country row but outside of <select>
-   * from triggering focus.
-   */
-  private onCountryRowPointerDown_(e: Event) {
-    if ((e.composedPath()[0] as HTMLElement).tagName !== 'SELECT') {
-      e.preventDefault();
-    }
-  }
-
   createHonorificAddressComponentUI(
       address: chrome.autofillPrivate.AddressEntry): AddressComponentUI {
     return new AddressComponentUI(address, {
@@ -262,6 +250,12 @@ class SettingsAddressEditDialogElement extends
       isLongField: true,
       placeholder: undefined,
     });
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'settings-address-edit-dialog': SettingsAddressEditDialogElement;
   }
 }
 
@@ -323,7 +317,6 @@ class AddressComponentUI {
         return address.countryCode;
       default:
         assertNotReached();
-        return '';
     }
   }
 
@@ -369,13 +362,13 @@ class AddressComponentUI {
   }
 }
 
-interface CountryDetailManager {
+export interface CountryDetailManager {
   /**
    * Gets the list of available countries.
    * The default country will be first, followed by a separator, followed by
    * an alphabetized list of countries available.
    */
-  getCountryList(): Promise<Array<chrome.autofillPrivate.CountryEntry>>;
+  getCountryList(): Promise<chrome.autofillPrivate.CountryEntry[]>;
 
   /**
    * Gets the address format for a given country code.
@@ -389,7 +382,7 @@ interface CountryDetailManager {
  */
 export class CountryDetailManagerImpl implements CountryDetailManager {
   getCountryList() {
-    return new Promise<Array<chrome.autofillPrivate.CountryEntry>>(function(
+    return new Promise<chrome.autofillPrivate.CountryEntry[]>(function(
         callback) {
       chrome.autofillPrivate.getCountryList(callback);
     });

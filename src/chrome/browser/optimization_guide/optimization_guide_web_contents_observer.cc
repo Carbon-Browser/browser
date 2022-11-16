@@ -4,10 +4,13 @@
 
 #include "chrome/browser/optimization_guide/optimization_guide_web_contents_observer.h"
 
+#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/optimization_guide/chrome_hints_manager.h"
 #include "chrome/browser/optimization_guide/optimization_guide_keyed_service.h"
 #include "chrome/browser/optimization_guide/optimization_guide_keyed_service_factory.h"
+#include "chrome/browser/preloading/prefetch/no_state_prefetch/no_state_prefetch_manager_factory.h"
 #include "chrome/browser/profiles/profile.h"
+#include "components/no_state_prefetch/browser/no_state_prefetch_manager.h"
 #include "components/optimization_guide/core/hints_fetcher.h"
 #include "components/optimization_guide/core/hints_processing_util.h"
 #include "components/optimization_guide/core/optimization_guide_enums.h"
@@ -21,15 +24,31 @@ namespace {
 
 bool IsValidOptimizationGuideNavigation(
     content::NavigationHandle* navigation_handle) {
-  return navigation_handle->IsInPrimaryMainFrame() &&
-         navigation_handle->GetURL().SchemeIsHTTPOrHTTPS();
+  if (!navigation_handle->IsInPrimaryMainFrame())
+    return false;
+
+  if (!navigation_handle->GetURL().SchemeIsHTTPOrHTTPS())
+    return false;
+
+  // Now check if this is a NSP navigation. NSP is not a valid navigation.
+  prerender::NoStatePrefetchManager* no_state_prefetch_manager =
+      prerender::NoStatePrefetchManagerFactory::GetForBrowserContext(
+          navigation_handle->GetWebContents()->GetBrowserContext());
+  if (!no_state_prefetch_manager) {
+    // Not a NSP navigation if there is no NSP manager.
+    return true;
+  }
+  return !(no_state_prefetch_manager->IsWebContentsPrefetching(
+      navigation_handle->GetWebContents()));
 }
 
 }  // namespace
 
 OptimizationGuideWebContentsObserver::OptimizationGuideWebContentsObserver(
     content::WebContents* web_contents)
-    : content::WebContentsObserver(web_contents) {
+    : content::WebContentsObserver(web_contents),
+      content::WebContentsUserData<OptimizationGuideWebContentsObserver>(
+          *web_contents) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
   optimization_guide_keyed_service_ =
@@ -121,31 +140,24 @@ void OptimizationGuideWebContentsObserver::DidFinishNavigation(
           navigation_handle->GetRedirectChain()));
 }
 
-void OptimizationGuideWebContentsObserver::DocumentOnLoadCompletedInMainFrame(
-    content::RenderFrameHost* render_frame_host) {
+void OptimizationGuideWebContentsObserver::PostFetchHintsUsingManager() {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  if (!render_frame_host->GetLastCommittedURL().SchemeIsHTTPOrHTTPS()) {
+  if (!web_contents()
+           ->GetPrimaryMainFrame()
+           ->GetLastCommittedURL()
+           .SchemeIsHTTPOrHTTPS())
     return;
-  }
-  if (web_contents() !=
-      content::WebContents::FromRenderFrameHost(render_frame_host)) {
-    // The current web contents isn't for the main frame that reached onload.
-    return;
-  }
 
   if (!optimization_guide_keyed_service_)
     return;
 
-  // Give the renderer some time to send us predictions that might have come
-  // at onload.
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::ThreadTaskRunnerHandle::Get()->PostTask(
       FROM_HERE,
       base::BindOnce(
           &OptimizationGuideWebContentsObserver::FetchHintsUsingManager,
           weak_factory_.GetWeakPtr(),
           optimization_guide_keyed_service_->GetHintsManager(),
-          web_contents()->GetPrimaryPage().GetWeakPtr()),
-      optimization_guide::features::GetOnloadDelayForHintsFetching());
+          web_contents()->GetPrimaryPage().GetWeakPtr()));
 }
 
 void OptimizationGuideWebContentsObserver::FetchHintsUsingManager(
@@ -159,7 +171,9 @@ void OptimizationGuideWebContentsObserver::FetchHintsUsingManager(
   PageData& page_data = GetPageData(*page);
   page_data.set_sent_batched_hints_request();
 
-  hints_manager->FetchHintsForURLs(page_data.GetHintsTargetUrls());
+  hints_manager->FetchHintsForURLs(
+      page_data.GetHintsTargetUrls(),
+      optimization_guide::proto::CONTEXT_BATCH_UPDATE_GOOGLE_SRP);
 }
 
 void OptimizationGuideWebContentsObserver::NotifyNavigationFinish(
@@ -199,6 +213,8 @@ void OptimizationGuideWebContentsObserver::AddURLsToBatchFetchBasedOnPrediction(
   if (page_data.is_sent_batched_hints_request())
     return;
   page_data.InsertHintTargetUrls(urls);
+
+  PostFetchHintsUsingManager();
 }
 
 OptimizationGuideWebContentsObserver::PageData&
@@ -229,7 +245,7 @@ OptimizationGuideWebContentsObserver::NavigationHandleData::
 OptimizationGuideWebContentsObserver::NavigationHandleData::
     ~NavigationHandleData() = default;
 
-PAGE_USER_DATA_KEY_IMPL(OptimizationGuideWebContentsObserver::PageData)
+PAGE_USER_DATA_KEY_IMPL(OptimizationGuideWebContentsObserver::PageData);
 NAVIGATION_HANDLE_USER_DATA_KEY_IMPL(
-    OptimizationGuideWebContentsObserver::NavigationHandleData)
-WEB_CONTENTS_USER_DATA_KEY_IMPL(OptimizationGuideWebContentsObserver)
+    OptimizationGuideWebContentsObserver::NavigationHandleData);
+WEB_CONTENTS_USER_DATA_KEY_IMPL(OptimizationGuideWebContentsObserver);

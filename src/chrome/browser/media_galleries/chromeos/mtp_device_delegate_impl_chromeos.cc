@@ -18,13 +18,12 @@
 #include "base/containers/circular_deque.h"
 #include "base/containers/contains.h"
 #include "base/files/file_util.h"
-#include "base/macros.h"
+#include "base/notreached.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/posix/eintr_wrapper.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
-#include "base/task/post_task.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
@@ -386,7 +385,7 @@ void CloseFileDescriptor(const int file_descriptor) {
 void DeleteTemporaryFile(const base::FilePath& file_path) {
   base::ThreadPool::PostTask(
       FROM_HERE, {base::MayBlock(), base::TaskPriority::BEST_EFFORT},
-      base::BindOnce(base::GetDeleteFileCallback(), file_path));
+      base::GetDeleteFileCallback(file_path));
 }
 
 // A fake callback to be passed as CopyFileProgressCallback.
@@ -417,6 +416,10 @@ class MTPDeviceDelegateImplLinux::MTPFileNode {
               const std::string& file_name,
               MTPFileNode* parent,
               FileIdToMTPFileNodeMap* file_id_to_node_map);
+
+  MTPFileNode(const MTPFileNode&) = delete;
+  MTPFileNode& operator=(const MTPFileNode&) = delete;
+
   ~MTPFileNode();
 
   const MTPFileNode* GetChild(const std::string& name) const;
@@ -446,8 +449,6 @@ class MTPDeviceDelegateImplLinux::MTPFileNode {
   ChildNodes children_;
   MTPFileNode* const parent_;
   FileIdToMTPFileNodeMap* file_id_to_node_map_;
-
-  DISALLOW_COPY_AND_ASSIGN(MTPFileNode);
 };
 
 MTPDeviceDelegateImplLinux::MTPFileNode::MTPFileNode(
@@ -1390,8 +1391,18 @@ void MTPDeviceDelegateImplLinux::RunTask(PendingTaskInfo task_info) {
     }
   }
 
-  base::PostTask(task_info.location, {task_info.thread_id},
-                 std::move(task_info.task));
+  switch (task_info.thread_id) {
+    case content::BrowserThread::UI:
+      content::GetUIThreadTaskRunner({})->PostTask(task_info.location,
+                                                   std::move(task_info.task));
+      break;
+    case content::BrowserThread::IO:
+      content::GetIOThreadTaskRunner({})->PostTask(task_info.location,
+                                                   std::move(task_info.task));
+      break;
+    case content::BrowserThread::ID_COUNT:
+      NOTREACHED();
+  }
 }
 
 void MTPDeviceDelegateImplLinux::WriteDataIntoSnapshotFile(

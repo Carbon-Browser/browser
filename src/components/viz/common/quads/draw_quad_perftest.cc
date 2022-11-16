@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "base/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "base/timer/lap_timer.h"
 #include "components/viz/common/quads/compositor_render_pass.h"
@@ -54,7 +55,7 @@ class DrawQuadPerfTest : public testing::Test {
  public:
   DrawQuadPerfTest()
       : timer_(kWarmupRuns,
-               base::TimeDelta::FromMilliseconds(kTimeLimitMillis),
+               base::Milliseconds(kTimeLimitMillis),
                kTimeCheckInterval) {}
 
   void CreateRenderPass() {
@@ -79,7 +80,7 @@ class DrawQuadPerfTest : public testing::Test {
       bool premultiplied_alpha = true;
       gfx::PointF uv_top_left(0, 0);
       gfx::PointF uv_bottom_right(1, 1);
-      SkColor background_color = SK_ColorRED;
+      SkColor4f background_color = SkColors::kRed;
       float vertex_opacity[4] = {1.f, 1.f, 1.f, 1.f};
       bool y_flipped = false;
       bool nearest_neighbor = true;
@@ -114,7 +115,7 @@ class DrawQuadPerfTest : public testing::Test {
 
  private:
   std::unique_ptr<CompositorRenderPass> render_pass_;
-  SharedQuadState* shared_state_;
+  raw_ptr<SharedQuadState> shared_state_;
   base::LapTimer timer_;
 };
 

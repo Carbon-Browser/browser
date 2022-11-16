@@ -31,6 +31,9 @@ class SimTest : public testing::Test {
   // Create a remote frame as the main frame and create a local child frame.
   void InitializeRemote();
 
+  // Create a WebView with a main frame being a fenced frame root.
+  void InitializeFencedFrameRoot(mojom::blink::FencedFrameMode mode);
+
   // Load URL in the local frame root.
   void LoadURL(const String& url);
 
@@ -49,6 +52,7 @@ class SimTest : public testing::Test {
   SimCompositor& Compositor();
 
   Vector<String>& ConsoleMessages();
+  void ResizeView(const gfx::Size&);
 
   // Creates a SimWebFrameWidget. Subclasses can override this if the
   // wish to create their own.
@@ -68,6 +72,7 @@ class SimTest : public testing::Test {
       bool never_composited,
       bool is_for_child_local_root,
       bool is_for_nested_main_frame,
+      bool is_for_scalable_page,
       SimCompositor* compositor);
 
  private:
@@ -86,7 +91,8 @@ class SimTest : public testing::Test {
       bool hidden,
       bool never_composited,
       bool is_for_child_local_root,
-      bool is_for_nested_main_frame);
+      bool is_for_nested_main_frame,
+      bool is_for_scalable_page);
 
   // These are unique_ptrs in order to destroy them in TearDown. Subclasses
   // may override Platform::Current() and these must shutdown before the

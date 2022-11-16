@@ -13,8 +13,8 @@
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "ui/base/ime/chromeos/ime_bridge.h"
-#include "ui/base/ime/chromeos/mock_ime_input_context_handler.h"
+#include "ui/base/ime/ash/ime_bridge.h"
+#include "ui/base/ime/ash/mock_ime_input_context_handler.h"
 #include "ui/base/ime/text_input_flags.h"
 #include "ui/events/base_event_utils.h"
 #include "ui/events/keycodes/dom/dom_code.h"
@@ -45,7 +45,7 @@ class TestGrammarServiceClient : public GrammarServiceClient {
                         const std::u16string& text,
                         TextCheckCompleteCallback callback) override {
     std::vector<ui::GrammarFragment> grammar_results;
-    for (int i = 0; i < text.size(); i++) {
+    for (size_t i = 0; i < text.size(); i++) {
       if (text.substr(i, 5) == u"error") {
         grammar_results.emplace_back(gfx::Range(i, i + 5), "correct");
       }
@@ -95,6 +95,7 @@ class MockSuggestionHandler : public SuggestionHandlerInterface {
               AcceptSuggestionCandidate,
               (int context_id,
                const std::u16string& candidate,
+               size_t delete_previous_utf16_len,
                std::string* error),
               (override));
   MOCK_METHOD(bool,
@@ -110,7 +111,6 @@ class GrammarManagerTest : public testing::Test {
  protected:
   void SetUp() override {
     profile_ = std::make_unique<TestingProfile>();
-    ui::IMEBridge::Initialize();
     ui::IMEBridge::Get()->SetInputContextHandler(
         &mock_ime_input_context_handler_);
     chromeos::machine_learning::ServiceConnection::
@@ -137,11 +137,11 @@ TEST_F(GrammarManagerTest, HandlesSingleGrammarCheckResult) {
   manager.OnFocus(1, /*text_input_flags=*/0);
   manager.OnSurroundingTextChanged(u"", 0, 0);
   manager.OnSurroundingTextChanged(u"There is error.", 0, 0);
-  task_environment_.FastForwardBy(base::TimeDelta::FromMilliseconds(2500));
+  task_environment_.FastForwardBy(base::Milliseconds(2500));
 
   auto grammar_fragments =
       mock_ime_input_context_handler_.get_grammar_fragments();
-  EXPECT_EQ(grammar_fragments.size(), 1);
+  EXPECT_EQ(grammar_fragments.size(), 1u);
   EXPECT_EQ(grammar_fragments[0].range, gfx::Range(9, 14));
   EXPECT_EQ(grammar_fragments[0].suggestion, "correct");
   histogram_tester.ExpectUniqueSample("InputMethod.Assistive.Grammar.Actions",
@@ -158,12 +158,12 @@ TEST_F(GrammarManagerTest, RecordsUnderlinesMetricsWithoutDups) {
   manager.OnFocus(1, /*text_input_flags=*/0);
   manager.OnSurroundingTextChanged(u"", 0, 0);
   manager.OnSurroundingTextChanged(u"There is error error", 0, 0);
-  task_environment_.FastForwardBy(base::TimeDelta::FromMilliseconds(2500));
+  task_environment_.FastForwardBy(base::Milliseconds(2500));
   histogram_tester.ExpectUniqueSample("InputMethod.Assistive.Grammar.Actions",
                                       0 /*GrammarAction::kUnderlined*/, 2);
 
   manager.OnSurroundingTextChanged(u"There is error error error", 0, 0);
-  task_environment_.FastForwardBy(base::TimeDelta::FromMilliseconds(2500));
+  task_environment_.FastForwardBy(base::Milliseconds(2500));
   histogram_tester.ExpectUniqueSample("InputMethod.Assistive.Grammar.Actions",
                                       0 /*GrammarAction::kUnderlined*/, 3);
 }
@@ -178,11 +178,11 @@ TEST_F(GrammarManagerTest, DoesNotRunGrammarCheckOnTextFieldWithSpellcheckOff) {
   manager.OnFocus(1, ui::TEXT_INPUT_FLAG_SPELLCHECK_OFF);
   manager.OnSurroundingTextChanged(u"", 0, 0);
   manager.OnSurroundingTextChanged(u"There is error.", 0, 0);
-  task_environment_.FastForwardBy(base::TimeDelta::FromMilliseconds(2500));
+  task_environment_.FastForwardBy(base::Milliseconds(2500));
 
   auto grammar_fragments =
       mock_ime_input_context_handler_.get_grammar_fragments();
-  EXPECT_EQ(grammar_fragments.size(), 0);
+  EXPECT_EQ(grammar_fragments.size(), 0u);
   histogram_tester.ExpectUniqueSample("InputMethod.Assistive.Grammar.Actions",
                                       0 /*GrammarAction::kUnderlined*/, 0);
 }
@@ -197,11 +197,11 @@ TEST_F(GrammarManagerTest, ChecksLastSentenceImmediately) {
   manager.OnSurroundingTextChanged(u"", 0, 0);
   manager.OnSurroundingTextChanged(u"There is error. And another error.", 20,
                                    20);
-  task_environment_.FastForwardBy(base::TimeDelta::FromMilliseconds(250));
+  task_environment_.FastForwardBy(base::Milliseconds(250));
 
   auto grammar_fragments =
       mock_ime_input_context_handler_.get_grammar_fragments();
-  EXPECT_EQ(grammar_fragments.size(), 1);
+  EXPECT_EQ(grammar_fragments.size(), 1u);
   EXPECT_EQ(grammar_fragments[0].range, gfx::Range(9, 14));
   EXPECT_EQ(grammar_fragments[0].suggestion, "correct");
 }
@@ -216,11 +216,11 @@ TEST_F(GrammarManagerTest, ChecksBothLastAndCurrentSentence) {
   manager.OnSurroundingTextChanged(u"", 0, 0);
   manager.OnSurroundingTextChanged(u"There is error. And another error.", 20,
                                    20);
-  task_environment_.FastForwardBy(base::TimeDelta::FromMilliseconds(2500));
+  task_environment_.FastForwardBy(base::Milliseconds(2500));
 
   auto grammar_fragments =
       mock_ime_input_context_handler_.get_grammar_fragments();
-  EXPECT_EQ(grammar_fragments.size(), 2);
+  EXPECT_EQ(grammar_fragments.size(), 2u);
   EXPECT_EQ(grammar_fragments[0].range, gfx::Range(9, 14));
   EXPECT_EQ(grammar_fragments[0].suggestion, "correct");
   EXPECT_EQ(grammar_fragments[1].range, gfx::Range(28, 33));
@@ -236,11 +236,11 @@ TEST_F(GrammarManagerTest, HandlesMultipleGrammarCheckResults) {
   manager.OnFocus(1);
   manager.OnSurroundingTextChanged(u"", 0, 0);
   manager.OnSurroundingTextChanged(u"There is error error.", 0, 0);
-  task_environment_.FastForwardBy(base::TimeDelta::FromMilliseconds(2500));
+  task_environment_.FastForwardBy(base::Milliseconds(2500));
 
   auto grammar_fragments =
       mock_ime_input_context_handler_.get_grammar_fragments();
-  EXPECT_EQ(grammar_fragments.size(), 2);
+  EXPECT_EQ(grammar_fragments.size(), 2u);
   EXPECT_EQ(grammar_fragments[0].range, gfx::Range(9, 14));
   EXPECT_EQ(grammar_fragments[0].suggestion, "correct");
   EXPECT_EQ(grammar_fragments[1].range, gfx::Range(15, 20));
@@ -256,20 +256,20 @@ TEST_F(GrammarManagerTest, ClearsPreviousMarkersUponGettingNewResults) {
   manager.OnFocus(1);
   manager.OnSurroundingTextChanged(u"", 0, 0);
   manager.OnSurroundingTextChanged(u"There is error.", 0, 0);
-  task_environment_.FastForwardBy(base::TimeDelta::FromMilliseconds(2500));
+  task_environment_.FastForwardBy(base::Milliseconds(2500));
 
   auto grammar_fragments =
       mock_ime_input_context_handler_.get_grammar_fragments();
-  EXPECT_EQ(grammar_fragments.size(), 1);
+  EXPECT_EQ(grammar_fragments.size(), 1u);
   EXPECT_EQ(grammar_fragments[0].range, gfx::Range(9, 14));
   EXPECT_EQ(grammar_fragments[0].suggestion, "correct");
 
   manager.OnSurroundingTextChanged(u"There is a new error.", 0, 0);
-  task_environment_.FastForwardBy(base::TimeDelta::FromMilliseconds(2500));
+  task_environment_.FastForwardBy(base::Milliseconds(2500));
 
   auto updated_grammar_fragments =
       mock_ime_input_context_handler_.get_grammar_fragments();
-  EXPECT_EQ(updated_grammar_fragments.size(), 1);
+  EXPECT_EQ(updated_grammar_fragments.size(), 1u);
   EXPECT_EQ(updated_grammar_fragments[0].range, gfx::Range(15, 20));
   EXPECT_EQ(updated_grammar_fragments[0].suggestion, "correct");
 }
@@ -284,18 +284,18 @@ TEST_F(GrammarManagerTest, ShowsAndDismissesGrammarSuggestion) {
   manager.OnFocus(1);
   manager.OnSurroundingTextChanged(u"", 0, 0);
   manager.OnSurroundingTextChanged(u"There is error.", 0, 0);
-  task_environment_.FastForwardBy(base::TimeDelta::FromMilliseconds(2500));
+  task_environment_.FastForwardBy(base::Milliseconds(2500));
 
   AssistiveWindowProperties expected_properties;
   expected_properties.type = ui::ime::AssistiveWindowType::kGrammarSuggestion;
   expected_properties.candidates = {u"correct"};
   expected_properties.visible = true;
+  expected_properties.announce_string = kShowGrammarSuggestionMessage;
 
   EXPECT_CALL(mock_suggestion_handler,
               SetAssistiveWindowProperties(1, expected_properties, _));
-  EXPECT_CALL(mock_suggestion_handler,
-              Announce(std::u16string(kShowGrammarSuggestionMessage)));
 
+  mock_ime_input_context_handler_.set_cursor_range(gfx::Range(10, 10));
   manager.OnSurroundingTextChanged(u"There is error.", 10, 10);
   histogram_tester.ExpectBucketCount("InputMethod.Assistive.Grammar.Actions",
                                      1 /*GrammarAction::kWindowShown*/, 1);
@@ -307,6 +307,33 @@ TEST_F(GrammarManagerTest, ShowsAndDismissesGrammarSuggestion) {
   manager.OnKeyEvent(CreateKeyEvent(ui::DomCode::ESCAPE));
 }
 
+TEST_F(GrammarManagerTest, DoesntShowGrammarSuggestionWhenUndoWindowIsShown) {
+  ::testing::StrictMock<MockSuggestionHandler> mock_suggestion_handler;
+  GrammarManager manager(profile_.get(),
+                         std::make_unique<TestGrammarServiceClient>(),
+                         &mock_suggestion_handler);
+  base::HistogramTester histogram_tester;
+
+  manager.OnFocus(1);
+  manager.OnSurroundingTextChanged(u"", 0, 0);
+  manager.OnSurroundingTextChanged(u"There is error.", 0, 0);
+  mock_ime_input_context_handler_.SetAutocorrectRange(gfx::Range(9, 14));
+  task_environment_.FastForwardBy(base::Milliseconds(2500));
+
+  auto grammar_fragments =
+      mock_ime_input_context_handler_.get_grammar_fragments();
+  EXPECT_EQ(grammar_fragments.size(), 1u);
+  EXPECT_EQ(grammar_fragments[0].range, gfx::Range(9, 14));
+  EXPECT_EQ(grammar_fragments[0].suggestion, "correct");
+
+  // No EXPECT_CALL comparing with the last test case because suggestion window
+  // should not show.
+
+  manager.OnSurroundingTextChanged(u"There is error.", 10, 10);
+  histogram_tester.ExpectBucketCount("InputMethod.Assistive.Grammar.Actions",
+                                     1 /*GrammarAction::kWindowShown*/, 0);
+}
+
 TEST_F(GrammarManagerTest, DismissesSuggestionWhenSelectingARange) {
   ::testing::StrictMock<MockSuggestionHandler> mock_suggestion_handler;
   GrammarManager manager(profile_.get(),
@@ -316,22 +343,23 @@ TEST_F(GrammarManagerTest, DismissesSuggestionWhenSelectingARange) {
   manager.OnFocus(1);
   manager.OnSurroundingTextChanged(u"", 0, 0);
   manager.OnSurroundingTextChanged(u"There is error.", 0, 0);
-  task_environment_.FastForwardBy(base::TimeDelta::FromMilliseconds(2500));
+  task_environment_.FastForwardBy(base::Milliseconds(2500));
 
   AssistiveWindowProperties expected_properties;
   expected_properties.type = ui::ime::AssistiveWindowType::kGrammarSuggestion;
   expected_properties.candidates = {u"correct"};
   expected_properties.visible = true;
+  expected_properties.announce_string = kShowGrammarSuggestionMessage;
 
   EXPECT_CALL(mock_suggestion_handler,
               SetAssistiveWindowProperties(1, expected_properties, _));
-  EXPECT_CALL(mock_suggestion_handler,
-              Announce(std::u16string(kShowGrammarSuggestionMessage)));
 
+  mock_ime_input_context_handler_.set_cursor_range(gfx::Range(10, 10));
   manager.OnSurroundingTextChanged(u"There is error.", 10, 10);
 
   EXPECT_CALL(mock_suggestion_handler, DismissSuggestion(1, _));
 
+  mock_ime_input_context_handler_.set_cursor_range(gfx::Range(9, 10));
   manager.OnSurroundingTextChanged(u"There is error.", 9, 10);
 }
 
@@ -347,11 +375,10 @@ TEST_F(GrammarManagerTest, HighlightsAndCommitsGrammarSuggestionWithTab) {
   manager.OnFocus(1);
   manager.OnSurroundingTextChanged(u"", 0, 0);
   manager.OnSurroundingTextChanged(u"There is error.", 0, 0);
-  task_environment_.FastForwardBy(base::TimeDelta::FromMilliseconds(2500));
+  task_environment_.FastForwardBy(base::Milliseconds(2500));
 
   EXPECT_CALL(mock_suggestion_handler, SetAssistiveWindowProperties(1, _, _));
-  EXPECT_CALL(mock_suggestion_handler,
-              Announce(std::u16string(kShowGrammarSuggestionMessage)));
+  mock_ime_input_context_handler_.set_cursor_range(gfx::Range(10, 10));
   manager.OnSurroundingTextChanged(u"There is error.", 10, 10);
 
   ui::ime::AssistiveWindowButton suggestion_button{
@@ -366,14 +393,14 @@ TEST_F(GrammarManagerTest, HighlightsAndCommitsGrammarSuggestionWithTab) {
   EXPECT_CALL(mock_suggestion_handler,
               Announce(std::u16string(kAcceptGrammarSuggestionMessage)));
   manager.OnKeyEvent(CreateKeyEvent(ui::DomCode::ENTER));
-  task_environment_.FastForwardBy(base::TimeDelta::FromMilliseconds(200));
+  task_environment_.FastForwardBy(base::Milliseconds(200));
 
   EXPECT_EQ(
       mock_ime_input_context_handler_.delete_surrounding_text_call_count(), 1);
   auto deleteSurroundingTextArg =
       mock_ime_input_context_handler_.last_delete_surrounding_text_arg();
   EXPECT_EQ(deleteSurroundingTextArg.offset, 9);
-  EXPECT_EQ(deleteSurroundingTextArg.length, 5);
+  EXPECT_EQ(deleteSurroundingTextArg.length, 5u);
 
   EXPECT_EQ(mock_ime_input_context_handler_.commit_text_call_count(), 1);
   EXPECT_EQ(mock_ime_input_context_handler_.last_commit_text(), u"correct");
@@ -393,11 +420,10 @@ TEST_F(GrammarManagerTest, HighlightsAndCommitsGrammarSuggestionWithUpArrow) {
   manager.OnFocus(1);
   manager.OnSurroundingTextChanged(u"", 0, 0);
   manager.OnSurroundingTextChanged(u"There is error.", 0, 0);
-  task_environment_.FastForwardBy(base::TimeDelta::FromMilliseconds(2500));
+  task_environment_.FastForwardBy(base::Milliseconds(2500));
 
   EXPECT_CALL(mock_suggestion_handler, SetAssistiveWindowProperties(1, _, _));
-  EXPECT_CALL(mock_suggestion_handler,
-              Announce(std::u16string(kShowGrammarSuggestionMessage)));
+  mock_ime_input_context_handler_.set_cursor_range(gfx::Range(10, 10));
   manager.OnSurroundingTextChanged(u"There is error.", 10, 10);
 
   ui::ime::AssistiveWindowButton suggestion_button{
@@ -412,14 +438,14 @@ TEST_F(GrammarManagerTest, HighlightsAndCommitsGrammarSuggestionWithUpArrow) {
   EXPECT_CALL(mock_suggestion_handler,
               Announce(std::u16string(kAcceptGrammarSuggestionMessage)));
   manager.OnKeyEvent(CreateKeyEvent(ui::DomCode::ENTER));
-  task_environment_.FastForwardBy(base::TimeDelta::FromMilliseconds(200));
+  task_environment_.FastForwardBy(base::Milliseconds(200));
 
   EXPECT_EQ(
       mock_ime_input_context_handler_.delete_surrounding_text_call_count(), 1);
   auto deleteSurroundingTextArg =
       mock_ime_input_context_handler_.last_delete_surrounding_text_arg();
   EXPECT_EQ(deleteSurroundingTextArg.offset, 9);
-  EXPECT_EQ(deleteSurroundingTextArg.length, 5);
+  EXPECT_EQ(deleteSurroundingTextArg.length, 5u);
 
   EXPECT_EQ(mock_ime_input_context_handler_.commit_text_call_count(), 1);
   EXPECT_EQ(mock_ime_input_context_handler_.last_commit_text(), u"correct");
@@ -439,12 +465,11 @@ TEST_F(GrammarManagerTest, IgnoresGrammarSuggestion) {
   manager.OnFocus(1);
   manager.OnSurroundingTextChanged(u"", 0, 0);
   manager.OnSurroundingTextChanged(u"There is error.", 0, 0);
-  task_environment_.FastForwardBy(base::TimeDelta::FromMilliseconds(2500));
+  task_environment_.FastForwardBy(base::Milliseconds(2500));
 
-  EXPECT_EQ(mock_ime_input_context_handler_.get_grammar_fragments().size(), 1);
+  EXPECT_EQ(mock_ime_input_context_handler_.get_grammar_fragments().size(), 1u);
   EXPECT_CALL(mock_suggestion_handler, SetAssistiveWindowProperties(1, _, _));
-  EXPECT_CALL(mock_suggestion_handler,
-              Announce(std::u16string(kShowGrammarSuggestionMessage)));
+  mock_ime_input_context_handler_.set_cursor_range(gfx::Range(10, 10));
   manager.OnSurroundingTextChanged(u"There is error.", 10, 10);
 
   ui::ime::AssistiveWindowButton suggestion_button{
@@ -469,7 +494,7 @@ TEST_F(GrammarManagerTest, IgnoresGrammarSuggestion) {
               Announce(std::u16string(kIgnoreGrammarSuggestionMessage)));
   manager.OnKeyEvent(CreateKeyEvent(ui::DomCode::ENTER));
 
-  EXPECT_EQ(mock_ime_input_context_handler_.get_grammar_fragments().size(), 0);
+  EXPECT_EQ(mock_ime_input_context_handler_.get_grammar_fragments().size(), 0u);
   EXPECT_EQ(
       mock_ime_input_context_handler_.delete_surrounding_text_call_count(), 0);
   EXPECT_EQ(mock_ime_input_context_handler_.commit_text_call_count(), 0);
@@ -477,8 +502,8 @@ TEST_F(GrammarManagerTest, IgnoresGrammarSuggestion) {
                                      3 /*GrammarAction::kIgnored*/, 1);
 
   manager.OnSurroundingTextChanged(u"There is error. There is error.", 20, 20);
-  task_environment_.FastForwardBy(base::TimeDelta::FromMilliseconds(2500));
-  EXPECT_EQ(mock_ime_input_context_handler_.get_grammar_fragments().size(), 0);
+  task_environment_.FastForwardBy(base::Milliseconds(2500));
+  EXPECT_EQ(mock_ime_input_context_handler_.get_grammar_fragments().size(), 0u);
 }
 
 }  // namespace

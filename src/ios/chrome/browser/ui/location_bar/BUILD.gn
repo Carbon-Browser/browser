@@ -22,6 +22,7 @@ source_set("location_bar") {
   ]
   deps = [
     ":constants",
+    ":location_bar_model_delegate",
     "resources:location_bar_connection_dangerous",
     "resources:location_bar_connection_info",
     "resources:location_bar_connection_offline",
@@ -63,7 +64,7 @@ source_set("location_bar") {
     "//ios/chrome/browser/ui/fullscreen",
     "//ios/chrome/browser/ui/fullscreen:feature_flags",
     "//ios/chrome/browser/ui/fullscreen:ui",
-    "//ios/chrome/browser/ui/infobars:feature_flags",
+    "//ios/chrome/browser/ui/icons:symbols",
     "//ios/chrome/browser/ui/main:default_browser_scene_agent",
     "//ios/chrome/browser/ui/main:scene_state_header",
     "//ios/chrome/browser/ui/ntp:util",
@@ -161,6 +162,7 @@ source_set("unit_tests") {
     "//ios/chrome/browser/autocomplete",
     "//ios/chrome/browser/browser_state:test_support",
     "//ios/chrome/browser/favicon",
+    "//ios/chrome/browser/history",
     "//ios/chrome/browser/main:test_support",
     "//ios/chrome/browser/overlays",
     "//ios/chrome/browser/overlays/public/web_content_area",

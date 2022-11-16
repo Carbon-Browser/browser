@@ -14,9 +14,7 @@
 #include "base/base64.h"
 #include "base/containers/contains.h"
 #include "base/containers/span.h"
-#include "base/cxx17_backports.h"
 #include "base/logging.h"
-#include "base/macros.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/pickle.h"
 #include "base/strings/string_piece.h"
@@ -29,19 +27,18 @@
 #include "net/base/registry_controlled_domains/registry_controlled_domain.h"
 #include "net/base/url_util.h"
 #include "net/cert/asn1_util.h"
-#include "net/cert/internal/cert_errors.h"
-#include "net/cert/internal/name_constraints.h"
-#include "net/cert/internal/parsed_certificate.h"
-#include "net/cert/internal/signature_algorithm.h"
-#include "net/cert/internal/verify_name_match.h"
-#include "net/cert/internal/verify_signed_data.h"
 #include "net/cert/pem.h"
+#include "net/cert/pki/cert_errors.h"
+#include "net/cert/pki/name_constraints.h"
+#include "net/cert/pki/parsed_certificate.h"
+#include "net/cert/pki/signature_algorithm.h"
+#include "net/cert/pki/verify_name_match.h"
+#include "net/cert/pki/verify_signed_data.h"
 #include "net/cert/x509_util.h"
 #include "net/der/encode_values.h"
 #include "net/der/parser.h"
 #include "net/dns/dns_util.h"
 #include "third_party/boringssl/src/include/openssl/evp.h"
-#include "third_party/boringssl/src/include/openssl/pkcs7.h"
 #include "third_party/boringssl/src/include/openssl/pool.h"
 #include "third_party/boringssl/src/include/openssl/sha.h"
 #include "url/url_canon.h"
@@ -81,8 +78,8 @@ void SplitOnChar(const base::StringPiece& src,
 
 // Sets |value| to the Value from a DER Sequence Tag-Length-Value and return
 // true, or return false if the TLV was not a valid DER Sequence.
-WARN_UNUSED_RESULT bool ParseSequenceValue(const der::Input& tlv,
-                                           der::Input* value) {
+[[nodiscard]] bool ParseSequenceValue(const der::Input& tlv,
+                                      der::Input* value) {
   der::Parser parser(tlv);
   return parser.ReadTag(der::kSequence, value) && !parser.HasMore();
 }
@@ -114,30 +111,6 @@ bool GetNormalizedCertIssuer(CRYPTO_BUFFER* cert,
   return NormalizeName(issuer_value, out_normalized_issuer, &errors);
 }
 
-// Parses certificates from a PKCS#7 SignedData structure, appending them to
-// |handles|.
-void CreateCertBuffersFromPKCS7Bytes(
-    base::span<const uint8_t> data,
-    std::vector<bssl::UniquePtr<CRYPTO_BUFFER>>* handles) {
-  crypto::EnsureOpenSSLInit();
-  crypto::OpenSSLErrStackTracer err_cleaner(FROM_HERE);
-
-  CBS der_data;
-  CBS_init(&der_data, data.data(), data.size());
-  STACK_OF(CRYPTO_BUFFER)* certs = sk_CRYPTO_BUFFER_new_null();
-
-  if (PKCS7_get_raw_certificates(certs, &der_data,
-                                 x509_util::GetBufferPool())) {
-    for (size_t i = 0; i < sk_CRYPTO_BUFFER_num(certs); ++i) {
-      handles->push_back(
-          bssl::UniquePtr<CRYPTO_BUFFER>(sk_CRYPTO_BUFFER_value(certs, i)));
-    }
-  }
-  // |handles| took ownership of the individual buffers, so only free the list
-  // itself.
-  sk_CRYPTO_BUFFER_free(certs);
-}
-
 }  // namespace
 
 // static
@@ -145,7 +118,7 @@ scoped_refptr<X509Certificate> X509Certificate::CreateFromBuffer(
     bssl::UniquePtr<CRYPTO_BUFFER> cert_buffer,
     std::vector<bssl::UniquePtr<CRYPTO_BUFFER>> intermediates) {
   DCHECK(cert_buffer);
-  scoped_refptr<X509Certificate> cert(
+  auto cert = base::WrapRefCounted(
       new X509Certificate(std::move(cert_buffer), std::move(intermediates)));
   if (!cert->cert_buffer())
     return nullptr;  // Initialize() failed.
@@ -158,7 +131,7 @@ scoped_refptr<X509Certificate> X509Certificate::CreateFromBufferUnsafeOptions(
     std::vector<bssl::UniquePtr<CRYPTO_BUFFER>> intermediates,
     UnsafeCreateOptions options) {
   DCHECK(cert_buffer);
-  scoped_refptr<X509Certificate> cert(new X509Certificate(
+  auto cert = base::WrapRefCounted(new X509Certificate(
       std::move(cert_buffer), std::move(intermediates), options));
   if (!cert->cert_buffer())
     return nullptr;  // Initialize() failed.
@@ -232,17 +205,17 @@ scoped_refptr<X509Certificate> X509Certificate::CreateFromPickle(
 scoped_refptr<X509Certificate> X509Certificate::CreateFromPickleUnsafeOptions(
     base::PickleIterator* pickle_iter,
     UnsafeCreateOptions options) {
-  int chain_length = 0;
+  size_t chain_length = 0;
   if (!pickle_iter->ReadLength(&chain_length))
     return nullptr;
 
   std::vector<base::StringPiece> cert_chain;
   const char* data = nullptr;
-  int data_length = 0;
-  for (int i = 0; i < chain_length; ++i) {
+  size_t data_length = 0;
+  for (size_t i = 0; i < chain_length; ++i) {
     if (!pickle_iter->ReadData(&data, &data_length))
       return nullptr;
-    cert_chain.push_back(base::StringPiece(data, data_length));
+    cert_chain.emplace_back(data, data_length);
   }
   return CreateFromDERCertChainUnsafeOptions(cert_chain, options);
 }
@@ -288,7 +261,7 @@ CertificateList X509Certificate::CreateCertificateListFromBytes(
     // data is one of the accepted formats.
     if (format & ~FORMAT_PEM_CERT_SEQUENCE) {
       for (size_t i = 0;
-           certificates.empty() && i < base::size(kFormatDecodePriority); ++i) {
+           certificates.empty() && i < std::size(kFormatDecodePriority); ++i) {
         if (format & kFormatDecodePriority[i]) {
           certificates = CreateCertBuffersFromBytes(
               base::as_bytes(base::make_span(decoded)),
@@ -308,7 +281,7 @@ CertificateList X509Certificate::CreateCertificateListFromBytes(
   // contains the binary representation of a Format, if it failed to parse
   // as a PEM certificate/chain.
   for (size_t i = 0;
-       certificates.empty() && i < base::size(kFormatDecodePriority); ++i) {
+       certificates.empty() && i < std::size(kFormatDecodePriority); ++i) {
     if (format & kFormatDecodePriority[i])
       certificates = CreateCertBuffersFromBytes(data, kFormatDecodePriority[i]);
   }
@@ -365,15 +338,15 @@ bool X509Certificate::GetSubjectAltName(
                            x509_util::DefaultParseCertificateOptions(), &tbs,
                            nullptr))
     return false;
-  if (!tbs.has_extensions)
+  if (!tbs.extensions_tlv)
     return false;
 
   std::map<der::Input, ParsedExtension> extensions;
-  if (!ParseExtensions(tbs.extensions_tlv, &extensions))
+  if (!ParseExtensions(tbs.extensions_tlv.value(), &extensions))
     return false;
 
   ParsedExtension subject_alt_names_extension;
-  if (!ConsumeExtension(SubjectAltNameOid(), &extensions,
+  if (!ConsumeExtension(der::Input(kSubjectAltNameOid), &extensions,
                         &subject_alt_names_extension)) {
     return false;
   }
@@ -552,7 +525,6 @@ bool X509Certificate::VerifyHostname(
     // Catch badly corrupt cert names up front.
     if (cert_san_dns_name.empty() ||
         cert_san_dns_name.find('\0') != std::string::npos) {
-      DVLOG(1) << "Bad name in cert: " << cert_san_dns_name;
       continue;
     }
     std::string presented_name(base::ToLowerASCII(cert_san_dns_name));
@@ -616,8 +588,8 @@ bool X509Certificate::GetPEMEncodedChain(
   if (!GetPEMEncoded(cert_buffer(), &pem_data))
     return false;
   encoded_chain.push_back(pem_data);
-  for (size_t i = 0; i < intermediate_ca_certs_.size(); ++i) {
-    if (!GetPEMEncoded(intermediate_ca_certs_[i].get(), &pem_data))
+  for (const auto& intermediate_ca_cert : intermediate_ca_certs_) {
+    if (!GetPEMEncoded(intermediate_ca_cert.get(), &pem_data))
       return false;
     encoded_chain.push_back(pem_data);
   }
@@ -649,7 +621,7 @@ void X509Certificate::GetPublicKeyInfo(const CRYPTO_BUFFER* cert_buffer,
   if (!pkey)
     return;
 
-  switch (pkey->type) {
+  switch (EVP_PKEY_id(pkey.get())) {
     case EVP_PKEY_RSA:
       *type = kPublicKeyTypeRSA;
       break;
@@ -681,7 +653,7 @@ bssl::UniquePtr<CRYPTO_BUFFER> X509Certificate::CreateCertBufferFromBytes(
     return nullptr;
   }
 
-  return x509_util::CreateCryptoBuffer(data.data(), data.size());
+  return x509_util::CreateCryptoBuffer(data);
 }
 
 // static
@@ -698,7 +670,7 @@ X509Certificate::CreateCertBuffersFromBytes(base::span<const uint8_t> data,
       break;
     }
     case FORMAT_PKCS7: {
-      CreateCertBuffersFromPKCS7Bytes(data, &results);
+      x509_util::CreateCertBuffersFromPKCS7Bytes(data, &results);
       break;
     }
     default: {

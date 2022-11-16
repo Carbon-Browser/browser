@@ -7,7 +7,8 @@
 
 #include "base/callback.h"
 #include "base/memory/scoped_refptr.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/time/tick_clock.h"
 #include "base/time/time.h"
 #include "third_party/blink/renderer/platform/wtf/deque.h"
 
@@ -23,7 +24,7 @@ class FakeTaskRunner : public base::SingleThreadTaskRunner {
 
   void SetTime(base::TimeTicks new_time);
   void SetTime(double new_time) {
-    SetTime(base::TimeTicks() + base::TimeDelta::FromSecondsD(new_time));
+    SetTime(base::TimeTicks() + base::Seconds(new_time));
   }
 
   // base::SingleThreadTaskRunner implementation:
@@ -32,8 +33,10 @@ class FakeTaskRunner : public base::SingleThreadTaskRunner {
   void RunUntilIdle();
   void AdvanceTimeAndRun(base::TimeDelta delta);
   void AdvanceTimeAndRun(double delta_seconds) {
-    AdvanceTimeAndRun(base::TimeDelta::FromSecondsD(delta_seconds));
+    AdvanceTimeAndRun(base::Seconds(delta_seconds));
   }
+
+  const base::TickClock* GetMockTickClock() const;
 
   using PendingTask = std::pair<base::OnceClosure, base::TimeTicks>;
   Deque<PendingTask> TakePendingTasksForTesting();
@@ -42,6 +45,11 @@ class FakeTaskRunner : public base::SingleThreadTaskRunner {
   bool PostDelayedTask(const base::Location& location,
                        base::OnceClosure task,
                        base::TimeDelta delay) override;
+  bool PostDelayedTaskAt(base::subtle::PostDelayedTaskPassKey,
+                         const base::Location& from_here,
+                         base::OnceClosure task,
+                         base::TimeTicks delayed_run_time,
+                         base::subtle::DelayPolicy deadline_policy) override;
   bool PostNonNestableDelayedTask(const base::Location&,
                                   base::OnceClosure task,
                                   base::TimeDelta delay) override;

@@ -7,9 +7,12 @@ package org.chromium.chrome.browser.bookmarks;
 import static androidx.test.espresso.Espresso.onView;
 import static androidx.test.espresso.action.ViewActions.click;
 import static androidx.test.espresso.assertion.ViewAssertions.matches;
+import static androidx.test.espresso.matcher.ViewMatchers.Visibility.VISIBLE;
 import static androidx.test.espresso.matcher.ViewMatchers.isDisplayed;
+import static androidx.test.espresso.matcher.ViewMatchers.withEffectiveVisibility;
 import static androidx.test.espresso.matcher.ViewMatchers.withId;
 
+import static org.hamcrest.core.AllOf.allOf;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -24,6 +27,7 @@ import android.content.Context;
 import androidx.test.filters.MediumTest;
 
 import org.junit.After;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Rule;
@@ -33,10 +37,15 @@ import org.junit.runner.RunWith;
 
 import org.chromium.base.test.util.Batch;
 import org.chromium.base.test.util.CommandLineFlags;
+import org.chromium.base.test.util.DisabledTest;
+import org.chromium.base.test.util.MetricsUtils.HistogramDelta;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
+import org.chromium.chrome.browser.preferences.ChromePreferenceKeys;
+import org.chromium.chrome.browser.preferences.SharedPreferencesManager;
 import org.chromium.chrome.browser.signin.SyncConsentActivityLauncherImpl;
-import org.chromium.chrome.browser.signin.ui.SyncConsentActivityLauncher;
+import org.chromium.chrome.browser.ui.signin.SigninPromoController.SyncPromoState;
+import org.chromium.chrome.browser.ui.signin.SyncConsentActivityLauncher;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
 import org.chromium.chrome.test.batch.BlankCTATabInitialStateRule;
@@ -76,35 +85,46 @@ public class BookmarkPersonalizedSigninPromoTest {
 
     @Before
     public void setUp() {
-        BookmarkPromoHeader.forcePromoStateForTests(
-                BookmarkPromoHeader.PromoState.PROMO_SIGNIN_PERSONALIZED);
+        BookmarkPromoHeader.forcePromoStateForTests(SyncPromoState.PROMO_FOR_SIGNED_OUT_STATE);
         SyncConsentActivityLauncherImpl.setLauncherForTest(mMockSyncConsentActivityLauncher);
     }
 
     @After
     public void tearDown() {
+        SharedPreferencesManager.getInstance().removeKey(
+                ChromePreferenceKeys.SYNC_PROMO_TOTAL_SHOW_COUNT);
         SyncConsentActivityLauncherImpl.setLauncherForTest(null);
         BookmarkPromoHeader.forcePromoStateForTests(null);
     }
 
     @Test
     @MediumTest
+    @DisabledTest(message = "crbug.com/1294402")
     public void testSigninButtonDefaultAccount() {
+        final CoreAccountInfo accountInfo =
+                mAccountManagerTestRule.addAccount(AccountManagerTestRule.TEST_ACCOUNT_EMAIL);
+        HistogramDelta signinHistogram =
+                new HistogramDelta("Signin.SyncPromo.Continued.Count.Bookmarks", 1);
         doNothing()
                 .when(SyncConsentActivityLauncherImpl.get())
                 .launchActivityForPromoDefaultFlow(any(Context.class), anyInt(), anyString());
-        CoreAccountInfo accountInfo =
-                mAccountManagerTestRule.addAccount(AccountManagerTestRule.TEST_ACCOUNT_EMAIL);
         showBookmarkManagerAndCheckSigninPromoIsDisplayed();
-        onView(withId(R.id.signin_promo_signin_button)).perform(click());
+
+        onView(allOf(withId(R.id.signin_promo_signin_button), withEffectiveVisibility(VISIBLE)))
+                .perform(click());
+
         verify(mMockSyncConsentActivityLauncher)
                 .launchActivityForPromoDefaultFlow(any(Activity.class),
                         eq(SigninAccessPoint.BOOKMARK_MANAGER), eq(accountInfo.getEmail()));
+        Assert.assertEquals(1, signinHistogram.getDelta());
     }
 
     @Test
     @MediumTest
+    @DisabledTest(message = "crbug.com/1294402")
     public void testSigninButtonNotDefaultAccount() {
+        HistogramDelta signinHistogram =
+                new HistogramDelta("Signin.SyncPromo.Continued.Count.Bookmarks", 1);
         doNothing()
                 .when(SyncConsentActivityLauncherImpl.get())
                 .launchActivityForPromoChooseAccountFlow(any(Context.class), anyInt(), anyString());
@@ -115,11 +135,14 @@ public class BookmarkPersonalizedSigninPromoTest {
         verify(mMockSyncConsentActivityLauncher)
                 .launchActivityForPromoChooseAccountFlow(any(Activity.class),
                         eq(SigninAccessPoint.BOOKMARK_MANAGER), eq(accountInfo.getEmail()));
+        Assert.assertEquals(1, signinHistogram.getDelta());
     }
 
     @Test
     @MediumTest
     public void testSigninButtonNewAccount() {
+        HistogramDelta signinHistogram =
+                new HistogramDelta("Signin.SyncPromo.Continued.Count.Bookmarks", 1);
         doNothing()
                 .when(SyncConsentActivityLauncherImpl.get())
                 .launchActivityForPromoAddAccountFlow(any(Context.class), anyInt());
@@ -128,10 +151,13 @@ public class BookmarkPersonalizedSigninPromoTest {
         verify(mMockSyncConsentActivityLauncher)
                 .launchActivityForPromoAddAccountFlow(
                         any(Activity.class), eq(SigninAccessPoint.BOOKMARK_MANAGER));
+        Assert.assertEquals(1, signinHistogram.getDelta());
     }
 
     private void showBookmarkManagerAndCheckSigninPromoIsDisplayed() {
         mBookmarkTestRule.showBookmarkManager(sActivityTestRule.getActivity());
-        onView(withId(R.id.signin_promo_view_container)).check(matches(isDisplayed()));
+        // Sync promo sometimes shows up again on tablets after profile data updates.
+        onView(allOf(withId(R.id.signin_promo_view_container), withEffectiveVisibility(VISIBLE)))
+                .check(matches(isDisplayed()));
     }
 }

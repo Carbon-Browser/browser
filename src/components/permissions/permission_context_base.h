@@ -9,6 +9,7 @@
 #include <unordered_map>
 
 #include "base/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "build/build_config.h"
@@ -39,7 +40,7 @@ class Observer : public base::CheckedObserver {
   virtual void OnPermissionChanged(
       const ContentSettingsPattern& primary_pattern,
       const ContentSettingsPattern& secondary_pattern,
-      ContentSettingsType content_type) = 0;
+      ContentSettingsTypeSet content_type_set) = 0;
 };
 
 using BrowserPermissionCallback = base::OnceCallback<void(ContentSetting)>;
@@ -87,8 +88,7 @@ class PermissionContextBase : public KeyedService,
 
   // |callback| is called upon resolution of the request, but not if a prompt
   // is shown and ignored.
-  virtual void RequestPermission(content::WebContents* web_contents,
-                                 const PermissionRequestID& id,
+  virtual void RequestPermission(const PermissionRequestID& id,
                                  const GURL& requesting_frame,
                                  bool user_gesture,
                                  BrowserPermissionCallback callback);
@@ -133,8 +133,7 @@ class PermissionContextBase : public KeyedService,
 
   // Called if generic checks (existing content setting, embargo, etc.) fail to
   // resolve a permission request. The default implementation prompts the user.
-  virtual void DecidePermission(content::WebContents* web_contents,
-                                const PermissionRequestID& id,
+  virtual void DecidePermission(const PermissionRequestID& id,
                                 const GURL& requesting_origin,
                                 const GURL& embedding_origin,
                                 bool user_gesture,
@@ -179,9 +178,10 @@ class PermissionContextBase : public KeyedService,
                                           ContentSetting content_setting);
 
   // content_settings::Observer:
-  void OnContentSettingChanged(const ContentSettingsPattern& primary_pattern,
-                               const ContentSettingsPattern& secondary_pattern,
-                               ContentSettingsType content_type) override;
+  void OnContentSettingChanged(
+      const ContentSettingsPattern& primary_pattern,
+      const ContentSettingsPattern& secondary_pattern,
+      ContentSettingsTypeSet content_type_set) override;
 
   // Implementors can override this method to use a different PermissionRequest
   // implementation.
@@ -221,7 +221,7 @@ class PermissionContextBase : public KeyedService,
                          ContentSetting content_setting,
                          bool is_one_time);
 
-  content::BrowserContext* browser_context_;
+  raw_ptr<content::BrowserContext> browser_context_;
   const ContentSettingsType content_settings_type_;
   const blink::mojom::PermissionsPolicyFeature permissions_policy_feature_;
   std::unordered_map<std::string, std::unique_ptr<PermissionRequest>>

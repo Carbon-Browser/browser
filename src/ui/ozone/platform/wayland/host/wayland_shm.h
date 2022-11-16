@@ -5,9 +5,8 @@
 #ifndef UI_OZONE_PLATFORM_WAYLAND_HOST_WAYLAND_SHM_H_
 #define UI_OZONE_PLATFORM_WAYLAND_HOST_WAYLAND_SHM_H_
 
-
 #include "base/files/scoped_file.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/ozone/platform/wayland/common/wayland_object.h"
 #include "ui/ozone/platform/wayland/common/wayland_util.h"
@@ -20,30 +19,36 @@ class WaylandConnection;
 // |wl_buffer|s backed by a fd to a shared memory.
 class WaylandShm : public wl::GlobalObjectRegistrar<WaylandShm> {
  public:
-  static void Register(WaylandConnection* connection);
+  static constexpr char kInterfaceName[] = "wl_shm";
+
   static void Instantiate(WaylandConnection* connection,
                           wl_registry* registry,
                           uint32_t name,
+                          const std::string& interface,
                           uint32_t version);
 
   WaylandShm(wl_shm* shm, WaylandConnection* connection);
+
+  WaylandShm(const WaylandShm&) = delete;
+  WaylandShm& operator=(const WaylandShm&) = delete;
+
   ~WaylandShm();
 
   wl_shm* get() const { return shm_.get(); }
 
-  // Creates a wl_buffer based on shared memory handle for the specified
-  // |widget|.
-  wl::Object<struct wl_buffer> CreateBuffer(base::ScopedFD fd,
+  // Creates a wl_buffer based on shared memory handle with the specified
+  // |length| and |size|. Whereas |with_alpha_channel| indicates whether the
+  // buffer's color format should use or not the alpha channel.
+  wl::Object<struct wl_buffer> CreateBuffer(const base::ScopedFD& fd,
                                             size_t length,
-                                            const gfx::Size& size);
+                                            const gfx::Size& size,
+                                            bool with_alpha_channel);
 
  private:
   wl::Object<wl_shm> const shm_;
 
   // Non-owned pointer to the main connection.
-  WaylandConnection* const connection_;
-
-  DISALLOW_COPY_AND_ASSIGN(WaylandShm);
+  const raw_ptr<WaylandConnection> connection_;
 };
 
 }  // namespace ui

@@ -281,10 +281,10 @@ class GTestTest(TestRunnerTest):
       gtest.build_test_command()
 
     # Create the two expected tools, and the test should be ready to run.
-    with open(os.path.join(args.vpython_dir, 'vpython'), 'w'):
+    with open(os.path.join(args.vpython_dir, 'vpython3'), 'w'):
       pass  # Just touch the file.
     os.mkdir(os.path.join(args.vpython_dir, 'bin'))
-    with open(os.path.join(args.vpython_dir, 'bin', 'python'), 'w'):
+    with open(os.path.join(args.vpython_dir, 'bin', 'python3'), 'w'):
       pass
     gtest = test_runner.GTestTest(args, None)
     gtest.build_test_command()
@@ -293,10 +293,12 @@ class GTestTest(TestRunnerTest):
 class HostCmdTests(TestRunnerTest):
 
   @parameterized.expand([
-      [True],
-      [False],
+      [True, True],
+      [False, True],
+      [True, False],
+      [False, False],
   ])
-  def test_host_cmd(self, is_lacros):
+  def test_host_cmd(self, is_lacros, strip_chrome):
     args = [
         'script_name',
         'host-cmd',
@@ -309,6 +311,8 @@ class HostCmdTests(TestRunnerTest):
       args += ['--deploy-lacros']
     else:
       args += ['--deploy-chrome']
+      if strip_chrome:
+        args += ['--strip-chrome']
     args += [
         '--',
         'fake_cmd',
@@ -338,7 +342,9 @@ class HostCmdTests(TestRunnerTest):
             test_runner.LACROS_LAUNCHER_SCRIPT_PATH,
         ]
       else:
-        expected_cmd += ['--mount', '--nostrip', '--deploy']
+        expected_cmd += ['--mount', '--deploy']
+        if not strip_chrome:
+          expected_cmd += ['--nostrip']
 
       expected_cmd += [
           '--',

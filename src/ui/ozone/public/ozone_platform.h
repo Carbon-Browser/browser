@@ -12,9 +12,9 @@
 #include "base/callback.h"
 #include "base/component_export.h"
 #include "base/containers/flat_set.h"
-#include "base/macros.h"
 #include "base/message_loop/message_pump_type.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
+#include "build/build_config.h"
 #include "mojo/public/cpp/bindings/binder_map.h"
 #include "ui/gfx/buffer_types.h"
 #include "ui/gfx/native_widget_types.h"
@@ -70,6 +70,10 @@ struct PlatformWindowInitProperties;
 class COMPONENT_EXPORT(OZONE) OzonePlatform {
  public:
   OzonePlatform();
+
+  OzonePlatform(const OzonePlatform&) = delete;
+  OzonePlatform& operator=(const OzonePlatform&) = delete;
+
   virtual ~OzonePlatform();
 
   // Additional initialization params for the platform. Platforms must not
@@ -128,14 +132,6 @@ class COMPONENT_EXPORT(OZONE) OzonePlatform {
     // Linux only: determines if Skia can fall back to the X11 output device.
     bool skia_can_fall_back_to_x11 = false;
 
-    // Wayland only: determines if the client must ignore the screen bounds when
-    // calculating bounds of menu windows.
-    bool ignore_screen_bounds_for_menus = false;
-
-    // Wayland only: determines whether BufferQueue needs a background image to
-    // be stacked below an AcceleratedWidget to make a widget opaque.
-    bool needs_background_image = false;
-
     // Wayland only: determines whether windows which are not top level ones
     // should be given parents explicitly.
     bool set_parent_for_non_top_level_windows = false;
@@ -154,6 +150,19 @@ class COMPONENT_EXPORT(OZONE) OzonePlatform {
     // Determines whether buffer formats should be fetched on GPU and passed
     // back via gpu extra info.
     bool fetch_buffer_formats_for_gmb_on_gpu = false;
+
+#if BUILDFLAG(IS_LINUX)
+    // TODO(crbug.com/1116701): add vaapi support for other Ozone platforms on
+    // Linux. At the moment, VA-API Linux implementation supports only X11
+    // backend. This implementation must be refactored to support Ozone
+    // properly. As a temporary solution, VA-API on Linux checks if vaapi is
+    // supported (which implicitly means that it is Ozone/X11).
+    bool supports_vaapi = false;
+#endif
+
+    // Indicates that the platform allows client applications to manipulate
+    // global screen coordinates. Wayland, for example, disallow it by design.
+    bool supports_global_screen_coordinates = true;
   };
 
   // Groups platform properties that can only be known at run time.
@@ -178,6 +187,17 @@ class COMPONENT_EXPORT(OZONE) OzonePlatform {
     // must have the appropriate logic in its GetPlatformRuntimeProperties()
     // method.
     static SupportsSsdForTest override_supports_ssd_for_test;
+
+    // Wayland only: determines whether solid color overlays can be delegated
+    // without a backing image via a wayland protocol.
+    bool supports_non_backed_solid_color_buffers = false;
+
+    // Indicates whether the platform supports native pixmaps.
+    bool supports_native_pixmaps = false;
+
+    // Wayland only: determines whether BufferQueue needs a background image to
+    // be stacked below an AcceleratedWidget to make a widget opaque.
+    bool needs_background_image = false;
   };
 
   // Corresponds to chrome_browser_main_extra_parts.h.
@@ -208,14 +228,19 @@ class COMPONENT_EXPORT(OZONE) OzonePlatform {
   // Initializes the subsystems/resources necessary for the UI process (e.g.
   // events) with additional properties to customize the ozone platform
   // implementation. Ozone will not retain InitParams after returning from
-  // InitalizeForUI.
-  static void InitializeForUI(const InitParams& args);
+  // InitializeForUI.
+  // Returns whether the initialisation completed successfully.  Should this
+  // have returned false, the browser must stop the startup and exit because it
+  // would not be able to work normally.
+  static bool InitializeForUI(const InitParams& args);
 
   // Initializes the subsystems for rendering but with additional properties
   // provided by |args| as with InitalizeForUI.
   static void InitializeForGPU(const InitParams& args);
 
   static OzonePlatform* GetInstance();
+
+  static bool IsInitialized();
 
   // Returns the current ozone platform name.
   // Some tests may skip based on the platform name.
@@ -280,7 +305,8 @@ class COMPONENT_EXPORT(OZONE) OzonePlatform {
   virtual const PlatformProperties& GetPlatformProperties();
 
   // Returns runtime properties of the current platform implementation available
-  // after InitializeForUI() runs.
+  // after either InitializeUI() or InitializeGPU() runs. Runtime properties for
+  // UI and GPU may be different depending on availability of platform objects.
   virtual const PlatformRuntimeProperties& GetPlatformRuntimeProperties();
 
   // Ozone platform implementations may also choose to expose mojo interfaces to
@@ -320,12 +346,26 @@ class COMPONENT_EXPORT(OZONE) OzonePlatform {
 
   bool single_process() const { return single_process_; }
 
+  static bool ShouldFailInitializeUIForTest();
+
  private:
+  friend class OzonePlatformTest;
+
+  // For platforms that may fail at the early stage of initialising, sets so
+  // that they fail.
+  // See https://crbug.com/1280138.
+  static void SetFailInitializeUIForTest(bool fail);
+
   // Optional method for pre-early initialization. In case of X11, sets X11
   // error handlers so that errors can be caught if early initialization fails.
   virtual void PreEarlyInitialize();
 
-  virtual void InitializeUI(const InitParams& params) = 0;
+  // Initialises the platform in the UI process.  Returns whether that completed
+  // successfully, i. e., the startup process may proceed further.
+  // The platform implementation must check all conditions critical for normal
+  // operation, and return false if any of them are not met (e. g., the display
+  // server is not available).
+  virtual bool InitializeUI(const InitParams& params) = 0;
   virtual void InitializeGPU(const InitParams& params) = 0;
 
   bool initialized_ui_ = false;
@@ -336,8 +376,6 @@ class COMPONENT_EXPORT(OZONE) OzonePlatform {
   // modifications to |single_process_| visible by other threads. Mutex is not
   // needed since it's set before other threads are started.
   volatile bool single_process_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(OzonePlatform);
 };
 
 }  // namespace ui

@@ -7,24 +7,27 @@
 
 #include <memory>
 
+#include "ash/services/multidevice_setup/public/mojom/multidevice_setup.mojom.h"
 #include "ash/shell_delegate.h"
 #include "base/callback.h"
-#include "base/macros.h"
-#include "chromeos/services/multidevice_setup/public/mojom/multidevice_setup.mojom.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
+#include "url/gurl.h"
 
 namespace ash {
 
 class TestShellDelegate : public ShellDelegate {
  public:
   TestShellDelegate();
+
+  TestShellDelegate(const TestShellDelegate&) = delete;
+  TestShellDelegate& operator=(const TestShellDelegate&) = delete;
+
   ~TestShellDelegate() override;
 
   // Allows tests to override the MultiDeviceSetup binding behavior for this
   // TestShellDelegate.
   using MultiDeviceSetupBinder = base::RepeatingCallback<void(
-      mojo::PendingReceiver<
-          chromeos::multidevice_setup::mojom::MultiDeviceSetup>)>;
+      mojo::PendingReceiver<multidevice_setup::mojom::MultiDeviceSetup>)>;
   void SetMultiDeviceSetupBinder(MultiDeviceSetupBinder binder) {
     multidevice_setup_binder_ = std::move(binder);
   }
@@ -37,17 +40,24 @@ class TestShellDelegate : public ShellDelegate {
   std::unique_ptr<BackGestureContextualNudgeDelegate>
   CreateBackGestureContextualNudgeDelegate(
       BackGestureContextualNudgeController* controller) override;
+  std::unique_ptr<NearbyShareDelegate> CreateNearbyShareDelegate(
+      NearbyShareController* controller) const override;
+  std::unique_ptr<DesksTemplatesDelegate> CreateDesksTemplatesDelegate()
+      const override;
+  scoped_refptr<network::SharedURLLoaderFactory>
+  GetGeolocationUrlLoaderFactory() const override;
   bool CanGoBack(gfx::NativeWindow window) const override;
-  void SetTabScrubberEnabled(bool enabled) override;
+  void SetTabScrubberChromeOSEnabled(bool enabled) override;
   bool ShouldWaitForTouchPressAck(gfx::NativeWindow window) override;
   int GetBrowserWebUITabStripHeight() override;
   void BindMultiDeviceSetup(
-      mojo::PendingReceiver<
-          chromeos::multidevice_setup::mojom::MultiDeviceSetup> receiver)
-      override;
-  std::unique_ptr<NearbyShareDelegate> CreateNearbyShareDelegate(
-      NearbyShareController* controller) const override;
+      mojo::PendingReceiver<multidevice_setup::mojom::MultiDeviceSetup>
+          receiver) override;
   bool IsSessionRestoreInProgress() const override;
+  void SetUpEnvironmentForLockedFullscreen(bool locked) override {}
+  const GURL& GetLastCommittedURLForWindowIfAny(aura::Window* window) override;
+  void ForceSkipWarningUserOnClose(
+      const std::vector<aura::Window*>& windows) override {}
 
   void SetCanGoBack(bool can_go_back);
   void SetShouldWaitForTouchAck(bool should_wait_for_touch_ack);
@@ -55,8 +65,10 @@ class TestShellDelegate : public ShellDelegate {
   bool IsLoggingRedirectDisabled() const override;
   base::FilePath GetPrimaryUserDownloadsFolder() const override;
   void OpenFeedbackPageForPersistentDesksBar() override {}
-  std::unique_ptr<::full_restore::AppLaunchInfo>
-  GetAppLaunchDataForDeskTemplate(aura::Window* window) const override;
+  void SetLastCommittedURLForWindow(const GURL& url);
+  version_info::Channel GetChannel() override;
+
+  void set_channel(version_info::Channel channel) { channel_ = channel; }
 
  private:
   // True if the current top window can go back.
@@ -76,7 +88,9 @@ class TestShellDelegate : public ShellDelegate {
 
   MultiDeviceSetupBinder multidevice_setup_binder_;
 
-  DISALLOW_COPY_AND_ASSIGN(TestShellDelegate);
+  GURL last_committed_url_ = GURL::EmptyGURL();
+
+  version_info::Channel channel_ = version_info::Channel::UNKNOWN;
 };
 
 }  // namespace ash

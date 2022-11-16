@@ -203,10 +203,6 @@ bool FakeSocket::GetSSLInfo(net::SSLInfo* ssl_info) {
   return false;
 }
 
-void FakeSocket::GetConnectionAttempts(net::ConnectionAttempts* out) const {
-  out->clear();
-}
-
 int64_t FakeSocket::GetTotalReceivedBytes() const {
   NOTIMPLEMENTED();
   return 0;
@@ -221,18 +217,6 @@ FakeSocketClient::FakeSocketClient(
 }
 
 FakeSocketClient::~FakeSocketClient() {}
-
-void FakeSocketClient::IncomingTcpConnection(
-    const net::IPEndPoint& endpoint,
-    mojo::PendingRemote<network::mojom::P2PSocket> socket,
-    mojo::PendingReceiver<network::mojom::P2PSocketClient> client_receiver) {
-  accepted_.push_back(
-      std::make_pair(std::move(socket), std::move(client_receiver)));
-}
-
-void FakeSocketClient::CloseAccepted() {
-  accepted_.clear();
-}
 
 void CreateRandomPacket(std::vector<int8_t>* packet) {
   size_t size = kStunHeaderSize + rand() % 1000;

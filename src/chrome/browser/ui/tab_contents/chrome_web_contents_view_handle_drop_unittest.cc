@@ -9,6 +9,7 @@
 #include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/bind.h"
@@ -78,8 +79,6 @@ class ChromeWebContentsViewDelegateHandleOnPerformDrop : public testing::Test {
     run_loop_ = std::make_unique<base::RunLoop>();
 
     using FakeDelegate = enterprise_connectors::FakeContentAnalysisDelegate;
-    auto is_encrypted_callback =
-        base::BindRepeating([](const base::FilePath&) { return false; });
 
     policy::SetDMTokenForTesting(
         policy::DMToken::CreateValidTokenForTesting("dm_token"));
@@ -100,8 +99,7 @@ class ChromeWebContentsViewDelegateHandleOnPerformDrop : public testing::Test {
     enterprise_connectors::ContentAnalysisDelegate::SetFactoryForTesting(
         base::BindRepeating(
             &enterprise_connectors::FakeContentAnalysisDelegate::Create,
-            run_loop_->QuitClosure(), callback, is_encrypted_callback,
-            "dm_token"));
+            run_loop_->QuitClosure(), callback, "dm_token"));
     enterprise_connectors::ContentAnalysisDelegate::DisableUIForTesting();
   }
 
@@ -147,7 +145,7 @@ class ChromeWebContentsViewDelegateHandleOnPerformDrop : public testing::Test {
   content::BrowserTaskEnvironment task_environment_;
   base::test::ScopedFeatureList scoped_feature_list_;
   TestingProfileManager profile_manager_{TestingBrowserProcess::GetGlobal()};
-  TestingProfile* profile_;
+  raw_ptr<TestingProfile> profile_;
   std::unique_ptr<base::RunLoop> run_loop_;
   std::unique_ptr<content::WebContents> web_contents_;
   int expected_requests_count_ = 0;
@@ -211,23 +209,6 @@ TEST_F(ChromeWebContentsViewDelegateHandleOnPerformDrop, Html) {
   RunTest(data, /*enable=*/true, /*scan_succeeds=*/true);
 
   data.html = base::UTF8ToUTF16(small_text());
-  SetExpectedRequestsCount(0);
-  RunTest(data, /*enable=*/true, /*scan_succeeds=*/true);
-}
-
-// Make sure DropData::file_contents is handled correctly.
-TEST_F(ChromeWebContentsViewDelegateHandleOnPerformDrop, FileContents) {
-  content::DropData data;
-  data.file_contents = large_text();
-
-  SetExpectedRequestsCount(0);
-  RunTest(data, /*enable=*/false, /*scan_succeeds=*/true);
-
-  SetExpectedRequestsCount(1);
-  RunTest(data, /*enable=*/true, /*scan_succeeds=*/false);
-  RunTest(data, /*enable=*/true, /*scan_succeeds=*/true);
-
-  data.file_contents = small_text();
   SetExpectedRequestsCount(0);
   RunTest(data, /*enable=*/true, /*scan_succeeds=*/true);
 }

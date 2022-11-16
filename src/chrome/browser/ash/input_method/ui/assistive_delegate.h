@@ -28,6 +28,8 @@ enum class AssistiveWindowType {
   kEmojiSuggestion,
   kPersonalInfoSuggestion,
   kGrammarSuggestion,
+  kMultiWordSuggestion,
+  kLongpressDiacriticsSuggestion,
 };
 
 struct AssistiveWindowButton {

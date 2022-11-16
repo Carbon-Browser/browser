@@ -6,9 +6,11 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/power_monitor_test.h"
 #include "base/test/task_environment.h"
+#include "base/time/time.h"
 #include "build/build_config.h"
 #include "components/download/internal/background_service/scheduler/battery_status_listener_impl.h"
 #include "components/download/network/network_status_listener_impl.h"
@@ -39,6 +41,11 @@ class MockObserver : public DeviceStatusListener::Observer {
 class TestBatteryStatusListener : public BatteryStatusListenerImpl {
  public:
   TestBatteryStatusListener() : BatteryStatusListenerImpl(base::TimeDelta()) {}
+
+  TestBatteryStatusListener(const TestBatteryStatusListener&) = delete;
+  TestBatteryStatusListener& operator=(const TestBatteryStatusListener&) =
+      delete;
+
   ~TestBatteryStatusListener() override = default;
 
   void set_battery_percentage(int battery_percentage) {
@@ -50,7 +57,6 @@ class TestBatteryStatusListener : public BatteryStatusListenerImpl {
 
  private:
   int battery_percentage_ = 0;
-  DISALLOW_COPY_AND_ASSIGN(TestBatteryStatusListener);
 };
 
 // Test target that only loads default implementation of NetworkStatusListener.
@@ -64,6 +70,9 @@ class TestDeviceStatusListener : public DeviceStatusListener {
                              std::move(battery_listener),
                              std::move(network_listener)) {}
 
+  TestDeviceStatusListener(const TestDeviceStatusListener&) = delete;
+  TestDeviceStatusListener& operator=(const TestDeviceStatusListener&) = delete;
+
   // DeviceStatusListener implementation.
   void Start(const base::TimeDelta& start_delay) override {
     // Cache the start delay for verification.
@@ -76,8 +85,6 @@ class TestDeviceStatusListener : public DeviceStatusListener {
  private:
   friend class DeviceStatusListenerTest;
   base::TimeDelta start_delay_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestDeviceStatusListener);
 };
 
 class DeviceStatusListenerTest : public testing::Test {
@@ -146,8 +153,9 @@ class DeviceStatusListenerTest : public testing::Test {
   // Needed for network change notifier and power monitor.
   base::test::SingleThreadTaskEnvironment task_environment_;
   base::test::ScopedPowerMonitorTestSource power_source_;
-  TestBatteryStatusListener* test_battery_listener_;
-  network::TestNetworkConnectionTracker* test_network_connection_tracker_;
+  raw_ptr<TestBatteryStatusListener> test_battery_listener_;
+  raw_ptr<network::TestNetworkConnectionTracker>
+      test_network_connection_tracker_;
 };
 
 // Verifies the initial state that the observer should be notified.
@@ -176,8 +184,8 @@ TEST_F(DeviceStatusListenerTest, DuplicateStart) {
   ChangeNetworkType(ConnectionType::CONNECTION_NONE);
   SimulateBatteryChange(true); /* Not charging. */
   EXPECT_EQ(DeviceStatus(), listener_->CurrentDeviceStatus());
-  const auto acutual_delay = base::TimeDelta::FromSeconds(0);
-  listener_->Start(base::TimeDelta::FromSeconds(1));
+  const auto acutual_delay = base::Seconds(0);
+  listener_->Start(base::Seconds(1));
   listener_->Start(acutual_delay);
   EXPECT_CALL(mock_observer_, OnDeviceStatusChanged(_)).Times(1);
   base::RunLoop().RunUntilIdle();
@@ -280,7 +288,7 @@ TEST_F(DeviceStatusListenerTest, ConnectionUnknownTreatedCorrectly) {
   base::RunLoop().RunUntilIdle();
 
   // Initial states check.
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   EXPECT_EQ(NetworkStatus::DISCONNECTED,
             listener_->CurrentDeviceStatus().network_status);
 #else

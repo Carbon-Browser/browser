@@ -23,7 +23,6 @@
 
 #include "base/numerics/checked_math.h"
 #include "third_party/blink/renderer/core/layout/layout_counter.h"
-#include "third_party/blink/renderer/platform/heap/handle.h"
 
 #if DCHECK_IS_ON()
 #include <stdio.h>
@@ -444,7 +443,7 @@ static void ShowTreeAndMark(const CounterNode* node) {
 
 #if DCHECK_IS_ON()
 
-void showCounterTree(const blink::CounterNode* counter) {
+void ShowCounterTree(const blink::CounterNode* counter) {
   if (counter)
     ShowTreeAndMark(counter);
   else

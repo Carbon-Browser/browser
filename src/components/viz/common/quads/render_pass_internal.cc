@@ -7,6 +7,7 @@
 #include <stddef.h>
 
 #include "base/trace_event/traced_value.h"
+#include "cc/base/math_util.h"
 #include "components/viz/common/frame_sinks/copy_output_request.h"
 #include "components/viz/common/quads/solid_color_draw_quad.h"
 #include "components/viz/common/traced_value.h"
@@ -39,7 +40,7 @@ SharedQuadState* RenderPassInternal::CreateAndAppendSharedQuadState() {
 
 void RenderPassInternal::ReplaceExistingQuadWithSolidColor(
     QuadList::Iterator at,
-    SkColor color,
+    SkColor4f color,
     SkBlendMode blend_mode) {
   const SharedQuadState* shared_quad_state = at->shared_quad_state;
   if (shared_quad_state->are_contents_opaque ||
@@ -52,6 +53,7 @@ void RenderPassInternal::ReplaceExistingQuadWithSolidColor(
   }
 
   const gfx::Rect rect = at->rect;
+  // TODO(crbug.com/1308932) This function should be called with an SkColor4f
   quad_list.ReplaceExistingElement<SolidColorDrawQuad>(at)->SetAll(
       shared_quad_state, rect, /*visible_rect=*/rect,
       /*needs_blending=*/false, color,

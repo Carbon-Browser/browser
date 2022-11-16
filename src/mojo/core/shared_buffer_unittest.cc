@@ -53,7 +53,7 @@ TEST_F(SharedBufferTest, PassSharedBufferLocal) {
   ExpectBufferContents(dupe, 0, message);
 }
 
-#if !defined(OS_IOS)
+#if !BUILDFLAG(IS_IOS)
 
 // Reads a single message with a shared buffer handle, maps the buffer, copies
 // the message contents into it, then exits.
@@ -194,11 +194,13 @@ DEFINE_TEST_CLIENT_TEST_WITH_PIPE(ReceiveAndEditBufferParent,
   });
 }
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 // Android multi-process tests are not executing the new process. This is flaky.
 #define MAYBE_PassHandleBetweenCousins DISABLED_PassHandleBetweenCousins
 #else
-#define MAYBE_PassHandleBetweenCousins PassHandleBetweenCousins
+// TODO(crbug.com/1287637): This test flakes frequently on various platforms,
+// with failure return-codes from RunTestClientAndGetExitCode().
+#define MAYBE_PassHandleBetweenCousins DISABLED_PassHandleBetweenCousins
 #endif
 TEST_F(SharedBufferTest, MAYBE_PassHandleBetweenCousins) {
   const std::string message = "hello";
@@ -299,7 +301,7 @@ TEST_F(SharedBufferTest, CreateAndPassFromChildReadOnlyBuffer) {
   });
 }
 
-#endif  // !defined(OS_IOS)
+#endif  // !BUILDFLAG(IS_IOS)
 
 }  // namespace
 }  // namespace core

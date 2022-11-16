@@ -13,7 +13,6 @@
 #include <memory>
 
 #include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "gpu/command_buffer/client/gpu_control.h"
 #include "gpu/command_buffer/common/cmd_buffer_common.h"
 #include "gpu/command_buffer/common/gpu_memory_allocation.h"
@@ -86,6 +85,8 @@ class MockClientCommandBuffer : public CommandBuffer,
 
   void SetTokenForSetGetBuffer(int32_t token) { token_ = token; }
 
+  void ForceLostContext(error::ContextLostReason reason) override;
+
  private:
   int32_t put_offset_ = 0;
   int32_t token_ = 10000;  // All token checks in the tests should pass.
@@ -106,6 +107,10 @@ class MockClientCommandBufferMockFlush : public MockClientCommandBuffer {
 class MockClientGpuControl : public GpuControl {
  public:
   MockClientGpuControl();
+
+  MockClientGpuControl(const MockClientGpuControl&) = delete;
+  MockClientGpuControl& operator=(const MockClientGpuControl&) = delete;
+
   ~MockClientGpuControl() override;
 
   MOCK_METHOD1(SetGpuControlClient, void(GpuControlClient*));
@@ -147,9 +152,6 @@ class MockClientGpuControl : public GpuControl {
                    base::OnceCallback<void(std::unique_ptr<gfx::GpuFence>)>
                        callback) override {}
   MOCK_METHOD1(SetDisplayTransform, void(gfx::OverlayTransform));
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(MockClientGpuControl);
 };
 
 class FakeDecoderClient : public DecoderClient {

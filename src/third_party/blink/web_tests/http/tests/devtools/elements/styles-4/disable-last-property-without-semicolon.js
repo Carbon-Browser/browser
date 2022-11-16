@@ -4,7 +4,7 @@
 
 (async function() {
   TestRunner.addResult(`Verifies that formatter adds a semicolon when enabling property.\n`);
-  await TestRunner.loadModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
+  await TestRunner.loadLegacyModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
   await TestRunner.showPanel('elements');
   await TestRunner.loadHTML(`
       <style>
@@ -42,7 +42,7 @@
       }
 
       function nodeCallback(node) {
-        TestRunner.cssModel.matchedStylesPromise(node.id, false, false).then(callback);
+        TestRunner.cssModel.getMatchedStyles(node.id, false, false).then(callback);
       }
       ElementsTestRunner.selectNodeWithId('formatted', nodeCallback);
     },

@@ -28,7 +28,8 @@
 #include "base/bind.h"
 #include "base/logging.h"
 #include "third_party/blink/public/platform/platform.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/heap/visitor.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/trace_event.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_loading_log.h"
 #include "third_party/blink/renderer/platform/weborigin/security_origin.h"
@@ -40,9 +41,8 @@ static Persistent<MemoryCache>* g_memory_cache;
 
 static const unsigned kCDefaultCacheCapacity = 8192 * 1024;
 static const base::TimeDelta kCMinDelayBeforeLiveDecodedPrune =
-    base::TimeDelta::FromSeconds(1);
-static const base::TimeDelta kCMaxPruneDeferralDelay =
-    base::TimeDelta::FromMilliseconds(500);
+    base::Seconds(1);
+static const base::TimeDelta kCMaxPruneDeferralDelay = base::Milliseconds(500);
 
 // Percentage of capacity toward which we prune, to avoid immediately pruning
 // again.

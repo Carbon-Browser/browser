@@ -2,7 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/macros.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/extensions/extension_browsertest.h"
 #include "chrome/browser/extensions/extension_tab_util.h"
@@ -28,6 +27,10 @@ namespace extensions {
 class ManifestV3BrowserTest : public ExtensionBrowserTest {
  public:
   ManifestV3BrowserTest() {}
+
+  ManifestV3BrowserTest(const ManifestV3BrowserTest&) = delete;
+  ManifestV3BrowserTest& operator=(const ManifestV3BrowserTest&) = delete;
+
   ~ManifestV3BrowserTest() override {}
 
   void SetUpOnMainThread() override {
@@ -38,8 +41,6 @@ class ManifestV3BrowserTest : public ExtensionBrowserTest {
 
  private:
   ScopedCurrentChannel channel_override_{version_info::Channel::UNKNOWN};
-
-  DISALLOW_COPY_AND_ASSIGN(ManifestV3BrowserTest);
 };
 
 IN_PROC_BROWSER_TEST_F(ManifestV3BrowserTest, ProgrammaticScriptInjection) {
@@ -90,7 +91,7 @@ IN_PROC_BROWSER_TEST_F(ManifestV3BrowserTest, ProgrammaticScriptInjection) {
   test_dir.WriteManifest(kManifest);
   test_dir.WriteFile(FILE_PATH_LITERAL("worker.js"), kWorker);
 
-  ExtensionTestMessageListener listener("ready", /*will_reply=*/false);
+  ExtensionTestMessageListener listener("ready");
   const Extension* extension = LoadExtension(test_dir.UnpackedPath());
   ASSERT_TRUE(extension);
   ASSERT_TRUE(listener.WaitUntilSatisfied());
@@ -132,7 +133,7 @@ IN_PROC_BROWSER_TEST_F(ManifestV3BrowserTest, ActionAPI) {
       test_data_dir_.AppendASCII("api_test/icon_rgb_0_0_255.png"),
       FILE_PATH_LITERAL("blue_icon.png"));
 
-  ExtensionTestMessageListener listener("ready", /*will_reply=*/false);
+  ExtensionTestMessageListener listener("ready");
   const Extension* extension = LoadExtension(test_dir.UnpackedPath());
   ASSERT_TRUE(extension);
   ASSERT_TRUE(listener.WaitUntilSatisfied());

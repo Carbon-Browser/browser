@@ -27,6 +27,7 @@
 #include "services/network/test/test_url_loader_factory.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace account_manager {
 
@@ -265,9 +266,9 @@ class AccountManagerObserver : public AccountManager::Observer {
   void Reset() {
     is_token_upserted_callback_called_ = false;
     is_account_removed_callback_called_ = false;
-    last_upserted_account_key_ = ::account_manager::AccountKey{};
+    last_upserted_account_key_ = absl::nullopt;
     last_upserted_account_email_.clear();
-    last_removed_account_key_ = ::account_manager::AccountKey{};
+    last_removed_account_key_ = absl::nullopt;
     last_removed_account_email_.clear();
     accounts_.clear();
   }
@@ -281,7 +282,7 @@ class AccountManagerObserver : public AccountManager::Observer {
   }
 
   const ::account_manager::AccountKey& last_upserted_account_key() const {
-    return last_upserted_account_key_;
+    return last_upserted_account_key_.value();
   }
 
   const std::string& last_upserted_account_email() const {
@@ -289,7 +290,7 @@ class AccountManagerObserver : public AccountManager::Observer {
   }
 
   const ::account_manager::AccountKey& last_removed_account_key() const {
-    return last_removed_account_key_;
+    return last_removed_account_key_.value();
   }
 
   const std::string& last_removed_account_email() const {
@@ -303,9 +304,9 @@ class AccountManagerObserver : public AccountManager::Observer {
  private:
   bool is_token_upserted_callback_called_ = false;
   bool is_account_removed_callback_called_ = false;
-  ::account_manager::AccountKey last_upserted_account_key_;
+  absl::optional<::account_manager::AccountKey> last_upserted_account_key_;
   std::string last_upserted_account_email_;
-  ::account_manager::AccountKey last_removed_account_key_;
+  absl::optional<::account_manager::AccountKey> last_removed_account_key_;
   std::string last_removed_account_email_;
   std::set<::account_manager::AccountKey> accounts_;
 };
@@ -331,16 +332,6 @@ class MockAccessTokenConsumer : public OAuth2AccessTokenConsumer {
     return "account_manager_unittest";
   }
 };
-
-TEST(AccountManagerKeyTest, TestValidity) {
-  ::account_manager::AccountKey key1{std::string(),
-                                     ::account_manager::AccountType::kGaia};
-  EXPECT_FALSE(key1.IsValid());
-
-  ::account_manager::AccountKey key3{"abc",
-                                     ::account_manager::AccountType::kGaia};
-  EXPECT_TRUE(key3.IsValid());
-}
 
 TEST_F(AccountManagerTest, TestInitializationCompletes) {
   AccountManager account_manager;
@@ -465,18 +456,6 @@ TEST_F(AccountManagerTest, TestAccountEmailPersistence) {
   EXPECT_EQ(kRawUserEmail, raw_email);
 }
 
-TEST_F(AccountManagerTest, UpdatingAccountEmailShouldNotOverwriteTokens) {
-  const std::string new_email = "new-email@example.org";
-  account_manager()->UpsertAccount(kGaiaAccountKey, kRawUserEmail, kGaiaToken);
-  account_manager()->UpdateEmail(kGaiaAccountKey, new_email);
-  RunAllPendingTasks();
-
-  ResetAndInitializeAccountManager();
-  const std::string raw_email = GetAccountEmailBlocking(kGaiaAccountKey);
-  EXPECT_EQ(new_email, raw_email);
-  EXPECT_EQ(kGaiaToken, account_manager()->accounts_[kGaiaAccountKey].token);
-}
-
 TEST_F(AccountManagerTest, UpsertAccountCanUpdateEmail) {
   const std::string new_email = "new-email@example.org";
   account_manager()->UpsertAccount(kGaiaAccountKey, kRawUserEmail, kGaiaToken);
@@ -558,23 +537,6 @@ TEST_F(AccountManagerTest, RemovedAccountsAreImmediatelyUnavailable) {
   account_manager()->UpsertAccount(kGaiaAccountKey, kRawUserEmail, kGaiaToken);
 
   account_manager()->RemoveAccount(kGaiaAccountKey);
-  EXPECT_TRUE(GetAccountsBlocking().empty());
-}
-
-TEST_F(AccountManagerTest, AccountsCanBeRemovedByRawEmail) {
-  account_manager()->UpsertAccount(kGaiaAccountKey, kRawUserEmail, kGaiaToken);
-
-  account_manager()->RemoveAccount(kRawUserEmail);
-  EXPECT_TRUE(GetAccountsBlocking().empty());
-}
-
-TEST_F(AccountManagerTest, AccountsCanBeRemovedByCanonicalEmail) {
-  const std::string raw_email = "abc.123.456@gmail.com";
-  const std::string canonical_email = "abc123456@gmail.com";
-
-  account_manager()->UpsertAccount(kGaiaAccountKey, raw_email, kGaiaToken);
-
-  account_manager()->RemoveAccount(canonical_email);
   EXPECT_TRUE(GetAccountsBlocking().empty());
 }
 

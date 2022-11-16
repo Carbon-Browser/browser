@@ -32,6 +32,7 @@ const char kBorealisDiskStartupResultHistogram[] =
     "Borealis.Disk.Startup.Result";
 const char kBorealisInstallNumAttemptsHistogram[] =
     "Borealis.Install.NumAttempts";
+const char kBorealisGameModeResultHistogram[] = "Borealis.GameMode.Result";
 const char kBorealisInstallResultHistogram[] = "Borealis.Install.Result";
 const char kBorealisInstallOverallTimeHistogram[] =
     "Borealis.Install.OverallTime";
@@ -172,6 +173,12 @@ void RecordBorealisDiskStartupResultHistogram(
                                 disk_result);
 }
 
+void RecordBorealisGameModeResultHistogram(
+    BorealisGameModeResult game_mode_result) {
+  base::UmaHistogramEnumeration(kBorealisGameModeResultHistogram,
+                                game_mode_result);
+}
+
 }  // namespace borealis
 
 std::ostream& operator<<(std::ostream& stream,
@@ -182,14 +189,18 @@ std::ostream& operator<<(std::ostream& stream,
     case borealis::BorealisStartupResult::kCancelled:
       return stream << "Cancelled";
     case borealis::BorealisStartupResult::kMountFailed:
-      return stream << "Mount Failed";
+      return stream << "Mount failed";
     case borealis::BorealisStartupResult::kDiskImageFailed:
-      return stream << "Disk Image Failed";
+      return stream << "Disk Image failed";
     case borealis::BorealisStartupResult::kStartVmFailed:
-      return stream << "Start VM Failed";
+      return stream << "Start VM failed";
     case borealis::BorealisStartupResult::kAwaitBorealisStartupFailed:
-      return stream << "Await Borealis Startup Failed";
+      return stream << "Await Borealis Startup failed";
     case borealis::BorealisStartupResult::kSyncDiskFailed:
       return stream << "Syncing Disk failed";
+    case borealis::BorealisStartupResult::kRequestWaylandFailed:
+      return stream << "Request Wayland failed";
+    case borealis::BorealisStartupResult::kDisallowed:
+      return stream << "Borealis is not allowed";
   }
 }

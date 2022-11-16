@@ -11,16 +11,15 @@
 #include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/feature_list.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/scoped_refptr.h"
 #include "build/build_config.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/lifetime/browser_shutdown.h"
 #include "chrome/browser/prefs/session_startup_pref.h"
+#include "chrome/browser/profiles/keep_alive/profile_keep_alive_types.h"
+#include "chrome/browser/profiles/keep_alive/scoped_profile_keep_alive.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/profiles/profile_keep_alive_types.h"
-#include "chrome/browser/profiles/scoped_profile_keep_alive.h"
 #include "chrome/browser/ui/startup/startup_browser_creator.h"
 #include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "components/keep_alive_registry/keep_alive_types.h"
@@ -36,13 +35,14 @@
 #include "services/network/public/mojom/cookie_manager.mojom.h"
 #include "services/network/public/mojom/network_context.mojom.h"
 #include "storage/browser/quota/special_storage_policy.h"
+#include "third_party/blink/public/common/storage_key/storage_key.h"
 
 namespace {
 
-bool OriginMatcher(const url::Origin& origin,
+bool OriginMatcher(const blink::StorageKey& storage_key,
                    storage::SpecialStoragePolicy* policy) {
-  return policy->IsStorageSessionOnly(origin.GetURL()) &&
-         !policy->IsStorageProtected(origin.GetURL());
+  return policy->IsStorageSessionOnly(storage_key.origin().GetURL()) &&
+         !policy->IsStorageProtected(storage_key.origin().GetURL());
 }
 
 class SessionDataDeleterInternal
@@ -51,6 +51,10 @@ class SessionDataDeleterInternal
   SessionDataDeleterInternal(Profile* profile,
                              bool delete_only_by_session_only_policy,
                              base::OnceClosure callback);
+
+  SessionDataDeleterInternal(const SessionDataDeleterInternal&) = delete;
+  SessionDataDeleterInternal& operator=(const SessionDataDeleterInternal&) =
+      delete;
 
   void Run(content::StoragePartition* storage_partition,
            HostContentSettingsMap* host_content_settings_map);
@@ -71,8 +75,6 @@ class SessionDataDeleterInternal
   mojo::Remote<network::mojom::CookieManager> cookie_manager_;
   scoped_refptr<storage::SpecialStoragePolicy> storage_policy_;
   const bool delete_only_by_session_only_policy_;
-
-  DISALLOW_COPY_AND_ASSIGN(SessionDataDeleterInternal);
 };
 
 SessionDataDeleterInternal::SessionDataDeleterInternal(
@@ -120,13 +122,8 @@ void SessionDataDeleterInternal::Run(
         // Fire and forget. Session cookies will be cleaned up on start as well.
         // (SQLitePersistentCookieStore::Backend::DeleteSessionCookiesOnStartup)
         base::DoNothing());
-
-    // If the permissions policy feature is enabled, delete the client hint
-    // preferences
-    if (base::FeatureList::IsEnabled(features::kFeaturePolicyForClientHints)) {
-      host_content_settings_map->ClearSettingsForOneType(
-          ContentSettingsType::CLIENT_HINTS);
-    }
+    host_content_settings_map->ClearSettingsForOneType(
+        ContentSettingsType::CLIENT_HINTS);
   }
 
   if (!storage_policy_.get() || !storage_policy_->HasSessionOnlyOrigins())
@@ -158,13 +155,12 @@ void SessionDataDeleter::DeleteSessionOnlyData(bool skip_session_cookies,
   // called during shutdown.
   DCHECK(!browser_shutdown::IsTryingToQuit());
 
-  SessionStartupPref::Type startup_pref_type =
+  SessionStartupPref startup_pref =
       StartupBrowserCreator::GetSessionStartupPref(
-          *base::CommandLine::ForCurrentProcess(), profile_)
-          .type;
+          *base::CommandLine::ForCurrentProcess(), profile_);
 
   bool delete_only_by_session_only_policy =
-      skip_session_cookies || startup_pref_type == SessionStartupPref::LAST;
+      skip_session_cookies || startup_pref.ShouldRestoreLastSession();
 
   auto deleter = base::MakeRefCounted<SessionDataDeleterInternal>(
       profile_, delete_only_by_session_only_policy, std::move(callback));

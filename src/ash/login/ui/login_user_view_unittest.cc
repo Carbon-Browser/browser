@@ -18,6 +18,10 @@ namespace ash {
 namespace {
 
 class LoginUserViewUnittest : public LoginTestBase {
+ public:
+  LoginUserViewUnittest(const LoginUserViewUnittest&) = delete;
+  LoginUserViewUnittest& operator=(const LoginUserViewUnittest&) = delete;
+
  protected:
   LoginUserViewUnittest() = default;
   ~LoginUserViewUnittest() override = default;
@@ -75,8 +79,6 @@ class LoginUserViewUnittest : public LoginTestBase {
   void OnTapped() { ++tap_count_; }
   void OnRemoveWarningShown() { ++remove_show_warning_count_; }
   void OnRemove() { ++remove_count_; }
-
-  DISALLOW_COPY_AND_ASSIGN(LoginUserViewUnittest);
 };
 
 }  // namespace
@@ -180,6 +182,35 @@ TEST_F(LoginUserViewUnittest, EntireViewIsTapTarget) {
 
   // Click a location outside of the view bounds.
   EXPECT_FALSE(tap(view->GetBoundsInScreen().bottom_right(), 1, 1));
+}
+
+TEST_F(LoginUserViewUnittest, DropdownClickable) {
+  LoginUserView* view =
+      AddUserView(LoginDisplayStyle::kLarge, true /*show_dropdown*/,
+                  false /*public_account*/);
+  LoginUserView::TestApi view_test(view);
+
+  EXPECT_FALSE(view_test.remove_account_dialog()->GetVisible());
+
+  GetEventGenerator()->MoveMouseTo(
+      view_test.dropdown()->GetBoundsInScreen().CenterPoint());
+  GetEventGenerator()->ClickLeftButton();
+  EXPECT_EQ(0, tap_count_);
+  EXPECT_TRUE(view_test.remove_account_dialog()->GetVisible());
+}
+
+TEST_F(LoginUserViewUnittest, DropdownTappable) {
+  LoginUserView* view =
+      AddUserView(LoginDisplayStyle::kLarge, true /*show_dropdown*/,
+                  false /*public_account*/);
+  LoginUserView::TestApi view_test(view);
+
+  EXPECT_FALSE(view_test.remove_account_dialog()->GetVisible());
+
+  GetEventGenerator()->GestureTapAt(
+      view_test.dropdown()->GetBoundsInScreen().CenterPoint());
+  EXPECT_EQ(0, tap_count_);
+  EXPECT_TRUE(view_test.remove_account_dialog()->GetVisible());
 }
 
 // Verifies the focused user view is opaque. Verifies that a hovered view is

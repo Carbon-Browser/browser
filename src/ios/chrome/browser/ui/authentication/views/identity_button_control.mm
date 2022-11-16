@@ -30,8 +30,8 @@ const CGFloat kArrowDownMargin = 12.;
 @interface IdentityButtonControl ()
 
 @property(nonatomic, strong) IdentityView* identityView;
-// Image View for the arrow (down or left according to |style|, see the
-// |arrowDirection| property), letting the user know that more profiles can be
+// Image View for the arrow (down or left according to `style`, see the
+// `arrowDirection` property), letting the user know that more profiles can be
 // selected.
 @property(nonatomic, strong) UIImageView* arrowImageView;
 
@@ -44,7 +44,7 @@ const CGFloat kArrowDownMargin = 12.;
   if (self) {
     self.accessibilityIdentifier = kIdentityButtonControlIdentifier;
     self.layer.cornerRadius = kIdentityButtonControlRadius;
-    self.backgroundColor = [UIColor colorNamed:kSecondaryBackgroundColor];
+    [self setUnhighlightedBackgroundColor];
 
     // Adding view elements inside.
     // Down or right arrow.
@@ -52,7 +52,6 @@ const CGFloat kArrowDownMargin = 12.;
     _arrowImageView.translatesAutoresizingMaskIntoConstraints = NO;
     _arrowDirection = IdentityButtonControlArrowDown;
     [self updateArrowDirection];
-    _arrowImageView.tintColor = [UIColor colorNamed:kTextPrimaryColor];
     [self addSubview:_arrowImageView];
 
     // Main view with avatar, name and email.
@@ -81,9 +80,7 @@ const CGFloat kArrowDownMargin = 12.;
     AddSameCenterYConstraint(self, _arrowImageView);
     ApplyVisualConstraintsWithMetrics(constraints, views, metrics);
 
-    if (@available(iOS 13.4, *)) {
-      [self addInteraction:[[ViewPointerInteraction alloc] init]];
-    }
+    [self addInteraction:[[ViewPointerInteraction alloc] init]];
 
     // Accessibility.
     self.isAccessibilityElement = YES;
@@ -119,6 +116,8 @@ const CGFloat kArrowDownMargin = 12.;
 
 - (void)setIdentityViewStyle:(IdentityViewStyle)style {
   self.identityView.style = style;
+  if (!self.highlighted)
+    [self setUnhighlightedBackgroundColor];
 }
 
 - (IdentityViewStyle)identityViewStyle {
@@ -126,6 +125,21 @@ const CGFloat kArrowDownMargin = 12.;
 }
 
 #pragma mark - Private
+
+// Sets the background color when not highlighted.
+- (void)setUnhighlightedBackgroundColor {
+  DCHECK(!self.highlighted);
+  switch (self.identityView.style) {
+    case IdentityViewStyleDefault:
+    case IdentityViewStyleIdentityChooser:
+      self.backgroundColor = [UIColor colorNamed:kSecondaryBackgroundColor];
+      break;
+    case IdentityViewStyleConsistency:
+      self.backgroundColor =
+          [UIColor colorNamed:kGroupedSecondaryBackgroundColor];
+      break;
+  }
+}
 
 - (CGPoint)locationFromTouches:(NSSet*)touches {
   UITouch* touch = [touches anyObject];
@@ -142,6 +156,7 @@ const CGFloat kArrowDownMargin = 12.;
       break;
     case IdentityButtonControlArrowDown:
       image = [UIImage imageNamed:@"identity_picker_view_arrow_down"];
+      tintColor = [UIColor colorNamed:kTextQuaternaryColor];
       break;
   }
   DCHECK(image);
@@ -155,9 +170,8 @@ const CGFloat kArrowDownMargin = 12.;
 
   if (highlighted) {
     self.backgroundColor = [UIColor colorNamed:kGrey300Color];
-  } else if (self.identityViewStyle != IdentityViewStyleConsistency) {
-    // Background color for the consistency web sign-in is reset manually.
-    self.backgroundColor = [UIColor colorNamed:kSecondaryBackgroundColor];
+  } else {
+    [self setUnhighlightedBackgroundColor];
   }
 }
 

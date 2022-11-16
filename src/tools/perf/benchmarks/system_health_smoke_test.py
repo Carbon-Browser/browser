@@ -110,6 +110,10 @@ _DISABLED_TESTS = frozenset({
 MAX_VALUES_PER_TEST_CASE = 1000
 
 
+class SystemHealthBenchmarkSmokeTest(unittest.TestCase):
+  pass
+
+
 def _GenerateSmokeTestCase(benchmark_class, story_to_smoke_test):
 
   # NOTE TO SHERIFFS: DO NOT DISABLE THIS TEST.
@@ -119,10 +123,10 @@ def _GenerateSmokeTestCase(benchmark_class, story_to_smoke_test):
   # wider swath of coverage  than is usally intended. Instead, if a test is
   # failing, disable it by putting it into the _DISABLED_TESTS list above.
   @decorators.Disabled('chromeos')  # crbug.com/351114
+  @decorators.Disabled('mac')  # crbug.com/1277277
   def RunTest(self):
     class SinglePageBenchmark(benchmark_class):  # pylint: disable=no-init
       def CreateStorySet(self, options):
-        # pylint: disable=super-on-old-class
         story_set = super(SinglePageBenchmark, self).CreateStorySet(options)
         stories_to_remove = [s for s in story_set.stories if s !=
                              story_to_smoke_test]
@@ -136,9 +140,9 @@ def _GenerateSmokeTestCase(benchmark_class, story_to_smoke_test):
       options = GenerateBenchmarkOptions(
           output_dir=temp_dir,
           benchmark_cls=SinglePageBenchmark)
-      simplified_test_name = self.id().replace(
-          'benchmarks.system_health_smoke_test.SystemHealthBenchmarkSmokeTest.',
-          '')
+      replacement_string = ('benchmarks.system_health_smoke_test.'
+                            'SystemHealthBenchmarkSmokeTest.')
+      simplified_test_name = self.id().replace(replacement_string, '')
       # Sanity check to ensure that that substring removal was effective.
       assert len(simplified_test_name) < len(self.id())
 
@@ -165,8 +169,10 @@ def _GenerateSmokeTestCase(benchmark_class, story_to_smoke_test):
   test_method_name = '%s/%s' % (
       benchmark_class.Name(), story_to_smoke_test.name)
 
-  class SystemHealthBenchmarkSmokeTest(unittest.TestCase):
-    pass
+  # Set real_test_func as benchmark_class to make typ
+  # write benchmark_class source filepath to trace instead of
+  # path to this file
+  RunTest.real_test_func = benchmark_class
 
   setattr(SystemHealthBenchmarkSmokeTest, test_method_name, RunTest)
 
@@ -186,6 +192,8 @@ def GenerateBenchmarkOptions(output_dir, benchmark_cls):
   # all crashes and hence remove the need to enable logging in actual perf
   # benchmarks.
   options.browser_options.logging_verbosity = 'non-verbose'
+  options.browser_options.environment = \
+      chromium_config.GetDefaultChromiumConfig()
   options.target_platforms = benchmark_cls.GetSupportedPlatformNames(
       benchmark_cls.SUPPORTED_PLATFORMS)
   results_processor.ProcessOptions(options)
@@ -240,8 +248,6 @@ def validate_smoke_test_name_versions():
         'You can use crbug.com/878390 for the disabling reference.'
         '[StoryName] : [StoryVersion1],[StoryVersion2]...\n%s' % (msg))
 
-  return
-
 
 def load_tests(loader, standard_tests, pattern):
   del loader, standard_tests, pattern  # unused
@@ -295,7 +301,7 @@ def find_multi_version_stories(stories, disabled):
       else:
         prefix = name
     prefixes[prefix].append(name)
-  for prefix, stories in prefixes.items():
-    if len(stories) == 1:
-      prefixes.pop(prefix)
-  return prefixes
+  return {
+      prefix: stories
+      for prefix, stories in prefixes.items() if len(stories) != 1
+  }

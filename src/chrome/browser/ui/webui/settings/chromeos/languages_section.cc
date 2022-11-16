@@ -10,12 +10,13 @@
 #include "base/no_destructor.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/ui/webui/settings/ash/search/search_tag_registry.h"
 #include "chrome/browser/ui/webui/settings/chromeos/os_settings_features_util.h"
-#include "chrome/browser/ui/webui/settings/chromeos/search/search_tag_registry.h"
 #include "chrome/browser/ui/webui/settings/languages_handler.h"
 #include "chrome/browser/ui/webui/webui_util.h"
 #include "chrome/common/url_constants.h"
 #include "chrome/grit/generated_resources.h"
+#include "chromeos/components/quick_answers/public/cpp/quick_answers_state.h"
 #include "components/prefs/pref_service.h"
 #include "components/spellcheck/browser/pref_names.h"
 #include "content/public/browser/web_ui_data_source.h"
@@ -102,11 +103,6 @@ const std::vector<SearchConcept>& GetEditDictionarySearchConceptsV2() {
   return *tags;
 }
 
-bool IsLanguageSettingsV2Update2Enabled() {
-  return base::FeatureList::IsEnabled(
-      ::chromeos::features::kLanguageSettingsUpdate2);
-}
-
 const std::vector<SearchConcept>& GetSmartInputsSearchConcepts() {
   static const base::NoDestructor<std::vector<SearchConcept>> tags({
       {IDS_OS_SETTINGS_TAG_LANGUAGES_SUGGESTIONS,
@@ -143,21 +139,6 @@ const std::vector<SearchConcept>& GetEmojiSuggestionSearchConcepts() {
   return *tags;
 }
 
-const std::vector<SearchConcept>& GetPredictiveWritingSearchConcepts() {
-  static const base::NoDestructor<std::vector<SearchConcept>> tags({
-      {IDS_OS_SETTINGS_TAG_LANGUAGES_PREDICTIVE_WRITING,
-       mojom::kSmartInputsSubpagePath,
-       mojom::SearchResultIcon::kGlobe,
-       mojom::SearchResultDefaultRank::kMedium,
-       mojom::SearchResultType::kSetting,
-       {.setting = mojom::Setting::kShowPredictiveWriting},
-       {IDS_OS_SETTINGS_TAG_LANGUAGES_PREDICTIVE_WRITING_ALT1,
-        IDS_OS_SETTINGS_TAG_LANGUAGES_PREDICTIVE_WRITING_ALT2,
-        SearchConcept::kAltTagEnd}},
-  });
-  return *tags;
-}
-
 bool IsAssistivePersonalInfoAllowed() {
   return !features::IsGuestModeActive() &&
          base::FeatureList::IsEnabled(
@@ -184,18 +165,12 @@ void AddSmartInputsStrings(content::WebUIDataSource* html_source,
       {"emojiSuggestionTitle", IDS_SETTINGS_SUGGESTIONS_EMOJI_SUGGESTION_TITLE},
       {"emojiSuggestionDescription",
        IDS_SETTINGS_SUGGESTIONS_EMOJI_SUGGESTION_DESCRIPTION},
-      {"predictiveWritingTitle",
-       IDS_SETTINGS_SUGGESTIONS_PREDICTIVE_WRITING_TITLE},
-      {"predictiveWritingDescription",
-       IDS_SETTINGS_SUGGESTIONS_PREDICTIVE_WRITING_DESCRIPTION},
   };
   html_source->AddLocalizedStrings(kLocalizedStrings);
 
   html_source->AddBoolean("allowAssistivePersonalInfo",
                           IsAssistivePersonalInfoAllowed());
   html_source->AddBoolean("allowEmojiSuggestion", is_emoji_suggestion_allowed);
-  html_source->AddBoolean("allowPredictiveWriting",
-                          IsPredictiveWritingAllowed());
 }
 
 void AddInputMethodOptionsStrings(content::WebUIDataSource* html_source) {
@@ -208,6 +183,8 @@ void AddInputMethodOptionsStrings(content::WebUIDataSource* html_source) {
        IDS_SETTINGS_INPUT_METHOD_OPTIONS_PHYSICAL_KEYBOARD},
       {"inputMethodOptionsVirtualKeyboardSectionTitle",
        IDS_SETTINGS_INPUT_METHOD_OPTIONS_VIRTUAL_KEYBOARD},
+      {"inputMethodOptionsSuggestionsSectionTitle",
+       IDS_SETTINGS_INPUT_METHOD_OPTIONS_SUGGESTIONS},
       {"inputMethodOptionsEnableDoubleSpacePeriod",
        IDS_SETTINGS_INPUT_METHOD_OPTIONS_ENABLE_DOUBLE_SPACE_PERIOD},
       {"inputMethodOptionsEnableGestureTyping",
@@ -220,6 +197,8 @@ void AddInputMethodOptionsStrings(content::WebUIDataSource* html_source) {
        IDS_SETTINGS_INPUT_METHOD_OPTIONS_ENABLE_CAPITALIZATION},
       {"inputMethodOptionsAutoCorrection",
        IDS_SETTINGS_INPUT_METHOD_OPTIONS_AUTO_CORRECTION},
+      {"inputMethodOptionsPredictiveWriting",
+       IDS_SETTINGS_INPUT_METHOD_OPTIONS_PREDICTIVE_WRITING},
       {"inputMethodOptionsXkbLayout",
        IDS_SETTINGS_INPUT_METHOD_OPTIONS_XKB_LAYOUT},
       {"inputMethodOptionsZhuyinKeyboardLayout",
@@ -260,14 +239,14 @@ void AddInputMethodOptionsStrings(content::WebUIDataSource* html_source) {
        IDS_SETTINGS_INPUT_METHOD_OPTIONS_KOREAN_LAYOUT},
       {"inputMethodOptionsKoreanSyllableInput",
        IDS_SETTINGS_INPUT_METHOD_OPTIONS_KOREAN_SYLLABLE_INPUT},
-      {"inputMethodOptionsKoreanShowHangulCandidate",
-       IDS_SETTINGS_INPUT_METHOD_OPTIONS_KOREAN_SHOW_HANGUL_CANDIDATE},
       {"inputMethodOptionsDvorakKeyboard",
        IDS_SETTINGS_INPUT_METHOD_OPTIONS_KEYBOARD_DVORAK},
       {"inputMethodOptionsColemakKeyboard",
        IDS_SETTINGS_INPUT_METHOD_OPTIONS_KEYBOARD_COLEMAK},
   };
   html_source->AddLocalizedStrings(kLocalizedStrings);
+  html_source->AddBoolean("allowPredictiveWriting",
+                          IsPredictiveWritingAllowed());
 }
 
 void AddLanguagesPageStringsV2(content::WebUIDataSource* html_source) {
@@ -319,7 +298,7 @@ void AddLanguagesPageStringsV2(content::WebUIDataSource* html_source) {
   html_source->AddString(
       "translateTargetLabel",
       l10n_util::GetStringUTF16(
-          ash::features::IsQuickAnswersV2Enabled()
+          QuickAnswersState::Get() && QuickAnswersState::Get()->is_eligible()
               ? IDS_OS_SETTINGS_LANGUAGES_TRANSLATE_TARGET_LABEL_WITH_QUICK_ANSWERS
               : IDS_OS_SETTINGS_LANGUAGES_TRANSLATE_TARGET_LABEL));
   html_source->AddString(
@@ -421,15 +400,12 @@ LanguagesSection::LanguagesSection(Profile* profile,
   updater.AddSearchTags(GetInputPageSearchConceptsV2());
   UpdateSpellCheckSearchTags();
 
-  if (IsAssistivePersonalInfoAllowed() || IsEmojiSuggestionAllowed() ||
-      IsPredictiveWritingAllowed()) {
+  if (IsAssistivePersonalInfoAllowed() || IsEmojiSuggestionAllowed()) {
     updater.AddSearchTags(GetSmartInputsSearchConcepts());
     if (IsAssistivePersonalInfoAllowed())
       updater.AddSearchTags(GetAssistivePersonalInfoSearchConcepts());
     if (IsEmojiSuggestionAllowed())
       updater.AddSearchTags(GetEmojiSuggestionSearchConcepts());
-    if (IsPredictiveWritingAllowed())
-      updater.AddSearchTags(GetPredictiveWritingSearchConcepts());
   }
 }
 
@@ -456,21 +432,22 @@ void LanguagesSection::AddLoadTimeData(content::WebUIDataSource* html_source) {
       {"noSearchResults", IDS_SEARCH_NO_RESULTS},
   };
   html_source->AddLocalizedStrings(kLocalizedStrings);
+  html_source->AddString(
+      "languagePacksNotice",
+      l10n_util::GetStringFUTF16(
+          IDS_SETTINGS_LANGUAGES_LANGUAGE_PACKS_NOTICE,
+          base::ASCIIToUTF16(chrome::kLanguagePacksLearnMoreURL)));
   AddSmartInputsStrings(html_source, IsEmojiSuggestionAllowed());
   AddInputMethodOptionsStrings(html_source);
   AddLanguagesPageStringsV2(html_source);
   AddInputPageStringsV2(html_source);
 
-  html_source->AddBoolean(
-      "imeOptionsInSettings",
-      base::FeatureList::IsEnabled(
-          ::chromeos::features::kImeOptionsInSettings) &&
-          base::FeatureList::IsEnabled(::chromeos::features::kImeMojoDecoder));
-  html_source->AddBoolean("enableLanguageSettingsV2Update2",
-                          IsLanguageSettingsV2Update2Enabled());
+  html_source->AddBoolean("enableLanguageSettingsV2Update2", true);
   html_source->AddBoolean("onDeviceGrammarCheckEnabled",
                           base::FeatureList::IsEnabled(
                               ::chromeos::features::kOnDeviceGrammarCheck));
+  html_source->AddBoolean("languagePacksHandwritingEnabled",
+                          ::chromeos::features::IsLanguagePacksEnabled());
 }
 
 void LanguagesSection::AddHandlers(content::WebUI* web_ui) {
@@ -552,17 +529,14 @@ void LanguagesSection::RegisterHierarchy(HierarchyGenerator* generator) const {
   static constexpr mojom::Setting kSmartInputsFeaturesSettings[] = {
       mojom::Setting::kShowPersonalInformationSuggestions,
       mojom::Setting::kShowEmojiSuggestions,
-      mojom::Setting::kShowPredictiveWriting,
   };
   RegisterNestedSettingBulk(mojom::Subpage::kSmartInputs,
                             kSmartInputsFeaturesSettings, generator);
 }
 
 bool LanguagesSection::IsEmojiSuggestionAllowed() const {
-  return base::FeatureList::IsEnabled(
-             ::chromeos::features::kEmojiSuggestAddition) &&
-         pref_service_->GetBoolean(
-             ::chromeos::prefs::kEmojiSuggestionEnterpriseAllowed);
+  return pref_service_->GetBoolean(
+      ::chromeos::prefs::kEmojiSuggestionEnterpriseAllowed);
 }
 
 bool LanguagesSection::IsSpellCheckEnabled() const {

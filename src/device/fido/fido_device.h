@@ -12,7 +12,6 @@
 
 #include "base/callback.h"
 #include "base/component_export.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "device/fido/authenticator_get_info_response.h"
 #include "device/fido/fido_constants.h"
@@ -59,6 +58,10 @@ class COMPONENT_EXPORT(DEVICE_FIDO) FidoDevice {
   };
 
   FidoDevice();
+
+  FidoDevice(const FidoDevice&) = delete;
+  FidoDevice& operator=(const FidoDevice&) = delete;
+
   virtual ~FidoDevice();
   // Pure virtual function defined by each device type, implementing
   // the device communication transaction. The function must not immediately
@@ -147,8 +150,6 @@ class COMPONENT_EXPORT(DEVICE_FIDO) FidoDevice {
   // device. It starts at one so that zero can be used as an invalid value where
   // needed.
   CancelToken next_cancel_token_ = kInvalidCancelToken + 1;
-
-  DISALLOW_COPY_AND_ASSIGN(FidoDevice);
 };
 
 }  // namespace device

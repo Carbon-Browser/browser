@@ -9,17 +9,21 @@
 #include <string>
 
 #include "chrome/test/base/mixin_based_in_process_browser_test.h"
+// TODO(https://crbug.com/1164001): move to forward declaration.
+#include "chromeos/ash/components/network/network_state_test_helper.h"
 
 class AccountId;
 
-namespace chromeos {
-
-class NetworkStateTestHelper;
+namespace ash {
 
 // This object sets offline login mode on the login screen.
 class OfflineLoginTestMixin : public InProcessBrowserTestMixin {
  public:
   explicit OfflineLoginTestMixin(InProcessBrowserTestMixinHost* host);
+
+  OfflineLoginTestMixin(const OfflineLoginTestMixin&) = delete;
+  OfflineLoginTestMixin& operator=(const OfflineLoginTestMixin&) = delete;
+
   ~OfflineLoginTestMixin() override;
 
   // InProcessBrowserTestMixin:
@@ -49,22 +53,22 @@ class OfflineLoginTestMixin : public InProcessBrowserTestMixin {
                                   const std::string& password,
                                   bool wait_for_signin);
 
+  void SubmitEmailAndBlockOfflineFlow(const std::string& user_email);
+
  private:
   // Triggers Offline Login screen.
   void StartLoginAuthOffline();
 
   // This is ised to disable networking.
   std::unique_ptr<chromeos::NetworkStateTestHelper> network_state_test_helper_;
-
-  DISALLOW_COPY_AND_ASSIGN(OfflineLoginTestMixin);
 };
 
-}  // namespace chromeos
+}  // namespace ash
 
 // TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
 // source migration is finished.
-namespace ash {
-using ::chromeos::OfflineLoginTestMixin;
+namespace chromeos {
+using ::ash::OfflineLoginTestMixin;
 }
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_TEST_OFFLINE_LOGIN_TEST_MIXIN_H_

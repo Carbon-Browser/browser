@@ -10,17 +10,17 @@
 #include "ash/public/cpp/session/session_observer.h"
 #include "ash/system/power/power_status.h"
 #include "ash/system/tray/tray_item_view.h"
-#include "base/macros.h"
 
 namespace ash {
-
-namespace tray {
 
 class PowerTrayView : public TrayItemView,
                       public PowerStatus::Observer,
                       public SessionObserver {
  public:
   explicit PowerTrayView(Shelf* shelf);
+
+  PowerTrayView(const PowerTrayView&) = delete;
+  PowerTrayView& operator=(const PowerTrayView&) = delete;
 
   ~PowerTrayView() override;
 
@@ -51,11 +51,8 @@ class PowerTrayView : public TrayItemView,
   session_manager::SessionState session_state_ =
       session_manager::SessionState::UNKNOWN;
   ScopedSessionObserver session_observer_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(PowerTrayView);
 };
 
-}  // namespace tray
 }  // namespace ash
 
 #endif  // ASH_SYSTEM_POWER_TRAY_POWER_H_

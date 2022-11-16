@@ -7,6 +7,8 @@
 #include <memory>
 
 #include "base/feature_list.h"
+#include "base/memory/raw_ptr.h"
+#include "base/time/time.h"
 #include "build/build_config.h"
 #include "components/performance_manager/graph/graph_impl.h"
 #include "components/performance_manager/graph/node_attached_data_impl.h"
@@ -21,14 +23,12 @@ namespace performance_manager {
 namespace {
 
 // The default process metrics refresh interval.
-constexpr base::TimeDelta kDefaultRefreshTimerPeriod =
-    base::TimeDelta::FromMinutes(2);
+constexpr base::TimeDelta kDefaultRefreshTimerPeriod = base::Minutes(2);
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
 // The fast process metrics refresh interval. Used in certain situations, see
 // the comment in ProcessMetricsDecorator::StartTimer for more details.
-constexpr base::TimeDelta kFastRefreshTimerPeriod =
-    base::TimeDelta::FromSeconds(20);
+constexpr base::TimeDelta kFastRefreshTimerPeriod = base::Seconds(20);
 #endif
 
 }  // namespace
@@ -51,7 +51,7 @@ class ProcessMetricsDecorator::ScopedMetricsInterestTokenImpl
   ~ScopedMetricsInterestTokenImpl() override;
 
  protected:
-  Graph* graph_;
+  raw_ptr<Graph> graph_;
 };
 
 ProcessMetricsDecorator::ScopedMetricsInterestTokenImpl::
@@ -108,14 +108,13 @@ void ProcessMetricsDecorator::StartTimer() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   base::TimeDelta refresh_period = kDefaultRefreshTimerPeriod;
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
   // Bump the refresh frequency when urgent discarding is done from the graph or
   // when discarding tabs on high PMF as these features relies on relatively
   // fresh data.
   // TODO(sebmarchand): Measure the performance impact of this.
   if (base::FeatureList::IsEnabled(
-          features::kUrgentDiscardingFromPerformanceManager) ||
-      base::FeatureList::IsEnabled(features::kHighPMFDiscardPolicy)) {
+          features::kUrgentDiscardingFromPerformanceManager)) {
     refresh_period = kFastRefreshTimerPeriod;
   }
 #endif

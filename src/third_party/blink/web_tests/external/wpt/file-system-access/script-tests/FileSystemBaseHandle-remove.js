@@ -73,3 +73,26 @@ directory_test(async (t, root) => {
   assert_array_equals(await getSortedDirectoryEntries(root), ['file-to-keep']);
   await promise_rejects_dom(t, 'NotFoundError', getFileContents(handle));
 }, 'remove() on a file should ignore the recursive option');
+
+directory_test(async (t, root) => {
+  const handle =
+      await createFileWithContents(t, 'file-to-remove', '12345', root);
+  await createFileWithContents(t, 'file-to-keep', 'abc', root);
+
+  const writable = await handle.createWritable();
+  await promise_rejects_dom(t, 'NoModificationAllowedError', handle.remove());
+
+  await writable.close();
+  assert_array_equals(
+      await getSortedDirectoryEntries(root),
+      ['file-to-keep', 'file-to-remove']);
+
+  await handle.remove();
+  assert_array_equals(await getSortedDirectoryEntries(root), ['file-to-keep']);
+  await promise_rejects_dom(t, 'NotFoundError', getFileContents(handle));
+}, 'remove() while the file has an open writable fails');
+
+promise_test(async (t) => {
+  const root = await navigator.storage.getDirectory();
+  await promise_rejects_dom(t, 'NoModificationAllowedError', root.remove());
+}, 'cannot remove the root of a sandbox file system');

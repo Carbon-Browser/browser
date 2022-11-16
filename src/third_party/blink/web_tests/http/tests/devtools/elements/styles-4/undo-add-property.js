@@ -4,7 +4,7 @@
 
 (async function() {
   TestRunner.addResult(`Tests that adding a property is undone properly.\n`);
-  await TestRunner.loadModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
+  await TestRunner.loadLegacyModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
   await TestRunner.showPanel('elements');
   await TestRunner.loadHTML(`
       <style>
@@ -20,17 +20,17 @@
 
   async function testAppendProperty() {
     TestRunner.addResult('=== Last property ===');
-    await testAddProperty('margin-left: 2px', undefined, testInsertBegin);
+    await testAddProperty('margin-left: 2px;', undefined, testInsertBegin);
   }
 
   async function testInsertBegin() {
     TestRunner.addResult('=== First property ===');
-    await testAddProperty('margin-top: 0px', 0, testInsertMiddle);
+    await testAddProperty('margin-top: 0px;', 0, testInsertMiddle);
   }
 
   async function testInsertMiddle() {
     TestRunner.addResult('=== Middle property ===');
-    await testAddProperty('margin-right: 1px', 1, TestRunner.completeTest.bind(TestRunner));
+    await testAddProperty('margin-right: 1px;', 1, TestRunner.completeTest.bind(TestRunner));
   }
 
   async function testAddProperty(propertyText, index, callback) {

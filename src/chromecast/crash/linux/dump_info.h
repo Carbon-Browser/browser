@@ -9,7 +9,6 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
 #include "base/time/time.h"
 #include "chromecast/crash/linux/minidump_params.h"
 
@@ -39,6 +38,9 @@ class DumpInfo {
            const base::Time& dump_time,
            const MinidumpParams& params,
            const std::vector<std::string>* attachments = nullptr);
+
+  DumpInfo(const DumpInfo&) = delete;
+  DumpInfo& operator=(const DumpInfo&) = delete;
 
   ~DumpInfo();
 
@@ -82,8 +84,6 @@ class DumpInfo {
   base::Time dump_time_;
   MinidumpParams params_;
   bool valid_;
-
-  DISALLOW_COPY_AND_ASSIGN(DumpInfo);
 };
 
 }  // namespace chromecast

@@ -31,8 +31,10 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_STYLE_GRID_AREA_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_STYLE_GRID_AREA_H_
 
+#include "base/check_op.h"
 #include "base/dcheck_is_on.h"
 #include "third_party/blink/renderer/core/style/grid_positions_resolver.h"
+#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/hash_map.h"
 #include "third_party/blink/renderer/platform/wtf/math_extras.h"
@@ -41,12 +43,10 @@
 
 namespace blink {
 
-// Recommended maximum size for both explicit and implicit grids. Note that this
-// actually allows a [-999,999] range. The limit is low on purpouse because
-// higher values easly trigger OOM situations. That will definitely improve once
-// we switch from a vector of vectors based grid representation to a more
-// efficient one memory-wise.
-const int kGridMaxTracks = 1000;
+// Legacy grid expands out auto-repeaters, so it has a lower cap than GridNG.
+// Note that this actually allows a [-999,999] range.
+const int kLegacyGridMaxTracks = 1000;
+const int kGridMaxTracks = INT_MAX - 1;
 
 // A span in a single direction (either rows or columns). Note that |start_line|
 // and |end_line| are grid lines' indexes.
@@ -146,14 +146,9 @@ struct GridSpan {
   bool IsIndefinite() const { return type_ == kIndefinite; }
 
   void Translate(wtf_size_t offset) {
-    DCHECK_EQ(type_, kUntranslatedDefinite);
-
-    type_ = kTranslatedDefinite;
-    start_line_ += offset;
-    end_line_ += offset;
-
-    DCHECK_GE(start_line_, 0);
-    DCHECK_GT(end_line_, 0);
+    DCHECK_NE(type_, kIndefinite);
+    *this =
+        GridSpan(start_line_ + offset, end_line_ + offset, kTranslatedDefinite);
   }
 
  private:
@@ -161,16 +156,18 @@ struct GridSpan {
 
   template <typename T>
   GridSpan(T start_line, T end_line, GridSpanType type) : type_(type) {
-#if DCHECK_IS_ON()
-    DCHECK_LT(start_line, end_line);
-    if (type == kTranslatedDefinite) {
-      DCHECK_GE(start_line, static_cast<T>(0));
-      DCHECK_GT(end_line, static_cast<T>(0));
-    }
-#endif
+    const int grid_max_tracks = RuntimeEnabledFeatures::LayoutNGEnabled()
+                                    ? kGridMaxTracks
+                                    : kLegacyGridMaxTracks;
+    start_line_ =
+        ClampTo<int>(start_line, -grid_max_tracks, grid_max_tracks - 1);
+    end_line_ = ClampTo<int>(end_line, start_line_ + 1, grid_max_tracks);
 
-    start_line_ = clampTo<int>(start_line, -kGridMaxTracks, kGridMaxTracks - 1);
-    end_line_ = clampTo<int>(end_line, -kGridMaxTracks + 1, kGridMaxTracks);
+#if DCHECK_IS_ON()
+    DCHECK_LT(start_line_, end_line_);
+    if (type == kTranslatedDefinite)
+      DCHECK_GE(start_line_, 0);
+#endif
   }
 
   int start_line_;

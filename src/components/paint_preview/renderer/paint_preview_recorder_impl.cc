@@ -9,11 +9,12 @@
 
 #include "base/auto_reset.h"
 #include "base/bind.h"
-#include "base/bind_post_task.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/task/bind_post_task.h"
+#include "base/task/task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
-#include "base/task_runner.h"
+#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/trace_event/common/trace_event_common.h"
 #include "base/trace_event/trace_event.h"
@@ -202,7 +203,8 @@ PaintPreviewRecorderImpl::PaintPreviewRecorderImpl(
     content::RenderFrame* render_frame)
     : content::RenderFrameObserver(render_frame),
       is_painting_preview_(false),
-      is_main_frame_(render_frame->IsMainFrame()) {
+      is_main_frame_(render_frame->IsMainFrame() &&
+                     !render_frame->IsInFencedFrameTree()) {
   render_frame->GetAssociatedInterfaceRegistry()->AddInterface(
       base::BindRepeating(&PaintPreviewRecorderImpl::BindPaintPreviewRecorder,
                           weak_ptr_factory_.GetWeakPtr()));

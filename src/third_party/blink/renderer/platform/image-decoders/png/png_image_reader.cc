@@ -96,6 +96,11 @@ PNGImageReader::PNGImageReader(PNGImageDecoder* decoder,
       ignore_animation_(false) {
   png_ = png_create_read_struct(PNG_LIBPNG_VER_STRING, nullptr, pngFailed,
                                 nullptr);
+  // Configure the PNG encoder to always keep the cICP chunk if present.
+  // TODO(veluca): when libpng starts supporting cICP chunks explicitly, remove
+  // this code.
+  png_set_keep_unknown_chunks(png_, PNG_HANDLE_CHUNK_ALWAYS,
+                              reinterpret_cast<const png_byte*>("cICP"), 1);
   info_ = png_create_info_struct(png_);
   png_set_progressive_read_fn(png_, decoder_, nullptr, pngRowAvailable,
                               pngFrameComplete);
@@ -140,7 +145,7 @@ bool PNGImageReader::ShouldDecodeWithNewPNG(wtf_size_t index) const {
     return true;
   const bool first_frame_decode_in_progress = progressive_decode_offset_;
   const bool frame_size_matches_ihdr =
-      frame_info_[index].frame_rect == IntRect(0, 0, width_, height_);
+      frame_info_[index].frame_rect == gfx::Rect(0, 0, width_, height_);
   if (index)
     return first_frame_decode_in_progress || !frame_size_matches_ihdr;
   return !first_frame_decode_in_progress && !frame_size_matches_ihdr;
@@ -202,8 +207,8 @@ void PNGImageReader::StartFrameDecoding(const FastSharedBufferReader& reader,
   DCHECK_GT(ihdr_offset_, initial_offset_);
   ProcessData(reader, initial_offset_, ihdr_offset_ - initial_offset_);
 
-  const IntRect& frame_rect = frame_info_[index].frame_rect;
-  if (frame_rect == IntRect(0, 0, width_, height_)) {
+  const gfx::Rect& frame_rect = frame_info_[index].frame_rect;
+  if (frame_rect == gfx::Rect(0, 0, width_, height_)) {
     DCHECK_GT(idat_offset_, ihdr_offset_);
     ProcessData(reader, ihdr_offset_, idat_offset_ - ihdr_offset_);
     return;
@@ -218,8 +223,8 @@ void PNGImageReader::StartFrameDecoding(const FastSharedBufferReader& reader,
   png_byte* header = reinterpret_cast<png_byte*>(read_buffer);
   if (chunk != header)
     memcpy(header, chunk, kHeaderSize);
-  png_save_uint_32(header +  8, frame_rect.Width());
-  png_save_uint_32(header + 12, frame_rect.Height());
+  png_save_uint_32(header + 8, frame_rect.width());
+  png_save_uint_32(header + 12, frame_rect.height());
   // IHDR has been modified, so tell libpng to ignore CRC errors.
   png_set_crc_action(png_, PNG_CRC_QUIET_USE, PNG_CRC_QUIET_USE);
   png_process_data(png_, info_, header, kHeaderSize);
@@ -384,7 +389,7 @@ bool PNGImageReader::Parse(SegmentReader& data, ParseQuery query) {
     // This should never be read in this case, but initialize just in case.
     frame.byte_length = kFirstFrameIndicator;
     frame.duration = 0;
-    frame.frame_rect = IntRect(0, 0, width_, height_);
+    frame.frame_rect = gfx::Rect(0, 0, width_, height_);
     frame.disposal_method = ImageFrame::DisposalMethod::kDisposeKeep;
     frame.alpha_blend = ImageFrame::AlphaBlendSource::kBlendAtopBgcolor;
     DCHECK(frame_info_.IsEmpty());
@@ -623,7 +628,7 @@ bool PNGImageReader::ParseSize(const FastSharedBufferReader& reader) {
       chunk =
           ReadAsConstPngBytep(reader, read_offset_ + 8, length, read_buffer);
       if (!ParseFrameInfo(chunk) ||
-          new_frame_.frame_rect != IntRect(0, 0, width_, height_)) {
+          new_frame_.frame_rect != gfx::Rect(0, 0, width_, height_)) {
         ignore_animation_ = true;
         continue;
       }
@@ -632,7 +637,8 @@ bool PNGImageReader::ParseSize(const FastSharedBufferReader& reader) {
       ignore_animation_ = true;
     } else {
       auto is_necessary_ancillary = [](const png_byte* chunk) {
-        for (const char* tag : {"tRNS", "cHRM", "iCCP", "sRGB", "gAMA"}) {
+        for (const char* tag :
+             {"tRNS", "cHRM", "iCCP", "sRGB", "gAMA", "cICP"}) {
           if (IsChunk(chunk, tag))
             return true;
         }
@@ -704,7 +710,7 @@ bool PNGImageReader::ParseFrameInfo(const png_byte* data) {
   }
 
   new_frame_.frame_rect =
-      IntRect(x_offset, y_offset, frame_width, frame_height);
+      gfx::Rect(x_offset, y_offset, frame_width, frame_height);
 
   if (delay_denominator)
     new_frame_.duration = delay_numerator * 1000 / delay_denominator;

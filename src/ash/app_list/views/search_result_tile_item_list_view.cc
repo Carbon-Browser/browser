@@ -11,6 +11,7 @@
 #include <set>
 #include <string>
 
+#include "ash/app_list/app_list_model_provider.h"
 #include "ash/app_list/app_list_util.h"
 #include "ash/app_list/app_list_view_delegate.h"
 #include "ash/app_list/model/search/search_result.h"
@@ -80,17 +81,17 @@ SearchResultTileItemListView::SearchResultTileItemListView(
           SharedAppListConfig::instance().max_search_result_tiles()) {
   layout_ = SetLayoutManager(std::make_unique<views::BoxLayout>(
       views::BoxLayout::Orientation::kHorizontal,
-      gfx::Insets(kItemListVerticalSpacing, kItemListHorizontalSpacing),
+      gfx::Insets::VH(kItemListVerticalSpacing, kItemListHorizontalSpacing),
       kBetweenItemSpacing));
   for (size_t i = 0; i < max_search_result_tiles_; ++i) {
     views::Separator* separator =
         AddChildView(std::make_unique<views::Separator>());
     separator->SetVisible(false);
-    separator->SetBorder(views::CreateEmptyBorder(
+    separator->SetBorder(views::CreateEmptyBorder(gfx::Insets::TLBR(
         kSeparatorTopPadding, kSeparatorLeftRightPadding,
         SharedAppListConfig::instance().search_tile_height() - kSeparatorHeight,
-        kSeparatorLeftRightPadding));
-    separator->SetColor(AppListColorProvider::Get()->GetSeparatorColor());
+        kSeparatorLeftRightPadding)));
+    separator->SetColorId(AppListColorProvider::Get()->GetSeparatorColorId());
     separator_views_.push_back(separator);
     layout_->SetFlexForView(separator, 0);
 
@@ -132,7 +133,6 @@ int SearchResultTileItemListView::DoUpdate() {
   bool is_previous_result_installable_app = false;
   int installed_app_index = -1;
   int playstore_app_index = -1;
-  int reinstall_app_index = -1;
   int app_group_index = -1;
   bool found_playstore_results = false;
 
@@ -158,7 +158,6 @@ int SearchResultTileItemListView::DoUpdate() {
       found_playstore_results = true;
     } else if (item->result_type() ==
                AppListSearchResultType::kPlayStoreReinstallApp) {
-      ++reinstall_app_index;
       app_group_index = playstore_app_index;
     } else {
       ++installed_app_index;
@@ -199,8 +198,7 @@ int SearchResultTileItemListView::DoUpdate() {
     recent_playstore_query_ = user_typed_query;
     playstore_impression_timer_.Stop();
     playstore_impression_timer_.Start(
-        FROM_HERE,
-        base::TimeDelta::FromMilliseconds(kPlayStoreImpressionDelayInMs), this,
+        FROM_HERE, base::Milliseconds(kPlayStoreImpressionDelayInMs), this,
         &SearchResultTileItemListView::OnPlayStoreImpressionTimer);
     // Set the starting time in result view for play store results.
     base::TimeTicks result_display_start = base::TimeTicks::Now();
@@ -219,9 +217,9 @@ int SearchResultTileItemListView::DoUpdate() {
       base::STLSetDifference<std::set<std::string>>(result_id_added,
                                                     result_id_removed);
 
+  SearchModel* const search_model = AppListModelProvider::Get()->search_model();
   for (const std::string& added_id : actual_added_ids) {
-    SearchResult* added =
-        view_delegate()->GetSearchModel()->FindSearchResult(added_id);
+    SearchResult* added = search_model->FindSearchResult(added_id);
     if (added != nullptr && added->notify_visibility_change()) {
       view_delegate()->OnSearchResultVisibilityChanged(added->id(), shown());
     }
@@ -232,8 +230,7 @@ int SearchResultTileItemListView::DoUpdate() {
                                                       result_id_added);
     // we only notify removed items if we're in the middle of showing.
     for (const std::string& removed_id : actual_removed_ids) {
-      SearchResult* removed =
-          view_delegate()->GetSearchModel()->FindSearchResult(removed_id);
+      SearchResult* removed = search_model->FindSearchResult(removed_id);
       if (removed != nullptr && removed->notify_visibility_change()) {
         view_delegate()->OnSearchResultVisibilityChanged(removed->id(),
                                                          false /*=shown*/);

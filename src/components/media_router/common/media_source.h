@@ -24,10 +24,6 @@ constexpr char kRemotePlaybackPresentationUrlScheme[] = "remote-playback";
 constexpr char kLegacyCastPresentationUrlPrefix[] =
     "https://google.com/cast#__castAppId__=";
 
-// A Cast SDK enabled website (e.g. Google Slides) may use the mirroring app ID
-// rather than the tab mirroring URN.
-constexpr char kMirroringAppUri[] = "cast:0F5096E8";
-
 // Strings used in presentation IDs by the Cast SDK implementation.
 // TODO(takumif): Move them out of this file, since they are not directly
 // related to MediaSource.
@@ -58,10 +54,6 @@ class MediaSource {
  public:
   using Id = std::string;
 
-  // TODO(jrw): Eliminate this constructor and use optional<MediaSource> where
-  // needed.
-  MediaSource();
-
   // Create from an arbitrary string, which may or may not be a presentation
   // URL.
   explicit MediaSource(const MediaSource::Id& id);
@@ -85,10 +77,13 @@ class MediaSource {
 
   bool operator<(const MediaSource& other) const { return id_ < other.id(); }
 
-  // Hash operator for hash containers.
-  struct Hash {
-    uint32_t operator()(const MediaSource& source) const {
-      return base::FastHash(source.id());
+  // Compare operator for absl::optional<MediaSource>
+  struct Cmp {
+    bool operator()(const absl::optional<MediaSource>& source1,
+                    const absl::optional<MediaSource>& source2) const {
+      Id id1 = (source1.has_value()) ? (source1->id()) : "";
+      Id id2 = (source2.has_value()) ? (source2->id()) : "";
+      return id1 < id2;
     }
   };
 

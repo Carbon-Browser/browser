@@ -7,7 +7,6 @@
 
 #import <Foundation/Foundation.h>
 
-#include "base/macros.h"
 #include "base/task/cancelable_task_tracker.h"
 #include "components/keyed_service/core/keyed_service.h"
 
@@ -26,6 +25,10 @@ class FaviconLoader : public KeyedService {
   typedef void (^FaviconAttributesCompletionBlock)(FaviconAttributes*);
 
   explicit FaviconLoader(favicon::LargeIconService* large_icon_service);
+
+  FaviconLoader(const FaviconLoader&) = delete;
+  FaviconLoader& operator=(const FaviconLoader&) = delete;
+
   ~FaviconLoader() override;
 
   // Tries to find a FaviconAttributes in |favicon_cache_| with |page_url|:
@@ -74,6 +77,9 @@ class FaviconLoader : public KeyedService {
   // Cancel all incomplete requests.
   void CancellAllRequests();
 
+  // Return a weak pointer to the current object.
+  base::WeakPtr<FaviconLoader> AsWeakPtr();
+
  private:
   // The LargeIconService used to retrieve favicon.
   favicon::LargeIconService* large_icon_service_;
@@ -86,7 +92,7 @@ class FaviconLoader : public KeyedService {
   // algorithm. Keyed by NSString of URL (page URL or icon URL) spec.
   NSCache<NSString*, FaviconAttributes*>* favicon_cache_;
 
-  DISALLOW_COPY_AND_ASSIGN(FaviconLoader);
+  base::WeakPtrFactory<FaviconLoader> weak_ptr_factory_{this};
 };
 
 #endif  // IOS_CHROME_BROWSER_FAVICON_FAVICON_LOADER_H_

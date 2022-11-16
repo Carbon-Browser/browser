@@ -29,12 +29,12 @@
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/process/kill.h"
 #include "base/process/launch.h"
 #include "base/ranges/algorithm.h"
 #include "base/run_loop.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/pattern.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
@@ -45,6 +45,7 @@
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/system/sys_info.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
 #include "base/test/gtest_util.h"
@@ -61,17 +62,17 @@
 #include "build/chromeos_buildflags.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-#if defined(OS_POSIX)
+#if BUILDFLAG(IS_POSIX)
 #include <fcntl.h>
 
 #include "base/files/file_descriptor_watcher_posix.h"
 #endif
 
-#if defined(OS_APPLE)
+#if BUILDFLAG(IS_APPLE)
 #include "base/mac/scoped_nsautorelease_pool.h"
 #endif
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include "base/strings/string_util_win.h"
 #include "base/win/windows_version.h"
 
@@ -81,16 +82,14 @@
 #undef GetCommandLine
 #endif
 
-#if defined(OS_FUCHSIA)
+#if BUILDFLAG(IS_FUCHSIA)
 #include <lib/fdio/namespace.h>
 #include <lib/zx/job.h>
 #include <lib/zx/time.h>
 #include "base/atomic_sequence_num.h"
-#include "base/base_paths_fuchsia.h"
 #include "base/fuchsia/default_job.h"
 #include "base/fuchsia/file_utils.h"
 #include "base/fuchsia/fuchsia_logging.h"
-#include "base/path_service.h"
 #endif
 
 namespace base {
@@ -122,7 +121,7 @@ const char kUnreliableResultsTag[] = "UNRELIABLE_RESULTS";
 // the test launcher to people looking at the output (no output for a long
 // time is mysterious and gives no info about what is happening) 3) help
 // debugging in case the process hangs anyway.
-constexpr TimeDelta kOutputTimeout = TimeDelta::FromSeconds(15);
+constexpr TimeDelta kOutputTimeout = Seconds(15);
 
 // Limit of output snippet lines when printing to stdout.
 // Avoids flooding the logs with amount of output that gums up
@@ -155,7 +154,7 @@ TestLauncherTracer* GetTestLauncherTracer() {
   return tracer;
 }
 
-#if defined(OS_FUCHSIA)
+#if BUILDFLAG(IS_FUCHSIA)
 zx_status_t WaitForJobExit(const zx::job& job) {
   zx::time deadline =
       zx::deadline_after(zx::duration(kOutputTimeout.ToZxDuration()));
@@ -169,9 +168,9 @@ zx_status_t WaitForJobExit(const zx::job& job) {
   }
   return ZX_OK;
 }
-#endif  // defined(OS_FUCHSIA)
+#endif  // BUILDFLAG(IS_FUCHSIA)
 
-#if defined(OS_POSIX)
+#if BUILDFLAG(IS_POSIX)
 // Self-pipe that makes it possible to do complex shutdown handling
 // outside of the signal handler.
 int g_shutdown_pipe[2] = { -1, -1 };
@@ -198,7 +197,7 @@ void KillSpawnedTestProcesses() {
           "done.\nGiving processes a chance to terminate cleanly... ");
   fflush(stdout);
 
-  PlatformThread::Sleep(TimeDelta::FromMilliseconds(500));
+  PlatformThread::Sleep(Milliseconds(500));
 
   fprintf(stdout, "done.\n");
   fflush(stdout);
@@ -215,7 +214,7 @@ void KillSpawnedTestProcesses() {
   fprintf(stdout, "done.\n");
   fflush(stdout);
 }
-#endif  // defined(OS_POSIX)
+#endif  // BUILDFLAG(IS_POSIX)
 
 // Parses the environment variable var as an Int32.  If it is unset, returns
 // true.  If it is set, unsets it then converts it to Int32 before
@@ -276,7 +275,7 @@ CommandLine PrepareCommandLineForGTest(const CommandLine& command_line,
 
   if (switches.find(switches::kTestLauncherRetriesLeft) == switches.end()) {
     switches[switches::kTestLauncherRetriesLeft] =
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
         base::NumberToWString(
 #else
         base::NumberToString(
@@ -293,7 +292,7 @@ CommandLine PrepareCommandLineForGTest(const CommandLine& command_line,
   // does not really support removing switches well, and trying to do that
   // on a CommandLine with a wrapper is known to break.
   // TODO(phajdan.jr): Give it a try to support CommandLine removing switches.
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   new_command_line.PrependWrapper(UTF8ToWide(wrapper));
 #else
   new_command_line.PrependWrapper(wrapper);
@@ -311,22 +310,20 @@ int LaunchChildTestProcessWithOptions(const CommandLine& command_line,
                                       TimeDelta timeout,
                                       TestLauncherDelegate* delegate,
                                       bool* was_timeout) {
-  TimeTicks start_time(TimeTicks::Now());
-
-#if defined(OS_POSIX)
+#if BUILDFLAG(IS_POSIX)
   // Make sure an option we rely on is present - see LaunchChildGTestProcess.
   DCHECK(options.new_process_group);
 #endif
 
   LaunchOptions new_options(options);
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   DCHECK(!new_options.job_handle);
 
   win::ScopedHandle job_handle;
   if (flags & TestLauncher::USE_JOB_OBJECTS) {
     job_handle.Set(CreateJobObject(NULL, NULL));
-    if (!job_handle.IsValid()) {
+    if (!job_handle.is_valid()) {
       LOG(ERROR) << "Could not create JobObject.";
       return -1;
     }
@@ -340,14 +337,14 @@ int LaunchChildTestProcessWithOptions(const CommandLine& command_line,
       job_flags |= JOB_OBJECT_LIMIT_BREAKAWAY_OK;
     }
 
-    if (!SetJobObjectLimitFlags(job_handle.Get(), job_flags)) {
+    if (!SetJobObjectLimitFlags(job_handle.get(), job_flags)) {
       LOG(ERROR) << "Could not SetJobObjectLimitFlags.";
       return -1;
     }
 
-    new_options.job_handle = job_handle.Get();
+    new_options.job_handle = job_handle.get();
   }
-#elif defined(OS_FUCHSIA)
+#elif BUILDFLAG(IS_FUCHSIA)
   DCHECK(!new_options.job_handle);
 
   // Set the clone policy, deliberately omitting FDIO_SPAWN_CLONE_NAMESPACE so
@@ -410,9 +407,9 @@ int LaunchChildTestProcessWithOptions(const CommandLine& command_line,
   new_options.paths_to_transfer.push_back(
       {kCachePath,
        base::OpenDirectoryHandle(test_cache_dir).TakeChannel().release()});
-#endif  // defined(OS_FUCHSIA)
+#endif  // BUILDFLAG(IS_FUCHSIA)
 
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   // To prevent accidental privilege sharing to an untrusted child, processes
   // are started with PR_SET_NO_NEW_PRIVS. Do not set that here, since this
   // new child will be privileged and trusted.
@@ -427,7 +424,7 @@ int LaunchChildTestProcessWithOptions(const CommandLine& command_line,
     // in the set.
     AutoLock lock(*GetLiveProcessesLock());
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
     // Allow the handle used to capture stdio and stdout to be inherited by the
     // child. Note that this is done under GetLiveProcessesLock() to ensure that
     // only the desired child receives the handle.
@@ -439,7 +436,7 @@ int LaunchChildTestProcessWithOptions(const CommandLine& command_line,
 
     process = LaunchProcess(command_line, new_options);
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
     // Revoke inheritance so that the handle isn't leaked into other children.
     // Note that this is done under GetLiveProcessesLock() to ensure that only
     // the desired child receives the handle.
@@ -476,13 +473,13 @@ int LaunchChildTestProcessWithOptions(const CommandLine& command_line,
     }
   }
 
-#if defined(OS_FUCHSIA)
+#if BUILDFLAG(IS_FUCHSIA)
   zx_status_t wait_status = WaitForJobExit(job_handle);
   if (wait_status != ZX_OK) {
     LOG(ERROR) << "Batch leaked jobs or processes.";
     exit_code = -1;
   }
-#endif  // defined(OS_FUCHSIA)
+#endif  // BUILDFLAG(IS_FUCHSIA)
 
   {
     // Note how we grab the log before issuing a possibly broad process kill.
@@ -490,13 +487,13 @@ int LaunchChildTestProcessWithOptions(const CommandLine& command_line,
     // to do that twice and trigger all kinds of log messages.
     AutoLock lock(*GetLiveProcessesLock());
 
-#if defined(OS_FUCHSIA)
+#if BUILDFLAG(IS_FUCHSIA)
     zx_status_t status = job_handle.kill();
     ZX_CHECK(status == ZX_OK, status);
 
     // Cleanup the data directory.
     CHECK(DeletePathRecursively(child_data_path));
-#elif defined(OS_POSIX)
+#elif BUILDFLAG(IS_POSIX)
     // It is not possible to waitpid() on any leaked sub-processes of the test
     // batch process, since those are not direct children of this process.
     // kill()ing the process-group will return a result indicating whether the
@@ -507,13 +504,10 @@ int LaunchChildTestProcessWithOptions(const CommandLine& command_line,
     // Unconditionally kill the process group, regardless of the batch exit-code
     // until a better solution is available.
     kill(-1 * process.Handle(), SIGKILL);
-#endif  // defined(OS_POSIX)
+#endif  // BUILDFLAG(IS_POSIX)
 
     GetLiveProcesses()->erase(process.Handle());
   }
-
-  GetTestLauncherTracer()->RecordProcessExecution(
-      start_time, TimeTicks::Now() - start_time);
 
   return exit_code;
 }
@@ -527,6 +521,12 @@ struct ChildProcessResults {
   bool was_timeout = false;
   // Exit code of child process.
   int exit_code;
+  // Thread ID of the runner.
+  PlatformThreadId thread_id;
+  // The sequence number of the child test process executed.
+  // It's used instead of process id to distinguish processes that process id
+  // might be reused by OS.
+  int process_num;
 };
 
 // Returns the path to a temporary directory within |task_temp_dir| for the
@@ -545,11 +545,11 @@ FilePath CreateChildTempDirIfSupported(const FilePath& task_temp_dir,
 // temporary directory to |environment|.
 void SetTemporaryDirectory(const FilePath& temp_dir,
                            EnvironmentMap* environment) {
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   environment->emplace(L"TMP", temp_dir.value());
-#elif defined(OS_APPLE)
+#elif BUILDFLAG(IS_APPLE)
   environment->emplace("MAC_CHROMIUM_TMPDIR", temp_dir.value());
-#elif defined(OS_POSIX) || defined(OS_FUCHSIA)
+#elif BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
   environment->emplace("TMPDIR", temp_dir.value());
 #endif
 }
@@ -566,13 +566,14 @@ ChildProcessResults DoLaunchChildTestProcess(
   TimeTicks start_time = TimeTicks::Now();
 
   ChildProcessResults result;
+  result.thread_id = PlatformThread::CurrentId();
 
   ScopedFILE output_file;
   FilePath output_filename;
   if (redirect_stdio) {
     output_file = CreateAndOpenTemporaryStream(&output_filename);
     CHECK(output_file);
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
     // Paint the file so that it will be deleted when all handles are closed.
     if (!FILEToFile(output_file.get()).DeleteOnClose(true)) {
       PLOG(WARNING) << "Failed to mark " << output_filename.AsUTF8Unsafe()
@@ -586,7 +587,7 @@ ChildProcessResults DoLaunchChildTestProcess(
   // Tell the child process to use its designated temporary directory.
   if (!process_temp_dir.empty())
     SetTemporaryDirectory(process_temp_dir, &options.environment);
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 
   options.inherit_mode = test_launch_options.inherit_mode;
   options.handles_to_inherit = test_launch_options.handles_to_inherit;
@@ -605,7 +606,7 @@ ChildProcessResults DoLaunchChildTestProcess(
     }
   }
 
-#else  // if !defined(OS_WIN)
+#else  // if !BUILDFLAG(IS_WIN)
 
   options.fds_to_remap = test_launch_options.fds_to_remap;
   if (redirect_stdio) {
@@ -617,14 +618,14 @@ ChildProcessResults DoLaunchChildTestProcess(
         std::make_pair(output_file_fd, STDERR_FILENO));
   }
 
-#if !defined(OS_FUCHSIA)
+#if !BUILDFLAG(IS_FUCHSIA)
   options.new_process_group = true;
 #endif
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   options.kill_on_parent_death = true;
 #endif
 
-#endif  // !defined(OS_WIN)
+#endif  // !BUILDFLAG(IS_WIN)
 
   result.exit_code = LaunchChildTestProcessWithOptions(
       command_line, options, test_launch_options.flags, timeout, delegate,
@@ -640,7 +641,7 @@ ChildProcessResults DoLaunchChildTestProcess(
           result.exit_code != 0);
 
     output_file.reset();
-#if !defined(OS_WIN)
+#if !BUILDFLAG(IS_WIN)
     // On Windows, the reset() above is enough to delete the file since it was
     // painted for such after being opened. Lesser platforms require an explicit
     // delete now.
@@ -649,6 +650,8 @@ ChildProcessResults DoLaunchChildTestProcess(
 #endif
   }
   result.elapsed_time = TimeTicks::Now() - start_time;
+  result.process_num = GetTestLauncherTracer()->RecordProcessExecution(
+      start_time, result.elapsed_time);
   return result;
 }
 
@@ -710,7 +713,7 @@ class TestRunner {
   ThreadChecker thread_checker_;
 
   std::vector<std::string> tests_to_run_;
-  TestLauncher* const launcher_;
+  const raw_ptr<TestLauncher> launcher_;
   std::vector<scoped_refptr<TaskRunner>> task_runners_;
   // Number of sequenced task runners to use.
   const size_t runner_count_;
@@ -940,6 +943,7 @@ TestLauncher::TestLauncher(TestLauncherDelegate* launcher_delegate,
       test_broken_count_(0),
       retries_left_(0),
       retry_limit_(retry_limit),
+      output_bytes_limit_(kOutputSnippetBytesLimit),
       force_run_broken_tests_(false),
       watchdog_timer_(FROM_HERE,
                       kOutputTimeout,
@@ -959,8 +963,7 @@ bool TestLauncher::Run(CommandLine* command_line) {
                                       : command_line))
     return false;
 
-
-#if defined(OS_POSIX)
+#if BUILDFLAG(IS_POSIX)
   CHECK_EQ(0, pipe(g_shutdown_pipe));
 
   struct sigaction action;
@@ -976,7 +979,7 @@ bool TestLauncher::Run(CommandLine* command_line) {
       g_shutdown_pipe[0],
       base::BindRepeating(&TestLauncher::OnShutdownPipeReadable,
                           Unretained(this)));
-#endif  // defined(OS_POSIX)
+#endif  // BUILDFLAG(IS_POSIX)
 
   // Start the watchdog timer.
   watchdog_timer_.Reset();
@@ -1049,7 +1052,8 @@ void TestLauncher::LaunchChildGTestProcess(
       BindOnce(&TestLauncher::ProcessTestResults, Unretained(this), test_names,
                result_file, process_results.output_file_contents,
                process_results.elapsed_time, process_results.exit_code,
-               process_results.was_timeout,
+               process_results.was_timeout, process_results.thread_id,
+               process_results.process_num,
                CountItemsInDirectory(child_temp_dir)));
 }
 
@@ -1081,6 +1085,8 @@ void TestLauncher::ProcessTestResults(
     TimeDelta elapsed_time,
     int exit_code,
     bool was_timeout,
+    PlatformThreadId thread_id,
+    int process_num,
     int leaked_items) {
   std::vector<TestResult> test_results;
   bool crashed = false;
@@ -1159,6 +1165,11 @@ void TestLauncher::ProcessTestResults(
   for (auto& i : final_results) {
     // Fix the output snippet after possible changes to the test result.
     i.output_snippet = GetTestOutputSnippet(i, output);
+    // The thread id injected here is the worker thread that launching the child
+    // testing process, it might be different from the current thread that
+    // ProcessTestResults.
+    i.thread_id = thread_id;
+    i.process_num = process_num;
   }
 
   if (leaked_items)
@@ -1175,12 +1186,12 @@ void TestLauncher::OnTestFinished(const TestResult& original_result) {
 
   TestResult result(original_result);
 
-  if (result.output_snippet.length() > kOutputSnippetBytesLimit) {
+  if (result.output_snippet.length() > output_bytes_limit_) {
     if (result.status == TestResult::TEST_SUCCESS)
       result.status = TestResult::TEST_EXCESSIVE_OUTPUT;
 
     result.output_snippet =
-        TruncateSnippetFocused(result.output_snippet, kOutputSnippetBytesLimit);
+        TruncateSnippetFocused(result.output_snippet, output_bytes_limit_);
   }
 
   bool print_snippet = false;
@@ -1262,9 +1273,9 @@ void TestLauncher::OnTestFinished(const TestResult& original_result) {
             test_broken_count_);
     fflush(stdout);
 
-#if defined(OS_POSIX)
+#if BUILDFLAG(IS_POSIX)
     KillSpawnedTestProcesses();
-#endif  // defined(OS_POSIX)
+#endif  // BUILDFLAG(IS_POSIX)
 
     MaybeSaveSummaryAsJSON({"BROKEN_TEST_EARLY_EXIT"});
 
@@ -1425,10 +1436,24 @@ bool TestLauncher::Init(CommandLine* command_line) {
   force_run_broken_tests_ =
       command_line->HasSwitch(switches::kTestLauncherForceRunBrokenTests);
 
+  if (command_line->HasSwitch(switches::kTestLauncherOutputBytesLimit)) {
+    int output_bytes_limit = -1;
+    if (!StringToInt(command_line->GetSwitchValueASCII(
+                         switches::kTestLauncherOutputBytesLimit),
+                     &output_bytes_limit) ||
+        output_bytes_limit < 0) {
+      LOG(ERROR) << "Invalid value for "
+                 << switches::kTestLauncherOutputBytesLimit;
+      return false;
+    }
+
+    output_bytes_limit_ = output_bytes_limit;
+  }
+
   fprintf(stdout, "Using %zu parallel jobs.\n", parallel_jobs_);
   fflush(stdout);
 
-  CreateAndStartThreadPool(static_cast<int>(parallel_jobs_));
+  CreateAndStartThreadPool(parallel_jobs_);
 
   std::vector<std::string> positive_file_filter;
   std::vector<std::string> positive_gtest_filter;
@@ -1469,7 +1494,7 @@ bool TestLauncher::Init(CommandLine* command_line) {
     }
   }
 
-  skip_diabled_tests_ =
+  skip_disabled_tests_ =
       !command_line->HasSwitch(kGTestRunDisabledTestsFlag) &&
       !command_line->HasSwitch(kIsolatedScriptRunDisabledTestsFlag);
 
@@ -1520,7 +1545,7 @@ bool TestLauncher::Init(CommandLine* command_line) {
 
   if (!results_tracker_.Init(*command_line)) {
     LOG(ERROR) << "Failed to initialize test results tracker.";
-    return 1;
+    return true;
   }
 
 #if defined(NDEBUG)
@@ -1532,31 +1557,31 @@ bool TestLauncher::Init(CommandLine* command_line) {
   // Operating systems (sorted alphabetically).
   // Note that they can deliberately overlap, e.g. OS_LINUX is a subset
   // of OS_POSIX.
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   results_tracker_.AddGlobalTag("OS_ANDROID");
 #endif
 
-#if defined(OS_APPLE)
+#if BUILDFLAG(IS_APPLE)
   results_tracker_.AddGlobalTag("OS_APPLE");
 #endif
 
-#if defined(OS_BSD)
+#if BUILDFLAG(IS_BSD)
   results_tracker_.AddGlobalTag("OS_BSD");
 #endif
 
-#if defined(OS_FREEBSD)
+#if BUILDFLAG(IS_FREEBSD)
   results_tracker_.AddGlobalTag("OS_FREEBSD");
 #endif
 
-#if defined(OS_FUCHSIA)
+#if BUILDFLAG(IS_FUCHSIA)
   results_tracker_.AddGlobalTag("OS_FUCHSIA");
 #endif
 
-#if defined(OS_IOS)
+#if BUILDFLAG(IS_IOS)
   results_tracker_.AddGlobalTag("OS_IOS");
 #endif
 
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   results_tracker_.AddGlobalTag("OS_LINUX");
 #endif
 
@@ -1564,27 +1589,27 @@ bool TestLauncher::Init(CommandLine* command_line) {
   results_tracker_.AddGlobalTag("OS_CHROMEOS");
 #endif
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   results_tracker_.AddGlobalTag("OS_MAC");
 #endif
 
-#if defined(OS_NACL)
+#if BUILDFLAG(IS_NACL)
   results_tracker_.AddGlobalTag("OS_NACL");
 #endif
 
-#if defined(OS_OPENBSD)
+#if BUILDFLAG(IS_OPENBSD)
   results_tracker_.AddGlobalTag("OS_OPENBSD");
 #endif
 
-#if defined(OS_POSIX)
+#if BUILDFLAG(IS_POSIX)
   results_tracker_.AddGlobalTag("OS_POSIX");
 #endif
 
-#if defined(OS_SOLARIS)
+#if BUILDFLAG(IS_SOLARIS)
   results_tracker_.AddGlobalTag("OS_SOLARIS");
 #endif
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   results_tracker_.AddGlobalTag("OS_WIN");
 #endif
 
@@ -1708,7 +1733,7 @@ bool TestLauncher::ProcessAndValidateTests() {
       pre_tests.erase(test_sequence.back().GetDisabledStrippedName());
     }
     // Skip disabled tests unless explicitly requested.
-    if (!test_info.disabled() || !skip_diabled_tests_)
+    if (!test_info.disabled() || !skip_disabled_tests_)
       tests_to_run.insert(tests_to_run.end(), test_sequence.rbegin(),
                           test_sequence.rend());
   }
@@ -1722,7 +1747,7 @@ bool TestLauncher::ProcessAndValidateTests() {
   return result;
 }
 
-void TestLauncher::CreateAndStartThreadPool(int num_parallel_jobs) {
+void TestLauncher::CreateAndStartThreadPool(size_t num_parallel_jobs) {
   base::ThreadPoolInstance::Create("TestLauncher");
   base::ThreadPoolInstance::Get()->Start({num_parallel_jobs});
 }
@@ -1949,7 +1974,7 @@ void TestLauncher::OnTestIterationStart() {
   results_tracker_.OnTestIterationStarting();
 }
 
-#if defined(OS_POSIX)
+#if BUILDFLAG(IS_POSIX)
 // I/O watcher for the reading end of the self-pipe above.
 // Terminates any launched child processes and exits the process.
 void TestLauncher::OnShutdownPipeReadable() {
@@ -1963,7 +1988,7 @@ void TestLauncher::OnShutdownPipeReadable() {
   // The signal would normally kill the process, so exit now.
   _exit(1);
 }
-#endif  // defined(OS_POSIX)
+#endif  // BUILDFLAG(IS_POSIX)
 
 void TestLauncher::MaybeSaveSummaryAsJSON(
     const std::vector<std::string>& additional_tags) {
@@ -1996,7 +2021,7 @@ void TestLauncher::OnOutputTimeout() {
   fprintf(stdout, "Still waiting for the following processes to finish:\n");
 
   for (const auto& pair : *GetLiveProcesses()) {
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
     fwprintf(stdout, L"\t%s\n", pair.second.GetCommandLineString().c_str());
 #else
     fprintf(stdout, "\t%s\n", pair.second.GetCommandLineString().c_str());
@@ -2038,7 +2063,7 @@ size_t NumParallelJobs(unsigned int cores_per_job) {
     return 1U;
   }
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   // Use processors in all groups (Windows splits more than 64 logical
   // processors into groups).
   size_t cores = base::checked_cast<size_t>(

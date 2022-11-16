@@ -31,11 +31,9 @@ class WebFeedDialogMediator {
         public void onClick(PropertyModel model, int buttonType) {
             switch (buttonType) {
                 case ModalDialogProperties.ButtonType.POSITIVE:
-                    mCallback.onResult(DialogDismissalCause.POSITIVE_BUTTON_CLICKED);
                     dismissDialog(DialogDismissalCause.POSITIVE_BUTTON_CLICKED);
                     break;
                 case ModalDialogProperties.ButtonType.NEGATIVE:
-                    mCallback.onResult(DialogDismissalCause.NEGATIVE_BUTTON_CLICKED);
                     dismissDialog(DialogDismissalCause.NEGATIVE_BUTTON_CLICKED);
                     break;
                 default:
@@ -75,8 +73,12 @@ class WebFeedDialogMediator {
                                 dialogContents.mPrimaryButtonText)
                         .with(ModalDialogProperties.NEGATIVE_BUTTON_TEXT,
                                 dialogContents.mSecondaryButtonText)
-                        .with(ModalDialogProperties.PRIMARY_BUTTON_FILLED,
-                                dialogContents.mSecondaryButtonText != null)
+                        .with(ModalDialogProperties.BUTTON_STYLES,
+                                dialogContents.mSecondaryButtonText != null
+                                        ? ModalDialogProperties.ButtonStyles
+                                                  .PRIMARY_FILLED_NEGATIVE_OUTLINE
+                                        : ModalDialogProperties.ButtonStyles
+                                                  .PRIMARY_OUTLINE_NEGATIVE_OUTLINE)
                         .build();
     }
 

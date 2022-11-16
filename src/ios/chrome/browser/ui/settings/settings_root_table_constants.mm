@@ -8,5 +8,12 @@
 #error "This file requires ARC support."
 #endif
 
+NSString* const kSettingsToolbarAddButtonId = @"SettingsToolbarAddButtonId";
+
 NSString* const kSettingsToolbarDeleteButtonId =
     @"SettingsToolbarDeleteButtonId";
+
+NSString* const kSettingsToolbarEditButtonId = @"SettingsToolbarEditButtonId";
+
+NSString* const kSettingsToolbarEditDoneButtonId =
+    @"kSettingsToolbarEditDoneButtonId";

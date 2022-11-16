@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "base/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/threading/thread_checker.h"
 #include "base/timer/timer.h"
@@ -44,6 +45,10 @@ class RendererController final : public mojom::RemotingSource,
   RendererController(
       mojo::PendingReceiver<mojom::RemotingSource> source_receiver,
       mojo::PendingRemote<mojom::Remoter> remoter);
+
+  RendererController(const RendererController&) = delete;
+  RendererController& operator=(const RendererController&) = delete;
+
   ~RendererController() override;
 
   // mojom::RemotingSource implementations.
@@ -167,11 +172,11 @@ class RendererController final : public mojom::RemotingSource,
   // Callback from RpcMessenger when sending message to remote sink.
   void SendMessageToSink(std::vector<uint8_t> message);
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   bool IsAudioRemotePlaybackSupported() const;
   bool IsVideoRemotePlaybackSupported() const;
   bool IsRemotePlaybackSupported() const;
-#endif  // defined(OS_ANDROID)
+#endif  // BUILDFLAG(IS_ANDROID)
 
 #if BUILDFLAG(ENABLE_MEDIA_REMOTING_RPC)
   // Handles dispatching of incoming and outgoing RPC messages.
@@ -233,7 +238,7 @@ class RendererController final : public mojom::RemotingSource,
   SessionMetricsRecorder metrics_recorder_;
 
   // Not owned by this class. Can only be set once by calling SetClient().
-  MediaObserverClient* client_ = nullptr;
+  raw_ptr<MediaObserverClient> client_ = nullptr;
 
   // When this is running, it indicates that remoting will be started later
   // when the timer gets fired. The start will be canceled if there is any
@@ -242,11 +247,9 @@ class RendererController final : public mojom::RemotingSource,
   // remote the content while this timer is running.
   base::OneShotTimer delayed_start_stability_timer_;
 
-  const base::TickClock* clock_;
+  raw_ptr<const base::TickClock> clock_;
 
   base::WeakPtrFactory<RendererController> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(RendererController);
 };
 
 }  // namespace remoting

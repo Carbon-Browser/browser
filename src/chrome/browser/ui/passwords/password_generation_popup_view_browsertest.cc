@@ -6,6 +6,7 @@
 
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_window.h"
@@ -48,11 +49,11 @@ class TestPasswordGenerationPopupController
                 FormData()),
             password_manager::ContentPasswordManagerDriverFactory::
                 FromWebContents(web_contents)
-                    ->GetDriverForFrame(web_contents->GetMainFrame())
+                    ->GetDriverForFrame(web_contents->GetPrimaryMainFrame())
                     ->AsWeakPtr(),
             nullptr /* PasswordGenerationPopupObserver*/,
             web_contents,
-            web_contents->GetMainFrame()) {}
+            web_contents->GetPrimaryMainFrame()) {}
 
   ~TestPasswordGenerationPopupController() override {}
 
@@ -70,7 +71,7 @@ class PasswordGenerationPopupViewTest : public InProcessBrowserTest {
   }
 
  protected:
-  TestPasswordGenerationPopupController* controller_;
+  raw_ptr<TestPasswordGenerationPopupController> controller_;
 };
 
 // Regression test for crbug.com/400543. Verifying that moving the mouse in the

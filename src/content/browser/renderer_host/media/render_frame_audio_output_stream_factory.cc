@@ -16,6 +16,7 @@
 #include "base/containers/flat_set.h"
 #include "base/containers/unique_ptr_adapters.h"
 #include "base/location.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/stringprintf.h"
 #include "base/time/time.h"
@@ -62,6 +63,9 @@ class RenderFrameAudioOutputStreamFactory::Core final
        media::AudioSystem* audio_system,
        MediaStreamManager* media_stream_manager);
 
+  Core(const Core&) = delete;
+  Core& operator=(const Core&) = delete;
+
   ~Core() final = default;
 
   void Init(
@@ -93,6 +97,9 @@ class RenderFrameAudioOutputStreamFactory::Core final
           base::BindOnce(&ProviderImpl::Done, base::Unretained(this)));
     }
 
+    ProviderImpl(const ProviderImpl&) = delete;
+    ProviderImpl& operator=(const ProviderImpl&) = delete;
+
     ~ProviderImpl() final { DCHECK_CURRENTLY_ON(BrowserThread::IO); }
 
     void Acquire(
@@ -120,12 +127,10 @@ class RenderFrameAudioOutputStreamFactory::Core final
     void Done() { owner_->DeleteProvider(this); }
 
    private:
-    RenderFrameAudioOutputStreamFactory::Core* const owner_;
+    const raw_ptr<RenderFrameAudioOutputStreamFactory::Core> owner_;
     const std::string device_id_;
 
     mojo::Receiver<media::mojom::AudioOutputStreamProvider> receiver_;
-
-    DISALLOW_COPY_AND_ASSIGN(ProviderImpl);
   };
 
   using OutputStreamProviderSet =
@@ -175,8 +180,6 @@ class RenderFrameAudioOutputStreamFactory::Core final
   // Weak pointers are used to cancel device authorizations that are in flight
   // while |this| is destructed.
   base::WeakPtrFactory<Core> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(Core);
 };
 
 class RenderFrameAudioOutputStreamFactory::RestrictedModeCore final

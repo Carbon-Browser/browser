@@ -8,12 +8,13 @@
 #include <memory>
 
 #include "base/gtest_prod_util.h"
+#include "base/time/time.h"
 #include "third_party/blink/public/web/web_performance.h"
-#include "third_party/blink/public/web/web_swap_result.h"
+#include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/paint/first_meaningful_paint_detector.h"
 #include "third_party/blink/renderer/core/paint/paint_event.h"
-#include "third_party/blink/renderer/platform/heap/handle.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/supplementable.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 
@@ -31,7 +32,7 @@ class CORE_EXPORT PaintTiming final : public GarbageCollected<PaintTiming>,
                                       public Supplement<Document> {
   friend class FirstMeaningfulPaintDetector;
   using ReportTimeCallback =
-      WTF::CrossThreadOnceFunction<void(WebSwapResult, base::TimeTicks)>;
+      WTF::CrossThreadOnceFunction<void(base::TimeTicks)>;
   using RequestAnimationFrameTimesAfterBackForwardCacheRestore = std::array<
       base::TimeTicks,
       WebPerformance::
@@ -108,6 +109,11 @@ class CORE_EXPORT PaintTiming final : public GarbageCollected<PaintTiming>,
     return first_contentful_paint_presentation_;
   }
 
+  base::TimeTicks FirstContentfulPaintRenderedButNotPresentedAsMonotonicTime()
+      const {
+    return first_contentful_paint_;
+  }
+
   // FirstImagePaint returns the first time that image content was painted.
   base::TimeTicks FirstImagePaint() const {
     return first_image_paint_presentation_;
@@ -144,17 +150,20 @@ class CORE_EXPORT PaintTiming final : public GarbageCollected<PaintTiming>,
 
   void RegisterNotifyPresentationTime(ReportTimeCallback);
   void ReportPresentationTime(PaintEvent,
-                              WebSwapResult,
                               base::TimeTicks timestamp);
   void ReportFirstPaintAfterBackForwardCacheRestorePresentationTime(
       wtf_size_t index,
-      WebSwapResult,
       base::TimeTicks timestamp);
 
   // The caller owns the |clock| which must outlive the PaintTiming.
   void SetTickClockForTesting(const base::TickClock* clock);
 
   void OnRestoredFromBackForwardCache();
+
+  // Indicates whether a mouseover event was recently dispatched over an
+  // HTMLImageElement LCP element.
+  bool IsLCPMouseoverDispatchedRecently();
+  void SetLCPMouseoverDispatched();
 
   void Trace(Visitor*) const override;
 
@@ -200,10 +209,6 @@ class CORE_EXPORT PaintTiming final : public GarbageCollected<PaintTiming>,
 
   base::TimeTicks FirstPaintRendered() const { return first_paint_; }
 
-  base::TimeTicks FirstContentfulPaintRendered() const {
-    return first_contentful_paint_;
-  }
-
   // TODO(crbug/738235): Non first_*_presentation_ variables are only being
   // tracked to compute deltas for reporting histograms and should be removed
   // once we confirm the deltas and discrepancies look reasonable.
@@ -222,6 +227,8 @@ class CORE_EXPORT PaintTiming final : public GarbageCollected<PaintTiming>,
   base::TimeTicks first_eligible_to_paint_;
 
   base::TimeTicks last_portal_activated_presentation_;
+
+  base::TimeTicks lcp_mouse_over_dispatch_time_;
 
   Member<FirstMeaningfulPaintDetector> fmp_detector_;
 

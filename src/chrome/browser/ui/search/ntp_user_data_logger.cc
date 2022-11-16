@@ -7,9 +7,11 @@
 #include <algorithm>
 #include <string>
 
+#include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/user_metrics.h"
+#include "base/trace_event/trace_event.h"
 #include "chrome/browser/after_startup_task_utils.h"
 #include "chrome/browser/search/background/ntp_custom_background_service.h"
 #include "chrome/browser/search/background/ntp_custom_background_service_factory.h"
@@ -22,6 +24,8 @@
 #include "components/search/ntp_features.h"
 
 namespace {
+
+constexpr char kUIEventCategory[] = "ui";
 
 // Logs CustomizedShortcutSettings on the NTP.
 void LogCustomizedShortcutSettings(bool using_most_visited, bool is_visible) {
@@ -265,17 +269,21 @@ LogoClickType LoggingEventToLogoClick(NTPLoggingEventType event) {
 // Helper macro to log a load time to UMA. There's no good reason why we don't
 // use one of the standard UMA_HISTORAM_*_TIMES macros, but all their ranges are
 // different, and it's not worth changing all the existing histograms.
-#define UMA_HISTOGRAM_LOAD_TIME(name, sample)                      \
-  UMA_HISTOGRAM_CUSTOM_TIMES(name, sample,                         \
-                             base::TimeDelta::FromMilliseconds(1), \
-                             base::TimeDelta::FromSeconds(60), 100)
+#define UMA_HISTOGRAM_LOAD_TIME(name, sample)                     \
+  UMA_HISTOGRAM_CUSTOM_TIMES(name, sample, base::Milliseconds(1), \
+                             base::Seconds(60), 100)
 
-NTPUserDataLogger::NTPUserDataLogger(Profile* profile, const GURL& ntp_url)
-    : has_emitted_(false),
-      should_record_doodle_load_time_(true),
-      during_startup_(!AfterStartupTaskUtils::IsBrowserStartupComplete()),
+NTPUserDataLogger::NTPUserDataLogger(Profile* profile,
+                                     const GURL& ntp_url,
+                                     base::Time ntp_navigation_start_time)
+    : during_startup_(!AfterStartupTaskUtils::IsBrowserStartupComplete()),
       ntp_url_(ntp_url),
-      profile_(profile) {}
+      profile_(profile),
+      // TODO(https://crbug.com/1280310): Migrate NTP navigation startup time
+      // from base::Time to base::TimeTicks to avoid time glitches.
+      ntp_navigation_start_time_(
+          base::TimeTicks::UnixEpoch() +
+          (ntp_navigation_start_time - base::Time::UnixEpoch())) {}
 
 NTPUserDataLogger::~NTPUserDataLogger() = default;
 
@@ -322,6 +330,8 @@ void NTPUserDataLogger::LogEvent(NTPLoggingEventType event,
       break;
     case NTP_ONE_GOOGLE_BAR_SHOWN:
       UMA_HISTOGRAM_LOAD_TIME("NewTabPage.OneGoogleBar.ShownTime", time);
+      EmitNtpTraceEvent("NewTabPage.OneGoogleBar.ShownTime", time);
+
       break;
     case NTP_BACKGROUND_CUSTOMIZED:
     case NTP_SHORTCUT_CUSTOMIZED:
@@ -366,6 +376,8 @@ void NTPUserDataLogger::LogEvent(NTPLoggingEventType event,
       break;
     case NTP_MIDDLE_SLOT_PROMO_SHOWN:
       UMA_HISTOGRAM_LOAD_TIME("NewTabPage.Promos.ShownTime", time);
+      EmitNtpTraceEvent("NewTabPage.Promos.ShownTime", time);
+
       break;
     case NTP_MIDDLE_SLOT_PROMO_LINK_CLICKED:
       UMA_HISTOGRAM_EXACT_LINEAR("NewTabPage.Promos.LinkClicked", 1, 1);
@@ -395,6 +407,7 @@ void NTPUserDataLogger::LogEvent(NTPLoggingEventType event,
       break;
     case NTP_APP_RENDERED:
       UMA_HISTOGRAM_LOAD_TIME("NewTabPage.MainUi.ShownTime", time);
+      EmitNtpTraceEvent("NewTabPage.MainUi.ShownTime", time);
       break;
   }
 }
@@ -463,11 +476,7 @@ void NTPUserDataLogger::EmitNtpStatistics(base::TimeDelta load_time,
   bool is_google = DefaultSearchProviderIsGoogle();
 
   // Split between NTP variants.
-  if (ntp_url_.SchemeIsHTTPOrHTTPS()) {
-    UMA_HISTOGRAM_LOAD_TIME("NewTabPage.LoadTime.Web", load_time);
-    // Only third-party NTPs can be loaded from the web.
-    UMA_HISTOGRAM_LOAD_TIME("NewTabPage.LoadTime.Web.Other", load_time);
-  } else if (ntp_url_ == GURL(chrome::kChromeUINewTabPageURL)) {
+  if (ntp_url_ == GURL(chrome::kChromeUINewTabPageURL)) {
     UMA_HISTOGRAM_LOAD_TIME("NewTabPage.LoadTime.WebUINTP", load_time);
   } else if (ntp_url_ == GURL(chrome::kChromeUINewTabPageThirdPartyURL)) {
     UMA_HISTOGRAM_LOAD_TIME("NewTabPage.LoadTime.WebUI3PNTP", load_time);
@@ -500,6 +509,16 @@ void NTPUserDataLogger::EmitNtpStatistics(base::TimeDelta load_time,
   during_startup_ = false;
 }
 
+void NTPUserDataLogger::EmitNtpTraceEvent(const char* event_name,
+                                          base::TimeDelta duration) {
+  TRACE_EVENT_NESTABLE_ASYNC_BEGIN_WITH_TIMESTAMP0(kUIEventCategory, event_name,
+                                                   TRACE_ID_LOCAL(this),
+                                                   ntp_navigation_start_time_);
+  TRACE_EVENT_NESTABLE_ASYNC_END_WITH_TIMESTAMP0(
+      kUIEventCategory, event_name, TRACE_ID_LOCAL(this),
+      ntp_navigation_start_time_ + duration);
+}
+
 void NTPUserDataLogger::RecordDoodleImpression(base::TimeDelta time,
                                                bool is_cta,
                                                bool from_cache) {
@@ -507,6 +526,8 @@ void NTPUserDataLogger::RecordDoodleImpression(base::TimeDelta time,
       is_cta ? LOGO_IMPRESSION_TYPE_CTA : LOGO_IMPRESSION_TYPE_STATIC;
   UMA_HISTOGRAM_ENUMERATION("NewTabPage.LogoShown", logo_type,
                             LOGO_IMPRESSION_TYPE_MAX);
+  EmitNtpTraceEvent("NewTabPage.LogoShown", time);
+
   if (from_cache) {
     UMA_HISTOGRAM_ENUMERATION("NewTabPage.LogoShown.FromCache", logo_type,
                               LOGO_IMPRESSION_TYPE_MAX);

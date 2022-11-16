@@ -9,6 +9,8 @@
 
 #include "base/bind.h"
 #include "base/task/common/scoped_defer_task_posting.h"
+#include "base/trace_event/base_tracing.h"
+#include "third_party/blink/renderer/platform/scheduler/common/tracing_helper.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/frame_scheduler_impl.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/main_thread_scheduler_impl.h"
 #include "third_party/blink/renderer/platform/wtf/wtf.h"
@@ -20,6 +22,9 @@ namespace scheduler {
 namespace internal {
 using base::sequence_manager::internal::TaskQueueImpl;
 }
+
+using perfetto::protos::pbzero::ChromeTrackEvent;
+using perfetto::protos::pbzero::RendererMainThreadTaskExecution;
 
 // static
 const char* MainThreadTaskQueue::NameForQueueType(
@@ -131,6 +136,8 @@ MainThreadTaskQueue::MainThreadTaskQueue(
         &MainThreadTaskQueue::OnTaskStarted, base::Unretained(this)));
     task_queue_->SetOnTaskCompletedHandler(base::BindRepeating(
         &MainThreadTaskQueue::OnTaskCompleted, base::Unretained(this)));
+    task_queue_->SetTaskExecutionTraceLogger(base::BindRepeating(
+        &MainThreadTaskQueue::LogTaskExecution, base::Unretained(this)));
   }
 }
 
@@ -155,6 +162,22 @@ void MainThreadTaskQueue::OnTaskCompleted(
   }
 }
 
+void MainThreadTaskQueue::LogTaskExecution(
+    perfetto::EventContext& ctx,
+    const base::sequence_manager::Task& task) {
+  static const uint8_t* enabled =
+      TRACE_EVENT_API_GET_CATEGORY_GROUP_ENABLED("scheduler");
+  if (!*enabled)
+    return;
+  RendererMainThreadTaskExecution* execution =
+      ctx.event<ChromeTrackEvent>()->set_renderer_main_thread_task_execution();
+  execution->set_task_type(
+      TaskTypeToProto(static_cast<blink::TaskType>(task.task_type)));
+  if (frame_scheduler_) {
+    frame_scheduler_->WriteIntoTrace(ctx.Wrap(execution));
+  }
+}
+
 void MainThreadTaskQueue::OnTaskRunTimeReported(
     TaskQueue::TaskTiming* task_timing) {
   if (throttler_) {
@@ -176,8 +199,9 @@ void MainThreadTaskQueue::DetachFromMainThreadScheduler() {
   task_queue_->SetOnTaskCompletedHandler(
       base::BindRepeating(&MainThreadSchedulerImpl::OnTaskCompleted,
                           main_thread_scheduler_->GetWeakPtr(), nullptr));
-  task_queue_->SetOnTaskPostedHandler(
-      internal::TaskQueueImpl::OnTaskPostedHandler());
+  on_ipc_task_posted_callback_handle_.reset();
+  task_queue_->SetTaskExecutionTraceLogger(
+      internal::TaskQueueImpl::TaskExecutionTraceLogger());
 
   ClearReferencesToSchedulers();
 }
@@ -185,18 +209,14 @@ void MainThreadTaskQueue::DetachFromMainThreadScheduler() {
 void MainThreadTaskQueue::SetOnIPCTaskPosted(
     base::RepeatingCallback<void(const base::sequence_manager::Task&)>
         on_ipc_task_posted_callback) {
-  if (task_queue_->HasImpl()) {
-    // We use the frame_scheduler_ to track metrics so as to ensure that metrics
-    // are not tied to individual task queues.
-    task_queue_->SetOnTaskPostedHandler(on_ipc_task_posted_callback);
-  }
+  // We use the frame_scheduler_ to track metrics so as to ensure that metrics
+  // are not tied to individual task queues.
+  on_ipc_task_posted_callback_handle_ = task_queue_->AddOnTaskPostedHandler(
+      std::move(on_ipc_task_posted_callback));
 }
 
 void MainThreadTaskQueue::DetachOnIPCTaskPostedWhileInBackForwardCache() {
-  if (task_queue_->HasImpl()) {
-    task_queue_->SetOnTaskPostedHandler(
-        internal::TaskQueueImpl::OnTaskPostedHandler());
-  }
+  on_ipc_task_posted_callback_handle_.reset();
 }
 
 void MainThreadTaskQueue::ShutdownTaskQueue() {
@@ -237,16 +257,6 @@ FrameSchedulerImpl* MainThreadTaskQueue::GetFrameScheduler() const {
 void MainThreadTaskQueue::SetFrameSchedulerForTest(
     FrameSchedulerImpl* frame_scheduler) {
   frame_scheduler_ = frame_scheduler;
-}
-
-void MainThreadTaskQueue::SetNetRequestPriority(
-    net::RequestPriority net_request_priority) {
-  net_request_priority_ = net_request_priority;
-}
-
-absl::optional<net::RequestPriority> MainThreadTaskQueue::net_request_priority()
-    const {
-  return net_request_priority_;
 }
 
 void MainThreadTaskQueue::SetWebSchedulingPriority(

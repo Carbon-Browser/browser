@@ -14,8 +14,8 @@
 #include "base/bind.h"
 #include "base/containers/cxx20_erase.h"
 #include "base/location.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/extensions/api/commands/command_service.h"
 #include "chrome/browser/extensions/api/developer_private/inspectable_views_finder.h"
@@ -28,7 +28,6 @@
 #include "chrome/browser/extensions/shared_module_service.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/webui/extensions/extension_icon_source.h"
-#include "chrome/common/extensions/command.h"
 #include "chrome/common/extensions/manifest_handlers/app_launch_info.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/grit/generated_resources.h"
@@ -46,6 +45,7 @@
 #include "extensions/browser/ui_util.h"
 #include "extensions/browser/warning_service.h"
 #include "extensions/common/api/extension_action/action_info.h"
+#include "extensions/common/command.h"
 #include "extensions/common/extension_set.h"
 #include "extensions/common/install_warning.h"
 #include "extensions/common/manifest.h"
@@ -552,10 +552,10 @@ void ExtensionInfoGenerator::CreateExtensionInfoHelper(
             ->GetDependentExtensions(&extension);
     for (const scoped_refptr<const Extension>& dependent :
              *dependent_extensions) {
-      developer::DependentExtension extension;
-      extension.id = dependent->id();
-      extension.name = dependent->name();
-      info->dependent_extensions.push_back(std::move(extension));
+      developer::DependentExtension dependent_extension;
+      dependent_extension.id = dependent->id();
+      dependent_extension.name = dependent->name();
+      info->dependent_extensions.push_back(std::move(dependent_extension));
     }
   }
 

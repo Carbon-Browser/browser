@@ -4,12 +4,16 @@
 
 #include "ui/ozone/platform/wayland/host/wayland_clipboard.h"
 
+#include <cstdint>
 #include <memory>
 #include <string>
 
+#include "base/bind.h"
 #include "base/check.h"
-#include "base/containers/contains.h"
+#include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/memory/weak_ptr.h"
 #include "base/notreached.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/clipboard/clipboard_buffer.h"
@@ -23,6 +27,7 @@
 #include "ui/ozone/platform/wayland/host/wayland_data_device_manager.h"
 #include "ui/ozone/platform/wayland/host/wayland_data_offer_base.h"
 #include "ui/ozone/platform/wayland/host/wayland_data_source.h"
+#include "ui/ozone/platform/wayland/host/wayland_serial_tracker.h"
 #include "ui/ozone/platform/wayland/host/zwp_primary_selection_device.h"
 #include "ui/ozone/platform/wayland/host/zwp_primary_selection_device_manager.h"
 #include "ui/ozone/public/platform_clipboard.h"
@@ -43,10 +48,9 @@ class Clipboard {
   // Synchronously retrieves the mime types list currently available to be read.
   virtual std::vector<std::string> ReadMimeTypes() = 0;
 
-  // Asynchronously reads clipboard content with |mime_type| format. The result
-  // data is expected to arrive through OnSelectionDataReceived() callback.
-  virtual bool Read(const std::string& mime_type,
-                    ui::PlatformClipboard::RequestDataClosure callback) = 0;
+  // Synchronously reads and returns clipboard content with |mime_type| format.
+  // TODO(crbug.com/443355): Drop once Clipboard API becomes async.
+  virtual ui::PlatformClipboard::Data Read(const std::string& mime_type) = 0;
 
   // Synchronously stores and announces |data| as available from this clipboard.
   virtual void Write(const ui::PlatformClipboard::DataMap* data) = 0;
@@ -67,28 +71,22 @@ class Clipboard {
 template <typename Manager,
           typename DataSource = typename Manager::DataSource,
           typename DataDevice = typename Manager::DataDevice>
-class ClipboardImpl final : public Clipboard,
-                            public DataSource::Delegate,
-                            public DataDevice::SelectionDelegate {
+class ClipboardImpl final : public Clipboard, public DataSource::Delegate {
  public:
-  explicit ClipboardImpl(Manager* manager, ui::ClipboardBuffer buffer)
-      : manager_(manager), buffer_(buffer) {
-    GetDevice()->set_selection_delegate(this);
+  ClipboardImpl(Manager* manager,
+                ui::ClipboardBuffer buffer,
+                ui::WaylandConnection* connection)
+      : manager_(manager), buffer_(buffer), connection_(connection) {
+    GetDevice()->set_selection_offer_callback(base::BindRepeating(
+        &ClipboardImpl::HandleNewSelectionOffer, weak_factory_.GetWeakPtr()));
   }
-  ~ClipboardImpl() final { GetDevice()->set_selection_delegate(nullptr); }
+  ~ClipboardImpl() final = default;
 
   ClipboardImpl(const ClipboardImpl&) = delete;
   ClipboardImpl& operator=(const ClipboardImpl&) = delete;
 
-  // TODO(crbug.com/1165466): Support nested clipboard requests.
-  bool Read(const std::string& mime_type,
-            ui::PlatformClipboard::RequestDataClosure callback) final {
-    requested_mime_type_ = mime_type;
-    read_clipboard_closure_ = std::move(callback);
-    if (GetDevice()->RequestSelectionData(GetMimeTypeForRequest(mime_type)))
-      return true;
-    DeliverData(nullptr, mime_type);
-    return false;
+  ui::PlatformClipboard::Data Read(const std::string& mime_type) final {
+    return GetDevice()->ReadSelectionData(GetMimeTypeForRequest(mime_type));
   }
 
   std::vector<std::string> ReadMimeTypes() final {
@@ -101,6 +99,10 @@ class ClipboardImpl final : public Clipboard,
   // responsible for writing the clipboard contents into the supplied fd. This
   // client can only drop the clipboard contents when it receives a
   // wl_data_source::cancelled event.
+  //
+  // This is supposedly responding to an input event, i.e: there is a valid
+  // corresponding serial number (provided by wl::SerialTracker). Otherwise,
+  // this function will no-op.
   void Write(const ui::PlatformClipboard::DataMap* data) final {
     if (!data || data->empty()) {
       offered_data_.clear();
@@ -110,7 +112,21 @@ class ClipboardImpl final : public Clipboard,
       source_ = manager_->CreateSource(this);
       source_->Offer(GetOfferedMimeTypes());
     }
-    GetDevice()->SetSelectionSource(source_.get());
+
+    // TODO(nickdiego): This function should just no-op if no serial is found
+    // (ie: no recent input event has been processed yet), though several unit
+    // and browser tests do not satisfy this precondition so would fail [1].
+    // Revisit this once those tests are fixed.
+    //
+    // [1] https://chromium-review.googlesource.com/c/chromium/src/+/3527605/2
+    auto& serial_tracker = connection_->serial_tracker();
+    auto serial = serial_tracker.GetSerial({wl::SerialType::kTouchPress,
+                                            wl::SerialType::kMousePress,
+                                            wl::SerialType::kKeyPress});
+    if (serial.has_value())
+      GetDevice()->SetSelectionSource(source_.get(), serial->value);
+    else
+      LOG(WARNING) << "No serial found for selection.";
 
     if (!clipboard_changed_callback_.is_null())
       clipboard_changed_callback_.Run(buffer_);
@@ -149,26 +165,12 @@ class ClipboardImpl final : public Clipboard,
     return mime_type;
   }
 
-  void DeliverData(ui::PlatformClipboard::Data contents,
-                   const std::string& mime_type) {
-    CHECK_EQ(GetMimeTypeForRequest(requested_mime_type_), mime_type);
-    if (!read_clipboard_closure_.is_null())
-      std::move(read_clipboard_closure_).Run(contents);
-    requested_mime_type_.clear();
-  }
-
-  // WaylandDataDeviceBase::SelectionDelegate:
-  void OnSelectionOffer(ui::WaylandDataOfferBase* offer) final {
+  void HandleNewSelectionOffer(ui::WaylandDataOfferBase* offer) const {
     if (IsSelectionOwner())
       return;
 
     if (!clipboard_changed_callback_.is_null())
       clipboard_changed_callback_.Run(buffer_);
-  }
-
-  void OnSelectionDataReceived(const std::string& mime_type,
-                               ui::PlatformClipboard::Data contents) final {
-    DeliverData(contents, mime_type);
   }
 
   // WaylandDataSource::Delegate:
@@ -188,7 +190,7 @@ class ClipboardImpl final : public Clipboard,
   }
 
   // The device manager used to access data device and create data sources.
-  Manager* const manager_;
+  const raw_ptr<Manager> manager_;
 
   // The clipboard buffer managed by this |this|.
   const ui::ClipboardBuffer buffer_;
@@ -199,26 +201,26 @@ class ClipboardImpl final : public Clipboard,
   // The data currently stored in a given clipboard buffer.
   ui::PlatformClipboard::DataMap offered_data_;
 
-  // Stores the callback to be invoked upon data reading from clipboard.
-  ui::PlatformClipboard::RequestDataClosure read_clipboard_closure_;
-
-  // Last mime type requested to be read from the clipboard.
-  std::string requested_mime_type_;
-
   // Notifies when clipboard data changes. Can be empty if not set.
   ClipboardDataChangedCallback clipboard_changed_callback_;
+
+  const raw_ptr<ui::WaylandConnection> connection_;
+
+  base::WeakPtrFactory<ClipboardImpl> weak_factory_{this};
 };
 
 }  // namespace wl
 
 namespace ui {
+
 WaylandClipboard::WaylandClipboard(WaylandConnection* connection,
                                    WaylandDataDeviceManager* manager)
     : connection_(connection),
       copypaste_clipboard_(
           std::make_unique<wl::ClipboardImpl<WaylandDataDeviceManager>>(
               manager,
-              ClipboardBuffer::kCopyPaste)) {
+              ClipboardBuffer::kCopyPaste,
+              connection)) {
   DCHECK(manager);
   DCHECK(connection_);
   DCHECK(copypaste_clipboard_);
@@ -235,15 +237,23 @@ void WaylandClipboard::OfferClipboardData(
   std::move(callback).Run();
 }
 
-// TODO(crbug.com/1165466): Support nested clipboard requests.
 void WaylandClipboard::RequestClipboardData(
     ClipboardBuffer buffer,
     const std::string& mime_type,
     PlatformClipboard::RequestDataClosure callback) {
+  PlatformClipboard::Data data;
   if (auto* clipboard = GetClipboard(buffer))
-    clipboard->Read(mime_type, std::move(callback));
-  else
-    std::move(callback).Run(nullptr);
+    data = clipboard->Read(mime_type);
+  std::move(callback).Run(data);
+}
+
+void WaylandClipboard::GetAvailableMimeTypes(
+    ClipboardBuffer buffer,
+    PlatformClipboard::GetMimeTypesClosure callback) {
+  std::vector<std::string> mime_types;
+  if (auto* clipboard = GetClipboard(buffer))
+    mime_types = clipboard->ReadMimeTypes();
+  std::move(callback).Run(mime_types);
 }
 
 bool WaylandClipboard::IsSelectionOwner(ClipboardBuffer buffer) {
@@ -259,15 +269,6 @@ void WaylandClipboard::SetClipboardDataChangedCallback(
     selection_clipboard->SetClipboardDataChangedCallback(data_changed_callback);
 }
 
-void WaylandClipboard::GetAvailableMimeTypes(
-    ClipboardBuffer buffer,
-    PlatformClipboard::GetMimeTypesClosure callback) {
-  std::vector<std::string> mime_types;
-  if (auto* clipboard = GetClipboard(buffer))
-    mime_types = clipboard->ReadMimeTypes();
-  std::move(callback).Run(mime_types);
-}
-
 bool WaylandClipboard::IsSelectionBufferAvailable() const {
   return (connection_->zwp_primary_selection_device_manager() != nullptr) ||
          (connection_->gtk_primary_selection_device_manager() != nullptr);
@@ -278,19 +279,21 @@ wl::Clipboard* WaylandClipboard::GetClipboard(ClipboardBuffer buffer) {
     return copypaste_clipboard_.get();
 
   if (buffer == ClipboardBuffer::kSelection) {
-    if (auto* manager = connection_->zwp_primary_selection_device_manager()) {
+    auto* zwp_manager = connection_->zwp_primary_selection_device_manager();
+    if (zwp_manager) {
       if (!primary_selection_clipboard_) {
         primary_selection_clipboard_ = std::make_unique<
             wl::ClipboardImpl<ZwpPrimarySelectionDeviceManager>>(
-            manager, ClipboardBuffer::kSelection);
+            zwp_manager, ClipboardBuffer::kSelection, connection_);
       }
       return primary_selection_clipboard_.get();
-    } else if (auto* manager =
-                   connection_->gtk_primary_selection_device_manager()) {
+    }
+    auto* gtk_manager = connection_->gtk_primary_selection_device_manager();
+    if (gtk_manager) {
       if (!primary_selection_clipboard_) {
         primary_selection_clipboard_ = std::make_unique<
             wl::ClipboardImpl<GtkPrimarySelectionDeviceManager>>(
-            manager, ClipboardBuffer::kSelection);
+            gtk_manager, ClipboardBuffer::kSelection, connection_);
       }
       return primary_selection_clipboard_.get();
     }

@@ -9,15 +9,12 @@
 #include <string>
 #include <vector>
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
+#include "base/memory/weak_ptr.h"
 #include "components/history/core/browser/keyword_id.h"
-#include "components/history/core/browser/top_sites.h"
-#include "components/omnibox/browser/keyword_extensions_delegate.h"
-#include "components/omnibox/browser/omnibox_triggered_feature_service.h"
-#include "components/omnibox/browser/shortcuts_backend.h"
+#include "components/omnibox/browser/actions/omnibox_action.h"
 #include "third_party/metrics_proto/omnibox_event.pb.h"
 
-class AutocompleteController;
 struct AutocompleteMatch;
 class AutocompleteClassifier;
 class AutocompleteSchemeClassifier;
@@ -25,10 +22,13 @@ class RemoteSuggestionsService;
 class DocumentSuggestionsService;
 class GURL;
 class InMemoryURLIndex;
+class KeywordExtensionsDelegate;
 class KeywordProvider;
 class OmniboxPedalProvider;
+class OmniboxTriggeredFeatureService;
 class PrefService;
 class ShortcutsBackend;
+class TabMatcher;
 
 namespace bookmarks {
 class BookmarkModel;
@@ -37,6 +37,7 @@ class BookmarkModel;
 namespace history {
 class HistoryService;
 class URLDatabase;
+class TopSites;
 }
 
 namespace history_clusters {
@@ -59,13 +60,9 @@ namespace query_tiles {
 class TileService;
 }
 
-namespace ntp_tiles {
-class MostVisitedSites;
-}
-
 class TemplateURLService;
 
-class AutocompleteProviderClient {
+class AutocompleteProviderClient : public OmniboxAction::Client {
  public:
   virtual ~AutocompleteProviderClient() {}
 
@@ -73,12 +70,12 @@ class AutocompleteProviderClient {
   GetURLLoaderFactory() = 0;
   virtual PrefService* GetPrefs() const = 0;
   virtual PrefService* GetLocalState() = 0;
+  virtual std::string GetApplicationLocale() const = 0;
   virtual const AutocompleteSchemeClassifier& GetSchemeClassifier() const = 0;
   virtual AutocompleteClassifier* GetAutocompleteClassifier() = 0;
   virtual history::HistoryService* GetHistoryService() = 0;
   virtual history_clusters::HistoryClustersService* GetHistoryClustersService();
   virtual scoped_refptr<history::TopSites> GetTopSites() = 0;
-  virtual ntp_tiles::MostVisitedSites* GetNtpMostVisitedSites();
   virtual bookmarks::BookmarkModel* GetBookmarkModel() = 0;
   virtual history::URLDatabase* GetInMemoryDatabase() = 0;
   virtual InMemoryURLIndex* GetInMemoryURLIndex() = 0;
@@ -167,32 +164,28 @@ class AutocompleteProviderClient {
   virtual void PrefetchImage(const GURL& url) = 0;
 
   // Sends a hint to the service worker context that navigation to
-  // |desination_url| is likely, unless the current profile is in incognito
+  // |destination_url| is likely, unless the current profile is in incognito
   // mode. On platforms where this is supported, the service worker lookup can
   // be expensive so this method should only be called once per input session.
   virtual void StartServiceWorker(const GURL& destination_url) {}
-
-  // Called by |controller| when its results have changed and all providers are
-  // done processing the autocomplete request. Used by chrome to inform the
-  // prefetch service of updated results.
-  virtual void OnAutocompleteControllerResultReady(
-      AutocompleteController* controller) {}
 
   // Called after creation of |keyword_provider| to allow the client to
   // configure the provider if desired.
   virtual void ConfigureKeywordProvider(KeywordProvider* keyword_provider) {}
 
-  // Called to find out if there is an open tab with the given URL within the
-  // current profile. |input| can be null; match is more precise (e.g. scheme
-  // presence) if provided.
-  virtual bool IsTabOpenWithURL(const GURL& url,
-                                const AutocompleteInput* input) = 0;
+  // Called to acquire the instance of TabMatcher, used to identify open tabs
+  // for a given set of AutocompleteMatches within the current profile.
+  virtual const TabMatcher& GetTabMatcher() const = 0;
 
   // Returns whether user is currently allowed to enter incognito mode.
   virtual bool IsIncognitoModeAvailable() const;
 
   // Returns true if the sharing hub command is enabled.
   virtual bool IsSharingHubAvailable() const;
+
+  // Gets a weak pointer to the client. Used when providers need to use the
+  // client when the client may no longer be around.
+  virtual base::WeakPtr<AutocompleteProviderClient> GetWeakPtr();
 };
 
 #endif  // COMPONENTS_OMNIBOX_BROWSER_AUTOCOMPLETE_PROVIDER_CLIENT_H_

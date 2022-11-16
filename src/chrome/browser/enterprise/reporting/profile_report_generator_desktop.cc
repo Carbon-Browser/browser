@@ -7,7 +7,6 @@
 #include <utility>
 
 #include "base/json/values_util.h"
-#include "base/macros.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "build/chromeos_buildflags.h"
@@ -16,6 +15,7 @@
 #include "chrome/browser/enterprise/reporting/extension_request/extension_request_report_generator.h"
 #include "chrome/browser/extensions/extension_management.h"
 #include "chrome/browser/policy/chrome_browser_policy_connector.h"
+#include "chrome/common/chrome_features.h"
 #include "chrome/common/extensions/extension_constants.h"
 #include "chrome/common/pref_names.h"
 #include "components/enterprise/browser/reporting/policy_info.h"
@@ -45,12 +45,10 @@ void ProfileReportGeneratorDesktop::GetExtensionRequest(
     enterprise_management::ChromeUserProfileInfo* report) {
   if (!profile_->GetPrefs()->GetBoolean(prefs::kCloudExtensionRequestEnabled))
     return;
-  const base::DictionaryValue* pending_requests =
-      profile_->GetPrefs()->GetDictionary(prefs::kCloudExtensionRequestIds);
+  const base::Value::Dict& pending_requests =
+      profile_->GetPrefs()->GetValueDict(prefs::kCloudExtensionRequestIds);
 
   // In case a corrupted profile prefs causing |pending_requests| to be null.
-  if (!pending_requests)
-    return;
 
   extensions::ExtensionManagement* extension_management =
       extensions::ExtensionManagementFactory::GetForBrowserContext(profile_);
@@ -58,7 +56,7 @@ void ProfileReportGeneratorDesktop::GetExtensionRequest(
       extension_urls::GetDefaultWebstoreUpdateUrl().spec();
 
   int number_of_requests = 0;
-  for (auto it : pending_requests->DictItems()) {
+  for (auto it : pending_requests) {
     if (!ExtensionRequestReportGenerator::ShouldUploadExtensionRequest(
             it.first, webstore_update_url, extension_management)) {
       continue;
@@ -76,6 +74,14 @@ void ProfileReportGeneratorDesktop::GetExtensionRequest(
         it.second.FindKey(extension_misc::kExtensionRequestTimestamp));
     if (timestamp)
       request->set_request_timestamp(timestamp->ToJavaTime());
+
+    if (base::FeatureList::IsEnabled(
+            features::kExtensionWorkflowJustification)) {
+      const std::string* justification = it.second.FindStringKey(
+          extension_misc::kExtensionWorkflowJustification);
+      if (justification)
+        request->set_justification(*justification);
+    }
   }
 }
 

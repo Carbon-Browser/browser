@@ -5,8 +5,10 @@
 #ifndef CHROME_BROWSER_ENTERPRISE_CONNECTORS_DEVICE_TRUST_ATTESTATION_COMMON_MOCK_ATTESTATION_SERVICE_H_
 #define CHROME_BROWSER_ENTERPRISE_CONNECTORS_DEVICE_TRUST_ATTESTATION_COMMON_MOCK_ATTESTATION_SERVICE_H_
 
+#include <string>
+
+#include "base/values.h"
 #include "chrome/browser/enterprise/connectors/device_trust/attestation/common/attestation_service.h"
-#include "chrome/browser/enterprise/connectors/device_trust/attestation/common/proto/device_trust_attestation_ca.pb.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
 namespace enterprise_connectors {
@@ -21,11 +23,8 @@ class MockAttestationService : public AttestationService {
 
   MOCK_METHOD(void,
               BuildChallengeResponseForVAChallenge,
-              (const std::string&,
-               std::unique_ptr<DeviceTrustSignals>,
-               AttestationCallback),
+              (const std::string&, base::Value::Dict, AttestationCallback),
               (override));
-  MOCK_METHOD1(StampReport, void(DeviceTrustReportEvent&));
 };
 
 }  // namespace test

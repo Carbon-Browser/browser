@@ -48,7 +48,8 @@ import javax.annotation.concurrent.GuardedBy;
  */
 public final class SafeModeService extends Service {
     private static final String TAG = "WebViewSafeMode";
-    private static final String SAFEMODE_ACTIONS_KEY = "SAFEMODE_ACTIONS";
+    @VisibleForTesting
+    public static final String SAFEMODE_ACTIONS_KEY = "SAFEMODE_ACTIONS";
 
     private static final Object sLock = new Object();
 
@@ -173,7 +174,8 @@ public final class SafeModeService extends Service {
 
     private static final String SHARED_PREFS_FILE = "webview_safemode_prefs";
 
-    private static final String LAST_MODIFIED_TIME_KEY = "LAST_MODIFIED_TIME";
+    @VisibleForTesting
+    public static final String LAST_MODIFIED_TIME_KEY = "LAST_MODIFIED_TIME";
 
     private boolean isCallerTrusted() {
         final Context context = ContextUtils.getApplicationContext();
@@ -216,9 +218,7 @@ public final class SafeModeService extends Service {
                 throw new SecurityException("setSafeMode() may only be called by a trusted app");
             }
 
-            synchronized (sLock) {
-                SafeModeService.setSafeMode(actions);
-            }
+            SafeModeService.setSafeMode(actions);
         }
     };
 
@@ -235,9 +235,19 @@ public final class SafeModeService extends Service {
     /**
      * Sets the SafeMode config. This includes persisting the set of actions, toggling component
      * state, etc.
+     *
+     * <p>This may only be called from the same process SafeModeService is declared to run in via
+     * the "android:process" attribute. Callers from other processes must bind to the Service via
+     * the AIDL interface.
      */
+    public static void setSafeMode(List<String> actions) {
+        synchronized (sLock) {
+            SafeModeService.setSafeModeLocked(actions);
+        }
+    }
+
     @GuardedBy("sLock")
-    private static void setSafeMode(List<String> actions) {
+    private static void setSafeModeLocked(List<String> actions) {
         boolean enableSafeMode = actions != null && !actions.isEmpty();
 
         SharedPreferences.Editor editor = getSharedPreferences().edit();
@@ -266,10 +276,25 @@ public final class SafeModeService extends Service {
     }
 
     @GuardedBy("sLock")
+    private static void disableSafeMode() {
+        setSafeModeLocked(Arrays.asList());
+    }
+
+    @GuardedBy("sLock")
     private static boolean shouldAutoDisableSafeMode() {
         long lastModifiedTime = getSharedPreferences().getLong(LAST_MODIFIED_TIME_KEY, 0L);
         long currentTime = sClock.currentTimeMillis();
         long timeSinceLastSafeModeConfig = currentTime - lastModifiedTime;
+
+        // It shouldn't be possible for lastModifiedTime to happen in the future (greater than
+        // currentTime). The user may have changed the clock on their device. Treat the config as
+        // expired in this case because we don't want to be in SafeMode arbitrarily long.
+        if (timeSinceLastSafeModeConfig < 0) {
+            Log.w(TAG, "Config timestamp is (%d) but current time is (%d); disabling SafeMode",
+                    lastModifiedTime, currentTime);
+            return true;
+        }
+
         return timeSinceLastSafeModeConfig >= SAFE_MODE_ENABLED_TIME_LIMIT_MS;
     }
 
@@ -288,14 +313,19 @@ public final class SafeModeService extends Service {
                 return new HashSet<>();
             }
             if (shouldAutoDisableSafeMode()) {
-                setSafeMode(Arrays.asList());
+                disableSafeMode();
                 return new HashSet<>();
             }
 
             // Returning an empty Set in the absence of persisted actions ensures the caller
             // doesn't crash when iterating over the return value.
-            return getSharedPreferences().getStringSet(
+            Set<String> actions = getSharedPreferences().getStringSet(
                     SAFEMODE_ACTIONS_KEY, Collections.emptySet());
+            if (actions.isEmpty()) {
+                Log.w(TAG, "Config is empty even though SafeMode is enabled; disabling SafeMode");
+                disableSafeMode();
+            }
+            return actions;
         }
     }
 
@@ -303,6 +333,13 @@ public final class SafeModeService extends Service {
     public static void clearSharedPrefsForTesting() {
         synchronized (sLock) {
             getSharedPreferences().edit().clear().apply();
+        }
+    }
+
+    @VisibleForTesting
+    public static void removeSharedPrefKeyForTesting(String key) {
+        synchronized (sLock) {
+            getSharedPreferences().edit().remove(key).apply();
         }
     }
 }

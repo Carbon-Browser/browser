@@ -7,7 +7,6 @@
 
 #include <string>
 
-#include "base/macros.h"
 #include "extensions/browser/api/virtual_keyboard_private/virtual_keyboard_delegate.h"
 #include "extensions/common/api/virtual_keyboard.h"
 
@@ -16,6 +15,11 @@ namespace extensions {
 class ShellVirtualKeyboardDelegate : public VirtualKeyboardDelegate {
  public:
   ShellVirtualKeyboardDelegate();
+
+  ShellVirtualKeyboardDelegate(const ShellVirtualKeyboardDelegate&) = delete;
+  ShellVirtualKeyboardDelegate& operator=(const ShellVirtualKeyboardDelegate&) =
+      delete;
+
   ~ShellVirtualKeyboardDelegate() override = default;
 
  protected:
@@ -52,13 +56,12 @@ class ShellVirtualKeyboardDelegate : public VirtualKeyboardDelegate {
   bool PasteClipboardItem(const std::string& clipboard_item_id) override;
   bool DeleteClipboardItem(const std::string& clipboard_item_id) override;
 
-  api::virtual_keyboard::FeatureRestrictions RestrictFeatures(
-      const api::virtual_keyboard::RestrictFeatures::Params& params) override;
+  void RestrictFeatures(
+      const api::virtual_keyboard::RestrictFeatures::Params& params,
+      OnRestrictFeaturesCallback callback) override;
 
  private:
   bool is_hotrod_keyboard_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(ShellVirtualKeyboardDelegate);
 };
 
 }  // namespace extensions

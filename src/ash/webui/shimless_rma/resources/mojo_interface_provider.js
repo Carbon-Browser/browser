@@ -4,9 +4,9 @@
 
 import {assert} from 'chrome://resources/js/assert.m.js';
 
-import {fakeChromeVersion, fakeComponents, fakeDeviceRegions, fakeDeviceSkus, fakeRsuChallengeQrCode, fakeStates} from './fake_data.js';
-import {FakeShimlessRmaService} from './fake_shimless_rma_service.js'
-import {NetworkConfigServiceInterface, RmadErrorCode, ShimlessRmaService, ShimlessRmaServiceInterface} from './shimless_rma_types.js';
+import {fakeCalibrationComponentsWithFails, fakeChromeVersion, fakeComponents, fakeDeviceRegions, fakeDeviceSkus, fakeDeviceWhiteLabels, fakeLog, fakeLogSavePath, fakeRsuChallengeCode, fakeRsuChallengeQrCode, fakeStates} from './fake_data.js';
+import {FakeShimlessRmaService} from './fake_shimless_rma_service.js';
+import {CalibrationSetupInstruction, NetworkConfigServiceInterface, RmadErrorCode, ShimlessRmaService, ShimlessRmaServiceInterface, WriteProtectDisableCompleteAction} from './shimless_rma_types.js';
 
 /**
  * @fileoverview
@@ -18,7 +18,7 @@ import {NetworkConfigServiceInterface, RmadErrorCode, ShimlessRmaService, Shimle
  * If true this will replace ShimlessRmaService with a fake.
  * @type {boolean}
  */
-let useFakeService = true;
+const useFakeService = false;
 
 /**
  * @type {?ShimlessRmaServiceInterface}
@@ -36,32 +36,58 @@ let networkConfigService = null;
  */
 function setupFakeShimlessRmaService_() {
   // Create provider.
-  let service = new FakeShimlessRmaService();
+  const service = new FakeShimlessRmaService();
 
   service.setStates(fakeStates);
 
-  service.setAbortRmaResult(RmadErrorCode.kOk);
+  service.setAsyncOperationDelayMs(500);
+
+  service.setAbortRmaResult(RmadErrorCode.kRmaNotRequired);
+
+  service.automaticallyTriggerHardwareVerificationStatusObservation();
 
   service.setGetCurrentOsVersionResult(fakeChromeVersion[0]);
-  service.setCheckForOsUpdatesResult(true);
-  service.setUpdateOsResult(false);
+  service.setCheckForOsUpdatesResult('99.0.4844.74');
+  service.setUpdateOsResult(true);
   service.automaticallyTriggerOsUpdateObservation();
 
   service.setGetComponentListResult(fakeComponents);
-  service.setReimageRequiredResult(false);
+  service.automaticallyTriggerUpdateRoFirmwareObservation();
   service.automaticallyTriggerDisableWriteProtectionObservation();
-  service.automaticallyTriggerProvisioningObservation();
   service.automaticallyTriggerCalibrationObservation();
 
-  service.setGetRsuDisableWriteProtectChallengeResult('##challenge code##')
+  service.setGetRsuDisableWriteProtectChallengeResult(fakeRsuChallengeCode);
+  service.setGetRsuDisableWriteProtectHwidResult('SAMUSTEST_2082');
   service.setGetRsuDisableWriteProtectChallengeQrCodeResponse(
       fakeRsuChallengeQrCode);
 
-  service.setGetOriginalSerialNumberResult('serial# 0001')
+  service.setGetWriteProtectDisableCompleteAction(
+      WriteProtectDisableCompleteAction.kCompleteAssembleDevice);
+
+  service.setGetWriteProtectManuallyDisabledInstructionsResult(
+      'g.co/help', fakeRsuChallengeQrCode);
+
+  service.setGetOriginalSerialNumberResult('serial# 0001');
   service.setGetRegionListResult(fakeDeviceRegions);
   service.setGetOriginalRegionResult(1);
   service.setGetSkuListResult(fakeDeviceSkus);
   service.setGetOriginalSkuResult(1);
+  service.setGetWhiteLabelListResult(fakeDeviceWhiteLabels);
+  service.setGetOriginalWhiteLabelResult(1);
+  service.setGetOriginalDramPartNumberResult('dram# 0123');
+
+  service.setGetCalibrationSetupInstructionsResult(
+      CalibrationSetupInstruction.kCalibrationInstructionPlaceLidOnFlatSurface);
+  service.setGetCalibrationComponentListResult(
+      fakeCalibrationComponentsWithFails);
+
+  service.automaticallyTriggerProvisioningObservation();
+  service.automaticallyTriggerFinalizationObservation();
+
+  service.automaticallyTriggerPowerCableStateObservation();
+  service.setGetLogResult(fakeLog);
+  service.setSaveLogResult({'path': fakeLogSavePath});
+  service.setGetPowerwashRequiredResult(true);
 
   // Set the fake service.
   setShimlessRmaServiceForTesting(service);
@@ -108,20 +134,4 @@ export function getNetworkConfigService() {
 
   assert(!!networkConfigService);
   return networkConfigService;
-}
-
-/**
- * @param {number} error
- * @return {string}
- */
-export function rmadErrorString(error) {
-  if (error === RmadErrorCode.kOk) {
-    return '';
-  }
-  for (const [k, v] of Object.entries(RmadErrorCode)) {
-    if (v === error) {
-      return 'Error: ' + k + '(' + error + ')';
-    }
-  }
-  return 'Error: unknown (' + error + ')';
 }

@@ -56,6 +56,7 @@ class ParentPermissionDialogViewTest
   enum class NextDialogAction {
     kCancel,
     kAccept,
+    kClose,
   };
 
   ParentPermissionDialogViewTest()
@@ -123,6 +124,9 @@ class ParentPermissionDialogViewTest
         case NextDialogAction::kAccept:
           view_->AcceptDialog();
           break;
+        case NextDialogAction::kClose:
+          view_->CloseDialog();
+          break;
       }
     }
   }
@@ -136,9 +140,9 @@ class ParentPermissionDialogViewTest
     // OAuth refresh tokens.
     identity_test_env_ = std::make_unique<signin::IdentityTestEnvironment>();
     identity_test_env_->MakeAccountAvailable(
-        chromeos::FakeGaiaMixin::kFakeUserEmail);
-    identity_test_env_->SetPrimaryAccount(
-        chromeos::FakeGaiaMixin::kFakeUserEmail, signin::ConsentLevel::kSync);
+        ash::FakeGaiaMixin::kFakeUserEmail);
+    identity_test_env_->SetPrimaryAccount(ash::FakeGaiaMixin::kFakeUserEmail,
+                                          signin::ConsentLevel::kSync);
     identity_test_env_->SetRefreshTokenForPrimaryAccount();
     identity_test_env_->SetAutomaticIssueOfAccessTokens(true);
   }
@@ -255,11 +259,11 @@ class ParentPermissionDialogViewTest
 
   ParentPermissionDialog::Result result_;
 
-  chromeos::LoggedInUserMixin logged_in_user_mixin_{
+  ash::LoggedInUserMixin logged_in_user_mixin_{
       &mixin_host_,
       // Simulate Gellerization / Adding Supervision to load extensions.
-      content::IsPreTest() ? chromeos::LoggedInUserMixin::LogInType::kRegular
-                           : chromeos::LoggedInUserMixin::LogInType::kChild,
+      content::IsPreTest() ? ash::LoggedInUserMixin::LogInType::kRegular
+                           : ash::LoggedInUserMixin::LogInType::kChild,
       embedded_test_server(), this};
 
   // Closure that is triggered once the dialog is shown.
@@ -309,6 +313,13 @@ IN_PROC_BROWSER_TEST_F(ParentPermissionDialogViewTest,
                        PermissionDialogCanceled) {
   set_next_dialog_action(
       ParentPermissionDialogViewTest::NextDialogAction::kCancel);
+  ShowPrompt();
+  CheckResult(ParentPermissionDialog::Result::kParentPermissionCanceled);
+}
+
+IN_PROC_BROWSER_TEST_F(ParentPermissionDialogViewTest, PermissionDialogClosed) {
+  set_next_dialog_action(
+      ParentPermissionDialogViewTest::NextDialogAction::kClose);
   ShowPrompt();
   CheckResult(ParentPermissionDialog::Result::kParentPermissionCanceled);
 }

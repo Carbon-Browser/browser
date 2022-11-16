@@ -15,10 +15,26 @@
 
 namespace test {
 
+// Are you happy now linker?
+const int ScopedPrivacyBudgetConfig::kDefaultGeneration;
+constexpr int kSelectAllSurfacesExpectedSurfaceCount = 1;
+
 ScopedPrivacyBudgetConfig::Parameters::Parameters() = default;
 ScopedPrivacyBudgetConfig::Parameters::Parameters(const Parameters&) = default;
 ScopedPrivacyBudgetConfig::Parameters::Parameters(Parameters&&) = default;
 ScopedPrivacyBudgetConfig::Parameters::~Parameters() = default;
+
+ScopedPrivacyBudgetConfig::Parameters::Parameters(Presets presets) {
+  switch (presets) {
+    case Presets::kEnableRandomSampling:
+      expected_surface_count = kSelectAllSurfacesExpectedSurfaceCount;
+      break;
+
+    case Presets::kDisable:
+      enabled = false;
+      break;
+  }
+}
 
 ScopedPrivacyBudgetConfig::~ScopedPrivacyBudgetConfig() {
   DCHECK(applied_) << "ScopedPrivacyBudgetConfig instance created but not "
@@ -33,18 +49,7 @@ ScopedPrivacyBudgetConfig::ScopedPrivacyBudgetConfig(
 }
 
 ScopedPrivacyBudgetConfig::ScopedPrivacyBudgetConfig(Presets presets) {
-  switch (presets) {
-    case kEnable:
-      Apply(Parameters());
-      break;
-
-    case kDisable: {
-      Parameters parameters;
-      parameters.enabled = false;
-      Apply(parameters);
-      break;
-    }
-  }
+  Apply(Parameters(presets));
 }
 
 void ScopedPrivacyBudgetConfig::Apply(const Parameters& parameters) {
@@ -75,22 +80,18 @@ void ScopedPrivacyBudgetConfig::Apply(const Parameters& parameters) {
          EncodeIdentifiabilityFieldTrialParam(parameters.blocked_types)});
   }
 
-  ftp.insert({features::kIdentifiabilityStudySurfaceSelectionRate.name,
-              base::NumberToString(parameters.surface_selection_rate)});
+  if (!parameters.allowed_random_types.empty()) {
+    ftp.insert({features::kIdentifiabilityStudyAllowedRandomTypes.name,
+                EncodeIdentifiabilityFieldTrialParam(
+                    parameters.allowed_random_types)});
+  }
 
-  if (parameters.max_surfaces != defaults.max_surfaces) {
-    ftp.insert({features::kIdentifiabilityStudyMaxSurfaces.name,
-                base::NumberToString(parameters.max_surfaces)});
-  }
-  if (!parameters.per_surface_sampling_rate.empty()) {
-    ftp.insert({features::kIdentifiabilityStudyPerSurfaceSettings.name,
-                EncodeIdentifiabilityFieldTrialParam(
-                    parameters.per_surface_sampling_rate)});
-  }
-  if (!parameters.per_type_sampling_rate.empty()) {
-    ftp.insert({features::kIdentifiabilityStudyPerTypeSettings.name,
-                EncodeIdentifiabilityFieldTrialParam(
-                    parameters.per_type_sampling_rate)});
+  ftp.insert({features::kIdentifiabilityStudyExpectedSurfaceCount.name,
+              base::NumberToString(parameters.expected_surface_count)});
+
+  if (parameters.active_surface_budget != defaults.active_surface_budget) {
+    ftp.insert({features::kIdentifiabilityStudyActiveSurfaceBudget.name,
+                base::NumberToString(parameters.active_surface_budget)});
   }
   if (!parameters.per_surface_cost.empty()) {
     ftp.insert(
@@ -106,6 +107,56 @@ void ScopedPrivacyBudgetConfig::Apply(const Parameters& parameters) {
     ftp.insert(
         {features::kIdentifiabilityStudySurfaceEquivalenceClasses.name,
          EncodeIdentifiabilityFieldTrialParam(parameters.equivalence_classes)});
+  }
+  if (!parameters.blocks.empty()) {
+    ftp.insert({features::kIdentifiabilityStudyBlocks.name,
+                EncodeIdentifiabilityFieldTrialParam(parameters.blocks)});
+  }
+  if (!parameters.block_weights.empty()) {
+    ftp.insert(
+        {features::kIdentifiabilityStudyBlockWeights.name,
+         EncodeIdentifiabilityFieldTrialParam(parameters.block_weights)});
+  }
+  if (!parameters.reid_blocks.empty()) {
+    ftp.insert({features::kIdentifiabilityStudyReidSurfaceBlocks.name,
+                EncodeIdentifiabilityFieldTrialParam(parameters.reid_blocks)});
+  }
+  if (!parameters.reid_salts_ranges.empty()) {
+    ftp.insert(
+        {features::kIdentifiabilityStudyReidSurfaceBlocksSaltsRanges.name,
+         EncodeIdentifiabilityFieldTrialParam(parameters.reid_salts_ranges)});
+  }
+  if (!parameters.reid_bits.empty()) {
+    ftp.insert({features::kIdentifiabilityStudyReidSurfaceBlocksBits.name,
+                EncodeIdentifiabilityFieldTrialParam(parameters.reid_bits)});
+  }
+  if (!parameters.reid_noise.empty()) {
+    ftp.insert(
+        {features::kIdentifiabilityStudyReidBlocksNoiseProbabilities.name,
+         EncodeIdentifiabilityFieldTrialParam(parameters.reid_noise)});
+  }
+  if (!parameters.per_surface_cost.empty()) {
+    ftp.insert(
+        {features::kIdentifiabilityStudyPerHashCost.name,
+         EncodeIdentifiabilityFieldTrialParam(parameters.per_surface_cost)});
+  }
+  if (!parameters.per_type_cost.empty()) {
+    ftp.insert(
+        {features::kIdentifiabilityStudyPerTypeCost.name,
+         EncodeIdentifiabilityFieldTrialParam(parameters.per_type_cost)});
+  }
+  if (!parameters.equivalence_classes.empty()) {
+    ftp.insert(
+        {features::kIdentifiabilityStudySurfaceEquivalenceClasses.name,
+         EncodeIdentifiabilityFieldTrialParam(parameters.equivalence_classes)});
+  }
+  ftp.insert({features::kIdentifiabilityStudyEnableActiveSampling.name,
+              EncodeIdentifiabilityFieldTrialParam(
+                  parameters.enable_active_sampling)});
+  if (!parameters.actively_sampled_fonts.empty()) {
+    ftp.insert({features::kIdentifiabilityStudyActivelySampledFonts.name,
+                EncodeIdentifiabilityFieldTrialParam(
+                    parameters.actively_sampled_fonts)});
   }
 
   scoped_feature_list_.InitAndEnableFeatureWithParameters(

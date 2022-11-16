@@ -11,14 +11,15 @@ GEN_INCLUDE(['//chrome/test/data/webui/polymer_interactive_ui_test.js']);
 
 GEN('#include "content/public/test/browser_test.h"');
 
+/* eslint-disable no-var */
+
 const BookmarksFocusTest = class extends PolymerInteractiveUITest {
   /** @override */
   get browsePreload() {
-    throw 'this is abstract and should be overriden by subclasses';
+    throw new Error('this is abstract and should be overriden by subclasses');
   }
 };
 
-// eslint-disable-next-line no-var
 var BookmarksFolderNodeFocusTest = class extends BookmarksFocusTest {
   /** @override */
   get browsePreload() {
@@ -32,7 +33,6 @@ TEST_F('BookmarksFolderNodeFocusTest', 'MAYBE_All', function() {
   mocha.run();
 });
 
-// eslint-disable-next-line no-var
 var BookmarksListFocusTest = class extends BookmarksFocusTest {
   /** @override */
   get browsePreload() {
@@ -46,7 +46,6 @@ TEST_F('BookmarksListFocusTest', 'MAYBE_All', function() {
   mocha.run();
 });
 
-// eslint-disable-next-line no-var
 var BookmarksDialogFocusManagerTest = class extends BookmarksFocusTest {
   /** @override */
   get browsePreload() {

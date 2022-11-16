@@ -122,13 +122,13 @@
       Meghatározza azt az időtartamot, amely eltelik, mire megjelenik a képernyőkímélő az eszközök bejelentkezési képernyőin kiállító módban.
 
       A házirend értékét ezredmásodpercben kell megadni.</translation>
-<translation id="1141767714195601945">Ez a házirend vezérli a Carbon Browser Browser Browser parancssori paramétereit az Internet Explorerből történő indítás esetén.
+<translation id="1141767714195601945">Ez a házirend vezérli a Carbon Browser parancssori paramétereit az Internet Explorerből történő indítás esetén.
 
       Ha az Internet Explorerre vonatkozó „Régi böngészők támogatása” bővítmény nincs telepítve, akkor a házirendnek nincs hatása.
 
-      Ha a házirend nincs beállítva, az Internet Explorer csak az URL-t adja át a Carbon Browser Browser Browser-nak parancssori paraméterként.
+      Ha a házirend nincs beállítva, az Internet Explorer csak az URL-t adja át a Carbon Browser-nak parancssori paraméterként.
 
-      Ha a házirendben karakterláncok listáját adja meg, akkor a rendszer szóközökkel kapcsolja össze őket, és így adja át a Carbon Browser Browser Browser-nak parancssori paraméterként.
+      Ha a házirendben karakterláncok listáját adja meg, akkor a rendszer szóközökkel kapcsolja össze őket, és így adja át a Carbon Browser-nak parancssori paraméterként.
 
       Ha valamelyik elem ${url} paramétert tartalmaz, azt a rendszer a megnyitni kívánt oldal URL-címére cseréli.
 
@@ -267,7 +267,7 @@
 
       A házirend mindegyik listaeleme egy-egy karakterlánc, amely pontosvesszővel (<ph name="SEMICOLON" />) elválasztva tartalmazza a bővítményazonosítót és a frissítési URL-t. A bővítményazonosító az a 32 betűs karakterlánc, amely például a <ph name="CHROME_EXTENSIONS_LINK" /> oldalon található meg fejlesztői módban. A frissítési URL-nek a következő linken ismertetett frissítési manifest XML-dokumentumára kell mutatnia: <ph name="LINK_TO_EXTENSION_DOC1" />. Fontos: Az ebben a házirendben megadott frissítési URL csak a kezdeti telepítés céljára szolgál; a bővítmény későbbi frissítései a bővítmény manifestjében megadott frissítési URL-t használják.
 
-      Például a <ph name="EXTENSION_POLICY_EXAMPLE" /> a Carbon Browser Browser Browser Internetes áruház normál frissítési URL-jéről telepíti a <ph name="EXTENSION_POLICY_EXAMPLE_EXTENSION_NAME" /> alkalmazást. További információ a bővítmények tárolásáról: <ph name="LINK_TO_EXTENSION_DOC2" />.</translation>
+      Például a <ph name="EXTENSION_POLICY_EXAMPLE" /> a Carbon Browser Internetes áruház normál frissítési URL-jéről telepíti a <ph name="EXTENSION_POLICY_EXAMPLE_EXTENSION_NAME" /> alkalmazást. További információ a bővítmények tárolásáról: <ph name="LINK_TO_EXTENSION_DOC2" />.</translation>
 <translation id="1435659902881071157">Eszközszintű hálózatbeállítás</translation>
 <translation id="1438739959477268107">Kulcslétrehozás alapértelmezett beállítása</translation>
 <translation id="1454846751303307294">Lehetővé teszi, hogy megadja az URL-minták egy olyan listáját, amely meghatározza, mely webhelyek nem futtathatnak JavaScriptet. Ha a házirend beállítatlanul marad, akkor a rendszer a globális alapértelmezett értéket használja valamennyi webhelyre vonatkozóan; vagy -- ha be van állítva -- a "DefaultJavaScriptSetting" házirendből, vagy pedig a felhasználó személyes konfigurációjából.</translation>
@@ -426,11 +426,11 @@
 
       Ha a házirend nincs beállítva, a <ph name="TPM_FIRMWARE_UPDATE_TPM" />-firmware-frissítés funkció nem áll rendelkezésre.</translation>
 <translation id="1708496595873025510">Korlátozást állít be a Variations seed lekérésére</translation>
-<translation id="1717817358640580294">Ha nincs beállítva, a Carbon Browser Browser Browser-tisztogatás – amennyiben nem kívánt szoftvert észlel – jelentheti a vizsgálattal kapcsolatos metaadatokat a Google-nak a SafeBrowsingExtendedReportingEnabled házirend által meghatározottak szerint. A Carbon Browser Browser Browser-tisztogatás ezután megkérdezi a felhasználót, hogy szeretné-e megtisztítani az eszközt a nem kívánt szoftvertől. A felhasználó a tisztogatás eredményét megoszthatja a Google-lal, hogy segítsen a nemkívánatos szoftverek jövőbeli észlelésére vonatkozó fejlesztésekben. Az eredmény fájlok metaadatait, az automatikusan telepített bővítményeket és a bejegyzéskulcsokat tartalmazza a Carbon Browser Browser Browser adatvédelmi tanulmányában ismertetett módon.
+<translation id="1717817358640580294">Ha nincs beállítva, a Carbon Browser-tisztogatás – amennyiben nem kívánt szoftvert észlel – jelentheti a vizsgálattal kapcsolatos metaadatokat a Google-nak a SafeBrowsingExtendedReportingEnabled házirend által meghatározottak szerint. A Carbon Browser-tisztogatás ezután megkérdezi a felhasználót, hogy szeretné-e megtisztítani az eszközt a nem kívánt szoftvertől. A felhasználó a tisztogatás eredményét megoszthatja a Google-lal, hogy segítsen a nemkívánatos szoftverek jövőbeli észlelésére vonatkozó fejlesztésekben. Az eredmény fájlok metaadatait, az automatikusan telepített bővítményeket és a bejegyzéskulcsokat tartalmazza a Carbon Browser adatvédelmi tanulmányában ismertetett módon.
 
-      Ha le van tiltva, és a Carbon Browser Browser Browser-tisztogatás nem kívánt szoftvert észlel, a vizsgálat metaadatait nem jelenti a Google-nak – felülírva ezzel a SafeBrowsingExtendedReportingEnabled beállítást. A Carbon Browser Browser Browser-tisztogatás megkérdezi a felhasználót, hogy szeretné-e megtisztítani az eszközt a nem kívánt szoftvertől.  A Google nem kapja meg a tisztogatás eredményeit, és a felhasználó sem tudja megosztani őket.
+      Ha le van tiltva, és a Carbon Browser-tisztogatás nem kívánt szoftvert észlel, a vizsgálat metaadatait nem jelenti a Google-nak – felülírva ezzel a SafeBrowsingExtendedReportingEnabled beállítást. A Carbon Browser-tisztogatás megkérdezi a felhasználót, hogy szeretné-e megtisztítani az eszközt a nem kívánt szoftvertől.  A Google nem kapja meg a tisztogatás eredményeit, és a felhasználó sem tudja megosztani őket.
 
-      Ha aktiválva van, a Carbon Browser Browser Browser-tisztogatás – amennyiben nem kívánt szoftvert észlel – jelentheti a vizsgálattal kapcsolatos metaadatokat a Google-nak a SafeBrowsingExtendedReportingEnabled házirend által meghatározottak szerint. A Carbon Browser Browser Browser-tisztogatás megkérdezi a felhasználót, hogy szeretné-e megtisztítani az eszközt a nem kívánt szoftvertől.  A Google megkapja a tisztogatás eredményeit, és a felhasználó nem tudja megakadályozni ezt.
+      Ha aktiválva van, a Carbon Browser-tisztogatás – amennyiben nem kívánt szoftvert észlel – jelentheti a vizsgálattal kapcsolatos metaadatokat a Google-nak a SafeBrowsingExtendedReportingEnabled házirend által meghatározottak szerint. A Carbon Browser-tisztogatás megkérdezi a felhasználót, hogy szeretné-e megtisztítani az eszközt a nem kívánt szoftvertől.  A Google megkapja a tisztogatás eredményeit, és a felhasználó nem tudja megakadályozni ezt.
 
       Ez a házirend csak olyan Windows-példányokon hozzáférhető, amelyek csatlakoznak <ph name="MS_AD_NAME" />-domainhez, illetve csak olyan Windows 10 Pro- vagy Enterprise-példányokon használható, amelyeken aktiválva van az eszközkezelés.</translation>
 <translation id="172374442286684480">Helyi adatok beállításának engedélyezése minden webhely számára</translation>
@@ -620,7 +620,7 @@
 <translation id="2073552873076775140">Bejelentkezés engedélyezése a <ph name="PRODUCT_NAME" /> böngészőbe</translation>
 <translation id="2077129598763517140">Hardveres gyorsítás alkalmazása lehetőség szerint</translation>
 <translation id="2077273864382355561">Képernyő kikapcsolásának késleltetése akkumulátorról való működés során</translation>
-<translation id="2082205219176343977">Az engedélyezett legrégebbi Carbon Browser Browser Browser-verzió beállítása az eszközön.</translation>
+<translation id="2082205219176343977">Az engedélyezett legrégebbi Carbon Browser-verzió beállítása az eszközön.</translation>
 <translation id="209586405398070749">Stabil csatorna</translation>
 <translation id="2098658257603918882">Használati és összeomlással kapcsolatos adatok jelentésének engedélyezése</translation>
 <translation id="2104418465060359056">Bővítmények és beépülő modulok adatainak jelentése</translation>
@@ -665,7 +665,7 @@
       Ha letiltja a beállítást, vagy ha nem állítja be, akkor a hitelesítési portál hitelesítési oldalai új (normál) böngészőlapon jelennek meg, figyelembe véve az aktuális felhasználó proxybeállításait.</translation>
 <translation id="21394354835637379">Lehetővé teszi annak megadását, hogy mely URL-ek telepíthetnek bővítményeket, alkalmazásokat és témákat.
 
-              A <ph name="PRODUCT_NAME" /> 21-es verziójától kezdve nehezebb a bővítmények, alkalmazások és felhasználói szkriptek telepítése a Carbon Browser Browser Browser Internetes áruházon kívülről. A felhasználók korábban rákattinthattak bármely *.crx fájlra mutató linkre, a <ph name="PRODUCT_NAME" /> pedig néhány figyelmeztetés után felajánlotta a fájl telepítését. A <ph name="PRODUCT_NAME" /> 21-es verziójától kezdve az ilyen fájlokat le kell tölteni, és be kell húzni a <ph name="PRODUCT_NAME" /> beállításainak oldalára. Ez a beállítás lehetővé teszi, hogy bizonyos URL-ek a régi, könnyebb telepítési folyamatot használják.
+              A <ph name="PRODUCT_NAME" /> 21-es verziójától kezdve nehezebb a bővítmények, alkalmazások és felhasználói szkriptek telepítése a Carbon Browser Internetes áruházon kívülről. A felhasználók korábban rákattinthattak bármely *.crx fájlra mutató linkre, a <ph name="PRODUCT_NAME" /> pedig néhány figyelmeztetés után felajánlotta a fájl telepítését. A <ph name="PRODUCT_NAME" /> 21-es verziójától kezdve az ilyen fájlokat le kell tölteni, és be kell húzni a <ph name="PRODUCT_NAME" /> beállításainak oldalára. Ez a beállítás lehetővé teszi, hogy bizonyos URL-ek a régi, könnyebb telepítési folyamatot használják.
 
               A listában szereplő összes elem bővítményjellegű egyezési minta (lásd: https://developer.chrome.com/extensions/match_patterns). A felhasználók a listában szereplő bármelyik elemmel egyező URL-ről a könnyű módszerrel telepíthetnek elemeket. A mintáknak a *.crx fájl helye mellett azt az oldalt is engedélyezniük kell, ahonnan a letöltés megkezdődik (azaz a hivatkozó oldalt). 
 
@@ -739,11 +739,11 @@
 
       Ha a házirend le van tiltva, vagy ha nincs beállítva, az oldalak – a specifikációnak (https://html.spec.whatwg.org/#apis-for-creating-and-navigating-browsing-contexts-by-name) megfelelően – nem jeleníthetnek meg előugró ablakokat az unload művelet végrehajtása során.
 
-      A Carbon Browser Browser Browser 82-es verziójából eltávolítjuk ezt a házirendet.
+      A Carbon Browser 82-es verziójából eltávolítjuk ezt a házirendet.
 
       Lásd: https://www.chromestatus.com/feature/5989473649164288 .</translation>
 <translation id="2269319728625047531">A szinkronizáláshoz való hozzájárulás megjelenítésének engedélyezése a bejelentkezési folyamat közben</translation>
-<translation id="2274864612594831715">A házirend a virtuális billentyűzet a Carbon Browser Browser BrowserOS beviteli eszközeként való engedélyezését állítja be. A házirend felhasználók által nem felülírható.
+<translation id="2274864612594831715">A házirend a virtuális billentyűzet a Carbon BrowserOS beviteli eszközeként való engedélyezését állítja be. A házirend felhasználók által nem felülírható.
 
       Ha a házirend értéke „true”, akkor a virtuális képernyő-billentyűzet mindig engedélyezve lesz.
 
@@ -811,9 +811,9 @@
 <translation id="2463034609187171371">DHE rejtjelezési csomagok engedélyezése a TLS protokollban</translation>
 <translation id="2463365186486772703">Alkalmazás nyelv- és országkódja</translation>
 <translation id="2466131534462628618">A hitelesítési portál a hitelesítéskor figyelmen kívül hagyja a proxyt</translation>
-<translation id="2471748297300970300">Ha le van tiltva, nem jelennek meg biztonsági figyelmeztetések, amikor a Carbon Browser Browser Browser-ot bizonyos potenciálisan veszélyes parancssori jelzők használatával indítják el.
+<translation id="2471748297300970300">Ha le van tiltva, nem jelennek meg biztonsági figyelmeztetések, amikor a Carbon Browser-ot bizonyos potenciálisan veszélyes parancssori jelzők használatával indítják el.
 
-          Ha engedélyezve van, vagy ha nincs beállítva, megjelennek biztonsági figyelmeztetések, amennyiben bizonyos parancssori jelzőket használnak a Carbon Browser Browser Browser indításakor.
+          Ha engedélyezve van, vagy ha nincs beállítva, megjelennek biztonsági figyelmeztetések, amennyiben bizonyos parancssori jelzőket használnak a Carbon Browser indításakor.
 
           Windows rendszeren ez a házirend csak olyan példányokon hozzáférhető, amelyek csatlakoznak <ph name="MS_AD_NAME" />-domainhez, illetve csak olyan Windows 10 Pro- vagy Enterprise-példányokon használható, amelyeken aktiválva van az eszközkezelés.</translation>
 <translation id="2482676533225429905">Natív üzenetküldő</translation>
@@ -929,7 +929,7 @@
           A Google azonnali eredmény URL-je a következőként adható meg: <ph name="GOOGLE_SEARCH_URL" />.
 
           Ezt a beállítást akkor kell megadni, ha a „DefaultSearchProviderEnabled” házirend engedélyezve van, és csak ebben az esetben veszi figyelembe a rendszer.</translation>
-<translation id="2659019163577049044">Ha ez a beállítás aktiválva van, a felhasználók beállíthatják eszközeiket úgy, hogy szinkronizálják az SMS-eket a telefonok és a Carbon Browser Browser Browserbookok között. Ha ez a házirend engedélyezve van, a felhasználóknak kifejezetten aktiválniuk kell ezt a funkciót a beállítási folyamat végrehajtásával. A beállítási folyamat elvégzése után küldhetnek és fogadhatnak SMS-eket a Carbon Browser Browser Browserbookjaikon.
+<translation id="2659019163577049044">Ha ez a beállítás aktiválva van, a felhasználók beállíthatják eszközeiket úgy, hogy szinkronizálják az SMS-eket a telefonok és a Carbon Browserbookok között. Ha ez a házirend engedélyezve van, a felhasználóknak kifejezetten aktiválniuk kell ezt a funkciót a beállítási folyamat végrehajtásával. A beállítási folyamat elvégzése után küldhetnek és fogadhatnak SMS-eket a Carbon Browserbookjaikon.
 
       Ha a beállítás nincs aktiválva, a felhasználók nem állíthatják be az SMS-ek szinkronizálását.
 
@@ -943,7 +943,7 @@
 <translation id="2706708761587205154">Nyomtatás kizárólag PIN-kód használatával</translation>
 <translation id="2710534340210290498">Ha a házirend beállítása hamis, a felhasználók nem tudják lezárni a képernyőt (csak kijelentkezni tudnak a felhasználói munkamenetből). Ha a beállítás értéke igaz, vagy ha nincs konfigurálva, a jelszóval hitelesített felhasználók zárolhatják a képernyőt.</translation>
 <translation id="2731627323327011390">A(z) <ph name="PRODUCT_OS_NAME" /> által az ARC-alkalmazásoknak kiadott CA-tanúsítványok használatának letiltása</translation>
-<translation id="2742843273354638707">A Carbon Browser Browser Browser Internetes áruház alkalmazásnak és a láblécben lévő linkjének elrejtése az Új lap oldalon és a <ph name="PRODUCT_OS_NAME" /> alkalmazásindítóban.
+<translation id="2742843273354638707">A Carbon Browser Internetes áruház alkalmazásnak és a láblécben lévő linkjének elrejtése az Új lap oldalon és a <ph name="PRODUCT_OS_NAME" /> alkalmazásindítóban.
 
       Ha a házirend igaz értékre van állítva, az ikonok rejtettek.
 
@@ -1006,12 +1006,12 @@
       Ha a házirend időintervallumok nem üres listájára van állítva:
       Az eszközök nem tudnak automatikusan frissítéseket keresni a megadott időintervallumokon belül. A korábbi állapot visszaállítását igénylő és a minimális <ph name="PRODUCT_OS_NAME" />-verzió alatti eszközökre nem érvényes ez a házirend a lehetséges biztonsági problémák elkerülése érdekében. Továbbá a házirend nem tiltja a felhasználók és adminisztrátorok által kérelmezett frissítéskereséseket.
       Ha a házirend nincs beállítva, vagy nem tartalmaz időintervallumokat:
-      Ez a házirend nem tiltja az automatikus frissítéskereséseket, más házirendek azonban tilthatják őket. Ez a funkció csak az automatikusan induló kioszkként beállított Carbon Browser Browser Browser-eszközökön használható. A többi eszközt nem korlátozza ez a házirend.</translation>
+      Ez a házirend nem tiltja az automatikus frissítéskereséseket, más házirendek azonban tilthatják őket. Ez a funkció csak az automatikusan induló kioszkként beállított Carbon Browser-eszközökön használható. A többi eszközt nem korlátozza ez a házirend.</translation>
 <translation id="2823870601012066791">A Windows beállításjegyzékének helye <ph name="PRODUCT_OS_NAME" />-ügyfelek esetében:</translation>
 <translation id="2824715612115726353">Inkognitómód engedélyezése</translation>
 <translation id="2836621397261130126">Azt szabályozza, hogy a KDC-irányelv általi jóváhagyást figyelembe vegye-e a rendszer a <ph name="KERBEROS" />-jegyek felhatalmazásáról való döntéskor.
 
-          Ha a házirend beállítása igaz, a HTTP-hitelesítés tiszteletben tartja a KDC-házirend általi jóváhagyásokat, azaz a Carbon Browser Browser Browser csak akkor ad felhatalmazást a hitelesítési adatok használatára, ha a KDC a szolgáltatásjegyen beállítja az <ph name="OK_AS_DELEGATE" /> attribútumot. További információ: https://tools.ietf.org/html/rfc5896.html. A szolgáltatásnak az „AuthNegotiateDelegateWhitelist” házirenddel is egyeznie kell.
+          Ha a házirend beállítása igaz, a HTTP-hitelesítés tiszteletben tartja a KDC-házirend általi jóváhagyásokat, azaz a Carbon Browser csak akkor ad felhatalmazást a hitelesítési adatok használatára, ha a KDC a szolgáltatásjegyen beállítja az <ph name="OK_AS_DELEGATE" /> attribútumot. További információ: https://tools.ietf.org/html/rfc5896.html. A szolgáltatásnak az „AuthNegotiateDelegateWhitelist” házirenddel is egyeznie kell.
 
           Ha a házirend nincs beállítva, vagy értéke hamis, a rendszer figyelmen kívül hagyja a KDC-házirendet a támogatott platformokon, és csak az „AuthNegotiateDelegateWhitelist” házirendet veszi figyelembe.
 
@@ -1157,7 +1157,7 @@
 <translation id="3034580675120919256">Meghatározhatja, hogy a webhelyek futtathatnak-e JavaScriptet. A JavaScript futtatását engedélyezheti vagy letilthatja minden webhely számára. Ha a házirend beállítatlanul marad, a rendszer az "AllowJavaScript" értéket használja, amelyet a felhasználó módosíthat.</translation>
 <translation id="3038323923255997294">A háttéralkalmazások továbbfuttatása a(z) <ph name="PRODUCT_NAME" /> alkalmazás bezárása esetén</translation>
 <translation id="3046192273793919231">Hálózati csomagok küldése a kezelőszerverre az online állapot ellenőrzésének céljából</translation>
-<translation id="3047732214002457234">Azt szabályozza, hogy a Carbon Browser Browser Browser-tisztogatás hogyan jelenti az adatokat a Google-nak</translation>
+<translation id="3047732214002457234">Azt szabályozza, hogy a Carbon Browser-tisztogatás hogyan jelenti az adatokat a Google-nak</translation>
 <translation id="304775240152542058">Ez a házirend vezérli az alternatív böngésző elindítására szolgáló parancssori paramétereket.
 
       Ha a házirend beállítatlanul marad, a rendszer csak az URL-t adja tovább parancssori paraméterként.
@@ -1229,9 +1229,9 @@
       Ha a házirend nincs beállítva, illetve értéke hamis, akkor a TLS protokoll DHE rejtjelezési csomagjai nem lesznek engedélyezve. Igaz értékre állítva engedélyezve lesznek a DHE rejtjelezési csomagjai, és megmarad a kompatibilitás az elavult szerverekkel. Ez átmeneti intézkedés, a szervert újra kell konfigurálni.
 
       Javasoljuk a szerverek áttelepítését ECDHE rejtjelezési csomagokra. Ha ezek nem állnak rendelkezésre, gondoskodjon róla, hogy engedélyezve legyen egy RSA kulcscserélést használó rejtjelezési csomag.</translation>
-<translation id="3117706142826400449">Ha le van tiltva, a Carbon Browser Browser Browser-tisztogatás nem tudja megkeresni a nemkívánatos szoftvereket, és nem tudja megtisztítani a rendszert. A Carbon Browser Browser Browser-tisztogatás chrome://settings/cleanup címről történő manuális elindítása le van tiltva.
+<translation id="3117706142826400449">Ha le van tiltva, a Carbon Browser-tisztogatás nem tudja megkeresni a nemkívánatos szoftvereket, és nem tudja megtisztítani a rendszert. A Carbon Browser-tisztogatás chrome://settings/cleanup címről történő manuális elindítása le van tiltva.
 
-      Ha aktiválva van, vagy ha nincs beállítva, a Carbon Browser Browser Browser-tisztogatás rendszeresen ellenőrizi a rendszert nem kívánt szoftvereket keresve, és ha talál ilyet, megkérdezi a felhasználót, hogy el szeretné-e távolítani. A Carbon Browser Browser Browser-tisztogatás chrome://settings címről történő manuális elindítása engedélyezve van.
+      Ha aktiválva van, vagy ha nincs beállítva, a Carbon Browser-tisztogatás rendszeresen ellenőrizi a rendszert nem kívánt szoftvereket keresve, és ha talál ilyet, megkérdezi a felhasználót, hogy el szeretné-e távolítani. A Carbon Browser-tisztogatás chrome://settings címről történő manuális elindítása engedélyezve van.
 
       Ez a házirend csak olyan Windows-példányokon hozzáférhető, amelyek csatlakoznak <ph name="MS_AD_NAME" />-domainhez, illetve csak olyan Windows 10 Pro- vagy Enterprise-példányokon használható, amelyeken aktiválva van az eszközkezelés.</translation>
 <translation id="3152425128389603870">Az Egységes asztali mód hozzáférhetővé tétele és alapértelmezés szerinti bekapcsolása</translation>
@@ -1340,7 +1340,7 @@
       Ha a beállítás ki van kapcsolva vagy nincs megadva, a(z) <ph name="PRODUCT_NAME" /> nem kényszeríti a Korlátozott módot a YouTube-on. Külső házirendek, például YouTube-házirendek azonban továbbra is kényszeríthetik a Korlátozott módot.</translation>
 <translation id="3428247105888806363">Hálózati előrejelzés engedélyezése</translation>
 <translation id="3432863169147125747">A nyomtatási beállítások kezelésére szolgál.</translation>
-<translation id="3434932177006334880">A Carbon Browser Browser Browser 42-es verziójáig ennek a beállításnak a neve EnableWebBasedSignin volt, a Carbon Browser Browser Browser 43-as verziójától kezdve pedig teljesen megszűnik a támogatása.
+<translation id="3434932177006334880">A Carbon Browser 42-es verziójáig ennek a beállításnak a neve EnableWebBasedSignin volt, a Carbon Browser 43-as verziójától kezdve pedig teljesen megszűnik a támogatása.
 
       Ez a beállítás azon vállalati ügyfelek számára hasznos, akik olyan egyszeri bejelentkezési (SSO) megoldásokat használnak, amelyek még nem kompatibilisek az új, beágyazott bejelentkezési folyamattal.
       Ha engedélyezi ezt a beállítást, a régi, webes alapú bejelentkezési folyamat használható.
@@ -1438,9 +1438,9 @@
 <translation id="3646859102161347133">Nagyító típusának beállítása</translation>
 <translation id="3653237928288822292">Alapértelmezett keresési szolgáltató ikonja</translation>
 <translation id="3660510274595679517">
-        Ha a házirend értéke igaz, a felhőkezelési regisztráció kötelező, és ha nem teljesül, megakadályozza a Carbon Browser Browser Browser indítási folyamatát.
+        Ha a házirend értéke igaz, a felhőkezelési regisztráció kötelező, és ha nem teljesül, megakadályozza a Carbon Browser indítási folyamatát.
 
-        Ha a házirend beállítatlanul marad, vagy értéke hamis, a felhőkezelési regisztráció nem kötelező, és ha nem teljesül, nem akadályozza meg a Carbon Browser Browser Browser indítási folyamatát.
+        Ha a házirend beállítatlanul marad, vagy értéke hamis, a felhőkezelési regisztráció nem kötelező, és ha nem teljesül, nem akadályozza meg a Carbon Browser indítási folyamatát.
 
         Ez a házirend a gépek hatókörére vonatkozó, felhővel kapcsolatos házirend asztali környezetben való regisztrációjánál használható. Beállítása Windows rendszeren beállításjegyzék vagy GPO, Mac rendszeren plist, Linux esetében pedig JSON-házirendfájl használatával lehetséges.</translation>
 <translation id="3660562134618097814">SAML IdP cookie-k átadása a bejelentkezés során</translation>
@@ -1630,11 +1630,11 @@ Ha a házirend értéke hamis, a böngésző nem jelenti a kioszkmunkamenet info
 <translation id="3984028218719007910">Meghatározza, hogy a(z) <ph name="PRODUCT_OS_NAME" /> megtartja-e a helyi fiókadatokat a kijelentkezést követően. Ha a beállítás igaz, akkor a(z) <ph name="PRODUCT_OS_NAME" /> nem tart meg állandó fiókokat, és a rendszer elveti a felhasználói munkamenet minden adatát a kijelentkezés után. Ha a házirend beállítása hamis, vagy nincs beállítva a házirend, akkor az eszköz megtarthatja a (titkosított) helyi felhasználói adatokat.</translation>
 <translation id="398475542699441679">Ez a házirend vezérli a Régi böngészők támogatása funkció engedélyezését.
 
-      Ha a házirend beállítatlanul marad, vagy értéke hamis, a Carbon Browser Browser Browser nem próbálja meg másik böngészőben megnyitni a kijelölt URL-eket.
+      Ha a házirend beállítatlanul marad, vagy értéke hamis, a Carbon Browser nem próbálja meg másik böngészőben megnyitni a kijelölt URL-eket.
 
-      Ha a házirend értéke igaz, a Carbon Browser Browser Browser alternatív böngészőben (pl. Internet Explorer) próbál meg megnyitni bizonyos URL-eket. Ez a funkció a(z) <ph name="LEGACY_BROWSER_SUPPORT_POLICY_GROUP" /> csoportban található házirendek használatával konfigurálható.
+      Ha a házirend értéke igaz, a Carbon Browser alternatív böngészőben (pl. Internet Explorer) próbál meg megnyitni bizonyos URL-eket. Ez a funkció a(z) <ph name="LEGACY_BROWSER_SUPPORT_POLICY_GROUP" /> csoportban található házirendek használatával konfigurálható.
 
-      A funkció a(z) <ph name="LEGACY_BROWSER_SUPPORT_EXTENSION_NAME" /> bővítmény helyébe lép. A rendszer a bővítmény konfigurációját alkalmazza erre a funkcióra, de erősen javasolt inkább a Carbon Browser Browser Browser-házirendek használata. Ez biztosítja a jobb kompatibilitást a későbbiekben.</translation>
+      A funkció a(z) <ph name="LEGACY_BROWSER_SUPPORT_EXTENSION_NAME" /> bővítmény helyébe lép. A rendszer a bővítmény konfigurációját alkalmazza erre a funkcióra, de erősen javasolt inkább a Carbon Browser-házirendek használata. Ez biztosítja a jobb kompatibilitást a későbbiekben.</translation>
 <translation id="3997519162482760140">Azon URL-ek, amelyek hozzáférést kapnak a videórögzítő eszközökhöz a SAML bejelentkezési oldalakon</translation>
 <translation id="4001275826058808087">Vállalati eszközök rendszergazdái annak szabályozására használhatják ezt a jelölőt, hogy engedélyezik-e a felhasználóknak az ajánlatok beváltását Chrome OS-regisztráció útján.
 
@@ -1653,13 +1653,13 @@ Ha a házirend értéke hamis, a böngésző nem jelenti a kioszkmunkamenet info
 
           Ez a házirend elsőbbséget élvez az esetlegesen ütköző <ph name="EXTENSION_INSTALL_BLACKLIST_POLICY_NAME" /> házirenddel szemben. Ha egy korábban kényszerítve telepített alkalmazást vagy bővítményt töröl erről a listáról, a <ph name="PRODUCT_NAME" /> automatikusan eltávolítja.
 
-          Azon Windows-példányokon, amelyek nem csatlakoztak valamely <ph name="MS_AD_NAME" />-domainhez, a kényszerített telepítés csak a Carbon Browser Browser Browser Internetes áruházban megtalálható alkalmazások és bővítmények esetében alkalmazható.
+          Azon Windows-példányokon, amelyek nem csatlakoztak valamely <ph name="MS_AD_NAME" />-domainhez, a kényszerített telepítés csak a Carbon Browser Internetes áruházban megtalálható alkalmazások és bővítmények esetében alkalmazható.
 
           Felhívjuk figyelmét, hogy a felhasználók bármelyik bővítmény forráskódját módosíthatják a fejlesztői eszközök segítségével (és esetleg működésképtelenné tehetik a bővítményt). Ha ez problémát jelent, állítsa be a <ph name="DEVELOPER_TOOLS_POLICY_NAME" /> házirendet.
 
-          A házirend listájában lévő összes elem olyan karakterlánc, amely egy bővítményazonosítót és tetszőlegesen egy pontosvesszővel (<ph name="SEMICOLON" />) elválasztott „frissítési” URL-t tartalmaz. A bővítményazonosító az a 32 betűből álló karakterlánc, amelyet például itt tekinthet meg fejlesztői módban: <ph name="CHROME_EXTENSIONS_LINK" />. Ha megadja a „frissítési” URL-t, annak frissítési manifest XML-dokumentumra kell mutatnia, melynek leírását itt találja: <ph name="LINK_TO_EXTENSION_DOC1" />. A böngésző alapértelmezés szerint a Carbon Browser Browser Browser Internetes áruház frissítési URL-jét használja (jelenleg: „https://clients2.google.com/service/update2/crx”). Felhívjuk figyelmét, hogy a jelen házirendben megadott „frissítési” URL csak az első telepítéshez használatos; a bővítmény további frissítései a bővítmény manifestfájljában feltüntetett URL-en keresztül történnek. A „frissítési” URL kifejezett megadása a <ph name="PRODUCT_NAME" /> 67-es verziójáig bezárólag volt kötelező.
+          A házirend listájában lévő összes elem olyan karakterlánc, amely egy bővítményazonosítót és tetszőlegesen egy pontosvesszővel (<ph name="SEMICOLON" />) elválasztott „frissítési” URL-t tartalmaz. A bővítményazonosító az a 32 betűből álló karakterlánc, amelyet például itt tekinthet meg fejlesztői módban: <ph name="CHROME_EXTENSIONS_LINK" />. Ha megadja a „frissítési” URL-t, annak frissítési manifest XML-dokumentumra kell mutatnia, melynek leírását itt találja: <ph name="LINK_TO_EXTENSION_DOC1" />. A böngésző alapértelmezés szerint a Carbon Browser Internetes áruház frissítési URL-jét használja (jelenleg: „https://clients2.google.com/service/update2/crx”). Felhívjuk figyelmét, hogy a jelen házirendben megadott „frissítési” URL csak az első telepítéshez használatos; a bővítmény további frissítései a bővítmény manifestfájljában feltüntetett URL-en keresztül történnek. A „frissítési” URL kifejezett megadása a <ph name="PRODUCT_NAME" /> 67-es verziójáig bezárólag volt kötelező.
 
-          Például a(z) <ph name="EXTENSION_POLICY_EXAMPLE" /> karakterlánc a(z) <ph name="EXTENSION_ID_SAMPLE" /> azonosítójú bővítményt telepíti a Carbon Browser Browser Browser Internetes áruház általános „frissítési” URL-jéről. A bővítmények tárolásával kapcsolatban itt talál további információt: <ph name="LINK_TO_EXTENSION_DOC2" />.
+          Például a(z) <ph name="EXTENSION_POLICY_EXAMPLE" /> karakterlánc a(z) <ph name="EXTENSION_ID_SAMPLE" /> azonosítójú bővítményt telepíti a Carbon Browser Internetes áruház általános „frissítési” URL-jéről. A bővítmények tárolásával kapcsolatban itt talál további információt: <ph name="LINK_TO_EXTENSION_DOC2" />.
 
           Ha a házirend nincs beállítva, akkor a rendszer egyetlen alkalmazást vagy bővítményt sem telepít automatikusan, a felhasználó pedig törölheti a <ph name="PRODUCT_NAME" /> bármely telepített alkalmazását és bővítményét.
 
@@ -1764,7 +1764,7 @@ Ha a házirend értéke hamis, a böngésző nem jelenti a kioszkmunkamenet info
           Ha beállítja ezt a házirendet, a felhasználók nem módosíthatják vagy bírálhatják felül.
 
           Ha nem állítja be a házirendet, akkor a beragadó billentyűk kezdetben le vannak tiltva, de a felhasználó bármikor engedélyezheti őket.</translation>
-<translation id="4171331498167688968">Ha a házirend értéke hamis, akkor a harmadik felek szoftverei számára engedélyezve lesz a futtatható kódok Carbon Browser Browser Browser-folyamatokba történő beszúrása. Ha a házirend nincs beállítva, vagy értéke igaz, akkor a harmadik felek szoftverei nem tudnak beszúrni futtatható kódot a Carbon Browser Browser Browser-folyamatokba.
+<translation id="4171331498167688968">Ha a házirend értéke hamis, akkor a harmadik felek szoftverei számára engedélyezve lesz a futtatható kódok Carbon Browser-folyamatokba történő beszúrása. Ha a házirend nincs beállítva, vagy értéke igaz, akkor a harmadik felek szoftverei nem tudnak beszúrni futtatható kódot a Carbon Browser-folyamatokba.
 
       A házirend értékétől függetlenül a böngésző jelenleg nem tiltja le, hogy harmadik felek szoftverei futtatható kódot szúrjanak be a folyamataiba olyan számítógépen, amely <ph name="MS_AD_NAME" />-domainhez csatlakozik.</translation>
 <translation id="4183229833636799228">Alapértelmezett <ph name="FLASH_PLUGIN_NAME" />-beállítás</translation>
@@ -1833,11 +1833,11 @@ Ha a házirend értéke hamis, a böngésző nem jelenti a kioszkmunkamenet info
 <translation id="4298509794364745131">Olyan alkalmazásokból álló listát ad meg, amelyek jegyzetkészítő alkalmazásként engedélyezhetők a(z) <ph name="PRODUCT_OS_NAME" /> lezárási képernyőjén.
 
       Ha az előnyben részesített jegyzetkészítő alkalmazás engedélyezve van a lezárási képernyőn, akkor ezen a képernyőn szerepel majd az előnyben részesített jegyzetkészítő alkalmazás indítására szolgáló kezelőfelület-elem.
-      Indítás után az alkalmazás a lezárási képernyő tetején alkalmazásablakot, míg a lezárási képernyő felületén adatelemeket (jegyzeteket) tud létrehozni. Az alkalmazás létrehozott jegyzeteket importál az elsődleges felhasználói munkamenetbe, ha a munkamenet zárolása fel van oldva. Jelenleg csak a Carbon Browser Browser Browser jegyzetkészítő alkalmazásai támogatottak a lezárási képernyőn.
+      Indítás után az alkalmazás a lezárási képernyő tetején alkalmazásablakot, míg a lezárási képernyő felületén adatelemeket (jegyzeteket) tud létrehozni. Az alkalmazás létrehozott jegyzeteket importál az elsődleges felhasználói munkamenetbe, ha a munkamenet zárolása fel van oldva. Jelenleg csak a Carbon Browser jegyzetkészítő alkalmazásai támogatottak a lezárási képernyőn.
 
       Ha a házirend be van állítva, a felhasználó csak akkor engedélyezhet alkalmazást a lezárási képernyőn, ha a házirend listaértékei közt szerepel az alkalmazás bővítményazonosítója.
       A házirend üres listára való beállítása ennek következtében teljesen letiltja a lezárási képernyőn való jegyzetkészítést.
-      Felhívjuk figyelmét, hogy az alkalmazásazonosítót tartalmazó házirend nem jelenti feltétlenül azt, hogy a felhasználó jegyzetkészítő alkalmazásként tudja majd engedélyezni az alkalmazást a lezárási képernyőn. Carbon Browser Browser Browser 61-en például a platform tovább korlátozza a rendelkezésre álló alkalmazások készletét.
+      Felhívjuk figyelmét, hogy az alkalmazásazonosítót tartalmazó házirend nem jelenti feltétlenül azt, hogy a felhasználó jegyzetkészítő alkalmazásként tudja majd engedélyezni az alkalmazást a lezárási képernyőn. Carbon Browser 61-en például a platform tovább korlátozza a rendelkezésre álló alkalmazások készletét.
 
       Ha nem állítja be ezt a házirendet, akkor a házirend által előírt korlátozások nem vonatkoznak majd a felhasználó által a lezárási képernyőn engedélyezhető alkalmazások készletére.</translation>
 <translation id="4313767483634435271">Az eszköz dokkolójának MAC-címe</translation>
@@ -1986,7 +1986,7 @@ Ha a házirend értéke hamis, a böngésző nem jelenti a kioszkmunkamenet info
 <translation id="467236746355332046">Támogatott funkciók:</translation>
 <translation id="4674167212832291997">Azon URL-minták listájának testreszabása, amelyeket minden esetben a(z) <ph name="PRODUCT_FRAME_NAME" /> segítségével kell megjeleníteni.
 
-          Ha a házirend nincs beállítva, akkor a rendszer a „Carbon Browser Browser BrowserFrameRendererSettings” házirendben meghatározott alapértelmezett megjelenítőt használja valamennyi webhely esetében.
+          Ha a házirend nincs beállítva, akkor a rendszer a „Carbon BrowserFrameRendererSettings” házirendben meghatározott alapértelmezett megjelenítőt használja valamennyi webhely esetében.
 
           Példamintákért lásd a következő címet: https://www.chromium.org/developers/how-tos/chrome-frame-getting-started.</translation>
 <translation id="467449052039111439">Nyisson meg egy URL-listát</translation>
@@ -2084,10 +2084,10 @@ Ha a házirend értéke hamis, a böngésző nem jelenti a kioszkmunkamenet info
 
       Ha a házirend értéke hamis, akkor a(z) <ph name="PRODUCT_NAME" /> nem teszi lehetővé új profilok létrehozását a felhasználókezelőből.</translation>
 <translation id="4970855112942626932">A böngészőbe való bejelentkezés letiltása</translation>
-<translation id="4978405676361550165">Ha az „OffHours” házirend be van állítva, akkor a rendszer nem veszi figyelembe a megadott eszközházirendeket (azaz az alapértelmezés szerinti beállításokkal használja őket) a meghatározott időintervallumban. A Carbon Browser Browser Browser újra beállítja az eszközszabályzatokat minden alkalommal, amikor az „OffHours” időszaka elindul vagy befejeződik. Az „OffHours” időszak végén és az eszközszabályzat beállításainak módosulásakor a felhasználók értesítést kapnak, és kijelentkezteti őket a rendszer (pl. amikor a felhasználó nem engedélyezett fiókkal van bejelentkezve).</translation>
+<translation id="4978405676361550165">Ha az „OffHours” házirend be van állítva, akkor a rendszer nem veszi figyelembe a megadott eszközházirendeket (azaz az alapértelmezés szerinti beállításokkal használja őket) a meghatározott időintervallumban. A Carbon Browser újra beállítja az eszközszabályzatokat minden alkalommal, amikor az „OffHours” időszaka elindul vagy befejeződik. Az „OffHours” időszak végén és az eszközszabályzat beállításainak módosulásakor a felhasználók értesítést kapnak, és kijelentkezteti őket a rendszer (pl. amikor a felhasználó nem engedélyezett fiókkal van bejelentkezve).</translation>
 <translation id="4980635395568992380">Adattípus:</translation>
 <translation id="4983201894483989687">Elavult bővítmények futtatásának engedélyezése</translation>
-<translation id="4986560318567565414">A Carbon Browser Browser Browser elérési útvonala a másik böngészőről való átváltáshoz.</translation>
+<translation id="4986560318567565414">A Carbon Browser elérési útvonala a másik böngészőről való átváltáshoz.</translation>
 <translation id="4988291787868618635">A tétlenségi késleltetés elteltével végzendő művelet</translation>
 <translation id="5034604678285451405">Az energiaellátás peak shift funkciójára vonatkozó százalékos küszöbérték beállítása.
 
@@ -2157,11 +2157,11 @@ Ha a házirend értéke hamis, a böngésző nem jelenti a kioszkmunkamenet info
       Ha a házirend értéke 0, le van tiltva a gépi fiókjelszó módosítása.
 
       Fontos megjegyezni, hogy a jelszavak régebbiek lehetnek a megadott napok számánál, ha a kliens annál hosszabb időn át offline állapotban volt.</translation>
-<translation id="510196893779239086">Ez a házirend szabályozza, hogy a Carbon Browser Browser Browser teljesen bezáródik-e, amikor az utolsó lap másik böngészőre váltana át.
+<translation id="510196893779239086">Ez a házirend szabályozza, hogy a Carbon Browser teljesen bezáródik-e, amikor az utolsó lap másik böngészőre váltana át.
 
-      Ha a házirend nincs beállítva, vagy ha igazra van állítva, a Carbon Browser Browser Browser legalább egy lapot megnyitva hagy, miután másik böngészőre vált át.
+      Ha a házirend nincs beállítva, vagy ha igazra van állítva, a Carbon Browser legalább egy lapot megnyitva hagy, miután másik böngészőre vált át.
 
-      Ha a házirend hamis értékre van állítva, a Carbon Browser Browser Browser bezárja a lapot a másik böngészőre való átváltás után (még akkor is, ha ez volt az utolsó lap). Ez azt eredményezi, hogy a Carbon Browser Browser Browser teljesen bezárul.</translation>
+      Ha a házirend hamis értékre van állítva, a Carbon Browser bezárja a lapot a másik böngészőre való átváltás után (még akkor is, ha ez volt az utolsó lap). Ez azt eredményezi, hogy a Carbon Browser teljesen bezárul.</translation>
 <translation id="5102203758995933166">Lehetővé teszi a hálózati konfiguráció push módszerrel történő, felhasználónkénti alkalmazását <ph name="PRODUCT_OS_NAME" />-eszközre. A hálózati konfiguráció az Open Network Configuration által meghatározott formátumú JSON-karakterlánc.</translation>
 <translation id="5105313908130842249">Képernyő lezárásának késleltetése akkumulátorról való működés során</translation>
 <translation id="5108031557082757679">Eszközökhöz kötött letiltott vállalati nyomtatók</translation>
@@ -2176,7 +2176,7 @@ Ha a házirend értéke hamis, a böngésző nem jelenti a kioszkmunkamenet info
 <translation id="5148753489738115745">Lehetővé teszi további paraméterek megadását, amelyeket a(z) <ph name="PRODUCT_FRAME_NAME" /> használ a(z) <ph name="PRODUCT_NAME" /> indításakor.
 
           Ha nincs beállítva ez a házirend, akkor a rendszer az alapértelmezett parancssort használja.</translation>
-<translation id="5152787786897382519">A Carbon Browser Browser Browser és a Carbon Browser Browser Browser is rendelkezik olyan házirendcsoportokkal, amelyek egymástól függve biztosítják valamelyik funkció vezérelhetőségét. Ezeket a kombinációkat az alábbi házirendcsoportok jelképezik. Mivel a házirendeknek többféle forrása is lehet, a rendszer csak a legmagasabb prioritású forrásból származó értékeket alkalmazza. Az ugyanabban a csoportban lévő, de alacsonyabb prioritású forrásból származó értékeket figyelmen kívül hagyja. A prioritási sorrendet a következő házirend határozza meg: <ph name="POLICY_PRIORITY_DOC_URL" />.</translation>
+<translation id="5152787786897382519">A Carbon Browser és a Carbon Browser is rendelkezik olyan házirendcsoportokkal, amelyek egymástól függve biztosítják valamelyik funkció vezérelhetőségét. Ezeket a kombinációkat az alábbi házirendcsoportok jelképezik. Mivel a házirendeknek többféle forrása is lehet, a rendszer csak a legmagasabb prioritású forrásból származó értékeket alkalmazza. Az ugyanabban a csoportban lévő, de alacsonyabb prioritású forrásból származó értékeket figyelmen kívül hagyja. A prioritási sorrendet a következő házirend határozza meg: <ph name="POLICY_PRIORITY_DOC_URL" />.</translation>
 <translation id="5159469559091666409">Az ellenőrző hálózati csomagok küldésének gyakorisága (ezredmásodpercben).
 
       Ha nem állítja be a házirendet, az alapértelmezett időtartam három perc.
@@ -2277,7 +2277,7 @@ Ha a házirend értéke hamis, a böngésző nem jelenti a kioszkmunkamenet info
           A tiltólista „*” értéke azt jelenti, hogy minden üzenetkezelő gazdagép felkerül rá, hacsak nem szerepelnek kifejezetten az engedélyezőlistán.
 
           Ha a házirend nincs beállítva, a(z) <ph name="PRODUCT_NAME" /> minden telepített natív üzenetkezelő gazdagépet betölt.</translation>
-<translation id="5272684451155669299">Ha igaz, a felhasználó a Carbon Browser Browser Browser-eszközök hardverei segítségével távolról tanúsíthatja azonosságát az adatvédelmi CA-nál a(z) <ph name="ENTERPRISE_PLATFORM_KEYS_API" /> segítségével és a(z) <ph name="CHALLENGE_USER_KEY_FUNCTION" /> használatával.
+<translation id="5272684451155669299">Ha igaz, a felhasználó a Carbon Browser-eszközök hardverei segítségével távolról tanúsíthatja azonosságát az adatvédelmi CA-nál a(z) <ph name="ENTERPRISE_PLATFORM_KEYS_API" /> segítségével és a(z) <ph name="CHALLENGE_USER_KEY_FUNCTION" /> használatával.
 
           Ha hamis, illetve nincs beállítva, akkor az API hívásai sikertelenek lesznek, és hibakódot adnak vissza.</translation>
 <translation id="5277806246014825877">A Crostini futtatásának engedélyezése a felhasználó számára.
@@ -2487,7 +2487,7 @@ Ha a házirend értéke hamis, a böngésző nem jelenti a kioszkmunkamenet info
         Ha a házirend értéke hamis, a felhasználók nem küldhetnek visszajelzést a Google számára.
 
         Ha a házirend nincs beállítva, vagy értéke igaz, a felhasználók küldhetnek visszajelzést a Google számára a Menü -&gt; Súgó -&gt; Hibabejelentés lehetőség vagy billentyűkombináció használatával.</translation>
-<translation id="5581292529942108810">A Carbon Browser Browser Browser Reporting Extension házirendjeinek konfigurálása.
+<translation id="5581292529942108810">A Carbon Browser Reporting Extension házirendjeinek konfigurálása.
 
       A házirend csak bekapcsolt <ph name="CHROME_REPORTING_EXTENSION_NAME" /> mellett és <ph name="MACHINE_LEVEL_USER_CLOUD_POLICY_ENROLLMENT_TOKEN_POLICY_NAME" /> nevű tokent felhasználva érvényesül.</translation>
 <translation id="5583806683960333345">Ha ez a beállítás engedélyezve van, a felhasználók használhatják az azonnali internetmegosztás funkciót, azaz megoszthatják Google-telefonjuk mobiladat-kapcsolatát az eszközükkel.
@@ -2517,7 +2517,7 @@ Ha a házirend értéke hamis, a böngésző nem jelenti a kioszkmunkamenet info
 
       MEGJEGYZÉS: Android rendszeren a webhely-izoláció kísérleti funkció. A támogatás idővel javul, de a funkció használata jelenleg teljesítményproblémákat okozhat.
 
-      MEGJEGYZÉS: Ez a házirend csak az Android rendszeren futó Carbon Browser Browser Browser böngészőre vonatkozik, kizárólag olyan eszközökön, amelyek több mint 1 GB RAM-mal rendelkeznek. Ha nem Android platformon is alkalmazni szeretné a házirendet, használja az IsolateOrigins beállítást.
+      MEGJEGYZÉS: Ez a házirend csak az Android rendszeren futó Carbon Browser böngészőre vonatkozik, kizárólag olyan eszközökön, amelyek több mint 1 GB RAM-mal rendelkeznek. Ha nem Android platformon is alkalmazni szeretné a házirendet, használja az IsolateOrigins beállítást.
       </translation>
 <translation id="5599461642204007579"><ph name="MS_AD_NAME" />-kezelési beállítások</translation>
 <translation id="5610104657949692379">Ha a házirend be van állítva, meghatározza azt a műveletet, amelyet a <ph name="PRODUCT_OS_NAME" /> elvégez, ha a felhasználó inaktív marad a tétlenségi késleltetésként megadott időtartamig, amely külön konfigurálható.
@@ -2525,7 +2525,7 @@ Ha a házirend értéke hamis, a böngésző nem jelenti a kioszkmunkamenet info
           Ha nincs beállítva, akkor a rendszer az alapértelmezett műveletet (felfüggesztés) hajtja végre.
 
           Ha a kiválasztott művelet a felfüggesztés, a <ph name="PRODUCT_OS_NAME" /> rendszerben külön beállítható, hogy lezárja-e a képernyőt a felfüggesztés előtt.</translation>
-<translation id="5618398258385745432">A kapcsolódó beállítás még azelőtt volt használatban, hogy a jelszavak megtekintésénél való újrahitelesítést bevezettük. A módosítás óta a beállítás nem volt hatással a Carbon Browser Browser Browser viselkedésére (ennek következtében a házirend sem). A Carbon Browser Browser Browser jelenlegi viselkedése ugyanaz, mintha a házirendnél az lenne beállítva, hogy nem jelenhetnek meg a jelszavak egyszerű szövegként a jelszókezelő beállításainak oldalán. Ez azt jelenti, hogy a beállítások oldala csak helyőrzőket tartalmaz, és a Carbon Browser Browser Browser csak akkor jeleníti meg a jelszót, ha a felhasználó rákattint a „Megjelenítés” lehetőségre (és szükség esetén újrahitelesít). A házirend eredeti leírása alább látható.
+<translation id="5618398258385745432">A kapcsolódó beállítás még azelőtt volt használatban, hogy a jelszavak megtekintésénél való újrahitelesítést bevezettük. A módosítás óta a beállítás nem volt hatással a Carbon Browser viselkedésére (ennek következtében a házirend sem). A Carbon Browser jelenlegi viselkedése ugyanaz, mintha a házirendnél az lenne beállítva, hogy nem jelenhetnek meg a jelszavak egyszerű szövegként a jelszókezelő beállításainak oldalán. Ez azt jelenti, hogy a beállítások oldala csak helyőrzőket tartalmaz, és a Carbon Browser csak akkor jeleníti meg a jelszót, ha a felhasználó rákattint a „Megjelenítés” lehetőségre (és szükség esetén újrahitelesít). A házirend eredeti leírása alább látható.
 
           Azt szabályozza, hogy a felhasználók megjeleníthetik-e jelszavaikat egyszerű szövegként a jelszókezelőben.
 
@@ -2625,7 +2625,7 @@ Ha a házirend értéke hamis, a böngésző nem jelenti a kioszkmunkamenet info
       Ha nincs beállítva a házirend, a felhasználó módosítani tudja a beállítást.
       </translation>
 <translation id="5832274826894536455">Megszüntetett házirendek</translation>
-<translation id="5835124959204887277">Meghatározza azokat az URL-eket és domaineket, amelyeknél nem jelenik meg értesítés a hitelesítési tanúsítványok biztonsági hardverkulcsoktól való kérésekor. Továbbá jelet küld a biztonsági hardverkulcsnak annak a jelzésére, hogy egyedi hitelesítésre kerülhet sor. Enélkül a Carbon Browser Browser Browser 65-ös és újabb verzióinak felhasználói értesítést kapnak, amikor a webhelyek biztonsági hardverkulcs általi hitelesítést kérnek.
+<translation id="5835124959204887277">Meghatározza azokat az URL-eket és domaineket, amelyeknél nem jelenik meg értesítés a hitelesítési tanúsítványok biztonsági hardverkulcsoktól való kérésekor. Továbbá jelet küld a biztonsági hardverkulcsnak annak a jelzésére, hogy egyedi hitelesítésre kerülhet sor. Enélkül a Carbon Browser 65-ös és újabb verzióinak felhasználói értesítést kapnak, amikor a webhelyek biztonsági hardverkulcs általi hitelesítést kérnek.
 
       Az URL-ek (például https://example.com/some/path) csak U2F-alkalmazásazonosítóként felelnek meg. A domainek (például example.com) csak webes hitelesítésű RP-azonosítóként felelnek meg. Ezért az adott webhely U2F és webes hitelesítésű API-jainak lefedése érdekében az alkalmazásazonosító URL-jének és domainjének is szerepelnie kell a listában.</translation>
 <translation id="5836064773277134605">A távoli gazdagép által használt UDP porttartomány korlátozása</translation>
@@ -2759,7 +2759,7 @@ Ha a házirend értéke hamis, a böngésző nem jelenti a kioszkmunkamenet info
 
       Ha a házirend beállítatlanul marad, vagy Hamis értékre van állítva, a rendszer nem gyűjt és nem tölt fel adatokat.
       Ha a házirend Igaz értékre van állítva, a rendszer adatokat gyűjt és tölt fel a Google Felügyeleti konzolba.
-      A feltöltött adatok szabályozásához használja a Carbon Browser Browser Browser Reporting Extension csoport házirendjeit.
+      A feltöltött adatok szabályozásához használja a Carbon Browser Reporting Extension csoport házirendjeit.
 
       Ez a házirend csak a(z) <ph name="MACHINE_LEVEL_USER_CLOUD_POLICY_ENROLLMENT_TOKEN_POLICY_NAME" /> nevű tokent felhasználva érvényesül.
 
@@ -2842,7 +2842,7 @@ Ha a házirend értéke hamis, a böngésző nem jelenti a kioszkmunkamenet info
 <translation id="6282799760374509080">Hangrögzítés engedélyezése vagy tiltása</translation>
 <translation id="6284362063448764300">TLS 1.1</translation>
 <translation id="6310223829319187614">A domainnév felhasználói bejelentkezés közbeni automatikus kiegészítésének engedélyezése</translation>
-<translation id="6315673513957120120">A Carbon Browser Browser Browser figyelmeztető oldalt jelenít meg, amikor a felhasználó SSL-hibával rendelkező webhelyre navigál. Alapértelmezés szerint, illetve a házirend igaz értékre állításakor a felhasználók továbbléphetnek az ilyen figyelmeztető oldalakról.
+<translation id="6315673513957120120">A Carbon Browser figyelmeztető oldalt jelenít meg, amikor a felhasználó SSL-hibával rendelkező webhelyre navigál. Alapértelmezés szerint, illetve a házirend igaz értékre állításakor a felhasználók továbbléphetnek az ilyen figyelmeztető oldalakról.
       Ha a házirend értéke hamis, akkor a felhasználók nem juthatnak tovább a figyelmeztető oldalon.</translation>
 <translation id="6319198883324703402">A felhasználónak megjelenített első újraindítási értesítés ideje</translation>
 <translation id="6352543686437322588">Az eszköz helyi fiókja, amelybe a rendszer adott várakozás után automatikusan bejelentkezik.
@@ -2884,7 +2884,7 @@ Ha a házirend értéke hamis, a böngésző nem jelenti a kioszkmunkamenet info
           Ha a proxyszerver automatikus észlelését választja, az Android-alkalmazások a „http://wpad/wpad.dat” szkript-URL-t kapják. A proxy automatikus észlelésével kapcsolatos protokoll más része nem kerül felhasználásra.
 
           Ha a .pac proxyszkriptet választja, az Android-alkalmazások a szkript-URL-t kapják meg.</translation>
-<translation id="6430366557948788869">Carbon Browser Browser Browser Reporting Extension</translation>
+<translation id="6430366557948788869">Carbon Browser Reporting Extension</translation>
 <translation id="6440051664870270040">Annak engedélyezése a webhelyek számára, hogy egyszerre navigáljanak és nyissanak meg előugró ablakokat</translation>
 <translation id="6447948611083700881">Biztonsági mentés és helyreállítás letiltva</translation>
 <translation id="6449476513004303784">A felhasználók nem kezelhetik a tanúsítványokat</translation>
@@ -2942,9 +2942,9 @@ Ha a házirend értéke hamis, a böngésző nem jelenti a kioszkmunkamenet info
 <translation id="6536600139108165863">Automatikus újraindítás az eszköz leállításakor</translation>
 <translation id="6539246272469751178">Ez a házirend nem vonatkozik az Android-alkalmazásokra. Az Android-alkalmazások mindig az alapértelmezés szerinti letöltési könyvtárat használják, és nem férhetnek hozzá a(z) <ph name="PRODUCT_OS_NAME" /> által a nem alapértelmezés szerinti letöltési könyvtárba letöltött fájlokhoz.</translation>
 <translation id="654303922206238013">Migrációs stratégia a következőhöz: ecryptfs</translation>
-<translation id="6544897973797372144">Ha a házirend értéke Igaz, és a Carbon Browser Browser BrowserOsReleaseChannel házirend nincs megadva, akkor a részt vevő domain felhasználói megváltoztathatják az eszköz kiadási csatornáját. Ha a házirend értéke Hamis, akkor az eszköz csak az utoljára beállított csatornát használhatja.
+<translation id="6544897973797372144">Ha a házirend értéke Igaz, és a Carbon BrowserOsReleaseChannel házirend nincs megadva, akkor a részt vevő domain felhasználói megváltoztathatják az eszköz kiadási csatornáját. Ha a házirend értéke Hamis, akkor az eszköz csak az utoljára beállított csatornát használhatja.
 
-      A felhasználó által kiválasztott csatornát felülírja a Carbon Browser Browser BrowserOsReleaseChannel házirend, de ha a házirend csatornája stabilabb, mint az eszközön telepített csatorna, akkor a csatornaváltás csak azt követően történik meg, hogy a stabilabb csatorna verziója magasabb számot ért el, mint a korábban az eszközre telepített csatorna verziószáma.</translation>
+      A felhasználó által kiválasztott csatornát felülírja a Carbon BrowserOsReleaseChannel házirend, de ha a házirend csatornája stabilabb, mint az eszközön telepített csatorna, akkor a csatornaváltás csak azt követően történik meg, hogy a stabilabb csatorna verziója magasabb számot ért el, mint a korábban az eszközre telepített csatorna verziószáma.</translation>
 <translation id="6553143066970470539">Képernyő fényerejének százalékos értéke</translation>
 <translation id="6559057113164934677">Ne engedje webhelyek hozzáférését a kamerához és mikrofonhoz</translation>
 <translation id="6561396069801924653">Kisegítő beállítások megjelenítése az értesítési terület menüjében</translation>
@@ -3024,7 +3024,7 @@ Ha a házirend értéke hamis, a böngésző nem jelenti a kioszkmunkamenet info
 <translation id="6698632841807204978">Monokróm nyomtatás engedélyezése</translation>
 <translation id="6699880231565102694">A kétlépcsős azonosítás engedélyezése távoli hozzáférésű gazdagépekhez</translation>
 <translation id="6731757988219967594">Legfelső szintű (de nem iframe keretekbe beágyazott) webhelyek szűrése felnőtteknek szóló tartalmak szerint</translation>
-<translation id="6734521799274931721">A Carbon Browser Browser BrowserOS rendelkezésre állására vonatkozó hálózati fájlmegosztásokat szabályozza</translation>
+<translation id="6734521799274931721">A Carbon BrowserOS rendelkezésre állására vonatkozó hálózati fájlmegosztásokat szabályozza</translation>
 <translation id="6735701345096330595">A helyesírás-ellenőrzéshez használt nyelvek engedélyezésének kényszerítése</translation>
 <translation id="673699536430961464">A beállítás lehetővé teszi a felhasználók számára a Google-fiókok közötti váltást a böngészőablak tartalomterületén belül, miután bejelentkeztek <ph name="PRODUCT_OS_NAME" />-eszközükbe.
 
@@ -3032,7 +3032,7 @@ Ha a házirend értéke hamis, a böngésző nem jelenti a kioszkmunkamenet info
 
       Ha a házirend nincs beállítva, vagy értéke „igaz”, az alapértelmezett beállítás van használatban: Engedélyezett a másik fiókba történő bejelentkezés a böngésző tartalomterületéről, kivéve gyermek fiókok esetén, amelyeknél ez a lehetőség le van tiltva a nem inkognitómódban használt tartalomterületeken.
 
-      Ha nem szeretné engedélyezni a másik fiókba történő bejelentkezést inkognitómódban, fontolja meg a mód letiltását az PrivateModeAvailability házirenddel.
+      Ha nem szeretné engedélyezni a másik fiókba történő bejelentkezést inkognitómódban, fontolja meg a mód letiltását az privateModeAvailability házirenddel.
 
       Megjegyzés: A felhasználók a cookie-k letiltásával hozzá tudnak férni a Google-szolgáltatásokhoz nem hitelesített állapotban.</translation>
 <translation id="6757438632136860443">Lehetővé teszi URL-minták olyan listájának megadását, amely meghatározza, hogy mely webhelyek futtathatják a(z) <ph name="FLASH_PLUGIN_NAME" /> beépülő modult.
@@ -3112,7 +3112,7 @@ Ha az irányelv igaz értékre van beállítva, akkor a rendszer a beépített D
 
       MEGJEGYZÉS: Android rendszeren a webhely-izoláció kísérleti funkció. A támogatás idővel javul, de a funkció jelenleg teljesítményproblémákat okozhat.
 
-      MEGJEGYZÉS: Ez a házirend csak az Android rendszeren futó Carbon Browser Browser Browser böngészőre vonatkozik, kizárólag olyan eszközökön, amelyek több mint 1 GB RAM-mal rendelkeznek. Ha nem Android platformon is alkalmazni szeretné a házirendet, használja a SitePerProcess beállítást.
+      MEGJEGYZÉS: Ez a házirend csak az Android rendszeren futó Carbon Browser böngészőre vonatkozik, kizárólag olyan eszközökön, amelyek több mint 1 GB RAM-mal rendelkeznek. Ha nem Android platformon is alkalmazni szeretné a házirendet, használja a SitePerProcess beállítást.
       </translation>
 <translation id="6922884955650325312">A(z) <ph name="FLASH_PLUGIN_NAME" /> beépülő modul letiltása</translation>
 <translation id="6923366716660828830">Megadja az alapértelmezett keresési szolgáltató nevét. Ha üresen vagy beállítatlanul marad, a keresési URL által megadott gazdagépnév lesz használatban. A házirend csak akkor érvényesül, ha a "DefaultSearchProviderEnabled" házirend engedélyezve van.</translation>
@@ -3196,9 +3196,9 @@ Ha az irányelv igaz értékre van beállítva, akkor a rendszer a beépített D
 
       Ha a házirend értéke hamis, vagy ha nincs beállítva, akkor a <ph name="PRODUCT_NAME" /> nem gyűjthet és tölthet fel ilyen naplókat.
 
-      Ezek a naplók a Carbon Browser Browser Browser-ban végzett hang- vagy videohívások esetében tapasztalt problémák megkereséséhez segítséget nyújtó információkat tartalmaznak, például a küldött és fogadott RTP-csomagok méretét és időpontját, a hálózati torlódással kapcsolatos visszajelzést, illetve a hang- és videohívásokhoz tartozó képkockák minőségével és idejével kapcsolatos metaadatokat. A naplók nem tartalmazzák a hívások hang- vagy videóanyagát.
+      Ezek a naplók a Carbon Browser-ban végzett hang- vagy videohívások esetében tapasztalt problémák megkereséséhez segítséget nyújtó információkat tartalmaznak, például a küldött és fogadott RTP-csomagok méretét és időpontját, a hálózati torlódással kapcsolatos visszajelzést, illetve a hang- és videohívásokhoz tartozó képkockák minőségével és idejével kapcsolatos metaadatokat. A naplók nem tartalmazzák a hívások hang- vagy videóanyagát.
 
-      A Carbon Browser Browser Browser ilyen jellegű adatgyűjtését kizárólag a Google webes szolgáltatásai tudják kiváltani (például a Google Hangouts vagy a Google Meet).
+      A Carbon Browser ilyen jellegű adatgyűjtését kizárólag a Google webes szolgáltatásai tudják kiváltani (például a Google Hangouts vagy a Google Meet).
 
       A Google – munkamenet-azonosítók révén – társíthatja ezeket a naplókat a Google adott szolgáltatása által gyűjtött naplókkal; ennek célja a hibakeresés megkönnyítése.
       </translation>
@@ -3294,12 +3294,12 @@ Ha az irányelv igaz értékre van beállítva, akkor a rendszer a beépített D
 <translation id="7185078796915954712">TLS 1.3</translation>
 <translation id="718956142899066210">Frissítésekhez engedélyezett csatlakozási típusok</translation>
 <translation id="7194407337890404814">Az alapértelmezett keresési szolgáltató neve</translation>
-<translation id="7199304109870655950">Távoli hozzáférés beállításainak konfigurálása a Carbon Browser Browser Browser távoliasztal-szolgáltatás gazdagépén.
+<translation id="7199304109870655950">Távoli hozzáférés beállításainak konfigurálása a Carbon Browser távoliasztal-szolgáltatás gazdagépén.
 
-      A Carbon Browser Browser Browser távoliasztal-szolgáltatás gazdagépe egy olyan natív szolgáltatás, amely azon a célszámítógépen fut, amelyhez a felhasználó a Carbon Browser Browser Browser távoliasztal-szolgáltatás alkalmazás használatával tud csatlakozni.  A natív szolgáltatás csomagolása és végrehajtása a <ph name="PRODUCT_NAME" /> böngészőtől elkülönítve történik.
+      A Carbon Browser távoliasztal-szolgáltatás gazdagépe egy olyan natív szolgáltatás, amely azon a célszámítógépen fut, amelyhez a felhasználó a Carbon Browser távoliasztal-szolgáltatás alkalmazás használatával tud csatlakozni.  A natív szolgáltatás csomagolása és végrehajtása a <ph name="PRODUCT_NAME" /> böngészőtől elkülönítve történik.
 
       A böngésző figyelmen kívül hagyja ezeket a házirendeket,
-      ha a Carbon Browser Browser Browser távoliasztal-szolgáltatási gazdagépe nincs telepítve.</translation>
+      ha a Carbon Browser távoliasztal-szolgáltatási gazdagépe nincs telepítve.</translation>
 <translation id="7202925763179776247">Letöltési korlátozások engedélyezése</translation>
 <translation id="7207095846245296855">A Google Biztonságos Keresés kényszerítése</translation>
 <translation id="7211368186050418507">Soha ne történjen meg az időzóna automatikus érzékelése</translation>
@@ -3401,7 +3401,7 @@ Ha az irányelv igaz értékre van beállítva, akkor a rendszer a beépített D
 <translation id="7329968046053403405">Megadja a <ph name="HTTP_NEGOTIATE" /> hitelesítést (pl. a Kerberos-hitelesítést) támogató androidos hitelesítőalkalmazás által biztosított fiókok fióktípusát. Ezt az információt a hitelesítőalkalmazás szállítója bocsátja rendelkezésre. További részletekért lásd: https://goo.gl/hajyfN.
 
           Ha nincs megadva beállítás, akkor a böngésző letiltja a <ph name="HTTP_NEGOTIATE" /> hitelesítést az Androidon.</translation>
-<translation id="7331962793961469250">Ha Igaz értékre van állítva, a Carbon Browser Browser Browser Internetes áruház alkalmazásainak promóciói nem jelennek meg az Új lap oldalon. A beállítás Hamis értékre állítása vagy beállítatlanul hagyása esetén a Carbon Browser Browser Browser Internetes áruház alkalmazásainak promóciói megjelennek az Új lap oldalon</translation>
+<translation id="7331962793961469250">Ha Igaz értékre van állítva, a Carbon Browser Internetes áruház alkalmazásainak promóciói nem jelennek meg az Új lap oldalon. A beállítás Hamis értékre állítása vagy beállítatlanul hagyása esetén a Carbon Browser Internetes áruház alkalmazásainak promóciói megjelennek az Új lap oldalon</translation>
 <translation id="7332963785317884918">Ez a házirend elavult. A <ph name="PRODUCT_OS_NAME" /> mindig a „RemoveLRU” tisztítási stratégiát fogja használni.
 
       Az automatikus tisztítási viselkedést vezérli <ph name="PRODUCT_OS_NAME" />-eszközökön. Automatikus tisztítás akkor következik be, amikor a szabad lemezterület mennyisége kritikus szintet ér el, így szabadítva fel lemezterületet.
@@ -3461,7 +3461,7 @@ Ha az irányelv igaz értékre van beállítva, akkor a rendszer a beépített D
       </translation>
 <translation id="7506269062143646163">Engedélyezheti a Signed HTTP Exchange (SXG) támogatását.
 
-          Ha a házirend nincs beállítva, vagy értéke Engedélyezve, a Carbon Browser Browser Browser elfogadja a Signed HTTP Exchange típusúként megjelenített internetes tartalmakat.
+          Ha a házirend nincs beállítva, vagy értéke Engedélyezve, a Carbon Browser elfogadja a Signed HTTP Exchange típusúként megjelenített internetes tartalmakat.
 
           Ha a házirend beállítása Letiltva, akkor a Signed HTTP Exchange típusú tartalmak nem tölthetők be.</translation>
 <translation id="7511361072385293666">Ha a házirend értéke igaz, vagy ha nincs beállítva, akkor a <ph name="PRODUCT_NAME" /> termékben használható a QUIC protokoll.
@@ -3500,7 +3500,7 @@ Ha az irányelv igaz értékre van beállítva, akkor a rendszer a beépített D
 
       Ha a házirend beállítatlanul marad, vagy a beállított értéke 0, akkor a kijelölt URL-eket a rendszer azonnal másik böngészőben nyitja meg.
 
-      Ha a házirend valamilyen számra van állítva, akkor a Carbon Browser Browser Browser az üzenetet a beállított értéknek megfelelő ezredmásodpercig jeleníti meg, majd megnyitja a másik böngészőt.</translation>
+      Ha a házirend valamilyen számra van állítva, akkor a Carbon Browser az üzenetet a beállított értéknek megfelelő ezredmásodpercig jeleníti meg, majd megnyitja a másik böngészőt.</translation>
 <translation id="7593523670408385997">Konfigurálja a gyorsítótár méretét, amelyet a(z) <ph name="PRODUCT_NAME" /> arra használ, hogy a gyorsítótárazott fájlokat a merevlemezen tárolja.
 
       Ha beállítja ezt a házirendet, a(z) <ph name="PRODUCT_NAME" /> attól függetlenül használni fogja a megadott méretű gyorsítótárat, hogy a felhasználó megadta-e a „--disk-cache-size” jelölőt. A házirendben meghatározott érték nem abszolút határ, inkább egy javaslat a gyorsítótárazó rendszer számára. A néhány megabájt alatti, túl kicsi értékeket a rendszer automatikusan felkerekíti egy használható minimumra.
@@ -3681,7 +3681,7 @@ Ha az irányelv igaz értékre van beállítva, akkor a rendszer a beépített D
 
       MEGJEGYZÉS: A 45-ös verzióig ezt a házirendet csak a kioszk módban történő futtatás esetén támogatta a böngésző.</translation>
 <translation id="7912255076272890813">Engedélyezett alkalmazás-/bővítménytípusok konfigurálása</translation>
-<translation id="7922358664346625612">A Carbon Browser Browser Browser utolsó lapjának megnyitva tartása.</translation>
+<translation id="7922358664346625612">A Carbon Browser utolsó lapjának megnyitva tartása.</translation>
 <translation id="793134539373873765">Megadja, hogy a rendszer egyenrangú kapcsolatot használjon-e az operációs rendszer frissítési tartalmai esetében. Ha „igaz” értékre van állítva, az eszközök megosztják és megpróbálják felhasználni a frissítési tartalmat a helyi hálózaton, és lehetőség szerint csökkentik a felhasznált internetes sávszélességet, valamint a túlterhelést. Ha a frissítési tartalom nem érhető el a helyi hálózaton, az eszköz inkább egy frissítési szerverről végzi el a letöltést. Ha „hamis” értékre van állítva, vagy nincs beállítva, a rendszer nem használ egyenrangú kapcsolatot.</translation>
 <translation id="7933141401888114454">Felügyelt felhasználók létrehozásának engedélyezése</translation>
 <translation id="793473937901685727">Tanúsítvány rendelkezésre állásának beállítása az ARC-alkalmazások számára</translation>
@@ -3839,7 +3839,7 @@ Ha az irányelv igaz értékre van beállítva, akkor a rendszer a beépített D
       Ha az irányelv nincs beállítva, akkor a(z) <ph name="PRODUCT_OS_NAME" /> az eszköz helyi fiókjának e-mail fiókazonosítóját használja a bejelentkezési képernyőn megjelenő névként.
 
       Ez az irányelv a normál felhasználói fiókok esetében nincs figyelembe véve.</translation>
-<translation id="8259375588339409826">A Carbon Browser Browser Browser és a Carbon Browser Browser Browser a házirendek azonos készletét támogatja. Vegye figyelembe, hogy ez a dokumentum tartalmazhat még nem kiadott házirendeket is (pl. a „Támogatott a következőkön” bejegyzés a <ph name="PRODUCT_NAME" /> ki nem adott verziójára vonatkozik), amelyek figyelmeztetés nélkül módosíthatók vagy eltávolíthatók, és amelyekre nem vonatkozik semmiféle garancia, beleértve a biztonsági és adatvédelmi tulajdonságaikra vonatkozó garanciákat is.
+<translation id="8259375588339409826">A Carbon Browser és a Carbon Browser a házirendek azonos készletét támogatja. Vegye figyelembe, hogy ez a dokumentum tartalmazhat még nem kiadott házirendeket is (pl. a „Támogatott a következőkön” bejegyzés a <ph name="PRODUCT_NAME" /> ki nem adott verziójára vonatkozik), amelyek figyelmeztetés nélkül módosíthatók vagy eltávolíthatók, és amelyekre nem vonatkozik semmiféle garancia, beleértve a biztonsági és adatvédelmi tulajdonságaikra vonatkozó garanciákat is.
 
 Ezek a házirendek kizárólag a <ph name="PRODUCT_NAME" /> vállalaton belüli példányainak konfigurálására használhatók. Az házirendek vállalaton kívül történő használata (pl. nyilvánosan terjesztett programban) rosszindulatú program használatának minősül, így a Google és a vírusirtó szolgáltatók valószínűleg rosszindulatú programként címkézik fel.
 
@@ -3856,7 +3856,7 @@ A házirend konfigurálásának ajánlott módja Windows rendszerben a GPO, noha
 
       Ha a házirend értéke hamis, a böngésző nem jelenti a statisztikákat.
       Ha a házirend értéke igaz, vagy ha nincs beállítva, a böngésző jelenti a statisztikákat.</translation>
-<translation id="8294750666104911727">Általában a chrome=1 értékre állított X-UA-Compatible metacímkével rendelkező oldalak a(z) <ph name="PRODUCT_FRAME_NAME" /> környezetben lesznek megjelenítve a „Carbon Browser Browser BrowserFrameRendererSettings” szabálytól függetlenül.
+<translation id="8294750666104911727">Általában a chrome=1 értékre állított X-UA-Compatible metacímkével rendelkező oldalak a(z) <ph name="PRODUCT_FRAME_NAME" /> környezetben lesznek megjelenítve a „Carbon BrowserFrameRendererSettings” szabálytól függetlenül.
 
           Ha engedélyezi ezt a beállítást, a rendszer nem fog metacímkéket keresni az egyes oldalakon.
 
@@ -3882,7 +3882,7 @@ A házirend konfigurálásának ajánlott módja Windows rendszerben a GPO, noha
 <translation id="8344454543174932833">Könyvjelzők importálása az alapértelmezett böngészőből az első indításkor</translation>
 <translation id="8357681633047935212">A felhasználói munkamenet hosszának korlátozása</translation>
 <translation id="8359734107661430198">Az ExampleDeprecatedFeature API engedélyezése 2008. 09. 02-ig</translation>
-<translation id="8367209241899435947">A Carbon Browser Browser Browser-tisztogatás engedélyezése Windows rendszeren</translation>
+<translation id="8367209241899435947">A Carbon Browser-tisztogatás engedélyezése Windows rendszeren</translation>
 <translation id="8369602308428138533">Képernyő kikapcsolásának késleltetése hálózati áramról való működés során</translation>
 <translation id="8371178326720637170">Vállalati hardverplatform API felügyelt bővítmények általi használatának engedélyezése</translation>
 <translation id="8374747520743832795">Hardverstatisztikák és teljesítménnyel kapcsolatos azonosítók bejelentése.
@@ -3955,13 +3955,13 @@ A házirend konfigurálásának ajánlott módja Windows rendszerben a GPO, noha
       A házirend eltávolításra kerül az M75-ös verzióban.</translation>
 <translation id="8484458986062090479">A mindig a gazdagép böngészője segítségével megjelenítendő URL-minták listájának testreszabása.
 
-          Ha nincs konfigurálva ez a házirend, akkor a rendszer a „Carbon Browser Browser BrowserFrameRendererSettings” házirend által meghatározott alapértelmezett megjelenítőt használja valamennyi webhely esetében.
+          Ha nincs konfigurálva ez a házirend, akkor a rendszer a „Carbon BrowserFrameRendererSettings” házirend által meghatározott alapértelmezett megjelenítőt használja valamennyi webhely esetében.
 
           Példamintákat a következő helyen talál: https://www.chromium.org/developers/how-tos/chrome-frame-getting-started.</translation>
 <translation id="8489964335640955763">PluginVm</translation>
 <translation id="8493645415242333585">Böngészési előzmények mentésének tiltása</translation>
 <translation id="8499172469244085141">Alapértelmezett beállítások (a felhasználók felülbírálhatják)</translation>
-<translation id="849962487677588458">Ez a házirend megszűnt, és a Carbon Browser Browser Browser 78-as verziójából pótlás nélkül eltávolítjuk.
+<translation id="849962487677588458">Ez a házirend megszűnt, és a Carbon Browser 78-as verziójából pótlás nélkül eltávolítjuk.
 
       Ez a házirend engedélyezi a HTTP/0.9 használatát a 80-astól (HTTP) és 443-astól (HTTPS) eltérő portokon.
 
@@ -3989,7 +3989,7 @@ A házirend konfigurálásának ajánlott módja Windows rendszerben a GPO, noha
 
       A „Verziószám” itt utalhat pontos verzióra (pl. „61.0.3163.120” vagy verzióelőtagra (pl. „61.0”).  </translation>
 <translation id="8544375438507658205">Alapértelmezett HTML-megjelenítő a <ph name="PRODUCT_FRAME_NAME" /> számára</translation>
-<translation id="8544465954173828789">Az SMS-ek telefon és Carbon Browser Browser Browserbook közti szinkronizálásának engedélyezése.</translation>
+<translation id="8544465954173828789">Az SMS-ek telefon és Carbon Browserbook közti szinkronizálásának engedélyezése.</translation>
 <translation id="8548832052135586762">Csak színes nyomtatás, csak monokróm nyomtatás, illetve nincs korlátozás a színes módra vonatkozóan. Ha nincs beállítva a házirend, akkor nincs érvényben korlátozás.</translation>
 <translation id="8549772397068118889">Figyelmeztetés tartalomcsomagokon kívüli webhelyek felkeresése esetén</translation>
 <translation id="8566729013138025202">Meghatározza azt a házirendkészletet, amelyet a rendszer át fog adni az ARC futási idő számára. Az értéknek érvényes JSON-értéknek kell lennie.
@@ -4196,7 +4196,7 @@ A házirend konfigurálásának ajánlott módja Windows rendszerben a GPO, noha
 
           A házirend bővítményazonosítót vagy frissítési URL-t társít a konfigurációjához. Bővítményazonosító esetén csak a megadott bővítményre lesz érvényes a konfiguráció. A <ph name="DEFAULT_SCOPE" /> különleges azonosítóhoz be lehet állítani alapértelmezett konfigurációt, amely az összes olyan bővítményre érvényes lesz, melyhez nincs beállítva egyéni konfiguráció ebben a házirendben. Frissítési URL esetén a konfiguráció érvényes lesz az összes olyan bővítményre, melynek manifestfájljában meghatározott frissítési URL pontosan egyezik az ebben a bővítményben meghatározott URL-lel (részletes leírás: <ph name="LINK_TO_EXTENSION_DOC1" />).
 
-          <ph name="MS_AD_NAME" />-domainhez nem csatlakozó Windows-példányok esetén a kényszerített telepítés lehetősége a Carbon Browser Browser Browser Internetes áruházban megtalálható alkalmazásokra és bővítményekre korlátozódik.
+          <ph name="MS_AD_NAME" />-domainhez nem csatlakozó Windows-példányok esetén a kényszerített telepítés lehetősége a Carbon Browser Internetes áruházban megtalálható alkalmazásokra és bővítményekre korlátozódik.
           </translation>
 <translation id="8947415621777543415">Eszköz helyének jelentése</translation>
 <translation id="8951350807133946005">A lemez gyorsítótár-könyvtárának beállítása</translation>
@@ -4243,13 +4243,13 @@ A házirend konfigurálásának ajánlott módja Windows rendszerben a GPO, noha
       Ha a házirend értéke olyan tokenre van állítva, amely megfeleltethető egy Quick Fix Buildnek, akkor az eszköz frissül a kapcsolódó Quick Fix Buildre, feltéve, hogy a frissítést nem akadályozza másik házirend.
 
       Ha a házirend nincs beállítva, vagy az értéke nem feleltethető meg Quick Fix Buildnek, akkor az eszköz nem frissül Quick Fix Buildre. Ha az eszközön már fut Quick Fix Build, és a házirend már nincs beállítva, vagy értéke már nem feleltethető meg Quick Fix Buildnek, akkor az eszköz szokásos buildre frissül, feltéve, hogy a frissítést nem akadályozza másik házirend.</translation>
-<translation id="9054012305936267950">Ez a házirend a böngésző bejelentkezési viselkedését szabályozza. Segítségével megadhatja, hogy bejelentkezhet-e a felhasználó a fiókjával a <ph name="PRODUCT_NAME" /> böngészőbe, és használhatja-e a fiókkal kapcsolatos szolgáltatásokat, például a Carbon Browser Browser Browser-szinkronizálást.
+<translation id="9054012305936267950">Ez a házirend a böngésző bejelentkezési viselkedését szabályozza. Segítségével megadhatja, hogy bejelentkezhet-e a felhasználó a fiókjával a <ph name="PRODUCT_NAME" /> böngészőbe, és használhatja-e a fiókkal kapcsolatos szolgáltatásokat, például a Carbon Browser-szinkronizálást.
 
-      Ha a házirend beállítása „A böngészőbe való bejelentkezés letiltása”, akkor a felhasználó nem tud bejelentkezni a böngészőbe, és nem tudja használni a fiókalapú szolgáltatásokat. Ebben az esetben nem használhatók és nem is hozzáférhetők a böngészőszintű funkciók, például a Carbon Browser Browser Browser-szinkronizálás. Ha a felhasználó bejelentkezett, és Ön ezt követően állítja a házirendet „Letiltva” állapotúra, akkor a Carbon Browser Browser Browser felhasználó általi következő futtatásakor a rendszer kijelentkezteti a felhasználót, akinek azonban a helyi profiladatai – így a könyvjelzői, jelszavai stb. – megőrződnek. A felhasználó ezt követően is be tud jelentkezni a Google webes szolgáltatásaiba (például a Gmail szolgáltatásba), és használni is tudja őket.
+      Ha a házirend beállítása „A böngészőbe való bejelentkezés letiltása”, akkor a felhasználó nem tud bejelentkezni a böngészőbe, és nem tudja használni a fiókalapú szolgáltatásokat. Ebben az esetben nem használhatók és nem is hozzáférhetők a böngészőszintű funkciók, például a Carbon Browser-szinkronizálás. Ha a felhasználó bejelentkezett, és Ön ezt követően állítja a házirendet „Letiltva” állapotúra, akkor a Carbon Browser felhasználó általi következő futtatásakor a rendszer kijelentkezteti a felhasználót, akinek azonban a helyi profiladatai – így a könyvjelzői, jelszavai stb. – megőrződnek. A felhasználó ezt követően is be tud jelentkezni a Google webes szolgáltatásaiba (például a Gmail szolgáltatásba), és használni is tudja őket.
 
-      Ha a házirend beállítása „A böngészőbe való bejelentkezés engedélyezése”, akkor a felhasználó bejelentkezhet a böngészőbe, valamint a rendszer automatikusan bejelentkezteti a böngészőbe, ha be van jelentkezve a Google webes szolgáltatásaiba, például a Gmailbe. Ha a felhasználó be van jelentkezve a böngészőbe, az azt jelenti, hogy a böngésző megőrzi a felhasználó fiókadatait. Ez azonban nem jelenti azt, hogy a Carbon Browser Browser Browser-szinkronizálás alapértelmezés szerint bekapcsolódna; a felhasználónak külön kell engedélyeznie a funkció használatát. E házirend engedélyezése megakadályozza, hogy a felhasználó kikapcsolja azt a beállítást, amely lehetővé teszi a böngészőbe való bejelentkezést. A Carbon Browser Browser Browser-szinkronizálás funkció rendelkezésre állásának vezérléséhez használja a szinkronizálást letiltó „SyncDisabled” házirendet.
+      Ha a házirend beállítása „A böngészőbe való bejelentkezés engedélyezése”, akkor a felhasználó bejelentkezhet a böngészőbe, valamint a rendszer automatikusan bejelentkezteti a böngészőbe, ha be van jelentkezve a Google webes szolgáltatásaiba, például a Gmailbe. Ha a felhasználó be van jelentkezve a böngészőbe, az azt jelenti, hogy a böngésző megőrzi a felhasználó fiókadatait. Ez azonban nem jelenti azt, hogy a Carbon Browser-szinkronizálás alapértelmezés szerint bekapcsolódna; a felhasználónak külön kell engedélyeznie a funkció használatát. E házirend engedélyezése megakadályozza, hogy a felhasználó kikapcsolja azt a beállítást, amely lehetővé teszi a böngészőbe való bejelentkezést. A Carbon Browser-szinkronizálás funkció rendelkezésre állásának vezérléséhez használja a szinkronizálást letiltó „SyncDisabled” házirendet.
 
-      Ha a házirend beállítása „A felhasználók bejelentkezésre kényszerítése a böngésző használatához”, akkor a rendszer fiókválasztó párbeszédablakot jelenít meg a felhasználónak, akinek fiókot kell választania, majd be kell jelentkeznie a kiválasztott fiókba a böngésző használatához. Felügyelt fiók esetében ez biztosítja a fiókhoz társított házirendek alkalmazását és betartását. Alapértelmezés szerint ez bekapcsolja a Carbon Browser Browser Browser-szinkronizálást az adott fiókra vonatkozóan – kivéve, ha a szinkronizálást a domainadminisztrátor vagy a szinkronizálást letiltó „SyncDisabled” házirend letiltotta. A „BrowserGuestModeEnabled” alapértelmezett értékét a rendszer hamisra állítja. Megjegyzés: A meglévő, nem hitelesített profilokat a rendszer kizárja, e profilok a házirend engedélyezése után hozzáférhetetlenné válnak. További információ a következő súgócikkben található: https://support.google.com/chrome/a/answer/7572556. Ez a lehetőség nem támogatja a Linuxot, és használata esetén „A böngészőbe való bejelentkezés engedélyezése” beállítás lesz aktív.
+      Ha a házirend beállítása „A felhasználók bejelentkezésre kényszerítése a böngésző használatához”, akkor a rendszer fiókválasztó párbeszédablakot jelenít meg a felhasználónak, akinek fiókot kell választania, majd be kell jelentkeznie a kiválasztott fiókba a böngésző használatához. Felügyelt fiók esetében ez biztosítja a fiókhoz társított házirendek alkalmazását és betartását. Alapértelmezés szerint ez bekapcsolja a Carbon Browser-szinkronizálást az adott fiókra vonatkozóan – kivéve, ha a szinkronizálást a domainadminisztrátor vagy a szinkronizálást letiltó „SyncDisabled” házirend letiltotta. A „BrowserGuestModeEnabled” alapértelmezett értékét a rendszer hamisra állítja. Megjegyzés: A meglévő, nem hitelesített profilokat a rendszer kizárja, e profilok a házirend engedélyezése után hozzáférhetetlenné válnak. További információ a következő súgócikkben található: https://support.google.com/chrome/a/answer/7572556. Ez a lehetőség nem támogatja a Linuxot, és használata esetén „A böngészőbe való bejelentkezés engedélyezése” beállítás lesz aktív.
 
       Ha a házirend nincs beállítva, akkor a felhasználó döntheti el, hogy kívánja-e engedélyezni – és saját belátása szerint használni – a böngészőbe való bejelentkezés lehetőségét.</translation>
 <translation id="9072600218500597787">Beállítja a távoli hozzáférésű gazdagépek kötelező domainneveit, és megakadályozza, hogy a felhasználók módosítsák őket.
@@ -4296,7 +4296,7 @@ A házirend konfigurálásának ajánlott módja Windows rendszerben a GPO, noha
 
       Ha a házirend true (igaz) értékre van állítva, a rendszer rendszernaplókat küld. Ha
       false (hamis) értékre van állítva vagy nincs beállítva, a rendszer nem küld rendszernaplókat.</translation>
-<translation id="9150416707757015439">Ez a házirend elavult. Kérjük, használja helyette az PrivateModeAvailability házirendet. Engedélyezi az inkognitómódot a következőben: <ph name="PRODUCT_NAME" />. Ha ez a beállítás engedélyezve van, illetve nincs konfigurálva, akkor a felhasználók inkognitómódban is megnyithatják a weboldalakat. Ha a beállítás nincs engedélyezve, a felhasználók nem nyithatják meg inkognitómódban a weboldalakat. Ha a házirend beállítatlanul marad, akkor megtörténik az engedélyezése, a felhasználók pedig használni tudják az inkognitómódot.</translation>
+<translation id="9150416707757015439">Ez a házirend elavult. Kérjük, használja helyette az privateModeAvailability házirendet. Engedélyezi az inkognitómódot a következőben: <ph name="PRODUCT_NAME" />. Ha ez a beállítás engedélyezve van, illetve nincs konfigurálva, akkor a felhasználók inkognitómódban is megnyithatják a weboldalakat. Ha a beállítás nincs engedélyezve, a felhasználók nem nyithatják meg inkognitómódban a weboldalakat. Ha a házirend beállítatlanul marad, akkor megtörténik az engedélyezése, a felhasználók pedig használni tudják az inkognitómódot.</translation>
 <translation id="915194831143859291">Ha a házirend értéke false (hamis), vagy ha nincs beállítva, a <ph name="PRODUCT_OS_NAME" /> engedélyezi a felhasználó számára az eszköz leállítását.
       Ha a házirend értéke true (igaz), a <ph name="PRODUCT_OS_NAME" /> újraindítást kezdeményez, amikor a felhasználó leállítja az eszközt. A <ph name="PRODUCT_OS_NAME" /> a felhasználói felület összes leállítógombját újraindítást kezdeményező gombokra cseréli ki. Ha a felhasználó a bekapcsológombbal állítja le az eszközt, az nem indul automatikusan újra automatikusan akkor sem, ha a házirend engedélyezve van.</translation>
 <translation id="9152473318295429890">Kontextus szerinti javaslatok engedélyezése kapcsolódó weboldalak formájában</translation>
@@ -4336,7 +4336,7 @@ A házirend konfigurálásának ajánlott módja Windows rendszerben a GPO, noha
 
       Ha a házirend be van állítva, a rendszer ezt használja a <ph name="PRODUCT_NAME" /> elindítására, amikor a <ph name="PRODUCT_NAME" /> indítása az Internet Explorerből történik.
 
-      A házirend beállítása lehet a végrehajtható fájl elérési útja, illetve a ${chrome} paraméter, amely automatikusan észleli a Carbon Browser Browser Browser telepítési helyét.</translation>
+      A házirend beállítása lehet a végrehajtható fájl elérési útja, illetve a ${chrome} paraméter, amely automatikusan észleli a Carbon Browser telepítési helyét.</translation>
 <translation id="930930237275114205">A(z) <ph name="PRODUCT_FRAME_NAME" /> felhasználói adatokat tartalmazó könyvtárának beállítása</translation>
 <translation id="943865157632139008">Lehetővé teszi az alapértelmezett HTML-megjelenítő konfigurálását, ha a <ph name="PRODUCT_FRAME_NAME" /> telepítve van.
       Az alapértelmezett beállítás az, hogy a gazdagép böngészője végzi a megjelenítést, de ezt Ön felülbírálhatja, és megjelenítheti a HTML oldalakat alapértelmezés szerint a <ph name="PRODUCT_FRAME_NAME" /> segítségével.</translation>

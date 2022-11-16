@@ -10,7 +10,6 @@
 
 #include "ash/search_box/search_box_constants.h"
 #include "base/bind.h"
-#include "base/macros.h"
 #include "ui/events/types/event_type.h"
 #include "ui/views/background.h"
 #include "ui/views/controls/button/image_button.h"
@@ -22,8 +21,9 @@ class ImageSkia;
 }  // namespace gfx
 
 namespace views {
-class BoxLayout;
+class BoxLayoutView;
 class ImageView;
+class Label;
 class Textfield;
 }  // namespace views
 
@@ -31,6 +31,7 @@ namespace ash {
 
 class SearchBoxViewDelegate;
 class SearchBoxImageButton;
+class SearchIconImageView;
 
 // These are used in histograms, do not remove/renumber entries. If you're
 // adding to this enum with the intention that it will be logged, update the
@@ -50,6 +51,10 @@ class SearchBoxViewBase : public views::View,
                           public views::TextfieldController {
  public:
   explicit SearchBoxViewBase(SearchBoxViewDelegate* delegate);
+
+  SearchBoxViewBase(const SearchBoxViewBase&) = delete;
+  SearchBoxViewBase& operator=(const SearchBoxViewBase&) = delete;
+
   ~SearchBoxViewBase() override;
 
   struct InitParams {
@@ -58,6 +63,13 @@ class SearchBoxViewBase : public views::View,
 
     // Whether to create a rounded-rect background.
     bool create_background = true;
+
+    // Whether to animate the transition when the search icon is changed.
+    bool animate_changing_search_icon = false;
+
+    // Whether we should increase spacing between `search_icon_', 'search_box_',
+    // and the 'search_box_button_container_'.
+    bool increase_child_view_padding = false;
   };
   virtual void Init(const InitParams& params);
 
@@ -71,7 +83,13 @@ class SearchBoxViewBase : public views::View,
   views::ImageButton* assistant_button();
   views::ImageButton* back_button();
   views::ImageButton* close_button();
+  views::ImageView* search_icon();
   views::Textfield* search_box() { return search_box_; }
+
+  // Sets contents for the title and category labels used for ghost text
+  // autocomplete.
+  void MaybeSetAutocompleteGhostText(const std::u16string& title,
+                                     const std::u16string& category);
 
   // Swaps the google icon with the back button.
   void ShowBackOrGoogleIcon(bool show_back_button);
@@ -91,13 +109,11 @@ class SearchBoxViewBase : public views::View,
   void OnKeyEvent(ui::KeyEvent* event) override;
   void OnGestureEvent(ui::GestureEvent* event) override;
   void OnMouseEvent(ui::MouseEvent* event) override;
+  void OnThemeChanged() override;
 
   // Allows for search box to be notified of gestures occurring outside, without
   // deactivating the searchbox.
   void NotifyGestureEvent();
-
-  // Used only in the tests to get the current search icon.
-  views::ImageView* get_search_icon_for_test() { return search_icon_; }
 
   // Whether the search box is active.
   bool is_search_box_active() const { return is_search_box_active_; }
@@ -109,10 +125,16 @@ class SearchBoxViewBase : public views::View,
   // Whether the trimmed query in the search box is empty.
   bool IsSearchBoxTrimmedQueryEmpty() const;
 
+  virtual void UpdateSearchTextfieldAccessibleNodeData(
+      ui::AXNodeData* node_data);
+
   virtual void ClearSearch();
 
   // Called when the search box active state changes.
   virtual void OnSearchBoxActiveChanged(bool active);
+
+  // Updates the painting if the focus moves to or from the search box.
+  virtual void UpdateSearchBoxFocusPaint();
 
  protected:
   // Fires query change notification.
@@ -121,8 +143,17 @@ class SearchBoxViewBase : public views::View,
   // Nofifies the active status change.
   void NotifyActiveChanged();
 
-  // Updates the visibility of close button.
-  void UpdateButtonsVisisbility();
+  // Updates the visibility of the close and assistant buttons.
+  void UpdateButtonsVisibility();
+
+  // When necessary, starts the fade in animation for the button.
+  void MaybeFadeButtonIn(SearchBoxImageButton* button);
+
+  // When necessary, starts the fade out animation for the button.
+  void MaybeFadeButtonOut(SearchBoxImageButton* button);
+
+  // Used as a callback to set the button's visibility to false.
+  void SetVisibilityHidden(SearchBoxImageButton* button);
 
   // Overridden from views::TextfieldController:
   void ContentsChanged(views::Textfield* sender,
@@ -133,8 +164,7 @@ class SearchBoxViewBase : public views::View,
                           const ui::GestureEvent& gesture_event) override;
 
   SearchBoxViewDelegate* delegate() { return delegate_; }
-  views::BoxLayout* box_layout() { return box_layout_; }
-  views::ImageView* search_icon() { return search_icon_; }
+  views::BoxLayoutView* box_layout_view() { return content_container_; }
 
   void SetSearchBoxBackgroundCornerRadius(int corner_radius);
 
@@ -148,8 +178,6 @@ class SearchBoxViewBase : public views::View,
 
   // Updates the search box's background color.
   void UpdateBackgroundColor(SkColor color);
-
-  virtual void ModelChanged() {}
 
   // Shows/hides the virtual keyboard if the search box is active.
   virtual void UpdateKeyboardVisibility() {}
@@ -177,22 +205,24 @@ class SearchBoxViewBase : public views::View,
  private:
   void OnEnabledChanged();
 
-  // Gets the search box background. May return null.
-  views::Background* GetSearchBoxBackground();
-
   SearchBoxViewDelegate* const delegate_;
 
   // Owned by views hierarchy.
-  views::View* content_container_;
-  views::ImageView* search_icon_ = nullptr;
+  views::BoxLayoutView* content_container_;
+  SearchIconImageView* search_icon_ = nullptr;
   SearchBoxImageButton* assistant_button_ = nullptr;
   SearchBoxImageButton* back_button_ = nullptr;
   SearchBoxImageButton* close_button_ = nullptr;
-  views::Textfield* search_box_;
-  views::View* search_box_right_space_ = nullptr;
+  views::BoxLayoutView* text_container_ = nullptr;
 
-  // Owned by |content_container_|. It is deleted when the view is deleted.
-  views::BoxLayout* box_layout_ = nullptr;
+  views::Textfield* search_box_;
+  views::BoxLayoutView* ghost_text_container_ = nullptr;
+  views::Label* separator_label_ = nullptr;
+  views::Label* autocomplete_ghost_text_ = nullptr;
+  views::Label* category_separator_label_ = nullptr;
+  views::Label* category_ghost_text_ = nullptr;
+
+  views::View* search_box_button_container_ = nullptr;
 
   // Whether the search box is active.
   bool is_search_box_active_ = false;
@@ -206,7 +236,7 @@ class SearchBoxViewBase : public views::View,
           base::BindRepeating(&SearchBoxViewBase::OnEnabledChanged,
                               base::Unretained(this)));
 
-  DISALLOW_COPY_AND_ASSIGN(SearchBoxViewBase);
+  base::WeakPtrFactory<SearchBoxViewBase> weak_factory_{this};
 };
 
 }  // namespace ash

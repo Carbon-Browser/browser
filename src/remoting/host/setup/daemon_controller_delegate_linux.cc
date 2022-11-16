@@ -5,6 +5,7 @@
 #include "remoting/host/setup/daemon_controller_delegate_linux.h"
 
 #include <unistd.h>
+#include <utility>
 
 #include "base/bind.h"
 #include "base/command_line.h"
@@ -24,9 +25,10 @@
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
 #include "build/build_config.h"
+#include "remoting/base/file_path_util_linux.h"
 #include "remoting/host/host_config.h"
-#include "remoting/host/linux/file_path_util.h"
 #include "remoting/host/usage_stats_consent.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace remoting {
 
@@ -144,21 +146,23 @@ DaemonController::State DaemonControllerDelegateLinux::GetState() {
   }
 }
 
-std::unique_ptr<base::DictionaryValue>
-DaemonControllerDelegateLinux::GetConfig() {
-  std::unique_ptr<base::DictionaryValue> config(
+absl::optional<base::Value::Dict> DaemonControllerDelegateLinux::GetConfig() {
+  absl::optional<base::Value> host_config(
       HostConfigFromJsonFile(GetConfigPath()));
-  if (!config)
-    return nullptr;
+  if (!host_config.has_value())
+    return absl::nullopt;
 
-  std::unique_ptr<base::DictionaryValue> result(new base::DictionaryValue());
-  std::string value;
-  if (config->GetString(kHostIdConfigPath, &value)) {
-    result->SetString(kHostIdConfigPath, value);
+  base::Value::Dict result;
+  std::string* value = host_config->FindStringKey(kHostIdConfigPath);
+  if (value) {
+    result.Set(kHostIdConfigPath, *value);
   }
-  if (config->GetString(kXmppLoginConfigPath, &value)) {
-    result->SetString(kXmppLoginConfigPath, value);
+
+  value = host_config->FindStringKey(kXmppLoginConfigPath);
+  if (value) {
+    result.Set(kXmppLoginConfigPath, *value);
   }
+
   return result;
 }
 
@@ -169,7 +173,7 @@ void DaemonControllerDelegateLinux::CheckPermission(
 }
 
 void DaemonControllerDelegateLinux::SetConfigAndStart(
-    std::unique_ptr<base::DictionaryValue> config,
+    base::Value::Dict config,
     bool consent,
     DaemonController::CompletionCallback done) {
   // Ensure the configuration directory exists.
@@ -185,7 +189,7 @@ void DaemonControllerDelegateLinux::SetConfigAndStart(
   }
 
   // Write config.
-  if (!HostConfigToJsonFile(*config, GetConfigPath())) {
+  if (!HostConfigToJsonFile(base::Value(std::move(config)), GetConfigPath())) {
     LOG(ERROR) << "Failed to update config file.";
     std::move(done).Run(DaemonController::RESULT_FAILED);
     return;
@@ -211,13 +215,20 @@ void DaemonControllerDelegateLinux::SetConfigAndStart(
 }
 
 void DaemonControllerDelegateLinux::UpdateConfig(
-    std::unique_ptr<base::DictionaryValue> config,
+    base::Value::Dict config,
     DaemonController::CompletionCallback done) {
-  std::unique_ptr<base::DictionaryValue> new_config(
+  absl::optional<base::Value> new_config(
       HostConfigFromJsonFile(GetConfigPath()));
-  if (new_config)
-    new_config->MergeDictionary(config.get());
-  if (!new_config || !HostConfigToJsonFile(*new_config, GetConfigPath())) {
+  if (!new_config.has_value() || !new_config->is_dict()) {
+    LOG(ERROR) << "Failed to read existing config file.";
+    std::move(done).Run(DaemonController::RESULT_FAILED);
+    return;
+  }
+
+  new_config->GetDict().Merge(std::move(config));
+
+  if (!HostConfigToJsonFile(base::Value(std::move(*new_config)),
+                            GetConfigPath())) {
     LOG(ERROR) << "Failed to update config file.";
     std::move(done).Run(DaemonController::RESULT_FAILED);
     return;

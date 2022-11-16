@@ -1,7 +1,7 @@
 {
   "layers": [
     {
-      "name": "Scrolling Contents Layer",
+      "name": "Scrolling background of LayoutView #document",
       "bounds": [800, 600],
       "contentsOpaque": true,
       "backgroundColor": "#FFFFFF"
@@ -16,35 +16,29 @@
     },
     {
       "name": "LayoutBlockFlow DIV id='scroller'",
-      "bounds": [102, 102],
+      "position": [1, 1],
+      "bounds": [100, 100],
+      "drawsContent": false,
       "backfaceVisibility": "hidden",
       "transform": 1
     },
     {
       "name": "LayoutBlockFlow (positioned) DIV id='fixed'",
-      "position": [60, 60],
       "bounds": [80, 80],
       "contentsOpaque": true,
-      "backgroundColor": "#008000"
+      "backgroundColor": "#008000",
+      "transform": 2
     },
     {
       "name": "LayoutBlockFlow (relative positioned) DIV class='scrolled'",
       "position": [5, 5],
-      "bounds": [60, 40],
-      "contentsOpaque": true,
-      "backfaceVisibility": "hidden",
-      "backgroundColor": "#0000FF",
-      "transform": 1
-    },
-    {
-      "name": "Squashing Layer (first squashed layer: LayoutBlockFlow (relative positioned) DIV class='scrolled')",
-      "position": [5, 49],
-      "bounds": [60, 128],
+      "bounds": [60, 172],
+      "contentsOpaqueForText": true,
       "backfaceVisibility": "hidden",
       "transform": 1
     },
     {
-      "name": "ContentsLayer for Vertical Scrollbar Layer",
+      "name": "VerticalScrollbar",
       "position": [94, 1],
       "bounds": [7, 100],
       "backfaceVisibility": "hidden",
@@ -59,6 +53,15 @@
         [0, 1, 0, 0],
         [0, 0, 1, 0],
         [98, 90, 0, 1]
+      ]
+    },
+    {
+      "id": 2,
+      "transform": [
+        [1, 0, 0, 0],
+        [0, 1, 0, 0],
+        [0, 0, 1, 0],
+        [60, 60, 0, 1]
       ]
     }
   ]

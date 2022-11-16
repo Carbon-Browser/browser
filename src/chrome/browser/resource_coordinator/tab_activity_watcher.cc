@@ -9,6 +9,7 @@
 #include "base/metrics/histogram_macros.h"
 #include "base/no_destructor.h"
 #include "base/rand_util.h"
+#include "base/time/time.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/resource_coordinator/lifecycle_unit.h"
 #include "chrome/browser/resource_coordinator/tab_lifecycle_unit_external.h"
@@ -22,7 +23,6 @@
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
-#include "components/ukm/content/source_url_recorder.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/render_view_host.h"
@@ -66,6 +66,9 @@ class TabActivityWatcher::WebContentsData
       public content::WebContentsUserData<WebContentsData>,
       public content::RenderWidgetHost::InputEventObserver {
  public:
+  WebContentsData(const WebContentsData&) = delete;
+  WebContentsData& operator=(const WebContentsData&) = delete;
+
   ~WebContentsData() override = default;
 
   // Calculates the tab reactivation score for a background tab. Returns nullopt
@@ -194,9 +197,10 @@ class TabActivityWatcher::WebContentsData
   };
 
   explicit WebContentsData(content::WebContents* web_contents)
-      : WebContentsObserver(web_contents) {
+      : WebContentsObserver(web_contents),
+        content::WebContentsUserData<WebContentsData>(*web_contents) {
     DCHECK(!web_contents->GetBrowserContext()->IsOffTheRecord());
-    web_contents->GetMainFrame()
+    web_contents->GetPrimaryMainFrame()
         ->GetRenderViewHost()
         ->GetWidget()
         ->AddInputEventObserver(this);
@@ -204,7 +208,7 @@ class TabActivityWatcher::WebContentsData
     creation_time_ = NowTicks();
 
     // A navigation may already have completed if this is a replacement tab.
-    ukm_source_id_ = ukm::GetSourceIdForWebContentsDocument(web_contents);
+    ukm_source_id_ = web_contents->GetPrimaryMainFrame()->GetPageUkmSourceId();
 
     // When a tab is discarded, a new null_web_contents will be created (with
     // WasDiscarded set as true) applied as a replacement of the discarded tab.
@@ -265,9 +269,6 @@ class TabActivityWatcher::WebContentsData
 
   void DidFinishNavigation(
       content::NavigationHandle* navigation_handle) override {
-    // TODO(https://crbug.com/1218946): With MPArch there may be multiple main
-    // frames. This caller was converted automatically to the primary main frame
-    // to preserve its semantics. Follow up to confirm correctness.
     if (!navigation_handle->HasCommitted() ||
         !navigation_handle->IsInPrimaryMainFrame() ||
         navigation_handle->IsSameDocument()) {
@@ -482,11 +483,9 @@ class TabActivityWatcher::WebContentsData
   FrecencyScore frecency_score_;
 
   WEB_CONTENTS_USER_DATA_KEY_DECL();
-
-  DISALLOW_COPY_AND_ASSIGN(WebContentsData);
 };
 
-WEB_CONTENTS_USER_DATA_KEY_IMPL(TabActivityWatcher::WebContentsData)
+WEB_CONTENTS_USER_DATA_KEY_IMPL(TabActivityWatcher::WebContentsData);
 
 TabActivityWatcher::TabActivityWatcher()
     : tab_metrics_logger_(std::make_unique<TabMetricsLogger>()),

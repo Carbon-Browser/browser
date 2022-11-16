@@ -1,0 +1,96 @@
+#
+# This file is part of eyeo Chromium SDK,
+# Copyright (C) 2006-present eyeo GmbH
+#
+# eyeo Chromium SDK is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 3 as
+# published by the Free Software Foundation.
+#
+# eyeo Chromium SDK is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with eyeo Chromium SDK.  If not, see <http://www.gnu.org/licenses/>.
+
+source_set("converter") {
+  sources = [
+    "converter.cc",
+    "converter.h",
+    "filter_keyword_extractor.cc",
+    "filter_keyword_extractor.h",
+    "metadata.cc",
+    "metadata.h",
+    "snippet_tokenizer.h",
+    "snippet_tokenizer_impl.cc",
+    "snippet_tokenizer_impl.h",
+  ]
+
+  public_deps = [
+    "//base",
+    "//components/adblock/core/common:base",
+    "//components/adblock/core:schema",
+    "//third_party/flatbuffers",
+    "//third_party/icu/",
+    "//third_party/re2",
+    "//url:url",
+  ]
+}
+
+executable("adblock_flatbuffer_converter") {
+  sources = [ "converter_standalone.cc" ]
+
+  deps = [
+    ":converter",
+  ]
+}
+
+source_set("test_support") {
+  testonly = true
+  sources = [
+    "test/mock_snippet_tokenizer.cc",
+    "test/mock_snippet_tokenizer.h",
+  ]
+
+  public_deps = [
+    ":converter",
+    "//testing/gmock",
+    "//testing/gtest",
+  ]
+}
+
+source_set("unit_tests") {
+  testonly = true
+  sources = [
+    "test/converter_test.cc",
+    "test/filter_keyword_extractor_test.cc",
+    "test/metadata_test.cc",
+    "test/snippet_tokenizer_impl_test.cc",
+  ]
+
+  deps = [
+    ":test_support",
+    "//components/adblock/core",
+    "//testing/gtest",
+  ]
+}
+
+source_set("perf_tests") {
+  testonly = true
+  sources = [
+    "test/converter_perftest.cc",
+  ]
+
+  deps = [
+    ":converter",
+    "//testing/gtest",
+  ]
+
+  data = [
+    "//components/test/data/adblock/easylist.txt",
+    "//components/test/data/adblock/exceptionrules.txt",
+    "//components/test/data/adblock/anticv.txt",
+    "//components/test/data/adblock/longurl.txt",
+  ]
+}

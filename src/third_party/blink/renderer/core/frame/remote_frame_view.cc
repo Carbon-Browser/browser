@@ -7,7 +7,7 @@
 #include "base/cxx17_backports.h"
 #include "components/paint_preview/common/paint_preview_tracker.h"
 #include "printing/buildflags/buildflags.h"
-#include "third_party/blink/public/mojom/frame/frame_owner_element_type.mojom-blink.h"
+#include "third_party/blink/public/common/frame/frame_owner_element_type.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/frame/local_frame_view.h"
@@ -17,13 +17,13 @@
 #include "third_party/blink/renderer/core/layout/layout_embedded_content.h"
 #include "third_party/blink/renderer/core/layout/layout_view.h"
 #include "third_party/blink/renderer/core/page/page.h"
-#include "third_party/blink/renderer/platform/geometry/int_rect.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_context.h"
 #include "third_party/blink/renderer/platform/graphics/paint/cull_rect.h"
 #include "third_party/blink/renderer/platform/graphics/paint/drawing_recorder.h"
 #include "third_party/blink/renderer/platform/graphics/paint/foreign_layer_display_item.h"
 #include "third_party/blink/renderer/platform/widget/frame_widget.h"
-#include "ui/gfx/transform_util.h"
+#include "ui/gfx/geometry/rect.h"
+#include "ui/gfx/geometry/transform_util.h"
 
 #if BUILDFLAG(ENABLE_PRINTING)
 // nogncheck because dependency on //printing is conditional upon
@@ -34,7 +34,7 @@
 namespace blink {
 
 RemoteFrameView::RemoteFrameView(RemoteFrame* remote_frame)
-    : FrameView(IntRect()), remote_frame_(remote_frame) {
+    : FrameView(gfx::Rect()), remote_frame_(remote_frame) {
   DCHECK(remote_frame);
   Show();
 }
@@ -46,10 +46,8 @@ LocalFrameView* RemoteFrameView::ParentFrameView() const {
     return nullptr;
 
   HTMLFrameOwnerElement* owner = remote_frame_->DeprecatedLocalOwner();
-  if (owner &&
-      (owner->OwnerType() == mojom::blink::FrameOwnerElementType::kPortal ||
-       owner->OwnerType() ==
-           mojom::blink::FrameOwnerElementType::kFencedframe)) {
+  if (owner && (owner->OwnerType() == FrameOwnerElementType::kPortal ||
+                owner->OwnerType() == FrameOwnerElementType::kFencedframe)) {
     return owner->GetDocument().GetFrame()->View();
   }
 
@@ -67,9 +65,10 @@ LocalFrameView* RemoteFrameView::ParentLocalRootFrameView() const {
     return nullptr;
 
   HTMLFrameOwnerElement* owner = remote_frame_->DeprecatedLocalOwner();
-  if (owner &&
-      owner->OwnerType() == mojom::blink::FrameOwnerElementType::kPortal)
+  if (owner && (owner->OwnerType() == FrameOwnerElementType::kPortal ||
+                owner->OwnerType() == FrameOwnerElementType::kFencedframe)) {
     return owner->GetDocument().GetFrame()->LocalFrameRoot().View();
+  }
 
   // |is_attached_| is only set from AttachToLayout(), which ensures that the
   // parent is a local frame.
@@ -108,10 +107,9 @@ bool RemoteFrameView::UpdateViewportIntersectionsForSubtree(
 void RemoteFrameView::SetViewportIntersection(
     const mojom::blink::ViewportIntersectionState& intersection_state) {
   mojom::blink::ViewportIntersectionState new_state(intersection_state);
-  new_state.compositor_visible_rect = gfx::Rect(compositing_rect_);
+  new_state.compositor_visible_rect = compositing_rect_;
   if (!last_intersection_state_.Equals(new_state)) {
     last_intersection_state_ = new_state;
-    GetFrame().SynchronizeVisualProperties();
     remote_frame_->SetViewportIntersection(new_state);
   } else if (needs_frame_rect_propagation_) {
     PropagateFrameRects();
@@ -128,22 +126,16 @@ void RemoteFrameView::SetNeedsOcclusionTracking(bool needs_tracking) {
   }
 }
 
-void RemoteFrameView::UpdateCompositingRect() {
-  IntRect previous_rect = compositing_rect_;
-  compositing_rect_ = IntRect();
+gfx::Rect RemoteFrameView::ComputeCompositingRect() const {
   LocalFrameView* local_root_view = ParentLocalRootFrameView();
   LayoutEmbeddedContent* owner_layout_object =
       remote_frame_->OwnerLayoutObject();
-  if (!local_root_view || !owner_layout_object) {
-    needs_frame_rect_propagation_ = true;
-    return;
-  }
 
   // For main frames we constrain the rect that gets painted to the viewport.
   // If the local frame root is an OOPIF itself, then we use the root's
   // intersection rect. This represents a conservative maximum for the area
   // that needs to be rastered by the OOPIF compositor.
-  IntRect viewport_rect(IntPoint(), local_root_view->Size());
+  gfx::Rect viewport_rect(gfx::Point(), local_root_view->Size());
   if (local_root_view->GetPage()->MainFrame() != local_root_view->GetFrame()) {
     viewport_rect = local_root_view->GetFrame().RemoteViewportIntersection();
   }
@@ -159,9 +151,9 @@ void RemoteFrameView::UpdateCompositingRect() {
   TransformationMatrix matrix =
       local_root_transform_state.AccumulatedTransform().Inverse();
   PhysicalRect local_viewport_rect = PhysicalRect::EnclosingRect(
-      matrix.ProjectQuad(FloatRect(viewport_rect)).BoundingBox());
-  compositing_rect_ = EnclosingIntRect(local_viewport_rect);
-  IntSize frame_size = Size();
+      matrix.ProjectQuad(gfx::QuadF(gfx::RectF(viewport_rect))).BoundingBox());
+  gfx::Rect compositing_rect = ToEnclosingRect(local_viewport_rect);
+  gfx::Size frame_size = Size();
 
   // Iframes that fit within the window viewport get fully rastered. For
   // iframes that are larger than the window viewport, add a 30% buffer to the
@@ -171,15 +163,46 @@ void RemoteFrameView::UpdateCompositingRect() {
   // it seems to make guttering rare with slow to medium speed wheel scrolling.
   // Can we collect UMA data to estimate how much extra rastering this causes,
   // and possibly how common guttering is?
-  compositing_rect_.InflateX(ceilf(local_viewport_rect.Width() * 0.15f));
-  compositing_rect_.InflateY(ceilf(local_viewport_rect.Height() * 0.15f));
-  compositing_rect_.SetWidth(
-      std::min(frame_size.Width(), compositing_rect_.Width()));
-  compositing_rect_.SetHeight(
-      std::min(frame_size.Height(), compositing_rect_.Height()));
-  IntPoint compositing_rect_location = compositing_rect_.Location();
-  compositing_rect_location.ClampNegativeToZero();
-  compositing_rect_.SetLocation(compositing_rect_location);
+  compositing_rect.Outset(
+      gfx::Outsets::VH(ceilf(local_viewport_rect.Height() * 0.15f),
+                       ceilf(local_viewport_rect.Width() * 0.15f)));
+  compositing_rect.set_width(
+      std::min(frame_size.width(), compositing_rect.width()));
+  compositing_rect.set_height(
+      std::min(frame_size.height(), compositing_rect.height()));
+  gfx::Point compositing_rect_location = compositing_rect.origin();
+  compositing_rect_location.SetToMax(gfx::Point());
+  compositing_rect.set_origin(compositing_rect_location);
+
+  return compositing_rect;
+}
+
+void RemoteFrameView::UpdateCompositingRect() {
+  remote_frame_->UpdateCompositedLayerBounds();
+  gfx::Rect previous_rect = compositing_rect_;
+  compositing_rect_ = gfx::Rect();
+  LocalFrameView* local_root_view = ParentLocalRootFrameView();
+  LayoutEmbeddedContent* owner_layout_object =
+      remote_frame_->OwnerLayoutObject();
+  if (!local_root_view || !owner_layout_object) {
+    needs_frame_rect_propagation_ = true;
+    return;
+  }
+
+  // The |compositing_rect_| provides the child compositor the rectangle (in its
+  // local coordinate space) which should be rasterized/composited. Its based on
+  // the child frame's intersection with the viewport and an optimization to
+  // avoid large iframes rasterizing their complete viewport.
+  // Since this rectangle is dependent on the child frame's position in the
+  // embedding frame, updating this can be used for communication with a fenced
+  // frame. So if the frame size is frozen, we use the complete viewport of the
+  // child frame as its compositing rect.
+  if (auto frozen_size = owner_layout_object->FrozenFrameSize()) {
+    compositing_rect_ =
+        gfx::Rect(frozen_size->width.Ceil(), frozen_size->height.Ceil());
+  } else {
+    compositing_rect_ = ComputeCompositingRect();
+  }
 
   if (compositing_rect_ != previous_rect)
     needs_frame_rect_propagation_ = true;
@@ -202,17 +225,16 @@ void RemoteFrameView::UpdateCompositingScaleFactor() {
                                           kTraverseDocumentBoundaries);
 
   float frame_to_local_root_scale_factor = 1.0f;
-  gfx::Transform local_root_transform = TransformationMatrix::ToTransform(
-      local_root_transform_state.AccumulatedTransform());
-  if (local_root_transform.HasPerspective()) {
+  gfx::Transform local_root_transform =
+      local_root_transform_state.AccumulatedTransform().ToTransform();
+  absl::optional<gfx::Vector2dF> scale_components =
+      gfx::TryComputeTransform2dScaleComponents(local_root_transform);
+  if (!scale_components) {
     frame_to_local_root_scale_factor =
         gfx::ComputeApproximateMaxScale(local_root_transform);
   } else {
-    gfx::Vector2dF scale_components =
-        gfx::ComputeTransform2dScaleComponents(local_root_transform,
-                                               /*fallback_scale=*/1.0f);
     frame_to_local_root_scale_factor =
-        std::max(scale_components.x(), scale_components.y());
+        std::max(scale_components->x(), scale_components->y());
   }
 
   // The compositing scale factor is calculated by multiplying the scale factor
@@ -246,7 +268,7 @@ void RemoteFrameView::Dispose() {
   SetNeedsOcclusionTracking(false);
 }
 
-void RemoteFrameView::SetFrameRect(const IntRect& rect) {
+void RemoteFrameView::SetFrameRect(const gfx::Rect& rect) {
   EmbeddedContentView::SetFrameRect(rect);
   if (needs_frame_rect_propagation_)
     PropagateFrameRects();
@@ -257,19 +279,27 @@ void RemoteFrameView::PropagateFrameRects() {
   // containing local frame root. The position of the local root within
   // any remote frames, if any, is accounted for by the embedder.
   needs_frame_rect_propagation_ = false;
-  IntRect frame_rect(FrameRect());
-  IntRect screen_space_rect = frame_rect;
+  gfx::Rect frame_rect(FrameRect());
+  gfx::Rect screen_space_rect = frame_rect;
 
   if (LocalFrameView* parent = ParentFrameView()) {
     screen_space_rect = parent->ConvertToRootFrame(screen_space_rect);
   }
-  remote_frame_->FrameRectsChanged(frame_rect, screen_space_rect);
+
+  gfx::Size frame_size = frame_rect.size();
+  if (auto* layout_object = GetLayoutEmbeddedContent()) {
+    if (auto frozen_size = layout_object->FrozenFrameSize()) {
+      frame_size =
+          gfx::Size(frozen_size->width.Ceil(), frozen_size->height.Ceil());
+    }
+  }
+  remote_frame_->FrameRectsChanged(frame_size, screen_space_rect);
 }
 
 void RemoteFrameView::Paint(GraphicsContext& context,
-                            const GlobalPaintFlags flags,
+                            PaintFlags flags,
                             const CullRect& rect,
-                            const IntSize& paint_offset) const {
+                            const gfx::Vector2d& paint_offset) const {
   if (!rect.Intersects(FrameRect()))
     return;
 
@@ -278,7 +308,7 @@ void RemoteFrameView::Paint(GraphicsContext& context,
     DrawingRecorder recorder(context, owner_layout_object,
                              DisplayItem::kDocumentBackground);
     context.Save();
-    context.Translate(paint_offset.Width(), paint_offset.Height());
+    context.Translate(paint_offset.x(), paint_offset.y());
     DCHECK(context.Canvas());
 
     uint32_t content_id = 0;
@@ -296,13 +326,10 @@ void RemoteFrameView::Paint(GraphicsContext& context,
     context.Restore();
   }
 
-  if (RuntimeEnabledFeatures::CompositeAfterPaintEnabled() &&
-      GetFrame().GetCcLayer()) {
-    auto offset = RoundedIntPoint(
-        GetLayoutEmbeddedContent()->ReplacedContentRect().offset);
-    RecordForeignLayer(context, owner_layout_object,
-                       DisplayItem::kForeignLayerRemoteFrame,
-                       GetFrame().GetCcLayer(), offset);
+  if (GetFrame().GetCcLayer()) {
+    RecordForeignLayer(
+        context, owner_layout_object, DisplayItem::kForeignLayerRemoteFrame,
+        GetFrame().GetCcLayer(), FrameRect().origin() + paint_offset);
   }
 }
 
@@ -366,7 +393,7 @@ bool RemoteFrameView::HasIntrinsicSizingInfo() const {
   return has_intrinsic_sizing_info_;
 }
 
-uint32_t RemoteFrameView::Print(const IntRect& rect,
+uint32_t RemoteFrameView::Print(const gfx::Rect& rect,
                                 cc::PaintCanvas* canvas) const {
 #if BUILDFLAG(ENABLE_PRINTING)
   auto* metafile = canvas->GetPrintingMetafile();
@@ -389,7 +416,7 @@ uint32_t RemoteFrameView::Print(const IntRect& rect,
 #endif
 }
 
-uint32_t RemoteFrameView::CapturePaintPreview(const IntRect& rect,
+uint32_t RemoteFrameView::CapturePaintPreview(const gfx::Rect& rect,
                                               cc::PaintCanvas* canvas) const {
   auto* tracker = canvas->GetPaintPreviewTracker();
   DCHECK(tracker);  // |tracker| must exist or there is a bug upstream.

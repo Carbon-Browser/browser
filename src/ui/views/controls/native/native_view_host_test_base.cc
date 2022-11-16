@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/views/controls/native/native_view_host.h"
 #include "ui/views/widget/widget.h"
 
@@ -18,12 +18,20 @@ class NativeViewHostTestBase::NativeViewHostTesting : public NativeViewHost {
  public:
   explicit NativeViewHostTesting(NativeViewHostTestBase* owner)
       : owner_(owner) {}
+
+  NativeViewHostTesting(const NativeViewHostTesting&) = delete;
+  NativeViewHostTesting& operator=(const NativeViewHostTesting&) = delete;
+
   ~NativeViewHostTesting() override { owner_->host_destroyed_count_++; }
 
- private:
-  NativeViewHostTestBase* owner_;
+  // NativeViewHost:
+  bool OnMousePressed(const ui::MouseEvent& event) override {
+    ++owner_->on_mouse_pressed_called_count_;
+    return NativeViewHost::OnMousePressed(event);
+  }
 
-  DISALLOW_COPY_AND_ASSIGN(NativeViewHostTesting);
+ private:
+  raw_ptr<NativeViewHostTestBase> owner_;
 };
 
 NativeViewHostTestBase::NativeViewHostTestBase() = default;
@@ -35,10 +43,11 @@ void NativeViewHostTestBase::TearDown() {
   ViewsTestBase::TearDown();
 }
 
-void NativeViewHostTestBase::CreateTopLevel() {
+void NativeViewHostTestBase::CreateTopLevel(WidgetDelegate* widget_delegate) {
   toplevel_ = std::make_unique<Widget>();
   Widget::InitParams toplevel_params =
       CreateParams(Widget::InitParams::TYPE_WINDOW);
+  toplevel_params.delegate = widget_delegate;
   toplevel_params.ownership = Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
   toplevel_->Init(std::move(toplevel_params));
 }

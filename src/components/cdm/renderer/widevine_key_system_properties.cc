@@ -5,7 +5,6 @@
 #include "components/cdm/renderer/widevine_key_system_properties.h"
 
 #include "base/command_line.h"
-#include "base/compiler_specific.h"
 #include "base/feature_list.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -18,11 +17,13 @@
 #error This file should only be built when Widevine is enabled.
 #endif
 
+using media::CdmSessionType;
 using media::EmeConfigRule;
+using media::EmeConfigRuleState;
 using media::EmeFeatureSupport;
 using media::EmeInitDataType;
 using media::EmeMediaType;
-using media::EmeSessionTypeSupport;
+using media::EncryptionScheme;
 using media::SupportedCodecs;
 using Robustness = cdm::WidevineKeySystemProperties::Robustness;
 
@@ -45,32 +46,62 @@ Robustness ConvertRobustness(const std::string& robustness) {
   return Robustness::INVALID;
 }
 
+#if BUILDFLAG(IS_WIN)
+bool IsHardwareSecurityEnabledForKeySystem(const std::string& key_system) {
+  return (key_system == kWidevineKeySystem &&
+          base::FeatureList::IsEnabled(media::kHardwareSecureDecryption)) ||
+         (key_system == kWidevineExperimentKeySystem &&
+          base::FeatureList::IsEnabled(
+              media::kHardwareSecureDecryptionExperiment));
+}
+#endif  // BUILDFLAG(IS_WIN)
+
 }  // namespace
 
 WidevineKeySystemProperties::WidevineKeySystemProperties(
-    media::SupportedCodecs codecs,
-    base::flat_set<media::EncryptionScheme> encryption_schemes,
-    media::SupportedCodecs hw_secure_codecs,
-    base::flat_set<media::EncryptionScheme> hw_secure_encryption_schemes,
+    SupportedCodecs codecs,
+    base::flat_set<EncryptionScheme> encryption_schemes,
+    base::flat_set<CdmSessionType> session_types,
+    SupportedCodecs hw_secure_codecs,
+    base::flat_set<EncryptionScheme> hw_secure_encryption_schemes,
+    base::flat_set<CdmSessionType> hw_secure_session_types,
     Robustness max_audio_robustness,
     Robustness max_video_robustness,
-    media::EmeSessionTypeSupport persistent_license_support,
-    media::EmeFeatureSupport persistent_state_support,
-    media::EmeFeatureSupport distinctive_identifier_support)
+    EmeFeatureSupport persistent_state_support,
+    EmeFeatureSupport distinctive_identifier_support)
     : codecs_(codecs),
       encryption_schemes_(std::move(encryption_schemes)),
+      session_types_(std::move(session_types)),
       hw_secure_codecs_(hw_secure_codecs),
       hw_secure_encryption_schemes_(std::move(hw_secure_encryption_schemes)),
+      hw_secure_session_types_(std::move(hw_secure_session_types)),
       max_audio_robustness_(max_audio_robustness),
       max_video_robustness_(max_video_robustness),
-      persistent_license_support_(persistent_license_support),
       persistent_state_support_(persistent_state_support),
       distinctive_identifier_support_(distinctive_identifier_support) {}
 
 WidevineKeySystemProperties::~WidevineKeySystemProperties() = default;
 
-std::string WidevineKeySystemProperties::GetKeySystemName() const {
+std::string WidevineKeySystemProperties::GetBaseKeySystemName() const {
   return kWidevineKeySystem;
+}
+
+bool WidevineKeySystemProperties::IsSupportedKeySystem(
+    const std::string& key_system) const {
+#if BUILDFLAG(IS_WIN)
+  if (key_system == kWidevineExperimentKeySystem &&
+      base::FeatureList::IsEnabled(
+          media::kHardwareSecureDecryptionExperiment)) {
+    return true;
+  }
+#endif  // BUILDFLAG(IS_WIN)
+
+  return key_system == kWidevineKeySystem;
+}
+
+bool WidevineKeySystemProperties::ShouldUseBaseKeySystemName() const {
+  // Internally Widevine CDM only supports kWidevineKeySystem.
+  return true;
 }
 
 bool WidevineKeySystemProperties::IsSupportedInitDataType(
@@ -86,20 +117,21 @@ bool WidevineKeySystemProperties::IsSupportedInitDataType(
   return false;
 }
 
-EmeConfigRule WidevineKeySystemProperties::GetEncryptionSchemeConfigRule(
-    media::EncryptionScheme encryption_scheme) const {
-  bool is_supported = encryption_schemes_.count(encryption_scheme);
+absl::optional<EmeConfigRule>
+WidevineKeySystemProperties::GetEncryptionSchemeConfigRule(
+    EncryptionScheme encryption_scheme) const {
+  bool is_supported = encryption_schemes_.contains(encryption_scheme);
   bool is_hw_secure_supported =
-      hw_secure_encryption_schemes_.count(encryption_scheme);
-
-  if (is_supported && is_hw_secure_supported)
-    return EmeConfigRule::SUPPORTED;
-  else if (is_supported && !is_hw_secure_supported)
-    return EmeConfigRule::HW_SECURE_CODECS_NOT_ALLOWED;
-  else if (!is_supported && is_hw_secure_supported)
-    return EmeConfigRule::HW_SECURE_CODECS_REQUIRED;
-  else
-    return EmeConfigRule::NOT_SUPPORTED;
+      hw_secure_encryption_schemes_.contains(encryption_scheme);
+  if (is_supported && is_hw_secure_supported) {
+    return EmeConfigRule();
+  } else if (is_supported && !is_hw_secure_supported) {
+    return EmeConfigRule{.hw_secure_codecs = EmeConfigRuleState::kNotAllowed};
+  } else if (!is_supported && is_hw_secure_supported) {
+    return EmeConfigRule{.hw_secure_codecs = EmeConfigRuleState::kRequired};
+  } else {
+    return absl::nullopt;
+  }
 }
 
 SupportedCodecs WidevineKeySystemProperties::GetSupportedCodecs() const {
@@ -111,13 +143,16 @@ SupportedCodecs WidevineKeySystemProperties::GetSupportedHwSecureCodecs()
   return hw_secure_codecs_;
 }
 
-EmeConfigRule WidevineKeySystemProperties::GetRobustnessConfigRule(
+absl::optional<EmeConfigRule>
+WidevineKeySystemProperties::GetRobustnessConfigRule(
+    const std::string& key_system,
     EmeMediaType media_type,
     const std::string& requested_robustness,
     const bool* hw_secure_requirement) const {
   Robustness robustness = ConvertRobustness(requested_robustness);
-  if (robustness == Robustness::INVALID)
-    return EmeConfigRule::NOT_SUPPORTED;
+  if (robustness == Robustness::INVALID) {
+    return absl::nullopt;
+  }
 
   Robustness max_robustness = Robustness::INVALID;
   switch (media_type) {
@@ -137,12 +172,13 @@ EmeConfigRule WidevineKeySystemProperties::GetRobustnessConfigRule(
       (max_robustness == Robustness::SW_SECURE_DECODE &&
        robustness == Robustness::HW_SECURE_CRYPTO) ||
       robustness > max_robustness) {
-    return EmeConfigRule::NOT_SUPPORTED;
+    return absl::nullopt;
   }
 
-  bool hw_secure_codecs_required =
+  [[maybe_unused]] bool hw_secure_codecs_required =
       hw_secure_requirement && *hw_secure_requirement;
-#if defined(OS_CHROMEOS)
+
+#if BUILDFLAG(IS_CHROMEOS)
   // Hardware security requires HWDRM or remote attestation, both of these
   // require an identifier.
   if (robustness >= Robustness::HW_SECURE_CRYPTO || hw_secure_codecs_required) {
@@ -150,12 +186,13 @@ EmeConfigRule WidevineKeySystemProperties::GetRobustnessConfigRule(
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
     if (!base::CommandLine::ForCurrentProcess()->HasSwitch(
             switches::kLacrosUseChromeosProtectedMedia)) {
-      return EmeConfigRule::IDENTIFIER_REQUIRED;
+      return EmeConfigRule{.identifier = EmeConfigRuleState::kRequired};
     }
 #endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
-    return EmeConfigRule::IDENTIFIER_AND_HW_SECURE_CODECS_REQUIRED;
+    return EmeConfigRule{.identifier = EmeConfigRuleState::kRequired,
+                         .hw_secure_codecs = EmeConfigRuleState::kRequired};
 #else
-    return EmeConfigRule::IDENTIFIER_REQUIRED;
+    return EmeConfigRule{.identifier = EmeConfigRuleState::kRequired};
 #endif
   }
 
@@ -166,32 +203,80 @@ EmeConfigRule WidevineKeySystemProperties::GetRobustnessConfigRule(
   // available for the requested codecs.
   if (media_type == EmeMediaType::VIDEO &&
       max_robustness == Robustness::HW_SECURE_ALL) {
-    return EmeConfigRule::IDENTIFIER_RECOMMENDED;
+    return EmeConfigRule{.identifier = EmeConfigRuleState::kRecommended};
   }
-#elif defined(OS_ANDROID)
+#elif BUILDFLAG(IS_ANDROID)
   // On Android, require hardware secure codecs for SW_SECURE_DECODE and above.
-  if (robustness >= Robustness::SW_SECURE_DECODE || hw_secure_codecs_required)
-    return EmeConfigRule::HW_SECURE_CODECS_REQUIRED;
-#elif defined(OS_WIN)
-  // On Windows, hardware security uses MediaFoundation-based CDM which requires
-  // identifier and persistent state.
-  if (robustness >= Robustness::HW_SECURE_CRYPTO || hw_secure_codecs_required)
-    return EmeConfigRule::IDENTIFIER_PERSISTENCE_AND_HW_SECURE_CODECS_REQUIRED;
+  if (robustness >= Robustness::SW_SECURE_DECODE || hw_secure_codecs_required) {
+    return EmeConfigRule{.hw_secure_codecs = EmeConfigRuleState::kRequired};
+  }
+
+#elif BUILDFLAG(IS_WIN)
+  if (robustness >= Robustness::HW_SECURE_CRYPTO) {
+    // On Windows, hardware security uses MediaFoundation-based CDM which
+    // requires identifier and persistent state.
+
+    if (IsHardwareSecurityEnabledForKeySystem(key_system)) {
+      return EmeConfigRule{.identifier = EmeConfigRuleState::kRequired,
+                           .persistence = EmeConfigRuleState::kRequired,
+                           .hw_secure_codecs = EmeConfigRuleState::kRequired};
+    } else {
+      return absl::nullopt;
+    }
+  } else if (robustness < Robustness::HW_SECURE_CRYPTO) {
+    // On Windows, when software security is queried, explicitly not allow
+    // hardware secure codecs to prevent robustness level upgrade, for stability
+    // and compatibility reasons. See https://crbug.com/1327043.
+    return EmeConfigRule{.hw_secure_codecs = EmeConfigRuleState::kNotAllowed};
+  }
 #else
   // On other platforms, require hardware secure codecs for HW_SECURE_CRYPTO and
   // above.
-  if (robustness >= Robustness::HW_SECURE_CRYPTO)
-    return EmeConfigRule::HW_SECURE_CODECS_REQUIRED;
+  if (robustness >= Robustness::HW_SECURE_CRYPTO) {
+    return EmeConfigRule{.hw_secure_codecs = EmeConfigRuleState::kRequired};
+  }
 
-  ALLOW_UNUSED_LOCAL(hw_secure_codecs_required);
-#endif  // defined(OS_CHROMEOS)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
-  return EmeConfigRule::SUPPORTED;
+  return EmeConfigRule();
 }
 
-EmeSessionTypeSupport
+absl::optional<EmeConfigRule>
 WidevineKeySystemProperties::GetPersistentLicenseSessionSupport() const {
-  return persistent_license_support_;
+  bool is_supported =
+      session_types_.contains(CdmSessionType::kPersistentLicense);
+
+#if BUILDFLAG(IS_CHROMEOS)
+  // The logic around hardware/software security support is complicated on
+  // ChromeOS. This code is to preserve the original logic, by deciding the
+  // support only based on `is_supported` and ignore `is_hw_secure_supported`.
+  // Note: On ChromeOS, platform verification (similar to CDM host verification)
+  // is required for persistent license support, which requires identifier.
+  // TODO(crbug.com/1324262): Fix the logic after refactoring EmeConfigRule.
+  if (is_supported) {
+    return EmeConfigRule{.identifier = EmeConfigRuleState::kRequired,
+                         .persistence = EmeConfigRuleState::kRequired};
+
+  } else {
+    return absl::nullopt;
+  }
+#else   // BUILDFLAG(IS_CHROMEOS)
+  bool is_hw_secure_supported =
+      hw_secure_session_types_.contains(CdmSessionType::kPersistentLicense);
+
+  // Per GetPersistentLicenseSessionSupport() API, there's no need to specify
+  // the PERSISTENCE requirement here, which is implicitly assumed and enforced
+  // by `KeySystemConfigSelector`.
+  if (is_supported && is_hw_secure_supported) {
+    return EmeConfigRule();
+  } else if (is_supported && !is_hw_secure_supported) {
+    return EmeConfigRule{.hw_secure_codecs = EmeConfigRuleState::kNotAllowed};
+  } else if (!is_supported && is_hw_secure_supported) {
+    return EmeConfigRule{.hw_secure_codecs = EmeConfigRuleState::kRequired};
+  } else {
+    return absl::nullopt;
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS)
 }
 
 EmeFeatureSupport WidevineKeySystemProperties::GetPersistentStateSupport()

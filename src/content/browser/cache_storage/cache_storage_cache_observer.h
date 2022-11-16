@@ -5,16 +5,14 @@
 #ifndef CONTENT_BROWSER_CACHE_STORAGE_CACHE_STORAGE_CACHE_OBSERVER_H_
 #define CONTENT_BROWSER_CACHE_STORAGE_CACHE_STORAGE_CACHE_OBSERVER_H_
 
-#include "content/common/content_export.h"
-
 namespace content {
 
-class LegacyCacheStorageCache;
+class CacheStorageCache;
 
-class CONTENT_EXPORT CacheStorageCacheObserver {
+class CacheStorageCacheObserver {
  public:
   // The cache size has been set.
-  virtual void CacheSizeUpdated(const LegacyCacheStorageCache* cache) = 0;
+  virtual void CacheSizeUpdated(const CacheStorageCache* cache) = 0;
 };
 
 }  // namespace content

@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "base/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/user_metrics.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
@@ -37,6 +38,7 @@
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/base/theme_provider.h"
 #include "ui/base/window_open_disposition.h"
+#include "ui/color/color_id.h"
 #include "ui/resources/grit/ui_resources.h"
 #include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/controls/button/menu_button.h"
@@ -106,11 +108,11 @@ class BookmarkModelDropObserver : public bookmarks::BaseBookmarkModelObserver {
     bookmark_model_ = nullptr;
   }
 
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
   const bookmarks::BookmarkNodeData drop_data_;
-  const bookmarks::BookmarkNode* drop_parent_;
+  raw_ptr<const bookmarks::BookmarkNode> drop_parent_;
   const size_t index_to_drop_at_;
-  bookmarks::BookmarkModel* bookmark_model_;
+  raw_ptr<bookmarks::BookmarkModel> bookmark_model_;
 };
 
 }  // namespace
@@ -333,16 +335,6 @@ ui::mojom::DragOperation BookmarkMenuDelegate::GetDropOperation(
       profile_, event, drop_data_, drop_parent, index_to_drop_at);
 }
 
-ui::mojom::DragOperation BookmarkMenuDelegate::OnPerformDrop(
-    MenuItemView* menu,
-    views::MenuDelegate::DropPosition position,
-    const ui::DropTargetEvent& event) {
-  auto drop_cb = GetDropCallback(menu, position, event);
-  ui::mojom::DragOperation output_drag_op = ui::mojom::DragOperation::kNone;
-  std::move(drop_cb).Run(event, output_drag_op);
-  return output_drag_op;
-}
-
 views::View::DropCallback BookmarkMenuDelegate::GetDropCallback(
     views::MenuItemView* menu,
     views::MenuDelegate::DropPosition position,
@@ -563,12 +555,12 @@ void BookmarkMenuDelegate::BuildMenusForPermanentNodes(
   BuildMenuForPermanentNode(
       model->other_node(),
       chrome::GetBookmarkFolderIcon(chrome::BookmarkFolderIconType::kNormal,
-                                    ui::NativeTheme::kColorId_MenuIconColor),
+                                    ui::kColorMenuIcon),
       menu, &added_separator);
   BuildMenuForPermanentNode(
       model->mobile_node(),
       chrome::GetBookmarkFolderIcon(chrome::BookmarkFolderIconType::kNormal,
-                                    ui::NativeTheme::kColorId_MenuIconColor),
+                                    ui::kColorMenuIcon),
       menu, &added_separator);
 }
 
@@ -596,7 +588,7 @@ void BookmarkMenuDelegate::BuildMenuForManagedNode(MenuItemView* menu) {
   BuildMenuForPermanentNode(
       node,
       chrome::GetBookmarkFolderIcon(chrome::BookmarkFolderIconType::kManaged,
-                                    ui::NativeTheme::kColorId_MenuIconColor),
+                                    ui::kColorMenuIcon),
       menu, &added_separator);
 }
 
@@ -605,9 +597,8 @@ void BookmarkMenuDelegate::BuildMenu(const BookmarkNode* parent,
                                      MenuItemView* menu) {
   DCHECK_LE(start_child_index, parent->children().size());
   ui::ResourceBundle* rb = &ui::ResourceBundle::GetSharedInstance();
-  const ui::ImageModel folder_icon =
-      chrome::GetBookmarkFolderIcon(chrome::BookmarkFolderIconType::kNormal,
-                                    ui::NativeTheme::kColorId_MenuIconColor);
+  const ui::ImageModel folder_icon = chrome::GetBookmarkFolderIcon(
+      chrome::BookmarkFolderIconType::kNormal, ui::kColorMenuIcon);
   for (auto i = parent->children().cbegin() + start_child_index;
        i != parent->children().cend(); ++i) {
     const BookmarkNode* node = i->get();
@@ -623,12 +614,11 @@ void BookmarkMenuDelegate::BuildMenu(const BookmarkNode* parent,
       child_menu_item->GetViewAccessibility().OverrideDescription(
           url_formatter::FormatUrl(
               node->url(), url_formatter::kFormatUrlOmitDefaults,
-              net::UnescapeRule::SPACES, nullptr, nullptr, nullptr));
+              base::UnescapeRule::SPACES, nullptr, nullptr, nullptr));
     } else {
       DCHECK(node->is_folder());
       child_menu_item = menu->AppendSubMenu(
           id, MaybeEscapeLabel(node->GetTitle()), folder_icon);
-      child_menu_item->GetViewAccessibility().OverrideDescription("");
     }
     AddMenuToMaps(child_menu_item, node);
   }

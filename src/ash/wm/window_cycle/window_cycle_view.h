@@ -112,9 +112,17 @@ class ASH_EXPORT WindowCycleView : public views::WidgetDelegateView,
   // views::WidgetDelegateView:
   gfx::Size CalculatePreferredSize() const override;
   void Layout() override;
+  void OnThemeChanged() override;
 
   // ui::ImplicitAnimationObserver:
   void OnImplicitAnimationsCompleted() override;
+
+  // Returns whether or not the given `screen_point` is located in tab slider
+  // container.
+  bool IsEventInTabSliderContainer(const gfx::Point& screen_point);
+
+  // Returns the maximum width of the cycle view.
+  int CalculateMaxWidth() const;
 
  private:
   friend class WindowCycleListTestApi;

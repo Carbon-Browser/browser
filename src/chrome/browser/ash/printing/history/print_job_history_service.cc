@@ -8,7 +8,7 @@
 #include "chrome/common/pref_names.h"
 #include "components/prefs/pref_registry_simple.h"
 
-namespace chromeos {
+namespace ash {
 
 PrintJobHistoryService::PrintJobHistoryService() = default;
 
@@ -32,4 +32,10 @@ void PrintJobHistoryService::RemoveObserver(
   observers_.RemoveObserver(observer);
 }
 
-}  // namespace chromeos
+void PrintJobHistoryService::Shutdown() {
+  for (auto& observer : observers_) {
+    observer.OnShutdown();
+  }
+}
+
+}  // namespace ash

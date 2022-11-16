@@ -15,6 +15,8 @@ class GURL;
 
 namespace password_manager {
 
+struct PasswordForm;
+
 // A service that can be used to query the list of facets that are affiliated
 // with a given facet, i.e., facets that belong to the same logical application.
 // See affiliation_utils.h for details of what this means.
@@ -26,6 +28,9 @@ class AffiliationService : public KeyedService {
   using ResultCallback =
       base::OnceCallback<void(const AffiliatedFacets& /* results */,
                               bool /* success */)>;
+
+  using PasswordFormsCallback =
+      base::OnceCallback<void(std::vector<std::unique_ptr<PasswordForm>>)>;
 
   // Prefetches change password URLs for sites requested. Receives a callback to
   // run when the prefetch finishes.
@@ -71,6 +76,13 @@ class AffiliationService : public KeyedService {
   virtual void CancelPrefetch(const FacetURI& facet_uri,
                               const base::Time& keep_fresh_until) = 0;
 
+  // Compares |facet_uris| with a actively prefetching list of facets. For any
+  // facet which is present in the |facet_uris| but missing from the list a new
+  // prefetch is scheduled. For any facet which is present in the list but
+  // missing in |facet_uris| the corresponding prefetch command is canceled. It
+  // also deletes cache which is no longer needed.
+  virtual void KeepPrefetchForFacets(std::vector<FacetURI> facet_uris) = 0;
+
   // Wipes results of on-demand fetches and expired prefetches from the
   // cache, but retains information corresponding to facets that are being
   // kept fresh. As no required data is deleted, there will be no network
@@ -78,6 +90,22 @@ class AffiliationService : public KeyedService {
   // remove data corresponding to the given |facet_uri|, but still only as
   // long as the data is no longer needed.
   virtual void TrimCacheForFacetURI(const FacetURI& facet_uri) = 0;
+
+  // Wipes results from cache which don't correspond to the any facet from
+  // |facet_uris|.
+  virtual void TrimUnusedCache(std::vector<FacetURI> facet_uris) = 0;
+
+  // Retrieves affiliation and branding information about the Android
+  // credentials in |forms|, sets |affiliated_web_realm|, |app_display_name| and
+  // |app_icon_url| of forms, and invokes |result_callback|.
+  // NOTE: When |strategy_on_cache_miss| is set to |FAIL|, this will not issue
+  // an on-demand network request. And if a request to cache fails, no
+  // affiliation and branding information will be injected into corresponding
+  // form.
+  virtual void InjectAffiliationAndBrandingInformation(
+      std::vector<std::unique_ptr<PasswordForm>> forms,
+      AffiliationService::StrategyOnCacheMiss strategy_on_cache_miss,
+      PasswordFormsCallback result_callback) = 0;
 };
 
 }  // namespace password_manager

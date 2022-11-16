@@ -9,11 +9,10 @@
 
 #include <memory>
 
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/threading/thread_checker.h"
 #include "base/time/time.h"
-#include "chromeos/dbus/cicerone/cicerone_client.h"
+#include "chromeos/ash/components/dbus/cicerone/cicerone_client.h"
 
 namespace message_center {
 class Notification;
@@ -27,15 +26,19 @@ namespace crostini {
 // class should be created after DBus has been initialized and destroyed before
 // DBus has been shutdown.
 // This class must be instantiated on the UI thread.
-class CrostiniLowDiskNotification : public chromeos::CiceroneClient::Observer {
+class CrostiniLowDiskNotification : public ash::CiceroneClient::Observer {
  public:
   // Registers this class as a Cicerone Observer.
   CrostiniLowDiskNotification();
 
+  CrostiniLowDiskNotification(const CrostiniLowDiskNotification&) = delete;
+  CrostiniLowDiskNotification& operator=(const CrostiniLowDiskNotification&) =
+      delete;
+
   // Unregisters from observing events.
   ~CrostiniLowDiskNotification() override;
 
-  // chromeos::CiceroneClient::Observer override.
+  // ash::CiceroneClient::Observer override.
   void OnLowDiskSpaceTriggered(
       const vm_tools::cicerone::LowDiskSpaceTriggeredSignal& signal) override;
 
@@ -68,8 +71,6 @@ class CrostiniLowDiskNotification : public chromeos::CiceroneClient::Observer {
   THREAD_CHECKER(thread_checker_);
 
   base::WeakPtrFactory<CrostiniLowDiskNotification> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(CrostiniLowDiskNotification);
 };
 
 }  // namespace crostini

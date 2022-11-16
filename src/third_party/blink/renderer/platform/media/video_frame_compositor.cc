@@ -7,10 +7,11 @@
 #include <memory>
 
 #include "base/bind.h"
-#include "base/bind_post_task.h"
 #include "base/callback_helpers.h"
 #include "base/synchronization/waitable_event.h"
+#include "base/task/bind_post_task.h"
 #include "base/time/default_tick_clock.h"
+#include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
 #include "components/viz/common/frame_sinks/begin_frame_args.h"
 #include "media/base/media_switches.h"
@@ -36,13 +37,13 @@ VideoFrameCompositor::VideoFrameCompositor(
       tick_clock_(base::DefaultTickClock::GetInstance()),
       background_rendering_timer_(
           FROM_HERE,
-          base::TimeDelta::FromMilliseconds(kBackgroundRenderingTimeoutMs),
+          base::Milliseconds(kBackgroundRenderingTimeoutMs),
           base::BindRepeating(&VideoFrameCompositor::BackgroundRender,
                               base::Unretained(this),
                               RenderingMode::kBackground)),
       force_begin_frames_timer_(
           FROM_HERE,
-          base::TimeDelta::FromMilliseconds(kForceBeginFramesTimeoutMs),
+          base::Milliseconds(kForceBeginFramesTimeoutMs),
           base::BindRepeating(&VideoFrameCompositor::StopForceBeginFrames,
                               base::Unretained(this))),
       submitter_(std::move(submitter)) {
@@ -272,7 +273,7 @@ void VideoFrameCompositor::UpdateCurrentFrameIfStale(UpdateType type) {
   const base::TimeDelta interval = now - last_background_render_;
 
   // Cap updates to 250Hz which should be more than enough for everyone.
-  if (interval < base::TimeDelta::FromMilliseconds(4))
+  if (interval < base::Milliseconds(4))
     return;
 
   {
@@ -330,6 +331,9 @@ VideoFrameCompositor::GetLastPresentedFrameMetadata() {
     frame_metadata->presented_frames = presentation_counter_;
   }
 
+  if (base::FeatureList::IsEnabled(media::kKeepRvfcFrameAlive))
+    frame_metadata->frame = last_frame;
+
   frame_metadata->width = last_frame->visible_rect().width();
   frame_metadata->height = last_frame->visible_rect().height();
 
@@ -355,8 +359,8 @@ bool VideoFrameCompositor::ProcessNewFrame(
     bool repaint_duplicate_frame) {
   DCHECK(task_runner_->BelongsToCurrentThread());
 
-  if (frame && GetCurrentFrame() && !repaint_duplicate_frame &&
-      frame->unique_id() == GetCurrentFrame()->unique_id()) {
+  if (!frame || (GetCurrentFrame() && !repaint_duplicate_frame &&
+                 frame->unique_id() == GetCurrentFrame()->unique_id())) {
     return false;
   }
 
@@ -456,6 +460,21 @@ bool VideoFrameCompositor::CallRender(base::TimeTicks deadline_min,
   if (background_rendering_enabled_)
     background_rendering_timer_.Reset();
   return new_frame || had_new_background_frame;
+}
+
+void VideoFrameCompositor::OnContextLost() {
+  DCHECK(task_runner_->BelongsToCurrentThread());
+  // current_frame_'s resource in the context has been lost, so current_frame_
+  // is not valid any more. current_frame_ should be reset. Now the compositor
+  // has no concept of resetting current_frame_, so a black frame is set.
+  base::AutoLock lock(current_frame_lock_);
+  if (!current_frame_ || (!current_frame_->HasTextures() &&
+                          !current_frame_->HasGpuMemoryBuffer())) {
+    return;
+  }
+  scoped_refptr<media::VideoFrame> black_frame =
+      media::VideoFrame::CreateBlackFrame(current_frame_->natural_size());
+  SetCurrentFrame_Locked(std::move(black_frame), tick_clock_->NowTicks());
 }
 
 }  // namespace blink

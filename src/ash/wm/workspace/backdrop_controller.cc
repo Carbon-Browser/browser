@@ -28,6 +28,7 @@
 #include "ash/wm/window_util.h"
 #include "base/auto_reset.h"
 #include "base/bind.h"
+#include "base/containers/adapters.h"
 #include "base/memory/weak_ptr.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/compositor/layer.h"
@@ -47,6 +48,10 @@ namespace {
 class BackdropEventHandler : public ui::EventHandler {
  public:
   BackdropEventHandler() = default;
+
+  BackdropEventHandler(const BackdropEventHandler&) = delete;
+  BackdropEventHandler& operator=(const BackdropEventHandler&) = delete;
+
   ~BackdropEventHandler() override = default;
 
   // ui::EventHandler:
@@ -72,9 +77,6 @@ class BackdropEventHandler : public ui::EventHandler {
       event->SetHandled();
     }
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(BackdropEventHandler);
 };
 
 // -----------------------------------------------------------------------------
@@ -291,9 +293,7 @@ void BackdropController::UpdateBackdrop() {
 
 aura::Window* BackdropController::GetTopmostWindowWithBackdrop() {
   const aura::Window::Windows windows = container_->children();
-  for (auto window_iter = windows.rbegin(); window_iter != windows.rend();
-       ++window_iter) {
-    aura::Window* window = *window_iter;
+  for (aura::Window* window : base::Reversed(windows)) {
     if (window == backdrop_window_)
       continue;
 

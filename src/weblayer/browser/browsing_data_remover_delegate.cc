@@ -15,7 +15,6 @@
 #include "content/public/browser/browsing_data_filter_builder.h"
 #include "services/network/public/mojom/cookie_manager.mojom.h"
 #include "weblayer/browser/browser_process.h"
-#include "weblayer/browser/default_search_engine.h"
 #include "weblayer/browser/favicon/favicon_service_impl.h"
 #include "weblayer/browser/favicon/favicon_service_impl_factory.h"
 #include "weblayer/browser/heavy_ad_service_factory.h"
@@ -96,7 +95,7 @@ void BrowsingDataRemoverDelegate::RemoveEmbedderData(
   // between UNPROTECTED_WEB and PROTECTED_WEB.
   if (remove_mask & content::BrowsingDataRemover::DATA_TYPE_COOKIES) {
     network::mojom::NetworkContext* safe_browsing_context = nullptr;
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
     safe_browsing_context = BrowserProcess::GetInstance()
                                 ->GetSafeBrowsingService()
                                 ->GetNetworkContext();
@@ -112,9 +111,6 @@ void BrowsingDataRemoverDelegate::RemoveEmbedderData(
   if (remove_mask & DATA_TYPE_SITE_SETTINGS) {
     browsing_data::RemoveSiteSettingsData(delete_begin, delete_end,
                                           host_content_settings_map);
-
-    // Reset the Default Search Engine permissions to their default.
-    ResetDsePermissions(browser_context_);
   }
 
   RunCallbackIfDone();

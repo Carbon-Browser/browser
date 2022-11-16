@@ -6,9 +6,9 @@
 
 #include "ash/accessibility/accessibility_controller_impl.h"
 #include "ash/constants/ash_features.h"
+#include "ash/controls/contextual_tooltip.h"
 #include "ash/public/cpp/shelf_config.h"
 #include "ash/session/session_controller_impl.h"
-#include "ash/shelf/contextual_tooltip.h"
 #include "ash/shelf/shelf_layout_manager.h"
 #include "ash/shelf/shelf_observer.h"
 #include "ash/shelf/shelf_widget.h"
@@ -41,34 +41,33 @@ constexpr int kInAppToHomeVerticalMarginDrop = 10;
 constexpr int kInAppToHomeNudgeVerticalMarginDrop = 8;
 
 // Animation time for each translation of drag handle to show contextual nudge.
-constexpr base::TimeDelta kInAppToHomeAnimationTime =
-    base::TimeDelta::FromMilliseconds(300);
+constexpr base::TimeDelta kInAppToHomeAnimationTime = base::Milliseconds(300);
 
 // Animation time to return drag handle to original position after hiding
 // contextual nudge.
 constexpr base::TimeDelta kInAppToHomeHideAnimationDuration =
-    base::TimeDelta::FromMilliseconds(600);
+    base::Milliseconds(600);
 
 // Animation time to return drag handle to original position after the user taps
 // to hide the contextual nudge.
 constexpr base::TimeDelta kInAppToHomeHideOnTapAnimationDuration =
-    base::TimeDelta::FromMilliseconds(100);
+    base::Milliseconds(100);
 
 // Delay between animating drag handle and tooltip opacity.
 constexpr base::TimeDelta kInAppToHomeNudgeOpacityDelay =
-    base::TimeDelta::FromMilliseconds(500);
+    base::Milliseconds(500);
 
 // Fade in time for drag handle nudge tooltip.
 constexpr base::TimeDelta kInAppToHomeNudgeOpacityAnimationDuration =
-    base::TimeDelta::FromMilliseconds(200);
+    base::Milliseconds(200);
 
 // Delay before animating the drag handle and showing the drag handle nudge.
-constexpr base::TimeDelta kShowNudgeDelay = base::TimeDelta::FromSeconds(2);
+constexpr base::TimeDelta kShowNudgeDelay = base::Seconds(2);
 
 // This class is deleted after OnImplicitAnimationsCompleted() is called.
 class HideNudgeObserver : public ui::ImplicitAnimationObserver {
  public:
-  HideNudgeObserver(ContextualNudge* drag_handle_nudge)
+  explicit HideNudgeObserver(ContextualNudge* drag_handle_nudge)
       : drag_handle_nudge_(drag_handle_nudge) {}
   ~HideNudgeObserver() override = default;
 
@@ -80,7 +79,7 @@ class HideNudgeObserver : public ui::ImplicitAnimationObserver {
   }
 
  private:
-  ContextualNudge* drag_handle_nudge_;
+  ContextualNudge* const drag_handle_nudge_;
 };
 
 }  // namespace
@@ -197,11 +196,6 @@ void DragHandle::HideDragHandleNudge(
     contextual_tooltip::HandleGesturePerformed(
         Shell::Get()->session_controller()->GetLastActiveUserPrefService(),
         contextual_tooltip::TooltipType::kInAppToHome);
-  } else {
-    // HandleGesturePerformed will also call MaybeLogNudgeDismissedMetrics so we
-    // do not need to call it separately for kPerformedGesture.
-    contextual_tooltip::MaybeLogNudgeDismissedMetrics(
-        contextual_tooltip::TooltipType::kInAppToHome, reason);
   }
 
   HideDragHandleNudgeHelper(/*hidden_by_tap=*/reason ==

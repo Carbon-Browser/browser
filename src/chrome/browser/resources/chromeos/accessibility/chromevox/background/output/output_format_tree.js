@@ -6,10 +6,7 @@
  * @fileoverview Parses the output format.
  */
 
-goog.provide('OutputFormatTree');
-
-goog.scope(function() {
-OutputFormatTree = class {
+export class OutputFormatTree {
   /** @private */
   constructor() {
     /** @public {string} */
@@ -33,7 +30,7 @@ OutputFormatTree = class {
       format = format.replace(/([,:])\s+/gm, '$1');
       const words = format.split(' ');
       // Ignore empty strings.
-      words.filter(word => !!word);
+      words.filter(word => Boolean(word));
 
       formatTrees = words.map(word => OutputFormatTree.buildFromString_(word));
     } else if (format) {
@@ -84,5 +81,4 @@ OutputFormatTree = class {
 
     return root;
   }
-};
-});  // goog.scope
+}

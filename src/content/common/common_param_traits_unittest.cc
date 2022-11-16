@@ -10,7 +10,6 @@
 #include <memory>
 #include <utility>
 
-#include "base/macros.h"
 #include "base/values.h"
 #include "components/viz/common/surfaces/surface_info.h"
 #include "content/common/content_param_traits.h"
@@ -72,7 +71,7 @@ TEST(IPCMessageTest, Bitmap) {
   IPC::Message bad_msg(1, 2, IPC::Message::PRIORITY_NORMAL);
   // Copy the first message block over to |bad_msg|.
   const char* fixed_data;
-  int fixed_data_size;
+  size_t fixed_data_size;
   iter = base::PickleIterator(msg);
   EXPECT_TRUE(iter.ReadData(&fixed_data, &fixed_data_size));
   bad_msg.WriteData(fixed_data, fixed_data_size);
@@ -89,9 +88,9 @@ TEST(IPCMessageTest, Bitmap) {
 
 TEST(IPCMessageTest, ListValue) {
   base::ListValue input;
-  input.Append(42.42);
-  input.Append("forty");
-  input.Append(std::make_unique<base::Value>());
+  input.GetList().Append(42.42);
+  input.GetList().Append("forty");
+  input.GetList().Append(base::Value());
 
   IPC::Message msg(1, 2, IPC::Message::PRIORITY_NORMAL);
   IPC::WriteParam(&msg, input);
@@ -100,7 +99,7 @@ TEST(IPCMessageTest, ListValue) {
   base::PickleIterator iter(msg);
   EXPECT_TRUE(IPC::ReadParam(&msg, &iter, &output));
 
-  EXPECT_TRUE(input.Equals(&output));
+  EXPECT_EQ(input, output);
 
   // Also test the corrupt case.
   IPC::Message bad_msg(1, 2, IPC::Message::PRIORITY_NORMAL);
@@ -134,7 +133,7 @@ TEST(IPCMessageTest, DictionaryValue) {
   base::PickleIterator iter(msg);
   EXPECT_TRUE(IPC::ReadParam(&msg, &iter, &output));
 
-  EXPECT_TRUE(input.Equals(&output));
+  EXPECT_EQ(input, output);
 
   // Also test the corrupt case.
   IPC::Message bad_msg(1, 2, IPC::Message::PRIORITY_NORMAL);
@@ -176,6 +175,7 @@ TEST(IPCMessageTest, SSLInfo) {
   const net::SHA256HashValue kCertPublicKeyHashValue = {{0x01, 0x02}};
   in.public_key_hashes.push_back(net::HashValue(kCertPublicKeyHashValue));
   in.pinning_failure_log = "foo";
+  in.encrypted_client_hello = true;
 
   scoped_refptr<net::ct::SignedCertificateTimestamp> sct(
       new net::ct::SignedCertificateTimestamp());
@@ -217,6 +217,7 @@ TEST(IPCMessageTest, SSLInfo) {
   ASSERT_EQ(in.handshake_type, out.handshake_type);
   ASSERT_EQ(in.public_key_hashes, out.public_key_hashes);
   ASSERT_EQ(in.pinning_failure_log, out.pinning_failure_log);
+  ASSERT_EQ(in.encrypted_client_hello, out.encrypted_client_hello);
 
   ASSERT_EQ(in.signed_certificate_timestamps.size(),
             out.signed_certificate_timestamps.size());

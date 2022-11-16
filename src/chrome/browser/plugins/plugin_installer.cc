@@ -8,6 +8,7 @@
 
 #include "base/bind.h"
 #include "base/callback_helpers.h"
+#include "base/observer_list.h"
 #include "base/process/process.h"
 #include "chrome/browser/platform_util.h"
 #include "chrome/browser/plugins/plugin_installer_observer.h"
@@ -28,8 +29,8 @@ void PluginInstaller::RemoveObserver(PluginInstallerObserver* observer) {
   strong_observer_count_--;
   observers_.RemoveObserver(observer);
   if (strong_observer_count_ == 0) {
-    for (WeakPluginInstallerObserver& observer : weak_observers_)
-      observer.OnlyWeakObserversLeft();
+    for (WeakPluginInstallerObserver& weak_observer : weak_observers_)
+      weak_observer.OnlyWeakObserversLeft();
   }
 }
 

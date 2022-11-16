@@ -4,6 +4,7 @@
 
 #include "third_party/blink/public/common/interest_group/interest_group.h"
 
+#include <cmath>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -12,7 +13,7 @@
 #include "base/time/time.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/common_export.h"
-#include "third_party/blink/public/mojom/interest_group/interest_group_types.mojom-forward.h"
+#include "third_party/blink/public/mojom/interest_group/interest_group_types.mojom.h"
 #include "url/gurl.h"
 #include "url/origin.h"
 #include "url/url_constants.h"
@@ -51,6 +52,14 @@ InterestGroup::Ad::Ad(GURL render_url, absl::optional<std::string> metadata)
 
 InterestGroup::Ad::~Ad() = default;
 
+size_t InterestGroup::Ad::EstimateSize() const {
+  size_t size = 0u;
+  size += render_url.spec().length();
+  if (metadata)
+    size += metadata->size();
+  return size;
+}
+
 bool InterestGroup::Ad::operator==(const Ad& other) const {
   return render_url == other.render_url && metadata == other.metadata;
 }
@@ -61,8 +70,11 @@ InterestGroup::InterestGroup(
     base::Time expiry,
     url::Origin owner,
     std::string name,
+    double priority,
+    blink::mojom::InterestGroup::ExecutionMode execution_mode,
     absl::optional<GURL> bidding_url,
-    absl::optional<GURL> update_url,
+    absl::optional<GURL> bidding_wasm_helper_url,
+    absl::optional<GURL> daily_update_url,
     absl::optional<GURL> trusted_bidding_signals_url,
     absl::optional<std::vector<std::string>> trusted_bidding_signals_keys,
     absl::optional<std::string> user_bidding_signals,
@@ -71,8 +83,11 @@ InterestGroup::InterestGroup(
     : expiry(expiry),
       owner(std::move(owner)),
       name(std::move(name)),
+      priority(priority),
+      execution_mode(execution_mode),
       bidding_url(std::move(bidding_url)),
-      update_url(std::move(update_url)),
+      bidding_wasm_helper_url(std::move(bidding_wasm_helper_url)),
+      daily_update_url(std::move(daily_update_url)),
       trusted_bidding_signals_url(std::move(trusted_bidding_signals_url)),
       trusted_bidding_signals_keys(std::move(trusted_bidding_signals_keys)),
       user_bidding_signals(std::move(user_bidding_signals)),
@@ -88,10 +103,25 @@ bool InterestGroup::IsValid() const {
   if (owner.scheme() != url::kHttpsScheme)
     return false;
 
+  if (!std::isfinite(priority))
+    return false;
+
+  if (execution_mode !=
+          blink::mojom::InterestGroup::ExecutionMode::kCompatibilityMode &&
+      execution_mode !=
+          blink::mojom::InterestGroup::ExecutionMode::kGroupedByOriginMode) {
+    return false;
+  }
+
   if (bidding_url && !IsUrlAllowed(*bidding_url, *this))
     return false;
 
-  if (update_url && !IsUrlAllowed(*update_url, *this))
+  if (bidding_wasm_helper_url &&
+      !IsUrlAllowed(*bidding_wasm_helper_url, *this)) {
+    return false;
+  }
+
+  if (daily_update_url && !IsUrlAllowed(*daily_update_url, *this))
     return false;
 
   if (trusted_bidding_signals_url) {
@@ -118,15 +148,51 @@ bool InterestGroup::IsValid() const {
     }
   }
 
-  return true;
+  return EstimateSize() < blink::mojom::kMaxInterestGroupSize;
+}
+
+size_t InterestGroup::EstimateSize() const {
+  size_t size = 0u;
+  size += owner.Serialize().size();
+  size += name.size();
+
+  size += sizeof(priority);
+  size += sizeof(execution_mode);
+
+  if (bidding_url)
+    size += bidding_url->spec().length();
+  if (bidding_wasm_helper_url)
+    size += bidding_wasm_helper_url->spec().length();
+  if (daily_update_url)
+    size += daily_update_url->spec().length();
+  if (trusted_bidding_signals_url)
+    size += trusted_bidding_signals_url->spec().length();
+  if (trusted_bidding_signals_keys) {
+    for (const std::string& key : *trusted_bidding_signals_keys)
+      size += key.size();
+  }
+  if (user_bidding_signals)
+    size += user_bidding_signals->size();
+  if (ads) {
+    for (const Ad& ad : *ads)
+      size += ad.EstimateSize();
+  }
+  if (ad_components) {
+    for (const Ad& ad : *ad_components)
+      size += ad.EstimateSize();
+  }
+  return size;
 }
 
 bool InterestGroup::IsEqualForTesting(const InterestGroup& other) const {
-  return std::tie(expiry, owner, name, bidding_url, update_url,
+  return std::tie(expiry, owner, name, priority, execution_mode, bidding_url,
+                  bidding_wasm_helper_url, daily_update_url,
                   trusted_bidding_signals_url, trusted_bidding_signals_keys,
                   user_bidding_signals, ads, ad_components) ==
-         std::tie(other.expiry, other.owner, other.name, other.bidding_url,
-                  other.update_url, other.trusted_bidding_signals_url,
+         std::tie(other.expiry, other.owner, other.name, other.priority,
+                  other.execution_mode, other.bidding_url,
+                  other.bidding_wasm_helper_url, other.daily_update_url,
+                  other.trusted_bidding_signals_url,
                   other.trusted_bidding_signals_keys,
                   other.user_bidding_signals, other.ads, other.ad_components);
 }

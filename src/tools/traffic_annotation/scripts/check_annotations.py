@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # Copyright 2017 The Chromium Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -30,7 +30,7 @@ CHANGELIST_SIZE_TO_TRIGGER_FULL_TEST = 100
 
 
 class NetworkTrafficAnnotationChecker():
-  EXTENSIONS = ['.cc', '.mm',]
+  EXTENSIONS = ['.cc', '.mm', '.java']
   ANNOTATIONS_FILE = 'annotations.xml'
 
   def __init__(self, build_path=None):
@@ -118,6 +118,7 @@ class NetworkTrafficAnnotationChecker():
       print(stdout_text)
     if stderr_text:
       print("\n[Runtime Messages]:\n%s" % stderr_text)
+
     return return_code
 
 

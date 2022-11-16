@@ -90,9 +90,11 @@ NSString* const kPreviousSessionInfoOSVersion = @"PreviousSessionInfoOSVersion";
 //   the device thermal state.
 NSString* const kPreviousSessionInfoThermalState =
     @"PreviousSessionInfoThermalState";
+// TODO(crbug.com/1266034): Remove key for no longer logged state.
 // - A (boolean) describing whether or not low power mode is enabled.
 NSString* const kPreviousSessionInfoLowPowerMode =
     @"PreviousSessionInfoLowPowerMode";
+// TODO(crbug.com/1295763): Remove key for no longer used state.
 // - A (boolean) describing whether the last session was on Multi-Window enabled
 //   version of the application.
 NSString* const kPreviousSessionInfoMultiWindowEnabled =
@@ -138,11 +140,9 @@ NSString* const kPreviousSessionInfoOTRTabCount =
 @property(nonatomic, assign) float deviceBatteryLevel;
 @property(nonatomic, assign) DeviceBatteryState deviceBatteryState;
 @property(nonatomic, assign) DeviceThermalState deviceThermalState;
-@property(nonatomic, assign) BOOL deviceWasInLowPowerMode;
 @property(nonatomic, assign) BOOL didSeeMemoryWarningShortlyBeforeTerminating;
 @property(nonatomic, assign) BOOL isFirstSessionAfterUpgrade;
 @property(nonatomic, assign) BOOL isFirstSessionAfterLanguageChange;
-@property(nonatomic, assign) BOOL isMultiWindowEnabledSession;
 @property(nonatomic, assign) BOOL OSRestartedAfterPreviousSession;
 @property(nonatomic, strong) NSString* OSVersion;
 @property(nonatomic, strong) NSDate* sessionStartTime;
@@ -189,8 +189,6 @@ static PreviousSessionInfo* gSharedInstance = nil;
     gSharedInstance.didSeeMemoryWarningShortlyBeforeTerminating =
         [defaults boolForKey:previous_session_info_constants::
                                  kDidSeeMemoryWarningShortlyBeforeTerminating];
-    gSharedInstance.deviceWasInLowPowerMode =
-        [defaults boolForKey:kPreviousSessionInfoLowPowerMode];
     gSharedInstance.deviceBatteryState = static_cast<DeviceBatteryState>(
         [defaults integerForKey:kPreviousSessionInfoBatteryState]);
     gSharedInstance.deviceBatteryLevel =
@@ -212,10 +210,11 @@ static PreviousSessionInfo* gSharedInstance = nil;
     gSharedInstance.isFirstSessionAfterUpgrade =
         ![lastRanVersion isEqualToString:currentVersion];
 
-    // TODO(crbug.com/1109280): Remove after the migration to Multi-Window
-    // sessions is done.
-    gSharedInstance.isMultiWindowEnabledSession =
-        [defaults boolForKey:kPreviousSessionInfoMultiWindowEnabled];
+    // This key is no longer being used so we remove it here,
+    // but this should be cleaned-up in many milestones.
+    // TODO(crbug.com/1295763): Remove this line.
+    [[NSUserDefaults standardUserDefaults]
+        removeObjectForKey:kPreviousSessionInfoMultiWindowEnabled];
 
     gSharedInstance.connectedSceneSessionsIDs = [NSMutableSet
         setWithArray:[defaults
@@ -297,6 +296,8 @@ static PreviousSessionInfo* gSharedInstance = nil;
 
   [[NSUserDefaults standardUserDefaults]
       removeObjectForKey:kPreviousSessionInfoAppWillTerminate];
+  [[NSUserDefaults standardUserDefaults]
+      removeObjectForKey:kPreviousSessionInfoLowPowerMode];
 
   [defaults setObject:[NSDate date] forKey:kPreviousSessionInfoStartTime];
 
@@ -347,12 +348,6 @@ static PreviousSessionInfo* gSharedInstance = nil;
 
   [[NSNotificationCenter defaultCenter]
       addObserver:self
-         selector:@selector(updateStoredLowPowerMode)
-             name:NSProcessInfoPowerStateDidChangeNotification
-           object:nil];
-
-  [[NSNotificationCenter defaultCenter]
-      addObserver:self
          selector:@selector(updateStoredThermalState)
              name:NSProcessInfoThermalStateDidChangeNotification
            object:nil];
@@ -382,7 +377,6 @@ static PreviousSessionInfo* gSharedInstance = nil;
   [self updateApplicationState];
   [self updateStoredBatteryLevel];
   [self updateStoredBatteryState];
-  [self updateStoredLowPowerMode];
   [self updateStoredThermalState];
   // Save critical state information for crash detection.
   [[NSUserDefaults standardUserDefaults] synchronize];
@@ -456,18 +450,6 @@ static PreviousSessionInfo* gSharedInstance = nil;
   [[NSUserDefaults standardUserDefaults]
       setInteger:batteryStateValue
           forKey:kPreviousSessionInfoBatteryState];
-
-  [self updateSessionEndTime];
-}
-
-- (void)updateStoredLowPowerMode {
-  if (!self.recordingCurrentSession)
-    return;
-  BOOL isLowPoweredModeEnabled =
-      [[NSProcessInfo processInfo] isLowPowerModeEnabled];
-  [[NSUserDefaults standardUserDefaults]
-      setInteger:isLowPoweredModeEnabled
-          forKey:kPreviousSessionInfoLowPowerMode];
 
   [self updateSessionEndTime];
 }
@@ -562,15 +544,6 @@ static PreviousSessionInfo* gSharedInstance = nil;
   [self synchronizeSceneSessionIDs];
 }
 
-- (void)updateMultiWindowSupportStatus {
-  gSharedInstance.isMultiWindowEnabledSession =
-      base::ios::IsMultiwindowSupported();
-  NSUserDefaults* defaults = [NSUserDefaults standardUserDefaults];
-  [defaults setBool:gSharedInstance.isMultiWindowEnabledSession
-             forKey:kPreviousSessionInfoMultiWindowEnabled];
-  [defaults synchronize];
-}
-
 - (base::ScopedClosureRunner)startSessionRestoration {
   if (self.numberOfSessionsBeingRestored == 0) {
     [NSUserDefaults.standardUserDefaults
@@ -630,9 +603,10 @@ static PreviousSessionInfo* gSharedInstance = nil;
 
 - (void)setReportParameterURL:(const GURL&)URL forKey:(NSString*)key {
   // Store only URL origin (not whole URL spec) as requested by Privacy Team.
-  [self setReportParameterValue:base::SysUTF8ToNSString(
-                                    URL.GetOrigin().spec().c_str())
-                         forKey:key];
+  [self
+      setReportParameterValue:base::SysUTF8ToNSString(
+                                  URL.DeprecatedGetOriginAsURL().spec().c_str())
+                       forKey:key];
 }
 
 - (void)removeReportParameterForKey:(NSString*)key {

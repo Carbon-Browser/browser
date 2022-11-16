@@ -7,7 +7,6 @@
 
 #include <memory>
 
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "chrome/browser/ash/policy/core/device_cloud_policy_manager_ash.h"
 
@@ -24,6 +23,11 @@ class FakeDeviceCloudPolicyManager : public DeviceCloudPolicyManagerAsh {
   FakeDeviceCloudPolicyManager(
       std::unique_ptr<DeviceCloudPolicyStoreAsh> store,
       const scoped_refptr<base::SequencedTaskRunner>& task_runner);
+
+  FakeDeviceCloudPolicyManager(const FakeDeviceCloudPolicyManager&) = delete;
+  FakeDeviceCloudPolicyManager& operator=(const FakeDeviceCloudPolicyManager&) =
+      delete;
+
   ~FakeDeviceCloudPolicyManager() override;
 
   void set_unregister_result(bool value) { unregister_result_ = value; }
@@ -34,8 +38,6 @@ class FakeDeviceCloudPolicyManager : public DeviceCloudPolicyManagerAsh {
 
  private:
   bool unregister_result_;
-
-  DISALLOW_COPY_AND_ASSIGN(FakeDeviceCloudPolicyManager);
 };
 
 }  // namespace policy

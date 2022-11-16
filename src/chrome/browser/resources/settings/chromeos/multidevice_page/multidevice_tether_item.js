@@ -11,70 +11,106 @@
  * serves a role comparable to the internet_page's network-summary element.
  */
 
-Polymer({
-  is: 'settings-multidevice-tether-item',
+import 'chrome://resources/cr_components/chromeos/network/network_icon.m.js';
+import '../../settings_shared.css.js';
+import '../../settings_vars.css.js';
+import './multidevice_feature_item.js';
 
-  behaviors: [
-    NetworkListenerBehavior,
-    MultiDeviceFeatureBehavior,
-  ],
+import {MojoInterfaceProviderImpl} from 'chrome://resources/cr_components/chromeos/network/mojo_interface_provider.m.js';
+import {NetworkListenerBehavior, NetworkListenerBehaviorInterface} from 'chrome://resources/cr_components/chromeos/network/network_listener_behavior.m.js';
+import {OncMojo} from 'chrome://resources/cr_components/chromeos/network/onc_mojo.m.js';
+import {html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-  properties: {
-    /**
-     * The device state for tethering.
-     * @private {?OncMojo.DeviceStateProperties|undefined}
-     */
-    deviceState_: Object,
+import {loadTimeData} from '../../i18n_setup.js';
+import {routes} from '../os_route.js';
+import {OsSettingsRoutes} from '../os_settings_routes.js';
 
-    /**
-     * The network state for a potential tethering host phone. Note that there
-     * is at most one because only one MultiDevice host phone is allowed on an
-     * account at a given time.
-     * @private {?OncMojo.NetworkStateProperties|undefined}
-     */
-    activeNetworkState_: Object,
+import {MultiDeviceFeatureBehavior, MultiDeviceFeatureBehaviorInterface} from './multidevice_feature_behavior.js';
 
-    /**
-     * Alias for allowing Polymer bindings to settings.routes.
-     * @type {?OsSettingsRoutes}
-     */
-    routes: {
-      type: Object,
-      value: settings.routes,
-    },
+/**
+ * @constructor
+ * @extends {PolymerElement}
+ * @implements {NetworkListenerBehaviorInterface}
+ * @implements {MultiDeviceFeatureBehaviorInterface}
+ */
+const SettingsMultideviceTetherItemElementBase = mixinBehaviors(
+    [
+      NetworkListenerBehavior,
+      MultiDeviceFeatureBehavior,
+    ],
+    PolymerElement);
 
-    /**
-     * Whether to show technology badge on mobile network icon.
-     * @private
-     */
-    showTechnologyBadge_: {
-      type: Boolean,
-      value() {
-        return loadTimeData.valueExists('showTechnologyBadge') &&
-            loadTimeData.getBoolean('showTechnologyBadge');
-      }
-    },
-  },
+/** @polymer */
+class SettingsMultideviceTetherItemElement extends
+    SettingsMultideviceTetherItemElementBase {
+  static get is() {
+    return 'settings-multidevice-tether-item';
+  }
 
-  /** @private {?chromeos.networkConfig.mojom.CrosNetworkConfigRemote} */
-  networkConfig_: null,
+  static get template() {
+    return html`{__html_template__}`;
+  }
+
+  static get properties() {
+    return {
+      /**
+       * The device state for tethering.
+       * @private {?OncMojo.DeviceStateProperties|undefined}
+       */
+      deviceState_: Object,
+
+      /**
+       * The network state for a potential tethering host phone. Note that there
+       * is at most one because only one MultiDevice host phone is allowed on an
+       * account at a given time.
+       * @private {?OncMojo.NetworkStateProperties|undefined}
+       */
+      activeNetworkState_: Object,
+
+      /**
+       * Alias for allowing Polymer bindings to routes.
+       * @type {?OsSettingsRoutes}
+       */
+      routes: {
+        type: Object,
+        value: routes,
+      },
+
+      /**
+       * Whether to show technology badge on mobile network icon.
+       * @private
+       */
+      showTechnologyBadge_: {
+        type: Boolean,
+        value() {
+          return loadTimeData.valueExists('showTechnologyBadge') &&
+              loadTimeData.getBoolean('showTechnologyBadge');
+        },
+      },
+    };
+  }
 
   /** @override */
-  created() {
-    this.networkConfig_ = network_config.MojoInterfaceProviderImpl.getInstance()
-                              .getMojoServiceRemote();
-  },
+  constructor() {
+    super();
+
+    /** @private {!chromeos.networkConfig.mojom.CrosNetworkConfigRemote} */
+    this.networkConfig_ =
+        MojoInterfaceProviderImpl.getInstance().getMojoServiceRemote();
+  }
 
   /** @override */
-  attached() {
+  connectedCallback() {
+    super.connectedCallback();
+
     this.updateTetherDeviceState_();
     this.updateTetherNetworkState_();
-  },
+  }
 
   /** @override */
   focus() {
-    this.$$('settings-multidevice-feature-item').focus();
-  },
+    this.shadowRoot.querySelector('settings-multidevice-feature-item').focus();
+  }
 
   /**
    * CrosNetworkConfigObserver impl
@@ -96,17 +132,17 @@ Polymer({
         this.activeNetworkState_ = response.result;
       }
     });
-  },
+  }
 
   /** CrosNetworkConfigObserver impl */
   onNetworkStateListChanged() {
     this.updateTetherNetworkState_();
-  },
+  }
 
   /** CrosNetworkConfigObserver impl */
   onDeviceStateListChanged() {
     this.updateTetherDeviceState_();
-  },
+  }
 
   /**
    * Retrieves device states (OncMojo.DeviceStateProperties) and sets
@@ -131,7 +167,7 @@ Polymer({
         type: kTether,
       };
     });
-  },
+  }
 
   /**
    * Retrieves all Instant Tethering network states
@@ -153,7 +189,7 @@ Polymer({
       this.activeNetworkState_ =
           networks[0] || OncMojo.getDefaultNetworkState(kTether);
     });
-  },
+  }
 
   /**
    * Returns an array containing the active network state if there is one
@@ -164,7 +200,7 @@ Polymer({
    */
   getNetworkStateList_() {
     return this.activeNetworkState_.guid ? [this.activeNetworkState_] : [];
-  },
+  }
 
   /**
    * @return {!URLSearchParams}
@@ -172,5 +208,9 @@ Polymer({
    */
   getTetherNetworkUrlSearchParams_() {
     return new URLSearchParams('type=Tether');
-  },
-});
+  }
+}
+
+customElements.define(
+    SettingsMultideviceTetherItemElement.is,
+    SettingsMultideviceTetherItemElement);

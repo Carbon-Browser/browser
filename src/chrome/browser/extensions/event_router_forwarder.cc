@@ -32,7 +32,7 @@ EventRouterForwarder::~EventRouterForwarder() {
 void EventRouterForwarder::BroadcastEventToRenderers(
     events::HistogramValue histogram_value,
     const std::string& event_name,
-    std::unique_ptr<base::ListValue> event_args,
+    base::Value::List event_args,
     const GURL& event_url,
     bool dispatch_to_off_the_record_profiles) {
   HandleEvent(std::string(), histogram_value, event_name, std::move(event_args),
@@ -42,7 +42,7 @@ void EventRouterForwarder::BroadcastEventToRenderers(
 void EventRouterForwarder::DispatchEventToRenderers(
     events::HistogramValue histogram_value,
     const std::string& event_name,
-    std::unique_ptr<base::ListValue> event_args,
+    base::Value::List event_args,
     void* profile,
     bool use_profile_to_restrict_events,
     const GURL& event_url,
@@ -58,7 +58,7 @@ void EventRouterForwarder::HandleEvent(
     const std::string& extension_id,
     events::HistogramValue histogram_value,
     const std::string& event_name,
-    std::unique_ptr<base::ListValue> event_args,
+    base::Value::List event_args,
     void* profile_ptr,
     bool use_profile_to_restrict_events,
     const GURL& event_url,
@@ -94,10 +94,11 @@ void EventRouterForwarder::HandleEvent(
   }
 
   if (dispatch_to_off_the_record_profiles) {
-    for (Profile* profile : profiles_to_dispatch_to) {
-      if (profile->HasPrimaryOTRProfile())
+    for (Profile* profile_to_dispatch_to : profiles_to_dispatch_to) {
+      if (profile_to_dispatch_to->HasPrimaryOTRProfile())
         profiles_to_dispatch_to.insert(
-            profile->GetPrimaryOTRProfile(/*create_if_needed=*/true));
+            profile_to_dispatch_to->GetPrimaryOTRProfile(
+                /*create_if_needed=*/true));
     }
   }
 
@@ -108,11 +109,11 @@ void EventRouterForwarder::HandleEvent(
     return;
 
   // Use the same event_args for each profile (making copies as needed).
-  std::vector<std::unique_ptr<base::ListValue>> per_profile_args;
+  std::vector<base::Value::List> per_profile_args;
   per_profile_args.reserve(profiles_to_dispatch_to.size());
   per_profile_args.emplace_back(std::move(event_args));
   for (size_t i = 1; i < profiles_to_dispatch_to.size(); ++i)
-    per_profile_args.emplace_back(per_profile_args.front()->CreateDeepCopy());
+    per_profile_args.emplace_back(per_profile_args.front().Clone());
   DCHECK_EQ(per_profile_args.size(), profiles_to_dispatch_to.size());
 
   size_t profile_args_index = 0;
@@ -131,7 +132,7 @@ void EventRouterForwarder::CallEventRouter(
     const std::string& extension_id,
     events::HistogramValue histogram_value,
     const std::string& event_name,
-    std::unique_ptr<base::ListValue> event_args,
+    base::Value::List event_args,
     Profile* restrict_to_profile,
     const GURL& event_url) {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -142,9 +143,8 @@ void EventRouterForwarder::CallEventRouter(
     return;
 #endif
 
-  auto event = std::make_unique<Event>(histogram_value, event_name,
-                                       std::move(*event_args).TakeList(),
-                                       restrict_to_profile);
+  auto event = std::make_unique<Event>(
+      histogram_value, event_name, std::move(event_args), restrict_to_profile);
   event->event_url = event_url;
   if (extension_id.empty()) {
     extensions::EventRouter::Get(profile)->BroadcastEvent(std::move(event));

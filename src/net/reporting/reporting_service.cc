@@ -10,12 +10,12 @@
 #include "base/feature_list.h"
 #include "base/json/json_reader.h"
 #include "base/logging.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/tick_clock.h"
 #include "base/time/time.h"
 #include "base/values.h"
 #include "net/base/features.h"
+#include "net/base/isolation_info.h"
 #include "net/http/structured_headers.h"
 #include "net/reporting/reporting_browsing_data_remover.h"
 #include "net/reporting/reporting_cache.h"
@@ -26,6 +26,7 @@
 #include "net/reporting/reporting_uploader.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
+#include "url/origin.h"
 
 namespace net {
 
@@ -40,14 +41,14 @@ constexpr int kMaxJsonDepth = 5;
 // Tasks are queued pending completion of loading from the store.
 class ReportingServiceImpl : public ReportingService {
  public:
-  ReportingServiceImpl(std::unique_ptr<ReportingContext> context)
-      : context_(std::move(context)),
-        shut_down_(false),
-        started_loading_from_store_(false),
-        initialized_(false) {
+  explicit ReportingServiceImpl(std::unique_ptr<ReportingContext> context)
+      : context_(std::move(context)) {
     if (!context_->IsClientDataPersisted())
       initialized_ = true;
   }
+
+  ReportingServiceImpl(const ReportingServiceImpl&) = delete;
+  ReportingServiceImpl& operator=(const ReportingServiceImpl&) = delete;
 
   // ReportingService implementation:
 
@@ -59,14 +60,14 @@ class ReportingServiceImpl : public ReportingService {
   void SetDocumentReportingEndpoints(
       const base::UnguessableToken& reporting_source,
       const url::Origin& origin,
-      const net::NetworkIsolationKey& network_isolation_key,
+      const IsolationInfo& isolation_info,
       const base::flat_map<std::string, std::string>& endpoints) override {
     DCHECK(!reporting_source.is_empty());
-    DoOrBacklogTask(
-        base::BindOnce(&ReportingServiceImpl::DoSetDocumentReportingEndpoints,
-                       base::Unretained(this), reporting_source,
-                       FixupNetworkIsolationKey(network_isolation_key), origin,
-                       std::move(endpoints)));
+    DoOrBacklogTask(base::BindOnce(
+        &ReportingServiceImpl::DoSetDocumentReportingEndpoints,
+        base::Unretained(this), reporting_source, isolation_info,
+        FixupNetworkIsolationKey(isolation_info.network_isolation_key()),
+        origin, std::move(endpoints)));
   }
 
   void SendReportsAndRemoveSource(
@@ -83,7 +84,7 @@ class ReportingServiceImpl : public ReportingService {
       const std::string& user_agent,
       const std::string& group,
       const std::string& type,
-      std::unique_ptr<const base::Value> body,
+      base::Value::Dict body,
       int depth) override {
     DCHECK(context_);
     DCHECK(context_->delegate());
@@ -109,28 +110,28 @@ class ReportingServiceImpl : public ReportingService {
         depth, queued_ticks));
   }
 
-  void ProcessReportToHeader(const GURL& url,
+  void ProcessReportToHeader(const url::Origin& origin,
                              const NetworkIsolationKey& network_isolation_key,
                              const std::string& header_string) override {
     if (header_string.size() > kMaxJsonSize)
       return;
 
-    std::unique_ptr<base::Value> header_value =
-        base::JSONReader::ReadDeprecated("[" + header_string + "]",
-                                         base::JSON_PARSE_RFC, kMaxJsonDepth);
+    absl::optional<base::Value> header_value = base::JSONReader::Read(
+        "[" + header_string + "]", base::JSON_PARSE_RFC, kMaxJsonDepth);
     if (!header_value)
       return;
 
-    DVLOG(1) << "Received Reporting policy for " << url.GetOrigin();
+    DVLOG(1) << "Received Reporting policy for " << origin;
     DoOrBacklogTask(base::BindOnce(
         &ReportingServiceImpl::DoProcessReportToHeader, base::Unretained(this),
-        FixupNetworkIsolationKey(network_isolation_key), url,
-        std::move(header_value)));
+        FixupNetworkIsolationKey(network_isolation_key), origin,
+        std::move(header_value).value()));
   }
 
-  void RemoveBrowsingData(uint64_t data_type_mask,
-                          const base::RepeatingCallback<bool(const GURL&)>&
-                              origin_filter) override {
+  void RemoveBrowsingData(
+      uint64_t data_type_mask,
+      const base::RepeatingCallback<bool(const url::Origin&)>& origin_filter)
+      override {
     DoOrBacklogTask(base::BindOnce(&ReportingServiceImpl::DoRemoveBrowsingData,
                                    base::Unretained(this), data_type_mask,
                                    origin_filter));
@@ -152,17 +153,22 @@ class ReportingServiceImpl : public ReportingService {
   }
 
   base::Value StatusAsValue() const override {
-    base::Value dict(base::Value::Type::DICTIONARY);
-    dict.SetKey("reportingEnabled", base::Value(true));
-    dict.SetKey("clients", context_->cache()->GetClientsAsValue());
-    dict.SetKey("reports", context_->cache()->GetReportsAsValue());
-    return dict;
+    base::Value::Dict dict;
+    dict.Set("reportingEnabled", true);
+    dict.Set("clients", context_->cache()->GetClientsAsValue());
+    dict.Set("reports", context_->cache()->GetReportsAsValue());
+    return base::Value(std::move(dict));
   }
 
   std::vector<const ReportingReport*> GetReports() const override {
     std::vector<const net::ReportingReport*> reports;
     context_->cache()->GetReports(&reports);
     return reports;
+  }
+
+  base::flat_map<url::Origin, std::vector<ReportingEndpoint>>
+  GetV1ReportingEndpointsByOrigin() const override {
+    return context_->cache()->GetV1ReportingEndpointsByOrigin();
   }
 
   void AddReportingCacheObserver(ReportingCacheObserver* observer) override {
@@ -199,7 +205,7 @@ class ReportingServiceImpl : public ReportingService {
       const std::string& user_agent,
       const std::string& group,
       const std::string& type,
-      std::unique_ptr<const base::Value> body,
+      base::Value::Dict body,
       int depth,
       base::TimeTicks queued_ticks) {
     DCHECK(initialized_);
@@ -209,27 +215,29 @@ class ReportingServiceImpl : public ReportingService {
   }
 
   void DoProcessReportToHeader(const NetworkIsolationKey& network_isolation_key,
-                               const GURL& url,
-                               std::unique_ptr<base::Value> header_value) {
+                               const url::Origin& origin,
+                               const base::Value& header_value) {
     DCHECK(initialized_);
+    DCHECK(header_value.is_list());
     ReportingHeaderParser::ParseReportToHeader(
-        context_.get(), network_isolation_key, url, std::move(header_value));
+        context_.get(), network_isolation_key, origin, header_value.GetList());
   }
 
   void DoSetDocumentReportingEndpoints(
       const base::UnguessableToken& reporting_source,
+      const IsolationInfo& isolation_info,
       const NetworkIsolationKey& network_isolation_key,
       const url::Origin& origin,
       base::flat_map<std::string, std::string> header_value) {
     DCHECK(initialized_);
     ReportingHeaderParser::ProcessParsedReportingEndpointsHeader(
-        context_.get(), reporting_source, network_isolation_key, origin,
-        std::move(header_value));
+        context_.get(), reporting_source, isolation_info, network_isolation_key,
+        origin, std::move(header_value));
   }
 
   void DoRemoveBrowsingData(
       uint64_t data_type_mask,
-      const base::RepeatingCallback<bool(const GURL&)>& origin_filter) {
+      const base::RepeatingCallback<bool(const url::Origin&)>& origin_filter) {
     DCHECK(initialized_);
     ReportingBrowsingDataRemover::RemoveBrowsingData(
         context_->cache(), data_type_mask, origin_filter);
@@ -290,9 +298,9 @@ class ReportingServiceImpl : public ReportingService {
   }
 
   std::unique_ptr<ReportingContext> context_;
-  bool shut_down_;
-  bool started_loading_from_store_;
-  bool initialized_;
+  bool shut_down_ = false;
+  bool started_loading_from_store_ = false;
+  bool initialized_ = false;
   std::vector<base::OnceClosure> task_backlog_;
 
   bool respect_network_isolation_key_ = base::FeatureList::IsEnabled(
@@ -303,8 +311,6 @@ class ReportingServiceImpl : public ReportingService {
   NetworkIsolationKey empty_nik_;
 
   base::WeakPtrFactory<ReportingServiceImpl> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ReportingServiceImpl);
 };
 
 }  // namespace

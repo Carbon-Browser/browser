@@ -4,12 +4,12 @@
 
 #include "extensions/renderer/storage_area.h"
 
-#include "base/cxx17_backports.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/values_test_util.h"
 #include "components/version_info/channel.h"
 #include "extensions/common/extension_builder.h"
 #include "extensions/common/features/feature_channel.h"
+#include "extensions/common/mojom/event_dispatcher.mojom.h"
 #include "extensions/common/mojom/frame.mojom.h"
 #include "extensions/renderer/bindings/api_binding_test_util.h"
 #include "extensions/renderer/bindings/api_binding_util.h"
@@ -22,21 +22,6 @@
 namespace extensions {
 
 using StorageAreaTest = NativeExtensionBindingsSystemUnittest;
-
-// A specialization of StorageAreaTest that pretends it's running
-// on version_info::Channel::UNKNOWN.
-class StorageAreaTrunkTest : public StorageAreaTest {
- public:
-  StorageAreaTrunkTest() = default;
-  ~StorageAreaTrunkTest() override = default;
-  StorageAreaTrunkTest(const StorageAreaTrunkTest& other) = delete;
-  StorageAreaTrunkTest& operator=(const StorageAreaTrunkTest& other) = delete;
-
- private:
-  // TODO(crbug.com/1185226): Remove unknown channel when chrome.storage.session
-  // is released in stable.
-  ScopedCurrentChannel current_channel_{version_info::Channel::UNKNOWN};
-};
 
 // Test that trying to use StorageArea.get without a StorageArea `this` fails
 // (with a helpful error message).
@@ -64,7 +49,7 @@ TEST_F(StorageAreaTest, TestUnboundedUse) {
       FunctionFromString(context, kRunStorageGet);
   v8::Local<v8::Value> args[] = {storage_get};
   RunFunctionAndExpectError(
-      run_storage_get, context, base::size(args), args,
+      run_storage_get, context, std::size(args), args,
       "Uncaught TypeError: Illegal invocation: Function must be called on "
       "an object of type StorageArea");
 }
@@ -92,12 +77,12 @@ TEST_F(StorageAreaTest, TestUseAfterInvalidation) {
   v8::Local<v8::Function> run_storage_get =
       FunctionFromString(context, kRunStorageGet);
   v8::Local<v8::Value> args[] = {storage};
-  RunFunction(run_storage_get, context, base::size(args), args);
+  RunFunction(run_storage_get, context, std::size(args), args);
 
   DisposeContext(context);
 
   EXPECT_FALSE(binding::IsContextValid(context));
-  RunFunctionAndExpectError(run_storage_get, context, base::size(args), args,
+  RunFunctionAndExpectError(run_storage_get, context, std::size(args), args,
                             "Uncaught Error: Extension context invalidated.");
 }
 
@@ -125,7 +110,7 @@ TEST_F(StorageAreaTest, InvalidInvocationError) {
       FunctionFromString(context, kRunStorageGet);
   v8::Local<v8::Value> args[] = {storage};
   RunFunctionAndExpectError(
-      run_storage_get, context, base::size(args), args,
+      run_storage_get, context, std::size(args), args,
       "Uncaught TypeError: " +
           api_errors::InvocationError(
               "storage.get",
@@ -133,12 +118,11 @@ TEST_F(StorageAreaTest, InvalidInvocationError) {
               "No matching signature."));
 }
 
-TEST_F(StorageAreaTrunkTest, HasOnChanged) {
-  scoped_refptr<const Extension> extension =
-      ExtensionBuilder("foo")
-          .SetManifestKey("manifest_version", 3)
-          .AddPermission("storage")
-          .Build();
+TEST_F(StorageAreaTest, HasOnChanged) {
+  scoped_refptr<const Extension> extension = ExtensionBuilder("foo")
+                                                 .SetManifestVersion(3)
+                                                 .AddPermission("storage")
+                                                 .Build();
   RegisterExtension(extension);
 
   v8::HandleScope handle_scope(isolate());
@@ -164,9 +148,10 @@ TEST_F(StorageAreaTrunkTest, HasOnChanged) {
         FunctionFromString(context, kRegisterListener);
     RunFunctionOnGlobal(add_listener, context, 0, nullptr);
 
+    base::Value::List value = ListValueFromString("['foo']");
     bindings_system()->DispatchEventInContext(
-        base::StringPrintf("storage.%s.onChanged", kStorage).c_str(),
-        ListValueFromString("['foo']").get(), nullptr, script_context);
+        base::StringPrintf("storage.%s.onChanged", kStorage).c_str(), value,
+        nullptr, script_context);
 
     EXPECT_EQ("\"foo\"", GetStringPropertyFromObject(context->Global(), context,
                                                      "change"));
@@ -174,11 +159,10 @@ TEST_F(StorageAreaTrunkTest, HasOnChanged) {
 }
 
 TEST_F(StorageAreaTest, PromiseBasedFunctionsForManifestV3) {
-  scoped_refptr<const Extension> extension =
-      ExtensionBuilder("foo")
-          .SetManifestKey("manifest_version", 3)
-          .AddPermission("storage")
-          .Build();
+  scoped_refptr<const Extension> extension = ExtensionBuilder("foo")
+                                                 .SetManifestVersion(3)
+                                                 .AddPermission("storage")
+                                                 .Build();
   RegisterExtension(extension);
 
   v8::HandleScope handle_scope(isolate());
@@ -200,7 +184,7 @@ TEST_F(StorageAreaTest, PromiseBasedFunctionsForManifestV3) {
       FunctionFromString(context, kRunStorageGet);
   v8::Local<v8::Value> args[] = {storage};
   v8::Local<v8::Value> return_value =
-      RunFunctionOnGlobal(run_storage_get, context, base::size(args), args);
+      RunFunctionOnGlobal(run_storage_get, context, std::size(args), args);
 
   ASSERT_TRUE(return_value->IsPromise());
   v8::Local<v8::Promise> promise = return_value.As<v8::Promise>();
@@ -216,7 +200,7 @@ TEST_F(StorageAreaTest, PromiseBasedFunctionsForManifestV3) {
               base::test::IsJson(R"(["local", "foo"])"));
 
   bindings_system()->HandleResponse(last_params().request_id, /*success=*/true,
-                                    *ListValueFromString(R"([{"foo": 42}])"),
+                                    ListValueFromString(R"([{"foo": 42}])"),
                                     /*error=*/std::string());
 
   EXPECT_EQ(v8::Promise::kFulfilled, promise->State());
@@ -224,11 +208,10 @@ TEST_F(StorageAreaTest, PromiseBasedFunctionsForManifestV3) {
 }
 
 TEST_F(StorageAreaTest, PromiseBasedFunctionsDisallowedForManifestV2) {
-  scoped_refptr<const Extension> extension =
-      ExtensionBuilder("foo")
-          .SetManifestKey("manifest_version", 2)
-          .AddPermission("storage")
-          .Build();
+  scoped_refptr<const Extension> extension = ExtensionBuilder("foo")
+                                                 .SetManifestVersion(2)
+                                                 .AddPermission("storage")
+                                                 .Build();
   RegisterExtension(extension);
 
   v8::HandleScope handle_scope(isolate());
@@ -255,7 +238,7 @@ TEST_F(StorageAreaTest, PromiseBasedFunctionsDisallowedForManifestV2) {
           "storage.get",
           "optional [string|array|object] keys, function callback",
           api_errors::NoMatchingSignature());
-  RunFunctionAndExpectError(run_storage_get, context, base::size(args), args,
+  RunFunctionAndExpectError(run_storage_get, context, std::size(args), args,
                             expected_error);
 }
 

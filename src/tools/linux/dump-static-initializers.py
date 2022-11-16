@@ -27,6 +27,7 @@ they reference.
 from __future__ import print_function
 
 import optparse
+import os
 import re
 import subprocess
 import sys
@@ -42,11 +43,19 @@ IS_GIT_WORKSPACE = (subprocess.Popen(
     ['git', 'rev-parse'], stderr=subprocess.PIPE).wait() == 0)
 
 
-class Demangler(object):
+class Demangler:
   """A wrapper around c++filt to provide a function to demangle symbols."""
 
   def __init__(self, toolchain):
-    self.cppfilt = subprocess.Popen([toolchain + 'c++filt'],
+    # llvm toolchain uses cxx rather than c++.
+    path = toolchain + 'cxxfilt'
+    if not os.path.exists(path):
+      path = toolchain + 'c++filt'
+    if not os.path.exists(path):
+      # Android currently has an issue where the llvm toolchain in the ndk does
+      # not contain c++filt. Hopefully fixed in next NDK update...
+      path = 'c++filt'
+    self.cppfilt = subprocess.Popen([path],
                                     stdin=subprocess.PIPE,
                                     stdout=subprocess.PIPE,
                                     universal_newlines=True)
@@ -131,6 +140,7 @@ def ParseNmLine(line):
   if match:
     addr, size, prefix, filename = match.groups()
     return (filename, int(addr, 16), int(size, 16), prefix+filename)
+  return None
 
 
 def test_ParseNmLine():

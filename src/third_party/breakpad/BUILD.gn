@@ -79,7 +79,7 @@ if (use_fuzzing_engine) {
 # {micro,mini}dump_stackwalk and minidump_dump are tool-type executables
 # that do not build on Windows.
 if (!is_win) {
-  if (current_toolchain == host_toolchain) {
+  if (current_toolchain == host_toolchain || target_os == "mac") {
     # Contains the code shared by both {micro,mini}dump_stackwalk.
     static_library("stackwalk_common") {
       sources = [
@@ -279,7 +279,7 @@ if (!is_win) {
 # Mac --------------------------------------------------------------------------
 
 if (is_mac) {
-  if (current_toolchain == host_toolchain) {
+  if (current_toolchain == host_toolchain || target_os != "ios") {
     source_set("common") {
       sources = [
         "breakpad/src/common/dwarf/bytereader.cc",
@@ -336,15 +336,6 @@ if (is_mac) {
       configs += [ ":internal_config" ]
 
       frameworks = [ "Foundation.framework" ]
-
-      if (!is_debug) {
-        # dump_syms crashes when built at -O1, -O2, and -O3.  It does
-        # not crash at -Os.  To play it safe, dump_syms is always built
-        # at -O0 until this can be sorted out.
-        # https://crbug.com/google-breakpad/329
-        configs -= [ "//build/config/compiler:default_optimization" ]
-        cflags = [ "-O0" ]
-      }
 
       deps = [ ":common" ]
     }
@@ -486,14 +477,6 @@ if (is_mac) {
   }
 }
 
-# TODO(thakis): Remove this once we roll breakpad.
-# Upstream fixes we need:
-# https://chromium.googlesource.com/breakpad/breakpad/+/0d9416d3bfa659
-# https://chromium.googlesource.com/breakpad/breakpad/+/32096a2dc8f8a7
-config("temp_wunreach_config") {
-  cflags = [ "-Wno-unreachable-code-break" ]
-}
-
 if (is_linux || is_chromeos || is_android) {
   if (current_toolchain == host_toolchain) {
     executable("symupload") {
@@ -517,7 +500,6 @@ if (is_linux || is_chromeos || is_android) {
         "breakpad/src/third_party",
       ]
 
-      configs += [ ":temp_wunreach_config" ]
       configs += [ ":tools_config" ]
 
       libs = [ "dl" ]
@@ -626,6 +608,9 @@ if (is_linux || is_chromeos || is_android) {
       "breakpad/src/client/linux/minidump_writer/linux_ptrace_dumper.h",
       "breakpad/src/client/linux/minidump_writer/minidump_writer.cc",
       "breakpad/src/client/linux/minidump_writer/minidump_writer.h",
+      "breakpad/src/client/linux/minidump_writer/pe_file.cc",
+      "breakpad/src/client/linux/minidump_writer/pe_file.h",
+      "breakpad/src/client/linux/minidump_writer/pe_structs.h",
       "breakpad/src/client/linux/minidump_writer/proc_cpuinfo_reader.h",
       "breakpad/src/client/minidump_file_writer-inl.h",
       "breakpad/src/client/minidump_file_writer.cc",
@@ -820,8 +805,6 @@ if (is_linux || is_chromeos || is_android) {
 
     include_dirs = [ "breakpad/src" ]
 
-    configs += [ ":temp_wunreach_config" ]
-
     deps = [ ":client" ]
   }
 
@@ -861,18 +844,11 @@ if (is_win) {
   }
   if (current_toolchain == host_toolchain ||
       current_toolchain == symupload_toolchain) {
-    # TODO(thakis): Remove once
-    # https://chromium-review.googlesource.com/c/breakpad/breakpad/+/2995406
-    # is rolled in.
-    config("common_windows_internal_config") {
-      cflags = [ "-Wno-unreachable-code-return" ]
-    }
     static_library("common_windows") {
       include_dirs = [
         "$visual_studio_path/DIA SDK/include",
         "breakpad/src",
       ]
-      configs += [ ":common_windows_internal_config" ]
       sources = [
         "breakpad/src/common/windows/dia_util.cc",
         "breakpad/src/common/windows/dia_util.h",
@@ -892,6 +868,8 @@ if (is_win) {
         "breakpad/src/common/windows/pe_util.h",
         "breakpad/src/common/windows/string_utils-inl.h",
         "breakpad/src/common/windows/string_utils.cc",
+        "breakpad/src/common/windows/sym_upload_v2_protocol.cc",
+        "breakpad/src/common/windows/sym_upload_v2_protocol.h",
         "breakpad/src/common/windows/symbol_collector_client.cc",
         "breakpad/src/common/windows/symbol_collector_client.h",
       ]

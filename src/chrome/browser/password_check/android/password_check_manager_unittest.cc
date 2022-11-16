@@ -7,7 +7,9 @@
 #include <memory>
 
 #include "base/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/notreached.h"
 #include "base/strings/strcat.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/bind.h"
@@ -21,9 +23,11 @@
 #include "chrome/browser/sync/sync_service_factory.h"
 #include "chrome/test/base/testing_profile.h"
 #include "components/password_manager/core/browser/bulk_leak_check_service.h"
+#include "components/password_manager/core/browser/mock_password_scripts_fetcher.h"
 #include "components/password_manager/core/browser/password_form.h"
 #include "components/password_manager/core/browser/password_manager_test_utils.h"
 #include "components/password_manager/core/browser/test_password_store.h"
+#include "components/password_manager/core/browser/ui/insecure_credentials_manager.h"
 #include "components/password_manager/core/common/password_manager_features.h"
 #include "components/password_manager/core/common/password_manager_pref_names.h"
 #include "components/prefs/testing_pref_service.h"
@@ -42,17 +46,21 @@ using password_manager::BulkLeakCheckService;
 using password_manager::InsecureCredential;
 using password_manager::InsecureCredentialTypeFlags;
 using password_manager::InsecureType;
+using password_manager::MockPasswordScriptsFetcher;
 using password_manager::PasswordCheckUIStatus;
 using password_manager::PasswordForm;
 using password_manager::TestPasswordStore;
 using password_manager::prefs::kLastTimePasswordCheckCompleted;
 using testing::_;
 using testing::AtLeast;
+using testing::Each;
 using testing::ElementsAre;
 using testing::Field;
 using testing::Invoke;
 using testing::IsEmpty;
+using testing::Key;
 using testing::NiceMock;
+using testing::Property;
 using testing::Return;
 
 using CompromisedCredentialForUI =
@@ -72,6 +80,28 @@ constexpr char16_t kPassword1[] = u"s3cre3t";
 
 constexpr char kTestEmail[] = "user@gmail.com";
 
+InsecureCredentialTypeFlags InsecureTypeFlagFromInsecureType(
+    InsecureType type) {
+  switch (type) {
+    case InsecureType::kLeaked:
+      return InsecureCredentialTypeFlags::kCredentialLeaked;
+    case InsecureType::kPhished:
+      return InsecureCredentialTypeFlags::kCredentialPhished;
+    case InsecureType::kWeak:
+      return InsecureCredentialTypeFlags::kWeakCredential;
+    case InsecureType::kReused:
+      return InsecureCredentialTypeFlags::kReusedCredential;
+  }
+  NOTREACHED() << "Unexpected InsecureType value";
+}
+
+MATCHER_P(MatchInsecureTypeFlag,
+          insecure_type_flag,
+          base::StrCat({negation ? "does not " : "", "match the type flag"})) {
+  return ((insecure_type_flag & InsecureTypeFlagFromInsecureType(arg)) !=
+          InsecureCredentialTypeFlags::kSecure);
+}
+
 class MockPasswordCheckManagerObserver : public PasswordCheckManager::Observer {
  public:
   MOCK_METHOD(void, OnSavedPasswordsFetched, (int), (override));
@@ -84,26 +114,6 @@ class MockPasswordCheckManagerObserver : public PasswordCheckManager::Observer {
               (override));
 
   MOCK_METHOD(void, OnPasswordCheckProgressChanged, (int, int), (override));
-};
-
-class MockPasswordScriptsFetcher
-    : public password_manager::PasswordScriptsFetcher {
- public:
-  MOCK_METHOD(void, PrewarmCache, (), (override));
-
-  MOCK_METHOD(void, RefreshScriptsIfNecessary, (base::OnceClosure), (override));
-
-  MOCK_METHOD(void,
-              FetchScriptAvailability,
-              (const url::Origin&,
-               const base::Version&,
-               base::OnceCallback<void(bool)>),
-              (override));
-
-  MOCK_METHOD(bool,
-              IsScriptAvailable,
-              (const url::Origin&, const base::Version&),
-              (const override));
 };
 
 BulkLeakCheckService* CreateAndUseBulkLeakCheckService(
@@ -197,7 +207,13 @@ auto ExpectCompromisedCredentialForUI(
       Field(&CompromisedCredentialForUI::display_origin, display_origin),
       Field(&CompromisedCredentialForUI::url, url), package_name_field_matcher,
       change_password_url_field_matcher,
-      Field(&CompromisedCredentialForUI::insecure_type, insecure_type),
+      Field(&CompromisedCredentialForUI::password_issues,
+            Each(Key(MatchInsecureTypeFlag(insecure_type)))),
+      Property(&CompromisedCredentialForUI::IsLeaked,
+               insecure_type == InsecureCredentialTypeFlags::kCredentialLeaked),
+      Property(
+          &CompromisedCredentialForUI::IsPhished,
+          insecure_type == InsecureCredentialTypeFlags::kCredentialPhished),
       Field(&CompromisedCredentialForUI::has_startable_script,
             has_startable_script),
       Field(&CompromisedCredentialForUI::has_auto_change_button,
@@ -230,14 +246,15 @@ class PasswordCheckManagerTest : public testing::Test {
   content::BrowserTaskEnvironment task_env_;
   signin::IdentityTestEnvironment identity_test_env_;
   TestingProfile profile_;
-  BulkLeakCheckService* service_ =
+  raw_ptr<BulkLeakCheckService> service_ =
       CreateAndUseBulkLeakCheckService(identity_test_env_.identity_manager(),
                                        &profile_);
   scoped_refptr<TestPasswordStore> store_ =
       CreateAndUseTestPasswordStore(&profile_);
-  syncer::TestSyncService* sync_service_ = CreateAndUseSyncService(&profile_);
+  raw_ptr<syncer::TestSyncService> sync_service_ =
+      CreateAndUseSyncService(&profile_);
   NiceMock<MockPasswordCheckManagerObserver> mock_observer_;
-  MockPasswordScriptsFetcher* fetcher_ =
+  raw_ptr<MockPasswordScriptsFetcher> fetcher_ =
       CreateAndUseMockPasswordScriptsFetcher(&profile_);
   base::test::ScopedFeatureList feature_list_;
   std::unique_ptr<PasswordCheckManager> manager_;
@@ -308,6 +325,7 @@ TEST_F(PasswordCheckManagerTest,
   sync_service().SetActiveDataTypes(syncer::ModelTypeSet(syncer::PASSWORDS));
   feature_list().InitWithFeatures(
       {password_manager::features::kPasswordScriptsFetching,
+       password_manager::features::kPasswordDomainCapabilitiesFetching,
        password_manager::features::kPasswordChangeInSettings},
       {});
   EXPECT_CALL(mock_observer(), OnPasswordCheckStatusChanged).Times(AtLeast(1));
@@ -368,6 +386,16 @@ TEST_F(PasswordCheckManagerTest, CorrectlyCreatesUIStructForAppCredentials) {
   store().AddLogin(form_with_affiliation);
   RunUntilIdle();
 
+  // Some weak, reused and secure credentials that should be ignored.
+  PasswordForm form_weak = MakeSavedAndroidPassword(kExampleOrg, kUsername1);
+  AddIssueToForm(&form_weak, InsecureType::kWeak);
+  store().AddLogin(form_weak);
+  PasswordForm form_reused = MakeSavedAndroidPassword(kExampleCom, kUsername2);
+  AddIssueToForm(&form_reused, InsecureType::kReused);
+  store().AddLogin(form_reused);
+  store().AddLogin(MakeSavedAndroidPassword(kExampleOrg, kUsername2));
+
+  EXPECT_THAT(manager().GetCompromisedCredentialsCount(), 2);
   EXPECT_THAT(
       manager().GetCompromisedCredentials(),
       UnorderedElementsAre(
@@ -419,6 +447,7 @@ TEST_F(PasswordCheckManagerTest,
   sync_service().SetActiveDataTypes(syncer::ModelTypeSet());
   feature_list().InitWithFeatures(
       {password_manager::features::kPasswordScriptsFetching,
+       password_manager::features::kPasswordDomainCapabilitiesFetching,
        password_manager::features::kPasswordChangeInSettings},
       {});
   PasswordForm form = MakeSavedPassword(kExampleCom, kUsername1);
@@ -449,6 +478,7 @@ TEST_F(PasswordCheckManagerTest,
   sync_service().SetActiveDataTypes(syncer::ModelTypeSet(syncer::PASSWORDS));
   feature_list().InitWithFeatures(
       {password_manager::features::kPasswordScriptsFetching,
+       password_manager::features::kPasswordDomainCapabilitiesFetching,
        password_manager::features::kPasswordChangeInSettings},
       {});
   PasswordForm form = MakeSavedPassword(kExampleCom, kUsername1);
@@ -479,6 +509,7 @@ TEST_F(PasswordCheckManagerTest,
   sync_service().SetActiveDataTypes(syncer::ModelTypeSet(syncer::PASSWORDS));
   feature_list().InitWithFeatures(
       {password_manager::features::kPasswordScriptsFetching,
+       password_manager::features::kPasswordDomainCapabilitiesFetching,
        password_manager::features::kPasswordChangeInSettings},
       {});
 
@@ -512,8 +543,9 @@ TEST_F(PasswordCheckManagerTest,
   // Enable password sync
   sync_service().SetActiveDataTypes(syncer::ModelTypeSet(syncer::PASSWORDS));
   feature_list().InitWithFeatures(
-      /*enabled_features=*/{password_manager::features::
-                                kPasswordScriptsFetching},
+      /*enabled_features=*/
+      {password_manager::features::kPasswordScriptsFetching,
+       password_manager::features::kPasswordDomainCapabilitiesFetching},
       /*disabled_features=*/{
           password_manager::features::kPasswordChangeInSettings});
 
@@ -547,6 +579,7 @@ TEST_F(PasswordCheckManagerTest,
   sync_service().SetActiveDataTypes(syncer::ModelTypeSet(syncer::PASSWORDS));
   feature_list().InitWithFeatures(
       {password_manager::features::kPasswordScriptsFetching,
+       password_manager::features::kPasswordDomainCapabilitiesFetching,
        password_manager::features::kPasswordChangeInSettings},
       {});
 

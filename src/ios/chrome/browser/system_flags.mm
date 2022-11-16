@@ -8,23 +8,16 @@
 #include "ios/chrome/browser/system_flags.h"
 
 #import <Foundation/Foundation.h>
-#import <UIKit/UIKit.h>
-#include <dispatch/dispatch.h>
-
-#include <string>
 
 #include "base/command_line.h"
 #include "base/feature_list.h"
 #include "base/metrics/field_trial.h"
-#include "base/strings/string_util.h"
-#include "base/strings/sys_string_conversions.h"
 #include "build/branding_buildflags.h"
 #include "components/autofill/core/common/autofill_switches.h"
 #include "components/password_manager/core/common/password_manager_features.h"
 #include "components/variations/variations_associated_data.h"
 #include "ios/chrome/browser/browsing_data/browsing_data_features.h"
 #include "ios/chrome/browser/chrome_switches.h"
-#import "ios/chrome/browser/ui/infobars/infobar_feature.h"
 #include "ios/chrome/browser/ui/ui_feature_flags.h"
 
 #if !defined(__has_feature) || !__has_feature(objc_arc)
@@ -38,12 +31,17 @@ NSString* const kAlternateDiscoverFeedServerURL =
 NSString* const kDisableDCHECKCrashes = @"DisableDCHECKCrashes";
 NSString* const kEnableStartupCrash = @"EnableStartupCrash";
 NSString* const kFirstRunForceEnabled = @"FirstRunForceEnabled";
-NSString* const kGaiaEnvironment = @"GAIAEnvironment";
 NSString* const kOriginServerHost = @"AlternateOriginServerHost";
 NSString* const kWhatsNewPromoStatus = @"WhatsNewPromoStatus";
 NSString* const kClearApplicationGroup = @"ClearApplicationGroup";
 const base::Feature kEnableThirdPartyKeyboardWorkaround{
     "EnableThirdPartyKeyboardWorkaround", base::FEATURE_ENABLED_BY_DEFAULT};
+
+NSString* const kForceBackgroundRefreshForFollowingFeedEnabled =
+    @"ForceBackgroundRefreshForFollowingFeedEnabled";
+NSString* const kBackgroundRefreshMaxAgeInSeconds =
+    @"BackgroundRefreshMaxAgeInSeconds";
+
 }  // namespace
 
 namespace experimental_flags {
@@ -53,20 +51,8 @@ bool AlwaysDisplayFirstRun() {
       [[NSUserDefaults standardUserDefaults] boolForKey:kFirstRunForceEnabled];
 }
 
-GaiaEnvironment GetGaiaEnvironment() {
-  NSString* gaia_environment =
-      [[NSUserDefaults standardUserDefaults] objectForKey:kGaiaEnvironment];
-  if ([gaia_environment isEqualToString:@"Staging"])
-    return GAIA_ENVIRONMENT_STAGING;
-  if ([gaia_environment isEqualToString:@"Test"])
-    return GAIA_ENVIRONMENT_TEST;
-  return GAIA_ENVIRONMENT_PROD;
-}
-
-std::string GetOriginServerHost() {
-  NSString* alternateHost =
-      [[NSUserDefaults standardUserDefaults] stringForKey:kOriginServerHost];
-  return base::SysNSStringToUTF8(alternateHost);
+NSString* GetOriginServerHost() {
+  return [[NSUserDefaults standardUserDefaults] stringForKey:kOriginServerHost];
 }
 
 WhatsNewPromoStatus GetWhatsNewPromoStatus() {
@@ -83,15 +69,37 @@ WhatsNewPromoStatus GetWhatsNewPromoStatus() {
   return static_cast<WhatsNewPromoStatus>(status);
 }
 
-std::string getAlternateDiscoverFeedServerURL() {
-  NSString* alternateServerURL = [[NSUserDefaults standardUserDefaults]
+NSString* GetAlternateDiscoverFeedServerURL() {
+  return [[NSUserDefaults standardUserDefaults]
       stringForKey:kAlternateDiscoverFeedServerURL];
-  return base::SysNSStringToUTF8(alternateServerURL);
 }
 
 bool ShouldResetNoticeCardOnFeedStart() {
   return [[NSUserDefaults standardUserDefaults]
       boolForKey:@"ResetNoticeCard"];
+}
+
+bool ShouldResetFirstFollowCount() {
+  return [[NSUserDefaults standardUserDefaults] boolForKey:@"ResetFirstFollow"];
+}
+
+void DidResetFirstFollowCount() {
+  [[NSUserDefaults standardUserDefaults] setBool:NO forKey:@"ResetFirstFollow"];
+}
+
+bool ShouldAlwaysShowFirstFollow() {
+  return [[NSUserDefaults standardUserDefaults]
+      boolForKey:@"AlwaysShowFirstFollow"];
+}
+
+bool IsForceBackgroundRefreshForFollowingFeedEnabled() {
+  return [[NSUserDefaults standardUserDefaults]
+      boolForKey:kForceBackgroundRefreshForFollowingFeedEnabled];
+}
+
+double GetBackgroundRefreshMaxAgeInSeconds() {
+  return [[NSUserDefaults standardUserDefaults]
+      doubleForKey:kBackgroundRefreshMaxAgeInSeconds];
 }
 
 bool IsMemoryDebuggingEnabled() {

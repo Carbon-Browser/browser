@@ -164,11 +164,25 @@ Polymer({
       value: 0,
     },
 
+    /** @private {!Array<ash.scanning.mojom.ColorMode>} */
+    selectedSourceColorModes_: {
+      type: Array,
+      value: () => [],
+      computed: 'computeColorModes_(selectedSource, capabilities_.sources)',
+    },
+
     /** @private {!Array<ash.scanning.mojom.PageSize>} */
     selectedSourcePageSizes_: {
       type: Array,
       value: () => [],
       computed: 'computePageSizes_(selectedSource, capabilities_.sources)',
+    },
+
+    /** @private {!Array<number>} */
+    selectedSourceResolutions_: {
+      type: Array,
+      value: () => [],
+      computed: 'computeResolutions_(selectedSource, capabilities_.sources)',
     },
 
     /**
@@ -275,14 +289,6 @@ Polymer({
      */
     scanFailedDialogTextKey_: String,
 
-    /** @private {boolean} */
-    scanAppStickySettingsEnabled_: {
-      type: Boolean,
-      value: function() {
-        return loadTimeData.getBoolean('scanAppStickySettingsEnabled');
-      }
-    },
-
     /** @private {!ScanSettings} */
     savedScanSettings_: {
       type: Object,
@@ -309,25 +315,27 @@ Polymer({
       value: 0,
     },
 
-    /** @private {boolean} */
-    scanAppMultiPageScanEnabled_: {
-      type: Boolean,
-      value: function() {
-        return loadTimeData.getBoolean('scanAppMultiPageScanEnabled');
-      }
-    },
-
     /** {boolean} */
-    multiPageScanChecked: {
+    multiPageScanChecked: Boolean,
+
+    /**
+     * Only true when the multi-page checkbox is checked and the supported scan
+     * settings are chosen. Multi-page scanning only supports creating PDFs from
+     * the Flatbed source.
+     * @private {boolean}
+     */
+    isMultiPageScan_: {
       type: Boolean,
-      observer: 'onMultiPageScanCheckedChange_',
+      computed: 'computeIsMultiPageScan_(multiPageScanChecked, ' +
+          'selectedFileType, selectedSource)',
+      observer: 'onIsMultiPageScanChange_',
     },
 
     /** @private {boolean} */
     showMultiPageCheckbox_: {
       type: Boolean,
       computed: 'computeShowMultiPageCheckbox_(showScanSettings_, ' +
-          'selectedSource, selectedFileType, scanAppMultiPageScanEnabled_)',
+          'selectedSource, selectedFileType)',
       reflectToAttribute: true,
     },
 
@@ -361,17 +369,15 @@ Polymer({
         /* @type {string} */ (myFilesPath) => {
           this.selectedFilePath = myFilesPath;
         });
-    if (this.scanAppStickySettingsEnabled_) {
-      this.browserProxy_.getScanSettings().then(
-          /* @type {string} */ (scanSettings) => {
-            if (!scanSettings) {
-              return;
-            }
+    this.browserProxy_.getScanSettings().then(
+        /* @type {string} */ (scanSettings) => {
+          if (!scanSettings) {
+            return;
+          }
 
-            this.savedScanSettings_ =
-                /** @type {!ScanSettings} */ (JSON.parse(scanSettings));
-          });
-    }
+          this.savedScanSettings_ =
+              /** @type {!ScanSettings} */ (JSON.parse(scanSettings));
+        });
   },
 
   /** @override */
@@ -415,7 +421,7 @@ Polymer({
 
     // The Scan app increments |this.pageNumber_| itself during a multi-page
     // scan.
-    if (!this.multiPageScanChecked) {
+    if (!this.isMultiPageScan_) {
       this.pageNumber_ = pageNumber;
     }
     this.progressPercent_ = progressPercent;
@@ -446,7 +452,7 @@ Polymer({
     // the preview area shows 'Scanning length+1'.
     this.pageNumber_ = this.objectUrls_.length;
 
-    if (this.multiPageScanChecked) {
+    if (this.isMultiPageScan_) {
       this.setAppState_(AppState.MULTI_PAGE_NEXT_ACTION);
     }
   },
@@ -510,6 +516,20 @@ Polymer({
   },
 
   /**
+   * @return {!Array<ash.scanning.mojom.ColorMode>}
+   * @private
+   */
+  computeColorModes_() {
+    for (const source of this.capabilities_.sources) {
+      if (source.name === this.selectedSource) {
+        return source.colorModes;
+      }
+    }
+
+    return [];
+  },
+
+  /**
    * @return {!Array<ash.scanning.mojom.PageSize>}
    * @private
    */
@@ -517,6 +537,20 @@ Polymer({
     for (const source of this.capabilities_.sources) {
       if (source.name === this.selectedSource) {
         return source.pageSizes;
+      }
+    }
+
+    return [];
+  },
+
+  /**
+   * @return {!Array<number>}
+   * @private
+   */
+  computeResolutions_() {
+    for (const source of this.capabilities_.sources) {
+      if (source.name === this.selectedSource) {
+        return source.resolutions;
       }
     }
 
@@ -534,8 +568,7 @@ Polymer({
     this.selectedFileType = ash.scanning.mojom.FileType.kPdf.toString();
 
     this.setAppState_(
-        this.scanAppStickySettingsEnabled_ &&
-                this.areSavedScanSettingsAvailable_() ?
+        this.areSavedScanSettingsAvailable_() ?
             AppState.SETTING_SAVED_SETTINGS :
             AppState.READY);
   },
@@ -599,7 +632,7 @@ Polymer({
     }
 
     const settings = this.getScanSettings_();
-    if (this.multiPageScanChecked) {
+    if (this.isMultiPageScan_) {
       this.scanService_
           .startMultiPageScan(
               this.getSelectedScannerToken_(), settings,
@@ -620,9 +653,7 @@ Polymer({
               });
     }
 
-    if (this.scanAppStickySettingsEnabled_) {
-      this.saveScanSettings_();
-    }
+    this.saveScanSettings_();
 
     const scanJobSettingsForMetrics = {
       sourceType: this.sourceTypeMap_.get(this.selectedSource),
@@ -908,9 +939,7 @@ Polymer({
         this.$$('#scannerSelect').$$('#scannerSelect').focus();
       } else if (this.appState_ === AppState.SCANNING) {
         this.$$('#cancelButton').focus();
-      } else if (
-          this.appState_ === AppState.DONE ||
-          this.appState_ === AppState.MULTI_PAGE_NEXT_ACTION) {
+      } else if (this.appState_ === AppState.DONE) {
         this.$$('#scanPreview').$$('#previewDiv').focus();
       }
     });
@@ -1042,10 +1071,12 @@ Polymer({
     }
 
     this.setSelectedSourceTypeIfAvailable_(scannerSettings.sourceName);
-    this.setSelectedFileTypeIfAvailable_(scannerSettings.fileType);
-    this.setSelectedColorModeIfAvailable_(scannerSettings.colorMode);
-    this.setSelectedPageSizeIfAvailable_(scannerSettings.pageSize);
-    this.setSelectedResolutionIfAvailable_(scannerSettings.resolutionDpi);
+    afterNextRender(this, () => {
+      this.setSelectedFileTypeIfAvailable_(scannerSettings.fileType);
+      this.setSelectedColorModeIfAvailable_(scannerSettings.colorMode);
+      this.setSelectedPageSizeIfAvailable_(scannerSettings.pageSize);
+      this.setSelectedResolutionIfAvailable_(scannerSettings.resolutionDpi);
+    });
 
     // This must be set last because it depends on the values of sourceType and
     // fileType.
@@ -1149,8 +1180,6 @@ Polymer({
 
   /** @private */
   saveScanSettings_() {
-    assert(this.scanAppStickySettingsEnabled_);
-
     const scannerName = this.getSelectedScannerDisplayName_();
     this.savedScanSettings_.lastUsedScannerName = scannerName;
     this.savedScanSettings_.scanToPath = this.selectedFilePath;
@@ -1217,8 +1246,8 @@ Polymer({
    * @private
    */
   computeShowMultiPageCheckbox_() {
-    return this.scanAppMultiPageScanEnabled_ && this.showScanSettings_ &&
-        this.isPDFSelected_() && this.isFlatbedSelected_();
+    return this.showScanSettings_ && this.isPDFSelected_() &&
+        this.isFlatbedSelected_();
   },
 
   /**
@@ -1242,9 +1271,14 @@ Polymer({
   },
 
   /** @private */
-  onMultiPageScanCheckedChange_() {
-    assert(!this.multiPageScanChecked || this.scanAppMultiPageScanEnabled_);
-    const nextPageNum = this.multiPageScanChecked ? 1 : 0;
+  computeIsMultiPageScan_() {
+    return this.multiPageScanChecked && this.isPDFSelected_() &&
+        this.isFlatbedSelected_();
+  },
+
+  /** @private */
+  onIsMultiPageScanChange_() {
+    const nextPageNum = this.isMultiPageScan_ ? 1 : 0;
     this.browserProxy_.getPluralString('scanButtonText', nextPageNum)
         .then(
             /* @type {string} */ (pluralString) => {
@@ -1296,7 +1330,7 @@ Polymer({
    * @private
    */
   setSelectedColorModeIfAvailable_(colorMode) {
-    if (this.capabilities_.colorModes.includes(colorMode)) {
+    if (this.selectedSourceColorModes_.includes(colorMode)) {
       this.selectedColorMode = colorMode.toString();
     }
   },
@@ -1316,7 +1350,7 @@ Polymer({
    * @private
    */
   setSelectedResolutionIfAvailable_(resolution) {
-    if (this.capabilities_.resolutions.includes(resolution)) {
+    if (this.selectedSourceResolutions_.includes(resolution)) {
       this.selectedResolution = resolution.toString();
     }
   },

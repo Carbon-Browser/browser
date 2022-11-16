@@ -11,18 +11,17 @@
 #include "base/files/file_path.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/json/json_writer.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "components/policy/core/common/external_data_fetcher.h"
 #include "components/policy/core/common/policy_map.h"
 #include "components/policy/core/common/policy_types.h"
+#include "components/value_store/leveldb_value_store.h"
+#include "components/value_store/value_store_test_suite.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/test_utils.h"
 #include "extensions/browser/api/storage/backend_task_runner.h"
 #include "extensions/browser/api/storage/settings_observer.h"
 #include "extensions/browser/api/storage/storage_area_namespace.h"
-#include "extensions/browser/value_store/leveldb_value_store.h"
-#include "extensions/browser/value_store/value_store_unittest.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -30,7 +29,7 @@ using testing::_;
 using testing::Mock;
 using testing::NiceMock;
 using value_store::ValueStore;
-using value_store::ValueStoreTest;
+using value_store::ValueStoreTestSuite;
 
 namespace extensions {
 
@@ -51,7 +50,7 @@ std::string ValueStoreChangeToJson(value_store::ValueStoreChangeList changes) {
       value_store::ValueStoreChange::ToValue(std::move(changes)));
 }
 
-class MockSettingsObserver : public SettingsObserver {
+class MockSettingsObserver {
  public:
   MOCK_METHOD3(OnSettingsChangedJSON,
                void(const std::string& extension_id,
@@ -60,22 +59,28 @@ class MockSettingsObserver : public SettingsObserver {
 
   void OnSettingsChanged(const std::string& extension_id,
                          StorageAreaNamespace storage_area,
-                         const base::Value& changes) override {
-    OnSettingsChangedJSON(extension_id, storage_area, ValueToJson(changes));
+                         base::Value changes) {
+    OnSettingsChangedJSON(extension_id, storage_area,
+                          ValueToJson(std::move(changes)));
   }
 };
 
 // Extends PolicyValueStore by overriding the mutating methods, so that the
-// Get() base implementation can be tested with the ValueStoreTest parameterized
-// tests.
+// Get() base implementation can be tested with the ValueStoreTestSuite
+// parameterized tests.
 class MutablePolicyValueStore : public PolicyValueStore {
  public:
   explicit MutablePolicyValueStore(const base::FilePath& path)
-      : PolicyValueStore(kTestExtensionId,
-                         base::MakeRefCounted<SettingsObserverList>(),
-                         std::make_unique<value_store::LeveldbValueStore>(
-                             kDatabaseUMAClientName,
-                             path)) {}
+      : PolicyValueStore(
+            kTestExtensionId,
+            SequenceBoundSettingsChangedCallback(base::DoNothing()),
+            std::make_unique<value_store::LeveldbValueStore>(
+                kDatabaseUMAClientName,
+                path)) {}
+
+  MutablePolicyValueStore(const MutablePolicyValueStore&) = delete;
+  MutablePolicyValueStore& operator=(const MutablePolicyValueStore&) = delete;
+
   ~MutablePolicyValueStore() override = default;
 
   WriteResult Set(WriteOptions options,
@@ -85,7 +90,7 @@ class MutablePolicyValueStore : public PolicyValueStore {
   }
 
   WriteResult Set(WriteOptions options,
-                  const base::DictionaryValue& values) override {
+                  const base::Value::Dict& values) override {
     return delegate()->Set(options, values);
   }
 
@@ -98,9 +103,6 @@ class MutablePolicyValueStore : public PolicyValueStore {
   }
 
   WriteResult Clear() override { return delegate()->Clear(); }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(MutablePolicyValueStore);
 };
 
 ValueStore* Param(const base::FilePath& file_path) {
@@ -110,7 +112,7 @@ ValueStore* Param(const base::FilePath& file_path) {
 }  // namespace
 
 INSTANTIATE_TEST_SUITE_P(PolicyValueStoreTest,
-                         ValueStoreTest,
+                         ValueStoreTestSuite,
                          testing::Values(&Param));
 
 class PolicyValueStoreTest : public testing::Test {
@@ -120,18 +122,16 @@ class PolicyValueStoreTest : public testing::Test {
 
   void SetUp() override {
     ASSERT_TRUE(scoped_temp_dir_.CreateUniqueTempDir());
-    observers_ = new SettingsObserverList();
-    observers_->AddObserver(&observer_);
     store_ = std::make_unique<PolicyValueStore>(
-        kTestExtensionId, observers_,
+        kTestExtensionId,
+        SequenceBoundSettingsChangedCallback(
+            base::BindRepeating(&MockSettingsObserver::OnSettingsChanged,
+                                base::Unretained(&observer_))),
         std::make_unique<value_store::LeveldbValueStore>(
             kDatabaseUMAClientName, scoped_temp_dir_.GetPath()));
   }
 
-  void TearDown() override {
-    observers_->RemoveObserver(&observer_);
-    store_.reset();
-  }
+  void TearDown() override { store_.reset(); }
 
  protected:
   void SetCurrentPolicy(const policy::PolicyMap& policies) {
@@ -151,7 +151,6 @@ class PolicyValueStoreTest : public testing::Test {
   content::BrowserTaskEnvironment task_environment_;
   std::unique_ptr<PolicyValueStore> store_;
   NiceMock<MockSettingsObserver> observer_;
-  scoped_refptr<SettingsObserverList> observers_;
 };
 
 TEST_F(PolicyValueStoreTest, DontProvideRecommendedPolicies) {
@@ -167,10 +166,11 @@ TEST_F(PolicyValueStoreTest, DontProvideRecommendedPolicies) {
 
   ValueStore::ReadResult result = store_->Get();
   ASSERT_TRUE(result.status().ok());
-  EXPECT_EQ(1u, result.settings().DictSize());
-  base::Value* value = NULL;
-  EXPECT_FALSE(result.settings().Get("may", &value));
-  EXPECT_TRUE(result.settings().Get("must", &value));
+  EXPECT_EQ(1u, result.settings().size());
+  base::Value* value = result.settings().Find("may");
+  EXPECT_FALSE(value);
+  value = result.settings().Find("must");
+  ASSERT_TRUE(value);
   EXPECT_EQ(expected, *value);
 }
 
@@ -180,8 +180,8 @@ TEST_F(PolicyValueStoreTest, ReadOnly) {
   base::Value string_value("value");
   EXPECT_FALSE(store_->Set(options, "key", string_value).status().ok());
 
-  base::DictionaryValue dict;
-  dict.SetString("key", "value");
+  base::Value::Dict dict;
+  dict.Set("key", "value");
   EXPECT_FALSE(store_->Set(options, dict).status().ok());
 
   EXPECT_FALSE(store_->Remove("key").status().ok());

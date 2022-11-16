@@ -9,6 +9,7 @@
 #include <string>
 
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/ozone/platform/wayland/test/test_selection_device_manager.h"
 
 namespace wl {
@@ -39,6 +40,10 @@ struct WlDataSourceImpl : public TestSelectionSource::Delegate {
     wl_client_flush(wl_resource_get_client(source_->resource()));
   }
 
+  void SendFinished() override {
+    wl_data_source_send_dnd_finished(source_->resource());
+  }
+
   void SendCancelled() override {
     wl_data_source_send_cancelled(source_->resource());
   }
@@ -46,7 +51,7 @@ struct WlDataSourceImpl : public TestSelectionSource::Delegate {
   void OnDestroying() override { delete this; }
 
  private:
-  TestDataSource* const source_;
+  const raw_ptr<TestDataSource> source_;
 };
 
 }  // namespace

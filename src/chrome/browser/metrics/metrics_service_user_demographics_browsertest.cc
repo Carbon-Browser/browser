@@ -60,6 +60,11 @@ class MetricsServiceUserDemographicsBrowserTest
     }
   }
 
+  MetricsServiceUserDemographicsBrowserTest(
+      const MetricsServiceUserDemographicsBrowserTest&) = delete;
+  MetricsServiceUserDemographicsBrowserTest& operator=(
+      const MetricsServiceUserDemographicsBrowserTest&) = delete;
+
   void SetUpCommandLine(base::CommandLine* command_line) override {
     SyncTest::SetUpCommandLine(command_line);
     // Enable the metrics service for testing (in recording-only mode).
@@ -89,8 +94,6 @@ class MetricsServiceUserDemographicsBrowserTest
   bool metrics_consent_ = true;
 
   base::test::ScopedFeatureList scoped_feature_list_;
-
-  DISALLOW_COPY_AND_ASSIGN(MetricsServiceUserDemographicsBrowserTest);
 };
 
 // TODO(crbug/1016118): Add the remaining test cases.
@@ -116,7 +119,7 @@ IN_PROC_BROWSER_TEST_P(MetricsServiceUserDemographicsBrowserTest,
 
   // TODO(crbug/1076461): Try to replace the below set-up code with functions
   // from SyncTest.
-  Profile* test_profile = ProfileManager::GetActiveUserProfile();
+  Profile* test_profile = ProfileManager::GetLastUsedProfileIfLoaded();
 
   // Enable sync for the test profile.
   std::unique_ptr<SyncServiceImplHarness> harness =
@@ -145,12 +148,12 @@ IN_PROC_BROWSER_TEST_P(MetricsServiceUserDemographicsBrowserTest,
     histogram.ExpectTotalCount("UMA.UserDemographics.Status", /*count=*/0);
   }
 
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
+#if !BUILDFLAG(IS_CHROMEOS)
   // Sign out the user to revoke all refresh tokens. This prevents any posted
   // tasks from successfully fetching an access token during the tear-down
   // phase and crashing on a DCHECK. See crbug/1102746 for more details.
   harness->SignOutPrimaryAccount();
-#endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // !BUILDFLAG(IS_CHROMEOS)
 }
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)

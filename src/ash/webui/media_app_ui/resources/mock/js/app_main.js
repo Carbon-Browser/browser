@@ -12,7 +12,7 @@
  * Helper that returns UI that can serve as an effective mock of a fragment of
  * the real app, after loading a provided Blob URL.
  *
- * @typedef{function(string, string): Promise<!HTMLElement>}}
+ * @typedef{function(string, mediaApp.AbstractFile): Promise<!HTMLElement>}}
  */
 let ModuleHandler;
 
@@ -25,17 +25,57 @@ const createVideoChild = async (blobSrc) => {
 };
 
 /** @type {ModuleHandler} */
-const createImgChild = async (blobSrc, fileName) => {
+const createImgChild = async (blobSrc, file) => {
   const img = /** @type {!HTMLImageElement} */ (document.createElement('img'));
   img.src = blobSrc;
-  img.alt = fileName;
+  img.alt = file.name;
   try {
     await img.decode();
   } catch (error) {
     // Mimic what the real app does on decode errors so we can test error
     // handling for file access.
-    img.alt = 'Unable to decode';
+    return /** @type {!HTMLElement} */ (await createErrorChild(blobSrc, file));
   }
+  return img;
+};
+
+/** @type {ModuleHandler} */
+const createAudioChild = async (blobSrc, file) => {
+  const container =
+      /** @type {HTMLDivElement} */ (document.createElement('div'));
+
+  const title = /** @type {HTMLDivElement} */
+      (container.appendChild(document.createElement('div')));
+  title.className = 'title';
+  title.innerText = file.name;
+
+  const audio = /** @type {HTMLAudioElement} */
+      (container.appendChild(document.createElement('audio')));
+  if (file.size === 0) {
+    console.warn('Assuming zero-byte test file: not loading audio.');
+    return container;
+  }
+
+  audio.src = blobSrc;
+  // Audio will autoplay in this manner. Do the same in the mock to test
+  // integration points.
+  audio.play()
+      .then(() => {
+        console.log('Audio playing..');
+      })
+      .catch(e => {
+        console.error(String(e));
+      });
+  return container;
+};
+
+/** @type {ModuleHandler} */
+const createErrorChild = async (_, file) => {
+  console.warn(`Mock handling of ${file.name} resulted in error.`);
+  // In the real app, a loaderror element is loaded infront of a placeholder
+  // image with some error alt text. For tests, we only mock the placeholder.
+  const img = /** @type {!HTMLImageElement} */ (document.createElement('img'));
+  img.alt = 'Unable to decode';
   return img;
 };
 
@@ -67,11 +107,43 @@ class BacklightApp extends HTMLElement {
    * @private
    */
   async preprocessFile(file) {
-    // This mock is only used for tests (which only test a .orf RAW file). We
-    // don't maintain the full list of RAW extensions here.
-    if (file && file.name.toLowerCase().endsWith('.orf')) {
+    // This mock is only used for tests (which only test a .orf and .nef RAW
+    // file). We don't maintain the full list of RAW extensions here.
+    const rawExtensions = ['orf', 'nef'];
+    const isRawFile =
+        file && rawExtensions.includes(file.name.split('.').pop());
+    if (isRawFile) {
       file.blob = await this.delegate.extractPreview(file.blob);
+      file.mimeType = 'image/x-RAW';
     }
+  }
+
+  /**
+   * Emulates the sniffing done in the "real" BacklightApp to detect a file's
+   * mime type. See go/media-app-element.
+   *
+   * @param {?mediaApp.AbstractFile} file
+   * @return {!Promise<string>} The sniffed mime type, or empty string if none
+   *     detected.
+   * @private
+   */
+  async sniffedMimeType(file) {
+    const START_OF_IMAGE_MARKER = 0xffd8;
+
+    const PNG_MARKER = 0x89504e47;  // Literally '‰PNG'.
+
+    if (file.size < 4) {
+      return '';
+    }
+
+    const view = new DataView(await file.blob.slice(0, 4).arrayBuffer());
+    if (view.getUint32(0) === PNG_MARKER) {
+      return 'image/png';
+    }
+    if (view.getUint16(0) === START_OF_IMAGE_MARKER) {
+      return 'image/jpeg';
+    }
+    return '';
   }
 
   /**
@@ -80,13 +152,27 @@ class BacklightApp extends HTMLElement {
    */
   async loadFile(file) {
     await this.preprocessFile(file);
-    const isVideo = file.mimeType.match('^video/');
-    const factory = isVideo ? createVideoChild : createImgChild;
+    const mimeType = file.mimeType || await this.sniffedMimeType(file);
+    let factory;
+    switch (mimeType.split('/')[0]) {
+      case 'video':
+        factory = createVideoChild;
+        break;
+      case 'image':
+        factory = createImgChild;
+        break;
+      case 'audio':
+        factory = createAudioChild;
+        break;
+      default:
+        factory = createErrorChild;
+    }
     // Note the mock app will just leak this Blob URL.
-    const child = await factory(URL.createObjectURL(file.blob), file.name);
+    const child = await factory(URL.createObjectURL(file.blob), file);
 
     this.replaceChild(child, this.currentMedia);
     this.currentMedia = child;
+    this.delegate.notifyCurrentFile(file.name, mimeType);
   }
 
   updateHandler() {
@@ -98,9 +184,10 @@ class BacklightApp extends HTMLElement {
     this.replaceChild(newHandler, this.currentHandler);
     this.currentHandler = newHandler;
 
-    // Toggle 'shownav' indicating the navigation buttons are available.
-    // This emulates `setNavigationPossible()` in the real app.
-    this.currentHandler.toggleAttribute('shownav', this.files.length > 1);
+    // The presence of the 'filetraversalenabled' attribute emulates
+    // `setFileTraversalEnabled()` in the real app.
+    this.currentHandler.toggleAttribute(
+        'filetraversalenabled', this.files.length > 1);
   }
 
   /** @override  */
@@ -143,7 +230,7 @@ class BacklightApp extends HTMLElement {
 window.customElements.define('backlight-app', BacklightApp);
 
 // Element mimicking the image/video handler which is the parent of the
-// `navigation-overlay`.
+// `carousel-overlay`.
 class BacklightMediaHandler extends HTMLElement {}
 window.customElements.define('backlight-media-handler', BacklightMediaHandler);
 
@@ -165,7 +252,7 @@ self.addEventListener('error', (event) => {
     url: window.location.href,
     product: 'ChromeOS_MediaAppMock',
     lineNumber: errorEvent.lineno,
-    columnNumber: errorEvent.colno
+    columnNumber: errorEvent.colno,
   });
 });
 self.addEventListener('unhandledrejection', (event) => {

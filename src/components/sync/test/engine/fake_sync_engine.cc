@@ -6,7 +6,9 @@
 
 #include <utility>
 
+#include "base/callback.h"
 #include "components/sync/engine/data_type_activation_response.h"
+#include "components/sync/engine/nigori/nigori.h"
 #include "components/sync/engine/sync_engine_host.h"
 #include "components/sync/model/model_type_controller_delegate.h"
 
@@ -30,8 +32,7 @@ void FakeSyncEngine::TriggerInitializationCompletion(bool success) {
 
   initialized_ = success;
 
-  host_->OnEngineInitialized(WeakHandle<DataTypeDebugInfoListener>(), success,
-                             is_first_time_sync_configure_);
+  host_->OnEngineInitialized(success, is_first_time_sync_configure_);
 }
 
 void FakeSyncEngine::Initialize(InitParams params) {
@@ -71,12 +72,16 @@ void FakeSyncEngine::StartConfiguration() {}
 
 void FakeSyncEngine::StartSyncingWithServer() {}
 
-void FakeSyncEngine::SetEncryptionPassphrase(const std::string& passphrase) {}
+void FakeSyncEngine::StartHandlingInvalidations() {
+  started_handling_invalidations_ = true;
+}
 
-void FakeSyncEngine::SetDecryptionPassphrase(const std::string& passphrase) {}
+void FakeSyncEngine::SetEncryptionPassphrase(
+    const std::string& passphrase,
+    const KeyDerivationParams& key_derivation_params) {}
 
-void FakeSyncEngine::SetKeystoreEncryptionBootstrapToken(
-    const std::string& token) {}
+void FakeSyncEngine::SetExplicitPassphraseDecryptionKey(
+    std::unique_ptr<Nigori> key) {}
 
 void FakeSyncEngine::AddTrustedVaultDecryptionKeys(
     const std::vector<std::vector<uint8_t>>& keys,

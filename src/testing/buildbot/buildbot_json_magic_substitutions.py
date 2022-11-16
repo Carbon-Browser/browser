@@ -16,7 +16,7 @@ the differentiation can be done programmatically.
 MAGIC_SUBSTITUTION_PREFIX = '$$MAGIC_SUBSTITUTION_'
 
 
-def ChromeOSTelemetryRemote(test_config):
+def ChromeOSTelemetryRemote(test_config, _=None, __=None):
   """Substitutes the correct CrOS remote Telemetry arguments.
 
   VMs use a hard-coded remote address and port, while physical hardware use
@@ -26,6 +26,32 @@ def ChromeOSTelemetryRemote(test_config):
     test_config: A dict containing a configuration for a specific test on a
         specific builder.
   """
+  if _GetChromeOSBoardName(test_config) == 'amd64-generic':
+    return [
+        '--remote=127.0.0.1',
+        # By default, CrOS VMs' ssh servers listen on local port 9222.
+        '--remote-ssh-port=9222',
+    ]
+  return [
+      # Magic hostname that resolves to a CrOS device in the test lab.
+      '--remote=variable_chromeos_device_hostname',
+  ]
+
+
+def ChromeOSGtestFilterFile(test_config, _=None, __=None):
+  """Substitutes the correct CrOS filter file for gtests."""
+  board = _GetChromeOSBoardName(test_config)
+  test_name = test_config['name']
+  filter_file = 'chromeos.%s.%s.filter' % (board, test_name)
+  return [
+      '--test-launcher-filter-file=../../testing/buildbot/filters/' +
+      filter_file
+  ]
+
+
+def _GetChromeOSBoardName(test_config):
+  """Helper function to determine what ChromeOS board is being used."""
+
   def StringContainsSubstring(s, sub_strs):
     for sub_str in sub_strs:
       if sub_str in s:
@@ -44,22 +70,13 @@ def ChromeOSTelemetryRemote(test_config):
         'No pool set for CrOS test, unable to determine whether running on '
         'a VM or physical hardware.')
 
-  if (StringContainsSubstring(pool, TEST_POOLS)
-      and 'device_type' not in dimensions[0]):
-    return [
-      '--remote=127.0.0.1',
-      # By default, CrOS VMs' ssh servers listen on local port 9222.
-      '--remote-ssh-port=9222',
-    ]
-  if StringContainsSubstring(pool, TEST_POOLS):
-    return [
-      # Magic hostname that resolves to a CrOS device in the test lab.
-      '--remote=variable_chromeos_device_hostname',
-    ]
-  raise RuntimeError('Unknown CrOS pool %s' % pool)
+  if not StringContainsSubstring(pool, TEST_POOLS):
+    raise RuntimeError('Unknown CrOS pool %s' % pool)
+
+  return dimensions[0].get('device_type', 'amd64-generic')
 
 
-def GPUExpectedDeviceId(test_config):
+def GPUExpectedDeviceId(test_config, _=None, __=None):
   """Substitutes the correct expected GPU(s) for certain GPU tests.
 
   Most configurations only need one expected GPU, but heterogeneous pools (e.g.
@@ -94,6 +111,23 @@ def GPUExpectedDeviceId(test_config):
   return retval
 
 
-def TestOnlySubstitution(_):
+def GPUParallelJobs(_, __, tester_config):
+  """Substitutes the correct number of jobs for GPU tests.
+
+  Linux/Mac/Windows can run tests in parallel since multiple windows can be open
+  but other platforms cannot.
+
+  Args:
+    tester_config: A dict containing the configuration for the builder
+        that |test_config| is for.
+  """
+  os_type = tester_config.get('os_type')
+  assert os_type
+  if os_type in ['lacros', 'linux', 'mac', 'win']:
+    return ['--jobs=4']
+  return ['--jobs=1']
+
+
+def TestOnlySubstitution(_, __, ___):
   """Magic substitution used for unittests."""
   return ['--magic-substitution-success']

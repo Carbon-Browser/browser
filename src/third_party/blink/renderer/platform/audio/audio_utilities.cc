@@ -28,18 +28,16 @@
 #include "third_party/blink/renderer/platform/wtf/math_extras.h"
 #include "third_party/fdlibm/ieee754.h"
 
-namespace blink {
-
-namespace audio_utilities {
+namespace blink::audio_utilities {
 
 float DecibelsToLinear(float decibels) {
-  return fdlibm::powf(10, 0.05f * decibels);
+  return powf(10, 0.05f * decibels);
 }
 
 float LinearToDecibels(float linear) {
   DCHECK_GE(linear, 0);
 
-  return 20 * fdlibm::log10f(linear);
+  return 20 * log10f(linear);
 }
 
 double DiscreteTimeConstantForSampleRate(double time_constant,
@@ -134,6 +132,4 @@ bool IsPowerOfTwo(size_t x) {
   return x > 0 && ((x & (x - 1)) == 0);
 }
 
-}  // namespace audio_utilities
-
-}  // namespace blink
+}  // namespace blink::audio_utilities

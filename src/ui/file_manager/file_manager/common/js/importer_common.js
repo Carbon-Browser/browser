@@ -21,14 +21,14 @@ importer.UpdateType = {
   PROGRESS: 'PROGRESS',
   COMPLETE: 'COMPLETE',
   ERROR: 'ERROR',
-  CANCELED: 'CANCELED'
+  CANCELED: 'CANCELED',
 };
 
 /** @enum {string} */
 importer.ScanEvent = {
   FINALIZED: 'finalized',
   INVALIDATED: 'invalidated',
-  UPDATED: 'updated'
+  UPDATED: 'updated',
 };
 
 /**
@@ -53,7 +53,7 @@ importer.Disposition = {
   CONTENT_DUPLICATE: 'content-dupe',
   HISTORY_DUPLICATE: 'history-dupe',
   ORIGINAL: 'original',
-  SCAN_DUPLICATE: 'scan-dupe'
+  SCAN_DUPLICATE: 'scan-dupe',
 };
 
 /**
@@ -63,8 +63,7 @@ importer.Disposition = {
 importer.Setting = {
   HAS_COMPLETED_IMPORT: 'importer-has-completed-import',
   MACHINE_ID: 'importer-machine-id',
-  PHOTOS_APP_ENABLED: 'importer-photo-app-enabled',
-  LAST_KNOWN_LOG_ID: 'importer-last-known-log-id'
+  LAST_KNOWN_LOG_ID: 'importer-last-known-log-id',
 };
 
 /**
@@ -82,7 +81,7 @@ importer.ELIGIBLE_VOLUME_TYPES_ = [
  */
 importer.ValidImportRoots_ = {
   DCIM: 'DCIM',
-  MP_ROOT: 'MP_ROOT'  // MP_ROOT is a Sony thing.
+  MP_ROOT: 'MP_ROOT',  // MP_ROOT is a Sony thing.
 };
 
 /**
@@ -91,7 +90,7 @@ importer.ValidImportRoots_ = {
 importer.Destination = {
   // locally copied, but not imported to cloud as of yet.
   DEVICE: 'device',
-  GOOGLE_DRIVE: 'google-drive'
+  GOOGLE_DRIVE: 'google-drive',
 };
 
 /**
@@ -101,6 +100,11 @@ importer.Destination = {
  * @return {boolean}
  */
 importer.isEligibleType = entry => {
+  if (window.isSWA) {
+    // Disables the Cloud Import for SWA.
+    return false;
+  }
+
   // TODO(mtomasz): Add support to mime types.
   return !!entry && entry.isFile &&
       FileType.isType(['image', 'raw', 'video'], entry);
@@ -252,21 +256,6 @@ importer.getMediaDirectory = directory => {
 };
 
 /**
- * @param {!DirectoryEntry} directory Presumably the root of a filesystem.
- * @return {!Promise<boolean>} True if the directory contains a
- *     child media directory (like 'DCIM').
- */
-importer.hasMediaDirectory = directory => {
-  return importer.getMediaDirectory(directory).then(
-      result => {
-        return Promise.resolve(!!result);
-      },
-      () => {
-        return Promise.resolve(false);
-      });
-};
-
-/**
  * @param {!DirectoryEntry} parent
  * @param {string} name
  * @return {!Promise<DirectoryEntry>}
@@ -279,37 +268,6 @@ importer.getDirectory_ = (parent, name) => {
           resolve(null);
         });
   });
-};
-
-/**
- * Handles a message from Pulsar...in which we presume we are being
- * informed of its "Automatically import stuff." state.
- *
- * While the runtime message system is loosey goosey about types,
- * we fully expect message to be a boolean value.
- *
- * @param {*} message
- *
- * @return {!Promise} Resolves once the message has been handled.
- */
-importer.handlePhotosAppMessage = message => {
-  if (typeof message !== 'boolean') {
-    console.error(
-        'Unrecognized message type received from photos app: ' + message);
-    return Promise.reject();
-  }
-
-  const storage = importer.ChromeLocalStorage.getInstance();
-  return storage.set(importer.Setting.PHOTOS_APP_ENABLED, message);
-};
-
-/**
- * @return {!Promise<boolean>} Resolves with true when Cloud Import feature
- *     is enabled.
- */
-importer.isPhotosAppImportEnabled = () => {
-  const storage = importer.ChromeLocalStorage.getInstance();
-  return storage.get(importer.Setting.PHOTOS_APP_ENABLED, false);
 };
 
 /**
@@ -425,7 +383,7 @@ importer.getHistoryFiles = () => {
   return Promise
       .all([
         importer.getOrCreateHistoryFile(),
-        importer.getMachineId().then(importer.getUnownedHistoryFiles_)
+        importer.getMachineId().then(importer.getUnownedHistoryFiles_),
       ])
       .then(
           /** @param {!Array<!FileEntry|!Array<!FileEntry>>} entries */

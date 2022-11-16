@@ -8,7 +8,9 @@
 #include "ash/system/message_center/ash_message_popup_collection.h"
 #include "ash/system/unified/unified_system_tray.h"
 #include "ash/test/ash_test_base.h"
+#include "ash/test/layer_animation_stopped_waiter.h"
 #include "base/test/scoped_feature_list.h"
+#include "ui/compositor/scoped_animation_duration_scale_mode.h"
 #include "ui/message_center/public/cpp/message_center_constants.h"
 #include "ui/message_center/public/cpp/notifier_id.h"
 #include "ui/message_center/views/message_popup_view.h"
@@ -18,6 +20,10 @@ using message_center::MessageCenter;
 using message_center::Notification;
 
 namespace ash {
+
+namespace {
+const char kIdFormat[] = "id%ld";
+}  // namespace
 
 class NotificationGroupingControllerTest : public AshTestBase {
  public:
@@ -35,9 +41,9 @@ class NotificationGroupingControllerTest : public AshTestBase {
   }
 
  protected:
-  std::string AddNotificationWithNotifierId(std::string notifier_id) {
+  std::string AddNotificationWithOriginUrl(const GURL& origin_url) {
     std::string id;
-    MessageCenter::Get()->AddNotification(MakeNotification(id, notifier_id));
+    MessageCenter::Get()->AddNotification(MakeNotification(id, origin_url));
     return id;
   }
 
@@ -57,36 +63,33 @@ class NotificationGroupingControllerTest : public AshTestBase {
 
   // Construct a new notification for testing.
   std::unique_ptr<Notification> MakeNotification(std::string& id_out,
-                                                 std::string notifier_id) {
+                                                 const GURL& origin_url) {
     id_out = base::StringPrintf(kIdFormat, notifications_counter_);
+    message_center::NotifierId notifier_id;
+    notifier_id.profile_id = "abc@gmail.com";
+    notifier_id.type = message_center::NotifierType::WEB_PAGE;
     auto notification = std::make_unique<Notification>(
         message_center::NOTIFICATION_TYPE_SIMPLE, id_out,
         u"id" + base::NumberToString16(notifications_counter_),
         u"message" + base::NumberToString16(notifications_counter_),
-        gfx::Image(), u"src", GURL(),
-        message_center::NotifierId(message_center::NotifierType::APPLICATION,
-                                   notifier_id),
+        ui::ImageModel(), u"src", origin_url, notifier_id,
         message_center::RichNotificationData(), nullptr);
     notifications_counter_++;
     return notification;
   }
-
-  static const char kIdFormat[];
 
   base::test::ScopedFeatureList scoped_feature_list_;
 
   size_t notifications_counter_ = 0;
 };
 
-const char NotificationGroupingControllerTest::kIdFormat[] = "id%ld";
-
 TEST_F(NotificationGroupingControllerTest, BasicGrouping) {
   auto* message_center = MessageCenter::Get();
   std::string id0, id1, id2;
-  const char group_id[] = "group";
-  id0 = AddNotificationWithNotifierId(group_id);
-  id1 = AddNotificationWithNotifierId(group_id);
-  id2 = AddNotificationWithNotifierId(group_id);
+  const GURL url(u"http://test-url.com/");
+  id0 = AddNotificationWithOriginUrl(url);
+  id1 = AddNotificationWithOriginUrl(url);
+  id2 = AddNotificationWithOriginUrl(url);
 
   EXPECT_TRUE(message_center->FindNotificationById(id0)->group_child());
   EXPECT_TRUE(message_center->FindNotificationById(id1)->group_child());
@@ -98,10 +101,10 @@ TEST_F(NotificationGroupingControllerTest, BasicGrouping) {
 
 TEST_F(NotificationGroupingControllerTest, BasicRemoval) {
   std::string id0, id1, id2;
-  const char group_id[] = "group";
-  id0 = AddNotificationWithNotifierId(group_id);
-  id1 = AddNotificationWithNotifierId(group_id);
-  id2 = AddNotificationWithNotifierId(group_id);
+  const GURL url(u"http://test-url.com");
+  id0 = AddNotificationWithOriginUrl(url);
+  id1 = AddNotificationWithOriginUrl(url);
+  id2 = AddNotificationWithOriginUrl(url);
 
   std::string id_parent = id0 + kIdSuffixForGroupContainerNotification;
   // Group notification should stay intact if a single group notification is
@@ -111,7 +114,7 @@ TEST_F(NotificationGroupingControllerTest, BasicRemoval) {
       MessageCenter::Get()->FindNotificationById(id_parent)->group_parent());
 
   // Adding and removing a non group notification should have no impact.
-  std::string tmp = AddNotificationWithNotifierId("tmp");
+  std::string tmp = AddNotificationWithOriginUrl(GURL(u"tmp"));
   MessageCenter::Get()->RemoveNotification(tmp, true);
 
   EXPECT_TRUE(MessageCenter::Get()->FindNotificationById(id0)->group_child());
@@ -125,11 +128,11 @@ TEST_F(NotificationGroupingControllerTest,
   auto* tray = GetPrimaryUnifiedSystemTray();
 
   std::string id0;
-  const char group_id[] = "group";
-  id0 = AddNotificationWithNotifierId(group_id);
+  const GURL url(u"http://test-url.com");
+  id0 = AddNotificationWithOriginUrl(url);
 
   std::string tmp;
-  tmp = AddNotificationWithNotifierId(group_id);
+  tmp = AddNotificationWithOriginUrl(url);
 
   std::string parent_id = id0 + kIdSuffixForGroupContainerNotification;
   EXPECT_TRUE(GetPopupView(parent_id));
@@ -141,12 +144,13 @@ TEST_F(NotificationGroupingControllerTest,
   EXPECT_FALSE(GetPopupView(parent_id));
 
   // Adding notification with a different notifier id should have no effect.
-  AddNotificationWithNotifierId("tmp");
+  AddNotificationWithOriginUrl(GURL("tmp"));
   EXPECT_FALSE(GetPopupView(parent_id));
 
-  AnimateUntilIdle();
+  AddNotificationWithOriginUrl(url);
 
-  AddNotificationWithNotifierId(group_id);
+  // Move down or fade in animation might happen before showing the popup.
+  AnimateUntilIdle();
 
   EXPECT_TRUE(GetPopupView(parent_id));
 }
@@ -154,12 +158,12 @@ TEST_F(NotificationGroupingControllerTest,
 TEST_F(NotificationGroupingControllerTest,
        RemovingParentRemovesChildGroupNotifications) {
   std::string id0;
-  const char group_id[] = "group";
-  id0 = AddNotificationWithNotifierId(group_id);
+  const GURL url(u"http://test-url.com");
+  id0 = AddNotificationWithOriginUrl(url);
 
   std::string tmp;
-  AddNotificationWithNotifierId(group_id);
-  AddNotificationWithNotifierId(group_id);
+  AddNotificationWithOriginUrl(url);
+  AddNotificationWithOriginUrl(url);
 
   MessageCenter::Get()->RemoveNotification(
       id0 + kIdSuffixForGroupContainerNotification, true);
@@ -168,46 +172,14 @@ TEST_F(NotificationGroupingControllerTest,
 }
 
 TEST_F(NotificationGroupingControllerTest,
-       ConvertingGroupedNotificationToSingleNotificationAndBack) {
-  auto* message_center = MessageCenter::Get();
-  std::string id0, id1, id2;
-  const char group_id[] = "group";
-  id0 = AddNotificationWithNotifierId(group_id);
-  id1 = AddNotificationWithNotifierId(group_id);
-  id2 = AddNotificationWithNotifierId(group_id);
-
-  std::string parent_id = id0 + kIdSuffixForGroupContainerNotification;
-  EXPECT_TRUE(
-      MessageCenter::Get()->FindNotificationById(parent_id)->group_parent());
-
-  // Removing all but 1 notification should convert it back to a single
-  // notification and result in the removal of the parent notification.
-  message_center->RemoveNotification(id0, true);
-  message_center->RemoveNotification(id1, true);
-
-  auto* single_notification = message_center->FindNotificationById(id2);
-  EXPECT_FALSE(single_notification->group_child() ||
-               single_notification->group_parent());
-  EXPECT_FALSE(message_center->FindNotificationById(parent_id));
-
-  // Adding further notifications should create a new group with the parent id
-  // being derived from `id2`.
-  id0 = AddNotificationWithNotifierId(group_id);
-  id1 = AddNotificationWithNotifierId(group_id);
-
-  parent_id = id2 + kIdSuffixForGroupContainerNotification;
-  EXPECT_TRUE(message_center->FindNotificationById(parent_id));
-}
-
-TEST_F(NotificationGroupingControllerTest,
-       ConvertingRepopulatedParentToSingleNotification) {
+       RepopulatedParentNotificationRemoval) {
   auto* message_center = MessageCenter::Get();
   std::string id0, id1, id2, id3, id4;
-  const char group_id[] = "group";
-  id0 = AddNotificationWithNotifierId(group_id);
-  id1 = AddNotificationWithNotifierId(group_id);
-  id2 = AddNotificationWithNotifierId(group_id);
-  id3 = AddNotificationWithNotifierId(group_id);
+  const GURL url(u"http://test-url.com");
+  id0 = AddNotificationWithOriginUrl(url);
+  id1 = AddNotificationWithOriginUrl(url);
+  id2 = AddNotificationWithOriginUrl(url);
+  id3 = AddNotificationWithOriginUrl(url);
 
   std::string parent_id = id0 + kIdSuffixForGroupContainerNotification;
 
@@ -215,17 +187,109 @@ TEST_F(NotificationGroupingControllerTest,
   GetPrimaryUnifiedSystemTray()->ShowBubble();
   GetPrimaryUnifiedSystemTray()->CloseBubble();
 
-  id4 = AddNotificationWithNotifierId(group_id);
+  id4 = AddNotificationWithOriginUrl(url);
+
+  AnimateUntilIdle();
 
   message_center->RemoveNotification(id0, true);
   message_center->RemoveNotification(id1, true);
   message_center->RemoveNotification(id2, true);
   message_center->RemoveNotification(id3, true);
 
-  auto* single_notification = MessageCenter::Get()->FindNotificationById(id4);
-  EXPECT_FALSE(single_notification->group_child() ||
-               single_notification->group_parent());
-  EXPECT_FALSE(MessageCenter::Get()->FindNotificationById(parent_id));
+  auto* last_child = MessageCenter::Get()->FindNotificationById(id4);
+  auto* parent = MessageCenter::Get()->FindNotificationById(parent_id);
+
+  EXPECT_TRUE(last_child->group_child());
+  EXPECT_TRUE(parent->group_parent());
+}
+
+TEST_F(NotificationGroupingControllerTest,
+       NotificationsGroupingOnMultipleScreens) {
+  UpdateDisplay("800x600,800x600");
+  auto* message_center = MessageCenter::Get();
+  std::string id0, id1, id2;
+  const GURL url(u"http://test-url.com/");
+  id0 = AddNotificationWithOriginUrl(url);
+  id1 = AddNotificationWithOriginUrl(url);
+  id2 = AddNotificationWithOriginUrl(url);
+
+  EXPECT_TRUE(message_center->FindNotificationById(id0)->group_child());
+  EXPECT_TRUE(message_center->FindNotificationById(id1)->group_child());
+  EXPECT_TRUE(message_center->FindNotificationById(id2)->group_child());
+
+  std::string id_parent = id0 + kIdSuffixForGroupContainerNotification;
+  EXPECT_TRUE(message_center->FindNotificationById(id_parent)->group_parent());
+
+  // Make sure there is only a single popup (there would be more popups if
+  // grouping didn't work)
+  EXPECT_EQ(1u, message_center->GetPopupNotifications().size());
+}
+
+// Create a group notification while the message center bubble is
+// is shown.
+TEST_F(NotificationGroupingControllerTest,
+       NotificationsGroupingMessageCenterBubbleShown) {
+  GetPrimaryUnifiedSystemTray()->ShowBubble();
+
+  auto* message_center = MessageCenter::Get();
+  std::string id0, id1, id2;
+  const GURL url(u"http://test-url.com/");
+
+  id0 = AddNotificationWithOriginUrl(url);
+  id1 = AddNotificationWithOriginUrl(url);
+  id2 = AddNotificationWithOriginUrl(url);
+
+  EXPECT_TRUE(message_center->FindNotificationById(id0)->group_child());
+  EXPECT_TRUE(message_center->FindNotificationById(id1)->group_child());
+
+  std::string id_parent = id0 + kIdSuffixForGroupContainerNotification;
+  EXPECT_TRUE(message_center->FindNotificationById(id_parent)->group_parent());
+}
+
+TEST_F(NotificationGroupingControllerTest,
+       GroupedNotificationRemovedDuringAnimation) {
+  auto* message_center = MessageCenter::Get();
+  std::string id0, id1;
+  const GURL url(u"http://test-url.com/");
+
+  // Enable animations.
+  ui::ScopedAnimationDurationScaleMode duration(
+      ui::ScopedAnimationDurationScaleMode::NON_ZERO_DURATION);
+
+  id0 = AddNotificationWithOriginUrl(url);
+  id1 = AddNotificationWithOriginUrl(url);
+
+  // Remove notification with `id` before the animation completes.
+  message_center->RemoveNotification(id1, true);
+
+  // Wait for the animation to end to ensure there is no crash
+  LayerAnimationStoppedWaiter waiter;
+  waiter.Wait(GetPopupView(id0)->message_view()->layer());
+}
+
+TEST_F(NotificationGroupingControllerTest,
+       ParentNotificationRemovedDuringAnimation) {
+  // Enable animations.
+  ui::ScopedAnimationDurationScaleMode duration(
+      ui::ScopedAnimationDurationScaleMode::NON_ZERO_DURATION);
+
+  auto* message_center = MessageCenter::Get();
+  std::string id0, id1;
+  const GURL url(u"http://test-url.com/");
+
+  id0 = AddNotificationWithOriginUrl(url);
+  id1 = AddNotificationWithOriginUrl(url);
+
+  // Remove the first notification before the animation completes.
+  message_center->RemoveNotification(id0, true);
+
+  // Wait for the animation to end to ensure there is no crash
+  LayerAnimationStoppedWaiter waiter;
+  waiter.Wait(GetPopupView(id0)->message_view()->layer());
+
+  // Make sure the second notification is still there.
+  EXPECT_FALSE(message_center->FindNotificationById(id0));
+  EXPECT_TRUE(message_center->FindNotificationById(id1));
 }
 
 }  // namespace ash

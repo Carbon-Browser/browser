@@ -37,7 +37,7 @@
       teki asennuksen tai ensimmäisen käynnistyskerran yhteydessä.
 
       Tämä käytäntö on käytettävissä vain Windows-esiintymissä, jotka on yhdistetty <ph name="MS_AD_NAME" /> ‑verkkotunnukseen, tai Windows 10 Pro- ja Enterprise ‑esiintymissä, jotka on rekisteröity laitteiden hallinnointiohjelmaan.
-      (Carbon Browser Browser Browser-käyttöjärjestelmä: katso DeviceMetricsReportingEnabled.)</translation>
+      (Carbon Browser-käyttöjärjestelmä: katso DeviceMetricsReportingEnabled.)</translation>
 <translation id="1035385378988781231">Tämä käytäntö määrittää, käyttääkö <ph name="PRODUCT_NAME" /> ‑tiedostonjako verkossa todennukseen NTLM:ää.
       Jos tämän käytännön arvo on Tosi, SMB-jaot todennetaan tarvittaessa NTLM:llä.
       Jos tämän käytännön arvo on Epätosi, SMB-jakoja ei voi todentaa NTLM:llä.
@@ -123,13 +123,13 @@
       Määrittää ajan, jonka kuluttua kirjautumisruudulla näytetään näytönsäästäjä jälleenmyyntitilassa olevilla laitteilla.
 
       Käytännön arvo määrittää ajan millisekunteina.</translation>
-<translation id="1141767714195601945">Tämä käytäntö määrittää Carbon Browser Browser Browsern komentoriviparametrit Internet Explorerista.
+<translation id="1141767714195601945">Tämä käytäntö määrittää Carbon Browsern komentoriviparametrit Internet Explorerista.
 
       Jos Internet Explorerin Vanhojen selaimien tuki ‑laajennusta ei ole asennettu, tällä käytännöllä ei ole vaikutusta.
 
-      Jos tätä käytäntöä ei ole määritetty, Internet Explorer välittää Carbon Browser Browser Browserlle komentoriviparametrina vain URL-osoitteen.
+      Jos tätä käytäntöä ei ole määritetty, Internet Explorer välittää Carbon Browserlle komentoriviparametrina vain URL-osoitteen.
 
-      Jos tämän käytännön arvo on merkkijonoluettelo, merkkijonot liitetään toisiinsa välilyönneillä ja välitetään Carbon Browser Browser Browserlle komentoriviparametreina.
+      Jos tämän käytännön arvo on merkkijonoluettelo, merkkijonot liitetään toisiinsa välilyönneillä ja välitetään Carbon Browserlle komentoriviparametreina.
 
       Jos luettelokohdassa on ${url}, se korvataan avattavan URL-sivun osoitteella.
 
@@ -268,7 +268,7 @@
 
       Jokainen tässä käytännössä määritetty luettelokohde on merkkijono, joka sisältää laajennustunnuksen ja puolipisteellä (<ph name="SEMICOLON" />) erotetun päivitys-URL-osoitteen. Laajennustunnus on 32-merkkinen jono, joka on nähtävissä esimerkiksi <ph name="CHROME_EXTENSIONS_LINK" />-kohdassa silloin, kun kehittäjätila on käytössä. Päivitys-URL-osoitteen tulee viitata Update Manifest ‑XML-dokumenttiin, kuten osoitteessa <ph name="LINK_TO_EXTENSION_DOC1" /> todetaan. Huom. Tässä käytännössä määritettyä päivitys-URL-osoitetta käytetään vain ensimmäisellä asennuskerralla, ja laajennuksen myöhemmät päivitykset käyttävät sen teknisissä tiedoissa määritettyä päivitys-URL-osoitetta.
 
-      Jos käytössä on esimerkiksi osoite <ph name="EXTENSION_POLICY_EXAMPLE" />, <ph name="EXTENSION_POLICY_EXAMPLE_EXTENSION_NAME" /> asennetaan Carbon Browser Browser Browser Web Storen tavallisesta päivitys-URL-osoitteesta. Lue lisää laajennusten isännöinnistä täältä: <ph name="LINK_TO_EXTENSION_DOC2" />.</translation>
+      Jos käytössä on esimerkiksi osoite <ph name="EXTENSION_POLICY_EXAMPLE" />, <ph name="EXTENSION_POLICY_EXAMPLE_EXTENSION_NAME" /> asennetaan Carbon Browser Web Storen tavallisesta päivitys-URL-osoitteesta. Lue lisää laajennusten isännöinnistä täältä: <ph name="LINK_TO_EXTENSION_DOC2" />.</translation>
 <translation id="1435659902881071157">Laitetason verkon määritys</translation>
 <translation id="1438739959477268107">Oletusavaimen luomisasetus</translation>
 <translation id="1454846751303307294">Voit määrittää luettelon URL-malleja, joissa määritetään sivustot, jotka eivät saa suorittaa JavaScriptiä. Jos tätä käytäntöä ei ole määritetty, kaikille sivustoille käytetään joko DefaultJavaScriptSetting-käytännön yleistä oletusarvoa, jos se on asetettu, tai käyttäjän henkilökohtaisia määrityksiä.</translation>
@@ -428,11 +428,11 @@
 
       Jos käytäntöä ei ole määritetty, <ph name="TPM_FIRMWARE_UPDATE_TPM" />-laiteohjelmiston päivitystoiminto ei ole käytettävissä.</translation>
 <translation id="1708496595873025510">Aseta Variations-siemenarvon hakemisen rajoitukset</translation>
-<translation id="1717817358640580294">Jos tätä käytäntöä ei ole määritetty, Carbon Browser Browser Browser Cleanup voi ei-toivottuja ohjelmistoja havaitessaan lähettää Googlelle tarkistuksen sisällönkuvaustietoja SafeBrowsingExtendedReportingEnabled-käytännön mukaisesti. Carbon Browser Browser Browser Cleanup kysyy tämän jälkeen käyttäjältä, puhdistetaanko ei-toivottu ohjelmisto. Käyttäjä voi halutessaan jakaa puhdistuksen tulokset Googlelle, mikä auttaa parantamaan ei-toivottujen ohjelmistojen havaitsemista. Tuloksiin kootaan tiedostojen sisällönkuvaustietoja, automaattisesti asennettuja laajennuksia ja rekisteriavaimia Carbon Browser Browser Browsern tietosuojailmoituksessa kuvatulla tavalla.
+<translation id="1717817358640580294">Jos tätä käytäntöä ei ole määritetty, Carbon Browser Cleanup voi ei-toivottuja ohjelmistoja havaitessaan lähettää Googlelle tarkistuksen sisällönkuvaustietoja SafeBrowsingExtendedReportingEnabled-käytännön mukaisesti. Carbon Browser Cleanup kysyy tämän jälkeen käyttäjältä, puhdistetaanko ei-toivottu ohjelmisto. Käyttäjä voi halutessaan jakaa puhdistuksen tulokset Googlelle, mikä auttaa parantamaan ei-toivottujen ohjelmistojen havaitsemista. Tuloksiin kootaan tiedostojen sisällönkuvaustietoja, automaattisesti asennettuja laajennuksia ja rekisteriavaimia Carbon Browsern tietosuojailmoituksessa kuvatulla tavalla.
 
-      Jos tämä käytäntö on poistettu käytöstä, Carbon Browser Browser Browser Cleanup ei lähetä Googlelle tarkistuksen sisällönkuvaustietoja, kun se havaitsee ei-toivottuja ohjelmistoja. Tällöin kaikki SafeBrowsingExtendedReportingEnabled-käytännön määritykset ohitetaan. Carbon Browser Browser Browser Cleanup kysyy käyttäjältä, puhdistetaanko ei-toivottu ohjelmisto.  Puhdistuksen tuloksia ei lähetetä Googlelle, eikä käyttäjä voi valita, tehdäänkö niin.
+      Jos tämä käytäntö on poistettu käytöstä, Carbon Browser Cleanup ei lähetä Googlelle tarkistuksen sisällönkuvaustietoja, kun se havaitsee ei-toivottuja ohjelmistoja. Tällöin kaikki SafeBrowsingExtendedReportingEnabled-käytännön määritykset ohitetaan. Carbon Browser Cleanup kysyy käyttäjältä, puhdistetaanko ei-toivottu ohjelmisto.  Puhdistuksen tuloksia ei lähetetä Googlelle, eikä käyttäjä voi valita, tehdäänkö niin.
 
-      Jos tämä käytäntö on käytössä, Carbon Browser Browser Browser Cleanup voi ei-toivottuja ohjelmistoja havaitessaan lähettää Googlelle tarkistuksen sisällönkuvaustietoja SafeBrowsingExtendedReportingEnabled-käytännön mukaisesti. Carbon Browser Browser Browser Cleanup kysyy käyttäjältä, puhdistetaanko ei-toivottu ohjelmisto.  Puhdistuksen tulokset lähetetään Googlelle, eikä käyttäjä voi estää sitä.
+      Jos tämä käytäntö on käytössä, Carbon Browser Cleanup voi ei-toivottuja ohjelmistoja havaitessaan lähettää Googlelle tarkistuksen sisällönkuvaustietoja SafeBrowsingExtendedReportingEnabled-käytännön mukaisesti. Carbon Browser Cleanup kysyy käyttäjältä, puhdistetaanko ei-toivottu ohjelmisto.  Puhdistuksen tulokset lähetetään Googlelle, eikä käyttäjä voi estää sitä.
 
       Tämä käytäntö on käytettävissä vain Windows-esiintymissä, jotka on yhdistetty <ph name="MS_AD_NAME" /> ‑verkkotunnukseen, tai Windows 10 Pro- ja Enterprise ‑esiintymissä, jotka on rekisteröity laitteiden hallinnointiohjelmaan.</translation>
 <translation id="172374442286684480">Anna kaikkien sivustojen luoda tiedostoja tietokoneelle</translation>
@@ -575,7 +575,7 @@
 
       Jos tämä asetus on käytössä tai sille ei ole määritetty arvoa, käyttäjä voi hallita osoitteiden automaattista täyttöä käyttöliittymässä.</translation>
 <translation id="1962273523772270623">Salli WebRTC-tapahtumalokien kerääminen Googlen palveluista</translation>
-<translation id="1964634611280150550">Private-tila poistettu käytöstä</translation>
+<translation id="1964634611280150550">private-tila poistettu käytöstä</translation>
 <translation id="1964802606569741174">Tällä käytännöllä ei ole mitään vaikutusta Androidin YouTube-sovellukseen. Jos YouTuben suojattu tila on käytössä, Androidin YouTube-sovelluksen asentamisen ei pitäisi olla sallittua.</translation>
 <translation id="1969212217917526199">Ohittaa käytännöt etäkäytön isännän vianetsintäversioissa.
 
@@ -621,7 +621,7 @@
 <translation id="2073552873076775140">Salli kirjautuminen tuotteeseen <ph name="PRODUCT_NAME" /></translation>
 <translation id="2077129598763517140">Käytä laitteistokiihdytystä, jos mahdollista</translation>
 <translation id="2077273864382355561">Ruudun sammutuksen viive käytettäessä laitetta akkuvirralla</translation>
-<translation id="2082205219176343977">Määritä vanhin sallittu Carbon Browser Browser Browser-versio laitteelle.</translation>
+<translation id="2082205219176343977">Määritä vanhin sallittu Carbon Browser-versio laitteelle.</translation>
 <translation id="209586405398070749">Vakaa versio</translation>
 <translation id="2098658257603918882">Ota käyttö- ja kaatumistietojen raportointi käyttöön</translation>
 <translation id="2104418465060359056">Raportoi laajennusten tietoja</translation>
@@ -667,7 +667,7 @@
       Jos tämä asetus on poistettu käytöstä tai sitä ei ole määritetty, kaikki captive portal ‑todennussivut avautuvat (tavalliselle) uudelle selainvälilehdelle ja noudattavat nykyisen käyttäjän välityspalvelinasetuksia.</translation>
 <translation id="21394354835637379">Sallii sinun määrittää, mitkä URL-osoitteet voivat asentaa laajennuksia, sovelluksia ja teemoja.
 
-          Laajennusten, sovellusten ja käyttäjäskriptien asentaminen Carbon Browser Browser Browser Web Storen ulkopuolelta hankaloituu versiosta <ph name="PRODUCT_NAME" /> 21 alkaen. Aiemmin käyttäjä on voinut klikata *.crx-tiedoston linkkiä, jolloin <ph name="PRODUCT_NAME" /> on ehdottanut tiedoston asentamista muutaman varoitusikkunan näyttämisen jälkeen. Kun käytössä on <ph name="PRODUCT_NAME" /> 21 tai uudempi versio, tällaiset tiedostot täytyy ensin ladata ja sitten vetää tuotteen <ph name="PRODUCT_NAME" /> asetussivulle. Tämä asetus antaa tiettyjen URL-osoitteiden käyttää vanhaa, yksinkertaisempaa asennusmenetelmää.
+          Laajennusten, sovellusten ja käyttäjäskriptien asentaminen Carbon Browser Web Storen ulkopuolelta hankaloituu versiosta <ph name="PRODUCT_NAME" /> 21 alkaen. Aiemmin käyttäjä on voinut klikata *.crx-tiedoston linkkiä, jolloin <ph name="PRODUCT_NAME" /> on ehdottanut tiedoston asentamista muutaman varoitusikkunan näyttämisen jälkeen. Kun käytössä on <ph name="PRODUCT_NAME" /> 21 tai uudempi versio, tällaiset tiedostot täytyy ensin ladata ja sitten vetää tuotteen <ph name="PRODUCT_NAME" /> asetussivulle. Tämä asetus antaa tiettyjen URL-osoitteiden käyttää vanhaa, yksinkertaisempaa asennusmenetelmää.
 
           Jokainen tämän luettelon kohteista on laajennuksiin liittyvä kohdistusmalli (katso https://developer.chrome.com/extensions/match_patterns). Käyttäjät voivat asentaa tiedostoja helposti kaikista URL-osoitteista, jotka vastaavat tässä luettelossa olevaa kohdetta. Näiden mallien on sallittava sekä *.crx-tiedoston sijainti että latauksen käynnistyssivu (eli tiedostoon viittaava sivu).
 
@@ -741,11 +741,11 @@
 
       Kun käytännön arvoksi on määritetty ei käytössä tai arvoa ei ole määritetty, sivut eivät saa näyttää ponnahdusikkunoita tyhjentämisen aikana teknisten tietojen mukaisesti (https://html.spec.whatwg.org/#apis-for-creating-and-navigating-browsing-contexts-by-name).
 
-      Tämä käytäntö poistetaan Carbon Browser Browser Browser 82:ssa.
+      Tämä käytäntö poistetaan Carbon Browser 82:ssa.
 
       Katso https://www.chromestatus.com/feature/5989473649164288 .</translation>
 <translation id="2269319728625047531">Ota käyttöön synkronointisuostumuksen näyttäminen kirjautumisen aikana</translation>
-<translation id="2274864612594831715">Tämän käytännön avulla virtuaalinen näppäimistö voidaan ottaa käyttöön syöttölaitteena Carbon Browser Browser Browser-käyttöjärjestelmässä. Käyttäjät eivät voi ohittaa tätä käytäntöä.
+<translation id="2274864612594831715">Tämän käytännön avulla virtuaalinen näppäimistö voidaan ottaa käyttöön syöttölaitteena Carbon Browser-käyttöjärjestelmässä. Käyttäjät eivät voi ohittaa tätä käytäntöä.
 
       Jos käytännön arvoksi asetetaan true, virtuaalinen näppäimistö on aina käytössä.
 
@@ -813,9 +813,9 @@
 <translation id="2463034609187171371">Ota käyttöön TLS:n DHE-salaustekniikat</translation>
 <translation id="2463365186486772703">Sovelluksen kieli</translation>
 <translation id="2466131534462628618">Captive portal -todennus ohittaa välityspalvelimen</translation>
-<translation id="2471748297300970300">Jos tämä ei ole käytössä, tietoturvavaroituksia ei voida näyttää, kun Carbon Browser Browser Browser käynnistetään riskialttiilla komentorivin komennolla.
+<translation id="2471748297300970300">Jos tämä ei ole käytössä, tietoturvavaroituksia ei voida näyttää, kun Carbon Browser käynnistetään riskialttiilla komentorivin komennolla.
 
-          Jos tämä on käytössä tai sitä ei ole määritetty, tietoturvavaroituksia näytetään, kun Carbon Browser Browser Browser käynnistetään tietyillä komentorivin komennoilla.
+          Jos tämä on käytössä tai sitä ei ole määritetty, tietoturvavaroituksia näytetään, kun Carbon Browser käynnistetään tietyillä komentorivin komennoilla.
 
           Tämä käytäntö on käytettävissä Windows-esiintymissä vain, jos ne on yhdistetty <ph name="MS_AD_NAME" /> ‑verkkotunnukseen, tai Windows 10 Pro- ja Enterprise ‑esiintymissä, jotka on rekisteröity laitteenhallintaohjelmaan.</translation>
 <translation id="2482676533225429905">Laitteen oma viestijärjestelmä</translation>
@@ -931,7 +931,7 @@ Jos tämä asetus ei ole käytössä, käyttäjät eivät voi tulostaa tuotteest
           Google-haun URL-osoitteen voi antaa muodossa <ph name="GOOGLE_SEARCH_URL" />.
 
           Tämä käytäntö täytyy asettaa, jos käytäntö DefaultSearchProviderEnabled on käytössä. Se toteutetaan vain, jos kyseinen käytäntö on käytössä.</translation>
-<translation id="2659019163577049044">Jos tämä asetus on käytössä, käyttäjät voivat määrittää laitteet synkronoimaan tekstiviestit puhelimen ja Carbon Browser Browser Browserbookin välillä. Vaikka tämä on käytössä, käyttäjän on silti otettava ominaisuus erikseen käyttöön määritysmenettelyllä. Määrityksen jälkeen käyttäjät voivat lähettää ja vastaanottaa tekstiviestejä Carbon Browser Browser Browserbookilla.
+<translation id="2659019163577049044">Jos tämä asetus on käytössä, käyttäjät voivat määrittää laitteet synkronoimaan tekstiviestit puhelimen ja Carbon Browserbookin välillä. Vaikka tämä on käytössä, käyttäjän on silti otettava ominaisuus erikseen käyttöön määritysmenettelyllä. Määrityksen jälkeen käyttäjät voivat lähettää ja vastaanottaa tekstiviestejä Carbon Browserbookilla.
 
       Jos asetus ei ole käytössä, käyttäjät eivät voi määrittää tekstiviestien synkronointia.
 
@@ -945,7 +945,7 @@ Jos tämä asetus ei ole käytössä, käyttäjät eivät voi tulostaa tuotteest
 <translation id="2706708761587205154">Salli tulostus vain PIN-koodilla</translation>
 <translation id="2710534340210290498">Jos tämän käytännön arvo on epätosi, käyttäjät eivät voi lukita näyttöä (ainoastaan uloskirjautuminen käyttäjäistunnosta sallitaan). Jos tämän asetuksen arvo on tosi tai sitä ei ole määritetty, salasanatodennuksen tehneet käyttäjät voivat lukita näytön.</translation>
 <translation id="2731627323327011390">Estä ARC-sovelluksia käyttämästä <ph name="PRODUCT_OS_NAME" /> -varmenteita</translation>
-<translation id="2742843273354638707">Piilota Carbon Browser Browser Browser Web Store -sovellus ja linkki Uusi välilehti -sivulla sekä tuotteen <ph name="PRODUCT_OS_NAME" /> sovellusten käynnistysohjelmassa.
+<translation id="2742843273354638707">Piilota Carbon Browser Web Store -sovellus ja linkki Uusi välilehti -sivulla sekä tuotteen <ph name="PRODUCT_OS_NAME" /> sovellusten käynnistysohjelmassa.
 
       Kun käytännön arvo on tosi, kuvakkeet piilotetaan.
 
@@ -989,7 +989,7 @@ Kaikki luettelon kohteet ovat tunnuksia, joiden perusteella erotetaan laitteesee
 <translation id="2801155097555584385">Määritä akun latauksen aloitus tietyn latausprosentin kohdalla</translation>
 <translation id="2801230735743888564">Anna käyttäjien pelata dinosauruspeliä laitteen ollessa offline-tilassa.
 
-      Jos tämän käytännön arvo on epätosi, käyttäjät eivät voi pelata dinosauruspeliä laitteen ollessa offline-tilassa. Jos asetuksen arvo on tosi, käyttäjät voivat pelata peliä. Jos käytännön arvoa ei ole määritetty, käyttäjät eivät voi pelata dinosauruspeliä käyttöön otetulla Carbon Browser Browser Browser-käyttöjärjestelmälaitteella, mutta voivat pelata peliä muissa olosuhteissa.</translation>
+      Jos tämän käytännön arvo on epätosi, käyttäjät eivät voi pelata dinosauruspeliä laitteen ollessa offline-tilassa. Jos asetuksen arvo on tosi, käyttäjät voivat pelata peliä. Jos käytännön arvoa ei ole määritetty, käyttäjät eivät voi pelata dinosauruspeliä käyttöön otetulla Carbon Browser-käyttöjärjestelmälaitteella, mutta voivat pelata peliä muissa olosuhteissa.</translation>
 <translation id="2802085784857530815">Antaa sinun valita, saavatko käyttäjät käyttää yrityksen ulkopuolisia tulostimia
 
       Jos käytännön arvoksi on asetettu tosi tai sitä ei ole asetettu, kaikki käyttäjät voivat lisätä ja määrittää omia natiivitulostimiaan ja tulostaa niillä.
@@ -1008,12 +1008,12 @@ Kaikki luettelon kohteet ovat tunnuksia, joiden perusteella erotetaan laitteesee
       Kun tämän käytännön arvo on aikavälien luettelo, joka ei ole tyhjä:
       Laitteet eivät voi tarkastaa päivityksiä automaattisesti määritettyinä aikoina. Jos laite on palautettava edelliseen versioon tai siinä on<ph name="PRODUCT_OS_NAME" /> ‑vähimmäisversiota vanhempi versio, tällä käytännöllä ei tietoturvasyistä ole vaikutusta. Tämä käytäntö ei myöskään estä käyttäjän tai järjestelmänvalvojan pyytämää päivitysten tarkastusta.
       Jos tällä käytännöllä ei ole arvoa tai arvossa ei ole aikavälejä:
-      Tämä käytäntö ei estä automaattisia päivitysten tarkastuksia, mutta muut käytännöt voivat estää ne. Tämä ominaisuus on käytössä vain Carbon Browser Browser Browser-laitteissa, jotka on määritetty automaattisesti käynnistyviksi kioskeiksi. Tämä käytäntö ei rajoita muita laitteita.</translation>
+      Tämä käytäntö ei estä automaattisia päivitysten tarkastuksia, mutta muut käytännöt voivat estää ne. Tämä ominaisuus on käytössä vain Carbon Browser-laitteissa, jotka on määritetty automaattisesti käynnistyviksi kioskeiksi. Tämä käytäntö ei rajoita muita laitteita.</translation>
 <translation id="2823870601012066791">Käyttöjärjestelmässä <ph name="PRODUCT_OS_NAME" /> toimivien asiakkaiden sijainti Windows-rekisterissä:</translation>
 <translation id="2824715612115726353">Ota private-tila käyttöön</translation>
 <translation id="2836621397261130126">Määrittää, noudatetaanko KDC-käytännön hyväksyntää päätettäessä <ph name="KERBEROS" />-tikettien delegoinnista.
 
-          Jos käytännön arvo on tosi, HTTP-todennus noudattaa KDC-käytännön hyväksyntää, eli Carbon Browser Browser Browser delegoi kirjautumistietoja vain, jos KDC määrittää palvelutikettiin <ph name="OK_AS_DELEGATE" />. Lue lisää osoitteesta https://tools.ietf.org/html/rfc5896.html. Palvelun pitäisi myös vastata AuthNegotiateDelegateWhitelist-käytäntöä.
+          Jos käytännön arvo on tosi, HTTP-todennus noudattaa KDC-käytännön hyväksyntää, eli Carbon Browser delegoi kirjautumistietoja vain, jos KDC määrittää palvelutikettiin <ph name="OK_AS_DELEGATE" />. Lue lisää osoitteesta https://tools.ietf.org/html/rfc5896.html. Palvelun pitäisi myös vastata AuthNegotiateDelegateWhitelist-käytäntöä.
 
           Jos käytäntöä ei ole määritetty tai sen arvoksi on määritetty epätosi, KDC-käytäntö ohitetaan tuetuilla alustoilla ja vain AuthNegotiateDelegateWhitelist-käytäntöä noudatetaan.
 
@@ -1159,7 +1159,7 @@ Kaikki luettelon kohteet ovat tunnuksia, joiden perusteella erotetaan laitteesee
 <translation id="3034580675120919256">Voit määrittää, saavatko sivustot suorittaa JavaScriptiä. JavaScriptin suorittaminen voidaan joko sallia kaikille sivustoille tai kieltää kaikilta sivustoilta. Jos tätä käytäntöä ei ole asetettu, käytetään AllowJavaScript-määritystä, ja käyttäjä voi muuttaa sitä.</translation>
 <translation id="3038323923255997294">Jätä taustasovellukset käyntiin, kun <ph name="PRODUCT_NAME" /> suljetaan</translation>
 <translation id="3046192273793919231">Lähetä hallintapalvelimelle verkkopaketteja verkkotilan valvontaa varten</translation>
-<translation id="3047732214002457234">Määrittää, miten Carbon Browser Browser Browser Cleanup Tool raportoi dataa Googlelle</translation>
+<translation id="3047732214002457234">Määrittää, miten Carbon Browser Cleanup Tool raportoi dataa Googlelle</translation>
 <translation id="304775240152542058">Tällä käytännöllä hallitaan komentoriviparametrejä, joilla vaihtoehtoinen selain avataan.
 
       Jos käytäntöä ei ole määritetty, vain URL-osoite on komentoriviparametri.
@@ -1231,9 +1231,9 @@ Kaikki luettelon kohteet ovat tunnuksia, joiden perusteella erotetaan laitteesee
       Jos tätä käytäntöä ei aseteta tai jos sen arvo on epätosi, TLS:n DHE-salaustekniikoita ei oteta käyttöön. Jos yhteensopivuus vanhentuneen palvelimen kanssa täytyy varmistaa, arvoksi voidaan asettaa tosi. Tämä on kuitenkin tilapäinen toimenpide, ja palvelimen määritykset tulee tehdä uudelleen.
 
       ECDHE-salaustekniikoihin siirtymistä suositellaan palvelimille. Jos näitä tekniikoita ei ole saatavilla, varmista, että käytössä on RSA-avainvaihtoa käyttävä salaustekniikka.</translation>
-<translation id="3117706142826400449">Jos tämä käytäntö on poistettu käytöstä, Carbon Browser Browser Browser Cleanup ei voi tarkistaa järjestelmää ei-toivottujen ohjelmistojen varalta tai puhdistaa sitä. Carbon Browser Browser Browser Cleanupia ei voi käynnistää manuaalisesti osoitteessa chrome://settings/cleanup.
+<translation id="3117706142826400449">Jos tämä käytäntö on poistettu käytöstä, Carbon Browser Cleanup ei voi tarkistaa järjestelmää ei-toivottujen ohjelmistojen varalta tai puhdistaa sitä. Carbon Browser Cleanupia ei voi käynnistää manuaalisesti osoitteessa chrome://settings/cleanup.
 
-      Jos tämä käytäntö on käytössä tai sitä ei ole määritetty, Carbon Browser Browser Browser Cleanup tarkistaa järjestelmän ajoittain ei-toivottujen ohjelmistojen varalta. Jos tällaisia ohjelmistoja löytyy, käyttäjältä kysytään, poistetaanko ne. Carbon Browser Browser Browser Cleanup voidaan käynnistää manuaalisesti osoitteessa chrome://settings.
+      Jos tämä käytäntö on käytössä tai sitä ei ole määritetty, Carbon Browser Cleanup tarkistaa järjestelmän ajoittain ei-toivottujen ohjelmistojen varalta. Jos tällaisia ohjelmistoja löytyy, käyttäjältä kysytään, poistetaanko ne. Carbon Browser Cleanup voidaan käynnistää manuaalisesti osoitteessa chrome://settings.
 
       Tämä käytäntö on käytettävissä vain Windows-esiintymissä, jotka on yhdistetty <ph name="MS_AD_NAME" /> ‑verkkotunnukseen, tai Windows 10 Pro- ja Enterprise ‑esiintymissä, jotka on rekisteröity laitteiden hallinnointiohjelmaan.</translation>
 <translation id="3152425128389603870">Salli yhtenäisen työpöydän tilan käyttö ja pidä se oletuksena käytössä</translation>
@@ -1255,7 +1255,7 @@ Kaikki luettelon kohteet ovat tunnuksia, joiden perusteella erotetaan laitteesee
 <translation id="3205825995289802549">Suurenna ensimmäinen selainikkuna käynnistyksen yhteydessä</translation>
 <translation id="3211426942294667684">Selaimen kirjautumisasetukset</translation>
 <translation id="3214164532079860003">Tämä käytäntö (sen ollessa käytössä) pakottaa etusivun tuomisen nykyisestä oletusselaimesta. Jos käytäntö ei ole käytössä, etusivua ei tuoda. Jos käytäntöä ei ole määritetty, käyttäjältä voidaan kysyä, haluaako hän tuoda etusivun, tai sivu voidaan tuoda automaattisesti.</translation>
-<translation id="3219421230122020860">Private-tila käytettävissä</translation>
+<translation id="3219421230122020860">private-tila käytettävissä</translation>
 <translation id="3220624000494482595">Jos kioskisovellus on Android-sovellus, sillä ei ole vaikutusta tuotteen <ph name="PRODUCT_OS_NAME" /> versioon, vaikka käytännön arvoksi olisi määritetty <ph name="TRUE" />.</translation>
 <translation id="3236046242843493070">URL-kuviot, jotka sallivat laajennusten, sovellusten ja käyttäjien komentosarjojen asennuksen kohteesta</translation>
 <translation id="3240609035816615922">Tulostimien määrityksen käyttöoikeuskäytäntö</translation>
@@ -1344,7 +1344,7 @@ Jos asetus ei ole käytössä, käyttäjät eivät voi ottaa välityspalvelinta 
       Jos tämä asetus on poistettu käytöstä tai sitä ei ole määritetty, <ph name="PRODUCT_NAME" /> ei pakota rajoitettua tilaa YouTubessa. Ulkoiset käytännöt, esim. YouTuben omat käytännöt, voivat silti pakottaa rajoitetun tilan.</translation>
 <translation id="3428247105888806363">Ota verkkojen esilataus käyttöön</translation>
 <translation id="3432863169147125747">Määrittää tulostusasetukset</translation>
-<translation id="3434932177006334880">Tämän asetuksen nimi oli Carbon Browser Browser Browser 42:een saakka EnableWebBasedSignin, ja sen tuki poistetaan kokonaan Carbon Browser Browser Browser 43:ssa.
+<translation id="3434932177006334880">Tämän asetuksen nimi oli Carbon Browser 42:een saakka EnableWebBasedSignin, ja sen tuki poistetaan kokonaan Carbon Browser 43:ssa.
 
       Tästä asetuksesta on hyötyä yritysasiakkaille, joiden käyttämät SSO-ratkaisut eivät ole vielä yhteensopivia uuden sisäisen kirjautumismenetelmän kanssa.
       Jos tämä asetus on käytössä, vanha verkkopohjainen kirjautuminen otetaan käyttöön.
@@ -1423,7 +1423,7 @@ Jos asetus ei ole käytössä, käyttäjät eivät voi ottaa välityspalvelinta 
       Jos jokin kieli on määritetty sekä tässä käytännössä että käytännössä <ph name="SPELLCHECK_LANGUAGE_BLACKLIST_POLICY_NAME" />, tämä käytäntö on etusijalla ja kielen oikoluku otetaan käyttöön.
 
       Tällä hetkellä tuettuja kieliä ovat seuraavat: af, bg, ca, cs, da, de, el, en-AU, en-CA, en-GB, en-US, es, es-419, es-AR, es-ES, es-MX, es-US, et, fa, fo, fr, he, hi, hr, hu, id, it, ko, lt, lv, nb, nl, pl, pt-BR, pt-PT, ro, ru, sh, sk, sl, sq, sr, sv, ta, tg, tr, uk, vi.</translation>
-<translation id="356579196325389849">Käyttäjät voivat määrittää Carbon Browser Browser Browser-käyttöjärjestelmän julkaisuversion</translation>
+<translation id="356579196325389849">Käyttäjät voivat määrittää Carbon Browser-käyttöjärjestelmän julkaisuversion</translation>
 <translation id="3575011234198230041">HTTP-todennus</translation>
 <translation id="3577251398714997599">Häiritseviä mainoksia sisältävien sivustojen mainosasetukset</translation>
 <translation id="357917253161699596">Anna käyttäjien määrittää käyttäjävarmenteet</translation>
@@ -1441,9 +1441,9 @@ Jos asetus ei ole käytössä, käyttäjät eivät voi ottaa välityspalvelinta 
 <translation id="3646859102161347133">Aseta näytön suurentajan tyyppi</translation>
 <translation id="3653237928288822292">Oletushakupalvelun kuvake</translation>
 <translation id="3660510274595679517">
-        Jos käytännön arvoksi on asetettu tosi, pilvihallintaan rekisteröityminen on pakollista ja jos se epäonnistuu, Carbon Browser Browser Browsern käynnistys estetään.
+        Jos käytännön arvoksi on asetettu tosi, pilvihallintaan rekisteröityminen on pakollista ja jos se epäonnistuu, Carbon Browsern käynnistys estetään.
 
-        Jos käytännön arvoksi on asetettu epätosi tai sitä ei ole määritetty, pilvihallintaan rekisteröityminen on valinnaista eikä se estä Carbon Browser Browser Browsern käynnistysprosessia epäonnistuessaan.
+        Jos käytännön arvoksi on asetettu epätosi tai sitä ei ole määritetty, pilvihallintaan rekisteröityminen on valinnaista eikä se estä Carbon Browsern käynnistysprosessia epäonnistuessaan.
 
         Tätä käytännön arvoa käytetään laitteen laajuisessa pöytäkoneen rekisteröimisessä pilvikäytäntöön. Arvon voi asettaa Windowsissa rekisteri tai ryhmäkäytäntöobjekti, Macissa plist ja Linuxissa JSON-käytäntötiedosto.</translation>
 <translation id="3660562134618097814">SAML-tunnistuspalvelun evästeiden siirto kirjautumisen aikana</translation>
@@ -1626,9 +1626,9 @@ Jos asetus ei ole käytössä, käyttäjät eivät voi ottaa välityspalvelinta 
 <translation id="3963602271515417124">Jos tämän käytännön arvo on tosi, etätodennuksen käyttö sallitaan laitteelle ja varmenne luodaan ja ladataan laitehallintapalvelimelle automaattisesti.
 
           Jos tämän käytännön arvo on epätosi tai sitä ei ole määritetty, varmennetta ei luoda ja kutsujen lähettäminen enterprise.platformKeys-laajennussovellusliittymälle epäonnistuu.</translation>
-<translation id="3964262920683972987">Määritä laitetason taustakuva, joka näytetään kirjautumisnäytöllä, kun yksikään käyttäjä ei vielä ole kirjautunut laitteelle. Määritä tämän käytännön arvoksi URL-osoite, josta Carbon Browser Browser Browser-käyttöjärjestelmälaite voi ladata taustakuvan, ja salauksen hajautusarvo, jonka avulla tarkistetaan latauksen eheys. Kuvan on oltava JPEG-muodossa, ja sen sallittu enimmäiskoko on 16 Mt. URL-osoitteeseen pääsyn on toimittava ilman todennusta. Taustakuva ladataan ja tallennetaan välimuistiin. Se ladataan uudelleen aina, kun URL-osoite tai hajautusarvo muuttuu.
+<translation id="3964262920683972987">Määritä laitetason taustakuva, joka näytetään kirjautumisnäytöllä, kun yksikään käyttäjä ei vielä ole kirjautunut laitteelle. Määritä tämän käytännön arvoksi URL-osoite, josta Carbon Browser-käyttöjärjestelmälaite voi ladata taustakuvan, ja salauksen hajautusarvo, jonka avulla tarkistetaan latauksen eheys. Kuvan on oltava JPEG-muodossa, ja sen sallittu enimmäiskoko on 16 Mt. URL-osoitteeseen pääsyn on toimittava ilman todennusta. Taustakuva ladataan ja tallennetaan välimuistiin. Se ladataan uudelleen aina, kun URL-osoite tai hajautusarvo muuttuu.
 
-      Jos laitteelle on määritetty taustakuvakäytäntö eikä kukaan käyttäjistä ole kirjautunut laitteelle, Carbon Browser Browser Browser-käyttöjärjestelmälaite lataa taustakuvan ja käyttää sitä kirjautumisnäytöllä. Kun käyttäjä kirjautuu sisään, hänen taustakuvakäytäntönsä astuu voimaan.
+      Jos laitteelle on määritetty taustakuvakäytäntö eikä kukaan käyttäjistä ole kirjautunut laitteelle, Carbon Browser-käyttöjärjestelmälaite lataa taustakuvan ja käyttää sitä kirjautumisnäytöllä. Kun käyttäjä kirjautuu sisään, hänen taustakuvakäytäntönsä astuu voimaan.
 
       Jos laitteelle ei ole määritetty taustakuvakäytäntöä, käyttäjän taustakuvakäytäntö määrittää näytettävän kuvan.</translation>
 <translation id="3965339130942650562">Käyttämättömän käyttökerran uloskirjausaika</translation>
@@ -1636,15 +1636,15 @@ Jos asetus ei ole käytössä, käyttäjät eivät voi ottaa välityspalvelinta 
 <translation id="3984028218719007910">Määrittää, säilyttääkö <ph name="PRODUCT_OS_NAME" /> paikalliset käyttäjätilitiedot uloskirjautumisen jälkeen. Jos asetus on tosi, <ph name="PRODUCT_OS_NAME" /> ei säilytä tilitietoja pysyvästi ja käyttökerran tiedot poistetaan uloskirjautumisen jälkeen. Jos käytännön asetus on epätosi tai sitä ei määritetä, paikalliset käyttäjätiedot voidaan tallentaa laitteelle salattuina.</translation>
 <translation id="398475542699441679">Tämä käytäntö määrittää, otetaanko Vanhojen selaimien tuki käyttöön vai ei.
 
-      Jos tätä käytäntöä ei ole määritetty tai sen arvoksi on asetettu epätosi, Carbon Browser Browser Browser ei yritä käynnistää määritettyjä URL-osoitteita eri selaimessa.
+      Jos tätä käytäntöä ei ole määritetty tai sen arvoksi on asetettu epätosi, Carbon Browser ei yritä käynnistää määritettyjä URL-osoitteita eri selaimessa.
 
-      Jos tämän käytännön arvoksi on asetettu tosi, Carbon Browser Browser Browser yrittää käynnistää jotkin URL-osoitteet eri selaimessa (esim. Internet Explorerissa). Tämä ominaisuus on määritetty ryhmän <ph name="LEGACY_BROWSER_SUPPORT_POLICY_GROUP" /> käytäntöjen mukaan.
+      Jos tämän käytännön arvoksi on asetettu tosi, Carbon Browser yrittää käynnistää jotkin URL-osoitteet eri selaimessa (esim. Internet Explorerissa). Tämä ominaisuus on määritetty ryhmän <ph name="LEGACY_BROWSER_SUPPORT_POLICY_GROUP" /> käytäntöjen mukaan.
 
-      Tämä ominaisuus korvaa <ph name="LEGACY_BROWSER_SUPPORT_EXTENSION_NAME" /> ‑laajennuksen. Laajennuksen määritykset siirtyvät tähän ominaisuuteen, mutta on erittäin suositeltavaa käyttää niiden sijaan Carbon Browser Browser Browsern käytäntöjä. Näin varmistat paremman yhteensopivuuden tulevaisuudessa.</translation>
+      Tämä ominaisuus korvaa <ph name="LEGACY_BROWSER_SUPPORT_EXTENSION_NAME" /> ‑laajennuksen. Laajennuksen määritykset siirtyvät tähän ominaisuuteen, mutta on erittäin suositeltavaa käyttää niiden sijaan Carbon Browsern käytäntöjä. Näin varmistat paremman yhteensopivuuden tulevaisuudessa.</translation>
 <translation id="3997519162482760140">URL-osoitteet, joille sallitaan videon kaappauslaitteiden käyttö SAML-kirjautumissivuilla</translation>
-<translation id="4001275826058808087">Yrityslaitteiden järjestelmänvalvojat voivat hallita tämän käytännön avulla, sallitaanko käyttäjien lunastaa tarjouksia Carbon Browser Browser Browser-käyttöjärjestelmän rekisteröitymisen kautta.
+<translation id="4001275826058808087">Yrityslaitteiden järjestelmänvalvojat voivat hallita tämän käytännön avulla, sallitaanko käyttäjien lunastaa tarjouksia Carbon Browser-käyttöjärjestelmän rekisteröitymisen kautta.
 
-      Jos käytännön arvoksi on asetettu tosi tai sille ei aseteta mitään arvoa, käyttäjät voivat lunastaa tarjouksia Carbon Browser Browser Browser-käyttöjärjestelmän rekisteröitymisen kautta.
+      Jos käytännön arvoksi on asetettu tosi tai sille ei aseteta mitään arvoa, käyttäjät voivat lunastaa tarjouksia Carbon Browser-käyttöjärjestelmän rekisteröitymisen kautta.
 
       Jos käytännön arvoksi on asetettu epätosi, käyttäjät eivät voi lunastaa tarjouksia.</translation>
 <translation id="4008233182078913897">Määrittää luettelon sovelluksista ja laajennuksista, jotka asennetaan hiljaisesti
@@ -1659,13 +1659,13 @@ Jos asetus ei ole käytössä, käyttäjät eivät voi ottaa välityspalvelinta 
 
           Tätä käytäntöä sovelletaan ensisijaisesti, jos <ph name="EXTENSION_INSTALL_BLACKLIST_POLICY_NAME" /> on sen kanssa ristiriidassa. Jos sovellus tai laajennus on aiemmin asennettu pakollisena ja poistetaan tästä luettelosta, <ph name="PRODUCT_NAME" /> poistaa sen automaattisesti.
 
-          Jos Windows-asennusta ei ole liitetty <ph name="MS_AD_NAME" /> ‑verkkotunnukseen, pakollinen asennus koskee vain Carbon Browser Browser Browser Web Storesta saatavia sovelluksia ja laajennuksia.
+          Jos Windows-asennusta ei ole liitetty <ph name="MS_AD_NAME" /> ‑verkkotunnukseen, pakollinen asennus koskee vain Carbon Browser Web Storesta saatavia sovelluksia ja laajennuksia.
 
           Huomaa, että käyttäjät voivat muokata laajennusten lähdekoodia Kehittäjätyökaluilla (mikä voi häiritä laajennuksen toimintaa). Jos tämä mahdollisuus on huomioitava, käytäntö <ph name="DEVELOPER_TOOLS_POLICY_NAME" /> tulee määrittää.
 
-          Käytännön jokainen luettelokohde on merkkijono, joka sisältää laajennuksen tunnuksen sekä valinnaisesti myös puolipisteellä (<ph name="SEMICOLON" />) erotetun URL-osoitteen, jota käytetään päivitykseen. Laajennuksen tunnus on 32-kirjaiminen merkkijono, joka on nähtävissä kehittäjätilassa esimerkiksi täällä: <ph name="CHROME_EXTENSIONS_LINK" />. Laajennuksen mahdollisen päivitysosoitteen tulee johtaa XML-päivitysluetteloasiakirjaan, kuten osoitteessa <ph name="LINK_TO_EXTENSION_DOC1" /> on kuvattu. Oletusarvoisesti käytetään Carbon Browser Browser Browser Web Storen päivitysosoitetta (joka on tällä hetkellä "https://clients2.google.com/service/update2/crx"). Huomaa, että tässä käytännössä määritettyä päivitysosoitetta käytetään vain ensimmäiseen asennukseen. Laajennuksen myöhempiin päivityksiin käytetään laajennuksen luettelossa ilmoitettua päivitysosoitetta. Päivitysosoitteen ilmoittaminen oli pakollista vielä tuotteen <ph name="PRODUCT_NAME" /> versiossa 67.
+          Käytännön jokainen luettelokohde on merkkijono, joka sisältää laajennuksen tunnuksen sekä valinnaisesti myös puolipisteellä (<ph name="SEMICOLON" />) erotetun URL-osoitteen, jota käytetään päivitykseen. Laajennuksen tunnus on 32-kirjaiminen merkkijono, joka on nähtävissä kehittäjätilassa esimerkiksi täällä: <ph name="CHROME_EXTENSIONS_LINK" />. Laajennuksen mahdollisen päivitysosoitteen tulee johtaa XML-päivitysluetteloasiakirjaan, kuten osoitteessa <ph name="LINK_TO_EXTENSION_DOC1" /> on kuvattu. Oletusarvoisesti käytetään Carbon Browser Web Storen päivitysosoitetta (joka on tällä hetkellä "https://clients2.google.com/service/update2/crx"). Huomaa, että tässä käytännössä määritettyä päivitysosoitetta käytetään vain ensimmäiseen asennukseen. Laajennuksen myöhempiin päivityksiin käytetään laajennuksen luettelossa ilmoitettua päivitysosoitetta. Päivitysosoitteen ilmoittaminen oli pakollista vielä tuotteen <ph name="PRODUCT_NAME" /> versiossa 67.
 
-          Esimerkki: <ph name="EXTENSION_POLICY_EXAMPLE" /> asentaa laajennuksen <ph name="EXTENSION_ID_SAMPLE" /> Carbon Browser Browser Browser Web Storen tavallisen päivitysosoitteen kautta. Jos haluat lisätietoja laajennusten isännöinnistä, katso <ph name="LINK_TO_EXTENSION_DOC2" />.
+          Esimerkki: <ph name="EXTENSION_POLICY_EXAMPLE" /> asentaa laajennuksen <ph name="EXTENSION_ID_SAMPLE" /> Carbon Browser Web Storen tavallisen päivitysosoitteen kautta. Jos haluat lisätietoja laajennusten isännöinnistä, katso <ph name="LINK_TO_EXTENSION_DOC2" />.
 
           Jos tätä käytäntöä ei aseteta, mitään sovelluksia tai laajennuksia ei asenneta automaattisesti, ja käyttäjä voi poistaa minkä tahansa sovelluksen tai laajennuksen tuotteesta <ph name="PRODUCT_NAME" />.
 
@@ -1699,7 +1699,7 @@ Jos asetus ei ole käytössä, käyttäjät eivät voi ottaa välityspalvelinta 
       <ph name="CLOUD_PRINT_NAME" /> ‑yhdistetyt tulostimet ovat tyyppiä <ph name="PRINTER_TYPE_CLOUD" />, ja muut tulostimet ovat tyyppiä <ph name="PRINTER_TYPE_LOCAL" />.
       Kentän tyhjäksi jättäminen tarkoittaa, että siihen hyväksytään kaikki arvot. Jos esimerkiksi yhteydet jätetään tyhjäksi, tulostuksen esikatselu pyrkii löytämään sekä pilvitulostimia että paikallisia tulostimia.
       Säännöllisten lausekkeiden muodon tulee noudattaa JavaScriptin RegExp-syntaksia, ja kirjainkoolla on väliä osumissa.</translation>
-<translation id="4088589230932595924">Private-tila pakotettu</translation>
+<translation id="4088589230932595924">private-tila pakotettu</translation>
 <translation id="4088983553732356374">Tällä käytännöllä määritetään, onko sivustoilla lupa luoda paikallisia tietoja. Paikallisten tietojen luominen voidaan sallia kaikille sivustoille tai kieltää kaikilta sivustoilta.
 
           Jos tämän käytännön asetus on Säilytä evästeet käyttökerran ajan, evästeet poistetaan käyttökerran päätyttyä. Huom. Jos <ph name="PRODUCT_NAME" /> on käynnissä taustatilassa, käyttökerta ei välttämättä pääty viimeisen ikkunan sulkeutuessa. Katso käytäntö BackgroundModeEnabled, niin saat lisätietoja tämän toiminnallisuuden määrittämisestä.
@@ -1770,7 +1770,7 @@ Jos asetus ei ole käytössä, käyttäjät eivät voi ottaa välityspalvelinta 
           Jos määrität tämän käytännön, käyttäjät eivät voi muuttaa tai ohittaa sitä.
 
           Jos käytäntöä ei ole määritetty, päälle jäävät näppäimet poistetaan oletuksena käytöstä, mutta käyttäjä voi ottaa ne käyttöön milloin tahansa.</translation>
-<translation id="4171331498167688968">Jos käytännön arvo on epätosi, kolmannen osapuolen ohjelmistot voivat lisätä suoritettavaa koodia Carbon Browser Browser Browsern prosesseihin. Jos käytännölle ei ole määritetty arvoa tai sen arvo on tosi, kolmannen osapuolen ohjelmistoja estetään lisäämästä suoritettavaa koodia Carbon Browser Browser Browsern prosesseihin.
+<translation id="4171331498167688968">Jos käytännön arvo on epätosi, kolmannen osapuolen ohjelmistot voivat lisätä suoritettavaa koodia Carbon Browsern prosesseihin. Jos käytännölle ei ole määritetty arvoa tai sen arvo on tosi, kolmannen osapuolen ohjelmistoja estetään lisäämästä suoritettavaa koodia Carbon Browsern prosesseihin.
 
       Tämän käytännön arvosta huolimatta selain ei tällä hetkellä estä kolmannen osapuolen ohjelmistoja lisäämästä suoritettavaa koodia selaimen prosesseihin tietokoneella, joka on liitetty toimialueeseen <ph name="MS_AD_NAME" />.</translation>
 <translation id="4183229833636799228"><ph name="FLASH_PLUGIN_NAME" />-oletusasetus</translation>
@@ -1840,11 +1840,11 @@ Jos asetus ei ole käytössä, käyttäjät eivät voi ottaa välityspalvelinta 
 <translation id="4298509794364745131">Määrittää luettelon sovelluksia, jotka <ph name="PRODUCT_OS_NAME" /> voi näyttää lukitusnäytöllä muistiinpanosovelluksina.
 
       Jos ensisijainen muistiinpanosovellus on käytettävissä lukitusnäytöllä, näytöllä näkyy sovelluksen käynnistävä käyttöliittymäelementti.
-      Kun sovellus on käynnistetty, se voi luoda lukitusnäytön päälle sovellusikkunan ja luoda muistiinpanoja lukitusnäytöltä. Sovellus voi tuoda nämä muistiinpanot ensisijaisen käyttäjän käyttökertaan, jos se on avattu. Tällä hetkellä lukitusnäytöllä voi olla vain Carbon Browser Browser Browsern muistiinpanosovelluksia.
+      Kun sovellus on käynnistetty, se voi luoda lukitusnäytön päälle sovellusikkunan ja luoda muistiinpanoja lukitusnäytöltä. Sovellus voi tuoda nämä muistiinpanot ensisijaisen käyttäjän käyttökertaan, jos se on avattu. Tällä hetkellä lukitusnäytöllä voi olla vain Carbon Browsern muistiinpanosovelluksia.
 
       Jos käytännölle on määritetty arvo, käyttäjä voi valita sovelluksen käytön lukitusnäytöllä vain, jos sovelluksen tunnus on luettelossa, joka on käytännön arvo.
       Jos käytännön arvo on tyhjä luettelo, muistiinpanojen tekeminen lukitusnäytöltä poistetaan siis kokonaan käytöstä.
-      Huomaa, ettei käyttäjä voi välttämättä lisätä muistiinpanosovellusta lukitusnäytölle, vaikka sen tunnus olisi käytännön arvossa. Esimerkiksi Carbon Browser Browser Browsern versiossa 61 käyttöympäristö rajoittaa sovellusvaihtoehtojen määrää.
+      Huomaa, ettei käyttäjä voi välttämättä lisätä muistiinpanosovellusta lukitusnäytölle, vaikka sen tunnus olisi käytännön arvossa. Esimerkiksi Carbon Browsern versiossa 61 käyttöympäristö rajoittaa sovellusvaihtoehtojen määrää.
 
       Jos käytännölle ei ole määritetty arvoa, se ei rajoita käyttäjän lukitusnäytölle lisäämiä sovelluksia millään tavalla.</translation>
 <translation id="4313767483634435271">Laitteelle tarkoitetun telineen MAC-osoite</translation>
@@ -1993,7 +1993,7 @@ Jos asetus ei ole käytössä, käyttäjät eivät voi ottaa välityspalvelinta 
 <translation id="467236746355332046">Tuetut ominaisuudet:</translation>
 <translation id="4674167212832291997">Muokkaa niiden URL-mallien luetteloa, jotka tuotteen <ph name="PRODUCT_FRAME_NAME" /> tulee aina piirtää näytölle.
 
-           Jos käytäntöä ei ole määritetty, kaikki sivustot piirretään näytölle Carbon Browser Browser BrowserFrameRendererSettings-käytännön näytölle piirtämisen oletusmäärityksien mukaan.
+           Jos käytäntöä ei ole määritetty, kaikki sivustot piirretään näytölle Carbon BrowserFrameRendererSettings-käytännön näytölle piirtämisen oletusmäärityksien mukaan.
 
           Esimerkkimalleja on osoitteessa http://www.chromium.org/developers/how-tos/chrome-frame-getting-started.</translation>
 <translation id="467449052039111439">Avaa seuraavat sivut:</translation>
@@ -2090,10 +2090,10 @@ Jos asetus ei ole käytössä, käyttäjät eivät voi ottaa välityspalvelinta 
 
       Jos tämän käytännön arvoksi on määritetty epätosi, <ph name="PRODUCT_NAME" /> ei salli käyttäjien hallinnan luovan uusia profiileja.</translation>
 <translation id="4970855112942626932">Estä kirjautuminen selaimelle</translation>
-<translation id="4978405676361550165">Jos OffHours-käytäntö on määritetty, valitut laitekäytännöt ohitetaan (tällöin käytössä ovat niiden oletusasetukset) määritettyjen ajanjaksojen aikana. Carbon Browser Browser Browser ottaa laitekäytännöt uudelleen käyttöön aina, kun OffHours-ajanjakso alkaa tai päättyy. Käyttäjä saa ilmoituksen ja pakotetaan kirjautumaan ulos, kun OffHours-ajan päättymiseen ja laitekäytäntöihin liittyviä asetuksia muutetaan (esimerkiksi silloin, kun käyttäjä ei ole kirjautuneena sisään sallitulla tilillä).</translation>
+<translation id="4978405676361550165">Jos OffHours-käytäntö on määritetty, valitut laitekäytännöt ohitetaan (tällöin käytössä ovat niiden oletusasetukset) määritettyjen ajanjaksojen aikana. Carbon Browser ottaa laitekäytännöt uudelleen käyttöön aina, kun OffHours-ajanjakso alkaa tai päättyy. Käyttäjä saa ilmoituksen ja pakotetaan kirjautumaan ulos, kun OffHours-ajan päättymiseen ja laitekäytäntöihin liittyviä asetuksia muutetaan (esimerkiksi silloin, kun käyttäjä ei ole kirjautuneena sisään sallitulla tilillä).</translation>
 <translation id="4980635395568992380">Tietotyyppi:</translation>
 <translation id="4983201894483989687">Salli vanhentuneiden laajennuksien käyttö</translation>
-<translation id="4986560318567565414">Polku Carbon Browser Browser Browseren vaihdettaessa toisesta selaimesta</translation>
+<translation id="4986560318567565414">Polku Carbon Browseren vaihdettaessa toisesta selaimesta</translation>
 <translation id="4988291787868618635">Toiminto, joka suoritetaan käyttämättömyysajan kuluttua</translation>
 <translation id="5034604678285451405">Aseta akun prosenttiraja ruuhka-ajan virranvaihtoa varten.
 
@@ -2163,11 +2163,11 @@ Jos asetus ei ole käytössä, käyttäjät eivät voi ottaa välityspalvelinta 
       Jos käytännön arvo on 0, konetilin salasanan vaihto ei ole käytössä.
 
       Salasanojen ikä saattaa ylittää määritellyn päivien lukumäärän, jos asiakas on ollut offline-tilassa pidemmän aikaa.</translation>
-<translation id="510196893779239086">Tämä käytäntö määrää, suljetaanko Carbon Browser Browser Browser kokonaan, jos viimeinen välilehti on vaihtamassa toiseen selaimeen.
+<translation id="510196893779239086">Tämä käytäntö määrää, suljetaanko Carbon Browser kokonaan, jos viimeinen välilehti on vaihtamassa toiseen selaimeen.
 
-      Jos tätä käytäntöä ei ole määritetty tai sen arvoksi on asetettu tosi, Carbon Browser Browser Browser jättää vähintään yhden välilehden auki vaihdettuaan toiseen selaimeen.
+      Jos tätä käytäntöä ei ole määritetty tai sen arvoksi on asetettu tosi, Carbon Browser jättää vähintään yhden välilehden auki vaihdettuaan toiseen selaimeen.
 
-      Jos käytännön arvoksi on asetettu tosi, Carbon Browser Browser Browser sulkee välilehden vaihdettuaan toiseen selaimeen, vaikka se olisi viimeinen välilehti. Tästä seuraa Carbon Browser Browser Browsern täysi sulkeminen.</translation>
+      Jos käytännön arvoksi on asetettu tosi, Carbon Browser sulkee välilehden vaihdettuaan toiseen selaimeen, vaikka se olisi viimeinen välilehti. Tästä seuraa Carbon Browsern täysi sulkeminen.</translation>
 <translation id="5102203758995933166">Sallii verkon määritystietojen käyttöönoton käyttäjäkohtaisesti <ph name="PRODUCT_OS_NAME" /> ‑laitteessa. Verkon määritystiedot ovat Open Network Configuration ‑muodon mukaisessa JSON-merkkijonossa.</translation>
 <translation id="5105313908130842249">Ruudun lukituksen viive käytettäessä laitetta akkuvirralla</translation>
 <translation id="5108031557082757679">Käytöstä poistetut yrityslaitteiden tulostimet</translation>
@@ -2182,7 +2182,7 @@ Jos asetus ei ole käytössä, käyttäjät eivät voi ottaa välityspalvelinta 
 <translation id="5148753489738115745">Voit määrittää muita parametreja, joita käytetään, kun <ph name="PRODUCT_FRAME_NAME" /> käynnistää tuotteen <ph name="PRODUCT_NAME" />.
 
           Jos käytäntöä ei ole määritetty, käytetään oletuskomentoriviä.</translation>
-<translation id="5152787786897382519">Sekä Carbon Browser Browser Browser että Carbon Browser Browser Browserlla on joitain käytäntöryhmiä, jotka tarvitsevat toisiaan voidakseen antaa käyttäjän hallita ominaisuutta. Seuraavat käytäntöryhmät edustavat näitä joukkoja. Koska käytännöillä voi olla useita lähteitä, vain korkeimman prioriteetin lähteestä tulevia arvoja käytetään. Saman ryhmän matalamman prioriteetin ryhmästä tulevat arvot jätetään huomiotta. Prioriteettijärjestys on määritelty täällä: <ph name="POLICY_PRIORITY_DOC_URL" />.</translation>
+<translation id="5152787786897382519">Sekä Carbon Browser että Carbon Browserlla on joitain käytäntöryhmiä, jotka tarvitsevat toisiaan voidakseen antaa käyttäjän hallita ominaisuutta. Seuraavat käytäntöryhmät edustavat näitä joukkoja. Koska käytännöillä voi olla useita lähteitä, vain korkeimman prioriteetin lähteestä tulevia arvoja käytetään. Saman ryhmän matalamman prioriteetin ryhmästä tulevat arvot jätetään huomiotta. Prioriteettijärjestys on määritelty täällä: <ph name="POLICY_PRIORITY_DOC_URL" />.</translation>
 <translation id="5159469559091666409">Valvontapakettien lähetystiheys millisekunteina.
 
       Jos tätä käytäntöä ei ole määritetty, oletusaikaväli on 3 minuuttia. Pienin
@@ -2283,7 +2283,7 @@ Jos asetus ei ole käytössä, käyttäjät eivät voi ottaa välityspalvelinta 
           Kiellettyjen luettelon arvo * tarkoittaa, että kaikki laitteen omaa viestijärjestelmää käyttävät isännät on kielletty, ellei niitä ole lisätty sallittujen luetteloon.
 
           Jos käytäntöä ei ole määritetty, <ph name="PRODUCT_NAME" /> lataa kaikki asennetut laitteen omaa viestijärjestelmää käyttävät isännät.</translation>
-<translation id="5272684451155669299">Jos tämän käytännön arvo on tosi, käyttäjä voi etätodentaa henkilöllisyytensä tietosuojavarmenteen myöntäjälle Carbon Browser Browser Browser-laitteiston avulla, mihin käytetään <ph name="ENTERPRISE_PLATFORM_KEYS_API" />a ja funktiota <ph name="CHALLENGE_USER_KEY_FUNCTION" />.
+<translation id="5272684451155669299">Jos tämän käytännön arvo on tosi, käyttäjä voi etätodentaa henkilöllisyytensä tietosuojavarmenteen myöntäjälle Carbon Browser-laitteiston avulla, mihin käytetään <ph name="ENTERPRISE_PLATFORM_KEYS_API" />a ja funktiota <ph name="CHALLENGE_USER_KEY_FUNCTION" />.
 
           Jos käytännön arvo on epätosi tai sitä ei ole määritetty, kutsujen lähettäminen sovellusliittymälle epäonnistuu ja palauttaa virhekoodin.</translation>
 <translation id="5277806246014825877">Antaa käyttäjän suorittaa Crostinin.
@@ -2298,11 +2298,11 @@ Jos asetus ei ole käytössä, käyttäjät eivät voi ottaa välityspalvelinta 
       Jos käytäntöä ei määritetä tai sen arvo on tyhjä merkkijono tai virheellinen porttiväli, WebRTC voi käyttää kaikkia käytettävissä olevia paikallisia UDP-portteja.</translation>
 <translation id="5290940294294002042">Määritä laajennukset, jotka käyttäjä voi ottaa käyttöön tai poistaa käytöstä</translation>
 <translation id="5306186200045823863">Luota Symantec Corporationin vanhaan PKI-infrastruktuuriin</translation>
-<translation id="5307432759655324440">Private-tilan saatavuus</translation>
+<translation id="5307432759655324440">private-tilan saatavuus</translation>
 <translation id="5318185076587284965">Salli etäkäytön isännän käyttää relay-palvelimia</translation>
 <translation id="5323128137188992869">Määritä, onko <ph name="PRODUCT_NAME" /> käytettävissä sisällön suoratoistamiseen laitteeseen.
 
-          Jos tämän käytännön arvo on epätosi, käyttäjät eivät voi suoratoistaa sisältöä laitteeseen. Jos arvo on tosi, käyttäjät saavat suoratoistaa sisältöä. Jos tätä käytäntöä ei ole määritetty, käyttäjät eivät voi suoratoistaa sisältöä rekisteröityihin Carbon Browser Browser Browser-käyttöjärjestelmää käyttäviin laitteisiin, mutta he voivat suoratoistaa sisältöä rekisteröimättömiin laitteisiin.</translation>
+          Jos tämän käytännön arvo on epätosi, käyttäjät eivät voi suoratoistaa sisältöä laitteeseen. Jos arvo on tosi, käyttäjät saavat suoratoistaa sisältöä. Jos tätä käytäntöä ei ole määritetty, käyttäjät eivät voi suoratoistaa sisältöä rekisteröityihin Carbon Browser-käyttöjärjestelmää käyttäviin laitteisiin, mutta he voivat suoratoistaa sisältöä rekisteröimättömiin laitteisiin.</translation>
 <translation id="5329007337159326804">Varoitus: <ph name="PRODUCT_NAME" /> ei enää tue uusimman TLS-version käytäntöä versiosta 75 (arviolta kesäkuusta 2019) eteenpäin.
 
       Jos tätä käytäntöä ei ole määritetty, <ph name="PRODUCT_NAME" /> käyttää oletuksena uusinta versiota.
@@ -2493,7 +2493,7 @@ Jos käytäntöä ei määritetä, käyttäjät voivat valita, tuleeko hylly pii
         Jos käytännön arvo on epätosi, käyttäjät eivät voi lähettää palautetta Googlelle.
 
         Jos käytännölle ei ole määritetty arvoa tai sen arvo on tosi, käyttäjät voivat lähettää Googlelle palautetta valitsemalla Valikko &gt; Ohje &gt; Ilmoita ongelmasta tai näppäinyhdistelmällä.</translation>
-<translation id="5581292529942108810">Määritä Carbon Browser Browser Browsern ilmoituslaajennukseen liittyvät käytännöt.
+<translation id="5581292529942108810">Määritä Carbon Browsern ilmoituslaajennukseen liittyvät käytännöt.
 
       Käytäntö on voimassa vain, kun <ph name="CHROME_REPORTING_EXTENSION_NAME" /> on käytössä ja koneella on käytössä <ph name="MACHINE_LEVEL_USER_CLOUD_POLICY_ENROLLMENT_TOKEN_POLICY_NAME" />.</translation>
 <translation id="5583806683960333345">Jos tämä asetus on käytössä, käyttäjät voivat käyttää Yhteyden pikajakamista, jonka avulla he voivat jakaa Google-puhelimen mobiilidatan toiselle laitteelle.
@@ -2523,7 +2523,7 @@ Jos käytäntöä ei määritetä, käyttäjät voivat valita, tuleeko hylly pii
 
       HUOM. Sivustojen eristäminen on kokeellinen ominaisuus Androidissa. Sen tuki paranee ajan myötä, mutta toistaiseksi suorituskyvyssä saattaa ilmetä ongelmia. 
 
-      HUOM. Tämä käytäntö koskee vain Carbon Browser Browser Browsern Android-versiota, jossa on yli 1 Gt RAM-muistia. Jos haluat käyttää käytäntöä muilla kuin Android-alustoilla, käytä IsolateOrigins-asetusta.
+      HUOM. Tämä käytäntö koskee vain Carbon Browsern Android-versiota, jossa on yli 1 Gt RAM-muistia. Jos haluat käyttää käytäntöä muilla kuin Android-alustoilla, käytä IsolateOrigins-asetusta.
       </translation>
 <translation id="5599461642204007579"><ph name="MS_AD_NAME" />: ylläpitoasetukset</translation>
 <translation id="5610104657949692379">Kun tämä käytäntö on määritetty, sen perusteella valitaan toiminto, jonka <ph name="PRODUCT_OS_NAME" /> suorittaa käyttäjän oltua ei-aktiivisena tietyn aikaa (aikaraja on määritettävissä erikseen).
@@ -2531,7 +2531,7 @@ Jos käytäntöä ei määritetä, käyttäjät voivat valita, tuleeko hylly pii
           Jos tätä käytäntöä ei ole määritetty, käyttöjärjestelmä suorittaa oletustoiminnon eli siirtää laitteen lepotilaan.
 
           Jos toiminnoksi on valittu siirto lepotilaan, <ph name="PRODUCT_OS_NAME" /> voidaan määrittää erikseen lukitsemaan näyttö tai jättämään se lukitsematta ennen lepotilan aktivointia.</translation>
-<translation id="5618398258385745432">Tähän käytäntöön liittyvä asetus oli käytössä, ennen kuin salasanojen näyttämistä edeltävä uudelleentodennus otettiin käyttöön. Asetuksella ja tällä käytännöllä ei ole sen jälkeen ollut vaikutusta Carbon Browser Browser Browsern toimintaan. Carbon Browser Browser Browsern nykyinen toiminta vastaa tilannetta, jossa käytäntö on määritetty niin, että salasanoja ei näytetä tavallisena tekstinä salasanojen ylläpidon asetussivulla. Tämän seurauksena asetussivulla näytetään ensin vain paikkamerkki, ja Carbon Browser Browser Browser näyttää salasanan käyttäjälle vasta tämän klikattua Näytä (ja tehtyä tarvittaessa uudelleentodennuksen). Alla on käytännön alkuperäinen kuvaus.
+<translation id="5618398258385745432">Tähän käytäntöön liittyvä asetus oli käytössä, ennen kuin salasanojen näyttämistä edeltävä uudelleentodennus otettiin käyttöön. Asetuksella ja tällä käytännöllä ei ole sen jälkeen ollut vaikutusta Carbon Browsern toimintaan. Carbon Browsern nykyinen toiminta vastaa tilannetta, jossa käytäntö on määritetty niin, että salasanoja ei näytetä tavallisena tekstinä salasanojen ylläpidon asetussivulla. Tämän seurauksena asetussivulla näytetään ensin vain paikkamerkki, ja Carbon Browser näyttää salasanan käyttäjälle vasta tämän klikattua Näytä (ja tehtyä tarvittaessa uudelleentodennuksen). Alla on käytännön alkuperäinen kuvaus.
 
           Määrittää, voiko käyttäjä nähdä salasanoja tavallisena tekstinä salasanojen ylläpidossa.
 
@@ -2632,7 +2632,7 @@ Jos käytäntöä ei määritetä, käyttäjät voivat valita, tuleeko hylly pii
       Jos käytäntöä ei ole määritetty, käyttäjä voi muuttaa asetuksen.
       </translation>
 <translation id="5832274826894536455">Käytöstä poistetut käytännöt</translation>
-<translation id="5835124959204887277">Määrittää URL-osoitteet ja verkkotunnukset, joista ei näytetä kehotetta suojausavaimen todennusvarmenteen pyynnön yhteydessä. Suojausavain saa lisäksi signaalin, joka kertoo, että yksilöllinen todennus saattaa olla käytössä. Muissa tapauksissa käyttäjä saa kehotteen Carbon Browser Browser Browser 65+:ssa, kun sivusto pyytää suojausavainten todennusta.
+<translation id="5835124959204887277">Määrittää URL-osoitteet ja verkkotunnukset, joista ei näytetä kehotetta suojausavaimen todennusvarmenteen pyynnön yhteydessä. Suojausavain saa lisäksi signaalin, joka kertoo, että yksilöllinen todennus saattaa olla käytössä. Muissa tapauksissa käyttäjä saa kehotteen Carbon Browser 65+:ssa, kun sivusto pyytää suojausavainten todennusta.
 
       URL-osoitteet (esim. https://example.com/joku/polku) vastaavat ainoastaan U2F-sovellustunnuksia. Verkkotunnukset (esim. example.com) vastaavat ainoastaan webauthn RP ‑tunnuksia. Sekä sovellustunnuksen URL-osoitteen että verkkotunnuksen tulee siis olla luettelossa, jotta ne kattavat tietyn sivun U2F- ja webauthn-sovellusliittymän.</translation>
 <translation id="5836064773277134605">Rajoita etäkäytön isännän käyttämää UDP-porttialuetta</translation>
@@ -2689,7 +2689,7 @@ Jos käytäntöä ei määritetä, käyttäjät voivat valita, tuleeko hylly pii
           Jos määrität tämän käytännön, käyttäjät voivat ohittaa sen väliaikaisesti ottamalla suuren osoittimen käyttöön tai poistamalla sen käytöstä. Käyttäjän valinta ei kuitenkaan ole pysyvä, ja oletusarvo palautetaan käyttöön aina kirjautumisnäytön tullessa näkyviin uudestaan tai käyttäjän ollessa epäaktiivinen kirjautumisnäytössä minuutin ajan.
 
           Jos tätä käytäntöä ei määritetä, suuri osoitin ei ole käytössä kirjautumisnäytön ensimmäisellä näyttökerralla. Käyttäjät voivat ottaa suuren osoittimen käyttöön tai pois käytöstä milloin tahansa, ja sen tila kirjautumisnäytössä pysyy samana, vaikka käyttäjä vaihtuisi.</translation>
-<translation id="5929855945144989709">Salli laitteiden käyttää virtuaalikoneita Carbon Browser Browser Browser-käyttöjärjestelmässä</translation>
+<translation id="5929855945144989709">Salli laitteiden käyttää virtuaalikoneita Carbon Browser-käyttöjärjestelmässä</translation>
 <translation id="5932767795525445337">Tämän käytännön avulla voidaan myös kiinnittää Android-sovelluksia.</translation>
 <translation id="5936622343001856595">Pakottaa Google-verkkohaun kyselyt tehtäväksi SafeSearch-tilassa ja estää käyttäjiä muuttamasta tätä asetusta.
 
@@ -2743,7 +2743,7 @@ Jos tämä asetus ei ole käytössä tai jos sen arvo on false, tulostuskomento 
           Käytännön arvo tulee antaa millisekunteina. Arvon on oltava pienempi kuin käyttämättömyyden viive.</translation>
 <translation id="6097601282776163274">Ota käyttöön anonymisoidun datan kerääminen URL-avaimella</translation>
 <translation id="6099853574908182288">Väritulostuksen oletustila</translation>
-<translation id="6107642964266628393">Määrittää, miten ja milloin Carbon Browser Browser Browser-käyttöjärjestelmän päivitykset otetaan käyttöön</translation>
+<translation id="6107642964266628393">Määrittää, miten ja milloin Carbon Browser-käyttöjärjestelmän päivitykset otetaan käyttöön</translation>
 <translation id="6111936128861357925">Salli dinosauruspeli</translation>
 <translation id="6114416803310251055">poistettu</translation>
 <translation id="6133088669883929098">Salli kaikkien sivustojen käyttää avainten luomistoimintoa.</translation>
@@ -2765,7 +2765,7 @@ Jos tämä asetus ei ole käytössä tai jos sen arvo on false, tulostuskomento 
 
       Jos käytännölle ei määritetä arvoa tai sen arvo on Epätosi, dataa ei kerätä tai ladata konsoliin.
       Jos käytännön sen arvo on Tosi, dataa kerätään ja ladataan Google-hallintakonsoliin.
-      Voit valita ladattavan datan Carbon Browser Browser Browsern ilmoituslaajennukseen liittyvillä käytännöillä.
+      Voit valita ladattavan datan Carbon Browsern ilmoituslaajennukseen liittyvillä käytännöillä.
 
       Tämä käytäntö toimii vain, jos <ph name="MACHINE_LEVEL_USER_CLOUD_POLICY_ENROLLMENT_TOKEN_POLICY_NAME" /> on otettu käyttöön koneella.
 
@@ -2847,7 +2847,7 @@ Jos tämä asetus ei ole käytössä tai jos sen arvo on false, tulostuskomento 
 <translation id="6282799760374509080">Salli tai estä äänen kaappaaminen</translation>
 <translation id="6284362063448764300">TLS 1.1</translation>
 <translation id="6310223829319187614">Verkkotunnuksen automaattinen täydennys kirjautumisen yhteydessä</translation>
-<translation id="6315673513957120120">Carbon Browser Browser Browser näyttää varoitussivun, jos käyttäjä avaa SSL-virheitä sisältävän sivuston. Jos käytännön arvo on Tosi, käyttäjä voi ohittaa varoitussivun. Tämä on myös oletusarvo.
+<translation id="6315673513957120120">Carbon Browser näyttää varoitussivun, jos käyttäjä avaa SSL-virheitä sisältävän sivuston. Jos käytännön arvo on Tosi, käyttäjä voi ohittaa varoitussivun. Tämä on myös oletusarvo.
       Käytännön arvo Epätosi estää varoitussivujen ohittamisen.</translation>
 <translation id="6319198883324703402">Asettaa ensimmäisen uudelleenkäynnistyksen käyttäjäilmoituksen ajan</translation>
 <translation id="6352543686437322588">Automaattinen kirjautuminen laitteen paikalliselle tilille viiveen jälkeen.
@@ -2889,7 +2889,7 @@ Jos tämä asetus ei ole käytössä tai jos sen arvo on false, tulostuskomento 
           Jos välityspalvelin tunnistetaan automaattisesti, Android-sovelluksille toimitetaan http://wpad/wpad.dat-skriptin URL-osoite. Muita välityspalvelimien automaattisen tunnistusprotokollan osia ei käytetä.
 
           Jos otat käyttöön .pac-välityspalvelinskriptin, sen URL-osoite toimitetaan Android-sovelluksille.</translation>
-<translation id="6430366557948788869">Carbon Browser Browser Browsern ilmoituslaajennus</translation>
+<translation id="6430366557948788869">Carbon Browsern ilmoituslaajennus</translation>
 <translation id="6440051664870270040">Salli sivustojen käyttää siirtymistoimintoja ja avata ponnahdusikkunoita samanaikaisesti</translation>
 <translation id="6447948611083700881">Varmuuskopiointi ja palautus poistettu käytöstä</translation>
 <translation id="6449476513004303784">Estä käyttäjiä määrittämästä varmenteita</translation>
@@ -2947,9 +2947,9 @@ Jos tämä asetus ei ole käytössä tai jos sen arvo on false, tulostuskomento 
 <translation id="6536600139108165863">Automaattinen uudelleenkäynnistys laitteen sammuessa</translation>
 <translation id="6539246272469751178">Tällä käytännöllä ei ole vaikutusta Android-sovelluksiin. Android-sovellukset käyttävät aina oletuslataushakemistoa, eivätkä voi käyttää kohteen <ph name="PRODUCT_OS_NAME" /> muualle kuin oletuslataushakemistoon lataamia tiedostoja.</translation>
 <translation id="654303922206238013">Ecryptfs-siirtomenettely</translation>
-<translation id="6544897973797372144">Jos käytännön arvo on Tosi ja Carbon Browser Browser BrowserOsReleaseChannel-käytäntöä ei ole määritetty, käyttäjät voivat vaihtaa laitteen julkaisuversiota. Jos käytännön arvo on Epätosi, laitteeseen lukitaan viimeksi määritetty julkaisuversio.
+<translation id="6544897973797372144">Jos käytännön arvo on Tosi ja Carbon BrowserOsReleaseChannel-käytäntöä ei ole määritetty, käyttäjät voivat vaihtaa laitteen julkaisuversiota. Jos käytännön arvo on Epätosi, laitteeseen lukitaan viimeksi määritetty julkaisuversio.
 
-      Carbon Browser Browser BrowserOsReleaseChannel-käytäntö ohittaa käyttäjän valitseman julkaisuversion. Jos käytännössä määritetty versio on vakaampi kuin laitteelle asennettu versio, versiota vaihdetaan vasta, kun vakaamman julkaisuversion versionumero on laitteelle asennettua julkaisuversiota suurempi.</translation>
+      Carbon BrowserOsReleaseChannel-käytäntö ohittaa käyttäjän valitseman julkaisuversion. Jos käytännössä määritetty versio on vakaampi kuin laitteelle asennettu versio, versiota vaihdetaan vasta, kun vakaamman julkaisuversion versionumero on laitteelle asennettua julkaisuversiota suurempi.</translation>
 <translation id="6553143066970470539">Näytön kirkkausprosentti</translation>
 <translation id="6559057113164934677">Älä anna minkään sivuston käyttää kameraa ja mikrofonia</translation>
 <translation id="6561396069801924653">Näytä käytettävyysvalinnat ilmaisinalueen valikossa</translation>
@@ -3029,7 +3029,7 @@ Jos tämä asetus ei ole käytössä tai jos sen arvo on false, tulostuskomento 
 <translation id="6698632841807204978">Mustavalkotulostuksen käyttöönotto</translation>
 <translation id="6699880231565102694">Ota kahden tekijän todennus käyttöön etäisännille</translation>
 <translation id="6731757988219967594">Suodata vain aikuisille suunnattua sisältöä (mutta ei upotettua sisältöä) ylimmän tason sivustoilta</translation>
-<translation id="6734521799274931721">Määrittää, onko Verkkotiedostojen jakaminen käytettävissä Carbon Browser Browser Browser-käyttöjärjestelmässä</translation>
+<translation id="6734521799274931721">Määrittää, onko Verkkotiedostojen jakaminen käytettävissä Carbon Browser-käyttöjärjestelmässä</translation>
 <translation id="6735701345096330595">Pakota oikeinkirjoituksen tarkistuskielten käyttöönotto</translation>
 <translation id="673699536430961464">Tämä käytäntö antaa käyttäjien vaihtaa Google-tililtä toiselle selainikkunan sisältöosassa <ph name="PRODUCT_OS_NAME" /> ‑laitteelle kirjautumisen jälkeen.
 
@@ -3037,7 +3037,7 @@ Jos tämä asetus ei ole käytössä tai jos sen arvo on false, tulostuskomento 
 
       Jos käytännön arvo on tosi tai sille ei ole määritetty arvoa, oletuskäyttäytymistä sovelletaan: toiselle tilille kirjautuminen selaimen sisältöalueella on sallittua, paitsi jos kyseessä on lapsen tili, jolloin se on kiellettyä, paitsi jos kyseessä ole private-ikkunan sisältöalue.
 
-      Jos et halua, että toiselle tilille kirjautuminen private-tilan avulla on sallittua, voit estää tämän tila PrivateModeAvailability-käytännöllä.
+      Jos et halua, että toiselle tilille kirjautuminen private-tilan avulla on sallittua, voit estää tämän tila privateModeAvailability-käytännöllä.
 
       Huomaa, että käyttäjät pääsevät käyttämään Google-palveluja ilman todennusta estämällä evästeet.</translation>
 <translation id="6757438632136860443">Voit määrittää URL-osoitemalleja, joiden määrittämät sivustot saavat suorittaa <ph name="FLASH_PLUGIN_NAME" />-laajennuksen.
@@ -3074,7 +3074,7 @@ Jos tämä asetus ei ole käytössä tai jos sen arvo on false, tulostuskomento 
 
       Jos tämän käytännön arvo on epätosi, sisäänrakennettua DNS-asiakassovellusta ei käytetä koskaan.
 
-      Jos tätä käytäntöä ei ole määritetty, sisäänrakennettu DNS-asiakassovellus otetaan oletuksena käyttöön MacOSissa, Androidissa (kun yksityinen DNS ja VPN eivät ole käytössä) ja Carbon Browser Browser Browser-käyttöjärjestelmässä. Lisäksi käyttäjät voivat ottaa sisäänrakennetun DNS-asiakassovelluksen käyttöön tai poistaa sen käytöstä chrome://flags-sivun tai komentorivin avulla.</translation>
+      Jos tätä käytäntöä ei ole määritetty, sisäänrakennettu DNS-asiakassovellus otetaan oletuksena käyttöön MacOSissa, Androidissa (kun yksityinen DNS ja VPN eivät ole käytössä) ja Carbon Browser-käyttöjärjestelmässä. Lisäksi käyttäjät voivat ottaa sisäänrakennetun DNS-asiakassovelluksen käyttöön tai poistaa sen käytöstä chrome://flags-sivun tai komentorivin avulla.</translation>
 <translation id="6843296367238757293">Tämä käytäntö on vanhentunut. Suosittelemme, että et käytä sitä. Lue lisää täältä: https://support.google.com/chrome/a/answer/7643500.</translation>
 <translation id="684856667300805181">Tämä käytäntö poistettiin tuotteessa <ph name="PRODUCT_NAME" /> 68 ja korvattiin käytännöllä <ph name="ARC_GLS_POLICY_NAME" />.</translation>
 <translation id="6856743875250214792">Tämä käytäntö on poistettu käytöstä ja M66:sta, sillä sitä käytettiin ainoastaan sisäisessä testauksessa. Se on lisäksi tietosuojariski.
@@ -3115,7 +3115,7 @@ Jos tämä asetus ei ole käytössä tai jos sen arvo on false, tulostuskomento 
 
       HUOM. Sivustojen eristäminen on kokeellinen ominaisuus Androidissa. Sen tuki paranee ajan myötä, mutta toistaiseksi suorituskyvyssä saattaa ilmetä ongelmia.
 
-      HUOM. Tämä käytäntö koskee vain Carbon Browser Browser Browsern Android-versiota, jossa on yli 1 Gt RAM-muistia. Jos haluat käyttää käytäntöä muilla kuin Android-alustoilla, käytä SitePerProcessia.
+      HUOM. Tämä käytäntö koskee vain Carbon Browsern Android-versiota, jossa on yli 1 Gt RAM-muistia. Jos haluat käyttää käytäntöä muilla kuin Android-alustoilla, käytä SitePerProcessia.
       </translation>
 <translation id="6922884955650325312">Estä <ph name="FLASH_PLUGIN_NAME" />-laajennus.</translation>
 <translation id="6923366716660828830">Määrittää oletushakupalvelun nimen. Jos nimi jätetään tyhjäksi tai käytäntöä ei ole määritetty, käytetään haku-URL-osoitteen määrittämää isäntänimeä. Tämä käytäntö on voimassa vain jos DefaultSearchProviderEnabled-käytäntö on käytössä.</translation>
@@ -3198,9 +3198,9 @@ Jos tätä käytäntöä ei ole määritetty, käytetään oletusarvoa (32).</tr
 
       Jos tämän käytännön arvo on Epätosi tai sitä ei ole määritetty, <ph name="PRODUCT_NAME" /> ei saa kerätä tai lähettää kyseisiä lokeja.
 
-      Lokien tiedot auttavat korjaamaan Carbon Browser Browser Browsern ääni- ja videopuheluihin liittyviä ongelmia. Ne voivat olla esimerkiksi lähetettyjen ja vastaanotettujen RTP-pakettien koko- ja aikatietoja, palautetta verkon ruuhkautumisesta sekä ääni- ja videokehysten käyttöaikaan ja laatuun liittyviä sisällönkuvaustietoja. Lokeihin ei tallenneta puhelujen ääni- tai videosisältöä.
+      Lokien tiedot auttavat korjaamaan Carbon Browsern ääni- ja videopuheluihin liittyviä ongelmia. Ne voivat olla esimerkiksi lähetettyjen ja vastaanotettujen RTP-pakettien koko- ja aikatietoja, palautetta verkon ruuhkautumisesta sekä ääni- ja videokehysten käyttöaikaan ja laatuun liittyviä sisällönkuvaustietoja. Lokeihin ei tallenneta puhelujen ääni- tai videosisältöä.
 
-      Tämän Carbon Browser Browser Browsern datan keräyksen voi käynnistää vain Googlen verkkopalvelu, kuten Google Hangouts tai Google Meet.
+      Tämän Carbon Browsern datan keräyksen voi käynnistää vain Googlen verkkopalvelu, kuten Google Hangouts tai Google Meet.
 
       Nämä lokit voidaan yhdistää käyttökertatunnuksen avulla muihin lokeihin, jotka kyseessä oleva Googlen palvelu on kerännyt. Tämän tarkoituksena on helpottaa virheenkorjausta.
       </translation>
@@ -3295,11 +3295,11 @@ Jos tätä käytäntöä ei ole määritetty, käytetään oletusarvoa (32).</tr
 <translation id="7185078796915954712">TLS 1.3</translation>
 <translation id="718956142899066210">Päivityksille sallitut yhteystyypit</translation>
 <translation id="7194407337890404814">Oletushakupalvelun nimi</translation>
-<translation id="7199304109870655950">Määritä Carbon Browser Browser Browser-etäkäytön isännän etäkäyttöasetukset.
+<translation id="7199304109870655950">Määritä Carbon Browser-etäkäytön isännän etäkäyttöasetukset.
 
-      Carbon Browser Browser Browser-etäkäytön isäntä on kohdelaitteella toimiva natiivipalvelu, jonka avulla käyttäjä voi muodostaa yhteyden kyseiseen laitteeseen Carbon Browser Browser Browser-etäkäyttö-sovelluksella. <ph name="PRODUCT_NAME" /> ei osallistu natiivipalvelun pakkaamiseen ja suorittamiseen.
+      Carbon Browser-etäkäytön isäntä on kohdelaitteella toimiva natiivipalvelu, jonka avulla käyttäjä voi muodostaa yhteyden kyseiseen laitteeseen Carbon Browser-etäkäyttö-sovelluksella. <ph name="PRODUCT_NAME" /> ei osallistu natiivipalvelun pakkaamiseen ja suorittamiseen.
 
-     Nämä käytännöt otetaan huomioon vain, jos Carbon Browser Browser Browser-etäkäytön isäntä on asennettu.</translation>
+     Nämä käytännöt otetaan huomioon vain, jos Carbon Browser-etäkäytön isäntä on asennettu.</translation>
 <translation id="7202925763179776247">Salli lataamisen rajoitukset</translation>
 <translation id="7207095846245296855">Pakota Googlen SafeSearch</translation>
 <translation id="7211368186050418507">Älä koskaan havaitse aikavyöhykettä automaattisesti</translation>
@@ -3401,7 +3401,7 @@ Jos tätä käytäntöä ei ole määritetty, käytetään oletusarvoa (32).</tr
 <translation id="7329968046053403405">Määrittää tilityypin, jota käytetään <ph name="HTTP_NEGOTIATE" /> -todennusta (esim. Kerberos) tukevassa Android-todennussovelluksessa. Tämän tiedon pitäisi olla saatavilla todennussovelluksen tarjoajalta. Lisätietoja on osoitteessa https://goo.gl/hajyfN.
 
           Jos asetusta ei määritetä, <ph name="HTTP_NEGOTIATE" /> -todennus poistetaan käytöstä Android-laitteilla.</translation>
-<translation id="7331962793961469250">Kun asetus on True, Carbon Browser Browser Browser Web Storen sovelluksien mainoksia ei näytetä Uusi välilehti -sivulla. Kun asetus on False tai sitä ei ole valittu, Carbon Browser Browser Browser Web Storen sovelluksien mainoksia näytetään Uusi välilehti -sivulla.</translation>
+<translation id="7331962793961469250">Kun asetus on True, Carbon Browser Web Storen sovelluksien mainoksia ei näytetä Uusi välilehti -sivulla. Kun asetus on False tai sitä ei ole valittu, Carbon Browser Web Storen sovelluksien mainoksia näytetään Uusi välilehti -sivulla.</translation>
 <translation id="7332963785317884918">Tämä käytäntö on poistettu käytöstä. <ph name="PRODUCT_OS_NAME" /> käyttää aina RemoveLRU-puhdistustapaa.
 
       Hallinnoi tuotetta <ph name="PRODUCT_OS_NAME" /> käyttävien laitteiden automaattisen puhdistuksen tapaa. Automaattisen puhdistuksen avulla vapautetaan levytilaa, ja se käynnistyy, kun levyllä oleva tila käy kriittisen vähiin.
@@ -3461,7 +3461,7 @@ Jos tätä käytäntöä ei ole määritetty, käytetään oletusarvoa (32).</tr
       </translation>
 <translation id="7506269062143646163">Ota käyttöön Signed HTTP Exchange (SXG).
 
-          Jos käytäntöä ei ole asetettu tai sen arvo on käytössä, Carbon Browser Browser Browser hyväksyy Signed HTTP Exchange (SXG) ‑muodossa annetun verkkosisällön.
+          Jos käytäntöä ei ole asetettu tai sen arvo on käytössä, Carbon Browser hyväksyy Signed HTTP Exchange (SXG) ‑muodossa annetun verkkosisällön.
 
           Jos käytännön arvo on Ei käytössä, Signed HTTP Exchangen lataaminen ei ole mahdollista.</translation>
 <translation id="7511361072385293666">Jos tämän käytännön arvo on Tosi tai sitä ei aseteta, <ph name="PRODUCT_NAME" /> sallii QUIC-protokollan käytön.
@@ -3500,7 +3500,7 @@ Jos tätä käytäntöä ei ole määritetty, käytetään oletusarvoa (32).</tr
 
       Jos tätä käytäntöä ei ole määritetty tai sen arvo on 0, määrättyyn URL-osoitteeseen siirtyminen avaa osoitteen heti toisessa selaimessa.
 
-      Kun tämän käytännön arvo on luku, Carbon Browser Browser Browser näyttää viestin luvun millisekuntien ajan ja avaa sitten toisen selaimen.</translation>
+      Kun tämän käytännön arvo on luku, Carbon Browser näyttää viestin luvun millisekuntien ajan ja avaa sitten toisen selaimen.</translation>
 <translation id="7593523670408385997">Määrittää sen välimuistin koon, jota <ph name="PRODUCT_NAME" /> käyttää välimuistiin tallennettujen tiedostojen tallentamiseen.
 
       Jos asetat tämän käytännön, <ph name="PRODUCT_NAME" /> käyttää määritettyä välimuistin kokoa riippumatta siitä, onko käyttäjä määrittänyt levyn välimuistin kokoon liittyvän merkinnän (--disk-cache-size). Tässä käytännössä määritetty arvo ei ole tiukka raja, vaan suositus välimuistijärjestelmälle. Paria megatavua pienempi arvo on liian pieni, joten se pyöristetään ylöspäin pienimpään sallittuun arvoon.
@@ -3681,7 +3681,7 @@ Jos tätä käytäntöä ei ole määritetty, käytetään oletusarvoa (32).</tr
 
       HUOM. Versioon 45 asti tätä käytäntöä tuettiin vain kioskitilassa.</translation>
 <translation id="7912255076272890813">Määritä sallitut sovellus- ja laajennustyypit</translation>
-<translation id="7922358664346625612">Jätä Carbon Browser Browser Browsern viimeinen välilehti auki</translation>
+<translation id="7922358664346625612">Jätä Carbon Browsern viimeinen välilehti auki</translation>
 <translation id="793134539373873765">Tarkentaa, käytetäänkö p2p-menetelmää käyttöjärjestelmän päivityksen tietosisältöön. Jos määritys on Tosi, laitteet jakavat ja yrittävät käyttää päivitysten tietosisältöjä LAN-verkossa, mahdollisesti vähentäen laajakaistan käyttöä ja ruuhkaa. Jos päivityksen tietosisältö ei ole LAN-verkossa, laite palaa lataamaan päivityspalvelimelta. Jos määritys on Epätosi tai sitä ei ole asetettu, p2p-menetelmää ei käytetä.</translation>
 <translation id="7933141401888114454">Ota valvottujen käyttäjien luominen käyttöön</translation>
 <translation id="793473937901685727">Määritä ARC-sovellusten oikeus käyttää varmenteita</translation>
@@ -3712,7 +3712,7 @@ Jos tätä käytäntöä ei ole määritetty, käytetään oletusarvoa (32).</tr
 <translation id="798856998567564266">Jos tämä asetus on käytössä, kirjanmerkkejä voidaan lisätä, poistaa ja muokata. Sovellus sallii nämä toiminnot oletuksena myös silloin, kun tätä käytäntöä ei ole määritetty.
 
       Jos tämä asetus on poistettu käytöstä, kirjanmerkkejä ei voi lisätä, poistaa tai muokata. Aiemmin luodut kirjanmerkit ovat yhä käytettävissä.</translation>
-<translation id="7992136759457836904">Tällä käytännöllä voit määrittää, sallitaanko virtuaalikoneiden suorittaminen Carbon Browser Browser Browser-käyttöjärjestelmässä.
+<translation id="7992136759457836904">Tällä käytännöllä voit määrittää, sallitaanko virtuaalikoneiden suorittaminen Carbon Browser-käyttöjärjestelmässä.
 
       Jos käytännön arvo on tosi, laitteella voi suorittaa virtuaalikoneita.
       Jos käytännön arvo on epätosi, laitteella ei voi suorittaa virtuaalikoneita.
@@ -3792,7 +3792,7 @@ Jos tätä käytäntöä ei ole määritetty, käytetään oletusarvoa (32).</tr
       Jos käytännön arvoksi on määritetty epätosi, käyttöliittymäluetteloa ei ilmoiteta.</translation>
 <translation id="8141795997560411818">Tämä käytäntö ei estä käyttäjää käyttämästä Androidin Google Drive ‑sovellusta. Jos haluat estää Google Driven käytön, sinun on estettävä myös Androidin Google Drive ‑sovelluksen asennus.</translation>
 <translation id="8142894094385450823">Asettaa hallinnoidun istunnon suositellut maa-asetukset</translation>
-<translation id="8146727383888924340">Salli käyttäjien lunastaa tarjouksia Carbon Browser Browser Browser-käyttöjärjestelmän rekisteröitymisen kautta</translation>
+<translation id="8146727383888924340">Salli käyttäjien lunastaa tarjouksia Carbon Browser-käyttöjärjestelmän rekisteröitymisen kautta</translation>
 <translation id="8148785525797916822">Älä näytä varoitusta, kun <ph name="PRODUCT_NAME" /> on käytössä tietokoneella tai käyttöjärjestelmässä, jonka tuki on päättynyt.</translation>
 <translation id="8148901634826284024">Ota käyttöön suuri kontrasti -tilan käytettävyysominaisuus.
 
@@ -3807,7 +3807,7 @@ Jos tätä käytäntöä ei ole määritetty, käytetään oletusarvoa (32).</tr
 
       Tässä tilassa profiilitietoja säilytetään levyllä vain käyttäjäistunnon ajan. Ominaisuuksia, kuten selainhistoriaa, laajennuksia ja niiden tietoja, verkkotietoja, kuten evästeitä ja verkkotietokantoja, ei säilytetä, kun selain suljetaan. Tämä ei kuitenkaan estä käyttäjää lataamasta tietoja levylle manuaalisesti, tallentamasta sivuja tai tulostamasta niitä.
 
-      Jos käyttäjä on ottanut synkronoinnin käyttöön, kaikki nämä tiedot säilytetään käyttäjän synkronointiprofiilissa samoin kuin tavallisissa profiileissa. Private-tila on myös saatavilla, ellei käytäntö ole erikseen poistanut sitä käytöstä.
+      Jos käyttäjä on ottanut synkronoinnin käyttöön, kaikki nämä tiedot säilytetään käyttäjän synkronointiprofiilissa samoin kuin tavallisissa profiileissa. private-tila on myös saatavilla, ellei käytäntö ole erikseen poistanut sitä käytöstä.
 
       Jos käytäntö on poistettu käytöstä tai sitä ei ole asetettu, kirjautuminen avaa tavallisen profiilin.</translation>
 <translation id="8158758865057576716">Salli roaming-kopioiden luominen <ph name="PRODUCT_NAME" /> ‑profiilitiedoista.</translation>
@@ -3839,7 +3839,7 @@ Jos tämä käytäntö on määritetty, kirjautumisruudussa käytetään kunkin 
 Jos tätä käytäntöä ei määritetä, <ph name="PRODUCT_OS_NAME" /> näyttää kirjautumisruudulla laitteeseen lisätyn tilin sähköpostitilin tunnuksen.
 
 Tämä käytäntö ei ole käytössä tavallisilla käyttäjätileillä.</translation>
-<translation id="8259375588339409826">Carbon Browser Browser Browser ja Carbon Browser Browser Browser tukevat samoja käytäntöjä. Huomaa, että tämä dokumentti voi sisältää julkaisemattomia käytäntöjä (joiden tuettu-merkintä viittaa julkaisemattomaan <ph name="PRODUCT_NAME" /> ‑versioon), joita voidaan muuttaa tai poistaa ilman erillistä ilmoitusta ja joille ei tarjota minkäänlaisia takuita, ei edes tietoturva- tai tietosuojaominaisuuksiin liittyviä takuita.
+<translation id="8259375588339409826">Carbon Browser ja Carbon Browser tukevat samoja käytäntöjä. Huomaa, että tämä dokumentti voi sisältää julkaisemattomia käytäntöjä (joiden tuettu-merkintä viittaa julkaisemattomaan <ph name="PRODUCT_NAME" /> ‑versioon), joita voidaan muuttaa tai poistaa ilman erillistä ilmoitusta ja joille ei tarjota minkäänlaisia takuita, ei edes tietoturva- tai tietosuojaominaisuuksiin liittyviä takuita.
 
 Näiden käytäntöjen tarkoituksena on vain <ph name="PRODUCT_NAME" /> ‑esiintymien määrittäminen organisaation sisäistä käyttöä varten. Näiden käytäntöjen käyttöä organisaation ulkopuolella (esimerkiksi julkisesti jaeltavassa ohjelmassa) käsitellään samalla tavoin kuin haittaohjelmia, ja Google ja virustorjuntapalvelujen tarjoajat todennäköisesti merkitsevät tällaisen käytön haitalliseksi.
 
@@ -3856,7 +3856,7 @@ Suosittelemme määrittämään käytännöt Windowsissa ryhmäkäytäntöobjekt
 
       Jos käytännön arvo on epätosi, tilastoja ei ilmoiteta.
       Jos käytännön arvo on tosi, tilastot ilmoitetaan.</translation>
-<translation id="8294750666104911727">Yleensä sivut, joiden X-UA-Compatible-kohdan arvoksi on asetettu chrome=1 hahmonnetaan kohteessa <ph name="PRODUCT_FRAME_NAME" /> riippumatta "Carbon Browser Browser BrowserFrameRendererSettings"-käytännöstä.
+<translation id="8294750666104911727">Yleensä sivut, joiden X-UA-Compatible-kohdan arvoksi on asetettu chrome=1 hahmonnetaan kohteessa <ph name="PRODUCT_FRAME_NAME" /> riippumatta "Carbon BrowserFrameRendererSettings"-käytännöstä.
 
           Jos otat tämän asetuksen käyttöön, sivujen sisällönkuvauskenttiä ei skannata.
 
@@ -3882,7 +3882,7 @@ Suosittelemme määrittämään käytännöt Windowsissa ryhmäkäytäntöobjekt
 <translation id="8344454543174932833">Tuo kirjanmerkit oletusselaimesta ensimmäisellä käyttökerralla</translation>
 <translation id="8357681633047935212">Rajoita käyttäjän istunnon pituus</translation>
 <translation id="8359734107661430198">Ota käyttöön ExampleDeprecatedFeature-sovellusliittymä 2.9.2008 saakka</translation>
-<translation id="8367209241899435947">Salli Carbon Browser Browser Browser Cleanup Windowsissa</translation>
+<translation id="8367209241899435947">Salli Carbon Browser Cleanup Windowsissa</translation>
 <translation id="8369602308428138533">Ruudun sammutuksen viive käytettäessä laitetta verkkovirralla</translation>
 <translation id="8371178326720637170">Antaa hallinnoitujen laajennusten käyttää Enterprise Hardware Platform ‑sovellusliittymää.</translation>
 <translation id="8374747520743832795">Ilmoita virrankäyttöön liittyviä laitetilastoja ja ‑tunnisteita.
@@ -3954,13 +3954,13 @@ Suosittelemme määrittämään käytännöt Windowsissa ryhmäkäytäntöobjekt
       Tämä käytäntö poistetaan versiossa M75.</translation>
 <translation id="8484458986062090479">Muokkaa niiden URL-mallien luetteloa, jotka isäntäselaimen tulee aina piirtää näytölle.
  
-          Jos käytäntöä ei ole määritetty, kaikki sivustot piirretään näytölle Carbon Browser Browser BrowserFrameRendererSettings-käytännön näytölle piirtämisen oletusmäärityksien mukaan.
+          Jos käytäntöä ei ole määritetty, kaikki sivustot piirretään näytölle Carbon BrowserFrameRendererSettings-käytännön näytölle piirtämisen oletusmäärityksien mukaan.
  
           Esimerkkimalleja on osoitteessa http://www.chromium.org/developers/how-tos/chrome-frame-getting-started.</translation>
 <translation id="8489964335640955763">PluginVm</translation>
 <translation id="8493645415242333585">Poista selainhistorian tallentaminen käytöstä</translation>
 <translation id="8499172469244085141">Oletusasetukset (käyttäjät voivat ohittaa)</translation>
-<translation id="849962487677588458">Tämä käytäntö on poistettu käytöstä. Se poistetaan Carbon Browser Browser Browsern versiosta 78 eikä sitä korvata millään.
+<translation id="849962487677588458">Tämä käytäntö on poistettu käytöstä. Se poistetaan Carbon Browsern versiosta 78 eikä sitä korvata millään.
 
       Tämä käytäntö sallii HTTP/0.9:n myös muille porteille kuin 80 (HTTP) ja 443 (HTTPS).
 
@@ -3988,7 +3988,7 @@ Suosittelemme määrittämään käytännöt Windowsissa ryhmäkäytäntöobjekt
 
       Versio voi tässä tarkoittaa joko tarkkaa versiota, esim. 61.0.3163.120, tai version alkuosaa, esim. 61.0.  </translation>
 <translation id="8544375438507658205">HTML-osoitteiden oletushahmonnin tuotteelle <ph name="PRODUCT_FRAME_NAME" /></translation>
-<translation id="8544465954173828789">Salli tekstiviestien synkronointi puhelimesta Carbon Browser Browser Browserbookiin</translation>
+<translation id="8544465954173828789">Salli tekstiviestien synkronointi puhelimesta Carbon Browserbookiin</translation>
 <translation id="8548832052135586762">Määrittää tulostusasetukseksi vain väritulostuksen, vain mustavalkotulostuksen tai rajoittamattoman. Määrittämätön käytäntö tulkitaan rajoituksen puuttumiseksi.</translation>
 <translation id="8549772397068118889">Varoita, kun sisältöpaketteihin kuulumaton sivusto avataan</translation>
 <translation id="8566729013138025202">Määrittää ARC-suorituspalvelulle toimitettavat käytännöt. Arvon on oltava kelvollinen JSON-tiedosto.
@@ -4016,7 +4016,7 @@ Jos tämän käytännön arvoksi on määritetty Tosi, käyttäjän on suoritett
 
       Jos käytännölle ei ole määritetty arvoa tai sen arvo on tosi, kaikilla käyttäjillä on oikeus käyttää ARC:tä (paitsi jos ARC on poistettu käytöstä toisella tavalla).
 
-      Käytäntöön tehtyjä muutoksia sovelletaan vain, jos ARC ei ole käynnissä, esimerkiksi Carbon Browser Browser Browser-käyttöjärjestelmän käynnistyksen aikana.</translation>
+      Käytäntöön tehtyjä muutoksia sovelletaan vain, jos ARC ei ole käynnissä, esimerkiksi Carbon Browser-käyttöjärjestelmän käynnistyksen aikana.</translation>
 <translation id="8615400197788843468"><ph name="PRODUCT_NAME" /> saa käyttää rajoitettua G Suite ‑kirjautumistoimintoa, eikä käyttäjä voi muuttaa tätä asetusta
 
       Jos määrität tämän asetuksen, käyttäjä pääsee Google Apps
@@ -4037,7 +4037,7 @@ Jos tämän käytännön arvoksi on määritetty Tosi, käyttäjän on suoritett
 
       Käyttäjät eivät voi muuttaa tai ohittaa tätä asetusta.</translation>
 <translation id="8631434304112909927">versioon <ph name="UNTIL_VERSION" /> saakka</translation>
-<translation id="8649763579836720255">Carbon Browser Browser Browser-käyttöjärjestelmää käyttävät laitteet voivat käyttää etävahvistusta (vahvistetut käyttöoikeudet), jotta saavat Carbon Browser Browser Browser-käyttöjärjestelmän CA:n lähettämän todistuksen, joka vahvistaa, että laitteella voi toistaa suojattua sisältöä. Tähän prosessiin kuuluu laitteistosuositusten lähettäminen Carbon Browser Browser Browser-käyttöjärjestelmän CA:lle, joka tunnistaa jokaisen yksittäisen laitteen.
+<translation id="8649763579836720255">Carbon Browser-käyttöjärjestelmää käyttävät laitteet voivat käyttää etävahvistusta (vahvistetut käyttöoikeudet), jotta saavat Carbon Browser-käyttöjärjestelmän CA:n lähettämän todistuksen, joka vahvistaa, että laitteella voi toistaa suojattua sisältöä. Tähän prosessiin kuuluu laitteistosuositusten lähettäminen Carbon Browser-käyttöjärjestelmän CA:lle, joka tunnistaa jokaisen yksittäisen laitteen.
 
           Jos tämän asetuksen arvoksi on asetettu epätosi, laite ei käytä etävahvistusta sisällön suojaamiseen eikä laite välttämättä voi toistaa suojattua sisältöä.
 
@@ -4194,7 +4194,7 @@ Jos tämän käytännön arvoksi on määritetty Tosi, käyttäjän on suoritett
 
           Tämä käytäntö käyttää laajennustunnusta tai päivityksen URL-osoitetta. Laajennustunnusta käytettäessä määritys koskee vain tunnusta vastaavaa laajennusta. Oletusarvoinen määritys voidaan asettaa käyttämällä tunnusta <ph name="DEFAULT_SCOPE" />. Se koskee kaikkia laajennuksia, joille ei ole asetettu muokattua määritystä tässä käytännössä. Päivityksen URL-osoitetta käytettäessä määritys koskee kaikkia laajennuksia, jotka käyttävät täsmälleen laajennuksen luettelossa määriteltyä päivityksen URL-osoitetta. Katso <ph name="LINK_TO_EXTENSION_DOC1" />.
 
-          Windowsin esiintymissä, joita ei ole liitetty <ph name="MS_AD_NAME" /> ‑verkkotunnukseen, pakotettu asennus on mahdollinen vain sovelluksille ja laajennuksille, jotka ovat Carbon Browser Browser Browser Web Storessa.
+          Windowsin esiintymissä, joita ei ole liitetty <ph name="MS_AD_NAME" /> ‑verkkotunnukseen, pakotettu asennus on mahdollinen vain sovelluksille ja laajennuksille, jotka ovat Carbon Browser Web Storessa.
           </translation>
 <translation id="8947415621777543415">Ilmoita laitteen sijainti</translation>
 <translation id="8951350807133946005">Aseta levyn välimuistihakemisto</translation>
@@ -4241,13 +4241,13 @@ Jos tämän käytännön arvoksi on määritetty Tosi, käyttäjän on suoritett
       Jos käytännön arvo on Quick Fix ‑versioon yhdistettävä tunnus, laite päivitetään vastaavaan Quick Fix ‑versioon, ellei toinen käytäntö estä päivittämistä.
 
       Jos tätä käytäntöä ei ole määritetty tai sen arvoa ei voi yhdistää Quick Fix ‑versioon, laitetta ei päivitetä Quick Fix ‑versioon. Jos laitteella on jo käytössä Quick Fix ‑versio eikä käytännöllä ole enää arvoa tai sen arvoa ei voi enää yhdistää Quick Fix ‑versioon, laite päivitetään tavalliseen versioon, ellei toinen käytäntö estä päivittämistä.</translation>
-<translation id="9054012305936267950">Tällä käytännöllä hallitaan selaimen kirjautumiskäyttäytymistä. Sillä voit valita, voiko käyttäjä suorittaa <ph name="PRODUCT_NAME" /> ‑kirjautumisen tilillään ja käyttää tähän liittyviä palveluita, kuten Carbon Browser Browser Browsern synkronointia.
+<translation id="9054012305936267950">Tällä käytännöllä hallitaan selaimen kirjautumiskäyttäytymistä. Sillä voit valita, voiko käyttäjä suorittaa <ph name="PRODUCT_NAME" /> ‑kirjautumisen tilillään ja käyttää tähän liittyviä palveluita, kuten Carbon Browsern synkronointia.
 
-      Jos käytännön arvo on Estä kirjautuminen selaimelle, käyttäjä ei voi kirjautua selaimelle tai käyttää tilipohjaisia palveluita. Tällöin selaintason palvelut kuten Carbon Browser Browser Browsern synkronointi eivät ole käytettävissä. Jos käyttäjä oli kirjautuneena, kun käytännön arvoksi valittiin Estä, hänet kirjataan ulos seuraavalla Carbon Browser Browser Browsern suorituskerralla. Paikallinen profiilidata, esimerkiksi kirjanmerkit ja salasanat, säilytetään silti. Käyttäjä voi kirjautua Googlen verkkopalveluihin (esim. Gmail) ja käyttää niitä.
+      Jos käytännön arvo on Estä kirjautuminen selaimelle, käyttäjä ei voi kirjautua selaimelle tai käyttää tilipohjaisia palveluita. Tällöin selaintason palvelut kuten Carbon Browsern synkronointi eivät ole käytettävissä. Jos käyttäjä oli kirjautuneena, kun käytännön arvoksi valittiin Estä, hänet kirjataan ulos seuraavalla Carbon Browsern suorituskerralla. Paikallinen profiilidata, esimerkiksi kirjanmerkit ja salasanat, säilytetään silti. Käyttäjä voi kirjautua Googlen verkkopalveluihin (esim. Gmail) ja käyttää niitä.
 
-      Jos käytännön arvo on Salli kirjautuminen selaimelle, käyttäjä voi kirjautua selaimelle, ja hänet kirjataan automaattisesti selaimelle Gmailiin tai muihin Googlen verkkopalveluihin kirjautumisen yhteydessä. Kun käyttäjä on kirjautunut selaimelle, se tallentaa hänen tilitietonsa. Carbon Browser Browser Browsern synkronointi ei kuitenkaan ole käytössä oletuksena, vaan käyttäjän on otettava tämä ominaisuus käyttöön erikseen. Tämän käytännön voimaantulo estää käyttäjää kytkemästä päälle asetusta, joka sallii selaimelle kirjautumisen. Voit päättää Carbon Browser Browser Browsern synkronoinnin saatavuudesta SyncDisabled-käytännöllä.
+      Jos käytännön arvo on Salli kirjautuminen selaimelle, käyttäjä voi kirjautua selaimelle, ja hänet kirjataan automaattisesti selaimelle Gmailiin tai muihin Googlen verkkopalveluihin kirjautumisen yhteydessä. Kun käyttäjä on kirjautunut selaimelle, se tallentaa hänen tilitietonsa. Carbon Browsern synkronointi ei kuitenkaan ole käytössä oletuksena, vaan käyttäjän on otettava tämä ominaisuus käyttöön erikseen. Tämän käytännön voimaantulo estää käyttäjää kytkemästä päälle asetusta, joka sallii selaimelle kirjautumisen. Voit päättää Carbon Browsern synkronoinnin saatavuudesta SyncDisabled-käytännöllä.
 
-      Jos käytännön arvo on Pakota kirjautumaan selaimelle, käyttäjälle näytetään tilinvalintaikkuna, ja hänen täytyy valita tili ja kirjautua sisään käyttääkseen selainta. Näin varmistetaan, että tilin käytäntöjä noudatetaan hallinnoiduilla tileillä. Samalla Carbon Browser Browser Browsern synkronointi otetaan oletuksena käyttöön tilillä, paitsi jos synkronointi on verkkotunnuksen 
+      Jos käytännön arvo on Pakota kirjautumaan selaimelle, käyttäjälle näytetään tilinvalintaikkuna, ja hänen täytyy valita tili ja kirjautua sisään käyttääkseen selainta. Näin varmistetaan, että tilin käytäntöjä noudatetaan hallinnoiduilla tileillä. Samalla Carbon Browsern synkronointi otetaan oletuksena käyttöön tilillä, paitsi jos synkronointi on verkkotunnuksen 
 ylläpitäjän tai SyncDisabled-käytännön estämä. BrowserGuestModeEnabled-käytännön arvoksi asetetaan Epätosi. Aiemmin luodut profiilit, joilla ei ole kirjauduttu sisään, lukitaan pois käytöstä, kun käytäntö on voimassa. Lisätietoja on artikkelissa https://support.google.com/chrome/a/answer/7572556. Tämä vaihtoehto ei tue Linuxia ja käyttää silloin Salli kirjautuminen selaimelle -arvoa.
 
       Jos tälle käytännölle ei määritetä arvoa, käyttäjä voi valita, otetaan selaimelle kirjautuminen käyttöön, ja käyttää ominaisuutta haluamallaan tavalla.</translation>
@@ -4295,7 +4295,7 @@ ylläpitäjän tai SyncDisabled-käytännön estämä. BrowserGuestModeEnabled-k
 
       Jos tämän käytännön arvo on Tosi, järjestelmälokit lähetetään. Jos arvo
       on Epätosi tai jos sitä ei aseteta, järjestelmälokeja ei lähetetä.</translation>
-<translation id="9150416707757015439">Tämä käytäntö on vanhentunut. Käytä sen sijaa PrivateModeAvailability-käytäntöä. Ottaa käyttöön private-tilan tuotteessa <ph name="PRODUCT_NAME" />. Jos tämä asetus on käytössä tai sitä ei ole määritetty, käyttäjät voivat avata verkkosivuja private-tilassa. Jos tämä asetus ei ole käytössä, käyttäjät eivät voi avata verkkosivuja private-tilassa. Jos käytäntöä ei ole asetettu, se otetaan käyttöön ja käyttäjät voivat käyttää private-tilaa.</translation>
+<translation id="9150416707757015439">Tämä käytäntö on vanhentunut. Käytä sen sijaa privateModeAvailability-käytäntöä. Ottaa käyttöön private-tilan tuotteessa <ph name="PRODUCT_NAME" />. Jos tämä asetus on käytössä tai sitä ei ole määritetty, käyttäjät voivat avata verkkosivuja private-tilassa. Jos tämä asetus ei ole käytössä, käyttäjät eivät voi avata verkkosivuja private-tilassa. Jos käytäntöä ei ole asetettu, se otetaan käyttöön ja käyttäjät voivat käyttää private-tilaa.</translation>
 <translation id="915194831143859291">Jos tämän käytännön arvo on Epätosi tai jos sitä ei määritetä, <ph name="PRODUCT_OS_NAME" /> sallii käyttäjän sammuttaa laitteen.
       Jos tämän käytännön arvo on Tosi, <ph name="PRODUCT_OS_NAME" /> käynnistää laitteen uudelleen, jos käyttäjä sammuttaa sen. <ph name="PRODUCT_OS_NAME" /> korvaa käyttöliittymän kaikki sammutuspainikkeet uudelleenkäynnistyspainikkeilla. Jos käyttäjä käyttää sammuttamiseen laitteen virtapainiketta, laite ei käynnisty automaattisesti uudelleen, vaikka tämä käytäntö olisikin käytössä.</translation>
 <translation id="9152473318295429890">Salli vastaavien verkkosivujen ehdottaminen kontekstin perusteella</translation>
@@ -4335,7 +4335,7 @@ ylläpitäjän tai SyncDisabled-käytännön estämä. BrowserGuestModeEnabled-k
 
       Jos tämä käytäntö on määritetty, <ph name="PRODUCT_NAME" /> käynnistetään sen avulla, kun <ph name="PRODUCT_NAME" /> käynnistetään Internet Explorerista.
 
-      Tämän käytännön arvoksi voidaan määrittää suoritustiedoston polku tai ${chrome}, jolloin Carbon Browser Browser Browsern asennussijainti havaitaan automaattisesti.</translation>
+      Tämän käytännön arvoksi voidaan määrittää suoritustiedoston polku tai ${chrome}, jolloin Carbon Browsern asennussijainti havaitaan automaattisesti.</translation>
 <translation id="930930237275114205">Määritä tuotteen <ph name="PRODUCT_FRAME_NAME" /> käyttäjätietohakemisto</translation>
 <translation id="943865157632139008">Sallii HTML-oletusrenderöijän määrittämisen, kun <ph name="PRODUCT_FRAME_NAME" /> on asennettu.
       Oletuksena isäntäselain vastaa renderöinnistä, mutta voit myös ohittaa tämän ja valita, että <ph name="PRODUCT_FRAME_NAME" /> toimii HTML-sivujen oletusrenderöijänä.</translation>

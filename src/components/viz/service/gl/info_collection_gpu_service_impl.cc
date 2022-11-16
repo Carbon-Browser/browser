@@ -5,9 +5,8 @@
 #include "components/viz/service/gl/info_collection_gpu_service_impl.h"
 
 #include <utility>
-#include "base/task/post_task.h"
+#include "base/task/task_runner_util.h"
 #include "base/task/thread_pool.h"
-#include "base/task_runner_util.h"
 #include "gpu/config/dx_diag_node.h"
 #include "gpu/config/gpu_info_collector.h"
 

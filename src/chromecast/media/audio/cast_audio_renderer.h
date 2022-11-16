@@ -14,6 +14,7 @@
 #include "base/threading/sequence_bound.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
+#include "chromecast/common/mojom/audio_socket.mojom.h"
 #include "chromecast/media/audio/audio_output_service/output_stream_connection.h"
 #include "media/base/audio_renderer.h"
 #include "media/base/buffering_state.h"
@@ -84,7 +85,8 @@ class CastAudioRenderer
   void SetVolume(float volume) override;
   void SetLatencyHint(absl::optional<base::TimeDelta> latency_hint) override;
   void SetPreservesPitch(bool preserves_pitch) override;
-  void SetAutoplayInitiated(bool auto_play_initiated) override;
+  void SetWasPlayedWithUserActivation(
+      bool was_played_with_user_activation) override;
 
   // ::media::TimeSource implementation:
   void StartTicking() override;
@@ -99,8 +101,10 @@ class CastAudioRenderer
   // audio_output_service::OutputStreamConnection::Delegate implementation:
   void OnBackendInitialized(
       const audio_output_service::BackendInitializationStatus& status) override;
-  void UpdateMediaTime(int64_t media_timestamp_microseconds,
-                       int64_t reference_timestamp_microseconds) override;
+  void OnNextBuffer(int64_t media_timestamp_microseconds,
+                    int64_t reference_timestamp_microseconds,
+                    int64_t delay_microseconds,
+                    int64_t delay_timestamp_microseconds) override;
 
   void ScheduleFetchNextBuffer();
   void FetchNextBuffer();
@@ -187,13 +191,15 @@ class CastAudioRenderer
 
   // TODO(b/173250111): update these values based on whether the media session
   // is multiroom.
-  base::TimeDelta min_lead_time_ = base::TimeDelta::FromMilliseconds(100);
-  base::TimeDelta max_lead_time_ = base::TimeDelta::FromMilliseconds(500);
+  base::TimeDelta min_lead_time_ = base::Milliseconds(100);
+  base::TimeDelta max_lead_time_ = base::Milliseconds(500);
 
   mojo::PendingRemote<::media::mojom::CastApplicationMediaInfoManager>
       application_media_info_manager_pending_remote_;
   mojo::Remote<::media::mojom::CastApplicationMediaInfoManager>
       application_media_info_manager_remote_;
+  mojo::PendingRemote<mojom::AudioSocketBroker>
+      audio_socket_broker_pending_remote_;
 
   SEQUENCE_CHECKER(sequence_checker_);
 

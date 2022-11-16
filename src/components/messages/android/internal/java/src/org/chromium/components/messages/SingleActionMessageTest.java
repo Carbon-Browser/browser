@@ -11,6 +11,7 @@ import android.animation.Animator;
 import android.app.Activity;
 
 import androidx.test.filters.MediumTest;
+import androidx.test.filters.SmallTest;
 
 import org.junit.Assert;
 import org.junit.Before;
@@ -29,23 +30,25 @@ import org.chromium.base.ApiCompatibilityUtils;
 import org.chromium.base.Callback;
 import org.chromium.base.test.BaseActivityTestRule;
 import org.chromium.base.test.BaseJUnit4ClassRunner;
+import org.chromium.base.test.util.Batch;
 import org.chromium.base.test.util.CallbackHelper;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
 import org.chromium.ui.modelutil.PropertyModel;
+import org.chromium.ui.test.util.BlankUiTestActivity;
 import org.chromium.ui.test.util.DisableAnimationsTestRule;
-import org.chromium.ui.test.util.DummyUiActivity;
 
 /**
  * Tests for {@link SingleActionMessage}.
  */
 @RunWith(BaseJUnit4ClassRunner.class)
+@Batch(Batch.UNIT_TESTS)
 public class SingleActionMessageTest {
     @ClassRule
     public static DisableAnimationsTestRule sDisableAnimationsRule =
             new DisableAnimationsTestRule();
     @ClassRule
-    public static BaseActivityTestRule<DummyUiActivity> sActivityTestRule =
-            new BaseActivityTestRule<>(DummyUiActivity.class);
+    public static BaseActivityTestRule<BlankUiTestActivity> sActivityTestRule =
+            new BaseActivityTestRule<>(BlankUiTestActivity.class);
 
     private static Activity sActivity;
 
@@ -56,7 +59,7 @@ public class SingleActionMessageTest {
         }
 
         @Override
-        public long get(long extension) {
+        public long get(int id, long extension) {
             return mDuration;
         }
     }
@@ -66,6 +69,8 @@ public class SingleActionMessageTest {
     @Mock
     private Callback<Animator> mAnimatorStartCallback;
 
+    private CallbackHelper mPrimaryActionCallback;
+    private CallbackHelper mSecondaryActionCallback;
     private CallbackHelper mDismissCallback;
     private SingleActionMessage.DismissCallback mEmptyDismissCallback =
             (model, dismissReason) -> {};
@@ -80,6 +85,8 @@ public class SingleActionMessageTest {
     @Before
     public void setupTest() throws Exception {
         mDismissCallback = new CallbackHelper();
+        mPrimaryActionCallback = new CallbackHelper();
+        mSecondaryActionCallback = new CallbackHelper();
     }
 
     @Test
@@ -110,6 +117,8 @@ public class SingleActionMessageTest {
         message.dismiss(DismissReason.UNKNOWN);
         mDismissCallback.waitForFirst(
                 "Dismiss callback should be called when message is dismissed");
+        Assert.assertTrue("mMessageDismissed should be true when a message is dismissed.",
+                message.getMessageDismissedForTesting());
     }
 
     @Test
@@ -145,24 +154,91 @@ public class SingleActionMessageTest {
         MessageContainer container = new MessageContainer(sActivity, null);
         PropertyModel m1 = createBasicSingleActionMessageModel();
         PropertyModel m2 = createBasicSingleActionMessageModel();
-        SingleActionMessage message1 = new SingleActionMessage(container, m1, mEmptyDismissCallback,
-                () -> 0, new MockDurationProvider(0L), mAnimatorStartCallback);
-        final MessageBannerCoordinator messageBanner1 =
-                Mockito.mock(MessageBannerCoordinator.class);
         final MessageBannerView view1 = new MessageBannerView(sActivity, null);
-        view1.setId(R.id.message_banner);
-        message1.setMessageBannerForTesting(messageBanner1);
-        message1.setViewForTesting(view1);
-        SingleActionMessage message2 = new SingleActionMessage(container, m2, mEmptyDismissCallback,
-                () -> 0, new MockDurationProvider(0L), mAnimatorStartCallback);
-        final MessageBannerCoordinator messageBanner2 =
-                Mockito.mock(MessageBannerCoordinator.class);
         final MessageBannerView view2 = new MessageBannerView(sActivity, null);
-        view2.setId(R.id.message_banner);
-        message2.setMessageBannerForTesting(messageBanner2);
-        message2.setViewForTesting(view2);
-        message1.show();
-        message2.show();
+        createAndShowSingleActionMessage(container, m1, view1);
+        createAndShowSingleActionMessage(container, m2, view2);
+    }
+
+    @Test
+    @MediumTest
+    public void testPrimaryActionCallbackInvokedOnce() {
+        MessageContainer container = new MessageContainer(sActivity, null);
+        PropertyModel model = createBasicSingleActionMessageModel();
+        final MessageBannerView view = new MessageBannerView(sActivity, null);
+        SingleActionMessage message = createAndShowSingleActionMessage(container, model, view);
+        executeAndVerifyRepeatedButtonClicks(true, model, message, view);
+    }
+
+    @Test
+    @MediumTest
+    public void testSecondaryActionCallbackInvokedOnce() {
+        MessageContainer container = new MessageContainer(sActivity, null);
+        PropertyModel model = createBasicSingleActionMessageModel();
+        final MessageBannerView view = new MessageBannerView(sActivity, null);
+        SingleActionMessage message = createAndShowSingleActionMessage(container, model, view);
+        executeAndVerifyRepeatedButtonClicks(false, model, message, view);
+    }
+
+    @Test
+    @SmallTest
+    public void testMessageShouldShowDefault() {
+        MessageContainer container = new MessageContainer(sActivity, null);
+        PropertyModel model = createBasicSingleActionMessageModel();
+        final MessageBannerView view = new MessageBannerView(sActivity, null);
+        SingleActionMessage message = createAndShowSingleActionMessage(container, model, view);
+        Assert.assertTrue("#shouldShow should be true by default.", message.shouldShow());
+    }
+
+    @Test
+    @SmallTest
+    public void testMessageShouldNotShow() {
+        MessageContainer container = new MessageContainer(sActivity, null);
+        PropertyModel model = createBasicSingleActionMessageModel();
+        model.set(MessageBannerProperties.ON_STARTED_SHOWING, () -> false);
+        final MessageBannerView view = new MessageBannerView(sActivity, null);
+        SingleActionMessage message = createAndShowSingleActionMessage(container, model, view);
+        Assert.assertFalse(
+                "#shouldShow should be false when the ON_STARTED_SHOWING supplier returns false.",
+                message.shouldShow());
+    }
+
+    private void executeAndVerifyRepeatedButtonClicks(boolean isPrimaryButtonClickedFirst,
+            PropertyModel model, SingleActionMessage message, MessageBannerView view) {
+        int expectedPrimaryActionCallbackCount = mPrimaryActionCallback.getCallCount();
+        int expectedSecondaryActionCallbackCount = mSecondaryActionCallback.getCallCount();
+        if (isPrimaryButtonClickedFirst) {
+            model.get(MessageBannerProperties.PRIMARY_BUTTON_CLICK_LISTENER).onClick(view);
+            expectedPrimaryActionCallbackCount += 1;
+        } else {
+            model.get(MessageBannerProperties.ON_SECONDARY_BUTTON_CLICK).run();
+            expectedSecondaryActionCallbackCount += 1;
+        }
+        // Simulate message dismissal on button click.
+        message.dismiss(DismissReason.UNKNOWN);
+        Assert.assertTrue("mMessageDismissed should be true when a message is dismissed.",
+                message.getMessageDismissedForTesting());
+        // Simulate subsequent button clicks.
+        model.get(MessageBannerProperties.PRIMARY_BUTTON_CLICK_LISTENER).onClick(view);
+        model.get(MessageBannerProperties.ON_SECONDARY_BUTTON_CLICK).run();
+        Assert.assertEquals("The primary action callback was not run the expected number of times.",
+                expectedPrimaryActionCallbackCount, mPrimaryActionCallback.getCallCount());
+        Assert.assertEquals(
+                "The secondary action callback was not run the expected number of times.",
+                expectedSecondaryActionCallbackCount, mSecondaryActionCallback.getCallCount());
+    }
+
+    private SingleActionMessage createAndShowSingleActionMessage(
+            MessageContainer container, PropertyModel model, MessageBannerView view) {
+        SingleActionMessage message =
+                new SingleActionMessage(container, model, mEmptyDismissCallback,
+                        () -> 0, new MockDurationProvider(0L), mAnimatorStartCallback);
+        final MessageBannerCoordinator messageBanner = Mockito.mock(MessageBannerCoordinator.class);
+        view.setId(R.id.message_banner);
+        message.setMessageBannerForTesting(messageBanner);
+        message.setViewForTesting(view);
+        message.show();
+        return message;
     }
 
     private PropertyModel createBasicSingleActionMessageModel() {
@@ -173,7 +249,13 @@ public class SingleActionMessageTest {
                 .with(MessageBannerProperties.ICON,
                         ApiCompatibilityUtils.getDrawable(
                                 sActivity.getResources(), android.R.drawable.ic_menu_add))
-                .with(MessageBannerProperties.ON_PRIMARY_ACTION, () -> {})
+                .with(MessageBannerProperties.ON_PRIMARY_ACTION,
+                        () -> {
+                            mPrimaryActionCallback.notifyCalled();
+                            return PrimaryActionClickBehavior.DISMISS_IMMEDIATELY;
+                        })
+                .with(MessageBannerProperties.ON_SECONDARY_ACTION,
+                        () -> { mSecondaryActionCallback.notifyCalled(); })
                 .with(MessageBannerProperties.ON_TOUCH_RUNNABLE, () -> {})
                 .with(MessageBannerProperties.ON_DISMISSED,
                         (dismissReason) -> { mDismissCallback.notifyCalled(); })

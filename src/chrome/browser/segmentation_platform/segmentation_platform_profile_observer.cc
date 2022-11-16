@@ -8,6 +8,7 @@
 
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
+#include "chrome/browser/segmentation_platform/ukm_database_client.h"
 #include "components/segmentation_platform/public/segmentation_platform_service.h"
 
 namespace segmentation_platform {
@@ -50,10 +51,18 @@ SegmentationPlatformProfileObserver::SegmentationPlatformProfileObserver(
 }
 
 SegmentationPlatformProfileObserver::~SegmentationPlatformProfileObserver() {
-  profile_manager_->RemoveObserver(this);
+  if (profile_manager_)
+    profile_manager_->RemoveObserver(this);
 }
 
 void SegmentationPlatformProfileObserver::OnProfileAdded(Profile* profile) {
+  // We might call this method for the same profile more than once, but should
+  // not process the same profile twice. That can be the case during the
+  // construction of this `SegmentationPlatformProfileObserver`, which can be
+  // called from within another `ProfileManagerObserver::OnProfileAdded`.
+  if (observed_profiles_.IsObservingSource(profile))
+    return;
+
   observed_profiles_.AddObservation(profile);
 
   // Check if we have any OTR profiles.
@@ -68,6 +77,10 @@ void SegmentationPlatformProfileObserver::OnProfileAdded(Profile* profile) {
   NotifyExistenceOfOTRProfile(has_otr_profiles);
 }
 
+void SegmentationPlatformProfileObserver::OnProfileManagerDestroying() {
+  profile_manager_ = nullptr;
+}
+
 void SegmentationPlatformProfileObserver::OnOffTheRecordProfileCreated(
     Profile* profile) {
   OnProfileAdded(profile);
@@ -77,6 +90,11 @@ void SegmentationPlatformProfileObserver::OnProfileWillBeDestroyed(
     Profile* profile) {
   observed_profiles_.RemoveObservation(profile);
   if (!profile->IsOffTheRecord() && !profile->HasAnyOffTheRecordProfile())
+    return;
+
+  // If the profile manager is destroyed, then skip changing the recording
+  // state.
+  if (!profile_manager_)
     return;
 
   // We are destroying a profile which is an OTR profile or has an OTR profile.

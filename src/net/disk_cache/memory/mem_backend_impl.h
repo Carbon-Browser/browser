@@ -15,8 +15,8 @@
 #include "base/callback_forward.h"
 #include "base/compiler_specific.h"
 #include "base/containers/linked_list.h"
-#include "base/macros.h"
 #include "base/memory/memory_pressure_listener.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/string_split.h"
 #include "base/time/time.h"
@@ -39,6 +39,10 @@ namespace disk_cache {
 class NET_EXPORT_PRIVATE MemBackendImpl final : public Backend {
  public:
   explicit MemBackendImpl(net::NetLog* net_log);
+
+  MemBackendImpl(const MemBackendImpl&) = delete;
+  MemBackendImpl& operator=(const MemBackendImpl&) = delete;
+
   ~MemBackendImpl() override;
 
   // Returns an instance of a Backend implemented only in memory. The returned
@@ -136,7 +140,7 @@ class NET_EXPORT_PRIVATE MemBackendImpl final : public Backend {
   void OnMemoryPressure(
       base::MemoryPressureListener::MemoryPressureLevel memory_pressure_level);
 
-  base::Clock* custom_clock_for_testing_;  // usually nullptr.
+  raw_ptr<base::Clock> custom_clock_for_testing_ = nullptr;  // usually nullptr.
 
   EntryMap entries_;
 
@@ -144,17 +148,15 @@ class NET_EXPORT_PRIVATE MemBackendImpl final : public Backend {
   // most recently used.
   base::LinkedList<MemEntryImpl> lru_list_;
 
-  int32_t max_size_;      // Maximum data size for this instance.
-  int32_t current_size_;
+  int32_t max_size_ = 0;  // Maximum data size for this instance.
+  int32_t current_size_ = 0;
 
-  net::NetLog* net_log_;
+  raw_ptr<net::NetLog> net_log_;
   base::OnceClosure post_cleanup_callback_;
 
   base::MemoryPressureListener memory_pressure_listener_;
 
   base::WeakPtrFactory<MemBackendImpl> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(MemBackendImpl);
 };
 
 }  // namespace disk_cache

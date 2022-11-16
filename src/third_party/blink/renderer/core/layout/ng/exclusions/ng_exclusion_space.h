@@ -5,7 +5,9 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_LAYOUT_NG_EXCLUSIONS_NG_EXCLUSION_SPACE_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_LAYOUT_NG_EXCLUSIONS_NG_EXCLUSION_SPACE_H_
 
+#include "base/check_op.h"
 #include "base/dcheck_is_on.h"
+#include "base/notreached.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/layout/ng/exclusions/ng_exclusion.h"
 #include "third_party/blink/renderer/core/layout/ng/exclusions/ng_layout_opportunity.h"
@@ -13,6 +15,8 @@
 #include "third_party/blink/renderer/core/layout/ng/geometry/ng_bfc_rect.h"
 #include "third_party/blink/renderer/core/style/computed_style_constants.h"
 #include "third_party/blink/renderer/platform/geometry/layout_unit.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
+#include "third_party/blink/renderer/platform/heap/persistent.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
@@ -24,6 +28,8 @@ typedef HeapVector<NGLayoutOpportunity, 8> LayoutOpportunityVector;
 // see NGExclusionSpace below. NGExclusionSpace was designed to be cheap
 // to construct and cheap to copy if empty.
 class CORE_EXPORT NGExclusionSpaceInternal final {
+  USING_FAST_MALLOC(NGExclusionSpaceInternal);
+
  public:
   NGExclusionSpaceInternal();
   NGExclusionSpaceInternal(const NGExclusionSpaceInternal&);
@@ -85,6 +91,65 @@ class CORE_EXPORT NGExclusionSpaceInternal final {
         NOTREACHED();
         return LayoutUnit::Min();
     }
+  }
+
+  void SetHasBreakBeforeFloat(EFloat type) {
+    switch (type) {
+      default:
+        NOTREACHED();
+        [[fallthrough]];
+      case EFloat::kLeft:
+        has_break_before_left_float_ = true;
+        break;
+      case EFloat::kRight:
+        has_break_before_right_float_ = true;
+        break;
+    }
+  }
+
+  void SetHasBreakInsideFloat(EFloat type) {
+    switch (type) {
+      default:
+        NOTREACHED();
+        [[fallthrough]];
+      case EFloat::kLeft:
+        has_break_inside_left_float_ = true;
+        break;
+      case EFloat::kRight:
+        has_break_inside_right_float_ = true;
+        break;
+    }
+  }
+
+  bool NeedsClearancePastFragmentainer(EClear type) {
+    bool needs_clearance = false;
+    switch (type) {
+      default:
+        NOTREACHED();
+        [[fallthrough]];
+      case EClear::kNone:
+        return false;
+      case EClear::kLeft:
+      case EClear::kBoth:
+        needs_clearance |=
+            has_break_inside_left_float_ || has_break_before_left_float_;
+        if (type == EClear::kLeft)
+          break;
+        [[fallthrough]];
+      case EClear::kRight:
+        needs_clearance |=
+            has_break_inside_right_float_ || has_break_before_right_float_;
+        break;
+    }
+    return needs_clearance;
+  }
+
+  bool NeedsBreakBeforeFloat(EClear type) {
+    // Floats cannot start above any preceding floats, so if any float has been
+    // pushed to the next fragmentainer, so will this one.
+    if (has_break_before_left_float_ || has_break_before_right_float_)
+      return true;
+    return NeedsClearancePastFragmentainer(type);
   }
 
   LayoutUnit LastFloatBlockStart() const { return last_float_block_start_; }
@@ -328,7 +393,18 @@ class CORE_EXPORT NGExclusionSpaceInternal final {
   // we initially ignore exclusions with shape data. When we first see an
   // exclusion with shape data, we set this flag, and rebuild the
   // DerivedGeometry data-structure, to perform the additional bookkeeping.
-  bool track_shape_exclusions_ = false;
+  unsigned track_shape_exclusions_ : 1;
+
+  // Set to true if we have found a left/right float that needs to start in the
+  // next fragmentainer (e.g. because it has monolithic content or has break
+  // avoidance requests inside).
+  unsigned has_break_before_left_float_ : 1;
+  unsigned has_break_before_right_float_ : 1;
+
+  // Set to true if we have added a left/right float that will be resumed in the
+  // next fragmentainer.
+  unsigned has_break_inside_left_float_ : 1;
+  unsigned has_break_inside_right_float_ : 1;
 
   // The derived geometry struct, is the data-structure which handles all of the
   // queries on the exclusion space. It can always be rebuilt from exclusions_
@@ -448,6 +524,30 @@ class CORE_EXPORT NGExclusionSpace {
     if (!exclusion_space_)
       exclusion_space_ = std::make_unique<NGExclusionSpaceInternal>();
     exclusion_space_->Add(std::move(exclusion));
+  }
+
+  void SetHasBreakBeforeFloat(EFloat type) {
+    DCHECK(exclusion_space_);
+    exclusion_space_->SetHasBreakBeforeFloat(type);
+  }
+
+  void SetHasBreakInsideFloat(EFloat type) {
+    DCHECK(exclusion_space_);
+    exclusion_space_->SetHasBreakInsideFloat(type);
+  }
+
+  // Return true if an in-flow node (i.e. not another float, for instance) with
+  // the given 'clear' property needs clearance past the current fragmentainer.
+  bool NeedsClearancePastFragmentainer(EClear type) const {
+    return exclusion_space_ &&
+           exclusion_space_->NeedsClearancePastFragmentainer(type);
+  }
+
+  // Return true if a float with the given 'clear' property needs to be pushed
+  // past the current fragmentainer, either because of clearance, or because we
+  // already have floats that have been pushed.
+  bool NeedsBreakBeforeFloat(EClear type) const {
+    return exclusion_space_ && exclusion_space_->NeedsBreakBeforeFloat(type);
   }
 
   // Returns a layout opportunity, within the BFC.

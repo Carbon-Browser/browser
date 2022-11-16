@@ -78,7 +78,7 @@ Polymer({
     shillDebugging_: {
       type: String,
       value: 'unknown',
-    }
+    },
   },
 
   observers: ['onShillDebuggingChanged_(shillDebugging_)'],
@@ -97,8 +97,9 @@ Polymer({
   /* @private */
   onShillDebuggingChanged_() {
     const shillDebugging = this.shillDebugging_;
-    if (!shillDebugging || shillDebugging == 'unknown')
+    if (!shillDebugging || shillDebugging == 'unknown') {
       return;
+    }
     this.browserProxy_.setShillDebugging(shillDebugging).then((response) => {
       /*const result =*/ response.shift();
       const isError = response.shift();

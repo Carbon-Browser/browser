@@ -8,7 +8,6 @@
 #include <string>
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "chrome/browser/ash/login/screens/base_screen.h"
 // TODO(https://crbug.com/1164001): move to forward declaration.
 #include "chrome/browser/ui/webui/chromeos/login/fingerprint_setup_screen_handler.h"
@@ -48,6 +47,10 @@ class FingerprintSetupScreen : public BaseScreen,
 
   FingerprintSetupScreen(FingerprintSetupScreenView* view,
                          const ScreenExitCallback& exit_callback);
+
+  FingerprintSetupScreen(const FingerprintSetupScreen&) = delete;
+  FingerprintSetupScreen& operator=(const FingerprintSetupScreen&) = delete;
+
   ~FingerprintSetupScreen() override;
 
   void set_exit_callback_for_testing(const ScreenExitCallback& exit_callback) {
@@ -64,7 +67,7 @@ class FingerprintSetupScreen : public BaseScreen,
                         bool enroll_session_complete,
                         int percent_complete) override;
   void OnAuthScanDone(
-      device::mojom::ScanResult scan_result,
+      const device::mojom::FingerprintMessagePtr msg,
       const base::flat_map<std::string, std::vector<std::string>>& matches)
       override;
   void OnSessionFailed() override;
@@ -76,7 +79,7 @@ class FingerprintSetupScreen : public BaseScreen,
   bool MaybeSkip(WizardContext* context) override;
   void ShowImpl() override;
   void HideImpl() override;
-  void OnUserAction(const std::string& action_id) override;
+  void OnUserActionDeprecated(const std::string& action_id) override;
 
  private:
   void StartAddingFinger();
@@ -91,8 +94,6 @@ class FingerprintSetupScreen : public BaseScreen,
   ScreenExitCallback exit_callback_;
 
   base::WeakPtrFactory<FingerprintSetupScreen> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(FingerprintSetupScreen);
 };
 
 }  // namespace ash

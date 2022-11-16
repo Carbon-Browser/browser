@@ -36,9 +36,9 @@
     boolean isLoadingFromMemoryCache(DOMString url);
 
     // Call this function with the URL of a resource that has not yet been
-    // fetched. It returns a promise that resolves with the priority of the
-    // request, once it has been made.
-    [CallWith=ScriptState] Promise<unsigned long> getResourcePriority(DOMString url, Document document);
+    // fetched. It returns a promise that resolves with the initial priority
+    // of the request, once it has been made.
+    [CallWith=ScriptState] Promise<unsigned long> getInitialResourcePriority(DOMString url, Document document);
 
     DOMString getResourceHeader(DOMString url, DOMString header, Document document);
 
@@ -195,8 +195,6 @@
 
     [RaisesException] DOMString layerTreeAsText(Document document, optional unsigned short flags);
 
-    [RaisesException] boolean scrollsWithRespectTo(Element element1, Element element2);
-
     DOMString scrollingStateTreeAsText(Document document);
     [RaisesException] DOMString mainThreadScrollingReasons(Document document);
     [RaisesException] DOMRectList nonFastScrollableRects(Document document);
@@ -239,6 +237,9 @@
     TypeConversions typeConversions();
 
     sequence<DOMString> getReferencedFilePaths();
+    // This should be called if <input type=file> refers to files selected
+    // without the browser process.
+    void disableReferencedFilePathsVerification();
 
     // These functions both reset the tracked repaint rects. They are intended to be used in the following order:
     //  startTrackingRepaints(), repaintRectsAsText(), stopTrackingRepaints().
@@ -290,6 +291,7 @@
 
     [RaisesException] void forceCompositingUpdate(Document document);
 
+    void setDarkPreferredColorScheme(Document document);
     void setForcedColorsAndDarkPreferredColorScheme(Document document);
 
     [RaisesException] void setShouldRevealPassword(Element element, boolean reveal);

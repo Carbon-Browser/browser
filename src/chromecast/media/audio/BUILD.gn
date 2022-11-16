@@ -30,16 +30,16 @@ cast_source_set("wav_header") {
 
 cast_source_set("processing") {
   sources = [
-    "audio_clock_simulator.cc",
-    "audio_clock_simulator.h",
     "audio_fader.cc",
     "audio_fader.h",
-    "audio_provider.h",
     "cast_audio_bus.cc",
     "cast_audio_bus.h",
   ]
 
-  deps = [ "//base" ]
+  deps = [
+    "//base",
+    "//chromecast/media/api",
+  ]
 
   # Use fastest possible float math.
   configs -= [ "//build/config/compiler:default_optimization" ]
@@ -54,8 +54,8 @@ cast_source_set("playback_rate_shifter") {
   ]
 
   deps = [
-    ":processing",
     "//base",
+    "//chromecast/media/api",
     "//media",
   ]
 }
@@ -100,6 +100,16 @@ cast_source_set("resampler") {
   ]
 }
 
+cast_source_set("channel_mixer") {
+  sources = [ "cast_channel_mixer_impl.cc" ]
+  deps = [
+    "//base",
+    "//chromecast/media/api",
+    "//chromecast/media/cma/base",
+    "//media",
+  ]
+}
+
 cast_source_set("audio_renderer") {
   sources = [
     "cast_audio_renderer.cc",
@@ -126,6 +136,7 @@ cast_source_set("audio_renderer") {
 
 cast_source_set("audio") {
   sources = [
+    "audio_clock_simulator_impl.cc",
     "cast_audio_input_stream.cc",
     "cast_audio_input_stream.h",
     "cast_audio_manager.cc",
@@ -185,6 +196,26 @@ cast_source_set("audio") {
   configs += [ "//media/audio:platform_config" ]
 }
 
+cast_source_set("cast_audio_output_device") {
+  sources = [
+    "cast_audio_output_device.cc",
+    "cast_audio_output_device.h",
+  ]
+
+  deps = [
+    ":audio_io_thread",
+    "//base",
+    "//chromecast/common/mojom",
+    "//chromecast/media/audio/audio_output_service:output_connection",
+    "//chromecast/media/audio/audio_output_service:proto",
+    "//chromecast/media/base:monotonic_clock",
+    "//content/renderer:renderer",
+    "//media",
+    "//media/mojo/mojom",
+    "//net",
+  ]
+}
+
 if (is_android) {
   cast_source_set("cast_audio_device_factory") {
     sources = [
@@ -193,9 +224,14 @@ if (is_android) {
     ]
 
     deps = [
+      ":cast_audio_output_device",
       "//base",
+      "//chromecast/base",
+      "//content/public/renderer",
       "//content/renderer:renderer",
       "//media",
+      "//third_party/blink/public:blink",
+      "//third_party/blink/public/common",
     ]
   }
 }
@@ -273,11 +309,13 @@ cast_source_set("unittests") {
   ]
 
   deps = [
+    ":audio",
     ":interleaved_channel_mixer",
     ":playback_rate_shifter",
     ":processing",
     ":rate_adjuster",
     "//base",
+    "//chromecast/media/api",
     "//media",
     "//testing/gmock",
     "//testing/gtest",

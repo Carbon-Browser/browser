@@ -30,13 +30,6 @@
 #error "This file requires ARC support."
 #endif
 
-// TODO(crbug.com/1015113): The EG2 macro is breaking indexing for some reason
-// without the trailing semicolon.  For now, disable the extra semi warning
-// so Xcode indexing works for the egtest.
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wc++98-compat-extra-semi"
-GREY_STUB_CLASS_IN_APP_MAIN_QUEUE(SettingsAppInterface);
-
 using chrome_test_util::ButtonWithAccessibilityLabelId;
 using chrome_test_util::ClearBrowsingDataButton;
 using chrome_test_util::ClearBrowsingDataView;
@@ -282,7 +275,7 @@ id<GREYMatcher> ClearBrowsingDataCell() {
 - (void)testClearCookies {
   GREYAssertTrue(self.testServer->Start(), @"Server did not start.");
 
-  // Load |kUrl| and check that cookie is not set.
+  // Load `kUrl` and check that cookie is not set.
   [ChromeEarlGrey loadURL:self.testServer->GetURL("/echo")];
 
   NSDictionary* cookies = [ChromeEarlGrey cookies];
@@ -327,7 +320,7 @@ id<GREYMatcher> ClearBrowsingDataCell() {
 }
 
 // Verifies that breakpad reporting works properly under possible settings of
-// the preference |kMetricsReportingEnabled|.
+// the preference `kMetricsReportingEnabled`.
 // NOTE: breakpad only allows uploading for non-first-launch runs.
 - (void)testBreakpadReporting {
   [self setTearDownHandler:^{
@@ -340,7 +333,7 @@ id<GREYMatcher> ClearBrowsingDataCell() {
 }
 
 // Verifies that breakpad reporting works properly under possible settings of
-// the preference |kMetricsReportingEnabled|.
+// the preference `kMetricsReportingEnabled`.
 // NOTE: breakpad only allows uploading for non-first-launch runs.
 - (void)testBreakpadReportingFirstLaunch {
   [self setTearDownHandler:^{

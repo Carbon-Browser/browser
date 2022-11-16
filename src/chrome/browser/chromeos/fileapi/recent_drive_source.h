@@ -10,7 +10,6 @@
 
 #include "ash/components/drivefs/mojom/drivefs.mojom.h"
 #include "base/files/file.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "chrome/browser/chromeos/fileapi/recent_source.h"
@@ -32,6 +31,10 @@ class RecentFile;
 class RecentDriveSource : public RecentSource {
  public:
   explicit RecentDriveSource(Profile* profile);
+
+  RecentDriveSource(const RecentDriveSource&) = delete;
+  RecentDriveSource& operator=(const RecentDriveSource&) = delete;
+
   ~RecentDriveSource() override;
 
   // RecentSource overrides:
@@ -58,8 +61,6 @@ class RecentDriveSource : public RecentSource {
   mojo::Remote<drivefs::mojom::SearchQuery> search_query_;
 
   base::WeakPtrFactory<RecentDriveSource> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(RecentDriveSource);
 };
 
 }  // namespace chromeos

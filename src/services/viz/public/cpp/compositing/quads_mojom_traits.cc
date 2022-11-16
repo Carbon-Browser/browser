@@ -4,6 +4,9 @@
 
 #include "services/viz/public/cpp/compositing/quads_mojom_traits.h"
 
+#include "base/notreached.h"
+#include "components/viz/common/quads/shared_element_draw_quad.h"
+#include "components/viz/common/quads/texture_draw_quad.h"
 #include "services/viz/public/cpp/compositing/compositor_render_pass_id_mojom_traits.h"
 #include "services/viz/public/cpp/compositing/resource_id_mojom_traits.h"
 #include "services/viz/public/cpp/crash_keys.h"
@@ -19,41 +22,41 @@ viz::DrawQuad* AllocateAndConstruct(
     viz::QuadList* list) {
   viz::DrawQuad* quad = nullptr;
   switch (material) {
-    case viz::mojom::DrawQuadStateDataView::Tag::DEBUG_BORDER_QUAD_STATE:
+    case viz::mojom::DrawQuadStateDataView::Tag::kDebugBorderQuadState:
       quad = list->AllocateAndConstruct<viz::DebugBorderDrawQuad>();
       quad->material = viz::DrawQuad::Material::kDebugBorder;
       return quad;
-    case viz::mojom::DrawQuadStateDataView::Tag::RENDER_PASS_QUAD_STATE:
+    case viz::mojom::DrawQuadStateDataView::Tag::kRenderPassQuadState:
       quad = list->AllocateAndConstruct<viz::CompositorRenderPassDrawQuad>();
       quad->material = viz::DrawQuad::Material::kCompositorRenderPass;
       return quad;
-    case viz::mojom::DrawQuadStateDataView::Tag::SOLID_COLOR_QUAD_STATE:
+    case viz::mojom::DrawQuadStateDataView::Tag::kSolidColorQuadState:
       quad = list->AllocateAndConstruct<viz::SolidColorDrawQuad>();
       quad->material = viz::DrawQuad::Material::kSolidColor;
       return quad;
-    case viz::mojom::DrawQuadStateDataView::Tag::STREAM_VIDEO_QUAD_STATE:
-      quad = list->AllocateAndConstruct<viz::StreamVideoDrawQuad>();
-      quad->material = viz::DrawQuad::Material::kStreamVideoContent;
-      return quad;
-    case viz::mojom::DrawQuadStateDataView::Tag::SURFACE_QUAD_STATE:
+    case viz::mojom::DrawQuadStateDataView::Tag::kSurfaceQuadState:
       quad = list->AllocateAndConstruct<viz::SurfaceDrawQuad>();
       quad->material = viz::DrawQuad::Material::kSurfaceContent;
       return quad;
-    case viz::mojom::DrawQuadStateDataView::Tag::TEXTURE_QUAD_STATE:
+    case viz::mojom::DrawQuadStateDataView::Tag::kTextureQuadState:
       quad = list->AllocateAndConstruct<viz::TextureDrawQuad>();
       quad->material = viz::DrawQuad::Material::kTextureContent;
       return quad;
-    case viz::mojom::DrawQuadStateDataView::Tag::TILE_QUAD_STATE:
+    case viz::mojom::DrawQuadStateDataView::Tag::kTileQuadState:
       quad = list->AllocateAndConstruct<viz::TileDrawQuad>();
       quad->material = viz::DrawQuad::Material::kTiledContent;
       return quad;
-    case viz::mojom::DrawQuadStateDataView::Tag::VIDEO_HOLE_QUAD_STATE:
+    case viz::mojom::DrawQuadStateDataView::Tag::kVideoHoleQuadState:
       quad = list->AllocateAndConstruct<viz::VideoHoleDrawQuad>();
       quad->material = viz::DrawQuad::Material::kVideoHole;
       return quad;
-    case viz::mojom::DrawQuadStateDataView::Tag::YUV_VIDEO_QUAD_STATE:
+    case viz::mojom::DrawQuadStateDataView::Tag::kYuvVideoQuadState:
       quad = list->AllocateAndConstruct<viz::YUVVideoDrawQuad>();
       quad->material = viz::DrawQuad::Material::kYuvVideoContent;
+      return quad;
+    case viz::mojom::DrawQuadStateDataView::Tag::kSharedElementQuadState:
+      quad = list->AllocateAndConstruct<viz::SharedElementDrawQuad>();
+      quad->material = viz::DrawQuad::Material::kSharedElement;
       return quad;
   }
   NOTREACHED();
@@ -64,7 +67,8 @@ viz::DrawQuad* AllocateAndConstruct(
 bool StructTraits<viz::mojom::DebugBorderQuadStateDataView, viz::DrawQuad>::
     Read(viz::mojom::DebugBorderQuadStateDataView data, viz::DrawQuad* out) {
   viz::DebugBorderDrawQuad* quad = static_cast<viz::DebugBorderDrawQuad*>(out);
-  quad->color = data.color();
+  if (!data.ReadColor(&quad->color))
+    return false;
   quad->width = data.width();
   return true;
 }
@@ -106,21 +110,9 @@ bool StructTraits<viz::mojom::SolidColorQuadStateDataView, viz::DrawQuad>::Read(
     viz::DrawQuad* out) {
   viz::SolidColorDrawQuad* quad = static_cast<viz::SolidColorDrawQuad*>(out);
   quad->force_anti_aliasing_off = data.force_anti_aliasing_off();
-  quad->color = data.color();
+  if (!data.ReadColor(&quad->color))
+    return false;
   return true;
-}
-
-// static
-bool StructTraits<viz::mojom::StreamVideoQuadStateDataView, viz::DrawQuad>::
-    Read(viz::mojom::StreamVideoQuadStateDataView data, viz::DrawQuad* out) {
-  auto* quad = static_cast<viz::StreamVideoDrawQuad*>(out);
-  quad->resources.count = 1;
-  return data.ReadResourceSizeInPixels(
-             &quad->overlay_resources.size_in_pixels) &&
-         data.ReadUvTopLeft(&quad->uv_top_left) &&
-         data.ReadUvBottomRight(&quad->uv_bottom_right) &&
-         data.ReadResourceId(
-             &quad->resources.ids[viz::StreamVideoDrawQuad::kResourceIdIndex]);
 }
 
 // static
@@ -128,7 +120,8 @@ bool StructTraits<viz::mojom::SurfaceQuadStateDataView, viz::DrawQuad>::Read(
     viz::mojom::SurfaceQuadStateDataView data,
     viz::DrawQuad* out) {
   viz::SurfaceDrawQuad* quad = static_cast<viz::SurfaceDrawQuad*>(out);
-  quad->default_background_color = data.default_background_color();
+  if (!data.ReadDefaultBackgroundColor(&quad->default_background_color))
+    return false;
   quad->stretch_content_to_fill_bounds = data.stretch_content_to_fill_bounds();
   quad->is_reflection = data.is_reflection();
   quad->allow_merge = data.allow_merge();
@@ -151,13 +144,18 @@ bool StructTraits<viz::mojom::TextureQuadStateDataView, viz::DrawQuad>::Read(
   quad->premultiplied_alpha = data.premultiplied_alpha();
   gfx::ProtectedVideoType protected_video_type =
       gfx::ProtectedVideoType::kClear;
+  viz::OverlayPriority overlay_priority_hint = viz::OverlayPriority::kLow;
   if (!data.ReadUvTopLeft(&quad->uv_top_left) ||
       !data.ReadUvBottomRight(&quad->uv_bottom_right) ||
-      !data.ReadProtectedVideoType(&protected_video_type)) {
+      !data.ReadProtectedVideoType(&protected_video_type) ||
+      !data.ReadHdrMetadata(&quad->hdr_metadata) ||
+      !data.ReadOverlayPriorityHint(&overlay_priority_hint)) {
     return false;
   }
   quad->protected_video_type = protected_video_type;
-  quad->background_color = data.background_color();
+  quad->overlay_priority_hint = overlay_priority_hint;
+  if (!data.ReadBackgroundColor(&quad->background_color))
+    return false;
   base::span<float> vertex_opacity_array(quad->vertex_opacity);
   if (!data.ReadVertexOpacity(&vertex_opacity_array))
     return false;
@@ -165,8 +163,8 @@ bool StructTraits<viz::mojom::TextureQuadStateDataView, viz::DrawQuad>::Read(
   quad->y_flipped = data.y_flipped();
   quad->nearest_neighbor = data.nearest_neighbor();
   quad->secure_output_only = data.secure_output_only();
+  quad->is_stream_video = data.is_stream_video();
   quad->is_video_frame = data.is_video_frame();
-  quad->hw_protected_validation_id = data.hw_protected_validation_id();
 
   if (!data.ReadDamageRect(&quad->damage_rect))
     return false;
@@ -191,6 +189,14 @@ bool StructTraits<viz::mojom::TileQuadStateDataView, viz::DrawQuad>::Read(
   quad->force_anti_aliasing_off = data.force_anti_aliasing_off();
   quad->resources.count = 1;
   return true;
+}
+
+// static
+bool StructTraits<viz::mojom::SharedElementQuadStateDataView, viz::DrawQuad>::
+    Read(viz::mojom::SharedElementQuadStateDataView data, viz::DrawQuad* out) {
+  viz::SharedElementDrawQuad* shared_element_quad =
+      static_cast<viz::SharedElementDrawQuad*>(out);
+  return data.ReadResourceId(&shared_element_quad->resource_id);
 }
 
 // static

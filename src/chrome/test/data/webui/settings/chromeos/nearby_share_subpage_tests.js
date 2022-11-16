@@ -2,19 +2,18 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// clang-format off
-// #import {TestBrowserProxy} from '../../test_browser_proxy.js';
-// #import {assertEquals} from '../../chai_assert.js';
-// #import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-// #import {NearbyAccountManagerBrowserProxy, NearbyAccountManagerBrowserProxyImpl, setNearbyShareSettingsForTesting, setReceiveManagerForTesting, setContactManagerForTesting, Router, routes} from 'chrome://os-settings/chromeos/os_settings.js';
-// #import {FakeContactManager} from '../../nearby_share/shared/fake_nearby_contact_manager.m.js';
-// #import {FakeNearbyShareSettings} from '../../nearby_share/shared/fake_nearby_share_settings.m.js';
-// #import {FakeReceiveManager} from './fake_receive_manager.m.js'
-// #import {isVisible, waitAfterNextRender} from 'chrome://test/test_util.js';
-// #import {getDeepActiveElement} from 'chrome://resources/js/util.m.js';
-// clang-format on
+import {NearbyAccountManagerBrowserProxyImpl, Router, routes, setContactManagerForTesting, setNearbyShareSettingsForTesting, setReceiveManagerForTesting} from 'chrome://os-settings/chromeos/os_settings.js';
+import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {isVisible, waitAfterNextRender} from 'chrome://test/test_util.js';
 
-/** @implements {nearby_share.AccountManagerBrowserProxy} */
+import {assertEquals} from '../../chai_assert.js';
+import {FakeContactManager} from '../../nearby_share/shared/fake_nearby_contact_manager.js';
+import {FakeNearbyShareSettings} from '../../nearby_share/shared/fake_nearby_share_settings.js';
+import {TestBrowserProxy} from '../../test_browser_proxy.js';
+
+import {FakeReceiveManager} from './fake_receive_manager.js';
+
+/** @implements {AccountManagerBrowserProxy} */
 class TestAccountManagerBrowserProxy extends TestBrowserProxy {
   constructor() {
     super([
@@ -48,65 +47,126 @@ suite('NearbyShare', function() {
   let featureToggleButton = null;
   /** @type {?FakeReceiveManager} */
   let fakeReceiveManager = null;
-  /** @type {nearby_share.AccountManagerBrowserProxy} */
+  /** @type {AccountManagerBrowserProxy} */
   let accountManagerBrowserProxy = null;
-  /** @type {!nearby_share.FakeContactManager} */
-  const fakeContactManager = new nearby_share.FakeContactManager();
-  /** @type {!nearby_share.FakeNearbyShareSettings} */
+  /** @type {!FakeContactManager} */
+  let fakeContactManager = null;
+  /** @type {!FakeNearbyShareSettings} */
   let fakeSettings = null;
 
   setup(function() {
+    setupFakes();
+    fakeSettings.setEnabled(true);
+    fakeSettings.setIsOnboardingComplete(true);
+
+
+    createSubpage(/*is_enabled=*/ true, /*is_onboarding_complete=*/ true);
+    syncFakeSettings();
+    featureToggleButton =
+        subpage.shadowRoot.querySelector('#featureToggleButton');
+
+    return flushAsync();
+  });
+
+  teardown(function() {
+    subpage.remove();
+    Router.getInstance().resetRouteForTesting();
+  });
+
+  function setupFakes() {
     accountManagerBrowserProxy = new TestAccountManagerBrowserProxy();
-    nearby_share.NearbyAccountManagerBrowserProxyImpl.instance_ =
-        accountManagerBrowserProxy;
+    NearbyAccountManagerBrowserProxyImpl.setInstanceForTesting(
+        accountManagerBrowserProxy);
 
-    fakeReceiveManager = new nearby_share.FakeReceiveManager();
-    nearby_share.setReceiveManagerForTesting(fakeReceiveManager);
+    fakeReceiveManager = new FakeReceiveManager();
+    setReceiveManagerForTesting(fakeReceiveManager);
 
-    nearby_share.setContactManagerForTesting(fakeContactManager);
+    fakeContactManager = new FakeContactManager();
+    setContactManagerForTesting(fakeContactManager);
     fakeContactManager.setupContactRecords();
 
-    fakeSettings = new nearby_share.FakeNearbyShareSettings();
-    fakeSettings.setEnabled(true);
-    nearby_share.setNearbyShareSettingsForTesting(fakeSettings);
+    fakeSettings = new FakeNearbyShareSettings();
+    setNearbyShareSettingsForTesting(fakeSettings);
+  }
 
+  function syncFakeSettings() {
+    subpage.set('settings.enabled', fakeSettings.getEnabledForTest());
+    subpage.set(
+        'settings.isFastInitiationHardwareSupported',
+        fakeSettings.getIsFastInitiationHardwareSupportedTest());
+    subpage.set(
+        'settings.fastInitiationNotificationState',
+        fakeSettings.getFastInitiationNotificationStateTest());
+    subpage.set('settings.deviceName', fakeSettings.getDeviceNameForTest());
+    subpage.set('settings.dataUsage', fakeSettings.getDataUsageForTest());
+    subpage.set('settings.visibility', fakeSettings.getVisibilityForTest());
+    subpage.set(
+        'settings.allowedContacts', fakeSettings.getAllowedContactsForTest());
+    subpage.set(
+        'settings.isOnboardingComplete', fakeSettings.isOnboardingComplete());
+  }
+
+  function createSubpage(is_enabled, is_onboarding_complete) {
     PolymerTest.clearBody();
 
     subpage = document.createElement('settings-nearby-share-subpage');
     subpage.prefs = {
       'nearby_sharing': {
         'enabled': {
-          value: true,
+          value: is_enabled,
         },
         'data_usage': {
           value: 3,
         },
         'device_name': {
           value: '',
-        }
-      }
+        },
+        'onboarding_complete': {
+          value: is_onboarding_complete,
+        },
+      },
     };
+    subpage.isSettingsRetreived = true;
 
     document.body.appendChild(subpage);
-    Polymer.dom.flush();
-
-    featureToggleButton = subpage.$$('#featureToggleButton');
-  });
-
-  teardown(function() {
-    subpage.remove();
-    settings.Router.getInstance().resetRouteForTesting();
-  });
+    flush();
+  }
 
   // Returns true if the element exists and has not been 'removed' by the
   // Polymer template system.
   function doesElementExist(selector) {
-    const el = subpage.$$(selector);
+    const el = subpage.shadowRoot.querySelector(selector);
     return (el !== null) && (el.style.display !== 'none');
   }
 
+  function subpageControlsHidden(is_hidden) {
+    assertEquals(is_hidden, !doesElementExist('#highVisibilityToggle'));
+    assertEquals(is_hidden, !doesElementExist('#editDeviceNameButton'));
+    assertEquals(is_hidden, !doesElementExist('#editVisibilityButton'));
+    assertEquals(is_hidden, !doesElementExist('#editDataUsageButton'));
+  }
+
+  function subpageControlsDisabled(is_disabled) {
+    assertEquals(
+        is_disabled,
+        subpage.shadowRoot.querySelector('#highVisibilityToggle')
+            .hasAttribute('disabled'));
+    assertEquals(
+        is_disabled,
+        subpage.shadowRoot.querySelector('#editDeviceNameButton')
+            .hasAttribute('disabled'));
+    assertEquals(
+        is_disabled,
+        subpage.shadowRoot.querySelector('#editVisibilityButton')
+            .hasAttribute('disabled'));
+    assertEquals(
+        is_disabled,
+        subpage.shadowRoot.querySelector('#editDataUsageButton')
+            .hasAttribute('disabled'));
+  }
+
   function flushAsync() {
-    Polymer.dom.flush();
+    flush();
     // Use setTimeout to wait for the next macrotask.
     return new Promise(resolve => setTimeout(resolve));
   }
@@ -117,21 +177,20 @@ suite('NearbyShare', function() {
     assertEquals(true, featureToggleButton.checked);
     assertEquals(true, subpage.prefs.nearby_sharing.enabled.value);
     assertEquals('On', featureToggleButton.label.trim());
-    assertTrue(doesElementExist('#highVisibilityToggle'));
-    assertTrue(doesElementExist('#editDeviceNameButton'));
-    assertTrue(doesElementExist('#editVisibilityButton'));
-    assertTrue(doesElementExist('#editDataUsageButton'));
+    subpageControlsHidden(false);
+    subpageControlsDisabled(false);
 
     featureToggleButton.click();
-    Polymer.dom.flush();
+    flush();
 
     assertEquals(false, featureToggleButton.checked);
     assertEquals(false, subpage.prefs.nearby_sharing.enabled.value);
     assertEquals('Off', featureToggleButton.label.trim());
-    assertFalse(doesElementExist('#highVisibilityToggle'));
-    assertFalse(doesElementExist('#editDeviceNameButton'));
-    assertFalse(doesElementExist('#editVisibilityButton'));
-    assertFalse(doesElementExist('#editDataUsageButton'));
+    if (loadTimeData.getValue('isNearbyShareBackgroundScanningEnabled')) {
+      subpageControlsHidden(false);
+    } else {
+      subpageControlsHidden(true);
+    }
   });
 
   test('toggle row controls preference', function() {
@@ -147,27 +206,34 @@ suite('NearbyShare', function() {
   });
 
   suite('Deeplinking', () => {
+    suiteSetup(function() {
+      loadTimeData.overrideValues({
+        isNearbyShareBackgroundScanningEnabled: true,
+      });
+    });
+
     const deepLinkTestData = [
       {settingId: '208', deepLinkElement: '#featureToggleButton'},
       {settingId: '214', deepLinkElement: '#editDeviceNameButton'},
       {settingId: '215', deepLinkElement: '#editVisibilityButton'},
       {settingId: '216', deepLinkElement: '#manageContactsLinkRow'},
       {settingId: '217', deepLinkElement: '#editDataUsageButton'},
+      {settingId: '220', deepLinkElement: '#fastInitiationNotificationToggle'},
     ];
 
     deepLinkTestData.forEach((testData) => {
       test(
           'Deep link to nearby setting element ' + testData.deepLinkElement,
           async () => {
-            const params = new URLSearchParams;
+            const params = new URLSearchParams();
             params.append('settingId', testData.settingId);
-            settings.Router.getInstance().navigateTo(
-                settings.routes.NEARBY_SHARE, params);
+            Router.getInstance().navigateTo(routes.NEARBY_SHARE, params);
 
-            Polymer.dom.flush();
+            flush();
 
-            const deepLinkElement = subpage.$$(testData.deepLinkElement);
-            await test_util.waitAfterNextRender(deepLinkElement);
+            const deepLinkElement =
+                subpage.shadowRoot.querySelector(testData.deepLinkElement);
+            await waitAfterNextRender(deepLinkElement);
             assertEquals(
                 deepLinkElement, subpage.shadowRoot.activeElement,
                 'Nearby share setting element ' + testData.deepLinkElement +
@@ -179,56 +245,64 @@ suite('NearbyShare', function() {
   test('update device name preference', function() {
     assertEquals('', subpage.prefs.nearby_sharing.device_name.value);
 
-    subpage.$$('#editDeviceNameButton').click();
-    Polymer.dom.flush();
+    subpage.shadowRoot.querySelector('#editDeviceNameButton').click();
+    flush();
 
-    const dialog = subpage.$$('nearby-share-device-name-dialog');
+    const dialog =
+        subpage.shadowRoot.querySelector('nearby-share-device-name-dialog');
     const oldName = subpage.settings.deviceName;
     const newName = 'NEW NAME';
-    dialog.$$('cr-input').value = newName;
-    dialog.$$('.action-button').click();
-    Polymer.dom.flush();
+    dialog.shadowRoot.querySelector('cr-input').value = newName;
+    dialog.shadowRoot.querySelector('.action-button').click();
+    flush();
+    syncFakeSettings();
+    flush();
 
     assertEquals(newName, subpage.settings.deviceName);
     subpage.set('settings.deviceName', oldName);
   });
 
   test('validate device name preference', async () => {
-    subpage.$$('#editDeviceNameButton').click();
-    Polymer.dom.flush();
-    const dialog = subpage.$$('nearby-share-device-name-dialog');
-    const input = dialog.$$('cr-input');
-    const doneButton = dialog.$$('#doneButton');
+    subpage.shadowRoot.querySelector('#editDeviceNameButton').click();
+    flush();
+    const dialog =
+        subpage.shadowRoot.querySelector('nearby-share-device-name-dialog');
+    const input = dialog.shadowRoot.querySelector('cr-input');
+    const doneButton = dialog.shadowRoot.querySelector('#doneButton');
 
     fakeSettings.setNextDeviceNameResult(
         nearbyShare.mojom.DeviceNameValidationResult.kErrorEmpty);
     input.fire('input');
     // Allow the validation promise to resolve.
-    await test_util.waitAfterNextRender();
-    Polymer.dom.flush();
+    await waitAfterNextRender();
+    flush();
     assertTrue(input.invalid);
     assertTrue(doneButton.disabled);
 
     fakeSettings.setNextDeviceNameResult(
         nearbyShare.mojom.DeviceNameValidationResult.kValid);
     input.fire('input');
-    await test_util.waitAfterNextRender();
-    Polymer.dom.flush();
+    await waitAfterNextRender();
+    flush();
     assertFalse(input.invalid);
     assertFalse(doneButton.disabled);
   });
 
   test('update data usage preference', function() {
-    assertEquals(3, subpage.prefs.nearby_sharing.data_usage.value);
+    assertEquals(2, subpage.settings.dataUsage);
 
-    subpage.$$('#editDataUsageButton').click();
-    Polymer.dom.flush();
+    subpage.shadowRoot.querySelector('#editDataUsageButton').click();
+    flush();
 
-    const dialog = subpage.$$('nearby-share-data-usage-dialog');
-    dialog.$$('#dataUsageDataButton').click();
-    dialog.$$('.action-button').click();
+    const dialog =
+        subpage.shadowRoot.querySelector('nearby-share-data-usage-dialog');
+    dialog.shadowRoot.querySelector('#dataUsageWifiOnlyButton').click();
+    dialog.shadowRoot.querySelector('.action-button').click();
+    flush();
+    syncFakeSettings();
+    flush();
 
-    assertEquals(2, subpage.prefs.nearby_sharing.data_usage.value);
+    assertEquals(3, subpage.settings.dataUsage);
   });
 
   test('update visibility shows dialog', function() {
@@ -236,25 +310,29 @@ suite('NearbyShare', function() {
     // nearby-contact-visibility component which is hosted directly on the
     // dialog. Here we just verify the dialog shows up, it has the component,
     // and it has a close/action button.
-    subpage.$$('#editVisibilityButton').click();
-    Polymer.dom.flush();
+    subpage.shadowRoot.querySelector('#editVisibilityButton').click();
+    flush();
 
-    const dialog = subpage.$$('nearby-share-contact-visibility-dialog');
-    assertTrue(dialog.$$('nearby-contact-visibility') !== null);
-    dialog.$$('.action-button').click();
+    const dialog = subpage.shadowRoot.querySelector(
+        'nearby-share-contact-visibility-dialog');
+    assertTrue(
+        dialog.shadowRoot.querySelector('nearby-contact-visibility') !== null);
+    dialog.shadowRoot.querySelector('.action-button').click();
   });
 
   test('toggle high visibility from UI', async function() {
-    subpage.$$('#highVisibilityToggle').click();
-    Polymer.dom.flush();
+    subpage.shadowRoot.querySelector('#highVisibilityToggle').click();
+    flush();
     assertTrue(fakeReceiveManager.getInHighVisibilityForTest());
 
-    const dialog = subpage.$$('nearby-share-receive-dialog');
+    const dialog =
+        subpage.shadowRoot.querySelector('nearby-share-receive-dialog');
     assertTrue(!!dialog);
 
-    await test_util.waitAfterNextRender(dialog);
-    const highVisibilityDialog = dialog.$$('nearby-share-high-visibility-page');
-    assertTrue(test_util.isVisible(highVisibilityDialog));
+    await waitAfterNextRender(dialog);
+    const highVisibilityDialog =
+        dialog.shadowRoot.querySelector('nearby-share-high-visibility-page');
+    assertTrue(isVisible(highVisibilityDialog));
 
     dialog.close_();
     assertFalse(fakeReceiveManager.getInHighVisibilityForTest());
@@ -263,7 +341,8 @@ suite('NearbyShare', function() {
   test(
       'high visibility UI updates from high visibility changes',
       async function() {
-        const highVisibilityToggle = subpage.$$('#highVisibilityToggle');
+        const highVisibilityToggle =
+            subpage.shadowRoot.querySelector('#highVisibilityToggle');
         assertFalse(highVisibilityToggle.checked);
 
         fakeReceiveManager.setInHighVisibilityForTest(true);
@@ -276,7 +355,7 @@ suite('NearbyShare', function() {
         fakeReceiveManager.setInHighVisibilityForTest(true);
         assertTrue(highVisibilityToggle.checked);
         subpage.onNearbyProcessStopped();
-        Polymer.dom.flush();
+        flush();
         assertFalse(highVisibilityToggle.checked);
 
         // Failure to start advertising unchecks the toggle.
@@ -284,7 +363,7 @@ suite('NearbyShare', function() {
         fakeReceiveManager.setInHighVisibilityForTest(true);
         assertTrue(highVisibilityToggle.checked);
         subpage.onStartAdvertisingFailure();
-        Polymer.dom.flush();
+        flush();
         assertFalse(highVisibilityToggle.checked);
 
         // Toggle still gets unchecked even if advertising was not attempted.
@@ -292,38 +371,40 @@ suite('NearbyShare', function() {
         fakeReceiveManager.setInHighVisibilityForTest(false);
         subpage.inHighVisibility_ = true;
         subpage.showHighVisibilityPage_();
-        const dialog = subpage.$$('nearby-share-receive-dialog');
+        const dialog =
+            subpage.shadowRoot.querySelector('nearby-share-receive-dialog');
         assertTrue(!!dialog);
-        await test_util.waitAfterNextRender(dialog);
-        const highVisibilityDialog =
-            dialog.$$('nearby-share-high-visibility-page');
-        await test_util.waitAfterNextRender(dialog);
-        assertTrue(test_util.isVisible(highVisibilityDialog));
+        await waitAfterNextRender(dialog);
+        const highVisibilityDialog = dialog.shadowRoot.querySelector(
+            'nearby-share-high-visibility-page');
+        await waitAfterNextRender(dialog);
+        assertTrue(isVisible(highVisibilityDialog));
         highVisibilityDialog.registerResult =
             nearbyShare.mojom.RegisterReceiveSurfaceResult.kNoConnectionMedium;
-        await test_util.waitAfterNextRender(highVisibilityDialog);
-        highVisibilityDialog.$$('nearby-page-template')
-            .$$('#closeButton')
+        await waitAfterNextRender(highVisibilityDialog);
+        highVisibilityDialog.shadowRoot.querySelector('nearby-page-template')
+            .shadowRoot.querySelector('#closeButton')
             .click();
-        Polymer.dom.flush();
+        flush();
         assertFalse(highVisibilityToggle.checked);
       });
 
   test('GAIA email, account manager enabled', async () => {
     await accountManagerBrowserProxy.whenCalled('getAccounts');
-    Polymer.dom.flush();
+    flush();
 
-    const profileName = subpage.$$('#profileName');
+    const profileName = subpage.shadowRoot.querySelector('#profileName');
     assertEquals('Primary Account', profileName.textContent.trim());
-    const profileLabel = subpage.$$('#profileLabel');
+    const profileLabel = subpage.shadowRoot.querySelector('#profileLabel');
     assertEquals('primary@gmail.com', profileLabel.textContent.trim());
   });
 
   test('show receive dialog', function() {
     subpage.showReceiveDialog_ = true;
-    Polymer.dom.flush();
+    flush();
 
-    const dialog = subpage.$$('nearby-share-receive-dialog');
+    const dialog =
+        subpage.shadowRoot.querySelector('nearby-share-receive-dialog');
     assertTrue(!!dialog);
   });
 
@@ -334,22 +415,23 @@ suite('NearbyShare', function() {
       return 0;
     };
 
-    const params = new URLSearchParams;
+    const params = new URLSearchParams();
     params.append('receive', '1');
     params.append('timeout', '600');  // 10 minutes
-    settings.Router.getInstance().navigateTo(
-        settings.routes.NEARBY_SHARE, params);
+    Router.getInstance().navigateTo(routes.NEARBY_SHARE, params);
 
-    const dialog = subpage.$$('nearby-share-receive-dialog');
+    const dialog =
+        subpage.shadowRoot.querySelector('nearby-share-receive-dialog');
     assertTrue(!!dialog);
-    const highVisibilityDialog = dialog.$$('nearby-share-high-visibility-page');
+    const highVisibilityDialog =
+        dialog.shadowRoot.querySelector('nearby-share-high-visibility-page');
     assertTrue(!!highVisibilityDialog);
     assertFalse(highVisibilityDialog.highVisibilityTimedOut_());
 
-    Polymer.dom.flush();
-    await test_util.waitAfterNextRender(dialog);
+    flush();
+    await waitAfterNextRender(dialog);
 
-    assertTrue(test_util.isVisible(highVisibilityDialog));
+    assertTrue(isVisible(highVisibilityDialog));
     assertEquals(highVisibilityDialog.shutoffTimestamp, 600 * 1000);
 
     // Restore mock
@@ -363,15 +445,16 @@ suite('NearbyShare', function() {
       return 0;
     };
 
-    const params = new URLSearchParams;
+    const params = new URLSearchParams();
     params.append('receive', '1');
     params.append('timeout', '600');  // 10 minutes
-    settings.Router.getInstance().navigateTo(
-        settings.routes.NEARBY_SHARE, params);
+    Router.getInstance().navigateTo(routes.NEARBY_SHARE, params);
 
-    const dialog = subpage.$$('nearby-share-receive-dialog');
+    const dialog =
+        subpage.shadowRoot.querySelector('nearby-share-receive-dialog');
     assertTrue(!!dialog);
-    const highVisibilityDialog = dialog.$$('nearby-share-high-visibility-page');
+    const highVisibilityDialog =
+        dialog.shadowRoot.querySelector('nearby-share-high-visibility-page');
     assertTrue(!!highVisibilityDialog);
 
     highVisibilityDialog.calculateRemainingTime_();
@@ -383,17 +466,61 @@ suite('NearbyShare', function() {
     };
 
     highVisibilityDialog.calculateRemainingTime_();
-    await test_util.waitAfterNextRender(dialog);
-    assertTrue(test_util.isVisible(highVisibilityDialog));
+    await waitAfterNextRender(dialog);
+    assertTrue(isVisible(highVisibilityDialog));
     assertTrue(highVisibilityDialog.highVisibilityTimedOut_());
 
     // Restore mock
     performance.now = originalNow;
   });
 
-  test('download contacts on attach', () => {
+  test('download contacts on attach', async () => {
+    await flushAsync();
     // Ensure contacts download occurs when the subpage is attached.
     assertTrue(fakeContactManager.downloadContactsCalled);
+  });
+
+  test('Do not download contacts on attach pre-onboarding', async () => {
+    await flushAsync();
+
+    subpage.remove();
+    Router.getInstance().resetRouteForTesting();
+
+    setupFakes();
+    fakeSettings.setEnabled(false);
+    fakeSettings.setIsOnboardingComplete(false);
+    syncFakeSettings();
+    createSubpage(/*is_enabled=*/ false, /*is_onboarding_complete=*/ false);
+
+    await flushAsync();
+    // Ensure contacts download occurs when the subpage is attached.
+    assertFalse(fakeContactManager.downloadContactsCalled);
+  });
+
+  test('Show setup button pre-onboarding', async () => {
+    await flushAsync();
+
+    subpage.remove();
+    Router.getInstance().resetRouteForTesting();
+
+    setupFakes();
+    createSubpage(/*is_enabled=*/ false, /*is_onboarding_complete=*/ false);
+
+    await flushAsync();
+    assertFalse(doesElementExist('#featureToggleButton'));
+    assertTrue(doesElementExist('#setupRow'));
+
+    // Clicking starts onboarding flow
+    subpage.shadowRoot.querySelector('#setupRow')
+        .querySelector('cr-button')
+        .click();
+    await flushAsync();
+    assertTrue(doesElementExist('#receiveDialog'));
+    assertEquals(
+        'active',
+        subpage.shadowRoot.querySelector('#receiveDialog')
+            .shadowRoot.querySelector('#onboarding-one')
+            .className);
   });
 
   test('feature toggle UI changes', function() {
@@ -413,11 +540,15 @@ suite('NearbyShare', function() {
 
   test('subpage hidden when feature toggled off', function() {
     // Ensure that the subpage content is hidden when the Nearby is off.
-    const subpageContent = subpage.$$('#subpageContent');
-    const highVizToggle = subpage.$$('#highVisibilityToggle');
-    const editDeviceNameButton = subpage.$$('#editDeviceNameButton');
-    const editVisibilityButton = subpage.$$('#editVisibilityButton');
-    const editDataUsageButton = subpage.$$('#editDataUsageButton');
+    const subpageContent = subpage.shadowRoot.querySelector('#subpageContent');
+    const highVizToggle =
+        subpage.shadowRoot.querySelector('#highVisibilityToggle');
+    const editDeviceNameButton =
+        subpage.shadowRoot.querySelector('#editDeviceNameButton');
+    const editVisibilityButton =
+        subpage.shadowRoot.querySelector('#editVisibilityButton');
+    const editDataUsageButton =
+        subpage.shadowRoot.querySelector('#editDataUsageButton');
 
     assertEquals(true, featureToggleButton.checked);
     assertEquals(true, subpage.prefs.nearby_sharing.enabled.value);
@@ -425,44 +556,57 @@ suite('NearbyShare', function() {
     assertTrue(doesElementExist('#help'));
 
     editVisibilityButton.click();
-    Polymer.dom.flush();
-    const visibilityDialog =
-        subpage.$$('nearby-share-contact-visibility-dialog');
+    flush();
+    const visibilityDialog = subpage.shadowRoot.querySelector(
+        'nearby-share-contact-visibility-dialog');
     assertTrue(!!visibilityDialog);
-    assertTrue(visibilityDialog.$$('nearby-contact-visibility') !== null);
+    assertTrue(
+        visibilityDialog.shadowRoot.querySelector(
+            'nearby-contact-visibility') !== null);
 
     editDeviceNameButton.click();
-    Polymer.dom.flush();
-    const deviceNameDialog = subpage.$$('nearby-share-device-name-dialog');
+    flush();
+    const deviceNameDialog =
+        subpage.shadowRoot.querySelector('nearby-share-device-name-dialog');
     assertTrue(!!deviceNameDialog);
 
     editDataUsageButton.click();
-    Polymer.dom.flush();
-    const dataUsageDialog = subpage.$$('nearby-share-data-usage-dialog');
+    flush();
+    const dataUsageDialog =
+        subpage.shadowRoot.querySelector('nearby-share-data-usage-dialog');
     assertTrue(!!dataUsageDialog);
 
     highVizToggle.click();
-    Polymer.dom.flush();
-    const receiveDialog = subpage.$$('nearby-share-receive-dialog');
+    flush();
+    const receiveDialog =
+        subpage.shadowRoot.querySelector('nearby-share-receive-dialog');
     assertTrue(!!receiveDialog);
 
     featureToggleButton.click();
-    Polymer.dom.flush();
+    flush();
 
     assertEquals(false, featureToggleButton.checked);
     assertEquals(false, subpage.prefs.nearby_sharing.enabled.value);
     assertEquals('Off', featureToggleButton.label.trim());
     assertEquals('none', subpageContent.style.display);
-    assertEquals('none', subpage.$$('#helpContent').style.display);
-    assertFalse(doesElementExist('#highVisibilityToggle'));
-    assertFalse(doesElementExist('#editDeviceNameButton'));
-    assertFalse(doesElementExist('#editVisibilityButton'));
-    assertFalse(doesElementExist('#editDataUsageButton'));
+    assertEquals(
+        'none', subpage.shadowRoot.querySelector('#helpContent').style.display);
+    if (loadTimeData.getValue('isNearbyShareBackgroundScanningEnabled')) {
+      subpageControlsHidden(false);
+    } else {
+      subpageControlsHidden(true);
+    }
     assertFalse(doesElementExist('#help'));
   });
 
   test('Fast init toggle doesn\'t exist', function() {
-    assertFalse(!!subpage.$$('#fastInitiationNotificationToggle'));
+    if (loadTimeData.getValue('isNearbyShareBackgroundScanningEnabled')) {
+      assertTrue(!!subpage.shadowRoot.querySelector(
+          '#fastInitiationNotificationToggle'));
+    } else {
+      assertFalse(!!subpage.shadowRoot.querySelector(
+          '#fastInitiationNotificationToggle'));
+    }
   });
 
   suite('Background Scanning Enabled', function() {
@@ -472,17 +616,85 @@ suite('NearbyShare', function() {
       });
     });
 
+    test('UX changes disabled when no hardware support', async () => {
+      subpage.set('settings.isFastInitiationHardwareSupported', false);
+      await flushAsync();
+
+      // Toggle doesnt exist
+      const fastInitToggle =
+          subpage.shadowRoot.querySelector('#fastInitiationNotificationToggle');
+      assertFalse(!!fastInitToggle);
+
+      // Subpage contents do not show when feature off
+      featureToggleButton.click();
+      flush();
+
+      assertFalse(featureToggleButton.checked);
+      assertFalse(subpage.prefs.nearby_sharing.enabled.value);
+      assertEquals('Off', featureToggleButton.label.trim());
+
+      subpageControlsHidden(true);
+    });
+
+
     test('Fast initiation notification toggle', async () => {
-      const fastInitToggle = subpage.$$('#fastInitiationNotificationToggle');
+      const fastInitToggle =
+          subpage.shadowRoot.querySelector('#fastInitiationNotificationToggle');
       assertTrue(!!fastInitToggle);
       await flushAsync();
       assertTrue(fastInitToggle.checked);
-      assertTrue(subpage.settings.fastInitiationNotificationEnabled);
+      assertEquals(
+          nearbyShare.mojom.FastInitiationNotificationState.kEnabled,
+          subpage.settings.fastInitiationNotificationState);
 
       fastInitToggle.click();
       await flushAsync();
       assertFalse(fastInitToggle.checked);
-      assertFalse(subpage.settings.fastInitiationNotificationEnabled);
+      assertEquals(
+          nearbyShare.mojom.FastInitiationNotificationState.kDisabledByUser,
+          subpage.settings.fastInitiationNotificationState);
+    });
+
+    test('Subpage content visible but disabled when feature off', async () => {
+      featureToggleButton.click();
+      flush();
+
+      assertFalse(featureToggleButton.checked);
+      assertFalse(subpage.prefs.nearby_sharing.enabled.value);
+      assertEquals('Off', featureToggleButton.label.trim());
+
+      subpageControlsHidden(false);
+      subpageControlsDisabled(true);
+    });
+
+    test('Subpage content not visible pre-onboarding', async () => {
+      featureToggleButton.click();
+      subpage.set('prefs.nearby_sharing.onboarding_complete.value', false);
+      await flushAsync();
+
+      assertFalse(subpage.prefs.nearby_sharing.enabled.value);
+      subpageControlsHidden(true);
+    });
+
+    test('Subpage content visible but disabled when feature off', async () => {
+      featureToggleButton.click();
+      flush();
+
+      assertEquals(false, featureToggleButton.checked);
+      assertEquals(false, subpage.prefs.nearby_sharing.enabled.value);
+      assertEquals('Off', featureToggleButton.label.trim());
+
+      subpageControlsHidden(false);
+      subpageControlsDisabled(true);
+    });
+
+    test('Subpage content not visible pre-onboarding', async () => {
+      featureToggleButton.click();
+      subpage.set('prefs.nearby_sharing.onboarding_complete.value', false);
+      await flushAsync();
+
+      assertEquals(false, subpage.prefs.nearby_sharing.enabled.value);
+      subpageControlsHidden(true);
     });
   });
 });

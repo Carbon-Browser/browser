@@ -7,7 +7,6 @@
 #include "base/android/jni_android.h"
 #include "base/android/jni_string.h"
 #include "base/android/scoped_java_ref.h"
-#include "base/macros.h"
 #include "chrome/browser/ui/messages/android/jni_headers/SimpleConfirmInfoBarBuilder_jni.h"
 #include "components/infobars/android/confirm_infobar.h"
 #include "components/infobars/content/content_infobar_manager.h"
@@ -34,11 +33,15 @@ class SimpleConfirmInfoBarDelegate : public ConfirmInfoBarDelegate {
       const std::u16string& link_text_str,
       bool auto_expire);
 
+  SimpleConfirmInfoBarDelegate(const SimpleConfirmInfoBarDelegate&) = delete;
+  SimpleConfirmInfoBarDelegate& operator=(const SimpleConfirmInfoBarDelegate&) =
+      delete;
+
   ~SimpleConfirmInfoBarDelegate() override;
 
   // ConfirmInfoBarDelegate:
   infobars::InfoBarDelegate::InfoBarIdentifier GetIdentifier() const override;
-  gfx::Image GetIcon() const override;
+  ui::ImageModel GetIcon() const override;
   std::u16string GetLinkText() const override;
   bool ShouldExpire(const NavigationDetails& details) const override;
   bool LinkClicked(WindowOpenDisposition disposition) override;
@@ -58,8 +61,6 @@ class SimpleConfirmInfoBarDelegate : public ConfirmInfoBarDelegate {
   std::u16string secondary_str_;
   std::u16string link_text_str_;
   bool auto_expire_;
-
-  DISALLOW_COPY_AND_ASSIGN(SimpleConfirmInfoBarDelegate);
 };
 
 SimpleConfirmInfoBarDelegate::SimpleConfirmInfoBarDelegate(
@@ -89,9 +90,9 @@ SimpleConfirmInfoBarDelegate::GetIdentifier() const {
   return identifier_;
 }
 
-gfx::Image SimpleConfirmInfoBarDelegate::GetIcon() const {
+ui::ImageModel SimpleConfirmInfoBarDelegate::GetIcon() const {
   return icon_bitmap_.IsEmpty() ? ConfirmInfoBarDelegate::GetIcon()
-                                : icon_bitmap_;
+                                : ui::ImageModel::FromImage(icon_bitmap_);
 }
 
 std::u16string SimpleConfirmInfoBarDelegate::GetLinkText() const {

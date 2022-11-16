@@ -9,7 +9,7 @@
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_computed_effect_timing.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_optional_effect_timing.h"
-#include "third_party/blink/renderer/bindings/core/v8/v8_union_string_unrestricteddouble.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_union_cssnumericvalue_string_unrestricteddouble.h"
 #include "third_party/blink/renderer/core/animation/animation.h"
 #include "third_party/blink/renderer/core/animation/animation_effect.h"
 #include "third_party/blink/renderer/core/animation/css/css_animation.h"
@@ -33,7 +33,8 @@
 #include "third_party/blink/renderer/core/inspector/inspector_style_sheet.h"
 #include "third_party/blink/renderer/core/inspector/v8_inspector_string.h"
 #include "third_party/blink/renderer/platform/animation/timing_function.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/crypto.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/wtf/text/base64.h"
 
 namespace blink {
@@ -64,7 +65,9 @@ InspectorAnimationAgent::InspectorAnimationAgent(
       v8_session_(v8_session),
       is_cloning_(false),
       enabled_(&agent_state_, /*default_value=*/false),
-      playback_rate_(&agent_state_, /*default_value=*/1.0) {}
+      playback_rate_(&agent_state_, /*default_value=*/1.0) {
+  DCHECK(css_agent);
+}
 
 void InspectorAnimationAgent::Restore() {
   if (enabled_.Get()) {
@@ -355,7 +358,7 @@ Response InspectorAnimationAgent::seekAnimations(
     if (!clone->Paused())
       clone->play();
     clone->SetCurrentTimeInternal(
-        AnimationTimeDelta::FromMillisecondsD(current_time));
+        ANIMATION_TIME_DELTA_FROM_MILLISECONDS(current_time));
   }
   return Response::Success();
 }
@@ -391,7 +394,8 @@ Response InspectorAnimationAgent::setTiming(const String& animation_id,
 
   OptionalEffectTiming* timing = OptionalEffectTiming::Create();
   timing->setDuration(
-      MakeGarbageCollected<V8UnionStringOrUnrestrictedDouble>(duration));
+      MakeGarbageCollected<V8UnionCSSNumericValueOrStringOrUnrestrictedDouble>(
+          duration));
   timing->setDelay(delay);
   animation->effect()->updateTiming(timing, exception_state);
   return Response::Success();

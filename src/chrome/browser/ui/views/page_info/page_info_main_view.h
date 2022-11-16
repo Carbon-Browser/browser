@@ -8,11 +8,14 @@
 #include <map>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "chrome/browser/ui/views/page_info/chosen_object_view_observer.h"
-#include "chrome/browser/ui/views/page_info/permission_selector_row_observer.h"
+#include "chrome/browser/ui/views/page_info/permission_toggle_row_view_observer.h"
+#include "components/page_info/core/proto/about_this_site_metadata.pb.h"
 #include "components/page_info/page_info_ui.h"
 #include "device/vr/buildflags/buildflags.h"
+#include "ui/base/interaction/element_identifier.h"
 #include "ui/views/view.h"
 
 namespace views {
@@ -26,37 +29,53 @@ class PageInfoHoverButton;
 class PageInfoNavigationHandler;
 class PageInfoSecurityContentView;
 class PermissionToggleRowView;
+class PageInfoHistoryController;
 
 namespace test {
 class PageInfoBubbleViewTestApi;
 }  // namespace test
 
 // The main view of the page info, contains security information, permissions
-// and  site-related settings. This is used in the experimental
-// PageInfoNewBubbleView (under a flag PageInfoV2Desktop).
+// and  site-related settings.
 class PageInfoMainView : public views::View,
                          public PageInfoUI,
-                         public PermissionSelectorRowObserver,
+                         public PermissionToggleRowViewObserver,
                          public ChosenObjectViewObserver {
  public:
   // The width of the column size for permissions and chosen object icons.
   static constexpr int kIconColumnWidth = 16;
+  DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kCookieButtonElementId);
+
+  // Container view that fills the bubble width for button rows. Supports
+  // updating the layout.
+  class ContainerView : public views::View {
+   public:
+    ContainerView();
+
+    // Notifies that preferred size changed and updates the layout.
+    void Update();
+  };
 
   PageInfoMainView(PageInfo* presenter,
                    ChromePageInfoUiDelegate* ui_delegate,
-                   PageInfoNavigationHandler* navigation_handler);
+                   PageInfoNavigationHandler* navigation_handler,
+                   PageInfoHistoryController* history_controller,
+                   base::OnceClosure initialized_callback);
   ~PageInfoMainView() override;
 
   // PageInfoUI implementations.
+  void EnsureCookieInfo() override;
   void SetCookieInfo(const CookieInfoList& cookie_info_list) override;
   void SetPermissionInfo(const PermissionInfoList& permission_info_list,
                          ChosenObjectInfoList chosen_object_info_list) override;
   void SetIdentityInfo(const IdentityInfo& identity_info) override;
   void SetPageFeatureInfo(const PageFeatureInfo& info) override;
+  void SetAdPersonalizationInfo(const AdPersonalizationInfo& info) override;
 
   gfx::Size CalculatePreferredSize() const override;
+  void ChildPreferredSizeChanged(views::View* child) override;
 
-  // PermissionSelectorRowObserver:
+  // PermissionToggleRowViewObserver:
   void OnPermissionChanged(const PageInfo::PermissionInfo& permission) override;
 
   // ChosenObjectViewObserver:
@@ -73,11 +92,11 @@ class PageInfoMainView : public views::View,
 
   // Creates a view with vertical box layout that will used a container for
   // other views.
-  std::unique_ptr<views::View> CreateContainerView() WARN_UNUSED_RESULT;
+  [[nodiscard]] std::unique_ptr<views::View> CreateContainerView();
 
   // Creates bubble header view for this page, contains the title and the close
   // button.
-  std::unique_ptr<views::View> CreateBubbleHeaderView() WARN_UNUSED_RESULT;
+  [[nodiscard]] std::unique_ptr<views::View> CreateBubbleHeaderView();
 
   // Posts a task to HandleMoreInfoRequestAsync() below.
   void HandleMoreInfoRequest(views::View* source);
@@ -92,52 +111,69 @@ class PageInfoMainView : public views::View,
   // the label depending on the number of visible permissions.
   void UpdateResetButton(const PermissionInfoList& permission_info_list);
 
-  PageInfo* presenter_;
+  // Creates 'About this site' section which contains a button that opens a
+  // subpage and two separators.
+  [[nodiscard]] std::unique_ptr<views::View> CreateAboutThisSiteSection(
+      const page_info::proto::SiteInfo& info);
 
-  ChromePageInfoUiDelegate* ui_delegate_;
+  // Creates 'Ad personalization' section which contains a button that opens a
+  // subpage and a separator.
+  [[nodiscard]] std::unique_ptr<views::View> CreateAdPersonalizationSection();
 
-  PageInfoNavigationHandler* navigation_handler_;
+  raw_ptr<PageInfo> presenter_;
+
+  raw_ptr<ChromePageInfoUiDelegate> ui_delegate_;
+
+  raw_ptr<PageInfoNavigationHandler> navigation_handler_;
 
   // The raw details of the status of the identity check for this site.
   std::u16string details_text_ = std::u16string();
 
   // The button that opens the "Connection" subpage.
-  PageInfoHoverButton* connection_button_ = nullptr;
+  raw_ptr<PageInfoHoverButton> connection_button_ = nullptr;
 
   // The view that contains the certificate, cookie, and permissions sections.
-  views::View* site_settings_view_ = nullptr;
+  raw_ptr<views::View> site_settings_view_ = nullptr;
 
   // The button that opens the "Cookies" dialog.
-  PageInfoHoverButton* cookie_button_ = nullptr;
+  raw_ptr<PageInfoHoverButton> cookie_button_ = nullptr;
 
   // The button that opens up "Site Settings".
-  views::View* site_settings_link_ = nullptr;
+  raw_ptr<views::View> site_settings_link_ = nullptr;
 
   // The view that contains the scroll view with permission rows and the reset
   // button, surrounded by separators.
-  views::View* permissions_view_ = nullptr;
+  raw_ptr<views::View> permissions_view_ = nullptr;
+
+  // The section that contains "About this site" button that opens a
+  // subpage and two separators.
+  raw_ptr<views::View> about_this_site_section_ = nullptr;
 
   // The view that contains `SecurityInformationView` and a certificate button.
-  PageInfoSecurityContentView* security_content_view_ = nullptr;
+  raw_ptr<PageInfoSecurityContentView> security_content_view_ = nullptr;
 
-#if defined(OS_WIN) && BUILDFLAG(ENABLE_VR)
+  // The section that contains 'Ad personalization' button that opens a
+  // subpage.
+  raw_ptr<views::View> ads_personalization_section_ = nullptr;
+
+#if BUILDFLAG(IS_WIN) && BUILDFLAG(ENABLE_VR)
   // The view that contains ui related to features on a page, like a presenting
   // VR page.
-  views::View* page_feature_info_view_ = nullptr;
+  raw_ptr<views::View> page_feature_info_view_ = nullptr;
 #endif
 
   // These rows bundle together all the |View|s involved in a single row of the
   // permissions section, and keep those views updated when the underlying
   // |Permission| changes.
-  std::vector<PermissionToggleRowView*> selector_rows_;
+  std::vector<PermissionToggleRowView*> toggle_rows_;
 
   std::vector<ChosenObjectView*> chosen_object_rows_;
 
-  views::Label* title_ = nullptr;
+  raw_ptr<views::Label> title_ = nullptr;
 
-  views::View* security_container_view_ = nullptr;
+  raw_ptr<views::View> security_container_view_ = nullptr;
 
-  views::LabelButton* reset_button_ = nullptr;
+  raw_ptr<views::LabelButton> reset_button_ = nullptr;
 
   base::WeakPtrFactory<PageInfoMainView> weak_factory_{this};
 };

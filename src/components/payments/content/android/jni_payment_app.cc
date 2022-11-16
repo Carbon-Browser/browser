@@ -120,11 +120,6 @@ bool JniPaymentApp::CanPreselect(JNIEnv* env) {
   return payment_app_->CanPreselect();
 }
 
-bool JniPaymentApp::IsUserGestureRequiredToSkipUi(JNIEnv* env) {
-  // All payment apps require a user gesture to skip UI by default.
-  return true;
-}
-
 void JniPaymentApp::InvokePaymentApp(JNIEnv* env,
                                      const JavaParamRef<jobject>& jcallback) {
   invoke_callback_ = jcallback;
@@ -154,18 +149,6 @@ void JniPaymentApp::AbortPaymentApp(JNIEnv* env,
   payment_app_->AbortPaymentApp(base::BindOnce(
       &OnAbortResult,
       base::android::ScopedJavaGlobalRef<jobject>(env, jcallback)));
-}
-
-bool JniPaymentApp::IsReadyForMinimalUI(JNIEnv* env) {
-  return payment_app_->IsReadyForMinimalUI();
-}
-
-ScopedJavaLocalRef<jstring> JniPaymentApp::AccountBalance(JNIEnv* env) {
-  return ConvertUTF8ToJavaString(env, payment_app_->GetAccountBalance());
-}
-
-void JniPaymentApp::DisableShowingOwnUI(JNIEnv* env) {
-  payment_app_->DisableShowingOwnUI();
 }
 
 ScopedJavaLocalRef<jstring> JniPaymentApp::GetApplicationIdentifierToHide(

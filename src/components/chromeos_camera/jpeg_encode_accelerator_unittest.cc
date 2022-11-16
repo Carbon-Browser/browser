@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <string.h>
 
+#include <sys/mman.h>
 #include <memory>
 
 #include "base/at_exit.h"
@@ -12,7 +13,6 @@
 #include "base/command_line.h"
 #include "base/files/file_util.h"
 #include "base/logging.h"
-#include "base/macros.h"
 #include "base/memory/unsafe_shared_memory_region.h"
 #include "base/path_service.h"
 #include "base/rand_util.h"
@@ -24,6 +24,7 @@
 #include "base/test/test_timeouts.h"
 #include "base/threading/thread.h"
 #include "base/threading/thread_task_runner_handle.h"
+#include "base/time/time.h"
 #include "build/build_config.h"
 #include "components/chromeos_camera/gpu_jpeg_encode_accelerator_factory.h"
 #include "components/chromeos_camera/jpeg_encode_accelerator.h"
@@ -274,6 +275,10 @@ class JpegClient : public JpegEncodeAccelerator::Client {
              const std::vector<TestImage*>& test_images,
              media::test::ClientStateNotification<ClientState>* note,
              size_t exif_size);
+
+  JpegClient(const JpegClient&) = delete;
+  JpegClient& operator=(const JpegClient&) = delete;
+
   ~JpegClient() override;
   void CreateJpegEncoder();
   void DestroyJpegEncoder();
@@ -352,8 +357,6 @@ class JpegClient : public JpegEncodeAccelerator::Client {
   std::unique_ptr<gpu::GpuMemoryBufferManager> gpu_memory_buffer_manager_;
 
   base::WeakPtrFactory<JpegClient> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(JpegClient);
 };
 
 JpegClient::JpegClient(const std::vector<TestImage*>& test_aligned_images,
@@ -426,7 +429,7 @@ void JpegClient::VideoFrameReady(int32_t buffer_id, size_t hw_encoded_size) {
     // |hw_out_frame_| should only be mapped once.
     auto mapper =
         media::GenericDmaBufVideoFrameMapper::Create(hw_out_frame_->format());
-    hw_out_frame_ = mapper->Map(hw_out_frame_);
+    hw_out_frame_ = mapper->Map(hw_out_frame_, PROT_READ | PROT_WRITE);
   }
 
   size_t sw_encoded_size = 0;
@@ -706,6 +709,11 @@ void JpegClient::StartEncodeDmaBuf(int32_t bitstream_buffer_id) {
 }
 
 class JpegEncodeAcceleratorTest : public ::testing::Test {
+ public:
+  JpegEncodeAcceleratorTest(const JpegEncodeAcceleratorTest&) = delete;
+  JpegEncodeAcceleratorTest& operator=(const JpegEncodeAcceleratorTest&) =
+      delete;
+
  protected:
   JpegEncodeAcceleratorTest() {}
 
@@ -721,9 +729,6 @@ class JpegEncodeAcceleratorTest : public ::testing::Test {
   // owned by JpegEncodeAcceleratorTestEnvironment.
   std::vector<TestImage*> test_aligned_images_;
   std::vector<TestImage*> test_unaligned_images_;
-
- protected:
-  DISALLOW_COPY_AND_ASSIGN(JpegEncodeAcceleratorTest);
 };
 
 void JpegEncodeAcceleratorTest::TestEncode(size_t num_concurrent_encoders,

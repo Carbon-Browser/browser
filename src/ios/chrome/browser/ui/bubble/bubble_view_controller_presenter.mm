@@ -18,6 +18,9 @@ namespace {
 
 // How long, in seconds, the bubble is visible on the screen.
 const NSTimeInterval kBubbleVisibilityDuration = 5.0;
+// How long, in seconds, the long duration bubble is visible on the screen. Ex.
+// Follow in-product help(IPH) bubble.
+const NSTimeInterval kBubbleVisibilityLongDuration = 8.0;
 // How long, in seconds, the user should be considered engaged with the bubble
 // after the bubble first becomes visible.
 const NSTimeInterval kBubbleEngagementDuration = 30.0;
@@ -27,12 +30,15 @@ const CGFloat kVoiceOverAnnouncementDelay = 1;
 
 }  // namespace
 
-@interface BubbleViewControllerPresenter ()<UIGestureRecognizerDelegate>
+// Implements BubbleViewDelegate to handle BubbleView's close and snooze buttons
+// tap.
+@interface BubbleViewControllerPresenter () <UIGestureRecognizerDelegate,
+                                             BubbleViewDelegate>
 
 // Redeclared as readwrite so the value can be changed internally.
 @property(nonatomic, assign, readwrite, getter=isUserEngaged) BOOL userEngaged;
 // The underlying BubbleViewController managed by this object.
-// |bubbleViewController| manages the BubbleView instance.
+// `bubbleViewController` manages the BubbleView instance.
 @property(nonatomic, strong) BubbleViewController* bubbleViewController;
 // The tap gesture recognizer intercepting tap gestures occurring inside the
 // bubble view. Taps inside must be differentiated from taps outside to track
@@ -63,9 +69,15 @@ const CGFloat kVoiceOverAnnouncementDelay = 1;
 @property(nonatomic, assign) BubbleArrowDirection arrowDirection;
 // The alignment of the underlying BubbleView's arrow.
 @property(nonatomic, assign) BubbleAlignment alignment;
+// The type of the bubble view's content.
+@property(nonatomic, assign, readonly) BubbleViewType bubbleType;
+// YES if the bubble should present longer.
+@property(nonatomic, assign) BOOL isLongDurationBubble;
+// Whether the bubble view controller is presented or dismissed.
+@property(nonatomic, assign, getter=isPresenting) BOOL presenting;
 // The block invoked when the bubble is dismissed (both via timer and via tap).
 // Is optional.
-@property(nonatomic, strong) ProceduralBlock dismissalCallback;
+@property(nonatomic, strong) ProceduralBlockWithSnoozeAction dismissalCallback;
 
 @end
 
@@ -85,15 +97,23 @@ const CGFloat kVoiceOverAnnouncementDelay = 1;
 @synthesize voiceOverAnnouncement = _voiceOverAnnouncement;
 
 - (instancetype)initWithText:(NSString*)text
+                       title:(NSString*)titleString
+                       image:(UIImage*)image
               arrowDirection:(BubbleArrowDirection)arrowDirection
                    alignment:(BubbleAlignment)alignment
-           dismissalCallback:(ProceduralBlock)dismissalCallback {
+                  bubbleType:(BubbleViewType)type
+           dismissalCallback:
+               (ProceduralBlockWithSnoozeAction)dismissalCallback {
   self = [super init];
   if (self) {
     _bubbleViewController =
         [[BubbleViewController alloc] initWithText:text
+                                             title:titleString
+                                             image:image
                                     arrowDirection:arrowDirection
-                                         alignment:alignment];
+                                         alignment:alignment
+                                    bubbleViewType:type
+                                          delegate:self];
     _outsideBubbleTapRecognizer = [[UITapGestureRecognizer alloc]
         initWithTarget:self
                 action:@selector(tapOutsideBubbleRecognized:)];
@@ -113,6 +133,7 @@ const CGFloat kVoiceOverAnnouncementDelay = 1;
     _triggerFollowUpAction = NO;
     _arrowDirection = arrowDirection;
     _alignment = alignment;
+    _bubbleType = type;
     _dismissalCallback = dismissalCallback;
     // The timers are initialized when the bubble is presented, not during
     // initialization. Because the user might not present the bubble immediately
@@ -122,21 +143,46 @@ const CGFloat kVoiceOverAnnouncementDelay = 1;
   return self;
 }
 
+- (instancetype)initDefaultBubbleWithText:(NSString*)text
+                           arrowDirection:(BubbleArrowDirection)arrowDirection
+                                alignment:(BubbleAlignment)alignment
+                     isLongDurationBubble:(BOOL)isLongDurationBubble
+                        dismissalCallback:
+                            (ProceduralBlockWithSnoozeAction)dismissalCallback {
+  self.isLongDurationBubble = isLongDurationBubble;
+  return [self initWithText:text
+                      title:nil
+                      image:nil
+             arrowDirection:arrowDirection
+                  alignment:alignment
+                 bubbleType:BubbleViewTypeDefault
+          dismissalCallback:dismissalCallback];
+}
+
+- (BOOL)canPresentInView:(UIView*)parentView anchorPoint:(CGPoint)anchorPoint {
+  CGPoint anchorPointInParent = [parentView.window convertPoint:anchorPoint
+                                                         toView:parentView];
+  return !CGRectIsEmpty([self frameForBubbleInRect:parentView.bounds
+                                     atAnchorPoint:anchorPointInParent]);
+}
+
 - (void)presentInViewController:(UIViewController*)parentViewController
                            view:(UIView*)parentView
                     anchorPoint:(CGPoint)anchorPoint {
-  [parentViewController addChildViewController:self.bubbleViewController];
-
   CGPoint anchorPointInParent =
       [parentView.window convertPoint:anchorPoint toView:parentView];
   self.bubbleViewController.view.frame =
       [self frameForBubbleInRect:parentView.bounds
                    atAnchorPoint:anchorPointInParent];
-  // If the bubble's frame is not set, we abandon this IPH attempt.
-  if (CGRectIsEmpty(self.bubbleViewController.view.frame)) {
-    return;
-  }
+  // The bubble's frame must be set. Call `canPresentInView` to make sure that
+  // the frame can be set before calling `presentInViewController`.
+  DCHECK(!CGRectIsEmpty(self.bubbleViewController.view.frame));
+
+  self.presenting = YES;
+  [parentViewController addChildViewController:self.bubbleViewController];
   [parentView addSubview:self.bubbleViewController.view];
+  [self.bubbleViewController
+      didMoveToParentViewController:parentViewController];
   [self.bubbleViewController animateContentIn];
 
   [self.bubbleViewController.view
@@ -144,10 +190,10 @@ const CGFloat kVoiceOverAnnouncementDelay = 1;
   [parentView addGestureRecognizer:self.outsideBubbleTapRecognizer];
   [parentView addGestureRecognizer:self.swipeRecognizer];
 
-  CGFloat duration = kBubbleVisibilityDuration;
-
   self.bubbleDismissalTimer = [NSTimer
-      scheduledTimerWithTimeInterval:duration
+      scheduledTimerWithTimeInterval:self.isLongDurationBubble
+                                         ? kBubbleVisibilityLongDuration
+                                         : kBubbleVisibilityDuration
                               target:self
                             selector:@selector(bubbleDismissalTimerFired:)
                             userInfo:nil
@@ -162,30 +208,42 @@ const CGFloat kVoiceOverAnnouncementDelay = 1;
                                      userInfo:nil
                                       repeats:NO];
 
+  [[NSNotificationCenter defaultCenter]
+      addObserver:self
+         selector:@selector(onKeyboardHide:)
+             name:UIKeyboardWillHideNotification
+           object:nil];
+
   if (self.voiceOverAnnouncement) {
-    // The VoiceOverAnnouncement should be dispatched after a delay to account
-    // the fact that it can be presented right after a screen change (for
-    // example when the application or a new tab is opened). This screen change
-    // is changing the VoiceOver focus to focus a newly visible element. If this
-    // announcement is currently being read, it is cancelled. The added delay
-    // allows the announcement to be posted after the element is focused, so it
-    // is not cancelled.
-    dispatch_after(
-        dispatch_time(DISPATCH_TIME_NOW,
-                      (int64_t)(kVoiceOverAnnouncementDelay * NSEC_PER_SEC)),
-        dispatch_get_main_queue(), ^{
-          UIAccessibilityPostNotification(
-              UIAccessibilityAnnouncementNotification,
-              self.voiceOverAnnouncement);
-        });
+    if (self.bubbleShouldAutoDismissUnderAccessibility) {
+      // The VoiceOverAnnouncement should be dispatched after a delay to account
+      // for the fact that it can be presented right after a screen change (for
+      // example when the application or a new tab is opened). This screen
+      // change is changing the VoiceOver focus to focus a newly visible
+      // element. If this announcement is currently being read, it is cancelled.
+      // The added delay allows the announcement to be posted after the element
+      // is focused, so it is not cancelled.
+      dispatch_after(
+          dispatch_time(DISPATCH_TIME_NOW,
+                        (int64_t)(kVoiceOverAnnouncementDelay * NSEC_PER_SEC)),
+          dispatch_get_main_queue(), ^{
+            UIAccessibilityPostNotification(
+                UIAccessibilityAnnouncementNotification,
+                self.voiceOverAnnouncement);
+          });
+    } else {
+      UIAccessibilityPostNotification(UIAccessibilityLayoutChangedNotification,
+                                      self.bubbleViewController.view);
+    }
   }
 }
 
-- (void)dismissAnimated:(BOOL)animated {
-  // Because this object must stay in memory to handle the |userEngaged|
-  // property correctly, it is possible for |dismissAnimated| to be called
+- (void)dismissAnimated:(BOOL)animated
+           snoozeAction:(feature_engagement::Tracker::SnoozeAction)action {
+  // Because this object must stay in memory to handle the `userEngaged`
+  // property correctly, it is possible for `dismissAnimated` to be called
   // multiple times. However, only the first call should have any effect.
-  if (!self.bubbleViewController.parentViewController) {
+  if (!self.presenting) {
     return;
   }
 
@@ -197,12 +255,16 @@ const CGFloat kVoiceOverAnnouncementDelay = 1;
       removeGestureRecognizer:self.outsideBubbleTapRecognizer];
   [self.swipeRecognizer.view removeGestureRecognizer:self.swipeRecognizer];
   [self.bubbleViewController dismissAnimated:animated];
-  [self.bubbleViewController willMoveToParentViewController:nil];
-  [self.bubbleViewController removeFromParentViewController];
+  self.presenting = NO;
 
   if (self.dismissalCallback) {
-    self.dismissalCallback();
+    self.dismissalCallback(action);
   }
+}
+
+- (void)dismissAnimated:(BOOL)animated {
+  [self dismissAnimated:animated
+           snoozeAction:feature_engagement::Tracker::SnoozeAction::DISMISSED];
 }
 
 - (void)dealloc {
@@ -222,15 +284,46 @@ const CGFloat kVoiceOverAnnouncementDelay = 1;
 - (BOOL)gestureRecognizer:(UIGestureRecognizer*)gestureRecognizer
     shouldRecognizeSimultaneouslyWithGestureRecognizer:
         (UIGestureRecognizer*)otherGestureRecognizer {
-  // Allow the swipeRecognizer to be triggered at the same time as other gesture
-  // recognizers.
-  if (gestureRecognizer == self.swipeRecognizer)
-    return YES;
-  // Because the outside tap recognizer is potentially in the responder chain,
-  // this prevents both the inside and outside gesture recognizers from
-  // triggering at once when tapping inside the bubble.
-  return gestureRecognizer != self.insideBubbleTapRecognizer &&
-         otherGestureRecognizer != self.insideBubbleTapRecognizer;
+  // Allow swipeRecognizer and outsideBubbleTapRecognizer to be triggered at the
+  // same time as other gesture recognizers.
+  return gestureRecognizer == self.swipeRecognizer ||
+         gestureRecognizer == self.outsideBubbleTapRecognizer;
+}
+
+- (BOOL)gestureRecognizer:(UIGestureRecognizer*)gestureRecognizer
+       shouldReceiveTouch:(UITouch*)touch {
+  // Prevents outside gesture recognizers from triggering when tapping inside
+  // the bubble.
+  if (gestureRecognizer == self.outsideBubbleTapRecognizer &&
+      [touch.view isDescendantOfView:self.bubbleViewController.view]) {
+    return NO;
+  }
+  // If the swipe originated from a button inside the bubble, cancel the touch
+  // instead of dismissing the bubble.
+  if (gestureRecognizer == self.swipeRecognizer &&
+      [touch.view isDescendantOfView:self.bubbleViewController.view] &&
+      [touch.view isKindOfClass:[UIButton class]]) {
+    return NO;
+  }
+  // Prevents inside gesture recognizers from triggering when tapping on a
+  // button inside of the bubble.
+  if (gestureRecognizer == self.insideBubbleTapRecognizer &&
+      [touch.view isKindOfClass:[UIButton class]]) {
+    return NO;
+  }
+  return YES;
+}
+
+#pragma mark - BubbleViewDelegate
+
+- (void)didTapCloseButton {
+  [self dismissAnimated:YES
+           snoozeAction:feature_engagement::Tracker::SnoozeAction::DISMISSED];
+}
+
+- (void)didTapSnoozeButton {
+  [self dismissAnimated:YES
+           snoozeAction:feature_engagement::Tracker::SnoozeAction::SNOOZED];
 }
 
 #pragma mark - Private
@@ -245,38 +338,74 @@ const CGFloat kVoiceOverAnnouncementDelay = 1;
   [self dismissAnimated:YES];
 }
 
-// Automatically dismisses the bubble view when |bubbleDismissalTimer| fires.
+// Automatically dismisses the bubble view when `bubbleDismissalTimer` fires.
 - (void)bubbleDismissalTimerFired:(id)sender {
-  [self dismissAnimated:YES];
+  BOOL usesScreenReader = UIAccessibilityIsVoiceOverRunning() ||
+                          UIAccessibilityIsSwitchControlRunning();
+  if (usesScreenReader && !self.bubbleShouldAutoDismissUnderAccessibility) {
+    // No-op. Keep the IPH available for screen reader users.
+  } else {
+    [self dismissAnimated:YES];
+  }
 }
 
-// Marks the user as not engaged when |engagementTimer| fires.
+// Marks the user as not engaged when `engagementTimer` fires.
 - (void)engagementTimerFired:(id)sender {
   self.userEngaged = NO;
   self.triggerFollowUpAction = NO;
   self.engagementTimer = nil;
 }
 
-// Calculates the frame of the BubbleView. |rect| is the frame of the bubble's
-// superview. |anchorPoint| is the anchor point of the bubble. |anchorPoint|
-// and |rect| must be in the same coordinates.
+// Invoked when the keybord is dismissed.
+- (void)onKeyboardHide:(NSNotification*)notification {
+  [self dismissAnimated:YES];
+}
+
+// Calculates the frame of the BubbleView. `rect` is the frame of the bubble's
+// superview. `anchorPoint` is the anchor point of the bubble. `anchorPoint`
+// and `rect` must be in the same coordinates.
 - (CGRect)frameForBubbleInRect:(CGRect)rect atAnchorPoint:(CGPoint)anchorPoint {
+  const BOOL arrowIsFloating = self.bubbleType != BubbleViewTypeDefault;
+  CGFloat bubbleAlignmentOffset = bubble_util::BubbleDefaultAlignmentOffset();
+  if (arrowIsFloating) {
+    bubbleAlignmentOffset = bubble_util::FloatingArrowAlignmentOffset(
+        rect.size.width, anchorPoint, self.alignment);
+  }
+  // Set bubble alignment offset, must be set before the call to `sizeThatFits`.
+  [self.bubbleViewController setBubbleAlignmentOffset:bubbleAlignmentOffset];
   CGSize maxBubbleSize = bubble_util::BubbleMaxSize(
-      anchorPoint, self.arrowDirection, self.alignment, rect.size);
+      anchorPoint, bubbleAlignmentOffset, self.arrowDirection, self.alignment,
+      rect.size);
   CGSize bubbleSize =
       [self.bubbleViewController.view sizeThatFits:maxBubbleSize];
-  // If |bubbleSize| does not fit in |maxBubbleSize|, the bubble will be
+  const BOOL bubbleIsFullWidth = self.bubbleType != BubbleViewTypeDefault &&
+                                 self.bubbleType != BubbleViewTypeWithClose;
+  if (bubbleIsFullWidth) {
+    bubbleSize.width = maxBubbleSize.width;
+  }
+  // If `bubbleSize` does not fit in `maxBubbleSize`, the bubble will be
   // partially off screen and not look good. This is most likely a result of
-  // an incorrect value for |alignment| (such as a trailing aligned bubble
+  // an incorrect value for `alignment` (such as a trailing aligned bubble
   // anchored to an element on the leading edge of the screen).
   if (bubbleSize.width > maxBubbleSize.width ||
       bubbleSize.height > maxBubbleSize.height) {
     return CGRectNull;
   }
-  CGRect bubbleFrame =
-      bubble_util::BubbleFrame(anchorPoint, bubbleSize, self.arrowDirection,
-                               self.alignment, CGRectGetWidth(rect));
+  CGRect bubbleFrame = bubble_util::BubbleFrame(
+      anchorPoint, bubbleAlignmentOffset, bubbleSize, self.arrowDirection,
+      self.alignment, CGRectGetWidth(rect));
+  // If anchorPoint is too close to the edge of the screen, the bubble will be
+  // partially off screen and not look good.
+  if (!CGRectContainsRect(rect, bubbleFrame)) {
+    return CGRectNull;
+  }
   return bubbleFrame;
+}
+
+// Whether the bubble should stick or auto-dismiss when the user uses a screen
+// reader.
+- (BOOL)bubbleShouldAutoDismissUnderAccessibility {
+  return self.bubbleType == BubbleViewTypeDefault;
 }
 
 @end

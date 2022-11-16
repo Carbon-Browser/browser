@@ -22,6 +22,7 @@
 #include "ui/display/display.h"
 #include "ui/display/display_layout.h"
 #include "ui/display/display_layout_builder.h"
+#include "ui/display/util/display_util.h"
 #include "ui/display/win/display_info.h"
 #include "ui/display/win/dpi.h"
 #include "ui/display/win/local_process_window_finder_win.h"
@@ -128,6 +129,24 @@ absl::optional<DISPLAYCONFIG_PATH_INFO> GetPathInfo(HMONITOR monitor) {
   return absl::nullopt;
 }
 
+// Gets a user-friendly name for a given display using EDID data. Returns an
+// empty string if the provided path is unset/nullopt or EDID data is not
+// available for the device.
+std::string GetFriendlyDeviceName(
+    const absl::optional<DISPLAYCONFIG_PATH_INFO>& path) {
+  if (!path)
+    return std::string();
+  DISPLAYCONFIG_TARGET_DEVICE_NAME targetName = {};
+  targetName.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME;
+  targetName.header.size = sizeof(targetName);
+  targetName.header.adapterId = path->targetInfo.adapterId;
+  targetName.header.id = path->targetInfo.id;
+  LONG result = DisplayConfigGetDeviceInfo(&targetName.header);
+  if (result == ERROR_SUCCESS && targetName.flags.friendlyNameFromEdid)
+    return base::WideToUTF8(targetName.monitorFriendlyDeviceName);
+  return std::string();
+}
+
 float GetSDRWhiteLevel(const absl::optional<DISPLAYCONFIG_PATH_INFO>& path) {
   if (path) {
     DISPLAYCONFIG_SDR_WHITE_LEVEL white_level = {};
@@ -206,30 +225,33 @@ std::vector<DisplayInfo> FindAndRemoveTouchingDisplayInfos(
 // and |sdr_white_level| with default buffer formats for Windows.
 gfx::DisplayColorSpaces CreateDisplayColorSpaces(
     const gfx::ColorSpace& color_space,
-    float sdr_white_level = gfx::ColorSpace::kDefaultScrgbLinearSdrWhiteLevel) {
+    float sdr_white_level) {
   gfx::DisplayColorSpaces display_color_spaces(color_space);
   // When alpha is not needed, specify BGRX_8888 to get
   // DXGI_ALPHA_MODE_IGNORE. This saves significant power (see
   // https://crbug.com/1057163).
   display_color_spaces.SetOutputBufferFormats(gfx::BufferFormat::BGRX_8888,
                                               gfx::BufferFormat::BGRA_8888);
-  display_color_spaces.SetSDRWhiteLevel(sdr_white_level);
+  display_color_spaces.SetSDRMaxLuminanceNits(sdr_white_level);
   return display_color_spaces;
 }
 
 // Updates |color_spaces| for HDR and WCG content usage with appropriate color
 // HDR spaces and given |sdr_white_level|.
-gfx::DisplayColorSpaces GetDisplayColorSpacesForHdr(float sdr_white_level) {
+gfx::DisplayColorSpaces GetDisplayColorSpacesForHdr(
+    float sdr_white_level,
+    float hdr_max_luminance_relative) {
   auto color_spaces =
       CreateDisplayColorSpaces(gfx::ColorSpace::CreateSRGB(), sdr_white_level);
+  color_spaces.SetHDRMaxLuminanceRelative(hdr_max_luminance_relative);
 
   // This will map to DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709. In that space,
   // the brightness of (1,1,1) is 80 nits.
-  const auto scrgb_linear = gfx::ColorSpace::CreateSCRGBLinear(sdr_white_level);
+  const auto scrgb_linear = gfx::ColorSpace::CreateSCRGBLinear80Nits();
 
   // This will map to DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020, with sRGB's
   // (1,1,1) mapping to the specified number of nits.
-  const auto hdr10 = gfx::ColorSpace::CreateHDR10(sdr_white_level);
+  const auto hdr10 = gfx::ColorSpace::CreateHDR10();
 
   // Use HDR color spaces only when there is WCG or HDR content on the screen.
   constexpr bool kNeedsAlpha = true;
@@ -257,12 +279,11 @@ gfx::DisplayColorSpaces GetDisplayColorSpacesForHdr(float sdr_white_level) {
 gfx::DisplayColorSpaces GetForcedDisplayColorSpaces() {
   // Adjust white level to a default value irrespective of whether the color
   // space is scRGB linear (defaults to 80 nits) or PQ (defaults to 100 nits).
-  const auto& color_space =
-      Display::GetForcedDisplayColorProfile().GetWithSDRWhiteLevel(
-          gfx::ColorSpace::kDefaultScrgbLinearSdrWhiteLevel);
-  auto display_color_spaces = CreateDisplayColorSpaces(color_space);
+  const auto& color_space = GetForcedDisplayColorProfile();
+  auto display_color_spaces = CreateDisplayColorSpaces(
+      color_space, gfx::ColorSpace::kDefaultSDRWhiteLevel);
   // Use the forced color profile's buffer format for all content usages.
-  if (color_space.GetTransferID() == gfx::ColorSpace::TransferID::SMPTEST2084) {
+  if (color_space.GetTransferID() == gfx::ColorSpace::TransferID::PQ) {
     display_color_spaces.SetOutputBufferFormats(
         gfx::BufferFormat::RGBA_1010102, gfx::BufferFormat::RGBA_1010102);
   } else if (color_space.IsHDR()) {
@@ -275,7 +296,8 @@ gfx::DisplayColorSpaces GetForcedDisplayColorSpaces() {
 Display CreateDisplayFromDisplayInfo(
     const DisplayInfo& display_info,
     const ColorProfileReader* color_profile_reader,
-    bool hdr_enabled) {
+    const gfx::mojom::DXGIOutputDesc* dxgi_output_desc,
+    bool hdr_enabled_on_any_display) {
   const float scale_factor = display_info.device_scale_factor();
   const gfx::Rect bounds = gfx::ScaleToEnclosingRect(display_info.screen_rect(),
                                                      1.0f / scale_factor);
@@ -285,18 +307,31 @@ Display CreateDisplayFromDisplayInfo(
       display_info.screen_work_rect(), 1.0f / scale_factor));
   display.set_rotation(display_info.rotation());
   display.set_display_frequency(display_info.display_frequency());
+  display.set_label(display_info.label());
 
   // DisplayColorSpaces is created using the forced color profile if present, or
   // from the ICC profile provided by |color_profile_reader| for SDR content,
   // and HDR10 or scRGB linear for HDR and WCG content if HDR is enabled.
   gfx::DisplayColorSpaces color_spaces;
-  if (Display::HasForceDisplayColorProfile()) {
+  if (HasForceDisplayColorProfile()) {
     color_spaces = GetForcedDisplayColorSpaces();
-  } else if (hdr_enabled) {
-    color_spaces = GetDisplayColorSpacesForHdr(display_info.sdr_white_level());
+  } else if (hdr_enabled_on_any_display) {
+    float sdr_white_level = display_info.sdr_white_level();
+    float hdr_max_luminance_relative = 0.f;
+    if (dxgi_output_desc && dxgi_output_desc->hdr_enabled) {
+      hdr_max_luminance_relative =
+          dxgi_output_desc->max_luminance / sdr_white_level;
+    }
+    hdr_max_luminance_relative = std::max(hdr_max_luminance_relative,
+                                          kMinHDRCapableMaxLuminanceRelative);
+    // TODO(https://crbug.com/1339352): Do not allow non-HDR-enabled displays
+    // to use HDR color spaces.
+    color_spaces = GetDisplayColorSpacesForHdr(sdr_white_level,
+                                               hdr_max_luminance_relative);
   } else {
     color_spaces = CreateDisplayColorSpaces(
-        color_profile_reader->GetDisplayColorSpace(display.id()));
+        color_profile_reader->GetDisplayColorSpace(display.id()),
+        gfx::ColorSpace::kDefaultSDRWhiteLevel);
   }
   if (color_spaces.SupportsHDR()) {
     // These are (ab)used by pages via media query APIs to detect HDR support.
@@ -327,7 +362,7 @@ Display CreateDisplayFromDisplayInfo(
 std::vector<ScreenWinDisplay> DisplayInfosToScreenWinDisplays(
     const std::vector<DisplayInfo>& display_infos,
     ColorProfileReader* color_profile_reader,
-    bool hdr_enabled) {
+    gfx::mojom::DXGIInfo* dxgi_info) {
   if (display_infos.empty()) {
     return {};
   }
@@ -354,11 +389,23 @@ std::vector<ScreenWinDisplay> DisplayInfosToScreenWinDisplays(
     }
   }
 
+  // Construct a map from display IDs to DXGI output descriptors.
+  std::map<int64_t, const gfx::mojom::DXGIOutputDesc*> dxgi_output_descs;
+  bool hdr_enabled_on_any_display = false;
+  if (dxgi_info) {
+    for (const auto& dxgi_output_desc : dxgi_info->output_descs) {
+      hdr_enabled_on_any_display |= dxgi_output_desc->hdr_enabled;
+      dxgi_output_descs[DisplayInfo::DeviceIdFromDeviceName(
+          dxgi_output_desc->device_name.c_str())] = dxgi_output_desc.get();
+    }
+  }
+
   // Layout and create the ScreenWinDisplays.
   std::vector<Display> displays;
   for (const auto& display_info : display_infos) {
     displays.push_back(CreateDisplayFromDisplayInfo(
-        display_info, color_profile_reader, hdr_enabled));
+        display_info, color_profile_reader,
+        dxgi_output_descs[display_info.id()], hdr_enabled_on_any_display));
   }
   builder.Build()->ApplyToDisplayList(&displays, nullptr, 0);
 
@@ -449,7 +496,7 @@ BOOL CALLBACK EnumMonitorForDisplayInfoCallback(HMONITOR monitor,
   display_infos->emplace_back(
       monitor_info, GetMonitorScaleFactor(monitor), GetSDRWhiteLevel(path_info),
       display_settings.rotation, display_settings.frequency, pixels_per_inch,
-      GetOutputTechnology(path_info));
+      GetOutputTechnology(path_info), GetFriendlyDeviceName(path_info));
   return TRUE;
 }
 
@@ -652,9 +699,9 @@ void ScreenWin::SetRequestHDRStatusCallback(
 }
 
 // static
-void ScreenWin::SetHDREnabled(bool hdr_enabled) {
-  if (g_instance && (g_instance->hdr_enabled_ != hdr_enabled)) {
-    g_instance->hdr_enabled_ = hdr_enabled;
+void ScreenWin::SetDXGIInfo(gfx::mojom::DXGIInfoPtr dxgi_info) {
+  if (g_instance && !mojo::Equals(g_instance->dxgi_info_, dxgi_info)) {
+    g_instance->dxgi_info_ = std::move(dxgi_info);
     g_instance->UpdateAllDisplaysAndNotify();
   }
 }
@@ -672,6 +719,12 @@ gfx::NativeWindow ScreenWin::GetNativeWindowFromHWND(HWND hwnd) const {
 bool ScreenWin::IsNativeWindowOccluded(gfx::NativeWindow window) const {
   NOTREACHED();
   return false;
+}
+
+absl::optional<bool> ScreenWin::IsWindowOnCurrentVirtualDesktop(
+    gfx::NativeWindow window) const {
+  NOTREACHED();
+  return absl::nullopt;
 }
 
 ScreenWin::ScreenWin(bool initialize) {
@@ -766,15 +819,16 @@ gfx::Rect ScreenWin::DIPToScreenRectInWindow(gfx::NativeWindow window,
 void ScreenWin::UpdateFromDisplayInfos(
     const std::vector<DisplayInfo>& display_infos) {
   screen_win_displays_ = DisplayInfosToScreenWinDisplays(
-      display_infos, color_profile_reader_.get(), hdr_enabled_);
+      display_infos, color_profile_reader_.get(), dxgi_info_.get());
   displays_ = ScreenWinDisplaysToDisplays(screen_win_displays_);
+  std::vector<int64_t> internal_display_ids;
   for (const auto& display_info : display_infos) {
     if (IsInternalOutputTechnology(display_info.output_technology())) {
-      // TODO(crbug.com/1078903): Support multiple internal displays.
-      Display::SetInternalDisplayId(display_info.id());
+      internal_display_ids.push_back(display_info.id());
       break;
     }
   }
+  SetInternalDisplayIds(internal_display_ids);
 }
 
 void ScreenWin::Initialize() {

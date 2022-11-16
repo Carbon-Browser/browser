@@ -7,7 +7,6 @@
 #include <algorithm>
 
 #include "base/containers/cxx20_erase.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/threading/sequence_bound.h"
 #include "media/gpu/android/codec_image_group.h"
@@ -20,6 +19,10 @@ namespace media {
 class GpuMaybeRenderEarlyImpl {
  public:
   GpuMaybeRenderEarlyImpl() {}
+
+  GpuMaybeRenderEarlyImpl(const GpuMaybeRenderEarlyImpl&) = delete;
+  GpuMaybeRenderEarlyImpl& operator=(const GpuMaybeRenderEarlyImpl&) = delete;
+
   ~GpuMaybeRenderEarlyImpl() = default;
 
   void SetCodecImageGroup(scoped_refptr<CodecImageGroup> image_group) {
@@ -65,8 +68,6 @@ class GpuMaybeRenderEarlyImpl {
   scoped_refptr<CodecImageGroup> image_group_;
 
   base::WeakPtrFactory<GpuMaybeRenderEarlyImpl> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(GpuMaybeRenderEarlyImpl);
 };
 
 // Default implementation of MaybeRenderEarlyManager.  Lives on whatever thread
@@ -80,6 +81,11 @@ class MaybeRenderEarlyManagerImpl : public MaybeRenderEarlyManager,
       : gpu::RefCountedLockHelperDrDc(std::move(drdc_lock)),
         gpu_task_runner_(gpu_task_runner),
         gpu_impl_(std::move(gpu_task_runner)) {}
+
+  MaybeRenderEarlyManagerImpl(const MaybeRenderEarlyManagerImpl&) = delete;
+  MaybeRenderEarlyManagerImpl& operator=(const MaybeRenderEarlyManagerImpl&) =
+      delete;
+
   ~MaybeRenderEarlyManagerImpl() override = default;
 
   void SetSurfaceBundle(
@@ -117,8 +123,6 @@ class MaybeRenderEarlyManagerImpl : public MaybeRenderEarlyManager,
 
   // Gpu-side.
   base::SequenceBound<GpuMaybeRenderEarlyImpl> gpu_impl_;
-
-  DISALLOW_COPY_AND_ASSIGN(MaybeRenderEarlyManagerImpl);
 };
 
 // static

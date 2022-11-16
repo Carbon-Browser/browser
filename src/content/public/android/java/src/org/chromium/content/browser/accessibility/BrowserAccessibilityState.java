@@ -4,14 +4,14 @@
 
 package org.chromium.content.browser.accessibility;
 
+import static org.chromium.content.browser.accessibility.WebContentsAccessibilityImpl.TAG;
+
 import android.accessibilityservice.AccessibilityServiceInfo;
-import android.annotation.TargetApi;
 import android.content.ComponentName;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.database.ContentObserver;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Handler;
 import android.provider.Settings;
 import android.view.accessibility.AccessibilityEvent;
@@ -45,8 +45,6 @@ public class BrowserAccessibilityState {
     public interface Listener {
         public void onBrowserAccessibilityStateChanged(boolean newScreenReaderEnabledState);
     }
-
-    private static final String TAG = "ClankAccessibility";
 
     // Analysis of the most popular accessibility services on Android suggests
     // that any service that requests any of these three events is a screen reader
@@ -129,7 +127,19 @@ public class BrowserAccessibilityState {
             // the set of running accessibility services doesn't always reflect that
             // immediately, but updateAccessibilityServices checks for this and keeps
             // polling until they agree.
-            updateAccessibilityServices();
+            getHandler().post(() -> { updateAccessibilityServices(); });
+        }
+    }
+
+    @VisibleForTesting
+    public static void setFeedbackTypeMaskForTesting(int value) {
+        if (!sInitialized) updateAccessibilityServices();
+
+        sFeedbackTypeMask = value;
+
+        // Inform all listeners of this change.
+        for (Listener listener : sListeners) {
+            listener.onBrowserAccessibilityStateChanged(sScreenReader);
         }
     }
 
@@ -156,6 +166,19 @@ public class BrowserAccessibilityState {
         // Inform all listeners of this change.
         for (Listener listener : sListeners) {
             listener.onBrowserAccessibilityStateChanged(true);
+        }
+    }
+
+    @VisibleForTesting
+    public static void setScreenReaderModeForTesting(boolean enabled) {
+        if (!sInitialized) updateAccessibilityServices();
+
+        // Explicitly set screen reader mode since a real screen reader isn't run during tests.
+        sScreenReader = enabled;
+
+        // Inform all listeners of this change.
+        for (Listener listener : sListeners) {
+            listener.onBrowserAccessibilityStateChanged(sScreenReader);
         }
     }
 
@@ -202,6 +225,8 @@ public class BrowserAccessibilityState {
         if (serviceNamesString != null && !serviceNamesString.isEmpty()) {
             String[] serviceNames = serviceNamesString.split(":");
             for (String name : serviceNames) {
+                // null or empty names can be skipped
+                if (name == null || name.isEmpty()) continue;
                 // Try to canonicalize the component name if possible.
                 ComponentName componentName = ComponentName.unflattenFromString(name);
                 if (componentName != null) {
@@ -300,7 +325,6 @@ public class BrowserAccessibilityState {
     }
 
     @CalledByNative
-    @TargetApi(Build.VERSION_CODES.JELLY_BEAN_MR1)
     static void registerObservers() {
         ContentResolver contentResolver = ContextUtils.getApplicationContext().getContentResolver();
         contentResolver.registerContentObserver(

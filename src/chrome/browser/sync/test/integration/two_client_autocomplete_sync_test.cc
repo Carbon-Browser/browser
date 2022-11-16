@@ -2,7 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/macros.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/sync/test/integration/autofill_helper.h"
 #include "chrome/browser/sync/test/integration/sync_test.h"
@@ -15,18 +14,19 @@ namespace {
 using autofill::AutofillKey;
 using autofill_helper::AddKeys;
 using autofill_helper::GetAllKeys;
-using autofill_helper::KeysMatch;
 using autofill_helper::RemoveKey;
 
 class TwoClientAutocompleteSyncTest : public SyncTest {
  public:
   TwoClientAutocompleteSyncTest() : SyncTest(TWO_CLIENT) {}
-  ~TwoClientAutocompleteSyncTest() override {}
+
+  TwoClientAutocompleteSyncTest(const TwoClientAutocompleteSyncTest&) = delete;
+  TwoClientAutocompleteSyncTest& operator=(
+      const TwoClientAutocompleteSyncTest&) = delete;
+
+  ~TwoClientAutocompleteSyncTest() override = default;
 
   bool TestUsesSelfNotifications() override { return false; }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(TwoClientAutocompleteSyncTest);
 };
 
 IN_PROC_BROWSER_TEST_F(TwoClientAutocompleteSyncTest, WebDataServiceSanity) {

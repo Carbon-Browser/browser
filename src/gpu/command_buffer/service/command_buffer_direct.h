@@ -6,6 +6,7 @@
 #define GPU_COMMAND_BUFFER_SERVICE_COMMAND_BUFFER_DIRECT_H_
 
 #include "base/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "gpu/command_buffer/common/constants.h"
 #include "gpu/command_buffer/service/command_buffer_service.h"
 #include "gpu/command_buffer/service/decoder_client.h"
@@ -40,6 +41,7 @@ class GPU_EXPORT CommandBufferDirect : public CommandBuffer,
       TransferBufferAllocationOption option =
           TransferBufferAllocationOption::kLoseContextOnOOM) override;
   void DestroyTransferBuffer(int32_t id) override;
+  void ForceLostContext(error::ContextLostReason reason) override;
 
   // CommandBufferServiceClient implementation:
   CommandBatchProcessedResult OnCommandBatchProcessed() override;
@@ -63,7 +65,7 @@ class GPU_EXPORT CommandBufferDirect : public CommandBuffer,
 
  private:
   CommandBufferService service_;
-  AsyncAPIInterface* handler_ = nullptr;
+  raw_ptr<AsyncAPIInterface> handler_ = nullptr;
 };
 
 }  // namespace gpu

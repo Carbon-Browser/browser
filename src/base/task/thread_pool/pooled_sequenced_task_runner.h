@@ -8,11 +8,12 @@
 #include "base/base_export.h"
 #include "base/callback_forward.h"
 #include "base/location.h"
+#include "base/memory/raw_ptr.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool/pooled_task_runner_delegate.h"
 #include "base/task/thread_pool/sequence.h"
+#include "base/task/updateable_sequenced_task_runner.h"
 #include "base/time/time.h"
-#include "base/updateable_sequenced_task_runner.h"
 
 namespace base {
 namespace internal {
@@ -29,10 +30,20 @@ class BASE_EXPORT PooledSequencedTaskRunner
   PooledSequencedTaskRunner& operator=(const PooledSequencedTaskRunner&) =
       delete;
 
+  // Initializes the state of all the sequence manager features. Must be invoked
+  // after FeatureList initialization.
+  static void InitializeFeatures();
+
   // UpdateableSequencedTaskRunner:
   bool PostDelayedTask(const Location& from_here,
                        OnceClosure closure,
                        TimeDelta delay) override;
+
+  bool PostDelayedTaskAt(subtle::PostDelayedTaskPassKey,
+                         const Location& from_here,
+                         OnceClosure closure,
+                         TimeTicks delayed_run_time,
+                         subtle::DelayPolicy delay_policy) override;
 
   bool PostNonNestableDelayedTask(const Location& from_here,
                                   OnceClosure closure,
@@ -45,7 +56,9 @@ class BASE_EXPORT PooledSequencedTaskRunner
  private:
   ~PooledSequencedTaskRunner() override;
 
-  PooledTaskRunnerDelegate* const pooled_task_runner_delegate_;
+  // TODO(crbug.com/1298696): Breaks base_unittests.
+  const raw_ptr<PooledTaskRunnerDelegate, DegradeToNoOpWhenMTE>
+      pooled_task_runner_delegate_;
 
   // Sequence for all Tasks posted through this TaskRunner.
   const scoped_refptr<Sequence> sequence_;

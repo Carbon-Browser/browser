@@ -5,7 +5,6 @@
 #ifndef CHROME_BROWSER_ASH_PRINTING_HISTORY_PRINT_JOB_HISTORY_SERVICE_FACTORY_H_
 #define CHROME_BROWSER_ASH_PRINTING_HISTORY_PRINT_JOB_HISTORY_SERVICE_FACTORY_H_
 
-#include "base/macros.h"
 #include "base/memory/singleton.h"
 #include "components/keyed_service/content/browser_context_keyed_service_factory.h"
 
@@ -17,7 +16,7 @@ namespace user_prefs {
 class PrefRegistrySyncable;
 }  // namespace user_prefs
 
-namespace chromeos {
+namespace ash {
 
 class PrintJobHistoryService;
 
@@ -32,6 +31,10 @@ class PrintJobHistoryServiceFactory : public BrowserContextKeyedServiceFactory {
 
   static PrintJobHistoryServiceFactory* GetInstance();
 
+  PrintJobHistoryServiceFactory(const PrintJobHistoryServiceFactory&) = delete;
+  PrintJobHistoryServiceFactory& operator=(
+      const PrintJobHistoryServiceFactory&) = delete;
+
  private:
   friend struct base::DefaultSingletonTraits<PrintJobHistoryServiceFactory>;
 
@@ -43,10 +46,8 @@ class PrintJobHistoryServiceFactory : public BrowserContextKeyedServiceFactory {
       content::BrowserContext* context) const override;
   void RegisterProfilePrefs(
       user_prefs::PrefRegistrySyncable* registry) override;
-
-  DISALLOW_COPY_AND_ASSIGN(PrintJobHistoryServiceFactory);
 };
 
-}  // namespace chromeos
+}  // namespace ash
 
 #endif  // CHROME_BROWSER_ASH_PRINTING_HISTORY_PRINT_JOB_HISTORY_SERVICE_FACTORY_H_

@@ -32,7 +32,7 @@ bool HistogramNameLesser(const base::HistogramBase* a,
 }  // namespace
 
 // static
-LazyInstance<Lock>::Leaky StatisticsRecorder::lock_;
+LazyInstance<Lock>::Leaky StatisticsRecorder::lock_ = LAZY_INSTANCE_INITIALIZER;
 
 // static
 StatisticsRecorder* StatisticsRecorder::top_ = nullptr;
@@ -46,17 +46,6 @@ std::atomic<bool> StatisticsRecorder::have_active_callbacks_{false};
 // static
 std::atomic<StatisticsRecorder::GlobalSampleCallback>
     StatisticsRecorder::global_sample_callback_{nullptr};
-
-size_t StatisticsRecorder::BucketRangesHash::operator()(
-    const BucketRanges* const a) const {
-  return a->checksum();
-}
-
-bool StatisticsRecorder::BucketRangesEqual::operator()(
-    const BucketRanges* const a,
-    const BucketRanges* const b) const {
-  return a->Equals(b);
-}
 
 StatisticsRecorder::ScopedHistogramSampleObserver::
     ScopedHistogramSampleObserver(const std::string& name,
@@ -140,19 +129,14 @@ HistogramBase* StatisticsRecorder::RegisterOrDeleteDuplicate(
 // static
 const BucketRanges* StatisticsRecorder::RegisterOrDeleteDuplicateRanges(
     const BucketRanges* ranges) {
-  DCHECK(ranges->HasValidChecksum());
-
-  // Declared before |auto_lock| to ensure correct destruction order.
-  std::unique_ptr<const BucketRanges> ranges_deleter;
   const AutoLock auto_lock(lock_.Get());
   EnsureGlobalRecorderWhileLocked();
 
-  const BucketRanges* const registered = *top_->ranges_.insert(ranges).first;
-  if (registered == ranges) {
+  const BucketRanges* const registered =
+      top_->ranges_manager_.RegisterOrDeleteDuplicateRanges(ranges);
+
+  if (registered == ranges)
     ANNOTATE_LEAKING_OBJECT_PTR(ranges);
-  } else {
-    ranges_deleter.reset(ranges);
-  }
 
   return registered;
 }
@@ -189,12 +173,10 @@ std::string StatisticsRecorder::ToJSON(JSONVerbosityLevel verbosity_level) {
 
 // static
 std::vector<const BucketRanges*> StatisticsRecorder::GetBucketRanges() {
-  std::vector<const BucketRanges*> out;
   const AutoLock auto_lock(lock_.Get());
   EnsureGlobalRecorderWhileLocked();
-  out.reserve(top_->ranges_.size());
-  out.assign(top_->ranges_.begin(), top_->ranges_.end());
-  return out;
+
+  return top_->ranges_manager_.GetBucketRanges();
 }
 
 // static
@@ -257,7 +239,6 @@ void StatisticsRecorder::AddHistogramSampleObserver(
   const AutoLock auto_lock(lock_.Get());
   EnsureGlobalRecorderWhileLocked();
 
-  scoped_refptr<HistogramSampleObserverList> observers;
   auto iter = top_->observers_.find(name);
   if (iter == top_->observers_.end()) {
     top_->observers_.insert(
@@ -367,7 +348,11 @@ void StatisticsRecorder::ForgetHistogramForTesting(base::StringPiece name) {
 std::unique_ptr<StatisticsRecorder>
 StatisticsRecorder::CreateTemporaryForTesting() {
   const AutoLock auto_lock(lock_.Get());
-  return WrapUnique(new StatisticsRecorder());
+  std::unique_ptr<StatisticsRecorder> temporary_recorder =
+      WrapUnique(new StatisticsRecorder());
+  temporary_recorder->ranges_manager_
+      .DoNotReleaseRangesOnDestroyForTesting();  // IN-TEST
+  return temporary_recorder;
 }
 
 // static
@@ -449,9 +434,6 @@ void StatisticsRecorder::ImportGlobalPersistentHistograms() {
     allocator->ImportHistogramsToStatisticsRecorder();
 }
 
-// This singleton instance should be started during the single threaded portion
-// of main(), and hence it is not thread safe. It initializes globals to provide
-// support for all future calls.
 StatisticsRecorder::StatisticsRecorder() {
   lock_.Get().AssertAcquired();
   previous_ = top_;

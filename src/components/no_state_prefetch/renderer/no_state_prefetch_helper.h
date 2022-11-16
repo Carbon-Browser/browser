@@ -6,7 +6,6 @@
 #define COMPONENTS_NO_STATE_PREFETCH_RENDERER_NO_STATE_PREFETCH_HELPER_H_
 
 #include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "content/public/renderer/render_frame_observer.h"
@@ -27,6 +26,9 @@ class NoStatePrefetchHelper
  public:
   NoStatePrefetchHelper(content::RenderFrame* render_frame,
                         const std::string& histogram_prefix);
+
+  NoStatePrefetchHelper(const NoStatePrefetchHelper&) = delete;
+  NoStatePrefetchHelper& operator=(const NoStatePrefetchHelper&) = delete;
 
   ~NoStatePrefetchHelper() override;
 
@@ -57,8 +59,6 @@ class NoStatePrefetchHelper
   base::TimeTicks parsed_time_;
 
   base::WeakPtrFactory<NoStatePrefetchHelper> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(NoStatePrefetchHelper);
 };
 
 }  // namespace prerender

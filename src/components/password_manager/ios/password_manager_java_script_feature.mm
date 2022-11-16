@@ -4,6 +4,7 @@
 
 #import "components/password_manager/ios/password_manager_java_script_feature.h"
 
+#include "base/no_destructor.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/values.h"
 #include "components/autofill/core/common/password_form_fill_data.h"
@@ -22,7 +23,7 @@ using autofill::CreateStringCallback;
 namespace password_manager {
 
 namespace {
-constexpr char kScriptName[] = "password_controller_js";
+constexpr char kScriptName[] = "password_controller";
 
 // The timeout for any JavaScript call in this file.
 constexpr int64_t kJavaScriptExecutionTimeoutInSeconds = 5;
@@ -49,20 +50,21 @@ std::unique_ptr<base::Value> SerializeFillData(
   root_dict->SetInteger("unique_renderer_id",
                         FormRendererIdToJsParameter(form_renderer_id));
 
-  auto fieldList = std::make_unique<base::ListValue>();
+  base::Value::List fieldList;
 
-  auto usernameField = std::make_unique<base::DictionaryValue>();
-  usernameField->SetInteger("unique_renderer_id",
-                            FieldRendererIdToJsParameter(username_element));
-  usernameField->SetString("value", username_value);
-  fieldList->Append(std::move(usernameField));
+  base::Value::Dict usernameField;
+  usernameField.Set("unique_renderer_id",
+                    FieldRendererIdToJsParameter(username_element));
+  usernameField.Set("value", username_value);
+  fieldList.Append(std::move(usernameField));
 
-  auto passwordField = std::make_unique<base::DictionaryValue>();
-  passwordField->SetInteger("unique_renderer_id", password_element.value());
-  passwordField->SetString("value", password_value);
-  fieldList->Append(std::move(passwordField));
+  base::Value::Dict passwordField;
+  passwordField.Set("unique_renderer_id",
+                    static_cast<int>(password_element.value()));
+  passwordField.Set("value", password_value);
+  fieldList.Append(std::move(passwordField));
 
-  root_dict->Set("fields", std::move(fieldList));
+  root_dict->GetDict().Set("fields", std::move(fieldList));
 
   return root_dict;
 }
@@ -122,10 +124,9 @@ void PasswordManagerJavaScriptFeature::FindPasswordFormsInFrame(
     base::OnceCallback<void(NSString*)> callback) {
   DCHECK(frame->IsMainFrame());
   DCHECK(!callback.is_null());
-  CallJavaScriptFunction(
-      frame, "passwords.findPasswordForms", {},
-      CreateStringCallback(std::move(callback)),
-      base::TimeDelta::FromSeconds(kJavaScriptExecutionTimeoutInSeconds));
+  CallJavaScriptFunction(frame, "passwords.findPasswordForms", {},
+                         CreateStringCallback(std::move(callback)),
+                         base::Seconds(kJavaScriptExecutionTimeoutInSeconds));
 }
 
 void PasswordManagerJavaScriptFeature::ExtractForm(
@@ -136,10 +137,9 @@ void PasswordManagerJavaScriptFeature::ExtractForm(
   DCHECK(!callback.is_null());
   std::vector<base::Value> parameters;
   parameters.emplace_back(FormRendererIdToJsParameter(form_identifier));
-  CallJavaScriptFunction(
-      frame, "passwords.getPasswordFormDataAsString", parameters,
-      CreateStringCallback(std::move(callback)),
-      base::TimeDelta::FromSeconds(kJavaScriptExecutionTimeoutInSeconds));
+  CallJavaScriptFunction(frame, "passwords.getPasswordFormDataAsString",
+                         parameters, CreateStringCallback(std::move(callback)),
+                         base::Seconds(kJavaScriptExecutionTimeoutInSeconds));
 }
 
 void PasswordManagerJavaScriptFeature::FillPasswordForm(
@@ -181,10 +181,9 @@ void PasswordManagerJavaScriptFeature::FillPasswordForm(
   parameters.push_back(std::move(*form_value));
   parameters.emplace_back(std::move(username));
   parameters.emplace_back(std::move(password));
-  CallJavaScriptFunction(
-      frame, "passwords.fillPasswordForm", parameters,
-      CreateBoolCallback(std::move(callback)),
-      base::TimeDelta::FromSeconds(kJavaScriptExecutionTimeoutInSeconds));
+  CallJavaScriptFunction(frame, "passwords.fillPasswordForm", parameters,
+                         CreateBoolCallback(std::move(callback)),
+                         base::Seconds(kJavaScriptExecutionTimeoutInSeconds));
 }
 
 void PasswordManagerJavaScriptFeature::FillPasswordForm(
@@ -204,10 +203,10 @@ void PasswordManagerJavaScriptFeature::FillPasswordForm(
       FieldRendererIdToJsParameter(confirm_password_identifier));
   parameters.push_back(
       base::Value(base::SysNSStringToUTF8(generated_password)));
-  CallJavaScriptFunction(
-      frame, "passwords.fillPasswordFormWithGeneratedPassword", parameters,
-      CreateBoolCallback(std::move(callback)),
-      base::TimeDelta::FromSeconds(kJavaScriptExecutionTimeoutInSeconds));
+  CallJavaScriptFunction(frame,
+                         "passwords.fillPasswordFormWithGeneratedPassword",
+                         parameters, CreateBoolCallback(std::move(callback)),
+                         base::Seconds(kJavaScriptExecutionTimeoutInSeconds));
 }
 
 }  // namespace password_manager

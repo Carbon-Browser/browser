@@ -41,10 +41,9 @@ void ClipboardAPI::OnClipboardDataChanged() {
   EventRouter* router = EventRouter::Get(browser_context_);
   if (router &&
       router->HasEventListener(clipboard::OnClipboardDataChanged::kEventName)) {
-    std::unique_ptr<Event> event(
-        new Event(events::CLIPBOARD_ON_CLIPBOARD_DATA_CHANGED,
-                  clipboard::OnClipboardDataChanged::kEventName,
-                  std::vector<base::Value>()));
+    std::unique_ptr<Event> event(new Event(
+        events::CLIPBOARD_ON_CLIPBOARD_DATA_CHANGED,
+        clipboard::OnClipboardDataChanged::kEventName, base::Value::List()));
     router->BroadcastEvent(std::move(event));
   }
 }
@@ -65,8 +64,8 @@ ExtensionFunction::ResponseAction ClipboardSetImageDataFunction::Run() {
   }
 
   ExtensionsAPIClient::Get()->SaveImageDataToClipboard(
-      std::vector<char>(params->image_data.begin(), params->image_data.end()),
-      params->type, std::move(*params->additional_items),
+      std::move(params->image_data), params->type,
+      std::move(*params->additional_items),
       base::BindOnce(&ClipboardSetImageDataFunction::OnSaveImageDataSuccess,
                      this),
       base::BindOnce(&ClipboardSetImageDataFunction::OnSaveImageDataError,

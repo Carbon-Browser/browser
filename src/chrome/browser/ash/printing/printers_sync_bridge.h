@@ -11,8 +11,8 @@
 #include <vector>
 
 #include "base/observer_list_threadsafe.h"
-#include "base/sequenced_task_runner.h"
 #include "base/synchronization/lock.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/sync/model/conflict_resolution.h"
 #include "components/sync/model/model_type_store.h"
 #include "components/sync/model/model_type_sync_bridge.h"
@@ -20,9 +20,9 @@
 
 namespace sync_pb {
 class PrinterSpecifics;
-}
+}  // namespace sync_pb
 
-namespace chromeos {
+namespace ash {
 
 // Moderates interaction with the backing database and integrates with the User
 // Sync Service for printers.
@@ -30,6 +30,10 @@ class PrintersSyncBridge : public syncer::ModelTypeSyncBridge {
  public:
   PrintersSyncBridge(syncer::OnceModelTypeStoreFactory callback,
                      base::RepeatingClosure error_callback);
+
+  PrintersSyncBridge(const PrintersSyncBridge&) = delete;
+  PrintersSyncBridge& operator=(const PrintersSyncBridge&) = delete;
+
   ~PrintersSyncBridge() override;
 
   // ModelTypeSyncBridge implementation.
@@ -102,10 +106,8 @@ class PrintersSyncBridge : public syncer::ModelTypeSyncBridge {
   // In memory cache of printer information. Access to this is synchronized with
   // |data_lock_|.
   std::map<std::string, std::unique_ptr<sync_pb::PrinterSpecifics>> all_data_;
-
-  DISALLOW_COPY_AND_ASSIGN(PrintersSyncBridge);
 };
 
-}  // namespace chromeos
+}  // namespace ash
 
 #endif  // CHROME_BROWSER_ASH_PRINTING_PRINTERS_SYNC_BRIDGE_H_

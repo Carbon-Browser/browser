@@ -7,16 +7,16 @@
 
 #include <string>
 
-#include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "chrome/browser/ash/login/test/device_state_mixin.h"
+#include "chrome/browser/ash/policy/core/device_cloud_policy_store_ash.h"
 #include "chrome/browser/ash/policy/core/device_policy_builder.h"
 #include "chrome/test/base/mixin_based_in_process_browser_test.h"
 #include "chromeos/dbus/dbus_thread_manager.h"
+#include "components/policy/core/common/cloud/mock_cloud_policy_store.h"
 #include "components/policy/core/common/cloud/test/policy_builder.h"
 #include "components/prefs/pref_change_registrar.h"
 
-namespace chromeos {
+namespace ash {
 class FakeSessionManagerClient;
 }
 
@@ -98,6 +98,8 @@ class DevicePolicyCrosTestHelper {
   //   resolution setting.
   void RefreshPolicyAndWaitUntilDeviceSettingsUpdated(
       const std::vector<std::string>& settings);
+  // Refreshes the whole device cloud policies.
+  void RefreshPolicyAndWaitUntilDeviceCloudPolicyUpdated();
   void UnsetPolicy(const std::vector<std::string>& settings);
 
  private:
@@ -122,11 +124,11 @@ class DevicePolicyCrosBrowserTest : public MixinBasedInProcessBrowserTest {
     return policy_helper()->device_policy();
   }
 
-  chromeos::FakeSessionManagerClient* session_manager_client();
+  ash::FakeSessionManagerClient* session_manager_client();
 
-  chromeos::DeviceStateMixin device_state_{
+  ash::DeviceStateMixin device_state_{
       &mixin_host_,
-      chromeos::DeviceStateMixin::State::OOBE_COMPLETED_CLOUD_ENROLLED};
+      ash::DeviceStateMixin::State::OOBE_COMPLETED_CLOUD_ENROLLED};
 
   DevicePolicyCrosTestHelper* policy_helper() { return &policy_helper_; }
 

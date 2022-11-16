@@ -36,6 +36,9 @@ class AcceptHeaderTest : public ContentBrowserTest {
  public:
   AcceptHeaderTest() {}
 
+  AcceptHeaderTest(const AcceptHeaderTest&) = delete;
+  AcceptHeaderTest& operator=(const AcceptHeaderTest&) = delete;
+
   void SetUpOnMainThread() override {
     embedded_test_server()->RegisterRequestMonitor(base::BindRepeating(
         &AcceptHeaderTest::Monitor, base::Unretained(this)));
@@ -108,8 +111,6 @@ class AcceptHeaderTest : public ContentBrowserTest {
   base::Lock waiting_lock_;
   std::unique_ptr<base::RunLoop> waiting_run_loop_;
   std::string waiting_for_path_;
-
-  DISALLOW_COPY_AND_ASSIGN(AcceptHeaderTest);
 };
 
 IN_PROC_BROWSER_TEST_F(AcceptHeaderTest, Check) {
@@ -169,7 +170,7 @@ IN_PROC_BROWSER_TEST_F(AcceptHeaderTest, Check) {
 
 // Shared workers aren't implemented on Android.
 // https://bugs.chromium.org/p/chromium/issues/detail?id=154571
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
   // ResourceType::kSharedWorker
   EXPECT_EQ("*/*", GetFor("/shared_worker.js"));
 #endif

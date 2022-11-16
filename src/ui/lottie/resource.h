@@ -5,18 +5,32 @@
 #ifndef UI_LOTTIE_RESOURCE_H_
 #define UI_LOTTIE_RESOURCE_H_
 
-#include <memory>
+#include <string>
 
 #include "base/component_export.h"
+#include "build/chromeos_buildflags.h"
+
+namespace gfx {
+class ImageSkia;
+}
+
+namespace ui {
+class ImageModel;
+}
 
 namespace lottie {
-class Animation;
 
-// Gets a vector graphic resource specified by |resource_id| from the current
-// module data and returns it as an |Animation| object. This expects the
-// resource to be gzipped.
+// Used for loading a Lottie asset intended as a still image (not animated).
 COMPONENT_EXPORT(UI_LOTTIE)
-std::unique_ptr<Animation> GetVectorAnimationNamed(int resource_id);
+gfx::ImageSkia ParseLottieAsStillImage(const std::string& bytes_string);
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+// Used for loading a Lottie asset intended as a still image (not animated),
+// with support for using different colors in light mode, dark mode, and
+// "elevated" dark mode (see |views::Widget::InitParams::background_elevation|).
+COMPONENT_EXPORT(UI_LOTTIE)
+ui::ImageModel ParseLottieAsThemedStillImage(const std::string& bytes_string);
+#endif
 
 }  // namespace lottie
 

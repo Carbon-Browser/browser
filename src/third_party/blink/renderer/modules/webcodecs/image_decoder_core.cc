@@ -6,6 +6,7 @@
 
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/numerics/safe_conversions.h"
 #include "base/time/time.h"
 #include "media/base/timestamp_constants.h"
 #include "media/base/video_frame.h"
@@ -14,6 +15,7 @@
 #include "third_party/blink/renderer/platform/graphics/video_frame_image_util.h"
 #include "third_party/blink/renderer/platform/image-decoders/segment_reader.h"
 #include "third_party/blink/renderer/platform/wtf/shared_buffer.h"
+#include "third_party/skia/include/core/SkColorSpace.h"
 #include "third_party/skia/include/core/SkYUVAPixmaps.h"
 
 namespace blink {
@@ -122,7 +124,7 @@ ImageDecoderCore::ImageMetadata ImageDecoderCore::DecodeMetadata() {
   }
 
   metadata.has_size = true;
-  metadata.frame_count = SafeCast<uint32_t>(decoder_->FrameCount());
+  metadata.frame_count = base::checked_cast<uint32_t>(decoder_->FrameCount());
   metadata.repetition_count = decoder_->RepetitionCount();
   metadata.image_has_both_still_and_animated_sub_images =
       decoder_->ImageHasBothStillAndAnimatedSubImages();
@@ -258,6 +260,17 @@ std::unique_ptr<ImageDecoderCore::ImageDecodeResult> ImageDecoderCore::Decode(
         decoder_->FrameDurationAtIndex(frame_index);
   }
 
+  if (is_decoding_in_order_) {
+    // Stop aggressive purging when out of order decoding is detected.
+    if (last_decoded_frame_ != frame_index &&
+        ((last_decoded_frame_ + 1) % decoder_->FrameCount()) != frame_index) {
+      is_decoding_in_order_ = false;
+    } else {
+      decoder_->ClearCacheExceptFrame(frame_index);
+    }
+    last_decoded_frame_ = frame_index;
+  }
+
   result->status = Status::kOk;
   result->sk_image = std::move(sk_image);
   result->frame = std::move(frame);
@@ -274,7 +287,7 @@ void ImageDecoderCore::AppendData(size_t data_size,
   data_complete_ = data_complete;
   if (data) {
     stream_buffer_->Append(reinterpret_cast<const char*>(data.get()),
-                           SafeCast<wtf_size_t>(data_size));
+                           base::checked_cast<wtf_size_t>(data_size));
   } else {
     DCHECK_EQ(data_size, 0u);
   }
@@ -290,6 +303,8 @@ void ImageDecoderCore::Clear() {
   yuv_frame_ = nullptr;
   have_completed_rgb_decode_ = false;
   have_completed_yuv_decode_ = false;
+  last_decoded_frame_ = 0u;
+  is_decoding_in_order_ = true;
 }
 
 void ImageDecoderCore::Reinitialize(
@@ -301,6 +316,11 @@ void ImageDecoderCore::Reinitialize(
       ImageDecoder::HighBitDepthDecodingOption::kDefaultBitDepth,
       color_behavior_, desired_size_, animation_option_);
   DCHECK(decoder_);
+}
+
+bool ImageDecoderCore::FrameIsDecodedAtIndexForTesting(
+    uint32_t frame_index) const {
+  return decoder_->FrameIsDecodedAtIndex(frame_index);
 }
 
 void ImageDecoderCore::MaybeDecodeToYuv() {
@@ -316,8 +336,7 @@ void ImageDecoderCore::MaybeDecodeToYuv() {
   // not populated with image data. To avoid thrashing as bytes come in, only
   // create the frame once.
   if (!yuv_frame_) {
-    const auto coded_size =
-        gfx::Size(decoder_->DecodedYUVSize(cc::YUVIndex::kY));
+    const auto coded_size = decoder_->DecodedYUVSize(cc::YUVIndex::kY);
 
     // Plane sizes are guaranteed to fit in an int32_t by
     // ImageDecoder::SetSize(); since YUV is 1 byte-per-channel, we can just
@@ -375,6 +394,9 @@ void ImageDecoderCore::MaybeDecodeToYuv() {
       gfx_cs = gfx::ColorSpace::CreateREC709();
     }
   }
+
+  yuv_frame_->metadata().transformation = ImageOrientationToVideoTransformation(
+      decoder_->Orientation().Orientation());
 
   if (gfx_cs.IsValid()) {
     yuv_frame_->set_color_space(YUVColorSpaceToGfxColorSpace(

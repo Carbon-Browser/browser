@@ -11,6 +11,10 @@
 #include "ash/system/locale/locale_update_controller_impl.h"
 #include "ash/system/tray/tray_bubble_view.h"
 
+namespace views {
+class Widget;
+}  // namespace views
+
 namespace ash {
 
 class AutoclickScrollBubbleController;
@@ -26,6 +30,11 @@ class ASH_EXPORT AutoclickMenuBubbleController
   static const int kAnimationDurationMs = 150;
 
   AutoclickMenuBubbleController();
+
+  AutoclickMenuBubbleController(const AutoclickMenuBubbleController&) = delete;
+  AutoclickMenuBubbleController& operator=(
+      const AutoclickMenuBubbleController&) = delete;
+
   ~AutoclickMenuBubbleController() override;
 
   // Sets the currently selected event type.
@@ -65,6 +74,9 @@ class ASH_EXPORT AutoclickMenuBubbleController
   // LocaleChangeObserver:
   void OnLocaleChanged() override;
 
+  // For tests only.
+  views::Widget* GetBubbleWidgetForTesting() { return bubble_widget_; }
+
  private:
   friend class AutoclickMenuBubbleControllerTest;
   friend class AutoclickTest;
@@ -81,8 +93,6 @@ class ASH_EXPORT AutoclickMenuBubbleController
   // by this class so that positioning calculations can take place using both
   // classes at once.
   std::unique_ptr<AutoclickScrollBubbleController> scroll_bubble_controller_;
-
-  DISALLOW_COPY_AND_ASSIGN(AutoclickMenuBubbleController);
 };
 
 }  // namespace ash

@@ -14,6 +14,7 @@ import time
 
 import javac_output_processor
 from util import build_utils
+from util import server_utils
 
 
 def ProcessJavacOutput(output, target_name):
@@ -100,7 +101,7 @@ def main(argv):
         options.java_version,
     ])
   if options.java_version == '1.8':
-    # Android's boot jar doesn't contain all java 8 classes.
+    # Android's boot jar doesn't contain all java classes.
     options.bootclasspath.append(build_utils.RT_JAR_PATH)
 
   if options.bootclasspath:

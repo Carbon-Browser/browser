@@ -13,6 +13,7 @@
 #include "ash/system/accessibility/dictation_button_tray.h"
 #include "ash/system/status_area_widget_delegate.h"
 #include "ash/system/status_area_widget_test_helper.h"
+#include "ash/system/tray/tray_bubble_wrapper.h"
 #include "ash/test/ash_test_base.h"
 #include "base/test/task_environment.h"
 #include "components/user_manager/user_manager.h"
@@ -45,6 +46,11 @@ class TrayBackgroundViewTestView : public TrayBackgroundView,
     return provide_menu_model_ ? std::make_unique<ui::SimpleMenuModel>(this)
                                : nullptr;
   }
+  void OnAnyBubbleVisibilityChanged(views::Widget* bubble_widget,
+                                    bool visible) override {
+    on_bubble_visibility_change_captured_widget_ = bubble_widget;
+    on_bubble_visibility_change_captured_visibility_ = visible;
+  }
 
   // ui::SimpleMenuModel::Delegate:
   void ExecuteCommand(int command_id, int event_flags) override {}
@@ -56,6 +62,9 @@ class TrayBackgroundViewTestView : public TrayBackgroundView,
   void SetShouldShowMenu(bool should_show_menu) {
     SetContextMenuEnabled(should_show_menu);
   }
+
+  views::Widget* on_bubble_visibility_change_captured_widget_ = nullptr;
+  bool on_bubble_visibility_change_captured_visibility_ = false;
 
  private:
   bool provide_menu_model_;
@@ -74,19 +83,17 @@ class TrayBackgroundViewTest : public AshTestBase {
   void SetUp() override {
     AshTestBase::SetUp();
 
-    auto test_view =
-        std::make_unique<TrayBackgroundViewTestView>(GetPrimaryShelf());
-    test_view_ = test_view.get();
-
-    // Adds this `test_view_` to the mock `StatusAreaWidget`. We need to remove
-    // the layout manager from the delegate before adding a new child, since
-    // there's an DCHECK in the `GridLayout` to assert no more child can be
-    // added.
-    StatusAreaWidgetTestHelper::GetStatusAreaWidget()
-        ->status_area_widget_delegate()
-        ->SetLayoutManager(nullptr);
-    StatusAreaWidgetTestHelper::GetStatusAreaWidget()->AddTrayButton(
-        std::move(test_view));
+    // Adds this `test_view_` to the mock `StatusAreaWidget`. We need to
+    // remove the layout manager from the delegate before adding a new
+    // child, since there's a DCHECK in the `GridLayout` to assert no more
+    // children can be added.
+    // Can't use std::make_unique() here, because we need base class type for
+    // template method to link successfully without adding test code to
+    // status_area_widget.cc.
+    test_view_ = static_cast<TrayBackgroundViewTestView*>(
+        StatusAreaWidgetTestHelper::GetStatusAreaWidget()->AddTrayButton(
+            std::unique_ptr<TrayBackgroundView>(
+                new TrayBackgroundViewTestView(GetPrimaryShelf()))));
 
     // Set Dictation button to be visible.
     AccessibilityControllerImpl* controller =
@@ -140,7 +147,7 @@ TEST_F(TrayBackgroundViewTest, ShowingAnimationAbortedByHideAnimation) {
   // Here we wait until the animation is finished and we give it one more second
   // to finish the callbacks in `OnVisibilityAnimationFinished()`.
   StatusAreaWidgetTestHelper::WaitForLayerAnimationEnd(test_view()->layer());
-  task_environment()->FastForwardBy(base::TimeDelta::FromSeconds(1));
+  task_environment()->FastForwardBy(base::Seconds(1));
 
   // After the hide animation is finished, test_view() is not visible.
   EXPECT_FALSE(test_view()->GetVisible());
@@ -157,42 +164,42 @@ TEST_F(TrayBackgroundViewTest, HandleSessionChange) {
   // Gives it a small duration to let the session get changed. This duration is
   // way smaller than the animation duration, so that the animation will not
   // finish when this duration ends. The same for the other places below.
-  task_environment()->FastForwardBy(base::TimeDelta::FromMilliseconds(20));
+  task_environment()->FastForwardBy(base::Milliseconds(20));
 
   test_view()->SetVisiblePreferred(false);
   test_view()->SetVisiblePreferred(true);
-  task_environment()->FastForwardBy(base::TimeDelta::FromMilliseconds(20));
+  task_environment()->FastForwardBy(base::Milliseconds(20));
   EXPECT_TRUE(test_view()->layer()->GetAnimator()->is_animating());
   EXPECT_TRUE(test_view()->GetVisible());
 
   GetSessionControllerClient()->SetSessionState(
       session_manager::SessionState::ACTIVE);
-  task_environment()->FastForwardBy(base::TimeDelta::FromMilliseconds(20));
+  task_environment()->FastForwardBy(base::Milliseconds(20));
   EXPECT_FALSE(test_view()->layer()->GetAnimator()->is_animating());
   EXPECT_TRUE(test_view()->GetVisible());
 
   // Enable the animation after session state get changed.
-  task_environment()->FastForwardBy(base::TimeDelta::FromMilliseconds(20));
+  task_environment()->FastForwardBy(base::Milliseconds(20));
   test_view()->SetVisiblePreferred(false);
   test_view()->SetVisiblePreferred(true);
-  task_environment()->FastForwardBy(base::TimeDelta::FromMilliseconds(20));
+  task_environment()->FastForwardBy(base::Milliseconds(20));
   EXPECT_TRUE(test_view()->layer()->GetAnimator()->is_animating());
   EXPECT_TRUE(test_view()->GetVisible());
 
   // Not showing animation after unlocking screen.
   GetSessionControllerClient()->SetSessionState(
       session_manager::SessionState::LOCKED);
-  task_environment()->FastForwardBy(base::TimeDelta::FromMilliseconds(20));
+  task_environment()->FastForwardBy(base::Milliseconds(20));
 
   test_view()->SetVisiblePreferred(false);
   test_view()->SetVisiblePreferred(true);
-  task_environment()->FastForwardBy(base::TimeDelta::FromMilliseconds(20));
+  task_environment()->FastForwardBy(base::Milliseconds(20));
   EXPECT_TRUE(test_view()->layer()->GetAnimator()->is_animating());
   EXPECT_TRUE(test_view()->GetVisible());
 
   GetSessionControllerClient()->SetSessionState(
       session_manager::SessionState::ACTIVE);
-  task_environment()->FastForwardBy(base::TimeDelta::FromMilliseconds(20));
+  task_environment()->FastForwardBy(base::Milliseconds(20));
   EXPECT_FALSE(test_view()->layer()->GetAnimator()->is_animating());
   EXPECT_TRUE(test_view()->GetVisible());
 
@@ -205,12 +212,13 @@ TEST_F(TrayBackgroundViewTest, HandleSessionChange) {
 
   // Simulates user switching by changing the order of session_ids.
   Shell::Get()->session_controller()->SetUserSessionOrder({2u, 1u});
-  task_environment()->FastForwardBy(base::TimeDelta::FromMilliseconds(20));
+  task_environment()->FastForwardBy(base::Milliseconds(20));
   EXPECT_FALSE(test_view()->layer()->GetAnimator()->is_animating());
   EXPECT_TRUE(test_view()->GetVisible());
 }
 
-TEST_F(TrayBackgroundViewTest, SecondaryDisplay) {
+// TODO(crbug.com/1314693): Flaky.
+TEST_F(TrayBackgroundViewTest, DISABLED_SecondaryDisplay) {
   ui::ScopedAnimationDurationScaleMode test_duration_mode(
       ui::ScopedAnimationDurationScaleMode::NORMAL_DURATION);
 
@@ -219,7 +227,7 @@ TEST_F(TrayBackgroundViewTest, SecondaryDisplay) {
 
   // Switch the primary and secondary screen.
   SwapPrimaryDisplay();
-  task_environment()->FastForwardBy(base::TimeDelta::FromMilliseconds(20));
+  task_environment()->FastForwardBy(base::Milliseconds(20));
   EXPECT_FALSE(
       GetPrimaryDictationTray()->layer()->GetAnimator()->is_animating());
   EXPECT_TRUE(GetPrimaryDictationTray()->GetVisible());
@@ -228,24 +236,24 @@ TEST_F(TrayBackgroundViewTest, SecondaryDisplay) {
   EXPECT_TRUE(GetSecondaryDictationTray()->GetVisible());
 
   // Enable the animation after showing up on the secondary screen.
-  task_environment()->FastForwardBy(base::TimeDelta::FromMilliseconds(20));
+  task_environment()->FastForwardBy(base::Milliseconds(20));
   GetPrimaryDictationTray()->SetVisiblePreferred(false);
   GetPrimaryDictationTray()->SetVisiblePreferred(true);
   GetSecondaryDictationTray()->SetVisiblePreferred(false);
   GetSecondaryDictationTray()->SetVisiblePreferred(true);
-  task_environment()->FastForwardBy(base::TimeDelta::FromMilliseconds(20));
+  task_environment()->FastForwardBy(base::Milliseconds(20));
   EXPECT_TRUE(
       GetPrimaryDictationTray()->layer()->GetAnimator()->is_animating());
   EXPECT_TRUE(GetPrimaryDictationTray()->GetVisible());
   EXPECT_TRUE(
       GetSecondaryDictationTray()->layer()->GetAnimator()->is_animating());
   EXPECT_TRUE(GetSecondaryDictationTray()->GetVisible());
-  task_environment()->FastForwardBy(base::TimeDelta::FromSeconds(3));
+  task_environment()->FastForwardBy(base::Seconds(3));
 
   // Remove the secondary screen.
   UpdateDisplay("800x600");
 
-  task_environment()->FastForwardBy(base::TimeDelta::FromMilliseconds(20));
+  task_environment()->FastForwardBy(base::Milliseconds(20));
   EXPECT_FALSE(
       GetPrimaryDictationTray()->layer()->GetAnimator()->is_animating());
   EXPECT_TRUE(GetPrimaryDictationTray()->GetVisible());
@@ -339,6 +347,36 @@ TEST_F(TrayBackgroundViewTest, AutoHideShelfWithContextMenu) {
   ASSERT_FALSE(TriggerAutoHideTimeout(layout_manager));
   EXPECT_FALSE(test_view()->IsShowingMenu());
   EXPECT_EQ(SHELF_AUTO_HIDE_HIDDEN, shelf->GetAutoHideState());
+}
+
+// Loads a bubble inside the tray and shows that. Then verifies that
+// OnAnyBubbleVisibilityChanged is called.
+TEST_F(TrayBackgroundViewTest, OnAnyBubbleVisibilityChanged) {
+  ui::ScopedAnimationDurationScaleMode test_duration_mode(
+      ui::ScopedAnimationDurationScaleMode::NORMAL_DURATION);
+
+  test_view()->SetVisiblePreferred(true);
+
+  TrayBubbleView::InitParams init_params;
+  init_params.delegate = test_view()->GetWeakPtr();
+  init_params.parent_window =
+      Shell::GetContainer(Shell::GetPrimaryRootWindow(),
+                          kShellWindowId_AccessibilityBubbleContainer);
+  init_params.anchor_mode = TrayBubbleView::AnchorMode::kRect;
+  init_params.preferred_width = 200;
+  auto bubble_view = std::make_unique<TrayBubbleView>(init_params);
+  bubble_view->SetCanActivate(true);
+  auto bubble_ =
+      std::make_unique<TrayBubbleWrapper>(test_view(), bubble_view.release(),
+                                          /*event_handling=*/false);
+
+  bubble_->GetBubbleWidget()->Show();
+  bubble_->GetBubbleWidget()->Activate();
+  bubble_->bubble_view()->SetVisible(true);
+
+  EXPECT_EQ(bubble_->GetBubbleWidget(),
+            test_view()->on_bubble_visibility_change_captured_widget_);
+  EXPECT_TRUE(test_view()->on_bubble_visibility_change_captured_visibility_);
 }
 
 }  // namespace ash

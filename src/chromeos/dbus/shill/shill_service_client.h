@@ -10,11 +10,11 @@
 
 #include "base/callback.h"
 #include "base/component_export.h"
-#include "base/macros.h"
 #include "chromeos/dbus/shill/shill_client_helper.h"
 
 namespace base {
 class Value;
+class Time;
 }
 
 namespace dbus {
@@ -119,6 +119,10 @@ class COMPONENT_EXPORT(SHILL_CLIENT) ShillServiceClient {
     // Sets a fake traffic counters that can be used in tests.
     virtual void SetFakeTrafficCounters(base::Value fake_traffic_counters) = 0;
 
+    // Sets the callback used to get the mocked time in tests.
+    virtual void SetTimeGetterForTest(
+        base::RepeatingCallback<base::Time()>) = 0;
+
    protected:
     virtual ~TestInterface() {}
   };
@@ -134,6 +138,9 @@ class COMPONENT_EXPORT(SHILL_CLIENT) ShillServiceClient {
 
   // Returns the global instance if initialized. May return null.
   static ShillServiceClient* Get();
+
+  ShillServiceClient(const ShillServiceClient&) = delete;
+  ShillServiceClient& operator=(const ShillServiceClient&) = delete;
 
   // Adds a property changed |observer| to the service at |service_path|.
   virtual void AddPropertyChangedObserver(
@@ -242,9 +249,6 @@ class COMPONENT_EXPORT(SHILL_CLIENT) ShillServiceClient {
   // Initialize/Shutdown should be used instead.
   ShillServiceClient();
   virtual ~ShillServiceClient();
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ShillServiceClient);
 };
 
 }  // namespace chromeos

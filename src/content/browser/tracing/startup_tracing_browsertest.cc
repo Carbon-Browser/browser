@@ -72,6 +72,10 @@ class StartupTracingInProcessTest : public ContentBrowserTest {
 class LargeTraceEventData : public base::trace_event::ConvertableToTraceFormat {
  public:
   LargeTraceEventData() = default;
+
+  LargeTraceEventData(const LargeTraceEventData&) = delete;
+  LargeTraceEventData& operator=(const LargeTraceEventData&) = delete;
+
   ~LargeTraceEventData() override = default;
 
   const size_t kLargeMessageSize = 100 * 1024;
@@ -79,9 +83,6 @@ class LargeTraceEventData : public base::trace_event::ConvertableToTraceFormat {
     std::string large_string(kLargeMessageSize, '.');
     out->append(large_string);
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(LargeTraceEventData);
 };
 
 // This will fill a massive amount of startup tracing data into a
@@ -191,6 +192,9 @@ class StartupTracingTest
  public:
   StartupTracingTest() = default;
 
+  StartupTracingTest(const StartupTracingTest&) = delete;
+  StartupTracingTest& operator=(const StartupTracingTest&) = delete;
+
   void SetUpCommandLine(base::CommandLine* command_line) override {
     command_line->AppendSwitch(switches::kTraceStartup);
     if (GetFinishType() == FinishType::kWaitForTimeout) {
@@ -232,7 +236,7 @@ class StartupTracingTest
       case OutputType::kJSON:
         return "json";
       case OutputType::kProto:
-        return "proto";
+        return "pftrace";
     }
   }
 
@@ -261,11 +265,11 @@ class StartupTracingTest
   }
 
   static void CheckOutput(base::FilePath path, OutputType output_type) {
-#if defined(OS_LINUX) && defined(THREAD_SANITIZER)
+#if BUILDFLAG(IS_LINUX) && defined(THREAD_SANITIZER)
     // Skip checks because the thread sanitizer is often too slow to flush trace
     // data correctly within the timeouts. We still run the tests on TSAN to
     // catch general threading issues.
-#else // !(defined(OS_LINUX) && defined(THREAD_SANITIZER))
+#else   // !(BUILDFLAG(IS_LINUX) && defined(THREAD_SANITIZER))
     std::string trace;
     base::ScopedAllowBlockingForTesting allow_blocking;
     ASSERT_TRUE(base::ReadFileToString(path, &trace))
@@ -279,7 +283,7 @@ class StartupTracingTest
     // as a substring.
     EXPECT_TRUE(trace.find("StartupTracingController::Start") !=
                 std::string::npos);
-#endif // !(defined(OS_LINUX) && defined(THREAD_SANITIZER))
+#endif  // !(BUILDFLAG(IS_LINUX) && defined(THREAD_SANITIZER))
   }
 
   void Wait() {
@@ -300,8 +304,6 @@ class StartupTracingTest
  private:
   base::test::ScopedRunLoopTimeout increased_timeout_{
       FROM_HERE, TestTimeouts::test_launcher_timeout()};
-
-  DISALLOW_COPY_AND_ASSIGN(StartupTracingTest);
 };
 
 INSTANTIATE_TEST_SUITE_P(
@@ -348,7 +350,13 @@ INSTANTIATE_TEST_SUITE_P(
         testing::Values(OutputType::kJSON, OutputType::kProto),
         testing::Values(OutputLocation::kDirectoryWithDefaultBasename)));
 
-IN_PROC_BROWSER_TEST_P(EmergencyStopTracingTest, StopOnUIThread) {
+// Flaky; see https://crbug.com/1341341 .
+#if BUILDFLAG(IS_MAC)
+#define MAYBE_StopOnUIThread DISABLED_StopOnUIThread
+#else
+#define MAYBE_StopOnUIThread StopOnUIThread
+#endif
+IN_PROC_BROWSER_TEST_P(EmergencyStopTracingTest, MAYBE_StopOnUIThread) {
   EXPECT_TRUE(NavigateToURL(shell(), GetTestUrl("", "title1.html")));
 
   StartupTracingController::EmergencyStop();

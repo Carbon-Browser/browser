@@ -15,28 +15,28 @@ import 'chrome://resources/cr_elements/shared_vars_css.m.js';
 import 'chrome://resources/polymer/v3_0/iron-collapse/iron-collapse.js';
 import 'chrome://resources/polymer/v3_0/iron-flex-layout/iron-flex-layout-classes.js';
 import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
-import '../settings_shared_css.js';
+import '../settings_shared.css.js';
 import './safety_check_extensions_child.js';
 import './safety_check_passwords_child.js';
 import './safety_check_safe_browsing_child.js';
 import './safety_check_updates_child.js';
-
 // <if expr="_google_chrome and is_win">
 import './safety_check_chrome_cleaner_child.js';
+
 // </if>
 
-import {I18nBehavior} from 'chrome://resources/js/i18n_behavior.m.js';
-import {WebUIListenerBehavior} from 'chrome://resources/js/web_ui_listener_behavior.m.js';
-import {IronA11yAnnouncer} from 'chrome://resources/polymer/v3_0/iron-a11y-announcer/iron-a11y-announcer.js';
-import {flush, html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {getInstance as getAnnouncerInstance} from 'chrome://resources/cr_elements/cr_a11y_announcer/cr_a11y_announcer.js';
+import {I18nMixin} from 'chrome://resources/js/i18n_mixin.js';
+import {WebUIListenerMixin} from 'chrome://resources/js/web_ui_listener_mixin.js';
+import {flush, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {HatsBrowserProxyImpl, TrustSafetyInteraction} from '../hats_browser_proxy.js';
-import {loadTimeData} from '../i18n_setup.js';
 import {MetricsBrowserProxy, MetricsBrowserProxyImpl, SafetyCheckInteractions} from '../metrics_browser_proxy.js';
-
 import {routes} from '../route.js';
 import {Router} from '../router.js';
+
 import {SafetyCheckBrowserProxy, SafetyCheckBrowserProxyImpl, SafetyCheckCallbackConstants, SafetyCheckParentStatus} from './safety_check_browser_proxy.js';
+import {getTemplate} from './safety_check_page.html.js';
 
 type ParentChangedEvent = {
   newState: SafetyCheckParentStatus,
@@ -44,8 +44,7 @@ type ParentChangedEvent = {
 };
 
 const SettingsSafetyCheckPageElementBase =
-    mixinBehaviors([WebUIListenerBehavior, I18nBehavior], PolymerElement) as
-    {new (): PolymerElement & I18nBehavior & WebUIListenerBehavior};
+    WebUIListenerMixin(I18nMixin(PolymerElement));
 
 export class SettingsSafetyCheckPageElement extends
     SettingsSafetyCheckPageElementBase {
@@ -54,7 +53,7 @@ export class SettingsSafetyCheckPageElement extends
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
   }
 
   static get properties() {
@@ -80,7 +79,7 @@ export class SettingsSafetyCheckPageElement extends
   /** Timer ID for periodic update. */
   private updateTimerId_: number = -1;
 
-  connectedCallback() {
+  override connectedCallback() {
     super.connectedCallback();
 
     // Register for safety check status updates.
@@ -108,7 +107,7 @@ export class SettingsSafetyCheckPageElement extends
     // Trigger safety check.
     this.safetyCheckBrowserProxy_.runSafetyCheck();
     // Readout new safety check status via accessibility.
-    this.fireIronAnnounce_(this.i18n('safetyCheckAriaLiveRunning'));
+    getAnnouncerInstance().announce(this.i18n('safetyCheckAriaLiveRunning'));
   }
 
   private onSafetyCheckParentChanged_(event: ParentChangedEvent) {
@@ -129,13 +128,8 @@ export class SettingsSafetyCheckPageElement extends
       // Run initial safety check parent ran string update now.
       update();
       // Readout new safety check status via accessibility.
-      this.fireIronAnnounce_(this.i18n('safetyCheckAriaLiveAfter'));
+      getAnnouncerInstance().announce(this.i18n('safetyCheckAriaLiveAfter'));
     }
-  }
-
-  private fireIronAnnounce_(text: string) {
-    this.dispatchEvent(new CustomEvent(
-        'iron-announce', {bubbles: true, composed: true, detail: {text}}));
   }
 
   private shouldShowParentButton_(): boolean {
@@ -159,6 +153,12 @@ export class SettingsSafetyCheckPageElement extends
 
   private shouldShowChildren_(): boolean {
     return this.parentStatus_ !== SafetyCheckParentStatus.BEFORE;
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'settings-safety-check-page': SettingsSafetyCheckPageElement;
   }
 }
 

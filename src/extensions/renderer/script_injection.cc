@@ -10,8 +10,8 @@
 #include "base/bind.h"
 #include "base/feature_list.h"
 #include "base/lazy_instance.h"
-#include "base/macros.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/time/time.h"
 #include "base/timer/elapsed_timer.h"
 #include "base/trace_event/typed_macros.h"
 #include "base/tracing/protos/chrome_track_event.pbzero.h"
@@ -135,6 +135,10 @@ class ScriptInjection::FrameWatcher : public content::RenderFrameObserver {
                ScriptInjection* injection)
       : content::RenderFrameObserver(render_frame),
         injection_(injection) {}
+
+  FrameWatcher(const FrameWatcher&) = delete;
+  FrameWatcher& operator=(const FrameWatcher&) = delete;
+
   ~FrameWatcher() override {}
 
  private:
@@ -142,8 +146,6 @@ class ScriptInjection::FrameWatcher : public content::RenderFrameObserver {
   void OnDestruct() override { injection_->invalidate_render_frame(); }
 
   ScriptInjection* injection_;
-
-  DISALLOW_COPY_AND_ASSIGN(FrameWatcher);
 };
 
 // static
@@ -359,9 +361,13 @@ void ScriptInjection::InjectJs(std::set<std::string>* executing_scripts,
   } else {
     DCHECK_EQ(mojom::ExecutionWorld::kMain, execution_world);
   }
+  auto promise_behavior =
+      injector_->ShouldWaitForPromise()
+          ? blink::WebLocalFrame::PromiseBehavior::kAwait
+          : blink::WebLocalFrame::PromiseBehavior::kDontWait;
   render_frame_->GetWebFrame()->RequestExecuteScript(
       world_id, sources, is_user_gesture, execution_option, callback.release(),
-      blink::BackForwardCacheAware::kPossiblyDisallow);
+      blink::BackForwardCacheAware::kPossiblyDisallow, promise_behavior);
 }
 
 void ScriptInjection::OnJsInjectionCompleted(
@@ -431,14 +437,13 @@ void ScriptInjection::InjectOrRemoveCss(
       run_location_, injected_stylesheets, num_injected_stylesheets);
   blink::WebLocalFrame* web_frame = render_frame_->GetWebFrame();
 
-  blink::WebDocument::CSSOrigin blink_css_origin =
-      blink::WebDocument::kAuthorOrigin;
+  auto blink_css_origin = blink::WebCssOrigin::kAuthor;
   switch (injector_->GetCssOrigin()) {
     case mojom::CSSOrigin::kUser:
-      blink_css_origin = blink::WebDocument::kUserOrigin;
+      blink_css_origin = blink::WebCssOrigin::kUser;
       break;
     case mojom::CSSOrigin::kAuthor:
-      blink_css_origin = blink::WebDocument::kAuthorOrigin;
+      blink_css_origin = blink::WebCssOrigin::kAuthor;
       break;
   }
 

@@ -5,8 +5,9 @@
 package org.chromium.components.messages;
 
 import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
+import androidx.annotation.VisibleForTesting;
 
+import org.chromium.base.Log;
 import org.chromium.components.messages.MessageScopeChange.ChangeType;
 import org.chromium.ui.util.TokenHolder;
 
@@ -20,16 +21,13 @@ import java.util.Map;
  * message and which message to show next.
  */
 class MessageQueueManager implements ScopeChangeController.Delegate {
-    /**
-     * mCurrentDisplayedMessage refers to the message which is currently visible on the screen
-     * including situations in which the message is already dismissed and hide animation is running.
-     */
-    @Nullable
-    private MessageQueueManager.MessageState mCurrentDisplayedMessage;
-    private MessageQueueDelegate mMessageQueueDelegate;
+    static final String TAG = "MessageQueueManager";
+
     // TokenHolder tracking whether the queue should be suspended.
     private final TokenHolder mSuppressionTokenHolder =
             new TokenHolder(this::onSuspendedStateChange);
+    private final MessageAnimationCoordinator mAnimationCoordinator =
+            new MessageAnimationCoordinator();
 
     /**
      * A {@link Map} collection which contains {@code MessageKey} as the key and the corresponding
@@ -70,8 +68,7 @@ class MessageQueueManager implements ScopeChangeController.Delegate {
 
         List<MessageState> messageQueue = mMessageQueues.get(scopeKey);
         if (messageQueue == null) {
-            messageQueue = new ArrayList<>();
-            mMessageQueues.put(scopeKey, messageQueue);
+            mMessageQueues.put(scopeKey, messageQueue = new ArrayList<>());
             mScopeChangeController.firstMessageEnqueued(scopeKey);
         }
 
@@ -80,7 +77,11 @@ class MessageQueueManager implements ScopeChangeController.Delegate {
         mMessages.put(messageKey, messageState);
 
         MessageState candidate = getNextMessage();
-        updateCurrentDisplayedMessage(true, candidate);
+        if (candidate != null) {
+            Log.w(TAG, "Currently displaying message with ID %s and key %s.",
+                    candidate.handler.getMessageIdentifier(), candidate.messageKey);
+        }
+        updateCurrentDisplayedMessage(candidate);
 
         if (candidate == messageState) {
             MessagesMetrics.recordMessageEnqueuedVisible(message.getMessageIdentifier());
@@ -119,14 +120,16 @@ class MessageQueueManager implements ScopeChangeController.Delegate {
         // Remove the scope from the map if the messageQueue is empty.
         List<MessageState> messageQueue = mMessageQueues.get(scopeKey);
         messageQueue.remove(messageState);
+        Log.w(TAG, "Removed message with ID %s and key %s from the message queue.",
+                messageState.handler.getMessageIdentifier(), messageState.messageKey);
         if (messageQueue.isEmpty()) {
             mMessageQueues.remove(scopeKey);
             mScopeChangeController.lastMessageDismissed(scopeKey);
         }
 
         message.dismiss(dismissReason);
-        if (mCurrentDisplayedMessage == messageState) {
-            hideMessage(updateCurrentMessage, updateCurrentMessage);
+        if (mAnimationCoordinator.getCurrentDisplayedMessage() == messageState) {
+            updateCurrentDisplayedMessage(null);
         }
         MessagesMetrics.recordDismissReason(message.getMessageIdentifier(), dismissReason);
     }
@@ -140,7 +143,7 @@ class MessageQueueManager implements ScopeChangeController.Delegate {
     }
 
     public void setDelegate(MessageQueueDelegate delegate) {
-        mMessageQueueDelegate = delegate;
+        mAnimationCoordinator.setMessageQueueDelegate(delegate);
     }
 
     // TODO(crbug.com/1163290): Handle the case in which the scope becomes inactive when the
@@ -159,15 +162,15 @@ class MessageQueueManager implements ScopeChangeController.Delegate {
             }
         } else if (change.changeType == ChangeType.INACTIVE) {
             mScopeStates.put(scopeKey, false);
-            updateCurrentDisplayedMessage(change.animateTransition, getNextMessage());
+            updateCurrentDisplayedMessage(getNextMessage());
         } else if (change.changeType == ChangeType.ACTIVE) {
             mScopeStates.put(scopeKey, true);
-            updateCurrentDisplayedMessage(true, getNextMessage());
+            updateCurrentDisplayedMessage(getNextMessage());
         }
     }
 
     private void onSuspendedStateChange() {
-        updateCurrentDisplayedMessage(true, getNextMessage());
+        updateCurrentDisplayedMessage(getNextMessage());
     }
 
     private boolean isQueueSuspended() {
@@ -178,15 +181,9 @@ class MessageQueueManager implements ScopeChangeController.Delegate {
     //      running when we get another scope change signal that should potentially either reverse
     //      the animation (i.e. going from inactive -> active quickly) or jump to the end (i.e.
     //      going from animate transition -> don't animate transition.
-    private void updateCurrentDisplayedMessage(boolean animateTransition, MessageState candidate) {
-        if (mCurrentDisplayedMessage != candidate) {
-            if (mCurrentDisplayedMessage == null) {
-                mCurrentDisplayedMessage = candidate;
-                mMessageQueueDelegate.onStartShowing(mCurrentDisplayedMessage.handler::show);
-            } else {
-                hideMessage(!isQueueSuspended() && animateTransition, !isQueueSuspended());
-            }
-        }
+    private void updateCurrentDisplayedMessage(MessageState candidate) {
+        mAnimationCoordinator.updateWithoutStacking(candidate, isQueueSuspended(),
+                () -> { updateCurrentDisplayedMessage(getNextMessage()); });
     }
 
     void dismissAllMessages(@DismissReason int dismissReason) {
@@ -204,20 +201,13 @@ class MessageQueueManager implements ScopeChangeController.Delegate {
         return mMessages;
     }
 
-    private void hideMessage(boolean animate, boolean updateCurrentMessage) {
-        mCurrentDisplayedMessage.handler.hide(animate, () -> {
-            mMessageQueueDelegate.onFinishHiding();
-            mCurrentDisplayedMessage = null;
-            if (updateCurrentMessage) updateCurrentDisplayedMessage(true, getNextMessage());
-        });
-    }
-
     /**
      * Iterate the queues of each scope to get the next messages. If multiple messages meet the
      * requirements, which can show in the given scope, then the message queued earliest will be
      * returned.
      */
-    private MessageState getNextMessage() {
+    @VisibleForTesting
+    MessageState getNextMessage() {
         if (isQueueSuspended()) return null;
         MessageState nextMessage = null;
         for (List<MessageState> queue : mMessageQueues.values()) {
@@ -225,8 +215,15 @@ class MessageQueueManager implements ScopeChangeController.Delegate {
             Boolean isActive = mScopeStates.get(queue.get(0).scopeKey);
             if (isActive == null || !isActive) continue;
             for (MessageState candidate : queue) {
-                if (nextMessage == null || (candidate.highPriority && !nextMessage.highPriority)
-                        || candidate.id < nextMessage.id) {
+                boolean shouldShow = candidate.handler.shouldShow();
+                Log.w(TAG,
+                        "MessageStateHandler#shouldShow for message with ID %s and key %s in "
+                                + "MessageQueueManager#getNextMessage returned %s.",
+                        candidate.handler.getMessageIdentifier(), candidate.messageKey, shouldShow);
+                if (shouldShow
+                        && (nextMessage == null
+                                || (candidate.highPriority && !nextMessage.highPriority)
+                                || candidate.id < nextMessage.id)) {
                     nextMessage = candidate;
                 }
             }
@@ -237,7 +234,6 @@ class MessageQueueManager implements ScopeChangeController.Delegate {
     static class MessageState {
         private static int sIdNext;
 
-        // TODO(crbug.com/1188980): add priority if necessary.
         public final int id;
         public final ScopeKey scopeKey;
         public final Object messageKey;

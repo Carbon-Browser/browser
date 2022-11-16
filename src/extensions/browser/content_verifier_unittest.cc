@@ -5,6 +5,7 @@
 #include <memory>
 
 #include "base/files/file_path.h"
+#include "base/memory/raw_ptr.h"
 #include "base/path_service.h"
 #include "base/values.h"
 #include "content/public/test/browser_task_environment.h"
@@ -71,6 +72,11 @@ base::FilePath AppendSuffix(const base::FilePath& path,
 class TestContentVerifierDelegate : public MockContentVerifierDelegate {
  public:
   TestContentVerifierDelegate() = default;
+
+  TestContentVerifierDelegate(const TestContentVerifierDelegate&) = delete;
+  TestContentVerifierDelegate& operator=(const TestContentVerifierDelegate&) =
+      delete;
+
   ~TestContentVerifierDelegate() override = default;
 
   std::set<base::FilePath> GetBrowserImagePaths(
@@ -80,8 +86,6 @@ class TestContentVerifierDelegate : public MockContentVerifierDelegate {
 
  private:
   std::set<base::FilePath> browser_images_paths_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestContentVerifierDelegate);
 };
 
 std::set<base::FilePath> TestContentVerifierDelegate::GetBrowserImagePaths(
@@ -202,9 +206,9 @@ class ContentVerifierTest : public ExtensionsTest {
   // page or background script.
   scoped_refptr<Extension> CreateTestExtension() {
     base::DictionaryValue manifest;
-    manifest.SetString("name", "Dummy Extension");
-    manifest.SetString("version", "1");
-    manifest.SetInteger("manifest_version", 2);
+    manifest.SetStringKey("name", "Dummy Extension");
+    manifest.SetStringKey("version", "1");
+    manifest.SetIntKey("manifest_version", 2);
 
     if (background_manifest_type_ ==
         BackgroundManifestType::kBackgroundScript) {
@@ -215,7 +219,7 @@ class ContentVerifierTest : public ExtensionsTest {
           base::Value::ToUniquePtrValue(std::move(background_scripts)));
     } else if (background_manifest_type_ ==
                BackgroundManifestType::kBackgroundPage) {
-      manifest.SetString(manifest_keys::kBackgroundPage, "foo/page.txt");
+      manifest.SetStringPath(manifest_keys::kBackgroundPage, "foo/page.txt");
     }
 
     base::Value content_scripts(base::Value::Type::LIST);
@@ -243,7 +247,7 @@ class ContentVerifierTest : public ExtensionsTest {
 
   scoped_refptr<ContentVerifier> content_verifier_;
   scoped_refptr<Extension> extension_;
-  TestContentVerifierDelegate* content_verifier_delegate_raw_;
+  raw_ptr<TestContentVerifierDelegate> content_verifier_delegate_raw_;
 };
 
 class ContentVerifierTestWithBackgroundType

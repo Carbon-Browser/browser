@@ -126,13 +126,13 @@
       Determina o período de tempo antes de a proteção de ecrã ser apresentada no ecrã de início de sessão para aparelhos no modo de retalho.
 
       O valor da política deve ser especificado em milissegundos.</translation>
-<translation id="1141767714195601945">Esta política controla os parâmetros da linha de comandos do Carbon Browser Browser Browser a partir do Internet Explorer.
+<translation id="1141767714195601945">Esta política controla os parâmetros da linha de comandos do Carbon Browser a partir do Internet Explorer.
 
       Se o suplemento "Compatibilidade com o navegador antigo" para o Internet Explorer não estiver instalado, esta política não tem qualquer efeito.
 
-      Se esta política não estiver definida, o Internet Explorer apenas transmite o URL ao Carbon Browser Browser Browser como um parâmetro da linha de comandos.
+      Se esta política não estiver definida, o Internet Explorer apenas transmite o URL ao Carbon Browser como um parâmetro da linha de comandos.
 
-      Se esta política estiver definida como uma lista de strings, as strings são associadas com espaços e transmitidas ao Carbon Browser Browser Browser como parâmetros da linha de comandos.
+      Se esta política estiver definida como uma lista de strings, as strings são associadas com espaços e transmitidas ao Carbon Browser como parâmetros da linha de comandos.
 
       Se um elemento contiver ${url}, é substituído pelo URL da página a abrir.
 
@@ -271,7 +271,7 @@
 
       Cada item de lista da política é uma string que inclui um ID de extensão e um URL de "atualização", separados por ponto e vírgula (<ph name="SEMICOLON" />). O ID de extensão é uma string de 32 letras encontrada, por exemplo, em <ph name="CHROME_EXTENSIONS_LINK" /> quando está no modo de programador. O URL de "atualização" deve indicar um documento XML de manifesto de atualização, tal como descrito em <ph name="LINK_TO_EXTENSION_DOC1" />. Tenha em atenção que o URL de "atualização" definido nesta política apenas é utilizado para a instalação inicial, uma vez que as atualizações subsequentes da extensão utilizam o URL de atualização indicado no manifesto da extensão.
 
-      Por exemplo, <ph name="EXTENSION_POLICY_EXAMPLE" /> instala a aplicação <ph name="EXTENSION_POLICY_EXAMPLE_EXTENSION_NAME" /> a partir do URL de "atualização" padrão da Web Store do Carbon Browser Browser Browser. Para mais informações acerca do alojamento de extensões, consulte: <ph name="LINK_TO_EXTENSION_DOC2" />.</translation>
+      Por exemplo, <ph name="EXTENSION_POLICY_EXAMPLE" /> instala a aplicação <ph name="EXTENSION_POLICY_EXAMPLE_EXTENSION_NAME" /> a partir do URL de "atualização" padrão da Web Store do Carbon Browser. Para mais informações acerca do alojamento de extensões, consulte: <ph name="LINK_TO_EXTENSION_DOC2" />.</translation>
 <translation id="1435659902881071157">Configuração de rede ao nível do aparelho</translation>
 <translation id="1438739959477268107">Predefinição de geração de chaves</translation>
 <translation id="1454846751303307294">Permite definir uma lista de padrões de URL que especificam os Web sites não autorizados a executar JavaScript. Se esta política não for definida, será utilizado o valor global predefinido para todos os Web sites, seja a partir da política "DefaultJavaScriptSetting", caso esteja definida, ou a partir da configuração pessoal do utilizador.</translation>
@@ -430,11 +430,11 @@
 
       Se a política não estiver definida, a funcionalidade de atualização de firmware do <ph name="TPM_FIRMWARE_UPDATE_TPM" /> não estará disponível.</translation>
 <translation id="1708496595873025510">Definir a restrição para a obtenção da semente Variações</translation>
-<translation id="1717817358640580294">Se não estiver definida, caso a Limpeza do Carbon Browser Browser Browser detete software indesejado, pode comunicar os metadados da verificação à Google, de acordo com a política definida por SafeBrowsingExtendedReportingEnabled. Em seguida, a Limpeza do Carbon Browser Browser Browser irá perguntar ao utilizador se pretende limpar o software indesejado. O utilizador pode optar por partilhar os resultados da limpeza com a Google para ajudar em futuras deteções de software indesejado. Estes resultados contêm metadados de ficheiros, extensões instaladas automaticamente e chaves de registo, conforme descrito no documento técnico da Privacidade do Carbon Browser Browser Browser.
+<translation id="1717817358640580294">Se não estiver definida, caso a Limpeza do Carbon Browser detete software indesejado, pode comunicar os metadados da verificação à Google, de acordo com a política definida por SafeBrowsingExtendedReportingEnabled. Em seguida, a Limpeza do Carbon Browser irá perguntar ao utilizador se pretende limpar o software indesejado. O utilizador pode optar por partilhar os resultados da limpeza com a Google para ajudar em futuras deteções de software indesejado. Estes resultados contêm metadados de ficheiros, extensões instaladas automaticamente e chaves de registo, conforme descrito no documento técnico da Privacidade do Carbon Browser.
 
-      Se estiver desativada, caso a Limpeza do Carbon Browser Browser Browser detete software indesejado, não irá comunicar os metadados da verificação à Google e substituirá qualquer política definida por SafeBrowsingExtendedReportingEnabled. A Limpeza do Carbon Browser Browser Browser perguntará ao utilizador se pretende limpar o software indesejado.  Os resultados da limpeza não serão comunicados à Google e o utilizador deixará de ter a opção de o fazer.
+      Se estiver desativada, caso a Limpeza do Carbon Browser detete software indesejado, não irá comunicar os metadados da verificação à Google e substituirá qualquer política definida por SafeBrowsingExtendedReportingEnabled. A Limpeza do Carbon Browser perguntará ao utilizador se pretende limpar o software indesejado.  Os resultados da limpeza não serão comunicados à Google e o utilizador deixará de ter a opção de o fazer.
 
-      Se estiver ativada, caso a Limpeza do Carbon Browser Browser Browser detete software indesejado, pode comunicar os metadados da verificação à Google, de acordo com a política definida por SafeBrowsingExtendedReportingEnabled. A Limpeza do Carbon Browser Browser Browser perguntará ao utilizador se pretende limpar o software indesejado.  Os resultados da limpeza serão comunicados à Google e o utilizador deixará de ter a opção de o impedir.
+      Se estiver ativada, caso a Limpeza do Carbon Browser detete software indesejado, pode comunicar os metadados da verificação à Google, de acordo com a política definida por SafeBrowsingExtendedReportingEnabled. A Limpeza do Carbon Browser perguntará ao utilizador se pretende limpar o software indesejado.  Os resultados da limpeza serão comunicados à Google e o utilizador deixará de ter a opção de o impedir.
 
       Esta política está apenas disponível em instâncias do Windows associadas a um domínio do <ph name="MS_AD_NAME" /> ou em instâncias do Windows 10 Pro ou Enterprise inscritas para gestão de dispositivos.</translation>
 <translation id="172374442286684480">Permitir que todos os sites definam dados locais</translation>
@@ -624,7 +624,7 @@
 <translation id="2073552873076775140">Permitir iniciar sessão no <ph name="PRODUCT_NAME" /></translation>
 <translation id="2077129598763517140">Utilizar aceleração de hardware sempre que estiver disponível</translation>
 <translation id="2077273864382355561">Atraso para desligar o ecrã quando o dispositivo está a utilizar a energia da bateria</translation>
-<translation id="2082205219176343977">Configurar a versão mínima do Carbon Browser Browser Browser permitida para o dispositivo</translation>
+<translation id="2082205219176343977">Configurar a versão mínima do Carbon Browser permitida para o dispositivo</translation>
 <translation id="209586405398070749">Canal estável</translation>
 <translation id="2098658257603918882">Ativar registos de utilização e dados relacionados com falhas</translation>
 <translation id="2104418465060359056">Comunicar as informações das extensões e dos plug-ins</translation>
@@ -669,7 +669,7 @@
       Se desativar esta definição ou não a definir, todas as páginas de autenticação do portal cativo são apresentadas num separador de navegador novo (normal), com as definições de proxy do utilizador atual.</translation>
 <translation id="21394354835637379">Permite-lhe especificar que URLs podem instalar extensões, aplicações e temas.
 
-          Desde o <ph name="PRODUCT_NAME" /> 21, é mais difícil instalar extensões, aplicações e scripts de utilizadores que não sejam da Web Store do Carbon Browser Browser Browser. Anteriormente, os utilizadores podiam clicar num link para um ficheiro *.crx e o <ph name="PRODUCT_NAME" /> oferecia-se para instalar o ficheiro depois de apresentar alguns avisos. Depois do <ph name="PRODUCT_NAME" /> 21, este tipo de ficheiro tem de ser transferido e arrastado para a página de definições do <ph name="PRODUCT_NAME" />. Esta definição permite que URLs específicos tenham o fluxo de instalação antigo e mais fácil.
+          Desde o <ph name="PRODUCT_NAME" /> 21, é mais difícil instalar extensões, aplicações e scripts de utilizadores que não sejam da Web Store do Carbon Browser. Anteriormente, os utilizadores podiam clicar num link para um ficheiro *.crx e o <ph name="PRODUCT_NAME" /> oferecia-se para instalar o ficheiro depois de apresentar alguns avisos. Depois do <ph name="PRODUCT_NAME" /> 21, este tipo de ficheiro tem de ser transferido e arrastado para a página de definições do <ph name="PRODUCT_NAME" />. Esta definição permite que URLs específicos tenham o fluxo de instalação antigo e mais fácil.
 
           Cada item desta lista é um padrão de correspondência do estilo de extensão (consulte https://developer.chrome.com/extensions/match_patterns). Os utilizadores poderão instalar itens facilmente a partir de qualquer URL que corresponda a um item desta lista. Tanto a localização do ficheiro *.crx como a página a partir da qual foi iniciada a transferência (ou seja, o referenciador) têm de ser permitidas por estes padrões.
 
@@ -743,7 +743,7 @@
 
       Quando a política está definida como desativada, as páginas não podem apresentar pop-ups quando estiverem a ser descarregadas, conforme a especificação (https://html.spec.whatwg.org/#apis-for-creating-and-navigating-browsing-contexts-by-name).
 
-      Esta política será removida no Carbon Browser Browser Browser 82.
+      Esta política será removida no Carbon Browser 82.
 
       Consulte https://www.chromestatus.com/feature/5989473649164288.</translation>
 <translation id="2269319728625047531">Ativar a apresentação do Consentimento de sincronização durante o início de sessão.</translation>
@@ -815,9 +815,9 @@
 <translation id="2463034609187171371">Ative os conjuntos de cifras DHE no TLS.</translation>
 <translation id="2463365186486772703">Local da aplicação</translation>
 <translation id="2466131534462628618">A autenticação de portal cativo ignora proxy</translation>
-<translation id="2471748297300970300">Se estiver desativada, impede a apresentação de avisos de segurança ao iniciar o Carbon Browser Browser Browser com alguns sinalizadores da linha de comandos potencialmente perigosos.
+<translation id="2471748297300970300">Se estiver desativada, impede a apresentação de avisos de segurança ao iniciar o Carbon Browser com alguns sinalizadores da linha de comandos potencialmente perigosos.
 
-          Se estiver ativada ou por definir, são apresentados avisos de segurança quando são utilizados alguns sinalizadores da linha de comandos para iniciar o Carbon Browser Browser Browser.
+          Se estiver ativada ou por definir, são apresentados avisos de segurança quando são utilizados alguns sinalizadores da linha de comandos para iniciar o Carbon Browser.
 
           No Windows, esta política está apenas disponível em instâncias associadas a um domínio <ph name="MS_AD_NAME" /> ou em instâncias do Windows 10 Pro ou Enterprise inscritas para gestão de dispositivos.</translation>
 <translation id="2482676533225429905">Mensagens nativas</translation>
@@ -933,7 +933,7 @@
           O URL de pesquisa do Google pode ser especificado como <ph name="GOOGLE_SEARCH_URL" />.
 
           Esta opção tem de estar definida quando a política "DefaultSearchProviderEnabled" estiver ativada e apenas é aplicada nestas condições.</translation>
-<translation id="2659019163577049044">Se esta definição for ativada, os utilizadores podem configurar os respetivos dispositivos para sincronizarem mensagens SMS entre o telemóvel e o Carbon Browser Browser Browserbook. Tenha em conta que, caso esta política seja permitida, os utilizadores têm de ativar a funcionalidade explicitamente mediante a conclusão de um fluxo de configuração. Após a conclusão desse fluxo, os utilizadores podem enviar e receber mensagens SMS nos respetivos Carbon Browser Browser Browserbooks.
+<translation id="2659019163577049044">Se esta definição for ativada, os utilizadores podem configurar os respetivos dispositivos para sincronizarem mensagens SMS entre o telemóvel e o Carbon Browserbook. Tenha em conta que, caso esta política seja permitida, os utilizadores têm de ativar a funcionalidade explicitamente mediante a conclusão de um fluxo de configuração. Após a conclusão desse fluxo, os utilizadores podem enviar e receber mensagens SMS nos respetivos Carbon Browserbooks.
 
       Se esta definição for desativada, os utilizadores não podem configurar a sincronização de SMS.
 
@@ -947,7 +947,7 @@
 <translation id="2706708761587205154">Permitir impressão apenas com PIN</translation>
 <translation id="2710534340210290498">Se esta política estiver definida como Falsa, os utilizadores não podem bloquear o ecrã (apenas será possível terminar a sessão de utilizador). Se esta política estiver definida como Verdadeira ou não estiver definida, os utilizadores que efetuaram a autenticação com uma palavra-passe podem bloquear o ecrã.</translation>
 <translation id="2731627323327011390">Desativar a utilização de certificados do <ph name="PRODUCT_OS_NAME" /> em aplicações ARC</translation>
-<translation id="2742843273354638707">Oculta a aplicação da Web Store do Carbon Browser Browser Browser e o link do rodapé da página Novo separador e do iniciador de aplicações do <ph name="PRODUCT_OS_NAME" />.
+<translation id="2742843273354638707">Oculta a aplicação da Web Store do Carbon Browser e o link do rodapé da página Novo separador e do iniciador de aplicações do <ph name="PRODUCT_OS_NAME" />.
 
       Quando esta política está definida como verdadeira, os ícones estão ocultos.
 
@@ -1009,12 +1009,12 @@
       Quando esta política estiver definida para uma lista não vazia de intervalos de tempo:
       Os dispositivos não poderão realizar verificações automáticas de atualizações durante os intervalos de tempo especificados. Os dispositivos que requerem uma reversão ou que sejam anteriores à versão mínima do <ph name="PRODUCT_OS_NAME" /> não serão afetados por esta política devido a possíveis problemas de segurança. Além disso, esta política não bloqueia as verificações de atualizações solicitadas pelos utilizadores ou administradores.
       Quando esta política não estiver definida ou não contiver quaisquer intervalos de tempo:
-      Esta política não bloqueará quaisquer verificações automáticas de atualizações, contudo, estas podem ser bloqueadas por outras políticas. Esta funcionalidade só está disponível em dispositivos Carbon Browser Browser Browser configurados como quiosques de início automático. Os outros dispositivos não são restringidos por esta política.</translation>
+      Esta política não bloqueará quaisquer verificações automáticas de atualizações, contudo, estas podem ser bloqueadas por outras políticas. Esta funcionalidade só está disponível em dispositivos Carbon Browser configurados como quiosques de início automático. Os outros dispositivos não são restringidos por esta política.</translation>
 <translation id="2823870601012066791">Localização da base de dados de registo do Windows para os clientes <ph name="PRODUCT_OS_NAME" />:</translation>
 <translation id="2824715612115726353">Ativar o modo de navegação anónima</translation>
 <translation id="2836621397261130126">Controla se a aprovação da política do KDC é respeitada para decidir se deve delegar permissões <ph name="KERBEROS" />.
 
-          Se esta política estiver definida como verdadeira, a autenticação HTTP respeita a aprovação da política do KDC. O Carbon Browser Browser Browser apenas delega credenciais se o KDC definir <ph name="OK_AS_DELEGATE" /> numa permissão do serviço. Consulte https://tools.ietf.org/html/rfc5896.html para obter mais informações. O serviço também deve corresponder à política "AuthNegotiateDelegateWhitelist".
+          Se esta política estiver definida como verdadeira, a autenticação HTTP respeita a aprovação da política do KDC. O Carbon Browser apenas delega credenciais se o KDC definir <ph name="OK_AS_DELEGATE" /> numa permissão do serviço. Consulte https://tools.ietf.org/html/rfc5896.html para obter mais informações. O serviço também deve corresponder à política "AuthNegotiateDelegateWhitelist".
 
           Se esta política não estiver definida ou estiver definida como falsa, a política do KDC é ignorada nas plataformas suportadas e apenas é respeitada a política "AuthNegotiateDelegateWhitelist".
 
@@ -1160,7 +1160,7 @@
 <translation id="3034580675120919256">Permite definir se os Web sites estão autorizados a executar JavaScript. A execução de JavaScript pode ser permitida para todos os Web sites ou negada para todos os Web sites. Se esta política não for definida, será utilizada a definição "AllowJavaScript" e o utilizador poderá alterá-la.</translation>
 <translation id="3038323923255997294">Continuar a executar aplicações em segundo plano quando o <ph name="PRODUCT_NAME" /> está fechado</translation>
 <translation id="3046192273793919231">Enviar pacotes de rede para o servidor de gestão para monitorizar o estado online</translation>
-<translation id="3047732214002457234">Controlar a forma como a Limpeza do Carbon Browser Browser Browser envia dados para a Google</translation>
+<translation id="3047732214002457234">Controlar a forma como a Limpeza do Carbon Browser envia dados para a Google</translation>
 <translation id="304775240152542058">Esta política controla os parâmetros da linha de comandos a iniciar para o navegador alternativo.
 
       Quando esta política não está definida, apenas o URL é transmitido como parâmetro da linha de comandos.
@@ -1232,9 +1232,9 @@
       Se a política não for definida ou for definida como falsa, os conjuntos de cifras DHE no TLS não estão ativados. Caso contrário, pode ser definida como verdadeira para ativar os conjuntos de cifras DHE e manter a compatibilidade com um servidor desatualizado. Esta é uma medida temporária e é necessário voltar a configurar o servidor.
 
       É recomendado migrar os servidores para os conjuntos de cifras ECDHE. Se não estiverem disponíveis, certifique-se de que está ativado um conjunto de cifras que utilize a troca de chaves RSA.</translation>
-<translation id="3117706142826400449">Se estiver desativada, impede a Limpeza do Carbon Browser Browser Browser de verificar a existência de software indesejado no sistema e de realizar limpezas. O acionamento manual da Limpeza do Carbon Browser Browser Browser a partir de chrome://settings/cleanup está desativado.
+<translation id="3117706142826400449">Se estiver desativada, impede a Limpeza do Carbon Browser de verificar a existência de software indesejado no sistema e de realizar limpezas. O acionamento manual da Limpeza do Carbon Browser a partir de chrome://settings/cleanup está desativado.
 
-      Se estiver ativada ou por definir, a Limpeza do Carbon Browser Browser Browser verifica periodicamente a existência de software indesejado no sistema e, caso encontre algum, pergunta ao utilizador se pretende removê-lo. O acionamento manual da Limpeza do Carbon Browser Browser Browser a partir de chrome://settings está ativado.
+      Se estiver ativada ou por definir, a Limpeza do Carbon Browser verifica periodicamente a existência de software indesejado no sistema e, caso encontre algum, pergunta ao utilizador se pretende removê-lo. O acionamento manual da Limpeza do Carbon Browser a partir de chrome://settings está ativado.
 
       Esta política está apenas disponível em instâncias do Windows associadas a um domínio do <ph name="MS_AD_NAME" /> ou em instâncias do Windows 10 Pro ou Enterprise inscritas para gestão de dispositivos.</translation>
 <translation id="3152425128389603870">Disponibilizar o Ambiente de trabalho unificado e ativá-lo por predefinição</translation>
@@ -1345,7 +1345,7 @@ Se esta definição estiver desativada, os utilizadores não podem ativar o prox
       Se esta política estiver definida como Desativada ou não for definido qualquer valor, o <ph name="PRODUCT_NAME" /> não aplica o Modo restrito no YouTube. As políticas externas, tais como as políticas do YouTube, podem ainda assim aplicar o Modo restrito.</translation>
 <translation id="3428247105888806363">Ativar previsão de rede</translation>
 <translation id="3432863169147125747">Controla as definições de impressão.</translation>
-<translation id="3434932177006334880">Esta definição foi denominada EnableWebBasedSignin antes do Carbon Browser Browser Browser 42 e o respetivo apoio técnico vai ser completamente removido no Carbon Browser Browser Browser 43.
+<translation id="3434932177006334880">Esta definição foi denominada EnableWebBasedSignin antes do Carbon Browser 42 e o respetivo apoio técnico vai ser completamente removido no Carbon Browser 43.
 
       Esta definição é útil para os clientes empresariais que utilizem soluções de SSO ainda incompatíveis com o novo fluxo de início de sessão inline.
       Se ativar esta definição, é utilizado o antigo fluxo de início de sessão baseado na Web.
@@ -1443,9 +1443,9 @@ Se esta definição estiver desativada, os utilizadores não podem ativar o prox
 <translation id="3646859102161347133">Definir tipo de lupa</translation>
 <translation id="3653237928288822292">Ícone do fornecedor de pesquisas predefinido</translation>
 <translation id="3660510274595679517">
-        Se esta política estiver definida como verdadeira, a inscrição na gestão na nuvem é obrigatória e, se falhar, bloqueia o processo de iniciação do Carbon Browser Browser Browser.
+        Se esta política estiver definida como verdadeira, a inscrição na gestão na nuvem é obrigatória e, se falhar, bloqueia o processo de iniciação do Carbon Browser.
 
-        Se esta política estiver definida como falsa, a inscrição na gestão na nuvem é opcional e, se falhar, não bloqueia o processo de iniciação do Carbon Browser Browser Browser.
+        Se esta política estiver definida como falsa, a inscrição na gestão na nuvem é opcional e, se falhar, não bloqueia o processo de iniciação do Carbon Browser.
 
         Esta política é utilizada pela inscrição de políticas de nuvem num âmbito automático em computadores e pode ser definida pela Base de dados de registo ou GPO no Windows, pelo plist no Mac e pelo ficheiro da política JSON no Linux.</translation>
 <translation id="3660562134618097814">Transferir cookies SAML IdP durante o início de sessão</translation>
@@ -1638,11 +1638,11 @@ Se esta definição estiver desativada, os utilizadores não podem ativar o prox
 <translation id="3984028218719007910">Determina se o <ph name="PRODUCT_OS_NAME" /> mantém os dados de contas locais depois de terminar sessão. Se esta política estiver definida como verdadeira, o <ph name="PRODUCT_OS_NAME" /> não mantém contas persistentes e todos os dados da sessão do utilizador serão rejeitados depois de terminar sessão. Se estiver definida como falsa ou não estiver configurada, o dispositivo pode manter dados de utilizadores locais (encriptados).</translation>
 <translation id="398475542699441679">Esta política controla se a Compatibilidade com o navegador antigo é ativada ou não.
 
-      Quando esta política não está definida ou é definida como falsa, o Carbon Browser Browser Browser não tenta iniciar os URLs designados num navegador alternativo.
+      Quando esta política não está definida ou é definida como falsa, o Carbon Browser não tenta iniciar os URLs designados num navegador alternativo.
 
-      Quando esta política está definida como verdadeira, o Carbon Browser Browser Browser tenta iniciar alguns URLs num navegador alternativo (como o Internet Explorer). Esta funcionalidade é configurada através das políticas do grupo <ph name="LEGACY_BROWSER_SUPPORT_POLICY_GROUP" />.
+      Quando esta política está definida como verdadeira, o Carbon Browser tenta iniciar alguns URLs num navegador alternativo (como o Internet Explorer). Esta funcionalidade é configurada através das políticas do grupo <ph name="LEGACY_BROWSER_SUPPORT_POLICY_GROUP" />.
 
-      Esta funcionalidade substitui a extensão <ph name="LEGACY_BROWSER_SUPPORT_EXTENSION_NAME" />. A configuração permitida pela extensão será transferida para esta funcionalidade, mas recomendamos vivamente que utilize as políticas do Carbon Browser Browser Browser. Assim, garante uma melhor compatibilidade no futuro.</translation>
+      Esta funcionalidade substitui a extensão <ph name="LEGACY_BROWSER_SUPPORT_EXTENSION_NAME" />. A configuração permitida pela extensão será transferida para esta funcionalidade, mas recomendamos vivamente que utilize as políticas do Carbon Browser. Assim, garante uma melhor compatibilidade no futuro.</translation>
 <translation id="3997519162482760140">URLs aos quais será concedido acesso a dispositivos de captura de vídeo nas páginas de início de sessão SAML</translation>
 <translation id="4001275826058808087">Os administradores de TI para dispositivos empresariais podem utilizar este sinalizador para permitir que os utilizadores resgatem ofertas através do Registo no Chrome OS.
 
@@ -1661,13 +1661,13 @@ Se esta definição estiver desativada, os utilizadores não podem ativar o prox
 
           Esta política tem prioridade sobre uma política <ph name="EXTENSION_INSTALL_BLACKLIST_POLICY_NAME" /> potencialmente conflituosa. Se uma aplicação ou extensão previamente instalada de forma forçada for removida desta lista, é automaticamente desinstalada pelo <ph name="PRODUCT_NAME" />.
 
-          Em instâncias do Windows que não façam parte de um domínio <ph name="MS_AD_NAME" />, a instalação forçada está limitada a aplicações e extensões apresentadas na Web Store do Carbon Browser Browser Browser.
+          Em instâncias do Windows que não façam parte de um domínio <ph name="MS_AD_NAME" />, a instalação forçada está limitada a aplicações e extensões apresentadas na Web Store do Carbon Browser.
 
           Tenha em atenção que o código-fonte de qualquer extensão pode ser alterado pelos utilizadores através das Ferramentas para programadores (o que pode resultar no funcionamento incorreto da extensão). Se pretender evitar esta situação, defina a política <ph name="DEVELOPER_TOOLS_POLICY_NAME" />.
 
-          Cada item de lista da política é uma string que contém um ID de extensão e, opcionalmente, um URL de "atualização" separado por ponto e vírgula (<ph name="SEMICOLON" />). O ID da extensão é a string de 32 letras encontrada, por exemplo, em <ph name="CHROME_EXTENSIONS_LINK" /> no modo de programador. O URL de "atualização", se especificado, deve apontar para um documento XML de Atualização do manifesto conforme descrito em <ph name="LINK_TO_EXTENSION_DOC1" />. Por predefinição, utiliza-se o URL de atualização da Web Store do Carbon Browser Browser Browser (que, atualmente, é "https://clients2.google.com/service/update2/crx"). Tenha em atenção que o URL de "atualização" definido nesta política apenas é utilizado para a instalação inicial e as atualizações subsequentes da extensão utilizam o URL de atualização indicado no manifesto da extensão. Tenha também em atenção que era obrigatório especificar explicitamente o URL de "atualização" até à versão 67 do <ph name="PRODUCT_NAME" />, inclusive.
+          Cada item de lista da política é uma string que contém um ID de extensão e, opcionalmente, um URL de "atualização" separado por ponto e vírgula (<ph name="SEMICOLON" />). O ID da extensão é a string de 32 letras encontrada, por exemplo, em <ph name="CHROME_EXTENSIONS_LINK" /> no modo de programador. O URL de "atualização", se especificado, deve apontar para um documento XML de Atualização do manifesto conforme descrito em <ph name="LINK_TO_EXTENSION_DOC1" />. Por predefinição, utiliza-se o URL de atualização da Web Store do Carbon Browser (que, atualmente, é "https://clients2.google.com/service/update2/crx"). Tenha em atenção que o URL de "atualização" definido nesta política apenas é utilizado para a instalação inicial e as atualizações subsequentes da extensão utilizam o URL de atualização indicado no manifesto da extensão. Tenha também em atenção que era obrigatório especificar explicitamente o URL de "atualização" até à versão 67 do <ph name="PRODUCT_NAME" />, inclusive.
 
-          Por exemplo, a política <ph name="EXTENSION_POLICY_EXAMPLE" /> instala a extensão com o ID <ph name="EXTENSION_ID_SAMPLE" /> a partir do URL de "atualização" padrão da Web Store do Carbon Browser Browser Browser. Para mais informações acerca do alojamento de extensões, consulte: <ph name="LINK_TO_EXTENSION_DOC2" />.
+          Por exemplo, a política <ph name="EXTENSION_POLICY_EXAMPLE" /> instala a extensão com o ID <ph name="EXTENSION_ID_SAMPLE" /> a partir do URL de "atualização" padrão da Web Store do Carbon Browser. Para mais informações acerca do alojamento de extensões, consulte: <ph name="LINK_TO_EXTENSION_DOC2" />.
 
           Se esta política não estiver definida, não é efetuada a instalação automática de aplicações ou de extensões e o utilizador pode desinstalar qualquer aplicação ou extensão no <ph name="PRODUCT_NAME" />.
 
@@ -1772,7 +1772,7 @@ Se esta definição estiver desativada, os utilizadores não podem ativar o prox
           Se definir esta política, os utilizadores não a poderão alterar nem substituir.
 
           Se esta política não for definida, as teclas aderentes estarão inicialmente desativadas, mas poderão ser ativadas em qualquer altura pelo utilizador.</translation>
-<translation id="4171331498167688968">Se a política estiver definida como falsa, o software de terceiros estará autorizado a injetar código executável nos processos do Carbon Browser Browser Browser. Se a política não estiver definida ou estiver definida como verdadeira, o software de terceiros será impedido de injetar código executável nos processos do Carbon Browser Browser Browser.
+<translation id="4171331498167688968">Se a política estiver definida como falsa, o software de terceiros estará autorizado a injetar código executável nos processos do Carbon Browser. Se a política não estiver definida ou estiver definida como verdadeira, o software de terceiros será impedido de injetar código executável nos processos do Carbon Browser.
 
       Independentemente do valor desta política, o navegador não impede atualmente software de terceiros de injetar código executável nos respetivos processos num computador associado a um domínio <ph name="MS_AD_NAME" />.</translation>
 <translation id="4183229833636799228">Definição de <ph name="FLASH_PLUGIN_NAME" /> predefinida</translation>
@@ -1841,11 +1841,11 @@ Se esta definição estiver desativada, os utilizadores não podem ativar o prox
 <translation id="4298509794364745131">Especifica a lista de aplicações que podem ser ativadas como aplicações para tirar notas no ecrã de bloqueio do <ph name="PRODUCT_OS_NAME" />.
 
       Se a aplicação para tirar notas preferida estiver ativada no ecrã de bloqueio, este irá conter um elemento de IU para a iniciar.
-      Quando for iniciada, a aplicação pode criar uma janela da aplicação na parte superior do ecrã de bloqueio e criar itens de dados (notas) no contexto do ecrã de bloqueio. A aplicação pode importar notas criadas para a sessão do utilizador principal quando a sessão estiver desbloqueada. Atualmente, o ecrã de bloqueio suporta apenas aplicações para tirar notas do Carbon Browser Browser Browser.
+      Quando for iniciada, a aplicação pode criar uma janela da aplicação na parte superior do ecrã de bloqueio e criar itens de dados (notas) no contexto do ecrã de bloqueio. A aplicação pode importar notas criadas para a sessão do utilizador principal quando a sessão estiver desbloqueada. Atualmente, o ecrã de bloqueio suporta apenas aplicações para tirar notas do Carbon Browser.
 
       Se a política estiver definida, o utilizador apenas pode ativar uma aplicação no ecrã de bloqueio se o ID de extensão da aplicação estiver incluído no valor da lista da política.
       Por conseguinte, definir esta política para uma lista vazia desativa totalmente a possibilidade de tirar notas no ecrã de bloqueio.
-      Tenha em atenção que o facto de a política incluir um ID de aplicação não significa necessariamente que o utilizador possa ativar a aplicação como uma aplicação para tirar notas no ecrã de bloqueio. Por exemplo, no Carbon Browser Browser Browser 61, aplicam-se restrições adicionais da plataforma ao conjunto de aplicações disponíveis.
+      Tenha em atenção que o facto de a política incluir um ID de aplicação não significa necessariamente que o utilizador possa ativar a aplicação como uma aplicação para tirar notas no ecrã de bloqueio. Por exemplo, no Carbon Browser 61, aplicam-se restrições adicionais da plataforma ao conjunto de aplicações disponíveis.
 
       Se a política não for definida, não se aplicam as restrições impostas pela política ao conjunto de aplicações que o utilizador pode ativar no ecrã de bloqueio.</translation>
 <translation id="4313767483634435271">Endereço MAC designado da estação de ancoragem do dispositivo</translation>
@@ -1994,7 +1994,7 @@ Se esta definição estiver desativada, os utilizadores não podem ativar o prox
 <translation id="467236746355332046">Funcionalidades suportadas:</translation>
 <translation id="4674167212832291997">Personaliza a lista de padrões de URL que devem ser sempre processados pelo <ph name="PRODUCT_FRAME_NAME" />.
 
-          Se esta política não for definida, é utilizado o processador predefinido para todos os sites, conforme especificado pela política "Carbon Browser Browser BrowserFrameRendererSettings".
+          Se esta política não for definida, é utilizado o processador predefinido para todos os sites, conforme especificado pela política "Carbon BrowserFrameRendererSettings".
 
           Para obter exemplos de padrões, consulte https://www.chromium.org/developers/how-tos/chrome-frame-getting-started.</translation>
 <translation id="467449052039111439">Abrir uma lista de URLs</translation>
@@ -2092,10 +2092,10 @@ Se esta definição estiver desativada, os utilizadores não podem ativar o prox
 
       Se esta política estiver definida como falsa, o <ph name="PRODUCT_NAME" /> não permite a criação de novos perfis a partir do gestor de utilizadores.</translation>
 <translation id="4970855112942626932">Desativar o início de sessão no navegador</translation>
-<translation id="4978405676361550165">Se a política "OffHours" estiver definida, as políticas do dispositivo especificadas são ignoradas (utilize as predefinições destas políticas) durante os intervalos de tempo definidos. O Carbon Browser Browser Browser volta a aplicar as políticas do dispositivo em todos os eventos em que começa ou termina o período "OffHours". O utilizador é notificado e obrigado a terminar sessão quando o período "OffHours" termina e as definições da política do dispositivo são alteradas (por exemplo, quando o utilizador tem sessão iniciada com uma conta não autorizada).</translation>
+<translation id="4978405676361550165">Se a política "OffHours" estiver definida, as políticas do dispositivo especificadas são ignoradas (utilize as predefinições destas políticas) durante os intervalos de tempo definidos. O Carbon Browser volta a aplicar as políticas do dispositivo em todos os eventos em que começa ou termina o período "OffHours". O utilizador é notificado e obrigado a terminar sessão quando o período "OffHours" termina e as definições da política do dispositivo são alteradas (por exemplo, quando o utilizador tem sessão iniciada com uma conta não autorizada).</translation>
 <translation id="4980635395568992380">Tipo de dados:</translation>
 <translation id="4983201894483989687">Permitir a execução de plug-ins desatualizados</translation>
-<translation id="4986560318567565414">Caminho para o Carbon Browser Browser Browser para mudar do navegador alternativo.</translation>
+<translation id="4986560318567565414">Caminho para o Carbon Browser para mudar do navegador alternativo.</translation>
 <translation id="4988291787868618635">Ação a realizar quando o atraso de inatividade for alcançado</translation>
 <translation id="5034604678285451405">Defina o limiar da bateria de desvio de picos de energia em percentagem.
 
@@ -2165,11 +2165,11 @@ Se esta definição estiver desativada, os utilizadores não podem ativar o prox
       Se a política for definida como 0, a alteração da palavra-passe da conta da máquina é desativada.
 
       Tenha em atenção que as palavras-passe poderão ultrapassar o número de dias especificado se o cliente estiver offline por um período de tempo mais longo.</translation>
-<translation id="510196893779239086">Esta política controla se o Carbon Browser Browser Browser é fechado completamente quando o último separador muda para outro navegador.
+<translation id="510196893779239086">Esta política controla se o Carbon Browser é fechado completamente quando o último separador muda para outro navegador.
 
-      Se esta política não for definida ou for definida como verdadeira, o Carbon Browser Browser Browser mantém pelo menos um separador aberto depois de mudar para um navegador alternativo.
+      Se esta política não for definida ou for definida como verdadeira, o Carbon Browser mantém pelo menos um separador aberto depois de mudar para um navegador alternativo.
 
-      Se esta política for definida como falsa, o Carbon Browser Browser Browser fecha o separador depois de mudar para um navegador alternativo, mesmo que seja o último separador. Desta forma, a execução do Carbon Browser Browser Browser será terminada.</translation>
+      Se esta política for definida como falsa, o Carbon Browser fecha o separador depois de mudar para um navegador alternativo, mesmo que seja o último separador. Desta forma, a execução do Carbon Browser será terminada.</translation>
 <translation id="5102203758995933166">Permite que a configuração de rede seja aplicada por utilizador a um dispositivo <ph name="PRODUCT_OS_NAME" />. A configuração de rede é uma cadeia de formato JSON, conforme definido pelo formato de Configuração de rede aberta.</translation>
 <translation id="5105313908130842249">Atraso do bloqueio do ecrã quando o dispositivo está a utilizar a energia da bateria</translation>
 <translation id="5108031557082757679">Impressoras empresariais de dispositivos desativadas</translation>
@@ -2184,7 +2184,7 @@ Se esta definição estiver desativada, os utilizadores não podem ativar o prox
 <translation id="5148753489738115745">Permite especificar parâmetros adicionais utilizados quando o <ph name="PRODUCT_FRAME_NAME" /> iniciar o <ph name="PRODUCT_NAME" />.
 
           Se esta política não estiver definida, será utilizada a linha de comandos predefinida.</translation>
-<translation id="5152787786897382519">Tanto o Carbon Browser Browser Browser como o Carbon Browser Browser Browser têm alguns grupos de políticas que dependem umas das outras para assegurar o controlo de uma funcionalidade. Estes conjuntos são representados pelos seguintes grupos de políticas. Uma vez que as políticas podem ter várias origens, apenas são aplicados os valores provenientes da origem de prioridade mais elevada. Os valores provenientes de uma origem de prioridade mais baixa no mesmo grupo serão ignorados. A ordem de prioridade está definida em <ph name="POLICY_PRIORITY_DOC_URL" />.</translation>
+<translation id="5152787786897382519">Tanto o Carbon Browser como o Carbon Browser têm alguns grupos de políticas que dependem umas das outras para assegurar o controlo de uma funcionalidade. Estes conjuntos são representados pelos seguintes grupos de políticas. Uma vez que as políticas podem ter várias origens, apenas são aplicados os valores provenientes da origem de prioridade mais elevada. Os valores provenientes de uma origem de prioridade mais baixa no mesmo grupo serão ignorados. A ordem de prioridade está definida em <ph name="POLICY_PRIORITY_DOC_URL" />.</translation>
 <translation id="5159469559091666409">Frequência, em milissegundos, com que são enviados os pacotes de monitorização de rede.
 
       Se esta política não for definida, o intervalo predefinido é de 3 minutos. O
@@ -2285,7 +2285,7 @@ Se esta definição estiver desativada, os utilizadores não podem ativar o prox
           Um valor de "*" na lista negra significa que todos os anfitriões de mensagens nativas estão na lista negra, salvo se estiverem expressamente mencionados na lista de autorizações.
 
           Se esta política não for definida, o <ph name="PRODUCT_NAME" /> carregará todos os anfitriões de mensagens nativas instalados.</translation>
-<translation id="5272684451155669299">Se for verdadeira, o utilizador pode utilizar o hardware nos dispositivos Carbon Browser Browser Browser para comprovar remotamente a sua identidade perante a AC de privacidade através da <ph name="ENTERPRISE_PLATFORM_KEYS_API" /> com <ph name="CHALLENGE_USER_KEY_FUNCTION" />.
+<translation id="5272684451155669299">Se for verdadeira, o utilizador pode utilizar o hardware nos dispositivos Carbon Browser para comprovar remotamente a sua identidade perante a AC de privacidade através da <ph name="ENTERPRISE_PLATFORM_KEYS_API" /> com <ph name="CHALLENGE_USER_KEY_FUNCTION" />.
 
           Se estiver definida como falsa ou se não estiver definida, as chamadas para a API falham e resultam num código de erro.</translation>
 <translation id="5277806246014825877">Permite que este utilizador execute o Crostini.
@@ -2495,7 +2495,7 @@ Se esta definição estiver desativada, os utilizadores não podem ativar o prox
         Se a política estiver definida como falsa, os utilizadores não podem enviar comentários para a Google.
 
         Se a política não estiver definida ou estiver definida como verdadeira, os utilizadores podem enviar comentários para a Google através do Menu -&gt; Ajuda -&gt; Comunicar um problema ou de uma combinação de teclas.</translation>
-<translation id="5581292529942108810">Configure as políticas relacionadas com a Carbon Browser Browser Browser Reporting Extension.
+<translation id="5581292529942108810">Configure as políticas relacionadas com a Carbon Browser Reporting Extension.
 
       Esta política apenas entra em vigor quando a <ph name="CHROME_REPORTING_EXTENSION_NAME" /> está ativada e a máquina está associada à <ph name="MACHINE_LEVEL_USER_CLOUD_POLICY_ENROLLMENT_TOKEN_POLICY_NAME" />.</translation>
 <translation id="5583806683960333345">Se esta definição estiver ativada, os utilizadores podem utilizar a Ligação (à Internet) via telemóvel instantânea, que permite ao telemóvel Google partilhar os dados móveis com o dispositivo.
@@ -2521,7 +2521,7 @@ Se esta definição estiver desativada, os utilizadores não podem ativar o prox
 
       NOTA: no Android, o isolamento de site é experimental. O suporte será melhorado ao longo do tempo, mas atualmente pode causar problemas de desempenho.
 
-      NOTA: esta política é aplicável apenas ao Carbon Browser Browser Browser no Android nos dispositivos estritamente com mais de 1 GB de RAM. Para aplicar a política a plataformas não Android, utilize IsolateOrigins.
+      NOTA: esta política é aplicável apenas ao Carbon Browser no Android nos dispositivos estritamente com mais de 1 GB de RAM. Para aplicar a política a plataformas não Android, utilize IsolateOrigins.
       </translation>
 <translation id="5599461642204007579">Definições de gestão de <ph name="MS_AD_NAME" /></translation>
 <translation id="5610104657949692379">Quando esta política está definida, especifica a ação que o <ph name="PRODUCT_OS_NAME" /> efetua quando o utilizador permanece inativo durante o período de tempo determinado pelo atraso de inatividade, que pode ser configurado separadamente.
@@ -2529,7 +2529,7 @@ Se esta definição estiver desativada, os utilizadores não podem ativar o prox
           Quando esta política não está definida, é efetuada a ação predefinida, que é a suspensão.
 
           Se a ação for a suspensão, o <ph name="PRODUCT_OS_NAME" /> pode ser configurado separadamente para bloquear ou não bloquear o ecrã antes da suspensão.</translation>
-<translation id="5618398258385745432">A definição associada era utilizada antes de ser introduzida a reautenticação durante a visualização de palavras-passe. Depois disso, a definição e, consequentemente, esta política deixaram de afetar o comportamento do Carbon Browser Browser Browser. Atualmente, o Carbon Browser Browser Browser comporta-se como se a política estivesse definida para desativar a apresentação das palavras-passe em texto não codificado na página de definições do gestor de palavras-passe. Isto significa que a página de definições inclui apenas um marcador de posição e o Carbon Browser Browser Browser só mostra a palavra-passe depois de o utilizador clicar em "Mostrar" (e efetuar a reautenticação, se aplicável). Segue-se a descrição original da política.
+<translation id="5618398258385745432">A definição associada era utilizada antes de ser introduzida a reautenticação durante a visualização de palavras-passe. Depois disso, a definição e, consequentemente, esta política deixaram de afetar o comportamento do Carbon Browser. Atualmente, o Carbon Browser comporta-se como se a política estivesse definida para desativar a apresentação das palavras-passe em texto não codificado na página de definições do gestor de palavras-passe. Isto significa que a página de definições inclui apenas um marcador de posição e o Carbon Browser só mostra a palavra-passe depois de o utilizador clicar em "Mostrar" (e efetuar a reautenticação, se aplicável). Segue-se a descrição original da política.
 
           Controla se os utilizadores podem mostrar palavras-passe em texto não codificado no gestor de palavras-passe.
 
@@ -2630,7 +2630,7 @@ Se esta definição estiver desativada, os utilizadores não podem ativar o prox
       Se a política não estiver configurada, o utilizador pode alterar esta definição.
       </translation>
 <translation id="5832274826894536455">Políticas descontinuadas</translation>
-<translation id="5835124959204887277">Especifica os URLs e os domínios para os quais não é apresentada um pedido quando são solicitados os certificados de comprovação das Chaves de segurança. Além disso, é enviado um sinal para a Chave de segurança a indicar que a comprovação individual pode ser utilizada. Sem isto, os utilizadores do Carbon Browser Browser Browser 65 e superior recebem um pedido quando os sites solicitarem a comprovação das Chaves de segurança.
+<translation id="5835124959204887277">Especifica os URLs e os domínios para os quais não é apresentada um pedido quando são solicitados os certificados de comprovação das Chaves de segurança. Além disso, é enviado um sinal para a Chave de segurança a indicar que a comprovação individual pode ser utilizada. Sem isto, os utilizadores do Carbon Browser 65 e superior recebem um pedido quando os sites solicitarem a comprovação das Chaves de segurança.
 
       Os URLs (como https://example.com/some/path) obtêm correspondência apenas como appIDs de U2F. Os domínios (como example.com) obtêm correspondência apenas como IDs de RP de webauthn. Desta forma, para abranger APIs de U2F e de webauthn de um determinado site, tanto o URL como o domínio do appID têm de constar da lista.</translation>
 <translation id="5836064773277134605">Restringir o intervalo da porta UDP utilizado pelo anfitrião de acesso remoto</translation>
@@ -2763,7 +2763,7 @@ Se esta definição estiver desativada, os utilizadores não podem ativar o prox
 
       Quando esta política não está definida ou está definida como falsa, os dados não são recolhidos nem carregados.
       Quando esta política está definida com verdadeira, os dados são recolhidos e carregados para a Consola do administrador do Google.
-      Para controlar os dados que são carregados, utilize políticas no grupo Carbon Browser Browser Browser Reporting Extension.
+      Para controlar os dados que são carregados, utilize políticas no grupo Carbon Browser Reporting Extension.
 
       Esta política apenas entra em vigor quando a máquina é inscrita com <ph name="MACHINE_LEVEL_USER_CLOUD_POLICY_ENROLLMENT_TOKEN_POLICY_NAME" />.
 
@@ -2846,7 +2846,7 @@ Se esta definição estiver desativada, os utilizadores não podem ativar o prox
 <translation id="6282799760374509080">Permitir ou impedir a captura de áudio</translation>
 <translation id="6284362063448764300">TLS 1.1</translation>
 <translation id="6310223829319187614">Ativar o preenchimento automático do nome do domínio durante o início de sessão do utilizador</translation>
-<translation id="6315673513957120120">O Carbon Browser Browser Browser mostra uma página de aviso quando os utilizadores navegam para sites com erros de SSL. Por predefinição ou quando esta política está definida como verdadeira, os utilizadores estão autorizados a clicar nestas páginas de aviso.
+<translation id="6315673513957120120">O Carbon Browser mostra uma página de aviso quando os utilizadores navegam para sites com erros de SSL. Por predefinição ou quando esta política está definida como verdadeira, os utilizadores estão autorizados a clicar nestas páginas de aviso.
       Definir esta política como falsa desautoriza os utilizadores a clicar em qualquer página de aviso.</translation>
 <translation id="6319198883324703402">Defina o tempo da primeira notificação de reinício do utilizador</translation>
 <translation id="6352543686437322588">Conta local de dispositivo para início de sessão automático após atraso.
@@ -2888,7 +2888,7 @@ Se esta definição estiver desativada, os utilizadores não podem ativar o prox
           Se escolher detetar automaticamente o servidor proxy, é fornecido o URL "http://wpad/wpad.dat" do script às aplicações para Android. Não é utilizada mais nenhuma parte do protocolo de deteção automática do proxy.
 
           Se escolher utilizar um script de proxy .pac, o URL do script é fornecido às aplicações para Android.</translation>
-<translation id="6430366557948788869">Carbon Browser Browser Browser Reporting Extension</translation>
+<translation id="6430366557948788869">Carbon Browser Reporting Extension</translation>
 <translation id="6440051664870270040">Permitir que os sites naveguem e abram pop-ups em simultâneo</translation>
 <translation id="6447948611083700881">A cópia de segurança e o restauro estão desativados.</translation>
 <translation id="6449476513004303784">Não permitir que os utilizadores efetuem a gestão dos certificados</translation>
@@ -2946,9 +2946,9 @@ Se esta definição estiver desativada, os utilizadores não podem ativar o prox
 <translation id="6536600139108165863">Reinicialização automática no encerramento do dispositivo</translation>
 <translation id="6539246272469751178">Esta política não tem qualquer efeito em aplicações para Android. As aplicações para Android utilizam sempre o diretório de transferências predefinido e não podem aceder a quaisquer ficheiros transferidos pelo <ph name="PRODUCT_OS_NAME" /> para um diretório de transferências não predefinido.</translation>
 <translation id="654303922206238013">Estratégia de migração de ecryptfs</translation>
-<translation id="6544897973797372144">Se esta política for definida como Verdadeira e a política Carbon Browser Browser BrowserOsReleaseChannel não estiver especificada, os utilizadores do domínio inscrito serão autorizados a alterar o canal de lançamento do dispositivo. Se esta política for definida como Falsa, o dispositivo será bloqueado no último canal em que foi definido.
+<translation id="6544897973797372144">Se esta política for definida como Verdadeira e a política Carbon BrowserOsReleaseChannel não estiver especificada, os utilizadores do domínio inscrito serão autorizados a alterar o canal de lançamento do dispositivo. Se esta política for definida como Falsa, o dispositivo será bloqueado no último canal em que foi definido.
 
-      O canal selecionado do utilizador será substituído pela política Carbon Browser Browser BrowserOsReleaseChannel, mas, se o canal da política for mais estável do que o instalado no dispositivo, o canal apenas mudará quando a versão do canal mais estável atingir uma versão superior à instalada no dispositivo.</translation>
+      O canal selecionado do utilizador será substituído pela política Carbon BrowserOsReleaseChannel, mas, se o canal da política for mais estável do que o instalado no dispositivo, o canal apenas mudará quando a versão do canal mais estável atingir uma versão superior à instalada no dispositivo.</translation>
 <translation id="6553143066970470539">Percentagem de brilho do ecrã</translation>
 <translation id="6559057113164934677">Não permitir que nenhum site aceda à câmara e microfone</translation>
 <translation id="6561396069801924653">Mostrar opções de acessibilidade no menu do tabuleiro do sistema</translation>
@@ -3036,7 +3036,7 @@ Se esta definição estiver desativada, os utilizadores não podem ativar o prox
 
       Se esta política não estiver definida ou estiver definida como verdadeira, é utilizado o comportamento predefinido: é permitido iniciar sessão numa conta diferente a partir da área de conteúdo do navegador, exceto para contas de criança, em que está bloqueado para uma área de conteúdo do navegador que não esteja em navegação anónima.
 
-      Caso o início de sessão numa conta diferente não deva ser permitido através do modo de navegação anónima, considere bloquear esse modo através da política PrivateModeAvailability.
+      Caso o início de sessão numa conta diferente não deva ser permitido através do modo de navegação anónima, considere bloquear esse modo através da política privateModeAvailability.
 
       Tenha em atenção que os utilizadores podem aceder aos serviços Google com um estado não autenticado através do bloqueio dos respetivos cookies.</translation>
 <translation id="6757438632136860443">Permite-lhe definir uma lista de padrões de URL que especificam sites que estão autorizados a executar o plug-in <ph name="FLASH_PLUGIN_NAME" />.
@@ -3116,7 +3116,7 @@ Se esta definição estiver desativada, os utilizadores não podem ativar o prox
 
       NOTA: no Android, o isolamento de site é experimental. O suporte será melhorado ao longo do tempo, mas atualmente pode causar problemas de desempenho.
 
-      NOTA: esta política é aplicável apenas ao Carbon Browser Browser Browser no Android nos dispositivos estritamente com mais de 1 GB de RAM. Para aplicar a política a plataformas não Android, utilize SitePerProcess.
+      NOTA: esta política é aplicável apenas ao Carbon Browser no Android nos dispositivos estritamente com mais de 1 GB de RAM. Para aplicar a política a plataformas não Android, utilize SitePerProcess.
       </translation>
 <translation id="6922884955650325312">Bloquear o plug-in <ph name="FLASH_PLUGIN_NAME" /></translation>
 <translation id="6923366716660828830">Especifica o nome do fornecedor de pesquisas predefinido. Se deixar esta política em branco ou por definir, será utilizado o nome de anfitrião especificado pelo URL de pesquisa. Esta política apenas será considerada se a política "DefaultSearchProviderEnabled" estiver ativada.</translation>
@@ -3199,9 +3199,9 @@ Se esta definição estiver desativada, os utilizadores não podem ativar o prox
 
       Se a política for definida como "false" ou não for definida, o <ph name="PRODUCT_NAME" /> não pode recolher nem carregar esses registos.
 
-      Estes registos contêm informações de diagnóstico que são úteis para depurar problemas em chamadas de áudio ou videochamadas no Carbon Browser Browser Browser, como, por exemplo, a hora e o tamanho dos pacotes RTP enviados e recebidos, comentários sobre congestionamentos na rede e metadados sobre a hora e a qualidade dos frames de áudio e vídeo. Estes registos não incluem conteúdos de áudio ou vídeo das chamadas.
+      Estes registos contêm informações de diagnóstico que são úteis para depurar problemas em chamadas de áudio ou videochamadas no Carbon Browser, como, por exemplo, a hora e o tamanho dos pacotes RTP enviados e recebidos, comentários sobre congestionamentos na rede e metadados sobre a hora e a qualidade dos frames de áudio e vídeo. Estes registos não incluem conteúdos de áudio ou vídeo das chamadas.
 
-      Esta recolha de dados por parte do Carbon Browser Browser Browser só pode ser acionada pelos serviços Google na Web, como o Google Hangouts ou o Google Meet.
+      Esta recolha de dados por parte do Carbon Browser só pode ser acionada pelos serviços Google na Web, como o Google Hangouts ou o Google Meet.
 
       O Google poderá associar estes registos, mediante um ID de sessão, a outros registos que o próprio serviço Google recolha, o que tem como objetivo facilitar a depuração.
       </translation>
@@ -3293,12 +3293,12 @@ Se esta definição estiver desativada, os utilizadores não podem ativar o prox
 <translation id="7185078796915954712">TLS 1.3</translation>
 <translation id="718956142899066210">Tipos de ligação permitidos para atualizações</translation>
 <translation id="7194407337890404814">Nome do fornecedor de pesquisas predefinido</translation>
-<translation id="7199304109870655950">Configure as opções de acesso remoto no anfitrião do Ambiente de Trabalho Remoto do Carbon Browser Browser Browser.
+<translation id="7199304109870655950">Configure as opções de acesso remoto no anfitrião do Ambiente de Trabalho Remoto do Carbon Browser.
 
-      O anfitrião do Ambiente de Trabalho Remoto do Carbon Browser Browser Browser é um serviço nativo executado no computador de destino ao qual um utilizador se pode associar ao utilizar a aplicação Ambiente de Trabalho Remoto do Carbon Browser Browser Browser. O serviço nativo é comprimido e executado em separado a partir do navegador <ph name="PRODUCT_NAME" />.
+      O anfitrião do Ambiente de Trabalho Remoto do Carbon Browser é um serviço nativo executado no computador de destino ao qual um utilizador se pode associar ao utilizar a aplicação Ambiente de Trabalho Remoto do Carbon Browser. O serviço nativo é comprimido e executado em separado a partir do navegador <ph name="PRODUCT_NAME" />.
 
       Estas políticas são ignoradas, exceto se o
-      anfitrião do Ambiente de Trabalho Remoto do Carbon Browser Browser Browser estiver instalado.</translation>
+      anfitrião do Ambiente de Trabalho Remoto do Carbon Browser estiver instalado.</translation>
 <translation id="7202925763179776247">Permitir restrições de transferências</translation>
 <translation id="7207095846245296855">Forçar Google Pesquisa segura</translation>
 <translation id="7211368186050418507">Nunca detetar automaticamente o fuso horário</translation>
@@ -3400,7 +3400,7 @@ Se esta definição estiver desativada, os utilizadores não podem ativar o prox
 <translation id="7329968046053403405">Especifica o tipo de conta das contas fornecidas pela aplicação de autenticação Android que suporta a autenticação <ph name="HTTP_NEGOTIATE" /> (por exemplo, a autenticação Kerberos). Estas informações devem ser disponibilizadas pelo fornecedor da aplicação de autenticação. Para mais informações, consulte https://goo.gl/hajyfN.
 
           Se não for fornecida nenhuma definição, a autenticação <ph name="HTTP_NEGOTIATE" /> é desativada no Android.</translation>
-<translation id="7331962793961469250">Quando a opção está definida como Verdadeiro, as promoções de aplicações da Carbon Browser Browser Browser Web Store não serão apresentadas na página de novo separador. Definir esta opção como Falso ou deixá-la por definir fará com que as promoções de aplicações da Carbon Browser Browser Browser Web Store sejam apresentadas na página de novo separador.</translation>
+<translation id="7331962793961469250">Quando a opção está definida como Verdadeiro, as promoções de aplicações da Carbon Browser Web Store não serão apresentadas na página de novo separador. Definir esta opção como Falso ou deixá-la por definir fará com que as promoções de aplicações da Carbon Browser Web Store sejam apresentadas na página de novo separador.</translation>
 <translation id="7332963785317884918">Esta política está obsoleta. O <ph name="PRODUCT_OS_NAME" /> utilizará sempre a estratégia de limpeza "RemoveLRU".
 
       Controla o comportamento de limpeza automático em dispositivos <ph name="PRODUCT_OS_NAME" />. A limpeza automática é acionada quando a quantidade de espaço livre em disco atinge um nível crítico para recuperar algum espaço em disco.
@@ -3460,7 +3460,7 @@ Se esta definição estiver desativada, os utilizadores não podem ativar o prox
       </translation>
 <translation id="7506269062143646163">Ativar o suporte para Signed HTTP Exchange (SXG).
 
-          Se esta política não estiver definida ou estiver definida como Ativada, o Carbon Browser Browser Browser aceitará conteúdos Web servidos como Signed HTTP Exchanges.
+          Se esta política não estiver definida ou estiver definida como Ativada, o Carbon Browser aceitará conteúdos Web servidos como Signed HTTP Exchanges.
 
           Se esta política estiver definida como Desativada, não será possível carregar Signed HTTP Exchanges.</translation>
 <translation id="7511361072385293666">Se esta política estiver definida como verdadeira ou não estiver definida, é permitida a utilização do protocolo QUIC no <ph name="PRODUCT_NAME" />.
@@ -3499,7 +3499,7 @@ Se esta definição estiver desativada, os utilizadores não podem ativar o prox
 
       Se esta política não for definida ou for definida como 0, ao navegar para um determinado URL, este é imediatamente aberto num navegador alternativo.
 
-      Se esta política for definida como um número, o Carbon Browser Browser Browser apresenta uma mensagem com esse número de milissegundos e, em seguida, abre o navegador alternativo.</translation>
+      Se esta política for definida como um número, o Carbon Browser apresenta uma mensagem com esse número de milissegundos e, em seguida, abre o navegador alternativo.</translation>
 <translation id="7593523670408385997">Configura o tamanho da cache que o <ph name="PRODUCT_NAME" /> utilizará para armazenar ficheiros em cache no disco.
 
       Se definir esta política, o <ph name="PRODUCT_NAME" /> utilizará o tamanho da cache fornecido, independentemente de o utilizador ter especificado ou não a sinalização "--disk-cache-size". O valor especificado nesta política não é um limite rígido, mas, sim, uma sugestão para o sistema de colocação em cache. Qualquer valor alguns megabytes abaixo é demasiado pequeno e será arredondado para o mesmo valor mínimo.
@@ -3679,7 +3679,7 @@ Se esta definição estiver desativada, os utilizadores não podem ativar o prox
 
       NOTA: até à versão 45, esta política apenas era suportada no modo quiosque.</translation>
 <translation id="7912255076272890813">Configurar tipos de aplicações/extensões permitidos</translation>
-<translation id="7922358664346625612">Manter o último separador aberto no Carbon Browser Browser Browser</translation>
+<translation id="7922358664346625612">Manter o último separador aberto no Carbon Browser</translation>
 <translation id="793134539373873765">Especifica se o p2p será utilizado para cargas úteis de atualização do SO. Se estiver definido como Verdadeiro, os dispositivos irão partilhar e tentar consumir cargas úteisde atualização na LAN, reduzindo potencialmente a utilização e o congestionamento da largura de banda da Internet. Se a carga útil de atualização não estiver disponível na LAN, o dispositivo irá regressar à transferência a partir de um servidor de atualização. Se estiver definido como Falso ou se não estiver configurado, o p2p não será utilizado.</translation>
 <translation id="7933141401888114454">Permitir a criação de utilizadores supervisionados</translation>
 <translation id="793473937901685727">Definir a disponibilidade de certificados para aplicações ARC</translation>
@@ -3837,7 +3837,7 @@ Se esta definição estiver desativada, os utilizadores não podem ativar o prox
       Se a política ficar por definir, o <ph name="PRODUCT_OS_NAME" /> utilizará o ID da conta de email da conta local do dispositivo como o nome a apresentar no ecrã de início de sessão.
 
       Esta política é ignorada para contas de utilizador normais.</translation>
-<translation id="8259375588339409826">O Carbon Browser Browser Browser e o Carbon Browser Browser Browser suportam o mesmo conjunto de políticas. Tenha em atenção que este documento pode incluir políticas não lançadas (ou seja, a entrada "Suportado em" refere-se a uma versão do <ph name="PRODUCT_NAME" /> que ainda não foi lançada). Tais políticas estão sujeitas a alteração ou remoção sem aviso prévio e não são objeto de qualquer tipo de garantia, incluindo garantias quanto às respetivas propriedades de segurança e de privacidade.
+<translation id="8259375588339409826">O Carbon Browser e o Carbon Browser suportam o mesmo conjunto de políticas. Tenha em atenção que este documento pode incluir políticas não lançadas (ou seja, a entrada "Suportado em" refere-se a uma versão do <ph name="PRODUCT_NAME" /> que ainda não foi lançada). Tais políticas estão sujeitas a alteração ou remoção sem aviso prévio e não são objeto de qualquer tipo de garantia, incluindo garantias quanto às respetivas propriedades de segurança e de privacidade.
 
 A utilização destas políticas destina-se unicamente à configuração de instâncias do <ph name="PRODUCT_NAME" /> internas à sua entidade. A utilização destas políticas fora da sua entidade (por exemplo, num programa distribuído publicamente) é considerada software malicioso e será, provavelmente, etiquetada como software malicioso pela Google e por fornecedores de antivírus.
 
@@ -3854,7 +3854,7 @@ A forma recomendada para configurar a política no Windows é através do GPO, e
 
       Se a política estiver definida como falsa, as estatísticas não são comunicadas.
       Se estiver definida como verdadeira ou não estiver definida, as estatísticas são comunicadas.</translation>
-<translation id="8294750666104911727">Normalmente, as páginas com X-UA-Compatible definido como chrome=1 serão processadas em <ph name="PRODUCT_FRAME_NAME" />, independentemente da política "Carbon Browser Browser BrowserFrameRendererSettings".
+<translation id="8294750666104911727">Normalmente, as páginas com X-UA-Compatible definido como chrome=1 serão processadas em <ph name="PRODUCT_FRAME_NAME" />, independentemente da política "Carbon BrowserFrameRendererSettings".
 
           Se ativar esta definição, não serão procuradas metatags nas páginas.
 
@@ -3879,7 +3879,7 @@ A forma recomendada para configurar a política no Windows é através do GPO, e
 <translation id="8344454543174932833">Importar marcadores a partir do navegador predefinido na primeira execução</translation>
 <translation id="8357681633047935212">Limitar a duração de uma sessão de utilizador</translation>
 <translation id="8359734107661430198">Ativar a API ExampleDeprecatedFeature através de 2008/09/02</translation>
-<translation id="8367209241899435947">Ativar a Limpeza do Carbon Browser Browser Browser no Windows</translation>
+<translation id="8367209241899435947">Ativar a Limpeza do Carbon Browser no Windows</translation>
 <translation id="8369602308428138533">Atraso para desligar o ecrã quando o dispositivo está ligado à eletricidade</translation>
 <translation id="8371178326720637170">Permite que extensões geridas utilizem a API Enterprise Hardware Platform.</translation>
 <translation id="8374747520743832795">Comunicar estatísticas e identificadores de hardware relacionados com a energia.
@@ -3951,13 +3951,13 @@ A forma recomendada para configurar a política no Windows é através do GPO, e
       A política vai ser removida em M75.</translation>
 <translation id="8484458986062090479">Personaliza a lista de padrões de URL que devem ser sempre processados pelo navegador anfitrião.
 
-          Se esta política não for definida, é utilizado o processador predefinido para todos os sites, conforme especificado pela política "Carbon Browser Browser BrowserFrameRendererSettings".
+          Se esta política não for definida, é utilizado o processador predefinido para todos os sites, conforme especificado pela política "Carbon BrowserFrameRendererSettings".
 
           Para obter exemplos de padrões, consulte https://www.chromium.org/developers/how-tos/chrome-frame-getting-started.</translation>
 <translation id="8489964335640955763">PluginVm</translation>
 <translation id="8493645415242333585">Desativar armazenamento do histórico de navegação</translation>
 <translation id="8499172469244085141">Predefinições (os utilizadores podem substituir)</translation>
-<translation id="849962487677588458">Esta política foi descontinuada e está prevista a sua remoção no Carbon Browser Browser Browser 78, sem substituição.
+<translation id="849962487677588458">Esta política foi descontinuada e está prevista a sua remoção no Carbon Browser 78, sem substituição.
 
       Esta política ativa o HTTP/0.9 noutras portas que não a 80 para HTTP e a 443 para HTTPS.
 
@@ -3985,7 +3985,7 @@ A forma recomendada para configurar a política no Windows é através do GPO, e
 
       Aqui, "Versão" pode ser uma versão exata, como "61.0.3163.120" ou um prefixo de versão, como "61.0".  </translation>
 <translation id="8544375438507658205">Processador de HTML predefinido para <ph name="PRODUCT_FRAME_NAME" /></translation>
-<translation id="8544465954173828789">Permitir a sincronização de mensagens SMS do telemóvel com o Carbon Browser Browser Browserbook.</translation>
+<translation id="8544465954173828789">Permitir a sincronização de mensagens SMS do telemóvel com o Carbon Browserbook.</translation>
 <translation id="8548832052135586762">Define a impressão para cores apenas, monocromática apenas ou sem restrição do modo de cores. Uma política não definida é tratada como sem restrição.</translation>
 <translation id="8549772397068118889">Avisar quando estiver a visitar sites fora dos pacotes de conteúdo</translation>
 <translation id="8566729013138025202">Especifica um conjunto de políticas que são transmitidas ao tempo de execução ARC. O valor tem de ser um formato JSON válido.
@@ -4195,7 +4195,7 @@ A forma recomendada para configurar a política no Windows é através do GPO, e
 
           Esta política mapeia um ID de extensão ou um URL de atualização para a respetiva configuração. Com um ID de extensão, a configuração é aplicada apenas à extensão especificada. É possível definir uma configuração predefinida para o ID especial <ph name="DEFAULT_SCOPE" />, que irá aplicar-se a todas as extensões que não tenham uma configuração personalizada definida nesta política. Com um URL de atualização, a configuração é aplicada a todas as extensões com o URL de atualização exato indicado no manifesto desta extensão, conforme descrito em <ph name="LINK_TO_EXTENSION_DOC1" />.
 
-          Em instâncias do Windows que não façam parte de um domínio <ph name="MS_AD_NAME" />, a instalação forçada está limitada a aplicações e extensões apresentadas na Web Store do Carbon Browser Browser Browser.
+          Em instâncias do Windows que não façam parte de um domínio <ph name="MS_AD_NAME" />, a instalação forçada está limitada a aplicações e extensões apresentadas na Web Store do Carbon Browser.
           </translation>
 <translation id="8947415621777543415">Comunicar localização do dispositivo</translation>
 <translation id="8951350807133946005">Definir o diretório de cache do disco</translation>
@@ -4242,13 +4242,13 @@ A forma recomendada para configurar a política no Windows é através do GPO, e
       Se o valor da política for definido como um token que mapeia para uma Compilação de correção rápida, o dispositivo será atualizado para a Compilação de correção rápida correspondente, caso a atualização não seja bloqueada por nenhuma outra política.
 
       Se esta política não for definida ou se o respetivo valor não mapear para uma Compilação de correção rápida, o dispositivo não será atualizado para uma Compilação de correção rápida. Se o dispositivo já estiver a executar uma Compilação de correção rápida e a política já não estiver definida ou o respetivo valor já não mapear para uma Compilação de correção rápida, o dispositivo será atualizado para uma compilação normal, caso a atualização não seja bloqueada por nenhuma outra política.</translation>
-<translation id="9054012305936267950">Esta política controla o comportamento de início de sessão do navegador. Permite-lhe especificar se o utilizador pode iniciar sessão no <ph name="PRODUCT_NAME" /> com a respetiva conta e utilizar serviços relacionados com a conta, como a Sincronização do Carbon Browser Browser Browser.
+<translation id="9054012305936267950">Esta política controla o comportamento de início de sessão do navegador. Permite-lhe especificar se o utilizador pode iniciar sessão no <ph name="PRODUCT_NAME" /> com a respetiva conta e utilizar serviços relacionados com a conta, como a Sincronização do Carbon Browser.
 
-      Se a política estiver definida como "Desativar o início de sessão no navegador", o utilizador não pode iniciar sessão no navegador nem utilizar os serviços baseados na conta. Neste caso, as funcionalidades ao nível do navegador, como a Sincronização do Carbon Browser Browser Browser, não podem ser utilizadas e estão indisponíveis. Se o utilizador tiver sessão iniciada e a política for definida como "Desativada", a sessão do utilizador é terminada da próxima vez que este executar o Carbon Browser Browser Browser, mas os respetivos dados locais do perfil, como marcadores, palavras-passe, etc., mantêm-se guardados. O utilizador ainda poderá iniciar sessão e utilizar os serviços Web Google como o Gmail.
+      Se a política estiver definida como "Desativar o início de sessão no navegador", o utilizador não pode iniciar sessão no navegador nem utilizar os serviços baseados na conta. Neste caso, as funcionalidades ao nível do navegador, como a Sincronização do Carbon Browser, não podem ser utilizadas e estão indisponíveis. Se o utilizador tiver sessão iniciada e a política for definida como "Desativada", a sessão do utilizador é terminada da próxima vez que este executar o Carbon Browser, mas os respetivos dados locais do perfil, como marcadores, palavras-passe, etc., mantêm-se guardados. O utilizador ainda poderá iniciar sessão e utilizar os serviços Web Google como o Gmail.
 
-      Se a política estiver definida como "Ativar o início de sessão no navegador", o utilizador tem autorização para iniciar sessão no navegador e a respetiva sessão é iniciada automaticamente no mesmo quando tem sessão iniciada nos serviços Web Google como o Gmail. Ter sessão iniciada no navegador significa que as informações da conta do utilizador são guardadas pelo navegador. Contudo, tal não significa que a Sincronização do Carbon Browser Browser Browser estará ativa por predefinição; o utilizador tem de ativar separadamente a utilização desta funcionalidade. A ativação desta política impede que o utilizador desative a definição que permite o início de sessão no navegador. Para controlar a disponibilidade da Sincronização do Carbon Browser Browser Browser, utilize a política "SyncDisabled".
+      Se a política estiver definida como "Ativar o início de sessão no navegador", o utilizador tem autorização para iniciar sessão no navegador e a respetiva sessão é iniciada automaticamente no mesmo quando tem sessão iniciada nos serviços Web Google como o Gmail. Ter sessão iniciada no navegador significa que as informações da conta do utilizador são guardadas pelo navegador. Contudo, tal não significa que a Sincronização do Carbon Browser estará ativa por predefinição; o utilizador tem de ativar separadamente a utilização desta funcionalidade. A ativação desta política impede que o utilizador desative a definição que permite o início de sessão no navegador. Para controlar a disponibilidade da Sincronização do Carbon Browser, utilize a política "SyncDisabled".
 
-      Se a política estiver definida como "Forçar início de sessão no navegador", é apresentada ao utilizador uma caixa de diálogo de seleção de conta e este tem de optar e iniciar sessão para utilizar o navegador. Isto garante que, para as contas geridas, as políticas associadas à conta sejam aplicadas e implementadas. Por predefinição, esta opção ativa a Sincronização do Carbon Browser Browser Browser para a conta, exceto no caso em que a sincronização tenha sido desativada pelo administrador do domínio ou através da política "SyncDisabled". O valor predefinido de BrowserGuestModeEnabled vai ser definido como falso. Tenha em atenção que os perfis não assinados existentes serão bloqueados e estarão inacessíveis após a ativação desta política. Para mais informações, consulte o artigo do Centro de Ajuda: https://support.google.com/chrome/a/answer/7572556. Esta opção não é compatível com o Linux e, se for utilizada, utilizará "Ativar o início de sessão no navegador" como alternativa.
+      Se a política estiver definida como "Forçar início de sessão no navegador", é apresentada ao utilizador uma caixa de diálogo de seleção de conta e este tem de optar e iniciar sessão para utilizar o navegador. Isto garante que, para as contas geridas, as políticas associadas à conta sejam aplicadas e implementadas. Por predefinição, esta opção ativa a Sincronização do Carbon Browser para a conta, exceto no caso em que a sincronização tenha sido desativada pelo administrador do domínio ou através da política "SyncDisabled". O valor predefinido de BrowserGuestModeEnabled vai ser definido como falso. Tenha em atenção que os perfis não assinados existentes serão bloqueados e estarão inacessíveis após a ativação desta política. Para mais informações, consulte o artigo do Centro de Ajuda: https://support.google.com/chrome/a/answer/7572556. Esta opção não é compatível com o Linux e, se for utilizada, utilizará "Ativar o início de sessão no navegador" como alternativa.
 
       Se esta política não for definida, o utilizador pode decidir se pretende ativar a opção de início de sessão no navegador e utilizá-la conforme entender.</translation>
 <translation id="9072600218500597787">Configura os nomes de domínio do anfitrião obrigatórios que são impostos aos anfitriões de acesso remoto e impede os utilizadores de os alterarem.
@@ -4295,7 +4295,7 @@ A forma recomendada para configurar a política no Windows é através do GPO, e
 
       Se esta política estiver definida como verdadeira, os registos do sistema são enviados. Se
       estiver definida como falsa ou se não estiver definida, os registos do sistema não são enviados.</translation>
-<translation id="9150416707757015439">Esta política está obsoleta. Em alternativa, utilize PrivateModeAvailability. Ativa o modo de navegação anónima no <ph name="PRODUCT_NAME" />. Se esta definição estiver ativada ou não estiver configurada, os utilizadores podem abrir páginas Web no modo de navegação anónima. Se esta definição estiver desativada, os utilizadores não podem abrir páginas Web no modo de navegação anónima. Se deixar esta política por definir, a definição estará ativada e o utilizador poderá utilizar o modo de navegação anónima.</translation>
+<translation id="9150416707757015439">Esta política está obsoleta. Em alternativa, utilize privateModeAvailability. Ativa o modo de navegação anónima no <ph name="PRODUCT_NAME" />. Se esta definição estiver ativada ou não estiver configurada, os utilizadores podem abrir páginas Web no modo de navegação anónima. Se esta definição estiver desativada, os utilizadores não podem abrir páginas Web no modo de navegação anónima. Se deixar esta política por definir, a definição estará ativada e o utilizador poderá utilizar o modo de navegação anónima.</translation>
 <translation id="915194831143859291">Se esta política estiver definida como falsa ou não estiver configurada, o <ph name="PRODUCT_OS_NAME" /> permite ao utilizador encerrar o dispositivo.
       Se esta política estiver definida como verdadeira, o <ph name="PRODUCT_OS_NAME" /> aciona um reinício quando o utilizador encerrar o dispositivo. O <ph name="PRODUCT_OS_NAME" /> substitui todas as ocorrências de botões de encerramento na IU por botões de reinício. Se o utilizador encerrar o dispositivo através do botão ligar/desligar, este não reinicia automaticamente, mesmo que a política esteja ativada.</translation>
 <translation id="9152473318295429890">Ativar sugestões contextuais de páginas Web relacionadas</translation>
@@ -4335,7 +4335,7 @@ A forma recomendada para configurar a política no Windows é através do GPO, e
 
       Se esta política estiver definida, é utilizada para iniciar o <ph name="PRODUCT_NAME" /> quando iniciar o <ph name="PRODUCT_NAME" /> a partir do Internet Explorer.
 
-      Esta política pode ser definida para um caminho de ficheiro executável ou ${chrome} para detetar automaticamente a localização de instalação do Carbon Browser Browser Browser.</translation>
+      Esta política pode ser definida para um caminho de ficheiro executável ou ${chrome} para detetar automaticamente a localização de instalação do Carbon Browser.</translation>
 <translation id="930930237275114205">Definir diretório de dados do utilizador do <ph name="PRODUCT_FRAME_NAME" /></translation>
 <translation id="943865157632139008">Permite-lhe configurar o processador de HTML predefinido quando é instalado o <ph name="PRODUCT_FRAME_NAME" />.
       A predefinição é permitir que o navegador anfitrião efetue o processamento, mas, se pretender, pode substituir esta predefinição e fazer com que o <ph name="PRODUCT_FRAME_NAME" /> processe as páginas HTML por predefinição.</translation>

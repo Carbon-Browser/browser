@@ -4,7 +4,6 @@
 
 #include "base/at_exit.h"
 #include "base/command_line.h"
-#include "base/cxx17_backports.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/task/single_thread_task_executor.h"
 #include "components/exo/wayland/clients/client_base.h"
@@ -36,12 +35,13 @@ void FrameCallback(void* data, wl_callback* callback, uint32_t time) {
 class SubSurfaceClient : public ClientBase {
  public:
   SubSurfaceClient() = default;
+
+  SubSurfaceClient(const SubSurfaceClient&) = delete;
+  SubSurfaceClient& operator=(const SubSurfaceClient&) = delete;
+
   ~SubSurfaceClient() override = default;
 
   void Run(const ClientBase::InitParams& params);
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(SubSurfaceClient);
 };
 
 void SubSurfaceClient::Run(const ClientBase::InitParams& params) {
@@ -114,7 +114,7 @@ void SubSurfaceClient::Run(const ClientBase::InitParams& params) {
       Buffer* buffer = buffers_.front().get();
       SkCanvas* canvas = buffer->sk_surface->getCanvas();
       static const SkColor kColors[] = {SK_ColorRED, SK_ColorBLACK};
-      canvas->clear(kColors[frame_count % base::size(kColors)]);
+      canvas->clear(kColors[frame_count % std::size(kColors)]);
       if (gr_context_) {
         gr_context_->flushAndSubmit();
         glFinish();

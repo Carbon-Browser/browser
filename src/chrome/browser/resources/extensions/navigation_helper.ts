@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {assert} from 'chrome://resources/js/assert.m.js';
+import {assert} from 'chrome://resources/js/assert_ts.js';
 
 
 /**
@@ -13,6 +13,8 @@ export enum Page {
   LIST = 'items-list',
   DETAILS = 'details-view',
   ACTIVITY_LOG = 'activity-log',
+  SITE_PERMISSIONS = 'site-permissions',
+  SITE_PERMISSIONS_ALL_SITES = 'site-permissions-by-site',
   SHORTCUTS = 'keyboard-shortcuts',
   ERRORS = 'error-page',
 }
@@ -64,8 +66,9 @@ export class NavigationHelper {
   }
 
   /**
-   * Going to /configureCommands and /shortcuts should land you on /shortcuts.
-   * These are the only two supported routes, so all other cases will redirect
+   * Going to /configureCommands and /shortcuts should land you on /shortcuts,
+   * and going to /sitePermissions should land you on /sitePermissions.
+   * These are the only three supported routes, so all other cases will redirect
    * you to root path if not already on it.
    */
   private processRoute_() {
@@ -73,6 +76,12 @@ export class NavigationHelper {
         this.currentPath_ === '/shortcuts') {
       window.history.replaceState(
           undefined /* stateObject */, '', '/shortcuts');
+    } else if (this.currentPath_ === '/sitePermissions') {
+      window.history.replaceState(
+          undefined /* stateObject */, '', '/sitePermissions');
+    } else if (this.currentPath_ === '/sitePermissions/allSites') {
+      window.history.replaceState(
+          undefined /* stateObject */, '', '/sitePermissions/allSites');
     } else if (this.currentPath_ !== '/') {
       window.history.replaceState(undefined /* stateObject */, '', '/');
     }
@@ -102,6 +111,12 @@ export class NavigationHelper {
 
     if (this.currentPath_ === '/shortcuts') {
       return {page: Page.SHORTCUTS};
+    }
+    if (this.currentPath_ === '/sitePermissions') {
+      return {page: Page.SITE_PERMISSIONS};
+    }
+    if (this.currentPath_ === '/sitePermissions/allSites') {
+      return {page: Page.SITE_PERMISSIONS_ALL_SITES};
     }
 
     return {page: Page.LIST};
@@ -181,6 +196,12 @@ export class NavigationHelper {
         } else {
           path = '/?id=' + entry.extensionId;
         }
+        break;
+      case Page.SITE_PERMISSIONS:
+        path = '/sitePermissions';
+        break;
+      case Page.SITE_PERMISSIONS_ALL_SITES:
+        path = '/sitePermissions/allSites';
         break;
       case Page.SHORTCUTS:
         path = '/shortcuts';

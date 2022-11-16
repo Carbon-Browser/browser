@@ -8,11 +8,16 @@
 #include <memory>
 
 #include "ash/shell_delegate.h"
-#include "base/macros.h"
+#include "base/callback_forward.h"
+#include "url/gurl.h"
 
 class ChromeShellDelegate : public ash::ShellDelegate {
  public:
   ChromeShellDelegate();
+
+  ChromeShellDelegate(const ChromeShellDelegate&) = delete;
+  ChromeShellDelegate& operator=(const ChromeShellDelegate&) = delete;
+
   ~ChromeShellDelegate() override;
 
   // ash::ShellDelegate:
@@ -23,29 +28,30 @@ class ChromeShellDelegate : public ash::ShellDelegate {
   std::unique_ptr<ash::BackGestureContextualNudgeDelegate>
   CreateBackGestureContextualNudgeDelegate(
       ash::BackGestureContextualNudgeController* controller) override;
+  std::unique_ptr<ash::NearbyShareDelegate> CreateNearbyShareDelegate(
+      ash::NearbyShareController* controller) const override;
+  std::unique_ptr<ash::DesksTemplatesDelegate> CreateDesksTemplatesDelegate()
+      const override;
+  scoped_refptr<network::SharedURLLoaderFactory>
+  GetGeolocationUrlLoaderFactory() const override;
   void OpenKeyboardShortcutHelpPage() const override;
   bool CanGoBack(gfx::NativeWindow window) const override;
-  void SetTabScrubberEnabled(bool enabled) override;
+  void SetTabScrubberChromeOSEnabled(bool enabled) override;
   bool AllowDefaultTouchActions(gfx::NativeWindow window) override;
   bool ShouldWaitForTouchPressAck(gfx::NativeWindow window) override;
   bool IsTabDrag(const ui::OSExchangeData& drop_data) override;
   int GetBrowserWebUITabStripHeight() override;
-  aura::Window* CreateBrowserForTabDrop(
-      aura::Window* source_window,
-      const ui::OSExchangeData& drop_data) override;
   void BindBluetoothSystemFactory(
       mojo::PendingReceiver<device::mojom::BluetoothSystemFactory> receiver)
       override;
   void BindFingerprint(
       mojo::PendingReceiver<device::mojom::Fingerprint> receiver) override;
   void BindMultiDeviceSetup(
-      mojo::PendingReceiver<
-          chromeos::multidevice_setup::mojom::MultiDeviceSetup> receiver)
-      override;
+      mojo::PendingReceiver<ash::multidevice_setup::mojom::MultiDeviceSetup>
+          receiver) override;
   media_session::MediaSessionService* GetMediaSessionService() override;
-  std::unique_ptr<ash::NearbyShareDelegate> CreateNearbyShareDelegate(
-      ash::NearbyShareController* controller) const override;
   bool IsSessionRestoreInProgress() const override;
+  void SetUpEnvironmentForLockedFullscreen(bool locked) override;
   bool IsUiDevToolsStarted() const override;
   void StartUiDevTools() override;
   void StopUiDevTools() override;
@@ -53,14 +59,12 @@ class ChromeShellDelegate : public ash::ShellDelegate {
   bool IsLoggingRedirectDisabled() const override;
   base::FilePath GetPrimaryUserDownloadsFolder() const override;
   void OpenFeedbackPageForPersistentDesksBar() override;
-  std::unique_ptr<::full_restore::AppLaunchInfo>
-  GetAppLaunchDataForDeskTemplate(aura::Window* window) const override;
-
   static void SetDisableLoggingRedirectForTesting(bool value);
   static void ResetDisableLoggingRedirectForTesting();
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ChromeShellDelegate);
+  const GURL& GetLastCommittedURLForWindowIfAny(aura::Window* window) override;
+  version_info::Channel GetChannel() override;
+  void ForceSkipWarningUserOnClose(
+      const std::vector<aura::Window*>& windows) override;
 };
 
 #endif  // CHROME_BROWSER_UI_ASH_CHROME_SHELL_DELEGATE_H_

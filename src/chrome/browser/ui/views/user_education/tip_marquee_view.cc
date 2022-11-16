@@ -8,6 +8,7 @@
 
 #include "base/bind.h"
 #include "base/command_line.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/resources_util.h"
 #include "chrome/grit/theme_resources.h"
@@ -88,24 +89,26 @@ class TestTipMarqueeViewLearnMoreBubble
         SetLayoutManager(std::make_unique<views::FlexLayout>());
     layout->SetOrientation(views::LayoutOrientation::kHorizontal);
     layout->SetCrossAxisAlignment(views::LayoutAlignment::kStart);
-    layout->SetInteriorMargin(gfx::Insets(10, 0, 0, 0));
+    layout->SetInteriorMargin(gfx::Insets::TLBR(10, 0, 0, 0));
     views::View* const placeholder_image =
         AddChildView(std::make_unique<views::View>());
     placeholder_image->SetPreferredSize(gfx::Size(150, 175));
+    // In real UI, we wouldn't use kColorMidground directly, but rather create
+    // a new color ID mapped to it (or similar).
     placeholder_image->SetBackground(
-        views::CreateSolidBackground(SK_ColorLTGRAY));
+        views::CreateThemedSolidBackground(ui::kColorMidground));
 
     views::View* const rhs_view = AddChildView(std::make_unique<views::View>());
     auto* const rhs_layout =
         rhs_view->SetLayoutManager(std::make_unique<views::FlexLayout>());
     rhs_layout->SetOrientation(views::LayoutOrientation::kVertical);
     rhs_layout->SetCrossAxisAlignment(views::LayoutAlignment::kStart);
-    rhs_layout->SetInteriorMargin(gfx::Insets(0, 16, 0, 0));
+    rhs_layout->SetInteriorMargin(gfx::Insets::TLBR(0, 16, 0, 0));
 
     auto* const title_text =
         rhs_view->AddChildView(std::make_unique<views::Label>(
             kTipMarqueeViewTestTitleText, views::style::CONTEXT_DIALOG_TITLE));
-    title_text->SetProperty(views::kMarginsKey, gfx::Insets(6, 0, 10, 0));
+    title_text->SetProperty(views::kMarginsKey, gfx::Insets::TLBR(6, 0, 10, 0));
 
     auto* const body_text = rhs_view->AddChildView(
         std::make_unique<views::Label>(kTipMarqueeViewTestBodyText,
@@ -118,7 +121,7 @@ class TestTipMarqueeViewLearnMoreBubble
  private:
   void OnAccept() { marquee_->ClearTip(); }
 
-  TipMarqueeView* const marquee_;
+  const raw_ptr<TipMarqueeView> marquee_;
 };
 
 void ShowTestTipMarqueeViewLearnMoreBubble(TipMarqueeView* marquee) {
@@ -183,7 +186,7 @@ class TipMarqueeOverflowBubbleView : public views::BubbleDialogDelegateView {
     tip_marquee_view_->ClearTip();
   }
 
-  TipMarqueeView* const tip_marquee_view_;
+  const raw_ptr<TipMarqueeView> tip_marquee_view_;
 };
 
 BEGIN_METADATA(TipMarqueeOverflowBubbleView, views::BubbleDialogDelegateView)
@@ -203,7 +206,7 @@ TipMarqueeView::TipMarqueeView(int text_context, int text_style) {
   // tip_text_label_->SetElideBehavior(gfx::ElideBehavior::ELIDE_TAIL);
 
   SetBorder(views::CreateEmptyBorder(
-      gfx::Insets(0, kTipMarqueeIconTotalWidth, 0, 0)));
+      gfx::Insets::TLBR(0, kTipMarqueeIconTotalWidth, 0, 0)));
 
   SetVisible(false);
 
@@ -281,10 +284,11 @@ void TipMarqueeView::Layout() {
   } else {
     tip_text_label_->SetVisible(true);
     gfx::Rect text_rect = GetContentsBounds();
-    text_rect.Inset(0,
-                    std::max(0, (text_rect.height() -
-                                 tip_text_label_->GetPreferredSize().height()) /
-                                    2));
+    text_rect.Inset(gfx::Insets::VH(
+        std::max(0, (text_rect.height() -
+                     tip_text_label_->GetPreferredSize().height()) /
+                        2),
+        0));
     tip_text_label_->SetBoundsRect(text_rect);
   }
 }
@@ -300,7 +304,7 @@ void TipMarqueeView::OnPaint(gfx::Canvas* canvas) {
 }
 
 std::u16string TipMarqueeView::GetTooltipText(const gfx::Point& p) const {
-  if (!IsPointInIcon(p))
+  if (!GetVisible() || !IsPointInIcon(p))
     return View::GetTooltipText(p);
 
   // TODO(pkasting): Localize
@@ -350,7 +354,7 @@ void TipMarqueeView::ToggleOverflowWidget() {
   DCHECK(!show_tip_widget_);
   show_tip_widget_ = views::BubbleDialogDelegateView::CreateBubble(
       std::make_unique<TipMarqueeOverflowBubbleView>(this, tip_text_));
-  widget_observer_.Observe(show_tip_widget_);
+  widget_observer_.Observe(show_tip_widget_.get());
   show_tip_widget_->Show();
 }
 

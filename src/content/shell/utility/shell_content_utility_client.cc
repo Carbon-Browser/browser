@@ -16,7 +16,6 @@
 #include "base/memory/shared_memory_mapping.h"
 #include "base/memory/unsafe_shared_memory_region.h"
 #include "base/memory/writable_shared_memory_region.h"
-#include "base/no_destructor.h"
 #include "base/process/process.h"
 #include "build/build_config.h"
 #include "components/services/storage/test_api/test_api.h"
@@ -33,7 +32,7 @@
 #include "sandbox/policy/sandbox.h"
 #include "services/test/echo/echo_service.h"
 
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 #include "content/test/sandbox_status_service.h"
 #endif
 
@@ -47,6 +46,9 @@ class TestUtilityServiceImpl : public mojom::TestService {
     mojo::MakeSelfOwnedReceiver(base::WrapUnique(new TestUtilityServiceImpl),
                                 std::move(receiver));
   }
+
+  TestUtilityServiceImpl(const TestUtilityServiceImpl&) = delete;
+  TestUtilityServiceImpl& operator=(const TestUtilityServiceImpl&) = delete;
 
   // mojom::TestService implementation:
   void DoSomething(DoSomethingCallback callback) override {
@@ -112,8 +114,6 @@ class TestUtilityServiceImpl : public mojom::TestService {
 
  private:
   TestUtilityServiceImpl() = default;
-
-  DISALLOW_COPY_AND_ASSIGN(TestUtilityServiceImpl);
 };
 
 auto RunEchoService(mojo::PendingReceiver<echo::mojom::EchoService> receiver) {
@@ -137,12 +137,13 @@ ShellContentUtilityClient::~ShellContentUtilityClient() = default;
 
 void ShellContentUtilityClient::ExposeInterfacesToBrowser(
     mojo::BinderMap* binders) {
-  binders->Add(base::BindRepeating(&TestUtilityServiceImpl::Create),
-               base::ThreadTaskRunnerHandle::Get());
+  binders->Add<mojom::TestService>(
+      base::BindRepeating(&TestUtilityServiceImpl::Create),
+      base::ThreadTaskRunnerHandle::Get());
   binders->Add<mojom::PowerMonitorTest>(
       base::BindRepeating(&PowerMonitorTestImpl::MakeSelfOwnedReceiver),
       base::ThreadTaskRunnerHandle::Get());
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   if (register_sandbox_status_helper_) {
     binders->Add<content::mojom::SandboxStatusService>(
         base::BindRepeating(

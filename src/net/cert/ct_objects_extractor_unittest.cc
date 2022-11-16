@@ -14,9 +14,7 @@
 #include "net/test/test_data_directory.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace net {
-
-namespace ct {
+namespace net::ct {
 
 class CTObjectsExtractorTest : public ::testing::Test {
  public:
@@ -64,8 +62,7 @@ TEST_F(CTObjectsExtractorTest, ExtractEmbeddedSCT) {
   EXPECT_EQ(ct::GetTestPublicKeyId(), sct->log_id);
 
   base::Time expected_timestamp =
-      base::Time::UnixEpoch() +
-      base::TimeDelta::FromMilliseconds(1365181456275);
+      base::Time::UnixEpoch() + base::Milliseconds(1365181456275);
   EXPECT_EQ(expected_timestamp, sct->timestamp);
 }
 
@@ -84,8 +81,7 @@ TEST_F(CTObjectsExtractorTest, ExtractEmbeddedSCTListWithUIDs) {
   EXPECT_EQ(ct::GetTestPublicKeyId(), sct->log_id);
 
   base::Time expected_timestamp =
-      base::Time::UnixEpoch() +
-      base::TimeDelta::FromMilliseconds(1365181456275);
+      base::Time::UnixEpoch() + base::Milliseconds(1365181456275);
   EXPECT_EQ(expected_timestamp, sct->timestamp);
 }
 
@@ -193,6 +189,4 @@ TEST_F(CTObjectsExtractorTest, ExtractSCTListFromOCSPResponseMatchesIssuer) {
       &extracted_sct_list));
 }
 
-}  // namespace ct
-
-}  // namespace net
+}  // namespace net::ct

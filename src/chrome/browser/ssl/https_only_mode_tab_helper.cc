@@ -24,8 +24,9 @@ void HttpsOnlyModeTabHelper::ReadyToCommitNavigation(
 
 HttpsOnlyModeTabHelper::HttpsOnlyModeTabHelper(
     content::WebContents* web_contents)
-    : WebContentsObserver(web_contents) {
+    : WebContentsObserver(web_contents),
+      content::WebContentsUserData<HttpsOnlyModeTabHelper>(*web_contents) {
   factory_ = std::make_unique<ChromeSecurityBlockingPageFactory>();
 }
 
-WEB_CONTENTS_USER_DATA_KEY_IMPL(HttpsOnlyModeTabHelper)
+WEB_CONTENTS_USER_DATA_KEY_IMPL(HttpsOnlyModeTabHelper);

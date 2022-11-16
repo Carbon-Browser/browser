@@ -57,11 +57,11 @@ ui::NativeTheme::ScrollbarOverlayColorTheme
 NativeThemeScrollbarOverlayColorTheme(WebScrollbarOverlayColorTheme theme) {
   switch (theme) {
     case WebScrollbarOverlayColorTheme::kWebScrollbarOverlayColorThemeLight:
-      return ui::NativeTheme::ScrollbarOverlayColorThemeLight;
+      return ui::NativeTheme::ScrollbarOverlayColorTheme::kLight;
     case WebScrollbarOverlayColorTheme::kWebScrollbarOverlayColorThemeDark:
-      return ui::NativeTheme::ScrollbarOverlayColorThemeDark;
+      return ui::NativeTheme::ScrollbarOverlayColorTheme::kDark;
     default:
-      return ui::NativeTheme::ScrollbarOverlayColorThemeDark;
+      return ui::NativeTheme::ScrollbarOverlayColorTheme::kDefault;
   }
 }
 
@@ -111,6 +111,30 @@ ui::NativeTheme::SystemThemeColor NativeSystemThemeColor(
       return ui::NativeTheme::SystemThemeColor::kWindowText;
     default:
       return ui::NativeTheme::SystemThemeColor::kNotSupported;
+  }
+}
+
+WebThemeEngine::SystemThemeColor WebThemeSystemThemeColor(
+    ui::NativeTheme::SystemThemeColor theme_color) {
+  switch (theme_color) {
+    case ui::NativeTheme::SystemThemeColor::kButtonFace:
+      return WebThemeEngine::SystemThemeColor::kButtonFace;
+    case ui::NativeTheme::SystemThemeColor::kButtonText:
+      return WebThemeEngine::SystemThemeColor::kButtonText;
+    case ui::NativeTheme::SystemThemeColor::kGrayText:
+      return WebThemeEngine::SystemThemeColor::kGrayText;
+    case ui::NativeTheme::SystemThemeColor::kHighlight:
+      return WebThemeEngine::SystemThemeColor::kHighlight;
+    case ui::NativeTheme::SystemThemeColor::kHighlightText:
+      return WebThemeEngine::SystemThemeColor::kHighlightText;
+    case ui::NativeTheme::SystemThemeColor::kHotlight:
+      return WebThemeEngine::SystemThemeColor::kHotlight;
+    case ui::NativeTheme::SystemThemeColor::kWindow:
+      return WebThemeEngine::SystemThemeColor::kWindow;
+    case ui::NativeTheme::SystemThemeColor::kWindowText:
+      return WebThemeEngine::SystemThemeColor::kWindowText;
+    default:
+      return WebThemeEngine::SystemThemeColor::kNotSupported;
   }
 }
 

@@ -2,8 +2,8 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 #
-# This source code is a part of ABP Chromium.
-# Use of this source code is governed by the GPLv3 that can be found in the docs_abp/LICENSE file.
+# This source code is a part of eyeo Chromium SDK.
+# Use of this source code is governed by the GPLv3 that can be found in the components/adblock/LICENSE file.
 
 
 import("//build/buildflag_header.gni")
@@ -12,13 +12,14 @@ import("//build/config/chrome_build.gni")
 declare_args() {
   # Set to true make a build that disables activation of field trial tests
   # specified in testing/variations/fieldtrial_testing_config.json.
-  # Note: this setting is ignored if is_chrome_branded.
+  # Note: For Chrome-branded Android builds, this is always considered as set to
+  # true (see below). This is done to avoid the binary size impact (~40 KiB) on
+  # Android.
   disable_fieldtrial_testing_config = false
 }
 
-# We build ABP Chromium with |is_chrome_branded = true| but we don't want
-# field trials to affect our automated tests.
-fieldtrial_testing_enabled = false
+fieldtrial_testing_enabled =
+    !disable_fieldtrial_testing_config && !(is_android && is_chrome_branded)
 
 buildflag_header("buildflags") {
   header = "buildflags.h"
@@ -41,7 +42,6 @@ static_library("service") {
 
   deps = [
     ":buildflags",
-    ":constants",
     "//base",
     "//build:branding_buildflags",
     "//build:chromeos_buildflags",
@@ -72,16 +72,19 @@ source_set("unit_tests") {
   ]
 
   deps = [
-    ":constants",
+    ":buildflags",
     ":service",
     "//base",
     "//base/test:test_support",
+    "//build:branding_buildflags",
     "//components/metrics",
     "//components/metrics:test_support",
     "//components/prefs:test_support",
     "//components/variations",
     "//components/variations:test_support",
+    "//components/variations/field_trial_config",
     "//components/variations/proto",
+    "//components/version_info",
     "//components/web_resource:test_support",
     "//net",
     "//net:test_support",
@@ -89,13 +92,4 @@ source_set("unit_tests") {
     "//services/network/public/cpp",
     "//testing/gtest",
   ]
-}
-
-static_library("constants") {
-  sources = [
-    "variations_safe_mode_constants.cc",
-    "variations_safe_mode_constants.h",
-  ]
-
-  deps = [ "//base" ]
 }

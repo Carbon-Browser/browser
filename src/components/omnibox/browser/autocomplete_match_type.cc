@@ -5,13 +5,12 @@
 #include "components/omnibox/browser/autocomplete_match_type.h"
 
 #include "base/check.h"
-#include "base/cxx17_backports.h"
 #include "base/notreached.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "components/omnibox/browser/autocomplete_match.h"
 #include "components/omnibox/browser/omnibox_field_trial.h"
-#include "components/omnibox/browser/omnibox_popup_model.h"
+#include "components/omnibox/browser/omnibox_popup_selection.h"
 #include "components/omnibox/browser/suggestion_answer.h"
 #include "components/strings/grit/components_strings.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -50,9 +49,11 @@ std::string AutocompleteMatchType::ToString(AutocompleteMatchType::Type type) {
     "image-from-clipboard",
     "query-tiles",
     "navsuggest-tiles",
+    "open-tab",
+    "history-cluster",
   };
   // clang-format on
-  static_assert(base::size(strings) == AutocompleteMatchType::NUM_TYPES,
+  static_assert(std::size(strings) == AutocompleteMatchType::NUM_TYPES,
                 "strings array must have NUM_TYPES elements");
   return strings[type];
 }
@@ -138,8 +139,10 @@ std::u16string GetAccessibilityBaseLabel(const AutocompleteMatch& match,
       IDS_ACC_AUTOCOMPLETE_CLIPBOARD_IMAGE,  // CLIPBOARD_IMAGE
       0,                                     // TILE_SUGGESTION
       0,                                     // TILE_NAVSUGGEST
+      0,                                     // OPEN_TAB
+      0,                                     // HISTORY_CLUSTER
   };
-  static_assert(base::size(message_ids) == AutocompleteMatchType::NUM_TYPES,
+  static_assert(std::size(message_ids) == AutocompleteMatchType::NUM_TYPES,
                 "message_ids must have NUM_TYPES elements");
 
   // Document provider should use its full display text; description has

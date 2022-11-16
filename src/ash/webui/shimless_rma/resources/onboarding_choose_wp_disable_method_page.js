@@ -5,20 +5,33 @@
 import './shimless_rma_shared_css.js';
 import './base_page.js';
 
-import {html, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {I18nBehavior, I18nBehaviorInterface} from 'chrome://resources/js/i18n_behavior.m.js';
+import {html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {getShimlessRmaService} from './mojo_interface_provider.js';
 import {ShimlessRmaServiceInterface, StateResult} from './shimless_rma_types.js';
+import {disableNextButton, enableNextButton} from './shimless_rma_util.js';
 
 /**
  * @fileoverview
  * 'onboarding-choose-wp-disable-method-page' allows user to select between
  * hardware or RSU write protection disable methods.
  *
- * TODO(joonbug): Change "Manual" description based on enterprise enrollment
+ * TODO(gavindodd): Change "Manual" description based on enterprise enrollment
  * status.
  */
-export class OnboardingChooseWpDisableMethodPageElement extends PolymerElement {
+
+/**
+ * @constructor
+ * @extends {PolymerElement}
+ * @implements {I18nBehaviorInterface}
+ */
+const OnboardingChooseWpDisableMethodPageBase =
+    mixinBehaviors([I18nBehavior], PolymerElement);
+
+/** @polymer */
+export class OnboardingChooseWpDisableMethodPage extends
+    OnboardingChooseWpDisableMethodPageBase {
   static get is() {
     return 'onboarding-choose-wp-disable-method-page';
   }
@@ -29,13 +42,13 @@ export class OnboardingChooseWpDisableMethodPageElement extends PolymerElement {
 
   static get properties() {
     return {
-      /** @private {ShimlessRmaServiceInterface} */
-      shimlessRmaService_: {
-        type: Object,
-        value: {},
-      },
+      /**
+       * Set by shimless_rma.js.
+       * @type {boolean}
+       */
+      allButtonsDisabled: Boolean,
 
-      /** @private {string} */
+      /** @private */
       hwwpMethod_: {
         type: String,
         value: '',
@@ -43,9 +56,9 @@ export class OnboardingChooseWpDisableMethodPageElement extends PolymerElement {
     };
   }
 
-  /** @override */
-  ready() {
-    super.ready();
+  constructor() {
+    super();
+    /** @private {ShimlessRmaServiceInterface} */
     this.shimlessRmaService_ = getShimlessRmaService();
   }
 
@@ -55,9 +68,15 @@ export class OnboardingChooseWpDisableMethodPageElement extends PolymerElement {
    */
   onHwwpDisableMethodSelectionChanged_(event) {
     this.hwwpMethod_ = event.detail.value;
+    const disabled = !this.hwwpMethod_;
+    if (disabled) {
+      disableNextButton(this);
+    } else {
+      enableNextButton(this);
+    }
   }
 
-  /** @return {!Promise<!StateResult>} */
+  /** @return {!Promise<!{stateResult: !StateResult}>} */
   onNextButtonClick() {
     if (this.hwwpMethod_ === 'hwwpDisableMethodManual') {
       return this.shimlessRmaService_.chooseManuallyDisableWriteProtect();
@@ -67,8 +86,8 @@ export class OnboardingChooseWpDisableMethodPageElement extends PolymerElement {
       return Promise.reject(new Error('No disable method selected'));
     }
   }
-};
+}
 
 customElements.define(
-    OnboardingChooseWpDisableMethodPageElement.is,
-    OnboardingChooseWpDisableMethodPageElement);
+    OnboardingChooseWpDisableMethodPage.is,
+    OnboardingChooseWpDisableMethodPage);

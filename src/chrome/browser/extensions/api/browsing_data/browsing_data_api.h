@@ -12,7 +12,9 @@
 #include <memory>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
+#include "base/time/time.h"
 #include "components/browsing_data/core/browsing_data_utils.h"
 #include "components/signin/core/browser/account_reconcilor.h"
 #include "content/public/browser/browsing_data_filter_builder.h"
@@ -29,7 +31,6 @@ extern const char kDataToRemoveKey[];
 extern const char kOptionsKey[];
 
 // Type keys.
-extern const char kAppCacheKey[];
 extern const char kCacheKey[];
 extern const char kCookiesKey[];
 extern const char kDownloadsKey[];
@@ -75,8 +76,8 @@ class BrowsingDataSettingsFunction : public ExtensionFunction {
   // indicating whether the data type is both selected and permitted to be
   // removed; and a value in the |permitted_dict| with the |data_type| as a
   // key, indicating only whether the data type is permitted to be removed.
-  void SetDetails(base::DictionaryValue* selected_dict,
-                  base::DictionaryValue* permitted_dict,
+  void SetDetails(base::Value* selected_dict,
+                  base::Value* permitted_dict,
                   const char* data_type,
                   bool is_selected);
 
@@ -84,7 +85,7 @@ class BrowsingDataSettingsFunction : public ExtensionFunction {
   bool isDataTypeSelected(browsing_data::BrowsingDataType data_type,
                           browsing_data::ClearBrowsingDataTab tab);
 
-  PrefService* prefs_ = nullptr;
+  raw_ptr<PrefService> prefs_ = nullptr;
 };
 
 // This serves as a base class from which the browsing data API removal

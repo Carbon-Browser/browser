@@ -5,8 +5,8 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_LOCATION_BAR_LOCATION_ICON_VIEW_H_
 #define CHROME_BROWSER_UI_VIEWS_LOCATION_BAR_LOCATION_ICON_VIEW_H_
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/views/location_bar/icon_label_bubble_view.h"
-#include "components/feature_engagement/public/tracker.h"
 #include "components/omnibox/browser/location_bar_model.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 
@@ -17,8 +17,6 @@ class WebContents;
 namespace security_state {
 enum SecurityLevel;
 }
-
-class Profile;
 
 // Use a LocationIconView to display an icon on the leading side of the edit
 // field. It shows the user's current action (while the user is editing), or the
@@ -65,8 +63,7 @@ class LocationIconView : public IconLabelBubbleView {
 
   LocationIconView(const gfx::FontList& font_list,
                    IconLabelBubbleView::Delegate* parent_delegate,
-                   Delegate* delegate,
-                   Profile* profile);
+                   Delegate* delegate);
   LocationIconView(const LocationIconView&) = delete;
   LocationIconView& operator=(const LocationIconView&) = delete;
   ~LocationIconView() override;
@@ -139,9 +136,7 @@ class LocationIconView : public IconLabelBubbleView {
   // location icon was updated.
   bool was_editing_or_empty_ = false;
 
-  Delegate* delegate_;
-
-  feature_engagement::Tracker* feature_engagement_tracker_;
+  raw_ptr<Delegate> delegate_;
 
   // Used to scope the lifetime of asynchronous icon fetch callbacks to the
   // lifetime of the object. Weak pointers issued by this factory are

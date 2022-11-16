@@ -1,5 +1,3 @@
-# tags: [ Android Fuchsia Linux Mac Mac10.12 Mac10.13 Win Win7 Win10.1909 ]
-# tags: [ Release Debug ]
 # results: [ Timeout Crash Pass Failure Slow Skip ]
 
 # This file lists test expectations for WPT tests running ONLY under the wptrunner code path in
@@ -46,7 +44,7 @@ external/wpt/input-events/input-events-get-target-ranges-deleting-in-list-items.
 external/wpt/input-events/input-events-get-target-ranges-deleting-in-list-items.tentative.html?Delete,ol [ Pass ] # wpt_use_checked_in_metadata
 external/wpt/input-events/input-events-get-target-ranges-deleting-in-list-items.tentative.html?Delete,ul [ Pass ] # wpt_use_checked_in_metadata
 external/wpt/input-events/input-events-get-target-ranges-during-and-after-dispatch.tentative.html [ Pass ] # wpt_use_checked_in_metadata
-external/wpt/input-events/input-events-get-target-ranges-forwarddelete.tentative.html [ Pass ] # wpt_use_checked_in_metadata
+external/wpt/input-events/input-events-get-target-ranges-forwarddelete.tentative.html [ Skip ]
 external/wpt/input-events/input-events-get-target-ranges-joining-dl-element-and-another-list.tentative.html?Backspace [ Pass ] # wpt_use_checked_in_metadata
 external/wpt/input-events/input-events-get-target-ranges-joining-dl-element-and-another-list.tentative.html?Delete [ Pass ] # wpt_use_checked_in_metadata
 external/wpt/input-events/input-events-get-target-ranges-joining-dl-elements.tentative.html?Backspace [ Pass ] # wpt_use_checked_in_metadata
@@ -184,7 +182,6 @@ external/wpt/uievents/order-of-events/mouse-events/mouseover-out.html [ Pass ] #
 external/wpt/uievents/order-of-events/mouse-events/wheel-basic.html [ Pass ] # wpt_use_checked_in_metadata
 external/wpt/uievents/order-of-events/mouse-events/wheel-scrolling.html [ Pass ] # wpt_use_checked_in_metadata
 
-external/wpt/webauthn/createcredential-badargs-attestation.https.html [ Pass ] # wpt_use_checked_in_metadata
 external/wpt/webauthn/createcredential-badargs-authnrselection.https.html [ Pass ] # wpt_use_checked_in_metadata
 external/wpt/webauthn/createcredential-badargs-challenge.https.html [ Pass ] # wpt_use_checked_in_metadata
 external/wpt/webauthn/createcredential-badargs-rp.https.html [ Pass ] # wpt_use_checked_in_metadata
@@ -233,3 +230,5 @@ crbug.com/1208893 external/wpt/pointerevents/pointerevent_touch-action-pan-x-pan
 crbug.com/1208893 external/wpt/pointerevents/pointerevent_touch-action-pan-y-css_touch.html [ Failure ]
 crbug.com/1208893 external/wpt/pointerevents/pointerevent_touch-action-span-none-test_touch.html [ Failure ]
 crbug.com/1208893 external/wpt/pointerevents/pointerevent_touch-action-table-none-test_touch.html [ Failure ]
+
+crbug.com/1208893 external/wpt/webauthn/createcredential-minpinlength.https.html [ Failure ]

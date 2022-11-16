@@ -10,7 +10,6 @@
 #include "components/password_manager/core/browser/test_password_store.h"
 #import "components/policy/core/common/policy_loader_ios_constants.h"
 #import "components/policy/policy_constants.h"
-#import "components/signin/ios/browser/features.h"
 #import "components/signin/public/base/signin_pref_names.h"
 #import "components/sync/driver/mock_sync_service.h"
 #import "ios/chrome/browser/browser_state/test_chrome_browser_state.h"
@@ -26,9 +25,9 @@
 #import "ios/chrome/browser/sync/sync_setup_service_factory.h"
 #import "ios/chrome/browser/sync/sync_setup_service_mock.h"
 #import "ios/chrome/browser/ui/commands/application_commands.h"
-#import "ios/chrome/browser/ui/commands/browser_commands.h"
 #import "ios/chrome/browser/ui/commands/browsing_data_commands.h"
 #import "ios/chrome/browser/ui/commands/command_dispatcher.h"
+#import "ios/chrome/browser/ui/commands/snackbar_commands.h"
 #import "ios/chrome/browser/ui/settings/settings_table_view_controller_constants.h"
 #import "ios/chrome/browser/ui/table_view/cells/table_view_detail_icon_item.h"
 #import "ios/chrome/browser/ui/table_view/cells/table_view_image_item.h"
@@ -81,9 +80,7 @@ class SettingsTableViewControllerTest : public ChromeTableViewControllerTest {
             &AuthenticationServiceFake::CreateAuthenticationService));
     chrome_browser_state_ = builder.Build();
 
-    WebStateList* web_state_list = nullptr;
-    browser_ = std::make_unique<TestBrowser>(chrome_browser_state_.get(),
-                                             web_state_list);
+    browser_ = std::make_unique<TestBrowser>(chrome_browser_state_.get());
 
     sync_setup_service_mock_ = static_cast<SyncSetupServiceMock*>(
         SyncSetupServiceFactory::GetForBrowserState(
@@ -125,11 +122,37 @@ class SettingsTableViewControllerTest : public ChromeTableViewControllerTest {
   }
 
   ChromeTableViewController* InstantiateController() override {
-    return [[SettingsTableViewController alloc]
-        initWithBrowser:browser_.get()
-             dispatcher:static_cast<id<ApplicationCommands, BrowserCommands,
-                                       BrowsingDataCommands>>(
-                            browser_->GetCommandDispatcher())];
+    id mockSnackbarCommandHandler =
+        OCMProtocolMock(@protocol(SnackbarCommands));
+
+    // Set up ApplicationCommands mock. Because ApplicationCommands conforms
+    // to ApplicationSettingsCommands, that needs to be mocked and dispatched
+    // as well.
+    id mockApplicationCommandHandler =
+        OCMProtocolMock(@protocol(ApplicationCommands));
+    id mockApplicationSettingsCommandHandler =
+        OCMProtocolMock(@protocol(ApplicationSettingsCommands));
+
+    CommandDispatcher* dispatcher = browser_->GetCommandDispatcher();
+    [dispatcher startDispatchingToTarget:mockSnackbarCommandHandler
+                             forProtocol:@protocol(SnackbarCommands)];
+    [dispatcher startDispatchingToTarget:mockApplicationCommandHandler
+                             forProtocol:@protocol(ApplicationCommands)];
+    [dispatcher
+        startDispatchingToTarget:mockApplicationSettingsCommandHandler
+                     forProtocol:@protocol(ApplicationSettingsCommands)];
+
+    SettingsTableViewController* controller =
+        [[SettingsTableViewController alloc]
+            initWithBrowser:browser_.get()
+                 dispatcher:static_cast<id<ApplicationCommands, BrowserCommands,
+                                           BrowsingDataCommands>>(
+                                browser_->GetCommandDispatcher())];
+    controller.applicationCommandsHandler = HandlerForProtocol(
+        browser_->GetCommandDispatcher(), ApplicationCommands);
+    controller.snackbarCommandsHandler =
+        HandlerForProtocol(browser_->GetCommandDispatcher(), SnackbarCommands);
+    return controller;
   }
 
   void SetupSyncServiceEnabledExpectations() {
@@ -145,8 +168,7 @@ class SettingsTableViewControllerTest : public ChromeTableViewControllerTest {
         .WillByDefault(Return(true));
     ON_CALL(*sync_service_mock_->GetMockUserSettings(), GetSelectedTypes())
         .WillByDefault(Return(syncer::UserSelectableTypeSet::All()));
-    ON_CALL(*sync_service_mock_, IsAuthenticatedAccountPrimary())
-        .WillByDefault(Return(true));
+    ON_CALL(*sync_service_mock_, HasSyncConsent()).WillByDefault(Return(true));
   }
 
   void AddSigninDisabledEnterprisePolicy() {
@@ -185,7 +207,7 @@ TEST_F(SettingsTableViewControllerTest, SyncOn) {
   SetupSyncServiceEnabledExpectations();
   ON_CALL(*sync_setup_service_mock_, GetSyncServiceState())
       .WillByDefault(Return(SyncSetupService::kNoSyncServiceError));
-  auth_service_->SignIn(fake_identity_);
+  auth_service_->SignIn(fake_identity_, nil);
 
   CreateController();
   CheckController();
@@ -212,7 +234,7 @@ TEST_F(SettingsTableViewControllerTest, SyncPasswordError) {
   // Set missing password error in Sync service.
   ON_CALL(*sync_setup_service_mock_, GetSyncServiceState())
       .WillByDefault(Return(SyncSetupService::kSyncServiceNeedsPassphrase));
-  auth_service_->SignIn(fake_identity_);
+  auth_service_->SignIn(fake_identity_, nil);
 
   CreateController();
   CheckController();
@@ -244,7 +266,7 @@ TEST_F(SettingsTableViewControllerTest, TurnsSyncOffAfterFirstSetup) {
       .WillByDefault(Return(true));
   ON_CALL(*sync_setup_service_mock_, CanSyncFeatureStart())
       .WillByDefault(Return(false));
-  auth_service_->SignIn(fake_identity_);
+  auth_service_->SignIn(fake_identity_, nil);
 
   CreateController();
   CheckController();
@@ -277,7 +299,7 @@ TEST_F(SettingsTableViewControllerTest,
       .WillByDefault(Return(true));
   ON_CALL(*sync_setup_service_mock_, CanSyncFeatureStart())
       .WillByDefault(Return(true));
-  auth_service_->SignIn(fake_identity_);
+  auth_service_->SignIn(fake_identity_, nil);
 
   CreateController();
   CheckController();
@@ -312,7 +334,7 @@ TEST_F(SettingsTableViewControllerTest, SigninDisabled) {
 TEST_F(SettingsTableViewControllerTest, SyncSetupNotComplete) {
   ON_CALL(*sync_service_mock_->GetMockUserSettings(), IsFirstSetupComplete())
       .WillByDefault(Return(false));
-  auth_service_->SignIn(fake_identity_);
+  auth_service_->SignIn(fake_identity_, nil);
 
   CreateController();
   CheckController();
@@ -348,6 +370,6 @@ TEST_F(SettingsTableViewControllerTest, SigninDisabledByPolicy) {
       static_cast<TableViewInfoButtonItem*>(signin_items[0]);
   ASSERT_NSEQ(signin_item.text,
               l10n_util::GetNSString(IDS_IOS_SIGN_IN_TO_CHROME_SETTING_TITLE));
-  ASSERT_NSEQ(signin_item.detailText,
-              l10n_util::GetNSString(IDS_IOS_SETTINGS_SIGNIN_DISABLED));
+  ASSERT_NSEQ(signin_item.statusText,
+              l10n_util::GetNSString(IDS_IOS_SETTING_OFF));
 }

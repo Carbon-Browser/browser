@@ -9,9 +9,10 @@ import 'chrome://resources/polymer/v3_0/paper-styles/color.js';
 import './shortcut_input.js';
 
 import {CrContainerShadowMixin} from 'chrome://resources/cr_elements/cr_container_shadow_mixin.js';
-import {html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {KeyboardShortcutDelegate} from './keyboard_shortcut_delegate.js';
+import {getTemplate} from './keyboard_shortcuts.html.js';
 
 /** Event interface for dom-repeat. */
 interface RepeaterEvent<T> extends CustomEvent {
@@ -23,17 +24,17 @@ interface RepeaterEvent<T> extends CustomEvent {
 }
 
 const ExtensionsKeyboardShortcutsElementBase =
-    CrContainerShadowMixin(PolymerElement) as {new (): PolymerElement};
+    CrContainerShadowMixin(PolymerElement);
 
 // The UI to display and manage keyboard shortcuts set for extension commands.
-class ExtensionsKeyboardShortcutsElement extends
+export class ExtensionsKeyboardShortcutsElement extends
     ExtensionsKeyboardShortcutsElementBase {
   static get is() {
     return 'extensions-keyboard-shortcuts';
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
   }
 
   static get properties() {
@@ -53,9 +54,9 @@ class ExtensionsKeyboardShortcutsElement extends
   }
 
   delegate: KeyboardShortcutDelegate;
-  items: Array<chrome.developerPrivate.ExtensionInfo>;
+  items: chrome.developerPrivate.ExtensionInfo[];
 
-  ready() {
+  override ready() {
     super.ready();
     this.addEventListener('view-enter-start', this.onViewEnter_);
   }
@@ -64,7 +65,7 @@ class ExtensionsKeyboardShortcutsElement extends
     chrome.metricsPrivate.recordUserAction('Options_ExtensionCommands');
   }
 
-  private calculateShownItems_(): Array<chrome.developerPrivate.ExtensionInfo> {
+  private calculateShownItems_(): chrome.developerPrivate.ExtensionInfo[] {
     return this.items.filter(function(item) {
       return item.commands.length > 0;
     });
@@ -107,6 +108,13 @@ class ExtensionsKeyboardShortcutsElement extends
          chrome.developerPrivate.CommandScope));
   }
 }
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'extensions-keyboard-shortcuts': ExtensionsKeyboardShortcutsElement;
+  }
+}
+
 
 customElements.define(
     ExtensionsKeyboardShortcutsElement.is, ExtensionsKeyboardShortcutsElement);

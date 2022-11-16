@@ -20,7 +20,7 @@ import {BatterySaverState, ChargingState, MobileStatus, PhoneStatusModel, Signal
 const mobileStatusToStringMap = new Map([
   [MobileStatus.NO_SIM, 'No SIM'],
   [MobileStatus.SIM_BUT_NO_RECEPTION, 'SIM but no reception'],
-  [MobileStatus.SIM_WITH_RECEPTION, 'SIM with reception']
+  [MobileStatus.SIM_WITH_RECEPTION, 'SIM with reception'],
 ]);
 
 /**
@@ -156,6 +156,7 @@ Polymer({
   /** @override */
   created() {
     this.browserProxy_ = MultidevicePhoneHubBrowserProxy.getInstance();
+    this.setFakePhoneModel_();
   },
 
   /** @private */

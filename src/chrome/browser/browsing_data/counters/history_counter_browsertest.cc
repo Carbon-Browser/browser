@@ -8,7 +8,9 @@
 
 #include "base/bind.h"
 #include "base/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
+#include "base/time/time.h"
 #include "chrome/browser/history/history_service_factory.h"
 #include "chrome/browser/history/web_history_service_factory.h"
 #include "chrome/browser/sync/sync_service_factory.h"
@@ -55,9 +57,7 @@ class HistoryCounterTest : public InProcessBrowserTest {
 
   void SetTime(base::Time time) { time_ = time; }
 
-  void RevertTimeInDays(int days) {
-    time_ -= base::TimeDelta::FromDays(days);
-  }
+  void RevertTimeInDays(int days) { time_ -= base::Days(days); }
 
   void SetHistoryDeletionPref(bool value) {
     browser()->profile()->GetPrefs()->SetBoolean(
@@ -118,7 +118,7 @@ class HistoryCounterTest : public InProcessBrowserTest {
 
  private:
   std::unique_ptr<base::RunLoop> run_loop_;
-  history::HistoryService* history_service_;
+  raw_ptr<history::HistoryService> history_service_;
   std::unique_ptr<history::FakeWebHistoryService> fake_web_history_service_;
   base::Time time_;
 
@@ -321,10 +321,8 @@ IN_PROC_BROWSER_TEST_F(HistoryCounterTest, Synced) {
   // No entries locally. There are some entries in Sync, but they are out of the
   // time range.
   SetDeletionPeriodPref(browsing_data::TimePeriod::LAST_HOUR);
-  service->AddSyncedVisit(
-      "www.google.com", GetCurrentTime() - base::TimeDelta::FromHours(2));
-  service->AddSyncedVisit(
-      "www.chrome.com", GetCurrentTime() - base::TimeDelta::FromHours(2));
+  service->AddSyncedVisit("www.google.com", GetCurrentTime() - base::Hours(2));
+  service->AddSyncedVisit("www.chrome.com", GetCurrentTime() - base::Hours(2));
   service->SetupFakeResponse(true /* success */, net::HTTP_OK);
   counter.Restart();
   WaitForCounting();

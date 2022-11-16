@@ -5,13 +5,13 @@
 #include "ui/ozone/demo/skia/skia_surfaceless_gl_renderer.h"
 
 #include <stddef.h>
+
 #include <memory>
 #include <utility>
 
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/command_line.h"
-#include "base/cxx17_backports.h"
 #include "base/trace_event/trace_event.h"
 #include "third_party/skia/include/core/SkCanvas.h"
 #include "third_party/skia/include/core/SkDeferredDisplayListRecorder.h"
@@ -22,7 +22,9 @@
 #include "third_party/skia/include/gpu/gl/GrGLInterface.h"
 #include "ui/display/types/display_snapshot.h"
 #include "ui/gfx/geometry/rect_conversions.h"
+#include "ui/gfx/geometry/rrect_f.h"
 #include "ui/gfx/gpu_fence.h"
+#include "ui/gfx/overlay_plane_data.h"
 #include "ui/gl/gl_bindings.h"
 #include "ui/gl/gl_context.h"
 #include "ui/gl/gl_image.h"
@@ -176,7 +178,7 @@ bool SurfacelessSkiaGlRenderer::Initialize() {
   else
     primary_plane_rect_ = gfx::Rect(size_);
 
-  for (size_t i = 0; i < base::size(buffers_); ++i) {
+  for (size_t i = 0; i < std::size(buffers_); ++i) {
     buffers_[i] = std::make_unique<BufferWrapper>();
     if (!buffers_[i]->Initialize(gr_context_.get(), widget_,
                                  primary_plane_rect_.size()))
@@ -185,7 +187,7 @@ bool SurfacelessSkiaGlRenderer::Initialize() {
 
   if (command_line->HasSwitch(kEnableOverlay)) {
     gfx::Size overlay_size = gfx::Size(size_.width() / 8, size_.height() / 8);
-    for (size_t i = 0; i < base::size(overlay_buffer_); ++i) {
+    for (size_t i = 0; i < std::size(overlay_buffer_); ++i) {
       overlay_buffer_[i] = std::make_unique<BufferWrapper>();
       overlay_buffer_[i]->Initialize(gr_context_.get(),
                                      gfx::kNullAcceleratedWidget, overlay_size);
@@ -249,18 +251,26 @@ void SurfacelessSkiaGlRenderer::RenderFrame() {
   if (!disable_primary_plane_) {
     CHECK(overlay_list.front().overlay_handled);
     gl_surface_->ScheduleOverlayPlane(
-        0, gfx::OVERLAY_TRANSFORM_NONE, buffers_[back_buffer_]->image(),
-        primary_plane_rect_, unity_rect, /* enable_blend */ true,
-        gfx::Rect(buffers_[back_buffer_]->size()), /* opacity */ 1.0f,
-        /* gpu_fence */ nullptr);
+        buffers_[back_buffer_]->image(), /* gpu_fence */ nullptr,
+        gfx::OverlayPlaneData(
+            0, gfx::OVERLAY_TRANSFORM_NONE, gfx::RectF(primary_plane_rect_),
+            unity_rect,
+            /* enable_blend */ true, gfx::Rect(buffers_[back_buffer_]->size()),
+            /* opacity */ 1.0f, gfx::OverlayPriorityHint::kNone,
+            /* rounded_corners */ gfx::RRectF(), gfx::ColorSpace::CreateSRGB(),
+            /*hdr_metadata=*/absl::nullopt));
   }
 
   if (overlay_buffer_[0] && overlay_list.back().overlay_handled) {
     gl_surface_->ScheduleOverlayPlane(
-        1, gfx::OVERLAY_TRANSFORM_NONE, overlay_buffer_[back_buffer_]->image(),
-        overlay_rect, unity_rect, /* enable_blend */ true,
-        gfx::Rect(buffers_[back_buffer_]->size()), /* opacity */ 1.0f,
-        /* gpu_fence */ nullptr);
+        overlay_buffer_[back_buffer_]->image(), /* gpu_fence */ nullptr,
+        gfx::OverlayPlaneData(
+            1, gfx::OVERLAY_TRANSFORM_NONE, gfx::RectF(overlay_rect),
+            unity_rect,
+            /* enable_blend */ true, gfx::Rect(buffers_[back_buffer_]->size()),
+            /* opacity */ 1.0f, gfx::OverlayPriorityHint::kNone,
+            /* rounded_corners */ gfx::RRectF(), gfx::ColorSpace::CreateSRGB(),
+            /*hdr_metadata=*/absl::nullopt));
   }
 
   back_buffer_ ^= 1;
@@ -274,13 +284,13 @@ void SurfacelessSkiaGlRenderer::PostRenderFrameTask(
     gfx::SwapCompletionResult result) {
   switch (result.swap_result) {
     case gfx::SwapResult::SWAP_NAK_RECREATE_BUFFERS:
-      for (size_t i = 0; i < base::size(buffers_); ++i) {
+      for (size_t i = 0; i < std::size(buffers_); ++i) {
         buffers_[i] = std::make_unique<BufferWrapper>();
         if (!buffers_[i]->Initialize(gr_context_.get(), widget_,
                                      primary_plane_rect_.size()))
           LOG(FATAL) << "Failed to recreate buffer";
       }
-      FALLTHROUGH;  // We want to render a new frame anyways.
+      [[fallthrough]];  // We want to render a new frame anyways.
     case gfx::SwapResult::SWAP_ACK:
       SkiaGlRenderer::PostRenderFrameTask(std::move(result));
       break;

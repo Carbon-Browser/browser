@@ -4,7 +4,6 @@
 
 #include "chrome/browser/chromeos/extensions/extensions_permissions_tracker.h"
 
-#include "base/cxx17_backports.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/scoped_testing_local_state.h"
@@ -50,10 +49,10 @@ class MockExtensionsPermissionsTracker : public ExtensionsPermissionsTracker {
       : ExtensionsPermissionsTracker(registry, browser_context) {
     safe_permissions_.insert(
         kSafePermissionsSet1,
-        kSafePermissionsSet1 + base::size(kSafePermissionsSet1));
+        kSafePermissionsSet1 + std::size(kSafePermissionsSet1));
     safe_permissions_.insert(
         kSafePermissionsSet2,
-        kSafePermissionsSet2 + base::size(kSafePermissionsSet2));
+        kSafePermissionsSet2 + std::size(kSafePermissionsSet2));
   }
 
   // ExtensionsPermissionsTracker:
@@ -77,6 +76,11 @@ class ExtensionsPermissionsTrackerTest : public testing::Test {
       : prefs_(profile_.GetTestingPrefService()),
         registry_(ExtensionRegistry::Get(&profile_)),
         testing_local_state_(TestingBrowserProcess::GetGlobal()) {}
+
+  ExtensionsPermissionsTrackerTest(const ExtensionsPermissionsTrackerTest&) =
+      delete;
+  ExtensionsPermissionsTrackerTest& operator=(
+      const ExtensionsPermissionsTrackerTest&) = delete;
 
   base::Value SetupForceList() {
     base::Value dict(base::Value::Type::DICTIONARY);
@@ -117,8 +121,6 @@ class ExtensionsPermissionsTrackerTest : public testing::Test {
   ExtensionRegistry* registry_;
   ScopedTestingLocalState testing_local_state_;
   std::unique_ptr<MockExtensionsPermissionsTracker> permissions_tracker_;
-
-  DISALLOW_COPY_AND_ASSIGN(ExtensionsPermissionsTrackerTest);
 };
 
 TEST_F(ExtensionsPermissionsTrackerTest, EmptyForceList) {
@@ -141,12 +143,12 @@ TEST_F(ExtensionsPermissionsTrackerTest, SafeForceListInstalled) {
 
   std::vector<std::string> v1(
       kSafePermissionsSet1,
-      kSafePermissionsSet1 + base::size(kSafePermissionsSet1));
+      kSafePermissionsSet1 + std::size(kSafePermissionsSet1));
   AddExtensionWithIdAndPermissions(kExtensionId1, v1);
 
   std::vector<std::string> v2(
       kSafePermissionsSet2,
-      kSafePermissionsSet2 + base::size(kSafePermissionsSet2));
+      kSafePermissionsSet2 + std::size(kSafePermissionsSet2));
   AddExtensionWithIdAndPermissions(kExtensionId2, v2);
 
   EXPECT_FALSE(testing_local_state_.Get()->GetBoolean(
@@ -159,11 +161,11 @@ TEST_F(ExtensionsPermissionsTrackerTest, UnsafeForceListInstalled) {
 
   std::vector<std::string> v1(
       kUnsafePermissionsSet1,
-      kUnsafePermissionsSet1 + base::size(kUnsafePermissionsSet1));
+      kUnsafePermissionsSet1 + std::size(kUnsafePermissionsSet1));
 
   std::vector<std::string> v2(
       kUnsafePermissionsSet2,
-      kUnsafePermissionsSet2 + base::size(kUnsafePermissionsSet2));
+      kUnsafePermissionsSet2 + std::size(kUnsafePermissionsSet2));
 
   AddExtensionWithIdAndPermissions(kExtensionId1, v1);
   AddExtensionWithIdAndPermissions(kExtensionId2, v2);
@@ -178,12 +180,12 @@ TEST_F(ExtensionsPermissionsTrackerTest, MixedForceListInstalled) {
 
   std::vector<std::string> v1(
       kUnsafePermissionsSet1,
-      kUnsafePermissionsSet1 + base::size(kUnsafePermissionsSet1));
+      kUnsafePermissionsSet1 + std::size(kUnsafePermissionsSet1));
   AddExtensionWithIdAndPermissions(kExtensionId1, v1);
 
   std::vector<std::string> v2(
       kSafePermissionsSet2,
-      kSafePermissionsSet2 + base::size(kSafePermissionsSet2));
+      kSafePermissionsSet2 + std::size(kSafePermissionsSet2));
   AddExtensionWithIdAndPermissions(kExtensionId2, v2);
 
   EXPECT_TRUE(testing_local_state_.Get()->GetBoolean(
@@ -196,12 +198,12 @@ TEST_F(ExtensionsPermissionsTrackerTest, ForceListIncreased) {
 
   std::vector<std::string> v1(
       kSafePermissionsSet1,
-      kSafePermissionsSet1 + base::size(kSafePermissionsSet1));
+      kSafePermissionsSet1 + std::size(kSafePermissionsSet1));
   AddExtensionWithIdAndPermissions(kExtensionId1, v1);
 
   std::vector<std::string> v2(
       kSafePermissionsSet2,
-      kSafePermissionsSet2 + base::size(kSafePermissionsSet2));
+      kSafePermissionsSet2 + std::size(kSafePermissionsSet2));
   AddExtensionWithIdAndPermissions(kExtensionId2, v2);
 
   EXPECT_FALSE(testing_local_state_.Get()->GetBoolean(
@@ -213,7 +215,7 @@ TEST_F(ExtensionsPermissionsTrackerTest, ForceListIncreased) {
 
   std::vector<std::string> v3(
       kUnsafePermissionsSet1,
-      kUnsafePermissionsSet1 + base::size(kUnsafePermissionsSet1));
+      kUnsafePermissionsSet1 + std::size(kUnsafePermissionsSet1));
   AddExtensionWithIdAndPermissions(kExtensionId3, v3);
 
   EXPECT_TRUE(testing_local_state_.Get()->GetBoolean(
@@ -226,12 +228,12 @@ TEST_F(ExtensionsPermissionsTrackerTest, ForceListDecreased) {
 
   std::vector<std::string> v1(
       kUnsafePermissionsSet1,
-      kUnsafePermissionsSet1 + base::size(kUnsafePermissionsSet1));
+      kUnsafePermissionsSet1 + std::size(kUnsafePermissionsSet1));
   AddExtensionWithIdAndPermissions(kExtensionId1, v1);
 
   std::vector<std::string> v2(
       kSafePermissionsSet2,
-      kSafePermissionsSet2 + base::size(kSafePermissionsSet2));
+      kSafePermissionsSet2 + std::size(kSafePermissionsSet2));
   AddExtensionWithIdAndPermissions(kExtensionId2, v2);
 
   EXPECT_TRUE(testing_local_state_.Get()->GetBoolean(
@@ -250,7 +252,7 @@ TEST_F(ExtensionsPermissionsTrackerTest, SafePendingExtensions) {
 
   std::vector<std::string> v1(
       kSafePermissionsSet1,
-      kSafePermissionsSet1 + base::size(kSafePermissionsSet1));
+      kSafePermissionsSet1 + std::size(kSafePermissionsSet1));
   AddExtensionWithIdAndPermissions(kExtensionId1, v1);
 
   EXPECT_TRUE(testing_local_state_.Get()->GetBoolean(
@@ -258,7 +260,7 @@ TEST_F(ExtensionsPermissionsTrackerTest, SafePendingExtensions) {
 
   std::vector<std::string> v2(
       kSafePermissionsSet2,
-      kSafePermissionsSet2 + base::size(kSafePermissionsSet2));
+      kSafePermissionsSet2 + std::size(kSafePermissionsSet2));
   AddExtensionWithIdAndPermissions(kExtensionId2, v2);
 
   EXPECT_FALSE(testing_local_state_.Get()->GetBoolean(
@@ -271,7 +273,7 @@ TEST_F(ExtensionsPermissionsTrackerTest, UnsafePendingExtensions) {
 
   std::vector<std::string> v1(
       kSafePermissionsSet1,
-      kSafePermissionsSet1 + base::size(kSafePermissionsSet1));
+      kSafePermissionsSet1 + std::size(kSafePermissionsSet1));
   AddExtensionWithIdAndPermissions(kExtensionId1, v1);
 
   EXPECT_TRUE(testing_local_state_.Get()->GetBoolean(
@@ -279,7 +281,7 @@ TEST_F(ExtensionsPermissionsTrackerTest, UnsafePendingExtensions) {
 
   std::vector<std::string> v2(
       kUnsafePermissionsSet1,
-      kUnsafePermissionsSet1 + base::size(kUnsafePermissionsSet1));
+      kUnsafePermissionsSet1 + std::size(kUnsafePermissionsSet1));
   AddExtensionWithIdAndPermissions(kExtensionId2, v2);
 
   EXPECT_TRUE(testing_local_state_.Get()->GetBoolean(
@@ -292,12 +294,12 @@ TEST_F(ExtensionsPermissionsTrackerTest, UnsafeForceListChanged) {
 
   std::vector<std::string> v1(
       kSafePermissionsSet1,
-      kSafePermissionsSet1 + base::size(kSafePermissionsSet1));
+      kSafePermissionsSet1 + std::size(kSafePermissionsSet1));
   AddExtensionWithIdAndPermissions(kExtensionId1, v1);
 
   std::vector<std::string> v2(
       kUnsafePermissionsSet1,
-      kUnsafePermissionsSet1 + base::size(kUnsafePermissionsSet1));
+      kUnsafePermissionsSet1 + std::size(kUnsafePermissionsSet1));
   AddExtensionWithIdAndPermissions(kExtensionId2, v2);
 
   EXPECT_TRUE(testing_local_state_.Get()->GetBoolean(
@@ -324,17 +326,17 @@ TEST_F(ExtensionsPermissionsTrackerTest, OtherExtensionsLoaded) {
 
   std::vector<std::string> v1(
       kSafePermissionsSet1,
-      kSafePermissionsSet1 + base::size(kSafePermissionsSet1));
+      kSafePermissionsSet1 + std::size(kSafePermissionsSet1));
   AddExtensionWithIdAndPermissions(kExtensionId1, v1);
 
   std::vector<std::string> v2(
       kSafePermissionsSet1,
-      kSafePermissionsSet1 + base::size(kSafePermissionsSet1));
+      kSafePermissionsSet1 + std::size(kSafePermissionsSet1));
   AddExtensionWithIdAndPermissions(kExtensionId2, v2);
 
   std::vector<std::string> v3(
       kUnsafePermissionsSet1,
-      kUnsafePermissionsSet1 + base::size(kUnsafePermissionsSet1));
+      kUnsafePermissionsSet1 + std::size(kUnsafePermissionsSet1));
   AddExtensionWithIdAndPermissions(kExtensionId3, v3);
 
   EXPECT_FALSE(testing_local_state_.Get()->GetBoolean(

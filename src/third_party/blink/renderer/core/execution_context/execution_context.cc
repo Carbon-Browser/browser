@@ -31,6 +31,7 @@
 #include "build/build_config.h"
 #include "third_party/blink/public/common/permissions_policy/document_policy_features.h"
 #include "third_party/blink/public/mojom/devtools/inspector_issue.mojom-blink-forward.h"
+#include "third_party/blink/public/mojom/frame/lifecycle.mojom-blink.h"
 #include "third_party/blink/public/mojom/permissions_policy/permissions_policy_feature.mojom-blink.h"
 #include "third_party/blink/public/mojom/permissions_policy/policy_disposition.mojom-blink.h"
 #include "third_party/blink/public/mojom/permissions_policy/policy_value.mojom-blink.h"
@@ -47,14 +48,16 @@
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/web_feature.h"
 #include "third_party/blink/renderer/core/inspector/console_message.h"
+#include "third_party/blink/renderer/core/inspector/inspector_audits_issue.h"
 #include "third_party/blink/renderer/core/loader/document_loader.h"
 #include "third_party/blink/renderer/core/origin_trials/origin_trial_context.h"
 #include "third_party/blink/renderer/core/workers/worker_global_scope.h"
 #include "third_party/blink/renderer/core/workers/worklet_global_scope.h"
 #include "third_party/blink/renderer/platform/bindings/dom_wrapper_world.h"
 #include "third_party/blink/renderer/platform/context_lifecycle_notifier.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
+#include "third_party/blink/renderer/platform/loader/fetch/code_cache_host.h"
 #include "third_party/blink/renderer/platform/loader/fetch/memory_cache.h"
 #include "third_party/blink/renderer/platform/scheduler/public/event_loop.h"
 #include "third_party/blink/renderer/platform/weborigin/scheme_registry.h"
@@ -109,20 +112,23 @@ ExecutionContext* ExecutionContext::ForCurrentRealm(
 // static
 ExecutionContext* ExecutionContext::ForRelevantRealm(
     const v8::FunctionCallbackInfo<v8::Value>& info) {
-  return ToExecutionContext(info.Holder()->CreationContext());
+  v8::Local<v8::Context> context;
+  if (!info.Holder()->GetCreationContext().ToLocal(&context))
+    return nullptr;
+  return ToExecutionContext(context);
 }
 
 // static
 ExecutionContext* ExecutionContext::ForRelevantRealm(
     const v8::PropertyCallbackInfo<v8::Value>& info) {
-  auto ctx = info.Holder()->CreationContext();
-  if (ctx.IsEmpty())
+  v8::Local<v8::Context> context;
+  if (!info.Holder()->GetCreationContext().ToLocal(&context))
     return nullptr;
-  return ToExecutionContext(ctx);
+  return ToExecutionContext(context);
 }
 
 // static
-blink::mojom::CodeCacheHost* ExecutionContext::GetCodeCacheHostFromContext(
+CodeCacheHost* ExecutionContext::GetCodeCacheHostFromContext(
     ExecutionContext* execution_context) {
   DCHECK_NE(execution_context, nullptr);
   if (execution_context->IsWindow()) {
@@ -227,7 +233,7 @@ bool ExecutionContext::SharedArrayBufferTransferAllowed() const {
   if (SecurityPolicy::IsSharedArrayBufferAlwaysAllowedForOrigin(origin))
     return true;
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   return false;
 #else
   // On desktop, enable transfer for the reverse Origin Trial, or if the
@@ -524,18 +530,11 @@ void ExecutionContext::SetReferrerPolicy(
   policy_container_->UpdateReferrerPolicy(referrer_policy);
 }
 
-network::mojom::IPAddressSpace ExecutionContext::AddressSpace() const {
-  return policy_container_->GetIPAddressSpace();
-}
-
-void ExecutionContext::SetAddressSpace(
-    network::mojom::blink::IPAddressSpace ip_address_space) {
-  GetPolicyContainer()->SetIPAddressSpace(ip_address_space);
-}
-
 void ExecutionContext::SetPolicyContainer(
     std::unique_ptr<PolicyContainer> container) {
   policy_container_ = std::move(container);
+  security_context_.SetSandboxFlags(
+      policy_container_->GetPolicies().sandbox_flags);
 }
 
 std::unique_ptr<PolicyContainer> ExecutionContext::TakePolicyContainer() {
@@ -586,25 +585,49 @@ bool ExecutionContext::FeatureEnabled(OriginTrialFeature feature) const {
 
 bool ExecutionContext::IsFeatureEnabled(
     mojom::blink::PermissionsPolicyFeature feature,
-    ReportOptions report_on_failure,
-    const String& message) const {
+    ReportOptions report_option,
+    const String& message) {
   bool should_report;
   bool enabled = security_context_.IsFeatureEnabled(feature, &should_report);
 
-  if (should_report && report_on_failure == ReportOptions::kReportOnFailure) {
+  if (should_report && report_option == ReportOptions::kReportOnFailure) {
     mojom::blink::PolicyDisposition disposition =
         enabled ? mojom::blink::PolicyDisposition::kReport
                 : mojom::blink::PolicyDisposition::kEnforce;
+
     ReportPermissionsPolicyViolation(feature, disposition, message);
   }
   return enabled;
 }
 
 bool ExecutionContext::IsFeatureEnabled(
+    mojom::blink::PermissionsPolicyFeature feature) const {
+  bool should_report;
+  return security_context_.IsFeatureEnabled(feature, &should_report);
+}
+
+bool ExecutionContext::IsFeatureEnabled(
+    mojom::blink::DocumentPolicyFeature feature) const {
+  DCHECK(GetDocumentPolicyFeatureInfoMap().at(feature).default_value.Type() ==
+         mojom::blink::PolicyValueType::kBool);
+  return IsFeatureEnabled(feature, PolicyValue::CreateBool(true));
+}
+
+bool ExecutionContext::IsFeatureEnabled(
+    mojom::blink::DocumentPolicyFeature feature,
+    PolicyValue threshold_value) const {
+  // The default value for any feature should be true unless restricted by
+  // document policy
+  if (!RuntimeEnabledFeatures::DocumentPolicyEnabled())
+    return true;
+  return security_context_.IsFeatureEnabled(feature, threshold_value).enabled;
+}
+
+bool ExecutionContext::IsFeatureEnabled(
     mojom::blink::DocumentPolicyFeature feature,
     ReportOptions report_option,
     const String& message,
-    const String& source_file) const {
+    const String& source_file) {
   DCHECK(GetDocumentPolicyFeatureInfoMap().at(feature).default_value.Type() ==
          mojom::blink::PolicyValueType::kBool);
   return IsFeatureEnabled(feature, PolicyValue::CreateBool(true), report_option,
@@ -616,7 +639,7 @@ bool ExecutionContext::IsFeatureEnabled(
     PolicyValue threshold_value,
     ReportOptions report_option,
     const String& message,
-    const String& source_file) const {
+    const String& source_file) {
   // The default value for any feature should be true unless restricted by
   // document policy
   if (!RuntimeEnabledFeatures::DocumentPolicyEnabled())
@@ -639,24 +662,7 @@ bool ExecutionContext::IsFeatureEnabled(
 }
 
 bool ExecutionContext::RequireTrustedTypes() const {
-  return require_safe_types_ &&
-         RuntimeEnabledFeatures::TrustedDOMTypesEnabled(this);
-}
-
-String ExecutionContext::addressSpaceForBindings() const {
-  switch (AddressSpace()) {
-    case network::mojom::IPAddressSpace::kPublic:
-    case network::mojom::IPAddressSpace::kUnknown:
-      return "public";
-
-    case network::mojom::IPAddressSpace::kPrivate:
-      return "private";
-
-    case network::mojom::IPAddressSpace::kLocal:
-      return "local";
-  }
-  NOTREACHED();
-  return "public";
+  return require_safe_types_;
 }
 
 }  // namespace blink

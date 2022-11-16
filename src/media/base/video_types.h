@@ -79,9 +79,18 @@ enum VideoPixelFormat {
 
   PIXEL_FORMAT_RGBAF16 = 33,  // Half float RGBA, 1 plane.
 
+  PIXEL_FORMAT_I422A = 34,  // 24bpp YUVA planar 1x1 Y, 2x1 UV, 1x1 A samples.
+
+  PIXEL_FORMAT_I444A = 35,  // 32bpp YUVA planar, no subsampling.
+
+  // YUVA planar, 10 bits per pixel component.
+  PIXEL_FORMAT_YUV420AP10 = 36,
+  PIXEL_FORMAT_YUV422AP10 = 37,
+  PIXEL_FORMAT_YUV444AP10 = 38,
+
   // Please update UMA histogram enumeration when adding new formats here.
   PIXEL_FORMAT_MAX =
-      PIXEL_FORMAT_RGBAF16,  // Must always be equal to largest entry logged.
+      PIXEL_FORMAT_YUV444AP10,  // Must always be equal to largest entry logged.
 };
 
 // Returns the name of a Format as a string.
@@ -100,6 +109,9 @@ MEDIA_SHMEM_EXPORT std::string FourccToString(uint32_t fourcc);
 
 // Returns true if |format| is a YUV format with multiple planes.
 MEDIA_SHMEM_EXPORT bool IsYuvPlanar(VideoPixelFormat format);
+
+// Returns true if |format| is an RGB format.
+MEDIA_SHMEM_EXPORT bool IsRGB(VideoPixelFormat format);
 
 // Returns true if |format| has no Alpha channel (hence is always opaque).
 MEDIA_SHMEM_EXPORT bool IsOpaque(VideoPixelFormat format);

@@ -10,14 +10,15 @@
 #include <map>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "base/bind.h"
 #include "base/callback.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
 #include "base/location.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "chromeos/dbus/constants/dbus_switches.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -63,6 +64,30 @@ void FakeDebugDaemonClient::SetSwapParameter(
   std::move(callback).Run(std::string());
 }
 
+void FakeDebugDaemonClient::SwapZramEnableWriteback(
+    uint32_t size_mb,
+    DBusMethodCallback<std::string> callback) {
+  std::move(callback).Run(std::string());
+}
+
+void FakeDebugDaemonClient::SwapZramSetWritebackLimit(
+    uint32_t limit_pages,
+    DBusMethodCallback<std::string> callback) {
+  std::move(callback).Run(std::string());
+}
+
+void FakeDebugDaemonClient::SwapZramMarkIdle(
+    uint32_t age_seconds,
+    DBusMethodCallback<std::string> callback) {
+  std::move(callback).Run(std::string());
+}
+
+void FakeDebugDaemonClient::InitiateSwapZramWriteback(
+    debugd::ZramWritebackMode mode,
+    DBusMethodCallback<std::string> callback) {
+  std::move(callback).Run(std::string());
+}
+
 std::string FakeDebugDaemonClient::GetTracingAgentName() {
   return kCrOSTracingAgentName;
 }
@@ -89,12 +114,19 @@ void FakeDebugDaemonClient::StopAgentTracing(
 void FakeDebugDaemonClient::SetStopAgentTracingTaskRunner(
     scoped_refptr<base::TaskRunner> task_runner) {}
 
+void FakeDebugDaemonClient::SetRoutesForTesting(
+    std::vector<std::string> routes) {
+  routes_ = std::move(routes);
+}
+
 void FakeDebugDaemonClient::GetRoutes(
     bool numeric,
     bool ipv6,
+    bool all_tables,
     DBusMethodCallback<std::vector<std::string>> callback) {
   base::ThreadTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
+      FROM_HERE,
+      base::BindOnce(std::move(callback), absl::make_optional(routes_)));
 }
 
 void FakeDebugDaemonClient::GetNetworkStatus(
@@ -110,8 +142,8 @@ void FakeDebugDaemonClient::GetNetworkInterfaces(
 }
 
 void FakeDebugDaemonClient::GetPerfOutput(
-    base::TimeDelta duration,
-    const std::vector<std::string>& perf_args,
+    const std::vector<std::string>& quipper_args,
+    bool disable_cpu_idle,
     int file_descriptor,
     DBusMethodCallback<uint64_t> error_callback) {}
 
@@ -298,17 +330,6 @@ void FakeDebugDaemonClient::GetU2fFlags(
   base::ThreadTaskRunnerHandle::Get()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), absl::make_optional(u2f_flags_)));
-}
-
-void FakeDebugDaemonClient::GetKernelFeatureList(
-    KernelFeatureListCallback callback) {
-  // Defined by test.
-}
-
-void FakeDebugDaemonClient::KernelFeatureEnable(
-    const std::string& name,
-    KernelFeatureListCallback callback) {
-  // Defined by test.
 }
 
 void FakeDebugDaemonClient::AddObserver(Observer* observer) {

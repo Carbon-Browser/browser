@@ -11,7 +11,7 @@
 
 #include "base/compiler_specific.h"
 #include "base/containers/span.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "crypto/ec_signature_creator.h"
 
 namespace crypto {
@@ -19,6 +19,10 @@ namespace crypto {
 class ECSignatureCreatorImpl : public ECSignatureCreator {
  public:
   explicit ECSignatureCreatorImpl(ECPrivateKey* key);
+
+  ECSignatureCreatorImpl(const ECSignatureCreatorImpl&) = delete;
+  ECSignatureCreatorImpl& operator=(const ECSignatureCreatorImpl&) = delete;
+
   ~ECSignatureCreatorImpl() override;
 
   bool Sign(base::span<const uint8_t> data,
@@ -28,9 +32,7 @@ class ECSignatureCreatorImpl : public ECSignatureCreator {
                        std::vector<uint8_t>* out_raw_sig) override;
 
  private:
-  ECPrivateKey* key_;
-
-  DISALLOW_COPY_AND_ASSIGN(ECSignatureCreatorImpl);
+  raw_ptr<ECPrivateKey> key_;
 };
 
 }  // namespace crypto

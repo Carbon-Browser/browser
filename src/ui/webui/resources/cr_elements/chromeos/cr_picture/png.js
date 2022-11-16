@@ -2,7 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-cr.define('cr.png', function() {
   /**
    * @fileoverview
    * 'CrPngBehavior' is a behavior to convert image sequences into APNG
@@ -113,7 +112,7 @@ cr.define('cr.png', function() {
     0x40DF0B66, 0x37D83BF0, 0xA9BCAE53, 0xDEBB9EC5, 0x47B2CF7F, 0x30B5FFE9,
     0xBDBDF21C, 0xCABAC28A, 0x53B39330, 0x24B4A3A6, 0xBAD03605, 0xCDD70693,
     0x54DE5729, 0x23D967BF, 0xB3667A2E, 0xC4614AB8, 0x5D681B02, 0x2A6F2B94,
-    0xB40BBE37, 0xC30C8EA1, 0x5A05DF1B, 0x2D02EF8D
+    0xB40BBE37, 0xC30C8EA1, 0x5A05DF1B, 0x2D02EF8D,
   ];
 
   /**
@@ -130,12 +129,12 @@ cr.define('cr.png', function() {
   let CrPngState;
 
   /**
-   * Returns a data URL for an animated PNG image that is created
-   * from a sequence of images.
+   * Construct an internal representation of the png.
    * @param {!Array<string>} images The data URLs for each image.
-   * @return {string} A data URL for an animated PNG image.
+   * @return {!CrPngState}
+   * @private
    */
-  /* #export */ function convertImageSequenceToPng(images) {
+  function convertDataUrlsToCrPng(images) {
     const png =
         /** @type {!CrPngState} */ ({frames: 0, sequences: 0, chunks: []});
 
@@ -199,6 +198,35 @@ cr.define('cr.png', function() {
     writeUInt32(IEND, getCRC(IEND, 4, 8), 8);
     png.chunks.push(IEND);
 
+    return png;
+  }
+
+  /**
+   * Get a binary representation of the png.
+   * @param {!Array<string>} images The data URLs for each image.
+   * @return {!Uint8Array} Binary data for animated png image.
+   */
+  export function convertImageSequenceToPngBinary(images) {
+    const png = convertDataUrlsToCrPng(images);
+    const numBytes =
+        png.chunks.reduce((value, next) => value + next.byteLength, 0);
+    const result = new Uint8Array(numBytes);
+    let offset = 0;
+    for (const chunk of png.chunks) {
+      result.set(/** @type {!ArrayBufferView} */ (chunk), offset);
+      offset += chunk.byteLength;
+    }
+    return result;
+  }
+
+  /**
+   * Returns a data URL for an animated PNG image that is created
+   * from a sequence of images.
+   * @param {!Array<string>} images The data URLs for each image.
+   * @return {string} A data URL for an animated PNG image.
+   */
+  export function convertImageSequenceToPng(images) {
+    const png = convertDataUrlsToCrPng(images);
     return 'data:image/png;base64,' +
         btoa(png.chunks
                  .map(function(chunk) {
@@ -217,7 +245,7 @@ cr.define('cr.png', function() {
    * @param {string} url An btoa encoded data URL for a PNG image.
    * @return {boolean} True if data URL is an animated PNG image.
    */
-  /* #export */ function isEncodedPngDataUrlAnimated(url) {
+  export function isEncodedPngDataUrlAnimated(url) {
     const decoded = atob(url.substr('data:image/png;base64,'.length));
     return decoded.substr(37, 4) === 'acTL';
   }
@@ -509,10 +537,3 @@ cr.define('cr.png', function() {
     }
     console.error('Unexpectedly reached end of file');
   }
-
-  // #cr_define_end
-  return {
-    convertImageSequenceToPng,
-    isEncodedPngDataUrlAnimated,
-  };
-});

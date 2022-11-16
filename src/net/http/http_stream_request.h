@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "net/base/load_states.h"
 #include "net/base/net_error_details.h"
 #include "net/base/net_export.h"
@@ -50,7 +50,7 @@ class NET_EXPORT_PRIVATE HttpStreamRequest {
   // called as a result of a stream request.
   class NET_EXPORT_PRIVATE Delegate {
    public:
-    virtual ~Delegate() {}
+    virtual ~Delegate() = default;
 
     // This is the success case for RequestStream.
     // |stream| is now owned by the delegate.
@@ -137,7 +137,7 @@ class NET_EXPORT_PRIVATE HttpStreamRequest {
 
   class NET_EXPORT_PRIVATE Helper {
    public:
-    virtual ~Helper() {}
+    virtual ~Helper() = default;
 
     // Returns the LoadState for Request.
     virtual LoadState GetLoadState() const = 0;
@@ -162,6 +162,9 @@ class NET_EXPORT_PRIVATE HttpStreamRequest {
                         websocket_handshake_stream_create_helper,
                     const NetLogWithSource& net_log,
                     StreamType stream_type);
+
+  HttpStreamRequest(const HttpStreamRequest&) = delete;
+  HttpStreamRequest& operator=(const HttpStreamRequest&) = delete;
 
   ~HttpStreamRequest();
 
@@ -217,21 +220,19 @@ class NET_EXPORT_PRIVATE HttpStreamRequest {
   const GURL url_;
 
   // Unowned. The helper must outlive this request.
-  Helper* helper_;
+  raw_ptr<Helper, DanglingUntriaged> helper_;
 
-  WebSocketHandshakeStreamBase::CreateHelper* const
+  const raw_ptr<WebSocketHandshakeStreamBase::CreateHelper>
       websocket_handshake_stream_create_helper_;
   const NetLogWithSource net_log_;
 
-  bool completed_;
-  bool was_alpn_negotiated_;
+  bool completed_ = false;
+  bool was_alpn_negotiated_ = false;
   // Protocol negotiated with the server.
-  NextProto negotiated_protocol_;
-  bool using_spdy_;
+  NextProto negotiated_protocol_ = kProtoUnknown;
+  bool using_spdy_ = false;
   ConnectionAttempts connection_attempts_;
   const StreamType stream_type_;
-
-  DISALLOW_COPY_AND_ASSIGN(HttpStreamRequest);
 };
 
 }  // namespace net

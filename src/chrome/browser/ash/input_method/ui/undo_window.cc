@@ -8,6 +8,7 @@
 #include "ash/public/cpp/style/scoped_light_mode_as_default.h"
 #include "chrome/app/vector_icons/vector_icons.h"
 #include "chrome/browser/ash/input_method/ui/border_factory.h"
+#include "chrome/browser/ash/input_method/ui/colors.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/views/bubble/bubble_border.h"
@@ -26,8 +27,8 @@ constexpr int kHeight = 28;
 constexpr int kPadding = 0;
 constexpr int kIconSize = 16;
 // TODO(crbug/1099044): Update and use cros_colors.json5
-constexpr SkColor kButtonHighlightColor =
-    SkColorSetA(SK_ColorBLACK, 0x0F);  // 6% Black.
+constexpr cros_styles::ColorName kButtonHighlightColor =
+    cros_styles::ColorName::kRippleColor;
 
 }  // namespace
 
@@ -37,7 +38,7 @@ UndoWindow::UndoWindow(gfx::NativeView parent, AssistiveDelegate* delegate)
   SetCanActivate(false);
   DCHECK(parent);
   set_parent_window(parent);
-  set_margins(gfx::Insets(kPadding, kPadding, kPadding, kPadding));
+  set_margins(gfx::Insets(kPadding));
   SetArrow(views::BubbleBorder::Arrow::BOTTOM_LEFT);
   SetLayoutManager(std::make_unique<views::BoxLayout>(
       views::BoxLayout::Orientation::kHorizontal));
@@ -48,7 +49,7 @@ UndoWindow::UndoWindow(gfx::NativeView parent, AssistiveDelegate* delegate)
   undo_button_->SetText(kUndoButtonText);
   undo_button_->SetImageLabelSpacing(
       views::LayoutProvider::Get()->GetDistanceMetric(
-          views::DistanceMetric::DISTANCE_RELATED_LABEL_HORIZONTAL));
+          views::DistanceMetric::DISTANCE_RELATED_BUTTON_HORIZONTAL));
   undo_button_->SetBackground(nullptr);
   undo_button_->SetFocusBehavior(views::View::FocusBehavior::ACCESSIBLE_ONLY);
   undo_button_->SetMaxSize(
@@ -67,7 +68,7 @@ void UndoWindow::OnThemeChanged() {
               ash::ColorProvider::ContentLayerType::kIconColorPrimary)));
   undo_button_->SetEnabledTextColors(
       ash::ColorProvider::Get()->GetContentLayerColor(
-          ash::ColorProvider::ContentLayerType::kTextColorPrimary));
+          ash::ColorProvider::ContentLayerType::kTextColorSecondary));
   BubbleDialogDelegateView::OnThemeChanged();
 }
 
@@ -107,7 +108,8 @@ void UndoWindow::SetButtonHighlighted(const AssistiveWindowButton& button,
     return;
 
   undo_button_->SetBackground(
-      highlighted ? views::CreateSolidBackground(kButtonHighlightColor)
+      highlighted ? views::CreateSolidBackground(
+                        ResolveSemanticColor(kButtonHighlightColor))
                   : nullptr);
 }
 

@@ -6,15 +6,14 @@
 
 #include <vector>
 
+#include "ash/components/settings/cros_settings_names.h"
 #include "ash/constants/ash_features.h"
 #include "base/bind.h"
 #include "base/callback_helpers.h"
-#include "base/cxx17_backports.h"
 #include "base/feature_list.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/system/sys_info.h"
-#include "base/task/post_task.h"
 #include "base/task/thread_pool.h"
 #include "chrome/browser/ash/policy/core/browser_policy_connector_ash.h"
 #include "chrome/browser/ash/settings/cros_settings.h"
@@ -23,7 +22,6 @@
 #include "chrome/grit/chromium_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "chromeos/dbus/util/version_loader.h"
-#include "chromeos/settings/cros_settings_names.h"
 #include "chromeos/strings/grit/chromeos_strings.h"
 #include "chromeos/system/statistics_provider.h"
 #include "components/version_info/version_info.h"
@@ -32,14 +30,12 @@
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/chromeos/devicetype_utils.h"
 
-namespace chromeos {
-
+namespace ash {
 namespace {
 
 const char* const kReportingFlags[] = {
-    chromeos::kReportDeviceVersionInfo, chromeos::kReportDeviceActivityTimes,
-    chromeos::kReportDeviceBootMode, chromeos::kReportDeviceLocation,
-    chromeos::kDeviceLoginScreenSystemInfoEnforced};
+    kReportDeviceVersionInfo, kReportDeviceActivityTimes, kReportDeviceBootMode,
+    kReportDeviceLocation, kDeviceLoginScreenSystemInfoEnforced};
 
 // Strings used to generate the serial number part of the version string.
 const char kSerialNumberPrefix[] = "SN:";
@@ -58,7 +54,7 @@ const char kBluetoothDeviceNamePrefix[] = "Bluetooth device name: ";
 // VersionInfoUpdater public:
 
 VersionInfoUpdater::VersionInfoUpdater(Delegate* delegate)
-    : cros_settings_(chromeos::CrosSettings::Get()), delegate_(delegate) {}
+    : cros_settings_(CrosSettings::Get()), delegate_(delegate) {}
 
 VersionInfoUpdater::~VersionInfoUpdater() {
   policy::BrowserPolicyConnectorAsh* connector =
@@ -98,7 +94,7 @@ void VersionInfoUpdater::StartUpdate(bool is_chrome_branded) {
   // Watch for changes to the reporting flags.
   auto callback = base::BindRepeating(&VersionInfoUpdater::UpdateEnterpriseInfo,
                                       base::Unretained(this));
-  for (unsigned int i = 0; i < base::size(kReportingFlags); ++i) {
+  for (unsigned int i = 0; i < std::size(kReportingFlags); ++i) {
     subscriptions_.push_back(
         cros_settings_->AddSettingsObserver(kReportingFlags[i], callback));
   }
@@ -109,10 +105,8 @@ void VersionInfoUpdater::StartUpdate(bool is_chrome_branded) {
 
   // Get ADB sideloading status if supported on device. Otherwise, default is to
   // not show.
-  if (base::FeatureList::IsEnabled(
-      chromeos::features::kArcAdbSideloadingFeature)) {
-    chromeos::SessionManagerClient* client =
-        chromeos::SessionManagerClient::Get();
+  if (base::FeatureList::IsEnabled(features::kArcAdbSideloadingFeature)) {
+    SessionManagerClient* client = SessionManagerClient::Get();
     client->QueryAdbSideload(
         base::BindOnce(&VersionInfoUpdater::OnQueryAdbSideload,
                        weak_pointer_factory_.GetWeakPtr()));
@@ -121,7 +115,7 @@ void VersionInfoUpdater::StartUpdate(bool is_chrome_branded) {
 
 absl::optional<bool> VersionInfoUpdater::IsSystemInfoEnforced() const {
   bool is_system_info_enforced = false;
-  if (cros_settings_->GetBoolean(chromeos::kDeviceLoginScreenSystemInfoEnforced,
+  if (cros_settings_->GetBoolean(kDeviceLoginScreenSystemInfoEnforced,
                                  &is_system_info_enforced)) {
     return is_system_info_enforced;
   }
@@ -235,4 +229,4 @@ void VersionInfoUpdater::OnQueryAdbSideload(
     delegate_->OnAdbSideloadStatusUpdated(enabled);
 }
 
-}  // namespace chromeos
+}  // namespace ash

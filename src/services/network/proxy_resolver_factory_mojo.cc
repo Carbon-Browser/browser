@@ -12,12 +12,11 @@
 #include "base/bind.h"
 #include "base/callback.h"
 #include "base/logging.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/task/post_task.h"
+#include "base/task/task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/task_runner.h"
 #include "base/values.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -162,8 +161,8 @@ class ClientMixin : public ClientInterface {
 
  private:
   MojoHostResolverImpl host_resolver_;
-  net::ProxyResolverErrorObserver* const error_observer_;
-  net::NetLog* const net_log_;
+  const raw_ptr<net::ProxyResolverErrorObserver> error_observer_;
+  const raw_ptr<net::NetLog> net_log_;
   const net::NetLogWithSource net_log_with_source_;
 };
 
@@ -185,6 +184,10 @@ class ProxyResolverMojo : public net::ProxyResolver {
       net::HostResolver* host_resolver,
       std::unique_ptr<net::ProxyResolverErrorObserver> error_observer,
       net::NetLog* net_log);
+
+  ProxyResolverMojo(const ProxyResolverMojo&) = delete;
+  ProxyResolverMojo& operator=(const ProxyResolverMojo&) = delete;
+
   ~ProxyResolverMojo() override;
 
   // ProxyResolver implementation:
@@ -207,13 +210,11 @@ class ProxyResolverMojo : public net::ProxyResolver {
   mojo::Remote<proxy_resolver::mojom::ProxyResolver>
       mojo_proxy_resolver_remote_;
 
-  net::HostResolver* host_resolver_;
+  raw_ptr<net::HostResolver> host_resolver_;
 
   std::unique_ptr<net::ProxyResolverErrorObserver> error_observer_;
 
-  net::NetLog* net_log_;
-
-  DISALLOW_COPY_AND_ASSIGN(ProxyResolverMojo);
+  raw_ptr<net::NetLog> net_log_;
 };
 
 class ProxyResolverMojo::Job
@@ -226,6 +227,10 @@ class ProxyResolverMojo::Job
       net::ProxyInfo* results,
       net::CompletionOnceCallback callback,
       const net::NetLogWithSource& net_log);
+
+  Job(const Job&) = delete;
+  Job& operator=(const Job&) = delete;
+
   ~Job() override;
 
   // Returns the LoadState of this job.
@@ -242,14 +247,12 @@ class ProxyResolverMojo::Job
   void CompleteRequest(int result);
 
   const GURL url_;
-  net::ProxyInfo* results_;
+  raw_ptr<net::ProxyInfo> results_;
   net::CompletionOnceCallback callback_;
 
   SEQUENCE_CHECKER(sequence_checker_);
   mojo::Receiver<proxy_resolver::mojom::ProxyResolverRequestClient> receiver_{
       this};
-
-  DISALLOW_COPY_AND_ASSIGN(Job);
 };
 
 ProxyResolverMojo::Job::Job(
@@ -400,8 +403,8 @@ class ProxyResolverFactoryMojo::Job
     std::move(callback_).Run(error);
   }
 
-  ProxyResolverFactoryMojo* const factory_;
-  std::unique_ptr<net::ProxyResolver>* resolver_;
+  const raw_ptr<ProxyResolverFactoryMojo> factory_;
+  raw_ptr<std::unique_ptr<net::ProxyResolver>> resolver_;
   net::CompletionOnceCallback callback_;
   mojo::PendingRemote<proxy_resolver::mojom::ProxyResolver> resolver_remote_;
   mojo::Receiver<proxy_resolver::mojom::ProxyResolverFactoryRequestClient>

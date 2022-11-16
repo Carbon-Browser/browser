@@ -34,7 +34,7 @@
       Sera hii isipowekwa, mipangilio itakuwa ile ambayo mtumiaji alichagua wakati wa kusakinisha programu au utekelezaji wa kwanza wa programu.
 
       Sera hii inapatikana kwenye matukio ya Windows ambayo yameunganishwa kwenye kikoa cha <ph name="MS_AD_NAME" />. au matukio ya Windows 10 Pro au Enterprise yaliyojumuishwa katika usimamizi wa kifaa.
-      (Kwa ajili ya Mfumo wa Uendeshaji wa Carbon Browser Browser Browser, angalia DeviceMetricsReportingEnabled.)</translation>
+      (Kwa ajili ya Mfumo wa Uendeshaji wa Carbon Browser, angalia DeviceMetricsReportingEnabled.)</translation>
 <translation id="1035385378988781231">Sera hii inadhibiti iwapo kipengele cha Faili za Kushiriki Mtandaoni katika <ph name="PRODUCT_NAME" /> kitatumia NTLM kuthibitisha.
 
       Iwapo sera hii imewekwa kuwa Ndivyo, NTLM itatumika kuthibitisha faili za kushiriki za SMB panapohitajika.
@@ -112,13 +112,13 @@
       Inathibitisha kipindi kabla ya kuonyeshwa kwa taswira ya skrini katika skrini ya kuingia kwa vifaa hivi katika modi ya reje reja.
 
       Thamani ya sera inafaa kubainishwa katika milisekunde.</translation>
-<translation id="1141767714195601945">Sera hii inadhibiti vipengee vya mstari wa amri katika Carbon Browser Browser Browser kutoka Internet Explorer.
+<translation id="1141767714195601945">Sera hii inadhibiti vipengee vya mstari wa amri katika Carbon Browser kutoka Internet Explorer.
 
       Ikiwa kipengele cha "Uwezo wa Kutumia Kivinjari Kilichopitwa na Wakati" cha Internet Explorer hakijasakinishwa, sera hii haina athari.
 
-      Sera hii isipowekwa, Internet Explore itapitisha tu URL kwenye Carbon Browser Browser Browser kama kipengele cha mstari wa amri.
+      Sera hii isipowekwa, Internet Explore itapitisha tu URL kwenye Carbon Browser kama kipengele cha mstari wa amri.
 
-      Sera hii ikiwekwa kuwa orodha ya mifuatano, mifuatano hiyo huunganishwa kwa kutumia nafasi na kupitishwa kwenye Carbon Browser Browser Browser kama vipengele vya mstari wa amri.
+      Sera hii ikiwekwa kuwa orodha ya mifuatano, mifuatano hiyo huunganishwa kwa kutumia nafasi na kupitishwa kwenye Carbon Browser kama vipengele vya mstari wa amri.
 
       Ikiwa kipengee kinajumuisha ${url}, nafasi yake itachukuliwa na URL ya ukurasa utakaofunguka.
 
@@ -253,7 +253,7 @@ Ikiwa sera hii haitawekwa, mipangilio hii itawashwa lakini mtumiaji hataweza kui
 
       Kila kipengee cha orodha ya sera ni kifungu ambacho kinajumuisha kitambulisho cha kiendelezi na URL ya "sasisho" inayotenganishwa kwa nukta mkato (<ph name="SEMICOLON" />) Kitambulisho cha kiendelezi ni kifungu cha herufi 32 kinachopatikana, kwa mfano kwenye <ph name="CHROME_EXTENSIONS_LINK" /> ikiwa katika hali ya wasanidi programu. URL ya "sasisho" inapaswa kuashiria hati ya XML ya faili ya Maelezo ya Sasisho kama ilivyofafanuliwa katika <ph name="LINK_TO_EXTENSION_DOC1" />. Kumbuka URL ya "sasisho" iliyowekwa katika sera hii hutumika tu kwa ajili ya usakinishaji wa kwanza, masasisho yanayofuata ya kiendelezi hutumia URL ya sasisho iliyobainishwa kwenye faili ya maelezo ya kiendelezi.
 
-      Kwa mfano, <ph name="EXTENSION_POLICY_EXAMPLE" /> husakinisha programu ya <ph name="EXTENSION_POLICY_EXAMPLE_EXTENSION_NAME" /> kutoka URL ya "sasisho" la kawaida la Duka la Carbon Browser Browser Browser kwenye Wavuti. Kwa maelezo zaidi kuhusu jinsi ya kupangisha viendelezi, angalia: <ph name="LINK_TO_EXTENSION_DOC2" />.</translation>
+      Kwa mfano, <ph name="EXTENSION_POLICY_EXAMPLE" /> husakinisha programu ya <ph name="EXTENSION_POLICY_EXAMPLE_EXTENSION_NAME" /> kutoka URL ya "sasisho" la kawaida la Duka la Carbon Browser kwenye Wavuti. Kwa maelezo zaidi kuhusu jinsi ya kupangisha viendelezi, angalia: <ph name="LINK_TO_EXTENSION_DOC2" />.</translation>
 <translation id="1435659902881071157">Usanidi wa mtandao wa kiwango cha kifaa</translation>
 <translation id="1438739959477268107">Mipangilio ya uundaji ufunguo chaguomsingi</translation>
 <translation id="1454846751303307294">Inakuruhusu kuweka orodha ya ruwaza za url ambazo zinabainisha tovuti ambazo haziruhusiwi kuendesha JavaScript.
@@ -407,12 +407,12 @@ Iwapo sera hii haijawekwa, hali ya juu ya utoafautishaji huzimwa wakati skrini y
 
       Sera hii isipowekwa, utendaji wa programu dhibiti ya <ph name="TPM_FIRMWARE_UPDATE_TPM" /> hautapatikana.</translation>
 <translation id="1708496595873025510">Weka kizuizi kwenye uletaji wa mbegu Tofauti</translation>
-<translation id="1717817358640580294">Iwapo sera haijawekwa na Kipengele cha Kusafisha Carbon Browser Browser Browser kitambue programu isiyotakikana, kinaweza kuripoti metadata kuhusu ukaguzi kwa Google kulingana na sera zilizowekwa na
-SafeBrowsingExtendedReportingEnabled. Kisha, Kipengele cha Kusafisha Carbon Browser Browser Browser kitamwuliza mtumiaji iwapo angependa kuondoa programu isiyotakikana. Mtumiaji anaweza kuchagua kushiriki matokeo ya uondoaji na Google ili kusaidia utambuzi wa programu zisizotakikana baadaye. Matokeo haya yana metadata ya faili, viendelezi vilivyosakinishwa kiotomatiki na funguo za sajili kama ilivyobainishwa na Hati ya Faragha ya Carbon Browser Browser Browser.
+<translation id="1717817358640580294">Iwapo sera haijawekwa na Kipengele cha Kusafisha Carbon Browser kitambue programu isiyotakikana, kinaweza kuripoti metadata kuhusu ukaguzi kwa Google kulingana na sera zilizowekwa na
+SafeBrowsingExtendedReportingEnabled. Kisha, Kipengele cha Kusafisha Carbon Browser kitamwuliza mtumiaji iwapo angependa kuondoa programu isiyotakikana. Mtumiaji anaweza kuchagua kushiriki matokeo ya uondoaji na Google ili kusaidia utambuzi wa programu zisizotakikana baadaye. Matokeo haya yana metadata ya faili, viendelezi vilivyosakinishwa kiotomatiki na funguo za sajili kama ilivyobainishwa na Hati ya Faragha ya Carbon Browser.
 
-      Iwapo sera imezimwa na Kipengele cha Kusafisha Carbon Browser Browser Browser kitambue programu isiyotakikana, hakitaripoti metadata kuhusu ukaguzi kwa Google, hali itakayobatilisha sera zozote zilizowekwa na SafeBrowsingExtendedReportingEnabled. Kipengele cha Kusafisha Carbon Browser Browser Browser kitamwuliza mtumiaji iwapo angependa kuondoa programu isiyotakikana.  Matokeo ya uondoaji hayataripotiwa kwa Google na mtumiaji hatakuwa na chaguo la kufanya hivyo.
+      Iwapo sera imezimwa na Kipengele cha Kusafisha Carbon Browser kitambue programu isiyotakikana, hakitaripoti metadata kuhusu ukaguzi kwa Google, hali itakayobatilisha sera zozote zilizowekwa na SafeBrowsingExtendedReportingEnabled. Kipengele cha Kusafisha Carbon Browser kitamwuliza mtumiaji iwapo angependa kuondoa programu isiyotakikana.  Matokeo ya uondoaji hayataripotiwa kwa Google na mtumiaji hatakuwa na chaguo la kufanya hivyo.
 
-      Iwapo sera imewashwa na Kipengele cha Kusafisha Carbon Browser Browser Browser kitambue programu isiyotakikana, kinaweza kuripoti metadata kuhusu ukaguzi kwa Google kulingana na sera zilizowekwa na SafeBrowsingExtendedReportingEnabled. Kipengele cha Kusafisha Carbon Browser Browser Browser kitamwuliza mtumiaji iwapo angependa kuondoa programu isiyotakikana.  Matokeo ya uondoaji yataripotiwa kwa Google na mtumiaji hatakuwa na chaguo la kuzuia hali hii.
+      Iwapo sera imewashwa na Kipengele cha Kusafisha Carbon Browser kitambue programu isiyotakikana, kinaweza kuripoti metadata kuhusu ukaguzi kwa Google kulingana na sera zilizowekwa na SafeBrowsingExtendedReportingEnabled. Kipengele cha Kusafisha Carbon Browser kitamwuliza mtumiaji iwapo angependa kuondoa programu isiyotakikana.  Matokeo ya uondoaji yataripotiwa kwa Google na mtumiaji hatakuwa na chaguo la kuzuia hali hii.
 
       Sera hii inapatikana kwenye matukio ya Windows ambayo yameunganishwa kwenye kikoa cha <ph name="MS_AD_NAME" />. au matukio ya Windows 10 Pro au Enterprise yaliyojumuishwa katika usimamizi wa kifaa.</translation>
 <translation id="172374442286684480">Ruhusu tovuti zote kuweka data za karibu nawe</translation>
@@ -608,7 +608,7 @@ Sera hii ikiondolewa, chaguomsingi zitatumika kwa mipangilio yote.</translation>
 <translation id="2073552873076775140">Ruhusu kuingia katika akaunti ya <ph name="PRODUCT_NAME" /></translation>
 <translation id="2077129598763517140">Tumia uongezaji kasi wa maunzi wakati unapatikana</translation>
 <translation id="2077273864382355561">Kuzimika kwa skrini kunachelewa wakati wa kuendesha kwa nishati ya betri</translation>
-<translation id="2082205219176343977">Weka mipangilio ya msingi inayoruhusiwa ya toleo la Carbon Browser Browser Browser kwenye kifaa.</translation>
+<translation id="2082205219176343977">Weka mipangilio ya msingi inayoruhusiwa ya toleo la Carbon Browser kwenye kifaa.</translation>
 <translation id="209586405398070749">Kituo imara</translation>
 <translation id="2098658257603918882">Wezesha kuripoti kwa matumizi na data zinazohusu mvurugiko</translation>
 <translation id="2104418465060359056">Ripoti maelezo ya Programu Jalizi na Viendelezi</translation>
@@ -652,7 +652,7 @@ Sera hii ikiondolewa, chaguomsingi zitatumika kwa mipangilio yote.</translation>
       Ukizima mipangilio hii au usipoiweka, kurasa zozote za uthibitishaji wa ukurasa wa mwanzo zitaonyeshwa katika kichupo cha kivinjari kipya (kawaida), kwa kutumia mipangilio ya seva mbadala ya mtumiaji wa sasa.</translation>
 <translation id="21394354835637379">Hukuruhusu kubainisha URL ambazo zinaruhusiwa ili kusakinisha viendelezi, programu na mandhari.
 
-          Kuanzia toleo la <ph name="PRODUCT_NAME" /> la 21, ni vigumu kusakinisha viendelezi, programu na hati za mtumiaji kutoka nje ya Duka la Carbon Browser Browser Browser kwenye Wavuti. Hapo awali, watumiaji wangebofya kiungo cha kufikia faili ya *.crx na <ph name="PRODUCT_NAME" /> ingewapa fursa ya kusakinisha faili baada ya ilani chache. Baada ya toleo la <ph name="PRODUCT_NAME" /> la 21, faili kama hizi lazima zipakuliwe na kuburutwa kwenye ukurasa wa mipangilio ya <ph name="PRODUCT_NAME" />. Sera hii huruhusu URL maalum kuwa na mtiririko wa awali na rahisi wa usakinishaji.
+          Kuanzia toleo la <ph name="PRODUCT_NAME" /> la 21, ni vigumu kusakinisha viendelezi, programu na hati za mtumiaji kutoka nje ya Duka la Carbon Browser kwenye Wavuti. Hapo awali, watumiaji wangebofya kiungo cha kufikia faili ya *.crx na <ph name="PRODUCT_NAME" /> ingewapa fursa ya kusakinisha faili baada ya ilani chache. Baada ya toleo la <ph name="PRODUCT_NAME" /> la 21, faili kama hizi lazima zipakuliwe na kuburutwa kwenye ukurasa wa mipangilio ya <ph name="PRODUCT_NAME" />. Sera hii huruhusu URL maalum kuwa na mtiririko wa awali na rahisi wa usakinishaji.
 
           Kila kipengee kwenye orodha hii ni mchoro unaolingana na muundo wa kiendelezi (Angalia https://developer.chrome.com/extensions/match_patterns). Watumiaji wataweza kusakinisha kwa urahisi vipengee kutoka URL yoyote inayolingana na kipengee katika orodha hii. Ni lazima eneo la faili ya *.crx na ukurasa ambapo upakuaji ulianzia (kwa mfano, unaoelekeza) liruhusiwe na michoro hii.
 
@@ -729,11 +729,11 @@ Sera hii ikiondolewa, chaguomsingi zitatumika kwa mipangilio yote.</translation>
 
       Sera ikizimwa au isipowekwa, kurasa haziruhusiwi kuonyesha madirisha ibukizi wakati zinaondolewa kulingana na maelezo ya msingi (https://html.spec.whatwg.org/#apis-for-creating-and-navigating-browsing-contexts-by-name).
 
-      Sera hii itaondolewa katika Carbon Browser Browser Browser 82.
+      Sera hii itaondolewa katika Carbon Browser 82.
 
       Angalia https://www.chromestatus.com/feature/5989473649164288 .</translation>
 <translation id="2269319728625047531">Washa kipengele cha kuonyesha Idhini ya Usawazishaji wakati wa kuingia katika akaunti</translation>
-<translation id="2274864612594831715">Sera hii inasanidi kuwasha kibodi pepe kama kifaa cha kuingiza data kwenye Carbon Browser Browser BrowserOS. Watumiaji hawawezi kuibatilisha sera hii.
+<translation id="2274864612594831715">Sera hii inasanidi kuwasha kibodi pepe kama kifaa cha kuingiza data kwenye Carbon BrowserOS. Watumiaji hawawezi kuibatilisha sera hii.
 
       Ikiwa sera hii itawekwa kuwa ndivyo,  kibodi pepe ya skrini itawashwa wakati wowote.
 
@@ -798,9 +798,9 @@ Ikiwa sera imewekwa kuwa sivyo au haijawekwa, matukio hayatarekodiwa.</translati
 <translation id="2463034609187171371">Washa kriptografia ya DHE katika TLS</translation>
 <translation id="2463365186486772703">Lugha ya programu</translation>
 <translation id="2466131534462628618">Uthibitishaji wa ukurasa wavuti hupuuza seva mbadala</translation>
-<translation id="2471748297300970300">Iwapo sera imezimwa, inazuia ilani za usalama zisionekane wakati Carbon Browser Browser Browser imefunguliwa na baadhi ya alama za mstari wa amri zinazoweza kuwa hatari.
+<translation id="2471748297300970300">Iwapo sera imezimwa, inazuia ilani za usalama zisionekane wakati Carbon Browser imefunguliwa na baadhi ya alama za mstari wa amri zinazoweza kuwa hatari.
 
-          Iwapo sera imewashwa au haijawekwa, ilani za usalama huwa zinaonyeshwa wakati baadhi ya alama za mstari wa amri zinatumika kufungua Carbon Browser Browser Browser.
+          Iwapo sera imewashwa au haijawekwa, ilani za usalama huwa zinaonyeshwa wakati baadhi ya alama za mstari wa amri zinatumika kufungua Carbon Browser.
 
           Kwenye Windows, sera hii inapatikana tu kwa matukio ambayo yameunganishwa kwenye kikoa cha <ph name="MS_AD_NAME" /> au matukio ya Windows 10 Pro au Enterprise yaliyojumuishwa katika usimamizi wa kifaa.</translation>
 <translation id="2482676533225429905">Ujumbe wa Asili</translation>
@@ -922,7 +922,7 @@ Ikiwa sera imewekwa kuwa sivyo au haijawekwa, matukio hayatarekodiwa.</translati
           URL ya utafutaji wa Google inaweza kubanishwa kuwa: <ph name="GOOGLE_SEARCH_URL" />.
 
           Lazima chaguo hili liwekwe wakati sera ya 'DefaultSearchProviderEnabled' imewashwa na itazingatiwa tu hali hii ikitimizwa.</translation>
-<translation id="2659019163577049044">Kama mipangilio hii imewashwa, watumiaji wataruhusiwa kuweka mipangilio kwenye vifaa vyao ili wasawazishe ujumbe wa SMS kati ya simu na Carbon Browser Browser Browserbook zao. Kumbuka kwamba ikiwa sera hii itaruhusiwa, ni sharti watumiaji wajijumuishe waziwazi kwenye kipengele hiki kwa kukamilisha utaratibu wa kuweka mipangilio. Pindi utaratibu wa kuweka mipangilio utakamilika, watumiaji wataweza kutuma na kupokea SMS kwenye Carbon Browser Browser Browserbook zao.
+<translation id="2659019163577049044">Kama mipangilio hii imewashwa, watumiaji wataruhusiwa kuweka mipangilio kwenye vifaa vyao ili wasawazishe ujumbe wa SMS kati ya simu na Carbon Browserbook zao. Kumbuka kwamba ikiwa sera hii itaruhusiwa, ni sharti watumiaji wajijumuishe waziwazi kwenye kipengele hiki kwa kukamilisha utaratibu wa kuweka mipangilio. Pindi utaratibu wa kuweka mipangilio utakamilika, watumiaji wataweza kutuma na kupokea SMS kwenye Carbon Browserbook zao.
 
       Ikiwa mipangilio hii imezimwa, watumiaji hawataruhusiwa kuweka mipangilio ya kusawazisha SMS.
 
@@ -940,7 +940,7 @@ Ikiwa sera imewekwa kuwa sivyo au haijawekwa, matukio hayatarekodiwa.</translati
 <translation id="2706708761587205154">Ruhusu uchapishajikwa kwa kutumia PIN pekee</translation>
 <translation id="2710534340210290498">Ikiwa sera hii imewekwa kuwa ndivyo, watumiaji hawataweza kufunga skrini (utaweza kuondoka katika kipindi cha mtumiaji pekee). Mipangilio hii ikiwekwa kuwa ndivyo au isipowekwa, watumiaji ambao walithibitisha kupitia nenosiri wanaweza kufunga skrini.</translation>
 <translation id="2731627323327011390">Zima kipengele cha utumiaji wa vyeti vya <ph name="PRODUCT_OS_NAME" /> kwenye programu za ARC</translation>
-<translation id="2742843273354638707">Ficha programu ya Duka la Carbon Browser Browser Browser kwenye Wavuti na kiungo cha kijachini kutoka kwenye Ukurasa wa Kichupo Kipya na kifungua programu cha <ph name="PRODUCT_OS_NAME" />.
+<translation id="2742843273354638707">Ficha programu ya Duka la Carbon Browser kwenye Wavuti na kiungo cha kijachini kutoka kwenye Ukurasa wa Kichupo Kipya na kifungua programu cha <ph name="PRODUCT_OS_NAME" />.
 
       Sera hii inapowekwa kuwa ndivyo, aikoni hufichwa.
 
@@ -984,7 +984,7 @@ Ikiwa sera imewekwa kuwa sivyo au haijawekwa, matukio hayatarekodiwa.</translati
 <translation id="2801155097555584385">Weka mapendeleo ya muda wa kuanza kuchaji betri katika asilimia</translation>
 <translation id="2801230735743888564">Ruruhusu watumiaji wacheze mchezo fiche wa dinosau kifaa kinapokuwa nje ya mtandao.
 
-      Sera hii ikiwekwa kuwa Sivyo, watumiaji hawataweza kucheza mchezo mchezo fiche wa dinosau kifaa kinapokuwa nje ya mtandao. Mipangilio hii ikiwekwa kuwa Ndivyo, watumiaji wanaruhusiwa kucheza mchezo wa dinosau. Sera hii isipowekwa, watumiaji hawaruhusiwi kucheza mchezo fiche wa dinosau kwenye Mfumo wa Uendeshaji wa Carbon Browser Browser Browser uliosajiliwa, lakini wanaruhusiwa kuucheza chini ya hali nyingine.</translation>
+      Sera hii ikiwekwa kuwa Sivyo, watumiaji hawataweza kucheza mchezo mchezo fiche wa dinosau kifaa kinapokuwa nje ya mtandao. Mipangilio hii ikiwekwa kuwa Ndivyo, watumiaji wanaruhusiwa kucheza mchezo wa dinosau. Sera hii isipowekwa, watumiaji hawaruhusiwi kucheza mchezo fiche wa dinosau kwenye Mfumo wa Uendeshaji wa Carbon Browser uliosajiliwa, lakini wanaruhusiwa kuucheza chini ya hali nyingine.</translation>
 <translation id="2802085784857530815">Inakuruhusu udhibiti ikiwa watumiaji wanaweza kufikia printa zisizo za shirika
 
       Ikiwa sera imewekwa kuwa Ndivyo, au isipowekwa kabisa, watumiaji wataweza kuongeza, kuweka mipangilio na kuchapisha wakitumia printa za mitandao yao.
@@ -1003,12 +1003,12 @@ Ikiwa sera imewekwa kuwa sivyo au haijawekwa, matukio hayatarekodiwa.</translati
       Sera hii inapowekwa katika orodha yenye vipindi fulani vya muda:
       Vifaa havitaweza kukagua masasisho kiotomatiki katika vipindi vilivyobainishwa. Vifaa ambavyo vinahitaji matoleo ya zamani au vinatumia matoleo yaliyotangulia <ph name="PRODUCT_OS_NAME" /> havitaathiriwa na sera hii kutokana na matatizo ya usalama yanayoweza kutokea. Zaidi ya hayo, sera hii haitazuia ukaguzi wa masasisho unaoombwa na watumiaji au wasimamizi.
       Sera hii isipowekwa au ikikosa kipindi chochote:
-      Hamna ukaguzi wa masasisho ya kiotomatiki utakaozuiliwa na sera hii, lakini unaweza kuzuiliwa na sera zingine. Kipengele hiki kimewashwa tu kwenye vifaa vya Carbon Browser Browser Browser ambavyo vimewekewa mipangilio ya skrini nzima kufunguka kiotomatiki. Vifaa vingine havitazuiwa na sera hii.</translation>
+      Hamna ukaguzi wa masasisho ya kiotomatiki utakaozuiliwa na sera hii, lakini unaweza kuzuiliwa na sera zingine. Kipengele hiki kimewashwa tu kwenye vifaa vya Carbon Browser ambavyo vimewekewa mipangilio ya skrini nzima kufunguka kiotomatiki. Vifaa vingine havitazuiwa na sera hii.</translation>
 <translation id="2823870601012066791">Eneo la sajili ya Windows la viteja vya <ph name="PRODUCT_OS_NAME" />:</translation>
 <translation id="2824715612115726353">Washa hali Fiche</translation>
 <translation id="2836621397261130126">Hudhibiti ikiwa uidhinishaji wa sera ya KDC unazingatiwa katika uamuzi wa kutoa tiketi za <ph name="KERBEROS" />.
 
-          Ikiwa sera hii imewekwa kuwa ndivyo, uthibitishaji wa HTTP utazingatia uidhinishaji wa sera ya KDC, kwa mfano, Carbon Browser Browser Browser hutoa tu kitambulisho ikiwa KDC imeweka <ph name="OK_AS_DELEGATE" /> kwenye tiketi ya huduma. Tafadhali angalia https://tools.ietf.org/html/rfc5896.html ili upate maelezo zaidi. Ni sharti huduma ilingane na sera ya 'AuthNegotiateDelegateWhitelist'.
+          Ikiwa sera hii imewekwa kuwa ndivyo, uthibitishaji wa HTTP utazingatia uidhinishaji wa sera ya KDC, kwa mfano, Carbon Browser hutoa tu kitambulisho ikiwa KDC imeweka <ph name="OK_AS_DELEGATE" /> kwenye tiketi ya huduma. Tafadhali angalia https://tools.ietf.org/html/rfc5896.html ili upate maelezo zaidi. Ni sharti huduma ilingane na sera ya 'AuthNegotiateDelegateWhitelist'.
 
           Ikiwa sera hii haijawekwa au imewekwa kuwa sivyo, sera ya KDC haitazingatiwa kwenye mifumo inayotumika na itazingatia sera ya 'AuthNegotiateDelegateWhitelist' pekee.
 
@@ -1157,7 +1157,7 @@ Ikiwa sera imewekwa kuwa sivyo au haijawekwa, matukio hayatarekodiwa.</translati
           Ikiwa sera hii itasalia kama haijawekwa, 'AllowJavaScript' itatumiwa na mtumiaji ataweza kuibadilisha.</translation>
 <translation id="3038323923255997294">Endelea kuendesha programu za mandharinyuma wakati <ph name="PRODUCT_NAME" /> imefungwa</translation>
 <translation id="3046192273793919231">Tuma vifurushi vya mtandao kwenye seva ya udhibiti ili kufuatilia hali ya mtandao</translation>
-<translation id="3047732214002457234">Hudhibiti jinsi Kipengele cha Kusafisha Carbon Browser Browser Browser huripoti data kwa Google</translation>
+<translation id="3047732214002457234">Hudhibiti jinsi Kipengele cha Kusafisha Carbon Browser huripoti data kwa Google</translation>
 <translation id="304775240152542058">Sera hii inadhibiti vipengee vya mstari wa amri ili kufungua kivinjari mbadala.
 
       Iwapo hujaweka mipangilio ya sera hii, URL pekee ndiyo itapitishwa kama kipengee cha mstari wa amri.
@@ -1227,9 +1227,9 @@ Ikiwa sera imewekwa kuwa sivyo au haijawekwa, matukio hayatarekodiwa.</translati
       Sera hii isipowekwa, au ikiwekwa kuwa sivyo, basi mipangilio ya kriptografia ya DHE katika TLS haitawashwa. La sivyo, inaweza kuwekwa kuwa ndivyo ili kuwasha mipangilio ya kriptografia ya DHE na kudumisha uoanifu na seva iliyokwisha muda. Huu ni mkakati wa muda tu na seva inapaswa kuwekwa mipangilio upya.
 
       Seva zinahimizwa kuhamia kwenye mipangilio ya kriptografia ya ECDHE. Ikiwa mipangilio hii haipatikani, hakikisha kuwa mipangilio ya kriptografia inayotumia ubadilishanaji wa kitufe cha RSA imewashwa.</translation>
-<translation id="3117706142826400449">Ikiwa sera imezimwa, itazuia Kipengele cha Kusafisha Carbon Browser Browser Browser kisikague mfumo ili kubaini programu zisizotakikana na kuziondoa. Uwezo wa kuanzisha Kipengele cha Kusafisha Carbon Browser Browser Browser kutoka chrome://settings/cleanup umezimwa.
+<translation id="3117706142826400449">Ikiwa sera imezimwa, itazuia Kipengele cha Kusafisha Carbon Browser kisikague mfumo ili kubaini programu zisizotakikana na kuziondoa. Uwezo wa kuanzisha Kipengele cha Kusafisha Carbon Browser kutoka chrome://settings/cleanup umezimwa.
 
-      Ikiwa sera imewashwa au haijawekwa, Kipengele cha Kusafisha Carbon Browser Browser Browser hukagua mfumo mara kwa mara ili kubaini programu zisizotakikana na kuziondoa. Ikiwa programu yoyote itapatikana, tutamwuliza mtumiaji ikiwa angependa kuiondoa. Uwezo wa kuanzisha Kipengele cha Kusafisha Carbon Browser Browser Browser kutoka chrome://settings umewashwa.
+      Ikiwa sera imewashwa au haijawekwa, Kipengele cha Kusafisha Carbon Browser hukagua mfumo mara kwa mara ili kubaini programu zisizotakikana na kuziondoa. Ikiwa programu yoyote itapatikana, tutamwuliza mtumiaji ikiwa angependa kuiondoa. Uwezo wa kuanzisha Kipengele cha Kusafisha Carbon Browser kutoka chrome://settings umewashwa.
 
       Sera hii inapatikana kwenye matukio ya Windows ambayo yameunganishwa kwenye kikoa cha <ph name="MS_AD_NAME" />. au matukio ya Windows 10 Pro au Enterprise yaliyojumuishwa katika usimamizi wa kifaa.</translation>
 <translation id="3152425128389603870">Fanya Eneo-kazi Lililounganishwa lipatikane na uwashe kwa chaguomsingi</translation>
@@ -1346,7 +1346,7 @@ Ikiwa sera imewekwa kuwa sivyo au haijawekwa, matukio hayatarekodiwa.</translati
       Mipangilio hii ikiwekwa kuwa Imezimwa au hakuna thamani iliyowekwa, Hali yenye Mipaka kwenye YouTube haitatekelezwa na <ph name="PRODUCT_NAME" />. Sera za nje kama vile sera za YouTube bado zinaweza kutekeleza Hali yenye Mipaka.</translation>
 <translation id="3428247105888806363">Wezesha ubashiri wa mtandao</translation>
 <translation id="3432863169147125747">Hudhibiti mipangilio ya uchapishaji.</translation>
-<translation id="3434932177006334880">Mipangilio hii ilipewa jina la EnableWebBasedSignin kabla ya Carbon Browser Browser Browser 42, na matumizi yake yataondolewa kabisa katika Carbon Browser Browser Browser 43.
+<translation id="3434932177006334880">Mipangilio hii ilipewa jina la EnableWebBasedSignin kabla ya Carbon Browser 42, na matumizi yake yataondolewa kabisa katika Carbon Browser 43.
 
       Mipangilio hii ni muhimu kwa wateja wa biashara wanaotumia matoleo ya Kuingia katika Akaunti Mara Moja ambayo bado hayatumiki pamoja na mtiririko wa kuingia katika akaunti kulingana na maandishi.
       Ukiwasha mipangilio hii, mtiririko wa zamani wa kuingia katika akaunti kulingana na wavuti utatumiwa.
@@ -1426,7 +1426,7 @@ Sera hii inatumika tu kama sera ya 'DefaultSearchProviderEnabled' imewashwa.</tr
       Ikiwa lugha imejumuishwa katika sera hii na sera ya <ph name="SPELLCHECK_LANGUAGE_BLACKLIST_POLICY_NAME" />, sera hii inapewa kipaumbele na lugha inayotumia kikagua tahajia huwashwa.
 
       Lugha ambazo zinatumika kwa sasa: Kiafrikana, Kibulgaria, Kikatalani, Kicheki, Kiholanzi, Kigiriki, Kiingereza cha Australia, Kiingereza cha Kanada, Kiingereza cha Uingereza, Kiingereza cha Marekani, Kihispania, Kihispania cha Marekani Kusini, Kihispania cha Ajentina, Kihispania cha Uhispania, Kihispania cha Meksiko, Kihispania cha Marekani, Kiestonia, Kiajemi, Kifarosi, Kifaransa, Kiyahudi, Kihindi, Kikoresia, Kihungari, Kiindonesia, Kiitaliano, Kikorea, Kilasembagi, Kiflemil, Kibokmali cha Norwe, Kiholanzi, Kipolandi, Kireno cha Brazil, Kireno cha Ulaya, Kiromania, Kirusi, Kislovakia, Kislovenia, Kialbania, Kiserbia, Kiswidi, Kitamili, Kitajiki, Kituruki, Kiukraini, Kivietinamu.</translation>
-<translation id="356579196325389849">Watumiaji wanaweza kuweka mipangilio ya kituo cha matoleo ya Mfumo wa Uendeshaji wa Carbon Browser Browser Browser</translation>
+<translation id="356579196325389849">Watumiaji wanaweza kuweka mipangilio ya kituo cha matoleo ya Mfumo wa Uendeshaji wa Carbon Browser</translation>
 <translation id="3575011234198230041">Uthibitishaji wa HTTP</translation>
 <translation id="3577251398714997599">Mipangilio ya matangazo kwa tovuti zilizo na matangazo yanayokatiza matumizi</translation>
 <translation id="357917253161699596">Ruhusu watumiaji kudhibiti vyeti vya watumiaji</translation>
@@ -1437,16 +1437,16 @@ Sera hii inatumika tu kama sera ya 'DefaultSearchProviderEnabled' imewashwa.</tr
 <translation id="3591584750136265240">Weka mipangilio ya tabia ya kithibitishaji cha kuingia katika akaunti</translation>
 <translation id="3627678165642179114">Wezesha au lemaza huduma ya wavuti ya ukaguzi tahajia</translation>
 <translation id="3628480121685794414">Ruhusu uchapishaji kwenye upande mmoja</translation>
-<translation id="3631099945620529777">Ikiwekwa kuwa sivyo, kitufe cha 'Tamatisha mchakato' kitazimwa katika Kidhibiti cha Shughuli kwenye Carbon Browser Browser Browser.
+<translation id="3631099945620529777">Ikiwekwa kuwa sivyo, kitufe cha 'Tamatisha mchakato' kitazimwa katika Kidhibiti cha Shughuli kwenye Carbon Browser.
 
-      Ikiwekwa kuwa ndivyo au mipangilio isiwekwe, mtumiaji anaweza kutamatisha shughuli katika Kidhibiti cha Shughuli kwenye Carbon Browser Browser Browser.</translation>
+      Ikiwekwa kuwa ndivyo au mipangilio isiwekwe, mtumiaji anaweza kutamatisha shughuli katika Kidhibiti cha Shughuli kwenye Carbon Browser.</translation>
 <translation id="3643284063603988867">Washa kipengele cha 'Kumbuka nenosiri'</translation>
 <translation id="3646859102161347133">Weka aina ya kikuza skrini</translation>
 <translation id="3653237928288822292">Aikoni ya mtoaji wa utafutaji chaguomsingi</translation>
 <translation id="3660510274595679517">
-        Ikiwa sera hii imewekwa kuwa Ndivyo, ujumuishaji katika udhibiti wa wingu ni wa lazima na huzuia mchakato wa kufungua Carbon Browser Browser Browser ikiwa itashindwa kufunguka.
+        Ikiwa sera hii imewekwa kuwa Ndivyo, ujumuishaji katika udhibiti wa wingu ni wa lazima na huzuia mchakato wa kufungua Carbon Browser ikiwa itashindwa kufunguka.
 
-        Ikiwa sera hii haijawekwa au imewekwa kuwa Sivyo, ujumuishaji katika udhibiti wa wingu si wa lazima na hauzuii mchakato wa kufungua Carbon Browser Browser Browser ikiwa itashindwa kufunguka.
+        Ikiwa sera hii haijawekwa au imewekwa kuwa Sivyo, ujumuishaji katika udhibiti wa wingu si wa lazima na hauzuii mchakato wa kufungua Carbon Browser ikiwa itashindwa kufunguka.
 
         Sera hii inatumiwa na mpango wa ujumuishaji wa sera ya wingu katika upeo wa mashine kwenye kompyuta ya mezani na inaweza kuwekwa na Sajili au GPO kwenye Windows, faili ya plist kwenye Mac na faili ya sera ya JSON kwenye Linux.</translation>
 <translation id="3660562134618097814">Hamisha vidakuzi vya SAML IdP wakati wa kuingia katika akaunti</translation>
@@ -1632,9 +1632,9 @@ Sera hii isipowekwa, mtumiaji bado anaweza kusakinisha kiendelezi chochote katik
 <translation id="3963602271515417124">Ikiwa ndivyo, ushuhuda wa mbali huruhusiwa kwa ajili ya kifaa na cheti kitazalishwa kiotomatiki na kupakiwa kwenye Seva ya Udhibiti wa Kifaa.
            
             Ikiwa imewekwa kuwa sivyo, au haijawekwa, hakuna cheti kitakachozalishwa na simu kwa API ya kiendelezi cha enterprise.platformKeys zitashindwa.</translation>
-<translation id="3964262920683972987">Weka mipangilio ya picha ya mandhari ya kiwango cha kifaa ambayo inaonyeshwa kwenye skrini ya kuingia katika akaunti ikiwa hakuna mtumiaji aliyeingia katika kifaa. Sera inawekwa kwa kubainisha URL ambapo kifaa cha Mfumo wa Uendeshaji wa Carbon Browser Browser Browser kinaweza kupakua picha ya mandhari na alama ya reli ya kriptografia inayotumiwa kuthibitisha usalama wa kipakuliwa. Picha lazima iwe katika muundo wa JPEG, ukubwa wa faili yake usizidi MB 16. Ni sharti URL ifikiwe bila uthibitishaji wowote. Picha ya mandhari inapakuliwa na kuwekwa katika akiba. Itapakuliwa upya wakati URL au alama ya reli inabadilika.
+<translation id="3964262920683972987">Weka mipangilio ya picha ya mandhari ya kiwango cha kifaa ambayo inaonyeshwa kwenye skrini ya kuingia katika akaunti ikiwa hakuna mtumiaji aliyeingia katika kifaa. Sera inawekwa kwa kubainisha URL ambapo kifaa cha Mfumo wa Uendeshaji wa Carbon Browser kinaweza kupakua picha ya mandhari na alama ya reli ya kriptografia inayotumiwa kuthibitisha usalama wa kipakuliwa. Picha lazima iwe katika muundo wa JPEG, ukubwa wa faili yake usizidi MB 16. Ni sharti URL ifikiwe bila uthibitishaji wowote. Picha ya mandhari inapakuliwa na kuwekwa katika akiba. Itapakuliwa upya wakati URL au alama ya reli inabadilika.
 
-      Ikiwa sera ya mandhari ya kifaa itawekwa, kifaa cha Mfumo wa Uendeshaji wa Carbon Browser Browser Browser kitapakua na kutumia picha ya mandhari kwenye skrini ya kuingia katika akaunti ikiwa hakuna mtumiaji ambaye ameingia katika akaunti ya kifaa. Pindi tu mtumiaji anapoingia katika akaunti, sera ya mandhari ya mtumiaji itaanza kutumika.
+      Ikiwa sera ya mandhari ya kifaa itawekwa, kifaa cha Mfumo wa Uendeshaji wa Carbon Browser kitapakua na kutumia picha ya mandhari kwenye skrini ya kuingia katika akaunti ikiwa hakuna mtumiaji ambaye ameingia katika akaunti ya kifaa. Pindi tu mtumiaji anapoingia katika akaunti, sera ya mandhari ya mtumiaji itaanza kutumika.
 
       Ikiwa sera ya mandhari ya kifaa itaachwa bila kuwekwa, ni sera ya mandhari ya mtumiaji itakayoamua kitu cha kuonyesha ikiwa sera ya mandhari ya mtumiaji imewekwa.</translation>
 <translation id="3965339130942650562">Muda umekwisha mpaka uondokaji wa kuingia kusikotumika kutekelezwe</translation>
@@ -1642,11 +1642,11 @@ Sera hii isipowekwa, mtumiaji bado anaweza kusakinisha kiendelezi chochote katik
 <translation id="3984028218719007910">Inathibitisha iwapo <ph name="PRODUCT_OS_NAME" /> inaweka data ya akaunti ya karibu baada ya kuondoka. Ikiwa imewekwa kwenye ndivyo, hakuna akaunti za kudumu zinazowekwa kwa <ph name="PRODUCT_OS_NAME" /> na data yote kutoka kwenye kipindi cha mtumiaji itatupwa baada ya kuondoka. Ikiwa sera hii imewekwa kuwa sivyo au haijasanidiwa, kifaa kinaweza kuweka data ya mtumiaji wa karibu (iliyosimbwa fiche).</translation>
 <translation id="398475542699441679">Sera hii inadhibiti ruhusa ya Uwezo wa Kutumia Kivinjari Kilichopitwa na Wakati.
 
-      Sera hii isipowekwa au ikiwekwa kuwa 'sivyo', Carbon Browser Browser Browser haitajaribu kufungua URL zilizobainishwa katika kivinjari mbadala.
+      Sera hii isipowekwa au ikiwekwa kuwa 'sivyo', Carbon Browser haitajaribu kufungua URL zilizobainishwa katika kivinjari mbadala.
 
-      Sera hii ikiwekwa kuwa 'ndivyo', Carbon Browser Browser Browser itajaribu kufungua baadhi ya URL katika kivinjari mbadala (kama vile Internet Explorer). Mipangilio ya kipengele hiki huwekwa kwa kutumia sera katika kikundi cha <ph name="LEGACY_BROWSER_SUPPORT_POLICY_GROUP" />.
+      Sera hii ikiwekwa kuwa 'ndivyo', Carbon Browser itajaribu kufungua baadhi ya URL katika kivinjari mbadala (kama vile Internet Explorer). Mipangilio ya kipengele hiki huwekwa kwa kutumia sera katika kikundi cha <ph name="LEGACY_BROWSER_SUPPORT_POLICY_GROUP" />.
 
-      Kipengele hiki kinachukua nafasi ya kiendelezi cha <ph name="LEGACY_BROWSER_SUPPORT_EXTENSION_NAME" />. Mipangilio kutoka kiendelezi italetwa kwenye kipengele hiki, lakini tunapendekeza zaidi utumie sera za Carbon Browser Browser Browser badala yake. Hali hii inahakikisha uoanifu bora zaidi katika siku zijazo.</translation>
+      Kipengele hiki kinachukua nafasi ya kiendelezi cha <ph name="LEGACY_BROWSER_SUPPORT_EXTENSION_NAME" />. Mipangilio kutoka kiendelezi italetwa kwenye kipengele hiki, lakini tunapendekeza zaidi utumie sera za Carbon Browser badala yake. Hali hii inahakikisha uoanifu bora zaidi katika siku zijazo.</translation>
 <translation id="3997519162482760140">URL zitakazopewa idhini ya kufikia vifaa vya kurekodi video kwenye kurasa za kuingia katika SAML</translation>
 <translation id="4001275826058808087">Usimamizi wa IT kwa vifaa vya biashara unaweza kutumia alama hii kudhibiti iwapo itaruhusu watumiaji kukomboa matoleo kupitia Usajili wa Chrome OS.
 
@@ -1666,13 +1666,13 @@ fiche, bila mtumiaji kuhusishwa
 
           Sera hii inapewa kipaumbele ikiwa kuna sera inayoweza kukinzana ya <ph name="EXTENSION_INSTALL_BLACKLIST_POLICY_NAME" />. Ikiwa programu au kiendelezi kilichosakinishwa hapo awali kwa lazima kitaondolewa kwenye orodha hii, kitaondolewa kiotomatiki na <ph name="PRODUCT_NAME" />.
 
-          Katika matukio ya Windows ambayo hayajaunganishwa kwenye kikoa cha <ph name="MS_AD_NAME" />, usakinishaji wa lazima unatumiwa tu na programu na viendelezi vilivyoorodheshwa katika Duka la Carbon Browser Browser Browser kwenye Wavuti.
+          Katika matukio ya Windows ambayo hayajaunganishwa kwenye kikoa cha <ph name="MS_AD_NAME" />, usakinishaji wa lazima unatumiwa tu na programu na viendelezi vilivyoorodheshwa katika Duka la Carbon Browser kwenye Wavuti.
           Kumbuka kuwa msimbo wa kiendelezi chochote unaweza kubadilishwa na mtumiaji kupitia Zana za Wasanidi Programu (hali hii inaweza kuzuia kiendelezi kufanya kazi vizuri). Ikiwa jambo hili litatokea, sera ya <ph name="DEVELOPER_TOOLS_POLICY_NAME" /> inapaswa kuwekwa.
 
-           Kila kipengee cha orodha ya sera ni kifungu ambacho kinajumuisha kitambulisho cha kiendelezi na URL ya "sasisho" isiyo ya lazima inayotenganishwa kwa nukta mkato (<ph name="SEMICOLON" />). Kitambulisho cha kiendelezi ni kifungu cha herufi 32 kinachopatikana (kwa mfano) kwenye <ph name="CHROME_EXTENSIONS_LINK" /> ikiwa katika hali ya msanidi programu. URL ya "sasisho" , ikiwa imebainishwa, inapaswa kuashiria hati ya XML ya faili ya Maelezo ya Sasisho kama ilivyofafanuliwa katika <ph name="LINK_TO_EXTENSION_DOC1" />. Kwa chaguomsingi, URL ya sasisho ya Duka la Carbon Browser Browser Browser kwenye Wavuti inatumika (ambayo kwa sasa ni "https://clients2.google.com/service/update2/crx"). Kumbuka kuwa URL ya "sasisho" iliyowekwa kwenye sera hii itatumiwa tu kwenye usanikishaji wa mwanzo; masasisho yanayofuata ya kiendelezi yatatumia URL ya sasisho inayoonyeshwa katika faili ya maelezo ya kiendelezi. Kumbuka pia kuwa hali ya kubainisha URL ya "sasisho" kwa njia bayana ilikuwa lazima katika matoleo ya <ph name="PRODUCT_NAME" /> na mapya zaidi ikiwa ni pamoja na toleo la 67.
+           Kila kipengee cha orodha ya sera ni kifungu ambacho kinajumuisha kitambulisho cha kiendelezi na URL ya "sasisho" isiyo ya lazima inayotenganishwa kwa nukta mkato (<ph name="SEMICOLON" />). Kitambulisho cha kiendelezi ni kifungu cha herufi 32 kinachopatikana (kwa mfano) kwenye <ph name="CHROME_EXTENSIONS_LINK" /> ikiwa katika hali ya msanidi programu. URL ya "sasisho" , ikiwa imebainishwa, inapaswa kuashiria hati ya XML ya faili ya Maelezo ya Sasisho kama ilivyofafanuliwa katika <ph name="LINK_TO_EXTENSION_DOC1" />. Kwa chaguomsingi, URL ya sasisho ya Duka la Carbon Browser kwenye Wavuti inatumika (ambayo kwa sasa ni "https://clients2.google.com/service/update2/crx"). Kumbuka kuwa URL ya "sasisho" iliyowekwa kwenye sera hii itatumiwa tu kwenye usanikishaji wa mwanzo; masasisho yanayofuata ya kiendelezi yatatumia URL ya sasisho inayoonyeshwa katika faili ya maelezo ya kiendelezi. Kumbuka pia kuwa hali ya kubainisha URL ya "sasisho" kwa njia bayana ilikuwa lazima katika matoleo ya <ph name="PRODUCT_NAME" /> na mapya zaidi ikiwa ni pamoja na toleo la 67.
 
           Kwa mfano, <ph name="EXTENSION_POLICY_EXAMPLE" /> inasakinisha programu ya <ph name="EXTENSION_ID_SAMPLE" /> kutoka URL ya "sasisho" la
-kawaida la Duka la Carbon Browser Browser Browser kwenye Wavuti. Kwa maelezo zaidi kuhusu jinsi ya kupangisha viendelezi, angalia: <ph name="LINK_TO_EXTENSION_DOC2" />.
+kawaida la Duka la Carbon Browser kwenye Wavuti. Kwa maelezo zaidi kuhusu jinsi ya kupangisha viendelezi, angalia: <ph name="LINK_TO_EXTENSION_DOC2" />.
 
           Ikiwa sera hii haijawekwa, hakuna programu au viendelezi vitakavyosakinishwa kiotomatiki na mtumiaji anaweza kuondoa programu au kiendelezi chochote katika <ph name="PRODUCT_NAME" />.
 
@@ -1778,7 +1778,7 @@ kawaida la Duka la Carbon Browser Browser Browser kwenye Wavuti. Kwa maelezo zai
           Ukiweka sera hii, watumiaji hawawezi kuibadilisha au kuibatilisha.
 
           Sera hii isipowekwa, kipengele cha vitufe vinavyonata huzimwa mwanzoni lakini kinaweza kuwashwa na mtumiaji wakati wowote.</translation>
-<translation id="4171331498167688968">Kama sera imewekwa kuwa sivyo basi programu ya kampuni nyingine itazuiwa kuingiza msimbo unaoweza kutekelezwa katika michakato ya Carbon Browser Browser Browser. Kama sera haijawekwa au imewekwa kuwa ndivyo, programu ya kampuni nyingine itaruhusiwa kuingiza msimbo unaoweza kutekelezwa katika michakato ya Carbon Browser Browser Browser.
+<translation id="4171331498167688968">Kama sera imewekwa kuwa sivyo basi programu ya kampuni nyingine itazuiwa kuingiza msimbo unaoweza kutekelezwa katika michakato ya Carbon Browser. Kama sera haijawekwa au imewekwa kuwa ndivyo, programu ya kampuni nyingine itaruhusiwa kuingiza msimbo unaoweza kutekelezwa katika michakato ya Carbon Browser.
 
       Bila kujali thamani ya sera hii, kivinjari kwa sasa hakitazuia programu za kampuni nyingine kuingiza msimbo unaoweza kutekeleza michakato yake kwenye mashine ambayo imeunganishwa kwenye kikoa cha <ph name="MS_AD_NAME" />.</translation>
 <translation id="4183229833636799228">Mipangilio chaguomsingi ya <ph name="FLASH_PLUGIN_NAME" /></translation>
@@ -1846,10 +1846,10 @@ Thamani ya sera inapaswa kubainishwa katika sekunde. Thamani huwekwa pamoja ili 
 <translation id="4298509794364745131">Huzibainisha programu zinazoweza kuwashwa kuwa programu za kuandika madokezo kwenye skrini iliyofungwa ya <ph name="PRODUCT_OS_NAME" />.
 
       Unapoitumia programu ya kuandika vidokezo unayoipendelea kwenye skrini iliyofungwa, kiolesura cha kufungua programu hiyo kitaonekana kwenye skrini iliyofungwa.
-      Unapoifungua programu hiyo, programu itaunda dirisha la programu sehemu ya juu ya skrini iliyofungwa na vipengee vya data (vidokezo) vitaundwa katika skrini iliyofungwa. Programu italeta vidokezo vilivyoundwa kwenye kipindi msingi cha mtumiaji, unapokifungua kipindi. Kwa sasa, unaweza tu kuzitumia programu za Carbon Browser Browser Browser za kuandika vidokezo kwenye skrini iliyofungwa.
+      Unapoifungua programu hiyo, programu itaunda dirisha la programu sehemu ya juu ya skrini iliyofungwa na vipengee vya data (vidokezo) vitaundwa katika skrini iliyofungwa. Programu italeta vidokezo vilivyoundwa kwenye kipindi msingi cha mtumiaji, unapokifungua kipindi. Kwa sasa, unaweza tu kuzitumia programu za Carbon Browser za kuandika vidokezo kwenye skrini iliyofungwa.
 
       Ukiiweka sera, mtumiaji ataruhusiwa kuwasha programu kwenye skrini iliyofungwa iwapo tu Kitambulisho cha kiendelezi kiko kwenye orodha ya thamani ya sera.
-      Ukiiweka sera hii kwenye orodha tupu, kipengele cha kuandika vidokezo kwenye skrini iliyofungwa kitazimwa kabisa. Kumbuka kuwa sera iliyo na Kitambulisho cha programu haimaanishi kuwa mtumiaji anaweza kuwasha programu kuandika vidokezo kwenye skrini iliyofungwa - kwa mfano, kwenye Carbon Browser Browser Browser 61, programu ambazo unaweza kuzitumia zimewekewa vikwazo na mfumo.
+      Ukiiweka sera hii kwenye orodha tupu, kipengele cha kuandika vidokezo kwenye skrini iliyofungwa kitazimwa kabisa. Kumbuka kuwa sera iliyo na Kitambulisho cha programu haimaanishi kuwa mtumiaji anaweza kuwasha programu kuandika vidokezo kwenye skrini iliyofungwa - kwa mfano, kwenye Carbon Browser 61, programu ambazo unaweza kuzitumia zimewekewa vikwazo na mfumo.
 
       Usipoiweka sera, hamna vikwazo vitakavyowekwa kwenye seti ya programu ambazo mtumiaji anaweza kuwasha kwenye skrini iliyofungwa vilivyowekwa na sera.</translation>
 <translation id="4313767483634435271">Anwani ya MAC ya kituo iliyobainishwa kwenye kifaa</translation>
@@ -2005,7 +2005,7 @@ Sera hii ikiwekwa kuwa sivyo au isiwekwe, kibodi itatoa amri za vitufe vya media
 <translation id="467236746355332046">Vipengele vinavyohimiliwa:</translation>
 <translation id="4674167212832291997">Geuza orodha ya ruwaza za URL ambazo zinastahili kuonyeshwa mara kwa mara na <ph name="PRODUCT_FRAME_NAME" /> ili zikufae.
 
-          Ikiwa sera hii haitawekwa kionyeshi chaguomsingi kitatumiwa kwa tovuti zote kama ilivyobainishwa na sera ya 'Carbon Browser Browser BrowserFrameRendererSettings'.
+          Ikiwa sera hii haitawekwa kionyeshi chaguomsingi kitatumiwa kwa tovuti zote kama ilivyobainishwa na sera ya 'Carbon BrowserFrameRendererSettings'.
 
           Kwa mifano ya ruwaza angalia https://www.chromium.org/developers/how-tos/chrome-frame-getting-started.</translation>
 <translation id="467449052039111439">Fungua orodha ya URL</translation>
@@ -2099,10 +2099,10 @@ Iwapo sera hii haijawekwa, kiteuzi kikubwa kitazimwa mwanzoni lakini kitawashwa 
 
      Sera hii ikiwekwa kuwa sivyo, <ph name="PRODUCT_NAME" /> haitaruhusu kuunda wasifu mpya kutoka kwenye kidhibiti cha mtumiaji.</translation>
 <translation id="4970855112942626932">Zima kipengele cha kuingia katika akaunti ya kivinjari</translation>
-<translation id="4978405676361550165">Ikiwa sera ya "OffHours" imewekwa, basi sera za kifaa zilizobainishwa hazitatumika (tumia mipangilio chaguomsingi ya sera hizi) katika vipindi vilivyotajwa. Sera za kifaa huwekwa tena na Carbon Browser Browser Browser kwa kila tukio wakati kipindi cha "OffHours" kinaanza au kukamilika. Watumiaji wataarifiwa na kulazimishwa kuondoka katika akaunti wakati muda wa "OffHours" unakamilika na mipangilio ya kifaa inabadilishwa (kwa mfano, wakati mtumiaji ameingia katika akaunti akitumia akaunti ambayo hairuhusiwi).</translation>
+<translation id="4978405676361550165">Ikiwa sera ya "OffHours" imewekwa, basi sera za kifaa zilizobainishwa hazitatumika (tumia mipangilio chaguomsingi ya sera hizi) katika vipindi vilivyotajwa. Sera za kifaa huwekwa tena na Carbon Browser kwa kila tukio wakati kipindi cha "OffHours" kinaanza au kukamilika. Watumiaji wataarifiwa na kulazimishwa kuondoka katika akaunti wakati muda wa "OffHours" unakamilika na mipangilio ya kifaa inabadilishwa (kwa mfano, wakati mtumiaji ameingia katika akaunti akitumia akaunti ambayo hairuhusiwi).</translation>
 <translation id="4980635395568992380">Aina ya data:</translation>
 <translation id="4983201894483989687">Ruhusu kuendesha programu jalizi ambazo zimepitwa na wakati.</translation>
-<translation id="4986560318567565414">Njia ya kufikia Carbon Browser Browser Browser kwa ajili ya kubadili kutoka kivinjari mbadala.</translation>
+<translation id="4986560318567565414">Njia ya kufikia Carbon Browser kwa ajili ya kubadili kutoka kivinjari mbadala.</translation>
 <translation id="4988291787868618635">Hatua ya kuchukua wakati ucheleweshaji wa kutokuwa na shughuli unapofikiwa</translation>
 <translation id="5034604678285451405">Weka kipengele kinachopunguza matumizi ya betri kwa kubadilisha mfumo kuendeshwa kwenye nguvu za betri katika asilimia.
 
@@ -2176,11 +2176,11 @@ Iwapo sera hii haijawekwa, kiteuzi kikubwa kitazimwa mwanzoni lakini kitawashwa 
       Kama sera hii imewekwa kuwa 0, kipengele cha kubadilisha nenosiri la akaunti ya mashine itazimwa.
 
      Kumbuka kwamba manenosiri huenda yakawa ya zamani zaidi kuliko siku zilizobainishwa ikiwa mteja amekuwa nje ya mtandao kwa muda mrefu zaidi.</translation>
-<translation id="510196893779239086">Sera hii hubaini iwapo Carbon Browser Browser Browser itafungwa kabisa wakati kichupo cha mwisho kitahamia kwenye kivinjari kingine.
+<translation id="510196893779239086">Sera hii hubaini iwapo Carbon Browser itafungwa kabisa wakati kichupo cha mwisho kitahamia kwenye kivinjari kingine.
 
-      Sera hii isipowekwa au ikiwekwa kuwa 'ndivyo', Carbon Browser Browser Browser itasalia na angalau kichupo kimoja kilichofunguka, baada ya kuhamia kwenye kivinjari mbadala.
+      Sera hii isipowekwa au ikiwekwa kuwa 'ndivyo', Carbon Browser itasalia na angalau kichupo kimoja kilichofunguka, baada ya kuhamia kwenye kivinjari mbadala.
 
-      Sera hii ikiwekwa kuwa 'sivyo', Carbon Browser Browser Browser itafunga kichupo baada ya kuhamia kwenye kivinjari mbadala hata kama kilikuwa kichupo cha mwisho. Hali hii itasababisha Carbon Browser Browser Browser kufungwa kabisa.</translation>
+      Sera hii ikiwekwa kuwa 'sivyo', Carbon Browser itafunga kichupo baada ya kuhamia kwenye kivinjari mbadala hata kama kilikuwa kichupo cha mwisho. Hali hii itasababisha Carbon Browser kufungwa kabisa.</translation>
 <translation id="5102203758995933166">Huruhusu kutuma mipangilio ya mtandao ili itekelezwe kwa kila mtumiaji katika kifaa cha <ph name="PRODUCT_OS_NAME" />. Mipangilio ya mtandao ni mfuatano wa muundo wa JSON kama unavyofafanuliwa na muundo wa Mipangilio Huru ya Mtandao.</translation>
 <translation id="5105313908130842249">Ufungaji wa skrini unachelewa wakati wa kuendesha kwa nishati ya betri</translation>
 <translation id="5108031557082757679">Printa za biashara zisizotumia sera</translation>
@@ -2195,7 +2195,7 @@ Iwapo sera hii haijawekwa, kiteuzi kikubwa kitazimwa mwanzoni lakini kitawashwa 
 <translation id="5148753489738115745">Inakuruhusu kubainisha kigezo za ziada ambazo ziinatumika wakati <ph name="PRODUCT_FRAME_NAME" /> inazindua <ph name="PRODUCT_NAME" />.
 
           Ikiwa sera hii haijawekwa mpangilio wa amri chaguomsingi  utatumika.</translation>
-<translation id="5152787786897382519">Carbon Browser Browser Browser na Carbon Browser Browser Browser zina baadhi ya vikundi vya sera vinavyotegemeana ili kutoa udhibiti wa kipengele. Seti hizi zinawakilishwa na vikundi vifuatavyo vya sera. Ukizingatia kwamba sera zinaweza kuwa na vyanzo vingi, tutatumia tu thamani zinazotoka kwenye chanzo chenye kipaumbele cha juu. Hatutatumia thamani kutoka chanzo chenye kipaumbele cha chini katika kikundi sawa. Mpangilio wa kipaumbele umefafanuliwa katika <ph name="POLICY_PRIORITY_DOC_URL" />.</translation>
+<translation id="5152787786897382519">Carbon Browser na Carbon Browser zina baadhi ya vikundi vya sera vinavyotegemeana ili kutoa udhibiti wa kipengele. Seti hizi zinawakilishwa na vikundi vifuatavyo vya sera. Ukizingatia kwamba sera zinaweza kuwa na vyanzo vingi, tutatumia tu thamani zinazotoka kwenye chanzo chenye kipaumbele cha juu. Hatutatumia thamani kutoka chanzo chenye kipaumbele cha chini katika kikundi sawa. Mpangilio wa kipaumbele umefafanuliwa katika <ph name="POLICY_PRIORITY_DOC_URL" />.</translation>
 <translation id="5159469559091666409">Mara ambazo vifurushi vya mtandao vya ufuatiliaji hutumwa, katika milisekunde.
 
      Sera hii isipowekwa, muda chaguomsingi ni dakika 3. Muda wa chini
@@ -2309,7 +2309,7 @@ Iwapo sera hii haijawekwa, kiteuzi kikubwa kitazimwa mwanzoni lakini kitawashwa 
         Thamani ya orodha ya wasioidhinishwa ya '*' inamaanisha kwamba wapangishi wote wa ujumbe asili hawajaidhinishwa isipokuwa kama wamewekwa waziwazi katika orodha ya walioidhinishwa.
 
          Kama sera hii haitawekwa <ph name="PRODUCT_NAME" /> itapakia wapangishi wote waliosakinishwa wa ujumbe asili.</translation>
-<translation id="5272684451155669299">Ikiwekwa kuwa ndivyo, mtumiaji anaweza kutumia maunzi kwenye vifaa vya Carbon Browser Browser Browser ili kudhibiti kwa umbali utambulisho wake katika CA ya faragha kupitia <ph name="ENTERPRISE_PLATFORM_KEYS_API" /> akitumia <ph name="CHALLENGE_USER_KEY_FUNCTION" />.
+<translation id="5272684451155669299">Ikiwekwa kuwa ndivyo, mtumiaji anaweza kutumia maunzi kwenye vifaa vya Carbon Browser ili kudhibiti kwa umbali utambulisho wake katika CA ya faragha kupitia <ph name="ENTERPRISE_PLATFORM_KEYS_API" /> akitumia <ph name="CHALLENGE_USER_KEY_FUNCTION" />.
 
           Ikiwekwa kuwa sivyo, au isipowekwa, majaribio ya kuwasiliana na API hayatafanikiwa na kutakuwa na msimbo wa hitilafu.</translation>
 <translation id="5277806246014825877">Washa ili mtumiaji huyu atumie Crostini.
@@ -2328,7 +2328,7 @@ Iwapo sera hii haijawekwa, kiteuzi kikubwa kitazimwa mwanzoni lakini kitawashwa 
 <translation id="5318185076587284965">Washa matumizi ya seva za relei kwa mpangishi wa ufikiaji wa mbali</translation>
 <translation id="5323128137188992869">Ruhusu maudhui yatumwe kwenye kifaa kwa kutumia <ph name="PRODUCT_NAME" />.
 
-          Ikiwa sera hii imewekwa kuwa Sivyo, watumiaji hawataweza kutuma maudhui kwenye vifaa vyao. Ikiwa sera hii imewekwa kuwa Ndivyo, watumiaji wataruhusiwa kutuma maudhui. Sera hii isipowekwa, watumiaji hawataruhusiwa kutuma maudhui kwenye vifaa vya mfumo wa uendeshaji wa Carbon Browser Browser Browser vilivyosajiliwa, lakini wataruhusiwa kutuma kwenye vifaa vingine ambavyo havijasajiliwa.</translation>
+          Ikiwa sera hii imewekwa kuwa Sivyo, watumiaji hawataweza kutuma maudhui kwenye vifaa vyao. Ikiwa sera hii imewekwa kuwa Ndivyo, watumiaji wataruhusiwa kutuma maudhui. Sera hii isipowekwa, watumiaji hawataruhusiwa kutuma maudhui kwenye vifaa vya mfumo wa uendeshaji wa Carbon Browser vilivyosajiliwa, lakini wataruhusiwa kutuma kwenye vifaa vingine ambavyo havijasajiliwa.</translation>
 <translation id="5329007337159326804">Onyo: Sera ya kiwango cha juu cha toleo la TLS itaondolewa kabisa kwenye <ph name="PRODUCT_NAME" /> tukikaribia toleo la 75 (kuelekea Juni 2019).
 
       Ikiwa mipangilio ya sera hii haijawekwa, inamaanisha kuwa <ph name="PRODUCT_NAME" /> inatumia toleo chaguomsingi la kiwango cha juu.
@@ -2525,7 +2525,7 @@ Iwapo sera hii haijawekwa, kiteuzi kikubwa kitazimwa mwanzoni lakini kitawashwa 
         Iwapo sera imewekwa kuwa sivyo, watumiaji hawawezi kutuma maoni kwa Google.
 
         Iwapo sera haijawekwa au imewekwa kuwa ndivyo, watumiaji wanaweza kutuma maoni kwa Google kupitia Menyu-&gt;Usaidizi-&gt;Ripoti Tatizo au mkusanyiko wa funguo.</translation>
-<translation id="5581292529942108810">Weka mipangilio inayohusiana na sera za Kiendelezi cha Kuripoti cha Carbon Browser Browser Browser.
+<translation id="5581292529942108810">Weka mipangilio inayohusiana na sera za Kiendelezi cha Kuripoti cha Carbon Browser.
 
       Sera hii inaweza kutumika tu wakati umewasha <ph name="CHROME_REPORTING_EXTENSION_NAME" /> na mashine imejumuishwa katika <ph name="MACHINE_LEVEL_USER_CLOUD_POLICY_ENROLLMENT_TOKEN_POLICY_NAME" />.</translation>
 <translation id="5583806683960333345">Mipangilio hii ikiwashwa, watumiaji wataruhusiwa kutumia Mtandao wa Kusambazwa Papo Hapo, ambao huruhusu simu yao ya Google kushiriki data ya mtandao wa simu na kifaa chao.
@@ -2551,7 +2551,7 @@ Iwapo sera hii haijawekwa, kiteuzi kikubwa kitazimwa mwanzoni lakini kitawashwa 
 
       KUMBUKA: Kwenye Android, Utengaji wa Tovuti unatumika kama majaribio. Tutaendelea kuimarisha uwezo wa kutumia huduma hii, lakini kwa sasa huenda ikasababisha matatizo ya utendaji.
 
-      KUMBUKA: Sera hii inatumika tu katika Carbon Browser Browser Browser kwenye Android inayotumia tu vifaa vilivyo na RAM inayozidi GB1. Ili utumie sera hii kwenye mifumo isiyo ya Android, tumia IsolateOrigins.
+      KUMBUKA: Sera hii inatumika tu katika Carbon Browser kwenye Android inayotumia tu vifaa vilivyo na RAM inayozidi GB1. Ili utumie sera hii kwenye mifumo isiyo ya Android, tumia IsolateOrigins.
       </translation>
 <translation id="5599461642204007579">Mipangilio ya kudhibiti <ph name="MS_AD_NAME" /></translation>
 <translation id="5610104657949692379">Sera hii inapowekwa, hubainisha hatua ambayo <ph name="PRODUCT_OS_NAME" /> huchukua wakati mtumiaji anasalia bila shughuli kwa urefu wa muda uliotolewa na ucheleweshaji wa kutokuwa na shughuli, unaoweza kuwekewa mipangilio tofauti.
@@ -2559,7 +2559,7 @@ Iwapo sera hii haijawekwa, kiteuzi kikubwa kitazimwa mwanzoni lakini kitawashwa 
           Sera hii isipowekwa, hatua chaguomsingi huchukuliwa, ambayo ni 'kusimamisha'.
 
           Ikiwa hatua imesimamishwa, <ph name="PRODUCT_OS_NAME" /> inaweza kuwekewa mipangilio tofauti ili kufunga au kutofunga skrini kabla ya kusimamisha.</translation>
-<translation id="5618398258385745432">Mipangilio husika ilitumiwa kabla ya kuanzishwa kwa uthibitishaji upya wa kuangalia manenosiri. Tangu wakati huo, mipangilio na sera hii haijaathiri utendaji wa Carbon Browser Browser Browser. Utendaji wa sasa wa Carbon Browser Browser Browser ni sawa na sera iliyowekwa ili kuzima kipengele cha kuonyesha manenosiri katika maandishi yanayosomeka katika ukurasa wa mipangilio ya kidhibiti cha manenosiri. Hii inamaanisha kwamba ukurasa wa mipangilio unakishikilia nafasi pekee na Carbon Browser Browser Browser huonyesha nenosiri wakati mtumiaji anabofya "Onyesha" (na kuthibitisha upya, iwapo kunatumika). Maelezo halisi ya sera yanafuata hapa chini.
+<translation id="5618398258385745432">Mipangilio husika ilitumiwa kabla ya kuanzishwa kwa uthibitishaji upya wa kuangalia manenosiri. Tangu wakati huo, mipangilio na sera hii haijaathiri utendaji wa Carbon Browser. Utendaji wa sasa wa Carbon Browser ni sawa na sera iliyowekwa ili kuzima kipengele cha kuonyesha manenosiri katika maandishi yanayosomeka katika ukurasa wa mipangilio ya kidhibiti cha manenosiri. Hii inamaanisha kwamba ukurasa wa mipangilio unakishikilia nafasi pekee na Carbon Browser huonyesha nenosiri wakati mtumiaji anabofya "Onyesha" (na kuthibitisha upya, iwapo kunatumika). Maelezo halisi ya sera yanafuata hapa chini.
 
           Hudhibiti iwapo mtumiaji anaweza kuonyesha manenosiri katika maandishi yanayosomeka katika kidhibiti cha manenosiri.
 
@@ -2666,7 +2666,7 @@ Sera hii ikiwekwa kuwa ndivyo au isipowekwa, kipindi cha mgeni kinachodhibitiwa 
       Kama sera haijasanidiwa, mtumiaji ataweza kubadilisha mipangilio hii.
       </translation>
 <translation id="5832274826894536455">Sera zilizoacha kutumika</translation>
-<translation id="5835124959204887277">Hubainisha URL na vikoa ambavyo hakuna kidokezo kitakachoonyeshwa wakati vyeti vya ufikiaji uliothibitishwa vinaombwa kutoka Funguo za Usalama. Vile vile, ishara itatumwa kwa Funguo za Usalama inayoonyesha ufikiaji uliothibitishwa wa kibinafsi ambao unaweza kutumiwa. Bila hii, watumiaji watadokezewa katika Carbon Browser Browser Browser 65+ wakati tovuti zinaomba ufikiaji uliothibitishwa wa Funguo za Usalama. 
+<translation id="5835124959204887277">Hubainisha URL na vikoa ambavyo hakuna kidokezo kitakachoonyeshwa wakati vyeti vya ufikiaji uliothibitishwa vinaombwa kutoka Funguo za Usalama. Vile vile, ishara itatumwa kwa Funguo za Usalama inayoonyesha ufikiaji uliothibitishwa wa kibinafsi ambao unaweza kutumiwa. Bila hii, watumiaji watadokezewa katika Carbon Browser 65+ wakati tovuti zinaomba ufikiaji uliothibitishwa wa Funguo za Usalama. 
 
     URL (kama vile https://example.com/some/path) zitalingana kama U2F appIDs pekee. Vikoa (kama vile example.com) vinalingana kama Vitambulisho vya webauthn RP pekee. Ili kushughulikia API zote mbili za U2F na webauthn za tovuti fulani iliyotolewa, ni sharti URL zote mbili za appID na kikoa ziorodheshwe.</translation>
 <translation id="5836064773277134605">Zuia masafa ya lango la UDP yaliyotumiwa na mpangishi wa ufikiaji wa mbali</translation>
@@ -2718,7 +2718,7 @@ Kama sera hii ni itawekwa kuwa uongo, kiteuzi kikubwa kitazimwa wakati skrini ya
 Kama utaweka sera hii, watumiaji wanaweza kuipuuza kwa muda kwa kuwasha au kuzima kiteuzi kikubwa. Hata hivyo, chaguo la mtumiaji halitaendelea na chaguomsingi  litarejeshwa tena wakati wowote skrini ya kuingia katika skrini itakapoonyeshwa upya au mtumiaji atakaposalia bila kufanya kitu kwenye skrini ya kuingia katika akaunti kwa dakika moja. 
 
 Kama sera hii haijawekwa, kiteuzi kikubwa huzimwa wakati skrini ya kuingia katika akaunti itakapoonyeshwa kwanza. Watumiaji wanaweza kuwasha au kuzima kiteuzi kikubwa wakati wowote na hali yake kwenye skrini ya kuingia katika akaunti inaendelea kati ya watumiaji.</translation>
-<translation id="5929855945144989709">Ruhusu vifaa vitumie mashine pepe vinavyotumia Mfumo wa Uendeshaji wa Carbon Browser Browser Browser</translation>
+<translation id="5929855945144989709">Ruhusu vifaa vitumie mashine pepe vinavyotumia Mfumo wa Uendeshaji wa Carbon Browser</translation>
 <translation id="5932767795525445337">Sera hii inaweza kutumika kubandika programu za Android.</translation>
 <translation id="5936622343001856595">Hulazimisha maswali katika Utafutaji wa Wavuti wa Google kufanywa na SafeSearch ikiwa imewashwa na huzuia watumiaji kubadilisha mpangilio huu.
 
@@ -2772,7 +2772,7 @@ Kama sera hii haijawekwa, kiteuzi kikubwa huzimwa wakati skrini ya kuingia katik
 Thamani ya sera inapaswa kubainishwa katika milisekunde. Thamani huwekwa pamoja kuwa chini ya ucheleweshaji wa kutofanya kitu.</translation>
 <translation id="6097601282776163274">Washa kipengele cha ukusanyaji wa faragha wa data ukitumia ufunguo wa URL</translation>
 <translation id="6099853574908182288">Hali chaguomsingi ya uchapishaji wa rangi</translation>
-<translation id="6107642964266628393">Hudhibiti jinsi na wakati masasisho ya Carbon Browser Browser Browser yanapowekwa.</translation>
+<translation id="6107642964266628393">Hudhibiti jinsi na wakati masasisho ya Carbon Browser yanapowekwa.</translation>
 <translation id="6111936128861357925">Ruhusu Mchezo Fiche wa Dinosau</translation>
 <translation id="6114416803310251055">Limepuuzwa</translation>
 <translation id="6133088669883929098">Ruhusu tovuti zote zitumie uundaji ufunguo</translation>
@@ -2796,7 +2796,7 @@ Thamani ya sera inapaswa kubainishwa katika milisekunde. Thamani huwekwa pamoja 
 
       Sera hii isipowekwa au ikiwekwa kuwa Sivyo, hakuna data inayokusanya au kupakiwa.
       Sera hii ikiwekwa kuwa Ndivyo, data inakusanywa na kupakiwa kwenye dashibodi ya Udhibiti wa Google.
-      Ili udhibiti data inayopakiwa, tafadhali tumia sera katika kikundi cha Kiendelezi cha Kuripoti cha Carbon Browser Browser Browser.
+      Ili udhibiti data inayopakiwa, tafadhali tumia sera katika kikundi cha Kiendelezi cha Kuripoti cha Carbon Browser.
 
       Sera hii inaweza kutumika tu wakati mashine imejumuishwa katika <ph name="MACHINE_LEVEL_USER_CLOUD_POLICY_ENROLLMENT_TOKEN_POLICY_NAME" />.
 
@@ -2882,7 +2882,7 @@ Thamani ya sera inapaswa kubainishwa katika milisekunde. Thamani huwekwa pamoja 
 <translation id="6282799760374509080">Ruhusu au upinge kurekodi sauti</translation>
 <translation id="6284362063448764300">TLS 1.1</translation>
 <translation id="6310223829319187614">Washa kipengee cha jina la kikoa cha kukamilisha kiotomatiki wakati wa mtumiaji kuingia katika akaunti</translation>
-<translation id="6315673513957120120">Carbon Browser Browser Browser huonyesha ukurasa wa onyo watumiaji wanapoenda kwenye tovuti ambazo zina hitilafu za SSL. Kwa chaguomsingi au sera hii ikiwekwa kuwa ndivyo, watumiaji wanaruhusiwa kubofya kwenye kurasa hizi za onyo.
+<translation id="6315673513957120120">Carbon Browser huonyesha ukurasa wa onyo watumiaji wanapoenda kwenye tovuti ambazo zina hitilafu za SSL. Kwa chaguomsingi au sera hii ikiwekwa kuwa ndivyo, watumiaji wanaruhusiwa kubofya kwenye kurasa hizi za onyo.
       Kuweka sera kuwa sivyo hakuwaruhusu watumiaji kubofya ukurasa wowote wa onyo.</translation>
 <translation id="6319198883324703402">Weka saa ya arifa ya kwanza ya kuanzisha upya ya mtumiaji</translation>
 <translation id="6352543686437322588">Kuingia kiotomatiki katika akaunti iliyo kwenye kifaa baada ya ucheleweshaji.
@@ -2924,7 +2924,7 @@ Thamani ya sera inapaswa kubainishwa katika milisekunde. Thamani huwekwa pamoja 
           Ukichagua kugundua seva mbadala kiotomatiki, URL ya hati "http://wpad/wpad.dat" hutolewa kwa programu za Android. Hakuna sehemu nyingine ya itifaki ya kugundua kiotomatiki inayotumiwa.
 
           Ukichagua kutumia hati ya seva mbadala ya a .pac, URL ya hati inatolewa kwa programu za Android.</translation>
-<translation id="6430366557948788869">Kiendelezi cha Kuripoti Carbon Browser Browser Browser</translation>
+<translation id="6430366557948788869">Kiendelezi cha Kuripoti Carbon Browser</translation>
 <translation id="6440051664870270040">Ruhusu tovuti zivinjari kwa wakati mmoja na zifungue madirisha ibukizi</translation>
 <translation id="6447948611083700881">Vipengele vya kuhifadhi nakala na kurejesha vimezimwa</translation>
 <translation id="6449476513004303784">Usiruhusu watumiaji kudhibiti vyeti</translation>
@@ -2983,9 +2983,9 @@ Kuacha sera hii bila kuiweka kutaruhusu mtumiaji kuchagua mwenyewe iwapo ukurasa
 <translation id="6536600139108165863">Uwashaji tena kiotomatiki baada ya kuzima kifaa</translation>
 <translation id="6539246272469751178">Sera hii haiathiri programu za Android. Programu za Android hutumia saraka chaguomsingi ya vipakuliwa wakati wote na haziwezi kufikia faili zozote zilizopakuliwa na <ph name="PRODUCT_OS_NAME" /> katika saraka ya vipakuliwa ambayo si chaguomsingi.</translation>
 <translation id="654303922206238013">Mkakati wa uhamishaji wa ecryptfs</translation>
-<translation id="6544897973797372144">Ikiwa sera hii itawekwa kuwa Ndivyo na sera ya Carbon Browser Browser BrowserOsReleaseChannel haijabainishwa basi watumiaji wa kikoa cha uandikishaji kitaruhusiwa kubadilisha kituo cha kutoa cha kifaa. Ikiwa sera hii itawekwa kuwa siyo Ndivyo kifaa kitafungwa katika kituo chochote ambapo kilikuwa kimewekwa mwisho.
+<translation id="6544897973797372144">Ikiwa sera hii itawekwa kuwa Ndivyo na sera ya Carbon BrowserOsReleaseChannel haijabainishwa basi watumiaji wa kikoa cha uandikishaji kitaruhusiwa kubadilisha kituo cha kutoa cha kifaa. Ikiwa sera hii itawekwa kuwa siyo Ndivyo kifaa kitafungwa katika kituo chochote ambapo kilikuwa kimewekwa mwisho.
 
-      Kituo kilichoteuliwa na mtumiaji kitafutwa kwa sera ya Carbon Browser Browser BrowserOsReleaseChannel, lakini ikiwa kituo cha sera ni thabiti zaidi kuliko kile ambacho kilikuwa kimesakinishwa kwenye kifaa, hivyo basi kituo kitabadili tu baada ya toleo la kituo thabiti zaidi kinachofikia idadi ya juu zaidi ya toleo kuliko lililosakinishwa kwenye kifaa.</translation>
+      Kituo kilichoteuliwa na mtumiaji kitafutwa kwa sera ya Carbon BrowserOsReleaseChannel, lakini ikiwa kituo cha sera ni thabiti zaidi kuliko kile ambacho kilikuwa kimesakinishwa kwenye kifaa, hivyo basi kituo kitabadili tu baada ya toleo la kituo thabiti zaidi kinachofikia idadi ya juu zaidi ya toleo kuliko lililosakinishwa kwenye kifaa.</translation>
 <translation id="6553143066970470539">Asilimia ya ung'avu wa skrini</translation>
 <translation id="6559057113164934677">Usiruhusu tovuti yoyote kufikia kamera na maikrofoni yangu</translation>
 <translation id="6561396069801924653">Onyesha chaguo za ufikiaji katika menyu ya trei ya mfumo</translation>
@@ -3061,7 +3061,7 @@ Iwapo sera hii haitawekwa au orodha ni tupu miradi yote itapatikana katika <ph n
 <translation id="6698632841807204978">Ruhusu uchapishaji wa rangi nyeusi na nyeupe</translation>
 <translation id="6699880231565102694">Wezesha uthibitishaji wa vipengee viwili kwa wapangishaji wa ufikivu wa mbali</translation>
 <translation id="6731757988219967594">Chuja tovuti maarufu (lakini si iframes zinazopachikwa) zinazoonyesha maudhui ya watu wazima</translation>
-<translation id="6734521799274931721">Hudhibiti Faili za Kushiriki katika Mtandao kwa ajili ya upatikanaji wa Carbon Browser Browser BrowserOS</translation>
+<translation id="6734521799274931721">Hudhibiti Faili za Kushiriki katika Mtandao kwa ajili ya upatikanaji wa Carbon BrowserOS</translation>
 <translation id="6735701345096330595">Lazimisha kuwasha sera ya kikagua tahajia</translation>
 <translation id="673699536430961464">Mipangilio hii huruhusu watumiaji kubadili kati ya akaunti za Google katika eneo la maudhui ya dirisha la kivinjari baada ya kuingia katika akaunti wakitumia kifaa chao cha <ph name="PRODUCT_OS_NAME" />.
 
@@ -3069,7 +3069,7 @@ Iwapo sera hii haitawekwa au orodha ni tupu miradi yote itapatikana katika <ph n
 
       Kama sera hii haijawekwa au imewekwa kuwa ndivyo, hali chaguomsingi itatumika: utaruhusiwa kuingia katika akaunti tofauti kwenye eneo la maudhui ya kivinjari, isipokuwa katika akaunti za mtoto ambapo itazuiwa katika eneo la maudhui ya kivinjari kisicho na hali fiche.
 
-      Katika hali ambapo kuingia katika akaunti tofauti hakuruhusiwa kupitia Hali Fiche, zingatia kuzuia hali hiyo ukitumia sera ya PrivateModeAvailability.
+      Katika hali ambapo kuingia katika akaunti tofauti hakuruhusiwa kupitia Hali Fiche, zingatia kuzuia hali hiyo ukitumia sera ya privateModeAvailability.
 
       Kumbuka kwamba watumiaji wataweza kufikia huduma za Google katika hali isiyothibitishwa kwa kuzuia vidakuzi vyao.</translation>
 <translation id="6757438632136860443">Hukuruhusu kuweka orodha ya ruwaza za url inayobainisha tovuti zinazoruhusiwa kutumia programu jalizi ya <ph name="FLASH_PLUGIN_NAME" />.
@@ -3106,7 +3106,7 @@ Iwapo sera hii haitawekwa au orodha ni tupu miradi yote itapatikana katika <ph n
 
       Iwapo sera hii imewekwa kuwa sivyo, kiteja cha DNS kilichojumuishwa hakitawahi kutumiwa.
 
-      Iwapo sera hii itaachwa bila kuwekwa, kiteja cha DNS kilichojumuishwa kitawashwa kwa chaguomsingi kwenye MacOS, Android (wakati DNS ya Faragha au VPN zimewashwa) na Carbon Browser Browser BrowserOS na watumiaji wataweza kubadilisha iwapo kiteja cha DNS kilichojumuishwa kitatumika kwa kuhariri chrome://flags au kubainisha alama ya mstari wa amri.</translation>
+      Iwapo sera hii itaachwa bila kuwekwa, kiteja cha DNS kilichojumuishwa kitawashwa kwa chaguomsingi kwenye MacOS, Android (wakati DNS ya Faragha au VPN zimewashwa) na Carbon BrowserOS na watumiaji wataweza kubadilisha iwapo kiteja cha DNS kilichojumuishwa kitatumika kwa kuhariri chrome://flags au kubainisha alama ya mstari wa amri.</translation>
 <translation id="6843296367238757293">Sera hii imeacha kuendesha huduma. Unakatazwa kuitumia. Soma zaidi katika https://support.google.com/chrome/a/answer/7643500</translation>
 <translation id="684856667300805181">Sera hii iliondolewa katika <ph name="PRODUCT_NAME" /> 68, nafasi yake imechukuliwa na <ph name="ARC_GLS_POLICY_NAME" />.</translation>
 <translation id="6856743875250214792">Sera hii iliacha kuendesha huduma na imeondolewa katika M66, kwa sababu ilitumika kwa jaribio la ndani pekee na ina athari za usalama.
@@ -3152,7 +3152,7 @@ Ikiwa sera haijawekwa, mtumiaji ataweza kubadilisha mipangilio hii.
 
       KUMBUKA: Kwenye Android, Utengaji wa Tovuti bado unafanyiwa majaribio. Matumizi yataboreshwa baada ya muda lakini kwa sasa yanaweza kusababisha matatizo ya utendaji.
 
-      KUMBUKA: Sera hii inatumika tu katika Carbon Browser Browser Browser kwenye vifaa vya Android vyenye zaidi ya GB 1 ya RAM. Ili kutumia sera kwenye mifumo isiyo ya Android, tumia SitePerProcess.
+      KUMBUKA: Sera hii inatumika tu katika Carbon Browser kwenye vifaa vya Android vyenye zaidi ya GB 1 ya RAM. Ili kutumia sera kwenye mifumo isiyo ya Android, tumia SitePerProcess.
       </translation>
 <translation id="6922884955650325312">Zuia programu jalizi ya <ph name="FLASH_PLUGIN_NAME" /></translation>
 <translation id="6923366716660828830">Inabainisha jina la mtoaji wa utafutaji chaguo -msingi. Likiachwa tupu au bila kuwekwa, jina la mpangishaji lililobainishwa na URL ya utafutaji litatumiwa.
@@ -3248,9 +3248,9 @@ Ikiwa sera haijawekwa, mtumiaji ataweza kubadilisha mipangilio hii.
 
       Kama sera imewekwa kuwa sivyo au haijawekwa, huenda <ph name="PRODUCT_NAME" /> haitakusanya wala kupakia kumbukumbu hizi.
 
-      Kumbukumbu hizi hujumuisha maelezo ya utambuzi ambayo yanasaidia kutatua matatizo ya simu za sauti au video katika Carbon Browser Browser Browser, kama vile wakatI na ukubwa wa vifurushi vya RTP vinavyotumwa na kupokelewa, maoni kuhusu msongamano kwenye mtandao na metadata kuhusu wakati na ubora wa fremu za sauti na video. Kumbukumbu hizi hazijumuishi maudhui ya simu ya sauti wala ya video.
+      Kumbukumbu hizi hujumuisha maelezo ya utambuzi ambayo yanasaidia kutatua matatizo ya simu za sauti au video katika Carbon Browser, kama vile wakatI na ukubwa wa vifurushi vya RTP vinavyotumwa na kupokelewa, maoni kuhusu msongamano kwenye mtandao na metadata kuhusu wakati na ubora wa fremu za sauti na video. Kumbukumbu hizi hazijumuishi maudhui ya simu ya sauti wala ya video.
 
-      Ukusanyaji wa data hii kwa kutumia Carbon Browser Browser Browser unaweza kuanzishwa tu na huduma za wavuti za Google, kama vile Google Hangouts au Google Meet. 
+      Ukusanyaji wa data hii kwa kutumia Carbon Browser unaweza kuanzishwa tu na huduma za wavuti za Google, kama vile Google Hangouts au Google Meet. 
 
       Huenda Google ikahusisha kumbukumbu hizi na kumbukumbu zingine ambazo hukusanywa na huduma ya Google yenyewe kupitia kitambulisho cha kipindi; hali hii inanuia kurahisisha shughuli ya utatuzi.
       </translation>
@@ -3304,7 +3304,7 @@ Ikiwa sera haijawekwa, mtumiaji ataweza kubadilisha mipangilio hii.
 <translation id="7123160381479171745">Hubainisha orodha ya watumiaji ambao wanaruhusiwa kuingia katika akaunti kwenye kifaa. Hoja zinazowekwa ni za muundo wa <ph name="USER_WHITELIST_ENTRY_FORMAT" />, kama vile <ph name="USER_WHITELIST_ENTRY_EXAMPLE" />. Ili kuruhusu watumiaji wowote kwenye kikoa, tumia hoja za muundo wa <ph name="USER_WHITELIST_ENTRY_WILDCARD" />.
 
       Ikiwa mipangilio ya sera hii haijawekwa, hakuna vizuizi ambavyo watumiaji wanahitaji kuingia katika akaunti yake. Kumbuka kuwa hatua ya kuweka watumiaji wapya bado inahitaji mipangilio ya sera ya <ph name="DEVICE_ALLOW_NEW_USERS_POLICY_NAME" /> kuwekwa ifaavyo.</translation>
-<translation id="7126716959063786004">Washa kipengele cha kutamatisha shughuli katika Kidhibiti cha Shughuli kwenye Carbon Browser Browser Browser</translation>
+<translation id="7126716959063786004">Washa kipengele cha kutamatisha shughuli katika Kidhibiti cha Shughuli kwenye Carbon Browser</translation>
 <translation id="7127892035367404455">Rejea kwenye toleo lengwa</translation>
 <translation id="713121532817834879">Sera hii ni URL inayorejelea faili ya XML katika muundo sawa na sera ya Internet Explorer ya <ph name="IEEM_SITELIST_POLICY" />. Sera hii hupakia sheria kutoka faili ya XML, bila kushiriki sheria hizo na Internet Explorer.
 
@@ -3344,12 +3344,12 @@ inapatikana tu kwenye Windows na ${safari} inapatikana tu kwenye Windows na Mac 
 <translation id="7185078796915954712">TLS 1.3</translation>
 <translation id="718956142899066210">Aina za miunganisho zinazoruhusiwa kwa visasisho</translation>
 <translation id="7194407337890404814">Kitoaji chaguomsingi cha utafutaji</translation>
-<translation id="7199304109870655950">Weka mipangilio ya uwezo wa kufikiwa kwa mbali katika seva pangishi kwenye Programu ya Carbon Browser Browser Browser ya Ufikiaji wa Kompyuta kutoka Mbali.
+<translation id="7199304109870655950">Weka mipangilio ya uwezo wa kufikiwa kwa mbali katika seva pangishi kwenye Programu ya Carbon Browser ya Ufikiaji wa Kompyuta kutoka Mbali.
 
-      Seva pangishi ya Programu ya Carbon Browser Browser Browser ya Ufikiaji wa Kompyuta kutoka Mbali ni huduma ya ndani inayotumika kwenye mashine lengwa ambako mtumiaji anaweza kuunganisha kwa kutumia Programu ya Carbon Browser Browser Browser ya Ufikiaji wa Kompyuta kutoka Mbali.  Huduma ya mfumo inapangwa na kutekelezwa tofauti na kivinjari cha <ph name="PRODUCT_NAME" />.
+      Seva pangishi ya Programu ya Carbon Browser ya Ufikiaji wa Kompyuta kutoka Mbali ni huduma ya ndani inayotumika kwenye mashine lengwa ambako mtumiaji anaweza kuunganisha kwa kutumia Programu ya Carbon Browser ya Ufikiaji wa Kompyuta kutoka Mbali.  Huduma ya mfumo inapangwa na kutekelezwa tofauti na kivinjari cha <ph name="PRODUCT_NAME" />.
 
       Sera hizi hazitumiki isipokuwa
-      seva pangishi ya Programu ya Carbon Browser Browser Browser ya Ufikiaji wa Kompyuta kutoka Mbali iwe imesakinishwa.</translation>
+      seva pangishi ya Programu ya Carbon Browser ya Ufikiaji wa Kompyuta kutoka Mbali iwe imesakinishwa.</translation>
 <translation id="7202925763179776247">Weka vikwazo vya upakuaji</translation>
 <translation id="7207095846245296855">Lazimisha Google SafeSearch</translation>
 <translation id="7211368186050418507">Isiwahi kugundua saa za eneo kiotomatiki</translation>
@@ -3450,9 +3450,9 @@ Kama sera haitawekwa, kikuza skrini kitazimwa wakati skrini ya kuingia katika ak
 <translation id="7329968046053403405">Hubainisha aina ya akaunti ya akaunti zinazotolewa na programu ya uthibitishaji wa Android inayotumia uthibitishaji wa <ph name="HTTP_NEGOTIATE" /> (k.m. uthibitishaji wa Kerberos). Maelezo haya yanapaswa kupatikana kutoka kwa muuzaji wa programu ya uthibitishaji. Kwa maelezo zaidi angalia https://goo.gl/hajyfN.
 
           Ikiwa mipangilio haijatolewa, uthibitishaji wa <ph name="HTTP_NEGOTIATE" /> utazimwa kwenye Android.</translation>
-<translation id="7331962793961469250">Wakati imewekwa kwenye Ndivyo, utambulishaji wa programu za Duka la Wavuti la Carbon Browser Browser Browser hautaionekana katika ukurasa wa kichupo kipya.
+<translation id="7331962793961469250">Wakati imewekwa kwenye Ndivyo, utambulishaji wa programu za Duka la Wavuti la Carbon Browser hautaionekana katika ukurasa wa kichupo kipya.
 
-      Kuweka chaguo hili kwa Siyo Ndivyo au kuliacha kama halijawekwa kutafanya utambulishaji wa programu za Duka la wavuti la Carbon Browser Browser Browser katika ukurasa wa kichupo kipya.</translation>
+      Kuweka chaguo hili kwa Siyo Ndivyo au kuliacha kama halijawekwa kutafanya utambulishaji wa programu za Duka la wavuti la Carbon Browser katika ukurasa wa kichupo kipya.</translation>
 <translation id="7332963785317884918">Sera hii imekosolewa. <ph name="PRODUCT_OS_NAME" /> itatumia mkakati wa kufuta wa 'RemoveLRU' wakati wowote.
 
       Hudhibiti tabia ya ufutaji otomatiki kwenye vifaa vya <ph name="PRODUCT_OS_NAME" />. Kufuta kiotomatiki kunafanywa kiasi cha nafasi tupu ya diski kinapofikia kiwango muhimu cha kurejesha baadhi ya nafasi ya diski.
@@ -3512,7 +3512,7 @@ Kama sera haitawekwa, kikuza skrini kitazimwa wakati skrini ya kuingia katika ak
       </translation>
 <translation id="7506269062143646163">Ruhusu utumiaji wa Kubadilisha HTTP Iliyoambatishwa Cheti (SXG).
 
-          Ikiwa sera hii haijawekwa au imewekwa kuwa 'Imewashwa', Carbon Browser Browser Browser itakubali maudhui ya wavuti yanayotolewa kama Kubadilisha HTTP Iliyoambatishwa Cheti.
+          Ikiwa sera hii haijawekwa au imewekwa kuwa 'Imewashwa', Carbon Browser itakubali maudhui ya wavuti yanayotolewa kama Kubadilisha HTTP Iliyoambatishwa Cheti.
 
           Sera hii ikiwekwa kuwa 'Imezimwa', Kubadilisha HTTP Iliyoambatishwa Cheti hakuwezi kupakiwa.</translation>
 <translation id="7511361072385293666">Sera hii ikiwekwa kuwa ndivyo au kutowekwa, matumizi ya itifaki ya QUIC katika <ph name="PRODUCT_NAME" /> yanaruhusiwa.
@@ -3553,7 +3553,7 @@ Kama sera haitawekwa, kikuza skrini kitazimwa wakati skrini ya kuingia katika ak
 
       Sera hii isipowekwa au ikiwekwa kuwa 0, hatua ya kwenda kwenye URL iliyobainishwa itaifungua katika kivinjari mbadala mara moja.
 
-      Sera hii ikiwekwa kuwa nambari, Carbon Browser Browser Browser inaonyesha ujumbe unaodumu milisekunde zilizobainishwa kisha inafungua kivinjari mbadala.</translation>
+      Sera hii ikiwekwa kuwa nambari, Carbon Browser inaonyesha ujumbe unaodumu milisekunde zilizobainishwa kisha inafungua kivinjari mbadala.</translation>
 <translation id="7593523670408385997">Husanidi ukubwa wa akiba ambao <ph name="PRODUCT_NAME" /> itatumia kwa ajili ya kuhifadhi faili zilizoakibishwa kwenye diski.
 
     Ukiweka sera hii, <ph name="PRODUCT_NAME" /> itatumia ukubwa wa akiba uliotolewa bila kujali kama mtumiaji amebainisha alama ya '- ukubwa wa-diski ya-kuakibisha' au la. Thamani iliyobainishwa katika sera hii sio kikomo kisichoweza kurekebishwa bali ni pendekezo la mfumo wa kuakibisha, thamani yoyote chini ya megabaiti chache ni ndogo mno na itazidishwa hadi kiwango cha chini kinachokubalika.
@@ -3732,7 +3732,7 @@ Kama sera haitawekwa, kikuza skrini kitazimwa wakati skrini ya kuingia katika ak
 <translation id="7895553628261067384">Ufikiaji wa mbali</translation>
 <translation id="7902255855035461275">Michoro katika orodha hii italinganishwa na ya asili ya usalama wa ombi la URL.  Ikilingana, idhini ya kufikia vifaa vya kurekodi video itatolewa bila ombi. KUMBUKA: Kabla ya toleo la 45, sera hii ilitumika katika hali ya Skrini nzima pekee.</translation>
 <translation id="7912255076272890813">Sanidi aina za programu/viendelezi zinazoruhusiwa</translation>
-<translation id="7922358664346625612">Acha kichupo cha mwisho kikiwa kimefunguliwa katika Carbon Browser Browser Browser.</translation>
+<translation id="7922358664346625612">Acha kichupo cha mwisho kikiwa kimefunguliwa katika Carbon Browser.</translation>
 <translation id="793134539373873765">Hubainisha iwapo p2p itatumika kwa sasisho za data ya OS. Kama imewekwa kuwa Kweli, vifaa vitashiriki na kujaribu kusasisha data kwenye LAN, hivyo kuna uwezekano wa kupunguza matumizi ya kipimo data cha intaneti na msongamano. Kama sasisho ya data haipo kwenye LAN, kifaa kitarudia kupakua kutoka kwenye seva ya sasisho. Kama imewekwa kuwa Uongo ama haijasanidiwa, p2p haitatumika.</translation>
 <translation id="7933141401888114454">Washa uundaji wa watumiaji wanaosimamiwa</translation>
 <translation id="793473937901685727">Weka upatikanaji wa cheti kwa programu za ARC</translation>
@@ -3768,7 +3768,7 @@ Kama sera haitawekwa, kikuza skrini kitazimwa wakati skrini ya kuingia katika ak
 <translation id="798856998567564266">Ukiwasha mipangilio hii, alamisho zinaweza kuongezwa, kuondolewa au kubadilishwa. Hii ndio hali chaguomsingi wakati sera hii haijawekwa.
 
       Ukizima mipangilio hii, alamisho haziwezi kuongezwa, kuondolewa au kubadilishwa. Alamisho ambazo tayari zilikuwepo bado zinapatikana.</translation>
-<translation id="7992136759457836904">Hukuruhusu udhibiti ikiwa mashine pepe zinaruhusiwa kutumia Mfumo wa Uendeshaji wa Carbon Browser Browser Browser.
+<translation id="7992136759457836904">Hukuruhusu udhibiti ikiwa mashine pepe zinaruhusiwa kutumia Mfumo wa Uendeshaji wa Carbon Browser.
 
       Ikiwa sera imewekwa kuwa Ndivyo, kifaa kinaruhusiwa kutumia mashine pepe.
       Ikiwa sera imewekwa kuwa Sivyo, kifaa hakitaruhusiwa kutumia mashine pepe.
@@ -3847,7 +3847,7 @@ Ukiwasha sera hii, usawazishaji kwenye wingu utazimwa.
       Ikiwa sera itawekwa kuwa Uongo, orodha ya violesura haitaripotiwa.</translation>
 <translation id="8141795997560411818">Sera hii haizuii mtumiaji kutumia programu ya Hifadhi ya Android Google. Ikiwa unataka kuzuia idhini ya kufikia Hifadhi ya Google, usiruhusu usakinishaji wa programu ya Hifadhi ya Android Google pia.</translation>
 <translation id="8142894094385450823">Weka lugha zinazopendekezwa kwa kipindi kinachodhibitiwa</translation>
-<translation id="8146727383888924340">Ruhusu watumiaji kukomboa matoleo kupitia Usajili wa Mfumo wa Uendeshaji wa Carbon Browser Browser Browser</translation>
+<translation id="8146727383888924340">Ruhusu watumiaji kukomboa matoleo kupitia Usajili wa Mfumo wa Uendeshaji wa Carbon Browser</translation>
 <translation id="8148785525797916822">Hukandamiza onyo linaloonekana <ph name="PRODUCT_NAME" /> inapofanya kazi kwenye kompyuta au mfumo wa uendeshaji ambao hautumiki tena.</translation>
 <translation id="8148901634826284024">Washa kipengee cha upatikanaji cha hali ya juu ya utofutishaji. 
 Kama sera hii imewekwa kuwa kweli, hali ya juu ya utofautishaji itawashwa kila wakati. 
@@ -3890,7 +3890,7 @@ Kama sera hii haitawekwa, hali ya juu ya utofautishaji itazimwa mwanzoni lakini 
       Iwapo sera itaachwa bila kuwekwa, <ph name="PRODUCT_OS_NAME" /> itatumia Kitambulisho cha akaunti ya barua pepe ya akaunti ya kifaa cha karibu nawe kama jina la onyesho kwenye skrini ya kuingia.
 
     Sera hii inaapuzwa kwa akaunti za mtumiaji wa mara kwa mara.</translation>
-<translation id="8259375588339409826">Carbon Browser Browser Browser na Carbon Browser Browser Browser hutumia kundi moja la sera. Tafadhali kumbuka kwamba hati hii inaweza kujumuisha sera ambazo zinalenga matoleo ambayo hayajatolewa (kwa mfano kipengele cha "Linalotumika kwenye' kinarejelea toleo la <ph name="PRODUCT_NAME" />) ambalo halijatolewa na kwamba sera kama hizo zinaweza kubadilishwa au kuondolewa bila taarifa, na hakuna uhakika wowote kuhusu vipengele vyake vya usalama na faragha. 
+<translation id="8259375588339409826">Carbon Browser na Carbon Browser hutumia kundi moja la sera. Tafadhali kumbuka kwamba hati hii inaweza kujumuisha sera ambazo zinalenga matoleo ambayo hayajatolewa (kwa mfano kipengele cha "Linalotumika kwenye' kinarejelea toleo la <ph name="PRODUCT_NAME" />) ambalo halijatolewa na kwamba sera kama hizo zinaweza kubadilishwa au kuondolewa bila taarifa, na hakuna uhakika wowote kuhusu vipengele vyake vya usalama na faragha. 
 
 Sera hizi zinalenga kutumiwa hasa kwa kuweka mipangilio ya matukio ya <ph name="PRODUCT_NAME" /> ya ndani ya shirika lako. Matumizi ya sera hizi nje ya shirika lako (kwa mfano, katika programu inayosambazwa kwa umma) yanachukuliwa kuwa programu hasidi na yanaweza kuainishwa kama programu hasidi na Google na wauzaji wa kingavirusi.
 
@@ -3907,7 +3907,7 @@ Njia inayopendekezwa ya kuweka mipangilio ya sera kwenye Windows ni kupitia GPO,
 
       Ukiweka sera hii kuwa sivyo, takwimu hazitaripotiwa.
       Ukiweka sera hii kuwa ndivyo au usipoiweka, takwimu zitaripotiwa</translation>
-<translation id="8294750666104911727">Kwa kawaida kurasa Zinazooana na X-UA zilizowekwa kwa chrome=1  zitaonyeshwa katika <ph name="PRODUCT_FRAME_NAME" /> bila kujali sera ya 'Carbon Browser Browser BrowserFrameRendererSettings'.
+<translation id="8294750666104911727">Kwa kawaida kurasa Zinazooana na X-UA zilizowekwa kwa chrome=1  zitaonyeshwa katika <ph name="PRODUCT_FRAME_NAME" /> bila kujali sera ya 'Carbon BrowserFrameRendererSettings'.
 
          Ukiwasha mpangilio huu, kurasa hazitachanganuliwa kwa metatagi. 
 
@@ -3933,7 +3933,7 @@ Njia inayopendekezwa ya kuweka mipangilio ya sera kwenye Windows ni kupitia GPO,
 <translation id="8344454543174932833">Ingiza alamisho kutoka kivinjari chaguomsingi wakati wa uendeshaji wa kwanza</translation>
 <translation id="8357681633047935212">Dhibiti muda wa kipindi cha mtumiaji</translation>
 <translation id="8359734107661430198">Washa API ya ExampleDeprecatedFeature kupitia 2008/09/02</translation>
-<translation id="8367209241899435947">Washa Kipengele cha Kusafisha Carbon Browser Browser Browser kwenye Windows</translation>
+<translation id="8367209241899435947">Washa Kipengele cha Kusafisha Carbon Browser kwenye Windows</translation>
 <translation id="8369602308428138533">Kuchelewa kwa kuzima skirini wakati nishati ya AC inapotumika</translation>
 <translation id="8371178326720637170">Huruhusu viendelezi vinavyodhibitiwa kutumia API ya Enterprise Hardware Platform</translation>
 <translation id="8374747520743832795">Ripoti takwimu na vitambulishi vya maunzi vinavyohusiana na nishati.
@@ -3997,13 +3997,13 @@ Njia inayopendekezwa ya kuweka mipangilio ya sera kwenye Windows ni kupitia GPO,
       Sera itaondolewa kwenye M75.</translation>
 <translation id="8484458986062090479">Geuza orodha ya ruwaza za URL ambazo zinastahili kuonyeshwa mara kwa mara na kivinjari kipangishi ili zikufae.
 
-          Ikiwa sera hii haitawekwa kionyeshi chaguomsingi kitatumiwa kwa tovuti zote kama ilivyobainishwa na sera ya 'Carbon Browser Browser BrowserFrameRendererSettings'.
+          Ikiwa sera hii haitawekwa kionyeshi chaguomsingi kitatumiwa kwa tovuti zote kama ilivyobainishwa na sera ya 'Carbon BrowserFrameRendererSettings'.
 
           Kwa mifano ya ruwaza angalia https://www.chromium.org/developers/how-tos/chrome-frame-getting-started.</translation>
 <translation id="8489964335640955763">PluginVm</translation>
 <translation id="8493645415242333585">Lemaza kuhifadhi historia ya kivinjari</translation>
 <translation id="8499172469244085141">Mipangilio ya Chaguo-Msingi (watumiaji wanaweza kubadilisha)</translation>
-<translation id="849962487677588458">Tumeacha kutumia sera hii na tutaiondoa kwenye Carbon Browser Browser Browser 78. Nafasi yake haitachukuliwa na sera nyingine.
+<translation id="849962487677588458">Tumeacha kutumia sera hii na tutaiondoa kwenye Carbon Browser 78. Nafasi yake haitachukuliwa na sera nyingine.
 
       Sera hii huwasha HTTP/0.9 kwenye milango isipokuwa ya 80 katika HTTP na ya 443 katika HTTPS.
 
@@ -4031,7 +4031,7 @@ Ikiwa sera hii haijawekwa, hakuna vizuizi vitakavyotumika na watumiaji wanaweza 
 
 Katika hali hii "Toleo" linaweza kuwa toleo halisi kama vile toleo la '61.0.3163.120' au kiambishi cha toleo, kama vile '61.0'  </translation>
 <translation id="8544375438507658205">Kionyeshi chaguo-msngi cha HTML kwa<ph name="PRODUCT_FRAME_NAME" /></translation>
-<translation id="8544465954173828789">Ruhusu Ujumbe wa SMS kusawazishwa kutoka simu hadi Carbon Browser Browser Browserbook.</translation>
+<translation id="8544465954173828789">Ruhusu Ujumbe wa SMS kusawazishwa kutoka simu hadi Carbon Browserbook.</translation>
 <translation id="8548832052135586762">Inaweka uchapishaji wa rangi pekee, rangi moja nyeupe na nyeusi pekee au kudhibiti hali isiyo na rangi. Sera ambayo haijawekewa mipangilio inachukuliwa kuwa hamna kudhibiti.</translation>
 <translation id="8549772397068118889">Tahadharisha ninapotembelea tovuti zilizo nje ya vifurushi vya maudhui</translation>
 <translation id="8566729013138025202">Hubainisha kikundi cha sera zitakazotolewa kwa muda wa kutekeleza ARC. Lazima thamani iwe JSON sahihi.
@@ -4039,7 +4039,7 @@ Katika hali hii "Toleo" linaweza kuwa toleo halisi kama vile toleo la '61.0.3163
       Sera hii inaweza kutumika kuweka mipangilio ya kubainisha programu za Android ambazo zinasakinishwa kiotomatiki kwenye kifaa.
 
       Ili kubandika programu kwenye kifungua programu, angalia PinnedLauncherApps.</translation>
-<translation id="8566842294717252664">Ficha duka la wavuti kwenye ukurasa mpya wa kichupo na kifungua programu cha Carbon Browser Browser Browser</translation>
+<translation id="8566842294717252664">Ficha duka la wavuti kwenye ukurasa mpya wa kichupo na kifungua programu cha Carbon Browser</translation>
 <translation id="8569734380847633643">
           Sera hii ikiwekwa kuwa sivyo, <ph name="PRODUCT_OS_NAME" /> itazima Wi-Fi na watumiaji hawataweza kuiwasha tena.
           Sera hii ikiwekwa kuwa ndivyo au isipowekwa, watumiaji wataweza kuwasha au kuzima Wi-Fi wapendavyo.</translation>
@@ -4059,7 +4059,7 @@ Katika hali hii "Toleo" linaweza kuwa toleo halisi kama vile toleo la '61.0.3163
 
       Ikiwa sera hii imebadilishwa au imewekwa kuwa ndivyo, watumiaiji wote wanaruhusiwa kutumia ARC (ila katika hali ambapo ARC inazimwa kwa kutumia mbinu nyinginezo).
 
-      Mabadiliko kwenye sera yatatumika wakati ARC haitekelezwi tu, kwa mfano, mfumo wa uendeshaji wa Carbon Browser Browser Browser unapoanza.</translation>
+      Mabadiliko kwenye sera yatatumika wakati ARC haitekelezwi tu, kwa mfano, mfumo wa uendeshaji wa Carbon Browser unapoanza.</translation>
 <translation id="8615400197788843468">Huruhusu kipengele cha kuingia katika akaunti cha <ph name="PRODUCT_NAME" /> kinachodhibitiwa katika G Suite na kuzuia watumiaji wasibadilishe mipangilio hii.
 
       Iwapo utabainisha mipangilio hii, watumiaji wataweza tu kufikia Programu za Google kupitia akaunti kutoka vikoa vilivyobainishwa (kumbuka kuwa ili kuruhusu akaunti za gmail.com/googlemail.com, unapaswa kuongeza "akaunti za watumiaji"
@@ -4230,7 +4230,7 @@ kiwekwe kwenye maombi yote ya HTTP na HTTPS katika vikoa vyote vya google.com, j
 
           Sera hii inaambatisha kitambulisho cha kiendelezi au URL ya sasisho kwenye mipangilio yake. Ikiwa na kitambulisho cha kiendelezi, mipangilio itawekwa kwenye kiendelezi kilichobainishwa pekee. Mipangilio chaguomsingi inaweza kuwekwa kwenye kitambulisho maalum cha <ph name="DEFAULT_SCOPE" />, ambayo itatumika kwenye viendelezi vyote visivyo na mipangilio maalum katika sera hii. Ukiwa na URL ya sasisho, mipangilio itawekwa kwenye viendelezi vyote kwa kutumia URL iliyobainishwa katika faili za maelezo ya kiendelezi hiki, kama ilivyofafanuliwa katika <ph name="LINK_TO_EXTENSION_DOC1" />.
 
-          Kwa matukio ya Windows ambayo hayajaunganishwa kwenye kikoa cha <ph name="MS_AD_NAME" />, usakinishaji wa lazima unafanywa tu kwenye programu na viendelezi vilivyoorodheshwa katika Duka la Carbon Browser Browser Browser kwenye Wavuti.
+          Kwa matukio ya Windows ambayo hayajaunganishwa kwenye kikoa cha <ph name="MS_AD_NAME" />, usakinishaji wa lazima unafanywa tu kwenye programu na viendelezi vilivyoorodheshwa katika Duka la Carbon Browser kwenye Wavuti.
           </translation>
 <translation id="8947415621777543415">Ripoti eneo la kifaa</translation>
 <translation id="8951350807133946005">Weka saraka ya akiba ya diski</translation>
@@ -4321,7 +4321,7 @@ kiwekwe kwenye maombi yote ya HTTP na HTTPS katika vikoa vyote vya google.com, j
 
       Sera hii ikiwekwa kuwa ndivyo, kumbukumbu za mfumo zitatumwa. Ikiwekwa
       kuwa sivyo au kutowekwa, basi hakuna kumbukumbu za mfumo ambazo zitatumwa.</translation>
-<translation id="9150416707757015439">Sera hii imepitwa na wakati. Tafadhali, tumia PrivateModeAvailability badala yake.
+<translation id="9150416707757015439">Sera hii imepitwa na wakati. Tafadhali, tumia privateModeAvailability badala yake.
       Huwasha hali fiche katika <ph name="PRODUCT_NAME" />.
 
       Ikiwa mpangilio huu umewashwa au haujasanidiwa, watumiaji wanaweza kufungua kurasa za wavuti katika hali fiche.
@@ -4369,7 +4369,7 @@ kiwekwe kwenye maombi yote ya HTTP na HTTPS katika vikoa vyote vya google.com, j
 
       Sera hii inapowekwa, itatumiwa kufungua <ph name="PRODUCT_NAME" /> wakati inafungua <ph name="PRODUCT_NAME" /> kutoka Internet Explorer.
 
-      Sera hii inaweza kuwekwa kuwa njia ya utekelezaji wa faili au ${chrome} kutambua kiotomatiki sehemu ya usakinishaji kwenye Carbon Browser Browser Browser.</translation>
+      Sera hii inaweza kuwekwa kuwa njia ya utekelezaji wa faili au ${chrome} kutambua kiotomatiki sehemu ya usakinishaji kwenye Carbon Browser.</translation>
 <translation id="930930237275114205">Weka saraka ya data ya mtumiaji wa <ph name="PRODUCT_FRAME_NAME" /></translation>
 <translation id="943865157632139008">Hukuruhusu kuweka mipangilio ya HTML chaguomsingi inayokuelekeza wakati <ph name="PRODUCT_FRAME_NAME" /> imesakinishwa.
       Mipangilio chaguomsingi ni kuruhusu kivinjari cha seva pangishi kufanya utekelezaji, lakini unaweza kubatilisha hili kwa hiari ili kuifanya <ph name="PRODUCT_FRAME_NAME" /> itekeleze kurasa za HTML kwa chaguomsingi.</translation>

@@ -10,9 +10,9 @@
 #include <vector>
 
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
+#include "build/chromeos_buildflags.h"
 #include "remoting/host/host_status_observer.h"
 #include "remoting/host/it2me/it2me_confirmation_dialog.h"
 #include "remoting/host/it2me/it2me_confirmation_dialog_proxy.h"
@@ -22,6 +22,7 @@
 #include "remoting/protocol/port_range.h"
 #include "remoting/protocol/validating_authenticator.h"
 #include "remoting/signaling/signal_strategy.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 class DictionaryValue;
@@ -34,6 +35,7 @@ class ChromotingHostContext;
 class DesktopEnvironmentFactory;
 class FtlSignalingConnector;
 class HostEventLogger;
+class HostEventReporter;
 class HostStatusLogger;
 class LogToServer;
 class OAuthTokenGetter;
@@ -83,6 +85,9 @@ class It2MeHost : public base::RefCountedThreadSafe<It2MeHost>,
 
   It2MeHost();
 
+  It2MeHost(const It2MeHost&) = delete;
+  It2MeHost& operator=(const It2MeHost&) = delete;
+
   // Enable, disable, or query whether or not the confirm, continue, and
   // disconnect dialogs are shown.
   void set_enable_dialogs(bool enable);
@@ -97,7 +102,9 @@ class It2MeHost : public base::RefCountedThreadSafe<It2MeHost>,
   // input is detected.
   void set_terminate_upon_input(bool terminate_upon_input);
 
-  // Methods called by the script object, from the plugin thread.
+  // Indicates whether the session was initiated through the remote command
+  // infrastructure for a managed device.
+  void set_is_enterprise_session(bool is_enterprise_session);
 
   // Creates It2Me host structures and starts the host.
   virtual void Connect(
@@ -112,10 +119,10 @@ class It2MeHost : public base::RefCountedThreadSafe<It2MeHost>,
   // Disconnects and shuts down the host.
   virtual void Disconnect();
 
-  // remoting::HostStatusObserver implementation.
-  void OnAccessDenied(const std::string& jid) override;
-  void OnClientConnected(const std::string& jid) override;
-  void OnClientDisconnected(const std::string& jid) override;
+  // HostStatusObserver implementation.
+  void OnClientAccessDenied(const std::string& signaling_id) override;
+  void OnClientConnected(const std::string& signaling_id) override;
+  void OnClientDisconnected(const std::string& signaling_id) override;
 
   void SetStateForTesting(It2MeHostState state,
                           protocol::ErrorCode error_code) {
@@ -194,6 +201,9 @@ class It2MeHost : public base::RefCountedThreadSafe<It2MeHost>,
   std::unique_ptr<HostStatusLogger> host_status_logger_;
   std::unique_ptr<DesktopEnvironmentFactory> desktop_environment_factory_;
   std::unique_ptr<HostEventLogger> host_event_logger_;
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  std::unique_ptr<HostEventReporter> host_event_reporter_;
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
   std::unique_ptr<ChromotingHost> host_;
   int failed_login_attempts_ = 0;
@@ -207,6 +217,10 @@ class It2MeHost : public base::RefCountedThreadSafe<It2MeHost>,
   // Stores the current relay connections allowed policy value.
   bool relay_connections_allowed_ = false;
 
+  // Indicates whether the session was initiated via the RemoteCommand infra.
+  // This is by administrators to connect to managed enterprise devices.
+  bool is_enterprise_session_ = false;
+
   // The client and host domain policy setting.
   std::vector<std::string> required_client_domain_list_;
   std::vector<std::string> required_host_domain_list_;
@@ -214,14 +228,18 @@ class It2MeHost : public base::RefCountedThreadSafe<It2MeHost>,
   // The host port range policy setting.
   PortRange udp_port_range_;
 
+  // Stores the clipboard size policy value.
+  absl::optional<size_t> max_clipboard_size_;
+
+  // Stores the remote support connections allowed policy value.
+  bool remote_support_connections_allowed_ = true;
+
   // Tracks the JID of the remote user when in a connecting state.
   std::string connecting_jid_;
 
   bool enable_dialogs_ = true;
   bool enable_notifications_ = true;
   bool terminate_upon_input_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(It2MeHost);
 };
 
 // Having a factory interface makes it possible for the test to provide a mock
@@ -229,12 +247,13 @@ class It2MeHost : public base::RefCountedThreadSafe<It2MeHost>,
 class It2MeHostFactory {
  public:
   It2MeHostFactory();
+
+  It2MeHostFactory(const It2MeHostFactory&) = delete;
+  It2MeHostFactory& operator=(const It2MeHostFactory&) = delete;
+
   virtual ~It2MeHostFactory();
 
   virtual scoped_refptr<It2MeHost> CreateIt2MeHost();
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(It2MeHostFactory);
 };
 
 }  // namespace remoting

@@ -25,13 +25,16 @@ class VIZ_SERVICE_EXPORT OverlayProcessorSurfaceControl
   void SetViewportSize(const gfx::Size& size) override;
   void AdjustOutputSurfaceOverlay(
       absl::optional<OutputSurfaceOverlayPlane>* output_surface_plane) override;
-  void CheckOverlaySupport(
+  void CheckOverlaySupportImpl(
       const OverlayProcessorInterface::OutputSurfaceOverlayPlane* primary_plane,
       OverlayCandidateList* candidates) override;
   gfx::Rect GetOverlayDamageRectForOutputSurface(
       const OverlayCandidate& overlay) const override;
 
  private:
+  // Historically, android media was hardcoding color space to srgb. This
+  // indicates that we going to use real one.
+  const bool use_real_color_space_;
   gfx::OverlayTransform display_transform_ = gfx::OVERLAY_TRANSFORM_NONE;
   gfx::Size viewport_size_;
 };

@@ -84,9 +84,12 @@ class OverviewWindowDragHistogramTest : public AshTestBase {
         ui::GestureConfiguration::GetInstance();
     const int old_long_press_time_in_ms =
         gesture_config->long_press_time_in_ms();
+    const base::TimeDelta old_short_press_time =
+        gesture_config->short_press_time();
     const int old_show_press_delay_in_ms =
         gesture_config->show_press_delay_in_ms();
     gesture_config->set_long_press_time_in_ms(1);
+    gesture_config->set_short_press_time(base::Milliseconds(1));
     gesture_config->set_show_press_delay_in_ms(1);
 
     EnterTablet();
@@ -96,11 +99,11 @@ class OverviewWindowDragHistogramTest : public AshTestBase {
     generator->PressTouch();
     base::RunLoop run_loop;
     base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
-        FROM_HERE, run_loop.QuitClosure(),
-        base::TimeDelta::FromMilliseconds(2));
+        FROM_HERE, run_loop.QuitClosure(), base::Milliseconds(2));
     run_loop.Run();
 
     gesture_config->set_long_press_time_in_ms(old_long_press_time_in_ms);
+    gesture_config->set_short_press_time(old_short_press_time);
     gesture_config->set_show_press_delay_in_ms(old_show_press_delay_in_ms);
   }
 

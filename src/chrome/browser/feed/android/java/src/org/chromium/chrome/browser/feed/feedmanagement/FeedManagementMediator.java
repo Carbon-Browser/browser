@@ -14,14 +14,15 @@ import android.provider.Browser;
 import android.view.View;
 import android.view.View.OnClickListener;
 
+import androidx.annotation.VisibleForTesting;
 import androidx.browser.customtabs.CustomTabsIntent;
 
-import org.chromium.base.ContextUtils;
 import org.chromium.base.Log;
 import org.chromium.base.compat.ApiHelperForM;
 import org.chromium.chrome.browser.feed.FeedServiceBridge;
+import org.chromium.chrome.browser.feed.R;
+import org.chromium.chrome.browser.feed.StreamKind;
 import org.chromium.chrome.browser.feed.v2.FeedUserActionType;
-import org.chromium.chrome.browser.feed.webfeed.R;
 import org.chromium.ui.modelutil.MVCListAdapter.ModelList;
 import org.chromium.ui.modelutil.ModelListAdapter;
 import org.chromium.ui.modelutil.PropertyModel;
@@ -40,27 +41,30 @@ public class FeedManagementMediator {
     private final Context mContext;
     private final FollowManagementLauncher mFollowManagementLauncher;
     private final AutoplayManagementLauncher mAutoplayManagementLauncher;
+    private final @StreamKind int mInitiatingStreamKind;
 
     /**
      * Interface to supply a method which can launch the FollowManagementActivity.
      */
     public interface FollowManagementLauncher {
-        public void launchFollowManagement(Context mContext);
+        void launchFollowManagement(Context mContext);
     }
 
     /**
      * Interface to supply a method which can launch the AutoplayManagementActivity.
      */
     public interface AutoplayManagementLauncher {
-        public void launchAutoplayManagement(Context mContext);
+        void launchAutoplayManagement(Context mContext);
     }
 
     FeedManagementMediator(Context context, ModelList modelList,
-            FollowManagementLauncher followLauncher, AutoplayManagementLauncher autoplayLauncher) {
+            FollowManagementLauncher followLauncher, AutoplayManagementLauncher autoplayLauncher,
+            @StreamKind int initiatingStreamKind) {
         mModelList = modelList;
         mContext = context;
         mFollowManagementLauncher = followLauncher;
         mAutoplayManagementLauncher = autoplayLauncher;
+        mInitiatingStreamKind = initiatingStreamKind;
 
         // Add the menu items into the menu.
         PropertyModel activityModel = generateListItem(R.string.feed_manage_activity,
@@ -99,7 +103,6 @@ public class FeedManagementMediator {
     }
 
     // TODO(petewil): Borrowed these from code we can't link to.  How do I keep them in sync?
-    static final String EXTRA_UI_TYPE = "org.chromium.chrome.browser.customtabs.EXTRA_UI_TYPE";
     static final String TRUSTED_APPLICATION_CODE_EXTRA = "trusted_application_code_extra";
 
     // Launch a new activity in the same task with the given uri as a CCT.
@@ -113,12 +116,11 @@ public class FeedManagementMediator {
         intent.setClassName(mContext, "org.chromium.chrome.browser.customtabs.CustomTabActivity");
 
         // Do the things that createCustomTabActivityIntent does:
-        intent.setPackage(mContext.getPackageName());
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); // Needed for pre-N versions of android.
         intent.putExtra(Browser.EXTRA_APPLICATION_ID, mContext.getPackageName());
 
         // Adding trusted extras lets us know that the intent came from Chrome.
-        intent.setPackage(ContextUtils.getApplicationContext().getPackageName());
+        intent.setPackage(mContext.getPackageName());
         intent.putExtra(TRUSTED_APPLICATION_CODE_EXTRA, getAuthenticationToken());
         mContext.startActivity(intent);
         // TODO(https://crbug.com/1195209): Record uma by calling ReportOtherUserAction
@@ -126,42 +128,54 @@ public class FeedManagementMediator {
     }
 
     // Copied from IntentHandler, which is in chrome_java, so we can't call it directly.
-    private static PendingIntent getAuthenticationToken() {
+    private PendingIntent getAuthenticationToken() {
         Intent fakeIntent = new Intent();
-        Context appContext = ContextUtils.getApplicationContext();
-        ComponentName fakeComponentName =
-                new ComponentName(appContext.getPackageName(), "FakeClass");
+        ComponentName fakeComponentName = new ComponentName(mContext.getPackageName(), "FakeClass");
         fakeIntent.setComponent(fakeComponentName);
         int mutabililtyFlag = 0;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             mutabililtyFlag = ApiHelperForM.getPendingIntentImmutableFlag();
         }
-        return PendingIntent.getActivity(appContext, 0, fakeIntent, mutabililtyFlag);
+        return PendingIntent.getActivity(mContext, 0, fakeIntent, mutabililtyFlag);
     }
 
-    private void handleActivityClick(View view) {
-        Log.d(TAG, "Activity click caught.");
+    @VisibleForTesting
+    void handleActivityClick(View view) {
+        Log.d(TAG, "Activity click caught." + mInitiatingStreamKind);
+        FeedServiceBridge.reportOtherUserAction(
+                mInitiatingStreamKind, FeedUserActionType.TAPPED_MANAGE_ACTIVITY);
         launchUriActivity("https://myactivity.google.com/myactivity?product=50");
     }
 
-    private void handleInterestsClick(View view) {
+    @VisibleForTesting
+    void handleInterestsClick(View view) {
         Log.d(TAG, "Interests click caught.");
+        FeedServiceBridge.reportOtherUserAction(
+                mInitiatingStreamKind, FeedUserActionType.TAPPED_MANAGE_INTERESTS);
         launchUriActivity("https://www.google.com/preferences/interests/yourinterests?sh=n");
     }
 
-    private void handleHiddenClick(View view) {
+    @VisibleForTesting
+    void handleHiddenClick(View view) {
         Log.d(TAG, "Hidden click caught.");
+        FeedServiceBridge.reportOtherUserAction(
+                mInitiatingStreamKind, FeedUserActionType.TAPPED_MANAGE_INTERESTS);
         launchUriActivity("https://www.google.com/preferences/interests/hidden?sh=n");
     }
 
-    private void handleAutoplayClick(View view) {
+    @VisibleForTesting
+    void handleAutoplayClick(View view) {
         Log.d(TAG, "Autoplay click caught.");
+        FeedServiceBridge.reportOtherUserAction(
+                mInitiatingStreamKind, FeedUserActionType.OPENED_AUTOPLAY_SETTINGS);
         mAutoplayManagementLauncher.launchAutoplayManagement(mContext);
     }
 
-    private void handleFollowingClick(View view) {
+    @VisibleForTesting
+    void handleFollowingClick(View view) {
         Log.d(TAG, "Following click caught.");
-        FeedServiceBridge.reportOtherUserAction(FeedUserActionType.TAPPED_MANAGE_FOLLOWING);
+        FeedServiceBridge.reportOtherUserAction(
+                mInitiatingStreamKind, FeedUserActionType.TAPPED_MANAGE_FOLLOWING);
         mFollowManagementLauncher.launchFollowManagement(mContext);
     }
 }

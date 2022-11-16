@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/sync_file_system/drive_backend/metadata_database.pb.h"
 #include "chrome/browser/sync_file_system/drive_backend/sync_task.h"
@@ -46,6 +46,10 @@ class RemoteToLocalSyncer : public SyncTask {
   // Conflicting trackers will have low priority for RemoteToLocalSyncer so that
   // it should be resolved by LocatToRemoteSyncer.
   explicit RemoteToLocalSyncer(SyncEngineContext* sync_context);
+
+  RemoteToLocalSyncer(const RemoteToLocalSyncer&) = delete;
+  RemoteToLocalSyncer& operator=(const RemoteToLocalSyncer&) = delete;
+
   ~RemoteToLocalSyncer() override;
 
   void RunPreflight(std::unique_ptr<SyncTaskToken> token) override;
@@ -199,7 +203,7 @@ class RemoteToLocalSyncer : public SyncTask {
   MetadataDatabase* metadata_database();
   RemoteChangeProcessor* remote_change_processor();
 
-  SyncEngineContext* sync_context_;  // Not owned.
+  raw_ptr<SyncEngineContext> sync_context_;  // Not owned.
 
   std::unique_ptr<FileTracker> dirty_tracker_;
   std::unique_ptr<FileMetadata> remote_metadata_;
@@ -215,8 +219,6 @@ class RemoteToLocalSyncer : public SyncTask {
   std::unique_ptr<FileChangeList> local_changes_;
 
   base::WeakPtrFactory<RemoteToLocalSyncer> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(RemoteToLocalSyncer);
 };
 
 }  // namespace drive_backend

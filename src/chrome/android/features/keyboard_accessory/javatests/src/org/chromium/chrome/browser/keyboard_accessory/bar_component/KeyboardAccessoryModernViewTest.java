@@ -80,9 +80,11 @@ import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
 import org.chromium.chrome.test.util.browser.Features.EnableFeatures;
 import org.chromium.components.autofill.AutofillSuggestion;
+import org.chromium.components.browser_ui.widget.chips.ChipView;
 import org.chromium.components.feature_engagement.EventConstants;
 import org.chromium.components.feature_engagement.FeatureConstants;
 import org.chromium.components.feature_engagement.Tracker;
+import org.chromium.components.feature_engagement.TriggerDetails;
 import org.chromium.components.feature_engagement.TriggerState;
 import org.chromium.content_public.browser.test.util.JavaScriptUtils;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
@@ -91,7 +93,6 @@ import org.chromium.ui.DropdownItem;
 import org.chromium.ui.ViewProvider;
 import org.chromium.ui.modelutil.LazyConstructionPropertyMcp;
 import org.chromium.ui.modelutil.PropertyModel;
-import org.chromium.ui.widget.ChipView;
 import org.chromium.ui.widget.ChromeImageView;
 import org.chromium.url.GURL;
 
@@ -108,6 +109,7 @@ import java.util.concurrent.atomic.AtomicReference;
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
 @EnableFeatures(ChromeFeatureList.AUTOFILL_KEYBOARD_ACCESSORY)
+@SuppressWarnings("DoNotMock") // Mocks GURL
 public class KeyboardAccessoryModernViewTest {
     private static final String CUSTOM_ICON_URL = "https://www.example.com/image.png";
     private static final Bitmap TEST_CARD_ART_IMAGE =
@@ -140,6 +142,11 @@ public class KeyboardAccessoryModernViewTest {
         }
 
         @Override
+        public TriggerDetails shouldTriggerHelpUIWithSnooze(String feature) {
+            return null;
+        }
+
+        @Override
         public boolean wouldTriggerHelpUI(String feature) {
             return true;
         }
@@ -159,6 +166,11 @@ public class KeyboardAccessoryModernViewTest {
             mWasDismissed = true;
         }
 
+        @Override
+        public void dismissedWithSnooze(String feature, int snoozeAction) {
+            mWasDismissed = true;
+        }
+
         public boolean wasDismissed() {
             return mWasDismissed;
         }
@@ -168,6 +180,22 @@ public class KeyboardAccessoryModernViewTest {
         public DisplayLockHandle acquireDisplayLock() {
             return () -> {};
         }
+
+        @Override
+        public void setPriorityNotification(String feature) {}
+
+        @Override
+        @Nullable
+        public String getPendingPriorityNotification() {
+            return null;
+        }
+
+        @Override
+        public void registerPriorityNotificationHandler(
+                String feature, Runnable priorityNotificationHandler) {}
+
+        @Override
+        public void unregisterPriorityNotificationHandler(String feature) {}
 
         @Override
         public boolean isInitialized() {
@@ -514,8 +542,8 @@ public class KeyboardAccessoryModernViewTest {
         CriteriaHelper.pollUiThread(() -> {
             ChipView chipView = (ChipView) view.mBarItemsView.getChildAt(0);
             ChromeImageView iconImageView = (ChromeImageView) chipView.getChildAt(0);
-            Drawable expectedIcon = mActivityTestRule.getActivity().getResources().getDrawable(
-                    R.drawable.visa_card);
+            Drawable expectedIcon =
+                    mActivityTestRule.getActivity().getDrawable(R.drawable.visa_card);
             return getBitmap(expectedIcon).sameAs(getBitmap(iconImageView.getDrawable()));
         });
     }
@@ -538,8 +566,8 @@ public class KeyboardAccessoryModernViewTest {
         CriteriaHelper.pollUiThread(() -> {
             ChipView chipView = (ChipView) view.mBarItemsView.getChildAt(0);
             ChromeImageView iconImageView = (ChromeImageView) chipView.getChildAt(0);
-            Drawable expectedIcon = mActivityTestRule.getActivity().getResources().getDrawable(
-                    R.drawable.visa_card);
+            Drawable expectedIcon =
+                    mActivityTestRule.getActivity().getDrawable(R.drawable.visa_card);
             return getBitmap(expectedIcon).sameAs(getBitmap(iconImageView.getDrawable()));
         });
     }

@@ -4,13 +4,14 @@
 
 #include "device/bluetooth/bluetooth_discovery_manager_mac.h"
 
+#include "base/memory/raw_ptr.h"
+
 #import <IOBluetooth/objc/IOBluetoothDevice.h>
 #import <IOBluetooth/objc/IOBluetoothDeviceInquiry.h>
 
 #include "base/check_op.h"
 #include "base/logging.h"
 #include "base/mac/scoped_nsobject.h"
-#include "base/macros.h"
 
 namespace device {
 
@@ -22,7 +23,7 @@ class BluetoothDiscoveryManagerMacClassic;
 @interface BluetoothDeviceInquiryDelegate
     : NSObject<IOBluetoothDeviceInquiryDelegate> {
  @private
-  device::BluetoothDiscoveryManagerMacClassic* _manager;  // weak
+  raw_ptr<device::BluetoothDiscoveryManagerMacClassic> _manager;  // weak
 }
 
 - (instancetype)initWithManager:
@@ -45,6 +46,11 @@ class BluetoothDiscoveryManagerMacClassic
             [[BluetoothDeviceInquiryDelegate alloc] initWithManager:this]),
         inquiry_([[IOBluetoothDeviceInquiry alloc]
             initWithDelegate:inquiry_delegate_]) {}
+
+  BluetoothDiscoveryManagerMacClassic(
+      const BluetoothDiscoveryManagerMacClassic&) = delete;
+  BluetoothDiscoveryManagerMacClassic& operator=(
+      const BluetoothDiscoveryManagerMacClassic&) = delete;
 
   ~BluetoothDiscoveryManagerMacClassic() override {}
 
@@ -180,8 +186,6 @@ class BluetoothDiscoveryManagerMacClassic
   // Objective-C objects for running and tracking device inquiry.
   base::scoped_nsobject<BluetoothDeviceInquiryDelegate> inquiry_delegate_;
   base::scoped_nsobject<IOBluetoothDeviceInquiry> inquiry_;
-
-  DISALLOW_COPY_AND_ASSIGN(BluetoothDiscoveryManagerMacClassic);
 };
 
 BluetoothDiscoveryManagerMac::BluetoothDiscoveryManagerMac(

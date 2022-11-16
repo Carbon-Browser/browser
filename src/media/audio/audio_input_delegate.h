@@ -8,7 +8,6 @@
 #include <memory>
 #include <string>
 
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "media/base/media_export.h"
 
@@ -33,9 +32,6 @@ class MEDIA_EXPORT AudioInputDelegate {
         base::ReadOnlySharedMemoryRegion shared_memory_region,
         std::unique_ptr<base::CancelableSyncSocket> socket,
         bool initially_muted) = 0;
-
-    // Called when the microphone is muted/unmuted.
-    virtual void OnMuted(int stream_id, bool is_muted) = 0;
 
     // Called if stream encounters an error and has become unusable.
     virtual void OnStreamError(int stream_id) = 0;

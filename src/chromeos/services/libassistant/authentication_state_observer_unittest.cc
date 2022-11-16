@@ -4,11 +4,11 @@
 
 #include "base/test/task_environment.h"
 #include "chromeos/assistant/internal/internal_util.h"
+#include "chromeos/assistant/internal/libassistant/shared_headers.h"
 #include "chromeos/assistant/internal/test_support/fake_assistant_manager_internal.h"
 #include "chromeos/services/libassistant/libassistant_service.h"
 #include "chromeos/services/libassistant/public/mojom/authentication_state_observer.mojom.h"
 #include "chromeos/services/libassistant/test_support/libassistant_service_tester.h"
-#include "libassistant/shared/internal_api/assistant_manager_delegate.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -81,6 +81,10 @@ class AuthenticationStateObserverTest : public ::testing::Test {
         observer_mock_.BindNewPipeAndPassRemote());
 
     service_tester_.Start();
+
+    service_tester_.service()
+        .conversation_controller()
+        .OnAssistantClientRunning(&service_tester_.assistant_client());
   }
 
   AuthenticationStateObserverMock& observer_mock() { return observer_mock_; }

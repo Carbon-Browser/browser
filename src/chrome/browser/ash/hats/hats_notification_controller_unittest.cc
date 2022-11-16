@@ -13,9 +13,9 @@
 #include "chrome/test/base/browser_with_test_window_test.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
-#include "chromeos/network/network_state.h"
-#include "chromeos/network/portal_detector/mock_network_portal_detector.h"
-#include "chromeos/network/portal_detector/network_portal_detector.h"
+#include "chromeos/ash/components/network/network_state.h"
+#include "chromeos/ash/components/network/portal_detector/mock_network_portal_detector.h"
+#include "chromeos/ash/components/network/portal_detector/network_portal_detector.h"
 #include "components/image_fetcher/core/request_metadata.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/test/browser_task_environment.h"
@@ -37,6 +37,12 @@ namespace ash {
 class HatsNotificationControllerTest : public BrowserWithTestWindowTest {
  public:
   HatsNotificationControllerTest() {}
+
+  HatsNotificationControllerTest(const HatsNotificationControllerTest&) =
+      delete;
+  HatsNotificationControllerTest& operator=(
+      const HatsNotificationControllerTest&) = delete;
+
   ~HatsNotificationControllerTest() override {}
 
   void SetUp() override {
@@ -59,8 +65,9 @@ class HatsNotificationControllerTest : public BrowserWithTestWindowTest {
   scoped_refptr<HatsNotificationController> InstantiateHatsController() {
     // The initialization will fail since the function IsNewDevice() will return
     // true.
-    scoped_refptr<HatsNotificationController> hats_notification_controller =
-        new HatsNotificationController(profile(), kHatsGeneralSurvey);
+    auto hats_notification_controller =
+        base::MakeRefCounted<HatsNotificationController>(profile(),
+                                                         kHatsGeneralSurvey);
 
     // HatsController::IsNewDevice() is run on a blocking thread.
     content::RunAllTasksUntilIdle();
@@ -82,9 +89,6 @@ class HatsNotificationControllerTest : public BrowserWithTestWindowTest {
   NiceMock<MockNetworkPortalDetector> mock_network_portal_detector_;
 
   std::unique_ptr<NotificationDisplayServiceTester> display_service_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(HatsNotificationControllerTest);
 };
 
 TEST_F(HatsNotificationControllerTest, NewDevice_ShouldNotShowNotification) {
@@ -127,9 +131,11 @@ TEST_F(HatsNotificationControllerTest, OldDevice_ShouldShowNotification) {
   // Finally check if notification was launched to confirm initialization.
   EXPECT_TRUE(display_service_->GetNotification(
       HatsNotificationController::kNotificationId));
+
+  // Simulate dismissing notification by the user to clean up the notification.
   display_service_->RemoveNotification(
       NotificationHandler::Type::TRANSIENT,
-      HatsNotificationController::kNotificationId, false);
+      HatsNotificationController::kNotificationId, /*by_user=*/true);
 }
 
 TEST_F(HatsNotificationControllerTest, NoInternet_DoNotShowNotification) {
@@ -216,9 +222,10 @@ TEST_F(HatsNotificationControllerTest,
   EXPECT_TRUE(display_service_->GetNotification(
       HatsNotificationController::kNotificationId));
 
+  // Simulate dismissing notification by the user to clean up the notification.
   display_service_->RemoveNotification(
       NotificationHandler::Type::TRANSIENT,
-      HatsNotificationController::kNotificationId, false);
+      HatsNotificationController::kNotificationId, /*by_user=*/true);
 }
 
 }  // namespace ash

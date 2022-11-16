@@ -8,17 +8,13 @@
  *
  */
 
-goog.provide('AbstractTts');
-
-goog.require('Msgs');
-goog.require('TtsInterface');
-goog.require('goog.i18n.MessageFormat');
+import {Msgs} from './msgs.js';
 
 /**
  * Creates a new instance.
  * @implements {TtsInterface}
  */
-AbstractTts = class {
+export class AbstractTts {
   constructor() {
     this.ttsProperties = new Object();
 
@@ -72,7 +68,12 @@ AbstractTts = class {
     }
   }
 
-  /** @override */
+  /**
+   * @param {string} textString
+   * @param {QueueMode} queueMode
+   * @param {Object=} properties
+   * @override
+   */
   speak(textString, queueMode, properties) {
     return this;
   }
@@ -181,14 +182,14 @@ AbstractTts = class {
    *    acronym / abbreviation.
    *
    * @param {string} text A text string to be spoken.
-   * @param {Object= } properties Out parameter populated with how to speak the
+   * @param {Object=} properties Out parameter populated with how to speak the
    *     string.
    * @return {string} The text formatted in a way that will sound better by
    *     most speech engines.
    * @protected
    */
   preprocess(text, properties) {
-    if (text.length === 1 && text >= 'A' && text <= 'Z') {
+    if (text.length === 1 && text.toLowerCase() !== text) {
       // Describe capital letters according to user's setting.
       if (localStorage['capitalStrategy'] === 'increasePitch') {
         for (const prop in AbstractTts.PERSONALITY_CAPITAL) {
@@ -204,6 +205,17 @@ AbstractTts = class {
     if (localStorage['usePitchChanges'] === 'false') {
       delete properties.relativePitch;
     }
+
+    // Since dollar and sterling pound signs will be replaced with text, move
+    // them to after the number if they stay between a negative sign and a
+    // number.
+    text = text.replace(AbstractTts.negativeCurrencyAmountRegexp_, match => {
+      const minus = match[0];
+      const number = match.substring(2);
+      const currency = match[1];
+
+      return minus + number + currency;
+    });
 
     // Substitute all symbols in the substitution dictionary. This is pretty
     // efficient because we use a single regexp that matches all symbols
@@ -263,7 +275,7 @@ AbstractTts = class {
       this.ttsProperties[key] = value;
     }
   }
-};
+}
 
 
 /**
@@ -311,24 +323,24 @@ AbstractTts.PUNCTUATION_ECHOES = [
     name: 'none',
     msg: 'no_punctuation',
     regexp: /[-$#"()*;:<>\n\\\/+='~`@_]/g,
-    clear: true
+    clear: true,
   },
 
   // Punctuation echoed for the 'some' option.
   {
     name: 'some',
     msg: 'some_punctuation',
-    regexp: /[$#"*<>\\\/\{\}+=~`%\u2022]/g,
-    clear: false
+    regexp: /[$#"*<>\\\/\{\}+=~`%\u2022\u25e6\u25a0]/g,
+    clear: false,
   },
 
   // Punctuation echoed for the 'all' option.
   {
     name: 'all',
     msg: 'all_punctuation',
-    regexp: /[-$#"()*;:<>\n\\\/\{\}\[\]+='~`!@_.,?%\u2022]/g,
-    clear: false
-  }
+    regexp: /[-$#"()*;:<>\n\\\/\{\}\[\]+='~`!@_.,?%\u2022\u25e6\u25a0]/g,
+    clear: false,
+  },
 ];
 
 /** TTS pause property. @type {string} */
@@ -343,7 +355,7 @@ AbstractTts.PERSONALITY_ANNOTATION = {
   'relativePitch': -0.25,
   // TODO:(rshearer) Added this color change for I/O presentation.
   'color': 'yellow',
-  'punctuationEcho': 'none'
+  'punctuationEcho': 'none',
 };
 
 
@@ -353,7 +365,7 @@ AbstractTts.PERSONALITY_ANNOTATION = {
  * @type {Object}
  */
 AbstractTts.PERSONALITY_ANNOUNCEMENT = {
-  'punctuationEcho': 'none'
+  'punctuationEcho': 'none',
 };
 
 /**
@@ -363,7 +375,7 @@ AbstractTts.PERSONALITY_ANNOUNCEMENT = {
  */
 AbstractTts.PERSONALITY_SYSTEM_ALERT = {
   'punctuationEcho': 'none',
-  'doNotInterrupt': true
+  'doNotInterrupt': true,
 };
 
 /**
@@ -372,7 +384,7 @@ AbstractTts.PERSONALITY_SYSTEM_ALERT = {
  */
 AbstractTts.PERSONALITY_ASIDE = {
   'relativePitch': -0.1,
-  'color': '#669'
+  'color': '#669',
 };
 
 
@@ -381,7 +393,7 @@ AbstractTts.PERSONALITY_ASIDE = {
  * @type {Object}
  */
 AbstractTts.PERSONALITY_CAPITAL = {
-  'relativePitch': 0.2
+  'relativePitch': 0.2,
 };
 
 
@@ -391,7 +403,7 @@ AbstractTts.PERSONALITY_CAPITAL = {
  */
 AbstractTts.PERSONALITY_DELETED = {
   'punctuationEcho': 'none',
-  'relativePitch': -0.6
+  'relativePitch': -0.6,
 };
 
 
@@ -402,7 +414,7 @@ AbstractTts.PERSONALITY_DELETED = {
 AbstractTts.PERSONALITY_QUOTE = {
   'relativePitch': 0.1,
   'color': '#b6b',
-  'fontWeight': 'bold'
+  'fontWeight': 'bold',
 };
 
 
@@ -413,7 +425,7 @@ AbstractTts.PERSONALITY_QUOTE = {
 AbstractTts.PERSONALITY_STRONG = {
   'relativePitch': 0.1,
   'color': '#b66',
-  'fontWeight': 'bold'
+  'fontWeight': 'bold',
 };
 
 
@@ -425,7 +437,7 @@ AbstractTts.PERSONALITY_EMPHASIS = {
   'relativeVolume': 0.1,
   'relativeRate': -0.1,
   'color': '#6bb',
-  'fontWeight': 'bold'
+  'fontWeight': 'bold',
 };
 
 
@@ -443,6 +455,7 @@ AbstractTts.DEBUG = true;
  */
 AbstractTts.CHARACTER_DICTIONARY = {
   ' ': 'space',
+  '\u00a0': 'space',
   '`': 'backtick',
   '~': 'tilde',
   '!': 'exclamation',
@@ -478,7 +491,9 @@ AbstractTts.CHARACTER_DICTIONARY = {
   '\r': 'return',
   '\n': 'new_line',
   '\\': 'backslash',
-  '\u2022': 'bullet'
+  '\u2022': 'bullet',
+  '\u25e6': 'white_bullet',
+  '\u25a0': 'square_bullet',
 };
 
 
@@ -539,7 +554,7 @@ AbstractTts.SUBSTITUTION_DICTIONARY = {
   '\u25c4': 'left pointer',
   '\u25c5': 'left pointer',
   '\uf8ff': 'apple',
-  '£': 'pound sterling'
+  '£': 'pound sterling',
 };
 
 
@@ -557,7 +572,15 @@ AbstractTts.substitutionDictionaryRegexp_;
  * @private
  */
 AbstractTts.repetitionRegexp_ =
-    /([-\/\\|!@#$%^&*\(\)=_+\[\]\{\}.?;'":<>\u2022])\1{2,}/g;
+    /([-\/\\|!@#$%^&*\(\)=_+\[\]\{\}.?;'":<>\u2022\u25e6\u25a0])\1{2,}/g;
 
 /** TTS phonetic-characters property. @type {string} */
 AbstractTts.PHONETIC_CHARACTERS = 'phoneticCharacters';
+
+/**
+ * Regexp filter for negative dollar and pound amounts.
+ * @type {RegExp}
+ * @private
+ */
+AbstractTts.negativeCurrencyAmountRegexp_ =
+    /-[£\$](\d{1,3})(\d+|(,\d{3})*)(\.\d{1,})?/g;

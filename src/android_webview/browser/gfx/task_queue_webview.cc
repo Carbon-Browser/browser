@@ -12,7 +12,6 @@
 #include "base/bind.h"
 #include "base/containers/queue.h"
 #include "base/logging.h"
-#include "base/no_destructor.h"
 #include "base/synchronization/condition_variable.h"
 #include "base/synchronization/lock.h"
 #include "base/thread_annotations.h"
@@ -33,13 +32,17 @@ namespace {
 class TaskQueueViz : public TaskQueueWebView {
  public:
   TaskQueueViz();
+
+  TaskQueueViz(const TaskQueueViz&) = delete;
+  TaskQueueViz& operator=(const TaskQueueViz&) = delete;
+
   ~TaskQueueViz() override;
 
   // TaskQueueWebView overrides.
   void ScheduleTask(base::OnceClosure task, bool out_of_order) override;
   void ScheduleOrRetainTask(base::OnceClosure task) override;
   void ScheduleIdleTask(base::OnceClosure task) override;
-  void ScheduleClientTask(base::OnceClosure task) override;
+  scoped_refptr<base::TaskRunner> GetClientTaskRunner() override;
   void InitializeVizThread(const scoped_refptr<base::SingleThreadTaskRunner>&
                                viz_task_runner) override;
   void ScheduleOnVizAndBlock(VizTask viz_task) override;
@@ -62,8 +65,6 @@ class TaskQueueViz : public TaskQueueWebView {
   base::ConditionVariable condvar_{&lock_};
   bool done_ GUARDED_BY(lock_) = true;
   base::circular_deque<base::OnceClosure> tasks_ GUARDED_BY(lock_);
-
-  DISALLOW_COPY_AND_ASSIGN(TaskQueueViz);
 };
 
 TaskQueueViz::TaskQueueViz() {
@@ -110,9 +111,9 @@ void TaskQueueViz::ScheduleIdleTask(base::OnceClosure task) {
   EmplaceTask(std::move(task));
 }
 
-void TaskQueueViz::ScheduleClientTask(base::OnceClosure task) {
+scoped_refptr<base::TaskRunner> TaskQueueViz::GetClientTaskRunner() {
   DCHECK(viz_task_runner_);
-  viz_task_runner_->PostTask(FROM_HERE, std::move(task));
+  return viz_task_runner_;
 }
 
 void TaskQueueViz::InitializeVizThread(

@@ -5,7 +5,6 @@
 #include "chrome/browser/media/webrtc/media_stream_device_permission_context.h"
 
 #include "base/bind.h"
-#include "base/macros.h"
 #include "build/build_config.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/test/base/chrome_render_view_host_test_harness.h"
@@ -21,7 +20,7 @@
 #include "content/public/test/web_contents_tester.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
 #include "components/permissions/permission_request_manager.h"
 #endif
 
@@ -41,6 +40,12 @@ class TestPermissionContext : public MediaStreamDevicePermissionContext {
 // converted to tests in this file.
 class MediaStreamDevicePermissionContextTests
     : public ChromeRenderViewHostTestHarness {
+ public:
+  MediaStreamDevicePermissionContextTests(
+      const MediaStreamDevicePermissionContextTests&) = delete;
+  MediaStreamDevicePermissionContextTests& operator=(
+      const MediaStreamDevicePermissionContextTests&) = delete;
+
  protected:
   MediaStreamDevicePermissionContextTests() = default;
 
@@ -52,19 +57,19 @@ class MediaStreamDevicePermissionContextTests
     // Check that there is no saved content settings.
     EXPECT_EQ(CONTENT_SETTING_ASK,
               HostContentSettingsMapFactory::GetForProfile(profile())
-                  ->GetContentSetting(insecure_url.GetOrigin(),
-                                      insecure_url.GetOrigin(),
+                  ->GetContentSetting(insecure_url.DeprecatedGetOriginAsURL(),
+                                      insecure_url.DeprecatedGetOriginAsURL(),
                                       content_settings_type));
     EXPECT_EQ(CONTENT_SETTING_ASK,
               HostContentSettingsMapFactory::GetForProfile(profile())
-                  ->GetContentSetting(secure_url.GetOrigin(),
-                                      insecure_url.GetOrigin(),
+                  ->GetContentSetting(secure_url.DeprecatedGetOriginAsURL(),
+                                      insecure_url.DeprecatedGetOriginAsURL(),
                                       content_settings_type));
-    EXPECT_EQ(
-        CONTENT_SETTING_ASK,
-        HostContentSettingsMapFactory::GetForProfile(profile())
-            ->GetContentSetting(insecure_url.GetOrigin(),
-                                secure_url.GetOrigin(), content_settings_type));
+    EXPECT_EQ(CONTENT_SETTING_ASK,
+              HostContentSettingsMapFactory::GetForProfile(profile())
+                  ->GetContentSetting(insecure_url.DeprecatedGetOriginAsURL(),
+                                      secure_url.DeprecatedGetOriginAsURL(),
+                                      content_settings_type));
 
     EXPECT_EQ(CONTENT_SETTING_BLOCK,
               permission_context
@@ -84,11 +89,11 @@ class MediaStreamDevicePermissionContextTests
     GURL secure_url("https://www.example.com");
 
     // Check that there is no saved content settings.
-    EXPECT_EQ(
-        CONTENT_SETTING_ASK,
-        HostContentSettingsMapFactory::GetForProfile(profile())
-            ->GetContentSetting(secure_url.GetOrigin(), secure_url.GetOrigin(),
-                                content_settings_type));
+    EXPECT_EQ(CONTENT_SETTING_ASK,
+              HostContentSettingsMapFactory::GetForProfile(profile())
+                  ->GetContentSetting(secure_url.DeprecatedGetOriginAsURL(),
+                                      secure_url.DeprecatedGetOriginAsURL(),
+                                      content_settings_type));
 
     EXPECT_EQ(CONTENT_SETTING_ASK,
               permission_context
@@ -101,14 +106,12 @@ class MediaStreamDevicePermissionContextTests
   // ChromeRenderViewHostTestHarness:
   void SetUp() override {
     ChromeRenderViewHostTestHarness::SetUp();
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
     infobars::ContentInfoBarManager::CreateForWebContents(web_contents());
 #else
     permissions::PermissionRequestManager::CreateForWebContents(web_contents());
 #endif
   }
-
-  DISALLOW_COPY_AND_ASSIGN(MediaStreamDevicePermissionContextTests);
 };
 
 // MEDIASTREAM_MIC permission status should be ask for insecure origin to

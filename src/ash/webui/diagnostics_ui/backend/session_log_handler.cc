@@ -6,9 +6,10 @@
 
 #include "ash/constants/ash_features.h"
 #include "ash/public/cpp/holding_space/holding_space_client.h"
-#include "ash/webui/diagnostics_ui/backend/networking_log.h"
-#include "ash/webui/diagnostics_ui/backend/routine_log.h"
-#include "ash/webui/diagnostics_ui/backend/telemetry_log.h"
+#include "ash/system/diagnostics/diagnostics_log_controller.h"
+#include "ash/system/diagnostics/networking_log.h"
+#include "ash/system/diagnostics/routine_log.h"
+#include "ash/system/diagnostics/telemetry_log.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/strings/string_util.h"
@@ -25,23 +26,34 @@ namespace ash {
 namespace diagnostics {
 namespace {
 
-const char kRoutineLogSectionHeader[] = "=== Routine Log === \n";
-const char kTelemetryLogSectionHeader[] = "=== Telemetry Log === \n";
-const char kNetworkingLogSectionHeader[] = "=== Networking Log === \n";
+const char kRoutineLogSubsectionHeader[] = "--- Test Routines --- \n";
+const char kSystemLogSectionHeader[] = "=== System === \n";
+const char kNetworkingLogSectionHeader[] = "=== Networking === \n";
+const char kNoRoutinesRun[] =
+    "No routines of this type were run in the session.\n";
 const char kDefaultSessionLogFileName[] = "session_log.txt";
-const char kRoutineLogPath[] = "/tmp/diagnostics/diagnostics_routine_log";
+
+std::string GetRoutineResultsString(const std::string& results) {
+  const std::string section_header =
+      std::string(kRoutineLogSubsectionHeader) + "\n";
+  if (results.empty()) {
+    return section_header + kNoRoutinesRun;
+  }
+
+  return section_header + results;
+}
 
 }  // namespace
 
 SessionLogHandler::SessionLogHandler(
     const SelectFilePolicyCreator& select_file_policy_creator,
-    ash::HoldingSpaceClient* holding_space_client)
-    : SessionLogHandler(
-          select_file_policy_creator,
-          std::make_unique<TelemetryLog>(),
-          std::make_unique<RoutineLog>(base::FilePath(kRoutineLogPath)),
-          std::make_unique<NetworkingLog>(),
-          holding_space_client) {}
+    ash::HoldingSpaceClient* holding_space_client,
+    const base::FilePath& log_directory_path)
+    : SessionLogHandler(select_file_policy_creator,
+                        std::make_unique<TelemetryLog>(),
+                        std::make_unique<RoutineLog>(log_directory_path),
+                        std::make_unique<NetworkingLog>(log_directory_path),
+                        holding_space_client) {}
 
 SessionLogHandler::SessionLogHandler(
     const SelectFilePolicyCreator& select_file_policy_creator,
@@ -53,31 +65,52 @@ SessionLogHandler::SessionLogHandler(
       telemetry_log_(std::move(telemetry_log)),
       routine_log_(std::move(routine_log)),
       networking_log_(std::move(networking_log)),
-      holding_space_client_(holding_space_client) {
+      holding_space_client_(holding_space_client),
+      task_runner_(
+          base::ThreadPool::CreateSequencedTaskRunner({base::MayBlock()})) {
   DCHECK(holding_space_client_);
+  weak_ptr_ = weak_factory_.GetWeakPtr();
 }
 
-SessionLogHandler::~SessionLogHandler() = default;
+SessionLogHandler::~SessionLogHandler() {
+  if (select_file_dialog_) {
+    /* Lifecycle for SelectFileDialog is responsibility of calling code. */
+    select_file_dialog_->ListenerDestroyed();
+  }
+}
 
 void SessionLogHandler::RegisterMessages() {
-  web_ui()->RegisterDeprecatedMessageCallback(
-      "initialize", base::BindRepeating(&SessionLogHandler::HandleInitialize,
-                                        base::Unretained(this)));
-  web_ui()->RegisterDeprecatedMessageCallback(
+  web_ui()->RegisterMessageCallback(
+      "initialize",
+      base::BindRepeating(&SessionLogHandler::HandleInitialize, weak_ptr_));
+  web_ui()->RegisterMessageCallback(
       "saveSessionLog",
       base::BindRepeating(&SessionLogHandler::HandleSaveSessionLogRequest,
-                          base::Unretained(this)));
+                          weak_ptr_));
 }
 
 void SessionLogHandler::FileSelected(const base::FilePath& path,
                                      int index,
                                      void* params) {
-  base::ThreadPool::PostTaskAndReplyWithResult(
-      FROM_HERE, {base::MayBlock()},
-      base::BindOnce(&SessionLogHandler::CreateSessionLog,
-                     base::Unretained(this), path),
-      base::BindOnce(&SessionLogHandler::OnSessionLogCreated,
-                     weak_factory_.GetWeakPtr(), path));
+  // TODO(b/226574520): Remove SessionLogHandler::CreateSessionLog and
+  // condition as part of flag clean up.
+  if (ash::features::IsLogControllerForDiagnosticsAppEnabled()) {
+    task_runner_->PostTaskAndReplyWithResult(
+        FROM_HERE,
+        base::BindOnce(
+            &DiagnosticsLogController::GenerateSessionLogOnBlockingPool,
+            base::Unretained(DiagnosticsLogController::Get()), path),
+        base::BindOnce(&SessionLogHandler::OnSessionLogCreated, weak_ptr_,
+                       path));
+  } else {
+    task_runner_->PostTaskAndReplyWithResult(
+        FROM_HERE,
+        base::BindOnce(&SessionLogHandler::CreateSessionLog,
+                       base::Unretained(this), path),
+        base::BindOnce(&SessionLogHandler::OnSessionLogCreated, weak_ptr_,
+                       path));
+  }
+  select_file_dialog_.reset();
 }
 
 void SessionLogHandler::OnSessionLogCreated(const base::FilePath& file_path,
@@ -98,6 +131,7 @@ void SessionLogHandler::FileSelectionCanceled(void* params) {
   RejectJavascriptCallback(base::Value(save_session_log_callback_id_),
                            /*success=*/base::Value(false));
   save_session_log_callback_id_ = "";
+  select_file_dialog_.reset();
 }
 
 TelemetryLog* SessionLogHandler::GetTelemetryLog() const {
@@ -112,6 +146,11 @@ NetworkingLog* SessionLogHandler::GetNetworkingLog() const {
   return networking_log_.get();
 }
 
+void SessionLogHandler::SetTaskRunnerForTesting(
+    const scoped_refptr<base::SequencedTaskRunner>& task_runner) {
+  task_runner_ = std::move(task_runner.get());
+}
+
 void SessionLogHandler::SetWebUIForTest(content::WebUI* web_ui) {
   set_web_ui(web_ui);
 }
@@ -121,36 +160,55 @@ void SessionLogHandler::SetLogCreatedClosureForTest(base::OnceClosure closure) {
 }
 
 bool SessionLogHandler::CreateSessionLog(const base::FilePath& file_path) {
-  // Fetch RoutineLog
-  const std::string routine_log_contents = routine_log_->GetContents();
+  // Fetch Routine logs
+  const std::string system_routines = routine_log_->GetContentsForCategory(
+      RoutineLog::RoutineCategory::kSystem);
+  const std::string network_routines = routine_log_->GetContentsForCategory(
+      RoutineLog::RoutineCategory::kNetwork);
 
-  // Fetch TelemetryLog
-  const std::string telemetry_log_contents = telemetry_log_->GetContents();
+  // Fetch system data from TelemetryLog.
+  const std::string system_log_contents = telemetry_log_->GetContents();
 
-  std::vector<std::string> pieces = {
-      kTelemetryLogSectionHeader, telemetry_log_contents,
-      kRoutineLogSectionHeader, routine_log_contents};
+  std::vector<std::string> pieces;
+  pieces.push_back(kSystemLogSectionHeader);
+  if (!system_log_contents.empty()) {
+    pieces.push_back(system_log_contents);
+  }
+
+  // Add the routine section for the system category.
+  pieces.push_back(GetRoutineResultsString(system_routines));
 
   if (features::IsNetworkingInDiagnosticsAppEnabled()) {
-    // Fetch NetworkingLog
+    // Add networking category.
     pieces.push_back(kNetworkingLogSectionHeader);
-    pieces.push_back(networking_log_->GetContents());
+
+    // Add the network info section.
+    pieces.push_back(networking_log_->GetNetworkInfo());
+
+    // Add the routine section for the network category.
+    pieces.push_back(GetRoutineResultsString(network_routines));
+
+    // Add the network events section.
+    pieces.push_back(networking_log_->GetNetworkEvents());
   }
 
   return base::WriteFile(file_path, base::JoinString(pieces, "\n"));
 }
 
 void SessionLogHandler::HandleSaveSessionLogRequest(
-    const base::ListValue* args) {
-  CHECK_EQ(1U, args->GetList().size());
+    const base::Value::List& args) {
+  CHECK_EQ(1U, args.size());
   DCHECK(save_session_log_callback_id_.empty());
-  save_session_log_callback_id_ = args->GetList()[0].GetString();
+  save_session_log_callback_id_ = args[0].GetString();
 
   content::WebContents* web_contents = web_ui()->GetWebContents();
   gfx::NativeWindow owning_window =
       web_contents ? web_contents->GetTopLevelNativeWindow()
                    : gfx::kNullNativeWindow;
 
+  // Early return if the select file dialog is already active.
+  if (select_file_dialog_)
+    return;
   select_file_dialog_ = ui::SelectFileDialog::Create(
       this, select_file_policy_creator_.Run(web_contents));
   select_file_dialog_->SelectFile(
@@ -163,8 +221,8 @@ void SessionLogHandler::HandleSaveSessionLogRequest(
       /*params=*/nullptr);
 }
 
-void SessionLogHandler::HandleInitialize(const base::ListValue* args) {
-  DCHECK(args && args->GetList().empty());
+void SessionLogHandler::HandleInitialize(const base::Value::List& args) {
+  DCHECK(args.empty());
   AllowJavascript();
 }
 

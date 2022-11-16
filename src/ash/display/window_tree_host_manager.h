@@ -12,9 +12,9 @@
 #include <vector>
 
 #include "ash/ash_export.h"
+#include "ash/host/ash_window_tree_host_delegate.h"
 #include "base/compiler_specific.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/timer/timer.h"
@@ -50,7 +50,8 @@ class ASH_EXPORT WindowTreeHostManager
       public aura::WindowTreeHostObserver,
       public display::ContentProtectionManager::Observer,
       public display::DisplayManager::Delegate,
-      public ui::internal::InputMethodDelegate {
+      public ui::internal::InputMethodDelegate,
+      public AshWindowTreeHostDelegate {
  public:
   // TODO(oshima): Consider moving this to display::DisplayObserver.
   class ASH_EXPORT Observer {
@@ -74,6 +75,10 @@ class ASH_EXPORT WindowTreeHostManager
   };
 
   WindowTreeHostManager();
+
+  WindowTreeHostManager(const WindowTreeHostManager&) = delete;
+  WindowTreeHostManager& operator=(const WindowTreeHostManager&) = delete;
+
   ~WindowTreeHostManager() override;
 
   void Start();
@@ -119,7 +124,7 @@ class ASH_EXPORT WindowTreeHostManager
   // returns the primary root window only.
   aura::Window::Windows GetAllRootWindows();
 
-  // Returns all oot window controllers. In non extended desktop
+  // Returns all root window controllers. In non extended desktop
   // mode, this return a RootWindowController for the primary root window only.
   std::vector<RootWindowController*> GetAllRootWindowControllers();
 
@@ -161,6 +166,11 @@ class ASH_EXPORT WindowTreeHostManager
   // ui::internal::InputMethodDelegate overrides:
   ui::EventDispatchDetails DispatchKeyEventPostIME(
       ui::KeyEvent* event) override;
+
+  // ash::AshWindowTreeHostDelegate overrides:
+  const display::Display* GetDisplayById(int64_t display_id) const override;
+  void SetCurrentEventTargeterSourceHost(
+      aura::WindowTreeHost* targeter_src_host) override;
 
  private:
   FRIEND_TEST_ALL_PREFIXES(WindowTreeHostManagerTest, BoundsUpdated);
@@ -213,8 +223,6 @@ class ASH_EXPORT WindowTreeHostManager
   std::unique_ptr<base::RepeatingTimer> effective_resolution_UMA_timer_;
 
   base::WeakPtrFactory<WindowTreeHostManager> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(WindowTreeHostManager);
 };
 
 }  // namespace ash

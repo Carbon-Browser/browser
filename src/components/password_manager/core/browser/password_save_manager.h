@@ -5,8 +5,7 @@
 #ifndef COMPONENTS_PASSWORD_MANAGER_CORE_BROWSER_PASSWORD_SAVE_MANAGER_H_
 #define COMPONENTS_PASSWORD_MANAGER_CORE_BROWSER_PASSWORD_SAVE_MANAGER_H_
 
-#include "base/macros.h"
-#include "components/password_manager/core/browser/password_store.h"
+#include "components/password_manager/core/browser/password_store_interface.h"
 
 namespace autofill {
 struct FormData;
@@ -35,6 +34,10 @@ struct PasswordForm;
 class PasswordSaveManager {
  public:
   PasswordSaveManager() = default;
+
+  PasswordSaveManager(const PasswordSaveManager&) = delete;
+  PasswordSaveManager& operator=(const PasswordSaveManager&) = delete;
+
   virtual ~PasswordSaveManager() = default;
 
   virtual void Init(PasswordManagerClient* client,
@@ -99,14 +102,20 @@ class PasswordSaveManager {
   virtual void BlockMovingToAccountStoreFor(
       const autofill::GaiaIdHash& gaia_id_hash) = 0;
 
+  // Updates the submission indicator event for pending credentials at the
+  // moment of submisison detection.
+  virtual void UpdateSubmissionIndicatorEvent(
+      autofill::mojom::SubmissionIndicatorEvent event) = 0;
+
   virtual bool IsNewLogin() const = 0;
   virtual bool IsPasswordUpdate() const = 0;
+  virtual bool IsSamePassword() const = 0;
   virtual bool HasGeneratedPassword() const = 0;
 
-  virtual std::unique_ptr<PasswordSaveManager> Clone() = 0;
+  // Signals that the user updated the username value in the bubble prompt.
+  virtual void UsernameUpdatedInBubble() = 0;
 
- private:
-  DISALLOW_COPY_AND_ASSIGN(PasswordSaveManager);
+  virtual std::unique_ptr<PasswordSaveManager> Clone() = 0;
 };
 }  // namespace password_manager
 

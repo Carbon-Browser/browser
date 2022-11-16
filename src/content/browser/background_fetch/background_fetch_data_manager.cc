@@ -8,6 +8,7 @@
 
 #include "base/command_line.h"
 #include "base/containers/queue.h"
+#include "base/observer_list.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
 #include "components/services/storage/public/mojom/cache_storage_control.mojom.h"
@@ -184,12 +185,13 @@ void BackgroundFetchDataManager::CreateRegistration(
     blink::mojom::BackgroundFetchOptionsPtr options,
     const SkBitmap& icon,
     bool start_paused,
+    const net::IsolationInfo& isolation_info,
     CreateRegistrationCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   AddDatabaseTask(std::make_unique<background_fetch::CreateMetadataTask>(
       this, registration_id, std::move(requests), std::move(options), icon,
-      start_paused, std::move(callback)));
+      start_paused, isolation_info, std::move(callback)));
 }
 
 void BackgroundFetchDataManager::GetRegistration(

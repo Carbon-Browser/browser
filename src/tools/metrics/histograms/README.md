@@ -186,6 +186,8 @@ or:
 UmaHistogramEnumeration("NewTabPageAction", action);
 ```
 
+where `action` is an enumerator of the enumeration type `NewTabPageAction`.
+
 Logging histograms from Java should look similar:
 
 ```java
@@ -207,6 +209,9 @@ private static void logNewTabPageAction(@NewTabPageAction int action) {
             "NewTabPageAction", action, NewTabPageAction.COUNT);
 }
 ```
+
+Finally, regardless of the programming language you are using, add the
+definition of the enumerator to [enums.xml](./enums.xml).
 
 #### Legacy Enums
 
@@ -265,41 +270,42 @@ from previous Chrome versions.
 ### Count Histograms
 
 [histogram_macros.h](https://cs.chromium.org/chromium/src/base/metrics/histogram_macros.h)
-provides macros for some common count types such as memory or elapsed time, in
+provides macros for some common count types, such as memory or elapsed time, in
 addition to general count macros. These have reasonable default values; you
 seldom need to choose the number of buckets or histogram min. However, you still
 need to choose the histogram max (use the advice below).
 
-If none of the default macros work well for you, please thoughtfully choose
-a min, max, and bucket count for your histogram using the advice below.
+If none of the default macros work well for you, please thoughtfully choose a
+min, max, and bucket count for your histogram using the advice below.
 
 #### Count Histograms: Choosing Min and Max
 
-For histogram max, choose a value such that very few emissions to the histogram
-exceed the max. If a metric emission is above the max value, it will get put
-into an "overflow" bucket. If this bucket is too large, it can be difficult to
-compute statistics. One rule of thumb is at most 1% of samples should be in the
+For the max, choose a value such that very few histogram samples exceed the max.
+If a sample is greater than or equal to the max value, it is put in an
+"overflow" bucket. If this bucket is too large, it can be difficult to compute
+statistics. One rule of thumb is that at most 1% of samples should be in the
 overflow bucket (and ideally, less). This allows analysis of the 99th
 percentile. Err on the side of too large a range versus too short a range.
-(Remember that if you choose poorly, you'll have to wait for another release
-cycle to fix it.)
+Remember that if you choose poorly, you'll have to wait for another release
+cycle to fix it.
 
-For histogram min, if you care about all possible values (zero and above),
-choose a min of 1. All histograms have an underflow bucket for emitted zeros,
-so a min of 1 is appropriate. Otherwise, choose the min appropriate for your
-particular situation.
+For the min, use 1 if you care about all possible values (zero and above). All
+histograms have an underflow bucket for emitted zeros, so a min of 1 is
+appropriate. Otherwise, choose the min appropriate for your particular
+situation.
 
 #### Count Histograms: Choosing Number of Buckets
 
 Choose the smallest number of buckets that give you the granularity you need. By
-default, count histogram bucket sizes scale exponentially so you can get fine
-granularity when the numbers are small yet still reasonable resolution for
-larger numbers. The macros default to 50 buckets (or 100 buckets for histograms
-with wide ranges), which is appropriate for most purposes. Because histograms
-pre-allocate all the buckets, the number of buckets selected directly dictates
-how much memory is used. Do not exceed 100 buckets without good reason (and
-consider whether [sparse histograms](#When-To-Use-Sparse-Histograms) might work
-better for you in that case—they do not pre-allocate their buckets).
+default, count histogram bucket sizes increase exponentially with respect to the
+value (i.e., exponential binning), so you can get fine granularity when the
+values are small yet still reasonable resolution when the values are larger. The
+macros default to 50 buckets (or 100 buckets for histograms with wide ranges),
+which is appropriate for most purposes. Because histograms pre-allocate all the
+buckets, the number of buckets selected directly dictates how much memory is
+used. Do not exceed 100 buckets without good reason (and consider whether
+[sparse histograms](#When-To-Use-Sparse-Histograms) might work better for you in
+that case—they do not pre-allocate their buckets).
 
 ### Timing Histograms
 
@@ -382,8 +388,8 @@ After a histogram expires, it ceases to be displayed on the dashboard.
 Follow [these directions](#extending) to extend it.
 
 Once a histogram has expired, the code that records it becomes dead code and
-should be removed from the codebase along with marking the histogram definition
-as obsolete.
+should be removed from the codebase. You should also [clean up](#obsolete) the
+corresponding entry in histograms.xml.
 
 In **rare** cases, the expiry can be set to "never". This is used to denote
 metrics of critical importance that are, typically, used for other reports. For
@@ -413,16 +419,19 @@ Here are some guidelines for common scenarios:
 *   If the histogram is not in use now, but might be useful in the far future,
     remove it.
 *   If the histogram is not in use now, but might be useful in the near
-    future, pick ~3 months or ~2 milestones ahead.
+    future, pick ~3 months (also ~3 milestones) ahead.
 *   If the histogram is actively in use now and is useful in the short term,
-    pick 3-6 months or 2-4 milestones ahead.
+    pick 3-6 months (3-6 milestones) ahead.
 *   If the histogram is actively in use and seems useful for an indefinite time,
     pick 1 year.
 
-We also have a tool that automatically extends expiry dates. The 80% more
-frequently accessed histograms are pushed out every Tuesday, to 6 months from
-the date of the run. Googlers can view the [design
-doc](https://docs.google.com/document/d/1IEAeBF9UnYQMDfyh2gdvE7WlUKsfIXIZUw7qNoU89A4).
+We also have a tool that automatically extends expiry dates. The most frequently
+accessed histograms, currently 99%, have their expirations automatically
+extended every Tuesday to 6 months from the date of the run. Googlers can view
+the [design
+doc](https://docs.google.com/document/d/1IEAeBF9UnYQMDfyh2gdvE7WlUKsfIXIZUw7qNoU89A4)
+of the program that does this.  The bottom line is: If the histogram is being
+checked, it should be extended without developer interaction.
 
 #### How to extend an expired histogram {#extending}
 
@@ -500,15 +509,14 @@ represent, the bucket range or number of buckets, etc.), create a new histogram
 with a new name. Otherwise analysis that mixes the data pre- and post- change
 may be misleading. If the histogram name is still the best name choice, the
 recommendation is to simply append a '2' to the name. See [Cleaning Up Histogram
-Entries](#Cleaning-Up-Histogram-Entries) for details on how to handle the XML
-changes.
+Entries](#obsolete) for details on how to handle the XML changes.
 
 ## Deleting Histograms
 
 Please delete code that emits to histograms that are no longer needed.
 Histograms take up memory. Cleaning up histograms that you no longer care
 about is good! But see the note below on
-[Cleaning Up Histogram Entries](#Cleaning-Up-Histogram-Entries).
+[Cleaning Up Histogram Entries](#obsolete).
 
 ## Documenting Histograms
 
@@ -606,42 +614,52 @@ with the histogram. If there isn't a parallel DIR_METADATA file with such a
 component, but a parent directory has one, then the parent directory's component
 is used.
 
-### Cleaning Up Histogram Entries
+### Cleaning Up Histogram Entries {#obsolete}
 
-Do not delete histograms from histograms.xml files or move them to
-obsolete_histograms.xml. Instead, mark unused histograms as obsolete and
-annotate them with the date or milestone in the `<obsolete>` tag entry. They
-will later get moved to obsolete_histograms.xml via tooling.
+If a histogram is no longer being emitted to, there are two options to clean up
+the entry: either mark the histogram as obsolete or remove the corresponding
+histograms.xml entry. This also applies to variants of a
+[patterned histogram](#Patterned-Histograms) and to suffix entries for a
+suffixed histogram.
 
-If deprecating only some variants of a
-[patterned histogram](#Patterned-Histograms), mark each deprecated `<variant>`
-as obsolete as well. Similarly, if the histogram used histogram suffixes, mark
-the suffix entry for the histogram as obsolete.
+However you proceed, a changelist that obsoletes a histogram entry should be
+reviewed by all current owners.
 
-If the histogram is being replaced by a new version:
+Note: the Chrome team is in the process of streamlining this process so that a
+histogram entry can be deleted and an obsoletion message recorded in a single
+change list.
 
-* Note in the `<obsolete>` message the name of the replacement histogram.
+#### Option: Add an Obsoletion Message
 
-* Make sure the descriptions of the original and replacement histogram are
-  different. It's never appropriate for them to be identical. Either the old
-  description was wrong, and it should be revised to explain what it actually
-  measured, or the old histogram was measuring something not as useful as the
-  replacement, in which case the new histogram is measuring something different
-  and needs to have a new description.
+You can choose to add a message to a histogram entry which will mark it as
+obsolete, and which will also provide relevant information to interested Chrome
+developers.
 
-A changelist that marks a histogram as obsolete should be reviewed by all
-current owners.
+* Add the obsoletion message between `<obsolete>` and `</obsolete>` tags within
+  the `<histogram>` block.
+* This should include the date or milestone when the entry became obsolete.
+* You could also include information about why the histogram has become
+  obsolete. For example, you might indicate how the histogram's summary did not
+  accurately describe the collected data.
+* If the obsolete histogram is being replaced, include the name of the
+  replacement and make sure that the new description is different from the
+  original to reflect the change between versions.
 
-Deleting histogram entries would be bad if someone accidentally reused your old
-histogram name and thereby corrupted new data with whatever old data is still
-coming in. It's also useful to keep obsolete histogram descriptions in
-[histograms.xml](./histograms.xml)—that way, if someone is searching for a
-histogram to answer a particular question, they can learn if there was a
-histogram at some point that did so even if it isn't active now.
+#### Option: Remove the Entry
 
-*Exception:* It is ok to delete the metadata for any histogram that has never
-been recorded to. For example, it's fine to correct a typo where the histogram
-name in the metadata does not match the name in the Chromium source code.
+If you do not want to add an obsoletion message, you can simply delete the
+entry in the histograms.xml file.
+
+* In some cases there may be artifacts that remain, with some examples being:
+  * Empty `<token>` blocks.
+  * `<enum>` blocks from enums.xml that are no longer used.
+  * Suffix entries in histogram_suffixes_list.xml.
+* Please remove these artifacts if you find them.
+  * **Exception**: please mark `<int value=...>` blocks as obsolete rather than
+    deleting them, if the surrounding `<enum>` block is not being deleted.
+* A histogram entry can be removed after an obsoletion message was added, but
+  please check that at least a day has passed since the change landed. This
+  ensures that the message will be recorded by internal tools.
 
 ### Patterned Histograms
 
@@ -685,10 +703,12 @@ This example defines metadata for 12 (= 3 x 4) concrete histograms, such as
 </histogram>
 ```
 
-Note that each token `<variant>` defines what text should be substituted for it,
-both in the histogram name and in the summary text. As shorthand, a `<variant>`
-that omits the `summary` attribute substitutes the value of the `name` attribute
-in the histogram's `<summary>` text as well.
+Each token `<variant>` defines what text should be substituted for it, 
+both in the histogram name and in the summary text. The name part gets 
+substituted into the histogram name; the summary part gets substituted in 
+the summary field (the histogram description). As shorthand, a
+`<variant>` that omits the `summary` attribute substitutes the value of
+the `name` attribute in the histogram's `<summary>` text as well.
 
 *** promo
 Tip: You can declare an optional token by listing an empty name: `<variant
@@ -702,6 +722,11 @@ of histograms. See
 [histograms.xml](https://source.chromium.org/search?q=file:histograms.xml%20%3Cvariants)
 for examples.
 
+*** promo
+Warning: The `name` attribute of the `<variants>` tag is globally scoped, so
+use detailed names to avoid collisions.
+***
+
 By default, a `<variant>` inherits the owners declared for the patterned
 histogram. Each variant can optionally override the inherited list with custom
 owners:
@@ -711,9 +736,6 @@ owners:
   <owner>subteam@chromium.org</owner>
 </variant>
 ```
-
-As [with histogram entries](#Cleaning-Up-Histogram-Entries), never delete
-variants. If the variant expansion is no longer used, mark it as `<obsolete>`.
 
 *** promo
 Tip: You can run `print_expanded_histograms.py --pattern=` to show all generated

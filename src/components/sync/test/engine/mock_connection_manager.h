@@ -15,7 +15,7 @@
 
 #include "base/callback.h"
 #include "base/compiler_specific.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/synchronization/lock.h"
 #include "components/sync/base/model_type.h"
 #include "components/sync/base/unique_position.h"
@@ -49,11 +49,16 @@ class MockConnectionManager : public ServerConnectionManager {
   };
 
   MockConnectionManager();
+
+  MockConnectionManager(const MockConnectionManager&) = delete;
+  MockConnectionManager& operator=(const MockConnectionManager&) = delete;
+
   ~MockConnectionManager() override;
 
   // Overridden ServerConnectionManager functions.
   HttpResponse PostBuffer(const std::string& buffer_in,
                           const std::string& access_token,
+                          bool allow_batching,
                           std::string* buffer_out) override;
 
   // Control of commit response.
@@ -90,7 +95,6 @@ class MockConnectionManager : public ServerConnectionManager {
       int64_t version,
       int64_t sync_ts,
       bool is_dir,
-      int64_t position,
       const sync_pb::EntitySpecifics& specifics);
   sync_pb::SyncEntity* AddUpdateSpecifics(
       const std::string& id,
@@ -99,7 +103,6 @@ class MockConnectionManager : public ServerConnectionManager {
       int64_t version,
       int64_t sync_ts,
       bool is_dir,
-      int64_t position,
       const sync_pb::EntitySpecifics& specifics,
       const std::string& originator_cache_guid,
       const std::string& originator_client_item_id);
@@ -269,11 +272,6 @@ class MockConnectionManager : public ServerConnectionManager {
   // a TRANSIENT_ERROR response.
   bool ShouldTransientErrorThisId(const std::string& id);
 
-  // Generate a numeric position_in_parent value.  We use a global counter
-  // that only decreases; this simulates new objects always being added to the
-  // front of the ordering.
-  int64_t GeneratePositionInParent() { return next_position_in_parent_--; }
-
   // Get a mutable update response which will eventually be returned to the
   // client.
   sync_pb::GetUpdatesResponse* GetUpdateResponse();
@@ -325,7 +323,7 @@ class MockConnectionManager : public ServerConnectionManager {
   // The updates we'll return to the next request.
   std::list<sync_pb::GetUpdatesResponse> update_queue_;
   base::OnceClosure mid_commit_callback_;
-  MidCommitObserver* mid_commit_observer_;
+  raw_ptr<MidCommitObserver> mid_commit_observer_;
 
   // The keystore key we return for a GetUpdates with need_encryption_key set.
   std::string keystore_key_;
@@ -347,9 +345,6 @@ class MockConnectionManager : public ServerConnectionManager {
   std::unique_ptr<sync_pb::ClientCommand> gu_client_command_;
   std::unique_ptr<sync_pb::ClientCommand> commit_client_command_;
 
-  // The next value to use for the position_in_parent property.
-  int64_t next_position_in_parent_;
-
   ModelTypeSet expected_filter_;
 
   ModelTypeSet partial_failure_type_;
@@ -359,8 +354,6 @@ class MockConnectionManager : public ServerConnectionManager {
   std::string next_token_;
 
   std::vector<sync_pb::ClientToServerMessage> requests_;
-
-  DISALLOW_COPY_AND_ASSIGN(MockConnectionManager);
 };
 
 }  // namespace syncer

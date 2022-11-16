@@ -7,20 +7,28 @@
 #include <memory>
 
 #include "ash/accelerators/accelerator_controller_impl.h"
+#include "ash/constants/ash_pref_names.h"
 #include "ash/frame/header_view.h"
 #include "ash/frame/wide_frame_view.h"
 #include "ash/resources/vector_icons/vector_icons.h"
+#include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
+#include "ash/style/ash_color_provider.h"
+#include "ash/style/dark_light_mode_controller_impl.h"
 #include "ash/test/ash_test_base.h"
+#include "ash/test/test_widget_builder.h"
 #include "ash/wm/desks/desks_util.h"
 #include "ash/wm/overview/overview_controller.h"
 #include "ash/wm/splitview/split_view_controller.h"
 #include "ash/wm/tablet_mode/tablet_mode_controller.h"
 #include "ash/wm/window_state.h"
 #include "ash/wm/window_state_delegate.h"
+#include "ash/wm/window_util.h"
 #include "ash/wm/wm_event.h"
 #include "base/command_line.h"
 #include "base/containers/flat_set.h"
+#include "base/test/scoped_feature_list.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "chromeos/ui/base/window_properties.h"
 #include "chromeos/ui/frame/caption_buttons/frame_caption_button_container_view.h"
 #include "chromeos/ui/frame/default_frame_header.h"
@@ -56,12 +64,19 @@ using ::chromeos::ImmersiveFullscreenControllerDelegate;
 using ::chromeos::ImmersiveFullscreenControllerTestApi;
 using ::chromeos::kFrameActiveColorKey;
 using ::chromeos::kFrameInactiveColorKey;
+using ::chromeos::kTrackDefaultFrameColors;
 
 // A views::WidgetDelegate which uses a NonClientFrameViewAsh.
 class NonClientFrameViewAshTestWidgetDelegate
     : public views::WidgetDelegateView {
  public:
   NonClientFrameViewAshTestWidgetDelegate() = default;
+
+  NonClientFrameViewAshTestWidgetDelegate(
+      const NonClientFrameViewAshTestWidgetDelegate&) = delete;
+  NonClientFrameViewAshTestWidgetDelegate& operator=(
+      const NonClientFrameViewAshTestWidgetDelegate&) = delete;
+
   ~NonClientFrameViewAshTestWidgetDelegate() override = default;
 
   std::unique_ptr<views::NonClientFrameView> CreateNonClientFrameView(
@@ -87,8 +102,6 @@ class NonClientFrameViewAshTestWidgetDelegate
  private:
   // Not owned.
   NonClientFrameViewAsh* non_client_frame_view_ = nullptr;
-
-  DISALLOW_COPY_AND_ASSIGN(NonClientFrameViewAshTestWidgetDelegate);
 };
 
 class TestWidgetConstraintsDelegate
@@ -98,6 +111,11 @@ class TestWidgetConstraintsDelegate
     SetCanMaximize(true);
     SetCanMinimize(true);
   }
+
+  TestWidgetConstraintsDelegate(const TestWidgetConstraintsDelegate&) = delete;
+  TestWidgetConstraintsDelegate& operator=(
+      const TestWidgetConstraintsDelegate&) = delete;
+
   ~TestWidgetConstraintsDelegate() override = default;
 
   // views::View:
@@ -135,8 +153,6 @@ class TestWidgetConstraintsDelegate
  private:
   gfx::Size minimum_size_;
   gfx::Size maximum_size_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestWidgetConstraintsDelegate);
 };
 
 using NonClientFrameViewAshTest = AshTestBase;
@@ -428,6 +444,10 @@ namespace {
 class TestButtonModel : public chromeos::CaptionButtonModel {
  public:
   TestButtonModel() = default;
+
+  TestButtonModel(const TestButtonModel&) = delete;
+  TestButtonModel& operator=(const TestButtonModel&) = delete;
+
   ~TestButtonModel() override = default;
 
   void set_zoom_mode(bool zoom_mode) { zoom_mode_ = zoom_mode; }
@@ -459,8 +479,6 @@ class TestButtonModel : public chromeos::CaptionButtonModel {
   base::flat_set<views::CaptionButtonIcon> visible_buttons_;
   base::flat_set<views::CaptionButtonIcon> enabled_buttons_;
   bool zoom_mode_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(TestButtonModel);
 };
 
 }  // namespace
@@ -767,6 +785,33 @@ TEST_F(NonClientFrameViewAshTest, WideFrameButton) {
   }
 }
 
+TEST_F(NonClientFrameViewAshTest, MoveFullscreenWideFrameBetweenDisplay) {
+  UpdateDisplay("800x600, 1000x600");
+
+  auto* screen = display::Screen::GetScreen();
+  auto display_list = screen->GetAllDisplays();
+
+  auto* delegate = new NonClientFrameViewAshTestWidgetDelegate();
+  std::unique_ptr<views::Widget> widget =
+      CreateTestWidget(delegate, desks_util::GetActiveDeskContainerId(),
+                       gfx::Rect(100, 0, 400, 500));
+  widget->SetFullscreen(true);
+  std::unique_ptr<WideFrameView> wide_frame_view =
+      std::make_unique<WideFrameView>(widget.get());
+  wide_frame_view->GetWidget()->Show();
+  ASSERT_EQ(display_list[0].id(),
+            screen->GetDisplayNearestWindow(widget->GetNativeWindow()).id());
+  EXPECT_EQ(800,
+            wide_frame_view->GetWidget()->GetWindowBoundsInScreen().width());
+
+  window_util::MoveWindowToDisplay(widget->GetNativeWindow(),
+                                   display_list[1].id());
+  EXPECT_EQ(display_list[1].id(),
+            screen->GetDisplayNearestWindow(widget->GetNativeWindow()).id());
+  EXPECT_EQ(1000,
+            wide_frame_view->GetWidget()->GetWindowBoundsInScreen().width());
+}
+
 namespace {
 
 class NonClientFrameViewAshFrameColorTest
@@ -774,15 +819,22 @@ class NonClientFrameViewAshFrameColorTest
       public testing::WithParamInterface<bool> {
  public:
   NonClientFrameViewAshFrameColorTest() = default;
-  ~NonClientFrameViewAshFrameColorTest() override = default;
 
- private:
-  DISALLOW_COPY_AND_ASSIGN(NonClientFrameViewAshFrameColorTest);
+  NonClientFrameViewAshFrameColorTest(
+      const NonClientFrameViewAshFrameColorTest&) = delete;
+  NonClientFrameViewAshFrameColorTest& operator=(
+      const NonClientFrameViewAshFrameColorTest&) = delete;
+
+  ~NonClientFrameViewAshFrameColorTest() override = default;
 };
 
 class TestWidgetDelegate : public TestWidgetConstraintsDelegate {
  public:
   TestWidgetDelegate(bool custom) : custom_(custom) {}
+
+  TestWidgetDelegate(const TestWidgetDelegate&) = delete;
+  TestWidgetDelegate& operator=(const TestWidgetDelegate&) = delete;
+
   ~TestWidgetDelegate() override = default;
 
   // views::WidgetDelegate:
@@ -797,8 +849,6 @@ class TestWidgetDelegate : public TestWidgetConstraintsDelegate {
 
  private:
   bool custom_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestWidgetDelegate);
 };
 
 }  // namespace
@@ -851,6 +901,37 @@ TEST_P(NonClientFrameViewAshFrameColorTest, KFrameInactiveColor) {
             delegate->non_client_frame_view()->GetInactiveFrameColorForTest());
 }
 
+// Verify that NonClientFrameViewAsh updates the active and inactive colors at
+// construction.
+TEST_P(NonClientFrameViewAshFrameColorTest, KFrameColorCtor) {
+  TestWidgetDelegate* delegate = new TestWidgetDelegate(GetParam());
+  // Build the window, this implicit constructs the NonClientFrameView.
+  constexpr SkColor non_default_color = SK_ColorWHITE;
+  std::unique_ptr<views::Widget> widget =
+      TestWidgetBuilder()
+          .SetDelegate(delegate)
+          .SetBounds(gfx::Rect())
+          .SetParent(Shell::GetPrimaryRootWindow()->GetChildById(
+              desks_util::GetActiveDeskContainerId()))
+          .SetShow(true)
+          .SetWindowProperty(kTrackDefaultFrameColors, false)
+          .SetWindowProperty(kFrameActiveColorKey, non_default_color)
+          .SetWindowProperty(kFrameInactiveColorKey, non_default_color)
+          .BuildOwnsNativeWidget();
+
+  // Check that the default color is different from the one used in the  test.
+  SkColor inactive_color =
+      widget->GetNativeWindow()->GetProperty(kFrameInactiveColorKey);
+  SkColor active_color =
+      widget->GetNativeWindow()->GetProperty(kFrameActiveColorKey);
+  EXPECT_EQ(active_color, non_default_color);
+  EXPECT_EQ(inactive_color, non_default_color);
+  EXPECT_EQ(delegate->non_client_frame_view()->GetInactiveFrameColorForTest(),
+            non_default_color);
+  EXPECT_EQ(delegate->non_client_frame_view()->GetActiveFrameColorForTest(),
+            non_default_color);
+}
+
 // Verify that NonClientFrameViewAsh updates the active color based on the
 // kFrameActiveColorKey window property.
 TEST_P(NonClientFrameViewAshFrameColorTest, WideFrameInitialColor) {
@@ -873,6 +954,89 @@ TEST_P(NonClientFrameViewAshFrameColorTest, WideFrameInitialColor) {
   DefaultFrameHeader* header = wide_header_view->GetFrameHeader();
   EXPECT_EQ(new_active_color, header->active_frame_color_for_testing());
   EXPECT_EQ(new_inactive_color, header->inactive_frame_color_for_testing());
+}
+
+// Tests to make sure that the NonClientFrameViewAsh tracks default frame colors
+// for both light and dark mode.
+TEST_P(NonClientFrameViewAshFrameColorTest, DefaultFrameColorsDarkAndLight) {
+  base::test::ScopedFeatureList scoped_feature_list(
+      chromeos::features::kDarkLightMode);
+  auto* color_provider = AshColorProvider::Get();
+  auto* dark_light_mode_controller = DarkLightModeControllerImpl::Get();
+  dark_light_mode_controller->OnActiveUserPrefServiceChanged(
+      Shell::Get()->session_controller()->GetActivePrefService());
+  ASSERT_TRUE(chromeos::features::IsDarkLightModeEnabled());
+  const bool initial_dark_mode_status =
+      dark_light_mode_controller->IsDarkModeEnabled();
+
+  TestWidgetDelegate* delegate = new TestWidgetDelegate(GetParam());
+  std::unique_ptr<views::Widget> widget = CreateTestWidget(delegate);
+  aura::Window* window = widget->GetNativeWindow();
+
+  const SkColor initial_active_default =
+      color_provider->GetActiveDialogTitleBarColor();
+  const SkColor initial_inactive_default =
+      color_provider->GetInactiveDialogTitleBarColor();
+  SkColor active_color = window->GetProperty(kFrameActiveColorKey);
+  SkColor inactive_color = window->GetProperty(kFrameInactiveColorKey);
+
+  EXPECT_EQ(initial_active_default, active_color);
+  EXPECT_EQ(initial_inactive_default, inactive_color);
+
+  // Switch the color mode
+  dark_light_mode_controller->ToggleColorMode();
+  ASSERT_NE(initial_dark_mode_status,
+            dark_light_mode_controller->IsDarkModeEnabled());
+
+  const SkColor active_default = color_provider->GetActiveDialogTitleBarColor();
+  const SkColor inactive_default =
+      color_provider->GetInactiveDialogTitleBarColor();
+  active_color = window->GetProperty(kFrameActiveColorKey);
+  inactive_color = window->GetProperty(kFrameInactiveColorKey);
+
+  EXPECT_NE(initial_active_default, active_default);
+  EXPECT_NE(initial_inactive_default, inactive_default);
+  EXPECT_EQ(active_default, active_color);
+  EXPECT_EQ(inactive_default, inactive_color);
+}
+
+// Tests to make sure that NonClientFrameViewAsh does not clobber custom frame
+// colors when the kTrackDefaultFrameColors property is set to false.
+TEST_P(NonClientFrameViewAshFrameColorTest,
+       CanSetPersistentFrameColorsDarkAndLight) {
+  base::test::ScopedFeatureList scoped_feature_list(
+      chromeos::features::kDarkLightMode);
+  auto* dark_light_mode_controller = DarkLightModeControllerImpl::Get();
+  dark_light_mode_controller->OnActiveUserPrefServiceChanged(
+      Shell::Get()->session_controller()->GetActivePrefService());
+  ASSERT_TRUE(chromeos::features::IsDarkLightModeEnabled());
+  const bool initial_dark_mode_status =
+      dark_light_mode_controller->IsDarkModeEnabled();
+
+  TestWidgetDelegate* delegate = new TestWidgetDelegate(GetParam());
+  std::unique_ptr<views::Widget> widget = CreateTestWidget(delegate);
+  aura::Window* window = widget->GetNativeWindow();
+
+  constexpr SkColor new_active_color = SK_ColorWHITE;
+  constexpr SkColor new_inactive_color = SK_ColorBLACK;
+
+  EXPECT_NE(new_active_color, window->GetProperty(kFrameActiveColorKey));
+  EXPECT_NE(new_inactive_color, window->GetProperty(kFrameInactiveColorKey));
+
+  window->SetProperty(kTrackDefaultFrameColors, false);
+  window->SetProperty(kFrameActiveColorKey, new_active_color);
+  window->SetProperty(kFrameInactiveColorKey, new_inactive_color);
+
+  EXPECT_EQ(new_active_color, window->GetProperty(kFrameActiveColorKey));
+  EXPECT_EQ(new_inactive_color, window->GetProperty(kFrameInactiveColorKey));
+
+  // Switch the color mode.
+  dark_light_mode_controller->ToggleColorMode();
+  ASSERT_NE(initial_dark_mode_status,
+            dark_light_mode_controller->IsDarkModeEnabled());
+
+  EXPECT_EQ(new_active_color, window->GetProperty(kFrameActiveColorKey));
+  EXPECT_EQ(new_inactive_color, window->GetProperty(kFrameInactiveColorKey));
 }
 
 // Run frame color tests with and without custom WindowStateDelegate.

@@ -15,6 +15,7 @@
 #include "third_party/blink/public/mojom/file_system_access/file_system_access_manager.mojom-blink-forward.h"
 #include "third_party/blink/public/mojom/file_system_access/file_system_access_manager.mojom-blink.h"
 #include "third_party/blink/public/mojom/file_system_access/file_system_access_manager.mojom-shared.h"
+#include "third_party/blink/public/mojom/frame/user_activation_notification_type.mojom-shared.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_usvstring_usvstringsequence.h"
@@ -28,13 +29,14 @@
 #include "third_party/blink/renderer/core/fileapi/file_error.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
+#include "third_party/blink/renderer/core/probe/core_probes.h"
 #include "third_party/blink/renderer/core/workers/worker_global_scope.h"
 #include "third_party/blink/renderer/modules/file_system_access/file_system_access_error.h"
 #include "third_party/blink/renderer/modules/file_system_access/file_system_directory_handle.h"
 #include "third_party/blink/renderer/modules/file_system_access/file_system_file_handle.h"
 #include "third_party/blink/renderer/platform/bindings/enumeration_base.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/network/http_parsers.h"
 #include "third_party/blink/renderer/platform/weborigin/security_origin.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
@@ -187,7 +189,7 @@ void VerifyIsAllowedToShowFilePicker(const LocalDOMWindow& window,
   }
 
   LocalFrame* local_frame = window.GetFrame();
-  if (!local_frame || local_frame->IsCrossOriginToMainFrame()) {
+  if (!local_frame || local_frame->IsCrossOriginToOutermostMainFrame()) {
     exception_state.ThrowSecurityError(
         "Cross origin sub frames aren't allowed to show a file picker.");
     return;
@@ -226,7 +228,22 @@ ScriptPromise ShowFilePickerImpl(
     LocalDOMWindow& window,
     mojom::blink::FilePickerOptionsPtr options,
     mojom::blink::CommonFilePickerOptionsPtr common_options,
+    ExceptionState& exception_state,
     bool return_as_sequence) {
+  bool multiple =
+      options->which() ==
+          mojom::blink::FilePickerOptions::Tag::kOpenFilePickerOptions &&
+      options->get_open_file_picker_options()->can_select_multiple_files;
+  bool intercepted = false;
+  probe::FileChooserOpened(window.GetFrame(), /*element=*/nullptr, multiple,
+                           &intercepted);
+  if (intercepted) {
+    exception_state.ThrowDOMException(
+        DOMExceptionCode::kAbortError,
+        "Intercepted by Page.setInterceptFileChooserDialog().");
+    return ScriptPromise();
+  }
+
   auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
   ScriptPromise resolver_result = resolver->Promise();
 
@@ -349,6 +366,7 @@ ScriptPromise GlobalFileSystemAccess::showOpenFilePicker(
       mojom::blink::CommonFilePickerOptions::New(
           std::move(starting_directory_id),
           std::move(well_known_starting_directory), std::move(token)),
+      exception_state,
       /*return_as_sequence=*/true);
 }
 
@@ -413,6 +431,7 @@ ScriptPromise GlobalFileSystemAccess::showSaveFilePicker(
       mojom::blink::CommonFilePickerOptions::New(
           std::move(starting_directory_id),
           std::move(well_known_starting_directory), std::move(token)),
+      exception_state,
       /*return_as_sequence=*/false);
 }
 
@@ -463,6 +482,7 @@ ScriptPromise GlobalFileSystemAccess::showDirectoryPicker(
       mojom::blink::CommonFilePickerOptions::New(
           std::move(starting_directory_id),
           std::move(well_known_starting_directory), std::move(token)),
+      exception_state,
       /*return_as_sequence=*/false);
 }
 

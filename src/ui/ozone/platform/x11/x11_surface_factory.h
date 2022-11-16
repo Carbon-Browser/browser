@@ -8,7 +8,6 @@
 #include <memory>
 #include <vector>
 
-#include "base/macros.h"
 #include "gpu/vulkan/buildflags.h"
 #include "ui/gfx/x/connection.h"
 #include "ui/gl/gl_surface.h"
@@ -21,6 +20,10 @@ namespace ui {
 class X11SurfaceFactory : public SurfaceFactoryOzone {
  public:
   explicit X11SurfaceFactory(std::unique_ptr<x11::Connection> connection);
+
+  X11SurfaceFactory(const X11SurfaceFactory&) = delete;
+  X11SurfaceFactory& operator=(const X11SurfaceFactory&) = delete;
+
   ~X11SurfaceFactory() override;
 
   // SurfaceFactoryOzone:
@@ -46,14 +49,17 @@ class X11SurfaceFactory : public SurfaceFactoryOzone {
                                gfx::BufferFormat format,
                                gfx::BufferUsage usage,
                                NativePixmapCallback callback) override;
+  scoped_refptr<gfx::NativePixmap> CreateNativePixmapFromHandle(
+      gfx::AcceleratedWidget widget,
+      gfx::Size size,
+      gfx::BufferFormat format,
+      gfx::NativePixmapHandle handle) override;
 
  private:
   std::unique_ptr<GLOzone> glx_implementation_;
   std::unique_ptr<GLOzone> egl_implementation_;
 
   std::unique_ptr<x11::Connection> connection_;
-
-  DISALLOW_COPY_AND_ASSIGN(X11SurfaceFactory);
 };
 
 }  // namespace ui

@@ -62,8 +62,7 @@ int ModifiersWithoutMouseButtons(const WebInputEvent& event) {
 
 // Time between two consecutive mouse moves, during which second mouse move
 // is not converted to touch.
-constexpr base::TimeDelta kMouseMoveDropInterval =
-    base::TimeDelta::FromMilliseconds(5);
+constexpr base::TimeDelta kMouseMoveDropInterval = base::Milliseconds(5);
 
 } // namespace
 
@@ -361,9 +360,10 @@ void TouchEmulator::OnViewDestroyed(RenderWidgetHostViewBase* destroyed_view) {
     return;
 
   emulated_stream_active_sequence_count_ = 0;
-  // If we aren't enabled, just reset out target.
-  if (!gesture_provider_) {
-    last_emulated_start_target_ = nullptr;
+  last_emulated_start_target_ = nullptr;
+
+  // If we aren't enabled, we can just stop here.
+  if (!enabled()) {
     return;
   }
 

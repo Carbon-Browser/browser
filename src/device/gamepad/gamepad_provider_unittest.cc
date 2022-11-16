@@ -8,7 +8,7 @@
 
 #include "base/bind.h"
 #include "base/command_line.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
 #include "base/threading/platform_thread.h"
@@ -65,7 +65,7 @@ class TestChangeClient : public GamepadChangeClient {
     // to ensure no changes come in.
     if (num_changes == 0) {
       num_changes_left_ = 0;
-      base::PlatformThread::Sleep(base::TimeDelta::FromMilliseconds(20));
+      base::PlatformThread::Sleep(base::Milliseconds(20));
       base::RunLoop().RunUntilIdle();
       return;
     }
@@ -107,7 +107,7 @@ class GamepadProviderTest : public testing::Test, public GamepadTestHelper {
     const base::subtle::Atomic32 initial_version = buffer->seqlock.ReadBegin();
     base::subtle::Atomic32 current_version;
     do {
-      base::PlatformThread::Sleep(base::TimeDelta::FromMilliseconds(10));
+      base::PlatformThread::Sleep(base::Milliseconds(10));
       current_version = buffer->seqlock.ReadBegin();
     } while (current_version % 2 || current_version == initial_version);
   }
@@ -136,7 +136,7 @@ class GamepadProviderTest : public testing::Test, public GamepadTestHelper {
   std::unique_ptr<GamepadProvider> provider_;
 
   // Pointer owned by the provider.
-  MockGamepadDataFetcher* mock_data_fetcher_;
+  raw_ptr<MockGamepadDataFetcher> mock_data_fetcher_;
 
   TestChangeClient change_client_;
 };

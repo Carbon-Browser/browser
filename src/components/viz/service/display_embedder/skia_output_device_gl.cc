@@ -13,13 +13,13 @@
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "components/viz/common/gpu/context_lost_reason.h"
-#include "components/viz/service/display/dc_layer_overlay.h"
 #include "gpu/command_buffer/common/swap_buffers_complete_params.h"
 #include "gpu/command_buffer/service/feature_info.h"
 #include "gpu/command_buffer/service/gl_utils.h"
 #include "gpu/command_buffer/service/mailbox_manager.h"
 #include "gpu/command_buffer/service/shared_context_state.h"
-#include "gpu/command_buffer/service/shared_image_factory.h"
+#include "gpu/command_buffer/service/shared_image/shared_image_factory.h"
+#include "gpu/command_buffer/service/skia_utils.h"
 #include "gpu/command_buffer/service/texture_base.h"
 #include "gpu/command_buffer/service/texture_manager.h"
 #include "skia/ext/legacy_display_globals.h"
@@ -32,9 +32,14 @@
 #include "ui/gl/dc_renderer_layer_params.h"
 #include "ui/gl/gl_bindings.h"
 #include "ui/gl/gl_context.h"
+#include "ui/gl/gl_image.h"
 #include "ui/gl/gl_surface.h"
 #include "ui/gl/gl_utils.h"
 #include "ui/gl/gl_version_info.h"
+
+#if BUILDFLAG(IS_WIN)
+#include "components/viz/service/display/dc_layer_overlay.h"
+#endif
 
 namespace viz {
 
@@ -42,7 +47,7 @@ namespace {
 base::TimeTicks g_last_reshape_failure = base::TimeTicks();
 
 NOINLINE void CheckForLoopFailures() {
-  const auto threshold = base::TimeDelta::FromSeconds(1);
+  const auto threshold = base::Seconds(1);
   auto now = base::TimeTicks::Now();
   if (!g_last_reshape_failure.is_null() &&
       now - g_last_reshape_failure < threshold) {
@@ -65,7 +70,7 @@ class SkiaOutputDeviceGL::OverlayData {
       : texture_(std::move(texture)) {}
 
   explicit OverlayData(
-      std::unique_ptr<gpu::SharedImageRepresentationOverlay> representation)
+      std::unique_ptr<gpu::OverlayImageRepresentation> representation)
       : representation_(std::move(representation)) {}
 
   ~OverlayData() = default;
@@ -90,9 +95,8 @@ class SkiaOutputDeviceGL::OverlayData {
   void EndOverlayAccess() { access_.reset(); }
 
  private:
-  std::unique_ptr<gpu::SharedImageRepresentationOverlay> representation_;
-  std::unique_ptr<gpu::SharedImageRepresentationOverlay::ScopedReadAccess>
-      access_;
+  std::unique_ptr<gpu::OverlayImageRepresentation> representation_;
+  std::unique_ptr<gpu::OverlayImageRepresentation::ScopedReadAccess> access_;
   scoped_refptr<gpu::gles2::TexturePassthrough> texture_;
 };
 
@@ -115,7 +119,7 @@ SkiaOutputDeviceGL::SkiaOutputDeviceGL(
   capabilities_.uses_default_gl_framebuffer = true;
   capabilities_.output_surface_origin = gl_surface_->GetOrigin();
   capabilities_.supports_post_sub_buffer = gl_surface_->SupportsPostSubBuffer();
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   if (gl_surface_->SupportsDCLayers()) {
     // We need to set this bit to allow viz to track the previous damage rect
     // of a backbuffer in a multiple backbuffer system, so backbuffers always
@@ -126,7 +130,7 @@ SkiaOutputDeviceGL::SkiaOutputDeviceGL(
         gl::DirectCompositionRootSurfaceBufferCount();
     capabilities_.supports_delegated_ink = gl_surface_->SupportsDelegatedInk();
   }
-#endif  // OS_WIN
+#endif  // BUILDFLAG(IS_WIN)
   if (feature_info->workarounds()
           .disable_post_sub_buffers_for_onscreen_surfaces) {
     capabilities_.supports_post_sub_buffer = false;
@@ -134,12 +138,13 @@ SkiaOutputDeviceGL::SkiaOutputDeviceGL(
   if (feature_info->workarounds().supports_two_yuv_hardware_overlays) {
     capabilities_.supports_two_yuv_hardware_overlays = true;
   }
-  capabilities_.max_frames_pending = gl_surface_->GetBufferCount() - 1;
+  capabilities_.pending_swap_params.max_pending_swaps =
+      gl_surface_->GetBufferCount() - 1;
   capabilities_.supports_commit_overlay_planes =
       gl_surface_->SupportsCommitOverlayPlanes();
   capabilities_.supports_gpu_vsync = gl_surface_->SupportsGpuVSync();
   capabilities_.supports_dc_layers = gl_surface_->SupportsDCLayers();
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   // TODO(weiliangc): This capability is used to check whether we should do
   // overlay. Since currently none of the other overlay system is implemented,
   // only update this for Android.
@@ -154,8 +159,8 @@ SkiaOutputDeviceGL::SkiaOutputDeviceGL(
   capabilities_.orientation_mode = OutputSurface::OrientationMode::kHardware;
 #endif  // IS_CHROMEOS_ASH
 
-  DCHECK(context_state_->gr_context());
-  DCHECK(context_state_->context());
+  DCHECK(context_state_);
+  DCHECK(gl_surface_);
 
   if (gl_surface_->SupportsSwapTimestamps()) {
     gl_surface_->SetEnableSwapTimestamps();
@@ -165,14 +170,17 @@ SkiaOutputDeviceGL::SkiaOutputDeviceGL(
     context_state_->MakeCurrent(gl_surface_.get());
   }
 
+  DCHECK(context_state_->gr_context());
+  DCHECK(context_state_->context());
+
   GrDirectContext* gr_context = context_state_->gr_context();
   gl::CurrentGL* current_gl = context_state_->context()->GetCurrentGL();
 
   // Get alpha bits from the default frame buffer.
+  int alpha_bits = 0;
   glBindFramebufferEXT(GL_FRAMEBUFFER, 0);
   gr_context->resetContext(kRenderTarget_GrGLBackendState);
   const auto* version = current_gl->Version;
-  GLint alpha_bits = 0;
   if (version->is_desktop_core_profile) {
     glGetFramebufferAttachmentParameterivEXT(
         GL_FRAMEBUFFER, GL_BACK_LEFT, GL_FRAMEBUFFER_ATTACHMENT_ALPHA_SIZE,
@@ -184,7 +192,7 @@ SkiaOutputDeviceGL::SkiaOutputDeviceGL(
 
   auto color_type = kRGBA_8888_SkColorType;
 
-  if (!alpha_bits) {
+  if (alpha_bits == 0) {
     color_type = gl_surface_->GetFormat().GetBufferSize() == 16
                      ? kRGB_565_SkColorType
                      : kRGB_888x_SkColorType;
@@ -197,7 +205,7 @@ SkiaOutputDeviceGL::SkiaOutputDeviceGL(
       color_type = kRGBA_8888_SkColorType;
     }
   }
-
+  // SRGB
   capabilities_.sk_color_types[static_cast<int>(gfx::BufferFormat::RGBA_8888)] =
       color_type;
   capabilities_.sk_color_types[static_cast<int>(gfx::BufferFormat::RGBX_8888)] =
@@ -206,7 +214,11 @@ SkiaOutputDeviceGL::SkiaOutputDeviceGL(
       color_type;
   capabilities_.sk_color_types[static_cast<int>(gfx::BufferFormat::BGRX_8888)] =
       color_type;
-
+  // HDR10
+  capabilities_
+      .sk_color_types[static_cast<int>(gfx::BufferFormat::RGBA_1010102)] =
+      kRGBA_1010102_SkColorType;
+  // scRGB linear
   capabilities_.sk_color_types[static_cast<int>(gfx::BufferFormat::RGBA_F16)] =
       kRGBA_F16_SkColorType;
 }
@@ -216,31 +228,31 @@ SkiaOutputDeviceGL::~SkiaOutputDeviceGL() {
   memory_type_tracker_->TrackMemFree(backbuffer_estimated_size_);
 }
 
-bool SkiaOutputDeviceGL::Reshape(const gfx::Size& size,
-                                 float device_scale_factor,
-                                 const gfx::ColorSpace& color_space,
-                                 gfx::BufferFormat buffer_format,
-                                 gfx::OverlayTransform transform) {
+bool SkiaOutputDeviceGL::Reshape(
+    const SkSurfaceCharacterization& characterization,
+    const gfx::ColorSpace& color_space,
+    float device_scale_factor,
+    gfx::OverlayTransform transform) {
 #if !BUILDFLAG(IS_CHROMEOS_ASH)
   DCHECK_EQ(transform, gfx::OVERLAY_TRANSFORM_NONE);
 #endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
 
-  if (!gl_surface_->Resize(size, device_scale_factor, color_space,
-                           gfx::AlphaBitsForBufferFormat(buffer_format))) {
+  const gfx::Size size = gfx::SkISizeToSize(characterization.dimensions());
+  const SkColorType color_type = characterization.colorType();
+  const bool has_alpha =
+      !SkAlphaTypeIsOpaque(characterization.imageInfo().alphaType());
+
+  if (!gl_surface_->Resize(size, device_scale_factor, color_space, has_alpha)) {
     CheckForLoopFailures();
     // To prevent tail call, so we can see the stack.
     base::debug::Alias(nullptr);
     return false;
   }
-  SkSurfaceProps surface_props =
-      skia::LegacyDisplayGlobals::GetSkSurfaceProps();
+  SkSurfaceProps surface_props{0, kUnknown_SkPixelGeometry};
 
-  GrGLFramebufferInfo framebuffer_info;
-  framebuffer_info.fFBOID = 0;
+  GrGLFramebufferInfo framebuffer_info = {0};
   DCHECK_EQ(gl_surface_->GetBackingFramebufferObject(), 0u);
 
-  const auto format_index = static_cast<int>(buffer_format);
-  SkColorType color_type = capabilities_.sk_color_types[format_index];
   switch (color_type) {
     case kRGBA_8888_SkColorType:
       framebuffer_info.fFormat = GL_RGBA8;
@@ -251,32 +263,34 @@ bool SkiaOutputDeviceGL::Reshape(const gfx::Size& size,
     case kRGB_565_SkColorType:
       framebuffer_info.fFormat = GL_RGB565;
       break;
+    case kRGBA_1010102_SkColorType:
+      framebuffer_info.fFormat = GL_RGB10_A2_EXT;
+      break;
     case kRGBA_F16_SkColorType:
       framebuffer_info.fFormat = GL_RGBA16F;
       break;
     default:
-      NOTREACHED() << "color_type: " << color_type
-                   << " buffer_format: " << format_index;
+      NOTREACHED() << "color_type: " << color_type;
   }
-  // TODO(kylechar): We might need to support RGB10A2 for HDR10. HDR10 was only
-  // used with Windows updated RS3 (2017) as a workaround for a DWM bug so it
-  // might not be relevant to support anymore as a result.
 
   GrBackendRenderTarget render_target(size.width(), size.height(),
-                                      /*sampleCnt=*/0,
+                                      characterization.sampleCount(),
                                       /*stencilBits=*/0, framebuffer_info);
   auto origin = (gl_surface_->GetOrigin() == gfx::SurfaceOrigin::kTopLeft)
                     ? kTopLeft_GrSurfaceOrigin
                     : kBottomLeft_GrSurfaceOrigin;
   sk_surface_ = SkSurface::MakeFromBackendRenderTarget(
       context_state_->gr_context(), render_target, origin, color_type,
-      color_space.ToSkColorSpace(), &surface_props);
+      characterization.refColorSpace(), &surface_props);
   if (!sk_surface_) {
-    LOG(ERROR) << "Couldn't create surface: "
-               << context_state_->gr_context()->abandoned() << " " << color_type
-               << " " << framebuffer_info.fFBOID << " "
-               << framebuffer_info.fFormat << " " << color_space.ToString()
-               << " " << size.ToString();
+    LOG(ERROR) << "Couldn't create surface:"
+               << "\n  abandoned()="
+               << context_state_->gr_context()->abandoned()
+               << "\n  color_type=" << color_type
+               << "\n  framebuffer_info.fFBOID=" << framebuffer_info.fFBOID
+               << "\n  framebuffer_info.fFormat=" << framebuffer_info.fFormat
+               << "\n  color_space=" << color_space.ToString()
+               << "\n  size=" << size.ToString();
     CheckForLoopFailures();
     // To prevent tail call, so we can see the stack.
     base::debug::Alias(nullptr);
@@ -403,7 +417,7 @@ void SkiaOutputDeviceGL::SetEnableDCLayers(bool enable) {
 
 void SkiaOutputDeviceGL::ScheduleOverlays(
     SkiaOutputSurface::OverlayList overlays) {
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   for (auto& dc_layer : overlays) {
     auto params = std::make_unique<ui::DCRendererLayerParams>();
     // Get GLImages for DC layer textures.
@@ -437,12 +451,13 @@ void SkiaOutputDeviceGL::ScheduleOverlays(
     params->clip_rect = dc_layer.clip_rect;
     params->protected_video_type = dc_layer.protected_video_type;
     params->hdr_metadata = dc_layer.hdr_metadata;
+    params->is_video_fullscreen_mode = dc_layer.is_video_fullscreen_mode;
 
     // Schedule DC layer overlay to be presented at next SwapBuffers().
     if (!gl_surface_->ScheduleDCLayer(std::move(params)))
       DLOG(ERROR) << "ScheduleDCLayer failed";
   }
-#endif  // OS_WIN
+#endif  // BUILDFLAG(IS_WIN)
 }
 
 void SkiaOutputDeviceGL::EnsureBackbuffer() {
@@ -454,9 +469,7 @@ void SkiaOutputDeviceGL::DiscardBackbuffer() {
 }
 
 SkSurface* SkiaOutputDeviceGL::BeginPaint(
-    bool allocate_frame_buffer,
     std::vector<GrBackendSemaphore>* end_semaphores) {
-  DCHECK(!allocate_frame_buffer);
   DCHECK(sk_surface_);
   return sk_surface_.get();
 }

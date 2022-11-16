@@ -20,7 +20,7 @@
 namespace extensions {
 
 const char kTestHostName[] = "com.chrome.test.native_host";
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 const char kTestHostPath[] = "C:\\ProgramFiles\\host.exe";
 #else
 const char kTestHostPath[] = "/usr/bin/host";
@@ -101,7 +101,7 @@ TEST_F(NativeMessagingHostManifestTest, LoadValid) {
   EXPECT_EQ(manifest->description(), "Native Messaging Test");
   EXPECT_EQ(manifest->host_interface(),
             NativeMessagingHostManifest::HOST_INTERFACE_STDIO);
-  EXPECT_EQ(manifest->path(), base::FilePath::FromUTF8Unsafe(kTestHostPath));
+  EXPECT_EQ(manifest->path(), base::FilePath::FromASCII(kTestHostPath));
   EXPECT_TRUE(manifest->allowed_origins().MatchesSecurityOrigin(
       GURL("chrome-extension://knldjmfmopnpolahpmmgbagdohdnhkik/")));
   EXPECT_FALSE(manifest->allowed_origins().MatchesSecurityOrigin(

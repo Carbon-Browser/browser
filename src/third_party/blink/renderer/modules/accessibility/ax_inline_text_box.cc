@@ -35,8 +35,10 @@
 #include "base/numerics/clamped_math.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/core/editing/ephemeral_range.h"
+#include "third_party/blink/renderer/core/editing/markers/custom_highlight_marker.h"
 #include "third_party/blink/renderer/core/editing/markers/document_marker_controller.h"
 #include "third_party/blink/renderer/core/editing/position.h"
+#include "third_party/blink/renderer/core/highlight/highlight.h"
 #include "third_party/blink/renderer/core/layout/api/line_layout_api_shim.h"
 #include "third_party/blink/renderer/core/layout/layout_text.h"
 #include "third_party/blink/renderer/core/layout/ng/inline/ng_inline_node.h"
@@ -46,6 +48,7 @@
 #include "third_party/blink/renderer/modules/accessibility/ax_range.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "ui/accessibility/ax_role_properties.h"
+#include "ui/gfx/geometry/transform.h"
 
 namespace blink {
 
@@ -55,12 +58,12 @@ AXInlineTextBox::AXInlineTextBox(
     : AXObject(ax_object_cache), inline_text_box_(std::move(inline_text_box)) {}
 
 void AXInlineTextBox::GetRelativeBounds(AXObject** out_container,
-                                        FloatRect& out_bounds_in_container,
-                                        skia::Matrix44& out_container_transform,
+                                        gfx::RectF& out_bounds_in_container,
+                                        gfx::Transform& out_container_transform,
                                         bool* clips_children) const {
   *out_container = nullptr;
-  out_bounds_in_container = FloatRect();
-  out_container_transform.setIdentity();
+  out_bounds_in_container = gfx::RectF();
+  out_container_transform.MakeIdentity();
 
   if (!inline_text_box_ || !ParentObject() ||
       !ParentObject()->GetLayoutObject()) {
@@ -68,13 +71,13 @@ void AXInlineTextBox::GetRelativeBounds(AXObject** out_container,
   }
 
   *out_container = ParentObject();
-  out_bounds_in_container = FloatRect(inline_text_box_->LocalBounds());
+  out_bounds_in_container = gfx::RectF(inline_text_box_->LocalBounds());
 
   // Subtract the local bounding box of the parent because they're
   // both in the same coordinate system.
-  FloatRect parent_bounding_box =
+  gfx::RectF parent_bounding_box =
       ParentObject()->LocalBoundingBoxRectForAccessibility();
-  out_bounds_in_container.MoveBy(-parent_bounding_box.Location());
+  out_bounds_in_container.Offset(-parent_bounding_box.OffsetFromOrigin());
 }
 
 bool AXInlineTextBox::ComputeAccessibilityIsIgnored(
@@ -249,8 +252,7 @@ void AXInlineTextBox::SerializeMarkerAttributes(
 
   if (IsDetached())
     return;
-  if (!GetDocument() ||
-      GetDocument()->IsSlotAssignmentOrLegacyDistributionDirty()) {
+  if (!GetDocument() || GetDocument()->IsSlotAssignmentDirty()) {
     // In order to retrieve the document markers we need access to the flat
     // tree. If the slot assignments in a shadow DOM subtree are dirty,
     // accessing the flat tree will cause them to be updated, which could in
@@ -266,6 +268,7 @@ void AXInlineTextBox::SerializeMarkerAttributes(
   const auto ax_range = AXRange::RangeOfContents(*this);
 
   std::vector<int32_t> marker_types;
+  std::vector<int32_t> highlight_types;
   std::vector<int32_t> marker_starts;
   std::vector<int32_t> marker_ends;
 
@@ -301,7 +304,8 @@ void AXInlineTextBox::SerializeMarkerAttributes(
   const DocumentMarker::MarkerTypes markers_used_by_accessibility(
       DocumentMarker::kSpelling | DocumentMarker::kGrammar |
       DocumentMarker::kTextMatch | DocumentMarker::kActiveSuggestion |
-      DocumentMarker::kSuggestion | DocumentMarker::kTextFragment);
+      DocumentMarker::kSuggestion | DocumentMarker::kTextFragment |
+      DocumentMarker::kCustomHighlight);
   // "MarkersIntersectingRange" performs a binary search through the document
   // markers list for markers in the given range and of the given types. It
   // should be of a logarithmic complexity.
@@ -336,7 +340,16 @@ void AXInlineTextBox::SerializeMarkerAttributes(
         end_position.TextOffset() - start_text_offset_in_parent, text_length);
     DCHECK_GE(local_end_offset, 0);
 
+    int32_t highlight_type =
+        static_cast<int32_t>(ax::mojom::blink::HighlightType::kNone);
+    if (marker->GetType() == DocumentMarker::kCustomHighlight) {
+      const auto& highlight_marker = To<CustomHighlightMarker>(*marker);
+      highlight_type =
+          ToAXHighlightType(highlight_marker.GetHighlight()->type());
+    }
+
     marker_types.push_back(int32_t{ToAXMarkerType(marker->GetType())});
+    highlight_types.push_back(static_cast<int32_t>(highlight_type));
     marker_starts.push_back(local_start_offset);
     marker_ends.push_back(local_end_offset);
   }
@@ -349,6 +362,8 @@ void AXInlineTextBox::SerializeMarkerAttributes(
 
   node_data->AddIntListAttribute(
       ax::mojom::blink::IntListAttribute::kMarkerTypes, marker_types);
+  node_data->AddIntListAttribute(
+      ax::mojom::blink::IntListAttribute::kHighlightTypes, highlight_types);
   node_data->AddIntListAttribute(
       ax::mojom::blink::IntListAttribute::kMarkerStarts, marker_starts);
   node_data->AddIntListAttribute(

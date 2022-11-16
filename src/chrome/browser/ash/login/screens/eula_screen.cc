@@ -4,18 +4,21 @@
 
 #include "chrome/browser/ash/login/screens/eula_screen.h"
 
+#include "ash/constants/ash_features.h"
+#include "ash/constants/ash_switches.h"
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/check.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/notreached.h"
 #include "chrome/browser/ash/customization/customization_document.h"
+#include "chrome/browser/ash/login/startup_utils.h"
 #include "chrome/browser/ash/login/wizard_context.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
 #include "chrome/browser/ash/policy/enrollment/enrollment_requisition_manager.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/ui/webui/chromeos/login/eula_screen_handler.h"
-#include "chromeos/dbus/dbus_method_call_status.h"
+#include "chromeos/dbus/common/dbus_method_call_status.h"
 #include "chromeos/dbus/dbus_thread_manager.h"
 #include "chromeos/dbus/tpm_manager/tpm_manager.pb.h"
 #include "chromeos/dbus/tpm_manager/tpm_manager_client.h"
@@ -90,7 +93,10 @@ std::string EulaScreen::GetResultString(Result result) {
     case Result::ACCEPTED_WITHOUT_USAGE_STATS_REPORTING:
       return "AcceptedWithoutStats";
     case Result::BACK:
+    case Result::BACK_DEMO_MODE:
       return "Back";
+    case Result::ALREADY_ACCEPTED:
+    case Result::ALREADY_ACCEPTED_DEMO_MODE:
     case Result::NOT_APPLICABLE:
       return BaseScreen::kNotApplicable;
   }
@@ -111,11 +117,22 @@ EulaScreen::~EulaScreen() {
 }
 
 bool EulaScreen::MaybeSkip(WizardContext* context) {
-  // TODO(https://crbug.com/1233010) Handle GOOGLE_CHROME_BRANDING build flag in
-  // this file instead of WizardController::is_branded_build_.
-
   // This should be kept in sync with `testapi_shouldSkipEula`. If the logic
   // became too complicated we need to consider extract and reuse parts of it.
+
+  if (!context->is_branded_build) {
+    exit_callback_.Run(Result::NOT_APPLICABLE);
+    return true;
+  }
+
+  if (StartupUtils::IsEulaAccepted() && !context->is_cloud_ready_update_flow) {
+    const auto* const demo_setup_controller =
+        WizardController::default_controller()->demo_setup_controller();
+    exit_callback_.Run(demo_setup_controller
+                           ? Result::ALREADY_ACCEPTED_DEMO_MODE
+                           : Result::ALREADY_ACCEPTED);
+    return true;
+  }
 
   // Remora (CfM) devices are enterprise only. To enroll device it is required
   // to accept ToS on the server side. Thus for such devices it is not needed to
@@ -139,17 +156,26 @@ bool EulaScreen::IsUsageStatsEnabled() const {
 
 void EulaScreen::OnViewDestroyed(EulaView* view) {
   if (view_ == view)
-    view_ = NULL;
+    view_ = nullptr;
 }
 
 void EulaScreen::ShowImpl() {
   // Command to own the TPM.
-  TpmManagerClient::Get()->TakeOwnership(::tpm_manager::TakeOwnershipRequest(),
-                                         base::DoNothing());
-  if (WizardController::UsingHandsOffEnrollment())
-    OnUserAction(kUserActionAcceptButtonClicked);
-  else if (view_)
+  // When --tpm-is-dynamic switch is set pre-enrollment TPM check relies on the
+  // TPM being un-owned until enrollment. b/187429309
+  if (!switches::IsTpmDynamic()) {
+    TpmManagerClient::Get()->TakeOwnership(
+        ::tpm_manager::TakeOwnershipRequest(), base::DoNothing());
+  }
+  if (WizardController::IsZeroTouchHandsOffOobeFlow()) {
+    OnUserActionDeprecated(kUserActionAcceptButtonClicked);
+  } else if (view_) {
+    if (context()->is_cloud_ready_update_flow) {
+      view_->HideSecuritySettingsInfo();
+      view_->HideBackButton();
+    }
     view_->Show();
+  }
 }
 
 void EulaScreen::HideImpl() {
@@ -157,9 +183,9 @@ void EulaScreen::HideImpl() {
     view_->Hide();
 }
 
-void EulaScreen::OnUserAction(const std::string& action_id) {
+void EulaScreen::OnUserActionDeprecated(const std::string& action_id) {
   if (!IsEulaUserAction(action_id)) {
-    BaseScreen::OnUserAction(action_id);
+    BaseScreen::OnUserActionDeprecated(action_id);
     return;
   }
   RecordUserAction(action_id);
@@ -178,7 +204,10 @@ void EulaScreen::OnUserAction(const std::string& action_id) {
                            ? Result::ACCEPTED_WITH_USAGE_STATS_REPORTING
                            : Result::ACCEPTED_WITHOUT_USAGE_STATS_REPORTING);
   } else if (action_id == kUserActionBackButtonClicked) {
-    exit_callback_.Run(Result::BACK);
+    const auto* const demo_setup_controller =
+        WizardController::default_controller()->demo_setup_controller();
+    exit_callback_.Run(demo_setup_controller ? Result::BACK_DEMO_MODE
+                                             : Result::BACK);
   }
 }
 

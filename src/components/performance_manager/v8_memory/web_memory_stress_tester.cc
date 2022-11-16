@@ -66,10 +66,11 @@ class StressTestSecurityChecker : public WebMeasureMemorySecurityChecker {
 // When the production implementation would kill a renderer, instead upload a
 // crash report with the message in a breadcrumb. This should only be done once
 // per browser session to avoid spamming crashes.
-void ReportBadMessageInCrashOnce(const std::string& message) {
+void ReportBadMessageInCrashOnce(base::StringPiece message) {
   static bool have_crashed = false;
   if (have_crashed)
     return;
+  have_crashed = true;
   base::debug::ScopedActivity scoped_activity;
   auto& user_data = scoped_activity.user_data();
   user_data.SetString("web_measure_memory_bad_mojo_message", message);
@@ -86,7 +87,8 @@ bool WebMeasureMemoryStressTester::FeatureIsEnabled() {
 }
 
 void WebMeasureMemoryStressTester::OnLoadingStateChanged(
-    const PageNode* page_node) {
+    const PageNode* page_node,
+    PageNode::LoadingState previous_state) {
   DCHECK(page_node);
   DCHECK_ON_GRAPH_SEQUENCE(page_node->GetGraph());
   if (page_node->GetLoadingState() != PageNode::LoadingState::kLoadedIdle)

@@ -6,7 +6,6 @@
 
 #include <stdio.h>
 
-#include "base/cxx17_backports.h"
 #include "base/metrics/histogram_macros.h"
 #include "components/sync/base/stop_source.h"
 #include "components/sync/base/user_selectable_type.h"
@@ -29,11 +28,11 @@ SyncSetupService::SyncSetupService(syncer::SyncService* sync_service)
   DCHECK(sync_service_);
 }
 
-SyncSetupService::~SyncSetupService() {
-}
+SyncSetupService::~SyncSetupService() {}
 
+// static
 syncer::ModelType SyncSetupService::GetModelType(SyncableDatatype datatype) {
-  DCHECK(datatype < base::size(kDataTypes));
+  DCHECK(datatype < std::size(kDataTypes));
   return kDataTypes[datatype];
 }
 
@@ -58,20 +57,17 @@ void SyncSetupService::SetDataTypeEnabled(syncer::ModelType datatype,
     model_types.Put(datatype);
   else
     model_types.Remove(datatype);
+  syncer::SyncUserSettings* user_settings = sync_service_->GetUserSettings();
   // TODO(crbug.com/950874): support syncer::UserSelectableType in ios code,
   // get rid of this workaround and consider getting rid of SyncableDatatype.
   syncer::UserSelectableTypeSet selected_types;
-  for (syncer::UserSelectableType type : syncer::UserSelectableTypeSet::All()) {
+  for (syncer::UserSelectableType type :
+       user_settings->GetRegisteredSelectableTypes()) {
     if (model_types.Has(syncer::UserSelectableTypeToCanonicalModelType(type))) {
       selected_types.Put(type);
     }
   }
-  if (enabled && !CanSyncFeatureStart())
-    SetSyncEnabledWithoutChangingDatatypes(true);
-  sync_service_->GetUserSettings()->SetSelectedTypes(IsSyncingAllDataTypes(),
-                                                     selected_types);
-  if (GetPreferredDataTypes().Empty())
-    SetSyncEnabled(false);
+  user_settings->SetSelectedTypes(IsSyncingAllDataTypes(), selected_types);
 }
 
 bool SyncSetupService::UserActionIsRequiredToHaveTabSyncWork() {
@@ -105,8 +101,6 @@ bool SyncSetupService::IsSyncingAllDataTypes() const {
 void SyncSetupService::SetSyncingAllDataTypes(bool sync_all) {
   if (!sync_blocker_)
     sync_blocker_ = sync_service_->GetSetupInProgressHandle();
-  if (sync_all && !CanSyncFeatureStart())
-    SetSyncEnabled(true);
   sync_service_->GetUserSettings()->SetSelectedTypes(
       sync_all, sync_service_->GetUserSettings()->GetSelectedTypes());
 }
@@ -120,7 +114,14 @@ bool SyncSetupService::CanSyncFeatureStart() const {
 }
 
 void SyncSetupService::SetSyncEnabled(bool sync_enabled) {
-  SetSyncEnabledWithoutChangingDatatypes(sync_enabled);
+  if (!sync_blocker_)
+    sync_blocker_ = sync_service_->GetSetupInProgressHandle();
+  if (!sync_enabled) {
+    UMA_HISTOGRAM_ENUMERATION("Sync.StopSource", syncer::CHROME_SYNC_SETTINGS,
+                              syncer::STOP_SOURCE_LIMIT);
+  }
+  sync_service_->GetUserSettings()->SetSyncRequested(sync_enabled);
+
   if (sync_enabled && GetPreferredDataTypes().Empty())
     SetSyncingAllDataTypes(true);
 }
@@ -148,6 +149,7 @@ SyncSetupService::SyncServiceState SyncSetupService::GetSyncServiceState() {
       break;
     // The following errors are unexpected on iOS.
     case GoogleServiceAuthError::SERVICE_ERROR:
+    case GoogleServiceAuthError::SCOPE_LIMITED_UNRECOVERABLE_ERROR:
     // Conventional value for counting the states, never used.
     case GoogleServiceAuthError::NUM_STATES:
       NOTREACHED() << "Unexpected Auth error ("
@@ -181,7 +183,11 @@ bool SyncSetupService::HasFinishedInitialSetup() {
   //   1. User is signed in with sync enabled and the sync setup was completed.
   //   OR
   //   2. User is not signed in or has disabled sync.
-  return !sync_service_->CanSyncFeatureStart() ||
+  // Note that if the user visits the Advanced Settings during the opt-in flow,
+  // the Sync consent is not granted yet. In this case, IsSyncRequested() is
+  // set to true, indicating that the sync was requested but the initial setup
+  // has not been finished yet.
+  return !IsSyncRequested() ||
          sync_service_->GetUserSettings()->IsFirstSetupComplete();
 }
 
@@ -213,15 +219,4 @@ void SyncSetupService::CommitSyncChanges() {
 
 bool SyncSetupService::HasUncommittedChanges() {
   return sync_service_->IsSetupInProgress();
-}
-
-void SyncSetupService::SetSyncEnabledWithoutChangingDatatypes(
-    bool sync_enabled) {
-  if (!sync_blocker_)
-    sync_blocker_ = sync_service_->GetSetupInProgressHandle();
-  if (!sync_enabled) {
-    UMA_HISTOGRAM_ENUMERATION("Sync.StopSource", syncer::CHROME_SYNC_SETTINGS,
-                              syncer::STOP_SOURCE_LIMIT);
-  }
-  sync_service_->GetUserSettings()->SetSyncRequested(sync_enabled);
 }

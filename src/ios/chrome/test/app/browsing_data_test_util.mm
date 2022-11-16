@@ -8,7 +8,6 @@
 
 #include "base/logging.h"
 #include "base/task/cancelable_task_tracker.h"
-#include "base/task/post_task.h"
 #import "base/test/ios/wait_util.h"
 #include "components/browsing_data/core/browsing_data_utils.h"
 #include "components/history/core/browser/history_service.h"
@@ -91,10 +90,10 @@ bool ClearCertificatePolicyCache(bool off_the_record) {
                                           : GetOriginalBrowserState();
   auto cache = web::BrowserState::GetCertificatePolicyCache(browser_state);
   __block BOOL policies_cleared = NO;
-  base::PostTask(FROM_HERE, {web::WebThread::IO}, base::BindOnce(^{
-                   cache->ClearCertificatePolicies();
-                   policies_cleared = YES;
-                 }));
+  web::GetIOThreadTaskRunner({})->PostTask(FROM_HERE, base::BindOnce(^{
+                                             cache->ClearCertificatePolicies();
+                                             policies_cleared = YES;
+                                           }));
   return WaitUntilConditionOrTimeout(2, ^{
     return policies_cleared;
   });
@@ -124,8 +123,7 @@ int GetBrowsingHistoryEntryCount(NSError** error) {
   NSDate* deadline = [NSDate dateWithTimeIntervalSinceNow:4.0];
   while (!history_service_callback_called &&
          [[NSDate date] compare:deadline] != NSOrderedDescending) {
-    base::test::ios::SpinRunLoopWithMaxDelay(
-        base::TimeDelta::FromSecondsD(0.1));
+    base::test::ios::SpinRunLoopWithMaxDelay(base::Seconds(0.1));
   }
 
   NSString* error_message = nil;

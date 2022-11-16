@@ -19,6 +19,10 @@ extern NSString* const kFirstRunWelcomeScreenAccessibilityIdentifier;
 // The accessibility identifier for the Sign in screen shown in first run.
 extern NSString* const kFirstRunSignInScreenAccessibilityIdentifier;
 
+// The accessibility identifier for the Legacy Sign in screen shown in first
+// run.
+extern NSString* const kFirstRunLegacySignInScreenAccessibilityIdentifier;
+
 // The accessibility identifier for the Sync screen shown in first run.
 extern NSString* const kFirstRunSyncScreenAccessibilityIdentifier;
 
@@ -26,11 +30,14 @@ extern NSString* const kFirstRunSyncScreenAccessibilityIdentifier;
 // run.
 extern NSString* const kFirstRunDefaultBrowserScreenAccessibilityIdentifier;
 
-// Begin tag used to delimit part of text to put in bold.
-extern NSString* const kBeginBoldTag;
+// URL for the terms of service text.
+extern NSString* const kTermsOfServiceURL;
 
-// End tag used to delimit part of text to put in bold.
-extern NSString* const kEndBoldTag;
+// URL for the metric reporting text.
+extern NSString* const kMetricReportingURL;
+
+// Accessibility identifier of the enterprise loading screen.
+extern NSString* const kEnterpriseLoadingScreenAccessibilityIdentifier;
 
 }  // first_run
 

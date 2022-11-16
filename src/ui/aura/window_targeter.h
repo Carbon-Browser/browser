@@ -8,7 +8,7 @@
 #include <memory>
 #include <vector>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/aura/aura_export.h"
 #include "ui/events/event_targeter.h"
 #include "ui/gfx/geometry/insets.h"
@@ -29,6 +29,10 @@ class Window;
 class AURA_EXPORT WindowTargeter : public ui::EventTargeter {
  public:
   WindowTargeter();
+
+  WindowTargeter(const WindowTargeter&) = delete;
+  WindowTargeter& operator=(const WindowTargeter&) = delete;
+
   ~WindowTargeter() override;
 
   using HitTestRects = std::vector<gfx::Rect>;
@@ -151,12 +155,10 @@ class AURA_EXPORT WindowTargeter : public ui::EventTargeter {
 
   // The Window this WindowTargeter is installed on. Null if not attached to a
   // Window.
-  aura::Window* window_ = nullptr;
+  raw_ptr<aura::Window> window_ = nullptr;
 
   gfx::Insets mouse_extend_;
   gfx::Insets touch_extend_;
-
-  DISALLOW_COPY_AND_ASSIGN(WindowTargeter);
 };
 
 }  // namespace aura

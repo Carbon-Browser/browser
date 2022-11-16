@@ -23,6 +23,7 @@ import org.chromium.components.signin.metrics.SigninAccessPoint;
 import org.chromium.components.signin.metrics.SignoutReason;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
 
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 /**
@@ -30,13 +31,13 @@ import java.util.concurrent.TimeoutException;
  */
 public final class SigninTestUtil {
     /**
-     * Returns the currently signed in coreAccountInfo.
+     * @return The primary account of the requested {@link ConsentLevel}.
      */
-    static CoreAccountInfo getCurrentAccount() {
+    static CoreAccountInfo getPrimaryAccount(@ConsentLevel int consentLevel) {
         return TestThreadUtils.runOnUiThreadBlockingNoException(() -> {
             return IdentityServicesProvider.get()
                     .getIdentityManager(Profile.getLastUsedRegularProfile())
-                    .getPrimaryAccountInfo(ConsentLevel.SYNC);
+                    .getPrimaryAccountInfo(consentLevel);
         });
     }
 
@@ -48,7 +49,6 @@ public final class SigninTestUtil {
         TestThreadUtils.runOnUiThreadBlocking(() -> {
             SigninManager signinManager = IdentityServicesProvider.get().getSigninManager(
                     Profile.getLastUsedRegularProfile());
-            signinManager.onFirstRunCheckDone(); // Allow sign-in
             signinManager.signin(AccountUtils.createAccountFromName(coreAccountInfo.getEmail()),
                     new SigninManager.SignInCallback() {
                         @Override
@@ -87,7 +87,6 @@ public final class SigninTestUtil {
         TestThreadUtils.runOnUiThreadBlocking(() -> {
             SigninManager signinManager = IdentityServicesProvider.get().getSigninManager(
                     Profile.getLastUsedRegularProfile());
-            signinManager.onFirstRunCheckDone(); // Allow sign-in
             signinManager.signinAndEnableSync(SigninAccessPoint.UNKNOWN,
                     AccountUtils.createAccountFromName(coreAccountInfo.getEmail()),
                     new SigninManager.SignInCallback() {
@@ -131,19 +130,28 @@ public final class SigninTestUtil {
                     .seedAccountsIfNeeded(ch::notifyCalled);
         });
         try {
-            ch.waitForFirst("Timed out while waiting for system accounts to seed.");
+            ch.waitForFirst(
+                    "Timed out while waiting for system accounts to seed.", 20, TimeUnit.SECONDS);
         } catch (TimeoutException ex) {
             throw new RuntimeException("Timed out while waiting for system accounts to seed.");
         }
     }
 
     static void signOut() {
+        signOut(SignoutReason.SIGNOUT_TEST);
+    }
+
+    static void forceSignOut() {
+        signOut(SignoutReason.FORCE_SIGNOUT_ALWAYS_ALLOWED_FOR_TEST);
+    }
+
+    private static void signOut(@SignoutReason int signoutReason) {
         ThreadUtils.assertOnBackgroundThread();
         CallbackHelper callbackHelper = new CallbackHelper();
         TestThreadUtils.runOnUiThreadBlocking(() -> {
             IdentityServicesProvider.get()
                     .getSigninManager(Profile.getLastUsedRegularProfile())
-                    .signOut(SignoutReason.SIGNOUT_TEST, callbackHelper::notifyCalled, false);
+                    .signOut(signoutReason, callbackHelper::notifyCalled, false);
         });
         try {
             callbackHelper.waitForFirst();

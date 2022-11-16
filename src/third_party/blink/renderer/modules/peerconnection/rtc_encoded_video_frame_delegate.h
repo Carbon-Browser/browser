@@ -9,11 +9,11 @@
 
 #include <memory>
 
+#include "base/synchronization/lock.h"
 #include "third_party/blink/renderer/bindings/core/v8/serialization/serialized_script_value.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "third_party/blink/renderer/platform/wtf/thread_safe_ref_counted.h"
-#include "third_party/blink/renderer/platform/wtf/threading_primitives.h"
 #include "third_party/webrtc/api/frame_transformer_interface.h"
 #include "third_party/webrtc/api/video/video_frame_metadata.h"
 
@@ -35,15 +35,15 @@ class RTCEncodedVideoFrameDelegate
   DOMArrayBuffer* CreateDataBuffer() const;
   void SetData(const DOMArrayBuffer* data);
   DOMArrayBuffer* CreateAdditionalDataBuffer() const;
-  uint32_t Ssrc() const;
-  uint8_t PayloadType() const;
+  absl::optional<uint32_t> Ssrc() const;
+  absl::optional<uint8_t> PayloadType() const;
   const webrtc::VideoFrameMetadata* GetMetadata() const;
   std::unique_ptr<webrtc::TransformableVideoFrameInterface> PassWebRtcFrame();
 
  private:
-  mutable Mutex mutex_;
+  mutable base::Lock lock_;
   std::unique_ptr<webrtc::TransformableVideoFrameInterface> webrtc_frame_
-      GUARDED_BY(mutex_);
+      GUARDED_BY(lock_);
 };
 
 class MODULES_EXPORT RTCEncodedVideoFramesAttachment

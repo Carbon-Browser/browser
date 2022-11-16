@@ -8,7 +8,6 @@
 #include <string>
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/values.h"
 #include "chrome/browser/profiles/profile.h"
 
@@ -23,16 +22,21 @@ extern const char kSalt[];
 extern const char kRequirePasswordUpdate[];
 extern const char kHasIncompleteKey[];
 
-
 // Base class for SupervisedUserManagerImpl - provides a mechanism for getting
 // and setting specific values for supervised users, as well as additional
 // lookup methods that make sense only for supervised users.
+// TODO(b/231321563): Check this entire class is not used anymore for
+// deprecated supervised users and remove it with all dependencies.
 class SupervisedUserManager {
  public:
   // Registers user manager preferences.
   static void RegisterLocalStatePrefs(PrefRegistrySimple* registry);
 
   SupervisedUserManager() {}
+
+  SupervisedUserManager(const SupervisedUserManager&) = delete;
+  SupervisedUserManager& operator=(const SupervisedUserManager&) = delete;
+
   virtual ~SupervisedUserManager() {}
 
   // Returns sync_user_id for supervised user with `user_id` or empty string if
@@ -66,9 +70,6 @@ class SupervisedUserManager {
   virtual void SetPasswordInformation(
       const std::string& user_id,
       const base::DictionaryValue* password_info) = 0;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(SupervisedUserManager);
 };
 
 }  // namespace ash

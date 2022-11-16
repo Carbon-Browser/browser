@@ -56,7 +56,7 @@ class UpgradeDetectorTest : public ::testing::Test {
     return task_environment_.GetMockTickClock();
   }
 
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   ~UpgradeDetectorTest() override {
     if (!tz_overridden_)
       return;
@@ -85,7 +85,7 @@ class UpgradeDetectorTest : public ::testing::Test {
     env_->SetVar("TZ", tz);
     tzset();
   }
-#endif  // defined(OS_LINUX) || defined(OS_CHROMEOS)
+#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 
   void RunUntilIdle() { task_environment_.RunUntilIdle(); }
 
@@ -111,18 +111,18 @@ class UpgradeDetectorTest : public ::testing::Test {
   UpgradeDetector::RelaunchWindow CreateRelaunchWindow(int hour,
                                                        int minute,
                                                        int duration_mins) {
-    return UpgradeDetector::RelaunchWindow(
-        hour, minute, base::TimeDelta::FromMinutes(duration_mins));
+    return UpgradeDetector::RelaunchWindow(hour, minute,
+                                           base::Minutes(duration_mins));
   }
 
  private:
   base::test::TaskEnvironment task_environment_;
   ScopedTestingLocalState scoped_local_state_;
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   std::unique_ptr<base::Environment> env_;
   absl::optional<std::string> original_tz_;
   bool tz_overridden_ = false;
-#endif  // defined(OS_LINUX) || defined(OS_CHROMEOS)
+#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 };
 
 TEST_F(UpgradeDetectorTest, RelaunchWindowPolicy) {
@@ -137,7 +137,7 @@ TEST_F(UpgradeDetectorTest, RelaunchWindowPolicy) {
   ASSERT_TRUE(window);
   EXPECT_EQ(window.value().hour, 2);
   EXPECT_EQ(window.value().minute, 20);
-  EXPECT_EQ(window.value().duration, base::TimeDelta::FromMinutes(180));
+  EXPECT_EQ(window.value().duration, base::Minutes(180));
 }
 
 TEST_F(UpgradeDetectorTest, DeadlineAdjustment) {
@@ -246,7 +246,7 @@ TEST_F(UpgradeDetectorTest, DeadlineAdjustmentOverMidnight) {
   RunUntilIdle();
 }
 
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 TEST_F(UpgradeDetectorTest, DeadlineAdjustmentDst) {
   // Set Europe timezone where daylight saving starts (UTC+1) at local 2:00am
   // on the last Sunday of March and ends at local 3:00am on the last Sunday of
@@ -302,4 +302,4 @@ TEST_F(UpgradeDetectorTest, DeadlineAdjustmentDst) {
   upgrade_detector.Shutdown();
   RunUntilIdle();
 }
-#endif  // defined(OS_LINUX) || defined(OS_CHROMEOS)
+#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)

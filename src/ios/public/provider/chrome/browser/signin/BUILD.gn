@@ -11,8 +11,6 @@ source_set("signin") {
     "chrome_identity_interaction_manager.mm",
     "chrome_identity_service.h",
     "chrome_identity_service.mm",
-    "chrome_trusted_vault_service.h",
-    "chrome_trusted_vault_service.mm",
   ]
   deps = [
     "//base",
@@ -36,6 +34,19 @@ source_set("signin_resources_api") {
   frameworks = [ "UIKit.framework" ]
 }
 
+source_set("signin_sso_api") {
+  configs += [ "//build/config/compiler:enable_arc" ]
+  sources = [ "signin_sso_api.h" ]
+  deps = []
+  frameworks = [ "Foundation.framework" ]
+}
+
+source_set("trusted_vault_api") {
+  configs += [ "//build/config/compiler:enable_arc" ]
+  sources = [ "trusted_vault_api.h" ]
+  deps = [ "//ios/chrome/browser/signin:trusted_vault" ]
+}
+
 source_set("test_support") {
   configs += [ "//build/config/compiler:enable_arc" ]
   testonly = true
@@ -44,8 +55,6 @@ source_set("test_support") {
     "fake_chrome_identity_interaction_manager.mm",
     "fake_chrome_identity_service.h",
     "fake_chrome_identity_service.mm",
-    "fake_chrome_trusted_vault_service.h",
-    "fake_chrome_trusted_vault_service.mm",
   ]
   deps = [
     ":constants",
@@ -88,35 +97,10 @@ source_set("constants") {
   deps = [ "//base" ]
 }
 
-source_set("test_signin_error") {
-  testonly = true
-  configs += [ "//build/config/compiler:enable_arc" ]
-  sources = [ "test_signin_error.mm" ]
-  deps = [
-    ":signin_error_api",
-    "//base",
-  ]
-  frameworks = [ "Foundation.framework" ]
-}
-
-source_set("test_signin_resources") {
-  testonly = true
-  configs += [ "//build/config/compiler:enable_arc" ]
-  sources = [ "test_signin_resources.mm" ]
-  deps = [
-    ":signin_resources_api",
-    "//ui/base:test_support",
-  ]
-  frameworks = [ "UIKit.framework" ]
-}
-
 source_set("unit_tests") {
   configs += [ "//build/config/compiler:enable_arc" ]
   testonly = true
-  sources = [
-    "chrome_identity_service_unittest.mm",
-    "chrome_trusted_vault_service_unittest.mm",
-  ]
+  sources = [ "chrome_identity_service_unittest.mm" ]
   deps = [
     ":fake_chrome_identity",
     ":signin",

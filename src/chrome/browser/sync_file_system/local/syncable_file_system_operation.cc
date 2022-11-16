@@ -8,7 +8,6 @@
 
 #include "base/bind.h"
 #include "base/check_op.h"
-#include "base/macros.h"
 #include "base/notreached.h"
 #include "chrome/browser/sync_file_system/local/local_file_sync_context.h"
 #include "chrome/browser/sync_file_system/local/sync_file_system_backend.h"
@@ -16,6 +15,7 @@
 #include "chrome/browser/sync_file_system/syncable_file_system_util.h"
 #include "content/public/browser/browser_thread.h"
 #include "storage/browser/blob/shareable_file_reference.h"
+#include "storage/browser/file_system/copy_or_move_hook_delegate.h"
 #include "storage/browser/file_system/file_system_context.h"
 #include "storage/browser/file_system/file_system_operation.h"
 #include "storage/browser/file_system/file_system_operation_context.h"
@@ -122,9 +122,9 @@ void SyncableFileSystemOperation::CreateDirectory(const FileSystemURL& url,
 void SyncableFileSystemOperation::Copy(
     const FileSystemURL& src_url,
     const FileSystemURL& dest_url,
-    CopyOrMoveOption option,
+    CopyOrMoveOptionSet options,
     ErrorBehavior error_behavior,
-    const CopyOrMoveProgressCallback& progress_callback,
+    std::unique_ptr<storage::CopyOrMoveHookDelegate> copy_or_move_hook_delegate,
     StatusCallback callback) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::IO);
   if (!operation_runner_.get()) {
@@ -138,7 +138,8 @@ void SyncableFileSystemOperation::Copy(
       weak_factory_.GetWeakPtr(),
       base::BindOnce(
           &FileSystemOperation::Copy, base::Unretained(impl_.get()), src_url,
-          dest_url, option, error_behavior, progress_callback,
+          dest_url, options, error_behavior,
+          std::move(copy_or_move_hook_delegate),
           base::BindOnce(&self::DidFinish, weak_factory_.GetWeakPtr())));
   operation_runner_->PostOperationTask(std::move(task));
 }
@@ -146,9 +147,9 @@ void SyncableFileSystemOperation::Copy(
 void SyncableFileSystemOperation::Move(
     const FileSystemURL& src_url,
     const FileSystemURL& dest_url,
-    CopyOrMoveOption option,
+    CopyOrMoveOptionSet options,
     ErrorBehavior error_behavior,
-    const CopyOrMoveProgressCallback& progress_callback,
+    std::unique_ptr<storage::CopyOrMoveHookDelegate> copy_or_move_hook_delegate,
     StatusCallback callback) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::IO);
   if (!operation_runner_.get()) {
@@ -163,7 +164,8 @@ void SyncableFileSystemOperation::Move(
       weak_factory_.GetWeakPtr(),
       base::BindOnce(
           &FileSystemOperation::Move, base::Unretained(impl_.get()), src_url,
-          dest_url, option, error_behavior, progress_callback,
+          dest_url, options, error_behavior,
+          std::move(copy_or_move_hook_delegate),
           base::BindOnce(&self::DidFinish, weak_factory_.GetWeakPtr())));
   operation_runner_->PostOperationTask(std::move(task));
 }
@@ -294,7 +296,7 @@ void SyncableFileSystemOperation::TouchFile(
 }
 
 void SyncableFileSystemOperation::OpenFile(const FileSystemURL& url,
-                                           int file_flags,
+                                           uint32_t file_flags,
                                            OpenFileCallback callback) {
   NOTREACHED();
 }
@@ -347,20 +349,20 @@ void SyncableFileSystemOperation::RemoveDirectory(const FileSystemURL& url,
 void SyncableFileSystemOperation::CopyFileLocal(
     const FileSystemURL& src_url,
     const FileSystemURL& dest_url,
-    CopyOrMoveOption option,
+    CopyOrMoveOptionSet options,
     const CopyFileProgressCallback& progress_callback,
     StatusCallback callback) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::IO);
-  impl_->CopyFileLocal(src_url, dest_url, option, progress_callback,
+  impl_->CopyFileLocal(src_url, dest_url, options, progress_callback,
                        std::move(callback));
 }
 
 void SyncableFileSystemOperation::MoveFileLocal(const FileSystemURL& src_url,
                                                 const FileSystemURL& dest_url,
-                                                CopyOrMoveOption option,
+                                                CopyOrMoveOptionSet options,
                                                 StatusCallback callback) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::IO);
-  impl_->MoveFileLocal(src_url, dest_url, option, std::move(callback));
+  impl_->MoveFileLocal(src_url, dest_url, options, std::move(callback));
 }
 
 base::File::Error SyncableFileSystemOperation::SyncGetPlatformPath(

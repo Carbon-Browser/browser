@@ -17,7 +17,7 @@
 #include "services/device/public/mojom/usb_manager.mojom.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace chromeos {
+namespace ash {
 namespace {
 
 constexpr uint8_t kPrinterInterfaceClass = 7;
@@ -135,4 +135,4 @@ TEST_F(UsbPrinterDetectorTest, OnPrintersFoundCallback) {
 }
 
 }  // namespace
-}  // namespace chromeos
+}  // namespace ash

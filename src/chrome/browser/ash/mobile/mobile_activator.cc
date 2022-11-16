@@ -22,14 +22,13 @@
 #include "base/threading/scoped_blocking_call.h"
 #include "base/timer/timer.h"
 #include "base/values.h"
-#include "chromeos/network/device_state.h"
-#include "chromeos/network/network_activation_handler.h"
-#include "chromeos/network/network_configuration_handler.h"
-#include "chromeos/network/network_connect.h"
-#include "chromeos/network/network_connection_handler.h"
-#include "chromeos/network/network_event_log.h"
-#include "chromeos/network/network_handler_callbacks.h"
-#include "chromeos/network/network_state_handler.h"
+#include "chromeos/ash/components/network/device_state.h"
+#include "chromeos/ash/components/network/network_activation_handler.h"
+#include "chromeos/ash/components/network/network_configuration_handler.h"
+#include "chromeos/ash/components/network/network_connect.h"
+#include "chromeos/ash/components/network/network_connection_handler.h"
+#include "chromeos/ash/components/network/network_event_log.h"
+#include "chromeos/ash/components/network/network_handler_callbacks.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
@@ -86,10 +85,8 @@ void MobileActivator::TerminateActivation() {
   continue_reconnect_timer_.Stop();
   reconnect_timeout_timer_.Stop();
 
-  if (NetworkHandler::IsInitialized()) {
-    NetworkHandler::Get()->network_state_handler()->RemoveObserver(this,
-                                                                   FROM_HERE);
-  }
+  network_state_handler_observer_.Reset();
+
   meid_.clear();
   iccid_.clear();
   service_path_.clear();
@@ -131,6 +128,10 @@ void MobileActivator::NetworkPropertiesUpdated(const NetworkState* network) {
   EvaluateCellularNetwork(network);
 }
 
+void MobileActivator::OnShuttingDown() {
+  network_state_handler_observer_.Reset();
+}
+
 void MobileActivator::AddObserver(MobileActivator::Observer* observer) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   observers_.AddObserver(observer);
@@ -169,7 +170,7 @@ void MobileActivator::InitiateActivation(const std::string& service_path) {
 
   // We want shill to connect us after activations, so enable autoconnect.
   base::DictionaryValue auto_connect_property;
-  auto_connect_property.SetBoolean(shill::kAutoConnectProperty, true);
+  auto_connect_property.SetBoolKey(shill::kAutoConnectProperty, true);
   NetworkHandler::Get()->network_configuration_handler()->SetShillProperties(
       service_path_, auto_connect_property, base::DoNothing(),
       network_handler::ErrorCallback());
@@ -249,9 +250,8 @@ void MobileActivator::HandlePortalLoaded(bool success) {
 }
 
 void MobileActivator::StartOTASPTimer() {
-  state_duration_timer_.Start(
-      FROM_HERE, base::TimeDelta::FromMilliseconds(kOTASPRetryDelay), this,
-      &MobileActivator::HandleOTASPTimeout);
+  state_duration_timer_.Start(FROM_HERE, base::Milliseconds(kOTASPRetryDelay),
+                              this, &MobileActivator::HandleOTASPTimeout);
 }
 
 void MobileActivator::StartActivation() {
@@ -274,7 +274,8 @@ void MobileActivator::StartActivation() {
   }
 
   // Start monitoring network property changes.
-  NetworkHandler::Get()->network_state_handler()->AddObserver(this, FROM_HERE);
+  network_state_handler_observer_.Observe(
+      NetworkHandler::Get()->network_state_handler());
 
   if (network->activation_type() == shill::kActivationTypeNonCellular) {
     StartActivationOverNonCellularNetwork();
@@ -420,14 +421,14 @@ void MobileActivator::ForceReconnect(const NetworkState* network,
       network->path(), base::DoNothing(), network_handler::ErrorCallback());
   // Keep trying to connect until told otherwise.
   continue_reconnect_timer_.Stop();
-  continue_reconnect_timer_.Start(
-      FROM_HERE, base::TimeDelta::FromMilliseconds(kReconnectDelayMS), this,
-      &MobileActivator::ContinueConnecting);
+  continue_reconnect_timer_.Start(FROM_HERE,
+                                  base::Milliseconds(kReconnectDelayMS), this,
+                                  &MobileActivator::ContinueConnecting);
   // If we don't ever connect again, we're going to call this a failure.
   reconnect_timeout_timer_.Stop();
-  reconnect_timeout_timer_.Start(
-      FROM_HERE, base::TimeDelta::FromMilliseconds(kMaxReconnectTime), this,
-      &MobileActivator::ReconnectTimedOut);
+  reconnect_timeout_timer_.Start(FROM_HERE,
+                                 base::Milliseconds(kMaxReconnectTime), this,
+                                 &MobileActivator::ReconnectTimedOut);
 }
 
 void MobileActivator::ReconnectTimedOut() {
@@ -743,8 +744,7 @@ const char* MobileActivator::GetStateDescription(PlanActivationState state) {
 
 void MobileActivator::CompleteActivation() {
   // Remove observers, we are done with this page.
-  NetworkHandler::Get()->network_state_handler()->RemoveObserver(this,
-                                                                 FROM_HERE);
+  network_state_handler_observer_.Reset();
 }
 
 bool MobileActivator::RunningActivation() const {
@@ -803,7 +803,7 @@ void MobileActivator::ChangeState(const NetworkState* network,
           FROM_HERE,
           base::BindOnce(&MobileActivator::RetryOTASP,
                          weak_ptr_factory_.GetWeakPtr()),
-          base::TimeDelta::FromMilliseconds(kOTASPRetryDelay));
+          base::Milliseconds(kOTASPRetryDelay));
       break;
     }
     case PlanActivationState::kStartOTASP:
@@ -811,9 +811,8 @@ void MobileActivator::ChangeState(const NetworkState* network,
     case PlanActivationState::kInitiatingActivation:
     case PlanActivationState::kTryingOTASP:
     case PlanActivationState::kOTASP:
-      // This used to call Shill.Service.ActivateCellularModem, however that
-      // method is no longer implemented. Instead this just starts the timer
-      // waiting for activation state changes. https://crbug.com/1021688.
+      // Starts the timer waiting for activation state changes.
+      // https://crbug.com/1021688.
       StartOTASPTimer();
       break;
     case PlanActivationState::kPageLoading:

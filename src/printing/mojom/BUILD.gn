@@ -7,9 +7,23 @@ import("//printing/buildflags/buildflags.gni")
 
 mojom("mojom") {
   sources = [ "print.mojom" ]
+
+  cpp_typemaps = [
+    {
+      types = [
+        {
+          mojom = "printing.mojom.PageRange"
+          cpp = "::printing::PageRange"
+        },
+      ]
+      traits_sources = [ "print_mojom_traits.cc" ]
+      traits_headers = [ "print_mojom_traits.h" ]
+      traits_deps = [ "//mojo/public/mojom/base" ]
+    },
+  ]
 }
 
-if (enable_basic_printing) {
+if (enable_oop_printing) {
   mojom("printing_context") {
     if (is_linux || is_chromeos) {
       enabled_features = [ "is_linux_or_chromeos" ]
@@ -33,10 +47,6 @@ if (enable_basic_printing) {
           {
             mojom = "printing.mojom.PageSetup"
             cpp = "::printing::PageSetup"
-          },
-          {
-            mojom = "printing.mojom.PageRange"
-            cpp = "::printing::PageRange"
           },
           {
             mojom = "printing.mojom.RequestedMedia"

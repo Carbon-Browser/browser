@@ -26,6 +26,7 @@ namespace language_packs {
 namespace {
 
 constexpr char kFakeDlcId[] = "FakeDlc";
+constexpr char kSupportedLocale[] = "es";
 
 // We need a mock callback so that we can check that it gets called.
 class CallbackForTesting {
@@ -112,28 +113,13 @@ class LanguagePackManagerTest : public testing::Test {
   }
 };
 
-TEST_F(LanguagePackManagerTest, IsPackAvailableTrueTest) {
-  const bool available = manager_->IsPackAvailable(kHandwritingFeatureId, "en");
-  EXPECT_TRUE(available);
-}
-
-TEST_F(LanguagePackManagerTest, IsPackAvailableFalseTest) {
-  // Correct ID, wrong language.
-  bool available = manager_->IsPackAvailable(kHandwritingFeatureId, "fr");
-  EXPECT_FALSE(available);
-
-  // ID doesn't exists.
-  available = manager_->IsPackAvailable("foo", "fr");
-  EXPECT_FALSE(available);
-}
-
 TEST_F(LanguagePackManagerTest, InstallSuccessTest) {
   dlcservice_client_->set_install_error(dlcservice::kErrorNone);
   dlcservice_client_->set_install_root_path("/path");
 
   // We need to use an existing Pack ID, so that we do get a result back.
   manager_->InstallPack(
-      kHandwritingFeatureId, "en",
+      kHandwritingFeatureId, kSupportedLocale,
       base::BindOnce(&LanguagePackManagerTest::InstallTestCallback,
                      base::Unretained(this)));
   base::RunLoop().RunUntilIdle();
@@ -148,7 +134,7 @@ TEST_F(LanguagePackManagerTest, InstallFailureTest) {
 
   // We need to use an existing Pack ID, so that we do get a result back.
   manager_->InstallPack(
-      kHandwritingFeatureId, "en",
+      kHandwritingFeatureId, kSupportedLocale,
       base::BindOnce(&LanguagePackManagerTest::InstallTestCallback,
                      base::Unretained(this)));
   base::RunLoop().RunUntilIdle();
@@ -159,7 +145,7 @@ TEST_F(LanguagePackManagerTest, InstallFailureTest) {
 
 TEST_F(LanguagePackManagerTest, InstallWrongIdTest) {
   manager_->InstallPack(
-      kFakeDlcId, "en",
+      kFakeDlcId, kSupportedLocale,
       base::BindOnce(&LanguagePackManagerTest::InstallTestCallback,
                      base::Unretained(this)));
   base::RunLoop().RunUntilIdle();
@@ -176,7 +162,8 @@ TEST_F(LanguagePackManagerTest, InstallCallbackTest) {
   testing::StrictMock<CallbackForTesting> callback;
   EXPECT_CALL(callback, Callback(_));
 
-  manager_->InstallPack(kFakeDlcId, "en", callback.GetInstallCallback());
+  manager_->InstallPack(kFakeDlcId, kSupportedLocale,
+                        callback.GetInstallCallback());
   base::RunLoop().RunUntilIdle();
 }
 
@@ -190,7 +177,7 @@ TEST_F(LanguagePackManagerTest, GetPackStateSuccessTest) {
 
   // We need to use an existing Pack ID, so that we do get a result back.
   manager_->GetPackState(
-      kHandwritingFeatureId, "en",
+      kHandwritingFeatureId, kSupportedLocale,
       base::BindOnce(&LanguagePackManagerTest::GetPackStateTestCallback,
                      base::Unretained(this)));
   base::RunLoop().RunUntilIdle();
@@ -205,7 +192,7 @@ TEST_F(LanguagePackManagerTest, GetPackStateFailureTest) {
 
   // We need to use an existing Pack ID, so that we do get a result back.
   manager_->GetPackState(
-      kHandwritingFeatureId, "en",
+      kHandwritingFeatureId, kSupportedLocale,
       base::BindOnce(&LanguagePackManagerTest::GetPackStateTestCallback,
                      base::Unretained(this)));
   base::RunLoop().RunUntilIdle();
@@ -216,7 +203,7 @@ TEST_F(LanguagePackManagerTest, GetPackStateFailureTest) {
 
 TEST_F(LanguagePackManagerTest, GetPackStateWrongIdTest) {
   manager_->GetPackState(
-      kFakeDlcId, "en",
+      kFakeDlcId, kSupportedLocale,
       base::BindOnce(&LanguagePackManagerTest::GetPackStateTestCallback,
                      base::Unretained(this)));
   base::RunLoop().RunUntilIdle();
@@ -232,7 +219,8 @@ TEST_F(LanguagePackManagerTest, GetPackStateCallbackTest) {
   testing::StrictMock<CallbackForTesting> callback;
   EXPECT_CALL(callback, Callback(_));
 
-  manager_->GetPackState(kFakeDlcId, "en", callback.GetPackStateCallback());
+  manager_->GetPackState(kFakeDlcId, kSupportedLocale,
+                         callback.GetPackStateCallback());
   base::RunLoop().RunUntilIdle();
 }
 
@@ -241,7 +229,7 @@ TEST_F(LanguagePackManagerTest, RemovePackSuccessTest) {
 
   // We need to use an existing Pack ID, so that we do get a result back.
   manager_->RemovePack(
-      kHandwritingFeatureId, "en",
+      kHandwritingFeatureId, kSupportedLocale,
       base::BindOnce(&LanguagePackManagerTest::RemoveTestCallback,
                      base::Unretained(this)));
   base::RunLoop().RunUntilIdle();
@@ -255,7 +243,7 @@ TEST_F(LanguagePackManagerTest, RemovePackFailureTest) {
 
   // We need to use an existing Pack ID, so that we do get a result back.
   manager_->RemovePack(
-      kHandwritingFeatureId, "en",
+      kHandwritingFeatureId, kSupportedLocale,
       base::BindOnce(&LanguagePackManagerTest::RemoveTestCallback,
                      base::Unretained(this)));
   base::RunLoop().RunUntilIdle();
@@ -265,7 +253,7 @@ TEST_F(LanguagePackManagerTest, RemovePackFailureTest) {
 
 TEST_F(LanguagePackManagerTest, RemovePackWrongIdTest) {
   manager_->RemovePack(
-      kFakeDlcId, "en",
+      kFakeDlcId, kSupportedLocale,
       base::BindOnce(&LanguagePackManagerTest::RemoveTestCallback,
                      base::Unretained(this)));
   base::RunLoop().RunUntilIdle();
@@ -281,7 +269,8 @@ TEST_F(LanguagePackManagerTest, RemovePackCallbackTest) {
   testing::StrictMock<CallbackForTesting> callback;
   EXPECT_CALL(callback, Callback(_));
 
-  manager_->RemovePack(kFakeDlcId, "en", callback.GetRemoveCallback());
+  manager_->RemovePack(kFakeDlcId, kSupportedLocale,
+                       callback.GetRemoveCallback());
   base::RunLoop().RunUntilIdle();
 }
 
@@ -319,6 +308,55 @@ TEST_F(LanguagePackManagerTest, RemoveObserverTest) {
   dlcservice_client_->NotifyObserversForTest(dlc_state);
 
   base::RunLoop().RunUntilIdle();
+}
+
+// Check that all supported locales are available.
+TEST_F(LanguagePackManagerTest, CheckAllLocalesAvailable) {
+  // Handwriting Recognition.
+  const std::vector<std::string> handwriting({"es", "ja"});
+  for (const auto& locale : handwriting) {
+    EXPECT_TRUE(manager_->IsPackAvailable(kHandwritingFeatureId, locale));
+  }
+}
+
+TEST_F(LanguagePackManagerTest, IsPackAvailableFalseTest) {
+  // Correct ID, wrong language (Polish).
+  bool available = manager_->IsPackAvailable(kHandwritingFeatureId, "pl");
+  EXPECT_FALSE(available);
+
+  // ID doesn't exists.
+  available = manager_->IsPackAvailable("foo", "fr");
+  EXPECT_FALSE(available);
+}
+
+TEST_F(LanguagePackManagerTest, InstallBasePayloadSuccess) {
+  dlcservice_client_->set_install_error(dlcservice::kErrorNone);
+  dlcservice_client_->set_install_root_path("/path");
+
+  // We need to use an existing Pack ID, so that we do get a result back.
+  manager_->InstallBasePayload(
+      kHandwritingFeatureId,
+      base::BindOnce(&LanguagePackManagerTest::InstallTestCallback,
+                     base::Unretained(this)));
+  base::RunLoop().RunUntilIdle();
+
+  EXPECT_EQ(pack_result_.operation_error, dlcservice::kErrorNone);
+  EXPECT_EQ(pack_result_.pack_state, PackResult::INSTALLED);
+  EXPECT_EQ(pack_result_.path, "/path");
+}
+
+TEST_F(LanguagePackManagerTest, InstallBasePayloadFailureTestFailure) {
+  dlcservice_client_->set_install_error(dlcservice::kErrorInternal);
+
+  // We need to use an existing Pack ID, so that we do get a result back.
+  manager_->InstallBasePayload(
+      kHandwritingFeatureId,
+      base::BindOnce(&LanguagePackManagerTest::InstallTestCallback,
+                     base::Unretained(this)));
+  base::RunLoop().RunUntilIdle();
+
+  EXPECT_EQ(pack_result_.operation_error, dlcservice::kErrorInternal);
+  EXPECT_NE(pack_result_.pack_state, PackResult::INSTALLED);
 }
 
 }  // namespace language_packs

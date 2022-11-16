@@ -34,6 +34,11 @@ class SameSiteDataRemoverBrowserTest : public ContentBrowserTest {
  public:
   SameSiteDataRemoverBrowserTest() {}
 
+  SameSiteDataRemoverBrowserTest(const SameSiteDataRemoverBrowserTest&) =
+      delete;
+  SameSiteDataRemoverBrowserTest& operator=(
+      const SameSiteDataRemoverBrowserTest&) = delete;
+
   void SetUpOnMainThread() override {
     ContentBrowserTest::SetUpOnMainThread();
 
@@ -78,9 +83,9 @@ class SameSiteDataRemoverBrowserTest : public ContentBrowserTest {
     ClearSameSiteNoneCookiesAndStorageForOrigins(
         run_loop.QuitClosure(), GetBrowserContext(),
         base::BindLambdaForTesting(
-            [&clear_storage_hosts](const url::Origin& origin,
+            [&clear_storage_hosts](const blink::StorageKey& storage_key,
                                    storage::SpecialStoragePolicy* policy) {
-              return clear_storage_hosts.find(origin.host()) !=
+              return clear_storage_hosts.find(storage_key.origin().host()) !=
                      clear_storage_hosts.end();
             }));
     run_loop.Run();
@@ -103,8 +108,6 @@ class SameSiteDataRemoverBrowserTest : public ContentBrowserTest {
   }
 
   std::unique_ptr<net::EmbeddedTestServer> https_server_;
-
-  DISALLOW_COPY_AND_ASSIGN(SameSiteDataRemoverBrowserTest);
 };
 
 IN_PROC_BROWSER_TEST_F(SameSiteDataRemoverBrowserTest, TestClearData) {

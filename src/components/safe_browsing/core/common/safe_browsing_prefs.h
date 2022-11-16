@@ -18,6 +18,10 @@ class PrefRegistrySimple;
 class PrefService;
 class GURL;
 
+namespace base {
+class Time;
+}
+
 namespace prefs {
 // A list of times at which CSD pings were sent.
 extern const char kSafeBrowsingCsdPingTimestamps[];
@@ -111,6 +115,22 @@ extern const char kSafeBrowsingMetricsLastLogTime[];
 // Used for logging metrics. Structure: go/sb-event-ts-pref-struct.
 extern const char kSafeBrowsingEventTimestamps[];
 
+// A timestamp indicating the last time the account tailored security boolean
+// was updated.
+extern const char kAccountTailoredSecurityUpdateTimestamp[];
+
+// Whether the user was shown the notification that they may want to enable
+// Enhanced Safe Browsing due to their account tailored security state.
+extern const char kAccountTailoredSecurityShownNotification[];
+
+// A boolean indicating if Enhanced Protection was enabled in sync with
+// account tailored security.
+extern const char kEnhancedProtectionEnabledViaTailoredSecurity[];
+
+// The last time the Extension Telemetry Service successfully
+// uploaded its data.
+extern const char kExtensionTelemetryLastUploadTime[];
+
 }  // namespace prefs
 
 namespace safe_browsing {
@@ -180,7 +200,11 @@ enum EnterpriseRealTimeUrlCheckMode {
 
 SafeBrowsingState GetSafeBrowsingState(const PrefService& prefs);
 
-void SetSafeBrowsingState(PrefService* prefs, SafeBrowsingState state);
+// Set the SafeBrowsing prefs. Also records if ESB was enabled in sync with
+// Account-ESB via Tailored Security.
+void SetSafeBrowsingState(PrefService* prefs,
+                          SafeBrowsingState state,
+                          bool is_esb_enabled_in_sync = false);
 
 // Returns whether Safe Browsing is enabled for the user.
 bool IsSafeBrowsingEnabled(const PrefService& prefs);
@@ -235,6 +259,14 @@ void SetExtendedReportingPrefAndMetric(PrefService* prefs,
 // This variant is used to simplify test code by omitting the location.
 void SetExtendedReportingPrefForTests(PrefService* prefs, bool value);
 
+// Sets the last time the Extension Telemetry Service successfully uploaded
+// its data.
+void SetLastUploadTimeForExtensionTelemetry(PrefService& prefs,
+                                            const base::Time& time);
+
+// Returns the `kExtensionTelemetryLastUploadTime` user preference.
+base::Time GetLastUploadTimeForExtensionTelemetry(PrefService& prefs);
+
 // Sets the currently active Safe Browsing Enhanced Protection to the specified
 // value.
 void SetEnhancedProtectionPrefForTests(PrefService* prefs, bool value);
@@ -275,7 +307,7 @@ void GetSafeBrowsingAllowlistDomainsPref(
 
 // Helper function to validate and canonicalize a list of domain strings.
 void CanonicalizeDomainList(
-    const base::ListValue& raw_domain_list,
+    const base::Value& raw_domain_list,
     std::vector<std::string>* out_canonicalized_domain_list);
 
 // Helper function to determine if |url| matches Safe Browsing allowlist domains

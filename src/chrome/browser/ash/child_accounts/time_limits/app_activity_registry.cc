@@ -9,6 +9,7 @@
 #include "base/containers/contains.h"
 #include "base/logging.h"
 #include "base/time/default_tick_clock.h"
+#include "base/unguessable_token.h"
 #include "base/values.h"
 #include "chrome/browser/ash/child_accounts/time_limits/app_time_limit_utils.h"
 #include "chrome/browser/ash/child_accounts/time_limits/app_time_limits_allowlist_policy_wrapper.h"
@@ -23,16 +24,16 @@
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/scoped_user_pref_update.h"
-#include "components/services/app_service/public/mojom/types.mojom.h"
+#include "components/services/app_service/public/cpp/app_types.h"
 
 namespace ash {
 namespace app_time {
 
 namespace {
 
-constexpr base::TimeDelta kFiveMinutes = base::TimeDelta::FromMinutes(5);
-constexpr base::TimeDelta kOneMinute = base::TimeDelta::FromMinutes(1);
-constexpr base::TimeDelta kZeroMinutes = base::TimeDelta::FromMinutes(0);
+constexpr base::TimeDelta kFiveMinutes = base::Minutes(5);
+constexpr base::TimeDelta kOneMinute = base::Minutes(1);
+constexpr base::TimeDelta kZeroMinutes = base::Minutes(0);
 
 enterprise_management::AppActivity::AppState AppStateForReporting(
     AppState state) {
@@ -150,12 +151,12 @@ AppActivityRegistry::AppActivityRegistry(
   DCHECK(pref_service_);
 
   if (ShouldCleanUpStoredPref())
-    CleanRegistry(base::Time::Now() - base::TimeDelta::FromDays(30));
+    CleanRegistry(base::Time::Now() - base::Days(30));
 
   InitializeRegistryFromPref();
 
-  save_data_to_pref_service_.Start(FROM_HERE, base::TimeDelta::FromMinutes(5),
-                                   this, &AppActivityRegistry::SaveAppActivity);
+  save_data_to_pref_service_.Start(FROM_HERE, base::Minutes(5), this,
+                                   &AppActivityRegistry::SaveAppActivity);
 
   app_service_wrapper_->AddObserver(this);
 }
@@ -225,10 +226,9 @@ void AppActivityRegistry::OnAppBlocked(const AppId& app_id) {
   SetAppState(app_id, AppState::kBlocked);
 }
 
-void AppActivityRegistry::OnAppActive(
-    const AppId& app_id,
-    const apps::Instance::InstanceKey& instance_key,
-    base::Time timestamp) {
+void AppActivityRegistry::OnAppActive(const AppId& app_id,
+                                      const base::UnguessableToken& instance_id,
+                                      base::Time timestamp) {
   if (!base::Contains(activity_registry_, app_id))
     return;
 
@@ -242,10 +242,10 @@ void AppActivityRegistry::OnAppActive(
     // If the instance is in |app_details.paused_instances| then
     // AppActivityRegistry has already notified its observers to pause it.
     // Return.
-    if (base::Contains(app_details.paused_instances, instance_key))
+    if (base::Contains(app_details.paused_instances, instance_id))
       return;
 
-    app_details.paused_instances.insert(instance_key);
+    app_details.paused_instances.insert(instance_id);
     NotifyLimitReached(app_id, /* was_active */ true);
     return;
   }
@@ -253,13 +253,13 @@ void AppActivityRegistry::OnAppActive(
   if (!IsAppAvailable(app_id))
     return;
 
-  std::set<apps::Instance::InstanceKey>& active_instances =
+  std::set<base::UnguessableToken>& active_instances =
       app_details.active_instances;
 
-  if (base::Contains(active_instances, instance_key))
+  if (base::Contains(active_instances, instance_id))
     return;
 
-  active_instances.insert(instance_key);
+  active_instances.insert(instance_id);
 
   // No need to set app as active if there were already active instances for the
   // app
@@ -271,7 +271,7 @@ void AppActivityRegistry::OnAppActive(
 
 void AppActivityRegistry::OnAppInactive(
     const AppId& app_id,
-    const apps::Instance::InstanceKey& instance_key,
+    const base::UnguessableToken& instance_id,
     base::Time timestamp) {
   if (!base::Contains(activity_registry_, app_id))
     return;
@@ -279,13 +279,13 @@ void AppActivityRegistry::OnAppInactive(
   if (app_id == GetChromeAppId())
     return;
 
-  std::set<apps::Instance::InstanceKey>& active_instances =
+  std::set<base::UnguessableToken>& active_instances =
       activity_registry_[app_id].active_instances;
 
-  if (!base::Contains(active_instances, instance_key))
+  if (!base::Contains(active_instances, instance_id))
     return;
 
-  active_instances.erase(instance_key);
+  active_instances.erase(instance_id);
   if (active_instances.size() > 0)
     return;
 
@@ -294,7 +294,7 @@ void AppActivityRegistry::OnAppInactive(
 
 void AppActivityRegistry::OnAppDestroyed(
     const AppId& app_id,
-    const apps::Instance::InstanceKey& instance_key,
+    const base::UnguessableToken& instance_id,
     base::Time timestamp) {
   if (!base::Contains(activity_registry_, app_id))
     return;
@@ -303,8 +303,8 @@ void AppActivityRegistry::OnAppDestroyed(
     return;
 
   AppDetails& app_details = activity_registry_.at(app_id);
-  if (base::Contains(app_details.paused_instances, instance_key))
-    app_details.paused_instances.erase(instance_key);
+  if (base::Contains(app_details.paused_instances, instance_id))
+    app_details.paused_instances.erase(instance_id);
 }
 
 bool AppActivityRegistry::IsAppInstalled(const AppId& app_id) const {
@@ -396,7 +396,7 @@ void AppActivityRegistry::GenerateHiddenApps(
     enterprise_management::App* app_info = report->add_hidden_app();
     app_info->set_app_id(app_id.app_id());
     app_info->set_app_type(AppTypeForReporting(app_id.app_type()));
-    if (app_id.app_type() == apps::mojom::AppType::kArc) {
+    if (app_id.app_type() == apps::AppType::kArc) {
       app_info->add_additional_app_id(
           app_service_wrapper_->GetAppServiceId(app_id));
     }
@@ -446,7 +446,7 @@ AppActivityRegistry::GenerateAppActivityReport(
     app_info->set_app_id(app_id.app_id());
     app_info->set_app_type(AppTypeForReporting(app_id.app_type()));
     // AppService is is only different for ARC++ apps.
-    if (app_id.app_type() == apps::mojom::AppType::kArc) {
+    if (app_id.app_type() == apps::AppType::kArc) {
       app_info->add_additional_app_id(
           app_service_wrapper_->GetAppServiceId(app_id));
     }
@@ -628,11 +628,11 @@ void AppActivityRegistry::OnTimeLimitAllowlistChanged(
 void AppActivityRegistry::SaveAppActivity() {
   {
     ListPrefUpdate update(pref_service_, prefs::kPerAppTimeLimitsAppActivities);
-    base::ListValue* list_value = update.Get();
+    base::Value* list_value = update.Get();
 
     const base::Time now = base::Time::Now();
 
-    base::Value::ListView list_view = list_value->GetList();
+    base::Value::ListView list_view = list_value->GetListDeprecated();
     for (base::Value& entry : list_view) {
       absl::optional<AppId> app_id = policy::AppIdFromAppInfoDict(entry);
       DCHECK(app_id.has_value());
@@ -700,13 +700,12 @@ void AppActivityRegistry::OnResetTimeReached(base::Time timestamp) {
 void AppActivityRegistry::CleanRegistry(base::Time timestamp) {
   ListPrefUpdate update(pref_service_, prefs::kPerAppTimeLimitsAppActivities);
 
-  base::ListValue* list_value = update.Get();
+  base::Value* list_value = update.Get();
 
-  // base::Value::ListStorage is an alias for std::vector<base::Value>.
-  base::Value::ListStorage list_storage = std::move(*list_value).TakeList();
+  base::Value::List& list = list_value->GetList();
 
-  for (size_t index = 0; index < list_storage.size();) {
-    base::Value& entry = list_storage[index];
+  for (size_t index = 0; index < list.size();) {
+    base::Value& entry = list[index];
     absl::optional<PersistedAppInfo> info =
         PersistedAppInfo::PersistedAppInfoFromDict(&entry, true);
     DCHECK(info.has_value());
@@ -719,15 +718,13 @@ void AppActivityRegistry::CleanRegistry(base::Time timestamp) {
 
       // To efficiently remove the entry, swap it with the last element and pop
       // back.
-      if (index < list_storage.size() - 1)
-        std::swap(list_storage[index], list_storage[list_storage.size() - 1]);
-      list_storage.pop_back();
+      if (index < list.size() - 1)
+        std::swap(list[index], list[list.size() - 1]);
+      list.erase(list.end() - 1);
     } else {
       ++index;
     }
   }
-
-  *list_value = base::ListValue(std::move(list_storage));
 }
 
 void AppActivityRegistry::OnAppReinstalled(const AppId& app_id) {
@@ -1029,7 +1026,7 @@ bool AppActivityRegistry::ShowLimitUpdatedNotificationIfNeeded(
 }
 
 base::TimeDelta AppActivityRegistry::GetWebActiveRunningTime() const {
-  base::TimeDelta active_running_time = base::TimeDelta::FromSeconds(0);
+  base::TimeDelta active_running_time = base::Seconds(0);
   for (const auto& app_info : activity_registry_) {
     const AppId& app_id = app_info.first;
     const AppDetails& details = app_info.second;
@@ -1065,7 +1062,7 @@ void AppActivityRegistry::InitializeRegistryFromPref() {
       pref_service_->GetInt64(prefs::kPerAppTimeLimitsLatestLimitUpdateTime);
 
   latest_app_limit_update_ = base::Time::FromDeltaSinceWindowsEpoch(
-      base::TimeDelta::FromMicroseconds(last_limits_updates));
+      base::Microseconds(last_limits_updates));
 
   InitializeAppActivities();
 }
@@ -1126,10 +1123,10 @@ bool AppActivityRegistry::ShouldCleanUpStoredPref() {
   if (last_time == 0)
     return false;
 
-  base::Time time = base::Time::FromDeltaSinceWindowsEpoch(
-      base::TimeDelta::FromMicroseconds(last_time));
+  base::Time time =
+      base::Time::FromDeltaSinceWindowsEpoch(base::Microseconds(last_time));
 
-  return time < base::Time::Now() - base::TimeDelta::FromDays(30);
+  return time < base::Time::Now() - base::Days(30);
 }
 
 void AppActivityRegistry::SendSystemNotificationsForApp(const AppId& app_id) {

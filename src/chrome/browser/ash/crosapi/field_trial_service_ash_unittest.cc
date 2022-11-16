@@ -6,7 +6,7 @@
 
 #include "base/metrics/field_trial.h"
 #include "base/test/bind.h"
-#include "base/test/task_environment.h"
+#include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace crosapi {
@@ -39,7 +39,9 @@ class TestFieldTrialObserver : public mojom::FieldTrialObserver {
     return receiver_.BindNewPipeAndPassRemote();
   }
 
-  void set_on_activate(OnActivateCallback callback) { callback_ = callback; }
+  void set_on_activate(OnActivateCallback callback) {
+    callback_ = std::move(callback);
+  }
 
   mojo::Receiver<mojom::FieldTrialObserver> receiver_{this};
 
@@ -66,7 +68,7 @@ class FieldTrialServiceAshTest : public testing::Test {
   TestFieldTrialObserver observer_;
 
  private:
-  base::test::SingleThreadTaskEnvironment task_environment;
+  content::BrowserTaskEnvironment task_environment;
 };
 
 TEST_F(FieldTrialServiceAshTest, SendInitialFieldTrialsAndUpdate) {
@@ -77,7 +79,7 @@ TEST_F(FieldTrialServiceAshTest, SendInitialFieldTrialsAndUpdate) {
   base::RunLoop run_loop1;
   observer_.set_on_activate(base::BindLambdaForTesting(
       [&](const std::vector<mojom::FieldTrialGroupInfoPtr>& infos) {
-        EXPECT_EQ(2, infos.size());
+        ASSERT_EQ(2u, infos.size());
         VerifyFieldTrial(infos[0], kTrialName1, kGroupName);
         VerifyFieldTrial(infos[1], kTrialName2, kGroupName);
         run_loop1.Quit();
@@ -92,7 +94,7 @@ TEST_F(FieldTrialServiceAshTest, SendInitialFieldTrialsAndUpdate) {
   base::RunLoop run_loop2;
   observer_.set_on_activate(base::BindLambdaForTesting(
       [&](const std::vector<mojom::FieldTrialGroupInfoPtr>& infos) {
-        EXPECT_EQ(1, infos.size());
+        EXPECT_EQ(1u, infos.size());
         VerifyFieldTrial(infos[0], kTrialName3, kGroupName);
         run_loop2.Quit();
         // Test won't exit until this is called.
@@ -109,7 +111,7 @@ TEST_F(FieldTrialServiceAshTest, SendEmptyInitialFieldTrial) {
   base::RunLoop run_loop;
   observer_.set_on_activate(base::BindLambdaForTesting(
       [&](const std::vector<mojom::FieldTrialGroupInfoPtr>& infos) {
-        EXPECT_EQ(0, infos.size());
+        EXPECT_EQ(0u, infos.size());
         run_loop.Quit();
         // Test won't exit until this is called.
       }));

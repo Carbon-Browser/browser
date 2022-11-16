@@ -136,7 +136,7 @@ Dualshock4Controller::~Dualshock4Controller() = default;
 bool Dualshock4Controller::IsDualshock4(GamepadId gamepad_id) {
   return gamepad_id == GamepadId::kSonyProduct05c4 ||
          gamepad_id == GamepadId::kSonyProduct09cc ||
-         gamepad_id == GamepadId::kVendor2e95Product7725;
+         gamepad_id == GamepadId::kScufProduct7725;
 }
 
 // static
@@ -202,7 +202,7 @@ bool Dualshock4Controller::ProcessInputReport(uint8_t report_id,
       data->controller_data.button_ps,
       data->controller_data.button_touch,
   };
-  for (size_t i = 0; i < base::size(button_values); ++i) {
+  for (size_t i = 0; i < std::size(button_values); ++i) {
     pad->buttons[i].pressed = button_values[i];
     pad->buttons[i].touched = button_values[i];
     pad->buttons[i].value = button_values[i] ? 1.0 : 0.0;
@@ -211,17 +211,17 @@ bool Dualshock4Controller::ProcessInputReport(uint8_t report_id,
   return true;
 }
 
-void Dualshock4Controller::SetVibration(double strong_magnitude,
-                                        double weak_magnitude) {
+void Dualshock4Controller::SetVibration(
+    mojom::GamepadEffectParametersPtr params) {
   // Genuine DualShock 4 gamepads use an alternate output report when connected
   // over Bluetooth. Always send USB-mode reports to SCUF Vantage gamepads.
   if (bus_type_ == GAMEPAD_BUS_BLUETOOTH &&
-      gamepad_id_ != GamepadId::kVendor2e95Product7725) {
-    SetVibrationBluetooth(strong_magnitude, weak_magnitude);
+      gamepad_id_ != GamepadId::kScufProduct7725) {
+    SetVibrationBluetooth(params->strong_magnitude, params->weak_magnitude);
     return;
   }
 
-  SetVibrationUsb(strong_magnitude, weak_magnitude);
+  SetVibrationUsb(params->strong_magnitude, params->weak_magnitude);
 }
 
 void Dualshock4Controller::SetVibrationUsb(double strong_magnitude,

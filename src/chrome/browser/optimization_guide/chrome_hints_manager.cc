@@ -18,24 +18,11 @@
 #include "content/public/browser/browser_thread.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/optimization_guide/android/android_push_notification_manager.h"
 #endif
 
 namespace {
-
-// Creates the platform specific push notification manager.
-std::unique_ptr<optimization_guide::PushNotificationManager>
-MaybeCreatePushNotificationManager(PrefService* pref_service) {
-#if defined(OS_ANDROID)
-  if (optimization_guide::features::IsPushNotificationsEnabled()) {
-    return std::make_unique<
-        optimization_guide::android::AndroidPushNotificationManager>(
-        pref_service);
-  }
-#endif
-  return nullptr;
-}
 
 // Returns true if we can make a request for hints for |prediction|.
 bool IsAllowedToFetchForNavigationPrediction(
@@ -65,11 +52,13 @@ namespace optimization_guide {
 ChromeHintsManager::ChromeHintsManager(
     Profile* profile,
     PrefService* pref_service,
-    optimization_guide::OptimizationGuideStore* hint_store,
+    base::WeakPtr<optimization_guide::OptimizationGuideStore> hint_store,
     optimization_guide::TopHostProvider* top_host_provider,
     optimization_guide::TabUrlProvider* tab_url_provider,
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
-    network::NetworkConnectionTracker* network_connection_tracker)
+    std::unique_ptr<optimization_guide::PushNotificationManager>
+        push_notification_manager,
+    OptimizationGuideLogger* optimization_guide_logger)
     : HintsManager(profile->IsOffTheRecord(),
                    g_browser_process->GetApplicationLocale(),
                    pref_service,
@@ -77,8 +66,8 @@ ChromeHintsManager::ChromeHintsManager(
                    top_host_provider,
                    tab_url_provider,
                    url_loader_factory,
-                   network_connection_tracker,
-                   MaybeCreatePushNotificationManager(pref_service)),
+                   std::move(push_notification_manager),
+                   optimization_guide_logger),
       profile_(profile) {
   NavigationPredictorKeyedService* navigation_predictor_service =
       NavigationPredictorKeyedServiceFactory::GetForProfile(profile);

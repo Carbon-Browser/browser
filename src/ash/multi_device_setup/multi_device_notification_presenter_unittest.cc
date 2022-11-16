@@ -9,6 +9,8 @@
 #include <utility>
 
 #include "ash/public/cpp/test/test_system_tray_client.h"
+#include "ash/services/multidevice_setup/public/cpp/fake_multidevice_setup.h"
+#include "ash/services/multidevice_setup/public/mojom/multidevice_setup.mojom.h"
 #include "ash/session/test_session_controller_client.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/test/ash_test_base.h"
@@ -20,8 +22,6 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/token.h"
-#include "chromeos/services/multidevice_setup/public/cpp/fake_multidevice_setup.h"
-#include "chromeos/services/multidevice_setup/public/mojom/multidevice_setup.mojom.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/message_center/fake_message_center.h"
@@ -40,6 +40,10 @@ const char16_t kTestDeviceType[] = u"Chrome device";
 class TestMessageCenter : public message_center::FakeMessageCenter {
  public:
   TestMessageCenter() = default;
+
+  TestMessageCenter(const TestMessageCenter&) = delete;
+  TestMessageCenter& operator=(const TestMessageCenter&) = delete;
+
   ~TestMessageCenter() override = default;
 
   // message_center::FakeMessageCenter:
@@ -92,8 +96,6 @@ class TestMessageCenter : public message_center::FakeMessageCenter {
 
  private:
   std::unique_ptr<message_center::Notification> notification_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestMessageCenter);
 };
 
 }  // namespace
@@ -102,12 +104,17 @@ class MultiDeviceNotificationPresenterTest : public NoSessionAshTestBase {
  public:
   MultiDeviceNotificationPresenterTest() = default;
 
+  MultiDeviceNotificationPresenterTest(
+      const MultiDeviceNotificationPresenterTest&) = delete;
+  MultiDeviceNotificationPresenterTest& operator=(
+      const MultiDeviceNotificationPresenterTest&) = delete;
+
   void SetUp() override {
     fake_multidevice_setup_ =
-        std::make_unique<chromeos::multidevice_setup::FakeMultiDeviceSetup>();
+        std::make_unique<multidevice_setup::FakeMultiDeviceSetup>();
     auto delegate = std::make_unique<TestShellDelegate>();
     delegate->SetMultiDeviceSetupBinder(base::BindRepeating(
-        &chromeos::multidevice_setup::MultiDeviceSetupBase::BindReceiver,
+        &multidevice_setup::MultiDeviceSetupBase::BindReceiver,
         base::Unretained(fake_multidevice_setup_.get())));
     NoSessionAshTestBase::SetUp(std::move(delegate));
 
@@ -287,7 +294,7 @@ class MultiDeviceNotificationPresenterTest : public NoSessionAshTestBase {
   base::HistogramTester histogram_tester_;
   TestSystemTrayClient* test_system_tray_client_;
   TestMessageCenter test_message_center_;
-  std::unique_ptr<chromeos::multidevice_setup::FakeMultiDeviceSetup>
+  std::unique_ptr<multidevice_setup::FakeMultiDeviceSetup>
       fake_multidevice_setup_;
   std::unique_ptr<MultiDeviceNotificationPresenter> notification_presenter_;
 
@@ -332,8 +339,6 @@ class MultiDeviceNotificationPresenterTest : public NoSessionAshTestBase {
     EXPECT_EQ(title, kVisibleNotification->title());
     EXPECT_EQ(message, kVisibleNotification->message());
   }
-
-  DISALLOW_COPY_AND_ASSIGN(MultiDeviceNotificationPresenterTest);
 };
 
 TEST_F(MultiDeviceNotificationPresenterTest, NotSignedIntoAccount) {

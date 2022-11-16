@@ -33,7 +33,16 @@ class DesktopProfileSessionDurationsService
       syncer::SyncService* sync_service,
       signin::IdentityManager* identity_manager,
       DesktopSessionDurationTracker* tracker);
+
+  DesktopProfileSessionDurationsService(
+      const DesktopProfileSessionDurationsService&) = delete;
+  DesktopProfileSessionDurationsService& operator=(
+      const DesktopProfileSessionDurationsService&) = delete;
+
   ~DesktopProfileSessionDurationsService() override;
+
+  bool IsSignedIn() const;
+  bool IsSyncing() const;
 
   // DesktopSessionDurationtracker::Observer:
   void OnSessionStarted(base::TimeTicks session_start) override;
@@ -52,8 +61,6 @@ class DesktopProfileSessionDurationsService
   base::ScopedObservation<DesktopSessionDurationTracker,
                           DesktopSessionDurationTracker::Observer>
       session_duration_observation_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(DesktopProfileSessionDurationsService);
 };
 
 }  // namespace metrics

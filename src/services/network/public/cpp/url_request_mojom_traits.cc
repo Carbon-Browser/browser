@@ -9,10 +9,13 @@
 #include "base/debug/dump_without_crashing.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
+#include "base/time/time.h"
 #include "mojo/public/cpp/base/file_mojom_traits.h"
 #include "mojo/public/cpp/base/file_path_mojom_traits.h"
 #include "mojo/public/cpp/base/time_mojom_traits.h"
 #include "mojo/public/cpp/base/unguessable_token_mojom_traits.h"
+#include "net/log/net_log_source.h"
+#include "net/log/net_log_source_type.h"
 #include "services/network/public/cpp/crash_keys.h"
 #include "services/network/public/cpp/http_request_headers_mojom_traits.h"
 #include "services/network/public/cpp/isolation_info_mojom_traits.h"
@@ -22,6 +25,7 @@
 #include "services/network/public/mojom/cookie_access_observer.mojom.h"
 #include "services/network/public/mojom/data_pipe_getter.mojom.h"
 #include "services/network/public/mojom/devtools_observer.mojom.h"
+#include "services/network/public/mojom/ip_address_space.mojom.h"
 #include "services/network/public/mojom/trust_tokens.mojom.h"
 #include "services/network/public/mojom/url_loader.mojom-shared.h"
 #include "services/network/public/mojom/url_request.mojom.h"
@@ -114,6 +118,22 @@ bool StructTraits<network::mojom::WebBundleTokenParamsDataView,
   return true;
 }
 
+bool StructTraits<network::mojom::NetLogSourceDataView, net::NetLogSource>::
+    Read(network::mojom::NetLogSourceDataView data, net::NetLogSource* out) {
+  if (data.source_type() >=
+      static_cast<uint32_t>(net::NetLogSourceType::COUNT)) {
+    return false;
+  }
+  base::TimeTicks start_time;
+  if (!data.ReadStartTime(&start_time)) {
+    return false;
+  }
+  *out =
+      net::NetLogSource(static_cast<net::NetLogSourceType>(data.source_type()),
+                        data.source_id(), start_time);
+  return true;
+}
+
 bool StructTraits<
     network::mojom::URLRequestDataView,
     network::ResourceRequest>::Read(network::mojom::URLRequestDataView data,
@@ -158,7 +178,10 @@ bool StructTraits<
       !data.ReadRecursivePrefetchToken(&out->recursive_prefetch_token) ||
       !data.ReadWebBundleTokenParams(&out->web_bundle_token_params) ||
       !data.ReadDevtoolsAcceptedStreamTypes(
-          &out->devtools_accepted_stream_types)) {
+          &out->devtools_accepted_stream_types) ||
+      !data.ReadNetLogCreateInfo(&out->net_log_create_info) ||
+      !data.ReadNetLogReferenceInfo(&out->net_log_reference_info) ||
+      !data.ReadNavigationRedirectChain(&out->navigation_redirect_chain)) {
     // Note that data.ReadTrustTokenParams is temporarily handled below.
     return false;
   }
@@ -175,8 +198,6 @@ bool StructTraits<
       data.update_first_party_url_on_redirect();
   out->load_flags = data.load_flags();
   out->resource_type = data.resource_type();
-  out->should_reset_appcache = data.should_reset_appcache();
-  out->is_external_request = data.is_external_request();
   out->originated_from_service_worker = data.originated_from_service_worker();
   out->skip_service_worker = data.skip_service_worker();
   out->corb_detachable = data.corb_detachable();
@@ -186,7 +207,7 @@ bool StructTraits<
   out->enable_load_timing = data.enable_load_timing();
   out->enable_upload_progress = data.enable_upload_progress();
   out->do_not_prompt_for_login = data.do_not_prompt_for_login();
-  out->is_main_frame = data.is_main_frame();
+  out->is_outermost_main_frame = data.is_outermost_main_frame();
   out->transition_type = data.transition_type();
   out->previews_state = data.previews_state();
   out->upgrade_if_insecure = data.upgrade_if_insecure();
@@ -195,7 +216,8 @@ bool StructTraits<
       data.is_signed_exchange_prefetch_cache_enabled();
   out->is_fetch_like_api = data.is_fetch_like_api();
   out->is_favicon = data.is_favicon();
-  out->obey_origin_policy = data.obey_origin_policy();
+  out->original_destination = data.original_destination();
+  out->target_ip_address_space = data.target_ip_address_space();
   return true;
 }
 

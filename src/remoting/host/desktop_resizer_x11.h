@@ -8,8 +8,8 @@
 #include <string.h>
 
 #include "base/command_line.h"
-#include "base/macros.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "remoting/base/logging.h"
 #include "remoting/host/desktop_resizer.h"
 #include "remoting/host/linux/x11_util.h"
@@ -47,11 +47,14 @@ class DesktopResizerX11 : public DesktopResizer {
   ~DesktopResizerX11() override;
 
   // DesktopResizer interface
-  ScreenResolution GetCurrentResolution() override;
+  ScreenResolution GetCurrentResolution(webrtc::ScreenId screen_id) override;
   std::list<ScreenResolution> GetSupportedResolutions(
-      const ScreenResolution& preferred) override;
-  void SetResolution(const ScreenResolution& resolution) override;
-  void RestoreResolution(const ScreenResolution& original) override;
+      const ScreenResolution& preferred,
+      webrtc::ScreenId screen_id) override;
+  void SetResolution(const ScreenResolution& resolution,
+                     webrtc::ScreenId screen_id) override;
+  void RestoreResolution(const ScreenResolution& original,
+                         webrtc::ScreenId screen_id) override;
 
  private:
   // Add a mode matching the specified resolution and switch to it.
@@ -74,9 +77,9 @@ class DesktopResizerX11 : public DesktopResizer {
   // its resolution.
   void SwitchToMode(const char* name);
 
-  x11::Connection* connection_;
-  x11::RandR* const randr_ = nullptr;
-  const x11::Screen* const screen_ = nullptr;
+  raw_ptr<x11::Connection> connection_;
+  const raw_ptr<x11::RandR> randr_ = nullptr;
+  const raw_ptr<const x11::Screen> screen_ = nullptr;
   x11::Window root_;
   ScreenResources resources_;
   bool exact_resize_;

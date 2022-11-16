@@ -16,7 +16,6 @@
 #include "base/check_op.h"
 #include "base/containers/contains.h"
 #include "base/feature_list.h"
-#include "base/macros.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
@@ -161,8 +160,8 @@ constexpr DbusAppmenuCommand kHelpMenu[] = {
 void FindMenuItemsForCommandAux(
     ui::MenuModel* menu,
     int command,
-    std::vector<std::pair<ui::MenuModel*, int>>* menu_items) {
-  for (int i = 0; i < menu->GetItemCount(); i++) {
+    std::vector<std::pair<ui::MenuModel*, size_t>>* menu_items) {
+  for (size_t i = 0; i < menu->GetItemCount(); ++i) {
     if (menu->GetCommandIdAt(i) == command)
       menu_items->push_back({menu, i});
     if (menu->GetTypeAt(i) == ui::SimpleMenuModel::ItemType::TYPE_SUBMENU) {
@@ -172,10 +171,10 @@ void FindMenuItemsForCommandAux(
   }
 }
 
-std::vector<std::pair<ui::MenuModel*, int>> FindMenuItemsForCommand(
+std::vector<std::pair<ui::MenuModel*, size_t>> FindMenuItemsForCommand(
     ui::MenuModel* menu,
     int command) {
-  std::vector<std::pair<ui::MenuModel*, int>> menu_items;
+  std::vector<std::pair<ui::MenuModel*, size_t>> menu_items;
   FindMenuItemsForCommandAux(menu, command, &menu_items);
   return menu_items;
 }
@@ -184,6 +183,9 @@ std::vector<std::pair<ui::MenuModel*, int>> FindMenuItemsForCommand(
 
 struct DbusAppmenu::HistoryItem {
   HistoryItem() : session_id(SessionID::InvalidValue()) {}
+
+  HistoryItem(const HistoryItem&) = delete;
+  HistoryItem& operator=(const HistoryItem&) = delete;
 
   // The title for the menu item.
   std::u16string title;
@@ -202,9 +204,6 @@ struct DbusAppmenu::HistoryItem {
   // is the owner of all items. If it is not a window, then the entry is a
   // single page and the vector will be empty.
   std::vector<HistoryItem*> tabs;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(HistoryItem);
 };
 
 DbusAppmenu::DbusAppmenu(BrowserView* browser_view, uint32_t browser_frame_id)
@@ -298,7 +297,7 @@ ui::SimpleMenuModel* DbusAppmenu::BuildStaticMenu(
     if (command_id == kSeparator) {
       // Use InsertSeparatorAt() instead of AddSeparator() because the latter
       // refuses to add a separator to an empty menu.
-      int old_item_count = menu->GetItemCount();
+      size_t old_item_count = menu->GetItemCount();
       menu->InsertSeparatorAt(old_item_count,
                               ui::MenuSeparatorType::SPACING_SEPARATOR);
 
@@ -580,7 +579,8 @@ void DbusAppmenu::ExecuteCommand(int command_id, int event_flags) {
   } else if (command_id == kTagProfileEdit) {
     avatar_menu_->EditProfile(active_profile_index_);
   } else if (command_id == kTagProfileCreate) {
-    ProfilePicker::Show(ProfilePicker::EntryPoint::kProfileMenuAddNewProfile);
+    ProfilePicker::Show(ProfilePicker::Params::FromEntryPoint(
+        ProfilePicker::EntryPoint::kProfileMenuAddNewProfile));
   } else if (base::Contains(history_items_, command_id)) {
     HistoryItem* item = history_items_[command_id].get();
     // If this item can be restored using TabRestoreService, do so.

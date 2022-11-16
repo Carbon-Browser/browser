@@ -13,15 +13,16 @@
 #include "chrome/browser/apps/app_service/browser_app_launcher.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser_dialogs.h"
-#include "chrome/browser/web_applications/os_integration_manager.h"
+#include "chrome/browser/web_applications/os_integration/os_integration_manager.h"
+#include "chrome/browser/web_applications/os_integration/web_app_file_handler_manager.h"
+#include "chrome/browser/web_applications/os_integration/web_app_shortcut_mac.h"
 #include "chrome/browser/web_applications/web_app.h"
+#include "chrome/browser/web_applications/web_app_constants.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/browser/web_applications/web_app_registrar.h"
-#include "chrome/browser/web_applications/web_app_registry_update.h"
-#include "chrome/browser/web_applications/web_app_shortcut_mac.h"
-#include "chrome/browser/web_applications/web_app_sync_bridge.h"
-#include "chrome/common/chrome_features.h"
+#include "chrome/browser/web_applications/web_app_utils.h"
 #include "chrome/common/chrome_switches.h"
+#include "components/services/app_service/public/cpp/app_launch_util.h"
 #include "net/base/filename_util.h"
 #include "third_party/blink/public/common/custom_handlers/protocol_handler_utils.h"
 
@@ -29,20 +30,101 @@ namespace web_app {
 
 namespace {
 
-// Align with Windows implementation which only supports 10 items.
-constexpr int kMaxApplicationDockMenuItems = 10;
-
 // Testing hook for BrowserAppLauncher::LaunchAppWithParams
 web_app::BrowserAppLauncherForTesting& GetBrowserAppLauncherForTesting() {
   static base::NoDestructor<web_app::BrowserAppLauncherForTesting> instance;
   return *instance;
 }
 
+// Launches the app specified by `params` and `file_launches` in the given
+// `profile`.
+void LaunchAppWithParams(
+    Profile* profile,
+    apps::AppLaunchParams params,
+    const WebAppFileHandlerManager::LaunchInfos& file_launches) {
+  if (!file_launches.empty()) {
+    for (const auto& [url, files] : file_launches) {
+      apps::AppLaunchParams params_copy(params.app_id, params.container,
+                                        params.disposition,
+                                        params.launch_source);
+      params_copy.override_url = url;
+      params_copy.launch_files = files;
+
+      if (GetBrowserAppLauncherForTesting()) {
+        GetBrowserAppLauncherForTesting().Run(params_copy);
+      } else {
+        apps::AppServiceProxyFactory::GetForProfile(profile)
+            ->BrowserAppLauncher()
+            ->LaunchAppWithParams(std::move(params_copy));
+      }
+    }
+    return;
+  }
+
+  if (GetBrowserAppLauncherForTesting()) {
+    GetBrowserAppLauncherForTesting().Run(params);
+  } else {
+    apps::AppServiceProxyFactory::GetForProfile(profile)
+        ->BrowserAppLauncher()
+        ->LaunchAppWithParams(std::move(params));
+  }
+}
+
+// Cancels the launch of the app for the given `app_id`, potentially resulting
+// in the app shim exiting.
+void CancelAppLaunch(Profile* profile, const web_app::AppId& app_id) {
+  apps::AppShimManager::Get()->OnAppLaunchCancelled(profile, app_id);
+}
+
+// Called after the user's preference has been persisted, and the OS
+// has been notified of the change.
+void OnPersistUserChoiceCompleted(
+    apps::AppLaunchParams params,
+    const WebAppFileHandlerManager::LaunchInfos& file_launches,
+    Profile* profile,
+    bool allowed) {
+  if (allowed) {
+    LaunchAppWithParams(profile, std::move(params), file_launches);
+  } else {
+    CancelAppLaunch(profile, params.app_id);
+  }
+}
+
+// Called after the user has dismissed the WebAppProtocolHandlerIntentPicker
+// dialog.
+void UserChoiceDialogCompleted(
+    apps::AppLaunchParams params,
+    const WebAppFileHandlerManager::LaunchInfos& file_launches,
+    Profile* profile,
+    bool allowed,
+    bool remember_user_choice) {
+  absl::optional<GURL> protocol_url = params.protocol_handler_launch_url;
+  const bool is_file_launch = !file_launches.empty();
+  web_app::AppId app_id = params.app_id;
+
+  auto persist_done =
+      base::BindOnce(&OnPersistUserChoiceCompleted, std::move(params),
+                     file_launches, profile, allowed);
+
+  if (remember_user_choice) {
+    if (protocol_url) {
+      PersistProtocolHandlersUserChoice(profile, app_id, *protocol_url, allowed,
+                                        std::move(persist_done));
+    } else {
+      DCHECK(is_file_launch);
+      PersistFileHandlersUserChoice(profile, app_id, allowed,
+                                    std::move(persist_done));
+    }
+  } else {
+    std::move(persist_done).Run();
+  }
+}
+
 }  // namespace
 
 void SetBrowserAppLauncherForTesting(
-    BrowserAppLauncherForTesting browserAppLauncherForTesting) {
-  GetBrowserAppLauncherForTesting() = std::move(browserAppLauncherForTesting);
+    const BrowserAppLauncherForTesting& launcher) {
+  GetBrowserAppLauncherForTesting() = launcher;
 }
 
 WebAppShimManagerDelegate::WebAppShimManagerDelegate(
@@ -83,16 +165,22 @@ bool WebAppShimManagerDelegate::AppCanCreateHost(Profile* profile,
                                                  const AppId& app_id) {
   if (UseFallback(profile, app_id))
     return fallback_delegate_->AppCanCreateHost(profile, app_id);
-  // All PWAs and bookmark apps can attach to a host.
-  return AppIsInstalled(profile, app_id);
+  // A host is only created for use with RemoteCocoa.
+  return AppUsesRemoteCocoa(profile, app_id);
 }
 
 bool WebAppShimManagerDelegate::AppUsesRemoteCocoa(Profile* profile,
                                                    const AppId& app_id) {
   if (UseFallback(profile, app_id))
     return fallback_delegate_->AppUsesRemoteCocoa(profile, app_id);
-  // All PWAs and bookmark apps use RemoteCocoa.
-  return AppIsInstalled(profile, app_id);
+  // All PWAs, and bookmark apps that open in their own window (not in a browser
+  // window) can attach to a host.
+  if (!profile)
+    return false;
+  auto& registrar = WebAppProvider::GetForWebApps(profile)->registrar();
+  return registrar.IsInstalled(app_id) &&
+         registrar.GetAppEffectiveDisplayMode(app_id) !=
+             web_app::DisplayMode::kBrowser;
 }
 
 bool WebAppShimManagerDelegate::AppIsMultiProfile(Profile* profile,
@@ -128,22 +216,24 @@ void WebAppShimManagerDelegate::LaunchApp(
                                   login_item_restore_state);
     return;
   }
-  DisplayMode display_mode =
-      WebAppProvider::GetForWebApps(profile)->registrar().GetAppUserDisplayMode(
-          app_id);
-  apps::mojom::LaunchContainer launch_container =
-      web_app::ConvertDisplayModeToAppLaunchContainer(display_mode);
-  apps::mojom::AppLaunchSource launch_source =
-      apps::mojom::AppLaunchSource::kSourceCommandLine;
+  DisplayMode effective_display_mode = WebAppProvider::GetForWebApps(profile)
+                                           ->registrar()
+                                           .GetAppEffectiveDisplayMode(app_id);
+
+  apps::LaunchContainer launch_container =
+      web_app::ConvertDisplayModeToAppLaunchContainer(effective_display_mode);
+  apps::LaunchSource launch_source = apps::LaunchSource::kFromCommandLine;
   if (login_item_restore_state !=
       chrome::mojom::AppShimLoginItemRestoreState::kNone) {
-    launch_source = apps::mojom::AppLaunchSource::kSourceRunOnOsLogin;
+    launch_source = apps::LaunchSource::kFromOsLogin;
   }
 
   apps::AppLaunchParams params(app_id, launch_container,
                                WindowOpenDisposition::NEW_FOREGROUND_TAB,
                                launch_source);
-  params.launch_files = files;
+  // Don't assign `files` to `params.launch_files` until we're sure this is a
+  // permitted file launch.
+  std::vector<base::FilePath> launch_files = files;
   params.override_url = override_url;
 
   for (const GURL& url : urls) {
@@ -158,7 +248,7 @@ void WebAppShimManagerDelegate::LaunchApp(
     if (url.SchemeIsFile()) {
       base::FilePath file_path;
       if (net::FileURLToFilePath(url, &file_path)) {
-        params.launch_files.push_back(file_path);
+        launch_files.push_back(file_path);
       } else {
         DLOG(ERROR) << "Failed to convert file scheme url to file path.";
       }
@@ -172,19 +262,25 @@ void WebAppShimManagerDelegate::LaunchApp(
 
     // Validate that the scheme is something that could be registered by the PWA
     // via the manifest.
-    bool has_custom_scheme_prefix = false;
-    if (!blink::IsValidCustomHandlerScheme(url.scheme(),
-                                           /* allow_ext_plus_prefix */ false,
-                                           has_custom_scheme_prefix)) {
+    if (!blink::IsValidCustomHandlerScheme(
+            url.scheme(), blink::ProtocolHandlerSecurityLevel::kStrict)) {
       DLOG(ERROR) << "Protocol is not a valid custom handler scheme.";
       continue;
     }
 
     params.protocol_handler_launch_url = url;
+    params.launch_source = apps::LaunchSource::kFromProtocolHandler;
   }
 
+  WebAppProvider* const provider = WebAppProvider::GetForWebApps(profile);
+  WebAppFileHandlerManager::LaunchInfos file_launches;
+  if (!params.protocol_handler_launch_url) {
+    file_launches = provider->os_integration_manager()
+                        .file_handler_manager()
+                        .GetMatchingFileHandlerUrls(app_id, launch_files);
+  }
   if (GetBrowserAppLauncherForTesting()) {
-    std::move(GetBrowserAppLauncherForTesting()).Run(params);
+    LaunchAppWithParams(profile, std::move(params), file_launches);
     return;
   }
 
@@ -192,49 +288,44 @@ void WebAppShimManagerDelegate::LaunchApp(
     GURL protocol_url = params.protocol_handler_launch_url.value();
 
     // Protocol handlers should prompt the user before launching the app,
-    // unless the user has granted permission to this protocol scheme
+    // unless the user has granted or denied permission to this protocol scheme
     // previously.
-    if (!WebAppProvider::GetForWebApps(profile)
-             ->registrar()
-             .IsApprovedLaunchProtocol(app_id, protocol_url.scheme())) {
-      auto launch_callback = base::BindOnce(
-          [](apps::AppLaunchParams params, Profile* profile, bool allowed,
-             bool remember_user_choice) {
-            if (allowed) {
-              if (remember_user_choice) {
-                web_app::WebAppProvider* provider =
-                    web_app::WebAppProvider::GetForWebApps(profile);
-                web_app::ScopedRegistryUpdate update(&provider->sync_bridge());
-                web_app::WebApp* app_to_update =
-                    update->UpdateApp(params.app_id);
-                std::vector<std::string> protocol_handlers(
-                    app_to_update->approved_launch_protocols());
-                protocol_handlers.push_back(
-                    params.protocol_handler_launch_url.value().scheme());
-                app_to_update->SetApprovedLaunchProtocols(
-                    std::move(protocol_handlers));
-              }
-              apps::AppServiceProxyFactory::GetForProfile(profile)
-                  ->BrowserAppLauncher()
-                  ->LaunchAppWithParams(std::move(params));
-            } else {
-              apps::AppShimManager::Get()->OnAppLaunchCancelled(profile,
-                                                                params.app_id);
-            }
-          },
-          std::move(params), profile);
+    web_app::WebAppRegistrar& registrar =
+        WebAppProvider::GetForWebApps(profile)->registrar();
+    if (registrar.IsDisallowedLaunchProtocol(app_id, protocol_url.scheme())) {
+      CancelAppLaunch(profile, app_id);
+      return;
+    }
 
-      // ShowWebAppProtocolHandlerIntentPicker keeps the `profile` alive through
-      // running of `launch_callback`.
-      chrome::ShowWebAppProtocolHandlerIntentPicker(
-          std::move(protocol_url), profile, app_id, std::move(launch_callback));
+    if (!registrar.IsAllowedLaunchProtocol(app_id, protocol_url.scheme())) {
+      chrome::ShowWebAppProtocolLaunchDialog(
+          std::move(protocol_url), profile, app_id,
+          base::BindOnce(&UserChoiceDialogCompleted, std::move(params),
+                         WebAppFileHandlerManager::LaunchInfos(), profile));
       return;
     }
   }
 
-  apps::AppServiceProxyFactory::GetForProfile(profile)
-      ->BrowserAppLauncher()
-      ->LaunchAppWithParams(std::move(params));
+  // If there is no matching file handling URL (such as when the API has been
+  // disabled), fall back to a normal app launch.
+  if (!file_launches.empty()) {
+    const WebApp* web_app = provider->registrar().GetAppById(app_id);
+    DCHECK(web_app);
+
+    if (web_app->file_handler_approval_state() ==
+        ApiApprovalState::kRequiresPrompt) {
+      chrome::ShowWebAppFileLaunchDialog(
+          launch_files, profile, app_id,
+          base::BindOnce(&UserChoiceDialogCompleted, std::move(params),
+                         file_launches, profile));
+      return;
+    }
+
+    DCHECK_EQ(ApiApprovalState::kAllowed,
+              web_app->file_handler_approval_state());
+  }
+
+  LaunchAppWithParams(profile, std::move(params), file_launches);
 }
 
 void WebAppShimManagerDelegate::LaunchShim(
@@ -293,23 +384,17 @@ WebAppShimManagerDelegate::GetAppShortcutsMenuItemInfos(Profile* profile,
 
   std::vector<chrome::mojom::ApplicationDockMenuItemPtr> dock_menu_items;
 
-  if (!base::FeatureList::IsEnabled(
-          features::kDesktopPWAsAppIconShortcutsMenuUI)) {
-    return dock_menu_items;
-  }
-
   DCHECK(profile);
 
   auto shortcuts_menu_item_infos = WebAppProvider::GetForWebApps(profile)
                                        ->registrar()
                                        .GetAppShortcutsMenuItemInfos(app_id);
 
-  int num_entries = std::min(static_cast<int>(shortcuts_menu_item_infos.size()),
-                             kMaxApplicationDockMenuItems);
-  for (int i = 0; i < num_entries; i++) {
+  DCHECK_LE(shortcuts_menu_item_infos.size(), kMaxApplicationDockMenuItems);
+  for (const auto& shortcuts_menu_item_info : shortcuts_menu_item_infos) {
     auto mojo_item = chrome::mojom::ApplicationDockMenuItem::New();
-    mojo_item->name = shortcuts_menu_item_infos[i].name;
-    mojo_item->url = shortcuts_menu_item_infos[i].url;
+    mojo_item->name = shortcuts_menu_item_info.name;
+    mojo_item->url = shortcuts_menu_item_info.url;
     dock_menu_items.push_back(std::move(mojo_item));
   }
 

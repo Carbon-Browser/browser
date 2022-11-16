@@ -6,6 +6,7 @@
 
 #include <memory>
 #include <numeric>
+#include <tuple>
 #include <vector>
 
 #include "ash/constants/ash_switches.h"
@@ -19,6 +20,7 @@
 #include "base/command_line.h"
 #include "base/path_service.h"
 #include "base/strings/safe_sprintf.h"
+#include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "cc/base/math_util.h"
 #include "chrome/browser/ash/accessibility/accessibility_manager.h"
@@ -28,6 +30,7 @@
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/frame/top_container_view.h"
 #include "chrome/browser/ui/views/location_bar/location_bar_view.h"
+#include "chrome/browser/ui/views/omnibox/omnibox_view_views.h"
 #include "chrome/common/url_constants.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
@@ -138,6 +141,10 @@ class TestController : public TopControlsSlideController {
       : real_controller_(std::move(real_controller)) {
     DCHECK(real_controller_);
   }
+
+  TestController(const TestController&) = delete;
+  TestController& operator=(const TestController&) = delete;
+
   ~TestController() override = default;
 
   void AddObserver(TestControllerObserver* observer) {
@@ -188,8 +195,6 @@ class TestController : public TopControlsSlideController {
   std::unique_ptr<TopControlsSlideController> real_controller_;
 
   base::ObserverList<TestControllerObserver>::Unchecked observers_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestController);
 };
 
 // Waits for a given terminal value (1.f or 0.f) of the browser top controls
@@ -200,6 +205,10 @@ class TopControlsShownRatioWaiter : public TestControllerObserver {
       : controller_(controller) {
     controller_->AddObserver(this);
   }
+
+  TopControlsShownRatioWaiter(const TopControlsShownRatioWaiter&) = delete;
+  TopControlsShownRatioWaiter& operator=(const TopControlsShownRatioWaiter&) =
+      delete;
 
   ~TopControlsShownRatioWaiter() override { controller_->RemoveObserver(this); }
 
@@ -248,8 +257,6 @@ class TopControlsShownRatioWaiter : public TestControllerObserver {
   std::unique_ptr<base::RunLoop> run_loop_;
 
   float waiting_for_shown_ratio_ = 0;
-
-  DISALLOW_COPY_AND_ASSIGN(TopControlsShownRatioWaiter);
 };
 
 // Waits for a given |is_gesture_scrolling_in_progress_| value.
@@ -303,6 +310,12 @@ class GestureScrollInProgressChangeWaiter : public TestControllerObserver {
 class TopControlsSlideControllerTest : public InProcessBrowserTest {
  public:
   TopControlsSlideControllerTest() = default;
+
+  TopControlsSlideControllerTest(const TopControlsSlideControllerTest&) =
+      delete;
+  TopControlsSlideControllerTest& operator=(
+      const TopControlsSlideControllerTest&) = delete;
+
   ~TopControlsSlideControllerTest() override = default;
 
   BrowserView* browser_view() const {
@@ -346,7 +359,7 @@ class TopControlsSlideControllerTest : public InProcessBrowserTest {
   }
 
   void OpenUrlAtIndex(const GURL& url, int index) {
-    AddTabAtIndex(index, url, ui::PAGE_TRANSITION_TYPED);
+    ASSERT_TRUE(AddTabAtIndex(index, url, ui::PAGE_TRANSITION_TYPED));
     auto* active_contents = browser_view()->GetActiveWebContents();
     EXPECT_TRUE(content::WaitForLoadStop(active_contents));
     SynchronizeBrowserWithRenderer(active_contents);
@@ -545,8 +558,6 @@ class TopControlsSlideControllerTest : public InProcessBrowserTest {
   }
 
   TestController* test_controller_ = nullptr;  // Not owned.
-
-  DISALLOW_COPY_AND_ASSIGN(TopControlsSlideControllerTest);
 };
 
 namespace {
@@ -674,7 +685,7 @@ IN_PROC_BROWSER_TEST_F(TopControlsSlideControllerTest, TestCtrlL) {
 }
 
 // Fails on Linux ChromiumOS MSan Tests (https://crbug.com/1194575).
-#if defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_CHROMEOS)
 #define MAYBE_TestScrollingPageAndSwitchingToNTP \
   DISABLED_TestScrollingPageAndSwitchingToNTP
 #else
@@ -741,7 +752,7 @@ IN_PROC_BROWSER_TEST_F(TopControlsSlideControllerTest,
 }
 
 // Fails on Linux Chromium OS Tests (https://crbug.com/1191327).
-#if defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_CHROMEOS)
 #define MAYBE_TestClosingATab DISABLED_TestClosingATab
 #else
 #define MAYBE_TestClosingATab TestClosingATab
@@ -790,8 +801,9 @@ IN_PROC_BROWSER_TEST_F(TopControlsSlideControllerTest, MAYBE_TestClosingATab) {
                                TopChromeShownState::kFullyHidden);
 }
 
+// Sheriff 2022/02/25; flaky test crbug/1300462
 IN_PROC_BROWSER_TEST_F(TopControlsSlideControllerTest,
-                       TestFocusEditableElements) {
+                       DISABLED_TestFocusEditableElements) {
   ToggleTabletMode();
   ASSERT_TRUE(GetTabletModeEnabled());
   EXPECT_TRUE(top_controls_slide_controller()->IsEnabled());
@@ -858,7 +870,7 @@ IN_PROC_BROWSER_TEST_F(TopControlsSlideControllerTest,
   EXPECT_TRUE(bool_result);
   // Evaluate an empty sentence to make sure that the event processing is done
   // in the content.
-  ignore_result(content::EvalJs(contents, ";"));
+  std::ignore = content::EvalJs(contents, ";");
 
   SCOPED_TRACE("Scroll to hide should now work.");
   ScrollAndExpectTopChromeToBe(ScrollDirection::kDown,
@@ -873,6 +885,10 @@ class BrowserViewLayoutWaiter : public views::ViewObserver {
       : browser_view_(browser_view) {
     browser_view->AddObserver(this);
   }
+
+  BrowserViewLayoutWaiter(const BrowserViewLayoutWaiter&) = delete;
+  BrowserViewLayoutWaiter& operator=(const BrowserViewLayoutWaiter&) = delete;
+
   ~BrowserViewLayoutWaiter() override { browser_view_->RemoveObserver(this); }
 
   void Wait() {
@@ -898,11 +914,15 @@ class BrowserViewLayoutWaiter : public views::ViewObserver {
   bool view_bounds_changed_ = false;
 
   std::unique_ptr<base::RunLoop> run_loop_;
-
-  DISALLOW_COPY_AND_ASSIGN(BrowserViewLayoutWaiter);
 };
 
-IN_PROC_BROWSER_TEST_F(TopControlsSlideControllerTest, DisplayRotation) {
+// TODO(1323318): Flaky under dbg and sanitizers.
+#if !defined(NDEBUG) || defined(ADDRESS_SANITIZER) || defined(MEMORY_SANITIZER)
+#define MAYBE_DisplayRotation DISABLED_DisplayRotation
+#else
+#define MAYBE_DisplayRotation DisplayRotation
+#endif
+IN_PROC_BROWSER_TEST_F(TopControlsSlideControllerTest, MAYBE_DisplayRotation) {
   ToggleTabletMode();
   ASSERT_TRUE(GetTabletModeEnabled());
   EXPECT_TRUE(top_controls_slide_controller()->IsEnabled());
@@ -1001,6 +1021,10 @@ class PageStateUpdateWaiter : content::WebContentsObserver {
  public:
   explicit PageStateUpdateWaiter(content::WebContents* contents)
       : WebContentsObserver(contents) {}
+
+  PageStateUpdateWaiter(const PageStateUpdateWaiter&) = delete;
+  PageStateUpdateWaiter& operator=(const PageStateUpdateWaiter&) = delete;
+
   ~PageStateUpdateWaiter() override = default;
 
   void Wait() {
@@ -1020,14 +1044,18 @@ class PageStateUpdateWaiter : content::WebContentsObserver {
 
  private:
   base::RunLoop run_loop_;
-
-  DISALLOW_COPY_AND_ASSIGN(PageStateUpdateWaiter);
 };
 
 // Verifies that we ignore the shown ratios sent from widgets other than that of
 // the main frame (such as widgets of the drop-down menus in web pages).
 // https://crbug.com/891471.
-IN_PROC_BROWSER_TEST_F(TopControlsSlideControllerTest, TestDropDowns) {
+// TODO(1337418): Flaky for dbg and ASan builds.
+#if !defined(NDEBUG) || defined(ADDRESS_SANITIZER)
+#define MAYBE_TestDropDowns DISABLED_TestDropDowns
+#else
+#define MAYBE_TestDropDowns TestDropDowns
+#endif
+IN_PROC_BROWSER_TEST_F(TopControlsSlideControllerTest, MAYBE_TestDropDowns) {
   browser_view()->frame()->Maximize();
   ToggleTabletMode();
   ASSERT_TRUE(GetTabletModeEnabled());
@@ -1072,7 +1100,7 @@ IN_PROC_BROWSER_TEST_F(TopControlsSlideControllerTest, TestDropDowns) {
   send_key_event(ui::VKEY_RETURN);
   // Evaluate an empty sentence to make sure that the event processing is done
   // in the content.
-  ignore_result(content::EvalJs(contents, ";"));
+  std::ignore = content::EvalJs(contents, ";");
 
   // Verify that the selected option has changed and the fourth option is
   // selected.
@@ -1132,6 +1160,10 @@ class IntermediateShownRatioWaiter : public TestControllerObserver {
     controller_->AddObserver(this);
   }
 
+  IntermediateShownRatioWaiter(const IntermediateShownRatioWaiter&) = delete;
+  IntermediateShownRatioWaiter& operator=(const IntermediateShownRatioWaiter&) =
+      delete;
+
   ~IntermediateShownRatioWaiter() override {
     controller_->RemoveObserver(this);
   }
@@ -1170,8 +1202,6 @@ class IntermediateShownRatioWaiter : public TestControllerObserver {
   base::OnceClosure on_intermediate_ratio_callback_;
 
   bool seen_intermediate_ratios_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(IntermediateShownRatioWaiter);
 };
 
 // TODO(crbug.com/1055958): Test is flaky.
@@ -1346,7 +1376,9 @@ IN_PROC_BROWSER_TEST_F(TopControlsSlideControllerTest,
   CheckBrowserLayout(browser_view(), TopChromeShownState::kFullyShown);
 }
 
-IN_PROC_BROWSER_TEST_F(TopControlsSlideControllerTest, TestPermissionBubble) {
+// Sheriff 2022/04/18; flaky test crbug/1317068
+IN_PROC_BROWSER_TEST_F(TopControlsSlideControllerTest,
+                       DISABLED_TestPermissionBubble) {
   ToggleTabletMode();
   ASSERT_TRUE(GetTabletModeEnabled());
   EXPECT_TRUE(top_controls_slide_controller()->IsEnabled());
@@ -1374,7 +1406,7 @@ IN_PROC_BROWSER_TEST_F(TopControlsSlideControllerTest, TestPermissionBubble) {
   auto* permission_manager =
       permissions::PermissionRequestManager::FromWebContents(active_contents);
   TopControlsShownRatioWaiter waiter(top_controls_slide_controller());
-  permission_manager->AddRequest(active_contents->GetMainFrame(),
+  permission_manager->AddRequest(active_contents->GetPrimaryMainFrame(),
                                  &permission_request);
   waiter.WaitForRatio(1.f);
   EXPECT_FLOAT_EQ(top_controls_slide_controller()->GetShownRatio(), 1.f);
@@ -1387,7 +1419,7 @@ IN_PROC_BROWSER_TEST_F(TopControlsSlideControllerTest, TestPermissionBubble) {
                                TopChromeShownState::kFullyShown);
 
   // Dismiss the bubble.
-  permission_manager->Closing();
+  permission_manager->Dismiss();
   EXPECT_FALSE(permission_manager->IsRequestInProgress());
   SynchronizeBrowserWithRenderer(active_contents);
 
@@ -1396,7 +1428,9 @@ IN_PROC_BROWSER_TEST_F(TopControlsSlideControllerTest, TestPermissionBubble) {
                                TopChromeShownState::kFullyHidden);
 }
 
-IN_PROC_BROWSER_TEST_F(TopControlsSlideControllerTest, TestToggleChromeVox) {
+// Flaky on ChromeOS bots. https://crbug.com/1033648
+IN_PROC_BROWSER_TEST_F(TopControlsSlideControllerTest,
+                       DISABLED_TestToggleChromeVox) {
   ToggleTabletMode();
   ASSERT_TRUE(GetTabletModeEnabled());
   EXPECT_TRUE(top_controls_slide_controller()->IsEnabled());

@@ -17,7 +17,7 @@ function setUp() {
 }
 
 function testCommandDefaultPrevented() {
-  var calls = 0;
+  let calls = 0;
   document.addEventListener('canExecute', function(e) {
     ++calls;
     assertFalse(e.defaultPrevented);
@@ -39,7 +39,7 @@ function createEvent(key, code, keyCode) {
     altKey: false,
     ctrlKey: true,
     metaKey: false,
-    shiftKey: false
+    shiftKey: false,
   };
 }
 

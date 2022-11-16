@@ -9,6 +9,7 @@
 #include "ash/app_list/app_list_controller_impl.h"
 #include "ash/app_list/app_list_metrics.h"
 #include "ash/app_list/app_list_presenter_event_filter.h"
+#include "ash/app_list/app_list_util.h"
 #include "ash/app_list/app_list_view_delegate.h"
 #include "ash/app_list/views/app_list_main_view.h"
 #include "ash/app_list/views/apps_container_view.h"
@@ -22,6 +23,7 @@
 #include "ash/public/cpp/metrics_util.h"
 #include "ash/public/cpp/pagination/pagination_model.h"
 #include "ash/public/cpp/shell_window_ids.h"
+#include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
 #include "ash/wm/container_finder.h"
 #include "base/bind.h"
@@ -29,7 +31,7 @@
 #include "base/containers/contains.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/user_metrics.h"
-#include "chromeos/services/assistant/public/cpp/assistant_enums.h"
+#include "chromeos/ash/services/assistant/public/cpp/assistant_enums.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/aura/client/focus_client.h"
 #include "ui/aura/window.h"
@@ -38,9 +40,10 @@
 #include "ui/compositor/scoped_layer_animation_settings.h"
 #include "ui/display/screen.h"
 #include "ui/display/types/display_constants.h"
+#include "ui/gfx/geometry/transform.h"
+#include "ui/gfx/geometry/transform_util.h"
 #include "ui/gfx/presentation_feedback.h"
-#include "ui/gfx/transform.h"
-#include "ui/gfx/transform_util.h"
+#include "ui/views/controls/textfield/textfield.h"
 #include "ui/views/widget/widget.h"
 #include "ui/wm/core/transient_window_manager.h"
 #include "ui/wm/public/activation_client.h"
@@ -169,6 +172,11 @@ void AppListPresenterImpl::Show(AppListViewState preferred_state,
     return;
   }
 
+  // TODO(https://crbug.com/1307871): Remove this when the linked crash gets
+  // diagnosed - the crash is possible if app list gets dismissed while being
+  // shown. `showing_app_list_` in intended to catch this case.
+  showing_app_list_ = true;
+
   is_target_visibility_show_ = true;
   OnVisibilityWillChange(GetTargetVisibility(), display_id);
   RequestPresentationTime(display_id, event_time_stamp);
@@ -228,6 +236,7 @@ void AppListPresenterImpl::Show(AppListViewState preferred_state,
   event_filter_ =
       std::make_unique<AppListPresenterEventFilter>(controller_, this, view_);
   controller_->ViewShown(display_id);
+  showing_app_list_ = false;
 
   OnVisibilityChanged(GetTargetVisibility(), display_id);
 }
@@ -239,6 +248,10 @@ void AppListPresenterImpl::Dismiss(base::TimeTicks event_time_stamp) {
   // If the app list target visibility is shown, there should be an existing
   // view.
   DCHECK(view_);
+
+  // TODO(https://crbug.com/1307871): Remove this when the linked crash gets
+  // diagnosed.
+  CHECK(!showing_app_list_);
 
   is_target_visibility_show_ = false;
   RequestPresentationTime(GetDisplayId(), event_time_stamp);
@@ -300,6 +313,7 @@ void AppListPresenterImpl::Dismiss(base::TimeTicks event_time_stamp) {
 void AppListPresenterImpl::SetViewVisibility(bool visible) {
   if (!view_)
     return;
+  view_->OnAppListVisibilityWillChange(visible);
   view_->SetVisible(visible);
   view_->search_box_view()->SetVisible(visible);
 }
@@ -333,6 +347,48 @@ ShelfAction AppListPresenterImpl::ToggleAppList(
                           : AppListViewState::kPeeking,
        display_id, event_time_stamp, show_source);
   return SHELF_ACTION_APP_LIST_SHOWN;
+}
+
+void AppListPresenterImpl::UpdateForNewSortingOrder(
+    const absl::optional<AppListSortOrder>& new_order,
+    bool animate,
+    base::OnceClosure update_position_closure) {
+  if (!view_)
+    return;
+
+  base::OnceClosure done_closure;
+  if (animate) {
+    // The search box should ignore a11y events during the reorder animation
+    // so that the announcement of app list reorder is made before that of
+    // focus change.
+    SetViewIgnoredForAccessibility(view_->search_box_view(), true);
+
+    // Focus on the search box before starting the reorder animation to prevent
+    // focus moving through app list items as they're being hidden for order
+    // update animation.
+    view_->search_box_view()->search_box()->RequestFocus();
+
+    done_closure =
+        base::BindOnce(&AppListPresenterImpl::OnAppListReorderAnimationDone,
+                       weak_ptr_factory_.GetWeakPtr());
+  }
+
+  view_->app_list_main_view()
+      ->contents_view()
+      ->apps_container_view()
+      ->UpdateForNewSortingOrder(new_order, animate,
+                                 std::move(update_position_closure),
+                                 std::move(done_closure));
+}
+
+void AppListPresenterImpl::UpdateContinueSectionVisibility() {
+  if (!view_)
+    return;
+
+  view_->app_list_main_view()
+      ->contents_view()
+      ->apps_container_view()
+      ->UpdateContinueSectionVisibility();
 }
 
 bool AppListPresenterImpl::IsVisibleDeprecated() const {
@@ -521,6 +577,10 @@ void AppListPresenterImpl::OnClosed() {
 
 void AppListPresenterImpl::OnWindowFocused(aura::Window* gained_focus,
                                            aura::Window* lost_focus) {
+  // Do not focus app list window in the Kiosk mode.
+  if (Shell::Get()->session_controller()->IsRunningInAppMode())
+    return;
+
   if (!view_ || !is_target_visibility_show_)
     return;
 
@@ -542,7 +602,8 @@ void AppListPresenterImpl::OnWindowFocused(aura::Window* gained_focus,
       !base::Contains(kIdsOfContainersThatWontHideAppList,
                       gained_focus_container_id);
 
-  const bool app_list_gained_focus = applist_window->Contains(gained_focus);
+  const bool app_list_gained_focus = applist_window->Contains(gained_focus) ||
+                                     applist_container->Contains(gained_focus);
   const bool app_list_lost_focus =
       gained_focus ? gained_focus_hides_app_list
                    : (lost_focus && applist_container->Contains(lost_focus));
@@ -670,6 +731,14 @@ void AppListPresenterImpl::SnapAppListBoundsToDisplayEdge() {
   const gfx::Rect bounds =
       controller_->SnapBoundsToDisplayEdge(window->bounds());
   window->SetBounds(bounds);
+}
+
+void AppListPresenterImpl::OnAppListReorderAnimationDone() {
+  if (!view_)
+    return;
+
+  // Re-enable the search box to handle a11y events.
+  SetViewIgnoredForAccessibility(view_->search_box_view(), false);
 }
 
 }  // namespace ash

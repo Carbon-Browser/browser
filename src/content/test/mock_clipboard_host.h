@@ -7,7 +7,6 @@
 
 #include <string>
 
-#include "base/macros.h"
 #include "build/build_config.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "third_party/blink/public/mojom/clipboard/clipboard.mojom.h"
@@ -19,6 +18,10 @@ namespace content {
 class MockClipboardHost : public blink::mojom::ClipboardHost {
  public:
   MockClipboardHost();
+
+  MockClipboardHost(const MockClipboardHost&) = delete;
+  MockClipboardHost& operator=(const MockClipboardHost&) = delete;
+
   ~MockClipboardHost() override;
 
   void Bind(mojo::PendingReceiver<blink::mojom::ClipboardHost> receiver);
@@ -43,8 +46,6 @@ class MockClipboardHost : public blink::mojom::ClipboardHost {
                ReadRtfCallback callback) override;
   void ReadPng(ui::ClipboardBuffer clipboard_buffer,
                ReadPngCallback callback) override;
-  void ReadImage(ui::ClipboardBuffer clipboard_buffer,
-                 ReadImageCallback callback) override;
   void ReadFiles(ui::ClipboardBuffer clipboard_buffer,
                  ReadFilesCallback callback) override;
   void ReadCustomData(ui::ClipboardBuffer clipboard_buffer,
@@ -67,10 +68,12 @@ class MockClipboardHost : public blink::mojom::ClipboardHost {
       ReadUnsanitizedCustomFormatCallback callback) override;
   void WriteUnsanitizedCustomFormat(const std::u16string& format,
                                     mojo_base::BigBuffer data) override;
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   void WriteStringToFindPboard(const std::u16string& text) override;
 #endif
  private:
+  std::vector<std::u16string> ReadStandardFormatNames();
+
   mojo::ReceiverSet<blink::mojom::ClipboardHost> receivers_;
   ui::ClipboardSequenceNumberToken sequence_number_;
   std::u16string plain_text_;
@@ -82,8 +85,6 @@ class MockClipboardHost : public blink::mojom::ClipboardHost {
   bool write_smart_paste_ = false;
   bool needs_reset_ = false;
   std::map<std::u16string, std::vector<uint8_t>> unsanitized_custom_data_map_;
-
-  DISALLOW_COPY_AND_ASSIGN(MockClipboardHost);
 };
 
 }  // namespace content

@@ -7,23 +7,24 @@
 
 #include <memory>
 
-#include "base/macros.h"
+#include "content/common/content_export.h"
 #include "content/common/frame.mojom.h"
 #include "content/renderer/navigation_client.h"
 #include "third_party/blink/public/mojom/navigation/navigation_params.mojom.h"
 
 namespace blink {
-class WebDocumentLoader;
-
 namespace mojom {
 enum class CommitResult;
 }
-}
+}  // namespace blink
 
 namespace content {
 
 class CONTENT_EXPORT NavigationState {
  public:
+  NavigationState(const NavigationState&) = delete;
+  NavigationState& operator=(const NavigationState&) = delete;
+
   ~NavigationState();
 
   static std::unique_ptr<NavigationState> Create(
@@ -35,9 +36,6 @@ class CONTENT_EXPORT NavigationState {
       bool was_initiated_in_this_frame);
 
   static std::unique_ptr<NavigationState> CreateForSynchronousCommit();
-
-  static NavigationState* FromDocumentLoader(
-      blink::WebDocumentLoader* document_loader);
 
   // True iff the frame's navigation was within the same document.
   bool WasWithinSameDocument();
@@ -113,8 +111,6 @@ class CONTENT_EXPORT NavigationState {
   // Used to notify whether a commit request from the browser process was
   // successful or not.
   mojom::NavigationClient::CommitNavigationCallback commit_callback_;
-
-  DISALLOW_COPY_AND_ASSIGN(NavigationState);
 };
 
 }  // namespace content

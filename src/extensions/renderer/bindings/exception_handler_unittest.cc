@@ -5,6 +5,7 @@
 #include "extensions/renderer/bindings/exception_handler.h"
 
 #include <string>
+#include <tuple>
 
 #include "base/bind.h"
 #include "base/strings/stringprintf.h"
@@ -32,7 +33,7 @@ void ThrowException(v8::Local<v8::Context> context,
   v8::Local<v8::Function> function = FunctionFromString(
       context,
       base::StringPrintf("(function() { throw %s; })", to_throw.c_str()));
-  ignore_result(function->Call(context, v8::Undefined(isolate), 0, nullptr));
+  std::ignore = function->Call(context, v8::Undefined(isolate), 0, nullptr);
   ASSERT_TRUE(try_catch.HasCaught());
   handler->HandleException(context, "handled", &try_catch);
 }
@@ -168,8 +169,8 @@ TEST_F(ExceptionHandlerTest, StackTraces) {
     v8::TryCatch try_catch(isolate());
     v8::Local<v8::Function> throw_error_function = FunctionFromString(
         context, "(function() { throw new Error('function'); })");
-    ignore_result(throw_error_function->Call(context, v8::Undefined(isolate()),
-                                             0, nullptr));
+    std::ignore = throw_error_function->Call(context, v8::Undefined(isolate()),
+                                             0, nullptr);
     ASSERT_TRUE(try_catch.HasCaught());
     handler.HandleException(context, "handled", &try_catch);
     ASSERT_TRUE(logged_error);

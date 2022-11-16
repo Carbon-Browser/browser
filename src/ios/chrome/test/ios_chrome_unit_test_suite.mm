@@ -4,7 +4,6 @@
 
 #include "ios/chrome/test/ios_chrome_unit_test_suite.h"
 
-#include "base/macros.h"
 #include "base/metrics/user_metrics.h"
 #include "base/path_service.h"
 #include "base/test/test_simple_task_runner.h"
@@ -14,6 +13,7 @@
 #include "ios/chrome/browser/chrome_url_constants.h"
 #include "ios/chrome/test/testing_application_context.h"
 #include "ios/components/webui/web_ui_url_constants.h"
+#import "ios/public/provider/chrome/browser/app_utils/app_utils_api.h"
 #import "ios/public/provider/chrome/browser/chrome_browser_provider.h"
 #import "ios/web/public/web_client.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -31,9 +31,17 @@ class IOSChromeUnitTestSuiteInitializer
     : public testing::EmptyTestEventListener {
  public:
   IOSChromeUnitTestSuiteInitializer() {}
+
+  IOSChromeUnitTestSuiteInitializer(const IOSChromeUnitTestSuiteInitializer&) =
+      delete;
+  IOSChromeUnitTestSuiteInitializer& operator=(
+      const IOSChromeUnitTestSuiteInitializer&) = delete;
+
   ~IOSChromeUnitTestSuiteInitializer() override {}
 
   void OnTestStart(const testing::TestInfo& test_info) override {
+    ios::provider::Initialize();
+
     chrome_browser_provider_ = ios::CreateChromeBrowserProvider();
     ios::ChromeBrowserProvider* previous_provider =
         ios::SetChromeBrowserProvider(chrome_browser_provider_.get());
@@ -56,8 +64,6 @@ class IOSChromeUnitTestSuiteInitializer
  private:
   std::unique_ptr<ios::ChromeBrowserProvider> chrome_browser_provider_;
   std::unique_ptr<ApplicationContext> application_context_;
-
-  DISALLOW_COPY_AND_ASSIGN(IOSChromeUnitTestSuiteInitializer);
 };
 
 }  // namespace

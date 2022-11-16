@@ -7,18 +7,19 @@ import 'chrome://resources/cr_elements/icons.m.js';
 import 'chrome://resources/cr_elements/hidden_style_css.m.js';
 import 'chrome://resources/cr_elements/shared_style_css.m.js';
 import './profile_card_menu.js';
-import './profile_picker_shared_css.js';
+import './profile_picker_shared.css.js';
 import 'chrome://resources/cr_elements/cr_input/cr_input.m.js';
 import 'chrome://resources/polymer/v3_0/paper-tooltip/paper-tooltip.js';
 
 import {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.m.js';
-import {I18nBehavior} from 'chrome://resources/js/i18n_behavior.m.js';
+import {I18nMixin} from 'chrome://resources/js/i18n_mixin.js';
 import {PaperTooltipElement} from 'chrome://resources/polymer/v3_0/paper-tooltip/paper-tooltip.js';
-import {html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {ManageProfilesBrowserProxy, ManageProfilesBrowserProxyImpl, ProfileState} from './manage_profiles_browser_proxy.js';
+import {getTemplate} from './profile_card.html.js';
 
-interface ProfileCardElement {
+export interface ProfileCardElement {
   $: {
     gaiaName: HTMLElement,
     gaiaNameTooltip: PaperTooltipElement,
@@ -27,16 +28,15 @@ interface ProfileCardElement {
   };
 }
 
-const ProfileCardElementBase = mixinBehaviors([I18nBehavior], PolymerElement) as
-    {new (): PolymerElement & I18nBehavior};
+const ProfileCardElementBase = I18nMixin(PolymerElement);
 
-class ProfileCardElement extends ProfileCardElementBase {
+export class ProfileCardElement extends ProfileCardElementBase {
   static get is() {
     return 'profile-card';
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
   }
 
   static get properties() {
@@ -57,7 +57,7 @@ class ProfileCardElement extends ProfileCardElementBase {
   private manageProfilesBrowserProxy_: ManageProfilesBrowserProxy =
       ManageProfilesBrowserProxyImpl.getInstance();
 
-  connectedCallback() {
+  override connectedCallback() {
     super.connectedCallback();
     this.addNameInputTooltipListeners_();
     this.addGaiaNameTooltipListeners_();
@@ -142,6 +142,12 @@ class ProfileCardElement extends ProfileCardElementBase {
     if (this.$.nameInput.invalid) {
       this.$.nameInput.value = this.profileState.localProfileName;
     }
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'profile-card': ProfileCardElement;
   }
 }
 

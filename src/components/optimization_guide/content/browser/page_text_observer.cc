@@ -320,7 +320,8 @@ PageTextObserver::ConsumerTextDumpRequest::ConsumerTextDumpRequest() = default;
 PageTextObserver::ConsumerTextDumpRequest::~ConsumerTextDumpRequest() = default;
 
 PageTextObserver::PageTextObserver(content::WebContents* web_contents)
-    : content::WebContentsObserver(web_contents) {}
+    : content::WebContentsObserver(web_contents),
+      content::WebContentsUserData<PageTextObserver>(*web_contents) {}
 PageTextObserver::~PageTextObserver() = default;
 
 PageTextObserver* PageTextObserver::GetOrCreateForWebContents(
@@ -331,31 +332,22 @@ PageTextObserver* PageTextObserver::GetOrCreateForWebContents(
   return PageTextObserver::FromWebContents(web_contents);
 }
 
-void PageTextObserver::DidStartNavigation(content::NavigationHandle* handle) {
-  // TODO(https://crbug.com/1218946): With MPArch there may be multiple main
-  // frames. This caller was converted automatically to the primary main frame
-  // to preserve its semantics. Follow up to confirm correctness.
-  if (!handle->IsInPrimaryMainFrame()) {
-    return;
-  }
-
-  requests_.clear();
-  page_result_.reset();
-  outstanding_requests_ = 0;
-  outstanding_requests_grace_timer_.reset();
-}
-
 void PageTextObserver::DidFinishNavigation(content::NavigationHandle* handle) {
   // Only main frames are supported for right now.
-  // TODO(https://crbug.com/1218946): With MPArch there may be multiple main
-  // frames. This caller was converted automatically to the primary main frame
-  // to preserve its semantics. Follow up to confirm correctness.
   if (!handle->IsInPrimaryMainFrame()) {
     return;
   }
 
   if (!handle->HasCommitted()) {
     return;
+  }
+
+  // Reset consumer requests if the navigation is not in the same document.
+  if (!handle->IsSameDocument()) {
+    requests_.clear();
+    page_result_.reset();
+    outstanding_requests_ = 0;
+    outstanding_requests_grace_timer_.reset();
   }
 
   if (consumers_.empty()) {
@@ -381,12 +373,11 @@ void PageTextObserver::DidFinishNavigation(content::NavigationHandle* handle) {
 }
 
 bool PageTextObserver::IsOOPIF(content::RenderFrameHost* rfh) const {
-  return rfh->GetProcess()->GetID() !=
-         rfh->GetMainFrame()->GetProcess()->GetID();
+  return rfh->IsCrossProcessSubframe();
 }
 
 void PageTextObserver::RenderFrameCreated(content::RenderFrameHost* rfh) {
-  if (!IsOOPIF(rfh)) {
+  if (!IsOOPIF(rfh) || !rfh->GetPage().IsPrimary()) {
     return;
   }
 
@@ -437,6 +428,9 @@ void PageTextObserver::OnFrameTextDumpCompleted(
 void PageTextObserver::DidFinishLoad(
     content::RenderFrameHost* render_frame_host,
     const GURL& validated_url) {
+  if (!render_frame_host->IsInPrimaryMainFrame())
+    return;
+
   base::UmaHistogramCounts100(
       "OptimizationGuide.PageTextDump.OutstandingRequests.DidFinishLoad",
       outstanding_requests_);
@@ -478,6 +472,6 @@ void PageTextObserver::RemoveConsumer(Consumer* consumer) {
   consumers_.erase(consumer);
 }
 
-WEB_CONTENTS_USER_DATA_KEY_IMPL(PageTextObserver)
+WEB_CONTENTS_USER_DATA_KEY_IMPL(PageTextObserver);
 
 }  // namespace optimization_guide

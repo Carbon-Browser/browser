@@ -18,9 +18,16 @@ guidance is that new top level directories are for product (e.g. Chrome,
 Android WebView, Ash). Even if these products have multiple executables, the
 code should be in subdirectories of the product.
 
-
-Documentation about the integration of Adblock Plus into Chromium is rooted in
-[docs_abp/README.md](docs_abp/README.md). Differences between versions are
-listed in [the changelog](docs_abp/CHANGELOG.md).
-
 If you found a bug, please file it at https://crbug.com/new.
+
+
+## Eyeo Chromium SDK
+
+Eyeo Chromium SDK is a fork of the Chromium project that
+integrates ad-filtering capabilities.  A big part of the functionality is
+implemented inside a component, to simplify the integration with other
+modifications to the browser.
+
+The [component folder](components/adblock) contains most of the source code,
+as well as the changelog, license and technical documentation about
+architecture and integration steps.

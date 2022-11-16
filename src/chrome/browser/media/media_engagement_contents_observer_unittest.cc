@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/simple_test_clock.h"
@@ -25,17 +26,21 @@
 #include "chrome/test/base/testing_profile.h"
 #include "components/ukm/test_ukm_recorder.h"
 #include "content/public/browser/global_routing_id.h"
+#include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/mock_navigation_handle.h"
+#include "content/public/test/navigation_simulator.h"
+#include "content/public/test/prerender_test_util.h"
 #include "content/public/test/web_contents_tester.h"
 #include "media/base/media_switches.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
 #include "services/metrics/public/cpp/ukm_source.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/blink/public/common/features.h"
 
 // TODO(crbug/1004580) All these tests crash on Android
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
 class MediaEngagementContentsObserverTest
     : public ChromeRenderViewHostTestHarness {
  public:
@@ -154,7 +159,7 @@ class MediaEngagementContentsObserverTest
   }
 
   void SimulatePlaybackStopped(int id) {
-    SimulatePlaybackStoppedWithTime(id, true, base::TimeDelta::FromSeconds(0));
+    SimulatePlaybackStoppedWithTime(id, true, base::Seconds(0));
   }
 
   void SimulateMutedStateChange(int id, bool muted) {
@@ -396,9 +401,7 @@ class MediaEngagementContentsObserverTest
 
   base::Time Now() { return test_clock_.Now(); }
 
-  void Advance15Minutes() {
-    test_clock_.Advance(base::TimeDelta::FromMinutes(15));
-  }
+  void Advance15Minutes() { test_clock_.Advance(base::Minutes(15)); }
 
   ukm::TestAutoSetUkmRecorder& test_ukm_recorder() {
     return test_ukm_recorder_;
@@ -406,7 +409,7 @@ class MediaEngagementContentsObserverTest
 
  private:
   // contents_observer_ auto-destroys when WebContents is destroyed.
-  MediaEngagementContentsObserver* contents_observer_;
+  raw_ptr<MediaEngagementContentsObserver> contents_observer_;
 
   std::unique_ptr<MediaEngagementService> service_;
 
@@ -420,7 +423,7 @@ class MediaEngagementContentsObserverTest
 
   const base::TimeDelta kMaxWaitingTime =
       MediaEngagementContentsObserver::kSignificantMediaPlaybackTime +
-      base::TimeDelta::FromSeconds(2);
+      base::Seconds(2);
 };
 
 // TODO(mlamouri): test that visits are not recorded multiple times when a
@@ -1217,20 +1220,20 @@ TEST_F(MediaEngagementContentsObserverTest, SignificantAudibleTabMuted_Off) {
 
 TEST_F(MediaEngagementContentsObserverTest, RecordPlaybackTime) {
   SimulateSignificantAudioPlayer(0);
-  SimulatePlaybackStoppedWithTime(0, false, base::TimeDelta::FromSeconds(3));
-  ExpectPlaybackTime(0, base::TimeDelta::FromSeconds(3));
+  SimulatePlaybackStoppedWithTime(0, false, base::Seconds(3));
+  ExpectPlaybackTime(0, base::Seconds(3));
 
   SimulateSignificantAudioPlayer(0);
-  SimulatePlaybackStoppedWithTime(0, false, base::TimeDelta::FromSeconds(6));
-  ExpectPlaybackTime(0, base::TimeDelta::FromSeconds(9));
+  SimulatePlaybackStoppedWithTime(0, false, base::Seconds(6));
+  ExpectPlaybackTime(0, base::Seconds(9));
 
   SimulateSignificantAudioPlayer(0);
-  SimulatePlaybackStoppedWithTime(0, true, base::TimeDelta::FromSeconds(2));
-  ExpectPlaybackTime(0, base::TimeDelta::FromSeconds(11));
+  SimulatePlaybackStoppedWithTime(0, true, base::Seconds(2));
+  ExpectPlaybackTime(0, base::Seconds(11));
 
   SimulateSignificantAudioPlayer(0);
-  SimulatePlaybackStoppedWithTime(0, false, base::TimeDelta::FromSeconds(2));
-  ExpectPlaybackTime(0, base::TimeDelta::FromSeconds(2));
+  SimulatePlaybackStoppedWithTime(0, false, base::Seconds(2));
+  ExpectPlaybackTime(0, base::Seconds(2));
 }
 
 TEST_F(MediaEngagementContentsObserverTest, ShortMediaIgnored) {
@@ -1241,14 +1244,14 @@ TEST_F(MediaEngagementContentsObserverTest, ShortMediaIgnored) {
   SimulateSignificantAudioPlayer(0);
   SimulateSignificantPlaybackTimeForPlayer(0);
   SimulateSignificantVideoPlayer(1);
-  SimulatePlaybackStoppedWithTime(1, true, base::TimeDelta::FromSeconds(1));
+  SimulatePlaybackStoppedWithTime(1, true, base::Seconds(1));
   SimulateSignificantVideoPlayer(2);
   SimulateSignificantPlaybackTimeForPlayer(2);
 
   // Navigate to a sub page and continue watching.
   Navigate(GURL("https://www.google.com/test"));
   SimulateSignificantAudioPlayer(1);
-  SimulatePlaybackStoppedWithTime(1, true, base::TimeDelta::FromSeconds(2));
+  SimulatePlaybackStoppedWithTime(1, true, base::Seconds(2));
 
   // Test that when we navigate to a new origin the audible players the scores
   // are recorded and we log extra UKM events with the times.
@@ -1262,12 +1265,12 @@ TEST_F(MediaEngagementContentsObserverTest, TotalTimeUsedInShortCalculation) {
   Navigate(origin.GetURL());
 
   SimulateSignificantAudioPlayer(0);
-  SimulatePlaybackStoppedWithTime(0, false, base::TimeDelta::FromSeconds(8));
+  SimulatePlaybackStoppedWithTime(0, false, base::Seconds(8));
   SimulateSignificantPlaybackTimeForPlayer(0);
 
   SimulateSignificantAudioPlayer(0);
-  SimulatePlaybackStoppedWithTime(0, true, base::TimeDelta::FromSeconds(2));
-  ExpectPlaybackTime(0, base::TimeDelta::FromSeconds(10));
+  SimulatePlaybackStoppedWithTime(0, true, base::Seconds(2));
+  ExpectPlaybackTime(0, base::Seconds(10));
 
   SimulateDestroy();
   ExpectScores(origin, 0, 1, 0);
@@ -1279,7 +1282,7 @@ TEST_F(MediaEngagementContentsObserverTest, OnlyIgnoreFinishedMedia) {
   Navigate(origin.GetURL());
 
   SimulateSignificantAudioPlayer(0);
-  SimulatePlaybackStoppedWithTime(0, false, base::TimeDelta::FromSeconds(2));
+  SimulatePlaybackStoppedWithTime(0, false, base::Seconds(2));
 
   SimulateDestroy();
   ExpectScores(origin, 0, 1, 0);
@@ -1363,4 +1366,94 @@ TEST_F(MediaEngagementContentsObserverTest, PlayerStateIsCleanedUp) {
   EXPECT_EQ(0u, GetStoredPlayerStatesCount());
 }
 
-#endif  // !defined(OS_ANDROID)
+class MediaEngagementContentsObserverPrerenderTest
+    : public MediaEngagementContentsObserverTest {
+ public:
+  MediaEngagementContentsObserverPrerenderTest() {
+    scoped_feature_list_.InitWithFeatures(
+        {blink::features::kPrerender2},
+        // Disable the memory requirement of Prerender2 so the test can run on
+        // any bot.
+        {blink::features::kPrerender2MemoryControls});
+  }
+  ~MediaEngagementContentsObserverPrerenderTest() override = default;
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
+TEST_F(MediaEngagementContentsObserverPrerenderTest,
+       EnsureDoNotCleanupAfterNavigation_AudioContextInPrerendering) {
+  content::test::ScopedPrerenderWebContentsDelegate web_contents_delegate(
+      *web_contents());
+
+  GURL url = GURL("https://example.com");
+  content::NavigationSimulator::NavigateAndCommitFromBrowser(web_contents(),
+                                                             url);
+  EXPECT_EQ(0u, GetAudioContextPlayersCount());
+
+  SimulateAudioContextStarted(0);
+  EXPECT_EQ(1u, GetAudioContextPlayersCount());
+
+  // Add a prerender page.
+  auto* prerender_frame = content::WebContentsTester::For(web_contents())
+                              ->AddPrerenderAndCommitNavigation(url);
+  DCHECK_NE(prerender_frame, nullptr);
+  EXPECT_EQ(prerender_frame->GetLifecycleState(),
+            content::RenderFrameHost::LifecycleState::kPrerendering);
+  EXPECT_EQ(1u, GetAudioContextPlayersCount());
+
+  // Activate the prerendered page.
+  content::NavigationSimulator::NavigateAndCommitFromDocument(
+      url, web_contents()->GetPrimaryMainFrame());
+  EXPECT_EQ(prerender_frame->GetLifecycleState(),
+            content::RenderFrameHost::LifecycleState::kActive);
+  EXPECT_EQ(0u, GetAudioContextPlayersCount());
+}
+
+class MediaEngagementContentsObserverFencedFrameTest
+    : public MediaEngagementContentsObserverTest {
+ public:
+  MediaEngagementContentsObserverFencedFrameTest() {
+    scoped_feature_list_.InitAndEnableFeatureWithParameters(
+        blink::features::kFencedFrames, {{"implementation_type", "mparch"}});
+  }
+  ~MediaEngagementContentsObserverFencedFrameTest() override = default;
+
+  content::RenderFrameHost* CreateFencedFrame(
+      content::RenderFrameHost* parent) {
+    content::RenderFrameHost* fenced_frame =
+        content::RenderFrameHostTester::For(parent)->AppendFencedFrame();
+    return fenced_frame;
+  }
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
+TEST_F(MediaEngagementContentsObserverFencedFrameTest,
+       EnsureDoNotCleanupAfterNavigation_AudioContextOnFencedFrame) {
+  GURL url("https://example.com");
+  content::NavigationSimulator::NavigateAndCommitFromBrowser(web_contents(),
+                                                             url);
+  EXPECT_EQ(0u, GetAudioContextPlayersCount());
+
+  SimulateAudioContextStarted(0);
+  EXPECT_EQ(1u, GetAudioContextPlayersCount());
+
+  // Navigate a fenced frame.
+  content::RenderFrameHostTester::For(main_rfh())
+      ->InitializeRenderFrameIfNeeded();
+  content::RenderFrameHost* fenced_frame_rfh = CreateFencedFrame(main_rfh());
+  std::unique_ptr<content::NavigationSimulator> navigation_simulator =
+      content::NavigationSimulator::CreateRendererInitiated(url,
+                                                            fenced_frame_rfh);
+  navigation_simulator->Commit();
+  EXPECT_TRUE(fenced_frame_rfh->IsFencedFrameRoot());
+  EXPECT_EQ(1u, GetAudioContextPlayersCount());
+
+  Navigate(url);
+  EXPECT_EQ(0u, GetAudioContextPlayersCount());
+}
+
+#endif  // !BUILDFLAG(IS_ANDROID)

@@ -6,7 +6,6 @@
 #define UI_NATIVE_THEME_NATIVE_THEME_MAC_H_
 
 #include "base/mac/scoped_nsobject.h"
-#include "base/macros.h"
 #include "base/no_destructor.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/native_theme/native_theme_aura.h"
@@ -33,20 +32,16 @@ class NATIVE_THEME_EXPORT NativeThemeMac : public NativeThemeBase {
     COUNT
   };
 
-  // Adjusts an SkColor based on the current system control tint. For example,
-  // if the current tint is "graphite", this function maps the provided value to
-  // an appropriate gray.
-  static SkColor ApplySystemControlTint(SkColor color);
+  NativeThemeMac(const NativeThemeMac&) = delete;
+  NativeThemeMac& operator=(const NativeThemeMac&) = delete;
 
   // NativeTheme:
-  SkColor GetSystemColorDeprecated(ColorId color_id,
-                                   ColorScheme color_scheme,
-                                   bool apply_processing) const override;
   SkColor GetSystemButtonPressedColor(SkColor base_color) const override;
   PreferredContrast CalculatePreferredContrast() const override;
 
   // NativeThemeBase:
   void Paint(cc::PaintCanvas* canvas,
+             const ColorProvider* color_provider,
              Part part,
              State state,
              const gfx::Rect& rect,
@@ -55,10 +50,12 @@ class NATIVE_THEME_EXPORT NativeThemeMac : public NativeThemeBase {
              const absl::optional<SkColor>& accent_color) const override;
   void PaintMenuPopupBackground(
       cc::PaintCanvas* canvas,
+      const ColorProvider* color_provider,
       const gfx::Size& size,
       const MenuBackgroundExtraParams& menu_background,
       ColorScheme color_scheme) const override;
   void PaintMenuItemBackground(cc::PaintCanvas* canvas,
+                               const ColorProvider* color_provider,
                                State state,
                                const gfx::Rect& rect,
                                const MenuItemExtraParams& menu_item,
@@ -106,8 +103,8 @@ class NATIVE_THEME_EXPORT NativeThemeMac : public NativeThemeBase {
   // Paint the selected menu item background, and a border for emphasis when in
   // high contrast.
   void PaintSelectedMenuItem(cc::PaintCanvas* canvas,
-                             const gfx::Rect& rect,
-                             ColorScheme color_scheme) const;
+                             const ColorProvider* color_provider,
+                             const gfx::Rect& rect) const;
 
   void PaintScrollBarTrackGradient(cc::PaintCanvas* canvas,
                                    const gfx::Rect& rect,
@@ -128,12 +125,6 @@ class NATIVE_THEME_EXPORT NativeThemeMac : public NativeThemeBase {
   void InitializeDarkModeStateAndObserver();
 
   void ConfigureWebInstance() override;
-
-  // Used by the GetSystem to run the switch for MacOS override colors that may
-  // use named NS system colors. This is a separate function from GetSystemColor
-  // to make sure the NSAppearance can be set in a scoped way.
-  absl::optional<SkColor> GetOSColor(ColorId color_id,
-                                     ColorScheme color_scheme) const;
 
   enum ScrollbarPart {
     kThumb,
@@ -165,8 +156,6 @@ class NATIVE_THEME_EXPORT NativeThemeMac : public NativeThemeBase {
   // contrast.
   std::unique_ptr<NativeTheme::ColorSchemeNativeThemeObserver>
       color_scheme_observer_;
-
-  DISALLOW_COPY_AND_ASSIGN(NativeThemeMac);
 };
 
 // Mac implementation of native theme support for web controls.
@@ -175,12 +164,6 @@ class NATIVE_THEME_EXPORT NativeThemeMac : public NativeThemeBase {
 class NativeThemeMacWeb : public NativeThemeAura {
  public:
   NativeThemeMacWeb();
-
-  float AdjustBorderWidthByZoom(float border_width,
-                                float zoom_level) const override;
-  float AdjustBorderRadiusByZoom(Part part,
-                                 float border_width,
-                                 float zoom_level) const override;
 
   static NativeThemeMacWeb* instance();
 };

@@ -6,9 +6,11 @@
 
 #include <memory>
 
+#include "ash/components/arc/arc_features.h"
+#include "ash/components/arc/arc_prefs.h"
+#include "ash/components/tpm/stub_install_attributes.h"
 #include "ash/constants/ash_features.h"
 #include "base/command_line.h"
-#include "base/macros.h"
 #include "base/system/sys_info.h"
 #include "base/test/icu_test_util.h"
 #include "base/test/scoped_command_line.h"
@@ -30,12 +32,8 @@
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chrome/test/base/testing_profile_manager.h"
-#include "chromeos/dbus/concierge/concierge_client.h"
-#include "chromeos/dbus/oobe_config/fake_oobe_configuration_client.h"
-#include "chromeos/tpm/stub_install_attributes.h"
+#include "chromeos/ash/components/dbus/concierge/concierge_client.h"
 #include "components/account_id/account_id.h"
-#include "components/arc/arc_features.h"
-#include "components/arc/arc_prefs.h"
 #include "components/policy/core/common/cloud/cloud_policy_constants.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/testing_pref_service.h"
@@ -81,6 +79,10 @@ class FakeUserManagerWithLocalState : public ash::FakeChromeUserManager {
     RegisterPrefs(test_local_state_->registry());
   }
 
+  FakeUserManagerWithLocalState(const FakeUserManagerWithLocalState&) = delete;
+  FakeUserManagerWithLocalState& operator=(
+      const FakeUserManagerWithLocalState&) = delete;
+
   PrefService* GetLocalState() const override {
     return test_local_state_.get();
   }
@@ -94,8 +96,6 @@ class FakeUserManagerWithLocalState : public ash::FakeChromeUserManager {
   TestingProfileManager* const testing_profile_manager_;
 
   std::unique_ptr<TestingPrefServiceSimple> test_local_state_;
-
-  DISALLOW_COPY_AND_ASSIGN(FakeUserManagerWithLocalState);
 };
 
 class ScopedLogIn {
@@ -127,6 +127,9 @@ class ScopedLogIn {
     }
   }
 
+  ScopedLogIn(const ScopedLogIn&) = delete;
+  ScopedLogIn& operator=(const ScopedLogIn&) = delete;
+
   ~ScopedLogIn() { fake_user_manager_->RemoveUserFromList(account_id_); }
 
  private:
@@ -147,8 +150,6 @@ class ScopedLogIn {
 
   FakeUserManagerWithLocalState* fake_user_manager_;
   const AccountId account_id_;
-
-  DISALLOW_COPY_AND_ASSIGN(ScopedLogIn);
 };
 
 bool IsArcAllowedForProfileOnFirstCall(const Profile* profile) {
@@ -161,6 +162,10 @@ bool IsArcAllowedForProfileOnFirstCall(const Profile* profile) {
 class ChromeArcUtilTest : public testing::Test {
  public:
   ChromeArcUtilTest() = default;
+
+  ChromeArcUtilTest(const ChromeArcUtilTest&) = delete;
+  ChromeArcUtilTest& operator=(const ChromeArcUtilTest&) = delete;
+
   ~ChromeArcUtilTest() override = default;
 
   void SetUp() override {
@@ -212,8 +217,6 @@ class ChromeArcUtilTest : public testing::Test {
   std::unique_ptr<user_manager::ScopedUserManager> user_manager_enabler_;
   // Owned by |profile_manager_|
   TestingProfile* profile_ = nullptr;
-
-  DISALLOW_COPY_AND_ASSIGN(ChromeArcUtilTest);
 };
 
 TEST_F(ChromeArcUtilTest, IsArcAllowedForProfile) {
@@ -284,9 +287,8 @@ TEST_F(ChromeArcUtilTest, IsArcAllowedForProfile_ActiveDirectoryEnabled) {
       GetFakeUserManager(),
       AccountId::AdFromObjGuid("f04557de-5da2-40ce-ae9d-b8874d8da96e"),
       user_manager::USER_TYPE_ACTIVE_DIRECTORY);
-  EXPECT_FALSE(chromeos::ProfileHelper::Get()
-                   ->GetUserByProfile(profile())
-                   ->HasGaiaAccount());
+  EXPECT_FALSE(
+      ash::ProfileHelper::Get()->GetUserByProfile(profile())->HasGaiaAccount());
   EXPECT_TRUE(IsArcAllowedForProfileOnFirstCall(profile()));
 }
 
@@ -296,9 +298,8 @@ TEST_F(ChromeArcUtilTest, IsArcAllowedForProfile_ActiveDirectoryDisabled) {
       GetFakeUserManager(),
       AccountId::AdFromObjGuid("f04557de-5da2-40ce-ae9d-b8874d8da96e"),
       user_manager::USER_TYPE_ACTIVE_DIRECTORY);
-  EXPECT_FALSE(chromeos::ProfileHelper::Get()
-                   ->GetUserByProfile(profile())
-                   ->HasGaiaAccount());
+  EXPECT_FALSE(
+      ash::ProfileHelper::Get()->GetUserByProfile(profile())->HasGaiaAccount());
   EXPECT_FALSE(IsArcAllowedForProfileOnFirstCall(profile()));
 }
 
@@ -307,9 +308,8 @@ TEST_F(ChromeArcUtilTest, IsArcAllowedForProfile_KioskArcNotAvailable) {
   ScopedLogIn login(GetFakeUserManager(),
                     AccountId::FromUserEmail(profile()->GetProfileUserName()),
                     user_manager::USER_TYPE_ARC_KIOSK_APP);
-  EXPECT_FALSE(chromeos::ProfileHelper::Get()
-                   ->GetUserByProfile(profile())
-                   ->HasGaiaAccount());
+  EXPECT_FALSE(
+      ash::ProfileHelper::Get()->GetUserByProfile(profile())->HasGaiaAccount());
   EXPECT_FALSE(IsArcAllowedForProfileOnFirstCall(profile()));
 }
 
@@ -319,9 +319,8 @@ TEST_F(ChromeArcUtilTest, IsArcAllowedForProfile_KioskArcInstalled) {
   ScopedLogIn login(GetFakeUserManager(),
                     AccountId::FromUserEmail(profile()->GetProfileUserName()),
                     user_manager::USER_TYPE_ARC_KIOSK_APP);
-  EXPECT_FALSE(chromeos::ProfileHelper::Get()
-                   ->GetUserByProfile(profile())
-                   ->HasGaiaAccount());
+  EXPECT_FALSE(
+      ash::ProfileHelper::Get()->GetUserByProfile(profile())->HasGaiaAccount());
   EXPECT_TRUE(IsArcAllowedForProfileOnFirstCall(profile()));
 }
 
@@ -331,9 +330,8 @@ TEST_F(ChromeArcUtilTest, IsArcAllowedForProfile_KioskArcSupported) {
   ScopedLogIn login(GetFakeUserManager(),
                     AccountId::FromUserEmail(profile()->GetProfileUserName()),
                     user_manager::USER_TYPE_ARC_KIOSK_APP);
-  EXPECT_FALSE(chromeos::ProfileHelper::Get()
-                   ->GetUserByProfile(profile())
-                   ->HasGaiaAccount());
+  EXPECT_FALSE(
+      ash::ProfileHelper::Get()->GetUserByProfile(profile())->HasGaiaAccount());
   EXPECT_TRUE(IsArcAllowedForProfileOnFirstCall(profile()));
 }
 
@@ -394,25 +392,25 @@ TEST_F(ChromeArcUtilTest, IsArcCompatibleFileSystemUsedForProfile) {
       profile()->GetProfileUserName(), kTestGaiaId));
   ScopedLogIn login(GetFakeUserManager(), id);
   const user_manager::User* user =
-      chromeos::ProfileHelper::Get()->GetUserByProfile(profile());
+      ash::ProfileHelper::Get()->GetUserByProfile(profile());
 
   // Unconfirmed
   EXPECT_FALSE(IsArcCompatibleFileSystemUsedForUser(user));
 
+  user_manager::KnownUser known_user(g_browser_process->local_state());
   // Old FS
-  user_manager::known_user::SetIntegerPref(
-      id, prefs::kArcCompatibleFilesystemChosen, kFileSystemIncompatible);
+  known_user.SetIntegerPref(id, prefs::kArcCompatibleFilesystemChosen,
+                            kFileSystemIncompatible);
   EXPECT_FALSE(IsArcCompatibleFileSystemUsedForUser(user));
 
   // New FS
-  user_manager::known_user::SetIntegerPref(
-      id, prefs::kArcCompatibleFilesystemChosen, kFileSystemCompatible);
+  known_user.SetIntegerPref(id, prefs::kArcCompatibleFilesystemChosen,
+                            kFileSystemCompatible);
   EXPECT_TRUE(IsArcCompatibleFileSystemUsedForUser(user));
 
   // New FS (User notified)
-  user_manager::known_user::SetIntegerPref(
-      id, prefs::kArcCompatibleFilesystemChosen,
-      kFileSystemCompatibleAndNotifiedDeprecated);
+  known_user.SetIntegerPref(id, prefs::kArcCompatibleFilesystemChosen,
+                            kFileSystemCompatibleAndNotifiedDeprecated);
   EXPECT_TRUE(IsArcCompatibleFileSystemUsedForUser(user));
 }
 
@@ -696,18 +694,6 @@ TEST_F(ChromeArcUtilTest, ArcStartModeDefaultDemoMode) {
   EXPECT_TRUE(IsPlayStoreAvailable());
 }
 
-// TODO(b/154290639): We disable Play Store if device is offline enrolled.
-TEST_F(ChromeArcUtilTest, ArcStartModeDefaultOfflineDemoMode) {
-  auto* command_line = base::CommandLine::ForCurrentProcess();
-  command_line->InitFromArgv({"", "--arc-availability=installed"});
-  ash::DemoSession::SetDemoConfigForTesting(
-      ash::DemoSession::DemoModeConfig::kOffline);
-  ScopedLogIn login(GetFakeUserManager(),
-                    AccountId::FromUserEmail("public_user@gmail.com"),
-                    user_manager::USER_TYPE_PUBLIC_ACCOUNT);
-  EXPECT_FALSE(IsPlayStoreAvailable());
-}
-
 TEST_F(ChromeArcUtilTest, ArcStartModeDefaultDemoModeWithoutPlayStore) {
   base::test::ScopedFeatureList feature_list;
   feature_list.InitWithFeatureState(chromeos::features::kShowPlayInDemoMode,
@@ -759,16 +745,19 @@ TEST_F(ChromeArcUtilTest, ArcUnmanagedToManagedTransition_FeatureOff) {
 class ArcOobeTest : public ChromeArcUtilTest {
  public:
   ArcOobeTest() {
-    chromeos::ConciergeClient::InitializeFake(/*fake_cicerone_client=*/nullptr);
-    oobe_configuration_ = std::make_unique<chromeos::OobeConfiguration>();
+    ash::ConciergeClient::InitializeFake(/*fake_cicerone_client=*/nullptr);
+    oobe_configuration_ = std::make_unique<ash::OobeConfiguration>();
   }
+
+  ArcOobeTest(const ArcOobeTest&) = delete;
+  ArcOobeTest& operator=(const ArcOobeTest&) = delete;
 
   ~ArcOobeTest() override {
     // Fake display host have to be shut down first, as it may access
     // configuration.
     fake_login_display_host_.reset();
     oobe_configuration_.reset();
-    chromeos::ConciergeClient::Shutdown();
+    ash::ConciergeClient::Shutdown();
   }
 
  protected:
@@ -783,10 +772,8 @@ class ArcOobeTest : public ChromeArcUtilTest {
   void CloseLoginDisplayHost() { fake_login_display_host_.reset(); }
 
  private:
-  std::unique_ptr<chromeos::OobeConfiguration> oobe_configuration_;
+  std::unique_ptr<ash::OobeConfiguration> oobe_configuration_;
   std::unique_ptr<ash::FakeLoginDisplayHost> fake_login_display_host_;
-
-  DISALLOW_COPY_AND_ASSIGN(ArcOobeTest);
 };
 
 TEST_F(ArcOobeTest, TermsOfServiceOobeNegotiationNeededForManagedUser) {

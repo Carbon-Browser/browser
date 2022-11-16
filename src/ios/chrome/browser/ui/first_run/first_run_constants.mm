@@ -19,13 +19,22 @@ NSString* const kFirstRunWelcomeScreenAccessibilityIdentifier =
 NSString* const kFirstRunSignInScreenAccessibilityIdentifier =
     @"firstRunSignInScreenAccessibilityIdentifier";
 
+NSString* const kFirstRunLegacySignInScreenAccessibilityIdentifier =
+    @"firstRunLegacySignInScreenAccessibilityIdentifier";
+
 NSString* const kFirstRunSyncScreenAccessibilityIdentifier =
     @"firstRunSyncScreenAccessibilityIdentifier";
 
 NSString* const kFirstRunDefaultBrowserScreenAccessibilityIdentifier =
     @"firstRunDefaultBrowserScreenAccessibilityIdentifier";
 
-NSString* const kBeginBoldTag = @"BEGIN_BOLD[ \t]*";
-NSString* const kEndBoldTag = @"[ \t]*END_BOLD";
+// URL for the terms of service text.
+NSString* const kTermsOfServiceURL = @"internal://terms-of-service";
+
+// URL for the metric reporting text.
+NSString* const kMetricReportingURL = @"internal://metric-reporting";
+
+NSString* const kEnterpriseLoadingScreenAccessibilityIdentifier =
+    @"enterpriseLoadingScreenAccessibilityIdentifier";
 
 }  // first_run

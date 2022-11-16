@@ -7,7 +7,7 @@
 #include <utility>
 
 #include "base/command_line.h"
-#include "base/sequenced_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "components/gcm_driver/gcm_client_factory.h"
@@ -21,17 +21,17 @@ namespace gcm {
 namespace {
 
 GCMClient::ChromePlatform GetPlatform() {
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   return GCMClient::PLATFORM_WIN;
-#elif defined(OS_APPLE)
+#elif BUILDFLAG(IS_APPLE)
   return GCMClient::PLATFORM_MAC;
-#elif defined(OS_IOS)
+#elif BUILDFLAG(IS_IOS)
   return GCMClient::PLATFORM_IOS;
-#elif defined(OS_ANDROID)
+#elif BUILDFLAG(IS_ANDROID)
   return GCMClient::PLATFORM_ANDROID;
 #elif BUILDFLAG(IS_CHROMEOS_ASH)
   return GCMClient::PLATFORM_CROS;
-#elif defined(OS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
+#elif BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
   return GCMClient::PLATFORM_LINUX;
 #else
   // For all other platforms, return as LINUX.

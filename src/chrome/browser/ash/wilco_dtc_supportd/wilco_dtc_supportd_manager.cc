@@ -14,7 +14,7 @@
 #include "chrome/browser/ash/wilco_dtc_supportd/wilco_dtc_supportd_network_context.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/net/system_network_context_manager.h"
-#include "chromeos/dbus/upstart/upstart_client.h"
+#include "chromeos/ash/components/dbus/upstart/upstart_client.h"
 #include "components/session_manager/core/session_manager.h"
 #include "components/session_manager/session_manager_types.h"
 #include "components/user_manager/user.h"
@@ -31,14 +31,17 @@ class WilcoDtcSupportdManagerDelegateImpl final
     : public WilcoDtcSupportdManager::Delegate {
  public:
   WilcoDtcSupportdManagerDelegateImpl();
+
+  WilcoDtcSupportdManagerDelegateImpl(
+      const WilcoDtcSupportdManagerDelegateImpl&) = delete;
+  WilcoDtcSupportdManagerDelegateImpl& operator=(
+      const WilcoDtcSupportdManagerDelegateImpl&) = delete;
+
   ~WilcoDtcSupportdManagerDelegateImpl() override;
 
   // Delegate overrides:
   std::unique_ptr<WilcoDtcSupportdBridge> CreateWilcoDtcSupportdBridge()
       override;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(WilcoDtcSupportdManagerDelegateImpl);
 };
 
 WilcoDtcSupportdManagerDelegateImpl::WilcoDtcSupportdManagerDelegateImpl() =

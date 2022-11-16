@@ -29,6 +29,7 @@
 #include "ui/aura/window_observer.h"
 #include "ui/base/class_property.h"
 #include "ui/compositor/animation_throughput_reporter.h"
+#include "ui/compositor/compositor.h"
 #include "ui/compositor/compositor_observer.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_animation_observer.h"
@@ -38,8 +39,8 @@
 #include "ui/compositor/scoped_layer_animation_settings.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
+#include "ui/gfx/geometry/transform.h"
 #include "ui/gfx/interpolated_transform.h"
-#include "ui/gfx/transform.h"
 #include "ui/wm/core/coordinate_conversion.h"
 #include "ui/wm/core/window_util.h"
 
@@ -49,11 +50,9 @@ namespace {
 const int kLayerAnimationsForMinimizeDurationMS = 200;
 
 // Amount of time for the cross fade animation.
-constexpr base::TimeDelta kCrossFadeDuration =
-    base::TimeDelta::FromMilliseconds(200);
+constexpr base::TimeDelta kCrossFadeDuration = base::Milliseconds(200);
 
-constexpr base::TimeDelta kCrossFadeMaxDuration =
-    base::TimeDelta::FromMilliseconds(400);
+constexpr base::TimeDelta kCrossFadeMaxDuration = base::Milliseconds(400);
 
 // Durations for the brightness/grayscale fade animation, in milliseconds.
 const int kBrightnessGrayscaleFadeDurationMs = 1000;
@@ -69,8 +68,7 @@ const float kWindowAnimation_HideOpacity = 0.f;
 const float kWindowAnimation_ShowOpacity = 1.f;
 
 // Duration for gfx::Tween::ZERO animation of showing window.
-constexpr base::TimeDelta kZeroAnimationMs =
-    base::TimeDelta::FromMilliseconds(300);
+constexpr base::TimeDelta kZeroAnimationMs = base::Milliseconds(300);
 
 constexpr char kCrossFadeSmoothness[] =
     "Ash.Window.AnimationSmoothness.CrossFade";
@@ -120,8 +118,7 @@ class CrossFadeObserver : public aura::WindowObserver,
         [](const absl::optional<std::string>& histogram_name, int smoothness) {
           if (histogram_name) {
             DCHECK(!histogram_name->empty());
-            base::UmaHistogramPercentageObsoleteDoNotUse(*histogram_name,
-                                                         smoothness);
+            base::UmaHistogramPercentage(*histogram_name, smoothness);
           } else {
             UMA_HISTOGRAM_PERCENTAGE(kCrossFadeSmoothness, smoothness);
           }
@@ -287,6 +284,16 @@ void CrossFadeAnimationInternal(
   {
     ui::Layer* old_layer = old_layer_owner->root();
     old_layer->GetAnimator()->StopAnimating();
+    // If Overview exit animation is in the sequence, stopping animation may
+    // trigger `OverviewController::OnEndingAnimationComplete` which may finally
+    // start the frame animation.
+    // 'FrameHeader::FrameAnimatorView::StartAnimation' recreates the window
+    // layer such that the `new_layer` is no longer the window's current layer.
+    // Therefore, we should update the `new_layer`. Refer to
+    // https://crbug.com/1313977.
+    // TODO(zxdan): find a way to change the window state after exiting Overview
+    // or avoid frame animation when setting bounds.
+    new_layer = window->layer();
     old_layer->SetTransform(old_transform);
     ui::ScopedLayerAnimationSettings settings(old_layer->GetAnimator());
     settings.SetTransitionDuration(animation_duration);
@@ -449,8 +456,14 @@ void AddLayerAnimationsForMinimize(aura::Window* window, bool show) {
 void AnimateShowWindow_Minimize(aura::Window* window) {
   window->layer()->SetOpacity(kWindowAnimation_HideOpacity);
   ui::ScopedLayerAnimationSettings settings(window->layer()->GetAnimator());
+  ui::AnimationThroughputReporter reporter(
+      settings.GetAnimator(),
+      metrics_util::ForSmoothness(
+          base::BindRepeating(static_cast<void (*)(const char*, int)>(
+                                  &base::UmaHistogramPercentage),
+                              "Ash.Window.AnimationSmoothness.Unminimize")));
   base::TimeDelta duration =
-      base::TimeDelta::FromMilliseconds(kLayerAnimationsForMinimizeDurationMS);
+      base::Milliseconds(kLayerAnimationsForMinimizeDurationMS);
   settings.SetTransitionDuration(duration);
   AddLayerAnimationsForMinimize(window, true);
 
@@ -463,8 +476,16 @@ void AnimateShowWindow_Minimize(aura::Window* window) {
 void AnimateHideWindow_Minimize(aura::Window* window) {
   // Property sets within this scope will be implicitly animated.
   ::wm::ScopedHidingAnimationSettings hiding_settings(window);
+  // Report animation smoothness for animations created within this scope.
+  ui::AnimationThroughputReporter reporter(
+      hiding_settings.layer_animation_settings()->GetAnimator(),
+      metrics_util::ForSmoothness(
+          base::BindRepeating(static_cast<void (*)(const char*, int)>(
+                                  &base::UmaHistogramPercentage),
+                              "Ash.Window.AnimationSmoothness.Minimize")));
+
   base::TimeDelta duration =
-      base::TimeDelta::FromMilliseconds(kLayerAnimationsForMinimizeDurationMS);
+      base::Milliseconds(kLayerAnimationsForMinimizeDurationMS);
   hiding_settings.layer_animation_settings()->SetTransitionDuration(duration);
   window->layer()->SetVisible(false);
 
@@ -490,7 +511,7 @@ void AnimateShowHideWindowCommon_BrightnessGrayscale(aura::Window* window,
   }
 
   base::TimeDelta duration =
-      base::TimeDelta::FromMilliseconds(kBrightnessGrayscaleFadeDurationMs);
+      base::Milliseconds(kBrightnessGrayscaleFadeDurationMs);
 
   if (show) {
     ui::ScopedLayerAnimationSettings settings(window->layer()->GetAnimator());
@@ -513,8 +534,7 @@ void AnimateShowWindow_BrightnessGrayscale(aura::Window* window) {
 void AnimateShowWindow_FadeIn(aura::Window* window) {
   window->layer()->SetOpacity(kWindowAnimation_HideOpacity);
   ui::ScopedLayerAnimationSettings settings(window->layer()->GetAnimator());
-  settings.SetTransitionDuration(
-      base::TimeDelta::FromMilliseconds(kFadeInAnimationMs));
+  settings.SetTransitionDuration(base::Milliseconds(kFadeInAnimationMs));
   window->layer()->SetVisible(true);
   window->layer()->SetOpacity(kWindowAnimation_ShowOpacity);
 }
@@ -525,7 +545,7 @@ void AnimateHideWindow_BrightnessGrayscale(aura::Window* window) {
 
 void AnimateHideWindow_SlideOut(aura::Window* window) {
   base::TimeDelta duration =
-      base::TimeDelta::FromMilliseconds(PipPositioner::kPipDismissTimeMs);
+      base::Milliseconds(PipPositioner::kPipDismissTimeMs);
 
   ::wm::ScopedHidingAnimationSettings settings(window);
   settings.layer_animation_settings()->SetTransitionDuration(duration);

@@ -5,7 +5,9 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_CSS_COMPUTED_STYLE_CSS_VALUE_MAPPING_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_CSS_COMPUTED_STYLE_CSS_VALUE_MAPPING_H_
 
+#include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/css/css_value.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_map.h"
 #include "third_party/blink/renderer/platform/wtf/text/atomic_string.h"
 
 namespace blink {
@@ -22,7 +24,7 @@ class CORE_EXPORT ComputedStyleCSSValueMapping {
       const PropertyRegistry*);
 
  private:
-  static const CSSValue* Get(const AtomicString custom_property_name,
+  static const CSSValue* Get(const AtomicString& custom_property_name,
                              const ComputedStyle&,
                              const PropertyRegistry*);
 };

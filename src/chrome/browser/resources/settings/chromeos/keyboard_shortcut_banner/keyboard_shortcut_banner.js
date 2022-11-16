@@ -12,11 +12,11 @@
  * keyboard shortcuts. For example, "Press Ctrl + Space" should be passed in as
  * "Press <kbd><kbd>Ctrl</kbd>+<kbd>Space</kbd></kbd>".
  */
-import '//resources/cr_elements/cr_button/cr_button.m.js';
+import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
 
-import {html, mixinBehaviors, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {getInstance as getAnnouncerInstance} from 'chrome://resources/cr_elements/cr_a11y_announcer/cr_a11y_announcer.js';
 import {I18nBehavior, I18nBehaviorInterface} from 'chrome://resources/js/i18n_behavior.m.js';
-import {IronA11yAnnouncer} from 'chrome://resources/polymer/v3_0/iron-a11y-announcer/iron-a11y-announcer.js';
+import {html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 /**
  * @constructor
@@ -45,24 +45,15 @@ class KeyboardShortcutBanner extends KeyboardShortcutBannerBase {
       /** @type {!Array<string>} */
       body: {
         type: Array,
-      }
+      },
     };
-  }
-
-  /** @override */
-  connectedCallback() {
-    super.connectedCallback();
-    IronA11yAnnouncer.requestAvailability();
   }
 
   /** @private */
   onDismissClick_() {
-    this.dispatchEvent(new CustomEvent('iron-announce', {
-      bubbles: true,
-      composed: true,
-      detail: {text: this.i18n('shortcutBannerDismissed')}
-    }));
-    this.dispatchEvent(new CustomEvent('dismiss'));
+    getAnnouncerInstance().announce(this.i18n('shortcutBannerDismissed'));
+    this.dispatchEvent(
+        new CustomEvent('dismiss', {bubbles: true, composed: true}));
   }
 
   /**

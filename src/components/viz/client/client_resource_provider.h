@@ -18,10 +18,13 @@
 #include "components/viz/common/resources/returned_resource.h"
 #include "components/viz/common/resources/transferable_resource.h"
 #include "third_party/khronos/GLES2/gl2.h"
+#include "third_party/skia/include/core/SkRefCnt.h"
 #include "third_party/skia/include/core/SkSurface.h"
-#include "third_party/skia/include/gpu/GrBackendSurface.h"
+
+class SkColorSpace;
 
 namespace gpu {
+struct Capabilities;
 namespace gles2 {
 class GLES2Interface;
 }
@@ -45,6 +48,10 @@ class RasterContextProvider;
 class VIZ_CLIENT_EXPORT ClientResourceProvider {
  public:
   ClientResourceProvider();
+
+  ClientResourceProvider(const ClientResourceProvider&) = delete;
+  ClientResourceProvider& operator=(const ClientResourceProvider&) = delete;
+
   ~ClientResourceProvider();
 
   static gpu::SyncToken GenerateSyncTokenHelper(gpu::gles2::GLES2Interface* gl);
@@ -112,6 +119,7 @@ class VIZ_CLIENT_EXPORT ClientResourceProvider {
   class VIZ_CLIENT_EXPORT ScopedSkSurface {
    public:
     ScopedSkSurface(GrDirectContext* gr_context,
+                    const gpu::Capabilities& capabilities,
                     sk_sp<SkColorSpace> color_space,
                     GLuint texture_id,
                     GLenum texture_target,
@@ -119,14 +127,16 @@ class VIZ_CLIENT_EXPORT ClientResourceProvider {
                     ResourceFormat format,
                     SkSurfaceProps surface_props,
                     int msaa_sample_count);
+
+    ScopedSkSurface(const ScopedSkSurface&) = delete;
+    ScopedSkSurface& operator=(const ScopedSkSurface&) = delete;
+
     ~ScopedSkSurface();
 
     SkSurface* surface() const { return surface_.get(); }
 
    private:
     sk_sp<SkSurface> surface_;
-
-    DISALLOW_COPY_AND_ASSIGN(ScopedSkSurface);
   };
 
  private:
@@ -144,8 +154,6 @@ class VIZ_CLIENT_EXPORT ClientResourceProvider {
   // The ResourceIds in ClientResourceProvider start from 1 to avoid
   // conflicts with id from DisplayResourceProvider.
   ResourceIdGenerator id_generator_;
-
-  DISALLOW_COPY_AND_ASSIGN(ClientResourceProvider);
 };
 
 }  // namespace viz

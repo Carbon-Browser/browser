@@ -11,7 +11,6 @@
 #include "ash/ash_export.h"
 #include "ash/public/cpp/overview_test_api.h"
 #include "base/callback_forward.h"
-#include "base/macros.h"
 
 namespace aura {
 class Window;
@@ -40,6 +39,10 @@ class WorkspaceController;
 class ASH_EXPORT ShellTestApi {
  public:
   ShellTestApi();
+
+  ShellTestApi(const ShellTestApi&) = delete;
+  ShellTestApi& operator=(const ShellTestApi&) = delete;
+
   ~ShellTestApi();
 
   // TabletModeController usually takes a screenshot before animating from
@@ -54,11 +57,6 @@ class ASH_EXPORT ShellTestApi {
   // set this to enabled, the test is responsible for setting it back to
   // disabled to prevent failing subsequent tests.
   static void SetUseLoginNotificationDelayForTest(bool use_delay);
-
-  // Whether a notification is shown at startup about new shortcuts. This
-  // can interfere with tests that expect a certain window to be active,
-  // that count notifications, or that test ChromeVox output.
-  static void SetShouldShowShortcutNotificationForTest(bool show_notification);
 
   MessageCenterController* message_center_controller();
   WorkspaceController* workspace_controller();
@@ -144,8 +142,6 @@ class ASH_EXPORT ShellTestApi {
 
  private:
   Shell* shell_;  // not owned
-
-  DISALLOW_COPY_AND_ASSIGN(ShellTestApi);
 };
 
 }  // namespace ash

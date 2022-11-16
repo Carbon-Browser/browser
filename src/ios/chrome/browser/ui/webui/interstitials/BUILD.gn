@@ -26,6 +26,7 @@ source_set("interstitials") {
     "//ios/chrome/browser/safe_browsing",
     "//ios/chrome/browser/ssl",
     "//ios/components/security_interstitials",
+    "//ios/components/security_interstitials/safe_browsing",
     "//ios/web/public/security",
     "//ios/web/public/webui",
     "//net",
@@ -44,7 +45,6 @@ source_set("constants") {
 }
 
 source_set("eg2_tests") {
-  defines = [ "CHROME_EARL_GREY_2" ]
   configs += [
     "//build/config/compiler:enable_arc",
     "//build/config/ios:xctest_config",

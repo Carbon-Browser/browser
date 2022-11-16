@@ -7,7 +7,7 @@
 // clang-format on
 
 /**
- * @implements {chromeos.multideviceSetup.mojom.MultiDeviceSetupInterface}
+ * @implements {ash.multideviceSetup.mojom.MultiDeviceSetupInterface}
  */
 /* #export */ class FakeMojoService {
   constructor() {
@@ -62,7 +62,7 @@
     for (let i = 0; i < this.deviceCount; i++) {
       const deviceName = deviceNames[i % 4];
       devices.push({
-        remoteDevice: {deviceName: deviceName, deviceId: deviceName + '--' + i}
+        remoteDevice: {deviceName: deviceName, deviceId: deviceName + '--' + i},
       });
     }
     return new Promise(function(resolve, reject) {
@@ -73,7 +73,7 @@
   /** @override */
   setHostDevice(hostInstanceIdOrLegacyDeviceId) {
     if (this.shouldSetHostSucceed) {
-      console.log(
+      console.info(
           'setHostDevice(' + hostInstanceIdOrLegacyDeviceId +
           ') called; simulating ' +
           'success.');

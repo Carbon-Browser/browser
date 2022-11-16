@@ -9,7 +9,6 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
 #include "extensions/browser/extension_function.h"
 #include "extensions/browser/script_executor.h"
 #include "extensions/common/api/extension_types.h"
@@ -24,6 +23,9 @@ namespace extensions {
 class ExecuteCodeFunction : public ExtensionFunction {
  public:
   ExecuteCodeFunction();
+
+  ExecuteCodeFunction(const ExecuteCodeFunction&) = delete;
+  ExecuteCodeFunction& operator=(const ExecuteCodeFunction&) = delete;
 
  protected:
   ~ExecuteCodeFunction() override;
@@ -99,8 +101,6 @@ class ExecuteCodeFunction : public ExtensionFunction {
 
   // The ID of the root frame to inject into.
   int root_frame_id_ = -1;
-
-  DISALLOW_COPY_AND_ASSIGN(ExecuteCodeFunction);
 };
 
 }  // namespace extensions

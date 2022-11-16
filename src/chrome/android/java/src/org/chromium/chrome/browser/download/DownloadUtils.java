@@ -36,6 +36,7 @@ import org.chromium.base.metrics.RecordUserAction;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.ChromeTabbedActivity;
 import org.chromium.chrome.browser.IntentHandler;
+import org.chromium.chrome.browser.app.download.home.DownloadActivity;
 import org.chromium.chrome.browser.download.items.OfflineContentAggregatorFactory;
 import org.chromium.chrome.browser.feature_engagement.TrackerFactory;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
@@ -66,6 +67,7 @@ import org.chromium.components.offline_items_collection.OfflineItem;
 import org.chromium.components.offline_items_collection.OpenParams;
 import org.chromium.content_public.browser.BrowserStartupController;
 import org.chromium.content_public.browser.LoadUrlParams;
+import org.chromium.content_public.browser.WebContents;
 import org.chromium.ui.base.DeviceFormFactor;
 import org.chromium.ui.widget.Toast;
 
@@ -295,8 +297,12 @@ public class DownloadUtils {
             DownloadUtils.recordDownloadPageMetrics(tab);
         }
 
-        Tracker tracker =
-                TrackerFactory.getTrackerForProfile(Profile.fromWebContents(tab.getWebContents()));
+        WebContents webContents = tab.getWebContents();
+        if (webContents == null) return;
+
+        Profile profile = Profile.fromWebContents(webContents);
+        if (profile == null) return;
+        Tracker tracker = TrackerFactory.getTrackerForProfile(profile);
         tracker.notifyEvent(EventConstants.DOWNLOAD_PAGE_STARTED);
     }
 
@@ -381,13 +387,10 @@ public class DownloadUtils {
             ContextUtils.getApplicationContext().startActivity(
                     new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS)
                             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-        } else if (LegacyHelpers.isLegacyOfflinePage(contentId)) {
+        } else {
             OpenParams openParams = new OpenParams(LaunchLocation.PROGRESS_BAR);
             openParams.openInIncognito = OTRProfileID.isOffTheRecord(otrProfileID);
             OfflineContentAggregatorFactory.get().openItem(openParams, contentId);
-        } else {
-            DownloadManagerService.getDownloadManagerService().openDownload(
-                    contentId, otrProfileID, source, context);
         }
     }
 
@@ -423,7 +426,7 @@ public class DownloadUtils {
             Intent intent = MediaViewerUtils.getMediaViewerIntent(fileUri /*displayUri*/,
                     contentUri /*contentUri*/, normalizedMimeType,
                     true /* allowExternalAppHandlers */, context);
-            IntentHandler.startActivityForTrustedIntent(intent);
+            IntentHandler.startActivityForTrustedIntent(context, intent);
             service.updateLastAccessTime(downloadGuid, otrProfileID);
             return true;
         }
@@ -467,12 +470,26 @@ public class DownloadUtils {
         return false;
     }
 
+    /**
+     * Opens a completed download.
+     * @param filePath File path on disk of the download to open.
+     * @param mimeType MIME type of the downloaded file.
+     * @param downloadGuid Unique GUID of the download.
+     * @param otrProfileID User's OTRProfileID.
+     * @param originalUrl URL which initially triggered the download itself.
+     * @param referer URL of the page which redirected to the download URL.
+     * @param source Where this download was initiated from.
+     */
     @CalledByNative
-    static void openDownload(String filePath, String mimeType, String downloadGuid,
+    public static void openDownload(String filePath, String mimeType, String downloadGuid,
             OTRProfileID otrProfileID, String originalUrl, String referer,
             @DownloadOpenSource int source) {
-        boolean canOpen = DownloadUtils.openFile(filePath, mimeType, downloadGuid, otrProfileID,
-                originalUrl, referer, source, ContextUtils.getApplicationContext());
+        // Mapping generic MIME type to android openable type based on URL and file extension.
+        String newMimeType = MimeUtils.remapGenericMimeType(mimeType, originalUrl, filePath);
+        Activity activity = ApplicationStatus.getLastTrackedFocusedActivity();
+        boolean canOpen = DownloadUtils.openFile(filePath, newMimeType, downloadGuid, otrProfileID,
+                originalUrl, referer, source,
+                activity == null ? ContextUtils.getApplicationContext() : activity);
         if (!canOpen) {
             DownloadUtils.showDownloadManager(null, null, otrProfileID, source);
         }

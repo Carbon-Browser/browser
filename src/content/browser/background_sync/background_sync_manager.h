@@ -16,7 +16,7 @@
 
 #include "base/callback_forward.h"
 #include "base/cancelable_callback.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/time/clock.h"
@@ -75,6 +75,10 @@ class CONTENT_EXPORT BackgroundSyncManager
   static std::unique_ptr<BackgroundSyncManager> Create(
       scoped_refptr<ServiceWorkerContextWrapper> service_worker_context,
       scoped_refptr<DevToolsBackgroundServicesContextImpl> devtools_context);
+
+  BackgroundSyncManager(const BackgroundSyncManager&) = delete;
+  BackgroundSyncManager& operator=(const BackgroundSyncManager&) = delete;
+
   ~BackgroundSyncManager() override;
 
   // Stores the given background sync registration and adds it to the scheduling
@@ -85,6 +89,7 @@ class CONTENT_EXPORT BackgroundSyncManager
   // parameters if the user or UA chose different parameters than those
   // supplied.
   void Register(int64_t sw_registration_id,
+                int render_process_host_id,
                 blink::mojom::SyncRegistrationOptions options,
                 StatusAndRegistrationCallback callback);
 
@@ -223,7 +228,7 @@ class CONTENT_EXPORT BackgroundSyncManager
       const std::string& tag,
       scoped_refptr<ServiceWorkerVersion> active_version,
       ServiceWorkerVersion::StatusCallback callback);
-  virtual void HasMainFrameWindowClient(const url::Origin& origin,
+  virtual void HasMainFrameWindowClient(const blink::StorageKey& key,
                                         BoolCallback callback);
 
  private:
@@ -292,14 +297,17 @@ class CONTENT_EXPORT BackgroundSyncManager
   // Register callbacks
   void RegisterCheckIfHasMainFrame(
       int64_t sw_registration_id,
+      int render_process_host_id,
       blink::mojom::SyncRegistrationOptions options,
       StatusAndRegistrationCallback callback);
   void RegisterDidCheckIfMainFrame(
       int64_t sw_registration_id,
+      int render_process_host_id,
       blink::mojom::SyncRegistrationOptions options,
       StatusAndRegistrationCallback callback,
       bool has_main_frame_client);
   void RegisterImpl(int64_t sw_registration_id,
+                    int render_process_host_id,
                     blink::mojom::SyncRegistrationOptions options,
                     StatusAndRegistrationCallback callback);
   void RegisterDidAskForPermission(
@@ -503,15 +511,13 @@ class CONTENT_EXPORT BackgroundSyncManager
 
   std::unique_ptr<BackgroundSyncNetworkObserver> network_observer_;
 
-  base::Clock* clock_;
+  raw_ptr<base::Clock> clock_;
 
   std::map<int64_t, int> emulated_offline_sw_;
 
   SEQUENCE_CHECKER(sequence_checker_);
 
   base::WeakPtrFactory<BackgroundSyncManager> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(BackgroundSyncManager);
 };
 
 }  // namespace content

@@ -9,8 +9,8 @@
 #include <utility>
 
 #include "base/location.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "third_party/blink/public/common/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/platform/modules/webrtc/webrtc_logging.h"
@@ -27,7 +27,7 @@
 namespace blink {
 namespace {
 
-static int g_next_request_id = 0;
+static int32_t g_next_request_id = 0;
 
 // The histogram counts the number of calls to the JS APIs
 // getUserMedia() and getDisplayMedia().
@@ -39,6 +39,9 @@ void UpdateAPICount(UserMediaRequest::MediaType media_type) {
       break;
     case UserMediaRequest::MediaType::kDisplayMedia:
       api_name = RTCAPIName::kGetDisplayMedia;
+      break;
+    case UserMediaRequest::MediaType::kDisplayMediaSet:
+      api_name = RTCAPIName::kGetDisplayMediaSet;
       break;
   }
   UpdateWebRTCMethodCount(api_name);
@@ -140,13 +143,7 @@ void UserMediaClient::RequestUserMedia(UserMediaRequest* user_media_request) {
   // Save histogram data so we can see how much GetUserMedia is used.
   UpdateAPICount(user_media_request->MediaRequestType());
 
-  // TODO(crbug.com/787254): Communicate directly with the
-  // PeerConnectionTrackerHost mojo object once it is available from Blink.
-  if (auto* window = user_media_request->GetWindow()) {
-    PeerConnectionTracker::From(*window).TrackGetUserMedia(user_media_request);
-  }
-
-  int request_id = g_next_request_id++;
+  int32_t request_id = g_next_request_id++;
   blink::WebRtcLogMessage(base::StringPrintf(
       "UMCI::RequestUserMedia({request_id=%d}, {audio constraints=%s}, "
       "{video constraints=%s})",
@@ -166,6 +163,13 @@ void UserMediaClient::RequestUserMedia(UserMediaRequest* user_media_request) {
         LocalFrame::HasTransientUserActivation(window->GetFrame());
   }
   user_media_request->set_request_id(request_id);
+
+  // TODO(crbug.com/787254): Communicate directly with the
+  // PeerConnectionTrackerHost mojo object once it is available from Blink.
+  if (auto* window = user_media_request->GetWindow()) {
+    PeerConnectionTracker::From(*window).TrackGetUserMedia(user_media_request);
+  }
+
   user_media_request->set_has_transient_user_activation(
       has_transient_user_activation);
   pending_request_infos_.push_back(
@@ -194,7 +198,7 @@ bool UserMediaClient::IsCapturing() {
   return user_media_processor_->HasActiveSources();
 }
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
 void UserMediaClient::FocusCapturedSurface(const String& label, bool focus) {
   DCHECK(user_media_processor_);
   user_media_processor_->FocusCapturedSurface(label, focus);

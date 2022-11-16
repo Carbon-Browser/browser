@@ -17,12 +17,12 @@
 #include "ash/public/mojom/assistant_volume_control.mojom.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
-#include "ash/style/ash_color_provider.h"
 #include "base/bind.h"
 #include "base/memory/scoped_refptr.h"
-#include "chromeos/services/assistant/public/cpp/assistant_prefs.h"
-#include "chromeos/services/assistant/public/cpp/assistant_service.h"
-#include "chromeos/services/assistant/public/cpp/features.h"
+#include "chromeos/ash/services/assistant/public/cpp/assistant_browser_delegate.h"
+#include "chromeos/ash/services/assistant/public/cpp/assistant_prefs.h"
+#include "chromeos/ash/services/assistant/public/cpp/assistant_service.h"
+#include "chromeos/ash/services/assistant/public/cpp/features.h"
 #include "chromeos/services/libassistant/public/cpp/assistant_feedback.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
@@ -40,7 +40,7 @@ AssistantControllerImpl::AssistantControllerImpl() {
   // provide an opportunity to turn on/off A11Y features.
   Shell::Get()->accessibility_controller()->AddObserver(this);
 
-  color_mode_observer_.Observe(AshColorProvider::Get());
+  color_mode_observer_.Observe(DarkLightModeControllerImpl::Get());
 
   NotifyConstructed();
 }
@@ -74,13 +74,12 @@ void AssistantControllerImpl::SetAssistant(
   assistant_alarm_timer_controller_.SetAssistant(assistant);
   assistant_interaction_controller_.SetAssistant(assistant);
   assistant_notification_controller_.SetAssistant(assistant);
-  assistant_screen_context_controller_.SetAssistant(assistant);
   assistant_ui_controller_.SetAssistant(assistant);
 
   OnAccessibilityStatusChanged();
 
-  ScopedLightModeAsDefault scoped_light_mode_as_default;
-  OnColorModeChanged(AshColorProvider::Get()->IsDarkModeEnabled());
+  ScopedAssistantLightModeAsDefault scoped_light_mode_as_default;
+  OnColorModeChanged(DarkLightModeControllerImpl::Get()->IsDarkModeEnabled());
 
   if (assistant) {
     for (AssistantControllerObserver& observer : observers_)
@@ -121,6 +120,7 @@ void AssistantControllerImpl::DownloadImage(
                 "Generally triggered in direct response to a user issued "
                 "query. A single query may necessitate the downloading of "
                 "multiple images."
+              data: "None."
               destination: GOOGLE_OWNED_SERVICE
             }
             policy {
@@ -128,6 +128,9 @@ void AssistantControllerImpl::DownloadImage(
               setting:
                 "The Google Assistant can be enabled/disabled in Chrome "
                 "Settings and is subject to eligibility requirements."
+              policy_exception_justification:
+                "The users can disable this feature. This does not send/store "
+                "user data."
             })");
 
   ImageDownloader::Get()->Download(url, kNetworkTrafficAnnotationTag,
@@ -147,6 +150,13 @@ void AssistantControllerImpl::RemoveObserver(
 void AssistantControllerImpl::OpenUrl(const GURL& url,
                                       bool in_background,
                                       bool from_server) {
+  // app_list search result will be opened by `OpenUrl()`. However, the
+  // `assistant_` may not be ready. Show a toast to indicate it.
+  if (!assistant_) {
+    assistant_ui_controller_.ShowUnboundErrorToast();
+    return;
+  }
+
   if (assistant::util::IsDeepLinkUrl(url)) {
     NotifyDeepLinkReceived(url);
     return;
@@ -165,14 +175,7 @@ void AssistantControllerImpl::OpenUrl(const GURL& url,
   if (IsAndroidIntent(url)) {
     android_helper->LaunchAndroidIntent(url.spec());
   } else {
-    // The new tab should be opened with a user activation since the user
-    // interacted with the Assistant to open the url. |in_background| describes
-    // the relationship between |url| and Assistant UI, not the browser. As
-    // such, the browser will always be instructed to open |url| in a new
-    // browser tab and Assistant UI state will be updated downstream to respect
-    // |in_background|.
-    NewWindowDelegate::GetInstance()->OpenUrl(url,
-                                              /*from_user_interaction=*/true);
+    chromeos::assistant::AssistantBrowserDelegate::Get()->OpenUrl(url);
   }
   NotifyUrlOpened(url, from_server);
 }
@@ -229,7 +232,6 @@ void AssistantControllerImpl::OnDeepLinkReceived(
     case DeepLinkType::kQuery:
     case DeepLinkType::kReminders:
     case DeepLinkType::kSettings:
-    case DeepLinkType::kWhatsOnMyScreen:
       // No action needed.
       break;
   }

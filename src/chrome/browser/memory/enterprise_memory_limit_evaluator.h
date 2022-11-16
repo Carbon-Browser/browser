@@ -6,6 +6,7 @@
 #define CHROME_BROWSER_MEMORY_ENTERPRISE_MEMORY_LIMIT_EVALUATOR_H_
 
 #include "base/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/threading/sequenced_task_runner_handle.h"
@@ -27,6 +28,12 @@ class EnterpriseMemoryLimitEvaluator {
  public:
   explicit EnterpriseMemoryLimitEvaluator(
       std::unique_ptr<memory_pressure::MemoryPressureVoter> voter);
+
+  EnterpriseMemoryLimitEvaluator(const EnterpriseMemoryLimitEvaluator&) =
+      delete;
+  EnterpriseMemoryLimitEvaluator& operator=(
+      const EnterpriseMemoryLimitEvaluator&) = delete;
+
   ~EnterpriseMemoryLimitEvaluator();
 
   // Starts/stops observing the resident set of Chrome processes and notifying
@@ -52,7 +59,7 @@ class EnterpriseMemoryLimitEvaluator {
   // RSS. This is only meant to be used as a key to remove the observer once
   // it's not necessary anymore, do not call functions directly from this
   // pointer.
-  GraphObserver* observer_ = nullptr;
+  raw_ptr<GraphObserver> observer_ = nullptr;
 
   uint64_t resident_set_limit_mb_ = 0;
 
@@ -61,8 +68,6 @@ class EnterpriseMemoryLimitEvaluator {
   SEQUENCE_CHECKER(sequence_checker_);
 
   base::WeakPtrFactory<EnterpriseMemoryLimitEvaluator> weak_ptr_factory_;
-
-  DISALLOW_COPY_AND_ASSIGN(EnterpriseMemoryLimitEvaluator);
 };
 
 // Instances of this class are constructed and destructed on the main thread.

@@ -19,14 +19,15 @@
 #include "content/public/test/browser_test_utils.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 #include "chrome/browser/sharesheet/sharesheet_types.h"
 #include "chrome/browser/webshare/chromeos/sharesheet_client.h"
+#include "chromeos/components/sharesheet/constants.h"
 #endif
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include "chrome/browser/webshare/win/scoped_share_operation_fake_components.h"
 #endif
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 #include "chrome/browser/webshare/mac/sharing_service_operation.h"
 #include "third_party/blink/public/mojom/webshare/webshare.mojom.h"
 #endif
@@ -37,25 +38,30 @@ class ShareServiceBrowserTest : public InProcessBrowserTest {
     feature_list_.InitAndEnableFeature(features::kWebShare);
   }
 
+  void SetUp() override {
+#if BUILDFLAG(IS_WIN)
+    if (!webshare::ScopedShareOperationFakeComponents::IsSupportedEnvironment())
+      GTEST_SKIP();
+#endif
+    InProcessBrowserTest::SetUp();
+  }
+
   void SetUpOnMainThread() override {
     InProcessBrowserTest::SetUpOnMainThread();
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
     webshare::SharesheetClient::SetSharesheetCallbackForTesting(
         base::BindRepeating(&ShareServiceBrowserTest::AcceptShareRequest));
 #endif
-#if defined(OS_WIN)
-    if (!IsSupportedEnvironment())
-      return;
-
+#if BUILDFLAG(IS_WIN)
     ASSERT_NO_FATAL_FAILURE(scoped_fake_components_.SetUp());
 #endif
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
     webshare::SharingServiceOperation::SetSharePickerCallbackForTesting(
         base::BindRepeating(&ShareServiceBrowserTest::AcceptShareRequest));
 #endif
   }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   static void AcceptShareRequest(
       content::WebContents* web_contents,
       const std::vector<base::FilePath>& file_paths,
@@ -68,7 +74,7 @@ class ShareServiceBrowserTest : public InProcessBrowserTest {
   }
 #endif
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   static void AcceptShareRequest(
       content::WebContents* web_contents,
       const std::vector<base::FilePath>& file_paths,
@@ -80,27 +86,14 @@ class ShareServiceBrowserTest : public InProcessBrowserTest {
   }
 #endif
 
- protected:
-#if defined(OS_WIN)
-  bool IsSupportedEnvironment() {
-    return webshare::ScopedShareOperationFakeComponents::
-        IsSupportedEnvironment();
-  }
-#endif
-
  private:
   base::test::ScopedFeatureList feature_list_;
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   webshare::ScopedShareOperationFakeComponents scoped_fake_components_;
 #endif
 };
 
 IN_PROC_BROWSER_TEST_F(ShareServiceBrowserTest, Text) {
-#if defined(OS_WIN)
-  if (!IsSupportedEnvironment())
-    return;
-#endif
-
   const int kRepeats = 4;
 
   base::HistogramTester histogram_tester;
@@ -160,11 +153,6 @@ class SafeBrowsingShareServiceBrowserTest : public ShareServiceBrowserTest {
 
 IN_PROC_BROWSER_TEST_F(SafeBrowsingShareServiceBrowserTest,
                        PortableDocumentFile) {
-#if defined(OS_WIN)
-  if (!IsSupportedEnvironment())
-    return;
-#endif
-
   ASSERT_TRUE(embedded_test_server()->Start());
   GURL url(embedded_test_server()->GetURL("/webshare/index.html"));
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));

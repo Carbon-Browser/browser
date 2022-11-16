@@ -1,4 +1,4 @@
-#!/usr/bin/env vpython
+#!/usr/bin/env vpython3
 # Copyright 2018 The Chromium Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -9,7 +9,7 @@ import unittest
 import perf_device_trigger
 
 
-class Args(object):
+class Args(object): # pylint: disable=useless-object-inheritance
     def __init__(self):
         self.shards = 1
         self.shard_index = None
@@ -29,7 +29,9 @@ class FakeTriggerer(perf_device_trigger.PerfDeviceTriggerer):
         self._triggered_with_swarming_go = 0
         self._list_bots_result = list_bots_result
         self._list_tasks_results = list_tasks_results
+        # pylint: disable=super-with-arguments
         super(FakeTriggerer, self).__init__(args, swarming_args)
+        # pylint: enable=super-with-arguments
 
     def set_files(self, files):
         self._files = files
@@ -123,7 +125,7 @@ class UnitTest(unittest.TestCase):
         # the last build that ran the shard that corresponds to that
         # index.  If that shard hasn't been run before the entry
         # should be an empty string.
-        for i in xrange(num_shards):
+        for i in range(num_shards):
             task = {
                 'tasks': [{
                     'request': {
@@ -141,8 +143,7 @@ class UnitTest(unittest.TestCase):
             # out of the tags.
             if shard % 2:
                 return [{'bot_id': bot_id}]
-            else:
-                return [{'tags': ['id:%s' % bot_id]}]
+            return [{'tags': ['id:%s' % bot_id]}]
         return []
 
     def generate_list_of_eligible_bots_query_response(self, alive_bots,
@@ -169,7 +170,7 @@ class UnitTest(unittest.TestCase):
 
     def list_contains_sublist(self, main_list, sub_list):
         return any(sub_list == main_list[offset:offset + len(sub_list)]
-                   for offset in xrange(len(main_list) - (len(sub_list) - 1)))
+                   for offset in range(len(main_list) - (len(sub_list) - 1)))
 
     def get_triggered_shard_to_bot(self, triggerer):
         triggered_map = {}
@@ -208,7 +209,7 @@ class UnitTest(unittest.TestCase):
                                    alive_bots=[],
                                    dead_bots=[])
         err_msg = 'Not enough available machines exist in swarming pool'
-        self.assertTrue(err_msg in context.exception.message)
+        self.assertTrue(err_msg in str(context.exception))
 
     def test_previously_healthy_now_dead(self):
         # Test that it swaps out build1 and build2 that are dead

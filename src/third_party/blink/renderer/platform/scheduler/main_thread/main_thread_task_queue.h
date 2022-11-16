@@ -8,10 +8,10 @@
 #include <memory>
 
 #include "base/memory/weak_ptr.h"
-#include "base/single_thread_task_runner.h"
 #include "base/task/sequence_manager/task_queue.h"
 #include "base/task/sequence_manager/task_queue_impl.h"
 #include "base/task/sequence_manager/time_domain.h"
+#include "base/task/single_thread_task_runner.h"
 #include "net/base/request_priority.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/platform/scheduler/common/throttling/budget_pool.h"
@@ -36,16 +36,12 @@ namespace main_thread_scheduler_impl_unittest {
 class MainThreadSchedulerImplTest;
 }
 
-namespace task_queue_throttler_unittest {
-class TaskQueueThrottlerTest;
-}
-
 class FrameSchedulerImpl;
 class MainThreadSchedulerImpl;
 class WakeUpBudgetPool;
 
-// TODO(kdillon): Remove ref-counting of MainThreadTaskQueues as it's no longer
-// needed.
+// TODO(crbug.com/1143007): Remove ref-counting of MainThreadTaskQueues as it's
+// no longer needed.
 class PLATFORM_EXPORT MainThreadTaskQueue
     : public base::RefCountedThreadSafe<MainThreadTaskQueue> {
  public:
@@ -164,8 +160,9 @@ class PLATFORM_EXPORT MainThreadTaskQueue
       kCompositor = 9,  // Main-thread only.
       kInput = 10,
       kPostMessageForwarding = 11,
+      kInternalNavigationCancellation = 12,
 
-      kCount = 12
+      kCount = 13
     };
 
     // kPrioritisationTypeWidthBits is the number of bits required
@@ -361,9 +358,8 @@ class PLATFORM_EXPORT MainThreadTaskQueue
       return *this;
     }
 
-    QueueCreationParams SetTimeDomain(
-        base::sequence_manager::TimeDomain* domain) {
-      spec = spec.SetTimeDomain(domain);
+    QueueCreationParams SetNonWaking(bool non_waking) {
+      spec = spec.SetNonWaking(non_waking);
       return *this;
     }
 
@@ -425,6 +421,9 @@ class PLATFORM_EXPORT MainThreadTaskQueue
                        TaskQueue::TaskTiming* task_timing,
                        base::sequence_manager::LazyNow* lazy_now);
 
+  void LogTaskExecution(perfetto::EventContext& ctx,
+                        const base::sequence_manager::Task& task);
+
   void SetOnIPCTaskPosted(
       base::RepeatingCallback<void(const base::sequence_manager::Task&)>
           on_ipc_task_posted_callback);
@@ -443,15 +442,12 @@ class PLATFORM_EXPORT MainThreadTaskQueue
     return task_queue_->CreateTaskRunner(static_cast<int>(task_type));
   }
 
-  void SetNetRequestPriority(net::RequestPriority net_request_priority);
-  absl::optional<net::RequestPriority> net_request_priority() const;
-
   void SetWebSchedulingPriority(WebSchedulingPriority priority);
   absl::optional<WebSchedulingPriority> web_scheduling_priority() const;
 
   void OnWebSchedulingTaskQueueDestroyed();
 
-  // TODO(kdillon): Improve MTTQ API surface so that we no longer
+  // TODO(crbug.com/1143007): Improve MTTQ API surface so that we no longer
   // need to expose the raw pointer to the queue.
   TaskQueue* GetTaskQueue() { return task_queue_.get(); }
 
@@ -481,6 +477,39 @@ class PLATFORM_EXPORT MainThreadTaskQueue
   void SetWakeUpBudgetPool(WakeUpBudgetPool* wake_up_budget_pool);
   WakeUpBudgetPool* GetWakeUpBudgetPool() const { return wake_up_budget_pool_; }
 
+  void SetQueuePriority(TaskQueue::QueuePriority priority) {
+    task_queue_->SetQueuePriority(priority);
+  }
+  TaskQueue::QueuePriority GetQueuePriority() const {
+    return task_queue_->GetQueuePriority();
+  }
+
+  bool IsQueueEnabled() const { return task_queue_->IsQueueEnabled(); }
+  bool IsEmpty() const { return task_queue_->IsEmpty(); }
+
+  bool HasTaskToRunImmediatelyOrReadyDelayedTask() const {
+    return task_queue_->HasTaskToRunImmediatelyOrReadyDelayedTask();
+  }
+
+  void SetBlameContext(base::trace_event::BlameContext* blame_context) {
+    task_queue_->SetBlameContext(blame_context);
+  }
+
+  void SetShouldReportPostedTasksWhenDisabled(bool should_report) {
+    task_queue_->SetShouldReportPostedTasksWhenDisabled(should_report);
+  }
+
+  std::unique_ptr<TaskQueue::QueueEnabledVoter> CreateQueueEnabledVoter() {
+    return task_queue_->CreateQueueEnabledVoter();
+  }
+
+  void AddTaskObserver(base::TaskObserver* task_observer) {
+    task_queue_->AddTaskObserver(task_observer);
+  }
+  void RemoveTaskObserver(base::TaskObserver* task_observer) {
+    task_queue_->RemoveTaskObserver(task_observer);
+  }
+
   base::WeakPtr<MainThreadTaskQueue> AsWeakPtr() {
     return weak_ptr_factory_.GetWeakPtr();
   }
@@ -490,13 +519,8 @@ class PLATFORM_EXPORT MainThreadTaskQueue
  protected:
   void SetFrameSchedulerForTest(FrameSchedulerImpl* frame_scheduler);
 
-  // Returns the underlying task queue. Only to be used for tests that need to
-  // test functionality of the task queue specifically without the wrapping
-  // MainThreadTaskQueue (ex TaskQueueThrottlerTest).
-  TaskQueue* GetTaskQueueForTest() { return task_queue_.get(); }
-
-  // TODO(kdillon): Remove references to TaskQueueImpl once TaskQueueImpl
-  // inherits from TaskQueue.
+  // TODO(crbug.com/1143007): Remove references to TaskQueueImpl once
+  // TaskQueueImpl inherits from TaskQueue.
   MainThreadTaskQueue(
       std::unique_ptr<base::sequence_manager::internal::TaskQueueImpl> impl,
       const TaskQueue::Spec& spec,
@@ -513,8 +537,6 @@ class PLATFORM_EXPORT MainThreadTaskQueue
   friend class base::sequence_manager::SequenceManager;
   friend class blink::scheduler::main_thread_scheduler_impl_unittest::
       MainThreadSchedulerImplTest;
-  friend class blink::scheduler::task_queue_throttler_unittest::
-      TaskQueueThrottlerTest;
 
   // Clear references to main thread scheduler and frame scheduler and dispatch
   // appropriate notifications. This is the common part of ShutdownTaskQueue and
@@ -526,13 +548,6 @@ class PLATFORM_EXPORT MainThreadTaskQueue
 
   const QueueType queue_type_;
   const QueueTraits queue_traits_;
-
-  // Warning: net_request_priority is not the same as the priority of the queue.
-  // It is the priority (at the loading stack level) of the resource associated
-  // to the queue, if one exists.
-  //
-  // Used to track UMA metrics for resource loading tasks split by net priority.
-  absl::optional<net::RequestPriority> net_request_priority_;
 
   // |web_scheduling_priority_| is the priority of the task queue within the web
   // scheduling API. This priority is used in conjunction with the frame
@@ -550,6 +565,9 @@ class PLATFORM_EXPORT MainThreadTaskQueue
 
   // The WakeUpBudgetPool for this TaskQueue, if any.
   WakeUpBudgetPool* wake_up_budget_pool_{nullptr};  // NOT OWNED
+
+  std::unique_ptr<TaskQueue::OnTaskPostedCallbackHandle>
+      on_ipc_task_posted_callback_handle_;
 
   base::WeakPtrFactory<MainThreadTaskQueue> weak_ptr_factory_{this};
 };

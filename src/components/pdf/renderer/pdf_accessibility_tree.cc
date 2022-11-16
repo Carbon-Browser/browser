@@ -7,26 +7,30 @@
 #include <algorithm>
 #include <utility>
 
+#include "base/bind.h"
+#include "base/callback.h"
 #include "base/i18n/break_iterator.h"
+#include "base/location.h"
 #include "base/memory/ptr_util.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/notreached.h"
 #include "base/strings/utf_string_conversion_utils.h"
+#include "base/threading/thread_task_runner_handle.h"
 #include "components/pdf/renderer/pdf_ax_action_target.h"
 #include "components/strings/grit/components_strings.h"
 #include "content/public/renderer/render_accessibility.h"
 #include "content/public/renderer/render_frame.h"
 #include "content/public/renderer/render_thread.h"
-#include "content/public/renderer/render_view.h"
 #include "pdf/accessibility_structs.h"
 #include "pdf/pdf_accessibility_action_handler.h"
 #include "pdf/pdf_features.h"
-#include "third_party/blink/public/strings/grit/blink_strings.h"
+#include "third_party/blink/public/strings/grit/blink_accessibility_strings.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/accessibility/null_ax_action_target.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/gfx/geometry/point_f.h"
 #include "ui/gfx/geometry/rect_conversions.h"
-#include "ui/gfx/transform.h"
+#include "ui/gfx/geometry/transform.h"
 
 namespace pdf {
 
@@ -59,6 +63,9 @@ class LineHelper {
       : text_runs_(text_runs) {
     StartNewLine(0);
   }
+
+  LineHelper(const LineHelper&) = delete;
+  LineHelper& operator=(const LineHelper&) = delete;
 
   void StartNewLine(size_t current_index) {
     DCHECK(current_index == 0 || current_index < text_runs_.size());
@@ -138,8 +145,6 @@ class LineHelper {
   float accumulated_weight_top_;
   float accumulated_weight_bottom_;
   float accumulated_width_;
-
-  DISALLOW_COPY_AND_ASSIGN(LineHelper);
 };
 
 void ComputeParagraphAndHeadingThresholds(
@@ -223,17 +228,17 @@ ui::AXNode* GetStaticTextNodeFromNode(ui::AXNode* node) {
     return nullptr;
   ui::AXNode* static_node = node;
   // Get the static text from the link node.
-  if (node->data().role == ax::mojom::Role::kLink &&
+  if (node->GetRole() == ax::mojom::Role::kLink &&
       node->children().size() == 1) {
     static_node = node->children()[0];
   }
   // Get the static text from the highlight node.
-  if (node->data().role == ax::mojom::Role::kPdfActionableHighlight &&
+  if (node->GetRole() == ax::mojom::Role::kPdfActionableHighlight &&
       !node->children().empty()) {
     static_node = node->children()[0];
   }
   // If it's static text node, then it holds text.
-  if (static_node && static_node->data().role == ax::mojom::Role::kStaticText)
+  if (static_node && static_node->GetRole() == ax::mojom::Role::kStaticText)
     return static_node;
   return nullptr;
 }
@@ -244,8 +249,9 @@ std::string GetTextRunCharsAsUTF8(
     int char_index) {
   std::string chars_utf8;
   for (uint32_t i = 0; i < text_run.len; ++i) {
-    base::WriteUnicodeCharacter(chars[char_index + i].unicode_character,
-                                &chars_utf8);
+    base::WriteUnicodeCharacter(
+        static_cast<base_icu::UChar32>(chars[char_index + i].unicode_character),
+        &chars_utf8);
   }
   return chars_utf8;
 }
@@ -1291,6 +1297,16 @@ bool PdfAccessibilityTree::IsDataFromPluginValid(
 }
 
 void PdfAccessibilityTree::SetAccessibilityViewportInfo(
+    chrome_pdf::AccessibilityViewportInfo viewport_info) {
+  // This call may trigger layout, and ultimately self-deletion; see
+  // crbug.com/1274376 for details.
+  base::ThreadTaskRunnerHandle::Get()->PostTask(
+      FROM_HERE,
+      base::BindOnce(&PdfAccessibilityTree::DoSetAccessibilityViewportInfo,
+                     weak_ptr_factory_.GetWeakPtr(), std::move(viewport_info)));
+}
+
+void PdfAccessibilityTree::DoSetAccessibilityViewportInfo(
     const chrome_pdf::AccessibilityViewportInfo& viewport_info) {
   zoom_ = viewport_info.zoom;
   scale_ = viewport_info.scale;
@@ -1317,6 +1333,16 @@ void PdfAccessibilityTree::SetAccessibilityViewportInfo(
 }
 
 void PdfAccessibilityTree::SetAccessibilityDocInfo(
+    chrome_pdf::AccessibilityDocInfo doc_info) {
+  // This call may trigger layout, and ultimately self-deletion; see
+  // crbug.com/1274376 for details.
+  base::ThreadTaskRunnerHandle::Get()->PostTask(
+      FROM_HERE,
+      base::BindOnce(&PdfAccessibilityTree::DoSetAccessibilityDocInfo,
+                     weak_ptr_factory_.GetWeakPtr(), std::move(doc_info)));
+}
+
+void PdfAccessibilityTree::DoSetAccessibilityDocInfo(
     const chrome_pdf::AccessibilityDocInfo& doc_info) {
   content::RenderAccessibility* render_accessibility =
       GetRenderAccessibilityIfEnabled();
@@ -1340,6 +1366,21 @@ void PdfAccessibilityTree::SetAccessibilityDocInfo(
 }
 
 void PdfAccessibilityTree::SetAccessibilityPageInfo(
+    chrome_pdf::AccessibilityPageInfo page_info,
+    std::vector<chrome_pdf::AccessibilityTextRunInfo> text_runs,
+    std::vector<chrome_pdf::AccessibilityCharInfo> chars,
+    chrome_pdf::AccessibilityPageObjects page_objects) {
+  // This call may trigger layout, and ultimately self-deletion; see
+  // crbug.com/1274376 for details.
+  base::ThreadTaskRunnerHandle::Get()->PostTask(
+      FROM_HERE,
+      base::BindOnce(&PdfAccessibilityTree::DoSetAccessibilityPageInfo,
+                     weak_ptr_factory_.GetWeakPtr(), std::move(page_info),
+                     std::move(text_runs), std::move(chars),
+                     std::move(page_objects)));
+}
+
+void PdfAccessibilityTree::DoSetAccessibilityPageInfo(
     const chrome_pdf::AccessibilityPageInfo& page_info,
     const std::vector<chrome_pdf::AccessibilityTextRunInfo>& text_runs,
     const std::vector<chrome_pdf::AccessibilityCharInfo>& chars,
@@ -1383,6 +1424,8 @@ void PdfAccessibilityTree::SetAccessibilityPageInfo(
   AddPageContent(page_node, page_bounds, page_index, text_runs, chars,
                  page_objects);
 
+  did_get_a_text_run_ |= !text_runs.empty();
+
   if (page_index == page_count_ - 1)
     Finish();
 }
@@ -1422,6 +1465,9 @@ void PdfAccessibilityTree::Finish() {
       GetRenderAccessibilityIfEnabled();
   if (render_accessibility)
     render_accessibility->SetPluginTreeSource(this);
+
+  base::UmaHistogramBoolean("Accessibility.PDF.HasAccessibleText",
+                            did_get_a_text_run_);
 }
 
 void PdfAccessibilityTree::UpdateAXTreeDataFromSelection() {
@@ -1524,8 +1570,7 @@ PdfAccessibilityTree::GetRenderAccessibilityIfEnabled() {
 
 std::unique_ptr<gfx::Transform>
 PdfAccessibilityTree::MakeTransformFromViewInfo() const {
-  double applicable_scale_factor =
-      content::RenderThread::Get()->IsUseZoomForDSF() ? scale_ : 1;
+  double applicable_scale_factor = scale_;
   auto transform = std::make_unique<gfx::Transform>();
   // `scroll_` represents the offset from which PDF content starts. It is the
   // height of the PDF toolbar and the width of sidenav in pixels if it is open.

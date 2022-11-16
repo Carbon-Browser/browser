@@ -32,6 +32,10 @@ def blink_class_name(idl_definition):
                   (web_idl.CallbackFunction, web_idl.CallbackInterface,
                    web_idl.Enumeration, web_idl.Typedef)):
         return "V8{}".format(idl_definition.identifier)
+    elif isinstance(idl_definition, web_idl.ObservableArray):
+        return "V8ObservableArray{}".format(
+            idl_definition.element_type.
+            type_name_with_extended_attribute_key_values)
     elif isinstance(idl_definition, web_idl.Union):
         # Technically this name is not guaranteed to be unique because
         # (X or sequence<Y or Z>) and (X or Y or sequence<Z>) have the same
@@ -217,6 +221,7 @@ def blink_type_info(idl_type):
                         ref_fmt="{}&",
                         const_ref_fmt="const {}&",
                         has_null_value=True,
+                        is_move_effective=True,
                         clear_member_var_fmt="{} = String()")
 
     if real_type.is_array_buffer:
@@ -291,8 +296,7 @@ def blink_type_info(idl_type):
             # a value type (is_gc_type=False, has_null_value=False) rather than
             # a reference type (is_gc_type=True, has_null_value=True) by
             # default.
-            typename = "HeapVector<AddMemberIfNeeded<{}>>".format(
-                element_type.member_t)
+            typename = "HeapVector<{}>".format(element_type.member_t)
             return TypeInfo(typename,
                             ref_fmt="{}&",
                             const_ref_fmt="const {}&",
@@ -308,6 +312,17 @@ def blink_type_info(idl_type):
                             is_move_effective=True,
                             clear_member_var_fmt="{}.clear()")
 
+    if real_type.is_observable_array:
+        typename = blink_class_name(
+            real_type.observable_array_definition_object)
+        return TypeInfo(typename,
+                        member_fmt="Member<{}>",
+                        ref_fmt="{}*",
+                        const_ref_fmt="const {}*",
+                        value_fmt="{}*",
+                        has_null_value=True,
+                        is_gc_type=True)
+
     if real_type.is_record:
         assert real_type.key_type.is_string
         key_type = blink_type_info(real_type.key_type)
@@ -317,9 +332,8 @@ def blink_type_info(idl_type):
             # a value type (is_gc_type=False, has_null_value=False) rather than
             # a reference type (is_gc_type=True, has_null_value=True) by
             # default.
-            typename = (
-                "HeapVector<std::pair<{}, AddMemberIfNeeded<{}>>>".format(
-                    key_type.value_t, value_type.member_t))
+            typename = ("HeapVector<std::pair<{}, {}>>".format(
+                key_type.member_t, value_type.member_t))
             return TypeInfo(typename,
                             ref_fmt="{}&",
                             const_ref_fmt="const {}&",
@@ -395,11 +409,8 @@ def _native_value_tag_impl(idl_type):
     """Returns the tag type of NativeValueTraits."""
     assert isinstance(idl_type, web_idl.IdlType)
 
-    if idl_type.is_typedef:
-        if idl_type.identifier in ("EventHandler",
-                                   "OnBeforeUnloadEventHandler",
-                                   "OnErrorEventHandler"):
-            return "IDL{}".format(idl_type.identifier)
+    if idl_type.is_event_handler:
+        return "IDL{}".format(idl_type.identifier)
 
     real_type = idl_type.unwrap(typedef=True)
 
@@ -409,9 +420,15 @@ def _native_value_tag_impl(idl_type):
             idl_type.type_name_with_extended_attribute_key_values)
 
     if real_type.is_array_buffer:
+        if "BufferSourceTypeNoSizeLimit" in real_type.effective_annotations:
+            return "IDLBufferSourceTypeNoSizeLimit<{}>".format(
+                blink_type_info(real_type).typename)
         return blink_type_info(real_type).typename
 
     if real_type.is_buffer_source_type:
+        if "BufferSourceTypeNoSizeLimit" in real_type.effective_annotations:
+            return "IDLBufferSourceTypeNoSizeLimit<{}>".format(
+                blink_type_info(real_type).value_t)
         return blink_type_info(real_type).value_t
 
     if real_type.is_symbol:
@@ -430,6 +447,9 @@ def _native_value_tag_impl(idl_type):
     if real_type.is_frozen_array:
         return "IDLArray<{}>".format(
             _native_value_tag_impl(real_type.element_type))
+
+    if real_type.is_observable_array:
+        return blink_class_name(real_type.observable_array_definition_object)
 
     if real_type.is_record:
         return "IDLRecord<{}, {}>".format(

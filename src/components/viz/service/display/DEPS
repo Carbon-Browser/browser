@@ -7,6 +7,7 @@ include_rules = [
   "+cc/output",
   "+cc/resources",
   "+cc/scheduler",
+  "+components/viz/service/performance_hint",
   "+components/viz/service/surfaces",
   "+components/viz/service/display_embedder/overlay_candidate_validator_android.h",
   "+components/viz/service/display_embedder/overlay_candidate_validator_mac.h",
@@ -15,7 +16,7 @@ include_rules = [
   "+components/viz/service/display_embedder/overlay_candidate_validator_win.h",
   "+components/viz/service/display_embedder/skia_output_surface_dependency.h",
   "+components/viz/common",
-  "+gpu/command_buffer/client",
+  "+gpu/command_buffer/client/shared_image_interface.h",
   "+gpu/command_buffer/common",
   "+gpu/command_buffer/service",
   "+gpu/GLES2",
@@ -34,6 +35,7 @@ include_rules = [
   "+ui/gfx/video_types.h",
   "+ui/gl/ca_renderer_layer_params.h",
   "+ui/gl/dc_renderer_layer_params.h",
+  "+ui/gl/direct_composition_surface_win.h",
   "+ui/gl/gl_fence.h",
   "+ui/gl/gl_utils.h",
   "+ui/gl/gpu_switching_manager.h",
@@ -76,10 +78,6 @@ specific_include_rules = {
   ],
   "viz_pixel_test\.(cc|h)": [
     "+components/viz/test",
-  ],
-  "overlay_processor_using_strategy\.(cc|h)": [
-    "+media/gpu/buildflags.h",
-    "+media/gpu/vaapi/vaapi_wrapper.h",
   ],
   "output_surface\.h": [
     "+mojo/public/cpp/bindings/pending_receiver.h",

@@ -8,8 +8,8 @@
 #include "base/feature_list.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
+#include "chromeos/ash/components/network/network_connection_handler.h"
 #include "chromeos/login/login_state/login_state.h"
-#include "chromeos/network/network_connection_handler.h"
 #include "chromeos/strings/grit/chromeos_strings.h"
 #include "components/login/localized_values_builder.h"
 #include "components/strings/grit/components_strings.h"
@@ -103,6 +103,14 @@ constexpr webui::LocalizedString kElementLocalizedStrings[] = {
     {"networkListItemActivateA11yLabel",
      IDS_NETWORK_LIST_ITEM_ACTIVATE_A11Y_LABEL},
     {"networkListItemActivating", IDS_NETWORK_LIST_ITEM_ACTIVATING},
+    {"networkListItemCellularBlockedA11yLabel",
+     IDS_NETWORK_LIST_ITEM_CELLULAR_BLOCKED_A11Y_LABEL},
+    {"networkListItemCellularBlockedWithConnectionStatusA11yLabel",
+     IDS_NETWORK_LIST_ITEM_CELLULAR_BLOCKED_WITH_CONNECTION_STATUS_A11Y_LABEL},
+    {"networkListItemWiFiBlockedA11yLabel",
+     IDS_NETWORK_LIST_ITEM_WIFI_BLOCKED_A11Y_LABEL},
+    {"networkListItemWiFiBlockedWithConnectionStatusA11yLabel",
+     IDS_NETWORK_LIST_ITEM_WIFI_BLOCKED_WITH_CONNECTION_STATUS_A11Y_LABEL},
     {"networkListItemUnavailableSimNetwork",
      IDS_NETWORK_LIST_ITEM_UNAVAILABLE_SIM_NETWORK},
     {"networkListItemDownload", IDS_NETWORK_LIST_ITEM_DOWNLOAD},
@@ -223,21 +231,54 @@ void AddOncLocalizedStrings(content::WebUIDataSource* html_source) {
       {"OncTether-Carrier", IDS_ONC_TETHER_CARRIER},
       {"OncTether-Carrier_Unknown", IDS_ONC_TETHER_CARRIER_UNKNOWN},
       {"OncVPN-Host", IDS_ONC_VPN_HOST},
+      {"OncVPN-IPsec-AuthType", IDS_ONC_VPN_AUTH_TYPE},
+      {"OncVPN-IPsec-AuthType_PSK", IDS_ONC_VPN_IPSEC_PSK},
+      {"OncVPN-IPsec-AuthType_Cert", IDS_ONC_EAP_USER_CERT},
+      {"OncVPN-IPsec-AuthType_EAP", IDS_ONC_VPN_AUTH_TYPE_USERNAME},
       {"OncVPN-IPsec-Group", IDS_ONC_VPN_IPSEC_GROUP},
+      {"OncVPN-IPsec-LocalIdentity", IDS_ONC_VPN_IPSEC_LOCAL_IDENTITY},
+      {"OncVPN-IPsec-Password", IDS_ONC_VPN_PASSWORD},
       {"OncVPN-IPsec-PSK", IDS_ONC_VPN_IPSEC_PSK},
+      {"OncVPN-IPsec-RemoteIdentity", IDS_ONC_VPN_IPSEC_REMOTE_IDENTITY},
+      {"OncVPN-IPsec-Username", IDS_ONC_VPN_USERNAME},
       {"OncVPN-L2TP-Password", IDS_ONC_VPN_PASSWORD},
       {"OncVPN-L2TP-Username", IDS_ONC_VPN_USERNAME},
+      {"OncVPN-OpenVPN-Auth", IDS_ONC_VPN_OPENVPN_AUTH},
+      {"OncVPN-OpenVPN-Cipher", IDS_ONC_VPN_OPENVPN_CIPHER},
+      {"OncVPN-OpenVPN-CompressionAlgorithm",
+       IDS_ONC_VPN_OPENVPN_COMPRESSION_ALGORITHM},
       {"OncVPN-OpenVPN-ExtraHosts", IDS_ONC_VPN_OPENVPN_EXTRA_HOSTS},
+      {"OncVPN-OpenVPN-KeyDirection", IDS_ONC_VPN_OPENVPN_KEY_DIRECTION},
       {"OncVPN-OpenVPN-OTP", IDS_ONC_VPN_OPENVPN_OTP},
       {"OncVPN-OpenVPN-Password", IDS_ONC_VPN_PASSWORD},
+      {"OncVPN-OpenVPN-TlsAuthContents", IDS_ONC_VPN_OPENVPN_TLS_AUTH_CONTENTS},
       {"OncVPN-OpenVPN-Username", IDS_ONC_VPN_USERNAME},
       {"OncVPN-ProviderName", IDS_ONC_VPN_THIRD_PARTY_VPN_PROVIDER_NAME},
       {"OncVPN-Type", IDS_ONC_VPN_TYPE},
+      {"OncVPN-Type_IKEv2", IDS_ONC_VPN_TYPE_IKEV2},
       {"OncVPN-Type_L2TP_IPsec", IDS_ONC_VPN_TYPE_L2TP_IPSEC},
-      {"OncVPN-Type_L2TP_IPsec_PSK", IDS_ONC_VPN_TYPE_L2TP_IPSEC_PSK},
-      {"OncVPN-Type_L2TP_IPsec_Cert", IDS_ONC_VPN_TYPE_L2TP_IPSEC_CERT},
       {"OncVPN-Type_OpenVPN", IDS_ONC_VPN_TYPE_OPENVPN},
+      {"OncVPN-Type_WireGuard", IDS_ONC_VPN_TYPE_WIREGUARD},
       {"OncVPN-Type_ARCVPN", IDS_ONC_VPN_TYPE_ARCVPN},
+      {"OncVPN-WireGuard-IPAddress", IDS_ONC_VPN_WIREGUARD_IP_ADDRESS},
+      {"OncVPN-WireGuard-MTU", IDS_ONC_VPN_WIREGUARD_MTU},
+      {"OncVPN-WireGuard-DNS", IDS_ONC_VPN_WIREGUARD_DNS},
+      {"OncVPN-WireGuard-PrivateKey", IDS_ONC_VPN_WIREGUARD_PRIVATE_KEY},
+      {"OncVPN-WireGuard-PublicKey", IDS_ONC_VPN_WIREGUARD_PUBLIC_KEY},
+      {"OncVPN-WireGuard-Peer", IDS_ONC_VPN_WIREGUARD_PEER},
+      {"OncVPN-WireGuard-Peer-PublicKey", IDS_ONC_VPN_WIREGUARD_PUBLIC_KEY},
+      {"OncVPN-WireGuard-Peer-PresharedKey",
+       IDS_ONC_VPN_WIREGUARD_PRESHARED_KEY},
+      {"OncVPN-WireGuard-Peer-PersistentKeepalive",
+       IDS_ONC_VPN_WIREGUARD_PERSISTENT_KEEPALIVE},
+      {"OncVPN-WireGuard-Peer-Endpoint", IDS_ONC_VPN_WIREGUARD_ENDPOINT},
+      {"OncVPN-WireGuard-Peer-AllowedIP", IDS_ONC_VPN_WIREGUARD_ALLOWED_IP},
+      {"OncVPN-WireGuard-Key", IDS_ONC_VPN_WIREGUARD_KEY},
+      {"OncVPN-WireGuard-Key_UseCurrent",
+       IDS_ONC_VPN_WIREGUARD_KEY_USE_CURRENT},
+      {"OncVPN-WireGuard-Key_GenerateNew",
+       IDS_ONC_VPN_WIREGUARD_KEY_GENERATE_NEW},
+      {"OncVPN-WireGuard-Key_UserInput", IDS_ONC_VPN_WIREGUARD_KEY_USER_INPUT},
       {"OncWiFi-Frequency", IDS_ONC_WIFI_FREQUENCY},
       {"OncWiFi-Passphrase", IDS_ONC_WIFI_PASSWORD},
       {"OncWiFi-SSID", IDS_ONC_WIFI_SSID},
@@ -328,14 +369,24 @@ void AddDetailsLocalizedStrings(content::WebUIDataSource* html_source) {
       {"networkSimLockEnableSublabel",
        IDS_SETTINGS_INTERNET_NETWORK_SIM_LOCK_ENABLE_SUBLABEL},
       {"networkSimLockedTitle", IDS_SETTINGS_INTERNET_NETWORK_SIM_LOCKED_TITLE},
+      {"networkSimLockPolicyAdminSubtitle",
+       IDS_SETTINGS_INTERNET_NETWORK_SIM_LOCK_POLICY_ADMIN_SUBTITLE},
       {"networkSimPukDialogSubtitle",
        IDS_SETTINGS_INTERNET_NETWORK_SIM_LOCKED_PUK_SUBTITLE},
+      {"networkSimPukDialogManagedSubtitle",
+       IDS_SETTINGS_INTERNET_NETWORK_MANAGED_SIM_LOCKED_PUK_SUBTITLE},
+      {"networkSimPukDialogManagedWarningNoFailures",
+       IDS_SETTINGS_INTERNET_NETWORK_MANAGED_SIM_LOCKED_PUK_WARNING_NO_FAILURES},
       {"networkSimPukDialogWarningNoFailures",
        IDS_SETTINGS_INTERNET_NETWORK_SIM_LOCKED_PUK_WARNING_NO_FAILURES},
       {"networkSimPukDialogWarningWithFailure",
        IDS_SETTINGS_INTERNET_NETWORK_SIM_LOCKED_PUK_WARNING_WITH_FAILURE},
       {"networkSimPukDialogWarningWithFailures",
        IDS_SETTINGS_INTERNET_NETWORK_SIM_LOCKED_PUK_WARNING_WITH_FAILURES},
+      {"networkSimPukDialogManagedWarningWithFailure",
+       IDS_SETTINGS_INTERNET_NETWORK_MANAGED_SIM_LOCKED_PUK_WARNING_WITH_FAILURE},
+      {"networkSimPukDialogManagedWarningWithFailures",
+       IDS_SETTINGS_INTERNET_NETWORK_MANAGED_SIM_LOCKED_PUK_WARNING_WITH_FAILURES},
       {"networkSimLockedWarning",
        IDS_SETTINGS_INTERNET_NETWORK_SIM_LOCKED_WARNING},
       {"networkSimReEnterNewPin",
@@ -385,6 +436,8 @@ void AddDetailsLocalizedStrings(content::WebUIDataSource* html_source) {
 
   html_source->AddBoolean("useAttachApn",
                           chromeos::features::ShouldUseAttachApn());
+  html_source->AddBoolean("isSimLockPolicyEnabled",
+                          chromeos::features::IsSimLockPolicyEnabled());
 }
 
 void AddConfigLocalizedStrings(content::WebUIDataSource* html_source) {
@@ -408,9 +461,16 @@ void AddConfigLocalizedStrings(content::WebUIDataSource* html_source) {
   };
   html_source->AddLocalizedStrings(kLocalizedStrings);
 
+  html_source->AddBoolean("eapGtcWifiAuthentication",
+                          ash::features::IsEapGtcWifiAuthenticationEnabled());
+
   html_source->AddBoolean(
       "showHiddenNetworkWarning",
       base::FeatureList::IsEnabled(ash::features::kHiddenNetworkWarning));
+
+  html_source->AddBoolean(
+      "enableHiddenNetworkMigration",
+      base::FeatureList::IsEnabled(ash::features::kHiddenNetworkMigration));
 
   // Login screen and public account users can only create shared network
   // configurations. Other users default to unshared network configurations.

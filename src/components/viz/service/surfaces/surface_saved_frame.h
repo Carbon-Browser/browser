@@ -8,7 +8,6 @@
 #include <memory>
 #include <vector>
 
-#include "base/compiler_specific.h"
 #include "base/containers/flat_map.h"
 #include "base/memory/weak_ptr.h"
 #include "components/viz/common/frame_sinks/copy_output_result.h"
@@ -52,6 +51,7 @@ class VIZ_SERVICE_EXPORT SurfaceSavedFrame {
     // Texture representation.
     gpu::Mailbox mailbox;
     gpu::SyncToken sync_token;
+    gfx::ColorSpace color_space;
 
     // Software bitmap representation.
     SkBitmap bitmap;
@@ -92,22 +92,40 @@ class VIZ_SERVICE_EXPORT SurfaceSavedFrame {
   void RequestCopyOfOutput(Surface* surface);
   void ReleaseSurface();
 
-  absl::optional<FrameResult> TakeResult() WARN_UNUSED_RESULT;
+  [[nodiscard]] absl::optional<FrameResult> TakeResult();
 
   // For testing functionality that ensures that we have a valid frame.
   void CompleteSavedFrameForTesting();
 
+  base::flat_set<SharedElementResourceId> GetEmptyResourceIds() const;
+
  private:
   enum class ResultType { kRoot, kShared };
 
-  class ScopedInterpolatedSurface {
+  // Replaced the CompositorFrame on the |surface| with a copy that places
+  // shared elements in individual render passes. This effectively allows them
+  // to be in independent layers that can be cached as textures.
+  class ScopedCleanSurface {
    public:
-    ScopedInterpolatedSurface(Surface* surface, CompositorFrame frame);
-    ~ScopedInterpolatedSurface();
+    ScopedCleanSurface(Surface* surface, CompositorFrame clean_frame);
+    ~ScopedCleanSurface();
 
    private:
     Surface* surface_;
   };
+
+  // Queues copy requests by creating a copy of the CompositorFrame as specified
+  // in ScopedCleanSurface.
+  void CopyUsingCleanFrame(Surface* surface);
+
+  // Queues copy requests from the original CompositorFrame. This mode is used
+  // when the frame produced by the renderer already has independent render
+  // passes for each shared element.
+  void CopyUsingOriginalFrame(Surface* surface);
+
+  std::unique_ptr<CopyOutputRequest> CreateCopyRequestIfNeeded(
+      const CompositorRenderPass& render_pass,
+      const CompositorRenderPassList& render_pass_list) const;
 
   void NotifyCopyOfOutputComplete(ResultType type,
                                   size_t shared_index,
@@ -137,7 +155,7 @@ class VIZ_SERVICE_EXPORT SurfaceSavedFrame {
   bool FilterSharedElementAndTaintedQuads(
       const base::flat_map<CompositorRenderPassId, CompositorRenderPassId>*
           tainted_to_clean_pass_ids,
-      const CompositorRenderPassDrawQuad& pass_quad,
+      const DrawQuad& quad,
       CompositorRenderPass& copy_pass) const;
 
   // Returns true if |pass_id|'s content is 1:1 with a shared element.
@@ -159,7 +177,10 @@ class VIZ_SERVICE_EXPORT SurfaceSavedFrame {
   // whether the SurfaceSavedFrame is "valid".
   size_t valid_result_count_ = 0;
 
-  absl::optional<ScopedInterpolatedSurface> surface_;
+  // Tracks whether the root render pass should be copied.
+  bool copy_root_render_pass_ = true;
+
+  absl::optional<ScopedCleanSurface> clean_surface_;
 
   base::WeakPtrFactory<SurfaceSavedFrame> weak_factory_{this};
 };

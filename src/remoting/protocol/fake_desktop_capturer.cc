@@ -10,8 +10,8 @@
 
 #include "base/bind.h"
 #include "base/check.h"
-#include "base/macros.h"
 #include "base/notreached.h"
+#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "third_party/webrtc/modules/desktop_capture/desktop_frame.h"
 
@@ -44,6 +44,9 @@ class DefaultFrameGenerator
         box_speed_y_(kSpeed),
         first_frame_(true) {}
 
+  DefaultFrameGenerator(const DefaultFrameGenerator&) = delete;
+  DefaultFrameGenerator& operator=(const DefaultFrameGenerator&) = delete;
+
   std::unique_ptr<webrtc::DesktopFrame> GenerateFrame(
       webrtc::SharedMemoryFactory* shared_memory_factory);
 
@@ -57,8 +60,6 @@ class DefaultFrameGenerator
   int box_speed_x_;
   int box_speed_y_;
   bool first_frame_;
-
-  DISALLOW_COPY_AND_ASSIGN(DefaultFrameGenerator);
 };
 
 std::unique_ptr<webrtc::DesktopFrame> DefaultFrameGenerator::GenerateFrame(
@@ -156,10 +157,17 @@ void FakeDesktopCapturer::CaptureFrame() {
     frame->set_capture_time_ms(
         (base::Time::Now() - capture_start_time).InMillisecondsRoundedUp());
   }
-  callback_->OnCaptureResult(
-      frame ? webrtc::DesktopCapturer::Result::SUCCESS
-            : webrtc::DesktopCapturer::Result::ERROR_TEMPORARY,
-      std::move(frame));
+  auto result = frame ? webrtc::DesktopCapturer::Result::SUCCESS
+                      : webrtc::DesktopCapturer::Result::ERROR_TEMPORARY;
+  // Post a task for the OnCaptureResult call to allow the stack to unwind and
+  // simulate the actual product more accurately. Calling OnCaptureResult()
+  // directly also leads to issues when testing with shared memory regions and
+  // IPC as the callback invocation will occur before the shared region can be
+  // set up.
+  base::ThreadTaskRunnerHandle::Get()->PostTask(
+      FROM_HERE,
+      base::BindOnce(&webrtc::DesktopCapturer::Callback::OnCaptureResult,
+                     base::Unretained(callback_), result, std::move(frame)));
 }
 
 bool FakeDesktopCapturer::GetSourceList(SourceList* sources) {

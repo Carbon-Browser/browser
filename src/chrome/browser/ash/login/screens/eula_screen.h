@@ -8,8 +8,6 @@
 #include <string>
 
 #include "base/callback.h"
-#include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "chrome/browser/ash/login/screens/base_screen.h"
 // TODO(https://crbug.com/1164001): move to forward declaration.
 #include "chrome/browser/ui/webui/chromeos/login/eula_screen_handler.h"
@@ -26,8 +24,15 @@ class EulaScreen : public BaseScreen {
     ACCEPTED_WITH_USAGE_STATS_REPORTING,
     // The user accepted EULA, and disabled usage stats reporting.
     ACCEPTED_WITHOUT_USAGE_STATS_REPORTING,
-    // The usage did not accept EULA - they clicked back button instead.
+    // Eula already accepted, skip screen
+    ALREADY_ACCEPTED,
+    // Eula already accepted, skip screen (demo mode)
+    ALREADY_ACCEPTED_DEMO_MODE,
+    // The user did not accept EULA - they clicked back button instead.
     BACK,
+    // The user did not accept EULA - they clicked back button instead (demo
+    // mode).
+    BACK_DEMO_MODE,
     // Eula screen is skipped.
     NOT_APPLICABLE,
   };
@@ -51,6 +56,10 @@ class EulaScreen : public BaseScreen {
 
   using ScreenExitCallback = base::RepeatingCallback<void(Result result)>;
   EulaScreen(EulaView* view, const ScreenExitCallback& exit_callback);
+
+  EulaScreen(const EulaScreen&) = delete;
+  EulaScreen& operator=(const EulaScreen&) = delete;
+
   ~EulaScreen() override;
 
   // Returns URL of the OEM EULA page that should be displayed using current
@@ -74,7 +83,7 @@ class EulaScreen : public BaseScreen {
   bool MaybeSkip(WizardContext* context) override;
   void ShowImpl() override;
   void HideImpl() override;
-  void OnUserAction(const std::string& action_id) override;
+  void OnUserActionDeprecated(const std::string& action_id) override;
   bool HandleAccelerator(LoginAcceleratorAction action) override;
 
   // EulaView:
@@ -95,8 +104,6 @@ class EulaScreen : public BaseScreen {
   EulaView* view_;
 
   ScreenExitCallback exit_callback_;
-
-  DISALLOW_COPY_AND_ASSIGN(EulaScreen);
 };
 
 }  // namespace ash

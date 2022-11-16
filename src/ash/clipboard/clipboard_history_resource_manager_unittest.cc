@@ -11,14 +11,12 @@
 #include "ash/clipboard/clipboard_history_controller_impl.h"
 #include "ash/clipboard/clipboard_history_item.h"
 #include "ash/clipboard/test_support/clipboard_history_item_builder.h"
-#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/clipboard_image_model_factory.h"
 #include "ash/shell.h"
 #include "ash/test/ash_test_base.h"
 #include "base/callback.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/icu_test_util.h"
-#include "base/test/scoped_feature_list.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/skia/include/core/SkBitmap.h"
@@ -90,8 +88,6 @@ class ClipboardHistoryResourceManagerTest : public AshTestBase {
   ~ClipboardHistoryResourceManagerTest() override = default;
 
   void SetUp() override {
-    scoped_feature_list_.InitAndEnableFeature(
-        chromeos::features::kClipboardHistory);
     AshTestBase::SetUp();
     clipboard_history_ =
         Shell::Get()->clipboard_history_controller()->history();
@@ -114,7 +110,6 @@ class ClipboardHistoryResourceManagerTest : public AshTestBase {
   }
 
  private:
-  base::test::ScopedFeatureList scoped_feature_list_;
   const ClipboardHistory* clipboard_history_;
   const ClipboardHistoryResourceManager* resource_manager_;
   std::unique_ptr<MockClipboardImageModelFactory> mock_image_factory_;
@@ -128,8 +123,10 @@ TEST_F(ClipboardHistoryResourceManagerTest, GetLabel) {
   builder.SetText("Text")
       .SetMarkup("HTML with no image or table tags")
       .SetRtf("Rtf")
-      .SetFilenames({ui::FileInfo(base::FilePath("/dir/filename"),
-                                  base::FilePath("filename"))})
+      .SetFilenames({ui::FileInfo(base::FilePath("/path/to/File.txt"),
+                                  base::FilePath("File.txt")),
+                     ui::FileInfo(base::FilePath("/path/to/Other%20File.txt"),
+                                  base::FilePath("Other%20File.txt"))})
       .SetBookmarkTitle("Bookmark Title")
       .SetPng(gfx::test::CreatePNGBytes(10))
       .SetFileSystemData({u"/path/to/File.txt", u"/path/to/Other%20File.txt"})
@@ -164,7 +161,8 @@ TEST_F(ClipboardHistoryResourceManagerTest, GetLabel) {
   builder.ClearRtf();
 
   // In the absence of RTF data, Filenames data takes precedence.
-  EXPECT_EQ(resource_manager()->GetLabel(builder.Build()), u"filename");
+  EXPECT_EQ(resource_manager()->GetLabel(builder.Build()),
+            u"File.txt, Other File.txt");
 
   builder.ClearFilenames();
 

@@ -13,17 +13,26 @@
 class Profile;
 class SystemExtensionsInstallManager;
 
-// Name of the directory, under the user profile directory, where System
-// Extensions are installed.
-extern const char kSystemExtensionsProfileDirectory[];
+namespace ash {
 
 // Manages the installation, storage, and execution of System Extensions.
 class SystemExtensionsProvider : public KeyedService {
  public:
-  // May return nullptr if there is no provider associated with this profile.
-  static SystemExtensionsProvider* Get(Profile* profile);
+  // Returns the provider associated with `profile`. Should only be called if
+  // System Extensions is enabled for the profile i.e. if
+  // IsSystemExtensionsEnabled() returns true.
+  static SystemExtensionsProvider& Get(Profile* profile);
 
-  SystemExtensionsProvider();
+  // TODO(crbug.com/1272371): Remove when APIs can be accessed in a less hacky
+  // way.
+  // If true, System Extension APIs will be bound on all service workers. This
+  // is being added temporarily for development. Use in conjunction with e.g
+  // --enable-blink-features=BlinkExtensionChromeOS,
+  //                         BlinkExtensionChromeOSWindowManagement
+  // to use regular service workers to test your System Extension APIs.
+  static bool IsDebugMode();
+
+  explicit SystemExtensionsProvider(Profile* profile);
   SystemExtensionsProvider(const SystemExtensionsProvider&) = delete;
   SystemExtensionsProvider& operator=(const SystemExtensionsProvider&) = delete;
   ~SystemExtensionsProvider() override;
@@ -32,8 +41,18 @@ class SystemExtensionsProvider : public KeyedService {
     return *install_manager_;
   }
 
+  // Called when a service worker will be started to enable Blink runtime
+  // features based on system extension type. Currently System Extensions run on
+  // chrome-untrusted:// which is process isolated, so this method should be
+  // called.
+  void UpdateEnabledBlinkRuntimeFeaturesInIsolatedWorker(
+      const GURL& script_url,
+      std::vector<std::string>& out_forced_enabled_runtime_features);
+
  private:
   std::unique_ptr<SystemExtensionsInstallManager> install_manager_;
 };
+
+}  // namespace ash
 
 #endif  // CHROME_BROWSER_ASH_SYSTEM_EXTENSIONS_SYSTEM_EXTENSIONS_PROVIDER_H_

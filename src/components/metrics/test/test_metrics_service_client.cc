@@ -20,6 +20,11 @@ const char TestMetricsServiceClient::kBrandForTesting[] = "brand_for_testing";
 TestMetricsServiceClient::TestMetricsServiceClient() = default;
 TestMetricsServiceClient::~TestMetricsServiceClient() = default;
 
+variations::SyntheticTrialRegistry*
+TestMetricsServiceClient::GetSyntheticTrialRegistry() {
+  return nullptr;
+}
+
 metrics::MetricsService* TestMetricsServiceClient::GetMetricsService() {
   return nullptr;
 }
@@ -44,6 +49,11 @@ std::string TestMetricsServiceClient::GetApplicationLocale() {
 bool TestMetricsServiceClient::GetBrand(std::string* brand_code) {
   *brand_code = kBrandForTesting;
   return true;
+}
+
+const network_time::NetworkTimeTracker*
+TestMetricsServiceClient::GetNetworkTimeTracker() {
+  return nullptr;
 }
 
 SystemProfileProto::Channel TestMetricsServiceClient::GetChannel() {
@@ -74,7 +84,7 @@ std::unique_ptr<MetricsLogUploader> TestMetricsServiceClient::CreateUploader(
 }
 
 base::TimeDelta TestMetricsServiceClient::GetStandardUploadInterval() {
-  return base::TimeDelta::FromMinutes(5);
+  return base::Minutes(5);
 }
 
 bool TestMetricsServiceClient::IsReportingPolicyManaged() {

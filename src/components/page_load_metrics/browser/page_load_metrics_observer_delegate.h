@@ -8,10 +8,12 @@
 #include "base/time/time.h"
 #include "components/page_load_metrics/browser/observers/core/largest_contentful_paint_handler.h"
 #include "components/page_load_metrics/browser/resource_tracker.h"
+#include "components/page_load_metrics/browser/responsiveness_metrics_normalization.h"
 #include "components/page_load_metrics/common/page_end_reason.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/scoped_visibility_tracker.h"
+#include "url/gurl.h"
 
 namespace content {
 class WebContents;
@@ -37,13 +39,17 @@ class PageLoadMetricsObserverDelegate {
  public:
   // States when the page is restored from the back-forward cache.
   struct BackForwardCacheRestore {
-    explicit BackForwardCacheRestore(bool was_in_foreground);
+    explicit BackForwardCacheRestore(bool was_in_foreground,
+                                     base::TimeTicks navigation_start_time);
     BackForwardCacheRestore(const BackForwardCacheRestore&);
 
     // The first time when the page becomes backgrounded after the page is
     // restored. The time is relative to the navigation start of bfcache restore
-    // avigation.
+    // navigation.
     absl::optional<base::TimeDelta> first_background_time;
+
+    // The navigation start time for this back-forward cache restore.
+    base::TimeTicks navigation_start_time;
 
     // True if the page was in foreground when the page is restored.
     bool was_in_foreground = false;
@@ -142,9 +148,15 @@ class PageLoadMetricsObserverDelegate {
   virtual const PageRenderData& GetPageRenderData() const = 0;
   virtual const NormalizedCLSData& GetNormalizedCLSData(
       BfcacheStrategy bfcache_strategy) const = 0;
+  // Returns normalized responsiveness metrics data. Currently we normalize
+  // user interaction latencies from all renderer frames in a few different
+  // ways.
+  virtual const NormalizedResponsivenessMetrics&
+  GetNormalizedResponsivenessMetrics() const = 0;
   // InputTiming data accumulated across all frames.
   virtual const mojom::InputTiming& GetPageInputTiming() const = 0;
-  virtual const blink::MobileFriendliness& GetMobileFriendliness() const = 0;
+  virtual const absl::optional<blink::MobileFriendliness>&
+  GetMobileFriendliness() const = 0;
   virtual const PageRenderData& GetMainFrameRenderData() const = 0;
   virtual const ui::ScopedVisibilityTracker& GetVisibilityTracker() const = 0;
   virtual const ResourceTracker& GetResourceTracker() const = 0;
@@ -157,6 +169,12 @@ class PageLoadMetricsObserverDelegate {
   // being deprecated.
   virtual const LargestContentfulPaintHandler&
   GetExperimentalLargestContentfulPaintHandler() const = 0;
+
+  // Returns the current soft navigation count - https://bit.ly/soft-navigation
+  // Soft navigations are JS-driven same-document navigations that are using the
+  // history API or the new Navigation API, triggered by a user gesture and
+  // meaningfully modify the DOM, replacing the previous content with new one.
+  virtual uint32_t GetSoftNavigationCount() const = 0;
 
   // UKM source ID for the current page load. For prerendered page loads, this
   // returns ukm::kInvalidSourceId until activation navigation.

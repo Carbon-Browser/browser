@@ -9,7 +9,9 @@
 #include "base/component_export.h"
 #include "third_party/abseil-cpp/absl/types/variant.h"
 #include "third_party/skia/include/core/SkColor.h"
+#include "ui/color/color_id.h"
 #include "ui/gfx/color_palette.h"
+#include "ui/gfx/geometry/size.h"
 #include "ui/gfx/image/image.h"
 #include "ui/gfx/image/image_skia.h"
 
@@ -19,7 +21,7 @@ struct VectorIcon;
 
 namespace ui {
 
-class NativeTheme;
+class ColorProvider;
 
 // The following classes encapsulate the various ways that a model may provide
 // or otherwise specify an icon or image. Most notably, these are used by the
@@ -47,7 +49,7 @@ class COMPONENT_EXPORT(UI_BASE) VectorIconModel {
 
   const gfx::VectorIcon* vector_icon() const { return vector_icon_; }
   int icon_size() const { return icon_size_; }
-  int color_id() const { return absl::get<int>(color_); }
+  ColorId color_id() const { return absl::get<ColorId>(color_); }
   SkColor color() const { return absl::get<SkColor>(color_); }
   bool has_color() const { return absl::holds_alternative<SkColor>(color_); }
   const gfx::VectorIcon* badge_icon() const { return badge_icon_; }
@@ -56,7 +58,7 @@ class COMPONENT_EXPORT(UI_BASE) VectorIconModel {
   friend class ImageModel;
 
   VectorIconModel(const gfx::VectorIcon& vector_icon,
-                  int color_id,
+                  ColorId color_id,
                   int icon_size,
                   const gfx::VectorIcon* badge_icon);
   // TODO (kylixrd): This should be eventually removed once all instances of
@@ -68,18 +70,16 @@ class COMPONENT_EXPORT(UI_BASE) VectorIconModel {
 
   const gfx::VectorIcon* vector_icon_ = nullptr;
   int icon_size_ = 0;
-  absl::variant<int, SkColor> color_ = gfx::kPlaceholderColor;
+  absl::variant<ColorId, SkColor> color_ = gfx::kPlaceholderColor;
   const gfx::VectorIcon* badge_icon_ = nullptr;
 };
 
-// ImageModel encapsulates either a gfx::Image or a VectorIconModel. Only one
-// of the two may be specified at a given time. This class is instantiated via
-// the FromXXXX static factory functions.
-
+// ImageModel encapsulates one of several image representations. See FromXXXX
+// static-factory functions for supported formats.
 class COMPONENT_EXPORT(UI_BASE) ImageModel {
  public:
   using ImageGenerator =
-      base::RepeatingCallback<gfx::ImageSkia(const ui::NativeTheme*)>;
+      base::RepeatingCallback<gfx::ImageSkia(const ui::ColorProvider*)>;
 
   ImageModel();
   ImageModel(const ImageModel&);
@@ -88,8 +88,9 @@ class COMPONENT_EXPORT(UI_BASE) ImageModel {
   ImageModel& operator=(ImageModel&&);
   ~ImageModel();
 
+  // TODO(pkasting): Remove the default `color_id` or replace with kColorIcon.
   static ImageModel FromVectorIcon(const gfx::VectorIcon& vector_icon,
-                                   int color_id = -1,
+                                   ColorId color_id = kColorMenuIcon,
                                    int icon_size = 0,
                                    const gfx::VectorIcon* badge_icon = nullptr);
   static ImageModel FromVectorIcon(const gfx::VectorIcon& vector_icon,
@@ -98,10 +99,12 @@ class COMPONENT_EXPORT(UI_BASE) ImageModel {
                                    const gfx::VectorIcon* badge_icon = nullptr);
   static ImageModel FromImage(const gfx::Image& image);
   static ImageModel FromImageSkia(const gfx::ImageSkia& image_skia);
+  // |FromResourceId| does not support color theming. To create an |ImageModel|
+  // with color theming, use |ResourceBundle::GetThemedLottieImageNamed|.
   static ImageModel FromResourceId(int resource_id);
   // `size` must be the size of the image the `generator` returns.
   // NOTE: If this proves onerous, we could allow autodetection, at the cost of
-  // requiring `generator` to be runnable with a null NativeTheme*.
+  // requiring `generator` to be runnable with a null ColorProvider*.
   static ImageModel FromImageGenerator(ImageGenerator generator,
                                        gfx::Size size);
 
@@ -118,6 +121,9 @@ class COMPONENT_EXPORT(UI_BASE) ImageModel {
   // Checks if both models yield equal images.
   bool operator==(const ImageModel& other) const;
   bool operator!=(const ImageModel& other) const;
+
+  // Rasterizes if necessary.
+  gfx::ImageSkia Rasterize(const ui::ColorProvider* color_provider) const;
 
  private:
   struct ImageGeneratorAndSize {

@@ -9,13 +9,19 @@
 #include <utility>
 
 #include "base/metrics/histogram_macros.h"
-#include "base/sequenced_task_runner.h"
+#include "base/synchronization/waitable_event.h"
+#include "base/task/sequenced_task_runner.h"
 #include "media/base/bind_to_current_loop.h"
 #include "media/base/bitrate.h"
+#include "media/base/bitstream_buffer.h"
+#include "media/base/media_util.h"
 #include "media/base/video_frame.h"
 #include "media/video/gpu_video_accelerator_factories.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/platform/scheduler/public/post_cross_thread_task.h"
+#include "third_party/blink/renderer/platform/wtf/cross_thread_copier_base.h"
+#include "third_party/blink/renderer/platform/wtf/cross_thread_copier_gfx.h"
+#include "third_party/blink/renderer/platform/wtf/cross_thread_copier_std.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 #include "third_party/libyuv/include/libyuv.h"
 #include "ui/gfx/geometry/size.h"
@@ -42,7 +48,7 @@ const uint32_t kMaxKeyframeInterval = 100;
 scoped_refptr<VEAEncoder> VEAEncoder::Create(
     const VideoTrackRecorder::OnEncodedVideoCB& on_encoded_video_cb,
     const VideoTrackRecorder::OnErrorCB& on_error_cb,
-    int32_t bits_per_second,
+    uint32_t bits_per_second,
     media::VideoCodecProfile codec,
     absl::optional<uint8_t> level,
     const gfx::Size& size,
@@ -65,7 +71,7 @@ bool VEAEncoder::OutputBuffer::IsValid() {
 VEAEncoder::VEAEncoder(
     const VideoTrackRecorder::OnEncodedVideoCB& on_encoded_video_cb,
     const VideoTrackRecorder::OnErrorCB& on_error_cb,
-    int32_t bits_per_second,
+    uint32_t bits_per_second,
     media::VideoCodecProfile codec,
     absl::optional<uint8_t> level,
     const gfx::Size& size,
@@ -299,7 +305,7 @@ void VEAEncoder::ConfigureEncoderOnEncodingTaskRunner(const gfx::Size& size,
   DVLOG(3) << __func__;
   DCHECK_CALLED_ON_VALID_SEQUENCE(encoding_sequence_checker_);
   DCHECK(gpu_factories_->GetTaskRunner()->RunsTasksInCurrentSequence());
-  DCHECK_GT(bits_per_second_, 0);
+  DCHECK_NE(bits_per_second_, 0u);
 
   input_visible_size_ = size;
   vea_requested_input_coded_size_ = gfx::Size();
@@ -317,13 +323,18 @@ void VEAEncoder::ConfigureEncoderOnEncodingTaskRunner(const gfx::Size& size,
   }
 
   // TODO(b/181797390): Use VBR bitrate mode.
+  // TODO(crbug.com/1289907): remove the cast to uint32_t once
+  // |bits_per_second_| is stored as uint32_t.
   const media::VideoEncodeAccelerator::Config config(
       pixel_format, input_visible_size_, codec_,
       media::Bitrate::ConstantBitrate(bits_per_second_), absl::nullopt,
       absl::nullopt, level_, false, storage_type,
       media::VideoEncodeAccelerator::Config::ContentType::kCamera);
-  if (!video_encoder_ || !video_encoder_->Initialize(config, this))
+  if (!video_encoder_ ||
+      !video_encoder_->Initialize(config, this,
+                                  std::make_unique<media::NullMediaLog>())) {
     NotifyError(media::VideoEncodeAccelerator::kPlatformFailureError);
+  }
 }
 
 void VEAEncoder::DestroyOnEncodingTaskRunner(

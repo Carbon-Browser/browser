@@ -21,11 +21,11 @@
 
 namespace autofill {
 
-using autofill::features::kAutofillAblationStudyAblationWeightPerMilleParam;
-using autofill::features::kAutofillAblationStudyEnabledForAddressesParam;
-using autofill::features::kAutofillAblationStudyEnabledForPaymentsParam;
-using autofill::features::kAutofillEnableAblationStudy;
-using autofill::features::kAutofillShowTypePredictions;
+using ::autofill::features::kAutofillAblationStudyAblationWeightPerMilleParam;
+using ::autofill::features::kAutofillAblationStudyEnabledForAddressesParam;
+using ::autofill::features::kAutofillAblationStudyEnabledForPaymentsParam;
+using ::autofill::features::kAutofillEnableAblationStudy;
+using ::autofill::features::kAutofillShowTypePredictions;
 
 namespace {
 
@@ -61,7 +61,7 @@ int DaysSinceLocalWindowsEpoch(const base::Time& now) {
   int32_t raw_offset_in_ms = zone->getRawOffset();
 
   // The time offset for EST is negative. Therefore, we add the negative number.
-  delta += base::TimeDelta::FromMilliseconds(raw_offset_in_ms);
+  delta += base::Milliseconds(raw_offset_in_ms);
 
   return delta.InDays();
 }

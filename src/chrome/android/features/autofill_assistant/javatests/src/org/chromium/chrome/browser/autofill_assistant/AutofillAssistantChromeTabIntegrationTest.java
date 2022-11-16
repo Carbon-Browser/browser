@@ -28,7 +28,6 @@ import static org.chromium.chrome.browser.autofill_assistant.AutofillAssistantUi
 import static org.chromium.chrome.browser.autofill_assistant.AutofillAssistantUiTestUtil.waitUntilViewMatchesCondition;
 
 import android.support.test.InstrumentationRegistry;
-import android.view.KeyEvent;
 
 import androidx.test.espresso.Espresso;
 import androidx.test.espresso.matcher.ViewMatchers.Visibility;
@@ -45,7 +44,6 @@ import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.DisabledTest;
 import org.chromium.base.test.util.FlakyTest;
 import org.chromium.base.test.util.Restriction;
-import org.chromium.chrome.autofill_assistant.R;
 import org.chromium.chrome.browser.autofill_assistant.proto.ActionProto;
 import org.chromium.chrome.browser.autofill_assistant.proto.ChipProto;
 import org.chromium.chrome.browser.autofill_assistant.proto.ChipType;
@@ -56,16 +54,14 @@ import org.chromium.chrome.browser.autofill_assistant.proto.SupportedScriptProto
 import org.chromium.chrome.browser.autofill_assistant.proto.SupportedScriptProto.PresentationProto;
 import org.chromium.chrome.browser.autofill_assistant.proto.TellProto;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
-import org.chromium.chrome.browser.omnibox.UrlBar;
 import org.chromium.chrome.browser.tabmodel.TabModelUtils;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
 import org.chromium.chrome.test.util.ChromeTabUtils;
 import org.chromium.chrome.test.util.OmniboxTestUtils;
-import org.chromium.chrome.test.util.WaitForFocusHelper;
+import org.chromium.components.autofill_assistant.AutofillAssistantPreferencesUtil;
+import org.chromium.components.autofill_assistant.R;
 import org.chromium.components.browser_ui.widget.scrim.ScrimCoordinator;
-import org.chromium.content_public.browser.test.util.KeyUtils;
-import org.chromium.content_public.browser.test.util.TestThreadUtils;
 import org.chromium.ui.test.util.UiRestriction;
 
 import java.util.ArrayList;
@@ -88,6 +84,7 @@ public class AutofillAssistantChromeTabIntegrationTest {
     public final TestRule mRulesChain = RuleChain.outerRule(mTestRule).around(mTabTestRule);
 
     private ScrimCoordinator mScrimCoordinator;
+    private OmniboxTestUtils mOmnibox;
 
     private String getURL(String page) {
         return mTabTestRule.getURL(page);
@@ -104,6 +101,7 @@ public class AutofillAssistantChromeTabIntegrationTest {
     public void setUp() throws Exception {
         mScrimCoordinator =
                 mTestRule.getActivity().getRootUiCoordinatorForTesting().getScrimCoordinator();
+        mOmnibox = new OmniboxTestUtils(mTestRule.getActivity());
     }
 
     @Test
@@ -122,8 +120,7 @@ public class AutofillAssistantChromeTabIntegrationTest {
         AutofillAssistantTestScript script = new AutofillAssistantTestScript(
                 SupportedScriptProto.newBuilder()
                         .setPath(TEST_PAGE_A)
-                        .setPresentation(PresentationProto.newBuilder().setAutostart(true).setChip(
-                                ChipProto.newBuilder().setText("Done")))
+                        .setPresentation(PresentationProto.newBuilder().setAutostart(true))
                         .build(),
                 list);
 
@@ -155,8 +152,7 @@ public class AutofillAssistantChromeTabIntegrationTest {
         AutofillAssistantTestScript script = new AutofillAssistantTestScript(
                 SupportedScriptProto.newBuilder()
                         .setPath(TEST_PAGE_A)
-                        .setPresentation(PresentationProto.newBuilder().setAutostart(true).setChip(
-                                ChipProto.newBuilder().setText("Done")))
+                        .setPresentation(PresentationProto.newBuilder().setAutostart(true))
                         .build(),
                 list);
 
@@ -189,8 +185,7 @@ public class AutofillAssistantChromeTabIntegrationTest {
         AutofillAssistantTestScript script = new AutofillAssistantTestScript(
                 SupportedScriptProto.newBuilder()
                         .setPath(TEST_PAGE_A)
-                        .setPresentation(PresentationProto.newBuilder().setAutostart(true).setChip(
-                                ChipProto.newBuilder().setText("Done")))
+                        .setPresentation(PresentationProto.newBuilder().setAutostart(true))
                         .build(),
                 list);
         startAutofillAssistantOnTab(TEST_PAGE_A, script);
@@ -219,8 +214,7 @@ public class AutofillAssistantChromeTabIntegrationTest {
         AutofillAssistantTestScript scriptA = new AutofillAssistantTestScript(
                 SupportedScriptProto.newBuilder()
                         .setPath(TEST_PAGE_A)
-                        .setPresentation(PresentationProto.newBuilder().setAutostart(true).setChip(
-                                ChipProto.newBuilder().setText("Done")))
+                        .setPresentation(PresentationProto.newBuilder().setAutostart(true))
                         .build(),
                 listA);
 
@@ -234,8 +228,7 @@ public class AutofillAssistantChromeTabIntegrationTest {
         AutofillAssistantTestScript scriptB = new AutofillAssistantTestScript(
                 SupportedScriptProto.newBuilder()
                         .setPath(TEST_PAGE_B)
-                        .setPresentation(PresentationProto.newBuilder().setAutostart(true).setChip(
-                                ChipProto.newBuilder().setText("Done")))
+                        .setPresentation(PresentationProto.newBuilder().setAutostart(true))
                         .build(),
                 listB);
 
@@ -285,8 +278,7 @@ public class AutofillAssistantChromeTabIntegrationTest {
         AutofillAssistantTestScript scriptA = new AutofillAssistantTestScript(
                 SupportedScriptProto.newBuilder()
                         .setPath(TEST_PAGE_A)
-                        .setPresentation(PresentationProto.newBuilder().setAutostart(true).setChip(
-                                ChipProto.newBuilder().setText("Done")))
+                        .setPresentation(PresentationProto.newBuilder().setAutostart(true))
                         .build(),
                 listA);
         ArrayList<ActionProto> listB = new ArrayList<>();
@@ -300,8 +292,7 @@ public class AutofillAssistantChromeTabIntegrationTest {
         AutofillAssistantTestScript scriptB = new AutofillAssistantTestScript(
                 SupportedScriptProto.newBuilder()
                         .setPath(TEST_PAGE_B)
-                        .setPresentation(PresentationProto.newBuilder().setAutostart(true).setChip(
-                                ChipProto.newBuilder().setText("Done")))
+                        .setPresentation(PresentationProto.newBuilder().setAutostart(true))
                         .build(),
                 listB);
 
@@ -363,8 +354,7 @@ public class AutofillAssistantChromeTabIntegrationTest {
         AutofillAssistantTestScript scriptA = new AutofillAssistantTestScript(
                 SupportedScriptProto.newBuilder()
                         .setPath(TEST_PAGE_A)
-                        .setPresentation(PresentationProto.newBuilder().setAutostart(true).setChip(
-                                ChipProto.newBuilder().setText("Done")))
+                        .setPresentation(PresentationProto.newBuilder().setAutostart(true))
                         .build(),
                 listA);
         ArrayList<ActionProto> listB = new ArrayList<>();
@@ -378,8 +368,7 @@ public class AutofillAssistantChromeTabIntegrationTest {
         AutofillAssistantTestScript scriptB = new AutofillAssistantTestScript(
                 SupportedScriptProto.newBuilder()
                         .setPath(TEST_PAGE_B)
-                        .setPresentation(PresentationProto.newBuilder().setAutostart(true).setChip(
-                                ChipProto.newBuilder().setText("Done")))
+                        .setPresentation(PresentationProto.newBuilder().setAutostart(true))
                         .build(),
                 listB);
 
@@ -437,8 +426,7 @@ public class AutofillAssistantChromeTabIntegrationTest {
         AutofillAssistantTestScript scriptA = new AutofillAssistantTestScript(
                 SupportedScriptProto.newBuilder()
                         .setPath(TEST_PAGE_A)
-                        .setPresentation(PresentationProto.newBuilder().setAutostart(true).setChip(
-                                ChipProto.newBuilder().setText("Done")))
+                        .setPresentation(PresentationProto.newBuilder().setAutostart(true))
                         .build(),
                 listA);
 
@@ -452,8 +440,7 @@ public class AutofillAssistantChromeTabIntegrationTest {
         AutofillAssistantTestScript scriptB = new AutofillAssistantTestScript(
                 SupportedScriptProto.newBuilder()
                         .setPath(TEST_PAGE_B)
-                        .setPresentation(PresentationProto.newBuilder().setAutostart(true).setChip(
-                                ChipProto.newBuilder().setText("Done")))
+                        .setPresentation(PresentationProto.newBuilder().setAutostart(true))
                         .build(),
                 listB);
         startAutofillAssistantOnTab(TEST_PAGE_A, scriptA);
@@ -475,6 +462,7 @@ public class AutofillAssistantChromeTabIntegrationTest {
 
     @Test
     @MediumTest
+    @DisabledTest(message = "crbug.com/1272997")
     public void interactingWithLocationBarHidesAutofillAssistant() {
         ArrayList<ActionProto> list = new ArrayList<>();
         list.add(ActionProto.newBuilder()
@@ -485,8 +473,7 @@ public class AutofillAssistantChromeTabIntegrationTest {
         AutofillAssistantTestScript script = new AutofillAssistantTestScript(
                 SupportedScriptProto.newBuilder()
                         .setPath(TEST_PAGE_A)
-                        .setPresentation(PresentationProto.newBuilder().setAutostart(true).setChip(
-                                ChipProto.newBuilder().setText("Done")))
+                        .setPresentation(PresentationProto.newBuilder().setAutostart(true))
                         .build(),
                 list);
         startAutofillAssistantOnTab(TEST_PAGE_A, script);
@@ -496,9 +483,7 @@ public class AutofillAssistantChromeTabIntegrationTest {
                 withEffectiveVisibility(Visibility.VISIBLE));
 
         // Clicking location bar hides UI and shows the keyboard.
-        final UrlBar urlBar = mTestRule.getActivity().findViewById(R.id.url_bar);
-        WaitForFocusHelper.acquireFocusForView(urlBar);
-        OmniboxTestUtils.waitForFocusAndKeyboardActive(urlBar, true);
+        mOmnibox.requestFocus();
         waitUntilViewMatchesCondition(withText("Prompt"), not(isCompletelyDisplayed()));
 
         // Closing keyboard brings it back.
@@ -509,9 +494,7 @@ public class AutofillAssistantChromeTabIntegrationTest {
                 withEffectiveVisibility(Visibility.VISIBLE));
 
         // Committing URL shows error.
-        TestThreadUtils.runOnUiThreadBlocking(() -> { urlBar.setText(getURL(TEST_PAGE_B)); });
-        KeyUtils.singleKeyEventView(
-                InstrumentationRegistry.getInstrumentation(), urlBar, KeyEvent.KEYCODE_ENTER);
+        mOmnibox.typeText(getURL(TEST_PAGE_B), true);
         waitUntilViewMatchesCondition(withText(containsString("Sorry")), isCompletelyDisplayed());
     }
 
@@ -537,8 +520,7 @@ public class AutofillAssistantChromeTabIntegrationTest {
         AutofillAssistantTestScript script = new AutofillAssistantTestScript(
                 SupportedScriptProto.newBuilder()
                         .setPath(TEST_PAGE_A)
-                        .setPresentation(PresentationProto.newBuilder().setAutostart(true).setChip(
-                                ChipProto.newBuilder().setText("Done")))
+                        .setPresentation(PresentationProto.newBuilder().setAutostart(true))
                         .build(),
                 list);
         startAutofillAssistantOnTab(TEST_PAGE_A, script);
@@ -577,8 +559,7 @@ public class AutofillAssistantChromeTabIntegrationTest {
         AutofillAssistantTestScript script = new AutofillAssistantTestScript(
                 SupportedScriptProto.newBuilder()
                         .setPath(TEST_PAGE_A)
-                        .setPresentation(PresentationProto.newBuilder().setAutostart(true).setChip(
-                                ChipProto.newBuilder().setText("Done")))
+                        .setPresentation(PresentationProto.newBuilder().setAutostart(true))
                         .build(),
                 list);
 
@@ -641,9 +622,7 @@ public class AutofillAssistantChromeTabIntegrationTest {
                 withEffectiveVisibility(Visibility.VISIBLE));
 
         // Clicking location bar hides UI and shows the keyboard.
-        final UrlBar urlBar = mTestRule.getActivity().findViewById(R.id.url_bar);
-        WaitForFocusHelper.acquireFocusForView(urlBar);
-        OmniboxTestUtils.waitForFocusAndKeyboardActive(urlBar, true);
+        mOmnibox.requestFocus();
         waitUntilViewMatchesCondition(withId(R.id.button_init_ok), not(isDisplayed()));
 
         // Closing keyboard brings it back.

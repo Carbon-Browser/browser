@@ -82,19 +82,19 @@ base::Value SessionTabToValue(const ::sessions::SessionTab& tab) {
   if (!tab_url.is_valid() || tab_url.spec() == chrome::kChromeUINewTabURL)
     return base::Value();
 
-  base::Value dictionary(base::Value::Type::DICTIONARY);
+  base::Value::Dict dictionary;
   NewTabUI::SetUrlTitleAndDirection(&dictionary, current_navigation.title(),
                                     tab_url);
-  dictionary.SetStringKey("remoteIconUrlForUma",
-                          current_navigation.favicon_url().spec());
-  dictionary.SetStringKey("type", "tab");
-  dictionary.SetDoubleKey("timestamp",
-                          static_cast<double>(tab.timestamp.ToInternalValue()));
+  dictionary.Set("remoteIconUrlForUma",
+                 current_navigation.favicon_url().spec());
+  dictionary.Set("type", "tab");
+  dictionary.Set("timestamp",
+                 static_cast<double>(tab.timestamp.ToInternalValue()));
   // TODO(jeremycho): This should probably be renamed to tabId to avoid
   // confusion with the ID corresponding to a session.  Investigate all the
   // places (C++ and JS) where this is being used.  (http://crbug.com/154865).
-  dictionary.SetIntKey("sessionId", tab.tab_id.id());
-  return dictionary;
+  dictionary.Set("sessionId", tab.tab_id.id());
+  return base::Value(std::move(dictionary));
 }
 
 // Helper for initializing a boilerplate SessionWindow JSON compatible object.
@@ -125,7 +125,7 @@ base::Value SessionWindowToValue(const ::sessions::SessionWindow& window) {
       tab_values.Append(std::move(tab_value));
     }
   }
-  if (tab_values.GetList().empty())
+  if (tab_values.GetListDeprecated().empty())
     return base::Value();
 
   base::Value dictionary = BuildWindowData(window.timestamp, window.window_id);
@@ -221,19 +221,19 @@ sync_sessions::OpenTabsUIDelegate* ForeignSessionHandler::GetOpenTabsUIDelegate(
 }
 
 void ForeignSessionHandler::RegisterMessages() {
-  web_ui()->RegisterDeprecatedMessageCallback(
+  web_ui()->RegisterMessageCallback(
       "deleteForeignSession",
       base::BindRepeating(&ForeignSessionHandler::HandleDeleteForeignSession,
                           base::Unretained(this)));
-  web_ui()->RegisterDeprecatedMessageCallback(
+  web_ui()->RegisterMessageCallback(
       "getForeignSessions",
       base::BindRepeating(&ForeignSessionHandler::HandleGetForeignSessions,
                           base::Unretained(this)));
-  web_ui()->RegisterDeprecatedMessageCallback(
+  web_ui()->RegisterMessageCallback(
       "openForeignSession",
       base::BindRepeating(&ForeignSessionHandler::HandleOpenForeignSession,
                           base::Unretained(this)));
-  web_ui()->RegisterDeprecatedMessageCallback(
+  web_ui()->RegisterMessageCallback(
       "setForeignSessionCollapsed",
       base::BindRepeating(
           &ForeignSessionHandler::HandleSetForeignSessionCollapsed,
@@ -288,10 +288,10 @@ std::u16string ForeignSessionHandler::FormatSessionTime(
 }
 
 void ForeignSessionHandler::HandleGetForeignSessions(
-    const base::ListValue* args) {
+    const base::Value::List& args) {
   AllowJavascript();
   CHECK(!initial_session_list_.is_none());
-  const base::Value& callback_id = args->GetList()[0];
+  const base::Value& callback_id = args[0];
   ResolveJavascriptCallback(callback_id, std::move(initial_session_list_));
 
   // Clear the initial list so that it will be reset in AllowJavascript if the
@@ -311,10 +311,9 @@ base::Value ForeignSessionHandler::GetForeignSessions() {
     // and only add back sessions that are still current.
     DictionaryPrefUpdate pref_update(Profile::FromWebUI(web_ui())->GetPrefs(),
                                      prefs::kNtpCollapsedForeignSessions);
-    base::DictionaryValue* current_collapsed_sessions = pref_update.Get();
-    std::unique_ptr<base::DictionaryValue> collapsed_sessions(
-        current_collapsed_sessions->DeepCopy());
-    current_collapsed_sessions->Clear();
+    base::Value* current_collapsed_sessions = pref_update.Get();
+    base::Value collapsed_sessions = current_collapsed_sessions->Clone();
+    current_collapsed_sessions->DictClear();
 
     // Note: we don't own the SyncedSessions themselves.
     for (size_t i = 0; i < sessions.size() && i < kMaxSessionsToShow; ++i) {
@@ -333,10 +332,10 @@ base::Value ForeignSessionHandler::GetForeignSessions() {
                                 FormatSessionTime(session->modified_time));
       session_data.SetDoubleKey("timestamp", session->modified_time.ToJsTime());
 
-      bool is_collapsed = collapsed_sessions->HasKey(session_tag);
+      bool is_collapsed = collapsed_sessions.FindKey(session_tag);
       session_data.SetBoolKey("collapsed", is_collapsed);
       if (is_collapsed)
-        current_collapsed_sessions->SetBoolean(session_tag, true);
+        current_collapsed_sessions->SetBoolKey(session_tag, true);
 
       base::Value window_list(base::Value::Type::LIST);
 
@@ -357,40 +356,39 @@ base::Value ForeignSessionHandler::GetForeignSessions() {
 }
 
 void ForeignSessionHandler::HandleOpenForeignSession(
-    const base::ListValue* args) {
-  size_t num_args = args->GetList().size();
+    const base::Value::List& args) {
+  size_t num_args = args.size();
   // Expect either 1 or 8 args. For restoring an entire session, only
   // one argument is required -- the session tag. To restore a tab,
   // the additional args required are the window id, the tab id,
   // and 4 properties of the event object (button, altKey, ctrlKey,
   // metaKey, shiftKey) for determining how to open the tab.
   if (num_args != 8U && num_args != 1U) {
-    LOG(ERROR) << "openForeignSession called with " << args->GetList().size()
+    LOG(ERROR) << "openForeignSession called with " << args.size()
                << " arguments.";
     return;
   }
 
   // Extract the session tag (always provided).
-  std::string session_string_value;
-  if (!args->GetString(0, &session_string_value)) {
+  if (!args[0].is_string()) {
     LOG(ERROR) << "Failed to extract session tag.";
     return;
   }
+  const std::string& session_string_value = args[0].GetString();
 
   // Extract window number.
-  std::string window_num_str;
   int window_num = -1;
-  if (num_args >= 2 && (!args->GetString(1, &window_num_str) ||
-                        !base::StringToInt(window_num_str, &window_num))) {
+  if (num_args >= 2 && (!args[1].is_string() ||
+                        !base::StringToInt(args[1].GetString(), &window_num))) {
     LOG(ERROR) << "Failed to extract window number.";
     return;
   }
 
   // Extract tab id.
-  std::string tab_id_str;
   SessionID::id_type tab_id_value = 0;
-  if (num_args >= 3 && (!args->GetString(2, &tab_id_str) ||
-                        !base::StringToInt(tab_id_str, &tab_id_value))) {
+  if (num_args >= 3 &&
+      (!args[2].is_string() ||
+       !base::StringToInt(args[2].GetString(), &tab_id_value))) {
     LOG(ERROR) << "Failed to extract tab SessionID.";
     return;
   }
@@ -406,18 +404,18 @@ void ForeignSessionHandler::HandleOpenForeignSession(
 }
 
 void ForeignSessionHandler::HandleDeleteForeignSession(
-    const base::ListValue* args) {
-  if (args->GetList().size() != 1U) {
+    const base::Value::List& args) {
+  if (args.size() != 1U) {
     LOG(ERROR) << "Wrong number of args to deleteForeignSession";
     return;
   }
 
   // Get the session tag argument (required).
-  std::string session_tag;
-  if (!args->GetString(0, &session_tag)) {
+  if (!args[0].is_string()) {
     LOG(ERROR) << "Unable to extract session tag";
     return;
   }
+  const std::string& session_tag = args[0].GetString();
 
   sync_sessions::OpenTabsUIDelegate* open_tabs =
       GetOpenTabsUIDelegate(web_ui());
@@ -426,31 +424,31 @@ void ForeignSessionHandler::HandleDeleteForeignSession(
 }
 
 void ForeignSessionHandler::HandleSetForeignSessionCollapsed(
-    const base::ListValue* args) {
-  if (args->GetList().size() != 2U) {
+    const base::Value::List& args) {
+  if (args.size() != 2U) {
     LOG(ERROR) << "Wrong number of args to setForeignSessionCollapsed";
     return;
   }
 
   // Get the session tag argument (required).
-  std::string session_tag;
-  if (!args->GetString(0, &session_tag)) {
+  if (!args[0].is_string()) {
     LOG(ERROR) << "Unable to extract session tag";
     return;
   }
+  const std::string& session_tag = args[0].GetString();
 
-  bool is_collapsed;
-  if (!args->GetBoolean(1, &is_collapsed)) {
+  if (!args[1].is_bool()) {
     LOG(ERROR) << "Unable to extract boolean argument";
     return;
   }
+  const bool is_collapsed = args[1].GetBool();
 
   // Store session tags for collapsed sessions in a preference so that the
   // collapsed state persists.
   PrefService* prefs = Profile::FromWebUI(web_ui())->GetPrefs();
   DictionaryPrefUpdate update(prefs, prefs::kNtpCollapsedForeignSessions);
   if (is_collapsed)
-    update.Get()->SetBoolean(session_tag, true);
+    update.Get()->SetBoolKey(session_tag, true);
   else
     update.Get()->RemoveKey(session_tag);
 }

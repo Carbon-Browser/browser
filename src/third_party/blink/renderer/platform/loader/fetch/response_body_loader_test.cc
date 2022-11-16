@@ -35,10 +35,6 @@ class TestBackForwardCacheLoaderHelper : public BackForwardCacheLoaderHelper {
   void DidBufferLoadWhileInBackForwardCache(size_t num_bytes) override {}
 
   void Detach() override {}
-
-  bool CanContinueBufferingWhileInBackForwardCache() const override {
-    return true;
-  }
 };
 
 class ResponseBodyLoaderTest : public testing::Test {
@@ -46,15 +42,6 @@ class ResponseBodyLoaderTest : public testing::Test {
   using Command = ReplayingBytesConsumer::Command;
   using PublicState = BytesConsumer::PublicState;
   using Result = BytesConsumer::Result;
-
-  static constexpr uint32_t kMaxNumConsumedBytesInTaskForTesting = 512 * 1024;
-  ResponseBodyLoaderTest() {
-    base::FieldTrialParams params;
-    params["loader_chunk_size"] =
-        base::NumberToString(kMaxNumConsumedBytesInTaskForTesting);
-    scoped_feature_list_.InitAndEnableFeatureWithParameters(
-        network::features::kLoaderDataPipeTuningFeature, params);
-  }
 
   class TestClient final : public GarbageCollected<TestClient>,
                            public ResponseBodyLoaderClient {
@@ -89,6 +76,9 @@ class ResponseBodyLoaderTest : public testing::Test {
           break;
       }
     }
+    void DidReceiveDecodedData(
+        const String& data,
+        std::unique_ptr<ParkableStringImpl::SecureDigest> digest) override {}
     void DidFinishLoadingBody() override {
       DCHECK(!finished_);
       DCHECK(!failed_);
@@ -361,7 +351,7 @@ TEST_F(ResponseBodyLoaderTest, Suspend) {
 TEST_F(ResponseBodyLoaderTest, ReadTooBigBuffer) {
   auto task_runner = base::MakeRefCounted<scheduler::FakeTaskRunner>();
   auto* consumer = MakeGarbageCollected<ReplayingBytesConsumer>(task_runner);
-  constexpr auto kMax = kMaxNumConsumedBytesInTaskForTesting;
+  const uint32_t kMax = network::features::GetLoaderChunkSize();
 
   consumer->Add(Command(Command::kData, std::string(kMax - 1, 'a').data()));
   consumer->Add(Command(Command::kData, std::string(2, 'b').data()));

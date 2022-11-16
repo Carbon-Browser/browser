@@ -26,16 +26,20 @@ namespace unified_consent {
 class UnifiedConsentService;
 }
 
+namespace syncer {
+class SyncService;
+}
+
 // Mediator that handles the sync operation.
 @interface SyncScreenMediator : NSObject
 
 - (instancetype)init NS_UNAVAILABLE;
 
 // Inits the mediator with
-// |authenticationService| provides the authentication library.
-// |identityManager| gives access to information of users Google identity.
-// |consentAuditor| to record the content.
-// |syncSetupService| helps triggering the sync flow.
+// `authenticationService` provides the authentication library.
+// `identityManager` gives access to information of users Google identity.
+// `consentAuditor` to record the content.
+// `syncSetupService` helps triggering the sync flow.
 - (instancetype)
     initWithAuthenticationService:(AuthenticationService*)authenticationService
                   identityManager:(signin::IdentityManager*)identityManager
@@ -46,6 +50,8 @@ class UnifiedConsentService;
                  syncSetupService:(SyncSetupService*)syncSetupService
             unifiedConsentService:
                 (unified_consent::UnifiedConsentService*)unifiedConsentService
+                      syncService:(syncer::SyncService*)syncService
+
     NS_DESIGNATED_INITIALIZER;
 
 // Disconnect the mediator.

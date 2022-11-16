@@ -4,8 +4,6 @@
 
 static_library("content") {
   sources = [
-    "appcache_helper.cc",
-    "appcache_helper.h",
     "browsing_data_helper.cc",
     "browsing_data_helper.h",
     "cache_storage_helper.cc",
@@ -39,6 +37,7 @@ static_library("content") {
     "//components/content_settings/core/common",
     "//components/no_state_prefetch/browser",
     "//components/prefs",
+    "//components/services/storage/privileged/mojom",
     "//components/services/storage/public/cpp",
     "//components/services/storage/public/mojom",
     "//components/site_isolation",
@@ -50,7 +49,6 @@ static_library("content") {
 source_set("unit_tests") {
   testonly = true
   sources = [
-    "appcache_helper_unittest.cc",
     "browsing_data_helper_unittest.cc",
     "cache_storage_helper_unittest.cc",
     "cookie_helper_unittest.cc",
@@ -75,8 +73,6 @@ source_set("unit_tests") {
 source_set("test_support") {
   testonly = true
   sources = [
-    "mock_appcache_helper.cc",
-    "mock_appcache_helper.h",
     "mock_cache_storage_helper.cc",
     "mock_cache_storage_helper.h",
     "mock_cookie_helper.cc",

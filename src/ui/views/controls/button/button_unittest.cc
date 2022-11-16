@@ -9,8 +9,8 @@
 #include <utility>
 
 #include "base/bind.h"
-#include "base/macros.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "build/build_config.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -58,15 +58,17 @@ namespace {
 class TestContextMenuController : public ContextMenuController {
  public:
   TestContextMenuController() = default;
+
+  TestContextMenuController(const TestContextMenuController&) = delete;
+  TestContextMenuController& operator=(const TestContextMenuController&) =
+      delete;
+
   ~TestContextMenuController() override = default;
 
   // ContextMenuController:
   void ShowContextMenuForViewImpl(View* source,
                                   const gfx::Point& point,
                                   ui::MenuSourceType source_type) override {}
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(TestContextMenuController);
 };
 
 class TestButton : public Button {
@@ -76,6 +78,9 @@ class TestButton : public Button {
                                    &pressed_)) {
     SetHasInkDropActionOnClick(has_ink_drop_action_on_click);
   }
+
+  TestButton(const TestButton&) = delete;
+  TestButton& operator=(const TestButton&) = delete;
 
   ~TestButton() override = default;
 
@@ -108,8 +113,6 @@ class TestButton : public Button {
   bool canceled_ = false;
 
   KeyClickAction custom_key_click_action_ = KeyClickAction::kNone;
-
-  DISALLOW_COPY_AND_ASSIGN(TestButton);
 };
 
 class TestButtonObserver {
@@ -124,6 +127,10 @@ class TestButtonObserver {
             [](TestButtonObserver* obs) { obs->state_changed_ = true; },
             base::Unretained(this)));
   }
+
+  TestButtonObserver(const TestButtonObserver&) = delete;
+  TestButtonObserver& operator=(const TestButtonObserver&) = delete;
+
   ~TestButtonObserver() = default;
 
   void Reset() {
@@ -140,8 +147,6 @@ class TestButtonObserver {
 
   base::CallbackListSubscription highlighted_changed_subscription_;
   base::CallbackListSubscription state_changed_subscription_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestButtonObserver);
 };
 
 TestInkDrop* AddTestInkDrop(TestButton* button) {
@@ -158,6 +163,10 @@ TestInkDrop* AddTestInkDrop(TestButton* button) {
 class ButtonTest : public ViewsTestBase {
  public:
   ButtonTest() = default;
+
+  ButtonTest(const ButtonTest&) = delete;
+  ButtonTest& operator=(const ButtonTest&) = delete;
+
   ~ButtonTest() override = default;
 
   void SetUp() override {
@@ -208,10 +217,9 @@ class ButtonTest : public ViewsTestBase {
 
  private:
   std::unique_ptr<Widget> widget_;
-  TestButton* button_;
+  raw_ptr<TestButton> button_;
   std::unique_ptr<TestButtonObserver> button_observer_;
   std::unique_ptr<ui::test::EventGenerator> event_generator_;
-  DISALLOW_COPY_AND_ASSIGN(ButtonTest);
 };
 
 // Iterate through the metadata for Button to ensure it all works.
@@ -268,7 +276,7 @@ TEST_F(ButtonTest, HoverStateOnVisibilityChange) {
 
 // Disabling cursor events occurs for touch events and the Ash magnifier. There
 // is no touch on desktop Mac. Tracked in http://crbug.com/445520.
-#if !defined(OS_MAC) || defined(USE_AURA)
+#if !BUILDFLAG(IS_MAC) || defined(USE_AURA)
   aura::test::TestCursorClient cursor_client(GetRootWindow(widget()));
 
   // In Aura views, no new hover effects are invoked if mouse events
@@ -286,7 +294,7 @@ TEST_F(ButtonTest, HoverStateOnVisibilityChange) {
 
   button()->SetVisible(true);
   EXPECT_EQ(Button::STATE_NORMAL, button()->GetState());
-#endif  // !defined(OS_MAC) || defined(USE_AURA)
+#endif  // !BUILDFLAG(IS_MAC) || defined(USE_AURA)
 }
 
 // Tests that the hover state is preserved during a view hierarchy update of a
@@ -372,7 +380,7 @@ TEST_F(ButtonTest, NotifyActionNoClick) {
 }
 
 // No touch on desktop Mac. Tracked in http://crbug.com/445520.
-#if !defined(OS_MAC) || defined(USE_AURA)
+#if !BUILDFLAG(IS_MAC) || defined(USE_AURA)
 
 namespace {
 
@@ -412,7 +420,7 @@ TEST_F(ButtonTest, GestureEventsRespectDisabledState) {
   EXPECT_EQ(Button::STATE_DISABLED, button()->GetState());
 }
 
-#endif  // !defined(OS_MAC) || defined(USE_AURA)
+#endif  // !BUILDFLAG(IS_MAC) || defined(USE_AURA)
 
 // Ensure subclasses of Button are correctly recognized as Button.
 TEST_F(ButtonTest, AsButton) {
@@ -778,7 +786,7 @@ TEST_F(ButtonTest, ActionOnSpace) {
   ui::KeyEvent space_press(ui::ET_KEY_PRESSED, ui::VKEY_SPACE, ui::EF_NONE);
   EXPECT_TRUE(button()->OnKeyPressed(space_press));
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   EXPECT_EQ(Button::STATE_NORMAL, button()->GetState());
   EXPECT_TRUE(button()->pressed());
 #else
@@ -788,7 +796,7 @@ TEST_F(ButtonTest, ActionOnSpace) {
 
   ui::KeyEvent space_release(ui::ET_KEY_RELEASED, ui::VKEY_SPACE, ui::EF_NONE);
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   EXPECT_FALSE(button()->OnKeyReleased(space_release));
 #else
   EXPECT_TRUE(button()->OnKeyReleased(space_release));
@@ -808,7 +816,7 @@ TEST_F(ButtonTest, ActionOnReturn) {
 
   ui::KeyEvent return_press(ui::ET_KEY_PRESSED, ui::VKEY_RETURN, ui::EF_NONE);
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   EXPECT_FALSE(button()->OnKeyPressed(return_press));
   EXPECT_EQ(Button::STATE_NORMAL, button()->GetState());
   EXPECT_FALSE(button()->pressed());

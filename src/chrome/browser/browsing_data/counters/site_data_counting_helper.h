@@ -11,7 +11,8 @@
 #include <vector>
 
 #include "base/callback.h"
-#include "chrome/browser/browsing_data/browsing_data_media_license_helper.h"
+#include "base/memory/raw_ptr.h"
+#include "base/time/time.h"
 #include "components/content_settings/core/common/content_settings_types.h"
 #include "net/cookies/canonical_cookie.h"
 #include "third_party/blink/public/mojom/quota/quota_types.mojom-forward.h"
@@ -25,7 +26,7 @@ struct StorageUsageInfo;
 
 namespace storage {
 class SpecialStoragePolicy;
-struct BucketInfo;
+struct BucketLocator;
 }
 
 // Helper class that counts the number of unique origins, that are affected by
@@ -49,21 +50,17 @@ class SiteDataCountingHelper {
       const scoped_refptr<storage::SpecialStoragePolicy>&
           special_storage_policy,
       const std::vector<content::StorageUsageInfo>& infos);
-  void GetQuotaBucketsCallback(const std::set<storage::BucketInfo>& buckets,
+  void GetQuotaBucketsCallback(const std::set<storage::BucketLocator>& buckets,
                                blink::mojom::StorageType type);
-  void SitesWithMediaLicensesCallback(
-      const std::list<BrowsingDataMediaLicenseHelper::MediaLicenseInfo>&
-          media_license_info_list);
 
   void Done(const std::vector<GURL>& origins);
 
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
   base::Time begin_;
   base::Time end_;
   base::OnceCallback<void(int)> completion_callback_;
   int tasks_;
   std::set<std::string> unique_hosts_;
-  scoped_refptr<BrowsingDataMediaLicenseHelper> media_license_helper_;
 };
 
 #endif  // CHROME_BROWSER_BROWSING_DATA_COUNTERS_SITE_DATA_COUNTING_HELPER_H_

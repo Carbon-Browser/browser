@@ -20,7 +20,6 @@
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "ui/base/resource/resource_bundle.h"
-#include "ui/resources/grit/webui_resources.h"
 
 class WebUIResourceBrowserTest : public InProcessBrowserTest {
  public:
@@ -44,15 +43,15 @@ class WebUIResourceBrowserTest : public InProcessBrowserTest {
     content::WebContents* web_contents =
         browser()->tab_strip_model()->GetActiveWebContents();
     ASSERT_TRUE(web_contents);
-    EXPECT_TRUE(ExecuteWebUIResourceTest(web_contents, {}));
+    EXPECT_TRUE(ExecuteWebUIResourceTest(web_contents));
   }
 };
 
+#if BUILDFLAG(IS_CHROMEOS_ASH)
 IN_PROC_BROWSER_TEST_F(WebUIResourceBrowserTest, ArrayDataModelModuleTest) {
   LoadTestUrl("?module=js/cr/ui/array_data_model_test.js");
 }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
 IN_PROC_BROWSER_TEST_F(WebUIResourceBrowserTest, CrTest) {
   LoadTestUrl("cr_test.html");
 }
@@ -62,16 +61,8 @@ IN_PROC_BROWSER_TEST_F(WebUIResourceBrowserTest, CrReloadTest) {
 }
 #endif
 
-IN_PROC_BROWSER_TEST_F(WebUIResourceBrowserTest, EventTargetModuleTest) {
-  LoadTestUrl("?module=js/cr/event_target_test.js");
-}
-
 IN_PROC_BROWSER_TEST_F(WebUIResourceBrowserTest, I18nProcessCssTest) {
   LoadTestUrl("i18n_process_css_test.html");
-}
-
-IN_PROC_BROWSER_TEST_F(WebUIResourceBrowserTest, ListModuleTest) {
-  LoadTestUrl("?module=js/cr/ui/list_test.js");
 }
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -79,8 +70,10 @@ IN_PROC_BROWSER_TEST_F(WebUIResourceBrowserTest, GridModuleTest) {
   LoadTestUrl("?module=js/cr/ui/grid_test.js");
 }
 
-// This test is Chrome OS only as the utils file it imports relies on
-// list_single_selection_model, which is only included on Chrome OS.
+IN_PROC_BROWSER_TEST_F(WebUIResourceBrowserTest, ListModuleTest) {
+  LoadTestUrl("?module=js/cr/ui/list_test.js");
+}
+
 IN_PROC_BROWSER_TEST_F(WebUIResourceBrowserTest, ListSelectionModelModuleTest) {
   LoadTestUrl("?module=js/cr/ui/list_selection_model_test.js");
 }
@@ -96,7 +89,7 @@ IN_PROC_BROWSER_TEST_F(WebUIResourceBrowserTest, MenuModuleTest) {
 }
 
 IN_PROC_BROWSER_TEST_F(WebUIResourceBrowserTest, MockTimerTest) {
-  LoadTestUrl("mock_timer_test.html");
+  LoadTestUrl("?module=mock_timer_test.js");
 }
 
 IN_PROC_BROWSER_TEST_F(WebUIResourceBrowserTest, PositionUtilModuleTest) {
@@ -113,8 +106,4 @@ IN_PROC_BROWSER_TEST_F(WebUIResourceBrowserTest, ContextMenuHandlerModuleTest) {
 
 IN_PROC_BROWSER_TEST_F(WebUIResourceBrowserTest, MenuButtonModuleTest) {
   LoadTestUrl("?module=js/cr/ui/menu_button_test.js");
-}
-
-IN_PROC_BROWSER_TEST_F(WebUIResourceBrowserTest, SplitterModuleTest) {
-  LoadTestUrl("?module=js/cr/ui/splitter_test.js");
 }

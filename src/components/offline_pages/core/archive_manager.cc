@@ -12,9 +12,9 @@
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/sequenced_task_runner.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/system/sys_info.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 
@@ -72,7 +72,7 @@ void GetStorageStatsImpl(const base::FilePath& temporary_archives_dir,
     base::FileEnumerator file_enumerator(public_archives_dir, false,
                                          base::FileEnumerator::FILES);
     while (!file_enumerator.Next().empty()) {
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
       std::string extension = base::WideToUTF8(
           file_enumerator.GetInfo().GetName().FinalExtension());
 #else

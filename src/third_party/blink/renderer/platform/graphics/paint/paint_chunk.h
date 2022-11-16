@@ -8,8 +8,8 @@
 #include <iosfwd>
 #include <memory>
 
+#include "base/check_op.h"
 #include "base/dcheck_is_on.h"
-#include "third_party/blink/renderer/platform/geometry/int_rect.h"
 #include "third_party/blink/renderer/platform/graphics/color.h"
 #include "third_party/blink/renderer/platform/graphics/paint/display_item.h"
 #include "third_party/blink/renderer/platform/graphics/paint/display_item_client.h"
@@ -17,10 +17,12 @@
 #include "third_party/blink/renderer/platform/graphics/paint/layer_selection_data.h"
 #include "third_party/blink/renderer/platform/graphics/paint/raster_invalidation_tracking.h"
 #include "third_party/blink/renderer/platform/graphics/paint/ref_counted_property_tree_state.h"
+#include "third_party/blink/renderer/platform/graphics/paint/region_capture_data.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/forward.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
+#include "ui/gfx/geometry/rect.h"
 
 namespace blink {
 
@@ -34,7 +36,6 @@ struct PLATFORM_EXPORT PaintChunk {
   DISALLOW_NEW();
 
   using Id = DisplayItem::Id;
-
   PaintChunk(wtf_size_t begin,
              wtf_size_t end,
              const DisplayItemClient& client,
@@ -63,6 +64,7 @@ struct PLATFORM_EXPORT PaintChunk {
         id(other.id),
         properties(other.properties),
         hit_test_data(std::move(other.hit_test_data)),
+        region_capture_data(std::move(other.region_capture_data)),
         layer_selection_data(std::move(other.layer_selection_data)),
         bounds(other.bounds),
         drawable_bounds(other.drawable_bounds),
@@ -87,14 +89,18 @@ struct PLATFORM_EXPORT PaintChunk {
     return old.is_cacheable && Matches(old.id);
   }
 
-  bool Matches(const Id& other_id) const {
-    if (!is_cacheable || id != other_id)
+  bool CanMatchOldChunk() const {
+    if (!is_cacheable)
       return false;
     // A chunk whose client is just created should not match any cached chunk,
     // even if it's id equals the old chunk's id (which may happen if this
     // chunk's client is just created at the same address of the old chunk's
     // deleted client).
     return !client_is_just_created;
+  }
+
+  bool Matches(const Id& other_id) const {
+    return CanMatchOldChunk() && id == other_id;
   }
 
   bool EqualsForUnderInvalidationChecking(const PaintChunk& other) const;
@@ -109,6 +115,10 @@ struct PLATFORM_EXPORT PaintChunk {
     if (!layer_selection_data)
       layer_selection_data = std::make_unique<LayerSelectionData>();
     return *layer_selection_data;
+  }
+
+  bool DrawsContent() const {
+    return !effectively_invisible && !drawable_bounds.IsEmpty();
   }
 
   size_t MemoryUsageInBytes() const;
@@ -138,9 +148,10 @@ struct PLATFORM_EXPORT PaintChunk {
   Id id;
 
   // The paint properties which apply to this chunk.
-  RefCountedPropertyTreeState properties;
+  RefCountedPropertyTreeStateOrAlias properties;
 
   std::unique_ptr<HitTestData> hit_test_data;
+  std::unique_ptr<RegionCaptureData> region_capture_data;
   std::unique_ptr<LayerSelectionData> layer_selection_data;
 
   // The following fields depend on the display items in this chunk.
@@ -151,13 +162,13 @@ struct PLATFORM_EXPORT PaintChunk {
   // It's in the coordinate space of the containing transform node. This can be
   // larger than |drawble_bounds|, because of non-drawable display items and
   // extra bounds.
-  IntRect bounds;
+  gfx::Rect bounds;
 
   // The total bounds of visual rects of drawable display items in this paint
   // chunk.
-  IntRect drawable_bounds;
+  gfx::Rect drawable_bounds;
 
-  IntRect rect_known_to_be_opaque;
+  gfx::Rect rect_known_to_be_opaque;
 
   // Some raster effects can exceed |bounds| in the rasterization space. This
   // is the maximum DisplayItemClient::VisualRectOutsetForRasterEffects() of

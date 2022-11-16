@@ -19,7 +19,7 @@
 #include "base/callback_list.h"
 #include "base/files/file_path.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/supports_user_data.h"
@@ -27,12 +27,13 @@
 #include "chrome/browser/enterprise/connectors/common.h"
 #include "chrome/browser/safe_browsing/cloud_content_scanning/binary_upload_service.h"
 #include "chrome/browser/safe_browsing/download_protection/deep_scanning_request.h"
+#include "chrome/browser/safe_browsing/download_protection/download_protection_observer.h"
 #include "chrome/browser/safe_browsing/download_protection/download_protection_util.h"
-#include "chrome/browser/safe_browsing/download_protection/download_reporter.h"
 #include "chrome/browser/safe_browsing/services_delegate.h"
 #include "components/safe_browsing/content/browser/safe_browsing_navigation_observer_manager.h"
 #include "components/safe_browsing/content/browser/ui_manager.h"
 #include "components/safe_browsing/core/browser/db/database_manager.h"
+#include "components/safe_browsing/core/browser/safe_browsing_metrics_collector.h"
 #include "components/sessions/core/session_id.h"
 #include "url/gurl.h"
 
@@ -68,6 +69,10 @@ class DownloadProtectionService {
   // Creates a download service.  The service is initially disabled.  You need
   // to call SetEnabled() to start it.  |sb_service| owns this object.
   explicit DownloadProtectionService(SafeBrowsingService* sb_service);
+
+  DownloadProtectionService(const DownloadProtectionService&) = delete;
+  DownloadProtectionService& operator=(const DownloadProtectionService&) =
+      delete;
 
   virtual ~DownloadProtectionService();
 
@@ -111,8 +116,7 @@ class DownloadProtectionService {
 
   virtual void CheckPPAPIDownloadRequest(
       const GURL& requestor_url,
-      const GURL& initiating_frame_url,
-      content::WebContents* web_contents,
+      content::RenderFrameHost* initiating_frame,
       const base::FilePath& default_file_path,
       const std::vector<base::FilePath::StringType>& alternate_extensions,
       Profile* profile,
@@ -191,16 +195,29 @@ class DownloadProtectionService {
   void ReportDelayedBypassEvent(download::DownloadItem* download,
                                 download::DownloadDangerType danger_type);
 
-  // Uploads |item| to Safe Browsing for deep scanning, using the upload
-  // service attached to the profile |item| was downloaded in. This is
-  // non-blocking, and the result we be provided through |callback|. |source| is
-  // used to identify the reason for deep scanning. Only the scan types listed
-  // in |allowed_scans| will be performed. This must be called on the UI
+  // Uploads `item` to Safe Browsing for deep scanning, using the upload
+  // service attached to the profile `item` was downloaded in. This is
+  // non-blocking, and the result we be provided through `callback`. `trigger`
+  // is used to identify the reason for deep scanning, aka enterprise policy or
+  // APP. `download_check_result` indicates the previously known SB verdict to
+  // apply to the download should deep scanning fail. `analysis_settings`
+  // contains settings to apply throughout scanning (types of scans to do,
+  // whether to block/allow large files, etc). This must be called on the UI
   // thread.
   void UploadForDeepScanning(
       download::DownloadItem* item,
       CheckDownloadRepeatingCallback callback,
       DeepScanningRequest::DeepScanTrigger trigger,
+      DownloadCheckResult download_check_result,
+      enterprise_connectors::AnalysisSettings analysis_settings);
+
+  // Uploads a save package `item` for deep scanning. `save_package_file`
+  // contains a mapping of on-disk files part of that save package to their
+  // final paths.
+  void UploadSavePackageForDeepScanning(
+      download::DownloadItem* item,
+      base::flat_map<base::FilePath, base::FilePath> save_package_files,
+      CheckDownloadRepeatingCallback callback,
       enterprise_connectors::AnalysisSettings analysis_settings);
 
   // Returns all the currently active deep scanning requests.
@@ -208,6 +225,10 @@ class DownloadProtectionService {
 
   virtual scoped_refptr<network::SharedURLLoaderFactory> GetURLLoaderFactory(
       content::BrowserContext* browser_context);
+
+  // Removes all pending download requests that are associated with the
+  // `browser_context`.
+  void RemovePendingDownloadRequests(content::BrowserContext* browser_context);
 
  private:
   friend class PPAPIDownloadRequest;
@@ -239,12 +260,13 @@ class DownloadProtectionService {
     explicit DownloadPingToken(const std::string& token)
         : token_string_(token) {}
 
+    DownloadPingToken(const DownloadPingToken&) = delete;
+    DownloadPingToken& operator=(const DownloadPingToken&) = delete;
+
     std::string token_string() { return token_string_; }
 
    private:
     std::string token_string_;
-
-    DISALLOW_COPY_AND_ASSIGN(DownloadPingToken);
   };
 
   // Cancels all requests in |download_requests_|, and empties it, releasing
@@ -252,8 +274,11 @@ class DownloadProtectionService {
   void CancelPendingRequests();
 
   // Called by a CheckClientDownloadRequest instance when it finishes, to
-  // remove it from |download_requests_|.
-  void RequestFinished(CheckClientDownloadRequestBase* request);
+  // remove it from |download_requests_| and to report security sensitive
+  // events to safe_browsing_metrics_collector.
+  void RequestFinished(CheckClientDownloadRequestBase* request,
+                       content::BrowserContext* browser_context,
+                       DownloadCheckResult result);
 
   // Called by a DeepScanningRequest when it finishes, to remove it from
   // |deep_scanning_requests_|.
@@ -278,6 +303,8 @@ class DownloadProtectionService {
   void AddReferrerChainToPPAPIClientDownloadRequest(
       content::WebContents* web_contents,
       const GURL& initiating_frame_url,
+      const content::GlobalRenderFrameHostId&
+          initiating_outermost_main_frame_id,
       const GURL& initiating_main_frame_url,
       SessionID tab_id,
       bool has_user_gesture,
@@ -288,21 +315,32 @@ class DownloadProtectionService {
 
   // Get the BinaryUploadService for the given |profile|. Virtual so it can be
   // overridden in tests.
-  virtual BinaryUploadService* GetBinaryUploadService(Profile* profile);
+  virtual BinaryUploadService* GetBinaryUploadService(
+      Profile* profile,
+      const enterprise_connectors::AnalysisSettings& settings);
 
   // Get the SafeBrowsingNavigationObserverManager for the given |web_contents|.
   SafeBrowsingNavigationObserverManager* GetNavigationObserverManager(
       content::WebContents* web_contents);
 
-  SafeBrowsingService* sb_service_;
+  // Callback when deep scanning has finished, but we may want to do the
+  // metadata check anyway.
+  void MaybeCheckMetdataAfterDeepScanning(
+      download::DownloadItem* item,
+      CheckDownloadRepeatingCallback callback,
+      DownloadCheckResult result);
+
+  raw_ptr<SafeBrowsingService> sb_service_;
   // These pointers may be NULL if SafeBrowsing is disabled.
   scoped_refptr<SafeBrowsingUIManager> ui_manager_;
   scoped_refptr<SafeBrowsingDatabaseManager> database_manager_;
 
   // Set of pending server requests for DownloadManager mediated downloads.
-  base::flat_map<CheckClientDownloadRequestBase*,
-                 std::unique_ptr<CheckClientDownloadRequestBase>>
-      download_requests_;
+  base::flat_map<
+      content::BrowserContext*,
+      base::flat_map<CheckClientDownloadRequestBase*,
+                     std::unique_ptr<CheckClientDownloadRequestBase>>>
+      context_download_requests_;
 
   // Set of pending server requests for PPAPI mediated downloads.
   base::flat_map<PPAPIDownloadRequest*, std::unique_ptr<PPAPIDownloadRequest>>
@@ -342,12 +380,11 @@ class DownloadProtectionService {
   // Rate of allowlisted downloads we sample to send out download ping.
   double allowlist_sample_rate_;
 
-  // DownloadReporter to send real time reports for dangerous download events.
-  DownloadReporter download_reporter_;
+  // DownloadProtectionObserver to send real time reports for dangerous download
+  // events and handle special user actions on the download.
+  DownloadProtectionObserver download_protection_observer_;
 
   base::WeakPtrFactory<DownloadProtectionService> weak_ptr_factory_;
-
-  DISALLOW_COPY_AND_ASSIGN(DownloadProtectionService);
 };
 }  // namespace safe_browsing
 

@@ -5,9 +5,11 @@
 package org.chromium.chrome.browser.survey;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.verifyZeroInteractions;
 
 import android.app.Activity;
 import android.content.Context;
@@ -39,7 +41,8 @@ import org.robolectric.shadows.ShadowLooper;
 
 import org.chromium.base.CommandLine;
 import org.chromium.base.ContextUtils;
-import org.chromium.base.metrics.test.ShadowRecordHistogram;
+import org.chromium.base.metrics.RecordHistogram;
+import org.chromium.base.metrics.UmaRecorderHolder;
 import org.chromium.base.task.test.BackgroundShadowAsyncTask;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.CallbackHelper;
@@ -53,6 +56,7 @@ import org.chromium.chrome.browser.infobar.InfoBarContainer;
 import org.chromium.chrome.browser.infobar.SurveyInfoBar;
 import org.chromium.chrome.browser.infobar.SurveyInfoBarDelegate;
 import org.chromium.chrome.browser.lifecycle.ActivityLifecycleDispatcher;
+import org.chromium.chrome.browser.lifecycle.PauseResumeWithNativeObserver;
 import org.chromium.chrome.browser.preferences.ChromePreferenceKeys;
 import org.chromium.chrome.browser.preferences.SharedPreferencesManager;
 import org.chromium.chrome.browser.survey.ChromeSurveyController.InfoBarClosingState;
@@ -65,6 +69,7 @@ import org.chromium.components.messages.DismissReason;
 import org.chromium.components.messages.MessageBannerProperties;
 import org.chromium.components.messages.MessageDispatcher;
 import org.chromium.components.messages.MessageIdentifier;
+import org.chromium.components.messages.PrimaryActionClickBehavior;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.ui.modelutil.PropertyModel;
 
@@ -79,7 +84,7 @@ import java.util.concurrent.TimeUnit;
 // clang-format off
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE,
-        shadows = { BackgroundShadowAsyncTask.class, ShadowRecordHistogram.class,
+        shadows = { BackgroundShadowAsyncTask.class,
             ChromeSurveyControllerFlowTest.ShadowChromeFeatureList.class,
             ChromeSurveyControllerFlowTest.ShadowSurveyInfoBar.class,
             ChromeSurveyControllerFlowTest.ShadowInfoBarContainer.class
@@ -179,6 +184,7 @@ public class ChromeSurveyControllerFlowTest {
 
     private TabModelSelectorObserver mTabModelSelectorObserver;
     private TabObserver mTabObserver;
+    private PauseResumeWithNativeObserver mLifecycleObserver;
 
     @Before
     public void setup() {
@@ -207,10 +213,11 @@ public class ChromeSurveyControllerFlowTest {
     @After
     public void tearDown() {
         ChromeSurveyController.forceIsUMAEnabledForTesting(false);
+        ChromeSurveyController.resetMessageShownForTesting();
         ShadowChromeFeatureList.sParamValues.clear();
         ShadowChromeFeatureList.sEnableSurvey = false;
         ShadowChromeFeatureList.sEnableMessages = false;
-        ShadowRecordHistogram.reset();
+        UmaRecorderHolder.resetForTesting();
 
         CommandLine.getInstance().removeSwitch(ChromeSurveyController.COMMAND_LINE_PARAM_NAME);
     }
@@ -271,7 +278,7 @@ public class ChromeSurveyControllerFlowTest {
     public void testStartDownloadIfEligibleTask_UmaDisabled() {
         ChromeSurveyController.forceIsUMAEnabledForTesting(false);
         mSharedPreferencesManager.writeBoolean(
-                ChromePreferenceKeys.PRIVACY_METRICS_REPORTING, false);
+                ChromePreferenceKeys.PRIVACY_METRICS_REPORTING_PERMITTED_BY_USER, false);
 
         initializeChromeSurveyController();
         assertDownloadAttempted(false);
@@ -281,7 +288,7 @@ public class ChromeSurveyControllerFlowTest {
     public void testStartDownloadIfEligibleTask_UmaEnabled() {
         ChromeSurveyController.forceIsUMAEnabledForTesting(false);
         mSharedPreferencesManager.writeBoolean(
-                ChromePreferenceKeys.PRIVACY_METRICS_REPORTING, true);
+                ChromePreferenceKeys.PRIVACY_METRICS_REPORTING_PERMITTED_BY_USER, true);
 
         assertDownloadAttempted(false);
         initializeChromeSurveyController();
@@ -568,9 +575,52 @@ public class ChromeSurveyControllerFlowTest {
         Assert.assertNotNull("Message dismissal action is null.",
                 messageModel.get(MessageBannerProperties.ON_DISMISSED));
 
-        messageModel.get(MessageBannerProperties.ON_PRIMARY_ACTION).run();
+        Assert.assertEquals("Message ON_PRIMARY_ACTION should return DISMISS_IMMEDIATELY.",
+                PrimaryActionClickBehavior.DISMISS_IMMEDIATELY,
+                messageModel.get(MessageBannerProperties.ON_PRIMARY_ACTION).get().intValue());
         Assert.assertEquals("showSurvey should be called.", 1,
                 mTestSurveyController.showSurveyIfAvailableCallback.getCallCount());
+    }
+
+    @Test
+    public void testMessages_NotShownOnExpiredSurvey() {
+        ShadowChromeFeatureList.sEnableMessages = true;
+        setupTabMocks();
+        initializeChromeSurveyController();
+        assertCallbackAssignedInSurveyController();
+        mockTabReady();
+        // Simulate an expired survey.
+        mTestSurveyController.isSurveyExpired = true;
+        mTestSurveyController.onDownloadSuccessRunnable.run();
+        verifyZeroInteractions(mMessageDispatcher);
+        Assert.assertEquals("showSurvey should not be called.", 0,
+                mTestSurveyController.showSurveyIfAvailableCallback.getCallCount());
+    }
+
+    @Test
+    public void testMessages_EnqueuedMessageDismissedOnExpiredSurvey() throws Exception {
+        presentMessages();
+
+        // Simulate survey expiration after the message is enqueued.
+        mTestSurveyController.isSurveyExpired = true;
+
+        PropertyModel messageModel = mMessagePropertyCaptor.getValue();
+        boolean shouldShow =
+                messageModel.get(MessageBannerProperties.ON_STARTED_SHOWING).getAsBoolean();
+        Assert.assertFalse(
+                "The enqueued message should not be shown if the survey has expired.", shouldShow);
+        verify(mMessageDispatcher).dismissMessage(messageModel, DismissReason.DISMISSED_BY_FEATURE);
+    }
+
+    @Test
+    public void testMessages_MessageShownOnce() {
+        presentMessages();
+        Assert.assertTrue("Message should be shown.", ChromeSurveyController.isMessageShown());
+        verify(mMessageDispatcher).enqueueWindowScopedMessage(any(), anyBoolean());
+
+        // Simulate survey download that triggers invocation of #showSurveyPrompt.
+        mTestSurveyController.onDownloadSuccessRunnable.run();
+        verifyNoMoreInteractions(mMessageDispatcher);
     }
 
     @Test
@@ -636,6 +686,24 @@ public class ChromeSurveyControllerFlowTest {
         assertInfoBarClosingStateRecorded(InfoBarClosingState.UNKNOWN);
     }
 
+    @Test
+    public void testMessages_Dismiss_OnResumeActivity() {
+        presentMessages();
+        PropertyModel messageModel = mMessagePropertyCaptor.getValue();
+
+        // Simulate survey expiration.
+        mTestSurveyController.isSurveyExpired = true;
+        mLifecycleObserver.onResumeWithNative();
+        verify(mMessageDispatcher).dismissMessage(messageModel, DismissReason.DISMISSED_BY_FEATURE);
+
+        // Simulate the invocation of the message dismissal callback.
+        messageModel.get(MessageBannerProperties.ON_DISMISSED)
+                .onResult(DismissReason.DISMISSED_BY_FEATURE);
+        Assert.assertFalse("SharedPreference for InfoBarShown should not be recorded.",
+                SharedPreferencesManager.getInstance().contains(mPrefKeyPromptShown));
+        assertInfoBarClosingStateRecorded(InfoBarClosingState.UNKNOWN);
+    }
+
     private void initializeChromeSurveyController() {
         ChromeSurveyController.initialize(
                 mMockModelSelector, mMockLifecycleDispatcher, mActivity, mMessageDispatcher);
@@ -663,12 +731,19 @@ public class ChromeSurveyControllerFlowTest {
         setupTabMocks();
         initializeChromeSurveyController();
         assertCallbackAssignedInSurveyController();
+        Mockito.doAnswer(invocation -> {
+                   mLifecycleObserver = invocation.getArgument(0);
+                   return null;
+               })
+                .when(mMockLifecycleDispatcher)
+                .register(any());
 
         // Verify the survey should be attempted to present on a valid tab.
         mockTabReady();
         mTestSurveyController.onDownloadSuccessRunnable.run();
         assertSurveyMessagesEnqueued();
         Assert.assertNotNull("mTabObserver is null.", mTabObserver);
+        Assert.assertNotNull("mLifecycleObserver is null.", mLifecycleObserver);
     }
 
     private void mockTabReady() {
@@ -720,7 +795,7 @@ public class ChromeSurveyControllerFlowTest {
     }
 
     private void assertInfoBarClosingStateRecorded(@InfoBarClosingState int state) {
-        int count = ShadowRecordHistogram.getHistogramValueCountForTesting(
+        int count = RecordHistogram.getHistogramValueCountForTesting(
                 "Android.Survey.InfoBarClosingState", state);
         Assert.assertEquals(
                 String.format("InfoBarClosingState for state <%d> is not recorded.", state), 1,
@@ -730,6 +805,9 @@ public class ChromeSurveyControllerFlowTest {
     private void assertInfoBarDisplayedRecorded() {
         if (mTabObserver != null) {
             verify(mMockTab).removeObserver(mTabObserver);
+        }
+        if (mLifecycleObserver != null) {
+            verify(mMockLifecycleDispatcher).unregister(mLifecycleObserver);
         }
         Assert.assertTrue("SharedPreference for InfoBarShown is not recorded.",
                 SharedPreferencesManager.getInstance().contains(mPrefKeyPromptShown));
@@ -753,13 +831,14 @@ public class ChromeSurveyControllerFlowTest {
                                             + "with sample <%d> is not recorded.",
                                     sample),
                 1,
-                ShadowRecordHistogram.getHistogramValueCountForTesting(
+                RecordHistogram.getHistogramValueCountForTesting(
                         "Android.Survey.DownloadAttemptsBeforeAccepted", sample));
     }
 
     private static class TestSurveyController extends SurveyController {
         public final CallbackHelper downloadIfApplicableCallback = new CallbackHelper();
         public final CallbackHelper showSurveyIfAvailableCallback = new CallbackHelper();
+        public boolean isSurveyExpired;
 
         @Nullable
         public Runnable onDownloadSuccessRunnable;
@@ -780,6 +859,11 @@ public class ChromeSurveyControllerFlowTest {
                 boolean showAsBottomSheet, int displayLogoResId,
                 @Nullable ActivityLifecycleDispatcher lifecycleDispatcher) {
             showSurveyIfAvailableCallback.notifyCalled();
+        }
+
+        @Override
+        public boolean isSurveyExpired(String triggerId) {
+            return isSurveyExpired;
         }
     }
 }

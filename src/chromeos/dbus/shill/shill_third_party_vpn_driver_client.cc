@@ -12,7 +12,6 @@
 
 #include "base/bind.h"
 #include "base/callback_helpers.h"
-#include "base/cxx17_backports.h"
 #include "base/logging.h"
 #include "base/values.h"
 #include "chromeos/dbus/shill/fake_shill_third_party_vpn_driver_client.h"
@@ -44,6 +43,12 @@ class ShillThirdPartyVpnDriverClientImpl
     : public ShillThirdPartyVpnDriverClient {
  public:
   explicit ShillThirdPartyVpnDriverClientImpl(dbus::Bus* bus);
+
+  ShillThirdPartyVpnDriverClientImpl(
+      const ShillThirdPartyVpnDriverClientImpl&) = delete;
+  ShillThirdPartyVpnDriverClientImpl& operator=(
+      const ShillThirdPartyVpnDriverClientImpl&) = delete;
+
   ~ShillThirdPartyVpnDriverClientImpl() override;
 
   // ShillThirdPartyVpnDriverClient overrides
@@ -121,8 +126,6 @@ class ShillThirdPartyVpnDriverClientImpl
   dbus::Bus* bus_;
   HelperMap helpers_;
   std::set<std::string> valid_keys_;
-
-  DISALLOW_COPY_AND_ASSIGN(ShillThirdPartyVpnDriverClientImpl);
 };
 
 ShillThirdPartyVpnDriverClientImpl::HelperInfo::HelperInfo(
@@ -132,7 +135,7 @@ ShillThirdPartyVpnDriverClientImpl::HelperInfo::HelperInfo(
 ShillThirdPartyVpnDriverClientImpl::ShillThirdPartyVpnDriverClientImpl(
     dbus::Bus* bus)
     : bus_(bus) {
-  for (uint32_t i = 0; i < base::size(kSetParametersKeyList); ++i) {
+  for (uint32_t i = 0; i < std::size(kSetParametersKeyList); ++i) {
     valid_keys_.insert(kSetParametersKeyList[i]);
   }
 }

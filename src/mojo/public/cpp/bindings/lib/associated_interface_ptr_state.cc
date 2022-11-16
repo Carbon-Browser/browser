@@ -59,7 +59,9 @@ void AssociatedInterfacePtrStateBase::Bind(
     uint32_t version,
     std::unique_ptr<MessageReceiver> validator,
     scoped_refptr<base::SequencedTaskRunner> runner,
-    const char* interface_name) {
+    const char* interface_name,
+    MessageToMethodInfoCallback method_info_callback,
+    MessageToMethodNameCallback method_name_callback) {
   DCHECK(!endpoint_client_);
   DCHECK_EQ(0u, version_);
   DCHECK(handle.is_valid());
@@ -70,7 +72,7 @@ void AssociatedInterfacePtrStateBase::Bind(
   endpoint_client_ = std::make_unique<InterfaceEndpointClient>(
       std::move(handle), nullptr, std::move(validator), false,
       GetTaskRunnerToUseFromUserProvidedTaskRunner(std::move(runner)), 0u,
-      interface_name);
+      interface_name, method_info_callback, method_name_callback);
 }
 
 ScopedInterfaceEndpointHandle AssociatedInterfacePtrStateBase::PassHandle() {

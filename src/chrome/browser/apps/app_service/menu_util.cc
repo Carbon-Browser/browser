@@ -10,6 +10,7 @@
 #include "base/check.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
+#include "build/chromeos_buildflags.h"
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
 #include "chrome/browser/prefs/incognito_mode_prefs.h"
@@ -19,6 +20,7 @@
 #include "content/public/common/content_features.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/models/image_model.h"
+#include "ui/color/color_id.h"
 #include "ui/gfx/image/image_skia.h"
 #include "ui/gfx/vector_icon_types.h"
 
@@ -81,32 +83,23 @@ void AddShortcutCommandItem(int command_id,
   (*menu_items)->items.push_back(std::move(menu_item));
 }
 
-void CreateOpenNewSubmenu(apps::mojom::MenuType menu_type,
-                          uint32_t string_id,
+void CreateOpenNewSubmenu(uint32_t string_id,
                           apps::mojom::MenuItemsPtr* menu_items) {
   apps::mojom::MenuItemPtr menu_item = apps::mojom::MenuItem::New();
   menu_item->type = apps::mojom::MenuItemType::kSubmenu;
-  menu_item->command_id = (menu_type == apps::mojom::MenuType::kAppList)
-                              ? ash::LAUNCH_NEW
-                              : ash::MENU_OPEN_NEW;
+  menu_item->command_id = ash::LAUNCH_NEW;
   menu_item->string_id = string_id;
 
   menu_item->submenu.push_back(
-      CreateRadioItem((menu_type == apps::mojom::MenuType::kAppList)
-                          ? ash::USE_LAUNCH_TYPE_REGULAR
-                          : ash::LAUNCH_TYPE_REGULAR_TAB,
+      CreateRadioItem(ash::USE_LAUNCH_TYPE_REGULAR,
                       IDS_APP_LIST_CONTEXT_MENU_NEW_TAB, kGroupId));
   menu_item->submenu.push_back(
-      CreateRadioItem((menu_type == apps::mojom::MenuType::kAppList)
-                          ? ash::USE_LAUNCH_TYPE_WINDOW
-                          : ash::LAUNCH_TYPE_WINDOW,
+      CreateRadioItem(ash::USE_LAUNCH_TYPE_WINDOW,
                       IDS_APP_LIST_CONTEXT_MENU_NEW_WINDOW, kGroupId));
   if (base::FeatureList::IsEnabled(features::kDesktopPWAsTabStrip) &&
       base::FeatureList::IsEnabled(features::kDesktopPWAsTabStripSettings)) {
     menu_item->submenu.push_back(
-        CreateRadioItem((menu_type == apps::mojom::MenuType::kAppList)
-                            ? ash::USE_LAUNCH_TYPE_TABBED_WINDOW
-                            : ash::LAUNCH_TYPE_TABBED_WINDOW,
+        CreateRadioItem(ash::USE_LAUNCH_TYPE_TABBED_WINDOW,
                         IDS_APP_LIST_CONTEXT_MENU_NEW_TABBED_WINDOW, kGroupId));
   }
 
@@ -160,18 +153,17 @@ bool PopulateNewItemFromMojoMenuItems(
   }
 
   auto& item = menu_items[0];
-  if (item->command_id != ash::LAUNCH_NEW &&
-      item->command_id != ash::MENU_OPEN_NEW) {
+  if (item->command_id != ash::LAUNCH_NEW)
     return false;
-  }
 
+  const ui::ColorId color_id = GetColorIdForMenuItemIcon();
   switch (item->type) {
     case apps::mojom::MenuItemType::kCommand: {
       const gfx::VectorIcon& icon =
           std::move(get_vector_icon).Run(item->command_id, item->string_id);
       model->AddItemWithStringIdAndIcon(
           item->command_id, item->string_id,
-          ui::ImageModel::FromVectorIcon(icon, /*color_id=*/-1,
+          ui::ImageModel::FromVectorIcon(icon, color_id,
                                          ash::kAppContextMenuIconSize));
       break;
     }
@@ -182,7 +174,7 @@ bool PopulateNewItemFromMojoMenuItems(
             std::move(get_vector_icon).Run(item->command_id, item->string_id);
         model->AddActionableSubmenuWithStringIdAndIcon(
             item->command_id, item->string_id, submenu,
-            ui::ImageModel::FromVectorIcon(icon, /*color_id=*/-1,
+            ui::ImageModel::FromVectorIcon(icon, color_id,
                                            ash::kAppContextMenuIconSize));
       }
       break;
@@ -228,34 +220,29 @@ base::StringPiece MenuTypeToString(apps::mojom::MenuType menu_type) {
 }
 
 apps::mojom::MenuType MenuTypeFromString(base::StringPiece menu_type) {
-  if (base::LowerCaseEqualsASCII(menu_type, "shelf"))
+  if (base::EqualsCaseInsensitiveASCII(menu_type, "shelf"))
     return apps::mojom::MenuType::kShelf;
-  if (base::LowerCaseEqualsASCII(menu_type, "applist"))
+  if (base::EqualsCaseInsensitiveASCII(menu_type, "applist"))
     return apps::mojom::MenuType::kAppList;
   return apps::mojom::MenuType::kShelf;
 }
 
-mojom::MenuItemsPtr CreateBrowserMenuItems(mojom::MenuType menu_type,
-                                           const Profile* profile) {
+mojom::MenuItemsPtr CreateBrowserMenuItems(const Profile* profile) {
   DCHECK(profile);
   mojom::MenuItemsPtr menu_items = mojom::MenuItems::New();
 
   // "Normal" windows are not allowed when incognito is enforced.
   if (IncognitoModePrefs::GetAvailability(profile->GetPrefs()) !=
-      IncognitoModePrefs::FORCED) {
-    AddCommandItem((menu_type == mojom::MenuType::kAppList)
-                       ? ash::APP_CONTEXT_MENU_NEW_WINDOW
-                       : ash::MENU_NEW_WINDOW,
-                   IDS_APP_LIST_NEW_WINDOW, &menu_items);
+      IncognitoModePrefs::Availability::kForced) {
+    AddCommandItem(ash::APP_CONTEXT_MENU_NEW_WINDOW, IDS_APP_LIST_NEW_WINDOW,
+                   &menu_items);
   }
 
   // Incognito windows are not allowed when incognito is disabled.
   if (!profile->IsOffTheRecord() &&
       IncognitoModePrefs::GetAvailability(profile->GetPrefs()) !=
-          IncognitoModePrefs::DISABLED) {
-    AddCommandItem((menu_type == mojom::MenuType::kAppList)
-                       ? ash::APP_CONTEXT_MENU_NEW_INCOGNITO_WINDOW
-                       : ash::MENU_NEW_INCOGNITO_WINDOW,
+          IncognitoModePrefs::Availability::kDisabled) {
+    AddCommandItem(ash::APP_CONTEXT_MENU_NEW_INCOGNITO_WINDOW,
                    IDS_APP_LIST_NEW_INCOGNITO_WINDOW, &menu_items);
   }
 
@@ -263,6 +250,14 @@ mojom::MenuItemsPtr CreateBrowserMenuItems(mojom::MenuType menu_type,
                  &menu_items);
 
   return menu_items;
+}
+
+ui::ColorId GetColorIdForMenuItemIcon() {
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  return ui::kColorAshSystemUIMenuIcon;
+#else
+  return ui::kColorMenuIcon;
+#endif
 }
 
 }  // namespace apps

@@ -11,7 +11,6 @@
 
 #include "base/bind.h"
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "build/build_config.h"
 #include "mojo/core/test/multiprocess_test_helper.h"
@@ -31,6 +30,10 @@ class MojoTestBase : public testing::Test {
   static constexpr size_t kMaxMessageSizeInTests = 32 * 1024 * 1024;
 
   MojoTestBase();
+
+  MojoTestBase(const MojoTestBase&) = delete;
+  MojoTestBase& operator=(const MojoTestBase&) = delete;
+
   ~MojoTestBase() override;
 
   using LaunchType = MultiprocessTestHelper::LaunchType;
@@ -40,6 +43,10 @@ class MojoTestBase : public testing::Test {
     ClientController(const std::string& client_name,
                      MojoTestBase* test,
                      LaunchType launch_type);
+
+    ClientController(const ClientController&) = delete;
+    ClientController& operator=(const ClientController&) = delete;
+
     ~ClientController();
 
     MojoHandle pipe() const { return pipe_.get().value(); }
@@ -49,13 +56,11 @@ class MojoTestBase : public testing::Test {
    private:
     friend class MojoTestBase;
 
-#if !defined(OS_IOS)
+#if !BUILDFLAG(IS_IOS)
     MultiprocessTestHelper helper_;
 #endif
     ScopedMessagePipeHandle pipe_;
     bool was_shutdown_ = false;
-
-    DISALLOW_COPY_AND_ASSIGN(ClientController);
   };
 
   ClientController& StartClient(const std::string& client_name);
@@ -170,8 +175,6 @@ class MojoTestBase : public testing::Test {
   std::vector<std::unique_ptr<ClientController>> clients_;
 
   LaunchType launch_type_ = LaunchType::CHILD;
-
-  DISALLOW_COPY_AND_ASSIGN(MojoTestBase);
 };
 
 // Use this to declare the child process's "main()" function for tests using
@@ -186,7 +189,7 @@ class MojoTestBase : public testing::Test {
 // |pipe_name| will be bound to the MojoHandle of a message pipe connected
 // to the test process (see RunTestClient* above.) This pipe handle is
 // automatically closed on test client teardown.
-#if !defined(OS_IOS)
+#if !BUILDFLAG(IS_IOS)
 #define DEFINE_TEST_CLIENT_WITH_PIPE(client_name, test_base, pipe_name) \
   class client_name##_MainFixture : public test_base {                  \
     void TestBody() override {}                                         \
@@ -222,10 +225,10 @@ class MojoTestBase : public testing::Test {
                        base::Unretained(&test)));                            \
   }                                                                          \
   void client_name##_MainFixture::Main(MojoHandle pipe_name)
-#else  // !defined(OS_IOS)
+#else  // !BUILDFLAG(IS_IOS)
 #define DEFINE_TEST_CLIENT_WITH_PIPE(client_name, test_base, pipe_name)
 #define DEFINE_TEST_CLIENT_TEST_WITH_PIPE(client_name, test_base, pipe_name)
-#endif  // !defined(OS_IOS)
+#endif  // !BUILDFLAG(IS_IOS)
 
 }  // namespace test
 }  // namespace core

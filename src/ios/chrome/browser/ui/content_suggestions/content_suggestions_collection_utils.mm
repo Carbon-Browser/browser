@@ -6,12 +6,13 @@
 
 #include "base/i18n/rtl.h"
 #include "components/strings/grit/components_strings.h"
-#import "ios/chrome/browser/ui/content_suggestions/cells/content_suggestions_most_visited_cell.h"
 #import "ios/chrome/browser/ui/content_suggestions/ntp_home_constant.h"
+#import "ios/chrome/browser/ui/icons/chrome_symbol.h"
 #import "ios/chrome/browser/ui/location_bar/location_bar_constants.h"
 #import "ios/chrome/browser/ui/ntp/new_tab_page_header_constants.h"
 #import "ios/chrome/browser/ui/start_surface/start_surface_features.h"
 #import "ios/chrome/browser/ui/toolbar/public/toolbar_utils.h"
+#include "ios/chrome/browser/ui/ui_feature_flags.h"
 #import "ios/chrome/browser/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/util/pointer_interaction_util.h"
@@ -37,7 +38,7 @@ const CGFloat kDoodleTopMarginRegularXRegular = 162;
 const CGFloat kDoodleTopMarginOther = 48;
 const CGFloat kShrunkDoodleTopMarginOther = 65;
 // Size of the doodle top margin which is multiplied by the scaled font factor,
-// and added to |kDoodleTopMarginOther| on non Regular x Regular form factors.
+// and added to `kDoodleTopMarginOther` on non Regular x Regular form factors.
 const CGFloat kDoodleScaledTopMarginOther = 10;
 
 // Top margin for the search field
@@ -61,8 +62,8 @@ const CGFloat kGoogleSearchDoodleShrunkHeight = 68;
 // TODO(crbug.com/1170491): clean up post-launch.
 const CGFloat kGoogleSearchLogoShrunkHeight = 36;
 
-// Height for the doodle frame when Google is not the default search engine.
-const CGFloat kNonGoogleSearchDoodleHeight = 60;
+// The size of the symbol image.
+const CGFloat kSymbolContentSuggestionsPointSize = 18;
 }
 
 namespace content_suggestions {
@@ -74,8 +75,9 @@ const CGFloat kReturnToRecentTabSectionBottomMargin = 25;
 CGFloat doodleHeight(BOOL logoIsShowing,
                      BOOL doodleIsShowing,
                      UITraitCollection* traitCollection) {
+  // For users with non-Google default search engine, there is no doodle.
   if (!IsRegularXRegularSizeClass(traitCollection) && !logoIsShowing) {
-    return kNonGoogleSearchDoodleHeight;
+    return 0;
   }
 
   if (ShouldShrinkLogoForStartSurface() && logoIsShowing) {
@@ -131,16 +133,13 @@ CGFloat heightForLogoHeader(BOOL logoIsShowing,
                             BOOL toolbarPresent,
                             CGFloat topInset,
                             UITraitCollection* traitCollection) {
-  CGFloat bottomPadding = ShouldShowReturnToMostRecentTabForStartSurface()
-                              ? kNTPShrunkLogoSearchFieldBottomPadding
-                              : kNTPSearchFieldBottomPadding;
   CGFloat headerHeight =
       doodleTopMargin(toolbarPresent, topInset, traitCollection) +
       doodleHeight(logoIsShowing, doodleIsShowing, traitCollection) +
       searchFieldTopMargin() +
       ToolbarExpandedHeight(
           [UIApplication sharedApplication].preferredContentSizeCategory) +
-      bottomPadding;
+      headerBottomPadding();
   if (!IsRegularXRegularSizeClass(traitCollection)) {
     return headerHeight;
   }
@@ -155,6 +154,12 @@ CGFloat heightForLogoHeader(BOOL logoIsShowing,
   }
 
   return headerHeight;
+}
+
+CGFloat headerBottomPadding() {
+  return ShouldShowReturnToMostRecentTabForStartSurface()
+             ? kNTPShrunkLogoSearchFieldBottomPadding
+             : kNTPSearchFieldBottomPadding;
 }
 
 void configureSearchHintLabel(UILabel* searchHintLabel,
@@ -178,20 +183,23 @@ void configureVoiceSearchButton(UIButton* voiceSearchButton,
 
   [voiceSearchButton setAdjustsImageWhenHighlighted:NO];
 
-  UIImage* micImage = [[UIImage imageNamed:@"location_bar_voice"]
-      imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+  UIImage* micImage = UseSymbols() ? DefaultSymbolWithPointSize(
+                                         kMicrophoneFillSymbol,
+                                         kSymbolContentSuggestionsPointSize)
+                                   : [UIImage imageNamed:@"location_bar_voice"];
+  micImage =
+      [micImage imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+
   [voiceSearchButton setImage:micImage forState:UIControlStateNormal];
   voiceSearchButton.tintColor = [UIColor colorNamed:kGrey500Color];
   [voiceSearchButton setAccessibilityLabel:l10n_util::GetNSString(
                                                IDS_IOS_ACCNAME_VOICE_SEARCH)];
   [voiceSearchButton setAccessibilityIdentifier:@"Voice Search"];
 
-  if (@available(iOS 13.4, *)) {
-      voiceSearchButton.pointerInteractionEnabled = YES;
-      // Make the pointer shape fit the location bar's semi-circle end shape.
-      voiceSearchButton.pointerStyleProvider =
-          CreateLiftEffectCirclePointerStyleProvider();
-  }
+  voiceSearchButton.pointerInteractionEnabled = YES;
+  // Make the pointer shape fit the location bar's semi-circle end shape.
+  voiceSearchButton.pointerStyleProvider =
+      CreateLiftEffectCirclePointerStyleProvider();
 }
 
 UIView* nearestAncestor(UIView* view, Class aClass) {

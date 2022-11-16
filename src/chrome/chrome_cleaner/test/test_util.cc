@@ -12,6 +12,7 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <tuple>
 #include <utility>
 
 #include "base/base_paths.h"
@@ -121,7 +122,7 @@ int RunChromeCleanerTestSuite(int argc,
   // IS_INTERNAL_CHROME_CLEANER_BUILD is only set on the Chrome Cleaner
   // builders, not the chromium builders, so this will not slow down the
   // general commit queue.
-  constexpr base::TimeDelta kInternalTimeout = base::TimeDelta::FromMinutes(10);
+  constexpr base::TimeDelta kInternalTimeout = base::Minutes(10);
   base::CommandLine::ForCurrentProcess()->AppendSwitchASCII(
       switches::kTestLauncherTimeout,
       base::NumberToString(kInternalTimeout.InMilliseconds()));
@@ -365,7 +366,7 @@ ScopedTempDirNoWow64::~ScopedTempDirNoWow64() {
   // Since the temp dir was created with Wow64 disabled, it must be deleted
   // with Wow64 disabled.
   ScopedDisableWow64Redirection disable_wow64_redirection;
-  ANALYZER_ALLOW_UNUSED(Delete());
+  std::ignore = Delete();
 
   // The parent's destructor will call Delete again, without disabling Wow64,
   // which could delete a directory with the same name in SysWOW64. So make

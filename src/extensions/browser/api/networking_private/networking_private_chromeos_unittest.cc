@@ -8,20 +8,19 @@
 #include "base/bind.h"
 #include "base/callback.h"
 #include "base/json/json_string_value_serializer.h"
-#include "base/macros.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
+#include "chromeos/ash/components/network/managed_network_configuration_handler.h"
+#include "chromeos/ash/components/network/network_configuration_handler.h"
+#include "chromeos/ash/components/network/network_handler.h"
+#include "chromeos/ash/components/network/network_handler_test_helper.h"
+#include "chromeos/ash/components/network/network_state.h"
+#include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/dbus/shill/shill_device_client.h"
 #include "chromeos/dbus/shill/shill_profile_client.h"
 #include "chromeos/dbus/shill/shill_service_client.h"
 #include "chromeos/login/login_state/login_state.h"
-#include "chromeos/network/managed_network_configuration_handler.h"
-#include "chromeos/network/network_configuration_handler.h"
-#include "chromeos/network/network_handler.h"
-#include "chromeos/network/network_handler_test_helper.h"
-#include "chromeos/network/network_state.h"
-#include "chromeos/network/network_state_handler.h"
 #include "components/onc/onc_constants.h"
 #include "extensions/browser/api/networking_private/networking_private_api.h"
 #include "extensions/browser/api_unittest.h"
@@ -61,6 +60,10 @@ const char kCellularName[] = "cellular";
 class NetworkingPrivateApiTest : public ApiUnitTest {
  public:
   NetworkingPrivateApiTest() {}
+
+  NetworkingPrivateApiTest(const NetworkingPrivateApiTest&) = delete;
+  NetworkingPrivateApiTest& operator=(const NetworkingPrivateApiTest&) = delete;
+
   ~NetworkingPrivateApiTest() override {}
 
   void SetUp() override {
@@ -69,7 +72,7 @@ class NetworkingPrivateApiTest : public ApiUnitTest {
     chromeos::LoginState::Initialize();
     chromeos::LoginState::Get()->SetLoggedInStateAndPrimaryUser(
         chromeos::LoginState::LOGGED_IN_ACTIVE,
-        chromeos::LoginState::LOGGED_IN_USER_KIOSK_APP, kUserHash);
+        chromeos::LoginState::LOGGED_IN_USER_KIOSK, kUserHash);
     base::RunLoop().RunUntilIdle();
 
     device_test()->ClearDevices();
@@ -229,6 +232,9 @@ class NetworkingPrivateApiTest : public ApiUnitTest {
     service_test()->AddService(kCellularServicePath, kCellularGuid,
                                kCellularName, shill::kTypeCellular,
                                shill::kStateOnline, true /* visible */);
+    service_test()->SetServiceProperty(kCellularServicePath,
+                                       shill::kCellularAllowRoamingProperty,
+                                       base::Value(false));
     service_test()->SetServiceProperty(
         kCellularServicePath, shill::kAutoConnectProperty, base::Value(true));
     service_test()->SetServiceProperty(
@@ -353,8 +359,6 @@ class NetworkingPrivateApiTest : public ApiUnitTest {
 
  private:
   chromeos::NetworkHandlerTestHelper network_handler_test_helper_;
-
-  DISALLOW_COPY_AND_ASSIGN(NetworkingPrivateApiTest);
 };
 
 TEST_F(NetworkingPrivateApiTest, SetSharedNetworkProperties) {

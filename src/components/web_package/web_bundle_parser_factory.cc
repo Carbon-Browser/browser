@@ -22,6 +22,9 @@ class FileDataSource final : public mojom::BundleDataSource {
         &base::DeletePointer<FileDataSource>, base::Unretained(this)));
   }
 
+  FileDataSource(const FileDataSource&) = delete;
+  FileDataSource& operator=(const FileDataSource&) = delete;
+
  private:
   // Implements mojom::BundleDataSource.
   void Read(uint64_t offset, uint64_t length, ReadCallback callback) override {
@@ -35,10 +38,17 @@ class FileDataSource final : public mojom::BundleDataSource {
     }
   }
 
+  void Length(LengthCallback callback) override {
+    const int64_t length = file_.GetLength();
+    std::move(callback).Run(length);
+  }
+
+  void IsRandomAccessContext(IsRandomAccessContextCallback callback) override {
+    std::move(callback).Run(true);
+  }
+
   mojo::Receiver<mojom::BundleDataSource> receiver_;
   base::File file_;
-
-  DISALLOW_COPY_AND_ASSIGN(FileDataSource);
 };
 
 }  // namespace
@@ -69,8 +79,11 @@ void WebBundleParserFactory::GetParserForFile(
 void WebBundleParserFactory::GetParserForDataSource(
     mojo::PendingReceiver<mojom::WebBundleParser> receiver,
     mojo::PendingRemote<mojom::BundleDataSource> data_source) {
+  // TODO(crbug.com/1247939): WebBundleParserFactory doesn't support |base_url|.
+  // For features::kWebBundlesFromNetwork should support |base_url|.
   auto parser = std::make_unique<WebBundleParser>(std::move(receiver),
-                                                  std::move(data_source));
+                                                  std::move(data_source),
+                                                  /*base_url=*/GURL());
 
   // |parser| will be destructed on remote mojo ends' disconnection.
   parser.release();

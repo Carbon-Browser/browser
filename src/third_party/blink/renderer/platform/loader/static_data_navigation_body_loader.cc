@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/loader/static_data_navigation_body_loader.h"
+#include "third_party/blink/public/mojom/loader/code_cache.mojom.h"
 
 namespace blink {
 
@@ -40,11 +41,22 @@ void StaticDataNavigationBodyLoader::SetDefersLoading(LoaderFreezeMode mode) {
 
 void StaticDataNavigationBodyLoader::StartLoadingBody(
     WebNavigationBodyLoader::Client* client,
-    blink::mojom::CodeCacheHost* code_cache_host) {
+    CodeCacheHost* code_cache_host) {
   DCHECK(!is_in_continue_);
   client_ = client;
+
+  if (client_) {
+    auto weak_self = weak_factory_.GetWeakPtr();
+    client_->BodyCodeCacheReceived(mojo_base::BigBuffer());
+    if (!weak_self)
+      return;
+  }
+
   Continue();
 }
+
+void StaticDataNavigationBodyLoader::StartLoadingCodeCache(
+    CodeCacheHost* code_cache_host) {}
 
 void StaticDataNavigationBodyLoader::Continue() {
   if (freeze_mode_ != LoaderFreezeMode::kNone || !client_ || is_in_continue_)

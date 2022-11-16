@@ -19,12 +19,8 @@ GEN_INCLUDE(['../../switch_access_e2e_test_base.js', '../../test_utility.js']);
 /** Test fixture for the SAATLite generated tests. */
 SwitchAccessSAATLiteTest = class extends SwitchAccessE2ETest {
   /** @override */
-  setUp() {
-    const runTest = this.deferRunTest(WhenTestDone.EXPECT);
-    (async () => {
+  async setUpDeferred() {
       await TestUtility.setup();
-      runTest();
-    })();
   }
 };
 
@@ -52,7 +48,7 @@ stream.on('open', () => {
 
   // Read all the files in the tests/ directory.
   const filenames = fs.readdirSync(testDir);
-  filenames.forEach((filename) => {
+  filenames.forEach(filename => {
     console.log('Compiling file: ', filename);
     const contents = fs.readFileSync(testDir + filename, {encoding: 'utf8'});
     stream.write(parse(contents).output + '\n');

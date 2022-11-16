@@ -59,11 +59,14 @@ static_library("renderer") {
 static_library("test_support") {
   testonly = true
   sources = [
+    "autofill_agent_test_api.h",
     "focus_test_utils.cc",
     "focus_test_utils.h",
     "form_cache_test_api.h",
     "test_password_autofill_agent.cc",
     "test_password_autofill_agent.h",
+    "test_utils.cc",
+    "test_utils.h",
   ]
 
   public_deps = [
@@ -72,6 +75,8 @@ static_library("test_support") {
   ]
   deps = [
     "//components/autofill/content/renderer",
+    "//components/autofill/core/common",
+    "//content/public/renderer",
     "//services/service_manager/public/cpp",
     "//skia",
     "//testing/gmock",

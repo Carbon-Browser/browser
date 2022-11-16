@@ -10,10 +10,10 @@
 #include <vector>
 
 #include "base/callback.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
-#include "chromeos/dbus/dbus_method_call_status.h"
+#include "chromeos/dbus/common/dbus_method_call_status.h"
 #include "chromeos/dbus/shill/shill_property_changed_observer.h"
 
 namespace base {
@@ -56,6 +56,9 @@ class ShillClientHelper {
   using ReleasedCallback = base::OnceCallback<void(ShillClientHelper* helper)>;
 
   explicit ShillClientHelper(dbus::ObjectProxy* proxy);
+
+  ShillClientHelper(const ShillClientHelper&) = delete;
+  ShillClientHelper& operator=(const ShillClientHelper&) = delete;
 
   virtual ~ShillClientHelper();
 
@@ -150,7 +153,7 @@ class ShillClientHelper {
   // Handles PropertyChanged signal.
   void OnPropertyChanged(dbus::Signal* signal);
 
-  dbus::ObjectProxy* proxy_;
+  raw_ptr<dbus::ObjectProxy> proxy_;
   ReleasedCallback released_callback_;
   int active_refs_;
   base::ObserverList<ShillPropertyChangedObserver,
@@ -160,8 +163,6 @@ class ShillClientHelper {
   // Note: This should remain the last member so it'll be destroyed and
   // invalidate its weak pointers before any other members are destroyed.
   base::WeakPtrFactory<ShillClientHelper> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ShillClientHelper);
 };
 
 }  // namespace chromeos

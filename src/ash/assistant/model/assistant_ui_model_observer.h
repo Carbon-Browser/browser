@@ -6,7 +6,6 @@
 #define ASH_ASSISTANT_MODEL_ASSISTANT_UI_MODEL_OBSERVER_H_
 
 #include "base/component_export.h"
-#include "base/macros.h"
 #include "base/observer_list_types.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/geometry/rect.h"
@@ -20,7 +19,6 @@ enum class AssistantExitPoint;
 
 namespace ash {
 
-enum class AssistantUiMode;
 enum class AssistantVisibility;
 
 // A checked observer which receives notification of changes to the Assistant UI
@@ -31,10 +29,11 @@ class COMPONENT_EXPORT(ASSISTANT_MODEL) AssistantUiModelObserver
   using AssistantEntryPoint = chromeos::assistant::AssistantEntryPoint;
   using AssistantExitPoint = chromeos::assistant::AssistantExitPoint;
 
-  // Invoked when the UI mode is changed. If |due_to_interaction| is true, the
-  // UI mode was changed as a result of an Assistant interaction.
-  virtual void OnUiModeChanged(AssistantUiMode ui_mode,
-                               bool due_to_interaction) {}
+  AssistantUiModelObserver(const AssistantUiModelObserver&) = delete;
+  AssistantUiModelObserver& operator=(const AssistantUiModelObserver&) = delete;
+
+  // Invoked when keyboard traversal mode is changed (enabled/disabled).
+  virtual void OnKeyboardTraversalModeChanged(bool keyboard_traversal_mode) {}
 
   // Invoked when the UI visibility is changed from |old_visibility| to
   // |new_visibility|. The |source| of the visibility change event is provided
@@ -53,8 +52,6 @@ class COMPONENT_EXPORT(ASSISTANT_MODEL) AssistantUiModelObserver
  protected:
   AssistantUiModelObserver() = default;
   ~AssistantUiModelObserver() override = default;
-
-  DISALLOW_COPY_AND_ASSIGN(AssistantUiModelObserver);
 };
 
 }  // namespace ash

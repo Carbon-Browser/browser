@@ -7,7 +7,7 @@
 #include <memory>
 
 #include "base/bind.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/profile_resetter/profile_resetter_test_base.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
@@ -36,6 +36,10 @@ using content::BrowserThread;
 class RemoveCookieTester {
  public:
   explicit RemoveCookieTester(Profile* profile);
+
+  RemoveCookieTester(const RemoveCookieTester&) = delete;
+  RemoveCookieTester& operator=(const RemoveCookieTester&) = delete;
+
   ~RemoveCookieTester();
 
   bool GetCookie(const std::string& host, net::CanonicalCookie* cookie);
@@ -54,11 +58,9 @@ class RemoveCookieTester {
 
   std::vector<net::CanonicalCookie> last_cookies_;
   bool waiting_callback_;
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
   mojo::Remote<network::mojom::CookieManager> cookie_manager_;
   scoped_refptr<content::MessageLoopRunner> runner_;
-
-  DISALLOW_COPY_AND_ASSIGN(RemoveCookieTester);
 };
 
 RemoveCookieTester::RemoveCookieTester(Profile* profile)
@@ -82,6 +84,7 @@ bool RemoveCookieTester::GetCookie(const std::string& host,
   net::CookieOptions cookie_options;
   cookie_manager_->GetCookieList(
       GURL("https://" + host + "/"), cookie_options,
+      net::CookiePartitionKeyCollection(),
       base::BindOnce(&RemoveCookieTester::GetCookieListCallback,
                      base::Unretained(this)));
   BlockUntilNotified();
@@ -101,9 +104,9 @@ void RemoveCookieTester::AddCookie(const std::string& host,
   options.set_include_httponly();
   auto cookie = net::CanonicalCookie::CreateUnsafeCookieForTesting(
       name, value, host, "/", base::Time(), base::Time(), base::Time(),
-      true /* secure*/, false /* http only*/,
+      base::Time(), /*secure=*/true, /*httponly=*/false,
       net::CookieSameSite::NO_RESTRICTION, net::COOKIE_PRIORITY_MEDIUM,
-      false /* same_party */);
+      /*same_party=*/false);
   cookie_manager_->SetCanonicalCookie(
       *cookie, net::cookie_util::SimulatedCookieSource(*cookie, "https"),
       options,

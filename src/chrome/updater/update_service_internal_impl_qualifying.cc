@@ -37,6 +37,7 @@ class UpdateServiceInternalQualifyingImpl : public UpdateServiceInternal {
 
   // Overrides for updater::UpdateServiceInternal.
   void Run(base::OnceClosure callback) override {
+    VLOG(1) << __func__ << " (Qualifying)";
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
     scoped_refptr<UpdateServiceImpl> service =
@@ -55,6 +56,7 @@ class UpdateServiceInternalQualifyingImpl : public UpdateServiceInternal {
 
   void InitializeUpdateService(base::OnceClosure callback) override {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+    VLOG(1) << __func__ << " (Qualifying)";
     std::move(callback).Run();
   }
 
@@ -71,19 +73,18 @@ class UpdateServiceInternalQualifyingImpl : public UpdateServiceInternal {
                                     const RegistrationResponse& response) {
     // Create a `CheckForUpdatesTask` with the local prefs' config and perform
     // an `Update` task for `kQualificationAppId`.
-    DVLOG(2) << "RegistrationResponse: " << response.status_code;
-    scoped_refptr<CheckForUpdatesTask> qualification_task =
-        base::MakeRefCounted<CheckForUpdatesTask>(
-            config_,
-            base::BindOnce(&UpdateServiceImpl::Update,
-                           base::MakeRefCounted<UpdateServiceImpl>(config_),
-                           kQualificationAppId,
-                           updater::UpdateService::Priority::kBackground,
-                           base::DoNothing()),
-            base::BindOnce(
-                &UpdateServiceInternalQualifyingImpl::QualificationDone, this,
-                std::move(callback)));
-    qualification_task->Run();
+    VLOG(2) << "RegistrationResponse: " << response.status_code;
+    base::MakeRefCounted<CheckForUpdatesTask>(
+        config_,
+        base::BindOnce(&UpdateServiceImpl::Update,
+                       base::MakeRefCounted<UpdateServiceImpl>(config_),
+                       kQualificationAppId, "",
+                       UpdateService::Priority::kBackground,
+                       UpdateService::PolicySameVersionUpdate::kNotAllowed,
+                       base::DoNothing()))
+        ->Run(base::BindOnce(
+            &UpdateServiceInternalQualifyingImpl::QualificationDone, this,
+            std::move(callback)));
   }
 
   void QualificationDone(base::OnceClosure callback) {

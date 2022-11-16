@@ -8,6 +8,7 @@
 
 #import <objc/runtime.h>
 
+#import "base/command_line.h"
 #import "base/mac/foundation_util.h"
 #include "base/strings/sys_string_conversions.h"
 #import "base/test/ios/wait_util.h"
@@ -28,6 +29,9 @@ using base::test::ios::kWaitForUIElementTimeout;
 using base::test::ios::WaitUntilConditionOrTimeout;
 
 namespace {
+
+NSString* const kIdentityEmailFormat = @"%@@gmail.com";
+NSString* const kIdentityGaiaIDFormat = @"%@ID";
 
 NSString* FakeGetHostedDomainForIdentity(ChromeIdentity* identity) {
   return base::SysUTF8ToNSString(gaia::ExtractDomainName(
@@ -140,14 +144,19 @@ void SetCachedAvatarForIdentity(ChromeIdentity* identity, UIImage* avatar) {
 @end
 
 namespace ios {
-NSString* const kIdentityEmailFormat = @"%@@gmail.com";
-NSString* const kIdentityGaiaIDFormat = @"%@ID";
-
 FakeChromeIdentityService::FakeChromeIdentityService()
     : identities_([[NSMutableArray alloc] init]),
       capabilitiesByIdentity_([[NSMutableDictionary alloc] init]),
       _fakeMDMError(false),
-      _pendingCallback(0) {}
+      _pendingCallback(0) {
+  std::string value =
+      base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
+          kAddFakeIdentitiesArg);
+  NSArray* identities = [FakeChromeIdentity identitiesFromBase64String:value];
+  if (identities) {
+    [identities_ addObjectsFromArray:identities];
+  }
+}
 
 FakeChromeIdentityService::~FakeChromeIdentityService() {}
 
@@ -168,8 +177,8 @@ FakeChromeIdentityService::PresentAccountDetailsController(
   [viewController presentViewController:accountDetailsViewController
                                animated:animated
                              completion:nil];
-  return ^(BOOL animated) {
-    [accountDetailsViewController dismissViewControllerAnimated:animated
+  return ^(BOOL dismissAnimated) {
+    [accountDetailsViewController dismissViewControllerAnimated:dismissAnimated
                                                      completion:nil];
   };
 }
@@ -197,7 +206,7 @@ void FakeChromeIdentityService::ForgetIdentity(
     ForgetIdentityCallback callback) {
   [identities_ removeObject:identity];
   [capabilitiesByIdentity_ removeObjectForKey:identity.gaiaID];
-  FireIdentityListChanged(/*keychain_reload=*/false);
+  FireIdentityListChanged(/*notify_user=*/false);
   if (callback) {
     // Forgetting an identity is normally an asynchronous operation (that
     // require some network calls), this is replicated here by dispatching
@@ -300,10 +309,8 @@ void FakeChromeIdentityService::SimulateForgetIdentityFromOtherApp(
 }
 
 void FakeChromeIdentityService::FireChromeIdentityReload() {
-  FireIdentityListChanged(/*keychain_reload=*/true);
+  FireIdentityListChanged(/*notify_user=*/true);
 }
-
-void FakeChromeIdentityService::SetUpForIntegrationTests() {}
 
 void FakeChromeIdentityService::AddManagedIdentities(NSArray* identitiesNames) {
   for (NSString* name in identitiesNames) {
@@ -330,7 +337,7 @@ void FakeChromeIdentityService::AddIdentity(ChromeIdentity* identity) {
   if (![identities_ containsObject:identity]) {
     [identities_ addObject:identity];
   }
-  FireIdentityListChanged(/*keychain_reload=*/false);
+  FireIdentityListChanged(/*notify_user=*/false);
 }
 
 void FakeChromeIdentityService::SetCapabilities(ChromeIdentity* identity,

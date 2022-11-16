@@ -2,21 +2,35 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "ash/constants/ash_features.h"
 #include "ash/constants/ash_switches.h"
+#include "ash/public/cpp/login_screen_test_api.h"
+#include "base/test/scoped_mock_time_message_loop_task_runner.h"
 #include "chrome/browser/ash/login/screens/welcome_screen.h"
 #include "chrome/browser/ash/login/test/oobe_base_test.h"
 #include "chrome/browser/ash/login/test/oobe_screen_waiter.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
+#include "chrome/browser/ui/webui/chromeos/login/network_screen_handler.h"
 #include "chrome/browser/ui/webui/chromeos/login/os_install_screen_handler.h"
+#include "chrome/browser/ui/webui/chromeos/login/os_trial_screen_handler.h"
 #include "chrome/browser/ui/webui/chromeos/login/welcome_screen_handler.h"
+#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/generated_resources.h"
 #include "chromeos/dbus/power/fake_power_manager_client.h"
 #include "content/public/test/browser_test.h"
+#include "ui/base/l10n/l10n_util.h"
+#include "ui/base/l10n/time_format.h"
+#include "ui/strings/grit/ui_strings.h"
 
 namespace ash {
 namespace {
 
 const test::UIPath kWelcomeScreen = {"connect", "welcomeScreen"};
-const test::UIPath kOsInstallButton = {"connect", "welcomeScreen", "osInstall"};
+const test::UIPath kWelcomeGetStarted = {"connect", "welcomeScreen",
+                                         "getStarted"};
+
+const test::UIPath kOsTrialInstallRadioButton = {"os-trial", "installButton"};
+const test::UIPath kOsTrialNextButton = {"os-trial", "nextButton"};
 
 const test::UIPath kOsInstallExitButton = {"os-install", "osInstallExitButton"};
 const test::UIPath kOsInstallIntroNextButton = {"os-install",
@@ -27,8 +41,6 @@ const test::UIPath kOsInstallConfirmCloseButton = {"os-install",
                                                    "closeConfirmDialogButton"};
 const test::UIPath kOsInstallErrorShutdownButton = {
     "os-install", "osInstallErrorShutdownButton"};
-const test::UIPath kOsInstallSuccessShutdownButton = {
-    "os-install", "osInstallSuccessShutdownButton"};
 
 const test::UIPath kOsInstallDialogIntro = {"os-install",
                                             "osInstallDialogIntro"};
@@ -40,6 +52,24 @@ const test::UIPath kOsInstallDialogError = {"os-install",
                                             "osInstallDialogError"};
 const test::UIPath kOsInstallDialogSuccess = {"os-install",
                                               "osInstallDialogSuccess"};
+
+// Paths to test strings
+const test::UIPath kOsInstallDialogSuccessSubtitile = {
+    "os-install", "osInstallDialogSuccessSubtitile"};
+
+std::string GetExpectedCountdownMessage(base::TimeDelta time_left) {
+  return l10n_util::GetStringFUTF8(
+      IDS_OS_INSTALL_SCREEN_SUCCESS_SUBTITLE,
+      ui::TimeFormat::Simple(ui::TimeFormat::FORMAT_DURATION,
+                             ui::TimeFormat::LENGTH_LONG, time_left),
+      l10n_util::GetStringUTF16(IDS_INSTALLED_PRODUCT_OS_NAME));
+}
+
+// TODO(crbug.com/1324627) - Remove once fixed.
+bool IsPolymer3Enabled() {
+  return (features::IsOobeAddPersonPolymer3Enabled() ||
+          features::IsOobePolymer3Enabled());
+}
 
 }  // namespace
 
@@ -64,7 +94,12 @@ class OsInstallScreenTest : public OobeBaseTest, OsInstallClient::Observer {
 
   void AdvanceToOsInstallScreen() {
     OobeScreenWaiter(WelcomeView::kScreenId).Wait();
-    test::OobeJS().TapOnPath(kOsInstallButton);
+    test::OobeJS().TapOnPath(kWelcomeGetStarted);
+
+    OobeScreenWaiter(OsTrialScreenView::kScreenId).Wait();
+    test::OobeJS().ExpectHasAttribute("checked", kOsTrialInstallRadioButton);
+    test::OobeJS().ClickOnPath(kOsTrialNextButton);
+
     OobeScreenWaiter(OsInstallScreenView::kScreenId).Wait();
     test::OobeJS().ExpectVisiblePath(kOsInstallDialogIntro);
   }
@@ -96,6 +131,12 @@ class OsInstallScreenTest : public OobeBaseTest, OsInstallClient::Observer {
 
   absl::optional<OsInstallClient::Status> GetStatus() const { return status_; }
 
+  void SetTickClockForTesting(const base::TickClock* tick_clock) {
+    WizardController::default_controller()
+        ->GetScreen<OsInstallScreen>()
+        ->set_tick_clock_for_testing(tick_clock);
+  }
+
  private:
   // OsInstallClient::Observer override:
   void StatusChanged(OsInstallClient::Status status,
@@ -106,22 +147,24 @@ class OsInstallScreenTest : public OobeBaseTest, OsInstallClient::Observer {
   absl::optional<OsInstallClient::Status> status_ = absl::nullopt;
 };
 
-// If the kAllowOsInstall switch is not set, the welcome screen should
-// not show the OS install button.
+// If the kAllowOsInstall switch is not set, clicking `Get Started` button
+// should show the network screen.
 IN_PROC_BROWSER_TEST_F(OobeBaseTest, InstallButtonHiddenByDefault) {
   OobeScreenWaiter(WelcomeView::kScreenId).Wait();
 
   test::OobeJS().ExpectVisiblePath(kWelcomeScreen);
-  test::OobeJS().ExpectHiddenPath(kOsInstallButton);
+  test::OobeJS().TapOnPath(kWelcomeGetStarted);
+  OobeScreenWaiter(NetworkScreenView::kScreenId).Wait();
 }
 
-// If the kAllowOsInstall is set, the welcome screen should show the
-// OS install button.
+// If the kAllowOsInstall is set, clicking `Get Started` button show show the
+// `OS Trial` screen
 IN_PROC_BROWSER_TEST_F(OsInstallScreenTest, InstallButtonVisibleWithSwitch) {
   OobeScreenWaiter(WelcomeView::kScreenId).Wait();
 
   test::OobeJS().ExpectVisiblePath(kWelcomeScreen);
-  test::OobeJS().ExpectVisiblePath(kOsInstallButton);
+  test::OobeJS().TapOnPath(kWelcomeGetStarted);
+  OobeScreenWaiter(OsTrialScreenView::kScreenId).Wait();
 }
 
 // Check that installation starts after clicking next on the confirm step.
@@ -150,8 +193,7 @@ IN_PROC_BROWSER_TEST_F(OsInstallScreenTest, OsInstallBackNavigation) {
   test::OobeJS().ExpectVisiblePath(kOsInstallDialogIntro);
   // Exit os install flow
   test::OobeJS().TapOnPath(kOsInstallExitButton);
-  OobeScreenWaiter(WelcomeView::kScreenId).Wait();
-  test::OobeJS().ExpectVisiblePath(kWelcomeScreen);
+  OobeScreenWaiter(OsTrialScreenView::kScreenId).Wait();
 }
 
 // Check that if no destination device is found, the error step is shown.
@@ -184,9 +226,22 @@ IN_PROC_BROWSER_TEST_F(OsInstallScreenTest, OsInstallGenericError) {
   EXPECT_EQ(power_manager_client->num_request_shutdown_calls(), 1);
 }
 
-// Check that a successful install shows the success step and clicking
-// the shutdown button powers off.
-IN_PROC_BROWSER_TEST_F(OsInstallScreenTest, OsInstallSuccess) {
+// Check that a successful install shows the success step and countdown timer,
+// which will shut down the computer automatically after 60 seconds.
+// TODO(crbug.com/1318903): Re-enable this test on linux-chromeos-dbg.
+#if !defined(NDEBUG)
+#define MAYBE_OsInstallSuccessAutoShutdown DISABLED_OsInstallSuccessAutoShutdown
+#else
+#define MAYBE_OsInstallSuccessAutoShutdown OsInstallSuccessAutoShutdown
+#endif
+IN_PROC_BROWSER_TEST_F(OsInstallScreenTest,
+                       MAYBE_OsInstallSuccessAutoShutdown) {
+  // TODO(crbug.com/1324627) - Adapt these tests to run with Polymer3 enabled.
+  if (IsPolymer3Enabled())
+    return;
+
+  base::ScopedMockTimeMessageLoopTaskRunner mocked_task_runner;
+  SetTickClockForTesting(mocked_task_runner->GetMockTickClock());
   auto* ti = OsInstallClient::Get()->GetTestInterface();
 
   AdvanceToOsInstallScreen();
@@ -198,7 +253,12 @@ IN_PROC_BROWSER_TEST_F(OsInstallScreenTest, OsInstallSuccess) {
 
   auto* power_manager_client = chromeos::FakePowerManagerClient::Get();
   EXPECT_EQ(power_manager_client->num_request_shutdown_calls(), 0);
-  test::OobeJS().TapOnPath(kOsInstallSuccessShutdownButton);
+  mocked_task_runner->FastForwardBy(base::Seconds(20));
+  EXPECT_EQ(power_manager_client->num_request_shutdown_calls(), 0);
+  test::OobeJS().ExpectElementText(
+      GetExpectedCountdownMessage(base::Seconds(40)),
+      kOsInstallDialogSuccessSubtitile);
+  mocked_task_runner->FastForwardBy(base::Seconds(41));
   EXPECT_EQ(power_manager_client->num_request_shutdown_calls(), 1);
 }
 

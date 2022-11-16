@@ -7,7 +7,6 @@
 #include <vector>
 
 #include "base/json/json_file_value_serializer.h"
-#include "base/macros.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "content/public/test/test_browser_context.h"
@@ -21,6 +20,7 @@
 #include "skia/ext/image_operations.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/resource/resource_bundle.h"
+#include "ui/gfx/image/image_skia_rep.h"
 #include "ui/gfx/image/image_skia_source.h"
 #include "ui/gfx/skia_util.h"
 
@@ -71,6 +71,9 @@ class ExtensionIconImageTest : public ExtensionsTest,
  public:
   ExtensionIconImageTest()
       : image_loaded_count_(0), quit_in_image_loaded_(false) {}
+
+  ExtensionIconImageTest(const ExtensionIconImageTest&) = delete;
+  ExtensionIconImageTest& operator=(const ExtensionIconImageTest&) = delete;
 
   ~ExtensionIconImageTest() override {}
 
@@ -128,8 +131,6 @@ class ExtensionIconImageTest : public ExtensionsTest,
  private:
   int image_loaded_count_;
   bool quit_in_image_loaded_;
-
-  DISALLOW_COPY_AND_ASSIGN(ExtensionIconImageTest);
 };
 
 }  // namespace

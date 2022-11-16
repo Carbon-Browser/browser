@@ -10,6 +10,7 @@
 
 #include "base/bind.h"
 #include "base/callback.h"
+#include "base/containers/adapters.h"
 #include "base/run_loop.h"
 #include "base/test/power_monitor_test.h"
 #include "base/test/task_environment.h"
@@ -41,6 +42,9 @@ class AudioFocusManagerTest
  public:
   AudioFocusManagerTest() = default;
 
+  AudioFocusManagerTest(const AudioFocusManagerTest&) = delete;
+  AudioFocusManagerTest& operator=(const AudioFocusManagerTest&) = delete;
+
   void SetUp() override {
     // Create an instance of the MediaSessionService.
     service_ = std::make_unique<MediaSessionServiceImpl>();
@@ -64,10 +68,9 @@ class AudioFocusManagerTest
 
   AudioFocusManager::RequestId GetAudioFocusedSession() {
     const auto audio_focus_requests = GetRequests();
-    for (auto iter = audio_focus_requests.rbegin();
-         iter != audio_focus_requests.rend(); ++iter) {
-      if ((*iter)->audio_focus_type == mojom::AudioFocusType::kGain)
-        return (*iter)->request_id.value();
+    for (const auto& request : base::Reversed(audio_focus_requests)) {
+      if (request->audio_focus_type == mojom::AudioFocusType::kGain)
+        return request->request_id.value();
     }
     return base::UnguessableToken::Null();
   }
@@ -281,8 +284,6 @@ class AudioFocusManagerTest
   mojo::Remote<mojom::MediaControllerManager> controller_manager_remote_;
 
   base::test::ScopedPowerMonitorTestSource power_source_;
-
-  DISALLOW_COPY_AND_ASSIGN(AudioFocusManagerTest);
 };
 
 INSTANTIATE_TEST_SUITE_P(

@@ -7,10 +7,11 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "weblayer/public/navigation.h"
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #include "base/android/scoped_java_ref.h"
 #endif
 
@@ -52,6 +53,10 @@ class NavigationImpl : public Navigation {
     safe_to_disable_network_error_auto_reload_ = value;
   }
 
+  void set_safe_to_disable_intent_processing(bool value) {
+    safe_to_disable_intent_processing_ = value;
+  }
+
   void set_safe_to_get_page() { safe_to_get_page_ = true; }
 
   void set_was_stopped() { was_stopped_ = true; }
@@ -62,7 +67,11 @@ class NavigationImpl : public Navigation {
     return disable_network_error_auto_reload_;
   }
 
-#if defined(OS_ANDROID)
+  bool disable_intent_processing() { return disable_intent_processing_; }
+
+  void set_finished() { finished_ = true; }
+
+#if BUILDFLAG(IS_ANDROID)
   int GetState(JNIEnv* env) { return static_cast<int>(GetState()); }
   base::android::ScopedJavaLocalRef<jstring> GetUri(JNIEnv* env);
   base::android::ScopedJavaLocalRef<jobjectArray> GetRedirectChain(JNIEnv* env);
@@ -87,11 +96,13 @@ class NavigationImpl : public Navigation {
     return IsServedFromBackForwardCache();
   }
   jboolean DisableNetworkErrorAutoReload(JNIEnv* env);
+  jboolean DisableIntentProcessing(JNIEnv* env);
   jboolean AreIntentLaunchesAllowedInBackground(JNIEnv* env);
   jboolean IsFormSubmission(JNIEnv* env) { return IsFormSubmission(); }
   base::android::ScopedJavaLocalRef<jstring> GetReferrer(JNIEnv* env);
   jlong GetPage(JNIEnv* env);
   int GetNavigationEntryOffset(JNIEnv* env);
+  jboolean WasFetchedFromCache(JNIEnv* env);
 
   void SetResponse(
       std::unique_ptr<embedder_support::WebResourceResponse> response);
@@ -127,9 +138,10 @@ class NavigationImpl : public Navigation {
   GURL GetReferrer() override;
   Page* GetPage() override;
   int GetNavigationEntryOffset() override;
+  bool WasFetchedFromCache() override;
 
  private:
-  content::NavigationHandle* navigation_handle_;
+  raw_ptr<content::NavigationHandle> navigation_handle_;
 
   // The NavigationEntry's unique ID for this navigation, or -1 if there isn't
   // one.
@@ -154,12 +166,20 @@ class NavigationImpl : public Navigation {
   // Whether DisableNetworkErrorAutoReload is allowed at this time.
   bool safe_to_disable_network_error_auto_reload_ = false;
 
+  // Whether DisableIntentProcessing is allowed at this time.
+  bool safe_to_disable_intent_processing_ = false;
+
   // Whether GetPage is allowed at this time.
   bool safe_to_get_page_ = false;
 
   bool disable_network_error_auto_reload_ = false;
 
-#if defined(OS_ANDROID)
+  bool disable_intent_processing_ = false;
+
+  // Whether this navigation has finished.
+  bool finished_ = false;
+
+#if BUILDFLAG(IS_ANDROID)
   base::android::ScopedJavaGlobalRef<jobject> java_navigation_;
   std::unique_ptr<embedder_support::WebResourceResponse> response_;
 #endif

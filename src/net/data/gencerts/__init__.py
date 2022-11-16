@@ -17,7 +17,7 @@ import shutil
 import subprocess
 import sys
 
-import openssl_conf
+from . import openssl_conf
 
 # Enum for the "type" of certificate that is to be created. This is used to
 # select sane defaults for the .cnf file and command line flags, but they can
@@ -40,11 +40,11 @@ SEPTEMBER_1_2015_UTC = '150901120000Z'
 # January 1st, 2016 12:00 UTC
 JANUARY_1_2016_UTC = '160101120000Z'
 
-# November 3rd, 2020 12:00 UTC
-NOVEMBER_3_2020_UTC = '201103120000Z'
+# October 5th, 2021 12:00 UTC
+OCTOBER_5_2021_UTC = '211005120000Z'
 
-# November 3rd, 2021 12:00 UTC
-NOVEMBER_3_2021_UTC = '211103120000Z'
+# October 5th, 2022 12:00 UTC
+OCTOBER_5_2022_UTC = '221005120000Z'
 
 KEY_PURPOSE_ANY = 'anyExtendedKeyUsage'
 KEY_PURPOSE_SERVER_AUTH = 'serverAuth'
@@ -66,8 +66,8 @@ g_invoking_script_path = None
 # The default validity range of generated certificates. Can be modified with
 # set_default_validity_range(). Chosen to end on a Wednesday, since these
 # will have to be manually re-generated.
-g_default_start_date = NOVEMBER_3_2020_UTC
-g_default_end_date = NOVEMBER_3_2021_UTC
+g_default_start_date = OCTOBER_5_2021_UTC
+g_default_end_date = OCTOBER_5_2022_UTC
 
 
 def set_default_validity_range(start_date, end_date):
@@ -499,8 +499,10 @@ class Certificate(object):
 
 
 def text_data_to_pem(block_header, text_data):
-  return '%s\n-----BEGIN %s-----\n%s\n-----END %s-----\n' % (text_data,
-          block_header, base64.b64encode(text_data), block_header)
+  # b64encode takes in bytes and returns bytes.
+  pem_data = base64.b64encode(text_data.encode('utf8')).decode('utf8')
+  return '%s\n-----BEGIN %s-----\n%s\n-----END %s-----\n' % (
+      text_data, block_header, pem_data, block_header)
 
 
 def write_chain(description, chain, out_pem):

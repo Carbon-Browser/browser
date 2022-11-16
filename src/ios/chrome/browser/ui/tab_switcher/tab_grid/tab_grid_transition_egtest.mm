@@ -7,7 +7,6 @@
 
 #include "base/bind.h"
 #include "base/strings/sys_string_conversions.h"
-#import "ios/chrome/browser/ui/tab_switcher/tab_grid/features.h"
 #include "ios/chrome/grit/ios_strings.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey_ui.h"
@@ -23,7 +22,6 @@
 #error "This file requires ARC support."
 #endif
 
-using chrome_test_util::TabGridCloseAllButton;
 using chrome_test_util::TabGridDoneButton;
 using chrome_test_util::TabGridIncognitoTabsPanelButton;
 using chrome_test_util::TabGridNewIncognitoTabButton;
@@ -39,10 +37,12 @@ void ShowTabViewController() {
   [[EarlGrey selectElementWithMatcher:matcher] performAction:grey_tap()];
 }
 
-// Selects and focuses the tab with the given |title|.
+// Selects and focuses the tab with the given `title`.
 void SelectTab(NSString* title) {
   [[EarlGrey
       selectElementWithMatcher:grey_allOf(grey_accessibilityLabel(title),
+                                          grey_ancestor(grey_kindOfClassName(
+                                              @"GridCell")),
                                           grey_accessibilityTrait(
                                               UIAccessibilityTraitStaticText),
                                           nil)] performAction:grey_tap()];
@@ -88,7 +88,7 @@ std::unique_ptr<net::test_server::HttpResponse> HandleQueryTitle(
   GREYAssertTrue(self.testServer->Start(), @"Test server failed to start");
 }
 
-// Returns the URL for a test page with the given |title|.
+// Returns the URL for a test page with the given `title`.
 - (GURL)makeURLForTitle:(NSString*)title {
   return self.testServer->GetURL("/querytitle?" +
                                  base::SysNSStringToUTF8(title));

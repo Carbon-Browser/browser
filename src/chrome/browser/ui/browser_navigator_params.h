@@ -9,7 +9,9 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
+#include "base/time/time.h"
 #include "build/build_config.h"
 #include "content/public/browser/global_request_id.h"
 #include "content/public/browser/reload_type.h"
@@ -28,7 +30,7 @@
 #include "ui/gfx/geometry/rect.h"
 #include "url/gurl.h"
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "components/tab_groups/tab_group_id.h"
 #endif
@@ -66,7 +68,7 @@ struct OpenURLParams;
 
 // TODO(thestig): Split or ifdef out more fields that are not used on Android.
 struct NavigateParams {
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   explicit NavigateParams(
       std::unique_ptr<content::WebContents> contents_to_insert);
 #else
@@ -79,7 +81,12 @@ struct NavigateParams {
   NavigateParams(Profile* profile,
                  const GURL& a_url,
                  ui::PageTransition a_transition);
+
+  NavigateParams(const NavigateParams&) = delete;
+  NavigateParams& operator=(const NavigateParams&) = delete;
+
   NavigateParams(NavigateParams&& params);
+
   ~NavigateParams();
 
   // Copies fields from |params| struct to |nav_params| struct.
@@ -133,7 +140,7 @@ struct NavigateParams {
 
   // Input parameter.
   // Only used by Singleton tabs. Causes a tab-switch in addition to navigation.
-  content::WebContents* switch_to_singleton_tab = nullptr;
+  raw_ptr<content::WebContents> switch_to_singleton_tab = nullptr;
 
   // Output parameter.
   // The WebContents in which the navigation occurred or that was inserted.
@@ -152,7 +159,7 @@ struct NavigateParams {
   //       Navigate(). However, if the originating page is from a different
   //       profile (e.g. an OFF_THE_RECORD page originating from a non-OTR
   //       window), then |source_contents| is reset to NULL.
-  content::WebContents* source_contents = nullptr;
+  raw_ptr<content::WebContents> source_contents = nullptr;
 
   // The disposition requested by the navigation source. Default is
   // CURRENT_TAB. What follows is a set of coercions that happen to this value
@@ -173,7 +180,7 @@ struct NavigateParams {
 
   // Allows setting the opener for the case when new WebContents are created
   // (i.e. when |disposition| asks for a new tab or window).
-  content::RenderFrameHost* opener = nullptr;
+  raw_ptr<content::RenderFrameHost> opener = nullptr;
 
   // Sets browser->is_trusted_source.
   bool trusted_source = false;
@@ -190,7 +197,7 @@ struct NavigateParams {
   int tabstrip_index = -1;
 
   // If non-empty, the new tab is an app tab.
-  std::string extension_app_id;
+  std::string app_id;
 
   // If non-empty, specifies the desired initial position and size of the
   // window if |disposition| == NEW_POPUP.
@@ -207,6 +214,9 @@ struct NavigateParams {
     // Show and activate the browser window after navigating.
     SHOW_WINDOW,
     // Show the browser window after navigating but do not activate.
+    // Note: This may cause a space / virtual desktop switch if the window is
+    // being shown on a display which is currently showing a fullscreen app.
+    // (crbug.com/1315749).
     SHOW_WINDOW_INACTIVE
   };
   // Default is NO_ACTION (don't show or activate the window).
@@ -230,7 +240,7 @@ struct NavigateParams {
   };
   PathBehavior path_behavior = RESPECT;
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
   // [in]  Specifies a Browser object where the navigation could occur or the
   //       tab could be added. Navigate() is not obliged to use this Browser if
   //       it is not compatible with the operation being performed. This can be
@@ -243,7 +253,7 @@ struct NavigateParams {
   //       Navigate(), the caller is responsible for showing it so that its
   //       window can assume responsibility for the Browser's lifetime (Browser
   //       objects are deleted when the user closes a visible browser window).
-  Browser* browser = nullptr;
+  raw_ptr<Browser> browser = nullptr;
 
   // The group the caller would like the tab to be added to.
   absl::optional<tab_groups::TabGroupId> group;
@@ -256,7 +266,7 @@ struct NavigateParams {
 
   // The profile that is initiating the navigation. If there is a non-NULL
   // browser passed in via |browser|, it's profile will be used instead.
-  Profile* initiating_profile = nullptr;
+  raw_ptr<Profile> initiating_profile = nullptr;
 
   // Indicates whether this navigation  should replace the current
   // navigation entry.
@@ -283,6 +293,10 @@ struct NavigateParams {
   // Indicates that the navigation should happen in an pwa window if
   // possible, i.e. if the is a PWA installed for the target URL.
   bool open_pwa_window_if_possible = false;
+
+  // Indicates that the navigation must happen in a PWA window. If a PWA
+  // window can't be created, the navigation will be cancelled.
+  bool force_open_pwa_window = false;
 
   // The time when the input which led to the navigation occurred. Currently
   // only set when a link is clicked or the navigation takes place from the
@@ -317,9 +331,13 @@ struct NavigateParams {
   // observed and fall back to using http scheme if necessary.
   bool is_using_https_as_default_scheme = false;
 
+  // Indicates the degree of privacy sensitivity for the navigation.
+  // Can be used to drive privacy decisions.
+  enum class PrivacySensitivity { CROSS_OTR, CROSS_PROFILE, DEFAULT };
+  PrivacySensitivity privacy_sensitivity = PrivacySensitivity::DEFAULT;
+
  private:
   NavigateParams();
-  DISALLOW_COPY_AND_ASSIGN(NavigateParams);
 };
 
 #endif  // CHROME_BROWSER_UI_BROWSER_NAVIGATOR_PARAMS_H_

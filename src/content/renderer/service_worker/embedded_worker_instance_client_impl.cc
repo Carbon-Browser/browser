@@ -12,7 +12,6 @@
 #include "base/trace_event/trace_event.h"
 #include "content/child/child_thread_impl.h"
 #include "content/child/scoped_child_process_reference.h"
-#include "content/common/service_worker/service_worker_utils.h"
 #include "content/public/common/content_client.h"
 #include "content/renderer/service_worker/service_worker_context_client.h"
 #include "content/renderer/worker/fetch_client_settings_object_helpers.h"
@@ -20,6 +19,7 @@
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/loader/worker_main_script_load_parameters.h"
 #include "third_party/blink/public/platform/web_content_settings_client.h"
+#include "third_party/blink/public/platform/web_runtime_features.h"
 #include "third_party/blink/public/platform/web_security_origin.h"
 #include "third_party/blink/public/platform/web_url.h"
 #include "third_party/blink/public/web/web_console_message.h"
@@ -42,16 +42,6 @@ void EmbeddedWorkerInstanceClientImpl::Create(
   new EmbeddedWorkerInstanceClientImpl(std::move(receiver),
                                        std::move(initiator_thread_task_runner),
                                        cors_exempt_header_list);
-}
-
-void EmbeddedWorkerInstanceClientImpl::CreateForRequest(
-    scoped_refptr<base::SingleThreadTaskRunner> initiator_thread_task_runner,
-    const std::vector<std::string>& cors_exempt_header_list,
-    mojo::PendingReceiver<blink::mojom::EmbeddedWorkerInstanceClient>
-        receiver) {
-  EmbeddedWorkerInstanceClientImpl::Create(
-      std::move(initiator_thread_task_runner), cors_exempt_header_list,
-      std::move(receiver));
 }
 
 void EmbeddedWorkerInstanceClientImpl::WorkerContextDestroyed() {
@@ -89,6 +79,10 @@ void EmbeddedWorkerInstanceClientImpl::StartWorker(
         std::move(params->main_script_load_params->url_loader_client_endpoints);
   }
 
+  for (const auto& feature : params->forced_enabled_runtime_features) {
+    blink::WebRuntimeFeatures::EnableFeatureFromString(feature, true);
+  }
+
   DCHECK(!params->provider_info->cache_storage ||
          base::FeatureList::IsEnabled(
              blink::features::kEagerCacheStorageSetupForServiceWorkers));
@@ -104,7 +98,8 @@ void EmbeddedWorkerInstanceClientImpl::StartWorker(
       std::move(params->renderer_preferences),
       std::move(params->service_worker_receiver),
       std::move(params->controller_receiver), std::move(params->instance_host),
-      std::move(params->provider_info), this, std::move(start_timing),
+      std::move(params->interface_provider), std::move(params->provider_info),
+      this, std::move(start_timing),
       std::move(params->preference_watcher_receiver),
       std::move(params->subresource_loader_factories),
       std::move(params->subresource_loader_updater),

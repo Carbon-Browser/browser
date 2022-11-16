@@ -11,7 +11,6 @@
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/json/json_writer.h"
-#include "base/macros.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/ref_counted.h"
 #include "base/path_service.h"
@@ -94,6 +93,12 @@ class CloudExternalDataPolicyObserverTest
   typedef std::pair<std::string, std::string> FetchedCall;
 
   CloudExternalDataPolicyObserverTest();
+
+  CloudExternalDataPolicyObserverTest(
+      const CloudExternalDataPolicyObserverTest&) = delete;
+  CloudExternalDataPolicyObserverTest& operator=(
+      const CloudExternalDataPolicyObserverTest&) = delete;
+
   ~CloudExternalDataPolicyObserverTest() override;
 
   // ash::DeviceSettingsTestBase:
@@ -164,9 +169,6 @@ class CloudExternalDataPolicyObserverTest
 
   TestingProfileManager profile_manager_;
   session_manager::SessionManager session_manager_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(CloudExternalDataPolicyObserverTest);
 };
 
 CloudExternalDataPolicyObserverTest::CloudExternalDataPolicyObserverTest()
@@ -337,8 +339,8 @@ void CloudExternalDataPolicyObserverTest::LogInAsDeviceLocalAccount(
   std::unique_ptr<PolicyServiceImpl> policy_service =
       std::make_unique<PolicyServiceImpl>(std::move(providers));
   builder.SetPolicyService(std::move(policy_service));
-  builder.SetPath(chromeos::ProfileHelper::Get()->GetProfilePathByUserIdHash(
-      chromeos::ProfileHelper::GetUserIdHashByUserIdForTesting(
+  builder.SetPath(ash::ProfileHelper::Get()->GetProfilePathByUserIdHash(
+      ash::ProfileHelper::GetUserIdHashByUserIdForTesting(
           account_id.GetUserEmail())));
 
   profile_ = builder.Build();
@@ -371,9 +373,8 @@ void CloudExternalDataPolicyObserverTest::LogInAsRegularUser() {
   std::unique_ptr<PolicyServiceImpl> policy_service =
       std::make_unique<PolicyServiceImpl>(std::move(providers));
   builder.SetPolicyService(std::move(policy_service));
-  builder.SetPath(chromeos::ProfileHelper::Get()->GetProfilePathByUserIdHash(
-      chromeos::ProfileHelper::GetUserIdHashByUserIdForTesting(
-          kRegularUserID)));
+  builder.SetPath(ash::ProfileHelper::Get()->GetProfilePathByUserIdHash(
+      ash::ProfileHelper::GetUserIdHashByUserIdForTesting(kRegularUserID)));
 
   profile_ = builder.Build();
   profile_->set_profile_name(kRegularUserID);

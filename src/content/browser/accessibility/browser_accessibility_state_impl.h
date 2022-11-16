@@ -7,10 +7,10 @@
 
 #include <vector>
 
-#include "base/compiler_specific.h"
-#include "base/macros.h"
+#include "base/time/time.h"
 #include "build/build_config.h"
 #include "components/metrics/metrics_provider.h"
+#include "content/common/content_export.h"
 #include "content/public/browser/browser_accessibility_state.h"
 #include "ui/accessibility/ax_mode.h"
 #include "ui/accessibility/ax_mode_observer.h"
@@ -41,6 +41,11 @@ class CONTENT_EXPORT BrowserAccessibilityStateImpl
       public ui::AXModeObserver {
  public:
   BrowserAccessibilityStateImpl();
+
+  BrowserAccessibilityStateImpl(const BrowserAccessibilityStateImpl&) = delete;
+  BrowserAccessibilityStateImpl& operator=(
+      const BrowserAccessibilityStateImpl&) = delete;
+
   ~BrowserAccessibilityStateImpl() override;
 
   static BrowserAccessibilityStateImpl* GetInstance();
@@ -69,7 +74,7 @@ class CONTENT_EXPORT BrowserAccessibilityStateImpl
   void UpdateUniqueUserHistograms() override;
   void UpdateHistogramsForTesting() override;
   void SetCaretBrowsingState(bool enabled) override;
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   void SetImageLabelsModeForProfile(bool enabled,
                                     BrowserContext* profile) override;
 #endif
@@ -173,8 +178,6 @@ class CONTENT_EXPORT BrowserAccessibilityStateImpl
 
   base::RepeatingCallbackList<void(const FocusedNodeDetails&)>
       focus_changed_callbacks_;
-
-  DISALLOW_COPY_AND_ASSIGN(BrowserAccessibilityStateImpl);
 };
 
 }  // namespace content

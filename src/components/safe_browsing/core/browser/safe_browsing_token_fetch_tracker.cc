@@ -29,13 +29,15 @@ int SafeBrowsingTokenFetchTracker::StartTrackingTokenFetch(
   const int request_id = requests_sent_;
   requests_sent_++;
   callbacks_[request_id] = std::move(on_token_fetched_callback);
+  // TODO(crbug.com/1276273): Use base::OneShotTimer here to enabling cancelling
+  // tracking of timeouts when requests complete. The implementation of
+  // OnTokenFetchTimeout can then be correspondingly simplified.
   base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&SafeBrowsingTokenFetchTracker::OnTokenFetchTimeout,
                      weak_ptr_factory_.GetWeakPtr(), request_id,
                      std::move(on_token_fetch_timeout_callback)),
-      base::TimeDelta::FromMilliseconds(
-          kTokenFetchTimeoutDelayFromMilliseconds));
+      base::Milliseconds(kTokenFetchTimeoutDelayFromMilliseconds));
 
   return request_id;
 }
@@ -49,6 +51,11 @@ void SafeBrowsingTokenFetchTracker::OnTokenFetchComplete(
 void SafeBrowsingTokenFetchTracker::OnTokenFetchTimeout(
     int request_id,
     OnTokenFetchTimeoutCallback on_token_fetch_timeout_callback) {
+  // The request might have already completed, in which case there
+  // is nothing to be done here.
+  if (!callbacks_.contains(request_id))
+    return;
+
   Finish(request_id, std::string());
 
   std::move(on_token_fetch_timeout_callback).Run(request_id);
@@ -66,6 +73,9 @@ void SafeBrowsingTokenFetchTracker::Finish(int request_id,
   callbacks_.erase(request_id);
 
   std::move(callback).Run(access_token);
+
+  // NOTE: Invoking the callback might have resulted in the synchronous
+  // destruction of this object, so there is nothing safe to do here but return.
 }
 
 }  // namespace safe_browsing

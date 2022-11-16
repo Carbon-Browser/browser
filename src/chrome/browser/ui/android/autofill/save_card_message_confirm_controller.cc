@@ -6,6 +6,7 @@
 
 #include "chrome/android/chrome_jni_headers/AutofillMessageConfirmFlowBridge_jni.h"
 
+#include "components/messages/android/messages_feature.h"
 #include "components/strings/grit/components_strings.h"
 #include "content/public/browser/web_contents.h"
 #include "ui/android/view_android.h"
@@ -15,6 +16,16 @@
 using base::android::ScopedJavaLocalRef;
 
 namespace autofill {
+
+// Get the Save Card confirmation dialog title resource ID depending on the
+// version of the dialog. See crbug.com/1306294 for details.
+int GetSaveCardDialogTitleId() {
+  if (messages::IsSaveCardMessagesUiEnabled() &&
+      messages::UseDialogV2ForSaveCardMessage()) {
+    return IDS_AUTOFILL_MOBILE_SAVE_CARD_TO_CLOUD_CONFIRMATION_DIALOG_TITLE_V2;
+  }
+  return IDS_AUTOFILL_MOBILE_SAVE_CARD_TO_CLOUD_CONFIRMATION_DIALOG_TITLE;
+}
 
 SaveCardMessageConfirmController::SaveCardMessageConfirmController(
     SaveCardMessageConfirmDelegate* delegate,
@@ -30,59 +41,67 @@ SaveCardMessageConfirmController::~SaveCardMessageConfirmController() {
   }
 }
 
-void SaveCardMessageConfirmController::ConfirmName(
+void SaveCardMessageConfirmController::ConfirmSaveCard(
+    const std::u16string& card_label,
+    const std::u16string& cardholder_account) {
+  if (!GetOrCreateJavaObject())
+    return;
+  JNIEnv* env = base::android::AttachCurrentThread();
+  Java_AutofillMessageConfirmFlowBridge_confirmSaveCard(
+      env, GetOrCreateJavaObject(),
+      base::android::ConvertUTF16ToJavaString(
+          env, l10n_util::GetStringUTF16(GetSaveCardDialogTitleId())),
+      base::android::ConvertUTF16ToJavaString(env, card_label),
+      base::android::ConvertUTF16ToJavaString(env, cardholder_account),
+      base::android::ConvertUTF16ToJavaString(
+          env, l10n_util::GetStringUTF16(
+                   IDS_AUTOFILL_FIX_FLOW_PROMPT_SAVE_CARD_LABEL)));
+}
+
+void SaveCardMessageConfirmController::FixName(
     const std::u16string& inferred_cardholder_name,
-    const std::u16string& card_label) {
+    const std::u16string& card_label,
+    const std::u16string& cardholder_account) {
   if (!GetOrCreateJavaObject())
     return;
   JNIEnv* env = base::android::AttachCurrentThread();
   Java_AutofillMessageConfirmFlowBridge_dismiss(env, GetOrCreateJavaObject());
-  Java_AutofillMessageConfirmFlowBridge_confirmName(
+  Java_AutofillMessageConfirmFlowBridge_fixName(
       env, GetOrCreateJavaObject(),
       base::android::ConvertUTF16ToJavaString(
-          env,
-          l10n_util::GetStringUTF16(
-              IDS_AUTOFILL_MOBILE_SAVE_CARD_TO_CLOUD_CONFIRMATION_DIALOG_TITLE)),
+          env, l10n_util::GetStringUTF16(GetSaveCardDialogTitleId())),
       base::android::ConvertUTF16ToJavaString(env, inferred_cardholder_name),
+      base::android::ConvertUTF16ToJavaString(env, card_label),
+      base::android::ConvertUTF16ToJavaString(env, cardholder_account),
       base::android::ConvertUTF16ToJavaString(
           env, l10n_util::GetStringUTF16(
-                   IDS_AUTOFILL_FIX_FLOW_PROMPT_SAVE_CARD_LABEL)),
-      base::android::ConvertUTF16ToJavaString(env, card_label));
+                   IDS_AUTOFILL_FIX_FLOW_PROMPT_SAVE_CARD_LABEL)));
 }
 
-void SaveCardMessageConfirmController::ConfirmDate(
-    const std::string& month,
-    const std::string& year,
-    const std::u16string& card_label) {
+void SaveCardMessageConfirmController::FixDate(
+    const std::u16string& card_label,
+    const std::u16string& cardholder_account) {
   if (!GetOrCreateJavaObject())
     return;
   JNIEnv* env = base::android::AttachCurrentThread();
-  Java_AutofillMessageConfirmFlowBridge_confirmDate(
+  Java_AutofillMessageConfirmFlowBridge_fixDate(
       env, GetOrCreateJavaObject(),
-      base::android::ConvertUTF8ToJavaString(env, month),
-      base::android::ConvertUTF8ToJavaString(env, year),
       base::android::ConvertUTF16ToJavaString(
-          env,
-          l10n_util::GetStringUTF16(
-              IDS_AUTOFILL_MOBILE_SAVE_CARD_TO_CLOUD_CONFIRMATION_DIALOG_TITLE)),
+          env, l10n_util::GetStringUTF16(GetSaveCardDialogTitleId())),
+      base::android::ConvertUTF16ToJavaString(env, card_label),
+      base::android::ConvertUTF16ToJavaString(env, cardholder_account),
       base::android::ConvertUTF16ToJavaString(
           env, l10n_util::GetStringUTF16(
-                   IDS_AUTOFILL_FIX_FLOW_PROMPT_SAVE_CARD_LABEL)),
-      base::android::ConvertUTF16ToJavaString(env, card_label));
+                   IDS_AUTOFILL_FIX_FLOW_PROMPT_SAVE_CARD_LABEL)));
 }
 
-void SaveCardMessageConfirmController::ConfirmDate(
-    const std::u16string& card_label) {
-  ConfirmDate("", "", card_label);
-}
-
-void SaveCardMessageConfirmController::SetLegalMessageLine(
+void SaveCardMessageConfirmController::AddLegalMessageLine(
     const LegalMessageLine& line) {
   auto java_object = GetOrCreateJavaObject();
   if (!java_object)
     return;
   JNIEnv* env = base::android::AttachCurrentThread();
-  Java_AutofillMessageConfirmFlowBridge_setLegalMessageLine(
+  Java_AutofillMessageConfirmFlowBridge_addLegalMessageLine(
       env, java_object,
       base::android::ConvertUTF16ToJavaString(env, line.text()));
   for (const auto& link : line.links()) {
@@ -104,7 +123,7 @@ SaveCardMessageConfirmController::GetOrCreateJavaObject() {
   JNIEnv* env = base::android::AttachCurrentThread();
   ui::ViewAndroid* view_android = web_contents_->GetNativeView();
   return java_object_ = Java_AutofillMessageConfirmFlowBridge_create(
-             env, reinterpret_cast<intptr_t>(delegate_),
+             env, reinterpret_cast<intptr_t>(delegate_.get()),
              view_android->GetWindowAndroid()->GetJavaObject());
 }
 

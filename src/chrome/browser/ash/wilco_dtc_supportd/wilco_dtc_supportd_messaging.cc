@@ -10,9 +10,7 @@
 
 #include "base/bind.h"
 #include "base/callback.h"
-#include "base/cxx17_backports.h"
 #include "base/logging.h"
-#include "base/macros.h"
 #include "base/memory/shared_memory_mapping.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/string_piece.h"
@@ -29,6 +27,7 @@
 #include "extensions/browser/api/messaging/native_message_host.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/common/api/messaging/messaging_endpoint.h"
+#include "extensions/common/api/messaging/serialization_format.h"
 #include "extensions/common/extension.h"
 #include "mojo/public/cpp/system/handle.h"
 #include "url/gurl.h"
@@ -47,7 +46,7 @@ const char* const kWilcoDtcSupportdHostOrigins[] = {
 
 // Size of |kWilcoDtcSupportdHostOrigins| array.
 const size_t kWilcoDtcSupportdHostOriginsSize =
-    base::size(kWilcoDtcSupportdHostOrigins);
+    std::size(kWilcoDtcSupportdHostOrigins);
 
 // Native application name that is used for passing UI messages between the
 // wilco_dtc daemon and extensions.
@@ -75,6 +74,12 @@ class WilcoDtcSupportdExtensionOwnedMessageHost final
     : public extensions::NativeMessageHost {
  public:
   WilcoDtcSupportdExtensionOwnedMessageHost() = default;
+
+  WilcoDtcSupportdExtensionOwnedMessageHost(
+      const WilcoDtcSupportdExtensionOwnedMessageHost&) = delete;
+  WilcoDtcSupportdExtensionOwnedMessageHost& operator=(
+      const WilcoDtcSupportdExtensionOwnedMessageHost&) = delete;
+
   ~WilcoDtcSupportdExtensionOwnedMessageHost() override = default;
 
   // extensions::NativeMessageHost:
@@ -207,8 +212,6 @@ class WilcoDtcSupportdExtensionOwnedMessageHost final
   // Must be the last member.
   base::WeakPtrFactory<WilcoDtcSupportdExtensionOwnedMessageHost>
       weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(WilcoDtcSupportdExtensionOwnedMessageHost);
 };
 
 // Extensions native message host implementation that is used when the wilco_dtc
@@ -229,6 +232,11 @@ class WilcoDtcSupportdDaemonOwnedMessageHost final
         send_response_callback_(std::move(send_response_callback)) {
     DCHECK(send_response_callback_);
   }
+
+  WilcoDtcSupportdDaemonOwnedMessageHost(
+      const WilcoDtcSupportdDaemonOwnedMessageHost&) = delete;
+  WilcoDtcSupportdDaemonOwnedMessageHost& operator=(
+      const WilcoDtcSupportdDaemonOwnedMessageHost&) = delete;
 
   ~WilcoDtcSupportdDaemonOwnedMessageHost() override {
     if (send_response_callback_) {
@@ -274,8 +282,6 @@ class WilcoDtcSupportdDaemonOwnedMessageHost final
   base::OnceCallback<void(const std::string& response)> send_response_callback_;
   // Unowned.
   Client* client_ = nullptr;
-
-  DISALLOW_COPY_AND_ASSIGN(WilcoDtcSupportdDaemonOwnedMessageHost);
 };
 
 // Helper that wraps the specified OnceCallback and encapsulates logic that
@@ -296,6 +302,11 @@ class FirstNonEmptyMessageCallbackWrapper final {
     if (!pending_callback_count_)
       std::move(original_callback_).Run(std::string() /* response */);
   }
+
+  FirstNonEmptyMessageCallbackWrapper(
+      const FirstNonEmptyMessageCallbackWrapper&) = delete;
+  FirstNonEmptyMessageCallbackWrapper& operator=(
+      const FirstNonEmptyMessageCallbackWrapper&) = delete;
 
   ~FirstNonEmptyMessageCallbackWrapper() {
     if (original_callback_) {
@@ -327,8 +338,6 @@ class FirstNonEmptyMessageCallbackWrapper final {
  private:
   base::OnceCallback<void(const std::string& response)> original_callback_;
   int pending_callback_count_;
-
-  DISALLOW_COPY_AND_ASSIGN(FirstNonEmptyMessageCallbackWrapper);
 };
 
 void DeliverMessageToExtension(
@@ -338,7 +347,8 @@ void DeliverMessageToExtension(
     base::OnceCallback<void(const std::string& response)>
         send_response_callback) {
   const extensions::PortId port_id(base::UnguessableToken::Create(),
-                                   1 /* port_number */, true /* is_opener */);
+                                   1 /* port_number */, true /* is_opener */,
+                                   extensions::SerializationFormat::kJson);
   extensions::MessageService* const message_service =
       extensions::MessageService::Get(profile);
   auto native_message_host =

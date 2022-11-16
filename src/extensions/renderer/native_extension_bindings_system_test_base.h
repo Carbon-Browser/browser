@@ -8,7 +8,6 @@
 #include <memory>
 #include <string>
 
-#include "base/macros.h"
 #include "extensions/common/api/messaging/message.h"
 #include "extensions/common/api/messaging/port_id.h"
 #include "extensions/common/extension.h"
@@ -23,6 +22,7 @@
 #include "extensions/renderer/test_extensions_renderer_client.h"
 #include "mojo/public/cpp/bindings/struct_ptr.h"
 #include "testing/gmock/include/gmock/gmock.h"
+#include "v8/include/v8-forward.h"
 
 struct ExtensionHostMsg_APIActionOrEvent_Params;
 
@@ -47,6 +47,10 @@ class ScriptContextSet;
 class TestIPCMessageSender : public IPCMessageSender {
  public:
   TestIPCMessageSender();
+
+  TestIPCMessageSender(const TestIPCMessageSender&) = delete;
+  TestIPCMessageSender& operator=(const TestIPCMessageSender&) = delete;
+
   ~TestIPCMessageSender() override;
 
   // IPCMessageSender:
@@ -89,6 +93,8 @@ class TestIPCMessageSender : public IPCMessageSender {
                void(int routing_id, const PortId& port_id, bool close_channel));
   MOCK_METHOD2(SendPostMessageToPort,
                void(const PortId& port_id, const Message& message));
+  MOCK_METHOD2(SendMessageResponsePending,
+               void(int routing_id, const PortId& port_id));
   MOCK_METHOD3(SendActivityLogIPC,
                void(const ExtensionId& extension_id,
                     IPCMessageSender::ActivityLogCallType call_type,
@@ -98,8 +104,6 @@ class TestIPCMessageSender : public IPCMessageSender {
 
  private:
   mojom::RequestParamsPtr last_params_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestIPCMessageSender);
 };
 
 // A test harness to instantiate the NativeExtensionBindingsSystem (along with
@@ -108,6 +112,12 @@ class TestIPCMessageSender : public IPCMessageSender {
 class NativeExtensionBindingsSystemUnittest : public APIBindingTest {
  public:
   NativeExtensionBindingsSystemUnittest();
+
+  NativeExtensionBindingsSystemUnittest(
+      const NativeExtensionBindingsSystemUnittest&) = delete;
+  NativeExtensionBindingsSystemUnittest& operator=(
+      const NativeExtensionBindingsSystemUnittest&) = delete;
+
   ~NativeExtensionBindingsSystemUnittest() override;
 
  protected:
@@ -157,8 +167,6 @@ class NativeExtensionBindingsSystemUnittest : public APIBindingTest {
   // True if we allow some v8::Contexts to avoid registration as a
   // ScriptContext.
   bool allow_unregistered_contexts_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(NativeExtensionBindingsSystemUnittest);
 };
 
 }  // namespace extensions

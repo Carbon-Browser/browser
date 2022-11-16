@@ -4,6 +4,7 @@
 
 #include <stddef.h>
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/content_settings/cookie_settings_factory.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
@@ -18,6 +19,11 @@
 class CollectedCookiesViewsTest : public InProcessBrowserTest {
  public:
   CollectedCookiesViewsTest() = default;
+
+  CollectedCookiesViewsTest(const CollectedCookiesViewsTest&) = delete;
+  CollectedCookiesViewsTest& operator=(const CollectedCookiesViewsTest&) =
+      delete;
+
   ~CollectedCookiesViewsTest() override = default;
 
   // InProcessBrowserTest:
@@ -53,9 +59,7 @@ class CollectedCookiesViewsTest : public InProcessBrowserTest {
   }
 
  private:
-  CollectedCookiesViews* cookies_dialog_ = nullptr;
-
-  DISALLOW_COPY_AND_ASSIGN(CollectedCookiesViewsTest);
+  raw_ptr<CollectedCookiesViews> cookies_dialog_ = nullptr;
 };
 
 IN_PROC_BROWSER_TEST_F(CollectedCookiesViewsTest, CloseDialog) {

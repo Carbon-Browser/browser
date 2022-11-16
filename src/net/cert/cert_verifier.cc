@@ -30,10 +30,10 @@ CertVerifier::RequestParams::RequestParams() = default;
 
 CertVerifier::RequestParams::RequestParams(
     scoped_refptr<X509Certificate> certificate,
-    const std::string& hostname,
+    base::StringPiece hostname,
     int flags,
-    const std::string& ocsp_response,
-    const std::string& sct_list)
+    base::StringPiece ocsp_response,
+    base::StringPiece sct_list)
     : certificate_(std::move(certificate)),
       hostname_(hostname),
       flags_(flags),
@@ -51,7 +51,7 @@ CertVerifier::RequestParams::RequestParams(
     SHA256_Update(&ctx, CRYPTO_BUFFER_data(cert_handle.get()),
                   CRYPTO_BUFFER_len(cert_handle.get()));
   }
-  SHA256_Update(&ctx, hostname_.data(), hostname.size());
+  SHA256_Update(&ctx, hostname.data(), hostname.size());
   SHA256_Update(&ctx, &flags, sizeof(flags));
   SHA256_Update(&ctx, ocsp_response.data(), ocsp_response.size());
   SHA256_Update(&ctx, sct_list.data(), sct_list.size());
@@ -78,7 +78,7 @@ bool CertVerifier::RequestParams::operator<(
 std::unique_ptr<CertVerifier> CertVerifier::CreateDefaultWithoutCaching(
     scoped_refptr<CertNetFetcher> cert_net_fetcher) {
   scoped_refptr<CertVerifyProc> verify_proc;
-#if defined(OS_FUCHSIA) || defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_FUCHSIA) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   verify_proc =
       CertVerifyProc::CreateBuiltinVerifyProc(std::move(cert_net_fetcher));
 #elif BUILDFLAG(BUILTIN_CERT_VERIFIER_FEATURE_SUPPORTED)

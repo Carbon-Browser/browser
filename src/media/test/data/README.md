@@ -50,14 +50,16 @@ have the mvhd version 0 32-bit duration field set to all 1's.
 A truncated audio/video file with audio packet timestamps of -1. We need to ensure that these packets aren't dropped.
 
 #### noise-xhe-aac.mp4
+#### noise-xhe-aac-mono.mp4
 Fragmented mp4 of noise encoded with xHE-AAC, from xHE-AAC samples in [Android
-CTS](https://android.googlesource.com/platform/cts/+/master/tests/tests/media/res/raw),
+CTS](https://android.googlesource.com/platform/cts/+/master/tests/tests/media/decoder/res/raw),
 using ffmpeg version 4.2.2 (where nofillin lets audio nonkeyframes in input be
 indicated the same in output, unlike more recent tip-of-tree ffmpeg's operation
 with this option) to remux, unfortunately with empty MOOV not giving real
 duration:
 ```
 ffmpeg -fflags nofillin -i noise_2ch_48khz_aot42_19_lufs_mp4.m4a -acodec copy -t 1 -movflags frag_keyframe+empty_moov+default_base_moof noise-xhe-aac.mp4
+ffmpeg -fflags nofillin -i noise_1ch_29_4khz_aot42_19_lufs_drc_config_change_mp4.m4a -acodec copy -t 1 -movflags frag_keyframe+empty_moov+default_base_moof noise-xhe-aac-mono.mp4
 ```
 
 ### FLAC
@@ -241,6 +243,10 @@ the media data doesn't start at time 0.
 #### bear-320x240_corrupted_after_init_segment.webm
 bear-320x240.webm's initialization segment followed by "CORRUPTED\n"
 
+#### mono_cpe.adts
+Technically not corrupt since ffmpeg explicitly allows this stereo track to say
+it's mono. First second of audio from test clip on https://crbug.com/1282058.
+
 ### Live
 
 #### bear-320x240-live.webm
@@ -254,6 +260,17 @@ ffmpeg -i bear-320x240.webm -acodec copy -vcodec copy -f webm pipe:1 > bear-320x
 #### colour.webm
 a WebM file containing color metadata in MKV/WebM Colour element copied from
 libwebm/testing/testdata/colour.webm
+
+#### four-colors.png
+An image (320x240 .png file) of 4 color blocks (Y,R,G,B) is first created by
+Windows Paint.exe.
+
+#### four-colors.y4m
+A 320x240 raw YUV single frame video with 4 color blocks (Y,R,G,B)
+Converted from four-colors.png using ffmpeg:
+```
+ffmpeg -i four-colors.png  -pix_fmt yuv420p  -f yuv4mpegpipe four-colors.y4m"
+```
 
 #### four-colors.mp4
 A 960x540 H.264 mp4 video with 4 color blocks (Y,R,G,B) in every frame. The
@@ -1165,6 +1182,18 @@ tfhd.default_sample_flags: s/0x01010000/0x02000000 (second frame is sync-sample,
 doesn't depend on other frames, mismatches compressed h265 second frame's
 nonkeyframe-ness).
 
+#### bear-1280x720-hevc.mp4
+HEVC video stream with 8-bit main profile, generated with
+```
+ffmpeg -i bear-1280x720.mp4 -vcodec hevc bear-1280x720-hevc.mp4
+```
+
+#### bear-1280x720-hevc-10bit.mp4
+HEVC video stream with 10-bit main10 profile, generated with
+```
+ffmpeg -i bear-1280x720.mp4 -vcodec hevc -pix_fmt yuv420p10le bear-1280x720-hevc-10bit.mp4
+```
+
 ### Multi-track MP4 file
 
 (c) copyright 2008, Blender Foundation / www.bigbuckbunny.org
@@ -1210,7 +1239,7 @@ ffmpeg -i red.webm -i green.webm -i blue.webm -i a300hz.webm -i a500hz.webm -map
 ### Spherical metadata WebM files
 
 #### bear-spherical-metadata.webm
-bear_silent.webm video injected with "stereo_mode=SIDE_BY_SIDE_LEFT_EYE_FIRST", "projectionType=EQUIRECTANGULAR", 
+bear_silent.webm video injected with "stereo_mode=SIDE_BY_SIDE_LEFT_EYE_FIRST", "projectionType=EQUIRECTANGULAR",
 and projection pose_yaw, pose_pitch, and pose_roll = 10, 20, and 30 respectively.
 
 ### Opus pre-skip and end-trimming test clips
@@ -1222,3 +1251,9 @@ https://people.xiph.org/~greg/opus_testvectors/
 
 [libaom test vectors]: https://aomedia.googlesource.com/aom/+/master/test/test_vectors.cc
 [libaom LICENSE]: https://source.chromium.org/chromium/chromium/src/+/main:media/test/data/licenses/AOM-LICENSE
+
+
+### DTS Audio
+
+#### dts.bin
+A single DTS Coherent Acoustics audio frame

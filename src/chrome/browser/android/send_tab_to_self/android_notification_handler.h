@@ -8,6 +8,8 @@
 #include <queue>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
 #include "chrome/browser/send_tab_to_self/receiving_ui_handler.h"
 #include "components/messages/android/message_wrapper.h"
 
@@ -30,11 +32,14 @@ class AndroidNotificationHandler : public ReceivingUiHandler {
   explicit AndroidNotificationHandler(Profile* profile);
   ~AndroidNotificationHandler() override;
 
-  Profile* profile() { return profile_; }
+  const Profile* profile() const override;
 
   void UpdateWebContents(content::WebContents* web_contents);
 
  private:
+  void DisplayNewEntriesOnUIThread(
+      const std::vector<const SendTabToSelfEntry>& new_entries);
+
   // ReceivingUiHandler implementation.
   void DisplayNewEntries(
       const std::vector<const SendTabToSelfEntry*>& new_entries) override;
@@ -54,9 +59,10 @@ class AndroidNotificationHandler : public ReceivingUiHandler {
   // messages::MessageDispatcherBridge.
   std::vector<std::unique_ptr<messages::MessageWrapper>> queued_messages_;
 
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
 
-  content::WebContents* web_contents_;
+  base::WeakPtr<content::WebContents> web_contents_;
+  base::WeakPtrFactory<AndroidNotificationHandler> weak_factory_{this};
 };
 
 }  // namespace send_tab_to_self

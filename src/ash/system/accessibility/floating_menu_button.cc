@@ -9,7 +9,9 @@
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/color/color_id.h"
 #include "ui/gfx/canvas.h"
+#include "ui/gfx/paint_vector_icon.h"
 #include "ui/gfx/vector_icon_types.h"
 #include "ui/gfx/vector_icon_utils.h"
 #include "ui/views/accessibility/view_accessibility.h"
@@ -61,6 +63,7 @@ FloatingMenuButton::FloatingMenuButton(views::Button::PressedCallback callback,
   TrayPopupUtils::ConfigureTrayPopupButton(this);
   views::InstallCircleHighlightPathGenerator(this);
   SetTooltipText(l10n_util::GetStringUTF16(accessible_name_id));
+  views::FocusRing::Get(this)->SetColorId(ui::kColorAshFocusRing);
 }
 
 FloatingMenuButton::~FloatingMenuButton() = default;
@@ -140,17 +143,23 @@ void FloatingMenuButton::GetAccessibleNodeData(ui::AXNodeData* node_data) {
 
 void FloatingMenuButton::OnThemeChanged() {
   ImageButton::OnThemeChanged();
-  views::FocusRing::Get(this)->SetColor(
-      AshColorProvider::Get()->GetControlsLayerColor(
-          AshColorProvider::ControlsLayerType::kFocusRingColor));
   UpdateImage();
   SchedulePaint();
 }
 
 void FloatingMenuButton::UpdateImage() {
   DCHECK(icon_);
-  AshColorProvider::Get()->DecorateIconButton(
-      this, *icon_, toggled_, GetDefaultSizeOfVectorIcon(*icon_));
+  auto* color_provider = AshColorProvider::Get();
+  const SkColor normal_color = color_provider->GetContentLayerColor(
+      AshColorProvider::ContentLayerType::kButtonIconColor);
+  const SkColor toggled_icon_color = color_provider->GetContentLayerColor(
+      AshColorProvider::ContentLayerType::kButtonIconColorPrimary);
+  const SkColor icon_color = toggled_ ? toggled_icon_color : normal_color;
+  SetImage(views::Button::STATE_NORMAL,
+           gfx::CreateVectorIcon(*icon_, icon_color));
+  SetImage(views::Button::STATE_DISABLED,
+           gfx::CreateVectorIcon(
+               *icon_, AshColorProvider::GetDisabledColor(normal_color)));
 }
 
 BEGIN_METADATA(FloatingMenuButton, views::ImageButton)

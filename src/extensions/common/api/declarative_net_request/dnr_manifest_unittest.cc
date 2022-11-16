@@ -41,6 +41,9 @@ class DNRManifestTest : public testing::Test {
  public:
   DNRManifestTest() = default;
 
+  DNRManifestTest(const DNRManifestTest&) = delete;
+  DNRManifestTest& operator=(const DNRManifestTest&) = delete;
+
  protected:
   // Loads the extension and verifies the |expected_error|.
   void LoadAndExpectError(const std::string& expected_error) {
@@ -111,8 +114,6 @@ class DNRManifestTest : public testing::Test {
 
  private:
   base::ScopedTempDir temp_dir_;
-
-  DISALLOW_COPY_AND_ASSIGN(DNRManifestTest);
 };
 
 TEST_F(DNRManifestTest, EmptyRuleset) {
@@ -124,7 +125,7 @@ TEST_F(DNRManifestTest, EmptyRuleset) {
 TEST_F(DNRManifestTest, InvalidManifestKey) {
   std::vector<TestRulesetInfo> rulesets({CreateDefaultRuleset()});
   std::unique_ptr<base::DictionaryValue> manifest = CreateManifest(rulesets);
-  manifest->SetInteger(dnr_api::ManifestKeys::kDeclarativeNetRequest, 3);
+  manifest->SetIntKey(dnr_api::ManifestKeys::kDeclarativeNetRequest, 3);
 
   WriteManifestAndRuleset(*manifest, rulesets);
   LoadAndExpectError(
@@ -135,7 +136,7 @@ TEST_F(DNRManifestTest, InvalidManifestKey) {
 TEST_F(DNRManifestTest, InvalidRulesFileKey) {
   std::vector<TestRulesetInfo> rulesets({CreateDefaultRuleset()});
   std::unique_ptr<base::DictionaryValue> manifest = CreateManifest(rulesets);
-  manifest->SetInteger(GetRuleResourcesKey(), 3);
+  manifest->SetIntPath(GetRuleResourcesKey(), 3);
 
   WriteManifestAndRuleset(*manifest, rulesets);
   LoadAndExpectError(

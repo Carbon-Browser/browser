@@ -18,12 +18,13 @@
 #include "base/files/file_path.h"
 #include "base/json/json_writer.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/single_thread_task_executor.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread.h"
 #include "base/time/default_tick_clock.h"
 #include "base/values.h"
@@ -107,17 +108,16 @@ void WriteStatsAndDestroySubscribers(
   cast_environment->logger()->Unsubscribe(audio_stats_subscriber.get());
   cast_environment->logger()->Unsubscribe(estimator.get());
 
-  std::unique_ptr<base::DictionaryValue> stats =
-      video_stats_subscriber->GetStats();
+  base::Value::Dict stats = video_stats_subscriber->GetStats();
   std::string json;
   base::JSONWriter::WriteWithOptions(
-      *stats, base::JSONWriter::OPTIONS_PRETTY_PRINT, &json);
+      stats, base::JSONWriter::OPTIONS_PRETTY_PRINT, &json);
   VLOG(0) << "Video stats: " << json;
 
   stats = audio_stats_subscriber->GetStats();
   json.clear();
   base::JSONWriter::WriteWithOptions(
-      *stats, base::JSONWriter::OPTIONS_PRETTY_PRINT, &json);
+      stats, base::JSONWriter::OPTIONS_PRETTY_PRINT, &json);
   VLOG(0) << "Audio stats: " << json;
 }
 
@@ -126,6 +126,9 @@ class TransportClient : public media::cast::CastTransport::Client {
   explicit TransportClient(
       media::cast::LogEventDispatcher* log_event_dispatcher)
       : log_event_dispatcher_(log_event_dispatcher) {}
+
+  TransportClient(const TransportClient&) = delete;
+  TransportClient& operator=(const TransportClient&) = delete;
 
   void OnStatusChanged(media::cast::CastTransportStatus status) final {
     VLOG(1) << "Transport status: " << status;
@@ -141,10 +144,8 @@ class TransportClient : public media::cast::CastTransport::Client {
   void ProcessRtpPacket(std::unique_ptr<media::cast::Packet> packet) final {}
 
  private:
-  media::cast::LogEventDispatcher* const
+  const raw_ptr<media::cast::LogEventDispatcher>
       log_event_dispatcher_;  // Not owned by this class.
-
-  DISALLOW_COPY_AND_ASSIGN(TransportClient);
 };
 
 }  // namespace
@@ -218,7 +219,7 @@ int main(int argc, char** argv) {
   // CastTransport initialization.
   std::unique_ptr<media::cast::CastTransport> transport_sender =
       media::cast::CastTransport::Create(
-          cast_environment->Clock(), base::TimeDelta::FromSeconds(1),
+          cast_environment->Clock(), base::Seconds(1),
           std::make_unique<TransportClient>(cast_environment->logger()),
           std::make_unique<media::cast::UdpTransportImpl>(
               io_task_executor.task_runner(), net::IPEndPoint(),
@@ -275,7 +276,7 @@ int main(int argc, char** argv) {
                      std::move(video_event_subscriber),
                      std::move(audio_event_subscriber),
                      std::move(video_log_file), std::move(audio_log_file)),
-      base::TimeDelta::FromSeconds(logging_duration_seconds));
+      base::Seconds(logging_duration_seconds));
 
   io_task_executor.task_runner()->PostDelayedTask(
       FROM_HERE,
@@ -283,7 +284,7 @@ int main(int argc, char** argv) {
                      std::move(video_stats_subscriber),
                      std::move(audio_stats_subscriber),
                      std::move(offset_estimator)),
-      base::TimeDelta::FromSeconds(logging_duration_seconds));
+      base::Seconds(logging_duration_seconds));
 
   // CastSender initialization.
   std::unique_ptr<media::cast::CastSender> cast_sender =

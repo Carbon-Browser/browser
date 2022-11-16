@@ -26,6 +26,12 @@ using UkmEntry = ukm::builders::PageForegroundSession;
 class ForegroundDurationUKMObserverBrowserTest : public InProcessBrowserTest {
  public:
   ForegroundDurationUKMObserverBrowserTest() {}
+
+  ForegroundDurationUKMObserverBrowserTest(
+      const ForegroundDurationUKMObserverBrowserTest&) = delete;
+  ForegroundDurationUKMObserverBrowserTest& operator=(
+      const ForegroundDurationUKMObserverBrowserTest&) = delete;
+
   ~ForegroundDurationUKMObserverBrowserTest() override {}
 
   void PreRunTestOnMainThread() override {
@@ -71,8 +77,6 @@ class ForegroundDurationUKMObserverBrowserTest : public InProcessBrowserTest {
  private:
   std::unique_ptr<ukm::TestAutoSetUkmRecorder> test_ukm_recorder_;
   std::unique_ptr<net::EmbeddedTestServer> https_test_server_;
-
-  DISALLOW_COPY_AND_ASSIGN(ForegroundDurationUKMObserverBrowserTest);
 };
 
 IN_PROC_BROWSER_TEST_F(ForegroundDurationUKMObserverBrowserTest, RecordSimple) {
@@ -97,13 +101,21 @@ IN_PROC_BROWSER_TEST_F(ForegroundDurationUKMObserverBrowserTest, TabSwitching) {
 
   TabStripModel* tab_strip_model = browser()->tab_strip_model();
   EXPECT_EQ(2, tab_strip_model->count());
-  EXPECT_EQ(url1, tab_strip_model->GetWebContentsAt(0)->GetURL());
-  EXPECT_EQ(url2, tab_strip_model->GetWebContentsAt(1)->GetURL());
+  EXPECT_EQ(url1, tab_strip_model->GetWebContentsAt(0)->GetLastCommittedURL());
+  EXPECT_EQ(url2, tab_strip_model->GetWebContentsAt(1)->GetLastCommittedURL());
 
-  tab_strip_model->ActivateTabAt(0, {TabStripModel::GestureType::kOther});
-  tab_strip_model->ActivateTabAt(1, {TabStripModel::GestureType::kOther});
-  tab_strip_model->ActivateTabAt(0, {TabStripModel::GestureType::kOther});
-  tab_strip_model->ActivateTabAt(1, {TabStripModel::GestureType::kOther});
+  tab_strip_model->ActivateTabAt(
+      0, TabStripUserGestureDetails(
+             TabStripUserGestureDetails::GestureType::kOther));
+  tab_strip_model->ActivateTabAt(
+      1, TabStripUserGestureDetails(
+             TabStripUserGestureDetails::GestureType::kOther));
+  tab_strip_model->ActivateTabAt(
+      0, TabStripUserGestureDetails(
+             TabStripUserGestureDetails::GestureType::kOther));
+  tab_strip_model->ActivateTabAt(
+      1, TabStripUserGestureDetails(
+             TabStripUserGestureDetails::GestureType::kOther));
   tab_strip_model->CloseAllTabs();
   ExpectMetricCountForUrl(url1, "ForegroundDuration", 3);
   ExpectMetricCountForUrl(url1, "ForegroundNumInputEvents", 3);

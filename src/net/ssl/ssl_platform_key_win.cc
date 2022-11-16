@@ -11,7 +11,6 @@
 #include <vector>
 
 #include "base/logging.h"
-#include "base/macros.h"
 #include "base/strings/utf_string_conversions.h"
 #include "crypto/openssl_util.h"
 #include "crypto/scoped_capi_types.h"
@@ -54,6 +53,9 @@ class SSLPlatformKeyCAPI : public ThreadedSSLPrivateKey::Delegate {
       : provider_name_(GetCAPIProviderName(provider.get())),
         provider_(std::move(provider)),
         key_spec_(key_spec) {}
+
+  SSLPlatformKeyCAPI(const SSLPlatformKeyCAPI&) = delete;
+  SSLPlatformKeyCAPI& operator=(const SSLPlatformKeyCAPI&) = delete;
 
   ~SSLPlatformKeyCAPI() override = default;
 
@@ -149,8 +151,6 @@ class SSLPlatformKeyCAPI : public ThreadedSSLPrivateKey::Delegate {
   std::string provider_name_;
   crypto::ScopedHCRYPTPROV provider_;
   DWORD key_spec_;
-
-  DISALLOW_COPY_AND_ASSIGN(SSLPlatformKeyCAPI);
 };
 
 class ScopedNCRYPT_PROV_HANDLE {
@@ -219,6 +219,9 @@ class SSLPlatformKeyCNG : public ThreadedSSLPrivateKey::Delegate {
         key_(key),
         type_(type),
         max_length_(max_length) {}
+
+  SSLPlatformKeyCNG(const SSLPlatformKeyCNG&) = delete;
+  SSLPlatformKeyCNG& operator=(const SSLPlatformKeyCNG&) = delete;
 
   ~SSLPlatformKeyCNG() override { NCryptFreeObject(key_); }
 
@@ -375,8 +378,6 @@ class SSLPlatformKeyCNG : public ThreadedSSLPrivateKey::Delegate {
   NCRYPT_KEY_HANDLE key_;
   int type_;
   size_t max_length_;
-
-  DISALLOW_COPY_AND_ASSIGN(SSLPlatformKeyCNG);
 };
 
 }  // namespace

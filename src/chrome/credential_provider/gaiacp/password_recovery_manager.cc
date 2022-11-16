@@ -42,11 +42,11 @@ namespace credential_provider {
 
 const base::TimeDelta
     PasswordRecoveryManager::kDefaultEscrowServiceEncryptionKeyRequestTimeout =
-        base::TimeDelta::FromMilliseconds(12000);
+        base::Milliseconds(12000);
 
 const base::TimeDelta
     PasswordRecoveryManager::kDefaultEscrowServiceDecryptionKeyRequestTimeout =
-        base::TimeDelta::FromMilliseconds(3000);
+        base::Milliseconds(3000);
 
 namespace {
 
@@ -538,7 +538,7 @@ HRESULT PasswordRecoveryManager::RecoverWindowsPasswordIfPossible(
   std::wstring store_key = GetUserPasswordLsaStoreKey(sid);
   wchar_t password_lsa_data[1024];
   HRESULT hr = policy->RetrievePrivateData(store_key.c_str(), password_lsa_data,
-                                           base::size(password_lsa_data));
+                                           std::size(password_lsa_data));
 
   if (FAILED(hr))
     LOGFN(ERROR) << "RetrievePrivateData hr=" << putHR(hr);

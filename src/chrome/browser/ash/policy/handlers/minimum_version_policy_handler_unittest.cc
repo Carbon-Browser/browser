@@ -6,6 +6,8 @@
 
 #include <memory>
 
+#include "ash/components/settings/cros_settings_names.h"
+#include "ash/components/tpm/stub_install_attributes.h"
 #include "ash/constants/ash_features.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
@@ -19,27 +21,24 @@
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/scoped_testing_local_state.h"
 #include "chrome/test/base/testing_browser_process.h"
+#include "chromeos/ash/components/dbus/update_engine/fake_update_engine_client.h"
+#include "chromeos/ash/components/dbus/update_engine/update_engine_client.h"
+#include "chromeos/ash/components/network/network_handler_test_helper.h"
 #include "chromeos/dbus/dbus_thread_manager.h"
 #include "chromeos/dbus/shill/shill_service_client.h"
-#include "chromeos/dbus/update_engine/fake_update_engine_client.h"
-#include "chromeos/network/network_handler_test_helper.h"
-#include "chromeos/settings/cros_settings_names.h"
-#include "chromeos/tpm/stub_install_attributes.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
-using testing::_;
-using testing::Mock;
-
-using MinimumVersionRequirement =
-    policy::MinimumVersionPolicyHandler::MinimumVersionRequirement;
-
 namespace policy {
 
 namespace {
+
+using MinimumVersionRequirement =
+    MinimumVersionPolicyHandler::MinimumVersionRequirement;
+
 const char kFakeCurrentVersion[] = "13305.20.0";
 const char kNewVersion[] = "13305.25.0";
 const char kNewerVersion[] = "13310.0.0";
@@ -96,8 +95,8 @@ class MinimumVersionPolicyHandlerTest
   ScopedTestingLocalState local_state_;
   base::test::ScopedFeatureList feature_list_;
   ash::ScopedTestingCrosSettings scoped_testing_cros_settings_;
-  chromeos::ScopedStubInstallAttributes scoped_stub_install_attributes_;
-  chromeos::FakeUpdateEngineClient* fake_update_engine_client_;
+  ash::ScopedStubInstallAttributes scoped_stub_install_attributes_;
+  ash::FakeUpdateEngineClient* fake_update_engine_client_;
   std::unique_ptr<chromeos::NetworkHandlerTestHelper>
       network_handler_test_helper_;
   std::unique_ptr<base::Version> current_version_;
@@ -110,12 +109,8 @@ MinimumVersionPolicyHandlerTest::MinimumVersionPolicyHandlerTest()
 }
 
 void MinimumVersionPolicyHandlerTest::SetUp() {
-  auto fake_update_engine_client =
-      std::make_unique<chromeos::FakeUpdateEngineClient>();
-  fake_update_engine_client_ = fake_update_engine_client.get();
   chromeos::DBusThreadManager::Initialize();
-  chromeos::DBusThreadManager::GetSetterForTesting()->SetUpdateEngineClient(
-      std::move(fake_update_engine_client));
+  fake_update_engine_client_ = ash::UpdateEngineClient::InitializeFakeForTest();
   network_handler_test_helper_ =
       std::make_unique<chromeos::NetworkHandlerTestHelper>();
 
@@ -136,6 +131,7 @@ void MinimumVersionPolicyHandlerTest::SetUp() {
 void MinimumVersionPolicyHandlerTest::TearDown() {
   minimum_version_policy_handler_.reset();
   network_handler_test_helper_.reset();
+  ash::UpdateEngineClient::Shutdown();
   chromeos::DBusThreadManager::Shutdown();
 }
 
@@ -182,7 +178,7 @@ base::Version MinimumVersionPolicyHandlerTest::GetCurrentVersion() const {
 
 void MinimumVersionPolicyHandlerTest::SetPolicyPref(base::Value value) {
   scoped_testing_cros_settings_.device_settings()->Set(
-      chromeos::kDeviceMinimumVersion, value);
+      ash::kDeviceMinimumVersion, value);
 }
 
 TEST_F(MinimumVersionPolicyHandlerTest, RequirementsNotMetState) {
@@ -348,7 +344,7 @@ TEST_F(MinimumVersionPolicyHandlerTest, DeadlineTimerExpired) {
   // Expire the timer and check that user is logged out of the session.
   EXPECT_CALL(*this, IsLoginSessionState()).Times(1);
   EXPECT_CALL(*this, RestartToLoginScreen()).Times(1);
-  const base::TimeDelta warning = base::TimeDelta::FromDays(kLongWarning);
+  const base::TimeDelta warning = base::Days(kLongWarning);
   task_environment.FastForwardBy(warning);
   EXPECT_FALSE(
       GetMinimumVersionPolicyHandler()->IsDeadlineTimerRunningForTesting());

@@ -32,9 +32,14 @@ Polymer({
       {
         customItemName: 'addWiFiListItemName',
         polymerIcon: 'cr:add',
-        customData: 'WiFi'
+        customData: 'WiFi',
       },
     ];
+  },
+
+  /** @override */
+  ready() {
+    chrome.send('initialize');
   },
 
   /**

@@ -65,7 +65,8 @@ std::unique_ptr<base::Value> ValueResultFromWKResult(id wk_result,
       std::unique_ptr<base::Value> value =
           ValueResultFromWKResult(list_item, max_depth - 1);
       if (value) {
-        list->Append(std::move(value));
+        list->GetList().Append(
+            base::Value::FromUniquePtrValue(std::move(value)));
       }
     }
     result = std::move(list);
@@ -113,13 +114,11 @@ void ExecuteJavaScript(WKWebView* web_view,
   [web_view evaluateJavaScript:script completionHandler:completion_handler];
 }
 
-#if defined(__IPHONE_14_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_14_0
 void ExecuteJavaScript(WKWebView* web_view,
                        WKContentWorld* content_world,
                        WKFrameInfo* frame_info,
                        NSString* script,
-                       void (^completion_handler)(id, NSError*))
-    API_AVAILABLE(ios(14.0)) {
+                       void (^completion_handler)(id, NSError*)) {
   if (!content_world && !frame_info) {
     // The -[WKWebView evaluateJavaScript:inFrame:inContentWorld:
     // completionHandler:] API requires a content_world. However, if no specific
@@ -149,6 +148,5 @@ void ExecuteJavaScript(WKWebView* web_view,
                 inContentWorld:content_world
              completionHandler:completion_handler];
 }
-#endif  // defined(__IPHONE14_0)
 
 }  // namespace web

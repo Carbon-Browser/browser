@@ -5,13 +5,27 @@
 #include "ui/accessibility/platform/ax_platform_node_unittest.h"
 
 #include "ui/accessibility/ax_constants.mojom.h"
+#include "ui/accessibility/platform/ax_platform_node_base.h"
 #include "ui/accessibility/platform/test_ax_node_wrapper.h"
+#include "ui/accessibility/platform/test_ax_tree_update.h"
 
 namespace ui {
 
 AXPlatformNodeTest::AXPlatformNodeTest() = default;
 
 AXPlatformNodeTest::~AXPlatformNodeTest() = default;
+
+void AXPlatformNodeTest::TearDown() {
+  // Destroy the tree and make sure we're not leaking any objects.
+  DestroyTree();
+
+#if BUILDFLAG_INTERNAL_HAS_NATIVE_ACCESSIBILITY()
+  TestAXNodeWrapper::SetGlobalIsWebContent(false);
+  TestAXNodeWrapper::ResetGlobalState();
+#endif  // BUILDFLAG_INTERNAL_HAS_NATIVE_ACCESSIBILITY()
+
+  ASSERT_EQ(0U, AXPlatformNodeBase::GetInstanceCountForTesting());
+}
 
 void AXPlatformNodeTest::Init(const AXTreeUpdate& initial_state) {
   SetTree(std::make_unique<AXTree>(initial_state));
@@ -26,38 +40,45 @@ void AXPlatformNodeTest::Init(
     const ui::AXNodeData& node6 /* = ui::AXNodeData() */,
     const ui::AXNodeData& node7 /* = ui::AXNodeData() */,
     const ui::AXNodeData& node8 /* = ui::AXNodeData() */,
-    const ui::AXNodeData& node9 /* = ui::AXNodeData() */,
-    const ui::AXNodeData& node10 /* = ui::AXNodeData() */,
-    const ui::AXNodeData& node11 /* = ui::AXNodeData() */,
-    const ui::AXNodeData& node12 /* = ui::AXNodeData() */) {
-  static ui::AXNodeData empty_data;
-  int32_t no_id = empty_data.id;
+    const ui::AXNodeData& node9 /* = AXNodeData() */,
+    const ui::AXNodeData& node10 /* = AXNodeData() */,
+    const ui::AXNodeData& node11 /* = AXNodeData() */,
+    const ui::AXNodeData& node12 /* = AXNodeData() */) {
   AXTreeUpdate update;
   update.root_id = node1.id;
+  update.has_tree_data = true;
+  update.tree_data.tree_id = AXTreeID::CreateNewAXTreeID();
+  update.tree_data.title = "Dialog title";
   update.nodes.push_back(node1);
-  if (node2.id != no_id)
+  if (node2.id != kInvalidAXNodeID)
     update.nodes.push_back(node2);
-  if (node3.id != no_id)
+  if (node3.id != kInvalidAXNodeID)
     update.nodes.push_back(node3);
-  if (node4.id != no_id)
+  if (node4.id != kInvalidAXNodeID)
     update.nodes.push_back(node4);
-  if (node5.id != no_id)
+  if (node5.id != kInvalidAXNodeID)
     update.nodes.push_back(node5);
-  if (node6.id != no_id)
+  if (node6.id != kInvalidAXNodeID)
     update.nodes.push_back(node6);
-  if (node7.id != no_id)
+  if (node7.id != kInvalidAXNodeID)
     update.nodes.push_back(node7);
-  if (node8.id != no_id)
+  if (node8.id != kInvalidAXNodeID)
     update.nodes.push_back(node8);
-  if (node9.id != no_id)
+  if (node9.id != kInvalidAXNodeID)
     update.nodes.push_back(node9);
-  if (node10.id != no_id)
+  if (node10.id != kInvalidAXNodeID)
     update.nodes.push_back(node10);
-  if (node11.id != no_id)
+  if (node11.id != kInvalidAXNodeID)
     update.nodes.push_back(node11);
-  if (node12.id != no_id)
+  if (node12.id != kInvalidAXNodeID)
     update.nodes.push_back(node12);
   Init(update);
+}
+
+AXTree* AXPlatformNodeTest::Init(const TestAXTreeUpdateNode& root) {
+  TestAXTreeUpdate update(root);
+  Init(update);
+  return GetTree();
 }
 
 AXTreeUpdate AXPlatformNodeTest::BuildTextField() {
@@ -67,6 +88,8 @@ AXTreeUpdate AXPlatformNodeTest::BuildTextField() {
   text_field_node.AddState(ax::mojom::State::kEditable);
   text_field_node.AddStringAttribute(ax::mojom::StringAttribute::kHtmlTag,
                                      "input");
+  text_field_node.AddStringAttribute(ax::mojom::StringAttribute::kInputType,
+                                     "text");
   text_field_node.SetValue("How now brown cow.");
 
   AXTreeUpdate update;
@@ -84,6 +107,8 @@ AXTreeUpdate AXPlatformNodeTest::BuildTextFieldWithSelectionRange(
   text_field_node.AddState(ax::mojom::State::kEditable);
   text_field_node.AddStringAttribute(ax::mojom::StringAttribute::kHtmlTag,
                                      "input");
+  text_field_node.AddStringAttribute(ax::mojom::StringAttribute::kInputType,
+                                     "text");
   text_field_node.AddBoolAttribute(ax::mojom::BoolAttribute::kSelected, true);
   text_field_node.AddIntAttribute(ax::mojom::IntAttribute::kTextSelStart,
                                   start);

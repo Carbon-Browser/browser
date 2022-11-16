@@ -39,6 +39,7 @@ import org.chromium.components.offline_items_collection.OfflineItemState;
 import org.chromium.components.offline_items_collection.UpdateDelta;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
 import org.chromium.net.test.EmbeddedTestServer;
+import org.chromium.url.GURL;
 
 import java.io.ByteArrayInputStream;
 import java.util.HashSet;
@@ -87,13 +88,10 @@ public class OMADownloadHandlerTest {
         }
 
         @Override
-        public void onDownloadItemUpdated(DownloadItem downloadItem) {
-            OfflineItem offlineItem = DownloadItem.createOfflineItem(downloadItem);
-            onItemUpdated(offlineItem, null);
-        }
+        public void showIncognitoDownloadMessage(Callback<Boolean> callback) {}
 
         @Override
-        public void onDownloadItemRemoved(ContentId contentId) {}
+        public void addDownloadInterstitialSource(GURL originalUrl) {}
 
         @Override
         public void onItemsAdded(List<OfflineItem> items) {}

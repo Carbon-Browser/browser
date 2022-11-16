@@ -30,8 +30,8 @@
 
 #include "third_party/blink/renderer/core/clipboard/clipboard_utilities.h"
 
+#include "base/strings/escape.h"
 #include "mojo/public/cpp/base/big_buffer.h"
-#include "net/base/escape.h"
 #include "third_party/blink/renderer/platform/image-encoders/image_encoder.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 #include "third_party/blink/renderer/platform/wtf/text/base64.h"
@@ -69,14 +69,14 @@ String ConvertURIListToURL(const String& uri_list) {
 }
 
 static String EscapeForHTML(const String& str) {
-  // net::EscapeForHTML can work on 8-bit Latin-1 strings as well as 16-bit
+  // base::EscapeForHTML can work on 8-bit Latin-1 strings as well as 16-bit
   // strings.
   if (str.Is8Bit()) {
-    auto result = net::EscapeForHTML(
+    auto result = base::EscapeForHTML(
         {reinterpret_cast<const char*>(str.Characters8()), str.length()});
     return String(result.data(), result.size());
   }
-  auto result = net::EscapeForHTML({str.Characters16(), str.length()});
+  auto result = base::EscapeForHTML({str.Characters16(), str.length()});
   return String(result.data(), result.size());
 }
 
@@ -96,31 +96,6 @@ String URLToImageMarkup(const KURL& url, const String& title) {
 
 String PNGToImageMarkup(const mojo_base::BigBuffer& png_data) {
   if (!png_data.size())
-    return String();
-
-  StringBuilder markup;
-  markup.Append("<img src=\"data:image/png;base64,");
-  markup.Append(Base64Encode(png_data));
-  markup.Append("\" alt=\"\"/>");
-  return markup.ToString();
-}
-
-// TODO(crbug.com/1223849): Remove this method once `ReadImage()` is removed.
-String BitmapToImageMarkup(const SkBitmap& bitmap) {
-  if (bitmap.isNull())
-    return String();
-
-  // Encode bitmap to Vector<uint8_t> on the main thread.
-  SkPixmap pixmap;
-  bitmap.peekPixels(&pixmap);
-
-  // Set encoding options to favor speed over size.
-  SkPngEncoder::Options options;
-  options.fZLibLevel = 1;
-  options.fFilterFlags = SkPngEncoder::FilterFlag::kNone;
-
-  Vector<uint8_t> png_data;
-  if (!ImageEncoder::Encode(&png_data, pixmap, options))
     return String();
 
   StringBuilder markup;

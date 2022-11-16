@@ -6,7 +6,7 @@
   TestRunner.addResult('Tests that styles sidebar can be navigated with arrow keys.\n');
 
   await TestRunner.showPanel('elements');
-  await TestRunner.loadModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
+  await TestRunner.loadLegacyModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
 
   await TestRunner.loadHTML(`
     <style>
@@ -71,7 +71,7 @@
 
   function dumpState() {
     TestRunner.addResult('Editing: ' + UI.isEditing())
-    TestRunner.addResult(document.deepActiveElement().textContent);
+    TestRunner.addResult(Platform.DOMUtilities.deepActiveElement(document).textContent);
     TestRunner.addResult('');
   }
 

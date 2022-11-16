@@ -2,8 +2,9 @@ Name: Guava ListenableFuture only
 Short Name: listenablefuture
 URL: https://github.com/google/guava
 Version: 1.0
-License: 
+License: Apache 2.0
 License File: LICENSE
+CPEPrefix: unknown
 Security Critical: yes
 
 Description:

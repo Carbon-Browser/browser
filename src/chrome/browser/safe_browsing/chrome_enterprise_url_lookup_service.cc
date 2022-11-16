@@ -5,7 +5,6 @@
 #include "chrome/browser/safe_browsing/chrome_enterprise_url_lookup_service.h"
 
 #include "base/callback.h"
-#include "base/task/post_task.h"
 #include "chrome/browser/enterprise/connectors/connectors_service.h"
 #include "chrome/browser/policy/dm_token_utils.h"
 #include "chrome/browser/profiles/profile.h"
@@ -56,14 +55,14 @@ bool ChromeEnterpriseRealTimeUrlLookupService::
   return false;
 }
 
-bool ChromeEnterpriseRealTimeUrlLookupService::CanAttachReferrerChain() const {
-  return base::FeatureList::IsEnabled(
-      kRealTimeUrlLookupReferrerChainForEnterprise);
-}
-
 int ChromeEnterpriseRealTimeUrlLookupService::GetReferrerUserGestureLimit()
     const {
   return 2;
+}
+
+bool ChromeEnterpriseRealTimeUrlLookupService::CanSendPageLoadToken() const {
+  // Page load token is disabled for enterprise users.
+  return false;
 }
 
 bool ChromeEnterpriseRealTimeUrlLookupService::CanCheckSubresourceURL() const {
@@ -76,6 +75,8 @@ bool ChromeEnterpriseRealTimeUrlLookupService::CanCheckSafeBrowsingDb() const {
 
 void ChromeEnterpriseRealTimeUrlLookupService::GetAccessToken(
     const GURL& url,
+    const GURL& last_committed_url,
+    bool is_mainframe,
     RTLookupRequestCallback request_callback,
     RTLookupResponseCallback response_callback,
     scoped_refptr<base::SequencedTaskRunner> callback_task_runner) {
@@ -138,7 +139,7 @@ std::string ChromeEnterpriseRealTimeUrlLookupService::GetMetricSuffix() const {
 
 bool ChromeEnterpriseRealTimeUrlLookupService::ShouldIncludeCredentials()
     const {
-  return !base::FeatureList::IsEnabled(kSafeBrowsingRemoveCookies);
+  return false;
 }
 
 double ChromeEnterpriseRealTimeUrlLookupService::
@@ -146,6 +147,11 @@ double ChromeEnterpriseRealTimeUrlLookupService::
   // Enterprise URL lookup is enabled at startup and managed by the admin, so
   // all referrer URLs should be included in the referrer chain.
   return 0;
+}
+
+bool ChromeEnterpriseRealTimeUrlLookupService::CanSendRTSampleRequest() const {
+  // Do not send sampled pings for enterprise users.
+  return false;
 }
 
 }  // namespace safe_browsing

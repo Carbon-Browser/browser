@@ -75,24 +75,25 @@ class ProcessorEntity {
   // Returns true if the specified update version does not contain new data.
   bool UpdateIsReflection(int64_t update_version) const;
 
-  void RecordEntityUpdateLatency(int64_t update_version, ModelType type);
-
   // Records that an update from the server was received but ignores its data.
-  void RecordIgnoredUpdate(const UpdateResponseData& response_data);
+  void RecordIgnoredRemoteUpdate(const UpdateResponseData& response_data);
 
   // Records an update from the server assuming its data is the new data for
   // this entity.
-  void RecordAcceptedUpdate(const UpdateResponseData& response_data);
+  void RecordAcceptedRemoteUpdate(const UpdateResponseData& response_data,
+                                  sync_pb::EntitySpecifics trimmed_specifics);
 
   // Squashes a pending commit with an update from the server.
-  void RecordForcedUpdate(const UpdateResponseData& response_data);
+  void RecordForcedRemoteUpdate(const UpdateResponseData& response_data,
+                                sync_pb::EntitySpecifics trimmed_specifics);
 
   // Applies a local change to this item.
-  void MakeLocalChange(std::unique_ptr<EntityData> data);
+  void RecordLocalUpdate(std::unique_ptr<EntityData> data,
+                         sync_pb::EntitySpecifics trimmed_specifics);
 
   // Applies a local deletion to this item. Returns true if entity was
   // previously committed to server and tombstone should be sent.
-  bool Delete();
+  bool RecordLocalDeletion();
 
   // Initializes a message representing this item's uncommitted state
   // and assumes that it is forwarded to the sync engine for commiting.
@@ -123,8 +124,6 @@ class ProcessorEntity {
   // Takes the passed commit data updates its fields with values from metadata
   // and caches it in the instance.
   void SetCommitData(std::unique_ptr<EntityData> data);
-
-  void CacheCommitData(std::unique_ptr<EntityData> data);
 
   // Check if the instance has cached commit data.
   bool HasCommitData() const;
@@ -175,8 +174,6 @@ class ProcessorEntity {
   // The time when this entity transition from being synced to being unsynced
   // (i.e. a local change happened).
   base::Time unsynced_time_;
-
-  std::map<int64_t, base::Time> unsynced_time_per_committed_server_version_;
 };
 
 }  // namespace syncer

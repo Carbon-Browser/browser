@@ -5,8 +5,7 @@
 #ifndef CHROME_BROWSER_PERFORMANCE_MANAGER_MECHANISMS_USERSPACE_SWAP_CHROMEOS_H_
 #define CHROME_BROWSER_PERFORMANCE_MANAGER_MECHANISMS_USERSPACE_SWAP_CHROMEOS_H_
 
-#include "base/macros.h"
-#include "chromeos/memory/userspace_swap/userspace_swap.mojom.h"
+#include "chromeos/ash/components/memory/userspace_swap/userspace_swap.mojom.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 
 namespace performance_manager {
@@ -51,6 +50,12 @@ class UserspaceSwapInitializationImpl
   using MemoryRegionPtr = ::userspace_swap::mojom::MemoryRegionPtr;
 
   explicit UserspaceSwapInitializationImpl(int render_process_host_id);
+
+  UserspaceSwapInitializationImpl(const UserspaceSwapInitializationImpl&) =
+      delete;
+  UserspaceSwapInitializationImpl& operator=(
+      const UserspaceSwapInitializationImpl&) = delete;
+
   ~UserspaceSwapInitializationImpl() override;
 
   static bool UserspaceSwapSupportedAndEnabled();
@@ -69,8 +74,6 @@ class UserspaceSwapInitializationImpl
  private:
   int render_process_host_id_ = 0;
   bool received_transfer_cb_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(UserspaceSwapInitializationImpl);
 };
 
 }  // namespace userspace_swap

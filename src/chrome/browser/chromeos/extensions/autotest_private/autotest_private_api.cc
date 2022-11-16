@@ -12,9 +12,17 @@
 #include <sstream>
 #include <utility>
 
-#include "ash/components/quick_answers/public/cpp/quick_answers_prefs.h"
+#include "ash/components/arc/arc_prefs.h"
+#include "ash/components/arc/metrics/arc_metrics_constants.h"
+#include "ash/components/arc/mojom/system_ui.mojom-shared.h"
+#include "ash/components/arc/session/arc_bridge_service.h"
+#include "ash/components/arc/session/arc_service_manager.h"
+#include "ash/components/arc/system_ui/arc_system_ui_bridge.h"
+#include "ash/components/login/auth/public/user_context.h"
+#include "ash/components/settings/cros_settings_names.h"
 #include "ash/constants/app_types.h"
 #include "ash/constants/ash_pref_names.h"
+#include "ash/constants/ash_switches.h"
 #include "ash/public/cpp/accelerators.h"
 #include "ash/public/cpp/accessibility_controller.h"
 #include "ash/public/cpp/ambient/ambient_ui_model.h"
@@ -22,6 +30,8 @@
 #include "ash/public/cpp/autotest_ambient_api.h"
 #include "ash/public/cpp/autotest_desks_api.h"
 #include "ash/public/cpp/autotest_private_api_utils.h"
+#include "ash/public/cpp/holding_space/holding_space_model.h"
+#include "ash/public/cpp/holding_space/holding_space_prefs.h"
 #include "ash/public/cpp/login_screen.h"
 #include "ash/public/cpp/metrics_util.h"
 #include "ash/public/cpp/overview_test_api.h"
@@ -32,6 +42,7 @@
 #include "ash/public/cpp/shelf_types.h"
 #include "ash/public/cpp/shelf_ui_info.h"
 #include "ash/public/cpp/split_view_test_api.h"
+#include "ash/public/cpp/style/dark_light_mode_controller.h"
 #include "ash/public/cpp/tablet_mode.h"
 #include "ash/public/cpp/window_properties.h"
 #include "ash/rotator/screen_rotation_animator.h"
@@ -39,8 +50,12 @@
 #include "ash/wm/wm_event.h"
 #include "base/base64.h"
 #include "base/bind.h"
+#include "base/command_line.h"
+#include "base/compiler_specific.h"
 #include "base/feature_list.h"
+#include "base/i18n/base_i18n_switches.h"
 #include "base/json/json_reader.h"
+#include "base/json/values_util.h"
 #include "base/lazy_instance.h"
 #include "base/no_destructor.h"
 #include "base/numerics/safe_conversions.h"
@@ -49,10 +64,11 @@
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
-#include "base/task/post_task.h"
+#include "base/system/sys_info.h"
 #include "base/threading/sequenced_task_runner_handle.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
+#include "base/timer/timer.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "chrome/app/chrome_command_ids.h"
@@ -67,6 +83,7 @@
 #include "chrome/browser/ash/borealis/borealis_metrics.h"
 #include "chrome/browser/ash/borealis/borealis_service.h"
 #include "chrome/browser/ash/crosapi/automation_ash.h"
+#include "chrome/browser/ash/crosapi/browser_util.h"
 #include "chrome/browser/ash/crosapi/crosapi_ash.h"
 #include "chrome/browser/ash/crosapi/crosapi_manager.h"
 #include "chrome/browser/ash/crostini/crostini_export_import.h"
@@ -75,33 +92,42 @@
 #include "chrome/browser/ash/crostini/crostini_manager.h"
 #include "chrome/browser/ash/crostini/crostini_pref_names.h"
 #include "chrome/browser/ash/crostini/crostini_util.h"
+#include "chrome/browser/ash/file_manager/open_util.h"
 #include "chrome/browser/ash/file_manager/path_util.h"
 #include "chrome/browser/ash/guest_os/guest_os_registry_service.h"
 #include "chrome/browser/ash/guest_os/guest_os_registry_service_factory.h"
 #include "chrome/browser/ash/login/lock/screen_locker.h"
+#include "chrome/browser/ash/login/ui/login_display_host.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_installer.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_installer_factory.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_pref_names.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_util.h"
+#include "chrome/browser/ash/power/ml/smart_dim/ml_agent.h"
+#include "chrome/browser/ash/printing/cups_printers_manager.h"
+#include "chrome/browser/ash/printing/cups_printers_manager_factory.h"
 #include "chrome/browser/ash/settings/cros_settings.h"
 #include "chrome/browser/ash/settings/stats_reporting_controller.h"
 #include "chrome/browser/ash/system/input_device_settings.h"
+#include "chrome/browser/ash/system_web_apps/system_web_app_manager.h"
 #include "chrome/browser/banners/app_banner_manager_desktop.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/browser_process_platform_part.h"
-#include "chrome/browser/chromeos/printing/cups_printers_manager.h"
-#include "chrome/browser/chromeos/printing/cups_printers_manager_factory.h"
+#include "chrome/browser/component_updater/smart_dim_component_installer.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
 #include "chrome/browser/policy/chrome_policy_conversions_client.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
+#include "chrome/browser/signin/identity_manager_factory.h"
 #include "chrome/browser/ui/app_list/arc/arc_app_list_prefs.h"
 #include "chrome/browser/ui/app_list/arc/arc_app_utils.h"
 #include "chrome/browser/ui/ash/default_pinned_apps.h"
+#include "chrome/browser/ui/ash/holding_space/holding_space_keyed_service.h"
+#include "chrome/browser/ui/ash/holding_space/holding_space_keyed_service_factory.h"
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_controller.h"
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_controller_util.h"
 #include "chrome/browser/ui/ash/shelf/shelf_spinner_controller.h"
+#include "chrome/browser/ui/ash/system_web_apps/system_web_app_ui_utils.h"
 #include "chrome/browser/ui/aura/accessibility/automation_manager_aura.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
@@ -112,40 +138,44 @@
 #include "chrome/browser/ui/toolbar/app_menu_model.h"
 #include "chrome/browser/ui/views/crostini/crostini_uninstaller_view.h"
 #include "chrome/browser/ui/views/plugin_vm/plugin_vm_installer_view.h"
-#include "chrome/browser/ui/web_applications/system_web_app_ui_utils.h"
 #include "chrome/browser/ui/webui/chromeos/crostini_installer/crostini_installer_dialog.h"
 #include "chrome/browser/ui/webui/chromeos/crostini_installer/crostini_installer_ui.h"
 #include "chrome/browser/web_applications/app_registrar_observer.h"
-#include "chrome/browser/web_applications/system_web_apps/system_web_app_manager.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/browser/web_applications/web_app_registrar.h"
 #include "chrome/common/extensions/api/autotest_private.h"
 #include "chrome/common/pref_names.h"
+#include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
+#include "chromeos/ash/services/assistant/assistant_manager_service_impl.h"
+#include "chromeos/ash/services/assistant/public/cpp/assistant_prefs.h"
+#include "chromeos/ash/services/assistant/public/cpp/assistant_service.h"
+#include "chromeos/components/quick_answers/public/cpp/quick_answers_prefs.h"
 #include "chromeos/dbus/dbus_thread_manager.h"
-#include "chromeos/dbus/session_manager/session_manager_client.h"
+#include "chromeos/metrics/login_event_recorder.h"
 #include "chromeos/printing/printer_configuration.h"
-#include "chromeos/services/assistant/public/cpp/assistant_prefs.h"
-#include "chromeos/services/assistant/public/cpp/assistant_service.h"
 #include "chromeos/services/machine_learning/public/cpp/service_connection.h"
-#include "chromeos/settings/cros_settings_names.h"
 #include "chromeos/ui/base/window_properties.h"
 #include "chromeos/ui/frame/default_frame_header.h"
 #include "chromeos/ui/frame/frame_header.h"
 #include "chromeos/ui/frame/immersive/immersive_fullscreen_controller.h"
 #include "chromeos/ui/wm/desks/desks_helper.h"
-#include "components/arc/arc_prefs.h"
-#include "components/arc/metrics/arc_metrics_constants.h"
-#include "components/full_restore/full_restore_utils.h"
+#include "components/app_restore/full_restore_utils.h"
+#include "components/app_restore/window_properties.h"
 #include "components/policy/core/browser/policy_conversions.h"
 #include "components/policy/core/common/policy_service.h"
+#include "components/prefs/pref_service.h"
+#include "components/services/app_service/public/cpp/app_types.h"
 #include "components/services/app_service/public/cpp/types_util.h"
 #include "components/services/app_service/public/mojom/types.mojom.h"
+#include "components/signin/public/identity_manager/access_token_info.h"
+#include "components/signin/public/identity_manager/identity_manager.h"
+#include "components/update_client/update_client_errors.h"
 #include "components/user_manager/user.h"
 #include "components/user_manager/user_manager.h"
+#include "components/variations/pref_names.h"
 #include "components/webapps/browser/banners/app_banner_manager.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/navigation_controller.h"
-#include "content/public/browser/tracing_controller.h"
 #include "content/public/browser/web_contents.h"
 #include "extensions/browser/event_router.h"
 #include "extensions/browser/extension_action.h"
@@ -171,9 +201,12 @@
 #include "ui/aura/window_tree_host.h"
 #include "ui/base/clipboard/clipboard.h"
 #include "ui/base/clipboard/scoped_clipboard_writer.h"
-#include "ui/base/ime/chromeos/ime_bridge.h"
+#include "ui/base/ime/ash/ime_bridge.h"
+#include "ui/base/ime/ash/ime_engine_handler_interface.h"
 #include "ui/base/ui_base_features.h"
+#include "ui/compositor/compositor.h"
 #include "ui/compositor/layer.h"
+#include "ui/compositor/layer_animator.h"
 #include "ui/compositor/throughput_tracker.h"
 #include "ui/compositor/throughput_tracker_host.h"
 #include "ui/display/display.h"
@@ -204,7 +237,7 @@ using chromeos::PrinterClass;
 constexpr char kCrostiniNotAvailableForCurrentUserError[] =
     "Crostini is not available for the current user";
 
-int AccessArray(const volatile int arr[], const volatile int* index) {
+NOINLINE int AccessArray(const int arr[], const int* index) {
   return arr[*index];
 }
 
@@ -263,12 +296,12 @@ std::string ConvertToString(message_center::NotificationType type) {
 std::unique_ptr<base::DictionaryValue> MakeDictionaryFromNotification(
     const message_center::Notification& notification) {
   auto result = std::make_unique<base::DictionaryValue>();
-  result->SetString("id", notification.id());
-  result->SetString("type", ConvertToString(notification.type()));
-  result->SetString("title", notification.title());
-  result->SetString("message", notification.message());
-  result->SetInteger("priority", notification.priority());
-  result->SetInteger("progress", notification.progress());
+  result->SetStringKey("id", notification.id());
+  result->SetStringKey("type", ConvertToString(notification.type()));
+  result->SetStringKey("title", notification.title());
+  result->SetStringKey("message", notification.message());
+  result->SetIntKey("priority", notification.priority());
+  result->SetIntKey("progress", notification.progress());
   return result;
 }
 
@@ -323,60 +356,64 @@ api::autotest_private::ShelfItemStatus GetShelfItemStatus(
   return api::autotest_private::ShelfItemStatus::SHELF_ITEM_STATUS_NONE;
 }
 
-api::autotest_private::AppType GetAppType(apps::mojom::AppType type) {
+api::autotest_private::AppType GetAppType(apps::AppType type) {
   switch (type) {
-    case apps::mojom::AppType::kArc:
+    case apps::AppType::kArc:
       return api::autotest_private::AppType::APP_TYPE_ARC;
-    case apps::mojom::AppType::kBuiltIn:
+    case apps::AppType::kBuiltIn:
       return api::autotest_private::AppType::APP_TYPE_BUILTIN;
-    case apps::mojom::AppType::kCrostini:
+    case apps::AppType::kCrostini:
       return api::autotest_private::AppType::APP_TYPE_CROSTINI;
-    case apps::mojom::AppType::kExtension:
+    case apps::AppType::kChromeApp:
+    case apps::AppType::kExtension:
       return api::autotest_private::AppType::APP_TYPE_EXTENSION;
-    case apps::mojom::AppType::kPluginVm:
+    case apps::AppType::kPluginVm:
       return api::autotest_private::AppType::APP_TYPE_PLUGINVM;
-    case apps::mojom::AppType::kWeb:
-    case apps::mojom::AppType::kSystemWeb:
+    case apps::AppType::kWeb:
+    case apps::AppType::kSystemWeb:
       return api::autotest_private::AppType::APP_TYPE_WEB;
-    case apps::mojom::AppType::kUnknown:
+    case apps::AppType::kUnknown:
       return api::autotest_private::AppType::APP_TYPE_NONE;
-    case apps::mojom::AppType::kMacOs:
+    case apps::AppType::kMacOs:
       return api::autotest_private::AppType::APP_TYPE_MACOS;
-    case apps::mojom::AppType::kStandaloneBrowser:
+    case apps::AppType::kStandaloneBrowser:
       return api::autotest_private::AppType::APP_TYPE_STANDALONEBROWSER;
-    case apps::mojom::AppType::kRemote:
+    case apps::AppType::kRemote:
       return api::autotest_private::AppType::APP_TYPE_REMOTE;
-    case apps::mojom::AppType::kBorealis:
+    case apps::AppType::kBorealis:
       return api::autotest_private::AppType::APP_TYPE_BOREALIS;
-    case apps::mojom::AppType::kStandaloneBrowserExtension:
-      // Intentionally fall-through for now.
+    case apps::AppType::kStandaloneBrowserExtension:
+      return api::autotest_private::AppType::APP_TYPE_NONE;
+    case apps::AppType::kStandaloneBrowserChromeApp:
       // TODO(https://crbug.com/1225848): Figure out appropriate behavior for
       // Lacros-hosted chrome-apps.
-      break;
-  }
+      return api::autotest_private::AppType::APP_TYPE_NONE;
+    }
   NOTREACHED();
   return api::autotest_private::AppType::APP_TYPE_NONE;
 }
 
 api::autotest_private::AppInstallSource GetAppInstallSource(
-    apps::mojom::InstallSource source) {
-  switch (source) {
-    case apps::mojom::InstallSource::kUnknown:
+    apps::InstallReason install_reason) {
+  switch (install_reason) {
+    case apps::InstallReason::kUnknown:
       return api::autotest_private::AppInstallSource::
           APP_INSTALL_SOURCE_UNKNOWN;
-    case apps::mojom::InstallSource::kSystem:
+    case apps::InstallReason::kSystem:
       return api::autotest_private::AppInstallSource::APP_INSTALL_SOURCE_SYSTEM;
-    case apps::mojom::InstallSource::kPolicy:
+    case apps::InstallReason::kPolicy:
       return api::autotest_private::AppInstallSource::APP_INSTALL_SOURCE_POLICY;
-    case apps::mojom::InstallSource::kOem:
+    case apps::InstallReason::kOem:
       return api::autotest_private::AppInstallSource::APP_INSTALL_SOURCE_OEM;
-    case apps::mojom::InstallSource::kDefault:
+    case apps::InstallReason::kDefault:
       return api::autotest_private::AppInstallSource::
           APP_INSTALL_SOURCE_DEFAULT;
-    case apps::mojom::InstallSource::kSync:
+    case apps::InstallReason::kSync:
       return api::autotest_private::AppInstallSource::APP_INSTALL_SOURCE_SYNC;
-    case apps::mojom::InstallSource::kUser:
+    case apps::InstallReason::kUser:
       return api::autotest_private::AppInstallSource::APP_INSTALL_SOURCE_USER;
+    case apps::InstallReason::kSubApp:
+      return api::autotest_private::AppInstallSource::APP_INSTALL_SOURCE_SUBAPP;
   }
   NOTREACHED();
   return api::autotest_private::AppInstallSource::APP_INSTALL_SOURCE_NONE;
@@ -404,30 +441,29 @@ api::autotest_private::AppWindowType GetAppWindowType(ash::AppType type) {
   return api::autotest_private::AppWindowType::APP_WINDOW_TYPE_NONE;
 }
 
-api::autotest_private::AppReadiness GetAppReadiness(
-    apps::mojom::Readiness readiness) {
+api::autotest_private::AppReadiness GetAppReadiness(apps::Readiness readiness) {
   switch (readiness) {
-    case apps::mojom::Readiness::kReady:
+    case apps::Readiness::kReady:
       return api::autotest_private::AppReadiness::APP_READINESS_READY;
-    case apps::mojom::Readiness::kDisabledByBlocklist:
+    case apps::Readiness::kDisabledByBlocklist:
       return api::autotest_private::AppReadiness::
           APP_READINESS_DISABLEDBYBLACKLIST;
-    case apps::mojom::Readiness::kDisabledByPolicy:
+    case apps::Readiness::kDisabledByPolicy:
       return api::autotest_private::AppReadiness::
           APP_READINESS_DISABLEDBYPOLICY;
-    case apps::mojom::Readiness::kDisabledByUser:
+    case apps::Readiness::kDisabledByUser:
       return api::autotest_private::AppReadiness::APP_READINESS_DISABLEDBYUSER;
-    case apps::mojom::Readiness::kTerminated:
+    case apps::Readiness::kTerminated:
       return api::autotest_private::AppReadiness::APP_READINESS_TERMINATED;
-    case apps::mojom::Readiness::kUninstalledByUser:
+    case apps::Readiness::kUninstalledByUser:
       return api::autotest_private::AppReadiness::
           APP_READINESS_UNINSTALLEDBYUSER;
-    case apps::mojom::Readiness::kRemoved:
+    case apps::Readiness::kRemoved:
       return api::autotest_private::AppReadiness::APP_READINESS_REMOVED;
-    case apps::mojom::Readiness::kUninstalledByMigration:
+    case apps::Readiness::kUninstalledByMigration:
       return api::autotest_private::AppReadiness::
           APP_READINESS_UNINSTALLEDBYMIGRATION;
-    case apps::mojom::Readiness::kUnknown:
+    case apps::Readiness::kUnknown:
       return api::autotest_private::AppReadiness::APP_READINESS_NONE;
   }
   NOTREACHED();
@@ -453,18 +489,9 @@ api::autotest_private::HotseatState GetHotseatState(
   NOTREACHED();
 }
 
-std::unique_ptr<bool> ConvertMojomOptionalBool(
-    apps::mojom::OptionalBool optional) {
-  switch (optional) {
-    case apps::mojom::OptionalBool::kTrue:
-      return std::make_unique<bool>(true);
-    case apps::mojom::OptionalBool::kFalse:
-      return std::make_unique<bool>(false);
-    case apps::mojom::OptionalBool::kUnknown:
-      return nullptr;
-  }
-  NOTREACHED();
-  return nullptr;
+std::unique_ptr<bool> ConvertOptionalBool(absl::optional<bool> optional) {
+  return optional.has_value() ? std::make_unique<bool>(optional.value())
+                              : nullptr;
 }
 
 // Helper function to set whitelisted user pref based on |pref_name| with any
@@ -476,6 +503,12 @@ std::string SetWhitelistedPref(Profile* profile,
   // profile.
   if (pref_name == prefs::kEnableAdbSideloadingRequested) {
     DCHECK(value.is_bool());
+    g_browser_process->local_state()->Set(pref_name, value);
+    return std::string();
+  }
+  if (pref_name == variations::prefs::kVariationsCompressedSeed ||
+      pref_name == variations::prefs::kVariationsSeedSignature) {
+    DCHECK(value.is_string());
     g_browser_process->local_state()->Set(pref_name, value);
     return std::string();
   }
@@ -525,19 +558,18 @@ std::string SetWhitelistedPref(Profile* profile,
     DCHECK(value.is_bool());
   } else if (pref_name == prefs::kPrintingAPIExtensionsAllowlist) {
     DCHECK(value.is_list());
-  } else if (pref_name == ash::quick_answers::prefs::kQuickAnswersEnabled) {
+  } else if (pref_name == quick_answers::prefs::kQuickAnswersEnabled) {
     DCHECK(value.is_bool());
   } else if (pref_name ==
-             ash::quick_answers::prefs::kQuickAnswersDefinitionEnabled) {
+             quick_answers::prefs::kQuickAnswersDefinitionEnabled) {
     DCHECK(value.is_bool());
   } else if (pref_name ==
-             ash::quick_answers::prefs::kQuickAnswersTranslationEnabled) {
+             quick_answers::prefs::kQuickAnswersTranslationEnabled) {
     DCHECK(value.is_bool());
   } else if (pref_name ==
-             ash::quick_answers::prefs::kQuickAnswersUnitConverstionEnabled) {
+             quick_answers::prefs::kQuickAnswersUnitConversionEnabled) {
     DCHECK(value.is_bool());
-  } else if (pref_name ==
-             ash::quick_answers::prefs::kQuickAnswersConsentStatus) {
+  } else if (pref_name == quick_answers::prefs::kQuickAnswersConsentStatus) {
     DCHECK(value.is_int());
   } else {
     return "The pref " + pref_name + " is not whitelisted.";
@@ -688,6 +720,26 @@ api::autotest_private::Location ToLocationDictionary(const gfx::Point& point) {
   return result;
 }
 
+arc::mojom::ThemeStyleType ToThemeStyleType(
+    const api::autotest_private::ThemeStyle& theme) {
+  switch (theme) {
+    case api::autotest_private::ThemeStyle::THEME_STYLE_TONALSPOT:
+      return arc::mojom::ThemeStyleType::TONAL_SPOT;
+    case api::autotest_private::ThemeStyle::THEME_STYLE_VIBRANT:
+      return arc::mojom::ThemeStyleType::VIBRANT;
+    case api::autotest_private::ThemeStyle::THEME_STYLE_EXPRESSIVE:
+      return arc::mojom::ThemeStyleType::EXPRESSIVE;
+    case api::autotest_private::ThemeStyle::THEME_STYLE_SPRITZ:
+      return arc::mojom::ThemeStyleType::SPRITZ;
+    case api::autotest_private::ThemeStyle::THEME_STYLE_RAINBOW:
+      return arc::mojom::ThemeStyleType::RAINBOW;
+    case api::autotest_private::ThemeStyle::THEME_STYLE_FRUITSALAD:
+      return arc::mojom::ThemeStyleType::FRUIT_SALAD;
+    default:
+      return arc::mojom::ThemeStyleType::TONAL_SPOT;
+  }
+}
+
 aura::Window* FindAppWindowById(const int64_t id) {
   auto list = ash::GetAppWindowList();
   auto iter = std::find_if(
@@ -802,6 +854,10 @@ int GetMouseEventFlags(api::autotest_private::MouseButton button) {
       return ui::EF_RIGHT_MOUSE_BUTTON;
     case api::autotest_private::MOUSE_BUTTON_MIDDLE:
       return ui::EF_MIDDLE_MOUSE_BUTTON;
+    case api::autotest_private::MOUSE_BUTTON_BACK:
+      return ui::EF_BACK_MOUSE_BUTTON;
+    case api::autotest_private::MOUSE_BUTTON_FORWARD:
+      return ui::EF_FORWARD_MOUSE_BUTTON;
     default:
       NOTREACHED();
   }
@@ -822,32 +878,105 @@ bool GetDisplayIdFromOptionalArg(const std::unique_ptr<std::string>& arg,
   return true;
 }
 
-struct SmoothnessTrackerInfo {
-  absl::optional<ui::ThroughputTracker> tracker;
-  ui::ThroughputTrackerHost::ReportCallback callback;
-  bool stopping = false;
+class DisplaySmoothnessTracker {
+ public:
+  using ReportCallback = base::OnceCallback<void(
+      const cc::FrameSequenceMetrics::CustomReportData& frame_data,
+      std::vector<int>&& throughput)>;
+
+  DisplaySmoothnessTracker() = default;
+  DisplaySmoothnessTracker(const DisplaySmoothnessTracker&) = delete;
+  DisplaySmoothnessTracker& operator=(const DisplaySmoothnessTracker&) = delete;
+  ~DisplaySmoothnessTracker() = default;
+
+  // Return true if tracking is started successfully.
+  bool Start(int64_t display_id,
+             base::TimeDelta throughput_interval,
+             ui::ThroughputTrackerHost::ReportCallback callback) {
+    auto* root_window = ash::Shell::GetRootWindowForDisplayId(display_id);
+    if (!root_window)
+      return false;
+
+    DCHECK(root_window_tracker_.windows().empty());
+    root_window_tracker_.Add(root_window);
+
+    tracker_ =
+        root_window->layer()->GetCompositor()->RequestNewThroughputTracker();
+    tracker_->Start(std::move(callback));
+
+    throughtput_timer_.Start(FROM_HERE, throughput_interval, this,
+                             &DisplaySmoothnessTracker::OnThroughputTimerFired);
+
+    return true;
+  }
+
+  void Stop(ReportCallback callback) {
+    stopping_ = true;
+    throughtput_timer_.Stop();
+    callback_ = std::move(callback);
+    tracker_->Stop();
+  }
+
+  ReportCallback TakeCallback() { return std::move(callback_); }
+  std::vector<int> TakeThroughput() { return std::move(throughput_); }
+
+  bool stopping() const { return stopping_; }
+  bool has_error() const { return has_error_; }
+
+ private:
+  void OnThroughputTimerFired() {
+    auto windows = root_window_tracker_.windows();
+    if (windows.empty()) {
+      // RootWindow is gone. This could happen when display is reconfigured
+      // during the test run. Treat it as error since no meaningful smoothness
+      // data would be captured in such case.
+      LOG(ERROR) << "Unable to collect throughput because underlying "
+                    "RootWindow is gone.";
+      has_error_ = true;
+      throughtput_timer_.Stop();
+      return;
+    }
+
+    DCHECK_EQ(windows.size(), 1u);
+    auto* root_window = windows[0];
+    throughput_.push_back(
+        100 - root_window->GetHost()->compositor()->GetPercentDroppedFrames());
+  }
+
+  aura::WindowTracker root_window_tracker_;
+  absl::optional<ui::ThroughputTracker> tracker_;
+  ReportCallback callback_;
+  bool stopping_ = false;
+  bool has_error_ = false;
+
+  base::RepeatingTimer throughtput_timer_;
+  std::vector<int> throughput_;
 };
-using DisplaySmoothnessTrackerInfos = std::map<int64_t, SmoothnessTrackerInfo>;
-DisplaySmoothnessTrackerInfos* GetDisplaySmoothnessTrackerInfos() {
-  static base::NoDestructor<DisplaySmoothnessTrackerInfos> trackers;
+
+using DisplaySmoothnessTrackers =
+    std::map<int64_t, std::unique_ptr<DisplaySmoothnessTracker>>;
+DisplaySmoothnessTrackers* GetDisplaySmoothnessTrackers() {
+  static base::NoDestructor<DisplaySmoothnessTrackers> trackers;
   return trackers.get();
 }
 
 // Forwards frame rate data to the callback for |display_id| and resets.
 void ForwardFrameRateDataAndReset(
     int64_t display_id,
-    const cc::FrameSequenceMetrics::CustomReportData& data) {
-  auto* infos = GetDisplaySmoothnessTrackerInfos();
-  auto it = infos->find(display_id);
-  DCHECK(it != infos->end());
-  DCHECK(it->second.callback);
+    const cc::FrameSequenceMetrics::CustomReportData& frame_data) {
+  auto* trackers = GetDisplaySmoothnessTrackers();
+  auto it = trackers->find(display_id);
+  DCHECK(it != trackers->end());
+
+  auto throughput = it->second->TakeThroughput();
 
   // Moves the callback out and erases the mapping first to allow new tracking
   // for |display_id| to start before |callback| run returns.
   // See https://crbug.com/1098886.
-  auto callback = std::move(it->second.callback);
-  infos->erase(it);
-  std::move(callback).Run(data);
+  auto callback = it->second->TakeCallback();
+  DCHECK(callback);
+  trackers->erase(it);
+  std::move(callback).Run(frame_data, std::move(throughput));
 }
 
 std::string ResolutionToString(
@@ -882,6 +1011,11 @@ class WindowStateChangeObserver : public aura::WindowObserver {
               expected_type_);
     scoped_observation_.Observe(window);
   }
+
+  WindowStateChangeObserver(const WindowStateChangeObserver&) = delete;
+  WindowStateChangeObserver& operator=(const WindowStateChangeObserver&) =
+      delete;
+
   ~WindowStateChangeObserver() override {}
 
   // aura::WindowObserver:
@@ -907,8 +1041,6 @@ class WindowStateChangeObserver : public aura::WindowObserver {
   base::ScopedObservation<aura::Window, aura::WindowObserver>
       scoped_observation_{this};
   base::OnceCallback<void(bool)> callback_;
-
-  DISALLOW_COPY_AND_ASSIGN(WindowStateChangeObserver);
 };
 
 class WindowBoundsChangeObserver : public aura::WindowObserver {
@@ -976,7 +1108,7 @@ class EventGenerator {
       : input_injector_(
             ui::OzonePlatform::GetInstance()->CreateSystemInputInjector()),
         host_(host),
-        interval_(base::TimeDelta::FromSeconds(1) /
+        interval_(base::Seconds(1) /
                   std::max(host->compositor()->refresh_rate(), 60.0f)),
         closure_(std::move(closure)),
         weak_ptr_factory_(this) {
@@ -1047,6 +1179,14 @@ class EventGenerator {
         }
         if (task->flags & ui::EF_RIGHT_MOUSE_BUTTON) {
           input_injector_->InjectMouseButton(ui::EF_RIGHT_MOUSE_BUTTON,
+                                             pressed);
+        }
+        if (task->flags & ui::EF_BACK_MOUSE_BUTTON) {
+          input_injector_->InjectMouseButton(ui::EF_BACK_MOUSE_BUTTON,
+                                             pressed);
+        }
+        if (task->flags & ui::EF_FORWARD_MOUSE_BUTTON) {
+          input_injector_->InjectMouseButton(ui::EF_FORWARD_MOUSE_BUTTON,
                                              pressed);
         }
         break;
@@ -1208,20 +1348,21 @@ ExtensionFunction::ResponseAction AutotestPrivateLoginStatusFunction::Run() {
       ash::ScreenLocker::default_screen_locker()->locked();
 
   if (user_manager) {
-    result->SetBoolean("isLoggedIn", user_manager->IsUserLoggedIn());
-    result->SetBoolean("isOwner", user_manager->IsCurrentUserOwner());
-    result->SetBoolean("isScreenLocked", is_screen_locked);
-    result->SetBoolean("isReadyForPassword",
+    result->SetBoolKey("isLoggedIn", user_manager->IsUserLoggedIn());
+    result->SetBoolKey("isOwner", user_manager->IsCurrentUserOwner());
+    result->SetBoolKey("isScreenLocked", is_screen_locked);
+    result->SetBoolKey("isReadyForPassword",
                        ash::LoginScreen::Get()->IsReadyForPassword());
     if (user_manager->IsUserLoggedIn()) {
-      result->SetBoolean("isRegularUser",
+      result->SetBoolKey("isRegularUser",
                          user_manager->IsLoggedInAsUserWithGaiaAccount());
-      result->SetBoolean("isGuest", user_manager->IsLoggedInAsGuest());
-      result->SetBoolean("isKiosk", user_manager->IsLoggedInAsKioskApp());
+      result->SetBoolKey("isGuest", user_manager->IsLoggedInAsGuest());
+      result->SetBoolKey("isKiosk", user_manager->IsLoggedInAsKioskApp());
 
       const user_manager::User* user = user_manager->GetActiveUser();
-      result->SetString("email", user->GetAccountId().GetUserEmail());
-      result->SetString("displayEmail", user->display_email());
+      result->SetStringKey("email", user->GetAccountId().GetUserEmail());
+      result->SetStringKey("displayEmail", user->display_email());
+      result->SetStringKey("displayName", user->display_name());
 
       std::string user_image;
       switch (user->image_index()) {
@@ -1237,10 +1378,10 @@ ExtensionFunction::ResponseAction AutotestPrivateLoginStatusFunction::Run() {
           user_image = base::NumberToString(user->image_index());
           break;
       }
-      result->SetString("userImage", user_image);
+      result->SetStringKey("userImage", user_image);
 
       if (user->HasGaiaAccount()) {
-        result->SetBoolean("hasValidOauth2Token",
+        result->SetBoolKey("hasValidOauth2Token",
                            user->oauth_token_status() ==
                                user_manager::User::OAUTH2_TOKEN_STATUS_VALID);
       }
@@ -1277,13 +1418,13 @@ AutotestPrivateGetAllEnterprisePoliciesFunction::Run() {
 
   auto client = std::make_unique<policy::ChromePolicyConversionsClient>(
       browser_context());
-  base::Value all_policies_array =
+  base::Value::Dict all_policies_dict =
       policy::DictionaryPolicyConversions(std::move(client))
           .EnableDeviceLocalAccountPolicies(true)
           .EnableDeviceInfo(true)
-          .ToValue();
+          .ToValueDict();
 
-  return RespondNow(OneArgument(std::move(all_policies_array)));
+  return RespondNow(OneArgument(base::Value(std::move(all_policies_dict))));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1325,56 +1466,51 @@ AutotestPrivateGetExtensionsInfoFunction::Run() {
   ExtensionActionManager* extension_action_manager =
       ExtensionActionManager::Get(browser_context());
 
-  base::ListValue extensions_values;
+  base::Value::List extensions_values;
   ExtensionList all;
   all.insert(all.end(), extensions.begin(), extensions.end());
   all.insert(all.end(), disabled_extensions.begin(), disabled_extensions.end());
   for (ExtensionList::const_iterator it = all.begin(); it != all.end(); ++it) {
     const Extension* extension = it->get();
     std::string id = extension->id();
-    std::unique_ptr<base::DictionaryValue> extension_value(
-        new base::DictionaryValue);
-    extension_value->SetString("id", id);
-    extension_value->SetString("version", extension->VersionString());
-    extension_value->SetString("name", extension->name());
-    extension_value->SetString("publicKey", extension->public_key());
-    extension_value->SetString("description", extension->description());
-    extension_value->SetString(
-        "backgroundUrl", BackgroundInfo::GetBackgroundURL(extension).spec());
-    extension_value->SetString(
-        "optionsUrl", OptionsPageInfo::GetOptionsPage(extension).spec());
+    base::Value::Dict extension_value;
+    extension_value.Set("id", id);
+    extension_value.Set("version", extension->VersionString());
+    extension_value.Set("name", extension->name());
+    extension_value.Set("publicKey", extension->public_key());
+    extension_value.Set("description", extension->description());
+    extension_value.Set("backgroundUrl",
+                        BackgroundInfo::GetBackgroundURL(extension).spec());
+    extension_value.Set("optionsUrl",
+                        OptionsPageInfo::GetOptionsPage(extension).spec());
 
-    extension_value->SetKey("hostPermissions",
-                            GetHostPermissions(extension, false));
-    extension_value->SetKey("effectiveHostPermissions",
-                            GetHostPermissions(extension, true));
-    extension_value->SetKey("apiPermissions", GetAPIPermissions(extension));
+    extension_value.Set("hostPermissions",
+                        GetHostPermissions(extension, false));
+    extension_value.Set("effectiveHostPermissions",
+                        GetHostPermissions(extension, true));
+    extension_value.Set("apiPermissions", GetAPIPermissions(extension));
 
     ManifestLocation location = extension->location();
-    extension_value->SetBoolean("isComponent",
-                                location == ManifestLocation::kComponent);
-    extension_value->SetBoolean("isInternal",
-                                location == ManifestLocation::kInternal);
-    extension_value->SetBoolean("isUserInstalled",
-                                location == ManifestLocation::kInternal ||
-                                    Manifest::IsUnpackedLocation(location));
-    extension_value->SetBoolean("isEnabled", service->IsExtensionEnabled(id));
-    extension_value->SetBoolean(
-        "allowedInIncognito", util::IsIncognitoEnabled(id, browser_context()));
+    extension_value.Set("isComponent",
+                        location == ManifestLocation::kComponent);
+    extension_value.Set("isInternal", location == ManifestLocation::kInternal);
+    extension_value.Set("isUserInstalled",
+                        location == ManifestLocation::kInternal ||
+                            Manifest::IsUnpackedLocation(location));
+    extension_value.Set("isEnabled", service->IsExtensionEnabled(id));
+    extension_value.Set("allowedInIncognito",
+                        util::IsIncognitoEnabled(id, browser_context()));
     const ExtensionAction* action =
         extension_action_manager->GetExtensionAction(*extension);
-    extension_value->SetBoolean(
-        "hasPageAction",
-        action && action->action_type() == ActionInfo::TYPE_PAGE);
+    extension_value.Set("hasPageAction", action && action->action_type() ==
+                                                       ActionInfo::TYPE_PAGE);
 
     extensions_values.Append(std::move(extension_value));
   }
 
-  std::unique_ptr<base::DictionaryValue> return_value(
-      new base::DictionaryValue);
-  return_value->SetKey("extensions", std::move(extensions_values));
-  return RespondNow(
-      OneArgument(base::Value::FromUniquePtrValue(std::move(return_value))));
+  base::Value::Dict return_value;
+  return_value.Set("extensions", std::move(extensions_values));
+  return RespondNow(OneArgument(base::Value(std::move(return_value))));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1389,11 +1525,10 @@ AutotestPrivateSimulateAsanMemoryBugFunction::Run() {
   DVLOG(1) << "AutotestPrivateSimulateAsanMemoryBugFunction";
 
   if (!IsTestMode(browser_context())) {
-    // This array is volatile not to let compiler optimize us out.
-    volatile int testarray[3] = {0, 0, 0};
+    int testarray[3] = {0, 0, 0};
 
     // Cause Address Sanitizer to abort this process.
-    volatile int index = 5;
+    int index = 5;
     AccessArray(testarray, &index);
   }
   return RespondNow(NoArguments());
@@ -1563,11 +1698,11 @@ AutotestPrivateGetVisibleNotificationsFunction::Run() {
 
   message_center::NotificationList::Notifications notification_set =
       message_center::MessageCenter::Get()->GetVisibleNotifications();
-  auto values = std::make_unique<base::ListValue>();
+  base::Value::List values;
   for (auto* notification : notification_set)
-    values->Append(MakeDictionaryFromNotification(*notification));
-  return RespondNow(
-      OneArgument(base::Value::FromUniquePtrValue(std::move(values))));
+    values.Append(base::Value::FromUniquePtrValue(
+        MakeDictionaryFromNotification(*notification)));
+  return RespondNow(OneArgument(base::Value(std::move(values))));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1674,6 +1809,51 @@ AutotestPrivateGetPlayStoreStateFunction::Run() {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// AutotestPrivateStartArcFunction
+///////////////////////////////////////////////////////////////////////////////
+
+AutotestPrivateStartArcFunction::~AutotestPrivateStartArcFunction() = default;
+
+ExtensionFunction::ResponseAction AutotestPrivateStartArcFunction::Run() {
+  DVLOG(1) << "AutotestPrivateStartArcFunction";
+
+  arc::ArcSessionManager* arc_session_manager = arc::ArcSessionManager::Get();
+  if (!arc_session_manager)
+    return RespondNow(Error("Could not find ARC session manager"));
+
+  Profile* profile = Profile::FromBrowserContext(browser_context());
+  if (!arc::IsArcAllowedForProfile(profile))
+    return RespondNow(Error("ARC cannot be started for the current user"));
+
+  if (arc_session_manager->enable_requested())
+    return RespondNow(Error("ARC is already started"));
+
+  arc_session_manager->RequestEnable();
+
+  return RespondNow(NoArguments());
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// AutotestPrivateStopArcFunction
+///////////////////////////////////////////////////////////////////////////////
+
+AutotestPrivateStopArcFunction::~AutotestPrivateStopArcFunction() = default;
+
+ExtensionFunction::ResponseAction AutotestPrivateStopArcFunction::Run() {
+  DVLOG(1) << "AutotestPrivateStopArcFunction";
+
+  arc::ArcSessionManager* arc_session_manager = arc::ArcSessionManager::Get();
+  if (!arc_session_manager)
+    return RespondNow(Error("Could not find ARC session manager"));
+
+  if (!arc_session_manager->enable_requested())
+    return RespondNow(Error("ARC is already stopped"));
+
+  arc_session_manager->RequestDisable();
+
+  return RespondNow(NoArguments());
+}
+///////////////////////////////////////////////////////////////////////////////
 // AutotestPrivateSetPlayStoreEnabledFunction
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -1748,7 +1928,40 @@ AutotestPrivateIsArcProvisionedFunction::Run() {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// AutotestPrivateGetArcPackageFunction
+// AutotestPrivateIsLacrosPrimaryBrowserFunction
+///////////////////////////////////////////////////////////////////////////////
+
+AutotestPrivateIsLacrosPrimaryBrowserFunction::
+    ~AutotestPrivateIsLacrosPrimaryBrowserFunction() = default;
+
+ExtensionFunction::ResponseAction
+AutotestPrivateIsLacrosPrimaryBrowserFunction::Run() {
+  DVLOG(1) << "AutotestPrivateIsLacrosPrimaryBrowserFunction";
+  return RespondNow(OneArgument(
+      base::Value(crosapi::browser_util::IsLacrosPrimaryBrowser())));
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// AutotestPrivateGetLacrosInfoFunction
+///////////////////////////////////////////////////////////////////////////////
+
+AutotestPrivateGetLacrosInfoFunction::~AutotestPrivateGetLacrosInfoFunction() =
+    default;
+
+ExtensionFunction::ResponseAction AutotestPrivateGetLacrosInfoFunction::Run() {
+  DVLOG(1) << "AutotestPrivateGetLacrosInfoFunction";
+  auto* browser_manager = crosapi::BrowserManager::Get();
+  auto result = std::make_unique<base::DictionaryValue>();
+  result->SetBoolKey("isRunning", browser_manager->IsRunning());
+  result->SetBoolKey("isKeepAlive", browser_manager->IsKeepAliveEnabled());
+  result->SetStringKey("lacrosPath",
+                       browser_manager->lacros_path().MaybeAsASCII());
+  return RespondNow(
+      OneArgument(base::Value::FromUniquePtrValue(std::move(result))));
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// AutotestPrivateGetArcAppFunction
 ///////////////////////////////////////////////////////////////////////////////
 
 AutotestPrivateGetArcAppFunction::~AutotestPrivateGetArcAppFunction() = default;
@@ -1801,6 +2014,51 @@ ExtensionFunction::ResponseAction AutotestPrivateGetArcAppFunction::Run() {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// AutotestPrivateGetArcAppKillsFunction
+///////////////////////////////////////////////////////////////////////////////
+
+AutotestPrivateGetArcAppKillsFunction::
+    ~AutotestPrivateGetArcAppKillsFunction() = default;
+
+ExtensionFunction::ResponseAction AutotestPrivateGetArcAppKillsFunction::Run() {
+  DVLOG(1) << "AutotestPrivateGetArcAppKillsFunction";
+
+  arc::ArcServiceManager* arc_service_manager = arc::ArcServiceManager::Get();
+  if (!arc_service_manager)
+    return RespondNow(Error("ARC service manager is not available"));
+
+  arc::ArcBridgeService* arc_bridge_service =
+      arc_service_manager->arc_bridge_service();
+
+  if (!arc_bridge_service)
+    return RespondNow(Error("ARC bridge service is not available"));
+
+  arc::mojom::ProcessInstance* process_instance = ARC_GET_INSTANCE_FOR_METHOD(
+      arc_bridge_service->process(), RequestLowMemoryKillCounts);
+
+  if (!process_instance)
+    return RespondNow(Error("ARC process service is not available"));
+
+  process_instance->RequestLowMemoryKillCounts(base::BindOnce(
+      &AutotestPrivateGetArcAppKillsFunction::OnKillCounts, this));
+
+  return RespondLater();
+}
+
+void AutotestPrivateGetArcAppKillsFunction::OnKillCounts(
+    arc::mojom::LowMemoryKillCountsPtr counts) {
+  api::autotest_private::ArcAppKillsDict result;
+  result.oom = counts->guest_oom;
+  result.lmkd_foreground = counts->lmkd_foreground;
+  result.lmkd_perceptible = counts->lmkd_perceptible;
+  result.lmkd_cached = counts->lmkd_cached;
+  result.pressure_foreground = counts->pressure_foreground;
+  result.pressure_perceptible = counts->pressure_perceptible;
+  result.pressure_cached = counts->pressure_cached;
+  Respond(OneArgument(base::Value::FromUniquePtrValue(result.ToValue())));
+}
+
+///////////////////////////////////////////////////////////////////////////////
 // AutotestPrivateGetArcPackageFunction
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -1833,11 +2091,11 @@ ExtensionFunction::ResponseAction AutotestPrivateGetArcPackageFunction::Run() {
     package_value->SetKey("lastBackupAndroidId",
                           base::Value(base::NumberToString(
                               package_info->last_backup_android_id)));
-    package_value->SetKey("lastBackupTime",
-                          base::Value(base::Time::FromDeltaSinceWindowsEpoch(
-                                          base::TimeDelta::FromMicroseconds(
-                                              package_info->last_backup_time))
-                                          .ToJsTime()));
+    package_value->SetKey(
+        "lastBackupTime",
+        base::Value(base::Time::FromDeltaSinceWindowsEpoch(
+                        base::Microseconds(package_info->last_backup_time))
+                        .ToJsTime()));
     package_value->SetKey("shouldSync", base::Value(package_info->should_sync));
     package_value->SetKey("system", base::Value(package_info->system));
     package_value->SetKey("vpnProvider",
@@ -1845,6 +2103,50 @@ ExtensionFunction::ResponseAction AutotestPrivateGetArcPackageFunction::Run() {
   }
   return RespondNow(
       OneArgument(base::Value::FromUniquePtrValue(std::move(package_value))));
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// AutotestPrivateGetCryptohomeRecoveryDataFunction
+///////////////////////////////////////////////////////////////////////////////
+
+AutotestPrivateGetCryptohomeRecoveryDataFunction::
+    ~AutotestPrivateGetCryptohomeRecoveryDataFunction() = default;
+
+ExtensionFunction::ResponseAction
+AutotestPrivateGetCryptohomeRecoveryDataFunction::Run() {
+  // The API is available only on test images.
+  base::SysInfo::CrashIfChromeOSNonTestImage();
+
+  if (!base::CommandLine::ForCurrentProcess()->HasSwitch(
+          ash::switches::kForceCryptohomeRecoveryForTesting)) {
+    return RespondNow(
+        Error("force-cryptohome-recovery-for-testing switch is not set"));
+  }
+
+  auto* host = ash::LoginDisplayHost::default_host();
+  if (!host)
+    return RespondNow(Error("LoginDisplayHost is not available"));
+  auto* context = host->GetWizardContext();
+  if (!context)
+    return RespondNow(Error("WizardContext is not available"));
+
+  chromeos::UserContext* user_context =
+      context->extra_factors_auth_session.get();
+  if (!user_context)
+    return RespondNow(Error("UserContext is not available"));
+
+  std::string reauth_proof_token = user_context->GetReauthProofToken();
+  std::string refresh_token = user_context->GetRefreshToken();
+  if (reauth_proof_token.empty() || refresh_token.empty()) {
+    return RespondNow(Error("Tokens are empty"));
+  }
+
+  api::autotest_private::CryptohomeRecoveryDataDict result;
+  result.reauth_proof_token = reauth_proof_token;
+  result.refresh_token = refresh_token;
+
+  return RespondNow(
+      OneArgument(base::Value::FromUniquePtrValue(result.ToValue())));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1860,13 +2162,13 @@ AutotestPrivateWaitForSystemWebAppsInstallFunction::
 ExtensionFunction::ResponseAction
 AutotestPrivateWaitForSystemWebAppsInstallFunction::Run() {
   Profile* profile = Profile::FromBrowserContext(browser_context());
-  web_app::WebAppProvider* provider =
-      web_app::WebAppProvider::GetForTest(profile);
+  ash::SystemWebAppManager* swa_manager =
+      ash::SystemWebAppManager::Get(profile);
 
-  if (!provider)
-    return RespondNow(Error("Web Apps are not available for profile."));
+  if (!swa_manager)
+    return RespondNow(Error("System Web Apps are not available for profile."));
 
-  provider->system_web_app_manager().on_apps_synchronized().Post(
+  swa_manager->on_apps_synchronized().Post(
       FROM_HERE,
       base::BindOnce(
           &AutotestPrivateWaitForSystemWebAppsInstallFunction::Respond, this,
@@ -1887,24 +2189,47 @@ AutotestPrivateGetRegisteredSystemWebAppsFunction::
 ExtensionFunction::ResponseAction
 AutotestPrivateGetRegisteredSystemWebAppsFunction::Run() {
   Profile* profile = Profile::FromBrowserContext(browser_context());
-  web_app::WebAppProvider* provider =
-      web_app::WebAppProvider::GetForTest(profile);
+  ash::SystemWebAppManager* swa_manager =
+      ash::SystemWebAppManager::Get(profile);
 
-  if (!provider)
-    return RespondNow(Error("Web Apps are not available for profile."));
+  if (!swa_manager)
+    return RespondNow(Error("System Web Apps are not available for profile."));
 
-  std::vector<api::autotest_private::SystemApp> result;
+  swa_manager->on_apps_synchronized().Post(
+      FROM_HERE,
+      base::BindOnce(&AutotestPrivateGetRegisteredSystemWebAppsFunction::
+                         OnSystemWebAppsInstalled,
+                     this));
+  return RespondLater();
+}
 
-  for (const auto& type_and_info :
-       provider->system_web_app_manager().GetRegisteredSystemAppsForTesting()) {
-    api::autotest_private::SystemApp system_app;
-    web_app::SystemWebAppDelegate* delegate = type_and_info.second.get();
-    system_app.internal_name = delegate->GetInternalName();
-    system_app.url = delegate->GetInstallUrl().GetOrigin().spec();
-    result.push_back(std::move(system_app));
+void AutotestPrivateGetRegisteredSystemWebAppsFunction::
+    OnSystemWebAppsInstalled() {
+  Profile* profile = Profile::FromBrowserContext(browser_context());
+  ash::SystemWebAppManager* swa_manager =
+      ash::SystemWebAppManager::Get(profile);
+  std::vector<api::autotest_private::SystemWebApp> result;
+  for (const auto& type_and_info : swa_manager->system_app_delegates()) {
+    api::autotest_private::SystemWebApp system_web_app;
+    ash::SystemWebAppDelegate* delegate = type_and_info.second.get();
+    system_web_app.internal_name = delegate->GetInternalName();
+    system_web_app.url =
+        delegate->GetInstallUrl().DeprecatedGetOriginAsURL().spec();
+    system_web_app.name = base::UTF16ToUTF8(delegate->GetWebAppInfo()->title);
+
+    absl::optional<web_app::AppId> app_id =
+        swa_manager->GetAppIdForSystemApp(type_and_info.first);
+    if (app_id) {
+      system_web_app.start_url =
+          ash::SystemWebAppManager::GetWebAppProvider(profile)
+              ->registrar()
+              .GetAppLaunchUrl(*app_id)
+              .spec();
+    }
+    result.push_back(std::move(system_web_app));
   }
 
-  return RespondNow(ArgumentList(
+  Respond(ArgumentList(
       api::autotest_private::GetRegisteredSystemWebApps::Results::Create(
           result)));
 }
@@ -1922,23 +2247,38 @@ AutotestPrivateIsSystemWebAppOpenFunction::
 ExtensionFunction::ResponseAction
 AutotestPrivateIsSystemWebAppOpenFunction::Run() {
   Profile* profile = Profile::FromBrowserContext(browser_context());
-  web_app::WebAppProvider* provider =
-      web_app::WebAppProvider::GetForTest(profile);
+  ash::SystemWebAppManager* swa_manager =
+      ash::SystemWebAppManager::Get(profile);
 
-  if (!provider)
-    return RespondNow(Error("Web Apps are not available for profile."));
+  if (!swa_manager)
+    return RespondNow(Error("System web Apps are not available for profile."));
 
   std::unique_ptr<api::autotest_private::IsSystemWebAppOpen::Params> params(
       api::autotest_private::IsSystemWebAppOpen::Params::Create(args()));
   EXTENSION_FUNCTION_VALIDATE(params);
   DVLOG(1) << "AutotestPrivateIsSystemWebAppOpenFunction " << params->app_id;
-  absl::optional<web_app::SystemAppType> app_type =
-      web_app::GetSystemWebAppTypeForAppId(profile, params->app_id);
-  if (!app_type)
-    return RespondNow(Error("No system web app is found by given app id."));
 
-  return RespondNow(OneArgument(base::Value(
-      web_app::FindSystemWebAppBrowser(profile, *app_type) != nullptr)));
+  swa_manager->on_apps_synchronized().Post(
+      FROM_HERE,
+      base::BindOnce(
+          &AutotestPrivateIsSystemWebAppOpenFunction::OnSystemWebAppsInstalled,
+          this));
+  return RespondLater();
+}
+
+void AutotestPrivateIsSystemWebAppOpenFunction::OnSystemWebAppsInstalled() {
+  Profile* profile = Profile::FromBrowserContext(browser_context());
+  std::unique_ptr<api::autotest_private::IsSystemWebAppOpen::Params> params(
+      api::autotest_private::IsSystemWebAppOpen::Params::Create(args()));
+  absl::optional<ash::SystemWebAppType> app_type =
+      ash::GetSystemWebAppTypeForAppId(profile, params->app_id);
+  if (!app_type) {
+    Respond(Error("No system web app is found by given app id."));
+    return;
+  }
+
+  Respond(OneArgument(base::Value(
+      ash::FindSystemWebAppBrowser(profile, *app_type) != nullptr)));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1982,7 +2322,7 @@ ExtensionFunction::ResponseAction AutotestPrivateLaunchAppFunction::Run() {
   if (!controller)
     return RespondNow(Error("Controller not available"));
   controller->LaunchApp(ash::ShelfID(params->app_id),
-                        ash::ShelfLaunchSource::LAUNCH_FROM_UNKNOWN,
+                        ash::ShelfLaunchSource::LAUNCH_FROM_INTERNAL,
                         0, /* event_flags */
                         display::Screen::GetScreen()->GetPrimaryDisplay().id());
   return RespondNow(NoArguments());
@@ -2004,27 +2344,85 @@ AutotestPrivateLaunchSystemWebAppFunction::Run() {
            << params->app_name << " url: " << params->url;
 
   Profile* profile = Profile::FromBrowserContext(browser_context());
-  auto* provider = web_app::WebAppProvider::GetForTest(profile);
-  if (!provider)
-    return RespondNow(Error("Web Apps not enabled for profile."));
+  ash::SystemWebAppManager* swa_manager =
+      ash::SystemWebAppManager::Get(profile);
 
-  absl::optional<web_app::SystemAppType> app_type;
-  for (const auto& type_and_info :
-       provider->system_web_app_manager().GetRegisteredSystemAppsForTesting()) {
+  if (!swa_manager)
+    return RespondNow(Error("System Web Apps are not available for profile."));
+
+  swa_manager->on_apps_synchronized().Post(
+      FROM_HERE,
+      base::BindOnce(
+          &AutotestPrivateLaunchSystemWebAppFunction::OnSystemWebAppsInstalled,
+          this));
+  return RespondLater();
+}
+
+void AutotestPrivateLaunchSystemWebAppFunction::OnSystemWebAppsInstalled() {
+  Profile* profile = Profile::FromBrowserContext(browser_context());
+  ash::SystemWebAppManager* swa_manager =
+      ash::SystemWebAppManager::Get(profile);
+
+  std::unique_ptr<api::autotest_private::LaunchSystemWebApp::Params> params(
+      api::autotest_private::LaunchSystemWebApp::Params::Create(args()));
+  absl::optional<ash::SystemWebAppType> app_type;
+
+  for (const auto& type_and_info : swa_manager->system_app_delegates()) {
     if (type_and_info.second->GetInternalName() == params->app_name) {
       app_type = type_and_info.first;
       break;
     }
   }
-  if (!app_type.has_value())
-    return RespondNow(Error("No mapped system web app found"));
+  if (!app_type.has_value()) {
+    Respond(Error("No mapped system web app found"));
+    return;
+  }
 
-  web_app::SystemAppLaunchParams swa_params;
+  ash::SystemAppLaunchParams swa_params;
   swa_params.url = GURL(params->url);
-  web_app::LaunchSystemWebAppAsync(profile, *app_type, swa_params);
-  web_app::FlushSystemWebAppLaunchesForTesting(profile);
+  ash::LaunchSystemWebAppAsync(profile, *app_type, swa_params);
+  ash::FlushSystemWebAppLaunchesForTesting(profile);
 
-  return RespondNow(NoArguments());
+  Respond(NoArguments());
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// AutotestPrivateLaunchFilesAppToPathFunction
+///////////////////////////////////////////////////////////////////////////////
+
+AutotestPrivateLaunchFilesAppToPathFunction::
+    ~AutotestPrivateLaunchFilesAppToPathFunction() = default;
+
+ExtensionFunction::ResponseAction
+AutotestPrivateLaunchFilesAppToPathFunction::Run() {
+  std::unique_ptr<api::autotest_private::LaunchFilesAppToPath::Params> params(
+      api::autotest_private::LaunchFilesAppToPath::Params::Create(args()));
+  EXTENSION_FUNCTION_VALIDATE(params);
+
+  base::FilePath absolute_path(params->absolute_path);
+  if (!absolute_path.IsAbsolute()) {
+    return RespondNow(Error("Supplied path is not absolute"));
+  }
+
+  Profile* profile = Profile::FromBrowserContext(browser_context());
+  file_manager::util::ShowItemInFolder(
+      profile, std::move(absolute_path),
+      base::BindOnce(
+          &AutotestPrivateLaunchFilesAppToPathFunction::OnShowItemInFolder,
+          this));
+
+  return RespondLater();
+}
+
+void AutotestPrivateLaunchFilesAppToPathFunction::OnShowItemInFolder(
+    platform_util::OpenOperationResult result) {
+  if (result != platform_util::OpenOperationResult::OPEN_SUCCEEDED) {
+    DVLOG(1) << "Failed navigating to folder with error: " << result;
+    Respond(Error("Failed trying to open the supplied path"));
+    return;
+  }
+
+  Respond(NoArguments());
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -2148,7 +2546,7 @@ AutotestPrivateRunCrostiniInstallerFunction::Run() {
         installer_ui->ClickInstallForTesting();
       }));
   crostini::CrostiniManager::GetForProfile(profile)->RestartCrostini(
-      crostini::ContainerId::GetDefault(),
+      crostini::DefaultContainerId(),
       base::BindOnce(
           &AutotestPrivateRunCrostiniInstallerFunction::CrostiniRestarted,
           this));
@@ -2224,7 +2622,7 @@ ExtensionFunction::ResponseAction AutotestPrivateExportCrostiniFunction::Run() {
   }
 
   crostini::CrostiniExportImport::GetForProfile(profile)->ExportContainer(
-      crostini::ContainerId::GetDefault(),
+      crostini::DefaultContainerId(),
       file_manager::util::GetDownloadsFolderForProfile(profile).Append(path),
       base::BindOnce(&AutotestPrivateExportCrostiniFunction::CrostiniExported,
                      this));
@@ -2264,12 +2662,28 @@ ExtensionFunction::ResponseAction AutotestPrivateImportCrostiniFunction::Run() {
     return RespondNow(Error("Invalid import path must not reference parent"));
   }
   crostini::CrostiniExportImport::GetForProfile(profile)->ImportContainer(
-      crostini::ContainerId::GetDefault(),
+      crostini::DefaultContainerId(),
       file_manager::util::GetDownloadsFolderForProfile(profile).Append(path),
       base::BindOnce(&AutotestPrivateImportCrostiniFunction::CrostiniImported,
                      this));
 
   return RespondLater();
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// AutotestPrivateCouldAllowCrostiniFunction
+///////////////////////////////////////////////////////////////////////////////
+
+AutotestPrivateCouldAllowCrostiniFunction::
+    ~AutotestPrivateCouldAllowCrostiniFunction() = default;
+
+ExtensionFunction::ResponseAction
+AutotestPrivateCouldAllowCrostiniFunction::Run() {
+  DVLOG(1) << "AutotestPrivateCouldAllowCrostiniFunction";
+
+  Profile* profile = Profile::FromBrowserContext(browser_context());
+  return RespondNow(OneArgument(
+      base::Value(crostini::CrostiniFeatures::Get()->CouldBeAllowed(profile))));
 }
 
 void AutotestPrivateImportCrostiniFunction::CrostiniImported(
@@ -2327,8 +2741,9 @@ AutotestPrivateShowPluginVMInstallerFunction::Run() {
 class AutotestPrivateInstallBorealisFunction::InstallationObserver
     : public borealis::BorealisInstaller::Observer {
  public:
-  InstallationObserver(Profile* profile,
-                       base::OnceCallback<void(bool)> completion_callback)
+  InstallationObserver(
+      Profile* profile,
+      base::OnceCallback<void(std::string)> completion_callback)
       : observation_(this),
         completion_callback_(std::move(completion_callback)) {
     observation_.Observe(
@@ -2348,9 +2763,12 @@ class AutotestPrivateInstallBorealisFunction::InstallationObserver
   void OnStateUpdated(
       borealis::BorealisInstaller::InstallingState new_state) override {}
 
-  void OnInstallationEnded(borealis::BorealisInstallResult result) override {
+  void OnInstallationEnded(borealis::BorealisInstallResult result,
+                           const std::string& error_description) override {
     std::move(completion_callback_)
-        .Run(result == borealis::BorealisInstallResult::kSuccess);
+        .Run(result == borealis::BorealisInstallResult::kSuccess
+                 ? ""
+                 : "Failed to install Borealis: " + error_description);
   }
 
   void OnCancelInitiated() override {}
@@ -2359,7 +2777,7 @@ class AutotestPrivateInstallBorealisFunction::InstallationObserver
   base::ScopedObservation<borealis::BorealisInstaller,
                           borealis::BorealisInstaller::Observer>
       observation_;
-  base::OnceCallback<void(bool)> completion_callback_;
+  base::OnceCallback<void(std::string)> completion_callback_;
 };
 
 AutotestPrivateInstallBorealisFunction::
@@ -2377,11 +2795,12 @@ AutotestPrivateInstallBorealisFunction::Run() {
   return RespondLater();
 }
 
-void AutotestPrivateInstallBorealisFunction::Complete(bool was_successful) {
-  if (was_successful) {
+void AutotestPrivateInstallBorealisFunction::Complete(
+    std::string error_or_empty) {
+  if (error_or_empty.empty()) {
     Respond(NoArguments());
   } else {
-    Respond(Error("Failed to install borealis"));
+    Respond(Error(error_or_empty));
   }
 }
 
@@ -2508,12 +2927,12 @@ ExtensionFunction::ResponseAction AutotestPrivateGetPrinterListFunction::Run() {
   DVLOG(1) << "AutotestPrivateGetPrinterListFunction";
 
   Profile* profile = Profile::FromBrowserContext(browser_context());
-  printers_manager_ = chromeos::CupsPrintersManager::Create(profile);
+  printers_manager_ = ash::CupsPrintersManager::Create(profile);
   printers_manager_->AddObserver(this);
 
   // Set up a timer to finish waiting after 10 seconds
   timeout_timer_.Start(
-      FROM_HERE, base::TimeDelta::FromSeconds(10),
+      FROM_HERE, base::Seconds(10),
       base::BindOnce(
           &AutotestPrivateGetPrinterListFunction::RespondWithTimeoutError,
           this));
@@ -2625,8 +3044,7 @@ ExtensionFunction::ResponseAction AutotestPrivateUpdatePrinterFunction::Run() {
       LOG(ERROR) << "Invalid ppd path: " << *js_printer.printer_ppd;
   }
   auto* printers_manager =
-      chromeos::CupsPrintersManagerFactory::GetForBrowserContext(
-          browser_context());
+      ash::CupsPrintersManagerFactory::GetForBrowserContext(browser_context());
   printers_manager->SavePrinter(printer);
   return RespondNow(NoArguments());
 }
@@ -2645,8 +3063,7 @@ ExtensionFunction::ResponseAction AutotestPrivateRemovePrinterFunction::Run() {
   DVLOG(1) << "AutotestPrivateRemovePrinterFunction " << params->printer_id;
 
   auto* printers_manager =
-      chromeos::CupsPrintersManagerFactory::GetForBrowserContext(
-          browser_context());
+      ash::CupsPrintersManagerFactory::GetForBrowserContext(browser_context());
   printers_manager->RemoveSavedPrinter(params->printer_id);
   return RespondNow(NoArguments());
 }
@@ -2697,6 +3114,64 @@ void AutotestPrivateBootstrapMachineLearningServiceFunction::
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// AutotestPrivateLoadSmartDimComponentFunction
+///////////////////////////////////////////////////////////////////////////////
+
+AutotestPrivateLoadSmartDimComponentFunction::
+    AutotestPrivateLoadSmartDimComponentFunction() = default;
+AutotestPrivateLoadSmartDimComponentFunction::
+    ~AutotestPrivateLoadSmartDimComponentFunction() = default;
+
+ExtensionFunction::ResponseAction
+AutotestPrivateLoadSmartDimComponentFunction::Run() {
+  DVLOG(1) << "AutotestPrivateLoadSmartDimComponentFunction";
+
+  if (ash::power::ml::SmartDimMlAgent::GetInstance()->IsDownloadWorkerReady()) {
+    return RespondNow(NoArguments());
+  }
+
+  const std::string crx_id =
+      component_updater::SmartDimComponentInstallerPolicy::GetExtensionId();
+  g_browser_process->component_updater()->GetOnDemandUpdater().OnDemandUpdate(
+      crx_id, component_updater::OnDemandUpdater::Priority::FOREGROUND,
+      base::BindOnce(&AutotestPrivateLoadSmartDimComponentFunction::
+                         OnComponentUpdatedCallback,
+                     this));
+
+  timer_.Start(
+      FROM_HERE, base::Seconds(5),
+      base::BindRepeating(
+          &AutotestPrivateLoadSmartDimComponentFunction::TryRespond, this));
+
+  return RespondLater();
+}
+
+void AutotestPrivateLoadSmartDimComponentFunction::OnComponentUpdatedCallback(
+    update_client::Error error) {
+  if (error != update_client::Error::NONE &&
+      error != update_client::Error::UPDATE_IN_PROGRESS) {
+    Respond(Error(base::StringPrintf(
+        "On demand update of the SmartDim component failed with error: %d.",
+        static_cast<int>(error))));
+  }
+}
+
+void AutotestPrivateLoadSmartDimComponentFunction::TryRespond() {
+  ++timer_triggered_count_;
+  if (did_respond()) {
+    return;
+  }
+
+  if (ash::power::ml::SmartDimMlAgent::GetInstance()->IsDownloadWorkerReady()) {
+    Respond(NoArguments());
+  } else if (timer_triggered_count_ >= 12) {
+    Respond(Error("Timeout occurred before SmartDim component was loaded."));
+  } else {
+    timer_.Reset();
+  }
+}
+
+///////////////////////////////////////////////////////////////////////////////
 // AutotestPrivateSetAssistantEnabled
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -2738,7 +3213,7 @@ AutotestPrivateSetAssistantEnabledFunction::Run() {
   // when timeout.
   enabled_ = params->enabled;
   timeout_timer_.Start(
-      FROM_HERE, base::TimeDelta::FromMilliseconds(params->timeout_ms),
+      FROM_HERE, base::Milliseconds(params->timeout_ms),
       base::BindOnce(&AutotestPrivateSetAssistantEnabledFunction::Timeout,
                      this));
   return RespondLater();
@@ -2777,13 +3252,25 @@ AutotestPrivateEnableAssistantAndWaitForReadyFunction::
     AutotestPrivateEnableAssistantAndWaitForReadyFunction() = default;
 
 AutotestPrivateEnableAssistantAndWaitForReadyFunction::
-    ~AutotestPrivateEnableAssistantAndWaitForReadyFunction() {
-  ash::AssistantState::Get()->RemoveObserver(this);
-}
+    ~AutotestPrivateEnableAssistantAndWaitForReadyFunction() = default;
 
 ExtensionFunction::ResponseAction
 AutotestPrivateEnableAssistantAndWaitForReadyFunction::Run() {
   DVLOG(1) << "AutotestPrivateEnableAssistantAndWaitForReadyFunction";
+
+  if (ash::AssistantState::Get()->assistant_status() ==
+      chromeos::assistant::AssistantStatus::READY) {
+    return RespondNow(Error("Assistant is already enabled."));
+  }
+
+  // We can set this callback only when assistant status is NOT_READY. We should
+  // call this before we try to enable Assistant to avoid causing some timing
+  // issue.
+  chromeos::assistant::AssistantManagerServiceImpl::
+      SetInitializedInternalCallbackForTesting(base::BindOnce(
+          &AutotestPrivateEnableAssistantAndWaitForReadyFunction::
+              OnInitializedInternal,
+          this));
 
   Profile* profile = Profile::FromBrowserContext(browser_context());
   const std::string& err_msg =
@@ -2792,34 +3279,12 @@ AutotestPrivateEnableAssistantAndWaitForReadyFunction::Run() {
   if (!err_msg.empty())
     return RespondNow(Error(err_msg));
 
-  // Asynchronously subscribe to status changes to avoid a possible segmentation
-  // fault caused by Respond() in the subscriber callback being called before
-  // RespondLater() below.
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE,
-      base::BindOnce(&AutotestPrivateEnableAssistantAndWaitForReadyFunction::
-                         SubscribeToStatusChanges,
-                     this));
-
-  // Prevent |this| from being freed before we get a response from the
-  // Assistant.
-  self_ = this;
-
   return RespondLater();
 }
 
 void AutotestPrivateEnableAssistantAndWaitForReadyFunction::
-    SubscribeToStatusChanges() {
-  // |AddObserver| will immediately trigger |OnAssistantStatusChanged|.
-  ash::AssistantState::Get()->AddObserver(this);
-}
-
-void AutotestPrivateEnableAssistantAndWaitForReadyFunction::
-    OnAssistantStatusChanged(chromeos::assistant::AssistantStatus status) {
-  if (status == chromeos::assistant::AssistantStatus::READY) {
-    Respond(NoArguments());
-    self_.reset();
-  }
+    OnInitializedInternal() {
+  Respond(NoArguments());
 }
 
 // AssistantInteractionHelper is a helper class used to interact with Assistant
@@ -2834,6 +3299,10 @@ class AssistantInteractionHelper
 
   AssistantInteractionHelper()
       : query_status_(std::make_unique<base::DictionaryValue>()) {}
+
+  AssistantInteractionHelper(const AssistantInteractionHelper&) = delete;
+  AssistantInteractionHelper& operator=(const AssistantInteractionHelper&) =
+      delete;
 
   ~AssistantInteractionHelper() override {
     if (GetAssistant()) {
@@ -2957,8 +3426,6 @@ class AssistantInteractionHelper
 
   // Callback triggered when interaction finished with non-empty response.
   OnInteractionFinishedCallback on_interaction_finished_callback_;
-
-  DISALLOW_COPY_AND_ASSIGN(AssistantInteractionHelper);
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -3000,7 +3467,7 @@ AutotestPrivateSendAssistantTextQueryFunction::Run() {
   // to |this| to avoid being destructed. Also make sure we stop and respond
   // when timeout.
   timeout_timer_.Start(
-      FROM_HERE, base::TimeDelta::FromMilliseconds(params->timeout_ms),
+      FROM_HERE, base::Milliseconds(params->timeout_ms),
       base::BindOnce(&AutotestPrivateSendAssistantTextQueryFunction::Timeout,
                      this));
 
@@ -3064,7 +3531,7 @@ AutotestPrivateWaitForAssistantQueryStatusFunction::Run() {
 
   // Start waiting for the response before time out.
   timeout_timer_.Start(
-      FROM_HERE, base::TimeDelta::FromSeconds(params->timeout_s),
+      FROM_HERE, base::Seconds(params->timeout_s),
       base::BindOnce(
           &AutotestPrivateWaitForAssistantQueryStatusFunction::Timeout, this));
   return RespondLater();
@@ -3244,7 +3711,7 @@ AutotestPrivateGetAllInstalledAppsFunction::Run() {
   DVLOG(1) << "AutotestPrivateGetAllInstalledAppsFunction";
 
   Profile* const profile = Profile::FromBrowserContext(browser_context());
-  apps::AppServiceProxyChromeOs* proxy =
+  apps::AppServiceProxy* proxy =
       apps::AppServiceProxyFactory::GetForProfile(profile);
 
   std::vector<api::autotest_private::App> installed_apps;
@@ -3255,15 +3722,29 @@ AutotestPrivateGetAllInstalledAppsFunction::Run() {
 
     api::autotest_private::App app;
     app.app_id = update.AppId();
-    app.name = update.Name();
+
+    // Assume that when `switches::kForceDirectionRTL` is enabled, the system
+    // language still follows the left-to-right fashion. Because the app names
+    // carried by `update` are adapted to RTL by inserting extra characters that
+    // indicate the text direction, we should recover the original app names
+    // before returning them as the result.
+    if (base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
+            switches::kForceUIDirection) == switches::kForceDirectionRTL) {
+      std::u16string name = base::UTF8ToUTF16(update.Name());
+      base::i18n::UnadjustStringForLocaleDirection(&name);
+      app.name = base::UTF16ToUTF8(name);
+    } else {
+      app.name = update.Name();
+    }
+
     app.short_name = update.ShortName();
     app.publisher_id = update.PublisherId();
     app.additional_search_terms = update.AdditionalSearchTerms();
     app.type = GetAppType(update.AppType());
-    app.install_source = GetAppInstallSource(update.InstallSource());
+    app.install_source = GetAppInstallSource(update.InstallReason());
     app.readiness = GetAppReadiness(update.Readiness());
-    app.show_in_launcher = ConvertMojomOptionalBool(update.ShowInLauncher());
-    app.show_in_search = ConvertMojomOptionalBool(update.ShowInSearch());
+    app.show_in_launcher = ConvertOptionalBool(update.ShowInLauncher());
+    app.show_in_search = ConvertOptionalBool(update.ShowInSearch());
     installed_apps.emplace_back(std::move(app));
   });
 
@@ -3519,6 +4000,28 @@ void AutotestPrivateWaitForOverviewStateFunction::Done(bool success) {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// AutotestPrivateSendArcOverlayColorFunction
+///////////////////////////////////////////////////////////////////////////////
+
+AutotestPrivateSendArcOverlayColorFunction::
+    ~AutotestPrivateSendArcOverlayColorFunction() = default;
+
+ExtensionFunction::ResponseAction
+AutotestPrivateSendArcOverlayColorFunction::Run() {
+  DVLOG(1) << "AutotestPrivateSendArcOverlayColorFunction";
+  std::unique_ptr<api::autotest_private::SendArcOverlayColor::Params> params(
+      api::autotest_private::SendArcOverlayColor::Params::Create(args()));
+  EXTENSION_FUNCTION_VALIDATE(params);
+  arc::ArcSystemUIBridge* const system_ui =
+      arc::ArcSystemUIBridge::GetForBrowserContext(browser_context());
+  if (!system_ui)
+    return RespondNow(Error("No ARC System UI Bridge is available."));
+  const bool result = system_ui->SendOverlayColor(
+      params->color, ToThemeStyleType(params->theme));
+  return RespondNow(OneArgument(base::Value(result)));
+}
+
+///////////////////////////////////////////////////////////////////////////////
 // AutotestPrivateSetOverviewModeStateFunction
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -3553,7 +4056,7 @@ void AutotestPrivateSetOverviewModeStateFunction::OnOverviewModeChanged(
         FROM_HERE,
         base::BindOnce(&AutotestPrivateSetOverviewModeStateFunction::Respond,
                        this, std::move(arg)),
-        base::TimeDelta::FromSeconds(1));
+        base::Seconds(1));
   } else {
     Respond(std::move(arg));
   }
@@ -3600,7 +4103,7 @@ AutotestPrivateShowVirtualKeyboardIfEnabledFunction::Run() {
   ui::IMEBridge::Get()
       ->GetInputContextHandler()
       ->GetInputMethod()
-      ->ShowVirtualKeyboardIfEnabled();
+      ->SetVirtualKeyboardVisibilityIfEnabled(true);
   return RespondNow(NoArguments());
 }
 
@@ -3883,7 +4386,7 @@ AutotestPrivateGetAppWindowListFunction::Run() {
                    << ") isn't available even though it is an ARC window.";
       }
 
-      std::string* app_id = window->GetProperty(full_restore::kAppIdKey);
+      std::string* app_id = window->GetProperty(app_restore::kAppIdKey);
       if (app_id) {
         window_info.full_restore_window_app_id =
             std::make_unique<std::string>(*app_id);
@@ -3923,8 +4426,8 @@ AutotestPrivateGetAppWindowListFunction::Run() {
           views::CAPTION_BUTTON_ICON_MINIMIZE,
           views::CAPTION_BUTTON_ICON_MAXIMIZE_RESTORE,
           views::CAPTION_BUTTON_ICON_CLOSE,
-          views::CAPTION_BUTTON_ICON_LEFT_SNAPPED,
-          views::CAPTION_BUTTON_ICON_RIGHT_SNAPPED,
+          views::CAPTION_BUTTON_ICON_LEFT_TOP_SNAPPED,
+          views::CAPTION_BUTTON_ICON_RIGHT_BOTTOM_SNAPPED,
           views::CAPTION_BUTTON_ICON_BACK,
           views::CAPTION_BUTTON_ICON_LOCATION,
           views::CAPTION_BUTTON_ICON_MENU,
@@ -4086,7 +4589,7 @@ ExtensionFunction::ResponseAction AutotestPrivateCloseAppWindowFunction::Run() {
 // AutotestPrivateInstallPWAForCurrentURL
 ///////////////////////////////////////////////////////////////////////////////
 
-// Used to notify when when a certain URL contains a WPA.
+// Used to notify when when a certain URL contains a PWA.
 class AutotestPrivateInstallPWAForCurrentURLFunction::PWABannerObserver
     : public webapps::AppBannerManager::Observer {
  public:
@@ -4105,6 +4608,10 @@ class AutotestPrivateInstallPWAForCurrentURLFunction::PWABannerObserver
       std::move(callback_).Run();
     }
   }
+
+  PWABannerObserver(const PWABannerObserver&) = delete;
+  PWABannerObserver& operator=(const PWABannerObserver&) = delete;
+
   ~PWABannerObserver() override {}
 
   void OnInstallableWebAppStatusUpdated() override {
@@ -4112,16 +4619,16 @@ class AutotestPrivateInstallPWAForCurrentURLFunction::PWABannerObserver
         app_banner_manager_->GetInstallableWebAppCheckResultForTesting();
     switch (installable) {
       case Installable::kNo:
-        FALLTHROUGH;
+        [[fallthrough]];
       case Installable::kNo_AlreadyInstalled:
-        FALLTHROUGH;
+        [[fallthrough]];
       case Installable::kUnknown:
         DCHECK(false) << "Unexpected AppBannerManager::Installable value (kNo "
                          "or kNoAlreadyInstalled or kUnknown)";
         break;
 
       case Installable::kYes_Promotable:
-        FALLTHROUGH;
+        [[fallthrough]];
       case Installable::kYes_ByUserRequest:
         observation_.Reset();
         std::move(callback_).Run();
@@ -4137,34 +4644,39 @@ class AutotestPrivateInstallPWAForCurrentURLFunction::PWABannerObserver
       observation_{this};
   base::OnceCallback<void()> callback_;
   webapps::AppBannerManager* app_banner_manager_;
-
-  DISALLOW_COPY_AND_ASSIGN(PWABannerObserver);
 };
 
-// Used to notify when a WPA is installed.
-class AutotestPrivateInstallPWAForCurrentURLFunction::PWARegistrarObserver
-    : public web_app::AppRegistrarObserver {
+// Used to notify when a PWA is installed.
+class AutotestPrivateInstallPWAForCurrentURLFunction::PWAInstallManagerObserver
+    : public web_app::WebAppInstallManagerObserver {
  public:
-  PWARegistrarObserver(Profile* profile,
-                       base::OnceCallback<void(const web_app::AppId&)> callback)
+  PWAInstallManagerObserver(
+      Profile* profile,
+      base::OnceCallback<void(const web_app::AppId&)> callback)
       : callback_(std::move(callback)) {
-    observation_.Observe(
-        &web_app::WebAppProvider::GetForTest(profile)->registrar());
+    auto* provider = web_app::WebAppProvider::GetForWebApps(profile);
+    if (provider)
+      observation_.Observe(&provider->install_manager());
   }
-  ~PWARegistrarObserver() override {}
+
+  PWAInstallManagerObserver(const PWAInstallManagerObserver&) = delete;
+  PWAInstallManagerObserver& operator=(const PWAInstallManagerObserver&) =
+      delete;
+
+  ~PWAInstallManagerObserver() override {}
 
   void OnWebAppInstalled(const web_app::AppId& app_id) override {
     observation_.Reset();
     std::move(callback_).Run(app_id);
   }
 
+  void OnWebAppInstallManagerDestroyed() override { observation_.Reset(); }
+
  private:
-  base::ScopedObservation<web_app::WebAppRegistrar,
-                          web_app::AppRegistrarObserver>
+  base::ScopedObservation<web_app::WebAppInstallManager,
+                          web_app::WebAppInstallManagerObserver>
       observation_{this};
   base::OnceCallback<void(const web_app::AppId&)> callback_;
-
-  DISALLOW_COPY_AND_ASSIGN(PWARegistrarObserver);
 };
 
 AutotestPrivateInstallPWAForCurrentURLFunction::
@@ -4203,7 +4715,7 @@ AutotestPrivateInstallPWAForCurrentURLFunction::Run() {
   // - There is no way to know whether ExecuteCommand fails.
   // - Current URL might not have a valid PWA.
   timeout_timer_.Start(
-      FROM_HERE, base::TimeDelta::FromMilliseconds(params->timeout_ms),
+      FROM_HERE, base::Milliseconds(params->timeout_ms),
       base::BindOnce(
           &AutotestPrivateInstallPWAForCurrentURLFunction::PWATimeout, this));
   return RespondLater();
@@ -4213,7 +4725,7 @@ void AutotestPrivateInstallPWAForCurrentURLFunction::PWALoaded() {
   Profile* profile = Profile::FromBrowserContext(browser_context());
   Browser* browser = GetFirstRegularBrowser();
 
-  registrar_observer_ = std::make_unique<PWARegistrarObserver>(
+  install_mananger_observer_ = std::make_unique<PWAInstallManagerObserver>(
       profile,
       base::BindOnce(
           &AutotestPrivateInstallPWAForCurrentURLFunction::PWAInstalled, this));
@@ -4297,6 +4809,18 @@ AutotestPrivateWaitForLauncherStateFunction::Run() {
       api::autotest_private::WaitForLauncherState::Params::Create(args()));
   EXTENSION_FUNCTION_VALIDATE(params);
   auto target_state = ToAppListViewState(params->launcher_state);
+  // The method is only implemented for fullscreen launcher, for bubble
+  // launcher, tests use automation APIs to wait for launcher visibility
+  // changes.
+  // Exceptionally, allow waiting for kClosed state in clamshell mode, so tests
+  // can wait for fullscreen launcher state change to finish when exiting tablet
+  // mode.
+  if (ash::features::IsProductivityLauncherEnabled() &&
+      !ash::TabletMode::Get()->InTabletMode() &&
+      target_state != ash::AppListViewState::kClosed) {
+    return RespondNow(Error("Not supported for bubble launcher"));
+  }
+
   if (WaitForLauncherState(
           target_state,
           base::BindOnce(&AutotestPrivateWaitForLauncherStateFunction::Done,
@@ -4606,8 +5130,7 @@ AutotestPrivateSetMetricsEnabledFunction::Run() {
   Profile* profile = Profile::FromBrowserContext(browser_context());
 
   bool value;
-  if (ash::CrosSettings::Get()->GetBoolean(chromeos::kStatsReportingPref,
-                                           &value) &&
+  if (ash::CrosSettings::Get()->GetBoolean(ash::kStatsReportingPref, &value) &&
       value == target_value_) {
     VLOG(1) << "Value at target; returning early";
     return RespondNow(NoArguments());
@@ -4627,13 +5150,12 @@ AutotestPrivateSetMetricsEnabledFunction::Run() {
 
 void AutotestPrivateSetMetricsEnabledFunction::OnDeviceSettingsStored() {
   bool actual;
-  if (!ash::CrosSettings::Get()->GetBoolean(chromeos::kStatsReportingPref,
+  if (!ash::CrosSettings::Get()->GetBoolean(ash::kStatsReportingPref,
                                             &actual)) {
     NOTREACHED() << "AutotestPrivateSetMetricsEnabledFunction: "
                  << "kStatsReportingPref should be set";
-    Respond(Error(base::StrCat(
-        {"Failed to set metrics consent: ", chromeos::kStatsReportingPref,
-         " is not set."})));
+    Respond(Error(base::StrCat({"Failed to set metrics consent: ",
+                                ash::kStatsReportingPref, " is not set."})));
     return;
   }
   VLOG(1) << "AutotestPrivateSetMetricsEnabledFunction: actual: "
@@ -4643,61 +5165,9 @@ void AutotestPrivateSetMetricsEnabledFunction::OnDeviceSettingsStored() {
     Respond(NoArguments());
   } else {
     Respond(Error(base::StrCat(
-        {"Failed to set metrics consent: ", chromeos::kStatsReportingPref,
+        {"Failed to set metrics consent: ", ash::kStatsReportingPref,
          " has wrong value."})));
   }
-}
-
-///////////////////////////////////////////////////////////////////////////////
-// AutotestPrivateStartTracingFunction
-///////////////////////////////////////////////////////////////////////////////
-AutotestPrivateStartTracingFunction::AutotestPrivateStartTracingFunction() =
-    default;
-AutotestPrivateStartTracingFunction::~AutotestPrivateStartTracingFunction() =
-    default;
-
-ExtensionFunction::ResponseAction AutotestPrivateStartTracingFunction::Run() {
-  std::unique_ptr<api::autotest_private::StartTracing::Params> params(
-      api::autotest_private::StartTracing::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params);
-  std::unique_ptr<base::Value> config_value = params->config.ToValue();
-  base::trace_event::TraceConfig config(*config_value.get());
-
-  if (!content::TracingController::GetInstance()->StartTracing(
-          config,
-          base::BindOnce(&AutotestPrivateStartTracingFunction::OnStartTracing,
-                         this))) {
-    return RespondNow(Error("Failed to start tracing"));
-  }
-
-  return RespondLater();
-}
-
-void AutotestPrivateStartTracingFunction::OnStartTracing() {
-  Respond(NoArguments());
-}
-
-///////////////////////////////////////////////////////////////////////////////
-// AutotestPrivateStopTracingFunction
-///////////////////////////////////////////////////////////////////////////////
-AutotestPrivateStopTracingFunction::AutotestPrivateStopTracingFunction() =
-    default;
-AutotestPrivateStopTracingFunction::~AutotestPrivateStopTracingFunction() =
-    default;
-
-ExtensionFunction::ResponseAction AutotestPrivateStopTracingFunction::Run() {
-  if (!content::TracingController::GetInstance()->StopTracing(
-          content::TracingController::CreateStringEndpoint(base::BindOnce(
-              &AutotestPrivateStopTracingFunction::OnTracingComplete, this)))) {
-    return RespondNow(Error("Failed to stop tracing"));
-  }
-  return RespondLater();
-}
-
-void AutotestPrivateStopTracingFunction::OnTracingComplete(
-    std::unique_ptr<std::string> trace) {
-  base::Value value(*trace.get());
-  Respond(OneArgument(std::move(value)));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -4931,9 +5401,10 @@ std::unique_ptr<base::DictionaryValue> BuildSetWindowBoundsResult(
     const gfx::Rect& bounds_in_display,
     int64_t display_id) {
   auto result = std::make_unique<base::DictionaryValue>();
-  result->SetDictionary("bounds",
-                        ToBoundsDictionary(bounds_in_display).ToValue());
-  result->SetString("displayId", base::NumberToString(display_id));
+  result->SetKey("bounds",
+                 base::Value::FromUniquePtrValue(
+                     ToBoundsDictionary(bounds_in_display).ToValue()));
+  result->SetStringKey("displayId", base::NumberToString(display_id));
   return result;
 }
 
@@ -5027,24 +5498,26 @@ AutotestPrivateStartSmoothnessTrackingFunction::Run() {
         Error(base::StrCat({"Invalid display id: ", *params->display_id})));
   }
 
-  auto* infos = GetDisplaySmoothnessTrackerInfos();
-  if (infos->find(display_id) != infos->end()) {
+  auto* trackers = GetDisplaySmoothnessTrackers();
+  if (trackers->find(display_id) != trackers->end()) {
     return RespondNow(
         Error(base::StrCat({"Smoothness already tracked for display: ",
                             base::NumberToString(display_id)})));
   }
 
-  auto* root_window = ash::Shell::GetRootWindowForDisplayId(display_id);
-  if (!root_window) {
+  base::TimeDelta throughput_interval = kDefaultThroughputInterval;
+  if (params->throughput_interval_ms)
+    throughput_interval = base::Milliseconds(*params->throughput_interval_ms);
+
+  auto tracker = std::make_unique<DisplaySmoothnessTracker>();
+  if (!tracker->Start(
+          display_id, throughput_interval,
+          base::BindOnce(&ForwardFrameRateDataAndReset, display_id))) {
     return RespondNow(Error(base::StrCat(
         {"Invalid display_id; no root window found for the display id ",
          base::NumberToString(display_id)})));
   }
-
-  auto tracker =
-      root_window->layer()->GetCompositor()->RequestNewThroughputTracker();
-  tracker.Start(base::BindOnce(&ForwardFrameRateDataAndReset, display_id));
-  (*infos)[display_id].tracker = std::move(tracker);
+  (*trackers)[display_id] = std::move(tracker);
   return RespondNow(NoArguments());
 }
 
@@ -5067,38 +5540,79 @@ AutotestPrivateStopSmoothnessTrackingFunction::Run() {
         Error(base::StrCat({"Invalid display id: ", *params->display_id})));
   }
 
-  auto* infos = GetDisplaySmoothnessTrackerInfos();
-  auto it = infos->find(display_id);
-  if (it == infos->end()) {
+  auto* trackers = GetDisplaySmoothnessTrackers();
+  auto it = trackers->find(display_id);
+  if (it == trackers->end()) {
     return RespondNow(
         Error(base::StrCat({"Smoothness is not tracked for display: ",
                             base::NumberToString(display_id)})));
   }
 
-  if (it->second.stopping) {
+  if (it->second->stopping()) {
     return RespondNow(Error(
         base::StrCat({"stopSmoothnessTracking already called for display: ",
                       base::NumberToString(display_id)})));
   }
 
-  it->second.callback = base::BindOnce(
-      &AutotestPrivateStopSmoothnessTrackingFunction::OnReportData, this);
-  it->second.stopping = true;
-  it->second.tracker->Stop();
+  const bool has_error = it->second->has_error();
+
+  // DisplaySmoothnessTracker::Stop does not invoke the report callback when
+  // gpu-process crashes and has no valid data to report. Start a timer to
+  // handle this case.
+  timeout_timer_.Start(
+      FROM_HERE, base::Seconds(5),
+      base::BindOnce(&AutotestPrivateStopSmoothnessTrackingFunction::OnTimeOut,
+                     this, display_id));
+
+  it->second->Stop(base::BindOnce(
+      &AutotestPrivateStopSmoothnessTrackingFunction::OnReportData, this));
+
+  // Trigger a repaint after ThroughputTracker::Stop() to generate a frame to
+  // ensure the tracker report will be sent back.
+  auto* root_window = ash::Shell::GetRootWindowForDisplayId(display_id);
+  root_window->GetHost()->compositor()->ScheduleFullRedraw();
+
+  if (has_error) {
+    return RespondNow(Error(base::StrCat(
+        {"Error happened during smoothness collection for display: ",
+         base::NumberToString(display_id)})));
+  }
 
   return did_respond() ? AlreadyResponded() : RespondLater();
 }
 
 void AutotestPrivateStopSmoothnessTrackingFunction::OnReportData(
-    const cc::FrameSequenceMetrics::CustomReportData& data) {
-  api::autotest_private::ThroughputTrackerAnimationData result_data;
-  result_data.frames_expected = data.frames_expected;
-  result_data.frames_produced = data.frames_produced;
-  result_data.jank_count = data.jank_count;
+    const cc::FrameSequenceMetrics::CustomReportData& frame_data,
+    std::vector<int>&& throughput) {
+  if (did_respond())
+    return;
+
+  timeout_timer_.AbandonAndStop();
+
+  api::autotest_private::DisplaySmoothnessData result_data;
+  result_data.frames_expected = frame_data.frames_expected;
+  result_data.frames_produced = frame_data.frames_produced;
+  result_data.jank_count = frame_data.jank_count;
+  result_data.throughput = std::move(throughput);
 
   Respond(ArgumentList(
       api::autotest_private::StopSmoothnessTracking::Results::Create(
           result_data)));
+}
+
+void AutotestPrivateStopSmoothnessTrackingFunction::OnTimeOut(
+    int64_t display_id) {
+  if (did_respond())
+    return;
+
+  // Clean up the non-functional tracker.
+  auto* trackers = GetDisplaySmoothnessTrackers();
+  auto it = trackers->find(display_id);
+  if (it == trackers->end())
+    return;
+  trackers->erase(it);
+
+  Respond(Error("Smoothness is not available"));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -5121,7 +5635,7 @@ AutotestPrivateWaitForAmbientPhotoAnimationFunction::Run() {
 
   // Wait for photo transition animation completed in ambient mode.
   ash::AutotestAmbientApi().WaitForPhotoTransitionAnimationCompleted(
-      params->num_completions, base::TimeDelta::FromSeconds(params->timeout),
+      params->num_completions, base::Seconds(params->timeout),
       /*on_complete=*/
       base::BindOnce(&AutotestPrivateWaitForAmbientPhotoAnimationFunction::
                          OnPhotoTransitionAnimationCompleted,
@@ -5239,6 +5753,270 @@ AutotestPrivateStopThroughputTrackerDataCollectionFunction::Run() {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// AutotestPrivateGetDisplaySmoothnessFunction
+//////////////////////////////////////////////////////////////////////////////
+
+AutotestPrivateGetDisplaySmoothnessFunction::
+    AutotestPrivateGetDisplaySmoothnessFunction() = default;
+
+AutotestPrivateGetDisplaySmoothnessFunction::
+    ~AutotestPrivateGetDisplaySmoothnessFunction() = default;
+
+ExtensionFunction::ResponseAction
+AutotestPrivateGetDisplaySmoothnessFunction::Run() {
+  auto params(
+      api::autotest_private::GetDisplaySmoothness::Params::Create(args()));
+  EXTENSION_FUNCTION_VALIDATE(params);
+
+  int64_t display_id;
+  if (!GetDisplayIdFromOptionalArg(params->display_id, &display_id)) {
+    return RespondNow(
+        Error(base::StrCat({"Invalid display id: ", *params->display_id})));
+  }
+
+  auto* root_window = ash::Shell::GetRootWindowForDisplayId(display_id);
+  const uint32_t smoothness =
+      100 - root_window->GetHost()->compositor()->GetPercentDroppedFrames();
+  return RespondNow(
+      ArgumentList(api::autotest_private::GetDisplaySmoothness::Results::Create(
+          smoothness)));
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// AutotestPrivateResetHoldingSpaceFunction
+////////////////////////////////////////////////////////////////////////////////
+
+AutotestPrivateResetHoldingSpaceFunction::
+    AutotestPrivateResetHoldingSpaceFunction() = default;
+
+AutotestPrivateResetHoldingSpaceFunction::
+    ~AutotestPrivateResetHoldingSpaceFunction() = default;
+
+ExtensionFunction::ResponseAction
+AutotestPrivateResetHoldingSpaceFunction::Run() {
+  auto params(api::autotest_private::ResetHoldingSpace::Params::Create(args()));
+  EXTENSION_FUNCTION_VALIDATE(params);
+
+  Profile* profile = Profile::FromBrowserContext(browser_context());
+
+  ash::HoldingSpaceKeyedService* service =
+      ash::HoldingSpaceKeyedServiceFactory::GetInstance()->GetService(profile);
+
+  if (service == nullptr)
+    return RespondNow(Error("Failed to get `HoldingSpaceKeyedService`."));
+
+  service->RemoveAll();
+
+  PrefService* prefs = profile->GetPrefs();
+  ash::holding_space_prefs::ResetProfilePrefsForTesting(prefs);
+
+  if (!ash::holding_space_prefs::MarkTimeOfFirstAvailability(prefs)) {
+    return RespondNow(
+        Error("Failed to call `MarkTimeOfFirstAvailability()` after clearing "
+              "prefs."));
+  }
+
+  if (!params->options || !params->options->mark_time_of_first_add)
+    return RespondNow(NoArguments());
+
+  if (!ash::holding_space_prefs::MarkTimeOfFirstAdd(prefs)) {
+    return RespondNow(
+        Error("Failed to call `MarkTimeOfFirstAdd()` after clearing prefs."));
+  }
+
+  return RespondNow(NoArguments());
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// AutotestPrivateStartLoginEventRecorderDataCollectionFunction
+//////////////////////////////////////////////////////////////////////////////
+
+AutotestPrivateStartLoginEventRecorderDataCollectionFunction::
+    AutotestPrivateStartLoginEventRecorderDataCollectionFunction() = default;
+
+AutotestPrivateStartLoginEventRecorderDataCollectionFunction::
+    ~AutotestPrivateStartLoginEventRecorderDataCollectionFunction() = default;
+
+ExtensionFunction::ResponseAction
+AutotestPrivateStartLoginEventRecorderDataCollectionFunction::Run() {
+  chromeos::LoginEventRecorder::Get()
+      ->PrepareEventCollectionForTesting();  // IN-TEST
+  return RespondNow(NoArguments());
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// AutotestPrivateGetLoginEventRecorderLoginEventsFunction
+//////////////////////////////////////////////////////////////////////////////
+
+AutotestPrivateGetLoginEventRecorderLoginEventsFunction::
+    AutotestPrivateGetLoginEventRecorderLoginEventsFunction() = default;
+
+AutotestPrivateGetLoginEventRecorderLoginEventsFunction::
+    ~AutotestPrivateGetLoginEventRecorderLoginEventsFunction() = default;
+
+ExtensionFunction::ResponseAction
+AutotestPrivateGetLoginEventRecorderLoginEventsFunction::Run() {
+  const auto& collected_data =
+      chromeos::LoginEventRecorder::Get()
+          ->GetCollectedLoginEventsForTesting();  // IN-TEST
+  std::vector<api::autotest_private::LoginEventRecorderData> result_data;
+  for (const auto& data : collected_data) {
+    api::autotest_private::LoginEventRecorderData event_data;
+    event_data.name = data.name();
+    event_data.microsecnods_since_unix_epoch =
+        (data.time() - base::Time::UnixEpoch()).InMicroseconds();
+    result_data.emplace_back(std::move(event_data));
+  }
+
+  return RespondNow(ArgumentList(
+      api::autotest_private::GetLoginEventRecorderLoginEvents::Results::Create(
+          result_data)));
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// AutotestPrivateAddLoginEventForTestingFunction
+//////////////////////////////////////////////////////////////////////////////
+
+AutotestPrivateAddLoginEventForTestingFunction::
+    AutotestPrivateAddLoginEventForTestingFunction() = default;
+
+AutotestPrivateAddLoginEventForTestingFunction::
+    ~AutotestPrivateAddLoginEventForTestingFunction() = default;
+
+ExtensionFunction::ResponseAction
+AutotestPrivateAddLoginEventForTestingFunction::Run() {
+  chromeos::LoginEventRecorder::Get()->AddLoginTimeMarker(
+      /*marker_name=*/"AutotestPrivateTestMarker",
+      /*send_to_uma=*/false,
+      /*write_to_file=*/false);
+  return RespondNow(NoArguments());
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// AutotestPrivateForceAutoThemeModeFunction
+//////////////////////////////////////////////////////////////////////////////
+
+AutotestPrivateForceAutoThemeModeFunction::
+    AutotestPrivateForceAutoThemeModeFunction() = default;
+
+AutotestPrivateForceAutoThemeModeFunction::
+    ~AutotestPrivateForceAutoThemeModeFunction() = default;
+
+ExtensionFunction::ResponseAction
+AutotestPrivateForceAutoThemeModeFunction::Run() {
+  DVLOG(1) << "AutotestPrivateForceAutoThemeModeFunction";
+
+  std::unique_ptr<api::autotest_private::ForceAutoThemeMode::Params> params(
+      api::autotest_private::ForceAutoThemeMode::Params::Create(args()));
+  EXTENSION_FUNCTION_VALIDATE(params);
+
+  ash::DarkLightModeController* dark_light_mode_controller =
+      ash::DarkLightModeController::Get();
+  DCHECK(dark_light_mode_controller);
+
+  dark_light_mode_controller->SetDarkModeEnabledForTest(
+      params->dark_mode_enabled);
+  return RespondNow(NoArguments());
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// AutotestPrivateGetAccessTokenFunction
+//////////////////////////////////////////////////////////////////////////////
+
+AutotestPrivateGetAccessTokenFunction::AutotestPrivateGetAccessTokenFunction() =
+    default;
+
+AutotestPrivateGetAccessTokenFunction::
+    ~AutotestPrivateGetAccessTokenFunction() = default;
+
+ExtensionFunction::ResponseAction AutotestPrivateGetAccessTokenFunction::Run() {
+  // Require a command line switch to avoid crashing on accident.
+  if (!base::CommandLine::ForCurrentProcess()->HasSwitch(
+          ash::switches::kGetAccessTokenForTest)) {
+    return RespondNow(
+        Error("* switch is not set", ash::switches::kGetAccessTokenForTest));
+  }
+  // This API is available only on test images.
+  base::SysInfo::CrashIfChromeOSNonTestImage();
+
+  auto params(api::autotest_private::GetAccessToken::Params::Create(args()));
+  EXTENSION_FUNCTION_VALIDATE(params.get());
+
+  timeout_timer_.Start(
+      FROM_HERE,
+      base::Milliseconds(params->access_token_params.timeout_ms
+                             ? *params->access_token_params.timeout_ms
+                             : 90000),
+      base::BindOnce(
+          &AutotestPrivateGetAccessTokenFunction::RespondWithTimeoutError,
+          this));
+
+  Profile* profile = Profile::FromBrowserContext(browser_context());
+  signin::IdentityManager* identity_manager =
+      IdentityManagerFactory::GetForProfile(profile);
+  OAuth2AccessTokenManager::ScopeSet scopes(
+      params->access_token_params.scopes.begin(),
+      params->access_token_params.scopes.end());
+  access_token_fetcher_ = identity_manager->CreateAccessTokenFetcherForAccount(
+      identity_manager
+          ->FindExtendedAccountInfoByEmailAddress(
+              params->access_token_params.email)
+          .account_id,
+      /*oauth_consumer_name=*/"cros_autotest_private", scopes,
+      base::BindOnce(&AutotestPrivateGetAccessTokenFunction::OnAccessToken,
+                     this),
+      signin::AccessTokenFetcher::Mode::kImmediate);
+  return RespondLater();
+}
+
+void AutotestPrivateGetAccessTokenFunction::RespondWithTimeoutError() {
+  if (did_respond()) {
+    return;
+  }
+  Respond(Error("Timed out fetching access token"));
+  access_token_fetcher_.reset();
+}
+
+void AutotestPrivateGetAccessTokenFunction::OnAccessToken(
+    GoogleServiceAuthError error,
+    signin::AccessTokenInfo token_info) {
+  access_token_fetcher_.reset();
+  timeout_timer_.AbandonAndStop();
+  if (did_respond()) {
+    return;
+  }
+  if (error.state() != GoogleServiceAuthError::NONE) {
+    Respond(Error("Failed to get access token: *", error.ToString()));
+    return;
+  }
+  auto token_dict = std::make_unique<base::DictionaryValue>();
+  token_dict->SetStringKey("accessToken", token_info.token);
+  token_dict->SetKey(
+      "expirationTimeUnixMs",
+      base::Int64ToValue((token_info.expiration_time - base::Time::UnixEpoch())
+                             .InMilliseconds()));
+  Respond(OneArgument(base::Value::FromUniquePtrValue(std::move(token_dict))));
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// AutotestPrivateIsInputMethodReadyForTestingFunction
+//////////////////////////////////////////////////////////////////////////////
+
+AutotestPrivateIsInputMethodReadyForTestingFunction::
+    AutotestPrivateIsInputMethodReadyForTestingFunction() = default;
+
+AutotestPrivateIsInputMethodReadyForTestingFunction::
+    ~AutotestPrivateIsInputMethodReadyForTestingFunction() = default;
+
+ExtensionFunction::ResponseAction
+AutotestPrivateIsInputMethodReadyForTestingFunction::Run() {
+  ui::IMEEngineHandlerInterface* engine =
+      ui::IMEBridge::Get()->GetCurrentEngineHandler();
+  return RespondNow(OneArgument(
+      base::Value(engine ? engine->IsReadyForTesting() : false)));  // IN-TEST
+}
+
+///////////////////////////////////////////////////////////////////////////////
 // AutotestPrivateAPI
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -5273,7 +6051,7 @@ void AutotestPrivateAPI::OnClipboardDataChanged() {
   std::unique_ptr<Event> event(
       new Event(events::AUTOTESTPRIVATE_ON_CLIPBOARD_DATA_CHANGED,
                 api::autotest_private::OnClipboardDataChanged::kEventName,
-                std::vector<base::Value>()));
+                base::Value::List()));
   event_router->BroadcastEvent(std::move(event));
 }
 

@@ -147,7 +147,7 @@ void VirtualDeviceEnabledDeviceFactory::CreateDevice(
         base::BindOnce(&VirtualDeviceEnabledDeviceFactory::
                            OnVirtualDeviceConsumerConnectionErrorOrClose,
                        base::Unretained(this), device_id));
-    std::move(callback).Run(mojom::DeviceAccessResultCode::SUCCESS);
+    std::move(callback).Run(media::VideoCaptureError::kNone);
     return;
   }
 
@@ -301,5 +301,12 @@ void VirtualDeviceEnabledDeviceFactory::OnDevicesChangedObserverDisconnected(
     }
   }
 }
+
+#if BUILDFLAG(IS_WIN)
+void VirtualDeviceEnabledDeviceFactory::OnGpuInfoUpdate(
+    const CHROME_LUID& luid) {
+  device_factory_->OnGpuInfoUpdate(luid);
+}
+#endif
 
 }  // namespace video_capture

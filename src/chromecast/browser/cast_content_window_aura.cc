@@ -46,6 +46,9 @@ class TouchBlocker : public ui::EventHandler, public aura::WindowObserver {
     }
   }
 
+  TouchBlocker(const TouchBlocker&) = delete;
+  TouchBlocker& operator=(const TouchBlocker&) = delete;
+
   ~TouchBlocker() override {
     if (window_) {
       window_->RemoveObserver(this);
@@ -82,17 +85,14 @@ class TouchBlocker : public ui::EventHandler, public aura::WindowObserver {
 
   aura::Window* window_;
   bool activated_;
-
-  DISALLOW_COPY_AND_ASSIGN(TouchBlocker);
 };
 
-CastContentWindowAura::CastContentWindowAura(base::WeakPtr<Delegate> delegate,
-                                             mojom::CastWebViewParamsPtr params,
+CastContentWindowAura::CastContentWindowAura(mojom::CastWebViewParamsPtr params,
                                              CastWindowManager* window_manager)
-    : CastContentWindow(delegate, std::move(params)),
+    : CastContentWindow(std::move(params)),
       window_manager_(window_manager),
       gesture_dispatcher_(
-          std::make_unique<CastContentGestureHandler>(delegate_)),
+          std::make_unique<CastContentGestureHandler>(gesture_router())),
       window_(nullptr),
       has_screen_access_(false),
       resize_window_when_navigation_starts_(true) {}
@@ -170,16 +170,6 @@ void CastContentWindowAura::SetActivityContext(base::Value activity_context) {}
 
 void CastContentWindowAura::SetHostContext(base::Value host_context) {}
 
-void CastContentWindowAura::NotifyVisibilityChange(
-    VisibilityType visibility_type) {
-  if (delegate_) {
-    delegate_->OnVisibilityChange(visibility_type);
-  }
-  for (auto& observer : observer_list_) {
-    observer.OnVisibilityChange(visibility_type);
-  }
-}
-
 void CastContentWindowAura::RequestMoveOut() {}
 
 void CastContentWindowAura::OnWindowVisibilityChanged(aura::Window* window,
@@ -205,7 +195,7 @@ void CastContentWindowAura::DidStartNavigation(
   SetFullWindowBounds();
 }
 
-void CastContentWindowAura::MainFrameWasResized(bool width_changed) {
+void CastContentWindowAura::PrimaryMainFrameWasResized(bool width_changed) {
   if (!web_contents())
     return;
   if (media_controls_) {

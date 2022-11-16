@@ -8,21 +8,19 @@
 
 #include <utility>
 
+#include "ash/components/cryptohome/cryptohome_parameters.h"
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/containers/contains.h"
+#include "base/files/file_enumerator.h"
 #include "base/files/file_util.h"
 #include "base/logging.h"
 #include "base/memory/weak_ptr.h"
-#include "base/no_destructor.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
-#include "base/task/post_task.h"
 #include "base/task/thread_pool.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/common/chrome_switches.h"
-#include "chromeos/cryptohome/cryptohome_parameters.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
 #include "chromeos/dbus/debug_daemon/debug_daemon_client.h"
 #include "components/feedback/feedback_util.h"
 #include "components/user_manager/user.h"
@@ -46,9 +44,14 @@ constexpr struct UserLogs {
 
   // The log file's path relative to the user's profile directory.
   const char* log_file_relative_path;
+
+  // If true, |log_file_relative_path| is a pattern for which files to match.
+  // This works like shell globbing. If there are multiple matches files, it
+  // chooses the newest file, with the latest modified time.
+  bool pattern = false;
 } kUserLogs[] = {
     {"chrome_user_log", "log/chrome"},
-    {"chrome_user_log.PREVIOUS", "log/chrome.PREVIOUS"},
+    {"chrome_user_log.PREVIOUS", "log/chrome_??????-??????", true},
     {"libassistant_user_log", "google-assistant-library/log/libassistant.log"},
     {"login-times", "login-times"},
     {"logout-times", "logout-times"},
@@ -70,28 +73,57 @@ const int64_t kMaxLogSize = 1024 * 1024;
 
 }  // namespace
 
+std::string ReadUserLogFile(const base::FilePath& log_file_path) {
+  std::string value;
+  const bool read_success =
+      feedback_util::ReadEndOfFile(log_file_path, kMaxLogSize, &value);
+
+  if (read_success && value.length() == kMaxLogSize) {
+    value.replace(0, strlen(kLogTruncated), kLogTruncated);
+
+    LOG(WARNING) << "Large log file was likely truncated: " << log_file_path;
+  }
+  return (read_success && !value.empty()) ? value : std::string(kNotAvailable);
+}
+
+std::string ReadUserLogFilePattern(
+    const base::FilePath& log_file_path_pattern) {
+  base::FilePath log_file_dir = log_file_path_pattern.DirName();
+  LOG(ERROR) << log_file_dir.value();
+  base::FileEnumerator file_enumerator(
+      log_file_dir, /*recursive=*/false, base::FileEnumerator::FILES,
+      log_file_path_pattern.BaseName().value());
+
+  base::Time newest_file_mtime;
+  base::FilePath newest_file_path;
+  for (base::FilePath path = file_enumerator.Next(); !path.empty();
+       path = file_enumerator.Next()) {
+    const base::FileEnumerator::FileInfo info = file_enumerator.GetInfo();
+    if (newest_file_mtime.is_null() ||
+        info.GetLastModifiedTime() >= newest_file_mtime) {
+      newest_file_mtime = info.GetLastModifiedTime();
+      newest_file_path = path;
+    }
+  }
+
+  return newest_file_mtime.is_null() ? std::string(kNotAvailable)
+                                     : ReadUserLogFile(newest_file_path);
+}
+
 // Reads the contents of the user log files listed in |kUserLogs| and adds them
 // to the |response| parameter.
 void ReadUserLogFiles(const std::vector<base::FilePath>& profile_dirs,
                       SystemLogsResponse* response) {
   for (size_t i = 0; i < profile_dirs.size(); ++i) {
     std::string profile_prefix = "Profile[" + base::NumberToString(i) + "] ";
+    const base::FilePath profile_dir = profile_dirs[i];
     for (const auto& log : kUserLogs) {
-      std::string value;
-      const bool read_success = feedback_util::ReadEndOfFile(
-          profile_dirs[i].Append(log.log_file_relative_path), kMaxLogSize,
-          &value);
-
-      if (read_success && value.length() == kMaxLogSize) {
-        value.replace(0, strlen(kLogTruncated), kLogTruncated);
-
-        LOG(WARNING) << "Large log file was likely truncated: "
-                     << log.log_file_relative_path;
-      }
-
-      response->emplace(
-          profile_prefix + log.log_key,
-          (read_success && !value.empty()) ? std::move(value) : kNotAvailable);
+      const base::FilePath log_file_path_or_pattern =
+          profile_dir.AppendASCII(log.log_file_relative_path);
+      const std::string content =
+          log.pattern ? ReadUserLogFilePattern(log_file_path_or_pattern)
+                      : ReadUserLogFile(log_file_path_or_pattern);
+      response->emplace(profile_prefix + log.log_key, content);
     }
   }
 }
@@ -110,16 +142,17 @@ void DebugDaemonLogSource::Fetch(SysLogsSourceCallback callback) {
   DCHECK(callback_.is_null());
 
   callback_ = std::move(callback);
-  chromeos::DebugDaemonClient* client =
-      chromeos::DBusThreadManager::Get()->GetDebugDaemonClient();
+  chromeos::DebugDaemonClient* client = chromeos::DebugDaemonClient::Get();
 
   client->GetRoutes(true,   // Numeric
                     false,  // No IPv6
+                    false,  // All tables option disabled
                     base::BindOnce(&DebugDaemonLogSource::OnGetRoutes,
                                    weak_ptr_factory_.GetWeakPtr(), false));
   ++num_pending_requests_;
-  client->GetRoutes(true,  // Numeric
-                    true,  // with IPv6
+  client->GetRoutes(true,   // Numeric
+                    true,   // with IPv6
+                    false,  // All tables option disabled
                     base::BindOnce(&DebugDaemonLogSource::OnGetRoutes,
                                    weak_ptr_factory_.GetWeakPtr(), true));
   ++num_pending_requests_;
@@ -185,8 +218,7 @@ void DebugDaemonLogSource::GetLoggedInUsersLogFiles() {
       continue;
 
     profile_dirs.emplace_back(
-        chromeos::ProfileHelper::GetProfilePathByUserIdHash(
-            user->username_hash()));
+        ash::ProfileHelper::GetProfilePathByUserIdHash(user->username_hash()));
   }
 
   auto response = std::make_unique<SystemLogsResponse>();

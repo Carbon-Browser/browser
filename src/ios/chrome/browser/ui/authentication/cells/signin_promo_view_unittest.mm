@@ -9,6 +9,7 @@
 #import "ios/chrome/browser/signin/signin_util.h"
 #import "ios/chrome/browser/ui/authentication/cells/signin_promo_view_constants.h"
 #import "ios/chrome/browser/ui/util/uikit_ui_util.h"
+#import "ios/chrome/common/ui/util/image_util.h"
 #import "ios/public/provider/chrome/browser/signin/signin_resources_api.h"
 #include "testing/platform_test.h"
 #include "third_party/ocmock/gtest_support.h"
@@ -58,4 +59,42 @@ TEST_F(SigninPromoViewTest, SecondaryButtonVisibility) {
   EXPECT_FALSE(view.secondaryButton.hidden);
   view.mode = SigninPromoViewModeSyncWithPrimaryAccount;
   EXPECT_TRUE(view.secondaryButton.hidden);
+}
+
+// Tests the accessibility label (based on the `textLabel` and the primary
+// button title).
+TEST_F(SigninPromoViewTest, AccessibilityLabel) {
+  UIWindow* currentWindow = GetAnyKeyWindow();
+  SigninPromoView* view =
+      [[SigninPromoView alloc] initWithFrame:CGRectMake(0, 0, 100, 100)];
+  [currentWindow.rootViewController.view addSubview:view];
+  NSString* primaryButtonTitle = @"Primary Button Title";
+  [view.primaryButton setTitle:primaryButtonTitle
+                      forState:UIControlStateNormal];
+  NSString* promoText = @"This is the promo text.";
+  view.textLabel.text = promoText;
+  NSString* expectedAccessibilityLabel =
+      [NSString stringWithFormat:@"%@ %@", promoText, primaryButtonTitle];
+  EXPECT_TRUE(
+      [view.accessibilityLabel isEqualToString:expectedAccessibilityLabel]);
+}
+
+// Tests that signin is created on non-compact layout and that setting compact
+// layout changes the primary button styling.
+TEST_F(SigninPromoViewTest, CompactLayout) {
+  UIWindow* currentWindow = GetAnyKeyWindow();
+  SigninPromoView* view =
+      [[SigninPromoView alloc] initWithFrame:CGRectMake(0, 0, 100, 100)];
+  view.mode = SigninPromoViewModeNoAccounts;
+  [currentWindow.rootViewController.view addSubview:view];
+  // Ensure that default layout is not compact.
+  EXPECT_FALSE(view.compactLayout);
+  // In full layout, the primary button is rounded with background color.
+  EXPECT_TRUE(view.primaryButton.backgroundColor);
+  EXPECT_GT(view.primaryButton.layer.cornerRadius, 0.0);
+
+  [view setCompactLayout:YES];
+  // In compact layout, the primary button is plain.
+  EXPECT_FALSE(view.primaryButton.backgroundColor);
+  EXPECT_EQ(view.primaryButton.layer.cornerRadius, 0.0);
 }

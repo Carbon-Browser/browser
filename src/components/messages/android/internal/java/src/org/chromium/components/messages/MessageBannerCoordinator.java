@@ -7,12 +7,12 @@ package org.chromium.components.messages;
 import android.animation.Animator;
 import android.content.res.Resources;
 
-import androidx.core.view.ViewCompat;
-import androidx.core.view.accessibility.AccessibilityNodeInfoCompat.AccessibilityActionCompat;
+import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.Callback;
 import org.chromium.base.annotations.MockedInTests;
 import org.chromium.base.supplier.Supplier;
+import org.chromium.components.browser_ui.widget.listmenu.ListMenuButton.PopupMenuShownListener;
 import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.ui.modelutil.PropertyModelChangeProcessor;
 
@@ -58,11 +58,32 @@ class MessageBannerCoordinator {
         mTimer = new MessageAutoDismissTimer();
         mOnTimeUp = onTimeUp;
         view.setSwipeHandler(mMediator);
-        ViewCompat.replaceAccessibilityAction(
-                view, AccessibilityActionCompat.ACTION_DISMISS, null, (v, c) -> {
-                    messageDismissed.run();
-                    return false;
-                });
+        view.setPopupMenuShownListener(
+                createPopupMenuShownListener(mTimer, mAutodismissDurationMs.get(), mOnTimeUp));
+    }
+
+    /**
+     * Creates a {@link PopupMenuShownListener} to handle secondary button popup menu events on the
+     * message banner.
+     * @param timer The {@link MessageAutoDismissTimer} controlling the message banner dismiss
+     *         duration.
+     * @param duration The auto dismiss duration for the message banner.
+     * @param onTimeUp A {@link Runnable} that will run if and when the auto dismiss timer is up.
+     */
+    @VisibleForTesting
+    PopupMenuShownListener createPopupMenuShownListener(
+            MessageAutoDismissTimer timer, long duration, Runnable onTimeUp) {
+        return new PopupMenuShownListener() {
+            @Override
+            public void onPopupMenuShown() {
+                timer.cancelTimer();
+            }
+
+            @Override
+            public void onPopupMenuDismissed() {
+                timer.startTimer(duration, onTimeUp);
+            }
+        };
     }
 
     /**
@@ -92,6 +113,14 @@ class MessageBannerCoordinator {
             setOnTitleChanged(null);
             messageHidden.run();
         });
+    }
+
+    void cancelTimer() {
+        mTimer.cancelTimer();
+    }
+
+    void startTimer() {
+        mTimer.startTimer(mAutodismissDurationMs.get(), mOnTimeUp);
     }
 
     void setOnTouchRunnable(Runnable runnable) {

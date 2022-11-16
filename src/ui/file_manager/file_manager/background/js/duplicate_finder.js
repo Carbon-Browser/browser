@@ -209,6 +209,10 @@ duplicateFinder.DispositionCheckerImpl = class {
       return Promise.reject('Unsupported destination: ' + destination);
     }
 
+    if (window.isSWA) {
+      return Promise.reject('Cloud Import is disabled in the SWA');
+    }
+
     return new Promise(
         /** @this {duplicateFinderInterfaces.DispositionChecker} */
         (resolve, reject) => {
@@ -256,7 +260,7 @@ duplicateFinder.DispositionCheckerImpl = class {
           return Promise
               .all([
                 history.wasCopied(entry, destination),
-                history.wasImported(entry, destination)
+                history.wasImported(entry, destination),
               ])
               .then(
                   /**

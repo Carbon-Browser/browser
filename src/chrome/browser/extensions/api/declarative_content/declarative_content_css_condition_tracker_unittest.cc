@@ -7,7 +7,6 @@
 #include <memory>
 #include <tuple>
 
-#include "base/macros.h"
 #include "base/test/values_test_util.h"
 #include "chrome/browser/extensions/api/declarative_content/content_predicate_evaluator.h"
 #include "chrome/browser/extensions/api/declarative_content/declarative_content_condition_tracker_test.h"
@@ -70,6 +69,7 @@ class InterceptingRendererStartupHelper : public RendererStartupHelper,
     std::move(callback).Run();
   }
   void CancelSuspendExtension(const std::string& extension_id) override {}
+  void SetDeveloperMode(bool current_developer_mode) override {}
   void SetSessionInfo(version_info::Channel channel,
                       mojom::FeatureSessionType session,
                       bool is_lock_screen_context) override {}
@@ -93,6 +93,8 @@ class InterceptingRendererStartupHelper : public RendererStartupHelper,
   void UpdateDefaultPolicyHostRestrictions(
       URLPatternSet default_policy_blocked_hosts,
       URLPatternSet default_policy_allowed_hosts) override {}
+  void UpdateUserHostRestrictions(URLPatternSet user_blocked_hosts,
+                                  URLPatternSet user_allowed_hosts) override {}
   void UpdateTabSpecificPermissions(const std::string& extension_id,
                                     URLPatternSet new_hosts,
                                     int tab_id,
@@ -119,6 +121,12 @@ class InterceptingRendererStartupHelper : public RendererStartupHelper,
 
 class DeclarativeContentCssConditionTrackerTest
     : public DeclarativeContentConditionTrackerTest {
+ public:
+  DeclarativeContentCssConditionTrackerTest(
+      const DeclarativeContentCssConditionTrackerTest&) = delete;
+  DeclarativeContentCssConditionTrackerTest& operator=(
+      const DeclarativeContentCssConditionTrackerTest&) = delete;
+
  protected:
   DeclarativeContentCssConditionTrackerTest() : tracker_(&delegate_) {}
 
@@ -141,6 +149,9 @@ class DeclarativeContentCssConditionTrackerTest
    public:
     Delegate() : evaluation_requests_(0) {}
 
+    Delegate(const Delegate&) = delete;
+    Delegate& operator=(const Delegate&) = delete;
+
     int evaluation_requests() { return evaluation_requests_; }
 
     // ContentPredicateEvaluator::Delegate:
@@ -155,8 +166,6 @@ class DeclarativeContentCssConditionTrackerTest
 
    private:
     int evaluation_requests_;
-
-    DISALLOW_COPY_AND_ASSIGN(Delegate);
   };
 
   // Creates a predicate with appropriate expectations of success.
@@ -221,8 +230,6 @@ class DeclarativeContentCssConditionTrackerTest
     EXPECT_EQ("", error);
     ASSERT_TRUE(*predicate);
   }
-
-  DISALLOW_COPY_AND_ASSIGN(DeclarativeContentCssConditionTrackerTest);
 };
 
 TEST(DeclarativeContentCssPredicateTest, WrongCssDatatype) {

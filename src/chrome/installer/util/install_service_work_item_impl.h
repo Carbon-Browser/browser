@@ -11,7 +11,6 @@
 #include <vector>
 
 #include "base/command_line.h"
-#include "base/macros.h"
 #include "base/win/scoped_handle.h"
 #include "base/win/windows_types.h"
 #include "chrome/installer/util/work_item_list.h"
@@ -57,10 +56,16 @@ class InstallServiceWorkItemImpl {
 
   InstallServiceWorkItemImpl(const std::wstring& service_name,
                              const std::wstring& display_name,
+                             uint32_t start_type,
                              const base::CommandLine& service_cmd_line,
+                             const base::CommandLine& com_service_cmd_line_args,
                              const std::wstring& registry_path,
                              const std::vector<GUID>& clsids,
                              const std::vector<GUID>& iids);
+
+  InstallServiceWorkItemImpl(const InstallServiceWorkItemImpl&) = delete;
+  InstallServiceWorkItemImpl& operator=(const InstallServiceWorkItemImpl&) =
+      delete;
 
   ~InstallServiceWorkItemImpl();
 
@@ -115,6 +120,10 @@ class InstallServiceWorkItemImpl {
    public:
     using Handle = SC_HANDLE;
 
+    ScHandleTraits() = delete;
+    ScHandleTraits(const ScHandleTraits&) = delete;
+    ScHandleTraits& operator=(const ScHandleTraits&) = delete;
+
     static bool CloseHandle(SC_HANDLE handle) {
       return ::CloseServiceHandle(handle) != FALSE;
     }
@@ -122,9 +131,6 @@ class InstallServiceWorkItemImpl {
     static bool IsHandleValid(SC_HANDLE handle) { return handle != nullptr; }
 
     static SC_HANDLE NullHandle() { return nullptr; }
-
-   private:
-    DISALLOW_IMPLICIT_CONSTRUCTORS(ScHandleTraits);
   };
 
   using ScopedScHandle =
@@ -177,8 +183,16 @@ class InstallServiceWorkItemImpl {
   // The service name displayed to the user.
   const std::wstring display_name_;
 
+  // The service start options. This parameter is typically SERVICE_AUTO_START
+  // or SERVICE_DEMAND_START.
+  const uint32_t start_type_;
+
   // The desired service command line.
   const base::CommandLine service_cmd_line_;
+
+  // The SCM will pass any switches specified in `com_service_cmd_line_args_` to
+  // ServiceMain() during COM activation.
+  const base::CommandLine com_service_cmd_line_args_;
 
   // The path under HKEY_LOCAL_MACHINE where the service persists information,
   // such as a versioned service name. For legacy reasons, this path is mapped
@@ -216,8 +230,6 @@ class InstallServiceWorkItemImpl {
   // True if a pre-existing service (named |original_service_name_|) could not
   // be deleted and still exists on rollback.
   bool original_service_still_exists_;
-
-  DISALLOW_COPY_AND_ASSIGN(InstallServiceWorkItemImpl);
 };
 
 }  // namespace installer

@@ -9,7 +9,6 @@
 #include <memory>
 
 #include "base/bind.h"
-#include "base/location.h"
 #include "chromecast/media/api/cast_audio_decoder.h"
 #include "chromecast/media/audio/mixer_service/output_stream_connection.h"
 #include "chromecast/public/media/decoder_config.h"
@@ -36,10 +35,14 @@ class AudioDecoderForMixer
   using BufferStatus = MediaPipelineBackend::BufferStatus;
 
   explicit AudioDecoderForMixer(MediaPipelineBackendForMixer* backend);
+
+  AudioDecoderForMixer(const AudioDecoderForMixer&) = delete;
+  AudioDecoderForMixer& operator=(const AudioDecoderForMixer&) = delete;
+
   ~AudioDecoderForMixer() override;
 
   virtual void Initialize();
-  virtual bool Start(int64_t pts, bool start_playback_asap);
+  virtual bool Start(int64_t pts, bool av_sync_enabled);
   void StartPlaybackAt(int64_t timestamp);
   virtual void Stop();
   virtual bool Pause();
@@ -55,6 +58,7 @@ class AudioDecoderForMixer
   bool SetConfig(const AudioConfig& config) override;
   bool SetVolume(float multiplier) override;
   RenderingDelay GetRenderingDelay() override;
+  AudioTrackTimestamp GetAudioTrackTimestamp() override;
 
   // This allows for very small changes in the rate of audio playback that are
   // (supposedly) imperceptible.
@@ -77,7 +81,7 @@ class AudioDecoderForMixer
   void OnMixerError() override;
 
   void CreateBufferPool(const AudioConfig& config, int frame_count);
-  void CreateMixerInput(const AudioConfig& config, bool start_playback_asap);
+  void CreateMixerInput(const AudioConfig& config, bool av_sync_enabled);
   void CleanUpPcm();
   void ResetMixerInputForNewConfig(const AudioConfig& config);
   void CreateDecoder();
@@ -125,11 +129,9 @@ class AudioDecoderForMixer
   scoped_refptr<IOBufferPool> buffer_pool_;
 
   int64_t playback_start_pts_ = 0;
-  bool start_playback_asap_ = false;
+  bool av_sync_enabled_ = false;
 
   base::WeakPtrFactory<AudioDecoderForMixer> weak_factory_;
-
-  DISALLOW_COPY_AND_ASSIGN(AudioDecoderForMixer);
 };
 
 }  // namespace media

@@ -7,7 +7,6 @@
 #include <memory>
 
 #include "base/win/windows_version.h"
-#include "components/viz/common/features.h"
 #include "gpu/command_buffer/service/feature_info.h"
 #include "gpu/config/gpu_preferences.h"
 #include "gpu/ipc/service/pass_through_image_transport_surface.h"
@@ -27,12 +26,15 @@ gl::DirectCompositionSurfaceWin::Settings
 CreateDirectCompositionSurfaceSettings(
     const GpuDriverBugWorkarounds& workarounds) {
   gl::DirectCompositionSurfaceWin::Settings settings;
+  settings.no_downscaled_overlay_promotion =
+      workarounds.no_downscaled_overlay_promotion;
   settings.disable_nv12_dynamic_textures =
       workarounds.disable_nv12_dynamic_textures;
   settings.disable_vp_scaling = workarounds.disable_vp_scaling;
-  settings.use_angle_texture_offset = features::IsUsingSkiaRenderer();
+  settings.disable_vp_super_resolution =
+      workarounds.disable_vp_super_resolution;
+  settings.use_angle_texture_offset = true;
   settings.force_root_surface_full_damage =
-      features::IsUsingSkiaRenderer() &&
       gl::ShouldForceDirectCompositionRootSurfaceFullDamage();
   settings.force_root_surface_full_damage_always =
       workarounds.force_direct_composition_full_damage_always;
@@ -54,7 +56,8 @@ scoped_refptr<gl::GLSurface> ImageTransportSurface::CreateNativeSurface(
       auto settings = CreateDirectCompositionSurfaceSettings(
           delegate->GetFeatureInfo()->workarounds());
       auto dc_surface = base::MakeRefCounted<gl::DirectCompositionSurfaceWin>(
-          surface_handle, std::move(vsync_callback), settings);
+          gl::GLSurfaceEGL::GetGLDisplayEGL(), surface_handle,
+          std::move(vsync_callback), settings);
       if (!dc_surface->Initialize(gl::GLSurfaceFormat()))
         return nullptr;
       delegate->DidCreateAcceleratedSurfaceChildWindow(surface_handle,
@@ -63,7 +66,7 @@ scoped_refptr<gl::GLSurface> ImageTransportSurface::CreateNativeSurface(
     } else {
       surface = gl::InitializeGLSurface(
           base::MakeRefCounted<gl::NativeViewGLSurfaceEGL>(
-              surface_handle,
+              gl::GLSurfaceEGL::GetGLDisplayEGL(), surface_handle,
               std::make_unique<gl::VSyncProviderWin>(surface_handle)));
       if (!surface)
         return nullptr;

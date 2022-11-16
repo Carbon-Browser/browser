@@ -9,8 +9,10 @@
 #include <cmath>
 #include <memory>
 
+#include "media/base/limits.h"
 #include "media/base/video_frame.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/gfx/geometry/rect.h"
 
 namespace {
 
@@ -165,9 +167,9 @@ class VideoUtilTest : public testing::Test {
     u_stride_ = u_stride;
     v_stride_ = v_stride;
 
-    y_plane_.reset(new uint8_t[y_stride * height]);
-    u_plane_.reset(new uint8_t[u_stride * height / 2]);
-    v_plane_.reset(new uint8_t[v_stride * height / 2]);
+    y_plane_ = std::make_unique<uint8_t[]>(y_stride * height);
+    u_plane_ = std::make_unique<uint8_t[]>(u_stride * height / 2);
+    v_plane_ = std::make_unique<uint8_t[]>(v_stride * height / 2);
   }
 
   void CreateDestinationFrame(int width, int height) {
@@ -326,7 +328,7 @@ class VideoUtilRotationTest
     : public testing::TestWithParam<VideoRotationTestData> {
  public:
   VideoUtilRotationTest() {
-    dest_.reset(new uint8_t[GetParam().width * GetParam().height]);
+    dest_ = std::make_unique<uint8_t[]>(GetParam().width * GetParam().height);
   }
   VideoUtilRotationTest(const VideoUtilRotationTest&) = delete;
   VideoUtilRotationTest& operator=(const VideoUtilRotationTest&) = delete;
@@ -408,6 +410,58 @@ TEST_F(VideoUtilTest, ComputeLetterboxRegionForI420) {
   EXPECT_TRUE(ComputeLetterboxRegionForI420(
                   gfx::Rect(0, 0, 2000000000, 2000000000), gfx::Size(0, 0))
                   .IsEmpty());
+}
+
+// Tests the MinimallyShrinkRectForI420 function.
+TEST_F(VideoUtilTest, MinimallyShrinkRectForI420) {
+  // A few no-ops:
+  EXPECT_EQ(gfx::Rect(2, 2, 100, 100),
+            MinimallyShrinkRectForI420(gfx::Rect(2, 2, 100, 100)));
+  EXPECT_EQ(gfx::Rect(2, -2, 100, 100),
+            MinimallyShrinkRectForI420(gfx::Rect(2, -2, 100, 100)));
+  EXPECT_EQ(gfx::Rect(-2, 2, 100, 100),
+            MinimallyShrinkRectForI420(gfx::Rect(-2, 2, 100, 100)));
+
+  // Origin has odd coordinates:
+  EXPECT_EQ(gfx::Rect(2, 2, 98, 98),
+            MinimallyShrinkRectForI420(gfx::Rect(1, 1, 100, 100)));
+  EXPECT_EQ(gfx::Rect(0, 2, 98, 98),
+            MinimallyShrinkRectForI420(gfx::Rect(-1, 1, 100, 100)));
+  EXPECT_EQ(gfx::Rect(2, 0, 98, 98),
+            MinimallyShrinkRectForI420(gfx::Rect(1, -1, 100, 100)));
+
+  // Size is odd:
+  EXPECT_EQ(gfx::Rect(2, 2, 98, 98),
+            MinimallyShrinkRectForI420(gfx::Rect(2, 2, 99, 99)));
+  EXPECT_EQ(gfx::Rect(-2, 2, 98, 98),
+            MinimallyShrinkRectForI420(gfx::Rect(-2, 2, 99, 99)));
+  EXPECT_EQ(gfx::Rect(2, -2, 98, 98),
+            MinimallyShrinkRectForI420(gfx::Rect(2, -2, 99, 99)));
+
+  // Both are odd:
+  EXPECT_EQ(gfx::Rect(2, 2, 98, 98),
+            MinimallyShrinkRectForI420(gfx::Rect(1, 1, 99, 99)));
+  EXPECT_EQ(gfx::Rect(0, 2, 98, 98),
+            MinimallyShrinkRectForI420(gfx::Rect(-1, 1, 99, 99)));
+  EXPECT_EQ(gfx::Rect(2, 0, 98, 98),
+            MinimallyShrinkRectForI420(gfx::Rect(1, -1, 99, 99)));
+
+  // Check the biggest rectangle that the function will accept:
+  constexpr int kMinDimension = -1 * limits::kMaxDimension;
+  if (limits::kMaxDimension % 2 == 0) {
+    EXPECT_EQ(gfx::Rect(kMinDimension, kMinDimension, 2 * limits::kMaxDimension,
+                        2 * limits::kMaxDimension),
+              MinimallyShrinkRectForI420(gfx::Rect(kMinDimension, kMinDimension,
+                                                   2 * limits::kMaxDimension,
+                                                   2 * limits::kMaxDimension)));
+  } else {
+    EXPECT_EQ(
+        gfx::Rect(kMinDimension + 1, kMinDimension + 1,
+                  2 * limits::kMaxDimension - 2, 2 * limits::kMaxDimension - 2),
+        MinimallyShrinkRectForI420(gfx::Rect(kMinDimension, kMinDimension,
+                                             2 * limits::kMaxDimension,
+                                             2 * limits::kMaxDimension)));
+  }
 }
 
 TEST_F(VideoUtilTest, ScaleSizeToEncompassTarget) {
@@ -563,9 +617,8 @@ TEST_F(VideoUtilTest, I420CopyWithPadding) {
 
 TEST_F(VideoUtilTest, WrapAsI420VideoFrame) {
   gfx::Size size(640, 480);
-  scoped_refptr<VideoFrame> src_frame =
-      VideoFrame::CreateFrame(PIXEL_FORMAT_I420A, size, gfx::Rect(size), size,
-                              base::TimeDelta::FromDays(1));
+  scoped_refptr<VideoFrame> src_frame = VideoFrame::CreateFrame(
+      PIXEL_FORMAT_I420A, size, gfx::Rect(size), size, base::Days(1));
 
   scoped_refptr<VideoFrame> dst_frame = WrapAsI420VideoFrame(src_frame);
   EXPECT_EQ(dst_frame->format(), PIXEL_FORMAT_I420);

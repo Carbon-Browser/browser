@@ -8,23 +8,27 @@
 #include <utility>
 
 #include "base/check_op.h"
+#include "base/command_line.h"
 #include "base/cxx17_backports.h"
 #include "base/files/file_util.h"
 #include "base/json/json_file_value_serializer.h"
 #include "base/json/json_string_value_serializer.h"
+#include "base/logging.h"
 #include "base/metrics/field_trial.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/path_service.h"
+#include "base/strings/string_number_conversions.h"
+#include "base/strings/stringprintf.h"
 #include "base/threading/thread_restrictions.h"
-#include "base/values.h"
+#include "build/build_config.h"
 #include "components/metrics/metrics_pref_names.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 #include "components/variations/pref_names.h"
-#include "components/variations/service/variations_safe_mode_constants.h"
+#include "components/variations/variations_switches.h"
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include <windows.h>
 #include "base/strings/string_util_win.h"
 #include "base/strings/utf_string_conversions.h"
@@ -32,12 +36,9 @@
 #endif
 
 namespace metrics {
+
 namespace {
 
-using ::variations::kExtendedSafeModeTrial;
-using ::variations::kSignalAndWriteSynchronouslyViaPrefServiceGroup;
-using ::variations::kSignalAndWriteViaFileUtilGroup;
-using ::variations::kWriteSynchronouslyViaPrefServiceGroup;
 using ::variations::prefs::kVariationsCrashStreak;
 
 // Denotes whether Chrome should perform clean shutdown steps: signaling that
@@ -45,57 +46,110 @@ using ::variations::prefs::kVariationsCrashStreak;
 // This may be modified by SkipCleanShutdownStepsForTesting().
 bool g_skip_clean_shutdown_steps = false;
 
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_IOS)
+// Records the the combined state of two distinct beacons' values in a
+// histogram.
+void RecordBeaconConsistency(
+    absl::optional<bool> beacon_file_beacon_value,
+    absl::optional<bool> platform_specific_beacon_value) {
+  CleanExitBeaconConsistency consistency =
+      CleanExitBeaconConsistency::kDirtyDirty;
+
+  if (!beacon_file_beacon_value) {
+    if (!platform_specific_beacon_value) {
+      consistency = CleanExitBeaconConsistency::kMissingMissing;
+    } else {
+      consistency = platform_specific_beacon_value.value()
+                        ? CleanExitBeaconConsistency::kMissingClean
+                        : CleanExitBeaconConsistency::kMissingDirty;
+    }
+  } else if (!platform_specific_beacon_value) {
+    consistency = beacon_file_beacon_value.value()
+                      ? CleanExitBeaconConsistency::kCleanMissing
+                      : CleanExitBeaconConsistency::kDirtyMissing;
+  } else if (beacon_file_beacon_value.value()) {
+    consistency = platform_specific_beacon_value.value()
+                      ? CleanExitBeaconConsistency::kCleanClean
+                      : CleanExitBeaconConsistency::kCleanDirty;
+  } else {
+    consistency = platform_specific_beacon_value.value()
+                      ? CleanExitBeaconConsistency::kDirtyClean
+                      : CleanExitBeaconConsistency::kDirtyDirty;
+  }
+  base::UmaHistogramEnumeration("UMA.CleanExitBeaconConsistency3", consistency);
+}
+#endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_IOS)
+
 // Increments kVariationsCrashStreak if |did_previous_session_exit_cleanly| is
 // false. Also, emits the crash streak to a histogram.
 //
-// Either |local_state| or |beacon_file_contents| is used to retrieve the crash
-// streak depending on the client's Extended Variations Safe Mode experiment
-// group in the last session.
+// If |beacon_file_contents| are given, then the beacon file is used to retrieve
+// the crash streak. Otherwise, |local_state| is used.
 void MaybeIncrementCrashStreak(bool did_previous_session_exit_cleanly,
                                base::Value* beacon_file_contents,
                                PrefService* local_state) {
-  int num_crashes =
-      beacon_file_contents
-          ? beacon_file_contents->FindKey(kVariationsCrashStreak)->GetInt()
-          : local_state->GetInteger(kVariationsCrashStreak);
+  int num_crashes;
+  if (beacon_file_contents) {
+    absl::optional<int> crash_streak =
+        beacon_file_contents->GetDict().FindInt(kVariationsCrashStreak);
+    // Any contents without the key should have been rejected by
+    // MaybeGetFileContents().
+    DCHECK(crash_streak);
+    num_crashes = crash_streak.value();
+  } else {
+    // TODO(crbug/1341087): Consider not falling back to Local State for clients
+    // on platforms that support the beacon file.
+    num_crashes = local_state->GetInteger(kVariationsCrashStreak);
+  }
 
-  // Increment the crash streak if the previous session crashed. Note that the
-  // streak is not cleared if the previous run didn’t crash. Instead, it’s
-  // incremented on each crash until Chrome is able to successfully fetch a new
-  // seed. This way, a seed update that mostly destabilizes Chrome still results
-  // in a fallback to safe mode.
-  //
-  // The crash streak is incremented here rather than in a variations-related
-  // class for two reasons. First, the crash streak depends on the value of
-  // kStabilityExitedCleanly. Second, if kVariationsCrashStreak were updated in
-  // another function, any crash between CleanExitBeacon() and that function
-  // would cause the crash streak to not be to incremented. A consequence of
-  // failing to increment the crash streak is that Variations Safe Mode might
-  // undercount or be completely unaware of repeated crashes early on in
-  // startup.
   if (!did_previous_session_exit_cleanly) {
+    // Increment the crash streak if the previous session crashed. Note that the
+    // streak is not cleared if the previous run didn’t crash. Instead, it’s
+    // incremented on each crash until Chrome is able to successfully fetch a
+    // new seed. This way, a seed update that mostly destabilizes Chrome still
+    // results in a fallback to Variations Safe Mode.
+    //
+    // The crash streak is incremented here rather than in a variations-related
+    // class for two reasons. First, the crash streak depends on whether Chrome
+    // exited cleanly in the last session, which is first checked via
+    // CleanExitBeacon::Initialize(). Second, if the crash streak were updated
+    // in another function, any crash between beacon initialization and the
+    // other function might cause the crash streak to not be to incremented.
+    // "Might" because the updated crash streak also needs to be persisted to
+    // disk. A consequence of failing to increment the crash streak is that
+    // Chrome might undercount or be completely unaware of repeated crashes
+    // early on in startup.
     ++num_crashes;
-    // Schedule only a Local State write. If the client happens to be in an
-    // Extended Variations Safe Mode experiment group that introduces new
-    // behavior, the crash streak will be written synchronously to disk later on
-    // in startup. See MaybeExtendVariationsSafeMode().
+    // For platforms that use the beacon file, the crash streak is written
+    // synchronously to disk later on in startup via
+    // MaybeExtendVariationsSafeMode() and WriteBeaconFile(). The crash streak
+    // is intentionally not written to the beacon file here. If the beacon file
+    // indicates that Chrome failed to exit cleanly, then Chrome got at
+    // least as far as MaybeExtendVariationsSafeMode(), which is during the
+    // PostEarlyInitialization stage when native code is being synchronously
+    // executed. Chrome should also be able to reach that point in this session.
+    //
+    // For platforms that do not use the beacon file, the crash streak is
+    // scheduled to be written to disk later on in startup. At the latest, this
+    // is done when a Local State write is scheduled via WriteBeaconFile(). A
+    // write is not scheduled here for three reasons.
+    //
+    // 1. It is an expensive operation.
+    // 2. Android WebLayer (one of the two platforms that does not use the
+    //    beacon file) did not appear to benefit from scheduling the write. See
+    //    crbug/1341850 for details.
+    // 3. Android WebView (the other beacon-file-less platform) has its own
+    //    Variations Safe Mode mechanism and does not need the crash streak.
     local_state->SetInteger(kVariationsCrashStreak, num_crashes);
-    local_state->CommitPendingWrite();
   }
   base::UmaHistogramSparse("Variations.SafeMode.Streak.Crashes",
                            base::clamp(num_crashes, 0, 100));
 }
 
-// Returns true if the previous session exited cleanly. Either |local_state| or
-// |beacon_file_contents| is used to get this information. Which is used depends
-// on the client's Extended Variations Safe Mode experiment group in the
-// previous session.
-bool DidPreviousSessionExitCleanly(base::Value* beacon_file_contents,
-                                   PrefService* local_state) {
-  if (beacon_file_contents)
-    return beacon_file_contents->FindKey(prefs::kStabilityExitedCleanly)
-        ->GetBool();
-  return local_state->GetBoolean(prefs::kStabilityExitedCleanly);
+// Records |file_state| in a histogram.
+void RecordBeaconFileState(BeaconFileState file_state) {
+  base::UmaHistogramEnumeration(
+      "Variations.ExtendedSafeMode.BeaconFileStateAtStartup", file_state);
 }
 
 // Returns the contents of the file at |beacon_file_path| if the following
@@ -106,91 +160,178 @@ bool DidPreviousSessionExitCleanly(base::Value* beacon_file_contents,
 // 3. The file is successfully read.
 // 4. The file contents are in the expected format with the expected info.
 //
-// The file is not expected to exist for clients that do not belong to the
-// kSignalAndWriteViaFileUtilGroup, but even among clients in that group, there
-// are some edge cases. MaybeGetFileContents() is called before clients are
-// assigned to an Extended Variations Safe Mode experiment group, so a client
-// that is later assigned to the kSignalAndWriteViaFileUtilGroup will not have
-// the file in the first session after updating. It is also possible for a user
-// to delete the file or to reset their variations state with
-// kResetVariationState.
-#if !defined(OS_ANDROID) && !defined(OS_IOS)
+// The file may not exist for the below reasons:
+//
+// 1. The file is unsupported on the platform.
+// 2. This is the first session after a client updates to or installs a Chrome
+//    version that uses the beacon file. The beacon file launched on desktop
+//    and iOS in M102 and on Android Chrome in M103.
+// 3. Android Chrome clients with only background sessions may never write a
+//    beacon file.
+// 4. A user may delete the file.
 std::unique_ptr<base::Value> MaybeGetFileContents(
     const base::FilePath& beacon_file_path) {
+  if (beacon_file_path.empty())
+    return nullptr;
+
+  int error_code;
   JSONFileValueDeserializer deserializer(beacon_file_path);
-  std::unique_ptr<base::Value> beacon_file_contents = deserializer.Deserialize(
-      /*error_code=*/nullptr, /*error_message=*/nullptr);
+  std::unique_ptr<base::Value> beacon_file_contents =
+      deserializer.Deserialize(&error_code, /*error_message=*/nullptr);
 
-  bool got_beacon_file_contents =
-      beacon_file_contents && beacon_file_contents->is_dict() &&
-      beacon_file_contents->FindKeyOfType(kVariationsCrashStreak,
-                                          base::Value::Type::INTEGER) &&
-      beacon_file_contents->FindKeyOfType(prefs::kStabilityExitedCleanly,
-                                          base::Value::Type::BOOLEAN);
-  base::UmaHistogramBoolean(
-      "Variations.ExtendedSafeMode.GotVariationsFileContents",
-      got_beacon_file_contents);
-
-  if (got_beacon_file_contents)
-    return beacon_file_contents;
-  return nullptr;
+  if (!beacon_file_contents) {
+    RecordBeaconFileState(BeaconFileState::kNotDeserializable);
+    base::UmaHistogramSparse(
+        "Variations.ExtendedSafeMode.BeaconFileDeserializationError",
+        error_code);
+    return nullptr;
+  }
+  if (!beacon_file_contents->is_dict() || beacon_file_contents->DictEmpty()) {
+    RecordBeaconFileState(BeaconFileState::kMissingDictionary);
+    return nullptr;
+  }
+  if (!beacon_file_contents->FindKeyOfType(kVariationsCrashStreak,
+                                           base::Value::Type::INTEGER)) {
+    RecordBeaconFileState(BeaconFileState::kMissingCrashStreak);
+    return nullptr;
+  }
+  if (!beacon_file_contents->FindKeyOfType(prefs::kStabilityExitedCleanly,
+                                           base::Value::Type::BOOLEAN)) {
+    RecordBeaconFileState(BeaconFileState::kMissingBeacon);
+    return nullptr;
+  }
+  RecordBeaconFileState(BeaconFileState::kReadable);
+  return beacon_file_contents;
 }
-#endif  // !defined(OS_ANDROID) && !defined(OS_IOS)
 
 }  // namespace
 
+const base::FilePath::CharType kCleanExitBeaconFilename[] =
+    FILE_PATH_LITERAL("Variations");
+
 CleanExitBeacon::CleanExitBeacon(const std::wstring& backup_registry_key,
                                  const base::FilePath& user_data_dir,
-                                 PrefService* local_state)
-    : local_state_(local_state),
+                                 PrefService* local_state,
+                                 version_info::Channel channel)
+    : backup_registry_key_(backup_registry_key),
+      user_data_dir_(user_data_dir),
+      local_state_(local_state),
       initial_browser_last_live_timestamp_(
           local_state->GetTime(prefs::kStabilityBrowserLastLiveTimeStamp)),
-      backup_registry_key_(backup_registry_key) {
+      channel_(channel) {
   DCHECK_NE(PrefService::INITIALIZATION_STATUS_WAITING,
             local_state_->GetInitializationStatus());
+}
 
-  if (!user_data_dir.empty())
-    beacon_file_path_ = user_data_dir.Append(variations::kVariationsFilename);
+void CleanExitBeacon::Initialize() {
+  DCHECK(!initialized_);
 
-#if defined(OS_ANDROID) || defined(OS_IOS)
-  // TODO(crbug/1248239): Allow the file to be used once the Extended Variations
-  // Safe Mode experiment is enabled on Clank.
-  //
-  // TODO(crbug/1244334): Enable this on iOS once the fix lands.
-  std::unique_ptr<base::Value> beacon_file_contents = nullptr;
-#else
+  if (!user_data_dir_.empty()) {
+    // Platforms that pass an empty path do so deliberately. They should not
+    // use the beacon file.
+    beacon_file_path_ = user_data_dir_.Append(kCleanExitBeaconFilename);
+  }
+
   std::unique_ptr<base::Value> beacon_file_contents =
       MaybeGetFileContents(beacon_file_path_);
-#endif  // defined(OS_ANDROID) || defined(OS_IOS)
 
   did_previous_session_exit_cleanly_ =
-      DidPreviousSessionExitCleanly(beacon_file_contents.get(), local_state_);
+      DidPreviousSessionExitCleanly(beacon_file_contents.get());
 
-#if defined(OS_WIN) || defined(OS_IOS)
-  // An enumeration of all possible permutations of the the beacon state in the
-  // registry (Windows) or NSUserDefaults (iOS) and in Local State.
-  enum class CleanExitBeaconConsistency {
-    kCleanClean = 0,
-    kCleanDirty = 1,
-    kCleanMissing = 2,
-    kDirtyClean = 3,
-    kDirtyDirty = 4,
-    kDirtyMissing = 5,
-    kMissingClean = 6,
-    kMissingDirty = 7,
-    kMissingMissing = 8,
-    kMaxValue = kMissingMissing,
-  };
-  CleanExitBeaconConsistency consistency =
-      CleanExitBeaconConsistency::kDirtyDirty;
+  MaybeIncrementCrashStreak(did_previous_session_exit_cleanly_,
+                            beacon_file_contents.get(), local_state_);
+  initialized_ = true;
+}
 
-  bool local_state_beacon_is_missing =
-      !local_state_->HasPrefPath(prefs::kStabilityExitedCleanly);
-  bool local_state_was_last_shutdown_clean = did_previous_session_exit_cleanly_;
+bool CleanExitBeacon::DidPreviousSessionExitCleanly(
+    base::Value* beacon_file_contents) {
+  if (!IsBeaconFileSupported())
+    return local_state_->GetBoolean(prefs::kStabilityExitedCleanly);
 
-  bool backup_beacon_was_last_shutdown_clean = true;
-  bool backup_beacon_is_missing = false;
-#if defined(OS_WIN)
+  absl::optional<bool> beacon_file_beacon_value =
+      beacon_file_contents ? beacon_file_contents->GetDict().FindBool(
+                                 prefs::kStabilityExitedCleanly)
+                           : absl::nullopt;
+
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_IOS)
+  absl::optional<bool> backup_beacon_value = ExitedCleanly();
+  RecordBeaconConsistency(beacon_file_beacon_value, backup_beacon_value);
+#endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_IOS)
+
+#if BUILDFLAG(IS_IOS)
+  // TODO(crbug/1231106): For the time being, this is a no-op; i.e.,
+  // ShouldUseUserDefaultsBeacon() always returns false.
+  if (ShouldUseUserDefaultsBeacon())
+    return backup_beacon_value.value_or(true);
+#endif  // BUILDFLAG(IS_IOS)
+
+  return beacon_file_beacon_value.value_or(true);
+}
+
+bool CleanExitBeacon::IsExtendedSafeModeSupported() const {
+  // All platforms that support the beacon file mechanism also happen to support
+  // Extended Variations Safe Mode.
+  return IsBeaconFileSupported();
+}
+
+void CleanExitBeacon::WriteBeaconValue(bool exited_cleanly,
+                                       bool is_extended_safe_mode) {
+  DCHECK(initialized_);
+  if (g_skip_clean_shutdown_steps)
+    return;
+
+  UpdateLastLiveTimestamp();
+
+  if (has_exited_cleanly_ && has_exited_cleanly_.value() == exited_cleanly) {
+    // It is possible to call WriteBeaconValue() with the same value for
+    // |exited_cleanly| twice during startup and shutdown on some platforms. If
+    // the current beacon value matches |exited_cleanly|, then return here to
+    // skip redundantly updating Local State, writing a beacon file, and on
+    // Windows and iOS, writing to platform-specific locations.
+    return;
+  }
+
+  if (is_extended_safe_mode) {
+    // |is_extended_safe_mode| can be true for only some platforms.
+    DCHECK(IsExtendedSafeModeSupported());
+    // |has_exited_cleanly_| should always be unset before starting to watch for
+    // browser crashes.
+    DCHECK(!has_exited_cleanly_);
+    // When starting to watch for browser crashes in the code covered by
+    // Extended Variations Safe Mode, the only valid value for |exited_cleanly|
+    // is `false`. `true` signals that Chrome should stop watching for crashes.
+    DCHECK(!exited_cleanly);
+    WriteBeaconFile(exited_cleanly);
+  } else {
+    // TODO(crbug/1341864): Stop updating |kStabilityExitedCleanly| on platforms
+    // that support the beacon file.
+    local_state_->SetBoolean(prefs::kStabilityExitedCleanly, exited_cleanly);
+    if (IsBeaconFileSupported()) {
+      WriteBeaconFile(exited_cleanly);
+    } else {
+      // Schedule a Local State write on platforms that back the beacon value
+      // using Local State rather than the beacon file.
+      local_state_->CommitPendingWrite();
+    }
+  }
+
+#if BUILDFLAG(IS_WIN)
+  base::win::RegKey regkey;
+  if (regkey.Create(HKEY_CURRENT_USER, backup_registry_key_.c_str(),
+                    KEY_ALL_ACCESS) == ERROR_SUCCESS) {
+    regkey.WriteValue(base::ASCIIToWide(prefs::kStabilityExitedCleanly).c_str(),
+                      exited_cleanly ? 1u : 0u);
+  }
+#elif BUILDFLAG(IS_IOS)
+  SetUserDefaultsBeacon(exited_cleanly);
+#endif  // BUILDFLAG(IS_WIN)
+
+  has_exited_cleanly_ = absl::make_optional(exited_cleanly);
+}
+
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_IOS)
+absl::optional<bool> CleanExitBeacon::ExitedCleanly() {
+#if BUILDFLAG(IS_WIN)
   base::win::RegKey regkey;
   DWORD value = 0u;
   if (regkey.Open(HKEY_CURRENT_USER, backup_registry_key_.c_str(),
@@ -198,107 +339,29 @@ CleanExitBeacon::CleanExitBeacon(const std::wstring& backup_registry_key,
       regkey.ReadValueDW(
           base::ASCIIToWide(prefs::kStabilityExitedCleanly).c_str(), &value) ==
           ERROR_SUCCESS) {
-    backup_beacon_was_last_shutdown_clean = value ? true : false;
-  } else {
-    backup_beacon_is_missing = true;
+    return value ? true : false;
   }
-#elif defined(OS_IOS)
-  if (HasUserDefaultsBeacon()) {
-    backup_beacon_was_last_shutdown_clean = GetUserDefaultsBeacon();
-  } else {
-    backup_beacon_is_missing = true;
-  }
-#endif  // defined(OS_IOS)
-
-  if (backup_beacon_is_missing) {
-    if (local_state_beacon_is_missing) {
-      consistency = CleanExitBeaconConsistency::kMissingMissing;
-    } else {
-      consistency = local_state_was_last_shutdown_clean
-                        ? CleanExitBeaconConsistency::kMissingClean
-                        : CleanExitBeaconConsistency::kMissingDirty;
-    }
-  } else {
-    if (local_state_beacon_is_missing) {
-      consistency = backup_beacon_was_last_shutdown_clean
-                        ? CleanExitBeaconConsistency::kCleanMissing
-                        : CleanExitBeaconConsistency::kDirtyMissing;
-    } else if (backup_beacon_was_last_shutdown_clean) {
-      consistency = local_state_was_last_shutdown_clean
-                        ? CleanExitBeaconConsistency::kCleanClean
-                        : CleanExitBeaconConsistency::kCleanDirty;
-    } else {
-      consistency = local_state_was_last_shutdown_clean
-                        ? CleanExitBeaconConsistency::kDirtyClean
-                        : CleanExitBeaconConsistency::kDirtyDirty;
-    }
-  }
-  base::UmaHistogramEnumeration("UMA.CleanExitBeaconConsistency2", consistency);
-
-#if defined(OS_IOS)
-  // For the time being, this is a no-op to avoid interference with the Extended
-  // Variations Safe Mode experiment; i.e., ShouldUseUserDefaultsBeacon() always
-  // returns false.
-  if (ShouldUseUserDefaultsBeacon())
-    did_previous_session_exit_cleanly_ = backup_beacon_was_last_shutdown_clean;
-#endif
-#endif  // defined(OS_WIN) || defined(OS_IOS)
-
-  MaybeIncrementCrashStreak(did_previous_session_exit_cleanly_,
-                            beacon_file_contents.get(), local_state_);
+  return absl::nullopt;
+#endif  // BUILDFLAG(IS_WIN)
+#if BUILDFLAG(IS_IOS)
+  if (HasUserDefaultsBeacon())
+    return GetUserDefaultsBeacon();
+  return absl::nullopt;
+#endif  // BUILDFLAG(IS_IOS)
 }
-
-CleanExitBeacon::~CleanExitBeacon() = default;
-
-void CleanExitBeacon::WriteBeaconValue(bool exited_cleanly,
-                                       bool write_synchronously,
-                                       bool update_beacon) {
-  if (g_skip_clean_shutdown_steps)
-    return;
-
-  UpdateLastLiveTimestamp();
-  if (update_beacon)
-    local_state_->SetBoolean(prefs::kStabilityExitedCleanly, exited_cleanly);
-
-  const std::string group_name =
-      base::FieldTrialList::FindFullName(kExtendedSafeModeTrial);
-
-  if (write_synchronously) {
-    if (group_name == kWriteSynchronouslyViaPrefServiceGroup ||
-        group_name == kSignalAndWriteSynchronouslyViaPrefServiceGroup) {
-      SCOPED_UMA_HISTOGRAM_TIMER_MICROS(
-          "Variations.ExtendedSafeMode.WritePrefsTime");
-      local_state_->CommitPendingWriteSynchronously();
-    } else if (group_name == kSignalAndWriteViaFileUtilGroup) {
-      SCOPED_UMA_HISTOGRAM_TIMER_MICROS(
-          "Variations.ExtendedSafeMode.WritePrefsTime");
-      WriteVariationsSafeModeFile(exited_cleanly);
-    }
-  } else {
-    local_state_->CommitPendingWrite();
-    if (group_name == kSignalAndWriteViaFileUtilGroup) {
-      // Clients in this group also write to the Variations Safe Mode file. This
-      // is because the file will be used in the next session, and thus, should
-      // be updated whenever kStabilityExitedCleanly is.
-      WriteVariationsSafeModeFile(exited_cleanly);
-    }
-  }
-
-#if defined(OS_WIN)
-  base::win::RegKey regkey;
-  if (regkey.Create(HKEY_CURRENT_USER, backup_registry_key_.c_str(),
-                    KEY_ALL_ACCESS) == ERROR_SUCCESS) {
-    regkey.WriteValue(base::ASCIIToWide(prefs::kStabilityExitedCleanly).c_str(),
-                      exited_cleanly ? 1u : 0u);
-  }
-#elif defined(OS_IOS)
-  SetUserDefaultsBeacon(exited_cleanly);
-#endif  // defined(OS_WIN)
-}
+#endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_IOS)
 
 void CleanExitBeacon::UpdateLastLiveTimestamp() {
   local_state_->SetTime(prefs::kStabilityBrowserLastLiveTimeStamp,
                         base::Time::Now());
+}
+
+const base::FilePath CleanExitBeacon::GetUserDataDirForTesting() const {
+  return user_data_dir_;
+}
+
+base::FilePath CleanExitBeacon::GetBeaconFilePathForTesting() const {
+  return beacon_file_path_;
 }
 
 // static
@@ -308,7 +371,7 @@ void CleanExitBeacon::RegisterPrefs(PrefRegistrySimple* registry) {
   registry->RegisterTimePref(prefs::kStabilityBrowserLastLiveTimeStamp,
                              base::Time(), PrefRegistry::LOSSY_PREF);
 
-  // This variations-safe-mode-related pref is registered here rather than in
+  // This Variations-Safe-Mode-related pref is registered here rather than in
   // SafeSeedManager::RegisterPrefs() because the CleanExitBeacon is
   // responsible for incrementing this value. (See the comments in
   // MaybeIncrementCrashStreak() for more details.)
@@ -326,18 +389,31 @@ void CleanExitBeacon::SetStabilityExitedCleanlyForTesting(
     PrefService* local_state,
     bool exited_cleanly) {
   local_state->SetBoolean(prefs::kStabilityExitedCleanly, exited_cleanly);
-#if defined(OS_IOS)
+#if BUILDFLAG(IS_IOS)
   SetUserDefaultsBeacon(exited_cleanly);
-#endif  // defined(OS_IOS)
+#endif  // BUILDFLAG(IS_IOS)
+}
+
+// static
+std::string CleanExitBeacon::CreateBeaconFileContentsForTesting(
+    bool exited_cleanly,
+    int crash_streak) {
+  const std::string exited_cleanly_str = exited_cleanly ? "true" : "false";
+  return base::StringPrintf(
+      "{\n"
+      "  \"user_experience_metrics.stability.exited_cleanly\":%s,\n"
+      "  \"variations_crash_streak\":%s\n"
+      "}",
+      exited_cleanly_str.data(), base::NumberToString(crash_streak).data());
 }
 
 // static
 void CleanExitBeacon::ResetStabilityExitedCleanlyForTesting(
     PrefService* local_state) {
   local_state->ClearPref(prefs::kStabilityExitedCleanly);
-#if defined(OS_IOS)
+#if BUILDFLAG(IS_IOS)
   ResetUserDefaultsBeacon();
-#endif  // defined(OS_IOS)
+#endif  // BUILDFLAG(IS_IOS)
 }
 
 // static
@@ -345,23 +421,31 @@ void CleanExitBeacon::SkipCleanShutdownStepsForTesting() {
   g_skip_clean_shutdown_steps = true;
 }
 
-void CleanExitBeacon::WriteVariationsSafeModeFile(bool exited_cleanly) const {
-  DCHECK_EQ(base::FieldTrialList::FindFullName(kExtendedSafeModeTrial),
-            kSignalAndWriteViaFileUtilGroup);
+bool CleanExitBeacon::IsBeaconFileSupported() const {
+  return !beacon_file_path_.empty();
+}
+
+void CleanExitBeacon::WriteBeaconFile(bool exited_cleanly) const {
   base::Value dict(base::Value::Type::DICTIONARY);
   dict.SetBoolKey(prefs::kStabilityExitedCleanly, exited_cleanly);
   dict.SetIntKey(kVariationsCrashStreak,
                  local_state_->GetInteger(kVariationsCrashStreak));
+
   std::string json_string;
   JSONStringValueSerializer serializer(&json_string);
   bool success = serializer.Serialize(dict);
   DCHECK(success);
   int data_size = static_cast<int>(json_string.size());
   DCHECK_NE(data_size, 0);
+  int bytes_written;
   {
     base::ScopedAllowBlocking allow_io;
-    base::WriteFile(beacon_file_path_, json_string.data(), data_size);
+    // WriteFile() returns -1 on error.
+    bytes_written =
+        base::WriteFile(beacon_file_path_, json_string.data(), data_size);
   }
+  base::UmaHistogramBoolean("Variations.ExtendedSafeMode.BeaconFileWrite",
+                            bytes_written != -1);
 }
 
 }  // namespace metrics

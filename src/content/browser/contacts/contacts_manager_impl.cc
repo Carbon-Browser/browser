@@ -16,7 +16,7 @@
 #include "services/metrics/public/cpp/metrics_utils.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #include "content/browser/contacts/contacts_provider_android.h"
 #endif
 
@@ -25,11 +25,11 @@ namespace content {
 namespace {
 
 std::unique_ptr<ContactsProvider> CreateProvider(
-    RenderFrameHostImpl* render_frame_host) {
-  if (render_frame_host->GetParent())
+    RenderFrameHostImpl& render_frame_host) {
+  if (render_frame_host.GetParentOrOuterDocument())
     return nullptr;  // This API is only supported on the main frame.
-#if defined(OS_ANDROID)
-  return std::make_unique<ContactsProviderAndroid>(render_frame_host);
+#if BUILDFLAG(IS_ANDROID)
+  return std::make_unique<ContactsProviderAndroid>(&render_frame_host);
 #else
   return nullptr;
 #endif
@@ -54,18 +54,12 @@ void OnContactsSelected(
 
 }  // namespace
 
-// static
-void ContactsManagerImpl::Create(
-    RenderFrameHostImpl* render_frame_host,
-    mojo::PendingReceiver<blink::mojom::ContactsManager> receiver) {
-  mojo::MakeSelfOwnedReceiver(
-      std::make_unique<ContactsManagerImpl>(render_frame_host),
-      std::move(receiver));
-}
-
-ContactsManagerImpl::ContactsManagerImpl(RenderFrameHostImpl* render_frame_host)
-    : contacts_provider_(CreateProvider(render_frame_host)),
-      source_id_(render_frame_host->GetPageUkmSourceId()) {}
+ContactsManagerImpl::ContactsManagerImpl(
+    RenderFrameHostImpl& render_frame_host,
+    mojo::PendingReceiver<blink::mojom::ContactsManager> receiver)
+    : DocumentService(render_frame_host, std::move(receiver)),
+      contacts_provider_(CreateProvider(render_frame_host)),
+      source_id_(render_frame_host.GetPageUkmSourceId()) {}
 
 ContactsManagerImpl::~ContactsManagerImpl() = default;
 

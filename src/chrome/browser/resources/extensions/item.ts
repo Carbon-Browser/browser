@@ -12,9 +12,9 @@ import 'chrome://resources/cr_elements/shared_style_css.m.js';
 import 'chrome://resources/cr_elements/shared_vars_css.m.js';
 import 'chrome://resources/js/action_link.js';
 import 'chrome://resources/cr_elements/action_link_css.m.js';
-import './icons.js';
-import './shared_style.js';
-import './shared_vars.js';
+import './icons.html.js';
+import './shared_style.css.js';
+import './shared_vars.css.js';
 import './strings.m.js';
 import 'chrome://resources/polymer/v3_0/iron-flex-layout/iron-flex-layout-classes.js';
 import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
@@ -22,12 +22,13 @@ import 'chrome://resources/polymer/v3_0/paper-tooltip/paper-tooltip.js';
 
 import {getToastManager} from 'chrome://resources/cr_elements/cr_toast/cr_toast_manager.js';
 import {CrToggleElement} from 'chrome://resources/cr_elements/cr_toggle/cr_toggle.m.js';
-import {assert, assertNotReached} from 'chrome://resources/js/assert.m.js';
-import {I18nBehavior} from 'chrome://resources/js/i18n_behavior.m.js';
-import {flush, html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {assert, assertNotReached} from 'chrome://resources/js/assert_ts.js';
+import {I18nMixin} from 'chrome://resources/js/i18n_mixin.js';
+import {flush, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
+import {getTemplate} from './item.html.js';
 import {ItemMixin} from './item_mixin.js';
-import {computeInspectableViewLabel, EnableControl, getEnableControl, getItemSource, getItemSourceString, isEnabled, SourceType, userCanChangeEnablement} from './item_util.js';
+import {computeInspectableViewLabel, EnableControl, getEnableControl, getItemSource, getItemSourceString, isEnabled, sortViews, SourceType, userCanChangeEnablement} from './item_util.js';
 import {navigation, Page} from './navigation_helper.js';
 
 export interface ItemDelegate {
@@ -56,14 +57,15 @@ export interface ItemDelegate {
 
 export interface ExtensionsItemElement {
   $: {
+    a11yAssociation: HTMLElement,
     detailsButton: HTMLElement,
     enableToggle: CrToggleElement,
+    name: HTMLElement,
+    removeButton: HTMLElement,
   };
 }
 
-const ExtensionsItemElementBase =
-    mixinBehaviors([I18nBehavior], ItemMixin(PolymerElement)) as
-    {new (): PolymerElement & I18nBehavior};
+const ExtensionsItemElementBase = I18nMixin(ItemMixin(PolymerElement));
 
 export class ExtensionsItemElement extends ExtensionsItemElementBase {
   static get is() {
@@ -71,7 +73,7 @@ export class ExtensionsItemElement extends ExtensionsItemElementBase {
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
   }
 
   static get properties() {
@@ -94,6 +96,12 @@ export class ExtensionsItemElement extends ExtensionsItemElementBase {
         type: Boolean,
         value: false,
       },
+
+      // First inspectable view after sorting.
+      firstInspectView_: {
+        type: Object,
+        computed: 'computeFirstInspectView_(data.views)',
+      },
     };
   }
 
@@ -105,6 +113,7 @@ export class ExtensionsItemElement extends ExtensionsItemElementBase {
   inDevMode: boolean;
   data: chrome.developerPrivate.ExtensionInfo;
   private showingDetails_: boolean;
+  private firstInspectView_: chrome.developerPrivate.ExtensionView;
   /** Prevents reloading the same item while it's already being reloaded. */
   private isReloading_: boolean = false;
 
@@ -167,8 +176,12 @@ export class ExtensionsItemElement extends ExtensionsItemElementBase {
     navigation.navigateTo({page: Page.DETAILS, extensionId: this.data.id});
   }
 
+  private computeFirstInspectView_(): chrome.developerPrivate.ExtensionView {
+    return sortViews(this.data.views)[0];
+  }
+
   private onInspectTap_() {
-    this.delegate.inspectItemView(this.data.id, this.data.views[0]);
+    this.delegate.inspectItemView(this.data.id, this.firstInspectView_);
   }
 
   private onExtraInspectTap_() {
@@ -251,8 +264,9 @@ export class ExtensionsItemElement extends ExtensionsItemElementBase {
         return 'extensions-icons:unpacked';
       case SourceType.WEBSTORE:
         return '';
+      default:
+        assertNotReached();
     }
-    assertNotReached();
   }
 
   private computeSourceIndicatorText_(): string {
@@ -276,7 +290,7 @@ export class ExtensionsItemElement extends ExtensionsItemElementBase {
     // sometimes it can. Even when it is, the UI behaves properly, but we
     // need to handle the case gracefully.
     return this.data.views.length > 0 ?
-        computeInspectableViewLabel(this.data.views[0]) :
+        computeInspectableViewLabel(this.firstInspectView_) :
         '';
   }
 
@@ -329,6 +343,12 @@ export class ExtensionsItemElement extends ExtensionsItemElementBase {
     // warning will still be shown in the item detail view.
     return this.data.showSafeBrowsingAllowlistWarning &&
         !this.hasSevereWarnings_();
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'extensions-item': ExtensionsItemElement;
   }
 }
 

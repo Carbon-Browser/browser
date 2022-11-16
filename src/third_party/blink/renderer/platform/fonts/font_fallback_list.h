@@ -79,8 +79,7 @@ class PLATFORM_EXPORT FontFallbackList : public RefCounted<FontFallbackList> {
   ShapeCache* GetShapeCache(const FontDescription& font_description) {
     if (!shape_cache_) {
       FallbackListCompositeKey key = CompositeKey(font_description);
-      shape_cache_ =
-          FontCache::GetFontCache()->GetShapeCache(key)->GetWeakPtr();
+      shape_cache_ = FontCache::Get().GetShapeCache(key)->GetWeakPtr();
     }
     DCHECK(shape_cache_);
     if (GetFontSelector())
@@ -108,7 +107,6 @@ class PLATFORM_EXPORT FontFallbackList : public RefCounted<FontFallbackList> {
 
   bool HasLoadingFallback() const { return has_loading_fallback_; }
   bool HasCustomFont() const { return has_custom_font_; }
-  bool HasAdvanceOverride() const { return has_advance_override_; }
 
  private:
   explicit FontFallbackList(FontFallbackMap& font_fallback_map);
@@ -125,13 +123,12 @@ class PLATFORM_EXPORT FontFallbackList : public RefCounted<FontFallbackList> {
   bool ComputeCanShapeWordByWord(const FontDescription&);
 
   Vector<scoped_refptr<FontData>, 1> font_list_;
-  const SimpleFontData* cached_primary_simple_font_data_;
+  const SimpleFontData* cached_primary_simple_font_data_ = nullptr;
   const WeakPersistent<FontFallbackMap> font_fallback_map_;
-  int family_index_;
-  uint16_t generation_;
+  int family_index_ = 0;
+  const uint16_t generation_;
   bool has_loading_fallback_ : 1;
   bool has_custom_font_ : 1;
-  bool has_advance_override_ : 1;
   bool can_shape_word_by_word_ : 1;
   bool can_shape_word_by_word_computed_ : 1;
   bool is_invalid_ : 1;

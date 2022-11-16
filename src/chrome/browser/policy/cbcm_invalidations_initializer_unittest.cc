@@ -6,14 +6,12 @@
 
 #include "base/bind.h"
 #include "base/json/json_writer.h"
-#include "base/test/scoped_feature_list.h"
 #include "base/values.h"
 #include "chrome/browser/device_identity/device_oauth2_token_service.h"
 #include "chrome/browser/device_identity/device_oauth2_token_service_factory.h"
 #include "chrome/browser/device_identity/device_oauth2_token_store_desktop.h"
 #include "components/os_crypt/os_crypt_mocker.h"
 #include "components/policy/core/common/cloud/mock_cloud_policy_client.h"
-#include "components/policy/core/common/features.h"
 #include "components/prefs/testing_pref_service.h"
 #include "content/public/test/browser_task_environment.h"
 #include "google_apis/gaia/gaia_urls.h"
@@ -29,9 +27,10 @@ static const char kFirstRefreshToken[] = "first_refresh_token";
 static const char kSecondRefreshToken[] = "second_refresh_token";
 static const char kFirstAccessToken[] = "first_access_token";
 static const char kSecondAccessToken[] = "second_access_token";
-static const char kServiceAccountEmail[] = "service_account@example.com";
+static const char kServiceAccountEmail[] =
+    "service_account@system.gserviceaccount.com";
 static const char kOtherServiceAccountEmail[] =
-    "other_service_account@example.com";
+    "other_service_account@system.gserviceaccount.com";
 static const char kDMToken[] = "dm_token";
 static const char kAuthCode[] = "auth_code";
 
@@ -91,9 +90,9 @@ class CBCMInvalidationsInitializerTest
   std::string MakeTokensFromAuthCodesResponse(const std::string& refresh_token,
                                               const std::string& access_token) {
     base::DictionaryValue dict;
-    dict.SetString("access_token", access_token);
-    dict.SetString("refresh_token", refresh_token);
-    dict.SetInteger("expires_in", 9999);
+    dict.SetStringKey("access_token", access_token);
+    dict.SetStringKey("refresh_token", refresh_token);
+    dict.SetIntKey("expires_in", 9999);
 
     std::string json;
     base::JSONWriter::Write(dict, &json);
@@ -102,10 +101,6 @@ class CBCMInvalidationsInitializerTest
 
  private:
   void SetUp() override {
-    feature_list_.InitWithFeatures(
-        {features::kCBCMPolicyInvalidations, features::kCBCMRemoteCommands},
-        {});
-
     DeviceOAuth2TokenStoreDesktop::RegisterPrefs(
         testing_local_state_.registry());
     DeviceOAuth2TokenServiceFactory::Initialize(GetURLLoaderFactory(),
@@ -125,7 +120,6 @@ class CBCMInvalidationsInitializerTest
   FakeCloudPolicyClient mock_policy_client_;
   network::TestURLLoaderFactory test_url_loader_factory_;
   content::BrowserTaskEnvironment task_environment_;
-  base::test::ScopedFeatureList feature_list_;
   TestingPrefServiceSimple testing_local_state_;
 };
 
@@ -220,7 +214,7 @@ TEST_F(CBCMInvalidationsInitializerTest,
   EXPECT_EQ(0, test_url_loader_factory()->NumPending());
   EXPECT_TRUE(
       DeviceOAuth2TokenServiceFactory::Get()->RefreshTokenIsAvailable());
-  EXPECT_EQ(CoreAccountId::FromEmail(kServiceAccountEmail),
+  EXPECT_EQ(CoreAccountId::FromRobotEmail(kServiceAccountEmail),
             DeviceOAuth2TokenServiceFactory::Get()->GetRobotAccountId());
   std::string first_refresh_token =
       testing_local_state()->GetString(kCBCMServiceAccountRefreshToken);
@@ -241,7 +235,7 @@ TEST_F(CBCMInvalidationsInitializerTest,
   // Now a different refresh token and email should be present. The token
   // themselves aren't validated because they're encrypted. Verifying that it
   // changed is sufficient.
-  EXPECT_EQ(CoreAccountId::FromEmail(kOtherServiceAccountEmail),
+  EXPECT_EQ(CoreAccountId::FromRobotEmail(kOtherServiceAccountEmail),
             DeviceOAuth2TokenServiceFactory::Get()->GetRobotAccountId());
   EXPECT_NE(first_refresh_token,
             testing_local_state()->GetString(kCBCMServiceAccountRefreshToken));
@@ -291,7 +285,7 @@ TEST_F(CBCMInvalidationsInitializerTest,
   // Now a different refresh token and email should be present. The token
   // themselves aren't validated because they're encrypted. Verifying that it
   // changed is sufficient.
-  EXPECT_EQ(CoreAccountId::FromEmail(kOtherServiceAccountEmail),
+  EXPECT_EQ(CoreAccountId::FromRobotEmail(kOtherServiceAccountEmail),
             DeviceOAuth2TokenServiceFactory::Get()->GetRobotAccountId());
   EXPECT_NE(first_refresh_token,
             testing_local_state()->GetString(kCBCMServiceAccountRefreshToken));

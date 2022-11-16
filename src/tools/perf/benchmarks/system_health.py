@@ -54,6 +54,8 @@ class _CommonSystemHealthBenchmark(perf_benchmark.PerfBenchmark):
     cat_filter.AddIncludedCategory('accessibility')
     # Needed for the metric reported by page.
     cat_filter.AddIncludedCategory('blink.user_timing')
+    # Needed for blinkResourceMetric,
+    cat_filter.AddIncludedCategory('blink.resource')
     # Needed for the console error metric.
     cat_filter.AddIncludedCategory('v8.console')
 
@@ -64,6 +66,7 @@ class _CommonSystemHealthBenchmark(perf_benchmark.PerfBenchmark):
         *SYSTEM_HEALTH_BENCHMARK_UMA)
     options.SetTimelineBasedMetrics([
         'accessibilityMetric',
+        'blinkResourceMetric',
         'consoleErrorMetric',
         'cpuTimeMetric',
         'limitedCpuTimeMetric',
@@ -83,7 +86,14 @@ class _CommonSystemHealthBenchmark(perf_benchmark.PerfBenchmark):
   def SetExtraBrowserOptions(self, options):
     # Using the software fallback can skew the rendering related metrics. So
     # disable that (unless explicitly run with --allow-software-compositing).
-    if self.allow_software_compositing:
+    #
+    # TODO(jonross): Catapult's record_wpr.py calls SetExtraBrowserOptions
+    # before calling ProcessCommandLineArgs. This will crash attempting to
+    # record new system health benchmarks. We do not want to support software
+    # compositing for recording, so for now we will just check for the existence
+    # the flag. We will review updating Catapult at a later point.
+    if (hasattr(self, 'allow_software_compositing')
+        and self.allow_software_compositing) or self.NeedsSoftwareCompositing():
       logging.warning('Allowing software compositing. Some of the reported '
                       'metrics will have unreliable values.')
     else:
@@ -114,7 +124,7 @@ class DesktopCommonSystemHealth(_CommonSystemHealthBenchmark):
   def CreateCoreTimelineBasedMeasurementOptions(self):
     options = super(DesktopCommonSystemHealth,
                     self).CreateCoreTimelineBasedMeasurementOptions()
-    options.config.chrome_trace_config.SetTraceBufferSizeInKb(300 * 1024)
+    options.config.chrome_trace_config.SetTraceBufferSizeInKb(400 * 1024)
     return options
 
 

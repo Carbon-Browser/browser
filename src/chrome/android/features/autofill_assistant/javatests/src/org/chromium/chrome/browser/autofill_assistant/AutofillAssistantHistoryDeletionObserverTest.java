@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import androidx.test.filters.SmallTest;
 
+import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -15,16 +16,14 @@ import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
+import org.chromium.base.test.BaseJUnit4ClassRunner;
 import org.chromium.base.test.util.Batch;
-import org.chromium.base.test.util.CommandLineFlags;
-import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.history.HistoryDeletionInfo;
-import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
+import org.chromium.components.autofill_assistant.AutofillAssistantPreferencesUtil;
 
 /** Tests for the autofill assistant history deletion observer. */
-@CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
-@RunWith(ChromeJUnit4ClassRunner.class)
-@Batch(Batch.PER_CLASS)
+@RunWith(BaseJUnit4ClassRunner.class)
+@Batch(Batch.UNIT_TESTS)
 public class AutofillAssistantHistoryDeletionObserverTest {
     @Mock
     HistoryDeletionInfo mHistoryDeletionInfo;
@@ -37,10 +36,16 @@ public class AutofillAssistantHistoryDeletionObserverTest {
         mHistoryDeletionObserver = new AutofillAssistantHistoryDeletionObserver();
     }
 
+    @After
+    public void tearDown() {
+        // Clear set preferences.
+        AutofillAssistantPreferencesUtil.onClearBrowserHistory();
+    }
+
     @Test
     @SmallTest
     public void clearFirstTimeUserFlagOnAllTimeHistoryDeletion() {
-        AutofillAssistantPreferencesUtil.setAutofillAssistantFirstTimeTriggerScriptUser(false);
+        AutofillAssistantPreferencesUtil.setFirstTimeTriggerScriptUserPreference(false);
         when(mHistoryDeletionInfo.isTimeRangeForAllTime()).thenReturn(true);
 
         mHistoryDeletionObserver.onURLsDeleted(mHistoryDeletionInfo);
@@ -51,7 +56,7 @@ public class AutofillAssistantHistoryDeletionObserverTest {
     @Test
     @SmallTest
     public void doesNotClearFirstTimeUserFlagOnPartialHistoryDeletion() {
-        AutofillAssistantPreferencesUtil.setAutofillAssistantFirstTimeTriggerScriptUser(false);
+        AutofillAssistantPreferencesUtil.setFirstTimeTriggerScriptUserPreference(false);
         when(mHistoryDeletionInfo.isTimeRangeForAllTime()).thenReturn(false);
 
         mHistoryDeletionObserver.onURLsDeleted(mHistoryDeletionInfo);

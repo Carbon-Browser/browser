@@ -121,7 +121,9 @@ class WindowCaptureParams : public VideoCaptureParams {
     DCHECK_NE(frame_sink_id_, new_frame_sink_id);
 
     frame_sink_id_ = new_frame_sink_id;
-    capturer->ChangeTarget(frame_sink_id_, subtree_capture_id_);
+    capturer->ChangeTarget(
+        viz::VideoCaptureTarget(frame_sink_id_, subtree_capture_id_),
+        /*crop_version=*/0);
 
     // If the movement to another display results in changes in the frame sink
     // size or DSF, OnVideoSizeMayHaveChanged() will be called by the below
@@ -197,8 +199,9 @@ class RegionCaptureParams : public VideoCaptureParams {
       const gfx::Rect& original_frame_visible_rect_pixels) const override {
     // We can't crop the video frame by an invalid bounds. The crop bounds must
     // be contained within the original frame bounds.
-    return GetIntersectionRect(original_frame_visible_rect_pixels,
-                               crop_region_pixels_);
+    gfx::Rect visible_rect = crop_region_pixels_;
+    visible_rect.AdjustToFit(original_frame_visible_rect_pixels);
+    return visible_rect;
   }
 
   gfx::Size GetVideoSize() const override {
@@ -287,8 +290,10 @@ void VideoCaptureParams::InitializeVideoCapturer(
   capturer->SetAutoThrottlingEnabled(false);
   // TODO(afakhry): Discuss with //media/ team the implications of color space
   // conversions.
-  capturer->SetFormat(media::PIXEL_FORMAT_I420, kColorSpace);
-  capturer->ChangeTarget(frame_sink_id_, subtree_capture_id_);
+  capturer->SetFormat(media::PIXEL_FORMAT_I420);
+  capturer->ChangeTarget(
+      viz::VideoCaptureTarget(frame_sink_id_, subtree_capture_id_),
+      /*crop_version=*/0);
 }
 
 gfx::Rect VideoCaptureParams::GetVideoFrameVisibleRect(

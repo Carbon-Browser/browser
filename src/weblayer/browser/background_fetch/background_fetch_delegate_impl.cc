@@ -32,7 +32,7 @@ BackgroundFetchDelegateImpl::~BackgroundFetchDelegateImpl() = default;
 void BackgroundFetchDelegateImpl::MarkJobComplete(const std::string& job_id) {
   BackgroundFetchDelegateBase::MarkJobComplete(job_id);
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   background_fetch::JobDetails* job_details =
       GetJobDetails(job_id, /*allow_null=*/true);
   if (job_details && job_details->job_state ==
@@ -42,7 +42,7 @@ void BackgroundFetchDelegateImpl::MarkJobComplete(const std::string& job_id) {
     // requested in a short span of time, so make sure the completed state is
     // reflected in the UI after a brief delay. See
     // https://developer.android.com/training/notify-user/build-notification#Updating
-    static constexpr auto kDelay = base::TimeDelta::FromMilliseconds(1500);
+    static constexpr auto kDelay = base::Milliseconds(1500);
     base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&BackgroundFetchDelegateImpl::DoUpdateUi,

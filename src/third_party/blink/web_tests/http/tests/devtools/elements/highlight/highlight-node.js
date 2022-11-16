@@ -5,7 +5,7 @@
 (async function() {
   TestRunner.addResult(
       `This test verifies the position and size of the highlight rectangles overlaid on an inspected node.\n`);
-  await TestRunner.loadModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
+  await TestRunner.loadLegacyModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
   await TestRunner.showPanel('elements');
   await TestRunner.loadHTML(`
       <style>
@@ -43,6 +43,7 @@
   await nodeResolved(div, 'inspectedElement');
   await nodeResolved(div, 'inspectedElement with RGB format', 'rgb');
   await nodeResolved(div, 'inspectedElement with HSL format', 'hsl');
+  await nodeResolved(div, 'inspectedElement with HWB format', 'hwb');
 
   let textNode = await ElementsTestRunner.findNodePromise(node => {
       return node.nodeType() === Node.TEXT_NODE && node.parentNode && node.parentNode.nodeName() === 'P' && node.parentNode.children()[0] === node;

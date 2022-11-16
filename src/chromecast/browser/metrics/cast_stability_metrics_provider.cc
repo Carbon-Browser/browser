@@ -14,7 +14,6 @@
 #include "chromecast/metrics/cast_metrics_service_client.h"
 #include "components/metrics/metrics_service.h"
 #include "components/metrics/stability_metrics_helper.h"
-#include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/child_process_data.h"
 #include "content/public/browser/child_process_termination_info.h"
@@ -22,11 +21,9 @@
 #include "content/public/browser/notification_service.h"
 #include "content/public/browser/notification_types.h"
 #include "content/public/browser/render_process_host.h"
-#include "third_party/metrics_proto/system_profile.pb.h"
 
 namespace chromecast {
 namespace metrics {
-
 namespace {
 
 enum RendererType {
@@ -46,24 +43,11 @@ int MapCrashExitCodeForHistogram(int exit_code) {
 
 }  // namespace
 
-// static
-void CastStabilityMetricsProvider::RegisterPrefs(PrefRegistrySimple* registry) {
-  registry->RegisterIntegerPref(prefs::kStabilityRendererCrashCount, 0);
-  registry->RegisterIntegerPref(prefs::kStabilityRendererFailedLaunchCount, 0);
-  registry->RegisterIntegerPref(prefs::kStabilityRendererHangCount, 0);
-  registry->RegisterIntegerPref(prefs::kStabilityChildProcessCrashCount, 0);
-}
-
 CastStabilityMetricsProvider::CastStabilityMetricsProvider(
     ::metrics::MetricsService* metrics_service,
     PrefService* pref_service)
     : metrics_service_(metrics_service), pref_service_(pref_service) {
   DCHECK(pref_service_);
-  BrowserChildProcessObserver::Add(this);
-}
-
-CastStabilityMetricsProvider::~CastStabilityMetricsProvider() {
-  BrowserChildProcessObserver::Remove(this);
 }
 
 void CastStabilityMetricsProvider::OnRecordingEnabled() {
@@ -77,37 +61,6 @@ void CastStabilityMetricsProvider::OnRecordingEnabled() {
 
 void CastStabilityMetricsProvider::OnRecordingDisabled() {
   registrar_.RemoveAll();
-}
-
-void CastStabilityMetricsProvider::ProvideStabilityMetrics(
-    ::metrics::SystemProfileProto* system_profile_proto) {
-  ::metrics::SystemProfileProto_Stability* stability_proto =
-      system_profile_proto->mutable_stability();
-
-  int count =
-      pref_service_->GetInteger(prefs::kStabilityChildProcessCrashCount);
-  if (count) {
-    stability_proto->set_child_process_crash_count(count);
-    pref_service_->SetInteger(prefs::kStabilityChildProcessCrashCount, 0);
-  }
-
-  count = pref_service_->GetInteger(prefs::kStabilityRendererCrashCount);
-  if (count) {
-    stability_proto->set_renderer_crash_count(count);
-    pref_service_->SetInteger(prefs::kStabilityRendererCrashCount, 0);
-  }
-
-  count = pref_service_->GetInteger(prefs::kStabilityRendererFailedLaunchCount);
-  if (count) {
-    stability_proto->set_renderer_failed_launch_count(count);
-    pref_service_->SetInteger(prefs::kStabilityRendererFailedLaunchCount, 0);
-  }
-
-  count = pref_service_->GetInteger(prefs::kStabilityRendererHangCount);
-  if (count) {
-    stability_proto->set_renderer_hang_count(count);
-    pref_service_->SetInteger(prefs::kStabilityRendererHangCount, 0);
-  }
 }
 
 void CastStabilityMetricsProvider::LogExternalCrash(
@@ -142,7 +95,6 @@ void CastStabilityMetricsProvider::Observe(
     }
 
     case content::NOTIFICATION_RENDER_WIDGET_HOST_HANG:
-      LogRendererHang();
       break;
 
     default:
@@ -151,21 +103,12 @@ void CastStabilityMetricsProvider::Observe(
   }
 }
 
-void CastStabilityMetricsProvider::BrowserChildProcessCrashed(
-    const content::ChildProcessData& data,
-    const content::ChildProcessTerminationInfo& info) {
-  IncrementPrefValue(prefs::kStabilityChildProcessCrashCount);
-  ::metrics::StabilityMetricsHelper::RecordStabilityEvent(
-      ::metrics::StabilityEventType::kChildProcessCrash);
-}
-
 void CastStabilityMetricsProvider::LogRendererCrash(
     content::RenderProcessHost* host,
     base::TerminationStatus status,
     int exit_code) {
   if (status == base::TERMINATION_STATUS_PROCESS_CRASHED ||
       status == base::TERMINATION_STATUS_ABNORMAL_TERMINATION) {
-    IncrementPrefValue(prefs::kStabilityRendererCrashCount);
     ::metrics::StabilityMetricsHelper::RecordStabilityEvent(
         ::metrics::StabilityEventType::kRendererCrash);
 
@@ -180,16 +123,9 @@ void CastStabilityMetricsProvider::LogRendererCrash(
     UMA_HISTOGRAM_ENUMERATION("BrowserRenderProcessHost.DisconnectedAlive",
                               RENDERER_TYPE_RENDERER, RENDERER_TYPE_COUNT);
   } else if (status == base::TERMINATION_STATUS_LAUNCH_FAILED) {
-    IncrementPrefValue(prefs::kStabilityRendererFailedLaunchCount);
     ::metrics::StabilityMetricsHelper::RecordStabilityEvent(
         ::metrics::StabilityEventType::kRendererFailedLaunch);
   }
-}
-
-void CastStabilityMetricsProvider::LogRendererHang() {
-  IncrementPrefValue(prefs::kStabilityRendererHangCount);
-  ::metrics::StabilityMetricsHelper::RecordStabilityEvent(
-      ::metrics::StabilityEventType::kRendererHang);
 }
 
 void CastStabilityMetricsProvider::IncrementPrefValue(const char* path) {

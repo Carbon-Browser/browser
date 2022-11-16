@@ -4,23 +4,26 @@
 
 package org.chromium.chrome.browser.share.link_to_text;
 
-import android.net.Uri;
-
 import androidx.vectordrawable.graphics.drawable.VectorDrawableCompat;
 
 import org.chromium.base.supplier.ObservableSupplier;
-import org.chromium.blink.mojom.TextFragmentReceiver;
 import org.chromium.chrome.R;
+import org.chromium.chrome.browser.feature_engagement.TrackerFactory;
+import org.chromium.chrome.browser.flags.ChromeFeatureList;
+import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.tab.CurrentTabObserver;
 import org.chromium.chrome.browser.tab.EmptyTabObserver;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab.TabLaunchType;
 import org.chromium.chrome.browser.tabmodel.TabModelSelector;
+import org.chromium.components.feature_engagement.FeatureConstants;
+import org.chromium.components.feature_engagement.Tracker;
 import org.chromium.components.messages.MessageBannerProperties;
 import org.chromium.components.messages.MessageDispatcher;
 import org.chromium.components.messages.MessageDispatcherProvider;
 import org.chromium.components.messages.MessageIdentifier;
 import org.chromium.components.messages.MessageScopeType;
+import org.chromium.components.messages.PrimaryActionClickBehavior;
 import org.chromium.content_public.browser.LoadUrlParams;
 import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.url.GURL;
@@ -29,38 +32,53 @@ import org.chromium.url.GURL;
  * This class is responsible for rendering an IPH, when receiving a link-to-text.
  */
 public class LinkToTextIPHController {
+    private static final String FEATURE_NAME =
+            FeatureConstants.SHARED_HIGHLIGHTING_RECEIVER_FEATURE;
+
     private final TabModelSelector mTabModelSelector;
     private CurrentTabObserver mCurrentTabObserver;
+    private Tracker mTracker;
 
     /**
      * Creates an {@link LinkToTextIPHController}.
-     * @param Tab The {@link Tab} where the IPH will be rendered.
+     * @param ObservableSupplier<Tab> An {@link ObservableSupplier} for {@link Tab} where the IPH
+     *         will be rendered.
+     * @param TabModelSelector The {@link TabModelSelector} to open a new tab.
      */
-    public LinkToTextIPHController(
-            ObservableSupplier<Tab> tabSupplier, TabModelSelector tabModelSelector) {
-        // TODO(cheickcisse): Create this object in {@link TabbedRootUiCoordinator} and check
-        // feature tracker.
+    public LinkToTextIPHController(ObservableSupplier<Tab> tabSupplier,
+            TabModelSelector tabModelSelector, ObservableSupplier<Profile> profileSupplier) {
         mTabModelSelector = tabModelSelector;
         mCurrentTabObserver = new CurrentTabObserver(tabSupplier, new EmptyTabObserver() {
             @Override
             public void onPageLoadFinished(Tab tab, GURL url) {
-                if (!hasTextFragment(tab, url)) return;
-                getExistingSelectors(tab);
+                if (!ChromeFeatureList.isEnabled(
+                            ChromeFeatureList.MESSAGES_FOR_ANDROID_INFRASTRUCTURE)) {
+                    return;
+                }
+
+                if (!LinkToTextHelper.hasTextFragment(url)) return;
+
+                Profile profile = profileSupplier.get();
+                // In some cases, ProfileSupplier.get() will return null or will not be initialized
+                // in Native. See https://crbug.com/1346710 and https://crbug.com/1353138.
+                if (profile == null || !profile.isNativeInitialized()) {
+                    profile = Profile.getLastUsedRegularProfile();
+                }
+                if (profile == null) {
+                    return;
+                }
+                mTracker = TrackerFactory.getTrackerForProfile(profile);
+                if (!mTracker.wouldTriggerHelpUI(FEATURE_NAME)) {
+                    return;
+                }
+
+                LinkToTextHelper.hasExistingSelectors(tab, (hasSelectors) -> {
+                    if (mTracker.shouldTriggerHelpUI(FEATURE_NAME)) {
+                        showMessageIPH(tab);
+                    }
+                });
             }
         }, null);
-    }
-
-    // Request text fragment selectors for existing highlights
-    private void getExistingSelectors(Tab tab) {
-        TextFragmentReceiver producer =
-                tab.getWebContents().getMainFrame().getInterfaceToRendererFrame(
-                        TextFragmentReceiver.MANAGER);
-        LinkToTextCoordinator.getExistingSelectors(producer, (text) -> {
-            if (text.length > 0) {
-                showMessageIPH(tab);
-            }
-            producer.close();
-        });
     }
 
     private void showMessageIPH(Tab tab) {
@@ -87,21 +105,18 @@ public class LinkToTextIPHController {
                 model, tab.getWebContents(), MessageScopeType.NAVIGATION, false);
     }
 
-    private void onMessageButtonClicked() {
-        onOpenInChrome(LinkToTextCoordinator.SHARED_HIGHLIGHTING_SUPPORT_URL);
+    private @PrimaryActionClickBehavior int onMessageButtonClicked() {
+        onOpenInChrome(LinkToTextHelper.SHARED_HIGHLIGHTING_SUPPORT_URL);
+        mTracker.dismissed(FEATURE_NAME);
+        return PrimaryActionClickBehavior.DISMISS_IMMEDIATELY;
     }
 
-    private void onMessageDismissed(Integer dismissReason) {}
+    private void onMessageDismissed(Integer dismissReason) {
+        mTracker.dismissed(FEATURE_NAME);
+    }
 
     private void onOpenInChrome(String linkUrl) {
         mTabModelSelector.openNewTab(new LoadUrlParams(linkUrl), TabLaunchType.FROM_LINK,
                 mTabModelSelector.getCurrentTab(), mTabModelSelector.isIncognitoSelected());
-    }
-
-    private boolean hasTextFragment(Tab tab, GURL url) {
-        Uri uri = Uri.parse(url.getSpec());
-        String fragment = uri.getEncodedFragment();
-        return fragment != null ? fragment.contains(LinkToTextCoordinator.TEXT_FRAGMENT_PREFIX)
-                                : false;
     }
 }

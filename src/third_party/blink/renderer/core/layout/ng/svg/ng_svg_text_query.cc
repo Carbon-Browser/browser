@@ -57,8 +57,10 @@ FragmentItemsInVisualOrder(const LayoutObject& query_root) {
       if (item.Type() == NGFragmentItem::kSvgText) {
         item_list.push_back(&item);
       } else if (NGInlineCursor descendants = cursor.CursorForDescendants()) {
-        if (descendants.CurrentItem()->Type() == NGFragmentItem::kSvgText)
-          item_list.push_back(descendants.CurrentItem());
+        for (; descendants; descendants.MoveToNext()) {
+          if (descendants.CurrentItem()->Type() == NGFragmentItem::kSvgText)
+            item_list.push_back(descendants.CurrentItem());
+        }
       }
     }
   }
@@ -82,9 +84,7 @@ FragmentItemsInLogicalOrder(const LayoutObject& query_root) {
 std::tuple<const NGFragmentItem*, StringView, unsigned, unsigned>
 FindFragmentItemForAddressableCodeUnitIndex(const LayoutObject& query_root,
                                             unsigned index) {
-  Vector<const NGFragmentItem*> item_list;
-  const NGFragmentItems* items;
-  std::tie(item_list, items) = FragmentItemsInLogicalOrder(query_root);
+  auto [item_list, items] = FragmentItemsInLogicalOrder(query_root);
 
   unsigned character_index = 0;
   for (const auto* item : item_list) {
@@ -105,7 +105,7 @@ FindFragmentItemForAddressableCodeUnitIndex(const LayoutObject& query_root,
 void GetCanvasRotation(void* context,
                        unsigned,
                        Glyph,
-                       FloatSize,
+                       gfx::Vector2dF,
                        float,
                        bool,
                        CanvasRotationInVertical rotation,
@@ -129,30 +129,55 @@ float InlineSize(const NGFragmentItem& item,
          item.SvgFragmentData()->length_adjust_scale / item.SvgScalingFactor();
 }
 
-std::tuple<const NGFragmentItem*, FloatRect> ScaledCharacterRectInContainer(
+std::tuple<const NGFragmentItem*, gfx::RectF> ScaledCharacterRectInContainer(
     const LayoutObject& query_root,
     unsigned code_unit_index) {
-  const NGFragmentItem* item;
-  unsigned start_ifc_offset, end_ifc_offset;
-  StringView item_text;
-  std::tie(item, item_text, start_ifc_offset, end_ifc_offset) =
+  auto [item, item_text, start_ifc_offset, end_ifc_offset] =
       FindFragmentItemForAddressableCodeUnitIndex(query_root, code_unit_index);
   DCHECK(item);
   DCHECK_EQ(item->Type(), NGFragmentItem::kSvgText);
   if (item->IsHiddenForPaint())
-    return {item, FloatRect()};
+    return {item, gfx::RectF()};
   auto char_rect =
-      FloatRect(item->LocalRect(item_text, start_ifc_offset, end_ifc_offset));
-  char_rect.MoveBy(item->SvgFragmentData()->rect.Location());
+      gfx::RectF(item->LocalRect(item_text, start_ifc_offset, end_ifc_offset));
+  char_rect.Offset(item->SvgFragmentData()->rect.OffsetFromOrigin());
   return {item, char_rect};
+}
+
+enum class QueryPosition { kStart, kEnd };
+gfx::PointF StartOrEndPosition(const LayoutObject& query_root,
+                               unsigned index,
+                               QueryPosition pos) {
+  auto [item, char_rect] = ScaledCharacterRectInContainer(query_root, index);
+  DCHECK_EQ(item->Type(), NGFragmentItem::kSvgText);
+  if (item->IsHiddenForPaint())
+    return gfx::PointF();
+  const auto& inline_text = *To<LayoutSVGInlineText>(item->GetLayoutObject());
+  const SimpleFontData* font = inline_text.ScaledFont().PrimaryFont();
+  const float ascent =
+      font ? font->GetFontMetrics().FixedAscent(item->Style().GetFontBaseline())
+           : 0.0f;
+  const bool left_or_top =
+      IsLtr(item->ResolvedDirection()) == (pos == QueryPosition::kStart);
+  gfx::PointF point;
+  if (item->IsHorizontal()) {
+    point = left_or_top ? char_rect.origin() : char_rect.top_right();
+    point.Offset(0.0f, ascent);
+  } else {
+    point = left_or_top ? char_rect.top_right() : char_rect.bottom_right();
+    point.Offset(-ascent, 0.0f);
+  }
+  if (item->HasSvgTransformForPaint())
+    point = item->BuildSvgTransformForPaint().MapPoint(point);
+  const float scaling_factor = inline_text.ScalingFactor();
+  point.Scale(1 / scaling_factor, 1 / scaling_factor);
+  return point;
 }
 
 }  // namespace
 
 unsigned NGSvgTextQuery::NumberOfCharacters() const {
-  Vector<const NGFragmentItem*> item_list;
-  const NGFragmentItems* items;
-  std::tie(item_list, items) = FragmentItemsInLogicalOrder(query_root_);
+  auto [item_list, items] = FragmentItemsInLogicalOrder(query_root_);
 
   unsigned addressable_code_unit_count = 0;
   for (const auto* item : item_list)
@@ -164,9 +189,7 @@ float NGSvgTextQuery::SubStringLength(unsigned start_index,
                                       unsigned length) const {
   if (length <= 0)
     return 0.0f;
-  Vector<const NGFragmentItem*> item_list;
-  const NGFragmentItems* items;
-  std::tie(item_list, items) = FragmentItemsInLogicalOrder(query_root_);
+  auto [item_list, items] = FragmentItemsInLogicalOrder(query_root_);
 
   float total_length = 0.0f;
   // Starting addressable code unit index for the current NGFragmentItem.
@@ -191,70 +214,19 @@ float NGSvgTextQuery::SubStringLength(unsigned start_index,
   return total_length;
 }
 
-FloatPoint NGSvgTextQuery::StartPositionOfCharacter(unsigned index) const {
-  const NGFragmentItem* item;
-  FloatRect char_rect;
-  std::tie(item, char_rect) =
-      ScaledCharacterRectInContainer(query_root_, index);
-  DCHECK_EQ(item->Type(), NGFragmentItem::kSvgText);
-  if (item->IsHiddenForPaint())
-    return FloatPoint();
-  const auto& inline_text = *To<LayoutSVGInlineText>(item->GetLayoutObject());
-  const float ascent =
-      inline_text.ScaledFont().PrimaryFont()->GetFontMetrics().FloatAscent(
-          item->Style().GetFontBaseline());
-  const bool is_ltr = IsLtr(item->ResolvedDirection());
-  FloatPoint point;
-  if (item->IsHorizontal()) {
-    point = is_ltr ? char_rect.Location() : char_rect.MaxXMinYCorner();
-    point.Move(0.0f, ascent);
-  } else {
-    point = is_ltr ? char_rect.MaxXMinYCorner() : char_rect.MaxXMaxYCorner();
-    point.Move(-ascent, 0.0f);
-  }
-  if (item->HasSvgTransformForPaint())
-    point = item->BuildSvgTransformForPaint().MapPoint(point);
-  const float scaling_factor = inline_text.ScalingFactor();
-  point.Scale(1 / scaling_factor, 1 / scaling_factor);
-  return point;
+gfx::PointF NGSvgTextQuery::StartPositionOfCharacter(unsigned index) const {
+  return StartOrEndPosition(query_root_, index, QueryPosition::kStart);
 }
 
-FloatPoint NGSvgTextQuery::EndPositionOfCharacter(unsigned index) const {
-  const NGFragmentItem* item;
-  FloatRect char_rect;
-  std::tie(item, char_rect) =
-      ScaledCharacterRectInContainer(query_root_, index);
-  DCHECK_EQ(item->Type(), NGFragmentItem::kSvgText);
-  if (item->IsHiddenForPaint())
-    return FloatPoint();
-  const auto& inline_text = *To<LayoutSVGInlineText>(item->GetLayoutObject());
-  const float ascent =
-      inline_text.ScaledFont().PrimaryFont()->GetFontMetrics().FloatAscent(
-          item->Style().GetFontBaseline());
-  const bool is_ltr = IsLtr(item->ResolvedDirection());
-  FloatPoint point;
-  if (item->IsHorizontal()) {
-    point = is_ltr ? char_rect.MaxXMinYCorner() : char_rect.Location();
-    point.Move(0.0f, ascent);
-  } else {
-    point = is_ltr ? char_rect.MaxXMaxYCorner() : char_rect.MaxXMinYCorner();
-    point.Move(-ascent, 0.0f);
-  }
-  if (item->HasSvgTransformForPaint())
-    point = item->BuildSvgTransformForPaint().MapPoint(point);
-  const float scaling_factor = inline_text.ScalingFactor();
-  point.Scale(1 / scaling_factor, 1 / scaling_factor);
-  return point;
+gfx::PointF NGSvgTextQuery::EndPositionOfCharacter(unsigned index) const {
+  return StartOrEndPosition(query_root_, index, QueryPosition::kEnd);
 }
 
-FloatRect NGSvgTextQuery::ExtentOfCharacter(unsigned index) const {
-  const NGFragmentItem* item;
-  FloatRect char_rect;
-  std::tie(item, char_rect) =
-      ScaledCharacterRectInContainer(query_root_, index);
+gfx::RectF NGSvgTextQuery::ExtentOfCharacter(unsigned index) const {
+  auto [item, char_rect] = ScaledCharacterRectInContainer(query_root_, index);
   DCHECK_EQ(item->Type(), NGFragmentItem::kSvgText);
   if (item->IsHiddenForPaint())
-    return FloatRect();
+    return gfx::RectF();
   if (item->HasSvgTransformForPaint())
     char_rect = item->BuildSvgTransformForPaint().MapRect(char_rect);
   char_rect.Scale(1 / item->SvgScalingFactor());
@@ -262,10 +234,7 @@ FloatRect NGSvgTextQuery::ExtentOfCharacter(unsigned index) const {
 }
 
 float NGSvgTextQuery::RotationOfCharacter(unsigned index) const {
-  const NGFragmentItem* item;
-  unsigned start_ifc_offset, end_ifc_offset;
-  StringView item_text;
-  std::tie(item, item_text, start_ifc_offset, end_ifc_offset) =
+  auto [item, item_text, start_ifc_offset, end_ifc_offset] =
       FindFragmentItemForAddressableCodeUnitIndex(query_root_, index);
   DCHECK(item);
   DCHECK_EQ(item->Type(), NGFragmentItem::kSvgText);
@@ -292,17 +261,15 @@ float NGSvgTextQuery::RotationOfCharacter(unsigned index) const {
 
 // https://svgwg.org/svg2-draft/text.html#__svg__SVGTextContentElement__getCharNumAtPosition
 int NGSvgTextQuery::CharacterNumberAtPosition(
-    const FloatPoint& position) const {
+    const gfx::PointF& position) const {
   // The specification says we should do hit-testing in logical order.
   // However, this does it in visual order in order to match to the legacy SVG
   // <text> behavior.
-  Vector<const NGFragmentItem*> item_list;
-  const NGFragmentItems* items;
-  std::tie(item_list, items) = FragmentItemsInVisualOrder(query_root_);
+  auto [item_list, items] = FragmentItemsInVisualOrder(query_root_);
 
   const NGFragmentItem* hit_item = nullptr;
   for (const auto* item : item_list) {
-    if (!item->IsHiddenForPaint() && item->Contains(position)) {
+    if (!item->IsHiddenForPaint() && item->InclusiveContains(position)) {
       hit_item = item;
       break;
     }
@@ -323,8 +290,7 @@ int NGSvgTextQuery::CharacterNumberAtPosition(
   }
 
   PhysicalOffset transformed_point =
-      hit_item->MapPointInContainer(
-          PhysicalOffset::FromFloatPointRound(position)) -
+      hit_item->MapPointInContainer(PhysicalOffset::FromPointFRound(position)) -
       hit_item->OffsetInContainerFragment();
   // NGFragmentItem::TextOffsetForPoint() is not suitable here because it
   // returns an offset for the nearest glyph edge.
@@ -333,7 +299,7 @@ int NGSvgTextQuery::CharacterNumberAtPosition(
           hit_item->ScaleInlineOffset(hit_item->IsHorizontal()
                                           ? transformed_point.left
                                           : transformed_point.top),
-          BreakGlyphs);
+          BreakGlyphsOption(true));
   return addressable_code_unit_count + offset_in_item;
 }
 

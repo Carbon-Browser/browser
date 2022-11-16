@@ -27,6 +27,7 @@
 #include "ash/shell.h"
 #include "ash/system/status_area_widget.h"
 #include "ash/test/ash_test_helper.h"
+#include "ash/test/ash_test_ui_stabilizer.h"
 #include "ash/test/test_widget_builder.h"
 #include "ash/test/test_window_builder.h"
 #include "ash/test_shell_delegate.h"
@@ -51,10 +52,12 @@
 #include "ui/aura/window_delegate.h"
 #include "ui/aura/window_tree_host.h"
 #include "ui/base/ime/init/input_method_initializer.h"
+#include "ui/compositor/compositor_switches.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
 #include "ui/display/test/display_manager_test_api.h"
 #include "ui/display/types/display_constants.h"
+#include "ui/display/util/display_util.h"
 #include "ui/events/devices/device_data_manager.h"
 #include "ui/events/devices/touchscreen_device.h"
 #include "ui/gfx/geometry/point.h"
@@ -69,26 +72,37 @@ using session_manager::SessionState;
 namespace ash {
 namespace {
 
+// AshEventGeneratorDelegate ---------------------------------------------------
+
 class AshEventGeneratorDelegate
     : public aura::test::EventGeneratorDelegateAura {
  public:
   AshEventGeneratorDelegate() = default;
+
+  AshEventGeneratorDelegate(const AshEventGeneratorDelegate&) = delete;
+  AshEventGeneratorDelegate& operator=(const AshEventGeneratorDelegate&) =
+      delete;
+
   ~AshEventGeneratorDelegate() override = default;
 
   // aura::test::EventGeneratorDelegateAura overrides:
   ui::EventTarget* GetTargetAt(const gfx::Point& point_in_screen) override {
     display::Screen* screen = display::Screen::GetScreen();
     display::Display display = screen->GetDisplayNearestPoint(point_in_screen);
+    if (current_display_id_ != display.id()) {
+      Shell::Get()->cursor_manager()->SetDisplay(display);
+      current_display_id_ = display.id();
+    }
     return Shell::GetRootWindowForDisplayId(display.id())->GetHost()->window();
   }
 
  private:
-  DISALLOW_COPY_AND_ASSIGN(AshEventGeneratorDelegate);
+  int64_t current_display_id_ = display::kInvalidDisplayId;
 };
 
 }  // namespace
 
-/////////////////////////////////////////////////////////////////////////////
+// AshTestBase -----------------------------------------------------------------
 
 AshTestBase::AshTestBase(
     std::unique_ptr<base::test::TaskEnvironment> task_environment)
@@ -108,6 +122,12 @@ void AshTestBase::SetUp() {
 }
 
 void AshTestBase::SetUp(std::unique_ptr<TestShellDelegate> delegate) {
+  // In pixel tests, override the current time before setting up system UI
+  // components so that the components relying on the time, like the time view,
+  // show as expected.
+  if (ui_stabilizer_)
+    ui_stabilizer_->OverrideTime();
+
   // At this point, the task APIs should already be provided by
   // |task_environment_|.
   CHECK(base::ThreadTaskRunnerHandle::IsSet());
@@ -121,6 +141,11 @@ void AshTestBase::SetUp(std::unique_ptr<TestShellDelegate> delegate) {
   params.local_state = local_state();
   ash_test_helper_ = std::make_unique<AshTestHelper>();
   ash_test_helper_->SetUp(std::move(params));
+
+  if (ui_stabilizer_) {
+    SimulateUserLogin(ui_stabilizer_->account_id());
+    ui_stabilizer_->StabilizeUi(GetPrimaryDisplay().size());
+  }
 }
 
 void AshTestBase::TearDown() {
@@ -137,7 +162,7 @@ void AshTestBase::TearDown() {
   event_generator_.reset();
   // Some tests set an internal display id,
   // reset it here, so other tests will continue in a clean environment.
-  display::Display::SetInternalDisplayId(display::kInvalidDisplayId);
+  display::SetInternalDisplayIds({display::kInvalidDisplayId});
 
   // Tests can add devices, so reset the lists for future tests.
   ui::DeviceDataManager::GetInstance()->ResetDeviceListsForTest();
@@ -215,15 +240,23 @@ std::unique_ptr<views::Widget> AshTestBase::CreateFramelessTestWidget() {
 std::unique_ptr<aura::Window> AshTestBase::CreateAppWindow(
     const gfx::Rect& bounds_in_screen,
     AppType app_type,
-    int shell_window_id) {
+    int shell_window_id,
+    views::WidgetDelegate* delegate) {
   TestWidgetBuilder builder;
   if (app_type != AppType::NON_APP) {
     builder.SetWindowProperty(aura::client::kAppType,
                               static_cast<int>(app_type));
   }
+
+  if (delegate) {
+    builder.SetDelegate(delegate);
+  } else {
+    builder.SetTestWidgetDelegate();
+  }
+
   // |widget| is configured to be owned by the underlying window.
   views::Widget* widget =
-      builder.SetTestWidgetDelegate()
+      builder
           .SetBounds(bounds_in_screen.IsEmpty() ? gfx::Rect(0, 0, 300, 300)
                                                 : bounds_in_screen)
           .SetContext(Shell::GetPrimaryRootWindow())
@@ -292,6 +325,24 @@ void AshTestBase::ParentWindowInPrimaryRootWindow(aura::Window* window) {
                                         gfx::Rect());
 }
 
+void AshTestBase::PrepareForPixelDiffTest() {
+  // In pixel tests, we want to take screenshots then compare them with the
+  // benchmark images. Therefore, enable pixel output in tests.
+  base::CommandLine::ForCurrentProcess()->AppendSwitch(
+      switches::kEnablePixelOutputInTests);
+
+  // Expect this function to be called before setup. Because the code that
+  // stabilizes the system UI for pixel tests should be executed during setup.
+  CHECK(!setup_called_);
+
+  CHECK(!ui_stabilizer_);
+  ui_stabilizer_ = std::make_unique<AshTestUiStabilizer>();
+
+  // In pixel tests, a fake user account is used to set the wallpaper.
+  // Therefore, do not start the session as default.
+  start_session_ = false;
+}
+
 void AshTestBase::SetUserPref(const std::string& user_email,
                               const std::string& path,
                               const base::Value& value) {
@@ -311,6 +362,10 @@ TestSystemTrayClient* AshTestBase::GetSystemTrayClient() {
 
 AppListTestHelper* AshTestBase::GetAppListTestHelper() {
   return ash_test_helper_->app_list_test_helper();
+}
+
+TestAppListClient* AshTestBase::GetTestAppListClient() {
+  return GetAppListTestHelper()->app_list_client();
 }
 
 AmbientAshTestHelper* AshTestBase::GetAmbientAshTestHelper() {
@@ -471,12 +526,24 @@ void AshTestBase::PressAndReleaseKey(ui::KeyboardCode key_code, int flags) {
   GetEventGenerator()->PressAndReleaseKey(key_code, flags);
 }
 
-void AshTestBase::SimulateMouseClickAt(
-    ui::test::EventGenerator* event_generator,
-    const views::View* target_view) {
-  DCHECK(target_view);
-  event_generator->MoveMouseTo(target_view->GetBoundsInScreen().CenterPoint());
+void AshTestBase::LeftClickOn(const views::View* view) {
+  DCHECK(view);
+  auto* event_generator = GetEventGenerator();
+  event_generator->MoveMouseTo(view->GetBoundsInScreen().CenterPoint());
   event_generator->ClickLeftButton();
+}
+
+void AshTestBase::RightClickOn(const views::View* view) {
+  DCHECK(view);
+  auto* event_generator = GetEventGenerator();
+  event_generator->MoveMouseTo(view->GetBoundsInScreen().CenterPoint());
+  event_generator->ClickRightButton();
+}
+
+void AshTestBase::GestureTapOn(const views::View* view) {
+  DCHECK(view);
+  auto* event_generator = GetEventGenerator();
+  event_generator->GestureTapAt(view->GetBoundsInScreen().CenterPoint());
 }
 
 bool AshTestBase::EnterOverview(OverviewEnterExitType type) {

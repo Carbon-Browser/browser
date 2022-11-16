@@ -13,8 +13,9 @@
 #include "base/scoped_multi_source_observation.h"
 #include "chrome/browser/ui/app_list/arc/arc_app_list_prefs.h"
 #include "chrome/browser/ui/ash/assistant/device_actions_delegate.h"
-#include "chromeos/services/assistant/public/cpp/assistant_service.h"
-#include "chromeos/services/assistant/public/cpp/device_actions.h"
+#include "chromeos/ash/services/assistant/public/cpp/assistant_service.h"
+#include "chromeos/ash/services/assistant/public/cpp/device_actions.h"
+#include "chromeos/services/bluetooth_config/public/mojom/cros_bluetooth_config.mojom.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/remote_set.h"
@@ -24,6 +25,10 @@ class DeviceActions : public ash::AndroidIntentHelper,
                       public ArcAppListPrefs::Observer {
  public:
   explicit DeviceActions(std::unique_ptr<DeviceActionsDelegate> delegate);
+
+  DeviceActions(const DeviceActions&) = delete;
+  DeviceActions& operator=(const DeviceActions&) = delete;
+
   ~DeviceActions() override;
 
   // chromeos::assistant::DeviceActions overrides:
@@ -61,7 +66,9 @@ class DeviceActions : public ash::AndroidIntentHelper,
       scoped_prefs_observations_{this};
   base::ObserverList<chromeos::assistant::AppListEventSubscriber>
       app_list_subscribers_;
-  DISALLOW_COPY_AND_ASSIGN(DeviceActions);
+
+  mojo::Remote<chromeos::bluetooth_config::mojom::CrosBluetoothConfig>
+      remote_cros_bluetooth_config_;
 };
 
 #endif  // CHROME_BROWSER_UI_ASH_ASSISTANT_DEVICE_ACTIONS_H_

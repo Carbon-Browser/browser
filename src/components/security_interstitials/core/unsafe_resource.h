@@ -9,15 +9,11 @@
 
 #include "base/callback.h"
 #include "base/memory/ref_counted.h"
-#include "base/sequenced_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/safe_browsing/core/browser/db/hit_report.h"
 #include "components/safe_browsing/core/common/safebrowsing_constants.h"
 #include "services/network/public/mojom/fetch_api.mojom.h"
 #include "url/gurl.h"
-
-namespace content {
-class WebContents;
-}  // namespace content
 
 namespace web {
 class WebState;
@@ -81,12 +77,10 @@ struct UnsafeResource {
   network::mojom::RequestDestination request_destination;
   UrlCheckCallback callback;  // This is called back on |callback_sequence|.
   scoped_refptr<base::SequencedTaskRunner> callback_sequence;
-  // TODO(crbug.com/1073315): |web_state_getter| is only used on iOS, and
-  // |web_contents_getter|, |render_process_id|, |render_frame_id|, and
-  // |frame_tree_node_id| are used on all other platforms.  This struct should
-  // be refactored to use only the common functionality can be shared across
-  // platforms.
-  base::RepeatingCallback<content::WebContents*(void)> web_contents_getter;
+  // TODO(crbug.com/1073315): |weak_web_state| is only used on iOS, and
+  // |render_process_id|, |render_frame_id|, and |frame_tree_node_id| are used
+  // on all other platforms. This struct should be refactored to use only the
+  // common functionality can be shared across platforms.
   // These content/ specific ids indicate what triggered safe browsing. In the
   // case of a frame navigating, we should have its FrameTreeNode id. In the
   // case of something triggered by a document (e.g. subresource loading), we
@@ -95,7 +89,7 @@ struct UnsafeResource {
   RenderFrameId render_frame_id = kNoRenderFrameId;
   FrameTreeNodeId frame_tree_node_id = kNoFrameTreeNodeId;
 
-  base::RepeatingCallback<web::WebState*(void)> web_state_getter;
+  base::WeakPtr<web::WebState> weak_web_state;
 
   safe_browsing::ThreatSource threat_source =
       safe_browsing::ThreatSource::UNKNOWN;

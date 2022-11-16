@@ -63,8 +63,8 @@ class CORE_EXPORT HTMLPortalElement : public HTMLFrameOwnerElement {
 
   const PortalToken& GetToken() const;
 
-  mojom::blink::FrameOwnerElementType OwnerType() const override {
-    return mojom::blink::FrameOwnerElementType::kPortal;
+  FrameOwnerElementType OwnerType() const override {
+    return FrameOwnerElementType::kPortal;
   }
 
   // Consumes the portal interface. When a Portal is activated, or if the
@@ -97,10 +97,6 @@ class CORE_EXPORT HTMLPortalElement : public HTMLFrameOwnerElement {
   // disable navigating the portal and insertion (and will display a warning in
   // the console).
   bool CheckWithinFrameLimitOrWarn() const;
-
-  // Checks that the number of frames and portals on the page are within the
-  // limit.
-  bool IsCurrentlyWithinFrameLimit() const;
 
   enum class GuestContentsEligibility {
     // Can have a guest contents.
@@ -144,6 +140,11 @@ class CORE_EXPORT HTMLPortalElement : public HTMLFrameOwnerElement {
   }
   void AttachLayoutTree(AttachContext& context) override;
   network::mojom::ReferrerPolicy ReferrerPolicyAttribute() override;
+
+  bool IsPortalCreationOrAdoptionAllowed(const ContainerNode* node);
+
+  // Defers the portal creation if the current document is being prerendered.
+  void CreatePortalAndNavigate(const ContainerNode* node);
 
   Member<PortalContents> portal_;
 

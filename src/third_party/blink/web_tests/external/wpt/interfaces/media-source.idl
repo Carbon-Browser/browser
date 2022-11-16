@@ -14,7 +14,7 @@ enum EndOfStreamError {
     "decode"
 };
 
-[Exposed=Window]
+[Exposed=(Window,DedicatedWorker)]
 interface MediaSource : EventTarget {
     constructor();
     readonly        attribute SourceBufferList    sourceBuffers;
@@ -24,20 +24,25 @@ interface MediaSource : EventTarget {
                     attribute EventHandler        onsourceopen;
                     attribute EventHandler        onsourceended;
                     attribute EventHandler        onsourceclose;
-    SourceBuffer   addSourceBuffer (DOMString type);
-    undefined           removeSourceBuffer (SourceBuffer sourceBuffer);
-    undefined           endOfStream (optional EndOfStreamError error);
-    undefined           setLiveSeekableRange (double start, double end);
-    undefined           clearLiveSeekableRange ();
-    static boolean isTypeSupported (DOMString type);
+    static readonly attribute boolean canConstructInDedicatedWorker;
+    SourceBuffer      addSourceBuffer (DOMString type);
+    undefined         removeSourceBuffer (SourceBuffer sourceBuffer);
+    undefined         endOfStream (optional EndOfStreamError error);
+    undefined         setLiveSeekableRange (double start, double end);
+    undefined         clearLiveSeekableRange ();
+    MediaSourceHandle getHandle ();
+    static boolean    isTypeSupported (DOMString type);
 };
+
+[Exposed=(Window,DedicatedWorker)]
+interface MediaSourceHandle {};
 
 enum AppendMode {
     "segments",
     "sequence"
 };
 
-[Exposed=Window]
+[Exposed=(Window,DedicatedWorker)]
 interface SourceBuffer : EventTarget {
                     attribute AppendMode          mode;
     readonly        attribute boolean             updating;
@@ -55,10 +60,11 @@ interface SourceBuffer : EventTarget {
                     attribute EventHandler        onabort;
     undefined appendBuffer (BufferSource data);
     undefined abort ();
+    undefined changeType (DOMString type);
     undefined remove (double start, unrestricted double end);
 };
 
-[Exposed=Window]
+[Exposed=(Window,DedicatedWorker)]
 interface SourceBufferList : EventTarget {
     readonly        attribute unsigned long length;
                     attribute EventHandler  onaddsourcebuffer;
@@ -66,14 +72,17 @@ interface SourceBufferList : EventTarget {
     getter SourceBuffer (unsigned long index);
 };
 
+[Exposed=(Window,DedicatedWorker)]
 partial interface AudioTrack {
     readonly        attribute SourceBuffer? sourceBuffer;
 };
 
+[Exposed=(Window,DedicatedWorker)]
 partial interface VideoTrack {
     readonly        attribute SourceBuffer? sourceBuffer;
 };
 
+[Exposed=(Window,DedicatedWorker)]
 partial interface TextTrack {
     readonly        attribute SourceBuffer? sourceBuffer;
 };

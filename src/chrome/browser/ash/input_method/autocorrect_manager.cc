@@ -4,18 +4,22 @@
 
 #include "chrome/browser/ash/input_method/autocorrect_manager.h"
 
+#include "ash/constants/ash_features.h"
+#include "base/feature_list.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/numerics/safe_conversions.h"
 #include "base/strings/strcat.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/input_method/assistive_window_properties.h"
+#include "chrome/browser/ash/input_method/ime_rules_config.h"
 #include "chrome/browser/ash/input_method/suggestion_enums.h"
 #include "chrome/browser/ui/ash/keyboard/chrome_keyboard_controller_client.h"
 #include "chrome/grit/generated_resources.h"
-#include "ui/base/ime/chromeos/extension_ime_util.h"
-#include "ui/base/ime/chromeos/ime_bridge.h"
-#include "ui/base/ime/chromeos/ime_input_context_handler_interface.h"
-#include "ui/base/ime/chromeos/input_method_manager.h"
+#include "ui/base/ime/ash/extension_ime_util.h"
+#include "ui/base/ime/ash/ime_bridge.h"
+#include "ui/base/ime/ash/ime_input_context_handler_interface.h"
+#include "ui/base/ime/ash/input_method_manager.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/events/keycodes/dom/dom_code.h"
 
@@ -50,7 +54,8 @@ void RecordAssistiveSuccess(AssistiveType type) {
   base::UmaHistogramEnumeration("InputMethod.Assistive.Success", type);
 }
 
-constexpr int kKeysUntilAutocorrectWindowHides = 4;
+constexpr int kKeysUntilUnderlineHides = 4;
+constexpr int kDistanceUntilUnderlineHides = 3;
 
 }  // namespace
 
@@ -74,12 +79,13 @@ void AutocorrectManager::HandleAutocorrect(const gfx::Range autocorrect_range,
                                                       current_text);
 
   original_text_ = original_text;
-  key_presses_until_underline_hide_ = kKeysUntilAutocorrectWindowHides;
+  key_presses_until_underline_hide_ = kKeysUntilUnderlineHides;
   if (!input_context->GetAutocorrectRange().is_empty()) {
-    ClearUnderline();
+    input_context->SetAutocorrectRange(gfx::Range());  // clear underline
+    LogAssistiveAutocorrectAction(AutocorrectActions::kUserAcceptedAutocorrect);
   }
 
-  input_context->SetAutocorrectRange(autocorrect_range);
+  input_context->SetAutocorrectRange(autocorrect_range);  // show underline
   LogAssistiveAutocorrectAction(AutocorrectActions::kUnderlined);
   RecordAssistiveCoverage(AssistiveType::kAutocorrectUnderlined);
   autocorrect_time_ = base::TimeTicks::Now();
@@ -132,22 +138,21 @@ bool AutocorrectManager::OnKeyEvent(const ui::KeyEvent& event) {
   if (key_presses_until_underline_hide_ >= 0) {
     --key_presses_until_underline_hide_;
   }
+
   if (key_presses_until_underline_hide_ == 0) {
-    ClearUnderline();
+    ui::IMEInputContextHandlerInterface* input_context =
+        ui::IMEBridge::Get()->GetInputContextHandler();
+
+    if (input_context && !input_context->GetAutocorrectRange().is_empty()) {
+      input_context->SetAutocorrectRange(gfx::Range());  // clear underline
+      LogAssistiveAutocorrectAction(
+          AutocorrectActions::kUserAcceptedAutocorrect);
+    } else {
+      LogAssistiveAutocorrectAction(
+          AutocorrectActions::kUserActionClearedUnderline);
+    }
   }
   return false;
-}
-
-void AutocorrectManager::ClearUnderline() {
-  ui::IMEInputContextHandlerInterface* input_context =
-      ui::IMEBridge::Get()->GetInputContextHandler();
-  if (input_context && !input_context->GetAutocorrectRange().is_empty()) {
-    input_context->SetAutocorrectRange(gfx::Range());
-    LogAssistiveAutocorrectAction(AutocorrectActions::kUserAcceptedAutocorrect);
-  } else {
-    LogAssistiveAutocorrectAction(
-        AutocorrectActions::kUserActionClearedUnderline);
-  }
 }
 
 void AutocorrectManager::OnSurroundingTextChanged(const std::u16string& text,
@@ -157,12 +162,19 @@ void AutocorrectManager::OnSurroundingTextChanged(const std::u16string& text,
   ui::IMEInputContextHandlerInterface* input_context =
       ui::IMEBridge::Get()->GetInputContextHandler();
   const gfx::Range range = input_context->GetAutocorrectRange();
+  const uint32_t cursor_pos_unsigned = base::checked_cast<uint32_t>(cursor_pos);
+  if (!range.is_empty() &&
+      (cursor_pos_unsigned + kDistanceUntilUnderlineHides < range.start() ||
+       cursor_pos_unsigned - kDistanceUntilUnderlineHides > range.end())) {
+    input_context->SetAutocorrectRange(gfx::Range());  // clear underline
+    LogAssistiveAutocorrectAction(AutocorrectActions::kUserAcceptedAutocorrect);
+  }
   // Explaination of checks:
   // 1) Check there is an autocorrect range
   // 2) Check cursor is in range
   // 3) Ensure there is no selection (selection UI clashes with autocorrect UI).
-  if (!range.is_empty() && cursor_pos >= range.start() &&
-      cursor_pos <= range.end() && cursor_pos == anchor_pos) {
+  if (!range.is_empty() && cursor_pos_unsigned >= range.start() &&
+      cursor_pos_unsigned <= range.end() && cursor_pos == anchor_pos) {
     if (!window_visible_) {
       const std::u16string autocorrected_text =
           text.substr(range.start(), range.length());
@@ -179,7 +191,7 @@ void AutocorrectManager::OnSurroundingTextChanged(const std::u16string& text,
       LogAssistiveAutocorrectAction(AutocorrectActions::kWindowShown);
       RecordAssistiveCoverage(AssistiveType::kAutocorrectWindowShown);
     }
-    key_presses_until_underline_hide_ = kKeysUntilAutocorrectWindowHides;
+    key_presses_until_underline_hide_ = kKeysUntilUnderlineHides;
   } else if (window_visible_) {
     AssistiveWindowProperties properties;
     properties.type = ui::ime::AssistiveWindowType::kUndoWindow;
@@ -192,6 +204,12 @@ void AutocorrectManager::OnSurroundingTextChanged(const std::u16string& text,
 }
 
 void AutocorrectManager::OnFocus(int context_id) {
+  if (base::FeatureList::IsEnabled(ash::features::kImeRuleConfig)) {
+    GetTextFieldContextualInfo(
+        base::BindOnce(&AutocorrectManager::OnTextFieldContextualInfoChanged,
+                       base::Unretained(this)));
+  }
+
   if (key_presses_until_underline_hide_ > 0) {
     // TODO(b/149796494): move this to onblur()
     LogAssistiveAutocorrectAction(
@@ -214,10 +232,11 @@ void AutocorrectManager::UndoAutocorrect() {
 
   ui::IMEInputContextHandlerInterface* input_context =
       ui::IMEBridge::Get()->GetInputContextHandler();
-  const gfx::Range range = input_context->GetAutocorrectRange();
+  const gfx::Range autocorrect_range = input_context->GetAutocorrectRange();
 
   if (input_context->HasCompositionText()) {
-    input_context->SetComposingRange(range.start(), range.end(), {});
+    input_context->SetComposingRange(autocorrect_range.start(),
+                                     autocorrect_range.end(), {});
     input_context->CommitText(
         original_text_,
         ui::TextInputClient::InsertTextCursorBehavior::kMoveCursorAfterText);
@@ -229,29 +248,17 @@ void AutocorrectManager::UndoAutocorrect() {
     const ui::SurroundingTextInfo surrounding_text =
         input_context->GetSurroundingTextInfo();
 
-    // TODO(crbug/1111135): Can we get away with deleting less text?
+    // Delete the autocorrected text.
     // This will not quite work properly if there is text actually highlighted,
     // and cursor is at end of the highlight block, but no easy way around it.
     // First delete everything before cursor.
     input_context->DeleteSurroundingText(
-        -static_cast<int>(surrounding_text.selection_range.start()),
-        surrounding_text.surrounding_text.length());
+        autocorrect_range.start() - surrounding_text.selection_range.start(),
+        autocorrect_range.length());
 
-    // Submit the text after the cursor in composition mode to leave the cursor
-    // at the start
-    ui::CompositionText composition_text;
-    composition_text.text =
-        surrounding_text.surrounding_text.substr(range.end());
-    input_context->UpdateCompositionText(composition_text,
-                                         /*cursor_pos=*/0, /*visible=*/true);
-    input_context->ConfirmCompositionText(/*reset_engine=*/false,
-                                          /*keep_selection=*/true);
-
-    // Insert the text before the cursor - now there should be the correct text
-    // and the cursor position will not have changed.
+    // Replace with the original text.
     input_context->CommitText(
-        surrounding_text.surrounding_text.substr(0, range.start()) +
-            original_text_,
+        original_text_,
         ui::TextInputClient::InsertTextCursorBehavior::kMoveCursorAfterText);
   }
 
@@ -259,6 +266,16 @@ void AutocorrectManager::UndoAutocorrect() {
   RecordAssistiveCoverage(AssistiveType::kAutocorrectReverted);
   RecordAssistiveSuccess(AssistiveType::kAutocorrectReverted);
   LogAssistiveAutocorrectDelay(base::TimeTicks::Now() - autocorrect_time_);
+}
+
+void AutocorrectManager::OnTextFieldContextualInfoChanged(
+    const TextFieldContextualInfo& info) {
+  disabled_by_rule_ =
+      ImeRulesConfig::GetInstance()->IsAutoCorrectDisabled(info);
+}
+
+bool AutocorrectManager::DisabledByRule() {
+  return disabled_by_rule_;
 }
 
 }  // namespace input_method

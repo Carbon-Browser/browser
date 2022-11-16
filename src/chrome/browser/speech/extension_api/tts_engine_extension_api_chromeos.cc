@@ -65,6 +65,10 @@ void TtsExtensionEngineChromeOS::Speak(content::TtsUtterance* utterance,
     return;
   }
 
+  // Reset any previously bound connections since we want to initialize with new
+  // audio params.
+  playback_tts_stream_.reset();
+
   TtsEngineExtensionObserverChromeOS::GetInstance(profile)
       ->BindPlaybackTtsStream(
           playback_tts_stream_.BindNewPipeAndPassReceiver(),
@@ -222,12 +226,12 @@ void TtsExtensionEngineChromeOS::Play(std::unique_ptr<base::ListValue> args,
 
   // Add audio stream options.
   DCHECK(audio_parameters_);
-  auto audio_stream_options = std::make_unique<base::DictionaryValue>();
-  audio_stream_options->SetInteger(tts_extension_api_constants::kSampleRateKey,
-                                   audio_parameters_->sample_rate);
-  audio_stream_options->SetInteger(tts_extension_api_constants::kBufferSizeKey,
-                                   audio_parameters_->buffer_size);
-  args->Append(std::move(audio_stream_options));
+  base::Value::Dict audio_stream_options;
+  audio_stream_options.Set(tts_extension_api_constants::kSampleRateKey,
+                           audio_parameters_->sample_rate);
+  audio_stream_options.Set(tts_extension_api_constants::kBufferSizeKey,
+                           audio_parameters_->buffer_size);
+  args->GetList().Append(std::move(audio_stream_options));
 
   // Disconnect any previous receivers.
   tts_event_observer_receiver_set_.Clear();
@@ -250,5 +254,5 @@ void TtsExtensionEngineChromeOS::Play(std::unique_ptr<base::ListValue> args,
       engine_id, std::make_unique<extensions::Event>(
                      extensions::events::TTS_ENGINE_ON_SPEAK_WITH_AUDIO_STREAM,
                      tts_engine_events::kOnSpeakWithAudioStream,
-                     std::move(*args).TakeList(), profile));
+                     std::move(args->GetList()), profile));
 }

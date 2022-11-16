@@ -55,7 +55,7 @@ class CC_EXPORT LayerTreeSettings {
   base::TimeDelta scrollbar_fade_duration;
   base::TimeDelta scrollbar_thinning_duration;
   bool scrollbar_flash_after_any_scroll_update = false;
-  SkColor solid_color_scrollbar_color = SK_ColorWHITE;
+  SkColor4f solid_color_scrollbar_color = SkColors::kWhite;
   base::TimeDelta scroll_animation_duration_for_testing;
   bool timeout_and_draw_when_animation_checkerboards = true;
   bool layers_always_allowed_lcd_text = false;
@@ -114,7 +114,11 @@ class CC_EXPORT LayerTreeSettings {
 
   // Indicates the case when a sub-frame gets its own LayerTree because it's
   // rendered in a different process from its ancestor frames.
-  bool is_layer_tree_for_subframe = false;
+  bool is_for_embedded_frame = false;
+
+  // Indicates when the LayerTree is for a portal element, GuestView, or top
+  // level frame. In all these cases we may have a page scale.
+  bool is_for_scalable_page = true;
 
   // Determines whether we disallow non-exact matches when finding resources
   // in ResourcePool. Only used for layout or pixel tests, as non-deterministic
@@ -126,9 +130,6 @@ class CC_EXPORT LayerTreeSettings {
   // completed the current BeginFrame before triggering their own BeginFrame
   // deadlines.
   bool wait_for_all_pipeline_stages_before_draw = false;
-
-  // Determines whether the zoom needs to be applied to the device scale factor.
-  bool use_zoom_for_dsf = false;
 
   // Determines whether mouse interactions on composited scrollbars are handled
   // on the compositor thread.
@@ -198,6 +199,19 @@ class CC_EXPORT LayerTreeSettings {
   // LayerTreeHostSingleThreadClient::FrameSinksToThrottleUpdated() will be
   // called with candidates.
   bool enable_compositing_based_throttling = false;
+
+  // Whether it is a LayerTree for ui.
+  bool is_layer_tree_for_ui = false;
+
+  // Whether tile resources are dropped for hidden layers. In terms of code,
+  // this uses PictureLayerImpl::HasValidTilePriorities(), which may return true
+  // even if the layer is not drawn. For example, if the layer is occluded it is
+  // still considered drawn and will not be impacted by this feature.
+  bool release_tile_resources_for_hidden_layers = false;
+
+  // Whether Fluent scrollbar is enabled. Please check https://crbug.com/1292117
+  // to find the link to the Fluent Scrollbar spec and related CLs.
+  bool enable_fluent_scrollbar = false;
 };
 
 class CC_EXPORT LayerListSettings : public LayerTreeSettings {

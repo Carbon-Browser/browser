@@ -9,8 +9,8 @@
 #include "cc/paint/element_id.h"
 #include "ui/gfx/geometry/point3_f.h"
 #include "ui/gfx/geometry/point_f.h"
-#include "ui/gfx/geometry/scroll_offset.h"
-#include "ui/gfx/transform.h"
+#include "ui/gfx/geometry/transform.h"
+#include "ui/gfx/geometry/vector2d_f.h"
 
 namespace base {
 namespace trace_event {
@@ -90,6 +90,8 @@ struct CC_EXPORT TransformNode {
 
   bool scrolls : 1;
 
+  bool is_fixed_to_viewport : 1;
+
   bool should_be_snapped : 1;
 
   // Used by the compositor to determine which layers need to be repositioned by
@@ -110,13 +112,14 @@ struct CC_EXPORT TransformNode {
   // visibility, not this transform one.
   bool delegates_to_parent_for_backface : 1;
 
-  // Set to true, if the compositing reason is will-change:transform.
+  // Set to true, if the compositing reason is will-change:transform, scale,
+  // rotate, or translate (for the CSS property that created this node).
   bool will_change_transform : 1;
 
   // Set to true, if the node or it's parent |will_change_transform| is true.
   bool node_or_ancestors_will_change_transform : 1;
 
-  gfx::ScrollOffset scroll_offset;
+  gfx::PointF scroll_offset;
 
   // This value stores the snapped amount whenever we snap. If the snap is due
   // to a scroll, we need it to calculate fixed-pos elements adjustment, even

@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include <ostream>
 #include <string>
 
 #include "base/check_op.h"
@@ -66,6 +67,9 @@ class ExceptionSwallower::ExceptionSwallowerThread
     Start();
   }
 
+  ExceptionSwallowerThread(const ExceptionSwallowerThread&) = delete;
+  ExceptionSwallowerThread& operator=(const ExceptionSwallowerThread&) = delete;
+
   ~ExceptionSwallowerThread() override {}
 
   void Stop() { exception_handler_server_.Stop(); }
@@ -107,8 +111,6 @@ class ExceptionSwallower::ExceptionSwallowerThread
 
   ExceptionHandlerServer exception_handler_server_;
   pid_t pid_;
-
-  DISALLOW_COPY_AND_ASSIGN(ExceptionSwallowerThread);
 };
 
 ExceptionSwallower::ExceptionSwallower() : exception_swallower_thread_() {

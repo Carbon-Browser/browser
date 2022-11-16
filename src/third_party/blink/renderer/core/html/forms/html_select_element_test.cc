@@ -17,7 +17,7 @@
 #include "third_party/blink/renderer/core/html/forms/select_type.h"
 #include "third_party/blink/renderer/core/layout/layout_theme.h"
 #include "third_party/blink/renderer/core/testing/page_test_base.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 
 namespace blink {
 
@@ -47,7 +47,7 @@ class HTMLSelectElementTest : public PageTestBase {
 
   bool FirstSelectIsConnectedAfterSelectMultiple(const Vector<int>& indices) {
     auto* select = To<HTMLSelectElement>(GetDocument().body()->firstChild());
-    select->focus();
+    select->Focus();
     select->SelectMultipleOptionsByPopup(indices);
     return select->isConnected();
   }
@@ -180,8 +180,8 @@ TEST_F(HTMLSelectElementTest, VisibleBoundsInVisualViewport) {
       "-webkit-appearance:none;'><option>o1</select>");
   auto* select = To<HTMLSelectElement>(GetDocument().body()->firstChild());
   ASSERT_NE(select, nullptr);
-  IntRect bounds = select->VisibleBoundsInVisualViewport();
-  EXPECT_EQ(24, bounds.Height());
+  gfx::Rect bounds = select->VisibleBoundsInVisualViewport();
+  EXPECT_EQ(24, bounds.height());
 }
 
 TEST_F(HTMLSelectElementTest, PopupIsVisible) {

@@ -5,7 +5,6 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_MEDIA_ROUTER_CAST_DIALOG_METRICS_H_
 #define CHROME_BROWSER_UI_VIEWS_MEDIA_ROUTER_CAST_DIALOG_METRICS_H_
 
-#include "base/macros.h"
 #include "base/time/time.h"
 #include "chrome/browser/ui/media_router/media_cast_mode.h"
 #include "chrome/browser/ui/media_router/ui_media_sink.h"
@@ -28,8 +27,12 @@ class CastDialogMetrics {
   // this value as the baseline for how long the dialog took to paint, load
   // sinks, etc.
   CastDialogMetrics(const base::Time& initialization_time,
-                    MediaRouterDialogOpenOrigin activation_location,
+                    MediaRouterDialogActivationLocation activation_location,
                     Profile* profile);
+
+  CastDialogMetrics(const CastDialogMetrics&) = delete;
+  CastDialogMetrics& operator=(const CastDialogMetrics&) = delete;
+
   virtual ~CastDialogMetrics();
 
   // Records the time it took to load sinks when called for the first time. This
@@ -76,7 +79,7 @@ class CastDialogMetrics {
   // The time when a non-empty list of sinks was loaded.
   base::Time sinks_load_time_;
 
-  MediaRouterDialogOpenOrigin const activation_location_;
+  MediaRouterDialogActivationLocation const activation_location_;
 
   bool const is_icon_pinned_;
 
@@ -85,8 +88,6 @@ class CastDialogMetrics {
   bool first_action_recorded_ = false;
 
   bool activation_location_and_cast_mode_recorded_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(CastDialogMetrics);
 };
 
 }  // namespace media_router

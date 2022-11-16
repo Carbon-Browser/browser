@@ -7,7 +7,7 @@
 #include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/location.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/devtools/devtools_window.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
@@ -287,6 +287,12 @@ void UnloadController::TabAttachedImpl(content::WebContents* contents) {
 void UnloadController::TabDetachedImpl(content::WebContents* contents) {
   if (is_attempting_to_close_browser_)
     ClearUnloadState(contents, false);
+  // TODO(crbug.com/1171997): This CHECK is only in place to diagnose a UAF bug.
+  // This is both used to confirm that a WebContents* isn't being removed from
+  // this set, and also if that hypothesis is correct turns a UAF into a
+  // non-security crash.
+  CHECK(tabs_needing_before_unload_fired_.find(contents) ==
+        tabs_needing_before_unload_fired_.end());
   web_contents_collection_.StopObserving(contents);
 }
 
@@ -321,7 +327,7 @@ void UnloadController::ProcessPendingTabs(bool skip_beforeunload) {
         *(tabs_needing_before_unload_fired_.begin());
     // Null check render_view_host here as this gets called on a PostTask and
     // the tab's render_view_host may have been nulled out.
-    if (web_contents->GetMainFrame()->GetRenderViewHost()) {
+    if (web_contents->GetPrimaryMainFrame()->GetRenderViewHost()) {
       // If there's a devtools window attached to |web_contents|,
       // we would like devtools to call its own beforeunload handlers first,
       // and then call beforeunload handlers for |web_contents|.
@@ -353,7 +359,7 @@ void UnloadController::ProcessPendingTabs(bool skip_beforeunload) {
     content::WebContents* web_contents = *(tabs_needing_unload_fired_.begin());
     // Null check render_view_host here as this gets called on a PostTask and
     // the tab's render_view_host may have been nulled out.
-    if (web_contents->GetMainFrame()->GetRenderViewHost()) {
+    if (web_contents->GetPrimaryMainFrame()->GetRenderViewHost()) {
       web_contents->ClosePage();
     } else {
       ClearUnloadState(web_contents, true);

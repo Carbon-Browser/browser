@@ -50,7 +50,7 @@ HidHapticGamepad::HapticReportData kHapticReportData[] = {
     // Stadia controller
     {0x18d1, 0x9400, 0x05, 5, 1, 3, 2 * kBitsPerByte, 0, 0xffff},
 };
-size_t kHapticReportDataLength = base::size(kHapticReportData);
+size_t kHapticReportDataLength = std::size(kHapticReportData);
 
 HidHapticGamepad::HidHapticGamepad(const HapticReportData& data,
                                    std::unique_ptr<HidWriter> writer)
@@ -105,8 +105,7 @@ void HidHapticGamepad::DoShutdown() {
   writer_.reset();
 }
 
-void HidHapticGamepad::SetVibration(double strong_magnitude,
-                                    double weak_magnitude) {
+void HidHapticGamepad::SetVibration(mojom::GamepadEffectParametersPtr params) {
   DCHECK(writer_);
   std::vector<uint8_t> control_report(report_length_bytes_);
   control_report[0] = report_id_;
@@ -114,7 +113,7 @@ void HidHapticGamepad::SetVibration(double strong_magnitude,
     // Single channel vibration. Combine both channels into a single magnitude.
     std::vector<uint8_t> vibration_bytes;
     double vibration_magnitude =
-        std::min(strong_magnitude + weak_magnitude, 1.0);
+        std::min(params->strong_magnitude + params->weak_magnitude, 1.0);
     MagnitudeToBytes(vibration_magnitude, report_size_bits_, logical_min_,
                      logical_max_, &vibration_bytes);
     // Vibration magnitude must not overwrite the report ID.
@@ -128,9 +127,9 @@ void HidHapticGamepad::SetVibration(double strong_magnitude,
     // Dual channel vibration.
     std::vector<uint8_t> left_bytes;
     std::vector<uint8_t> right_bytes;
-    MagnitudeToBytes(strong_magnitude, report_size_bits_, logical_min_,
+    MagnitudeToBytes(params->strong_magnitude, report_size_bits_, logical_min_,
                      logical_max_, &left_bytes);
-    MagnitudeToBytes(weak_magnitude, report_size_bits_, logical_min_,
+    MagnitudeToBytes(params->weak_magnitude, report_size_bits_, logical_min_,
                      logical_max_, &right_bytes);
     // Vibration magnitude must not overwrite the report ID.
     DCHECK(report_id_ == 0x00 || strong_offset_bytes_ > 0);

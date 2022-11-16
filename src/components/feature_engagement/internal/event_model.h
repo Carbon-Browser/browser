@@ -9,7 +9,6 @@
 #include <string>
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/time/time.h"
 
 namespace feature_engagement {
@@ -21,6 +20,9 @@ class EventModel {
   // Callback for when model initialization has finished. The |success|
   // argument denotes whether the model was successfully initialized.
   using OnModelInitializationFinished = base::OnceCallback<void(bool success)>;
+
+  EventModel(const EventModel&) = delete;
+  EventModel& operator=(const EventModel&) = delete;
 
   virtual ~EventModel() = default;
 
@@ -79,9 +81,6 @@ class EventModel {
 
  protected:
   EventModel() = default;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(EventModel);
 };
 
 }  // namespace feature_engagement

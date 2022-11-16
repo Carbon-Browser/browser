@@ -104,4 +104,32 @@ export function fakeShortcutProviderTest() {
           assertEquals(AcceleratorConfigResult.kSuccess, result);
         });
   });
+
+  test('RemoveAcceleratorFake', () => {
+    // TODO(jimmyxgong): Remove this test once real data is ready.
+    const accel = /** @type {!AcceleratorKeys} */ ({
+      modifiers: Modifier.SHIFT,
+      key: 79,
+      key_display: 'o',
+    });
+
+    return provider
+        .removeAccelerator(AcceleratorSource.kAsh, /**action=*/ 0, accel)
+        .then((result) => {
+          assertEquals(AcceleratorConfigResult.kSuccess, result);
+        });
+  });
+
+  test('RestoreAllDefaultsFake', () => {
+    return provider.restoreAllDefaults().then((result) => {
+      assertEquals(AcceleratorConfigResult.kSuccess, result);
+    });
+  });
+
+  test('RestoreActionDefaultsFake', () => {
+    return provider.restoreActionDefaults(AcceleratorSource.kAsh, 0)
+        .then((result) => {
+          assertEquals(AcceleratorConfigResult.kSuccess, result);
+        });
+  });
 }

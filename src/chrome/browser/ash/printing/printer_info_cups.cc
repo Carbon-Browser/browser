@@ -11,10 +11,9 @@
 #include "base/bind.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
-#include "base/task/post_task.h"
+#include "base/task/task_runner_util.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
-#include "base/task_runner_util.h"
 #include "base/version.h"
 #include "printing/backend/cups_jobs.h"
 #include "printing/printer_status.h"
@@ -128,7 +127,7 @@ QueryResult QueryPrinterImpl(const std::string& host,
 
 // Handles the request for |info|.  Parses make and model information before
 // calling |callback|.
-void OnPrinterQueried(chromeos::PrinterInfoCallback callback,
+void OnPrinterQueried(ash::PrinterInfoCallback callback,
                       const QueryResult& query_result) {
   const ::printing::PrinterQueryResult& result = query_result.result;
   const ::printing::PrinterInfo& printer_info = query_result.printer_info;
@@ -154,7 +153,7 @@ void OnPrinterQueried(chromeos::PrinterInfoCallback callback,
 
 }  // namespace
 
-namespace chromeos {
+namespace ash {
 
 void QueryIppPrinter(const std::string& host,
                      const int port,
@@ -172,4 +171,4 @@ void QueryIppPrinter(const std::string& host,
       base::BindOnce(&OnPrinterQueried, std::move(callback)));
 }
 
-}  // namespace chromeos
+}  // namespace ash

@@ -33,13 +33,12 @@ base::TimeDelta CalculateEventTimeout(double event_time,
   DCHECK_NE(media_element.playbackRate(), 0);
 
   auto const timeout =
-      base::TimeDelta::FromSecondsD((event_time - media_element.currentTime()) /
-                                    media_element.playbackRate());
+      base::Seconds((event_time - media_element.currentTime()) /
+                    media_element.playbackRate());
 
   // Only allow timeouts of multiples of 1ms to prevent "polling-by-timer"
   // and excessive calls to `TimeMarchesOn`.
-  constexpr base::TimeDelta kMinTimeoutInterval =
-      base::TimeDelta::FromMilliseconds(1);
+  constexpr base::TimeDelta kMinTimeoutInterval = base::Milliseconds(1);
   return std::max(timeout.CeilToMultiple(kMinTimeoutInterval),
                   kMinTimeoutInterval);
 }
@@ -61,7 +60,7 @@ CueTimeline::CueTimeline(HTMLMediaElement& media_element)
       update_requested_while_ignoring_(false) {}
 
 void CueTimeline::AddCues(TextTrack* track, const TextTrackCueList* cues) {
-  DCHECK_NE(track->mode(), TextTrack::DisabledKeyword());
+  DCHECK_NE(track->mode(), TextTrackMode::kDisabled);
   for (wtf_size_t i = 0; i < cues->length(); ++i)
     AddCueInternal(cues->AnonymousIndexedGetter(i));
   if (!MediaElement().IsShowPosterFlagSet()) {
@@ -70,7 +69,7 @@ void CueTimeline::AddCues(TextTrack* track, const TextTrackCueList* cues) {
 }
 
 void CueTimeline::AddCue(TextTrack* track, TextTrackCue* cue) {
-  DCHECK_NE(track->mode(), TextTrack::DisabledKeyword());
+  DCHECK_NE(track->mode(), TextTrackMode::kDisabled);
   AddCueInternal(cue);
   if (!MediaElement().IsShowPosterFlagSet()) {
     InvokeTimeMarchesOn();

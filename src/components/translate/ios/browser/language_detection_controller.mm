@@ -8,14 +8,18 @@
 
 #include "base/bind.h"
 #include "base/check_op.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
+#include "base/timer/elapsed_timer.h"
 #include "components/language/ios/browser/ios_language_detection_tab_helper.h"
 #include "components/prefs/pref_member.h"
 #include "components/translate/core/browser/translate_pref_names.h"
 #include "components/translate/core/common/language_detection_details.h"
+#include "components/translate/core/common/translate_util.h"
+#include "components/translate/core/language_detection/language_detection_model.h"
 #include "components/translate/core/language_detection/language_detection_util.h"
 #include "components/translate/ios/browser/string_clipping_util.h"
 #import "ios/web/common/url_scheme_util.h"
@@ -33,9 +37,24 @@ namespace translate {
 namespace {
 // Name for the UMA metric used to track text extraction time.
 const char kTranslateCaptureText[] = "Translate.CaptureText";
+// Name for the UMA metric used to track language detection evaluation duration.
+const char kTranslateLanguageDetectionTFLiteModelEvaluationDuration[] =
+    "Translate.LanguageDetection.TFLiteModelEvaluationDuration";
 // Prefix for the language detection javascript commands. Must be kept in sync
 // with language_detection.js.
 const char kCommandPrefix[] = "languageDetection";
+
+// The old CLD model version.
+const char kCLDModelVersion[] = "CLD3";
+
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+enum class LanguageDetectionMethod {
+  kTFLiteModelUsed,
+  kTFLiteModelUnavailable,
+  kTFLiteModelDisabled,
+  kMaxValue = kTFLiteModelDisabled
+};
 }
 
 // Note: This should stay in sync with the constant in language_detection.js.
@@ -43,8 +62,11 @@ const size_t kMaxIndexChars = 65535;
 
 LanguageDetectionController::LanguageDetectionController(
     web::WebState* web_state,
+    LanguageDetectionModel* language_detection_model,
     PrefService* prefs)
-    : web_state_(web_state), weak_method_factory_(this) {
+    : web_state_(web_state),
+      language_detection_model_(language_detection_model),
+      weak_method_factory_(this) {
   DCHECK(web_state_);
 
   translate_enabled_.Init(prefs::kOfferTranslateEnabled, prefs);
@@ -106,7 +128,7 @@ void LanguageDetectionController::OnTextCaptured(const base::Value& command,
   }
 
   UMA_HISTOGRAM_TIMES(kTranslateCaptureText,
-                      base::TimeDelta::FromMillisecondsD(*capture_text_time));
+                      base::Milliseconds(*capture_text_time));
 
   // If there is no language defined in httpEquiv, use the HTTP header.
   if (http_content_language->empty())
@@ -117,8 +139,7 @@ void LanguageDetectionController::OnTextCaptured(const base::Value& command,
       base::BindRepeating(&LanguageDetectionController::OnTextRetrieved,
                           weak_method_factory_.GetWeakPtr(), *has_notranslate,
                           *http_content_language, *html_lang, url),
-      base::TimeDelta::FromMilliseconds(
-          web::kJavaScriptFunctionCallDefaultTimeout));
+      base::Milliseconds(web::kJavaScriptFunctionCallDefaultTimeout));
 }
 
 void LanguageDetectionController::OnTextRetrieved(
@@ -133,10 +154,38 @@ void LanguageDetectionController::OnTextRetrieved(
   std::u16string text = text_content && text_content->is_string()
                             ? base::UTF8ToUTF16(text_content->GetString())
                             : std::u16string();
-  std::string language = DeterminePageLanguage(
-      http_content_language, html_lang,
-      GetStringByClippingLastWord(text, kMaxIndexChars),
-      &model_detected_language, &is_model_reliable, model_reliability_score);
+  std::string language;
+  std::string detection_model_version = kCLDModelVersion;
+
+  if (IsTFLiteLanguageDetectionEnabled() && language_detection_model_ &&
+      language_detection_model_->IsAvailable()) {
+    base::UmaHistogramEnumeration(
+        "IOS.Translate.PageLoad.LanguageDetectionMethod",
+        LanguageDetectionMethod::kTFLiteModelUsed);
+    base::ElapsedTimer timer;
+    language = language_detection_model_->DeterminePageLanguage(
+        http_content_language, html_lang,
+        GetStringByClippingLastWord(text, kMaxIndexChars),
+        &model_detected_language, &is_model_reliable, model_reliability_score);
+    base::UmaHistogramTimes(
+        kTranslateLanguageDetectionTFLiteModelEvaluationDuration,
+        timer.Elapsed());
+    detection_model_version = language_detection_model_->GetModelVersion();
+  } else {
+    if (IsTFLiteLanguageDetectionEnabled()) {
+      base::UmaHistogramEnumeration(
+          "IOS.Translate.PageLoad.LanguageDetectionMethod",
+          LanguageDetectionMethod::kTFLiteModelUnavailable);
+    } else {
+      base::UmaHistogramEnumeration(
+          "IOS.Translate.PageLoad.LanguageDetectionMethod",
+          LanguageDetectionMethod::kTFLiteModelDisabled);
+    }
+    language = DeterminePageLanguage(
+        http_content_language, html_lang,
+        GetStringByClippingLastWord(text, kMaxIndexChars),
+        &model_detected_language, &is_model_reliable, model_reliability_score);
+  }
   if (language.empty())
     return;  // No language detected.
 
@@ -152,6 +201,7 @@ void LanguageDetectionController::OnTextRetrieved(
   details.is_model_reliable = is_model_reliable;
   details.html_root_language = html_lang;
   details.adopted_language = language;
+  details.detection_model_version = detection_model_version;
 
   language::IOSLanguageDetectionTabHelper::FromWebState(web_state_)
       ->OnLanguageDetermined(details);

@@ -6,20 +6,21 @@
 
 #include <map>
 
+#include "ash/components/settings/cros_settings_names.h"
 #include "base/bind.h"
 #include "chrome/browser/ash/app_mode/app_session_ash.h"
 #include "chrome/browser/ash/app_mode/kiosk_cryptohome_remover.h"
+#include "chrome/browser/ash/crosapi/browser_util.h"
 #include "chrome/browser/ash/policy/core/device_local_account.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/web_applications/web_app_helpers.h"
-#include "chrome/browser/web_applications/web_application_info.h"
-#include "chromeos/settings/cros_settings_names.h"
+#include "chrome/browser/web_applications/web_app_install_info.h"
 #include "components/prefs/pref_registry_simple.h"
 
 namespace ash {
 
 namespace {
-// This class is owned by ChromeBrowserMainPartsChromeos.
+// This class is owned by `ChromeBrowserMainPartsAsh`.
 static WebKioskAppManager* g_web_kiosk_app_manager = nullptr;
 }  // namespace
 
@@ -92,10 +93,10 @@ const WebKioskAppData* WebKioskAppManager::GetAppByAccountId(
 
 void WebKioskAppManager::UpdateAppByAccountId(
     const AccountId& account_id,
-    std::unique_ptr<WebApplicationInfo> app_info) {
+    const WebAppInstallInfo& app_info) {
   for (auto& web_app : apps_) {
     if (web_app->account_id() == account_id) {
-      web_app->UpdateFromWebAppInfo(std::move(app_info));
+      web_app->UpdateFromWebAppInfo(app_info);
       return;
     }
   }
@@ -112,11 +113,15 @@ void WebKioskAppManager::AddAppForTesting(const AccountId& account_id,
   NotifyKioskAppsChanged();
 }
 
-void WebKioskAppManager::InitSession(Browser* browser) {
+void WebKioskAppManager::InitSession(Browser* browser, Profile* profile) {
   LOG_IF(FATAL, app_session_) << "Kiosk session is already initialized.";
 
   app_session_ = std::make_unique<AppSessionAsh>();
-  app_session_->InitForWebKiosk(browser);
+  if (crosapi::browser_util::IsLacrosEnabledInWebKioskSession())
+    app_session_->InitForWebKioskWithLacros(profile);
+  else
+    app_session_->InitForWebKiosk(browser);
+
   NotifySessionInitialized();
 }
 

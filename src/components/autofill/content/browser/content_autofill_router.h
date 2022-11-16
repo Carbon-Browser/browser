@@ -9,12 +9,14 @@
 #include <utility>
 
 #include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr.h"
 #include "components/autofill/content/browser/form_forest.h"
 #include "components/autofill/core/browser/autofill_driver.h"
 #include "components/autofill/core/browser/field_types.h"
 #include "components/autofill/core/common/form_data.h"
 #include "components/autofill/core/common/form_data_predictions.h"
 #include "components/autofill/core/common/form_field_data.h"
+#include "components/autofill_assistant/core/public/autofill_assistant_intent.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_widget_host.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -168,7 +170,8 @@ class ContentAutofillRouter {
   void SetFormToBeProbablySubmitted(ContentAutofillDriver* source_driver,
                                     const absl::optional<FormData>& form);
   void FormsSeen(ContentAutofillDriver* source_driver,
-                 const std::vector<FormData>& forms);
+                 const std::vector<FormData>& updated_forms,
+                 const std::vector<FormGlobalId>& removed_forms);
   void FormSubmitted(ContentAutofillDriver* source_driver,
                      const FormData& form,
                      bool known_success,
@@ -187,11 +190,12 @@ class ContentAutofillRouter {
                               const FormFieldData& field,
                               const gfx::RectF& bounding_box);
   void AskForValuesToFill(ContentAutofillDriver* source_driver,
-                          int32_t id,
                           const FormData& form,
                           const FormFieldData& field,
                           const gfx::RectF& bounding_box,
-                          bool autoselect_first_suggestion);
+                          int32_t query_id,
+                          bool autoselect_first_suggestion,
+                          TouchToFillEligible touch_to_fill_eligible);
   void HidePopup(ContentAutofillDriver* source_driver);
   void FocusNoLongerOnForm(ContentAutofillDriver* source_driver,
                            bool had_interacted_form);
@@ -206,15 +210,21 @@ class ContentAutofillRouter {
   void DidEndTextFieldEditing(ContentAutofillDriver* source_driver);
   void SelectFieldOptionsDidChange(ContentAutofillDriver* source_driver,
                                    const FormData& form);
+  void JavaScriptChangedAutofilledValue(ContentAutofillDriver* source,
+                                        const FormData& form,
+                                        const FormFieldData& field,
+                                        const std::u16string& old_value);
 
   // Event called by Autofill Assistant as if it was called by the renderer.
-  void FillFormForAssistant(ContentAutofillDriver* source_driver,
-                            const AutofillableData& fill_data,
-                            const FormData& form,
-                            const FormFieldData& field);
+  void FillFormForAssistant(
+      ContentAutofillDriver* source_driver,
+      const AutofillableData& fill_data,
+      const FormData& form,
+      const FormFieldData& field,
+      const autofill_assistant::AutofillAssistantIntent intent);
 
   // Routing of events called by the browser:
-  void FillOrPreviewForm(
+  std::vector<FieldGlobalId> FillOrPreviewForm(
       ContentAutofillDriver* source_driver,
       int query_id,
       mojom::RendererFormDataAction action,
@@ -260,22 +270,22 @@ class ContentAutofillRouter {
 
   // The URL of a main frame managed by the ContentAutofillRouter.
   // TODO(crbug.com/1240247): Remove.
-  GURL MainUrlForDebugging() const;
+  std::string MainUrlForDebugging() const;
 
   // The frame managed by the ContentAutofillRouter that was last passed to
   // an event.
   // TODO(crbug.com/1240247): Remove.
-  content::RenderFrameHost* some_rfh_for_debugging_ = nullptr;
+  content::GlobalRenderFrameHostId some_rfh_for_debugging_;
 
   // The forest of forms. See its documentation for the usage protocol.
   internal::FormForest form_forest_;
 
   // The driver that triggered the last AskForValuesToFill() call.
   // Update with SetLastQueriedSource().
-  ContentAutofillDriver* last_queried_source_ = nullptr;
+  raw_ptr<ContentAutofillDriver> last_queried_source_ = nullptr;
   // The driver to which the last AskForValuesToFill() call was routed.
   // Update with SetLastQueriedTarget().
-  ContentAutofillDriver* last_queried_target_ = nullptr;
+  raw_ptr<ContentAutofillDriver> last_queried_target_ = nullptr;
 
   // When the focus moves to a different frame, the order of the events
   // FocusNoLongerOnForm() and FocusOnFormField() may be reversed due to race

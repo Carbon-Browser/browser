@@ -20,6 +20,7 @@
 #include "third_party/blink/renderer/core/events/message_event.h"
 #include "third_party/blink/renderer/core/fetch/request.h"
 #include "third_party/blink/renderer/core/frame/csp/content_security_policy.h"
+#include "third_party/blink/renderer/core/frame/web_feature.h"
 #include "third_party/blink/renderer/core/inspector/thread_debugger.h"
 #include "third_party/blink/renderer/core/loader/worker_resource_timing_notifier_impl.h"
 #include "third_party/blink/renderer/core/messaging/blink_transferable_message.h"
@@ -27,6 +28,7 @@
 #include "third_party/blink/renderer/core/workers/dedicated_worker.h"
 #include "third_party/blink/renderer/core/workers/dedicated_worker_object_proxy.h"
 #include "third_party/blink/renderer/core/workers/dedicated_worker_thread.h"
+#include "third_party/blink/renderer/core/workers/global_scope_creation_params.h"
 #include "third_party/blink/renderer/platform/scheduler/public/post_cross_thread_task.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 #include "third_party/blink/renderer/platform/wtf/wtf.h"
@@ -61,7 +63,9 @@ void DedicatedWorkerMessagingProxy::StartWorkerGlobalScope(
     RejectCoepUnsafeNone reject_coep_unsafe_none,
     const blink::DedicatedWorkerToken& token,
     mojo::PendingRemote<mojom::blink::DedicatedWorkerHost>
-        dedicated_worker_host) {
+        dedicated_worker_host,
+    mojo::PendingRemote<mojom::blink::BackForwardCacheControllerHost>
+        back_forward_cache_controller_host) {
   DCHECK(IsParentContextThread());
   if (AskedToTerminate()) {
     // Worker.terminate() could be called from JS before the thread was
@@ -69,8 +73,10 @@ void DedicatedWorkerMessagingProxy::StartWorkerGlobalScope(
     return;
   }
 
-  // |dedicated_worker_host| must be stored before InitializeWorkerThread.
+  // These must be stored before InitializeWorkerThread.
   pending_dedicated_worker_host_ = std::move(dedicated_worker_host);
+  pending_back_forward_cache_controller_host_ =
+      std::move(back_forward_cache_controller_host);
   InitializeWorkerThread(
       std::move(creation_params),
       CreateBackingThreadStartupData(GetExecutionContext()->GetIsolate()),
@@ -87,10 +93,11 @@ void DedicatedWorkerMessagingProxy::StartWorkerGlobalScope(
       auto* resource_timing_notifier =
           WorkerResourceTimingNotifierImpl::CreateForOutsideResourceFetcher(
               *GetExecutionContext());
+      // TODO(crbug.com/1177199): pass a proper policy container
       GetWorkerThread()->FetchAndRunClassicScript(
           script_url, std::move(worker_main_script_load_params),
-          outside_settings_object.CopyData(), resource_timing_notifier,
-          stack_id);
+          /*policy_container=*/nullptr, outside_settings_object.CopyData(),
+          resource_timing_notifier, stack_id);
     } else {
       // Legacy code path (to be deprecated, see https://crbug.com/835717):
       GetWorkerThread()->EvaluateClassicScript(
@@ -109,10 +116,11 @@ void DedicatedWorkerMessagingProxy::StartWorkerGlobalScope(
     auto* resource_timing_notifier =
         WorkerResourceTimingNotifierImpl::CreateForOutsideResourceFetcher(
             *GetExecutionContext());
+    // TODO(crbug.com/1177199): pass a proper policy container
     GetWorkerThread()->FetchAndRunModuleScript(
         script_url, std::move(worker_main_script_load_params),
-        outside_settings_object.CopyData(), resource_timing_notifier,
-        *credentials_mode, reject_coep_unsafe_none);
+        /*policy_container=*/nullptr, outside_settings_object.CopyData(),
+        resource_timing_notifier, *credentials_mode, reject_coep_unsafe_none);
   } else {
     NOTREACHED();
   }
@@ -147,12 +155,12 @@ void DedicatedWorkerMessagingProxy::DidFailToFetchScript() {
   worker_object_->DispatchErrorEventForScriptFetchFailure();
 }
 
-void DedicatedWorkerMessagingProxy::Freeze() {
+void DedicatedWorkerMessagingProxy::Freeze(bool is_in_back_forward_cache) {
   DCHECK(IsParentContextThread());
   auto* worker_thread = GetWorkerThread();
   if (AskedToTerminate() || !worker_thread)
     return;
-  worker_thread->Freeze();
+  worker_thread->Freeze(is_in_back_forward_cache);
 }
 
 void DedicatedWorkerMessagingProxy::Resume() {
@@ -270,7 +278,8 @@ DedicatedWorkerMessagingProxy::CreateWorkerThread() {
   DCHECK(pending_dedicated_worker_host_);
   return std::make_unique<DedicatedWorkerThread>(
       GetExecutionContext(), WorkerObjectProxy(),
-      std::move(pending_dedicated_worker_host_));
+      std::move(pending_dedicated_worker_host_),
+      std::move(pending_back_forward_cache_controller_host_));
 }
 
 }  // namespace blink

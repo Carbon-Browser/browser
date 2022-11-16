@@ -5,10 +5,12 @@
 #include "ios/chrome/browser/ui/authentication/unified_consent/unified_consent_coordinator.h"
 
 #include "base/check_op.h"
+#import "ios/chrome/browser/browser_state/chrome_browser_state.h"
 #import "ios/chrome/browser/main/browser.h"
 #import "ios/chrome/browser/signin/authentication_service.h"
 #import "ios/chrome/browser/signin/authentication_service_factory.h"
 #import "ios/chrome/browser/signin/chrome_account_manager_service_factory.h"
+#import "ios/chrome/browser/ui/authentication/enterprise/enterprise_utils.h"
 #import "ios/chrome/browser/ui/authentication/unified_consent/identity_chooser/identity_chooser_coordinator.h"
 #import "ios/chrome/browser/ui/authentication/unified_consent/identity_chooser/identity_chooser_coordinator_delegate.h"
 #import "ios/chrome/browser/ui/authentication/unified_consent/unified_consent_mediator.h"
@@ -104,9 +106,19 @@
   return self.unifiedConsentViewController.isScrolledToBottom;
 }
 
+- (BOOL)hasManagedSyncDataType {
+  ChromeBrowserState* browserState = self.browser->GetBrowserState();
+  PrefService* prefService = browserState->GetPrefs();
+  return HasManagedSyncDataType(prefService);
+}
+
+- (BOOL)hasAccountRestrictions {
+  return IsRestrictAccountsToPatternsEnabled();
+}
+
 #pragma mark - Private
 
-// Opens the identity chooser dialog with an animation from |point|.
+// Opens the identity chooser dialog with an animation from `point`.
 - (void)showIdentityChooserDialogWithPoint:(CGPoint)point {
   self.identityChooserCoordinator = [[IdentityChooserCoordinator alloc]
       initWithBaseViewController:self.unifiedConsentViewController
@@ -126,6 +138,14 @@
 }
 
 #pragma mark - UnifiedConsentViewControllerDelegate
+
+- (BOOL)unifiedConsentCoordinatorHasManagedSyncDataType {
+  return self.hasManagedSyncDataType;
+}
+
+- (BOOL)unifiedConsentCoordinatorHasAccountRestrictions {
+  return self.hasAccountRestrictions;
+}
 
 - (void)unifiedConsentViewControllerViewDidAppear:
     (UnifiedConsentViewController*)controller {
@@ -150,6 +170,11 @@
   DCHECK(!self.settingsLinkWasTapped);
   self.settingsLinkWasTapped = YES;
   [self.delegate unifiedConsentCoordinatorDidTapSettingsLink:self];
+}
+
+- (void)unifiedConsentViewControllerDidTapLearnMoreLink:
+    (UnifiedConsentViewController*)controller {
+  [self.delegate unifiedConsentCoordinatorDidTapLearnMoreLink:self];
 }
 
 - (void)unifiedConsentViewControllerDidTapIdentityButtonControl:

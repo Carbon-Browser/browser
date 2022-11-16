@@ -10,7 +10,7 @@
 #include "media/video/h264_parser.h"
 
 #if BUILDFLAG(ENABLE_PLATFORM_HEVC)
-#include "media/video/h265_parser.h"
+#include "media/video/h265_nalu_parser.h"
 #endif  // BUILDFLAG(ENABLE_PLATFORM_HEVC)
 
 namespace media {
@@ -61,8 +61,14 @@ H264NALU::Type H264StringToNALUType(const std::string& name) {
   if (name == "FILL")
     return H264NALU::kFiller;
 
-  if (name == "R14")
-    return H264NALU::kReserved14;
+  if (name == "Prefix")
+    return H264NALU::kPrefix;
+
+  if (name == "SubsetSPS")
+    return H264NALU::kSubsetSPS;
+
+  if (name == "DPS")
+    return H264NALU::kDPS;
 
   CHECK(false) << "Unexpected name: " << name;
   return H264NALU::kUnspecified;

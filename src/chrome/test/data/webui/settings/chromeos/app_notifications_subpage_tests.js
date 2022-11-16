@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {setAppNotificationProviderForTesting} from 'chrome://os-settings/chromeos/os_settings.js';
+import {createBoolPermission, getBoolPermissionValue, isBoolValue, setAppNotificationProviderForTesting} from 'chrome://os-settings/chromeos/os_settings.js';
 import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
 import {PromiseResolver} from 'chrome://resources/js/promise_resolver.m.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
@@ -28,6 +28,11 @@ class FakeAppNotificationHandler {
 
     this.lastUpdatedAppPermission_ = {};
 
+    /**
+     * @private {!Array<!chromeos.settings.appNotification.mojom.App>}
+     */
+    this.apps_ = [];
+
     this.resetForTest();
   }
 
@@ -36,10 +41,16 @@ class FakeAppNotificationHandler {
       this.appNotificationObserverRemote_ = null;
     }
 
+    this.apps_ = [];
+    this.isQuietModeEnabled_ = false;
+    this.lastUpdatedAppId_ = -1;
+    this.lastUpdatedAppPermission_ = {};
+
     this.resolverMap_.set('addObserver', new PromiseResolver());
+    this.resolverMap_.set('getQuietMode', new PromiseResolver());
     this.resolverMap_.set('setQuietMode', new PromiseResolver());
     this.resolverMap_.set('setNotificationPermission', new PromiseResolver());
-    this.resolverMap_.set('notifyPageReady', new PromiseResolver());
+    this.resolverMap_.set('getApps', new PromiseResolver());
   }
 
   /**
@@ -96,7 +107,7 @@ class FakeAppNotificationHandler {
   }
 
   /**
-   * @return {!apps.mojom.Permission}
+   * @return {!appManagement.mojom.Permission}
    */
   getLastUpdatedPermission() {
     return this.lastUpdatedAppPermission_;
@@ -119,6 +130,14 @@ class FakeAppNotificationHandler {
   }
 
   /** @return {!Promise<{success: boolean}>} */
+  getQuietMode() {
+    return new Promise(resolve => {
+      this.methodCalled('getQuietMode');
+      resolve({success: this.isQuietModeEnabled_});
+    });
+  }
+
+  /** @return {!Promise<{success: boolean}>} */
   setQuietMode(enabled) {
     this.isQuietModeEnabled_ = enabled;
     return new Promise(resolve => {
@@ -129,7 +148,7 @@ class FakeAppNotificationHandler {
 
   /**
    * @param {string} id
-   * @param {!apps.mojom.Permission} permission
+   * @param {!appManagement.mojom.Permission} permission
    */
   setNotificationPermission(id, permission) {
     return new Promise(resolve => {
@@ -140,11 +159,13 @@ class FakeAppNotificationHandler {
     });
   }
 
-  /** @return {!Promise} */
-  notifyPageReady() {
+  /**
+   * @return {!Promise<!Array<!chromeos.settings.appNotification.mojom.App>>}
+   */
+  getApps() {
     return new Promise(resolve => {
-      this.methodCalled('notifyPageReady');
-      resolve();
+      this.methodCalled('getApps');
+      resolve({apps: this.apps_});
     });
   }
 }
@@ -194,50 +215,42 @@ suite('AppNotificationsSubpageTests', function() {
     mojoApi_.getObserverRemote().onQuietModeChanged(enable);
   }
 
-  /** @param {!Array<!chromeos.settings.appNotification.mojom.App>} */
-  function simulateNotificationAppListChanged(apps) {
-    mojoApi_.getObserverRemote().onNotificationAppListChanged(apps);
-  }
-
-  /**
-   * @param {number} id
-   * @param {!apps.mojom.PermissionValueType} value_type
-   * @param {number} value
-   * @param {boolean} is_managed
-   * @return {!apps.mojom.Permission}
-   */
-  function createPermission(id, value_type, value, is_managed) {
-    return {
-      permissionId: id,
-      valueType: value_type,
-      value: value,
-      isManaged: is_managed
-    };
+  /** @param {!chromeos.settings.appNotification.mojom.App} */
+  function simulateNotificationAppChanged(app) {
+    mojoApi_.getObserverRemote().onNotificationAppChanged(app);
   }
 
   /**
    * @param {string} id
    * @param {string} title
-   * @param {!apps.mojom.Permission} permission
+   * @param {!appManagement.mojom.Permission} permission
+   * @param {?chromeos.settings.appNotification.mojom.Readiness} readiness
    * @return {!chromeos.settings.appNotification.mojom.App}
    */
-  function createApp(id, title, permission) {
-    return {id: id, title: title, notificationPermission: permission};
+  function createApp(
+      id, title, permission,
+      readiness = chromeos.settings.appNotification.mojom.Readiness.kReady) {
+    return {
+      id: id,
+      title: title,
+      notificationPermission: permission,
+      readiness: readiness,
+    };
   }
 
   test('loadAppListAndClickToggle', async () => {
-    const permission1 = createPermission(
-        /**id=*/ 1, /**value_type=*/ 0,
-        /**value=*/ 0, /**is_managed=*/ false);
-    const permission2 = createPermission(
-        /**id=*/ 2, /**value_type=*/ 0,
-        /**value=*/ 1, /**is_managed=*/ false);
+    const permission1 = createBoolPermission(
+        /**permissionType=*/ 1,
+        /**value=*/ false, /**is_managed=*/ false);
+    const permission2 = createBoolPermission(
+        /**permissionType=*/ 2,
+        /**value=*/ true, /**is_managed=*/ false);
     const app1 = createApp('1', 'App1', permission1);
     const app2 = createApp('2', 'App2', permission2);
-    const expectedApps = [app1, app2];
 
     await initializeObserver;
-    simulateNotificationAppListChanged(expectedApps);
+    simulateNotificationAppChanged(app1);
+    simulateNotificationAppChanged(app2);
     await flushTasks();
 
     // Expect 2 apps to be loaded.
@@ -263,27 +276,62 @@ suite('AppNotificationsSubpageTests', function() {
     // Verify that the sent message matches the app it was clicked from.
     assertEquals('1', mojoApi_.getLastUpdatedAppId());
     const lastUpdatedPermission = mojoApi_.getLastUpdatedPermission();
-    assertEquals(1, lastUpdatedPermission.permissionId);
-    assertEquals(0, lastUpdatedPermission.valueType);
+    assertEquals(1, lastUpdatedPermission.permissionType);
+    assertTrue(isBoolValue(lastUpdatedPermission.value));
     assertEquals(false, lastUpdatedPermission.isManaged);
-    assertEquals(1, lastUpdatedPermission.value);
+    assertTrue(getBoolPermissionValue(lastUpdatedPermission.value));
   });
 
-  // TODO(crbug/1240175): Ensure that CrToggle is disabled correctly and
-  // CrPolicyIndicator is hidden correctly.
-  test('Each app-notification-row displays correctly', async () => {
-    const permission1 = createPermission(
-        /**id=*/ 1, /**value_type=*/ 0,
-        /**value=*/ 0, /**is_managed=*/ true);
-    const permission2 = createPermission(
-        /**id=*/ 2, /**value_type=*/ 0,
-        /**value=*/ 1, /**is_managed=*/ false);
-    const app1 = createApp('1', 'Chrome', permission1);
-    const app2 = createApp('2', 'Files', permission2);
-    const expectedApps = [app1, app2];
+  test('RemovedApp', async () => {
+    const permission1 = createBoolPermission(
+        /**permissionType=*/ 1,
+        /**value=*/ false, /**is_managed=*/ false);
+    const permission2 = createBoolPermission(
+        /**permissionType=*/ 2,
+        /**value=*/ true, /**is_managed=*/ false);
+    const app1 = createApp('1', 'App1', permission1);
+    const app2 = createApp('2', 'App2', permission2);
 
     await initializeObserver;
-    simulateNotificationAppListChanged(expectedApps);
+    simulateNotificationAppChanged(app1);
+    simulateNotificationAppChanged(app2);
+    await flushTasks();
+
+    // Expect 2 apps to be loaded.
+    let appRowList =
+        page.$.appNotificationsList.querySelectorAll('app-notification-row');
+    assertEquals(2, appRowList.length);
+
+    const app3 = createApp(
+        '1', 'App1', permission1,
+        chromeos.settings.appNotification.mojom.Readiness.kUninstalledByUser);
+    simulateNotificationAppChanged(app3);
+
+    await flushTasks();
+    // Expect only 1 app to be shown now.
+    appRowList =
+        page.$.appNotificationsList.querySelectorAll('app-notification-row');
+    assertEquals(1, appRowList.length);
+
+    const appRow1 = appRowList[0];
+    assertEquals('App2', appRow1.$.appTitle.textContent.trim());
+  });
+
+  test('Each app-notification-row displays correctly', async () => {
+    const appTitle1 = 'Files';
+    const appTitle2 = 'Chrome';
+    const permission1 = createBoolPermission(
+        /**permissionType=*/ 1,
+        /**value=*/ false, /**is_managed=*/ true);
+    const permission2 = createBoolPermission(
+        /**permissionType=*/ 2,
+        /**value=*/ true, /**is_managed=*/ false);
+    const app1 = createApp('file-id', appTitle1, permission1);
+    const app2 = createApp('chrome-id', appTitle2, permission2);
+
+    await initializeObserver;
+    simulateNotificationAppChanged(app1);
+    simulateNotificationAppChanged(app2);
     await flushTasks();
 
     const chromeRow = page.$.appNotificationsList.children[0];
@@ -292,13 +340,19 @@ suite('AppNotificationsSubpageTests', function() {
     assertTrue(!!page);
     flush();
 
-    assertEquals('Chrome', chromeRow.$.appTitle.textContent.trim());
-    assertTrue(chromeRow.$.appToggle.disabled);
-    assertTrue(!!chromeRow.shadowRoot.querySelector('cr-policy-indicator'));
+    // Apps should be listed in alphabetical order. |appTitle1| should come
+    // before |appTitle2|, so a 1 should be returned by localCompare.
+    const expected = 1;
+    const actual = appTitle1.localeCompare(appTitle2);
+    assertEquals(expected, actual);
 
-    assertEquals('Files', filesRow.$.appTitle.textContent.trim());
-    assertFalse(filesRow.$.appToggle.disabled);
-    assertFalse(!!filesRow.shadowRoot.querySelector('cr-policy-indicator'));
+    assertEquals(appTitle2, chromeRow.$.appTitle.textContent.trim());
+    assertFalse(chromeRow.$.appToggle.disabled);
+    assertFalse(!!chromeRow.shadowRoot.querySelector('cr-policy-indicator'));
+
+    assertEquals(appTitle1, filesRow.$.appTitle.textContent.trim());
+    assertTrue(filesRow.$.appToggle.disabled);
+    assertTrue(!!filesRow.shadowRoot.querySelector('cr-policy-indicator'));
   });
 
   test('toggleDoNotDisturb', function() {
@@ -369,7 +423,6 @@ suite('AppNotificationsSubpageTests', function() {
         })
         .then(() => {
           assertTrue(dndToggle.checked);
-          assertTrue(mojoApi_.getCurrentQuietModeState());
         });
   });
 });

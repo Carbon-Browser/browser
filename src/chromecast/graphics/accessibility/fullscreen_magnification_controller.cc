@@ -17,8 +17,8 @@
 #include "ui/compositor/paint_recorder.h"
 #include "ui/events/event.h"
 #include "ui/gfx/canvas.h"
-#include "ui/gfx/transform.h"
-#include "ui/gfx/transform_util.h"
+#include "ui/gfx/geometry/transform.h"
+#include "ui/gfx/geometry/transform_util.h"
 
 namespace chromecast {
 
@@ -67,6 +67,10 @@ class FullscreenMagnificationController::GestureProviderClient
     : public ui::GestureProviderAuraClient {
  public:
   GestureProviderClient() = default;
+
+  GestureProviderClient(const GestureProviderClient&) = delete;
+  GestureProviderClient& operator=(const GestureProviderClient&) = delete;
+
   ~GestureProviderClient() override = default;
 
   // ui::GestureProviderAuraClient overrides:
@@ -82,9 +86,6 @@ class FullscreenMagnificationController::GestureProviderClient
     DCHECK_NE(ui::ET_GESTURE_PINCH_END, event->type());
     DCHECK_NE(ui::ET_GESTURE_PINCH_UPDATE, event->type());
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(GestureProviderClient);
 };
 
 FullscreenMagnificationController::FullscreenMagnificationController(
@@ -101,7 +102,10 @@ FullscreenMagnificationController::FullscreenMagnificationController(
       this, gesture_provider_client_.get());
 }
 
-FullscreenMagnificationController::~FullscreenMagnificationController() {}
+FullscreenMagnificationController::~FullscreenMagnificationController() {
+  // Destroy `gesture_provider_` before `gesture_provider_client_`.
+  gesture_provider_.reset();
+}
 
 void FullscreenMagnificationController::SetEnabled(bool enabled) {
   if (is_enabled_ == enabled)
@@ -443,7 +447,7 @@ void FullscreenMagnificationController::OnPaintLayer(
         std::pow(kHighlightShadowRadius, 2));
 
     gfx::Rect outsetRect = bounds;
-    outsetRect.Inset(i, i, i, i);
+    outsetRect.Inset(i);
     recorder.canvas()->DrawRect(outsetRect, flags);
   }
 }

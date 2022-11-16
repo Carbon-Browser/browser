@@ -2,33 +2,36 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
 import 'chrome://resources/cr_elements/icons.m.js';
 import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
 import './shimless_rma_shared_css.js';
 import './base_page.js';
 import './icons.js';
 
-import {html, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {I18nBehavior, I18nBehaviorInterface} from 'chrome://resources/js/i18n_behavior.m.js';
+import {html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {getShimlessRmaService} from './mojo_interface_provider.js';
-import {ProvisioningObserverInterface, ProvisioningObserverReceiver, ProvisioningStep, ShimlessRmaServiceInterface, StateResult} from './shimless_rma_types.js';
-
-// TODO(gavindodd): Update text for i18n
-/** @type {!Object<!ProvisioningStep, string>} */
-const provisioningStepText = {
-  [ProvisioningStep.kProvisioningUnknown]: 'Starting...',
-  [ProvisioningStep.kInProgress]: 'In progress...',
-  [ProvisioningStep.kProvisioningComplete]: 'Complete.',
-};
+import {ProvisioningError, ProvisioningObserverInterface, ProvisioningObserverReceiver, ProvisioningStatus, ShimlessRmaServiceInterface, StateResult} from './shimless_rma_types.js';
+import {disableNextButton, enableNextButton, executeThenTransitionState} from './shimless_rma_util.js';
 
 /**
  * @fileoverview
- * 'reimaging-provisioning-page' enter updated device information if needed.
- *
- * Currently device information is serial number, region and sku. All values are
- * OEM specific.
+ * 'reimaging-provisioning-page' provisions the device then auto-transitions to
+ * the next page once complete.
  */
-export class ReimagingProvisioningPageElement extends PolymerElement {
+
+/**
+ * @constructor
+ * @extends {PolymerElement}
+ * @implements {I18nBehaviorInterface}
+ */
+const ReimagingProvisioningPageBase =
+    mixinBehaviors([I18nBehavior], PolymerElement);
+
+/** @polymer */
+export class ReimagingProvisioningPage extends ReimagingProvisioningPageBase {
   static get is() {
     return 'reimaging-provisioning-page';
   }
@@ -39,50 +42,30 @@ export class ReimagingProvisioningPageElement extends PolymerElement {
 
   static get properties() {
     return {
-      /** @private {ShimlessRmaServiceInterface} */
-      shimlessRmaService_: {
-        type: Object,
-        value: {},
-      },
-
       /**
-       * Receiver responsible for observing provisioning progress.
-       * @private {ProvisioningObserverReceiver}
+       * Set by shimless_rma.js.
+       * @type {boolean}
        */
-      provisioningObserverReceiver_: {
+      allButtonsDisabled: Boolean,
+
+      /** @protected {!ProvisioningStatus} */
+      status_: {
         type: Object,
-        value: null,
       },
 
-      /** @protected {!ProvisioningStep} */
-      step_: {
-        type: Object,
-        value: ProvisioningStep.kProvisioningUnknown,
-      },
-
-      /** @protected {number} */
-      progress_: {
-        type: Number,
-        value: 0.0,
-      },
-
-      /** @protected {string} */
-      statusString_: {
-        type: String,
-        computed: 'getStatusString_(step_, progress_)',
+      /** @protected {boolean} */
+      shouldShowSpinner_: {
+        type: Boolean,
+        value: true,
       },
     };
   }
 
-  /** @override */
-  ready() {
-    super.ready();
+  constructor() {
+    super();
+    /** @private {ShimlessRmaServiceInterface} */
     this.shimlessRmaService_ = getShimlessRmaService();
-    this.observeProvisioningProgress_();
-  }
-
-  /** @private */
-  observeProvisioningProgress_() {
+    /** @private {ProvisioningObserverReceiver} */
     this.provisioningObserverReceiver_ = new ProvisioningObserverReceiver(
         /**
          * @type {!ProvisioningObserverInterface}
@@ -94,38 +77,46 @@ export class ReimagingProvisioningPageElement extends PolymerElement {
   }
 
   /**
-   * @protected
-   * @return {string}
-   */
-  getStatusString_() {
-    // TODO(gavindodd): Update text for i18n
-    return provisioningStepText[this.step_] + ' ' +
-        Math.round(this.progress_ * 100) + '%';
-  }
-
-  /**
    * Implements ProvisioningObserver.onProvisioningUpdated()
-   * TODO(joonbug): Add error handling and display failure using cr-dialog.
-   * @protected
-   * @param {!ProvisioningStep} step
+   * @param {!ProvisioningStatus} status
    * @param {number} progress
+   * @param {!ProvisioningError} error
+   * @protected
    */
-  onProvisioningUpdated(step, progress) {
-    this.step_ = step;
-    this.progress_ = progress;
-  }
+  onProvisioningUpdated(status, progress, error) {
+    const isErrorStatus = status === ProvisioningStatus.kFailedBlocking ||
+        status === ProvisioningStatus.kFailedNonBlocking;
+    const isWpError = isErrorStatus && error === ProvisioningError.kWpEnabled;
 
-  /** @return {!Promise<!StateResult>} */
-  onNextButtonClick() {
-    if (this.step_ == ProvisioningStep.kProvisioningComplete) {
-      // TODO(crbug.com/1218180): Replace with a state specific function e.g.
-      // ProvisioningComplete()
-      return this.shimlessRmaService_.transitionNextState();
-    } else {
-      return Promise.reject(new Error('Provisioning is not complete.'));
+    this.status_ = status;
+
+    // Transition to next state when provisioning is complete.
+    if (this.status_ === ProvisioningStatus.kComplete) {
+      this.shouldShowSpinner_ = false;
+      executeThenTransitionState(
+          this, () => this.shimlessRmaService_.provisioningComplete());
+      return;
+    }
+
+    this.shouldShowSpinner_ =
+        isWpError || this.status_ === ProvisioningStatus.kInProgress;
+
+    if (isWpError) {
+      const dialog = /** @type {!CrDialogElement} */ (
+          this.shadowRoot.querySelector('#wpEnabledDialog'));
+      dialog.showModal();
     }
   }
-};
 
-customElements.define(
-    ReimagingProvisioningPageElement.is, ReimagingProvisioningPageElement);
+  /** @protected */
+  onTryAgainButtonClick_() {
+    const dialog = /** @type {!CrDialogElement} */ (
+        this.shadowRoot.querySelector('#wpEnabledDialog'));
+    dialog.close();
+
+    executeThenTransitionState(
+        this, () => this.shimlessRmaService_.retryProvisioning());
+  }
+}
+
+customElements.define(ReimagingProvisioningPage.is, ReimagingProvisioningPage);

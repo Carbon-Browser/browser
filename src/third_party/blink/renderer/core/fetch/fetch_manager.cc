@@ -9,8 +9,9 @@
 #include "base/check.h"
 #include "base/feature_list.h"
 #include "base/metrics/histogram_functions.h"
-#include "base/single_thread_task_runner.h"
+#include "base/numerics/safe_conversions.h"
 #include "base/strings/strcat.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/unguessable_token.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "services/network/public/cpp/features.h"
@@ -54,7 +55,7 @@
 #include "third_party/blink/renderer/platform/bindings/script_forbidden_scope.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/bindings/v8_throw_exception.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/heap/persistent.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
 #include "third_party/blink/renderer/platform/loader/cors/cors.h"
@@ -79,10 +80,9 @@
 #include "third_party/blink/renderer/platform/weborigin/security_policy.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "third_party/blink/renderer/platform/wtf/hash_set.h"
-#include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
-#include "v8.h"
+#include "v8/include/v8.h"
 
 using network::mojom::CredentialsMode;
 using network::mojom::FetchResponseType;
@@ -192,7 +192,7 @@ class FetchManager::Loader final
         size_t available;
         result = body_->BeginRead(&buffer, &available);
         if (result == Result::kOk) {
-          buffer_.Append(buffer, SafeCast<wtf_size_t>(available));
+          buffer_.Append(buffer, base::checked_cast<wtf_size_t>(available));
           result = body_->EndRead(available);
         }
         if (result == Result::kShouldWait)
@@ -323,7 +323,7 @@ FetchManager::Loader::Loader(ExecutionContext* execution_context,
   // to the fetch() call.
   v8::Local<v8::Value> exception =
       V8ThrowException::CreateTypeError(isolate, "Failed to fetch");
-  exception_.Set(isolate, exception);
+  exception_.Reset(isolate, exception);
 }
 
 FetchManager::Loader::~Loader() {
@@ -450,6 +450,8 @@ void FetchManager::Loader::DidReceiveResponse(
       NOTREACHED();
       break;
   }
+  // TODO(crbug.com/1288221): Remove this once the investigation is done.
+  CHECK(tainted_response);
 
   response_has_no_store_header_ = response.CacheControlContainsNoStore();
 
@@ -644,9 +646,7 @@ void FetchManager::Loader::Dispose() {
   // Prevent notification
   fetch_manager_ = nullptr;
   if (threadable_loader_) {
-    if (fetch_request_data_->Keepalive() &&
-        !base::FeatureList::IsEnabled(
-            network::features::kDisableKeepaliveFetch)) {
+    if (fetch_request_data_->Keepalive()) {
       threadable_loader_->Detach();
     } else {
       threadable_loader_->Cancel();
@@ -755,6 +755,8 @@ void FetchManager::Loader::PerformHTTPFetch() {
   // FIXME: Support body.
   ResourceRequest request(fetch_request_data_->Url());
   request.SetRequestorOrigin(fetch_request_data_->Origin());
+  request.SetNavigationRedirectChain(
+      fetch_request_data_->NavigationRedirectChain());
   request.SetIsolatedWorldOrigin(fetch_request_data_->IsolatedWorldOrigin());
   request.SetRequestContext(mojom::blink::RequestContextType::FETCH);
   request.SetRequestDestination(fetch_request_data_->Destination());
@@ -762,22 +764,8 @@ void FetchManager::Loader::PerformHTTPFetch() {
   request.SetHttpMethod(fetch_request_data_->Method());
   request.SetFetchWindowId(fetch_request_data_->WindowId());
   request.SetTrustTokenParams(fetch_request_data_->TrustTokenParams());
-
-  switch (fetch_request_data_->Mode()) {
-    case RequestMode::kSameOrigin:
-    case RequestMode::kNoCors:
-    case RequestMode::kCors:
-    case RequestMode::kCorsWithForcedPreflight:
-      request.SetMode(fetch_request_data_->Mode());
-      break;
-    case RequestMode::kNavigate:
-      // NetworkService (i.e. CorsURLLoaderFactory::IsSane) rejects kNavigate
-      // requests coming from renderers, so using kSameOrigin here.
-      // TODO(lukasza): Tweak CorsURLLoaderFactory::IsSane to accept kNavigate
-      // if request_initiator and the target are same-origin.
-      request.SetMode(RequestMode::kSameOrigin);
-      break;
-  }
+  request.SetMode(fetch_request_data_->Mode());
+  request.SetTargetAddressSpace(fetch_request_data_->TargetAddressSpace());
 
   request.SetCredentialsMode(fetch_request_data_->Credentials());
   for (const auto& header : fetch_request_data_->HeaderList()->List()) {
@@ -801,20 +789,17 @@ void FetchManager::Loader::PerformHTTPFetch() {
             pending_remote;
         fetch_request_data_->Buffer()->DrainAsChunkedDataPipeGetter(
             resolver_->GetScriptState(),
-            pending_remote.InitWithNewPipeAndPassReceiver());
+            pending_remote.InitWithNewPipeAndPassReceiver(),
+            /*client=*/nullptr);
         request.MutableBody().SetStreamBody(std::move(pending_remote));
-        request.SetAllowHTTP1ForStreamingUpload(
-            fetch_request_data_->AllowHTTP1ForStreamingUpload());
       }
     }
   }
   request.SetCacheMode(fetch_request_data_->CacheMode());
   request.SetRedirectMode(fetch_request_data_->Redirect());
-  request.SetFetchImportanceMode(fetch_request_data_->Importance());
+  request.SetFetchPriorityHint(fetch_request_data_->FetchPriorityHint());
   request.SetPriority(fetch_request_data_->Priority());
   request.SetUseStreamOnResponse(true);
-  request.SetExternalRequestStateFromRequestorAddressSpace(
-      execution_context_->AddressSpace());
   request.SetReferrerString(fetch_request_data_->ReferrerString());
   request.SetReferrerPolicy(fetch_request_data_->GetReferrerPolicy());
 
@@ -824,6 +809,8 @@ void FetchManager::Loader::PerformHTTPFetch() {
     request.SetKeepalive(true);
     UseCounter::Count(execution_context_, mojom::WebFeature::kFetchKeepalive);
   }
+
+  request.SetOriginalDestination(fetch_request_data_->OriginalDestination());
 
   // "3. Append `Host`, ..."
   // FIXME: Implement this when the spec is fixed.
@@ -873,7 +860,7 @@ void FetchManager::Loader::PerformDataFetch() {
   request.SetHttpMethod(fetch_request_data_->Method());
   request.SetCredentialsMode(network::mojom::CredentialsMode::kOmit);
   request.SetRedirectMode(RedirectMode::kError);
-  request.SetFetchImportanceMode(fetch_request_data_->Importance());
+  request.SetFetchPriorityHint(fetch_request_data_->FetchPriorityHint());
   request.SetPriority(fetch_request_data_->Priority());
   // We intentionally skip 'setExternalRequestStateFromRequestorAddressSpace',
   // as 'data:' can never be external.
@@ -916,23 +903,21 @@ void FetchManager::Loader::Failed(
     if (dom_exception) {
       resolver_->Reject(dom_exception);
     } else {
-      v8::Local<v8::Value> value = exception_.NewLocal(state->GetIsolate());
-      exception_.Clear();
-      if (RuntimeEnabledFeatures::ExceptionMetaDataForDevToolsEnabled()) {
-        ThreadDebugger* debugger = ThreadDebugger::From(state->GetIsolate());
-        if (devtools_request_id) {
-          debugger->GetV8Inspector()->associateExceptionData(
-              state->GetContext(), value,
-              V8AtomicString(state->GetIsolate(), "requestId"),
-              V8String(state->GetIsolate(), *devtools_request_id));
-        }
-        if (issue_id) {
-          debugger->GetV8Inspector()->associateExceptionData(
-              state->GetContext(), value,
-              V8AtomicString(state->GetIsolate(), "issueId"),
-              V8String(state->GetIsolate(),
-                       IdentifiersFactory::IdFromToken(*issue_id)));
-        }
+      v8::Local<v8::Value> value = exception_.Get(state->GetIsolate());
+      exception_.Reset();
+      ThreadDebugger* debugger = ThreadDebugger::From(state->GetIsolate());
+      if (devtools_request_id) {
+        debugger->GetV8Inspector()->associateExceptionData(
+            state->GetContext(), value,
+            V8AtomicString(state->GetIsolate(), "requestId"),
+            V8String(state->GetIsolate(), *devtools_request_id));
+      }
+      if (issue_id) {
+        debugger->GetV8Inspector()->associateExceptionData(
+            state->GetContext(), value,
+            V8AtomicString(state->GetIsolate(), "issueId"),
+            V8String(state->GetIsolate(),
+                     IdentifiersFactory::IdFromToken(*issue_id)));
       }
       resolver_->Reject(value);
     }

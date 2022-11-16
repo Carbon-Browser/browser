@@ -13,10 +13,8 @@
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
 #include "base/values.h"
-#include "chromeos/dbus/cros_healthd/cros_healthd_client.h"
-#include "chromeos/dbus/cros_healthd/fake_cros_healthd_client.h"
-#include "chromeos/services/cros_healthd/public/cpp/service_connection.h"
-#include "chromeos/services/cros_healthd/public/mojom/cros_healthd_diagnostics.mojom.h"
+#include "chromeos/ash/services/cros_healthd/public/cpp/fake_cros_healthd.h"
+#include "chromeos/ash/services/cros_healthd/public/mojom/cros_healthd_diagnostics.mojom.h"
 #include "components/policy/proto/device_management_backend.pb.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -163,15 +161,12 @@ class DeviceCommandRunRoutineJobTest : public testing::Test {
 };
 
 DeviceCommandRunRoutineJobTest::DeviceCommandRunRoutineJobTest() {
-  chromeos::CrosHealthdClient::InitializeFake();
+  ash::cros_healthd::FakeCrosHealthd::Initialize();
   test_start_time_ = base::TimeTicks::Now();
 }
 
 DeviceCommandRunRoutineJobTest::~DeviceCommandRunRoutineJobTest() {
-  chromeos::CrosHealthdClient::Shutdown();
-
-  // Wait for ServiceConnection to observe the destruction of the client.
-  chromeos::cros_healthd::ServiceConnection::GetInstance()->FlushForTesting();
+  ash::cros_healthd::FakeCrosHealthd::Shutdown();
 }
 
 void DeviceCommandRunRoutineJobTest::InitializeJob(
@@ -187,7 +182,7 @@ void DeviceCommandRunRoutineJobTest::InitializeJob(
       GenerateCommandProto(unique_id, base::TimeTicks::Now() - issued_time,
                            idleness_cutoff, terminate_upon_input, routine,
                            std::move(params)),
-      nullptr));
+      em::SignedData()));
 
   EXPECT_EQ(unique_id, job->unique_id());
   EXPECT_EQ(RemoteCommandJob::NOT_STARTED, job->status());
@@ -198,9 +193,9 @@ bool DeviceCommandRunRoutineJobTest::RunJob(
     base::Value params_dict,
     base::RepeatingCallback<void(RemoteCommandJob*)> callback) {
   auto job = std::make_unique<DeviceCommandRunRoutineJob>();
-  InitializeJob(
-      job.get(), kUniqueID, test_start_time_, base::TimeDelta::FromSeconds(30),
-      /*terminate_upon_input=*/false, routine, std::move(params_dict));
+  InitializeJob(job.get(), kUniqueID, test_start_time_, base::Seconds(30),
+                /*terminate_upon_input=*/false, routine,
+                std::move(params_dict));
   base::RunLoop run_loop;
   bool success = job->Run(base::Time::Now(), base::TimeTicks::Now(),
                           base::BindLambdaForTesting([&]() {
@@ -221,10 +216,10 @@ TEST_F(DeviceCommandRunRoutineJobTest, InvalidRoutineEnumInCommandPayload) {
   EXPECT_FALSE(job->Init(
       base::TimeTicks::Now(),
       GenerateCommandProto(kUniqueID, base::TimeTicks::Now() - test_start_time_,
-                           base::TimeDelta::FromSeconds(30),
+                           base::Seconds(30),
                            /*terminate_upon_input=*/false, kInvalidRoutineEnum,
                            std::move(params_dict)),
-      nullptr));
+      em::SignedData()));
 
   EXPECT_EQ(kUniqueID, job->unique_id());
   EXPECT_EQ(RemoteCommandJob::INVALID, job->status());
@@ -237,10 +232,10 @@ TEST_F(DeviceCommandRunRoutineJobTest, CommandPayloadMissingRoutine) {
   EXPECT_FALSE(job->Init(
       base::TimeTicks::Now(),
       GenerateCommandProto(kUniqueID, base::TimeTicks::Now() - test_start_time_,
-                           base::TimeDelta::FromSeconds(30),
+                           base::Seconds(30),
                            /*terminate_upon_input=*/false,
                            /*routine=*/absl::nullopt, std::move(params_dict)),
-      nullptr));
+      em::SignedData()));
 
   EXPECT_EQ(kUniqueID, job->unique_id());
   EXPECT_EQ(RemoteCommandJob::INVALID, job->status());
@@ -255,10 +250,10 @@ TEST_F(DeviceCommandRunRoutineJobTest, CommandPayloadMissingParamDict) {
   EXPECT_FALSE(job->Init(
       base::TimeTicks::Now(),
       GenerateCommandProto(kUniqueID, base::TimeTicks::Now() - test_start_time_,
-                           base::TimeDelta::FromSeconds(30),
+                           base::Seconds(30),
                            /*terminate_upon_input=*/false, kValidRoutineEnum,
                            /*params=*/absl::nullopt),
-      nullptr));
+      em::SignedData()));
 
   EXPECT_EQ(kUniqueID, job->unique_id());
   EXPECT_EQ(RemoteCommandJob::INVALID, job->status());
@@ -269,8 +264,8 @@ TEST_F(DeviceCommandRunRoutineJobTest, CommandPayloadMissingParamDict) {
 TEST_F(DeviceCommandRunRoutineJobTest, RunBatteryCapacityRoutineSuccess) {
   auto run_routine_response =
       chromeos::cros_healthd::mojom::RunRoutineResponse::New(kId, kStatus);
-  chromeos::cros_healthd::FakeCrosHealthdClient::Get()
-      ->SetRunRoutineResponseForTesting(run_routine_response);
+  ash::cros_healthd::FakeCrosHealthd::Get()->SetRunRoutineResponseForTesting(
+      run_routine_response);
   base::Value params_dict(base::Value::Type::DICTIONARY);
   EXPECT_TRUE(RunJob(
       chromeos::cros_healthd::mojom::DiagnosticRoutineEnum::kBatteryCapacity,
@@ -288,8 +283,8 @@ TEST_F(DeviceCommandRunRoutineJobTest, RunBatteryCapacityRoutineSuccess) {
 TEST_F(DeviceCommandRunRoutineJobTest, RunBatteryHealthRoutineSuccess) {
   auto run_routine_response =
       chromeos::cros_healthd::mojom::RunRoutineResponse::New(kId, kStatus);
-  chromeos::cros_healthd::FakeCrosHealthdClient::Get()
-      ->SetRunRoutineResponseForTesting(run_routine_response);
+  ash::cros_healthd::FakeCrosHealthd::Get()->SetRunRoutineResponseForTesting(
+      run_routine_response);
   base::Value params_dict(base::Value::Type::DICTIONARY);
   EXPECT_TRUE(RunJob(
       chromeos::cros_healthd::mojom::DiagnosticRoutineEnum::kBatteryHealth,
@@ -305,8 +300,8 @@ TEST_F(DeviceCommandRunRoutineJobTest, RunBatteryHealthRoutineSuccess) {
 TEST_F(DeviceCommandRunRoutineJobTest, RunUrandomRoutineSuccess) {
   auto run_routine_response =
       chromeos::cros_healthd::mojom::RunRoutineResponse::New(kId, kStatus);
-  chromeos::cros_healthd::FakeCrosHealthdClient::Get()
-      ->SetRunRoutineResponseForTesting(run_routine_response);
+  ash::cros_healthd::FakeCrosHealthd::Get()->SetRunRoutineResponseForTesting(
+      run_routine_response);
   base::Value params_dict(base::Value::Type::DICTIONARY);
   params_dict.SetIntKey(kLengthSecondsFieldName, kPositiveInt);
   EXPECT_TRUE(
@@ -325,8 +320,8 @@ TEST_F(DeviceCommandRunRoutineJobTest, RunUrandomRoutineSuccess) {
 TEST_F(DeviceCommandRunRoutineJobTest, RunUrandomRoutineMissingLengthSeconds) {
   auto run_routine_response =
       chromeos::cros_healthd::mojom::RunRoutineResponse::New(kId, kStatus);
-  chromeos::cros_healthd::FakeCrosHealthdClient::Get()
-      ->SetRunRoutineResponseForTesting(run_routine_response);
+  ash::cros_healthd::FakeCrosHealthd::Get()->SetRunRoutineResponseForTesting(
+      run_routine_response);
   base::Value params_dict(base::Value::Type::DICTIONARY);
   EXPECT_TRUE(
       RunJob(chromeos::cros_healthd::mojom::DiagnosticRoutineEnum::kUrandom,
@@ -360,8 +355,8 @@ TEST_F(DeviceCommandRunRoutineJobTest, RunUrandomRoutineInvalidLengthSeconds) {
 TEST_F(DeviceCommandRunRoutineJobTest, RunSmartctlCheckRoutineSuccess) {
   auto run_routine_response =
       chromeos::cros_healthd::mojom::RunRoutineResponse::New(kId, kStatus);
-  chromeos::cros_healthd::FakeCrosHealthdClient::Get()
-      ->SetRunRoutineResponseForTesting(run_routine_response);
+  ash::cros_healthd::FakeCrosHealthd::Get()->SetRunRoutineResponseForTesting(
+      run_routine_response);
   base::Value params_dict(base::Value::Type::DICTIONARY);
   EXPECT_TRUE(RunJob(
       chromeos::cros_healthd::mojom::DiagnosticRoutineEnum::kSmartctlCheck,
@@ -378,8 +373,8 @@ TEST_F(DeviceCommandRunRoutineJobTest, RunSmartctlCheckRoutineSuccess) {
 TEST_F(DeviceCommandRunRoutineJobTest, RunAcPowerRoutineSuccess) {
   auto run_routine_response =
       chromeos::cros_healthd::mojom::RunRoutineResponse::New(kId, kStatus);
-  chromeos::cros_healthd::FakeCrosHealthdClient::Get()
-      ->SetRunRoutineResponseForTesting(run_routine_response);
+  ash::cros_healthd::FakeCrosHealthd::Get()->SetRunRoutineResponseForTesting(
+      run_routine_response);
   base::Value params_dict(base::Value::Type::DICTIONARY);
   params_dict.SetIntKey(kExpectedStatusFieldName,
                         static_cast<int>(kValidAcPowerStatusEnum));
@@ -402,8 +397,8 @@ TEST_F(DeviceCommandRunRoutineJobTest,
        RunAcPowerRoutineNoOptionalExpectedPowerType) {
   auto run_routine_response =
       chromeos::cros_healthd::mojom::RunRoutineResponse::New(kId, kStatus);
-  chromeos::cros_healthd::FakeCrosHealthdClient::Get()
-      ->SetRunRoutineResponseForTesting(run_routine_response);
+  ash::cros_healthd::FakeCrosHealthd::Get()->SetRunRoutineResponseForTesting(
+      run_routine_response);
   base::Value params_dict(base::Value::Type::DICTIONARY);
   params_dict.SetIntKey(kExpectedStatusFieldName,
                         static_cast<int>(kValidAcPowerStatusEnum));
@@ -461,8 +456,8 @@ TEST_F(DeviceCommandRunRoutineJobTest, RunAcPowerRoutineInvalidExpectedStatus) {
 TEST_F(DeviceCommandRunRoutineJobTest, RunCpuCacheRoutineSuccess) {
   auto run_routine_response =
       chromeos::cros_healthd::mojom::RunRoutineResponse::New(kId, kStatus);
-  chromeos::cros_healthd::FakeCrosHealthdClient::Get()
-      ->SetRunRoutineResponseForTesting(run_routine_response);
+  ash::cros_healthd::FakeCrosHealthd::Get()->SetRunRoutineResponseForTesting(
+      run_routine_response);
   base::Value params_dict(base::Value::Type::DICTIONARY);
   params_dict.SetIntKey(kLengthSecondsFieldName, kPositiveInt);
   EXPECT_TRUE(
@@ -481,8 +476,8 @@ TEST_F(DeviceCommandRunRoutineJobTest, RunCpuCacheRoutineSuccess) {
 TEST_F(DeviceCommandRunRoutineJobTest, RunCpuCacheRoutineMissingLengthSeconds) {
   auto run_routine_response =
       chromeos::cros_healthd::mojom::RunRoutineResponse::New(kId, kStatus);
-  chromeos::cros_healthd::FakeCrosHealthdClient::Get()
-      ->SetRunRoutineResponseForTesting(run_routine_response);
+  ash::cros_healthd::FakeCrosHealthd::Get()->SetRunRoutineResponseForTesting(
+      run_routine_response);
   base::Value params_dict(base::Value::Type::DICTIONARY);
   EXPECT_TRUE(
       RunJob(chromeos::cros_healthd::mojom::DiagnosticRoutineEnum::kCpuCache,
@@ -514,8 +509,8 @@ TEST_F(DeviceCommandRunRoutineJobTest, RunCpuCacheRoutineInvalidLengthSeconds) {
 TEST_F(DeviceCommandRunRoutineJobTest, RunCpuStressRoutineSuccess) {
   auto run_routine_response =
       chromeos::cros_healthd::mojom::RunRoutineResponse::New(kId, kStatus);
-  chromeos::cros_healthd::FakeCrosHealthdClient::Get()
-      ->SetRunRoutineResponseForTesting(run_routine_response);
+  ash::cros_healthd::FakeCrosHealthd::Get()->SetRunRoutineResponseForTesting(
+      run_routine_response);
   base::Value params_dict(base::Value::Type::DICTIONARY);
   params_dict.SetIntKey(kLengthSecondsFieldName, kPositiveInt);
   EXPECT_TRUE(
@@ -535,8 +530,8 @@ TEST_F(DeviceCommandRunRoutineJobTest,
        RunCpuStressRoutineMissingLengthSeconds) {
   auto run_routine_response =
       chromeos::cros_healthd::mojom::RunRoutineResponse::New(kId, kStatus);
-  chromeos::cros_healthd::FakeCrosHealthdClient::Get()
-      ->SetRunRoutineResponseForTesting(run_routine_response);
+  ash::cros_healthd::FakeCrosHealthd::Get()->SetRunRoutineResponseForTesting(
+      run_routine_response);
   base::Value params_dict(base::Value::Type::DICTIONARY);
   EXPECT_TRUE(
       RunJob(chromeos::cros_healthd::mojom::DiagnosticRoutineEnum::kCpuStress,
@@ -569,8 +564,8 @@ TEST_F(DeviceCommandRunRoutineJobTest,
 TEST_F(DeviceCommandRunRoutineJobTest, RunFloatingPointAccuracyRoutineSuccess) {
   auto run_routine_response =
       chromeos::cros_healthd::mojom::RunRoutineResponse::New(kId, kStatus);
-  chromeos::cros_healthd::FakeCrosHealthdClient::Get()
-      ->SetRunRoutineResponseForTesting(run_routine_response);
+  ash::cros_healthd::FakeCrosHealthd::Get()->SetRunRoutineResponseForTesting(
+      run_routine_response);
   base::Value params_dict(base::Value::Type::DICTIONARY);
   params_dict.SetIntKey(kLengthSecondsFieldName, kPositiveInt);
   EXPECT_TRUE(RunJob(chromeos::cros_healthd::mojom::DiagnosticRoutineEnum::
@@ -591,8 +586,8 @@ TEST_F(DeviceCommandRunRoutineJobTest,
        RunFloatingPointAccuracyRoutineMissingLengthSeconds) {
   auto run_routine_response =
       chromeos::cros_healthd::mojom::RunRoutineResponse::New(kId, kStatus);
-  chromeos::cros_healthd::FakeCrosHealthdClient::Get()
-      ->SetRunRoutineResponseForTesting(run_routine_response);
+  ash::cros_healthd::FakeCrosHealthd::Get()->SetRunRoutineResponseForTesting(
+      run_routine_response);
   base::Value params_dict(base::Value::Type::DICTIONARY);
   EXPECT_TRUE(RunJob(chromeos::cros_healthd::mojom::DiagnosticRoutineEnum::
                          kFloatingPointAccuracy,
@@ -627,8 +622,8 @@ TEST_F(DeviceCommandRunRoutineJobTest,
 TEST_F(DeviceCommandRunRoutineJobTest, RunNvmeWearLevelRoutineSuccess) {
   auto run_routine_response =
       chromeos::cros_healthd::mojom::RunRoutineResponse::New(kId, kStatus);
-  chromeos::cros_healthd::FakeCrosHealthdClient::Get()
-      ->SetRunRoutineResponseForTesting(run_routine_response);
+  ash::cros_healthd::FakeCrosHealthd::Get()->SetRunRoutineResponseForTesting(
+      run_routine_response);
   base::Value params_dict(base::Value::Type::DICTIONARY);
   params_dict.SetIntKey(kWearLevelThresholdFieldName, kPositiveInt);
   EXPECT_TRUE(RunJob(
@@ -680,8 +675,8 @@ TEST_F(DeviceCommandRunRoutineJobTest, RunNvmeSelfTestRoutineSuccess) {
       chromeos::cros_healthd::mojom::NvmeSelfTestTypeEnum::kShortSelfTest;
   auto run_routine_response =
       chromeos::cros_healthd::mojom::RunRoutineResponse::New(kId, kStatus);
-  chromeos::cros_healthd::FakeCrosHealthdClient::Get()
-      ->SetRunRoutineResponseForTesting(run_routine_response);
+  ash::cros_healthd::FakeCrosHealthd::Get()->SetRunRoutineResponseForTesting(
+      run_routine_response);
   base::Value params_dict(base::Value::Type::DICTIONARY);
   params_dict.SetIntKey(kNvmeSelfTestTypeFieldName,
                         static_cast<int>(kValidNvmeSelfTestTypeEnum));
@@ -738,8 +733,8 @@ TEST_F(DeviceCommandRunRoutineJobTest,
 TEST_F(DeviceCommandRunRoutineJobTest, RunDiskReadRoutineSuccess) {
   auto run_routine_response =
       chromeos::cros_healthd::mojom::RunRoutineResponse::New(kId, kStatus);
-  chromeos::cros_healthd::FakeCrosHealthdClient::Get()
-      ->SetRunRoutineResponseForTesting(run_routine_response);
+  ash::cros_healthd::FakeCrosHealthd::Get()->SetRunRoutineResponseForTesting(
+      run_routine_response);
   base::Value params_dict(base::Value::Type::DICTIONARY);
   params_dict.SetIntKey(kTypeFieldName,
                         static_cast<int>(kValidDiskReadRoutineTypeEnum));
@@ -875,8 +870,8 @@ TEST_F(DeviceCommandRunRoutineJobTest, RunDiskReadRoutineInvalidFileSizeMb) {
 TEST_F(DeviceCommandRunRoutineJobTest, RunPrimeSearchRoutineSuccess) {
   auto run_routine_response =
       chromeos::cros_healthd::mojom::RunRoutineResponse::New(kId, kStatus);
-  chromeos::cros_healthd::FakeCrosHealthdClient::Get()
-      ->SetRunRoutineResponseForTesting(run_routine_response);
+  ash::cros_healthd::FakeCrosHealthd::Get()->SetRunRoutineResponseForTesting(
+      run_routine_response);
   base::Value params_dict(base::Value::Type::DICTIONARY);
   params_dict.SetIntKey(kLengthSecondsFieldName, kPositiveInt);
   EXPECT_TRUE(
@@ -896,8 +891,8 @@ TEST_F(DeviceCommandRunRoutineJobTest,
        RunPrimeSearchRoutineMissingLengthSeconds) {
   auto run_routine_response =
       chromeos::cros_healthd::mojom::RunRoutineResponse::New(kId, kStatus);
-  chromeos::cros_healthd::FakeCrosHealthdClient::Get()
-      ->SetRunRoutineResponseForTesting(run_routine_response);
+  ash::cros_healthd::FakeCrosHealthd::Get()->SetRunRoutineResponseForTesting(
+      run_routine_response);
   base::Value params_dict(base::Value::Type::DICTIONARY);
   EXPECT_TRUE(
       RunJob(chromeos::cros_healthd::mojom::DiagnosticRoutineEnum::kPrimeSearch,
@@ -930,8 +925,8 @@ TEST_F(DeviceCommandRunRoutineJobTest,
 TEST_F(DeviceCommandRunRoutineJobTest, RunBatteryDischargeRoutineSuccess) {
   auto run_routine_response =
       chromeos::cros_healthd::mojom::RunRoutineResponse::New(kId, kStatus);
-  chromeos::cros_healthd::FakeCrosHealthdClient::Get()
-      ->SetRunRoutineResponseForTesting(run_routine_response);
+  ash::cros_healthd::FakeCrosHealthd::Get()->SetRunRoutineResponseForTesting(
+      run_routine_response);
   base::Value params_dict(base::Value::Type::DICTIONARY);
   params_dict.SetIntKey(kLengthSecondsFieldName, kPositiveInt);
   params_dict.SetIntKey(kMaximumDischargePercentAllowedFieldName, kPositiveInt);
@@ -1019,8 +1014,8 @@ TEST_F(DeviceCommandRunRoutineJobTest,
 TEST_F(DeviceCommandRunRoutineJobTest, RunBatteryChargeRoutineSuccess) {
   auto run_routine_response =
       chromeos::cros_healthd::mojom::RunRoutineResponse::New(kId, kStatus);
-  chromeos::cros_healthd::FakeCrosHealthdClient::Get()
-      ->SetRunRoutineResponseForTesting(run_routine_response);
+  ash::cros_healthd::FakeCrosHealthd::Get()->SetRunRoutineResponseForTesting(
+      run_routine_response);
   base::Value params_dict(base::Value::Type::DICTIONARY);
   params_dict.SetIntKey(kLengthSecondsFieldName, kPositiveInt);
   params_dict.SetIntKey(kMinimumChargePercentRequiredFieldName, kPositiveInt);
@@ -1110,8 +1105,8 @@ TEST_F(DeviceCommandRunRoutineJobTest,
 TEST_F(DeviceCommandRunRoutineJobTest, RunMemoryRoutineSuccess) {
   auto run_routine_response =
       chromeos::cros_healthd::mojom::RunRoutineResponse::New(kId, kStatus);
-  chromeos::cros_healthd::FakeCrosHealthdClient::Get()
-      ->SetRunRoutineResponseForTesting(run_routine_response);
+  ash::cros_healthd::FakeCrosHealthd::Get()->SetRunRoutineResponseForTesting(
+      run_routine_response);
   base::Value params_dict(base::Value::Type::DICTIONARY);
   EXPECT_TRUE(
       RunJob(chromeos::cros_healthd::mojom::DiagnosticRoutineEnum::kMemory,
@@ -1129,8 +1124,8 @@ TEST_F(DeviceCommandRunRoutineJobTest, RunMemoryRoutineSuccess) {
 TEST_F(DeviceCommandRunRoutineJobTest, RunLanConnectivityRoutineSuccess) {
   auto run_routine_response =
       chromeos::cros_healthd::mojom::RunRoutineResponse::New(kId, kStatus);
-  chromeos::cros_healthd::FakeCrosHealthdClient::Get()
-      ->SetRunRoutineResponseForTesting(run_routine_response);
+  ash::cros_healthd::FakeCrosHealthd::Get()->SetRunRoutineResponseForTesting(
+      run_routine_response);
   base::Value params_dict(base::Value::Type::DICTIONARY);
   EXPECT_TRUE(RunJob(
       chromeos::cros_healthd::mojom::DiagnosticRoutineEnum::kLanConnectivity,
@@ -1148,8 +1143,8 @@ TEST_F(DeviceCommandRunRoutineJobTest, RunLanConnectivityRoutineSuccess) {
 TEST_F(DeviceCommandRunRoutineJobTest, RunSignalStrengthRoutineSuccess) {
   auto run_routine_response =
       chromeos::cros_healthd::mojom::RunRoutineResponse::New(kId, kStatus);
-  chromeos::cros_healthd::FakeCrosHealthdClient::Get()
-      ->SetRunRoutineResponseForTesting(run_routine_response);
+  ash::cros_healthd::FakeCrosHealthd::Get()->SetRunRoutineResponseForTesting(
+      run_routine_response);
   base::Value params_dict(base::Value::Type::DICTIONARY);
   EXPECT_TRUE(RunJob(
       chromeos::cros_healthd::mojom::DiagnosticRoutineEnum::kSignalStrength,
@@ -1167,8 +1162,8 @@ TEST_F(DeviceCommandRunRoutineJobTest, RunSignalStrengthRoutineSuccess) {
 TEST_F(DeviceCommandRunRoutineJobTest, RunGatewayCanBePingedRoutineSuccess) {
   auto run_routine_response =
       chromeos::cros_healthd::mojom::RunRoutineResponse::New(kId, kStatus);
-  chromeos::cros_healthd::FakeCrosHealthdClient::Get()
-      ->SetRunRoutineResponseForTesting(run_routine_response);
+  ash::cros_healthd::FakeCrosHealthd::Get()->SetRunRoutineResponseForTesting(
+      run_routine_response);
   base::Value params_dict(base::Value::Type::DICTIONARY);
   EXPECT_TRUE(RunJob(
       chromeos::cros_healthd::mojom::DiagnosticRoutineEnum::kGatewayCanBePinged,
@@ -1187,8 +1182,8 @@ TEST_F(DeviceCommandRunRoutineJobTest,
        RunHasSecureWiFiConnectionRoutineSuccess) {
   auto run_routine_response =
       chromeos::cros_healthd::mojom::RunRoutineResponse::New(kId, kStatus);
-  chromeos::cros_healthd::FakeCrosHealthdClient::Get()
-      ->SetRunRoutineResponseForTesting(run_routine_response);
+  ash::cros_healthd::FakeCrosHealthd::Get()->SetRunRoutineResponseForTesting(
+      run_routine_response);
   base::Value params_dict(base::Value::Type::DICTIONARY);
   EXPECT_TRUE(RunJob(chromeos::cros_healthd::mojom::DiagnosticRoutineEnum::
                          kHasSecureWiFiConnection,
@@ -1207,8 +1202,8 @@ TEST_F(DeviceCommandRunRoutineJobTest,
 TEST_F(DeviceCommandRunRoutineJobTest, RunDnsResolverPresentRoutineSuccess) {
   auto run_routine_response =
       chromeos::cros_healthd::mojom::RunRoutineResponse::New(kId, kStatus);
-  chromeos::cros_healthd::FakeCrosHealthdClient::Get()
-      ->SetRunRoutineResponseForTesting(run_routine_response);
+  ash::cros_healthd::FakeCrosHealthd::Get()->SetRunRoutineResponseForTesting(
+      run_routine_response);
   base::Value params_dict(base::Value::Type::DICTIONARY);
   EXPECT_TRUE(RunJob(
       chromeos::cros_healthd::mojom::DiagnosticRoutineEnum::kDnsResolverPresent,
@@ -1226,8 +1221,8 @@ TEST_F(DeviceCommandRunRoutineJobTest, RunDnsResolverPresentRoutineSuccess) {
 TEST_F(DeviceCommandRunRoutineJobTest, RunDnsLatencyRoutineSuccess) {
   auto run_routine_response =
       chromeos::cros_healthd::mojom::RunRoutineResponse::New(kId, kStatus);
-  chromeos::cros_healthd::FakeCrosHealthdClient::Get()
-      ->SetRunRoutineResponseForTesting(run_routine_response);
+  ash::cros_healthd::FakeCrosHealthd::Get()->SetRunRoutineResponseForTesting(
+      run_routine_response);
   base::Value params_dict(base::Value::Type::DICTIONARY);
   EXPECT_TRUE(
       RunJob(chromeos::cros_healthd::mojom::DiagnosticRoutineEnum::kDnsLatency,
@@ -1245,8 +1240,8 @@ TEST_F(DeviceCommandRunRoutineJobTest, RunDnsLatencyRoutineSuccess) {
 TEST_F(DeviceCommandRunRoutineJobTest, RunDnsResolutionRoutineSuccess) {
   auto run_routine_response =
       chromeos::cros_healthd::mojom::RunRoutineResponse::New(kId, kStatus);
-  chromeos::cros_healthd::FakeCrosHealthdClient::Get()
-      ->SetRunRoutineResponseForTesting(run_routine_response);
+  ash::cros_healthd::FakeCrosHealthd::Get()->SetRunRoutineResponseForTesting(
+      run_routine_response);
   base::Value params_dict(base::Value::Type::DICTIONARY);
   EXPECT_TRUE(RunJob(
       chromeos::cros_healthd::mojom::DiagnosticRoutineEnum::kDnsResolution,
@@ -1264,8 +1259,8 @@ TEST_F(DeviceCommandRunRoutineJobTest, RunDnsResolutionRoutineSuccess) {
 TEST_F(DeviceCommandRunRoutineJobTest, RunCaptivePortalRoutineSuccess) {
   auto run_routine_response =
       chromeos::cros_healthd::mojom::RunRoutineResponse::New(kId, kStatus);
-  chromeos::cros_healthd::FakeCrosHealthdClient::Get()
-      ->SetRunRoutineResponseForTesting(run_routine_response);
+  ash::cros_healthd::FakeCrosHealthd::Get()->SetRunRoutineResponseForTesting(
+      run_routine_response);
   base::Value params_dict(base::Value::Type::DICTIONARY);
   EXPECT_TRUE(RunJob(
       chromeos::cros_healthd::mojom::DiagnosticRoutineEnum::kCaptivePortal,
@@ -1283,8 +1278,8 @@ TEST_F(DeviceCommandRunRoutineJobTest, RunCaptivePortalRoutineSuccess) {
 TEST_F(DeviceCommandRunRoutineJobTest, RunHttpFirewallRoutineSuccess) {
   auto run_routine_response =
       chromeos::cros_healthd::mojom::RunRoutineResponse::New(kId, kStatus);
-  chromeos::cros_healthd::FakeCrosHealthdClient::Get()
-      ->SetRunRoutineResponseForTesting(run_routine_response);
+  ash::cros_healthd::FakeCrosHealthd::Get()->SetRunRoutineResponseForTesting(
+      run_routine_response);
   base::Value params_dict(base::Value::Type::DICTIONARY);
   EXPECT_TRUE(RunJob(
       chromeos::cros_healthd::mojom::DiagnosticRoutineEnum::kHttpFirewall,
@@ -1302,8 +1297,8 @@ TEST_F(DeviceCommandRunRoutineJobTest, RunHttpFirewallRoutineSuccess) {
 TEST_F(DeviceCommandRunRoutineJobTest, RunHttpsFirewallRoutineSuccess) {
   auto run_routine_response =
       chromeos::cros_healthd::mojom::RunRoutineResponse::New(kId, kStatus);
-  chromeos::cros_healthd::FakeCrosHealthdClient::Get()
-      ->SetRunRoutineResponseForTesting(run_routine_response);
+  ash::cros_healthd::FakeCrosHealthd::Get()->SetRunRoutineResponseForTesting(
+      run_routine_response);
   base::Value params_dict(base::Value::Type::DICTIONARY);
   EXPECT_TRUE(RunJob(
       chromeos::cros_healthd::mojom::DiagnosticRoutineEnum::kHttpsFirewall,
@@ -1321,8 +1316,8 @@ TEST_F(DeviceCommandRunRoutineJobTest, RunHttpsFirewallRoutineSuccess) {
 TEST_F(DeviceCommandRunRoutineJobTest, RunHttpsLatencyRoutineSuccess) {
   auto run_routine_response =
       chromeos::cros_healthd::mojom::RunRoutineResponse::New(kId, kStatus);
-  chromeos::cros_healthd::FakeCrosHealthdClient::Get()
-      ->SetRunRoutineResponseForTesting(run_routine_response);
+  ash::cros_healthd::FakeCrosHealthd::Get()->SetRunRoutineResponseForTesting(
+      run_routine_response);
   base::Value params_dict(base::Value::Type::DICTIONARY);
   EXPECT_TRUE(RunJob(
       chromeos::cros_healthd::mojom::DiagnosticRoutineEnum::kHttpsLatency,
@@ -1340,8 +1335,8 @@ TEST_F(DeviceCommandRunRoutineJobTest, RunHttpsLatencyRoutineSuccess) {
 TEST_F(DeviceCommandRunRoutineJobTest, RunVideoConferencingRoutineSuccess) {
   auto run_routine_response =
       chromeos::cros_healthd::mojom::RunRoutineResponse::New(kId, kStatus);
-  chromeos::cros_healthd::FakeCrosHealthdClient::Get()
-      ->SetRunRoutineResponseForTesting(run_routine_response);
+  ash::cros_healthd::FakeCrosHealthd::Get()->SetRunRoutineResponseForTesting(
+      run_routine_response);
   base::Value params_dict(base::Value::Type::DICTIONARY);
   params_dict.SetStringKey(
       DeviceCommandRunRoutineJob::kStunServerHostnameFieldName,
@@ -1363,8 +1358,8 @@ TEST_F(DeviceCommandRunRoutineJobTest,
        RunVideoConferencingRoutineNoOptionalStunServerHostname) {
   auto run_routine_response =
       chromeos::cros_healthd::mojom::RunRoutineResponse::New(kId, kStatus);
-  chromeos::cros_healthd::FakeCrosHealthdClient::Get()
-      ->SetRunRoutineResponseForTesting(run_routine_response);
+  ash::cros_healthd::FakeCrosHealthd::Get()->SetRunRoutineResponseForTesting(
+      run_routine_response);
   base::Value params_dict(base::Value::Type::DICTIONARY);
   EXPECT_TRUE(RunJob(
       chromeos::cros_healthd::mojom::DiagnosticRoutineEnum::kVideoConferencing,
@@ -1382,15 +1377,15 @@ TEST_F(DeviceCommandRunRoutineJobTest,
 TEST_F(DeviceCommandRunRoutineJobTest, RunArcHttpRoutineSuccess) {
   auto run_routine_response =
       chromeos::cros_healthd::mojom::RunRoutineResponse::New(kId, kStatus);
-  chromeos::cros_healthd::FakeCrosHealthdClient::Get()
-      ->SetRunRoutineResponseForTesting(run_routine_response);
+  ash::cros_healthd::FakeCrosHealthd::Get()->SetRunRoutineResponseForTesting(
+      run_routine_response);
   base::Value params_dict(base::Value::Type::DICTIONARY);
   EXPECT_TRUE(RunJob(
       chromeos::cros_healthd::mojom::DiagnosticRoutineEnum::kArcHttp,
       std::move(params_dict),
       base::BindLambdaForTesting([](RemoteCommandJob* job) {
         EXPECT_EQ(
-            chromeos::cros_healthd::FakeCrosHealthdClient::Get()
+            ash::cros_healthd::FakeCrosHealthd::Get()
                 ->GetLastRunRoutine()
                 .value(),
             chromeos::cros_healthd::mojom::DiagnosticRoutineEnum::kArcHttp);
@@ -1406,18 +1401,42 @@ TEST_F(DeviceCommandRunRoutineJobTest, RunArcHttpRoutineSuccess) {
 TEST_F(DeviceCommandRunRoutineJobTest, RunArcPingRoutineSuccess) {
   auto run_routine_response =
       chromeos::cros_healthd::mojom::RunRoutineResponse::New(kId, kStatus);
-  chromeos::cros_healthd::FakeCrosHealthdClient::Get()
-      ->SetRunRoutineResponseForTesting(run_routine_response);
+  ash::cros_healthd::FakeCrosHealthd::Get()->SetRunRoutineResponseForTesting(
+      run_routine_response);
   base::Value params_dict(base::Value::Type::DICTIONARY);
   EXPECT_TRUE(RunJob(
       chromeos::cros_healthd::mojom::DiagnosticRoutineEnum::kArcPing,
       std::move(params_dict),
       base::BindLambdaForTesting([](RemoteCommandJob* job) {
         EXPECT_EQ(
-            chromeos::cros_healthd::FakeCrosHealthdClient::Get()
+            ash::cros_healthd::FakeCrosHealthd::Get()
                 ->GetLastRunRoutine()
                 .value(),
             chromeos::cros_healthd::mojom::DiagnosticRoutineEnum::kArcPing);
+        EXPECT_EQ(job->status(), RemoteCommandJob::SUCCEEDED);
+        std::unique_ptr<std::string> payload = job->GetResultPayload();
+        EXPECT_TRUE(payload);
+        EXPECT_EQ(CreateSuccessPayload(kId, kStatus), *payload);
+      })));
+}
+
+// Note that the ARC DNS Resolution routine has no parameters, so we only need
+// to test that it can be run successfully.
+TEST_F(DeviceCommandRunRoutineJobTest, RunArcDnsResolutionRoutineSuccess) {
+  auto run_routine_response =
+      chromeos::cros_healthd::mojom::RunRoutineResponse::New(kId, kStatus);
+  ash::cros_healthd::FakeCrosHealthd::Get()->SetRunRoutineResponseForTesting(
+      run_routine_response);
+  base::Value params_dict(base::Value::Type::DICTIONARY);
+  EXPECT_TRUE(RunJob(
+      chromeos::cros_healthd::mojom::DiagnosticRoutineEnum::kArcDnsResolution,
+      std::move(params_dict),
+      base::BindLambdaForTesting([](RemoteCommandJob* job) {
+        EXPECT_EQ(ash::cros_healthd::FakeCrosHealthd::Get()
+                      ->GetLastRunRoutine()
+                      .value(),
+                  chromeos::cros_healthd::mojom::DiagnosticRoutineEnum::
+                      kArcDnsResolution);
         EXPECT_EQ(job->status(), RemoteCommandJob::SUCCEEDED);
         std::unique_ptr<std::string> payload = job->GetResultPayload();
         EXPECT_TRUE(payload);

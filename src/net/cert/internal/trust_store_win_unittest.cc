@@ -13,9 +13,9 @@
 #include "base/win/wincrypt_shim.h"
 #include "crypto/scoped_capi_types.h"
 #include "net/cert/cert_net_fetcher.h"
-#include "net/cert/internal/cert_errors.h"
-#include "net/cert/internal/parsed_certificate.h"
-#include "net/cert/internal/test_helpers.h"
+#include "net/cert/pki/cert_errors.h"
+#include "net/cert/pki/parsed_certificate.h"
+#include "net/cert/pki/test_helpers.h"
 #include "net/cert/x509_certificate.h"
 #include "net/cert/x509_util.h"
 #include "net/cert/x509_util_win.h"
@@ -65,7 +65,7 @@ bool AddToStore(HCERTSTORE store, const std::string file_name) {
       X509_ASN_ENCODING, CRYPTO_BUFFER_data(cert->cert_buffer()),
       CRYPTO_BUFFER_len(cert->cert_buffer())));
   return CertAddCertificateContextToStore(store, os_cert.get(),
-                                          CERT_STORE_ADD_ALWAYS, NULL);
+                                          CERT_STORE_ADD_ALWAYS, nullptr);
 }
 
 // Returns true if cert at file_name successfully added to store with
@@ -93,7 +93,7 @@ bool AddToStoreWithEKURestriction(HCERTSTORE store,
     }
   }
   return !!CertAddCertificateContextToStore(store, os_cert.get(),
-                                            CERT_STORE_ADD_ALWAYS, NULL);
+                                            CERT_STORE_ADD_ALWAYS, nullptr);
 }
 
 // TrustStoreWin isset up as follows:
@@ -127,7 +127,7 @@ TEST(TrustStoreWin, GetTrust) {
     CertificateTrustType expected_result;
   } kTestData[] = {
       // Explicitly trusted root should be trusted.
-      {kMultiRootDByD, CertificateTrustType::TRUSTED_ANCHOR},
+      {kMultiRootDByD, CertificateTrustType::TRUSTED_ANCHOR_WITH_EXPIRATION},
       // Intermediate for path building should not be trusted.
       {kMultiRootCByD, CertificateTrustType::UNSPECIFIED},
       // Unknown roots should not be trusted (e.g. just because they're
@@ -185,7 +185,7 @@ TEST(TrustStoreWin, GetTrustRestrictedEKU) {
   } kTestData[] = {
       // Root cert with EKU szOID_PKIX_KP_SERVER_AUTH usage set should be
       // trusted.
-      {kMultiRootDByD, CertificateTrustType::TRUSTED_ANCHOR},
+      {kMultiRootDByD, CertificateTrustType::TRUSTED_ANCHOR_WITH_EXPIRATION},
       // Root cert with EKU szOID_PKIX_KP_CLIENT_AUTH does not allow usage of
       // cert for server auth.
       {kMultiRootEByE, CertificateTrustType::DISTRUSTED},
@@ -279,7 +279,7 @@ TEST(TrustStoreWin, GetTrustDisallowedCerts) {
   } kTestData[] = {
       // dByD in root, also in distrusted but without szOID_PKIX_KP_SERVER_AUTH
       // set.
-      {kMultiRootDByD, CertificateTrustType::TRUSTED_ANCHOR},
+      {kMultiRootDByD, CertificateTrustType::TRUSTED_ANCHOR_WITH_EXPIRATION},
       // dByD in root, also in distrusted with szOID_PKIX_KP_SERVER_AUTH set.
       {kMultiRootEByE, CertificateTrustType::DISTRUSTED},
   };

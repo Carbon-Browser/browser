@@ -37,7 +37,8 @@ LensRegionSearchController::~LensRegionSearchController() {
   CloseWithReason(views::Widget::ClosedReason::kLostFocus);
 }
 
-void LensRegionSearchController::Start(bool is_google_default_search_provider) {
+void LensRegionSearchController::Start(bool use_fullscreen_capture,
+                                       bool is_google_default_search_provider) {
   is_google_default_search_provider_ = is_google_default_search_provider;
   if (!web_contents() || !browser_)
     return;
@@ -59,7 +60,11 @@ void LensRegionSearchController::Start(bool is_google_default_search_provider) {
       callback = base::BindOnce(&LensRegionSearchController::OnCaptureCompleted,
                                 weak_this_);
   in_capture_mode_ = true;
-  screenshot_flow_->Start(std::move(callback));
+  if (use_fullscreen_capture) {
+    screenshot_flow_->StartFullscreenCapture(std::move(callback));
+  } else {
+    screenshot_flow_->Start(std::move(callback));
+  }
 }
 
 gfx::Image LensRegionSearchController::ResizeImageIfNecessary(
@@ -184,10 +189,16 @@ void LensRegionSearchController::OnCaptureCompleted(
   }
 
   if (is_google_default_search_provider_) {
-    core_tab_helper->SearchWithLensInNewTab(
-        image, captured_image.Size(),
-        lens::EntryPoint::CHROME_REGION_SEARCH_MENU_ITEM,
-        lens::features::kEnableSidePanelForLensRegionSearch.Get());
+    // Do not show the side panel on region searches and modify the entry point
+    // if Lens fullscreen search features are enabled.
+    lens::EntryPoint entry_point =
+        lens::features::IsLensFullscreenSearchEnabled()
+            ? lens::EntryPoint::CHROME_FULLSCREEN_SEARCH_MENU_ITEM
+            : lens::EntryPoint::CHROME_REGION_SEARCH_MENU_ITEM;
+    bool use_side_panel = lens::features::IsLensSidePanelEnabled() &&
+                          !lens::features::IsLensFullscreenSearchEnabled();
+    core_tab_helper->SearchWithLensInNewTab(image, captured_image.Size(),
+                                            entry_point, use_side_panel);
   } else {
     core_tab_helper->SearchByImageInNewTab(image, captured_image.Size());
   }

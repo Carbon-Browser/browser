@@ -5,6 +5,7 @@
 #include "chrome/chrome_cleaner/os/initializer.h"
 
 #include <memory>
+#include <tuple>
 #include <utility>
 
 #include "base/command_line.h"
@@ -58,7 +59,7 @@ bool InitializeOSUtils() {
 
   // Call into the random number generator to initialize it. This must be done
   // once before lowering the token in the sandbox target process.
-  ANALYZER_ALLOW_UNUSED(base::RandUint64());
+  std::ignore = base::RandUint64();
 
   return true;
 }
@@ -76,7 +77,7 @@ void NotifyInitializationDoneForTesting() {
     // immediately reset. Wait at most 5 seconds for the test to signal that
     // it's ready using the same event before continuing. If the test takes
     // longer than that stop waiting to prevent hangs.
-    notifier_event->TimedWait(base::TimeDelta::FromSeconds(5));
+    notifier_event->TimedWait(base::Seconds(5));
   }
 }
 

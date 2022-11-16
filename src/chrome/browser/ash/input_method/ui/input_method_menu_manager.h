@@ -2,7 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/macros.h"
 #include "base/observer_list.h"
 #include "chrome/browser/ash/input_method/ui/input_method_menu_item.h"
 #include "ui/chromeos/ui_chromeos_export.h"
@@ -28,6 +27,9 @@ class UI_CHROMEOS_EXPORT InputMethodMenuManager {
     virtual void InputMethodMenuItemChanged(
         InputMethodMenuManager* manager) = 0;
   };
+
+  InputMethodMenuManager(const InputMethodMenuManager&) = delete;
+  InputMethodMenuManager& operator=(const InputMethodMenuManager&) = delete;
 
   ~InputMethodMenuManager();
 
@@ -58,8 +60,6 @@ class UI_CHROMEOS_EXPORT InputMethodMenuManager {
 
   // Observers who will be notified when menu changes.
   base::ObserverList<Observer>::Unchecked observers_;
-
-  DISALLOW_COPY_AND_ASSIGN(InputMethodMenuManager);
 };
 
 }  // namespace ime

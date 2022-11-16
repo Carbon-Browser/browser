@@ -24,7 +24,6 @@ import androidx.appcompat.content.res.AppCompatResources;
 import androidx.core.view.MarginLayoutParamsCompat;
 import androidx.core.view.ViewCompat;
 
-import org.chromium.base.ApiCompatibilityUtils;
 import org.chromium.ui.DropdownDividerDrawable;
 import org.chromium.ui.DropdownItem;
 
@@ -91,8 +90,16 @@ public class AutofillDropdownAdapter extends ArrayAdapter<DropdownItem> {
             // For refreshed layout, ignore the return value as we don't need to adjust the height
             // of the view.
             populateItemTagView(item, layout);
+            // Set the visibility of the start/end icons.
+            layout.findViewById(R.id.start_dropdown_icon)
+                    .setVisibility(item.isIconAtStart() ? View.VISIBLE : View.GONE);
+            layout.findViewById(R.id.end_dropdown_icon)
+                    .setVisibility(item.isIconAtStart() ? View.GONE : View.VISIBLE);
             ImageView iconView =
-                    populateIconView((ImageView) layout.findViewById(R.id.end_dropdown_icon), item);
+                    populateIconView((ImageView) (item.isIconAtStart()
+                                                     ? layout.findViewById(R.id.start_dropdown_icon)
+                                                     : layout.findViewById(R.id.end_dropdown_icon)),
+                            item);
             if (iconView != null) {
                 iconView.setLayoutParams(getSizeParamsForIconView(iconView, item));
             }
@@ -129,11 +136,9 @@ public class AutofillDropdownAdapter extends ArrayAdapter<DropdownItem> {
             divider.setHeight(dividerHeight);
             int dividerColor;
             if (mSeparators != null && mSeparators.contains(position)) {
-                dividerColor = ApiCompatibilityUtils.getColor(
-                        mContext.getResources(), R.color.dropdown_dark_divider_color);
+                dividerColor = mContext.getColor(R.color.dropdown_dark_divider_color);
             } else {
-                dividerColor = ApiCompatibilityUtils.getColor(
-                        mContext.getResources(), R.color.dropdown_divider_color);
+                dividerColor = mContext.getColor(R.color.dropdown_divider_color);
             }
             divider.setDividerColor(dividerColor);
         }
@@ -175,8 +180,7 @@ public class AutofillDropdownAdapter extends ArrayAdapter<DropdownItem> {
             labelView.setTypeface(null, Typeface.NORMAL);
         }
 
-        labelView.setTextColor(ApiCompatibilityUtils.getColor(
-                mContext.getResources(), item.getLabelFontColorResId()));
+        labelView.setTextColor(mContext.getColor(item.getLabelFontColorResId()));
         labelView.setTextSize(TypedValue.COMPLEX_UNIT_PX,
                 mContext.getResources().getDimension(R.dimen.text_size_large));
 
@@ -192,8 +196,10 @@ public class AutofillDropdownAdapter extends ArrayAdapter<DropdownItem> {
         ImageView iconViewEnd = (ImageView) layout.findViewById(R.id.end_dropdown_icon);
         if (item.isIconAtStart()) {
             iconViewEnd.setVisibility(View.GONE);
+            iconViewStart.setVisibility(View.VISIBLE);
         } else {
             iconViewStart.setVisibility(View.GONE);
+            iconViewEnd.setVisibility(View.VISIBLE);
         }
 
         ImageView iconView =

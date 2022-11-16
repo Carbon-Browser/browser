@@ -5,8 +5,8 @@
 #include "device/bluetooth/bluez/bluetooth_low_energy_scan_session_bluez.h"
 
 #include "base/callback.h"
+#include "base/debug/dump_without_crashing.h"
 #include "base/logging.h"
-#include "base/macros.h"
 #include "base/memory/ptr_util.h"
 #include "device/bluetooth/bluez/bluetooth_adapter_bluez.h"
 #include "device/bluetooth/bluez/bluetooth_device_bluez.h"
@@ -62,7 +62,13 @@ void BluetoothLowEnergyScanSessionBlueZ::OnDeviceFound(
 
   DCHECK(adapter_);
   device::BluetoothDevice* device = adapter_->GetDeviceWithPath(device_path);
-  DCHECK(device);
+  if (!device) {
+    // TODO(b/212643004): Generate crash dumps to understand why the device
+    // path is sometimes invalid but avoid notifying observers with a null
+    // device.
+    base::debug::DumpWithoutCrashing();
+    return;
+  }
 
   delegate_->OnDeviceFound(this, device);
 }

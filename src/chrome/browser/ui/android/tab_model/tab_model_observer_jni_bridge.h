@@ -9,7 +9,6 @@
 
 #include "base/android/jni_weak_ref.h"
 #include "base/android/scoped_java_ref.h"
-#include "base/macros.h"
 #include "base/observer_list.h"
 #include "chrome/browser/ui/android/tab_model/tab_model_observer.h"
 
@@ -20,6 +19,10 @@ class TabModelObserverJniBridge {
  public:
   TabModelObserverJniBridge(JNIEnv* env,
                             const base::android::JavaRef<jobject>& tab_model);
+
+  TabModelObserverJniBridge(const TabModelObserverJniBridge&) = delete;
+  TabModelObserverJniBridge& operator=(const TabModelObserverJniBridge&) =
+      delete;
 
   ~TabModelObserverJniBridge();
 
@@ -42,6 +45,10 @@ class TabModelObserverJniBridge {
                    const base::android::JavaParamRef<jobject>& jobj,
                    int tab_id,
                    bool incognito);
+
+  void DidCloseTabs(JNIEnv* env,
+                    const base::android::JavaParamRef<jobject>& jobj,
+                    const base::android::JavaParamRef<jobjectArray>& jtabs);
 
   void WillAddTab(JNIEnv* env,
                   const base::android::JavaParamRef<jobject>& jobj,
@@ -95,8 +102,6 @@ class TabModelObserverJniBridge {
 
   // Observers attached to this bridge.
   base::ObserverList<TabModelObserver>::Unchecked observers_;
-
-  DISALLOW_COPY_AND_ASSIGN(TabModelObserverJniBridge);
 };
 
 #endif  // CHROME_BROWSER_UI_ANDROID_TAB_MODEL_TAB_MODEL_OBSERVER_JNI_BRIDGE_H_

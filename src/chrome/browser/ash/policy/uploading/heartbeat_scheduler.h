@@ -11,7 +11,6 @@
 #include <string>
 
 #include "base/cancelable_callback.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
@@ -46,10 +45,13 @@ class HeartbeatScheduler : public gcm::GCMAppHandler,
   // to DM server, and can be null. |driver| can be null for tests.
   HeartbeatScheduler(
       gcm::GCMDriver* driver,
-      policy::CloudPolicyClient* cloud_policy_client,
-      policy::CloudPolicyStore* cloud_policy_store,
+      CloudPolicyClient* cloud_policy_client,
+      CloudPolicyStore* cloud_policy_store,
       const std::string& device_id,
       const scoped_refptr<base::SequencedTaskRunner>& task_runner);
+
+  HeartbeatScheduler(const HeartbeatScheduler&) = delete;
+  HeartbeatScheduler& operator=(const HeartbeatScheduler&) = delete;
 
   ~HeartbeatScheduler() override;
 
@@ -136,9 +138,9 @@ class HeartbeatScheduler : public gcm::GCMAppHandler,
   // Callback invoked via a delay to send a heartbeat.
   base::CancelableOnceClosure heartbeat_callback_;
 
-  policy::CloudPolicyClient* cloud_policy_client_;
+  CloudPolicyClient* cloud_policy_client_;
 
-  policy::CloudPolicyStore* cloud_policy_store_;
+  CloudPolicyStore* cloud_policy_store_;
 
   // The GCMDriver used to send heartbeat messages.
   gcm::GCMDriver* const gcm_driver_;
@@ -157,8 +159,6 @@ class HeartbeatScheduler : public gcm::GCMAppHandler,
   // Note: This should remain the last member so it'll be destroyed and
   // invalidate the weak pointers before any other members are destroyed.
   base::WeakPtrFactory<HeartbeatScheduler> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(HeartbeatScheduler);
 };
 
 }  // namespace policy

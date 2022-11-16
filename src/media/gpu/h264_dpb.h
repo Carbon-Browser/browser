@@ -12,7 +12,6 @@
 
 #include <vector>
 
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "media/gpu/codec_picture.h"
 #include "media/gpu/media_gpu_export.h"
@@ -39,6 +38,9 @@ class MEDIA_GPU_EXPORT H264Picture : public CodecPicture {
   };
 
   H264Picture();
+
+  H264Picture(const H264Picture&) = delete;
+  H264Picture& operator=(const H264Picture&) = delete;
 
   virtual V4L2H264Picture* AsV4L2H264Picture();
   virtual VaapiH264Picture* AsVaapiH264Picture();
@@ -96,9 +98,6 @@ class MEDIA_GPU_EXPORT H264Picture : public CodecPicture {
 
  protected:
   ~H264Picture() override;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(H264Picture);
 };
 
 // DPB - Decoded Picture Buffer.
@@ -107,6 +106,10 @@ class MEDIA_GPU_EXPORT H264Picture : public CodecPicture {
 class H264DPB {
  public:
   H264DPB();
+
+  H264DPB(const H264DPB&) = delete;
+  H264DPB& operator=(const H264DPB&) = delete;
+
   ~H264DPB();
 
   void set_max_num_pics(size_t max_num_pics);
@@ -116,8 +119,8 @@ class H264DPB {
   // and free it.
   void DeleteUnused();
 
-  // Remove a picture by its pic_order_cnt and free it.
-  void DeleteByPOC(int poc);
+  // Remove a picture from DPB and free it.
+  void Delete(scoped_refptr<H264Picture> pic);
 
   // Clear DPB.
   void Clear();
@@ -177,8 +180,6 @@ class H264DPB {
 
   H264Picture::Vector pics_;
   size_t max_num_pics_;
-
-  DISALLOW_COPY_AND_ASSIGN(H264DPB);
 };
 
 }  // namespace media

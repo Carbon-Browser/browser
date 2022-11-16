@@ -14,13 +14,13 @@
 #include "ash/ash_export.h"
 #include "ash/public/cpp/app_list/app_list_types.h"
 #include "ash/public/cpp/metrics_util.h"
-#include "ash/public/cpp/presentation_time_recorder.h"
 #include "base/callback.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
+#include "base/time/time.h"
 #include "build/build_config.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/aura/window_observer.h"
+#include "ui/compositor/presentation_time_recorder.h"
 #include "ui/events/event.h"
 #include "ui/gfx/color_palette.h"
 #include "ui/views/widget/widget.h"
@@ -43,14 +43,11 @@ class AppListA11yAnnouncer;
 class AppsContainerView;
 class ApplicationDragAndDropHost;
 class AppListBackgroundShieldView;
-class AppListConfig;
 class AppListMainView;
-class AppListModel;
 class AppsGridView;
 class PagedAppsGridView;
 class PaginationModel;
 class SearchBoxView;
-class SearchModel;
 class StateTransitionNotifier;
 
 FORWARD_DECLARE_TEST(AppListControllerImplTest,
@@ -74,13 +71,16 @@ class ASH_EXPORT AppListView : public views::WidgetDelegateView,
   class TestApi {
    public:
     explicit TestApi(AppListView* view);
+
+    TestApi(const TestApi&) = delete;
+    TestApi& operator=(const TestApi&) = delete;
+
     ~TestApi();
 
     PagedAppsGridView* GetRootAppsGridView();
 
    private:
     AppListView* const view_;
-    DISALLOW_COPY_AND_ASSIGN(TestApi);
   };
 
   class ASH_EXPORT ScopedAccessibilityAnnouncementLock {
@@ -157,14 +157,11 @@ class ASH_EXPORT AppListView : public views::WidgetDelegateView,
 
   // Does not take ownership of |delegate|.
   explicit AppListView(AppListViewDelegate* delegate);
+
+  AppListView(const AppListView&) = delete;
+  AppListView& operator=(const AppListView&) = delete;
+
   ~AppListView() override;
-
-  // Prevents handling input events for the |window| in context of handling in
-  // app list.
-  static void ExcludeWindowFromEventHandling(aura::Window* window);
-
-  static void SetShortAnimationForTesting(bool enabled);
-  static bool ShortAnimationsForTesting();
 
   // Used for testing, allows the page reset timer to be fired immediately
   // after starting.
@@ -327,6 +324,10 @@ class ASH_EXPORT AppListView : public views::WidgetDelegateView,
   //     initial animation transform.
   float GetAppListTransitionProgress(int flags) const;
 
+  // Returns the expected app list view height (measured from the screen bottom)
+  // in the provided state.
+  int GetHeightForState(AppListViewState state) const;
+
   // Returns the height of app list in fullscreen state.
   int GetFullscreenStateHeight() const;
 
@@ -363,11 +364,6 @@ class ASH_EXPORT AppListView : public views::WidgetDelegateView,
   // Moves the AppListView off screen and calls a layout if needed.
   void OnBoundsAnimationCompleted(AppListViewState target_state);
 
-  // Returns the expected tile bounds in screen coordinates the provided app
-  // grid item ID , if the item is in the first apps grid page. Otherwise, it
-  // returns 1x1 rectangle in the apps grid center.
-  gfx::Rect GetItemScreenBoundsInFirstGridPage(const std::string& id) const;
-
   gfx::NativeView parent_window() const { return parent_window_; }
 
   AppListViewState app_list_state() const { return app_list_state_; }
@@ -399,10 +395,6 @@ class ASH_EXPORT AppListView : public views::WidgetDelegateView,
 
   views::View* GetAppListBackgroundShieldForTest();
 
-  // Gets the current app list configuration. Should not be used before the app
-  // list content has been initialized.
-  const AppListConfig& GetAppListConfig() const;
-
   SkColor GetAppListBackgroundShieldColorForTest();
 
   // Returns true if the Embedded Assistant UI is currently being shown.
@@ -418,6 +410,10 @@ class ASH_EXPORT AppListView : public views::WidgetDelegateView,
   // Updates the title of the window that contains the launcher.
   void UpdateWindowTitle();
 
+  // Called when app list visibility changed.
+  void OnAppListVisibilityWillChange(bool visible);
+  void OnAppListVisibilityChanged(bool shown);
+
  private:
   FRIEND_TEST_ALL_PREFIXES(AppListControllerImplTest,
                            CheckAppListViewBoundsWhenVKeyboardEnabled);
@@ -431,11 +427,6 @@ class ASH_EXPORT AppListView : public views::WidgetDelegateView,
   // Returns insets that should be added to app list content to avoid overlap
   // with the shelf.
   gfx::Insets GetMainViewInsetsForShelf() const;
-
-  // Updates the app list configuration that should be used by this app list
-  // view.
-  // |parent_window|: The window that contains the app list widget.
-  void UpdateAppListConfig(aura::Window* parent_window);
 
   // Updates the widget to be shown.
   void UpdateWidget();
@@ -518,10 +509,6 @@ class ASH_EXPORT AppListView : public views::WidgetDelegateView,
   const std::vector<SkColor>& GetWallpaperProminentColors();
   void SetBackgroundShieldColor();
 
-  // Records the number of folders, and the number of items in folders for UMA
-  // histograms.
-  void RecordFolderMetrics();
-
   // Returns true if scroll events should be ignored.
   bool ShouldIgnoreScrollEvents();
 
@@ -552,8 +539,6 @@ class ASH_EXPORT AppListView : public views::WidgetDelegateView,
   void ResetSubpixelPositionOffset(ui::Layer* layer);
 
   AppListViewDelegate* const delegate_;
-  AppListModel* const model_;        // Not Owned.
-  SearchModel* const search_model_;  // Not Owned.
 
   // Keeps track of the number of locks that prevent the app list view
   // from creating app list transition accessibility events. This is used to
@@ -630,11 +615,7 @@ class ASH_EXPORT AppListView : public views::WidgetDelegateView,
   bool disable_contents_reset_when_showing_ = false;
 
   // Records the presentation time for app launcher dragging.
-  std::unique_ptr<PresentationTimeRecorder> presentation_time_recorder_;
-
-  // If set, the app list config that should be used within the app list view
-  // instead of the default instance.
-  std::unique_ptr<AppListConfig> app_list_config_;
+  std::unique_ptr<ui::PresentationTimeRecorder> presentation_time_recorder_;
 
   // A timer which will reset the app list to the initial page. This timer only
   // goes off when the app list is not visible after a set amount of time.
@@ -650,8 +631,6 @@ class ASH_EXPORT AppListView : public views::WidgetDelegateView,
   // detects that `SetState()` got called again (in which case the weak ptr will
   // be invalidated).
   base::WeakPtrFactory<AppListView> set_state_weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(AppListView);
 };
 
 }  // namespace ash

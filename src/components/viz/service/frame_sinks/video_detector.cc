@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "base/time/time.h"
+#include "components/viz/common/features.h"
 #include "components/viz/common/quads/compositor_frame.h"
 #include "components/viz/service/surfaces/surface.h"
 #include "components/viz/service/surfaces/surface_manager.h"
@@ -25,7 +26,12 @@ constexpr base::TimeDelta VideoDetector::kMinVideoDuration;
 // likely that a video is playing in it.
 class VideoDetector::ClientInfo {
  public:
-  ClientInfo() = default;
+  ClientInfo()
+      : should_ignore_non_video_frames_(
+            features::ShouldVideoDetectorIgnoreNonVideoFrames()) {}
+
+  ClientInfo(const ClientInfo&) = delete;
+  ClientInfo& operator=(const ClientInfo&) = delete;
 
   // Called when a Surface belonging to this client is drawn. Returns true if we
   // determine that video is playing in this client.
@@ -40,6 +46,10 @@ class VideoDetector::ClientInfo {
     last_drawn_frame_index_ = frame_index;
 
     const CompositorFrame& frame = surface->GetActiveFrame();
+
+    if (should_ignore_non_video_frames_ && !frame.metadata.may_contain_video) {
+      return false;
+    }
 
     gfx::Rect damage =
         gfx::ScaleToEnclosingRect(frame.render_pass_list.back()->damage_rect,
@@ -59,7 +69,7 @@ class VideoDetector::ClientInfo {
 
     const bool in_video =
         (buffer_size_ == kMinFramesPerSecond) &&
-        (now - update_times_[buffer_start_] <= base::TimeDelta::FromSeconds(1));
+        (now - update_times_[buffer_start_] <= base::Seconds(1));
 
     if (in_video && video_start_time_.is_null())
       video_start_time_ = update_times_[buffer_start_];
@@ -71,6 +81,10 @@ class VideoDetector::ClientInfo {
   }
 
  private:
+  // If true, we'll only process frames that may contain videos, as determined
+  // by the frame's may_contain_video metadata.
+  bool should_ignore_non_video_frames_;
+
   // Circular buffer containing update times of the last (up to
   // |kMinFramesPerSecond|) video-sized updates to this client.
   base::TimeTicks update_times_[kMinFramesPerSecond];
@@ -89,8 +103,6 @@ class VideoDetector::ClientInfo {
   // whether a new frame was submitted since the last time the Surface was
   // drawn.
   uint64_t last_drawn_frame_index_ = 0;
-
-  DISALLOW_COPY_AND_ASSIGN(ClientInfo);
 };
 
 VideoDetector::VideoDetector(

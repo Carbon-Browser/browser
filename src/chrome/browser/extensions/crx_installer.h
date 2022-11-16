@@ -10,15 +10,16 @@
 #include <utility>
 #include <vector>
 
-#include "base/compiler_specific.h"
 #include "base/files/file_path.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
+#include "base/scoped_observation.h"
 #include "base/version.h"
 #include "chrome/browser/extensions/extension_install_prompt.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/webstore_installer.h"
+#include "chrome/browser/profiles/profile_observer.h"
 #include "chrome/common/extensions/extension_constants.h"
 #include "components/sync/model/string_ordinal.h"
 #include "extensions/browser/api/declarative_net_request/ruleset_install_pref.h"
@@ -31,6 +32,7 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 class ExtensionServiceTest;
+class ScopedProfileKeepAlive;
 class SkBitmap;
 
 namespace base {
@@ -42,6 +44,7 @@ class CrxInstallError;
 class ExtensionService;
 class ExtensionUpdaterTest;
 enum class InstallationStage;
+class MockCrxInstaller;
 class PreloadCheckGroup;
 
 // This class installs a crx file into a profile.
@@ -72,7 +75,7 @@ class PreloadCheckGroup;
 // terminating during the install. We can't listen for the app termination
 // notification here in this class because it can be destroyed on any thread
 // and won't safely be able to clean up UI thread notification listeners.
-class CrxInstaller : public SandboxedUnpackerClient {
+class CrxInstaller : public SandboxedUnpackerClient, public ProfileObserver {
  public:
   // A callback to be executed when the install finishes.
   using InstallerResultCallback = ExtensionSystem::InstallUpdateCallback;
@@ -91,6 +94,9 @@ class CrxInstaller : public SandboxedUnpackerClient {
   // Used to indicate if host permissions should be withheld during
   // installation.
   enum WithholdingBehavior { kWithholdPermissions, kDontWithholdPermissions };
+
+  CrxInstaller(const CrxInstaller&) = delete;
+  CrxInstaller& operator=(const CrxInstaller&) = delete;
 
   // Extensions will be installed into service->install_directory(), then
   // registered with |service|. This does a silent install - see below for
@@ -114,7 +120,7 @@ class CrxInstaller : public SandboxedUnpackerClient {
   void InstallCrx(const base::FilePath& source_file);
 
   // Install the crx in |source_file|.
-  void InstallCrxFile(const CRXFileInfo& source_file);
+  virtual void InstallCrxFile(const CRXFileInfo& source_file);
 
   // Install the unpacked crx in |unpacked_dir|.
   // If |delete_source_| is true, |unpacked_dir| will be removed at the end of
@@ -257,6 +263,7 @@ class CrxInstaller : public SandboxedUnpackerClient {
   friend class ::ExtensionServiceTest;
   friend class BookmarkAppInstallFinalizerTest;
   friend class ExtensionUpdaterTest;
+  friend class MockCrxInstaller;
 
   CrxInstaller(base::WeakPtr<ExtensionService> service_weak,
                std::unique_ptr<ExtensionInstallPrompt> client,
@@ -298,6 +305,9 @@ class CrxInstaller : public SandboxedUnpackerClient {
                        declarative_net_request::RulesetInstallPrefs
                            ruleset_install_prefs) override;
   void OnStageChanged(InstallationStage stage) override;
+
+  // ProfileObserver
+  void OnProfileWillBeDestroyed(Profile* profile) override;
 
   // Called on the UI thread to start the requirements, policy and blocklist
   // checks on the extension.
@@ -364,7 +374,13 @@ class CrxInstaller : public SandboxedUnpackerClient {
   base::SequencedTaskRunner* GetUnpackerTaskRunner();
 
   // The Profile the extension is being installed in.
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
+
+  // Prevent Profile destruction until the CrxInstaller is done.
+  std::unique_ptr<ScopedProfileKeepAlive> profile_keep_alive_;
+  // ... but |profile_| could still get destroyed early, if Chrome shuts down
+  // completely. We need to perform some cleanup if that happens.
+  base::ScopedObservation<Profile, ProfileObserver> profile_observation_{this};
 
   // The extension being installed.
   scoped_refptr<const Extension> extension_;
@@ -538,8 +554,6 @@ class CrxInstaller : public SandboxedUnpackerClient {
   // Invoked when the expectations from CRXFileInfo match with the crx file
   // after unpack success.
   ExpectationsVerifiedCallback expectations_verified_callback_;
-
-  DISALLOW_COPY_AND_ASSIGN(CrxInstaller);
 };
 
 }  // namespace extensions

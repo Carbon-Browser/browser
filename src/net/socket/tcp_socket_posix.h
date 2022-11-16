@@ -10,11 +10,10 @@
 #include <memory>
 
 #include "base/callback.h"
-#include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "net/base/address_family.h"
 #include "net/base/completion_once_callback.h"
 #include "net/base/net_export.h"
+#include "net/base/network_change_notifier.h"
 #include "net/log/net_log_with_source.h"
 #include "net/socket/socket_descriptor.h"
 #include "net/socket/socket_performance_watcher.h"
@@ -43,6 +42,10 @@ class NET_EXPORT TCPSocketPosix {
       std::unique_ptr<SocketPerformanceWatcher> socket_performance_watcher,
       NetLog* net_log,
       const NetLogSource& source);
+
+  TCPSocketPosix(const TCPSocketPosix&) = delete;
+  TCPSocketPosix& operator=(const TCPSocketPosix&) = delete;
+
   virtual ~TCPSocketPosix();
 
   // Opens the socket.
@@ -120,8 +123,7 @@ class NET_EXPORT TCPSocketPosix {
 
   // Gets the estimated RTT. Returns false if the RTT is
   // unavailable. May also return false when estimated RTT is 0.
-  bool GetEstimatedRoundTripTime(base::TimeDelta* out_rtt) const
-      WARN_UNUSED_RESULT;
+  [[nodiscard]] bool GetEstimatedRoundTripTime(base::TimeDelta* out_rtt) const;
 
   // Closes the socket.
   void Close();
@@ -148,6 +150,11 @@ class NET_EXPORT TCPSocketPosix {
 
   const NetLogWithSource& net_log() const { return net_log_; }
 
+  // Opens the socket and returns the underlying SocketDescriptor as well as the
+  // result of Open(). This method is used by the socket broker.
+  static int OpenAndReleaseSocketDescriptor(AddressFamily family,
+                                            SocketDescriptor* out);
+
   // Return the underlying SocketDescriptor and clean up this object, which may
   // no longer be used. This method should be used only for testing. No read,
   // write, or accept operations should be pending.
@@ -164,6 +171,13 @@ class NET_EXPORT TCPSocketPosix {
   SocketPerformanceWatcher* socket_performance_watcher() const {
     return socket_performance_watcher_.get();
   }
+
+  // Binds this socket to `network`. All data traffic on the socket will be sent
+  // and received via `network`. Must be called after Open() but before
+  // Connect() and/or Bind(). This call will fail if `network` has disconnected.
+  // Communication using this socket will fail if `network` disconnects.
+  // Returns a net error code.
+  int BindToNetwork(NetworkChangeNotifier::NetworkHandle network);
 
  private:
   void AcceptCompleted(std::unique_ptr<TCPSocketPosix>* tcp_socket,
@@ -204,15 +218,13 @@ class NET_EXPORT TCPSocketPosix {
   // |socket_performance_watcher_|. May be nullptr.
   std::unique_ptr<SocketPerformanceWatcher> socket_performance_watcher_;
 
-  bool logging_multiple_connect_attempts_;
+  bool logging_multiple_connect_attempts_ = false;
 
   NetLogWithSource net_log_;
 
   // Current socket tag if |socket_| is valid, otherwise the tag to apply when
   // |socket_| is opened.
   SocketTag tag_;
-
-  DISALLOW_COPY_AND_ASSIGN(TCPSocketPosix);
 };
 
 }  // namespace net

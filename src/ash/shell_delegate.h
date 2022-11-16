@@ -6,18 +6,20 @@
 #define ASH_SHELL_DELEGATE_H_
 
 #include <memory>
-#include <string>
 #include <vector>
 
 #include "ash/ash_export.h"
-#include "base/callback.h"
+#include "ash/services/multidevice_setup/public/mojom/multidevice_setup.mojom-forward.h"
 #include "base/files/file_path.h"
-#include "chromeos/services/multidevice_setup/public/mojom/multidevice_setup.mojom-forward.h"
+#include "chromeos/ui/base/window_pin_type.h"
+#include "components/version_info/channel.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "services/device/public/mojom/bluetooth_system.mojom-forward.h"
 #include "services/device/public/mojom/fingerprint.mojom-forward.h"
 #include "services/media_session/public/cpp/media_session_service.h"
+#include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "ui/gfx/native_widget_types.h"
+#include "url/gurl.h"
 
 namespace aura {
 class Window;
@@ -27,16 +29,13 @@ namespace ui {
 class OSExchangeData;
 }
 
-namespace full_restore {
-struct AppLaunchInfo;
-}
-
 namespace ash {
 
 class AccessibilityDelegate;
-class CaptureModeDelegate;
-class BackGestureContextualNudgeDelegate;
 class BackGestureContextualNudgeController;
+class BackGestureContextualNudgeDelegate;
+class CaptureModeDelegate;
+class DesksTemplatesDelegate;
 class NearbyShareController;
 class NearbyShareDelegate;
 
@@ -65,11 +64,19 @@ class ASH_EXPORT ShellDelegate {
   virtual std::unique_ptr<NearbyShareDelegate> CreateNearbyShareDelegate(
       NearbyShareController* controller) const = 0;
 
+  virtual std::unique_ptr<DesksTemplatesDelegate> CreateDesksTemplatesDelegate()
+      const = 0;
+
+  // Returns the geolocation loader factory used to initialize geolocation
+  // provider.
+  virtual scoped_refptr<network::SharedURLLoaderFactory>
+  GetGeolocationUrlLoaderFactory() const = 0;
+
   // Check whether the current tab of the browser window can go back.
   virtual bool CanGoBack(gfx::NativeWindow window) const = 0;
 
   // Sets the tab scrubber |enabled_| field to |enabled|.
-  virtual void SetTabScrubberEnabled(bool enabled) = 0;
+  virtual void SetTabScrubberChromeOSEnabled(bool enabled) = 0;
 
   // Returns true if |window| allows default touch behaviors. If false, it means
   // no default touch behavior is allowed (i.e., the touch action of window is
@@ -88,12 +95,6 @@ class ASH_EXPORT ShellDelegate {
   // dragged out of it.
   virtual int GetBrowserWebUITabStripHeight() = 0;
 
-  // Drops tab in a new browser window. |drop_data| must be from a tab
-  // drag as determined by IsTabDrag() above.
-  virtual aura::Window* CreateBrowserForTabDrop(
-      aura::Window* source_window,
-      const ui::OSExchangeData& drop_data);
-
   // Binds a BluetoothSystemFactory receiver if possible.
   virtual void BindBluetoothSystemFactory(
       mojo::PendingReceiver<device::mojom::BluetoothSystemFactory> receiver) {}
@@ -104,8 +105,8 @@ class ASH_EXPORT ShellDelegate {
 
   // Binds a MultiDeviceSetup receiver for the primary profile.
   virtual void BindMultiDeviceSetup(
-      mojo::PendingReceiver<
-          chromeos::multidevice_setup::mojom::MultiDeviceSetup> receiver) = 0;
+      mojo::PendingReceiver<multidevice_setup::mojom::MultiDeviceSetup>
+          receiver) = 0;
 
   // Returns an interface to the Media Session service, or null if not
   // available.
@@ -115,6 +116,9 @@ class ASH_EXPORT ShellDelegate {
 
   // Returns if window browser sessions are restoring.
   virtual bool IsSessionRestoreInProgress() const = 0;
+
+  // Adjust system configuration for a Locked Fullscreen window.
+  virtual void SetUpEnvironmentForLockedFullscreen(bool locked) = 0;
 
   // Ui Dev Tools control.
   virtual bool IsUiDevToolsStarted() const;
@@ -134,13 +138,17 @@ class ASH_EXPORT ShellDelegate {
   // launched or removed.
   virtual void OpenFeedbackPageForPersistentDesksBar() = 0;
 
-  // Returns the app launch data that's associated with a particular |window| in
-  // order to construct a desk template. Return nullptr if no such app launch
-  // data can be constructed, which can happen if the |window| does not have
-  // an app id associated with it, or we're not in the primary active user
-  // session.
-  virtual std::unique_ptr<::full_restore::AppLaunchInfo>
-  GetAppLaunchDataForDeskTemplate(aura::Window* window) const = 0;
+  // Returns the last committed URL from the web contents if the given |window|
+  // contains a browser frame, otherwise returns GURL::EmptyURL().
+  virtual const GURL& GetLastCommittedURLForWindowIfAny(aura::Window* window);
+
+  // Retrieves the release track on which the device resides.
+  virtual version_info::Channel GetChannel() = 0;
+
+  // Tells browsers not to ask the user to confirm that they want to close a
+  // window when that window is closed.
+  virtual void ForceSkipWarningUserOnClose(
+      const std::vector<aura::Window*>& windows) = 0;
 };
 
 }  // namespace ash

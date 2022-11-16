@@ -6,6 +6,8 @@
 
 #include <string>
 
+#include "ash/components/arc/arc_prefs.h"
+#include "ash/components/arc/arc_util.h"
 #include "base/bind.h"
 #include "base/command_line.h"
 #include "base/logging.h"
@@ -19,13 +21,15 @@
 #include "chrome/browser/ui/app_list/arc/arc_app_utils.h"
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_controller.h"
 #include "chrome/grit/generated_resources.h"
-#include "components/arc/arc_prefs.h"
-#include "components/arc/arc_util.h"
 #include "components/consent_auditor/consent_auditor.h"
-#include "components/signin/public/identity_manager/consent_level.h"
+#include "components/signin/public/base/consent_level.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/sync_preferences/pref_service_syncable.h"
 #include "content/public/browser/browser_thread.h"
+
+// Enable VLOG level 1.
+#undef ENABLED_VLOG_LEVEL
+#define ENABLED_VLOG_LEVEL 1
 
 using sync_pb::UserConsentTypes;
 
@@ -168,13 +172,15 @@ void ArcPlayStoreEnabledPreferenceHandler::UpdateArcSessionManager() {
         IsArcPlayStoreEnabledPreferenceManagedForProfile(profile_));
   }
 
-  if (ShouldArcAlwaysStart() || IsArcPlayStoreEnabledForProfile(profile_)) {
+  if (ShouldArcAlwaysStart()) {
     arc_session_manager_->RequestEnable();
+  } else if (IsArcPlayStoreEnabledForProfile(profile_)) {
+    if (!ShouldArcStartManually())
+      arc_session_manager_->RequestEnable();
+    else
+      VLOG(1) << "ARC is not started automatically";
   } else {
-    const bool enable_requested = arc_session_manager_->enable_requested();
-    arc_session_manager_->RequestDisable();
-    if (enable_requested)
-      arc_session_manager_->RequestArcDataRemoval();
+    arc_session_manager_->RequestDisableWithArcDataRemoval();
   }
 }
 

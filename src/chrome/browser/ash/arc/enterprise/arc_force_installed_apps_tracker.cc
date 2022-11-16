@@ -176,23 +176,19 @@ void ArcForceInstalledAppsObserver::OnPolicyUpdated(
   if (ns.domain != policy::POLICY_DOMAIN_CHROME)
     return;
   const base::Value* const arc_policy =
-      current.GetValue(policy::key::kArcPolicy);
+      current.GetValue(policy::key::kArcPolicy, base::Value::Type::STRING);
   tracking_packages_.clear();
 
   // Track packages only if ArcPolicy is set.
-  if (arc_policy && arc_policy->is_string()) {
+  if (arc_policy) {
     // Get the required packages from ArcPolicy.
     auto required_packages =
         arc::policy_util::GetRequestedPackagesFromArcPolicy(
             arc_policy->GetString());
-    std::vector<std::pair<std::string, bool>> required_packages_vector;
     // Mark all required packages not yet installed in |tracking_packages_|.
-    std::transform(
-        required_packages.begin(), required_packages.end(),
-        std::back_inserter(required_packages_vector),
+    tracking_packages_ = base::MakeFlatMap<std::string, bool>(
+        required_packages, {},
         [](const std::string& v) { return std::make_pair(v, false); });
-    tracking_packages_ =
-        base::flat_map<std::string, bool>(std::move(required_packages_vector));
   }
   UpdateInstalledPackages();
 }
@@ -253,7 +249,7 @@ void PolicyComplianceObserver::OnComplianceReportReceived(
   }
 
   bool is_android_id_reset = true;
-  for (const auto& detail : details->GetList()) {
+  for (const auto& detail : details->GetListDeprecated()) {
     const base::Value* const reason =
         detail.FindKeyOfType("nonComplianceReason", base::Value::Type::INTEGER);
     const std::string* const settingName = detail.FindStringKey("settingName");

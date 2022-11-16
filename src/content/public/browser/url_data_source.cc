@@ -10,7 +10,7 @@
 #include "base/no_destructor.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
-#include "base/task_runner_util.h"
+#include "base/task/task_runner_util.h"
 #include "content/browser/webui/url_data_manager.h"
 #include "content/browser/webui/url_data_manager_backend.h"
 #include "content/browser/webui/url_data_source_impl.h"
@@ -51,6 +51,15 @@ std::string URLDataSource::URLToRequestPath(const GURL& url) {
   if (offset < static_cast<int>(spec.size()))
     return spec.substr(offset);
 
+  return std::string();
+}
+
+std::string URLDataSource::GetMimeType(const GURL& url) {
+  return GetMimeType(URLDataSource::URLToRequestPath(url));
+}
+
+std::string URLDataSource::GetMimeType(const std::string& path) {
+  NOTREACHED();
   return std::string();
 }
 
@@ -96,6 +105,7 @@ std::string URLDataSource::GetContentSecurityPolicy(
                                                : std::string();
     case network::mojom::CSPDirectiveName::BlockAllMixedContent:
     case network::mojom::CSPDirectiveName::ConnectSrc:
+    case network::mojom::CSPDirectiveName::FencedFrameSrc:
     case network::mojom::CSPDirectiveName::FrameSrc:
     case network::mojom::CSPDirectiveName::FontSrc:
     case network::mojom::CSPDirectiveName::ImgSrc:

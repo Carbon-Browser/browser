@@ -6,7 +6,9 @@
 #define CHROME_BROWSER_SAFE_BROWSING_ADVANCED_PROTECTION_STATUS_MANAGER_H_
 
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/sequence_checker.h"
+#include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/signin/public/identity_manager/access_token_info.h"
@@ -33,6 +35,12 @@ class AdvancedProtectionStatusManager
  public:
   AdvancedProtectionStatusManager(PrefService* pref_service,
                                   signin::IdentityManager* identity_manager);
+
+  AdvancedProtectionStatusManager(const AdvancedProtectionStatusManager&) =
+      delete;
+  AdvancedProtectionStatusManager& operator=(
+      const AdvancedProtectionStatusManager&) = delete;
+
   ~AdvancedProtectionStatusManager() override;
 
   // Returns whether the unconsented primary account of the associated profile
@@ -131,8 +139,8 @@ class AdvancedProtectionStatusManager
 
   SEQUENCE_CHECKER(sequence_checker_);
 
-  PrefService* pref_service_ = nullptr;
-  signin::IdentityManager* identity_manager_ = nullptr;
+  raw_ptr<PrefService> pref_service_ = nullptr;
+  raw_ptr<signin::IdentityManager> identity_manager_ = nullptr;
   std::unique_ptr<signin::PrimaryAccountAccessTokenFetcher>
       access_token_fetcher_;
 
@@ -142,8 +150,6 @@ class AdvancedProtectionStatusManager
   base::OneShotTimer timer_;
   base::Time last_refreshed_;
   base::TimeDelta minimum_delay_;
-
-  DISALLOW_COPY_AND_ASSIGN(AdvancedProtectionStatusManager);
 };
 
 }  // namespace safe_browsing

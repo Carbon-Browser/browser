@@ -6,7 +6,6 @@ package org.chromium.chrome.browser;
 
 import android.content.Context;
 import android.support.test.InstrumentationRegistry;
-import android.view.ContextThemeWrapper;
 
 import androidx.test.filters.SmallTest;
 
@@ -30,8 +29,9 @@ import org.chromium.chrome.R;
 import org.chromium.chrome.browser.init.ChromeBrowserInitializer;
 import org.chromium.chrome.browser.profiles.OTRProfileID;
 import org.chromium.chrome.browser.profiles.Profile;
-import org.chromium.chrome.test.ChromeBrowserTestRule;
 import org.chromium.chrome.test.ChromeJUnit4RunnerDelegate;
+import org.chromium.chrome.test.util.browser.signin.AccountManagerTestRule;
+import org.chromium.content_public.browser.GlobalRenderFrameHostId;
 import org.chromium.content_public.browser.UiThreadTaskTraits;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.content_public.browser.WebContentsObserver;
@@ -69,17 +69,21 @@ public class WarmupManagerTest {
     }
 
     @Rule
-    public final ChromeBrowserTestRule mChromeBrowserTestRule = new ChromeBrowserTestRule();
+    public final AccountManagerTestRule mAccountManagerTestRule = new AccountManagerTestRule();
 
     private WarmupManager mWarmupManager;
     private Context mContext;
 
     @Before
     public void setUp() throws Exception {
-        mContext = new ContextThemeWrapper(InstrumentationRegistry.getInstrumentation()
-                                                   .getTargetContext()
-                                                   .getApplicationContext(),
-                R.style.ColorOverlay);
+        // Unlike most of Chrome, the WarmupManager inflates layouts with the application context.
+        // This is because the inflation happens before an activity exists. If you're trying to fix
+        // a failing test, it's important to not add extra theme/style information to this context
+        // in this test because it could hide a real production issue. See https://crbug.com/1246329
+        // for an example.
+        mContext = InstrumentationRegistry.getInstrumentation()
+                           .getTargetContext()
+                           .getApplicationContext();
         TestThreadUtils.runOnUiThreadBlocking(() -> {
             ChromeBrowserInitializer.getInstance().handleSynchronousStartup();
             mWarmupManager = WarmupManager.getInstance();
@@ -125,7 +129,7 @@ public class WarmupManagerTest {
     @Test
     @SmallTest
     public void testCreateAndTakeSpareRenderer() {
-        final AtomicBoolean isRenderViewReady = new AtomicBoolean();
+        final AtomicBoolean isRenderFrameLive = new AtomicBoolean();
         final AtomicReference<WebContents> webContentsReference = new AtomicReference<>();
 
         PostTask.runOrPostTask(UiThreadTaskTraits.DEFAULT, () -> {
@@ -135,20 +139,22 @@ public class WarmupManagerTest {
                     mWarmupManager.takeSpareWebContents(false, false, !WarmupManager.FOR_CCT);
             Assert.assertNotNull(webContents);
             Assert.assertFalse(mWarmupManager.hasSpareWebContents());
+
+            if (webContents.getMainFrame().isRenderFrameLive()) {
+                isRenderFrameLive.set(true);
+            }
             WebContentsObserver observer = new WebContentsObserver(webContents) {
                 @Override
-                public void renderViewReady() {
-                    isRenderViewReady.set(true);
+                public void renderFrameCreated(GlobalRenderFrameHostId id) {
+                    isRenderFrameLive.set(true);
                 }
             };
-
-            // This is not racy because {@link WebContentsObserver} methods are called on the UI
-            // thread by posting a task. See {@link RenderViewHostImpl::PostRenderViewReady}.
             webContents.addObserver(observer);
+
             webContentsReference.set(webContents);
         });
         CriteriaHelper.pollUiThread(
-                () -> isRenderViewReady.get(), "Spare renderer is not initialized");
+                () -> isRenderFrameLive.get(), "Spare renderer is not initialized");
         PostTask.runOrPostTask(
                 UiThreadTaskTraits.DEFAULT, () -> webContentsReference.get().destroy());
     }
@@ -184,7 +190,7 @@ public class WarmupManagerTest {
     @UiThreadTest
     public void testClearsDeadWebContents() {
         mWarmupManager.createSpareWebContents(!WarmupManager.FOR_CCT);
-        WebContentsUtils.simulateRendererKilled(mWarmupManager.mSpareWebContents, false);
+        WebContentsUtils.simulateRendererKilled(mWarmupManager.mSpareWebContents);
         Assert.assertNull(
                 mWarmupManager.takeSpareWebContents(false, false, !WarmupManager.FOR_CCT));
     }
@@ -216,7 +222,7 @@ public class WarmupManagerTest {
         mWarmupManager.createSpareWebContents(WarmupManager.FOR_CCT);
         Assert.assertEquals(2, createdDelta.getDelta());
         Assert.assertNotNull(mWarmupManager.mSpareWebContents);
-        WebContentsUtils.simulateRendererKilled(mWarmupManager.mSpareWebContents, false);
+        WebContentsUtils.simulateRendererKilled(mWarmupManager.mSpareWebContents);
         Assert.assertEquals(1, killedDelta.getDelta());
         Assert.assertNull(mWarmupManager.takeSpareWebContents(false, false, WarmupManager.FOR_CCT));
 

@@ -31,7 +31,7 @@ CSSParserToken::CSSParserToken(CSSParserTokenType type,
       unit_(static_cast<unsigned>(CSSPrimitiveValue::UnitType::kNumber)) {
   DCHECK_EQ(type, kNumberToken);
   numeric_value_ =
-      clampTo<double>(numeric_value, -std::numeric_limits<float>::max(),
+      ClampTo<double>(numeric_value, -std::numeric_limits<float>::max(),
                       std::numeric_limits<float>::max());
 }
 
@@ -165,7 +165,7 @@ bool CSSParserToken::operator==(const CSSParserToken& other) const {
     case kHashToken:
       if (hash_token_type_ != other.hash_token_type_)
         return false;
-      FALLTHROUGH;
+      [[fallthrough]];
     case kIdentToken:
     case kFunctionToken:
     case kStringToken:
@@ -174,7 +174,7 @@ bool CSSParserToken::operator==(const CSSParserToken& other) const {
     case kDimensionToken:
       if (!ValueDataCharRawEqual(other))
         return false;
-      FALLTHROUGH;
+      [[fallthrough]];
     case kNumberToken:
     case kPercentageToken:
       return numeric_sign_ == other.numeric_sign_ &&

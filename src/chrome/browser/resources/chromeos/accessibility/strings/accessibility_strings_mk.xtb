@@ -30,7 +30,9 @@
 <translation id="1189258430971676908">Област за вежбање: паѓачки списоци</translation>
 <translation id="1195238899008218998">Поговор</translation>
 <translation id="1197088940767939838">Портокалова</translation>
+<translation id="1198865190323699001">Движења за допир</translation>
 <translation id="1201402288615127009">Следно</translation>
+<translation id="1202112913213080585">откажи</translation>
 <translation id="1206619573307042055">marquee</translation>
 <translation id="1207086294218137981">Нема следен наслов на ниво 4</translation>
 <translation id="1212770441379271564">Следните неколку кратенки не се наредби на ChromeVox, но сепак се многу корисни за да го извлечете максимумот од Chrome.
@@ -42,6 +44,7 @@
     За да го отворите менито на прелистувачот Chrome, притиснете Alt + F.</translation>
 <translation id="1213216066620407844">ChromeVox - Давање глас на Chrome</translation>
 <translation id="1225969361094801578">Темносива како шкрилец</translation>
+<translation id="122928249241119550">преместете на претходната реченица</translation>
 <translation id="1230503547248836149">Почеток на изборот</translation>
 <translation id="1236794971743289975">Референца</translation>
 <translation id="1237797094773582699">Слично, повлекувањето оддесно налево со четири прста може да се користи за да се преместите на претходниот дел. Пробајте сега.</translation>
@@ -66,8 +69,10 @@
 <translation id="133801305381959373">Нема следно текстуално поле за изменување</translation>
 <translation id="1342835525016946179">статија</translation>
 <translation id="1346059596910821859">Совет</translation>
+<translation id="1354356357730355833">копирај</translation>
 <translation id="135978014023467274">Ажурирани сте на ChromeVox 63.</translation>
 <translation id="1360699455582016846">Кликнете ја ставката под копчето за насочување <ph name="ROUTING_KEY_NUMBER" /></translation>
+<translation id="1376703628032300005">оди на следниот знак</translation>
 <translation id="1377925789329510816">Ова е последниот наслов. Притиснете „Пребарување“+H за да стигнете на првиот или „Пребарување“+Shift+H за да одите на вториот наслов на страницава.</translation>
 <translation id="138218114945450791">Светлосина</translation>
 <translation id="1383876407941801731">Барај</translation>
@@ -210,8 +215,10 @@
 <translation id="2435422727584637732">Сина како Доџерси</translation>
 <translation id="2438712309510062123">Предложете</translation>
 <translation id="2450814015951372393">Поле за избор</translation>
+<translation id="2450992626945324272">преместете на следната реченица</translation>
 <translation id="2461822463642141190">Моментално</translation>
 <translation id="2462626033734746142">Група радио-копчиња</translation>
+<translation id="2467741090055146971">поништи избор</translation>
 <translation id="2471138580042810658">Заглавие 6</translation>
 <translation id="248982282205370495">{COUNT,plural, =1{ѕвездичка}one{# ѕвездичка}other{# ѕвездички}}</translation>
 <translation id="2490721194269245365">Розово-кафеава</translation>
@@ -242,6 +249,7 @@
 <translation id="267442004702508783">освежи</translation>
 <translation id="2675533876313964202">Резеда</translation>
 <translation id="2684412629217766642">Затвори го упатството за ChromeVox</translation>
+<translation id="2692503699962701720">Смени ја висината на гласот кога изговараш типови елементи и форматиран текст</translation>
 <translation id="2697408785920771974">autoinl</translation>
 <translation id="2697786971245905543">Кандидат за конверзија на текст</translation>
 <translation id="2704429362613743330">{COUNT,plural, =1{отворена заграда}one{# отворена заграда}other{# отворени загради}}</translation>
@@ -352,6 +360,7 @@
 <translation id="3286372614333682499">портрет</translation>
 <translation id="3286390186030710347">Лизгач</translation>
 <translation id="3300348286427369683">Поддршка на збогатен текст. ChromeVox сега поддржува збогатени текстуални полиња, вклучувајќи наредби за скокање, насочување на курсорот за брајово писмо, избор и друго.</translation>
+<translation id="3300733168898541351">врати</translation>
 <translation id="3307886118343381874">Одете на крајот на табелата</translation>
 <translation id="3312997241656799641">Следна посетена врска</translation>
 <translation id="3313245066383501820">Копчето модификатор на ChromeVox</translation>
@@ -372,6 +381,7 @@
 <translation id="3406283310380167331">Прикажи список со обрасци</translation>
 <translation id="3414400929511680526">Сина „Алиса“</translation>
 <translation id="3418936350470374046">Нема ќелија долу</translation>
+<translation id="3419269701801640163">залепи</translation>
 <translation id="3435494200763325275">Продолжена навигација со Tab</translation>
 <translation id="344800400831402066">Перу</translation>
 <translation id="3457000393508828486">Делумно притиснато</translation>
@@ -383,8 +393,10 @@
 <translation id="3492609944033322585">{COUNT,plural, =1{десна заграда}one{# десна заграда}other{# десни загради}}</translation>
 <translation id="3494946239022273294">mnuitm</translation>
 <translation id="3497063866483065785">{COUNT,plural, =1{прашалник}one{# прашалник}other{# прашалници}}</translation>
+<translation id="3505359110822747654">Менијата на ChromeVox се собираат</translation>
 <translation id="3514822174137761109">{COUNT,plural, =1{карет
 }one{# карет}other{# карети}}</translation>
+<translation id="3518600448524470129">{COUNT,plural, =1{бела точка}one{# бела точка}other{# бели точки}}</translation>
 <translation id="352577523970648069">Текстуално поле за уредување</translation>
 <translation id="3538907380453898475">список со опис</translation>
 <translation id="3549141990712742152">исечи <ph name="TEXT" />.</translation>
@@ -453,6 +465,7 @@
 <translation id="4006140876663370126">img</translation>
 <translation id="4021716437419160885">Оди надолу</translation>
 <translation id="4035381225449278841">Пролет</translation>
+<translation id="4038098586530338813">повтори</translation>
 <translation id="4047216625641135770">Ознака</translation>
 <translation id="4047910800766704982">Може да користите природен човечки глас кога вашиот уред е онлајн. Текстот ќе се испрати во Google за обработка. Ова може да го исклучите во „Поставки“ во секое време.</translation>
 <translation id="4053520724192563562">Зелена како лимета</translation>
@@ -480,6 +493,7 @@
 <translation id="42164919740161077">Сивосина</translation>
 <translation id="4217571870635786043">Диктат</translation>
 <translation id="4218529045364428769">{COUNT,plural, =1{цртичка}one{# цртичка}other{# цртички}}</translation>
+<translation id="4220024144662591089">изберете од „<ph name="START_PHRASE" />“ до „<ph name="END_PHRASE" />“</translation>
 <translation id="4221012616705981690">Нема претходен список</translation>
 <translation id="4225355998815256469">Контроли за формулари</translation>
 <translation id="4230834257931120629">Светлосива како шкрилец</translation>
@@ -498,6 +512,7 @@
 <translation id="4300318234632215983">Објави URL зад врската</translation>
 <translation id="4322625298640984693">Боја „Сиена“</translation>
 <translation id="4342180618051828363">{COUNT,plural, =1{точка}=3{три точки}one{# точка}other{# точки}}</translation>
+<translation id="4352022650330571548">type <ph name="PHRASE" /></translation>
 <translation id="4372435075475052704">мин.:<ph name="X" /></translation>
 <translation id="4372705107434148843">Запри говор</translation>
 <translation id="4376316291247992553">Прикажи графика како брајово писмо</translation>
@@ -527,6 +542,7 @@
 <translation id="4601367666219428522">таб. <ph name="TABLENAME" /> <ph name="TABLEROWS" />x<ph name="TABLECOLS" /></translation>
 <translation id="4615592953348396470">Се игнорира следното притискање на копче</translation>
 <translation id="4623097797855662355">Отпечаток</translation>
+<translation id="4624970070706497034">TalkBack веќе не обезбедува приспособување за уредите Chromebook. Сѐ уште може да ја користите, но користете ги стандардните кратенки од тастатура на TalkBack. Притиснете „Пребарување“ + A, а потоа K за да ги видите достапните кратенки. Ако сепак сакате да ја користите TalkBack, повторно притиснете ја наредбата.</translation>
 <translation id="463135993322337640">Притиснете ChromeVox o, n за да дознаете што има ново</translation>
 <translation id="4649220074413114917">Допирањето на екранот со два прста може да се користи за запирање тековен говор. Ова е корисно ако не сакате ChromeVox да прочита нешто. За да продолжите, допрете го екранот со два прста.</translation>
 <translation id="4660783501463101648">Верзијата Classic е остранета. Копчето на тастатурата за повторно префрлање на ChromeVox Classic е отстрането.</translation>
@@ -561,6 +577,7 @@
 <translation id="4854380505292502090">Нема претходен виџет за аудиовизуелни содржини</translation>
 <translation id="4855927945655956315">Основни копчиња: Control</translation>
 <translation id="4862744964787595316">Не е болд</translation>
+<translation id="4865995900839719272">оди на претходниот ред</translation>
 <translation id="4866956062845190338">rdmnuitm</translation>
 <translation id="4867316986324544967">Овозможи TTS-најава</translation>
 <translation id="4886524826165775965"><ph name="INDEX" />/<ph name="TOTAL" /></translation>
@@ -618,6 +635,7 @@
 <translation id="5304943142864553931"><ph name="TITLE" />, картичка</translation>
 <translation id="5308380583665731573">Поврзи</translation>
 <translation id="5310788376443009632">отстрането:</translation>
+<translation id="5316825363044614340">оди на следниот ред</translation>
 <translation id="5320727453979144100">Овозможен режим на лепење</translation>
 <translation id="5321085947096604457">{COUNT,plural, =1{запирка}one{# запирка}other{# запирки}}</translation>
 <translation id="532485153932049746">Форматирање текст
@@ -654,6 +672,7 @@
 <translation id="5522423213731659107">Брзата ориентација заврши!</translation>
 <translation id="5534303576632885660">hdr</translation>
 <translation id="5539820223028224601">Сива „Гејнзборо“</translation>
+<translation id="554893713779400387">Вклучи/исклучи диктат</translation>
 <translation id="5549179427201066174">Вклучување или исклучување на звучни повратни информации (звучни сигнали)</translation>
 <translation id="556042886152191864">Копче</translation>
 <translation id="5561345396546889625">Следен список</translation>
@@ -664,6 +683,7 @@
 <translation id="5597170376237141345">Следно поле за избор</translation>
 <translation id="5598905979683743333"><ph name="NAME" />, радио-копчето не е избрано</translation>
 <translation id="5601172225407283979">Извршете стандардно дејство</translation>
+<translation id="5604302400025591178">{COUNT,plural, =1{квадратна точка}one{# квадратна точка}other{# квадратни точки}}</translation>
 <translation id="5608798115546226984">Линеарно автоматско комплетирање</translation>
 <translation id="5616029807486814372">Следна лекција</translation>
 <translation id="561939826962581046">time</translation>
@@ -671,6 +691,8 @@
 <translation id="5623842676595125836">Дневник</translation>
 <translation id="5628125749885014029">h4</translation>
 <translation id="5632083598315326067">Графички симбол</translation>
+<translation id="5648939288050772726">Честитки! Ги научивте основните работи за успешно користење на ChromeVox. Запомнете дека може да го отворите менито со наредби на ChromeVox во секое време, така што ќе притиснете „Пребарување + Точка“. За да дознаете повеќе за ChromeVox и Chrome OS, одете на следниве статии.
+    Ако завршивте со упатството, употребете го ChromeVox за навигација до копчето „Затвори“ и кликнете на него.</translation>
 <translation id="5653397561111110475">Користете ги функциите за пристапност на екранот на допир на Chromebook</translation>
 <translation id="5655682562155942719">Скокни наредби</translation>
 <translation id="56637627897541303">Место за текст</translation>
@@ -735,6 +757,7 @@
 <translation id="6034000775414344507">Светлосива</translation>
 <translation id="6036135911048686884">Истражувајте со допир</translation>
 <translation id="6037602951055904232">Повлечи напред</translation>
+<translation id="604240746417122825">граматичка грешка</translation>
 <translation id="6082768461603900813">Основна навигација</translation>
 <translation id="609281021724813947">Нема претходен лизгач</translation>
 <translation id="6100239002225743044">Преместете нагоре за еден ред</translation>
@@ -742,6 +765,7 @@
 <translation id="611827076493383239">vtd</translation>
 <translation id="6122013438240733403">btn</translation>
 <translation id="6132506484792346370">Список или поле со комбинации</translation>
+<translation id="613344593214611552">избришете ја претходната реченица</translation>
 <translation id="6142308968191113180">Заглавие 4</translation>
 <translation id="6150023170003443621">Жолто-зелена</translation>
 <translation id="6158882249329863701">ред <ph name="TABLECELLROWINDEX" />, колона <ph name="TABLECELLCOLUMNINDEX" /></translation>
@@ -751,6 +775,7 @@
 <translation id="6186305613600865047">Скокни до дното на страницата</translation>
 <translation id="6187190722927752226">Боја на аквамарин</translation>
 <translation id="6197361807490522975">Темносина</translation>
+<translation id="6218813441317556731">заменете „<ph name="DELETE_PHRASE" />“ со „<ph name="INSERT_PHRASE" />“</translation>
 <translation id="6236061028292614533">Следен наслов</translation>
 <translation id="6254901459154107917">Следна област за уредување текст</translation>
 <translation id="6259464875943891919">Излеговте од <ph name="TYPE" />.</translation>
@@ -791,6 +816,7 @@
 <translation id="6544923685317771506">Боја на морска школка</translation>
 <translation id="6551185905438378412">Боја на слонова коска</translation>
 <translation id="6561818612645211875">Одете на почетокот на тековниот ред</translation>
+<translation id="6563126228219321999">Нема неважечка ставка</translation>
 <translation id="6579990219486187401">Светлорозова</translation>
 <translation id="6583174818554398774">Оди на следно при грануларност</translation>
 <translation id="6584162722998608255">Понатаму, ќе дознаете како да се движите низ екранот. Може да повлечете со еден прст одлево надесно за да одите на следната ставка. Пробајте сега за да одите на следниот чекор.</translation>
@@ -821,6 +847,7 @@
 <translation id="6815255864998354418">Боја на шифон со лимон</translation>
 <translation id="6816066673340002913">Бледозлатеста</translation>
 <translation id="6826226459053491773">Повлечете надолу со два прста</translation>
+<translation id="6826669432862053130">Следна неважечка ставка</translation>
 <translation id="6833103209700200188">Подножје</translation>
 <translation id="6837853484260746864">Изберете глас:</translation>
 <translation id="6858047746862060282">Пролог</translation>
@@ -834,6 +861,7 @@
 <translation id="6910211073230771657">Избришано</translation>
 <translation id="6910969481785184048">Вклучи, исклучи и запри</translation>
 <translation id="6919104639734799681">Прикажи список со табели</translation>
+<translation id="692135145298539227">избриши</translation>
 <translation id="6945221475159498467">Избери</translation>
 <translation id="6949846980769640811">Средна аквамарин</translation>
 <translation id="6951482098621102657">Нема следен наслов на ниво 5</translation>
@@ -893,6 +921,7 @@
 <translation id="7292195267473691167"><ph name="LOCALE" /> (<ph name="VARIANT" />)</translation>
 <translation id="7308519659008003150">Нема претходно поле со формулар</translation>
 <translation id="731121099745151312">tritm</translation>
+<translation id="7313717760367325059">помош</translation>
 <translation id="7317017974771324508">делумно избрано</translation>
 <translation id="7322442671176251901">Истражувај со допир</translation>
 <translation id="7344012264516629579">Дополнителните наредби за скокање вклучуваат, на пример, скокање со линкови, копчиња и полиња за избор. Комплетниот список со наредби за скокање може да се најде во менијата на ChromeVox, коишто се отвораат со притискање Search + точка.</translation>
@@ -914,13 +943,13 @@
 <translation id="7439060726180460871">Директориум</translation>
 <translation id="744163271241493234">pwded</translation>
 <translation id="7465123027577412805">Да се користи природен глас?</translation>
-<translation id="7484805699335881122">Смени ја висината на гласот кога изговараш типови елементи и текст што е цитиран, избришан, со задебелени букви, во загради или со големи букви.</translation>
 <translation id="7491962110804786152">картичка</translation>
 <translation id="7492497529767769458">Одете до следниот дел. Примерите ги вклучуваат „Фиоката за статусот“ и „Стартерот“.</translation>
 <translation id="7505149250476994901">Изговарајте „cap“ (голема) пред буквата</translation>
 <translation id="7533226154149229506">Светлозлатеста-жолта</translation>
 <translation id="7543255924852002459">Отфрли етикета</translation>
 <translation id="7552432549459840808">Корисни кратенки на Chrome</translation>
+<translation id="7553679324939294712">вметнете „<ph name="INSERT_PHRASE" />“ пред „<ph name="BEFORE_PHRASE" />“</translation>
 <translation id="7569983096843329377">Црна</translation>
 <translation id="7579911500627256166">точка <ph name="DOT" /></translation>
 <translation id="7592060599656252486">Некои</translation>
@@ -944,12 +973,11 @@
 <translation id="7684431668231950609">Измени текст, внес на URL-адреса</translation>
 <translation id="7685589220304187312">tlbar</translation>
 <translation id="7693840228159394336">Претходно радио-копче</translation>
+<translation id="7696631298608145306">преместете на следниот збор</translation>
 <translation id="7701040980221191251">Нема</translation>
 <translation id="7701196182766842984">autolst</translation>
 <translation id="7713139339518499741">Природен глас</translation>
 <translation id="7714340021005120797">Нема следно комбинирано поле</translation>
-<translation id="772146615414628379">Честитки! Ги научивте основните работи за успешно користење на ChromeVox. Запомнете дека може да го отворите менито со наредби на ChromeVox во секое време, така што ќе притиснете „Пребарување + Точка“. За да дознаете повеќе за ChromeVox и Chrome OS, одете на следниве статии.
-    Ако завршивте со упатството, употребете го ChromeVox за навигација до копчето „Затвори“ и кликнете на него.</translation>
 <translation id="7724603315864178912">Исечи</translation>
 <translation id="7731785449856576010">Нема следен виџет за аудиовизуелни содржини</translation>
 <translation id="7735498529470878067">„Истражувај со допир“ може да ви помогне брзо да ги разгледате работите на екранот.</translation>
@@ -1010,8 +1038,10 @@
 <translation id="8126386426083591964">Нема претходен наслов на ниво 5</translation>
 <translation id="812886159861361726">Преземањето на <ph name="FILE_NAME" /> запре</translation>
 <translation id="8129445297241948503">Нема ќелија горе</translation>
+<translation id="8132248161074464367">Претходна неважечка ставка</translation>
 <translation id="8138880386467279117">Допир</translation>
 <translation id="8146613869421949343">Следно, ќе дознаете за копчето Search. Копчето Search се користи во комбинација со другите копчиња за наредбите на ChromeVox. Се наоѓа веднаш над левото копче Shift. За да продолжите, притиснете го копчето Search.</translation>
+<translation id="8158033275290782295">избери сè</translation>
 <translation id="816818801578874684">Ова е првиот наслов. Притиснете Search + H за да отидете на следниот.</translation>
 <translation id="8173092779156526980">Повлечете налево со четири прста</translation>
 <translation id="817440585505441544">{COUNT,plural, =1{долна црта}one{# долна црта}other{# долни црти}}</translation>
@@ -1051,6 +1081,7 @@
 <translation id="8455868257606149352">Макс. <ph name="X" /></translation>
 <translation id="84575901236241018">има пристапен клуч, <ph name="KEY" /></translation>
 <translation id="8463645336674919227">Оставате граматичка грешка</translation>
+<translation id="8465573210279050749">избришете го претходниот збор</translation>
 <translation id="847040613207937740">Нема следно поле за избор</translation>
 <translation id="8473540203671727883">Изговарај го текстот под глувчето</translation>
 <translation id="8476408756881832830">Паузирај ja репродукцијата кога зборува ChromeVox</translation>
@@ -1081,11 +1112,13 @@
 <translation id="8659501358298941449">Паѓачки списоци</translation>
 <translation id="8666733765751421568">Крај на <ph name="TYPE" /></translation>
 <translation id="867187640362843212">Заглавие 5</translation>
+<translation id="8690400660839620419">{COUNT,plural, =1{}one{подниво #}other{подниво #}}</translation>
 <translation id="8693391540059827073">Мое омилено годишно време</translation>
 <translation id="8696284982970258155">Боја на медена роса</translation>
 <translation id="8697111817566059991">{COUNT,plural, =1{цевка}one{# вертикална цевка}other{# вертикални цевки}}</translation>
 <translation id="8741370088760768424">Совет: притиснете Search + празно место за да ја активирате тековната ставка.</translation>
 <translation id="8743786158317878347">внесува структурирана содржина како табели</translation>
+<translation id="8746846427395705317">преместете на претходниот збор</translation>
 <translation id="8747966237988593539">Подреден список</translation>
 <translation id="8749988712346667988">Сребрена</translation>
 <translation id="875769700429317857">Преземањето на <ph name="FILE_NAME" /> заврши</translation>
@@ -1113,12 +1146,14 @@
 <translation id="8970172509886453271">Нема претходна секција</translation>
 <translation id="89720367119469899">Escape</translation>
 <translation id="8978496506222343566">tltip</translation>
+<translation id="898089897833732740">избришете „<ph name="PHRASE" />“</translation>
 <translation id="8986362086234534611">Заборави</translation>
 <translation id="8989104346085848538">За да го запрете тековниот говор на ChromeVox, притиснете го копчето Control.</translation>
 <translation id="8993737615451556423">Дава контроли за забрзување, забавување и паузирање на гласот за читање</translation>
 <translation id="9014206344398081366">Упатство за ChromeVox</translation>
 <translation id="9040132695316389094">Заглавие 1</translation>
 <translation id="9061884144798498064">Изберете брајова табела со 8 точки:</translation>
+<translation id="9063946545000394379">оди на претходниот знак</translation>
 <translation id="9065283790526219006">+појавни прозорци</translation>
 <translation id="9065912140022662363">Нема следно тркалезно копче</translation>
 <translation id="9067522039955793016">Прелом на страница</translation>
@@ -1127,6 +1162,7 @@
 <translation id="9077305471618729969">Светла морскозелена</translation>
 <translation id="9080299285199342830">Скокнете до крај</translation>
 <translation id="9089864840575085222">Ехо на пишување циклус</translation>
+<translation id="9099429023611373837">исечи</translation>
 <translation id="9108370397979208512">математика</translation>
 <translation id="9108589040018540527">scbr</translation>
 <translation id="911476240645808512">{COUNT,plural, =1{процент}one{# знак за процент}other{# знаци за процент}}</translation>
@@ -1146,6 +1182,7 @@
 <translation id="9223032053830369045">Темноцрвена</translation>
 <translation id="923331726185079994">ChromeVox е ажуриран</translation>
 <translation id="93384979447910801">Темна морскозелена</translation>
+<translation id="937605981140327129">TalkBack не е инсталирана во моментов. Инсталирајте ја Android AccessibilitySuite преку Play Store и обидете се повторно.</translation>
 <translation id="948171205378458592">Намали брзина на говор</translation>
 <translation id="957570623732056069">Повлечете налево или надесно со еден прст за да се движите низ лекцијава</translation>
 <translation id="958854023026327378">Повлечете надолу со еден прст</translation>

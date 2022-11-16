@@ -18,6 +18,8 @@ typedef BOOL (^ArrayFilterProcedure)(id object, NSUInteger index, BOOL* stop);
 typedef NSString* (^SubstringExtractionProcedure)(NSUInteger);
 NSString* const kBeginLinkTag = @"BEGIN_LINK[ \t]*";
 NSString* const kEndLinkTag = @"[ \t]*END_LINK";
+NSString* const kBeginBoldTag = @"BEGIN_BOLD[ \t]*";
+NSString* const kEndBoldTag = @"[ \t]*END_BOLD";
 }
 
 StringWithTags::StringWithTags() = default;
@@ -247,4 +249,54 @@ NSString* SubstringOfWidth(NSString* string,
   } while (characters > 0 && characters < [string length]);
 
   return substring;
+}
+
+CGRect TextViewLinkBound(UITextView* text_view, NSRange character_range) {
+  // Calculate UITextRange with NSRange.
+  UITextPosition* beginning = text_view.beginningOfDocument;
+  UITextPosition* start =
+      [text_view positionFromPosition:beginning
+                               offset:character_range.location];
+  UITextPosition* end = [text_view positionFromPosition:start
+                                                 offset:character_range.length];
+
+  CGRect rect = CGRectNull;
+  // Returns CGRectNull if there is a nil text position.
+  if (start && end) {
+    UITextRange* text_range = [text_view textRangeFromPosition:start
+                                                    toPosition:end];
+
+    NSArray* selection_rects = [text_view selectionRectsForRange:text_range];
+
+    for (UITextSelectionRect* selection_rect in selection_rects) {
+      rect = CGRectUnion(rect, selection_rect.rect);
+    }
+  }
+
+  return rect;
+}
+
+NSAttributedString* PutBoldPartInString(NSString* string,
+                                        UIFontTextStyle font_style) {
+  UIFontDescriptor* default_descriptor =
+      [UIFontDescriptor preferredFontDescriptorWithTextStyle:font_style];
+  UIFontDescriptor* bold_descriptor =
+      [[UIFontDescriptor preferredFontDescriptorWithTextStyle:font_style]
+          fontDescriptorWithSymbolicTraits:UIFontDescriptorTraitBold];
+  StringWithTag parsed_string =
+      ParseStringWithTag(string, kBeginBoldTag, kEndBoldTag);
+
+  NSMutableAttributedString* attributed_string =
+      [[NSMutableAttributedString alloc] initWithString:parsed_string.string];
+  [attributed_string addAttribute:NSFontAttributeName
+                            value:[UIFont fontWithDescriptor:default_descriptor
+                                                        size:0.0]
+                            range:NSMakeRange(0, parsed_string.string.length)];
+
+  [attributed_string addAttribute:NSFontAttributeName
+                            value:[UIFont fontWithDescriptor:bold_descriptor
+                                                        size:0.0]
+                            range:parsed_string.range];
+
+  return attributed_string;
 }

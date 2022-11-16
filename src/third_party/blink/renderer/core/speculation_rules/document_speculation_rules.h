@@ -11,7 +11,6 @@
 #include "third_party/blink/renderer/core/speculation_rules/speculation_rule_set.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_remote.h"
 #include "third_party/blink/renderer/platform/supplementable.h"
 
@@ -38,12 +37,19 @@ class CORE_EXPORT DocumentSpeculationRules
   // Appends a newly added rule set.
   void AddRuleSet(SpeculationRuleSet*);
 
+  // Removes a rule set from consideration.
+  void RemoveRuleSet(SpeculationRuleSet*);
+
   void Trace(Visitor*) const override;
 
  private:
   // Retrieves a valid proxy to the speculation host in the browser.
   // May be null if the execution context does not exist.
   mojom::blink::SpeculationHost* GetHost();
+
+  // Requests a future call to UpdateSpeculationCandidates, if none is yet
+  // scheduled.
+  void QueueUpdateSpeculationCandidates();
 
   // Pushes the current speculation candidates to the browser, immediately.
   void UpdateSpeculationCandidates();

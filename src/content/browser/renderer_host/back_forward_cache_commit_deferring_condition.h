@@ -8,7 +8,7 @@
 #include <memory>
 
 #include "base/memory/weak_ptr.h"
-#include "content/browser/renderer_host/commit_deferring_condition.h"
+#include "content/public/browser/commit_deferring_condition.h"
 
 namespace content {
 
@@ -25,6 +25,11 @@ class BackForwardCacheCommitDeferringCondition
   static std::unique_ptr<CommitDeferringCondition> MaybeCreate(
       NavigationRequest& navigation_request);
 
+  BackForwardCacheCommitDeferringCondition(
+      const BackForwardCacheCommitDeferringCondition&) = delete;
+  BackForwardCacheCommitDeferringCondition& operator=(
+      const BackForwardCacheCommitDeferringCondition&) = delete;
+
   ~BackForwardCacheCommitDeferringCondition() override;
 
   Result WillCommitNavigation(base::OnceClosure resume) override;
@@ -32,10 +37,6 @@ class BackForwardCacheCommitDeferringCondition
  private:
   explicit BackForwardCacheCommitDeferringCondition(
       NavigationRequest& navigation_request);
-
-  NavigationRequest& navigation_request_;
-
-  DISALLOW_COPY_AND_ASSIGN(BackForwardCacheCommitDeferringCondition);
 };
 
 }  // namespace content

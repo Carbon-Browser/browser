@@ -5,6 +5,7 @@
 #ifndef CHROME_BROWSER_VR_ELEMENTS_ENVIRONMENT_BACKGROUND_H_
 #define CHROME_BROWSER_VR_ELEMENTS_ENVIRONMENT_BACKGROUND_H_
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/vr/elements/ui_element.h"
 #include "chrome/browser/vr/renderers/base_quad_renderer.h"
 #include "device/vr/gl_bindings.h"
@@ -18,6 +19,10 @@ namespace vr {
 class Background : public UiElement {
  public:
   Background();
+
+  Background(const Background&) = delete;
+  Background& operator=(const Background&) = delete;
+
   ~Background() override;
 
   // UiElement:
@@ -39,6 +44,10 @@ class Background : public UiElement {
   class Renderer final : public BaseRenderer {
    public:
     Renderer();
+
+    Renderer(const Renderer&) = delete;
+    Renderer& operator=(const Renderer&) = delete;
+
     ~Renderer() override;
 
     void Draw(const gfx::Transform& view_proj_matrix,
@@ -63,8 +72,6 @@ class Background : public UiElement {
     GLuint vertex_buffer_;
     GLuint index_buffer_;
     GLuint index_count_;
-
-    DISALLOW_COPY_AND_ASSIGN(Renderer);
   };
 
  private:
@@ -87,13 +94,11 @@ class Background : public UiElement {
   sk_sp<SkSurface> normal_gradient_surface_;
   sk_sp<SkSurface> incognito_gradient_surface_;
   sk_sp<SkSurface> fullscreen_gradient_surface_;
-  SkiaSurfaceProvider* provider_ = nullptr;
+  raw_ptr<SkiaSurfaceProvider> provider_ = nullptr;
 
   float normal_factor_ = 1.0f;
   float incognito_factor_ = 0.0f;
   float fullscreen_factor_ = 0.0f;
-
-  DISALLOW_COPY_AND_ASSIGN(Background);
 };
 
 }  // namespace vr

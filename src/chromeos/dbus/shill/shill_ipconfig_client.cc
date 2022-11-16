@@ -10,7 +10,6 @@
 
 #include "base/bind.h"
 #include "base/logging.h"
-#include "base/macros.h"
 #include "base/values.h"
 #include "chromeos/dbus/shill/fake_shill_ipconfig_client.h"
 #include "chromeos/dbus/shill/shill_property_changed_observer.h"
@@ -31,6 +30,10 @@ ShillIPConfigClient* g_instance = nullptr;
 class ShillIPConfigClientImpl : public ShillIPConfigClient {
  public:
   explicit ShillIPConfigClientImpl(dbus::Bus* bus) : bus_(bus) {}
+
+  ShillIPConfigClientImpl(const ShillIPConfigClientImpl&) = delete;
+  ShillIPConfigClientImpl& operator=(const ShillIPConfigClientImpl&) = delete;
+
   ~ShillIPConfigClientImpl() override = default;
 
   ////////////////////////////////////
@@ -81,8 +84,6 @@ class ShillIPConfigClientImpl : public ShillIPConfigClient {
 
   dbus::Bus* bus_;
   HelperMap helpers_;
-
-  DISALLOW_COPY_AND_ASSIGN(ShillIPConfigClientImpl);
 };
 
 void ShillIPConfigClientImpl::GetProperties(
@@ -107,13 +108,11 @@ void ShillIPConfigClientImpl::SetProperty(const dbus::ObjectPath& ipconfig_path,
   // IPConfig supports writing basic type and string array properties.
   switch (value.type()) {
     case base::Value::Type::LIST: {
-      const base::ListValue* list_value = nullptr;
-      value.GetAsList(&list_value);
       dbus::MessageWriter variant_writer(nullptr);
       writer.OpenVariant("as", &variant_writer);
       dbus::MessageWriter array_writer(nullptr);
       variant_writer.OpenArray("s", &array_writer);
-      for (const auto& entry : list_value->GetList()) {
+      for (const auto& entry : value.GetListDeprecated()) {
         DLOG_IF(ERROR, !entry.is_string())
             << "Unexpected type " << entry.type();
         array_writer.AppendString(entry.is_string() ? entry.GetString()

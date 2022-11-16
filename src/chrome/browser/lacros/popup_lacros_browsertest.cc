@@ -7,6 +7,7 @@
 #include "chrome/browser/lacros/browser_test_util.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_window.h"
+#include "chrome/browser/ui/lacros/window_utility.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/tabs/tab.h"
@@ -45,8 +46,7 @@ void WaitForWindowPositionInScreen(const std::string& window_id,
       outer_loop.Quit();
   });
   base::RepeatingTimer timer;
-  timer.Start(FROM_HERE, base::TimeDelta::FromMilliseconds(1),
-              std::move(wait_for_position));
+  timer.Start(FROM_HERE, base::Milliseconds(1), std::move(wait_for_position));
   outer_loop.Run();
 }
 
@@ -72,7 +72,7 @@ IN_PROC_BROWSER_TEST_F(PopupBrowserTest, LongPressOnTabOpensNonEmptyMenu) {
   // Wait for the window to be created.
   aura::Window* window = browser()->window()->GetNativeWindow();
   std::string window_id =
-      browser_test_util::GetWindowId(window->GetRootWindow());
+      lacros_window_utility::GetRootWindowUniqueId(window->GetRootWindow());
   browser_test_util::WaitForWindowCreation(window_id);
 
   // Wait for the window to be globally positioned at 0,0. It will eventually
@@ -108,7 +108,7 @@ IN_PROC_BROWSER_TEST_F(PopupBrowserTest, LongPressOnTabOpensNonEmptyMenu) {
   // Wayland only transports press/move/release events, not gestures.
   base::RunLoop loop2;
   base::OneShotTimer timer2;
-  timer2.Start(FROM_HERE, base::TimeDelta::FromSeconds(1), loop2.QuitClosure());
+  timer2.Start(FROM_HERE, base::Seconds(1), loop2.QuitClosure());
   loop2.Run();
 
   // Release the touch in ash.
@@ -132,7 +132,7 @@ IN_PROC_BROWSER_TEST_F(PopupBrowserTest, LongPressOnTabOpensNonEmptyMenu) {
     loop3.Quit();
   });
   base::RepeatingTimer timer3;
-  timer3.Start(FROM_HERE, base::TimeDelta::FromMilliseconds(1),
+  timer3.Start(FROM_HERE, base::Milliseconds(1),
                std::move(wait_for_popup_on_screen));
   loop3.Run();
 

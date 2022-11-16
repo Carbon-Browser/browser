@@ -78,8 +78,7 @@ void DiceInterceptedSessionStartupHelper::Startup(base::OnceClosure callback) {
     // particular the ExternalCCResult fetch may time out after multiple seconds
     // (see kExternalCCResultTimeoutSeconds and https://crbug.com/750316#c37).
     base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
-        FROM_HERE, on_cookie_update_timeout_.callback(),
-        base::TimeDelta::FromSeconds(12));
+        FROM_HERE, on_cookie_update_timeout_.callback(), base::Seconds(12));
 
     accounts_in_cookie_observer_.Observe(identity_manager);
     if (use_multilogin_)
@@ -166,7 +165,7 @@ void DiceInterceptedSessionStartupHelper::MoveTab() {
   GURL url_to_open = GURL(chrome::kChromeUINewTabURL);
   // If the intercepted web contents is still alive, close it now.
   if (web_contents_) {
-    url_to_open = web_contents_->GetURL();
+    url_to_open = web_contents_->GetLastCommittedURL();
     web_contents_->Close();
   }
 

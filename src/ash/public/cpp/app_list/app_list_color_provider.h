@@ -7,6 +7,7 @@
 
 #include "ash/public/cpp/ash_public_export.h"
 #include "third_party/skia/include/core/SkColor.h"
+#include "ui/color/color_id.h"
 #include "ui/gfx/color_palette.h"
 
 namespace ash {
@@ -44,19 +45,22 @@ class ASH_PUBLIC_EXPORT AppListColorProvider {
   virtual SkColor GetFolderHintTextColor() const = 0;
   virtual SkColor GetFolderNameBorderColor(bool active) const = 0;
   virtual SkColor GetFolderNameSelectionColor() const = 0;
+  virtual SkColor GetFolderNotificationBadgeColor() const = 0;
   virtual SkColor GetContentsBackgroundColor() const = 0;
   virtual SkColor GetGridBackgroundCardActiveColor() const = 0;
   virtual SkColor GetGridBackgroundCardInactiveColor() const = 0;
-  virtual SkColor GetSeparatorColor() const = 0;
+  virtual ui::ColorId GetSeparatorColorId() const = 0;
   virtual SkColor GetFocusRingColor() const = 0;
-  virtual float GetFolderBackgrounBlurSigma() const = 0;
-  virtual SkColor GetRippleAttributesBaseColor(
+  virtual SkColor GetInkDropBaseColor(
       SkColor bg_color = gfx::kPlaceholderColor) const = 0;
-  virtual float GetRippleAttributesInkDropOpacity(
+  virtual float GetInkDropOpacity(
       SkColor bg_color = gfx::kPlaceholderColor) const = 0;
-  virtual float GetRippleAttributesHighlightOpacity(
+  virtual SkColor GetInvertedInkDropBaseColor(
+      SkColor bg_color = gfx::kPlaceholderColor) const = 0;
+  virtual float GetInvertedInkDropOpacity(
       SkColor bg_color = gfx::kPlaceholderColor) const = 0;
   virtual SkColor GetSearchResultViewHighlightColor() const = 0;
+  virtual SkColor GetTextColorURL() const = 0;
 
  protected:
   AppListColorProvider();

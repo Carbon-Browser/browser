@@ -5,9 +5,8 @@
 #include "extensions/browser/api/system_storage/system_storage_api.h"
 
 #include "base/bind.h"
-#include "base/task/post_task.h"
+#include "base/task/task_runner_util.h"
 #include "base/task/thread_pool.h"
-#include "base/task_runner_util.h"
 #include "content/public/browser/browser_thread.h"
 
 using storage_monitor::StorageMonitor;

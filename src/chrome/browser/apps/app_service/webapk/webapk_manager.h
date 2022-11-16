@@ -8,12 +8,14 @@
 #include <memory>
 #include <vector>
 
+#include "ash/components/arc/mojom/intent_helper.mojom-forward.h"
 #include "base/scoped_observation.h"
+#include "chrome/browser/apps/app_service/app_service_proxy_forward.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager_observer.h"
 #include "chrome/browser/ui/app_list/arc/arc_app_list_prefs.h"
-#include "components/arc/mojom/intent_helper.mojom-forward.h"
 #include "components/services/app_service/public/cpp/app_registry_cache.h"
+#include "components/services/app_service/public/cpp/app_types.h"
 
 class PrefChangeRegistrar;
 class Profile;
@@ -24,7 +26,6 @@ class ApkWebAppService;
 
 namespace apps {
 
-class AppServiceProxyBase;
 class WebApkInstallQueue;
 
 class WebApkManager : public AppRegistryCache::Observer,
@@ -55,7 +56,7 @@ class WebApkManager : public AppRegistryCache::Observer,
 
   // AppRegistryCache::Observer:
   void OnAppUpdate(const AppUpdate& update) override;
-  void OnAppTypeInitialized(apps::mojom::AppType type) override;
+  void OnAppTypeInitialized(AppType type) override;
   void OnAppRegistryCacheWillBeDestroyed(AppRegistryCache* cache) override;
 
   // ArcAppListPrefs::Observer:
@@ -67,11 +68,11 @@ class WebApkManager : public AppRegistryCache::Observer,
   void OnArcPlayStoreEnabledChanged(bool enabled) override;
 
   Profile* profile_;
-  AppServiceProxyBase* proxy_;
+  AppServiceProxy* proxy_;
   ash::ApkWebAppService* apk_service_;
   ArcAppListPrefs* app_list_prefs_;
 
-  bool initialized_;
+  bool initialized_ = false;
 
   std::unique_ptr<WebApkInstallQueue> install_queue_;
   std::vector<std::string> uninstall_queue_;

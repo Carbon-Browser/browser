@@ -11,10 +11,11 @@ along with a detailed description for each histogram.
 For best practices on writing histogram descriptions, see
 https://chromium.googlesource.com/chromium/src.git/+/HEAD/tools/metrics/histograms/README.md
 
-Please send CLs to chromium-metrics-reviews@google.com rather than to specific
-individuals. These CLs will be automatically reassigned to a reviewer within
-about 5 minutes. This approach helps the metrics team to load-balance incoming
-reviews. Googlers can read more about this at go/gwsq-gerrit.
+Please follow the instructions in the OWNERS file in this directory to find a
+reviewer. If no OWNERS file exists, please consider signing up at
+go/reviewing-metrics (Googlers only), as all subdirectories are expected to
+have an OWNERS file. As a last resort you can send the CL to
+chromium-metrics-reviews@google.com.
 -->
 
 <histogram-configuration>
@@ -43,8 +44,8 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearch.All.Searches"
-    enum="BooleanBottomSearchKind" expires_after="M95">
-<!-- TODO(donnd): change expires_after to never once established and
+    enum="BooleanBottomSearchKind" expires_after="2022-12-11">
+<!-- TODO(donnd): change expires_after to "never" once established and
        approved. -->
 
   <owner>donnd@chromium.org</owner>
@@ -85,8 +86,45 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
   </summary>
 </histogram>
 
+<histogram name="Search.ContextualSearch.Counted.Event"
+    enum="ContextualSearchCountedEvent" expires_after="2022-12-11">
+  <owner>donnd@chromium.org</owner>
+  <owner>contextual-search-eng@google.com</owner>
+  <summary>
+    Records that a Search was done and whether the search was unintelligent or
+    intelligent, and whether it was likely counted by Rasta. Recorded for all
+    users when the panel is closed after being opened. Implemented for Android.
+  </summary>
+</histogram>
+
+<histogram name="Search.ContextualSearch.Counted.Searches" enum="Boolean"
+    expires_after="2022-12-11">
+<!-- TODO(donnd): change expires_after to "never" once established and
+         approved. -->
+
+  <owner>donnd@chromium.org</owner>
+  <owner>contextual-search-eng@google.com</owner>
+  <summary>
+    Records that a Contextual Search was initiated by the user, and whether that
+    search should be counted as a real user-viewed search or not.
+
+    The true bucket is designed to match what Rasta counts in its queries(event)
+    metric as a real user search.
+
+    The false bucket includes all the other cases where the Contextual Search
+    was started but not counted by Rasta because the user has not been able to
+    view the Search Result Page. Usually this is because the user did not expand
+    the panel beyond the peeking state, but occasionally because it did not
+    render. Recorded when the panel is closed for all users. Implemented for
+    Android.
+  </summary>
+</histogram>
+
 <histogram name="Search.ContextualSearch.OutcomesDuration" units="days"
-    expires_after="M75">
+    expires_after="M104">
+  <obsolete>
+    Removed 06/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -97,7 +135,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearch.Ranker.FeaturesAvailable"
-    enum="Boolean" expires_after="M77">
+    enum="Boolean" expires_after="M104">
+  <obsolete>
+    Removed 06/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -119,7 +160,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearch.Ranker.NotSuppressed.ResultsSeen"
-    enum="ContextualSearchResultsSeen" expires_after="M77">
+    enum="ContextualSearchResultsSeen" expires_after="M104">
+  <obsolete>
+    Removed 06/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -129,7 +173,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearch.Ranker.Recorded" enum="Boolean"
-    expires_after="M77">
+    expires_after="M104">
+  <obsolete>
+    Removed 06/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -139,7 +186,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearch.Ranker.RecordedNative" enum="Boolean"
-    expires_after="M77">
+    expires_after="M104">
+  <obsolete>
+    Removed 06/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -150,7 +200,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearch.Ranker.Suppressed" enum="Boolean"
-    expires_after="M85">
+    expires_after="M104">
+  <obsolete>
+    Removed 06/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -199,7 +252,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearch.Ranker.WasAbleToPredict"
-    enum="Boolean" expires_after="M77">
+    enum="Boolean" expires_after="M104">
+  <obsolete>
+    Removed 06/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -209,7 +265,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearch.Ranker.WouldSuppress.ResultsSeen"
-    enum="ContextualSearchResultsSeen" expires_after="M77">
+    enum="ContextualSearchResultsSeen" expires_after="M104">
+  <obsolete>
+    Removed 06/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -231,7 +290,7 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearch.ResolveRequested"
-    enum="ContextualSearchGestureIsTap" expires_after="2022-04-04">
+    enum="ContextualSearchGestureIsTap" expires_after="2022-12-11">
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -242,7 +301,7 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearch.SelectionExpanded"
-    enum="ContextualSearchGestureIsTap" expires_after="2022-04-04">
+    enum="ContextualSearchGestureIsTap" expires_after="2022-12-11">
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -250,6 +309,22 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
     expanded, and whether that original selection was due to a Tap or not (vs
     longpress). Recorded when the qualifying server response is received.
     Implemented for Android.
+  </summary>
+</histogram>
+
+<histogram name="Search.ContextualSearch.SuppressedViewTooSmall" enum="Boolean"
+    expires_after="M106">
+  <owner>donnd@chromium.org</owner>
+  <owner>gangwu@chromium.org</owner>
+  <owner>contextual-search-eng@google.com</owner>
+  <summary>
+    Records whether triggering the Touch To Search feature was suppressed due to
+    the base page view being too small. This may happen in landscape mode, on
+    very small phones, when a Partial Height Custom Tab is being displayed, or
+    when muliwindow is in use with a small window. The intent is to capture in
+    the log how many searches we lose when the gating Feature is enabled.
+    Recorded when a gesture that would normally trigger TTS suppresses the
+    bottom sheet from showing. Android only.
   </summary>
 </histogram>
 
@@ -277,9 +352,9 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearch.TranslationNeeded"
-    enum="ContextualSearchGestureIsTap" expires_after="2022-04-04">
+    enum="ContextualSearchGestureIsTap" expires_after="2022-08-05">
   <owner>donnd@chromium.org</owner>
-  <owner>twellington@chromium.org</owner>
+  <owner>contextual-search-eng@google.com</owner>
   <summary>
     Records that a translation is needed for the current Contextual Search, and
     whether the selection was originally created by a Tap gesture. This is
@@ -291,6 +366,9 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 
 <histogram name="Search.ContextualSearch.TranslationsOptInIPHShown"
     enum="BooleanPreviouslyShown" expires_after="2022-04-04">
+  <obsolete>
+    Removed 01/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>contextual-search-eng@google.com</owner>
   <summary>
@@ -302,6 +380,9 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 
 <histogram name="Search.ContextualSearch.TranslationsOptInIPHWorked"
     enum="BooleanOptedIn" expires_after="2022-04-04">
+  <obsolete>
+    Removed 01/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>contextual-search-eng@google.com</owner>
   <summary>
@@ -349,58 +430,6 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
   </summary>
 </histogram>
 
-<histogram name="Search.ContextualSearchBarNoOverlap.PeekDuration" units="ms"
-    expires_after="M72">
-  <owner>donnd@chromium.org</owner>
-  <owner>twellington@chromium.org</owner>
-  <summary>
-    The duration that the panel was peeking before being opened when triggered
-    by a tap that was in a part of the screen where it overlaps the Bar. Logged
-    when the panel is closed after being opened. Implemented for Android.
-  </summary>
-</histogram>
-
-<histogram name="Search.ContextualSearchBarOverlap"
-    enum="ContextualSearchTapSuppression" expires_after="M77">
-  <owner>donnd@chromium.org</owner>
-  <owner>twellington@chromium.org</owner>
-  <summary>
-    Whether a Tap was suppressed because the Bar overlapped the selection area.
-    Implemented for Android.
-  </summary>
-</histogram>
-
-<histogram name="Search.ContextualSearchBarOverlap.PeekDuration" units="ms"
-    expires_after="M72">
-  <owner>donnd@chromium.org</owner>
-  <owner>twellington@chromium.org</owner>
-  <summary>
-    The duration that the panel was peeking before being opened when triggered
-    by a tap at the bottom of the screen where it overlaps the Bar. Logged when
-    the panel is closed after being opened. Implemented for Android.
-  </summary>
-</histogram>
-
-<histogram name="Search.ContextualSearchBarOverlapSeen"
-    enum="ContextualSearchBarOverlapSeen" expires_after="M72">
-  <owner>donnd@chromium.org</owner>
-  <owner>twellington@chromium.org</owner>
-  <summary>
-    Whether the Bar overlapped the selection area and whether the results were
-    seen. Recorded when the UX is hidden. Implemented for Android.
-  </summary>
-</histogram>
-
-<histogram name="Search.ContextualSearchBasePageProtocol"
-    enum="ContextualSearchBasePageProtocol" expires_after="M72">
-  <owner>donnd@chromium.org</owner>
-  <owner>twellington@chromium.org</owner>
-  <summary>
-    The protocol of the base page, logged at the time that any Search Term
-    Resolution Response is received.
-  </summary>
-</histogram>
-
 <histogram name="Search.ContextualSearchContextualCardsIntegration.DataShown"
     enum="Boolean" expires_after="never">
 <!-- expires-never: key metric on usefulness of Touch to Search. -->
@@ -414,19 +443,11 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
   </summary>
 </histogram>
 
-<histogram name="Search.ContextualSearchContextualCardsIntegration.ResultsSeen"
-    enum="ContextualSearchResultsSeen" expires_after="M85">
-  <owner>donnd@chromium.org</owner>
-  <owner>twellington@chromium.org</owner>
-  <summary>
-    Whether search results were seen as part of a Contextual Search when
-    Contextual Cards data was shown. This indicates that the panel was opened.
-    Implemented for Android.
-  </summary>
-</histogram>
-
 <histogram name="Search.ContextualSearchDurationBetweenTriggerAndScrollNotSeen"
-    units="ms" expires_after="M72">
+    units="ms" expires_after="M105">
+  <obsolete>
+    Removed 06/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -438,7 +459,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchDurationBetweenTriggerAndScrollSeen"
-    units="ms" expires_after="M72">
+    units="ms" expires_after="M105">
+  <obsolete>
+    Removed 06/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -450,7 +474,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchDurationSeen" units="ms"
-    expires_after="M72">
+    expires_after="M105">
+  <obsolete>
+    Removed 06/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -460,7 +487,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchDurationUnseen" units="ms"
-    expires_after="M72">
+    expires_after="M105">
+  <obsolete>
+    Removed 06/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -471,7 +501,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchDurationUnseenChained" units="ms"
-    expires_after="M72">
+    expires_after="M105">
+  <obsolete>
+    Removed 06/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -482,7 +515,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchEnterClosed"
-    enum="ContextualSearchEnterClosedStateChange" expires_after="M72">
+    enum="ContextualSearchEnterClosedStateChange" expires_after="M103">
+  <obsolete>
+    Removed as of 05/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -492,7 +528,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchEnterExpanded"
-    enum="ContextualSearchEnterExpandedStateChange" expires_after="M72">
+    enum="ContextualSearchEnterExpandedStateChange" expires_after="M103">
+  <obsolete>
+    Removed as of 05/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -502,7 +541,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchEnterMaximized"
-    enum="ContextualSearchEnterMaximizedStateChange" expires_after="M72">
+    enum="ContextualSearchEnterMaximizedStateChange" expires_after="M103">
+  <obsolete>
+    Removed as of 05/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -512,7 +554,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchEnterPeeked"
-    enum="ContextualSearchEnterPeekedStateChange" expires_after="M72">
+    enum="ContextualSearchEnterPeekedStateChange" expires_after="M103">
+  <obsolete>
+    Removed as of 05/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -522,7 +567,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchEntitySeen"
-    enum="ContextualSearchResultsSeen" expires_after="M77">
+    enum="ContextualSearchResultsSeen" expires_after="M103">
+  <obsolete>
+    Removed as of 05/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -533,7 +581,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchExitClosed"
-    enum="ContextualSearchExitClosedStateChange" expires_after="M72">
+    enum="ContextualSearchExitClosedStateChange" expires_after="M103">
+  <obsolete>
+    Removed as of 05/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -543,7 +594,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchExitExpanded"
-    enum="ContextualSearchExitExpandedStateChange" expires_after="M72">
+    enum="ContextualSearchExitExpandedStateChange" expires_after="M103">
+  <obsolete>
+    Removed as of 05/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -553,7 +607,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchExitMaximized"
-    enum="ContextualSearchExitMaximizedStateChange" expires_after="M72">
+    enum="ContextualSearchExitMaximizedStateChange" expires_after="M103">
+  <obsolete>
+    Removed as of 05/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -563,7 +620,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchExitPeeked"
-    enum="ContextualSearchExitPeekedStateChange" expires_after="M77">
+    enum="ContextualSearchExitPeekedStateChange" expires_after="M103">
+  <obsolete>
+    Removed as of 05/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -573,7 +633,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchFallbackSearchRequestStatus"
-    enum="ContextualSearchSearchRequestStatus" expires_after="M85">
+    enum="ContextualSearchSearchRequestStatus" expires_after="M105">
+  <obsolete>
+    Removed 06/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -582,18 +645,11 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
   </summary>
 </histogram>
 
-<histogram name="Search.ContextualSearchFirstRunFlowOutcome"
-    enum="ContextualSearchPreferenceState" expires_after="M72">
-  <owner>donnd@chromium.org</owner>
-  <owner>twellington@chromium.org</owner>
-  <summary>
-    The state of the Contextual Search Preference after the first run flow.
-    Implemented for Android.
-  </summary>
-</histogram>
-
 <histogram name="Search.ContextualSearchFirstRunPanelSeen"
-    enum="ContextualSearchFirstRunPanelSeen" expires_after="M72">
+    enum="ContextualSearchFirstRunPanelSeen" expires_after="M105">
+  <obsolete>
+    Removed 06/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -616,7 +672,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchLiteralSearchDuration" units="ms"
-    expires_after="M72">
+    expires_after="M105">
+  <obsolete>
+    Removed 06/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -627,7 +686,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchLowPrioritySearchRequestStatus"
-    enum="ContextualSearchSearchRequestStatus" expires_after="M72">
+    enum="ContextualSearchSearchRequestStatus" expires_after="M105">
+  <obsolete>
+    Removed 06/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -636,18 +698,11 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
   </summary>
 </histogram>
 
-<histogram name="Search.ContextualSearchMandatoryPromoOutcomeByGesture"
-    enum="ContextualSearchOutcomeByGesture" expires_after="M85">
-  <owner>donnd@chromium.org</owner>
-  <owner>twellington@chromium.org</owner>
-  <summary>
-    The outcome of the mandatory Promo broken down by original triggering
-    gesture. Logged for each view of the promo. Implemented for Android.
-  </summary>
-</histogram>
-
 <histogram name="Search.ContextualSearchNormalPrioritySearchRequestStatus"
-    enum="ContextualSearchSearchRequestStatus" expires_after="M77">
+    enum="ContextualSearchSearchRequestStatus" expires_after="M105">
+  <obsolete>
+    Removed 06/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -657,9 +712,9 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchPanelOpenDuration" units="ms"
-    expires_after="M72">
+    expires_after="M103">
   <owner>donnd@chromium.org</owner>
-  <owner>twellington@chromium.org</owner>
+  <owner>contextual-search-eng@google.com</owner>
   <summary>
     The time from opening the panel beyond peek until the panel is closed.
     Implemented for Android.
@@ -703,51 +758,8 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
   </summary>
 </histogram>
 
-<histogram name="Search.ContextualSearchPrevious28DayCtr" units="%"
-    expires_after="M72">
-  <owner>donnd@chromium.org</owner>
-  <owner>twellington@chromium.org</owner>
-  <summary>
-    The CTR from the previous 28 day period for each user, expressed as a
-    percentage. Logged the first time the panel is closed in each new week.
-    Implemented for Android.
-  </summary>
-</histogram>
-
-<histogram name="Search.ContextualSearchPrevious28DayImpressions" units="views"
-    expires_after="M72">
-  <owner>donnd@chromium.org</owner>
-  <owner>twellington@chromium.org</owner>
-  <summary>
-    The number of user impressions of the Bar from the previous 28 day period.
-    Logged the first time the panel is closed in each new week. Implemented for
-    Android.
-  </summary>
-</histogram>
-
-<histogram name="Search.ContextualSearchPreviousWeekCtr" units="%"
-    expires_after="M72">
-  <owner>donnd@chromium.org</owner>
-  <owner>twellington@chromium.org</owner>
-  <summary>
-    The CTR from the previous week for each user, expressed as a percentage.
-    Logged the first time the panel is closed in each new week. Implemented for
-    Android.
-  </summary>
-</histogram>
-
-<histogram name="Search.ContextualSearchPreviousWeekImpressions" units="views"
-    expires_after="M72">
-  <owner>donnd@chromium.org</owner>
-  <owner>twellington@chromium.org</owner>
-  <summary>
-    The number of user impressions of the Bar from the previous week. Logged the
-    first time the panel is closed in each new week. Implemented for Android.
-  </summary>
-</histogram>
-
 <histogram name="Search.ContextualSearchPrivacyOptInPreferenceStateChange"
-    enum="BooleanOptedIn" expires_after="M98">
+    enum="BooleanOptedIn" expires_after="2023-01-15">
   <owner>donnd@chromium.org</owner>
   <owner>contextual-search-eng@google.com</owner>
   <summary>
@@ -758,7 +770,7 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchPromoCardChoice" enum="BooleanOptedIn"
-    expires_after="M98">
+    expires_after="2023-01-01">
   <owner>donnd@chromium.org</owner>
   <owner>contextual-search-eng@google.com</owner>
   <summary>
@@ -769,7 +781,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchPromoOpenCount" units="opens"
-    expires_after="M77">
+    expires_after="M104">
+  <obsolete>
+    Removed as of 05/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -779,8 +794,8 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchPromoOpenCount2" units="opens"
-    expires_after="M98">
-  <owner>donnd@chromium.org</owner>
+    expires_after="2023-06-26">
+  <owner>gangwu@chromium.org</owner>
   <owner>contextual-search-eng@chromium.org</owner>
   <summary>
     The total count of times that the revised promo has been shown. Once the
@@ -789,18 +804,8 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
   </summary>
 </histogram>
 
-<histogram name="Search.ContextualSearchPromoOutcomeByGesture"
-    enum="ContextualSearchOutcomeByGesture" expires_after="M72">
-  <owner>donnd@chromium.org</owner>
-  <owner>twellington@chromium.org</owner>
-  <summary>
-    The outcome of the promo broken down by original triggering gesture. Logged
-    for each view of the promo. Implemented for Android.
-  </summary>
-</histogram>
-
 <histogram name="Search.ContextualSearchPromoSeenByGesture"
-    enum="ContextualSearchSeenByGesture" expires_after="M81">
+    enum="ContextualSearchSeenByGesture" expires_after="M103">
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -810,7 +815,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchPromoTapsBeforeFirstOpen" units="taps"
-    expires_after="M81">
+    expires_after="M105">
+  <obsolete>
+    Removed as of 06/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -820,7 +828,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchPromoTapsForNeverOpened" units="taps"
-    expires_after="M77">
+    expires_after="M105">
+  <obsolete>
+    Removed as of 06/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -831,7 +842,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchPromoTapsRemaining" units="taps"
-    expires_after="M77">
+    expires_after="M105">
+  <obsolete>
+    Removed as of 06/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -841,7 +855,7 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchQuickActions.Category"
-    enum="ContextualSearchQuickActionCategory" expires_after="2022-04-04">
+    enum="ContextualSearchQuickActionCategory" expires_after="2022-12-11">
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -887,7 +901,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchQuickActions.Shown" enum="BooleanShown"
-    expires_after="M72">
+    expires_after="M105">
+  <obsolete>
+    Removed as of 06/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -897,7 +914,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchQuickAnswerSeen"
-    enum="ContextualSearchQuickAnswerSeen" expires_after="M77">
+    enum="ContextualSearchQuickAnswerSeen" expires_after="M104">
+  <obsolete>
+    Removed as of 05/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -907,7 +927,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchRecentScrollSuppression"
-    enum="ContextualSearchTapSuppression" expires_after="M72">
+    enum="ContextualSearchTapSuppression" expires_after="M104">
+  <obsolete>
+    Removed as of 05/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -917,7 +940,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchResolutionDuration" units="ms"
-    expires_after="M72">
+    expires_after="M105">
+  <obsolete>
+    Removed as of 06/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -927,23 +953,16 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchResolvedSearchDuration" units="ms"
-    expires_after="M72">
+    expires_after="M105">
+  <obsolete>
+    Removed as of 06/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
     The time from starting a resolving search until the results in the SERP
     start to become viewable. Applies only to prefetched requests. Implemented
     for Android.
-  </summary>
-</histogram>
-
-<histogram name="Search.ContextualSearchResolvedTermWords"
-    enum="ContextualSearchResolvedTermWords" expires_after="M72">
-  <owner>donnd@chromium.org</owner>
-  <owner>twellington@chromium.org</owner>
-  <summary>
-    Whether the search term was single or multi-word, logged at the time that
-    any Search Term Resolution Response is received.
   </summary>
 </histogram>
 
@@ -972,7 +991,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchScreenTopSuppressed"
-    enum="ContextualSearchTapSuppression" expires_after="M72">
+    enum="ContextualSearchTapSuppression" expires_after="M103">
+  <obsolete>
+    Removed as of 05/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -983,6 +1005,9 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 
 <histogram name="Search.ContextualSearchSecondTapMlOverrideSeen" enum="Boolean"
     expires_after="M77">
+  <obsolete>
+    Removed as of 01/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -992,7 +1017,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchSelectionLengthNotSeen" units="chars"
-    expires_after="M72">
+    expires_after="M105">
+  <obsolete>
+    Removed as of 06/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -1003,7 +1031,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchSelectionLengthSeen" units="chars"
-    expires_after="M72">
+    expires_after="M105">
+  <obsolete>
+    Removed as of 06/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -1014,7 +1045,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchSelectionLengthSuppression"
-    enum="ContextualSearchTapSuppression" expires_after="M72">
+    enum="ContextualSearchTapSuppression" expires_after="M104">
+  <obsolete>
+    Removed as of 06/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -1024,7 +1058,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchSelectionValid"
-    enum="ContextualSearchSelectionValid" expires_after="M72">
+    enum="ContextualSearchSelectionValid" expires_after="M105">
+  <obsolete>
+    Removed as of 06/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -1033,7 +1070,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchTapDurationNotSeen" units="ms"
-    expires_after="M72">
+    expires_after="M103">
+  <obsolete>
+    Removed as of 05/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -1044,7 +1084,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchTapDurationSeen" units="ms"
-    expires_after="M72">
+    expires_after="M103">
+  <obsolete>
+    Removed as of 05/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -1067,7 +1110,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchTapLongDurationSeen"
-    enum="ContextualSearchResultsSeen" expires_after="M72">
+    enum="ContextualSearchResultsSeen" expires_after="M103">
+  <obsolete>
+    Removed as of 05/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -1076,28 +1122,11 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
   </summary>
 </histogram>
 
-<histogram name="Search.ContextualSearchTapLongWordSeen"
-    enum="ContextualSearchResultsSeen" expires_after="M72">
-  <owner>donnd@chromium.org</owner>
-  <owner>twellington@chromium.org</owner>
-  <summary>
-    Whether results were seen for a Tap that was on a word considered long.
-    Recorded when the UX is hidden. Implemented for Android.
-  </summary>
-</histogram>
-
-<histogram name="Search.ContextualSearchTapOnWordMiddleSeen"
-    enum="ContextualSearchResultsSeen" expires_after="M72">
-  <owner>donnd@chromium.org</owner>
-  <owner>twellington@chromium.org</owner>
-  <summary>
-    Whether results were seen for a Tap that was on the middle part of a word.
-    Recorded when the UX is hidden. Implemented for Android.
-  </summary>
-</histogram>
-
 <histogram name="Search.ContextualSearchTapShortDurationSeen"
-    enum="ContextualSearchResultsSeen" expires_after="M72">
+    enum="ContextualSearchResultsSeen" expires_after="M103">
+  <obsolete>
+    Removed as of 05/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -1106,18 +1135,11 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
   </summary>
 </histogram>
 
-<histogram name="Search.ContextualSearchTapShortWordSeen"
-    enum="ContextualSearchResultsSeen" expires_after="M72">
-  <owner>donnd@chromium.org</owner>
-  <owner>twellington@chromium.org</owner>
-  <summary>
-    Whether results were seen for a Tap that was on a word considered short.
-    Recorded when the UX is hidden. Implemented for Android.
-  </summary>
-</histogram>
-
 <histogram name="Search.ContextualSearchTapsSinceOpenDecided" units="taps"
-    expires_after="M72">
+    expires_after="M104">
+  <obsolete>
+    Removed as of 05/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -1127,7 +1149,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchTapsSinceOpenUndecided" units="taps"
-    expires_after="M72">
+    expires_after="M104">
+  <obsolete>
+    Removed as of 05/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -1138,7 +1163,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 
 <histogram
     name="Search.ContextualSearchTapSuppressionSeen.AnyHeuristicSatisfied"
-    enum="ContextualSearchSuppressionResultsSeen" expires_after="M72">
+    enum="ContextualSearchSuppressionResultsSeen" expires_after="M105">
+  <obsolete>
+    Removed as of 06/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -1149,7 +1177,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchTimeToSearch" units="ms"
-    expires_after="M72">
+    expires_after="M105">
+  <obsolete>
+    Removed as of 06/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -1159,7 +1190,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchTopLocationNotSeen" units="dps"
-    expires_after="M72">
+    expires_after="M103">
+  <obsolete>
+    Removed as of 05/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -1169,7 +1203,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.ContextualSearchTopLocationSeen" units="dps"
-    expires_after="M72">
+    expires_after="M103">
+  <obsolete>
+    Removed as of 05/2022
+  </obsolete>
   <owner>donnd@chromium.org</owner>
   <owner>twellington@chromium.org</owner>
   <summary>
@@ -1196,7 +1233,7 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.DefaultSearchProviderType"
-    enum="OmniboxSearchEngineType" expires_after="2022-01-02">
+    enum="OmniboxSearchEngineType" expires_after="2022-12-11">
   <owner>mpearson@chromium.org</owner>
   <owner>csharp@chromium.org</owner>
   <summary>
@@ -1269,7 +1306,7 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.iOS.SelectDefaultSearchEngine"
-    enum="OmniboxSearchEngineType" expires_after="2022-02-04">
+    enum="OmniboxSearchEngineType" expires_after="2023-01-04">
   <owner>sczs@chromium.org</owner>
   <owner>gambard@chromium.org</owner>
   <summary>
@@ -1290,7 +1327,7 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram base="true" name="Search.QueryTiles.Bitmap.Available"
-    enum="BooleanAvailable" expires_after="2022-04-01">
+    enum="BooleanAvailable" expires_after="2022-10-31">
 <!-- Name completed by histogram_suffixes name="TileUiSurface" -->
 
   <owner>shaktisahu@chromium.org</owner>
@@ -1314,7 +1351,7 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.QueryTiles.Fetcher.FirstFlowDuration" units="hours"
-    expires_after="2022-04-01">
+    expires_after="2023-01-01">
   <owner>qinmin@chromium.org</owner>
   <owner>chrome-upboarding-eng@google.com</owner>
   <summary>
@@ -1324,28 +1361,28 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.QueryTiles.Fetcher.Start" units="hours"
-    expires_after="2022-04-01">
+    expires_after="2023-01-01">
   <owner>qinmin@chromium.org</owner>
   <owner>chrome-upboarding-eng@google.com</owner>
   <summary>Records the hour (0-23) when the TileFetcher task starts.</summary>
 </histogram>
 
 <histogram name="Search.QueryTiles.FetcherHttpResponseCode"
-    enum="HttpResponseCode" expires_after="2022-04-01">
+    enum="HttpResponseCode" expires_after="2023-01-01">
   <owner>qinmin@chromium.org</owner>
   <owner>chrome-upboarding-eng@google.com</owner>
   <summary>Records the HTTP response code get from TileFetcher.</summary>
 </histogram>
 
 <histogram name="Search.QueryTiles.FetcherNetErrorCode" enum="NetErrorCodes"
-    expires_after="2022-04-01">
+    expires_after="2022-10-09">
   <owner>qinmin@chromium.org</owner>
   <owner>chrome-upboarding-eng@google.com</owner>
   <summary>Records the net error code get from TileFetcher.</summary>
 </histogram>
 
 <histogram name="Search.QueryTiles.Group.PruneReason"
-    enum="QueryTilesGroupPruneReason" expires_after="2022-04-01">
+    enum="QueryTilesGroupPruneReason" expires_after="2022-12-11">
   <owner>qinmin@chromium.org</owner>
   <owner>chrome-upboarding-eng@google.com</owner>
   <summary>
@@ -1354,7 +1391,7 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.QueryTiles.GroupStatus" enum="QueryTilesGroupStatus"
-    expires_after="2022-04-01">
+    expires_after="2022-12-11">
   <owner>qinmin@chromium.org</owner>
   <owner>chrome-upboarding-eng@google.com</owner>
   <summary>
@@ -1364,7 +1401,7 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 
 <histogram name="Search.QueryTiles.ImagePreloadingEvent"
     enum="QueryTilesImageLoadingEvent" expires_after="2022-04-01">
-  <owner>xingliu@chromium.org</owner>
+  <owner>qinmin@chromium.org</owner>
   <owner>chrome-upboarding-eng@google.com</owner>
   <summary>
     Records the image preloading events when the query tile images are fetched
@@ -1385,18 +1422,8 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
   </summary>
 </histogram>
 
-<histogram name="Search.QueryTiles.NTP.Chip.SearchClicked" units="index"
-    expires_after="2022-04-01">
-  <owner>shaktisahu@chromium.org</owner>
-  <owner>chrome-upboarding-eng@google.com</owner>
-  <summary>
-    Records the index of the query tile chip that was clicked from the fake
-    search box on the new tab page.
-  </summary>
-</histogram>
-
 <histogram name="Search.QueryTiles.RequestStatus"
-    enum="QueryTilesRequestStatus" expires_after="2022-04-01">
+    enum="QueryTilesRequestStatus" expires_after="2022-12-04">
   <owner>qinmin@chromium.org</owner>
   <owner>chrome-upboarding-eng@google.com</owner>
   <summary>
@@ -1405,8 +1432,35 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
   </summary>
 </histogram>
 
+<histogram name="Search.QueryTiles.ShowQueryTilesSegmentationResult"
+    enum="ShowQueryTilesSegmentationResult" expires_after="2022-08-09">
+  <owner>haileywang@chromium.org</owner>
+  <owner>ssid@chromium.org</owner>
+  <summary>
+    Records the result from segmentation platform that determines whether or not
+    to show Query Tiles on NTP. When segmentation model is finch enabled, this
+    is recorded every time the user navigates to NTP and the current Query Tiles
+    decision is inexistant or expired. For cases where segmentation model is not
+    finch enabled see ShowQueryTilesSegmentationResultComparison.
+  </summary>
+</histogram>
+
+<histogram name="Search.QueryTiles.ShowQueryTilesSegmentationResultComparison"
+    enum="ShowQueryTilesSegmentationResultComparison"
+    expires_after="2022-12-11">
+  <owner>haileywang@chromium.org</owner>
+  <owner>ssid@chromium.org</owner>
+  <summary>
+    Records the comparison of result from segmentation model and code logic for
+    when to show Query Tiles on NTP. When segmentation model is not finch
+    enabled, this is recorded every time the user navigates to NTP and the
+    current Query Tiles decision is inexistant or expired. For cases where
+    segmentation model is finch enabled see ShowQueryTilesSegmentationResult.
+  </summary>
+</histogram>
+
 <histogram base="true" name="Search.QueryTiles.Tile.Clicked" units="index"
-    expires_after="2022-04-01">
+    expires_after="2022-10-31">
 <!-- Name completed by histogram_suffixes name="TileUiSurface" -->
 
   <owner>shaktisahu@chromium.org</owner>
@@ -1427,7 +1481,7 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram base="true" name="Search.QueryTiles.TileCount" units="tiles"
-    expires_after="2022-04-01">
+    expires_after="2022-10-31">
 <!-- Name completed by histogram_suffixes name="TileUiSurface" -->
 
   <owner>shaktisahu@chromium.org</owner>
@@ -1457,7 +1511,7 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.QueryTiles.TrendingTileEvent" enum="TrendingTileEvent"
-    expires_after="2022-04-01">
+    expires_after="2023-01-01">
   <owner>qinmin@chromium.org</owner>
   <owner>chrome-upboarding-eng@google.com</owner>
   <summary>
@@ -1467,7 +1521,7 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.RegionSearch.Lens.RegionAspectRatio"
-    enum="LensRegionSearchAspectRatio" expires_after="2022-03-02">
+    enum="LensRegionSearchAspectRatio" expires_after="2023-01-15">
   <owner>juanmojica@google.com</owner>
   <owner>benwgold@google.com</owner>
   <owner>stanfield@google.com</owner>
@@ -1479,7 +1533,7 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.RegionSearch.Lens.RegionViewportProportion" units="pct"
-    expires_after="2022-03-02">
+    expires_after="2023-01-15">
   <owner>juanmojica@google.com</owner>
   <owner>benwgold@google.com</owner>
   <owner>stanfield@google.com</owner>
@@ -1491,7 +1545,7 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.RegionSearch.Lens.Result"
-    enum="LensRegionSearchCaptureResult" expires_after="2022-03-02">
+    enum="LensRegionSearchCaptureResult" expires_after="2023-01-15">
   <owner>juanmojica@google.com</owner>
   <owner>benwgold@google.com</owner>
   <owner>stanfield@google.com</owner>
@@ -1503,7 +1557,7 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.RelatedSearches.AllUserPermissions"
-    enum="ContextualSearchPermissions" expires_after="2022-02-20">
+    enum="ContextualSearchPermissions" expires_after="2022-12-11">
   <owner>donnd@chromium.org</owner>
   <owner>related-searches-vteam@google.com</owner>
   <summary>
@@ -1517,7 +1571,7 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.RelatedSearches.CarouselLastVisibleItemPosition"
-    units="position" expires_after="M95">
+    units="position" expires_after="2022-12-11">
   <owner>donnd@chromium.org</owner>
   <owner>gangwu@chromium.org</owner>
   <owner>related-searches-vteam@google.com</owner>
@@ -1531,7 +1585,7 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.RelatedSearches.CarouselScrollAndClick"
-    enum="ScrollAndClickStatus" expires_after="M95">
+    enum="ScrollAndClickStatus" expires_after="2022-12-11">
   <owner>donnd@chromium.org</owner>
   <owner>gangwu@chromium.org</owner>
   <owner>related-searches-vteam@google.com</owner>
@@ -1543,7 +1597,7 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.RelatedSearches.CarouselScrolled" enum="Boolean"
-    expires_after="M95">
+    expires_after="2022-12-11">
   <owner>donnd@chromium.org</owner>
   <owner>gangwu@chromium.org</owner>
   <owner>related-searches-vteam@google.com</owner>
@@ -1556,7 +1610,7 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.RelatedSearches.CTR" enum="BooleanClicked"
-    expires_after="M95">
+    expires_after="2022-08-07">
   <owner>donnd@chromium.org</owner>
   <owner>related-searches-vteam@google.com</owner>
   <summary>
@@ -1569,23 +1623,8 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
   </summary>
 </histogram>
 
-<histogram name="Search.RelatedSearches.NumberOfSuggestionsClicked"
-    units="selected" expires_after="M95">
-  <obsolete>
-    Deprecated as of August 2021 in favor of
-    Search.RelatedSearches.NumberOfSuggestionsClicked2
-  </obsolete>
-  <owner>donnd@chromium.org</owner>
-  <owner>related-searches-vteam@google.com</owner>
-  <summary>
-    The number of suggestions that were chosen by the user in a bottom-sheet
-    session that showed any Related Searches. Written when the suggestions UI is
-    closed. Implemented for Android.
-  </summary>
-</histogram>
-
 <histogram name="Search.RelatedSearches.NumberOfSuggestionsClicked2"
-    units="selected" expires_after="M95">
+    units="selected" expires_after="2022-12-11">
   <owner>donnd@chromium.org</owner>
   <owner>related-searches-vteam@google.com</owner>
   <summary>
@@ -1596,7 +1635,7 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.RelatedSearches.QualifiedUsers" enum="Boolean"
-    expires_after="2022-02-20">
+    expires_after="2022-12-11">
   <owner>donnd@chromium.org</owner>
   <owner>related-searches-vteam@google.com</owner>
   <summary>
@@ -1611,7 +1650,7 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.RelatedSearches.SelectedCarouselIndex" units="position"
-    expires_after="M95">
+    expires_after="2022-12-11">
   <owner>donnd@chromium.org</owner>
   <owner>related-searches-vteam@google.com</owner>
   <summary>
@@ -1622,7 +1661,7 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.RelatedSearches.SelectedSuggestionIndex"
-    units="position" expires_after="M95">
+    units="position" expires_after="2022-12-11">
   <owner>donnd@chromium.org</owner>
   <owner>related-searches-vteam@google.com</owner>
   <summary>
@@ -1669,7 +1708,7 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="Search.TemplateURL.Events" enum="SearchTemplateURLEvent"
-    expires_after="2021-12-05">
+    expires_after="2023-05-01">
   <owner>tommycli@chromium.org</owner>
   <owner>chrome-omnibox-team@google.com</owner>
   <summary>

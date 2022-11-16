@@ -67,6 +67,9 @@ struct MasterPrefs {
   std::vector<GURL> bookmarks;
   std::string import_bookmarks_path;
   std::string suppress_default_browser_prompt_for_version;
+#if BUILDFLAG(IS_MAC)
+  bool confirm_to_quit;
+#endif
 };
 
 void RegisterProfilePrefs(
@@ -76,7 +79,7 @@ void RegisterProfilePrefs(
 // run for this user.
 bool IsChromeFirstRun();
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 // Returns true if |command_line|'s switches explicitly specify that first run
 // should be suppressed in the current run.
 bool IsFirstRunSuppressed(const base::CommandLine& command_line);
@@ -118,18 +121,6 @@ bool ShouldShowWelcomePage();
 
 // Returns true if |contents| hosts one of the welcome pages.
 bool IsOnWelcomePage(content::WebContents* contents);
-
-// Sets a flag that will cause ShouldDoPersonalDataManagerFirstRun()
-// to return true exactly once, so that the browser loads
-// PersonalDataManager once the main message loop gets going.
-void SetShouldDoPersonalDataManagerFirstRun();
-
-// Returns true if the autofill personal data manager first-run action
-// should be taken.
-//
-// This will return true only once, the first time it is called after
-// SetShouldDoPersonalDataManagerFirstRun() is called.
-bool ShouldDoPersonalDataManagerFirstRun();
 
 // Automatically imports items requested by |profile|'s configuration (sum of
 // policies and initial prefs). Also imports bookmarks from file if

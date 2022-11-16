@@ -10,6 +10,7 @@
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/modules/shared_storage/shared_storage.h"
+#include "third_party/blink/renderer/modules/shared_storage/util.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 #include "third_party/blink/renderer/platform/weborigin/security_origin.h"
 
@@ -29,10 +30,18 @@ ScriptPromise SharedStorageWorklet::addModule(ScriptState* script_state,
   ExecutionContext* execution_context = ExecutionContext::From(script_state);
   CHECK(execution_context->IsWindow());
 
+  if (!CheckBrowsingContextIsValid(*script_state, exception_state))
+    return ScriptPromise();
+
   KURL script_source_url = execution_context->CompleteURL(module_url);
 
   auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
   ScriptPromise promise = resolver->Promise();
+
+  if (!CheckSharedStoragePermissionsPolicy(*script_state, *execution_context,
+                                           *resolver)) {
+    return promise;
+  }
 
   if (!script_source_url.IsValid()) {
     resolver->Reject(V8ThrowDOMException::CreateOrEmpty(
@@ -44,7 +53,7 @@ ScriptPromise SharedStorageWorklet::addModule(ScriptState* script_state,
   scoped_refptr<SecurityOrigin> script_security_origin =
       SecurityOrigin::Create(script_source_url);
 
-  if (!execution_context->GetSecurityOrigin()->IsSameOriginDomainWith(
+  if (!execution_context->GetSecurityOrigin()->IsSameOriginWith(
           script_security_origin.get())) {
     resolver->Reject(V8ThrowDOMException::CreateOrEmpty(
         script_state->GetIsolate(), DOMExceptionCode::kDataError,
@@ -52,7 +61,28 @@ ScriptPromise SharedStorageWorklet::addModule(ScriptState* script_state,
     return promise;
   }
 
-  // TODO: handle the operation
+  shared_storage_->GetSharedStorageDocumentService(execution_context)
+      ->AddModuleOnWorklet(
+          script_source_url,
+          WTF::Bind(
+              [](ScriptPromiseResolver* resolver,
+                 SharedStorageWorklet* shared_storage_worklet, bool success,
+                 const String& error_message) {
+                DCHECK(resolver);
+                ScriptState* script_state = resolver->GetScriptState();
+
+                if (!success) {
+                  ScriptState::Scope scope(script_state);
+                  resolver->Reject(V8ThrowDOMException::CreateOrEmpty(
+                      script_state->GetIsolate(),
+                      DOMExceptionCode::kOperationError, error_message));
+                  return;
+                }
+
+                resolver->Resolve();
+              },
+              WrapPersistent(resolver), WrapPersistent(this)));
+
   return promise;
 }
 

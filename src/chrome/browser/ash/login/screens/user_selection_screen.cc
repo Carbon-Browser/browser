@@ -9,9 +9,14 @@
 #include <memory>
 #include <utility>
 
+#include "ash/components/arc/arc_util.h"
+#include "ash/components/cryptohome/cryptohome_parameters.h"
+#include "ash/components/proximity_auth/screenlock_bridge.h"
+#include "ash/components/proximity_auth/smart_lock_metrics_recorder.h"
+#include "ash/components/settings/cros_settings_names.h"
+#include "ash/constants/ash_features.h"
 #include "ash/constants/ash_pref_names.h"
 #include "ash/constants/ash_switches.h"
-#include "ash/public/cpp/login_types.h"
 #include "base/bind.h"
 #include "base/callback.h"
 #include "base/command_line.h"
@@ -26,9 +31,10 @@
 #include "chrome/browser/ash/login/helper.h"
 #include "chrome/browser/ash/login/lock/screen_locker.h"
 #include "chrome/browser/ash/login/lock_screen_utils.h"
-#include "chrome/browser/ash/login/quick_unlock/fingerprint_storage.h"
+#include "chrome/browser/ash/login/quick_unlock/fingerprint_utils.h"
 #include "chrome/browser/ash/login/quick_unlock/quick_unlock_factory.h"
 #include "chrome/browser/ash/login/quick_unlock/quick_unlock_storage.h"
+#include "chrome/browser/ash/login/quick_unlock/quick_unlock_utils.h"
 #include "chrome/browser/ash/login/reauth_stats.h"
 #include "chrome/browser/ash/login/ui/login_display_host.h"
 #include "chrome/browser/ash/login/ui/views/user_board_view.h"
@@ -44,16 +50,11 @@
 #include "chrome/browser/ui/webui/chromeos/login/l10n_util.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/grit/generated_resources.h"
-#include "chromeos/components/proximity_auth/screenlock_bridge.h"
-#include "chromeos/components/proximity_auth/smart_lock_metrics_recorder.h"
-#include "chromeos/cryptohome/cryptohome_parameters.h"
+#include "chromeos/ash/components/dbus/userdataauth/userdataauth_client.h"
 #include "chromeos/dbus/dbus_thread_manager.h"
 #include "chromeos/dbus/tpm_manager/tpm_manager.pb.h"
 #include "chromeos/dbus/tpm_manager/tpm_manager_client.h"
-#include "chromeos/dbus/userdataauth/userdataauth_client.h"
-#include "chromeos/settings/cros_settings_names.h"
 #include "components/account_id/account_id.h"
-#include "components/arc/arc_util.h"
 #include "components/prefs/pref_service.h"
 #include "components/user_manager/known_user.h"
 #include "components/user_manager/user_manager.h"
@@ -67,6 +68,10 @@
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/chromeos/resources/grit/ui_chromeos_resources.h"
+
+// Enable VLOG level 1.
+#undef ENABLED_VLOG_LEVEL
+#define ENABLED_VLOG_LEVEL 1
 
 namespace ash {
 namespace {
@@ -110,7 +115,8 @@ std::unique_ptr<base::ListValue> GetPublicSessionLocales(
   // Construct the list of available locales. This list consists of the
   // recommended locales, followed by all others.
   std::unique_ptr<base::ListValue> available_locales =
-      GetUILanguageList(&recommended_locales, std::string());
+      GetUILanguageList(&recommended_locales, std::string(),
+                        input_method::InputMethodManager::Get());
 
   // Select the the first recommended locale that is actually available or the
   // current UI locale if none of them are available.
@@ -120,39 +126,6 @@ std::unique_ptr<base::ListValue> GetPublicSessionLocales(
 
   *out_multiple_locales = recommended_locales.size() >= 2;
   return available_locales;
-}
-
-// Determines the initial fingerprint state for the given user.
-FingerprintState GetInitialFingerprintState(const user_manager::User* user) {
-  // User must be logged in.
-  if (!user->is_logged_in())
-    return FingerprintState::UNAVAILABLE;
-
-  // Quick unlock storage must be available.
-  quick_unlock::QuickUnlockStorage* quick_unlock_storage =
-      quick_unlock::QuickUnlockFactory::GetForUser(user);
-  if (!quick_unlock_storage)
-    return FingerprintState::UNAVAILABLE;
-
-  // Fingerprint is not registered for this account.
-  if (!quick_unlock_storage->fingerprint_storage()->HasRecord())
-    return FingerprintState::UNAVAILABLE;
-
-  // Fingerprint unlock attempts should not be exceeded, as the lock screen has
-  // not been displayed yet.
-  DCHECK(
-      !quick_unlock_storage->fingerprint_storage()->ExceededUnlockAttempts());
-
-  // It has been too long since the last authentication.
-  if (!quick_unlock_storage->HasStrongAuth())
-    return FingerprintState::DISABLED_FROM_TIMEOUT;
-
-  // Auth is available.
-  if (quick_unlock_storage->IsFingerprintAuthenticationAvailable())
-    return FingerprintState::AVAILABLE_DEFAULT;
-
-  // Default to unavailabe.
-  return FingerprintState::UNAVAILABLE;
 }
 
 // Returns true if dircrypto migration check should be performed.
@@ -170,8 +143,7 @@ bool IsUserAllowedForARC(const AccountId& account_id) {
 
 AccountId GetOwnerAccountId() {
   std::string owner_email;
-  chromeos::CrosSettings::Get()->GetString(chromeos::kDeviceOwner,
-                                           &owner_email);
+  CrosSettings::Get()->GetString(kDeviceOwner, &owner_email);
   const AccountId owner = user_manager::known_user::GetAccountId(
       owner_email, std::string() /* id */, AccountType::UNKNOWN);
   return owner;
@@ -236,6 +208,11 @@ class UserSelectionScreen::DircryptoMigrationChecker {
  public:
   explicit DircryptoMigrationChecker(UserSelectionScreen* owner)
       : owner_(owner) {}
+
+  DircryptoMigrationChecker(const DircryptoMigrationChecker&) = delete;
+  DircryptoMigrationChecker& operator=(const DircryptoMigrationChecker&) =
+      delete;
+
   ~DircryptoMigrationChecker() = default;
 
   // Start to check whether the given user needs dircrypto migration.
@@ -326,8 +303,6 @@ class UserSelectionScreen::DircryptoMigrationChecker {
   std::map<AccountId, bool> needs_dircrypto_migration_cache_;
 
   base::WeakPtrFactory<DircryptoMigrationChecker> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(DircryptoMigrationChecker);
 };
 
 // Helper class  to check whether tpm is locked and update UI with time left to
@@ -371,9 +346,9 @@ class UserSelectionScreen::TpmLockedChecker {
     if (reply.dictionary_attack_lockout_in_effect()) {
       // Add `kWaitingOvertimeInSeconds` for safetiness, i.e hiding UI and
       // releasing `wake_lock_` happens after TPM becomes unlocked.
-      dictionary_attack_lockout_time_remaining_ = base::TimeDelta::FromSeconds(
-          reply.dictionary_attack_lockout_seconds_remaining() +
-          kWaitingOvertimeInSeconds);
+      dictionary_attack_lockout_time_remaining_ =
+          base::Seconds(reply.dictionary_attack_lockout_seconds_remaining() +
+                        kWaitingOvertimeInSeconds);
       OnTpmIsLocked();
     } else {
       TpmIsUnlocked();
@@ -382,9 +357,9 @@ class UserSelectionScreen::TpmLockedChecker {
 
   void OnTpmIsLocked() {
     AcquireWakeLock();
-    clock_ticking_animator_.Start(FROM_HERE, base::TimeDelta::FromSeconds(1),
-                                  this, &TpmLockedChecker::UpdateUI);
-    tpm_recheck_.Start(FROM_HERE, base::TimeDelta::FromMinutes(1), this,
+    clock_ticking_animator_.Start(FROM_HERE, base::Seconds(1), this,
+                                  &TpmLockedChecker::UpdateUI);
+    tpm_recheck_.Start(FROM_HERE, base::Minutes(1), this,
                        &TpmLockedChecker::Check);
   }
 
@@ -508,13 +483,14 @@ bool UserSelectionScreen::ShouldForceOnlineSignIn(
     return true;
   }
 
+  user_manager::KnownUser known_user(g_browser_process->local_state());
   const absl::optional<base::TimeDelta> offline_signin_time_limit =
-      user_manager::known_user::GetOfflineSigninLimit(user->GetAccountId());
+      known_user.GetOfflineSigninLimit(user->GetAccountId());
   if (!offline_signin_time_limit)
     return false;
 
   const base::Time last_gaia_signin_time =
-      user_manager::known_user::GetLastOnlineSignin(user->GetAccountId());
+      known_user.GetLastOnlineSignin(user->GetAccountId());
   if (last_gaia_signin_time == base::Time())
     return false;
   const base::Time now = base::DefaultClock::GetInstance()->Now();
@@ -550,7 +526,7 @@ UserAvatar UserSelectionScreen::BuildAshUserAvatarForUser(
         user.image_bytes()->front() + user.image_bytes()->size());
   } else if (user.HasDefaultImage()) {
     int resource_id =
-        default_user_image::kDefaultImageResourceIDs[user.image_index()];
+        default_user_image::GetDefaultImageResourceId(user.image_index());
     load_image_from_resource(resource_id);
   } else if (user.image_is_stub()) {
     load_image_from_resource(IDR_LOGIN_DEFAULT_USER);
@@ -671,13 +647,14 @@ void UserSelectionScreen::HandleFocusPod(const AccountId& account_id) {
           DisplayedScreen::SIGN_IN_SCREEN /* honor_device_policy */);
   lock_screen_utils::SetKeyboardSettings(account_id);
 
-  bool use_24hour_clock = false;
-  if (!user_manager::known_user::GetBooleanPref(
-          account_id, ::prefs::kUse24HourClock, &use_24hour_clock)) {
+  user_manager::KnownUser known_user(g_browser_process->local_state());
+  absl::optional<bool> use_24hour_clock =
+      known_user.FindBoolPath(account_id, ::prefs::kUse24HourClock);
+  if (!use_24hour_clock.has_value()) {
     focused_user_clock_type_.reset();
   } else {
     base::HourClockType clock_type =
-        use_24hour_clock ? base::k24HourClock : base::k12HourClock;
+        use_24hour_clock.value() ? base::k24HourClock : base::k12HourClock;
     if (focused_user_clock_type_.has_value()) {
       focused_user_clock_type_->UpdateClockType(clock_type);
     } else {
@@ -700,9 +677,9 @@ void UserSelectionScreen::HandleNoPodFocused() {
 void UserSelectionScreen::OnAllowedInputMethodsChanged() {
   DCHECK_EQ(display_type_, DisplayedScreen::SIGN_IN_SCREEN);
   if (focused_pod_account_id_.is_valid()) {
-    std::string user_input_method =
-        lock_screen_utils::GetUserLastInputMethod(focused_pod_account_id_);
-    lock_screen_utils::EnforceDevicePolicyInputMethods(user_input_method);
+    std::string user_input_method_id =
+        lock_screen_utils::GetUserLastInputMethodId(focused_pod_account_id_);
+    lock_screen_utils::EnforceDevicePolicyInputMethods(user_input_method_id);
   } else {
     lock_screen_utils::EnforceDevicePolicyInputMethods(std::string());
   }
@@ -768,11 +745,31 @@ void UserSelectionScreen::ShowBannerMessage(const std::u16string& message,
 void UserSelectionScreen::ShowUserPodCustomIcon(
     const AccountId& account_id,
     const proximity_auth::ScreenlockBridge::UserPodCustomIconInfo& icon_info) {
+  if (base::FeatureList::IsEnabled(ash::features::kSmartLockUIRevamp))
+    return;
+
   view_->ShowUserPodCustomIcon(account_id, icon_info);
 }
 
 void UserSelectionScreen::HideUserPodCustomIcon(const AccountId& account_id) {
+  if (base::FeatureList::IsEnabled(ash::features::kSmartLockUIRevamp))
+    return;
+
   view_->HideUserPodCustomIcon(account_id);
+}
+
+void UserSelectionScreen::SetSmartLockState(const AccountId& account_id,
+                                            SmartLockState state) {
+  if (base::FeatureList::IsEnabled(ash::features::kSmartLockUIRevamp)) {
+    view_->SetSmartLockState(account_id, state);
+  }
+}
+
+void UserSelectionScreen::NotifySmartLockAuthResult(const AccountId& account_id,
+                                                    bool success) {
+  if (base::FeatureList::IsEnabled(ash::features::kSmartLockUIRevamp)) {
+    view_->NotifySmartLockAuthResult(account_id, success);
+  }
 }
 
 void UserSelectionScreen::EnableInput() {
@@ -878,13 +875,11 @@ UserSelectionScreen::UpdateAndReturnUserListForAsh() {
     user_info.basic_user_info.type = user->GetType();
     user_info.basic_user_info.account_id = user->GetAccountId();
 
-    if (!user_manager::known_user::GetBooleanPref(
-            account_id, ::prefs::kUse24HourClock,
-            &user_info.use_24hour_clock)) {
-      // Fallback to system default in case pref was not found.
-      user_info.use_24hour_clock =
-          base::GetHourClockType() == base::k24HourClock;
-    }
+    user_manager::KnownUser known_user(g_browser_process->local_state());
+
+    user_info.use_24hour_clock =
+        known_user.FindBoolPath(account_id, ::prefs::kUse24HourClock)
+            .value_or(base::GetHourClockType() == base::k24HourClock);
 
     user_info.basic_user_info.display_name =
         base::UTF16ToUTF8(user->GetDisplayName());
@@ -894,26 +889,35 @@ UserSelectionScreen::UpdateAndReturnUserListForAsh() {
     user_info.is_signed_in = user->is_logged_in();
     user_info.is_device_owner = is_owner;
     user_info.can_remove = CanRemoveUser(user);
-    user_info.fingerprint_state = GetInitialFingerprintState(user);
+    user_info.fingerprint_state = quick_unlock::GetFingerprintStateForUser(
+        user, quick_unlock::Purpose::kUnlock);
+
+    auto* easy_unlock_service = GetEasyUnlockServiceForUser(account_id);
+    if (easy_unlock_service) {
+      user_info.smart_lock_state =
+          easy_unlock_service->GetInitialSmartLockState();
+    }
+
     user_info.show_pin_pad_for_password = false;
-    if (user_manager::known_user::GetIsEnterpriseManaged(
-            user->GetAccountId()) &&
+    if (known_user.GetIsEnterpriseManaged(user->GetAccountId()) &&
         user->GetType() != user_manager::USER_TYPE_PUBLIC_ACCOUNT) {
-      std::string account_manager;
-      if (user_manager::known_user::GetAccountManager(user->GetAccountId(),
-                                                      &account_manager)) {
-        user_info.user_account_manager = account_manager;
+      if (const std::string* account_manager =
+              known_user.GetAccountManager(user->GetAccountId())) {
+        user_info.user_account_manager = *account_manager;
       } else {
         user_info.user_account_manager =
             gaia::ExtractDomainName(user->display_email());
       }
     }
-    chromeos::CrosSettings::Get()->GetBoolean(
-        chromeos::kDeviceShowNumericKeyboardForPassword,
-        &user_info.show_pin_pad_for_password);
-    user_manager::known_user::GetBooleanPref(
-        user->GetAccountId(), prefs::kLoginDisplayPasswordButtonEnabled,
-        &user_info.show_display_password_button);
+    CrosSettings::Get()->GetBoolean(kDeviceShowNumericKeyboardForPassword,
+                                    &user_info.show_pin_pad_for_password);
+    if (absl::optional<bool> show_display_password_button =
+            known_user.FindBoolPath(
+                user->GetAccountId(),
+                prefs::kLoginDisplayPasswordButtonEnabled)) {
+      user_info.show_display_password_button =
+          show_display_password_button.value();
+    }
 
     // Fill multi-profile data.
     if (!is_signin_to_add) {
@@ -989,8 +993,13 @@ EasyUnlockService* UserSelectionScreen::GetEasyUnlockServiceForUser(
   ProfileHelper* profile_helper = ProfileHelper::Get();
   Profile* profile = profile_helper->GetProfileByUser(unlock_user);
 
-  // The user profile should exist if and only if this is the lock screen.
-  DCHECK_EQ(!!profile, GetScreenType() == LOCK_SCREEN);
+  // If the active screen is the lock screen, a Profile must exist that is
+  // associated with |unlock_user|. This does not apply vice-versa: there are
+  // some valid scenarios where |profile| exists but the active screen is not
+  // the lock screen.
+  if (GetScreenType() == LOCK_SCREEN) {
+    DCHECK(profile);
+  }
 
   if (!profile)
     profile = profile_helper->GetSigninProfile();

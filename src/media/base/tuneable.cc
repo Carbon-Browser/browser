@@ -9,8 +9,8 @@
 #include "base/cxx17_backports.h"
 #include "base/hash/hash.h"
 #include "base/metrics/field_trial_params.h"
-#include "base/no_destructor.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/time/time.h"
 #include "media/base/media_switches.h"
 
 namespace {
@@ -43,9 +43,9 @@ base::TimeDelta GetParam<base::TimeDelta>(const char* name,
                                           base::TimeDelta minimum_value,
                                           base::TimeDelta default_value,
                                           base::TimeDelta maximum_value) {
-  return base::TimeDelta::FromMilliseconds(GetParam<int>(
-      name, minimum_value.InMilliseconds(), default_value.InMilliseconds(),
-      maximum_value.InMilliseconds()));
+  return base::Milliseconds(GetParam<int>(name, minimum_value.InMilliseconds(),
+                                          default_value.InMilliseconds(),
+                                          maximum_value.InMilliseconds()));
 }
 
 }  // namespace

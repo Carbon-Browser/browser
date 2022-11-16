@@ -8,6 +8,7 @@
 #include <array>
 #include <chrono>
 #include <condition_variable>
+#include <cstdint>
 #include <mutex>
 #include <numeric>
 #include <set>
@@ -18,14 +19,24 @@
 
 #include "base/allocator/partition_allocator/address_pool_manager.h"
 #include "base/allocator/partition_allocator/address_pool_manager_bitmap.h"
+#include "base/allocator/partition_allocator/allocation_guard.h"
 #include "base/allocator/partition_allocator/page_allocator.h"
 #include "base/allocator/partition_allocator/page_allocator_constants.h"
 #include "base/allocator/partition_allocator/partition_address_space.h"
 #include "base/allocator/partition_allocator/partition_alloc.h"
+#include "base/allocator/partition_allocator/partition_alloc_base/bits.h"
+#include "base/allocator/partition_allocator/partition_alloc_base/compiler_specific.h"
+#include "base/allocator/partition_allocator/partition_alloc_base/cpu.h"
+#include "base/allocator/partition_allocator/partition_alloc_base/debug/alias.h"
+#include "base/allocator/partition_allocator/partition_alloc_base/immediate_crash.h"
+#include "base/allocator/partition_allocator/partition_alloc_base/memory/ref_counted.h"
+#include "base/allocator/partition_allocator/partition_alloc_base/memory/scoped_refptr.h"
+#include "base/allocator/partition_allocator/partition_alloc_base/no_destructor.h"
+#include "base/allocator/partition_allocator/partition_alloc_base/threading/platform_thread.h"
+#include "base/allocator/partition_allocator/partition_alloc_base/time/time.h"
 #include "base/allocator/partition_allocator/partition_alloc_check.h"
 #include "base/allocator/partition_allocator/partition_alloc_config.h"
 #include "base/allocator/partition_allocator/partition_alloc_constants.h"
-#include "base/allocator/partition_allocator/partition_alloc_features.h"
 #include "base/allocator/partition_allocator/partition_page.h"
 #include "base/allocator/partition_allocator/reservation_offset_table.h"
 #include "base/allocator/partition_allocator/starscan/metadata_allocator.h"
@@ -35,31 +46,31 @@
 #include "base/allocator/partition_allocator/starscan/snapshot.h"
 #include "base/allocator/partition_allocator/starscan/stack/stack.h"
 #include "base/allocator/partition_allocator/starscan/stats_collector.h"
+#include "base/allocator/partition_allocator/starscan/stats_reporter.h"
+#include "base/allocator/partition_allocator/tagging.h"
 #include "base/allocator/partition_allocator/thread_cache.h"
-#include "base/bits.h"
-#include "base/compiler_specific.h"
-#include "base/cpu.h"
-#include "base/debug/alias.h"
-#include "base/immediate_crash.h"
-#include "base/logging.h"
-#include "base/memory/ref_counted.h"
-#include "base/memory/scoped_refptr.h"
-#include "base/no_destructor.h"
-#include "base/threading/platform_thread.h"
-#include "base/time/time.h"
 #include "build/build_config.h"
 
-namespace base {
-namespace internal {
+// TODO(bikineev): Temporarily disable inlining in *Scan to get clearer
+// stacktraces.
+#define PA_STARSCAN_NOINLINE_SCAN_FUNCTIONS
 
-[[noreturn]] BASE_EXPORT NOINLINE NOT_TAIL_CALLED void DoubleFreeAttempt() {
-  NO_CODE_FOLDING();
-  IMMEDIATE_CRASH();
+#if defined(PA_STARSCAN_NOINLINE_SCAN_FUNCTIONS)
+#define PA_SCAN_INLINE PA_NOINLINE
+#else
+#define PA_SCAN_INLINE PA_ALWAYS_INLINE
+#endif
+
+namespace partition_alloc::internal {
+
+[[noreturn]] PA_NOINLINE PA_NOT_TAIL_CALLED void DoubleFreeAttempt() {
+  PA_NO_CODE_FOLDING();
+  PA_IMMEDIATE_CRASH();
 }
 
 namespace {
 
-#if DCHECK_IS_ON() && defined(OS_LINUX)
+#if defined(PA_HAS_ALLOCATION_GUARD)
 // Currently, check reentracy only on Linux. On Android TLS is emulated by the
 // runtime lib, which can allocate and therefore cause reentrancy.
 struct ReentrantScannerGuard final {
@@ -78,45 +89,61 @@ struct ReentrantScannerGuard final {
 thread_local size_t ReentrantScannerGuard::guard_ = 0;
 #else
 struct [[maybe_unused]] ReentrantScannerGuard final{};
-#endif
+#endif  // defined(PA_HAS_ALLOCATION_GUARD)
+
+// Scope that disables MTE checks. Only used inside scanning to avoid the race:
+// a slot tag is changed by the mutator, while the scanner sees an old value.
+struct DisableMTEScope final {
+  DisableMTEScope() {
+    ::partition_alloc::ChangeMemoryTaggingModeForCurrentThread(
+        ::partition_alloc::TagViolationReportingMode::kDisabled);
+  }
+  ~DisableMTEScope() {
+    ::partition_alloc::ChangeMemoryTaggingModeForCurrentThread(
+        parent_tagging_mode);
+  }
+
+ private:
+  ::partition_alloc::TagViolationReportingMode parent_tagging_mode =
+      ::partition_alloc::internal::GetMemoryTaggingModeForCurrentThread();
+};
 
 #if PA_STARSCAN_USE_CARD_TABLE
-// Bytemap that represent regions (cards) that contain quarantined objects.
+// Bytemap that represent regions (cards) that contain quarantined slots.
 // A single PCScan cycle consists of the following steps:
 // 1) clearing (memset quarantine + marking cards that contain quarantine);
 // 2) scanning;
-// 3) sweeping (freeing + unmarking cards that contain freed objects).
+// 3) sweeping (freeing + unmarking cards that contain freed slots).
 // Marking cards on step 1) ensures that the card table stays in the consistent
 // state while scanning. Unmarking on the step 3) ensures that unmarking
 // actually happens (and we don't hit too many false positives).
 //
-// The code here relies on the fact that |ptr| is in the non-BRP pool and that
-// the card table (this object) is allocated at the very beginning of that pool.
+// The code here relies on the fact that |address| is in the regular pool and
+// that the card table (this object) is allocated at the very beginning of that
+// pool.
 class QuarantineCardTable final {
  public:
-  // Avoid the load of the base of the non-BRP pool.
-  ALWAYS_INLINE static QuarantineCardTable& GetFrom(uintptr_t ptr) {
-    PA_DCHECK(
-        IsManagedByPartitionAllocNonBRPPool(reinterpret_cast<void*>(ptr)));
-    constexpr uintptr_t kNonBRPPoolBaseMask =
-        PartitionAddressSpace::NonBRPPoolBaseMask();
-    return *reinterpret_cast<QuarantineCardTable*>(ptr & kNonBRPPoolBaseMask);
+  // Avoid the load of the base of the regular pool.
+  PA_ALWAYS_INLINE static QuarantineCardTable& GetFrom(uintptr_t address) {
+    PA_SCAN_DCHECK(IsManagedByPartitionAllocRegularPool(address));
+    return *reinterpret_cast<QuarantineCardTable*>(
+        address & PartitionAddressSpace::RegularPoolBaseMask());
   }
 
-  ALWAYS_INLINE void Quarantine(uintptr_t begin, size_t size) {
+  PA_ALWAYS_INLINE void Quarantine(uintptr_t begin, size_t size) {
     return SetImpl(begin, size, true);
   }
 
-  ALWAYS_INLINE void Unquarantine(uintptr_t begin, size_t size) {
+  PA_ALWAYS_INLINE void Unquarantine(uintptr_t begin, size_t size) {
     return SetImpl(begin, size, false);
   }
 
-  // Returns whether the card to which |ptr| points to contains quarantined
-  // objects. May return false positives for but should never return false
+  // Returns whether the card to which |address| points to contains quarantined
+  // slots. May return false positives for but should never return false
   // negatives, as otherwise this breaks security.
-  ALWAYS_INLINE bool IsQuarantined(uintptr_t ptr) const {
-    const size_t byte = Byte(ptr);
-    PA_DCHECK(byte < bytes_.size());
+  PA_ALWAYS_INLINE bool IsQuarantined(uintptr_t address) const {
+    const size_t byte = Byte(address);
+    PA_SCAN_DCHECK(byte < bytes_.size());
     return bytes_[byte];
   }
 
@@ -126,18 +153,16 @@ class QuarantineCardTable final {
 
   QuarantineCardTable() = default;
 
-  ALWAYS_INLINE static constexpr size_t Byte(uintptr_t address) {
-    constexpr uintptr_t kNonBRPPoolBaseMask =
-        PartitionAddressSpace::NonBRPPoolBaseMask();
-    return (address & ~kNonBRPPoolBaseMask) / kCardSize;
+  PA_ALWAYS_INLINE static size_t Byte(uintptr_t address) {
+    return (address & ~PartitionAddressSpace::RegularPoolBaseMask()) /
+           kCardSize;
   }
 
-  ALWAYS_INLINE void SetImpl(uintptr_t begin, size_t size, bool value) {
+  PA_ALWAYS_INLINE void SetImpl(uintptr_t begin, size_t size, bool value) {
     const size_t byte = Byte(begin);
     const size_t need_bytes = (size + (kCardSize - 1)) / kCardSize;
-    PA_DCHECK(bytes_.size() >= byte + need_bytes);
-    PA_DCHECK(
-        IsManagedByPartitionAllocNonBRPPool(reinterpret_cast<void*>(begin)));
+    PA_SCAN_DCHECK(bytes_.size() >= byte + need_bytes);
+    PA_SCAN_DCHECK(IsManagedByPartitionAllocRegularPool(begin));
     for (size_t i = byte; i < byte + need_bytes; ++i)
       bytes_[i] = value;
   }
@@ -161,21 +186,69 @@ using MetadataHashMap =
                        std::equal_to<>,
                        MetadataAllocator<std::pair<const K, V>>>;
 
-ALWAYS_INLINE uintptr_t GetObjectStartInSuperPage(uintptr_t maybe_ptr,
-                                                  const PCScan::Root& root) {
-  char* allocation_start =
-      GetSlotStartInSuperPage<ThreadSafe>(reinterpret_cast<char*>(maybe_ptr));
-  if (!allocation_start) {
-    // |maybe_ptr| refers to a garbage or is outside of the payload region.
-    return 0;
+struct GetSlotStartResult final {
+  PA_ALWAYS_INLINE bool is_found() const {
+    PA_SCAN_DCHECK(!slot_start || slot_size);
+    return slot_start;
   }
-  return reinterpret_cast<uintptr_t>(
-      root.AdjustPointerForExtrasAdd(allocation_start));
+
+  uintptr_t slot_start = 0;
+  size_t slot_size = 0;
+};
+
+// Returns the start of a slot, or 0 if |maybe_inner_address| is not inside of
+// an existing slot span. The function may return a non-0 address even inside a
+// decommitted or free slot span, it's the caller responsibility to check if
+// memory is actually allocated.
+//
+// |maybe_inner_address| must be within a normal-bucket super page and can also
+// point to guard pages or slot-span metadata.
+PA_SCAN_INLINE GetSlotStartResult
+GetSlotStartInSuperPage(uintptr_t maybe_inner_address) {
+  PA_SCAN_DCHECK(IsManagedByNormalBuckets(maybe_inner_address));
+  // Don't use SlotSpanMetadata::FromSlotInnerAddr() or
+  // PartitionPage::FromAddr(), because they expect an address within a super
+  // page payload area, which we don't know yet if |maybe_inner_address| is.
+  const uintptr_t super_page = maybe_inner_address & kSuperPageBaseMask;
+
+  const uintptr_t partition_page_index =
+      (maybe_inner_address & kSuperPageOffsetMask) >> PartitionPageShift();
+  auto* page = PartitionSuperPageToMetadataArea<ThreadSafe>(super_page) +
+               partition_page_index;
+  // Check if page is valid. The check also works for the guard pages and the
+  // metadata page.
+  if (!page->is_valid)
+    return {};
+
+  page -= page->slot_span_metadata_offset;
+  PA_SCAN_DCHECK(page->is_valid);
+  PA_SCAN_DCHECK(!page->slot_span_metadata_offset);
+  auto* slot_span = &page->slot_span_metadata;
+  // Check if the slot span is actually used and valid.
+  if (!slot_span->bucket)
+    return {};
+  PA_SCAN_DCHECK(PartitionRoot<ThreadSafe>::IsValidSlotSpan(slot_span));
+  const uintptr_t slot_span_start =
+      SlotSpanMetadata<ThreadSafe>::ToSlotSpanStart(slot_span);
+  const ptrdiff_t ptr_offset = maybe_inner_address - slot_span_start;
+  PA_SCAN_DCHECK(0 <= ptr_offset &&
+                 ptr_offset < static_cast<ptrdiff_t>(
+                                  slot_span->bucket->get_pages_per_slot_span() *
+                                  PartitionPageSize()));
+  // Slot span size in bytes is not necessarily multiple of partition page.
+  // Don't check if the pointer points outside of usable area, since checking
+  // the quarantine bit will anyway return false in this case.
+  const size_t slot_size = slot_span->bucket->slot_size;
+  const size_t slot_number = slot_span->bucket->GetSlotNumber(ptr_offset);
+  const uintptr_t slot_start = slot_span_start + (slot_number * slot_size);
+  PA_SCAN_DCHECK(slot_start <= maybe_inner_address &&
+                 maybe_inner_address < slot_start + slot_size);
+  return {.slot_start = slot_start, .slot_size = slot_size};
 }
 
-#if DCHECK_IS_ON()
+#if PA_SCAN_DCHECK_IS_ON()
 bool IsQuarantineEmptyOnSuperPage(uintptr_t super_page) {
-  auto* bitmap = SuperPageStateBitmap(reinterpret_cast<char*>(super_page));
+  auto* bitmap = SuperPageStateBitmap(super_page);
   size_t visited = 0;
   bitmap->IterateQuarantined([&visited](auto) { ++visited; });
   return !visited;
@@ -186,7 +259,7 @@ SimdSupport DetectSimdSupport() {
 #if defined(PA_STARSCAN_NEON_SUPPORTED)
   return SimdSupport::kNEON;
 #else
-  base::CPU cpu;
+  const base::CPU& cpu = base::CPU::GetInstanceNoAllocation();
   if (cpu.has_avx2())
     return SimdSupport::kAVX2;
   if (cpu.has_sse41())
@@ -197,28 +270,29 @@ SimdSupport DetectSimdSupport() {
 
 void CommitCardTable() {
 #if PA_STARSCAN_USE_CARD_TABLE
-  RecommitSystemPages(
-      reinterpret_cast<void*>(PartitionAddressSpace::NonBRPPoolBase()),
-      sizeof(QuarantineCardTable), PageReadWrite, PageUpdatePermissions);
+  RecommitSystemPages(PartitionAddressSpace::RegularPoolBase(),
+                      sizeof(QuarantineCardTable),
+                      PageAccessibilityConfiguration::kReadWrite,
+                      PageAccessibilityDisposition::kRequireUpdate);
 #endif
 }
 
 template <class Function>
-void IterateNonEmptySlotSpans(uintptr_t super_page_base,
+void IterateNonEmptySlotSpans(uintptr_t super_page,
                               size_t nonempty_slot_spans,
                               Function function) {
-  PA_DCHECK(!(super_page_base % kSuperPageAlignment));
-  PA_DCHECK(nonempty_slot_spans);
+  PA_SCAN_DCHECK(!(super_page % kSuperPageAlignment));
+  PA_SCAN_DCHECK(nonempty_slot_spans);
 
   size_t slot_spans_to_visit = nonempty_slot_spans;
-#if DCHECK_IS_ON()
+#if PA_SCAN_DCHECK_IS_ON()
   size_t visited = 0;
 #endif
 
   IterateSlotSpans<ThreadSafe>(
-      reinterpret_cast<char*>(super_page_base), true /*with_quarantine*/,
+      super_page, true /*with_quarantine*/,
       [&function, &slot_spans_to_visit
-#if DCHECK_IS_ON()
+#if PA_SCAN_DCHECK_IS_ON()
        ,
        &visited
 #endif
@@ -229,7 +303,7 @@ void IterateNonEmptySlotSpans(uintptr_t super_page_base,
         }
         function(slot_span);
         --slot_spans_to_visit;
-#if DCHECK_IS_ON()
+#if PA_SCAN_DCHECK_IS_ON()
         // In debug builds, scan all the slot spans to check that number of
         // visited slot spans is equal to the number of nonempty_slot_spans.
         ++visited;
@@ -238,13 +312,13 @@ void IterateNonEmptySlotSpans(uintptr_t super_page_base,
         return slot_spans_to_visit == 0;
 #endif
       });
-#if DCHECK_IS_ON()
+#if PA_SCAN_DCHECK_IS_ON()
   // Check that exactly all non-empty slot spans have been visited.
   PA_DCHECK(nonempty_slot_spans == visited);
 #endif
 }
 
-// SuperPageSnapshot is used to record all slot spans that contain live objects.
+// SuperPageSnapshot is used to record all slot spans that contain live slots.
 // The class avoids dynamic allocations and is designed to be instantiated on
 // stack. To avoid stack overflow, internal data structures are kept packed.
 class SuperPageSnapshot final {
@@ -258,8 +332,9 @@ class SuperPageSnapshot final {
   static constexpr size_t kStateBitmapMinReservedSize =
       __builtin_constant_p(ReservedStateBitmapSize())
           ? ReservedStateBitmapSize()
-          : base::bits::AlignUp(sizeof(AllocationStateMap),
-                                kMinPartitionPageSize);
+          : partition_alloc::internal::base::bits::AlignUp(
+                sizeof(AllocationStateMap),
+                kMinPartitionPageSize);
   // Take into account guard partition page at the end of super-page.
   static constexpr size_t kGuardPagesSize = 2 * kMinPartitionPageSize;
 
@@ -325,18 +400,16 @@ static_assert(
     "SuperPageSnapshot must stay relatively small to be allocated on stack");
 
 SuperPageSnapshot::SuperPageSnapshot(uintptr_t super_page) {
-  using Root = PartitionRoot<ThreadSafe>;
   using SlotSpan = SlotSpanMetadata<ThreadSafe>;
 
-  auto* extent_entry = PartitionSuperPageToExtent<ThreadSafe>(
-      reinterpret_cast<char*>(super_page));
+  auto* extent_entry = PartitionSuperPageToExtent<ThreadSafe>(super_page);
 
-  typename Root::ScopedGuard lock(extent_entry->root->lock_);
+  ::partition_alloc::internal::ScopedGuard lock(extent_entry->root->lock_);
 
   const size_t nonempty_slot_spans =
       extent_entry->number_of_nonempty_slot_spans;
   if (!nonempty_slot_spans) {
-#if DCHECK_IS_ON()
+#if PA_SCAN_DCHECK_IS_ON()
     // Check that quarantine bitmap is empty for super-pages that contain
     // only empty/decommitted slot-spans.
     PA_CHECK(IsQuarantineEmptyOnSuperPage(super_page));
@@ -349,14 +422,14 @@ SuperPageSnapshot::SuperPageSnapshot(uintptr_t super_page) {
 
   IterateNonEmptySlotSpans(
       super_page, nonempty_slot_spans, [this, &current](SlotSpan* slot_span) {
-        const uintptr_t payload_begin = reinterpret_cast<uintptr_t>(
-            SlotSpan::ToSlotSpanStartPtr(slot_span));
+        const uintptr_t payload_begin = SlotSpan::ToSlotSpanStart(slot_span);
         // For single-slot slot-spans, scan only utilized slot part.
-        const size_t provisioned_size = UNLIKELY(slot_span->CanStoreRawSize())
-                                            ? slot_span->GetRawSize()
-                                            : slot_span->GetProvisionedSize();
+        const size_t provisioned_size =
+            PA_UNLIKELY(slot_span->CanStoreRawSize())
+                ? slot_span->GetRawSize()
+                : slot_span->GetProvisionedSize();
         // Free & decommitted slot spans are skipped.
-        PA_DCHECK(provisioned_size > 0);
+        PA_SCAN_DCHECK(provisioned_size > 0);
         const uintptr_t payload_end = payload_begin + provisioned_size;
         auto& area = scan_areas_[current];
 
@@ -367,6 +440,7 @@ SuperPageSnapshot::SuperPageSnapshot(uintptr_t super_page) {
         const size_t slot_size_in_words =
             slot_span->bucket->slot_size / sizeof(uintptr_t);
 
+#if PA_SCAN_DCHECK_IS_ON()
         PA_DCHECK(offset_in_words <=
                   std::numeric_limits<decltype(
                       area.offset_within_page_in_words)>::max());
@@ -375,6 +449,7 @@ SuperPageSnapshot::SuperPageSnapshot(uintptr_t super_page) {
         PA_DCHECK(
             slot_size_in_words <=
             std::numeric_limits<decltype(area.slot_size_in_words)>::max());
+#endif
 
         area.offset_within_page_in_words = offset_in_words;
         area.size_in_words = size_in_words;
@@ -383,7 +458,7 @@ SuperPageSnapshot::SuperPageSnapshot(uintptr_t super_page) {
         ++current;
       });
 
-  PA_DCHECK(kMaxSlotSpansInSuperPage >= current);
+  PA_SCAN_DCHECK(kMaxSlotSpansInSuperPage >= current);
   scan_areas_.set_size(current);
 }
 
@@ -418,32 +493,6 @@ class PCScanTask final : public base::RefCountedThreadSafe<PCScanTask>,
   using Root = PCScan::Root;
   using SlotSpan = SlotSpanMetadata<ThreadSafe>;
 
-  // TODO(bikineev): Move these checks to StarScanScanLoop.
-  struct GigaCageLookupPolicy {
-    ALWAYS_INLINE bool TestOnHeapPointer(uintptr_t maybe_ptr) const {
-      PA_DCHECK(IsManagedByPartitionAllocNonBRPPool(
-          reinterpret_cast<void*>(maybe_ptr)));
-#if defined(PA_HAS_64_BITS_POINTERS)
-#if PA_STARSCAN_USE_CARD_TABLE
-      return QuarantineCardTable::GetFrom(maybe_ptr).IsQuarantined(maybe_ptr);
-#else
-      // Without the card table, use the reservation offset table. It's not as
-      // precise (meaning that we may have hit the slow path more frequently),
-      // but reduces the memory overhead.  Since we are certain here, that
-      // |maybe_ptr| refers to the non-BRP pool, it's okay to use non-checking
-      // version of ReservationOffsetPointer().
-      const uintptr_t offset =
-          maybe_ptr & ~PartitionAddressSpace::NonBRPPoolBaseMask();
-      return *ReservationOffsetPointer(kNonBRPPoolHandle, offset) ==
-             kOffsetTagNormalBuckets;
-#endif
-#else   // defined(PA_HAS_64_BITS_POINTERS)
-      return IsManagedByPartitionAllocNonBRPPool(
-          reinterpret_cast<void*>(maybe_ptr));
-#endif  // defined(PA_HAS_64_BITS_POINTERS)
-    }
-  };
-
   // This is used:
   // - to synchronize all scanning threads (mutators and the scanner);
   // - for the scanner, to transition through the state machine
@@ -454,10 +503,9 @@ class PCScanTask final : public base::RefCountedThreadSafe<PCScanTask>,
     explicit SyncScope(PCScanTask& task) : task_(task) {
       task_.number_of_scanning_threads_.fetch_add(1, std::memory_order_relaxed);
       if (context == Context::kScanner) {
-        // Publish the change of the state so that the mutators can join
-        // scanning and expect the consistent state.
         task_.pcscan_.state_.store(PCScan::State::kScanning,
-                                   std::memory_order_release);
+                                   std::memory_order_relaxed);
+        task_.pcscan_.SetJoinableIfSafepointEnabled(true);
       }
     }
     ~SyncScope() {
@@ -468,6 +516,8 @@ class PCScanTask final : public base::RefCountedThreadSafe<PCScanTask>,
         // Otherwise, sweeping may free a page that can later be accessed by a
         // descheduled mutator.
         WaitForOtherThreads();
+        task_.pcscan_.state_.store(PCScan::State::kSweepingAndFinishing,
+                                   std::memory_order_relaxed);
       }
     }
 
@@ -484,13 +534,8 @@ class PCScanTask final : public base::RefCountedThreadSafe<PCScanTask>,
           // Notify that scan is done and there is no need to enter
           // the safepoint. This also helps a mutator to avoid repeating
           // entering. Since the scanner thread waits for all threads to finish,
-          // there is no ABA problem here. There is technically no need to have
-          // CAS here, since |state_| is under the mutex and can only be changed
-          // here, but we keep it for safety.
-          PCScan::State expected = PCScan::State::kScanning;
-          task_.pcscan_.state_.compare_exchange_strong(
-              expected, PCScan::State::kSweepingAndFinishing,
-              std::memory_order_relaxed, std::memory_order_relaxed);
+          // there is no ABA problem here.
+          task_.pcscan_.SetJoinableIfSafepointEnabled(false);
         }
       }
       task_.condvar_.notify_all();
@@ -510,14 +555,12 @@ class PCScanTask final : public base::RefCountedThreadSafe<PCScanTask>,
   friend class base::RefCountedThreadSafe<PCScanTask>;
   ~PCScanTask() = default;
 
-  template <typename LookupPolicy>
-  ALWAYS_INLINE AllocationStateMap* TryFindScannerBitmapForPointer(
+  PA_SCAN_INLINE AllocationStateMap* TryFindScannerBitmapForPointer(
       uintptr_t maybe_ptr) const;
 
-  // Lookup and marking functions. Return size of the object if marked or zero
+  // Lookup and marking functions. Return size of the slot if marked, or zero
   // otherwise.
-  template <typename LookupPolicy>
-  ALWAYS_INLINE size_t TryMarkObjectInNormalBuckets(uintptr_t maybe_ptr) const;
+  PA_SCAN_INLINE size_t TryMarkSlotInNormalBuckets(uintptr_t maybe_ptr) const;
 
   // Scans stack, only called from safepoints.
   void ScanStack();
@@ -525,25 +568,24 @@ class PCScanTask final : public base::RefCountedThreadSafe<PCScanTask>,
   // Scan individual areas.
   void ScanNormalArea(PCScanInternal& pcscan,
                       PCScanScanLoop& scan_loop,
-                      uintptr_t* begin,
-                      uintptr_t* end);
+                      uintptr_t begin,
+                      uintptr_t end);
   void ScanLargeArea(PCScanInternal& pcscan,
                      PCScanScanLoop& scan_loop,
-                     uintptr_t* begin,
-                     uintptr_t* end,
+                     uintptr_t begin,
+                     uintptr_t end,
                      size_t slot_size);
 
-  // Scans all registered partitions and marks reachable quarantined objects.
+  // Scans all registered partitions and marks reachable quarantined slots.
   void ScanPartitions();
 
-  // Clear quarantined objects and prepare card table for fast lookup
-  void ClearQuarantinedObjectsAndPrepareCardTable();
+  // Clear quarantined slots and prepare card table for fast lookup
+  void ClearQuarantinedSlotsAndPrepareCardTable();
 
   // Unprotect all slot spans from all partitions.
   void UnprotectPartitions();
 
-  // Sweeps (frees) unreachable quarantined entries. Returns the size of swept
-  // objects.
+  // Sweeps (frees) unreachable quarantined entries.
   void SweepQuarantine();
 
   // Finishes the scanner (updates limits, UMA, etc).
@@ -560,87 +602,109 @@ class PCScanTask final : public base::RefCountedThreadSafe<PCScanTask>,
   std::atomic<size_t> number_of_scanning_threads_{0u};
   // We can unprotect only once to reduce context-switches.
   std::once_flag unprotect_once_flag_;
-  bool immediatelly_free_objects_{false};
+  bool immediatelly_free_slots_{false};
   PCScan& pcscan_;
 };
 
-template <typename LookupPolicy>
-ALWAYS_INLINE AllocationStateMap* PCScanTask::TryFindScannerBitmapForPointer(
+PA_SCAN_INLINE AllocationStateMap* PCScanTask::TryFindScannerBitmapForPointer(
     uintptr_t maybe_ptr) const {
+  PA_SCAN_DCHECK(IsManagedByPartitionAllocRegularPool(maybe_ptr));
   // First, check if |maybe_ptr| points to a valid super page or a quarantined
   // card.
-  LookupPolicy lookup;
-  if (LIKELY(!lookup.TestOnHeapPointer(maybe_ptr)))
+#if defined(PA_HAS_64_BITS_POINTERS)
+#if PA_STARSCAN_USE_CARD_TABLE
+  // Check if |maybe_ptr| points to a quarantined card.
+  if (PA_LIKELY(
+          !QuarantineCardTable::GetFrom(maybe_ptr).IsQuarantined(maybe_ptr)))
     return nullptr;
-  // Check if we are not pointing to metadata/guard pages.
-  if (!IsWithinSuperPagePayload(reinterpret_cast<char*>(maybe_ptr),
-                                true /*with quarantine*/))
+#else
+  // Without the card table, use the reservation offset table to check if
+  // |maybe_ptr| points to a valid super-page. It's not as precise (meaning that
+  // we may have hit the slow path more frequently), but reduces the memory
+  // overhead.  Since we are certain here, that |maybe_ptr| refers to the
+  // regular pool, it's okay to use non-checking version of
+  // ReservationOffsetPointer().
+  const uintptr_t offset =
+      maybe_ptr & ~PartitionAddressSpace::RegularPoolBaseMask();
+  if (PA_LIKELY(*ReservationOffsetPointer(kRegularPoolHandle, offset) !=
+                kOffsetTagNormalBuckets))
     return nullptr;
-  // We are certain here that |maybe_ptr| points to the super page payload.
-  return StateBitmapFromPointer(reinterpret_cast<char*>(maybe_ptr));
+#endif
+#else   // defined(PA_HAS_64_BITS_POINTERS)
+  if (PA_LIKELY(!IsManagedByPartitionAllocRegularPool(maybe_ptr)))
+    return nullptr;
+#endif  // defined(PA_HAS_64_BITS_POINTERS)
+
+  // We are certain here that |maybe_ptr| points to an allocated super-page.
+  return StateBitmapFromAddr(maybe_ptr);
 }
 
 // Looks up and marks a potential dangling pointer. Returns the size of the slot
-// (which is then accounted as quarantined) or zero if no object is found.
+// (which is then accounted as quarantined), or zero if no slot is found.
 // For normal bucket super pages, PCScan uses two quarantine bitmaps, the
-// mutator and the scanner one. The former is used by mutators when objects are
+// mutator and the scanner one. The former is used by mutators when slots are
 // freed, while the latter is used concurrently by the PCScan thread. The
 // bitmaps are swapped as soon as PCScan is triggered. Once a dangling pointer
-// (which points to an object in the scanner bitmap) is found,
-// TryMarkObjectInNormalBuckets() marks it again in the bitmap and clears
+// (which points to a slot in the scanner bitmap) is found,
+// TryMarkSlotInNormalBuckets() marks it again in the bitmap and clears
 // from the scanner bitmap. This way, when scanning is done, all uncleared
-// entries in the scanner bitmap correspond to unreachable objects.
-template <typename LookupPolicy>
-ALWAYS_INLINE size_t
-PCScanTask::TryMarkObjectInNormalBuckets(uintptr_t maybe_ptr) const {
+// entries in the scanner bitmap correspond to unreachable slots.
+PA_SCAN_INLINE size_t
+PCScanTask::TryMarkSlotInNormalBuckets(uintptr_t maybe_ptr) const {
   // Check if |maybe_ptr| points somewhere to the heap.
-  auto* state_map = TryFindScannerBitmapForPointer<LookupPolicy>(maybe_ptr);
+  // The caller has to make sure that |maybe_ptr| isn't MTE-tagged.
+  auto* state_map = TryFindScannerBitmapForPointer(maybe_ptr);
   if (!state_map)
     return 0;
 
   // Beyond this point, we know that |maybe_ptr| is a pointer within a
   // normal-bucket super page.
-  PA_DCHECK(IsManagedByNormalBuckets(reinterpret_cast<void*>(maybe_ptr)));
-  auto* root =
-      Root::FromPointerInNormalBuckets(reinterpret_cast<char*>(maybe_ptr));
+  PA_SCAN_DCHECK(IsManagedByNormalBuckets(maybe_ptr));
 
 #if !PA_STARSCAN_USE_CARD_TABLE
+  // Pointer from a normal bucket is always in the first superpage.
+  auto* root = Root::FromAddrInFirstSuperpage(maybe_ptr);
   // Without the card table, we must make sure that |maybe_ptr| doesn't point to
   // metadata partition.
   // TODO(bikineev): To speed things up, consider removing the check and
   // committing quarantine bitmaps for metadata partition.
-  if (UNLIKELY(!root->IsQuarantineEnabled()))
+  // TODO(bikineev): Marking an entry in the reservation-table is not a
+  // publishing operation, meaning that the |root| pointer may not be assigned
+  // yet. This can happen as arbitrary pointers may point into a super-page
+  // during its set up. Make sure to check |root| is not null before
+  // dereferencing it.
+  if (PA_UNLIKELY(!root || !root->IsQuarantineEnabled()))
     return 0;
 #endif
 
   // Check if pointer was in the quarantine bitmap.
-  const uintptr_t base = GetObjectStartInSuperPage(maybe_ptr, *root);
-  if (!base || !state_map->IsQuarantined(base))
+  const GetSlotStartResult slot_start_result =
+      GetSlotStartInSuperPage(maybe_ptr);
+  if (!slot_start_result.is_found())
     return 0;
 
-  PA_DCHECK((maybe_ptr & kSuperPageBaseMask) == (base & kSuperPageBaseMask));
-
-  auto* target_slot_span =
-      SlotSpan::FromSlotInnerPtr(reinterpret_cast<void*>(base));
-  PA_DCHECK(root == Root::FromSlotSpan(target_slot_span));
-
-  const size_t usable_size = target_slot_span->GetUsableSize(root);
-  // Range check for inner pointers.
-  if (maybe_ptr >= base + usable_size)
+  const uintptr_t slot_start = slot_start_result.slot_start;
+  if (PA_LIKELY(!state_map->IsQuarantined(slot_start)))
     return 0;
 
-  if (UNLIKELY(immediatelly_free_objects_))
+  PA_SCAN_DCHECK((maybe_ptr & kSuperPageBaseMask) ==
+                 (slot_start & kSuperPageBaseMask));
+
+  if (PA_UNLIKELY(immediatelly_free_slots_))
     return 0;
 
   // Now we are certain that |maybe_ptr| is a dangling pointer. Mark it again in
   // the mutator bitmap and clear from the scanner bitmap. Note that since
   // PCScan has exclusive access to the scanner bitmap, we can avoid atomic rmw
   // operation for it.
-  state_map->MarkQuarantinedAsReachable(base);
-  return target_slot_span->bucket->slot_size;
+  if (PA_LIKELY(
+          state_map->MarkQuarantinedAsReachable(slot_start, pcscan_epoch_)))
+    return slot_start_result.slot_size;
+
+  return 0;
 }
 
-void PCScanTask::ClearQuarantinedObjectsAndPrepareCardTable() {
+void PCScanTask::ClearQuarantinedSlotsAndPrepareCardTable() {
   const PCScan::ClearType clear_type = pcscan_.clear_type_;
 
 #if !PA_STARSCAN_USE_CARD_TABLE
@@ -649,21 +713,21 @@ void PCScanTask::ClearQuarantinedObjectsAndPrepareCardTable() {
 #endif
 
   StarScanSnapshot::ClearingView view(*snapshot_);
-  view.VisitConcurrently([clear_type](uintptr_t super_page_base) {
-    auto* bitmap =
-        StateBitmapFromPointer(reinterpret_cast<char*>(super_page_base));
-    auto* root = Root::FromSuperPage(reinterpret_cast<char*>(super_page_base));
-    bitmap->IterateQuarantined([root, clear_type](uintptr_t ptr) {
-      auto* object = reinterpret_cast<void*>(ptr);
-      auto* slot_span = SlotSpan::FromSlotInnerPtr(object);
+  view.VisitConcurrently([clear_type](uintptr_t super_page) {
+    auto* bitmap = StateBitmapFromAddr(super_page);
+    auto* root = Root::FromFirstSuperPage(super_page);
+    bitmap->IterateQuarantined([root, clear_type](uintptr_t slot_start) {
+      auto* slot_span = SlotSpan::FromSlotStart(slot_start);
       // Use zero as a zapping value to speed up the fast bailout check in
       // ScanPartitions.
       const size_t size = slot_span->GetUsableSize(root);
-      if (clear_type == PCScan::ClearType::kLazy)
+      if (clear_type == PCScan::ClearType::kLazy) {
+        void* object = root->SlotStartToObject(slot_start);
         memset(object, 0, size);
+      }
 #if PA_STARSCAN_USE_CARD_TABLE
-      // Set card(s) for this quarantined object.
-      QuarantineCardTable::GetFrom(ptr).Quarantine(ptr, size);
+      // Set card(s) for this quarantined slot.
+      QuarantineCardTable::GetFrom(slot_start).Quarantine(slot_start, size);
 #endif
     });
   });
@@ -695,33 +759,28 @@ class PCScanScanLoop final : public ScanLoop<PCScanScanLoop> {
 
  public:
   explicit PCScanScanLoop(const PCScanTask& task)
-      : ScanLoop(PCScanInternal::Instance().simd_support()),
-#if defined(PA_HAS_64_BITS_POINTERS)
-        giga_cage_base_(PartitionAddressSpace::NonBRPPoolBase()),
-#endif
-        task_(task) {
-  }
+      : ScanLoop(PCScanInternal::Instance().simd_support()), task_(task) {}
 
   size_t quarantine_size() const { return quarantine_size_; }
 
  private:
-  ALWAYS_INLINE uintptr_t CageBase() const { return giga_cage_base_; }
-  ALWAYS_INLINE static constexpr uintptr_t CageMask() {
 #if defined(PA_HAS_64_BITS_POINTERS)
-    return PartitionAddressSpace::NonBRPPoolBaseMask();
-#else
-    return 0;
-#endif
+  PA_ALWAYS_INLINE static uintptr_t CageBase() {
+    return PartitionAddressSpace::RegularPoolBase();
   }
+  PA_ALWAYS_INLINE static uintptr_t CageMask() {
+    return PartitionAddressSpace::RegularPoolBaseMask();
+  }
+#endif  // defined(PA_HAS_64_BITS_POINTERS)
 
-  ALWAYS_INLINE void CheckPointer(uintptr_t maybe_ptr) {
+  PA_SCAN_INLINE void CheckPointer(uintptr_t maybe_ptr_maybe_tagged) {
+    // |maybe_ptr| may have an MTE tag, so remove it first.
     quarantine_size_ +=
-        task_.TryMarkObjectInNormalBuckets<PCScanTask::GigaCageLookupPolicy>(
-            maybe_ptr);
+        task_.TryMarkSlotInNormalBuckets(UntagAddr(maybe_ptr_maybe_tagged));
   }
 
-  const uintptr_t giga_cage_base_ = 0;
   const PCScanTask& task_;
+  DisableMTEScope disable_mte_;
   size_t quarantine_size_ = 0;
 };
 
@@ -731,18 +790,18 @@ class PCScanTask::StackVisitor final : public internal::StackVisitor {
 
   void VisitStack(uintptr_t* stack_ptr, uintptr_t* stack_top) override {
     static constexpr size_t kMinimalAlignment = 32;
-    stack_ptr = reinterpret_cast<uintptr_t*>(
-        reinterpret_cast<uintptr_t>(stack_ptr) & ~(kMinimalAlignment - 1));
-    stack_top = reinterpret_cast<uintptr_t*>(
+    uintptr_t begin =
+        reinterpret_cast<uintptr_t>(stack_ptr) & ~(kMinimalAlignment - 1);
+    uintptr_t end =
         (reinterpret_cast<uintptr_t>(stack_top) + kMinimalAlignment - 1) &
-        ~(kMinimalAlignment - 1));
-    PA_CHECK(stack_ptr < stack_top);
+        ~(kMinimalAlignment - 1);
+    PA_CHECK(begin < end);
     PCScanScanLoop loop(task_);
-    loop.Run(stack_ptr, stack_top);
+    loop.Run(begin, end);
     quarantine_size_ += loop.quarantine_size();
   }
 
-  // Returns size of quarantined objects that are reachable from the current
+  // Returns size of quarantined slots that are reachable from the current
   // stack.
   size_t quarantine_size() const { return quarantine_size_; }
 
@@ -755,7 +814,7 @@ PCScanTask::PCScanTask(PCScan& pcscan, size_t quarantine_last_size)
     : pcscan_epoch_(pcscan.epoch() - 1),
       snapshot_(StarScanSnapshot::Create(PCScanInternal::Instance())),
       stats_(PCScanInternal::Instance().process_name(), quarantine_last_size),
-      immediatelly_free_objects_(
+      immediatelly_free_slots_(
           PCScanInternal::Instance().IsImmediateFreeingEnabled()),
       pcscan_(pcscan) {}
 
@@ -766,7 +825,7 @@ void PCScanTask::ScanStack() {
   // Check if the stack top was registered. It may happen that it's not if the
   // current allocation happens from pthread trampolines.
   void* stack_top = pcscan.GetCurrentThreadStackTop();
-  if (UNLIKELY(!stack_top))
+  if (PA_UNLIKELY(!stack_top))
     return;
 
   Stack stack_scanner(stack_top);
@@ -777,37 +836,34 @@ void PCScanTask::ScanStack() {
 
 void PCScanTask::ScanNormalArea(PCScanInternal& pcscan,
                                 PCScanScanLoop& scan_loop,
-                                uintptr_t* begin,
-                                uintptr_t* end) {
+                                uintptr_t begin,
+                                uintptr_t end) {
   // Protect slot span before scanning it.
-  pcscan.ProtectPages(reinterpret_cast<uintptr_t>(begin),
-                      (end - begin) * sizeof(uintptr_t));
+  pcscan.ProtectPages(begin, end - begin);
   scan_loop.Run(begin, end);
 }
 
 void PCScanTask::ScanLargeArea(PCScanInternal& pcscan,
                                PCScanScanLoop& scan_loop,
-                               uintptr_t* begin,
-                               uintptr_t* end,
+                               uintptr_t begin,
+                               uintptr_t end,
                                size_t slot_size) {
   // For scanning large areas, it's worthwhile checking whether the range that
-  // is scanned contains allocated objects. It also helps to skip discarded
+  // is scanned contains allocated slots. It also helps to skip discarded
   // freed slots.
   // Protect slot span before scanning it.
-  pcscan.ProtectPages(reinterpret_cast<uintptr_t>(begin),
-                      (end - begin) * sizeof(uintptr_t));
+  pcscan.ProtectPages(begin, end - begin);
 
-  auto* bitmap = StateBitmapFromPointer(reinterpret_cast<void*>(begin));
-  const size_t slot_size_in_words = slot_size / sizeof(uintptr_t);
+  auto* bitmap = StateBitmapFromAddr(begin);
 
-  for (uintptr_t* current_slot = begin; current_slot < end;
-       current_slot += slot_size_in_words) {
-    // It is okay to skip objects as their payload has been zapped at this
-    // point which means that the pointers no longer retain other objects.
-    if (!bitmap->IsAllocated(reinterpret_cast<uintptr_t>(current_slot))) {
+  for (uintptr_t current_slot = begin; current_slot < end;
+       current_slot += slot_size) {
+    // It is okay to skip slots as the object they hold has been zapped at this
+    // point, which means that the pointers no longer retain other slots.
+    if (!bitmap->IsAllocated(current_slot)) {
       continue;
     }
-    uintptr_t* current_slot_end = current_slot + slot_size_in_words;
+    uintptr_t current_slot_end = current_slot + slot_size;
     // |slot_size| may be larger than |raw_size| for single-slot slot spans.
     scan_loop.Run(current_slot, std::min(current_slot_end, end));
   }
@@ -815,7 +871,7 @@ void PCScanTask::ScanLargeArea(PCScanInternal& pcscan,
 
 void PCScanTask::ScanPartitions() {
   // Threshold for which bucket size it is worthwhile in checking whether the
-  // object is allocated and needs to be scanned. PartitionPurgeSlotSpan()
+  // slot is allocated and needs to be scanned. PartitionPurgeSlotSpan()
   // purges only slots >= page-size, this helps us to avoid faulting in
   // discarded pages. We actually lower it further to 1024, to take advantage of
   // skipping unallocated slots, but don't want to go any lower, as this comes
@@ -832,13 +888,17 @@ void PCScanTask::ScanPartitions() {
         SuperPageSnapshot super_page_snapshot(super_page);
 
         for (const auto& scan_area : super_page_snapshot.scan_areas()) {
-          auto* const begin = reinterpret_cast<uintptr_t*>(
+          const uintptr_t begin =
               super_page |
-              (scan_area.offset_within_page_in_words * sizeof(uintptr_t)));
-          auto* const end = begin + scan_area.size_in_words;
+              (scan_area.offset_within_page_in_words * sizeof(uintptr_t));
+          PA_SCAN_DCHECK(begin ==
+                         super_page + (scan_area.offset_within_page_in_words *
+                                       sizeof(uintptr_t)));
+          const uintptr_t end =
+              begin + scan_area.size_in_words * sizeof(uintptr_t);
 
-          if (UNLIKELY(scan_area.slot_size_in_words >=
-                       kLargeScanAreaThresholdInWords)) {
+          if (PA_UNLIKELY(scan_area.slot_size_in_words >=
+                          kLargeScanAreaThresholdInWords)) {
             ScanLargeArea(pcscan, scan_loop, begin, end,
                           scan_area.slot_size_in_words * sizeof(uintptr_t));
           } else {
@@ -850,33 +910,164 @@ void PCScanTask::ScanPartitions() {
   stats_.IncreaseSurvivedQuarantineSize(scan_loop.quarantine_size());
 }
 
-void PCScanTask::SweepQuarantine() {
+namespace {
+
+struct SweepStat {
+  // Bytes that were really swept (by calling free()).
   size_t swept_bytes = 0;
+  // Bytes of marked quarantine memory that were discarded (by calling
+  // madvice(DONT_NEED)).
+  size_t discarded_bytes = 0;
+};
 
-  StarScanSnapshot::SweepingView sweeping_view(*snapshot_);
-  sweeping_view.VisitNonConcurrently([this,
-                                      &swept_bytes](uintptr_t super_page) {
-    auto* bitmap = StateBitmapFromPointer(reinterpret_cast<void*>(super_page));
-    auto* root = Root::FromSuperPage(reinterpret_cast<char*>(super_page));
-    bitmap->IterateUnmarkedQuarantined(
-        pcscan_epoch_, [root, &swept_bytes](uintptr_t ptr) {
-          auto* object = reinterpret_cast<void*>(ptr);
-          auto* slot_span = SlotSpan::FromSlotInnerPtr(object);
-          swept_bytes += slot_span->bucket->slot_size;
-          root->FreeNoHooksImmediate(object, slot_span);
+void UnmarkInCardTable(uintptr_t slot_start,
+                       SlotSpanMetadata<ThreadSafe>* slot_span) {
 #if PA_STARSCAN_USE_CARD_TABLE
-          // Reset card(s) for this quarantined object. Please note that the
-          // cards may still contain quarantined objects (which were
-          // promoted in this scan cycle), but
-          // ClearQuarantinedObjectsAndFilterSuperPages() will set them
-          // again in the next PCScan cycle.
-          QuarantineCardTable::GetFrom(ptr).Unquarantine(
-              ptr, slot_span->GetUsableSize(root));
+  // Reset card(s) for this quarantined slot. Please note that the cards may
+  // still contain quarantined slots (which were promoted in this scan cycle),
+  // but ClearQuarantinedSlotsAndPrepareCardTable() will set them again in the
+  // next PCScan cycle.
+  QuarantineCardTable::GetFrom(slot_start)
+      .Unquarantine(slot_start, slot_span->GetUtilizedSlotSize());
 #endif
-        });
-  });
+}
 
-  stats_.IncreaseSweptSize(swept_bytes);
+[[maybe_unused]] size_t FreeAndUnmarkInCardTable(
+    PartitionRoot<ThreadSafe>* root,
+    SlotSpanMetadata<ThreadSafe>* slot_span,
+    uintptr_t slot_start) {
+  void* object = root->SlotStartToObject(slot_start);
+  root->FreeNoHooksImmediate(object, slot_span, slot_start);
+  UnmarkInCardTable(slot_start, slot_span);
+  return slot_span->bucket->slot_size;
+}
+
+[[maybe_unused]] void SweepSuperPage(ThreadSafePartitionRoot* root,
+                                     uintptr_t super_page,
+                                     size_t epoch,
+                                     SweepStat& stat) {
+  auto* bitmap = StateBitmapFromAddr(super_page);
+  ThreadSafePartitionRoot::FromFirstSuperPage(super_page);
+  bitmap->IterateUnmarkedQuarantined(epoch, [root,
+                                             &stat](uintptr_t slot_start) {
+    auto* slot_span = SlotSpanMetadata<ThreadSafe>::FromSlotStart(slot_start);
+    stat.swept_bytes += FreeAndUnmarkInCardTable(root, slot_span, slot_start);
+  });
+}
+
+[[maybe_unused]] void SweepSuperPageAndDiscardMarkedQuarantine(
+    ThreadSafePartitionRoot* root,
+    uintptr_t super_page,
+    size_t epoch,
+    SweepStat& stat) {
+  auto* bitmap = StateBitmapFromAddr(super_page);
+  bitmap->IterateQuarantined(epoch, [root, &stat](uintptr_t slot_start,
+                                                  bool is_marked) {
+    auto* slot_span = SlotSpanMetadata<ThreadSafe>::FromSlotStart(slot_start);
+    if (PA_LIKELY(!is_marked)) {
+      stat.swept_bytes += FreeAndUnmarkInCardTable(root, slot_span, slot_start);
+      return;
+    }
+    // Otherwise, try to discard pages for marked quarantine. Since no data is
+    // stored in quarantined slots (e.g. the |next| pointer), this can be
+    // freely done.
+    const size_t slot_size = slot_span->bucket->slot_size;
+    if (slot_size >= SystemPageSize()) {
+      const uintptr_t discard_end =
+          base::bits::AlignDown(slot_start + slot_size, SystemPageSize());
+      const uintptr_t discard_begin =
+          base::bits::AlignUp(slot_start, SystemPageSize());
+      const intptr_t discard_size = discard_end - discard_begin;
+      if (discard_size > 0) {
+        DiscardSystemPages(discard_begin, discard_size);
+        stat.discarded_bytes += discard_size;
+      }
+    }
+  });
+}
+
+[[maybe_unused]] void SweepSuperPageWithBatchedFree(
+    ThreadSafePartitionRoot* root,
+    uintptr_t super_page,
+    size_t epoch,
+    SweepStat& stat) {
+  using SlotSpan = SlotSpanMetadata<ThreadSafe>;
+
+  auto* bitmap = StateBitmapFromAddr(super_page);
+  SlotSpan* previous_slot_span = nullptr;
+  internal::PartitionFreelistEntry* freelist_tail = nullptr;
+  internal::PartitionFreelistEntry* freelist_head = nullptr;
+  size_t freelist_entries = 0;
+
+  const auto bitmap_iterator = [&](uintptr_t slot_start) {
+    SlotSpan* current_slot_span = SlotSpan::FromSlotStart(slot_start);
+    auto* entry = PartitionFreelistEntry::EmplaceAndInitNull(slot_start);
+
+    if (current_slot_span != previous_slot_span) {
+      // We started scanning a new slot span. Flush the accumulated freelist to
+      // the slot-span's freelist. This is a single lock acquired per slot span.
+      if (previous_slot_span && freelist_entries) {
+        root->RawFreeBatch(freelist_head, freelist_tail, freelist_entries,
+                           previous_slot_span);
+      }
+      freelist_head = entry;
+      freelist_tail = nullptr;
+      freelist_entries = 0;
+      previous_slot_span = current_slot_span;
+    }
+
+    if (freelist_tail) {
+      freelist_tail->SetNext(entry);
+    }
+    freelist_tail = entry;
+    ++freelist_entries;
+
+    UnmarkInCardTable(slot_start, current_slot_span);
+
+    stat.swept_bytes += current_slot_span->bucket->slot_size;
+  };
+
+  bitmap->IterateUnmarkedQuarantinedAndFree(epoch, bitmap_iterator);
+
+  if (previous_slot_span && freelist_entries) {
+    root->RawFreeBatch(freelist_head, freelist_tail, freelist_entries,
+                       previous_slot_span);
+  }
+}
+
+}  // namespace
+
+void PCScanTask::SweepQuarantine() {
+  // Check that scan is unjoinable by this time.
+  PA_DCHECK(!pcscan_.IsJoinable());
+  // Discard marked quarantine memory on every Nth scan.
+  // TODO(bikineev): Find a better signal (e.g. memory pressure, high
+  // survival rate, etc).
+  static constexpr size_t kDiscardMarkedQuarantineFrequency = 16;
+  const bool should_discard =
+      (pcscan_epoch_ % kDiscardMarkedQuarantineFrequency == 0) &&
+      (pcscan_.clear_type_ == PCScan::ClearType::kEager);
+
+  SweepStat stat;
+  StarScanSnapshot::SweepingView sweeping_view(*snapshot_);
+  sweeping_view.VisitNonConcurrently(
+      [this, &stat, should_discard](uintptr_t super_page) {
+        auto* root = ThreadSafePartitionRoot::FromFirstSuperPage(super_page);
+
+#if PA_STARSCAN_BATCHED_FREE
+        SweepSuperPageWithBatchedFree(root, super_page, pcscan_epoch_, stat);
+        (void)should_discard;
+#else
+        if (PA_UNLIKELY(should_discard && !root->flags.allow_cookie))
+          SweepSuperPageAndDiscardMarkedQuarantine(root, super_page,
+                                                   pcscan_epoch_, stat);
+        else
+          SweepSuperPage(root, super_page, pcscan_epoch_, stat);
+#endif
+      });
+
+  stats_.IncreaseSweptSize(stat.swept_bytes);
+  stats_.IncreaseDiscardedQuarantineSize(stat.discarded_bytes);
 
 #if defined(PA_THREAD_CACHE_SUPPORTED)
   // Sweeping potentially frees into the current thread's thread cache. Purge
@@ -888,14 +1079,14 @@ void PCScanTask::SweepQuarantine() {
 }
 
 void PCScanTask::FinishScanner() {
-  stats_.ReportTracesAndHists();
+  stats_.ReportTracesAndHists(PCScanInternal::Instance().GetReporter());
 
   pcscan_.scheduler_.scheduling_backend().UpdateScheduleAfterScan(
       stats_.survived_quarantine_size(), stats_.GetOverallTime(),
       PCScanInternal::Instance().CalculateTotalHeapSize());
 
   PCScanInternal::Instance().ResetCurrentPCScanTask();
-  // Check that concurrent task can't be scheduled twice.
+  // Change the state and check that concurrent task can't be scheduled twice.
   PA_CHECK(pcscan_.state_.exchange(PCScan::State::kNotRunning,
                                    std::memory_order_acq_rel) ==
            PCScan::State::kSweepingAndFinishing);
@@ -912,10 +1103,10 @@ void PCScanTask::RunFromMutator() {
     if (!pcscan_.IsJoinable())
       return;
     {
-      // Clear all quarantined objects and prepare card table.
+      // Clear all quarantined slots and prepare card table.
       StatsCollector::MutatorScope clear_scope(
           stats_, StatsCollector::MutatorId::kClear);
-      ClearQuarantinedObjectsAndPrepareCardTable();
+      ClearQuarantinedSlotsAndPrepareCardTable();
     }
     {
       // Scan the thread's stack to find dangling references.
@@ -944,10 +1135,10 @@ void PCScanTask::RunFromScanner() {
     {
       SyncScope<Context::kScanner> sync_scope(*this);
       {
-        // Clear all quarantined objects and prepare the card table.
+        // Clear all quarantined slots and prepare the card table.
         StatsCollector::ScannerScope clear_scope(
             stats_, StatsCollector::ScannerId::kClear);
-        ClearQuarantinedObjectsAndPrepareCardTable();
+        ClearQuarantinedSlotsAndPrepareCardTable();
       }
       {
         // Scan heap for dangling references.
@@ -961,7 +1152,7 @@ void PCScanTask::RunFromScanner() {
       }
     }
     {
-      // Sweep unreachable quarantined objects.
+      // Sweep unreachable quarantined slots.
       StatsCollector::ScannerScope sweep_scope(
           stats_, StatsCollector::ScannerId::kSweep);
       SweepQuarantine();
@@ -976,7 +1167,7 @@ class PCScan::PCScanThread final {
 
   static PCScanThread& Instance() {
     // Lazily instantiate the scanning thread.
-    static base::NoDestructor<PCScanThread> instance;
+    static internal::base::NoDestructor<PCScanThread> instance;
     return *instance;
   }
 
@@ -985,12 +1176,12 @@ class PCScan::PCScanThread final {
       std::lock_guard<std::mutex> lock(mutex_);
       PA_DCHECK(!posted_task_.get());
       posted_task_ = std::move(task);
-      wanted_delay_ = TimeDelta();
+      wanted_delay_ = base::TimeDelta();
     }
     condvar_.notify_one();
   }
 
-  void PostDelayedTask(TimeDelta delay) {
+  void PostDelayedTask(base::TimeDelta delay) {
     {
       std::lock_guard<std::mutex> lock(mutex_);
       if (posted_task_.get()) {
@@ -1002,16 +1193,20 @@ class PCScan::PCScanThread final {
   }
 
  private:
-  friend class base::NoDestructor<PCScanThread>;
+  friend class internal::base::NoDestructor<PCScanThread>;
 
   PCScanThread() {
-    std::thread{[this] {
-      static constexpr const char* kThreadName = "PCScan";
-      // Ideally we should avoid mixing base:: and std:: API for threading, but
-      // this is useful for visualizing the pcscan thread in chrome://tracing.
-      base::PlatformThread::SetName(kThreadName);
-      TaskLoop();
-    }}.detach();
+    ScopedAllowAllocations allow_allocations_within_std_thread;
+    std::thread{[](PCScanThread* instance) {
+                  static constexpr const char* kThreadName = "PCScan";
+                  // Ideally we should avoid mixing base:: and std:: API for
+                  // threading, but this is useful for visualizing the pcscan
+                  // thread in chrome://tracing.
+                  internal::base::PlatformThread::SetName(kThreadName);
+                  instance->TaskLoop();
+                },
+                this}
+        .detach();
   }
 
   // Waits and returns whether the delay should be recomputed.
@@ -1050,7 +1245,7 @@ class PCScan::PCScanThread final {
         // Differentiate between a posted task and a delayed task schedule.
         if (posted_task_.get()) {
           std::swap(current_task, posted_task_);
-          wanted_delay_ = TimeDelta();
+          wanted_delay_ = base::TimeDelta();
         } else {
           PA_DCHECK(wanted_delay_.is_zero());
         }
@@ -1069,14 +1264,14 @@ class PCScan::PCScanThread final {
   std::mutex mutex_;
   std::condition_variable condvar_;
   TaskHandle posted_task_;
-  TimeDelta wanted_delay_;
+  base::TimeDelta wanted_delay_;
 };
 
 PCScanInternal::PCScanInternal() : simd_support_(DetectSimdSupport()) {}
 
 PCScanInternal::~PCScanInternal() = default;
 
-void PCScanInternal::Initialize(PCScan::WantedWriteProtectionMode wpmode) {
+void PCScanInternal::Initialize(PCScan::InitConfig config) {
   PA_DCHECK(!is_initialized_);
 #if defined(PA_HAS_64_BITS_POINTERS)
   // Make sure that GigaCage is initialized.
@@ -1084,7 +1279,8 @@ void PCScanInternal::Initialize(PCScan::WantedWriteProtectionMode wpmode) {
 #endif
   CommitCardTable();
 #if defined(PA_STARSCAN_UFFD_WRITE_PROTECTOR_SUPPORTED)
-  if (wpmode == PCScan::WantedWriteProtectionMode::kEnabled)
+  if (config.write_protection ==
+      PCScan::InitConfig::WantedWriteProtectionMode::kEnabled)
     write_protector_ = std::make_unique<UserFaultFDWriteProtector>();
   else
     write_protector_ = std::make_unique<NoWriteProtector>();
@@ -1092,13 +1288,23 @@ void PCScanInternal::Initialize(PCScan::WantedWriteProtectionMode wpmode) {
   write_protector_ = std::make_unique<NoWriteProtector>();
 #endif  // defined(PA_STARSCAN_UFFD_WRITE_PROTECTOR_SUPPORTED)
   PCScan::SetClearType(write_protector_->SupportedClearType());
+
+  if (config.safepoint == PCScan::InitConfig::SafepointMode::kEnabled) {
+    PCScan::Instance().EnableSafepoints();
+  }
   scannable_roots_ = RootsMap();
   nonscannable_roots_ = RootsMap();
+
+  static partition_alloc::StatsReporter s_no_op_reporter;
+  PCScan::Instance().RegisterStatsReporter(&s_no_op_reporter);
+
+  // Don't initialize PCScanThread::Instance() as otherwise sandbox complains
+  // about multiple threads running on sandbox initialization.
   is_initialized_ = true;
 }
 
 void PCScanInternal::PerformScan(PCScan::InvocationMode invocation_mode) {
-#if DCHECK_IS_ON()
+#if PA_SCAN_DCHECK_IS_ON()
   PA_DCHECK(is_initialized());
   PA_DCHECK(scannable_roots().size() > 0);
   PA_DCHECK(std::all_of(
@@ -1126,19 +1332,20 @@ void PCScanInternal::PerformScan(PCScan::InvocationMode invocation_mode) {
   auto task = base::MakeRefCounted<PCScanTask>(frontend, last_quarantine_size);
   PCScanInternal::Instance().SetCurrentPCScanTask(task);
 
-  if (UNLIKELY(invocation_mode ==
-               PCScan::InvocationMode::kScheduleOnlyForTesting)) {
+  if (PA_UNLIKELY(invocation_mode ==
+                  PCScan::InvocationMode::kScheduleOnlyForTesting)) {
     // Immediately change the state to enable safepoint testing.
     frontend.state_.store(PCScan::State::kScanning, std::memory_order_release);
+    frontend.SetJoinableIfSafepointEnabled(true);
     return;
   }
 
   // Post PCScan task.
-  if (LIKELY(invocation_mode == PCScan::InvocationMode::kNonBlocking)) {
+  if (PA_LIKELY(invocation_mode == PCScan::InvocationMode::kNonBlocking)) {
     PCScan::PCScanThread::Instance().PostTask(std::move(task));
   } else {
-    PA_DCHECK(PCScan::InvocationMode::kBlocking == invocation_mode ||
-              PCScan::InvocationMode::kForcedBlocking == invocation_mode);
+    PA_SCAN_DCHECK(PCScan::InvocationMode::kBlocking == invocation_mode ||
+                   PCScan::InvocationMode::kForcedBlocking == invocation_mode);
     std::move(*task).RunFromScanner();
   }
 }
@@ -1155,16 +1362,14 @@ void PCScanInternal::PerformScanIfNeeded(
     PerformScan(invocation_mode);
 }
 
-void PCScanInternal::PerformDelayedScan(TimeDelta delay) {
+void PCScanInternal::PerformDelayedScan(base::TimeDelta delay) {
   PCScan::PCScanThread::Instance().PostDelayedTask(delay);
 }
 
 void PCScanInternal::JoinScan() {
-#if !PCSCAN_DISABLE_SAFEPOINTS
   // Current task can be destroyed by the scanner. Check that it's valid.
   if (auto current_task = CurrentPCScanTask())
     current_task->RunFromMutator();
-#endif
 }
 
 PCScanInternal::TaskHandle PCScanInternal::CurrentPCScanTask() const {
@@ -1189,13 +1394,19 @@ PCScanInternal::SuperPages GetSuperPagesAndCommitStateBitmaps(
   PCScanInternal::SuperPages super_pages;
   for (auto* super_page_extent = root.first_extent; super_page_extent;
        super_page_extent = super_page_extent->next) {
-    for (char *super_page = SuperPagesBeginFromExtent(super_page_extent),
-              *super_page_end = SuperPagesEndFromExtent(super_page_extent);
+    for (uintptr_t super_page = SuperPagesBeginFromExtent(super_page_extent),
+                   super_page_end = SuperPagesEndFromExtent(super_page_extent);
          super_page != super_page_end; super_page += kSuperPageSize) {
-      RecommitSystemPages(internal::SuperPageStateBitmap(super_page),
-                          state_bitmap_size_to_commit, PageReadWrite,
-                          PageUpdatePermissions);
-      super_pages.push_back(reinterpret_cast<uintptr_t>(super_page));
+      // Make sure the metadata is committed.
+      // TODO(bikineev): Remove once this is known to work.
+      const volatile char* metadata = reinterpret_cast<char*>(
+          PartitionSuperPageToMetadataArea<ThreadSafe>(super_page));
+      *metadata;
+      RecommitSystemPages(SuperPageStateBitmapAddr(super_page),
+                          state_bitmap_size_to_commit,
+                          PageAccessibilityConfiguration::kReadWrite,
+                          PageAccessibilityDisposition::kRequireUpdate);
+      super_pages.push_back(super_page);
     }
   }
   return super_pages;
@@ -1208,14 +1419,14 @@ void PCScanInternal::RegisterScannableRoot(Root* root) {
   // Avoid nesting locks and store super_pages in a temporary vector.
   SuperPages super_pages;
   {
-    typename Root::ScopedGuard guard(root->lock_);
+    ::partition_alloc::internal::ScopedGuard guard(root->lock_);
     PA_CHECK(root->IsQuarantineAllowed());
     if (root->IsScanEnabled())
       return;
     PA_CHECK(!root->IsQuarantineEnabled());
     super_pages = GetSuperPagesAndCommitStateBitmaps(*root);
-    root->scan_mode = Root::ScanMode::kEnabled;
-    root->quarantine_mode = Root::QuarantineMode::kEnabled;
+    root->flags.scan_mode = Root::ScanMode::kEnabled;
+    root->flags.quarantine_mode = Root::QuarantineMode::kEnabled;
   }
   std::lock_guard<std::mutex> lock(roots_mutex_);
   PA_DCHECK(!scannable_roots_.count(root));
@@ -1230,13 +1441,13 @@ void PCScanInternal::RegisterNonScannableRoot(Root* root) {
   // Avoid nesting locks and store super_pages in a temporary vector.
   SuperPages super_pages;
   {
-    typename Root::ScopedGuard guard(root->lock_);
+    ::partition_alloc::internal::ScopedGuard guard(root->lock_);
     PA_CHECK(root->IsQuarantineAllowed());
     PA_CHECK(!root->IsScanEnabled());
     if (root->IsQuarantineEnabled())
       return;
     super_pages = GetSuperPagesAndCommitStateBitmaps(*root);
-    root->quarantine_mode = Root::QuarantineMode::kEnabled;
+    root->flags.quarantine_mode = Root::QuarantineMode::kEnabled;
   }
   std::lock_guard<std::mutex> lock(roots_mutex_);
   PA_DCHECK(!nonscannable_roots_.count(root));
@@ -1251,6 +1462,11 @@ void PCScanInternal::RegisterNewSuperPage(Root* root,
   PA_DCHECK(root);
   PA_CHECK(root->IsQuarantineAllowed());
   PA_DCHECK(!(super_page_base % kSuperPageAlignment));
+  // Make sure the metadata is committed.
+  // TODO(bikineev): Remove once this is known to work.
+  const volatile char* metadata = reinterpret_cast<char*>(
+      PartitionSuperPageToMetadataArea<ThreadSafe>(super_page_base));
+  *metadata;
 
   std::lock_guard<std::mutex> lock(roots_mutex_);
 
@@ -1333,15 +1549,17 @@ void PCScanInternal::ProtectPages(uintptr_t begin, size_t size) {
   // payload. Therefore we align up the incoming range by 4k. The unused part of
   // slot-spans doesn't need to be protected (the allocator will enter the
   // safepoint before trying to allocate from it).
-  PA_DCHECK(write_protector_.get());
-  write_protector_->ProtectPages(begin,
-                                 base::bits::AlignUp(size, SystemPageSize()));
+  PA_SCAN_DCHECK(write_protector_.get());
+  write_protector_->ProtectPages(
+      begin,
+      partition_alloc::internal::base::bits::AlignUp(size, SystemPageSize()));
 }
 
 void PCScanInternal::UnprotectPages(uintptr_t begin, size_t size) {
-  PA_DCHECK(write_protector_.get());
-  write_protector_->UnprotectPages(begin,
-                                   base::bits::AlignUp(size, SystemPageSize()));
+  PA_SCAN_DCHECK(write_protector_.get());
+  write_protector_->UnprotectPages(
+      begin,
+      partition_alloc::internal::base::bits::AlignUp(size, SystemPageSize()));
 }
 
 void PCScanInternal::ClearRootsForTesting() {
@@ -1349,12 +1567,12 @@ void PCScanInternal::ClearRootsForTesting() {
   // Set all roots as non-scannable and non-quarantinable.
   for (auto& pair : scannable_roots_) {
     Root* root = pair.first;
-    root->scan_mode = Root::ScanMode::kDisabled;
-    root->quarantine_mode = Root::QuarantineMode::kDisabledByDefault;
+    root->flags.scan_mode = Root::ScanMode::kDisabled;
+    root->flags.quarantine_mode = Root::QuarantineMode::kDisabledByDefault;
   }
   for (auto& pair : nonscannable_roots_) {
     Root* root = pair.first;
-    root->quarantine_mode = Root::QuarantineMode::kDisabledByDefault;
+    root->flags.quarantine_mode = Root::QuarantineMode::kDisabledByDefault;
   }
   // Make sure to destroy maps so that on the following ReinitForTesting() call
   // the maps don't attempt to destroy the backing.
@@ -1367,10 +1585,10 @@ void PCScanInternal::ClearRootsForTesting() {
   write_protector_.reset();
 }
 
-void PCScanInternal::ReinitForTesting(PCScan::WantedWriteProtectionMode mode) {
+void PCScanInternal::ReinitForTesting(PCScan::InitConfig config) {
   is_initialized_ = false;
   auto* new_this = new (this) PCScanInternal;
-  new_this->Initialize(mode);
+  new_this->Initialize(config);
 }
 
 void PCScanInternal::FinishScanForTesting() {
@@ -1379,5 +1597,15 @@ void PCScanInternal::FinishScanForTesting() {
   current_task->RunFromScanner();
 }
 
-}  // namespace internal
-}  // namespace base
+void PCScanInternal::RegisterStatsReporter(
+    partition_alloc::StatsReporter* reporter) {
+  PA_DCHECK(reporter);
+  stats_reporter_ = reporter;
+}
+
+partition_alloc::StatsReporter& PCScanInternal::GetReporter() {
+  PA_DCHECK(stats_reporter_);
+  return *stats_reporter_;
+}
+
+}  // namespace partition_alloc::internal

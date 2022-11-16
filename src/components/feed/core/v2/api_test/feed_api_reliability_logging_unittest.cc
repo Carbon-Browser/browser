@@ -277,7 +277,7 @@ TEST_F(FeedApiReliabilityLoggingTest, LoadStreamComplete_NoResponseReceived) {
       "LogRequestFinished result=-7 id=1\n"
 
       "LogLaunchFinishedAfterStreamUpdate "
-      "result=NO_CARDS_RESPONSE_ERROR_NON_200\n"
+      "result=NO_CARDS_REQUEST_ERROR_OTHER\n"
 
       "LogAboveTheFoldRender result=FULL_FEED_ERROR\n",
       surface.reliability_logging_bridge.GetEventsString());
@@ -314,8 +314,9 @@ TEST_F(FeedApiReliabilityLoggingTest, CacheRead_Stale) {
       MakeTypicalInitialModelState(
           /*first_cluster_id=*/0,
           kTestTimeEpoch -
-              GetFeedConfig().GetStalenessThreshold(kForYouStream) -
-              base::TimeDelta::FromMinutes(1)),
+              GetFeedConfig().GetStalenessThreshold(
+                  kForYouStream, /*is_web_feed_subscriber=*/true) -
+              base::Minutes(1)),
       base::DoNothing());
 
   // Store is stale, so we should fallback to a network request.
@@ -347,8 +348,9 @@ TEST_F(FeedApiReliabilityLoggingTest, CacheRead_StaleWithNetworkError) {
       MakeTypicalInitialModelState(
           /*first_cluster_id=*/0,
           kTestTimeEpoch -
-              GetFeedConfig().GetStalenessThreshold(kForYouStream) -
-              base::TimeDelta::FromMinutes(1)),
+              GetFeedConfig().GetStalenessThreshold(
+                  kForYouStream, /*is_web_feed_subscriber=*/true) -
+              base::Minutes(1)),
       base::DoNothing());
 
   // Store is stale, so we should fallback to a network request.
@@ -394,8 +396,8 @@ TEST_F(FeedApiReliabilityLoggingTest, CacheRead_Okay) {
 
 TEST_F(FeedApiReliabilityLoggingTest, UploadActions) {
   response_translator_.InjectResponse(MakeTypicalInitialModelState());
-  stream_->UploadAction(MakeFeedAction(1ul), /*upload_now=*/false,
-                        base::DoNothing());
+  stream_->UploadAction(MakeFeedAction(1ul), CreateLoggingParameters(),
+                        /*upload_now=*/false, base::DoNothing());
   TestForYouSurface surface(stream_.get());
   WaitForIdleTaskQueue();
 

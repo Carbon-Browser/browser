@@ -4,7 +4,6 @@
 
 #include "ash/public/cpp/views_text_services_context_menu_impl.h"
 
-#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/clipboard_history_controller.h"
 #include "chromeos/crosapi/mojom/clipboard_history.mojom.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -18,8 +17,7 @@ ViewsTextServicesContextMenuImpl::ViewsTextServicesContextMenuImpl(
     ui::SimpleMenuModel* menu,
     views::Textfield* client)
     : views::ViewsTextServicesContextMenuBase(menu, client) {
-  if (chromeos::features::IsClipboardHistoryEnabled())
-    AddClipboardHistoryMenuOption(menu);
+  AddClipboardHistoryMenuOption(menu);
 }
 
 ViewsTextServicesContextMenuImpl::~ViewsTextServicesContextMenuImpl() = default;
@@ -85,15 +83,15 @@ bool ViewsTextServicesContextMenuImpl::SupportsCommand(int command_id) const {
 
 void ViewsTextServicesContextMenuImpl::AddClipboardHistoryMenuOption(
     ui::SimpleMenuModel* menu) {
-  const int index_of_paste =
+  const absl::optional<size_t> index_of_paste =
       menu->GetIndexOfCommandId(ui::TouchEditable::kPaste);
 
   // Only add the clipboard history menu option when having the menu option
   // for paste.
-  if (index_of_paste == -1)
+  if (!index_of_paste.has_value())
     return;
 
-  const int target_index = index_of_paste + 1;
+  const size_t target_index = index_of_paste.value() + 1;
   menu->InsertItemAt(target_index, IDS_APP_SHOW_CLIPBOARD_HISTORY,
                      l10n_util::GetStringUTF16(IDS_APP_SHOW_CLIPBOARD_HISTORY));
   if (ClipboardHistoryController::Get()->ShouldShowNewFeatureBadge()) {

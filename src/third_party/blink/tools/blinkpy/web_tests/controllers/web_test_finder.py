@@ -183,7 +183,8 @@ class WebTestFinder(object):
                     line = self._strip_comments(line)
                     if not line:
                         continue
-                    is_glob = line[-1] == '*' and line[-2] != '\\'
+                    is_glob = line[-1] == '*' and (len(line) == 1
+                                                   or line[-2] != '\\')
                     if line[0] == '-':
                         if is_glob:
                             negative_globs.append(line)
@@ -232,7 +233,15 @@ class WebTestFinder(object):
         all_tests = set(all_tests_list)
         tests_to_skip = set()
         idlharness_skips = set()
+        tests_always_skipped = set()
         for test in all_tests:
+            # Manual tests and virtual tests skipped by platform config are
+            # always skipped and not affected by the --skip parameter
+            if (self._port.is_manual_test(test) or
+                    self._port.virtual_test_skipped_due_to_platform_config(test)):
+                tests_always_skipped.update({test})
+                continue
+
             # We always skip idlharness tests for MSAN/ASAN, even when running
             # with --no-expectations (https://crbug.com/856601). Note we will
             # run the test anyway if it is explicitly specified on the command
@@ -273,6 +282,8 @@ class WebTestFinder(object):
         elif self._options.skipped != 'always':
             # make sure we're explicitly running any tests passed on the command line; equivalent to 'default'.
             tests_to_skip -= set(paths)
+
+        tests_to_skip.update(tests_always_skipped)
 
         return tests_to_skip
 

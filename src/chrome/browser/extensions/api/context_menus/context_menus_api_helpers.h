@@ -7,6 +7,7 @@
 #ifndef CHROME_BROWSER_EXTENSIONS_API_CONTEXT_MENUS_CONTEXT_MENUS_API_HELPERS_H_
 #define CHROME_BROWSER_EXTENSIONS_API_CONTEXT_MENUS_CONTEXT_MENUS_API_HELPERS_H_
 
+#include "base/notreached.h"
 #include "chrome/browser/extensions/menu_manager.h"
 #include "chrome/common/extensions/api/context_menus.h"
 #include "content/public/browser/browser_context.h"
@@ -256,7 +257,6 @@ bool UpdateMenuItem(const PropertyWithEnumT& update_properties,
   }
 
   // Parent id.
-  MenuItem* parent = NULL;
   std::unique_ptr<MenuItem::Id> parent_id(
       GetParentId(update_properties, browser_context->IsOffTheRecord(),
                   item_id.extension_key));
@@ -275,7 +275,7 @@ bool UpdateMenuItem(const PropertyWithEnumT& update_properties,
 
   // There is no need to call ItemUpdated if ChangeParent is called because
   // all sanitation is taken care of in ChangeParent.
-  if (!parent && radio_item_updated && !menu_manager->ItemUpdated(item->id()))
+  if (radio_item_updated && !menu_manager->ItemUpdated(item->id()))
     return false;
 
   menu_manager->WriteToStorage(extension, item_id.extension_key);

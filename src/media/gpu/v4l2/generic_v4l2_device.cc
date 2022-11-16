@@ -18,7 +18,6 @@
 #include <algorithm>
 #include <memory>
 
-#include "base/cxx17_backports.h"
 #include "base/files/scoped_file.h"
 #include "base/posix/eintr_wrapper.h"
 #include "base/strings/stringprintf.h"
@@ -233,9 +232,9 @@ bool GenericV4L2Device::CanCreateEGLImageFrom(const Fourcc fourcc) const {
 
   return std::find(
              kEGLImageDrmFmtsSupported,
-             kEGLImageDrmFmtsSupported + base::size(kEGLImageDrmFmtsSupported),
+             kEGLImageDrmFmtsSupported + std::size(kEGLImageDrmFmtsSupported),
              V4L2PixFmtToDrmFormat(fourcc.ToV4L2PixFmt())) !=
-         kEGLImageDrmFmtsSupported + base::size(kEGLImageDrmFmtsSupported);
+         kEGLImageDrmFmtsSupported + std::size(kEGLImageDrmFmtsSupported);
 }
 
 EGLImageKHR GenericV4L2Device::CreateEGLImage(
@@ -322,6 +321,7 @@ scoped_refptr<gl::GLImage> GenericV4L2Device::CreateGLImage(
 
   DCHECK(pixmap);
 
+  // TODO(b/220336463): plumb the right color space.
   auto image =
       base::MakeRefCounted<gl::GLImageNativePixmap>(size, buffer_format);
   bool ret = image->Initialize(std::move(pixmap));

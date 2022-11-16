@@ -5,9 +5,9 @@
 #ifndef CHROME_BROWSER_UI_AUTOFILL_PAYMENTS_VIRTUAL_CARD_MANUAL_FALLBACK_BUBBLE_CONTROLLER_IMPL_H_
 #define CHROME_BROWSER_UI_AUTOFILL_PAYMENTS_VIRTUAL_CARD_MANUAL_FALLBACK_BUBBLE_CONTROLLER_IMPL_H_
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/autofill/payments/virtual_card_manual_fallback_bubble_controller.h"
 
-#include "base/macros.h"
 #include "chrome/browser/ui/autofill/autofill_bubble_controller_base.h"
 #include "components/autofill/core/browser/data_model/credit_card.h"
 #include "content/public/browser/web_contents_user_data.h"
@@ -34,7 +34,8 @@ class VirtualCardManualFallbackBubbleControllerImpl
       const VirtualCardManualFallbackBubbleControllerImpl&) = delete;
 
   // Show the bubble view.
-  void ShowBubble(const CreditCard* virtual_card,
+  void ShowBubble(const std::u16string& masked_card_identifier_string,
+                  const CreditCard* virtual_card,
                   const std::u16string& virtual_card_cvc,
                   const gfx::Image& virtual_card_image);
 
@@ -45,6 +46,8 @@ class VirtualCardManualFallbackBubbleControllerImpl
   AutofillBubbleBase* GetBubble() const override;
   const gfx::Image& GetBubbleTitleIcon() const override;
   std::u16string GetBubbleTitleText() const override;
+  std::u16string GetLearnMoreLinkText() const override;
+  std::u16string GetEducationalBodyLabel() const override;
   std::u16string GetVirtualCardNumberFieldLabel() const override;
   std::u16string GetExpirationDateFieldLabel() const override;
   std::u16string GetCardholderNameFieldLabel() const override;
@@ -55,6 +58,7 @@ class VirtualCardManualFallbackBubbleControllerImpl
       VirtualCardManualFallbackBubbleField field) const override;
   const CreditCard* GetVirtualCard() const override;
   bool ShouldIconBeVisible() const override;
+  void OnLinkClicked(const GURL& url) override;
   void OnBubbleClosed(PaymentsBubbleClosedReason closed_reason) override;
   void OnFieldClicked(VirtualCardManualFallbackBubbleField field) override;
 
@@ -63,8 +67,7 @@ class VirtualCardManualFallbackBubbleControllerImpl
       content::WebContents* web_contents);
 
   // AutofillBubbleControllerBase:
-  void DidFinishNavigation(
-      content::NavigationHandle* navigation_handle) override;
+  void PrimaryPageChanged(content::Page& page) override;
   void OnVisibilityChanged(content::Visibility visibility) override;
   PageActionIconType GetPageActionIconType() override;
   void DoShowBubble() override;
@@ -86,6 +89,10 @@ class VirtualCardManualFallbackBubbleControllerImpl
   bool IsWebContentsActive();
 
   void SetEventObserverForTesting(ObserverForTest* observer_for_test);
+
+  // The network + last four digits of card number for the related masked server
+  // card.
+  std::u16string masked_card_identifier_string_;
 
   // The cvc of the virtual card.
   std::u16string virtual_card_cvc_;
@@ -112,7 +119,7 @@ class VirtualCardManualFallbackBubbleControllerImpl
   // has been copied to the clipboard.
   absl::optional<VirtualCardManualFallbackBubbleField> clicked_field_;
 
-  ObserverForTest* observer_for_test_ = nullptr;
+  raw_ptr<ObserverForTest> observer_for_test_ = nullptr;
 
   base::WeakPtrFactory<VirtualCardManualFallbackBubbleControllerImpl>
       weak_ptr_factory_{this};

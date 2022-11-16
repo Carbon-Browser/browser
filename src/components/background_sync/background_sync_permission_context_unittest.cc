@@ -8,7 +8,6 @@
 
 #include "base/bind.h"
 #include "base/callback_helpers.h"
-#include "base/macros.h"
 #include "base/run_loop.h"
 #include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "components/content_settings/core/common/content_settings.h"
@@ -26,6 +25,12 @@
 
 class BackgroundSyncPermissionContextTest
     : public content::RenderViewHostTestHarness {
+ public:
+  BackgroundSyncPermissionContextTest(
+      const BackgroundSyncPermissionContextTest&) = delete;
+  BackgroundSyncPermissionContextTest& operator=(
+      const BackgroundSyncPermissionContextTest&) = delete;
+
  protected:
   BackgroundSyncPermissionContextTest() = default;
   ~BackgroundSyncPermissionContextTest() override = default;
@@ -38,11 +43,11 @@ class BackgroundSyncPermissionContextTest
     base::RunLoop run_loop;
 
     const permissions::PermissionRequestID id(
-        web_contents()->GetMainFrame()->GetProcess()->GetID(),
-        web_contents()->GetMainFrame()->GetRoutingID(),
+        web_contents()->GetPrimaryMainFrame()->GetProcess()->GetID(),
+        web_contents()->GetPrimaryMainFrame()->GetRoutingID(),
         permissions::PermissionRequestID::RequestLocalId());
     permission_context->RequestPermission(
-        web_contents(), id, url, /* user_gesture= */ false,
+        id, url, /* user_gesture= */ false,
         base::BindOnce(
             &BackgroundSyncPermissionContextTest::TrackPermissionDecision,
             base::Unretained(this), run_loop.QuitClosure()));
@@ -63,8 +68,6 @@ class BackgroundSyncPermissionContextTest
 
  private:
   bool permission_granted_;
-
-  DISALLOW_COPY_AND_ASSIGN(BackgroundSyncPermissionContextTest);
 };
 
 // Background sync permission should be allowed by default for a secure origin.

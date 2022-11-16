@@ -13,9 +13,9 @@
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/check.h"
+#include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
 #include "base/run_loop.h"
-#include "base/task/post_task.h"
 #include "base/task/thread_pool.h"
 #include "base/test/bind.h"
 #include "base/test/mock_callback.h"
@@ -100,6 +100,11 @@ std::string GetChromotingMessageText(const ftl::InboxMessage& message) {
 class MockMessageReceptionChannel : public MessageReceptionChannel {
  public:
   MockMessageReceptionChannel() = default;
+
+  MockMessageReceptionChannel(const MockMessageReceptionChannel&) = delete;
+  MockMessageReceptionChannel& operator=(const MockMessageReceptionChannel&) =
+      delete;
+
   ~MockMessageReceptionChannel() override = default;
 
   // MessageReceptionChannel implementations.
@@ -120,8 +125,6 @@ class MockMessageReceptionChannel : public MessageReceptionChannel {
  private:
   StreamOpener stream_opener_;
   MessageCallback on_incoming_msg_;
-
-  DISALLOW_COPY_AND_ASSIGN(MockMessageReceptionChannel);
 };
 
 class MockRegistrationManager : public RegistrationManager {
@@ -153,7 +156,7 @@ class FtlMessagingClientTest : public testing::Test {
   ProtobufHttpTestResponder test_responder_;
   FakeOAuthTokenGetter token_getter_{OAuthTokenGetter::Status::SUCCESS, "", ""};
   std::unique_ptr<FtlMessagingClient> messaging_client_;
-  MockMessageReceptionChannel* mock_message_reception_channel_;
+  raw_ptr<MockMessageReceptionChannel> mock_message_reception_channel_;
 
  private:
   base::test::TaskEnvironment task_environment_;

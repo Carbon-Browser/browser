@@ -30,7 +30,9 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_EDITING_INLINE_BOX_POSITION_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_EDITING_INLINE_BOX_POSITION_H_
 
+#include "base/check_op.h"
 #include "third_party/blink/renderer/core/core_export.h"
+#include "third_party/blink/renderer/core/editing/editing_boundary.h"
 #include "third_party/blink/renderer/core/editing/forward.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 
@@ -69,9 +71,12 @@ ComputeInlineBoxPosition(const PositionWithAffinity&);
 CORE_EXPORT InlineBoxPosition
 ComputeInlineBoxPosition(const PositionInFlatTreeWithAffinity&);
 
-PositionWithAffinity ComputeInlineAdjustedPosition(const PositionWithAffinity&);
+PositionWithAffinity ComputeInlineAdjustedPosition(
+    const PositionWithAffinity&,
+    EditingBoundaryCrossingRule = kCanCrossEditingBoundary);
 PositionInFlatTreeWithAffinity ComputeInlineAdjustedPosition(
-    const PositionInFlatTreeWithAffinity&);
+    const PositionInFlatTreeWithAffinity&,
+    EditingBoundaryCrossingRule = kCanCrossEditingBoundary);
 
 InlineBoxPosition ComputeInlineBoxPositionForInlineAdjustedPosition(
     const PositionWithAffinity&);

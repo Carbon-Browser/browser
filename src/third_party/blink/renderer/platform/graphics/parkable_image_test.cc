@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/graphics/parkable_image.h"
+#include "base/synchronization/lock.h"
 #include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
@@ -54,15 +55,15 @@ class ParkableImageBaseTest : public ::testing::Test {
   }
 
  protected:
-  void WaitForDelayedParking() {
+  void WaitForParking() {
     task_env_.FastForwardBy(ParkableImageManager::kDelayedParkingInterval);
   }
 
+  void WaitForDelayedParking() { task_env_.FastForwardBy(base::Seconds(30)); }
+
   // To aid in testing that the "Memory.ParkableImage.*.5min" metrics are
   // correctly recorded.
-  void Wait5MinForStatistics() {
-    task_env_.FastForwardBy(base::TimeDelta::FromMinutes(5));
-  }
+  void Wait5MinForStatistics() { task_env_.FastForwardBy(base::Minutes(5)); }
 
   void DescribeCurrentTasks() { task_env_.DescribeCurrentTasks(); }
 
@@ -76,23 +77,23 @@ class ParkableImageBaseTest : public ::testing::Test {
     return pi->impl_->MaybePark();
   }
   static void Unpark(scoped_refptr<ParkableImage> pi) {
-    MutexLocker lock(pi->impl_->lock_);
+    base::AutoLock lock(pi->impl_->lock_);
     pi->impl_->Unpark();
   }
   static void Lock(scoped_refptr<ParkableImage> pi) {
-    MutexLocker lock(pi->impl_->lock_);
+    base::AutoLock lock(pi->impl_->lock_);
     pi->LockData();
   }
   static void Unlock(scoped_refptr<ParkableImage> pi) {
-    MutexLocker lock(pi->impl_->lock_);
+    base::AutoLock lock(pi->impl_->lock_);
     pi->UnlockData();
   }
   static bool is_on_disk(scoped_refptr<ParkableImage> pi) {
-    MutexLocker lock(pi->impl_->lock_);
+    base::AutoLock lock(pi->impl_->lock_);
     return pi->is_on_disk();
   }
   static bool is_locked(scoped_refptr<ParkableImage> pi) {
-    MutexLocker lock(pi->impl_->lock_);
+    base::AutoLock lock(pi->impl_->lock_);
     return pi->impl_->is_locked();
   }
   static bool is_frozen(scoped_refptr<ParkableImage> pi) {
@@ -117,7 +118,7 @@ class ParkableImageBaseTest : public ::testing::Test {
       return false;
     }
 
-    MutexLocker lock(pi->impl_->lock_);
+    base::AutoLock lock(pi->impl_->lock_);
     pi->LockData();
 
     auto ro_buffer = pi->impl_->rw_buffer_->MakeROBufferSnapshot();
@@ -166,6 +167,8 @@ class ParkableImageBaseTest : public ::testing::Test {
                                        expected_count);
     histogram_tester_.ExpectTotalCount("Memory.ParkableImage.Read.Throughput",
                                        expected_count);
+    histogram_tester_.ExpectTotalCount(
+        "Memory.ParkableImage.Read.TimeSinceFreeze", expected_count);
   }
 
   base::HistogramTester histogram_tester_;
@@ -177,7 +180,20 @@ class ParkableImageBaseTest : public ::testing::Test {
 // Parking is enabled for these tests.
 class ParkableImageTest : public ParkableImageBaseTest {
  public:
-  ParkableImageTest() { fl_.InitAndEnableFeature(kParkableImagesToDisk); }
+  ParkableImageTest() {
+    fl_.InitWithFeatures({kParkableImagesToDisk}, {kDelayParkingImages});
+  }
+
+ private:
+  base::test::ScopedFeatureList fl_;
+};
+
+// Parking is delayed but enabled for these tests.
+class ParkableImageDelayedTest : public ParkableImageBaseTest {
+ public:
+  ParkableImageDelayedTest() {
+    fl_.InitWithFeatures({kParkableImagesToDisk, kDelayParkingImages}, {});
+  }
 
  private:
   base::test::ScopedFeatureList fl_;
@@ -533,7 +549,7 @@ TEST_F(ParkableImageTest, ManagerSimple) {
   // accounting task |ParkableImageManager::RecordStatisticsAfter5Minutes|.
   EXPECT_EQ(2u, GetPendingMainThreadTaskCount());
 
-  WaitForDelayedParking();
+  WaitForParking();
 
   // Image should be on disk now.
   EXPECT_TRUE(is_on_disk(pi));
@@ -541,7 +557,7 @@ TEST_F(ParkableImageTest, ManagerSimple) {
   Unpark(pi);
   EXPECT_FALSE(is_on_disk(pi));
 
-  WaitForDelayedParking();
+  WaitForParking();
 
   // Even though we unparked earlier, a new delayed parking task should park the
   // image still.
@@ -573,7 +589,7 @@ TEST_F(ParkableImageTest, ManagerSmall) {
   // accounting task |ParkableImageManager::RecordStatisticsAfter5Minutes|.
   EXPECT_EQ(2u, GetPendingMainThreadTaskCount());
 
-  WaitForDelayedParking();
+  WaitForParking();
 
   // Image should be on disk now.
   EXPECT_FALSE(is_on_disk(pi));
@@ -599,7 +615,7 @@ TEST_F(ParkableImageTest, ManagerTwo) {
   // accounting task |ParkableImageManager::RecordStatisticsAfter5Minutes|.
   EXPECT_EQ(2u, GetPendingMainThreadTaskCount());
 
-  WaitForDelayedParking();
+  WaitForParking();
 
   // Image should be on disk now.
   EXPECT_TRUE(is_on_disk(pi));
@@ -607,7 +623,7 @@ TEST_F(ParkableImageTest, ManagerTwo) {
   Unpark(pi);
   EXPECT_FALSE(is_on_disk(pi));
 
-  WaitForDelayedParking();
+  WaitForParking();
 
   // Even though we unparked earlier, a new delayed parking task should park the
   // image still.
@@ -635,7 +651,7 @@ TEST_F(ParkableImageTest, ManagerNonFrozen) {
   // accounting task |ParkableImageManager::RecordStatisticsAfter5Minutes|.
   EXPECT_EQ(2u, GetPendingMainThreadTaskCount());
 
-  WaitForDelayedParking();
+  WaitForParking();
 
   // Can't park because it is not frozen.
   EXPECT_FALSE(is_on_disk(pi));
@@ -747,7 +763,7 @@ TEST_F(ParkableImageNoParkingTest, ManagerSimple) {
   EXPECT_EQ(1u, GetPendingMainThreadTaskCount());
 
   // This should not do anything, since parking is disabled.
-  WaitForDelayedParking();
+  WaitForParking();
 
   EXPECT_FALSE(is_on_disk(pi));
 
@@ -776,7 +792,7 @@ TEST_F(ParkableImageTest, ManagerNotUnlocked) {
   pi->Freeze();
   Lock(pi);
 
-  WaitForDelayedParking();
+  WaitForParking();
 
   // Can't park because it is locked.
   EXPECT_FALSE(is_on_disk(pi));
@@ -803,7 +819,7 @@ TEST_F(ParkableImageTest, ManagerRescheduleUnfrozen) {
 
   // Fast forward enough for both to run.
   Wait5MinForStatistics();
-  WaitForDelayedParking();
+  WaitForParking();
 
   // Unfrozen ParkableImages are never parked.
   ASSERT_FALSE(is_on_disk(pi));
@@ -814,7 +830,7 @@ TEST_F(ParkableImageTest, ManagerRescheduleUnfrozen) {
   pi->Freeze();
   Lock(pi);
 
-  WaitForDelayedParking();
+  WaitForParking();
 
   // Locked ParkableImages are never parked.
   ASSERT_FALSE(is_on_disk(pi));
@@ -866,11 +882,120 @@ TEST_F(ParkableImageTest, DestroyOnSeparateThread) {
   // Task for parking image, followed by task for deleting the image.
   EXPECT_EQ(2u, GetPendingMainThreadTaskCount());
 
-  WaitForDelayedParking();
+  WaitForParking();
 
   // Now that the tasks for deleting and parking have run, the image is deleted.
   EXPECT_EQ(0u, manager.Size());
   EXPECT_EQ(0u, GetPendingMainThreadTaskCount());
+}
+
+// Test that we park only after 30 seconds, not immediately after freezing.
+TEST_F(ParkableImageDelayedTest, Simple) {
+  const size_t kDataSize = 3.5 * 4096;
+  char data[kDataSize];
+  PrepareReferenceData(data, kDataSize);
+
+  auto& manager = ParkableImageManager::Instance();
+  EXPECT_EQ(0u, manager.Size());
+
+  auto pi = MakeParkableImageForTesting(data, kDataSize);
+  EXPECT_EQ(1u, manager.Size());
+
+  Wait5MinForStatistics();
+
+  pi->Freeze();
+
+  EXPECT_EQ(1u, GetPendingMainThreadTaskCount());
+
+  WaitForParking();
+
+  // We have 1 task still, since we need to wait for 30 seconds after the image
+  // has been frozen.
+  EXPECT_EQ(1u, GetPendingMainThreadTaskCount());
+  EXPECT_FALSE(is_on_disk(pi));
+
+  WaitForDelayedParking();
+
+  // After waiting 30 seconds, the image is parked.
+  EXPECT_EQ(0u, GetPendingMainThreadTaskCount());
+
+  EXPECT_TRUE(is_on_disk(pi));
+}
+
+// Test that we park only after 30 seconds or once we have read the data, not
+// immediately after freezing.
+TEST_F(ParkableImageDelayedTest, Read) {
+  const size_t kDataSize = 3.5 * 4096;
+  char data[kDataSize];
+  PrepareReferenceData(data, kDataSize);
+
+  auto& manager = ParkableImageManager::Instance();
+  EXPECT_EQ(0u, manager.Size());
+
+  auto pi = MakeParkableImageForTesting(data, kDataSize);
+  EXPECT_EQ(1u, manager.Size());
+
+  Wait5MinForStatistics();
+
+  pi->Freeze();
+
+  EXPECT_EQ(1u, GetPendingMainThreadTaskCount());
+
+  WaitForParking();
+
+  // We have 1 task still, since we need to wait for 30 seconds after the image
+  // has been frozen.
+  EXPECT_EQ(1u, GetPendingMainThreadTaskCount());
+  EXPECT_FALSE(is_on_disk(pi));
+
+  // Read the data here, which allows us to park the image immediately.
+  pi->Data();
+
+  WaitForParking();
+
+  // Image is successfully parked, even though it's been less than 30 seconds.
+  EXPECT_EQ(0u, GetPendingMainThreadTaskCount());
+  EXPECT_TRUE(is_on_disk(pi));
+}
+
+// 30 seconds should be counted from when we freeze, and not be affected by
+// parking/unparking.
+TEST_F(ParkableImageDelayedTest, ParkAndUnpark) {
+  const size_t kDataSize = 3.5 * 4096;
+  char data[kDataSize];
+  PrepareReferenceData(data, kDataSize);
+
+  // We have no images currently.
+  ASSERT_EQ(0u, ParkableImageManager::Instance().Size());
+
+  auto pi = MakeParkableImageForTesting(data, kDataSize);
+
+  // We now have 1 image.
+  ASSERT_EQ(1u, ParkableImageManager::Instance().Size());
+
+  pi->Freeze();
+
+  WaitForParking();
+
+  EXPECT_FALSE(is_on_disk(pi));
+
+  WaitForDelayedParking();
+
+  EXPECT_TRUE(is_on_disk(pi));
+
+  Unpark(pi);
+
+  // Unparking blocks until it is read from disk, so we expect it to no longer
+  // be on disk after unparking.
+  EXPECT_FALSE(is_on_disk(pi));
+
+  // Make sure content is the same after unparking.
+  EXPECT_TRUE(IsSameContent(pi, data, kDataSize));
+
+  WaitForParking();
+
+  // No need to wait 30 more seconds, we can park immediately.
+  EXPECT_TRUE(is_on_disk(pi));
 }
 
 }  // namespace blink

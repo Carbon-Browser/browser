@@ -12,7 +12,7 @@
 #include <string>
 
 #include "base/containers/unique_ptr_adapters.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/process/process_handle.h"
 #include "build/build_config.h"
@@ -23,7 +23,6 @@
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/remote.h"
-#include "sandbox/policy/sandbox_type.h"
 #include "services/service_manager/public/cpp/identity.h"
 #include "services/service_manager/public/cpp/manifest.h"
 #include "services/service_manager/public/mojom/connector.mojom.h"
@@ -31,6 +30,12 @@
 #include "services/service_manager/public/mojom/service_control.mojom.h"
 #include "services/service_manager/public/mojom/service_manager.mojom.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+
+namespace sandbox {
+namespace mojom {
+enum class Sandbox;
+}
+}  // namespace sandbox
 
 namespace service_manager {
 
@@ -51,6 +56,10 @@ class ServiceInstance : public mojom::Connector,
   ServiceInstance(service_manager::ServiceManager* service_manager,
                   const Identity& identity,
                   const Manifest& manifest);
+
+  ServiceInstance(const ServiceInstance&) = delete;
+  ServiceInstance& operator=(const ServiceInstance&) = delete;
+
   ~ServiceInstance() override;
 
   const Identity& identity() const { return identity_; }
@@ -62,11 +71,11 @@ class ServiceInstance : public mojom::Connector,
   // Starts this instance using an already-established Service pipe.
   void StartWithRemote(mojo::PendingRemote<mojom::Service> remote);
 
-#if !defined(OS_IOS)
+#if !BUILDFLAG(IS_IOS)
   // Starts this instance from a path to a service executable on disk.
   bool StartWithProcessHost(std::unique_ptr<ServiceProcessHost> host,
-                            sandbox::policy::SandboxType sandbox_type);
-#endif  // !defined(OS_IOS)
+                            sandbox::mojom::Sandbox sandbox_type);
+#endif  // !BUILDFLAG(IS_IOS)
 
   // Binds an endpoint for this instance to receive metadata about its
   // corresponding service process, if any.
@@ -154,7 +163,7 @@ class ServiceInstance : public mojom::Connector,
       mojo::PendingRemote<mojom::ServiceManagerListener> listener) override;
 
   // Always owns |this|.
-  service_manager::ServiceManager* const service_manager_;
+  const raw_ptr<service_manager::ServiceManager> service_manager_;
 
   // A unique identity for this instance. Distinct from PID, as a single process
   // may host multiple service instances. Globally unique across time and space.
@@ -168,7 +177,7 @@ class ServiceInstance : public mojom::Connector,
   // instances in the system.
   const bool can_contact_all_services_;
 
-#if !defined(OS_IOS)
+#if !BUILDFLAG(IS_IOS)
   std::unique_ptr<ServiceProcessHost> process_host_;
 #endif
 
@@ -200,8 +209,6 @@ class ServiceInstance : public mojom::Connector,
   int pending_service_connections_ = 0;
 
   base::WeakPtrFactory<ServiceInstance> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ServiceInstance);
 };
 
 }  // namespace service_manager

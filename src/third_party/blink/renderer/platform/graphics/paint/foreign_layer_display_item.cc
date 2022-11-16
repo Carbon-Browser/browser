@@ -10,7 +10,6 @@
 #include "cc/layers/picture_layer.h"
 #include "third_party/blink/renderer/platform/graphics/compositing/layers_as_json.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_context.h"
-#include "third_party/blink/renderer/platform/graphics/graphics_layer.h"
 #include "third_party/blink/renderer/platform/graphics/paint/paint_controller.h"
 
 namespace blink {
@@ -19,14 +18,15 @@ ForeignLayerDisplayItem::ForeignLayerDisplayItem(
     DisplayItemClientId client_id,
     Type type,
     scoped_refptr<cc::Layer> layer,
-    const IntPoint& offset,
+    const gfx::Point& origin,
     RasterEffectOutset outset,
     PaintInvalidationReason paint_invalidation_reason)
     : DisplayItem(client_id,
                   type,
-                  IntRect(offset, IntSize(layer->bounds())),
+                  gfx::Rect(origin, layer->bounds()),
                   outset,
-                  paint_invalidation_reason),
+                  paint_invalidation_reason,
+                  /*draws_content*/ true),
       layer_(std::move(layer)) {
   DCHECK(IsForeignLayerType(type));
 }
@@ -47,17 +47,9 @@ void RecordForeignLayer(GraphicsContext& context,
                         const DisplayItemClient& client,
                         DisplayItem::Type type,
                         scoped_refptr<cc::Layer> layer,
-                        const IntPoint& offset,
+                        const gfx::Point& origin,
                         const PropertyTreeStateOrAlias* properties) {
   PaintController& paint_controller = context.GetPaintController();
-  if (RuntimeEnabledFeatures::CompositeAfterPaintEnabled()) {
-    // Only record the first fragment's cc::Layer to prevent duplicate layers.
-    // This is not needed for link highlights which do support fragmentation.
-    if (type != DisplayItem::kForeignLayerLinkHighlight &&
-        paint_controller.CurrentFragment() != 0) {
-      return;
-    }
-  }
   // This is like ScopedPaintChunkProperties but uses null id because foreign
   // layer chunk doesn't need an id nor a client.
   absl::optional<PropertyTreeStateOrAlias> previous_properties;
@@ -66,7 +58,7 @@ void RecordForeignLayer(GraphicsContext& context,
     paint_controller.UpdateCurrentPaintChunkProperties(*properties);
   }
   paint_controller.CreateAndAppend<ForeignLayerDisplayItem>(
-      client, type, std::move(layer), offset,
+      client, type, std::move(layer), origin,
       client.VisualRectOutsetForRasterEffects(),
       client.GetPaintInvalidationReason());
   paint_controller.RecordDebugInfo(client);

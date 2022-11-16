@@ -61,7 +61,7 @@ var cr = cr || function(global) {
   }
 
   /**
-   * The kind of property to define in {@code defineProperty}.
+   * The kind of property to define in {@code Object.defineProperty}.
    * @enum {string}
    * @const
    */
@@ -84,7 +84,7 @@ var cr = cr || function(global) {
      * element has the attribute then the value is true.
      * Use only for properties of type {boolean}.
      */
-    BOOL_ATTR: 'boolAttr'
+    BOOL_ATTR: 'boolAttr',
   };
 
   /**
@@ -116,7 +116,7 @@ var cr = cr || function(global) {
 
     // TODO(dbeam): replace with assertNotReached() in assert.js when I can coax
     // the browser/unit tests to preprocess this file through grit.
-    throw 'not reached';
+    throw new Error('not reached');
   }
 
   /**
@@ -126,11 +126,11 @@ var cr = cr || function(global) {
    *     for.
    * @param {PropertyKind} kind The kind of property we are getting the
    *     setter for.
-   * @param {function(*, *):void=} opt_setHook A function to run after the
+   * @param {function(*, *):void=} setHook A function to run after the
    *     property is set, but before the propertyChange event is fired.
    * @return {function(*):void} The function to use as a setter.
    */
-  function getSetter(name, kind, opt_setHook) {
+  function getSetter(name, kind, setHook) {
     let attributeName;
     switch (kind) {
       case PropertyKind.JS:
@@ -139,8 +139,8 @@ var cr = cr || function(global) {
           const oldValue = this[name];
           if (value !== oldValue) {
             this[privateName] = value;
-            if (opt_setHook) {
-              opt_setHook.call(this, value, oldValue);
+            if (setHook) {
+              setHook.call(this, value, oldValue);
             }
             dispatchPropertyChange(this, name, value, oldValue);
           }
@@ -156,8 +156,8 @@ var cr = cr || function(global) {
             } else {
               this.setAttribute(attributeName, value);
             }
-            if (opt_setHook) {
-              opt_setHook.call(this, value, oldValue);
+            if (setHook) {
+              setHook.call(this, value, oldValue);
             }
             dispatchPropertyChange(this, name, value, oldValue);
           }
@@ -173,8 +173,8 @@ var cr = cr || function(global) {
             } else {
               this.removeAttribute(attributeName);
             }
-            if (opt_setHook) {
-              opt_setHook.call(this, value, oldValue);
+            if (setHook) {
+              setHook.call(this, value, oldValue);
             }
             dispatchPropertyChange(this, name, value, oldValue);
           }
@@ -183,43 +183,7 @@ var cr = cr || function(global) {
 
     // TODO(dbeam): replace with assertNotReached() in assert.js when I can coax
     // the browser/unit tests to preprocess this file through grit.
-    throw 'not reached';
-  }
-
-  /**
-   * Defines a property on an object. When the setter changes the value a
-   * property change event with the type {@code name + 'Change'} is fired.
-   * @param {!Object} obj The object to define the property for.
-   * @param {string} name The name of the property.
-   * @param {PropertyKind=} opt_kind What kind of underlying storage to use.
-   * @param {function(*, *):void=} opt_setHook A function to run after the
-   *     property is set, but before the propertyChange event is fired.
-   *
-   * TODO(crbug.com/425829): This function makes use of deprecated getter or
-   * setter functions.
-   * @suppress {deprecated}
-   */
-  function defineProperty(obj, name, opt_kind, opt_setHook) {
-    if (typeof obj === 'function') {
-      obj = obj.prototype;
-    }
-
-    const kind = /** @type {PropertyKind} */ (opt_kind || PropertyKind.JS);
-
-    // TODO(crbug.com/425829): Remove above suppression once we no longer use
-    // deprecated functions lookupGetter, defineGetter, lookupSetter, and
-    // defineSetter.
-    // eslint-disable-next-line no-restricted-properties
-    if (!obj.__lookupGetter__(name)) {
-      // eslint-disable-next-line no-restricted-properties
-      obj.__defineGetter__(name, getGetter(name, kind));
-    }
-
-    // eslint-disable-next-line no-restricted-properties
-    if (!obj.__lookupSetter__(name)) {
-      // eslint-disable-next-line no-restricted-properties
-      obj.__defineSetter__(name, getSetter(name, kind, opt_setHook));
-    }
+    throw new Error('not reached');
   }
 
   /**
@@ -227,16 +191,14 @@ var cr = cr || function(global) {
    * Object.defineProperty(). When the setter changes the value a property
    * change event with the type {@code name + 'Change'} is fired.
    * @param {string} name The name of the property.
-   * @param {PropertyKind=} opt_kind What kind of underlying storage to use.
-   * @param {function(*, *):void=} opt_setHook A function to run after the
+   * @param {PropertyKind=} kind What kind of underlying storage to use.
+   * @param {function(*, *):void=} setHook A function to run after the
    *     property is set, but before the propertyChange event is fired.
    */
-  function getPropertyDescriptor(name, opt_kind, opt_setHook) {
-    const kind = /** @type {PropertyKind} */ (opt_kind || PropertyKind.JS);
-
+  function getPropertyDescriptor(name, kind = PropertyKind.JS, setHook) {
     const desc = {
       get: getGetter(name, kind),
-      set: getSetter(name, kind, opt_setHook),
+      set: getSetter(name, kind, setHook),
     };
     return desc;
   }
@@ -257,17 +219,16 @@ var cr = cr || function(global) {
    * Dispatches a simple event on an event target.
    * @param {!EventTarget} target The event target to dispatch the event on.
    * @param {string} type The type of the event.
-   * @param {boolean=} opt_bubbles Whether the event bubbles or not.
-   * @param {boolean=} opt_cancelable Whether the default action of the event
+   * @param {boolean=} bubbles Whether the event bubbles or not.
+   * @param {boolean=} cancelable Whether the default action of the event
    *     can be prevented. Default is true.
    * @return {boolean} If any of the listeners called {@code preventDefault}
    *     during the dispatch this will return false.
    */
-  function dispatchSimpleEvent(target, type, opt_bubbles, opt_cancelable) {
-    const e = new Event(type, {
-      bubbles: opt_bubbles,
-      cancelable: opt_cancelable === undefined || opt_cancelable
-    });
+  function dispatchSimpleEvent(target, type, bubbles, cancelable) {
+    const e = new Event(
+        type,
+        {bubbles: bubbles, cancelable: cancelable === undefined || cancelable});
     return target.dispatchEvent(e);
   }
 
@@ -433,7 +394,6 @@ var cr = cr || function(global) {
   return {
     addSingletonGetter: addSingletonGetter,
     define: define,
-    defineProperty: defineProperty,
     getPropertyDescriptor: getPropertyDescriptor,
     dispatchPropertyChange: dispatchPropertyChange,
     dispatchSimpleEvent: dispatchSimpleEvent,
@@ -461,7 +421,7 @@ var cr = cr || function(global) {
       let returnValue = false;
       // TODO(https://crbug.com/1118190): grit conditionals do not work in many
       // WebUI tests.
-      // <if expr="chromeos">
+      // <if expr="chromeos_ash">
       returnValue = true;
       // </if>
       return returnValue;
@@ -472,7 +432,7 @@ var cr = cr || function(global) {
       let returnValue = false;
       // TODO(https://crbug.com/1118190): grit conditionals do not work in many
       // WebUI tests.
-      // <if expr="lacros">
+      // <if expr="chromeos_lacros">
       returnValue = true;
       // </if>
       return returnValue;
@@ -491,6 +451,6 @@ var cr = cr || function(global) {
     /** Whether this is on iOS. */
     get isIOS() {
       return /CriOS/.test(navigator.userAgent);
-    }
+    },
   };
 }(this);

@@ -114,10 +114,19 @@ export class ClientRenderer {
     if (this.clipboardTextarea) {
       this.clipboardTextarea.onblur = this.hideClipboard_.bind(this);
     }
-    var clipboardButtons = document.getElementsByClassName('copy-button');
-    if (clipboardButtons) {
-      for (var i = 0; i < clipboardButtons.length; i++) {
-        clipboardButtons[i].onclick = this.copyToClipboard_.bind(this);
+
+    var copyPropertiesButtons =
+        document.getElementsByClassName('copy-properties-button');
+    if (copyPropertiesButtons) {
+      for (var i = 0; i < copyPropertiesButtons.length; i++) {
+        copyPropertiesButtons[i].onclick = this.copyProperties_.bind(this);
+      }
+    }
+
+    var copyLogButtons = document.getElementsByClassName('copy-log-button');
+    if (copyLogButtons) {
+      for (var i = 0; i < copyLogButtons.length; i++) {
+        copyLogButtons[i].onclick = this.copyLog_.bind(this);
       }
     }
 
@@ -239,8 +248,14 @@ export class ClientRenderer {
       player.destructed = true;
     }
     if ([
-          'url', 'frame_url', 'frame_title', 'audio_codec_name',
-          'video_codec_name', 'width', 'height', 'event'
+          'url',
+          'frame_url',
+          'frame_title',
+          'audio_codec_name',
+          'video_codec_name',
+          'width',
+          'height',
+          'event',
         ].includes(key)) {
       this.redrawPlayerList_(players);
     }
@@ -532,6 +547,19 @@ export class ClientRenderer {
     downloadLog(JSON.stringify(strippedPlayers, null, 2));
   }
 
+  copyLog_() {
+    if (!this.selectedPlayer) {
+      return;
+    }
+
+    // Copy both properties and events for convenience since both are useful
+    // in bug reports.
+    var p = this.selectedPlayer;
+    var playerLog = {properties: p.properties, events: p.allEvents};
+
+    this.showClipboard(JSON.stringify(playerLog, null, 2));
+  }
+
   showClipboard(string) {
     this.clipboardTextarea.value = string;
     this.clipboardDialog.showModal();
@@ -545,7 +573,7 @@ export class ClientRenderer {
     }
   }
 
-  copyToClipboard_() {
+  copyProperties_() {
     if (!this.selectedPlayer && !this.selectedAudioCompontentData) {
       return;
     }
@@ -600,12 +628,13 @@ export class ClientRenderer {
   createCdmRow_(cdm) {
     const template = $('cdm-row');
     const span = template.content.querySelectorAll('span');
-    span[0].textContent = cdm.key_system;
-    span[1].textContent = cdm.robustness;
-    span[2].textContent = cdm.name;
-    span[3].textContent = cdm.version;
-    span[4].textContent = cdm.path;
-    span[5].textContent = JSON.stringify(cdm.capability);
+    span[0].textContent = 'Key System: ' + cdm.key_system;
+    span[1].textContent = 'Robustness: ' + cdm.robustness;
+    span[2].textContent = 'Name: ' + cdm.name;
+    span[3].textContent = 'Version: ' + cdm.version;
+    span[4].textContent = 'Path: ' + cdm.path;
+    span[5].textContent = 'Status: ' + cdm.status;
+    span[6].textContent = 'Capabilities: ' + JSON.stringify(cdm.capability);
     return document.importNode(template.content, true);
   }
 }

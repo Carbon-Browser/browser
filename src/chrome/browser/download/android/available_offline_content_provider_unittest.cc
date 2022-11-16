@@ -9,6 +9,7 @@
 #include <utility>
 
 #include "base/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_util.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
@@ -24,6 +25,7 @@
 #include "components/offline_items_collection/core/test_support/mock_offline_content_provider.h"
 #include "components/offline_pages/core/offline_page_feature.h"
 #include "components/prefs/pref_service.h"
+#include "content/public/browser/render_process_host.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/gfx/image/image_unittest_util.h"
@@ -69,8 +71,7 @@ OfflineItem SuggestedOfflinePageItem() {
   item.description = "snippet";
   // Using Time::Now() isn't ideal, but this should result in "4 hours ago"
   // even if the test takes 1 hour to run.
-  item.creation_time =
-      base::Time::Now() - base::TimeDelta::FromMinutes(60 * 3.5);
+  item.creation_time = base::Time::Now() - base::Minutes(60 * 3.5);
   item.last_accessed_time = base::Time::Now();
   item.attribution = "attribution";
   return item;
@@ -160,16 +161,14 @@ class AvailableOfflineContentTest : public ChromeRenderViewHostTestHarness {
 
   std::unique_ptr<base::test::ScopedFeatureList> scoped_feature_list_ =
       std::make_unique<base::test::ScopedFeatureList>();
-  OfflineContentAggregator* aggregator_;
+  raw_ptr<OfflineContentAggregator> aggregator_;
   std::unique_ptr<offline_items_collection::MockOfflineContentProvider>
       content_provider_;
   std::unique_ptr<AvailableOfflineContentProvider> provider_;
 };
 
 TEST_F(AvailableOfflineContentTest, NoContent) {
-  bool list_visible_by_prefs;
-  std::vector<chrome::mojom::AvailableOfflineContentPtr> suggestions;
-  std::tie(list_visible_by_prefs, suggestions) = ListAndWait();
+  auto [list_visible_by_prefs, suggestions] = ListAndWait();
 
   EXPECT_TRUE(suggestions.empty());
   EXPECT_TRUE(list_visible_by_prefs);
@@ -184,9 +183,7 @@ TEST_F(AvailableOfflineContentTest, TooFewInterestingItems) {
                                IncompleteItem(), DangerousItem()});
 
   // Call List().
-  bool list_visible_by_prefs;
-  std::vector<chrome::mojom::AvailableOfflineContentPtr> suggestions;
-  std::tie(list_visible_by_prefs, suggestions) = ListAndWait();
+  auto [list_visible_by_prefs, suggestions] = ListAndWait();
 
   // As interesting items are below the minimum to show, nothing should be
   // reported.
@@ -204,9 +201,7 @@ TEST_F(AvailableOfflineContentTest, FourInterestingItems) {
       {{SuggestedOfflinePageItem().id, TestThumbnail()}});
 
   // Call List().
-  bool list_visible_by_prefs;
-  std::vector<chrome::mojom::AvailableOfflineContentPtr> suggestions;
-  std::tie(list_visible_by_prefs, suggestions) = ListAndWait();
+  auto [list_visible_by_prefs, suggestions] = ListAndWait();
 
   // Check that the right suggestions have been received in order.
   EXPECT_EQ(3ul, suggestions.size());
@@ -250,9 +245,7 @@ TEST_F(AvailableOfflineContentTest, ListVisibilityChanges) {
   profile()->GetPrefs()->SetBoolean(feed::prefs::kArticlesListVisible, false);
 
   // Call List().
-  bool list_visible_by_prefs;
-  std::vector<chrome::mojom::AvailableOfflineContentPtr> suggestions;
-  std::tie(list_visible_by_prefs, suggestions) = ListAndWait();
+  auto [list_visible_by_prefs, suggestions] = ListAndWait();
 
   // Check that suggestions have been received and the list is not visible.
   EXPECT_EQ(3ul, suggestions.size());

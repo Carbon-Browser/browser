@@ -141,7 +141,7 @@ to avoid crashes inside gtk.
 `NSS_DISABLE_ARENA_FREE_LIST=1` and `NSS_DISABLE_UNLOAD=1` are required as well.
 
 When filing a bug found by AddressSanitizer, please add a label
-`Stability-AddressSanitizer`.
+`Stability-Memory-AddressSanitizer`.
 
 ## ASan runtime options
 
@@ -209,13 +209,9 @@ If the above step fails or to run stuff without Chromium testing script (ex.
 ContentShell.apk, or any third party apk or binary), device setup is needed:
 ```shell
 tools/android/asan/third_party/asan_device_setup.sh \
-    --lib third_party/llvm-build/Release+Asserts/lib/clang/*/lib/linux/libclang_rt.asan-arm-android.so
+    --lib third_party/android_ndk/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/*/lib/linux
 # wait a few seconds for the device to reload
 ```
-**Note:** You need to replace `-arm-` part in `libclang_rt.asan-arm-android.so`
-in the command above with the corresponding architecture of the android device
-(e.g `-i686-` if you are running an `x86` emulator image).
-
 It only needs to be run once per device. It is safe to run it multiple times.
 Examine the output to ensure that setup was successful (you may need to run
 `adb disable-verity` and restart the device first). When this is done, the

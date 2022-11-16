@@ -9,11 +9,13 @@
 
 #include "android_webview/browser/aw_apk_type.h"
 #include "android_webview/browser/aw_browser_context.h"
+#include "android_webview/browser/aw_enterprise_authentication_app_link_manager.h"
 #include "android_webview/browser/aw_feature_list_creator.h"
 #include "android_webview/browser/lifecycle/aw_contents_lifecycle_notifier.h"
 #include "android_webview/browser/safe_browsing/aw_safe_browsing_allowlist_manager.h"
 #include "android_webview/browser/safe_browsing/aw_safe_browsing_ui_manager.h"
 #include "base/feature_list.h"
+#include "base/memory/raw_ptr.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_service.h"
 #include "components/safe_browsing/android/remote_database_manager.h"
@@ -29,6 +31,7 @@ namespace prefs {
 // Used for Kerberos authentication.
 extern const char kAuthAndroidNegotiateAccountType[];
 extern const char kAuthServerAllowlist[];
+extern const char kEnterpriseAuthAppLinkPolicy[];
 
 }  // namespace prefs
 
@@ -38,6 +41,10 @@ class VisibilityMetricsLogger;
 class AwBrowserProcess {
  public:
   AwBrowserProcess(AwFeatureListCreator* aw_feature_list_creator);
+
+  AwBrowserProcess(const AwBrowserProcess&) = delete;
+  AwBrowserProcess& operator=(const AwBrowserProcess&) = delete;
+
   ~AwBrowserProcess();
 
   static AwBrowserProcess* GetInstance();
@@ -67,6 +74,9 @@ class AwBrowserProcess {
 
   static void RegisterNetworkContextLocalStatePrefs(
       PrefRegistrySimple* pref_registry);
+  static void RegisterEnterpriseAuthenticationAppLinkPolicyPref(
+      PrefRegistrySimple* pref_registry);
+
   // Constructs HttpAuthDynamicParams based on |local_state_|.
   network::mojom::HttpAuthDynamicParamsPtr CreateHttpAuthDynamicParams();
 
@@ -74,6 +84,9 @@ class AwBrowserProcess {
 
   static void TriggerMinidumpUploading();
   static ApkType GetApkType();
+
+  EnterpriseAuthenticationAppLinkManager*
+  GetEnterpriseAuthenticationAppLinkManager();
 
  private:
   void CreateSafeBrowsingUIManager();
@@ -89,7 +102,7 @@ class AwBrowserProcess {
   // If non-null, this object holds a pref store that will be taken by
   // AwBrowserProcess to create the |local_state_|.
   // The AwFeatureListCreator is owned by AwMainDelegate.
-  AwFeatureListCreator* aw_feature_list_creator_;
+  raw_ptr<AwFeatureListCreator> aw_feature_list_creator_;
 
   std::unique_ptr<PrefService> local_state_;
 
@@ -113,8 +126,7 @@ class AwBrowserProcess {
 
   std::unique_ptr<VisibilityMetricsLogger> visibility_metrics_logger_;
   std::unique_ptr<AwContentsLifecycleNotifier> aw_contents_lifecycle_notifier_;
-
-  DISALLOW_COPY_AND_ASSIGN(AwBrowserProcess);
+  std::unique_ptr<EnterpriseAuthenticationAppLinkManager> app_link_manager_;
 };
 
 }  // namespace android_webview

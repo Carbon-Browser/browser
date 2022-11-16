@@ -4,6 +4,7 @@
 
 #include "components/optimization_guide/core/optimization_guide_util.h"
 
+#include "components/optimization_guide/core/optimization_guide_test_util.h"
 #include "components/optimization_guide/proto/loading_predictor_metadata.pb.h"
 #include "testing/gtest/include/gtest/gtest.h"
 

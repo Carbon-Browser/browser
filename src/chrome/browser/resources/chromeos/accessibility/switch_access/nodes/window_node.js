@@ -29,7 +29,7 @@ export class WindowRootNode extends BasicRootNode {
    */
   static buildTree(windowNode) {
     const root = new WindowRootNode(windowNode);
-    const childConstructor = (node) => BasicNode.create(node, root);
+    const childConstructor = node => BasicNode.create(node, root);
 
     BasicRootNode.findAndSetChildren(root, childConstructor);
     return root;
@@ -38,5 +38,5 @@ export class WindowRootNode extends BasicRootNode {
 
 BasicRootNode.builders.push({
   predicate: rootNode => SwitchAccessPredicate.isWindow(rootNode),
-  builder: WindowRootNode.buildTree
+  builder: WindowRootNode.buildTree,
 });

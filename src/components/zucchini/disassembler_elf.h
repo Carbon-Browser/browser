@@ -13,6 +13,7 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "components/zucchini/address_translator.h"
 #include "components/zucchini/buffer_view.h"
 #include "components/zucchini/disassembler.h"
@@ -63,6 +64,7 @@ struct AArch64ReferenceType {
 };
 
 struct Elf32Traits {
+  static constexpr uint16_t kVersion = 1;
   static constexpr Bitness kBitness = kBit32;
   static constexpr elf::FileClass kIdentificationClass = elf::ELFCLASS32;
   using Elf_Shdr = elf::Elf32_Shdr;
@@ -94,6 +96,7 @@ struct ElfAArch32Traits : public Elf32Traits {
 };
 
 struct Elf64Traits {
+  static constexpr uint16_t kVersion = 1;
   static constexpr Bitness kBitness = kBit64;
   static constexpr elf::FileClass kIdentificationClass = elf::ELFCLASS64;
   using Elf_Shdr = elf::Elf64_Shdr;
@@ -151,6 +154,7 @@ template <class TRAITS>
 class DisassemblerElf : public Disassembler {
  public:
   using Traits = TRAITS;
+  static constexpr uint16_t kVersion = Traits::kVersion;
   // Applies quick checks to determine whether |image| *may* point to the start
   // of an executable. Returns true iff the check passes.
   static bool QuickDetect(ConstBufferView image);
@@ -207,15 +211,15 @@ class DisassemblerElf : public Disassembler {
   void ParseSections();
 
   // Main ELF header.
-  const typename Traits::Elf_Ehdr* header_ = nullptr;
+  raw_ptr<const typename Traits::Elf_Ehdr> header_ = nullptr;
 
   // Section header table, ordered by section id.
   elf::Elf32_Half sections_count_ = 0;
-  const typename Traits::Elf_Shdr* sections_ = nullptr;
+  raw_ptr<const typename Traits::Elf_Shdr> sections_ = nullptr;
 
   // Program header table.
   elf::Elf32_Half segments_count_ = 0;
-  const typename Traits::Elf_Phdr* segments_ = nullptr;
+  raw_ptr<const typename Traits::Elf_Phdr> segments_ = nullptr;
 
   // Bit fields to store the role each section may play.
   std::vector<int> section_judgements_;
@@ -234,7 +238,7 @@ class DisassemblerElf : public Disassembler {
   std::vector<const typename Traits::Elf_Shdr*> exec_headers_;
 
   // Sorted file offsets of abs32 locations.
-  std::vector<offset_t> abs32_locations_;
+  std::deque<offset_t> abs32_locations_;
 };
 
 // Disassembler for ELF with Intel architectures.
@@ -296,12 +300,16 @@ class DisassemblerElfArm : public DisassemblerElf<TRAITS> {
   std::unique_ptr<ReferenceReader> MakeReadAbs32(offset_t lo, offset_t hi);
   std::unique_ptr<ReferenceWriter> MakeWriteAbs32(MutableBufferView image);
 
-  // Specialized Read/Write functions for different rel32 address types.
+  // Specialized Read/Write/Mix functions for different rel32 address types.
   template <class ADDR_TRAITS>
   std::unique_ptr<ReferenceReader> MakeReadRel32(offset_t lower,
                                                  offset_t upper);
   template <class ADDR_TRAITS>
   std::unique_ptr<ReferenceWriter> MakeWriteRel32(MutableBufferView image);
+
+  template <class ADDR_TRAITS>
+  std::unique_ptr<ReferenceMixer> MakeMixRel32(ConstBufferView old_image,
+                                               ConstBufferView new_image);
 
  protected:
   // Sorted file offsets of rel32 locations for each rel32 address type.

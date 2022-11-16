@@ -7,9 +7,7 @@
 
 #include <memory>
 
-#include "base/compiler_specific.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
 #include "chrome/browser/chrome_content_browser_client_parts.h"
 #include "components/download/public/common/quarantine_connection.h"
 #include "content/public/browser/browser_or_resource_context.h"
@@ -46,6 +44,12 @@ class ChromeContentBrowserClientExtensionsPart
     : public ChromeContentBrowserClientParts {
  public:
   ChromeContentBrowserClientExtensionsPart();
+
+  ChromeContentBrowserClientExtensionsPart(
+      const ChromeContentBrowserClientExtensionsPart&) = delete;
+  ChromeContentBrowserClientExtensionsPart& operator=(
+      const ChromeContentBrowserClientExtensionsPart&) = delete;
+
   ~ChromeContentBrowserClientExtensionsPart() override;
 
   // Corresponds to the ChromeContentBrowserClient function of the same name.
@@ -53,7 +57,7 @@ class ChromeContentBrowserClientExtensionsPart
   static bool ShouldCompareEffectiveURLsForSiteInstanceSelection(
       content::BrowserContext* browser_context,
       content::SiteInstance* candidate_site_instance,
-      bool is_main_frame,
+      bool is_outermost_main_frame,
       const GURL& candidate_url,
       const GURL& destination_url);
   static bool ShouldUseProcessPerSite(Profile* profile, const GURL& site_url);
@@ -62,18 +66,14 @@ class ChromeContentBrowserClientExtensionsPart
   static bool DoesSiteRequireDedicatedProcess(
       content::BrowserContext* browser_context,
       const GURL& effective_site_url);
-  static bool ShouldLockProcessToSite(content::BrowserContext* browser_context,
-                                      const GURL& effective_site_url);
   static bool CanCommitURL(content::RenderProcessHost* process_host,
                            const GURL& url);
   static bool IsSuitableHost(Profile* profile,
                              content::RenderProcessHost* process_host,
                              const GURL& site_url);
-  static bool ShouldTryToUseExistingProcessHost(Profile* profile,
-                                                const GURL& url);
   static size_t GetProcessCountToIgnoreForLimit();
-  static bool ShouldSubframesTryToReuseExistingProcess(
-      content::RenderFrameHost* main_frame);
+  static bool ShouldEmbeddedFramesTryToReuseExistingProcess(
+      content::RenderFrameHost* outermost_main_frame);
   static bool ShouldSwapBrowsingInstancesForNavigation(
       content::SiteInstance* site_instance,
       const GURL& current_effective_url,
@@ -133,8 +133,6 @@ class ChromeContentBrowserClientExtensionsPart
       service_manager::BinderRegistry* registry,
       blink::AssociatedInterfaceRegistry* associated_registry,
       content::RenderProcessHost* render_process_host) override;
-
-  DISALLOW_COPY_AND_ASSIGN(ChromeContentBrowserClientExtensionsPart);
 };
 
 }  // namespace extensions

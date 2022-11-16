@@ -8,16 +8,16 @@
 #include <memory>
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "media/base/video_frame.h"
+#include "media/cast/cast_config.h"
 #include "media/cast/constants.h"
-#include "media/cast/net/cast_transport_config.h"
 
 namespace media {
 namespace cast {
 
 class CastEnvironment;
+struct EncodedFrame;
 
 class VideoDecoder {
  public:
@@ -32,6 +32,10 @@ class VideoDecoder {
 
   VideoDecoder(const scoped_refptr<CastEnvironment>& cast_environment,
                Codec codec);
+
+  VideoDecoder(const VideoDecoder&) = delete;
+  VideoDecoder& operator=(const VideoDecoder&) = delete;
+
   virtual ~VideoDecoder();
 
   // Returns STATUS_INITIALIZED if the decoder was successfully constructed.  If
@@ -56,8 +60,6 @@ class VideoDecoder {
 
   const scoped_refptr<CastEnvironment> cast_environment_;
   scoped_refptr<ImplBase> impl_;
-
-  DISALLOW_COPY_AND_ASSIGN(VideoDecoder);
 };
 
 }  // namespace cast

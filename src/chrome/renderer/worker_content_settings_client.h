@@ -5,7 +5,6 @@
 #ifndef CHROME_RENDERER_WORKER_CONTENT_SETTINGS_CLIENT_H_
 #define CHROME_RENDERER_WORKER_CONTENT_SETTINGS_CLIENT_H_
 
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "components/content_settings/common/content_settings_manager.mojom.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -26,6 +25,10 @@ struct RendererContentSettingRules;
 class WorkerContentSettingsClient : public blink::WebContentSettingsClient {
  public:
   explicit WorkerContentSettingsClient(content::RenderFrame* render_frame);
+
+  WorkerContentSettingsClient& operator=(const WorkerContentSettingsClient&) =
+      delete;
+
   ~WorkerContentSettingsClient() override;
 
   // WebContentSettingsClient overrides.
@@ -51,7 +54,7 @@ class WorkerContentSettingsClient : public blink::WebContentSettingsClient {
   url::Origin top_frame_origin_;
   bool allow_running_insecure_content_;
   const int32_t render_frame_id_;
-  const RendererContentSettingRules* content_setting_rules_;
+  std::unique_ptr<RendererContentSettingRules> content_setting_rules_;
 
   // Because instances of this class are created on the parent's thread (i.e,
   // on the renderer main thread or on the thread of the parent worker), it is
@@ -62,8 +65,6 @@ class WorkerContentSettingsClient : public blink::WebContentSettingsClient {
       pending_content_settings_manager_;
   mutable mojo::Remote<content_settings::mojom::ContentSettingsManager>
       content_settings_manager_;
-
-  DISALLOW_ASSIGN(WorkerContentSettingsClient);
 };
 
 #endif  // CHROME_RENDERER_WORKER_CONTENT_SETTINGS_CLIENT_H_

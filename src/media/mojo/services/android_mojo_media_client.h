@@ -7,8 +7,7 @@
 
 #include <memory>
 
-#include "base/macros.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "media/mojo/services/mojo_media_client.h"
 
 namespace media {
@@ -16,6 +15,10 @@ namespace media {
 class AndroidMojoMediaClient final : public MojoMediaClient {
  public:
   AndroidMojoMediaClient();
+
+  AndroidMojoMediaClient(const AndroidMojoMediaClient&) = delete;
+  AndroidMojoMediaClient& operator=(const AndroidMojoMediaClient&) = delete;
+
   ~AndroidMojoMediaClient() override;
 
   // MojoMediaClient implementation.
@@ -24,9 +27,6 @@ class AndroidMojoMediaClient final : public MojoMediaClient {
 
   std::unique_ptr<CdmFactory> CreateCdmFactory(
       mojom::FrameInterfaceFactory* frame_interfaces) override;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(AndroidMojoMediaClient);
 };
 
 }  // namespace media

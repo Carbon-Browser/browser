@@ -5,27 +5,26 @@
 #ifndef CHROME_BROWSER_SYNC_TEST_INTEGRATION_TWO_CLIENT_WEB_APPS_INTEGRATION_TEST_BASE_H_
 #define CHROME_BROWSER_SYNC_TEST_INTEGRATION_TWO_CLIENT_WEB_APPS_INTEGRATION_TEST_BASE_H_
 
-#include "base/test/scoped_feature_list.h"
-#include "chrome/browser/sync/test/integration/sync_test.h"
-#include "chrome/browser/ui/views/web_apps/web_app_integration_browsertest_base.h"
+#include "chrome/browser/sync/test/integration/web_apps_sync_test_base.h"
+#include "chrome/browser/ui/views/web_apps/web_app_integration_test_driver.h"
 #include "content/public/test/browser_test.h"
 
 namespace base {
 class CommandLine;
 }
 
-namespace web_app {
+namespace web_app::integration_tests {
 
 class TwoClientWebAppsIntegrationTestBase
-    : public SyncTest,
-      public WebAppIntegrationBrowserTestBase::TestDelegate {
+    : public ::web_app::WebAppsSyncTestBase,
+      public WebAppIntegrationTestDriver::TestDelegate {
  public:
   TwoClientWebAppsIntegrationTestBase();
 
   // WebAppIntegrationBrowserTestBase::TestDelegate:
   Browser* CreateBrowser(Profile* profile) override;
   void AddBlankTabAndShow(Browser* browser) override;
-  net::EmbeddedTestServer* EmbeddedTestServer() override;
+  const net::EmbeddedTestServer* EmbeddedTestServer() const override;
   std::vector<Profile*> GetAllProfiles() override;
   bool IsSyncTest() override;
   void SyncTurnOff() override;
@@ -41,10 +40,9 @@ class TwoClientWebAppsIntegrationTestBase
   void TearDownOnMainThread() override;
   void SetUpCommandLine(base::CommandLine* command_line) override;
 
-  WebAppIntegrationBrowserTestBase helper_;
-  base::test::ScopedFeatureList scoped_feature_list_;
+  WebAppIntegrationTestDriver helper_;
 };
 
-}  // namespace web_app
+}  // namespace web_app::integration_tests
 
 #endif  // CHROME_BROWSER_SYNC_TEST_INTEGRATION_TWO_CLIENT_WEB_APPS_INTEGRATION_TEST_BASE_H_

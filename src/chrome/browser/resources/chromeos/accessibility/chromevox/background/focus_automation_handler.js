@@ -5,12 +5,14 @@
 /**
  * @fileoverview Handles automation events on the currently focused node.
  */
+import {CursorRange} from '../../common/cursors/range.js';
+import {ChromeVoxEvent} from '../common/custom_automation_event.js';
 
-goog.provide('FocusAutomationHandler');
+import {BaseAutomationHandler} from './base_automation_handler.js';
+import {ChromeVoxState} from './chromevox_state.js';
+import {Output} from './output/output.js';
+import {OutputEventType} from './output/output_types.js';
 
-goog.require('BaseAutomationHandler');
-
-goog.scope(function() {
 const AutomationEvent = chrome.automation.AutomationEvent;
 const AutomationNode = chrome.automation.AutomationNode;
 const Dir = constants.Dir;
@@ -18,17 +20,24 @@ const EventType = chrome.automation.EventType;
 const RoleType = chrome.automation.RoleType;
 const StateType = chrome.automation.StateType;
 
-
-FocusAutomationHandler = class extends BaseAutomationHandler {
+export class FocusAutomationHandler extends BaseAutomationHandler {
+  /** @private */
   constructor() {
     super(null);
 
     /** @private {AutomationNode|undefined} */
     this.previousActiveDescendant_;
 
-    chrome.automation.getDesktop((desktop) => {
+    chrome.automation.getDesktop(desktop => {
       desktop.addEventListener(EventType.FOCUS, this.onFocus.bind(this), false);
     });
+  }
+
+  static init() {
+    if (FocusAutomationHandler.instance) {
+      throw 'Error: Trying to create two instances of singleton FocusAutomationHandler';
+    }
+    FocusAutomationHandler.instance = new FocusAutomationHandler();
   }
 
   /**
@@ -80,12 +89,12 @@ FocusAutomationHandler = class extends BaseAutomationHandler {
     Output.forceModeForNextSpeechUtterance(QueueMode.CATEGORY_FLUSH);
 
     const prev = this.previousActiveDescendant_ ?
-        cursors.Range.fromNode(this.previousActiveDescendant_) :
+        CursorRange.fromNode(this.previousActiveDescendant_) :
         ChromeVoxState.instance.currentRange;
     new Output()
         .withoutHints()
         .withRichSpeechAndBraille(
-            cursors.Range.fromNode(evt.target.activeDescendant), prev,
+            CursorRange.fromNode(evt.target.activeDescendant), prev,
             OutputEventType.NAVIGATE)
         .go();
     this.previousActiveDescendant_ = evt.target.activeDescendant;
@@ -150,6 +159,7 @@ FocusAutomationHandler = class extends BaseAutomationHandler {
       return;
     }
   }
-};
+}
 
-});  // goog.scope
+/** @type {FocusAutomationHandler} */
+FocusAutomationHandler.instance;

@@ -8,6 +8,7 @@
 
 #include "base/bind.h"
 #include "base/logging.h"
+#include "base/synchronization/waitable_event.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "base/trace_event/process_memory_dump.h"
@@ -38,21 +39,13 @@ void OnGpuMemoryBufferDestroyed(
 
 bool WillGetGmbConfigFromGpu() {
 #if defined(USE_OZONE)
-  if (features::IsUsingOzonePlatform()) {
-    // Ozone/X11 (same as non-Ozone/X11) cannot get buffer formats in the
-    // browser process and requires gpu initialization to be done before it can
-    // determine what formats gmb can use. This limitation comes from the
-    // requirement to have GLX bindings initialized. The buffer formats will be
-    // passed through gpu extra info.
-    return ui::OzonePlatform::GetInstance()
-        ->GetPlatformProperties()
-        .fetch_buffer_formats_for_gmb_on_gpu;
-  }
-#endif
-#if defined(USE_X11)
-  // non-Ozone/X11 must always get native configs on gpu.
-  DCHECK(!features::IsUsingOzonePlatform());
-  return true;
+  // Ozone/X11 cannot get buffer formats in the browser process and requires gpu
+  // initialization to be done before it can determine what formats gmb can use.
+  // This limitation comes from the requirement to have GLX bindings
+  // initialized. The buffer formats will be passed through gpu extra info.
+  return ui::OzonePlatform::GetInstance()
+      ->GetPlatformProperties()
+      .fetch_buffer_formats_for_gmb_on_gpu;
 #else
   return false;
 #endif
@@ -271,7 +264,7 @@ HostGpuMemoryBufferManager::CreateGpuMemoryBuffer(
       // TileManager can set to cancel this wait.
       base::WaitableEvent* waitables[] = {&wait_event, shutdown_event};
       size_t index =
-          base::WaitableEvent::WaitMany(waitables, base::size(waitables));
+          base::WaitableEvent::WaitMany(waitables, std::size(waitables));
       if (index == 1)
         cancelled->data = true;
     } else {

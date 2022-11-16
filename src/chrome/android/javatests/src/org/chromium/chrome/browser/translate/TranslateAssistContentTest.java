@@ -39,7 +39,6 @@ import java.util.concurrent.TimeoutException;
  */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @Batch(TranslateAssistContentTest.TRANSLATE_BATCH_NAME)
-@Batch.SplitByFeature
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
 public class TranslateAssistContentTest {
     public static final String TRANSLATE_BATCH_NAME = "translate_batch_name";
@@ -62,7 +61,7 @@ public class TranslateAssistContentTest {
      * the changes to make the translate service mockable and remove the internet requirement.
      */
     private boolean shouldSkipDueToNetworkService() {
-        return !ChromeFeatureList.isEnabled("NetworkServiceInProcess");
+        return !ChromeFeatureList.isEnabled("NetworkServiceInProcess2");
     }
 
     @Before
@@ -94,6 +93,7 @@ public class TranslateAssistContentTest {
     @MediumTest
     @Restriction(Restriction.RESTRICTION_TYPE_INTERNET)
     @Features.EnableFeatures({ChromeFeatureList.TRANSLATE_ASSIST_CONTENT})
+    @Features.DisableFeatures({ChromeFeatureList.TRANSLATE_TFLITE})
     public void testAssistContentTranslatablePage()
             throws TimeoutException, ExecutionException, JSONException {
         if (shouldSkipDueToNetworkService()) return;
@@ -122,6 +122,7 @@ public class TranslateAssistContentTest {
     @MediumTest
     @Restriction(Restriction.RESTRICTION_TYPE_INTERNET)
     @Features.EnableFeatures({ChromeFeatureList.TRANSLATE_ASSIST_CONTENT})
+    @Features.DisableFeatures({ChromeFeatureList.TRANSLATE_TFLITE})
     public void testAssistContentTranslatedPage()
             throws TimeoutException, ExecutionException, JSONException {
         if (shouldSkipDueToNetworkService()) return;

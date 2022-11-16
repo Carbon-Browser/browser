@@ -47,7 +47,12 @@ class BrowserURLLoaderThrottle::CheckerOnIO
         real_time_lookup_enabled_(real_time_lookup_enabled),
         can_rt_check_subresource_url_(can_rt_check_subresource_url),
         can_check_db_(can_check_db),
-        url_lookup_service_(url_lookup_service) {}
+        url_lookup_service_(url_lookup_service) {
+    content::WebContents* contents = web_contents_getter_.Run();
+    if (!!contents) {
+      last_committed_url_ = contents->GetLastCommittedURL();
+    }
+  }
 
   // Starts the initial safe browsing check. This check and future checks may be
   // skipped after checking with the UrlCheckerDelegate.
@@ -63,7 +68,6 @@ class BrowserURLLoaderThrottle::CheckerOnIO
         std::move(delegate_getter_).Run();
     skip_checks_ =
         !url_checker_delegate ||
-        !url_checker_delegate->GetDatabaseManager()->IsSupported() ||
         url_checker_delegate->ShouldSkipRequestCheck(
             url, frame_tree_node_id_,
             content::ChildProcessHost::kInvalidUniqueID /* render_process_id */,
@@ -81,7 +85,7 @@ class BrowserURLLoaderThrottle::CheckerOnIO
         url_checker_delegate, web_contents_getter_,
         content::ChildProcessHost::kInvalidUniqueID, MSG_ROUTING_NONE,
         frame_tree_node_id_, real_time_lookup_enabled_,
-        can_rt_check_subresource_url_, can_check_db_,
+        can_rt_check_subresource_url_, can_check_db_, last_committed_url_,
         content::GetUIThreadTaskRunner({}), url_lookup_service_,
         WebUIInfoSingleton::GetInstance());
 
@@ -152,6 +156,7 @@ class BrowserURLLoaderThrottle::CheckerOnIO
   bool real_time_lookup_enabled_ = false;
   bool can_rt_check_subresource_url_ = false;
   bool can_check_db_ = true;
+  GURL last_committed_url_;
   base::WeakPtr<RealTimeUrlLookupServiceBase> url_lookup_service_;
 };
 

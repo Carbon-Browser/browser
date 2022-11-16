@@ -9,13 +9,17 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "components/safe_browsing/content/browser/base_ui_manager.h"
 #include "components/safe_browsing/core/browser/db/v4_protocol_manager_util.h"
 #include "components/security_interstitials/content/security_interstitial_page.h"
 #include "components/security_interstitials/core/base_safe_browsing_error_ui.h"
 #include "components/security_interstitials/core/metrics_helper.h"
 #include "url/gurl.h"
+
+namespace content {
+class NavigationHandle;
+}
 
 namespace security_interstitials {
 class SettingsPageHelper;
@@ -33,6 +37,9 @@ class BaseBlockingPage
   typedef std::vector<UnsafeResource> UnsafeResourceList;
   typedef std::unordered_map<content::WebContents*, UnsafeResourceList>
       UnsafeResourceMap;
+
+  BaseBlockingPage(const BaseBlockingPage&) = delete;
+  BaseBlockingPage& operator=(const BaseBlockingPage&) = delete;
 
   ~BaseBlockingPage() override;
 
@@ -64,6 +71,12 @@ class BaseBlockingPage
       std::unique_ptr<security_interstitials::SettingsPageHelper>
           settings_page_helper);
 
+  // If `this` was created for a post commit error page,
+  // `error_page_navigation_handle` is the navigation created for this blocking
+  // page.
+  virtual void CreatedPostCommitErrorPageNavigation(
+      content::NavigationHandle* error_page_navigation_handle) {}
+
  protected:
   // Don't instantiate this class directly, use ShowBlockingPage instead.
   BaseBlockingPage(
@@ -77,7 +90,7 @@ class BaseBlockingPage
       const BaseSafeBrowsingErrorUI::SBErrorDisplayOptions& display_options);
 
   // SecurityInterstitialPage methods:
-  void PopulateInterstitialStrings(base::Value* load_time_data) override;
+  void PopulateInterstitialStrings(base::Value::Dict& load_time_data) override;
   void OnInterstitialClosing() override {}
 
   // Called when the interstitial is going away. Intentionally do nothing in
@@ -127,7 +140,7 @@ class BaseBlockingPage
 
  private:
   // For reporting back user actions.
-  BaseUIManager* ui_manager_;
+  raw_ptr<BaseUIManager> ui_manager_;
 
   // The URL of the main frame that caused the warning.
   GURL main_frame_url_;
@@ -150,8 +163,6 @@ class BaseBlockingPage
 
   // For displaying safe browsing interstitial.
   std::unique_ptr<BaseSafeBrowsingErrorUI> sb_error_ui_;
-
-  DISALLOW_COPY_AND_ASSIGN(BaseBlockingPage);
 };
 
 }  // namespace safe_browsing

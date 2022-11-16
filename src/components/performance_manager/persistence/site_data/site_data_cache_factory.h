@@ -11,10 +11,8 @@
 #include "base/callback.h"
 #include "base/containers/flat_map.h"
 #include "base/files/file_path.h"
-#include "base/location.h"
-#include "base/macros.h"
 #include "base/sequence_checker.h"
-#include "base/sequenced_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/performance_manager/persistence/site_data/site_data_cache.h"
 #include "content/public/browser/browser_context.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -34,6 +32,10 @@ class SiteDataCacheInspector;
 class SiteDataCacheFactory {
  public:
   SiteDataCacheFactory();
+
+  SiteDataCacheFactory(const SiteDataCacheFactory&) = delete;
+  SiteDataCacheFactory& operator=(const SiteDataCacheFactory&) = delete;
+
   ~SiteDataCacheFactory();
 
   // Returns a pointer to the global instance.
@@ -89,8 +91,6 @@ class SiteDataCacheFactory {
       GUARDED_BY_CONTEXT(sequence_checker_);
 
   SEQUENCE_CHECKER(sequence_checker_);
-
-  DISALLOW_COPY_AND_ASSIGN(SiteDataCacheFactory);
 };
 
 }  // namespace performance_manager

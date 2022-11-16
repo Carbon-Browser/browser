@@ -10,6 +10,7 @@
 
 #include "base/containers/contains.h"
 #include "base/json/json_reader.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
 #include "base/values.h"
@@ -73,6 +74,15 @@ const char kExampleDictPreferenceWithoutInstallationMode[] = R"({
   },
   "bcdefghijklmnopabcdefghijklmnopa" : {
     "minimum_version_required": "1.1.0"
+  }
+})";
+
+const char kExampleDictPreferenceWithMultipleEntries[] = R"({
+  "abcdefghijklmnopabcdefghijklmnop,bcdefghijklmnopabcdefghijklmnopa" : {
+    "installation_mode": "blocked",
+  },
+  "bcdefghijklmnopabcdefghijklmnopa,cdefghijklmnopabcdefghijklmnopab" : {
+    "minimum_version_required": "2.0"
   }
 })";
 
@@ -207,13 +217,12 @@ class ExtensionManagementServiceTest : public testing::Test {
   }
 
   void SetExampleDictPref(const base::StringPiece example_dict_preference) {
-    base::JSONReader::ValueWithError result =
-        base::JSONReader::ReadAndReturnValueWithError(
-            example_dict_preference,
-            base::JSONParserOptions::JSON_ALLOW_TRAILING_COMMAS);
-    ASSERT_TRUE(result.value && result.value->is_dict())
-        << result.error_message;
-    SetPref(true, pref_names::kExtensionManagement, std::move(*result.value));
+    auto result = base::JSONReader::ReadAndReturnValueWithError(
+        example_dict_preference,
+        base::JSONParserOptions::JSON_ALLOW_TRAILING_COMMAS);
+    ASSERT_TRUE(result.has_value()) << result.error().message;
+    ASSERT_TRUE(result->is_dict());
+    SetPref(true, pref_names::kExtensionManagement, std::move(*result));
   }
 
   // Wrapper of ExtensionManagement::GetInstallationMode, |id| and
@@ -282,10 +291,10 @@ class ExtensionManagementServiceTest : public testing::Test {
       const std::string& id,
       const std::string& update_url) {
     base::DictionaryValue manifest_dict;
-    manifest_dict.SetString(manifest_keys::kName, "test");
-    manifest_dict.SetString(manifest_keys::kVersion, version);
-    manifest_dict.SetInteger(manifest_keys::kManifestVersion, 2);
-    manifest_dict.SetString(manifest_keys::kUpdateURL, update_url);
+    manifest_dict.SetStringPath(manifest_keys::kName, "test");
+    manifest_dict.SetStringPath(manifest_keys::kVersion, version);
+    manifest_dict.SetIntPath(manifest_keys::kManifestVersion, 2);
+    manifest_dict.SetStringPath(manifest_keys::kUpdateURL, update_url);
     std::string error;
     scoped_refptr<const Extension> extension =
         Extension::Create(base::FilePath(), location, manifest_dict,
@@ -300,7 +309,7 @@ class ExtensionManagementServiceTest : public testing::Test {
 
   content::BrowserTaskEnvironment task_environment_;
   std::unique_ptr<TestingProfile> profile_;
-  sync_preferences::TestingPrefServiceSyncable* pref_service_;
+  raw_ptr<sync_preferences::TestingPrefServiceSyncable> pref_service_;
   std::unique_ptr<ExtensionManagement> extension_management_;
 };
 
@@ -322,16 +331,16 @@ class ExtensionAdminPolicyTest : public ExtensionManagementServiceTest {
   void CreateHostedApp(ManifestLocation location) {
     base::DictionaryValue values;
     values.SetPath(extensions::manifest_keys::kWebURLs, base::ListValue());
-    values.SetString(extensions::manifest_keys::kLaunchWebURL,
-                     "http://www.example.com");
+    values.SetStringPath(extensions::manifest_keys::kLaunchWebURL,
+                         "http://www.example.com");
     CreateExtensionFromValues(location, &values);
   }
 
   void CreateExtensionFromValues(ManifestLocation location,
                                  base::DictionaryValue* values) {
-    values->SetString(extensions::manifest_keys::kName, "test");
-    values->SetString(extensions::manifest_keys::kVersion, "0.1");
-    values->SetInteger(extensions::manifest_keys::kManifestVersion, 2);
+    values->SetStringPath(extensions::manifest_keys::kName, "test");
+    values->SetStringPath(extensions::manifest_keys::kVersion, "0.1");
+    values->SetIntPath(extensions::manifest_keys::kManifestVersion, 2);
     std::string error;
     extension_ = Extension::Create(base::FilePath(), location, *values,
                                    Extension::NO_FLAGS, &error);
@@ -623,6 +632,16 @@ TEST_F(ExtensionManagementServiceTest, HostsMaximumExceeded) {
   EXPECT_EQ(100u, GetPolicyAllowedHosts(kTargetExtension).size());
 }
 
+// Tests that multiple entries for a dictionary are all applied.
+TEST_F(ExtensionManagementServiceTest, MultipleEntries) {
+  SetExampleDictPref(kExampleDictPreferenceWithMultipleEntries);
+
+  EXPECT_EQ(GetInstallationModeById(kTargetExtension2),
+            ExtensionManagement::INSTALLATION_BLOCKED);
+
+  EXPECT_FALSE(CheckMinimumVersion(kTargetExtension2, "1.0"));
+}
+
 // Tests parsing of new dictionary preference.
 TEST_F(ExtensionManagementServiceTest, PreferenceParsing) {
   SetExampleDictPref(kExampleDictPreference);
@@ -827,7 +846,7 @@ TEST_F(ExtensionManagementServiceTest, kMinimumVersionRequired) {
   EXPECT_TRUE(CheckMinimumVersion(kTargetExtension, "9999.0"));
 
   {
-    PrefUpdater pref(pref_service_);
+    PrefUpdater pref(pref_service_.get());
     pref.SetMinimumVersionRequired(kTargetExtension, "3.0");
   }
 
@@ -851,7 +870,7 @@ TEST_F(ExtensionManagementServiceTest, NewInstallSources) {
 
   // Set the new dictionary preference.
   {
-    PrefUpdater updater(pref_service_);
+    PrefUpdater updater(pref_service_.get());
     updater.ClearInstallSources();
   }
   // Verifies that the new one overrides the legacy ones.
@@ -861,7 +880,7 @@ TEST_F(ExtensionManagementServiceTest, NewInstallSources) {
 
   // Updates the new dictionary preference.
   {
-    PrefUpdater updater(pref_service_);
+    PrefUpdater updater(pref_service_.get());
     updater.AddInstallSource("https://corp.mycompany.com/*");
   }
   EXPECT_TRUE(ReadGlobalSettings()->has_restricted_install_sources);
@@ -882,7 +901,7 @@ TEST_F(ExtensionManagementServiceTest, NewAllowedTypes) {
 
   // Set the new dictionary preference.
   {
-    PrefUpdater updater(pref_service_);
+    PrefUpdater updater(pref_service_.get());
     updater.ClearAllowedTypes();
   }
   // Verifies that the new one overrides the legacy ones.
@@ -891,7 +910,7 @@ TEST_F(ExtensionManagementServiceTest, NewAllowedTypes) {
 
   // Updates the new dictionary preference.
   {
-    PrefUpdater updater(pref_service_);
+    PrefUpdater updater(pref_service_.get());
     updater.AddAllowedType("theme");
   }
   EXPECT_TRUE(ReadGlobalSettings()->has_restricted_allowed_types);
@@ -904,7 +923,7 @@ TEST_F(ExtensionManagementServiceTest, NewAllowedTypes) {
 TEST_F(ExtensionManagementServiceTest, NewInstallBlocklist) {
   // Set the new dictionary preference.
   {
-    PrefUpdater updater(pref_service_);
+    PrefUpdater updater(pref_service_.get());
     updater.SetBlocklistedByDefault(false);  // Allowed by default.
     updater.SetIndividualExtensionInstallationAllowed(kTargetExtension, false);
     updater.ClearPerExtensionSettings(kTargetExtension2);
@@ -940,7 +959,7 @@ TEST_F(ExtensionManagementServiceTest, NewInstallBlocklist) {
 TEST_F(ExtensionManagementServiceTest, NewAllowlist) {
   // Set the new dictionary preference.
   {
-    PrefUpdater updater(pref_service_);
+    PrefUpdater updater(pref_service_.get());
     updater.SetBlocklistedByDefault(true);  // Disallowed by default.
     updater.SetIndividualExtensionInstallationAllowed(kTargetExtension, true);
     updater.ClearPerExtensionSettings(kTargetExtension2);
@@ -981,7 +1000,7 @@ TEST_F(ExtensionManagementServiceTest, NewInstallForcelist) {
 
   // Set the new dictionary preference.
   {
-    PrefUpdater updater(pref_service_);
+    PrefUpdater updater(pref_service_.get());
     updater.SetIndividualExtensionAutoInstalled(
         kTargetExtension, kExampleUpdateUrl, true);
   }
@@ -1016,7 +1035,7 @@ TEST_F(ExtensionManagementServiceTest, IsInstallationExplicitlyAllowed) {
       extension_management_->IsInstallationExplicitlyAllowed(not_specified));
 
   // Set BlocklistedByDefault() to false.
-  PrefUpdater pref(pref_service_);
+  PrefUpdater pref(pref_service_.get());
   pref.SetBlocklistedByDefault(false);
 
   // The result should remain the same.
@@ -1052,7 +1071,7 @@ TEST_F(ExtensionManagementServiceTest, IsInstallationExplicitlyBlocked) {
   EXPECT_FALSE(
       extension_management_->IsInstallationExplicitlyBlocked(not_specified));
 
-  PrefUpdater pref(pref_service_);
+  PrefUpdater pref(pref_service_.get());
   pref.SetBlocklistedByDefault(false);
 
   EXPECT_FALSE(extension_management_->IsInstallationExplicitlyBlocked(allowed));

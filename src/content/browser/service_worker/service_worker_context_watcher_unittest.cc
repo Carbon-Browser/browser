@@ -41,6 +41,9 @@ class WatcherCallback {
  public:
   WatcherCallback() {}
 
+  WatcherCallback(const WatcherCallback&) = delete;
+  WatcherCallback& operator=(const WatcherCallback&) = delete;
+
   ~WatcherCallback() {}
 
   scoped_refptr<ServiceWorkerContextWatcher> StartWatch(
@@ -118,8 +121,6 @@ class WatcherCallback {
   int callback_count_ = 0;
 
   base::WeakPtrFactory<WatcherCallback> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(WatcherCallback);
 };
 
 }  // namespace
@@ -128,6 +129,11 @@ class ServiceWorkerContextWatcherTest : public testing::Test {
  public:
   ServiceWorkerContextWatcherTest()
       : task_environment_(BrowserTaskEnvironment::IO_MAINLOOP) {}
+
+  ServiceWorkerContextWatcherTest(const ServiceWorkerContextWatcherTest&) =
+      delete;
+  ServiceWorkerContextWatcherTest& operator=(
+      const ServiceWorkerContextWatcherTest&) = delete;
 
   void SetUp() override {
     helper_ = std::make_unique<EmbeddedWorkerTestHelper>(base::FilePath());
@@ -182,8 +188,6 @@ class ServiceWorkerContextWatcherTest : public testing::Test {
  private:
   std::unique_ptr<EmbeddedWorkerTestHelper> helper_;
   BrowserTaskEnvironment task_environment_;
-
-  DISALLOW_COPY_AND_ASSIGN(ServiceWorkerContextWatcherTest);
 };
 
 TEST_F(ServiceWorkerContextWatcherTest, NoServiceWorker) {

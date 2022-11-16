@@ -21,11 +21,11 @@ namespace android {
 namespace {
 
 // We are leaking these strings.
-const char* StrDupParam(const std::vector<std::string>& params, int index) {
+const char* StrDupParam(const std::vector<std::string>& params, size_t index) {
   return strdup(params[index].c_str());
 }
 
-int GetIntParam(const std::vector<std::string>& params, int index) {
+int GetIntParam(const std::vector<std::string>& params, size_t index) {
   int ret = 0;
   bool success = StringToInt(params[index], &ret);
   DCHECK(success);
@@ -79,7 +79,9 @@ BuildInfo::BuildInfo(const std::vector<std::string>& params)
       target_sdk_version_(GetIntParam(params, 21)),
       is_debug_android_(GetIntParam(params, 22)),
       is_tv_(GetIntParam(params, 23)),
-      version_incremental_(StrDupParam(params, 24)) {}
+      version_incremental_(StrDupParam(params, 24)),
+      hardware_(StrDupParam(params, 25)),
+      is_at_least_t_(GetIntParam(params, 26)) {}
 
 // static
 BuildInfo* BuildInfo::GetInstance() {

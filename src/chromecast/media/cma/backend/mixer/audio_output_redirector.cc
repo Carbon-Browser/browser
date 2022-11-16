@@ -12,8 +12,8 @@
 #include "base/cxx17_backports.h"
 #include "base/location.h"
 #include "base/logging.h"
-#include "base/sequenced_task_runner.h"
 #include "base/strings/pattern.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/sequenced_task_runner_handle.h"
 #include "chromecast/media/audio/audio_fader.h"
 #include "chromecast/media/audio/audio_log.h"
@@ -72,6 +72,9 @@ class AudioOutputRedirector::RedirectionConnection
 
     socket_->SetDelegate(this);
   }
+
+  RedirectionConnection(const RedirectionConnection&) = delete;
+  RedirectionConnection& operator=(const RedirectionConnection&) = delete;
 
   ~RedirectionConnection() override = default;
 
@@ -141,8 +144,6 @@ class AudioOutputRedirector::RedirectionConnection
 
   bool error_ = false;
   bool sent_stream_config_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(RedirectionConnection);
 };
 
 class AudioOutputRedirector::InputImpl : public AudioOutputRedirectorInput {
@@ -150,6 +151,10 @@ class AudioOutputRedirector::InputImpl : public AudioOutputRedirectorInput {
   using RenderingDelay = MediaPipelineBackend::AudioDecoder::RenderingDelay;
 
   InputImpl(AudioOutputRedirector* output_redirector, MixerInput* mixer_input);
+
+  InputImpl(const InputImpl&) = delete;
+  InputImpl& operator=(const InputImpl&) = delete;
+
   ~InputImpl() override;
 
   // AudioOutputRedirectorInput implementation:
@@ -172,8 +177,6 @@ class AudioOutputRedirector::InputImpl : public AudioOutputRedirectorInput {
 
   std::unique_ptr<::media::ChannelMixer> channel_mixer_;
   std::unique_ptr<::media::AudioBus> temp_buffer_;
-
-  DISALLOW_COPY_AND_ASSIGN(InputImpl);
 };
 
 AudioOutputRedirector::InputImpl::InputImpl(
@@ -443,7 +446,7 @@ void AudioOutputRedirector::MixInput(MixerInput* mixer_input,
     float* dest_channel = current_mix_data_ + c * next_num_frames_;
     if (config_.apply_volume) {
       mixer_input->VolumeScaleAccumulate(data->channel(c), num_frames,
-                                         dest_channel);
+                                         dest_channel, c);
     } else {
       const float* temp_channel = data->channel(c);
       for (int i = 0; i < num_frames; ++i) {

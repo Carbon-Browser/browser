@@ -26,6 +26,10 @@ namespace {
 class DraggableView : public views::View {
  public:
   DraggableView() = default;
+
+  DraggableView(const DraggableView&) = delete;
+  DraggableView& operator=(const DraggableView&) = delete;
+
   ~DraggableView() override = default;
 
   // views::View overrides:
@@ -36,14 +40,15 @@ class DraggableView : public views::View {
                      OSExchangeData* data) override {
     data->SetString(u"test");
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(DraggableView);
 };
 
 class TargetView : public views::View {
  public:
   TargetView() : dropped_(false) {}
+
+  TargetView(const TargetView&) = delete;
+  TargetView& operator=(const TargetView&) = delete;
+
   ~TargetView() override = default;
 
   // views::View overrides:
@@ -58,18 +63,20 @@ class TargetView : public views::View {
   int OnDragUpdated(const ui::DropTargetEvent& event) override {
     return ui::DragDropTypes::DRAG_MOVE;
   }
-  ui::mojom::DragOperation OnPerformDrop(
-      const ui::DropTargetEvent& event) override {
-    dropped_ = true;
-    return ui::mojom::DragOperation::kMove;
+  DropCallback GetDropCallback(const ui::DropTargetEvent& event) override {
+    return base::BindOnce(&TargetView::PerformDrop, base::Unretained(this));
   }
 
   bool dropped() const { return dropped_; }
 
  private:
-  bool dropped_;
+  void PerformDrop(const ui::DropTargetEvent& event,
+                   ui::mojom::DragOperation& output_drag_op) {
+    dropped_ = true;
+    output_drag_op = ui::mojom::DragOperation::kMove;
+  }
 
-  DISALLOW_COPY_AND_ASSIGN(TargetView);
+  bool dropped_;
 };
 
 views::Widget* CreateWidget(std::unique_ptr<views::View> contents_view,
@@ -121,7 +128,8 @@ using DragDropTest = AshTestBase;
 
 // Test if the mouse gets moved properly to another display
 // during drag & drop operation.
-TEST_F(DragDropTest, DragDropAcrossMultiDisplay) {
+// Test flaky on ChromeOS: crbug.com/1312727
+TEST_F(DragDropTest, DISABLED_DragDropAcrossMultiDisplay) {
   ui_controls::InstallUIControlsAura(test::CreateAshUIControls());
 
   UpdateDisplay("400x300,400x300");

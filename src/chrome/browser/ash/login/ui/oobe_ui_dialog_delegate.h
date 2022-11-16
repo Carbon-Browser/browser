@@ -10,7 +10,6 @@
 #include "ash/public/cpp/login_accelerators.h"
 #include "ash/public/cpp/login_types.h"
 #include "ash/public/cpp/system_tray_observer.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "chrome/browser/ash/login/screens/error_screen.h"
@@ -57,6 +56,10 @@ class OobeUIDialogDelegate : public ui::WebDialogDelegate,
                              public SystemTrayObserver {
  public:
   explicit OobeUIDialogDelegate(base::WeakPtr<LoginDisplayHostMojo> controller);
+
+  OobeUIDialogDelegate(const OobeUIDialogDelegate&) = delete;
+  OobeUIDialogDelegate& operator=(const OobeUIDialogDelegate&) = delete;
+
   ~OobeUIDialogDelegate() override;
 
   // Show the dialog widget.
@@ -85,6 +88,8 @@ class OobeUIDialogDelegate : public ui::WebDialogDelegate,
   OobeUI* GetOobeUI() const;
   gfx::NativeWindow GetNativeWindow() const;
 
+  views::Widget* GetWebDialogWidget() const;
+
   views::View* GetWebDialogView();
 
   CaptivePortalDialogDelegate* captive_portal_delegate_for_test() {
@@ -106,7 +111,7 @@ class OobeUIDialogDelegate : public ui::WebDialogDelegate,
   void OnCloseContents(content::WebContents* source,
                        bool* out_close_dialog) override;
   bool ShouldShowDialogTitle() const override;
-  bool HandleContextMenu(content::RenderFrameHost* render_frame_host,
+  bool HandleContextMenu(content::RenderFrameHost& render_frame_host,
                          const content::ContextMenuParams& params) override;
   std::vector<ui::Accelerator> GetAccelerators() override;
   bool AcceleratorPressed(const ui::Accelerator& accelerator) override;
@@ -165,8 +170,6 @@ class OobeUIDialogDelegate : public ui::WebDialogDelegate,
   // Whether the captive portal screen should be shown the next time the Gaia
   // dialog is opened.
   bool should_display_captive_portal_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(OobeUIDialogDelegate);
 };
 
 }  // namespace ash

@@ -6,10 +6,28 @@
 
 #include "base/compiler_specific.h"
 #include "base/logging.h"
+#include "base/no_destructor.h"
 #include "base/path_service.h"
 #include "build/build_config.h"
+#include "mojo/public/cpp/platform/named_platform_channel.h"
+#include "remoting/host/mojo_ipc/mojo_ipc_util.h"
 
 namespace remoting {
+
+namespace {
+
+#if !defined(NDEBUG) && BUILDFLAG(IS_LINUX)
+// Use a different IPC name for Linux debug builds so that we can run the host
+// directly from out/Debug without interfering with the production host that
+// might also be running.
+constexpr char kChromotingHostServicesIpcName[] =
+    "chromoting_host_services_debug_mojo_ipc";
+#else
+constexpr char kChromotingHostServicesIpcName[] =
+    "chromoting_host_services_mojo_ipc";
+#endif
+
+}  // namespace
 
 const base::FilePath::CharType kHostBinaryName[] =
     FILE_PATH_LITERAL("remoting_host");
@@ -27,12 +45,20 @@ bool GetInstalledBinaryPath(const base::FilePath::StringType& binary,
 
   base::FilePath path = dir_path.Append(binary);
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   path = path.ReplaceExtension(FILE_PATH_LITERAL("exe"));
-#endif  // defined(OS_WIN)
+#endif  // BUILDFLAG(IS_WIN)
 
   *full_path = path;
   return true;
+}
+
+const mojo::NamedPlatformChannel::ServerName&
+GetChromotingHostServicesServerName() {
+  static const base::NoDestructor<mojo::NamedPlatformChannel::ServerName>
+      server_name(WorkingDirectoryIndependentServerNameFromUTF8(
+          kChromotingHostServicesIpcName));
+  return *server_name;
 }
 
 }  // namespace remoting

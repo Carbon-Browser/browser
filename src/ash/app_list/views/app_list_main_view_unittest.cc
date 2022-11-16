@@ -19,10 +19,13 @@
 #include "ash/app_list/views/page_switcher.h"
 #include "ash/app_list/views/paged_apps_grid_view.h"
 #include "ash/app_list/views/search_box_view.h"
+#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/app_list/app_list_features.h"
 #include "ash/public/cpp/test/test_app_list_color_provider.h"
+#include "ash/style/ash_color_provider.h"
 #include "base/test/scoped_feature_list.h"
 #include "ui/compositor/layer.h"
+#include "ui/compositor/scoped_animation_duration_scale_mode.h"
 #include "ui/events/base_event_utils.h"
 #include "ui/events/keycodes/keyboard_codes_posix.h"
 #include "ui/events/types/event_type.h"
@@ -33,34 +36,33 @@
 #include "ui/views/widget/widget.h"
 
 namespace ash {
-namespace test {
-
 namespace {
 
-const int kInitialItems = 2;
+const size_t kInitialItems = 2;
 
 }  // namespace
 
+// Parameterized by ProductivityLauncher.
 class AppListMainViewTest : public views::ViewsTestBase,
                             public testing::WithParamInterface<bool> {
  public:
-  AppListMainViewTest() = default;
+  AppListMainViewTest() {
+    feature_list_.InitWithFeatureState(features::kProductivityLauncher,
+                                       GetParam());
+  }
   AppListMainViewTest(const AppListMainViewTest& other) = delete;
   AppListMainViewTest& operator=(const AppListMainViewTest& other) = delete;
   ~AppListMainViewTest() override = default;
 
   // testing::Test overrides:
   void SetUp() override {
-    AppListView::SetShortAnimationForTesting(true);
     views::ViewsTestBase::SetUp();
-    // Allow TEST_F for tests that don't need to be parameterized.
-    if (testing::UnitTest::GetInstance()->current_test_info()->value_param()) {
-      feature_list_.InitWithFeatureState(
-          app_list_features::kNewDragSpecInLauncher, GetParam());
-    }
+    zero_duration_mode_ =
+        std::make_unique<ui::ScopedAnimationDurationScaleMode>(
+            ui::ScopedAnimationDurationScaleMode::ZERO_DURATION);
 
     // Create, and show the app list is fullscreen apps grid state.
-    delegate_ = std::make_unique<AppListTestViewDelegate>();
+    delegate_ = std::make_unique<test::AppListTestViewDelegate>();
     app_list_view_ = new AppListView(delegate_.get());
     app_list_view_->InitView(GetContext());
     app_list_view_->Show(AppListViewState::kFullscreenAllApps,
@@ -70,8 +72,8 @@ class AppListMainViewTest : public views::ViewsTestBase,
 
   void TearDown() override {
     app_list_view_->GetWidget()->Close();
+    zero_duration_mode_.reset();
     views::ViewsTestBase::TearDown();
-    AppListView::SetShortAnimationForTesting(false);
   }
 
   // |point| is in |grid_view|'s coordinates.
@@ -177,11 +179,12 @@ class AppListMainViewTest : public views::ViewsTestBase,
     AppListFolderItem* folder_item =
         delegate_->GetTestModel()->CreateSingleItemFolder("single_item_folder",
                                                           "single");
+    GetRootGridView()->Layout();
     EXPECT_EQ(folder_item,
               delegate_->GetTestModel()->FindFolderItem("single_item_folder"));
     EXPECT_EQ(AppListFolderItem::kItemType, folder_item->GetItemType());
 
-    EXPECT_EQ(1, GetRootViewModel()->view_size());
+    EXPECT_EQ(1u, GetRootViewModel()->view_size());
     AppListItemView* folder_item_view =
         static_cast<AppListItemView*>(GetRootViewModel()->view_at(0));
     EXPECT_EQ(folder_item_view->item(), folder_item);
@@ -226,8 +229,6 @@ class AppListMainViewTest : public views::ViewsTestBase,
     return dragged;
   }
 
-  bool IsPaginationPreviewActive() { return GetParam(); }
-
   void PressKeyInSearchBox(ui::KeyboardCode key_code) {
     ui::KeyEvent press(ui::ET_KEY_PRESSED, key_code, ui::EF_NONE);
     search_box_view()->search_box()->OnKeyEvent(&press);
@@ -240,32 +241,36 @@ class AppListMainViewTest : public views::ViewsTestBase,
   }
 
  protected:
-  TestAppListColorProvider color_provider_;  // Needed by AppListView.
-  AppListView* app_list_view_ = nullptr;  // Owned by native widget.
-  std::unique_ptr<AppListTestViewDelegate> delegate_;
+  base::test::ScopedFeatureList feature_list_;
+  TestAppListColorProvider app_list_color_provider_;  // Needed by AppListView.
+  AshColorProvider ash_color_provider_;      // Needed by ContinueContainer.
+  AppListView* app_list_view_ = nullptr;     // Owned by native widget.
+  std::unique_ptr<test::AppListTestViewDelegate> delegate_;
 
  private:
-  base::test::ScopedFeatureList feature_list_;
+  std::unique_ptr<ui::ScopedAnimationDurationScaleMode> zero_duration_mode_;
 };
 
-INSTANTIATE_TEST_SUITE_P(All, AppListMainViewTest, testing::Bool());
+INSTANTIATE_TEST_SUITE_P(ProductivityLauncher,
+                         AppListMainViewTest,
+                         testing::Bool());
 
 // Tests that the close button becomes invisible after close button is clicked.
-TEST_F(AppListMainViewTest, CloseButtonInvisibleAfterCloseButtonClicked) {
+TEST_P(AppListMainViewTest, CloseButtonInvisibleAfterCloseButtonClicked) {
   PressKeyInSearchBox(ui::VKEY_A);
   ClickButton(search_box_view()->close_button());
   EXPECT_FALSE(search_box_view()->close_button()->GetVisible());
 }
 
 // Tests that the search box becomes empty after close button is clicked.
-TEST_F(AppListMainViewTest, SearchBoxEmptyAfterCloseButtonClicked) {
+TEST_P(AppListMainViewTest, SearchBoxEmptyAfterCloseButtonClicked) {
   PressKeyInSearchBox(ui::VKEY_A);
   ClickButton(search_box_view()->close_button());
   EXPECT_TRUE(search_box_view()->search_box()->GetText().empty());
 }
 
 // Tests that the search box is no longer active after close button is clicked.
-TEST_F(AppListMainViewTest, SearchBoxActiveAfterCloseButtonClicked) {
+TEST_P(AppListMainViewTest, SearchBoxActiveAfterCloseButtonClicked) {
   PressKeyInSearchBox(ui::VKEY_A);
   ClickButton(search_box_view()->close_button());
   EXPECT_FALSE(search_box_view()->is_search_box_active());
@@ -282,60 +287,9 @@ TEST_P(AppListMainViewTest, ModelChanged) {
   std::unique_ptr<SearchModel> old_search_model(
       delegate_->ReleaseTestSearchModel());
 
-  const int kReplacementItems = 5;
+  const size_t kReplacementItems = 5;
   delegate_->ReplaceTestModel(kReplacementItems);
-  main_view()->ModelChanged();
   EXPECT_EQ(kReplacementItems, GetRootViewModel()->view_size());
-}
-
-// Tests dragging an item out of a single item folder and drop it at the last
-// slot.
-TEST_P(AppListMainViewTest, DragLastItemFromFolderAndDropAtLastSlot) {
-  AppListItemView* folder_item_view = CreateAndOpenSingleItemFolder();
-  const gfx::Rect first_slot_tile = folder_item_view->bounds();
-
-  EXPECT_EQ(1, GetFolderViewModel()->view_size());
-
-  AppListItemView* dragged = StartDragForReparent(0);
-
-  // Drop it to the slot on the right of first slot.
-  AppsGridViewTestApi root_grid_view_test_api(GetRootGridView());
-  gfx::Point point =
-      root_grid_view_test_api.GetItemTileRectAtVisualIndex(0, 1).CenterPoint();
-  // Convert `point` to the folder's grid coordinates.
-  views::View::ConvertPointToTarget(GetRootGridView(), GetFolderGridView(),
-                                    &point);
-
-  SimulateUpdateDrag(GetFolderGridView(), AppsGridView::MOUSE, dragged, point);
-
-  // Drop it.
-  GetFolderGridView()->EndDrag(false);
-
-  // Folder icon view should be gone and there is only one item view.
-  EXPECT_EQ(1, GetRootViewModel()->view_size());
-  EXPECT_EQ(AppListItemView::kViewClassName,
-            static_cast<views::View*>(GetRootViewModel()->view_at(0))
-                ->GetClassName());
-
-  // The item view should be in slot 1 instead of slot 2 where it is dropped.
-  root_grid_view_test_api.LayoutToIdealBounds();
-  EXPECT_EQ(first_slot_tile, GetRootViewModel()->view_at(0)->bounds());
-
-  // Single item folder should be auto removed.
-  EXPECT_FALSE(delegate_->GetTestModel()->FindFolderItem("single_item_folder"));
-
-  // Ensure keyboard selection works on the root grid view after a reparent.
-  // This is a regression test for https://crbug.com/466058.
-  SimulateKeyPress(ui::VKEY_RIGHT);
-
-  // Initial key press moves focus to the search box. The next one should move
-  // the focus to the root apps grid.
-  EXPECT_TRUE(search_box_view()->search_box()->HasFocus());
-
-  SimulateKeyPress(ui::VKEY_LEFT);
-
-  EXPECT_TRUE(GetRootGridView()->has_selected_view());
-  EXPECT_FALSE(GetFolderGridView()->has_selected_view());
 }
 
 // Tests dragging an item out of a single item folder and dropping it onto the
@@ -346,10 +300,11 @@ TEST_P(AppListMainViewTest, DragReparentItemOntoPageSwitcher) {
 
   // Number of apps to populate. Should provide more than 1 page of apps (5*4 =
   // 20).
-  const int kNumApps = 30;
+  const size_t kNumApps = 30;
   delegate_->GetTestModel()->PopulateApps(kNumApps);
+  GetRootGridView()->Layout();
 
-  EXPECT_EQ(1, GetFolderViewModel()->view_size());
+  EXPECT_EQ(1u, GetFolderViewModel()->view_size());
   EXPECT_EQ(kNumApps + 1, GetRootViewModel()->view_size());
 
   AppListItemView* dragged = StartDragForReparent(0);
@@ -365,8 +320,10 @@ TEST_P(AppListMainViewTest, DragReparentItemOntoPageSwitcher) {
 
   // The folder should not be destroyed.
   EXPECT_EQ(kNumApps + 1, GetRootViewModel()->view_size());
-  EXPECT_TRUE(delegate_->GetTestModel()->FindFolderItem("single_item_folder"));
-  EXPECT_EQ(1, GetFolderViewModel()->view_size());
+  AppListFolderItem* const folder_item =
+      delegate_->GetTestModel()->FindFolderItem("single_item_folder");
+  ASSERT_TRUE(folder_item);
+  EXPECT_EQ(1u, folder_item->item_list()->item_count());
 }
 
 // Test that an interrupted drag while reparenting an item from a folder, when
@@ -396,9 +353,6 @@ TEST_P(AppListMainViewTest, MouseDragItemOutOfFolderWithCancel) {
 // back into its original folder results in a cancelled reparent. This is a
 // regression test for http://crbug.com/429083.
 TEST_P(AppListMainViewTest, ReparentSingleItemOntoSelf) {
-  // TODO(anasalazar): Fix for cardified state
-  if (IsPaginationPreviewActive())
-    return;
   // Add a folder with 1 item.
   AppListItemView* folder_item_view = CreateAndOpenSingleItemFolder();
   std::string folder_id = folder_item_view->item()->id();
@@ -418,11 +372,12 @@ TEST_P(AppListMainViewTest, ReparentSingleItemOntoSelf) {
   GetFolderGridView()->EndDrag(false);
 
   // The app list model should remain unchanged.
-  EXPECT_EQ(1, GetFolderViewModel()->view_size());
-  EXPECT_EQ(2, GetRootViewModel()->view_size());
+  EXPECT_EQ(2u, GetRootViewModel()->view_size());
   EXPECT_EQ(folder_id, GetRootGridView()->GetItemViewAt(0)->item()->id());
-  EXPECT_TRUE(delegate_->GetTestModel()->FindFolderItem("single_item_folder"));
+  AppListFolderItem* const folder_item =
+      delegate_->GetTestModel()->FindFolderItem("single_item_folder");
+  ASSERT_TRUE(folder_item);
+  EXPECT_EQ(1u, folder_item->item_list()->item_count());
 }
 
-}  // namespace test
 }  // namespace ash

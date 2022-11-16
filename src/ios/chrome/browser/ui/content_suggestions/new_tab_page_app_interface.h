@@ -8,7 +8,8 @@
 #import <UIKit/UIKit.h>
 
 // App interface for the NTP.
-// TODO(crbug.com/1200303): Move this to */ui/ntp.
+// TODO(crbug.com/1299373): Separate content suggestions functions into
+// ContentSuggestionsAppInterface interface and move this to /ui/ntp.
 @interface NewTabPageAppInterface : NSObject
 
 // Sets the fake service up.
@@ -23,21 +24,21 @@
 // Disables the suggestions.
 + (void)disableSuggestions;
 
-// Adds |numberOfSuggestions| suggestions to the list of suggestions provided.
+// Adds `numberOfSuggestions` suggestions to the list of suggestions provided.
 // The suggestions have the name "chromium<suggestionNumber>" and the url
 // http://chromium/<suggestionNumber>.
 + (void)addNumberOfSuggestions:(NSInteger)numberOfSuggestions
       additionalSuggestionsURL:(NSURL*)URL;
 
 // Add one particular suggestion, following the convention explained above, with
-// |suggestionNumber|.
+// `suggestionNumber`.
 + (void)addSuggestionNumber:(NSInteger)suggestionNumber;
 
 // Returns the short name of the default search engine.
 + (NSString*)defaultSearchEngine;
 
-// Resets the default search engine to |defaultSearchEngine|.
-// |defaultSearchEngine| should be its short name.
+// Resets the default search engine to `defaultSearchEngine`.
+// `defaultSearchEngine` should be its short name.
 + (void)resetSearchEngineTo:(NSString*)defaultSearchEngine;
 
 // Sets the what's new promo to "Move to Dock".
@@ -47,7 +48,7 @@
 + (void)resetWhatsNewPromo;
 
 // Returns the width the search field is supposed to have when the collection
-// has |collectionWidth|. |traitCollection| is the trait collection of the view
+// has `collectionWidth`. `traitCollection` is the trait collection of the view
 // displaying the omnibox, its Size Class is used in the computation.
 + (CGFloat)searchFieldWidthForCollectionWidth:(CGFloat)collectionWidth
                               traitCollection:

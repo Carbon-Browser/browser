@@ -5,6 +5,8 @@
 #ifndef MEDIA_CAPTURE_VIDEO_MAC_VIDEO_CAPTURE_DEVICE_AVFOUNDATION_MAC_H_
 #define MEDIA_CAPTURE_VIDEO_MAC_VIDEO_CAPTURE_DEVICE_AVFOUNDATION_MAC_H_
 
+#include "base/memory/raw_ptr.h"
+
 #import <AVFoundation/AVFoundation.h>
 #import <Foundation/Foundation.h>
 #include "base/callback_forward.h"
@@ -13,6 +15,7 @@
 #include "base/mac/scoped_nsobject.h"
 #include "base/synchronization/lock.h"
 #include "base/threading/thread_checker.h"
+#include "base/time/time.h"
 #include "media/capture/video/mac/sample_buffer_transformer_mac.h"
 #include "media/capture/video/video_capture_device.h"
 #include "media/capture/video_capture_types.h"
@@ -97,12 +100,14 @@ CAPTURE_EXPORT
   base::Lock _lock;
   // Used to avoid UAF in -captureOutput.
   base::Lock _destructionLock;
-  media::VideoCaptureDeviceAVFoundationFrameReceiver* _frameReceiver
+  raw_ptr<media::VideoCaptureDeviceAVFoundationFrameReceiver> _frameReceiver
       GUARDED_BY(_lock);  // weak.
   bool _capturedFirstFrame GUARDED_BY(_lock);
   bool _capturedFrameSinceLastStallCheck GUARDED_BY(_lock);
   std::unique_ptr<base::WeakPtrFactory<VideoCaptureDeviceAVFoundation>>
       _weakPtrFactoryForStallCheck;
+  // Timestamp offset to subtract from all frames, to avoid leaking uptime.
+  base::TimeDelta start_timestamp_;
 
   // Used to rate-limit crash reports for https://crbug.com/1168112.
   bool _hasDumpedForFrameSizeMismatch;

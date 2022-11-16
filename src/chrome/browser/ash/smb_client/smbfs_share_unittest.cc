@@ -6,6 +6,8 @@
 
 #include <utility>
 
+#include "ash/components/disks/disk_mount_manager.h"
+#include "ash/components/disks/mount_point.h"
 #include "ash/components/smbfs/smbfs_host.h"
 #include "ash/components/smbfs/smbfs_mounter.h"
 #include "base/run_loop.h"
@@ -20,8 +22,6 @@
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/ash/smb_client/smb_url.h"
 #include "chrome/test/base/testing_profile.h"
-#include "chromeos/disks/disk_mount_manager.h"
-#include "chromeos/disks/mount_point.h"
 #include "content/public/test/browser_task_environment.h"
 #include "storage/browser/file_system/external_mount_points.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -55,7 +55,7 @@ std::unique_ptr<KeyedService> BuildVolumeManager(
       Profile::FromBrowserContext(context),
       nullptr /* drive_integration_service */,
       nullptr /* power_manager_client */,
-      chromeos::disks::DiskMountManager::GetInstance(),
+      disks::DiskMountManager::GetInstance(),
       nullptr /* file_system_provider_service */,
       file_manager::VolumeManager::GetMtpStorageInfoCallback());
 }
@@ -99,9 +99,11 @@ class TestSmbFsImpl : public smbfs::mojom::SmbFs {
 
 class SmbFsShareTest : public testing::Test {
  protected:
+  static void SetUpTestSuite() {
+    disks::DiskMountManager::InitializeForTesting(disk_mount_manager());
+  }
+
   void SetUp() override {
-    chromeos::disks::DiskMountManager::InitializeForTesting(
-        disk_mount_manager_);
     file_manager::VolumeManagerFactory::GetInstance()->SetTestingFactory(
         &profile_, base::BindRepeating(&BuildVolumeManager));
 
@@ -121,13 +123,19 @@ class SmbFsShareTest : public testing::Test {
     file_manager::VolumeManager::Get(&profile_)->RemoveObserver(&observer_);
   }
 
+  static file_manager::FakeDiskMountManager* disk_mount_manager() {
+    static file_manager::FakeDiskMountManager* manager =
+        new file_manager::FakeDiskMountManager();
+    return manager;
+  }
+
   std::unique_ptr<smbfs::SmbFsHost> CreateSmbFsHost(
       SmbFsShare* share,
       mojo::Receiver<smbfs::mojom::SmbFs>* smbfs_receiver,
       mojo::Remote<smbfs::mojom::SmbFsDelegate>* delegate) {
     return std::make_unique<smbfs::SmbFsHost>(
-        std::make_unique<chromeos::disks::MountPoint>(
-            base::FilePath(kMountPath), disk_mount_manager_),
+        std::make_unique<disks::MountPoint>(base::FilePath(kMountPath),
+                                            disk_mount_manager()),
         share,
         mojo::Remote<smbfs::mojom::SmbFs>(
             smbfs_receiver->BindNewPipeAndPassRemote()),
@@ -137,8 +145,6 @@ class SmbFsShareTest : public testing::Test {
   content::BrowserTaskEnvironment task_environment_{
       content::BrowserTaskEnvironment::REAL_IO_THREAD,
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
-  file_manager::FakeDiskMountManager* disk_mount_manager_ =
-      new file_manager::FakeDiskMountManager;
   TestingProfile profile_;
   MockVolumeManagerObsever observer_;
 
@@ -339,7 +345,7 @@ TEST_F(SmbFsShareTest, DisallowCredentialsDialogAfterTimeout) {
   share.AllowCredentialsRequest();
   // Fast-forward time for the allow state to timeout. The timeout is 5 seconds,
   // so moving forward by 6 will ensure the timeout runs.
-  task_environment_.FastForwardBy(base::TimeDelta::FromSeconds(6));
+  task_environment_.FastForwardBy(base::Seconds(6));
 
   base::RunLoop run_loop;
   delegate->RequestCredentials(base::BindLambdaForTesting(
@@ -449,7 +455,7 @@ TEST_F(SmbFsShareTest, GenerateStableMountIdInput) {
   std::vector<std::string> tokens1 =
       base::SplitString(hash_input1, kMountIdHashSeparator,
                         base::KEEP_WHITESPACE, base::SPLIT_WANT_ALL);
-  EXPECT_EQ(tokens1.size(), 5);
+  EXPECT_EQ(tokens1.size(), 5u);
   EXPECT_EQ(tokens1[0], profile_user_hash);
   EXPECT_EQ(tokens1[1], SmbUrl(kSharePath).ToString());
   EXPECT_EQ(tokens1[2], "0" /* kerberos */);
@@ -467,7 +473,7 @@ TEST_F(SmbFsShareTest, GenerateStableMountIdInput) {
   std::vector<std::string> tokens2 =
       base::SplitString(hash_input2, kMountIdHashSeparator,
                         base::KEEP_WHITESPACE, base::SPLIT_WANT_ALL);
-  EXPECT_EQ(tokens2.size(), 5);
+  EXPECT_EQ(tokens2.size(), 5u);
   EXPECT_EQ(tokens2[0], profile_user_hash);
   EXPECT_EQ(tokens2[1], SmbUrl(kSharePath2).ToString());
   EXPECT_EQ(tokens2[2], "1" /* kerberos */);
@@ -491,8 +497,8 @@ TEST_F(SmbFsShareTest, GenerateStableMountId) {
   EXPECT_TRUE(mount_id1.compare(mount_id2));
 
   // Check: String is 64 characters long (SHA256 encoded as hex).
-  EXPECT_EQ(mount_id1.size(), 64);
-  EXPECT_EQ(mount_id2.size(), 64);
+  EXPECT_EQ(mount_id1.size(), 64u);
+  EXPECT_EQ(mount_id2.size(), 64u);
 }
 
 }  // namespace smb_client

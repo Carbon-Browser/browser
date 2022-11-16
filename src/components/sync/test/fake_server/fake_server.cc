@@ -10,7 +10,6 @@
 #include <utility>
 
 #include "base/command_line.h"
-#include "base/guid.h"
 #include "base/hash/hash.h"
 #include "base/json/json_writer.h"
 #include "base/logging.h"
@@ -18,16 +17,13 @@
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
-#include "base/synchronization/lock.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/time/time.h"
 #include "base/values.h"
-#include "components/sync/engine/net/server_connection_manager.h"
 #include "components/sync/protocol/data_type_progress_marker.pb.h"
 #include "components/sync/protocol/proto_value_conversions.h"
 #include "components/sync/protocol/sync_entity.pb.h"
 #include "components/sync/protocol/sync_enums.pb.h"
-#include "net/base/net_errors.h"
 #include "net/http/http_status_code.h"
 
 using syncer::GetModelTypeFromSpecifics;
@@ -35,9 +31,6 @@ using syncer::LoopbackServer;
 using syncer::LoopbackServerEntity;
 using syncer::ModelType;
 using syncer::ModelTypeSet;
-
-const char switches::kDisableFakeServerFailureOutput[] =
-    "disable-fake-server-failure-output";
 
 namespace fake_server {
 
@@ -124,7 +117,7 @@ uint64_t ComputeEntitiesHash(const std::vector<sync_pb::SyncEntity>& entities) {
   // receiving the same data. We sum up the hashes which has the nice side
   // effect of being independent of the order.
   uint64_t hash = 0;
-  for (const auto& entity : entities) {
+  for (const sync_pb::SyncEntity& entity : entities) {
     hash += base::PersistentHash(entity.id_string());
     hash += entity.version();
   }
@@ -157,7 +150,7 @@ HashAndTime UnpackProgressMarkerToken(const std::string& token) {
   }
 
   hash_and_time.time = base::Time::FromDeltaSinceWindowsEpoch(
-      base::TimeDelta::FromMicroseconds(micros_since_windows_epoch));
+      base::Microseconds(micros_since_windows_epoch));
   return hash_and_time;
 }
 
@@ -184,7 +177,7 @@ void PopulateFullUpdateTypeResults(
     // previous data.
     int64_t version =
         (base::Time::Now() - base::Time::UnixEpoch()).InMilliseconds();
-    for (const auto& entity : entities) {
+    for (const sync_pb::SyncEntity& entity : entities) {
       sync_pb::SyncEntity* response_entity = gu_response->add_entries();
       *response_entity = entity;
       response_entity->set_version(version);
@@ -254,6 +247,7 @@ net::HttpStatusCode FakeServer::HandleParsedCommand(
       break;
     case sync_pb::ClientToServerMessage::COMMIT:
       last_commit_message_ = message;
+      OnWillCommit();
       break;
     case sync_pb::ClientToServerMessage::CLEAR_SERVER_DATA:
       // Don't care.
@@ -272,20 +266,17 @@ net::HttpStatusCode FakeServer::HandleParsedCommand(
       commit_error_type_ != sync_pb::SyncEnums::SUCCESS &&
       ShouldSendTriggeredError()) {
     response->set_error_code(commit_error_type_);
-    response->set_store_birthday(loopback_server_->GetStoreBirthday());
     return net::HTTP_OK;
   }
 
   if (error_type_ != sync_pb::SyncEnums::SUCCESS &&
       ShouldSendTriggeredError()) {
     response->set_error_code(error_type_);
-    response->set_store_birthday(loopback_server_->GetStoreBirthday());
     return net::HTTP_OK;
   }
 
   if (triggered_actionable_error_.get() && ShouldSendTriggeredError()) {
     *response->mutable_error() = *triggered_actionable_error_;
-    response->set_store_birthday(loopback_server_->GetStoreBirthday());
     return net::HTTP_OK;
   }
 
@@ -418,6 +409,7 @@ void FakeServer::InjectEntity(std::unique_ptr<LoopbackServerEntity> entity) {
 
   const ModelType model_type = entity->GetModelType();
 
+  OnWillCommit();
   loopback_server_->SaveEntity(std::move(entity));
 
   // Notify observers so invalidations are mimic-ed.
@@ -431,6 +423,8 @@ base::Time FakeServer::SetWalletData(
   ModelType model_type =
       GetModelTypeFromSpecifics(wallet_entities[0].specifics());
   DCHECK(model_type == syncer::AUTOFILL_WALLET_DATA);
+
+  OnWillCommit();
   wallet_entities_ = wallet_entities;
 
   const base::Time now = base::Time::Now();
@@ -458,6 +452,8 @@ base::Time FakeServer::SetOfferData(
   ModelType model_type =
       GetModelTypeFromSpecifics(offer_entities[0].specifics());
   DCHECK(model_type == syncer::AUTOFILL_WALLET_OFFER);
+
+  OnWillCommit();
   offer_entities_ = offer_entities;
 
   const base::Time now = base::Time::Now();
@@ -488,6 +484,7 @@ base::Time FakeServer::GetProgressMarkerTimestamp(
 bool FakeServer::ModifyEntitySpecifics(
     const std::string& id,
     const sync_pb::EntitySpecifics& updated_specifics) {
+  OnWillCommit();
   if (!loopback_server_->ModifyEntitySpecifics(id, updated_specifics)) {
     return false;
   }
@@ -504,6 +501,7 @@ bool FakeServer::ModifyBookmarkEntity(
     const std::string& id,
     const std::string& parent_id,
     const sync_pb::EntitySpecifics& updated_specifics) {
+  OnWillCommit();
   if (!loopback_server_->ModifyBookmarkEntity(id, parent_id,
                                               updated_specifics)) {
     return false;
@@ -518,8 +516,22 @@ bool FakeServer::ModifyBookmarkEntity(
 
 void FakeServer::ClearServerData() {
   DCHECK(thread_checker_.CalledOnValidThread());
+
+  OnWillCommit();
+  {
+    base::ScopedAllowBlockingForTesting allow_blocking;
+    loopback_server_->ClearServerData();
+  }
+
+  // Notify observers so invalidations are mimic-ed.
+  OnCommit(/*committer_invalidator_client_id=*/std::string(),
+           /*committed_model_types=*/{syncer::NIGORI});
+}
+
+void FakeServer::DeleteAllEntitiesForModelType(ModelType model_type) {
+  DCHECK(thread_checker_.CalledOnValidThread());
   base::ScopedAllowBlockingForTesting allow_blocking;
-  loopback_server_->ClearServerData();
+  loopback_server_->DeleteAllEntitiesForModelType(model_type);
 }
 
 void FakeServer::SetHttpError(net::HttpStatusCode http_status_code) {
@@ -623,7 +635,7 @@ void FakeServer::RemoveObserver(Observer* observer) {
 
 void FakeServer::OnCommit(const std::string& committer_invalidator_client_id,
                           syncer::ModelTypeSet committed_model_types) {
-  for (auto& observer : observers_)
+  for (Observer& observer : observers_)
     observer.OnCommit(committer_invalidator_client_id, committed_model_types);
 }
 
@@ -675,6 +687,12 @@ void FakeServer::LogForTestFailure(const base::Location& location,
       location.file_name(), location.line_number(),
       base::StringPrintf("--- %s %d (reverse chronological order) ---\n%s",
                          title.c_str(), request_counter_, body.c_str())));
+}
+
+void FakeServer::OnWillCommit() {
+  for (Observer& observer : observers_) {
+    observer.OnWillCommit();
+  }
 }
 
 }  // namespace fake_server

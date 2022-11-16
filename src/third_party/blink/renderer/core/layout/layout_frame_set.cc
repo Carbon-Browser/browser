@@ -34,6 +34,7 @@
 #include "third_party/blink/renderer/core/paint/frame_set_painter.h"
 #include "third_party/blink/renderer/platform/cursors.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_context.h"
+#include "ui/base/cursor/cursor.h"
 
 namespace blink {
 
@@ -117,7 +118,7 @@ void LayoutFrameSet::LayOutAxis(GridAxis& axis,
     // Count the total length of all of the fixed columns/rows -> totalFixed.
     // Count the number of columns/rows which are fixed -> countFixed.
     if (grid[i].IsAbsolute()) {
-      grid_layout[i] = clampTo<int>(max(grid[i].Value() * effective_zoom, 0.0));
+      grid_layout[i] = ClampTo<int>(max(grid[i].Value() * effective_zoom, 0.0));
       total_fixed += grid_layout[i];
       count_fixed++;
     }
@@ -127,7 +128,7 @@ void LayoutFrameSet::LayOutAxis(GridAxis& axis,
     // countPercent.
     if (grid[i].IsPercentage()) {
       grid_layout[i] =
-          clampTo<int>(max(grid[i].Value() * available_len / 100., 0.0));
+          ClampTo<int>(max(grid[i].Value() * available_len / 100., 0.0));
       total_percent += grid_layout[i];
       count_percent++;
     }
@@ -136,7 +137,7 @@ void LayoutFrameSet::LayOutAxis(GridAxis& axis,
     // totalRelative. Count the number of columns/rows which are relative ->
     // countRelative.
     if (grid[i].IsRelative()) {
-      total_relative += clampTo<int>(max(grid[i].Value(), 1.0));
+      total_relative += ClampTo<int>(max(grid[i].Value(), 1.0));
       count_relative++;
     }
   }
@@ -496,10 +497,9 @@ bool LayoutFrameSet::UserResize(const MouseEvent& evt) {
     if (evt.type() == event_type_names::kMousedown &&
         evt.button() ==
             static_cast<int16_t>(WebPointerProperties::Button::kLeft)) {
-      FloatPoint local_pos =
-          AbsoluteToLocalFloatPoint(FloatPoint(evt.AbsoluteLocation()));
-      StartResizing(cols_, local_pos.X());
-      StartResizing(rows_, local_pos.Y());
+      gfx::PointF local_pos = AbsoluteToLocalPoint(evt.AbsoluteLocation());
+      StartResizing(cols_, local_pos.x());
+      StartResizing(rows_, local_pos.y());
       if (cols_.split_being_resized_ != kNoSplit ||
           rows_.split_being_resized_ != kNoSplit) {
         SetIsResizing(true);
@@ -511,10 +511,9 @@ bool LayoutFrameSet::UserResize(const MouseEvent& evt) {
         (evt.type() == event_type_names::kMouseup &&
          evt.button() ==
              static_cast<int16_t>(WebPointerProperties::Button::kLeft))) {
-      FloatPoint local_pos =
-          AbsoluteToLocalFloatPoint(FloatPoint(evt.AbsoluteLocation()));
-      ContinueResizing(cols_, local_pos.X());
-      ContinueResizing(rows_, local_pos.Y());
+      gfx::PointF local_pos = AbsoluteToLocalPoint(evt.AbsoluteLocation());
+      ContinueResizing(cols_, local_pos.x());
+      ContinueResizing(rows_, local_pos.y());
       if (evt.type() == event_type_names::kMouseup &&
           evt.button() ==
               static_cast<int16_t>(WebPointerProperties::Button::kLeft)) {
@@ -536,15 +535,15 @@ void LayoutFrameSet::SetIsResizing(bool is_resizing) {
   }
 }
 
-bool LayoutFrameSet::CanResizeRow(const IntPoint& p) const {
+bool LayoutFrameSet::CanResizeRow(const gfx::Point& p) const {
   NOT_DESTROYED();
-  int r = HitTestSplit(rows_, p.Y());
+  int r = HitTestSplit(rows_, p.y());
   return r != kNoSplit && !rows_.prevent_resize_[r];
 }
 
-bool LayoutFrameSet::CanResizeColumn(const IntPoint& p) const {
+bool LayoutFrameSet::CanResizeColumn(const gfx::Point& p) const {
   NOT_DESTROYED();
-  int c = HitTestSplit(cols_, p.X());
+  int c = HitTestSplit(cols_, p.x());
   return c != kNoSplit && !cols_.prevent_resize_[c];
 }
 
@@ -597,7 +596,7 @@ bool LayoutFrameSet::IsChildAllowed(LayoutObject* child,
 CursorDirective LayoutFrameSet::GetCursor(const PhysicalOffset& point,
                                           ui::Cursor& cursor) const {
   NOT_DESTROYED();
-  IntPoint rounded_point = RoundedIntPoint(point);
+  gfx::Point rounded_point = ToRoundedPoint(point);
   if (CanResizeRow(rounded_point)) {
     cursor = RowResizeCursor();
     return kSetCursor;

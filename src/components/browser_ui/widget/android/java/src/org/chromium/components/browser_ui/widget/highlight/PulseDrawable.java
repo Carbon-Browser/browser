@@ -5,7 +5,6 @@
 package org.chromium.components.browser_ui.widget.highlight;
 
 import android.content.Context;
-import android.content.res.Resources;
 import android.graphics.Canvas;
 import android.graphics.ColorFilter;
 import android.graphics.Paint;
@@ -23,8 +22,8 @@ import androidx.annotation.Nullable;
 import androidx.annotation.Px;
 import androidx.core.view.animation.PathInterpolatorCompat;
 
-import org.chromium.base.ApiCompatibilityUtils;
 import org.chromium.base.MathUtils;
+import org.chromium.components.browser_ui.styles.SemanticColorUtils;
 import org.chromium.components.browser_ui.widget.R;
 import org.chromium.components.browser_ui.widget.animation.Interpolators;
 
@@ -290,7 +289,7 @@ public class PulseDrawable extends Drawable implements Animatable {
     private PulseDrawable(Context context, Interpolator interpolator, Painter painter,
             PulseEndAuthority pulseEndAuthority) {
         this(new PulseState(interpolator, painter), pulseEndAuthority);
-        setUseLightPulseColor(context.getResources(), false);
+        setUseLightPulseColor(context, false);
     }
 
     private PulseDrawable(PulseState state, PulseEndAuthority pulseEndAuthority) {
@@ -303,14 +302,13 @@ public class PulseDrawable extends Drawable implements Animatable {
     }
 
     /**
-     * @param resources The {@link Resources} for accessing colors.
+     * @param context The {@link Context} for accessing colors.
      * @param useLightPulseColor Whether or not to use a light or dark color for the pulse.
      * */
-    public void setUseLightPulseColor(Resources resources, boolean useLightPulseColor) {
+    public void setUseLightPulseColor(Context context, boolean useLightPulseColor) {
         @ColorInt
-        int color = ApiCompatibilityUtils.getColor(resources,
-                useLightPulseColor ? R.color.default_icon_color_blue_light
-                                   : R.color.default_icon_color_blue);
+        int color = useLightPulseColor ? context.getColor(R.color.default_icon_color_blue_light)
+                                       : SemanticColorUtils.getDefaultIconColorAccent1(context);
         if (mState.color == color) return;
 
         int alpha = getAlpha();

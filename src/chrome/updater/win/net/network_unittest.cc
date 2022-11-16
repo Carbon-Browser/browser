@@ -9,6 +9,7 @@
 #include "base/test/task_environment.h"
 #include "chrome/updater/policy/manager.h"
 #include "chrome/updater/policy/service.h"
+#include "chrome/updater/win/net/network_fetcher.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace updater {
@@ -18,7 +19,7 @@ TEST(UpdaterTestNetwork, NetworkFetcherWinHTTPFactory) {
       base::test::SingleThreadTaskEnvironment::MainThreadType::UI);
 
   PolicyService::PolicyManagerVector managers;
-  managers.push_back(GetPolicyManager());
+  managers.push_back(GetDefaultValuesPolicyManager());
   auto policy_service =
       base::MakeRefCounted<PolicyService>(std::move(managers));
 

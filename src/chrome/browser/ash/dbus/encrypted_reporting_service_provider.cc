@@ -4,34 +4,38 @@
 
 #include "chrome/browser/ash/dbus/encrypted_reporting_service_provider.h"
 
+#include <limits>
 #include <memory>
 #include <utility>
 
-#include "base/bind_post_task.h"
+#include "base/callback.h"
 #include "base/memory/ref_counted_delete_on_sequence.h"
 #include "base/memory/weak_ptr.h"
-#include "base/sequenced_task_runner.h"
 #include "base/strings/strcat.h"
+#include "base/task/bind_post_task.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
+#include "chrome/browser/policy/messaging_layer/upload/event_upload_size_controller.h"
 #include "chrome/browser/policy/messaging_layer/upload/upload_client.h"
-#include "chrome/browser/policy/messaging_layer/util/get_cloud_policy_client.h"
+#include "chrome/browser/policy/messaging_layer/upload/upload_provider.h"
 #include "chromeos/dbus/missive/missive_client.h"
-#include "components/reporting/proto/interface.pb.h"
-#include "components/reporting/storage/storage_module_interface.h"
+#include "components/reporting/proto/synced/interface.pb.h"
+#include "components/reporting/resources/memory_resource_impl.h"
 #include "components/reporting/storage_selector/storage_selector.h"
-#include "components/reporting/util/backoff_settings.h"
 #include "components/reporting/util/status.h"
 #include "components/reporting/util/status.pb.h"
 #include "components/reporting/util/statusor.h"
 #include "dbus/bus.h"
 #include "dbus/exported_object.h"
 #include "dbus/message.h"
-#include "net/base/backoff_entry.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
 namespace ash {
 
 namespace {
+
+static constexpr uint64_t kDefaultMemoryAllocation =
+    16u * 1024uLL * 1024uLL;  // 16 MiB by default
 
 void SendStatusAsResponse(std::unique_ptr<dbus::Response> response,
                           dbus::ExportedObject::ResponseSender response_sender,
@@ -47,232 +51,20 @@ void SendStatusAsResponse(std::unique_ptr<dbus::Response> response,
   std::move(response_sender).Run(std::move(response));
 }
 
-void BuildUploadClient(
-    scoped_refptr<reporting::StorageModuleInterface> storage_module,
-    policy::CloudPolicyClient* client,
-    reporting::UploadClient::CreatedCallback update_upload_client_cb) {
-  reporting::UploadClient::ReportSuccessfulUploadCallback successful_upload_cb =
-      base::BindRepeating(&reporting::StorageModuleInterface::ReportSuccess,
-                          storage_module);
-
-  reporting::UploadClient::EncryptionKeyAttachedCallback encryption_key_cb =
-      base::BindRepeating(
-          &reporting::StorageModuleInterface::UpdateEncryptionKey,
-          storage_module);
-
-  reporting::UploadClient::Create(client, std::move(successful_upload_cb),
-                                  std::move(encryption_key_cb),
-                                  std::move(update_upload_client_cb));
-}
-
 }  // namespace
-
-// EncryptedReportingServiceProvider refcounted helper class.
-class EncryptedReportingServiceProvider::UploadHelper
-    : public base::RefCountedDeleteOnSequence<UploadHelper> {
- public:
-  UploadHelper(
-      reporting::GetCloudPolicyClientCallback build_cloud_policy_client_cb,
-      UploadClientBuilderCb upload_client_builder_cb,
-      scoped_refptr<base::SequencedTaskRunner> sequenced_task_runner);
-  UploadHelper(const UploadHelper& other) = delete;
-  UploadHelper& operator=(const UploadHelper& other) = delete;
-
-  // Requests new cloud policy client (can be invoked on any thread)
-  void PostNewCloudPolicyClientRequest();
-
-  // Uploads encrypted records (can be invoked on any thread).
-  void EnqueueUpload(
-      bool need_encryption_key,
-      std::unique_ptr<std::vector<reporting::EncryptedRecord>> records,
-      base::OnceCallback<void(reporting::Status)> enqueued_cb) const;
-
- private:
-  friend class base::RefCountedDeleteOnSequence<UploadHelper>;
-  friend class base::DeleteHelper<UploadHelper>;
-
-  // Refcounted object can only have private or protected destructor.
-  ~UploadHelper();
-
-  // Stages of cloud policy client and upload client creation,
-  // scheduled on a sequenced task runner.
-  void TryNewCloudPolicyClientRequest();
-  void OnCloudPolicyClientResult(
-      reporting::StatusOr<policy::CloudPolicyClient*> client_result);
-  void UpdateUploadClient(std::unique_ptr<reporting::UploadClient> client);
-  void OnUploadClientResult(
-      reporting::StatusOr<std::unique_ptr<reporting::UploadClient>>
-          client_result);
-
-  // Uploads encrypted records on sequenced task runner (and thus capable of
-  // detecting whether upload client is ready or not)
-  void EnqueueUploadInternal(
-      bool need_encryption_key,
-      std::unique_ptr<std::vector<reporting::EncryptedRecord>> records,
-      base::OnceCallback<void(reporting::Status)> enqueued_cb) const;
-
-  // Sequence task runner and checker used during
-  // |PostNewCloudPolicyClientRequest| processing.
-  // It is also used to protect |upload_client_|.
-  const scoped_refptr<base::SequencedTaskRunner> sequenced_task_runner_;
-  SEQUENCE_CHECKER(sequenced_task_checker_);
-
-  // Callbacks for cloud policy and upload client creation.
-  const reporting::GetCloudPolicyClientCallback build_cloud_policy_client_cb_;
-  const UploadClientBuilderCb upload_client_builder_cb_;
-
-  // Tracking of asynchronous stages.
-  std::atomic<bool> upload_client_request_in_progress_{false};
-  const std::unique_ptr<::net::BackoffEntry> backoff_entry_;
-
-  // Upload client (protected by sequenced task runner). Once set, is used
-  // repeatedly.
-  std::unique_ptr<reporting::UploadClient> upload_client_;
-
-  // Storage module, referring to missived.
-  const scoped_refptr<reporting::StorageModuleInterface> storage_module_;
-
-  // Keep this last so that all weak pointers will be invalidated at the
-  // beginning of destruction.
-  base::WeakPtrFactory<UploadHelper> weak_ptr_factory_{this};
-};
-
-EncryptedReportingServiceProvider::UploadHelper::UploadHelper(
-    reporting::GetCloudPolicyClientCallback build_cloud_policy_client_cb,
-    UploadClientBuilderCb upload_client_builder_cb,
-    scoped_refptr<base::SequencedTaskRunner> sequenced_task_runner)
-    : base::RefCountedDeleteOnSequence<UploadHelper>(sequenced_task_runner),
-      sequenced_task_runner_(std::move(sequenced_task_runner)),
-      build_cloud_policy_client_cb_(build_cloud_policy_client_cb),
-      upload_client_builder_cb_(upload_client_builder_cb),
-      backoff_entry_(reporting::GetBackoffEntry()),
-      storage_module_(MissiveClient::Get()->GetMissiveStorageModule()) {
-  DETACH_FROM_SEQUENCE(sequenced_task_checker_);
-}
-
-EncryptedReportingServiceProvider::UploadHelper::~UploadHelper() {
-  // Weak pointer factory must be destructed on the sequence.
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequenced_task_checker_);
-}
-
-void EncryptedReportingServiceProvider::UploadHelper::
-    PostNewCloudPolicyClientRequest() {
-  sequenced_task_runner_->PostTask(
-      FROM_HERE, base::BindOnce(&UploadHelper::TryNewCloudPolicyClientRequest,
-                                weak_ptr_factory_.GetWeakPtr()));
-}
-
-void EncryptedReportingServiceProvider::UploadHelper::
-    TryNewCloudPolicyClientRequest() {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequenced_task_checker_);
-  if (upload_client_ != nullptr) {
-    return;
-  }
-  if (upload_client_request_in_progress_) {
-    return;
-  }
-  upload_client_request_in_progress_ = true;
-
-  sequenced_task_runner_->PostDelayedTask(
-      FROM_HERE,
-      base::BindOnce(
-          [](base::WeakPtr<EncryptedReportingServiceProvider::UploadHelper>
-                 self) {
-            if (!self) {
-              return;  // Provider expired
-            }
-            self->build_cloud_policy_client_cb_.Run(base::BindPostTask(
-                self->sequenced_task_runner_,
-                base::BindOnce(&UploadHelper::OnCloudPolicyClientResult,
-                               self->weak_ptr_factory_.GetWeakPtr())));
-          },
-          weak_ptr_factory_.GetWeakPtr()),
-      backoff_entry_->GetTimeUntilRelease());
-
-  // Increase backoff_entry_ for next request.
-  backoff_entry_->InformOfRequest(/*succeeded=*/false);
-}
-
-void EncryptedReportingServiceProvider::UploadHelper::OnCloudPolicyClientResult(
-    reporting::StatusOr<policy::CloudPolicyClient*> client_result) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequenced_task_checker_);
-  if (!client_result.ok()) {
-    upload_client_request_in_progress_ = false;
-    TryNewCloudPolicyClientRequest();
-    return;
-  }
-  upload_client_builder_cb_.Run(
-      storage_module_, client_result.ValueOrDie(),
-      base::BindPostTask(sequenced_task_runner_,
-                         base::BindOnce(&UploadHelper::OnUploadClientResult,
-                                        weak_ptr_factory_.GetWeakPtr())));
-}
-
-void EncryptedReportingServiceProvider::UploadHelper::OnUploadClientResult(
-    reporting::StatusOr<std::unique_ptr<reporting::UploadClient>>
-        client_result) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequenced_task_checker_);
-  if (!client_result.ok()) {
-    upload_client_request_in_progress_ = false;
-    sequenced_task_runner_->PostTask(
-        FROM_HERE,
-        base::BindOnce(&UploadHelper::PostNewCloudPolicyClientRequest,
-                       weak_ptr_factory_.GetWeakPtr()));
-    return;
-  }
-  sequenced_task_runner_->PostTask(
-      FROM_HERE, base::BindOnce(&UploadHelper::UpdateUploadClient,
-                                weak_ptr_factory_.GetWeakPtr(),
-                                std::move(client_result.ValueOrDie())));
-}
-
-void EncryptedReportingServiceProvider::UploadHelper::UpdateUploadClient(
-    std::unique_ptr<reporting::UploadClient> upload_client) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequenced_task_checker_);
-  upload_client_ = std::move(upload_client);
-  backoff_entry_->InformOfRequest(/*succeeded=*/true);
-  upload_client_request_in_progress_ = false;
-}
-
-void EncryptedReportingServiceProvider::UploadHelper::EnqueueUpload(
-    bool need_encryption_key,
-    std::unique_ptr<std::vector<reporting::EncryptedRecord>> records,
-    base::OnceCallback<void(reporting::Status)> enqueued_cb) const {
-  sequenced_task_runner_->PostTask(
-      FROM_HERE,
-      base::BindOnce(&UploadHelper::EnqueueUploadInternal,
-                     weak_ptr_factory_.GetWeakPtr(), need_encryption_key,
-                     std::move(records), std::move(enqueued_cb)));
-}
-
-void EncryptedReportingServiceProvider::UploadHelper::EnqueueUploadInternal(
-    bool need_encryption_key,
-    std::unique_ptr<std::vector<reporting::EncryptedRecord>> records,
-    base::OnceCallback<void(reporting::Status)> enqueued_cb) const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequenced_task_checker_);
-  if (upload_client_ == nullptr) {
-    std::move(enqueued_cb)
-        .Run(reporting::Status{reporting::error::UNAVAILABLE,
-                               "UploadClient isn't ready"});
-    return;
-  }
-  std::move(enqueued_cb)
-      .Run(upload_client_->EnqueueUpload(need_encryption_key,
-                                         std::move(records)));
-}
 
 // EncryptedReportingServiceProvider implementation.
 
 EncryptedReportingServiceProvider::EncryptedReportingServiceProvider(
-    reporting::GetCloudPolicyClientCallback build_cloud_policy_client_cb,
-    UploadClientBuilderCb upload_client_builder_cb)
+    std::unique_ptr<::reporting::EncryptedReportingUploadProvider>
+        upload_provider)
     : origin_thread_id_(base::PlatformThread::CurrentId()),
       origin_thread_runner_(base::ThreadTaskRunnerHandle::Get()),
-      helper_(base::MakeRefCounted<UploadHelper>(
-          build_cloud_policy_client_cb,
-          upload_client_builder_cb,
-          base::ThreadPool::CreateSequencedTaskRunner(
-              {base::TaskPriority::BEST_EFFORT, base::MayBlock()}))) {}
+      memory_resource_(base::MakeRefCounted<::reporting::MemoryResourceImpl>(
+          kDefaultMemoryAllocation)),
+      upload_provider_(std::move(upload_provider)) {
+  DCHECK(upload_provider_.get());
+}
 
 EncryptedReportingServiceProvider::~EncryptedReportingServiceProvider() =
     default;
@@ -282,9 +74,10 @@ void EncryptedReportingServiceProvider::Start(
   DCHECK(OnOriginThread());
 
   if (!::reporting::StorageSelector::is_uploader_required()) {
-    // In LaCros configuration only Ash chrome is expected to receive
-    // uploads.
-    LOG(WARNING) << "Uploads are not expected in this configuration";
+    // We should never get to here, since the provider is only exported
+    // when is_uploader_required() is true. Have this code only
+    // in order to log configuration inconsistency.
+    LOG(ERROR) << "Uploads are not expected in this configuration";
     return;
   }
 
@@ -292,23 +85,55 @@ void EncryptedReportingServiceProvider::Start(
       chromeos::kChromeReportingServiceInterface,
       chromeos::kChromeReportingServiceUploadEncryptedRecordMethod,
       base::BindRepeating(
-          &EncryptedReportingServiceProvider::RequestUploadEncryptedRecord,
+          &EncryptedReportingServiceProvider::RequestUploadEncryptedRecords,
           weak_ptr_factory_.GetWeakPtr()),
       base::BindOnce(&EncryptedReportingServiceProvider::OnExported,
                      weak_ptr_factory_.GetWeakPtr()));
-  helper_->PostNewCloudPolicyClientRequest();
 }
 
 void EncryptedReportingServiceProvider::OnExported(
     const std::string& interface_name,
     const std::string& method_name,
     bool success) {
-  if (!success) {
-    LOG(ERROR) << "Failed to export " << interface_name << "." << method_name;
-  }
+  LOG_IF(ERROR, !success) << "Failed to export " << interface_name << "."
+                          << method_name;
 }
 
-void EncryptedReportingServiceProvider::RequestUploadEncryptedRecord(
+// static
+::reporting::UploadClient::ReportSuccessfulUploadCallback
+EncryptedReportingServiceProvider::GetReportSuccessUploadCallback() {
+  MissiveClient* const missive_client = MissiveClient::Get();
+  return base::BindPostTask(
+      missive_client->origin_task_runner(),
+      base::BindRepeating(
+          [](base::WeakPtr<MissiveClient> missive_client,
+             ::reporting::SequenceInformation sequence_information,
+             bool force_confirm) {
+            if (missive_client) {
+              missive_client->ReportSuccess(std::move(sequence_information),
+                                            force_confirm);
+            }
+          },
+          missive_client->GetWeakPtr()));
+}
+
+// static
+::reporting::UploadClient::EncryptionKeyAttachedCallback
+EncryptedReportingServiceProvider::GetEncryptionKeyAttachedCallback() {
+  MissiveClient* const missive_client = MissiveClient::Get();
+  return base::BindPostTask(
+      missive_client->origin_task_runner(),
+      base::BindRepeating(
+          [](base::WeakPtr<MissiveClient> missive_client,
+             ::reporting::SignedEncryptionInfo signed_encryption_info) {
+            if (missive_client) {
+              missive_client->UpdateEncryptionKey(signed_encryption_info);
+            }
+          },
+          missive_client->GetWeakPtr()));
+}
+
+void EncryptedReportingServiceProvider::RequestUploadEncryptedRecords(
     dbus::MethodCall* method_call,
     dbus::ExportedObject::ResponseSender response_sender) {
   DCHECK(OnOriginThread());
@@ -326,12 +151,15 @@ void EncryptedReportingServiceProvider::RequestUploadEncryptedRecord(
     return;
   }
 
-  reporting::UploadEncryptedRecordRequest request;
   dbus::MessageReader reader(method_call);
-  if (!reader.PopArrayOfBytesAsProto(&request)) {
+  const char* serialized_request_buf = nullptr;
+  size_t serialized_request_buf_size = 0;
+  if (!reader.PopArrayOfBytes(
+          reinterpret_cast<const uint8_t**>(&serialized_request_buf),
+          &serialized_request_buf_size)) {
     reporting::Status status{
         reporting::error::INVALID_ARGUMENT,
-        "Message was not decipherable as an UploadEncryptedRecordRequest"};
+        "Error reading UploadEncryptedRecordRequest as array of bytes"};
     LOG(ERROR) << "Unable to process UploadEncryptedRecordRequest. status: "
                << status;
     SendStatusAsResponse(std::move(response), std::move(response_sender),
@@ -339,27 +167,78 @@ void EncryptedReportingServiceProvider::RequestUploadEncryptedRecord(
     return;
   }
 
-  auto records = std::make_unique<std::vector<reporting::EncryptedRecord>>();
-  for (auto& record : request.encrypted_record()) {
-    records->push_back(std::move(record));
+  ::reporting::ScopedReservation scoped_reservation(serialized_request_buf_size,
+                                                    memory_resource_);
+  if (!scoped_reservation.reserved()) {
+    reporting::Status status{reporting::error::RESOURCE_EXHAUSTED,
+                             "UploadEncryptedRecordRequest has exhausted "
+                             "assigned memory pool in Chrome"};
+    LOG(ERROR) << "Unable to process UploadEncryptedRecordRequest. status: "
+               << status;
+    SendStatusAsResponse(std::move(response), std::move(response_sender),
+                         status);
+    return;
   }
-  DCHECK(helper_);
-  helper_->EnqueueUpload(
+
+  reporting::UploadEncryptedRecordRequest request;
+  if (!request.ParseFromArray(serialized_request_buf,
+                              serialized_request_buf_size)) {
+    reporting::Status status{
+        reporting::error::INVALID_ARGUMENT,
+        "Failed to parse UploadEncryptedRecordRequest from array of bytes."};
+    LOG(ERROR) << "Unable to process UploadEncryptedRecordRequest. status: "
+               << status;
+    SendStatusAsResponse(std::move(response), std::move(response_sender),
+                         status);
+    return;
+  }
+
+  // Missive should always send the remaining storage capacity and new events
+  // rate. If not, probably an outdated version of missive is running. In this
+  // case, we ignore the effect of remaining storage capacity/new events rate
+  // and give it the max/min possible value.
+  const auto remaining_storage_capacity =
+      request.has_remaining_storage_capacity()
+          ? request.remaining_storage_capacity()
+          : std::numeric_limits<uint64_t>::max();
+  const auto new_events_rate =
+      request.has_new_events_rate() ? request.new_events_rate() : 1U;
+  // Move events from |request| into a separate vector |records|, using more or
+  // less the same amount of memory that has been reserved above.
+  auto records{reporting::EventUploadSizeController::BuildEncryptedRecords(
+      request.encrypted_record(),
+      reporting::EventUploadSizeController(network_condition_service_,
+                                           new_events_rate,
+                                           remaining_storage_capacity))};
+
+  DCHECK(upload_provider_);
+  MissiveClient* const missive_client = MissiveClient::Get();
+  if (!missive_client) {
+    LOG(ERROR) << "No Missive client available";
+    SendStatusAsResponse(
+        std::move(response), std::move(response_sender),
+        reporting::Status(reporting::error::FAILED_PRECONDITION,
+                          "No Missive client available"));
+    return;
+  }
+
+  upload_provider_->RequestUploadEncryptedRecords(
       request.need_encryption_keys(), std::move(records),
+      std::move(scoped_reservation),
       base::BindPostTask(
           origin_thread_runner_,
           base::BindOnce(&SendStatusAsResponse, std::move(response),
                          std::move(response_sender))));
 }
 
-// static
-EncryptedReportingServiceProvider::UploadClientBuilderCb
-EncryptedReportingServiceProvider::GetUploadClientBuilder() {
-  return base::BindRepeating(&BuildUploadClient);
-}
-
 bool EncryptedReportingServiceProvider::OnOriginThread() const {
   return base::PlatformThread::CurrentId() == origin_thread_id_;
 }
 
+// static
+std::unique_ptr<::reporting::EncryptedReportingUploadProvider>
+EncryptedReportingServiceProvider::GetDefaultUploadProvider() {
+  return std::make_unique<::reporting::EncryptedReportingUploadProvider>(
+      GetReportSuccessUploadCallback(), GetEncryptionKeyAttachedCallback());
+}
 }  // namespace ash

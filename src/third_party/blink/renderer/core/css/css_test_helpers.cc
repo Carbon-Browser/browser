@@ -24,11 +24,13 @@
 #include "third_party/blink/renderer/core/css/property_registration.h"
 #include "third_party/blink/renderer/core/css/property_registry.h"
 #include "third_party/blink/renderer/core/css/rule_set.h"
+#include "third_party/blink/renderer/core/css/style_engine.h"
 #include "third_party/blink/renderer/core/css/style_sheet_contents.h"
 #include "third_party/blink/renderer/core/dom/document.h"
+#include "third_party/blink/renderer/core/execution_context/security_context.h"
 #include "third_party/blink/renderer/core/testing/page_test_base.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/wtf/text/text_encoding.h"
 
 namespace blink {
@@ -148,7 +150,13 @@ void DeclareProperty(Document& document,
       DynamicTo<StyleRuleProperty>(ParseRule(document, builder.ToString()));
   if (!rule)
     return;
-  PropertyRegistration::DeclareProperty(document, AtomicString(name), *rule);
+  auto* registration = PropertyRegistration::MaybeCreateForDeclaredProperty(
+      document, AtomicString(name), *rule);
+  if (!registration)
+    return;
+  document.EnsurePropertyRegistry().DeclareProperty(AtomicString(name),
+                                                    *registration);
+  document.GetStyleEngine().PropertyRegistryChanged();
 }
 
 scoped_refptr<CSSVariableData> CreateVariableData(String s) {
@@ -215,7 +223,9 @@ CSSSelectorList ParseSelectorList(const String& string) {
   CSSTokenizer tokenizer(string);
   const auto tokens = tokenizer.TokenizeToEOF();
   CSSParserTokenRange range(tokens);
-  return CSSSelectorParser::ParseSelector(range, context, sheet);
+  CSSSelectorVector vector =
+      CSSSelectorParser::ParseSelector(range, context, sheet);
+  return CSSSelectorList::AdoptSelectorVector(vector);
 }
 
 }  // namespace css_test_helpers

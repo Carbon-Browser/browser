@@ -7,11 +7,8 @@
 #include <utility>
 
 #include "base/bind.h"
-#include "base/command_line.h"
 #include "base/feature_list.h"
 #include "base/logging.h"
-#include "base/macros.h"
-#include "base/task/post_task.h"
 #include "components/autofill/core/browser/webdata/autocomplete_sync_bridge.h"
 #include "components/autofill/core/browser/webdata/autofill_profile_sync_bridge.h"
 #include "components/autofill/core/browser/webdata/autofill_wallet_metadata_sync_bridge.h"
@@ -19,7 +16,7 @@
 #include "components/autofill/core/browser/webdata/autofill_webdata_service.h"
 #include "components/autofill/core/common/autofill_features.h"
 #include "components/browser_sync/browser_sync_switches.h"
-#include "components/browser_sync/profile_sync_components_factory_impl.h"
+#include "components/browser_sync/sync_api_component_factory_impl.h"
 #include "components/consent_auditor/consent_auditor.h"
 #include "components/dom_distiller/core/dom_distiller_service.h"
 #include "components/history/core/browser/history_service.h"
@@ -31,13 +28,11 @@
 #include "components/password_manager/core/browser/password_store_interface.h"
 #include "components/reading_list/core/reading_list_model.h"
 #include "components/sync/base/report_unrecoverable_error.h"
-#include "components/sync/base/sync_base_switches.h"
 #include "components/sync/base/sync_util.h"
 #include "components/sync/driver/sync_api_component_factory.h"
 #include "components/sync/driver/sync_service.h"
 #include "components/sync_sessions/session_sync_service.h"
 #include "components/sync_user_events/user_event_service.h"
-#include "ios/chrome/browser/bookmarks/bookmark_model_factory.h"
 #include "ios/chrome/browser/bookmarks/bookmark_sync_service_factory.h"
 #include "ios/chrome/browser/browser_state/chrome_browser_state.h"
 #include "ios/chrome/browser/dom_distiller/dom_distiller_service_factory.h"
@@ -49,6 +44,7 @@
 #include "ios/chrome/browser/reading_list/reading_list_model_factory.h"
 #import "ios/chrome/browser/signin/chrome_account_manager_service_factory.h"
 #include "ios/chrome/browser/signin/identity_manager_factory.h"
+#import "ios/chrome/browser/signin/trusted_vault_client_backend_factory.h"
 #include "ios/chrome/browser/sync/consent_auditor_factory.h"
 #include "ios/chrome/browser/sync/device_info_sync_service_factory.h"
 #include "ios/chrome/browser/sync/ios_trusted_vault_client.h"
@@ -57,7 +53,6 @@
 #include "ios/chrome/browser/sync/send_tab_to_self_sync_service_factory.h"
 #include "ios/chrome/browser/sync/session_sync_service_factory.h"
 #include "ios/chrome/browser/sync/sync_invalidations_service_factory.h"
-#include "ios/chrome/browser/undo/bookmark_undo_service_factory.h"
 #include "ios/chrome/browser/webdata_services/web_data_service_factory.h"
 #include "ios/chrome/common/channel_info.h"
 #include "ios/web/public/thread/web_task_traits.h"
@@ -66,24 +61,6 @@
 #if !defined(__has_feature) || !__has_feature(objc_arc)
 #error "This file requires ARC support."
 #endif
-
-namespace {
-
-syncer::ModelTypeSet GetDisabledTypesFromCommandLine() {
-  std::string disabled_types_str =
-      base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
-          switches::kDisableSyncTypes);
-
-  syncer::ModelTypeSet disabled_types =
-      syncer::ModelTypeSetFromString(disabled_types_str);
-  if (disabled_types.Has(syncer::DEVICE_INFO)) {
-    DLOG(WARNING) << "DEVICE_INFO cannot be disabled via a command-line switch";
-    disabled_types.Remove(syncer::DEVICE_INFO);
-  }
-  return disabled_types;
-}
-
-}  // namespace
 
 IOSChromeSyncClient::IOSChromeSyncClient(ChromeBrowserState* browser_state)
     : browser_state_(browser_state) {
@@ -99,19 +76,19 @@ IOSChromeSyncClient::IOSChromeSyncClient(ChromeBrowserState* browser_state)
   db_thread_ = profile_web_data_service_
                    ? profile_web_data_service_->GetDBTaskRunner()
                    : nullptr;
-  password_store_ = IOSChromePasswordStoreFactory::GetInterfaceForBrowserState(
+  password_store_ = IOSChromePasswordStoreFactory::GetForBrowserState(
       browser_state_, ServiceAccessType::IMPLICIT_ACCESS);
 
   component_factory_ =
-      std::make_unique<browser_sync::ProfileSyncComponentsFactoryImpl>(
-          this, ::GetChannel(),
-          base::CreateSingleThreadTaskRunner({web::WebThread::UI}), db_thread_,
+      std::make_unique<browser_sync::SyncApiComponentFactoryImpl>(
+          this, ::GetChannel(), web::GetUIThreadTaskRunner({}), db_thread_,
           profile_web_data_service_, account_web_data_service_, password_store_,
           /*account_password_store=*/nullptr,
           ios::BookmarkSyncServiceFactory::GetForBrowserState(browser_state_));
 
   trusted_vault_client_ = std::make_unique<IOSTrustedVaultClient>(
-      ChromeAccountManagerServiceFactory::GetForBrowserState(browser_state_));
+      ChromeAccountManagerServiceFactory::GetForBrowserState(browser_state_),
+      TrustedVaultClientBackendFactory::GetForBrowserState(browser_state_));
 }
 
 IOSChromeSyncClient::~IOSChromeSyncClient() {}
@@ -146,11 +123,6 @@ IOSChromeSyncClient::GetSendTabToSelfSyncService() {
   return SendTabToSelfSyncServiceFactory::GetForBrowserState(browser_state_);
 }
 
-bookmarks::BookmarkModel* IOSChromeSyncClient::GetBookmarkModel() {
-  DCHECK_CURRENTLY_ON(web::WebThread::UI);
-  return ios::BookmarkModelFactory::GetForBrowserState(browser_state_);
-}
-
 favicon::FaviconService* IOSChromeSyncClient::GetFaviconService() {
   DCHECK_CURRENTLY_ON(web::WebThread::UI);
   return ios::FaviconServiceFactory::GetForBrowserState(
@@ -180,11 +152,7 @@ IOSChromeSyncClient::CreateDataTypeControllers(
     syncer::SyncService* sync_service) {
   // The iOS port does not have any platform-specific datatypes.
   return component_factory_->CreateCommonDataTypeControllers(
-      GetDisabledTypesFromCommandLine(), sync_service);
-}
-
-BookmarkUndoService* IOSChromeSyncClient::GetBookmarkUndoService() {
-  return ios::BookmarkUndoServiceFactory::GetForBrowserState(browser_state_);
+      /*disabled_types=*/{}, sync_service);
 }
 
 invalidation::InvalidationService*

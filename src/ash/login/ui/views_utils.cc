@@ -9,6 +9,7 @@
 
 #include "ash/login/ui/non_accessible_view.h"
 #include "ash/public/cpp/shelf_config.h"
+#include "ash/style/ash_color_provider.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
 #include "ui/views/controls/focus_ring.h"
@@ -27,6 +28,10 @@ class ContainerView : public NonAccessibleView,
   ContainerView() {
     SetEventTargeter(std::make_unique<views::ViewTargeter>(this));
   }
+
+  ContainerView(const ContainerView&) = delete;
+  ContainerView& operator=(const ContainerView&) = delete;
+
   ~ContainerView() override = default;
 
   // views::ViewTargeterDelegate:
@@ -41,9 +46,6 @@ class ContainerView : public NonAccessibleView,
     };
     return std::any_of(children.cbegin(), children.cend(), hits_child);
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ContainerView);
 };
 
 }  // namespace
@@ -52,7 +54,10 @@ namespace login_views_utils {
 
 std::unique_ptr<views::View> WrapViewForPreferredSize(
     std::unique_ptr<views::View> view) {
-  auto proxy = std::make_unique<NonAccessibleView>();
+  // Using ContainerView here ensures that click events will be passed to the
+  // wrapped view even if a transform is applied that moves the view outside the
+  // wrapper.
+  auto proxy = std::make_unique<ContainerView>();
   auto layout_manager = std::make_unique<views::BoxLayout>(
       views::BoxLayout::Orientation::kVertical);
   layout_manager->set_cross_axis_alignment(
@@ -98,13 +103,14 @@ bool HasFocusInAnyChildView(views::View* view) {
   return search == view;
 }
 
-views::Label* CreateBubbleLabel(const std::u16string& message,
-                                views::View* view_defining_max_width,
-                                SkColor color,
-                                const gfx::FontList& font_list,
-                                int line_height) {
-  views::Label* label =
-      new views::Label(message, views::style::CONTEXT_DIALOG_BODY_TEXT);
+std::unique_ptr<views::Label> CreateBubbleLabel(
+    const std::u16string& message,
+    views::View* view_defining_max_width,
+    SkColor color,
+    const gfx::FontList& font_list,
+    int line_height) {
+  auto label = std::make_unique<views::Label>(
+      message, views::style::CONTEXT_DIALOG_BODY_TEXT);
   label->SetAutoColorReadabilityEnabled(false);
   label->SetHorizontalAlignment(gfx::ALIGN_LEFT);
   label->SetEnabledColor(color);
@@ -179,7 +185,6 @@ void ConfigureRectFocusRingCircleInkDrop(views::View* view,
                                          absl::optional<int> radius) {
   DCHECK(view);
   DCHECK(focus_ring);
-  focus_ring->SetColor(ShelfConfig::Get()->shelf_focus_border_color());
   focus_ring->SetPathGenerator(
       std::make_unique<views::RectHighlightPathGenerator>());
 

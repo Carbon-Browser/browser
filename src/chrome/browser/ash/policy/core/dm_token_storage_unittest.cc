@@ -6,17 +6,18 @@
 
 #include <memory>
 
+#include "ash/components/cryptohome/system_salt_getter.h"
 #include "base/bind.h"
+#include "base/callback.h"
 #include "base/run_loop.h"
 #include "chrome/test/base/scoped_testing_local_state.h"
 #include "chrome/test/base/testing_browser_process.h"
-#include "chromeos/cryptohome/system_salt_getter.h"
+#include "chromeos/ash/components/dbus/userdataauth/fake_cryptohome_misc_client.h"
 #include "chromeos/dbus/dbus_thread_manager.h"
-#include "chromeos/dbus/userdataauth/fake_cryptohome_misc_client.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-using chromeos::FakeCryptohomeMiscClient;
+using ash::FakeCryptohomeMiscClient;
 
 namespace policy {
 
@@ -47,7 +48,7 @@ class DMTokenStorageTest : public testing::Test {
 
   void SetUp() override {
     chromeos::DBusThreadManager::Initialize();
-    chromeos::CryptohomeMiscClient::InitializeFake();
+    ash::CryptohomeMiscClient::InitializeFake();
     SetSaltAvailable();
 
     chromeos::SystemSaltGetter::Initialize();
@@ -56,7 +57,7 @@ class DMTokenStorageTest : public testing::Test {
   void TearDown() override {
     dm_token_storage_.reset();
     chromeos::SystemSaltGetter::Shutdown();
-    chromeos::CryptohomeMiscClient::Shutdown();
+    ash::CryptohomeMiscClient::Shutdown();
     chromeos::DBusThreadManager::Shutdown();
     base::RunLoop().RunUntilIdle();
   }

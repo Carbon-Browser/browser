@@ -16,12 +16,20 @@ namespace device {
 class BluetoothAdapter;
 }  // namespace device
 
+class PrefService;
+
 namespace chromeos {
 namespace bluetooth_config {
 
 class AdapterStateController;
+class BluetoothDeviceStatusNotifier;
+class BluetoothPowerController;
 class DeviceCache;
+class DeviceNameManager;
+class DeviceOperationHandler;
+class DiscoveredDevicesProvider;
 class DiscoverySessionManager;
+class FastPairDelegate;
 class Initializer;
 class SystemPropertiesProvider;
 
@@ -30,10 +38,13 @@ class SystemPropertiesProvider;
 // the API by delegating to these helpers.
 class CrosBluetoothConfig : public mojom::CrosBluetoothConfig {
  public:
-  CrosBluetoothConfig(
-      Initializer& initializer,
-      scoped_refptr<device::BluetoothAdapter> bluetooth_adapter);
+  CrosBluetoothConfig(Initializer& initializer,
+                      scoped_refptr<device::BluetoothAdapter> bluetooth_adapter,
+                      FastPairDelegate* fast_pair_delegate);
   ~CrosBluetoothConfig() override;
+
+  // Sets the PrefServices to be used by classes within CrosBluetoothConfig.
+  void SetPrefs(PrefService* logged_in_profile_prefs, PrefService* local_state);
 
   // Binds a PendingReceiver to this instance. Clients wishing to use the
   // CrosBluetoothConfig API should use this function as an entrypoint.
@@ -44,16 +55,37 @@ class CrosBluetoothConfig : public mojom::CrosBluetoothConfig {
   // mojom::CrosBluetoothConfig:
   void ObserveSystemProperties(
       mojo::PendingRemote<mojom::SystemPropertiesObserver> observer) override;
+  void ObserveDeviceStatusChanges(
+      mojo::PendingRemote<mojom::BluetoothDeviceStatusObserver> observer)
+      override;
+  void ObserveDiscoverySessionStatusChanges(
+      mojo::PendingRemote<mojom::DiscoverySessionStatusObserver> observer)
+      override;
   void SetBluetoothEnabledState(bool enabled) override;
+  void SetBluetoothHidDetectionActive() override;
+  void SetBluetoothHidDetectionInactive(bool is_using_bluetooth) override;
   void StartDiscovery(
       mojo::PendingRemote<mojom::BluetoothDiscoveryDelegate> delegate) override;
+  void Connect(const std::string& device_id, ConnectCallback callback) override;
+  void Disconnect(const std::string& device_id,
+                  DisconnectCallback callback) override;
+  void Forget(const std::string& device_id, ForgetCallback callback) override;
+  void SetDeviceNickname(const std::string& device_id,
+                         const std::string& nickname) override;
 
   mojo::ReceiverSet<mojom::CrosBluetoothConfig> receivers_;
 
   std::unique_ptr<AdapterStateController> adapter_state_controller_;
+  std::unique_ptr<BluetoothPowerController> bluetooth_power_controller_;
+  std::unique_ptr<DeviceNameManager> device_name_manager_;
   std::unique_ptr<DeviceCache> device_cache_;
   std::unique_ptr<SystemPropertiesProvider> system_properties_provider_;
+  std::unique_ptr<BluetoothDeviceStatusNotifier>
+      bluetooth_device_status_notifier_;
+  std::unique_ptr<DiscoveredDevicesProvider> discovered_devices_provider_;
   std::unique_ptr<DiscoverySessionManager> discovery_session_manager_;
+  std::unique_ptr<DeviceOperationHandler> device_operation_handler_;
+  FastPairDelegate* fast_pair_delegate_ = nullptr;
 };
 
 }  // namespace bluetooth_config

@@ -22,19 +22,19 @@
 #include "media/media_buildflags.h"
 #include "ppapi/buildflags/buildflags.h"
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #include "base/android/path_utils.h"
 #include "base/base_paths_android.h"
 // ui/base must only be used on Android. See BUILD.gn for dependency info.
 #include "ui/base/ui_base_paths.h"  // nogncheck
 #endif
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 #include "base/mac/bundle_locations.h"
 #include "base/mac/foundation_util.h"
 #endif
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include "base/win/registry.h"
 #endif
 
@@ -42,9 +42,14 @@
 #include "third_party/widevine/cdm/widevine_cdm_common.h"  // nogncheck
 #endif
 
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+#include "chromeos/crosapi/cpp/crosapi_constants.h"  // nogncheck
+#include "chromeos/lacros/lacros_paths.h"
+#endif
+
 namespace {
 
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 // The path to the external extension <id>.json files.
 // /usr/share seems like a good choice, see: http://www.pathname.com/fhs/
 const base::FilePath::CharType kFilepathSinglePrefExtensions[] =
@@ -54,7 +59,7 @@ const base::FilePath::CharType kFilepathSinglePrefExtensions[] =
     FILE_PATH_LITERAL("/usr/share/chromium/extensions");
 #endif  // BUILDFLAG(GOOGLE_CHROME_BRANDING)
 
-#endif  // defined(OS_LINUX) || defined(OS_CHROMEOS)
+#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 
 #if BUILDFLAG(ENABLE_WIDEVINE)
 // The name of the hint file that tells the latest component updated Widevine
@@ -79,7 +84,7 @@ base::FilePath& GetInvalidSpecifiedUserDataDirInternal() {
 // Gets the path for internal plugins.
 bool GetInternalPluginsDirectory(base::FilePath* result) {
 #if BUILDFLAG(ENABLE_PLUGINS)
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   // If called from Chrome, get internal plugins from a subdirectory of the
   // framework.
   if (base::mac::AmIBundled()) {
@@ -89,7 +94,7 @@ bool GetInternalPluginsDirectory(base::FilePath* result) {
     return true;
   }
   // In tests, just look in the module directory (below).
-#endif  //  defined(OS_MAC)
+#endif  //  BUILDFLAG(IS_MAC)
 
   // The rest of the world expects plugins in the module directory.
   return base::PathService::Get(base::DIR_MODULE, result);
@@ -103,11 +108,7 @@ bool GetInternalPluginsDirectory(base::FilePath* result) {
 // implementations should not be used if higher-versioned component-updated
 // implementations are available in DIR_USER_DATA.
 bool GetComponentDirectory(base::FilePath* result) {
-#if defined(OS_FUCHSIA)
-  // TODO(crbug.com/1241871): Support bundled components.
-  return false;
-#else
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   // If called from Chrome, return the framework's Libraries directory.
   if (base::mac::AmIBundled()) {
     *result = chrome::GetFrameworkBundlePath();
@@ -115,12 +116,11 @@ bool GetComponentDirectory(base::FilePath* result) {
     *result = result->Append("Libraries");
     return true;
   }
-// In tests, just look in the module directory (below).
+// In tests, just look in the assets directory (below).
 #endif
 
-  // The rest of the world expects components in the module directory.
-  return base::PathService::Get(base::DIR_MODULE, result);
-#endif
+  // The rest of the world expects components in the assets directory.
+  return base::PathService::Get(base::DIR_ASSETS, result);
 }
 
 }  // namespace
@@ -130,26 +130,21 @@ namespace chrome {
 bool PathProvider(int key, base::FilePath* result) {
   // Some keys are just aliases...
   switch (key) {
-    case chrome::DIR_APP:
-      return base::PathService::Get(base::DIR_MODULE, result);
     case chrome::DIR_LOGS:
 #ifdef NDEBUG
       // Release builds write to the data dir
       return base::PathService::Get(chrome::DIR_USER_DATA, result);
 #else
       // Debug builds write next to the binary (in the build tree)
-#if defined(OS_MAC)
+      // TODO(crbug.com/1262330): implement workable solution for Fuchsia.
+#if BUILDFLAG(IS_MAC)
       // Apps may not write into their own bundle.
       if (base::mac::AmIBundled()) {
         return base::PathService::Get(chrome::DIR_USER_DATA, result);
       }
+#endif  // BUILDFLAG(IS_MAC)
       return base::PathService::Get(base::DIR_EXE, result);
-#else
-      return base::PathService::Get(base::DIR_EXE, result);
-#endif  // defined(OS_MAC)
 #endif  // NDEBUG
-    case chrome::FILE_RESOURCE_MODULE:
-      return base::PathService::Get(base::FILE_MODULE, result);
   }
 
   // Assume that we will not need to create the directory if it does not exist.
@@ -183,7 +178,7 @@ bool PathProvider(int key, base::FilePath* result) {
         return false;
       break;
     case chrome::DIR_DEFAULT_DOWNLOADS_SAFE:
-#if defined(OS_WIN) || defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
       if (!GetUserDownloadsDirectorySafe(&cur))
         return false;
       break;
@@ -191,7 +186,7 @@ bool PathProvider(int key, base::FilePath* result) {
       // Fall through for all other platforms.
 #endif
     case chrome::DIR_DEFAULT_DOWNLOADS:
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
       if (!base::android::GetDownloadsDirectory(&cur))
         return false;
 #else
@@ -205,7 +200,7 @@ bool PathProvider(int key, base::FilePath* result) {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
       // ChromeOS uses a separate directory. See http://crosbug.com/25089
       cur = base::FilePath("/var/log/chrome");
-#elif defined(OS_ANDROID)
+#elif BUILDFLAG(IS_ANDROID)
       if (!base::android::GetCacheDirectory(&cur))
         return false;
 #else
@@ -218,14 +213,14 @@ bool PathProvider(int key, base::FilePath* result) {
       if (!GetDefaultUserDataDirectory(&cur))
         return false;
 #endif
-#if defined(OS_MAC) || defined(OS_WIN) || defined(OS_ANDROID)
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_ANDROID)
       cur = cur.Append(FILE_PATH_LITERAL("Crashpad"));
 #else
       cur = cur.Append(FILE_PATH_LITERAL("Crash Reports"));
 #endif
       create_dir = true;
       break;
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
     case chrome::DIR_WATCHER_DATA:
       // The watcher data is always stored relative to the default user data
       // directory.  This allows the watcher to be initialized before
@@ -243,27 +238,24 @@ bool PathProvider(int key, base::FilePath* result) {
       break;
 #endif
     case chrome::DIR_RESOURCES:
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
       cur = base::mac::FrameworkBundlePath();
       cur = cur.Append(FILE_PATH_LITERAL("Resources"));
-#elif defined(OS_FUCHSIA)
-      if (!base::PathService::Get(base::DIR_ASSETS, &cur))
-        return false;
 #else
-      if (!base::PathService::Get(chrome::DIR_APP, &cur))
+      if (!base::PathService::Get(base::DIR_ASSETS, &cur))
         return false;
       cur = cur.Append(FILE_PATH_LITERAL("resources"));
 #endif
       break;
     case chrome::DIR_APP_DICTIONARIES:
-#if defined(OS_POSIX)
-      // We can't write into the EXE dir on Linux, so keep dictionaries
-      // alongside the safe browsing database in the user data dir.
-      // And we don't want to write into the bundle on the Mac, so push
-      // it to the user data dir there also.
+#if !BUILDFLAG(IS_WIN)
+      // On most platforms, we can't write into the directory where
+      // binaries are stored, so keep dictionaries in the user data dir.
       if (!base::PathService::Get(chrome::DIR_USER_DATA, &cur))
         return false;
 #else
+      // TODO(crbug.com/1325862): Migrate Windows to use `DIR_USER_DATA` like
+      // other platforms.
       if (!base::PathService::Get(base::DIR_EXE, &cur))
         return false;
 #endif
@@ -302,7 +294,7 @@ bool PathProvider(int key, base::FilePath* result) {
     // was shipped along with chrome.  The value can be overridden
     // if it is installed via component updater.
     case chrome::DIR_PNACL_COMPONENT:
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
       // PNaCl really belongs in the InternalPluginsDirectory but actually
       // copying it there would result in the files also being shipped, which
       // we don't want yet. So for now, just find them in the directory where
@@ -329,11 +321,7 @@ bool PathProvider(int key, base::FilePath* result) {
     case chrome::DIR_BUNDLED_WIDEVINE_CDM:
       if (!GetComponentDirectory(&cur))
         return false;
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
-      // TODO(crbug.com/971433): Move Widevine CDM to a separate folder on
-      // Chrome OS so that the manifest can be included.
       cur = cur.AppendASCII(kWidevineCdmBaseDirectory);
-#endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
       break;
 
     case chrome::DIR_COMPONENT_UPDATED_WIDEVINE_CDM:
@@ -351,11 +339,11 @@ bool PathProvider(int key, base::FilePath* result) {
 
     case chrome::FILE_RESOURCES_PACK:  // Falls through.
     case chrome::FILE_DEV_UI_RESOURCES_PACK:
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
       cur = base::mac::FrameworkBundlePath();
       cur = cur.Append(FILE_PATH_LITERAL("Resources"))
                .Append(FILE_PATH_LITERAL("resources.pak"));
-#elif defined(OS_ANDROID)
+#elif BUILDFLAG(IS_ANDROID)
       if (!base::PathService::Get(ui::DIR_RESOURCE_PAKS_ANDROID, &cur))
         return false;
       if (key == chrome::FILE_DEV_UI_RESOURCES_PACK) {
@@ -373,6 +361,20 @@ bool PathProvider(int key, base::FilePath* result) {
       cur = cur.Append(FILE_PATH_LITERAL("resources.pak"));
 #endif
       break;
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+    case chrome::FILE_RESOURCES_FOR_SHARING_PACK:
+      if (!GetDefaultUserDataDirectory(&cur))
+        return false;
+      cur = cur.Append(FILE_PATH_LITERAL(crosapi::kSharedResourcesPackName));
+      break;
+    case chrome::FILE_ASH_RESOURCES_PACK:
+      if (!base::PathService::Get(chromeos::lacros_paths::ASH_RESOURCES_DIR,
+                                  &cur))
+        return false;
+      cur = cur.Append("resources.pak");
+      break;
+#endif
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
     case chrome::DIR_CHROMEOS_WALLPAPERS:
@@ -395,15 +397,8 @@ bool PathProvider(int key, base::FilePath* result) {
     // will fail if executed from an installed executable (because the
     // generated path won't exist).
     case chrome::DIR_GEN_TEST_DATA:
-#if defined(OS_ANDROID)
-      // On Android, our tests don't have permission to write to DIR_MODULE.
-      // gtest/test_runner.py pushes data to external storage.
-      if (!base::PathService::Get(base::DIR_SOURCE_ROOT, &cur))
+      if (!base::PathService::Get(base::DIR_GEN_TEST_DATA_ROOT, &cur))
         return false;
-#else
-      if (!base::PathService::Get(base::DIR_MODULE, &cur))
-        return false;
-#endif
       cur = cur.Append(FILE_PATH_LITERAL("test_data"));
       if (!base::PathExists(cur))  // We don't want to create this.
         return false;
@@ -426,7 +421,7 @@ bool PathProvider(int key, base::FilePath* result) {
       if (!base::PathExists(cur))  // We don't want to create this
         return false;
       break;
-#if defined(OS_POSIX) && !defined(OS_MAC) && !defined(OS_OPENBSD)
+#if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_MAC) && !BUILDFLAG(IS_OPENBSD)
     case chrome::DIR_POLICY_FILES: {
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
       cur = base::FilePath(FILE_PATH_LITERAL("/etc/opt/chrome/policies"));
@@ -438,10 +433,10 @@ bool PathProvider(int key, base::FilePath* result) {
 #endif
 // TODO(crbug.com/1052397): Revisit once build flag switch of lacros-chrome is
 // complete.
-#if BUILDFLAG(IS_CHROMEOS_ASH) ||                            \
-    ((defined(OS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)) && \
-     BUILDFLAG(CHROMIUM_BRANDING)) ||                        \
-    defined(OS_MAC)
+#if BUILDFLAG(IS_CHROMEOS_ASH) ||                              \
+    ((BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)) && \
+     BUILDFLAG(CHROMIUM_BRANDING)) ||                          \
+    BUILDFLAG(IS_MAC)
     case chrome::DIR_USER_EXTERNAL_EXTENSIONS: {
       if (!base::PathService::Get(chrome::DIR_USER_DATA, &cur))
         return false;
@@ -449,25 +444,24 @@ bool PathProvider(int key, base::FilePath* result) {
       break;
     }
 #endif
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
     case chrome::DIR_STANDALONE_EXTERNAL_EXTENSIONS: {
       cur = base::FilePath(kFilepathSinglePrefExtensions);
       break;
     }
 #endif
     case chrome::DIR_EXTERNAL_EXTENSIONS:
-#if defined(OS_FUCHSIA)
+#if BUILDFLAG(IS_FUCHSIA)
       // TODO(crbug.com/1241872): Support external extensions.
       return false;
 #else
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
       if (!chrome::GetGlobalApplicationSupportDirectory(&cur))
         return false;
 
       cur = cur.Append(FILE_PATH_LITERAL("Google"))
                .Append(FILE_PATH_LITERAL("Chrome"))
                .Append(FILE_PATH_LITERAL("External Extensions"));
-      create_dir = false;
 #else
       if (!base::PathService::Get(base::DIR_MODULE, &cur))
         return false;
@@ -479,24 +473,24 @@ bool PathProvider(int key, base::FilePath* result) {
 #endif
 
     case chrome::DIR_DEFAULT_APPS:
-#if defined(OS_FUCHSIA)
+#if BUILDFLAG(IS_FUCHSIA)
       // TODO(crbug.com/1241872): Support default-installed apps.
       return false;
 #else
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
       cur = base::mac::FrameworkBundlePath();
       cur = cur.Append(FILE_PATH_LITERAL("Default Apps"));
 #else
-      if (!base::PathService::Get(chrome::DIR_APP, &cur))
+      if (!base::PathService::Get(base::DIR_MODULE, &cur))
         return false;
       cur = cur.Append(FILE_PATH_LITERAL("default_apps"));
 #endif
       break;
 #endif
 
-#if defined(OS_LINUX) || defined(OS_CHROMEOS) || defined(OS_MAC)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_MAC)
     case chrome::DIR_NATIVE_MESSAGING:
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
       cur = base::FilePath(FILE_PATH_LITERAL(
            "/Library/Google/Chrome/NativeMessagingHosts"));
@@ -504,7 +498,7 @@ bool PathProvider(int key, base::FilePath* result) {
       cur = base::FilePath(FILE_PATH_LITERAL(
           "/Library/Application Support/Chromium/NativeMessagingHosts"));
 #endif
-#else  // defined(OS_MAC)
+#else  // BUILDFLAG(IS_MAC)
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
       cur = base::FilePath(FILE_PATH_LITERAL(
           "/etc/opt/chrome/native-messaging-hosts"));
@@ -512,7 +506,7 @@ bool PathProvider(int key, base::FilePath* result) {
       cur = base::FilePath(FILE_PATH_LITERAL(
           "/etc/chromium/native-messaging-hosts"));
 #endif
-#endif  // !defined(OS_MAC)
+#endif  // !BUILDFLAG(IS_MAC)
       break;
 
     case chrome::DIR_USER_NATIVE_MESSAGING:
@@ -520,22 +514,20 @@ bool PathProvider(int key, base::FilePath* result) {
         return false;
       cur = cur.Append(FILE_PATH_LITERAL("NativeMessagingHosts"));
       break;
-#endif  // defined(OS_LINUX) || defined(OS_CHROMEOS) || defined(OS_MAC)
-#if !defined(OS_ANDROID)
+#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_MAC)
+#if !BUILDFLAG(IS_ANDROID)
     case chrome::DIR_GLOBAL_GCM_STORE:
       if (!base::PathService::Get(chrome::DIR_USER_DATA, &cur))
         return false;
       cur = cur.Append(kGCMStoreDirname);
       break;
-#endif  // !defined(OS_ANDROID)
+#endif  // !BUILDFLAG(IS_ANDROID)
 #if BUILDFLAG(IS_CHROMEOS_ASH)
     case chrome::FILE_CHROME_OS_TPM_FIRMWARE_UPDATE_LOCATION:
       cur = base::FilePath(kChromeOSTPMFirmwareUpdateLocation);
-      create_dir = false;
       break;
     case chrome::FILE_CHROME_OS_TPM_FIRMWARE_UPDATE_SRK_VULNERABLE_ROCA:
       cur = base::FilePath(kChromeOSTPMFirmwareUpdateSRKVulnerableROCA);
-      create_dir = false;
       break;
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
     case chrome::DIR_OPTIMIZATION_GUIDE_PREDICTION_MODELS:
@@ -551,8 +543,7 @@ bool PathProvider(int key, base::FilePath* result) {
 
   // TODO(bauerb): http://crbug.com/259796
   base::ThreadRestrictions::ScopedAllowIO allow_io;
-  if (create_dir && !base::PathExists(cur) &&
-      !base::CreateDirectory(cur))
+  if (create_dir && !base::PathExists(cur) && !base::CreateDirectory(cur))
     return false;
 
   *result = cur;

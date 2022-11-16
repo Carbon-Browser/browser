@@ -14,7 +14,7 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "net/base/host_port_pair.h"
@@ -32,8 +32,8 @@
 #include "net/spdy/server_push_delegate.h"
 #include "net/spdy/spdy_session_key.h"
 #include "net/ssl/ssl_config_service.h"
-#include "net/third_party/quiche/src/quic/core/quic_versions.h"
-#include "net/third_party/quiche/src/spdy/core/spdy_protocol.h"
+#include "net/third_party/quiche/src/quiche/quic/core/quic_versions.h"
+#include "net/third_party/quiche/src/quiche/spdy/core/spdy_protocol.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace net {
@@ -52,7 +52,7 @@ class NET_EXPORT SpdySessionPool
     : public NetworkChangeNotifier::IPAddressObserver,
       public SSLClientContext::Observer {
  public:
-  typedef base::TimeTicks (*TimeFunc)(void);
+  typedef base::TimeTicks (*TimeFunc)();
 
   // Struct to hold randomly generated frame parameters to be used for sending
   // frames on the wire to "grease" frame type.  Frame type has to be one of
@@ -79,14 +79,15 @@ class NET_EXPORT SpdySessionPool
     class NET_EXPORT_PRIVATE Delegate {
      public:
       Delegate();
+
+      Delegate(const Delegate&) = delete;
+      Delegate& operator=(const Delegate&) = delete;
+
       virtual ~Delegate();
 
       // |spdy_session| will not be null.
       virtual void OnSpdySessionAvailable(
           base::WeakPtr<SpdySession> spdy_session) = 0;
-
-     private:
-      DISALLOW_COPY_AND_ASSIGN(Delegate);
     };
 
     // Constructor - this is called by the SpdySessionPool.
@@ -96,6 +97,9 @@ class NET_EXPORT SpdySessionPool
                        bool is_blocking_request_for_session,
                        Delegate* delegate,
                        SpdySessionPool* spdy_session_pool);
+
+    SpdySessionRequest(const SpdySessionRequest&) = delete;
+    SpdySessionRequest& operator=(const SpdySessionRequest&) = delete;
 
     ~SpdySessionRequest();
 
@@ -120,10 +124,8 @@ class NET_EXPORT SpdySessionPool
     const bool enable_ip_based_pooling_;
     const bool is_websocket_;
     const bool is_blocking_request_for_session_;
-    Delegate* const delegate_;
-    SpdySessionPool* spdy_session_pool_;
-
-    DISALLOW_COPY_AND_ASSIGN(SpdySessionRequest);
+    const raw_ptr<Delegate> delegate_;
+    raw_ptr<SpdySessionPool> spdy_session_pool_;
   };
 
   SpdySessionPool(HostResolver* host_resolver,
@@ -137,11 +139,18 @@ class NET_EXPORT SpdySessionPool
                   size_t session_max_recv_window_size,
                   int session_max_queued_capped_frames,
                   const spdy::SettingsMap& initial_settings,
+                  bool enable_http2_settings_grease,
                   const absl::optional<GreasedHttp2Frame>& greased_http2_frame,
                   bool http2_end_stream_with_data_frame,
                   bool enable_priority_update,
+                  bool go_away_on_ip_change,
                   SpdySessionPool::TimeFunc time_func,
-                  NetworkQualityEstimator* network_quality_estimator);
+                  NetworkQualityEstimator* network_quality_estimator,
+                  bool cleanup_sessions_on_ip_address_changed);
+
+  SpdySessionPool(const SpdySessionPool&) = delete;
+  SpdySessionPool& operator=(const SpdySessionPool&) = delete;
+
   ~SpdySessionPool() override;
 
   // In the functions below, a session is "available" if this pool has
@@ -194,6 +203,9 @@ class NET_EXPORT SpdySessionPool
       bool enable_ip_based_pooling,
       bool is_websocket,
       const NetLogWithSource& net_log);
+
+  // Returns true if there is an available session for |key|.
+  bool HasAvailableSession(const SpdySessionKey& key, bool is_websocket) const;
 
   // Just like FindAvailableSession.
   //
@@ -304,7 +316,7 @@ class NET_EXPORT SpdySessionPool
   }
 
   // Returns the stored DNS aliases for the session key.
-  std::vector<std::string> GetDnsAliasesForSessionKey(
+  std::set<std::string> GetDnsAliasesForSessionKey(
       const SpdySessionKey& key) const;
 
  private:
@@ -316,7 +328,7 @@ class NET_EXPORT SpdySessionPool
       std::map<SpdySessionKey, base::WeakPtr<SpdySession>>;
   using AliasMap = std::multimap<IPEndPoint, SpdySessionKey>;
   using DnsAliasesBySessionKeyMap =
-      std::map<SpdySessionKey, std::vector<std::string>>;
+      std::map<SpdySessionKey, std::set<std::string>>;
   using RequestSet = std::set<SpdySessionRequest*>;
 
   struct RequestInfoForKey {
@@ -347,7 +359,7 @@ class NET_EXPORT SpdySessionPool
   // given key, replaces them.
   void MapKeyToAvailableSession(const SpdySessionKey& key,
                                 const base::WeakPtr<SpdySession>& session,
-                                std::vector<std::string> dns_aliases);
+                                std::set<std::string> dns_aliases);
 
   // Returns an iterator into |available_sessions_| for the given key,
   // which may be equal to |available_sessions_.end()|.
@@ -383,7 +395,7 @@ class NET_EXPORT SpdySessionPool
       const SpdySessionKey& key,
       std::unique_ptr<SpdySession> new_session,
       const NetLogWithSource& source_net_log,
-      std::vector<std::string> dns_aliases);
+      std::set<std::string> dns_aliases);
 
   // If a session with the specified |key| exists, invokes
   // OnSpdySessionAvailable on all matching members of
@@ -400,9 +412,9 @@ class NET_EXPORT SpdySessionPool
       SpdySessionRequestMap::iterator request_map_iterator,
       RequestSet::iterator request_set_iterator);
 
-  HttpServerProperties* http_server_properties_;
+  raw_ptr<HttpServerProperties> http_server_properties_;
 
-  TransportSecurityState* transport_security_state_;
+  raw_ptr<TransportSecurityState> transport_security_state_;
 
   // The set of all sessions. This is a superset of the sessions in
   // |available_sessions_|.
@@ -423,14 +435,14 @@ class NET_EXPORT SpdySessionPool
   // The index of all unclaimed pushed streams of all SpdySessions in this pool.
   Http2PushPromiseIndex push_promise_index_;
 
-  SSLClientContext* const ssl_client_context_;
-  HostResolver* const resolver_;
+  const raw_ptr<SSLClientContext> ssl_client_context_;
+  const raw_ptr<HostResolver> resolver_;
 
   // Versions of QUIC which may be used.
   const quic::ParsedQuicVersionVector quic_supported_versions_;
 
   // Defaults to true. May be controlled via SpdySessionPoolPeer for tests.
-  bool enable_sending_initial_data_;
+  bool enable_sending_initial_data_ = true;
   bool enable_ping_based_connection_checking_;
 
   const bool is_http2_enabled_;
@@ -446,6 +458,13 @@ class NET_EXPORT SpdySessionPool
   // and also control SpdySession parameters like initial receive window size
   // and maximum HPACK dynamic table size.
   const spdy::SettingsMap initial_settings_;
+
+  // If true, a setting parameter with reserved identifier will be sent in every
+  // initial SETTINGS frame, see
+  // https://tools.ietf.org/html/draft-bishop-httpbis-grease-00.
+  // The setting identifier and value will be drawn independently for each
+  // connection to prevent tracking of the client.
+  const bool enable_http2_settings_grease_;
 
   // If set, an HTTP/2 frame with a reserved frame type will be sent after
   // every HTTP/2 SETTINGS frame and before every HTTP/2 DATA frame. See
@@ -467,16 +486,20 @@ class NET_EXPORT SpdySessionPool
   // HEADERS frames and PRIORITY frames if it has value 1.
   const bool enable_priority_update_;
 
+  // If set, sessions will be marked as going away upon relevant network changes
+  // (instead of being closed).
+  const bool go_away_on_ip_change_;
+
   SpdySessionRequestMap spdy_session_request_map_;
 
   TimeFunc time_func_;
-  ServerPushDelegate* push_delegate_;
+  raw_ptr<ServerPushDelegate> push_delegate_ = nullptr;
 
-  NetworkQualityEstimator* network_quality_estimator_;
+  raw_ptr<NetworkQualityEstimator> network_quality_estimator_;
+
+  const bool cleanup_sessions_on_ip_address_changed_;
 
   base::WeakPtrFactory<SpdySessionPool> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(SpdySessionPool);
 };
 
 }  // namespace net

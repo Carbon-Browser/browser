@@ -30,7 +30,6 @@ import androidx.browser.customtabs.CustomTabsIntent;
 import androidx.fragment.app.DialogFragment;
 import androidx.fragment.app.Fragment;
 
-import org.chromium.base.ApiCompatibilityUtils;
 import org.chromium.base.ContextUtils;
 import org.chromium.base.IntentUtils;
 import org.chromium.base.Log;
@@ -50,7 +49,6 @@ import java.util.Date;
  * Dialog to ask to user to enter their sync passphrase.
  */
 public class PassphraseDialogFragment extends DialogFragment implements OnClickListener {
-
     private static final String TAG = "Sync_UI";
 
     /**
@@ -123,11 +121,10 @@ public class PassphraseDialogFragment extends DialogFragment implements OnClickL
         mOriginalBackground = mPassphraseEditText.getBackground();
         mErrorBackground = mOriginalBackground.getConstantState().newDrawable();
         mErrorBackground.mutate().setColorFilter(
-                ApiCompatibilityUtils.getColor(getResources(), R.color.input_underline_error_color),
-                PorterDuff.Mode.SRC_IN);
+                getContext().getColor(R.color.input_underline_error_color), PorterDuff.Mode.SRC_IN);
 
         final AlertDialog d =
-                new AlertDialog.Builder(getActivity(), R.style.Theme_Chromium_AlertDialog)
+                new AlertDialog.Builder(getActivity(), R.style.ThemeOverlay_BrowserUI_AlertDialog)
                         .setView(v)
                         .setPositiveButton(R.string.submit,
                                 new Dialog.OnClickListener() {
@@ -185,8 +182,8 @@ public class PassphraseDialogFragment extends DialogFragment implements OnClickL
 
     private SpannableString getPromptText() {
         SyncService syncService = SyncService.get();
-        String accountName = getString(R.string.sync_account_info,
-                                     syncService.getAuthenticatedAccountInfo().getEmail())
+        String accountName =
+                getString(R.string.sync_account_info, syncService.getAccountInfo().getEmail())
                 + "\n\n";
         Date passphraseTime = syncService.getExplicitPassphraseTime();
         if (passphraseTime != null) {
@@ -208,7 +205,8 @@ public class PassphraseDialogFragment extends DialogFragment implements OnClickL
                 case PassphraseType.KEYSTORE_PASSPHRASE:
                 case PassphraseType.TRUSTED_VAULT_PASSPHRASE:
                 default:
-                    Log.w(TAG, "Found incorrect passphrase type " + passphraseType
+                    Log.w(TAG,
+                            "Found incorrect passphrase type " + passphraseType
                                     + ". Falling back to default string.");
             }
         }
@@ -243,9 +241,8 @@ public class PassphraseDialogFragment extends DialogFragment implements OnClickL
     }
 
     private void handleCancel() {
-        int cancelReason = isIncorrectPassphraseVisible()
-                ? PASSPHRASE_DIALOG_ERROR
-                : PASSPHRASE_DIALOG_CANCEL;
+        int cancelReason =
+                isIncorrectPassphraseVisible() ? PASSPHRASE_DIALOG_ERROR : PASSPHRASE_DIALOG_CANCEL;
         getListener().onPassphraseCanceled();
     }
 
@@ -273,8 +270,7 @@ public class PassphraseDialogFragment extends DialogFragment implements OnClickL
      */
     private void invalidPassphrase() {
         mVerifyingTextView.setText(R.string.sync_passphrase_incorrect);
-        mVerifyingTextView.setTextColor(ApiCompatibilityUtils.getColor(getResources(),
-                R.color.input_underline_error_color));
+        mVerifyingTextView.setTextColor(getContext().getColor(R.color.input_underline_error_color));
 
         mPassphraseEditText.setBackground(mErrorBackground);
     }

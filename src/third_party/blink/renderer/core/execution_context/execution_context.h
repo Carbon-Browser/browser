@@ -30,15 +30,14 @@
 
 #include <memory>
 
+#include "base/notreached.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
-#include "services/network/public/mojom/ip_address_space.mojom-blink-forward.h"
 #include "services/network/public/mojom/referrer_policy.mojom-blink-forward.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
 #include "third_party/blink/public/common/user_agent/user_agent_metadata.h"
 #include "third_party/blink/public/mojom/devtools/inspector_issue.mojom-blink-forward.h"
 #include "third_party/blink/public/mojom/frame/lifecycle.mojom-blink-forward.h"
-#include "third_party/blink/public/mojom/loader/code_cache.mojom-forward.h"
 #include "third_party/blink/public/mojom/permissions_policy/permissions_policy.mojom-blink-forward.h"
 #include "third_party/blink/public/mojom/permissions_policy/permissions_policy_feature.mojom-blink-forward.h"
 #include "third_party/blink/public/mojom/permissions_policy/policy_disposition.mojom-blink-forward.h"
@@ -48,6 +47,7 @@
 #include "third_party/blink/renderer/core/execution_context/security_context.h"
 #include "third_party/blink/renderer/core/frame/dom_timer_coordinator.h"
 #include "third_party/blink/renderer/core/frame/web_feature_forward.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
 #include "third_party/blink/renderer/platform/heap_observer_set.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
 #include "third_party/blink/renderer/platform/loader/fetch/console_logger.h"
@@ -57,7 +57,8 @@
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/supplementable.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
-#include "v8/include/v8.h"
+#include "v8/include/v8-callbacks.h"
+#include "v8/include/v8-forward.h"
 
 namespace base {
 class UnguessableToken;
@@ -67,10 +68,15 @@ namespace ukm {
 class UkmRecorder;
 }  // namespace ukm
 
+namespace v8 {
+class MicrotaskQueue;
+}  // namespace v8
+
 namespace blink {
 
 class Agent;
 class AuditsIssue;
+class CodeCacheHost;
 class ConsoleMessage;
 class ContentSecurityPolicy;
 class ContentSecurityPolicyDelegate;
@@ -145,8 +151,7 @@ class CORE_EXPORT ExecutionContext : public Supplementable<ExecutionContext>,
   // Returns the CodeCacheHost interface associated with the execution
   // context. This could return nullptr if there is no CodeCacheHost associated
   // with the current execution context.
-  static blink::mojom::CodeCacheHost* GetCodeCacheHostFromContext(
-      ExecutionContext*);
+  static CodeCacheHost* GetCodeCacheHostFromContext(ExecutionContext*);
 
   virtual bool IsWindow() const { return false; }
   virtual bool IsWorkerOrWorkletGlobalScope() const { return false; }
@@ -162,6 +167,10 @@ class CORE_EXPORT ExecutionContext : public Supplementable<ExecutionContext>,
   virtual bool IsPaintWorkletGlobalScope() const { return false; }
   virtual bool IsThreadedWorkletGlobalScope() const { return false; }
   virtual bool IsJSExecutionForbidden() const { return false; }
+
+  // TODO(crbug.com/1335924) Change this method to be pure-virtual and each
+  // derivative explicitly override it.
+  virtual bool IsInFencedFrame() const { return false; }
 
   virtual bool IsContextThread() const { return true; }
 
@@ -197,6 +206,7 @@ class CORE_EXPORT ExecutionContext : public Supplementable<ExecutionContext>,
   virtual const KURL& BaseURL() const = 0;
   virtual KURL CompleteURL(const String& url) const = 0;
   virtual void DisableEval(const String& error_message) = 0;
+  virtual void SetWasmEvalErrorMessage(const String& error_message) = 0;
   virtual String UserAgent() const = 0;
   virtual UserAgentMetadata GetUserAgentMetadata() const {
     return UserAgentMetadata();
@@ -240,7 +250,9 @@ class CORE_EXPORT ExecutionContext : public Supplementable<ExecutionContext>,
 
   virtual void RemoveURLFromMemoryCache(const KURL&);
 
-  void SetIsInBackForwardCache(bool);
+  virtual void SetIsInBackForwardCache(bool);
+  bool is_in_back_forward_cache() const { return is_in_back_forward_cache_; }
+
   void SetLifecycleState(mojom::FrameLifecycleState);
   void NotifyContextDestroyed();
 
@@ -284,7 +296,7 @@ class CORE_EXPORT ExecutionContext : public Supplementable<ExecutionContext>,
   }
   bool IsSecureContext(String& error_message) const;
 
-  virtual bool HasInsecureContextInAncestors() { return false; }
+  virtual bool HasInsecureContextInAncestors() const { return false; }
 
   // Returns a referrer to be used in the "Determine request's Referrer"
   // algorithm defined in the Referrer Policy spec.
@@ -305,6 +317,9 @@ class CORE_EXPORT ExecutionContext : public Supplementable<ExecutionContext>,
   network::mojom::ReferrerPolicy GetReferrerPolicy() const;
 
   PolicyContainer* GetPolicyContainer() { return policy_container_.get(); }
+  const PolicyContainer* GetPolicyContainer() const {
+    return policy_container_.get();
+  }
   void SetPolicyContainer(std::unique_ptr<PolicyContainer> container);
   std::unique_ptr<PolicyContainer> TakePolicyContainer();
 
@@ -332,21 +347,26 @@ class CORE_EXPORT ExecutionContext : public Supplementable<ExecutionContext>,
   // Report-To endpoints, via ReportPermissionsPolicyViolation(), if the feature
   // is disabled. The optional ConsoleMessage will be sent to the console if
   // present, or else a default message will be used instead.
+  bool IsFeatureEnabled(mojom::blink::PermissionsPolicyFeature) const;
   bool IsFeatureEnabled(
       mojom::blink::PermissionsPolicyFeature,
-      ReportOptions report_on_failure = ReportOptions::kDoNotReport,
-      const String& message = g_empty_string) const;
+      ReportOptions report_option = ReportOptions::kDoNotReport,
+      const String& message = g_empty_string);
+
+  bool IsFeatureEnabled(mojom::blink::DocumentPolicyFeature) const;
+  bool IsFeatureEnabled(mojom::blink::DocumentPolicyFeature,
+                        PolicyValue threshold_value) const;
   bool IsFeatureEnabled(
       mojom::blink::DocumentPolicyFeature,
       ReportOptions report_option = ReportOptions::kDoNotReport,
       const String& message = g_empty_string,
-      const String& source_file = g_empty_string) const;
+      const String& source_file = g_empty_string);
   bool IsFeatureEnabled(
       mojom::blink::DocumentPolicyFeature,
       PolicyValue threshold_value,
       ReportOptions report_option = ReportOptions::kDoNotReport,
       const String& message = g_empty_string,
-      const String& source_file = g_empty_string) const;
+      const String& source_file = g_empty_string);
 
   // Report policy violations is delegated to Document because in order
   // to both remain const qualified and output console message, needs
@@ -361,10 +381,6 @@ class CORE_EXPORT ExecutionContext : public Supplementable<ExecutionContext>,
       const String& message = g_empty_string,
       const String& source_file = g_empty_string) const {}
 
-  String addressSpaceForBindings() const;
-  network::mojom::IPAddressSpace AddressSpace() const;
-  void SetAddressSpace(network::mojom::blink::IPAddressSpace ip_address_space);
-
   HeapObserverSet<ContextLifecycleObserver>& ContextLifecycleObserverSet();
   unsigned ContextLifecycleStateObserverCountForTesting() const;
 
@@ -372,10 +388,12 @@ class CORE_EXPORT ExecutionContext : public Supplementable<ExecutionContext>,
   // https://html.spec.whatwg.org/C/webappapis.html#concept-settings-object-cross-origin-isolated-capability
   virtual bool CrossOriginIsolatedCapability() const = 0;
 
-  // Reflects the context's potential ability to use Direct Socket APIs.
+  // Returns true if scripts within this ExecutionContext are allowed to use
+  // APIs that require the page to be part of an isolated application.
+  // https://github.com/reillyeon/isolated-web-apps
   //
   // TODO(mkwst): We need a specification for the necessary restrictions.
-  virtual bool DirectSocketCapability() const = 0;
+  virtual bool IsolatedApplicationCapability() const = 0;
 
   // Returns true if SharedArrayBuffers can be transferred via PostMessage,
   // false otherwise. SharedArrayBuffer allows pages to craft high-precision
@@ -390,8 +408,8 @@ class CORE_EXPORT ExecutionContext : public Supplementable<ExecutionContext>,
   // Reports first usage of `navigator.userAgent` and related getters
   void ReportNavigatorUserAgentAccess();
 
-  virtual ukm::UkmRecorder* UkmRecorder() { return nullptr; }
-  virtual ukm::SourceId UkmSourceID() const { return ukm::kInvalidSourceId; }
+  virtual ukm::UkmRecorder* UkmRecorder() = 0;
+  virtual ukm::SourceId UkmSourceID() const = 0;
 
   // Returns the token that uniquely identifies this ExecutionContext.
   virtual ExecutionContextToken GetExecutionContextToken() const = 0;

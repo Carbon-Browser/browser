@@ -25,6 +25,7 @@
 #import "ios/chrome/browser/ui/main/default_browser_scene_agent.h"
 #import "ios/chrome/browser/ui/main/scene_state_browser_agent.h"
 #import "ios/chrome/browser/ui/util/uikit_ui_util.h"
+#import "ios/chrome/browser/web/web_navigation_browser_agent.h"
 #import "ios/chrome/browser/web_state_list/web_state_list.h"
 #import "net/base/mac/url_conversions.h"
 #include "url/gurl.h"
@@ -35,7 +36,9 @@
 
 @interface ActivityServiceCoordinator ()
 
-@property(nonatomic, weak) id<BrowserCommands, FindInPageCommands> handler;
+@property(nonatomic, weak)
+    id<BrowserCommands, BrowserCoordinatorCommands, FindInPageCommands>
+        handler;
 
 @property(nonatomic, strong) ActivityServiceMediator* mediator;
 
@@ -62,7 +65,8 @@
 #pragma mark - Public methods
 
 - (void)start {
-  self.handler = static_cast<id<BrowserCommands, FindInPageCommands>>(
+  self.handler = static_cast<
+      id<BrowserCommands, BrowserCoordinatorCommands, FindInPageCommands>>(
       self.browser->GetCommandDispatcher());
 
   ChromeBrowserState* browserState = self.browser->GetBrowserState();
@@ -70,12 +74,16 @@
       ios::BookmarkModelFactory::GetForBrowserState(browserState);
   id<BookmarksCommands> bookmarksHandler = HandlerForProtocol(
       self.browser->GetCommandDispatcher(), BookmarksCommands);
+  WebNavigationBrowserAgent* agent =
+      WebNavigationBrowserAgent::FromBrowser(self.browser);
   self.mediator =
       [[ActivityServiceMediator alloc] initWithHandler:self.handler
                                       bookmarksHandler:bookmarksHandler
                                    qrGenerationHandler:self.scopedHandler
                                            prefService:browserState->GetPrefs()
-                                         bookmarkModel:bookmarkModel];
+                                         bookmarkModel:bookmarkModel
+                                    baseViewController:self.baseViewController
+                                       navigationAgent:agent];
 
   SceneState* sceneState =
       SceneStateBrowserAgent::FromBrowser(self.browser)->GetSceneState();
@@ -91,7 +99,7 @@
   }
 
   if (self.params.URLs.count > 0) {
-    // If at least one valid URL is found, share the URLs in |_params|.
+    // If at least one valid URL is found, share the URLs in `_params`.
     for (URLWithTitle* urlWithTitle in self.params.URLs) {
       if (!urlWithTitle.URL.is_empty()) {
         [self shareURLs];
@@ -105,6 +113,9 @@
 }
 
 - (void)stop {
+  [self.viewController.presentingViewController
+      dismissViewControllerAnimated:YES
+                         completion:nil];
   self.viewController = nil;
 
   self.mediator = nil;
@@ -112,7 +123,7 @@
 
 #pragma mark - Private Methods
 
-// Sets up the activity ViewController with the given |items| and |activities|.
+// Sets up the activity ViewController with the given `items` and `activities`.
 - (void)shareItems:(NSArray<id<ChromeActivityItemSource>>*)items
         activities:(NSArray*)activities {
   self.viewController =
@@ -154,8 +165,10 @@
                                       activityType:activityType
                                          completed:completed];
 
-    // Signal the presentation provider that our scenario is over.
-    [strongSelf.presentationProvider activityServiceDidEndPresenting];
+    if (completed) {
+      // Signal the presentation provider that our scenario is over.
+      [strongSelf.presentationProvider activityServiceDidEndPresenting];
+    }
   }];
 
   [self.baseViewController presentViewController:self.viewController
@@ -168,15 +181,22 @@
 // Fetches the current tab's URL, configures activities and items, and shows
 // an activity view.
 - (void)shareCurrentPage {
+  web::WebState* currentWebState =
+      self.browser->GetWebStateList()->GetActiveWebState();
+
+  // In some cases it seems that the share sheet is triggered while no tab is
+  // present (probably due to a timing issue).
+  if (!currentWebState)
+    return;
+
   // Retrieve the current page's URL.
   __weak __typeof(self) weakSelf = self;
-  activity_services::RetrieveCanonicalUrl(
-      self.browser->GetWebStateList()->GetActiveWebState(), ^(const GURL& url) {
-        [weakSelf sharePageWithCanonicalURL:url];
-      });
+  activity_services::RetrieveCanonicalUrl(currentWebState, ^(const GURL& url) {
+    [weakSelf sharePageWithCanonicalURL:url];
+  });
 }
 
-// Shares the current page using its |canonicalURL|.
+// Shares the current page using its `canonicalURL`.
 - (void)sharePageWithCanonicalURL:(const GURL&)canonicalURL {
   ShareToData* data = activity_services::ShareToDataForWebState(
       self.browser->GetWebStateList()->GetActiveWebState(), canonicalURL);

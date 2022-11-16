@@ -10,8 +10,8 @@
 #include "base/memory/scoped_refptr.h"
 #include "components/reporting/compression/compression_module.h"
 #include "components/reporting/encryption/encryption_module_interface.h"
-#include "components/reporting/proto/record.pb.h"
-#include "components/reporting/proto/record_constants.pb.h"
+#include "components/reporting/proto/synced/record.pb.h"
+#include "components/reporting/proto/synced/record_constants.pb.h"
 #include "components/reporting/storage/storage.h"
 #include "components/reporting/storage/storage_configuration.h"
 #include "components/reporting/storage/storage_module_interface.h"
@@ -40,21 +40,20 @@ class StorageModule : public StorageModuleInterface {
   // called.
   void AddRecord(Priority priority,
                  Record record,
-                 base::OnceCallback<void(Status)> callback) override;
+                 EnqueueCallback callback) override;
 
   // Initiates upload of collected records according to the priority.
   // Called usually for a queue with an infinite or very large upload period.
   // Multiple |Flush| calls can safely run in parallel.
   // Returns error if cannot start upload.
-  void Flush(Priority priority,
-             base::OnceCallback<void(Status)> callback) override;
+  void Flush(Priority priority, FlushCallback callback) override;
 
-  // Once a record has been successfully uploaded, the sequencing information
+  // Once a record has been successfully uploaded, the sequence information
   // can be passed back to the StorageModule here for record deletion.
-  // If |force| is false (which is used in most cases), |sequencing_information|
-  // only affects Storage if no higher sequeincing was confirmed before;
+  // If |force| is false (which is used in most cases), |sequence_information|
+  // only affects Storage if no higher sequencing was confirmed before;
   // otherwise it is accepted unconditionally.
-  void ReportSuccess(SequencingInformation sequencing_information,
+  void ReportSuccess(SequenceInformation sequence_information,
                      bool force) override;
 
   // If the server attached signed encryption key to the response, it needs to

@@ -18,13 +18,13 @@ include_polymer = !is_android && !is_ios
 generate_grd("build_grdp") {
   grd_prefix = "webui_js"
   out_grd = "$target_gen_dir/resources.grdp"
-  deps = [ ":preprocess" ]
+  public_deps = [ ":preprocess" ]
   manifest_files = [
     "$target_gen_dir/$preprocess_gen_manifest",
     "$target_gen_dir/$preprocess_src_manifest",
   ]
   if (include_polymer) {
-    manifest_files += [ "$target_gen_dir/browser_command/tsconfig.manifest" ]
+    manifest_files += [ "$target_gen_dir/browser_command/build_ts.manifest" ]
   }
   resource_path_prefix = "js"
 }
@@ -33,11 +33,26 @@ group("preprocess") {
   public_deps = [
     ":preprocess_generated",
     ":preprocess_src",
+    ":preprocess_src_ts",
     "cr/ui:preprocess",
   ]
   if (include_polymer) {
     public_deps += [ "browser_command:build_ts" ]
   }
+}
+
+# TS files are passed to a separate target so that they are not listed in the
+# |out_manifest|.
+preprocess_if_expr("preprocess_src_ts") {
+  in_folder = "./"
+  out_folder = "$preprocess_folder"
+  in_files = [
+    "assert_ts.ts",
+    "custom_element.ts",
+    "i18n_mixin.ts",
+    "list_property_update_mixin.ts",
+    "web_ui_listener_mixin.ts",
+  ]
 }
 
 preprocess_if_expr("preprocess_src") {
@@ -49,24 +64,29 @@ preprocess_if_expr("preprocess_src") {
     "assert.js",
     "color_utils.js",
     "cr.m.js",
-    "custom_element.js",
-    "i18n_template_no_process.js",
     "icon.js",
     "load_time_data.m.js",
     "plural_string_proxy.js",
     "static_types.js",
-    "post_message_api_client.js",
-    "post_message_api_request_handler.js",
-    "post_message_api_server.js",
     "search_highlight_utils.js",
     "test_loader.js",
     "test_loader_util.js",
+
+    # Used by security interstitials and ios inspect UI
     "util.js",
     "webui_resource_test.js",
+    "webview_manager.js",
   ]
 
   if (is_chromeos_ash) {
-    in_files += [ "i18n_template_process.js" ]
+    in_files += [
+      "post_message_api_client.js",
+      "post_message_api_request_handler.js",
+      "post_message_api_server.js",
+    ]
+  }
+  if (is_chromeos) {
+    in_files += [ "os_about.js" ]
   }
 
   # TODO(crbug.com/1184053): Fully remove once no longer used by CrOS.
@@ -77,6 +97,7 @@ preprocess_if_expr("preprocess_src") {
       "cr.js",
       "event_tracker.js",
       "i18n_behavior.js",
+      "i18n_template_no_process.js",
       "list_property_update_behavior.js",
       "parse_html_subset.js",
       "polymer_config.js",
@@ -108,9 +129,6 @@ preprocess_if_expr("preprocess_generated") {
     "event_tracker.m.js",
     "load_time_data.js",
     "parse_html_subset.m.js",
-    "post_message_api_server.m.js",
-    "post_message_api_request_handler.m.js",
-    "post_message_api_client.m.js",
     "promise_resolver.m.js",
     "util.m.js",
   ]
@@ -122,17 +140,24 @@ preprocess_if_expr("preprocess_generated") {
       "web_ui_listener_behavior.m.js",
     ]
   }
+
+  if (is_chromeos_ash) {
+    in_files += [
+      "i18n_template_no_process.m.js",
+      "post_message_api_server.m.js",
+      "post_message_api_request_handler.m.js",
+      "post_message_api_client.m.js",
+    ]
+  }
 }
 
 group("closure_compile") {
   deps = [
     ":js_resources",
     "cr:closure_compile",
-    "cr/ui:closure_compile",
   ]
-
-  if (include_polymer) {
-    deps += [ "browser_command:closure_compile" ]
+  if (is_chromeos_ash) {
+    deps += [ "cr/ui:closure_compile" ]
   }
 }
 
@@ -143,21 +168,23 @@ js_type_check("js_resources") {
     ":assert",
     ":cr",
     ":event_tracker",
-    ":i18n_behavior",
     ":i18n_template_no_process",
-    ":list_property_update_behavior",
     ":load_time_data",
     ":parse_html_subset",
     ":promise_resolver",
     ":util",
-    ":web_ui_listener_behavior",
     ":webui_resource_test",
   ]
-  if (is_chromeos_ash) {
-    deps += [ ":i18n_template_process" ]
-  }
   if (is_ios) {
     deps += [ "ios:web_ui" ]
+  }
+
+  if (is_chromeos_ash) {
+    deps += [
+      ":i18n_behavior",
+      ":list_property_update_behavior",
+      ":web_ui_listener_behavior",
+    ]
   }
 }
 
@@ -183,18 +210,16 @@ js_library("i18n_template_no_process") {
   deps = [ ":load_time_data" ]
 }
 
-js_library("i18n_template_process") {
-  deps = [ ":i18n_template_no_process" ]
-}
+if (is_chromeos_ash) {
+  js_library("i18n_behavior") {
+    deps = [
+      ":load_time_data",
+      ":parse_html_subset",
+    ]
+  }
 
-js_library("i18n_behavior") {
-  deps = [
-    ":load_time_data",
-    ":parse_html_subset",
-  ]
-}
-
-js_library("list_property_update_behavior") {
+  js_library("list_property_update_behavior") {
+  }
 }
 
 js_library("load_time_data") {
@@ -214,8 +239,13 @@ js_library("util") {
   externs_list = [ "$externs_path/chrome_send.js" ]
 }
 
-js_library("web_ui_listener_behavior") {
-  deps = [ ":cr" ]
+js_library("webview_manager") {
+}
+
+if (is_chromeos_ash) {
+  js_library("web_ui_listener_behavior") {
+    deps = [ ":cr" ]
+  }
 }
 
 js_library("webui_resource_test") {
@@ -238,13 +268,19 @@ js_modulizer("modulize_local") {
     "i18n_behavior.js",
     "list_property_update_behavior.js",
     "parse_html_subset.js",
-    "post_message_api_server.js",
-    "post_message_api_request_handler.js",
-    "post_message_api_client.js",
     "promise_resolver.js",
     "util.js",
     "web_ui_listener_behavior.js",
   ]
+  if (is_chromeos_ash) {
+    input_files += [
+      "i18n_template_no_process.js",
+      "post_message_api_server.js",
+      "post_message_api_request_handler.js",
+      "post_message_api_client.js",
+    ]
+  }
+
   namespace_rewrites = [
     "cr.search_highlight_utils.Range|Range",
     "Polymer.ArraySplice.calculateSplices|calculateSplices",
@@ -268,7 +304,6 @@ js_type_check("js_resources_modules") {
   deps = [
     ":assert.m",
     ":cr.m",
-    ":custom_element",
     ":event_tracker.m",
     ":i18n_behavior.m",
     ":icon",
@@ -276,15 +311,20 @@ js_type_check("js_resources_modules") {
     ":load_time_data.m",
     ":parse_html_subset.m",
     ":plural_string_proxy",
-    ":post_message_api_client.m",
-    ":post_message_api_request_handler.m",
-    ":post_message_api_server.m",
     ":promise_resolver.m",
     ":search_highlight_utils",
     ":static_types",
     ":util.m",
     ":web_ui_listener_behavior.m",
   ]
+
+  if (is_chromeos_ash) {
+    deps += [
+      ":i18n_template_no_process.m",
+      ":post_message_api_client.m",
+      ":post_message_api_server.m",
+    ]
+  }
 }
 
 js_library("assert.m") {
@@ -298,9 +338,6 @@ js_library("cr.m") {
     ":promise_resolver.m",
   ]
   externs_list = [ "$externs_path/chrome_send.js" ]
-}
-
-js_library("custom_element") {
 }
 
 js_library("event_tracker.m") {
@@ -343,25 +380,32 @@ js_library("plural_string_proxy") {
   deps = [ ":cr.m" ]
 }
 
-js_library("post_message_api_server.m") {
-  sources =
-      [ "$root_gen_dir/ui/webui/resources/js/post_message_api_server.m.js" ]
-  deps = [ ":post_message_api_request_handler.m" ]
-  extra_deps = [ ":modulize_local" ]
-}
+if (is_chromeos_ash) {
+  js_library("i18n_template_no_process.m") {
+    sources =
+        [ "$root_gen_dir/ui/webui/resources/js/i18n_template_no_process.m.js" ]
+    deps = [ ":load_time_data" ]
+    extra_deps = [ ":modulize_local" ]
+  }
 
-js_library("post_message_api_client.m") {
-  sources =
-      [ "$root_gen_dir/ui/webui/resources/js/post_message_api_client.m.js" ]
-  deps = [ ":post_message_api_request_handler.m" ]
-  extra_deps = [ ":modulize_local" ]
-}
+  js_library("post_message_api_server.m") {
+    sources =
+        [ "$root_gen_dir/ui/webui/resources/js/post_message_api_server.m.js" ]
+    deps = [ ":post_message_api_request_handler.m" ]
+    extra_deps = [ ":modulize_local" ]
+  }
 
-js_library("post_message_api_request_handler.m") {
-  sources = [
-    "$root_gen_dir/ui/webui/resources/js/post_message_api_request_handler.m.js",
-  ]
-  extra_deps = [ ":modulize_local" ]
+  js_library("post_message_api_client.m") {
+    sources =
+        [ "$root_gen_dir/ui/webui/resources/js/post_message_api_client.m.js" ]
+    deps = [ ":post_message_api_request_handler.m" ]
+    extra_deps = [ ":modulize_local" ]
+  }
+
+  js_library("post_message_api_request_handler.m") {
+    sources = [ "$root_gen_dir/ui/webui/resources/js/post_message_api_request_handler.m.js" ]
+    extra_deps = [ ":modulize_local" ]
+  }
 }
 
 js_library("promise_resolver.m") {

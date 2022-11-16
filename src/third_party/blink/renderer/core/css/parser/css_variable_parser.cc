@@ -83,8 +83,6 @@ bool IsValidVariableReference(CSSParserTokenRange range) {
 
   if (range.Consume().GetType() != kCommaToken)
     return false;
-  if (range.AtEnd())
-    return false;
 
   bool has_references = false;
   return ClassifyBlock(range, has_references);
@@ -92,15 +90,34 @@ bool IsValidVariableReference(CSSParserTokenRange range) {
 
 bool IsValidEnvVariableReference(CSSParserTokenRange range) {
   range.ConsumeWhitespace();
-  if (range.ConsumeIncludingWhitespace().GetType() !=
-      CSSParserTokenType::kIdentToken)
+  auto token = range.ConsumeIncludingWhitespace();
+  if (token.GetType() != CSSParserTokenType::kIdentToken)
     return false;
   if (range.AtEnd())
     return true;
 
-  if (range.Consume().GetType() != kCommaToken)
-    return false;
-  if (range.AtEnd())
+  if (RuntimeEnabledFeatures::CSSFoldablesEnabled()) {
+    // Consume any number of integer values that indicate the indices for a
+    // multi-dimensional variable.
+    token = range.ConsumeIncludingWhitespace();
+    while (token.GetType() == kNumberToken) {
+      if (token.GetNumericValueType() != kIntegerValueType)
+        return false;
+      if (token.NumericValue() < 0.)
+        return false;
+      token = range.ConsumeIncludingWhitespace();
+    }
+
+    // If that's all we had (either ident then integers or just the ident) then
+    // the env() is valid.
+    if (token.GetType() == kEOFToken)
+      return true;
+  } else {
+    token = range.Consume();
+  }
+
+  // Otherwise we need a comma followed by an optional fallback value.
+  if (token.GetType() != kCommaToken)
     return false;
 
   bool has_references = false;
@@ -130,11 +147,11 @@ bool CSSVariableParser::IsValidVariableName(const CSSParserToken& token) {
     return false;
 
   StringView value = token.Value();
-  return value.length() >= 2 && value[0] == '-' && value[1] == '-';
+  return value.length() >= 3 && value[0] == '-' && value[1] == '-';
 }
 
 bool CSSVariableParser::IsValidVariableName(const String& string) {
-  return string.length() >= 2 && string[0] == '-' && string[1] == '-';
+  return string.length() >= 3 && string[0] == '-' && string[1] == '-';
 }
 
 bool CSSVariableParser::ContainsValidVariableReferences(
@@ -148,9 +165,6 @@ CSSCustomPropertyDeclaration* CSSVariableParser::ParseDeclarationValue(
     const CSSTokenizedValue& tokenized_value,
     bool is_animation_tainted,
     const CSSParserContext& context) {
-  if (tokenized_value.range.AtEnd())
-    return nullptr;
-
   bool has_references;
   CSSValueID type =
       ClassifyVariableRange(tokenized_value.range, has_references);
@@ -159,7 +173,6 @@ CSSCustomPropertyDeclaration* CSSVariableParser::ParseDeclarationValue(
     return nullptr;
   if (type == CSSValueID::kInternalVariableValue) {
     return MakeGarbageCollected<CSSCustomPropertyDeclaration>(
-
         CSSVariableData::Create(tokenized_value, is_animation_tainted,
                                 has_references, context.BaseURL(),
                                 context.Charset()));

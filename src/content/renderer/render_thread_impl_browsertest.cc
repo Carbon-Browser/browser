@@ -15,12 +15,11 @@
 #include "base/command_line.h"
 #include "base/debug/leak_annotations.h"
 #include "base/location.h"
-#include "base/macros.h"
 #include "base/memory/discardable_memory.h"
 #include "base/metrics/field_trial.h"
 #include "base/run_loop.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
 #include "base/test/test_switches.h"
 #include "base/threading/sequenced_task_runner_handle.h"
@@ -40,6 +39,7 @@
 #include "content/public/test/browser_test.h"
 #include "content/public/test/content_browser_test.h"
 #include "content/public/test/content_browser_test_utils.h"
+#include "content/public/test/content_test_suite_base.h"
 #include "content/public/test/test_content_client_initializer.h"
 #include "content/public/test/test_launcher.h"
 #include "content/renderer/render_process_impl.h"
@@ -48,6 +48,7 @@
 #include "gpu/config/gpu_switches.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/blink/public/common/switches.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/scheduler/test/renderer_scheduler_test_support.h"
 #include "third_party/blink/public/platform/scheduler/test/web_mock_thread_scheduler.h"
@@ -150,6 +151,10 @@ class RenderThreadImplBrowserTest : public testing::Test,
  public:
   RenderThreadImplBrowserTest() {}
 
+  RenderThreadImplBrowserTest(const RenderThreadImplBrowserTest&) = delete;
+  RenderThreadImplBrowserTest& operator=(const RenderThreadImplBrowserTest&) =
+      delete;
+
   void SetUp() override {
     content_renderer_client_ = std::make_unique<ContentRendererClient>();
     SetRendererClientForTesting(content_renderer_client_.get());
@@ -174,12 +179,14 @@ class RenderThreadImplBrowserTest : public testing::Test,
 
     cmd->AppendSwitchASCII(switches::kLang, "en-US");
 
-    cmd->AppendSwitchASCII(switches::kNumRasterThreads, "1");
+    cmd->AppendSwitchASCII(blink::switches::kNumRasterThreads, "1");
 
     // To avoid creating a GPU channel to query if
     // accelerated_video_decode is blocklisted on older Android system
     // in RenderThreadImpl::Init().
     cmd->AppendSwitch(switches::kIgnoreGpuBlocklist);
+
+    ContentTestSuiteBase::InitializeResourceBundle();
 
     blink::Platform::InitializeBlink();
     auto main_thread_scheduler =
@@ -187,8 +194,7 @@ class RenderThreadImplBrowserTest : public testing::Test,
     scoped_refptr<base::SingleThreadTaskRunner> test_task_counter(
         test_task_counter_.get());
 
-    base::FieldTrialList::CreateTrialsFromCommandLine(
-        *cmd, switches::kFieldTrialHandle, -1);
+    base::FieldTrialList::CreateTrialsFromCommandLine(*cmd, -1);
     thread_ = new RenderThreadImpl(
         InProcessChildThreadParams(io_task_runner,
                                    &process_host_->GetMojoInvitation().value()),
@@ -279,9 +285,6 @@ class RenderThreadImplBrowserTest : public testing::Test,
   RenderThreadImpl* thread_;
 
   std::unique_ptr<base::RunLoop> run_loop_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(RenderThreadImplBrowserTest);
 };
 
 // Disabled under LeakSanitizer due to memory leaks.
@@ -410,6 +413,12 @@ class RenderThreadImplGpuMemoryBufferBrowserTest
           ::testing::tuple<NativeBufferFlag, gfx::BufferFormat>> {
  public:
   RenderThreadImplGpuMemoryBufferBrowserTest() {}
+
+  RenderThreadImplGpuMemoryBufferBrowserTest(
+      const RenderThreadImplGpuMemoryBufferBrowserTest&) = delete;
+  RenderThreadImplGpuMemoryBufferBrowserTest& operator=(
+      const RenderThreadImplGpuMemoryBufferBrowserTest&) = delete;
+
   ~RenderThreadImplGpuMemoryBufferBrowserTest() override {}
 
   gpu::GpuMemoryBufferManager* memory_buffer_manager() {
@@ -439,8 +448,6 @@ class RenderThreadImplGpuMemoryBufferBrowserTest
   }
 
   gpu::GpuMemoryBufferManager* memory_buffer_manager_ = nullptr;
-
-  DISALLOW_COPY_AND_ASSIGN(RenderThreadImplGpuMemoryBufferBrowserTest);
 };
 
 // https://crbug.com/652531

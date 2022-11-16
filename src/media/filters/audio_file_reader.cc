@@ -113,14 +113,15 @@ bool AudioFileReader::OpenDecoder() {
 
   // Verify the channel layout is supported by Chrome.  Acts as a sanity check
   // against invalid files.  See http://crbug.com/171962
-  if (ChannelLayoutToChromeChannelLayout(codec_context_->channel_layout,
-                                         codec_context_->channels) ==
+  if (ChannelLayoutToChromeChannelLayout(
+          codec_context_->ch_layout.u.mask,
+          codec_context_->ch_layout.nb_channels) ==
       CHANNEL_LAYOUT_UNSUPPORTED) {
     return false;
   }
 
   // Store initial values to guard against midstream configuration changes.
-  channels_ = codec_context_->channels;
+  channels_ = codec_context_->ch_layout.nb_channels;
   audio_codec_ = CodecIDToAudioCodec(codec_context_->codec_id);
   sample_rate_ = codec_context_->sample_rate;
   av_sample_format_ = codec_context_->sample_fmt;
@@ -223,7 +224,7 @@ bool AudioFileReader::OnNewFrame(
   if (frames_read < 0)
     return false;
 
-  const int channels = frame->channels;
+  const int channels = frame->ch_layout.nb_channels;
   if (frame->sample_rate != sample_rate_ || channels != channels_ ||
       frame->format != av_sample_format_) {
     DLOG(ERROR) << "Unsupported midstream configuration change!"
@@ -246,10 +247,10 @@ bool AudioFileReader::OnNewFrame(
     const base::TimeDelta pkt_duration = ConvertFromTimeBase(
         glue_->format_context()->streams[stream_index_]->time_base,
         frame->pkt_duration + std::min(static_cast<int64_t>(0), frame->pts));
-    const base::TimeDelta frame_duration = base::TimeDelta::FromSecondsD(
-        frames_read / static_cast<double>(sample_rate_));
+    const base::TimeDelta frame_duration =
+        base::Seconds(frames_read / static_cast<double>(sample_rate_));
 
-    if (pkt_duration < frame_duration && pkt_duration > base::TimeDelta()) {
+    if (pkt_duration < frame_duration && pkt_duration.is_positive()) {
       const int new_frames_read =
           base::ClampFloor(frames_read * (pkt_duration / frame_duration));
       DVLOG(2) << "Shrinking AAC frame from " << frames_read << " to "

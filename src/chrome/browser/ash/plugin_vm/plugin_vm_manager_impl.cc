@@ -22,8 +22,8 @@
 #include "chrome/browser/ui/ash/shelf/shelf_spinner_item_controller.h"
 #include "chrome/browser/ui/simple_message_box.h"
 #include "chrome/grit/generated_resources.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
 #include "chromeos/dbus/debug_daemon/debug_daemon_client.h"
+#include "chromeos/dbus/dlcservice/dlcservice.pb.h"
 #include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/keyed_service/content/browser_context_keyed_service_factory.h"
 #include "components/prefs/pref_service.h"
@@ -84,7 +84,7 @@ void ShowStartVmFailedDialog(PluginVmLaunchResult result) {
   switch (result) {
     default:
       NOTREACHED();
-      FALLTHROUGH;
+      [[fallthrough]];
     case PluginVmLaunchResult::kError:
       title = l10n_util::GetStringFUTF16(IDS_PLUGIN_VM_START_VM_ERROR_TITLE,
                                          app_name);
@@ -120,16 +120,12 @@ void ShowStartVmFailedDialog(PluginVmLaunchResult result) {
 
 PluginVmManagerImpl::PluginVmManagerImpl(Profile* profile)
     : profile_(profile),
-      owner_id_(chromeos::ProfileHelper::GetUserIdHashFromProfile(profile)) {
-  chromeos::DBusThreadManager::Get()
-      ->GetVmPluginDispatcherClient()
-      ->AddObserver(this);
+      owner_id_(ash::ProfileHelper::GetUserIdHashFromProfile(profile)) {
+  ash::VmPluginDispatcherClient::Get()->AddObserver(this);
 }
 
 PluginVmManagerImpl::~PluginVmManagerImpl() {
-  chromeos::DBusThreadManager::Get()
-      ->GetVmPluginDispatcherClient()
-      ->RemoveObserver(this);
+  ash::VmPluginDispatcherClient::Get()->RemoveObserver(this);
 }
 
 void PluginVmManagerImpl::OnPrimaryUserSessionStarted() {
@@ -138,7 +134,7 @@ void PluginVmManagerImpl::OnPrimaryUserSessionStarted() {
   request.set_vm_name_uuid(kPluginVmName);
 
   // Probe the dispatcher.
-  chromeos::DBusThreadManager::Get()->GetVmPluginDispatcherClient()->ListVms(
+  ash::VmPluginDispatcherClient::Get()->ListVms(
       std::move(request),
       base::BindOnce(
           [](absl::optional<vm_tools::plugin_dispatcher::ListVmResponse>
@@ -149,9 +145,8 @@ void PluginVmManagerImpl::OnPrimaryUserSessionStarted() {
             if (reply.has_value()) {
               LOG(ERROR) << "New session has dispatcher unexpected already "
                             "running. Perhaps Chrome crashed?";
-              chromeos::DBusThreadManager::Get()
-                  ->GetDebugDaemonClient()
-                  ->StopPluginVmDispatcher(base::BindOnce([](bool success) {
+              chromeos::DebugDaemonClient::Get()->StopPluginVmDispatcher(
+                  base::BindOnce([](bool success) {
                     if (!success) {
                       LOG(ERROR) << "Failed to stop the dispatcher";
                     }
@@ -206,11 +201,11 @@ void PluginVmManagerImpl::LaunchPluginVm(LaunchPluginVmCallback callback) {
 }
 
 void PluginVmManagerImpl::AddVmStartingObserver(
-    chromeos::VmStartingObserver* observer) {
+    ash::VmStartingObserver* observer) {
   vm_starting_observers_.AddObserver(observer);
 }
 void PluginVmManagerImpl::RemoveVmStartingObserver(
-    chromeos::VmStartingObserver* observer) {
+    ash::VmStartingObserver* observer) {
   vm_starting_observers_.RemoveObserver(observer);
 }
 
@@ -229,8 +224,8 @@ void PluginVmManagerImpl::StopPluginVm(const std::string& name, bool force) {
   }
 
   // TODO(juwa): This may not work if the vm is STARTING|CONTINUING|RESUMING.
-  chromeos::DBusThreadManager::Get()->GetVmPluginDispatcherClient()->StopVm(
-      std::move(request), base::DoNothing());
+  ash::VmPluginDispatcherClient::Get()->StopVm(std::move(request),
+                                               base::DoNothing());
 }
 
 void PluginVmManagerImpl::RelaunchPluginVm() {
@@ -248,7 +243,7 @@ void PluginVmManagerImpl::RelaunchPluginVm() {
   request.set_vm_name_uuid(kPluginVmName);
 
   // TODO(dtor): This may not work if the vm is STARTING|CONTINUING|RESUMING.
-  chromeos::DBusThreadManager::Get()->GetVmPluginDispatcherClient()->SuspendVm(
+  ash::VmPluginDispatcherClient::Get()->SuspendVm(
       std::move(request),
       base::BindOnce(&PluginVmManagerImpl::OnSuspendVmForRelaunch,
                      weak_ptr_factory_.GetWeakPtr()));
@@ -373,7 +368,7 @@ void PluginVmManagerImpl::OnVmStateChanged(
     vm_tools::concierge::GetVmInfoRequest concierge_request;
     concierge_request.set_owner_id(owner_id_);
     concierge_request.set_name(kPluginVmName);
-    chromeos::ConciergeClient::Get()->GetVmInfo(
+    ash::ConciergeClient::Get()->GetVmInfo(
         std::move(concierge_request),
         base::BindOnce(&PluginVmManagerImpl::OnGetVmInfoForSharing,
                        weak_ptr_factory_.GetWeakPtr()));
@@ -396,11 +391,9 @@ void PluginVmManagerImpl::OnVmStateChanged(
 void PluginVmManagerImpl::StartDispatcher(
     base::OnceCallback<void(bool)> callback) const {
   LOG_FUNCTION_CALL();
-  chromeos::DBusThreadManager::Get()
-      ->GetDebugDaemonClient()
-      ->StartPluginVmDispatcher(owner_id_,
-                                g_browser_process->GetApplicationLocale(),
-                                std::move(callback));
+  chromeos::DebugDaemonClient::Get()->StartPluginVmDispatcher(
+      owner_id_, g_browser_process->GetApplicationLocale(),
+      std::move(callback));
 }
 
 vm_tools::plugin_dispatcher::VmState PluginVmManagerImpl::vm_state() const {
@@ -416,8 +409,10 @@ void PluginVmManagerImpl::InstallDlcAndUpdateVmState(
     base::OnceCallback<void(bool default_vm_exists)> success_callback,
     base::OnceClosure error_callback) {
   LOG_FUNCTION_CALL();
+  dlcservice::InstallRequest install_request;
+  install_request.set_id(kPitaDlc);
   chromeos::DlcserviceClient::Get()->Install(
-      "pita",
+      install_request,
       base::BindOnce(&PluginVmManagerImpl::OnInstallPluginVmDlc,
                      weak_ptr_factory_.GetWeakPtr(),
                      std::move(success_callback), std::move(error_callback)),
@@ -457,7 +452,7 @@ void PluginVmManagerImpl::OnStartDispatcher(
   request.set_owner_id(owner_id_);
   request.set_vm_name_uuid(kPluginVmName);
 
-  chromeos::DBusThreadManager::Get()->GetVmPluginDispatcherClient()->ListVms(
+  ash::VmPluginDispatcherClient::Get()->ListVms(
       std::move(request),
       base::BindOnce(&PluginVmManagerImpl::OnListVms,
                      weak_ptr_factory_.GetWeakPtr(),
@@ -537,7 +532,7 @@ void PluginVmManagerImpl::StartVm() {
   request.set_owner_id(owner_id_);
   request.set_vm_name_uuid(kPluginVmName);
 
-  chromeos::DBusThreadManager::Get()->GetVmPluginDispatcherClient()->StartVm(
+  ash::VmPluginDispatcherClient::Get()->StartVm(
       std::move(request), base::BindOnce(&PluginVmManagerImpl::OnStartVm,
                                          weak_ptr_factory_.GetWeakPtr()));
 }
@@ -579,7 +574,7 @@ void PluginVmManagerImpl::ShowVm() {
   request.set_owner_id(owner_id_);
   request.set_vm_name_uuid(kPluginVmName);
 
-  chromeos::DBusThreadManager::Get()->GetVmPluginDispatcherClient()->ShowVm(
+  ash::VmPluginDispatcherClient::Get()->ShowVm(
       std::move(request), base::BindOnce(&PluginVmManagerImpl::OnShowVm,
                                          weak_ptr_factory_.GetWeakPtr()));
 }
@@ -719,7 +714,7 @@ void PluginVmManagerImpl::StopVmForUninstall() {
   request.set_stop_mode(
       vm_tools::plugin_dispatcher::VmStopMode::VM_STOP_MODE_SHUTDOWN);
 
-  chromeos::DBusThreadManager::Get()->GetVmPluginDispatcherClient()->StopVm(
+  ash::VmPluginDispatcherClient::Get()->StopVm(
       std::move(request),
       base::BindOnce(&PluginVmManagerImpl::OnStopVmForUninstall,
                      weak_ptr_factory_.GetWeakPtr()));
@@ -746,7 +741,7 @@ void PluginVmManagerImpl::DestroyDiskImage() {
   request.set_cryptohome_id(owner_id_);
   request.set_vm_name(kPluginVmName);
 
-  chromeos::ConciergeClient::Get()->DestroyDiskImage(
+  ash::ConciergeClient::Get()->DestroyDiskImage(
       std::move(request),
       base::BindOnce(&PluginVmManagerImpl::OnDestroyDiskImage,
                      weak_ptr_factory_.GetWeakPtr()));

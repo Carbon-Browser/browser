@@ -6,12 +6,13 @@
 #define CC_PAINT_PAINT_OP_READER_H_
 
 #include "base/memory/scoped_refptr.h"
-#include "build/build_config.h"
 #include "cc/paint/paint_export.h"
 #include "cc/paint/paint_filter.h"
 #include "cc/paint/paint_op_writer.h"
 #include "cc/paint/transfer_cache_deserialize_helper.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+
+class SkColorSpace;
 
 namespace gpu {
 struct Mailbox;
@@ -34,11 +35,17 @@ class CC_PAINT_EXPORT PaintOpReader {
                 bool enable_security_constraints = false)
       : memory_(static_cast<const volatile char*>(memory) +
                 PaintOpWriter::HeaderBytes()),
-        remaining_bytes_(size - PaintOpWriter::HeaderBytes()),
+        remaining_bytes_(
+            base::bits::AlignDown(size, PaintOpWriter::Alignment())),
         options_(options),
         enable_security_constraints_(enable_security_constraints) {
-    if (size < PaintOpWriter::HeaderBytes())
+    DCHECK_EQ(memory_,
+              base::bits::AlignUp(memory_, PaintOpWriter::Alignment()));
+    if (remaining_bytes_ < PaintOpWriter::HeaderBytes()) {
       valid_ = false;
+      return;
+    }
+    remaining_bytes_ -= PaintOpWriter::HeaderBytes();
   }
 
   static void FixupMatrixPostSerialization(SkMatrix* matrix);
@@ -61,12 +68,13 @@ class CC_PAINT_EXPORT PaintOpReader {
   void Read(SkRect* rect);
   void Read(SkIRect* rect);
   void Read(SkRRect* rect);
+  void Read(SkColor4f* color);
 
   void Read(SkPath* path);
   void Read(PaintFlags* flags);
   void Read(PaintImage* image);
   void Read(sk_sp<SkData>* data);
-  void Read(sk_sp<SkTextBlob>* blob);
+  void Read(sk_sp<GrSlug>* slug);
   void Read(sk_sp<PaintFilter>* filter);
   void Read(sk_sp<PaintShader>* shader);
   void Read(SkMatrix* matrix);
@@ -79,9 +87,7 @@ class CC_PAINT_EXPORT PaintOpReader {
   void Read(SkYUVAInfo::Subsampling* subsampling);
   void Read(gpu::Mailbox* mailbox);
 
-#if !defined(OS_ANDROID)
   void Read(scoped_refptr<SkottieWrapper>* skottie);
-#endif
 
   void Read(SkClipOp* op) { ReadEnum<SkClipOp, SkClipOp::kMax_EnumValue>(op); }
   void Read(PaintCanvas::AnnotationType* type) {
@@ -126,7 +132,75 @@ class CC_PAINT_EXPORT PaintOpReader {
   // Aligns the memory to the given alignment.
   void AlignMemory(size_t alignment);
 
+  void AssertAlignment(size_t alignment) {
+#if DCHECK_IS_ON()
+    uintptr_t memory = reinterpret_cast<uintptr_t>(memory_);
+    DCHECK_EQ(base::bits::AlignUp(memory, alignment), memory);
+#endif
+  }
+
  private:
+  enum class DeserializationError {
+    // Enum values must remain synchronized with PaintOpDeserializationError
+    // in tools/metrics/histograms/enums.xml.
+    kDrawLooperForbidden = 0,
+    kEnumValueOutOfRange = 1,
+    kForbiddenSerializedImageType = 2,
+    kInsufficientRemainingBytes_AlignMemory = 3,
+    kInsufficientRemainingBytes_ExtractReadableMemory = 4,
+    kInsufficientRemainingBytes_Read_PaintRecord = 5,
+    kInsufficientRemainingBytes_Read_PaintShader_ColorBytes = 6,
+    kInsufficientRemainingBytes_Read_PaintShader_ColorSize = 7,
+    kInsufficientRemainingBytes_Read_PaintShader_Positions = 8,
+    kInsufficientRemainingBytes_Read_SkData = 9,
+    kInsufficientRemainingBytes_Read_SkPath = 10,
+    kInsufficientRemainingBytes_Read_SkRegion = 11,
+    kInsufficientRemainingBytes_Read_GrSlug = 12,
+    kInsufficientRemainingBytes_ReadData = 13,
+    kInsufficientRemainingBytes_ReadFlattenable = 14,
+    kInsufficientRemainingBytes_ReadMatrixConvolutionPaintFilter = 15,
+    kInsufficientRemainingBytes_ReadSimple = 16,
+    kInvalidPaintShader = 17,
+    kInvalidPaintShaderPositionsSize = 18,
+    kInvalidPaintShaderScalingBehavior = 19,
+    kInvalidPaintShaderType = 20,
+    kInvalidPlaneConfig = 21,
+    kInvalidRasterScale = 22,
+    kInvalidRecordShaderId = 23,
+    kInvalidSerializedImageType = 24,
+    kInvalidSkYUVColorSpace = 25,
+    kInvalidSubsampling = 26,
+    kInvalidTypeface = 27,
+    kMissingPaintCachePathEntry = 28,
+    kMissingPaintCacheTextBlobEntry = 29,
+    kMissingSharedImageProvider = 30,
+    kPaintFilterHasTooManyInputs = 31,
+    kPaintOpBufferMakeFromMemoryFailure = 32,
+    kPaintRecordForbidden = 33,
+    kReadImageFailure = 34,
+    kSharedImageOpenFailure = 35,  // Obsolete
+    kSkColorFilterUnflattenFailure = 36,
+    kSkColorSpaceDeserializeFailure = 37,
+    kSkDrawLooperUnflattenFailure = 38,
+    kSkMaskFilterUnflattenFailure = 39,
+    kSkPathEffectUnflattenFailure = 40,
+    kSkPathReadFromMemoryFailure = 41,
+    kSkRegionReadFromMemoryFailure = 42,
+    kGrSlugDeserializeFailure = 43,
+    kUnexpectedPaintShaderType = 44,
+    kUnexpectedSerializedImageType = 45,
+    kZeroMailbox = 46,
+    kZeroRegionBytes = 47,
+    kZeroSkPathBytes = 48,
+    kSharedImageProviderUnknownMailbox = 49,
+    kSharedImageProviderNoAccess = 50,
+    kSharedImageProviderSkImageCreationFailed = 51,
+    kZeroSkColorFilterBytes = 52,
+    kInsufficientPixelData = 53,
+
+    kMaxValue = kInsufficientPixelData
+  };
+
   template <typename T>
   void ReadSimple(T* val);
 
@@ -136,7 +210,9 @@ class CC_PAINT_EXPORT PaintOpReader {
                                const SkDeserialProcs* procs);
 
   template <typename T>
-  void ReadFlattenable(sk_sp<T>* val, Factory<T> factory);
+  void ReadFlattenable(sk_sp<T>* val,
+                       Factory<T> factory,
+                       DeserializationError error_on_factory_failure);
 
   template <typename Enum, Enum kMaxValue = Enum::kMaxValue>
   void ReadEnum(Enum* enum_value) {
@@ -145,13 +221,13 @@ class CC_PAINT_EXPORT PaintOpReader {
     uint8_t value = 0u;
     Read(&value);
     if (value > static_cast<uint8_t>(kMaxValue)) {
-      SetInvalid();
+      SetInvalid(DeserializationError::kEnumValueOutOfRange);
       return;
     }
     *enum_value = static_cast<Enum>(value);
   }
 
-  void SetInvalid(bool skip_crash_dump = false);
+  void SetInvalid(DeserializationError error);
 
   // The main entry point is Read(sk_sp<PaintFilter>* filter) which calls one of
   // the following functions depending on read type.
@@ -230,6 +306,7 @@ class CC_PAINT_EXPORT PaintOpReader {
 
   void Read(SkRegion* region);
   uint8_t* CopyScratchSpace(size_t bytes);
+  void DidRead(size_t bytes_read);
 
   const volatile char* memory_ = nullptr;
   size_t remaining_bytes_ = 0u;

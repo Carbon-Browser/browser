@@ -14,7 +14,6 @@
 #include "base/command_line.h"
 #include "base/files/file_util.h"
 #include "base/logging.h"
-#include "base/macros.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
@@ -54,6 +53,10 @@ class TestSandboxSetupHooks : public SandboxSetupHooks {
  public:
   explicit TestSandboxSetupHooks(base::Process* process_holder)
       : process_holder_(process_holder) {}
+
+  TestSandboxSetupHooks(const TestSandboxSetupHooks&) = delete;
+  TestSandboxSetupHooks& operator=(const TestSandboxSetupHooks&) = delete;
+
   ~TestSandboxSetupHooks() override = default;
 
   ResultCode TargetSpawned(
@@ -66,22 +69,21 @@ class TestSandboxSetupHooks : public SandboxSetupHooks {
 
  private:
   base::Process* process_holder_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestSandboxSetupHooks);
 };
 
 class TestSandboxTargetHooks : public SandboxTargetHooks {
  public:
   TestSandboxTargetHooks() = default;
+
+  TestSandboxTargetHooks(const TestSandboxTargetHooks&) = delete;
+  TestSandboxTargetHooks& operator=(const TestSandboxTargetHooks&) = delete;
+
   ~TestSandboxTargetHooks() override = default;
 
   ResultCode TargetDroppedPrivileges(
       const base::CommandLine& command_line) override {
     return RESULT_CODE_SUCCESS;
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(TestSandboxTargetHooks);
 };
 
 class SandboxTest : public base::MultiProcessTest {
@@ -171,8 +173,8 @@ TEST_F(SandboxTest, SpawnSandboxTarget) {
   EXPECT_TRUE(target_process.IsValid());
 
   int exit_code = -1;
-  EXPECT_TRUE(target_process.WaitForExitWithTimeout(
-      base::TimeDelta::FromSeconds(10), &exit_code));
+  EXPECT_TRUE(
+      target_process.WaitForExitWithTimeout(base::Seconds(10), &exit_code));
   EXPECT_EQ(kChildExitCode, exit_code);
 }
 

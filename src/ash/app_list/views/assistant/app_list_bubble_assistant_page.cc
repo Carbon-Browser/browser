@@ -8,12 +8,10 @@
 
 #include "ash/app_list/views/assistant/assistant_dialog_plate.h"
 #include "ash/app_list/views/assistant/assistant_main_stage.h"
-#include "ash/assistant/ui/colors/assistant_colors.h"
-#include "ash/assistant/ui/colors/assistant_colors_util.h"
-#include "third_party/skia/include/core/SkColor.h"
+#include "ash/assistant/model/assistant_ui_model.h"
+#include "ash/public/cpp/assistant/controller/assistant_ui_controller.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/compositor/layer.h"
-#include "ui/views/background.h"
 #include "ui/views/layout/box_layout.h"
 
 using views::BoxLayout;
@@ -27,12 +25,10 @@ AppListBubbleAssistantPage::AppListBubbleAssistantPage(
   layout->set_cross_axis_alignment(
       views::BoxLayout::CrossAxisAlignment::kCenter);
 
-  SetPaintToLayer();
-  SetBackground(views::CreateSolidBackground(assistant::ResolveAssistantColor(
-      assistant_colors::ColorName::kBgAssistantPlate)));
-
   dialog_plate_ =
       AddChildView(std::make_unique<AssistantDialogPlate>(delegate));
+  dialog_plate_->SetPaintToLayer();
+  dialog_plate_->layer()->SetFillsBoundsOpaquely(false);
   main_stage_ =
       AddChildView(std::make_unique<AppListAssistantMainStage>(delegate));
   layout->SetFlexForView(main_stage_, 1);
@@ -44,11 +40,11 @@ void AppListBubbleAssistantPage::RequestFocus() {
   dialog_plate_->RequestFocus();
 }
 
-void AppListBubbleAssistantPage::OnThemeChanged() {
-  views::View::OnThemeChanged();
-
-  background()->SetNativeControlColor(assistant::ResolveAssistantColor(
-      assistant_colors::ColorName::kBgAssistantPlate));
+void AppListBubbleAssistantPage::OnBoundsChanged(
+    const gfx::Rect& previous_bounds) {
+  // AssistantUiController::Get() can be nullptr in test.
+  if (AssistantUiController::Get())
+    AssistantUiController::Get()->SetAppListBubbleWidth(size().width());
 }
 
 BEGIN_METADATA(AppListBubbleAssistantPage, views::View)

@@ -4,6 +4,8 @@
 
 #include "third_party/blink/renderer/core/layout/ng/ng_physical_box_fragment.h"
 
+#include "third_party/blink/renderer/core/layout/geometry/physical_offset.h"
+#include "third_party/blink/renderer/core/layout/geometry/physical_rect.h"
 #include "third_party/blink/renderer/core/layout/ng/ng_layout_test.h"
 #include "third_party/blink/renderer/platform/testing/runtime_enabled_features_test_helpers.h"
 
@@ -274,6 +276,103 @@ TEST_F(NGPhysicalBoxFragmentTest, IsFragmentationContextRootFieldset) {
 
   const auto& child = GetPhysicalBoxFragmentByElementId("child");
   EXPECT_FALSE(child.IsFragmentationContextRoot());
+}
+
+TEST_F(NGPhysicalBoxFragmentTest, MayHaveDescendantAboveBlockStart) {
+  SetBodyInnerHTML(R"HTML(
+    <div id="container2">
+      <div id="container">
+        <div style="height: 100px"></div>
+        <div style="height: 100px; margin-top: -200px"></div>
+      </div>
+    </div>
+  )HTML");
+  const auto& container = GetPhysicalBoxFragmentByElementId("container");
+  EXPECT_TRUE(container.MayHaveDescendantAboveBlockStart());
+  const auto& container2 = GetPhysicalBoxFragmentByElementId("container2");
+  EXPECT_TRUE(container2.MayHaveDescendantAboveBlockStart());
+}
+
+TEST_F(NGPhysicalBoxFragmentTest,
+       MayHaveDescendantAboveBlockStartBlockInInline) {
+  ScopedLayoutNGBlockInInlineForTest block_in_inline(true);
+  SetBodyInnerHTML(R"HTML(
+    <div id="container2">
+      <div id="container">
+        <span>
+          <div style="height: 100px"></div>
+          <div style="height: 100px; margin-top: -200px"></div>
+        </span>
+      </div>
+    </div>
+  )HTML");
+  const auto& container = GetPhysicalBoxFragmentByElementId("container");
+  EXPECT_TRUE(container.MayHaveDescendantAboveBlockStart());
+  const auto& container2 = GetPhysicalBoxFragmentByElementId("container2");
+  EXPECT_TRUE(container2.MayHaveDescendantAboveBlockStart());
+}
+
+TEST_F(NGPhysicalBoxFragmentTest, OverflowClipMarginVisualBox) {
+  ScopedLayoutNGBlockFragmentationForTest block_frag(true);
+
+  SetBodyInnerHTML(R"HTML(
+    <style>
+      body {
+        width: 200px;
+        height: 50px;
+        column-count: 2;
+      }
+
+      .container {
+        width: 50px;
+        height: 50px;
+        border: 5px solid grey;
+        padding: 5px;
+        overflow: clip;
+        overflow-clip-margin: content-box 15px;
+      }
+
+      .content {
+        width: 100px;
+        height: 200px;
+      }
+    </style>
+    <div class="container" id="test">
+      <div class="content" style="background:blue"></div>
+    </div>
+  )HTML");
+
+  auto* layout_box = GetLayoutBoxByElementId("test");
+  ASSERT_EQ(layout_box->PhysicalFragmentCount(), 2u);
+
+  const PhysicalOffset zero_offset;
+
+  EXPECT_EQ(
+      layout_box->GetPhysicalFragment(0)->InkOverflow(),
+      PhysicalRect(zero_offset, PhysicalSize(LayoutUnit(75), LayoutUnit(35))));
+  EXPECT_EQ(
+      layout_box->GetPhysicalFragment(1)->InkOverflow(),
+      PhysicalRect(zero_offset, PhysicalSize(LayoutUnit(75), LayoutUnit(40))));
+
+  GetDocument().getElementById("test")->SetInlineStyleProperty(
+      CSSPropertyID::kOverflowClipMargin, "padding-box 15px");
+  UpdateAllLifecyclePhasesForTest();
+  EXPECT_EQ(
+      layout_box->GetPhysicalFragment(0)->InkOverflow(),
+      PhysicalRect(zero_offset, PhysicalSize(LayoutUnit(80), LayoutUnit(35))));
+  EXPECT_EQ(
+      layout_box->GetPhysicalFragment(1)->InkOverflow(),
+      PhysicalRect(zero_offset, PhysicalSize(LayoutUnit(80), LayoutUnit(45))));
+
+  GetDocument().getElementById("test")->SetInlineStyleProperty(
+      CSSPropertyID::kOverflowClipMargin, "border-box 15px");
+  UpdateAllLifecyclePhasesForTest();
+  EXPECT_EQ(
+      layout_box->GetPhysicalFragment(0)->InkOverflow(),
+      PhysicalRect(zero_offset, PhysicalSize(LayoutUnit(85), LayoutUnit(35))));
+  EXPECT_EQ(
+      layout_box->GetPhysicalFragment(1)->InkOverflow(),
+      PhysicalRect(zero_offset, PhysicalSize(LayoutUnit(85), LayoutUnit(50))));
 }
 
 }  // namespace blink

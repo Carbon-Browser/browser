@@ -45,6 +45,12 @@ class CORE_EXPORT NGTextDecorationPainter {
       NGHighlightPainter::SelectionPaintState* selection);
   ~NGTextDecorationPainter();
 
+  // Sets the given optional to a new TextDecorationInfo with the decorations
+  // that need to be painted, or nullopt if decorations should not be painted.
+  void UpdateDecorationInfo(absl::optional<TextDecorationInfo>&,
+                            const ComputedStyle&,
+                            const TextPaintStyle&);
+
   enum Phase { kOriginating, kSelection };
   void Begin(Phase phase);
   void PaintExceptLineThrough();
@@ -64,9 +70,8 @@ class CORE_EXPORT NGTextDecorationPainter {
 
   Step step_;
   Phase phase_;
-  bool has_line_through_decoration_;
   absl::optional<TextDecorationInfo> decoration_info_;
-  absl::optional<FloatRect> clip_rect_;
+  absl::optional<gfx::RectF> clip_rect_;
 };
 
 }  // namespace blink

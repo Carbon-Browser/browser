@@ -18,6 +18,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.ListView;
+import android.widget.Switch;
 import android.widget.TextView;
 
 import androidx.annotation.Nullable;
@@ -27,10 +28,12 @@ import androidx.annotation.WorkerThread;
 import org.chromium.android_webview.common.services.ServiceNames;
 import org.chromium.android_webview.devui.util.ComponentInfo;
 import org.chromium.android_webview.devui.util.ComponentsInfoLoader;
+import org.chromium.android_webview.services.ComponentsProviderPathUtil;
 import org.chromium.base.ThreadUtils;
 import org.chromium.base.task.AsyncTask;
 import org.chromium.ui.widget.Toast;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Locale;
 
@@ -46,9 +49,12 @@ public class ComponentsListFragment extends DevUiBaseFragment {
     private TextView mComponentsSummaryView;
     private Toast mUpdatingToast;
     private Toast mUpdatedToast;
+    private boolean mOnDemandUpdate;
 
     private static String sComponentUpdateServiceName;
     private static @Nullable Runnable sComponentInfoLoadedListener;
+    public static final String ON_DEMAND_UPDATE_REQUEST = "ON_DEMAND_UPDATE_REQUEST";
+    public static final String SERVICE_FINISH_CALLBACK = "SERVICE_FINISH_CALLBACK";
 
     @Override
     public void onAttach(Context context) {
@@ -70,6 +76,7 @@ public class ComponentsListFragment extends DevUiBaseFragment {
     }
 
     @Override
+    @SuppressWarnings({"UseSwitchCompatOrMaterialCode"})
     public void onViewCreated(View view, Bundle savedInstanceState) {
         Activity activity = (Activity) mContext;
         activity.setTitle("WebView Components");
@@ -80,6 +87,12 @@ public class ComponentsListFragment extends DevUiBaseFragment {
         updateComponentInfoList(/* showToast= */ false);
         mUpdatingToast = Toast.makeText(mContext, "Updating Components...", Toast.LENGTH_SHORT);
         mUpdatedToast = Toast.makeText(mContext, "Components Updated!", Toast.LENGTH_SHORT);
+
+        // On-Demand Update enabled by default
+        mOnDemandUpdate = true;
+        Switch onDemandUpdateToggle = (Switch) view.findViewById(R.id.on_demand_update);
+        onDemandUpdateToggle.setOnCheckedChangeListener(
+                (buttonView, isChecked) -> { mOnDemandUpdate = isChecked; });
     }
 
     /**
@@ -123,7 +136,8 @@ public class ComponentsListFragment extends DevUiBaseFragment {
             @Override
             @WorkerThread
             protected ArrayList<ComponentInfo> doInBackground() {
-                ComponentsInfoLoader componentInfoLoader = new ComponentsInfoLoader();
+                ComponentsInfoLoader componentInfoLoader = new ComponentsInfoLoader(new File(
+                        ComponentsProviderPathUtil.getComponentUpdateServiceDirectoryPath()));
                 ArrayList<ComponentInfo> retrievedComponentInfoList =
                         componentInfoLoader.getComponentsInfo();
 
@@ -174,16 +188,17 @@ public class ComponentsListFragment extends DevUiBaseFragment {
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        if (item.getItemId() == R.id.options_menu_refresh) {
+        if (item.getItemId() == R.id.options_menu_update) {
             MainActivity.logMenuSelection(MainActivity.MenuChoice.COMPONENTS_UPDATE);
             Intent intent = new Intent();
             intent.setClassName(mContext.getPackageName(), sComponentUpdateServiceName);
-            intent.putExtra("SERVICE_FINISH_CALLBACK", new ResultReceiver(null) {
+            intent.putExtra(SERVICE_FINISH_CALLBACK, new ResultReceiver(null) {
                 @Override
                 public void onReceiveResult(int resultCode, Bundle resultData) {
                     updateComponentInfoList(/* showToast= */ true);
                 }
             });
+            intent.putExtra(ON_DEMAND_UPDATE_REQUEST, mOnDemandUpdate);
             // show toast only if the user is viewing current fragment
             if (ComponentsListFragment.this.isVisible()) {
                 // show toast only if it is not already showing, prevent toast spam

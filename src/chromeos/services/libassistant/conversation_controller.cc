@@ -10,13 +10,15 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/thread_annotations.h"
 #include "base/threading/sequenced_task_runner_handle.h"
+#include "chromeos/ash/services/assistant/public/cpp/features.h"
 #include "chromeos/assistant/internal/internal_util.h"
-#include "chromeos/services/assistant/public/cpp/features.h"
+#include "chromeos/assistant/internal/libassistant/shared_headers.h"
+#include "chromeos/assistant/internal/proto/shared/proto/v2/delegate/event_handler_interface.pb.h"
+#include "chromeos/assistant/internal/proto/shared/proto/v2/internal_options.pb.h"
 #include "chromeos/services/libassistant/grpc/assistant_client.h"
 #include "chromeos/services/libassistant/public/mojom/conversation_controller.mojom.h"
+#include "chromeos/services/libassistant/util.h"
 #include "chromeos/strings/grit/chromeos_strings.h"
-#include "libassistant/shared/internal_api/assistant_manager_delegate.h"
-#include "libassistant/shared/internal_api/assistant_manager_internal.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "ui/base/l10n/l10n_util.h"
 
@@ -29,8 +31,7 @@ using assistant::AssistantQuerySource;
 
 namespace {
 
-constexpr base::TimeDelta kStopInteractionDelayTime =
-    base::TimeDelta::FromMilliseconds(500);
+constexpr base::TimeDelta kStopInteractionDelayTime = base::Milliseconds(500);
 
 // A macro which ensures we are running on the main thread.
 #define ENSURE_MOJOM_THREAD(method, ...)                                    \
@@ -96,23 +97,19 @@ chromeos::assistant::AssistantNotification ToAssistantNotification(
 }  // namespace
 
 ////////////////////////////////////////////////////////////////////////////////
-// AssistantManagerDelegateImpl
+// GrpcEventsObserver
 ////////////////////////////////////////////////////////////////////////////////
 
-// Implementation of |AssistantManagerDelegate| that will forward all calls
-// to the correct observers.
-// It also keeps track of the last text query that was started, so we can
-// pass its metadata to |OnConversationTurnStarted|.
-class ConversationController::AssistantManagerDelegateImpl
-    : public assistant_client::AssistantManagerDelegate {
+class ConversationController::GrpcEventsObserver
+    : public GrpcServicesObserver<
+          ::assistant::api::OnConversationStateEventRequest>,
+      public GrpcServicesObserver<::assistant::api::OnDeviceStateEventRequest> {
  public:
-  explicit AssistantManagerDelegateImpl(ConversationController* parent)
-      : parent_(*parent),
-        mojom_task_runner_(base::SequencedTaskRunnerHandle::Get()) {}
-  AssistantManagerDelegateImpl(const AssistantManagerDelegateImpl&) = delete;
-  AssistantManagerDelegateImpl& operator=(const AssistantManagerDelegateImpl&) =
-      delete;
-  ~AssistantManagerDelegateImpl() override = default;
+  explicit GrpcEventsObserver(ConversationController* parent)
+      : parent_(*parent) {}
+  GrpcEventsObserver(const GrpcEventsObserver&) = delete;
+  GrpcEventsObserver& operator=(const GrpcEventsObserver&) = delete;
+  ~GrpcEventsObserver() override = default;
 
   std::string AddPendingTextInteraction(const std::string& query,
                                         AssistantQuerySource source) {
@@ -120,34 +117,24 @@ class ConversationController::AssistantManagerDelegateImpl
                                  query);
   }
 
-  std::string NewPendingInteraction(AssistantInteractionType interaction_type,
-                                    AssistantQuerySource source,
-                                    const std::string& query) {
-    DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-    auto id = base::NumberToString(next_interaction_id_++);
-    pending_interactions_.emplace(
-        id, AssistantInteractionMetadata(interaction_type, source, query));
-    return id;
-  }
+  // GrpcServicesObserver:
+  // Invoked when a conversation state event has been received.
+  void OnGrpcMessage(const ::assistant::api::OnConversationStateEventRequest&
+                         request) override {
+    if (!request.event().has_on_turn_started())
+      return;
 
-  // assistant_client::AssistantManagerDelegate overrides:
-  void OnConversationTurnStartedInternal(
-      const assistant_client::ConversationTurnMetadata& metadata) override {
-    ENSURE_MOJOM_THREAD(
-        &AssistantManagerDelegateImpl::OnConversationTurnStartedInternal,
-        metadata);
-    DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-
+    const auto& turn_started = request.event().on_turn_started();
     // Retrieve the cached interaction metadata associated with this
     // conversation turn or construct a new instance if there's no match in the
     // cache.
     AssistantInteractionMetadata interaction_metadata;
-    auto it = pending_interactions_.find(metadata.id);
+    auto it = pending_interactions_.find(turn_started.turn_id());
     if (it != pending_interactions_.end()) {
       interaction_metadata = it->second;
       pending_interactions_.erase(it);
     } else {
-      interaction_metadata.type = metadata.is_mic_open
+      interaction_metadata.type = turn_started.is_mic_open()
                                       ? AssistantInteractionType::kVoice
                                       : AssistantInteractionType::kText;
       interaction_metadata.source =
@@ -158,52 +145,53 @@ class ConversationController::AssistantManagerDelegateImpl
       observer->OnInteractionStarted(interaction_metadata);
   }
 
-  void OnNotificationRemoved(const std::string& grouping_key) override {
-    ENSURE_MOJOM_THREAD(&AssistantManagerDelegateImpl::OnNotificationRemoved,
-                        grouping_key);
+  // Invoked when a device state event has been received.
+  void OnGrpcMessage(
+      const ::assistant::api::OnDeviceStateEventRequest& request) override {
+    const auto& event = request.event();
+    if (event.has_on_notification_removed()) {
+      const auto& grouping_id =
+          request.event().on_notification_removed().grouping_id();
+      if (grouping_id.empty())
+        RemoveAllNotifications();
+      else
+        RemoveNotification(grouping_id);
+      return;
+    }
 
-    if (grouping_key.empty())
-      RemoveAllNotifications();
-    else
-      RemoveNotification(grouping_key);
-  }
-
-  void OnCommunicationError(int error_code) override {
-    ENSURE_MOJOM_THREAD(&AssistantManagerDelegateImpl::OnCommunicationError,
-                        error_code);
-    DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-
-    if (assistant::IsAuthError(error_code)) {
-      for (auto& observer : parent_.authentication_state_observers_)
-        observer->OnAuthenticationError();
+    if (event.has_on_communication_error()) {
+      if (event.on_communication_error().error_code() ==
+          ::assistant::api::events::DeviceStateEvent::OnCommunicationError::
+              AUTH_TOKEN_FAIL) {
+        for (auto& observer : parent_.authentication_state_observers_)
+          observer->OnAuthenticationError();
+      }
     }
   }
 
  private:
   void RemoveAllNotifications() {
-    DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-
     parent_.notification_delegate_->RemoveAllNotifications(
         /*from_server=*/true);
   }
 
   void RemoveNotification(const std::string& id) {
-    DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-
     parent_.notification_delegate_->RemoveNotificationByGroupingKey(
         id, /*from_server=*/true);
   }
 
-  SEQUENCE_CHECKER(sequence_checker_);
+  std::string NewPendingInteraction(AssistantInteractionType interaction_type,
+                                    AssistantQuerySource source,
+                                    const std::string& query) {
+    auto id = base::NumberToString(next_interaction_id_++);
+    pending_interactions_.emplace(
+        id, AssistantInteractionMetadata(interaction_type, source, query));
+    return id;
+  }
 
-  int next_interaction_id_ GUARDED_BY_CONTEXT(sequence_checker_) = 1;
-  std::map<std::string, AssistantInteractionMetadata> pending_interactions_
-      GUARDED_BY_CONTEXT(sequence_checker_);
-
-  ConversationController& parent_ GUARDED_BY_CONTEXT(sequence_checker_);
-
-  scoped_refptr<base::SequencedTaskRunner> mojom_task_runner_;
-  base::WeakPtrFactory<AssistantManagerDelegateImpl> weak_factory_{this};
+  int next_interaction_id_ = 1;
+  std::map<std::string, AssistantInteractionMetadata> pending_interactions_;
+  ConversationController& parent_;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -212,8 +200,7 @@ class ConversationController::AssistantManagerDelegateImpl
 
 ConversationController::ConversationController()
     : receiver_(this),
-      assistant_manager_delegate_(
-          std::make_unique<AssistantManagerDelegateImpl>(this)),
+      events_observer_(std::make_unique<GrpcEventsObserver>(this)),
       action_module_(std::make_unique<assistant::action::CrosActionModule>(
           assistant::features::IsAppSupportEnabled(),
           assistant::features::IsWaitSchedulingEnabled())),
@@ -247,27 +234,32 @@ void ConversationController::AddAuthenticationStateObserver(
 
 void ConversationController::OnAssistantClientCreated(
     AssistantClient* assistant_client) {
-  // Registers ActionModule when AssistantManagerInternal has been created
-  // but not yet started.
-  assistant_client->assistant_manager_internal()->RegisterActionModule(
-      action_module_.get());
-
-  assistant_client->assistant_manager_internal()->SetAssistantManagerDelegate(
-      assistant_manager_delegate_.get());
+  if (!chromeos::assistant::features::IsLibAssistantV2Enabled()) {
+    // Registers ActionModule when AssistantClient has been created but not yet
+    // started.
+    assistant_client->RegisterActionModule(action_module_.get());
+  }
 }
 
 void ConversationController::OnAssistantClientRunning(
     AssistantClient* assistant_client) {
   // Only when Libassistant is running we can start sending queries.
-  assistant_manager_ = assistant_client->assistant_manager();
-  assistant_manager_internal_ = assistant_client->assistant_manager_internal();
+  assistant_client_ = assistant_client;
   requests_are_allowed_ = true;
+
+  if (chromeos::assistant::features::IsLibAssistantV2Enabled()) {
+    // Register the action module when all libassistant services are ready.
+    // `action_module_` outlives gRPC services.
+    assistant_client->RegisterActionModule(action_module_.get());
+  }
+
+  assistant_client_->AddConversationStateEventObserver(events_observer_.get());
+  assistant_client_->AddDeviceStateEventObserver(events_observer_.get());
 }
 
 void ConversationController::OnDestroyingAssistantClient(
     AssistantClient* assistant_client) {
-  assistant_manager_ = nullptr;
-  assistant_manager_internal_ = nullptr;
+  assistant_client_ = nullptr;
 }
 
 void ConversationController::SendTextQuery(const std::string& query,
@@ -277,28 +269,27 @@ void ConversationController::SendTextQuery(const std::string& query,
 
   DCHECK(requests_are_allowed_)
       << "Should not receive requests before Libassistant is running";
-  if (!assistant_manager_internal_)
+  if (!assistant_client_)
     return;
 
   MaybeStopPreviousInteraction();
 
   // Configs |VoicelessOptions|.
-  assistant_client::VoicelessOptions options;
-  options.is_user_initiated = true;
+  ::assistant::api::VoicelessOptions options;
+  options.set_is_user_initiated(true);
   if (!allow_tts) {
-    options.modality =
-        assistant_client::VoicelessOptions::Modality::TYPING_MODALITY;
+    options.set_modality(::assistant::api::VoicelessOptions::TYPING_MODALITY);
   }
   // Remember the interaction metadata, and pass the generated conversation id
   // to LibAssistant.
-  options.conversation_turn_id =
-      assistant_manager_delegate_->AddPendingTextInteraction(query, source);
+  options.set_conversation_turn_id(
+      events_observer_->AddPendingTextInteraction(query, source));
 
   // Builds text interaction.
-  std::string interaction = assistant::CreateTextQueryInteraction(query);
+  auto interaction = CreateTextQueryInteraction(query);
 
-  assistant_manager_internal_->SendVoicelessInteraction(
-      interaction, /*description=*/"text_query", options, [](auto) {});
+  assistant_client_->SendVoicelessInteraction(
+      interaction, /*description=*/"text_query", options, base::DoNothing());
 }
 
 void ConversationController::StartVoiceInteraction() {
@@ -306,21 +297,21 @@ void ConversationController::StartVoiceInteraction() {
 
   DCHECK(requests_are_allowed_)
       << "Should not receive requests before Libassistant is running";
-  if (!assistant_manager_) {
+  if (!assistant_client_) {
     VLOG(1) << "Starting voice interaction without assistant manager.";
     return;
   }
 
   MaybeStopPreviousInteraction();
 
-  assistant_manager_->StartAssistantInteraction();
+  assistant_client_->StartVoiceInteraction();
 }
 
 void ConversationController::StartEditReminderInteraction(
     const std::string& client_id) {
   DCHECK(requests_are_allowed_)
       << "Should not receive requests before Libassistant is running";
-  if (!assistant_manager_internal_)
+  if (!assistant_client_)
     return;
 
   // Cancels any ongoing StopInteraction posted by StopActiveInteraction()
@@ -330,9 +321,12 @@ void ConversationController::StartEditReminderInteraction(
   // See b/182948180.
   MaybeStopPreviousInteraction();
 
-  SendVoicelessInteraction(assistant::CreateEditReminderInteraction(client_id),
-                           /*description=*/std::string(),
-                           /*is_user_initiated=*/true);
+  ::assistant::api::VoicelessOptions options;
+  options.set_is_user_initiated(true);
+
+  assistant_client_->SendVoicelessInteraction(
+      CreateEditReminderInteraction(client_id),
+      /*description=*/std::string(), options, base::DoNothing());
 }
 
 void ConversationController::StartScreenContextInteraction(
@@ -340,7 +334,7 @@ void ConversationController::StartScreenContextInteraction(
     const std::vector<uint8_t>& screenshot) {
   DCHECK(requests_are_allowed_)
       << "Should not receive requests before Libassistant is running";
-  if (!assistant_manager_internal_)
+  if (!assistant_client_)
     return;
 
   MaybeStopPreviousInteraction();
@@ -366,11 +360,11 @@ void ConversationController::StartScreenContextInteraction(
   context_protos.emplace_back(
       chromeos::assistant::CreateContextProto(screenshot,
                                               /*is_first_query=*/true));
-  assistant_manager_internal_->SendScreenContextRequest(context_protos);
+  assistant_client_->SendScreenContextRequest(context_protos);
 }
 
 void ConversationController::StopActiveInteraction(bool cancel_conversation) {
-  if (!assistant_manager_internal_) {
+  if (!assistant_client_) {
     VLOG(1) << "Stopping interaction without assistant manager.";
     return;
   }
@@ -380,12 +374,11 @@ void ConversationController::StopActiveInteraction(bool cancel_conversation) {
   // stability as Libassistant might misbehave when it's forcefully stopped.
   auto stop_callback = [](base::WeakPtr<ConversationController> weak_this,
                           bool cancel_conversation) {
-    if (!weak_this || !weak_this->assistant_manager_internal_) {
+    if (!weak_this || !weak_this->assistant_client_) {
       return;
     }
     VLOG(1) << "Stopping Assistant interaction.";
-    weak_this->assistant_manager_internal_->StopAssistantInteractionInternal(
-        cancel_conversation);
+    weak_this->assistant_client_->StopAssistantInteraction(cancel_conversation);
   };
 
   stop_interaction_closure_ =
@@ -402,55 +395,59 @@ void ConversationController::RetrieveNotification(
     int32_t action_index) {
   DCHECK(requests_are_allowed_)
       << "Should not receive requests before Libassistant is running";
-  if (!assistant_manager_internal_)
+  if (!assistant_client_)
     return;
 
-  const std::string request_interaction =
-      assistant::SerializeNotificationRequestInteraction(
-          notification.server_id, notification.consistency_token,
-          notification.opaque_token, action_index);
+  auto request_interaction = CreateNotificationRequestInteraction(
+      notification.server_id, notification.consistency_token,
+      notification.opaque_token, action_index);
 
-  SendVoicelessInteraction(request_interaction,
-                           /*description=*/"RequestNotification",
-                           /*is_user_initiated=*/true);
+  ::assistant::api::VoicelessOptions options;
+  options.set_is_user_initiated(true);
+
+  assistant_client_->SendVoicelessInteraction(
+      request_interaction,
+      /*description=*/"RequestNotification", options, base::DoNothing());
 }
 
 void ConversationController::DismissNotification(
     AssistantNotification notification) {
   DCHECK(requests_are_allowed_)
       << "Should not receive requests before Libassistant is running";
-  if (!assistant_manager_internal_)
+  if (!assistant_client_)
     return;
 
-  const std::string dismissed_interaction =
-      assistant::SerializeNotificationDismissedInteraction(
-          notification.server_id, notification.consistency_token,
-          notification.opaque_token, {notification.grouping_key});
+  auto dismissed_interaction = CreateNotificationDismissedInteraction(
+      notification.server_id, notification.consistency_token,
+      notification.opaque_token, {notification.grouping_key});
 
-  assistant_client::VoicelessOptions options;
-  options.obfuscated_gaia_id = notification.obfuscated_gaia_id;
+  ::assistant::api::VoicelessOptions options;
+  options.set_obfuscated_gaia_id(notification.obfuscated_gaia_id);
 
-  assistant_manager_internal_->SendVoicelessInteraction(
+  assistant_client_->SendVoicelessInteraction(
       dismissed_interaction, /*description=*/"DismissNotification", options,
-      [](auto) {});
+      base::DoNothing());
 }
 
 void ConversationController::SendAssistantFeedback(
     const AssistantFeedback& feedback) {
   DCHECK(requests_are_allowed_)
       << "Should not receive requests before Libassistant is running";
-  if (!assistant_manager_internal_)
+  if (!assistant_client_)
     return;
 
   std::string raw_image_data(feedback.screenshot_png.begin(),
                              feedback.screenshot_png.end());
-  const std::string interaction = assistant::CreateSendFeedbackInteraction(
-      feedback.assistant_debug_info_allowed, feedback.description,
-      raw_image_data);
+  auto interaction =
+      CreateSendFeedbackInteraction(feedback.assistant_debug_info_allowed,
+                                    feedback.description, raw_image_data);
 
-  SendVoicelessInteraction(interaction,
-                           /*description=*/"send feedback with details",
-                           /*is_user_initiated=*/false);
+  ::assistant::api::VoicelessOptions options;
+  options.set_is_user_initiated(false);
+
+  assistant_client_->SendVoicelessInteraction(
+      interaction, /*description=*/"send feedback with details", options,
+      base::DoNothing());
 }
 
 void ConversationController::AddRemoteObserver(
@@ -518,15 +515,14 @@ void ConversationController::OnOpenAndroidApp(
   // Note that we will always set |provider_found| to true since the preceding
   // OnVerifyAndroidApp() should already confirm that the requested provider is
   // available on the device.
-  std::string interaction_proto =
-      assistant::CreateOpenProviderResponseInteraction(
-          interaction.interaction_id, /*provider_found=*/true);
-  assistant_client::VoicelessOptions options;
-  options.obfuscated_gaia_id = interaction.user_id;
+  auto interaction_proto = CreateOpenProviderResponseInteraction(
+      interaction.interaction_id, /*provider_found=*/true);
+  ::assistant::api::VoicelessOptions options;
+  options.set_obfuscated_gaia_id(interaction.user_id);
 
-  assistant_manager_internal_->SendVoicelessInteraction(
+  assistant_client_->SendVoicelessInteraction(
       interaction_proto, /*description=*/"open_provider_response", options,
-      [](auto) {});
+      base::DoNothing());
 }
 
 // Called from Libassistant thread.
@@ -547,7 +543,7 @@ void ConversationController::OnScheduleWait(int id, int time_ms) {
             }
           },
           weak_factory_.GetWeakPtr(), id),
-      base::TimeDelta::FromMilliseconds(time_ms));
+      base::Milliseconds(time_ms));
 
   // Notify subscribers that a wait has been started.
   for (auto& observer : observers_)
@@ -582,17 +578,6 @@ void ConversationController::MaybeStopPreviousInteraction() {
   }
 
   stop_interaction_closure_->callback().Run();
-}
-
-void ConversationController::SendVoicelessInteraction(
-    const std::string& interaction,
-    const std::string& description,
-    bool is_user_initiated) {
-  assistant_client::VoicelessOptions voiceless_options;
-  voiceless_options.is_user_initiated = is_user_initiated;
-
-  assistant_manager_internal_->SendVoicelessInteraction(
-      interaction, description, voiceless_options, [](auto) {});
 }
 
 }  // namespace libassistant

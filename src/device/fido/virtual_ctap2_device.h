@@ -13,7 +13,6 @@
 
 #include "base/component_export.h"
 #include "base/containers/span.h"
-#include "base/macros.h"
 #include "base/memory/scoped_refptr.h"
 #include "components/cbor/values.h"
 #include "device/fido/attested_credential_data.h"
@@ -74,12 +73,23 @@ class COMPONENT_EXPORT(DEVICE_FIDO) VirtualCtap2Device
     bool large_blob_support = false;
     // Support for setting a min PIN length and forcing pin change.
     bool min_pin_length_support = false;
+    // min_pin_length_extension_support, if true, enables support for the
+    // minPinLength extension. See
+    // https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#sctn-minpinlength-extension
+    bool min_pin_length_extension_support = false;
     bool always_uv = false;
     // The space available to store a large blob. In real authenticators this
     // may change depending on the number of resident credentials. We treat this
     // as a fixed size area for the large blob.
     size_t available_large_blob_storage = 1024;
     bool cred_blob_support = false;
+    // include_transports_in_attestation_certificate controls whether a
+    // transports extension will be included in the attestation certificate
+    // returned from a makeCredential operation.
+    bool include_transports_in_attestation_certificate = true;
+    // transports_in_get_info, if not empty, contains the transports that will
+    // be reported via getInfo.
+    std::vector<FidoTransportProtocol> transports_in_get_info;
 
     IncludeCredential include_credential_in_assertion_response =
         IncludeCredential::ONLY_IF_NEEDED;
@@ -186,6 +196,12 @@ class COMPONENT_EXPORT(DEVICE_FIDO) VirtualCtap2Device
     // response.
     PINUVAuthProtocol pin_protocol = PINUVAuthProtocol::kV1;
 
+    // internal_account_chooser indicates that the authenticator has a screen
+    // and thus presents the account chooser for discoverable credential
+    // assertions itself. This causes userSelected to be asserted on those
+    // responses.
+    bool internal_account_chooser = false;
+
     // override_response_map allows overriding the response for a given command
     // with a given code. The actual command won't be executed.
     base::flat_map<CtapRequestCommand, CtapDeviceResponseCode>
@@ -198,6 +214,10 @@ class COMPONENT_EXPORT(DEVICE_FIDO) VirtualCtap2Device
 
   VirtualCtap2Device();
   VirtualCtap2Device(scoped_refptr<State> state, const Config& config);
+
+  VirtualCtap2Device(const VirtualCtap2Device&) = delete;
+  VirtualCtap2Device& operator=(const VirtualCtap2Device&) = delete;
+
   ~VirtualCtap2Device() override;
 
   // Configures and sets a PIN on the authenticator.
@@ -317,8 +337,6 @@ class COMPONENT_EXPORT(DEVICE_FIDO) VirtualCtap2Device
   const Config config_;
   RequestState request_state_;
   base::WeakPtrFactory<FidoDevice> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(VirtualCtap2Device);
 };
 
 }  // namespace device

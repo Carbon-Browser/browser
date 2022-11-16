@@ -10,10 +10,8 @@
 
 #include "base/files/file_path.h"
 #include "base/files/scoped_temp_dir.h"
-#include "base/macros.h"
 #include "base/run_loop.h"
 #include "base/strings/string_piece.h"
-#include "base/task/post_task.h"
 #include "base/task/thread_pool.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
@@ -67,6 +65,11 @@ class StorageServiceDomStorageDatabaseTest : public testing::Test {
   StorageServiceDomStorageDatabaseTest()
       : blocking_task_runner_(base::ThreadPool::CreateSequencedTaskRunner(
             {base::MayBlock(), base::TaskShutdownBehavior::BLOCK_SHUTDOWN})) {}
+
+  StorageServiceDomStorageDatabaseTest(
+      const StorageServiceDomStorageDatabaseTest&) = delete;
+  StorageServiceDomStorageDatabaseTest& operator=(
+      const StorageServiceDomStorageDatabaseTest&) = delete;
 
  protected:
   // Helper for tests to block on the result of an OpenInMemory call.
@@ -128,7 +131,6 @@ class StorageServiceDomStorageDatabaseTest : public testing::Test {
                      Func operation) {
     base::RunLoop loop;
     database.PostTaskWithThisObject(
-        FROM_HERE,
         base::BindLambdaForTesting([&](const DomStorageDatabase& database) {
           operation(database);
           loop.Quit();
@@ -139,8 +141,6 @@ class StorageServiceDomStorageDatabaseTest : public testing::Test {
  private:
   base::test::TaskEnvironment task_environment_;
   scoped_refptr<base::SequencedTaskRunner> blocking_task_runner_;
-
-  DISALLOW_COPY_AND_ASSIGN(StorageServiceDomStorageDatabaseTest);
 };
 
 }  // namespace

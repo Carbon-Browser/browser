@@ -10,45 +10,46 @@
 
 #include "ash/public/cpp/app_list/app_list_metrics.h"
 #include "ash/public/cpp/app_list/app_list_notifier.h"
-#include "base/macros.h"
 #include "base/scoped_observation.h"
+
+class ChromeSearchResult;
+class Profile;
 
 namespace app_list {
 
-// Records impression, abandonment, and launch UMA metrics reported by the
-// AppListNotifier.
+// Records launcher search backend metrics. This includes impression,
+// abandonment, and launch information reported by the AppListNotifier.
+//
+// TODO(crbug.com/1258415): Rename this SearchMetricsManager.
 class SearchMetricsObserver : ash::AppListNotifier::Observer {
  public:
   using Result = ash::AppListNotifier::Result;
+  using Location = ash::AppListNotifier::Location;
 
-  explicit SearchMetricsObserver(ash::AppListNotifier* notifier);
+  SearchMetricsObserver(Profile* profile, ash::AppListNotifier* notifier);
   ~SearchMetricsObserver() override;
 
   SearchMetricsObserver(const SearchMetricsObserver&) = delete;
   SearchMetricsObserver& operator=(const SearchMetricsObserver&) = delete;
 
-  // AppListNotifier::Observer:
-  void OnImpression(ash::AppListNotifier::Location location,
+  // ash::AppListNotifier::Observer:
+  void OnImpression(Location location,
                     const std::vector<Result>& results,
                     const std::u16string& query) override;
-  void OnAbandon(ash::AppListNotifier::Location location,
+  void OnAbandon(Location location,
                  const std::vector<Result>& results,
                  const std::u16string& query) override;
-  void OnLaunch(ash::AppListNotifier::Location location,
+  void OnLaunch(Location location,
                 const Result& launched,
                 const std::vector<Result>& shown,
                 const std::u16string& query) override;
-  void OnIgnore(ash::AppListNotifier::Location location,
+  void OnIgnore(Location location,
                 const std::vector<Result>& results,
                 const std::u16string& query) override;
-  void OnQueryChanged(const std::u16string& query) override;
 
  private:
   base::ScopedObservation<ash::AppListNotifier, ash::AppListNotifier::Observer>
       observation_{this};
-
-  // Whether the search box currently contains an empty query.
-  bool last_query_empty_ = true;
 };
 
 }  // namespace app_list

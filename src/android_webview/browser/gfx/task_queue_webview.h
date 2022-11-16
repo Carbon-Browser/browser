@@ -6,9 +6,8 @@
 #define ANDROID_WEBVIEW_BROWSER_GFX_TASK_QUEUE_WEBVIEW_H_
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/memory/scoped_refptr.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 
 namespace android_webview {
 
@@ -42,7 +41,10 @@ class TaskQueueWebView {
 
   // Called by both DeferredGpuCommandService and
   // SkiaOutputSurfaceDisplayContext to post task to client thread.
-  virtual void ScheduleClientTask(base::OnceClosure task) = 0;
+  void ScheduleClientTask(base::OnceClosure task) {
+    GetClientTaskRunner()->PostTask(FROM_HERE, std::move(task));
+  }
+  virtual scoped_refptr<base::TaskRunner> GetClientTaskRunner() = 0;
 
  protected:
   virtual ~TaskQueueWebView() = default;

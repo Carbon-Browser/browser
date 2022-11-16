@@ -8,7 +8,8 @@
  */
 import 'chrome://resources/cr_components/chromeos/bluetooth/bluetooth_pairing_ui.js';
 
-import {html, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {BluetoothUiSurface, recordBluetoothUiSurfaceMetrics} from 'chrome://resources/cr_components/chromeos/bluetooth/bluetooth_metrics_utils.js';
+import {html, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 /** @polymer */
 class SettingsBluetoothPairingDialogElement extends PolymerElement {
@@ -20,11 +21,17 @@ class SettingsBluetoothPairingDialogElement extends PolymerElement {
     return html`{__html_template__}`;
   }
 
+  /** @override */
+  connectedCallback() {
+    super.connectedCallback();
+    recordBluetoothUiSurfaceMetrics(BluetoothUiSurface.SETTINGS_PAIRING_DIALOG);
+  }
+
   /**
    * @param {!Event} e
    * @private
    */
-  onCancel_(e) {
+  closeDialog_(e) {
     this.$.dialog.close();
     e.stopPropagation();
   }

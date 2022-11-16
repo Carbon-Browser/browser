@@ -5,7 +5,6 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_CHROME_TYPOGRAPHY_H_
 #define CHROME_BROWSER_UI_VIEWS_CHROME_TYPOGRAPHY_H_
 
-#include "base/macros.h"
 #include "build/chromeos_buildflags.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/gfx/font.h"
@@ -65,7 +64,10 @@ enum ChromeTextContext {
   CONTEXT_IPH_BUBBLE_BODY,
 
   // Button label in the IPH bubble. Usually 13pt.
-  CONTEXT_IPH_BUBBLE_BUTTON
+  CONTEXT_IPH_BUBBLE_BUTTON,
+
+  // Title label in the browser side panel. Usually 13pt.
+  CONTEXT_SIDE_PANEL_TITLE,
 };
 
 enum ChromeTextStyle {

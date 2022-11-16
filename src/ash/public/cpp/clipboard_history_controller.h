@@ -9,7 +9,9 @@
 #include <set>
 
 #include "ash/public/cpp/ash_public_export.h"
+#include "base/callback_forward.h"
 #include "base/observer_list_types.h"
+#include "base/values.h"
 #include "chromeos/crosapi/mojom/clipboard_history.mojom.h"
 #include "ui/base/ui_base_types.h"
 
@@ -22,10 +24,6 @@ namespace gfx {
 class Rect;
 }  // namespace gfx
 
-namespace ui {
-class ClipboardData;
-}  // namespace ui
-
 namespace ash {
 class ScopedClipboardHistoryPause;
 
@@ -33,6 +31,8 @@ class ScopedClipboardHistoryPause;
 // clipboard history menu.
 class ASH_PUBLIC_EXPORT ClipboardHistoryController {
  public:
+  using GetHistoryValuesCallback = base::OnceCallback<void(base::Value)>;
+
   class Observer : public base::CheckedObserver {
    public:
     // Called when the clipboard history menu is shown.
@@ -51,8 +51,8 @@ class ASH_PUBLIC_EXPORT ClipboardHistoryController {
   // Returns the singleton instance.
   static ClipboardHistoryController* Get();
 
-  virtual void AddObserver(Observer* observer) const = 0;
-  virtual void RemoveObserver(Observer* observer) const = 0;
+  virtual void AddObserver(Observer* observer) = 0;
+  virtual void RemoveObserver(Observer* observer) = 0;
 
   // Returns whether the clipboard history menu is able to show.
   virtual bool CanShowMenu() const = 0;
@@ -76,11 +76,14 @@ class ASH_PUBLIC_EXPORT ClipboardHistoryController {
   // its lifetime.
   virtual std::unique_ptr<ScopedClipboardHistoryPause> CreateScopedPause() = 0;
 
-  // Returns the history which tracks what is being copied to the clipboard.
-  // Only the items listed in |item_id_filter| are returned. If |item_id_filter|
-  // is empty, then all items in the history are returned.
-  virtual base::Value GetHistoryValues(
-      const std::set<std::string>& item_id_filter) const = 0;
+  // Calls `callback` with the clipboard history list, which tracks what has
+  // been copied to the clipboard. Only the items listed in |item_id_filter| are
+  // returned. If |item_id_filter| is empty, then all items in the history are
+  // returned. If clipboard history is disabled in the current mode, `callback`
+  // will be called with an empty history list.
+  // TODO(crbug.com/1309666): Remove const ref from |item_id_filter| param type.
+  virtual void GetHistoryValues(const std::set<std::string>& item_id_filter,
+                                GetHistoryValuesCallback callback) const = 0;
 
   // Returns a list of item ids for items contained in the clipboard history.
   virtual std::vector<std::string> GetHistoryItemIds() const = 0;
@@ -90,9 +93,6 @@ class ASH_PUBLIC_EXPORT ClipboardHistoryController {
 
   // Deletes the clipboard item specified by the item id.
   virtual bool DeleteClipboardItemById(const std::string& item_id) = 0;
-
-  // Deletes the clipboard item that matches `data`.
-  virtual bool DeleteClipboardItemByClipboardData(ui::ClipboardData* data) = 0;
 
  protected:
   ClipboardHistoryController();

@@ -12,14 +12,11 @@
 namespace favicon {
 class LargeIconService;
 }
-namespace ntp_snippets {
-class Category;
-class ContentSuggestionsService;
-}
 
-@protocol ContentSuggestionsDataSink;
-@class ContentSuggestionsItem;
+@protocol ContentSuggestionsCollectionConsumer;
+@protocol ContentSuggestionsConsumer;
 @class ContentSuggestionsMostVisitedItem;
+@class ContentSuggestionsParentItem;
 @class FaviconAttributesProvider;
 class LargeIconCache;
 
@@ -27,36 +24,38 @@ class LargeIconCache;
 // items.
 @interface ContentSuggestionsFaviconMediator : NSObject
 
-// Initializes the mediator with the |contentService| used to fetch the image of
-// the suggested items and the |largeIconService| to fetch the favicon locally.
-- (nullable instancetype)
-initWithContentService:
-    (nonnull ntp_snippets::ContentSuggestionsService*)contentService
-      largeIconService:(nonnull favicon::LargeIconService*)largeIconService
-        largeIconCache:(nullable LargeIconCache*)largeIconCache
+// Initializes the mediator with `largeIconService` to fetch the favicon
+// locally.
+- (instancetype)initWithLargeIconService:
+                    (favicon::LargeIconService*)largeIconService
+                          largeIconCache:(LargeIconCache*)largeIconCache
     NS_DESIGNATED_INITIALIZER;
 
-- (nullable instancetype)init NS_UNAVAILABLE;
+- (instancetype)init NS_UNAVAILABLE;
 
-// The data sink which should be notified of the changes in the items.
-@property(nonatomic, weak, nullable) id<ContentSuggestionsDataSink> dataSink;
+// The consumer that will be notified when the data change. `consumer` is used
+// if kContentSuggestionsUIViewControllerMigration is enabled.
+// TODO(crbug.com/1285378): remove after completion of UIViewController
+// migration.
+@property(nonatomic, weak) id<ContentSuggestionsCollectionConsumer>
+    collectionConsumer;
+@property(nonatomic, weak) id<ContentSuggestionsConsumer> consumer;
 
 // FaviconAttributesProvider to fetch the favicon for the most visited tiles.
-@property(nonatomic, nullable, strong, readonly)
+@property(nonatomic, strong, readonly)
     FaviconAttributesProvider* mostVisitedAttributesProvider;
 
-// Sets the |mostVisitedData| used to log the impression of the tiles.
+// Sets the `mostVisitedData` used to log the impression of the tiles.
 - (void)setMostVisitedDataForLogging:
     (const ntp_tiles::NTPTilesVector&)mostVisitedData;
 
-// Fetches the favicon for this |item|.
-- (void)fetchFaviconForMostVisited:
-    (nonnull ContentSuggestionsMostVisitedItem*)item;
-
-// Fetches the favicon attributes for this |item| living in |category|. Also
-// fetches the favicon image from the ContentSuggestionsService.
-- (void)fetchFaviconForSuggestions:(nonnull ContentSuggestionsItem*)item
-                        inCategory:(ntp_snippets::Category)category;
+// Fetches the favicon for this `item`.
+- (void)fetchFaviconForMostVisited:(ContentSuggestionsMostVisitedItem*)item;
+// Fetches the favicon for `item` within `parentItem`.
+// TODO(crbug.com/1285378): Remove this after fully migrating ContentSuggestions
+// to UIViewController.
+- (void)fetchFaviconForMostVisited:(ContentSuggestionsMostVisitedItem*)item
+                        parentItem:(ContentSuggestionsParentItem*)parentItem;
 
 @end
 

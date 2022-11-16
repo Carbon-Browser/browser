@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "components/password_manager/core/browser/password_form_manager.h"
 
@@ -24,7 +25,7 @@ class CredentialManagerPasswordFormManagerDelegate {
 };
 
 // A PasswordFormManager built to handle PasswordForm objects synthesized
-// by the Credential Manager API.
+// by the Credential Management API.
 class CredentialManagerPasswordFormManager : public PasswordFormManager {
  public:
   // Given a |client| and an |observed_form|, kick off the process of fetching
@@ -57,7 +58,7 @@ class CredentialManagerPasswordFormManager : public PasswordFormManager {
   // Calls OnProvisionalSaveComplete on |delegate_|.
   void NotifyDelegate();
 
-  CredentialManagerPasswordFormManagerDelegate* delegate_;
+  raw_ptr<CredentialManagerPasswordFormManagerDelegate> delegate_;
 
   base::WeakPtrFactory<CredentialManagerPasswordFormManager> weak_factory_{
       this};

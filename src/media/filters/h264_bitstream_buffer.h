@@ -14,6 +14,7 @@
 #include <stdint.h>
 
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/numerics/safe_conversions.h"
 #include "media/base/media_export.h"
@@ -32,6 +33,9 @@ class MEDIA_EXPORT H264BitstreamBuffer
     : public base::RefCountedThreadSafe<H264BitstreamBuffer> {
  public:
   H264BitstreamBuffer();
+
+  H264BitstreamBuffer(const H264BitstreamBuffer&) = delete;
+  H264BitstreamBuffer& operator=(const H264BitstreamBuffer&) = delete;
 
   // Discard all data and reset the buffer for reuse.
   void Reset();
@@ -136,9 +140,7 @@ class MEDIA_EXPORT H264BitstreamBuffer
   size_t bits_in_buffer_;
 
   // Buffer for stream data.
-  uint8_t* data_;
-
-  DISALLOW_COPY_AND_ASSIGN(H264BitstreamBuffer);
+  raw_ptr<uint8_t> data_;
 };
 
 }  // namespace media

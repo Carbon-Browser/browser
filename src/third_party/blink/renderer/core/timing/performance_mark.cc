@@ -22,8 +22,9 @@ PerformanceMark::PerformanceMark(
     double start_time,
     base::TimeTicks unsafe_time_for_traces,
     scoped_refptr<SerializedScriptValue> serialized_detail,
-    ExceptionState& exception_state)
-    : PerformanceEntry(name, start_time, start_time),
+    ExceptionState& exception_state,
+    uint32_t navigation_id)
+    : PerformanceEntry(name, start_time, start_time, navigation_id),
       serialized_detail_(std::move(serialized_detail)),
       unsafe_time_for_traces_(unsafe_time_for_traces) {}
 
@@ -58,8 +59,8 @@ PerformanceMark* PerformanceMark::Create(ScriptState* script_state,
       // GetTimeOrigin() returns seconds from the monotonic clock's origin..
       // Trace events timestamps accept seconds (as a double) based on
       // CurrentTime::monotonicallyIncreasingTime().
-      unsafe_start_for_traces = performance->GetTimeOriginInternal() +
-                                base::TimeDelta::FromMillisecondsD(start);
+      unsafe_start_for_traces =
+          performance->GetTimeOriginInternal() + base::Milliseconds(start);
     } else {
       start = performance->now();
       unsafe_start_for_traces = base::TimeTicks::Now();
@@ -89,9 +90,10 @@ PerformanceMark* PerformanceMark::Create(ScriptState* script_state,
   if (exception_state.HadException())
     return nullptr;
 
+  uint32_t navigation_id = PerformanceEntry::GetNavigationId(script_state);
   return MakeGarbageCollected<PerformanceMark>(
       mark_name, start, unsafe_start_for_traces, std::move(serialized_detail),
-      exception_state);
+      exception_state, navigation_id);
 }
 
 AtomicString PerformanceMark::entryType() const {
@@ -119,9 +121,9 @@ ScriptValue PerformanceMark::detail(ScriptState* script_state) {
   TraceWrapperV8Reference<v8::Value>& relevant_data =
       result.stored_value->value;
   if (!result.is_new_entry)
-    return ScriptValue(isolate, relevant_data.NewLocal(isolate));
+    return ScriptValue(isolate, relevant_data.Get(isolate));
   v8::Local<v8::Value> value = serialized_detail_->Deserialize(isolate);
-  relevant_data.Set(isolate, value);
+  relevant_data.Reset(isolate, value);
   return ScriptValue(isolate, value);
 }
 

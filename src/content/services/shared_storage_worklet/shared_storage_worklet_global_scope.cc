@@ -8,6 +8,7 @@
 #include <string>
 #include <utility>
 
+#include "base/threading/thread_task_runner_handle.h"
 #include "content/services/shared_storage_worklet/console.h"
 #include "content/services/shared_storage_worklet/module_script_downloader.h"
 #include "content/services/shared_storage_worklet/shared_storage.h"
@@ -19,6 +20,10 @@
 #include "gin/public/isolate_holder.h"
 #include "gin/v8_initializer.h"
 #include "mojo/public/cpp/bindings/remote.h"
+#include "v8/include/v8-context.h"
+#include "v8/include/v8-function.h"
+#include "v8/include/v8-initialization.h"
+#include "v8/include/v8-object.h"
 
 namespace shared_storage_worklet {
 
@@ -29,22 +34,6 @@ void InitV8() {
 #if defined(V8_USE_EXTERNAL_STARTUP_DATA)
   gin::V8Initializer::LoadV8Snapshot();
 #endif
-
-  // Each script is run once using its own isolate, so tune down V8 to use as
-  // little memory as possible.
-  static const char kOptimizeForSize[] = "--optimize_for_size";
-  v8::V8::SetFlagsFromString(kOptimizeForSize, strlen(kOptimizeForSize));
-
-  // Running v8 in jitless mode allows dynamic code to be disabled in the
-  // process, and since each isolate is used only once, this may be best for
-  // performance as well.
-  static const char kJitless[] = "--jitless";
-  v8::V8::SetFlagsFromString(kJitless, strlen(kJitless));
-
-  // WebAssembly isn't encountered during resolution, so reduce the potential
-  // attack surface.
-  static const char kNoExposeWasm[] = "--no-expose-wasm";
-  v8::V8::SetFlagsFromString(kNoExposeWasm, strlen(kNoExposeWasm));
 
   gin::IsolateHolder::Initialize(gin::IsolateHolder::kNonStrictMode,
                                  gin::ArrayBufferAllocator::SharedInstance());
@@ -89,9 +78,14 @@ void SharedStorageWorkletGlobalScope::OnModuleScriptDownloaded(
   // Now the module script is downloaded, initialize the worklet environment.
   InitV8();
 
+  // TODO(yaoxia): we may need a new IsolateType here. For now, set it to
+  // `kBlinkWorkerThread` even though it's not technically for blink worker:
+  // this is the best approximate type and is the only type that allows multiple
+  // isolates in one process (see CanHaveMultipleIsolates(isolate_type) in
+  // gin/v8_isolate_memory_dump_provider.cc).
   isolate_holder_ = std::make_unique<gin::IsolateHolder>(
-      base::ThreadTaskRunnerHandle::Get(), gin::IsolateHolder::kUseLocker,
-      gin::IsolateHolder::IsolateType::kUtility);
+      base::ThreadTaskRunnerHandle::Get(), gin::IsolateHolder::kSingleThread,
+      gin::IsolateHolder::IsolateType::kBlinkWorkerThread);
 
   WorkletV8Helper::HandleScope scope(Isolate());
   global_context_.Reset(Isolate(), v8::Context::New(Isolate()));
@@ -102,9 +96,10 @@ void SharedStorageWorkletGlobalScope::OnModuleScriptDownloaded(
   v8::Local<v8::Object> global = context->Global();
 
   url_selection_operation_handler_ =
-      std::make_unique<UrlSelectionOperationHandler>();
+      std::make_unique<UrlSelectionOperationHandler>(operation_definition_map_);
 
-  unnamed_operation_handler_ = std::make_unique<UnnamedOperationHandler>();
+  unnamed_operation_handler_ =
+      std::make_unique<UnnamedOperationHandler>(operation_definition_map_);
 
   console_ = std::make_unique<Console>(client);
   global
@@ -113,24 +108,11 @@ void SharedStorageWorkletGlobalScope::OnModuleScriptDownloaded(
       .Check();
 
   global
-      ->Set(
-          context,
-          gin::StringToSymbol(Isolate(), "registerURLSelectionOperation"),
-          gin::CreateFunctionTemplate(
-              Isolate(), base::BindRepeating(&SharedStorageWorkletGlobalScope::
-                                                 RegisterURLSelectionOperation,
-                                             weak_ptr_factory_.GetWeakPtr()))
-              ->GetFunction(context)
-              .ToLocalChecked())
-      .Check();
-
-  global
-      ->Set(context, gin::StringToSymbol(Isolate(), "registerOperation"),
+      ->Set(context, gin::StringToSymbol(Isolate(), "register"),
             gin::CreateFunctionTemplate(
                 Isolate(),
-                base::BindRepeating(
-                    &SharedStorageWorkletGlobalScope::RegisterOperation,
-                    weak_ptr_factory_.GetWeakPtr()))
+                base::BindRepeating(&SharedStorageWorkletGlobalScope::Register,
+                                    weak_ptr_factory_.GetWeakPtr()))
                 ->GetFunction(context)
                 .ToLocalChecked())
       .Check();
@@ -157,21 +139,23 @@ void SharedStorageWorkletGlobalScope::OnModuleScriptDownloaded(
   std::move(callback).Run(true, {});
 }
 
-void SharedStorageWorkletGlobalScope::RegisterURLSelectionOperation(
-    gin::Arguments* args) {
-  url_selection_operation_handler_->RegisterOperation(args);
-}
-
-void SharedStorageWorkletGlobalScope::RegisterOperation(gin::Arguments* args) {
-  unnamed_operation_handler_->RegisterOperation(args);
-}
-
 void SharedStorageWorkletGlobalScope::RunURLSelectionOperation(
     const std::string& name,
-    const std::vector<std::string>& urls,
+    const std::vector<GURL>& urls,
     const std::vector<uint8_t>& serialized_data,
     mojom::SharedStorageWorkletService::RunURLSelectionOperationCallback
         callback) {
+  if (!isolate_holder_) {
+    // TODO(yaoxia): if this operation comes while fetching the module script,
+    // we might want to queue the operation to be handled later after addModule
+    // completes. http://crbug/1249581
+    std::move(callback).Run(
+        /*success=*/false,
+        /*error_message=*/"The module script hasn't been loaded.",
+        /*length=*/0);
+    return;
+  }
+
   WorkletV8Helper::HandleScope scope(Isolate());
   url_selection_operation_handler_->RunOperation(
       LocalContext(), name, urls, serialized_data, std::move(callback));
@@ -181,9 +165,74 @@ void SharedStorageWorkletGlobalScope::RunOperation(
     const std::string& name,
     const std::vector<uint8_t>& serialized_data,
     mojom::SharedStorageWorkletService::RunOperationCallback callback) {
+  if (!isolate_holder_) {
+    // TODO(yaoxia): if this operation comes while fetching the module script,
+    // we might want to queue the operation to be handled later after addModule
+    // completes. http://crbug/1249581
+    std::move(callback).Run(
+        /*success=*/false,
+        /*error_message=*/"The module script hasn't been loaded.");
+    return;
+  }
+
   WorkletV8Helper::HandleScope scope(Isolate());
   unnamed_operation_handler_->RunOperation(
       LocalContext(), name, serialized_data, std::move(callback));
+}
+
+void SharedStorageWorkletGlobalScope::Register(gin::Arguments* args) {
+  std::string name;
+  if (!args->GetNext(&name)) {
+    args->ThrowTypeError("Missing \"name\" argument in operation registration");
+    return;
+  }
+
+  if (name.empty()) {
+    args->ThrowTypeError("Operation name cannot be empty");
+    return;
+  }
+
+  if (operation_definition_map_.count(name)) {
+    args->ThrowTypeError("Operation name already registered");
+    return;
+  }
+
+  v8::Local<v8::Object> class_definition;
+  if (!args->GetNext(&class_definition)) {
+    args->ThrowTypeError(
+        "Missing class name argument in operation registration");
+    return;
+  }
+
+  if (!class_definition->IsConstructor()) {
+    args->ThrowTypeError("Unexpected class argument: not a constructor");
+    return;
+  }
+
+  v8::Isolate* isolate = args->isolate();
+  v8::Local<v8::Context> context = args->GetHolderCreationContext();
+
+  v8::Local<v8::Value> class_prototype =
+      class_definition->Get(context, gin::StringToV8(isolate, "prototype"))
+          .ToLocalChecked();
+
+  if (!class_prototype->IsObject()) {
+    args->ThrowTypeError("Unexpected class prototype: not an object");
+    return;
+  }
+
+  v8::Local<v8::Value> run_function =
+      class_prototype.As<v8::Object>()
+          ->Get(context, gin::StringToV8(isolate, "run"))
+          .ToLocalChecked();
+
+  if (run_function->IsUndefined() || !run_function->IsFunction()) {
+    args->ThrowTypeError("Missing \"run()\" function in the class");
+    return;
+  }
+
+  operation_definition_map_.emplace(
+      name, v8::Global<v8::Function>(isolate, run_function.As<v8::Function>()));
 }
 
 v8::Isolate* SharedStorageWorkletGlobalScope::Isolate() {

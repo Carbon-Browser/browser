@@ -17,7 +17,6 @@
 
 #include "base/component_export.h"
 #include "base/containers/span.h"
-#include "base/macros.h"
 #include "ui/base/dragdrop/os_exchange_data.h"
 #include "ui/base/dragdrop/os_exchange_data_provider.h"
 #include "ui/gfx/geometry/vector2d.h"
@@ -137,6 +136,10 @@ class COMPONENT_EXPORT(UI_BASE) OSExchangeDataProviderWin
   explicit OSExchangeDataProviderWin(IDataObject* source);
   OSExchangeDataProviderWin();
 
+  OSExchangeDataProviderWin(const OSExchangeDataProviderWin&) = delete;
+  OSExchangeDataProviderWin& operator=(const OSExchangeDataProviderWin&) =
+      delete;
+
   ~OSExchangeDataProviderWin() override;
 
   IDataObject* data_object() const { return data_.get(); }
@@ -146,6 +149,8 @@ class COMPONENT_EXPORT(UI_BASE) OSExchangeDataProviderWin
   std::unique_ptr<OSExchangeDataProvider> Clone() const override;
   void MarkOriginatedFromRenderer() override;
   bool DidOriginateFromRenderer() const override;
+  void MarkAsFromPrivileged() override;
+  bool IsFromPrivileged() const override;
   void SetString(const std::u16string& data) override;
   void SetURL(const GURL& url, const std::u16string& title) override;
   void SetFilename(const base::FilePath& path) override;
@@ -202,8 +207,6 @@ class COMPONENT_EXPORT(UI_BASE) OSExchangeDataProviderWin
 
   scoped_refptr<DataObjectImpl> data_;
   Microsoft::WRL::ComPtr<IDataObject> source_object_;
-
-  DISALLOW_COPY_AND_ASSIGN(OSExchangeDataProviderWin);
 };
 
 }  // namespace ui

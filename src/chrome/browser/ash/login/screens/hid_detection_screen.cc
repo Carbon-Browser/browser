@@ -7,10 +7,14 @@
 #include <memory>
 #include <utility>
 
+#include "ash/components/hid_detection/hid_detection_manager_impl.h"
+#include "ash/components/hid_detection/hid_detection_utils.h"
+#include "ash/constants/ash_features.h"
 #include "ash/constants/ash_switches.h"
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/no_destructor.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/default_tick_clock.h"
@@ -20,10 +24,15 @@
 #include "chrome/browser/ash/login/wizard_controller.h"
 #include "chrome/browser/ui/webui/chromeos/login/hid_detection_screen_handler.h"
 #include "chrome/grit/generated_resources.h"
+#include "chromeos/constants/devicetype.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/device_service.h"
 #include "device/bluetooth/bluetooth_adapter_factory.h"
 #include "ui/base/l10n/l10n_util.h"
+
+// Enable VLOG level 1.
+#undef ENABLED_VLOG_LEVEL
+#define ENABLED_VLOG_LEVEL 1
 
 namespace ash {
 namespace {
@@ -68,6 +77,37 @@ GetInputDeviceManagerBinderOverride() {
   return *binder;
 }
 
+std::unique_ptr<hid_detection::HidDetectionManager>&
+GetHidDetectionManagerOverrideForTesting() {
+  static base::NoDestructor<std::unique_ptr<hid_detection::HidDetectionManager>>
+      hid_detection_manager;
+  return *hid_detection_manager;
+}
+
+std::string GetDeviceUiState(
+    const hid_detection::HidDetectionManager::InputState& state) {
+  switch (state) {
+    case hid_detection::HidDetectionManager::InputState::kSearching:
+      return kSearchingState;
+    case hid_detection::HidDetectionManager::InputState::kConnectedViaUsb:
+      return kUSBState;
+    case hid_detection::HidDetectionManager::InputState::kPairingViaBluetooth:
+      return kBTPairingState;
+    case hid_detection::HidDetectionManager::InputState::kPairedViaBluetooth:
+      return kBTPairedState;
+    case hid_detection::HidDetectionManager::InputState::kConnected:
+      return kConnectedState;
+  }
+}
+
+bool IsInputConnected(
+    const hid_detection::HidDetectionManager::InputMetadata& metadata) {
+  return metadata.state !=
+             hid_detection::HidDetectionManager::InputState::kSearching &&
+         metadata.state != hid_detection::HidDetectionManager::InputState::
+                               kPairingViaBluetooth;
+}
+
 }  // namespace
 
 // static
@@ -80,6 +120,26 @@ std::string HIDDetectionScreen::GetResultString(Result result) {
   }
 }
 
+bool HIDDetectionScreen::CanShowScreen() {
+  if (StartupUtils::IsHIDDetectionScreenDisabledForTests() ||
+      base::CommandLine::ForCurrentProcess()->HasSwitch(
+          switches::kDisableHIDDetectionOnOOBEForTesting)) {
+    // Store the flag inside the local state so it persists restart for the
+    // autoupdate tests.
+    StartupUtils::DisableHIDDetectionScreenForTests();
+    return false;
+  }
+
+  switch (chromeos::GetDeviceType()) {
+    case chromeos::DeviceType::kChromebase:
+    case chromeos::DeviceType::kChromebit:
+    case chromeos::DeviceType::kChromebox:
+      return true;
+    default:
+      return false;
+  }
+}
+
 HIDDetectionScreen::HIDDetectionScreen(HIDDetectionView* view,
                                        const ScreenExitCallback& exit_callback)
     : BaseScreen(HIDDetectionView::kScreenId, OobeScreenPriority::DEFAULT),
@@ -88,12 +148,30 @@ HIDDetectionScreen::HIDDetectionScreen(HIDDetectionView* view,
   if (view_)
     view_->Bind(this);
 
+  if (ash::features::IsOobeHidDetectionRevampEnabled()) {
+    const auto& hid_detection_manager_override =
+        GetHidDetectionManagerOverrideForTesting();
+    hid_detection_manager_ =
+        hid_detection_manager_override
+            ? std::unique_ptr<hid_detection::HidDetectionManager>(
+                  hid_detection_manager_override.get())
+            : std::make_unique<hid_detection::HidDetectionManagerImpl>(
+                  &content::GetDeviceService());
+    return;
+  }
+
   device::BluetoothAdapterFactory::Get()->GetAdapter(base::BindOnce(
       &HIDDetectionScreen::InitializeAdapter, weak_ptr_factory_.GetWeakPtr()));
   ConnectToInputDeviceManager();
 }
 
 HIDDetectionScreen::~HIDDetectionScreen() {
+  if (ash::features::IsOobeHidDetectionRevampEnabled()) {
+    if (view_)
+      view_->Unbind();
+    return;
+  }
+
   adapter_initially_powered_.reset();
   if (view_)
     view_->Unbind();
@@ -109,8 +187,19 @@ void HIDDetectionScreen::OverrideInputDeviceManagerBinderForTesting(
   GetInputDeviceManagerBinderOverride() = std::move(binder);
 }
 
+// static
+void HIDDetectionScreen::OverrideHidDetectionManagerForTesting(
+    std::unique_ptr<hid_detection::HidDetectionManager> hid_detection_manager) {
+  GetHidDetectionManagerOverrideForTesting() = std::move(hid_detection_manager);
+}
+
 void HIDDetectionScreen::OnContinueButtonClicked() {
-  CleanupOnExit();
+  if (ash::features::IsOobeHidDetectionRevampEnabled()) {
+    hid_detection_manager_->StopHidDetection();
+  } else {
+    hid_detection::RecordBluetoothPairingAttempts(num_pairing_attempts_);
+    CleanupOnExit();
+  }
   Exit(Result::NEXT);
 }
 
@@ -123,8 +212,6 @@ void HIDDetectionScreen::CleanupOnExit() {
       adapter_initially_powered_ && !(*adapter_initially_powered_);
   if (adapter_is_powered && need_switching_off)
     PowerOff();
-
-  demo_mode_detector_.reset();
 }
 
 void HIDDetectionScreen::OnViewDestroyed(HIDDetectionView* view) {
@@ -139,6 +226,11 @@ bool HIDDetectionScreen::ShouldEnableContinueButton() {
 
 void HIDDetectionScreen::CheckIsScreenRequired(
     base::OnceCallback<void(bool)> on_check_done) {
+  if (ash::features::IsOobeHidDetectionRevampEnabled()) {
+    hid_detection_manager_->GetIsHidDetectionRequired(std::move(on_check_done));
+    return;
+  }
+
   DCHECK(input_device_manager_);
   input_device_manager_->GetDevices(
       base::BindOnce(&HIDDetectionScreen::OnGetInputDevicesListForCheck,
@@ -146,9 +238,8 @@ void HIDDetectionScreen::CheckIsScreenRequired(
 }
 
 bool HIDDetectionScreen::MaybeSkip(WizardContext* context) {
-  if (StartupUtils::IsHIDDetectionScreenDisabledForTests() ||
-      base::CommandLine::ForCurrentProcess()->HasSwitch(
-          switches::kDisableHIDDetectionOnOOBEForTesting)) {
+  if (!CanShowScreen()) {
+    // TODO(https://crbug.com/1275960): Introduce Result::SKIPPED.
     Exit(Result::SKIPPED_FOR_TESTS);
     return true;
   }
@@ -159,6 +250,14 @@ bool HIDDetectionScreen::MaybeSkip(WizardContext* context) {
 void HIDDetectionScreen::ShowImpl() {
   if (!is_hidden())
     return;
+
+  if (ash::features::IsOobeHidDetectionRevampEnabled()) {
+    if (view_)
+      view_->Show();
+
+    hid_detection_manager_->StartHidDetection(/*delegate=*/this);
+    return;
+  }
 
   if (adapter_)
     adapter_->AddObserver(this);
@@ -174,8 +273,6 @@ void HIDDetectionScreen::ShowImpl() {
     GetInputDevicesList();
   else
     UpdateDevices();
-  demo_mode_detector_ = std::make_unique<DemoModeDetector>(
-      base::DefaultTickClock::GetInstance(), this);
   if (view_) {
     view_->Show();
   }
@@ -184,23 +281,24 @@ void HIDDetectionScreen::ShowImpl() {
 void HIDDetectionScreen::HideImpl() {
   if (is_hidden())
     return;
-  demo_mode_detector_.reset();
 
-  if (discovery_session_.get())
-    discovery_session_->Stop();
+  if (!ash::features::IsOobeHidDetectionRevampEnabled()) {
+    if (discovery_session_.get())
+      discovery_session_->Stop();
 
-  if (adapter_)
-    adapter_->RemoveObserver(this);
+    if (adapter_)
+      adapter_->RemoveObserver(this);
+  }
 
   if (view_)
     view_->Hide();
 }
 
-void HIDDetectionScreen::OnUserAction(const std::string& action_id) {
+void HIDDetectionScreen::OnUserActionDeprecated(const std::string& action_id) {
   if (action_id == kUserActionContinue) {
     OnContinueButtonClicked();
   } else {
-    BaseScreen::OnUserAction(action_id);
+    BaseScreen::OnUserActionDeprecated(action_id);
   }
 }
 
@@ -318,6 +416,7 @@ void HIDDetectionScreen::ConnectBTDevice(device::BluetoothDevice* device) {
     mouse_is_pairing_ = true;
     keyboard_is_pairing_ = true;
   }
+  ++num_pairing_attempts_;
   device->Connect(this, base::BindOnce(&HIDDetectionScreen::OnConnect,
                                        weak_ptr_factory_.GetWeakPtr(),
                                        device->GetAddress(), device_type));
@@ -455,6 +554,8 @@ void HIDDetectionScreen::InputDeviceAdded(InputDeviceInfoPtr info) {
     SetKeyboardDeviceName(info_ref->name);
     SendKeyboardDeviceNotification();
   }
+  DCHECK(!info_ref.is_null());
+  hid_detection::RecordHidConnected(*info_ref);
 }
 
 void HIDDetectionScreen::InputDeviceAddedForTesting(InputDeviceInfoPtr info) {
@@ -462,9 +563,17 @@ void HIDDetectionScreen::InputDeviceAddedForTesting(InputDeviceInfoPtr info) {
 }
 
 void HIDDetectionScreen::InputDeviceRemoved(const std::string& id) {
-  devices_.erase(id);
-  if (is_hidden())
+  if (is_hidden()) {
+    devices_.erase(id);
     return;
+  }
+
+  // Some devices may be removed that were not registered in InputDeviceAdded or
+  // OnGetInputDevicesList.
+  if (base::Contains(devices_, id))
+    hid_detection::RecordHidDisconnected(*devices_[id]);
+
+  devices_.erase(id);
 
   if (id == touchscreen_id_) {
     touchscreen_id_.clear();
@@ -483,6 +592,30 @@ void HIDDetectionScreen::InputDeviceRemoved(const std::string& id) {
     SendPointingDeviceNotification();
     UpdateDevices();
   }
+}
+
+void HIDDetectionScreen::OnHidDetectionStatusChanged(
+    hid_detection::HidDetectionManager::HidDetectionStatus status) {
+  if (!view_)
+    return;
+
+  view_->SetTouchscreenDetectedState(status.touchscreen_detected);
+  view_->SetMouseState(GetDeviceUiState(status.pointer_metadata.state));
+  view_->SetPointingDeviceName(status.pointer_metadata.detected_hid_name);
+
+  // TODO(b/232851163): Handle showing pairing dialog.
+
+  std::string keyboard_state = GetDeviceUiState(status.keyboard_metadata.state);
+
+  // Unlike pointing devices, which can be connected through serial IO or some
+  // other medium, keyboards only report USB and Bluetooth states.
+  if (keyboard_state == kConnectedState)
+    keyboard_state = kUSBState;
+  view_->SetKeyboardState(keyboard_state);
+  view_->SetKeyboardDeviceName(status.keyboard_metadata.detected_hid_name);
+  view_->SetContinueButtonEnabled(status.touchscreen_detected ||
+                                  IsInputConnected(status.pointer_metadata) ||
+                                  IsInputConnected(status.keyboard_metadata));
 }
 
 void HIDDetectionScreen::InitializeAdapter(

@@ -1,4 +1,17 @@
 #!/bin/bash
+
+# This file is part of eyeo Chromium SDK,
+# Copyright (C) 2006-present eyeo GmbH
+# eyeo Chromium SDK is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 3 as
+# published by the Free Software Foundation.
+# eyeo Chromium SDK is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# You should have received a copy of the GNU General Public License
+# along with eyeo Chromium SDK.  If not, see <http://www.gnu.org/licenses/>.
+
 # Install additional build dependencies.
 # Detect if they have already been installed (deps rarely change)
 for DEPS in install-build-deps-android.sh install-build-deps.sh; do
@@ -9,5 +22,5 @@ fi
 done
 if [ "$MISSING_DEPS" ] ; then
     echo "WARNING: Missing dependencies detected, you may want to update the docker image used."
-    chmod +x ./build/*.sh && ./build/install-build-deps-android.sh --no-prompt
+    ./build/install-build-deps-android.sh --no-prompt
 fi

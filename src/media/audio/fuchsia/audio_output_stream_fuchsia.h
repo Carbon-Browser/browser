@@ -8,6 +8,7 @@
 #include <fuchsia/media/cpp/fidl.h>
 
 #include "base/memory/shared_memory_mapping.h"
+#include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "media/audio/audio_io.h"
 #include "media/base/audio_parameters.h"
@@ -22,6 +23,9 @@ class AudioOutputStreamFuchsia : public AudioOutputStream {
   // Caller must ensure that manager outlives the stream.
   AudioOutputStreamFuchsia(AudioManagerFuchsia* manager,
                            const AudioParameters& parameters);
+
+  AudioOutputStreamFuchsia(const AudioOutputStreamFuchsia&) = delete;
+  AudioOutputStreamFuchsia& operator=(const AudioOutputStreamFuchsia&) = delete;
 
   // AudioOutputStream interface.
   bool Open() override;
@@ -96,8 +100,6 @@ class AudioOutputStreamFuchsia : public AudioOutputStream {
 
   // Timer that's scheduled to call PumpSamples().
   base::OneShotTimer timer_;
-
-  DISALLOW_COPY_AND_ASSIGN(AudioOutputStreamFuchsia);
 };
 
 }  // namespace media

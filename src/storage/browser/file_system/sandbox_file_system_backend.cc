@@ -13,7 +13,7 @@
 #include "base/check.h"
 #include "base/files/file_util.h"
 #include "base/metrics/histogram.h"
-#include "base/task_runner_util.h"
+#include "base/task/task_runner_util.h"
 #include "storage/browser/file_system/async_file_util_adapter.h"
 #include "storage/browser/file_system/copy_or_move_file_validator.h"
 #include "storage/browser/file_system/file_stream_reader.h"
@@ -59,7 +59,7 @@ void SandboxFileSystemBackend::Initialize(FileSystemContext* context) {
 
 void SandboxFileSystemBackend::ResolveURL(const FileSystemURL& url,
                                           OpenFileSystemMode mode,
-                                          OpenFileSystemCallback callback) {
+                                          ResolveURLCallback callback) {
   DCHECK(CanHandleType(url.type()));
   DCHECK(delegate_);
   if (delegate_->file_system_options().is_incognito() &&
@@ -73,7 +73,7 @@ void SandboxFileSystemBackend::ResolveURL(const FileSystemURL& url,
   }
 
   delegate_->OpenFileSystem(
-      url.origin(), url.type(), mode, std::move(callback),
+      url.storage_key(), url.bucket(), url.type(), mode, std::move(callback),
       GetFileSystemRootURI(url.origin().GetURL(), url.type()));
 }
 
@@ -174,10 +174,10 @@ const AccessObserverList* SandboxFileSystemBackend::GetAccessObservers(
   return delegate_->GetAccessObservers(type);
 }
 
-SandboxFileSystemBackendDelegate::OriginEnumerator*
-SandboxFileSystemBackend::CreateOriginEnumerator() {
+SandboxFileSystemBackendDelegate::StorageKeyEnumerator*
+SandboxFileSystemBackend::CreateStorageKeyEnumerator() {
   DCHECK(delegate_);
-  return delegate_->CreateOriginEnumerator();
+  return delegate_->CreateStorageKeyEnumerator();
 }
 
 }  // namespace storage

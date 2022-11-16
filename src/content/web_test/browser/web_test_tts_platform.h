@@ -15,6 +15,9 @@ class WebTestTtsPlatform : public content::TtsPlatform {
  public:
   static WebTestTtsPlatform* GetInstance();
 
+  WebTestTtsPlatform(const WebTestTtsPlatform&) = delete;
+  WebTestTtsPlatform& operator=(const WebTestTtsPlatform&) = delete;
+
   // content::TtsControllerDelegate overrides.
   bool PlatformImplSupported() override;
   bool PlatformImplInitialized() override;
@@ -37,15 +40,18 @@ class WebTestTtsPlatform : public content::TtsPlatform {
   void ClearError() override;
   void SetError(const std::string& error) override;
   void Shutdown() override;
-  bool PreferEngineDelegateVoices() override;
+  void FinalizeVoiceOrdering(std::vector<content::VoiceData>& voices) override;
+  void GetVoicesForBrowserContext(
+      content::BrowserContext* browser_context,
+      const GURL& source_url,
+      std::vector<content::VoiceData>* out_voices) override;
+  void RefreshVoices() override;
 
  private:
   WebTestTtsPlatform();
   virtual ~WebTestTtsPlatform();
 
   friend struct base::DefaultSingletonTraits<WebTestTtsPlatform>;
-
-  DISALLOW_COPY_AND_ASSIGN(WebTestTtsPlatform);
 };
 
 #endif  // CONTENT_WEB_TEST_BROWSER_WEB_TEST_TTS_PLATFORM_H_

@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "base/bind.h"
+#include "mojo/public/cpp/bindings/optional_as_pointer.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
 
@@ -52,6 +53,7 @@ EnumTraits<viz::mojom::CopyOutputResultFormat, viz::CopyOutputResult::Format>::
     case viz::CopyOutputResult::Format::RGBA:
       return viz::mojom::CopyOutputResultFormat::RGBA;
     case viz::CopyOutputResult::Format::I420_PLANES:
+    case viz::CopyOutputResult::Format::NV12_PLANES:
       break;  // Not intended for transport across service boundaries.
   }
   NOTREACHED();
@@ -142,50 +144,52 @@ StructTraits<viz::mojom::CopyOutputResultDataView,
 }
 
 // static
-absl::optional<gpu::Mailbox>
+mojo::OptionalAsPointer<const gpu::Mailbox>
 StructTraits<viz::mojom::CopyOutputResultDataView,
              std::unique_ptr<viz::CopyOutputResult>>::
     mailbox(const std::unique_ptr<viz::CopyOutputResult>& result) {
   if (result->destination() !=
           viz::CopyOutputResult::Destination::kNativeTextures ||
       result->IsEmpty()) {
-    return absl::nullopt;
+    return nullptr;
   }
 
   // Only RGBA can travel across process boundaries, in which case there will be
   // only one plane that is relevant in the |result|:
   DCHECK_EQ(result->format(), viz::CopyOutputResult::Format::RGBA);
-  return result->GetTextureResult()->planes[0].mailbox;
+  return mojo::MakeOptionalAsPointer(
+      &result->GetTextureResult()->planes[0].mailbox);
 }
 
 // static
-absl::optional<gpu::SyncToken>
+mojo::OptionalAsPointer<const gpu::SyncToken>
 StructTraits<viz::mojom::CopyOutputResultDataView,
              std::unique_ptr<viz::CopyOutputResult>>::
     sync_token(const std::unique_ptr<viz::CopyOutputResult>& result) {
   if (result->destination() !=
           viz::CopyOutputResult::Destination::kNativeTextures ||
       result->IsEmpty()) {
-    return absl::nullopt;
+    return nullptr;
   }
 
   // Only RGBA can travel across process boundaries, in which case there will be
   // only one plane that is relevant in the |result|:
   DCHECK_EQ(result->format(), viz::CopyOutputResult::Format::RGBA);
-  return result->GetTextureResult()->planes[0].sync_token;
+  return mojo::MakeOptionalAsPointer(
+      &result->GetTextureResult()->planes[0].sync_token);
 }
 
 // static
-absl::optional<gfx::ColorSpace>
+mojo::OptionalAsPointer<const gfx::ColorSpace>
 StructTraits<viz::mojom::CopyOutputResultDataView,
              std::unique_ptr<viz::CopyOutputResult>>::
     color_space(const std::unique_ptr<viz::CopyOutputResult>& result) {
   if (result->destination() !=
           viz::CopyOutputResult::Destination::kNativeTextures ||
       result->IsEmpty()) {
-    return absl::nullopt;
+    return nullptr;
   }
-  return result->GetTextureResult()->color_space;
+  return mojo::MakeOptionalAsPointer(&result->GetTextureResult()->color_space);
 }
 
 // static
@@ -293,7 +297,7 @@ bool StructTraits<viz::mojom::CopyOutputResultDataView,
               base::BindOnce(&Release, std::move(releaser)));
 
           *out_p = std::make_unique<viz::CopyOutputTextureResult>(
-              rect,
+              viz::CopyOutputResult::Format::RGBA, rect,
               viz::CopyOutputResult::TextureResult(*mailbox, *sync_token,
                                                    *color_space),
               std::move(release_callbacks));
@@ -302,6 +306,7 @@ bool StructTraits<viz::mojom::CopyOutputResultDataView,
       }
 
     case viz::CopyOutputResult::Format::I420_PLANES:
+    case viz::CopyOutputResult::Format::NV12_PLANES:
       break;  // Not intended for transport across service boundaries.
   }
 

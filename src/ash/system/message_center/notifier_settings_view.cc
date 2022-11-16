@@ -25,7 +25,6 @@
 #include "ash/system/tray/tray_popup_utils.h"
 #include "ash/system/tray/tray_toggle_button.h"
 #include "base/bind.h"
-#include "base/macros.h"
 #include "base/memory/ptr_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "components/prefs/pref_service.h"
@@ -35,7 +34,7 @@
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/base/l10n/l10n_util.h"
-#include "ui/base/ui_base_features.h"
+#include "ui/color/color_id.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/paint_recorder.h"
 #include "ui/events/event_utils.h"
@@ -62,7 +61,7 @@
 #include "ui/views/controls/separator.h"
 #include "ui/views/layout/box_layout.h"
 #include "ui/views/layout/fill_layout.h"
-#include "ui/views/layout/grid_layout.h"
+#include "ui/views/layout/table_layout.h"
 #include "ui/views/painter.h"
 #include "ui/views/widget/widget.h"
 
@@ -96,11 +95,11 @@ const int kInnateCheckboxRightPadding = 2;
 constexpr int kComputedCheckboxSize =
     kCheckboxSizeWithPadding - kInnateCheckboxRightPadding;
 
-constexpr gfx::Insets kLabelPadding(16, 18, 15, 18);
+constexpr auto kLabelPadding = gfx::Insets::TLBR(16, 18, 15, 18);
 const int kToggleButtonRowViewSpacing = 18;
 
-constexpr gfx::Insets kToggleButtonRowViewPadding(0, 18, 0, 0);
-constexpr gfx::Insets kToggleButtonRowLabelPadding(16, 0, 15, 0);
+constexpr auto kToggleButtonRowViewPadding = gfx::Insets::TLBR(0, 18, 0, 0);
+constexpr auto kToggleButtonRowLabelPadding = gfx::Insets::TLBR(16, 0, 15, 0);
 constexpr SkColor kTopBorderColor = SkColorSetA(SK_ColorBLACK, 0x1F);
 const int kLabelFontSizeDelta = 1;
 
@@ -122,6 +121,11 @@ void LogUserQuietModeEvent(const bool enabled) {
 class NotifierButtonWrapperView : public views::View {
  public:
   explicit NotifierButtonWrapperView(views::View* contents);
+
+  NotifierButtonWrapperView(const NotifierButtonWrapperView&) = delete;
+  NotifierButtonWrapperView& operator=(const NotifierButtonWrapperView&) =
+      delete;
+
   ~NotifierButtonWrapperView() override;
 
   // views::View:
@@ -142,8 +146,6 @@ class NotifierButtonWrapperView : public views::View {
 
   // NotifierButton to wrap.
   views::View* contents_;
-
-  DISALLOW_COPY_AND_ASSIGN(NotifierButtonWrapperView);
 };
 
 NotifierButtonWrapperView::NotifierButtonWrapperView(views::View* contents)
@@ -217,6 +219,9 @@ class ScrollContentsView : public views::View {
  public:
   ScrollContentsView() = default;
 
+  ScrollContentsView(const ScrollContentsView&) = delete;
+  ScrollContentsView& operator=(const ScrollContentsView&) = delete;
+
   // views::View:
   const char* GetClassName() const override { return "ScrollContentsView"; }
 
@@ -244,8 +249,6 @@ class ScrollContentsView : public views::View {
     canvas->ClipRect(shadowed_area, SkClipOp::kDifference);
     canvas->DrawRect(shadowed_area, flags);
   }
-
-  DISALLOW_COPY_AND_ASSIGN(ScrollContentsView);
 };
 
 // EmptyNotifierView -----------------------------------------------------------
@@ -282,6 +285,9 @@ class EmptyNotifierView : public views::View {
     label_ = AddChildView(label);
   }
 
+  EmptyNotifierView(const EmptyNotifierView&) = delete;
+  EmptyNotifierView& operator=(const EmptyNotifierView&) = delete;
+
   // views::View:
   const char* GetClassName() const override { return "EmptyNotifierView"; }
 
@@ -293,7 +299,6 @@ class EmptyNotifierView : public views::View {
   }
 
   views::Label* label_;
-  DISALLOW_COPY_AND_ASSIGN(EmptyNotifierView);
 };
 
 class NotifierViewCheckbox : public views::Checkbox {
@@ -372,22 +377,6 @@ class AdaptiveBadgingIcon : public ::views::ImageView {
         gfx::CreateVectorIcon(kSystemTrayAppBadgingIcon, kMenuIconSize,
                               AshColorProvider::Get()->GetContentLayerColor(
                                   ContentLayerType::kIconColorPrimary)));
-  }
-};
-
-//
-class AdaptiveSeparator : public ::views::Separator {
- public:
-  AdaptiveSeparator() = default;
-  AdaptiveSeparator(const AdaptiveSeparator&) = delete;
-  AdaptiveSeparator& operator=(const AdaptiveSeparator&) = delete;
-  ~AdaptiveSeparator() override = default;
-
- private:
-  void OnThemeChanged() override {
-    views::Separator::OnThemeChanged();
-    SetColor(AshColorProvider::Get()->GetContentLayerColor(
-        ContentLayerType::kSeparatorColor));
   }
 };
 
@@ -482,33 +471,43 @@ void NotifierSettingsView::NotifierButton::GetAccessibleNodeData(
 }
 
 void NotifierSettingsView::NotifierButton::GridChanged() {
-  using views::ColumnSet;
-  using views::GridLayout;
+  // TODO(crbug.com/1264821): Eliminate this function, set up the layout in the
+  // constructor, and replace TableLayout with BoxLayout.  Toggle the visibility
+  // of the policy icon dynamically as needed.
 
-  GridLayout* layout = SetLayoutManager(std::make_unique<GridLayout>());
-  ColumnSet* cs = layout->AddColumnSet(0);
-  // Add a column for the checkbox.
-  cs->AddPaddingColumn(0, kInnateCheckboxRightPadding);
-  cs->AddColumn(GridLayout::CENTER, GridLayout::CENTER, 0,
-                GridLayout::ColumnSize::kFixed, kComputedCheckboxSize, 0);
-  cs->AddPaddingColumn(0, kInternalHorizontalSpacing);
+  auto* layout = SetLayoutManager(std::make_unique<views::TableLayout>());
+  layout
+      // Add a column for the checkbox.
+      ->AddPaddingColumn(views::TableLayout::kFixedSize,
+                         kInnateCheckboxRightPadding)
+      .AddColumn(
+          views::LayoutAlignment::kCenter, views::LayoutAlignment::kCenter,
+          views::TableLayout::kFixedSize,
+          views::TableLayout::ColumnSize::kFixed, kComputedCheckboxSize, 0)
 
-  // Add a column for the icon.
-  cs->AddColumn(GridLayout::CENTER, GridLayout::CENTER, 0,
-                GridLayout::ColumnSize::kFixed, kEntryIconSize, 0);
-  cs->AddPaddingColumn(0, kSmallerInternalHorizontalSpacing);
+      // Add a column for the icon.
+      .AddPaddingColumn(views::TableLayout::kFixedSize,
+                        kInternalHorizontalSpacing)
+      .AddColumn(views::LayoutAlignment::kCenter,
+                 views::LayoutAlignment::kCenter,
+                 views::TableLayout::kFixedSize,
+                 views::TableLayout::ColumnSize::kFixed, kEntryIconSize, 0)
 
-  // Add a column for the name.
-  cs->AddColumn(GridLayout::LEADING, GridLayout::CENTER, 0,
-                GridLayout::ColumnSize::kUsePreferred, 0, 0);
+      // Add a column for the name.
+      .AddPaddingColumn(views::TableLayout::kFixedSize,
+                        kSmallerInternalHorizontalSpacing)
+      .AddColumn(views::LayoutAlignment::kStart,
+                 views::LayoutAlignment::kCenter,
+                 views::TableLayout::kFixedSize,
+                 views::TableLayout::ColumnSize::kUsePreferred, 0, 0)
 
-  // Add a padding column which contains expandable blank space.
-  cs->AddPaddingColumn(1, 0);
+      // Add a padding column which contains expandable blank space.
+      .AddPaddingColumn(1.0f, 0)
 
-  layout->StartRow(0, 0);
-  layout->AddExistingView(checkbox_);
-  layout->AddExistingView(icon_view_);
-  layout->AddExistingView(name_view_);
+      .AddRows(1, views::TableLayout::kFixedSize);
+
+  // FocusRing is a child of Button. Ignore it.
+  layout->SetChildViewIgnoredByLayout(views::FocusRing::Get(this), true);
 
   if (!GetEnabled()) {
     auto policy_enforced_icon = std::make_unique<views::ImageView>();
@@ -516,9 +515,11 @@ void NotifierSettingsView::NotifierButton::GridChanged() {
         gfx::CreateVectorIcon(kSystemMenuBusinessIcon, kEntryIconSize,
                               AshColorProvider::Get()->GetContentLayerColor(
                                   ContentLayerType::kIconColorPrimary)));
-    cs->AddColumn(GridLayout::CENTER, GridLayout::CENTER, 0,
-                  GridLayout::ColumnSize::kFixed, kEntryIconSize, 0);
-    layout->AddView(std::move(policy_enforced_icon));
+    layout->AddColumn(
+        views::LayoutAlignment::kCenter, views::LayoutAlignment::kCenter,
+        views::TableLayout::kFixedSize, views::TableLayout::ColumnSize::kFixed,
+        kEntryIconSize, 0);
+    AddChildView(std::move(policy_enforced_icon));
   }
 
   Layout();
@@ -537,52 +538,48 @@ NotifierSettingsView::NotifierSettingsView() {
   // There should be no bottom border under the header view if quick
   // settings notification permissions split is enabled.
   if (!features::IsSettingsAppNotificationSettingsEnabled()) {
-    header_view->SetBorder(
-        views::CreateSolidSidedBorder(0, 0, 4, 0, kTopBorderColor));
+    header_view->SetBorder(views::CreateSolidSidedBorder(
+        gfx::Insets::TLBR(0, 0, 4, 0), kTopBorderColor));
   }
 
   const SkColor text_color = AshColorProvider::Get()->GetContentLayerColor(
       ContentLayerType::kTextColorPrimary);
   const SkColor icon_color = AshColorProvider::Get()->GetContentLayerColor(
       ContentLayerType::kIconColorPrimary);
-  const SkColor separator_color = AshColorProvider::Get()->GetContentLayerColor(
-      ContentLayerType::kSeparatorColor);
 
-  if (::features::IsNotificationIndicatorEnabled()) {
-    // Row for the app badging toggle button.
-    auto app_badging_icon = std::make_unique<AdaptiveBadgingIcon>();
-    app_badging_icon->SetImage(gfx::CreateVectorIcon(
-        kSystemTrayAppBadgingIcon, kMenuIconSize, icon_color));
-    auto app_badging_label =
-        std::make_unique<views::Label>(l10n_util::GetStringUTF16(
-            IDS_ASH_MESSAGE_CENTER_APP_BADGING_BUTTON_TOOLTIP));
-    auto app_badging_toggle =
-        base::WrapUnique<views::ToggleButton>(new TrayToggleButton(
-            base::BindRepeating(&NotifierSettingsView::AppBadgingTogglePressed,
-                                base::Unretained(this)),
-            IDS_ASH_MESSAGE_CENTER_APP_BADGING_BUTTON_TOOLTIP));
-    app_badging_toggle_ = app_badging_toggle.get();
+  // Row for the app badging toggle button.
+  auto app_badging_icon = std::make_unique<AdaptiveBadgingIcon>();
+  app_badging_icon->SetImage(gfx::CreateVectorIcon(kSystemTrayAppBadgingIcon,
+                                                   kMenuIconSize, icon_color));
+  auto app_badging_label =
+      std::make_unique<views::Label>(l10n_util::GetStringUTF16(
+          IDS_ASH_MESSAGE_CENTER_APP_BADGING_BUTTON_TOOLTIP));
+  auto app_badging_toggle =
+      base::WrapUnique<views::ToggleButton>(new TrayToggleButton(
+          base::BindRepeating(&NotifierSettingsView::AppBadgingTogglePressed,
+                              base::Unretained(this)),
+          IDS_ASH_MESSAGE_CENTER_APP_BADGING_BUTTON_TOOLTIP));
+  app_badging_toggle_ = app_badging_toggle.get();
 
-    SessionControllerImpl* session_controller =
-        Shell::Get()->session_controller();
-    PrefService* prefs = session_controller->GetLastActiveUserPrefService();
-    if (prefs) {
-      app_badging_toggle_->SetIsOn(
-          prefs->GetBoolean(prefs::kAppNotificationBadgingEnabled));
-    }
-
-    auto app_badging_view = CreateToggleButtonRow(
-        std::move(app_badging_icon), std::move(app_badging_label),
-        std::move(app_badging_toggle));
-    app_badging_view->SetBorder(
-        views::CreateSolidSidedBorder(0, 0, 0, 1, kTopBorderColor));
-    header_view->AddChildView(std::move(app_badging_view));
-
-    // Separator between toggle button rows.
-    auto separator = std::make_unique<AdaptiveSeparator>();
-    separator->SetColor(separator_color);
-    header_view->AddChildView(std::move(separator));
+  SessionControllerImpl* session_controller =
+      Shell::Get()->session_controller();
+  PrefService* prefs = session_controller->GetLastActiveUserPrefService();
+  if (prefs) {
+    app_badging_toggle_->SetIsOn(
+        prefs->GetBoolean(prefs::kAppNotificationBadgingEnabled));
   }
+
+  auto app_badging_view = CreateToggleButtonRow(std::move(app_badging_icon),
+                                                std::move(app_badging_label),
+                                                std::move(app_badging_toggle));
+  app_badging_view->SetBorder(views::CreateSolidSidedBorder(
+      gfx::Insets::TLBR(0, 0, 0, 1), kTopBorderColor));
+  header_view->AddChildView(std::move(app_badging_view));
+
+  // Separator between toggle button rows.
+  auto separator = std::make_unique<views::Separator>();
+  separator->SetColorId(ui::kColorAshSystemUIMenuSeparator);
+  header_view->AddChildView(std::move(separator));
 
   // Row for the quiet mode toggle button.
   auto quiet_mode_icon = std::make_unique<views::ImageView>();
@@ -701,7 +698,7 @@ void NotifierSettingsView::OnNotifiersUpdated(
   auto contents_view = std::make_unique<ScrollContentsView>();
   contents_view->SetLayoutManager(std::make_unique<views::BoxLayout>(
       views::BoxLayout::Orientation::kVertical,
-      gfx::Insets(0, kHorizontalMargin)));
+      gfx::Insets::VH(0, kHorizontalMargin)));
 
   for (const auto& notifier : notifiers) {
     NotifierButton* button = new NotifierButton(notifier);

@@ -6,11 +6,11 @@
 
 #include "base/mac/foundation_util.h"
 #include "base/numerics/math_constants.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_cells_constants.h"
 #import "ios/chrome/browser/ui/table_view/chrome_table_view_styler.h"
 #import "ios/chrome/browser/ui/util/rtl_geometry.h"
 #import "ios/chrome/browser/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
+#import "ios/chrome/common/ui/table_view/table_view_cells_constants.h"
 #include "ios/chrome/grit/ios_strings.h"
 #include "ui/base/l10n/l10n_util_mac.h"
 
@@ -21,6 +21,8 @@
 namespace {
 // Identity rotation angle that positions disclosure pointing down.
 constexpr float kRotationNinetyCW = (90 / 180.0) * M_PI;
+
+static const CGFloat kDisabledOpacity = (CGFloat)0.40;
 }
 
 @implementation TableViewDisclosureHeaderFooterItem
@@ -84,7 +86,6 @@ constexpr float kRotationNinetyCW = (90 / 180.0) * M_PI;
     _subtitleLabel = [[UILabel alloc] init];
     _subtitleLabel.font =
         [UIFont preferredFontForTextStyle:UIFontTextStyleCaption1];
-    _subtitleLabel.textColor = [UIColor colorNamed:kTextSecondaryColor];
     [_subtitleLabel
         setContentCompressionResistancePriority:UILayoutPriorityRequired
                                         forAxis:UILayoutConstraintAxisVertical];
@@ -186,8 +187,14 @@ constexpr float kRotationNinetyCW = (90 / 180.0) * M_PI;
 #pragma mark - properties
 
 - (void)setDisabled:(BOOL)disabled {
-  _titleLabel.textColor = disabled ? [UIColor colorNamed:kTextSecondaryColor]
-                                   : [UIColor colorNamed:kTextPrimaryColor];
+  _subtitleLabel.textColor = [UIColor colorNamed:kTextSecondaryColor];
+  if (disabled) {
+    _titleLabel.textColor = [UIColor colorNamed:kTextSecondaryColor];
+    _subtitleLabel.alpha = kDisabledOpacity;
+  } else {
+    _titleLabel.textColor = [UIColor colorNamed:kTextPrimaryColor];
+  }
+
   _disclosureImageView.image =
       disabled ? nil : [UIImage imageNamed:@"table_view_cell_chevron"];
   _disabled = disabled;

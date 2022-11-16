@@ -13,8 +13,10 @@
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/test/bind.h"
+#include "base/test/scoped_locale.h"
 #include "base/values.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/chromeos/styles/cros_styles.h"
 
 namespace ash {
 
@@ -77,6 +79,43 @@ TEST_P(HoldingSpaceItemTest, DeserializeId) {
       HoldingSpaceItem::DeserializeId(serialized_holding_space_item);
 
   EXPECT_EQ(deserialized_holding_space_id, holding_space_item->id());
+}
+
+// Tests setting the accessible name for each holding space item type.
+TEST_P(HoldingSpaceItemTest, AccessibleName) {
+  // Force locale since strings are being verified.
+  base::ScopedLocale scoped_locale("en_US.UTF-8");
+
+  // Create a `holding_space_item`.
+  auto holding_space_item = HoldingSpaceItem::CreateFileBackedItem(
+      /*type=*/GetParam(), base::FilePath("file_path"),
+      GURL("filesystem::file_system_url"),
+      /*image_resolver=*/base::BindOnce(&CreateFakeHoldingSpaceImage));
+
+  // Initially the accessible name should be based on the backing file.
+  EXPECT_EQ(holding_space_item->GetAccessibleName(), u"file_path");
+
+  // If primary text is set, that should affect accessible name.
+  EXPECT_TRUE(holding_space_item->SetText(u"Primary text"));
+  EXPECT_EQ(holding_space_item->GetAccessibleName(), u"Primary text");
+
+  // If secondary text is set, that should affect accessible name.
+  EXPECT_TRUE(holding_space_item->SetSecondaryText(u"Secondary text"));
+  EXPECT_EQ(holding_space_item->GetAccessibleName(),
+            u"Primary text, Secondary text");
+
+  // It should be possible to override accessible name.
+  EXPECT_TRUE(holding_space_item->SetAccessibleName(u"Accessible name"));
+  EXPECT_EQ(holding_space_item->GetAccessibleName(), u"Accessible name");
+
+  // It should no-op to try to override accessible name w/ existing values.
+  EXPECT_FALSE(holding_space_item->SetAccessibleName(u"Accessible name"));
+  EXPECT_EQ(holding_space_item->GetAccessibleName(), u"Accessible name");
+
+  // It should be possible to remove the accessible name override.
+  EXPECT_TRUE(holding_space_item->SetAccessibleName(absl::nullopt));
+  EXPECT_EQ(holding_space_item->GetAccessibleName(),
+            u"Primary text, Secondary text");
 }
 
 // Tests pause for each holding space item type.
@@ -186,6 +225,34 @@ TEST_P(HoldingSpaceItemTest, SecondaryText) {
   // It should be possible to unset secondary text.
   EXPECT_TRUE(holding_space_item->SetSecondaryText(absl::nullopt));
   EXPECT_FALSE(holding_space_item->secondary_text());
+}
+
+// Tests setting the secondary text color for each holding space item type.
+TEST_P(HoldingSpaceItemTest, SecondaryTextColor) {
+  // Create a `holding_space_item`.
+  auto holding_space_item = HoldingSpaceItem::CreateFileBackedItem(
+      /*type=*/GetParam(), base::FilePath("file_path"),
+      GURL("filesystem::file_system_url"),
+      /*image_resolver=*/base::BindOnce(&CreateFakeHoldingSpaceImage));
+
+  // Initially the secondary text color should be absent.
+  EXPECT_FALSE(holding_space_item->secondary_text_color());
+
+  // It should be possible to update secondary text color to a new value.
+  EXPECT_TRUE(holding_space_item->SetSecondaryTextColor(
+      cros_styles::ColorName::kTextColorAlert));
+  EXPECT_EQ(holding_space_item->secondary_text_color().value(),
+            cros_styles::ColorName::kTextColorAlert);
+
+  // It should no-op to try to update secondary text color to existing values.
+  EXPECT_FALSE(holding_space_item->SetSecondaryTextColor(
+      cros_styles::ColorName::kTextColorAlert));
+  EXPECT_EQ(holding_space_item->secondary_text_color().value(),
+            cros_styles::ColorName::kTextColorAlert);
+
+  // It should be possible to unset secondary text color.
+  EXPECT_TRUE(holding_space_item->SetSecondaryTextColor(absl::nullopt));
+  EXPECT_FALSE(holding_space_item->secondary_text_color());
 }
 
 // Tests setting the text for each holding space item type.

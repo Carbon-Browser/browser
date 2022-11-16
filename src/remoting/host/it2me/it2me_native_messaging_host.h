@@ -8,9 +8,10 @@
 #include <memory>
 #include <string>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
+#include "base/time/time.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "extensions/browser/api/messaging/native_message_host.h"
@@ -43,6 +44,10 @@ class It2MeNativeMessagingHost : public It2MeHost::Observer,
                            std::unique_ptr<PolicyWatcher> policy_watcher,
                            std::unique_ptr<ChromotingHostContext> host_context,
                            std::unique_ptr<It2MeHostFactory> host_factory);
+
+  It2MeNativeMessagingHost(const It2MeNativeMessagingHost&) = delete;
+  It2MeNativeMessagingHost& operator=(const It2MeNativeMessagingHost&) = delete;
+
   ~It2MeNativeMessagingHost() override;
 
   // extensions::NativeMessageHost implementation.
@@ -110,14 +115,14 @@ class It2MeNativeMessagingHost : public It2MeHost::Observer,
   // Forward messages to an |elevated_host_|.
   bool use_elevated_host_ = false;
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   // Controls the lifetime of the elevated native messaging host process.
   // Note: 'elevated' in this instance means having the UiAccess privilege, not
   // being run as a higher privilege user.
   std::unique_ptr<ElevatedNativeMessagingHost> elevated_host_;
-#endif  // defined(OS_WIN)
+#endif  // BUILDFLAG(IS_WIN)
 
-  Client* client_ = nullptr;
+  raw_ptr<Client> client_ = nullptr;
   DelegatingSignalStrategy::IqCallback incoming_message_callback_;
   std::unique_ptr<ChromotingHostContext> host_context_;
   std::unique_ptr<It2MeHostFactory> factory_;
@@ -153,8 +158,6 @@ class It2MeNativeMessagingHost : public It2MeHost::Observer,
 
   base::WeakPtr<It2MeNativeMessagingHost> weak_ptr_;
   base::WeakPtrFactory<It2MeNativeMessagingHost> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(It2MeNativeMessagingHost);
 };
 
 }  // namespace remoting

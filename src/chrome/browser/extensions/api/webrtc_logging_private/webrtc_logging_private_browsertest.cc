@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/threading/thread_restrictions.h"
@@ -15,18 +16,21 @@ class WebrtcLoggingPrivateApiBrowserTest
     : public extensions::PlatformAppBrowserTest {
  public:
   WebrtcLoggingPrivateApiBrowserTest() = default;
+
+  WebrtcLoggingPrivateApiBrowserTest(
+      const WebrtcLoggingPrivateApiBrowserTest&) = delete;
+  WebrtcLoggingPrivateApiBrowserTest& operator=(
+      const WebrtcLoggingPrivateApiBrowserTest&) = delete;
+
   ~WebrtcLoggingPrivateApiBrowserTest() override = default;
 
   base::FilePath webrtc_logs_path() {
     return webrtc_logging::TextLogList::
         GetWebRtcLogDirectoryForBrowserContextPath(profile()->GetPath());
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(WebrtcLoggingPrivateApiBrowserTest);
 };
 
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 IN_PROC_BROWSER_TEST_F(WebrtcLoggingPrivateApiBrowserTest,
                        TestGetLogsDirectoryCreatesWebRtcLogsDirectory) {
   base::ScopedAllowBlockingForTesting allow_blocking;
@@ -52,7 +56,7 @@ IN_PROC_BROWSER_TEST_F(WebrtcLoggingPrivateApiBrowserTest,
                         .launch_as_platform_app = true}))
       << message_;
 }
-#endif  // defined(OS_LINUX) || defined(OS_CHROMEOS)
+#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 
 IN_PROC_BROWSER_TEST_F(WebrtcLoggingPrivateApiBrowserTest,
                        TestNoGetLogsDirectoryPermissionsFromHangoutsExtension) {
@@ -73,7 +77,7 @@ IN_PROC_BROWSER_TEST_F(WebrtcLoggingPrivateApiBrowserTest,
       << message_;
 }
 
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 IN_PROC_BROWSER_TEST_F(
     WebrtcLoggingPrivateApiBrowserTest,
     TestStartAudioDebugRecordingsForWebviewFromAppWithoutSwitch) {

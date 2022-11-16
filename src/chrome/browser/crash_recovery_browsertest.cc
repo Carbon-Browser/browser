@@ -8,7 +8,6 @@
 #include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
-#include "base/macros.h"
 #include "base/strings/stringprintf.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -62,6 +61,9 @@ class CacheMaxAgeHandler {
   explicit CacheMaxAgeHandler(const std::string& path)
       : path_(path), request_count_(0) { }
 
+  CacheMaxAgeHandler(const CacheMaxAgeHandler&) = delete;
+  CacheMaxAgeHandler& operator=(const CacheMaxAgeHandler&) = delete;
+
   std::unique_ptr<net::test_server::HttpResponse> HandleRequest(
       const net::test_server::HttpRequest& request) {
     if (request.relative_url != path_)
@@ -79,8 +81,6 @@ class CacheMaxAgeHandler {
  private:
   std::string path_;
   int request_count_;
-
-  DISALLOW_COPY_AND_ASSIGN(CacheMaxAgeHandler);
 };
 
 class CrashRecoveryBrowserTest : public InProcessBrowserTest {
@@ -115,9 +115,10 @@ IN_PROC_BROWSER_TEST_F(CrashRecoveryBrowserTest, Reload) {
   ASSERT_TRUE(ui_test_utils::GetCurrentTabTitle(browser(),
                                                 &title_after_crash));
   EXPECT_NE(title_before_crash, title_after_crash);
-  ASSERT_TRUE(GetActiveWebContents()->GetMainFrame()->GetView()->IsShowing());
+  ASSERT_TRUE(
+      GetActiveWebContents()->GetPrimaryMainFrame()->GetView()->IsShowing());
   ASSERT_FALSE(GetActiveWebContents()
-                   ->GetMainFrame()
+                   ->GetPrimaryMainFrame()
                    ->GetProcess()
                    ->IsProcessBackgrounded());
 }

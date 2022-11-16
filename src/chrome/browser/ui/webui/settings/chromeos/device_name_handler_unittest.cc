@@ -9,7 +9,7 @@
 
 #include "ash/constants/ash_features.h"
 #include "base/test/scoped_feature_list.h"
-#include "chrome/browser/chromeos/device_name/fake_device_name_store.h"
+#include "chrome/browser/ash/device_name/fake_device_name_store.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/test_web_ui.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -49,7 +49,7 @@ class DeviceNameHandlerTest : public testing::Test {
     // listening to changes in device name metadata.
     base::Value args(base::Value::Type::LIST);
     args.Append("callback-id");
-    handler()->HandleNotifyReadyForDeviceName(&base::Value::AsListValue(args));
+    handler()->HandleNotifyReadyForDeviceName(args.GetList());
 
     // On notifying, device name metadata should be received and be equal to the
     // default values.
@@ -75,9 +75,10 @@ class DeviceNameHandlerTest : public testing::Test {
     returned_data->GetString("deviceName", &device_name);
     EXPECT_EQ(expected_device_name, device_name);
 
-    int device_name_state;
-    returned_data->GetInteger("deviceNameState", &device_name_state);
-    EXPECT_EQ(static_cast<int>(expected_device_name_state), device_name_state);
+    absl::optional<int> device_name_state =
+        returned_data->FindIntKey("deviceNameState");
+    ASSERT_TRUE(device_name_state);
+    EXPECT_EQ(static_cast<int>(expected_device_name_state), *device_name_state);
   }
 
   void VerifySetDeviceNameResult(
@@ -86,7 +87,7 @@ class DeviceNameHandlerTest : public testing::Test {
     base::Value args(base::Value::Type::LIST);
     args.Append("callback-id");
     args.Append(device_name);
-    handler()->HandleAttemptSetDeviceName(&base::Value::AsListValue(args));
+    handler()->HandleAttemptSetDeviceName(args.GetList());
 
     const content::TestWebUI::CallData& call_data =
         *web_ui()->call_data().back();

@@ -12,11 +12,11 @@
 
 #include "base/callback.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/values.h"
-#include "chrome/browser/android/contextualsearch/contextual_search_context.h"
-#include "chrome/browser/android/contextualsearch/resolved_search_term.h"
+#include "chrome/browser/android/contextualsearch/native_contextual_search_context.h"
+#include "components/contextual_search/core/browser/resolved_search_term.h"
 #include "net/http/http_request_headers.h"
 
 namespace content {
@@ -51,11 +51,15 @@ class ContextualSearchDelegate
       TemplateURLService* template_url_service,
       SearchTermResolutionCallback search_term_callback,
       SurroundingTextCallback surrounding_callback);
+
+  ContextualSearchDelegate(const ContextualSearchDelegate&) = delete;
+  ContextualSearchDelegate& operator=(const ContextualSearchDelegate&) = delete;
+
   virtual ~ContextualSearchDelegate();
 
   // Gathers surrounding text and saves it locally in the given context.
   void GatherAndSaveSurroundingText(
-      base::WeakPtr<ContextualSearchContext> contextual_search_context,
+      base::WeakPtr<NativeContextualSearchContext> contextual_search_context,
       content::WebContents* web_contents);
 
   // Starts an asynchronous search term resolution request.
@@ -64,7 +68,7 @@ class ContextualSearchDelegate
   // When the response is available the callback specified in the constructor
   // is run.
   void StartSearchTermResolutionRequest(
-      base::WeakPtr<ContextualSearchContext> contextual_search_context,
+      base::WeakPtr<NativeContextualSearchContext> contextual_search_context,
       content::WebContents* web_contents);
 
   // Gets the target language for translation purposes for this user.
@@ -107,7 +111,7 @@ class ContextualSearchDelegate
 
   // Builds and returns the search term resolution request URL.
   // |context| is used to help build the query.
-  std::string BuildRequestUrl(ContextualSearchContext* context);
+  std::string BuildRequestUrl(NativeContextualSearchContext* context);
 
   // Uses the TemplateURL service to construct a search term resolution URL from
   // the given parameters.
@@ -123,7 +127,7 @@ class ContextualSearchDelegate
 
   // Populates and returns the discourse context.
   const net::HttpRequestHeaders GetDiscourseContext(
-      const ContextualSearchContext& context);
+      const NativeContextualSearchContext& context);
 
   // Builds a Resolved Search Term by decoding the given JSON string.
   std::unique_ptr<ResolvedSearchTerm> GetResolvedSearchTermFromJson(
@@ -145,18 +149,17 @@ class ContextualSearchDelegate
       std::string* caption,
       std::string* quick_action_uri,
       QuickActionCategory* quick_action_category,
-      int64_t* logged_event_id,
       std::string* search_url_full,
       std::string* search_url_preload,
       int* coca_card_tag,
       std::string* related_searches_json);
 
   // Extracts the start and end location from a mentions list, and sets the
-  // integers referenced by |startResult| and |endResult|.
+  // integers referenced by |start_result| and |end_result|.
   // |mentions_list| must be a list.
-  void ExtractMentionsStartEnd(const std::vector<base::Value>& mentions_list,
-                               int* startResult,
-                               int* endResult);
+  void ExtractMentionsStartEnd(const base::Value::List& mentions_list,
+                               int* start_result,
+                               int* end_result);
 
   // Generates a subset of the given surrounding_text string, for usage from
   // Java.
@@ -177,7 +180,7 @@ class ContextualSearchDelegate
 
   // For testing.
   void SetContextForTesting(
-      const base::WeakPtr<ContextualSearchContext>& context) {
+      const base::WeakPtr<NativeContextualSearchContext>& context) {
     context_ = context;
   }
 
@@ -188,7 +191,7 @@ class ContextualSearchDelegate
   scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory_;
 
   // Holds the TemplateURLService. Not owned.
-  TemplateURLService* template_url_service_;
+  raw_ptr<TemplateURLService> template_url_service_;
 
   // The field trial helper instance, always set up by the constructor.
   std::unique_ptr<ContextualSearchFieldTrial> field_trial_;
@@ -201,9 +204,7 @@ class ContextualSearchDelegate
 
   // Used to hold the context until an upcoming search term request is started.
   // Owned by the Java ContextualSearchContext.
-  base::WeakPtr<ContextualSearchContext> context_;
-
-  DISALLOW_COPY_AND_ASSIGN(ContextualSearchDelegate);
+  base::WeakPtr<NativeContextualSearchContext> context_;
 };
 
 #endif  // CHROME_BROWSER_ANDROID_CONTEXTUALSEARCH_CONTEXTUAL_SEARCH_DELEGATE_H_

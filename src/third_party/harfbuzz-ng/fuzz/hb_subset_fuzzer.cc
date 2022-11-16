@@ -11,8 +11,9 @@
 #include <hb-subset.h>
 // clang-format on
 
+#include <iterator>
+
 #include "base/check.h"
-#include "base/cxx17_backports.h"
 #include "third_party/harfbuzz-ng/utils/hb_scoped.h"
 
 namespace {
@@ -32,11 +33,11 @@ void TrySubset(hb_face_t* face,
   hb_set_t* codepoints = hb_subset_input_unicode_set(input.get());
 
   if (!drop_layout) {
-    hb_set_del(hb_subset_input_drop_tables_set(input.get()),
+    hb_set_del(hb_subset_input_set(input.get(), HB_SUBSET_SETS_DROP_TABLE_TAG),
                HB_TAG('G', 'S', 'U', 'B'));
-    hb_set_del(hb_subset_input_drop_tables_set(input.get()),
+    hb_set_del(hb_subset_input_set(input.get(), HB_SUBSET_SETS_DROP_TABLE_TAG),
                HB_TAG('G', 'P', 'O', 'S'));
-    hb_set_del(hb_subset_input_drop_tables_set(input.get()),
+    hb_set_del(hb_subset_input_set(input.get(), HB_SUBSET_SETS_DROP_TABLE_TAG),
                HB_TAG('G', 'D', 'E', 'F'));
   }
 
@@ -88,14 +89,14 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
                                  'Z', '1', '2', '3', '@', '_', '%',
                                  '&', ')', '*', '$', '!'};
 
-  TrySubset(face.get(), text, base::size(text), subset_flags);
+  TrySubset(face.get(), text, std::size(text), subset_flags);
 
   hb_codepoint_t text_from_data[16];
   if (size > sizeof(text_from_data) + 1) {
     memcpy(text_from_data, data + size - sizeof(text_from_data),
            sizeof(text_from_data));
     subset_flags = data[size - sizeof(text_from_data) - 1];
-    size_t text_size = base::size(text_from_data);
+    size_t text_size = std::size(text_from_data);
     TrySubset(face.get(), text_from_data, text_size, subset_flags);
   }
 

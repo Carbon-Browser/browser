@@ -4,6 +4,8 @@
 
 #include "rlz/mac/lib/rlz_value_store_mac.h"
 
+#include <tuple>
+
 #include "base/check.h"
 #include "base/files/file_path.h"
 #include "base/mac/foundation_util.h"
@@ -319,7 +321,7 @@ ScopedRlzValueStoreLock::~ScopedRlzValueStoreLock() {
 
   if (g_lock_depth > 0) {
     // Other locks are still using store_, don't free it yet.
-    ignore_result(store_.release());
+    std::ignore = store_.release();
     return;
   }
 

@@ -13,7 +13,7 @@ import {BASIC_DRIVE_ENTRY_SET, BASIC_FAKE_ENTRY_SET, BASIC_LOCAL_ENTRY_SET, COMP
  * that files subsequently added are also displayed.
  *
  * @param {string} path Path to be tested, Downloads or Drive.
- * @param {Array<TestEntryInfo>} defaultEntries Default file entries.
+ * @param {!Array<!TestEntryInfo>} defaultEntries Default file entries.
  */
 async function fileDisplay(path, defaultEntries) {
   // Open Files app on the given |path| with default file entries.
@@ -141,7 +141,7 @@ testcase.fileDisplayDriveOffline = async () => {
   chrome.test.assertEq(0, elements[0].text.indexOf('hello.txt'));
 
   // Check: hello.txt must have 'offline' CSS render style (opacity).
-  chrome.test.assertEq('0.4', elements[0].styles.opacity);
+  chrome.test.assertEq('0.38', elements[0].styles.opacity);
 
   // Retrieve file entries that are 'available offline' (not dimmed).
   const availableEntry = '#file-list .table-row:not(.dim-offline)';
@@ -168,12 +168,9 @@ testcase.fileDisplayDriveOffline = async () => {
 
 /**
  * Tests file display rendering in online Google Drive.
+ * @param {string} appId the id for the window to check the file display.
  */
-testcase.fileDisplayDriveOnline = async () => {
-  // Open Files app on Drive.
-  const appId =
-      await setupAndWaitUntilReady(RootPath.DRIVE, [], BASIC_DRIVE_ENTRY_SET);
-
+async function checkDriveOnlineDisplay(appId) {
   // Retrieve all file list row entries.
   const fileEntry = '#file-list .table-row';
   const elements = await remoteCall.callRemoteTestUtil(
@@ -184,6 +181,35 @@ testcase.fileDisplayDriveOnline = async () => {
   for (let i = 0; i < elements.length; ++i) {
     chrome.test.assertEq('1', elements[i].styles.opacity);
   }
+}
+
+/**
+ * Tests file display rendering in online Google Drive.
+ */
+testcase.fileDisplayDriveOnline = async () => {
+  // Open Files app on Drive.
+  const appId =
+      await setupAndWaitUntilReady(RootPath.DRIVE, [], BASIC_DRIVE_ENTRY_SET);
+
+  await checkDriveOnlineDisplay(appId);
+};
+
+/**
+ * Tests file display rendering in online Google Drive when opening via OpenItem
+ * function.
+ */
+testcase.fileDisplayDriveOnlineNewWindow = async () => {
+  // Open Files app on the Drive directory.
+  await addEntries(['drive'], BASIC_DRIVE_ENTRY_SET);
+  await sendTestMessage({name: 'launchAppOnDrive'});
+
+  // Wait for app window to open.
+  const appId = await remoteCall.waitForWindow('files#');
+
+  // Wait for Files app to finish loading.
+  await remoteCall.waitFor('isFileManagerLoaded', appId, true);
+
+  await checkDriveOnlineDisplay(appId);
 };
 
 /**
@@ -419,7 +445,7 @@ testcase.fileDisplayPartitionFileTable = async () => {
  * are displayed.
  *
  * @param {string} searchTerm The string to search for.
- * @param {Array<Object>} expectedResults The results set.
+ * @param {!Array<!TestEntryInfo>} expectedResults The results set.
  *
  */
 async function searchDownloads(searchTerm, expectedResults) {
@@ -676,6 +702,39 @@ testcase.fileDisplayWithoutDriveThenDisable = async () => {
 
   // Wait for the fake drive to reappear.
   await remoteCall.waitForElement(appId, ['[root-type-icon=\'drive\']']);
+};
+
+/**
+ * Tests that mounting a hidden Volume does not mount the volume in file
+ * manager.
+ */
+testcase.fileDisplayWithHiddenVolume = async () => {
+  const initialVolumeCount = await sendTestMessage({name: 'getVolumesCount'});
+
+  const appId =
+      await setupAndWaitUntilReady(RootPath.DOWNLOADS, [ENTRIES.beautiful], []);
+
+  // Get the directory tree elements.
+  const dirTreeQuery = ['#directory-tree [dir-type]'];
+  const elementsBefore = await remoteCall.callRemoteTestUtil(
+      'queryAllElements', appId, dirTreeQuery);
+
+  // Mount a hidden volume.
+  await sendTestMessage({name: 'mountHidden'});
+
+  const elementsAfter = await remoteCall.callRemoteTestUtil(
+      'queryAllElements', appId, dirTreeQuery);
+  const visibleLabelsBefore = elementsBefore.filter(e => !e.hidden)
+                                  .map(e => e.attributes['entry-label']);
+  const visibleLabelsAfter = elementsAfter.filter(e => !e.hidden)
+                                 .map(e => e.attributes['entry-label']);
+
+  // The directory tree should NOT display the hidden volume.
+  chrome.test.assertEq(visibleLabelsBefore, visibleLabelsAfter);
+
+  // The hidden volume should not be counted in the number of volumes.
+  chrome.test.assertEq(
+      initialVolumeCount, await sendTestMessage({name: 'getVolumesCount'}));
 };
 
 /**

@@ -39,6 +39,7 @@
         pointer-events: none;
       }
 
+      :host([disabled_]) cr-policy-indicator,
       :host([disabled_]) #networkIconContainer,
       :host([disabled_]) #networkStateText,
       :host([disabled_]) #divText,
@@ -47,7 +48,9 @@
       :host([is-p-sim-unactivated-network_]) #divText,
       :host([is-p-sim-unactivated-network_]) #networkIconContainer,
       :host([is-p-sim-activating-network_]) #divText,
-      :host([is-p-sim-activating-network_]) #networkIconContainer {
+      :host([is-p-sim-activating-network_]) #networkIconContainer,
+      :host([is-blocked-network_]) #divText,
+      :host([is-blocked-network_]) #networkIconContainer {
         opacity: var(--network-list-item-disabled-opacity);
       }
 
@@ -83,11 +86,11 @@
       }
 
       #networkStateText[active] {
-        color: var(--google-green-500);
+        color: var(--cros-text-color-positive);
       }
 
       .warning {
-        color: var(--google-yellow-700);
+        color: var(--cros-text-color-warning);
       }
 
       cr-policy-indicator {
@@ -103,11 +106,11 @@
       }
 
       :host(:not([disabled_])) cr-button iron-icon {
-        --iron-icon-fill-color: #1A73E8;
+        --iron-icon-fill-color: var(--cros-tab-icon-color-active);
       }
 
       :host([disabled_]) cr-button iron-icon {
-        --iron-icon-fill-color: var(--google-grey-600);
+        --iron-icon-fill-color: var(--cros-icon-color-disabled);
       }
 
       paper-spinner-lite {
@@ -129,7 +132,6 @@
            selectable
            aria-label$="[[rowLabel]]"
            aria-live="[[getLiveStatus_(isFocused)]]"
-           role="button"
            focus-type="rowWrapper"
            on-keydown="onKeydown_"
            on-click="onSelected_">
@@ -150,13 +152,14 @@
           </div>
           <div id="networkStateText"
               class$="[[getNetworkStateTextClass_(networkState.*,
-                  isPSimUnavailableNetwork_)]]"
+                  isPSimUnavailableNetwork_, isESimUnactivatedProfile_)]]"
               hidden$="[[!isStateTextVisible_(networkState.*,
-                  isPSimUnavailableNetwork_)]]"
+                  isPSimUnavailableNetwork_, isESimUnactivatedProfile_)]]"
               active$="[[isStateTextActive_(networkState.*,
-                           activationUnavailable)]]">
+                           activationUnavailable, isESimUnactivatedProfile_)]]">
             [[getNetworkStateText_(networkState.*, activationUnavailable,
-                deviceState.*, isPSimUnavailableNetwork_)]]
+                deviceState.*, isPSimUnavailableNetwork_,
+                isESimUnactivatedProfile_)]]
           </div>
         </div>
         <template is="dom-if" if="[[isPolicySource(networkState.source)]]">
@@ -224,6 +227,7 @@
     </div>
     <template is="dom-if" if="[[isCellularUnlockDialogOpen_]]" restamp>
       <sim-lock-dialogs
+          global-policy="[[globalPolicy]]"
           is-dialog-open="{{isCellularUnlockDialogOpen_}}"
           device-state="[[deviceState]]">
       </sim-lock-dialogs>

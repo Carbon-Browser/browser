@@ -4,14 +4,14 @@
 
 #include "chrome/browser/ui/ash/shelf/arc_shelf_spinner_item_controller.h"
 
+#include "ash/components/arc/metrics/arc_metrics_constants.h"
+#include "chrome/browser/ash/app_restore/app_restore_arc_task_handler.h"
+#include "chrome/browser/ash/app_restore/arc_app_launch_handler.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager.h"
-#include "chrome/browser/ash/full_restore/arc_app_launch_handler.h"
-#include "chrome/browser/ash/full_restore/full_restore_arc_task_handler.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/app_list/arc/arc_app_utils.h"
 #include "chrome/browser/ui/ash/shelf/shelf_spinner_controller.h"
-#include "components/arc/metrics/arc_metrics_constants.h"
-#include "components/full_restore/full_restore_utils.h"
+#include "components/app_restore/app_restore_utils.h"
 
 ArcShelfSpinnerItemController::ArcShelfSpinnerItemController(
     const std::string& arc_app_id,
@@ -21,6 +21,7 @@ ArcShelfSpinnerItemController::ArcShelfSpinnerItemController(
     : ShelfSpinnerItemController(arc_app_id),
       event_flags_(event_flags),
       user_interaction_type_(user_interaction_type),
+      request_time_(base::TimeTicks::Now()),
       window_info_(std::move(window_info)) {
   arc::ArcSessionManager* arc_session_manager = arc::ArcSessionManager::Get();
   // arc::ArcSessionManager might not be set in tests.
@@ -54,10 +55,9 @@ void ArcShelfSpinnerItemController::ItemSelected(
     const ItemFilterPredicate& filter_predicate) {
   if (window_info_ &&
       window_info_->window_id >
-          full_restore::kArcSessionIdOffsetForRestoredLaunching) {
-    ash::full_restore::FullRestoreArcTaskHandler::GetForProfile(
-        observed_profile_)
-        ->arc_app_launch_handler()
+          app_restore::kArcSessionIdOffsetForRestoredLaunching) {
+    ash::app_restore::AppRestoreArcTaskHandler::GetForProfile(observed_profile_)
+        ->full_restore_arc_app_launch_handler()
         ->LaunchApp(app_id());
     std::move(callback).Run(ash::SHELF_ACTION_NEW_WINDOW_CREATED, {});
     return;
@@ -88,8 +88,21 @@ void ArcShelfSpinnerItemController::OnAppStatesChanged(
     return;
 
   // Close() destroys this object, so start launching the app first.
-  arc::LaunchApp(observed_profile_, arc_app_id, event_flags_,
-                 user_interaction_type_, std::move(window_info_));
+
+  // Embed deferred time only for app launches. Don't modify shortcuts.
+  // Shortcuts do not have activity so they are not compatible.
+  if (!app_info.shortcut) {
+    const std::string launch_intent = arc::GetLaunchIntent(
+        app_info.package_name, app_info.activity,
+        {arc::CreateIntentTicksExtraParam(
+            arc::kRequestDeferredStartTimeParamKey, request_time_)});
+    arc::LaunchAppWithIntent(observed_profile_, arc_app_id, launch_intent,
+                             event_flags_, user_interaction_type_,
+                             std::move(window_info_));
+  } else {
+    arc::LaunchApp(observed_profile_, arc_app_id, event_flags_,
+                   user_interaction_type_, std::move(window_info_));
+  }
   Close();
 }
 
@@ -103,7 +116,7 @@ void ArcShelfSpinnerItemController::OnAppConnectionReady() {
   // this item when timeout.
   if (IsCreatedByFullRestore() && !close_timer_) {
     close_timer_ = std::make_unique<base::OneShotTimer>();
-    close_timer_->Start(FROM_HERE, ash::full_restore::kStopRestoreDelay,
+    close_timer_->Start(FROM_HERE, ash::app_restore::kStopRestoreDelay,
                         base::BindOnce(&ArcShelfSpinnerItemController::Close,
                                        weak_ptr_factory_.GetWeakPtr()));
   }
@@ -119,5 +132,5 @@ void ArcShelfSpinnerItemController::OnArcPlayStoreEnabledChanged(bool enabled) {
 bool ArcShelfSpinnerItemController::IsCreatedByFullRestore() {
   return window_info_ &&
          window_info_->window_id >
-             full_restore::kArcSessionIdOffsetForRestoredLaunching;
+             app_restore::kArcSessionIdOffsetForRestoredLaunching;
 }

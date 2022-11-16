@@ -13,9 +13,11 @@
 
 #include "base/command_line.h"
 #include "base/json/values_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_number_conversions.h"
 #include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "components/content_settings/core/common/content_settings_pattern.h"
+#include "components/content_settings/core/common/content_settings_utils.h"
 #include "components/permissions/permissions_client.h"
 #include "components/variations/variations_associated_data.h"
 #include "components/webapps/browser/banners/app_banner_manager.h"
@@ -74,9 +76,9 @@ std::unique_ptr<base::DictionaryValue> GetOriginAppBannerData(
   if (!settings)
     return std::make_unique<base::DictionaryValue>();
 
-  std::unique_ptr<base::DictionaryValue> dict =
-      base::DictionaryValue::From(settings->GetWebsiteSetting(
-          origin_url, origin_url, ContentSettingsType::APP_BANNER, NULL));
+  std::unique_ptr<base::DictionaryValue> dict = base::DictionaryValue::From(
+      content_settings::ToNullableUniquePtrValue(settings->GetWebsiteSetting(
+          origin_url, origin_url, ContentSettingsType::APP_BANNER, nullptr)));
   if (!dict)
     return std::make_unique<base::DictionaryValue>();
 
@@ -115,16 +117,16 @@ class AppPrefs {
   void Save() {
     DCHECK(dict_);
     dict_ = nullptr;
-    settings_->SetWebsiteSettingDefaultScope(origin_, GURL(),
-                                             ContentSettingsType::APP_BANNER,
-                                             std::move(origin_dict_));
+    settings_->SetWebsiteSettingDefaultScope(
+        origin_, GURL(), ContentSettingsType::APP_BANNER,
+        content_settings::FromNullableUniquePtrValue(std::move(origin_dict_)));
   }
 
  private:
   const GURL& origin_;
-  HostContentSettingsMap* settings_ = nullptr;
+  raw_ptr<HostContentSettingsMap> settings_ = nullptr;
   std::unique_ptr<base::DictionaryValue> origin_dict_;
-  base::Value* dict_ = nullptr;
+  raw_ptr<base::Value> dict_ = nullptr;
 };
 
 // Queries variations for the number of days which dismissing and ignoring the
@@ -256,7 +258,7 @@ void AppBannerSettingsHelper::ClearHistoryForURLs(
       permissions::PermissionsClient::Get()->GetSettingsMap(browser_context);
   for (const GURL& origin_url : origin_urls) {
     settings->SetWebsiteSettingDefaultScope(
-        origin_url, GURL(), ContentSettingsType::APP_BANNER, nullptr);
+        origin_url, GURL(), ContentSettingsType::APP_BANNER, base::Value());
     settings->FlushLossyWebsiteSettings();
   }
 }
@@ -337,9 +339,8 @@ bool AppBannerSettingsHelper::WasBannerRecentlyBlocked(
   DCHECK(!package_name_or_start_url.empty());
 
   absl::optional<bool> in_period = WasEventWithinPeriod(
-      APP_BANNER_EVENT_DID_BLOCK,
-      base::TimeDelta::FromDays(gDaysAfterDismissedToShow), web_contents,
-      origin_url, package_name_or_start_url, now);
+      APP_BANNER_EVENT_DID_BLOCK, base::Days(gDaysAfterDismissedToShow),
+      web_contents, origin_url, package_name_or_start_url, now);
   return in_period.value_or(true);
 }
 
@@ -351,9 +352,8 @@ bool AppBannerSettingsHelper::WasBannerRecentlyIgnored(
   DCHECK(!package_name_or_start_url.empty());
 
   absl::optional<bool> in_period = WasEventWithinPeriod(
-      APP_BANNER_EVENT_DID_SHOW,
-      base::TimeDelta::FromDays(gDaysAfterIgnoredToShow), web_contents,
-      origin_url, package_name_or_start_url, now);
+      APP_BANNER_EVENT_DID_SHOW, base::Days(gDaysAfterIgnoredToShow),
+      web_contents, origin_url, package_name_or_start_url, now);
 
   return in_period.value_or(true);
 }
@@ -405,7 +405,7 @@ bool AppBannerSettingsHelper::WasLaunchedRecently(
     base::Time now) {
   HostContentSettingsMap* settings =
       permissions::PermissionsClient::Get()->GetSettingsMap(browser_context);
-  std::unique_ptr<base::DictionaryValue> origin_dict =
+  std::unique_ptr<base::Value> origin_dict =
       GetOriginAppBannerData(settings, origin_url);
 
   if (!origin_dict)
@@ -415,22 +415,20 @@ bool AppBannerSettingsHelper::WasLaunchedRecently(
   // dictionaries per app path. If we find one that has been added to
   // homescreen recently, return true.
   base::TimeDelta recent_last_launch_in_days =
-      base::TimeDelta::FromDays(kRecentLastLaunchInDays);
-  for (base::DictionaryValue::Iterator it(*origin_dict); !it.IsAtEnd();
-       it.Advance()) {
-    if (it.value().is_dict()) {
-      const base::DictionaryValue* value;
-      it.value().GetAsDictionary(&value);
+      base::Days(kRecentLastLaunchInDays);
+  for (auto path_dicts : origin_dict->DictItems()) {
+    if (path_dicts.second.is_dict()) {
+      base::Value* value = &path_dicts.second;
 
-      double internal_time;
-      if (it.key() == kInstantAppsKey ||
-          !value->GetDouble(
-              kBannerEventKeys[APP_BANNER_EVENT_DID_ADD_TO_HOMESCREEN],
-              &internal_time)) {
+      if (path_dicts.first == kInstantAppsKey)
         continue;
-      }
 
-      if ((now - base::Time::FromInternalValue(internal_time)) <=
+      absl::optional<double> internal_time = value->FindDoubleKey(
+          kBannerEventKeys[APP_BANNER_EVENT_DID_ADD_TO_HOMESCREEN]);
+      if (!internal_time)
+        continue;
+
+      if ((now - base::Time::FromInternalValue(*internal_time)) <=
           recent_last_launch_in_days) {
         return true;
       }
@@ -480,10 +478,8 @@ void AppBannerSettingsHelper::RecordInstallTextAnimationShown(
     const GURL& scope) {
   DCHECK(scope.is_valid());
 
-  constexpr base::TimeDelta kInitialAnimationSuppressionPeriod =
-      base::TimeDelta::FromDays(1);
-  constexpr base::TimeDelta kMaxAnimationSuppressionPeriod =
-      base::TimeDelta::FromDays(90);
+  constexpr base::TimeDelta kInitialAnimationSuppressionPeriod = base::Days(1);
+  constexpr base::TimeDelta kMaxAnimationSuppressionPeriod = base::Days(90);
   constexpr double kExponentialBackoffFactor = 2;
 
   NextInstallTextAnimation next_prompt = {AppBannerManager::GetCurrentTime(),

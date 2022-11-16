@@ -4,12 +4,16 @@
 
 #include "ui/message_center/views/message_view.h"
 
+#include "ash/constants/ash_features.h"
+#include "base/observer_list.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/color/color_id.h"
+#include "ui/color/color_provider.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/scoped_layer_animation_settings.h"
 #include "ui/gfx/canvas.h"
@@ -31,7 +35,11 @@
 #include "ui/views/focus/focus_manager.h"
 #include "ui/views/widget/widget.h"
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "base/time/time.h"
+#endif
+
+#if BUILDFLAG(IS_WIN)
 #include "ui/base/win/shell.h"
 #endif
 
@@ -65,7 +73,7 @@ std::u16string CreateAccessibleName(const Notification& notification) {
 }
 
 bool ShouldShowAeroShadowBorder() {
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   return ui::win::IsAeroGlassEnabled();
 #else
   return false;
@@ -114,6 +122,12 @@ MessageView::MessageView(const Notification& notification)
 
 MessageView::~MessageView() {
   RemovedFromWidget();
+}
+
+views::View* MessageView::FindGroupNotificationView(
+    const std::string& notification_id) {
+  // Not implemented by default.
+  return nullptr;
 }
 
 void MessageView::UpdateWithNotification(const Notification& notification) {
@@ -189,7 +203,7 @@ SkPath MessageView::GetHighlightPath() const {
   // them on top of the notifications. We need to do this because TrayBubbleView
   // has a layer that masks to bounds due to which the focus ring can not extend
   // outside the view.
-  int inset = -views::FocusRing::kHaloInset;
+  int inset = -views::FocusRing::kDefaultHaloInset;
   rect.Inset(gfx::Insets(inset));
 
   SkScalar top_radius = std::max(0, top_radius_ - inset);
@@ -235,6 +249,10 @@ void MessageView::OnMouseReleased(const ui::MouseEvent& event) {
     return;
 
   MessageCenter::Get()->ClickOnNotification(notification_id_);
+}
+
+void MessageView::OnMouseEntered(const ui::MouseEvent& event) {
+  MessageCenter::Get()->OnMessageViewHovered(notification_id_);
 }
 
 bool MessageView::OnKeyPressed(const ui::KeyEvent& event) {
@@ -336,7 +354,17 @@ void MessageView::OnThemeChanged() {
 }
 
 ui::Layer* MessageView::GetSlideOutLayer() {
-  return is_nested_ ? layer() : GetWidget()->GetLayer();
+  // If a message view is contained in a parent message view it should give up
+  // slide behavior to the parent message view when the parent view is
+  // collapsed.
+  auto* nested_layer =
+      (parent_message_view_ && !parent_message_view_->IsExpanded())
+          ? parent_message_view_->layer()
+          : layer();
+  bool is_nested = (parent_message_view_ && !parent_message_view_->IsExpanded())
+                       ? parent_message_view_->is_nested()
+                       : is_nested_;
+  return is_nested ? nested_layer : GetWidget()->GetLayer();
 }
 
 void MessageView::OnSlideStarted() {
@@ -346,8 +374,26 @@ void MessageView::OnSlideStarted() {
 }
 
 void MessageView::OnSlideChanged(bool in_progress) {
+  // crbug/1333664: We need to make sure to disable scrolling while a
+  // notification view is sliding. This is to ensure the notification view can
+  // only move horizontally or vertically at one time.
+  if (scroller_ && !is_sliding_ && slide_out_controller_.GetGestureAmount()) {
+    is_sliding_ = true;
+    scroller_->SetVerticalScrollBarMode(
+        views::ScrollView::ScrollBarMode::kDisabled);
+  }
+
+  if (scroller_ && !in_progress) {
+    is_sliding_ = false;
+    scroller_->SetVerticalScrollBarMode(
+        views::ScrollView::ScrollBarMode::kEnabled);
+  }
+
   for (auto& observer : observers_) {
-    observer.OnSlideChanged(notification_id_);
+    if (in_progress)
+      observer.OnSlideChanged(notification_id_);
+    else
+      observer.OnSlideEnded(notification_id_);
   }
 }
 
@@ -459,6 +505,13 @@ void MessageView::OnSnoozeButtonPressed(const ui::Event& event) {
     observer.OnSnoozeButtonPressed(notification_id_);
 }
 
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+base::TimeDelta MessageView::GetBoundsAnimationDuration(
+    const Notification& notification) const {
+  return base::Milliseconds(0);
+}
+#endif
+
 bool MessageView::ShouldShowControlButtons() const {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   // Users on ChromeOS are used to the Settings and Close buttons not being
@@ -475,10 +528,10 @@ bool MessageView::ShouldShowControlButtons() const {
 }
 
 void MessageView::UpdateBackgroundPainter() {
-  auto* theme = GetNativeTheme();
-  SkColor background_color = theme->GetSystemColor(
-      is_active_ ? ui::NativeTheme::kColorId_NotificationBackgroundActive
-                 : ui::NativeTheme::kColorId_NotificationBackground);
+  const auto* color_provider = GetColorProvider();
+  SkColor background_color = color_provider->GetColor(
+      is_active_ ? ui::kColorNotificationBackgroundActive
+                 : ui::kColorNotificationBackgroundInactive);
 
   SetBackground(views::CreateBackgroundFromPainter(
       std::make_unique<NotificationBackgroundPainter>(
@@ -488,8 +541,14 @@ void MessageView::UpdateBackgroundPainter() {
 void MessageView::UpdateNestedBorder() {
   if (!is_nested_ || !GetWidget())
     return;
-  SkColor border_color = GetNativeTheme()->GetSystemColor(
-      ui::NativeTheme::kColorId_UnfocusedBorderColor);
+  SkColor border_color =
+      GetColorProvider()->GetColor(ui::kColorFocusableBorderUnfocused);
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  if (ash::features::IsNotificationsRefreshEnabled())
+    border_color = SK_ColorTRANSPARENT;
+#endif
+
   SetBorder(views::CreateRoundedRectBorder(
       kNotificationBorderThickness, kNotificationCornerRadius, border_color));
 }

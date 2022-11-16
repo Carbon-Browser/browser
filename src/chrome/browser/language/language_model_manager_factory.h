@@ -5,7 +5,6 @@
 #ifndef CHROME_BROWSER_LANGUAGE_LANGUAGE_MODEL_MANAGER_FACTORY_H_
 #define CHROME_BROWSER_LANGUAGE_LANGUAGE_MODEL_MANAGER_FACTORY_H_
 
-#include "base/macros.h"
 #include "base/memory/singleton.h"
 #include "components/keyed_service/content/browser_context_keyed_service_factory.h"
 
@@ -25,6 +24,10 @@ class LanguageModelManagerFactory : public BrowserContextKeyedServiceFactory {
   static language::LanguageModelManager* GetForBrowserContext(
       content::BrowserContext* browser_context);
 
+  LanguageModelManagerFactory(const LanguageModelManagerFactory&) = delete;
+  LanguageModelManagerFactory& operator=(const LanguageModelManagerFactory&) =
+      delete;
+
  private:
   friend struct base::DefaultSingletonTraits<LanguageModelManagerFactory>;
 
@@ -36,8 +39,6 @@ class LanguageModelManagerFactory : public BrowserContextKeyedServiceFactory {
       content::BrowserContext* context) const override;
   content::BrowserContext* GetBrowserContextToUse(
       content::BrowserContext* context) const override;
-
-  DISALLOW_COPY_AND_ASSIGN(LanguageModelManagerFactory);
 };
 
 #endif  // CHROME_BROWSER_LANGUAGE_LANGUAGE_MODEL_MANAGER_FACTORY_H_

@@ -11,6 +11,7 @@
 #include "base/callback.h"
 #include "base/files/file_path.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/test/scoped_feature_list.h"
 #include "components/download/content/factory/download_service_factory_helper.h"
@@ -43,6 +44,11 @@ class TestBlobContextGetterFactory : public download::BlobContextGetterFactory {
  public:
   TestBlobContextGetterFactory(content::BrowserContext* browser_context)
       : browser_context_(browser_context) {}
+
+  TestBlobContextGetterFactory(const TestBlobContextGetterFactory&) = delete;
+  TestBlobContextGetterFactory& operator=(const TestBlobContextGetterFactory&) =
+      delete;
+
   ~TestBlobContextGetterFactory() override = default;
 
  private:
@@ -53,8 +59,7 @@ class TestBlobContextGetterFactory : public download::BlobContextGetterFactory {
     std::move(callback).Run(blob_context_getter);
   }
 
-  content::BrowserContext* browser_context_;
-  DISALLOW_COPY_AND_ASSIGN(TestBlobContextGetterFactory);
+  raw_ptr<content::BrowserContext> browser_context_;
 };
 
 // Implementation of a Download Service client that will be servicing
@@ -65,6 +70,11 @@ class WebTestBackgroundFetchDelegate::WebTestBackgroundFetchDownloadClient
   explicit WebTestBackgroundFetchDownloadClient(
       base::WeakPtr<content::BackgroundFetchDelegate::Client> client)
       : client_(std::move(client)) {}
+
+  WebTestBackgroundFetchDownloadClient(
+      const WebTestBackgroundFetchDownloadClient&) = delete;
+  WebTestBackgroundFetchDownloadClient& operator=(
+      const WebTestBackgroundFetchDownloadClient&) = delete;
 
   ~WebTestBackgroundFetchDownloadClient() override = default;
 
@@ -225,8 +235,6 @@ class WebTestBackgroundFetchDelegate::WebTestBackgroundFetchDownloadClient
 
   base::WeakPtrFactory<WebTestBackgroundFetchDownloadClient> weak_ptr_factory_{
       this};
-
-  DISALLOW_COPY_AND_ASSIGN(WebTestBackgroundFetchDownloadClient);
 };
 
 WebTestBackgroundFetchDelegate::WebTestBackgroundFetchDelegate(

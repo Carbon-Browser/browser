@@ -30,7 +30,7 @@ export function fakeSystemRoutineContollerTestSuite() {
    * @return {!Promise}
    */
   function runRoutineAndAssertStandardResult(expectedType, expectedResult) {
-    let resolver = new PromiseResolver();
+    const resolver = new PromiseResolver();
 
     const routineRunnerRemote = /** @type {!RoutineRunnerRemote} */ ({
       onRoutineResult: (resultInfo) => {
@@ -51,7 +51,7 @@ export function fakeSystemRoutineContollerTestSuite() {
         }
 
         resolver.resolve();
-      }
+      },
     });
     controller.runRoutine(expectedType, routineRunnerRemote);
     return controller.getRunRoutinePromiseForTesting().then(() => {
@@ -70,7 +70,7 @@ export function fakeSystemRoutineContollerTestSuite() {
    */
   function runRoutineAndAssertStandardResultManualResolve(
       expectedType, expectedResult) {
-    let resolver = new PromiseResolver();
+    const resolver = new PromiseResolver();
 
     // Nothing should be running yet.
     assertFalse(controller.isRoutineInProgressForTesting());
@@ -89,7 +89,7 @@ export function fakeSystemRoutineContollerTestSuite() {
         // Mark that the test completed.
         wasRun = true;
         resolver.resolve();
-      }
+      },
     });
 
     controller.runRoutine(expectedType, routineRunnerRemote);

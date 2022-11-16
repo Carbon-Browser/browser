@@ -113,7 +113,7 @@ Response LegacyDOMSnapshotAgent::GetSnapshot(
         layout_tree_nodes,
     std::unique_ptr<protocol::Array<protocol::DOMSnapshot::ComputedStyle>>*
         computed_styles) {
-  document->View()->UpdateLifecycleToLayoutClean(
+  document->View()->UpdateLifecycleToCompositingInputsClean(
       DocumentUpdateReason::kInspector);
   // Setup snapshot.
   dom_nodes_ =
@@ -250,13 +250,13 @@ int LegacyDOMSnapshotAgent::VisitNode(Node* node,
     }
 
     if (auto* textarea_element = DynamicTo<HTMLTextAreaElement>(*element))
-      value->setTextValue(textarea_element->value());
+      value->setTextValue(textarea_element->Value());
 
     if (auto* input_element = DynamicTo<HTMLInputElement>(*element)) {
-      value->setInputValue(input_element->value());
+      value->setInputValue(input_element->Value());
       if ((input_element->type() == input_type_names::kRadio) ||
           (input_element->type() == input_type_names::kCheckbox)) {
-        value->setInputChecked(input_element->checked());
+        value->setInputChecked(input_element->Checked());
       }
     }
 
@@ -284,8 +284,8 @@ int LegacyDOMSnapshotAgent::VisitNode(Node* node,
     value->setFrameId(IdentifiersFactory::FrameId(document->GetFrame()));
     if (document->View() && document->View()->LayoutViewport()) {
       auto offset = document->View()->LayoutViewport()->GetScrollOffset();
-      value->setScrollOffsetX(offset.Width());
-      value->setScrollOffsetY(offset.Height());
+      value->setScrollOffsetX(offset.x());
+      value->setScrollOffsetY(offset.y());
     }
   } else if (auto* doc_type = DynamicTo<DocumentType>(node)) {
     value->setPublicId(doc_type->publicId());
@@ -399,8 +399,9 @@ int LegacyDOMSnapshotAgent::VisitLayoutTreeNode(LayoutObject* layout_object,
     PaintLayer* paint_layer = layout_object->EnclosingLayer();
 
     // We visited all PaintLayers when building |paint_order_map_|.
-    if (int paint_order = paint_order_map_->at(paint_layer))
-      layout_tree_node->setPaintOrder(paint_order);
+    const auto paint_order = paint_order_map_->find(paint_layer);
+    if (paint_order != paint_order_map_->end())
+      layout_tree_node->setPaintOrder(paint_order->value);
   }
 
   if (layout_object->IsText()) {

@@ -15,7 +15,6 @@
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/task/post_task.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/notifications/platform_notification_service_factory.h"
@@ -43,7 +42,7 @@
 #include "ui/base/l10n/l10n_util.h"
 #include "url/gurl.h"
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/ui/android/tab_model/tab_model.h"
 #include "chrome/browser/ui/android/tab_model/tab_model_list.h"
 #else
@@ -53,9 +52,9 @@
 #endif
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chrome/browser/chromeos/android_sms/android_sms_service_factory.h"
-#include "chrome/browser/chromeos/android_sms/android_sms_urls.h"
-#include "chrome/browser/chromeos/multidevice_setup/multidevice_setup_client_factory.h"
+#include "chrome/browser/ash/android_sms/android_sms_service_factory.h"
+#include "chrome/browser/ash/android_sms/android_sms_urls.h"
+#include "chrome/browser/ash/multidevice_setup/multidevice_setup_client_factory.h"
 #endif
 
 using content::BrowserThread;
@@ -156,7 +155,7 @@ void PushMessagingNotificationManager::DidCountVisibleNotifications(
                               notification_count);
 
   // Sites with a currently visible tab don't need to show notifications.
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   for (const TabModel* model : TabModelList::models()) {
     Profile* profile = model->GetProfile();
     WebContents* active_web_contents = model->GetActiveWebContents();
@@ -213,7 +212,7 @@ bool PushMessagingNotificationManager::IsTabVisible(
     Profile* profile,
     WebContents* active_web_contents,
     const GURL& origin) {
-  if (!active_web_contents || !active_web_contents->GetMainFrame())
+  if (!active_web_contents || !active_web_contents->GetPrimaryMainFrame())
     return false;
 
   // Don't leak information from other profiles.
@@ -221,7 +220,7 @@ bool PushMessagingNotificationManager::IsTabVisible(
     return false;
 
   // Ignore minimized windows.
-  switch (active_web_contents->GetMainFrame()->GetVisibilityState()) {
+  switch (active_web_contents->GetPrimaryMainFrame()->GetVisibilityState()) {
     case content::PageVisibilityState::kHidden:
     case content::PageVisibilityState::kHiddenButPainting:
       return false;
@@ -239,7 +238,7 @@ bool PushMessagingNotificationManager::IsTabVisible(
   if (visible_url.SchemeIs(content::kViewSourceScheme))
     visible_url = GURL(visible_url.GetContent());
 
-  return visible_url.GetOrigin() == origin;
+  return visible_url.DeprecatedGetOriginAsURL() == origin;
 }
 
 void PushMessagingNotificationManager::ProcessSilentPush(
@@ -298,12 +297,13 @@ bool PushMessagingNotificationManager::ShouldSkipUserVisibleOnlyRequirements(
   // This is a short-term exception to user visible only enforcement added
   // to support for "Messages for Web" integration on ChromeOS.
 
-  chromeos::multidevice_setup::MultiDeviceSetupClient* multidevice_setup_client;
+  ash::multidevice_setup::MultiDeviceSetupClient* multidevice_setup_client;
   if (test_multidevice_setup_client_) {
     multidevice_setup_client = test_multidevice_setup_client_;
   } else {
-    multidevice_setup_client = chromeos::multidevice_setup::
-        MultiDeviceSetupClientFactory::GetForProfile(profile_);
+    multidevice_setup_client =
+        ash::multidevice_setup::MultiDeviceSetupClientFactory::GetForProfile(
+            profile_);
   }
 
   if (!multidevice_setup_client)
@@ -311,17 +311,17 @@ bool PushMessagingNotificationManager::ShouldSkipUserVisibleOnlyRequirements(
 
   // Check if messages feature is enabled
   if (multidevice_setup_client->GetFeatureState(
-          chromeos::multidevice_setup::mojom::Feature::kMessages) !=
-      chromeos::multidevice_setup::mojom::FeatureState::kEnabledByUser) {
+          ash::multidevice_setup::mojom::Feature::kMessages) !=
+      ash::multidevice_setup::mojom::FeatureState::kEnabledByUser) {
     return false;
   }
 
-  chromeos::android_sms::AndroidSmsAppManager* android_sms_app_manager;
+  ash::android_sms::AndroidSmsAppManager* android_sms_app_manager;
   if (test_android_sms_app_manager_) {
     android_sms_app_manager = test_android_sms_app_manager_;
   } else {
-    chromeos::android_sms::AndroidSmsService* android_sms_service =
-        chromeos::android_sms::AndroidSmsServiceFactory::GetForBrowserContext(
+    auto* android_sms_service =
+        ash::android_sms::AndroidSmsServiceFactory::GetForBrowserContext(
             profile_);
     if (!android_sms_service)
       return false;
@@ -331,22 +331,21 @@ bool PushMessagingNotificationManager::ShouldSkipUserVisibleOnlyRequirements(
   // Check if origin matches current messages url
   absl::optional<GURL> app_url = android_sms_app_manager->GetCurrentAppUrl();
   if (!app_url)
-    app_url = chromeos::android_sms::GetAndroidMessagesURL();
+    app_url = ash::android_sms::GetAndroidMessagesURL();
 
-  if (!origin.EqualsIgnoringRef(app_url->GetOrigin()))
+  if (!origin.EqualsIgnoringRef(app_url->DeprecatedGetOriginAsURL()))
     return false;
 
   return true;
 }
 
 void PushMessagingNotificationManager::SetTestMultiDeviceSetupClient(
-    chromeos::multidevice_setup::MultiDeviceSetupClient*
-        multidevice_setup_client) {
+    ash::multidevice_setup::MultiDeviceSetupClient* multidevice_setup_client) {
   test_multidevice_setup_client_ = multidevice_setup_client;
 }
 
 void PushMessagingNotificationManager::SetTestAndroidSmsAppManager(
-    chromeos::android_sms::AndroidSmsAppManager* android_sms_app_manager) {
+    ash::android_sms::AndroidSmsAppManager* android_sms_app_manager) {
   test_android_sms_app_manager_ = android_sms_app_manager;
 }
 #endif

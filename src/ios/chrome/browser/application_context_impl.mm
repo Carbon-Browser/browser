@@ -12,17 +12,14 @@
 #include "base/command_line.h"
 #include "base/feature_list.h"
 #include "base/files/file_path.h"
-#include "base/macros.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/path_service.h"
-#include "base/sequenced_task_runner.h"
 #include "base/strings/sys_string_conversions.h"
-#include "base/task/post_task.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/time/default_clock.h"
 #include "base/time/default_tick_clock.h"
-#include "components/breadcrumbs/core/breadcrumb_manager.h"
 #include "components/breadcrumbs/core/breadcrumb_persistent_storage_manager.h"
 #include "components/breadcrumbs/core/features.h"
 #include "components/component_updater/component_updater_service.h"
@@ -51,21 +48,22 @@
 #include "ios/chrome/browser/browser_state/chrome_browser_state_manager_impl.h"
 #include "ios/chrome/browser/chrome_paths.h"
 #include "ios/chrome/browser/component_updater/ios_component_updater_configurator.h"
-#import "ios/chrome/browser/crash_report/breadcrumbs/application_breadcrumbs_logger_ios.h"
-#include "ios/chrome/browser/crash_report/breadcrumbs/breadcrumb_persistent_storage_util.h"
+#import "ios/chrome/browser/crash_report/breadcrumbs/application_breadcrumbs_logger.h"
 #include "ios/chrome/browser/gcm/ios_chrome_gcm_profile_service_factory.h"
 #include "ios/chrome/browser/history/history_service_factory.h"
 #include "ios/chrome/browser/ios_chrome_io_thread.h"
 #include "ios/chrome/browser/metrics/ios_chrome_metrics_services_manager_client.h"
 #include "ios/chrome/browser/policy/browser_policy_connector_ios.h"
 #include "ios/chrome/browser/policy/configuration_policy_handler_list_factory.h"
-#include "ios/chrome/browser/policy/policy_features.h"
 #include "ios/chrome/browser/pref_names.h"
 #include "ios/chrome/browser/prefs/browser_prefs.h"
 #include "ios/chrome/browser/prefs/ios_chrome_pref_service_factory.h"
-#include "ios/chrome/browser/safe_browsing/safe_browsing_service_impl.h"
+#include "ios/chrome/browser/segmentation_platform/otr_web_state_observer.h"
 #include "ios/chrome/browser/update_client/ios_chrome_update_query_params_delegate.h"
 #include "ios/chrome/common/channel_info.h"
+#include "ios/components/security_interstitials/safe_browsing/safe_browsing_service_impl.h"
+#include "ios/public/provider/chrome/browser/app_distribution/app_distribution_api.h"
+#include "ios/public/provider/chrome/browser/signin/signin_sso_api.h"
 #include "ios/web/public/thread/web_task_traits.h"
 #include "ios/web/public/thread/web_thread.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -101,8 +99,8 @@ void RequestProxyResolvingSocketFactory(
     ApplicationContextImpl* app_context,
     mojo::PendingReceiver<network::mojom::ProxyResolvingSocketFactory>
         receiver) {
-  base::PostTask(FROM_HERE, {web::WebThread::UI},
-                 base::BindOnce(&RequestProxyResolvingSocketFactoryOnUIThread,
+  web::GetUIThreadTaskRunner({})->PostTask(
+      FROM_HERE, base::BindOnce(&RequestProxyResolvingSocketFactoryOnUIThread,
                                 app_context, std::move(receiver)));
 }
 
@@ -112,10 +110,6 @@ void BindNetworkChangeManagerReceiver(
     mojo::PendingReceiver<network::mojom::NetworkChangeManager> receiver) {
   network_change_manager->AddReceiver(std::move(receiver));
 }
-
-// If enabled, keep logging and reporting UMA while chrome is backgrounded.
-const base::Feature kUmaBackgroundSessions{"IOSUMABackgroundSessions",
-                                           base::FEATURE_DISABLED_BY_DEFAULT};
 
 }  // namespace
 
@@ -156,43 +150,33 @@ void ApplicationContextImpl::PreMainMessageLoopRun() {
   BrowserPolicyConnectorIOS* browser_policy_connector =
       GetBrowserPolicyConnector();
   if (browser_policy_connector) {
-    DCHECK(IsEnterprisePolicyEnabled());
     browser_policy_connector->Init(GetLocalState(),
                                    GetSharedURLLoaderFactory());
   }
 
   if (base::FeatureList::IsEnabled(breadcrumbs::kLogBreadcrumbs)) {
-    breadcrumb_manager_ = std::make_unique<breadcrumbs::BreadcrumbManager>();
-    application_breadcrumbs_logger_ =
-        std::make_unique<ApplicationBreadcrumbsLoggerIOS>(
-            breadcrumb_manager_.get());
-
     base::FilePath storage_dir;
     bool result = base::PathService::Get(ios::DIR_USER_DATA, &storage_dir);
     DCHECK(result);
-
-    auto breadcrumb_persistent_storage_manager =
-        std::make_unique<breadcrumbs::BreadcrumbPersistentStorageManager>(
-            storage_dir,
-            breadcrumb_persistent_storage_util::
-                GetOldBreadcrumbPersistentStorageFilePath(storage_dir),
-            breadcrumb_persistent_storage_util::
-                GetOldBreadcrumbPersistentStorageTempFilePath(storage_dir));
-
-    application_breadcrumbs_logger_->SetPersistentStorageManager(
-        std::move(breadcrumb_persistent_storage_manager));
+    application_breadcrumbs_logger_ =
+        std::make_unique<ApplicationBreadcrumbsLogger>(storage_dir);
   }
 }
 
 void ApplicationContextImpl::StartTearDown() {
   DCHECK(thread_checker_.CalledOnValidThread());
+
+  // Destroy the segmentation OTR observer before
+  // `chrome_browser_state_manager_`.
+  segmentation_otr_web_state_observer_->TearDown();
+
   // We need to destroy the MetricsServicesManager and NetworkTimeTracker before
   // the IO thread gets destroyed, since the destructor can call the URLFetcher
   // destructor, which does a PostDelayedTask operation on the IO thread. (The
   // IO thread will handle that URLFetcher operation before going away.)
   metrics::MetricsService* metrics_service = GetMetricsService();
   if (metrics_service)
-    metrics_service->RecordCompletedSessionEnd();
+    metrics_service->LogCleanShutdown();
   metrics_services_manager_.reset();
   network_time_tracker_.reset();
 
@@ -280,9 +264,8 @@ void ApplicationContextImpl::OnAppEnterBackground() {
   // Tell the metrics services they were cleanly shutdown.
   metrics::MetricsService* metrics_service = GetMetricsService();
   if (metrics_service) {
-    const bool keep_reporting =
-        base::FeatureList::IsEnabled(kUmaBackgroundSessions);
-    metrics_service->OnAppEnterBackground(keep_reporting);
+    metrics_service->OnAppEnterBackground(
+        /*keep_recording_in_background=*/true);
   }
   ukm::UkmService* ukm_service = GetMetricsServicesManager()->GetUkmService();
   if (ukm_service)
@@ -412,7 +395,8 @@ ApplicationContextImpl::GetComponentUpdateService() {
     component_updater_ = component_updater::ComponentUpdateServiceFactory(
         component_updater::MakeIOSComponentUpdaterConfigurator(
             base::CommandLine::ForCurrentProcess()),
-        std::make_unique<component_updater::TimerUpdateScheduler>());
+        std::make_unique<component_updater::TimerUpdateScheduler>(),
+        ios::provider::GetBrandCode());
   }
   return component_updater_.get();
 }
@@ -442,36 +426,34 @@ ApplicationContextImpl::GetNetworkConnectionTracker() {
 
 BrowserPolicyConnectorIOS* ApplicationContextImpl::GetBrowserPolicyConnector() {
   DCHECK(thread_checker_.CalledOnValidThread());
-  if (IsEnterprisePolicyEnabled()) {
-    if (!browser_policy_connector_.get()) {
-      // Ensure that the ResourceBundle has already been initialized. If this
-      // DCHECK ever fails, a call to
-      // BrowserPolicyConnector::OnResourceBundleCreated() will need to be added
-      // later in the startup sequence, after the ResourceBundle is initialized.
-      DCHECK(ui::ResourceBundle::HasSharedInstance());
-      version_info::Channel channel = ::GetChannel();
-      policy::ConfigurationPolicyProvider* test_policy_provider =
-          tests_hook::GetOverriddenPlatformPolicyProvider();
+  if (!browser_policy_connector_.get()) {
+    // Ensure that the ResourceBundle has already been initialized. If this
+    // DCHECK ever fails, a call to
+    // BrowserPolicyConnector::OnResourceBundleCreated() will need to be added
+    // later in the startup sequence, after the ResourceBundle is initialized.
+    DCHECK(ui::ResourceBundle::HasSharedInstance());
+    version_info::Channel channel = ::GetChannel();
+    policy::ConfigurationPolicyProvider* test_policy_provider =
+        tests_hook::GetOverriddenPlatformPolicyProvider();
 
-      // If running under test (for example, if a mock platform policy provider
-      // was provided), enable future policies without requiring them to be on
-      // an allowlist. Otherwise, disable future policies on
-      // externally-published channels, unless a domain administrator explicitly
-      // adds them to the allowlist.
-      bool enable_future_policies_without_allowlist =
-          test_policy_provider != nullptr ||
-          (channel != version_info::Channel::STABLE &&
-           channel != version_info::Channel::BETA);
-      browser_policy_connector_ = std::make_unique<BrowserPolicyConnectorIOS>(
-          base::BindRepeating(&BuildPolicyHandlerList,
-                              enable_future_policies_without_allowlist));
+    // If running under test (for example, if a mock platform policy provider
+    // was provided), enable future policies without requiring them to be on
+    // an allowlist. Otherwise, disable future policies on
+    // externally-published channels, unless a domain administrator explicitly
+    // adds them to the allowlist.
+    bool enable_future_policies_without_allowlist =
+        test_policy_provider != nullptr ||
+        (channel != version_info::Channel::STABLE &&
+         channel != version_info::Channel::BETA);
+    browser_policy_connector_ =
+        std::make_unique<BrowserPolicyConnectorIOS>(base::BindRepeating(
+            &BuildPolicyHandlerList, enable_future_policies_without_allowlist));
 
-      // Install a mock platform policy provider, if running under EG2 and one
-      // is supplied.
-      if (test_policy_provider) {
-        browser_policy_connector_->SetPolicyProviderForTesting(
-            test_policy_provider);
-      }
+    // Install a mock platform policy provider, if running under EG2 and one
+    // is supplied.
+    if (test_policy_provider) {
+      browser_policy_connector_->SetPolicyProviderForTesting(  // IN-TEST
+          test_policy_provider);
     }
   }
   return browser_policy_connector_.get();
@@ -483,6 +465,24 @@ ApplicationContextImpl::GetBreadcrumbPersistentStorageManager() {
   return application_breadcrumbs_logger_
              ? application_breadcrumbs_logger_->GetPersistentStorageManager()
              : nullptr;
+}
+
+id<SingleSignOnService> ApplicationContextImpl::GetSSOService() {
+  if (!single_sign_on_service_) {
+    single_sign_on_service_ = ios::provider::CreateSSOService();
+    DCHECK(single_sign_on_service_);
+  }
+  return single_sign_on_service_;
+}
+
+segmentation_platform::OTRWebStateObserver*
+ApplicationContextImpl::GetSegmentationOTRWebStateObserver() {
+  if (!segmentation_otr_web_state_observer_) {
+    segmentation_otr_web_state_observer_ =
+        std::make_unique<segmentation_platform::OTRWebStateObserver>(
+            GetChromeBrowserStateManager());
+  }
+  return segmentation_otr_web_state_observer_.get();
 }
 
 void ApplicationContextImpl::SetApplicationLocale(const std::string& locale) {
@@ -545,7 +545,6 @@ void ApplicationContextImpl::CreateGCMDriver() {
       GetSharedURLLoaderFactory(),
       GetApplicationContext()->GetNetworkConnectionTracker(), ::GetChannel(),
       IOSChromeGCMProfileServiceFactory::GetProductCategoryForSubtypes(),
-      base::CreateSingleThreadTaskRunner({web::WebThread::UI}),
-      base::CreateSingleThreadTaskRunner({web::WebThread::IO}),
+      web::GetUIThreadTaskRunner({}), web::GetIOThreadTaskRunner({}),
       blocking_task_runner);
 }

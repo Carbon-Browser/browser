@@ -12,7 +12,7 @@
 namespace features {
 
 CC_BASE_EXPORT extern const base::Feature kAnimatedImageResume;
-CC_BASE_EXPORT extern const base::Feature kImpulseScrollAnimations;
+CC_BASE_EXPORT extern bool IsImpulseScrollAnimationEnabled();
 CC_BASE_EXPORT extern const base::Feature kSynchronizedScrolling;
 
 // When enabled, the double tap to zoom will be disabled when the viewport
@@ -34,12 +34,6 @@ CC_BASE_EXPORT extern const base::Feature kScrollUnification;
 CC_BASE_EXPORT extern const base::Feature
     kSchedulerSmoothnessForAnimatedScrolls;
 
-// When enabled, cc's layers support region-based wheel event hit-testing rather
-// than only supporting flagging all layers, or no layers, as having blocking
-// wheel event listeners.
-// https://docs.google.com/document/d/1ar4WhVnLA-fmw6atgP-23iq-ys_NfFoGb3LA5AgaylA/edit?usp=sharing
-CC_BASE_EXPORT extern const base::Feature kWheelEventRegions;
-
 // When enabled, cc will show blink's Web-Vital metrics inside its heads up
 // display.
 CC_BASE_EXPORT extern const base::Feature kHudDisplayForPerformanceMetrics;
@@ -53,6 +47,27 @@ CC_BASE_EXPORT extern const base::Feature kJankInjectionAblationFeature;
 CC_BASE_EXPORT extern const base::Feature
     kPreferNewContentForCheckerboardedScrolls;
 
+// When enabled, CompositorTimingHistory will directly record the timing history
+// that is used to calculate main thread timing estimates, and use the
+// percentile of sum of different stages instead of the sum of percentiles.
+CC_BASE_EXPORT extern const base::Feature
+    kDurationEstimatesInCompositorTimingHistory;
+
+// When enabled, the main thread does not block while commit is running on the
+// impl thread.
+// WARNING: This feature is not yet safe to enable. Work is needed to ensure
+// that main thread cc data structures are not modified on the main thread while
+// commit is running concurrently on the impl thread.
+CC_BASE_EXPORT extern const base::Feature kNonBlockingCommit;
+
+// When enabled, DroppedFrameCounter will use an adjusted sliding window
+// interval specified by field trial params.
+CC_BASE_EXPORT extern const base::Feature kSlidingWindowForDroppedFrameCounter;
+
+// When enabled, SupportsBackgroundThreadPriority is set to kNo for
+// GpuImageDecodeTaskImpl and SoftwareImageDecodeTaskImpl.
+// Introduced to fix https://crbug.com/1116624
+CC_BASE_EXPORT extern const base::Feature kNormalPriorityImageDecoding;
 }  // namespace features
 
 #endif  // CC_BASE_FEATURES_H_

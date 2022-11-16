@@ -5,22 +5,18 @@
 #include "chrome/browser/ui/views/location_bar/location_icon_view.h"
 
 #include "base/bind.h"
+#include "build/build_config.h"
 #include "chrome/browser/extensions/extension_ui_util.h"
-#include "chrome/browser/feature_engagement/tracker_factory.h"
-#include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/ui/browser_element_identifiers.h"
 #include "chrome/browser/ui/layout_constants.h"
 #include "chrome/browser/ui/page_info/page_info_dialog.h"
 #include "chrome/browser/ui/view_ids.h"
 #include "chrome/browser/ui/views/page_info/page_info_bubble_view.h"
-#include "chrome/browser/ui/views/user_education/feature_promo_controller_views.h"
 #include "chrome/grit/chromium_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/dom_distiller/core/url_constants.h"
-#include "components/feature_engagement/public/event_constants.h"
-#include "components/feature_engagement/public/feature_constants.h"
 #include "components/omnibox/browser/omnibox_edit_model.h"
 #include "components/omnibox/browser/omnibox_field_trial.h"
-#include "components/omnibox/common/omnibox_features.h"
 #include "components/security_state/core/security_state.h"
 #include "components/strings/grit/components_strings.h"
 #include "content/public/browser/web_contents.h"
@@ -33,6 +29,8 @@
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/views/animation/ink_drop.h"
 #include "ui/views/controls/label.h"
+#include "ui/views/style/platform_style.h"
+#include "ui/views/view_class_properties.h"
 
 using content::WebContents;
 using security_state::SecurityLevel;
@@ -40,16 +38,13 @@ using security_state::SecurityLevel;
 LocationIconView::LocationIconView(
     const gfx::FontList& font_list,
     IconLabelBubbleView::Delegate* parent_delegate,
-    Delegate* delegate,
-    Profile* profile)
-    : IconLabelBubbleView(font_list, parent_delegate),
-      delegate_(delegate),
-      feature_engagement_tracker_(
-          feature_engagement::TrackerFactory::GetForBrowserContext(profile)) {
+    Delegate* delegate)
+    : IconLabelBubbleView(font_list, parent_delegate), delegate_(delegate) {
   DCHECK(delegate_);
 
   SetID(VIEW_ID_LOCATION_ICON);
   SetUpForAnimation();
+  SetProperty(views::kElementIdentifierKey, kLocationIconElementId);
 
   // Readability is guaranteed by the omnibox theme.
   label()->SetAutoColorReadabilityEnabled(false);
@@ -260,12 +255,7 @@ void LocationIconView::Update(bool suppress_animations) {
       SetFocusBehavior(FocusBehavior::NEVER);
     } else {
       views::InkDrop::Get(this)->SetMode(views::InkDropHost::InkDropMode::ON);
-
-#if defined(OS_MAC)
-      SetFocusBehavior(FocusBehavior::ACCESSIBLE_ONLY);
-#else
-      SetFocusBehavior(FocusBehavior::ALWAYS);
-#endif
+      SetFocusBehavior(views::PlatformStyle::kDefaultFocusBehavior);
     }
   }
 
@@ -273,21 +263,6 @@ void LocationIconView::Update(bool suppress_animations) {
   if (!is_editing_or_empty) {
     last_update_security_level_ =
         delegate_->GetLocationBarModel()->GetSecurityLevel();
-
-    // Show in-product help for the updated connection security icon.
-    if (last_update_security_level_ == security_state::SECURE &&
-        delegate_->GetLocationBarModel()
-            ->ShouldUseUpdatedConnectionSecurityIndicators()) {
-      feature_engagement_tracker_->NotifyEvent(
-          feature_engagement::events::
-              kUpdatedConnectionSecurityIndicatorDisplayed);
-      FeaturePromoControllerViews* controller =
-          FeaturePromoControllerViews::GetForView(this);
-      if (controller) {
-        controller->MaybeShowPromo(
-            feature_engagement::kIPHUpdatedConnectionSecurityIndicatorsFeature);
-      }
-    }
   }
 
   was_editing_or_empty_ = is_editing_or_empty;

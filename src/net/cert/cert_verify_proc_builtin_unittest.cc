@@ -4,17 +4,21 @@
 
 #include "net/cert/cert_verify_proc_builtin.h"
 
+#include "base/memory/raw_ptr.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
-#include "base/task/post_task.h"
 #include "base/task/thread_pool.h"
 #include "base/test/task_environment.h"
+#include "base/time/time.h"
 #include "net/base/test_completion_callback.h"
 #include "net/cert/cert_verify_proc.h"
 #include "net/cert/crl_set.h"
 #include "net/cert/ev_root_ca_metadata.h"
 #include "net/cert/internal/system_trust_store.h"
+#include "net/cert/pki/trust_store.h"
+#include "net/cert/pki/trust_store_collection.h"
+#include "net/cert/pki/trust_store_in_memory.h"
 #include "net/cert_net/cert_net_fetcher_url_request.h"
 #include "net/der/encode_values.h"
 #include "net/log/net_log_with_source.h"
@@ -26,6 +30,9 @@
 #include "net/test/embedded_test_server/http_response.h"
 #include "net/test/embedded_test_server/request_handler_util.h"
 #include "net/test/gtest_util.h"
+#include "net/test/revocation_builder.h"
+#include "net/url_request/url_request_context.h"
+#include "net/url_request/url_request_context_builder.h"
 #include "net/url_request/url_request_test_util.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -57,6 +64,31 @@ std::unique_ptr<test_server::HttpResponse> FailRequestAndFailTest(
   return response;
 }
 
+std::unique_ptr<test_server::HttpResponse> ServeResponse(
+    HttpStatusCode status_code,
+    const std::string& content_type,
+    const std::string& content,
+    const test_server::HttpRequest& request) {
+  auto http_response = std::make_unique<test_server::BasicHttpResponse>();
+
+  http_response->set_code(status_code);
+  http_response->set_content_type(content_type);
+  http_response->set_content(content);
+  return http_response;
+}
+
+std::string MakeRandomHexString(size_t num_bytes) {
+  std::vector<char> rand_bytes;
+  rand_bytes.resize(num_bytes);
+
+  base::RandBytes(rand_bytes.data(), rand_bytes.size());
+  return base::HexEncode(rand_bytes.data(), rand_bytes.size());
+}
+
+static std::string MakeRandomPath(base::StringPiece suffix) {
+  return "/" + MakeRandomHexString(12) + std::string(suffix);
+}
+
 int VerifyOnWorkerThread(const scoped_refptr<CertVerifyProc>& verify_proc,
                          scoped_refptr<X509Certificate> cert,
                          const std::string& hostname,
@@ -78,6 +110,51 @@ int VerifyOnWorkerThread(const scoped_refptr<CertVerifyProc>& verify_proc,
   return error;
 }
 
+class MockSystemTrustStore : public SystemTrustStore {
+ public:
+  TrustStore* GetTrustStore() override { return &trust_store_; }
+
+  bool UsesSystemTrustStore() const override { return false; }
+
+  bool IsKnownRoot(const ParsedCertificate* trust_anchor) const override {
+    return mock_is_known_root_;
+  }
+
+  void AddTrustStore(TrustStore* store) { trust_store_.AddTrustStore(store); }
+
+  void SetMockIsKnownRoot(bool is_known_root) {
+    mock_is_known_root_ = is_known_root;
+  }
+
+#if BUILDFLAG(CHROME_ROOT_STORE_SUPPORTED)
+  int64_t chrome_root_store_version() override { return 0; }
+#endif
+
+ private:
+  TrustStoreCollection trust_store_;
+  bool mock_is_known_root_ = false;
+};
+
+class BlockingTrustStore : public TrustStore {
+ public:
+  CertificateTrust GetTrust(const ParsedCertificate* cert,
+                            base::SupportsUserData* debug_data) const override {
+    return backing_trust_store_.GetTrust(cert, debug_data);
+  }
+
+  void SyncGetIssuersOf(const ParsedCertificate* cert,
+                        ParsedCertificateList* issuers) override {
+    sync_get_issuer_started_event_.Signal();
+    sync_get_issuer_ok_to_finish_event_.Wait();
+
+    backing_trust_store_.SyncGetIssuersOf(cert, issuers);
+  }
+
+  base::WaitableEvent sync_get_issuer_started_event_;
+  base::WaitableEvent sync_get_issuer_ok_to_finish_event_;
+  TrustStoreInMemory backing_trust_store_;
+};
+
 }  // namespace
 
 class CertVerifyProcBuiltinTest : public ::testing::Test {
@@ -86,10 +163,12 @@ class CertVerifyProcBuiltinTest : public ::testing::Test {
 
   void SetUp() override {
     cert_net_fetcher_ = base::MakeRefCounted<CertNetFetcherURLRequest>();
-    verify_proc_ = CreateCertVerifyProcBuiltin(cert_net_fetcher_,
-                                               CreateEmptySystemTrustStore());
+    auto mock_system_trust_store = std::make_unique<MockSystemTrustStore>();
+    mock_system_trust_store_ = mock_system_trust_store.get();
+    verify_proc_ = CreateCertVerifyProcBuiltin(
+        cert_net_fetcher_, std::move(mock_system_trust_store));
 
-    context_ = std::make_unique<net::TestURLRequestContext>();
+    context_ = CreateTestURLRequestContextBuilder()->Build();
 
     cert_net_fetcher_->SetURLRequestContext(context_.get());
   }
@@ -116,17 +195,54 @@ class CertVerifyProcBuiltinTest : public ::testing::Test {
   base::test::TaskEnvironment& task_environment() { return task_environment_; }
 
   void CreateChain(std::unique_ptr<CertBuilder>* out_leaf,
+                   std::unique_ptr<CertBuilder>* out_root) {
+    CertBuilder::CreateSimpleChain(out_leaf, out_root);
+    ASSERT_TRUE(*out_leaf && *out_root);
+    // This test uses MOCK_TIME, so need to set the cert validity dates based
+    // on whatever the mock time happens to start at.
+    base::Time not_before = base::Time::Now() - base::Days(1);
+    base::Time not_after = base::Time::Now() + base::Days(10);
+    (*out_leaf)->SetValidity(not_before, not_after);
+    (*out_root)->SetValidity(not_before, not_after);
+  }
+
+  void CreateChain(std::unique_ptr<CertBuilder>* out_leaf,
                    std::unique_ptr<CertBuilder>* out_intermediate,
                    std::unique_ptr<CertBuilder>* out_root) {
     CertBuilder::CreateSimpleChain(out_leaf, out_intermediate, out_root);
     ASSERT_TRUE(*out_leaf && *out_intermediate && *out_root);
     // This test uses MOCK_TIME, so need to set the cert validity dates based
     // on whatever the mock time happens to start at.
-    base::Time not_before = base::Time::Now() - base::TimeDelta::FromDays(1);
-    base::Time not_after = base::Time::Now() + base::TimeDelta::FromDays(10);
+    base::Time not_before = base::Time::Now() - base::Days(1);
+    base::Time not_after = base::Time::Now() + base::Days(10);
     (*out_leaf)->SetValidity(not_before, not_after);
     (*out_intermediate)->SetValidity(not_before, not_after);
     (*out_root)->SetValidity(not_before, not_after);
+  }
+
+  // Creates a CRL issued and signed by |crl_issuer|, marking |revoked_serials|
+  // as revoked, and registers it to be served by the test server.
+  // Returns the full URL to retrieve the CRL from the test server.
+  GURL CreateAndServeCrl(EmbeddedTestServer* test_server,
+                         CertBuilder* crl_issuer,
+                         const std::vector<uint64_t>& revoked_serials,
+                         DigestAlgorithm digest = DigestAlgorithm::Sha256) {
+    std::string crl = BuildCrl(crl_issuer->GetSubject(), crl_issuer->GetKey(),
+                               revoked_serials, digest);
+    std::string crl_path = MakeRandomPath(".crl");
+    test_server->RegisterRequestHandler(
+        base::BindRepeating(&test_server::HandlePrefixedRequest, crl_path,
+                            base::BindRepeating(ServeResponse, HTTP_OK,
+                                                "application/pkix-crl", crl)));
+    return test_server->GetURL(crl_path);
+  }
+
+  void AddTrustStore(TrustStore* store) {
+    mock_system_trust_store_->AddTrustStore(store);
+  }
+
+  void SetMockIsKnownRoot(bool is_known_root) {
+    mock_system_trust_store_->SetMockIsKnownRoot(is_known_root);
   }
 
  private:
@@ -136,7 +252,8 @@ class CertVerifyProcBuiltinTest : public ::testing::Test {
   };
 
   CertVerifier::Config config_;
-  std::unique_ptr<net::TestURLRequestContext> context_;
+  std::unique_ptr<net::URLRequestContext> context_;
+  raw_ptr<MockSystemTrustStore> mock_system_trust_store_ = nullptr;
   scoped_refptr<CertVerifyProc> verify_proc_;
   scoped_refptr<CertNetFetcherURLRequest> cert_net_fetcher_;
 };
@@ -160,6 +277,56 @@ TEST_F(CertVerifyProcBuiltinTest, SimpleSuccess) {
   EXPECT_THAT(error, IsOk());
 }
 
+TEST_F(CertVerifyProcBuiltinTest, CRLNotCheckedForKnownRoots) {
+  std::unique_ptr<CertBuilder> leaf, root;
+  CreateChain(&leaf, &root);
+  ASSERT_TRUE(leaf && root);
+
+  EmbeddedTestServer test_server(EmbeddedTestServer::TYPE_HTTP);
+  ASSERT_TRUE(test_server.InitializeAndListen());
+
+  // CRL that marks leaf as revoked.
+  leaf->SetCrlDistributionPointUrl(
+      CreateAndServeCrl(&test_server, root.get(), {leaf->GetSerialNumber()}));
+
+  test_server.StartAcceptingConnections();
+
+  scoped_refptr<X509Certificate> chain = leaf->GetX509CertificateChain();
+  ASSERT_TRUE(chain.get());
+
+  NetLogSource verify_net_log_source;
+
+  {
+    CertVerifyResult verify_result;
+    TestCompletionCallback verify_callback;
+    Verify(chain.get(), "www.example.com",
+           CertVerifyProc::VERIFY_REV_CHECKING_ENABLED,
+           /*additional_trust_anchors=*/{root->GetX509Certificate()},
+           &verify_result, &verify_net_log_source, verify_callback.callback());
+
+    int error = verify_callback.WaitForResult();
+    EXPECT_THAT(error, IsError(ERR_CERT_REVOKED));
+    EXPECT_TRUE(verify_result.cert_status & CERT_STATUS_REV_CHECKING_ENABLED);
+  }
+
+  {
+    // Pretend the root is a known root.
+    SetMockIsKnownRoot(true);
+    CertVerifyResult verify_result;
+    TestCompletionCallback verify_callback;
+    Verify(chain.get(), "www.example.com",
+           CertVerifyProc::VERIFY_REV_CHECKING_ENABLED,
+           /*additional_trust_anchors=*/{root->GetX509Certificate()},
+           &verify_result, &verify_net_log_source, verify_callback.callback());
+
+    int error = verify_callback.WaitForResult();
+    // CRLs are not checked for chains issued by known roots, so verification
+    // should be successful.
+    EXPECT_THAT(error, IsOk());
+    EXPECT_TRUE(verify_result.cert_status & CERT_STATUS_REV_CHECKING_ENABLED);
+  }
+}
+
 // Tests that if the verification deadline is exceeded during revocation
 // checking, additional CRL fetches will not be attempted.
 TEST_F(CertVerifyProcBuiltinTest, RevocationCheckDeadlineCRL) {
@@ -169,7 +336,7 @@ TEST_F(CertVerifyProcBuiltinTest, RevocationCheckDeadlineCRL) {
 
   const base::TimeDelta timeout_increment =
       CertNetFetcherURLRequest::GetDefaultTimeoutForTesting() +
-      base::TimeDelta::FromMilliseconds(1);
+      base::Milliseconds(1);
   const int expected_request_count =
       base::ClampFloor(GetCertVerifyProcBuiltinTimeLimitForTesting() /
                        timeout_increment) +
@@ -242,7 +409,7 @@ TEST_F(CertVerifyProcBuiltinTest, RevocationCheckDeadlineOCSP) {
 
   const base::TimeDelta timeout_increment =
       CertNetFetcherURLRequest::GetDefaultTimeoutForTesting() +
-      base::TimeDelta::FromMilliseconds(1);
+      base::Milliseconds(1);
   const int expected_request_count =
       base::ClampFloor(GetCertVerifyProcBuiltinTimeLimitForTesting() /
                        timeout_increment) +
@@ -321,7 +488,7 @@ TEST_F(CertVerifyProcBuiltinTest, EVRevocationCheckDeadline) {
 
   const base::TimeDelta timeout_increment =
       CertNetFetcherURLRequest::GetDefaultTimeoutForTesting() +
-      base::TimeDelta::FromMilliseconds(1);
+      base::Milliseconds(1);
   const int expected_request_count =
       base::ClampFloor(GetCertVerifyProcBuiltinTimeLimitForTesting() /
                        timeout_increment) +
@@ -437,6 +604,53 @@ TEST_F(CertVerifyProcBuiltinTest, EVRevocationCheckDeadline) {
   EXPECT_EQ(true, event->params.FindBoolKey("has_valid_path"));
 }
 #endif  // defined(PLATFORM_USES_CHROMIUM_EV_METADATA)
+
+TEST_F(CertVerifyProcBuiltinTest, DeadlineExceededDuringSyncGetIssuers) {
+  std::unique_ptr<CertBuilder> leaf, intermediate, root;
+  CreateChain(&leaf, &intermediate, &root);
+  ASSERT_TRUE(leaf && intermediate && root);
+
+  BlockingTrustStore trust_store;
+  AddTrustStore(&trust_store);
+
+  auto intermediate_parsed_cert =
+      ParsedCertificate::Create(intermediate->DupCertBuffer(), {}, nullptr);
+  ASSERT_TRUE(intermediate_parsed_cert);
+  trust_store.backing_trust_store_.AddCertificateWithUnspecifiedTrust(
+      intermediate_parsed_cert);
+
+  scoped_refptr<X509Certificate> chain = leaf->GetX509Certificate();
+  ASSERT_TRUE(chain.get());
+
+  CertVerifyResult verify_result;
+  NetLogSource verify_net_log_source;
+  TestCompletionCallback verify_callback;
+  Verify(chain.get(), "www.example.com",
+         /*flags=*/0,
+         /*additional_trust_anchors=*/{root->GetX509Certificate()},
+         &verify_result, &verify_net_log_source, verify_callback.callback());
+
+  // Wait for trust_store.SyncGetIssuersOf to be called.
+  trust_store.sync_get_issuer_started_event_.Wait();
+
+  // Advance the clock past the verifier deadline.
+  const base::TimeDelta timeout_increment =
+      GetCertVerifyProcBuiltinTimeLimitForTesting() + base::Milliseconds(1);
+  task_environment().AdvanceClock(timeout_increment);
+
+  // Signal trust_store.SyncGetIssuersOf to finish.
+  trust_store.sync_get_issuer_ok_to_finish_event_.Signal();
+
+  int error = verify_callback.WaitForResult();
+  // Because the deadline was reached while retrieving the intermediate, path
+  // building should have stopped there and not found the root. The partial
+  // path built up to that point should be returned, and the error should be
+  // CERT_AUTHORITY_INVALID.
+  EXPECT_THAT(error, IsError(ERR_CERT_AUTHORITY_INVALID));
+  ASSERT_EQ(1u, verify_result.verified_cert->intermediate_buffers().size());
+  EXPECT_EQ(intermediate->GetCertBuffer(),
+            verify_result.verified_cert->intermediate_buffers()[0].get());
+}
 
 TEST_F(CertVerifyProcBuiltinTest, DebugData) {
   std::unique_ptr<CertBuilder> leaf, intermediate, root;

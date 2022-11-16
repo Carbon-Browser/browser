@@ -21,7 +21,7 @@ const EXPECTED_AUTOCOMPLETE_LIST = [
 /**
  * Expected files shown in the search results for 'hello'
  *
- * @type {Array<TestEntryInfo>}
+ * @type {!Array<!TestEntryInfo>}
  * @const
  */
 const SEARCH_RESULTS_ENTRY_SET = [
@@ -434,7 +434,7 @@ testcase.drivePinFileMobileNetwork = async () => {
     name: 'clickNotificationButton',
     extensionId: FILE_MANAGER_EXTENSIONS_ID,
     notificationId: 'disabled-mobile-sync',
-    index: 0
+    index: 0,
   });
   await repeatUntil(async () => {
     const preferences =
@@ -831,27 +831,27 @@ testcase.driveWelcomeBanner = async () => {
   // Open Files app on Drive.
   const appId = await setupAndWaitUntilReady(RootPath.DRIVE, []);
 
+  await remoteCall.isolateBannerForTesting(appId, 'drive-welcome-banner');
+  const driveWelcomeBannerQuery = '#banners > drive-welcome-banner';
+  const driveWelcomeBannerDismissButtonQuery = [
+    '#banners > drive-welcome-banner',
+    'educational-banner',
+    '#dismiss-button',
+  ];
+
   // Open the Drive volume in the files-list.
   chrome.test.assertTrue(await remoteCall.callRemoteTestUtil(
       'fakeMouseClick', appId, ['.drive-volume']));
 
   // Check: the Drive welcome banner should appear.
-  await remoteCall.waitForElement(appId, '.drive-welcome-wrapper');
+  await remoteCall.waitForElement(appId, driveWelcomeBannerQuery);
 
   // Close the Drive welcome banner.
-  chrome.test.assertTrue(await remoteCall.callRemoteTestUtil(
-      'fakeMouseClick', appId, ['cr-button.banner-close']));
+  await remoteCall.waitAndClickElement(
+      appId, driveWelcomeBannerDismissButtonQuery);
 
-  // Check: the Drive banner should close.
-  const caller = getCaller();
-  await repeatUntil(async () => {
-    const banner = await remoteCall.waitForElementStyles(
-        appId, '.drive-welcome', ['visibility']);
-
-    if (banner.styles.visibility !== 'hidden') {
-      return pending(caller, 'Welcome banner is still visible.');
-    }
-  });
+  await remoteCall.waitForElement(
+      appId, '#banners > drive-welcome-banner[hidden]');
 };
 
 /**
@@ -862,20 +862,29 @@ testcase.driveOfflineInfoBanner = async () => {
   // Open Files app on Drive.
   const appId = await setupAndWaitUntilReady(RootPath.DRIVE, []);
 
+  await remoteCall.isolateBannerForTesting(
+      appId, 'drive-offline-pinning-banner');
+  const driveOfflineBannerShownQuery =
+      '#banners > drive-offline-pinning-banner:not([hidden])';
+  const driveOfflineBannerHiddenQuery =
+      '#banners > drive-offline-pinning-banner[hidden]';
+  const driveOfflineLearnMoreLinkQuery =
+      ['#banners > drive-offline-pinning-banner', '[slot="extra-button"]'];
+
   // Check: the Drive Offline info banner should appear.
-  await remoteCall.waitForElement(appId, '#offline-info-banner:not([hidden])');
+  await remoteCall.waitForElement(appId, driveOfflineBannerShownQuery);
 
   // Click on the 'Learn more' button.
-  await remoteCall.waitAndClickElement(appId, '#offline-learn-more');
+  await remoteCall.waitAndClickElement(appId, driveOfflineLearnMoreLinkQuery);
 
   // Check: the Drive offline info banner should disappear.
-  await remoteCall.waitForElement(appId, '#offline-info-banner[hidden]');
+  await remoteCall.waitForElement(appId, driveOfflineBannerHiddenQuery);
 
   // Navigate to a different directory within Drive.
   await navigateWithDirectoryTree(appId, '/My Drive/photos');
 
   // Check: the Drive offline info banner should stay hidden.
-  await remoteCall.waitForElement(appId, '#offline-info-banner[hidden]');
+  await remoteCall.waitForElement(appId, driveOfflineBannerHiddenQuery);
 };
 
 /**
@@ -886,9 +895,13 @@ testcase.driveOfflineInfoBannerWithoutFlag = async () => {
   // Open Files app on Drive.
   const appId = await setupAndWaitUntilReady(RootPath.DRIVE, []);
 
+  await remoteCall.isolateBannerForTesting(
+      appId, 'drive-offline-pinning-banner');
+  const driveOfflineInfoBannerHiddenQuery =
+      '#banners > drive-offline-pinning-banner';
+
   // Check: the Drive Offline info banner should not appear.
-  await remoteCall.waitForElementLost(
-      appId, '#offline-info-banner:not([hidden])');
+  await remoteCall.waitForElementLost(appId, driveOfflineInfoBannerHiddenQuery);
 };
 
 /**
@@ -947,7 +960,7 @@ testcase.driveEnableDocsOfflineDialogWithoutWindow = async () => {
     name: 'clickNotificationButton',
     extensionId: FILE_MANAGER_EXTENSIONS_ID,
     notificationId: 'enable-docs-offline',
-    index: 1
+    index: 1,
   });
 
   // Check: the last dialog result should be 1 (accept).
@@ -964,7 +977,7 @@ testcase.driveEnableDocsOfflineDialogWithoutWindow = async () => {
     name: 'clickNotificationButton',
     extensionId: FILE_MANAGER_EXTENSIONS_ID,
     notificationId: 'enable-docs-offline',
-    index: 0
+    index: 0,
   });
 
   // Check: the last dialog result should be 2 (reject).

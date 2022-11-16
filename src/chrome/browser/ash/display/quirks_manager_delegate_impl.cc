@@ -28,7 +28,7 @@ std::string QuirksManagerDelegateImpl::GetApiKey() const {
 base::FilePath QuirksManagerDelegateImpl::GetDisplayProfileDirectory() const {
   base::FilePath directory;
   if (base::SysInfo::IsRunningOnChromeOS()) {
-    base::PathService::Get(chromeos::DIR_DEVICE_DISPLAY_PROFILES, &directory);
+    base::PathService::Get(ash::DIR_DEVICE_DISPLAY_PROFILES, &directory);
   } else {
     base::PathService::Get(chrome::DIR_USER_DATA, &directory);
     directory = directory.Append(kUserDataDisplayProfilesDirectory);
@@ -38,7 +38,7 @@ base::FilePath QuirksManagerDelegateImpl::GetDisplayProfileDirectory() const {
 
 bool QuirksManagerDelegateImpl::DevicePolicyEnabled() const {
   bool quirks_enabled = true;
-  ash::CrosSettings::Get()->GetBoolean(chromeos::kDeviceQuirksDownloadEnabled,
+  ash::CrosSettings::Get()->GetBoolean(ash::kDeviceQuirksDownloadEnabled,
                                        &quirks_enabled);
   return quirks_enabled;
 }

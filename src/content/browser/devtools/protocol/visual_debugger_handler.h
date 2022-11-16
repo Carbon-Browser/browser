@@ -5,7 +5,6 @@
 #ifndef CONTENT_BROWSER_DEVTOOLS_PROTOCOL_VISUAL_DEBUGGER_HANDLER_H_
 #define CONTENT_BROWSER_DEVTOOLS_PROTOCOL_VISUAL_DEBUGGER_HANDLER_H_
 
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "content/browser/devtools/protocol/browser.h"
 #include "content/browser/devtools/protocol/devtools_domain_handler.h"
@@ -25,7 +24,7 @@ class VisualDebuggerHandler : public DevToolsDomainHandler,
   void Wire(UberDispatcher* dispatcher) override;
 
   DispatchResponse FilterStream(
-      std::unique_ptr<protocol::DictionaryValue> in_filter) override;
+      std::unique_ptr<base::Value::Dict> in_filter) override;
 
   DispatchResponse StartStream() override;
   DispatchResponse StopStream() override;

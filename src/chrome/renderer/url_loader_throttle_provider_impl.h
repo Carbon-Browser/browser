@@ -2,9 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
-// This source code is a part of ABP Chromium.
+// This source code is a part of eyeo Chromium SDK.
 // Use of this source code is governed by the GPLv3 that can be found in the
-// docs_abp/LICENSE file.
+// components/adblock/LICENSE file.
 
 #ifndef CHROME_RENDERER_URL_LOADER_THROTTLE_PROVIDER_IMPL_H_
 #define CHROME_RENDERER_URL_LOADER_THROTTLE_PROVIDER_IMPL_H_
@@ -35,6 +35,9 @@ class URLLoaderThrottleProviderImpl : public blink::URLLoaderThrottleProvider {
       blink::URLLoaderThrottleProviderType type,
       ChromeContentRendererClient* chrome_content_renderer_client);
 
+  URLLoaderThrottleProviderImpl& operator=(
+      const URLLoaderThrottleProviderImpl&) = delete;
+
   ~URLLoaderThrottleProviderImpl() override;
 
   // blink::URLLoaderThrottleProvider implementation.
@@ -44,7 +47,7 @@ class URLLoaderThrottleProviderImpl : public blink::URLLoaderThrottleProvider {
       const blink::WebURLRequest& request) override;
   void SetOnline(bool is_online) override;
 
-  // ABP: Changed private to protected to allow
+  // eyeo Chromium SDK: Changed private to protected to allow
   // AdblockURLLoaderThrottleProviderImpl to reuse copy ctor.
  protected:
   // This copy constructor works in conjunction with Clone(), not intended for
@@ -63,8 +66,6 @@ class URLLoaderThrottleProviderImpl : public blink::URLLoaderThrottleProvider {
 #endif
 
   THREAD_CHECKER(thread_checker_);
-
-  DISALLOW_ASSIGN(URLLoaderThrottleProviderImpl);
 };
 
 #endif  // CHROME_RENDERER_URL_LOADER_THROTTLE_PROVIDER_IMPL_H_

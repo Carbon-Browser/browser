@@ -50,9 +50,9 @@ absl::optional<AppActivity::ActiveTime> AppActivityFromDict(
   }
 
   base::Time active_from_time = base::Time::FromDeltaSinceWindowsEpoch(
-      base::TimeDelta::FromMicroseconds(active_from_microseconds));
+      base::Microseconds(active_from_microseconds));
   base::Time active_to_time = base::Time::FromDeltaSinceWindowsEpoch(
-      base::TimeDelta::FromMicroseconds(active_to_microseconds));
+      base::Microseconds(active_to_microseconds));
 
   return AppActivity::ActiveTime(active_from_time, active_to_time);
 }
@@ -80,7 +80,7 @@ std::vector<AppActivity::ActiveTime> AppActiveTimesFromList(
     return active_times;
   }
 
-  base::Value::ConstListView list_view = list->GetList();
+  base::Value::ConstListView list_view = list->GetListDeprecated();
 
   for (const auto& value : list_view) {
     absl::optional<AppActivity::ActiveTime> entry = AppActivityFromDict(value);
@@ -132,10 +132,9 @@ absl::optional<PersistedAppInfo> PersistedAppInfo::PersistedAppInfoFromDict(
     active_times = AppActiveTimesFromList(list);
   }
 
-  return PersistedAppInfo(
-      app_id.value(), state.value(),
-      base::TimeDelta::FromMicroseconds(running_active_time_int),
-      std::move(active_times));
+  return PersistedAppInfo(app_id.value(), state.value(),
+                          base::Microseconds(running_active_time_int),
+                          std::move(active_times));
 }
 
 // static
@@ -146,7 +145,7 @@ std::vector<PersistedAppInfo> PersistedAppInfo::PersistedAppInfosFromList(
   if (!value || !value->is_list())
     return apps_info;
 
-  base::Value::ConstListView list_view = value->GetList();
+  base::Value::ConstListView list_view = value->GetListDeprecated();
 
   for (const auto& per_app_info : list_view) {
     absl::optional<PersistedAppInfo> info =
@@ -248,7 +247,7 @@ void PersistedAppInfo::UpdateAppActivityPreference(
 
   // If the last entry in |value| can be merged with the first entry in
   // |active_times_| merge them.
-  base::Value::ListView list_view = value->GetList();
+  base::Value::ListView list_view = value->GetListDeprecated();
   if (list_view.size() > 0) {
     base::Value& mergeable_entry = list_view[list_view.size() - 1];
     absl::optional<AppActivity::ActiveTime> active_time =
@@ -285,8 +284,7 @@ void PersistedAppInfo::RemoveActiveTimeEarlierThan(base::Time timestamp) {
 
 bool PersistedAppInfo::ShouldRestoreApp() const {
   bool is_installed = app_state() != AppState::kUninstalled;
-  bool has_active_running_time =
-      active_running_time() > base::TimeDelta::FromSeconds(0);
+  bool has_active_running_time = active_running_time() > base::Seconds(0);
   return is_installed || has_active_running_time;
 }
 

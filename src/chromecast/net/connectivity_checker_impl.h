@@ -8,7 +8,6 @@
 #include <memory>
 
 #include "base/cancelable_callback.h"
-#include "base/macros.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chromecast/base/metrics/cast_metrics_helper.h"
@@ -73,6 +72,19 @@ class ConnectivityCheckerImpl
       network::NetworkConnectionTracker* network_connection_tracker,
       TimeSyncTracker* time_sync_tracker);
 
+  // Connectivity checking and initialization will run on task_runner.
+  static scoped_refptr<ConnectivityCheckerImpl> Create(
+      scoped_refptr<base::SingleThreadTaskRunner> task_runner,
+      std::unique_ptr<network::PendingSharedURLLoaderFactory>
+          pending_url_loader_factory,
+      network::NetworkConnectionTracker* network_connection_tracker,
+      base::TimeDelta disconnected_probe_period,
+      base::TimeDelta connected_probe_period,
+      TimeSyncTracker* time_sync_tracker);
+
+  ConnectivityCheckerImpl(const ConnectivityCheckerImpl&) = delete;
+  ConnectivityCheckerImpl& operator=(const ConnectivityCheckerImpl&) = delete;
+
   // ConnectivityChecker implementation:
   bool Connected() const override;
   void Check() override;
@@ -81,9 +93,11 @@ class ConnectivityCheckerImpl
       metrics::CastMetricsHelper* cast_metrics_helper);
 
  protected:
-  explicit ConnectivityCheckerImpl(
+  ConnectivityCheckerImpl(
       scoped_refptr<base::SingleThreadTaskRunner> task_runner,
       network::NetworkConnectionTracker* network_connection_tracker,
+      base::TimeDelta disconnected_probe_period,
+      base::TimeDelta connected_probe_period,
       TimeSyncTracker* time_sync_tracker);
   ~ConnectivityCheckerImpl() override;
 
@@ -145,10 +159,13 @@ class ConnectivityCheckerImpl
   // called.
   base::CancelableOnceCallback<void()> timeout_;
 
+  // How often connectivity checks are performed while not connected.
+  const base::TimeDelta disconnected_probe_period_;
+  // How often connectivity checks are performed while connected.
+  const base::TimeDelta connected_probe_period_;
+
   base::WeakPtr<ConnectivityCheckerImpl> weak_this_;
   base::WeakPtrFactory<ConnectivityCheckerImpl> weak_factory_;
-
-  DISALLOW_COPY_AND_ASSIGN(ConnectivityCheckerImpl);
 };
 
 }  // namespace chromecast

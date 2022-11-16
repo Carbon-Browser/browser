@@ -22,7 +22,6 @@
 #include "content/browser/service_worker/service_worker_context_core.h"
 #include "content/browser/service_worker/service_worker_registration.h"
 #include "content/browser/storage_partition_impl.h"
-#include "content/common/service_worker/service_worker_utils.h"
 #include "content/public/browser/browser_thread.h"
 #include "third_party/blink/public/common/service_worker/service_worker_status_code.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
@@ -201,7 +200,8 @@ BackgroundFetchTestBase::CreateBackgroundFetchRegistrationData(
 
 scoped_refptr<DevToolsBackgroundServicesContextImpl>
 BackgroundFetchTestBase::devtools_context() {
-  return storage_partition()->GetDevToolsBackgroundServicesContext();
+  return static_cast<DevToolsBackgroundServicesContextImpl*>(
+      storage_partition()->GetDevToolsBackgroundServicesContext());
 }
 
 }  // namespace content

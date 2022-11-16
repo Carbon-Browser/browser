@@ -27,10 +27,14 @@ class GPURenderBundleEncoder : public DawnObject<WGPURenderBundleEncoder>,
  public:
   static GPURenderBundleEncoder* Create(
       GPUDevice* device,
-      const GPURenderBundleEncoderDescriptor* webgpu_desc);
+      const GPURenderBundleEncoderDescriptor* webgpu_desc,
+      ExceptionState& exception_state);
   explicit GPURenderBundleEncoder(
       GPUDevice* device,
       WGPURenderBundleEncoder render_bundle_encoder);
+
+  GPURenderBundleEncoder(const GPURenderBundleEncoder&) = delete;
+  GPURenderBundleEncoder& operator=(const GPURenderBundleEncoder&) = delete;
 
   // gpu_render_bundle_encoder.idl
   void setBindGroup(uint32_t index, DawnObject<WGPUBindGroup>* bindGroup) {
@@ -64,10 +68,23 @@ class GPURenderBundleEncoder : public DawnObject<WGPURenderBundleEncoder>,
 
   void setIndexBuffer(const DawnObject<WGPUBuffer>* buffer,
                       const V8GPUIndexFormat& format,
+                      uint64_t offset) {
+    GetProcs().renderBundleEncoderSetIndexBuffer(
+        GetHandle(), buffer->GetHandle(), AsDawnEnum(format), offset,
+        WGPU_WHOLE_SIZE);
+  }
+  void setIndexBuffer(const DawnObject<WGPUBuffer>* buffer,
+                      const V8GPUIndexFormat& format,
                       uint64_t offset,
                       uint64_t size) {
     GetProcs().renderBundleEncoderSetIndexBuffer(
         GetHandle(), buffer->GetHandle(), AsDawnEnum(format), offset, size);
+  }
+  void setVertexBuffer(uint32_t slot,
+                       const DawnObject<WGPUBuffer>* buffer,
+                       uint64_t offset) {
+    GetProcs().renderBundleEncoderSetVertexBuffer(
+        GetHandle(), slot, buffer->GetHandle(), offset, WGPU_WHOLE_SIZE);
   }
   void setVertexBuffer(uint32_t slot,
                        const DawnObject<WGPUBuffer>* buffer,
@@ -105,8 +122,10 @@ class GPURenderBundleEncoder : public DawnObject<WGPURenderBundleEncoder>,
 
   GPURenderBundle* finish(const GPURenderBundleDescriptor* webgpu_desc);
 
- private:
-  DISALLOW_COPY_AND_ASSIGN(GPURenderBundleEncoder);
+  void setLabelImpl(const String& value) override {
+    std::string utf8_label = value.Utf8();
+    GetProcs().renderBundleEncoderSetLabel(GetHandle(), utf8_label.c_str());
+  }
 };
 
 }  // namespace blink

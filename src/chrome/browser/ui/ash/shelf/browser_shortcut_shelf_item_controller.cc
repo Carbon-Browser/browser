@@ -13,7 +13,7 @@
 #include "ash/wm/desks/desks_util.h"
 #include "base/metrics/user_metrics.h"
 #include "base/metrics/user_metrics_action.h"
-#include "chrome/browser/ash/full_restore/full_restore_service.h"
+#include "chrome/browser/ash/app_restore/full_restore_service.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/ash/ash_util.h"
 #include "chrome/browser/ui/ash/multi_user/multi_user_util.h"
@@ -31,6 +31,7 @@
 #include "chrome/common/extensions/extension_constants.h"
 #include "chrome/grit/generated_resources.h"
 #include "chrome/grit/theme_resources.h"
+#include "components/app_constants/constants.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/url_constants.h"
 #include "extensions/browser/extension_prefs.h"
@@ -79,7 +80,7 @@ bool ShouldRecordLaunchTime(Browser* browser, const ash::ShelfModel* model) {
 
 BrowserShortcutShelfItemController::BrowserShortcutShelfItemController(
     ash::ShelfModel* shelf_model)
-    : ash::ShelfItemDelegate(ash::ShelfID(extension_misc::kChromeAppId)),
+    : ash::ShelfItemDelegate(ash::ShelfID(app_constants::kChromeAppId)),
       shelf_model_(shelf_model) {
   BrowserList::AddObserver(this);
 }
@@ -170,7 +171,7 @@ BrowserShortcutShelfItemController::GetAppMenuItems(
     if (!(event_flags & ui::EF_SHIFT_DOWN)) {
       base::RecordAction(base::UserMetricsAction(
           "Shelf_BrowserShortcutShelfItem_ShowWindows"));
-      app_menu_items.push_back({browser, kNoTab});
+      app_menu_items.emplace_back(browser, kNoTab);
       auto* tab = tab_strip->GetActiveWebContents();
       const gfx::Image& icon =
           ui::ResourceBundle::GetSharedInstance().GetImageNamed(
@@ -184,7 +185,7 @@ BrowserShortcutShelfItemController::GetAppMenuItems(
           base::UserMetricsAction("Shelf_BrowserShortcutShelfItem_ShowTabs"));
       for (int i = 0; i < tab_strip->count(); ++i) {
         auto* tab = tab_strip->GetWebContentsAt(i);
-        app_menu_items.push_back({browser, i});
+        app_menu_items.emplace_back(browser, i);
         items.push_back({static_cast<int>(app_menu_items.size() - 1),
                          controller->GetAppMenuTitle(tab),
                          controller->GetAppMenuIcon(tab).AsImageSkia()});

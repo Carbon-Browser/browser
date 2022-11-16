@@ -19,7 +19,7 @@
 #include "media/audio/audio_device_description.h"
 #include "media/base/audio_renderer_mixer.h"
 #include "media/base/audio_renderer_mixer_input.h"
-#include "third_party/blink/public/web/modules/media/audio/web_audio_device_factory.h"
+#include "third_party/blink/public/web/modules/media/audio/audio_device_factory.h"
 #include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
 
 namespace {
@@ -115,14 +115,6 @@ AudioRendererMixerManager::~AudioRendererMixerManager() {
   // References to AudioRendererMixers may be owned by garbage collected
   // objects.  During process shutdown they may be leaked, so, transitively,
   // |mixers_| may leak (i.e., may be non-empty at this time) as well.
-}
-
-// static
-AudioRendererMixerManager& AudioRendererMixerManager::GetInstance() {
-  DEFINE_THREAD_SAFE_STATIC_LOCAL(
-      AudioRendererMixerManager, instance,
-      (base::BindRepeating(&WebAudioDeviceFactory::NewAudioRendererMixerSink)));
-  return instance;
 }
 
 scoped_refptr<media::AudioRendererMixerInput>

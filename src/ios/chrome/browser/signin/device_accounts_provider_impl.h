@@ -9,7 +9,6 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
 #include "components/signin/public/identity_manager/ios/device_accounts_provider.h"
 
 class ChromeAccountManagerService;
@@ -19,6 +18,11 @@ class DeviceAccountsProviderImpl : public DeviceAccountsProvider {
  public:
   explicit DeviceAccountsProviderImpl(
       ChromeAccountManagerService* account_manager_service);
+
+  DeviceAccountsProviderImpl(const DeviceAccountsProviderImpl&) = delete;
+  DeviceAccountsProviderImpl& operator=(const DeviceAccountsProviderImpl&) =
+      delete;
+
   ~DeviceAccountsProviderImpl() override;
 
   // ios::DeviceAccountsProvider
@@ -33,8 +37,6 @@ class DeviceAccountsProviderImpl : public DeviceAccountsProvider {
 
  private:
   ChromeAccountManagerService* account_manager_service_ = nullptr;
-
-  DISALLOW_COPY_AND_ASSIGN(DeviceAccountsProviderImpl);
 };
 
 #endif  // IOS_CHROME_BROWSER_SIGNIN_DEVICE_ACCOUNTS_PROVIDER_IMPL_H_

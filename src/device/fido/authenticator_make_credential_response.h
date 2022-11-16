@@ -11,8 +11,8 @@
 #include <vector>
 
 #include "base/component_export.h"
+#include "base/containers/flat_set.h"
 #include "base/containers/span.h"
-#include "base/macros.h"
 #include "device/fido/attestation_object.h"
 #include "device/fido/fido_constants.h"
 #include "device/fido/fido_transport_protocol.h"
@@ -39,6 +39,12 @@ class COMPONENT_EXPORT(DEVICE_FIDO) AuthenticatorMakeCredentialResponse {
       AuthenticatorMakeCredentialResponse&& that);
   AuthenticatorMakeCredentialResponse& operator=(
       AuthenticatorMakeCredentialResponse&& other);
+
+  AuthenticatorMakeCredentialResponse(
+      const AuthenticatorMakeCredentialResponse&) = delete;
+  AuthenticatorMakeCredentialResponse& operator=(
+      const AuthenticatorMakeCredentialResponse&) = delete;
+
   ~AuthenticatorMakeCredentialResponse();
 
   std::vector<uint8_t> GetCBOREncodedAttestationObject() const;
@@ -91,6 +97,10 @@ class COMPONENT_EXPORT(DEVICE_FIDO) AuthenticatorMakeCredentialResponse {
   // |AuthenticatorCommon| based on enterprise policy.
   bool attestation_should_be_filtered = false;
 
+  // transports contains the full set of transports supported by the
+  // authenticator, if known.
+  absl::optional<base::flat_set<FidoTransportProtocol>> transports;
+
  private:
   AttestationObject attestation_object_;
 
@@ -102,8 +112,6 @@ class COMPONENT_EXPORT(DEVICE_FIDO) AuthenticatorMakeCredentialResponse {
   // returned if the credential is created with the largeBlobKey extension on a
   // capable authenticator.
   absl::optional<std::array<uint8_t, kLargeBlobKeyLength>> large_blob_key_;
-
-  DISALLOW_COPY_AND_ASSIGN(AuthenticatorMakeCredentialResponse);
 };
 
 // Through cbor::Writer, produces a CTAP style CBOR-encoded byte array

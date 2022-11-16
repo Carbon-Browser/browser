@@ -9,6 +9,7 @@
 #include <utility>
 
 #include "base/bind.h"
+#include "chrome/browser/ui/color/chrome_color_id.h"
 #include "chrome/browser/ui/layout_constants.h"
 #include "chrome/browser/ui/omnibox/omnibox_theme.h"
 #include "ui/accessibility/ax_node_data.h"
@@ -19,8 +20,8 @@
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/geometry/rect.h"
+#include "ui/gfx/geometry/skia_conversions.h"
 #include "ui/gfx/scoped_canvas.h"
-#include "ui/gfx/skia_util.h"
 #include "ui/views/accessibility/ax_virtual_view.h"
 #include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/animation/flood_fill_ink_drop_ripple.h"
@@ -34,6 +35,7 @@
 #include "ui/views/controls/focus_ring.h"
 #include "ui/views/controls/highlight_path_generator.h"
 #include "ui/views/controls/image_view.h"
+#include "ui/views/style/platform_style.h"
 #include "ui/views/widget/widget.h"
 
 namespace {
@@ -112,7 +114,7 @@ void IconLabelBubbleView::SeparatorView::UpdateOpacity() {
   }
 
   ui::ScopedLayerAnimationSettings animation(layer()->GetAnimator());
-  animation.SetTransitionDuration(base::TimeDelta::FromMilliseconds(duration));
+  animation.SetTransitionDuration(base::Milliseconds(duration));
   animation.SetTweenType(gfx::Tween::Type::EASE_IN);
   layer()->SetOpacity(opacity);
 }
@@ -127,13 +129,13 @@ class IconLabelBubbleView::HighlightPathGenerator
  public:
   HighlightPathGenerator() = default;
 
+  HighlightPathGenerator(const HighlightPathGenerator&) = delete;
+  HighlightPathGenerator& operator=(const HighlightPathGenerator&) = delete;
+
   // views::HighlightPathGenerator:
   SkPath GetHighlightPath(const views::View* view) override {
     return static_cast<const IconLabelBubbleView*>(view)->GetHighlightPath();
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(HighlightPathGenerator);
 };
 
 IconLabelBubbleView::IconLabelBubbleView(const gfx::FontList& font_list,
@@ -147,10 +149,8 @@ IconLabelBubbleView::IconLabelBubbleView(const gfx::FontList& font_list,
 
   separator_view_->SetVisible(ShouldShowSeparator());
 
-  views::InkDrop::Get(this)->SetVisibleOpacity(
-      GetOmniboxStateOpacity(OmniboxPartState::SELECTED));
-  views::InkDrop::Get(this)->SetHighlightOpacity(
-      GetOmniboxStateOpacity(OmniboxPartState::HOVERED));
+  views::InkDrop::Get(this)->SetVisibleOpacity(kOmniboxOpacitySelected);
+  views::InkDrop::Get(this)->SetHighlightOpacity(kOmniboxOpacityHovered);
 
   views::InkDrop::Get(this)->SetCreateInkDropCallback(base::BindRepeating(
       [](IconLabelBubbleView* host) {
@@ -170,7 +170,7 @@ IconLabelBubbleView::IconLabelBubbleView(const gfx::FontList& font_list,
 
   views::HighlightPathGenerator::Install(
       this, std::make_unique<HighlightPathGenerator>());
-  SetFocusBehavior(FocusBehavior::ACCESSIBLE_ONLY);
+  SetFocusBehavior(views::PlatformStyle::kDefaultFocusBehavior);
 
   UpdateBorder();
 
@@ -201,6 +201,12 @@ bool IconLabelBubbleView::ShouldShowLabel() const {
   return label()->GetVisible() && !label()->GetText().empty();
 }
 
+void IconLabelBubbleView::SetPaintLabelOverSolidBackground(
+    bool paint_label_over_solid_backround) {
+  paint_label_over_solid_backround_ = paint_label_over_solid_backround;
+  UpdateBackground();
+}
+
 void IconLabelBubbleView::SetLabel(const std::u16string& label_text) {
   SetAccessibleName(label_text);
   label()->SetText(label_text);
@@ -219,6 +225,15 @@ SkColor IconLabelBubbleView::GetForegroundColor() const {
 void IconLabelBubbleView::UpdateLabelColors() {
   SetEnabledTextColors(GetForegroundColor());
   label()->SetBackgroundColor(delegate_->GetIconLabelBubbleBackgroundColor());
+}
+
+void IconLabelBubbleView::UpdateBackground() {
+  // If the label is showing we must ensure the icon label is painted over a
+  // solid background.
+  SetBackground(paint_label_over_solid_backround_ && ShouldShowLabel()
+                    ? views::CreateThemedRoundedRectBackground(
+                          kColorToolbar, GetPreferredSize().height())
+                    : nullptr);
 }
 
 bool IconLabelBubbleView::ShouldShowSeparator() const {
@@ -312,7 +327,8 @@ void IconLabelBubbleView::Layout() {
   // The separator should be the same height as the icons.
   const int separator_height = GetLayoutConstant(LOCATION_BAR_ICON_SIZE);
   gfx::Rect separator_bounds(label()->bounds());
-  separator_bounds.Inset(0, (separator_bounds.height() - separator_height) / 2);
+  separator_bounds.Inset(
+      gfx::Insets::VH((separator_bounds.height() - separator_height) / 2, 0));
 
   float separator_width =
       GetWidthBetweenIconAndSeparator() + GetEndPaddingWithSeparator();
@@ -384,6 +400,7 @@ void IconLabelBubbleView::AnimationEnded(const gfx::Animation* animation) {
   views::InkDrop::Get(this)->GetInkDrop()->SetShowHighlightOnHover(true);
   views::InkDrop::Get(this)->GetInkDrop()->SetShowHighlightOnFocus(
       !views::FocusRing::Get(this));
+  UpdateBackground();
 }
 
 void IconLabelBubbleView::AnimationProgressed(const gfx::Animation* animation) {
@@ -458,10 +475,10 @@ int IconLabelBubbleView::GetEndPaddingWithSeparator() const {
 
 void IconLabelBubbleView::SetUpForAnimation() {
   views::InkDrop::Get(this)->SetMode(views::InkDropHost::InkDropMode::ON);
-  SetFocusBehavior(FocusBehavior::ACCESSIBLE_ONLY);
+  SetFocusBehavior(views::PlatformStyle::kDefaultFocusBehavior);
   label()->SetElideBehavior(gfx::NO_ELIDE);
   label()->SetVisible(false);
-  slide_animation_.SetSlideDuration(base::TimeDelta::FromMilliseconds(150));
+  slide_animation_.SetSlideDuration(base::Milliseconds(150));
   open_state_fraction_ = 1.0;
 }
 
@@ -471,7 +488,7 @@ void IconLabelBubbleView::SetUpForInOutAnimation() {
   // statically showing the label (1800ms), and hiding the label (600ms). The
   // proportion of time spent in each portion of the animation is controlled by
   // kIconLabelBubbleOpenTimeFraction.
-  slide_animation_.SetSlideDuration(base::TimeDelta::FromMilliseconds(3000));
+  slide_animation_.SetSlideDuration(base::Milliseconds(3000));
   // The tween is calculated in GetWidthBetween().
   slide_animation_.SetTweenType(gfx::Tween::LINEAR);
   open_state_fraction_ = 0.2;
@@ -516,7 +533,7 @@ void IconLabelBubbleView::ResetSlideAnimation(bool show_label) {
 }
 
 void IconLabelBubbleView::ReduceAnimationTimeForTesting() {
-  slide_animation_.SetSlideDuration(base::TimeDelta::FromMilliseconds(1));
+  slide_animation_.SetSlideDuration(base::Milliseconds(1));
 }
 
 void IconLabelBubbleView::PauseAnimation() {
@@ -554,18 +571,21 @@ void IconLabelBubbleView::ShowAnimation() {
   slide_animation_.Show();
   views::InkDrop::Get(this)->GetInkDrop()->SetShowHighlightOnHover(false);
   views::InkDrop::Get(this)->GetInkDrop()->SetShowHighlightOnFocus(false);
+  UpdateBackground();
 }
 
 void IconLabelBubbleView::HideAnimation() {
   slide_animation_.Hide();
   views::InkDrop::Get(this)->GetInkDrop()->SetShowHighlightOnHover(false);
   views::InkDrop::Get(this)->GetInkDrop()->SetShowHighlightOnFocus(false);
+  UpdateBackground();
 }
 
 SkPath IconLabelBubbleView::GetHighlightPath() const {
   gfx::Rect highlight_bounds = GetLocalBounds();
   if (ShouldShowSeparator())
-    highlight_bounds.Inset(0, 0, GetEndPaddingWithSeparator(), 0);
+    highlight_bounds.Inset(
+        gfx::Insets::TLBR(0, 0, 0, GetEndPaddingWithSeparator()));
   highlight_bounds = GetMirroredRect(highlight_bounds);
 
   const float corner_radius = highlight_bounds.height() / 2.f;
@@ -579,9 +599,9 @@ void IconLabelBubbleView::UpdateBorder() {
   // child views in the location bar have the same height. The visible height of
   // the bubble should be smaller, so use an empty border to shrink down the
   // content bounds so the background gets painted correctly.
-  SetBorder(views::CreateEmptyBorder(
-      gfx::Insets(GetLayoutConstant(LOCATION_BAR_CHILD_INTERIOR_PADDING),
-                  GetLayoutInsets(LOCATION_BAR_ICON_INTERIOR_PADDING).left())));
+  SetBorder(views::CreateEmptyBorder(gfx::Insets::VH(
+      GetLayoutConstant(LOCATION_BAR_CHILD_INTERIOR_PADDING),
+      GetLayoutInsets(LOCATION_BAR_ICON_INTERIOR_PADDING).left())));
 }
 
 BEGIN_METADATA(IconLabelBubbleView, views::LabelButton)

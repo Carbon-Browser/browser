@@ -23,11 +23,21 @@ class WorkingSetTrimmerPolicyChromeOS;
 
 namespace mechanism {
 
+enum class ArcVmReclaimType {
+  kReclaimNone = 0,
+  kReclaimGuestPageCaches,
+  kReclaimAll,  // both guest page caches and shmem
+};
+
 // WorkingSetTrimmerChromeOS is the platform specific implementation of a
 // working set trimmer for ChromeOS. This class should not be used directly it
 // should be used via the WorkingSetTrimmer::GetInstance() method.
 class WorkingSetTrimmerChromeOS : public WorkingSetTrimmer {
  public:
+  WorkingSetTrimmerChromeOS(const WorkingSetTrimmerChromeOS&) = delete;
+  WorkingSetTrimmerChromeOS& operator=(const WorkingSetTrimmerChromeOS&) =
+      delete;
+
   ~WorkingSetTrimmerChromeOS() override;
 
   // WorkingSetTrimmer implementation:
@@ -38,6 +48,7 @@ class WorkingSetTrimmerChromeOS : public WorkingSetTrimmer {
   friend class base::NoDestructor<WorkingSetTrimmerChromeOS>;
   friend class policies::WorkingSetTrimmerPolicyChromeOS;
   friend class TestWorkingSetTrimmerChromeOS;
+  friend class MockWorkingSetTrimmerChromeOS;
   using TrimArcVmWorkingSetCallback =
       base::OnceCallback<void(bool result, const std::string& failure_reason)>;
 
@@ -50,8 +61,17 @@ class WorkingSetTrimmerChromeOS : public WorkingSetTrimmer {
 
   // Asks vm_concierge to trim ARCVM's memory in the same way as TrimWorkingSet.
   // The function must be called on the UI thread.
-  void TrimArcVmWorkingSet(TrimArcVmWorkingSetCallback callback);
-  void OnDropArcVmCaches(TrimArcVmWorkingSetCallback callback, bool result);
+  // |callback| is invoked upon completion.
+  // |page_limit| is the maximum number of pages to reclaim
+  //             (arc::ArcSession::kNoPageLimit for no limit)
+  // Note: made virtual to ease unit testing (redefine in derived mock).
+  virtual void TrimArcVmWorkingSet(TrimArcVmWorkingSetCallback callback,
+                                   ArcVmReclaimType reclaim_type,
+                                   int page_limit);
+  void OnDropArcVmCaches(TrimArcVmWorkingSetCallback callback,
+                         ArcVmReclaimType reclaim_type,
+                         int page_limit,
+                         bool result);
 
   // The constructor is made private to prevent instantiation of this class
   // directly, it should always be retrieved via
@@ -61,8 +81,6 @@ class WorkingSetTrimmerChromeOS : public WorkingSetTrimmer {
   content::BrowserContext* context_for_testing_ = nullptr;
 
   base::WeakPtrFactory<WorkingSetTrimmerChromeOS> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(WorkingSetTrimmerChromeOS);
 };
 
 }  // namespace mechanism

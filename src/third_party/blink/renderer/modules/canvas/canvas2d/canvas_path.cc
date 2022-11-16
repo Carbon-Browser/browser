@@ -41,14 +41,11 @@
 #include "third_party/blink/renderer/core/frame/web_feature.h"
 #include "third_party/blink/renderer/modules/canvas/canvas2d/identifiability_study_helper.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
-#include "third_party/blink/renderer/platform/geometry/float_rect.h"
 #include "third_party/blink/renderer/platform/transforms/affine_transform.h"
 #include "third_party/blink/renderer/platform/wtf/math_extras.h"
+#include "ui/gfx/geometry/rect_f.h"
 
 namespace blink {
-
-// TODO(crbug.com/940846): Consider using double-type without casting and
-// DoublePoint & DoubleRect instead of FloatPoint & FloatRect.
 
 void CanvasPath::closePath() {
   if (UNLIKELY(path_.IsEmpty()))
@@ -69,10 +66,10 @@ void CanvasPath::moveTo(double double_x, double double_y) {
                                                 double_y);
   }
   if (UNLIKELY(!IsTransformInvertible())) {
-    path_.MoveTo(GetTransform().MapPoint(FloatPoint(x, y)));
+    path_.MoveTo(GetTransform().MapPoint(gfx::PointF(x, y)));
     return;
   }
-  path_.MoveTo(FloatPoint(x, y));
+  path_.MoveTo(gfx::PointF(x, y));
 }
 
 void CanvasPath::lineTo(double double_x, double double_y) {
@@ -84,7 +81,7 @@ void CanvasPath::lineTo(double double_x, double double_y) {
     identifiability_study_helper_.UpdateBuilder(CanvasOps::kLineTo, double_x,
                                                 double_y);
   }
-  FloatPoint p1 = FloatPoint(x, y);
+  gfx::PointF p1(x, y);
 
   if (UNLIKELY(!IsTransformInvertible())) {
     p1 = GetTransform().MapPoint(p1);
@@ -113,8 +110,8 @@ void CanvasPath::quadraticCurveTo(double double_cpx,
                                                 double_cpx, double_cpy,
                                                 double_x, double_y);
   }
-  FloatPoint p1 = FloatPoint(x, y);
-  FloatPoint cp = FloatPoint(cpx, cpy);
+  gfx::PointF p1(x, y);
+  gfx::PointF cp(cpx, cpy);
 
   if (UNLIKELY(!IsTransformInvertible())) {
     p1 = GetTransform().MapPoint(p1);
@@ -122,7 +119,7 @@ void CanvasPath::quadraticCurveTo(double double_cpx,
   }
 
   if (UNLIKELY(!path_.HasCurrentPoint()))
-    path_.MoveTo(FloatPoint(cpx, cpy));
+    path_.MoveTo(gfx::PointF(cpx, cpy));
 
   path_.AddQuadCurveTo(cp, p1);
 }
@@ -149,9 +146,9 @@ void CanvasPath::bezierCurveTo(double double_cp1x,
         double_cp2y, double_x, double_y);
   }
 
-  FloatPoint p1 = FloatPoint(x, y);
-  FloatPoint cp1 = FloatPoint(cp1x, cp1y);
-  FloatPoint cp2 = FloatPoint(cp2x, cp2y);
+  gfx::PointF p1(x, y);
+  gfx::PointF cp1(cp1x, cp1y);
+  gfx::PointF cp2(cp2x, cp2y);
 
   if (UNLIKELY(!IsTransformInvertible())) {
     p1 = GetTransform().MapPoint(p1);
@@ -159,7 +156,7 @@ void CanvasPath::bezierCurveTo(double double_cp1x,
     cp2 = GetTransform().MapPoint(cp2);
   }
   if (UNLIKELY(!path_.HasCurrentPoint()))
-    path_.MoveTo(FloatPoint(cp1x, cp1y));
+    path_.MoveTo(gfx::PointF(cp1x, cp1y));
 
   path_.AddBezierCurveTo(cp1, cp2, p1);
 }
@@ -191,8 +188,8 @@ void CanvasPath::arcTo(double double_x1,
                                                 double_r);
   }
 
-  FloatPoint p1 = FloatPoint(x1, y1);
-  FloatPoint p2 = FloatPoint(x2, y2);
+  gfx::PointF p1(x1, y1);
+  gfx::PointF p2(x2, y2);
 
   if (UNLIKELY(!IsTransformInvertible())) {
     p1 = GetTransform().MapPoint(p1);
@@ -253,14 +250,14 @@ float AdjustEndAngle(float start_angle, float end_angle, bool anticlockwise) {
   return new_end_angle;
 }
 
-inline void LineToFloatPoint(CanvasPath* path, const FloatPoint& p) {
-  path->lineTo(p.X(), p.Y());
+inline void LineTo(CanvasPath* path, const gfx::PointF& p) {
+  path->lineTo(p.x(), p.y());
 }
 
-inline FloatPoint GetPointOnEllipse(float radius_x,
-                                    float radius_y,
-                                    float theta) {
-  return FloatPoint(radius_x * cosf(theta), radius_y * sinf(theta));
+inline gfx::PointF GetPointOnEllipse(float radius_x,
+                                     float radius_y,
+                                     float theta) {
+  return gfx::PointF(radius_x * cosf(theta), radius_y * sinf(theta));
 }
 
 void CanonicalizeAngle(float* start_angle, float* end_angle) {
@@ -331,14 +328,16 @@ void DegenerateEllipse(CanvasPath* path,
   DCHECK((anticlockwise && (start_angle - end_angle) >= 0) ||
          (!anticlockwise && (end_angle - start_angle) >= 0));
 
-  FloatPoint center(x, y);
+  gfx::PointF center(x, y);
   AffineTransform rotation_matrix;
   rotation_matrix.RotateRadians(rotation);
   // First, if the object's path has any subpaths, then the method must add a
   // straight line from the last point in the subpath to the start point of the
   // arc.
-  LineToFloatPoint(path, center + rotation_matrix.MapPoint(GetPointOnEllipse(
-                                      radius_x, radius_y, start_angle)));
+  LineTo(path, center + rotation_matrix
+                            .MapPoint(GetPointOnEllipse(radius_x, radius_y,
+                                                        start_angle))
+                            .OffsetFromOrigin());
   if (UNLIKELY((!radius_x && !radius_y) || start_angle == end_angle))
     return;
 
@@ -349,21 +348,25 @@ void DegenerateEllipse(CanvasPath* path,
     for (float angle = start_angle - fmodf(start_angle, kPiOverTwoFloat) +
                        kPiOverTwoFloat;
          angle < end_angle; angle += kPiOverTwoFloat) {
-      LineToFloatPoint(
-          path, center + rotation_matrix.MapPoint(
-                             GetPointOnEllipse(radius_x, radius_y, angle)));
+      LineTo(path, center + rotation_matrix
+                                .MapPoint(GetPointOnEllipse(radius_x, radius_y,
+                                                            angle))
+                                .OffsetFromOrigin());
     }
   } else {
     for (float angle = start_angle - fmodf(start_angle, kPiOverTwoFloat);
          angle > end_angle; angle -= kPiOverTwoFloat) {
-      LineToFloatPoint(
-          path, center + rotation_matrix.MapPoint(
-                             GetPointOnEllipse(radius_x, radius_y, angle)));
+      LineTo(path, center + rotation_matrix
+                                .MapPoint(GetPointOnEllipse(radius_x, radius_y,
+                                                            angle))
+                                .OffsetFromOrigin());
     }
   }
 
-  LineToFloatPoint(path, center + rotation_matrix.MapPoint(GetPointOnEllipse(
-                                      radius_x, radius_y, end_angle)));
+  LineTo(path, center + rotation_matrix
+                            .MapPoint(GetPointOnEllipse(radius_x, radius_y,
+                                                        end_angle))
+                            .OffsetFromOrigin());
 }
 
 }  // namespace
@@ -407,7 +410,7 @@ void CanvasPath::arc(double double_x,
   }
 
   CanonicalizeAngle(&start_angle, &end_angle);
-  path_.AddArc(FloatPoint(x, y), radius, start_angle,
+  path_.AddArc(gfx::PointF(x, y), radius, start_angle,
                AdjustEndAngle(start_angle, end_angle, anticlockwise));
 }
 
@@ -468,7 +471,7 @@ void CanvasPath::ellipse(double double_x,
     return;
   }
 
-  path_.AddEllipse(FloatPoint(x, y), radius_x, radius_y, rotation, start_angle,
+  path_.AddEllipse(gfx::PointF(x, y), radius_x, radius_y, rotation, start_angle,
                    adjusted_end_angle);
 }
 
@@ -491,7 +494,7 @@ void CanvasPath::rect(double double_x,
         CanvasOps::kRect, double_x, double_y, double_width, double_height);
   }
 
-  path_.AddRect(FloatRect(x, y, width, height));
+  path_.AddRect(gfx::PointF(x, y), gfx::PointF(x + width, y + height));
 }
 
 void CanvasPath::roundRect(
@@ -501,13 +504,14 @@ void CanvasPath::roundRect(
     double double_height,
     const HeapVector<Member<V8UnionDOMPointInitOrUnrestrictedDouble>>& radii,
     ExceptionState& exception_state) {
-  UseCounter::Count(GetCanvasRenderingContextHost()->GetTopExecutionContext(),
-                    WebFeature::kCanvasRenderingContext2DContextLostEvent);
+  UseCounter::Count(GetTopExecutionContext(),
+                    WebFeature::kCanvasRenderingContext2DRoundRect);
   const int num_radii = radii.size();
   if (UNLIKELY(num_radii < 1 || num_radii > 4)) {
     exception_state.ThrowRangeError(
         String::Number(num_radii) +
         " radii provided. Between one and four radii are necessary.");
+    return;
   }
 
   float x = base::saturated_cast<float>(double_x);
@@ -523,7 +527,7 @@ void CanvasPath::roundRect(
   // TODO(crbug.com/1234113): Instrument new canvas APIs.
   identifiability_study_helper_.set_encountered_skipped_ops();
 
-  FloatSize r[num_radii];
+  gfx::SizeF r[num_radii];
   for (int i = 0; i < num_radii; ++i) {
     switch (radii[i]->GetContentType()) {
       case V8UnionDOMPointInitOrUnrestrictedDouble::ContentType::
@@ -536,13 +540,15 @@ void CanvasPath::roundRect(
         if (UNLIKELY(r_x < 0.0f)) {
           exception_state.ThrowRangeError(
               "X-radius value " + String::Number(r_x) + " is negative.");
+          return;
         }
         if (UNLIKELY(r_y < 0.0f)) {
           exception_state.ThrowRangeError(
               "Y-radius value " + String::Number(r_y) + " is negative.");
+          return;
         }
-        r[i] = FloatSize(base::saturated_cast<float>(p->x()),
-                         base::saturated_cast<float>(p->y()));
+        r[i] = gfx::SizeF(base::saturated_cast<float>(p->x()),
+                          base::saturated_cast<float>(p->y()));
         break;
       }
       case V8UnionDOMPointInitOrUnrestrictedDouble::ContentType::
@@ -554,8 +560,9 @@ void CanvasPath::roundRect(
         if (UNLIKELY(a < 0.0f)) {
           exception_state.ThrowRangeError("Radius value " + String::Number(a) +
                                           " is negative.");
+          return;
         }
-        r[i] = FloatSize(a, a);
+        r[i] = gfx::SizeF(a, a);
         break;
       }
     }
@@ -564,11 +571,11 @@ void CanvasPath::roundRect(
   if (UNLIKELY(width == 0) || UNLIKELY(height == 0)) {
     // AddRoundRect does not handle flat rects, correctly.  But since there are
     // no rounded corners on a flat rect, we can just use AddRect.
-    path_.AddRect(FloatRect(x, y, width, height));
+    path_.AddRect(gfx::PointF(x, y), gfx::PointF(x + width, y + height));
     return;
   }
 
-  FloatSize corner_radii[4];  // row-wise ordering
+  gfx::SizeF corner_radii[4];  // row-wise ordering
   switch (num_radii) {
     case 1:
       corner_radii[0] = corner_radii[1] = corner_radii[2] = corner_radii[3] =
@@ -596,12 +603,9 @@ void CanvasPath::roundRect(
     clockwise = false;
     x += width;
     width = -width;
-    FloatSize tmp = corner_radii[1];
-    corner_radii[1] = corner_radii[0];
-    corner_radii[0] = tmp;
-    tmp = corner_radii[3];
-    corner_radii[3] = corner_radii[2];
-    corner_radii[2] = tmp;
+    using std::swap;
+    swap(corner_radii[0], corner_radii[1]);
+    swap(corner_radii[2], corner_radii[3]);
   }
 
   if (UNLIKELY(height < 0)) {
@@ -609,18 +613,29 @@ void CanvasPath::roundRect(
     clockwise = !clockwise;
     y += height;
     height = -height;
-    FloatSize tmp = corner_radii[2];
-    corner_radii[2] = corner_radii[0];
-    corner_radii[0] = tmp;
-    tmp = corner_radii[3];
-    corner_radii[3] = corner_radii[1];
-    corner_radii[1] = tmp;
+    using std::swap;
+    swap(corner_radii[0], corner_radii[2]);
+    swap(corner_radii[1], corner_radii[3]);
   }
 
-  FloatRect rect(x, y, width, height);
-  path_.AddPathForRoundedRect(rect, corner_radii[0], corner_radii[1],
-                              corner_radii[2], corner_radii[3], clockwise);
-  path_.MoveTo(FloatPoint(x, y));
+  gfx::RectF rect(x, y, width, height);
+  path_.AddRoundedRect(FloatRoundedRect(rect, corner_radii[0], corner_radii[1],
+                                        corner_radii[2], corner_radii[3]),
+                       clockwise);
+  path_.MoveTo(gfx::PointF(x, y));
+}
+
+void CanvasPath::roundRect(
+    double double_x,
+    double double_y,
+    double double_width,
+    double double_height,
+    const Member<V8UnionDOMPointInitOrUnrestrictedDouble>& radius,
+    ExceptionState& exception_state) {
+  const auto radii =
+      HeapVector<Member<V8UnionDOMPointInitOrUnrestrictedDouble>>(1, radius);
+  roundRect(double_x, double_y, double_width, double_height, radii,
+            exception_state);
 }
 
 void CanvasPath::Trace(Visitor* visitor) const {

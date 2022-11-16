@@ -14,7 +14,7 @@
 #include "services/metrics/public/cpp/ukm_source.h"
 
 ForegroundDurationUKMObserver::ForegroundDurationUKMObserver()
-    : last_page_input_timing_(page_load_metrics::mojom::InputTiming()) {}
+    : last_page_input_timing_(page_load_metrics::mojom::InputTiming::New()) {}
 
 ForegroundDurationUKMObserver::~ForegroundDurationUKMObserver() {}
 
@@ -31,11 +31,12 @@ ForegroundDurationUKMObserver::OnStart(
 }
 
 page_load_metrics::PageLoadMetricsObserver::ObservePolicy
-ForegroundDurationUKMObserver::OnCommit(
+ForegroundDurationUKMObserver::OnFencedFramesStart(
     content::NavigationHandle* navigation_handle,
-    ukm::SourceId source_id) {
-  source_id_ = source_id;
-  return CONTINUE_OBSERVING;
+    const GURL& currently_committed_url) {
+  // This class doesn't use information on subframes and inner pages. No need to
+  // forward.
+  return STOP_OBSERVING;
 }
 
 page_load_metrics::PageLoadMetricsObserver::ObservePolicy
@@ -78,7 +79,8 @@ void ForegroundDurationUKMObserver::RecordUkmIfInForeground(
   if (!currently_in_foreground_)
     return;
   base::TimeDelta foreground_duration = end_time - last_time_shown_;
-  ukm::builders::PageForegroundSession ukm_builder(source_id_);
+  ukm::builders::PageForegroundSession ukm_builder(
+      GetDelegate().GetPageUkmSourceId());
   ukm::UkmRecorder* ukm_recorder = ukm::UkmRecorder::Get();
   ukm_builder.SetForegroundDuration(foreground_duration.InMilliseconds());
   RecordInputTimingMetrics(&ukm_builder);
@@ -95,14 +97,14 @@ void ForegroundDurationUKMObserver::RecordInputTimingMetrics(
   ukm_builder
       ->SetForegroundNumInputEvents(
           GetDelegate().GetPageInputTiming().num_input_events -
-          last_page_input_timing_.num_input_events)
+          last_page_input_timing_->num_input_events)
       .SetForegroundTotalInputDelay(
           (GetDelegate().GetPageInputTiming().total_input_delay -
-           last_page_input_timing_.total_input_delay)
+           last_page_input_timing_->total_input_delay)
               .InMilliseconds())
       .SetForegroundTotalAdjustedInputDelay(
           (GetDelegate().GetPageInputTiming().total_adjusted_input_delay -
-           last_page_input_timing_.total_adjusted_input_delay)
+           last_page_input_timing_->total_adjusted_input_delay)
               .InMilliseconds());
-  last_page_input_timing_ = GetDelegate().GetPageInputTiming();
+  last_page_input_timing_ = GetDelegate().GetPageInputTiming().Clone();
 }

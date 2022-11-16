@@ -5,18 +5,23 @@
 #include "chrome/browser/ui/views/profiles/profile_picker_dice_sign_in_provider.h"
 
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/profiles/keep_alive/profile_keep_alive_types.h"
 #include "chrome/browser/profiles/profile_attributes_entry.h"
 #include "chrome/browser/profiles/profile_attributes_storage.h"
 #include "chrome/browser/profiles/profile_avatar_icon_util.h"
-#include "chrome/browser/profiles/profile_keep_alive_types.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/signin/dice_tab_helper.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
+#include "chrome/browser/sync/sync_encryption_keys_tab_helper.h"
+#include "chrome/browser/themes/custom_theme_supplier.h"
 #include "chrome/browser/themes/theme_properties.h"
 #include "chrome/browser/themes/theme_service.h"
 #include "chrome/browser/themes/theme_service_factory.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_navigator.h"
+#include "chrome/browser/ui/color/chrome_color_id.h"
+#include "chrome/browser/ui/views/profiles/profile_picker_dice_sign_in_toolbar.h"
+#include "chrome/browser/ui/views/profiles/profile_picker_view.h"
 #include "chrome/common/webui_url_constants.h"
 #include "components/signin/public/identity_manager/account_info.h"
 #include "components/web_modal/web_contents_modal_dialog_manager.h"
@@ -27,6 +32,7 @@
 #include "google_apis/gaia/gaia_urls.h"
 #include "net/base/url_util.h"
 #include "ui/base/theme_provider.h"
+#include "ui/color/color_provider.h"
 #include "ui/views/controls/webview/web_contents_set_background_color.h"
 
 namespace {
@@ -43,7 +49,7 @@ bool IsExternalURL(const GURL& url) {
   // sign-in succeeds.
   if (url.is_empty() || url == GURL(url::kAboutBlankURL))
     return false;
-  if (gaia::IsGaiaSignonRealm(url.GetOrigin()))
+  if (gaia::HasGaiaSchemeHostPort(url))
     return false;
   return true;
 }
@@ -51,21 +57,24 @@ bool IsExternalURL(const GURL& url) {
 }  // namespace
 
 ProfilePickerDiceSignInProvider::ProfilePickerDiceSignInProvider(
-    ProfilePickerWebContentsHost* host)
-    : host_(host) {}
+    ProfilePickerView* host,
+    ProfilePickerDiceSignInToolbar* toolbar)
+    : host_(host), toolbar_(toolbar) {}
 
 ProfilePickerDiceSignInProvider::~ProfilePickerDiceSignInProvider() {
-  // Record unfinished signed-in profile creation (i.e. when callback was not
+  // Handle unfinished signed-in profile creation (i.e. when callback was not
   // called yet).
   if (callback_) {
-    contents()->SetDelegate(nullptr);
-    // TODO(crbug.com/1227699): Schedule the profile for deletion here, it's not
-    // needed any more. This triggers a crash if the browser is shutting down
-    // completely. Figure a way how to delete the profile only if that does not
-    // compete with a shutdown.
+    if (IsInitialized()) {
+      contents()->SetDelegate(nullptr);
+
+      // Schedule the profile for deletion, it's not needed any more.
+      g_browser_process->profile_manager()->ScheduleEphemeralProfileForDeletion(
+          profile_->GetPath());
+    }
 
     ProfileMetrics::LogProfileAddSignInFlowOutcome(
-        ProfileMetrics::ProfileAddSignInFlowOutcome::kAbortedBeforeSignIn);
+        ProfileMetrics::ProfileSignedInFlowOutcome::kAbortedBeforeSignIn);
   }
 }
 
@@ -80,7 +89,8 @@ void ProfilePickerDiceSignInProvider::SwitchToSignIn(
     std::move(switch_finished_callback).Run(true);
     // Do not load any url because the desired sign-in screen is still loaded in
     // `contents()`.
-    host_->ShowScreen(contents(), GURL(), /*show_toolbar=*/true);
+    host_->ShowScreen(contents(), GURL());
+    toolbar_->SetVisible(true);
     return;
   }
 
@@ -104,15 +114,31 @@ void ProfilePickerDiceSignInProvider::ReloadSignInPage() {
   }
 }
 
-const ui::ThemeProvider* ProfilePickerDiceSignInProvider::GetThemeProvider()
-    const {
+void ProfilePickerDiceSignInProvider::NavigateBack() {
+  if (!IsInitialized() || !contents())
+    return;
+
+  if (contents()->GetController().CanGoBack()) {
+    contents()->GetController().GoBack();
+    return;
+  }
+
+  // Move from sign-in back to the previous screen of profile creation.
+  // Do not load any url because the desired screen is still loaded in the
+  // picker contents.
+  host_->ShowScreenInPickerContents(GURL());
+  toolbar_->SetVisible(false);
+}
+
+ui::ColorProviderManager::ThemeInitializerSupplier*
+ProfilePickerDiceSignInProvider::GetCustomTheme() const {
   if (!IsInitialized())
     return nullptr;
-  return &ThemeService::GetThemeProviderForProfile(profile_);
+  return ThemeService::GetThemeSupplierForProfile(profile_);
 }
 
 bool ProfilePickerDiceSignInProvider::HandleContextMenu(
-    content::RenderFrameHost* render_frame_host,
+    content::RenderFrameHost& render_frame_host,
     const content::ContextMenuParams& params) {
   // Ignores context menu.
   return true;
@@ -221,6 +247,10 @@ void ProfilePickerDiceSignInProvider::OnProfileCreated(
   web_modal::WebContentsModalDialogManager::FromWebContents(contents())
       ->SetDelegate(this);
 
+  // To allow passing encryption keys during interactions with the page,
+  // instantiate SyncEncryptionKeysTabHelper.
+  SyncEncryptionKeysTabHelper::CreateForWebContents(contents());
+
   // Listen for sign-in getting completed.
   identity_manager_observation_.Observe(
       IdentityManagerFactory::GetForProfile(profile_));
@@ -229,8 +259,7 @@ void ProfilePickerDiceSignInProvider::OnProfileCreated(
   // by the instance of DiceTurnSyncOnHelper constructed later on in
   // ProfilePickerSignedInFlowController).
   signin_metrics::RecordSigninUserActionForAccessPoint(
-      signin_metrics::AccessPoint::ACCESS_POINT_USER_MANAGER,
-      signin_metrics::PromoAction::PROMO_ACTION_NO_SIGNIN_PROMO);
+      signin_metrics::AccessPoint::ACCESS_POINT_USER_MANAGER);
   signin_metrics::LogSigninAccessPointStarted(
       signin_metrics::AccessPoint::ACCESS_POINT_USER_MANAGER,
       signin_metrics::PromoAction::PROMO_ACTION_NO_SIGNIN_PROMO);
@@ -243,14 +272,21 @@ void ProfilePickerDiceSignInProvider::OnProfileCreated(
   // Make sure the web contents used for sign-in has proper background to match
   // the toolbar (for dark mode).
   views::WebContentsSetBackgroundColor::CreateForWebContentsWithColor(
-      contents(), GetThemeProvider()->GetColor(ThemeProperties::COLOR_TOOLBAR));
+      contents(), host_->GetColorProvider()->GetColor(kColorToolbar));
 
-  // The back button cannot be created from the constructor as ProfilePickerView
-  // needs to access the ThemeProvider of `this` in the process.
-  host_->CreateToolbarBackButton();
+  toolbar_->BuildToolbar(base::BindRepeating(
+      &ProfilePickerDiceSignInProvider::NavigateBack, base::Unretained(this)));
 
-  host_->ShowScreen(contents(), GetSigninURL(host_->ShouldUseDarkColors()),
-                    /*show_toolbar=*/true);
+  host_->ShowScreen(
+      contents(), GetSigninURL(host_->ShouldUseDarkColors()),
+      base::BindOnce(&ProfilePickerDiceSignInToolbar::SetVisible,
+                     // Unretained is enough as the callback is
+                     // called by the owner of the toolbar.
+                     base::Unretained(toolbar_), /*visible=*/true));
+}
+
+Profile* ProfilePickerDiceSignInProvider::GetInitializedProfile() {
+  return profile_;
 }
 
 bool ProfilePickerDiceSignInProvider::IsInitialized() const {
@@ -259,10 +295,11 @@ bool ProfilePickerDiceSignInProvider::IsInitialized() const {
 
 void ProfilePickerDiceSignInProvider::FinishFlow(bool is_saml) {
   DCHECK(IsInitialized());
+  // Stop listening to notifications.
   contents()->SetDelegate(nullptr);
-  // Stop the sign-in: hide the toolbar and disallow navigating back (without
-  // navigating to any other page).
-  host_->ShowScreen(contents(), GURL(), /*show_toolbar=*/false,
-                    /*enable_navigating_back=*/false);
-  std::move(callback_).Run(profile_, std::move(contents_), is_saml);
+  identity_manager_observation_.Reset();
+  // Stop the sign-in: hide and clear the toolbar.
+  toolbar_->ClearToolbar();
+  toolbar_->SetVisible(false);
+  std::move(callback_).Run(profile_.get(), std::move(contents_), is_saml);
 }

@@ -4,7 +4,6 @@
 
 #import <Cocoa/Cocoa.h>
 
-#include "base/macros.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ui/browser.h"
@@ -38,6 +37,11 @@ int WaitForFind(content::WebContents* web_contents, int* ordinal) {
 class FindBarPlatformHelperMacTest : public InProcessBrowserTest {
  public:
   FindBarPlatformHelperMacTest() {}
+
+  FindBarPlatformHelperMacTest(const FindBarPlatformHelperMacTest&) = delete;
+  FindBarPlatformHelperMacTest& operator=(const FindBarPlatformHelperMacTest&) =
+      delete;
+
   ~FindBarPlatformHelperMacTest() override = default;
 
   void SetUpOnMainThread() override {
@@ -52,8 +56,6 @@ class FindBarPlatformHelperMacTest : public InProcessBrowserTest {
 
  private:
   NSString* old_find_text_ = nullptr;
-
-  DISALLOW_COPY_AND_ASSIGN(FindBarPlatformHelperMacTest);
 };
 
 // Tests that the find bar is populated with the pasteboard at construction.

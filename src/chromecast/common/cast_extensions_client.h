@@ -6,7 +6,6 @@
 #define CHROMECAST_COMMON_CAST_EXTENSIONS_CLIENT_H_
 
 #include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "extensions/common/extensions_client.h"
 #include "url/gurl.h"
 
@@ -16,6 +15,10 @@ namespace extensions {
 class CastExtensionsClient : public ExtensionsClient {
  public:
   CastExtensionsClient();
+
+  CastExtensionsClient(const CastExtensionsClient&) = delete;
+  CastExtensionsClient& operator=(const CastExtensionsClient&) = delete;
+
   ~CastExtensionsClient() override;
 
   // ExtensionsClient overrides:
@@ -35,15 +38,13 @@ class CastExtensionsClient : public ExtensionsClient {
   bool IsScriptableURL(const GURL& url, std::string* error) const override;
   const GURL& GetWebstoreBaseURL() const override;
   const GURL& GetWebstoreUpdateURL() const override;
-  bool IsBlacklistUpdateURL(const GURL& url) const override;
+  bool IsBlocklistUpdateURL(const GURL& url) const override;
 
  private:
   ScriptingAllowlist scripting_allowlist_;
 
   const GURL webstore_base_url_;
   const GURL webstore_update_url_;
-
-  DISALLOW_COPY_AND_ASSIGN(CastExtensionsClient);
 };
 
 }  // namespace extensions

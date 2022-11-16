@@ -4,6 +4,8 @@
 
 #include "components/content_settings/browser/page_specific_content_settings.h"
 
+#include "base/metrics/histogram_base.h"
+#include "base/test/metrics/histogram_tester.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/content_settings/page_specific_content_settings_delegate.h"
 #include "chrome/test/base/chrome_render_view_host_test_harness.h"
@@ -48,9 +50,10 @@ TEST_F(PageSpecificContentSettingsTest, HistogramTest) {
                                      ContentSettingsType::MEDIASTREAM_CAMERA,
                                      ContentSetting::CONTENT_SETTING_ALLOW);
 
-  task_environment()->FastForwardBy(base::TimeDelta::FromSeconds(1));
+  task_environment()->FastForwardBy(base::Seconds(1));
   PageSpecificContentSettings* content_settings =
-      PageSpecificContentSettings::GetForFrame(web_contents()->GetMainFrame());
+      PageSpecificContentSettings::GetForFrame(
+          web_contents()->GetPrimaryMainFrame());
 
   histograms.ExpectTotalCount(kGeolocationHistogramName, 0);
   content_settings->OnContentAllowed(ContentSettingsType::GEOLOCATION);

@@ -2,7 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/macros.h"
 #include "build/build_config.h"
 #include "chrome/browser/sync/test/integration/extensions_helper.h"
 #include "chrome/browser/sync/test/integration/sync_integration_test_util.h"
@@ -37,7 +36,7 @@ IN_PROC_BROWSER_TEST_F(TwoClientExtensionsSyncTest,
 }
 
 // Flaky on Mac: http://crbug.com/535996
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 #define MAYBE_StartWithSameExtensions DISABLED_StartWithSameExtensions
 #else
 #define MAYBE_StartWithSameExtensions StartWithSameExtensions
@@ -60,7 +59,7 @@ IN_PROC_BROWSER_TEST_F(TwoClientExtensionsSyncTest,
 }
 
 // Flaky on Mac: http://crbug.com/535996
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 #define MAYBE_StartWithDifferentExtensions DISABLED_StartWithDifferentExtensions
 #else
 #define MAYBE_StartWithDifferentExtensions StartWithDifferentExtensions

@@ -5,10 +5,6 @@
 #ifndef UI_BASE_TEST_SCOPED_FAKE_NSWINDOW_FULLSCREEN_H_
 #define UI_BASE_TEST_SCOPED_FAKE_NSWINDOW_FULLSCREEN_H_
 
-#include <memory>
-
-#include "base/macros.h"
-
 namespace ui {
 namespace test {
 
@@ -22,15 +18,15 @@ class ScopedFakeNSWindowFullscreen {
   class Impl;
 
   ScopedFakeNSWindowFullscreen();
+
+  ScopedFakeNSWindowFullscreen(const ScopedFakeNSWindowFullscreen&) = delete;
+  ScopedFakeNSWindowFullscreen& operator=(const ScopedFakeNSWindowFullscreen&) =
+      delete;
+
   ~ScopedFakeNSWindowFullscreen();
 
-  // Wait for any transition in progress to complete.
-  void FinishTransition();
-
  private:
-  std::unique_ptr<Impl> impl_;
-
-  DISALLOW_COPY_AND_ASSIGN(ScopedFakeNSWindowFullscreen);
+  static int instance_count_;
 };
 
 }  // namespace test

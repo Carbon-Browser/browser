@@ -5,6 +5,7 @@
 #import "ios/chrome/browser/ui/authentication/signin/consistency_promo_signin/consistency_default_account/consistency_default_account_view_controller.h"
 
 #import "base/strings/sys_string_conversions.h"
+#import "components/signin/public/base/signin_metrics.h"
 #import "ios/chrome/browser/ui/authentication/signin/consistency_promo_signin/consistency_layout_delegate.h"
 #import "ios/chrome/browser/ui/authentication/signin/signin_constants.h"
 #import "ios/chrome/browser/ui/authentication/views/identity_button_control.h"
@@ -24,9 +25,9 @@
 
 namespace {
 
-// Margins for |self.contentView| (top, bottom, leading and trailing).
+// Margins for `self.contentView` (top, bottom, leading and trailing).
 constexpr CGFloat kContentMargin = 16.;
-// Space between elements in |self.contentView|.
+// Space between elements in `self.contentView`.
 constexpr CGFloat kContentSpacing = 16.;
 
 }
@@ -40,15 +41,25 @@ constexpr CGFloat kContentSpacing = 16.;
 @property(nonatomic, strong) IdentityButtonControl* identityButtonControl;
 // Button to confirm the default identity and sign-in.
 @property(nonatomic, strong) UIButton* continueAsButton;
-// Title for |self.continueAsButton|. This property is needed to hide the title
+// Title for `self.continueAsButton`. This property is needed to hide the title
 // the activity indicator is shown.
 @property(nonatomic, strong) NSString* continueAsTitle;
-// Activity indicator on top of |self.continueAsButton|.
+// Activity indicator on top of `self.continueAsButton`.
 @property(nonatomic, strong) UIActivityIndicatorView* activityIndicatorView;
+// The access point that triggered sign-in.
+@property(nonatomic, assign, readonly) signin_metrics::AccessPoint accessPoint;
 
 @end
 
 @implementation ConsistencyDefaultAccountViewController
+
+- (instancetype)initWithAccessPoint:(signin_metrics::AccessPoint)accessPoint {
+  self = [super init];
+  if (self) {
+    _accessPoint = accessPoint;
+  }
+  return self;
+}
 
 - (void)startSpinner {
   // Add spinner.
@@ -147,8 +158,20 @@ constexpr CGFloat kContentSpacing = 16.;
   ]];
   // Add the label.
   UILabel* label = [[UILabel alloc] init];
-  label.text =
-      l10n_util::GetNSString(IDS_IOS_CONSISTENCY_PROMO_DEFAULT_ACCOUNT_LABEL);
+  if (self.accessPoint ==
+      signin_metrics::AccessPoint::ACCESS_POINT_SEND_TAB_TO_SELF_PROMO) {
+    label.text =
+        l10n_util::GetNSString(IDS_SEND_TAB_TO_SELF_SIGN_IN_PROMO_LABEL);
+  } else {
+    // If there are enterprise restrictions, the string omits "Google Account".
+    BOOL showRestrictionsText =
+        self.enterpriseSignInRestrictions & kEnterpriseRestrictAccounts;
+    label.text = l10n_util::GetNSString(
+        showRestrictionsText
+            ? IDS_IOS_CONSISTENCY_PROMO_DEFAULT_ACCOUNT_RESTRICTIONS_LABEL
+            : IDS_IOS_CONSISTENCY_PROMO_DEFAULT_ACCOUNT_LABEL);
+  }
+
   label.textColor = [UIColor colorNamed:kGrey700Color];
   label.font = [UIFont preferredFontForTextStyle:UIFontTextStyleSubheadline];
   label.numberOfLines = 0;
@@ -158,8 +181,6 @@ constexpr CGFloat kContentSpacing = 16.;
   // Add IdentityButtonControl for the default identity.
   self.identityButtonControl =
       [[IdentityButtonControl alloc] initWithFrame:CGRectZero];
-  self.identityButtonControl.backgroundColor =
-      [UIColor colorNamed:kGroupedSecondaryBackgroundColor];
   self.identityButtonControl.arrowDirection = IdentityButtonControlArrowRight;
   self.identityButtonControl.identityViewStyle = IdentityViewStyleConsistency;
   [self.identityButtonControl addTarget:self
@@ -231,7 +252,7 @@ constexpr CGFloat kContentSpacing = 16.;
     case ConsistencySheetDisplayStyleCentered:
       break;
   }
-  // Safe area insets needs to be based on the window since the |self.view|
+  // Safe area insets needs to be based on the window since the `self.view`
   // might not be part of the window hierarchy when the animation is configured.
   return self.navigationController.navigationBar.frame.size.height +
          kContentMargin + size.height + kContentMargin + safeAreaInsetsHeight;

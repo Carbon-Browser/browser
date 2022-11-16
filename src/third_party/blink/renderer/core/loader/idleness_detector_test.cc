@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/core/loader/idleness_detector.h"
 
+#include "base/time/time.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/testing/page_test_base.h"
@@ -46,7 +47,7 @@ class IdlenessDetectorTest : public PageTestBase {
   }
 
   static base::TimeTicks SecondsToTimeTicks(double seconds) {
-    return base::TimeTicks() + base::TimeDelta::FromSecondsD(seconds);
+    return base::TimeTicks() + base::Seconds(seconds);
   }
 
  private:

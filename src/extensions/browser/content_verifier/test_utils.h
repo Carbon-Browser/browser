@@ -5,9 +5,16 @@
 #ifndef EXTENSIONS_BROWSER_CONTENT_VERIFIER_TEST_UTILS_H_
 #define EXTENSIONS_BROWSER_CONTENT_VERIFIER_TEST_UTILS_H_
 
+#include <list>
+#include <memory>
+#include <set>
+#include <string>
+#include <utility>
+#include <vector>
+
 #include "base/files/file_path.h"
 #include "base/run_loop.h"
-#include "base/sequenced_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/test/test_utils.h"
 #include "crypto/rsa_private_key.h"
@@ -39,7 +46,7 @@ class TestContentVerifySingleJobObserver {
       const TestContentVerifySingleJobObserver&) = delete;
 
   // Waits for a ContentVerifyJob to finish and returns job's status.
-  ContentVerifyJob::FailureReason WaitForJobFinished() WARN_UNUSED_RESULT;
+  [[nodiscard]] ContentVerifyJob::FailureReason WaitForJobFinished();
 
   // Waits for ContentVerifyJob to finish the attempt to read content hashes.
   ContentHashReader::InitStatus WaitForOnHashesReady();
@@ -64,7 +71,7 @@ class TestContentVerifySingleJobObserver {
                        const ContentHashReader& hash_reader) override;
 
     // Passed methods from ContentVerifySingleJobObserver:
-    ContentVerifyJob::FailureReason WaitForJobFinished() WARN_UNUSED_RESULT;
+    [[nodiscard]] ContentVerifyJob::FailureReason WaitForJobFinished();
     ContentHashReader::InitStatus WaitForOnHashesReady();
 
    private:
@@ -164,6 +171,11 @@ class TestContentVerifyJobObserver {
 class MockContentVerifierDelegate : public ContentVerifierDelegate {
  public:
   MockContentVerifierDelegate();
+
+  MockContentVerifierDelegate(const MockContentVerifierDelegate&) = delete;
+  MockContentVerifierDelegate& operator=(const MockContentVerifierDelegate&) =
+      delete;
+
   ~MockContentVerifierDelegate() override;
 
   // ContentVerifierDelegate:
@@ -184,14 +196,16 @@ class MockContentVerifierDelegate : public ContentVerifierDelegate {
  private:
   VerifierSourceType verifier_source_type_ = VerifierSourceType::SIGNED_HASHES;
   std::vector<uint8_t> verifier_key_;
-
-  DISALLOW_COPY_AND_ASSIGN(MockContentVerifierDelegate);
 };
 
 // Observes ContentVerifier::OnFetchComplete of a particular extension.
 class VerifierObserver : public ContentVerifier::TestObserver {
  public:
   VerifierObserver();
+
+  VerifierObserver(const VerifierObserver&) = delete;
+  VerifierObserver& operator=(const VerifierObserver&) = delete;
+
   virtual ~VerifierObserver();
 
   const std::set<base::FilePath>& hash_mismatch_unix_paths() {
@@ -217,8 +231,6 @@ class VerifierObserver : public ContentVerifier::TestObserver {
   // Created and accessed on |creation_thread_|.
   scoped_refptr<content::MessageLoopRunner> loop_runner_;
   content::BrowserThread::ID creation_thread_;
-
-  DISALLOW_COPY_AND_ASSIGN(VerifierObserver);
 };
 
 // Used to hold the result of a callback from the ContentHash creation.
@@ -240,6 +252,10 @@ struct ContentHashResult {
 class ContentHashWaiter {
  public:
   ContentHashWaiter();
+
+  ContentHashWaiter(const ContentHashWaiter&) = delete;
+  ContentHashWaiter& operator=(const ContentHashWaiter&) = delete;
+
   ~ContentHashWaiter();
 
   std::unique_ptr<ContentHashResult> CreateAndWaitForCallback(
@@ -257,8 +273,6 @@ class ContentHashWaiter {
   scoped_refptr<base::SequencedTaskRunner> reply_task_runner_;
   base::RunLoop run_loop_;
   std::unique_ptr<ContentHashResult> result_;
-
-  DISALLOW_COPY_AND_ASSIGN(ContentHashWaiter);
 };
 
 namespace content_verifier_test_utils {

@@ -6,8 +6,10 @@
 #define CHROME_BROWSER_BROWSING_DATA_ACCESS_CONTEXT_AUDIT_SERVICE_H_
 
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
+#include "base/observer_list.h"
 #include "base/scoped_observation.h"
-#include "base/updateable_sequenced_task_runner.h"
+#include "base/task/updateable_sequenced_task_runner.h"
 #include "chrome/browser/browsing_data/access_context_audit_database.h"
 #include "chrome/browser/profiles/profile.h"
 #include "components/browsing_data/content/canonical_cookie_hash.h"
@@ -64,7 +66,7 @@ class AccessContextAuditService
     // audit service for persisting to disk.
     void FlushCookieRecords();
 
-    AccessContextAuditService* service_;
+    raw_ptr<AccessContextAuditService> service_;
     canonical_cookie::CookieHashSet accessed_cookies_;
     url::Origin last_seen_top_frame_origin_;
     base::ScopedObservation<AccessContextAuditService, CookieAccessHelper>
@@ -72,6 +74,11 @@ class AccessContextAuditService
   };
 
   explicit AccessContextAuditService(Profile* profile);
+
+  AccessContextAuditService(const AccessContextAuditService&) = delete;
+  AccessContextAuditService& operator=(const AccessContextAuditService&) =
+      delete;
+
   ~AccessContextAuditService() override;
 
   // Initialises the Access Context Audit database in |database_dir|, and
@@ -112,9 +119,9 @@ class AccessContextAuditService
   void Shutdown() override;
 
   // StoragePartition::DataRemovalObserver:
-  void OnOriginDataCleared(
+  void OnStorageKeyDataCleared(
       uint32_t remove_mask,
-      base::RepeatingCallback<bool(const url::Origin&)> origin_matcher,
+      content::StoragePartition::StorageKeyMatcherFunction storage_key_matcher,
       const base::Time begin,
       const base::Time end) override;
 
@@ -176,8 +183,8 @@ class AccessContextAuditService
 
   int user_visible_tasks_in_progress = 0;
 
-  base::Clock* clock_;
-  Profile* profile_;
+  raw_ptr<base::Clock> clock_;
+  raw_ptr<Profile> profile_;
 
   base::ObserverList<CookieAccessHelper> cookie_access_helpers_;
 
@@ -191,7 +198,6 @@ class AccessContextAuditService
       storage_partition_observation_{this};
 
   base::WeakPtrFactory<AccessContextAuditService> weak_factory_{this};
-  DISALLOW_COPY_AND_ASSIGN(AccessContextAuditService);
 };
 
 #endif  // CHROME_BROWSER_BROWSING_DATA_ACCESS_CONTEXT_AUDIT_SERVICE_H_

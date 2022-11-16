@@ -7,7 +7,6 @@
 #include <memory>
 #include <vector>
 
-#include "base/cxx17_backports.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/run_loop.h"
@@ -16,6 +15,7 @@
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
 #include "base/time/clock.h"
+#include "base/time/time.h"
 #include "components/permissions/permission_usage_session.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -29,10 +29,9 @@ using ::testing::UnorderedElementsAre;
 
 namespace {
 
-constexpr base::Time kTestTimes[] = {
-    base::Time() + base::TimeDelta::FromDays(1),
-    base::Time() + base::TimeDelta::FromDays(2),
-    base::Time() + base::TimeDelta::FromDays(3)};
+constexpr base::Time kTestTimes[] = {base::Time() + base::Days(1),
+                                     base::Time() + base::Days(2),
+                                     base::Time() + base::Days(3)};
 
 constexpr ContentSettingsType kTestTypes[] = {
     ContentSettingsType::MEDIASTREAM_MIC,
@@ -137,14 +136,14 @@ class PermissionAuditingServiceTest : public testing::Test {
 };
 
 TEST_F(PermissionAuditingServiceTest, StorePermissionUsage) {
-  std::vector<url::Origin> origins(base::size(kTestOrigins));
-  std::vector<PermissionUsageSession> sessions(base::size(kTestOrigins));
-  for (size_t i = 0; i < base::size(kTestOrigins); ++i) {
+  std::vector<url::Origin> origins(std::size(kTestOrigins));
+  std::vector<PermissionUsageSession> sessions(std::size(kTestOrigins));
+  for (size_t i = 0; i < std::size(kTestOrigins); ++i) {
     origins[i] = url::Origin::Create(GURL(kTestOrigins[i]));
     sessions[i] = BuildUsageSession(kTestTypes[i % 2], origins[i]);
     service().StorePermissionUsage(sessions[i]);
   }
-  for (size_t i = 0; i < base::size(kTestOrigins); ++i) {
+  for (size_t i = 0; i < std::size(kTestOrigins); ++i) {
     EXPECT_THAT(
         GetPermissionUsageHistory(kTestTypes[i % 2], origins[i], base::Time()),
         ElementsAre(sessions[i]));
@@ -152,8 +151,8 @@ TEST_F(PermissionAuditingServiceTest, StorePermissionUsage) {
 }
 
 TEST_F(PermissionAuditingServiceTest, GetLastPermissionUsageTime) {
-  std::vector<url::Origin> origins(base::size(kTestOrigins));
-  for (size_t i = 0; i < base::size(kTestOrigins); ++i) {
+  std::vector<url::Origin> origins(std::size(kTestOrigins));
+  for (size_t i = 0; i < std::size(kTestOrigins); ++i) {
     origins[i] = url::Origin::Create(GURL(kTestOrigins[i]));
     service().StorePermissionUsage(
         BuildUsageSession(kTestTypes[0], origins[i]));
@@ -164,8 +163,8 @@ TEST_F(PermissionAuditingServiceTest, GetLastPermissionUsageTime) {
 }
 
 TEST_F(PermissionAuditingServiceTest, UpdateEndTime) {
-  std::vector<url::Origin> origins(base::size(kTestOrigins));
-  for (size_t i = 0; i < base::size(kTestOrigins); ++i) {
+  std::vector<url::Origin> origins(std::size(kTestOrigins));
+  for (size_t i = 0; i < std::size(kTestOrigins); ++i) {
     origins[i] = url::Origin::Create(GURL(kTestOrigins[i]));
     service().StorePermissionUsage(
         BuildUsageSession(kTestTypes[1], origins[i]));

@@ -10,13 +10,12 @@
 
 #include "base/files/file_path.h"
 #include "base/files/scoped_temp_dir.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted_delete_on_sequence.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/string_piece.h"
 #include "base/values.h"
-#include "extensions/browser/api/declarative_net_request/index_helper.h"
+#include "extensions/browser/api/declarative_net_request/install_index_helper.h"
 #include "extensions/browser/api/declarative_net_request/ruleset_install_pref.h"
 #include "extensions/browser/content_verifier/content_verifier_key.h"
 #include "extensions/browser/crx_file_info.h"
@@ -116,17 +115,7 @@ class SandboxedUnpackerClient
 // transcoding all images to PNG, parsing all message catalogs, and rewriting
 // the manifest JSON. As such, it should not be used when the output is not
 // intended to be given back to the author.
-//
-// Lifetime management:
-//
-// This class is ref-counted by each call it makes to itself on another thread.
-//
-// Additionally, we hold a reference to our own client so that the client lives
-// long enough to receive the result of unpacking.
-//
-// NOTE: This class should only be used on the FILE thread.
-//
-class SandboxedUnpacker : public base::RefCountedThreadSafe<SandboxedUnpacker> {
+class SandboxedUnpacker : public ImageSanitizer::Client {
  public:
   // Overrides the required verifier format for testing purposes. Only one
   // ScopedVerifierFormatOverrideForTest may exist at a time.
@@ -157,6 +146,9 @@ class SandboxedUnpacker : public base::RefCountedThreadSafe<SandboxedUnpacker> {
       const scoped_refptr<base::SequencedTaskRunner>& unpacker_io_task_runner,
       SandboxedUnpackerClient* client);
 
+  SandboxedUnpacker(const SandboxedUnpacker&) = delete;
+  SandboxedUnpacker& operator=(const SandboxedUnpacker&) = delete;
+
   // Start processing the extension, either from a CRX file or already unzipped
   // in a directory. The client is called with the results. The directory form
   // requires the id and base64-encoded public key (for insertion into the
@@ -167,11 +159,9 @@ class SandboxedUnpacker : public base::RefCountedThreadSafe<SandboxedUnpacker> {
                           const base::FilePath& directory);
 
  private:
-  friend class base::RefCountedThreadSafe<SandboxedUnpacker>;
-
   friend class SandboxedUnpackerTest;
 
-  ~SandboxedUnpacker();
+  ~SandboxedUnpacker() override;
 
   // Create |temp_dir_| used to unzip or unpack the extension in.
   bool CreateTempDirectory();
@@ -197,7 +187,7 @@ class SandboxedUnpacker : public base::RefCountedThreadSafe<SandboxedUnpacker> {
   // Callback which is called after the verified contents are uncompressed.
   void OnVerifiedContentsUncompressed(
       const base::FilePath& unzip_dir,
-      data_decoder::DataDecoder::ResultOrError<mojo_base::BigBuffer> result);
+      base::expected<mojo_base::BigBuffer, std::string> result);
 
   // Verifies the decompressed verified contents fetched from the header of CRX
   // and stores them if the verification of these contents is successful.
@@ -215,9 +205,11 @@ class SandboxedUnpacker : public base::RefCountedThreadSafe<SandboxedUnpacker> {
   // Helper which calls ReportFailure.
   void ReportUnpackExtensionFailed(base::StringPiece error);
 
-  void ImageSanitizationDone(ImageSanitizer::Status status,
-                             const base::FilePath& path);
-  void ImageSanitizerDecodedImage(const base::FilePath& path, SkBitmap image);
+  // Implementation of ImageSanitizer::Client:
+  data_decoder::DataDecoder* GetDataDecoder() override;
+  void OnImageSanitizationDone(ImageSanitizer::Status status,
+                               const base::FilePath& path) override;
+  void OnImageDecoded(const base::FilePath& path, SkBitmap image) override;
 
   void ReadMessageCatalogs();
 
@@ -248,7 +240,7 @@ class SandboxedUnpacker : public base::RefCountedThreadSafe<SandboxedUnpacker> {
   void IndexAndPersistJSONRulesetsIfNeeded();
 
   void OnJSONRulesetsIndexed(
-      declarative_net_request::IndexHelper::Result result);
+      declarative_net_request::InstallIndexHelper::Result result);
 
   // Computed hashes: if requested (via ShouldComputeHashes callback in
   // SandbloxedUnpackerClient), calculate hashes of all extensions' resources
@@ -337,8 +329,6 @@ class SandboxedUnpacker : public base::RefCountedThreadSafe<SandboxedUnpacker> {
   // Used during the message catalog rewriting phase to sanitize the extension
   // provided message catalogs.
   std::unique_ptr<JsonFileSanitizer> json_file_sanitizer_;
-
-  DISALLOW_COPY_AND_ASSIGN(SandboxedUnpacker);
 };
 
 }  // namespace extensions

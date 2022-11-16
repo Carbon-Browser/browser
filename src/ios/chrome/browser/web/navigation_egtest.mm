@@ -126,6 +126,19 @@ std::unique_ptr<net::test_server::HttpResponse> WindowLocationHashHandlers(
   return std::move(http_response);
 }
 
+CGVector FixCoordinateOffset(CGVector offset) {
+#if TARGET_IPHONE_SIMULATOR
+  // TODO(crbug.com/1342819): For some unknown reason, the XCUICoordinate
+  // space is scaled by the simulator's scale factor when computing offsets
+  // relative to the app or screen.
+  if (@available(iOS 16, *)) {
+    CGFloat scale = UIScreen.mainScreen.scale;
+    return CGVectorMake(offset.dx * scale, offset.dy * scale);
+  }
+#endif
+  return offset;
+}
+
 }  // namespace
 
 // Integration tests for navigating history via JavaScript and the forward and
@@ -516,7 +529,7 @@ std::unique_ptr<net::test_server::HttpResponse> WindowLocationHashHandlers(
                      "});",
                     kNoHashChangeText, content.c_str()];
 
-  [ChromeEarlGrey executeJavaScript:script];
+  [ChromeEarlGrey evaluateJavaScriptForSideEffect:script];
 }
 
 - (void)verifyBackAndForwardAfterRedirect:(std::string)redirectLabel {
@@ -584,12 +597,6 @@ std::unique_ptr<net::test_server::HttpResponse> WindowLocationHashHandlers(
 // Tests that navigating forward from NTP works when resuming from session
 // restore. This is a regression test for https://crbug.com/814790.
 - (void)testRestoreHistoryToNTPAndNavigateForward {
-  // This test fails in iOS 13.4 but is fixed in iOS 14. See crbug.com/1076598.
-  if (base::ios::IsRunningOnOrLater(13, 4, 0) &&
-      !base::ios::IsRunningOnIOS14OrLater()) {
-    EARL_GREY_TEST_DISABLED(@"Test disabled on iOS 13.4 but enabled in iOS 14");
-  }
-
   GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
   const GURL destinationURL = self.testServer->GetURL(kSimpleFileBasedTestURL);
   [ChromeEarlGrey loadURL:destinationURL];
@@ -615,6 +622,61 @@ std::unique_ptr<net::test_server::HttpResponse> WindowLocationHashHandlers(
   [ChromeEarlGrey triggerRestoreViaTabGridRemoveAllUndo];
   [[EarlGrey selectElementWithMatcher:OmniboxText("chrome://crash")]
       assertWithMatcher:grey_notNil()];
+}
+
+- (void)testEdgeSwipe {
+  GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
+  [ChromeEarlGrey loadURL:self.testServer->GetURL(kSimpleFileBasedTestURL)];
+  [ChromeEarlGrey waitForWebStateContainingText:"pony"];
+  [ChromeEarlGrey loadURL:self.testServer->GetURL("/history.html")];
+
+  // Edge swipes don't work with EG, use XCUI directly.
+  XCUIApplication* app = [[XCUIApplication alloc] init];
+
+  // Swiping back from WKWebView to WKWebView or to NTP seems fine with an edge
+  // of zero.
+  CGFloat leftEdge = 0;
+  XCUICoordinate* leftEdgeCoord =
+      [app coordinateWithNormalizedOffset:FixCoordinateOffset(
+                                              CGVectorMake(leftEdge, 0.5))];
+  XCUICoordinate* swipeRight = [leftEdgeCoord
+      coordinateWithOffset:FixCoordinateOffset(CGVectorMake(600, 0.5))];
+
+  // Swipe back twice.
+  [leftEdgeCoord pressForDuration:0.1f thenDragToCoordinate:swipeRight];
+  GREYWaitForAppToIdle(@"App failed to idle");
+  [leftEdgeCoord pressForDuration:0.1f thenDragToCoordinate:swipeRight];
+  GREYWaitForAppToIdle(@"App failed to idle");
+
+  // Verify the NTP is visible.
+  [ChromeEarlGrey waitForPageToFinishLoading];
+  [[EarlGrey selectElementWithMatcher:NTPCollectionView()]
+      assertWithMatcher:grey_notNil()];
+
+  // Swiping forward on a WKWebView works with an edge of one, but swiping
+  // forward from the NTP seems to fail with one, so use 0.99.
+  CGFloat rightEdgeNTP = 0.99;
+  CGFloat rightEdge = 1;
+  XCUICoordinate* rightEdgeCoordFromNTP =
+      [app coordinateWithNormalizedOffset:FixCoordinateOffset(
+                                              CGVectorMake(rightEdgeNTP, 0.5))];
+  XCUICoordinate* swipeLeftFromNTP = [rightEdgeCoordFromNTP
+      coordinateWithOffset:FixCoordinateOffset(CGVectorMake(-600, 0.5))];
+
+  // Swiping forward twice and verify each page.
+  [rightEdgeCoordFromNTP pressForDuration:0.1f
+                     thenDragToCoordinate:swipeLeftFromNTP];
+  GREYWaitForAppToIdle(@"App failed to idle");
+  [ChromeEarlGrey waitForWebStateContainingText:"pony"];
+
+  XCUICoordinate* rightEdgeCoord =
+      [app coordinateWithNormalizedOffset:FixCoordinateOffset(
+                                              CGVectorMake(rightEdge, 0.5))];
+  XCUICoordinate* swipeLeft = [rightEdgeCoord
+      coordinateWithOffset:FixCoordinateOffset(CGVectorMake(-600, 0.5))];
+  [rightEdgeCoord pressForDuration:0.1f thenDragToCoordinate:swipeLeft];
+  GREYWaitForAppToIdle(@"App failed to idle");
+  [ChromeEarlGrey waitForWebStateContainingText:"onload"];
 }
 
 @end

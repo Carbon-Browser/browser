@@ -2,8 +2,8 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 #
-# This source code is a part of ABP Chromium.
-# Use of this source code is governed by the GPLv3 that can be found in the docs_abp/LICENSE file.
+# This source code is a part of eyeo Chromium SDK.
+# Use of this source code is governed by the GPLv3 that can be found in the components/adblock/LICENSE file.
 
 
 import("//chrome/common/extensions/api/api_sources.gni")
@@ -32,6 +32,7 @@ function_registration("api_registration") {
     # Different APIs include headers from these targets.
     "//chrome/common",
     "//chrome/common:mojo_bindings",
+    "//components/autofill/core/common/mojom:mojo_types",
     "//components/omnibox/browser",
     "//components/translate/core/browser",
     "//components/zoom",
@@ -44,10 +45,13 @@ function_registration("api_registration") {
     # include generated headers from these targets.
     # TODO(brettw) this should be made unnecessary if possible.
     "//chrome/common/extensions/api",
-    "//components/adblock:adblock",
+    "//components/adblock/content:browser",
     "//components/sync",
     "//skia",
     "//third_party/metrics_proto",
     "//ui/accessibility:ax_enums_mojo",
   ]
+  if (is_chromeos) {
+    deps += [ "//chrome/browser/chromeos/extensions:constants" ]
+  }
 }

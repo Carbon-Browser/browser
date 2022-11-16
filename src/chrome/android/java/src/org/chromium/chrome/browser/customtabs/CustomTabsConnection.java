@@ -41,12 +41,12 @@ import org.chromium.base.Log;
 import org.chromium.base.StrictModeContext;
 import org.chromium.base.SysUtils;
 import org.chromium.base.ThreadUtils;
-import org.chromium.base.TimeUtilsJni;
 import org.chromium.base.TraceEvent;
 import org.chromium.base.annotations.CalledByNative;
 import org.chromium.base.annotations.JNINamespace;
 import org.chromium.base.annotations.NativeMethods;
 import org.chromium.base.metrics.RecordHistogram;
+import org.chromium.base.task.ChainedTasks;
 import org.chromium.base.task.PostTask;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.AppHooks;
@@ -58,12 +58,11 @@ import org.chromium.chrome.browser.browserservices.SessionDataHolder;
 import org.chromium.chrome.browser.browserservices.SessionHandler;
 import org.chromium.chrome.browser.device.DeviceClassManager;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
-import org.chromium.chrome.browser.init.ChainedTasks;
 import org.chromium.chrome.browser.init.ChromeBrowserInitializer;
 import org.chromium.chrome.browser.metrics.PageLoadMetrics;
 import org.chromium.chrome.browser.metrics.UmaSessionStats;
-import org.chromium.chrome.browser.net.spdyproxy.DataReductionProxySettings;
-import org.chromium.chrome.browser.privacy.settings.PrivacyPreferencesManagerImpl;
+import org.chromium.chrome.browser.prefetch.settings.PreloadPagesSettingsBridge;
+import org.chromium.chrome.browser.prefetch.settings.PreloadPagesState;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.components.content_settings.CookieControlsMode;
@@ -166,6 +165,9 @@ public class CustomTabsConnection {
     private static final String ON_RESIZED_CALLBACK = "onResized";
     private static final String ON_RESIZED_SIZE_EXTRA = "size";
 
+    private static final String ON_VERTICAL_SCROLL_EVENT_CALLBACK = "onVerticalScrollEvent";
+    private static final String ON_VERTICAL_SCROLL_EVENT_IS_DIRECTION_UP_EXTRA = "isDirectionUp";
+
     @IntDef({ParallelRequestStatus.NO_REQUEST, ParallelRequestStatus.SUCCESS,
             ParallelRequestStatus.FAILURE_NOT_INITIALIZED,
             ParallelRequestStatus.FAILURE_NOT_AUTHORIZED, ParallelRequestStatus.FAILURE_INVALID_URL,
@@ -209,10 +211,6 @@ public class CustomTabsConnection {
 
     @Nullable
     private Callback<CustomTabsSessionToken> mDisconnectCallback;
-
-    // Conversion between native TimeTicks and SystemClock.uptimeMillis().
-    private long mNativeTickOffsetUs;
-    private boolean mNativeTickOffsetUsComputed;
 
     private volatile ChainedTasks mWarmupTasks;
 
@@ -705,6 +703,8 @@ public class CustomTabsConnection {
         logCall("requestPostMessageChannel() with origin "
                         + (postMessageOrigin != null ? postMessageOrigin.toString() : ""),
                 success);
+        RecordHistogram.recordBooleanHistogram(
+                "CustomTabs.PostMessage.RequestPostMessageChannel", success);
         return success;
     }
 
@@ -1143,6 +1143,22 @@ public class CustomTabsConnection {
     }
 
     /**
+     * Notifies the application of a vertical scroll event, i.e. when a scroll started or changed
+     * direction.
+     *
+     * @param session The Binder object identifying the session.
+     * @param isDirectionUp Whether the scroll direction is up.
+     */
+    public void notifyVerticalScrollEvent(CustomTabsSessionToken session, boolean isDirectionUp) {
+        Bundle args = new Bundle();
+        args.putBoolean(ON_VERTICAL_SCROLL_EVENT_IS_DIRECTION_UP_EXTRA, isDirectionUp);
+
+        if (safeExtraCallback(session, ON_VERTICAL_SCROLL_EVENT_CALLBACK, args)) {
+            logCallback("extraCallback(" + ON_VERTICAL_SCROLL_EVENT_CALLBACK + ")", args);
+        }
+    }
+
+    /**
      * Notifies the application of a navigation event.
      *
      * Delivers the {@link CustomTabsCallback#onNavigationEvent} callback to the application.
@@ -1191,28 +1207,17 @@ public class CustomTabsConnection {
      * Creates a Bundle with a value for navigation start and the specified page load metric.
      *
      * @param metricName Name of the page load metric.
-     * @param navigationStartTick Absolute navigation start time, as TimeTicks taken from native.
+     * @param navigationStartMicros Absolute navigation start time, in microseconds, in
+     *         {@link SystemClock#uptimeMillis()} timebase.
      * @param offsetMs Offset in ms from navigationStart for the page load metric.
      *
      * @return A Bundle containing navigation start and the page load metric.
      */
     Bundle createBundleWithNavigationStartAndPageLoadMetric(
-            String metricName, long navigationStartTick, long offsetMs) {
-        if (!mNativeTickOffsetUsComputed) {
-            // Compute offset from time ticks to uptimeMillis.
-            mNativeTickOffsetUsComputed = true;
-            long nativeNowUs = TimeUtilsJni.get().getTimeTicksNowUs();
-            long javaNowUs = SystemClock.uptimeMillis() * 1000;
-            mNativeTickOffsetUs = nativeNowUs - javaNowUs;
-        }
+            String metricName, long navigationStartMicros, long offsetMs) {
         Bundle args = new Bundle();
         args.putLong(metricName, offsetMs);
-        // SystemClock.uptimeMillis() is used here as it (as of June 2017) uses the same system call
-        // as all the native side of Chrome, that is clock_gettime(CLOCK_MONOTONIC). Meaning that
-        // the offset relative to navigationStart is to be compared with a
-        // SystemClock.uptimeMillis() value.
-        args.putLong(PageLoadMetrics.NAVIGATION_START,
-                (navigationStartTick - mNativeTickOffsetUs) / 1000);
+        args.putLong(PageLoadMetrics.NAVIGATION_START, navigationStartMicros / 1000);
         return args;
     }
 
@@ -1221,16 +1226,17 @@ public class CustomTabsConnection {
      *
      * @param session Session identifier.
      * @param metricName Name of the page load metric.
-     * @param navigationStartTick Absolute navigation start time, as TimeTicks taken from native.
+     * @param navigationStartMicros Absolute navigation start time, in microseconds, in
+     *         {@link SystemClock#uptimeMillis()} timebase.
      * @param offsetMs Offset in ms from navigationStart for the page load metric.
      *
      * @return Whether the metric has been dispatched to the client.
      */
     boolean notifySinglePageLoadMetric(CustomTabsSessionToken session, String metricName,
-            long navigationStartTick, long offsetMs) {
+            long navigationStartMicros, long offsetMs) {
         return notifyPageLoadMetrics(session,
                 createBundleWithNavigationStartAndPageLoadMetric(
-                        metricName, navigationStartTick, offsetMs));
+                        metricName, navigationStartMicros, offsetMs));
     }
 
     /**
@@ -1270,12 +1276,15 @@ public class CustomTabsConnection {
      * Wraps calling extraCallback in a try/catch so exceptions thrown by the host app don't crash
      * Chrome. See https://crbug.com/517023.
      */
+    // The string passed is safe since it is a method name.
+    @SuppressWarnings("NoDynamicStringsInTraceEventCheck")
     protected boolean safeExtraCallback(
             CustomTabsSessionToken session, String callbackName, @Nullable Bundle args) {
         CustomTabsCallback callback = mClientManager.getCallbackForSession(session);
         if (callback == null) return false;
 
-        try {
+        try (TraceEvent te = TraceEvent.scoped(
+                     "CustomTabsConnection::safeExtraCallback", callbackName)) {
             callback.extraCallback(callbackName, args);
         } catch (Exception e) {
             return false;
@@ -1289,12 +1298,15 @@ public class CustomTabsConnection {
      * host app don't crash Chrome.
      */
     @Nullable
+    // The string passed is safe since it is a method name.
+    @SuppressWarnings("NoDynamicStringsInTraceEventCheck")
     public Bundle sendExtraCallbackWithResult(
             CustomTabsSessionToken session, String callbackName, @Nullable Bundle args) {
         CustomTabsCallback callback = mClientManager.getCallbackForSession(session);
         if (callback == null) return null;
 
-        try {
+        try (TraceEvent te = TraceEvent.scoped(
+                     "CustomTabsConnection::safeExtraCallbackWithResult", callbackName)) {
             return callback.extraCallbackWithResult(callbackName, args);
         } catch (Exception e) {
             return null;
@@ -1451,16 +1463,8 @@ public class CustomTabsConnection {
                 == CookieControlsMode.BLOCK_THIRD_PARTY) {
             return SPECULATION_STATUS_ON_START_NOT_ALLOWED_BLOCK_3RD_PARTY_COOKIES;
         }
-        // TODO(yusufo): The check for prerender in PrivacyPreferencesManagerImpl now checks for the
-        // network connection type as well, we should either change that or add another check for
-        // custom tabs. Then that method should be used to make the below check.
-        if (!PrivacyPreferencesManagerImpl.getInstance().getNetworkPredictionEnabled()) {
+        if (PreloadPagesSettingsBridge.getState() == PreloadPagesState.NO_PRELOADING) {
             return SPECULATION_STATUS_ON_START_NOT_ALLOWED_NETWORK_PREDICTION_DISABLED;
-        }
-        if (DataReductionProxySettings.getInstance().isDataReductionProxyEnabled()
-                && !ChromeFeatureList.isEnabled(
-                        ChromeFeatureList.PREDICTIVE_PREFETCHING_ALLOWED_ON_ALL_CONNECTION_TYPES)) {
-            return SPECULATION_STATUS_ON_START_NOT_ALLOWED_DATA_REDUCTION_ENABLED;
         }
         ConnectivityManager cm =
                 (ConnectivityManager) ContextUtils.getApplicationContext().getSystemService(

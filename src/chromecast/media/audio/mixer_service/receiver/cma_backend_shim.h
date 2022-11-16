@@ -9,7 +9,6 @@
 #include <memory>
 #include <string>
 
-#include "base/macros.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
@@ -69,6 +68,9 @@ class CmaBackendShim : public CmaBackend::AudioDecoder::Delegate {
                  const OutputStreamParams& params,
                  MediaPipelineBackendManager* backend_manager);
 
+  CmaBackendShim(const CmaBackendShim&) = delete;
+  CmaBackendShim& operator=(const CmaBackendShim&) = delete;
+
   // Removes this audio output. Public methods must not be called after Remove()
   // is called.
   void Remove();
@@ -112,8 +114,6 @@ class CmaBackendShim : public CmaBackend::AudioDecoder::Delegate {
 
   std::unique_ptr<CmaBackend> cma_backend_;
   CmaBackend::AudioDecoder* audio_decoder_;
-
-  DISALLOW_COPY_AND_ASSIGN(CmaBackendShim);
 };
 
 }  // namespace mixer_service

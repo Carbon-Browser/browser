@@ -2,9 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 
-#include "base/macros.h"
 #include "build/build_config.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
@@ -28,14 +28,15 @@ const char kSimplePage[] = "/focus/page_with_focus.html";
 class BrowserViewFocusTest : public InProcessBrowserTest {
  public:
   BrowserViewFocusTest() = default;
+
+  BrowserViewFocusTest(const BrowserViewFocusTest&) = delete;
+  BrowserViewFocusTest& operator=(const BrowserViewFocusTest&) = delete;
+
   ~BrowserViewFocusTest() override = default;
 
   bool IsViewFocused(ViewID vid) {
     return ui_test_utils::IsViewFocused(browser(), vid);
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(BrowserViewFocusTest);
 };
 
 IN_PROC_BROWSER_TEST_F(BrowserViewFocusTest, BrowsersRememberFocus) {
@@ -64,7 +65,7 @@ IN_PROC_BROWSER_TEST_F(BrowserViewFocusTest, BrowsersRememberFocus) {
 
   // The rest of this test does not make sense on Linux because the behavior
   // of Activate() is not well defined and can vary by window manager.
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   // Open a new browser window.
   Browser* browser2 =
       Browser::Create(Browser::CreateParams(browser()->profile(), true));
@@ -134,7 +135,7 @@ class FocusedViewClassRecorder : public views::FocusChangeListener {
     focus_change_count++;
   }
 
-  views::FocusManager* focus_manager_;
+  raw_ptr<views::FocusManager> focus_manager_;
   bool has_focused_on_non_webview_ = false;
   int focus_change_count = 0;
 };
@@ -150,7 +151,7 @@ IN_PROC_BROWSER_TEST_F(BrowserViewFocusTest, TabChangesAvoidSpuriousFocus) {
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
 
   // Create another tab.
-  AddTabAtIndex(1, url, ui::PAGE_TRANSITION_TYPED);
+  ASSERT_TRUE(AddTabAtIndex(1, url, ui::PAGE_TRANSITION_TYPED));
 
   // Begin recording focus changes.
   gfx::NativeWindow window = browser()->window()->GetNativeWindow();

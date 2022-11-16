@@ -13,6 +13,7 @@
 #include "ash/public/cpp/rounded_image_view.h"
 #include "ash/public/cpp/style/scoped_light_mode_as_default.h"
 #include "ash/style/ash_color_provider.h"
+#include "ash/style/dark_light_mode_controller_impl.h"
 #include "ash/system/holding_space/holding_space_item_view.h"
 #include "base/containers/adapters.h"
 #include "base/i18n/rtl.h"
@@ -40,11 +41,11 @@ namespace {
 constexpr int kDragImageItemViewCornerRadius = 8;
 constexpr int kDragImageItemViewElevation = 2;
 constexpr int kDragImageItemChipViewIconSize = 24;
-constexpr gfx::Insets kDragImageItemChipViewInsets(8, 8, 8, /*right=*/12);
+constexpr auto kDragImageItemChipViewInsets = gfx::Insets::TLBR(8, 8, 8, 12);
 constexpr gfx::Size kDragImageItemChipViewPreferredSize(160, 40);
 constexpr int kDragImageItemChipViewSpacing = 8;
 constexpr gfx::Size kDragImageItemScreenCaptureViewPreferredSize(104, 80);
-constexpr gfx::Insets kDragImageOverflowBadgeInsets = gfx::Insets(0, 8);
+constexpr auto kDragImageOverflowBadgeInsets = gfx::Insets::VH(0, 8);
 constexpr gfx::Size kDragImageOverflowBadgeMinimumSize(24, 24);
 constexpr int kDragImageViewChildOffset = 8;
 
@@ -219,7 +220,7 @@ class DragImageItemChipView : public DragImageItemView {
     icon->SetImage(item->image().GetImageSkia(
         icon->GetPreferredSize(),
         /*dark_background=*/features::IsDarkLightModeEnabled() &&
-            AshColorProvider::Get()->IsDarkModeEnabled()));
+            DarkLightModeControllerImpl::Get()->IsDarkModeEnabled()));
 
     // Label.
     ScopedLightModeAsDefault scoped_light_mode;
@@ -262,7 +263,7 @@ class DragImageItemScreenCaptureView : public DragImageItemView {
     image->SetImage(item->image().GetImageSkia(
         image->GetPreferredSize(),
         /*dark_background=*/features::IsDarkLightModeEnabled() &&
-            AshColorProvider::Get()->IsDarkModeEnabled()));
+            DarkLightModeControllerImpl::Get()->IsDarkModeEnabled()));
   }
 };
 
@@ -313,9 +314,10 @@ class DragImageOverflowBadge : public views::View {
     // Label.
     auto* label = AddChildView(
         bubble_utils::CreateLabel(bubble_utils::LabelStyle::kBadge));
-    label->SetEnabledColor(AshColorProvider::Get()->IsDarkModeEnabled()
-                               ? gfx::kGoogleGrey900
-                               : gfx::kGoogleGrey200);
+    label->SetEnabledColor(
+        DarkLightModeControllerImpl::Get()->IsDarkModeEnabled()
+            ? gfx::kGoogleGrey900
+            : gfx::kGoogleGrey200);
     label->SetText(base::UTF8ToUTF16(base::NumberToString(count)));
   }
 };
@@ -388,8 +390,7 @@ class DragImageView : public views::View {
     // within contents bounds so only half of the badge's preferred `size` needs
     // to be added as insets.
     gfx::Size size = drag_image_overflow_badge_->GetPreferredSize();
-    return gfx::Insets(/*top=*/size.height() / 2, /*left=*/0, /*bottom=*/0,
-                       /*right=*/size.width() / 2);
+    return gfx::Insets::TLBR(size.height() / 2, 0, 0, size.width() / 2);
   }
 
   void Layout() override {

@@ -24,6 +24,7 @@
 #include "ash/wm/lock_state_controller.h"
 #include "ash/wm/mru_window_tracker.h"
 #include "ash/wm/window_util.h"
+#include "base/auto_reset.h"
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/command_line.h"
@@ -192,6 +193,10 @@ bool SessionControllerImpl::IsUserFirstLogin() const {
   return GetUserSession(0)->user_info.is_new_profile;
 }
 
+bool SessionControllerImpl::IsEnterpriseManaged() const {
+  return client_ && client_->IsEnterpriseManaged();
+}
+
 bool SessionControllerImpl::ShouldDisplayManagedUI() const {
   if (!IsActiveUserSessionStarted())
     return false;
@@ -227,11 +232,6 @@ void SessionControllerImpl::CycleActiveUser(CycleUserDirection direction) {
 void SessionControllerImpl::ShowMultiProfileLogin() {
   if (client_)
     client_->ShowMultiProfileLogin();
-}
-
-void SessionControllerImpl::EmitAshInitialized() {
-  if (client_)
-    client_->EmitAshInitialized();
 }
 
 PrefService* SessionControllerImpl::GetSigninScreenPrefService() const {
@@ -364,7 +364,9 @@ void SessionControllerImpl::SetUserSessionOrder(
 }
 
 void SessionControllerImpl::PrepareForLock(PrepareForLockCallback callback) {
-  FullscreenController::MaybeExitFullscreen();
+  if (FullscreenController::ShouldExitFullscreenBeforeLock())
+    FullscreenController::MaybeExitFullscreen();
+
   std::move(callback).Run();
 }
 
@@ -466,6 +468,8 @@ void SessionControllerImpl::SetSessionState(SessionState state) {
   if (state_ == state)
     return;
 
+  base::AutoReset<bool> in_progress(&session_state_change_in_progress_, true);
+
   const bool was_user_session_blocked = IsUserSessionBlocked();
   const bool was_locked = state_ == SessionState::LOCKED;
   state_ = state;
@@ -516,6 +520,7 @@ LoginStatus SessionControllerImpl::CalculateLoginStatus() const {
     case SessionState::OOBE:
     case SessionState::LOGIN_PRIMARY:
     case SessionState::LOGGED_IN_NOT_ACTIVE:
+    case SessionState::RMA:
       return LoginStatus::NOT_LOGGED_IN;
 
     case SessionState::ACTIVE:

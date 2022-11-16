@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/autofill/payments/autofill_dialog_models.h"
 #include "chrome/browser/ui/views/payments/payment_request_sheet_controller.h"
 #include "components/autofill/core/browser/payments/full_card_request.h"
@@ -20,16 +20,14 @@ namespace autofill {
 class AutofillClient;
 }
 
-namespace content {
-class WebContents;
-}
-
 namespace views {
+class Combobox;
 class Textfield;
 }
 
 namespace payments {
 
+class PaymentRequestCvcUnmaskViewControllerVisualTest;
 class PaymentRequestSpec;
 class PaymentRequestState;
 class PaymentRequestDialogView;
@@ -47,7 +45,11 @@ class CvcUnmaskViewController
       const autofill::CreditCard& credit_card,
       base::WeakPtr<autofill::payments::FullCardRequest::ResultDelegate>
           result_delegate,
-      content::WebContents* web_contents);
+      content::RenderFrameHost* render_frame_host);
+
+  CvcUnmaskViewController(const CvcUnmaskViewController&) = delete;
+  CvcUnmaskViewController& operator=(const CvcUnmaskViewController&) = delete;
+
   ~CvcUnmaskViewController() override;
 
   // autofill::RiskDataLoader:
@@ -73,6 +75,7 @@ class CvcUnmaskViewController
   bool ShouldShowSecondaryButton() override;
 
  private:
+  friend PaymentRequestCvcUnmaskViewControllerVisualTest;
   // Called when the user confirms their CVC. This will pass the value to the
   // active FullCardRequest.
   void CvcConfirmed();
@@ -97,7 +100,10 @@ class CvcUnmaskViewController
 
   autofill::MonthComboboxModel month_combobox_model_;
   autofill::YearComboboxModel year_combobox_model_;
-  views::Textfield* cvc_field_;  // owned by the view hierarchy, outlives this.
+  raw_ptr<views::Combobox> month_combobox_ = nullptr;
+  raw_ptr<views::Combobox> year_combobox_ = nullptr;
+  raw_ptr<views::Textfield>
+      cvc_field_;  // owned by the view hierarchy, outlives this.
   autofill::CreditCard credit_card_;
   const content::GlobalRenderFrameHostId frame_routing_id_;
   autofill::payments::PaymentsClient payments_client_;
@@ -105,8 +111,6 @@ class CvcUnmaskViewController
   base::WeakPtr<autofill::CardUnmaskDelegate> unmask_delegate_;
 
   base::WeakPtrFactory<CvcUnmaskViewController> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(CvcUnmaskViewController);
 };
 
 }  // namespace payments

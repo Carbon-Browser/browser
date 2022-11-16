@@ -34,19 +34,23 @@
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/platform/wtf/hash_counted_set.h"
 
+namespace gfx {
+class Point;
+}
+
 namespace ui {
 class AXMode;
 }
 
 namespace blink {
 
+class AXObject;
 class AbstractInlineTextBox;
 class AccessibleNode;
 class HTMLCanvasElement;
 class HTMLOptionElement;
 class HTMLFrameOwnerElement;
 class HTMLSelectElement;
-class IntPoint;
 class LayoutRect;
 class LocalFrameView;
 
@@ -122,6 +126,7 @@ class CORE_EXPORT AXObjectCache : public GarbageCollected<AXObjectCache> {
   virtual void HandleUpdateActiveMenuOption(Node*) = 0;
   virtual void DidShowMenuListPopup(LayoutObject*) = 0;
   virtual void DidHideMenuListPopup(LayoutObject*) = 0;
+  virtual void HandleLoadStart(Document*) = 0;
   virtual void HandleLoadComplete(Document*) = 0;
   virtual void HandleLayoutComplete(Document*) = 0;
   virtual void HandleClicked(Node*) = 0;
@@ -165,10 +170,10 @@ class CORE_EXPORT AXObjectCache : public GarbageCollected<AXObjectCache> {
   virtual const AtomicString& ComputedRoleForNode(Node*) = 0;
   virtual String ComputedNameForNode(Node*) = 0;
 
-  virtual void OnTouchAccessibilityHover(const IntPoint&) = 0;
+  virtual void OnTouchAccessibilityHover(const gfx::Point&) = 0;
 
   virtual AXID GetAXID(Node*) = 0;
-  virtual Element* GetElementFromAXID(AXID) = 0;
+  virtual AXObject* ObjectFromAXID(AXID) const = 0;
 
   typedef AXObjectCache* (*AXObjectCacheCreateFunction)(Document&,
                                                         const ui::AXMode&);

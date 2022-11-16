@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/loader/interactive_detector.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/profiler/sample_metadata.h"
 #include "base/time/default_tick_clock.h"
@@ -27,22 +28,18 @@ int g_num_long_input_events = 0;
 // The threshold to emit the "Long Input Delay" trace event is the 99th
 // percentile of the histogram on Windows Stable as of Feb 25, 2020.
 constexpr base::TimeDelta kInputDelayTraceEventThreshold =
-    base::TimeDelta::FromMilliseconds(250);
+    base::Milliseconds(250);
 
 // The threshold to emit the "Long First Input Delay" trace event is the 99th
 // percentile of the histogram on Windows Stable as of Feb 27, 2020.
 constexpr base::TimeDelta kFirstInputDelayTraceEventThreshold =
-    base::TimeDelta::FromMilliseconds(575);
+    base::Milliseconds(575);
 
 }  // namespace
 
-// A fix for FID computation.
-const base::Feature kFixFirstInputDelayForDesktop{
-    "FixFirstInputDelayForDesktop", base::FEATURE_DISABLED_BY_DEFAULT};
-
 // Required length of main thread and network quiet window for determining
 // Time to Interactive.
-constexpr auto kTimeToInteractiveWindow = base::TimeDelta::FromSeconds(5);
+constexpr auto kTimeToInteractiveWindow = base::Seconds(5);
 // Network is considered "quiet" if there are no more than 2 active network
 // requests for this duration of time.
 constexpr int kNetworkQuietMaximumConnections = 2;
@@ -50,6 +47,10 @@ constexpr int kNetworkQuietMaximumConnections = 2;
 const char kHistogramInputDelay[] = "PageLoad.InteractiveTiming.InputDelay3";
 const char kHistogramInputTimestamp[] =
     "PageLoad.InteractiveTiming.InputTimestamp3";
+const char kHistogramProcessingTime[] =
+    "PageLoad.InteractiveTiming.ProcessingTime";
+const char kHistogramTimeToNextPaint[] =
+    "PageLoad.InteractiveTiming.TimeToNextPaint";
 
 // static
 const char InteractiveDetector::kSupplementName[] = "InteractiveDetector";
@@ -120,7 +121,7 @@ void InteractiveDetector::StartOrPostponeCITimer(
 
   // We give 1ms extra padding to the timer fire time to prevent floating point
   // arithmetic pitfalls when comparing window sizes.
-  timer_fire_time += base::TimeDelta::FromMilliseconds(1);
+  timer_fire_time += base::Milliseconds(1);
 
   // Return if there is an active timer scheduled to fire later than
   // |timer_fire_time|.
@@ -218,10 +219,6 @@ void InteractiveDetector::HandleForInputDelay(
   if (event_platform_timestamp.is_null())
     return;
 
-  if (event.type() == event_type_names::kMouseup &&
-      !base::FeatureList::IsEnabled(kFixFirstInputDelayForDesktop))
-    return;
-
   // These variables track the values which will be reported to histograms.
   base::TimeDelta delay;
   base::TimeTicks event_timestamp;
@@ -244,24 +241,19 @@ void InteractiveDetector::HandleForInputDelay(
     delay = pending_pointerdown_delay_;
     event_timestamp = pending_pointerdown_timestamp_;
   } else {
-    if (base::FeatureList::IsEnabled(kFixFirstInputDelayForDesktop)) {
-      if (event.type() == event_type_names::kMousedown) {
-        pending_mousedown_delay_ = processing_start - event_platform_timestamp;
-        pending_mousedown_timestamp_ = event_platform_timestamp;
+    if (event.type() == event_type_names::kMousedown) {
+      pending_mousedown_delay_ = processing_start - event_platform_timestamp;
+      pending_mousedown_timestamp_ = event_platform_timestamp;
+      return;
+    } else if (event.type() == event_type_names::kMouseup) {
+      if (pending_mousedown_timestamp_.is_null())
         return;
-      } else if (event.type() == event_type_names::kMouseup) {
-        if (pending_mousedown_timestamp_.is_null())
-          return;
-        delay = pending_mousedown_delay_;
-        event_timestamp = pending_mousedown_timestamp_;
-        pending_mousedown_delay_ = base::TimeDelta();
-        pending_mousedown_timestamp_ = base::TimeTicks();
-      } else {
-        // Record delays for click, keydown.
-        delay = processing_start - event_platform_timestamp;
-        event_timestamp = event_platform_timestamp;
-      }
+      delay = pending_mousedown_delay_;
+      event_timestamp = pending_mousedown_timestamp_;
+      pending_mousedown_delay_ = base::TimeDelta();
+      pending_mousedown_timestamp_ = base::TimeTicks();
     } else {
+      // Record delays for click, keydown.
       delay = processing_start - event_platform_timestamp;
       event_timestamp = event_platform_timestamp;
     }
@@ -303,12 +295,12 @@ void InteractiveDetector::HandleForInputDelay(
     // Apply metadata on stack samples.
     base::ApplyMetadataToPastSamples(
         event_timestamp, event_timestamp + delay,
-        "PageLoad.InteractiveTiming.LongInputDelay", g_num_long_input_events,
-        1);
+        "PageLoad.InteractiveTiming.LongInputDelay", g_num_long_input_events, 1,
+        base::SampleMetadataScope::kProcess);
     g_num_long_input_events++;
   }
 
-  // ELements in |first_input_delays_after_back_forward_cache_restore| is
+  // Elements in |first_input_delays_after_back_forward_cache_restore| is
   // allocated when the page is restored from the back-forward cache. If the
   // last element exists and this is nullopt value, the first input has not come
   // yet after the last time when the page is restored from the cache.
@@ -325,13 +317,11 @@ void InteractiveDetector::HandleForInputDelay(
     GetSupplementable()->Loader()->DidObserveInputDelay(delay);
   }
 
-  UMA_HISTOGRAM_CUSTOM_TIMES(kHistogramInputDelay, delay,
-                             base::TimeDelta::FromMilliseconds(1),
-                             base::TimeDelta::FromSeconds(60), 50);
+  UMA_HISTOGRAM_CUSTOM_TIMES(kHistogramInputDelay, delay, base::Milliseconds(1),
+                             base::Seconds(60), 50);
   UMA_HISTOGRAM_CUSTOM_TIMES(kHistogramInputTimestamp,
                              event_timestamp - page_event_times_.nav_start,
-                             base::TimeDelta::FromMilliseconds(10),
-                             base::TimeDelta::FromMinutes(10), 100);
+                             base::Milliseconds(10), base::Minutes(10), 100);
 
   // Only update longest input delay if page was not backgrounded while the
   // input was queued.
@@ -633,8 +623,8 @@ base::TimeDelta InteractiveDetector::ComputeTotalBlockingTime() {
         std::max(long_task.Low(), page_event_times_.first_contentful_paint);
     base::TimeTicks clipped_end = std::min(long_task.High(), interactive_time_);
     total_blocking_time +=
-        std::max(base::TimeDelta(), clipped_end - clipped_start -
-                                        base::TimeDelta::FromMilliseconds(50));
+        std::max(base::TimeDelta(),
+                 clipped_end - clipped_start - base::Milliseconds(50));
   }
   return total_blocking_time;
 }
@@ -694,6 +684,10 @@ void InteractiveDetector::RecordInputEventTimingUKM(
           time_to_next_paint.InMilliseconds())
       .Record(GetUkmRecorder());
 
+  UmaHistogramCustomTimes(kHistogramProcessingTime, processing_time,
+                          base::Milliseconds(1), base::Seconds(60), 50);
+  UmaHistogramCustomTimes(kHistogramTimeToNextPaint, time_to_next_paint,
+                          base::Milliseconds(1), base::Seconds(60), 50);
   if (!page_event_times_.first_input_processing_time) {
     page_event_times_.first_input_processing_time = processing_time;
     if (GetSupplementable()->Loader()) {

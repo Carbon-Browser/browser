@@ -5,6 +5,7 @@
 #include "ash/system/privacy_screen/privacy_screen_toast_controller.h"
 
 #include "ash/accessibility/accessibility_controller_impl.h"
+#include "ash/bubble/bubble_constants.h"
 #include "ash/shelf/shelf.h"
 #include "ash/shell.h"
 #include "ash/system/status_area_widget.h"
@@ -46,7 +47,7 @@ void PrivacyScreenToastController::ShowToast() {
   TrayBubbleView::InitParams init_params;
   init_params.shelf_alignment = tray_->shelf()->alignment();
   init_params.preferred_width = kPrivacyScreenToastMinWidth;
-  init_params.delegate = this;
+  init_params.delegate = GetWeakPtr();
   init_params.parent_window = tray_->GetBubbleWindowContainer();
   init_params.anchor_view = nullptr;
   init_params.anchor_mode = TrayBubbleView::AnchorMode::kRect;
@@ -54,8 +55,6 @@ void PrivacyScreenToastController::ShowToast() {
   // Decrease bottom and right insets to compensate for the adjustment of
   // the respective edges in Shelf::GetSystemTrayAnchorRect().
   init_params.insets = GetTrayBubbleInsets();
-  init_params.corner_radius = kUnifiedTrayCornerRadius;
-  init_params.has_shadow = false;
   init_params.translucent = true;
 
   bubble_view_ = new TrayBubbleView(init_params);
@@ -112,7 +111,12 @@ std::u16string PrivacyScreenToastController::GetAccessibleNameForBubble() {
   return toast_view_->GetAccessibleName();
 }
 
-void PrivacyScreenToastController::OnPrivacyScreenSettingChanged(bool enabled) {
+void PrivacyScreenToastController::OnPrivacyScreenSettingChanged(
+    bool enabled,
+    bool notify_ui) {
+  if (!notify_ui)
+    return;
+
   if (tray_->IsBubbleShown())
     return;
 
@@ -130,8 +134,8 @@ void PrivacyScreenToastController::StartAutoCloseTimer() {
   if (Shell::Get()->accessibility_controller()->spoken_feedback().enabled())
     autoclose_delay = kTrayPopupAutoCloseDelayInSecondsWithSpokenFeedback;
 
-  close_timer_.Start(FROM_HERE, base::TimeDelta::FromSeconds(autoclose_delay),
-                     this, &PrivacyScreenToastController::HideToast);
+  close_timer_.Start(FROM_HERE, base::Seconds(autoclose_delay), this,
+                     &PrivacyScreenToastController::HideToast);
 }
 
 void PrivacyScreenToastController::UpdateToastView() {

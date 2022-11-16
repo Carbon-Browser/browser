@@ -7,11 +7,17 @@ import("//build/config/ios/asset_catalog.gni")
 group("resources") {
   deps = [
     ":background_color",
+    ":blue_500_color",
+    ":blue_700_color",
     ":blue_color",
     ":blue_halo_color",
     ":close_button_color",
+    ":darker_scrim_background_color",
     ":disabled_tint_color",
     ":favicon_background_color",
+    ":green_500_color",
+    ":green_50_color",
+    ":green_700_color",
     ":green_color",
     ":grey_100_color",
     ":grey_200_color",
@@ -29,6 +35,8 @@ group("resources") {
     ":mdc_secondary_ink_color",
     ":placeholder_image_tint_color",
     ":primary_background_color",
+    ":purple_600_color",
+    ":red_500_color",
     ":red_color",
     ":scrim_background_color",
     ":secondary_background_color",
@@ -37,12 +45,17 @@ group("resources") {
     ":table_view_row_highlight_color",
     ":tertiary_background_color",
     ":text_primary_color",
+    ":text_quaternary_color",
     ":text_secondary_color",
     ":text_tertiary_color",
     ":textfield_background_color",
+    ":textfield_focused_background_color",
+    ":textfield_highlight_background_color",
     ":textfield_placeholder_color",
     ":toolbar_button_color",
     ":toolbar_shadow_color",
+    ":updated_tertiary_background_color",
+    ":yellow_500_color",
   ]
 }
 
@@ -56,6 +69,14 @@ colorset("blue_color") {
 
 colorset("blue_halo_color") {
   sources = [ "blue_halo_color.colorset/Contents.json" ]
+}
+
+colorset("blue_500_color") {
+  sources = [ "blue_500_color.colorset/Contents.json" ]
+}
+
+colorset("blue_700_color") {
+  sources = [ "blue_700_color.colorset/Contents.json" ]
 }
 
 colorset("close_button_color") {
@@ -72,6 +93,18 @@ colorset("favicon_background_color") {
 
 colorset("green_color") {
   sources = [ "green_color.colorset/Contents.json" ]
+}
+
+colorset("green_50_color") {
+  sources = [ "green_50_color.colorset/Contents.json" ]
+}
+
+colorset("green_500_color") {
+  sources = [ "green_500_color.colorset/Contents.json" ]
+}
+
+colorset("green_700_color") {
+  sources = [ "green_700_color.colorset/Contents.json" ]
 }
 
 colorset("grey_50_color") {
@@ -118,6 +151,18 @@ colorset("red_color") {
   sources = [ "red_color.colorset/Contents.json" ]
 }
 
+colorset("red_500_color") {
+  sources = [ "red_500_color.colorset/Contents.json" ]
+}
+
+colorset("purple_600_color") {
+  sources = [ "purple_600_color.colorset/Contents.json" ]
+}
+
+colorset("yellow_500_color") {
+  sources = [ "yellow_500_color.colorset/Contents.json" ]
+}
+
 colorset("mdc_ink_color") {
   sources = [ "mdc_ink_color.colorset/Contents.json" ]
 }
@@ -132,6 +177,10 @@ colorset("placeholder_image_tint_color") {
 
 colorset("scrim_background_color") {
   sources = [ "scrim_background_color.colorset/Contents.json" ]
+}
+
+colorset("darker_scrim_background_color") {
+  sources = [ "darker_scrim_background_color.colorset/Contents.json" ]
 }
 
 colorset("separator_color") {
@@ -150,12 +199,20 @@ colorset("tertiary_background_color") {
   sources = [ "tertiary_background_color.colorset/Contents.json" ]
 }
 
+colorset("updated_tertiary_background_color") {
+  sources = [ "updated_tertiary_background_color.colorset/Contents.json" ]
+}
+
 colorset("text_tertiary_color") {
   sources = [ "text_tertiary_color.colorset/Contents.json" ]
 }
 
 colorset("text_primary_color") {
   sources = [ "text_primary_color.colorset/Contents.json" ]
+}
+
+colorset("text_quaternary_color") {
+  sources = [ "text_quaternary_color.colorset/Contents.json" ]
 }
 
 colorset("text_secondary_color") {
@@ -166,8 +223,16 @@ colorset("textfield_placeholder_color") {
   sources = [ "textfield_placeholder_color.colorset/Contents.json" ]
 }
 
+colorset("textfield_highlight_background_color") {
+  sources = [ "textfield_highlight_background_color.colorset/Contents.json" ]
+}
+
 colorset("textfield_background_color") {
   sources = [ "textfield_background_color.colorset/Contents.json" ]
+}
+
+colorset("textfield_focused_background_color") {
+  sources = [ "textfield_focused_background_color.colorset/Contents.json" ]
 }
 
 colorset("toolbar_button_color") {

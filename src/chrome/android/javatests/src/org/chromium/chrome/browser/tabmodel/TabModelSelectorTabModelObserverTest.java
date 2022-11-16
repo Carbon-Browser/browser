@@ -26,7 +26,8 @@ import java.util.List;
 import java.util.concurrent.TimeoutException;
 
 /**
- * Tests for the TabModelSelectorTabModelObserver.
+ * Integration tests for the TabModelSelectorTabModelObserver.
+ * See TabModelSelectorTabModelObserverUnitTest.java for unit tests.
  */
 @RunWith(BaseJUnit4ClassRunner.class)
 @Batch(Batch.PER_CLASS)
@@ -65,11 +66,6 @@ public class TabModelSelectorTabModelObserverTest {
         mSelector = new TabModelSelectorBase(null, EmptyTabModelFilter::new, false) {
             @Override
             public void requestToShowTab(Tab tab, int type) {}
-
-            @Override
-            public boolean closeAllTabsRequest(boolean incognito) {
-                return false;
-            }
 
             @Override
             public boolean isSessionRestoreInProgress() {

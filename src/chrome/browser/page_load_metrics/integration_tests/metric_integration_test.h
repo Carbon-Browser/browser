@@ -66,6 +66,8 @@ class MetricIntegrationTest : public InProcessBrowserTest {
   // resource at the URL "/test.html".
   void LoadHTML(const std::string& content);
 
+  content::RenderWidgetHost* GetRenderWidgetHost();
+
   // Begin trace collection for the specified trace categories. The
   // trace includes events from all processes (browser and renderer).
   void StartTracing(const std::vector<std::string>& categories);
@@ -91,6 +93,10 @@ class MetricIntegrationTest : public InProcessBrowserTest {
   // metric name and value.
   void ExpectUKMPageLoadMetric(base::StringPiece metric_name,
                                int64_t expected_value);
+
+  void ExpectUKMPageLoadMetricFlagSet(base::StringPiece metric_name,
+                                      uint32_t flag_set,
+                                      bool expected);
 
   void ExpectUKMPageLoadMetricNear(base::StringPiece metric_name,
                                    double expected_value,

@@ -149,16 +149,15 @@ SelectToSpeakMenuView::SelectToSpeakMenuView(Delegate* delegate)
                           base::Unretained(this),
                           base::Unretained(speed_button_)))),
           views::Builder<views::Separator>()
-              .SetColor(AshColorProvider::Get()->GetContentLayerColor(
-                  AshColorProvider::ContentLayerType::kSeparatorColor))
-              .SetPreferredHeight(kSeparatorHeight)
-              .SetBorder(views::CreateEmptyBorder(
+              .SetColorId(ui::kColorAshSystemUIMenuSeparator)
+              .SetPreferredLength(kSeparatorHeight)
+              .SetBorder(views::CreateEmptyBorder(gfx::Insets::TLBR(
                   separator_spacing - kUnifiedTopShortcutSpacing, 0,
-                  separator_spacing, 0)),
+                  separator_spacing, 0))),
           views::Builder<views::BoxLayoutView>()
-              .SetInsideBorderInsets(gfx::Insets(0, kStopButtonPadding,
-                                                 kStopButtonPadding,
-                                                 kStopButtonPadding))
+              .SetInsideBorderInsets(gfx::Insets::TLBR(0, kStopButtonPadding,
+                                                       kStopButtonPadding,
+                                                       kStopButtonPadding))
               .SetBetweenChildSpacing(kStopButtonPadding)
               .AddChildren(
                   views::Builder<FloatingMenuButton>()
@@ -273,14 +272,14 @@ void SelectToSpeakMenuView::OnButtonPressed(views::Button* sender) {
 
   switch (action) {
     case SelectToSpeakPanelAction::kPreviousParagraph:
-      ABSL_FALLTHROUGH_INTENDED;
+      [[fallthrough]];
     case SelectToSpeakPanelAction::kNextParagraph:
       base::UmaHistogramEnumeration(
           kParagraphNavigationMethodHistogramName,
           CrosSelectToSpeakActivationMethod::kMenuButton);
       break;
     case SelectToSpeakPanelAction::kPreviousSentence:
-      ABSL_FALLTHROUGH_INTENDED;
+      [[fallthrough]];
     case SelectToSpeakPanelAction::kNextSentence:
       base::UmaHistogramEnumeration(
           kSentenceNavigationMethodHistogramName,

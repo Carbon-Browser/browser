@@ -8,7 +8,8 @@
 #include "services/metrics/public/cpp/ukm_builders.h"
 
 PageAnchorsMetricsObserver::AnchorsData::AnchorsData(
-    content::WebContents* contents) {}
+    content::WebContents* contents)
+    : content::WebContentsUserData<AnchorsData>(*contents) {}
 
 PageAnchorsMetricsObserver::AnchorsData::~AnchorsData() = default;
 
@@ -34,7 +35,7 @@ void PageAnchorsMetricsObserver::AnchorsData::Clear() {
   link_locations_.clear();
 }
 
-WEB_CONTENTS_USER_DATA_KEY_IMPL(PageAnchorsMetricsObserver::AnchorsData)
+WEB_CONTENTS_USER_DATA_KEY_IMPL(PageAnchorsMetricsObserver::AnchorsData);
 
 void PageAnchorsMetricsObserver::RecordUkm() {
   PageAnchorsMetricsObserver::AnchorsData* data =
@@ -61,13 +62,44 @@ void PageAnchorsMetricsObserver::RecordUkm() {
   data->Clear();
 }
 
+page_load_metrics::PageLoadMetricsObserver::ObservePolicy
+PageAnchorsMetricsObserver::OnPrerenderStart(
+    content::NavigationHandle* navigation_handle,
+    const GURL& currently_committed_url) {
+  is_in_prerendered_page_ = true;
+  return CONTINUE_OBSERVING;
+}
+
+page_load_metrics::PageLoadMetricsObserver::ObservePolicy
+PageAnchorsMetricsObserver::OnFencedFramesStart(
+    content::NavigationHandle* navigation_handle,
+    const GURL& currently_committed_url) {
+  // This class is interested only in the primary page's end of life timing,
+  // and doesn't need to continue observing FencedFrame pages.
+  return STOP_OBSERVING;
+}
+
 void PageAnchorsMetricsObserver::OnComplete(
     const page_load_metrics::mojom::PageLoadTiming&) {
+  // Do not report Ukm while prerendering.
+  if (is_in_prerendered_page_)
+    return;
+
   RecordUkm();
 }
 page_load_metrics::PageLoadMetricsObserver::ObservePolicy
 PageAnchorsMetricsObserver::FlushMetricsOnAppEnterBackground(
     const page_load_metrics::mojom::PageLoadTiming&) {
+  // Do not report Ukm while prerendering.
+  if (is_in_prerendered_page_)
+    return CONTINUE_OBSERVING;
+
   RecordUkm();
   return STOP_OBSERVING;
+}
+
+void PageAnchorsMetricsObserver::DidActivatePrerenderedPage(
+    content::NavigationHandle* navigation_handle) {
+  DCHECK(is_in_prerendered_page_);
+  is_in_prerendered_page_ = false;
 }

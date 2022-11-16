@@ -27,8 +27,13 @@ const int kBufferSize = 4096;
 }  // namespace
 
 class ContentDecoderToolTest : public PlatformTest {
+ public:
+  ContentDecoderToolTest(const ContentDecoderToolTest&) = delete;
+  ContentDecoderToolTest& operator=(const ContentDecoderToolTest&) = delete;
+
  protected:
   ContentDecoderToolTest() : gzip_encoded_len_(kBufferSize) {}
+
   void SetUp() override {
     PlatformTest::SetUp();
 
@@ -68,8 +73,6 @@ class ContentDecoderToolTest : public PlatformTest {
   // Original source encoded with gzip.
   char gzip_encoded_[kBufferSize];
   size_t gzip_encoded_len_;
-
-  DISALLOW_COPY_AND_ASSIGN(ContentDecoderToolTest);
 };
 
 TEST_F(ContentDecoderToolTest, TestGzip) {
@@ -85,7 +88,7 @@ TEST_F(ContentDecoderToolTest, TestGzip) {
 TEST_F(ContentDecoderToolTest, TestBrotli) {
   // In Cronet build, brotli sources are excluded due to binary size concern.
   // In such cases, skip the test.
-  std::unique_ptr<MockSourceStream> mock_source_stream(new MockSourceStream());
+  auto mock_source_stream = std::make_unique<MockSourceStream>();
   bool brotli_disabled =
       CreateBrotliSourceStream(std::move(mock_source_stream)) == nullptr;
   if (brotli_disabled)

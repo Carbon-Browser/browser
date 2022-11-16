@@ -7,17 +7,19 @@
 
 #include <map>
 #include <memory>
+#include <string>
 #include <utility>
 
 #include "base/callback.h"
 #include "base/containers/flat_map.h"
+#include "base/files/file_path.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/strings/string_piece.h"
 #include "components/reporting/compression/compression_module.h"
 #include "components/reporting/encryption/encryption_module_interface.h"
-#include "components/reporting/proto/record.pb.h"
-#include "components/reporting/proto/record_constants.pb.h"
+#include "components/reporting/proto/synced/record.pb.h"
+#include "components/reporting/proto/synced/record_constants.pb.h"
 #include "components/reporting/storage/storage_configuration.h"
 #include "components/reporting/storage/storage_queue.h"
 #include "components/reporting/storage/storage_uploader_interface.h"
@@ -48,7 +50,7 @@ class Storage : public base::RefCountedThreadSafe<Storage> {
              base::OnceCallback<void(Status)> completion_cb);
 
   // Confirms acceptance of the records according to the priority up to
-  // |sequencing_id| (inclusively). All records with sequeincing ids <= this
+  // |sequencing_id| (inclusively). All records with sequencing ids <= this
   // one can be removed from the Storage, and can no longer be uploaded.
   // If |force| is false (which is used in most cases), |sequencing_id| is
   // only accepted if no higher ids were confirmed before; otherwise it is
@@ -67,6 +69,8 @@ class Storage : public base::RefCountedThreadSafe<Storage> {
   // If the server attached signed encryption key to the response, it needs to
   // be paased here.
   void UpdateEncryptionKey(SignedEncryptionInfo signed_encryption_key);
+
+  const StorageOptions& options() const { return options_; }
 
   Storage(const Storage& other) = delete;
   Storage& operator=(const Storage& other) = delete;

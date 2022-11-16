@@ -39,7 +39,7 @@
             android:visibility="invisible"
             app:tint="@color/default_icon_color_tint_list" />
         <view
-            class="org.chromium.chrome.browser.customtabs.features.toolbar.CustomTabToolbar$InterceptTouchLayout"
+            class="org.chromium.chrome.browser.customtabs.features.toolbar.InterceptTouchLayout"
             android:id="@+id/title_url_container"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -78,7 +78,7 @@
     <LinearLayout
         android:id="@+id/action_buttons"
         android:layout_width="wrap_content"
-        android:layout_height="match_parent"
+        android:layout_height="wrap_content"
         android:layout_marginEnd="42dp"
         android:layout_gravity="center_vertical|end"
         android:gravity="center_vertical"

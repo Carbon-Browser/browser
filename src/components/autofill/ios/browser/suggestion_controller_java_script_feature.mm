@@ -7,6 +7,7 @@
 #import <Foundation/Foundation.h>
 
 #include "base/bind.h"
+#include "base/no_destructor.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/time/time.h"
 #include "base/values.h"
@@ -20,7 +21,7 @@ namespace autofill {
 
 namespace {
 
-const char kScriptName[] = "suggestion_controller_js";
+const char kScriptName[] = "suggestion_controller";
 
 // The timeout for any JavaScript call in this file.
 const int64_t kJavaScriptExecutionTimeoutInSeconds = 5;
@@ -131,7 +132,7 @@ void SuggestionControllerJavaScriptFeature::
       frame, "suggestion.hasPreviousNextElements", parameters,
       base::BindOnce(&ProcessPreviousAndNextElementsPresenceResult,
                      std::move(completion_handler)),
-      base::TimeDelta::FromSeconds(kJavaScriptExecutionTimeoutInSeconds));
+      base::Seconds(kJavaScriptExecutionTimeoutInSeconds));
 }
 
 void SuggestionControllerJavaScriptFeature::CloseKeyboardForFrame(

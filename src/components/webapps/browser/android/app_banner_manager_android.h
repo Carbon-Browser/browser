@@ -13,7 +13,8 @@
 #include "base/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "components/webapps/browser/android/add_to_homescreen_installer.h"
-#include "components/webapps/browser/android/installable/installable_ambient_badge_infobar_delegate.h"
+#include "components/webapps/browser/android/installable/installable_ambient_badge_client.h"
+#include "components/webapps/browser/android/installable/installable_ambient_badge_message_controller.h"
 #include "components/webapps/browser/banners/app_banner_manager.h"
 #include "url/gurl.h"
 
@@ -45,9 +46,8 @@ struct AddToHomescreenParams;
 //
 // TODO(crbug.com/1147268): remove remaining Chrome-specific functionality and
 // move to //components/webapps.
-class AppBannerManagerAndroid
-    : public AppBannerManager,
-      public InstallableAmbientBadgeInfoBarDelegate::Client {
+class AppBannerManagerAndroid : public AppBannerManager,
+                                public InstallableAmbientBadgeClient {
  public:
   explicit AppBannerManagerAndroid(content::WebContents* web_contents);
   AppBannerManagerAndroid(const AppBannerManagerAndroid&) = delete;
@@ -83,7 +83,7 @@ class AppBannerManagerAndroid
   // AppBannerManager overrides.
   void RequestAppBanner(const GURL& validated_url) override;
 
-  // InstallableAmbientBadgeInfoBarDelegate::Client overrides.
+  // InstallableAmbientBadgeClient overrides.
   void AddToHomescreenFromBadge() override;
   void BadgeDismissed() override;
 
@@ -97,6 +97,11 @@ class AppBannerManagerAndroid
 
   // Returns the appropriate app name based on whether we have a native/web app.
   std::u16string GetAppName() const override;
+
+  // Returns false if the bottom sheet can't be shown. In that case an
+  // alternative UI should be shown.
+  bool MaybeShowPwaBottomSheetController(bool expand_sheet,
+                                         WebappInstallSource install_source);
 
  protected:
   // AppBannerManager overrides.
@@ -177,6 +182,9 @@ class AppBannerManagerAndroid
 
   // The Java-side AppBannerManager.
   base::android::ScopedJavaGlobalRef<jobject> java_banner_manager_;
+
+  // Message controller for the ambient badge.
+  InstallableAmbientBadgeMessageController message_controller_{this};
 
   // App package name for a native app banner.
   std::string native_app_package_;

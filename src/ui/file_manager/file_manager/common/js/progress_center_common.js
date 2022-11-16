@@ -10,7 +10,7 @@ export const ProgressItemState = {
   PROGRESSING: 'progressing',
   COMPLETED: 'completed',
   ERROR: 'error',
-  CANCELED: 'canceled'
+  CANCELED: 'canceled',
 };
 Object.freeze(ProgressItemState);
 
@@ -21,14 +21,20 @@ Object.freeze(ProgressItemState);
 export const ProgressItemType = {
   // The item is file copy operation.
   COPY: 'copy',
-  // The item is file move operation.
-  MOVE: 'move',
   // The item is file delete operation.
   DELETE: 'delete',
+  // The item is emptying the trash operation.
+  EMPTY_TRASH: 'empty-trash',
+  // The item is file extract operation.
+  EXTRACT: 'extract',
+  // The item is file move operation.
+  MOVE: 'move',
   // The item is file zip operation.
   ZIP: 'zip',
   // The item is drive sync operation.
   SYNC: 'sync',
+  // The item is restoring the trash.
+  RESTORE: 'restore',
   // The item is general file transfer operation.
   // This is used for the mixed operation of summarized item.
   TRANSFER: 'transfer',
@@ -37,7 +43,7 @@ export const ProgressItemType = {
   // The item is archive operation.
   MOUNT_ARCHIVE: 'mount_archive',
   // The item is external drive partitioning operation.
-  PARTITION: 'partition'
+  PARTITION: 'partition',
 };
 Object.freeze(ProgressItemType);
 
@@ -118,20 +124,6 @@ export class ProgressCenterItem {
      * @type {?function()}
      */
     this.cancelCallback = null;
-
-    /**
-     * The current speed of the progress item in bytes per second.
-     * It's calculated using moving average formula.
-     * @type {number}
-     */
-    this.currentSpeed;
-
-    /**
-     * The average speed of the progress item in bytes per second.
-     * It is calculated using cumulative moving average.
-     * @type {number}
-     */
-    this.averageSpeed;
 
     /**
      * The predicted remaining time to complete the progress item in seconds.

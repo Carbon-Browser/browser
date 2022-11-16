@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "build/build_config.h"
 #include "chrome/browser/safe_browsing/incident_reporting/delayed_analysis_callback.h"
@@ -29,7 +30,7 @@ class TrackedPreferenceValidationDelegate;
 
 namespace safe_browsing {
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
 class DownloadProtectionService;
 #endif
 class IncidentReportingService;
@@ -51,7 +52,7 @@ class ServicesDelegate {
   class ServicesCreator {
    public:
     virtual bool CanCreateDatabaseManager() = 0;
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
     virtual bool CanCreateDownloadProtectionService() = 0;
 #endif
     virtual bool CanCreateIncidentReportingService() = 0;
@@ -59,7 +60,7 @@ class ServicesDelegate {
     // Caller takes ownership of the returned object. Cannot use std::unique_ptr
     // because services may not be implemented for some build configs.
     virtual SafeBrowsingDatabaseManager* CreateDatabaseManager() = 0;
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
     virtual DownloadProtectionService* CreateDownloadProtectionService() = 0;
 #endif
     virtual IncidentReportingService* CreateIncidentReportingService() = 0;
@@ -103,14 +104,13 @@ class ServicesDelegate {
       content::DownloadManager* download_manager) = 0;
 
   // Returns nullptr for any service that is not available.
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
   virtual DownloadProtectionService* GetDownloadService() = 0;
 #endif
 
-  // Takes a SharedURLLoaderFactory with the Safe Browsing NetworkContext and
-  // one from the BrowserProcess.
+  // Takes a SharedURLLoaderFactory from the BrowserProcess, for use in the
+  // database manager.
   virtual void StartOnIOThread(
-      scoped_refptr<network::SharedURLLoaderFactory> sb_url_loader_factory,
       scoped_refptr<network::SharedURLLoaderFactory> browser_url_loader_factory,
       const V4ProtocolConfig& v4_config) = 0;
   virtual void StopOnIOThread(bool shutdown) = 0;
@@ -118,12 +118,14 @@ class ServicesDelegate {
   virtual void CreateTelemetryService(Profile* profile) {}
   virtual void RemoveTelemetryService(Profile* profile) {}
 
+  virtual void OnProfileWillBeDestroyed(Profile* profile) {}
+
  protected:
   // Unowned pointer
-  SafeBrowsingService* const safe_browsing_service_;
+  const raw_ptr<SafeBrowsingService> safe_browsing_service_;
 
   // Unowned pointer
-  ServicesCreator* const services_creator_;
+  const raw_ptr<ServicesCreator> services_creator_;
 };
 
 }  // namespace safe_browsing

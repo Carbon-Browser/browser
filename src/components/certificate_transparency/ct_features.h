@@ -5,11 +5,13 @@
 #ifndef COMPONENTS_CERTIFICATE_TRANSPARENCY_CT_FEATURES_H_
 #define COMPONENTS_CERTIFICATE_TRANSPARENCY_CT_FEATURES_H_
 
+#include "base/component_export.h"
 #include "base/feature_list.h"
 
 namespace certificate_transparency {
 namespace features {
 
+COMPONENT_EXPORT(CERTIFICATE_TRANSPARENCY)
 extern const base::Feature kCertificateTransparencyComponentUpdater;
 
 }  // namespace features

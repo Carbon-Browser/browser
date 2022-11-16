@@ -5,7 +5,6 @@
 #ifndef CHROME_BROWSER_PRINTING_PRINT_VIEW_MANAGER_BASIC_H_
 #define CHROME_BROWSER_PRINTING_PRINT_VIEW_MANAGER_BASIC_H_
 
-#include "base/macros.h"
 #include "build/build_config.h"
 #include "chrome/browser/printing/print_view_manager_base.h"
 #include "content/public/browser/web_contents_user_data.h"
@@ -17,13 +16,16 @@ class PrintViewManagerBasic
     : public PrintViewManagerBase,
       public content::WebContentsUserData<PrintViewManagerBasic> {
  public:
+  PrintViewManagerBasic(const PrintViewManagerBasic&) = delete;
+  PrintViewManagerBasic& operator=(const PrintViewManagerBasic&) = delete;
+
   ~PrintViewManagerBasic() override;
 
   static void BindPrintManagerHost(
       mojo::PendingAssociatedReceiver<mojom::PrintManagerHost> receiver,
       content::RenderFrameHost* rfh);
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   // printing::PrintManager:
   void PdfWritingDone(int page_count) override;
 #endif
@@ -33,8 +35,6 @@ class PrintViewManagerBasic
   friend class content::WebContentsUserData<PrintViewManagerBasic>;
 
   WEB_CONTENTS_USER_DATA_KEY_DECL();
-
-  DISALLOW_COPY_AND_ASSIGN(PrintViewManagerBasic);
 };
 
 }  // namespace printing

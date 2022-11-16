@@ -8,14 +8,15 @@ GEN_INCLUDE(['//chrome/test/data/webui/polymer_interactive_ui_test.js']);
 
 GEN('#include "content/public/test/browser_test.h"');
 
+/* eslint-disable no-var */
+
 class NewTabPageInteractiveTest extends PolymerInteractiveUITest {
   /** @override */
   get browsePreload() {
-    throw 'this is abstract and should be overriden by subclasses';
+    throw new Error('this is abstract and should be overriden by subclasses');
   }
 }
 
-// eslint-disable-next-line no-var
 var NewTabPageCustomizeDialogFocusTest =
     class extends NewTabPageInteractiveTest {
   /** @override */
@@ -28,7 +29,6 @@ TEST_F('NewTabPageCustomizeDialogFocusTest', 'All', function() {
   mocha.run();
 });
 
-// eslint-disable-next-line no-var
 var NewTabPageDoodleShareDialogFocusTest =
     class extends NewTabPageInteractiveTest {
   /** @override */

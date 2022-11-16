@@ -7,12 +7,16 @@
 
 #include <map>
 #include <string>
+#include <utility>
 #include <vector>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
+#include "base/strings/string_split.h"
 #include "build/build_config.h"
 #include "ui/accessibility/ax_enums.mojom-forward.h"
 #include "ui/accessibility/ax_node.h"
+#include "ui/accessibility/ax_node_position.h"
+#include "ui/accessibility/ax_text_attributes.h"
 #include "ui/accessibility/platform/ax_platform_node.h"
 #include "ui/accessibility/platform/ax_platform_node_delegate.h"
 #include "ui/accessibility/platform/ax_platform_text_boundary.h"
@@ -57,23 +61,24 @@ struct AX_EXPORT AXLegacyHypertext {
 
 class AX_EXPORT AXPlatformNodeBase : public AXPlatformNode {
  public:
-  AXPlatformNodeBase();
-  ~AXPlatformNodeBase() override;
+  using AXPosition = AXNodePosition::AXPositionInstance;
 
-  virtual void Init(AXPlatformNodeDelegate* delegate);
+  ~AXPlatformNodeBase() override;
+  AXPlatformNodeBase(const AXPlatformNodeBase&) = delete;
+  AXPlatformNodeBase& operator=(const AXPlatformNodeBase&) = delete;
 
   // These are simple wrappers to our delegate.
   const AXNodeData& GetData() const;
   gfx::NativeViewAccessible GetFocus() const;
   gfx::NativeViewAccessible GetParent() const;
-  int GetChildCount() const;
-  gfx::NativeViewAccessible ChildAtIndex(int index) const;
+  size_t GetChildCount() const;
+  gfx::NativeViewAccessible ChildAtIndex(size_t index) const;
 
   std::string GetName() const;
 
   // This returns nullopt if there's no parent, it's unable to find the child in
   // the list of its parent's children, or its parent doesn't have children.
-  virtual absl::optional<int> GetIndexInParent();
+  virtual absl::optional<size_t> GetIndexInParent();
 
   // Returns a stack of ancestors of this node. The node at the top of the stack
   // is the top most ancestor.
@@ -92,7 +97,7 @@ class AX_EXPORT AXPlatformNodeBase : public AXPlatformNode {
   gfx::NativeViewAccessible GetNativeViewAccessible() override;
   void NotifyAccessibilityEvent(ax::mojom::Event event_type) override;
 
-#if defined(OS_APPLE)
+#if BUILDFLAG(IS_APPLE)
   void AnnounceText(const std::u16string& text) override;
 #endif
 
@@ -100,11 +105,16 @@ class AX_EXPORT AXPlatformNodeBase : public AXPlatformNode {
   bool IsDescendantOf(AXPlatformNode* ancestor) const override;
 
   // Helpers.
+  AXPlatformNodeBase* GetPlatformParent() const;
   AXPlatformNodeBase* GetPreviousSibling() const;
   AXPlatformNodeBase* GetNextSibling() const;
   AXPlatformNodeBase* GetFirstChild() const;
   AXPlatformNodeBase* GetLastChild() const;
   bool IsDescendant(AXPlatformNodeBase* descendant);
+
+  AXNodeID GetNodeId() const;
+  AXPlatformNodeBase* GetActiveDescendant() const;
+  AXPlatformNodeBase* GetPlatformTextFieldAncestor() const;
 
   using AXPlatformNodeChildIterator =
       ui::AXNode::ChildIteratorBase<AXPlatformNodeBase,
@@ -125,10 +135,14 @@ class AX_EXPORT AXPlatformNodeBase : public AXPlatformNode {
   bool GetFloatAttribute(ax::mojom::FloatAttribute attribute,
                          float* value) const;
 
+  const std::vector<std::pair<ax::mojom::IntAttribute, int32_t>>&
+  GetIntAttributes() const;
   bool HasIntAttribute(ax::mojom::IntAttribute attribute) const;
   int GetIntAttribute(ax::mojom::IntAttribute attribute) const;
   bool GetIntAttribute(ax::mojom::IntAttribute attribute, int* value) const;
 
+  const std::vector<std::pair<ax::mojom::StringAttribute, std::string>>&
+  GetStringAttributes() const;
   bool HasStringAttribute(ax::mojom::StringAttribute attribute) const;
   const std::string& GetStringAttribute(
       ax::mojom::StringAttribute attribute) const;
@@ -149,6 +163,9 @@ class AX_EXPORT AXPlatformNodeBase : public AXPlatformNode {
   bool GetInheritedString16Attribute(ax::mojom::StringAttribute attribute,
                                      std::u16string* value) const;
 
+  const std::vector<
+      std::pair<ax::mojom::IntListAttribute, std::vector<int32_t>>>&
+  GetIntListAttributes() const;
   bool HasIntListAttribute(ax::mojom::IntListAttribute attribute) const;
   const std::vector<int32_t>& GetIntListAttribute(
       ax::mojom::IntListAttribute attribute) const;
@@ -161,10 +178,23 @@ class AX_EXPORT AXPlatformNodeBase : public AXPlatformNode {
   bool GetStringListAttribute(ax::mojom::StringListAttribute attribute,
                               std::vector<std::string>* value) const;
 
+  bool HasHtmlAttribute(const char* attribute) const;
+  const base::StringPairs& GetHtmlAttributes() const;
   bool GetHtmlAttribute(const char* attribute, std::string* value) const;
   bool GetHtmlAttribute(const char* attribute, std::u16string* value) const;
 
+  AXTextAttributes GetTextAttributes() const;
+
   bool HasState(ax::mojom::State state) const;
+  ax::mojom::State GetState() const;
+
+  bool HasAction(ax::mojom::Action action) const;
+
+  bool HasTextStyle(ax::mojom::TextStyle text_style) const;
+
+  ax::mojom::NameFrom GetNameFrom() const;
+
+  bool HasNameFromOtherElement() const;
 
   // Returns the selection container if inside one.
   AXPlatformNodeBase* GetSelectionContainer() const;
@@ -301,7 +331,7 @@ class AX_EXPORT AXPlatformNodeBase : public AXPlatformNode {
   // Only text displayed on screen is included. Text from ARIA and HTML
   // attributes that is either not displayed on screen, or outside this node,
   // e.g. aria-label and HTML title, is not returned.
-  std::u16string GetInnerText() const;
+  std::u16string GetTextContentUTF16() const;
 
   // Returns the value of a control such as a text field, a slider, a <select>
   // element, a date picker or an ARIA combo box. In order to minimize
@@ -329,6 +359,7 @@ class AX_EXPORT AXPlatformNodeBase : public AXPlatformNode {
   // This method finds text boundaries in the text used for platform text APIs.
   // Implementations may use side-channel data such as line or word indices to
   // produce appropriate results.
+  // Returns -1 if the requested boundary has not been found.
   virtual int FindTextBoundary(ax::mojom::TextBoundary boundary,
                                int offset,
                                ax::mojom::MoveDirection direction,
@@ -381,7 +412,7 @@ class AX_EXPORT AXPlatformNodeBase : public AXPlatformNode {
   //
   // Delegate.  This is a weak reference which owns |this|.
   //
-  AXPlatformNodeDelegate* delegate_ = nullptr;
+  raw_ptr<AXPlatformNodeDelegate> delegate_ = nullptr;
 
   // Uses the delegate to calculate this node's PosInSet.
   absl::optional<int> GetPosInSet() const;
@@ -395,6 +426,11 @@ class AX_EXPORT AXPlatformNodeBase : public AXPlatformNode {
   bool IsPlatformDocument() const;
 
  protected:
+  AXPlatformNodeBase();
+
+  // AXPlatformNode overrides.
+  void Init(AXPlatformNodeDelegate* delegate) override;
+
   bool IsStructuredAnnotation() const;
   bool IsSelectionItemSupported() const;
 
@@ -519,6 +555,9 @@ class AX_EXPORT AXPlatformNodeBase : public AXPlatformNode {
   int GetHypertextOffsetFromEndpoint(AXPlatformNodeBase* endpoint_object,
                                      int endpoint_offset);
 
+  AXPlatformNodeBase::AXPosition HypertextOffsetToEndpoint(
+      int hypertext_offset) const;
+
   bool IsSameHypertextCharacter(const AXLegacyHypertext& old_hypertext,
                                 size_t old_char_index,
                                 size_t new_char_index);
@@ -527,8 +566,6 @@ class AX_EXPORT AXPlatformNodeBase : public AXPlatformNode {
       size_t* start,
       size_t* old_len,
       size_t* new_len);
-
-  std::string GetInvalidValue() const;
 
   // Based on the characteristics of this object, such as its role and the
   // presence of a multiselectable attribute, returns the maximum number of
@@ -549,7 +586,8 @@ class AX_EXPORT AXPlatformNodeBase : public AXPlatformNode {
   // Is there an aria-describedby that points to a role="tooltip".
   bool IsDescribedByTooltip() const;
 
-  DISALLOW_COPY_AND_ASSIGN(AXPlatformNodeBase);
+  friend AXPlatformNode* AXPlatformNode::Create(
+      AXPlatformNodeDelegate* delegate);
 };
 
 }  // namespace ui

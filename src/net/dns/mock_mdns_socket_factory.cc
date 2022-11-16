@@ -10,7 +10,7 @@
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/location.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "net/base/net_errors.h"
 #include "net/dns/public/util.h"
@@ -80,8 +80,9 @@ void MockMDnsSocketFactory::CreateSockets(
 void MockMDnsSocketFactory::CreateSocket(
     AddressFamily address_family,
     std::vector<std::unique_ptr<DatagramServerSocket>>* sockets) {
-  std::unique_ptr<testing::NiceMock<MockMDnsDatagramServerSocket>> new_socket(
-      new testing::NiceMock<MockMDnsDatagramServerSocket>(address_family));
+  auto new_socket =
+      std::make_unique<testing::NiceMock<MockMDnsDatagramServerSocket>>(
+          address_family);
 
   ON_CALL(*new_socket, SendToInternal(_, _, _))
       .WillByDefault(Invoke(

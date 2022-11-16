@@ -8,6 +8,7 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "build/branding_buildflags.h"
+#include "build/build_config.h"
 #include "chrome/browser/signin/account_consistency_mode_manager.h"
 #include "chrome/browser/ui/webui/webui_util.h"
 #include "chrome/browser/ui/webui/welcome/bookmark_handler.h"
@@ -28,7 +29,7 @@
 #include "net/base/url_util.h"
 #include "ui/base/webui/web_ui_util.h"
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include "base/win/windows_version.h"
 #endif
 
@@ -137,10 +138,10 @@ WelcomeUI::WelcomeUI(content::WebUI* web_ui, const GURL& url)
 
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
   html_source->AddResourcePath("images/background_svgs/logo.svg",
-                               IDR_PRODUCT_LOGO_24PX_1X);
+                               IDR_PRODUCT_LOGO_128PX_SVG);
 #endif
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   html_source->AddBoolean("is_win10",
                           base::win::GetVersion() >= base::win::Version::WIN10);
 #endif

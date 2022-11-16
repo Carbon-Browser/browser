@@ -11,14 +11,13 @@
 #include <memory>
 #include <string>
 
-#include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "base/no_destructor.h"
 #include "base/process/kill.h"
 #include "base/synchronization/lock.h"
 #include "base/thread_annotations.h"
 #include "base/values.h"
 #include "build/build_config.h"
+#include "content/common/content_export.h"
 #include "content/public/browser/gpu_data_manager.h"
 #include "content/public/common/three_d_api_types.h"
 #include "gpu/config/device_perf_info.h"
@@ -27,21 +26,22 @@
 #include "gpu/config/gpu_feature_info.h"
 #include "gpu/config/gpu_info.h"
 #include "gpu/config/gpu_mode.h"
+#include "media/base/supported_video_decoder_config.h"
+#include "media/video/video_encode_accelerator.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "third_party/blink/public/mojom/gpu/gpu.mojom.h"
 #include "ui/display/display_observer.h"
 #include "ui/gfx/gpu_extra_info.h"
+
+#if BUILDFLAG(IS_WIN)
+#include "ui/gfx/mojom/dxgi_info.mojom.h"
+#endif
 
 class GURL;
 
 namespace gpu {
 struct GpuPreferences;
 }
-
-namespace media {
-struct SupportedVideoDecoderConfig;
-using SupportedVideoDecoderConfigs = std::vector<SupportedVideoDecoderConfig>;
-}  // namespace media
 
 namespace content {
 
@@ -64,6 +64,9 @@ class CONTENT_EXPORT GpuDataManagerImpl : public GpuDataManager,
 
   // Getter for the singleton. This will return NULL on failure.
   static GpuDataManagerImpl* GetInstance();
+
+  GpuDataManagerImpl(const GpuDataManagerImpl&) = delete;
+  GpuDataManagerImpl& operator=(const GpuDataManagerImpl&) = delete;
 
   // This returns true after the first call of GetInstance().
   static bool Initialized();
@@ -105,13 +108,13 @@ class CONTENT_EXPORT GpuDataManagerImpl : public GpuDataManager,
   void UpdateGpuInfo(
       const gpu::GPUInfo& gpu_info,
       const absl::optional<gpu::GPUInfo>& gpu_info_for_hardware_gpu);
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   void UpdateDxDiagNode(const gpu::DxDiagNode& dx_diagnostics);
   void UpdateDx12Info(uint32_t d3d12_feature_level);
   void UpdateVulkanInfo(uint32_t vulkan_version);
   void UpdateDevicePerfInfo(const gpu::DevicePerfInfo& device_perf_info);
   void UpdateOverlayInfo(const gpu::OverlayInfo& overlay_info);
-  void UpdateHDRStatus(bool hdr_enabled);
+  void UpdateDXGIInfo(gfx::mojom::DXGIInfoPtr dxgi_info);
   void UpdateDxDiagNodeRequestStatus(bool request_continues);
   void UpdateDx12RequestStatus(bool request_continues);
   void UpdateVulkanRequestStatus(bool request_continues);
@@ -131,8 +134,11 @@ class CONTENT_EXPORT GpuDataManagerImpl : public GpuDataManager,
                             const absl::optional<gpu::GpuFeatureInfo>&
                                 gpu_feature_info_for_hardware_gpu);
   void UpdateGpuExtraInfo(const gfx::GpuExtraInfo& gpu_extra_info);
-  void UpdateMojoMediaVideoCapabilities(
+  void UpdateMojoMediaVideoDecoderCapabilities(
       const media::SupportedVideoDecoderConfigs& configs);
+  void UpdateMojoMediaVideoEncoderCapabilities(
+      const media::VideoEncodeAccelerator::SupportedProfiles&
+          supported_profiles);
 
   gpu::GpuFeatureInfo GetGpuFeatureInfo() const;
 
@@ -162,7 +168,7 @@ class CONTENT_EXPORT GpuDataManagerImpl : public GpuDataManager,
                      const std::string& header,
                      const std::string& message);
 
-  void ProcessCrashed(base::TerminationStatus exit_code);
+  void ProcessCrashed();
 
   // Returns a new copy of the ListValue.
   std::unique_ptr<base::ListValue> GetLogMessages() const;
@@ -227,8 +233,6 @@ class CONTENT_EXPORT GpuDataManagerImpl : public GpuDataManager,
   mutable base::Lock lock_;
   std::unique_ptr<GpuDataManagerImplPrivate> private_ GUARDED_BY(lock_)
       PT_GUARDED_BY(lock_);
-
-  DISALLOW_COPY_AND_ASSIGN(GpuDataManagerImpl);
 };
 
 }  // namespace content

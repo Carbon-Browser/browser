@@ -10,7 +10,6 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
 #include "base/supports_user_data.h"
 #include "content/public/browser/global_routing_id.h"
 #include "content/public/browser/media_player_id.h"
@@ -35,6 +34,11 @@ class WebContentsObserverConsistencyChecker
     : public WebContentsObserver,
       public base::SupportsUserData::Data {
  public:
+  WebContentsObserverConsistencyChecker(
+      const WebContentsObserverConsistencyChecker&) = delete;
+  WebContentsObserverConsistencyChecker& operator=(
+      const WebContentsObserverConsistencyChecker&) = delete;
+
   ~WebContentsObserverConsistencyChecker() override;
 
   // Enables these checks on |web_contents|. Usually
@@ -52,10 +56,8 @@ class WebContentsObserverConsistencyChecker
   void ReadyToCommitNavigation(NavigationHandle* navigation_handle) override;
   void DidFinishNavigation(NavigationHandle* navigation_handle) override;
   void PrimaryPageChanged(Page& page) override;
-  void DocumentAvailableInMainFrame(
-      RenderFrameHost* render_frame_host) override;
-  void DocumentOnLoadCompletedInMainFrame(
-      RenderFrameHost* render_frame_host) override;
+  void PrimaryMainDocumentElementAvailable() override;
+  void DocumentOnLoadCompletedInPrimaryMainFrame() override;
   void DOMContentLoaded(RenderFrameHost* render_frame_host) override;
   void DidFinishLoad(RenderFrameHost* render_frame_host,
                      const GURL& validated_url) override;
@@ -138,8 +140,6 @@ class WebContentsObserverConsistencyChecker
   bool is_loading_;
 
   bool web_contents_destroyed_;
-
-  DISALLOW_COPY_AND_ASSIGN(WebContentsObserverConsistencyChecker);
 };
 
 }  // namespace content

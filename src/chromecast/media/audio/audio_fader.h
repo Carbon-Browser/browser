@@ -8,9 +8,8 @@
 #include <cstdint>
 #include <memory>
 
-#include "base/macros.h"
 #include "base/time/time.h"
-#include "chromecast/media/audio/audio_provider.h"
+#include "chromecast/media/api/audio_provider.h"
 #include "chromecast/media/audio/cast_audio_bus.h"
 
 namespace chromecast {
@@ -28,6 +27,10 @@ class AudioFader : public AudioProvider {
              base::TimeDelta fade_time,
              double playback_rate);
   AudioFader(AudioProvider* provider, int fade_frames, double playback_rate);
+
+  AudioFader(const AudioFader&) = delete;
+  AudioFader& operator=(const AudioFader&) = delete;
+
   ~AudioFader() override;
 
   int buffered_frames() const { return buffered_frames_; }
@@ -91,8 +94,6 @@ class AudioFader : public AudioProvider {
   std::unique_ptr<CastAudioBus> fade_buffer_;
   int buffered_frames_ = 0;
   int fade_frames_remaining_ = 0;
-
-  DISALLOW_COPY_AND_ASSIGN(AudioFader);
 };
 
 }  // namespace media

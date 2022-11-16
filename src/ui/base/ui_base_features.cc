@@ -4,19 +4,47 @@
 
 #include "ui/base/ui_base_features.h"
 
+#include <stdlib.h>
+
+#include "base/feature_list.h"
+#include "base/metrics/field_trial_params.h"
+#include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include "base/win/windows_version.h"
 #endif
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #include "base/android/build_info.h"
+#endif
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "ui/base/shortcut_mapping_pref_delegate.h"
 #endif
 
 namespace features {
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
+// If enabled, the occluded region of the HWND is supplied to WindowTracker.
+const base::Feature kApplyNativeOccludedRegionToWindowTracker{
+    "ApplyNativeOccludedRegionToWindowTracker",
+    base::FEATURE_DISABLED_BY_DEFAULT};
+
+// Once enabled, the exact behavior is dictated by the field trial param
+// name `kApplyNativeOcclusionToCompositorType`.
+const base::Feature kApplyNativeOcclusionToCompositor{
+    "ApplyNativeOcclusionToCompositor", base::FEATURE_DISABLED_BY_DEFAULT};
+
+// Field trial param name for `kApplyNativeOcclusionToCompositor`.
+const char kApplyNativeOcclusionToCompositorType[] = "type";
+// When the WindowTreeHost is occluded or hidden, resources are released and
+// the compositor is hidden. See WindowTreeHost for specifics on what this
+// does.
+const char kApplyNativeOcclusionToCompositorTypeRelease[] = "release";
+// When the WindowTreeHost is occluded the frame rate is throttled.
+const char kApplyNativeOcclusionToCompositorTypeThrottle[] = "throttle";
+
 // If enabled, calculate native window occlusion - Windows-only.
 const base::Feature kCalculateNativeWinOcclusion{
     "CalculateNativeWinOcclusion", base::FEATURE_ENABLED_BY_DEFAULT};
@@ -26,11 +54,8 @@ const base::Feature kCalculateNativeWinOcclusion{
 const base::Feature kScreenPowerListenerForNativeWinOcclusion{
     "ScreenPowerListenerForNativeWinOcclusion",
     base::FEATURE_ENABLED_BY_DEFAULT};
-#endif  // OW_WIN
 
-// Whether or not to delegate color queries to the color provider.
-const base::Feature kColorProviderRedirection = {
-    "ColorProviderRedirection", base::FEATURE_DISABLED_BY_DEFAULT};
+#endif  // BUILDFLAG(IS_WIN)
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 // Integrate input method specific settings to Chrome OS settings page.
@@ -63,7 +88,16 @@ bool IsShortcutCustomizationAppEnabled() {
   return base::FeatureList::IsEnabled(kShortcutCustomizationApp);
 }
 
+// Share the resource file with ash-chrome. This feature reduces the memory
+// consumption while the disk usage slightly increases.
+// https://crbug.com/1253280.
+const base::Feature kLacrosResourcesFileSharing = {
+    "LacrosResourcesFileSharing", base::FEATURE_DISABLED_BY_DEFAULT};
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
+// Enable or disable multitouch for virtual keyboard on ChromeOS.
+const base::Feature kVirtualKeyboardMultitouch{
+    "VirtualKeyboardMultitouch", base::FEATURE_DISABLED_BY_DEFAULT};
 
 // Update of the virtual keyboard settings UI as described in
 // https://crbug.com/876901.
@@ -71,9 +105,22 @@ const base::Feature kInputMethodSettingsUiUpdate = {
     "InputMethodSettingsUiUpdate", base::FEATURE_DISABLED_BY_DEFAULT};
 
 // Enables percent-based scrolling for mousewheel and keyboard initiated
-// scrolls.
-const base::Feature kPercentBasedScrolling = {
-    "PercentBasedScrolling", base::FEATURE_DISABLED_BY_DEFAULT};
+// scrolls and impulse curve animations.
+const enum base::FeatureState kWindowsScrollingPersonalityDefaultStatus =
+    base::FEATURE_DISABLED_BY_DEFAULT;
+static_assert(!BUILDFLAG(IS_MAC) ||
+                  (BUILDFLAG(IS_MAC) &&
+                   kWindowsScrollingPersonalityDefaultStatus ==
+                       base::FEATURE_DISABLED_BY_DEFAULT),
+              "Do not enable this on the Mac. The animation does not match the "
+              "system scroll animation curve to such an extent that it makes "
+              "Chromium stand out in a bad way.");
+const base::Feature kWindowsScrollingPersonality = {
+    "WindowsScrollingPersonality", kWindowsScrollingPersonalityDefaultStatus};
+
+bool IsPercentBasedScrollingEnabled() {
+  return base::FeatureList::IsEnabled(features::kWindowsScrollingPersonality);
+}
 
 // Allows requesting unadjusted movement when entering pointerlock.
 const base::Feature kPointerLockOptions = {"PointerLockOptions",
@@ -83,21 +130,31 @@ const base::Feature kPointerLockOptions = {"PointerLockOptions",
 const base::Feature kSystemCaptionStyle{"SystemCaptionStyle",
                                         base::FEATURE_ENABLED_BY_DEFAULT};
 
+// When enabled, the feature will query the OS for a default cursor size,
+// to be used in determining the concrete object size of a custom cursor in
+// blink. Currently enabled by default on Windows only.
+// TODO(crbug.com/1333523) - Implement for other platforms.
+const base::Feature kSystemCursorSizeSupported{
+  "SystemCursorSizeSupported",
+#if BUILDFLAG(IS_WIN)
+      base::FEATURE_ENABLED_BY_DEFAULT
+#else
+      base::FEATURE_DISABLED_BY_DEFAULT
+#endif
+};
+
+bool IsSystemCursorSizeSupported() {
+  return base::FeatureList::IsEnabled(kSystemCursorSizeSupported);
+}
+
 // Allows system keyboard event capture via the keyboard lock API.
 const base::Feature kSystemKeyboardLock{"SystemKeyboardLock",
                                         base::FEATURE_ENABLED_BY_DEFAULT};
 
-const base::Feature kNotificationIndicator = {"EnableNotificationIndicator",
-                                              base::FEATURE_ENABLED_BY_DEFAULT};
-
-bool IsNotificationIndicatorEnabled() {
-  return base::FeatureList::IsEnabled(kNotificationIndicator);
-}
-
 // Enables GPU rasterization for all UI drawing (where not blocklisted).
 const base::Feature kUiGpuRasterization = {"UiGpuRasterization",
-#if defined(OS_APPLE) || BUILDFLAG(IS_CHROMEOS_ASH) || defined(OS_FUCHSIA) || \
-    BUILDFLAG(IS_CHROMEOS_LACROS)
+#if BUILDFLAG(IS_APPLE) || BUILDFLAG(IS_CHROMEOS_ASH) || \
+    BUILDFLAG(IS_FUCHSIA) || BUILDFLAG(IS_CHROMEOS_LACROS)
                                            base::FEATURE_ENABLED_BY_DEFAULT
 #else
                                            base::FEATURE_DISABLED_BY_DEFAULT
@@ -112,7 +169,7 @@ bool IsUiGpuRasterizationEnabled() {
 const base::Feature kUiCompositorScrollWithLayers = {
     "UiCompositorScrollWithLayers",
 // TODO(https://crbug.com/615948): Use composited scrolling on all platforms.
-#if defined(OS_APPLE)
+#if BUILDFLAG(IS_APPLE)
     base::FEATURE_ENABLED_BY_DEFAULT
 #else
     base::FEATURE_DISABLED_BY_DEFAULT
@@ -130,31 +187,39 @@ const base::Feature kExperimentalFlingAnimation {
   "ExperimentalFlingAnimation",
 // TODO(crbug.com/1052397): Revisit the macro expression once build flag switch
 // of lacros-chrome is complete.
-#if defined(OS_WIN) || (defined(OS_LINUX) && !BUILDFLAG(IS_CHROMEOS_ASH) && \
-                        !BUILDFLAG(IS_CHROMEOS_LACROS))
+#if BUILDFLAG(IS_WIN) ||                                   \
+    (BUILDFLAG(IS_LINUX) && !BUILDFLAG(IS_CHROMEOS_ASH) && \
+     !BUILDFLAG(IS_CHROMEOS_LACROS))
       base::FEATURE_ENABLED_BY_DEFAULT
 #else
       base::FEATURE_DISABLED_BY_DEFAULT
 #endif
 };
 
-#if defined(OS_WIN) || defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_WIN)
 // Cached in Java as well, make sure defaults are updated together.
 const base::Feature kElasticOverscroll = {"ElasticOverscroll",
-                                          base::FEATURE_DISABLED_BY_DEFAULT};
-#endif  // defined(OS_WIN) || defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
+                                          base::FEATURE_ENABLED_BY_DEFAULT
+#else  // BUILDFLAG(IS_ANDROID)
+                                          base::FEATURE_DISABLED_BY_DEFAULT
+#endif
+};
+#endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_ANDROID)
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
+const base::Feature kAndroidPermissionsCache{"AndroidPermissionsCache",
+                                             base::FEATURE_DISABLED_BY_DEFAULT};
 const char kElasticOverscrollType[] = "type";
 const char kElasticOverscrollTypeFilter[] = "filter";
 const char kElasticOverscrollTypeTransform[] = "transform";
-#endif  // defined(OS_ANDROID)
+#endif  // BUILDFLAG(IS_ANDROID)
 
 // Enables focus follow follow cursor (sloppyfocus).
 const base::Feature kFocusFollowsCursor = {"FocusFollowsCursor",
                                            base::FEATURE_DISABLED_BY_DEFAULT};
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 // Enables InputPane API for controlling on screen keyboard.
 const base::Feature kInputPaneOnScreenKeyboard = {
     "InputPaneOnScreenKeyboard", base::FEATURE_ENABLED_BY_DEFAULT};
@@ -171,17 +236,26 @@ bool IsUsingWMPointerForTouch() {
          base::FeatureList::IsEnabled(kPointerEventsForTouch);
 }
 
-// Enables Logging for DirectManipulation.
-const base::Feature kPrecisionTouchpadLogging{
-    "PrecisionTouchpadLogging", base::FEATURE_DISABLED_BY_DEFAULT};
-#endif  // defined(OS_WIN)
+#endif  // BUILDFLAG(IS_WIN)
 
-#if defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_CHROMEOS)
 // This feature supercedes kNewShortcutMapping.
 const base::Feature kImprovedKeyboardShortcuts = {
     "ImprovedKeyboardShortcuts", base::FEATURE_ENABLED_BY_DEFAULT};
 
 bool IsImprovedKeyboardShortcutsEnabled() {
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  // TODO(crbug/1264581): Remove this once kDeviceI18nShortcutsEnabled policy is
+  // deprecated.
+  if (::ui::ShortcutMappingPrefDelegate::IsInitialized()) {
+    ::ui::ShortcutMappingPrefDelegate* instance =
+        ::ui::ShortcutMappingPrefDelegate::GetInstance();
+    if (instance && instance->IsDeviceEnterpriseManaged()) {
+      return instance->IsI18nShortcutPrefEnabled();
+    }
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
   return base::FeatureList::IsEnabled(kImprovedKeyboardShortcuts);
 }
 
@@ -196,7 +270,7 @@ const base::Feature kDeprecateAltBasedSixPack = {
 bool IsDeprecateAltBasedSixPackEnabled() {
   return base::FeatureList::IsEnabled(kDeprecateAltBasedSixPack);
 }
-#endif  // defined(OS_CHROMEOS)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 // Enables forced colors mode for web content.
 const base::Feature kForcedColors{"ForcedColors",
@@ -213,7 +287,7 @@ bool IsForcedColorsEnabled() {
 // milestones.
 const base::Feature kEyeDropper {
   "EyeDropper",
-#if defined(OS_WIN) || defined(OS_MAC) || defined(OS_LINUX)
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
       base::FEATURE_ENABLED_BY_DEFAULT
 #else
       base::FEATURE_DISABLED_BY_DEFAULT
@@ -258,15 +332,6 @@ const base::Feature kResamplingScrollEventsExperimentalPrediction{
     "ResamplingScrollEventsExperimentalPrediction",
     base::FEATURE_DISABLED_BY_DEFAULT};
 
-bool IsUsingOzonePlatform() {
-#if defined(USE_X11) && !defined(USE_OZONE)
-
-#error Non-Ozone/X11 builds are no longer supported
-
-#endif  // defined(USE_X11) || defined(USE_OZONE)
-  return true;
-}
-
 const char kPredictorNameLsq[] = "lsq";
 const char kPredictorNameKalman[] = "kalman";
 const char kPredictorNameLinearFirst[] = "linear_first";
@@ -290,14 +355,60 @@ const base::Feature kUIDebugTools{"ui-debug-tools",
 
 bool IsSwipeToMoveCursorEnabled() {
   static const bool enabled =
-      base::FeatureList::IsEnabled(kSwipeToMoveCursor)
-#if defined(OS_ANDROID)
-      && base::android::BuildInfo::GetInstance()->sdk_int() >=
-             base::android::SDK_VERSION_R;
+#if BUILDFLAG(IS_ANDROID)
+      base::android::BuildInfo::GetInstance()->sdk_int() >=
+      base::android::SDK_VERSION_R;
 #else
-      ;
+      base::FeatureList::IsEnabled(kSwipeToMoveCursor);
 #endif
   return enabled;
+}
+
+// Enable raw draw for tiles.
+const base::Feature kRawDraw{"RawDraw", base::FEATURE_DISABLED_BY_DEFAULT};
+
+// Tile size = viewport size * TileSizeFactor
+const base::FeatureParam<double> kRawDrawTileSizeFactor{&kRawDraw,
+                                                        "TileSizeFactor", 1};
+
+const base::FeatureParam<bool> kIsRawDrawUsingMSAA{&kRawDraw, "IsUsingMSAA",
+                                                   false};
+bool IsUsingRawDraw() {
+  return base::FeatureList::IsEnabled(kRawDraw);
+}
+
+double RawDrawTileSizeFactor() {
+  return kRawDrawTileSizeFactor.Get();
+}
+
+bool IsRawDrawUsingMSAA() {
+  return kIsRawDrawUsingMSAA.Get();
+}
+
+const base::Feature kUiCompositorReleaseTileResourcesForHiddenLayers{
+    "UiCompositorReleaseTileResourcesForHiddenLayers",
+    base::FEATURE_DISABLED_BY_DEFAULT};
+
+const base::Feature kUiCompositorRequiredTilesOnly{
+    "UiCompositorRequiredTilesOnly", base::FEATURE_DISABLED_BY_DEFAULT};
+
+const base::Feature kEnableVariableRefreshRate = {
+    "EnableVariableRefreshRate", base::FEATURE_DISABLED_BY_DEFAULT};
+bool IsVariableRefreshRateEnabled() {
+  return base::FeatureList::IsEnabled(kEnableVariableRefreshRate);
+}
+
+const base::Feature kWaylandScreenCoordinatesEnabled{
+  "WaylandScreenCoordinatesEnabled",
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+      base::FEATURE_ENABLED_BY_DEFAULT
+#else
+      base::FEATURE_DISABLED_BY_DEFAULT
+#endif
+};
+
+bool IsWaylandScreenCoordinatesEnabled() {
+  return base::FeatureList::IsEnabled(kWaylandScreenCoordinatesEnabled);
 }
 
 }  // namespace features

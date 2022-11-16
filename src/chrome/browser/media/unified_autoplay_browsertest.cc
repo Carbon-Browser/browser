@@ -116,7 +116,7 @@ class UnifiedAutoplayBrowserTest : public InProcessBrowserTest {
   void SetAutoplayForceAllowFlag(const GURL& url) {
     mojo::AssociatedRemote<blink::mojom::AutoplayConfigurationClient> client;
     GetWebContents()
-        ->GetMainFrame()
+        ->GetPrimaryMainFrame()
         ->GetRemoteAssociatedInterfaces()
         ->GetInterface(&client);
     client->AddAutoplayFlags(url::Origin::Create(url),
@@ -144,11 +144,11 @@ class UnifiedAutoplayBrowserTest : public InProcessBrowserTest {
         is_renderer_initiated, from_context_menu);
 
     open_url_params.initiator_origin =
-        url::Origin::Create(active_contents->GetLastCommittedURL());
+        active_contents->GetPrimaryMainFrame()->GetLastCommittedOrigin();
     open_url_params.source_render_process_id =
-        active_contents->GetMainFrame()->GetProcess()->GetID();
+        active_contents->GetPrimaryMainFrame()->GetProcess()->GetID();
     open_url_params.source_render_frame_id =
-        active_contents->GetMainFrame()->GetRoutingID();
+        active_contents->GetPrimaryMainFrame()->GetRoutingID();
     open_url_params.user_gesture = user_gesture;
 
     return active_contents->OpenURL(open_url_params);
@@ -362,7 +362,7 @@ IN_PROC_BROWSER_TEST_F(UnifiedAutoplayBrowserTest,
       embedded_test_server()->GetURL("example.com", kTestPagePath));
 
   ChromeContentBrowserClientOverrideWebAppScope browser_client;
-  browser_client.set_web_app_scope(kTestPageUrl.GetOrigin());
+  browser_client.set_web_app_scope(kTestPageUrl.DeprecatedGetOriginAsURL());
 
   content::ContentBrowserClient* old_browser_client =
       content::SetBrowserClientForTesting(&browser_client);
@@ -458,11 +458,11 @@ class UnifiedAutoplaySettingBrowserTest : public UnifiedAutoplayBrowserTest {
   }
 
   content::RenderFrameHost* main_frame() const {
-    return web_contents()->GetAllFrames()[0];
+    return web_contents()->GetPrimaryMainFrame();
   }
 
   content::RenderFrameHost* first_child() const {
-    return web_contents()->GetAllFrames()[1];
+    return ChildFrameAt(main_frame(), 0);
   }
 
  private:
@@ -508,7 +508,7 @@ IN_PROC_BROWSER_TEST_F(UnifiedAutoplaySettingBrowserTest, Allow_Wildcard) {
   ContentSettingsPattern pattern(ContentSettingsPattern::FromString("[*.]com"));
   GetSettingsMap()->SetWebsiteSettingCustomScope(
       pattern, ContentSettingsPattern::Wildcard(), ContentSettingsType::SOUND,
-      std::make_unique<base::Value>(CONTENT_SETTING_ALLOW));
+      base::Value(CONTENT_SETTING_ALLOW));
 
   NavigateFrameAndWait(main_frame(), main_url);
   EXPECT_TRUE(AutoplayAllowed(main_frame()));
@@ -546,7 +546,7 @@ IN_PROC_BROWSER_TEST_F(UnifiedAutoplaySettingBrowserTest, Block_Wildcard) {
   ContentSettingsPattern pattern(ContentSettingsPattern::FromString("[*.]com"));
   GetSettingsMap()->SetWebsiteSettingCustomScope(
       pattern, ContentSettingsPattern::Wildcard(), ContentSettingsType::SOUND,
-      std::make_unique<base::Value>(CONTENT_SETTING_BLOCK));
+      base::Value(CONTENT_SETTING_BLOCK));
 
   GetSettingsMap()->SetContentSettingDefaultScope(
       foo_url, foo_url, ContentSettingsType::SOUND, CONTENT_SETTING_ALLOW);

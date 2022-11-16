@@ -8,8 +8,8 @@
 
 #include "base/callback_helpers.h"
 #include "base/logging.h"
-#include "components/autofill/core/browser/autofill_metrics.h"
 #include "components/autofill/core/browser/data_model/autofill_offer_data.h"
+#include "components/autofill/core/browser/metrics/autofill_metrics.h"
 #include "components/autofill/core/browser/webdata/autofill_sync_bridge_util.h"
 #include "components/autofill/core/browser/webdata/autofill_table.h"
 #include "components/autofill/core/browser/webdata/autofill_webdata_backend.h"
@@ -204,7 +204,6 @@ void AutofillWalletOfferSyncBridge::MergeRemoteData(
   web_data_backend_->CommitChanges();
 
   if (offer_data_changed) {
-    // TODO(crbug.com/1112095): Add enum to indicate what actually changed.
     web_data_backend_->NotifyOfMultipleAutofillChanges();
   }
 }

@@ -9,10 +9,9 @@
 #include <string>
 
 #include "base/bind.h"
-#include "base/cxx17_backports.h"
 #include "base/location.h"
 #include "base/run_loop.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/test_timeouts.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
@@ -64,7 +63,7 @@ static void OnCompleted(int bytes_read,
 }
 
 static const char kTestMessage[] = "$$TESTMESSAGETESTMESSAGETESTMESSAGETEST$$";
-static const int kTestMessageLength = base::size(kTestMessage);
+static const int kTestMessageLength = std::size(kTestMessage);
 
 net::AddressList CreateAddressList(const char* address_string, int port) {
   net::IPAddress ip;
@@ -151,7 +150,7 @@ static void SendMulticastPacket(base::OnceClosure quit_run_loop,
         FROM_HERE,
         base::BindOnce(&SendMulticastPacket, std::move(quit_run_loop), src,
                        result),
-        base::TimeDelta::FromSeconds(1));
+        base::Seconds(1));
   } else {
     std::move(quit_run_loop).Run();
     FAIL() << "Failed to connect to multicast address. Error code: " << result;
@@ -172,7 +171,7 @@ static void OnMulticastReadCompleted(base::OnceClosure quit_run_loop,
 }
 
 // TODO(https://crbug.com/1210643): Test is flaky on Mac.
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 #define MAYBE_TestUDPMulticastRecv DISABLED_TestUDPMulticastRecv
 #else
 #define MAYBE_TestUDPMulticastRecv TestUDPMulticastRecv

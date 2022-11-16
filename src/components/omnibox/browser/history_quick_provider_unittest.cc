@@ -13,10 +13,11 @@
 #include <string>
 #include <vector>
 
-#include "base/cxx17_backports.h"
 #include "base/format_macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "components/bookmarks/browser/bookmark_model.h"
 #include "components/bookmarks/test/bookmark_test_helpers.h"
@@ -33,9 +34,11 @@
 #include "components/omnibox/browser/history_test_util.h"
 #include "components/omnibox/browser/history_url_provider.h"
 #include "components/omnibox/browser/in_memory_url_index_test_util.h"
+#include "components/omnibox/common/omnibox_features.h"
 #include "components/prefs/pref_service.h"
 #include "components/search_engines/omnibox_focus_type.h"
 #include "components/search_engines/search_terms_data.h"
+#include "components/search_engines/template_url_starter_pack_data.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 using base::ASCIIToUTF16;
@@ -57,15 +60,13 @@ class WaitForURLsDeletedObserver : public history::HistoryServiceObserver {
                      const history::DeletionInfo& deletion_info) override;
 
   // Weak. Owned by our owner.
-  base::RunLoop* runner_;
+  raw_ptr<base::RunLoop> runner_;
 };
 
 WaitForURLsDeletedObserver::WaitForURLsDeletedObserver(base::RunLoop* runner)
-    : runner_(runner) {
-}
+    : runner_(runner) {}
 
-WaitForURLsDeletedObserver::~WaitForURLsDeletedObserver() {
-}
+WaitForURLsDeletedObserver::~WaitForURLsDeletedObserver() = default;
 
 void WaitForURLsDeletedObserver::OnURLsDeleted(
     history::HistoryService* service,
@@ -88,9 +89,7 @@ void WaitForURLsDeletedNotification(history::HistoryService* history_service) {
 class GetURLTask : public history::HistoryDBTask {
  public:
   GetURLTask(const GURL& url, bool* result_storage)
-      : result_storage_(result_storage),
-        url_(url) {
-  }
+      : result_storage_(result_storage), url_(url) {}
   GetURLTask(const GetURLTask&) = delete;
   GetURLTask& operator=(const GetURLTask&) = delete;
 
@@ -105,9 +104,9 @@ class GetURLTask : public history::HistoryDBTask {
   }
 
  private:
-  ~GetURLTask() override {}
+  ~GetURLTask() override = default;
 
-  bool* result_storage_;
+  raw_ptr<bool> result_storage_;
   const GURL url_;
 };
 
@@ -185,8 +184,14 @@ class HistoryQuickProviderTest : public testing::Test {
   ACMatches& ac_matches() { return ac_matches_; }
   HistoryQuickProvider& provider() { return *provider_; }
 
+  AutocompleteMatch QuickMatchToACMatch(const ScoredHistoryMatch& history_match,
+                                        int score) {
+    return provider_->QuickMatchToACMatch(history_match, score);
+  }
+
  private:
   base::test::TaskEnvironment task_environment_;
+  base::ScopedTempDir history_dir_;
   std::unique_ptr<FakeAutocompleteProviderClient> client_;
 
   ACMatches ac_matches_;  // The resulting matches after running RunTest.
@@ -196,6 +201,16 @@ class HistoryQuickProviderTest : public testing::Test {
 
 void HistoryQuickProviderTest::SetUp() {
   client_ = std::make_unique<FakeAutocompleteProviderClient>();
+  CHECK(history_dir_.CreateUniqueTempDir());
+  client_->set_history_service(
+      history::CreateHistoryService(history_dir_.GetPath(), true));
+  client_->set_bookmark_model(bookmarks::TestBookmarkClient::CreateModel());
+  client_->set_in_memory_url_index(std::make_unique<InMemoryURLIndex>(
+      client_->GetBookmarkModel(), client_->GetHistoryService(), nullptr,
+      history_dir_.GetPath(), SchemeSet()));
+  client_->set_template_url_service(
+      std::make_unique<TemplateURLService>(nullptr, 0));
+  client_->GetInMemoryURLIndex()->Init();
   ASSERT_TRUE(client_->GetHistoryService());
 
   // First make sure the automatic initialization completes to avoid a race
@@ -282,6 +297,14 @@ HistoryQuickProviderTest::GetTestData() {
        "'pre suf' should score higher than 'presuf'", 3, 3, 2},
       {"https://suffix.com/prefixsuffix3",
        "'pre suf' should score higher than 'presuf'", 3, 3, 3},
+      {"http://somedomain.com/a", "a", 1, 1, 1},
+      {"http://somedomain.com/b", "b", 1, 1, 1},
+      {"http://somedomain.com/c", "c", 1, 1, 1},
+      {"http://somedomain.com/d", "d", 1, 1, 1},
+      {"http://somedomain.com/e", "e", 1, 1, 1},
+      {"http://somedomain.com/f", "f", 1, 1, 1},
+      {"http://somedomain.com/g", "g", 1, 1, 1},
+      {"http://somedomain.com/h", "h", 1, 1, 1},
   };
 }
 
@@ -292,8 +315,7 @@ void HistoryQuickProviderTest::FillData() {
     row.set_title(base::UTF8ToUTF16(info.title));
     row.set_visit_count(info.visit_count);
     row.set_typed_count(info.typed_count);
-    row.set_last_visit(base::Time::Now() -
-                       base::TimeDelta::FromDays(info.days_from_now));
+    row.set_last_visit(base::Time::Now() - base::Days(info.days_from_now));
 
     AddFakeURLToHistoryDB(history_backend()->db(), row);
   }
@@ -301,8 +323,8 @@ void HistoryQuickProviderTest::FillData() {
 
 HistoryQuickProviderTest::SetShouldContain::SetShouldContain(
     const ACMatches& matched_urls) {
-  for (auto iter = matched_urls.begin(); iter != matched_urls.end(); ++iter)
-    matches_.insert(iter->destination_url.spec());
+  for (const auto& matched_url : matched_urls)
+    matches_.insert(matched_url.destination_url.spec());
 }
 
 void HistoryQuickProviderTest::SetShouldContain::operator()(
@@ -370,8 +392,8 @@ void HistoryQuickProviderTest::RunTestWithCursor(
                     .LeftOvers();
   }
   EXPECT_EQ(0U, leftovers.size()) << "There were " << leftovers.size()
-      << " unexpected results, one of which was: '"
-      << *(leftovers.begin()) << "'.";
+                                  << " unexpected results, one of which was: '"
+                                  << *(leftovers.begin()) << "'.";
 
   if (expected_urls.empty())
     return;
@@ -388,8 +410,8 @@ void HistoryQuickProviderTest::RunTestWithCursor(
         << "For result #" << i << " we got '" << actual->destination_url.spec()
         << "' but expected '" << *expected << "'.";
     EXPECT_LT(actual->relevance, best_score)
-      << "At result #" << i << " (url=" << actual->destination_url.spec()
-      << "), we noticed scores are not monotonically decreasing.";
+        << "At result #" << i << " (url=" << actual->destination_url.spec()
+        << "), we noticed scores are not monotonically decreasing.";
     best_score = actual->relevance;
   }
 
@@ -572,8 +594,8 @@ TEST_F(HistoryQuickProviderTest, ContentsClass) {
   // Verify that contents_class divides the string in the right places.
   // [22, 24) is the "第二".  All the other pairs are the "e3".
   ACMatchClassifications contents_class(ac_matches()[0].contents_class);
-  size_t expected_offsets[] = { 0, 22, 24, 31, 33, 40, 42, 49, 51, 58, 60, 67,
-                                69, 76, 78 };
+  size_t expected_offsets[] = {0,  22, 24, 31, 33, 40, 42, 49,
+                               51, 58, 60, 67, 69, 76, 78};
   // ScoredHistoryMatch may not highlight all the occurrences of these terms
   // because it only highlights terms at word breaks, and it only stores word
   // breaks up to some specified number of characters (50 at the time of this
@@ -581,7 +603,7 @@ TEST_F(HistoryQuickProviderTest, ContentsClass) {
   // increase that number in the future.  Regardless, we require the first
   // five offsets to be correct--in this example these cover at least one
   // occurrence of each term.
-  EXPECT_LE(contents_class.size(), base::size(expected_offsets));
+  EXPECT_LE(contents_class.size(), std::size(expected_offsets));
   EXPECT_GE(contents_class.size(), 5u);
   for (size_t i = 0; i < contents_class.size(); ++i)
     EXPECT_EQ(expected_offsets[i], contents_class[i].offset);
@@ -831,7 +853,7 @@ TEST_F(HistoryQuickProviderTest, DoTrimHttpScheme) {
   ScoredHistoryMatch history_match =
       BuildScoredHistoryMatch("http://www.facebook.com", u"face");
 
-  AutocompleteMatch match = provider().QuickMatchToACMatch(history_match, 100);
+  AutocompleteMatch match = QuickMatchToACMatch(history_match, 100);
   EXPECT_EQ(u"facebook.com", match.contents);
 }
 
@@ -844,7 +866,7 @@ TEST_F(HistoryQuickProviderTest, DontTrimHttpSchemeIfInputHasScheme) {
   ScoredHistoryMatch history_match =
       BuildScoredHistoryMatch("http://www.facebook.com", u"http://face");
 
-  AutocompleteMatch match = provider().QuickMatchToACMatch(history_match, 100);
+  AutocompleteMatch match = QuickMatchToACMatch(history_match, 100);
   EXPECT_EQ(u"http://facebook.com", match.contents);
 }
 
@@ -858,7 +880,7 @@ TEST_F(HistoryQuickProviderTest, DontTrimHttpSchemeIfInputMatches) {
       BuildScoredHistoryMatch("http://www.facebook.com", u"ht");
   history_match.match_in_scheme = true;
 
-  AutocompleteMatch match = provider().QuickMatchToACMatch(history_match, 100);
+  AutocompleteMatch match = QuickMatchToACMatch(history_match, 100);
   EXPECT_EQ(u"http://facebook.com", match.contents);
 }
 
@@ -871,7 +893,7 @@ TEST_F(HistoryQuickProviderTest, DontTrimHttpsSchemeIfInputHasScheme) {
   ScoredHistoryMatch history_match =
       BuildScoredHistoryMatch("https://www.facebook.com", u"https://face");
 
-  AutocompleteMatch match = provider().QuickMatchToACMatch(history_match, 100);
+  AutocompleteMatch match = QuickMatchToACMatch(history_match, 100);
   EXPECT_EQ(u"https://facebook.com", match.contents);
 }
 
@@ -883,22 +905,105 @@ TEST_F(HistoryQuickProviderTest, DoTrimHttpsScheme) {
   ScoredHistoryMatch history_match =
       BuildScoredHistoryMatch("https://www.facebook.com", u"face");
 
-  AutocompleteMatch match = provider().QuickMatchToACMatch(history_match, 100);
+  AutocompleteMatch match = QuickMatchToACMatch(history_match, 100);
   EXPECT_EQ(u"facebook.com", match.contents);
 }
 
 TEST_F(HistoryQuickProviderTest, CorrectAutocompleteWithTrailingSlash) {
-  provider().autocomplete_input_ = AutocompleteInput(
-      u"cr/", metrics::OmniboxEventProto::OTHER, TestSchemeClassifier());
+  AutocompleteInput input(u"cr/", metrics::OmniboxEventProto::OTHER,
+                          TestSchemeClassifier());
+  provider().Start(input, false);
   RowWordStarts word_starts;
   word_starts.url_word_starts_ = {0};
   ScoredHistoryMatch sh_match(history::URLRow(GURL("http://cr/")),
                               VisitInfoVector(), u"cr/", {u"cr"}, {0},
                               word_starts, false, 0, base::Time());
-  AutocompleteMatch ac_match(provider().QuickMatchToACMatch(sh_match, 0));
+  AutocompleteMatch ac_match(QuickMatchToACMatch(sh_match, 0));
   EXPECT_EQ(u"cr/", ac_match.fill_into_edit);
   EXPECT_EQ(u"", ac_match.inline_autocompletion);
   EXPECT_TRUE(ac_match.allowed_to_be_default_match);
+}
+
+TEST_F(HistoryQuickProviderTest, KeywordModeExtractUserInput) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndEnableFeature(omnibox::kSiteSearchStarterPack);
+
+  // Populate template URL with starter pack entries
+  std::vector<std::unique_ptr<TemplateURLData>> turls =
+      TemplateURLStarterPackData::GetStarterPackEngines();
+  for (auto& turl : turls) {
+    client().GetTemplateURLService()->Add(
+        std::make_unique<TemplateURL>(std::move(*turl)));
+  }
+  // Test result for user text "google", we should get back a result for google.
+  AutocompleteInput input(u"google", metrics::OmniboxEventProto::OTHER,
+                          TestSchemeClassifier());
+  provider().Start(input, false);
+  if (!provider().done())
+    base::RunLoop().Run();
+
+  ACMatches matches = provider().matches();
+  ASSERT_GT(matches.size(), 0u);
+  EXPECT_EQ(GURL("http://www.google.com/"), matches[0].destination_url);
+
+  // Test result for "@history google" while NOT in keyword mode, we should not
+  // get a result for google since we're searching for the whole input text
+  // including "@history".
+  AutocompleteInput input2(u"@history google",
+                           metrics::OmniboxEventProto::OTHER,
+                           TestSchemeClassifier());
+  provider().Start(input2, false);
+  if (!provider().done())
+    base::RunLoop().Run();
+
+  matches = provider().matches();
+  ASSERT_EQ(matches.size(), 0u);
+
+  // Turn on keyword mode, test result again, we should get back the result for
+  // google.com since we're searching only for the user text after the keyword.
+  input2.set_prefer_keyword(true);
+  input2.set_keyword_mode_entry_method(
+      metrics::OmniboxEventProto_KeywordModeEntryMethod_TAB);
+  provider().Start(input2, false);
+  if (!provider().done())
+    base::RunLoop().Run();
+
+  matches = provider().matches();
+  ASSERT_GT(matches.size(), 0u);
+  EXPECT_EQ(GURL("http://www.google.com/"), matches[0].destination_url);
+  EXPECT_TRUE(matches[0].from_keyword);
+}
+
+TEST_F(HistoryQuickProviderTest,
+       QuickMatchToACMatch_HideUrlForDocumentSuggestion) {
+  AutocompleteInput input(u"face", metrics::OmniboxEventProto::OTHER,
+                          TestSchemeClassifier());
+  provider().Start(input, false);
+  ScoredHistoryMatch history_match = BuildScoredHistoryMatch(
+      "https://docs.google.com/a/google.com/document/d/tH3_d0C-1d/edit",
+      u"doc");
+
+  AutocompleteMatch match = QuickMatchToACMatch(history_match, 100);
+  EXPECT_TRUE(match.contents.empty());
+}
+
+TEST_F(HistoryQuickProviderTest, MaxMatches) {
+  // Keyword mode is off. We should only get provider_max_matches_ matches.
+  AutocompleteInput input(u"somedomain.com", metrics::OmniboxEventProto::OTHER,
+                          TestSchemeClassifier());
+  provider().Start(input, false);
+
+  ACMatches matches = provider().matches();
+  EXPECT_EQ(matches.size(), provider().provider_max_matches());
+
+  // Turn keyword mode on. we should be able to get more matches now.
+  input.set_keyword_mode_entry_method(
+      metrics::OmniboxEventProto_KeywordModeEntryMethod_TAB);
+  input.set_prefer_keyword(true);
+  provider().Start(input, false);
+
+  matches = provider().matches();
+  EXPECT_EQ(matches.size(), provider().provider_max_matches_in_keyword_mode());
 }
 
 // HQPOrderingTest -------------------------------------------------------------

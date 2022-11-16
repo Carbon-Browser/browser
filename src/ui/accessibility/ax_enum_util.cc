@@ -6,9 +6,6 @@
 
 #include "ui/accessibility/ax_enums.mojom.h"
 
-#include "ui/base/l10n/l10n_util.h"
-#include "ui/strings/grit/ui_strings.h"
-
 namespace ui {
 
 const char* ToString(ax::mojom::Event event) {
@@ -382,6 +379,50 @@ const char* ToString(ax::mojom::Role role) {
       return "marquee";
     case ax::mojom::Role::kMath:
       return "math";
+    case ax::mojom::Role::kMathMLFraction:
+      return "mathMLFraction";
+    case ax::mojom::Role::kMathMLIdentifier:
+      return "mathMLIdentifier";
+    case ax::mojom::Role::kMathMLMath:
+      return "mathMLMath";
+    case ax::mojom::Role::kMathMLMultiscripts:
+      return "mathMLMultiscripts";
+    case ax::mojom::Role::kMathMLNoneScript:
+      return "mathMLNoneScript";
+    case ax::mojom::Role::kMathMLNumber:
+      return "mathMLNumber";
+    case ax::mojom::Role::kMathMLOperator:
+      return "mathMLOperator";
+    case ax::mojom::Role::kMathMLOver:
+      return "mathMLOver";
+    case ax::mojom::Role::kMathMLPrescriptDelimiter:
+      return "mathMLPrescriptDelimiter";
+    case ax::mojom::Role::kMathMLRoot:
+      return "mathMLRoot";
+    case ax::mojom::Role::kMathMLRow:
+      return "mathMLRow";
+    case ax::mojom::Role::kMathMLSquareRoot:
+      return "mathMLSquareRoot";
+    case ax::mojom::Role::kMathMLStringLiteral:
+      return "mathMLStringLiteral";
+    case ax::mojom::Role::kMathMLSub:
+      return "mathMLSub";
+    case ax::mojom::Role::kMathMLSubSup:
+      return "mathMLSubSup";
+    case ax::mojom::Role::kMathMLSup:
+      return "mathMLSup";
+    case ax::mojom::Role::kMathMLTable:
+      return "mathMLTable";
+    case ax::mojom::Role::kMathMLTableCell:
+      return "mathMLTableCell";
+    case ax::mojom::Role::kMathMLTableRow:
+      return "mathMLTableRow";
+    case ax::mojom::Role::kMathMLText:
+      return "mathMLText";
+    case ax::mojom::Role::kMathMLUnder:
+      return "mathMLUnder";
+    case ax::mojom::Role::kMathMLUnderOver:
+      return "mathMLUnderOver";
     case ax::mojom::Role::kMenu:
       return "menu";
     case ax::mojom::Role::kMenuBar:
@@ -706,33 +747,6 @@ const char* ToString(ax::mojom::DefaultActionVerb default_action_verb) {
   return "";
 }
 
-std::string ToLocalizedString(ax::mojom::DefaultActionVerb action_verb) {
-  switch (action_verb) {
-    case ax::mojom::DefaultActionVerb::kNone:
-      return "";
-    case ax::mojom::DefaultActionVerb::kActivate:
-      return l10n_util::GetStringUTF8(IDS_AX_ACTIVATE_ACTION_VERB);
-    case ax::mojom::DefaultActionVerb::kCheck:
-      return l10n_util::GetStringUTF8(IDS_AX_CHECK_ACTION_VERB);
-    case ax::mojom::DefaultActionVerb::kClick:
-      return l10n_util::GetStringUTF8(IDS_AX_CLICK_ACTION_VERB);
-    case ax::mojom::DefaultActionVerb::kClickAncestor:
-      return l10n_util::GetStringUTF8(IDS_AX_CLICK_ANCESTOR_ACTION_VERB);
-    case ax::mojom::DefaultActionVerb::kJump:
-      return l10n_util::GetStringUTF8(IDS_AX_JUMP_ACTION_VERB);
-    case ax::mojom::DefaultActionVerb::kOpen:
-      return l10n_util::GetStringUTF8(IDS_AX_OPEN_ACTION_VERB);
-    case ax::mojom::DefaultActionVerb::kPress:
-      return l10n_util::GetStringUTF8(IDS_AX_PRESS_ACTION_VERB);
-    case ax::mojom::DefaultActionVerb::kSelect:
-      return l10n_util::GetStringUTF8(IDS_AX_SELECT_ACTION_VERB);
-    case ax::mojom::DefaultActionVerb::kUncheck:
-      return l10n_util::GetStringUTF8(IDS_AX_UNCHECK_ACTION_VERB);
-  }
-
-  return "";
-}
-
 const char* ToString(ax::mojom::Mutation mutation) {
   switch (mutation) {
     case ax::mojom::Mutation::kNone:
@@ -1046,6 +1060,8 @@ const char* ToString(ax::mojom::IntListAttribute int_list_attribute) {
       return "markerStarts";
     case ax::mojom::IntListAttribute::kMarkerEnds:
       return "markerEnds";
+    case ax::mojom::IntListAttribute::kHighlightTypes:
+      return "highlightTypes";
     case ax::mojom::IntListAttribute::kCaretBounds:
       return "caretBounds";
     case ax::mojom::IntListAttribute::kCharacterOffsets:
@@ -1115,9 +1131,24 @@ const char* ToString(ax::mojom::MarkerType marker_type) {
       return "activeSuggestion";
     case ax::mojom::MarkerType::kSuggestion:
       return "suggestion";
+    case ax::mojom::MarkerType::kHighlight:
+      return "highlight";
   }
 
   return "";
+}
+
+const char* ToString(ax::mojom::HighlightType highlight_type) {
+  switch (highlight_type) {
+    case ax::mojom::HighlightType::kNone:
+      return "none";
+    case ax::mojom::HighlightType::kHighlight:
+      return "highlight";
+    case ax::mojom::HighlightType::kSpellingError:
+      return "spelling-error";
+    case ax::mojom::HighlightType::kGrammarError:
+      return "grammar-error";
+  }
 }
 
 const char* ToString(ax::mojom::MoveDirection move_direction) {
@@ -1437,8 +1468,6 @@ const char* ToString(ax::mojom::InvalidState invalid_state) {
       return "false";
     case ax::mojom::InvalidState::kTrue:
       return "true";
-    case ax::mojom::InvalidState::kOther:
-      return "other";
   }
 
   return "";
@@ -1493,8 +1522,6 @@ const char* ToString(ax::mojom::NameFrom name_from) {
   switch (name_from) {
     case ax::mojom::NameFrom::kNone:
       return "none";
-    case ax::mojom::NameFrom::kUninitialized:
-      return "uninitialized";
     case ax::mojom::NameFrom::kAttribute:
       return "attribute";
     case ax::mojom::NameFrom::kAttributeExplicitlyEmpty:
@@ -1522,12 +1549,18 @@ const char* ToString(ax::mojom::DescriptionFrom description_from) {
       return "none";
     case ax::mojom::DescriptionFrom::kAriaDescription:
       return "ariaDescription";
+    case ax::mojom::DescriptionFrom::kAttributeExplicitlyEmpty:
+      return "attributeExplicitlyEmpty";
     case ax::mojom::DescriptionFrom::kButtonLabel:
       return "buttonLabel";
+    case ax::mojom::DescriptionFrom::kPopupElement:
+      return "popupElement";
     case ax::mojom::DescriptionFrom::kRelatedElement:
       return "relatedElement";
     case ax::mojom::DescriptionFrom::kRubyAnnotation:
       return "rubyAnnotation";
+    case ax::mojom::DescriptionFrom::kSvgDescElement:
+      return "svgDescElement";
     case ax::mojom::DescriptionFrom::kSummary:
       return "summary";
     case ax::mojom::DescriptionFrom::kTableCaption:

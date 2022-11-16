@@ -8,7 +8,6 @@
 #include <vector>
 
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
 #include "chrome/browser/ui/views/apps/app_info_dialog/app_info_panel.h"
 #include "extensions/common/permissions/permission_message_provider.h"
 #include "ui/base/metadata/metadata_header_macros.h"
@@ -51,12 +50,12 @@ class AppInfoPermissionsPanel : public AppInfoPanel {
 
   int GetRetainedFileCount() const;
   std::u16string GetRetainedFileHeading() const;
-  const std::vector<std::u16string> GetRetainedFilePaths() const;
+  std::vector<std::u16string> GetRetainedFilePaths() const;
   void RevokeFilePermissions();
 
   int GetRetainedDeviceCount() const;
   std::u16string GetRetainedDeviceHeading() const;
-  const std::vector<std::u16string> GetRetainedDevices() const;
+  std::vector<std::u16string> GetRetainedDevices() const;
   void RevokeDevicePermissions();
 };
 

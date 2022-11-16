@@ -120,14 +120,11 @@ void InkDropHighlight::AnimateFade(AnimationType animation_type,
                             ? visible_opacity_
                             : kHiddenOpacity;
   views::AnimationBuilder builder;
-  if (effective_duration > base::TimeDelta())
+  if (effective_duration.is_positive())
     animation_abort_handle_ = builder.GetAbortHandle();
   builder
       .SetPreemptionStrategy(
           ui::LayerAnimator::IMMEDIATELY_ANIMATE_TO_NEW_TARGET)
-      .Once()
-      .SetDuration(effective_duration)
-      .SetOpacity(layer_.get(), opacity, gfx::Tween::EASE_IN_OUT)
       .OnStarted(base::BindOnce(&InkDropHighlight::AnimationStartedCallback,
                                 base::Unretained(this), animation_type))
       .OnEnded(base::BindOnce(&InkDropHighlight::AnimationEndedCallback,
@@ -135,7 +132,10 @@ void InkDropHighlight::AnimateFade(AnimationType animation_type,
                               InkDropAnimationEndedReason::SUCCESS))
       .OnAborted(base::BindOnce(&InkDropHighlight::AnimationEndedCallback,
                                 base::Unretained(this), animation_type,
-                                InkDropAnimationEndedReason::PRE_EMPTED));
+                                InkDropAnimationEndedReason::PRE_EMPTED))
+      .Once()
+      .SetDuration(effective_duration)
+      .SetOpacity(layer_.get(), opacity, gfx::Tween::EASE_IN_OUT);
 }
 
 gfx::Transform InkDropHighlight::CalculateTransform() const {

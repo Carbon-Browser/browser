@@ -77,7 +77,8 @@ class ExpectedOutput {
 
 class SurfaceAggregatorPerfTest : public VizPerfTest {
  public:
-  SurfaceAggregatorPerfTest() : manager_(&shared_bitmap_manager_) {
+  SurfaceAggregatorPerfTest()
+      : manager_(FrameSinkManagerImpl::InitParams(&shared_bitmap_manager_)) {
     resource_provider_ = std::make_unique<DisplayResourceProviderSoftware>(
         &shared_bitmap_manager_);
   }
@@ -125,7 +126,7 @@ class SurfaceAggregatorPerfTest : public VizPerfTest {
         bool premultiplied_alpha = false;
         const gfx::PointF uv_top_left;
         const gfx::PointF uv_bottom_right;
-        SkColor background_color = SK_ColorGREEN;
+        SkColor4f background_color = SkColors::kGreen;
         const float vertex_opacity[4] = {0.f, 0.f, 1.f, 1.f};
         bool flipped = false;
         bool nearest_neighbor = false;
@@ -145,7 +146,7 @@ class SurfaceAggregatorPerfTest : public VizPerfTest {
             SurfaceRange(absl::nullopt,
                          SurfaceId(FrameSinkId(1, i),
                                    LocalSurfaceId(i, child_tokens[i - 1]))),
-            SK_ColorWHITE, /*stretch_content_to_fill_bounds=*/false);
+            SkColors::kWhite, /*stretch_content_to_fill_bounds=*/false);
       }
 
       frame_builder.AddRenderPass(std::move(pass));
@@ -157,7 +158,7 @@ class SurfaceAggregatorPerfTest : public VizPerfTest {
         nullptr, &manager_, FrameSinkId(1, num_surfaces + 1), /*is_root=*/true);
     auto root_token = base::UnguessableToken::Create();
     base::TimeTicks next_fake_display_time =
-        base::TimeTicks() + base::TimeDelta::FromSeconds(1);
+        base::TimeTicks() + base::Seconds(1);
 
     bool first_lap = true;
     timer_.Reset();
@@ -174,7 +175,7 @@ class SurfaceAggregatorPerfTest : public VizPerfTest {
               SurfaceId(FrameSinkId(1, num_surfaces),
                         LocalSurfaceId(num_surfaces,
                                        child_tokens[num_surfaces - 1]))),
-          SK_ColorWHITE, /*stretch_content_to_fill_bounds=*/false);
+          SkColors::kWhite, /*stretch_content_to_fill_bounds=*/false);
 
       pass->output_rect = gfx::Rect(0, 0, 100, 100);
 
@@ -287,7 +288,7 @@ class SurfaceAggregatorPerfTest : public VizPerfTest {
         nullptr, &manager_, root_frame_sink_id, /*is_root=*/true);
 
     base::TimeTicks next_fake_display_time =
-        base::TimeTicks() + base::TimeDelta::FromSeconds(1);
+        base::TimeTicks() + base::Seconds(1);
 
     timer_.Reset();
     do {
@@ -396,7 +397,7 @@ class SurfaceAggregatorPerfTest : public VizPerfTest {
             base::Histogram::kNoFlags);
 
     base::TimeTicks next_fake_display_time =
-        base::TimeTicks() + base::TimeDelta::FromSeconds(1);
+        base::TimeTicks() + base::Seconds(1);
     timer_.Reset();
     int laps = 0;
     do {
@@ -484,9 +485,9 @@ class SurfaceAggregatorPerfTest : public VizPerfTest {
   }
 
   std::string GetHistogramStats(base::HistogramBase* histogram) {
-    base::Value graph_dict = histogram->ToGraphDict();
+    base::Value::Dict graph_dict = histogram->ToGraphDict();
     // The header contains the sample count and the mean.
-    return *graph_dict.FindStringKey("header");
+    return *graph_dict.FindString("header");
   }
 
  protected:

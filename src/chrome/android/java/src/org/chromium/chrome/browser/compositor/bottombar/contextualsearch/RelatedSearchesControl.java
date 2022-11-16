@@ -15,8 +15,8 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.recyclerview.widget.RecyclerView.OnScrollListener;
 
+import org.chromium.base.Callback;
 import org.chromium.base.MathUtils;
-import org.chromium.base.ObserverList;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.compositor.bottombar.OverlayPanel;
 import org.chromium.chrome.browser.compositor.bottombar.OverlayPanelInflater;
@@ -24,14 +24,14 @@ import org.chromium.chrome.browser.compositor.bottombar.contextualsearch.Context
 import org.chromium.chrome.browser.contextualsearch.ContextualSearchUma;
 import org.chromium.chrome.browser.contextualsearch.RelatedSearchesUma;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
-import org.chromium.components.browser_ui.widget.chips.Chip;
+import org.chromium.components.browser_ui.widget.chips.ChipProperties;
 import org.chromium.components.browser_ui.widget.chips.ChipsCoordinator;
-import org.chromium.components.browser_ui.widget.chips.ChipsProvider;
 import org.chromium.ui.base.LocalizationUtils;
+import org.chromium.ui.modelutil.MVCListAdapter.ListItem;
+import org.chromium.ui.modelutil.MVCListAdapter.ModelList;
+import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.ui.resources.dynamics.DynamicResourceLoader;
-import org.chromium.ui.widget.ChipView;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -58,6 +58,9 @@ public class RelatedSearchesControl {
     /** The pixel density. */
     private final float mDpToPx;
 
+    /** The chip models being displayed for related searches. */
+    private final ModelList mChips;
+
     /**
      * The inflated View, or {@code null} if the associated Feature is not enabled,
      * or {@link #destroy} has been called.
@@ -67,12 +70,11 @@ public class RelatedSearchesControl {
 
     /** The query suggestions for this feature, or {@code null} if we don't have any. */
     private @Nullable List<String> mRelatedSearchesSuggestions;
-    private List<Chip> mChips;
 
     /** Whether the first query is the default query. */
     private boolean mDisplayDefaultQuery;
 
-    private @Px int mDefaultQueryTextMaxWidthPx = Chip.SHOW_WHOLE_TEXT;
+    private @Px int mDefaultQueryTextMaxWidthPx = ChipProperties.SHOW_WHOLE_TEXT;
 
     /** Whether the view is visible. */
     private boolean mIsVisible;
@@ -127,6 +129,7 @@ public class RelatedSearchesControl {
         mDpToPx = context.getResources().getDisplayMetrics().density;
         mOverlayPanel = panel;
         mPanelSectionHost = panelSectionHost;
+        mChips = new ModelList();
         // mChipsSelected is default-initialized to 0.
     }
 
@@ -222,12 +225,15 @@ public class RelatedSearchesControl {
             int viewId = mIsInBarControl
                     ? R.id.contextual_search_related_searches_view_id
                     : R.id.contextual_search_related_searches_in_content_view_id;
-            mControlView = new RelatedSearchesControlView(
-                    mOverlayPanel, mContext, mViewContainer, mResourceLoader, layoutId, viewId);
+            int controlId = mIsInBarControl
+                    ? R.id.contextual_search_related_searches_view_control_id
+                    : R.id.contextual_search_related_searches_in_content_view_id;
+            mControlView = new RelatedSearchesControlView(mOverlayPanel, mContext, mViewContainer,
+                    mResourceLoader, layoutId, viewId, controlId);
         }
         assert mChipsSelected == 0 || hasReleatedSearchesToShow();
         mRelatedSearchesSuggestions = relatedSearches;
-        mChips = null;
+        mChips.clear();
         mDisplayDefaultQuery = displayDefaultQuery;
         mDefaultQueryTextMaxWidthPx = defaultQueryTextMaxWidthPx;
         if (hasReleatedSearchesToShow()) {
@@ -239,13 +245,16 @@ public class RelatedSearchesControl {
         mSelectedChip = NO_SELECTED_CHIP;
     }
 
-    void onPanelCollapsed() {
+    void onPanelCollapsing() {
         clearSelectedSuggestions();
     }
 
     /** Un-selects any currently selected chip. */
     void clearSelectedSuggestions() {
-        if (mControlView != null) mControlView.clearSelectedSuggestions();
+        if (mSelectedChip != NO_SELECTED_CHIP) {
+            mChips.get(mSelectedChip).model.set(ChipProperties.SELECTED, false);
+        }
+        mSelectedChip = NO_SELECTED_CHIP;
     }
 
     /** Returns whether we have Related Searches to show or not.  */
@@ -266,11 +275,11 @@ public class RelatedSearchesControl {
 
     @VisibleForTesting
     public void selectChipForTest(int chipIndex) {
-        mControlView.selectChipForTest(chipIndex);
+        handleChipTapped(mChips.get(chipIndex).model);
     }
 
     @VisibleForTesting
-    public List<Chip> getChipsForTest() {
+    public ModelList getChipsForTest() {
         return mControlView.getChipsForTest(); // IN-TEST
     }
 
@@ -400,7 +409,7 @@ public class RelatedSearchesControl {
         if (mControlView == null) return;
 
         float y = mPanelSectionHost.getYPositionPx();
-        View view = mControlView.getControlView();
+        View view = mControlView.getView();
         if (view == null || !mIsVisible || (mIsShowingView && mViewY == y) || mHeightPx == 0.f) {
             return;
         }
@@ -412,8 +421,7 @@ public class RelatedSearchesControl {
 
         if (mDisplayDefaultQuery && mSelectedChip == NO_SELECTED_CHIP && !fromCloseToPeek) {
             mSelectedChip = 0;
-            mChips.get(mSelectedChip).selected = true;
-            mControlView.onChipsChanged();
+            mChips.get(mSelectedChip).model.set(ChipProperties.SELECTED, true);
         }
 
         view.setTranslationX(offsetX);
@@ -433,7 +441,7 @@ public class RelatedSearchesControl {
     private void hideView() {
         if (mControlView == null) return;
 
-        View view = mControlView.getControlView();
+        View view = mControlView.getView();
         if (view == null || !mIsVisible || !mIsShowingView) {
             return;
         }
@@ -480,6 +488,8 @@ public class RelatedSearchesControl {
         mChipsSelected++;
         boolean isRelatedSearchesSuggestion = suggestionIndex > 0 || !mDisplayDefaultQuery;
         ContextualSearchUma.logAllSearches(isRelatedSearchesSuggestion);
+
+        mControlView.smoothScrollToPosition(suggestionIndex);
     }
 
     /** The position of the first Related Searches suggestion in the carousel UI. */
@@ -491,73 +501,33 @@ public class RelatedSearchesControl {
     // Chips
     // ============================================================================================
 
-    private class RelatedSearchesChipsProvider implements ChipsProvider {
-        private final ObserverList<Observer> mObservers = new ObserverList<>();
+    public void updateChips() {
+        Callback<PropertyModel> selectedCallback = (model) -> handleChipTapped(model);
 
-        @Override
-        public void addObserver(Observer observer) {
-            mObservers.addObserver(observer);
-        }
+        if (mChips.size() == 0 && hasReleatedSearchesToShow()) {
+            for (String suggestion : mRelatedSearchesSuggestions) {
+                final int index = mChips.size();
+                ListItem chip =
+                        ChipsCoordinator.buildChipListItem(index, suggestion, selectedCallback);
 
-        @Override
-        public void removeObserver(Observer observer) {
-            mObservers.removeObserver(observer);
-        }
-
-        @Override
-        public List<Chip> getChips() {
-            if (mChips == null) mChips = new ArrayList<>();
-            if (mChips.size() == 0 && hasReleatedSearchesToShow()) {
-                for (String suggestion : mRelatedSearchesSuggestions) {
-                    final int index = mChips.size();
-                    Chip chip = new Chip(index, suggestion, ChipView.INVALID_ICON_ID,
-                            () -> handleChipTapped(index));
-                    chip.enabled = true;
-                    if (index == 0 && mDisplayDefaultQuery) {
-                        chip.textMaxWidthPx = mDefaultQueryTextMaxWidthPx;
-                    }
-                    mChips.add(chip);
+                if (index == 0 && mDisplayDefaultQuery) {
+                    chip.model.set(ChipProperties.TEXT_MAX_WIDTH_PX, mDefaultQueryTextMaxWidthPx);
                 }
-                mDidShowAnySuggestions = true;
+                mChips.add(chip);
             }
-            return mChips;
+            mDidShowAnySuggestions = true;
         }
+    }
 
-        @Override
-        public int getChipSpacingPx() {
-            return mContext.getResources().getDimensionPixelSize(
-                    R.dimen.contextual_search_chip_list_chip_spacing);
-        }
+    private void handleChipTapped(PropertyModel tappedChip) {
+        if (mControlView == null) return;
 
-        @Override
-        public int getSidePaddingPx() {
-            return mContext.getResources().getDimensionPixelSize(
-                    R.dimen.contextual_search_chip_list_side_padding);
+        onSuggestionClicked(tappedChip.get(ChipProperties.ID));
+        if (mSelectedChip != NO_SELECTED_CHIP) {
+            mChips.get(mSelectedChip).model.set(ChipProperties.SELECTED, false);
         }
-
-        private void handleChipTapped(int tappedChipIndex) {
-            onSuggestionClicked(tappedChipIndex);
-            if (mSelectedChip != NO_SELECTED_CHIP) mChips.get(mSelectedChip).selected = false;
-            mSelectedChip = tappedChipIndex;
-            mChips.get(tappedChipIndex).selected = true;
-            onChipsChanged();
-        }
-
-        /** Un-selects any currently selected chip. */
-        void clearSelectedSuggestions() {
-            if (mSelectedChip != NO_SELECTED_CHIP) mChips.get(mSelectedChip).selected = false;
-            mSelectedChip = NO_SELECTED_CHIP;
-            onChipsChanged();
-        }
-
-        void onChipsChanged() {
-            for (Observer observer : mObservers) observer.onChipsChanged();
-        }
-
-        @VisibleForTesting
-        void selectChipForTest(int chipIndex) {
-            handleChipTapped(chipIndex);
-        }
+        mSelectedChip = tappedChip.get(ChipProperties.ID);
+        tappedChip.set(ChipProperties.SELECTED, true);
     }
 
     // ============================================================================================
@@ -572,10 +542,10 @@ public class RelatedSearchesControl {
      */
     private class RelatedSearchesControlView extends OverlayPanelInflater {
         private final ChipsCoordinator mChipsCoordinator;
-        private final RelatedSearchesChipsProvider mChipsProvider;
         // TODO(donnd): track the offset of the carousel here, so we can use it for snapshotting
         // and log that the user has scrolled it.
         private float mLastOffset;
+        private final int mControlId;
 
         /**
          * Constructs a view that can be shown in the panel.
@@ -585,26 +555,50 @@ public class RelatedSearchesControl {
          * @param resourceLoader    The resource loader that will handle the snapshot capturing.
          * @param layoutId          The XML Layout that declares the View.
          * @param viewId            The id of the root View of the Layout.
+         * @param controlId         The id of the control View.
          */
         RelatedSearchesControlView(OverlayPanel panel, Context context, ViewGroup container,
-                DynamicResourceLoader resourceLoader, int layoutId, int viewId) {
+                DynamicResourceLoader resourceLoader, int layoutId, int viewId, int controlId) {
             super(panel, layoutId, viewId, context, container, resourceLoader);
+            mControlId = controlId;
 
             // Setup Chips handling
-            mChipsProvider = new RelatedSearchesChipsProvider();
-            mChipsCoordinator = new ChipsCoordinator(context, mChipsProvider);
+            mChipsCoordinator = new ChipsCoordinator(context, mChips);
+            mChipsCoordinator.setSpaceItemDecoration(
+                    context.getResources().getDimensionPixelSize(
+                            R.dimen.contextual_search_chip_list_chip_spacing),
+                    context.getResources().getDimensionPixelSize(
+                            R.dimen.contextual_search_chip_list_side_padding));
 
             RecyclerView recyclerView = (RecyclerView) mChipsCoordinator.getView();
             recyclerView.addOnScrollListener(new OnScrollListener() {
                 @Override
                 public void onScrollStateChanged(RecyclerView recyclerView, int newState) {
                     if (newState == RecyclerView.SCROLL_STATE_DRAGGING) mScrolled = true;
+                    if (newState == RecyclerView.SCROLL_STATE_IDLE) invalidate(false);
                 }
             });
         }
 
+        /**
+         * Smoothly scroll to the view in the position.
+         * @param position the position of the view to scroll to.
+         */
+        private void smoothScrollToPosition(int position) {
+            RecyclerView recyclerView = (RecyclerView) mChipsCoordinator.getView();
+            recyclerView.smoothScrollToPosition(position);
+        }
+
         /** Returns the view for this control. */
         View getControlView() {
+            View view = getView();
+            if (view == null) return null;
+
+            return view.findViewById(mControlId);
+        }
+
+        @Override
+        public View getView() {
             return super.getView();
         }
 
@@ -620,7 +614,7 @@ public class RelatedSearchesControl {
             if (relatedSearchesViewGroup == null) return;
 
             // Notify the coordinator that the chips need to change
-            mChipsCoordinator.onChipsChanged();
+            updateChips();
             View coordinatorView = mChipsCoordinator.getView();
             if (coordinatorView == null) return;
 
@@ -638,15 +632,6 @@ public class RelatedSearchesControl {
             if (lastVisibleItemPosition != RecyclerView.NO_POSITION) {
                 RelatedSearchesUma.logCarouselLastVisibleItemPosition(lastVisibleItemPosition);
             }
-        }
-
-        /** Un-selects any currently selected chip. */
-        void clearSelectedSuggestions() {
-            mChipsProvider.clearSelectedSuggestions();
-        }
-
-        void onChipsChanged() {
-            mChipsProvider.onChipsChanged();
         }
 
         @Override
@@ -679,13 +664,9 @@ public class RelatedSearchesControl {
         }
 
         @VisibleForTesting
-        void selectChipForTest(int chipIndex) {
-            mChipsProvider.selectChipForTest(chipIndex);
-        }
-
-        @VisibleForTesting
-        List<Chip> getChipsForTest() {
-            return mChipsProvider.getChips();
+        ModelList getChipsForTest() {
+            updateChips();
+            return mChips;
         }
     }
 }

@@ -8,7 +8,6 @@
 #include <chrono>
 
 #include "base/containers/circular_deque.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "content/public/browser/tts_platform.h"
 #include "content/public/test/test_utils.h"
@@ -31,6 +30,10 @@ struct SpeechMonitorUtterance {
 class SpeechMonitor : public content::TtsPlatform {
  public:
   SpeechMonitor();
+
+  SpeechMonitor(const SpeechMonitor&) = delete;
+  SpeechMonitor& operator=(const SpeechMonitor&) = delete;
+
   virtual ~SpeechMonitor();
 
   // Use these apis if you want to write an async test e.g.
@@ -84,6 +87,10 @@ class SpeechMonitor : public content::TtsPlatform {
   bool StopSpeaking() override;
   bool IsSpeaking() override;
   void GetVoices(std::vector<content::VoiceData>* out_voices) override;
+  void GetVoicesForBrowserContext(
+      content::BrowserContext* browser_context,
+      const GURL& source_url,
+      std::vector<content::VoiceData>* out_voices) override {}
   void Pause() override {}
   void Resume() override {}
   void WillSpeakUtteranceWithVoice(
@@ -94,7 +101,8 @@ class SpeechMonitor : public content::TtsPlatform {
   void ClearError() override;
   void SetError(const std::string& error) override;
   void Shutdown() override;
-  bool PreferEngineDelegateVoices() override;
+  void FinalizeVoiceOrdering(std::vector<content::VoiceData>& voices) override;
+  void RefreshVoices() override;
 
   void MaybeContinueReplay();
   void MaybePrintExpectations();
@@ -132,8 +140,6 @@ class SpeechMonitor : public content::TtsPlatform {
   int stop_count_ = 0;
 
   base::WeakPtrFactory<SpeechMonitor> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(SpeechMonitor);
 };
 
 }  // namespace test

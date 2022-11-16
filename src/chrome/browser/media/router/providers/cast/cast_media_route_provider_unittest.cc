@@ -40,8 +40,7 @@ constexpr char kCastSource[] =
 static constexpr char kPresentationId[] = "presentationId";
 static constexpr char kOrigin[] = "https://www.youtube.com";
 static constexpr int kTabId = 1;
-static constexpr base::TimeDelta kRouteTimeout =
-    base::TimeDelta::FromSeconds(30);
+static constexpr base::TimeDelta kRouteTimeout = base::Seconds(30);
 
 base::Value MakeReceiverStatus() {
   return base::test::ParseJson(R"({
@@ -79,7 +78,6 @@ class CastMediaRouteProviderTest : public testing::Test {
                                socket_service_.task_runner()));
     CastSessionTracker::SetInstanceForTest(session_tracker_.get());
 
-    EXPECT_CALL(mock_router_, OnSinkAvailabilityUpdated(_, _));
     provider_ = std::make_unique<CastMediaRouteProvider>(
         provider_remote_.BindNewPipeAndPassReceiver(), std::move(router_remote),
         &media_sink_service_, &app_discovery_service_, &message_handler_,
@@ -98,20 +96,20 @@ class CastMediaRouteProviderTest : public testing::Test {
       const absl::optional<MediaRoute>& route,
       mojom::RoutePresentationConnectionPtr presentation_connections,
       const absl::optional<std::string>& error,
-      RouteRequestResult::ResultCode result) {
+      mojom::RouteRequestResultCode result) {
     EXPECT_TRUE(route);
     EXPECT_TRUE(presentation_connections);
     EXPECT_FALSE(error);
-    EXPECT_EQ(RouteRequestResult::ResultCode::OK, result);
+    EXPECT_EQ(mojom::RouteRequestResultCode::OK, result);
     route_ = std::make_unique<MediaRoute>(*route);
   }
 
   void ExpectCreateRouteFailure(
-      RouteRequestResult::ResultCode expected_result,
+      mojom::RouteRequestResultCode expected_result,
       const absl::optional<MediaRoute>& route,
       mojom::RoutePresentationConnectionPtr presentation_connections,
       const absl::optional<std::string>& error,
-      RouteRequestResult::ResultCode result) {
+      mojom::RouteRequestResultCode result) {
     EXPECT_FALSE(route);
     EXPECT_FALSE(presentation_connections);
     EXPECT_TRUE(error);
@@ -119,9 +117,9 @@ class CastMediaRouteProviderTest : public testing::Test {
   }
 
   void ExpectTerminateRouteSuccess(const absl::optional<std::string>& error,
-                                   RouteRequestResult::ResultCode result) {
+                                   mojom::RouteRequestResultCode result) {
     EXPECT_FALSE(error);
-    EXPECT_EQ(RouteRequestResult::ResultCode::OK, result);
+    EXPECT_EQ(mojom::RouteRequestResultCode::OK, result);
     route_.reset();
   }
 
@@ -200,7 +198,7 @@ TEST_F(CastMediaRouteProviderTest, CreateRouteFailsInvalidSink) {
       /* incognito */ false,
       base::BindOnce(&CastMediaRouteProviderTest::ExpectCreateRouteFailure,
                      base::Unretained(this),
-                     RouteRequestResult::ResultCode::SINK_NOT_FOUND));
+                     mojom::RouteRequestResultCode::SINK_NOT_FOUND));
 }
 
 TEST_F(CastMediaRouteProviderTest, CreateRouteFailsInvalidSource) {
@@ -212,7 +210,7 @@ TEST_F(CastMediaRouteProviderTest, CreateRouteFailsInvalidSource) {
       kRouteTimeout, /* incognito */ false,
       base::BindOnce(&CastMediaRouteProviderTest::ExpectCreateRouteFailure,
                      base::Unretained(this),
-                     RouteRequestResult::ResultCode::NO_SUPPORTED_PROVIDER));
+                     mojom::RouteRequestResultCode::NO_SUPPORTED_PROVIDER));
 }
 
 TEST_F(CastMediaRouteProviderTest, CreateRoute) {

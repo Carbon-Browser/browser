@@ -4,11 +4,11 @@
 
 #include "chrome/browser/ash/crosapi/geolocation_service_ash.h"
 
-#include "base/bind_post_task.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/bind_post_task.h"
 #include "base/time/time.h"
-#include "chromeos/network/geolocation_handler.h"
-#include "chromeos/network/network_handler.h"
+#include "chromeos/ash/components/network/geolocation_handler.h"
+#include "chromeos/ash/components/network/network_handler.h"
 #include "ui/base/clipboard/clipboard.h"
 
 namespace crosapi {
@@ -29,7 +29,7 @@ void DoWifiScanTaskOnNetworkHandlerThread(
     return;
   }
 
-  chromeos::WifiAccessPointVector access_points;
+  ash::WifiAccessPointVector access_points;
   int64_t age_ms = 0;
   if (!geolocation_handler->GetWifiAccessPoints(&access_points, &age_ms)) {
     std::move(callback).Run(true, false, base::TimeDelta(),
@@ -46,7 +46,7 @@ void DoWifiScanTaskOnNetworkHandlerThread(
     ap_data->ssid = base::UTF8ToUTF16(access_point.ssid);
     ap_data_vector.push_back(std::move(ap_data));
   }
-  std::move(callback).Run(true, true, base::TimeDelta::FromMilliseconds(age_ms),
+  std::move(callback).Run(true, true, base::Milliseconds(age_ms),
                           std::move(ap_data_vector));
 }
 

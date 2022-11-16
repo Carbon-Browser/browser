@@ -9,12 +9,30 @@
 namespace autofill_assistant {
 namespace features {
 
+// Controls whether to enable Autofill Assistant.
 const base::Feature kAutofillAssistant{"AutofillAssistant",
                                        base::FEATURE_ENABLED_BY_DEFAULT};
+
+// Controls whether to enable Autofill Assistant's way of annotating DOM. If
+// enabled will create an |AnnotateDomModelService|.
+const base::Feature kAutofillAssistantAnnotateDom{
+    "AutofillAssistantAnnotateDom", base::FEATURE_ENABLED_BY_DEFAULT};
 
 // Controls whether to enable Assistant Autofill in a normal Chrome tab.
 const base::Feature kAutofillAssistantChromeEntry{
     "AutofillAssistantChromeEntry", base::FEATURE_ENABLED_BY_DEFAULT};
+
+// Controls whether RPC responses from the backend should be verified for
+// |GetActions| calls.
+const base::Feature kAutofillAssistantVerifyGetActionsResponses{
+    "AutofillAssistantVerifyGetActionsResponses",
+    base::FEATURE_DISABLED_BY_DEFAULT};
+
+// Controls whether RPC requests to the backend should be signed for
+// |GetActions| calls.
+const base::Feature kAutofillAssistantSignGetActionsRequests{
+    "AutofillAssistantSignGetActionsRequests",
+    base::FEATURE_DISABLED_BY_DEFAULT};
 
 // Controls whether to enable dialog onboarding for Autofill Assistant
 const base::Feature kAutofillAssistantDialogOnboarding{
@@ -34,6 +52,29 @@ const base::Feature kAutofillAssistantDisableOnboardingFlow{
 // base64-injected trigger scripts can be shown even in the absence of MSBB.
 const base::Feature kAutofillAssistantDisableProactiveHelpTiedToMSBB{
     "AutofillAssistantDisableProactiveHelpTiedToMSBB",
+    base::FEATURE_ENABLED_BY_DEFAULT};
+
+// Emergency off-switch for full JS flow stack traces. Collecting full stack
+// traces may be computationally expensive, though exceptions are not expected
+// to happen frequently in our flows, and when they do, having full stack traces
+// would be preferred, so this is enabled by default for now.
+const base::Feature kAutofillAssistantFullJsFlowStackTraces{
+    "AutofillAssistantFullJsFlowStackTraces", base::FEATURE_ENABLED_BY_DEFAULT};
+
+// Same as AutofillAssistantFullJsFlowStackTraces, but for JS snippets instead
+// of JS flows. Since snippets are used quite extensively already, this is
+// disabled by default. This feature will let us ramp this safely in the future.
+//
+// TODO: this requires some more work, since we will likely need this not just
+// in the main frame, but in all nested frames as well.
+const base::Feature kAutofillAssistantFullJsSnippetStackTraces{
+    "AutofillAssistantFullJsSnippetStackTraces",
+    base::FEATURE_DISABLED_BY_DEFAULT};
+
+// Get a payments client token from GMS. This is an emergency off-switch in
+// case calling this by default has a negative impact.
+const base::Feature kAutofillAssistantGetPaymentsClientToken{
+    "AutofillAssistantGetPaymentsClientToken",
     base::FEATURE_ENABLED_BY_DEFAULT};
 
 // Whether Autofill Assistant should enable in-CCT triggering, i.e., requesting
@@ -64,11 +105,27 @@ const base::Feature kAutofillAssistantLoadDFMForTriggerScripts{
 const base::Feature kAutofillAssistantProactiveHelp{
     "AutofillAssistantProactiveHelp", base::FEATURE_ENABLED_BY_DEFAULT};
 
-// Used to configure the start heuristics for
+// Used to configure URL heuristics for upcoming new features.
+extern const base::Feature kAutofillAssistantUrlHeuristic1{
+    "AutofillAssistantUrlHeuristic1", base::FEATURE_DISABLED_BY_DEFAULT};
+extern const base::Feature kAutofillAssistantUrlHeuristic2{
+    "AutofillAssistantUrlHeuristic2", base::FEATURE_DISABLED_BY_DEFAULT};
+extern const base::Feature kAutofillAssistantUrlHeuristic3{
+    "AutofillAssistantUrlHeuristic3", base::FEATURE_DISABLED_BY_DEFAULT};
+extern const base::Feature kAutofillAssistantUrlHeuristic4{
+    "AutofillAssistantUrlHeuristic4", base::FEATURE_DISABLED_BY_DEFAULT};
+extern const base::Feature kAutofillAssistantUrlHeuristic5{
+    "AutofillAssistantUrlHeuristic5", base::FEATURE_DISABLED_BY_DEFAULT};
+
+// Legacy URL heuristics. Used to configure the start heuristics for
 // |kAutofillAssistantInCctTriggering| and/or
 // |kAutofillAssistantInTabTriggering|.
 const base::Feature kAutofillAssistantUrlHeuristics{
     "AutofillAssistantUrlHeuristics", base::FEATURE_DISABLED_BY_DEFAULT};
+
+// Whether Autofill Assistant is enabled on desktop.
+const base::Feature kAutofillAssistantDesktop{"AutofillAssistantDesktop",
+                                              base::FEATURE_ENABLED_BY_DEFAULT};
 
 }  // namespace features
 }  // namespace autofill_assistant

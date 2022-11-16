@@ -8,8 +8,8 @@
 #include "ash/webui/print_management/mojom/printing_manager.mojom.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
-#include "chrome/browser/chromeos/printing/cups_print_job_manager.h"
-#include "chrome/browser/chromeos/printing/history/print_job_info.pb.h"
+#include "chrome/browser/ash/printing/cups_print_job_manager.h"
+#include "chrome/browser/ash/printing/history/print_job_info.pb.h"
 #include "components/history/core/browser/history_service.h"
 #include "components/history/core/browser/history_service_observer.h"
 #include "components/keyed_service/core/keyed_service.h"
@@ -20,10 +20,15 @@
 
 class PrefService;
 
-namespace chromeos {
+namespace history {
 class DeletionInfo;
 class HistoryService;
+}  // namespace history
+
+namespace ash {
+
 class PrintJobHistoryService;
+
 namespace printing {
 namespace print_management {
 
@@ -79,10 +84,10 @@ class PrintingManager
   void OnPrintJobCancelled(base::WeakPtr<CupsPrintJob> job) override;
 
   // PrintJobHistoryObserver
-  void OnPrintJobsRetrieved(GetPrintJobsCallback callback,
-                            bool success,
-                            std::vector<chromeos::printing::proto::PrintJobInfo>
-                                print_job_info_protos);
+  void OnPrintJobsRetrieved(
+      GetPrintJobsCallback callback,
+      bool success,
+      std::vector<proto::PrintJobInfo> print_job_info_protos);
 
   // Callback function that is called when the print jobs are cleared from the
   // local database.
@@ -120,7 +125,7 @@ class PrintingManager
 
   // Not owned, this is the intermediate layer to interact with the print
   // job local database.
-  chromeos::PrintJobHistoryService* print_job_history_service_;
+  PrintJobHistoryService* print_job_history_service_;
 
   // Not owned, this provides the necessary observers to observe when browser
   // history has been cleared.
@@ -141,6 +146,6 @@ class PrintingManager
 
 }  // namespace print_management
 }  // namespace printing
-}  // namespace chromeos
+}  // namespace ash
 
 #endif  // CHROME_BROWSER_ASH_PRINTING_PRINT_MANAGEMENT_PRINTING_MANAGER_H_

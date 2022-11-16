@@ -12,7 +12,7 @@
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros_local.h"
-#include "base/sequenced_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "sql/database.h"
 #include "sql/error_delegate_util.h"
@@ -28,8 +28,6 @@ SQLitePersistentStoreBackendBase::SQLitePersistentStoreBackendBase(
     scoped_refptr<base::SequencedTaskRunner> client_task_runner)
     : path_(path),
       histogram_tag_(std::move(histogram_tag)),
-      initialized_(false),
-      corruption_detected_(false),
       current_version_number_(current_version_number),
       compatible_version_number_(compatible_version_number),
       background_task_runner_(std::move(background_task_runner)),
@@ -75,8 +73,6 @@ bool SQLitePersistentStoreBackendBase::InitializeDatabase() {
     return db_ != nullptr;
   }
 
-  base::Time start = base::Time::Now();
-
   const base::FilePath dir = path_.DirName();
   if (!base::PathExists(dir) && !base::CreateDirectory(dir)) {
     RecordPathDoesNotExistProblem();
@@ -109,11 +105,6 @@ bool SQLitePersistentStoreBackendBase::InitializeDatabase() {
     Reset();
     return false;
   }
-
-  base::UmaHistogramCustomTimes(histogram_tag_ + ".TimeInitializeDB",
-                                base::Time::Now() - start,
-                                base::TimeDelta::FromMilliseconds(1),
-                                base::TimeDelta::FromMinutes(1), 50);
 
   initialized_ = DoInitializeDatabase();
 

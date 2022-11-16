@@ -38,15 +38,16 @@
 #include "third_party/blink/public/common/permissions_policy/permissions_policy_features.h"
 #include "third_party/blink/public/common/renderer_preferences/renderer_preferences.h"
 #include "third_party/blink/public/mojom/page/page_visibility_state.mojom-forward.h"
-#include "third_party/blink/public/platform/web_impression.h"
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/public/web/web_ax_enums.h"
 #include "third_party/blink/public/web/web_frame.h"
 #include "third_party/blink/public/web/web_navigation_policy.h"
+#include "third_party/blink/public/web/web_picture_in_picture_window_options.h"
 #include "ui/gfx/geometry/rect.h"
 
 namespace blink {
 
+struct Impression;
 class WebURLRequest;
 class WebView;
 struct WebWindowFeatures;
@@ -72,7 +73,8 @@ class WebViewClient {
       network::mojom::WebSandboxFlags,
       const SessionStorageNamespaceId& session_storage_namespace_id,
       bool& consumed_user_gesture,
-      const absl::optional<WebImpression>&) {
+      const absl::optional<Impression>&,
+      const absl::optional<WebPictureInPictureWindowOptions>& pip_options) {
     return nullptr;
   }
 

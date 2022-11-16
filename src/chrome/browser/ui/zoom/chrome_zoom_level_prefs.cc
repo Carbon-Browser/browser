@@ -11,6 +11,7 @@
 #include "base/bind.h"
 #include "base/feature_list.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/time/time.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "chrome/common/chrome_constants.h"
@@ -97,14 +98,9 @@ void ChromeZoomLevelPrefs::SetDefaultZoomLevelPref(double level) {
 }
 
 double ChromeZoomLevelPrefs::GetDefaultZoomLevelPref() const {
-  double default_zoom_level = 0.0;
-
-  const base::DictionaryValue* default_zoom_level_dictionary =
-      pref_service_->GetDictionary(prefs::kPartitionDefaultZoomLevel);
-  // If no default has been previously set, the default returned is the
-  // value used to initialize default_zoom_level in this function.
-  default_zoom_level_dictionary->GetDouble(partition_key_, &default_zoom_level);
-  return default_zoom_level;
+  const base::Value::Dict& default_zoom_level_dictionary =
+      pref_service_->GetValueDict(prefs::kPartitionDefaultZoomLevel);
+  return default_zoom_level_dictionary.FindDouble(partition_key_).value_or(0.0);
 }
 
 base::CallbackListSubscription
@@ -126,19 +122,17 @@ void ChromeZoomLevelPrefs::OnZoomLevelChanged(
   double level = change.zoom_level;
   DictionaryPrefUpdate update(pref_service_,
                               prefs::kPartitionPerHostZoomLevels);
-  base::DictionaryValue* host_zoom_dictionaries = update.Get();
+  base::Value* host_zoom_dictionaries = update.Get();
   DCHECK(host_zoom_dictionaries);
 
   bool modification_is_removal =
       blink::PageZoomValuesEqual(level, host_zoom_map_->GetDefaultZoomLevel());
 
-  base::DictionaryValue* host_zoom_dictionary_weak = nullptr;
-  if (!host_zoom_dictionaries->GetDictionary(partition_key_,
-                                             &host_zoom_dictionary_weak)) {
-    auto host_zoom_dictionary = std::make_unique<base::DictionaryValue>();
-    host_zoom_dictionary_weak = host_zoom_dictionary.get();
-    host_zoom_dictionaries->Set(partition_key_,
-                                std::move(host_zoom_dictionary));
+  base::Value* host_zoom_dictionary_weak =
+      host_zoom_dictionaries->FindDictKey(partition_key_);
+  if (!host_zoom_dictionary_weak) {
+    host_zoom_dictionary_weak = host_zoom_dictionaries->SetKey(
+        partition_key_, base::Value(base::Value::Type::DICTIONARY));
   }
 
   if (modification_is_removal) {
@@ -146,7 +140,7 @@ void ChromeZoomLevelPrefs::OnZoomLevelChanged(
   } else {
     base::DictionaryValue dict;
     dict.SetDoubleKey(kZoomLevelKey, level);
-    dict.SetString(
+    dict.SetStringKey(
         kLastModifiedPath,
         base::NumberToString(change.last_modified.ToInternalValue()));
     host_zoom_dictionary_weak->SetKey(change.host, std::move(dict));
@@ -210,12 +204,11 @@ void ChromeZoomLevelPrefs::ExtractPerHostZoomLevels(
   {
     DictionaryPrefUpdate update(pref_service_,
                                 prefs::kPartitionPerHostZoomLevels);
-    base::DictionaryValue* host_zoom_dictionaries = update.Get();
-    base::DictionaryValue* host_zoom_dictionary = nullptr;
-    host_zoom_dictionaries->GetDictionary(partition_key_,
-                                          &host_zoom_dictionary);
+    base::Value* host_zoom_dictionaries = update.Get();
+    base::Value* partition_dictionary =
+        host_zoom_dictionaries->FindDictKey(partition_key_);
     for (const std::string& s : keys_to_remove)
-      host_zoom_dictionary->RemoveKey(s);
+      partition_dictionary->RemoveKey(s);
   }
 }
 
@@ -232,7 +225,8 @@ void ChromeZoomLevelPrefs::InitHostZoomMap(
   // Initialize the HostZoomMap with per-host zoom levels from the persisted
   // zoom-level preference values.
   const base::DictionaryValue* host_zoom_dictionaries =
-      pref_service_->GetDictionary(prefs::kPartitionPerHostZoomLevels);
+      &base::Value::AsDictionaryValue(
+          *pref_service_->GetDictionary(prefs::kPartitionPerHostZoomLevels));
   const base::DictionaryValue* host_zoom_dictionary = nullptr;
   if (host_zoom_dictionaries->GetDictionary(partition_key_,
                                             &host_zoom_dictionary)) {

@@ -6,14 +6,15 @@
 
 #include <wayland-cursor.h>
 
-#include "base/task/post_task.h"
+#include "base/task/task_runner_util.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
-#include "base/task_runner_util.h"
 #include "ui/base/cursor/platform_cursor.h"
+#include "ui/ozone/common/bitmap_cursor.h"
+#include "ui/ozone/common/bitmap_cursor_factory.h"
+#include "ui/ozone/platform/wayland/host/wayland_buffer_factory.h"
 #include "ui/ozone/platform/wayland/host/wayland_connection.h"
-#include "ui/ozone/platform/wayland/host/wayland_shm.h"
 
 namespace ui {
 
@@ -44,9 +45,9 @@ WaylandCursorFactory::WaylandCursorFactory(WaylandConnection* connection)
 WaylandCursorFactory::~WaylandCursorFactory() = default;
 
 void WaylandCursorFactory::ObserveThemeChanges() {
-  auto* cursor_theme_manager = CursorThemeManager::GetInstance();
-  DCHECK(cursor_theme_manager);
-  cursor_theme_observer_.Observe(cursor_theme_manager);
+  auto* linux_ui = LinuxUi::instance();
+  DCHECK(linux_ui);
+  cursor_theme_observer_.Observe(linux_ui);
 }
 
 scoped_refptr<PlatformCursor> WaylandCursorFactory::GetDefaultCursor(
@@ -58,7 +59,7 @@ scoped_refptr<PlatformCursor> WaylandCursorFactory::GetDefaultCursor(
         continue;
 
       current_theme_->cache[type] =
-          base::MakeRefCounted<BitmapCursorOzone>(type, cursor, scale_);
+          base::MakeRefCounted<BitmapCursor>(type, cursor, scale_);
       break;
     }
   }
@@ -68,7 +69,7 @@ scoped_refptr<PlatformCursor> WaylandCursorFactory::GetDefaultCursor(
   // Fall back to the base class implementation if the theme has't provided
   // a shape for the requested type.
   if (current_theme_->cache[type].get() == nullptr)
-    return BitmapCursorFactoryOzone::GetDefaultCursor(type);
+    return BitmapCursorFactory::GetDefaultCursor(type);
 
   return current_theme_->cache[type];
 }
@@ -145,7 +146,7 @@ void WaylandCursorFactory::ReloadThemeCursors() {
       FROM_HERE,
       {base::MayBlock(), base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN},
       base::BindOnce(LoadCursorTheme, name_, size_, scale_,
-                     connection_->shm()->get()),
+                     connection_->wayland_buffer_factory()->shm()),
       base::BindOnce(&WaylandCursorFactory::OnThemeLoaded,
                      weak_factory_.GetWeakPtr(), name_, size_));
 }

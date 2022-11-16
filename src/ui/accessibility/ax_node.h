@@ -11,21 +11,26 @@
 #include <memory>
 #include <ostream>
 #include <string>
+#include <utility>
 #include <vector>
 
-#include "base/strings/char_traits.h"
+#include "base/containers/stack.h"
+#include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/accessibility/ax_export.h"
 #include "ui/accessibility/ax_hypertext.h"
 #include "ui/accessibility/ax_node_data.h"
+#include "ui/accessibility/ax_text_attributes.h"
 #include "ui/accessibility/ax_tree_id.h"
 
 namespace ui {
 
 class AXComputedNodeData;
 class AXTableInfo;
+class AXTreeManager;
+
 struct AXLanguageInfo;
 struct AXTreeData;
 
@@ -33,19 +38,21 @@ struct AXTreeData;
 class AX_EXPORT AXNode final {
  public:
   // Replacement character used to represent an embedded (or, additionally for
-  // text navigation, an empty) object. Encoded in UTF16 format. Part of the
-  // Unicode Standard.
+  // text navigation, an empty) object. Part of the Unicode Standard.
   //
   // On some platforms, most objects are represented in the text of their
   // parents with a special "embedded object character" and not with their
   // actual text contents. Also on the same platforms, if a node has only
   // ignored descendants, i.e., it appears to be empty to assistive software, we
   // need to treat it as a character and a word boundary.
-  static constexpr char16_t kEmbeddedCharacter[] = u"\uFFFC";
-  // We compute the embedded character's length instead of manually typing it in
-  // order to avoid the two variables getting out of sync in a future update.
-  static constexpr int kEmbeddedCharacterLength =
-      base::CharTraits<char16_t>::length(kEmbeddedCharacter);
+  static constexpr char kEmbeddedObjectCharacterUTF8[] = "\xEF\xBF\xBC";
+  static constexpr char16_t kEmbeddedObjectCharacterUTF16[] = u"\xFFFC";
+  // We compute the embedded characters' length instead of manually typing it in
+  // order to avoid the variable pairs getting out of sync in a future update.
+  static constexpr int kEmbeddedObjectCharacterLengthUTF8 =
+      std::char_traits<char>::length(kEmbeddedObjectCharacterUTF8);
+  static constexpr int kEmbeddedObjectCharacterLengthUTF16 =
+      std::char_traits<char16_t>::length(kEmbeddedObjectCharacterUTF16);
 
   // Interface to the tree class that owns an AXNode. We use this instead
   // of letting AXNode have a pointer to its AXTree directly so that we're
@@ -64,7 +71,7 @@ class AX_EXPORT AXNode final {
     };
 
     // See AXTree::GetAXTreeID.
-    virtual AXTreeID GetAXTreeID() const = 0;
+    virtual const AXTreeID& GetAXTreeID() const = 0;
     // See `AXTree::GetTableInfo`.
     virtual AXTableInfo* GetTableInfo(const AXNode* table_node) const = 0;
     // See AXTree::GetFromId.
@@ -105,8 +112,8 @@ class AX_EXPORT AXNode final {
     NodeType* operator->() const;
 
    protected:
-    const NodeType* parent_;
-    NodeType* child_;
+    raw_ptr<const NodeType> parent_;
+    raw_ptr<NodeType, DanglingUntriaged> child_;
   };
 
   // The constructor requires a parent, id, and index in parent, but
@@ -117,7 +124,7 @@ class AX_EXPORT AXNode final {
          AXNode* parent,
          AXNodeID id,
          size_t index_in_parent,
-         size_t unignored_index_in_parent = 0);
+         size_t unignored_index_in_parent = 0u);
   virtual ~AXNode();
 
   // Accessors.
@@ -151,6 +158,7 @@ class AX_EXPORT AXNode final {
   AXNode* GetParentCrossingTreeBoundary() const;
   AXNode* GetUnignoredParent() const;
   AXNode* GetUnignoredParentCrossingTreeBoundary() const;
+  base::stack<AXNode*> GetAncestorsCrossingTreeBoundary() const;
   size_t GetIndexInParent() const;
   size_t GetUnignoredIndexInParent() const;
   AXNode* GetFirstChild() const;
@@ -161,10 +169,18 @@ class AX_EXPORT AXNode final {
   AXNode* GetLastChildCrossingTreeBoundary() const;
   AXNode* GetLastUnignoredChild() const;
   AXNode* GetLastUnignoredChildCrossingTreeBoundary() const;
+
+  // TODO(accessibility): Consider renaming all "GetDeepest...Child" methods to
+  // "GetDeepest...Descendant".
   AXNode* GetDeepestFirstChild() const;
+  AXNode* GetDeepestFirstChildCrossingTreeBoundary() const;
   AXNode* GetDeepestFirstUnignoredChild() const;
+  AXNode* GetDeepestFirstUnignoredChildCrossingTreeBoundary() const;
   AXNode* GetDeepestLastChild() const;
+  AXNode* GetDeepestLastChildCrossingTreeBoundary() const;
   AXNode* GetDeepestLastUnignoredChild() const;
+  AXNode* GetDeepestLastUnignoredChildCrossingTreeBoundary() const;
+
   AXNode* GetNextSibling() const;
   AXNode* GetNextUnignoredSibling() const;
   AXNode* GetPreviousSibling() const;
@@ -225,6 +241,27 @@ class AX_EXPORT AXNode final {
   UnignoredChildCrossingTreeBoundaryIterator
   UnignoredChildrenCrossingTreeBoundaryEnd() const;
 
+  // Returns true if this is a node on which accessibility events make sense to
+  // be fired. Events are not needed on nodes that will, for example, never
+  // appear in a tree that is visible to assistive software, as there will be no
+  // software to handle the event on the other end.
+  bool CanFireEvents() const;
+
+  // Returns an optional integer indicating the logical order of this node
+  // compared to another node, or returns an empty optional if the nodes are not
+  // comparable. Nodes are not comparable if they do not share a common
+  // ancestor.
+  //
+  //    0: if this node is logically equivalent to the other node.
+  //   <0: if this node is logically less than the other node.
+  //   >0: if this node is logically greater than the other node.
+  //
+  // Another way to look at the nodes' relative positions/logical orders is that
+  // they are equivalent to pre-order traversal of the tree. If we pre-order
+  // traverse from the root, the node that we visited earlier is always going to
+  // be before (logically less) the node we visit later.
+  absl::optional<int> CompareTo(const AXNode& other) const;
+
   // Returns true if the node has any of the text related roles, including
   // kStaticText, kInlineTextBox and kListMarker (for Legacy Layout). Does not
   // include any text field roles.
@@ -260,19 +297,9 @@ class AX_EXPORT AXNode final {
   // now owns all of the passed children.
   void SwapChildren(std::vector<AXNode*>* children);
 
-  // This is called when the AXTree no longer includes this node in the
-  // tree. Reference counting is used on some platforms because the
-  // operating system may hold onto a reference to an AXNode
-  // object even after we're through with it, so this may decrement the
-  // reference count and clear out the object's data.
-  void Destroy();
-
   // Returns true if this node is equal to or a descendant of |ancestor|.
   bool IsDescendantOf(const AXNode* ancestor) const;
-
-  // Gets the text offsets where new lines start either from the node's data or
-  // by computing them and caching the result.
-  std::vector<int> GetOrComputeLineStartOffsets();
+  bool IsDescendantOfCrossingTreeBoundary(const AXNode* ancestor) const;
 
   // If the color is transparent, blends with the ancestor's color.
   // Note that this is imperfect; it won't work if a node is absolute-
@@ -280,6 +307,8 @@ class AX_EXPORT AXNode final {
   // common cases.
   SkColor ComputeColor() const;
   SkColor ComputeBackgroundColor() const;
+
+  AXTreeManager* GetManager() const;
 
   //
   // Methods for accessing accessibility attributes including attributes that
@@ -313,6 +342,10 @@ class AX_EXPORT AXNode final {
     return data().GetFloatAttribute(attribute, value);
   }
 
+  const std::vector<std::pair<ax::mojom::IntAttribute, int32_t>>&
+  GetIntAttributes() const {
+    return data().int_attributes;
+  }
   bool HasIntAttribute(ax::mojom::IntAttribute attribute) const {
     return data().HasIntAttribute(attribute);
   }
@@ -323,6 +356,10 @@ class AX_EXPORT AXNode final {
     return data().GetIntAttribute(attribute, value);
   }
 
+  const std::vector<std::pair<ax::mojom::StringAttribute, std::string>>&
+  GetStringAttributes() const {
+    return data().string_attributes;
+  }
   bool HasStringAttribute(ax::mojom::StringAttribute attribute) const;
   const std::string& GetStringAttribute(
       ax::mojom::StringAttribute attribute) const;
@@ -334,22 +371,22 @@ class AX_EXPORT AXNode final {
   bool GetString16Attribute(ax::mojom::StringAttribute attribute,
                             std::u16string* value) const;
 
+  bool HasInheritedStringAttribute(ax::mojom::StringAttribute attribute) const;
   const std::string& GetInheritedStringAttribute(
       ax::mojom::StringAttribute attribute) const;
   std::u16string GetInheritedString16Attribute(
       ax::mojom::StringAttribute attribute) const;
 
-  bool HasIntListAttribute(ax::mojom::IntListAttribute attribute) const {
-    return data().HasIntListAttribute(attribute);
+  const std::vector<
+      std::pair<ax::mojom::IntListAttribute, std::vector<int32_t>>>&
+  GetIntListAttributes() const {
+    return data().intlist_attributes;
   }
+  bool HasIntListAttribute(ax::mojom::IntListAttribute attribute) const;
   const std::vector<int32_t>& GetIntListAttribute(
-      ax::mojom::IntListAttribute attribute) const {
-    return data().GetIntListAttribute(attribute);
-  }
+      ax::mojom::IntListAttribute attribute) const;
   bool GetIntListAttribute(ax::mojom::IntListAttribute attribute,
-                           std::vector<int32_t>* value) const {
-    return data().GetIntListAttribute(attribute, value);
-  }
+                           std::vector<int32_t>* value) const;
 
   bool HasStringListAttribute(ax::mojom::StringListAttribute attribute) const {
     return data().HasStringListAttribute(attribute);
@@ -363,6 +400,15 @@ class AX_EXPORT AXNode final {
     return data().GetStringListAttribute(attribute, value);
   }
 
+  const base::StringPairs& GetHtmlAttributes() const {
+    return data().html_attributes;
+  }
+  bool HasHtmlAttribute(const char* attribute) const {
+    return data().HasHtmlAttribute(attribute);
+  }
+  std::u16string GetHtmlAttribute(const char* attribute) const {
+    return data().GetHtmlAttribute(attribute);
+  }
   bool GetHtmlAttribute(const char* attribute, std::string* value) const {
     return data().GetHtmlAttribute(attribute, value);
   }
@@ -370,7 +416,28 @@ class AX_EXPORT AXNode final {
     return data().GetHtmlAttribute(attribute, value);
   }
 
+  AXTextAttributes GetTextAttributes() const {
+    return data().GetTextAttributes();
+  }
+
   bool HasState(ax::mojom::State state) const { return data().HasState(state); }
+  ax::mojom::State GetState() const {
+    return static_cast<ax::mojom::State>(data().state);
+  }
+
+  bool HasAction(ax::mojom::Action action) const {
+    return data().HasAction(action);
+  }
+
+  bool HasTextStyle(ax::mojom::TextStyle text_style) const {
+    return data().HasTextStyle(text_style);
+  }
+
+  ax::mojom::NameFrom GetNameFrom() const { return data().GetNameFrom(); }
+
+  ax::mojom::InvalidState GetInvalidState() const {
+    return data().GetInvalidState();
+  }
 
   // Return the hierarchical level if supported.
   absl::optional<int> GetHierarchicalLevel() const;
@@ -390,10 +457,21 @@ class AX_EXPORT AXNode final {
   // for ordered sets.
   bool IsIgnoredContainerForOrderedSet() const;
 
-  // If this node is a leaf, returns the inner text of this node. This is
+  // Helper functions that returns true when we are on a row/row group inside of
+  // a tree grid. Also works for rows that are part of a row group inside a tree
+  // grid. Returns false otherwise.
+  bool IsRowInTreeGrid(const AXNode* ordered_set) const;
+  bool IsRowGroupInTreeGrid() const;
+
+  // Returns the accessible name for this node. This could have originated from
+  // e.g. an onscreen label, or an ARIA label.
+  const std::string& GetNameUTF8() const;
+  std::u16string GetNameUTF16() const;
+
+  // If this node is a leaf, returns the text content of this node. This is
   // equivalent to its visible accessible name. Otherwise, if this node is not a
   // leaf, represents every non-textual child node with a special "embedded
-  // object character", and every textual child node with its inner text.
+  // object character", and every textual child node with its text content.
   // Textual nodes include e.g. static text and white space.
   //
   // This is how displayed text and embedded objects are represented in
@@ -416,10 +494,13 @@ class AX_EXPORT AXNode final {
   // Only text displayed on screen is included. Text from ARIA and HTML
   // attributes that is either not displayed on screen, or outside this node, is
   // not returned.
-  const std::string& GetInnerText() const;
-  const std::u16string& GetInnerTextUTF16() const;
+  //
+  // Does not take into account line breaks that have been introduced by layout.
+  // For example, in the Web context, "A<div>B</div>C" would produce "ABC".
+  const std::string& GetTextContentUTF8() const;
+  const std::u16string& GetTextContentUTF16() const;
 
-  // Returns the length of the text (in UTF16 code units) that is found inside
+  // Returns the length of the text (in code units) that is found inside
   // this node and all its descendants; including text found in embedded
   // objects.
   //
@@ -427,9 +508,10 @@ class AX_EXPORT AXNode final {
   // attributes that is either not displayed on screen, or outside this node, is
   // not included.
   //
-  // The length of the text is in UTF8 code units, not in grapheme clusters.
-  int GetInnerTextLength() const;
-  int GetInnerTextLengthUTF16() const;
+  // The length of the text is either in UTF8 or UTF16 code units, not in
+  // grapheme clusters.
+  int GetTextContentLengthUTF8() const;
+  int GetTextContentLengthUTF16() const;
 
   // Returns a string representing the language code.
   //
@@ -498,11 +580,11 @@ class AX_EXPORT AXNode final {
   // Get the node ids that represent rows in a table.
   std::vector<AXNodeID> GetTableRowNodeIds() const;
 
-#if defined(OS_APPLE)
+#if BUILDFLAG(IS_APPLE)
   // Table column-like nodes. These nodes are only present on macOS.
   bool IsTableColumn() const;
   absl::optional<int> GetTableColColIndex() const;
-#endif  // defined(OS_APPLE)
+#endif  // BUILDFLAG(IS_APPLE)
 
   // Table cell-like nodes.
   bool IsTableCellOrHeader() const;
@@ -518,9 +600,9 @@ class AX_EXPORT AXNode final {
   void GetTableCellColHeaders(std::vector<AXNode*>* col_headers) const;
   void GetTableCellRowHeaders(std::vector<AXNode*>* row_headers) const;
 
-  // Helper methods to check if a cell is an ARIA-1.1+ 'cell' or 'gridcell'
-  bool IsCellOrHeaderOfARIATable() const;
-  bool IsCellOrHeaderOfARIAGrid() const;
+  // Returns true if this node is a cell or a row/column header in an ARIA grid
+  // or treegrid.
+  bool IsCellOrHeaderOfAriaGrid() const;
 
   // Return an object containing information about the languages detected on
   // this node.
@@ -548,7 +630,8 @@ class AX_EXPORT AXNode final {
   // element.
   bool IsEmbeddedGroup() const;
 
-  // Returns true if node has ignored state or ignored role.
+  // Returns true if this node has the ignored state or a presentational ARIA
+  // role. Focused nodes are, by design, not ignored.
   bool IsIgnored() const;
 
   // Some nodes are not ignored but should be skipped during text navigation.
@@ -556,23 +639,21 @@ class AX_EXPORT AXNode final {
   // encountering a splitter during character and word navigation.
   bool IsIgnoredForTextNavigation() const;
 
-  // Returns true if node is invisible or ignored.
+  // Returns true if node is invisible, or if it is ignored as determined by
+  // `AXNode::IsIgnored()`.
   bool IsInvisibleOrIgnored() const;
-
-  // Returns true if node is focused within this tree.
-  bool IsFocusedWithinThisTree() const;
 
   // Returns true if an ancestor of this node (not including itself) is a
   // leaf node, meaning that this node is not actually exposed to any
   // platform's accessibility layer.
   bool IsChildOfLeaf() const;
 
-  // Returns true if this is a leaf node that has no inner text. Note that all
+  // Returns true if this is a leaf node that has no text content. Note that all
   // descendants of a leaf node are not exposed to any platform's accessibility
-  // layer, but they may be used to compute the node's inner text. Note also
-  // that, ignored nodes (leaf or otherwise) do not expose their inner text or
-  // hypertext to the platforms' accessibility layer, but they expose the inner
-  // text or hypertext of their unignored descendants.
+  // layer, but they may be used to compute the node's text content. Note also
+  // that, ignored nodes (leaf or otherwise) do not expose their text content or
+  // hypertext to the platforms' accessibility layer, but they expose the text
+  // content or hypertext of their unignored descendants.
   //
   // For example, empty text fields might have a set of unignored nested divs
   // inside them:
@@ -599,6 +680,10 @@ class AX_EXPORT AXNode final {
   // of a list marker node. Returns false otherwise.
   bool IsInListMarker() const;
 
+  // Returns true if this node is a popup button that is a parent to a menu list
+  // popup.
+  bool IsMenuListPopUpButton() const;
+
   // Returns true if this node is a collapsed popup button that is parent to a
   // menu list popup.
   bool IsCollapsedMenuListPopUpButton() const;
@@ -620,6 +705,18 @@ class AX_EXPORT AXNode final {
   // contenteditable without the role, (see `AXNodeData::IsTextField()`).
   AXNode* GetTextFieldAncestor() const;
 
+  // Get the native text field's deepest container; the lowest descendant that
+  // contains all its text. Returns nullptr if the text field is empty, or if it
+  // is not an atomic text field, (e.g., <input> or <textarea>).
+  AXNode* GetTextFieldInnerEditorElement() const;
+
+  // If this node is within a container (or widget) that supports either single
+  // or multiple selection, returns the node that represents the container.
+  AXNode* GetSelectionContainer() const;
+
+  // If this node is within a table, returns the node that represents the table.
+  AXNode* GetTableAncestor() const;
+
   // Returns true if this node is either an atomic text field , or one of its
   // ancestors is. An atomic text field does not expose its internal
   // implementation to assistive software, appearing as a single leaf node in
@@ -631,11 +728,18 @@ class AX_EXPORT AXNode final {
   // Finds and returns a pointer to ordered set containing node.
   AXNode* GetOrderedSet() const;
 
+  // Returns false if the |data_| is uninitialized or has been taken. Returns
+  // true otherwise.
+  bool IsDataValid() const;
+
+  // Returns true if the node supports the read-only attribute.
+  bool IsReadOnlySupported() const;
+
+  // Returns true if the node is marked read-only or is disabled. By default,
+  // all nodes that can't be edited are read-only.
+  bool IsReadOnlyOrDisabled() const;
+
  private:
-  // Computes the text offset where each line starts by traversing all child
-  // leaf nodes.
-  void ComputeLineStartOffsets(std::vector<int>* line_offsets,
-                               int* start_offset) const;
   AXTableInfo* GetAncestorTableInfo() const;
   void IdVectorToNodeVector(const std::vector<AXNodeID>& ids,
                             std::vector<AXNode*>* nodes) const;
@@ -652,26 +756,27 @@ class AX_EXPORT AXNode final {
   // readable format. For example: "50% red 40% green 90% blue".
   std::string GetValueForColorWell() const;
 
-  // Returns the value of a text field. If necessary, computes the value from
-  // the field's internal representation in the accessibility tree, in order to
-  // minimize cross-process communication between the renderer and the browser
-  // processes.
-  std::string GetValueForTextField() const;
-
   // Compute the actual value of a color attribute that needs to be
   // blended with ancestor colors.
   SkColor ComputeColorAttribute(ax::mojom::IntAttribute color_attr) const;
 
-  OwnerTree* const tree_;  // Owns this.
+  const raw_ptr<OwnerTree> tree_;  // Owns this.
   size_t index_in_parent_;
   size_t unignored_index_in_parent_;
   size_t unignored_child_count_ = 0;
-  AXNode* const parent_;
+  const raw_ptr<AXNode> parent_;
   std::vector<AXNode*> children_;
 
   // Stores information about this node that is immutable and which has been
   // computed by the tree's source, such as `content::BlinkAXTreeSource`.
   AXNodeData data_;
+
+  // Used to track when this object's data_ is valid. If either of these are
+  // true, and data is accessed, there will be a crash.
+  // TODO(crbug.com/1237353): Wrap this inside of an `#if DCHECK_IS_ON()` after
+  // removing `DumpWithoutCrashing`.
+  bool is_data_still_uninitialized_ = true;
+  bool has_data_been_taken_ = false;
 
   // See the class comment in "ax_hypertext.h" for an explanation of this
   // member.
@@ -761,10 +866,10 @@ AXNode::ChildIteratorBase<NodeType,
   // increment the iterator past the end, we remain at the past-the-end iterator
   // condition.
   if (child_ && parent_) {
-    if (child_ == (parent_->*LastChild)())
+    if (child_ == (parent_.get()->*LastChild)())
       child_ = nullptr;
     else
-      child_ = (child_->*NextSibling)();
+      child_ = (child_.get()->*NextSibling)();
   }
 
   return *this;
@@ -789,12 +894,12 @@ AXNode::ChildIteratorBase<NodeType,
     // If the iterator is past the end, |child_=nullptr|, decrement the iterator
     // gives us the last iterator element.
     if (!child_)
-      child_ = (parent_->*LastChild)();
+      child_ = (parent_.get()->*LastChild)();
     // Decrement the iterator gives us the previous element, except when the
     // iterator is at the beginning; in which case, decrementing the iterator
     // remains at the beginning.
-    else if (child_ != (parent_->*FirstChild)())
-      child_ = (child_->*PreviousSibling)();
+    else if (child_ != (parent_.get()->*FirstChild)())
+      child_ = (child_.get()->*PreviousSibling)();
   }
 
   return *this;

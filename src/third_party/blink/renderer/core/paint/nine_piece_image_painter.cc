@@ -4,14 +4,17 @@
 
 #include "third_party/blink/renderer/core/paint/nine_piece_image_painter.h"
 
+#include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/inspector/inspector_trace_events.h"
 #include "third_party/blink/renderer/core/layout/geometry/physical_rect.h"
 #include "third_party/blink/renderer/core/paint/nine_piece_image_grid.h"
+#include "third_party/blink/renderer/core/paint/paint_auto_dark_mode.h"
 #include "third_party/blink/renderer/core/style/computed_style.h"
 #include "third_party/blink/renderer/core/style/nine_piece_image.h"
-#include "third_party/blink/renderer/platform/geometry/int_size.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_context.h"
 #include "third_party/blink/renderer/platform/graphics/scoped_interpolation_quality.h"
+#include "ui/gfx/geometry/outsets.h"
+#include "ui/gfx/geometry/size.h"
 
 namespace blink {
 
@@ -87,27 +90,34 @@ bool ShouldTile(const NinePieceImageGrid::NinePieceDrawInfo& draw_info) {
 void PaintPieces(GraphicsContext& context,
                  const PhysicalRect& border_image_rect,
                  const ComputedStyle& style,
+                 const Document& document,
                  const NinePieceImage& nine_piece_image,
                  Image* image,
-                 const FloatSize& unzoomed_image_size,
+                 const gfx::SizeF& unzoomed_image_size,
                  PhysicalBoxSides sides_to_include) {
   // |image_size| is in the image's native resolution and |slice_scale| defines
   // the effective size of a CSS pixel in the image.
-  FloatSize image_size = image->SizeAsFloat(kRespectImageOrientation);
+  gfx::SizeF image_size = image->SizeAsFloat(kRespectImageOrientation);
   // Compute the scale factor to apply to the slice values by relating the
   // zoomed size to the "unzoomed" (CSS pixel) size. For raster images this
   // should match any DPR scale while for generated images it should match the
   // effective zoom. (Modulo imprecisions introduced by the computation.) This
   // scale should in theory be uniform.
-  FloatSize slice_scale(image_size.Width() / unzoomed_image_size.Width(),
-                        image_size.Height() / unzoomed_image_size.Height());
+  gfx::Vector2dF slice_scale(
+      image_size.width() / unzoomed_image_size.width(),
+      image_size.height() / unzoomed_image_size.height());
 
-  IntRectOutsets border_widths(
-      style.BorderTopWidth().ToInt(), style.BorderRightWidth().ToInt(),
-      style.BorderBottomWidth().ToInt(), style.BorderLeftWidth().ToInt());
+  auto border_widths = gfx::Outsets()
+                           .set_left_right(style.BorderLeftWidth().ToInt(),
+                                           style.BorderRightWidth().ToInt())
+                           .set_top_bottom(style.BorderTopWidth().ToInt(),
+                                           style.BorderBottomWidth().ToInt());
   NinePieceImageGrid grid(
       nine_piece_image, image_size, slice_scale, style.EffectiveZoom(),
-      PixelSnappedIntRect(border_image_rect), border_widths, sides_to_include);
+      ToPixelSnappedRect(border_image_rect), border_widths, sides_to_include);
+
+  // TODO(penglin):  We need to make a single classification for the entire grid
+  auto image_auto_dark_mode = ImageAutoDarkMode::Disabled();
 
   ScopedInterpolationQuality interpolation_quality_scope(
       context, style.GetInterpolationQuality());
@@ -120,18 +130,18 @@ void PaintPieces(GraphicsContext& context,
     if (!ShouldTile(draw_info)) {
       // Since there is no way for the developer to specify decode behavior,
       // use kSync by default.
-      context.DrawImage(image, Image::kSyncDecode, draw_info.destination,
-                        &draw_info.source, style.DisableForceDark());
+      context.DrawImage(image, Image::kSyncDecode, image_auto_dark_mode,
+                        draw_info.destination, &draw_info.source);
       continue;
     }
 
     // TODO(cavalcantii): see crbug.com/662513.
     absl::optional<TileParameters> h_tile = ComputeTileParameters(
-        draw_info.tile_rule.horizontal, draw_info.destination.Width(),
-        draw_info.source.Width(), draw_info.tile_scale.Width());
+        draw_info.tile_rule.horizontal, draw_info.destination.width(),
+        draw_info.source.width(), draw_info.tile_scale.x());
     absl::optional<TileParameters> v_tile = ComputeTileParameters(
-        draw_info.tile_rule.vertical, draw_info.destination.Height(),
-        draw_info.source.Height(), draw_info.tile_scale.Height());
+        draw_info.tile_rule.vertical, draw_info.destination.height(),
+        draw_info.source.height(), draw_info.tile_scale.y());
     if (!h_tile || !v_tile)
       continue;
 
@@ -143,19 +153,20 @@ void PaintPieces(GraphicsContext& context,
 
     ImageTilingInfo tiling_info;
     tiling_info.image_rect = draw_info.source;
-    tiling_info.scale = FloatSize(h_tile->scale_factor, v_tile->scale_factor);
+    tiling_info.scale =
+        gfx::Vector2dF(h_tile->scale_factor, v_tile->scale_factor);
     // The phase defines the origin of the whole image - not the image
     // rect (see ImageTilingInfo) - so we need to adjust it to account
     // for that.
-    FloatPoint tile_origin_in_dest_space = draw_info.source.Location();
-    tile_origin_in_dest_space.Scale(tiling_info.scale.Width(),
-                                    tiling_info.scale.Height());
+    gfx::PointF tile_origin_in_dest_space = draw_info.source.origin();
+    tile_origin_in_dest_space.Scale(tiling_info.scale.x(),
+                                    tiling_info.scale.y());
     tiling_info.phase =
-        draw_info.destination.Location() +
-        (FloatPoint(h_tile->phase, v_tile->phase) - tile_origin_in_dest_space);
-    tiling_info.spacing = FloatSize(h_tile->spacing, v_tile->spacing);
-
-    context.DrawImageTiled(image, draw_info.destination, tiling_info);
+        draw_info.destination.origin() +
+        (gfx::PointF(h_tile->phase, v_tile->phase) - tile_origin_in_dest_space);
+    tiling_info.spacing = gfx::SizeF(h_tile->spacing, v_tile->spacing);
+    context.DrawImageTiled(image, draw_info.destination, tiling_info,
+                           image_auto_dark_mode);
   }
 }
 
@@ -191,8 +202,8 @@ bool NinePieceImagePainter::Paint(GraphicsContext& graphics_context,
   // generated or SVG), then get an image using that size. This will yield an
   // image with either "native" size (raster images) or size scaled by effective
   // zoom.
-  const FloatSize default_object_size(border_image_rect.size);
-  FloatSize image_size = style_image->ImageSize(
+  const gfx::SizeF default_object_size(border_image_rect.size);
+  gfx::SizeF image_size = style_image->ImageSize(
       style.EffectiveZoom(), default_object_size, kRespectImageOrientation);
   scoped_refptr<Image> image =
       style_image->GetImage(observer, document, style, image_size);
@@ -202,16 +213,17 @@ bool NinePieceImagePainter::Paint(GraphicsContext& graphics_context,
   // Resolve the image size again, this time with a size-multiplier of one, to
   // yield the size in CSS pixels. This is the unit/scale we expect the
   // 'border-image-slice' values to be in.
-  FloatSize unzoomed_image_size = style_image->ImageSize(
-      1, default_object_size.ScaledBy(1 / style.EffectiveZoom()),
+  gfx::SizeF unzoomed_image_size = style_image->ImageSize(
+      1, gfx::ScaleSize(default_object_size, 1 / style.EffectiveZoom()),
       kRespectImageOrientation);
 
   DEVTOOLS_TIMELINE_TRACE_EVENT_WITH_CATEGORIES(
       TRACE_DISABLED_BY_DEFAULT("devtools.timeline"), "PaintImage",
       inspector_paint_image_event::Data, node, *style_image,
-      FloatRect(image->Rect()), FloatRect(border_image_rect));
-  PaintPieces(graphics_context, border_image_rect, style, nine_piece_image,
-              image.get(), unzoomed_image_size, sides_to_include);
+      gfx::RectF(image->Rect()), gfx::RectF(border_image_rect));
+  PaintPieces(graphics_context, border_image_rect, style, document,
+              nine_piece_image, image.get(), unzoomed_image_size,
+              sides_to_include);
   return true;
 }
 

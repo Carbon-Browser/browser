@@ -35,9 +35,11 @@ import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.signin.services.UnifiedConsentServiceBridge;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
 import org.chromium.chrome.test.util.browser.signin.AccountManagerTestRule;
+import org.chromium.chrome.test.util.browser.signin.SigninTestRule;
 import org.chromium.chrome.test.util.browser.signin.SigninTestUtil;
 import org.chromium.chrome.test.util.browser.sync.SyncTestUtil;
 import org.chromium.components.signin.base.CoreAccountInfo;
+import org.chromium.components.signin.identitymanager.ConsentLevel;
 import org.chromium.components.sync.ModelType;
 import org.chromium.components.sync.protocol.AutofillWalletSpecifics;
 import org.chromium.components.sync.protocol.EntitySpecifics;
@@ -55,6 +57,7 @@ import java.util.concurrent.Callable;
 
 /**
  * TestRule for common functionality between sync tests.
+ * TODO(crbug.com/1168590): Support batching tests with SyncTestRule.
  */
 public class SyncTestRule extends ChromeTabbedActivityTestRule {
     private static final String TAG = "SyncTestBase";
@@ -147,6 +150,12 @@ public class SyncTestRule extends ChromeTabbedActivityTestRule {
         }
 
         @Override
+        public Promise<Void> addTrustedRecoveryMethod(
+                CoreAccountInfo accountInfo, byte[] publicKey, int methodTypeHint) {
+            return Promise.fulfilled(null);
+        }
+
+        @Override
         public Promise<PendingIntent> createRecoverabilityDegradedIntent(
                 CoreAccountInfo accountInfo) {
             Context context = InstrumentationRegistry.getContext();
@@ -176,8 +185,7 @@ public class SyncTestRule extends ChromeTabbedActivityTestRule {
     private Context mContext;
     private FakeServerHelper mFakeServerHelper;
     private SyncService mSyncService;
-    private MockSyncContentResolverDelegate mSyncContentResolver;
-    private final AccountManagerTestRule mAccountManagerTestRule = new AccountManagerTestRule();
+    private final SigninTestRule mSigninTestRule = new SigninTestRule();
 
     private void ruleTearDown() {
         TestThreadUtils.runOnUiThreadBlocking(() -> {
@@ -203,11 +211,7 @@ public class SyncTestRule extends ChromeTabbedActivityTestRule {
         return mSyncService;
     }
 
-    MockSyncContentResolverDelegate getSyncContentResolver() {
-        return mSyncContentResolver;
-    }
-
-    public void startMainActivityForSyncTest() throws Exception {
+    public void startMainActivityForSyncTest() {
         // Start the activity by opening about:blank. This URL is ideal because it is not synced as
         // a typed URL. If another URL is used, it could interfere with test data.
         startMainActivityOnBlankPage();
@@ -224,17 +228,16 @@ public class SyncTestRule extends ChromeTabbedActivityTestRule {
      * Adds an account of given account name to AccountManagerFacade and waits for the seeding.
      */
     public CoreAccountInfo addAccount(String accountName) {
-        CoreAccountInfo coreAccountInfo =
-                mAccountManagerTestRule.addAccountAndWaitForSeeding(accountName);
+        CoreAccountInfo coreAccountInfo = mSigninTestRule.addAccountAndWaitForSeeding(accountName);
         Assert.assertFalse(SyncTestUtil.isSyncRequested());
         return coreAccountInfo;
     }
 
     /**
-     * Returns the currently signed in account.
+     * @return The primary account of the requested {@link ConsentLevel}.
      */
-    public CoreAccountInfo getCurrentSignedInAccount() {
-        return mAccountManagerTestRule.getCurrentSignedInAccount();
+    public CoreAccountInfo getPrimaryAccount(@ConsentLevel int consentLevel) {
+        return mSigninTestRule.getPrimaryAccount(consentLevel);
     }
 
     /**
@@ -243,13 +246,17 @@ public class SyncTestRule extends ChromeTabbedActivityTestRule {
      * @return the test account that is signed in.
      */
     public CoreAccountInfo setUpAccountAndEnableSyncForTesting() {
-        CoreAccountInfo accountInfo =
-                mAccountManagerTestRule.addTestAccountThenSigninAndEnableSync(mSyncService);
-        // Enable UKM when enabling sync as it is done by the sync confirmation UI.
-        enableUKM();
-        SyncTestUtil.waitForSyncFeatureActive();
-        SyncTestUtil.triggerSyncAndWaitForCompletion();
-        return accountInfo;
+        return setUpAccountAndEnableSyncForTesting(false);
+    }
+
+    /**
+     * Set up a child test account, sign in and enable sync. FirstSetupComplete bit will be set
+     * after this. For most purposes this function should be used as this emulates the basic sign in
+     * flow.
+     * @return the test account that is signed in.
+     */
+    public CoreAccountInfo setUpChildAccountAndEnableSyncForTesting() {
+        return setUpAccountAndEnableSyncForTesting(true);
     }
 
     /**
@@ -257,7 +264,7 @@ public class SyncTestRule extends ChromeTabbedActivityTestRule {
      * @return the test accountInfo that is signed in.
      */
     public CoreAccountInfo setUpAccountAndSignInForTesting() {
-        return mAccountManagerTestRule.addTestAccountThenSignin();
+        return mSigninTestRule.addTestAccountThenSignin();
     }
 
     /**
@@ -265,7 +272,7 @@ public class SyncTestRule extends ChromeTabbedActivityTestRule {
      * @return the test account that is signed in.
      */
     public CoreAccountInfo setUpTestAccountAndSignInWithSyncSetupAsIncomplete() {
-        CoreAccountInfo accountInfo = mAccountManagerTestRule.addTestAccountThenSigninAndEnableSync(
+        CoreAccountInfo accountInfo = mSigninTestRule.addTestAccountThenSigninAndEnableSync(
                 /* syncService= */ null);
         // Enable UKM when enabling sync as it is done by the sync confirmation UI.
         enableUKM();
@@ -296,13 +303,18 @@ public class SyncTestRule extends ChromeTabbedActivityTestRule {
     }
 
     public void signOut() {
-        mAccountManagerTestRule.signOut();
-        Assert.assertNull(mAccountManagerTestRule.getCurrentSignedInAccount());
+        mSigninTestRule.signOut();
+        Assert.assertNull(mSigninTestRule.getPrimaryAccount(ConsentLevel.SYNC));
         Assert.assertFalse(SyncTestUtil.isSyncRequested());
     }
 
     public void clearServerData() {
         mFakeServerHelper.clearServerData();
+        // SyncTestRule doesn't currently exercise invalidations, as opposed to
+        // C++ sync integration tests (based on SyncTest) which use
+        // FakeServerInvalidationSender to mimic invalidations. Hence, it is
+        // necessary to invoke triggerSync() explicitly, just like many Java
+        // tests do.
         SyncTestUtil.triggerSync();
         CriteriaHelper.pollUiThread(() -> {
             return !SyncService.get().isSyncRequested();
@@ -362,11 +374,6 @@ public class SyncTestRule extends ChromeTabbedActivityTestRule {
         final Statement base = super.apply(new Statement() {
             @Override
             public void evaluate() throws Throwable {
-                mSyncContentResolver = new MockSyncContentResolverDelegate();
-                mSyncContentResolver.setMasterSyncAutomatically(true);
-                TestThreadUtils.runOnUiThreadBlocking(
-                        () -> SyncContentResolverDelegate.overrideForTests(mSyncContentResolver));
-
                 TrustedVaultClient.setInstanceForTesting(
                         new TrustedVaultClient(FakeTrustedVaultClientBackend.get()));
 
@@ -387,13 +394,10 @@ public class SyncTestRule extends ChromeTabbedActivityTestRule {
 
                 startMainActivityForSyncTest();
 
-                // Ensure SyncController is created.
-                TestThreadUtils.runOnUiThreadBlocking(() -> SyncController.get());
-
                 statement.evaluate();
             }
         }, desc);
-        return mAccountManagerTestRule.apply(new Statement() {
+        return mSigninTestRule.apply(new Statement() {
             @Override
             public void evaluate() throws Throwable {
                 base.evaluate();
@@ -466,5 +470,16 @@ public class SyncTestRule extends ChromeTabbedActivityTestRule {
             UnifiedConsentServiceBridge.setUrlKeyedAnonymizedDataCollectionEnabled(
                     Profile.getLastUsedRegularProfile(), true);
         });
+    }
+
+    private CoreAccountInfo setUpAccountAndEnableSyncForTesting(boolean isChildAccount) {
+        CoreAccountInfo accountInfo =
+                mSigninTestRule.addTestAccountThenSigninAndEnableSync(mSyncService, isChildAccount);
+
+        // Enable UKM when enabling sync as it is done by the sync confirmation UI.
+        enableUKM();
+        SyncTestUtil.waitForSyncFeatureActive();
+        SyncTestUtil.triggerSyncAndWaitForCompletion();
+        return accountInfo;
     }
 }

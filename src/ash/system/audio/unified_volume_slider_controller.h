@@ -14,11 +14,19 @@ class UnifiedVolumeSliderController : public UnifiedSliderListener {
  public:
   class Delegate {
    public:
-    virtual ~Delegate() = default;
+    Delegate();
+    virtual ~Delegate();
     virtual void OnAudioSettingsButtonClicked() = 0;
+
+    base::WeakPtrFactory<Delegate> weak_ptr_factory_{this};
   };
 
-  UnifiedVolumeSliderController(Delegate* delegate, bool in_bubble);
+  explicit UnifiedVolumeSliderController(Delegate* delegate);
+
+  UnifiedVolumeSliderController(const UnifiedVolumeSliderController&) = delete;
+  UnifiedVolumeSliderController& operator=(
+      const UnifiedVolumeSliderController&) = delete;
+
   ~UnifiedVolumeSliderController() override;
 
   // UnifiedSliderListener:
@@ -32,11 +40,6 @@ class UnifiedVolumeSliderController : public UnifiedSliderListener {
 
  private:
   Delegate* const delegate_;
-
-  // Whether the volume slider is in the bubble, as opposed to the system tray.
-  const bool in_bubble_;
-
-  DISALLOW_COPY_AND_ASSIGN(UnifiedVolumeSliderController);
 };
 
 }  // namespace ash

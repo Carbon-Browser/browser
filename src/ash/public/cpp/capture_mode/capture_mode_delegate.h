@@ -5,9 +5,11 @@
 #ifndef ASH_PUBLIC_CPP_CAPTURE_MODE_CAPTURE_MODE_DELEGATE_H_
 #define ASH_PUBLIC_CPP_CAPTURE_MODE_CAPTURE_MODE_DELEGATE_H_
 
+#include <memory>
+
 #include "ash/public/cpp/ash_public_export.h"
-#include "ash/services/recording/public/mojom/recording_service.mojom-forward.h"
 #include "base/callback.h"
+#include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 
 namespace aura {
@@ -22,13 +24,37 @@ namespace gfx {
 class Rect;
 }  // namespace gfx
 
-namespace media {
-namespace mojom {
+namespace media::mojom {
 class AudioStreamFactory;
-}  // namespace mojom
-}  // namespace media
+}  // namespace media::mojom
+
+namespace recording::mojom {
+class RecordingService;
+}  // namespace recording::mojom
+
+namespace video_capture::mojom {
+class VideoSourceProvider;
+}  // namespace video_capture::mojom
 
 namespace ash {
+
+class RecordingOverlayView;
+
+// Defines the type of the callback that will be invoked when the DLP (Data Leak
+// Prevention) manager is checked for any restricted content related to screen
+// capture. DLP is checked multiple times (before entering a capture session,
+// when performing the capture, during video recording, and at the end when
+// video recording ends). If the callback was invoked with `proceed` set to
+// true, then capture mode will proceed with any operation that triggered the
+// check. Otherwise, capture mode will abort the operation.
+using OnCaptureModeDlpRestrictionChecked =
+    base::OnceCallback<void(bool proceed)>;
+
+// Defines the type of the callback that will be invoked when the remaining free
+// space on Drive is retrieved. `free_remaining_bytes` will be set to -1 if
+// there is an error in computing the DriveFS quota.
+using OnGotDriveFsFreeSpace =
+    base::OnceCallback<void(int64_t free_remaining_bytes)>;
 
 // Defines the interface for the delegate of CaptureModeController, that can be
 // implemented by an ash client (e.g. Chrome). The CaptureModeController owns
@@ -37,9 +63,9 @@ class ASH_PUBLIC_EXPORT CaptureModeDelegate {
  public:
   virtual ~CaptureModeDelegate() = default;
 
-  // Returns the path to save screen capture files based on user login status.
-  // If no user is logged in, returns the temporary directory.
-  virtual base::FilePath GetScreenCaptureDir() const = 0;
+  // Returns the path to the default downloads directory of the currently active
+  // user. This function can only be called if the user is logged in.
+  virtual base::FilePath GetUserDefaultDownloadsFolder() const = 0;
 
   // Shows the screenshot or screen recording item in the screen capture folder.
   virtual void ShowScreenCaptureItemInFolder(
@@ -53,15 +79,22 @@ class ASH_PUBLIC_EXPORT CaptureModeDelegate {
   // video.
   virtual bool Uses24HourFormat() const = 0;
 
-  // Returns whether initiation of capture mode is restricted because of Data
-  // Leak Prevention applied to the currently visible content.
-  virtual bool IsCaptureModeInitRestrictedByDlp() const = 0;
+  // Called when capture mode is being started to check if there are any content
+  // currently on the screen that are restricted by DLP. `callback` will be
+  // triggered by the DLP manager with `proceed` set to true if capture mode
+  // initialization is allowed to continue, or set to false if it should be
+  // aborted.
+  virtual void CheckCaptureModeInitRestrictionByDlp(
+      OnCaptureModeDlpRestrictionChecked callback) = 0;
 
-  // Returns whether capture of the region defined by |window| and |bounds|
-  // is currently allowed by Data Leak Prevention feature.
-  virtual bool IsCaptureAllowedByDlp(const aura::Window* window,
-                                     const gfx::Rect& bounds,
-                                     bool for_video) const = 0;
+  // Checks whether capture of the region defined by |window| and |bounds|
+  // is currently allowed by the Data Leak Prevention feature. `callback` will
+  // be triggered by the DLP manager with `proceed` set to true if capture of
+  // that region is allowed, or set to false otherwise.
+  virtual void CheckCaptureOperationRestrictionByDlp(
+      const aura::Window* window,
+      const gfx::Rect& bounds,
+      OnCaptureModeDlpRestrictionChecked callback) = 0;
 
   // Returns whether screen capture is allowed by an enterprise policy.
   virtual bool IsCaptureAllowedByPolicy() const = 0;
@@ -75,8 +108,20 @@ class ASH_PUBLIC_EXPORT CaptureModeDelegate {
       const gfx::Rect& bounds,
       base::OnceClosure on_area_restricted_callback) = 0;
 
-  // Called when the running video capture is stopped.
-  virtual void StopObservingRestrictedContent() = 0;
+  // Called when the running video capture is stopped. DLP will be checked to
+  // determine if there were any restricted content warnings during the
+  // recording, which didn't merit force-stopping it via the above
+  // `on_area_restricted_callback`. In this case, DLP shows a warning dialog and
+  // delegates the decision to the user to decide whether to keep the video (if
+  // `proceed` is set to true), or delete it (if `proceed` is set
+  // to false).
+  virtual void StopObservingRestrictedContent(
+      OnCaptureModeDlpRestrictionChecked callback) = 0;
+
+  // Notifies DLP that taking a screenshot was attempted. Called after checking
+  // DLP restrictions.
+  virtual void OnCaptureImageAttempted(const aura::Window* window,
+                                       const gfx::Rect& bounds) = 0;
 
   // Launches the Recording Service into a separate utility process.
   virtual mojo::Remote<recording::mojom::RecordingService>
@@ -92,6 +137,41 @@ class ASH_PUBLIC_EXPORT CaptureModeDelegate {
   // Called after the controller resets its |mojo::Remote| instance of the
   // service.
   virtual void OnServiceRemoteReset() = 0;
+
+  // Gets the DriveFS mount point. Returns true if the Drive is mounted false
+  // otherwise.
+  // TODO(michelefan): Now we have both CaptureModeDelegate and ProjectorClient
+  // expose the GetDriveFsMountPointPath. Add the APIs in ShellDelegate which is
+  // implemented by ChromeShellDelegate in chrome and TestShellDelegate in
+  // ash_unittests to reduce the duplication.
+  virtual bool GetDriveFsMountPointPath(base::FilePath* path) const = 0;
+
+  // Returns the absolute path for the user's Android Play files.
+  virtual base::FilePath GetAndroidFilesPath() const = 0;
+
+  // Returns the absolute path for the user's Linux Files.
+  virtual base::FilePath GetLinuxFilesPath() const = 0;
+
+  // Creates and returns the view that will be used as the contents view of the
+  // overlay widget, which is added as a child of the recorded surface to host
+  // contents rendered in a web view that are meant to be part of the recording
+  // such as annotations.
+  virtual std::unique_ptr<RecordingOverlayView> CreateRecordingOverlayView()
+      const = 0;
+
+  // Connects the given `receiver` to the VideoSourceProvider implementation in
+  // the video capture service.
+  virtual void ConnectToVideoSourceProvider(
+      mojo::PendingReceiver<video_capture::mojom::VideoSourceProvider>
+          receiver) = 0;
+
+  // Gets the remaining free space on DriveFS and invokes `callback` with that
+  // value, or -1 if there's an error in computing the DriveFS quota.
+  virtual void GetDriveFsFreeSpaceBytes(OnGotDriveFsFreeSpace callback) = 0;
+
+  // Returns true if camera support is disabled by admins via
+  // the `SystemFeaturesDisableList` policy, false otherwise.
+  virtual bool IsCameraDisabledByPolicy() const = 0;
 };
 
 }  // namespace ash

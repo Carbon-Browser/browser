@@ -32,15 +32,18 @@
 #include "chrome/browser/ui/webui/chromeos/login/update_required_screen_handler.h"
 #include "chrome/grit/chromium_strings.h"
 #include "chrome/grit/generated_resources.h"
+#include "chromeos/ash/components/dbus/update_engine/fake_update_engine_client.h"
+#include "chromeos/ash/components/network/network_state_test_helper.h"
 #include "chromeos/dbus/constants/dbus_switches.h"
 #include "chromeos/dbus/dbus_thread_manager.h"
-#include "chromeos/dbus/update_engine/fake_update_engine_client.h"
-#include "chromeos/network/network_state_test_helper.h"
 #include "components/user_manager/user_manager.h"
 #include "content/public/test/browser_test.h"
 #include "dbus/object_path.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
+#include "ui/base/l10n/l10n_util.h"
+#include "ui/chromeos/devicetype_utils.h"
+#include "ui/strings/grit/ui_strings.h"
 
 namespace ash {
 namespace {
@@ -50,9 +53,11 @@ namespace em = ::enterprise_management;
 const test::UIPath kUpdateRequiredScreen = {"update-required"};
 const test::UIPath kUpdateRequiredStep = {"update-required",
                                           "update-required-dialog"};
+const test::UIPath kUpdateRequiredSubtitle = {"update-required",
+                                              "update-subtitle"};
 const test::UIPath kUpdateNowButton = {"update-required", "update-button"};
 const test::UIPath kUpdateProcessStep = {"update-required",
-                                         "checking-downloading-update"};
+                                         "downloadingUpdate"};
 const test::UIPath kUpdateRequiredEolDialog = {"update-required", "eolDialog"};
 const test::UIPath kEolAdminMessageContainer = {"update-required",
                                                 "adminMessageContainer"};
@@ -76,22 +81,24 @@ const test::UIPath kMeteredNetworkAcceptButton = {
 const test::UIPath kNoNetworkStep = {"update-required",
                                      "update-required-no-network-dialog"};
 
-// Elements in checking-downloading-update
-const test::UIPath kUpdateProcessCheckingStep = {"update-required",
-                                                 "checking-downloading-update",
-                                                 "checking-for-updates-dialog"};
+// Elements in downloadingUpdate
+const test::UIPath kUpdateProcessCheckingStep = {
+    "update-required", "downloadingUpdate", "checking-for-updates-dialog"};
 const test::UIPath kUpdateProcessUpdatingStep = {
-    "update-required", "checking-downloading-update", "updating-dialog"};
+    "update-required", "downloadingUpdate", "updating-dialog"};
 const test::UIPath kUpdateProcessCompleteStep = {
-    "update-required", "checking-downloading-update", "update-complete-dialog"};
+    "update-required", "downloadingUpdate", "update-complete-dialog"};
 const test::UIPath kCheckingForUpdatesMessage = {
-    "update-required", "checking-downloading-update", "checkingForUpdatesMsg"};
-const test::UIPath kUpdatingProgress = {
-    "update-required", "checking-downloading-update", "updating-progress"};
+    "update-required", "downloadingUpdate", "checkingForUpdatesMsg"};
+const test::UIPath kUpdatingProgress = {"update-required", "downloadingUpdate",
+                                        "updating-progress"};
 
 constexpr char kWifiServicePath[] = "/service/wifi2";
 constexpr char kCellularServicePath[] = "/service/cellular1";
 constexpr char kDemoEolMessage[] = "Please return your device.";
+constexpr char16_t kDomain16[] = u"example.com";
+constexpr char kManager[] = "user@example.com";
+constexpr char16_t kManager16[] = u"user@example.com";
 
 chromeos::OobeUI* GetOobeUI() {
   auto* host = LoginDisplayHost::default_host();
@@ -187,7 +194,7 @@ class UpdateRequiredScreenTest : public OobeBaseTest {
     em::ChromeDeviceSettingsProto& proto(device_policy->payload());
     proto.mutable_device_minimum_version_aue_message()->set_value(eol_message);
     policy_helper_.RefreshPolicyAndWaitUntilDeviceSettingsUpdated(
-        {chromeos::kDeviceMinimumVersionAueMessage});
+        {kDeviceMinimumVersionAueMessage});
   }
 
  protected:
@@ -201,9 +208,8 @@ class UpdateRequiredScreenTest : public OobeBaseTest {
   // Handles network connections
   std::unique_ptr<chromeos::NetworkStateTestHelper> network_state_test_helper_;
   policy::DevicePolicyCrosTestHelper policy_helper_;
-  chromeos::DeviceStateMixin device_state_mixin_{
-      &mixin_host_,
-      chromeos::DeviceStateMixin::State::OOBE_COMPLETED_CLOUD_ENROLLED};
+  DeviceStateMixin device_state_mixin_{
+      &mixin_host_, DeviceStateMixin::State::OOBE_COMPLETED_CLOUD_ENROLLED};
   LoginManagerMixin login_manager_mixin_{&mixin_host_};
 };
 
@@ -215,7 +221,7 @@ IN_PROC_BROWSER_TEST_F(UpdateRequiredScreenTest, TestCaptivePortal) {
 
   static_cast<UpdateRequiredScreen*>(
       WizardController::default_controller()->current_screen())
-      ->SetErrorMessageDelayForTesting(base::TimeDelta::FromMilliseconds(10));
+      ->SetErrorMessageDelayForTesting(base::Milliseconds(10));
 
   test::OobeJS().ExpectVisiblePath(kUpdateRequiredStep);
 
@@ -241,7 +247,7 @@ IN_PROC_BROWSER_TEST_F(UpdateRequiredScreenTest, TestCaptivePortal) {
   // process should start.
   network_portal_detector_.SimulateDefaultNetworkState(
       NetworkPortalDetector::CAPTIVE_PORTAL_STATUS_ONLINE);
-  EXPECT_EQ(OobeScreen::SCREEN_UNKNOWN.AsId(), error_screen->GetParentScreen());
+  EXPECT_EQ(ash::OOBE_SCREEN_UNKNOWN.AsId(), error_screen->GetParentScreen());
 
   SetUpdateEngineStatus(update_engine::Operation::CHECKING_FOR_UPDATE);
   SetUpdateEngineStatus(update_engine::Operation::UPDATE_AVAILABLE);
@@ -252,7 +258,7 @@ IN_PROC_BROWSER_TEST_F(UpdateRequiredScreenTest, TestCaptivePortal) {
 
 IN_PROC_BROWSER_TEST_F(UpdateRequiredScreenTest, TestEolReached) {
   update_engine_client()->set_eol_date(
-      base::DefaultClock::GetInstance()->Now() - base::TimeDelta::FromDays(1));
+      base::DefaultClock::GetInstance()->Now() - base::Days(1));
   ShowUpdateRequiredScreen();
 
   test::OobeJS().ExpectVisiblePath(kUpdateRequiredEolDialog);
@@ -266,7 +272,7 @@ IN_PROC_BROWSER_TEST_F(UpdateRequiredScreenTest, TestEolReached) {
 IN_PROC_BROWSER_TEST_F(UpdateRequiredScreenTest, TestEolDeleteUsersConfirm) {
   EXPECT_EQ(user_manager::UserManager::Get()->GetUsers().size(), 2u);
   update_engine_client()->set_eol_date(
-      base::DefaultClock::GetInstance()->Now() - base::TimeDelta::FromDays(1));
+      base::DefaultClock::GetInstance()->Now() - base::Days(1));
   ShowUpdateRequiredScreen();
 
   test::OobeJS().ExpectVisiblePath(kUpdateRequiredEolDialog);
@@ -288,7 +294,7 @@ IN_PROC_BROWSER_TEST_F(UpdateRequiredScreenTest, TestEolDeleteUsersConfirm) {
 IN_PROC_BROWSER_TEST_F(UpdateRequiredScreenTest, TestEolDeleteUsersCancel) {
   EXPECT_EQ(user_manager::UserManager::Get()->GetUsers().size(), 2u);
   update_engine_client()->set_eol_date(
-      base::DefaultClock::GetInstance()->Now() - base::TimeDelta::FromDays(1));
+      base::DefaultClock::GetInstance()->Now() - base::Days(1));
   ShowUpdateRequiredScreen();
 
   test::OobeJS().ExpectVisiblePath(kUpdateRequiredEolDialog);
@@ -307,7 +313,7 @@ IN_PROC_BROWSER_TEST_F(UpdateRequiredScreenTest, TestEolDeleteUsersCancel) {
 
 IN_PROC_BROWSER_TEST_F(UpdateRequiredScreenTest, TestEolReachedAdminMessage) {
   update_engine_client()->set_eol_date(
-      base::DefaultClock::GetInstance()->Now() - base::TimeDelta::FromDays(1));
+      base::DefaultClock::GetInstance()->Now() - base::Days(1));
   SetEolMessageAndWaitForSettingsChange(kDemoEolMessage);
   ShowUpdateRequiredScreen();
 
@@ -319,7 +325,7 @@ IN_PROC_BROWSER_TEST_F(UpdateRequiredScreenTest, TestEolReachedAdminMessage) {
 
 IN_PROC_BROWSER_TEST_F(UpdateRequiredScreenTest, TestEolNotReached) {
   update_engine_client()->set_eol_date(
-      base::DefaultClock::GetInstance()->Now() + base::TimeDelta::FromDays(1));
+      base::DefaultClock::GetInstance()->Now() + base::Days(1));
   ShowUpdateRequiredScreen();
 
   test::OobeJS().ExpectHiddenPath(kUpdateRequiredEolDialog);
@@ -490,6 +496,41 @@ IN_PROC_BROWSER_TEST_F(UpdateRequiredScreenTest, TestUpdateProcess) {
   EXPECT_EQ(1, update_engine_client()->reboot_after_update_call_count());
 }
 
+// Validates that the manager presented to the user in the subtitle is the
+// domain to which the device belongs.
+IN_PROC_BROWSER_TEST_F(UpdateRequiredScreenTest, TestSubtitle) {
+  ShowUpdateRequiredScreen();
+  test::OobeJS().ExpectElementText(
+      l10n_util::GetStringFUTF8(IDS_UPDATE_REQUIRED_SCREEN_MESSAGE, kDomain16,
+                                ui::GetChromeOSDeviceName()),
+      kUpdateRequiredSubtitle);
+}
+
+class UpdateRequiredScreenFlexOrgTest : public UpdateRequiredScreenTest {
+ public:
+  UpdateRequiredScreenFlexOrgTest() {}
+  ~UpdateRequiredScreenFlexOrgTest() override = default;
+
+  void SetUpInProcessBrowserTestFixture() override {
+    UpdateRequiredScreenTest::SetUpInProcessBrowserTestFixture();
+    policy_helper_.device_policy()->policy_data().set_managed_by(kManager);
+    policy_helper_.RefreshDevicePolicy();
+  }
+
+ protected:
+  policy::DevicePolicyCrosTestHelper policy_helper_;
+};
+
+// For FlexOrgs, validates that the manager presented to the user in the
+// subtitle is the manager of the FlexOrg.
+IN_PROC_BROWSER_TEST_F(UpdateRequiredScreenFlexOrgTest, TestSubtitle) {
+  ShowUpdateRequiredScreen();
+  test::OobeJS().ExpectElementText(
+      l10n_util::GetStringFUTF8(IDS_UPDATE_REQUIRED_SCREEN_MESSAGE, kManager16,
+                                ui::GetChromeOSDeviceName()),
+      kUpdateRequiredSubtitle);
+}
+
 class UpdateRequiredScreenPolicyPresentTest : public OobeBaseTest {
  public:
   UpdateRequiredScreenPolicyPresentTest() {}
@@ -504,8 +545,7 @@ class UpdateRequiredScreenPolicyPresentTest : public OobeBaseTest {
             false /* unmanaged_user_restricted */));
     // Simulate end-of-life reached.
     update_engine_client()->set_eol_date(
-        base::DefaultClock::GetInstance()->Now() -
-        base::TimeDelta::FromDays(1));
+        base::DefaultClock::GetInstance()->Now() - base::Days(1));
   }
 
   void SetMinimumChromeVersionPolicy(const base::Value& value) {
@@ -523,9 +563,8 @@ class UpdateRequiredScreenPolicyPresentTest : public OobeBaseTest {
   }
 
  protected:
-  chromeos::DeviceStateMixin device_state_mixin_{
-      &mixin_host_,
-      chromeos::DeviceStateMixin::State::OOBE_COMPLETED_CLOUD_ENROLLED};
+  DeviceStateMixin device_state_mixin_{
+      &mixin_host_, DeviceStateMixin::State::OOBE_COMPLETED_CLOUD_ENROLLED};
   policy::DevicePolicyCrosTestHelper policy_helper_;
 };
 

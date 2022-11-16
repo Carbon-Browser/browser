@@ -9,20 +9,20 @@
 #include "base/hash/sha1.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/rand_util.h"
+#include "base/strings/escape.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
+#include "base/time/time.h"
 #include "build/build_config.h"
 #include "components/version_info/version_info.h"
 #include "crypto/sha2.h"
 #include "google_apis/google_api_keys.h"
-#include "net/base/escape.h"
 #include "net/base/ip_address.h"
 #include "net/base/net_errors.h"
 #include "net/http/http_request_headers.h"
 #include "url/url_util.h"
 
 using base::Time;
-using base::TimeDelta;
 
 namespace safe_browsing {
 
@@ -47,7 +47,7 @@ std::string Unescape(const std::string& url) {
   int loop_var = 0;
   do {
     old_size = unescaped_str.size();
-    unescaped_str = net::UnescapeBinaryURLComponent(unescaped_str);
+    unescaped_str = base::UnescapeBinaryURLComponent(unescaped_str);
   } while (old_size != unescaped_str.size() &&
            ++loop_var <= kMaxLoopIterations);
 
@@ -97,7 +97,7 @@ std::string GetReportUrl(const V4ProtocolConfig& config,
   std::string api_key = google_apis::GetAPIKey();
   if (!api_key.empty()) {
     base::StringAppendF(&url, "&key=%s",
-                        net::EscapeQueryParamValue(api_key, true).c_str());
+                        base::EscapeQueryParamValue(api_key, true).c_str());
   }
   if (reporting_level)
     url.append(base::StringPrintf("&ext=%d", *reporting_level));
@@ -114,30 +114,17 @@ std::ostream& operator<<(std::ostream& os, const ListIdentifier& id) {
 }
 
 PlatformType GetCurrentPlatformType() {
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   return WINDOWS_PLATFORM;
-#elif defined(OS_LINUX) || defined(OS_CHROMEOS)
+#elif BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   return LINUX_PLATFORM;
-#elif defined(OS_IOS)
+#elif BUILDFLAG(IS_IOS)
   return IOS_PLATFORM;
-#elif defined(OS_MAC)
+#elif BUILDFLAG(IS_MAC)
   return OSX_PLATFORM;
 #else
-  // TODO(crbug.com/1030487): This file is, in fact, intended to be compiled on
-  // Android, the comment below is obsolete. We should be able to return
-  // ANDROID_PLATFORM here.
-  //
-  // This should ideally never compile but it is getting compiled on Android.
-  // See: https://bugs.chromium.org/p/chromium/issues/detail?id=621647
-  // TODO(vakh): Once that bug is fixed, this should be removed. If we leave
-  // the platform_type empty, the server won't recognize the request and
-  // return an error response which will pollute our UMA metrics.
-  return LINUX_PLATFORM;
+  return ANDROID_PLATFORM;
 #endif
-}
-
-ListIdentifier GetCertCsdDownloadAllowlistId() {
-  return ListIdentifier(GetCurrentPlatformType(), CERT, CSD_DOWNLOAD_WHITELIST);
 }
 
 ListIdentifier GetChromeExtMalwareId() {
@@ -145,13 +132,7 @@ ListIdentifier GetChromeExtMalwareId() {
 }
 
 ListIdentifier GetChromeUrlApiId() {
-  // TODO(crbug.com/1030487): This special case for Android will no longer be
-  // needed once GetCurrentPlatformType() returns ANDROID_PLATFORM on Android.
-#if defined(OS_ANDROID)
-  return ListIdentifier(ANDROID_PLATFORM, URL, API_ABUSE);
-#else
   return ListIdentifier(GetCurrentPlatformType(), URL, API_ABUSE);
-#endif
 }
 
 ListIdentifier GetChromeUrlClientIncidentId() {
@@ -311,21 +292,9 @@ base::TimeDelta V4ProtocolManagerUtil::GetNextBackOffInterval(
     *multiplier *= 2;
   }
   base::TimeDelta next =
-      base::TimeDelta::FromMinutes(*multiplier * (1 + base::RandDouble()) * 15);
-  base::TimeDelta day = base::TimeDelta::FromHours(24);
+      base::Minutes(*multiplier * (1 + base::RandDouble()) * 15);
+  base::TimeDelta day = base::Hours(24);
   return next < day ? next : day;
-}
-
-// static
-void V4ProtocolManagerUtil::RecordHttpResponseOrErrorCode(
-    const char* metric_name,
-    int net_error,
-    int response_code) {
-  base::UmaHistogramSparse(
-      metric_name,
-      net_error == net::OK || net_error == net::ERR_HTTP_RESPONSE_CODE_FAILURE
-          ? response_code
-          : net_error);
 }
 
 // static
@@ -354,7 +323,7 @@ std::string V4ProtocolManagerUtil::ComposeUrl(const std::string& prefix,
       method.c_str(), request_base64.c_str());
   if (!key_param.empty()) {
     base::StringAppendF(&url, "&key=%s",
-                        net::EscapeQueryParamValue(key_param, true).c_str());
+                        base::EscapeQueryParamValue(key_param, true).c_str());
   }
   return url;
 }

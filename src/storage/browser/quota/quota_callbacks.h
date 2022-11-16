@@ -15,7 +15,7 @@
 
 #include "base/callback.h"
 #include "base/containers/contains.h"
-#include "components/services/storage/public/cpp/buckets/bucket_info.h"
+#include "components/services/storage/public/cpp/buckets/bucket_locator.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/quota/quota_types.mojom-forward.h"
 
@@ -29,27 +29,23 @@ struct UsageInfo;
 using UsageInfoEntries = std::vector<UsageInfo>;
 
 // Common callback types that are used throughout in the quota module.
-using AddChangeListenerCallback = base::OnceCallback<void()>;
-using GlobalUsageCallback =
+using UsageCallback =
     base::OnceCallback<void(int64_t usage, int64_t unlimited_usage)>;
 using QuotaCallback =
     base::OnceCallback<void(blink::mojom::QuotaStatusCode status,
                             int64_t quota)>;
-using UsageCallback = base::OnceCallback<void(int64_t usage)>;
 using UsageWithBreakdownCallback =
     base::OnceCallback<void(int64_t usage,
                             blink::mojom::UsageBreakdownPtr usage_breakdown)>;
-using AvailableSpaceCallback =
-    base::OnceCallback<void(blink::mojom::QuotaStatusCode, int64_t)>;
 using StatusCallback = base::OnceCallback<void(blink::mojom::QuotaStatusCode)>;
 using GetBucketsCallback =
-    base::OnceCallback<void(const std::set<BucketInfo>& buckets,
+    base::OnceCallback<void(const std::set<BucketLocator>& buckets,
                             blink::mojom::StorageType type)>;
 using GetStorageKeysCallback =
     base::OnceCallback<void(const std::set<blink::StorageKey>& storage_keys)>;
 using GetUsageInfoCallback = base::OnceCallback<void(UsageInfoEntries)>;
 using GetBucketCallback =
-    base::OnceCallback<void(const absl::optional<BucketInfo>& bucket_info)>;
+    base::OnceCallback<void(const absl::optional<BucketLocator>& bucket_info)>;
 
 // Simple template wrapper for a callback queue.
 template <typename CallbackType, typename... Args>

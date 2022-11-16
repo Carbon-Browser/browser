@@ -10,7 +10,7 @@
 
 #include "gpu/vulkan/vulkan_implementation.h"
 #include "gpu/vulkan/vulkan_instance.h"
-#include "ui/ozone/public/mojom/scenic_gpu_host.mojom.h"
+#include "ui/ozone/platform/scenic/mojom/scenic_gpu_host.mojom.h"
 
 namespace ui {
 
@@ -21,7 +21,13 @@ class VulkanImplementationScenic : public gpu::VulkanImplementation {
  public:
   VulkanImplementationScenic(ScenicSurfaceFactory* scenic_surface_factory,
                              SysmemBufferManager* sysmem_buffer_manager,
+                             bool use_swiftshader,
                              bool allow_protected_memory);
+
+  VulkanImplementationScenic(const VulkanImplementationScenic&) = delete;
+  VulkanImplementationScenic& operator=(const VulkanImplementationScenic&) =
+      delete;
+
   ~VulkanImplementationScenic() override;
 
   // VulkanImplementation:
@@ -46,6 +52,7 @@ class VulkanImplementationScenic : public gpu::VulkanImplementation {
                                           VkSemaphore vk_semaphore) override;
   VkExternalMemoryHandleTypeFlagBits GetExternalImageHandleType() override;
   bool CanImportGpuMemoryBuffer(
+      gpu::VulkanDeviceQueue* device_queue,
       gfx::GpuMemoryBufferType memory_buffer_type) override;
   std::unique_ptr<gpu::VulkanImage> CreateImageFromGpuMemoryHandle(
       gpu::VulkanDeviceQueue* device_queue,
@@ -68,7 +75,7 @@ class VulkanImplementationScenic : public gpu::VulkanImplementation {
 
   gpu::VulkanInstance vulkan_instance_;
 
-  DISALLOW_COPY_AND_ASSIGN(VulkanImplementationScenic);
+  bool using_surface_ = false;
 };
 
 }  // namespace ui

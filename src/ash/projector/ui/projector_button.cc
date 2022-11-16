@@ -7,6 +7,7 @@
 #include "ash/public/cpp/style/color_provider.h"
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/style/ash_color_provider.h"
+#include "ash/style/style_util.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/views/accessibility/view_accessibility.h"
@@ -25,7 +26,7 @@ constexpr gfx::Insets kButtonPadding{0};
 ProjectorButton::ProjectorButton(views::Button::PressedCallback callback,
                                  const std::u16string& name)
     : ToggleImageButton(callback), name_(name) {
-  SetPreferredSize({kProjectorButtonSize, kProjectorButtonSize});
+  SetPreferredSize(gfx::Size(kProjectorButtonSize, kProjectorButtonSize));
   SetBorder(views::CreateEmptyBorder(kButtonPadding));
 
   // Rounded background.
@@ -40,30 +41,39 @@ ProjectorButton::ProjectorButton(views::Button::PressedCallback callback,
 }
 
 void ProjectorButton::OnPaintBackground(gfx::Canvas* canvas) {
+  if (!GetToggled()) {
+    return;
+  }
   auto* color_provider = AshColorProvider::Get();
+  // Draw a filled background for the button.
   cc::PaintFlags flags;
   flags.setAntiAlias(true);
   flags.setStyle(cc::PaintFlags::kFill_Style);
   flags.setColor(color_provider->GetControlsLayerColor(
-      GetToggled()
-          ? AshColorProvider::ControlsLayerType::kControlBackgroundColorActive
-          : AshColorProvider::ControlsLayerType::
-                kControlBackgroundColorInactive));
+      AshColorProvider::ControlsLayerType::kControlBackgroundColorInactive));
   const gfx::RectF bounds(GetContentsBounds());
   canvas->DrawCircle(bounds.CenterPoint(), bounds.width() / 2, flags);
+
+  // Draw a border on the background circle.
+  cc::PaintFlags border_flags;
+  flags.setAntiAlias(true);
+  flags.setStyle(cc::PaintFlags::kStroke_Style);
+  flags.setColor(color_provider->GetControlsLayerColor(
+      AshColorProvider::ControlsLayerType::kHairlineBorderColor));
+  flags.setStrokeWidth(kProjectorButtonBorderSize);
+  canvas->DrawCircle(bounds.CenterPoint(),
+                     (bounds.width() - kProjectorButtonBorderSize * 2) / 2,
+                     flags);
 }
 
 void ProjectorButton::OnThemeChanged() {
   views::ToggleImageButton::OnThemeChanged();
 
   // Ink Drop.
-  const AshColorProvider::RippleAttributes ripple_attributes =
-      AshColorProvider::Get()->GetRippleAttributes();
   views::InkDrop::Get(this)->SetMode(views::InkDropHost::InkDropMode::ON);
   SetHasInkDropActionOnClick(true);
-  views::InkDrop::Get(this)->SetBaseColor(ripple_attributes.base_color);
-  views::InkDrop::Get(this)->SetHighlightOpacity(
-      ripple_attributes.highlight_opacity);
+  StyleUtil::ConfigureInkDropAttributes(
+      this, StyleUtil::kBaseColor | StyleUtil::kHighlightOpacity);
 }
 
 void ProjectorButton::GetAccessibleNodeData(ui::AXNodeData* node_data) {

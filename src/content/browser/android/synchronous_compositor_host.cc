@@ -11,6 +11,7 @@
 #include "base/bind.h"
 #include "base/command_line.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/shared_memory_mapping.h"
 #include "base/memory/writable_shared_memory_region.h"
 #include "base/threading/thread_restrictions.h"
@@ -31,13 +32,14 @@
 #include "gpu/ipc/client/gpu_channel_host.h"
 #include "ipc/ipc_sender.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
+#include "mojo/public/cpp/bindings/sync_call_restrictions.h"
 #include "third_party/skia/include/core/SkCanvas.h"
 #include "third_party/skia/include/core/SkImage.h"
 #include "third_party/skia/include/core/SkImageInfo.h"
 #include "third_party/skia/include/core/SkPixmap.h"
 #include "third_party/skia/include/core/SkRect.h"
 #include "ui/events/blink/did_overscroll_params.h"
-#include "ui/gfx/skia_util.h"
+#include "ui/gfx/geometry/skia_conversions.h"
 
 namespace content {
 
@@ -302,7 +304,6 @@ void SynchronousCompositorHost::UpdateFrameMetaData(
   frame_metadata_version_ = version;
   if (new_local_surface_id)
     local_surface_id_ = new_local_surface_id.value();
-  UpdatePresentedFrameToken(frame_metadata.frame_token);
 }
 
 namespace {
@@ -313,12 +314,12 @@ class ScopedSetSkCanvas {
     SynchronousCompositorSetSkCanvas(canvas);
   }
 
+  ScopedSetSkCanvas(const ScopedSetSkCanvas&) = delete;
+  ScopedSetSkCanvas& operator=(const ScopedSetSkCanvas&) = delete;
+
   ~ScopedSetSkCanvas() {
     SynchronousCompositorSetSkCanvas(nullptr);
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ScopedSetSkCanvas);
 };
 
 }
@@ -349,12 +350,14 @@ bool SynchronousCompositorHost::DemandDrawSwInProc(SkCanvas* canvas) {
 class SynchronousCompositorHost::ScopedSendZeroMemory {
  public:
   ScopedSendZeroMemory(SynchronousCompositorHost* host) : host_(host) {}
+
+  ScopedSendZeroMemory(const ScopedSendZeroMemory&) = delete;
+  ScopedSendZeroMemory& operator=(const ScopedSendZeroMemory&) = delete;
+
   ~ScopedSendZeroMemory() { host_->SendZeroMemory(); }
 
  private:
-  SynchronousCompositorHost* const host_;
-
-  DISALLOW_COPY_AND_ASSIGN(ScopedSendZeroMemory);
+  const raw_ptr<SynchronousCompositorHost> host_;
 };
 
 struct SynchronousCompositorHost::SharedMemoryWithSize {
@@ -365,8 +368,8 @@ struct SynchronousCompositorHost::SharedMemoryWithSize {
   SharedMemoryWithSize(size_t stride, size_t buffer_size)
       : stride(stride), buffer_size(buffer_size) {}
 
- private:
-  DISALLOW_COPY_AND_ASSIGN(SharedMemoryWithSize);
+  SharedMemoryWithSize(const SharedMemoryWithSize&) = delete;
+  SharedMemoryWithSize& operator=(const SharedMemoryWithSize&) = delete;
 };
 
 bool SynchronousCompositorHost::DemandDrawSw(SkCanvas* canvas,
@@ -380,7 +383,7 @@ bool SynchronousCompositorHost::DemandDrawSw(SkCanvas* canvas,
                            canvas->getBaseLayerSize().height());
   SkIRect canvas_clip = canvas->getDeviceClipBounds();
   params->clip = gfx::SkIRectToRect(canvas_clip);
-  params->transform.matrix() = canvas->getTotalMatrix();
+  params->transform = gfx::Transform(canvas->getTotalMatrix());
   if (params->size.IsEmpty())
     return true;
 
@@ -502,20 +505,22 @@ void SynchronousCompositorHost::ReturnResources(
                                  std::move(resources));
 }
 
+void SynchronousCompositorHost::OnCompositorFrameTransitionDirectiveProcessed(
+    uint32_t layer_tree_frame_sink_id,
+    uint32_t sequence_id) {
+  if (blink::mojom::SynchronousCompositor* compositor =
+          GetSynchronousCompositor()) {
+    compositor->OnCompositorFrameTransitionDirectiveProcessed(
+        layer_tree_frame_sink_id, sequence_id);
+  }
+}
+
 void SynchronousCompositorHost::DidPresentCompositorFrames(
     viz::FrameTimingDetailsMap timing_details,
     uint32_t frame_token) {
   timing_details_ = timing_details;
   if (!timing_details_.empty())
     AddBeginFrameRequest(BEGIN_FRAME);
-
-  UpdatePresentedFrameToken(frame_token);
-}
-
-void SynchronousCompositorHost::UpdatePresentedFrameToken(
-    uint32_t frame_token) {
-  rwhva_->FrameTokenChangedForSynchronousCompositor(frame_token,
-                                                    root_scroll_offset_);
 }
 
 void SynchronousCompositorHost::SetMemoryPolicy(size_t bytes_limit) {
@@ -529,7 +534,7 @@ void SynchronousCompositorHost::SetMemoryPolicy(size_t bytes_limit) {
 }
 
 void SynchronousCompositorHost::DidChangeRootLayerScrollOffset(
-    const gfx::ScrollOffset& root_offset) {
+    const gfx::PointF& root_offset) {
   if (root_scroll_offset_ == root_offset)
     return;
   root_scroll_offset_ = root_offset;
@@ -640,8 +645,7 @@ void SynchronousCompositorHost::UpdateRootLayerStateOnClient() {
   // for that case here.
   if (page_scale_factor_) {
     client_->UpdateRootLayerState(
-        this, gfx::ScrollOffsetToVector2dF(root_scroll_offset_),
-        gfx::ScrollOffsetToVector2dF(max_scroll_offset_), scrollable_size_,
+        this, root_scroll_offset_, max_scroll_offset_, scrollable_size_,
         page_scale_factor_, min_page_scale_factor_, max_page_scale_factor_);
   }
 }

@@ -63,7 +63,7 @@ namespace {
 // The amount of time to wait before informing the clients that the image has
 // been updated (in seconds). This effectively throttles invalidations that
 // result from new data arriving for this image.
-constexpr auto kFlushDelay = base::TimeDelta::FromSeconds(1);
+constexpr auto kFlushDelay = base::Seconds(1);
 
 }  // namespace
 
@@ -303,7 +303,7 @@ scoped_refptr<const SharedBuffer> ImageResource::ResourceBuffer() const {
 void ImageResource::AppendData(const char* data, size_t length) {
   v8::Isolate::GetCurrent()->AdjustAmountOfExternalAllocatedMemory(length);
   if (multipart_parser_) {
-    multipart_parser_->AppendData(data, SafeCast<wtf_size_t>(length));
+    multipart_parser_->AppendData(data, base::checked_cast<wtf_size_t>(length));
   } else {
     Resource::AppendData(data, length);
 

@@ -29,7 +29,8 @@ import org.mockito.stubbing.VoidAnswer1;
 import org.robolectric.annotation.Config;
 
 import org.chromium.base.test.BaseRobolectricTestRunner;
-import org.chromium.base.test.util.DisableIf;
+import org.chromium.base.test.util.DisabledTest;
+import org.chromium.base.test.util.MaxAndroidSdkLevel;
 import org.chromium.chrome.browser.preferences.SharedPreferencesManager;
 
 /**
@@ -92,6 +93,7 @@ public class GlobalNightModeStateControllerTest {
     }
 
     @Test
+    @DisabledTest(message = "https://crbug.com/1338271")
     public void testUpdateNightMode_PowerSaveMode_DefaultsToSystem() {
         // Set preference to system default and verify that the night mode isn't enabled.
         SharedPreferencesManager.getInstance().writeInt(UI_THEME_SETTING, ThemeType.SYSTEM_DEFAULT);
@@ -107,14 +109,18 @@ public class GlobalNightModeStateControllerTest {
     }
 
     @Test
-    @DisableIf.Build(sdk_is_greater_than = Build.VERSION_CODES.P)
-    public void testUpdateNightMode_PowerSaveMode_DefaultsToLight() {
+    @MaxAndroidSdkLevel(value = Build.VERSION_CODES.P,
+            reason = "Default to light parameter is only applicable pre-Q.")
+    @DisabledTest(message = "https://crbug.com/1338271")
+    public void
+    testUpdateNightMode_PowerSaveMode_DefaultsToLight() {
         // Enable power save mode and verify night mode is not enabled.
         setIsPowerSaveMode(true);
         assertFalse(mGlobalNightModeStateController.isInNightMode());
     }
 
     @Test
+    @DisabledTest(message = "https://crbug.com/1338271")
     public void testUpdateNightMode_SystemNightMode_DefaultsToSystem() {
         // Set preference to system default and verify that the night mode isn't enabled.
         SharedPreferencesManager.getInstance().writeInt(UI_THEME_SETTING, ThemeType.SYSTEM_DEFAULT);
@@ -130,14 +136,18 @@ public class GlobalNightModeStateControllerTest {
     }
 
     @Test
-    @DisableIf.Build(sdk_is_greater_than = Build.VERSION_CODES.P)
-    public void testUpdateNightMode_SystemNightMode_DefaultsToLight() {
+    @MaxAndroidSdkLevel(value = Build.VERSION_CODES.P,
+            reason = "Default to light parameter is only applicable pre-Q.")
+    @DisabledTest(message = "https://crbug.com/1338271")
+    public void
+    testUpdateNightMode_SystemNightMode_DefaultsToLight() {
         // Enable system night mode and verify night mode is not enabled.
         setSystemNightMode(true);
         assertFalse(mGlobalNightModeStateController.isInNightMode());
     }
 
     @Test
+    @DisabledTest(message = "https://crbug.com/1338271")
     public void testUpdateNightMode_Preference() {
         // Set preference to dark theme and verify night mode is enabled.
         SharedPreferencesManager.getInstance().writeInt(UI_THEME_SETTING, ThemeType.DARK);
@@ -157,6 +167,7 @@ public class GlobalNightModeStateControllerTest {
     }
 
     @Test
+    @DisabledTest(message = "https://crbug.com/1338271")
     public void testStopAndRestart() {
         // Simulate to stop listening to night mode state changes. Verify that night mode state is
         // not changed.
@@ -188,6 +199,7 @@ public class GlobalNightModeStateControllerTest {
     }
 
     @Test
+    @DisabledTest(message = "https://crbug.com/1338271")
     public void testObserver() {
         mGlobalNightModeStateController.addObserver(mObserver);
 

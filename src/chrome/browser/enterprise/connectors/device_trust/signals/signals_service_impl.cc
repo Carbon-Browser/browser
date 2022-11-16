@@ -7,10 +7,20 @@
 #include <memory>
 #include <utility>
 
-#include "chrome/browser/enterprise/connectors/device_trust/attestation/common/proto/device_trust_attestation_ca.pb.h"
+#include "base/barrier_closure.h"
+#include "base/bind.h"
+#include "base/callback.h"
+#include "base/values.h"
+#include "chrome/browser/enterprise/connectors/device_trust/signals/decorators/common/metrics_utils.h"
 #include "chrome/browser/enterprise/connectors/device_trust/signals/decorators/common/signals_decorator.h"
 
 namespace enterprise_connectors {
+
+namespace {
+
+constexpr char kLatencyHistogramVariant[] = "Full";
+
+}  // namespace
 
 SignalsServiceImpl::SignalsServiceImpl(
     std::vector<std::unique_ptr<SignalsDecorator>> signals_decorators)
@@ -18,14 +28,34 @@ SignalsServiceImpl::SignalsServiceImpl(
 
 SignalsServiceImpl::~SignalsServiceImpl() = default;
 
-std::unique_ptr<DeviceTrustSignals> SignalsServiceImpl::CollectSignals() {
-  auto signals = std::make_unique<DeviceTrustSignals>();
+void SignalsServiceImpl::CollectSignals(CollectSignalsCallback callback) {
+  auto start_time = base::TimeTicks::Now();
+  auto signals = std::make_unique<base::Value::Dict>();
+  auto* signals_ptr = signals.get();
+
+  auto barrier_closure = base::BarrierClosure(
+      signals_decorators_.size(),
+      base::BindOnce(&SignalsServiceImpl::OnSignalsDecorated,
+                     weak_ptr_factory_.GetWeakPtr(), std::move(callback),
+                     start_time, std::move(signals)));
 
   for (const auto& decorator : signals_decorators_) {
-    decorator->Decorate(*signals);
+    decorator->Decorate(*signals_ptr, barrier_closure);
   }
+}
 
-  return signals;
+void SignalsServiceImpl::OnSignalsDecorated(
+    CollectSignalsCallback callback,
+    base::TimeTicks start_time,
+    std::unique_ptr<base::Value::Dict> signals) {
+  LogSignalsCollectionLatency(kLatencyHistogramVariant, start_time);
+
+  if (!signals) {
+    base::Value::Dict empty_dictionary;
+    std::move(callback).Run(std::move(empty_dictionary));
+  } else {
+    std::move(callback).Run(std::move(*signals));
+  }
 }
 
 }  // namespace enterprise_connectors

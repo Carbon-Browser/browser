@@ -88,11 +88,15 @@ void LoseContextCHROMIUM(GLenum current, GLenum other) {
   }
 }
 
-void BeginRasterCHROMIUMImmediate(GLuint sk_color,
+void BeginRasterCHROMIUMImmediate(GLfloat r,
+                                  GLfloat g,
+                                  GLfloat b,
+                                  GLfloat a,
                                   GLboolean needs_clear,
                                   GLuint msaa_sample_count,
                                   gpu::raster::MsaaMode msaa_mode,
                                   GLboolean can_use_lcd_text,
+                                  GLboolean visible,
                                   const GLbyte* mailbox) {
   const uint32_t size =
       raster::cmds::BeginRasterCHROMIUMImmediate::ComputeSize();
@@ -100,8 +104,8 @@ void BeginRasterCHROMIUMImmediate(GLuint sk_color,
       GetImmediateCmdSpaceTotalSize<raster::cmds::BeginRasterCHROMIUMImmediate>(
           size);
   if (c) {
-    c->Init(sk_color, needs_clear, msaa_sample_count, msaa_mode,
-            can_use_lcd_text, mailbox);
+    c->Init(r, g, b, a, needs_clear, msaa_sample_count, msaa_mode,
+            can_use_lcd_text, visible, mailbox);
   }
 }
 
@@ -154,17 +158,6 @@ void UnlockTransferCacheEntryINTERNAL(GLuint entry_type, GLuint entry_id) {
       GetCmdSpace<raster::cmds::UnlockTransferCacheEntryINTERNAL>();
   if (c) {
     c->Init(entry_type, entry_id);
-  }
-}
-
-void DeletePaintCacheTextBlobsINTERNALImmediate(GLsizei n, const GLuint* ids) {
-  const uint32_t size =
-      raster::cmds::DeletePaintCacheTextBlobsINTERNALImmediate::ComputeSize(n);
-  raster::cmds::DeletePaintCacheTextBlobsINTERNALImmediate* c =
-      GetImmediateCmdSpaceTotalSize<
-          raster::cmds::DeletePaintCacheTextBlobsINTERNALImmediate>(size);
-  if (c) {
-    c->Init(n, ids);
   }
 }
 

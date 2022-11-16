@@ -27,8 +27,7 @@
 namespace ash {
 namespace {
 
-constexpr base::TimeDelta kAssistantAnimationDelay =
-    base::TimeDelta::FromMilliseconds(200);
+constexpr base::TimeDelta kAssistantAnimationDelay = base::Milliseconds(200);
 
 // Returns true if the button should appear activatable.
 bool CanActivate(int64_t display_id) {
@@ -184,7 +183,6 @@ void HomeButtonController::OnAppListShown() {
     views::InkDrop::Get(button_)->AnimateToState(views::InkDropState::ACTIVATED,
                                                  nullptr);
   }
-  is_showing_app_list_ = true;
 }
 
 void HomeButtonController::OnAppListDismissed() {
@@ -196,8 +194,6 @@ void HomeButtonController::OnAppListDismissed() {
     ink_drop->SnapToActivated();
   views::InkDrop::Get(button_)->AnimateToState(views::InkDropState::DEACTIVATED,
                                                nullptr);
-
-  is_showing_app_list_ = false;
 }
 
 void HomeButtonController::InitializeAssistantOverlay() {

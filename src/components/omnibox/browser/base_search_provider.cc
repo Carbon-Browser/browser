@@ -42,6 +42,8 @@ bool MatchTypeAndContentsAreEqual(const AutocompleteMatch& lhs,
 
 }  // namespace
 
+using OEP = metrics::OmniboxEventProto;
+
 // SuggestionDeletionHandler -------------------------------------------------
 
 // This class handles making requests to the server in order to delete
@@ -157,6 +159,11 @@ bool BaseSearchProvider::ShouldPrefetch(const AutocompleteMatch& match) {
 }
 
 // static
+bool BaseSearchProvider::ShouldPrerender(const AutocompleteMatch& match) {
+  return match.GetAdditionalInfo(kShouldPrerenderKey) == kTrue;
+}
+
+// static
 AutocompleteMatch BaseSearchProvider::CreateSearchSuggestion(
     const std::u16string& suggestion,
     AutocompleteMatchType::Type type,
@@ -219,25 +226,108 @@ void BaseSearchProvider::AppendSuggestClientToAdditionalQueryParams(
 // static
 bool BaseSearchProvider::IsNTPPage(
     metrics::OmniboxEventProto::PageClassification classification) {
-  using OEP = metrics::OmniboxEventProto;
   return (classification == OEP::NTP) ||
          (classification == OEP::OBSOLETE_INSTANT_NTP) ||
          (classification == OEP::INSTANT_NTP_WITH_FAKEBOX_AS_STARTING_FOCUS) ||
          (classification == OEP::INSTANT_NTP_WITH_OMNIBOX_AS_STARTING_FOCUS) ||
          (classification == OEP::NTP_REALBOX) ||
-         (classification == OEP::START_SURFACE_HOMEPAGE) ||
-         (classification == OEP::START_SURFACE_NEW_TAB) ||
-         (classification == OEP::ANDROID_SHORTCUTS_WIDGET);
+         (classification == OEP::ANDROID_SHORTCUTS_WIDGET) ||
+         (classification == OEP::NTP_ZPS_PREFETCH);
 }
 
 // static
 bool BaseSearchProvider::IsSearchResultsPage(
     metrics::OmniboxEventProto::PageClassification classification) {
-  using OEP = metrics::OmniboxEventProto;
   return (classification ==
           OEP::SEARCH_RESULT_PAGE_NO_SEARCH_TERM_REPLACEMENT) ||
          (classification ==
           OEP::SEARCH_RESULT_PAGE_DOING_SEARCH_TERM_REPLACEMENT);
+}
+
+// static
+bool BaseSearchProvider::CanSendPageURLInRequest(const GURL& page_url) {
+  return page_url.is_valid() && (page_url.scheme() == url::kHttpScheme ||
+                                 page_url.scheme() == url::kHttpsScheme);
+}
+
+// static
+bool BaseSearchProvider::CanSendRequest(
+    const GURL& suggest_url,
+    const TemplateURL* template_url,
+    const SearchTermsData& search_terms_data,
+    const AutocompleteProviderClient* client) {
+  // Make sure we are sending the suggest request through a cryptographically
+  // secure channel to prevent exposing the current page URL or personalized
+  // results without encryption.
+  if (!suggest_url.is_valid() || !suggest_url.SchemeIsCryptographic()) {
+    return false;
+  }
+
+  // Don't run if in incognito mode.
+  if (client->IsOffTheRecord()) {
+    return false;
+  }
+
+  // Don't run if we can't get preferences or search suggest is not enabled.
+  if (!client->SearchSuggestEnabled()) {
+    return false;
+  }
+
+  // Only make the request if we know that the provider supports zero-suggest
+  // requests. (Currently only the prepopulated Google provider supports it.)
+  if (template_url == nullptr ||
+      !template_url->SupportsReplacement(search_terms_data) ||
+      template_url->GetEngineType(search_terms_data) != SEARCH_ENGINE_GOOGLE) {
+    return false;
+  }
+
+  return true;
+}
+
+// static
+bool BaseSearchProvider::CanSendRequestWithURL(
+    const GURL& current_page_url,
+    const GURL& suggest_url,
+    const TemplateURL* template_url,
+    metrics::OmniboxEventProto::PageClassification page_classification,
+    const SearchTermsData& search_terms_data,
+    const AutocompleteProviderClient* client,
+    bool sending_search_terms) {
+  if (!CanSendRequest(suggest_url, template_url, search_terms_data, client)) {
+    return false;
+  }
+
+  // Don't bother sending the URL of an NTP page; it's not useful.  The server
+  // already gets equivalent information in the form of the current page
+  // classification.
+  if (IsNTPPage(page_classification)) {
+    return false;
+  }
+
+  // Only allow valid HTTP or HTTPS URLs.
+  if (!CanSendPageURLInRequest(current_page_url)) {
+    return false;
+  }
+
+  // If URL data collection is off, forbid sending the current page URL to the
+  // suggest endpoint - unless both of these hold:
+  //  * The suggest endpoint and current page must be same-origin. In that
+  //    case, the suggest endpoint could have already logged the current URL
+  //    when the user accessed it from the server.
+  //  * The search terms must be empty. When the user is typing new search
+  //    terms, Chrome should not leak to the endpoint which tab the user is
+  //    looking at. On-focus suggest requests don't contain a query.
+  if (!client->IsPersonalizedUrlDataCollectionActive()) {
+    bool safe_to_send_url_without_data_collection_active =
+        url::IsSameOriginWith(current_page_url, suggest_url) &&
+        !sending_search_terms;
+
+    if (!safe_to_send_url_without_data_collection_active) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 void BaseSearchProvider::DeleteMatch(const AutocompleteMatch& match) {
@@ -284,6 +374,7 @@ void BaseSearchProvider::AddProviderInfo(ProvidersInfo* provider_info) const {
 const char BaseSearchProvider::kRelevanceFromServerKey[] =
     "relevance_from_server";
 const char BaseSearchProvider::kShouldPrefetchKey[] = "should_prefetch";
+const char BaseSearchProvider::kShouldPrerenderKey[] = "should_prerender";
 const char BaseSearchProvider::kSuggestMetadataKey[] = "suggest_metadata";
 const char BaseSearchProvider::kDeletionUrlKey[] = "deletion_url";
 const char BaseSearchProvider::kTrue[] = "true";
@@ -399,71 +490,6 @@ std::u16string BaseSearchProvider::GetFillIntoEdit(
   return fill_into_edit;
 }
 
-// static
-bool BaseSearchProvider::CanSendURL(
-    const GURL& current_page_url,
-    const GURL& suggest_url,
-    const TemplateURL* template_url,
-    metrics::OmniboxEventProto::PageClassification page_classification,
-    const SearchTermsData& search_terms_data,
-    AutocompleteProviderClient* client,
-    bool sending_search_terms) {
-  // Make sure we are sending the suggest request through a cryptographically
-  // secure channel to prevent exposing the current page URL or personalized
-  // results without encryption.
-  if (!suggest_url.SchemeIsCryptographic())
-    return false;
-
-  // Don't run if in incognito mode.
-  if (client->IsOffTheRecord())
-    return false;
-
-  // Don't run if we can't get preferences or search suggest is not enabled.
-  if (!client->SearchSuggestEnabled())
-    return false;
-
-  // Only make the request if we know that the provider supports sending zero
-  // suggest. (Currently only the prepopulated Google provider supports it.)
-  if (template_url == nullptr ||
-      !template_url->SupportsReplacement(search_terms_data) ||
-      template_url->GetEngineType(search_terms_data) != SEARCH_ENGINE_GOOGLE)
-    return false;
-
-  if (!current_page_url.is_valid())
-    return false;
-
-  // Don't bother sending the URL of an NTP page; it's not useful.  The server
-  // already gets equivalent information in the form of the current page
-  // classification.
-  if (IsNTPPage(page_classification))
-    return false;
-
-  // Only allow HTTP URLs or HTTPS URLs.
-  const bool scheme_allowed = (current_page_url.scheme() == url::kHttpScheme) ||
-                              (current_page_url.scheme() == url::kHttpsScheme);
-  if (!scheme_allowed)
-    return false;
-
-  // If URL data collection is off, forbid sending the current page URL to the
-  // suggest endpoint - unless both of these hold:
-  //  * The suggest endpoint and current page must be same-origin. In that
-  //    case, the suggest endpoint could have already logged the current URL
-  //    when the user accessed it from the server.
-  //  * The search terms must be empty. When the user is typing new search
-  //    terms, Chrome should not leak to the endpoint which tab the user is
-  //    looking at. On-focus suggest requests don't contain a query.
-  if (!client->IsPersonalizedUrlDataCollectionActive()) {
-    bool safe_to_send_url_without_data_collection_active =
-        url::IsSameOriginWith(current_page_url, suggest_url) &&
-        !sending_search_terms;
-
-    if (!safe_to_send_url_without_data_collection_active)
-      return false;
-  }
-
-  return true;
-}
-
 void BaseSearchProvider::SetDeletionURL(const std::string& deletion_url,
                                         AutocompleteMatch* match) {
   if (deletion_url.empty())
@@ -476,7 +502,7 @@ void BaseSearchProvider::SetDeletionURL(const std::string& deletion_url,
   GURL url =
       template_url_service->GetDefaultSearchProvider()->GenerateSearchURL(
           template_url_service->search_terms_data());
-  url = url.GetOrigin().Resolve(deletion_url);
+  url = url.DeprecatedGetOriginAsURL().Resolve(deletion_url);
   if (url.is_valid()) {
     match->RecordAdditionalInfo(BaseSearchProvider::kDeletionUrlKey,
                                 url.spec());
@@ -502,6 +528,8 @@ void BaseSearchProvider::AddMatchToMap(
                              result.relevance_from_server() ? kTrue : kFalse);
   match.RecordAdditionalInfo(kShouldPrefetchKey,
                              result.should_prefetch() ? kTrue : kFalse);
+  match.RecordAdditionalInfo(kShouldPrerenderKey,
+                             result.should_prerender() ? kTrue : kFalse);
   SetDeletionURL(result.deletion_url(), &match);
   if (mark_as_deletable)
     match.deletable = true;
@@ -538,22 +566,26 @@ void BaseSearchProvider::AddMatchToMap(
     } else {
       if (match.keyword == i.first->second.keyword) {
         // Old and new matches are from the same search provider. It is okay to
-        // record one match's prefetch data onto a different match (for the same
-        // query string) for the following reasons:
+        // record one match's prefetch/prerender data onto a different match
+        // (for the same query string) for the following reasons:
         // 1. Because the suggest server only sends down a query string from
         // which we construct a URL, rather than sending a full URL, and because
         // we construct URLs from query strings in the same way every time, the
         // URLs for the two matches will be the same. Therefore, we won't end up
-        // prefetching something the server didn't intend.
-        // 2. Presumably the server sets the prefetch bit on a match it things
-        // is sufficiently relevant that the user is likely to choose it.
-        // Surely setting the prefetch bit on a match of even higher relevance
-        // won't violate this assumption.
+        // prefetching/prerendering something the server didn't intend.
+        // 2. Presumably the server sets the prefetch/prerender bit on a match
+        // it thinks is sufficiently relevant that the user is likely to choose
+        // it. Surely setting the prefetch/prerender bit on a match of even
+        // higher relevance won't violate this assumption.
         should_prefetch |= ShouldPrefetch(i.first->second);
         i.first->second.RecordAdditionalInfo(kShouldPrefetchKey,
                                              should_prefetch ? kTrue : kFalse);
         if (should_prefetch)
           i.first->second.RecordAdditionalInfo(kSuggestMetadataKey, metadata);
+        bool should_prerender =
+            result.should_prerender() || ShouldPrerender(i.first->second);
+        i.first->second.RecordAdditionalInfo(kShouldPrerenderKey,
+                                             should_prerender ? kTrue : kFalse);
       }
       i.first->second.duplicate_matches.push_back(std::move(match));
     }

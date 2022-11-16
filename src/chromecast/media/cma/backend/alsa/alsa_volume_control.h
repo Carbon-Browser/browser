@@ -9,7 +9,6 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
 #include "base/message_loop/message_pump_for_io.h"
 #include "base/timer/timer.h"
 #include "chromecast/media/cma/backend/system_volume_control.h"
@@ -18,16 +17,23 @@
 
 namespace chromecast {
 namespace media {
+class ScopedAlsaMixer;
 
 // SystemVolumeControl implementation for ALSA.
 class AlsaVolumeControl : public SystemVolumeControl,
                           public base::MessagePumpForIO::FdWatcher {
  public:
   explicit AlsaVolumeControl(Delegate* delegate);
+
+  AlsaVolumeControl(const AlsaVolumeControl&) = delete;
+  AlsaVolumeControl& operator=(const AlsaVolumeControl&) = delete;
+
   ~AlsaVolumeControl() override;
 
   // SystemVolumeControl interface.
   float GetRoundtripVolume(float volume) override;
+  float DbToVolumeLevel(float db_volume) override;
+  float VolumeLevelToDb(float level) override;
   float GetVolume() override;
   void SetVolume(float level) override;
   bool IsMuted() override;
@@ -35,11 +41,7 @@ class AlsaVolumeControl : public SystemVolumeControl,
   void SetPowerSave(bool power_save_on) override;
   void SetLimit(float limit) override;
 
-  void CheckPowerSave();
-
  private:
-  class ScopedAlsaMixer;
-
   static std::string GetVolumeElementName();
   static std::string GetVolumeDeviceName();
   static std::string GetMuteElementName(::media::AlsaWrapper* alsa,
@@ -66,6 +68,8 @@ class AlsaVolumeControl : public SystemVolumeControl,
 
   void OnVolumeOrMuteChanged();
 
+  void CheckPowerSave();
+
   Delegate* const delegate_;
 
   const std::unique_ptr<::media::AlsaWrapper> alsa_;
@@ -89,8 +93,6 @@ class AlsaVolumeControl : public SystemVolumeControl,
 
   std::vector<std::unique_ptr<base::MessagePumpForIO::FdWatchController>>
       file_descriptor_watchers_;
-
-  DISALLOW_COPY_AND_ASSIGN(AlsaVolumeControl);
 };
 
 }  // namespace media

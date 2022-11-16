@@ -10,8 +10,8 @@
 #include <memory>
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
+#include "base/time/time.h"
 #include "media/base/media_export.h"
 #include "media/base/stream_parser_buffer.h"
 
@@ -49,6 +49,9 @@ class MEDIA_EXPORT SourceBufferRange {
                     const BufferQueue& new_buffers,
                     base::TimeDelta range_start_pts,
                     InterbufferDistanceCB interbuffer_distance_cb);
+
+  SourceBufferRange(const SourceBufferRange&) = delete;
+  SourceBufferRange& operator=(const SourceBufferRange&) = delete;
 
   ~SourceBufferRange();
 
@@ -392,8 +395,6 @@ class MEDIA_EXPORT SourceBufferRange {
   // Maps keyframe presentation timestamps to GOP start index of |buffers_|
   // (with index adjusted by |keyframe_map_index_base_|);
   KeyframeMap keyframe_map_;
-
-  DISALLOW_COPY_AND_ASSIGN(SourceBufferRange);
 };
 
 }  // namespace media

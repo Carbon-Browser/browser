@@ -10,6 +10,7 @@
 #include "ash/public/cpp/shelf_model.h"
 #include "chrome/browser/ash/crosapi/browser_util.h"
 #include "chrome/browser/ui/ash/shelf/standalone_browser_extension_app_shelf_item_controller.h"
+#include "components/app_restore/full_restore_utils.h"
 #include "components/exo/shell_surface_util.h"
 
 namespace crosapi {
@@ -29,12 +30,14 @@ void ChromeAppWindowTrackerAsh::OnAppWindowAdded(const std::string& app_id,
                                                  const std::string& window_id) {
   pending_window_ids_[window_id].app_id = app_id;
   CheckWindowNoLongerPending(window_id);
+  full_restore::OnLacrosChromeAppWindowAdded(app_id, window_id);
 }
 
 void ChromeAppWindowTrackerAsh::OnAppWindowRemoved(
     const std::string& app_id,
     const std::string& window_id) {
   pending_window_ids_.erase(window_id);
+  full_restore::OnLacrosChromeAppWindowRemoved(app_id, window_id);
 }
 
 void ChromeAppWindowTrackerAsh::OnWindowInitialized(aura::Window* window) {
@@ -62,23 +65,8 @@ void ChromeAppWindowTrackerAsh::OnWindowDestroying(aura::Window* window) {
   pending_window_ids_.erase(it);
 }
 
-void ChromeAppWindowTrackerAsh::CheckWindowNoLongerPending(
-    const std::string& window_id) {
-  auto pending_window = pending_window_ids_.find(window_id);
-  if (pending_window == pending_window_ids_.end())
-    return;
-
-  // The window is still pending
-  if (pending_window->second.app_id.empty() || !pending_window->second.window)
-    return;
-
-  std::string app_id = std::move(pending_window->second.app_id);
-  aura::Window* window = pending_window->second.window;
-
-  // Now that both pieces of metadata are available, we can stop tracking the
-  // window.
-  pending_window_ids_.erase(pending_window);
-
+void ChromeAppWindowTrackerAsh::UpdateShelf(const std::string& app_id,
+                                            aura::Window* window) {
   ash::ShelfID shelf_id(app_id);
   ash::ShelfItemDelegate* existing_delegate =
       ash::ShelfModel::Get()->GetShelfItemDelegate(shelf_id);
@@ -100,6 +88,27 @@ void ChromeAppWindowTrackerAsh::CheckWindowNoLongerPending(
             shelf_id, window);
     ash::ShelfModel::Get()->Add(item, std::move(delegate));
   }
+}
+
+void ChromeAppWindowTrackerAsh::CheckWindowNoLongerPending(
+    const std::string& window_id) {
+  auto pending_window = pending_window_ids_.find(window_id);
+  if (pending_window == pending_window_ids_.end())
+    return;
+
+  // The window is still pending
+  if (pending_window->second.app_id.empty() || !pending_window->second.window)
+    return;
+
+  std::string app_id = std::move(pending_window->second.app_id);
+  aura::Window* window = pending_window->second.window;
+
+  // Now that both pieces of metadata are available, we can stop tracking the
+  // window.
+  pending_window_ids_.erase(pending_window);
+  window_observations_.RemoveObservation(window);
+
+  UpdateShelf(app_id, window);
 }
 
 }  // namespace crosapi

@@ -5,17 +5,21 @@
 #include "ui/ozone/platform/x11/gl_ozone_glx.h"
 
 #include "base/command_line.h"
+#include "build/build_config.h"
 #include "ui/gl/gl_context.h"
 #include "ui/gl/gl_context_glx.h"
 #include "ui/gl/gl_gl_api_implementation.h"
 #include "ui/gl/gl_glx_api_implementation.h"
+#include "ui/gl/gl_image_glx_native_pixmap.h"
 #include "ui/gl/gl_surface_glx_x11.h"
+#include "ui/gl/gl_utils.h"
+#include "ui/ozone/platform/x11/native_pixmap_glx_binding.h"
 
 namespace ui {
 
 namespace {
 
-#if defined(OS_OPENBSD)
+#if BUILDFLAG(IS_OPENBSD)
 const char kGLLibraryName[] = "libGL.so";
 #else
 const char kGLLibraryName[] = "libGL.so.1";
@@ -23,12 +27,15 @@ const char kGLLibraryName[] = "libGL.so.1";
 
 }  // namespace
 
-bool GLOzoneGLX::InitializeGLOneOffPlatform() {
+gl::GLDisplay* GLOzoneGLX::InitializeGLOneOffPlatform(
+    uint64_t system_device_id) {
+  // TODO(https://crbug.com/1251724): GLSurfaceGLX::InitializeOneOff()
+  // should take |system_device_id| and return a GLDisplayX11.
   if (!gl::GLSurfaceGLX::InitializeOneOff()) {
     LOG(ERROR) << "GLSurfaceGLX::InitializeOneOff failed.";
-    return false;
+    return nullptr;
   }
-  return true;
+  return gl::GetDisplayX11(system_device_id);
 }
 
 bool GLOzoneGLX::InitializeStaticGLBindings(
@@ -72,13 +79,30 @@ void GLOzoneGLX::SetDisabledExtensionsPlatform(
   gl::SetDisabledExtensionsGLX(disabled_extensions);
 }
 
-bool GLOzoneGLX::InitializeExtensionSettingsOneOffPlatform() {
+bool GLOzoneGLX::InitializeExtensionSettingsOneOffPlatform(
+    gl::GLDisplay* display) {
   return gl::InitializeExtensionSettingsOneOffGLX();
 }
 
-void GLOzoneGLX::ShutdownGL() {
+void GLOzoneGLX::ShutdownGL(gl::GLDisplay* display) {
   gl::ClearBindingsGL();
   gl::ClearBindingsGLX();
+}
+
+bool GLOzoneGLX::CanImportNativePixmap() {
+  return false;
+}
+
+std::unique_ptr<NativePixmapGLBinding> GLOzoneGLX::ImportNativePixmap(
+    scoped_refptr<gfx::NativePixmap> pixmap,
+    gfx::BufferFormat plane_format,
+    gfx::BufferPlane plane,
+    gfx::Size plane_size,
+    const gfx::ColorSpace& color_space,
+    GLenum target,
+    GLuint texture_id) {
+  return NativePixmapGLXBinding::Create(pixmap, plane_format, plane, plane_size,
+                                        target, texture_id);
 }
 
 bool GLOzoneGLX::GetGLWindowSystemBindingInfo(

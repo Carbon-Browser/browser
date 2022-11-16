@@ -9,17 +9,19 @@ import android.content.res.ColorStateList;
 import android.graphics.drawable.Drawable;
 import android.util.AttributeSet;
 import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
-import androidx.appcompat.content.res.AppCompatResources;
 import androidx.appcompat.widget.AppCompatImageButton;
 import androidx.vectordrawable.graphics.drawable.AnimatedVectorDrawableCompat;
 
 import org.chromium.base.ApiCompatibilityUtils;
+import org.chromium.components.browser_ui.styles.SemanticColorUtils;
 import org.chromium.components.browser_ui.widget.R;
 import org.chromium.components.browser_ui.widget.TintedDrawable;
 
@@ -34,6 +36,8 @@ public abstract class SelectableItemView<E> extends SelectableItemViewBase<E> {
     protected final int mSelectedLevel;
     protected final AnimatedVectorDrawableCompat mCheckDrawable;
 
+    protected int mStartIconViewSize;
+
     /**
      * The LinearLayout containing the rest of the views for the selectable item.
      */
@@ -43,6 +47,11 @@ public abstract class SelectableItemView<E> extends SelectableItemViewBase<E> {
      * An icon displayed at the start of the item row.
      */
     protected ImageView mStartIconView;
+
+    /**
+     * An optional button displayed at the before the end button, GONE by default.
+     */
+    protected AppCompatImageButton mEndStartButtonView;
 
     /**
      * An optional button displayed at the end of the item row, GONE by default.
@@ -87,12 +96,17 @@ public abstract class SelectableItemView<E> extends SelectableItemViewBase<E> {
     private boolean mVisualRefreshEnabled;
 
     /**
+     * Container for custom content to be set on the view.
+     */
+    private ViewGroup mCustomContentContainer;
+
+    /**
      * Constructor for inflating from XML.
      */
     public SelectableItemView(Context context, AttributeSet attrs) {
         super(context, attrs);
-        mStartIconSelectedColorList = AppCompatResources.getColorStateList(
-                getContext(), R.color.default_icon_color_inverse);
+        mStartIconSelectedColorList =
+                ColorStateList.valueOf(SemanticColorUtils.getDefaultIconColorInverse(context));
         mDefaultLevel = getResources().getInteger(R.integer.list_item_level_default);
         mSelectedLevel = getResources().getInteger(R.integer.list_item_level_selected);
         mCheckDrawable = AnimatedVectorDrawableCompat.create(
@@ -105,8 +119,9 @@ public abstract class SelectableItemView<E> extends SelectableItemViewBase<E> {
         return mVisualRefreshEnabled;
     }
 
-    protected void enableVisualRefresh() {
+    protected void enableVisualRefresh(int startIconViewSize) {
         mVisualRefreshEnabled = true;
+        mStartIconViewSize = startIconViewSize;
 
         mStartIconBackgroundRes = R.drawable.list_item_icon_modern_bg_rect;
         mLayoutRes = R.layout.modern_list_item_view_v2;
@@ -137,6 +152,14 @@ public abstract class SelectableItemView<E> extends SelectableItemViewBase<E> {
             mStartIconView.setBackgroundResource(mStartIconBackgroundRes);
             ApiCompatibilityUtils.setImageTintList(mStartIconView, getDefaultStartIconTint());
         }
+
+        if (isVisualRefreshEnabled()) {
+            mEndStartButtonView = findViewById(R.id.optional_button);
+            mCustomContentContainer = findViewById(R.id.custom_content_container);
+            mStartIconView.getLayoutParams().width = mStartIconViewSize;
+            mStartIconView.getLayoutParams().height = mStartIconViewSize;
+            mStartIconView.requestLayout();
+        }
     }
 
     /**
@@ -153,6 +176,22 @@ public abstract class SelectableItemView<E> extends SelectableItemViewBase<E> {
      */
     protected Drawable getStartIconDrawable() {
         return mStartIconDrawable;
+    }
+
+    /**
+     * Sets a custom content view.
+     * @param view The custom view or null to clear it.
+     */
+    protected void setCustomContent(@Nullable View view) {
+        assert isVisualRefreshEnabled()
+            : "Specifying custom content is only allowed when visual refresh is enabled";
+
+        // Custom content is allowed only with the visual refresh.
+        if (!isVisualRefreshEnabled()) return;
+
+        mCustomContentContainer.removeAllViews();
+        if (view == null) return;
+        mCustomContentContainer.addView(view);
     }
 
     /**
@@ -198,10 +237,15 @@ public abstract class SelectableItemView<E> extends SelectableItemViewBase<E> {
     public static void applyModernIconStyle(
             ImageView imageView, Drawable defaultIcon, boolean isSelected) {
         imageView.setBackgroundResource(R.drawable.list_item_icon_modern_bg);
-        imageView.setImageDrawable(
-                isSelected ? TintedDrawable.constructTintedDrawable(imageView.getContext(),
-                        R.drawable.ic_check_googblue_24dp, R.color.default_icon_color_inverse)
-                           : defaultIcon);
+        Drawable drawable;
+        if (isSelected) {
+            drawable = TintedDrawable.constructTintedDrawable(
+                    imageView.getContext(), R.drawable.ic_check_googblue_24dp);
+            drawable.setTint(SemanticColorUtils.getDefaultIconColorInverse(imageView.getContext()));
+        } else {
+            drawable = defaultIcon;
+        }
+        imageView.setImageDrawable(drawable);
         imageView.getBackground().setLevel(isSelected
                         ? imageView.getResources().getInteger(R.integer.list_item_level_selected)
                         : imageView.getResources().getInteger(R.integer.list_item_level_default));

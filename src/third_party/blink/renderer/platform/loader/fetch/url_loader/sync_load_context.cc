@@ -14,6 +14,7 @@
 #include "mojo/public/cpp/bindings/associated_remote.h"
 #include "net/url_request/redirect_info.h"
 #include "services/network/public/cpp/resource_request.h"
+#include "services/network/public/cpp/url_loader_completion_status.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/client_hints/client_hints.h"
@@ -198,7 +199,8 @@ void SyncLoadContext::CancelRedirect() {
 }
 
 void SyncLoadContext::OnReceivedResponse(
-    network::mojom::URLResponseHeadPtr head) {
+    network::mojom::URLResponseHeadPtr head,
+    base::TimeTicks response_arrival_at_renderer) {
   DCHECK(!Completed());
   response_->head = std::move(head);
 }
@@ -301,6 +303,8 @@ void SyncLoadContext::OnBodyReadable(MojoResult,
 
 void SyncLoadContext::OnAbort(base::WaitableEvent* event) {
   DCHECK(!Completed());
+  body_handle_.reset();
+  body_watcher_.Cancel();
   response_->error_code = net::ERR_ABORTED;
   CompleteRequest();
 }
@@ -309,6 +313,8 @@ void SyncLoadContext::OnTimeout() {
   // OnTimeout() must not be called after CompleteRequest() was called, because
   // the OneShotTimer must have been stopped.
   DCHECK(!Completed());
+  body_handle_.reset();
+  body_watcher_.Cancel();
   response_->error_code = net::ERR_TIMED_OUT;
   CompleteRequest();
 }

@@ -9,8 +9,10 @@
 #include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/cxx17_backports.h"
-
+#include "base/trace_event/typed_macros.h"
 #include "media/capture/video/chromeos/camera_metadata_utils.h"
+#include "media/capture/video/chromeos/camera_trace_utils.h"
+#include "third_party/perfetto/include/perfetto/tracing/track.h"
 
 namespace media {
 
@@ -193,6 +195,16 @@ void Camera3AController::Stabilize3AForStillCapture(
     base::OnceClosure on_3a_stabilized_callback) {
   DCHECK(task_runner_->BelongsToCurrentThread());
 
+  auto track = GetTraceTrack(CameraTraceEvent::kStabilize3A, request_id_);
+  TRACE_EVENT_BEGIN("camera", "Stabilize3AForStillCapture", track);
+  on_3a_stabilized_callback = base::BindOnce(
+      [](base::OnceClosure callback, perfetto::Track track) {
+        TRACE_EVENT_END("camera", std::move(track));
+        std::move(callback).Run();
+      },
+      std::move(on_3a_stabilized_callback), std::move(track));
+  ++request_id_;
+
   if (set_point_of_interest_running_) {
     // Use the settings from point of interest.
     if (!on_ae_locked_for_point_of_interest_callback_) {
@@ -222,7 +234,7 @@ void Camera3AController::Stabilize3AForStillCapture(
   }
 
   Set3aStabilizedCallback(std::move(on_3a_stabilized_callback),
-                          base::TimeDelta::FromSeconds(2));
+                          base::Seconds(2));
 
   if (af_mode_ !=
       cros::mojom::AndroidControlAfMode::ANDROID_CONTROL_AF_MODE_OFF) {
@@ -256,9 +268,8 @@ void Camera3AController::OnResultMetadataAvailable(
     // metadata from zero-shutter-lag request may be out of order compared to
     // previous regular requests.
     // https://developer.android.com/reference/android/hardware/camera2/CaptureResult#CONTROL_ENABLE_ZSL
-    latest_sensor_timestamp_ =
-        std::max(latest_sensor_timestamp_,
-                 base::TimeDelta::FromNanoseconds(sensor_timestamp[0]));
+    latest_sensor_timestamp_ = std::max(latest_sensor_timestamp_,
+                                        base::Nanoseconds(sensor_timestamp[0]));
   }
 
   if (!af_mode_set_) {
@@ -571,7 +582,7 @@ void Camera3AController::SetPointOfInterestOn3AModeSet() {
   Set3aStabilizedCallback(
       base::BindOnce(&Camera3AController::SetPointOfInterestOn3AStabilized,
                      GetWeakPtr()),
-      base::TimeDelta::FromSeconds(2));
+      base::Seconds(2));
   SetCaptureMetadata(
       cros::mojom::CameraMetadataTag::ANDROID_CONTROL_AF_TRIGGER,
       cros::mojom::AndroidControlAfTrigger::ANDROID_CONTROL_AF_TRIGGER_START);
@@ -590,9 +601,8 @@ void Camera3AController::SetPointOfInterestOn3AStabilized() {
   delayed_ae_unlock_callback_.Reset(base::BindOnce(
       &Camera3AController::SetPointOfInterestUnlockAe, GetWeakPtr()));
   // TODO(shik): Apply different delays for image capture / video recording.
-  task_runner_->PostDelayedTask(FROM_HERE,
-                                delayed_ae_unlock_callback_.callback(),
-                                base::TimeDelta::FromSeconds(4));
+  task_runner_->PostDelayedTask(
+      FROM_HERE, delayed_ae_unlock_callback_.callback(), base::Seconds(4));
 }
 
 void Camera3AController::SetPointOfInterestUnlockAe() {

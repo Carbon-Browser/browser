@@ -30,14 +30,13 @@ import org.chromium.chrome.browser.notifications.chime.ChimeDelegate;
 import org.chromium.chrome.browser.omaha.RequestGenerator;
 import org.chromium.chrome.browser.partnerbookmarks.PartnerBookmark;
 import org.chromium.chrome.browser.partnerbookmarks.PartnerBookmarksProviderIterator;
-import org.chromium.chrome.browser.partnercustomizations.PartnerBrowserCustomizations;
 import org.chromium.chrome.browser.password_manager.GooglePasswordManagerUIProvider;
 import org.chromium.chrome.browser.policy.PolicyAuditor;
 import org.chromium.chrome.browser.rlz.RevenueStats;
-import org.chromium.chrome.browser.signin.ui.GoogleActivityController;
 import org.chromium.chrome.browser.survey.SurveyController;
 import org.chromium.chrome.browser.sync.TrustedVaultClient;
 import org.chromium.chrome.browser.tab.Tab;
+import org.chromium.chrome.browser.ui.signin.GoogleActivityController;
 import org.chromium.chrome.browser.usage_stats.DigitalWellbeingClient;
 import org.chromium.chrome.browser.webapps.GooglePlayWebApkInstallDelegate;
 import org.chromium.chrome.browser.xsurface.ProcessScope;
@@ -224,15 +223,6 @@ public abstract class AppHooks {
     }
 
     /**
-     * @return A list of allowlisted apps that are allowed to receive notification when the
-     * set of offlined pages downloaded on their behalf has changed. Apps are listed by their
-     * package name.
-     */
-    public List<String> getOfflinePagesCctAllowlist() {
-        return Collections.emptyList();
-    }
-
-    /**
      * @return A list of allowlisted app package names whose completed notifications
      * we should suppress.
      */
@@ -246,14 +236,6 @@ public abstract class AppHooks {
     @Nullable
     public PartnerBookmark.BookmarkIterator getPartnerBookmarkIterator() {
         return PartnerBookmarksProviderIterator.createIfAvailable();
-    }
-
-    /**
-     * @return An instance of PartnerBrowserCustomizations.Provider that provides customizations
-     * specified by partners.
-     */
-    public PartnerBrowserCustomizations.Provider getCustomizationProvider() {
-        return new PartnerBrowserCustomizations.ProviderPackage();
     }
 
     /**
@@ -296,8 +278,7 @@ public abstract class AppHooks {
     }
 
     /**
-     * Returns a new {@link SurfaceRenderer} if the xsurface implementation is included in the
-     * apk. Otherwise null is returned.
+     * This is deprecated, and should not be called. Use FeedHooks instead.
      */
     public @Nullable ProcessScope getExternalSurfaceProcessScope(
             ProcessScopeDependencyProvider dependencies) {

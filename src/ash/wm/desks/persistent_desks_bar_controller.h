@@ -43,6 +43,8 @@ class ASH_EXPORT PersistentDesksBarController
       public AccessibilityObserver,
       public display::DisplayObserver {
  public:
+  constexpr static int kBarHeight = 40;
+
   PersistentDesksBarController();
   PersistentDesksBarController(const PersistentDesksBarController&) = delete;
   PersistentDesksBarController& operator=(const PersistentDesksBarController&) =
@@ -50,6 +52,15 @@ class ASH_EXPORT PersistentDesksBarController
   ~PersistentDesksBarController() override;
 
   static void RegisterProfilePrefs(PrefRegistrySimple* registry);
+
+  // Returns true if it satisfies the prerequisites to show the persistent
+  // desks bar. `kBentoBar` feature is running as an experiment now. And we will
+  // only enable it for a specific group of existing desks users, see
+  // `kUserHasUsedDesksRecently` for more details. But we also want to enable it
+  // if the user has explicitly enabled `kBentoBar` from chrome://flags or from
+  // the command line. Even though the user is not in the group of existing
+  // desks users.
+  static bool ShouldPersistentDesksBarBeVisible();
 
   const views::Widget* persistent_desks_bar_widget() const {
     return persistent_desks_bar_widget_.get();
@@ -64,7 +75,7 @@ class ASH_EXPORT PersistentDesksBarController
   void OnActiveUserPrefServiceChanged(PrefService* prefs) override;
 
   // OverviewObserver:
-  void OnOverviewModeStarting() override;
+  void OnOverviewModeWillStart() override;
   void OnOverviewModeEndingAnimationComplete(bool canceled) override;
 
   // DesksController::Observer:
@@ -131,6 +142,13 @@ class ASH_EXPORT PersistentDesksBarController
 
   std::unique_ptr<PrefChangeRegistrar> pref_change_registrar_;
   PrefService* active_user_pref_service_ = nullptr;
+
+  // Indicates if overview mode will start. This is used to guarantee the work
+  // area will be updated on the bento bar’s visibility changes before entering
+  // overview mode. Since the work area will not be updated once we are already
+  // in overview mode. Note, this will be set to true when overview mode will
+  // start and set to false until overview mode ends.
+  bool overview_mode_in_progress_ = false;
 };
 
 }  // namespace ash

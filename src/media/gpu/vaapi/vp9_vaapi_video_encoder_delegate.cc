@@ -13,11 +13,12 @@
 #include "base/memory/ref_counted_memory.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/stringprintf.h"
+#include "media/gpu/gpu_video_encode_accelerator_helpers.h"
 #include "media/gpu/macros.h"
 #include "media/gpu/vaapi/vaapi_common.h"
 #include "media/gpu/vaapi/vaapi_wrapper.h"
-#include "media/gpu/vaapi/vp9_rate_control.h"
-#include "media/gpu/vaapi/vp9_svc_layers.h"
+#include "media/gpu/vp9_svc_layers.h"
+#include "media/gpu/vpx_rate_control.h"
 #include "third_party/libvpx/source/libvpx/vp9/ratectrl_rtc.h"
 
 namespace media {
@@ -59,11 +60,11 @@ uint8_t QindexToQuantizer(uint8_t q_index) {
       208, 212, 216, 220, 224, 228, 232, 236, 240, 244, 249, 255,
   };
 
-  for (size_t q = 0; q < base::size(kQuantizerToQindex); ++q) {
+  for (size_t q = 0; q < std::size(kQuantizerToQindex); ++q) {
     if (kQuantizerToQindex[q] >= q_index)
       return q;
   }
-  return base::size(kQuantizerToQindex) - 1;
+  return std::size(kQuantizerToQindex) - 1;
 }
 
 // TODO(crbug.com/752720): remove this in favor of std::gcd if c++17 is enabled
@@ -91,39 +92,6 @@ uint32_t MaxSizeOfKeyframeAsPercentage(uint32_t optimal_buffer_size,
   // Don't go below 3 times the per frame bandwidth.
   constexpr uint32_t kMinIntraSizePercentage = 300u;
   return std::max(kMinIntraSizePercentage, target_size_kbyte_as_percent);
-}
-
-VideoBitrateAllocation GetDefaultVideoBitrateAllocation(
-    const VideoEncodeAccelerator::Config& config) {
-  VideoBitrateAllocation bitrate_allocation;
-  if (!config.HasTemporalLayer() && !config.HasSpatialLayer()) {
-    bitrate_allocation.SetBitrate(0, 0, config.bitrate.target());
-    return bitrate_allocation;
-  }
-
-  DCHECK_LE(config.spatial_layers.size(), VP9SVCLayers::kMaxSpatialLayers);
-  for (size_t sid = 0; sid < config.spatial_layers.size(); ++sid) {
-    const auto& spatial_layer = config.spatial_layers[sid];
-    const size_t num_temporal_layers = spatial_layer.num_of_temporal_layers;
-    DCHECK_LE(num_temporal_layers, VP9SVCLayers::kMaxSupportedTemporalLayers);
-    // The same bitrate factors as the software encoder.
-    // https://source.chromium.org/chromium/chromium/src/+/main:media/video/vpx_video_encoder.cc;l=131;drc=d383d0b3e4f76789a6de2a221c61d3531f4c59da
-    constexpr double kTemporalLayersBitrateScaleFactors
-        [][VP9SVCLayers::kMaxSupportedTemporalLayers] = {
-            {1.00, 0.00, 0.00},  // For one temporal layer.
-            {0.60, 0.40, 0.00},  // For two temporal layers.
-            {0.50, 0.20, 0.30},  // For three temporal layers.
-        };
-
-    const uint32_t bitrate_bps = spatial_layer.bitrate_bps;
-    for (size_t tid = 0; tid < num_temporal_layers; ++tid) {
-      const double factor =
-          kTemporalLayersBitrateScaleFactors[num_temporal_layers - 1][tid];
-      bitrate_allocation.SetBitrate(
-          sid, tid, base::checked_cast<int>(bitrate_bps * factor));
-    }
-  }
-  return bitrate_allocation;
 }
 
 libvpx::VP9RateControlRtcConfig CreateRateControlConfig(
@@ -175,21 +143,18 @@ libvpx::VP9RateControlRtcConfig CreateRateControlConfig(
   return rc_cfg;
 }
 
-static scoped_refptr<base::RefCountedBytes> MakeRefCountedBytes(void* ptr,
-                                                                size_t size) {
-  return base::MakeRefCounted<base::RefCountedBytes>(
-      reinterpret_cast<uint8_t*>(ptr), size);
+scoped_refptr<VP9Picture> GetVP9Picture(
+    const VaapiVideoEncoderDelegate::EncodeJob& job) {
+  return base::WrapRefCounted(
+      reinterpret_cast<VP9Picture*>(job.picture().get()));
 }
-
 }  // namespace
 
 VP9VaapiVideoEncoderDelegate::EncodeParams::EncodeParams()
     : kf_period_frames(kKFPeriod),
       framerate(0),
-      initial_qp(kDefaultQP),
       min_qp(kMinQP),
-      max_qp(kMaxQP),
-      error_resilient_mode(false) {}
+      max_qp(kMaxQP) {}
 
 void VP9VaapiVideoEncoderDelegate::set_rate_ctrl_for_testing(
     std::unique_ptr<VP9RateControl> rate_ctrl) {
@@ -220,11 +185,8 @@ bool VP9VaapiVideoEncoderDelegate::Initialize(
     return false;
   }
 
-  // Even though VP9VaapiVideoEncoderDelegate might support other bitrate
-  // control modes, only the kConstantQuantizationParameter is used.
-  if (ave_config.bitrate_control != VaapiVideoEncoderDelegate::BitrateControl::
-                                        kConstantQuantizationParameter) {
-    DVLOGF(1) << "Only CQ bitrate control is supported";
+  if (config.bitrate.mode() == Bitrate::Mode::kVariable) {
+    DVLOGF(1) << "Invalid configuraiton. VBR is not supported for VP9.";
     return false;
   }
 
@@ -234,8 +196,6 @@ bool VP9VaapiVideoEncoderDelegate::Initialize(
   current_params_ = EncodeParams();
   reference_frames_.Clear();
   frame_num_ = 0;
-
-  auto initial_bitrate_allocation = GetDefaultVideoBitrateAllocation(config);
 
   size_t num_temporal_layers = 1;
   size_t num_spatial_layers = 1;
@@ -284,6 +244,8 @@ bool VP9VaapiVideoEncoderDelegate::Initialize(
   if (spatial_layer_resolutions.empty())
     spatial_layer_resolutions.push_back(visible_size_);
 
+  auto initial_bitrate_allocation = AllocateBitrateForDefaultEncoding(config);
+
   // |rate_ctrl_| might be injected for tests.
   if (!rate_ctrl_) {
     rate_ctrl_ = VP9RateControl::Create(CreateRateControlConfig(
@@ -315,29 +277,29 @@ size_t VP9VaapiVideoEncoderDelegate::GetMaxNumOfRefFrames() const {
   return kVp9NumRefFrames;
 }
 
-bool VP9VaapiVideoEncoderDelegate::PrepareEncodeJob(EncodeJob* encode_job) {
+bool VP9VaapiVideoEncoderDelegate::PrepareEncodeJob(EncodeJob& encode_job) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (svc_layers_) {
-    if (svc_layers_->UpdateEncodeJob(encode_job->IsKeyframeRequested(),
+    if (svc_layers_->UpdateEncodeJob(encode_job.IsKeyframeRequested(),
                                      current_params_.kf_period_frames)) {
-      encode_job->ProduceKeyframe();
+      encode_job.ProduceKeyframe();
     }
   } else {
-    if (encode_job->IsKeyframeRequested())
+    if (encode_job.IsKeyframeRequested())
       frame_num_ = 0;
 
     if (frame_num_ == 0)
-      encode_job->ProduceKeyframe();
+      encode_job.ProduceKeyframe();
 
     frame_num_++;
     frame_num_ %= current_params_.kf_period_frames;
   }
 
-  scoped_refptr<VP9Picture> picture = GetPicture(encode_job);
+  scoped_refptr<VP9Picture> picture = GetVP9Picture(encode_job);
   DCHECK(picture);
 
   std::array<bool, kVp9NumRefsPerFrame> ref_frames_used = {false, false, false};
-  SetFrameHeader(encode_job->IsKeyframeRequested(), picture.get(),
+  SetFrameHeader(encode_job.IsKeyframeRequested(), picture.get(),
                  &ref_frames_used);
   if (!SubmitFrameParameters(encode_job, current_params_, picture,
                              reference_frames_, ref_frames_used)) {
@@ -350,15 +312,17 @@ bool VP9VaapiVideoEncoderDelegate::PrepareEncodeJob(EncodeJob* encode_job) {
 }
 
 BitstreamBufferMetadata VP9VaapiVideoEncoderDelegate::GetMetadata(
-    EncodeJob* encode_job,
+    const EncodeJob& encode_job,
     size_t payload_size) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   auto metadata =
       VaapiVideoEncoderDelegate::GetMetadata(encode_job, payload_size);
-  auto picture = GetPicture(encode_job);
+  auto picture = GetVP9Picture(encode_job);
   DCHECK(picture);
   metadata.vp9 = picture->metadata_for_encoding;
+  metadata.qp =
+      base::strict_cast<int32_t>(picture->frame_hdr->quant_params.base_q_idx);
   return metadata;
 }
 
@@ -428,7 +392,12 @@ bool VP9VaapiVideoEncoderDelegate::UpdateRates(
     uint32_t framerate) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  if (bitrate_allocation.GetSumBps() == 0 || framerate == 0)
+  if (bitrate_allocation.GetMode() != Bitrate::Mode::kConstant) {
+    DLOG(ERROR) << "VBR is not supported for VP9 but was requested.";
+    return false;
+  }
+
+  if (bitrate_allocation.GetSumBps() == 0u || framerate == 0)
     return false;
 
   pending_update_rates_ = std::make_pair(bitrate_allocation, framerate);
@@ -517,28 +486,8 @@ void VP9VaapiVideoEncoderDelegate::UpdateReferenceFrames(
   reference_frames_.Refresh(picture);
 }
 
-void VP9VaapiVideoEncoderDelegate::NotifyEncodedChunkSize(
-    VABufferID buffer_id,
-    VASurfaceID sync_surface_id) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  const uint64_t encoded_chunk_size =
-      vaapi_wrapper_->GetEncodedChunkSize(buffer_id, sync_surface_id);
-  if (encoded_chunk_size == 0)
-    error_cb_.Run();
-
-  BitrateControlUpdate(encoded_chunk_size);
-}
-
-scoped_refptr<VP9Picture> VP9VaapiVideoEncoderDelegate::GetPicture(
-    EncodeJob* job) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-
-  return base::WrapRefCounted(
-      reinterpret_cast<VP9Picture*>(job->picture().get()));
-}
-
 bool VP9VaapiVideoEncoderDelegate::SubmitFrameParameters(
-    EncodeJob* job,
+    EncodeJob& job,
     const EncodeParams& encode_params,
     scoped_refptr<VP9Picture> pic,
     const Vp9ReferenceFrameVector& ref_frames,
@@ -574,7 +523,7 @@ bool VP9VaapiVideoEncoderDelegate::SubmitFrameParameters(
                 : VA_INVALID_ID;
   }
 
-  pic_param.coded_buf = job->coded_buffer_id();
+  pic_param.coded_buf = job.coded_buffer_id();
   DCHECK_NE(pic_param.coded_buf, VA_INVALID_ID);
 
   if (frame_header->IsKeyframe()) {
@@ -628,21 +577,9 @@ bool VP9VaapiVideoEncoderDelegate::SubmitFrameParameters(
   pic_param.log2_tile_rows = frame_header->tile_rows_log2;
   pic_param.log2_tile_columns = frame_header->tile_cols_log2;
 
-  job->AddSetupCallback(
-      base::BindOnce(&VaapiVideoEncoderDelegate::SubmitBuffer,
-                     base::Unretained(this), VAEncSequenceParameterBufferType,
-                     MakeRefCountedBytes(&seq_param, sizeof(seq_param))));
-
-  job->AddSetupCallback(
-      base::BindOnce(&VaapiVideoEncoderDelegate::SubmitBuffer,
-                     base::Unretained(this), VAEncPictureParameterBufferType,
-                     MakeRefCountedBytes(&pic_param, sizeof(pic_param))));
-
-  job->AddPostExecuteCallback(
-      base::BindOnce(&VP9VaapiVideoEncoderDelegate::NotifyEncodedChunkSize,
-                     base::Unretained(this), job->coded_buffer_id(),
-                     job->input_surface()->id()));
-  return true;
+  return vaapi_wrapper_->SubmitBuffers(
+      {{VAEncSequenceParameterBufferType, sizeof(seq_param), &seq_param},
+       {VAEncPictureParameterBufferType, sizeof(pic_param), &pic_param}});
 }
 
 }  // namespace media

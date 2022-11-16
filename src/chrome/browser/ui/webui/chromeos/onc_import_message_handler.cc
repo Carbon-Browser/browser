@@ -7,13 +7,17 @@
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/bind_post_task.h"
+#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/values.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
-#include "chrome/browser/net/nss_context.h"
+#include "chrome/browser/net/nss_service.h"
+#include "chrome/browser/net/nss_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chromeos/network/onc/onc_certificate_importer_impl.h"
-#include "chromeos/network/onc/onc_parsed_certificates.h"
-#include "chromeos/network/onc/onc_utils.h"
+#include "chromeos/ash/components/network/onc/network_onc_utils.h"
+#include "chromeos/ash/components/network/onc/onc_certificate_importer_impl.h"
+#include "chromeos/components/onc/onc_parsed_certificates.h"
+#include "chromeos/components/onc/onc_utils.h"
 #include "components/onc/onc_constants.h"
 #include "components/policy/core/browser/policy_conversions.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -21,12 +25,28 @@
 
 namespace chromeos {
 
+namespace {
+
+void GetCertDBOnIOThread(
+    NssCertDatabaseGetter database_getter,
+    base::OnceCallback<void(net::NSSCertDatabase*)> callback) {
+  DCHECK_CURRENTLY_ON(content::BrowserThread::IO);
+
+  auto split_callback = base::SplitOnceCallback(std::move(callback));
+  net::NSSCertDatabase* cert_db =
+      std::move(database_getter).Run(std::move(split_callback.first));
+  if (cert_db)
+    std::move(split_callback.second).Run(cert_db);
+}
+
+}  // namespace
+
 OncImportMessageHandler::OncImportMessageHandler() = default;
 
 OncImportMessageHandler::~OncImportMessageHandler() = default;
 
 void OncImportMessageHandler::RegisterMessages() {
-  web_ui()->RegisterDeprecatedMessageCallback(
+  web_ui()->RegisterMessageCallback(
       "importONC", base::BindRepeating(&OncImportMessageHandler::OnImportONC,
                                        base::Unretained(this)));
 }
@@ -40,16 +60,26 @@ void OncImportMessageHandler::Respond(const std::string& callback_id,
   ResolveJavascriptCallback(base::Value(callback_id), response);
 }
 
-void OncImportMessageHandler::OnImportONC(const base::ListValue* list) {
-  CHECK_EQ(2u, list->GetList().size());
-  std::string callback_id, onc_blob;
-  CHECK(list->GetString(0, &callback_id));
-  CHECK(list->GetString(1, &onc_blob));
+void OncImportMessageHandler::OnImportONC(const base::Value::List& list) {
+  CHECK_EQ(2u, list.size());
+  std::string callback_id = list[0].GetString();
+  std::string onc_blob = list[1].GetString();
   AllowJavascript();
-  GetNSSCertDatabaseForProfile(
-      Profile::FromWebUI(web_ui()),
-      base::BindOnce(&OncImportMessageHandler::ImportONCToNSSDB,
-                     weak_factory_.GetWeakPtr(), callback_id, onc_blob));
+
+  // TODO(https://crbug.com/1186373): Pass the `NssCertDatabaseGetter` to
+  // the `CertImporter`. This is not unsafe if the profile shuts down during
+  // this operation.
+  content::GetIOThreadTaskRunner({})->PostTask(
+      FROM_HERE,
+      base::BindOnce(
+          &GetCertDBOnIOThread,
+          NssServiceFactory::GetForContext(Profile::FromWebUI(web_ui()))
+              ->CreateNSSCertDatabaseGetterForIOThread(),
+          base::BindPostTask(
+              base::SequencedTaskRunnerHandle::Get(),
+              base::BindOnce(&OncImportMessageHandler::ImportONCToNSSDB,
+                             weak_factory_.GetWeakPtr(), callback_id,
+                             onc_blob))));
 }
 
 void OncImportMessageHandler::ImportONCToNSSDB(const std::string& callback_id,
@@ -85,7 +115,7 @@ void OncImportMessageHandler::ImportONCToNSSDB(const std::string& callback_id,
   }
   result +=
       base::StringPrintf("Networks imported: %d\n", num_networks_imported);
-  if (certificates.GetList().empty()) {
+  if (certificates.GetListDeprecated().empty()) {
     if (!num_networks_imported)
       has_error = true;
     Respond(callback_id, result, has_error);

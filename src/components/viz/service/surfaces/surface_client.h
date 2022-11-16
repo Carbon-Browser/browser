@@ -8,7 +8,8 @@
 #include <memory>
 #include <vector>
 
-#include "base/macros.h"
+#include "base/containers/flat_set.h"
+#include "base/threading/platform_thread.h"
 #include "components/viz/common/resources/returned_resource.h"
 #include "components/viz/service/surfaces/pending_copy_output_request.h"
 #include "components/viz/service/viz_service_export.h"
@@ -34,7 +35,14 @@ class VIZ_SERVICE_EXPORT SurfaceClient {
  public:
   SurfaceClient() = default;
 
+  SurfaceClient(const SurfaceClient&) = delete;
+  SurfaceClient& operator=(const SurfaceClient&) = delete;
+
   virtual ~SurfaceClient() = default;
+
+  // Called when |surface| has committed a new CompositorFrame that become
+  // pending or active.
+  virtual void OnSurfaceCommitted(Surface* surface) = 0;
 
   // Called when |surface| has a new CompositorFrame available for display.
   virtual void OnSurfaceActivated(Surface* surface) = 0;
@@ -69,9 +77,9 @@ class VIZ_SERVICE_EXPORT SurfaceClient {
   // Notifies the client that a frame with |token| has been activated.
   virtual void OnFrameTokenChanged(uint32_t frame_token) = 0;
 
-  // Notifies the client that the submitted CompositorFrame has been processed
-  // (where processed may mean the frame has been displayed, or discarded).
-  virtual void OnSurfaceProcessed(Surface* surface) = 0;
+  // Sends a compositor frame ack to the client. Usually happens when viz is
+  // ready to receive another frame without dropping previous one.
+  virtual void SendCompositorFrameAck() = 0;
 
   // Notifies the client that a frame with |token| has been presented.
   virtual void OnSurfacePresented(
@@ -91,8 +99,7 @@ class VIZ_SERVICE_EXPORT SurfaceClient {
 
   virtual bool IsVideoCaptureStarted() = 0;
 
- private:
-  DISALLOW_COPY_AND_ASSIGN(SurfaceClient);
+  virtual base::flat_set<base::PlatformThreadId> GetThreadIds() = 0;
 };
 
 }  // namespace viz

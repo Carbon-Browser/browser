@@ -5,7 +5,6 @@
 #include <stdint.h>
 
 #include "base/containers/contains.h"
-#include "base/macros.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/sync_file_system/local/canned_syncable_file_system.h"
 #include "chrome/browser/sync_file_system/local/local_file_change_tracker.h"
@@ -40,6 +39,9 @@ class SyncableFileSystemTest : public testing::Test {
                      in_memory_env_.get(),
                      base::ThreadTaskRunnerHandle::Get().get(),
                      base::ThreadTaskRunnerHandle::Get().get()) {}
+
+  SyncableFileSystemTest(const SyncableFileSystemTest&) = delete;
+  SyncableFileSystemTest& operator=(const SyncableFileSystemTest&) = delete;
 
   void SetUp() override {
     ASSERT_TRUE(data_dir_.CreateUniqueTempDir());
@@ -105,8 +107,6 @@ class SyncableFileSystemTest : public testing::Test {
   scoped_refptr<LocalFileSyncContext> sync_context_;
 
   base::WeakPtrFactory<SyncableFileSystemTest> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(SyncableFileSystemTest);
 };
 
 // Brief combined testing. Just see if all the sandbox feature works.
@@ -124,7 +124,9 @@ TEST_F(SyncableFileSystemTest, SyncableLocalSandboxCombined) {
   const int64_t kOriginalQuota = QuotaManager::kSyncableStorageDefaultHostQuota;
 
   const int64_t kQuota = 12345 * 1024;
-  QuotaManager::kSyncableStorageDefaultHostQuota = kQuota;
+  file_system_.quota_manager()->SetQuota(
+      blink::StorageKey(url::Origin::Create(file_system_.origin())),
+      file_system_.storage_type(), kQuota);
   int64_t usage, quota;
   EXPECT_EQ(blink::mojom::QuotaStatusCode::kOk,
             file_system_.GetUsageAndQuota(&usage, &quota));
@@ -149,7 +151,9 @@ TEST_F(SyncableFileSystemTest, SyncableLocalSandboxCombined) {
 
   // Shrink the quota to the current usage, try to extend the file further
   // and see if it fails.
-  QuotaManager::kSyncableStorageDefaultHostQuota = new_usage;
+  file_system_.quota_manager()->SetQuota(
+      blink::StorageKey(url::Origin::Create(file_system_.origin())),
+      file_system_.storage_type(), new_usage);
   EXPECT_EQ(base::File::FILE_ERROR_NO_SPACE,
             file_system_.TruncateFile(URL("dir/foo"), kFileSizeToExtend + 1));
 
@@ -168,7 +172,9 @@ TEST_F(SyncableFileSystemTest, SyncableLocalSandboxCombined) {
   EXPECT_EQ(0, usage);
 
   // Restore the system default quota.
-  QuotaManager::kSyncableStorageDefaultHostQuota = kOriginalQuota;
+  file_system_.quota_manager()->SetQuota(
+      blink::StorageKey(url::Origin::Create(file_system_.origin())),
+      file_system_.storage_type(), kOriginalQuota);
 }
 
 // Combined testing with LocalFileChangeTracker.

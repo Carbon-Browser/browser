@@ -16,7 +16,6 @@
 #include "ash/public/cpp/pagination/pagination_model.h"
 #include "ash/public/cpp/pagination/pagination_model_observer.h"
 #include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "base/observer_list_types.h"
 #include "ui/views/view.h"
 #include "ui/views/view_model.h"
@@ -32,7 +31,6 @@ class ScopedLayerAnimationSettings;
 
 namespace ash {
 
-class AppListConfig;
 class AppListPage;
 class AppListView;
 class ApplicationDragAndDropHost;
@@ -58,22 +56,34 @@ class ASH_EXPORT ContentsView : public views::View,
         : contents_view_(contents_view) {
       contents_view_->set_active_state_without_animation_ = true;
     }
+
+    ScopedSetActiveStateAnimationDisabler(
+        const ScopedSetActiveStateAnimationDisabler&) = delete;
+    ScopedSetActiveStateAnimationDisabler& operator=(
+        const ScopedSetActiveStateAnimationDisabler&) = delete;
+
     ~ScopedSetActiveStateAnimationDisabler() {
       contents_view_->set_active_state_without_animation_ = false;
     }
 
    private:
     ContentsView* const contents_view_;
-
-    DISALLOW_COPY_AND_ASSIGN(ScopedSetActiveStateAnimationDisabler);
   };
 
   explicit ContentsView(AppListView* app_list_view);
+
+  ContentsView(const ContentsView&) = delete;
+  ContentsView& operator=(const ContentsView&) = delete;
+
   ~ContentsView() override;
+
+  // Returns the search box top margin when app list view is in peeking/half
+  // state, and showing the provided `page`.
+  static int GetPeekingSearchBoxTopMarginOnPage(AppListState page);
 
   // Initialize the pages of the launcher. Should be called after
   // set_contents_switcher_view().
-  void Init(AppListModel* model);
+  void Init();
 
   // Resets the state of the view so it is ready to be shown.
   void ResetForShow();
@@ -197,9 +207,6 @@ class ASH_EXPORT ContentsView : public views::View,
   gfx::Size AdjustSearchBoxSizeToFitMargins(
       const gfx::Size& preferred_size) const;
 
-  // Gets the current app list configuration.
-  const AppListConfig& GetAppListConfig() const;
-
  private:
   // Sets the active launcher page.
   void SetActiveStateInternal(int page_index, bool animate);
@@ -259,9 +266,6 @@ class ASH_EXPORT ContentsView : public views::View,
   int GetSearchBoxTopForViewState(AppListState state,
                                   AppListViewState view_state) const;
 
-  // Unowned pointer to application list model.
-  AppListModel* model_ = nullptr;
-
   // Sub-views of the ContentsView. All owned by the views hierarchy.
   AssistantPageView* assistant_page_view_ = nullptr;
   AppsContainerView* apps_container_view_ = nullptr;
@@ -300,8 +304,6 @@ class ASH_EXPORT ContentsView : public views::View,
   // to a new app list view state.
   absl::optional<AppListState> target_page_for_last_view_state_update_;
   absl::optional<AppListViewState> last_target_view_state_;
-
-  DISALLOW_COPY_AND_ASSIGN(ContentsView);
 };
 
 }  // namespace ash

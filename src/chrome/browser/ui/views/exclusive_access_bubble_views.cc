@@ -8,9 +8,8 @@
 
 #include "base/i18n/case_conversion.h"
 #include "base/location.h"
-#include "base/macros.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -34,7 +33,7 @@
 #include "ui/views/widget/widget.h"
 #include "url/gurl.h"
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include "ui/base/l10n/l10n_util_win.h"
 #endif
 
@@ -121,7 +120,7 @@ ExclusiveAccessBubbleViews::~ExclusiveAccessBubbleViews() {
   // the popup to synchronously hide, and then asynchronously close and delete
   // itself.
   popup_->Close();
-  base::ThreadTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE, popup_);
+  base::ThreadTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE, popup_.get());
   CHECK(!views::WidgetObserver::IsInObserverList());
 }
 
@@ -157,7 +156,7 @@ void ExclusiveAccessBubbleViews::UpdateContent(
 }
 
 void ExclusiveAccessBubbleViews::RepositionIfVisible() {
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   // Due to a quirk on the Mac, the popup will not be visible for a short period
   // of time after it is shown (it's asynchronous) so if we don't check the
   // value of the animation we'll have a stale version of the bounds when we
@@ -176,7 +175,7 @@ void ExclusiveAccessBubbleViews::HideImmediately() {
 
   RunHideCallbackIfNeeded(ExclusiveAccessBubbleHideReason::kInterrupted);
 
-  animation_->SetSlideDuration(base::TimeDelta::FromMilliseconds(150));
+  animation_->SetSlideDuration(base::Milliseconds(150));
   animation_->Hide();
 }
 
@@ -221,7 +220,7 @@ void ExclusiveAccessBubbleViews::UpdateViewContent(
   } else {
     accelerator = l10n_util::GetStringUTF16(IDS_APP_ESC_KEY);
   }
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   // Mac keyboards use lowercase for everything except function keys, which are
   // typically reserved for system use. Since |accelerator| is placed in a box
   // to make it look like a keyboard key it looks weird to not follow suit.
@@ -298,14 +297,14 @@ void ExclusiveAccessBubbleViews::Hide() {
   DCHECK(!IsHideTimeoutRunning());
   RunHideCallbackIfNeeded(ExclusiveAccessBubbleHideReason::kTimeout);
 
-  animation_->SetSlideDuration(base::TimeDelta::FromMilliseconds(700));
+  animation_->SetSlideDuration(base::Milliseconds(700));
   animation_->Hide();
 }
 
 void ExclusiveAccessBubbleViews::Show() {
   if (animation_->IsShowing())
     return;
-  animation_->SetSlideDuration(base::TimeDelta::FromMilliseconds(350));
+  animation_->SetSlideDuration(base::Milliseconds(350));
   animation_->Show();
 }
 

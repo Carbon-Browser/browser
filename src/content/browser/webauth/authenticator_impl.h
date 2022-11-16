@@ -9,30 +9,11 @@
 
 #include <memory>
 
-#include "base/macros.h"
 #include "content/common/content_export.h"
-#include "content/public/browser/document_service_base.h"
+#include "content/public/browser/document_service.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "third_party/blink/public/mojom/webauthn/authenticator.mojom.h"
-
-namespace base {
-class OneShotTimer;
-}
-
-namespace device {
-
-struct PlatformAuthenticatorInfo;
-struct CtapGetAssertionRequest;
-class FidoRequestHandlerBase;
-
-enum class FidoReturnCode : uint8_t;
-
-}  // namespace device
-
-namespace url {
-class Origin;
-}
 
 namespace content {
 
@@ -41,17 +22,25 @@ class RenderFrameHost;
 
 // Implementation of the public Authenticator interface.
 class CONTENT_EXPORT AuthenticatorImpl
-    : public DocumentServiceBase<blink::mojom::Authenticator> {
+    : public DocumentService<blink::mojom::Authenticator> {
  public:
   static void Create(
       RenderFrameHost* render_frame_host,
       mojo::PendingReceiver<blink::mojom::Authenticator> receiver);
 
+  static void CreateForTesting(
+      RenderFrameHost& render_frame_host,
+      mojo::PendingReceiver<blink::mojom::Authenticator> receiver,
+      std::unique_ptr<AuthenticatorCommon> authenticator_common);
+
+  AuthenticatorImpl(const AuthenticatorImpl&) = delete;
+  AuthenticatorImpl& operator=(const AuthenticatorImpl&) = delete;
+
  private:
   friend class AuthenticatorImplTest;
   friend class AuthenticatorImplRequestDelegateTest;
 
-  AuthenticatorImpl(RenderFrameHost* render_frame_host,
+  AuthenticatorImpl(RenderFrameHost& render_frame_host,
                     mojo::PendingReceiver<blink::mojom::Authenticator> receiver,
                     std::unique_ptr<AuthenticatorCommon> authenticator_common);
   ~AuthenticatorImpl() override;
@@ -76,8 +65,6 @@ class CONTENT_EXPORT AuthenticatorImpl
   mojo::Receiver<blink::mojom::Authenticator> receiver_{this};
 
   base::WeakPtrFactory<AuthenticatorImpl> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(AuthenticatorImpl);
 };
 
 }  // namespace content

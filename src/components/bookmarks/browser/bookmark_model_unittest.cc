@@ -17,6 +17,7 @@
 #include "base/containers/contains.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/guid.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
@@ -44,7 +45,6 @@
 
 using base::ASCIIToUTF16;
 using base::Time;
-using base::TimeDelta;
 
 namespace bookmarks {
 namespace {
@@ -140,9 +140,9 @@ class ScopedBookmarkUndoDelegate : public BookmarkUndoDelegate {
   }
 
  private:
-  BookmarkModel* model_ = nullptr;
-  BookmarkUndoProvider* undo_provider_ = nullptr;
-  const BookmarkNode* parent_ = nullptr;
+  raw_ptr<BookmarkModel> model_ = nullptr;
+  raw_ptr<BookmarkUndoProvider> undo_provider_ = nullptr;
+  raw_ptr<const BookmarkNode> parent_ = nullptr;
   size_t index_ = 0;
   std::unique_ptr<BookmarkNode> last_removed_node_;
 };
@@ -292,8 +292,8 @@ class BookmarkModelTest : public testing::Test,
     }
 
    private:
-    const BookmarkNode* node1_;
-    const BookmarkNode* node2_;
+    raw_ptr<const BookmarkNode> node1_;
+    raw_ptr<const BookmarkNode> node2_;
     size_t index1_;
     size_t index2_;
   };
@@ -319,6 +319,9 @@ class BookmarkModelTest : public testing::Test,
     model_->AddObserver(this);
     ClearCounts();
   }
+
+  BookmarkModelTest(const BookmarkModelTest&) = delete;
+  BookmarkModelTest& operator=(const BookmarkModelTest&) = delete;
 
   void BookmarkModelLoaded(BookmarkModel* model, bool ids_reassigned) override {
     // We never load from the db, so that this should never get invoked.
@@ -504,8 +507,6 @@ class BookmarkModelTest : public testing::Test,
   int before_remove_all_count_;
   int grouped_changes_beginning_count_;
   int grouped_changes_ended_count_;
-
-  DISALLOW_COPY_AND_ASSIGN(BookmarkModelTest);
 };
 
 TEST_F(BookmarkModelTest, InitialState) {
@@ -572,7 +573,7 @@ TEST_F(BookmarkModelTest, AddURLWithUnicodeTitle) {
 }
 
 TEST_F(BookmarkModelTest, AddURLWithWhitespaceTitle) {
-  for (size_t i = 0; i < base::size(url_whitespace_test_cases); ++i) {
+  for (size_t i = 0; i < std::size(url_whitespace_test_cases); ++i) {
     const BookmarkNode* root = model_->bookmark_bar_node();
     const std::u16string title(
         ASCIIToUTF16(url_whitespace_test_cases[i].input_title));
@@ -591,7 +592,7 @@ TEST_F(BookmarkModelTest, AddURLWithCreationTimeAndMetaInfo) {
   const BookmarkNode* root = model_->bookmark_bar_node();
   const std::u16string title(u"foo");
   const GURL url("http://foo.com");
-  const Time time = Time::Now() - TimeDelta::FromDays(1);
+  const Time time = Time::Now() - base::Days(1);
   BookmarkNode::MetaInfoMap meta_info;
   meta_info["foo"] = "bar";
 
@@ -619,7 +620,7 @@ TEST_F(BookmarkModelTest, AddURLWithGUID) {
   const BookmarkNode* root = model_->bookmark_bar_node();
   const std::u16string title(u"foo");
   const GURL url("http://foo.com");
-  const Time time = Time::Now() - TimeDelta::FromDays(1);
+  const Time time = Time::Now() - base::Days(1);
   BookmarkNode::MetaInfoMap meta_info;
   const base::GUID guid = base::GUID::GenerateRandomV4();
 
@@ -677,8 +678,7 @@ TEST_F(BookmarkModelTest, AddFolderWithCreationTime) {
   const BookmarkNode* root = model_->bookmark_bar_node();
   const std::u16string title(u"foo");
   BookmarkNode::MetaInfoMap meta_info;
-  const base::Time creation_time(base::Time::Now() -
-                                 base::TimeDelta::FromDays(1));
+  const base::Time creation_time(base::Time::Now() - base::Days(1));
 
   const BookmarkNode* new_node =
       model_->AddFolder(root, /*index=*/0, title, &meta_info, creation_time);
@@ -700,7 +700,7 @@ TEST_F(BookmarkModelTest, AddFolderWithGUID) {
 }
 
 TEST_F(BookmarkModelTest, AddFolderWithWhitespaceTitle) {
-  for (size_t i = 0; i < base::size(title_whitespace_test_cases); ++i) {
+  for (size_t i = 0; i < std::size(title_whitespace_test_cases); ++i) {
     const BookmarkNode* root = model_->bookmark_bar_node();
     const std::u16string title(
         ASCIIToUTF16(title_whitespace_test_cases[i].input_title));
@@ -822,7 +822,7 @@ TEST_F(BookmarkModelTest, SetTitle) {
 }
 
 TEST_F(BookmarkModelTest, SetTitleWithWhitespace) {
-  for (size_t i = 0; i < base::size(title_whitespace_test_cases); ++i) {
+  for (size_t i = 0; i < std::size(title_whitespace_test_cases); ++i) {
     const BookmarkNode* root = model_->bookmark_bar_node();
     std::u16string title(u"dummy");
     const GURL url("http://foo.com");
@@ -889,7 +889,7 @@ TEST_F(BookmarkModelTest, SetDateAdded) {
 
   ClearCounts();
 
-  base::Time new_time = base::Time::Now() + base::TimeDelta::FromMinutes(20);
+  base::Time new_time = base::Time::Now() + base::Minutes(20);
   model_->SetDateAdded(node, new_time);
   AssertObserverCount(0, 0, 0, 0, 0, 0, 0, 0, 0);
   EXPECT_EQ(new_time, node->date_added());
@@ -936,7 +936,7 @@ TEST_F(BookmarkModelTest, NonMovingMoveCall) {
   const BookmarkNode* root = model_->bookmark_bar_node();
   const std::u16string title(u"foo");
   const GURL url("http://foo.com");
-  const base::Time old_date(base::Time::Now() - base::TimeDelta::FromDays(1));
+  const base::Time old_date(base::Time::Now() - base::Days(1));
 
   const BookmarkNode* node = model_->AddURL(root, 0, title, url);
   model_->SetDateFolderModified(root, old_date);
@@ -1098,14 +1098,14 @@ TEST_F(BookmarkModelTest, Copy) {
 
 // Tests the default node if no bookmarks have been added yet
 TEST_F(BookmarkModelTest, ParentForNewNodesWithEmptyModel) {
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   ASSERT_EQ(model_->mobile_node(), GetParentForNewNodes(model_.get()));
 #else
   ASSERT_EQ(model_->bookmark_bar_node(), GetParentForNewNodes(model_.get()));
 #endif
 }
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 // Tests that the bookmark_bar_node can still be returned even on Android in
 // case the last bookmark was added to it.
 TEST_F(BookmarkModelTest, ParentCanBeBookmarkBarOnAndroid) {
@@ -1170,10 +1170,10 @@ TEST_F(BookmarkModelTest, MostRecentlyAddedEntries) {
       model_->bookmark_bar_node(), 2, u"blah", GURL("http://foo.com/2")));
   BookmarkNode* n4 = AsMutable(model_->AddURL(
       model_->bookmark_bar_node(), 3, u"blah", GURL("http://foo.com/3")));
-  n1->set_date_added(base_time + TimeDelta::FromDays(4));
-  n2->set_date_added(base_time + TimeDelta::FromDays(3));
-  n3->set_date_added(base_time + TimeDelta::FromDays(2));
-  n4->set_date_added(base_time + TimeDelta::FromDays(1));
+  n1->set_date_added(base_time + base::Days(4));
+  n2->set_date_added(base_time + base::Days(3));
+  n3->set_date_added(base_time + base::Days(2));
+  n4->set_date_added(base_time + base::Days(1));
 
   // Make sure order is honored.
   std::vector<const BookmarkNode*> recently_added;
@@ -1203,8 +1203,8 @@ TEST_F(BookmarkModelTest, GetMostRecentlyAddedUserNodeForURL) {
       AsMutable(model_->AddURL(model_->bookmark_bar_node(), 0, u"blah", url));
   BookmarkNode* n2 =
       AsMutable(model_->AddURL(model_->bookmark_bar_node(), 1, u"blah", url));
-  n1->set_date_added(base_time + TimeDelta::FromDays(4));
-  n2->set_date_added(base_time + TimeDelta::FromDays(3));
+  n1->set_date_added(base_time + base::Days(4));
+  n2->set_date_added(base_time + base::Days(3));
 
   // Make sure order is honored.
   ASSERT_EQ(n1, model_->GetMostRecentlyAddedUserNodeForURL(url));
@@ -1612,7 +1612,7 @@ TEST(BookmarkModelTest2, CreateAndRestore) {
     { "a b c [ d e [ f ] ]", "g h i [ j k [ l ] ]"},
   };
   std::unique_ptr<BookmarkModel> model;
-  for (size_t i = 0; i < base::size(data); ++i) {
+  for (size_t i = 0; i < std::size(data); ++i) {
     model = TestBookmarkClient::CreateModel();
 
     TestNode bbn;
@@ -1642,6 +1642,9 @@ class BookmarkModelFaviconTest : public testing::Test,
   BookmarkModelFaviconTest() : model_(TestBookmarkClient::CreateModel()) {
     model_->AddObserver(this);
   }
+
+  BookmarkModelFaviconTest(const BookmarkModelFaviconTest&) = delete;
+  BookmarkModelFaviconTest& operator=(const BookmarkModelFaviconTest&) = delete;
 
   // Emulates the favicon getting asynchronously loaded. In production, the
   // favicon is asynchronously loaded when BookmarkModel::GetFavicon() is
@@ -1704,9 +1707,6 @@ class BookmarkModelFaviconTest : public testing::Test,
 
   std::unique_ptr<BookmarkModel> model_;
   std::vector<const BookmarkNode*> updated_nodes_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(BookmarkModelFaviconTest);
 };
 
 // Test that BookmarkModel::OnFaviconsChanged() sends a notification that the

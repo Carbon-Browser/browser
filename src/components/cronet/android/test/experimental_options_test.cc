@@ -11,6 +11,7 @@
 #include "base/time/time.h"
 #include "components/cronet/android/cronet_tests_jni_headers/ExperimentalOptionsTest_jni.h"
 #include "components/cronet/android/test/cronet_test_util.h"
+#include "components/cronet/url_request_context_config.h"
 #include "net/base/address_family.h"
 #include "net/base/net_errors.h"
 #include "net/base/network_isolation_key.h"
@@ -48,10 +49,8 @@ void WriteToHostCacheOnNetworkThread(jlong jcontext_adapter,
       net::AddressList::CreateFromIPAddress(address, 0);
   net::HostCache::Entry entry(net::OK, address_list,
                               net::HostCache::Entry::SOURCE_UNKNOWN);
-  cache->Set(key1, entry, base::TimeTicks::Now(),
-             base::TimeDelta::FromSeconds(1));
-  cache->Set(key2, entry, base::TimeTicks::Now(),
-             base::TimeDelta::FromSeconds(1));
+  cache->Set(key1, entry, base::TimeTicks::Now(), base::Seconds(1));
+  cache->Set(key2, entry, base::TimeTicks::Now(), base::Seconds(1));
 }
 }  // namespace
 
@@ -63,6 +62,12 @@ static void JNI_ExperimentalOptionsTest_WriteToHostCache(
       jcontext_adapter,
       base::BindOnce(&WriteToHostCacheOnNetworkThread, jcontext_adapter,
                      base::android::ConvertJavaStringToUTF8(env, jaddress)));
+}
+
+static jboolean
+JNI_ExperimentalOptionsTest_ExperimentalOptionsParsingIsAllowedToFail(
+    JNIEnv* env) {
+  return URLRequestContextConfig::ExperimentalOptionsParsingIsAllowedToFail();
 }
 
 }  // namespace cronet

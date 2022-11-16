@@ -4,6 +4,7 @@
 
 #import "ios/chrome/browser/ui/tab_switcher/tab_grid/tab_grid_top_toolbar.h"
 
+#import "ios/chrome/browser/ui/icons/chrome_symbol.h"
 #import "ios/chrome/browser/ui/tab_switcher/tab_grid/features.h"
 #import "ios/chrome/browser/ui/tab_switcher/tab_grid/tab_grid_constants.h"
 #import "ios/chrome/browser/ui/tab_switcher/tab_grid/tab_grid_page_control.h"
@@ -19,8 +20,12 @@
 namespace {
 // The space after the new tab toolbar button item. Calculated to have
 // approximately 33 pts between the plus button and the done button.
-const int kNewTabButtonTrailingSpace = 20;
+const int kIconButtonAdditionalSpace = 20;
 const int kSelectionModeButtonSize = 17;
+const int kSearchBarTrailingSpace = 24;
+
+// The size of top toolbar search symbol image.
+const CGFloat kSymbolSearchImagePointSize = 22;
 }
 
 @interface TabGridTopToolbar () <UIToolbarDelegate>
@@ -30,14 +35,21 @@ const int kSelectionModeButtonSize = 17;
   UIBarButtonItem* _leadingButton;
   UIBarButtonItem* _spaceItem;
   UIBarButtonItem* _newTabButton;
-  UIBarButtonItem* _fixedTrailingSpaceItem;
+  UIBarButtonItem* _iconButtonAdditionalSpaceItem;
   UIBarButtonItem* _selectionModeFixedSpace;
   UIBarButtonItem* _selectAllButton;
   UIBarButtonItem* _selectedTabsItem;
+  UIBarButtonItem* _searchButton;
   UIBarButtonItem* _doneButton;
   UIBarButtonItem* _closeAllOrUndoButton;
   UIBarButtonItem* _editButton;
   UIBarButtonItem* _pageControlItem;
+  // Search mode
+  UISearchBar* _searchBar;
+  UIBarButtonItem* _searchBarItem;
+  UIBarButtonItem* _cancelSearchButton;
+  UIView* _searchBarView;
+
   BOOL _undoActive;
 }
 
@@ -46,6 +58,8 @@ const int kSelectionModeButtonSize = 17;
 }
 
 - (void)setPage:(TabGridPage)page {
+  if (_page == page)
+    return;
   _page = page;
   [self setItemsForTraitCollection:self.traitCollection];
 }
@@ -53,12 +67,24 @@ const int kSelectionModeButtonSize = 17;
 - (void)setMode:(TabGridMode)mode {
   if (_mode == mode)
     return;
+  // Reset search state when exiting search mode.
+  if (IsTabsSearchEnabled() && _mode == TabGridModeSearch) {
+    _searchBar.text = @"";
+    [_searchBar resignFirstResponder];
+  }
   _mode = mode;
   // Reset selected tabs count when mode changes.
   self.selectedTabsCount = 0;
   // Reset the Select All button to its default title.
   [self configureSelectAllButtonTitle];
   [self setItemsForTraitCollection:self.traitCollection];
+  if (mode == TabGridModeSearch) {
+    // Focus the search bar, and make it a first responder once the user enter
+    // to search mode. Doing that here instead in `setItemsForTraitCollection`
+    // makes sure it's only called once and allows the voicOver to transition
+    // smoothly and to say that there is a search field opened.
+    [_searchBar becomeFirstResponder];
+  }
 }
 
 - (void)setSelectedTabsCount:(int)count {
@@ -82,9 +108,23 @@ const int kSelectionModeButtonSize = 17;
   _selectAllButton.action = action;
 }
 
+- (void)setSearchButtonTarget:(id)target action:(SEL)action {
+  _searchButton.target = target;
+  _searchButton.action = action;
+}
+
+- (void)setSearchBarDelegate:(id<UISearchBarDelegate>)delegate {
+  _searchBar.delegate = delegate;
+}
+
 - (void)setDoneButtonTarget:(id)target action:(SEL)action {
   _doneButton.target = target;
   _doneButton.action = action;
+}
+
+- (void)setCancelSearchButtonTarget:(id)target action:(SEL)action {
+  _cancelSearchButton.target = target;
+  _cancelSearchButton.action = action;
 }
 
 - (void)setNewTabButtonEnabled:(BOOL)enabled {
@@ -113,7 +153,7 @@ const int kSelectionModeButtonSize = 17;
   if (useUndo) {
     _closeAllOrUndoButton.title =
         l10n_util::GetNSString(IDS_IOS_TAB_GRID_UNDO_CLOSE_ALL_BUTTON);
-    // Setting the |accessibilityIdentifier| seems to trigger layout, which
+    // Setting the `accessibilityIdentifier` seems to trigger layout, which
     // causes an infinite loop.
     if (_closeAllOrUndoButton.accessibilityIdentifier !=
         kTabGridUndoCloseAllButtonIdentifier) {
@@ -123,7 +163,7 @@ const int kSelectionModeButtonSize = 17;
   } else {
     _closeAllOrUndoButton.title =
         l10n_util::GetNSString(IDS_IOS_TAB_GRID_CLOSE_ALL_BUTTON);
-    // Setting the |accessibilityIdentifier| seems to trigger layout, which
+    // Setting the `accessibilityIdentifier` seems to trigger layout, which
     // causes an infinite loop.
     if (_closeAllOrUndoButton.accessibilityIdentifier !=
         kTabGridCloseAllButtonIdentifier) {
@@ -195,12 +235,47 @@ const int kSelectionModeButtonSize = 17;
 
 #pragma mark - Private
 
+- (void)configureSearchModeForTraitCollection:
+    (UITraitCollection*)traitCollection {
+  DCHECK_EQ(_mode, TabGridModeSearch);
+  CGFloat widthModifier = 1;
+
+  // In the landscape mode the search bar size should only span half of the
+  // width of the toolbar.
+  if (![self shouldUseCompactLayout:traitCollection])
+    widthModifier = kTabGridSearchBarNonCompactWidthRatioModifier;
+
+  CGFloat cancelWidth = [_cancelSearchButton.title sizeWithAttributes:@{
+                          NSFontAttributeName : [UIFont
+                              preferredFontForTextStyle:UIFontTextStyleBody]
+                        }]
+                            .width;
+  CGFloat barWidth =
+      (self.bounds.size.width - kSearchBarTrailingSpace - cancelWidth) *
+      kTabGridSearchBarWidthRatio * widthModifier;
+  // Update the search bar size based on the container size.
+  _searchBar.frame = CGRectMake(0, 0, barWidth, kTabGridSearchBarHeight);
+  _searchBarView.frame = CGRectMake(0, 0, barWidth, kTabGridSearchBarHeight);
+  [self setNeedsLayout];
+  [self setItems:@[ _searchBarItem, _spaceItem, _cancelSearchButton ]
+        animated:YES];
+}
+
 - (void)setItemsForTraitCollection:(UITraitCollection*)traitCollection {
+  if (_mode == TabGridModeSearch) {
+    [self configureSearchModeForTraitCollection:traitCollection];
+    return;
+  }
   UIBarButtonItem* centralItem = _pageControlItem;
   UIBarButtonItem* trailingButton = _doneButton;
   _selectionModeFixedSpace.width = 0;
-  if (traitCollection.verticalSizeClass == UIUserInterfaceSizeClassRegular &&
-      traitCollection.horizontalSizeClass == UIUserInterfaceSizeClassCompact) {
+  if ([self shouldUseCompactLayout:traitCollection]) {
+    if (IsTabsSearchEnabled() && _mode == TabGridModeNormal) {
+      _leadingButton = _searchButton;
+    } else {
+      _leadingButton = _spaceItem;
+    }
+
     if (_mode == TabGridModeSelection) {
       // In the selection mode, Done button is much smaller than SelectAll
       // we need to calculate the difference on the width and use it as a
@@ -211,28 +286,21 @@ const int kSelectionModeButtonSize = 17;
         _selectionModeFixedSpace, trailingButton
       ]];
     } else {
-      [self setItems:@[ _spaceItem, centralItem, _spaceItem ]];
+      trailingButton = _spaceItem;
+      [self setItems:@[
+        _leadingButton, _spaceItem, centralItem, _spaceItem, trailingButton
+      ]];
     }
     return;
   }
   // In Landscape normal mode leading button is always "closeAll", or "Edit" if
   // bulk actions feature is enabled.
-  if (IsTabsBulkActionsEnabled() && !_undoActive)
+  if (!_undoActive)
     _leadingButton = _editButton;
   else
     _leadingButton = _closeAllOrUndoButton;
 
-  if (ShowThumbStripInTraitCollection(traitCollection)) {
-    // The new tab button is only used if the thumb strip is enabled. In other
-    // cases, there is a floating new tab button on the bottom.
-    [self setItems:@[
-      _leadingButton, _spaceItem, centralItem, _spaceItem, _newTabButton,
-      _fixedTrailingSpaceItem, trailingButton
-    ]];
-    return;
-  }
-
-  if (IsTabsBulkActionsEnabled() && _mode == TabGridModeSelection) {
+  if (_mode == TabGridModeSelection) {
     // In the selection mode, Done button is much smaller than SelectAll
     // we need to calculate the difference on the width and use it as a
     // fixed space to make sure that the title is still centered.
@@ -241,10 +309,35 @@ const int kSelectionModeButtonSize = 17;
     _leadingButton = _selectAllButton;
   }
 
-  [self setItems:@[
-    _leadingButton, _spaceItem, centralItem, _spaceItem,
-    _selectionModeFixedSpace, trailingButton
-  ]];
+  // Build item list based on priority: tab search takes precedence over thumb
+  // strip.
+
+  BOOL animated = NO;
+  NSMutableArray* items = [[NSMutableArray alloc] init];
+
+  [items addObject:_leadingButton];
+
+  if (IsTabsSearchEnabled() && _mode == TabGridModeNormal) {
+    animated = YES;
+    [items
+        addObjectsFromArray:@[ _iconButtonAdditionalSpaceItem, _searchButton ]];
+  }
+
+  [items addObjectsFromArray:@[ _spaceItem, centralItem, _spaceItem ]];
+
+  if (ShowThumbStripInTraitCollection(traitCollection) &&
+      _mode == TabGridModeNormal) {
+    // The new tab button is only used if the thumb strip is enabled. In other
+    // cases, there is a floating new tab button on the bottom.
+    [items
+        addObjectsFromArray:@[ _newTabButton, _iconButtonAdditionalSpaceItem ]];
+  } else if (!IsTabsSearchEnabled() || _mode != TabGridModeNormal) {
+    [items addObject:_selectionModeFixedSpace];
+  }
+
+  [items addObject:trailingButton];
+
+  [self setItems:items animated:animated];
 }
 
 // Calculates the space width to use for selection mode.
@@ -286,36 +379,74 @@ const int kSelectionModeButtonSize = 17;
   _doneButton.accessibilityIdentifier = kTabGridDoneButtonIdentifier;
   _doneButton.title = l10n_util::GetNSString(IDS_IOS_TAB_GRID_DONE_BUTTON);
 
-  if (IsTabsBulkActionsEnabled()) {
-    _editButton = [[UIBarButtonItem alloc] init];
-    _editButton.tintColor = UIColorFromRGB(kTabGridToolbarTextButtonColor);
-    _editButton.title = l10n_util::GetNSString(IDS_IOS_TAB_GRID_EDIT_BUTTON);
-    _editButton.accessibilityIdentifier = kTabGridEditButtonIdentifier;
+  _editButton = [[UIBarButtonItem alloc] init];
+  _editButton.tintColor = UIColorFromRGB(kTabGridToolbarTextButtonColor);
+  _editButton.title = l10n_util::GetNSString(IDS_IOS_TAB_GRID_EDIT_BUTTON);
+  _editButton.accessibilityIdentifier = kTabGridEditButtonIdentifier;
 
-    _selectAllButton = [[UIBarButtonItem alloc] init];
-    _selectAllButton.tintColor = UIColorFromRGB(kTabGridToolbarTextButtonColor);
-    _selectAllButton.title =
-        l10n_util::GetNSString(IDS_IOS_TAB_GRID_SELECT_ALL_BUTTON);
-    _selectAllButton.accessibilityIdentifier =
-        kTabGridEditSelectAllButtonIdentifier;
+  _selectAllButton = [[UIBarButtonItem alloc] init];
+  _selectAllButton.tintColor = UIColorFromRGB(kTabGridToolbarTextButtonColor);
+  _selectAllButton.title =
+      l10n_util::GetNSString(IDS_IOS_TAB_GRID_SELECT_ALL_BUTTON);
+  _selectAllButton.accessibilityIdentifier =
+      kTabGridEditSelectAllButtonIdentifier;
 
-    _selectedTabsItem = [[UIBarButtonItem alloc] init];
-    _selectedTabsItem.title =
-        l10n_util::GetNSString(IDS_IOS_TAB_GRID_SELECT_TABS_TITLE);
-    _selectedTabsItem.tintColor =
-        UIColorFromRGB(kTabGridToolbarTextButtonColor);
-    _selectedTabsItem.action = nil;
-    _selectedTabsItem.target = nil;
-    _selectedTabsItem.enabled = NO;
-    [_selectedTabsItem setTitleTextAttributes:@{
-      NSForegroundColorAttributeName :
-          UIColorFromRGB(kTabGridToolbarTextButtonColor),
-      NSFontAttributeName : [[UIFontMetrics
-          metricsForTextStyle:UIFontTextStyleBody]
-          scaledFontForFont:[UIFont systemFontOfSize:kSelectionModeButtonSize
-                                              weight:UIFontWeightSemibold]]
+  _selectedTabsItem = [[UIBarButtonItem alloc] init];
+  _selectedTabsItem.title =
+      l10n_util::GetNSString(IDS_IOS_TAB_GRID_SELECT_TABS_TITLE);
+  _selectedTabsItem.tintColor = UIColorFromRGB(kTabGridToolbarTextButtonColor);
+  _selectedTabsItem.action = nil;
+  _selectedTabsItem.target = nil;
+  _selectedTabsItem.enabled = NO;
+  [_selectedTabsItem setTitleTextAttributes:@{
+    NSForegroundColorAttributeName :
+        UIColorFromRGB(kTabGridToolbarTextButtonColor),
+    NSFontAttributeName :
+        [[UIFontMetrics metricsForTextStyle:UIFontTextStyleBody]
+            scaledFontForFont:[UIFont systemFontOfSize:kSelectionModeButtonSize
+                                                weight:UIFontWeightSemibold]]
+  }
+                                   forState:UIControlStateDisabled];
+
+  if (IsTabsSearchEnabled()) {
+    if (UseSymbols()) {
+      UIImage* searchImage = DefaultSymbolWithPointSize(
+          kSearchSymbol, kSymbolSearchImagePointSize);
+      _searchButton =
+          [[UIBarButtonItem alloc] initWithImage:searchImage
+                                           style:UIBarButtonItemStylePlain
+                                          target:nil
+                                          action:nil];
+    } else {
+      _searchButton = [[UIBarButtonItem alloc]
+          initWithBarButtonSystemItem:UIBarButtonSystemItemSearch
+                               target:nil
+                               action:nil];
     }
-                                     forState:UIControlStateDisabled];
+
+    _searchButton.tintColor = UIColorFromRGB(kTabGridToolbarTextButtonColor);
+    _searchButton.accessibilityIdentifier = kTabGridSearchButtonIdentifier;
+
+    _searchBar = [[UISearchBar alloc] init];
+    _searchBar.placeholder =
+        l10n_util::GetNSString(IDS_IOS_TAB_GRID_SEARCHBAR_PLACEHOLDER);
+    _searchBar.accessibilityIdentifier = kTabGridSearchBarIdentifier;
+    // Cancel Button for the searchbar doesn't appear in ipadOS. Disable it and
+    // create a custom cancel button.
+    _searchBar.showsCancelButton = NO;
+    _cancelSearchButton = [[UIBarButtonItem alloc] init];
+    _cancelSearchButton.style = UIBarButtonItemStylePlain;
+    _cancelSearchButton.tintColor =
+        UIColorFromRGB(kTabGridToolbarTextButtonColor);
+    _cancelSearchButton.accessibilityIdentifier =
+        kTabGridCancelButtonIdentifier;
+    _cancelSearchButton.title =
+        l10n_util::GetNSString(IDS_IOS_TAB_GRID_CANCEL_BUTTON);
+    _searchBarView = [[UIView alloc] initWithFrame:_searchBar.frame];
+    [_searchBarView addSubview:_searchBar];
+    [_searchBarView sizeToFit];
+    _searchBarItem =
+        [[UIBarButtonItem alloc] initWithCustomView:_searchBarView];
   }
 
   _newTabButton = [[UIBarButtonItem alloc]
@@ -324,11 +455,11 @@ const int kSelectionModeButtonSize = 17;
                            action:nil];
   _newTabButton.tintColor = UIColorFromRGB(kTabGridToolbarTextButtonColor);
 
-  _fixedTrailingSpaceItem = [[UIBarButtonItem alloc]
+  _iconButtonAdditionalSpaceItem = [[UIBarButtonItem alloc]
       initWithBarButtonSystemItem:UIBarButtonSystemItemFixedSpace
                            target:nil
                            action:nil];
-  _fixedTrailingSpaceItem.width = kNewTabButtonTrailingSpace;
+  _iconButtonAdditionalSpaceItem.width = kIconButtonAdditionalSpace;
 
   _spaceItem = [[UIBarButtonItem alloc]
       initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
@@ -341,6 +472,12 @@ const int kSelectionModeButtonSize = 17;
                            action:nil];
 
   [self setItemsForTraitCollection:self.traitCollection];
+}
+
+// Returns YES if should use compact bottom toolbar layout.
+- (BOOL)shouldUseCompactLayout:(UITraitCollection*)traitCollection {
+  return traitCollection.verticalSizeClass == UIUserInterfaceSizeClassRegular &&
+         traitCollection.horizontalSizeClass == UIUserInterfaceSizeClassCompact;
 }
 
 @end

@@ -2,8 +2,9 @@ Name: firebase-measurement-connector
 Short Name: firebase-measurement-connector
 URL: https://firebase.google.com
 Version: 18.0.0
-License: 
+License: Android Software Development Kit License
 License File: LICENSE
+CPEPrefix: unknown
 Security Critical: yes
 
 Description:

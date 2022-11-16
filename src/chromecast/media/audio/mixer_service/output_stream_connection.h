@@ -8,13 +8,13 @@
 #include <cstdint>
 #include <memory>
 
-#include "base/macros.h"
 #include "base/memory/scoped_refptr.h"
 #include "chromecast/media/audio/mixer_service/mixer_connection.h"
 #include "chromecast/media/audio/mixer_service/mixer_socket.h"
 #include "net/base/io_buffer.h"
 
 namespace chromecast {
+class CastEventBuilder;
 class IOBufferPool;
 
 namespace media {
@@ -64,11 +64,19 @@ class OutputStreamConnection : public MixerConnection,
     // Called when an underrun happens on mixer input/output.
     virtual void OnMixerUnderrun(MixerUnderrunType type) {}
 
+    // Called when OutputStreamConnection records a cast event. It allows
+    // the Delegate to provide some extra data to the event.
+    virtual void ProcessCastEvent(CastEventBuilder* event) {}
+
    protected:
     virtual ~Delegate() = default;
   };
 
   OutputStreamConnection(Delegate* delegate, const OutputStreamParams& params);
+
+  OutputStreamConnection(const OutputStreamConnection&) = delete;
+  OutputStreamConnection& operator=(const OutputStreamConnection&) = delete;
+
   ~OutputStreamConnection() override;
 
   // Connects to the mixer. After this is called, delegate methods may start
@@ -145,8 +153,6 @@ class OutputStreamConnection : public MixerConnection,
   bool sent_eos_ = false;
 
   bool dropping_audio_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(OutputStreamConnection);
 };
 
 }  // namespace mixer_service

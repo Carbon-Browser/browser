@@ -14,11 +14,13 @@
 #include "chromecast/base/cast_features.h"
 #include "chromecast/base/chromecast_switches.h"
 #include "chromecast/base/metrics/cast_metrics_helper.h"
+#include "chromecast/browser/accessibility/accessibility_service_impl.h"
 #include "chromecast/browser/cast_browser_process.h"
 #include "chromecast/browser/cast_web_service.h"
 #include "chromecast/browser/lru_renderer_cache.h"
 #include "chromecast/browser/renderer_prelauncher.h"
 #include "chromecast/chromecast_buildflags.h"
+#include "chromecast/graphics/cast_screen.h"
 #include "content/public/browser/media_capture_devices.h"
 #include "content/public/browser/media_session.h"
 #include "content/public/browser/render_frame_host.h"
@@ -29,6 +31,7 @@
 #include "ipc/ipc_message.h"
 #include "net/base/net_errors.h"
 #include "third_party/blink/public/mojom/mediastream/media_stream.mojom-shared.h"
+#include "third_party/blink/public/mojom/mediastream/media_stream.mojom.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
 #include "url/gurl.h"
@@ -43,10 +46,12 @@ namespace {
 
 std::unique_ptr<content::WebContents> CreateWebContents(
     content::BrowserContext* browser_context,
-    scoped_refptr<content::SiteInstance> site_instance) {
+    scoped_refptr<content::SiteInstance> site_instance,
+    const mojom::CastWebViewParams& params) {
   DCHECK(browser_context);
   content::WebContents::CreateParams create_params(browser_context, nullptr);
   create_params.site_instance = site_instance;
+
   return content::WebContents::Create(create_params);
 }
 
@@ -74,33 +79,52 @@ scoped_refptr<content::SiteInstance> Prelaunch(
   return prelauncher->site_instance();
 }
 
+#if defined(USE_AURA)
+constexpr gfx::Rect k720pDimensions(0, 0, 1280, 720);
+#endif
+
 }  // namespace
 
 CastWebViewDefault::CastWebViewDefault(
-    const CreateParams& create_params,
     mojom::CastWebViewParamsPtr params,
     CastWebService* web_service,
     content::BrowserContext* browser_context,
     std::unique_ptr<CastContentWindow> cast_content_window)
-    : delegate_(create_params.delegate),
-      params_(std::move(params)),
+    : params_(std::move(params)),
       web_service_(web_service),
       renderer_prelauncher_(TakeOrCreatePrelauncher(params_->prelaunch_url,
                                                     params_->renderer_pool,
                                                     web_service_)),
       site_instance_(Prelaunch(renderer_prelauncher_.get())),
-      web_contents_(CreateWebContents(browser_context, site_instance_)),
+      web_contents_(
+          CreateWebContents(browser_context, site_instance_, *params_)),
       cast_web_contents_(web_contents_.get(), params_->Clone()),
       window_(cast_content_window
                   ? std::move(cast_content_window)
-                  : web_service->CreateWindow(create_params.window_delegate,
-                                              params_->Clone())) {
+                  : web_service->CreateWindow(params_->Clone())) {
   DCHECK(web_service_);
   DCHECK(window_);
+  cast_web_contents_.local_interfaces()
+      ->AddInterface<chromecast::shell::mojom::CastAccessibilityService>(
+          shell::CastBrowserProcess::GetInstance()->accessibility_service());
   window_->SetCastWebContents(&cast_web_contents_);
   web_contents_->SetDelegate(this);
 #if defined(USE_AURA)
   web_contents_->GetNativeView()->SetName(params_->activity_id);
+  if (params_->force_720p_resolution) {
+    const auto primary_display =
+        display::Screen::GetScreen()->GetPrimaryDisplay();
+
+    // Force scale factor to 1.0 and screen bounds to 720p.
+    // When performed prior to the creation of the web view this causes blink to
+    // render at a 1.0 pixel ratio but the compositor still scales out at 1.5,
+    // increasing performance on 1080p displays (at the expense of visual
+    // quality).
+    shell::CastBrowserProcess::GetInstance()
+        ->cast_screen()
+        ->OverridePrimaryDisplaySettings(k720pDimensions, 1.0,
+                                         primary_display.rotation());
+  }
 #endif
 }
 
@@ -126,6 +150,16 @@ CastWebContents* CastWebViewDefault::cast_web_contents() {
 
 base::TimeDelta CastWebViewDefault::shutdown_delay() const {
   return params_->shutdown_delay;
+}
+
+void CastWebViewDefault::OwnerDestroyed() {
+#if defined(USE_AURA)
+  if (params_->force_720p_resolution) {
+    shell::CastBrowserProcess::GetInstance()
+        ->cast_screen()
+        ->RestorePrimaryDisplaySettings();
+  }
+#endif
 }
 
 void CastWebViewDefault::CloseContents(content::WebContents* source) {
@@ -211,7 +245,7 @@ void CastWebViewDefault::RequestMediaAccessPermission(
       !params_->allow_media_access) {
     LOG(WARNING) << __func__ << ": media access is disabled.";
     std::move(callback).Run(
-        blink::MediaStreamDevices(),
+        blink::mojom::StreamDevicesSet(),
         blink::mojom::MediaStreamRequestResult::NOT_SUPPORTED,
         std::unique_ptr<content::MediaStreamUI>());
     return;
@@ -224,7 +258,10 @@ void CastWebViewDefault::RequestMediaAccessPermission(
   DVLOG(2) << __func__ << " audio_devices=" << audio_devices.size()
            << " video_devices=" << video_devices.size();
 
-  blink::MediaStreamDevices devices;
+  blink::mojom::StreamDevicesSet stream_devices_set;
+  stream_devices_set.stream_devices.emplace_back(
+      blink::mojom::StreamDevices::New());
+  blink::mojom::StreamDevices& devices = *stream_devices_set.stream_devices[0];
   if (request.audio_type ==
       blink::mojom::MediaStreamType::DEVICE_AUDIO_CAPTURE) {
     const blink::MediaStreamDevice* device = GetRequestedDeviceOrDefault(
@@ -232,7 +269,7 @@ void CastWebViewDefault::RequestMediaAccessPermission(
     if (device) {
       DVLOG(1) << __func__ << "Using audio device: id=" << device->id
                << " name=" << device->name;
-      devices.push_back(*device);
+      devices.audio_device = *device;
     }
   }
 
@@ -243,11 +280,12 @@ void CastWebViewDefault::RequestMediaAccessPermission(
     if (device) {
       DVLOG(1) << __func__ << "Using video device: id=" << device->id
                << " name=" << device->name;
-      devices.push_back(*device);
+      devices.video_device = *device;
     }
   }
 
-  std::move(callback).Run(devices, blink::mojom::MediaStreamRequestResult::OK,
+  std::move(callback).Run(stream_devices_set,
+                          blink::mojom::MediaStreamRequestResult::OK,
                           std::unique_ptr<content::MediaStreamUI>());
 }
 

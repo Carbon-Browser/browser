@@ -8,20 +8,22 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <algorithm>
 #include <limits>
 #include <ostream>
 #include <string>
 
+#include "base/numerics/safe_conversions.h"
 #include "build/build_config.h"
 #include "ui/gfx/range/gfx_range_export.h"
 
-#if defined(OS_APPLE)
+#if BUILDFLAG(IS_APPLE)
 #if __OBJC__
 #import <Foundation/Foundation.h>
 #else
 typedef struct _NSRange NSRange;
 #endif
-#endif  // defined(OS_APPLE)
+#endif  // BUILDFLAG(IS_APPLE)
 
 namespace gfx {
 
@@ -36,13 +38,15 @@ class GFX_RANGE_EXPORT Range {
   constexpr Range() : Range(0) {}
 
   // Initializes the range with a start and end.
-  constexpr Range(uint32_t start, uint32_t end) : start_(start), end_(end) {}
+  constexpr Range(size_t start, size_t end)
+      : start_(base::checked_cast<uint32_t>(start)),
+        end_(base::checked_cast<uint32_t>(end)) {}
 
   // Initializes the range with the same start and end positions.
-  constexpr explicit Range(uint32_t position) : Range(position, position) {}
+  constexpr explicit Range(size_t position) : Range(position, position) {}
 
   // Platform constructors.
-#if defined(OS_APPLE)
+#if BUILDFLAG(IS_APPLE)
   explicit Range(const NSRange& range);
 #endif
 
@@ -51,27 +55,28 @@ class GFX_RANGE_EXPORT Range {
     return Range(std::numeric_limits<uint32_t>::max());
   }
 
-  // Checks if the range is valid through comparison to InvalidRange().
+  // Checks if the range is valid through comparison to InvalidRange().  If this
+  // is not valid, you must not call start()/end().
   constexpr bool IsValid() const { return *this != InvalidRange(); }
 
   // Getters and setters.
-  constexpr uint32_t start() const { return start_; }
-  void set_start(uint32_t start) { start_ = start; }
+  constexpr size_t start() const { return start_; }
+  void set_start(size_t start) { start_ = base::checked_cast<uint32_t>(start); }
 
-  constexpr uint32_t end() const { return end_; }
-  void set_end(uint32_t end) { end_ = end; }
+  constexpr size_t end() const { return end_; }
+  void set_end(size_t end) { end_ = base::checked_cast<uint32_t>(end); }
 
   // Returns the absolute value of the length.
-  constexpr uint32_t length() const { return GetMax() - GetMin(); }
+  constexpr size_t length() const { return GetMax() - GetMin(); }
 
   constexpr bool is_reversed() const { return start() > end(); }
   constexpr bool is_empty() const { return start() == end(); }
 
   // Returns the minimum and maximum values.
-  constexpr uint32_t GetMin() const {
+  constexpr size_t GetMin() const {
     return start() < end() ? start() : end();
   }
-  constexpr uint32_t GetMax() const {
+  constexpr size_t GetMax() const {
     return start() > end() ? start() : end();
   }
 
@@ -108,14 +113,14 @@ class GFX_RANGE_EXPORT Range {
   // If they don't intersect, it returns an InvalidRange().
   // The returned range is always empty or forward (never reversed).
   constexpr Range Intersect(const Range& range) const {
-    const uint32_t min = std::max(GetMin(), range.GetMin());
-    const uint32_t max = std::min(GetMax(), range.GetMax());
+    const size_t min = std::max(GetMin(), range.GetMin());
+    const size_t max = std::min(GetMax(), range.GetMax());
     return (min < max || Contains(range) || range.Contains(*this))
                ? Range(min, max)
                : InvalidRange();
   }
 
-#if defined(OS_APPLE)
+#if BUILDFLAG(IS_APPLE)
   Range& operator=(const NSRange& range);
 
   // NSRange does not store the directionality of a range, so if this
@@ -128,8 +133,7 @@ class GFX_RANGE_EXPORT Range {
 
  private:
   // Note: we use uint32_t instead of size_t because this struct is sent over
-  // IPC which could span 32 & 64 bit processes. This is fine since text spans
-  // shouldn't exceed UINT32_MAX even on 64 bit builds.
+  // IPC which could span 32 & 64 bit processes.
   uint32_t start_;
   uint32_t end_;
 };

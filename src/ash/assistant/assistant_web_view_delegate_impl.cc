@@ -20,6 +20,12 @@ class AssistantWebContainerCaptionButtonModel
     : public chromeos::CaptionButtonModel {
  public:
   AssistantWebContainerCaptionButtonModel() = default;
+
+  AssistantWebContainerCaptionButtonModel(
+      const AssistantWebContainerCaptionButtonModel&) = delete;
+  AssistantWebContainerCaptionButtonModel& operator=(
+      const AssistantWebContainerCaptionButtonModel&) = delete;
+
   ~AssistantWebContainerCaptionButtonModel() override = default;
 
   // CaptionButtonModel:
@@ -31,10 +37,11 @@ class AssistantWebContainerCaptionButtonModel
       case views::CAPTION_BUTTON_ICON_BACK:
         return back_button_visibility_;
 
+      case views::CAPTION_BUTTON_ICON_FLOAT:
       case views::CAPTION_BUTTON_ICON_MINIMIZE:
       case views::CAPTION_BUTTON_ICON_MAXIMIZE_RESTORE:
-      case views::CAPTION_BUTTON_ICON_LEFT_SNAPPED:
-      case views::CAPTION_BUTTON_ICON_RIGHT_SNAPPED:
+      case views::CAPTION_BUTTON_ICON_LEFT_TOP_SNAPPED:
+      case views::CAPTION_BUTTON_ICON_RIGHT_BOTTOM_SNAPPED:
       case views::CAPTION_BUTTON_ICON_MENU:
       case views::CAPTION_BUTTON_ICON_ZOOM:
       case views::CAPTION_BUTTON_ICON_LOCATION:
@@ -55,8 +62,6 @@ class AssistantWebContainerCaptionButtonModel
 
  private:
   bool back_button_visibility_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(AssistantWebContainerCaptionButtonModel);
 };
 
 }  // namespace

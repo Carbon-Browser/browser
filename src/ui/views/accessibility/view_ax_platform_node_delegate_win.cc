@@ -22,7 +22,6 @@
 #include "ui/aura/window.h"
 #include "ui/aura/window_tree_host.h"
 #include "ui/base/layout.h"
-#include "ui/base/win/accessibility_misc_utils.h"
 #include "ui/base/win/atl_module.h"
 #include "ui/display/win/screen_win.h"
 #include "ui/views/accessibility/views_utilities_aura.h"
@@ -45,7 +44,7 @@ ViewAXPlatformNodeDelegateWin::ViewAXPlatformNodeDelegateWin(View* view)
 
 ViewAXPlatformNodeDelegateWin::~ViewAXPlatformNodeDelegateWin() = default;
 
-gfx::NativeViewAccessible ViewAXPlatformNodeDelegateWin::GetParent() {
+gfx::NativeViewAccessible ViewAXPlatformNodeDelegateWin::GetParent() const {
   // If the View has a parent View, return that View's IAccessible.
   if (view()->parent())
     return ViewAXPlatformNodeDelegate::GetParent();

@@ -6,6 +6,8 @@
 import 'chrome://resources/mojo/mojo/public/js/mojo_bindings_lite.js';
 import 'chrome://nearby/nearby_confirmation_page.js';
 
+import {NearbyConfirmationPageElement} from 'chrome://nearby/nearby_confirmation_page.js';
+
 import {assertEquals, assertFalse, assertTrue} from '../chai_assert.js';
 
 import {FakeConfirmationManagerRemote, FakeTransferUpdateListenerPendingReceiver} from './fake_mojo_interfaces.js';
@@ -24,7 +26,9 @@ suite('ConfirmatonPageTest', function() {
    * @param {string} button button selector (i.e. #actionButton)
    */
   function getButton(button) {
-    return confirmationPageElement.$$('nearby-page-template').$$(button);
+    return confirmationPageElement.shadowRoot
+        .querySelector('nearby-page-template')
+        .shadowRoot.querySelector(button);
   }
 
   setup(function() {
@@ -82,7 +86,8 @@ suite('ConfirmatonPageTest', function() {
     await transferUpdateListener.remote_.$.flushForTesting();
 
     const renderedToken =
-        confirmationPageElement.$$('#confirmationToken').textContent;
+        confirmationPageElement.shadowRoot.querySelector('#confirmationToken')
+            .textContent;
     assertTrue(renderedToken.includes(token));
   });
 
@@ -98,9 +103,10 @@ suite('ConfirmatonPageTest', function() {
           },
           payloadPreview: null,
         });
-    const renderedName = confirmationPageElement.$$('nearby-progress')
-                             .$$('#device-name')
-                             .innerText;
+    const renderedName =
+        confirmationPageElement.shadowRoot.querySelector('nearby-progress')
+            .shadowRoot.querySelector('#device-name')
+            .innerText;
     assertEquals(name, renderedName);
   });
 
@@ -109,11 +115,29 @@ suite('ConfirmatonPageTest', function() {
     confirmationPageElement.payloadPreview = {
       description: title,
       fileCount: 1,
-      shareType: nearbyShare.mojom.ShareType.kUnknownFile
+      shareType: nearbyShare.mojom.ShareType.kUnknownFile,
     };
     const renderedTitle =
-        confirmationPageElement.$$('nearby-preview').$$('#title').textContent;
+        confirmationPageElement.shadowRoot.querySelector('nearby-preview')
+            .shadowRoot.querySelector('#title')
+            .textContent;
     assertEquals(title, renderedTitle);
+  });
+
+  test('renders progress bar', async function() {
+    const token = 'TestToken1234';
+    transferUpdateListener.remote_.onTransferUpdate(
+        nearbyShare.mojom.TransferStatus.kInProgress, token);
+    await transferUpdateListener.remote_.$.flushForTesting();
+
+    const isAnimationHidden =
+        !!confirmationPageElement.shadowRoot.querySelector('cr-lottie[style]');
+
+    if (confirmationPageElement.shadowRoot.querySelector('#errorTitle')) {
+      assertTrue(isAnimationHidden);
+    } else {
+      assertFalse(isAnimationHidden);
+    }
   });
 
   test('renders error', async function() {
@@ -122,8 +146,27 @@ suite('ConfirmatonPageTest', function() {
         nearbyShare.mojom.TransferStatus.kRejected, token);
     await transferUpdateListener.remote_.$.flushForTesting();
 
-    const errorTitle = confirmationPageElement.$$('#errorTitle').textContent;
+    const errorTitle =
+        confirmationPageElement.shadowRoot.querySelector('#errorTitle')
+            .textContent;
     assertTrue(!!errorTitle);
+  });
+
+  test('hide progress bar when error', async function() {
+    const token = 'TestToken1234';
+    transferUpdateListener.remote_.onTransferUpdate(
+        nearbyShare.mojom.TransferStatus.kRejected, token);
+    await transferUpdateListener.remote_.$.flushForTesting();
+
+    const isAnimationHidden =
+        !!confirmationPageElement.shadowRoot.querySelector('cr-lottie[style]');
+
+    if (confirmationPageElement.shadowRoot.querySelector('#errorTitle')
+            .textContent) {
+      assertTrue(isAnimationHidden);
+    } else {
+      assertFalse(isAnimationHidden);
+    }
   });
 
   test('Ensure all final transfer states explicitly handled', async function() {
@@ -139,7 +182,7 @@ suite('ConfirmatonPageTest', function() {
       kRejected: true,
       kCancelled: true,
       MIN_VALUE: true,
-      MAX_VALUE: true
+      MAX_VALUE: true,
     };
 
     let key;
@@ -151,7 +194,9 @@ suite('ConfirmatonPageTest', function() {
             nearbyShare.mojom.TransferStatus[key], token);
         await transferUpdateListener.remote_.$.flushForTesting();
 
-        assertTrue(!!confirmationPageElement.$$('#errorTitle').textContent);
+        assertTrue(
+            !!confirmationPageElement.shadowRoot.querySelector('#errorTitle')
+                  .textContent);
 
         // Set back to a good state
         confirmationPageElement.set('errorTitle_', null);
@@ -159,7 +204,8 @@ suite('ConfirmatonPageTest', function() {
         transferUpdateListener.remote_.onTransferUpdate(
             nearbyShare.mojom.TransferStatus.kConnecting, token);
         await transferUpdateListener.remote_.$.flushForTesting();
-        assertFalse(!!confirmationPageElement.$$('#errorTitle'));
+        assertFalse(
+            !!confirmationPageElement.shadowRoot.querySelector('#errorTitle'));
       }
     }
   });

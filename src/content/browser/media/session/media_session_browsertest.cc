@@ -54,6 +54,9 @@ class MediaImageGetterHelper {
                        base::Unretained(this)));
   }
 
+  MediaImageGetterHelper(const MediaImageGetterHelper&) = delete;
+  MediaImageGetterHelper& operator=(const MediaImageGetterHelper&) = delete;
+
   void Wait() {
     if (bitmap_.has_value())
       return;
@@ -71,8 +74,6 @@ class MediaImageGetterHelper {
 
   base::RunLoop run_loop_;
   absl::optional<SkBitmap> bitmap_;
-
-  DISALLOW_COPY_AND_ASSIGN(MediaImageGetterHelper);
 };
 
 // Integration tests for content::MediaSession that do not take into
@@ -84,6 +85,10 @@ class MediaSessionBrowserTestBase : public ContentBrowserTest {
     embedded_test_server()->RegisterRequestMonitor(base::BindRepeating(
         &MediaSessionBrowserTestBase::OnServerRequest, base::Unretained(this)));
   }
+
+  MediaSessionBrowserTestBase(const MediaSessionBrowserTestBase&) = delete;
+  MediaSessionBrowserTestBase& operator=(const MediaSessionBrowserTestBase&) =
+      delete;
 
   void SetUp() override {
     ContentBrowserTest::SetUp();
@@ -97,14 +102,14 @@ class MediaSessionBrowserTestBase : public ContentBrowserTest {
   }
 
   void StartPlaybackAndWait(Shell* shell, const std::string& id) {
-    shell->web_contents()->GetMainFrame()->ExecuteJavaScriptForTests(
+    shell->web_contents()->GetPrimaryMainFrame()->ExecuteJavaScriptForTests(
         u"document.querySelector('#" + base::ASCIIToUTF16(id) + u"').play();",
         base::NullCallback());
     WaitForStart(shell);
   }
 
   void StopPlaybackAndWait(Shell* shell, const std::string& id) {
-    shell->web_contents()->GetMainFrame()->ExecuteJavaScriptForTests(
+    shell->web_contents()->GetPrimaryMainFrame()->ExecuteJavaScriptForTests(
         u"document.querySelector('#" + base::ASCIIToUTF16(id) + u"').pause();",
         base::NullCallback());
     WaitForStop(shell);
@@ -175,8 +180,6 @@ class MediaSessionBrowserTestBase : public ContentBrowserTest {
   // locked.
   base::Lock visited_urls_lock_;
   std::set<GURL> visited_urls_;
-
-  DISALLOW_COPY_AND_ASSIGN(MediaSessionBrowserTestBase);
 };
 
 class MediaSessionBrowserTest : public MediaSessionBrowserTestBase {
@@ -263,7 +266,7 @@ IN_PROC_BROWSER_TEST_F(MediaSessionBrowserTest, MultiplePlayersPlayPause) {
 }
 
 // Flaky on Mac. See https://crbug.com/980663
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 #define MAYBE_WebContents_Muted DISABLED_WebContents_Muted
 #else
 #define MAYBE_WebContents_Muted WebContents_Muted
@@ -291,7 +294,7 @@ IN_PROC_BROWSER_TEST_F(MediaSessionBrowserTest, MAYBE_WebContents_Muted) {
                    ->is_controllable);
 }
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
 // On Android, System Audio Focus would break this test.
 
 IN_PROC_BROWSER_TEST_F(MediaSessionBrowserTest, MultipleTabsPlayPause) {
@@ -331,7 +334,7 @@ IN_PROC_BROWSER_TEST_F(MediaSessionBrowserTest, MultipleTabsPlayPause) {
   EXPECT_TRUE(IsPlaying(shell(), "long-video"));
   EXPECT_TRUE(IsPlaying(other_shell, "long-video"));
 }
-#endif  // defined(OS_ANDROID)
+#endif  // BUILDFLAG(IS_ANDROID)
 
 IN_PROC_BROWSER_TEST_F(MediaSessionBrowserTest, GetMediaImageBitmap) {
   ASSERT_TRUE(embedded_test_server()->Start());

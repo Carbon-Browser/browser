@@ -5,7 +5,6 @@
 #include "third_party/blink/renderer/platform/scheduler/main_thread/frame_task_queue_controller.h"
 
 #include <memory>
-#include <tuple>
 #include <utility>
 
 #include "base/bind.h"
@@ -49,14 +48,14 @@ class FrameTaskQueueControllerTest : public testing::Test,
     scheduler_ = std::make_unique<MainThreadSchedulerImpl>(
         base::sequence_manager::SequenceManagerForTest::Create(
             nullptr, task_environment_.GetMainThreadTaskRunner(),
-            task_environment_.GetMockTickClock()),
-        absl::nullopt);
+            task_environment_.GetMockTickClock()));
     agent_group_scheduler_ = scheduler_->CreateAgentGroupScheduler();
     page_scheduler_ =
         agent_group_scheduler_->AsAgentGroupScheduler().CreatePageScheduler(
             nullptr);
     frame_scheduler_ = page_scheduler_->CreateFrameScheduler(
-        nullptr, nullptr, FrameScheduler::FrameType::kSubframe);
+        nullptr, nullptr, /*is_in_embedded_frame_tree=*/false,
+        FrameScheduler::FrameType::kSubframe);
     frame_task_queue_controller_ = std::make_unique<FrameTaskQueueController>(
         scheduler_.get(),
         static_cast<FrameSchedulerImpl*>(frame_scheduler_.get()), this);
@@ -192,9 +191,7 @@ TEST_F(FrameTaskQueueControllerTest, CreateAllTaskQueues) {
             frame_task_queue_controller_->GetAllTaskQueuesAndVoters().size());
   for (const auto& task_queue_and_voter :
        frame_task_queue_controller_->GetAllTaskQueuesAndVoters()) {
-    MainThreadTaskQueue* task_queue_ptr;
-    TaskQueue::QueueEnabledVoter* voter;
-    std::tie(task_queue_ptr, voter) = task_queue_and_voter;
+    auto [task_queue_ptr, voter] = task_queue_and_voter;
 
     EXPECT_NE(task_queue_ptr, nullptr);
     EXPECT_TRUE(all_task_queues.find(task_queue_ptr) != all_task_queues.end());

@@ -8,7 +8,6 @@ import 'chrome://resources/cr_elements/icons.m.js';
 import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
 import './battery_status_card.js';
 import './cpu_card.js';
-import './diagnostics_fonts_css.js';
 import './diagnostics_shared_css.js';
 import './icons.js';
 import './memory_card.js';
@@ -20,7 +19,7 @@ import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
 import {html, Polymer} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {DiagnosticsBrowserProxy, DiagnosticsBrowserProxyImpl} from './diagnostics_browser_proxy.js';
-import {SystemDataProviderInterface, SystemInfo} from './diagnostics_types.js'
+import {SystemDataProviderInterface, SystemInfo} from './diagnostics_types.js';
 import {getSystemDataProvider} from './mojo_interface_provider.js';
 import {TestSuiteStatus} from './routine_list_executor.js';
 
@@ -47,6 +46,12 @@ Polymer({
   browserProxy_: null,
 
   properties: {
+    /** @protected {boolean} */
+    saveSessionLogEnabled_: {
+      type: Boolean,
+      value: true,
+    },
+
     /** @private {boolean} */
     showBatteryStatusCard_: {
       type: Boolean,
@@ -114,7 +119,11 @@ Polymer({
     this.fetchSystemInfo_();
     this.browserProxy_ = DiagnosticsBrowserProxyImpl.getInstance();
     this.browserProxy_.initialize();
-    this.addCautionBannerEventListeners_();
+
+    // Only use inner banner behavior if system page is in stand-alone mode.
+    if (!this.isNetworkingEnabled) {
+      this.addCautionBannerEventListeners_();
+    }
   },
 
   /** @private */
@@ -145,6 +154,12 @@ Polymer({
 
   /** @protected */
   onSessionLogClick_() {
+    // Click already handled then leave early.
+    if (!this.saveSessionLogEnabled_) {
+      return;
+    }
+
+    this.saveSessionLogEnabled_ = false;
     this.browserProxy_.saveSessionLog()
         .then(
             /* @type {boolean} */ (success) => {
@@ -153,7 +168,10 @@ Polymer({
                   loadTimeData.getString(`sessionLogToastText${result}`);
               this.$.toast.show();
             })
-        .catch(() => {/* File selection cancelled */});
+        .catch(() => {/* File selection cancelled */})
+        .finally(() => {
+          this.saveSessionLogEnabled_ = true;
+        });
   },
 
   /** @private */
@@ -193,5 +211,21 @@ Polymer({
    */
   onNavigationPageChanged({isActive}) {
     this.isActive = isActive;
+    if (isActive) {
+      // Focus the topmost system page element.
+      this.$$('#overviewCard').$$('#overviewCardContainer').focus();
+      // TODO(ashleydp): Remove when a call can be made at a higher component
+      // to avoid duplicate code in all navigatable pages.
+      this.browserProxy_.recordNavigation('system');
+    }
+  },
+
+  /**
+   * @protected
+   * @return {string}
+   */
+  getCardContainerClass_() {
+    const cardContainer = 'diagnostics-cards-container';
+    return `${cardContainer}${this.isNetworkingEnabled ? '-nav' : ''}`;
   },
 });

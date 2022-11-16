@@ -15,6 +15,10 @@
 #import "ios/web/public/test/web_view_interaction_test_util.h"
 #include "ios/web/public/web_state_observer.h"
 
+#if DCHECK_IS_ON()
+#include "ui/display/screen_base.h"
+#endif
+
 #if !defined(__has_feature) || !__has_feature(objc_arc)
 #error "This file requires ARC support."
 #endif
@@ -33,6 +37,9 @@ class IntTestWebStateObserver : public WebStateObserver {
   // Instructs the observer to listen for page loads for |url|.
   explicit IntTestWebStateObserver(const GURL& url) : expected_url_(url) {}
 
+  IntTestWebStateObserver(const IntTestWebStateObserver&) = delete;
+  IntTestWebStateObserver& operator=(const IntTestWebStateObserver&) = delete;
+
   // Whether |expected_url_| has been loaded successfully.
   bool IsExpectedPageLoaded() { return page_loaded_; }
 
@@ -48,8 +55,6 @@ class IntTestWebStateObserver : public WebStateObserver {
  private:
   GURL expected_url_;
   bool page_loaded_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(IntTestWebStateObserver);
 };
 
 #pragma mark - WebIntTest
@@ -80,14 +85,15 @@ void WebIntTest::TearDown() {
                              [WKWebsiteDataStore allWebsiteDataTypes]);
 
   WebTest::TearDown();
-}
 
-std::unique_ptr<base::Value> WebIntTest::ExecuteJavaScript(NSString* script) {
-  return web::test::ExecuteJavaScript(web_state(),
-                                      base::SysNSStringToUTF8(script));
-  //  web_state()->ExecuteJavaScript
-  //  return web::test::ExecuteJavaScript(web_state()->GetJSInjectionReceiver(),
-  //                                      script);
+#if DCHECK_IS_ON()
+  // The same screen object is shared across multiple test runs on IOS build.
+  // Make sure that all display observers are removed at the end of each
+  // test.
+  display::ScreenBase* screen =
+      static_cast<display::ScreenBase*>(display::Screen::GetScreen());
+  DCHECK(!screen->HasDisplayObservers());
+#endif
 }
 
 bool WebIntTest::ExecuteBlockAndWaitForLoad(const GURL& url,

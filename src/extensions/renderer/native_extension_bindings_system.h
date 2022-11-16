@@ -9,12 +9,14 @@
 #include <string>
 
 #include "base/memory/weak_ptr.h"
+#include "extensions/common/mojom/event_dispatcher.mojom-forward.h"
 #include "extensions/renderer/bindings/api_binding_types.h"
 #include "extensions/renderer/bindings/api_bindings_system.h"
 #include "extensions/renderer/bindings/event_emitter.h"
 #include "extensions/renderer/feature_cache.h"
 #include "extensions/renderer/native_renderer_messaging_service.h"
-#include "v8/include/v8.h"
+#include "v8/include/v8-forward.h"
+#include "v8/include/v8-persistent-handle.h"
 
 namespace extensions {
 class IPCMessageSender;
@@ -34,6 +36,11 @@ class NativeExtensionBindingsSystem {
  public:
   explicit NativeExtensionBindingsSystem(
       std::unique_ptr<IPCMessageSender> ipc_message_sender);
+
+  NativeExtensionBindingsSystem(const NativeExtensionBindingsSystem&) = delete;
+  NativeExtensionBindingsSystem& operator=(
+      const NativeExtensionBindingsSystem&) = delete;
+
   ~NativeExtensionBindingsSystem();
 
   // Called when a new ScriptContext is created.
@@ -50,10 +57,11 @@ class NativeExtensionBindingsSystem {
 
   // Dispatches an event with the given |name|, |event_args|, and
   // |filtering_info| in the given |context|.
-  void DispatchEventInContext(const std::string& event_name,
-                              const base::ListValue* event_args,
-                              const EventFilteringInfo* filtering_info,
-                              ScriptContext* context);
+  void DispatchEventInContext(
+      const std::string& event_name,
+      const base::Value::List& event_args,
+      const mojom::EventFilteringInfoPtr& filtering_info,
+      ScriptContext* context);
 
   // Returns true if there is a listener for the given |event_name| in the
   // associated |context|.
@@ -63,7 +71,7 @@ class NativeExtensionBindingsSystem {
   // Handles the response associated with the given |request_id|.
   void HandleResponse(int request_id,
                       bool success,
-                      const base::ListValue& response,
+                      const base::Value::List& response,
                       const std::string& error);
 
   // Returns the associated IPC message sender.
@@ -107,6 +115,12 @@ class NativeExtensionBindingsSystem {
   static void BindingAccessor(v8::Local<v8::Name> name,
                               const v8::PropertyCallbackInfo<v8::Value>& info);
 
+  // Callback for accessing a restricted extension API. Access to the API is
+  // restricted to the developer mode only.
+  static void ThrowDeveloperModeRestrictedError(
+      v8::Local<v8::Name> name,
+      const v8::PropertyCallbackInfo<v8::Value>& info);
+
   // Creates and returns the API binding for the given |name|.
   static v8::Local<v8::Object> GetAPIHelper(v8::Local<v8::Context> context,
                                             v8::Local<v8::String> name);
@@ -134,6 +148,10 @@ class NativeExtensionBindingsSystem {
   // bindings availability has changed (such as after a permissions change).
   void InvalidateFeatureCache(const ExtensionId& extension_id);
 
+  // Creates the parameters objects inside chrome.scripting, if |context| is for
+  // content scripts running in an isolated world.
+  void SetScriptingParams(ScriptContext* context);
+
   std::unique_ptr<IPCMessageSender> ipc_message_sender_;
 
   // The APIBindingsSystem associated with this class.
@@ -147,8 +165,6 @@ class NativeExtensionBindingsSystem {
   v8::Eternal<v8::FunctionTemplate> get_internal_api_;
 
   base::WeakPtrFactory<NativeExtensionBindingsSystem> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(NativeExtensionBindingsSystem);
 };
 
 }  // namespace extensions

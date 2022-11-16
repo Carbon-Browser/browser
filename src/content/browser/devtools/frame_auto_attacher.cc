@@ -4,6 +4,8 @@
 
 #include "content/browser/devtools/frame_auto_attacher.h"
 
+#include "base/time/time.h"
+#include "content/browser/devtools/auction_worklet_devtools_agent_host.h"
 #include "content/browser/devtools/devtools_renderer_channel.h"
 #include "content/browser/devtools/render_frame_devtools_agent_host.h"
 #include "content/browser/devtools/service_worker_devtools_agent_host.h"
@@ -24,9 +26,10 @@ void GetMatchingHostsByScopeMap(
     ScopeAgentsMap* scope_agents_map) {
   base::flat_set<GURL> host_name_set;
   for (const GURL& url : urls)
-    host_name_set.insert(url.GetOrigin());
+    host_name_set.insert(url.DeprecatedGetOriginAsURL());
   for (const auto& host : agent_hosts) {
-    if (host_name_set.find(host->scope().GetOrigin()) == host_name_set.end())
+    if (host_name_set.find(host->scope().DeprecatedGetOriginAsURL()) ==
+        host_name_set.end())
       continue;
     const auto& it = scope_agents_map->find(host->scope());
     if (it == scope_agents_map->end()) {
@@ -125,13 +128,13 @@ void FrameAutoAttacher::SetRenderFrameHost(
   if (!auto_attach())
     return;
   UpdateFrames();
-  UpdatePortals();
+  UpdatePages();
   ReattachServiceWorkers();
 }
 
 void FrameAutoAttacher::DidFinishNavigation(
     NavigationRequest* navigation_request) {
-  if (!render_frame_host_)
+  if (!auto_attach() || !render_frame_host_)
     return;
 
   if (navigation_request->frame_tree_node() ==
@@ -155,48 +158,82 @@ void FrameAutoAttacher::DidFinishNavigation(
   // navigation started, so no throttle was installed. We auto-attach them
   // here instead (note that we cannot honor |wait_for_debugger_on_start_| in
   // this case).
-  AutoAttachToFrame(navigation_request, false);
+  constexpr bool wait_for_debugger_on_start = false;
+  scoped_refptr<RenderFrameDevToolsAgentHost> agent_host =
+      HandleNavigation(navigation_request, wait_for_debugger_on_start);
+  if (agent_host)
+    DispatchAutoAttach(agent_host.get(), wait_for_debugger_on_start);
 }
 
-void FrameAutoAttacher::UpdatePortals() {
+void FrameAutoAttacher::UpdatePages() {
   if (!auto_attach())
     return;
 
   Hosts new_hosts;
-  if (render_frame_host_ &&
-      render_frame_host_->frame_tree_node()->IsMainFrame()) {
-    WebContentsImpl* outer_web_contents = static_cast<WebContentsImpl*>(
-        WebContents::FromRenderFrameHost(render_frame_host_));
-    for (WebContents* web_contents :
-         outer_web_contents->GetInnerWebContents()) {
-      WebContentsImpl* web_contents_impl =
-          static_cast<WebContentsImpl*>(web_contents);
-      if (!web_contents_impl->IsPortal())
-        continue;
+  if (render_frame_host_) {
+    render_frame_host_->ForEachRenderFrameHost(base::BindRepeating(
+        [](Hosts* new_hosts, RenderFrameHost* root, RenderFrameHost* rfh) {
+          RenderFrameHostImpl* rfhi = static_cast<RenderFrameHostImpl*>(rfh);
+          if (rfh == root)
+            return RenderFrameHost::FrameIterationAction::kContinue;
 
-      scoped_refptr<DevToolsAgentHost> new_host =
-          RenderFrameDevToolsAgentHost::GetOrCreateFor(
-              web_contents_impl->GetFrameTree()->root());
-      new_hosts.insert(new_host);
-    }
+          FrameTreeNode* frame_tree_node = rfhi->frame_tree_node();
+          if (frame_tree_node->IsMainFrame() &&
+              WebContentsImpl::FromFrameTreeNode(frame_tree_node)->IsPortal()) {
+            scoped_refptr<DevToolsAgentHost> new_host =
+                RenderFrameDevToolsAgentHost::GetOrCreateFor(frame_tree_node);
+            new_hosts->insert(new_host);
+            return RenderFrameHost::FrameIterationAction::kSkipChildren;
+          }
+
+          if (rfhi->is_local_root())
+            return RenderFrameHost::FrameIterationAction::kSkipChildren;
+
+          return RenderFrameHost::FrameIterationAction::kContinue;
+        },
+        &new_hosts, render_frame_host_));
   }
 
   DispatchSetAttachedTargetsOfType(new_hosts, DevToolsAgentHost::kTypePage);
 }
 
+void FrameAutoAttacher::AutoAttachToPage(FrameTree* frame_tree,
+                                         bool wait_for_debugger_on_start) {
+  if (!auto_attach())
+    return;
+  scoped_refptr<DevToolsAgentHost> agent_host =
+      RenderFrameDevToolsAgentHost::GetOrCreateFor(frame_tree->root());
+  DispatchAutoAttach(agent_host.get(), wait_for_debugger_on_start);
+}
+
 void FrameAutoAttacher::UpdateAutoAttach(base::OnceClosure callback) {
   if (auto_attach()) {
+    UpdateFrames();
+    UpdatePages();
     if (render_frame_host_ && !render_frame_host_->GetParent() &&
         !observing_service_workers_) {
       observing_service_workers_ = true;
       ServiceWorkerDevToolsManager::GetInstance()->AddObserver(this);
-      ReattachServiceWorkers();
-      UpdateFrames();
-      UpdatePortals();
     }
-  } else if (observing_service_workers_) {
-    ServiceWorkerDevToolsManager::GetInstance()->RemoveObserver(this);
-    observing_service_workers_ = false;
+    if (observing_service_workers_) {
+      // Update service workers even if we've already been observing them,
+      // to notify new clients about existing service workers.
+      // This is similar to frames and pages above.
+      ReattachServiceWorkers();
+    }
+    if (render_frame_host_ && !observing_auction_worklets_) {
+      observing_auction_worklets_ = true;
+      DebuggableAuctionWorkletTracker::GetInstance()->AddObserver(this);
+    }
+  } else {
+    if (observing_service_workers_) {
+      ServiceWorkerDevToolsManager::GetInstance()->RemoveObserver(this);
+      observing_service_workers_ = false;
+    }
+    if (observing_auction_worklets_) {
+      DebuggableAuctionWorkletTracker::GetInstance()->RemoveObserver(this);
+      observing_auction_worklets_ = false;
+    }
   }
   RendererAutoAttacherBase::UpdateAutoAttach(std::move(callback));
 }
@@ -220,6 +257,21 @@ void FrameAutoAttacher::WorkerDestroyed(ServiceWorkerDevToolsAgentHost* host) {
   ReattachServiceWorkers();
 }
 
+void FrameAutoAttacher::AuctionWorkletCreated(DebuggableAuctionWorklet* worklet,
+                                              bool& should_pause_on_start) {
+  if (!render_frame_host_)
+    return;
+  if (!AuctionWorkletDevToolsAgentHost::IsRelevantTo(render_frame_host_,
+                                                     worklet)) {
+    return;
+  }
+  should_pause_on_start = wait_for_debugger_on_start();
+  DispatchAutoAttach(AuctionWorkletDevToolsAgentHostManager::GetInstance()
+                         .GetOrCreateFor(worklet)
+                         .get(),
+                     should_pause_on_start);
+}
+
 void FrameAutoAttacher::ReattachServiceWorkers() {
   if (!observing_service_workers_ || !render_frame_host_)
     return;
@@ -238,30 +290,41 @@ void FrameAutoAttacher::UpdateFrames() {
   DCHECK(auto_attach());
 
   Hosts new_hosts;
+  DevToolsAgentHost::List new_worklet_hosts;
   if (render_frame_host_) {
-    base::queue<FrameTreeNode*> queue;
-    for (size_t i = 0; i < render_frame_host_->child_count(); ++i) {
-      queue.push(render_frame_host_->child_at(i));
-    }
-    while (!queue.empty()) {
-      FrameTreeNode* node = queue.front();
-      queue.pop();
-      bool should_create = node->current_frame_host()->is_local_root_subframe();
-      if (should_create) {
-        scoped_refptr<DevToolsAgentHost> new_host =
-            RenderFrameDevToolsAgentHost::GetOrCreateFor(node);
-        new_hosts.insert(new_host);
-        // Note: We don't add children of a local root to |queue|, as they
-        // will be looked at by a separate TargetAutoAttacher created for the
-        // local root.
-      } else {
-        for (size_t i = 0; i < node->child_count(); ++i)
-          queue.push(node->child_at(i));
-      }
-    }
+    render_frame_host_->ForEachRenderFrameHost(base::BindRepeating(
+        [](Hosts* new_hosts, RenderFrameHostImpl* root, RenderFrameHost* rfh) {
+          auto* rfh_impl = static_cast<RenderFrameHostImpl*>(rfh);
+          if (rfh_impl == root || !rfh_impl->is_local_root())
+            return RenderFrameHost::FrameIterationAction::kContinue;
+
+          // At this point, |rfh_impl| is a local root that is in the subtree of
+          // |root|.
+          FrameTreeNode* node = rfh_impl->frame_tree_node();
+          bool should_create =
+              !node->IsMainFrame() || node->IsFencedFrameRoot();
+          if (should_create) {
+            scoped_refptr<DevToolsAgentHost> new_host =
+                RenderFrameDevToolsAgentHost::GetOrCreateFor(node);
+            new_hosts->insert(new_host);
+          }
+
+          // Note: We don't search through children of local roots as they will
+          // be handled by a FrameAutoAttacher that is created for the local
+          // root.
+          return RenderFrameHost::FrameIterationAction::kSkipChildren;
+        },
+        &new_hosts, render_frame_host_));
+
+    AuctionWorkletDevToolsAgentHostManager::GetInstance().GetAllForFrame(
+        render_frame_host_, &new_worklet_hosts);
   }
 
   DispatchSetAttachedTargetsOfType(new_hosts, DevToolsAgentHost::kTypeFrame);
+  DispatchSetAttachedTargetsOfType(
+      TargetAutoAttacher::Hosts(new_worklet_hosts.begin(),
+                                new_worklet_hosts.end()),
+      DevToolsAgentHost::kTypeAuctionWorklet);
 }
 
 }  // namespace content

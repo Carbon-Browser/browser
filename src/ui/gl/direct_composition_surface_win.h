@@ -10,10 +10,13 @@
 #include <dcomp.h>
 #include <wrl/client.h>
 
-#include "base/callback.h"
+#include "base/memory/scoped_refptr.h"
+#include "base/no_destructor.h"
+#include "base/observer_list_threadsafe.h"
 #include "base/time/time.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
-#include "ui/gfx/transform.h"
+#include "ui/gfx/geometry/transform.h"
+#include "ui/gfx/mojom/dxgi_info.mojom.h"
 #include "ui/gl/child_window_win.h"
 #include "ui/gl/gl_export.h"
 #include "ui/gl/gl_surface_egl.h"
@@ -31,8 +34,7 @@ namespace gl {
 class DCLayerTree;
 class DirectCompositionChildSurfaceWin;
 
-class GL_EXPORT DirectCompositionSurfaceWin : public GLSurfaceEGL,
-                                              public ui::GpuSwitchingObserver {
+class GL_EXPORT DirectCompositionSurfaceWin : public GLSurfaceEGL {
  public:
   using VSyncCallback =
       base::RepeatingCallback<void(base::TimeTicks, base::TimeDelta)>;
@@ -41,16 +43,28 @@ class GL_EXPORT DirectCompositionSurfaceWin : public GLSurfaceEGL,
   struct Settings {
     bool disable_nv12_dynamic_textures = false;
     bool disable_vp_scaling = false;
+    bool disable_vp_super_resolution = false;
     size_t max_pending_frames = 2;
     bool use_angle_texture_offset = false;
     bool force_root_surface_full_damage = false;
     bool force_root_surface_full_damage_always = false;
+    bool no_downscaled_overlay_promotion = false;
   };
 
   DirectCompositionSurfaceWin(
+      GLDisplayEGL* display,
       HWND parent_window,
       VSyncCallback vsync_callback,
       const DirectCompositionSurfaceWin::Settings& settings);
+
+  DirectCompositionSurfaceWin(const DirectCompositionSurfaceWin&) = delete;
+  DirectCompositionSurfaceWin& operator=(const DirectCompositionSurfaceWin&) =
+      delete;
+
+  static void InitializeOneOff(GLDisplayEGL* display);
+  static void ShutdownOneOff();
+
+  static IDCompositionDevice2* GetDirectCompositionDevice();
 
   // Returns true if direct composition is supported.  We prefer to use direct
   // composition even without hardware overlays, because it allows us to bypass
@@ -78,9 +92,6 @@ class GL_EXPORT DirectCompositionSurfaceWin : public GLSurfaceEGL,
   // Similar to the above but disables software overlay support.
   static void DisableSoftwareOverlays();
 
-  // Indicate the overlay caps are invalid.
-  static void InvalidateOverlayCaps();
-
   // Returns true if scaled hardware overlays are supported.
   static bool AreScaledOverlaysSupported();
 
@@ -100,7 +111,7 @@ class GL_EXPORT DirectCompositionSurfaceWin : public GLSurfaceEGL,
   static UINT GetOverlaySupportFlags(DXGI_FORMAT format);
 
   // Returns true if there is an HDR capable display connected.
-  static bool IsHDRSupported();
+  static gfx::mojom::DXGIInfoPtr GetDXGIInfo();
 
   // Returns true if swap chain tearing is supported.
   static bool IsSwapChainTearingSupported();
@@ -110,9 +121,6 @@ class GL_EXPORT DirectCompositionSurfaceWin : public GLSurfaceEGL,
   static void SetScaledOverlaysSupportedForTesting(bool value);
 
   static void SetOverlayFormatUsedForTesting(DXGI_FORMAT format);
-
-  static void SetOverlayHDRGpuInfoUpdateCallback(
-      OverlayHDRInfoUpdateCallback callback);
 
   // On Intel GPUs where YUV overlays are supported, BGRA8 overlays are
   // supported as well but IDXGIOutput3::CheckOverlaySupport() returns
@@ -168,12 +176,6 @@ class GL_EXPORT DirectCompositionSurfaceWin : public GLSurfaceEGL,
       std::unique_ptr<ui::DCRendererLayerParams> params) override;
   void SetFrameRate(float frame_rate) override;
 
-  // Implements GpuSwitchingObserver.
-  void OnGpuSwitched(gl::GpuPreference active_gpu_heuristic) override;
-  void OnDisplayAdded() override;
-  void OnDisplayRemoved() override;
-  void OnDisplayMetricsChanged() override;
-
   bool SupportsDelegatedInk() override;
   void SetDelegatedInkTrailStartPoint(
       std::unique_ptr<gfx::DelegatedInkMetadata> metadata) override;
@@ -212,11 +214,54 @@ class GL_EXPORT DirectCompositionSurfaceWin : public GLSurfaceEGL,
 
   scoped_refptr<DirectCompositionChildSurfaceWin> root_surface_;
   std::unique_ptr<DCLayerTree> layer_tree_;
+};
 
-  Microsoft::WRL::ComPtr<ID3D11Device> d3d11_device_;
-  Microsoft::WRL::ComPtr<IDCompositionDevice2> dcomp_device_;
+class GL_EXPORT DirectCompositionOverlayCapsObserver
+    : public base::CheckedObserver {
+ public:
+  virtual void OnOverlayCapsChanged() = 0;
 
-  DISALLOW_COPY_AND_ASSIGN(DirectCompositionSurfaceWin);
+ protected:
+  ~DirectCompositionOverlayCapsObserver() override = default;
+};
+
+// Upon receiving display notifications from ui::GpuSwitchingManager,
+// DirectCompositionOverlayCapsMonitor updates its overlay caps with the new
+// display setting and notifies DirectCompositionOverlayCapsObserver for the
+// overlay cap change.
+class GL_EXPORT DirectCompositionOverlayCapsMonitor
+    : public ui::GpuSwitchingObserver {
+ public:
+  DirectCompositionOverlayCapsMonitor(
+      const DirectCompositionOverlayCapsMonitor&) = delete;
+  DirectCompositionOverlayCapsMonitor& operator=(
+      const DirectCompositionOverlayCapsMonitor&) = delete;
+
+  static DirectCompositionOverlayCapsMonitor* GetInstance();
+
+  // DirectCompositionOverlayCapsMonitor is running on GpuMain thread.
+  // AddObserver()/RemoveObserver() are thread safe.
+  void AddObserver(DirectCompositionOverlayCapsObserver* observer);
+  void RemoveObserver(DirectCompositionOverlayCapsObserver* observer);
+
+  // Called when the overlay caps have changed in DirectCompositionSurfaceWin.
+  void NotifyOverlayCapsChanged();
+
+  // Implements GpuSwitchingObserver.
+  void OnGpuSwitched(gl::GpuPreference active_gpu_heuristic) override;
+  void OnDisplayAdded() override;
+  void OnDisplayRemoved() override;
+  void OnDisplayMetricsChanged() override;
+
+ private:
+  friend class base::NoDestructor<DirectCompositionOverlayCapsMonitor>;
+
+  DirectCompositionOverlayCapsMonitor();
+  ~DirectCompositionOverlayCapsMonitor() override;
+
+  scoped_refptr<
+      base::ObserverListThreadSafe<DirectCompositionOverlayCapsObserver>>
+      observer_list_;
 };
 
 }  // namespace gl

@@ -4,15 +4,19 @@
 
 package org.chromium.base;
 
+import android.app.Activity;
+import android.content.res.Resources.NotFoundException;
 import android.os.Looper;
 import android.os.MessageQueue;
-import android.os.SystemClock;
 import android.util.Log;
 import android.util.Printer;
+import android.view.View;
+import android.view.ViewGroup;
 
 import androidx.annotation.AnyThread;
 import androidx.annotation.Nullable;
 import androidx.annotation.UiThread;
+import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.annotations.CalledByNative;
 import org.chromium.base.annotations.JNINamespace;
@@ -44,6 +48,7 @@ public class TraceEvent implements AutoCloseable {
     private static volatile boolean sEnabled; // True when tracing into Chrome's tracing service.
     private static AtomicBoolean sNativeTracingReady = new AtomicBoolean();
     private static AtomicBoolean sUiThreadReady = new AtomicBoolean();
+    private static boolean sEventNameFilteringEnabled;
 
     // Trace tags replicated from android.os.Trace.
     public static final long ATRACE_TAG_WEBVIEW = 1L << 4;
@@ -377,8 +382,12 @@ public class TraceEvent implements AutoCloseable {
 
     private static ATrace sATrace;
 
-    private static class BasicLooperMonitor implements Printer {
-        private static final String LOOPER_TASK_PREFIX = "Looper.dispatch: ";
+    @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    static class BasicLooperMonitor implements Printer {
+        @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+        static final String LOOPER_TASK_PREFIX = "Looper.dispatch: ";
+        @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+        static final String FILTERED_EVENT_NAME = LOOPER_TASK_PREFIX + "EVENT_NAME_FILTERED";
         private static final int SHORTEST_LOG_PREFIX_LENGTH = "<<<<< Finished to ".length();
         private String mCurrentTarget;
 
@@ -420,7 +429,11 @@ public class TraceEvent implements AutoCloseable {
             mCurrentTarget = null;
         }
 
-        private static String getTraceEventName(String line) {
+        @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+        static String getTraceEventName(String line) {
+            if (sEventNameFilteringEnabled) {
+                return FILTERED_EVENT_NAME;
+            }
             return LOOPER_TASK_PREFIX + getTarget(line) + "(" + getTargetName(line) + ")";
         }
 
@@ -505,7 +518,7 @@ public class TraceEvent implements AutoCloseable {
         private final void syncIdleMonitoring() {
             if (sEnabled && !mIdleMonitorAttached) {
                 // approximate start time for computational purposes
-                mLastIdleStartedAt = SystemClock.elapsedRealtime();
+                mLastIdleStartedAt = TimeUtils.elapsedRealtimeMillis();
                 Looper.myQueue().addIdleHandler(this);
                 mIdleMonitorAttached = true;
                 Log.v(TAG, "attached idle handler");
@@ -522,15 +535,14 @@ public class TraceEvent implements AutoCloseable {
             if (mNumTasksSinceLastIdle == 0) {
                 TraceEvent.end(IDLE_EVENT_NAME);
             }
-            mLastWorkStartedAt = SystemClock.elapsedRealtime();
+            mLastWorkStartedAt = TimeUtils.elapsedRealtimeMillis();
             syncIdleMonitoring();
             super.beginHandling(line);
         }
 
         @Override
         final void endHandling(final String line) {
-            final long elapsed = SystemClock.elapsedRealtime()
-                    - mLastWorkStartedAt;
+            final long elapsed = TimeUtils.elapsedRealtimeMillis() - mLastWorkStartedAt;
             if (elapsed > MIN_INTERESTING_DURATION_MILLIS) {
                 traceAndLog(Log.WARN, "observed a task that took "
                         + elapsed + "ms: " + line);
@@ -548,7 +560,7 @@ public class TraceEvent implements AutoCloseable {
 
         @Override
         public final boolean queueIdle() {
-            final long now =  SystemClock.elapsedRealtime();
+            final long now = TimeUtils.elapsedRealtimeMillis();
             if (mLastIdleStartedAt == 0) mLastIdleStartedAt = now;
             final long elapsed = now - mLastIdleStartedAt;
             mNumIdlesSeen++;
@@ -627,6 +639,18 @@ public class TraceEvent implements AutoCloseable {
                         enabled ? LooperMonitorHolder.sInstance : null);
             }
         }
+        if (sUiThreadReady.get()) {
+            ViewHierarchyDumper.updateEnabledState();
+        }
+    }
+
+    @CalledByNative
+    public static void setEventNameFilteringEnabled(boolean enabled) {
+        sEventNameFilteringEnabled = enabled;
+    }
+
+    public static boolean eventNameFilteringEnabled() {
+        return sEventNameFilteringEnabled;
     }
 
     /**
@@ -673,6 +697,9 @@ public class TraceEvent implements AutoCloseable {
         if (sATrace != null) {
             sATrace.onUiThreadReady();
         }
+        if (sEnabled) {
+            ViewHierarchyDumper.updateEnabledState();
+        }
     }
 
     /**
@@ -699,6 +726,15 @@ public class TraceEvent implements AutoCloseable {
      */
     public static void instant(String name, String arg) {
         if (sEnabled) TraceEventJni.get().instant(name, arg);
+    }
+
+    /**
+     * Triggers a 'instant' native "AndroidIPC" event.
+     * @param name The name of the IPC.
+     * @param durMs The duration the IPC took in milliseconds.
+     */
+    public static void instantAndroidIPC(String name, long durMs) {
+        if (sEnabled) TraceEventJni.get().instantAndroidIPC(name, durMs);
     }
 
     /**
@@ -786,5 +822,123 @@ public class TraceEvent implements AutoCloseable {
         void endToplevel(String target);
         void startAsync(String name, long id);
         void finishAsync(String name, long id);
+        boolean viewHierarchyDumpEnabled();
+        void initViewHierarchyDump();
+        long startActivityDump(String name, long dumpProtoPtr);
+        void addViewDump(int id, int parentId, boolean isShown, boolean isDirty, String className,
+                String resourceName, long activityProtoPtr);
+        void instantAndroidIPC(String name, long durMs);
+    }
+
+    /**
+     * A method to be called by native code that uses the ViewHierarchyDumper class to emit a trace
+     * event with views of all running activities of the app.
+     */
+    @CalledByNative
+    public static void dumpViewHierarchy(long dumpProtoPtr) {
+        if (!ApplicationStatus.isInitialized()) {
+            return;
+        }
+
+        for (Activity a : ApplicationStatus.getRunningActivities()) {
+            long activityProtoPtr =
+                    TraceEventJni.get().startActivityDump(a.getClass().getName(), dumpProtoPtr);
+            ViewHierarchyDumper.dumpView(
+                    /*parentId=*/0, a.getWindow().getDecorView().getRootView(), activityProtoPtr);
+        }
+    }
+
+    /**
+     * A class that periodically dumps the view hierarchy of all running activities of the app to
+     * the trace. Enabled/disabled via the disabled-by-default-android_view_hierarchy trace
+     * category.
+     *
+     * The class registers itself as an idle handler, so that it can run when there are no other
+     * tasks in the queue (but not more often than once a second). When the queue is idle,
+     * it calls the initViewHierarchyDump() native function which in turn calls the
+     * TraceEvent.dumpViewHierarchy() with a pointer to the proto buffer to fill in. The
+     * TraceEvent.dumpViewHierarchy() traverses all activities and dumps view hierarchy for every
+     * activity. Altogether, the call sequence is as follows:
+     *   ViewHierarchyDumper.queueIdle()
+     *    -> JNI#initViewHierarchyDump()
+     *        -> TraceEvent.dumpViewHierarchy()
+     *            -> JNI#startActivityDump()
+     *            -> ViewHierarchyDumper.dumpView()
+     *                -> JNI#addViewDump()
+     */
+    private static final class ViewHierarchyDumper implements MessageQueue.IdleHandler {
+        private static final String EVENT_NAME = "TraceEvent.ViewHierarchyDumper";
+        private static final long MIN_VIEW_DUMP_INTERVAL_MILLIS = 1000L;
+        private static boolean sEnabled;
+        private static ViewHierarchyDumper sInstance;
+        private long mLastDumpTs;
+
+        @Override
+        public final boolean queueIdle() {
+            final long now = TimeUtils.elapsedRealtimeMillis();
+            if (mLastDumpTs == 0 || (now - mLastDumpTs) > MIN_VIEW_DUMP_INTERVAL_MILLIS) {
+                mLastDumpTs = now;
+                TraceEventJni.get().initViewHierarchyDump();
+            }
+
+            // Returning true to keep IdleHandler alive.
+            return true;
+        }
+
+        public static void updateEnabledState() {
+            if (!ThreadUtils.runningOnUiThread()) {
+                ThreadUtils.postOnUiThread(() -> { updateEnabledState(); });
+                return;
+            }
+
+            if (TraceEventJni.get().viewHierarchyDumpEnabled()) {
+                if (sInstance == null) {
+                    sInstance = new ViewHierarchyDumper();
+                }
+                enable();
+            } else {
+                if (sInstance != null) {
+                    disable();
+                }
+            }
+        }
+
+        private static void dumpView(int parentId, View v, long activityProtoPtr) {
+            ThreadUtils.assertOnUiThread();
+            int id = v.getId();
+            String resource;
+            try {
+                resource = v.getResources() != null
+                        ? (id != 0 ? v.getResources().getResourceName(id) : "__no_id__")
+                        : "__no_resources__";
+            } catch (NotFoundException e) {
+                resource = "__name_not_found__";
+            }
+            TraceEventJni.get().addViewDump(id, parentId, v.isShown(), v.isDirty(),
+                    v.getClass().getSimpleName(), resource, activityProtoPtr);
+
+            if (v instanceof ViewGroup) {
+                ViewGroup vg = (ViewGroup) v;
+                for (int i = 0; i < vg.getChildCount(); i++) {
+                    dumpView(id, vg.getChildAt(i), activityProtoPtr);
+                }
+            }
+        }
+
+        private static void enable() {
+            ThreadUtils.assertOnUiThread();
+            if (!sEnabled) {
+                Looper.myQueue().addIdleHandler(sInstance);
+                sEnabled = true;
+            }
+        }
+
+        private static void disable() {
+            ThreadUtils.assertOnUiThread();
+            if (sEnabled) {
+                Looper.myQueue().removeIdleHandler(sInstance);
+                sEnabled = false;
+            }
+        }
     }
 }

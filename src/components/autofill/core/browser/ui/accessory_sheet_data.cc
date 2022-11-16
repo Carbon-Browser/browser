@@ -82,17 +82,19 @@ std::ostream& operator<<(std::ostream& os, const AccessorySheetField& field) {
 UserInfo::UserInfo() = default;
 
 UserInfo::UserInfo(std::string origin)
-    : UserInfo(std::move(origin), IsPslMatch(false)) {}
+    : UserInfo(std::move(origin), IsExactMatch(true)) {}
 
-UserInfo::UserInfo(std::string origin, IsPslMatch is_psl_match)
-    : UserInfo(std::move(origin), is_psl_match, GURL()) {}
+UserInfo::UserInfo(std::string origin, IsExactMatch is_exact_match)
+    : UserInfo(std::move(origin), is_exact_match, GURL()) {}
 
 UserInfo::UserInfo(std::string origin, GURL icon_url)
-    : UserInfo(std::move(origin), IsPslMatch(false), std::move(icon_url)) {}
+    : UserInfo(std::move(origin), IsExactMatch(true), std::move(icon_url)) {}
 
-UserInfo::UserInfo(std::string origin, IsPslMatch is_psl_match, GURL icon_url)
+UserInfo::UserInfo(std::string origin,
+                   IsExactMatch is_exact_match,
+                   GURL icon_url)
     : origin_(std::move(origin)),
-      is_psl_match_(is_psl_match),
+      is_exact_match_(is_exact_match),
       icon_url_(std::move(icon_url)),
       estimated_dynamic_memory_use_(
           base::trace_event::EstimateMemoryUsage(origin_) +
@@ -110,7 +112,7 @@ UserInfo& UserInfo::operator=(UserInfo&& user_info) = default;
 
 bool UserInfo::operator==(const UserInfo& user_info) const {
   return fields_ == user_info.fields_ && origin_ == user_info.origin_ &&
-         is_psl_match_ == user_info.is_psl_match_ &&
+         is_exact_match_ == user_info.is_exact_match_ &&
          icon_url_ == user_info.icon_url_;
 }
 
@@ -120,7 +122,8 @@ size_t UserInfo::EstimateMemoryUsage() const {
 
 std::ostream& operator<<(std::ostream& os, const UserInfo& user_info) {
   os << "origin: \"" << user_info.origin() << "\", "
-     << "is_psl_match: " << std::boolalpha << user_info.is_psl_match() << ", "
+     << "is_exact_match: " << std::boolalpha << user_info.is_exact_match()
+     << ", "
      << "icon_url: " << user_info.icon_url() << ","
      << "fields: [\n";
   for (const AccessorySheetField& field : user_info.fields()) {
@@ -129,8 +132,49 @@ std::ostream& operator<<(std::ostream& os, const UserInfo& user_info) {
   return os << "]";
 }
 
+PromoCodeInfo::PromoCodeInfo(std::u16string promo_code,
+                             std::u16string details_text)
+    : promo_code_(AccessorySheetField(/*display_text=*/promo_code,
+                                      /*text_to_fill=*/promo_code,
+                                      /*a11y_description=*/promo_code,
+                                      /*id=*/std::string(),
+                                      /*is_password=*/false,
+                                      /*selectable=*/true)),
+      details_text_(details_text),
+      estimated_dynamic_memory_use_(
+          base::trace_event::EstimateMemoryUsage(promo_code_) +
+          base::trace_event::EstimateMemoryUsage(details_text_)) {}
+
+PromoCodeInfo::PromoCodeInfo(const PromoCodeInfo& promo_code_info) = default;
+
+PromoCodeInfo::PromoCodeInfo(PromoCodeInfo&& promo_code_info) = default;
+
+PromoCodeInfo::~PromoCodeInfo() = default;
+
+PromoCodeInfo& PromoCodeInfo::operator=(const PromoCodeInfo& promo_code_info) =
+    default;
+
+PromoCodeInfo& PromoCodeInfo::operator=(PromoCodeInfo&& promo_code_info) =
+    default;
+
+bool PromoCodeInfo::operator==(const PromoCodeInfo& promo_code_info) const {
+  return promo_code_ == promo_code_info.promo_code_ &&
+         details_text_ == promo_code_info.details_text_;
+}
+
+size_t PromoCodeInfo::EstimateMemoryUsage() const {
+  return sizeof(PromoCodeInfo) + estimated_dynamic_memory_use_;
+}
+
+std::ostream& operator<<(std::ostream& os,
+                         const PromoCodeInfo& promo_code_info) {
+  os << "promo_code: \"" << promo_code_info.promo_code() << "\", "
+     << "details_text: \"" << promo_code_info.details_text() << "\"";
+  return os;
+}
+
 FooterCommand::FooterCommand(std::u16string display_text,
-                             autofill::AccessoryAction action)
+                             AccessoryAction action)
     : display_text_(std::move(display_text)),
       accessory_action_(action),
       estimated_memory_use_by_strings_(
@@ -164,7 +208,7 @@ std::ostream& operator<<(std::ostream& os, const FooterCommand& fc) {
 
 OptionToggle::OptionToggle(std::u16string display_text,
                            bool enabled,
-                           autofill::AccessoryAction action)
+                           AccessoryAction action)
     : display_text_(display_text),
       enabled_(enabled),
       accessory_action_(action),
@@ -243,6 +287,7 @@ bool AccessorySheetData::operator==(const AccessorySheetData& data) const {
   return sheet_type_ == data.sheet_type_ && title_ == data.title_ &&
          warning_ == data.warning_ && option_toggle_ == data.option_toggle_ &&
          user_info_list_ == data.user_info_list_ &&
+         promo_code_info_list_ == data.promo_code_info_list_ &&
          footer_commands_ == data.footer_commands_;
 }
 
@@ -254,6 +299,7 @@ size_t AccessorySheetData::EstimateMemoryUsage() const {
               ? base::trace_event::EstimateMemoryUsage(option_toggle_.value())
               : 0) +
          base::trace_event::EstimateIterableMemoryUsage(user_info_list_) +
+         base::trace_event::EstimateIterableMemoryUsage(promo_code_info_list_) +
          base::trace_event::EstimateIterableMemoryUsage(footer_commands_);
 }
 
@@ -268,6 +314,10 @@ std::ostream& operator<<(std::ostream& os, const AccessorySheetData& data) {
   os << "\", warning: \"" << data.warning() << "\", and user info list: [";
   for (const UserInfo& user_info : data.user_info_list()) {
     os << user_info << ", ";
+  }
+  os << "], and promo code info list: [";
+  for (const PromoCodeInfo& promo_code_info : data.promo_code_info_list()) {
+    os << promo_code_info << ", ";
   }
   os << "], footer commands: [";
   for (const FooterCommand& footer_command : data.footer_commands()) {
@@ -297,7 +347,7 @@ AccessorySheetData::Builder& AccessorySheetData::Builder::SetWarning(
 AccessorySheetData::Builder&& AccessorySheetData::Builder::SetOptionToggle(
     std::u16string display_text,
     bool enabled,
-    autofill::AccessoryAction action) && {
+    AccessoryAction action) && {
   // Calls SetOptionToggle(...)& since |this| is an lvalue.
   return std::move(SetOptionToggle(std::move(display_text), enabled, action));
 }
@@ -305,7 +355,7 @@ AccessorySheetData::Builder&& AccessorySheetData::Builder::SetOptionToggle(
 AccessorySheetData::Builder& AccessorySheetData::Builder::SetOptionToggle(
     std::u16string display_text,
     bool enabled,
-    autofill::AccessoryAction action) & {
+    AccessoryAction action) & {
   accessory_sheet_data_.set_option_toggle(
       OptionToggle(std::move(display_text), enabled, action));
   return *this;
@@ -313,19 +363,19 @@ AccessorySheetData::Builder& AccessorySheetData::Builder::SetOptionToggle(
 
 AccessorySheetData::Builder&& AccessorySheetData::Builder::AddUserInfo(
     std::string origin,
-    UserInfo::IsPslMatch is_psl_match,
+    UserInfo::IsExactMatch is_exact_match,
     GURL icon_url) && {
   // Calls AddUserInfo()& since |this| is an lvalue.
   return std::move(
-      AddUserInfo(std::move(origin), is_psl_match, std::move(icon_url)));
+      AddUserInfo(std::move(origin), is_exact_match, std::move(icon_url)));
 }
 
 AccessorySheetData::Builder& AccessorySheetData::Builder::AddUserInfo(
     std::string origin,
-    UserInfo::IsPslMatch is_psl_match,
+    UserInfo::IsExactMatch is_exact_match,
     GURL icon_url) & {
   accessory_sheet_data_.add_user_info(
-      UserInfo(std::move(origin), is_psl_match, std::move(icon_url)));
+      UserInfo(std::move(origin), is_exact_match, std::move(icon_url)));
   return *this;
 }
 
@@ -396,16 +446,32 @@ AccessorySheetData::Builder& AccessorySheetData::Builder::AppendField(
   return *this;
 }
 
+AccessorySheetData::Builder&& AccessorySheetData::Builder::AddPromoCodeInfo(
+    std::u16string promo_code,
+    std::u16string details_text) && {
+  // Calls PromoCodeInfo(...)& since |this| is an lvalue.
+  return std::move(
+      AddPromoCodeInfo(std::move(promo_code), std::move(details_text)));
+}
+
+AccessorySheetData::Builder& AccessorySheetData::Builder::AddPromoCodeInfo(
+    std::u16string promo_code,
+    std::u16string details_text) & {
+  accessory_sheet_data_.add_promo_code_info(
+      (PromoCodeInfo(std::move(promo_code), std::move(details_text))));
+  return *this;
+}
+
 AccessorySheetData::Builder&& AccessorySheetData::Builder::AppendFooterCommand(
     std::u16string display_text,
-    autofill::AccessoryAction action) && {
+    AccessoryAction action) && {
   // Calls AppendFooterCommand(...)& since |this| is an lvalue.
   return std::move(AppendFooterCommand(std::move(display_text), action));
 }
 
 AccessorySheetData::Builder& AccessorySheetData::Builder::AppendFooterCommand(
     std::u16string display_text,
-    autofill::AccessoryAction action) & {
+    AccessoryAction action) & {
   accessory_sheet_data_.add_footer_command(
       FooterCommand(std::move(display_text), action));
   return *this;

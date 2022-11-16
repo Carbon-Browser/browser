@@ -7,7 +7,6 @@
 
 #include "base/callback_forward.h"
 #include "base/containers/flat_set.h"
-#include "base/macros.h"
 #include "base/types/strong_alias.h"
 #include "components/performance_manager/public/execution_context_priority/execution_context_priority.h"
 #include "components/performance_manager/public/graph/node.h"
@@ -79,6 +78,10 @@ class FrameNode : public Node {
   };
 
   FrameNode();
+
+  FrameNode(const FrameNode&) = delete;
+  FrameNode& operator=(const FrameNode&) = delete;
+
   ~FrameNode() override;
 
   // Returns the parent of this frame node. This may be null if this frame node
@@ -214,9 +217,6 @@ class FrameNode : public Node {
   // Returns a proxy to the RenderFrameHost associated with this node. The
   // proxy may only be dereferenced on the UI thread.
   virtual const RenderFrameHostProxy& GetRenderFrameHostProxy() const = 0;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(FrameNode);
 };
 
 // Pure virtual observer interface. Derive from this if you want to be forced to
@@ -224,6 +224,10 @@ class FrameNode : public Node {
 class FrameNodeObserver {
  public:
   FrameNodeObserver();
+
+  FrameNodeObserver(const FrameNodeObserver&) = delete;
+  FrameNodeObserver& operator=(const FrameNodeObserver&) = delete;
+
   virtual ~FrameNodeObserver();
 
   // Node lifetime notifications.
@@ -296,9 +300,6 @@ class FrameNodeObserver {
   virtual void OnFirstContentfulPaint(
       const FrameNode* frame_node,
       base::TimeDelta time_since_navigation_start) = 0;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(FrameNodeObserver);
 };
 
 // Default implementation of observer that provides dummy versions of each
@@ -307,6 +308,10 @@ class FrameNodeObserver {
 class FrameNode::ObserverDefaultImpl : public FrameNodeObserver {
  public:
   ObserverDefaultImpl();
+
+  ObserverDefaultImpl(const ObserverDefaultImpl&) = delete;
+  ObserverDefaultImpl& operator=(const ObserverDefaultImpl&) = delete;
+
   ~ObserverDefaultImpl() override;
 
   // FrameNodeObserver implementation:
@@ -335,9 +340,6 @@ class FrameNode::ObserverDefaultImpl : public FrameNodeObserver {
   void OnFirstContentfulPaint(
       const FrameNode* frame_node,
       base::TimeDelta time_since_navigation_start) override {}
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ObserverDefaultImpl);
 };
 
 }  // namespace performance_manager

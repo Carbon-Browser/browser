@@ -7,7 +7,6 @@
 #include "ash/constants/app_types.h"
 #include "base/bind.h"
 #include "base/test/task_environment.h"
-#include "chrome/browser/ui/app_list/search/arc/arc_app_reinstall_search_provider.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/aura/test/test_window_delegate.h"
@@ -20,6 +19,11 @@ class ArcActiveWindowThrottleObserverTest : public testing::Test {
   ArcActiveWindowThrottleObserverTest()
       : task_environment_(base::test::TaskEnvironment::MainThreadType::UI) {}
 
+  ArcActiveWindowThrottleObserverTest(
+      const ArcActiveWindowThrottleObserverTest&) = delete;
+  ArcActiveWindowThrottleObserverTest& operator=(
+      const ArcActiveWindowThrottleObserverTest&) = delete;
+
  protected:
   ArcActiveWindowThrottleObserver* window_observer() {
     return &window_observer_;
@@ -28,18 +32,18 @@ class ArcActiveWindowThrottleObserverTest : public testing::Test {
  private:
   base::test::SingleThreadTaskEnvironment task_environment_;
   ArcActiveWindowThrottleObserver window_observer_;
-
-  DISALLOW_COPY_AND_ASSIGN(ArcActiveWindowThrottleObserverTest);
 };
 
 TEST_F(ArcActiveWindowThrottleObserverTest, TestConstructDestruct) {}
 
 TEST_F(ArcActiveWindowThrottleObserverTest, TestOnWindowActivated) {
   aura::test::TestWindowDelegate dummy_delegate;
-  aura::Window* arc_window = aura::test::CreateTestWindowWithDelegate(
-      &dummy_delegate, 1, gfx::Rect(), nullptr);
-  aura::Window* chrome_window = aura::test::CreateTestWindowWithDelegate(
-      &dummy_delegate, 2, gfx::Rect(), nullptr);
+  std::unique_ptr<aura::Window> arc_window(
+      aura::test::CreateTestWindowWithDelegate(&dummy_delegate, 1, gfx::Rect(),
+                                               nullptr));
+  std::unique_ptr<aura::Window> chrome_window(
+      aura::test::CreateTestWindowWithDelegate(&dummy_delegate, 2, gfx::Rect(),
+                                               nullptr));
   arc_window->SetProperty(aura::client::kAppType,
                           static_cast<int>(ash::AppType::ARC_APP));
   chrome_window->SetProperty(aura::client::kAppType,
@@ -49,12 +53,12 @@ TEST_F(ArcActiveWindowThrottleObserverTest, TestOnWindowActivated) {
 
   window_observer()->OnWindowActivated(
       ArcActiveWindowThrottleObserver::ActivationReason::INPUT_EVENT,
-      arc_window, chrome_window);
+      arc_window.get(), chrome_window.get());
   EXPECT_TRUE(window_observer()->active());
 
   window_observer()->OnWindowActivated(
       ArcActiveWindowThrottleObserver::ActivationReason::INPUT_EVENT,
-      chrome_window, arc_window);
+      chrome_window.get(), arc_window.get());
   EXPECT_FALSE(window_observer()->active());
 }
 

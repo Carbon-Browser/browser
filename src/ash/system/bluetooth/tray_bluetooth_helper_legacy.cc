@@ -7,12 +7,14 @@
 #include <string>
 #include <utility>
 
+#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/system_tray_client.h"
 #include "ash/shell.h"
 #include "ash/system/bluetooth/bluetooth_power_controller.h"
 #include "ash/system/model/system_tray_model.h"
 #include "base/bind.h"
 #include "base/callback_helpers.h"
+#include "base/check.h"
 #include "base/metrics/user_metrics.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
@@ -118,9 +120,12 @@ BluetoothDeviceInfoPtr GetBluetoothDeviceInfo(device::BluetoothDevice* device) {
   info->name = device->GetName();
   info->is_paired = device->IsPaired();
   info->is_blocked_by_policy = device->IsBlockedByPolicy();
-  if (device->battery_percentage()) {
+
+  absl::optional<device::BluetoothDevice::BatteryInfo> battery_info =
+      device->GetBatteryInfo(device::BluetoothDevice::BatteryType::kDefault);
+  if (battery_info && battery_info->percentage.has_value()) {
     info->battery_info =
-        BluetoothDeviceBatteryInfo::New(device->battery_percentage().value());
+        BluetoothDeviceBatteryInfo::New(battery_info->percentage.value());
   }
 
   switch (device->GetDeviceType()) {
@@ -182,7 +187,9 @@ BluetoothDeviceInfoPtr GetBluetoothDeviceInfo(device::BluetoothDevice* device) {
 
 }  // namespace
 
-TrayBluetoothHelperLegacy::TrayBluetoothHelperLegacy() {}
+TrayBluetoothHelperLegacy::TrayBluetoothHelperLegacy() {
+  DCHECK(!ash::features::IsBluetoothRevampEnabled());
+}
 
 TrayBluetoothHelperLegacy::~TrayBluetoothHelperLegacy() {
   if (adapter_)
@@ -286,8 +293,7 @@ void TrayBluetoothHelperLegacy::ConnectToBluetoothDevice(
 
   // Show pairing dialog for the unpaired device; this kicks off pairing.
   Shell::Get()->system_tray_model()->client()->ShowBluetoothPairingDialog(
-      device->GetAddress(), device->GetNameForDisplay(), device->IsPaired(),
-      device->IsConnected());
+      device->GetAddress());
 }
 
 BluetoothSystem::State TrayBluetoothHelperLegacy::GetBluetoothState() {
@@ -305,9 +311,13 @@ BluetoothSystem::State TrayBluetoothHelperLegacy::GetBluetoothState() {
 
 void TrayBluetoothHelperLegacy::SetBluetoothEnabled(bool enabled) {
   if (enabled != (GetBluetoothState() == BluetoothSystem::State::kPoweredOn)) {
-    Shell::Get()->metrics()->RecordUserMetricsAction(
-        enabled ? UMA_STATUS_AREA_BLUETOOTH_ENABLED
-                : UMA_STATUS_AREA_BLUETOOTH_DISABLED);
+    if (enabled) {
+      base::RecordAction(
+          base::UserMetricsAction("StatusArea_Bluetooth_Enabled"));
+    } else {
+      base::RecordAction(
+          base::UserMetricsAction("StatusArea_Bluetooth_Disabled"));
+    }
   }
 
   Shell::Get()->bluetooth_power_controller()->SetBluetoothEnabled(enabled);

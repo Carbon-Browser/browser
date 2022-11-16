@@ -49,6 +49,10 @@ bool AXObjectHandlesSelector(id<NSAccessibility> ax_obj, SEL action) {
 class FlexibleRoleTestView : public View {
  public:
   explicit FlexibleRoleTestView(ax::mojom::Role role) : role_(role) {}
+
+  FlexibleRoleTestView(const FlexibleRoleTestView&) = delete;
+  FlexibleRoleTestView& operator=(const FlexibleRoleTestView&) = delete;
+
   void set_role(ax::mojom::Role role) { role_ = role; }
 
   // Add a child view and resize to fit the child.
@@ -74,8 +78,6 @@ class FlexibleRoleTestView : public View {
  private:
   ax::mojom::Role role_;
   bool mouse_was_pressed_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(FlexibleRoleTestView);
 };
 
 class TestLabelButton : public LabelButton {
@@ -85,15 +87,18 @@ class TestLabelButton : public LabelButton {
     label()->SetSize(gfx::Size(1, 1));
   }
 
-  using LabelButton::label;
+  TestLabelButton(const TestLabelButton&) = delete;
+  TestLabelButton& operator=(const TestLabelButton&) = delete;
 
- private:
-  DISALLOW_COPY_AND_ASSIGN(TestLabelButton);
+  using LabelButton::label;
 };
 
 class TestWidgetDelegate : public test::TestDesktopWidgetDelegate {
  public:
   TestWidgetDelegate() = default;
+
+  TestWidgetDelegate(const TestWidgetDelegate&) = delete;
+  TestWidgetDelegate& operator=(const TestWidgetDelegate&) = delete;
 
   static constexpr char16_t kAccessibleWindowTitle[] = u"My Accessible Window";
 
@@ -101,9 +106,6 @@ class TestWidgetDelegate : public test::TestDesktopWidgetDelegate {
   std::u16string GetAccessibleWindowTitle() const override {
     return kAccessibleWindowTitle;
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(TestWidgetDelegate);
 };
 
 constexpr char16_t TestWidgetDelegate::kAccessibleWindowTitle[];
@@ -114,6 +116,9 @@ constexpr char16_t TestWidgetDelegate::kAccessibleWindowTitle[];
 class AXNativeWidgetMacTest : public test::WidgetTest {
  public:
   AXNativeWidgetMacTest() = default;
+
+  AXNativeWidgetMacTest(const AXNativeWidgetMacTest&) = delete;
+  AXNativeWidgetMacTest& operator=(const AXNativeWidgetMacTest&) = delete;
 
   void SetUp() override {
     test::WidgetTest::SetUp();
@@ -150,8 +155,6 @@ class AXNativeWidgetMacTest : public test::WidgetTest {
 
  private:
   TestWidgetDelegate widget_delegate_;
-
-  DISALLOW_COPY_AND_ASSIGN(AXNativeWidgetMacTest);
 };
 
 }  // namespace
@@ -188,8 +191,10 @@ TEST_F(AXNativeWidgetMacTest, Lifetime) {
   // attribute normally and returns its size (if it's an array).
   base::scoped_nsprotocol<id<NSAccessibility>> ax_parent(
       ax_obj.accessibilityParent, base::scoped_policy::RETAIN);
-  EXPECT_EQ(1u, ax_parent.get().accessibilityChildren.count);
-  EXPECT_EQ(ax_node.get(), ax_parent.get().accessibilityChildren[0]);
+
+  // There are two children: a NativeFrameView and the TextField.
+  EXPECT_EQ(2u, ax_parent.get().accessibilityChildren.count);
+  EXPECT_EQ(ax_node.get(), ax_parent.get().accessibilityChildren[1]);
 
   // If it is not an array, the default implementation throws an exception, so
   // it's impossible to test these methods further on |ax_node|, apart from the
@@ -222,8 +227,9 @@ TEST_F(AXNativeWidgetMacTest, Lifetime) {
   EXPECT_EQ(NSNotFound, static_cast<NSInteger>(
                             [ax_node accessibilityIndexOfChild:ax_node]));
 
-  // The Widget is currently still around, but the child should be gone.
-  EXPECT_EQ(0u, ax_parent.get().accessibilityChildren.count);
+  // The Widget is currently still around, but the TextField should be gone,
+  // leaving just the NativeFrameView.
+  EXPECT_EQ(1u, ax_parent.get().accessibilityChildren.count);
 }
 
 // Check that potentially keyboard-focusable elements are always leaf nodes.
@@ -256,9 +262,10 @@ TEST_F(AXNativeWidgetMacTest, FocusableElementsAreLeafNodes) {
 // Test for NSAccessibilityChildrenAttribute, and ensure it excludes ignored
 // children from the accessibility tree.
 TEST_F(AXNativeWidgetMacTest, ChildrenAttribute) {
-  // Check childless views don't have accessibility children.
-  id<NSAccessibility> ax_node = A11yElementAtMidpoint();
-  EXPECT_EQ(0u, ax_node.accessibilityChildren.count);
+  // The ContentsView initially has a single child, a NativeFrameView.
+  id<NSAccessibility> ax_node =
+      widget()->GetContentsView()->GetNativeViewAccessible();
+  EXPECT_EQ(1u, ax_node.accessibilityChildren.count);
 
   const size_t kNumChildren = 3;
   for (size_t i = 0; i < kNumChildren; ++i) {
@@ -266,12 +273,13 @@ TEST_F(AXNativeWidgetMacTest, ChildrenAttribute) {
     AddChildTextfield(gfx::Size());
   }
 
-  EXPECT_EQ(kNumChildren, ax_node.accessibilityChildren.count);
+  // Having added three non-ignored children, the count is four.
+  EXPECT_EQ(kNumChildren + 1, ax_node.accessibilityChildren.count);
 
   // Check ignored children don't show up in the accessibility tree.
   widget()->GetContentsView()->AddChildView(
       new FlexibleRoleTestView(ax::mojom::Role::kNone));
-  EXPECT_EQ(kNumChildren, ax_node.accessibilityChildren.count);
+  EXPECT_EQ(kNumChildren + 1, ax_node.accessibilityChildren.count);
 }
 
 // Test for NSAccessibilityParentAttribute, including for a Widget with no
@@ -393,21 +401,13 @@ TEST_F(AXNativeWidgetMacTest, TextfieldGenericAttributes) {
   EXPECT_TRUE(AXObjectHandlesSelector(A11yElementAtMidpoint(),
                                       @selector(accessibilityPerformShowMenu)));
 
-  // Prevent the textfield from interfering with hit tests on the widget itself.
-  widget()->GetContentsView()->RemoveChildView(textfield);
-
   // NSAccessibilitySizeAttribute.
   EXPECT_EQ(GetWidgetBounds().size(),
             gfx::Size(ax_obj.accessibilityFrame.size));
   // Check the attribute is updated when the Widget is resized.
   gfx::Size new_size(200, 40);
-  widget()->SetSize(new_size);
-  // TODO(https://crbug.com/939860): Why does this fail to update with the new
-  // API but not the old one? With the new API, the frame is the same as it was
-  // before the change - perhaps we need to invalidate a cache somewhere? This
-  // EXPECT_NE() is actually checking that the behavior is *wrong*, so if it
-  // ever starts failing, you fixed 939860 :)
-  EXPECT_NE(new_size, gfx::Size(ax_obj.accessibilityFrame.size));
+  textfield->SetSize(new_size);
+  EXPECT_EQ(new_size, gfx::Size(ax_obj.accessibilityFrame.size));
 }
 
 TEST_F(AXNativeWidgetMacTest, TextfieldEditableAttributes) {
@@ -769,15 +769,15 @@ class TestComboboxModel : public ui::ComboboxModel {
  public:
   TestComboboxModel() = default;
 
+  TestComboboxModel(const TestComboboxModel&) = delete;
+  TestComboboxModel& operator=(const TestComboboxModel&) = delete;
+
   // ui::ComboboxModel:
-  int GetItemCount() const override { return 2; }
-  std::u16string GetItemAt(int index) const override {
+  size_t GetItemCount() const override { return 2; }
+  std::u16string GetItemAt(size_t index) const override {
     return index == 0 ? base::SysNSStringToUTF16(kTestStringValue)
                       : u"Second Item";
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(TestComboboxModel);
 };
 
 // Test a11y attributes of Comboboxes.

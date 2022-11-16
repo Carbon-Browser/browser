@@ -5,7 +5,6 @@
 #ifndef CHROME_BROWSER_EXTENSIONS_CONTENT_VERIFIER_TEST_UTILS_H_
 #define CHROME_BROWSER_EXTENSIONS_CONTENT_VERIFIER_TEST_UTILS_H_
 
-#include <list>
 #include <map>
 #include <memory>
 #include <set>
@@ -14,7 +13,8 @@
 
 #include "base/callback_helpers.h"
 #include "base/files/file_path.h"
-#include "chrome/browser/extensions/policy_extension_reinstaller.h"
+#include "base/time/time.h"
+#include "chrome/browser/extensions/corrupted_extension_reinstaller.h"
 #include "content/public/browser/browser_thread.h"
 #include "extensions/browser/content_verifier.h"
 #include "extensions/browser/content_verify_job.h"
@@ -27,7 +27,6 @@ namespace extensions {
 
 class ExtensionDownloader;
 class ExtensionDownloaderDelegate;
-class ManifestFetchData;
 
 namespace content_verifier_test {
 
@@ -36,6 +35,10 @@ namespace content_verifier_test {
 class DownloaderTestDelegate : public ExtensionDownloaderTestDelegate {
  public:
   DownloaderTestDelegate();
+
+  DownloaderTestDelegate(const DownloaderTestDelegate&) = delete;
+  DownloaderTestDelegate& operator=(const DownloaderTestDelegate&) = delete;
+
   ~DownloaderTestDelegate();
 
   // This makes it so that update check requests for |extension_id| will return
@@ -45,22 +48,20 @@ class DownloaderTestDelegate : public ExtensionDownloaderTestDelegate {
                    const std::string& version_string,
                    const base::FilePath& crx_path);
 
-  const std::vector<std::unique_ptr<ManifestFetchData>>& requests();
+  const std::vector<ExtensionDownloaderTask>& requests();
 
   // ExtensionDownloaderTestDelegate:
   void StartUpdateCheck(ExtensionDownloader* downloader,
                         ExtensionDownloaderDelegate* delegate,
-                        std::unique_ptr<ManifestFetchData> fetch_data) override;
+                        std::vector<ExtensionDownloaderTask> tasks) override;
 
  private:
   // The requests we've received.
-  std::vector<std::unique_ptr<ManifestFetchData>> requests_;
+  std::vector<ExtensionDownloaderTask> requests_;
 
   // The prepared responses - this maps an extension id to a (version string,
   // crx file path) pair.
   std::map<ExtensionId, std::pair<base::Version, base::FilePath>> responses_;
-
-  DISALLOW_COPY_AND_ASSIGN(DownloaderTestDelegate);
 };
 
 // This lets us simulate a policy-installed extension being "force" installed;
@@ -68,6 +69,10 @@ class DownloaderTestDelegate : public ExtensionDownloaderTestDelegate {
 class ForceInstallProvider : public ManagementPolicy::Provider {
  public:
   explicit ForceInstallProvider(const ExtensionId& id);
+
+  ForceInstallProvider(const ForceInstallProvider&) = delete;
+  ForceInstallProvider& operator=(const ForceInstallProvider&) = delete;
+
   ~ForceInstallProvider() override;
 
   std::string GetDebugPolicyProviderName() const override;
@@ -79,8 +84,6 @@ class ForceInstallProvider : public ManagementPolicy::Provider {
  private:
   // The extension id we want to disallow uninstall/disable for.
   ExtensionId id_;
-
-  DISALLOW_COPY_AND_ASSIGN(ForceInstallProvider);
 };
 
 // A helper for intercepting the normal action that
@@ -89,6 +92,9 @@ class ForceInstallProvider : public ManagementPolicy::Provider {
 class DelayTracker {
  public:
   DelayTracker();
+
+  DelayTracker(const DelayTracker&) = delete;
+  DelayTracker& operator=(const DelayTracker&) = delete;
 
   ~DelayTracker();
 
@@ -100,9 +106,7 @@ class DelayTracker {
  private:
   std::vector<base::TimeDelta> calls_;
   absl::optional<base::OnceClosure> saved_callback_;
-  PolicyExtensionReinstaller::ReinstallCallback action_;
-
-  DISALLOW_COPY_AND_ASSIGN(DelayTracker);
+  CorruptedExtensionReinstaller::ReinstallCallback action_;
 };
 
 }  // namespace content_verifier_test

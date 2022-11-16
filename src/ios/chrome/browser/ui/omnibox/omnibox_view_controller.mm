@@ -39,12 +39,8 @@ const CGFloat kClearButtonSize = 28.0f;
 
 }  // namespace
 
-#if defined(__IPHONE_14_0)
-@interface OmniboxViewController (Scribble) <UIScribbleInteractionDelegate>
-@end
-#endif  // defined(__IPHONE14_0)
-
-@interface OmniboxViewController () <OmniboxTextFieldDelegate> {
+@interface OmniboxViewController () <OmniboxTextFieldDelegate,
+                                     UIScribbleInteractionDelegate> {
   // Weak, acts as a delegate
   OmniboxTextChangeDelegate* _textChangeDelegate;
 }
@@ -84,10 +80,10 @@ const CGFloat kClearButtonSize = 28.0f;
 // Stores whether the clipboard currently stores copied content.
 @property(nonatomic, assign) BOOL hasCopiedContent;
 // Stores the current content type in the clipboard. This is only valid if
-// |hasCopiedContent| is YES.
+// `hasCopiedContent` is YES.
 @property(nonatomic, assign) ClipboardContentType copiedContentType;
 // Stores whether the cached clipboard state is currently being updated. See
-// |-updateCachedClipboardState| for more information.
+// `-updateCachedClipboardState` for more information.
 @property(nonatomic, assign) BOOL isUpdatingCachedClipboardState;
 
 @end
@@ -122,12 +118,8 @@ const CGFloat kClearButtonSize = 28.0f;
   SetA11yLabelAndUiAutomationName(self.textField, IDS_ACCNAME_LOCATION,
                                   @"Address");
 
-#if defined(__IPHONE_14_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_14_0
-  if (@available(iOS 14, *)) {
-    [self.textField
-        addInteraction:[[UIScribbleInteraction alloc] initWithDelegate:self]];
-  }
-#endif  // defined(__IPHONE_14_0)
+  [self.textField
+      addInteraction:[[UIScribbleInteraction alloc] initWithDelegate:self]];
 }
 
 - (void)viewDidLoad {
@@ -158,6 +150,8 @@ const CGFloat kClearButtonSize = 28.0f;
 - (void)viewWillAppear:(BOOL)animated {
   [super viewWillAppear:animated];
 
+  [self.view attachLayoutGuides];
+
   [NSNotificationCenter.defaultCenter
       addObserver:self
          selector:@selector(pasteboardDidChange:)
@@ -172,12 +166,6 @@ const CGFloat kClearButtonSize = 28.0f;
          selector:@selector(applicationDidBecomeActive:)
              name:UIApplicationDidBecomeActiveNotification
            object:nil];
-}
-
-- (void)viewDidAppear:(BOOL)animated {
-  [super viewDidAppear:animated];
-
-  [self.view attachLayoutGuides];
 }
 
 - (void)viewWillDisappear:(BOOL)animated {
@@ -286,12 +274,12 @@ const CGFloat kClearButtonSize = 28.0f;
 
 // Delegate method for UITextField, called when user presses the "go" button.
 - (BOOL)textFieldShouldReturn:(UITextField*)textField {
-  if (!_textChangeDelegate) {
+  if (!self.returnKeyDelegate) {
     // This can happen when the view controller is still alive but the model is
     // already deconstructed on shutdown.
     return YES;
   }
-  _textChangeDelegate->OnAccept();
+  [self.returnKeyDelegate omniboxReturnPressed:self];
   return NO;
 }
 
@@ -391,6 +379,10 @@ const CGFloat kClearButtonSize = 28.0f;
   self.searchByImageEnabled = searchByImageSupported;
 }
 
+- (void)updateText:(NSAttributedString*)text {
+  [self.textField setText:text userTextLength:text.length];
+}
+
 #pragma mark - EditViewAnimatee
 
 - (void)setLeadingIconFaded:(BOOL)faded {
@@ -487,22 +479,12 @@ const CGFloat kClearButtonSize = 28.0f;
 
   // Cancel original menu opening.
   UIMenuController* menuController = [UIMenuController sharedMenuController];
-#if !defined(__IPHONE_13_0) || __IPHONE_OS_VERSION_MIN_REQUIRED < __IPHONE_13_0
-  [menuController setMenuVisible:NO animated:NO];
-
-  // Reset where it should open below text field and reopen it.
-  menuController.arrowDirection = UIMenuControllerArrowUp;
-
-  [menuController setTargetRect:self.textField.frame inView:self.textField];
-  [menuController setMenuVisible:YES animated:YES];
-#else
   [menuController hideMenu];
 
   // Reset where it should open below text field and reopen it.
   menuController.arrowDirection = UIMenuControllerArrowUp;
 
   [menuController showMenuFromView:self.textField rect:self.textField.frame];
-#endif
 
   self.showingEditMenu = NO;
 }
@@ -519,12 +501,12 @@ const CGFloat kClearButtonSize = 28.0f;
 
 // Omnibox uses a custom clear button. It has a custom tint and image, but
 // otherwise it should act exactly like a system button. To achieve this, a
-// custom button is used as the |rightView|. Textfield's setRightViewMode: is
+// custom button is used as the `rightView`. Textfield's setRightViewMode: is
 // used to make the button invisible when the textfield is empty; the visibility
 // is updated on textfield text changes and clear button presses.
 - (void)setupClearButton {
   // Do not use the system clear button. Use a custom "right view" instead.
-  // Note that |rightView| is an incorrect name, it's really a trailing view.
+  // Note that `rightView` is an incorrect name, it's really a trailing view.
   [self.textField setClearButtonMode:UITextFieldViewModeNever];
   [self.textField setRightViewMode:UITextFieldViewModeAlways];
 
@@ -540,11 +522,9 @@ const CGFloat kClearButtonSize = 28.0f;
   SetA11yLabelAndUiAutomationName(clearButton, IDS_IOS_ACCNAME_CLEAR_TEXT,
                                   @"Clear Text");
 
-  if (@available(iOS 13.4, *)) {
-      clearButton.pointerInteractionEnabled = YES;
-      clearButton.pointerStyleProvider =
-          CreateLiftEffectCirclePointerStyleProvider();
-  }
+  clearButton.pointerInteractionEnabled = YES;
+  clearButton.pointerStyleProvider =
+      CreateLiftEffectCirclePointerStyleProvider();
 
   // Observe text changes to show the clear button when there is text and hide
   // it when the textfield is empty.
@@ -616,16 +596,7 @@ const CGFloat kClearButtonSize = 28.0f;
   RecordAction(
       UserMetricsAction("Mobile.OmniboxContextMenu.SearchCopiedImage"));
   self.omniboxInteractedWhileFocused = YES;
-  ClipboardRecentContent::GetInstance()->GetRecentImageFromClipboard(
-      base::BindOnce(^(absl::optional<gfx::Image> optionalImage) {
-        if (!optionalImage) {
-          return;
-        }
-        UIImage* image = optionalImage.value().ToUIImage();
-        dispatch_async(dispatch_get_main_queue(), ^{
-          [self.dispatcher searchByImage:image];
-        });
-      }));
+  [self.delegate omniboxViewControllerSearchCopiedImage:self];
 }
 
 - (void)visitCopiedLink:(id)sender {
@@ -669,8 +640,6 @@ const CGFloat kClearButtonSize = 28.0f;
 
 #pragma mark - UIScribbleInteractionDelegate
 
-#if defined(__IPHONE_14_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_14_0
-
 - (void)scribbleInteractionWillBeginWriting:(UIScribbleInteraction*)interaction
     API_AVAILABLE(ios(14.0)) {
   if (self.textField.isPreEditing) {
@@ -689,7 +658,5 @@ const CGFloat kClearButtonSize = 28.0f;
   // Dismiss any inline autocomplete. The user expectation is to not have it.
   [self.textField clearAutocompleteText];
 }
-
-#endif  // defined(__IPHONE_14_0)
 
 @end

@@ -13,19 +13,19 @@
 #include "base/feature_list.h"
 #include "base/location.h"
 #include "base/notreached.h"
-#include "base/single_thread_task_runner.h"
+#include "base/observer_list.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/supports_user_data.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "components/google/core/common/google_util.h"
 #include "components/language/core/browser/url_language_histogram.h"
 #include "components/translate/content/browser/content_record_page_language.h"
-#include "components/translate/content/browser/translate_model_service.h"
 #include "components/translate/core/browser/translate_download_manager.h"
 #include "components/translate/core/browser/translate_manager.h"
 #include "components/translate/core/browser/translate_metrics_logger.h"
+#include "components/translate/core/browser/translate_model_service.h"
 #include "components/translate/core/common/translate_metrics.h"
-#include "components/ukm/content/source_url_recorder.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_details.h"
@@ -36,6 +36,7 @@
 #include "content/public/browser/render_view_host.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/referrer.h"
+#include "net/http/http_response_headers.h"
 #include "net/http/http_status_code.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
 #include "url/gurl.h"
@@ -58,18 +59,14 @@ const base::Feature kAutoHrefTranslateAllOrigins{
 
 ContentTranslateDriver::ContentTranslateDriver(
     content::WebContents& web_contents,
-    content::NavigationController* nav_controller,
     language::UrlLanguageHistogram* url_language_histogram,
     translate::TranslateModelService* translate_model_service)
     : content::WebContentsObserver(&web_contents),
-      navigation_controller_(nav_controller),
       translate_manager_(nullptr),
       max_reload_check_attempts_(kMaxTranslateLoadCheckAttempts),
       next_page_seq_no_(0),
       language_histogram_(url_language_histogram),
-      translate_model_service_(translate_model_service) {
-  DCHECK(navigation_controller_);
-}
+      translate_model_service_(translate_model_service) {}
 
 ContentTranslateDriver::~ContentTranslateDriver() = default;
 
@@ -99,7 +96,7 @@ void ContentTranslateDriver::InitiateTranslation(const std::string& page_lang,
         base::BindOnce(&ContentTranslateDriver::InitiateTranslation,
                        weak_pointer_factory_.GetWeakPtr(), page_lang,
                        attempt + 1),
-        base::TimeDelta::FromMilliseconds(backoff));
+        base::Milliseconds(backoff));
     return;
   }
 
@@ -110,12 +107,12 @@ void ContentTranslateDriver::InitiateTranslation(const std::string& page_lang,
 // TranslateDriver methods
 
 bool ContentTranslateDriver::IsLinkNavigation() {
-  return navigation_controller_ &&
-         navigation_controller_->GetLastCommittedEntry() &&
-         ui::PageTransitionCoreTypeIs(
-             navigation_controller_->GetLastCommittedEntry()
-                 ->GetTransitionType(),
-             ui::PAGE_TRANSITION_LINK);
+  return web_contents()->GetController().GetLastCommittedEntry() &&
+         ui::PageTransitionCoreTypeIs(web_contents()
+                                          ->GetController()
+                                          .GetLastCommittedEntry()
+                                          ->GetTransitionType(),
+                                      ui::PAGE_TRANSITION_LINK);
 }
 
 void ContentTranslateDriver::OnTranslateEnabledChanged() {
@@ -151,7 +148,7 @@ void ContentTranslateDriver::RevertTranslation(int page_seq_no) {
 }
 
 bool ContentTranslateDriver::IsIncognito() {
-  return navigation_controller_->GetBrowserContext()->IsOffTheRecord();
+  return web_contents()->GetBrowserContext()->IsOffTheRecord();
 }
 
 const std::string& ContentTranslateDriver::GetContentsMimeType() {
@@ -167,11 +164,16 @@ const GURL& ContentTranslateDriver::GetVisibleURL() {
 }
 
 ukm::SourceId ContentTranslateDriver::GetUkmSourceId() {
-  return ukm::GetSourceIdForWebContentsDocument(web_contents());
+  return web_contents()->GetPrimaryMainFrame()->GetPageUkmSourceId();
 }
 
 bool ContentTranslateDriver::HasCurrentPage() {
-  return (navigation_controller_->GetLastCommittedEntry() != nullptr);
+  // TODO(https://crbug.com/524208): This function used to check the existence
+  // of GetLastCommittedEntry(), which will always exist now. Consider removing
+  // this function, making the callers assume HasCurrentPage() is always true.
+  content::NavigationEntry* current_entry =
+      web_contents()->GetController().GetLastCommittedEntry();
+  return current_entry && !current_entry->IsInitialEntry();
 }
 
 void ContentTranslateDriver::OpenUrlInNewTab(const GURL& url) {
@@ -285,9 +287,6 @@ void ContentTranslateDriver::DidFinishNavigation(
                                       google_util::ALLOW_NON_STANDARD_PORTS) ||
        IsAutoHrefTranslateAllOriginsEnabled());
 
-  // TODO(https://crbug.com/1218946): With MPArch there may be multiple main
-  // frames. This caller was converted automatically to the primary main frame
-  // to preserve its semantics. Follow up to confirm correctness.
   translate_manager_->GetLanguageState()->DidNavigate(
       navigation_handle->IsSameDocument(),
       navigation_handle->IsInPrimaryMainFrame(), reload,
@@ -383,16 +382,30 @@ void ContentTranslateDriver::GetLanguageDetectionModel(
     std::move(callback).Run(base::File());
     return;
   }
-  translate_model_service_->GetLanguageDetectionModelFile(
-      base::BindOnce(&ContentTranslateDriver::OnLanguageDetectionModelFile,
-                     weak_pointer_factory_.GetWeakPtr(), std::move(callback)));
+  // If the model file is not available, request the translate model service
+  // notify |this| when it is. The two-step process is to ensure that
+  // the model file and callback lifetimes are carefully managed so they
+  // are not freed without be handled on the appropriate thread, particularly
+  // for the model file.
+  if (!translate_model_service_->IsModelAvailable()) {
+    translate_model_service_->NotifyOnModelFileAvailable(base::BindOnce(
+        &ContentTranslateDriver::OnLanguageModelFileAvailabilityChanged,
+        weak_pointer_factory_.GetWeakPtr(), std::move(callback)));
+    return;
+  }
+
+  OnLanguageModelFileAvailabilityChanged(std::move(callback), true);
 }
 
-void ContentTranslateDriver::OnLanguageDetectionModelFile(
+void ContentTranslateDriver::OnLanguageModelFileAvailabilityChanged(
     GetLanguageDetectionModelCallback callback,
-    base::File model_file) {
-  DCHECK(model_file.IsValid());
-  std::move(callback).Run(std::move(model_file));
+    bool is_available) {
+  if (!is_available) {
+    std::move(callback).Run(base::File());
+    return;
+  }
+  std::move(callback).Run(
+      translate_model_service_->GetLanguageDetectionModelFile());
 }
 
 }  // namespace translate

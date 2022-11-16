@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "base/command_line.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/task_manager/mock_web_contents_task_manager.h"
 #include "chrome/browser/ui/browser.h"
@@ -36,6 +37,14 @@ const char kSimplePageUrl[] = "/cross-site/a.com/title2.html";
 std::u16string GetExpectedSubframeTitlePrefix() {
   return l10n_util::GetStringFUTF16(IDS_TASK_MANAGER_SUBFRAME_PREFIX,
                                     std::u16string());
+}
+
+std::u16string PrefixExpectedBFCacheTitle(const std::string& title,
+                                          bool is_subframe) {
+  const auto msg_id = is_subframe
+                          ? IDS_TASK_MANAGER_BACK_FORWARD_CACHE_SUBFRAME_PREFIX
+                          : IDS_TASK_MANAGER_BACK_FORWARD_CACHE_PREFIX;
+  return l10n_util::GetStringFUTF16(msg_id, base::UTF8ToUTF16(title));
 }
 
 std::u16string PrefixExpectedTabTitle(const std::string& title) {
@@ -132,7 +141,25 @@ IN_PROC_BROWSER_TEST_F(SubframeTaskBrowserTest, TaskManagerShowsSubframeTasks) {
           ? 4U
           : 1U,
       task_manager.tasks().size());
-  const Task* simple_page_task = task_manager.tasks().front();
+
+  const auto& tasks = task_manager.tasks();
+  // Main page and two cross-origin iframes.
+  if (content::BackForwardCache::IsSameSiteBackForwardCacheFeatureEnabled()) {
+    EXPECT_EQ(
+        PrefixExpectedBFCacheTitle("http://a.com/", /*is_subframe=*/false),
+        tasks[0]->title());
+    EXPECT_EQ(PrefixExpectedBFCacheTitle("http://b.com/",
+                                         /*is_subframe=*/true),
+              tasks[1]->title());
+    EXPECT_EQ(PrefixExpectedBFCacheTitle("http://c.com/",
+                                         /*is_subframe=*/true),
+              tasks[2]->title());
+  }
+  // When navigation to |kSimplePageUrl| happens, tasks are first created for
+  // page a.com and two cross-origin iframes b.com and c.com from
+  // |RenderFrameHostStateChange|, then the task for |kSimplePageUrl| is created
+  // from |DidFinishNavigation| when the navigation completes. Thus |.back()|.
+  const Task* simple_page_task = tasks.back();
   EXPECT_EQ(Task::RENDERER, simple_page_task->GetType());
   EXPECT_EQ(PrefixExpectedTabTitle("Title Of Awesomeness"),
             simple_page_task->title());
@@ -147,7 +174,7 @@ class HungWebContentsTaskManager : public MockWebContentsTaskManager {
   Task* unresponsive_task() { return unresponsive_task_; }
 
  private:
-  Task* unresponsive_task_;
+  raw_ptr<Task> unresponsive_task_;
 };
 
 // If sites are isolated, makes sure that subframe tasks can react to
@@ -184,8 +211,8 @@ IN_PROC_BROWSER_TEST_F(SubframeTaskBrowserTest, TaskManagerHungSubframe) {
   // Simulate a hang in one of the subframe processes.
   content::WebContents* web_contents =
       browser()->tab_strip_model()->GetActiveWebContents();
-  std::vector<content::RenderFrameHost*> frames = web_contents->GetAllFrames();
-  content::RenderFrameHost* subframe1 = frames[1];
+  content::RenderFrameHost* subframe1 = ChildFrameAt(web_contents, 0);
+  ASSERT_TRUE(subframe1);
   SimulateUnresponsiveRenderer(web_contents,
                                subframe1->GetView()->GetRenderWidgetHost());
 

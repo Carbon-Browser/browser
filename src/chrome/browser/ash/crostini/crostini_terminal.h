@@ -7,14 +7,28 @@
 
 #include <vector>
 
-#include "chrome/browser/apps/app_service/app_launch_params.h"
-#include "chrome/browser/ash/crostini/crostini_util.h"
+#include "base/containers/fixed_flat_map.h"
+#include "base/values.h"
+#include "chrome/browser/ash/guest_os/guest_id.h"
+#include "components/services/app_service/public/cpp/intent.h"
+#include "components/services/app_service/public/mojom/app_service.mojom.h"
+#include "components/services/app_service/public/mojom/types.mojom.h"
 #include "ui/display/types/display_constants.h"
-#include "ui/gfx/geometry/point.h"
 
 class Profile;
 
 namespace crostini {
+
+// web_app::GenerateAppId(/*manifest_id=*/absl::nullopt,
+//     GURL("chrome-untrusted://terminal/html/terminal.html"))
+extern const char kTerminalSystemAppId[];
+
+extern const char kTerminalHomePath[];
+
+extern const char kShortcutKey[];
+extern const char kShortcutValueSSH[];
+extern const char kShortcutValueTerminal[];
+extern const char kProfileIdKey[];
 
 // Settings items that can be user-modified for terminal.
 // These values are persisted to logs. Entries should not be renumbered and
@@ -96,12 +110,36 @@ enum class TerminalSetting {
   kMaxValue = kThemeVariations,
 };
 
+// Remove Terminal app id from crostini.registry.<terminal-app-id>.
+void RemoveTerminalFromRegistry(PrefService* prefs);
+
+const std::string& GetTerminalHomeUrl();
+
+// Generate URL to launch terminal.
+GURL GenerateTerminalURL(Profile* profile,
+                         const std::string& settings_profile,
+                         const guest_os::GuestId& container_id,
+                         const std::string& cwd = "",
+                         const std::vector<std::string>& terminal_args = {});
+
 // Launches the terminal tabbed app.
 void LaunchTerminal(Profile* profile,
-                    int64_t display_id = display::kInvalidDisplayId,
-                    const ContainerId& container_id = ContainerId::GetDefault(),
+                    int64_t display_id,
+                    const guest_os::GuestId& container_id,
                     const std::string& cwd = "",
                     const std::vector<std::string>& terminal_args = {});
+
+void LaunchTerminalHome(Profile* profile, int64_t display_id);
+
+void LaunchTerminalWithUrl(Profile* profile,
+                           int64_t display_id,
+                           const GURL& url);
+
+void LaunchTerminalWithIntent(
+    Profile* profile,
+    int64_t display_id,
+    apps::IntentPtr intent,
+    base::OnceCallback<void(bool success, const std::string& msg)> callback);
 
 // Launches the terminal settings popup window.
 void LaunchTerminalSettings(Profile* profile,
@@ -110,11 +148,48 @@ void LaunchTerminalSettings(Profile* profile,
 // Record which terminal settings have been changed by users.
 void RecordTerminalSettingsChangesUMAs(Profile* profile);
 
-// Returns terminal setting 'background-color'.
-std::string GetTerminalSettingBackgroundColor(Profile* profile);
+// Returns terminal setting 'background-color' to use for |url|.
+std::string GetTerminalSettingBackgroundColor(
+    Profile* profile,
+    GURL url,
+    absl::optional<SkColor> opener_background_color);
 
 // Returns terminal setting 'pass-ctrl-w'.
 bool GetTerminalSettingPassCtrlW(Profile* profile);
+
+// Menu shortcut ID for SSH with specified nassh profile-id.
+std::string ShortcutIdForSSH(const std::string& profileId);
+
+// Menu shortcut ID for Linux container.
+std::string ShortcutIdFromContainerId(Profile* profile,
+                                      const guest_os::GuestId& id);
+
+// Parse Intent extras from shortcut ID.
+base::flat_map<std::string, std::string> ExtrasFromShortcutId(
+    const base::Value& shortcut);
+
+// Returns list of SSH connections {<profile-id>, <description>}.
+std::vector<std::pair<std::string, std::string>> GetSSHConnections(
+    Profile* profile);
+
+// Add terminal menu items (Settings, Shut down Linux).
+void AddTerminalMenuItems(Profile* profile,
+                          apps::mojom::MenuItemsPtr* menu_items);
+
+// Add terminal shortcut items in menu.
+void AddTerminalMenuShortcuts(
+    Profile* profile,
+    int next_command_id,
+    apps::mojom::MenuItemsPtr menu_items,
+    apps::mojom::Publisher::GetMenuModelCallback callback,
+    std::vector<gfx::ImageSkia> icons = {});
+
+// Called when user clicks on terminal menu items. Returns true if |shortcut_id|
+// is recognized and handled.
+bool ExecuteTerminalMenuShortcutCommand(Profile* profile,
+                                        const std::string& shortcut_id,
+                                        int64_t display_id);
+
 }  // namespace crostini
 
 #endif  // CHROME_BROWSER_ASH_CROSTINI_CROSTINI_TERMINAL_H_

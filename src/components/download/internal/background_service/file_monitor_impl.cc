@@ -9,7 +9,7 @@
 #include "base/files/file_enumerator.h"
 #include "base/files/file_util.h"
 #include "base/stl_util.h"
-#include "base/task_runner_util.h"
+#include "base/task/task_runner_util.h"
 #include "base/threading/scoped_blocking_call.h"
 
 namespace download {
@@ -105,7 +105,7 @@ void FileMonitorImpl::Initialize(InitCallback callback) {
   base::PostTaskAndReplyWithResult(
       file_thread_task_runner_.get(), FROM_HERE,
       base::BindOnce(&InitializeAndCreateDownloadDirectory, download_file_dir_),
-      base::BindOnce(std::move(callback)));
+      std::move(callback));
 }
 
 void FileMonitorImpl::DeleteUnknownFiles(
@@ -159,7 +159,7 @@ void FileMonitorImpl::HardRecover(InitCallback callback) {
   base::PostTaskAndReplyWithResult(
       file_thread_task_runner_.get(), FROM_HERE,
       base::BindOnce(&HardRecoverOnFileThread, download_file_dir_),
-      base::BindOnce(std::move(callback)));
+      std::move(callback));
 }
 
 }  // namespace download

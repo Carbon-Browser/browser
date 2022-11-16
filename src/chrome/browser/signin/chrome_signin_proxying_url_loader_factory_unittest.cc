@@ -9,7 +9,6 @@
 
 #include "base/bind.h"
 #include "base/callback_helpers.h"
-#include "base/macros.h"
 #include "base/run_loop.h"
 #include "base/test/mock_callback.h"
 #include "chrome/browser/signin/chrome_signin_helper.h"
@@ -34,6 +33,10 @@ namespace {
 class MockDelegate : public HeaderModificationDelegate {
  public:
   MockDelegate() = default;
+
+  MockDelegate(const MockDelegate&) = delete;
+  MockDelegate& operator=(const MockDelegate&) = delete;
+
   ~MockDelegate() override = default;
 
   MOCK_METHOD1(ShouldInterceptNavigation, bool(content::WebContents* contents));
@@ -50,8 +53,6 @@ class MockDelegate : public HeaderModificationDelegate {
 
  private:
   base::WeakPtrFactory<MockDelegate> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(MockDelegate);
 };
 
 content::WebContents::Getter NullWebContentsGetter() {
@@ -64,6 +65,12 @@ class ChromeSigninProxyingURLLoaderFactoryTest : public testing::Test {
  public:
   ChromeSigninProxyingURLLoaderFactoryTest()
       : test_factory_receiver_(&test_factory_) {}
+
+  ChromeSigninProxyingURLLoaderFactoryTest(
+      const ChromeSigninProxyingURLLoaderFactoryTest&) = delete;
+  ChromeSigninProxyingURLLoaderFactoryTest& operator=(
+      const ChromeSigninProxyingURLLoaderFactoryTest&) = delete;
+
   ~ChromeSigninProxyingURLLoaderFactoryTest() override {}
 
   base::WeakPtr<MockDelegate> StartRequest(
@@ -114,8 +121,6 @@ class ChromeSigninProxyingURLLoaderFactoryTest : public testing::Test {
   network::TestURLLoaderFactory test_factory_;
   mojo::Receiver<network::mojom::URLLoaderFactory> test_factory_receiver_;
   std::unique_ptr<std::string> response_body_;
-
-  DISALLOW_COPY_AND_ASSIGN(ChromeSigninProxyingURLLoaderFactoryTest);
 };
 
 TEST_F(ChromeSigninProxyingURLLoaderFactoryTest, NoModification) {
@@ -141,7 +146,7 @@ TEST_F(ChromeSigninProxyingURLLoaderFactoryTest, ModifyHeaders) {
   request->url = kTestURL;
   request->referrer = kTestReferrer;
   request->destination = network::mojom::RequestDestination::kDocument;
-  request->is_main_frame = true;
+  request->is_outermost_main_frame = true;
   request->headers.SetHeader("X-Request-1", "Foo");
 
   base::WeakPtr<MockDelegate> delegate = StartRequest(std::move(request));
@@ -161,7 +166,8 @@ TEST_F(ChromeSigninProxyingURLLoaderFactoryTest, ModifyHeaders) {
             EXPECT_EQ(kTestURL, adapter->GetUrl());
             EXPECT_EQ(network::mojom::RequestDestination::kDocument,
                       adapter->GetRequestDestination());
-            EXPECT_EQ(GURL("https://chrome.com"), adapter->GetReferrerOrigin());
+            EXPECT_TRUE(adapter->IsOutermostMainFrame());
+            EXPECT_EQ(kTestReferrer, adapter->GetReferrer());
 
             EXPECT_TRUE(adapter->HasHeader("X-Request-1"));
             adapter->RemoveRequestHeaderByName("X-Request-1");
@@ -178,11 +184,12 @@ TEST_F(ChromeSigninProxyingURLLoaderFactoryTest, ModifyHeaders) {
           Invoke([&](ChromeRequestAdapter* adapter, const GURL& redirect_url) {
             EXPECT_EQ(network::mojom::RequestDestination::kDocument,
                       adapter->GetRequestDestination());
+            EXPECT_TRUE(adapter->IsOutermostMainFrame());
 
             // Changes to the URL and referrer take effect after the redirect
             // is followed.
             EXPECT_EQ(kTestURL, adapter->GetUrl());
-            EXPECT_EQ(GURL("https://chrome.com"), adapter->GetReferrerOrigin());
+            EXPECT_EQ(kTestReferrer, adapter->GetReferrer());
 
             // X-Request-1 and X-Request-2 were modified in the previous call to
             // ProcessRequest(). These changes should still be present.
@@ -210,8 +217,8 @@ TEST_F(ChromeSigninProxyingURLLoaderFactoryTest, ModifyHeaders) {
   // the redirect is received and again for the redirect response.
   EXPECT_CALL(*delegate, ProcessResponse(_, _))
       .WillOnce(Invoke([&](ResponseAdapter* adapter, const GURL& redirect_url) {
-        EXPECT_EQ(GURL("https://google.com"), adapter->GetOrigin());
-        EXPECT_TRUE(adapter->IsMainFrame());
+        EXPECT_EQ(kTestURL, adapter->GetURL());
+        EXPECT_TRUE(adapter->IsOutermostMainFrame());
 
         adapter->SetUserData(kResponseUserDataKey,
                              std::move(response_user_data));
@@ -226,8 +233,8 @@ TEST_F(ChromeSigninProxyingURLLoaderFactoryTest, ModifyHeaders) {
         EXPECT_EQ(kTestRedirectURL, redirect_url);
       }))
       .WillOnce(Invoke([&](ResponseAdapter* adapter, const GURL& redirect_url) {
-        EXPECT_EQ(GURL("https://youtube.com"), adapter->GetOrigin());
-        EXPECT_TRUE(adapter->IsMainFrame());
+        EXPECT_EQ(kTestRedirectURL, adapter->GetURL());
+        EXPECT_TRUE(adapter->IsOutermostMainFrame());
 
         EXPECT_EQ(response_user_data_ptr,
                   adapter->GetUserData(kResponseUserDataKey));

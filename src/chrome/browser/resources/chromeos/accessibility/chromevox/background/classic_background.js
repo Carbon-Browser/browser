@@ -5,41 +5,27 @@
 /**
  * @fileoverview Script that runs on the background page.
  */
+import {AbstractTts} from '../common/abstract_tts.js';
+import {CompositeTts} from '../common/composite_tts.js';
+import {ExtensionBridge} from '../common/extension_bridge.js';
+import {Msgs} from '../common/msgs.js';
 
-goog.provide('ChromeVoxBackground');
-
-goog.require('ChromeVoxState');
-goog.require('ConsoleTts');
-goog.require('EventStreamLogger');
-goog.require('LogStore');
-goog.require('Msgs');
-goog.require('constants');
-goog.require('AbstractEarcons');
-goog.require('BrailleBackground');
-goog.require('BrailleCaptionsBackground');
-goog.require('ChromeVox');
-goog.require('ChromeVoxEditableTextBase');
-goog.require('ChromeVoxPrefs');
-goog.require('CompositeTts');
-goog.require('ExtensionBridge');
-goog.require('InjectedScriptLoader');
-goog.require('NavBraille');
-goog.require('QueueMode');
-goog.require('TtsBackground');
-
+import {BrailleBackground} from './braille/braille_background.js';
+import {BrailleCaptionsBackground} from './braille/braille_captions_background.js';
+import {ChromeVoxState} from './chromevox_state.js';
+import {ConsoleTts} from './console_tts.js';
+import {ChromeVoxEditableTextBase, TypingEcho} from './editing/editable_text_base.js';
+import {InjectedScriptLoader} from './injected_script_loader.js';
+import {Output} from './output/output.js';
+import {ChromeVoxPrefs} from './prefs.js';
+import {TtsBackground} from './tts_background.js';
 
 /**
  * This is the legacy ChromeVox background object.
  */
-ChromeVoxBackground = class {
+export class ChromeVoxBackground {
   constructor() {
     ChromeVoxBackground.readPrefs();
-
-    const consoleTts = ConsoleTts.getInstance();
-    consoleTts.setEnabled(
-        ChromeVoxPrefs.instance.getPrefs()['enableSpeechLogging'] === 'true');
-
-    LogStore.getInstance();
 
     /**
      * Chrome's actual TTS which knows and cares about pitch, volume, etc.
@@ -51,7 +37,9 @@ ChromeVoxBackground = class {
     /**
      * @type {TtsInterface}
      */
-    this.tts = new CompositeTts().add(this.backgroundTts_).add(consoleTts);
+    this.tts = new CompositeTts()
+                   .add(this.backgroundTts_)
+                   .add(ConsoleTts.getInstance());
 
     this.addBridgeListener();
 
@@ -60,7 +48,7 @@ ChromeVoxBackground = class {
      * @type {BrailleBackground}
      * @private
      */
-    this.backgroundBraille_ = BrailleBackground.getInstance();
+    this.backgroundBraille_ = BrailleBackground.instance;
 
     // Export globals on ChromeVox.
     ChromeVox.tts = this.tts;
@@ -71,12 +59,11 @@ ChromeVoxBackground = class {
 
     // Set up a message passing system for goog.provide() calls from
     // within the content scripts.
-    chrome.extension.onMessage.addListener(function(request, sender, callback) {
+    chrome.extension.onMessage.addListener((request, sender, callback) => {
       if (request['srcFile']) {
         const srcFile = request['srcFile'];
-        InjectedScriptLoader.fetchCode([srcFile], function(code) {
-          callback({'code': code[srcFile]});
-        });
+        InjectedScriptLoader.fetchCode(
+            [srcFile], code => callback({'code': code[srcFile]}));
       }
       return true;
     });
@@ -96,9 +83,9 @@ ChromeVoxBackground = class {
     // Inject the content script into all running tabs allowed by the
     // manifest. This block is still necessary because the extension system
     // doesn't re-inject content scripts into already running tabs.
-    chrome.windows.getAll({'populate': true}, (windows) => {
+    chrome.windows.getAll({'populate': true}, windows => {
       for (let i = 0; i < windows.length; i++) {
-        const tabs = windows[i].tabs.filter((tab) => matchesRe.test(tab.url));
+        const tabs = windows[i].tabs.filter(tab => matchesRe.test(tab.url));
         this.injectChromeVoxIntoTabs(tabs);
       }
     });
@@ -106,17 +93,17 @@ ChromeVoxBackground = class {
 
   /**
    * @param {string} pref
-   * @param {*} value
+   * @param {Object|boolean|number|string} value
    * @param {boolean} announce
    */
   static setPref(pref, value, announce) {
     if (pref === 'earcons') {
-      AbstractEarcons.enabled = !!value;
+      AbstractEarcons.enabled = Boolean(value);
     } else if (pref === 'sticky' && announce) {
       if (typeof (value) !== 'boolean') {
         throw new Error('Unexpected sticky mode value ' + value);
       }
-      chrome.accessibilityPrivate.setKeyboardListener(true, !!value);
+      chrome.accessibilityPrivate.setKeyboardListener(true, Boolean(value));
       new Output()
           .withInitialSpeechProperties(AbstractTts.PERSONALITY_ANNOTATION)
           .withString(
@@ -148,13 +135,13 @@ ChromeVoxBackground = class {
             .go();
       }
     } else if (pref === 'brailleCaptions') {
-      BrailleCaptionsBackground.setActive(!!value);
+      BrailleCaptionsBackground.setActive(Boolean(value));
     } else if (pref === 'position') {
       ChromeVox.position =
           /** @type {Object<string, constants.Point>} */ (JSON.parse(
               /** @type {string} */ (value)));
     }
-    window['prefs'].setPref(pref, value);
+    ChromeVoxPrefs.instance.setPref(pref, value);
     ChromeVoxBackground.readPrefs();
   }
 
@@ -185,7 +172,7 @@ ChromeVoxBackground = class {
          * A helper function which executes code.
          * @param {string} code The code to execute.
          */
-        const executeScript = (code) => {
+        const executeScript = code => {
           chrome.tabs.executeScript(tab.id, {code, 'allFrames': true}, () => {
             if (!chrome.extension.lastError) {
               return;
@@ -217,9 +204,7 @@ ChromeVoxBackground = class {
             'window.CLOSURE_NO_DEPS = true\n');
 
         // Now inject the ChromeVox content script code into the tab.
-        listOfFiles.forEach(function(file) {
-          executeScript(code[file]);
-        });
+        listOfFiles.forEach(file => executeScript(code[file]));
       }
     };
 
@@ -286,24 +271,6 @@ ChromeVoxBackground = class {
 
       switch (target) {
         case 'TTS':
-          if (msg['startCallbackId'] !== undefined) {
-            msg['properties']['startCallback'] = function(opt_cleanupOnly) {
-              port.postMessage({
-                'message': 'TTS_CALLBACK',
-                'cleanupOnly': opt_cleanupOnly,
-                'id': msg['startCallbackId']
-              });
-            };
-          }
-          if (msg['endCallbackId'] !== undefined) {
-            msg['properties']['endCallback'] = function(opt_cleanupOnly) {
-              port.postMessage({
-                'message': 'TTS_CALLBACK',
-                'cleanupOnly': opt_cleanupOnly,
-                'id': msg['endCallbackId']
-              });
-            };
-          }
           try {
             this.onTtsMessage(msg);
           } catch (err) {
@@ -334,21 +301,18 @@ ChromeVoxBackground = class {
 
   /**
    * Initializes classic background object.
+   * @param {!ChromeVoxState} chromeVoxState The new background object.
    */
-  static init() {
+  static init(chromeVoxState) {
     // Create the background page object and export a function window['speak']
     // so that other background pages can access it. Also export the prefs
     // object for access by the options page.
     const background = new ChromeVoxBackground();
 
-    // TODO: this needs to be cleaned up (move to init?).
-    window['speak'] = background.tts.speak.bind(background.tts);
-    ChromeVoxState.backgroundTts = background.backgroundTts_;
-    // Export the prefs object for access by the options page.
-    window['prefs'] = ChromeVoxPrefs.instance;
-    // Export the braille translator manager for access by the options page.
-    window['braille_translator_manager'] =
-        background.backgroundBraille_.getTranslatorManager();
-    window['getCurrentVoice'] = background.getCurrentVoice.bind(background);
+    chromeVoxState.backgroundTts = background.backgroundTts_;
+    BridgeHelper.registerHandler(
+        BridgeConstants.ChromeVoxBackground.TARGET,
+        BridgeConstants.ChromeVoxBackground.Action.GET_CURRENT_VOICE,
+        () => background.getCurrentVoice());
   }
-};
+}

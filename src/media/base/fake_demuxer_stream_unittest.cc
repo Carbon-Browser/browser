@@ -7,7 +7,6 @@
 #include <memory>
 
 #include "base/bind.h"
-#include "base/macros.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "media/base/decoder_buffer.h"
@@ -30,6 +29,10 @@ class FakeDemuxerStreamTest : public testing::Test {
       : status_(DemuxerStream::kAborted),
         read_pending_(false),
         num_buffers_received_(0) {}
+
+  FakeDemuxerStreamTest(const FakeDemuxerStreamTest&) = delete;
+  FakeDemuxerStreamTest& operator=(const FakeDemuxerStreamTest&) = delete;
+
   ~FakeDemuxerStreamTest() override = default;
 
   void BufferReady(DemuxerStream::Status status,
@@ -111,7 +114,7 @@ class FakeDemuxerStreamTest : public testing::Test {
   }
 
   void ReadUntilPending() {
-    while (1) {
+    while (true) {
       read_pending_ = true;
       stream_->Read(base::BindOnce(&FakeDemuxerStreamTest::BufferReady,
                                    base::Unretained(this)));
@@ -188,9 +191,6 @@ class FakeDemuxerStreamTest : public testing::Test {
   scoped_refptr<DecoderBuffer> buffer_;
   bool read_pending_;
   int num_buffers_received_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(FakeDemuxerStreamTest);
 };
 
 TEST_F(FakeDemuxerStreamTest, Read_OneConfig) {
@@ -324,6 +324,38 @@ TEST_F(FakeDemuxerStreamTest, SeekToStart_AfterEOS) {
   stream_->SeekToStart();
   num_buffers_received_ = 0;
   ReadAllBuffers(3, 5);
+}
+
+TEST_F(FakeDemuxerStreamTest, DemuxerStream_GetTypeName) {
+  EXPECT_TRUE(DemuxerStream::GetTypeName(DemuxerStream::Type::AUDIO) ==
+              std::string("audio"));
+  EXPECT_TRUE(DemuxerStream::GetTypeName(DemuxerStream::Type::VIDEO) ==
+              std::string("video"));
+  EXPECT_TRUE(DemuxerStream::GetTypeName(DemuxerStream::Type::TEXT) ==
+              std::string("text"));
+  EXPECT_TRUE(DemuxerStream::GetTypeName(DemuxerStream::Type::UNKNOWN) ==
+              std::string("unknown"));
+}
+
+TEST_F(FakeDemuxerStreamTest, DemuxerStream_GetStatusName) {
+  EXPECT_TRUE(DemuxerStream::GetStatusName(DemuxerStream::Status::kOk) ==
+              std::string("okay"));
+  EXPECT_TRUE(DemuxerStream::GetStatusName(DemuxerStream::Status::kAborted) ==
+              std::string("aborted"));
+  EXPECT_TRUE(
+      DemuxerStream::GetStatusName(DemuxerStream::Status::kConfigChanged) ==
+      std::string("config_changed"));
+  EXPECT_TRUE(DemuxerStream::GetStatusName(DemuxerStream::Status::kError) ==
+              std::string("error"));
+}
+
+TEST_F(FakeDemuxerStreamTest, DemuxerStream_GetLivenessName) {
+  EXPECT_TRUE(GetStreamLivenessName(StreamLiveness::kUnknown) ==
+              std::string("unknown"));
+  EXPECT_TRUE(GetStreamLivenessName(StreamLiveness::kRecorded) ==
+              std::string("recorded"));
+  EXPECT_TRUE(GetStreamLivenessName(StreamLiveness::kLive) ==
+              std::string("live"));
 }
 
 }  // namespace media

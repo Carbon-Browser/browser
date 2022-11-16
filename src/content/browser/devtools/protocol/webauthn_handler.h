@@ -7,7 +7,6 @@
 
 #include <memory>
 
-#include "base/macros.h"
 #include "content/browser/devtools/protocol/devtools_domain_handler.h"
 #include "content/browser/devtools/protocol/web_authn.h"
 #include "content/common/content_export.h"
@@ -29,7 +28,7 @@ class WebAuthnHandler : public DevToolsDomainHandler, public WebAuthn::Backend {
   void Wire(UberDispatcher* dispatcher) override;
 
   // WebAuthn::Backend
-  CONTENT_EXPORT Response Enable() override;
+  CONTENT_EXPORT Response Enable(Maybe<bool> enable_ui) override;
   CONTENT_EXPORT Response Disable() override;
   Response AddVirtualAuthenticator(
       std::unique_ptr<WebAuthn::VirtualAuthenticatorOptions> options,

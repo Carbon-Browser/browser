@@ -6,7 +6,6 @@
 
 #include <utility>
 
-#include "base/macros.h"
 #include "base/memory/ptr_util.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
@@ -59,6 +58,12 @@ class ClientNativePixmapOpaque : public ClientNativePixmap {
 class ClientNativePixmapFactoryDmabuf : public ClientNativePixmapFactory {
  public:
   explicit ClientNativePixmapFactoryDmabuf() {}
+
+  ClientNativePixmapFactoryDmabuf(const ClientNativePixmapFactoryDmabuf&) =
+      delete;
+  ClientNativePixmapFactoryDmabuf& operator=(
+      const ClientNativePixmapFactoryDmabuf&) = delete;
+
   ~ClientNativePixmapFactoryDmabuf() override {}
 
   std::unique_ptr<ClientNativePixmap> ImportFromHandle(
@@ -87,9 +92,6 @@ class ClientNativePixmapFactoryDmabuf : public ClientNativePixmapFactory {
     NOTREACHED();
     return nullptr;
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ClientNativePixmapFactoryDmabuf);
 };
 
 ClientNativePixmapFactory* CreateClientNativePixmapFactoryDmabuf() {

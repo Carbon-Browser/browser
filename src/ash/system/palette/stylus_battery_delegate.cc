@@ -6,6 +6,7 @@
 
 #include <string>
 
+#include "ash/constants/ash_features.h"
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
@@ -22,8 +23,7 @@ namespace ash {
 namespace {
 // Battery percentage threshold used to label the battery level as Low.
 constexpr int kStylusLowBatteryThreshold = 24;
-constexpr base::TimeDelta kStylusBatteryStatusStaleThreshold =
-    base::TimeDelta::FromDays(14);
+constexpr base::TimeDelta kStylusBatteryStatusStaleThreshold = base::Days(14);
 }  // namespace
 
 StylusBatteryDelegate::StylusBatteryDelegate() {
@@ -52,14 +52,18 @@ gfx::ImageSkia StylusBatteryDelegate::GetBatteryImage() const {
 
   if (IsBatteryCharging()) {
     info.icon_badge = &kUnifiedMenuBatteryBoltIcon;
-    info.badge_outline = &kUnifiedMenuBatteryBoltOutlineIcon;
+    if (features::IsDarkLightModeEnabled()) {
+      info.badge_outline = &kUnifiedMenuBatteryBoltOutlineMaskIcon;
+    } else {
+      info.badge_outline = &kUnifiedMenuBatteryBoltOutlineIcon;
+    }
   }
 
   const SkColor icon_fg_color = GetColorForBatteryLevel();
   const SkColor icon_bg_color = AshColorProvider::Get()->GetBackgroundColor();
 
-  return PowerStatus::GetBatteryImage(info, kUnifiedTrayIconSize, icon_bg_color,
-                                      icon_fg_color);
+  return PowerStatus::GetBatteryImage(info, kUnifiedTrayBatteryIconSize,
+                                      icon_bg_color, icon_fg_color);
 }
 
 gfx::ImageSkia StylusBatteryDelegate::GetBatteryStatusUnknownImage() const {

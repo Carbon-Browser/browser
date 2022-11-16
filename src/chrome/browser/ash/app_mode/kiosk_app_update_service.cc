@@ -9,7 +9,7 @@
 #include "chrome/browser/ash/app_mode/kiosk_app_manager.h"
 #include "chrome/browser/ash/system/automatic_reboot_manager.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/browser_process_platform_part_chromeos.h"
+#include "chrome/browser/browser_process_platform_part_ash.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
 #include "chrome/browser/profiles/profile.h"
@@ -63,9 +63,8 @@ void KioskAppUpdateService::StartAppUpdateRestartTimer() {
     return;
 
   // Setup timer to force restart once the wait period expires.
-  restart_timer_.Start(
-      FROM_HERE, base::TimeDelta::FromMilliseconds(kForceRestartWaitTimeMs),
-      this, &KioskAppUpdateService::ForceAppUpdateRestart);
+  restart_timer_.Start(FROM_HERE, base::Milliseconds(kForceRestartWaitTimeMs),
+                       this, &KioskAppUpdateService::ForceAppUpdateRestart);
 }
 
 void KioskAppUpdateService::ForceAppUpdateRestart() {

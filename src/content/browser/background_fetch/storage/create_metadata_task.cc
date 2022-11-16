@@ -11,6 +11,7 @@
 #include "base/barrier_closure.h"
 #include "base/bind.h"
 #include "base/callback_helpers.h"
+#include "base/observer_list.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/trace_event/trace_event.h"
@@ -136,6 +137,7 @@ CreateMetadataTask::CreateMetadataTask(
     blink::mojom::BackgroundFetchOptionsPtr options,
     const SkBitmap& icon,
     bool start_paused,
+    const net::IsolationInfo& isolation_info,
     CreateMetadataCallback callback)
     : DatabaseTask(host),
       registration_id_(registration_id),
@@ -143,6 +145,7 @@ CreateMetadataTask::CreateMetadataTask(
       options_(std::move(options)),
       icon_(icon),
       start_paused_(start_paused),
+      isolation_info_(isolation_info),
       callback_(std::move(callback)) {}
 
 CreateMetadataTask::~CreateMetadataTask() = default;
@@ -289,6 +292,7 @@ void CreateMetadataTask::InitializeMetadataProto() {
   metadata_proto_->set_creation_microseconds_since_unix_epoch(
       (base::Time::Now() - base::Time::UnixEpoch()).InMicroseconds());
   metadata_proto_->set_num_fetches(requests_.size());
+  metadata_proto_->set_isolation_info(isolation_info_.Serialize());
 }
 
 void CreateMetadataTask::DidSerializeIcon(std::string serialized_icon) {
@@ -450,7 +454,7 @@ void CreateMetadataTask::FinishWithError(
     for (auto& observer : data_manager()->observers()) {
       observer.OnRegistrationCreated(registration_id_, *registration_data,
                                      options_.Clone(), icon_, requests_.size(),
-                                     start_paused_);
+                                     start_paused_, std::move(isolation_info_));
     }
   }
 

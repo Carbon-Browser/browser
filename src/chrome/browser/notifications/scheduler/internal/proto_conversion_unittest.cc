@@ -10,6 +10,7 @@
 
 #include "base/check.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/time/time.h"
 #include "chrome/browser/notifications/scheduler/test/test_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -100,14 +101,13 @@ TEST(ProtoConversionTest, ClientStateProtoConversion) {
   bool success =
       base::Time::FromString("04/25/20 01:00:00 AM", &last_trigger_time);
   DCHECK(success);
-  auto duration = base::TimeDelta::FromDays(7);
+  auto duration = base::Days(7);
   auto suppression = SuppressionInfo(last_trigger_time, duration);
   suppression.recover_goal = 5;
   client_state.suppression_info = std::move(suppression);
   client_state.last_shown_ts = last_trigger_time;
   client_state.negative_events_count = 1;
-  client_state.last_negative_event_ts =
-      last_trigger_time + base::TimeDelta::FromMinutes(1);
+  client_state.last_negative_event_ts = last_trigger_time + base::Minutes(1);
   TestClientStateConversion(&client_state);
 }
 
@@ -205,8 +205,8 @@ TEST(ProtoConversionTest, NotificationEntryConversion) {
 
   entry.schedule_params.deliver_time_start = entry.create_time;
   entry.schedule_params.deliver_time_end =
-      entry.create_time + base::TimeDelta::FromMinutes(10);
-  entry.schedule_params.ignore_timeout_duration = base::TimeDelta::FromDays(3);
+      entry.create_time + base::Minutes(10);
+  entry.schedule_params.ignore_timeout_duration = base::Days(3);
   TestNotificationEntryConversion(&entry);
 }
 

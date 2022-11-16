@@ -13,12 +13,11 @@
 #include "base/callback.h"
 #include "base/check_op.h"
 #include "base/lazy_instance.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
 #include "base/rand_util.h"
-#include "base/task/post_task.h"
 #include "base/task/thread_pool.h"
 #include "net/base/io_buffer.h"
 #include "net/base/ip_address.h"
@@ -50,6 +49,9 @@ class UDPSocketWin::Core : public base::RefCounted<Core> {
  public:
   explicit Core(UDPSocketWin* socket);
 
+  Core(const Core&) = delete;
+  Core& operator=(const Core&) = delete;
+
   // Start watching for the end of a read or write operation.
   void WatchForRead();
   void WatchForWrite();
@@ -74,31 +76,31 @@ class UDPSocketWin::Core : public base::RefCounted<Core> {
   class ReadDelegate : public base::win::ObjectWatcher::Delegate {
    public:
     explicit ReadDelegate(Core* core) : core_(core) {}
-    ~ReadDelegate() override {}
+    ~ReadDelegate() override = default;
 
     // base::ObjectWatcher::Delegate methods:
     void OnObjectSignaled(HANDLE object) override;
 
    private:
-    Core* const core_;
+    const raw_ptr<Core> core_;
   };
 
   class WriteDelegate : public base::win::ObjectWatcher::Delegate {
    public:
     explicit WriteDelegate(Core* core) : core_(core) {}
-    ~WriteDelegate() override {}
+    ~WriteDelegate() override = default;
 
     // base::ObjectWatcher::Delegate methods:
     void OnObjectSignaled(HANDLE object) override;
 
    private:
-    Core* const core_;
+    const raw_ptr<Core> core_;
   };
 
   ~Core();
 
   // The socket that created this object.
-  UDPSocketWin* socket_;
+  raw_ptr<UDPSocketWin> socket_;
 
   // |reader_| handles the signals from |read_watcher_|.
   ReadDelegate reader_;
@@ -109,8 +111,6 @@ class UDPSocketWin::Core : public base::RefCounted<Core> {
   base::win::ObjectWatcher read_watcher_;
   // |write_watcher_| watches for events from Write();
   base::win::ObjectWatcher write_watcher_;
-
-  DISALLOW_COPY_AND_ASSIGN(Core);
 };
 
 UDPSocketWin::Core::Core(UDPSocketWin* socket)
@@ -166,7 +166,7 @@ void UDPSocketWin::Core::WriteDelegate::OnObjectSignaled(HANDLE object) {
 }
 //-----------------------------------------------------------------------------
 
-QwaveApi::QwaveApi() : qwave_supported_(false) {
+QwaveApi::QwaveApi() {
   HMODULE qwave = LoadLibrary(L"qwave.dll");
   if (!qwave)
     return;
@@ -243,15 +243,7 @@ UDPSocketWin::UDPSocketWin(DatagramSocket::BindType bind_type,
                            net::NetLog* net_log,
                            const net::NetLogSource& source)
     : socket_(INVALID_SOCKET),
-      addr_family_(0),
-      is_connected_(false),
       socket_options_(SOCKET_OPTION_MULTICAST_LOOP),
-      multicast_interface_(0),
-      multicast_time_to_live_(1),
-      use_non_blocking_io_(false),
-      read_iobuffer_len_(0),
-      write_iobuffer_len_(0),
-      recv_from_address_(nullptr),
       net_log_(NetLogWithSource::Make(net_log, NetLogSourceType::UDP_SOCKET)) {
   EnsureWinsockInit();
   net_log_.BeginEventReferencingSource(NetLogEventType::SOCKET_ALIVE, source);
@@ -276,7 +268,7 @@ int UDPSocketWin::Open(AddressFamily address_family) {
   if (socket_ == INVALID_SOCKET)
     return MapSystemError(WSAGetLastError());
   if (!use_non_blocking_io_) {
-    core_ = new Core(this);
+    core_ = base::MakeRefCounted<Core>(this);
   } else {
     read_write_event_.Set(WSACreateEvent());
     WSAEventSelect(socket_, read_write_event_.Get(), FD_READ | FD_WRITE);
@@ -338,7 +330,7 @@ int UDPSocketWin::GetPeerAddress(IPEndPoint* address) const {
     SockaddrStorage storage;
     if (getpeername(socket_, storage.addr, &storage.addr_len))
       return MapSystemError(WSAGetLastError());
-    std::unique_ptr<IPEndPoint> remote_address(new IPEndPoint());
+    auto remote_address = std::make_unique<IPEndPoint>();
     if (!remote_address->FromSockAddr(storage.addr, storage.addr_len))
       return ERR_ADDRESS_INVALID;
     remote_address_ = std::move(remote_address);
@@ -359,7 +351,7 @@ int UDPSocketWin::GetLocalAddress(IPEndPoint* address) const {
     SockaddrStorage storage;
     if (getsockname(socket_, storage.addr, &storage.addr_len))
       return MapSystemError(WSAGetLastError());
-    std::unique_ptr<IPEndPoint> local_address(new IPEndPoint());
+    auto local_address = std::make_unique<IPEndPoint>();
     if (!local_address->FromSockAddr(storage.addr, storage.addr_len))
       return ERR_ADDRESS_INVALID;
     local_address_ = std::move(local_address);
@@ -774,7 +766,6 @@ int UDPSocketWin::InternalRecvFromOverlapped(IOBuffer* buf,
   DWORD flags = 0;
   DWORD num;
   CHECK_NE(INVALID_SOCKET, socket_);
-  AssertEventNotSignaled(core_->read_overlapped_.hEvent);
   int rv = WSARecvFrom(socket_, &read_buffer, 1, &num, &flags, storage.addr,
                        &storage.addr_len, &core_->read_overlapped_, nullptr);
   if (rv == 0) {
@@ -833,7 +824,6 @@ int UDPSocketWin::InternalSendToOverlapped(IOBuffer* buf,
 
   DWORD flags = 0;
   DWORD num;
-  AssertEventNotSignaled(core_->write_overlapped_.hEvent);
   int rv = WSASendTo(socket_, &write_buffer, 1, &num, flags, addr,
                      storage.addr_len, &core_->write_overlapped_, nullptr);
   if (rv == 0) {

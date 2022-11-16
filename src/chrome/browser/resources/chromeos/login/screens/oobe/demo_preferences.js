@@ -2,101 +2,163 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-Polymer({
-  is: 'demo-preferences-element',
+/* #js_imports_placeholder */
 
-  behaviors: [OobeI18nBehavior, OobeDialogHostBehavior, LoginScreenBehavior],
+/**
+ * @constructor
+ * @extends {PolymerElement}
+ * @implements {LoginScreenBehaviorInterface}
+ * @implements {OobeI18nBehaviorInterface}
+ */
+const DemoPreferencesScreenBase = Polymer.mixinBehaviors(
+    [OobeI18nBehavior, OobeDialogHostBehavior, LoginScreenBehavior],
+    Polymer.Element);
 
-  EXTERNAL_API: ['setSelectedKeyboard'],
+/**
+ * @polymer
+ */
+class DemoPreferencesScreen extends DemoPreferencesScreenBase {
+  static get is() {
+    return 'demo-preferences-element';
+  }
 
-  properties: {
+  /* #html_template_placeholder */
+
+  static get properties() {
+    return {
+      /**
+       * List of languages for language selector dropdown.
+       * @type {!Array<!OobeTypes.LanguageDsc>}
+       */
+      languages: {
+        type: Array,
+      },
+
+      /**
+       * List of keyboards for keyboard selector dropdown.
+       * @type {!Array<!OobeTypes.IMEDsc>}
+       */
+      keyboards: {
+        type: Array,
+      },
+
+      /**
+       * List of countries for country selector dropdown.
+       * @type {!Array<!OobeTypes.DemoCountryDsc>}
+       */
+      countries: {
+        type: Array,
+      },
+
+      /**
+       * Indicate whether a country has been selected.
+       * @private {boolean}
+       */
+      is_country_selected_: {
+        type: Boolean,
+        value: false,
+      },
+
+      is_input_invalid_: {
+        type: Boolean,
+        value: false,
+        reflectToAttribute: true,
+      },
+
+      retailer_id_input_: {
+        type: String,
+        value: '',
+        observer: 'retailerIdObserver_',
+      },
+
+      retailer_id_input_pattern_: {
+        type: String,
+        value: '[a-zA-Z]{3}-[0-9]{4}$',
+      },
+
+    };
+  }
+
+  constructor() {
+    super();
+
     /**
-     * List of languages for language selector dropdown.
-     * @type {!Array<!OobeTypes.LanguageDsc>}
+     * Flag that ensures that OOBE configuration is applied only once.
+     * @private {boolean}
      */
-    languages: {
-      type: Array,
-    },
+    this.configuration_applied_ = false;
 
     /**
-     * List of keyboards for keyboard selector dropdown.
-     * @type {!Array<!OobeTypes.IMEDsc>}
+     * Country id of the option if no real country is selected.
+     * @private {string}
      */
-    keyboards: {
-      type: Array,
-    },
+    this.country_not_selected_id_ = 'N/A';
+  }
 
-    /**
-     * List of countries for country selector dropdown.
-     * @type {!Array<!OobeTypes.DemoCountryDsc>}
-     */
-    countries: {
-      type: Array,
-    },
-
-  },
-
-  /**
-   * Flag that ensures that OOBE configuration is applied only once.
-   * @private {boolean}
-   */
-  configuration_applied_: false,
-
+  /** @override */
   ready() {
-    this.initializeLoginScreen('DemoPreferencesScreen', {
-      resetAllowed: false,
-    });
+    super.ready();
+    this.initializeLoginScreen('DemoPreferencesScreen');
     this.updateLocalizedContent();
-  },
+  }
+
+  /** Overridden from LoginScreenBehavior. */
+  // clang-format off
+  get EXTERNAL_API() {
+    return ['setSelectedKeyboard'];
+  }
+  // clang-format on
 
   /** Returns a control which should receive an initial focus. */
   get defaultControl() {
     return this.$.demoPreferencesDialog;
-  },
+  }
 
   /** Called when dialog is shown */
   onBeforeShow() {
     window.setTimeout(this.applyOobeConfiguration_.bind(this), 0);
-  },
+  }
 
   /** Called when dialog is shown for the first time */
   applyOobeConfiguration_() {
-    if (this.configuration_applied_)
+    if (this.configuration_applied_) {
       return;
-    var configuration = Oobe.getInstance().getOobeConfiguration();
-    if (!configuration)
+    }
+    const configuration = Oobe.getInstance().getOobeConfiguration();
+    if (!configuration) {
       return;
+    }
     if (configuration.demoPreferencesNext) {
       this.onNextClicked_();
     }
     this.configuration_applied_ = true;
-  },
+  }
 
   /** Called after resources are updated. */
   updateLocalizedContent() {
     assert(loadTimeData);
-    var languageList = /** @type {!Array<OobeTypes.LanguageDsc>} */ (
+    const languageList = /** @type {!Array<OobeTypes.LanguageDsc>} */ (
         loadTimeData.getValue('languageList'));
     this.setLanguageList_(languageList);
 
-    var inputMethodsList = /** @type {!Array<OobeTypes.IMEDsc>} */ (
+    const inputMethodsList = /** @type {!Array<OobeTypes.IMEDsc>} */ (
         loadTimeData.getValue('inputMethodsList'));
     this.setInputMethods_(inputMethodsList);
 
-    var countryList = /** @type {!Array<OobeTypes.DemoCountryDsc>} */ (
+    const countryList = /** @type {!Array<OobeTypes.DemoCountryDsc>} */ (
         loadTimeData.getValue('demoModeCountryList'));
     this.setCountryList_(countryList);
 
     this.i18nUpdateLocale();
-  },
+  }
 
   /**
    * Sets selected keyboard.
    * @param {string} keyboardId
    */
   setSelectedKeyboard(keyboardId) {
-    var found = false;
-    for (var keyboard of this.keyboards) {
+    let found = false;
+    for (const keyboard of this.keyboards) {
       if (keyboard.value != keyboardId) {
         keyboard.selected = false;
         continue;
@@ -104,12 +166,13 @@ Polymer({
       keyboard.selected = true;
       found = true;
     }
-    if (!found)
+    if (!found) {
       return;
+    }
 
     // Force i18n-dropdown to refresh.
     this.keyboards = this.keyboards.slice();
-  },
+  }
 
   /**
    * Sets language list.
@@ -118,7 +181,7 @@ Polymer({
    */
   setLanguageList_(languages) {
     this.languages = languages;
-  },
+  }
 
   /**
    * Sets input methods.
@@ -127,7 +190,7 @@ Polymer({
    */
   setInputMethods_(inputMethods) {
     this.keyboards = inputMethods;
-  },
+  }
 
   /**
    * Sets country list.
@@ -137,29 +200,30 @@ Polymer({
   setCountryList_(countries) {
     this.countries = countries;
     this.$.countryDropdownContainer.hidden = countries.length == 0;
-  },
+    for (let i = 0; i < countries.length; ++i) {
+      const country = countries[i];
+      if (country.selected && country.value !== this.country_not_selected_id_) {
+        this.is_country_selected_ = true;
+        return;
+      }
+    }
+  }
 
-  /**
-   * Handle language selection.
-   * @param {!CustomEvent<!OobeTypes.LanguageDsc>} event
-   * @private
-   */
-  onLanguageSelected_(event) {
-    var item = event.detail;
-    var languageId = item.value;
-    chrome.send('DemoPreferencesScreen.setLocaleId', [languageId]);
-  },
+  getRetailerIdInputDisplayText_() {
+    if (this.is_input_invalid_) {
+      return this.i18n('retailerIdInputErrorText');
+    }
+    return this.i18n('retailerIdInputHelpText');
+  }
 
-  /**
-   * Handle keyboard layout selection.
-   * @param {!CustomEvent<!OobeTypes.IMEDsc>} event
-   * @private
-   */
-  onKeyboardSelected_(event) {
-    var item = event.detail;
-    var inputMethodId = item.value;
-    chrome.send('DemoPreferencesScreen.setInputMethodId', [inputMethodId]);
-  },
+  retailerIdObserver_() {
+    if (!this.retailer_id_input_) {
+      this.is_input_invalid_ = false;
+    } else {
+      this.is_input_invalid_ = !RegExp(this.retailer_id_input_pattern_)
+                                    .test(this.retailer_id_input_);
+    }
+  }
 
   /**
    * Handle country selection.
@@ -167,9 +231,16 @@ Polymer({
    * @private
    */
   onCountrySelected_(event) {
-    chrome.send(
-        'DemoPreferencesScreen.setDemoModeCountry', [event.detail.value]);
-  },
+    this.userActed(['set-demo-mode-country', event.detail.value]);
+    this.is_country_selected_ =
+        event.detail.value !== this.country_not_selected_id_;
+  }
+
+  onKeydownRetailerIdInput_(e) {
+    if (e.key == 'Enter') {
+      this.onNextClicked_();
+    }
+  }
 
   /**
    * Back button click handler.
@@ -177,14 +248,15 @@ Polymer({
    */
   onBackClicked_() {
     this.userActed('close-setup');
-  },
+  }
 
   /**
    * Next button click handler.
    * @private
    */
   onNextClicked_() {
-    this.userActed('continue-setup');
-  },
+    this.userActed(['continue-setup', this.retailer_id_input_]);
+  }
+}
 
-});
+customElements.define(DemoPreferencesScreen.is, DemoPreferencesScreen);

@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "storage/browser/database/database_tracker.h"
+
 #include <stddef.h>
 #include <stdint.h>
 
@@ -12,17 +14,17 @@
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/gtest_prod_util.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
-#include "base/sequenced_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
 #include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/time.h"
 #include "net/base/net_errors.h"
 #include "net/base/test_completion_callback.h"
-#include "storage/browser/database/database_tracker.h"
 #include "storage/browser/quota/quota_client_type.h"
 #include "storage/browser/quota/quota_manager_proxy.h"
 #include "storage/browser/test/mock_special_storage_policy.h"
@@ -101,7 +103,8 @@ class TestQuotaManagerProxy : public QuotaManagerProxy {
   TestQuotaManagerProxy()
       : QuotaManagerProxy(
             /*quota_manager_impl=*/nullptr,
-            base::SequencedTaskRunnerHandle::Get()) {}
+            base::SequencedTaskRunnerHandle::Get(),
+            /*profile_path=*/base::FilePath()) {}
 
   void RegisterClient(
       mojo::PendingRemote<mojom::QuotaClient> client,
@@ -263,14 +266,14 @@ class DatabaseTracker_TestHelper_Test {
               tracker->GetFullDBFilePath(kOrigin1, kDB1), now, now));
           EXPECT_TRUE(base::TouchFile(
               tracker->GetFullDBFilePath(kOrigin2, kDB2), now, now));
-          base::Time three_days_ago = now - base::TimeDelta::FromDays(3);
+          base::Time three_days_ago = now - base::Days(3);
           EXPECT_TRUE(
               base::TouchFile(tracker->GetFullDBFilePath(kOrigin2, kDB3),
                               three_days_ago, three_days_ago));
 
-          // Delete databases modified since yesterday. db2 is whitelisted.
+          // Delete databases modified since yesterday. db2 is in the allowlist.
           base::Time yesterday = base::Time::Now();
-          yesterday -= base::TimeDelta::FromDays(1);
+          yesterday -= base::Days(1);
 
           net::TestCompletionCallback delete_data_modified_since_callback;
           tracker->DeleteDataModifiedSince(

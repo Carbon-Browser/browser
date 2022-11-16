@@ -5,6 +5,7 @@
 #include "chrome/browser/ui/web_applications/web_app_browser_controller.h"
 
 #include "base/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
@@ -20,36 +21,49 @@
 #include "chrome/browser/ui/web_applications/web_app_dialog_manager.h"
 #include "chrome/browser/ui/web_applications/web_app_launch_utils.h"
 #include "chrome/browser/ui/web_applications/web_app_ui_manager_impl.h"
-#include "chrome/browser/web_applications/system_web_apps/system_web_app_manager.h"
 #include "chrome/browser/web_applications/web_app_constants.h"
 #include "chrome/browser/web_applications/web_app_helpers.h"
 #include "chrome/browser/web_applications/web_app_icon_manager.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/browser/web_applications/web_app_sync_bridge.h"
+#include "chrome/browser/web_applications/web_app_tab_helper.h"
 #include "chrome/common/chrome_features.h"
 #include "components/services/app_service/public/cpp/app_registry_cache.h"
+#include "components/services/app_service/public/cpp/app_types.h"
+#include "components/services/app_service/public/mojom/types.mojom-forward.h"
 #include "components/webapps/browser/installable/installable_metrics.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/content_features.h"
 #include "ui/gfx/favicon_size.h"
 #include "ui/gfx/image/image.h"
+#include "ui/native_theme/native_theme.h"
 #include "url/gurl.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "chrome/browser/ash/apps/apk_web_app_service.h"
+#include "chrome/browser/ash/system_web_apps/types/system_web_app_delegate.h"
+#endif
 
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+#include "chromeos/crosapi/mojom/web_app_service.mojom.h"
+#include "chromeos/lacros/lacros_service.h"
+#include "chromeos/startup/browser_params_proxy.h"
+#endif
+
+#if BUILDFLAG(IS_CHROMEOS)
 namespace {
 constexpr char kRelationship[] = "delegate_permission/common.handle_all_urls";
 }
 #endif
 
+#if BUILDFLAG(IS_CHROMEOS_ASH)
 namespace {
 
 // SystemWebAppDelegate provides menu.
 class SystemAppTabMenuModelFactory : public TabMenuModelFactory {
  public:
   explicit SystemAppTabMenuModelFactory(
-      const web_app::SystemWebAppDelegate* system_app)
+      const ash::SystemWebAppDelegate* system_app)
       : system_app_(system_app) {}
   SystemAppTabMenuModelFactory(const SystemAppTabMenuModelFactory&) = delete;
   SystemAppTabMenuModelFactory& operator=(const SystemAppTabMenuModelFactory&) =
@@ -65,10 +79,11 @@ class SystemAppTabMenuModelFactory : public TabMenuModelFactory {
   }
 
  private:
-  const web_app::SystemWebAppDelegate* system_app_;
+  raw_ptr<const ash::SystemWebAppDelegate> system_app_;
 };
 
 }  // namespace
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 namespace web_app {
 
@@ -76,12 +91,18 @@ WebAppBrowserController::WebAppBrowserController(
     WebAppProvider& provider,
     Browser* browser,
     AppId app_id,
-    const SystemWebAppDelegate* system_app,
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+    const ash::SystemWebAppDelegate* system_app,
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
     bool has_tab_strip)
     : AppBrowserController(browser, std::move(app_id), has_tab_strip),
-      provider_(provider),
-      system_app_(system_app) {
-  registrar_observation_.Observe(&provider_.registrar());
+      provider_(provider)
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+      ,
+      system_app_(system_app)
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+{
+  install_manager_observation_.Observe(&provider.install_manager());
   PerformDigitalAssetLinkVerification(browser);
 }
 
@@ -102,9 +123,11 @@ bool WebAppBrowserController::IsHostedApp() const {
 
 std::unique_ptr<TabMenuModelFactory>
 WebAppBrowserController::GetTabMenuModelFactory() const {
+#if BUILDFLAG(IS_CHROMEOS_ASH)
   if (system_app() && system_app()->HasCustomTabMenuModel()) {
     return std::make_unique<SystemAppTabMenuModelFactory>(system_app());
   }
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
   return nullptr;
 }
 
@@ -126,30 +149,46 @@ void WebAppBrowserController::ToggleWindowControlsOverlayEnabled() {
 }
 
 gfx::Rect WebAppBrowserController::GetDefaultBounds() const {
+#if BUILDFLAG(IS_CHROMEOS_ASH)
   if (system_app_) {
     return system_app_->GetDefaultBounds(browser());
   }
-
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
   return gfx::Rect();
 }
 
 bool WebAppBrowserController::HasReloadButton() const {
-  if (!system_app_)
-    return true;
-
-  return system_app_->ShouldHaveReloadButtonInMinimalUi();
-}
-
-const SystemWebAppDelegate* WebAppBrowserController::system_app() const {
-  return system_app_;
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  if (system_app_)
+    return system_app_->ShouldHaveReloadButtonInMinimalUi();
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+  return true;
 }
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
+const ash::SystemWebAppDelegate* WebAppBrowserController::system_app() const {
+  return system_app_;
+}
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
+#if BUILDFLAG(IS_CHROMEOS)
 bool WebAppBrowserController::ShouldShowCustomTabBar() const {
   if (AppBrowserController::ShouldShowCustomTabBar())
     return true;
 
   return is_verified_.value_or(false);
+}
+
+void WebAppBrowserController::CheckDigitalAssetLinkRelationshipForAndroidApp(
+    const std::string& package_name,
+    const std::string& fingerprint) {
+  // base::Unretained is safe as |asset_link_handler_| is owned by this object
+  // and will be destroyed if this object is destroyed.
+  const std::string origin = GetAppStartUrl().DeprecatedGetOriginAsURL().spec();
+  asset_link_handler_->CheckDigitalAssetLinkRelationshipForAndroidApp(
+      origin, kRelationship, fingerprint, package_name,
+      base::BindOnce(&WebAppBrowserController::OnRelationshipCheckComplete,
+                     base::Unretained(this)));
 }
 
 void WebAppBrowserController::OnRelationshipCheckComplete(
@@ -168,7 +207,19 @@ void WebAppBrowserController::OnRelationshipCheckComplete(
   browser()->window()->UpdateCustomTabBarVisibility(should_show_cct,
                                                     false /* animate */);
 }
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+void WebAppBrowserController::OnGetAssociatedAndroidPackage(
+    crosapi::mojom::WebAppAndroidPackagePtr package) {
+  if (!package) {
+    // Web app was not installed from an Android package, nothing to check.
+    return;
+  }
+  CheckDigitalAssetLinkRelationshipForAndroidApp(package->package_name,
+                                                 package->sha256_fingerprint);
+}
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 
 void WebAppBrowserController::OnWebAppUninstalled(
     const AppId& uninstalled_app_id) {
@@ -176,8 +227,8 @@ void WebAppBrowserController::OnWebAppUninstalled(
     chrome::CloseWindow(browser());
 }
 
-void WebAppBrowserController::OnAppRegistrarDestroyed() {
-  registrar_observation_.Reset();
+void WebAppBrowserController::OnWebAppInstallManagerDestroyed() {
+  install_manager_observation_.Reset();
 }
 
 void WebAppBrowserController::SetReadIconCallbackForTesting(
@@ -214,29 +265,61 @@ ui::ImageModel WebAppBrowserController::GetWindowIcon() const {
 }
 
 absl::optional<SkColor> WebAppBrowserController::GetThemeColor() const {
+#if BUILDFLAG(IS_CHROMEOS_ASH)
   // System App popups (settings pages) always use default theme.
   if (system_app_ && browser()->is_type_app_popup())
     return absl::nullopt;
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
   absl::optional<SkColor> web_theme_color =
       AppBrowserController::GetThemeColor();
   if (web_theme_color)
     return web_theme_color;
 
+  if (ui::NativeTheme::GetInstanceForNativeUi()->ShouldUseDarkColors()) {
+    absl::optional<SkColor> dark_mode_color =
+        registrar().GetAppDarkModeThemeColor(app_id());
+
+    if (dark_mode_color) {
+      return dark_mode_color;
+    }
+  }
+
   return registrar().GetAppThemeColor(app_id());
 }
 
 absl::optional<SkColor> WebAppBrowserController::GetBackgroundColor() const {
-  if (auto color = AppBrowserController::GetBackgroundColor())
-    return color;
-  return registrar().GetAppBackgroundColor(app_id());
+  auto web_contents_color = AppBrowserController::GetBackgroundColor();
+  auto manifest_color = GetResolvedManifestBackgroundColor();
+
+  bool prefer_manifest_background_color = false;
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  if (system_app())
+    prefer_manifest_background_color =
+        system_app()->PreferManifestBackgroundColor();
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
+  auto [preferred_color, fallback_color] =
+      prefer_manifest_background_color
+          ? std::tie(manifest_color, web_contents_color)
+          : std::tie(web_contents_color, manifest_color);
+  return preferred_color ? preferred_color : fallback_color;
 }
 
 GURL WebAppBrowserController::GetAppStartUrl() const {
   return registrar().GetAppStartUrl(app_id());
 }
 
+GURL WebAppBrowserController::GetAppNewTabUrl() const {
+  return registrar().GetAppNewTabUrl(app_id());
+}
+
 bool WebAppBrowserController::IsUrlInAppScope(const GURL& url) const {
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  if (system_app() && system_app()->IsUrlInSystemAppScope(url))
+    return true;
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
   GURL app_scope = registrar().GetAppScope(app_id());
   if (!app_scope.is_valid())
     return false;
@@ -244,7 +327,7 @@ bool WebAppBrowserController::IsUrlInAppScope(const GURL& url) const {
   // https://w3c.github.io/manifest/#navigation-scope
   // If url is same origin as scope and url path starts with scope path, return
   // true. Otherwise, return false.
-  if (app_scope.GetOrigin() != url.GetOrigin()) {
+  if (app_scope.DeprecatedGetOriginAsURL() != url.DeprecatedGetOriginAsURL()) {
     // We allow an upgrade from http |app_scope| to https |url|.
     if (app_scope.scheme() != url::kHttpScheme)
       return false;
@@ -252,7 +335,8 @@ bool WebAppBrowserController::IsUrlInAppScope(const GURL& url) const {
     GURL::Replacements rep;
     rep.SetSchemeStr(url::kHttpsScheme);
     GURL secure_app_scope = app_scope.ReplaceComponents(rep);
-    if (secure_app_scope.GetOrigin() != url.GetOrigin())
+    if (secure_app_scope.DeprecatedGetOriginAsURL() !=
+        url.DeprecatedGetOriginAsURL())
       return false;
   }
 
@@ -273,20 +357,22 @@ std::u16string WebAppBrowserController::GetTitle() const {
     return base::UTF8ToUTF16(registrar().GetAppShortName(app_id()));
   }
 
-  const std::u16string raw_title = AppBrowserController::GetTitle();
+  std::u16string raw_title = AppBrowserController::GetTitle();
 
   if (!base::FeatureList::IsEnabled(features::kPrefixWebAppWindowsWithAppName))
     return raw_title;
 
-  const std::u16string app_name =
+  std::u16string app_name =
       base::UTF8ToUTF16(provider_.registrar().GetAppShortName(app_id()));
   if (base::StartsWith(raw_title, app_name)) {
     return raw_title;
-  } else if (raw_title.empty()) {
-    return app_name;
-  } else {
-    return base::StrCat({app_name, u" - ", raw_title});
   }
+
+  if (raw_title.empty()) {
+    return app_name;
+  }
+
+  return base::StrCat({app_name, u" - ", raw_title});
 }
 
 std::u16string WebAppBrowserController::GetAppShortName() const {
@@ -318,6 +404,12 @@ bool WebAppBrowserController::IsInstalled() const {
 void WebAppBrowserController::OnTabInserted(content::WebContents* contents) {
   AppBrowserController::OnTabInserted(contents);
   SetAppPrefsForWebContents(contents);
+
+  // If a `WebContents` is inserted into an app browser (e.g. after
+  // installation), it is "appy". Note that if and when it's moved back into a
+  // tabbed browser window (e.g. via "Open in Chrome" menu item), it is still
+  // considered "appy".
+  WebAppTabHelper::FromWebContents(contents)->set_acting_as_app(true);
 }
 
 void WebAppBrowserController::OnTabRemoved(content::WebContents* contents) {
@@ -329,18 +421,22 @@ const WebAppRegistrar& WebAppBrowserController::registrar() const {
   return provider_.registrar();
 }
 
+const WebAppInstallManager& WebAppBrowserController::install_manager() const {
+  return provider_.install_manager();
+}
+
 void WebAppBrowserController::LoadAppIcon(bool allow_placeholder_icon) const {
   apps::AppServiceProxy* proxy =
       apps::AppServiceProxyFactory::GetForProfile(browser()->profile());
   proxy->LoadIcon(proxy->AppRegistryCache().GetAppType(app_id()), app_id(),
-                  apps::mojom::IconType::kStandard, kWebAppIconSmall,
+                  apps::IconType::kStandard, kWebAppIconSmall,
                   allow_placeholder_icon,
                   base::BindOnce(&WebAppBrowserController::OnLoadIcon,
                                  weak_ptr_factory_.GetWeakPtr()));
 }
 
-void WebAppBrowserController::OnLoadIcon(apps::mojom::IconValuePtr icon_value) {
-  if (icon_value->icon_type != apps::mojom::IconType::kStandard)
+void WebAppBrowserController::OnLoadIcon(apps::IconValuePtr icon_value) {
+  if (!icon_value || icon_value->icon_type != apps::IconType::kStandard)
     return;
 
   app_icon_ = ui::ImageModel::FromImageSkia(icon_value->uncompressed);
@@ -370,18 +466,19 @@ void WebAppBrowserController::OnReadIcon(SkBitmap bitmap) {
 
 void WebAppBrowserController::PerformDigitalAssetLinkVerification(
     Browser* browser) {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   asset_link_handler_ =
       std::make_unique<digital_asset_links::DigitalAssetLinksHandler>(
           browser->profile()->GetURLLoaderFactory());
   is_verified_ = absl::nullopt;
+#endif
 
+#if BUILDFLAG(IS_CHROMEOS_ASH)
   ash::ApkWebAppService* apk_web_app_service =
       ash::ApkWebAppService::Get(browser->profile());
   if (!apk_web_app_service || !apk_web_app_service->IsWebOnlyTwa(app_id()))
     return;
 
-  const std::string origin = GetAppStartUrl().GetOrigin().spec();
   const absl::optional<std::string> package_name =
       apk_web_app_service->GetPackageNameForWebApp(app_id());
   const absl::optional<std::string> fingerprint =
@@ -391,12 +488,35 @@ void WebAppBrowserController::PerformDigitalAssetLinkVerification(
   DCHECK(package_name.has_value());
   DCHECK(fingerprint.has_value());
 
-  // base::Unretained is safe as |asset_link_handler_| is owned by this object
-  // and will be destroyed if this object is destroyed.
-  asset_link_handler_->CheckDigitalAssetLinkRelationshipForAndroidApp(
-      origin, kRelationship, fingerprint.value(), package_name.value(),
-      base::BindOnce(&WebAppBrowserController::OnRelationshipCheckComplete,
-                     base::Unretained(this)));
+  CheckDigitalAssetLinkRelationshipForAndroidApp(*package_name, *fingerprint);
+#endif
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  auto* lacros_service = chromeos::LacrosService::Get();
+  if (chromeos::BrowserParamsProxy::Get()->WebAppsEnabled() && lacros_service &&
+      lacros_service->IsAvailable<crosapi::mojom::WebAppService>() &&
+      lacros_service->GetInterfaceVersion(
+          crosapi::mojom::WebAppService::Uuid_) >=
+          int{crosapi::mojom::WebAppService::MethodMinVersions::
+                  kGetAssociatedAndroidPackageMinVersion}) {
+    lacros_service->GetRemote<crosapi::mojom::WebAppService>()
+        ->GetAssociatedAndroidPackage(
+            app_id(),
+            base::BindOnce(
+                &WebAppBrowserController::OnGetAssociatedAndroidPackage,
+                weak_ptr_factory_.GetWeakPtr()));
+  }
 #endif
 }
+
+absl::optional<SkColor>
+WebAppBrowserController::GetResolvedManifestBackgroundColor() const {
+  if (ui::NativeTheme::GetInstanceForNativeUi()->ShouldUseDarkColors()) {
+    auto dark_mode_color = registrar().GetAppDarkModeBackgroundColor(app_id());
+    if (dark_mode_color)
+      return dark_mode_color;
+  }
+  return registrar().GetAppBackgroundColor(app_id());
+}
+
 }  // namespace web_app

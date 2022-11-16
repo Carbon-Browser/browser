@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "base/files/scoped_file.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/gfx/buffer_types.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/linux/gbm_buffer.h"
@@ -24,6 +24,9 @@ class WaylandBufferManagerGpu;
 class GbmPixmapWayland : public gfx::NativePixmap {
  public:
   explicit GbmPixmapWayland(WaylandBufferManagerGpu* buffer_manager);
+
+  GbmPixmapWayland(const GbmPixmapWayland&) = delete;
+  GbmPixmapWayland& operator=(const GbmPixmapWayland&) = delete;
 
   // Creates a buffer object and initializes the pixmap buffer.
   // |visible_area_size| represents a 'visible size', i.e., a buffer
@@ -55,18 +58,13 @@ class GbmPixmapWayland : public gfx::NativePixmap {
   size_t GetDmaBufOffset(size_t plane) const override;
   size_t GetDmaBufPlaneSize(size_t plane) const override;
   size_t GetNumberOfPlanes() const override;
+  bool SupportsZeroCopyWebGPUImport() const override;
   uint64_t GetBufferFormatModifier() const override;
   gfx::BufferFormat GetBufferFormat() const override;
   gfx::Size GetBufferSize() const override;
   uint32_t GetUniqueId() const override;
   bool ScheduleOverlayPlane(gfx::AcceleratedWidget widget,
-                            int plane_z_order,
-                            gfx::OverlayTransform plane_transform,
-                            const gfx::Rect& display_bounds,
-                            const gfx::RectF& crop_rect,
-                            bool enable_blend,
-                            const gfx::Rect& damage_rect,
-                            float opacity,
+                            const gfx::OverlayPlaneData& overlay_plane_data,
                             std::vector<gfx::GpuFence> acquire_fences,
                             std::vector<gfx::GpuFence> release_fences) override;
   gfx::NativePixmapHandle ExportHandle() override;
@@ -75,13 +73,13 @@ class GbmPixmapWayland : public gfx::NativePixmap {
   ~GbmPixmapWayland() override;
 
   // Asks Wayland to create a dmabuf based wl_buffer.
-  void CreateDmabufBasedBuffer();
+  void CreateDmabufBasedWlBuffer();
 
   // gbm_bo wrapper for struct gbm_bo.
   std::unique_ptr<GbmBuffer> gbm_bo_;
 
   // Represents a connection to Wayland.
-  WaylandBufferManagerGpu* const buffer_manager_;
+  const raw_ptr<WaylandBufferManagerGpu> buffer_manager_;
 
   // Represents widget this pixmap backs.
   gfx::AcceleratedWidget widget_ = gfx::kNullAcceleratedWidget;
@@ -89,15 +87,11 @@ class GbmPixmapWayland : public gfx::NativePixmap {
   // A unique ID to identify the buffer for this pixmap.
   const uint32_t buffer_id_;
 
-  // Represents the z-axis order of the wayland surface this buffer is attach
-  // to.
-  int32_t z_order_ = 0;
-  bool z_order_set_ = false;
-
   // Size of the visible area of the buffer.
   gfx::Size visible_area_size_;
 
-  DISALLOW_COPY_AND_ASSIGN(GbmPixmapWayland);
+  // Says a wl_buffer has been created and must removed.
+  bool created_wl_buffer_ = false;
 };
 
 }  // namespace ui

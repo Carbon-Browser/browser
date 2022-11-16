@@ -24,7 +24,6 @@ class BookmarkSpecifics;
 class ClientConfigParams;
 class ClientToServerMessage;
 class ClientToServerResponse;
-class DatatypeAssociationStats;
 class DebugEventInfo;
 class DebugInfo;
 class DeviceInfoSpecifics;
@@ -35,6 +34,7 @@ class EntitySpecifics;
 class ExtensionSettingSpecifics;
 class ExtensionSpecifics;
 class HistoryDeleteDirectiveSpecifics;
+class HistorySpecifics;
 class LinkedAppIconInfo;
 class ManagedUserSettingSpecifics;
 class NavigationRedirect;
@@ -47,6 +47,7 @@ class PaymentsCustomerData;
 class PreferenceSpecifics;
 class PrinterPPDReference;
 class PrinterSpecifics;
+class PrintersAuthorizationServerSpecifics;
 class PriorityPreferenceSpecifics;
 class ReadingListSpecifics;
 class SearchEngineSpecifics;
@@ -114,9 +115,6 @@ std::unique_ptr<base::DictionaryValue> BookmarkSpecificsToValue(
 std::unique_ptr<base::DictionaryValue> ClientConfigParamsToValue(
     const sync_pb::ClientConfigParams& proto);
 
-std::unique_ptr<base::DictionaryValue> DatatypeAssociationStatsToValue(
-    const sync_pb::DatatypeAssociationStats& proto);
-
 std::unique_ptr<base::DictionaryValue> DebugEventInfoToValue(
     const sync_pb::DebugEventInfo& proto);
 
@@ -147,6 +145,9 @@ std::unique_ptr<base::DictionaryValue> ExtensionSpecificsToValue(
 std::unique_ptr<base::DictionaryValue> HistoryDeleteDirectiveSpecificsToValue(
     const sync_pb::HistoryDeleteDirectiveSpecifics&
         history_delete_directive_specifics);
+
+std::unique_ptr<base::DictionaryValue> HistorySpecificsToValue(
+    const sync_pb::HistorySpecifics& history_specifics);
 
 std::unique_ptr<base::DictionaryValue> LinkedAppIconInfoToValue(
     const sync_pb::LinkedAppIconInfo& linked_app_icon_info);
@@ -183,6 +184,11 @@ std::unique_ptr<base::DictionaryValue> PrinterPPDReferenceToValue(
 
 std::unique_ptr<base::DictionaryValue> PrinterSpecificsToValue(
     const sync_pb::PrinterSpecifics& printer_specifics);
+
+std::unique_ptr<base::DictionaryValue>
+PrintersAuthorizationServerSpecificsToValue(
+    const sync_pb::PrintersAuthorizationServerSpecifics&
+        printers_authorization_server_specifics);
 
 std::unique_ptr<base::DictionaryValue> PriorityPreferenceSpecificsToValue(
     const sync_pb::PriorityPreferenceSpecifics& proto);

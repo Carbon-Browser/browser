@@ -42,6 +42,9 @@ class UserAddingScreenTest : public LoginManagerTest,
     login_mixin_.AppendRegularUsers(3);
   }
 
+  UserAddingScreenTest(const UserAddingScreenTest&) = delete;
+  UserAddingScreenTest& operator=(const UserAddingScreenTest&) = delete;
+
   void SetUpInProcessBrowserTestFixture() override {
     LoginManagerTest::SetUpInProcessBrowserTestFixture();
     UserAddingScreen::Get()->AddObserver(this);
@@ -86,8 +89,6 @@ class UserAddingScreenTest : public LoginManagerTest,
   std::unique_ptr<base::RunLoop> run_loop_;
   bool finished_ = false;  // True if OnUserAddingFinished() has been called
                            // before WaitUntilUserAddingFinishedOrCancelled().
-
-  DISALLOW_COPY_AND_ASSIGN(UserAddingScreenTest);
 };
 
 IN_PROC_BROWSER_TEST_F(UserAddingScreenTest, CancelAdding) {
@@ -266,7 +267,15 @@ IN_PROC_BROWSER_TEST_F(UserAddingScreenTest, AddingSeveralUsers) {
     EXPECT_EQ(users_in_session_order_[i], unlock_users[i]->GetAccountId());
 }
 
-IN_PROC_BROWSER_TEST_F(UserAddingScreenTest, ScreenVisibilityAfterLock) {
+// TODO(crbug.com/1334963) Disabled
+// UserAddingScreenTest.ScreenVisibilityAfterLockbecause it is failing on "Linux
+// Chromium OS ASan LSan Tests" builder.
+#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX)
+#define MAYBE_ScreenVisibilityAfterLock DISABLED_ScreenVisibilityAfterLock
+#else
+#define MAYBE_ScreenVisibilityAfterLock ScreenVisibilityAfterLock
+#endif
+IN_PROC_BROWSER_TEST_F(UserAddingScreenTest, MAYBE_ScreenVisibilityAfterLock) {
   const auto& users = login_mixin_.users();
   LoginUser(users[0].account_id);
 

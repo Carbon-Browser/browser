@@ -4,7 +4,6 @@
 
 #include <string>
 
-#include "base/macros.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/metrics/user_action_tester.h"
 #include "chrome/browser/ui/browser.h"
@@ -33,6 +32,11 @@ const char kGetAddSupervisionUIElementJS[] =
 class AddSupervisionBrowserTest : public InProcessBrowserTest {
  public:
   AddSupervisionBrowserTest() = default;
+
+  AddSupervisionBrowserTest(const AddSupervisionBrowserTest&) = delete;
+  AddSupervisionBrowserTest& operator=(const AddSupervisionBrowserTest&) =
+      delete;
+
   ~AddSupervisionBrowserTest() override = default;
 
   void SetUpOnMainThread() override {
@@ -40,7 +44,7 @@ class AddSupervisionBrowserTest : public InProcessBrowserTest {
     // FakeGaia.IssueOAuthToken().
     identity_test_env_ = std::make_unique<signin::IdentityTestEnvironment>();
     identity_test_env_->MakePrimaryAccountAvailable(
-        "example@gmail.com", signin::ConsentLevel::kSignin);
+        "example@gmail.com", signin::ConsentLevel::kSync);
     // This makes the identity manager return the string "access_token" for the
     // access token.
     identity_test_env_->SetAutomaticIssueOfAccessTokens(true);
@@ -80,8 +84,6 @@ class AddSupervisionBrowserTest : public InProcessBrowserTest {
 
  private:
   std::unique_ptr<signin::IdentityTestEnvironment> identity_test_env_;
-
-  DISALLOW_COPY_AND_ASSIGN(AddSupervisionBrowserTest);
 };
 
 IN_PROC_BROWSER_TEST_F(AddSupervisionBrowserTest, URLParameters) {

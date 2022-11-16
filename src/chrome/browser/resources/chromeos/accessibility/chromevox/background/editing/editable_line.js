@@ -8,23 +8,23 @@
  * (e.g. start/end offsets) get saved. Line: nodes/offsets at the beginning/end
  * of a line get saved.
  */
+import {Cursor, CURSOR_NODE_INDEX, CursorMovement, CursorUnit} from '../../../common/cursors/cursor.js';
+import {CursorRange} from '../../../common/cursors/range.js';
+import {LibLouis} from '../braille/liblouis.js';
+import {Output} from '../output/output.js';
+import {OutputEventType, OutputNodeSpan} from '../output/output_types.js';
 
-goog.provide('editing.EditableLine');
-
-goog.scope(function() {
 const AutomationEvent = chrome.automation.AutomationEvent;
 const AutomationNode = chrome.automation.AutomationNode;
-const Cursor = cursors.Cursor;
 const Dir = constants.Dir;
 const EventType = chrome.automation.EventType;
 const FormType = LibLouis.FormType;
-const Range = cursors.Range;
 const RoleType = chrome.automation.RoleType;
 const StateType = chrome.automation.StateType;
-const Movement = cursors.Movement;
-const Unit = cursors.Unit;
+const Movement = CursorMovement;
+const Unit = CursorUnit;
 
-editing.EditableLine = class {
+export class EditableLine {
   /**
    * @param {!AutomationNode} startNode
    * @param {number} startIndex
@@ -46,14 +46,14 @@ editing.EditableLine = class {
     this.endContainer_;
 
     // Update |startIndex| and |endIndex| if the calls above to
-    // cursors.Cursor.deepEquivalent results in cursors to different container
+    // Cursor.deepEquivalent results in cursors to different container
     // nodes. The cursors can point directly to inline text boxes, in which case
     // we should not adjust the container start or end index.
     if (!AutomationPredicate.text(startNode) ||
         (this.start_.node !== startNode &&
          this.start_.node.parent !== startNode)) {
       startIndex =
-          (this.start_.index === cursors.NODE_INDEX && this.start_.node.name) ?
+          (this.start_.index === CURSOR_NODE_INDEX && this.start_.node.name) ?
           this.start_.node.name.length :
           this.start_.index;
     }
@@ -61,7 +61,7 @@ editing.EditableLine = class {
     if (!AutomationPredicate.text(endNode) ||
         (this.end_.node !== endNode && this.end_.node.parent !== endNode)) {
       endIndex =
-          (this.end_.index === cursors.NODE_INDEX && this.end_.node.name) ?
+          (this.end_.index === CURSOR_NODE_INDEX && this.end_.node.name) ?
           this.end_.node.name.length :
           this.end_.index;
     }
@@ -380,7 +380,7 @@ editing.EditableLine = class {
     // (e.g. in a multi-line selection).
     try {
       return this.value_.getSpanStart(this.start_) +
-          (this.start_.index === cursors.NODE_INDEX ? 0 : this.start_.index);
+          (this.start_.index === CURSOR_NODE_INDEX ? 0 : this.start_.index);
     } catch (e) {
       // When that happens, fall back to the start of this line.
       return 0;
@@ -394,7 +394,7 @@ editing.EditableLine = class {
   get endOffset() {
     try {
       return this.value_.getSpanStart(this.end_) +
-          (this.end_.index === cursors.NODE_INDEX ? 0 : this.end_.index);
+          (this.end_.index === CURSOR_NODE_INDEX ? 0 : this.end_.index);
     } catch (e) {
       return this.value_.length;
     }
@@ -465,12 +465,12 @@ editing.EditableLine = class {
     return this.value_;
   }
 
-  /** @return {!cursors.Cursor} */
+  /** @return {!Cursor} */
   get start() {
     return this.start_;
   }
 
-  /** @return {!cursors.Cursor} */
+  /** @return {!Cursor} */
   get end() {
     return this.end_;
   }
@@ -511,7 +511,7 @@ editing.EditableLine = class {
   /**
    * Returns true if |otherLine| surrounds the same line as |this|. Note that
    * the contents of the line might be different.
-   * @param {editing.EditableLine} otherLine
+   * @param {EditableLine} otherLine
    * @return {boolean}
    */
   isSameLine(otherLine) {
@@ -533,7 +533,7 @@ editing.EditableLine = class {
   /**
    * Returns true if |otherLine| surrounds the same line as |this| and has the
    * same selection.
-   * @param {editing.EditableLine} otherLine
+   * @param {EditableLine} otherLine
    * @return {boolean}
    */
   isSameLineAndSelection(otherLine) {
@@ -544,14 +544,18 @@ editing.EditableLine = class {
 
   /**
    * Returns whether this line comes before |otherLine| in document order.
-   * @param {!editing.EditableLine} otherLine
+   * @param {!EditableLine} otherLine
    * @return {boolean}
    */
   isBeforeLine(otherLine) {
-    if (this.isSameLine(otherLine) || !this.lineStartContainer_ ||
-        !otherLine.lineStartContainer_) {
+    if (!this.lineStartContainer_ || !otherLine.lineStartContainer_) {
       return false;
     }
+
+    if (this.isSameLine(otherLine)) {
+      return this.endOffset <= otherLine.endOffset;
+    }
+
     return AutomationUtil.getDirection(
                this.lineStartContainer_, otherLine.lineStartContainer_) ===
         Dir.FORWARD;
@@ -567,9 +571,9 @@ editing.EditableLine = class {
       return false;
     }
 
-    const start = new cursors.Cursor(
+    const start = new Cursor(
         this.lineStartContainer_, this.localLineStartContainerOffset_);
-    const end = new cursors.Cursor(
+    const end = new Cursor(
         this.lineEndContainer_, this.localLineEndContainerOffset_ - 1);
     const localStart = start.deepEquivalent || start;
     const localEnd = end.deepEquivalent || end;
@@ -619,42 +623,63 @@ editing.EditableLine = class {
 
   /**
    * Speaks the line using text to speech.
-   * @param {editing.EditableLine} prevLine
+   * @param {EditableLine} prevLine
    */
   speakLine(prevLine) {
-    let prev = (prevLine && prevLine.startContainer_.role) ?
+    // Detect when the entire line is just a breaking space. This occurs on
+    // Google Docs and requires that we speak it as a new line. However, we
+    // still need to account for all of the possible rich output occurring from
+    // ancestors of line nodes.
+    const isLineBreakingSpace = this.text === '\u00a0';
+
+    const prev = (prevLine && prevLine.startContainer_.role) ?
         prevLine.startContainer_ :
         null;
     const lineNodes =
         /** @type {Array<!AutomationNode>} */ (this.value_.getSpansInstanceOf(
             /** @type {function()} */ (this.startContainer_.constructor)));
-    let queueMode = QueueMode.CATEGORY_FLUSH;
-    for (let i = 0, cur; cur = lineNodes[i]; i++) {
-      if (cur.children.length) {
-        continue;
+    const speakNodeAtIndex = (index, prev) => {
+      const cur = lineNodes[index];
+      if (!cur) {
+        return;
       }
 
-      const o = new Output()
-                    .withRichSpeech(
-                        Range.fromNode(cur),
-                        prev ? Range.fromNode(prev) : Range.fromNode(cur),
-                        OutputEventType.NAVIGATE)
-                    .withQueueMode(queueMode);
+      if (cur.children.length) {
+        speakNodeAtIndex(++index, cur);
+        return;
+      }
+
+      const o = new Output();
+
+      if (isLineBreakingSpace) {
+        // Apply a replacement for \u00a0 to \n.
+        o.withSpeechTextReplacement('\u00a0', '\n');
+      }
+
+      o.withRichSpeech(
+           CursorRange.fromNode(cur),
+           prev ? CursorRange.fromNode(prev) : CursorRange.fromNode(cur),
+           OutputEventType.NAVIGATE)
+          .onSpeechEnd(() => {
+            speakNodeAtIndex(++index, cur);
+          });
 
       // Ignore whitespace only output except if it is leading content on the
       // line.
-      if (!o.isOnlyWhitespace || i === 0) {
+      if (!o.isOnlyWhitespace || index === 0) {
         o.go();
+      } else {
+        speakNodeAtIndex(++index, cur);
       }
-      prev = cur;
-      queueMode = QueueMode.QUEUE;
-    }
+    };
+
+    speakNodeAtIndex(0, prev);
   }
 
   /**
    * Creates a range around the character to the right of the line's starting
    * position.
-   * @return {!Range}
+   * @return {!CursorRange}
    */
   createCharRange() {
     const start = this.start_;
@@ -666,14 +691,14 @@ editing.EditableLine = class {
         // When |start| and |end| are equal, that means we've reached
         // the end of the document. This is a node boundary as well.
         start.equals(end)) {
-      end = new cursors.Cursor(start.node, start.index + 1);
+      end = new Cursor(start.node, start.index + 1);
     }
-    return new Range(start, end);
+    return new CursorRange(start, end);
   }
 
   /**
    * @param {boolean} shouldMoveToPreviousWord
-   * @return {!Range}
+   * @return {!CursorRange}
    */
   createWordRange(shouldMoveToPreviousWord) {
     const pos = this.start_;
@@ -685,8 +710,7 @@ editing.EditableLine = class {
         Unit.WORD,
         shouldMoveToPreviousWord ? Movement.DIRECTIONAL : Movement.BOUND,
         Dir.BACKWARD);
-    const end = pos.move(Unit.WORD, Movement.BOUND, Dir.FORWARD);
-    return new Range(start, end);
+    const end = start.move(Unit.WORD, Movement.BOUND, Dir.FORWARD);
+    return new CursorRange(start, end);
   }
-};
-});  // goog.scope
+}

@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "base/bind.h"
+#include "base/callback.h"
 #include "base/memory/ptr_util.h"
 #include "base/numerics/safe_math.h"
 #include "base/rand_util.h"
@@ -102,6 +103,10 @@ class NeverSerializedMessage : public TestMessageBase {
   NeverSerializedMessage(
       base::OnceClosure destruction_callback = base::OnceClosure())
       : destruction_callback_(std::move(destruction_callback)) {}
+
+  NeverSerializedMessage(const NeverSerializedMessage&) = delete;
+  NeverSerializedMessage& operator=(const NeverSerializedMessage&) = delete;
+
   ~NeverSerializedMessage() override {
     if (destruction_callback_)
       std::move(destruction_callback_).Run();
@@ -116,8 +121,6 @@ class NeverSerializedMessage : public TestMessageBase {
   void SerializePayload(void* buffer) override { NOTREACHED(); }
 
   base::OnceClosure destruction_callback_;
-
-  DISALLOW_COPY_AND_ASSIGN(NeverSerializedMessage);
 };
 
 class SimpleMessage : public TestMessageBase {
@@ -126,6 +129,9 @@ class SimpleMessage : public TestMessageBase {
                 base::OnceClosure destruction_callback = base::OnceClosure())
       : contents_(contents),
         destruction_callback_(std::move(destruction_callback)) {}
+
+  SimpleMessage(const SimpleMessage&) = delete;
+  SimpleMessage& operator=(const SimpleMessage&) = delete;
 
   ~SimpleMessage() override {
     if (destruction_callback_)
@@ -159,8 +165,6 @@ class SimpleMessage : public TestMessageBase {
   const std::string contents_;
   base::OnceClosure destruction_callback_;
   std::vector<mojo::ScopedMessagePipeHandle> handles_;
-
-  DISALLOW_COPY_AND_ASSIGN(SimpleMessage);
 };
 
 TEST_F(MessageTest, InvalidMessageObjects) {
@@ -224,7 +228,7 @@ TEST_F(MessageTest, DestroyMessageWithContext) {
 
 const char kTestMessageWithContext1[] = "hello laziness";
 
-#if !defined(OS_IOS)
+#if !BUILDFLAG(IS_IOS)
 
 const char kTestMessageWithContext2[] = "my old friend";
 const char kTestMessageWithContext3[] = "something something";
@@ -327,7 +331,7 @@ TEST_F(MessageTest, SerializeSimpleMessageWithHandlesWithContext) {
   });
 }
 
-#endif  // !defined(OS_IOS)
+#endif  // !BUILDFLAG(IS_IOS)
 
 TEST_F(MessageTest, SendLocalSimpleMessageWithHandlesWithContext) {
   auto message = std::make_unique<SimpleMessage>(kTestMessageWithContext1);
@@ -814,7 +818,7 @@ TEST_F(MessageTest, CommitInvalidMessageContents) {
   EXPECT_EQ(MOJO_RESULT_OK, MojoDestroyMessage(message));
 }
 
-#if !defined(OS_IOS)
+#if !BUILDFLAG(IS_IOS)
 
 TEST_F(MessageTest, ExtendPayloadWithHandlesAttached) {
   // Regression test for https://crbug.com/748996. Verifies that internal
@@ -930,7 +934,7 @@ DEFINE_TEST_CLIENT_TEST_WITH_PIPE(ReadMessageAndCheckPipe, MessageTest, h) {
     EXPECT_EQ(MOJO_RESULT_OK, MojoClose(handles[i]));
 }
 
-#endif  // !defined(OS_IOS)
+#endif  // !BUILDFLAG(IS_IOS)
 
 TEST_F(MessageTest, PartiallySerializedMessagesDontLeakHandles) {
   MojoMessageHandle message;

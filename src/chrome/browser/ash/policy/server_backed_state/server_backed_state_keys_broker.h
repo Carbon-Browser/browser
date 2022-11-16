@@ -11,15 +11,14 @@
 
 #include "base/callback.h"
 #include "base/callback_list.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
+
+namespace ash {
+class SessionManagerClient;
+}
 
 namespace base {
 class TimeDelta;
-}
-
-namespace chromeos {
-class SessionManagerClient;
 }
 
 namespace policy {
@@ -36,7 +35,12 @@ class ServerBackedStateKeysBroker {
   using StateKeysCallback = StateKeysCallbackList::CallbackType;
 
   explicit ServerBackedStateKeysBroker(
-      chromeos::SessionManagerClient* session_manager_client);
+      ash::SessionManagerClient* session_manager_client);
+
+  ServerBackedStateKeysBroker(const ServerBackedStateKeysBroker&) = delete;
+  ServerBackedStateKeysBroker& operator=(const ServerBackedStateKeysBroker&) =
+      delete;
+
   ~ServerBackedStateKeysBroker();
 
   // Registers a callback to be invoked whenever the state keys get updated.
@@ -78,7 +82,7 @@ class ServerBackedStateKeysBroker {
   // Stores newly-received state keys and notifies consumers.
   void StoreStateKeys(const std::vector<std::string>& state_keys);
 
-  chromeos::SessionManagerClient* session_manager_client_;
+  ash::SessionManagerClient* session_manager_client_;
 
   // The current set of state keys.
   std::vector<std::string> state_keys_;
@@ -93,8 +97,6 @@ class ServerBackedStateKeysBroker {
   StateKeysCallbackList request_callbacks_;
 
   base::WeakPtrFactory<ServerBackedStateKeysBroker> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ServerBackedStateKeysBroker);
 };
 
 }  // namespace policy

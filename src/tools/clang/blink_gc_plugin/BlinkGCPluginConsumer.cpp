@@ -140,7 +140,7 @@ void BlinkGCPluginConsumer::HandleTranslationUnit(ASTContext& context) {
     json_ = 0;
   }
 
-  FindBadPatterns(context, reporter_);
+  FindBadPatterns(context, reporter_, options_);
 }
 
 void BlinkGCPluginConsumer::ParseFunctionTemplates(TranslationUnitDecl* decl) {
@@ -259,7 +259,7 @@ void BlinkGCPluginConsumer::CheckClass(RecordInfo* info) {
     }
 
     {
-      CheckGCRootsVisitor visitor;
+      CheckGCRootsVisitor visitor(options_);
       if (visitor.ContainsGCRoots(info))
         reporter_.ClassContainsGCRoots(info, visitor.gc_roots());
     }
@@ -371,9 +371,7 @@ void BlinkGCPluginConsumer::CheckPolymorphicClass(
 CXXRecordDecl* BlinkGCPluginConsumer::GetLeftMostBase(
     CXXRecordDecl* left_most) {
   CXXRecordDecl::base_class_iterator it = left_most->bases_begin();
-  CXXRecordDecl* previous_left_most = left_most;
   while (it != left_most->bases_end()) {
-    previous_left_most = left_most;
     if (it->getType()->isDependentType())
       left_most = RecordInfo::GetDependentTemplatedDecl(*it->getType());
     else
@@ -381,12 +379,6 @@ CXXRecordDecl* BlinkGCPluginConsumer::GetLeftMostBase(
     if (!left_most || !left_most->hasDefinition())
       return 0;
     it = left_most->bases_begin();
-  }
-  if (Config::IsCppgcGCBase(left_most->getName())) {
-    // In the cppgc library, the GC base classes share a common parent. The
-    // common parent should be ignored for the purposes of getting the left
-    // most base.
-    return previous_left_most;
   }
   return left_most;
 }
@@ -572,17 +564,12 @@ void BlinkGCPluginConsumer::DumpClass(RecordInfo* info) {
       // The liveness kind of a path from the point to this value
       // is given by the innermost place that is non-strong.
       Edge::LivenessKind kind = Edge::kStrong;
-      if (Config::IsIgnoreCycleAnnotated(point_->field())) {
-        kind = Edge::kWeak;
-      } else {
-        for (Context::iterator it = context().begin();
-             it != context().end();
-             ++it) {
-          Edge::LivenessKind pointer_kind = (*it)->Kind();
-          if (pointer_kind != Edge::kStrong) {
-            kind = pointer_kind;
-            break;
-          }
+      for (Context::iterator it = context().begin(); it != context().end();
+           ++it) {
+        Edge::LivenessKind pointer_kind = (*it)->Kind();
+        if (pointer_kind != Edge::kStrong) {
+          kind = pointer_kind;
+          break;
         }
       }
       DumpEdge(

@@ -16,6 +16,7 @@
 #include "chrome/browser/extensions/test_extension_system.h"
 #include "chrome/common/extensions/extension_test_util.h"
 #include "chrome/test/base/testing_profile.h"
+#include "components/value_store/testing_value_store.h"
 #include "components/version_info/version_info.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/test_utils.h"
@@ -24,7 +25,6 @@
 #include "extensions/browser/api/declarative/test_rules_registry.h"
 #include "extensions/browser/extension_prefs.h"
 #include "extensions/browser/extension_registry.h"
-#include "extensions/browser/value_store/testing_value_store.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/features/feature_channel.h"
 #include "extensions/common/manifest_constants.h"
@@ -58,13 +58,13 @@ class RulesRegistryWithCacheTest : public testing::Test {
     base::DictionaryValue manifest_extra;
     std::string key;
     CHECK(Extension::ProducePEM("test extension 1", &key));
-    manifest_extra.SetString(manifest_keys::kPublicKey, key);
+    manifest_extra.SetStringKey(manifest_keys::kPublicKey, key);
     extension1_ = env_.MakeExtension(manifest_extra);
     CHECK(extension1_.get());
 
     // Different "key" values for the two extensions ensure a different ID.
     CHECK(Extension::ProducePEM("test extension 2", &key));
-    manifest_extra.SetString(manifest_keys::kPublicKey, key);
+    manifest_extra.SetStringKey(manifest_keys::kPublicKey, key);
     extension2_ = env_.MakeExtension(manifest_extra);
     CHECK(extension2_.get());
     CHECK_NE(extension2_->id(), extension1_->id());

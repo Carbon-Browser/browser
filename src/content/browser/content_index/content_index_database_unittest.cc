@@ -112,6 +112,9 @@ class ContentIndexDatabaseTest : public ::testing::Test {
       : task_environment_(BrowserTaskEnvironment::IO_MAINLOOP),
         embedded_worker_test_helper_(base::FilePath() /* in memory */) {}
 
+  ContentIndexDatabaseTest(const ContentIndexDatabaseTest&) = delete;
+  ContentIndexDatabaseTest& operator=(const ContentIndexDatabaseTest&) = delete;
+
   ~ContentIndexDatabaseTest() override = default;
 
   void SetUp() override {
@@ -142,7 +145,8 @@ class ContentIndexDatabaseTest : public ::testing::Test {
     base::RunLoop run_loop;
     blink::mojom::ContentIndexError error;
     database_->AddEntry(
-        service_worker_registration_id_, origin_, std::move(description),
+        service_worker_registration_id_, origin_,
+        /* is_top_level_context= */ true, std::move(description),
         std::move(icons), launch_url(),
         base::BindOnce(&DatabaseErrorCallback, run_loop.QuitClosure(), &error));
     run_loop.Run();
@@ -294,8 +298,6 @@ class ContentIndexDatabaseTest : public ::testing::Test {
   EmbeddedWorkerTestHelper embedded_worker_test_helper_;
   scoped_refptr<ServiceWorkerRegistration> service_worker_registration_;
   std::unique_ptr<ContentIndexDatabase> database_;
-
-  DISALLOW_COPY_AND_ASSIGN(ContentIndexDatabaseTest);
 };
 
 TEST_F(ContentIndexDatabaseTest, DatabaseOperations) {

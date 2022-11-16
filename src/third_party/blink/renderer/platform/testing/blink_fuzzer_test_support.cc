@@ -4,7 +4,6 @@
 
 #include "third_party/blink/renderer/platform/testing/blink_fuzzer_test_support.h"
 
-#include "base/at_exit.h"
 #include "base/command_line.h"
 #include "base/i18n/icu_util.h"
 #include "base/test/test_timeouts.h"
@@ -20,8 +19,6 @@ BlinkFuzzerTestSupport::BlinkFuzzerTestSupport(int argc, char** argv) {
   // Note: we don't tear anything down here after an iteration of the fuzzer
   // is complete, this is for efficiency. We rerun the fuzzer with the same
   // environment as the previous iteration.
-  base::AtExitManager at_exit;
-
   CHECK(base::i18n::InitializeICU());
 
   base::CommandLine::Init(argc, argv);
@@ -35,9 +32,8 @@ BlinkFuzzerTestSupport::~BlinkFuzzerTestSupport() {
 #if defined(ADDRESS_SANITIZER)
   // LSAN needs unreachable objects to be released to avoid reporting them
   // incorrectly as a memory leak.
-  blink::ThreadState* currentThreadState = blink::ThreadState::Current();
-  currentThreadState->CollectAllGarbageForTesting();
-#endif
+  blink::ThreadState::Current()->CollectAllGarbageForTesting();
+#endif  // defined(ADDRESS_SANITIZER)
 }
 
 }  // namespace blink

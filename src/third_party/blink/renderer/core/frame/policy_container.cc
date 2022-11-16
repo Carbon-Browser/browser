@@ -4,7 +4,9 @@
 
 #include "third_party/blink/renderer/core/frame/policy_container.h"
 
-#include "base/macros.h"
+#include <tuple>
+
+#include "services/network/public/cpp/web_sandbox_flags.h"
 #include "third_party/blink/renderer/core/frame/csp/conversion_util.h"
 
 namespace blink {
@@ -20,7 +22,7 @@ std::unique_ptr<PolicyContainer> PolicyContainer::CreateEmpty() {
   // Create a dummy PolicyContainerHost remote. All the messages will be
   // ignored.
   mojo::AssociatedRemote<mojom::blink::PolicyContainerHost> dummy_host;
-  ignore_result(dummy_host.BindNewEndpointAndPassDedicatedReceiver());
+  std::ignore = dummy_host.BindNewEndpointAndPassDedicatedReceiver();
 
   return std::make_unique<PolicyContainer>(
       dummy_host.Unbind(), mojom::blink::PolicyContainerPolicies::New());
@@ -33,10 +35,12 @@ std::unique_ptr<PolicyContainer> PolicyContainer::CreateFromWebPolicyContainer(
     return nullptr;
   mojom::blink::PolicyContainerPoliciesPtr policies =
       mojom::blink::PolicyContainerPolicies::New(
+          container->policies.cross_origin_embedder_policy,
           container->policies.referrer_policy,
-          container->policies.ip_address_space,
           ConvertToMojoBlink(
-              std::move(container->policies.content_security_policies)));
+              std::move(container->policies.content_security_policies)),
+          container->policies.is_anonymous, container->policies.sandbox_flags);
+
   return std::make_unique<PolicyContainer>(std::move(container->remote),
                                            std::move(policies));
 }
@@ -46,20 +50,10 @@ network::mojom::blink::ReferrerPolicy PolicyContainer::GetReferrerPolicy()
   return policies_->referrer_policy;
 }
 
-network::mojom::blink::IPAddressSpace PolicyContainer::GetIPAddressSpace()
-    const {
-  return policies_->ip_address_space;
-}
-
 void PolicyContainer::UpdateReferrerPolicy(
     network::mojom::blink::ReferrerPolicy policy) {
   policies_->referrer_policy = policy;
   policy_container_host_remote_->SetReferrerPolicy(policy);
-}
-
-void PolicyContainer::SetIPAddressSpace(
-    network::mojom::blink::IPAddressSpace ip_address_space) {
-  policies_->ip_address_space = ip_address_space;
 }
 
 const mojom::blink::PolicyContainerPolicies& PolicyContainer::GetPolicies()

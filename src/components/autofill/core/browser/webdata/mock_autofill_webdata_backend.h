@@ -19,6 +19,11 @@ class AutofillWebDataServiceObserverOnDBSequence;
 class MockAutofillWebDataBackend : public AutofillWebDataBackend {
  public:
   MockAutofillWebDataBackend();
+
+  MockAutofillWebDataBackend(const MockAutofillWebDataBackend&) = delete;
+  MockAutofillWebDataBackend& operator=(const MockAutofillWebDataBackend&) =
+      delete;
+
   ~MockAutofillWebDataBackend() override;
 
   MOCK_METHOD(WebDatabase*, GetDatabase, (), (override));
@@ -45,13 +50,6 @@ class MockAutofillWebDataBackend : public AutofillWebDataBackend {
               NotifyThatSyncHasStarted,
               (syncer::ModelType model_type),
               (override));
-  MOCK_METHOD(void,
-              NotifyOfCreditCardArtImagesChanged,
-              (const std::vector<std::string>& server_ids),
-              (override));
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(MockAutofillWebDataBackend);
 };
 
 }  // namespace autofill

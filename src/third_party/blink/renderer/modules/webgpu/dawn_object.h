@@ -9,8 +9,10 @@
 #include <dawn/webgpu.h>
 
 #include "base/memory/scoped_refptr.h"
+#include "third_party/blink/renderer/bindings/core/v8/script_value.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 #include "third_party/blink/renderer/platform/graphics/gpu/dawn_control_client_holder.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/heap/visitor.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 
@@ -35,7 +37,6 @@
   X(Sampler, sampler)                         \
   X(ShaderModule, shaderModule)               \
   X(Surface, surface)                         \
-  X(SwapChain, swapChain)                     \
   X(Texture, texture)                         \
   X(TextureView, textureView)
 
@@ -92,6 +93,8 @@ class DawnObjectBase {
   const String& label() const { return label_; }
   void setLabel(const String& value);
 
+  virtual void setLabelImpl(const String& value){};
+
  private:
   scoped_refptr<DawnControlClientHolder> dawn_control_client_;
   String label_;
@@ -103,6 +106,7 @@ class DawnObjectImpl : public ScriptWrappable, public DawnObjectBase {
   ~DawnObjectImpl() override;
 
   WGPUDevice GetDeviceHandle();
+  GPUDevice* device() { return device_.Get(); }
 
   void Trace(Visitor* visitor) const override;
 
@@ -127,6 +131,8 @@ class DawnObject : public DawnObjectImpl {
   }
 
   ~DawnObject() override {
+    DCHECK(handle_);
+
     // Note: The device is released last because all child objects must be
     // destroyed first.
     (GetProcs().*WGPUReleaseFn<Handle>::fn)(handle_);

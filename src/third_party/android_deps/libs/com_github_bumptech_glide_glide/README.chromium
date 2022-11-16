@@ -2,8 +2,9 @@ Name: Glide
 Short Name: glide
 URL: https://github.com/bumptech/glide
 Version: 4.11.0
-License: 
+License: Apache 2.0
 License File: LICENSE
+CPEPrefix: unknown
 Security Critical: yes
 
 Description:

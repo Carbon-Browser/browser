@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "third_party/blink/public/platform/media/buffered_data_source_host_impl.h"
+#include "third_party/blink/renderer/platform/media/buffered_data_source_host_impl.h"
 
 #include "media/base/timestamp_constants.h"
 
@@ -11,8 +11,7 @@ namespace blink {
 // We want a relatively small window for estimating bandwidth,
 // that way we don't need to worry too much about seeks and pause
 // throwing off the estimates.
-constexpr base::TimeDelta kDownloadHistoryWindowSeconds =
-    base::TimeDelta::FromSecondsD(10.0);
+constexpr base::TimeDelta kDownloadHistoryWindowSeconds = base::Seconds(10.0);
 
 // Limit the number of entries in the rate estimator queue.
 // 1024 entries should be more than enough.
@@ -95,7 +94,7 @@ static base::TimeDelta TimeForByteOffset(int64_t byte_offset,
     return base::TimeDelta();
   if (position > 0.99)
     return duration;
-  return base::TimeDelta::FromMilliseconds(
+  return base::Milliseconds(
       static_cast<int64_t>(position * duration.InMilliseconds()));
 }
 
@@ -136,7 +135,8 @@ double BufferedDataSourceHostImpl::DownloadRate() const {
   // data point that has the lowest download rate, we avoid over-estimating.
   const double kVeryLargeRate = 1.0E20;
   double download_rate = kVeryLargeRate;
-  for (int i = 0; i < std::min<int>(20, download_history_.size() - 3); i++) {
+  for (size_t i = 0; i < std::min<size_t>(20, download_history_.size() - 3);
+       i++) {
     int64_t downloaded_bytes =
         download_history_.back().second - download_history_[i].second;
     base::TimeTicks now = tick_clock_->NowTicks();

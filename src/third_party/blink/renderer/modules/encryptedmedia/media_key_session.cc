@@ -28,6 +28,7 @@
 #include <cmath>
 #include <limits>
 
+#include "base/numerics/safe_conversions.h"
 #include "media/base/content_decryption_module.h"
 #include "media/base/eme_constants.h"
 #include "third_party/blink/public/platform/task_type.h"
@@ -53,12 +54,10 @@
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/bindings/v8_throw_exception.h"
 #include "third_party/blink/renderer/platform/content_decryption_module_result.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/instrumentation/instance_counters.h"
 #include "third_party/blink/renderer/platform/network/mime/content_type.h"
-#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/timer.h"
-#include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
 #include "third_party/blink/renderer/platform/wtf/text/ascii_ctype.h"
 
 #define MEDIA_KEY_SESSION_LOG_LEVEL 3
@@ -247,8 +246,11 @@ class MediaKeySession::PendingAction final
 // is not expected to be called, and will reject the promise.
 class NewSessionResultPromise : public ContentDecryptionModuleResultPromise {
  public:
-  NewSessionResultPromise(ScriptState* script_state, MediaKeySession* session)
+  NewSessionResultPromise(ScriptState* script_state,
+                          const MediaKeysConfig& config,
+                          MediaKeySession* session)
       : ContentDecryptionModuleResultPromise(script_state,
+                                             config,
                                              EmeApiType::kGenerateRequest),
         session_(session) {}
 
@@ -284,8 +286,12 @@ class NewSessionResultPromise : public ContentDecryptionModuleResultPromise {
 // is not expected to be called, and will reject the promise.
 class LoadSessionResultPromise : public ContentDecryptionModuleResultPromise {
  public:
-  LoadSessionResultPromise(ScriptState* script_state, MediaKeySession* session)
-      : ContentDecryptionModuleResultPromise(script_state, EmeApiType::kLoad),
+  LoadSessionResultPromise(ScriptState* script_state,
+                           const MediaKeysConfig& config,
+                           MediaKeySession* session)
+      : ContentDecryptionModuleResultPromise(script_state,
+                                             config,
+                                             EmeApiType::kLoad),
         session_(session) {}
 
   ~LoadSessionResultPromise() override = default;
@@ -324,8 +330,12 @@ class LoadSessionResultPromise : public ContentDecryptionModuleResultPromise {
 // not expected to be called (and will reject the promise).
 class CloseSessionResultPromise : public ContentDecryptionModuleResultPromise {
  public:
-  CloseSessionResultPromise(ScriptState* script_state, MediaKeySession* session)
-      : ContentDecryptionModuleResultPromise(script_state, EmeApiType::kClose),
+  CloseSessionResultPromise(ScriptState* script_state,
+                            const MediaKeysConfig& config,
+                            MediaKeySession* session)
+      : ContentDecryptionModuleResultPromise(script_state,
+                                             config,
+                                             EmeApiType::kClose),
         session_(session) {}
 
   ~CloseSessionResultPromise() override = default;
@@ -360,9 +370,10 @@ class CloseSessionResultPromise : public ContentDecryptionModuleResultPromise {
 class SimpleResultPromise : public ContentDecryptionModuleResultPromise {
  public:
   SimpleResultPromise(ScriptState* script_state,
+                      const MediaKeysConfig& config,
                       MediaKeySession* session,
                       EmeApiType type)
-      : ContentDecryptionModuleResultPromise(script_state, type),
+      : ContentDecryptionModuleResultPromise(script_state, config, type),
         session_(session) {}
 
   ~SimpleResultPromise() override = default;
@@ -390,13 +401,15 @@ class SimpleResultPromise : public ContentDecryptionModuleResultPromise {
 
 MediaKeySession::MediaKeySession(ScriptState* script_state,
                                  MediaKeys* media_keys,
-                                 WebEncryptedMediaSessionType session_type)
+                                 WebEncryptedMediaSessionType session_type,
+                                 const MediaKeysConfig& config)
     : ExecutionContextLifecycleObserver(ExecutionContext::From(script_state)),
       async_event_queue_(
           MakeGarbageCollected<EventQueue>(GetExecutionContext(),
                                            TaskType::kMediaElementEvent)),
       media_keys_(media_keys),
       session_type_(session_type),
+      config_(config),
       expiration_(std::numeric_limits<double>::quiet_NaN()),
       key_statuses_map_(MakeGarbageCollected<MediaKeyStatusMap>()),
       closed_promise_(MakeGarbageCollected<ClosedPromise>(
@@ -537,7 +550,8 @@ ScriptPromise MediaKeySession::generateRequest(
 
   // 9. Let promise be a new promise.
   NewSessionResultPromise* result =
-      MakeGarbageCollected<NewSessionResultPromise>(script_state, this);
+      MakeGarbageCollected<NewSessionResultPromise>(script_state, config_,
+                                                    this);
   ScriptPromise promise = result->Promise();
 
   // 10. Run the following steps asynchronously (done in generateRequestTask())
@@ -630,7 +644,8 @@ ScriptPromise MediaKeySession::load(ScriptState* script_state,
 
   // 7. Let promise be a new promise.
   LoadSessionResultPromise* result =
-      MakeGarbageCollected<LoadSessionResultPromise>(script_state, this);
+      MakeGarbageCollected<LoadSessionResultPromise>(script_state, config_,
+                                                     this);
   ScriptPromise promise = result->Promise();
 
   // 8. Run the following steps asynchronously (done in loadTask())
@@ -750,7 +765,7 @@ ScriptPromise MediaKeySession::update(ScriptState* script_state,
 
   // 5. Let promise be a new promise.
   SimpleResultPromise* result = MakeGarbageCollected<SimpleResultPromise>(
-      script_state, this, EmeApiType::kUpdate);
+      script_state, config_, this, EmeApiType::kUpdate);
   ScriptPromise promise = result->Promise();
 
   // 6. Run the following steps asynchronously (done in updateTask())
@@ -797,7 +812,8 @@ ScriptPromise MediaKeySession::close(ScriptState* script_state,
 
   // 3. Let promise be a new promise.
   CloseSessionResultPromise* result =
-      MakeGarbageCollected<CloseSessionResultPromise>(script_state, this);
+      MakeGarbageCollected<CloseSessionResultPromise>(script_state, config_,
+                                                      this);
   ScriptPromise promise = result->Promise();
 
   // 4. Set this object's closing or closed value to true.
@@ -849,7 +865,7 @@ ScriptPromise MediaKeySession::remove(ScriptState* script_state,
 
   // 3. Let promise be a new promise.
   SimpleResultPromise* result = MakeGarbageCollected<SimpleResultPromise>(
-      script_state, this, EmeApiType::kRemove);
+      script_state, config_, this, EmeApiType::kRemove);
   ScriptPromise promise = result->Promise();
 
   // 4. Run the following steps asynchronously (done in removeTask()).
@@ -942,8 +958,9 @@ void MediaKeySession::OnSessionMessage(media::CdmMessageType message_type,
       init->setMessageType("individualization-request");
       break;
   }
-  init->setMessage(DOMArrayBuffer::Create(static_cast<const void*>(message),
-                                          SafeCast<uint32_t>(message_length)));
+  init->setMessage(
+      DOMArrayBuffer::Create(static_cast<const void*>(message),
+                             base::checked_cast<uint32_t>(message_length)));
 
   MediaKeyMessageEvent* event =
       MediaKeyMessageEvent::Create(event_type_names::kMessage, init);
@@ -977,12 +994,8 @@ void MediaKeySession::OnSessionClosed(media::CdmSessionClosedReason reason) {
   OnSessionExpirationUpdate(std::numeric_limits<double>::quiet_NaN());
 
   // 7. Resolve promise.
-  if (RuntimeEnabledFeatures::EncryptedMediaSessionClosedReasonEnabled()) {
-    closed_promise_->Resolve(
-        V8MediaKeySessionClosedReason(ConvertSessionClosedReason(reason)));
-  } else {
-    closed_promise_->ResolveWithUndefined();
-  }
+  closed_promise_->Resolve(
+      V8MediaKeySessionClosedReason(ConvertSessionClosedReason(reason)));
 
   // Fail any pending events, except if it's a close request.
   action_timer_.Stop();

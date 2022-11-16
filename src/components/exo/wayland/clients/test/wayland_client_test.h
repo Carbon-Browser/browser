@@ -13,6 +13,10 @@ namespace exo {
 class WaylandClientTest : public testing::Test {
  public:
   WaylandClientTest();
+
+  WaylandClientTest(const WaylandClientTest&) = delete;
+  WaylandClientTest& operator=(const WaylandClientTest&) = delete;
+
   ~WaylandClientTest() override;
 
   static void SetUIThreadTaskRunner(
@@ -23,10 +27,10 @@ class WaylandClientTest : public testing::Test {
   void SetUp() override;
   void TearDown() override;
 
+  wayland::Server* GetServer();
+
  private:
   WaylandClientTestHelper test_helper_;
-
-  DISALLOW_COPY_AND_ASSIGN(WaylandClientTest);
 };
 
 }  // namespace exo

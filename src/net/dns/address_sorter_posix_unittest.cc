@@ -6,12 +6,14 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "base/bind.h"
 #include "base/check_op.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
 #include "net/base/ip_address.h"
+#include "net/base/ip_endpoint.h"
 #include "net/base/net_errors.h"
 #include "net/base/test_completion_callback.h"
 #include "net/log/net_log_with_source.h"
@@ -22,6 +24,7 @@
 #include "net/socket/stream_socket.h"
 #include "net/test/test_with_task_environment.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace net {
@@ -40,7 +43,10 @@ IPAddress ParseIP(const std::string& str) {
 class TestUDPClientSocket : public DatagramClientSocket {
  public:
   explicit TestUDPClientSocket(const AddressMapping* mapping)
-      : mapping_(mapping), connected_(false)  {}
+      : mapping_(mapping) {}
+
+  TestUDPClientSocket(const TestUDPClientSocket&) = delete;
+  TestUDPClientSocket& operator=(const TestUDPClientSocket&) = delete;
 
   ~TestUDPClientSocket() override = default;
 
@@ -132,25 +138,26 @@ class TestUDPClientSocket : public DatagramClientSocket {
 
  private:
   NetLogWithSource net_log_;
-  const AddressMapping* mapping_;
-  bool connected_;
+  raw_ptr<const AddressMapping> mapping_;
+  bool connected_ = false;
   IPEndPoint local_endpoint_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestUDPClientSocket);
 };
 
 // Creates TestUDPClientSockets and maintains an AddressMapping.
 class TestSocketFactory : public ClientSocketFactory {
  public:
   TestSocketFactory() = default;
+
+  TestSocketFactory(const TestSocketFactory&) = delete;
+  TestSocketFactory& operator=(const TestSocketFactory&) = delete;
+
   ~TestSocketFactory() override = default;
 
   std::unique_ptr<DatagramClientSocket> CreateDatagramClientSocket(
       DatagramSocket::BindType,
       NetLog*,
       const NetLogSource&) override {
-    return std::unique_ptr<DatagramClientSocket>(
-        new TestUDPClientSocket(&mapping_));
+    return std::make_unique<TestUDPClientSocket>(&mapping_);
   }
   std::unique_ptr<TransportClientSocket> CreateTransportClientSocket(
       const AddressList&,
@@ -169,37 +176,21 @@ class TestSocketFactory : public ClientSocketFactory {
     NOTIMPLEMENTED();
     return nullptr;
   }
-  std::unique_ptr<ProxyClientSocket> CreateProxyClientSocket(
-      std::unique_ptr<StreamSocket> stream_socket,
-      const std::string& user_agent,
-      const HostPortPair& endpoint,
-      const ProxyServer& proxy_server,
-      HttpAuthController* http_auth_controller,
-      bool tunnel,
-      bool using_spdy,
-      NextProto negotiated_protocol,
-      ProxyDelegate* proxy_delegate,
-      const NetworkTrafficAnnotationTag& traffic_annotation) override {
-    NOTIMPLEMENTED();
-    return nullptr;
-  }
   void AddMapping(const IPAddress& dst, const IPAddress& src) {
     mapping_[dst] = src;
   }
 
  private:
   AddressMapping mapping_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestSocketFactory);
 };
 
-void OnSortComplete(AddressList* result_buf,
+void OnSortComplete(std::vector<IPEndPoint>* sorted_buf,
                     CompletionOnceCallback callback,
                     bool success,
-                    const AddressList& result) {
+                    std::vector<IPEndPoint> sorted) {
   EXPECT_TRUE(success);
   if (success)
-    *result_buf = result;
+    *sorted_buf = std::move(sorted);
   std::move(callback).Run(OK);
 }
 
@@ -227,25 +218,25 @@ class AddressSorterPosixTest : public TestWithTaskEnvironment {
   // Verify that NULL-terminated |addresses| matches (-1)-terminated |order|
   // after sorting.
   void Verify(const char* const addresses[], const int order[]) {
-    AddressList list;
-    for (const char* const* addr = addresses; *addr != NULL; ++addr)
-      list.push_back(IPEndPoint(ParseIP(*addr), 80));
+    std::vector<IPEndPoint> endpoints;
+    for (const char* const* addr = addresses; *addr != nullptr; ++addr)
+      endpoints.emplace_back(ParseIP(*addr), 80);
     for (size_t i = 0; order[i] >= 0; ++i)
-      CHECK_LT(order[i], static_cast<int>(list.size()));
+      CHECK_LT(order[i], static_cast<int>(endpoints.size()));
 
-    AddressList result;
+    std::vector<IPEndPoint> sorted;
     TestCompletionCallback callback;
-    sorter_.Sort(list,
-                 base::BindOnce(&OnSortComplete, &result, callback.callback()));
+    sorter_.Sort(endpoints,
+                 base::BindOnce(&OnSortComplete, &sorted, callback.callback()));
     callback.WaitForResult();
 
-    for (size_t i = 0; (i < result.size()) || (order[i] >= 0); ++i) {
-      IPEndPoint expected = order[i] >= 0 ? list[order[i]] : IPEndPoint();
-      IPEndPoint actual = i < result.size() ? result[i] : IPEndPoint();
-      EXPECT_TRUE(expected.address() == actual.address()) <<
-          "Address out of order at position " << i << "\n" <<
-          "  Actual: " << actual.ToStringWithoutPort() << "\n" <<
-          "Expected: " << expected.ToStringWithoutPort();
+    for (size_t i = 0; (i < sorted.size()) || (order[i] >= 0); ++i) {
+      IPEndPoint expected = order[i] >= 0 ? endpoints[order[i]] : IPEndPoint();
+      IPEndPoint actual = i < sorted.size() ? sorted[i] : IPEndPoint();
+      EXPECT_TRUE(expected == actual)
+          << "Endpoint out of order at position " << i << "\n"
+          << "  Actual: " << actual.ToString() << "\n"
+          << "Expected: " << expected.ToString();
     }
   }
 
@@ -256,7 +247,7 @@ class AddressSorterPosixTest : public TestWithTaskEnvironment {
 // Rule 1: Avoid unusable destinations.
 TEST_F(AddressSorterPosixTest, Rule1) {
   AddMapping("10.0.0.231", "10.0.0.1");
-  const char* const addresses[] = { "::1", "10.0.0.231", "127.0.0.1", NULL };
+  const char* const addresses[] = {"::1", "10.0.0.231", "127.0.0.1", nullptr};
   const int order[] = { 1, -1 };
   Verify(addresses, order);
 }
@@ -271,11 +262,11 @@ TEST_F(AddressSorterPosixTest, Rule2) {
   AddMapping("8.0.0.1", "169.254.0.10");  // global vs. link-local
   // In all three cases, matching scope is preferred.
   const int order[] = { 1, 0, -1 };
-  const char* const addresses1[] = { "3002::2", "3002::1", NULL };
+  const char* const addresses1[] = {"3002::2", "3002::1", nullptr};
   Verify(addresses1, order);
-  const char* const addresses2[] = { "fec1::2", "ff32::1", NULL };
+  const char* const addresses2[] = {"fec1::2", "ff32::1", nullptr};
   Verify(addresses2, order);
-  const char* const addresses3[] = { "8.0.0.1", "fec1::1", NULL };
+  const char* const addresses3[] = {"8.0.0.1", "fec1::1", nullptr};
   Verify(addresses3, order);
 }
 
@@ -285,7 +276,7 @@ TEST_F(AddressSorterPosixTest, Rule3) {
   AddMapping("3002::1", "4000::10");
   GetSourceInfo("4000::10")->deprecated = true;
   AddMapping("3002::2", "4000::20");
-  const char* const addresses[] = { "3002::1", "3002::2", NULL };
+  const char* const addresses[] = {"3002::1", "3002::2", nullptr};
   const int order[] = { 1, 0, -1 };
   Verify(addresses, order);
 }
@@ -295,7 +286,7 @@ TEST_F(AddressSorterPosixTest, Rule4) {
   AddMapping("3002::1", "4000::10");
   AddMapping("3002::2", "4000::20");
   GetSourceInfo("4000::20")->home = true;
-  const char* const addresses[] = { "3002::1", "3002::2", NULL };
+  const char* const addresses[] = {"3002::1", "3002::2", nullptr};
   const int order[] = { 1, 0, -1 };
   Verify(addresses, order);
 }
@@ -308,11 +299,11 @@ TEST_F(AddressSorterPosixTest, Rule5) {
   AddMapping("2002::1", "2001::10");              // 6to4 vs. Teredo
   const int order[] = { 1, 0, -1 };
   {
-    const char* const addresses[] = { "2001::1", "::1", NULL };
+    const char* const addresses[] = {"2001::1", "::1", nullptr};
     Verify(addresses, order);
   }
   {
-    const char* const addresses[] = { "2002::1", "::ffff:1234:1", NULL };
+    const char* const addresses[] = {"2002::1", "::ffff:1234:1", nullptr};
     Verify(addresses, order);
   }
 }
@@ -323,8 +314,8 @@ TEST_F(AddressSorterPosixTest, Rule6) {
   AddMapping("ff32::1", "fe81::10");              // multicast
   AddMapping("::ffff:1234:1", "::ffff:1234:10");  // IPv4-mapped
   AddMapping("2001::1", "2001::10");              // Teredo
-  const char* const addresses[] = { "2001::1", "::ffff:1234:1", "ff32::1",
-    "::1", NULL };
+  const char* const addresses[] = {"2001::1", "::ffff:1234:1", "ff32::1", "::1",
+                                   nullptr};
   const int order[] = { 3, 2, 1, 0, -1 };
   Verify(addresses, order);
 }
@@ -334,7 +325,7 @@ TEST_F(AddressSorterPosixTest, Rule7) {
   AddMapping("3002::1", "4000::10");
   AddMapping("3002::2", "4000::20");
   GetSourceInfo("4000::20")->native = true;
-  const char* const addresses[] = { "3002::1", "3002::2", NULL };
+  const char* const addresses[] = {"3002::1", "3002::2", nullptr};
   const int order[] = { 1, 0, -1 };
   Verify(addresses, order);
 }
@@ -348,8 +339,8 @@ TEST_F(AddressSorterPosixTest, Rule8) {
   AddMapping("ff32::1", "4000::10");  // link-local
   AddMapping("ff35::1", "4000::10");  // site-local
   AddMapping("ff38::1", "4000::10");  // org-local
-  const char* const addresses[] = { "ff38::1", "3000::1", "ff35::1", "ff32::1",
-                                    "fe81::1", NULL };
+  const char* const addresses[] = {"ff38::1", "3000::1", "ff35::1",
+                                   "ff32::1", "fe81::1", nullptr};
   const int order[] = { 4, 1, 3, 2, 0, -1 };
   Verify(addresses, order);
 }
@@ -362,8 +353,8 @@ TEST_F(AddressSorterPosixTest, Rule9) {
   GetSourceInfo("4000::10")->prefix_length = 15;
   AddMapping("4002::1", "4000::10");       // 14 bit match
   AddMapping("4080::1", "4000::10");       // 8 bit match
-  const char* const addresses[] = { "4080::1", "4002::1", "4000::1", "3000::1",
-                                    NULL };
+  const char* const addresses[] = {"4080::1", "4002::1", "4000::1", "3000::1",
+                                   nullptr};
   const int order[] = { 3, 2, 1, 0, -1 };
   Verify(addresses, order);
 }
@@ -373,7 +364,7 @@ TEST_F(AddressSorterPosixTest, Rule10) {
   AddMapping("4000::1", "4000::10");
   AddMapping("4000::2", "4000::10");
   AddMapping("4000::3", "4000::10");
-  const char* const addresses[] = { "4000::1", "4000::2", "4000::3", NULL };
+  const char* const addresses[] = {"4000::1", "4000::2", "4000::3", nullptr};
   const int order[] = { 0, 1, 2, -1 };
   Verify(addresses, order);
 }
@@ -385,10 +376,29 @@ TEST_F(AddressSorterPosixTest, MultipleRules) {
   AddMapping("4000::1", "4000::10");  // global unicast
   AddMapping("ff32::2", "fe81::20");  // deprecated link-local multicast
   GetSourceInfo("fe81::20")->deprecated = true;
-  const char* const addresses[] = { "ff3e::1", "ff32::2", "4000::1", "ff32::1",
-                                    "::1", "8.0.0.1", NULL };
+  const char* const addresses[] = {"ff3e::1", "ff32::2", "4000::1", "ff32::1",
+                                   "::1",     "8.0.0.1", nullptr};
   const int order[] = { 4, 3, 0, 2, 1, -1 };
   Verify(addresses, order);
+}
+
+TEST_F(AddressSorterPosixTest, InputPortsAreMaintained) {
+  AddMapping("::1", "::1");
+  AddMapping("::2", "::2");
+  AddMapping("::3", "::3");
+
+  IPEndPoint endpoint1(ParseIP("::1"), /*port=*/111);
+  IPEndPoint endpoint2(ParseIP("::2"), /*port=*/222);
+  IPEndPoint endpoint3(ParseIP("::3"), /*port=*/333);
+
+  std::vector<IPEndPoint> input = {endpoint1, endpoint2, endpoint3};
+  std::vector<IPEndPoint> sorted;
+  TestCompletionCallback callback;
+  sorter_.Sort(input,
+               base::BindOnce(&OnSortComplete, &sorted, callback.callback()));
+  callback.WaitForResult();
+
+  EXPECT_THAT(sorted, testing::ElementsAre(endpoint1, endpoint2, endpoint3));
 }
 
 }  // namespace net

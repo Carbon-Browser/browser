@@ -120,7 +120,7 @@ Status FocusToElement(
     if (base::TimeTicks::Now() - start_time >= session->implicit_wait) {
       return Status(kElementNotVisible);
     }
-    base::PlatformThread::Sleep(base::TimeDelta::FromMilliseconds(100));
+    base::PlatformThread::Sleep(base::Milliseconds(100));
   }
 
   bool is_enabled = false;
@@ -199,6 +199,62 @@ Status ExecuteFindChildElement(int interval_ms,
                                std::unique_ptr<base::Value>* value) {
   return FindElement(
       interval_ms, true, &element_id, session, web_view, params, value);
+}
+
+Status ExecuteFindChildElementFromShadowRoot(
+    int interval_ms,
+    Session* session,
+    WebView* web_view,
+    const std::string& shadow_root_id,
+    const base::DictionaryValue& params,
+    std::unique_ptr<base::Value>* value) {
+  return FindShadowElement(interval_ms, true, &shadow_root_id, session,
+                           web_view, params, value);
+}
+
+Status ExecuteFindChildElementsFromShadowRoot(
+    int interval_ms,
+    Session* session,
+    WebView* web_view,
+    const std::string& shadow_root_id,
+    const base::DictionaryValue& params,
+    std::unique_ptr<base::Value>* value) {
+  return FindShadowElement(interval_ms, false, &shadow_root_id, session,
+                           web_view, params, value);
+}
+
+Status ExecuteGetElementShadowRoot(Session* session,
+                                   WebView* web_view,
+                                   const std::string& element_id,
+                                   const base::DictionaryValue& params,
+                                   std::unique_ptr<base::Value>* value) {
+  Status status = CheckElement(element_id);
+
+  if (status.IsError())
+    return status;
+
+  base::ListValue args;
+  args.Append(CreateElement(element_id));
+
+  std::string currentFrameId = session->GetCurrentFrameId();
+
+  status = web_view->CallFunction(session->GetCurrentFrameId(),
+                                  "function(elem) { return elem.shadowRoot; }",
+                                  args, value);
+
+  if (status.IsError()) {
+    if (status.message().find("no such shadow root") != std::string::npos) {
+      return Status(kNoSuchShadowRoot);
+    }
+
+    return status;
+  }
+
+  if (value->get()->is_none()) {
+    return Status(kNoSuchShadowRoot);
+  }
+
+  return status;
 }
 
 Status ExecuteFindChildElements(int interval_ms,
@@ -335,12 +391,18 @@ Status ExecuteFlick(Session* session,
     return status;
 
   int xoffset, yoffset, speed;
-  if (!params.GetInteger("xoffset", &xoffset))
+
+  absl::optional<int> maybe_xoffset = params.FindIntKey("xoffset");
+  if (!maybe_xoffset)
     return Status(kInvalidArgument, "'xoffset' must be an integer");
-  if (!params.GetInteger("yoffset", &yoffset))
+  xoffset = *maybe_xoffset;
+
+  absl::optional<int> maybe_yoffset = params.FindIntKey("yoffset");
+  if (!maybe_yoffset)
     return Status(kInvalidArgument, "'yoffset' must be an integer");
-  if (!params.GetInteger("speed", &speed))
-    return Status(kInvalidArgument, "'speed' must be an integer");
+  yoffset = *maybe_yoffset;
+
+  speed = params.FindIntKey("speed").value_or(-1);
   if (speed < 1)
     return Status(kInvalidArgument, "'speed' must be a positive integer");
 
@@ -365,7 +427,7 @@ Status ExecuteFlick(Session* session,
     if (status.IsError())
       return status;
     base::PlatformThread::Sleep(
-        base::TimeDelta::FromMilliseconds(1000 / kFlickTouchEventsPerSecond));
+        base::Milliseconds(1000 / kFlickTouchEventsPerSecond));
   }
   return web_view->DispatchTouchEvent(
       TouchEvent(kTouchEnd, location.x + xoffset, location.y + yoffset), false);
@@ -443,7 +505,7 @@ Status ExecuteClearElement(Session* session,
     if (base::TimeTicks::Now() - start_time >= session->implicit_wait) {
       return Status(kElementNotVisible);
     }
-    base::PlatformThread::Sleep(base::TimeDelta::FromMilliseconds(50));
+    base::PlatformThread::Sleep(base::Milliseconds(50));
   }
   static bool isClearWarningNotified = false;
   if (!isClearWarningNotified) {
@@ -475,9 +537,10 @@ Status ExecuteSendKeysToElement(Session* session,
   base::ListValue key_list_local;
   const base::Value* text = nullptr;
   if (session->w3c_compliant) {
-    if (!params.Get("text", &text) || !text->is_string())
+    text = params.FindKey("text");
+    if (text == nullptr || !text->is_string())
       return Status(kInvalidArgument, "'text' must be a string");
-    key_list_local.Set(0, std::make_unique<base::Value>(text->Clone()));
+    key_list_local.Append(text->Clone());
     key_list = &key_list_local;
   } else {
     if (!params.GetList("value", &key_list))
@@ -509,11 +572,11 @@ Status ExecuteSendKeysToElement(Session* session,
     }
     // Compress array into a single string.
     std::string paths_string;
-    for (size_t i = 0; i < key_list->GetList().size(); ++i) {
-      std::string path_part;
-      if (!key_list->GetString(i, &path_part))
+    for (const base::Value& i : key_list->GetList()) {
+      const std::string* path_part = i.GetIfString();
+      if (!path_part)
         return Status(kInvalidArgument, "'value' is invalid");
-      paths_string.append(path_part);
+      paths_string.append(*path_part);
     }
 
     // w3c spec specifies empty path_part should throw invalidArgument error
@@ -549,8 +612,8 @@ Status ExecuteSendKeysToElement(Session* session,
       return Status(kInvalidArgument,
                     "the element can not hold multiple files");
 
-    std::unique_ptr<base::DictionaryValue> element(CreateElement(element_id));
-    return web_view->SetFileInputFiles(session->GetCurrentFrameId(), *element,
+    base::Value element = CreateElement(element_id);
+    return web_view->SetFileInputFiles(session->GetCurrentFrameId(), element,
                                        paths, multiple);
   } else if (session->w3c_compliant && is_input && is_nontypeable) {
     // Special handling for non-typeable inputs is only included in W3C Spec
@@ -1091,10 +1154,12 @@ Status ExecuteElementScreenshot(Session* session,
   double device_pixel_ratio =
          browser_info->FindKey("device_pixel_ratio")->GetDouble();
 
-  std::unique_ptr<base::DictionaryValue> clip_dict =
-      base::DictionaryValue::From(std::move(clip));
-  if (!clip_dict)
+  if (!clip->is_dict())
     return Status(kUnknownError, "Element Rect is not a dictionary");
+
+  base::DictionaryValue screenshot_params;
+  base::Value* clip_dict = screenshot_params.SetKey(
+      "clip", base::Value::FromUniquePtrValue(std::move(clip)));
   // |clip_dict| already contains the right width and height of the target
   // element, but its x and y are relative to containing frame. We replace them
   // with the x and y relative to top-level document origin, as expected by
@@ -1109,8 +1174,6 @@ Status ExecuteElementScreenshot(Session* session,
   clip_dict->SetDoubleKey("width",
                           std::min(viewport_width - location.x,
                                    clip_dict->FindKey("width")->GetDouble()));
-  base::DictionaryValue screenshot_params;
-  screenshot_params.SetDictionary("clip", std::move(clip_dict));
 
   std::string screenshot;
   status = web_view->CaptureScreenshot(&screenshot, screenshot_params);

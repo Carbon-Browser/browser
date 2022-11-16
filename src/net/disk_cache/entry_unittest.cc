@@ -8,7 +8,6 @@
 #include "base/callback_helpers.h"
 #include "base/files/file.h"
 #include "base/files/file_util.h"
-#include "base/macros.h"
 #include "base/metrics/field_trial.h"
 #include "base/metrics/field_trial_param_associator.h"
 #include "base/run_loop.h"
@@ -17,6 +16,7 @@
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/threading/platform_thread.h"
+#include "base/time/time.h"
 #include "build/build_config.h"
 #include "net/base/completion_once_callback.h"
 #include "net/base/io_buffer.h"
@@ -551,7 +551,7 @@ TEST_F(DiskCacheEntryTest, ExternalAsyncIO) {
 }
 
 // TODO(http://crbug.com/497101): This test is flaky.
-#if defined(OS_IOS)
+#if BUILDFLAG(IS_IOS)
 #define MAYBE_ExternalAsyncIONoBuffer DISABLED_ExternalAsyncIONoBuffer
 #else
 #define MAYBE_ExternalAsyncIONoBuffer ExternalAsyncIONoBuffer
@@ -606,9 +606,9 @@ void DiskCacheEntryTest::StreamAccess() {
   const int kBufferSize = 1024;
   const int kNumStreams = 3;
   scoped_refptr<net::IOBuffer> reference_buffers[kNumStreams];
-  for (int i = 0; i < kNumStreams; i++) {
-    reference_buffers[i] = base::MakeRefCounted<net::IOBuffer>(kBufferSize);
-    CacheTestFillBuffer(reference_buffers[i]->data(), kBufferSize, false);
+  for (auto& reference_buffer : reference_buffers) {
+    reference_buffer = base::MakeRefCounted<net::IOBuffer>(kBufferSize);
+    CacheTestFillBuffer(reference_buffer->data(), kBufferSize, false);
   }
   scoped_refptr<net::IOBuffer> buffer1 =
       base::MakeRefCounted<net::IOBuffer>(kBufferSize);
@@ -2262,7 +2262,7 @@ void DiskCacheEntryTest::DoomSparseEntry() {
       // Most likely we are waiting for the result of reading the sparse info
       // (it's always async on Posix so it is easy to miss). Unfortunately we
       // don't have any signal to watch for so we can only wait.
-      base::PlatformThread::Sleep(base::TimeDelta::FromMilliseconds(500));
+      base::PlatformThread::Sleep(base::Milliseconds(500));
       base::RunLoop().RunUntilIdle();
     }
     EXPECT_EQ(0, cache_->GetEntryCount());
@@ -2291,6 +2291,10 @@ class SparseTestCompletionCallback: public net::TestCompletionCallback {
       std::unique_ptr<disk_cache::Backend> cache)
       : cache_(std::move(cache)) {}
 
+  SparseTestCompletionCallback(const SparseTestCompletionCallback&) = delete;
+  SparseTestCompletionCallback& operator=(const SparseTestCompletionCallback&) =
+      delete;
+
  private:
   void SetResult(int result) override {
     cache_.reset();
@@ -2298,7 +2302,6 @@ class SparseTestCompletionCallback: public net::TestCompletionCallback {
   }
 
   std::unique_ptr<disk_cache::Backend> cache_;
-  DISALLOW_COPY_AND_ASSIGN(SparseTestCompletionCallback);
 };
 
 // Tests that we don't crash when the backend is deleted while we are working
@@ -2549,7 +2552,7 @@ TEST_F(DiskCacheEntryTest, SparseClipEnd) {
 
   // Blockfile refuses to deal with sparse indices over 64GiB.
   SparseClipEnd(std::numeric_limits<int64_t>::max(),
-                /* expect_unsupported = */ true);
+                /*expected_unsupported=*/true);
 }
 
 TEST_F(DiskCacheEntryTest, SparseClipEnd2) {
@@ -2558,7 +2561,7 @@ TEST_F(DiskCacheEntryTest, SparseClipEnd2) {
   const int64_t kLimit = 64ll * 1024 * 1024 * 1024;
   // Separate test for blockfile for indices right at the edge of its address
   // space limit. kLimit must match kMaxEndOffset in sparse_control.cc
-  SparseClipEnd(kLimit, /* expect_unsupported = */ false);
+  SparseClipEnd(kLimit, /*expected_unsupported=*/false);
 
   // Test with things after kLimit, too, which isn't an issue for backends
   // supporting the entire 64-bit offset range.
@@ -2591,14 +2594,14 @@ TEST_F(DiskCacheEntryTest, MemoryOnlySparseClipEnd) {
   SetMemoryOnlyMode();
   InitCache();
   SparseClipEnd(std::numeric_limits<int64_t>::max(),
-                /* expect_unsupported = */ false);
+                /* expected_unsupported = */ false);
 }
 
 TEST_F(DiskCacheEntryTest, SimpleSparseClipEnd) {
   SetSimpleCacheMode();
   InitCache();
   SparseClipEnd(std::numeric_limits<int64_t>::max(),
-                /* expect_unsupported = */ false);
+                /* expected_unsupported = */ false);
 }
 
 // Tests that corrupt sparse children are removed automatically.
@@ -2630,8 +2633,8 @@ TEST_F(DiskCacheEntryTest, CleanupSparseEntry) {
       child_key[count++] = entry->GetKey();
     entry->Close();
   }
-  for (int i = 0; i < 2; i++) {
-    ASSERT_THAT(OpenEntry(child_key[i], &entry), IsOk());
+  for (const auto& key : child_key) {
+    ASSERT_THAT(OpenEntry(key, &entry), IsOk());
     // Overwrite the header's magic and signature.
     EXPECT_EQ(12, WriteData(entry, 2, 0, buf1.get(), 12, false));
     entry->Close();
@@ -4878,7 +4881,7 @@ TEST_F(DiskCacheEntryTest, SimpleCacheNoSideDataEOF) {
   SetSimpleCacheMode();
   InitCache();
 
-  const std::string key("the first key");
+  const char key[] = "the first key";
   const int kSize = 1024;
   CreateEntryWithHeaderBodyAndSideData(key, kSize);
 
@@ -4888,7 +4891,20 @@ TEST_F(DiskCacheEntryTest, SimpleCacheNoSideDataEOF) {
 
   TruncateFileFromEnd(1 /*side data file_index*/, key, kSize,
                       static_cast<int>(sizeof(disk_cache::SimpleFileEOF)));
-  EXPECT_THAT(OpenEntry(key, &entry), IsError(net::ERR_FAILED));
+  EXPECT_THAT(OpenEntry(key, &entry), IsOk());
+  // The corrupted stream should have been deleted.
+  EXPECT_FALSE(SimpleCacheThirdStreamFileExists(key));
+  // _0 should still exist.
+  base::FilePath path_0 = cache_path_.AppendASCII(
+      disk_cache::simple_util::GetFilenameFromKeyAndFileIndex(key, 0));
+  EXPECT_TRUE(base::PathExists(path_0));
+
+  scoped_refptr<net::IOBuffer> check_stream_data =
+      base::MakeRefCounted<net::IOBuffer>(kSize);
+  EXPECT_EQ(kSize, ReadData(entry, 0, 0, check_stream_data.get(), kSize));
+  EXPECT_EQ(kSize, ReadData(entry, 1, 0, check_stream_data.get(), kSize));
+  EXPECT_EQ(0, entry->GetDataSize(2));
+  entry->Close();
 }
 
 TEST_F(DiskCacheEntryTest, SimpleCacheReadWithoutKeySHA256) {
@@ -4915,7 +4931,7 @@ TEST_F(DiskCacheEntryTest, SimpleCacheReadWithoutKeySHA256) {
   entry->Close();
 
   base::RunLoop().RunUntilIdle();
-  disk_cache::SimpleBackendImpl::FlushWorkerPoolForTesting();
+  disk_cache::FlushCacheThreadForTesting();
   base::RunLoop().RunUntilIdle();
 
   EXPECT_TRUE(
@@ -4955,7 +4971,7 @@ TEST_F(DiskCacheEntryTest, SimpleCacheDoubleOpenWithoutKeySHA256) {
   entry->Close();
 
   base::RunLoop().RunUntilIdle();
-  disk_cache::SimpleBackendImpl::FlushWorkerPoolForTesting();
+  disk_cache::FlushCacheThreadForTesting();
   base::RunLoop().RunUntilIdle();
 
   EXPECT_TRUE(
@@ -4964,7 +4980,7 @@ TEST_F(DiskCacheEntryTest, SimpleCacheDoubleOpenWithoutKeySHA256) {
   entry->Close();
 
   base::RunLoop().RunUntilIdle();
-  disk_cache::SimpleBackendImpl::FlushWorkerPoolForTesting();
+  disk_cache::FlushCacheThreadForTesting();
   base::RunLoop().RunUntilIdle();
 
   ASSERT_THAT(OpenEntry(key, &entry), IsOk());
@@ -4982,7 +4998,7 @@ TEST_F(DiskCacheEntryTest, SimpleCacheReadCorruptKeySHA256) {
   entry->Close();
 
   base::RunLoop().RunUntilIdle();
-  disk_cache::SimpleBackendImpl::FlushWorkerPoolForTesting();
+  disk_cache::FlushCacheThreadForTesting();
   base::RunLoop().RunUntilIdle();
 
   EXPECT_TRUE(
@@ -5000,7 +5016,7 @@ TEST_F(DiskCacheEntryTest, SimpleCacheReadCorruptLength) {
   entry->Close();
 
   base::RunLoop().RunUntilIdle();
-  disk_cache::SimpleBackendImpl::FlushWorkerPoolForTesting();
+  disk_cache::FlushCacheThreadForTesting();
   base::RunLoop().RunUntilIdle();
 
   EXPECT_TRUE(
@@ -5057,7 +5073,7 @@ TEST_F(DiskCacheEntryTest, SimpleCacheSparseErrorHandling) {
   EXPECT_EQ(kSize, WriteSparseData(entry, 0, buffer.get(), kSize));
   entry->Close();
 
-  disk_cache::SimpleBackendImpl::FlushWorkerPoolForTesting();
+  disk_cache::FlushCacheThreadForTesting();
   EXPECT_TRUE(base::PathExists(path_0));
   EXPECT_TRUE(base::PathExists(path_s));
 
@@ -5291,8 +5307,7 @@ void DiskCacheEntryTest::LastUsedTimePersists() {
   disk_cache::Entry* entry1 = nullptr;
   ASSERT_THAT(CreateEntry(kKey, &entry1), IsOk());
   ASSERT_TRUE(nullptr != entry1);
-  base::Time modified_last_used =
-      entry1->GetLastUsed() - base::TimeDelta::FromMinutes(5);
+  base::Time modified_last_used = entry1->GetLastUsed() - base::Minutes(5);
   entry1->SetLastUsedTimeForTest(modified_last_used);
   entry1->Close();
 
@@ -5301,8 +5316,8 @@ void DiskCacheEntryTest::LastUsedTimePersists() {
   ASSERT_TRUE(nullptr != entry2);
 
   base::TimeDelta diff = modified_last_used - entry2->GetLastUsed();
-  EXPECT_LT(diff, base::TimeDelta::FromSeconds(2));
-  EXPECT_GT(diff, -base::TimeDelta::FromSeconds(2));
+  EXPECT_LT(diff, base::Seconds(2));
+  EXPECT_GT(diff, -base::Seconds(2));
   entry2->Close();
 }
 
@@ -5498,7 +5513,7 @@ TEST_F(DiskCacheEntryTest, SimpleCacheCloseResurrection) {
 
   // Let optimistic create finish.
   base::RunLoop().RunUntilIdle();
-  disk_cache::SimpleBackendImpl::FlushWorkerPoolForTesting();
+  disk_cache::FlushCacheThreadForTesting();
   base::RunLoop().RunUntilIdle();
 
   int rv = entry->WriteData(1, 0, buffer.get(), kSize,
@@ -5525,7 +5540,7 @@ TEST_F(DiskCacheEntryTest, SimpleCacheCloseResurrection) {
 
   // Get first close a chance to finish.
   base::RunLoop().RunUntilIdle();
-  disk_cache::SimpleBackendImpl::FlushWorkerPoolForTesting();
+  disk_cache::FlushCacheThreadForTesting();
   base::RunLoop().RunUntilIdle();
 
   // Make sure |entry2| is still usable.

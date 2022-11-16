@@ -6,9 +6,9 @@
 
 #include <vector>
 
+#include "ash/components/arc/mojom/app.mojom.h"
 #include "ash/constants/ash_switches.h"
 #include "base/command_line.h"
-#include "base/macros.h"
 #include "base/memory/ptr_util.h"
 #include "base/run_loop.h"
 #include "base/time/time.h"
@@ -18,10 +18,9 @@
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
+#include "chromeos/ash/components/network/network_handler_test_helper.h"
 #include "chromeos/dbus/power/fake_power_manager_client.h"
 #include "chromeos/dbus/shill/shill_service_client.h"
-#include "chromeos/network/network_handler_test_helper.h"
-#include "components/arc/mojom/app.mojom.h"
 #include "components/policy/proto/device_management_backend.pb.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/testing_pref_service.h"
@@ -45,6 +44,12 @@ class FakeAppInstallEventLogCollectorDelegate
     : public ArcAppInstallEventLogCollector::Delegate {
  public:
   FakeAppInstallEventLogCollectorDelegate() = default;
+
+  FakeAppInstallEventLogCollectorDelegate(
+      const FakeAppInstallEventLogCollectorDelegate&) = delete;
+  FakeAppInstallEventLogCollectorDelegate& operator=(
+      const FakeAppInstallEventLogCollectorDelegate&) = delete;
+
   ~FakeAppInstallEventLogCollectorDelegate() override = default;
 
   struct Request {
@@ -92,8 +97,6 @@ class FakeAppInstallEventLogCollectorDelegate
   int add_for_all_count_ = 0;
   int add_count_ = 0;
   std::vector<Request> requests_;
-
-  DISALLOW_COPY_AND_ASSIGN(FakeAppInstallEventLogCollectorDelegate);
 };
 
 int64_t TimeToTimestamp(base::Time time) {
@@ -103,6 +106,12 @@ int64_t TimeToTimestamp(base::Time time) {
 }  // namespace
 
 class ArcAppInstallEventLogCollectorTest : public testing::Test {
+ public:
+  ArcAppInstallEventLogCollectorTest(
+      const ArcAppInstallEventLogCollectorTest&) = delete;
+  ArcAppInstallEventLogCollectorTest& operator=(
+      const ArcAppInstallEventLogCollectorTest&) = delete;
+
  protected:
   ArcAppInstallEventLogCollectorTest() = default;
   ~ArcAppInstallEventLogCollectorTest() override = default;
@@ -177,8 +186,6 @@ class ArcAppInstallEventLogCollectorTest : public testing::Test {
   FakeAppInstallEventLogCollectorDelegate delegate_;
   TestingPrefServiceSimple pref_service_;
   ArcAppTest arc_app_test_;
-
-  DISALLOW_COPY_AND_ASSIGN(ArcAppInstallEventLogCollectorTest);
 };
 
 // Test the case when collector is created and destroyed inside the one user
@@ -241,7 +248,7 @@ TEST_F(ArcAppInstallEventLogCollectorTest, LoginTypes) {
     // Check login after restart. No log is expected.
     ArcAppInstallEventLogCollector collector(delegate(), profile(), packages_);
     base::CommandLine::ForCurrentProcess()->AppendSwitch(
-        chromeos::switches::kLoginUser);
+        ash::switches::kLoginUser);
     collector.OnLogin();
     EXPECT_EQ(1, delegate()->add_for_all_count());
   }
@@ -355,7 +362,7 @@ TEST_F(ArcAppInstallEventLogCollectorTest, CloudDPSEvent) {
   EXPECT_EQ(0, delegate()->requests()[1].event.clouddps_response());
 
   // One package succeeded.
-  time += base::TimeDelta::FromSeconds(1);
+  time += base::Seconds(1);
   collector->OnCloudDpsSucceeded(time, {kPackageName});
   ASSERT_EQ(3, delegate()->add_count());
   ASSERT_EQ(0, delegate()->add_for_all_count());
@@ -367,7 +374,7 @@ TEST_F(ArcAppInstallEventLogCollectorTest, CloudDPSEvent) {
   EXPECT_FALSE(delegate()->requests()[0].event.has_clouddps_response());
 
   // One package failed.
-  time += base::TimeDelta::FromSeconds(1);
+  time += base::Seconds(1);
   collector->OnCloudDpsFailed(time, kPackageName2,
                               arc::mojom::InstallErrorReason::TIMEOUT);
   ASSERT_EQ(4, delegate()->add_count());
@@ -439,7 +446,7 @@ TEST_F(ArcAppInstallEventLogCollectorTest, InstallPackages) {
   EXPECT_EQ(kPackageName2, delegate()->last_request().package_name);
   EXPECT_TRUE(delegate()->last_request().add_disk_space_info);
 
-  time += base::TimeDelta::FromSeconds(1);
+  time += base::Seconds(1);
   collector->OnReportForceInstallMainLoopFailed(time, {kPackageName2});
   EXPECT_EQ(6, delegate()->add_count());
   EXPECT_EQ(em::AppInstallReportLogEvent::CLOUDDPC_MAIN_LOOP_FAILED,

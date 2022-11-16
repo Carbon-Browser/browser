@@ -22,7 +22,7 @@ namespace device {
 // To avoid oscillations, set this to twice the expected update interval of a
 // a GPS-type location provider (in case it misses a beat) plus a little.
 const base::TimeDelta LocationArbitrator::kFixStaleTimeoutTimeDelta =
-    base::TimeDelta::FromSeconds(11);
+    base::Seconds(11);
 
 LocationArbitrator::LocationArbitrator(
     const CustomLocationProviderCallback& custom_location_provider_getter,
@@ -149,7 +149,7 @@ LocationArbitrator::NewNetworkLocationProvider(
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
     const std::string& api_key) {
   DCHECK(url_loader_factory);
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   // Android uses its own SystemLocationProvider.
   return nullptr;
 #else
@@ -161,7 +161,7 @@ LocationArbitrator::NewNetworkLocationProvider(
 
 std::unique_ptr<LocationProvider>
 LocationArbitrator::NewSystemLocationProvider() {
-#if defined(OS_LINUX) || defined(OS_CHROMEOS) || defined(OS_FUCHSIA)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_FUCHSIA)
   return nullptr;
 #else
   return device::NewSystemLocationProvider(main_task_runner_,

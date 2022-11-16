@@ -25,11 +25,18 @@ source_set("chrome_paths") {
   ]
 }
 
+source_set("application_context") {
+  configs += [ "//build/config/compiler:enable_arc" ]
+  sources = [
+    "application_context.h",
+    "application_context.mm",
+  ]
+  deps = [ "//base" ]
+}
+
 source_set("browser") {
   configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
-    "application_context.cc",
-    "application_context.h",
     "arch_util.cc",
     "arch_util.h",
     "browser_about_rewriter.cc",
@@ -42,14 +49,12 @@ source_set("browser") {
     "chrome_root_coordinator.mm",
     "chrome_url_util.h",
     "chrome_url_util.mm",
-    "file_metadata_util.h",
-    "file_metadata_util.mm",
     "install_time_util.h",
     "install_time_util.mm",
     "installation_notifier.h",
     "installation_notifier.mm",
-    "ios_chrome_field_trials.cc",
     "ios_chrome_field_trials.h",
+    "ios_chrome_field_trials.mm",
     "ios_chrome_io_thread.h",
     "ios_chrome_io_thread.mm",
     "notification_promo.cc",
@@ -74,7 +79,7 @@ source_set("browser") {
     "//components/net_log",
     "//components/ntp_tiles",
     "//components/omnibox/browser",
-    "//components/password_manager/core/common:common",
+    "//components/password_manager/core/common",
     "//components/pref_registry",
     "//components/prefs",
     "//components/proxy_config",
@@ -96,7 +101,6 @@ source_set("browser") {
     "//ios/chrome/app/strings",
     "//ios/chrome/browser/browser_state",
     "//ios/chrome/browser/complex_tasks",
-    "//ios/chrome/browser/download",
     "//ios/chrome/browser/download/background_service",
     "//ios/chrome/browser/itunes_urls",
     "//ios/chrome/browser/sync/glue",
@@ -120,6 +124,7 @@ source_set("browser") {
     "//url",
   ]
   public_deps = [
+    ":application_context",
     ":chrome_paths",
     ":chrome_url_constants",
     ":pref_names",
@@ -129,7 +134,10 @@ source_set("browser") {
     "//ios/chrome/browser/sync/glue",
     "//ios/chrome/browser/browser_state",
   ]
-  frameworks = [ "UIKit.framework" ]
+  frameworks = [
+    "UIKit.framework",
+    "Foundation.framework",
+  ]
 }
 
 source_set("utils") {
@@ -145,11 +153,10 @@ source_set("utils") {
     "//base",
     "//build:branding_buildflags",
     "//components/autofill/core/common",
-    "//components/password_manager/core/common",
+    "//components/password_manager/core/common:features",
     "//components/variations",
     "//ios/chrome/browser/browsing_data:feature_flags",
     "//ios/chrome/browser/ui:feature_flags",
-    "//ios/chrome/browser/ui/infobars:feature_flags",
   ]
 }
 
@@ -194,6 +201,7 @@ source_set("browser_impl") {
     "//components/component_updater",
     "//components/content_settings/core/browser",
     "//components/content_settings/core/common",
+    "//components/crash/core/common:crash_key_lib",
     "//components/crash/core/common:reporter_running_ios",
     "//components/flags_ui",
     "//components/gcm_driver",
@@ -210,6 +218,7 @@ source_set("browser_impl") {
     "//components/prefs",
     "//components/safe_browsing/core/common",
     "//components/sessions",
+    "//components/signin/public/identity_manager",
     "//components/translate/core/browser",
     "//components/ukm",
     "//components/update_client",
@@ -228,7 +237,9 @@ source_set("browser_impl") {
     "//ios/chrome/browser/flags",
     "//ios/chrome/browser/gcm",
     "//ios/chrome/browser/history",
+    "//ios/chrome/browser/https_upgrades",
     "//ios/chrome/browser/metrics",
+    "//ios/chrome/browser/metrics:accessor",
     "//ios/chrome/browser/metrics:expired_histograms_array",
     "//ios/chrome/browser/net",
     "//ios/chrome/browser/open_from_clipboard",
@@ -237,12 +248,17 @@ source_set("browser_impl") {
     "//ios/chrome/browser/prefs",
     "//ios/chrome/browser/prefs:browser_prefs",
     "//ios/chrome/browser/safe_browsing",
+    "//ios/chrome/browser/segmentation_platform",
     "//ios/chrome/browser/send_tab_to_self",
+    "//ios/chrome/browser/signin",
     "//ios/chrome/browser/translate",
     "//ios/chrome/browser/update_client",
     "//ios/chrome/common",
     "//ios/chrome/common/app_group",
+    "//ios/components/security_interstitials/safe_browsing",
     "//ios/public/provider/chrome/browser",
+    "//ios/public/provider/chrome/browser/app_distribution:app_distribution_api",
+    "//ios/public/provider/chrome/browser/signin:signin_sso_api",
     "//ios/web",
     "//ios/web/public/init",
     "//mojo/public/cpp/bindings",
@@ -250,6 +266,7 @@ source_set("browser_impl") {
     "//rlz/buildflags",
     "//services/network:network_service",
     "//ui/base",
+    "//ui/display",
   ]
 
   if (enable_rlz) {
@@ -272,10 +289,7 @@ tweak_info_plist("experimental_info_plist") {
   if (ios_enable_sandbox_dump) {
     info_plists += [ "resources/Settings.bundle/ExperimentalSandboxDump.plist" ]
   }
-  info_plists += [
-    "resources/Settings.bundle/ExperimentalFlags.plist",
-    "resources/Settings.bundle/ExperimentalBlank.plist",
-  ]
+  info_plists += [ "resources/Settings.bundle/ExperimentalFlags.plist" ]
 }
 
 bundle_data("settings_experimental_synctypeslist_plist") {

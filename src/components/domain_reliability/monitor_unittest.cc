@@ -14,6 +14,7 @@
 
 #include "base/bind.h"
 #include "base/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_piece.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
@@ -35,8 +36,10 @@
 #include "net/http/http_util.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "net/test/gtest_util.h"
-#include "net/third_party/quiche/src/quic/core/quic_error_codes.h"
+#include "net/third_party/quiche/src/quiche/quic/core/quic_error_codes.h"
 #include "net/traffic_annotation/network_traffic_annotation_test_helper.h"
+#include "net/url_request/url_request_context.h"
+#include "net/url_request/url_request_context_builder.h"
 #include "net/url_request/url_request_test_util.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -67,8 +70,10 @@ class DomainReliabilityMonitorTest : public testing::Test {
   typedef DomainReliabilityMonitor::RequestInfo RequestInfo;
 
   DomainReliabilityMonitorTest()
-      : time_(new MockTime()),
-        monitor_(&url_request_context_,
+      : url_request_context_(
+            net::CreateTestURLRequestContextBuilder()->Build()),
+        time_(new MockTime()),
+        monitor_(url_request_context_.get(),
                  "test-reporter",
                  DomainReliabilityContext::UploadAllowedCallback(),
                  std::unique_ptr<MockableTime>(time_)) {
@@ -120,8 +125,8 @@ class DomainReliabilityMonitorTest : public testing::Test {
 
   base::test::SingleThreadTaskEnvironment task_environment_{
       base::test::TaskEnvironment::MainThreadType::IO};
-  net::TestURLRequestContext url_request_context_;
-  MockTime* time_;
+  std::unique_ptr<net::URLRequestContext> url_request_context_;
+  raw_ptr<MockTime> time_;
   DomainReliabilityMonitor monitor_;
   DomainReliabilityMonitor::RequestInfo request_;
 };
@@ -441,11 +446,12 @@ TEST_F(DomainReliabilityMonitorTest, ClearBeaconsWithFilter) {
   OnRequestLegComplete(request);
 
   // Delete the beacons for |origin1|.
-  monitor_.ClearBrowsingData(
-      CLEAR_BEACONS,
-      base::BindRepeating(
-          [](const GURL& url1, const GURL& url2) { return url1 == url2; },
-          origin1));
+  monitor_.ClearBrowsingData(CLEAR_BEACONS, base::BindRepeating(
+                                                [](const url::Origin& origin1,
+                                                   const url::Origin& origin2) {
+                                                  return origin1 == origin2;
+                                                },
+                                                url::Origin::Create(origin1)));
 
   // Beacons for |context1| were cleared. Beacons for |context2| and
   // the contexts themselves were not.
@@ -496,8 +502,10 @@ TEST_F(DomainReliabilityMonitorTest, ClearContextsWithFilter) {
   monitor_.ClearBrowsingData(
       CLEAR_CONTEXTS,
       base::BindRepeating(
-          [](const GURL& url1, const GURL& url2) { return url1 == url2; },
-          origin1));
+          [](const url::Origin& origin1, const url::Origin& origin2) {
+            return origin1 == origin2;
+          },
+          url::Origin::Create(origin1)));
 
   // Only one of the contexts should have been deleted.
   EXPECT_EQ(1u, monitor_.contexts_size_for_testing());
@@ -593,9 +601,9 @@ TEST_F(DomainReliabilityMonitorTest, RealRequest) {
 
   net::TestDelegate test_delegate;
   std::unique_ptr<net::URLRequest> url_request =
-      url_request_context_.CreateRequest(test_server.GetURL("/close-socket"),
-                                         net::DEFAULT_PRIORITY, &test_delegate,
-                                         TRAFFIC_ANNOTATION_FOR_TESTS);
+      url_request_context_->CreateRequest(test_server.GetURL("/close-socket"),
+                                          net::DEFAULT_PRIORITY, &test_delegate,
+                                          TRAFFIC_ANNOTATION_FOR_TESTS);
   url_request->set_isolation_info(kIsolationInfo);
   url_request->Start();
 
@@ -605,7 +613,7 @@ TEST_F(DomainReliabilityMonitorTest, RealRequest) {
 
   net::LoadTimingInfo load_timing_info;
   url_request->GetLoadTimingInfo(&load_timing_info);
-  base::TimeDelta expected_elapsed = base::TimeDelta::FromSeconds(1);
+  base::TimeDelta expected_elapsed = base::Seconds(1);
   time_->Advance(load_timing_info.request_start - time_->NowTicks() +
                  expected_elapsed);
 

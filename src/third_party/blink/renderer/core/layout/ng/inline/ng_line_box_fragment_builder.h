@@ -5,6 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_LAYOUT_NG_INLINE_NG_LINE_BOX_FRAGMENT_BUILDER_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_LAYOUT_NG_INLINE_NG_LINE_BOX_FRAGMENT_BUILDER_H_
 
+#include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/layout/geometry/logical_rect.h"
 #include "third_party/blink/renderer/core/layout/ng/inline/ng_inline_break_token.h"
 #include "third_party/blink/renderer/core/layout/ng/inline/ng_inline_node.h"
@@ -29,7 +30,7 @@ class CORE_EXPORT NGLineBoxFragmentBuilder final
  public:
   NGLineBoxFragmentBuilder(NGInlineNode node,
                            scoped_refptr<const ComputedStyle> style,
-                           const NGConstraintSpace* space,
+                           const NGConstraintSpace& space,
                            WritingDirectionMode writing_direction)
       : NGContainerFragmentBuilder(
             node,
@@ -67,6 +68,10 @@ class CORE_EXPORT NGLineBoxFragmentBuilder final
     line_box_bfc_block_offset_ = offset;
   }
 
+  void SetAnnotationBlockOffsetAdjustment(LayoutUnit adjustment) {
+    annotation_block_offset_adjustment_ = adjustment;
+  }
+
   const FontHeight& Metrics() const { return metrics_; }
   void SetMetrics(const FontHeight& metrics) { metrics_ = metrics; }
 
@@ -85,13 +90,19 @@ class CORE_EXPORT NGLineBoxFragmentBuilder final
   // are some data that should be propagated through line box fragments.
   void PropagateChildrenData(NGLogicalLineItems&);
 
+  void SetClearanceAfterLine(LayoutUnit clearance) {
+    clearance_after_line_ = clearance;
+  }
+
   // Creates the fragment. Can only be called once.
-  scoped_refptr<const NGLayoutResult> ToLineBoxFragment();
+  const NGLayoutResult* ToLineBoxFragment();
 
  private:
   absl::optional<LayoutUnit> line_box_bfc_block_offset_;
+  LayoutUnit annotation_block_offset_adjustment_;
   FontHeight metrics_ = FontHeight::Empty();
   LayoutUnit hang_inline_size_;
+  LayoutUnit clearance_after_line_;
   NGPhysicalLineBoxFragment::NGLineBoxType line_box_type_;
   TextDirection base_direction_;
 

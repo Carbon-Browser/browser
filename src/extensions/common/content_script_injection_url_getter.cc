@@ -7,6 +7,7 @@
 #include "base/containers/contains.h"
 #include "base/containers/flat_set.h"
 #include "base/notreached.h"
+#include "base/trace_event/typed_macros.h"
 #include "url/scheme_host_port.h"
 
 namespace extensions {
@@ -19,24 +20,69 @@ GURL ContentScriptInjectionUrlGetter::Get(
     const GURL& document_url,
     MatchOriginAsFallbackBehavior match_origin_as_fallback,
     bool allow_inaccessible_parents) {
-  auto should_consider_origin = [&document_url, match_origin_as_fallback]() {
-    switch (match_origin_as_fallback) {
-      case MatchOriginAsFallbackBehavior::kNever:
-        return false;
-      case MatchOriginAsFallbackBehavior::kMatchForAboutSchemeAndClimbTree:
-        return document_url.SchemeIs(url::kAboutScheme);
-      case MatchOriginAsFallbackBehavior::kAlways:
-        // TODO(devlin): Add more schemes here - blob, filesystem, etc.
-        return document_url.SchemeIs(url::kAboutScheme) ||
-               document_url.SchemeIs(url::kDataScheme);
-    }
+  // The following schemes are considered for opaque origins if the
+  // `match_origin_as_fallback` behavior is to always match.
+  // NOTE(devlin): This isn't an exhaustive list of schemes: some schemes may
+  // be missing, or more schemes may be added in the future. Would it make
+  // sense to turn this into a blocklist? Just doing this for all opaque
+  // schemes *should* be safe, since We still have a permission check against
+  // the precursor origin. This would only be a problem if an
+  // extension-accessible precursor origin can create an opaque-origin frame
+  // that *shouldn't* be accessible.
+  static const char* const kAllowedSchemesToMatchOriginAsFallback[] = {
+      url::kAboutScheme,
+      url::kBlobScheme,
+      url::kDataScheme,
+      url::kFileSystemScheme,
+  };
 
-    NOTREACHED();
+  // TODO(https://crbug.com/1212918): Consider reducing tracing instrumentation
+  // in the main function bodu and in the lambda below (once the bug is
+  // understood and fixed).
+  auto should_consider_origin = [&document_url, match_origin_as_fallback]() {
+    bool result = false;
+    switch (match_origin_as_fallback) {
+      case MatchOriginAsFallbackBehavior::kNever: {
+        TRACE_EVENT_INSTANT("extensions",
+                            "ContentScriptInjectionUrlGetter::Get/"
+                            "should_consider_origin: origin-never");
+        result = false;
+        break;
+      }
+      case MatchOriginAsFallbackBehavior::kMatchForAboutSchemeAndClimbTree: {
+        TRACE_EVENT_INSTANT("extensions",
+                            "ContentScriptInjectionUrlGetter::Get/"
+                            "should_consider_origin: origin-climb");
+        result = document_url.SchemeIs(url::kAboutScheme);
+        break;
+      }
+      case MatchOriginAsFallbackBehavior::kAlways: {
+        TRACE_EVENT_INSTANT("extensions",
+                            "ContentScriptInjectionUrlGetter::Get/"
+                            "should_consider_origin: origin-always");
+        result = base::Contains(kAllowedSchemesToMatchOriginAsFallback,
+                                document_url.scheme());
+        break;
+      }
+    }
+    if (result) {
+      TRACE_EVENT_INSTANT("extensions",
+                          "ContentScriptInjectionUrlGetter::Get/"
+                          "should_consider_origin=true");
+    } else {
+      TRACE_EVENT_INSTANT("extensions",
+                          "ContentScriptInjectionUrlGetter::Get/"
+                          "should_consider_origin=false");
+    }
+    return result;
   };
 
   // If we don't need to consider the origin, we're done.
-  if (!should_consider_origin())
+  if (!should_consider_origin()) {
+    TRACE_EVENT_INSTANT(
+        "extensions", "ContentScriptInjectionUrlGetter::Get/!consider-origin");
     return document_url;
+  }
 
   // Get the security origin for the `frame`. For about: frames, this is the
   // origin of that of the controlling frame - e.g., an about:blank frame on
@@ -50,8 +96,11 @@ GURL ContentScriptInjectionUrlGetter::Get(
   // When there's no valid tuple (which can happen in the case of e.g. a
   // browser-initiated navigation to an opaque URL), there's no origin to
   // fallback to. Bail.
-  if (!tuple_or_precursor_tuple.IsValid())
+  if (!tuple_or_precursor_tuple.IsValid()) {
+    TRACE_EVENT_INSTANT("extensions",
+                        "ContentScriptInjectionUrlGetter::Get/invalid-tuple");
     return document_url;
+  }
 
   const url::Origin origin_or_precursor_origin =
       url::Origin::Create(tuple_or_precursor_tuple.GetURL());
@@ -59,6 +108,9 @@ GURL ContentScriptInjectionUrlGetter::Get(
   if (!allow_inaccessible_parents &&
       !frame.CanAccess(origin_or_precursor_origin)) {
     // The `frame` can't access its precursor. Bail.
+    TRACE_EVENT_INSTANT(
+        "extensions",
+        "ContentScriptInjectionUrlGetter::Get/no-precursor-access");
     return document_url;
   }
 
@@ -72,6 +124,9 @@ GURL ContentScriptInjectionUrlGetter::Get(
 
   if (match_origin_as_fallback == MatchOriginAsFallbackBehavior::kAlways) {
     // The easy case! We use the origin directly. We're done.
+    TRACE_EVENT_INSTANT(
+        "extensions",
+        "ContentScriptInjectionUrlGetter::Get/origin-or-precursor");
     return origin_or_precursor_origin.GetURL();
   }
 
@@ -99,13 +154,19 @@ GURL ContentScriptInjectionUrlGetter::Get(
     // We reached the end of the ancestral chain without finding a valid parent,
     // or found a remote web frame (in which case, it's a different origin).
     // Bail and use the original URL.
-    if (!parent)
+    if (!parent) {
+      TRACE_EVENT_INSTANT(
+          "extensions", "ContentScriptInjectionUrlGetter::Get/no-more-parents");
       return document_url;
+    }
 
     // Avoid an infinite loop - see https://crbug.com/568432 and
     // https://crbug.com/883526.
-    if (base::Contains(already_visited_frame_ids, parent->GetId()))
+    if (base::Contains(already_visited_frame_ids, parent->GetId())) {
+      TRACE_EVENT_INSTANT("extensions",
+                          "ContentScriptInjectionUrlGetter::Get/infinite-loop");
       return document_url;
+    }
 
     url::SchemeHostPort parent_tuple_or_precursor_tuple =
         url::Origin(parent->GetOrigin()).GetTupleOrPrecursorTupleIfOpaque();
@@ -130,6 +191,8 @@ GURL ContentScriptInjectionUrlGetter::Get(
       // example.com, but the parent tuple origin is a.com.
       // Note that usually, this would have bailed earlier with a remote frame,
       // but it may not if we're at the process limit.
+      TRACE_EVENT_INSTANT("extensions",
+                          "ContentScriptInjectionUrlGetter::Get/tuple-diff");
       return document_url;
     }
 
@@ -138,6 +201,9 @@ GURL ContentScriptInjectionUrlGetter::Get(
     // disallowdocumentaccess attribute on iframe.
     if (!allow_inaccessible_parents && !frame.CanAccess(*parent)) {
       // The frame can't access its precursor. Bail.
+      TRACE_EVENT_INSTANT(
+          "extensions",
+          "ContentScriptInjectionUrlGetter::Get/no-parent-access");
       return document_url;
     }
 
@@ -149,6 +215,8 @@ GURL ContentScriptInjectionUrlGetter::Get(
   // We should know that the frame can access the parent document (unless we
   // explicitly allow it not to), since it has the same tuple origin as the
   // frame, and we checked the frame access above.
+  TRACE_EVENT_INSTANT("extensions",
+                      "ContentScriptInjectionUrlGetter::Get/parent-url");
   DCHECK(allow_inaccessible_parents || frame.CanAccess(parent->GetOrigin()));
   return parent_url;
 }

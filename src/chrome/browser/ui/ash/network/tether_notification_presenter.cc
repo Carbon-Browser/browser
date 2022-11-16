@@ -6,6 +6,8 @@
 
 #include <string>
 
+#include "ash/components/multidevice/logging/logging.h"
+#include "ash/constants/notifier_catalogs.h"
 #include "ash/public/cpp/network_icon_image_source.h"
 #include "ash/public/cpp/notification_utils.h"
 #include "base/bind.h"
@@ -20,8 +22,7 @@
 #include "chrome/common/url_constants.h"
 #include "chrome/common/webui_url_constants.h"
 #include "chrome/grit/generated_resources.h"
-#include "chromeos/components/multidevice/logging/logging.h"
-#include "chromeos/network/network_connect.h"
+#include "chromeos/ash/components/network/network_connect.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/gfx/color_palette.h"
 #include "ui/gfx/image/image.h"
@@ -52,6 +53,10 @@ class TetherNotificationDelegate
                              base::RepeatingClosure close)
       : HandleNotificationClickDelegate(click), close_callback_(close) {}
 
+  TetherNotificationDelegate(const TetherNotificationDelegate&) = delete;
+  TetherNotificationDelegate& operator=(const TetherNotificationDelegate&) =
+      delete;
+
   // NotificationDelegate:
   void Close(bool by_user) override {
     if (!close_callback_.is_null())
@@ -62,8 +67,6 @@ class TetherNotificationDelegate
   ~TetherNotificationDelegate() override = default;
 
   base::RepeatingClosure close_callback_;
-
-  DISALLOW_COPY_AND_ASSIGN(TetherNotificationDelegate);
 };
 
 class SettingsUiDelegateImpl
@@ -141,6 +144,7 @@ void TetherNotificationPresenter::NotifyPotentialHotspotNearby(
 
   ShowNotification(CreateNotification(
       kPotentialHotspotNotificationId,
+      ash::NotificationCatalogName::kTetherPotentialHotspot,
       l10n_util::GetStringUTF16(
           IDS_TETHER_NOTIFICATION_WIFI_AVAILABLE_ONE_DEVICE_TITLE),
       l10n_util::GetStringFUTF16(
@@ -158,6 +162,7 @@ void TetherNotificationPresenter::NotifyMultiplePotentialHotspotsNearby() {
 
   ShowNotification(CreateNotification(
       kPotentialHotspotNotificationId,
+      ash::NotificationCatalogName::kTetherPotentialHotspot,
       l10n_util::GetStringUTF16(
           IDS_TETHER_NOTIFICATION_WIFI_AVAILABLE_MULTIPLE_DEVICES_TITLE),
       l10n_util::GetStringUTF16(
@@ -197,6 +202,7 @@ void TetherNotificationPresenter::NotifySetupRequired(
 
   ShowNotification(CreateNotification(
       kSetupRequiredNotificationId,
+      ash::NotificationCatalogName::kTetherSetupRequired,
       l10n_util::GetStringFUTF16(IDS_TETHER_NOTIFICATION_SETUP_REQUIRED_TITLE,
                                  base::ASCIIToUTF16(device_name)),
       l10n_util::GetStringFUTF16(IDS_TETHER_NOTIFICATION_SETUP_REQUIRED_MESSAGE,
@@ -220,8 +226,9 @@ void TetherNotificationPresenter::NotifyConnectionToHostFailed() {
       l10n_util::GetStringUTF16(
           IDS_TETHER_NOTIFICATION_CONNECTION_FAILED_MESSAGE),
       std::u16string() /* display_source */, GURL() /* origin_url */,
-      message_center::NotifierId(message_center::NotifierType::SYSTEM_COMPONENT,
-                                 kNotifierTether),
+      message_center::NotifierId(
+          message_center::NotifierType::SYSTEM_COMPONENT, kNotifierTether,
+          ash::NotificationCatalogName::kTetherConnectionError),
       {} /* rich_notification_data */,
       new message_center::HandleNotificationClickDelegate(base::BindRepeating(
           &TetherNotificationPresenter::OnNotificationClicked,
@@ -295,16 +302,17 @@ void TetherNotificationPresenter::OnNotificationClosed(
 std::unique_ptr<message_center::Notification>
 TetherNotificationPresenter::CreateNotification(
     const std::string& id,
+    const ash::NotificationCatalogName& catalog_name,
     const std::u16string& title,
     const std::u16string& message,
     const gfx::ImageSkia& small_image,
     const message_center::RichNotificationData& rich_notification_data) {
   auto notification = std::make_unique<message_center::Notification>(
       message_center::NotificationType::NOTIFICATION_TYPE_SIMPLE, id, title,
-      message, gfx::Image() /* image */, std::u16string() /* display_source */,
+      message, ui::ImageModel(), std::u16string() /* display_source */,
       GURL() /* origin_url */,
       message_center::NotifierId(message_center::NotifierType::SYSTEM_COMPONENT,
-                                 kNotifierTether),
+                                 kNotifierTether, catalog_name),
       rich_notification_data,
       new TetherNotificationDelegate(
           base::BindRepeating(

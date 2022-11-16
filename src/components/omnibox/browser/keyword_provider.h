@@ -17,6 +17,7 @@
 #include <string>
 
 #include "base/compiler_specific.h"
+#include "base/memory/raw_ptr.h"
 #include "components/omnibox/browser/autocomplete_input.h"
 #include "components/omnibox/browser/autocomplete_provider.h"
 #include "components/omnibox/browser/keyword_extensions_delegate.h"
@@ -82,6 +83,13 @@ class KeywordProvider : public AutocompleteProvider {
   static const TemplateURL* GetSubstitutingTemplateURLForInput(
       TemplateURLService* model,
       AutocompleteInput* input);
+
+  // Returns an AutocompleteInput with the keyword stripped if we're in keyword
+  // mode for a starter pack engine. i.e. for "@History text", input is adjusted
+  // to just be "text".  Otherwise, input is untouched and returned as is.
+  static AutocompleteInput AdjustInputForStarterPackEngines(
+      const AutocompleteInput& input,
+      TemplateURLService* model);
 
   // If |text| corresponds (in the sense of
   // TemplateURLModel::CleanUserInputKeyword()) to an enabled, substituting
@@ -163,13 +171,11 @@ class KeywordProvider : public AutocompleteProvider {
       const TemplateURLService* template_url_service,
       const std::u16string& keyword);
 
-  AutocompleteProviderListener* listener_;
-
   // Input when searching against the keyword provider.
   AutocompleteInput keyword_input_;
 
   // Model for the keywords.
-  TemplateURLService* model_;
+  raw_ptr<TemplateURLService> model_;
 
   // Delegate to handle the extensions-only logic for KeywordProvider.
   // NULL when extensions are not enabled. May be NULL for tests.

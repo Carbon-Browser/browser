@@ -8,7 +8,7 @@
 #include <string>
 
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/sequence_checker.h"
@@ -62,8 +62,7 @@ class UpgradeDetector {
 
     bool IsValid() const {
       return hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59 &&
-             duration >= base::TimeDelta::FromMinutes(1) &&
-             duration != base::TimeDelta::Max();
+             duration >= base::Minutes(1) && duration != base::TimeDelta::Max();
     }
 
     int hour;
@@ -73,6 +72,9 @@ class UpgradeDetector {
 
   // Returns the singleton implementation instance.
   static UpgradeDetector* GetInstance();
+
+  UpgradeDetector(const UpgradeDetector&) = delete;
+  UpgradeDetector& operator=(const UpgradeDetector&) = delete;
 
   virtual ~UpgradeDetector();
 
@@ -339,10 +341,10 @@ class UpgradeDetector {
   void OnRelaunchPrefChanged();
 
   // A provider of Time to the detector.
-  const base::Clock* const clock_;
+  const raw_ptr<const base::Clock> clock_;
 
   // A provider of TimeTicks to the detectors' timers.
-  const base::TickClock* const tick_clock_;
+  const raw_ptr<const base::TickClock> tick_clock_;
 
   // Observes changes to the browser.relaunch_notification_period Local State
   // preference.
@@ -395,8 +397,6 @@ class UpgradeDetector {
   base::ObserverList<UpgradeObserver>::Unchecked observer_list_;
 
   base::WeakPtrFactory<UpgradeDetector> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(UpgradeDetector);
 };
 
 #endif  // CHROME_BROWSER_UPGRADE_DETECTOR_UPGRADE_DETECTOR_H_

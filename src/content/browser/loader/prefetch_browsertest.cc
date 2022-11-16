@@ -43,6 +43,10 @@ class PrefetchBrowserTest
         signed_exchange_enabled_(std::get<0>(GetParam())),
         split_cache_enabled_(std::get<1>(GetParam())),
         split_cache_by_credentials_enabled_(std::get<2>(GetParam())) {}
+
+  PrefetchBrowserTest(const PrefetchBrowserTest&) = delete;
+  PrefetchBrowserTest& operator=(const PrefetchBrowserTest&) = delete;
+
   ~PrefetchBrowserTest() override = default;
 
   void SetUpOnMainThread() override {
@@ -73,8 +77,6 @@ class PrefetchBrowserTest
 
  private:
   base::test::ScopedFeatureList feature_list_;
-
-  DISALLOW_COPY_AND_ASSIGN(PrefetchBrowserTest);
 };
 
 class PrefetchBrowserTestPrivacyChanges
@@ -84,6 +86,12 @@ class PrefetchBrowserTestPrivacyChanges
   PrefetchBrowserTestPrivacyChanges()
       : privacy_changes_enabled_(GetParam()),
         cross_origin_server_(std::make_unique<net::EmbeddedTestServer>()) {}
+
+  PrefetchBrowserTestPrivacyChanges(const PrefetchBrowserTestPrivacyChanges&) =
+      delete;
+  PrefetchBrowserTestPrivacyChanges& operator=(
+      const PrefetchBrowserTestPrivacyChanges&) = delete;
+
   ~PrefetchBrowserTestPrivacyChanges() override = default;
 
   void SetUp() override {
@@ -104,8 +112,6 @@ class PrefetchBrowserTestPrivacyChanges
 
  private:
   base::test::ScopedFeatureList feature_list_;
-
-  DISALLOW_COPY_AND_ASSIGN(PrefetchBrowserTestPrivacyChanges);
 };
 
 IN_PROC_BROWSER_TEST_P(PrefetchBrowserTestPrivacyChanges, RedirectNotFollowed) {
@@ -824,6 +830,8 @@ IN_PROC_BROWSER_TEST_P(PrefetchBrowserTest, CrossOriginWithPreloadAnonymous) {
 // - PrefetchBrowserTest.CrossOriginWithPreloadCredentialled
 IN_PROC_BROWSER_TEST_P(PrefetchBrowserTest,
                        CrossOriginWithPreloadCredentialled) {
+  ASSERT_TRUE(embedded_test_server()->InitializeAndListen());
+  const auto port = embedded_test_server()->port();
   const char target_path[] = "/target.html";
   const char preload_path[] = "/preload.js";
   RegisterResponse(
@@ -838,7 +846,7 @@ IN_PROC_BROWSER_TEST_P(PrefetchBrowserTest,
                         },
                         {
                             "Access-Control-Allow-Origin",
-                            "http://prefetch.com:22072",
+                            "http://prefetch.com:" + base::NumberToString(port),
                         },
                         {
                             "Access-Control-Allow-Credentials",
@@ -872,7 +880,7 @@ IN_PROC_BROWSER_TEST_P(PrefetchBrowserTest,
                        "crossorigin='use-credentials'></body>",
                        cross_origin_target_url.spec().c_str())));
   RegisterRequestHandler(embedded_test_server());
-  ASSERT_TRUE(embedded_test_server()->Start(22072));
+  embedded_test_server()->StartAcceptingConnections();
   EXPECT_EQ(0, GetPrefetchURLLoaderCallCount());
 
   // Loading a page that prefetches the target URL would increment both
@@ -911,8 +919,9 @@ IN_PROC_BROWSER_TEST_P(PrefetchBrowserTest, SignedExchangeWithPreload) {
       target_sxg_path,
       // We mock the SignedExchangeHandler, so just return a HTML content
       // as "application/signed-exchange;v=b3".
-      ResponseEntry("<head><title>Prefetch Target (SXG)</title><script "
-                    "src=\"./preload.js\"></script></head>",
+      ResponseEntry(MockSignedExchangeHandler::kMockSxgPrefix +
+                        "<head><title>Prefetch Target (SXG)</title><script "
+                        "src=\"./preload.js\"></script></head>",
                     "application/signed-exchange;v=b3",
                     {{"x-content-type-options", "nosniff"}}));
   RegisterResponse(preload_path_in_sxg,
@@ -977,8 +986,9 @@ IN_PROC_BROWSER_TEST_P(PrefetchBrowserTest,
       target_sxg_path,
       // We mock the SignedExchangeHandler, so just return a HTML content
       // as "application/signed-exchange;v=b3".
-      ResponseEntry("<head><title>Prefetch Target (SXG)</title><script "
-                    "src=\"./preload.js\"></script></head>",
+      ResponseEntry(MockSignedExchangeHandler::kMockSxgPrefix +
+                        "<head><title>Prefetch Target (SXG)</title><script "
+                        "src=\"./preload.js\"></script></head>",
                     "application/signed-exchange;v=b3",
                     {{"x-content-type-options", "nosniff"}}));
   RegisterResponse(preload_path_in_sxg,

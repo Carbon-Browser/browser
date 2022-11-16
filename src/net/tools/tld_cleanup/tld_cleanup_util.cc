@@ -4,7 +4,6 @@
 
 #include "net/tools/tld_cleanup/tld_cleanup_util.h"
 
-#include "base/cxx17_backports.h"
 #include "base/files/file_util.h"
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
@@ -22,8 +21,7 @@ const int kWildcardRule = 2;
 const int kPrivateRule = 4;
 }
 
-namespace net {
-namespace tld_cleanup {
+namespace net::tld_cleanup {
 
 // Writes the list of domain rules contained in the 'rules' set to the
 // 'outfile', with each rule terminated by a LF.  The file must already have
@@ -44,16 +42,16 @@ bool WriteRules(const RuleMap& rules, const base::FilePath& outfile) {
               "};\n"
               "%%\n");
 
-  for (auto i = rules.begin(); i != rules.end(); ++i) {
-    data.append(i->first);
+  for (const auto& rule : rules) {
+    data.append(rule.first);
     data.append(", ");
     int type = 0;
-    if (i->second.exception) {
+    if (rule.second.exception) {
       type = kExceptionRule;
-    } else if (i->second.wildcard) {
+    } else if (rule.second.wildcard) {
       type = kWildcardRule;
     }
-    if (i->second.is_private) {
+    if (rule.second.is_private) {
       type += kPrivateRule;
     }
     data.append(base::NumberToString(type));
@@ -141,8 +139,8 @@ NormalizeResult NormalizeDataToRuleMap(const std::string data,
   size_t line_end = 0;
   bool is_private = false;
   RuleMap extra_rules;
-  int begin_private_length = base::size(kBeginPrivateDomainsComment) - 1;
-  int end_private_length = base::size(kEndPrivateDomainsComment) - 1;
+  int begin_private_length = std::size(kBeginPrivateDomainsComment) - 1;
+  int end_private_length = std::size(kEndPrivateDomainsComment) - 1;
   while (line_start < data.size()) {
     if (line_start + begin_private_length < data.size() &&
         !data.compare(line_start, begin_private_length,
@@ -251,6 +249,4 @@ NormalizeResult NormalizeFile(const base::FilePath& in_filename,
   return result;
 }
 
-
-}  // namespace tld_cleanup
-}  // namespace net
+}  // namespace net::tld_cleanup

@@ -1,4 +1,4 @@
-#!/usr/bin/env vpython
+#!/usr/bin/env vpython3
 # Copyright 2020 The Chromium Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -50,7 +50,12 @@ class UnitTest(unittest.TestCase):
     short_log = 'Some logs.'
     # Tests a test result with log_path.
     test_result = result_sink_util._compose_test_result(
-        'TestCase/testSomething', 'PASS', True, short_log)
+        'TestCase/testSomething',
+        'PASS',
+        True,
+        test_log=short_log,
+        duration=1233,
+        file_artifacts={'name': '/path/to/name'})
     expected = {
         'testId': 'TestCase/testSomething',
         'status': 'PASS',
@@ -58,9 +63,14 @@ class UnitTest(unittest.TestCase):
         'summaryHtml': '<text-artifact artifact-id="Test Log" />',
         'artifacts': {
             'Test Log': {
-                'contents': base64.b64encode(short_log)
+                'contents':
+                    base64.b64encode(short_log.encode('utf-8')).decode('utf-8')
+            },
+            'name': {
+                'filePath': '/path/to/name'
             },
         },
+        'duration': '1.233000000s',
         'tags': [],
         'testMetadata': {
             'name': 'TestCase/testSomething'
@@ -82,7 +92,9 @@ class UnitTest(unittest.TestCase):
         'summaryHtml': '<text-artifact artifact-id="Test Log" />',
         'artifacts': {
             'Test Log': {
-                'contents': base64.b64encode(len_4128_str)
+                'contents':
+                    base64.b64encode(len_4128_str.encode('utf-8')
+                                    ).decode('utf-8')
             },
         },
         'tags': [],
@@ -91,7 +103,7 @@ class UnitTest(unittest.TestCase):
         },
     }
     test_result = result_sink_util._compose_test_result(
-        'TestCase/testSomething', 'PASS', True, len_4128_str)
+        'TestCase/testSomething', 'PASS', True, test_log=len_4128_str)
     self.assertEqual(test_result, expected)
 
   def test_compose_test_result_assertions(self):

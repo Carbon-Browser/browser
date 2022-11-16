@@ -7,11 +7,11 @@
 #include <utility>
 
 #include "base/bind.h"
+#include "base/file_descriptor_posix.h"
 #include "base/files/file_util.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/numerics/safe_conversions.h"
-#include "base/task/post_task.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "components/printing/browser/print_manager_utils.h"
@@ -37,7 +37,8 @@ uint32_t SaveDataToFd(int fd,
 }  // namespace
 
 AwPrintManager::AwPrintManager(content::WebContents* contents)
-    : PrintManager(contents) {}
+    : PrintManager(contents),
+      content::WebContentsUserData<AwPrintManager>(*contents) {}
 
 AwPrintManager::~AwPrintManager() = default;
 
@@ -62,7 +63,9 @@ void AwPrintManager::PdfWritingDone(int page_count) {
 
 bool AwPrintManager::PrintNow() {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  auto* rfh = web_contents()->GetMainFrame();
+  auto* rfh = web_contents()->GetPrimaryMainFrame();
+  if (!rfh->IsRenderFrameLive())
+    return false;
   GetPrintRenderFrame(rfh)->PrintRequestedPages();
   return true;
 }
@@ -95,9 +98,18 @@ void AwPrintManager::ScriptedPrint(
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   auto params = printing::mojom::PrintPagesParams::New();
   params->params = printing::mojom::PrintParams::New();
+
+  if (scripted_params->is_scripted &&
+      GetCurrentTargetFrame()->IsNestedWithinFencedFrame()) {
+    DLOG(ERROR) << "Unexpected message received. Script Print is not allowed"
+                   " in a fenced frame.";
+    std::move(callback).Run(std::move(params));
+    return;
+  }
+
   printing::RenderParamsFromPrintSettings(*settings_, params->params.get());
   params->params->document_cookie = scripted_params->cookie;
-  params->pages = printing::PageRange::GetPages(settings_->ranges());
+  params->pages = settings_->ranges();
   std::move(callback).Run(std::move(params));
 }
 
@@ -157,6 +169,6 @@ void AwPrintManager::OnDidPrintDocumentWritingDone(
   std::move(did_print_document_cb).Run(true);
 }
 
-WEB_CONTENTS_USER_DATA_KEY_IMPL(AwPrintManager)
+WEB_CONTENTS_USER_DATA_KEY_IMPL(AwPrintManager);
 
 }  // namespace android_webview

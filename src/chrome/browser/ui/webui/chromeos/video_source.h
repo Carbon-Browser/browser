@@ -7,7 +7,6 @@
 
 #include <string>
 
-#include "base/macros.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "content/public/browser/url_data_source.h"
@@ -25,6 +24,10 @@ namespace chromeos {
 class VideoSource : public content::URLDataSource {
  public:
   VideoSource();
+
+  VideoSource(const VideoSource&) = delete;
+  VideoSource& operator=(const VideoSource&) = delete;
+
   ~VideoSource() override;
 
   // content::URLDataSource:
@@ -33,7 +36,7 @@ class VideoSource : public content::URLDataSource {
       const GURL& url,
       const content::WebContents::Getter& wc_getter,
       content::URLDataSource::GotDataCallback got_data_callback) override;
-  std::string GetMimeType(const std::string& path) override;
+  std::string GetMimeType(const GURL& url) override;
 
  private:
   // Continuation from StartDataRequest().
@@ -46,8 +49,6 @@ class VideoSource : public content::URLDataSource {
   scoped_refptr<base::SequencedTaskRunner> task_runner_;
 
   base::WeakPtrFactory<VideoSource> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(VideoSource);
 };
 
 }  // namespace chromeos

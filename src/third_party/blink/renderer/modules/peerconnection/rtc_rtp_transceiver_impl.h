@@ -6,7 +6,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_PEERCONNECTION_RTC_RTP_TRANSCEIVER_IMPL_H_
 
 #include "base/memory/scoped_refptr.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
 #include "third_party/blink/renderer/modules/peerconnection/rtc_rtp_receiver_impl.h"
@@ -63,7 +63,6 @@ class MODULES_EXPORT RtpTransceiverState {
       absl::optional<blink::RtpSenderState> sender_state,
       absl::optional<blink::RtpReceiverState> receiver_state,
       absl::optional<std::string> mid,
-      bool stopped,
       webrtc::RtpTransceiverDirection direction,
       absl::optional<webrtc::RtpTransceiverDirection> current_direction,
       absl::optional<webrtc::RtpTransceiverDirection> fired_direction,
@@ -91,7 +90,6 @@ class MODULES_EXPORT RtpTransceiverState {
   blink::RtpReceiverState MoveReceiverState();
   absl::optional<std::string> mid() const;
   void set_mid(absl::optional<std::string>);
-  bool stopped() const;
   webrtc::RtpTransceiverDirection direction() const;
   void set_direction(webrtc::RtpTransceiverDirection);
   absl::optional<webrtc::RtpTransceiverDirection> current_direction() const;
@@ -107,7 +105,6 @@ class MODULES_EXPORT RtpTransceiverState {
   absl::optional<blink::RtpSenderState> sender_state_;
   absl::optional<blink::RtpReceiverState> receiver_state_;
   absl::optional<std::string> mid_;
-  bool stopped_;
   webrtc::RtpTransceiverDirection direction_;
   absl::optional<webrtc::RtpTransceiverDirection> current_direction_;
   absl::optional<webrtc::RtpTransceiverDirection> fired_direction_;
@@ -179,7 +176,6 @@ class MODULES_EXPORT RTCRtpTransceiverImpl : public RTCRtpTransceiverPlatform {
   void SetMid(absl::optional<String>) override;
   std::unique_ptr<RTCRtpSenderPlatform> Sender() const override;
   std::unique_ptr<RTCRtpReceiverPlatform> Receiver() const override;
-  bool Stopped() const override;
   webrtc::RtpTransceiverDirection Direction() const override;
   webrtc::RTCError SetDirection(
       webrtc::RtpTransceiverDirection direction) override;

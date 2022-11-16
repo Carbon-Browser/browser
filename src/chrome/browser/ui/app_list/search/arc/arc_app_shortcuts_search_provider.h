@@ -8,10 +8,9 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
+#include "ash/components/arc/mojom/app.mojom-forward.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ui/app_list/search/search_provider.h"
-#include "components/arc/mojom/app.mojom-forward.h"
 
 class AppListControllerDelegate;
 class Profile;
@@ -23,11 +22,16 @@ class ArcAppShortcutsSearchProvider : public SearchProvider {
   ArcAppShortcutsSearchProvider(int max_results,
                                 Profile* profile,
                                 AppListControllerDelegate* list_controller);
+
+  ArcAppShortcutsSearchProvider(const ArcAppShortcutsSearchProvider&) = delete;
+  ArcAppShortcutsSearchProvider& operator=(
+      const ArcAppShortcutsSearchProvider&) = delete;
+
   ~ArcAppShortcutsSearchProvider() override;
 
   // SearchProvider:
   void Start(const std::u16string& query) override;
-  ash::AppListSearchResultType ResultType() override;
+  ash::AppListSearchResultType ResultType() const override;
 
  private:
   void OnGetAppShortcutGlobalQueryItems(
@@ -41,8 +45,6 @@ class ArcAppShortcutsSearchProvider : public SearchProvider {
   AppListControllerDelegate* const list_controller_;  // Owned by AppListClient.
 
   base::WeakPtrFactory<ArcAppShortcutsSearchProvider> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ArcAppShortcutsSearchProvider);
 };
 
 }  // namespace app_list

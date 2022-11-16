@@ -12,6 +12,7 @@
 #include "base/bind.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_util.h"
+#include "base/no_destructor.h"
 #include "base/process/process.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
@@ -24,15 +25,15 @@ namespace base {
 namespace {
 
 base::Time GetUpperBoundTime() {
-#if defined(OS_ANDROID) || defined(OS_IOS) || defined(OS_FUCHSIA)
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS) || BUILDFLAG(IS_FUCHSIA)
   // If process creation time is not available then use instance creation
   // time as the upper-bound for old files. Modification times may be
   // rounded-down to coarse-grained increments, e.g. FAT has 2s granularity,
   // so it is necessary to set the upper-bound earlier than Now() by at least
   // that margin to account for modification times being rounded-down.
-  return Time::Now() - TimeDelta::FromSeconds(2);
+  return Time::Now() - Seconds(2);
 #else
-  return Process::Current().CreationTime() - TimeDelta::FromSeconds(2);
+  return Process::Current().CreationTime() - Seconds(2);
 #endif
 }
 

@@ -5,11 +5,13 @@
 #include "content/test/test_render_view_host.h"
 
 #include <memory>
+#include <tuple>
 
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "components/viz/common/surfaces/parent_local_surface_id_allocator.h"
 #include "components/viz/host/host_frame_sink_manager.h"
+#include "content/browser/blob_storage/chrome_blob_storage_context.h"
 #include "content/browser/compositor/image_transport_factory.h"
 #include "content/browser/compositor/surface_utils.h"
 #include "content/browser/dom_storage/dom_storage_context_wrapper.h"
@@ -18,7 +20,6 @@
 #include "content/browser/renderer_host/input/synthetic_gesture_target.h"
 #include "content/browser/renderer_host/render_frame_proxy_host.h"
 #include "content/browser/renderer_host/render_widget_host_input_event_router.h"
-#include "content/browser/site_instance_impl.h"
 #include "content/browser/storage_partition_impl.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_thread.h"
@@ -26,16 +27,18 @@
 #include "content/public/browser/storage_partition.h"
 #include "content/public/common/content_client.h"
 #include "content/public/common/drop_data.h"
+#include "content/public/common/page_visibility_state.h"
 #include "content/test/test_page_broadcast.h"
 #include "content/test/test_render_frame_host.h"
 #include "content/test/test_render_view_host.h"
 #include "content/test/test_web_contents.h"
 #include "media/base/video_frame.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
+#include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/page_state/page_state.h"
 #include "third_party/blink/public/common/web_preferences/web_preferences.h"
-#include "third_party/blink/public/mojom/page/drag.mojom.h"
+#include "third_party/blink/public/mojom/drag/drag.mojom.h"
 #include "ui/aura/env.h"
 #include "ui/compositor/compositor.h"
 #include "ui/compositor/layer_type.h"
@@ -49,7 +52,7 @@ namespace content {
 
 TestRenderWidgetHostView::TestRenderWidgetHostView(RenderWidgetHost* rwh)
     : RenderWidgetHostViewBase(rwh), is_showing_(false), is_occluded_(false) {
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   frame_sink_id_ = AllocateFrameSinkId();
   GetHostFrameSinkManager()->RegisterFrameSinkId(
       frame_sink_id_, this, viz::ReportFirstSurfaceActivation::kYes);
@@ -109,7 +112,10 @@ bool TestRenderWidgetHostView::HasFocus() {
   return true;
 }
 
-void TestRenderWidgetHostView::Show() {
+void TestRenderWidgetHostView::ShowWithVisibility(
+    PageVisibilityState page_visibility) {
+  page_visibility_ = page_visibility;
+  OnShowWithPageVisibility(page_visibility_);
   is_showing_ = true;
   is_occluded_ = false;
 }
@@ -123,6 +129,9 @@ bool TestRenderWidgetHostView::IsShowing() {
 }
 
 void TestRenderWidgetHostView::WasUnOccluded() {
+  // Can't be unoccluded unless the page is visible.
+  page_visibility_ = PageVisibilityState::kVisible;
+  OnShowWithPageVisibility(page_visibility_);
   is_occluded_ = false;
 }
 
@@ -146,13 +155,19 @@ void TestRenderWidgetHostView::RenderProcessGone() {
   delete this;
 }
 
-void TestRenderWidgetHostView::Destroy() { delete this; }
+void TestRenderWidgetHostView::Destroy() {
+  // Call this here in case any observers need access to the `this` before
+  // this derived class runs its destructor.
+  NotifyObserversAboutShutdown();
+
+  delete this;
+}
 
 gfx::Rect TestRenderWidgetHostView::GetViewBounds() {
   return gfx::Rect();
 }
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 void TestRenderWidgetHostView::SetActive(bool active) {
   // <viettrungluu@gmail.com>: Do I need to do anything here?
 }
@@ -174,8 +189,13 @@ gfx::Rect TestRenderWidgetHostView::GetBoundsInRootWindow() {
   return gfx::Rect();
 }
 
+void TestRenderWidgetHostView::ClearFallbackSurfaceForCommitPending() {
+  clear_fallback_surface_for_commit_pending_called_ = true;
+}
+
 void TestRenderWidgetHostView::TakeFallbackContentFrom(
     RenderWidgetHostView* view) {
+  take_fallback_content_from_called_ = true;
   CopyBackgroundColorIfPresentFrom(*view);
 }
 
@@ -215,6 +235,11 @@ void TestRenderWidgetHostView::OnFrameTokenChanged(
   OnFrameTokenChangedForView(frame_token, activation_time);
 }
 
+void TestRenderWidgetHostView::ClearFallbackSurfaceCalled() {
+  clear_fallback_surface_for_commit_pending_called_ = false;
+  take_fallback_content_from_called_ = false;
+}
+
 std::unique_ptr<SyntheticGestureTarget>
 TestRenderWidgetHostView::CreateSyntheticGestureTarget() {
   NOTIMPLEMENTED();
@@ -231,6 +256,40 @@ void TestRenderWidgetHostView::SetDisplayFeatureForTesting(
     display_feature_ = absl::nullopt;
 }
 
+void TestRenderWidgetHostView::NotifyHostAndDelegateOnWasShown(
+    blink::mojom::RecordContentToVisibleTimeRequestPtr visible_time_request) {
+  // Should only be called if the view was not already shown.
+  EXPECT_TRUE(!is_showing_ || is_occluded_);
+  switch (page_visibility_) {
+    case PageVisibilityState::kVisible:
+      // May or may not include a visible_time_request.
+      break;
+    case PageVisibilityState::kHiddenButPainting:
+      EXPECT_FALSE(visible_time_request);
+      break;
+    case PageVisibilityState::kHidden:
+      ADD_FAILURE();
+      break;
+  }
+}
+
+void TestRenderWidgetHostView::RequestPresentationTimeFromHostOrDelegate(
+    blink::mojom::RecordContentToVisibleTimeRequestPtr visible_time_request) {
+  // Should only be called if the view was already shown.
+  EXPECT_TRUE(is_showing_);
+  EXPECT_FALSE(is_occluded_);
+  EXPECT_EQ(page_visibility_, PageVisibilityState::kVisible);
+  EXPECT_TRUE(visible_time_request);
+}
+
+void TestRenderWidgetHostView::
+    CancelPresentationTimeRequestForHostAndDelegate() {
+  // Should only be called if the view was already shown.
+  EXPECT_TRUE(is_showing_);
+  EXPECT_FALSE(is_occluded_);
+  EXPECT_EQ(page_visibility_, PageVisibilityState::kHiddenButPainting);
+}
+
 absl::optional<DisplayFeature> TestRenderWidgetHostView::GetDisplayFeature() {
   return display_feature_;
 }
@@ -239,27 +298,64 @@ ui::Compositor* TestRenderWidgetHostView::GetCompositor() {
   return compositor_;
 }
 
+TestRenderWidgetHostViewChildFrame::TestRenderWidgetHostViewChildFrame(
+    RenderWidgetHost* rwh)
+    : RenderWidgetHostViewChildFrame(
+          rwh,
+          display::ScreenInfos(display::ScreenInfo())) {
+  Init();
+}
+
+void TestRenderWidgetHostViewChildFrame::Reset() {
+  last_gesture_seen_ = blink::WebInputEvent::Type::kUndefined;
+}
+
+void TestRenderWidgetHostViewChildFrame::SetCompositor(
+    ui::Compositor* compositor) {
+  compositor_ = compositor;
+}
+
+ui::Compositor* TestRenderWidgetHostViewChildFrame::GetCompositor() {
+  return compositor_;
+}
+
+void TestRenderWidgetHostViewChildFrame::ProcessGestureEvent(
+    const blink::WebGestureEvent& event,
+    const ui::LatencyInfo&) {
+  last_gesture_seen_ = event.GetType();
+}
+
 TestRenderViewHost::TestRenderViewHost(
     FrameTree* frame_tree,
-    SiteInstance* instance,
+    SiteInstanceGroup* group,
+    const StoragePartitionConfig& storage_partition_config,
     std::unique_ptr<RenderWidgetHostImpl> widget,
     RenderViewHostDelegate* delegate,
     int32_t routing_id,
     int32_t main_frame_routing_id,
-    bool swapped_out)
+    bool swapped_out,
+    scoped_refptr<BrowsingContextState> main_browsing_context_state)
     : RenderViewHostImpl(frame_tree,
-                         instance,
+                         group,
+                         storage_partition_config,
                          std::move(widget),
                          delegate,
                          routing_id,
                          main_frame_routing_id,
                          swapped_out,
-                         false /* has_initialized_audio_host */),
+                         false /* has_initialized_audio_host */,
+                         std::move(main_browsing_context_state)),
       delete_counter_(nullptr) {
-  // TestRenderWidgetHostView installs itself into this->view_ in its
-  // constructor, and deletes itself when TestRenderWidgetHostView::Destroy() is
-  // called.
-  new TestRenderWidgetHostView(GetWidget());
+  if (frame_tree->type() == FrameTree::Type::kFencedFrame) {
+    // TestRenderWidgetHostViewChildFrame deletes itself in
+    // RenderWidgetHostViewChildFrame::Destroy.
+    new TestRenderWidgetHostViewChildFrame(GetWidget());
+  } else {
+    // TestRenderWidgetHostView installs itself into this->view_ in
+    // its constructor, and deletes itself when
+    // TestRenderWidgetHostView::Destroy() is called.
+    new TestRenderWidgetHostView(GetWidget());
+  }
 }
 
 TestRenderViewHost::~TestRenderViewHost() {
@@ -315,8 +411,15 @@ bool TestRenderViewHost::CreateRenderView(
   } else {
     // Pretend that mojo connections of the RemoteFrame is transferred to
     // renderer process and bound in blink.
+    mojo::AssociatedRemote<blink::mojom::RemoteFrame> remote_frame;
+    std::ignore = remote_frame.BindNewEndpointAndPassDedicatedReceiver();
+    proxy_host->BindRemoteFrameInterfaces(
+        remote_frame.Unbind(),
+        mojo::AssociatedRemote<blink::mojom::RemoteFrameHost>()
+            .BindNewEndpointAndPassDedicatedReceiver());
+
     mojo::AssociatedRemote<blink::mojom::RemoteMainFrame> remote_main_frame;
-    ignore_result(remote_main_frame.BindNewEndpointAndPassDedicatedReceiver());
+    std::ignore = remote_main_frame.BindNewEndpointAndPassDedicatedReceiver();
     proxy_host->BindRemoteMainFrameInterfaces(
         remote_main_frame.Unbind(),
         mojo::AssociatedRemote<blink::mojom::RemoteMainFrameHost>()
@@ -335,7 +438,7 @@ bool TestRenderViewHost::CreateRenderView(
   return true;
 }
 
-MockRenderProcessHost* TestRenderViewHost::GetProcess() {
+MockRenderProcessHost* TestRenderViewHost::GetProcess() const {
   return static_cast<MockRenderProcessHost*>(RenderViewHostImpl::GetProcess());
 }
 
@@ -362,9 +465,10 @@ void TestRenderViewHost::TestStartDragging(const DropData& drop_data,
   StoragePartitionImpl* storage_partition =
       static_cast<StoragePartitionImpl*>(GetProcess()->GetStoragePartition());
   GetWidget()->StartDragging(
-      DropDataToDragData(drop_data,
-                         storage_partition->GetFileSystemAccessManager(),
-                         GetProcess()->GetID()),
+      DropDataToDragData(
+          drop_data, storage_partition->GetFileSystemAccessManager(),
+          GetProcess()->GetID(),
+          ChromeBlobStorageContext::GetFor(GetProcess()->GetBrowserContext())),
       blink::kDragOperationEvery, std::move(bitmap), gfx::Vector2d(),
       blink::mojom::DragEventSourceInfo::New());
 }
@@ -394,7 +498,7 @@ TestRenderViewHost* RenderViewHostImplTestHarness::test_rvh() {
 }
 
 TestRenderFrameHost* RenderViewHostImplTestHarness::main_test_rfh() {
-  return contents()->GetMainFrame();
+  return contents()->GetPrimaryMainFrame();
 }
 
 TestWebContents* RenderViewHostImplTestHarness::contents() {

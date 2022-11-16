@@ -24,7 +24,6 @@
 #include <string>
 
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
 #include "base/scoped_observation.h"
 #include "components/history/core/browser/history_service.h"
 #include "components/history/core/browser/history_service_observer.h"
@@ -44,6 +43,10 @@ class URLRow;
 class InMemoryHistoryBackend : public HistoryServiceObserver {
  public:
   InMemoryHistoryBackend();
+
+  InMemoryHistoryBackend(const InMemoryHistoryBackend&) = delete;
+  InMemoryHistoryBackend& operator=(const InMemoryHistoryBackend&) = delete;
+
   ~InMemoryHistoryBackend() override;
 
   // Initializes the backend from the history database pointed to by the
@@ -73,7 +76,6 @@ class InMemoryHistoryBackend : public HistoryServiceObserver {
   void OnURLVisited(HistoryService* history_service,
                     ui::PageTransition transition,
                     const URLRow& row,
-                    const RedirectList& redirects,
                     base::Time visit_time) override;
   void OnURLsModified(HistoryService* history_service,
                       const URLRows& changed_urls) override;
@@ -93,8 +95,6 @@ class InMemoryHistoryBackend : public HistoryServiceObserver {
 
   base::ScopedObservation<HistoryService, HistoryServiceObserver>
       history_service_observation_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(InMemoryHistoryBackend);
 };
 
 }  // namespace history

@@ -15,7 +15,7 @@ Color StyleColor::Resolve(Color current_color,
   if (IsCurrentColor())
     return current_color;
   if (EffectiveColorKeyword() != CSSValueID::kInvalid ||
-      (is_forced_color && IsSystemColor()))
+      (is_forced_color && IsSystemColorIncludingDeprecated()))
     return ColorFromKeyword(color_keyword_, color_scheme);
   return color_;
 }
@@ -66,17 +66,39 @@ bool StyleColor::IsColorKeyword(CSSValueID id) {
          id == CSSValueID::kMenu;
 }
 
-bool StyleColor::IsSystemColor(CSSValueID id) {
+bool StyleColor::IsSystemColorIncludingDeprecated(CSSValueID id) {
   return (id >= CSSValueID::kActiveborder && id <= CSSValueID::kWindowtext) ||
          id == CSSValueID::kMenu;
 }
 
-CSSValueID StyleColor::EffectiveColorKeyword() const {
-  if (!RuntimeEnabledFeatures::CSSSystemColorComputeToSelfEnabled()) {
-    return IsSystemColor(color_keyword_) ? CSSValueID::kInvalid
-                                         : color_keyword_;
+bool StyleColor::IsSystemColor(CSSValueID id) {
+  switch (id) {
+    case CSSValueID::kActivetext:
+    case CSSValueID::kButtonborder:
+    case CSSValueID::kButtonface:
+    case CSSValueID::kButtontext:
+    case CSSValueID::kCanvas:
+    case CSSValueID::kCanvastext:
+    case CSSValueID::kField:
+    case CSSValueID::kFieldtext:
+    case CSSValueID::kGraytext:
+    case CSSValueID::kHighlight:
+    case CSSValueID::kHighlighttext:
+    case CSSValueID::kLinktext:
+    case CSSValueID::kMark:
+    case CSSValueID::kMarktext:
+    case CSSValueID::kSelecteditem:
+    case CSSValueID::kSelecteditemtext:
+    case CSSValueID::kVisitedtext:
+      return true;
+    default:
+      return false;
   }
-  return color_keyword_;
+}
+
+CSSValueID StyleColor::EffectiveColorKeyword() const {
+  return IsSystemColorIncludingDeprecated(color_keyword_) ? CSSValueID::kInvalid
+                                                          : color_keyword_;
 }
 
 }  // namespace blink

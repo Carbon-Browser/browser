@@ -9,18 +9,17 @@
 #include <set>
 #include <string>
 
+#include "ash/public/cpp/login_accelerators.h"
 #include "base/callback.h"
-#include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/login/help_app_launcher.h"
 #include "chrome/browser/ash/login/screens/base_screen.h"
-#include "chrome/browser/chromeos/tpm_firmware_update.h"
+#include "chrome/browser/ash/tpm_firmware_update.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 // TODO(https://crbug.com/1164001): move to forward declaration.
 #include "chrome/browser/ui/webui/chromeos/login/reset_screen_handler.h"
-#include "chromeos/dbus/update_engine/update_engine_client.h"
+#include "chromeos/ash/components/dbus/update_engine/update_engine_client.h"
 
 class PrefRegistrySimple;
 
@@ -33,13 +32,14 @@ class ScopedGuestButtonBlocker;
 // will end up in the device restart.
 class ResetScreen : public BaseScreen, public UpdateEngineClient::Observer {
  public:
-  ResetScreen(ResetView* view,
+  ResetScreen(base::WeakPtr<ResetView> view,
               ErrorScreen* error_screen,
               const base::RepeatingClosure& exit_callback);
-  ~ResetScreen() override;
 
-  // Called when view is destroyed so there's no dead reference to it.
-  void OnViewDestroyed(ResetView* view);
+  ResetScreen(const ResetScreen&) = delete;
+  ResetScreen& operator=(const ResetScreen&) = delete;
+
+  ~ResetScreen() override;
 
   // Registers Local State preferences.
   static void RegisterPrefs(PrefRegistrySimple* registry);
@@ -66,7 +66,8 @@ class ResetScreen : public BaseScreen, public UpdateEngineClient::Observer {
   // BaseScreen implementation:
   void ShowImpl() override;
   void HideImpl() override;
-  void OnUserAction(const std::string& action_id) override;
+  void OnUserAction(const base::Value::List& args) override;
+  bool HandleAccelerator(LoginAcceleratorAction action) final;
 
   // UpdateEngineClient::Observer implementation:
   void UpdateStatusChanged(const update_engine::StatusResult& status) override;
@@ -84,7 +85,7 @@ class ResetScreen : public BaseScreen, public UpdateEngineClient::Observer {
 
   void ShowHelpArticle(HelpAppLauncher::HelpTopic topic);
 
-  ResetView* view_;
+  base::WeakPtr<ResetView> view_;
   ErrorScreen* error_screen_;
   base::RepeatingClosure exit_callback_;
 
@@ -97,8 +98,6 @@ class ResetScreen : public BaseScreen, public UpdateEngineClient::Observer {
   std::unique_ptr<ScopedGuestButtonBlocker> scoped_guest_button_blocker_;
 
   base::WeakPtrFactory<ResetScreen> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ResetScreen);
 };
 
 }  // namespace ash

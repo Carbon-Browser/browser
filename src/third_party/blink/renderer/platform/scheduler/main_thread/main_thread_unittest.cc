@@ -13,8 +13,8 @@
 #include "base/message_loop/message_pump.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/run_loop.h"
-#include "base/single_thread_task_runner.h"
 #include "base/task/sequence_manager/sequence_manager.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/simple_test_tick_clock.h"
 #include "base/test/task_environment.h"
 #include "base/threading/thread_task_runner_handle.h"
@@ -51,14 +51,13 @@ class MainThreadTest : public testing::Test {
   MainThreadTest& operator=(const MainThreadTest&) = delete;
 
   void SetUp() override {
-    clock_.Advance(base::TimeDelta::FromMicroseconds(5000));
+    clock_.Advance(base::Microseconds(5000));
     scheduler_ = std::make_unique<MainThreadSchedulerImpl>(
         base::sequence_manager::CreateSequenceManagerOnCurrentThreadWithPump(
             base::MessagePump::Create(base::MessagePumpType::DEFAULT),
             base::sequence_manager::SequenceManager::Settings::Builder()
                 .SetTickClock(&clock_)
-                .Build()),
-        absl::nullopt);
+                .Build()));
     scheduler_overrider_ =
         std::make_unique<ScopedSchedulerOverrider>(scheduler_.get());
     thread_ = Thread::Current();

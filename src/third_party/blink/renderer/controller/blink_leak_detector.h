@@ -9,7 +9,6 @@
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "third_party/blink/public/mojom/leak_detector/leak_detector.mojom-blink.h"
 #include "third_party/blink/renderer/controller/controller_export.h"
-#include "third_party/blink/renderer/platform/heap/handle.h"
 #include "third_party/blink/renderer/platform/timer.h"
 
 namespace blink {
@@ -20,6 +19,10 @@ class CONTROLLER_EXPORT BlinkLeakDetector : public mojom::blink::LeakDetector {
   static void Bind(mojo::PendingReceiver<mojom::blink::LeakDetector>);
 
   BlinkLeakDetector();
+
+  BlinkLeakDetector(const BlinkLeakDetector&) = delete;
+  BlinkLeakDetector& operator=(const BlinkLeakDetector&) = delete;
+
   ~BlinkLeakDetector() override;
 
  private:
@@ -35,8 +38,6 @@ class CONTROLLER_EXPORT BlinkLeakDetector : public mojom::blink::LeakDetector {
   PerformLeakDetectionCallback callback_;
 
   mojo::Receiver<mojom::blink::LeakDetector> receiver_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(BlinkLeakDetector);
 };
 
 }  // namespace blink

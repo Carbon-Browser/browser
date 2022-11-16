@@ -18,6 +18,7 @@
 #include "components/security_state/core/security_state.h"
 #include "components/webapps/browser/installable/installable_metrics.h"
 #include "components/webapps/browser/webapps_client.h"
+#include "components/webapps/common/constants.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/manifest_icon_downloader.h"
@@ -37,7 +38,7 @@
 #include "third_party/blink/public/mojom/manifest/display_mode.mojom.h"
 #include "url/origin.h"
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #include "components/webapps/browser/android/webapps_icon_utils.h"
 #endif
 
@@ -50,10 +51,6 @@ const int kMinimumScreenshotSizeInPx = 320;
 
 // Maximum dimension size in pixels for screenshots.
 const int kMaximumScreenshotSizeInPx = 3840;
-
-// Maximum dimension can't be more than 2.3 times as long as the minimum
-// dimension for screenshots.
-const double kMaximumScreenshotRatio = 2.3;
 
 // Maximum dimension size in pixels for icons.
 const int kMaximumIconSizeInPx = std::numeric_limits<int>::max();
@@ -79,7 +76,7 @@ const int kMinimumPrimaryIconSizeInPx = 144;
 const int kMinimumPrimaryAdaptiveLauncherIconSizeInPx = 83;
 
 int GetIdealPrimaryIconSizeInPx() {
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   return WebappsIconUtils::GetIdealHomescreenIconSizeInPx();
 #else
   return kMinimumPrimaryIconSizeInPx;
@@ -87,7 +84,7 @@ int GetIdealPrimaryIconSizeInPx() {
 }
 
 int GetMinimumPrimaryIconSizeInPx() {
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   return WebappsIconUtils::GetMinimumHomescreenIconSizeInPx();
 #else
   return kMinimumPrimaryIconSizeInPx;
@@ -95,7 +92,7 @@ int GetMinimumPrimaryIconSizeInPx() {
 }
 
 int GetIdealPrimaryAdaptiveLauncherIconSizeInPx() {
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   return WebappsIconUtils::GetIdealAdaptiveLauncherIconSizeInPx();
 #else
   return kMinimumPrimaryAdaptiveLauncherIconSizeInPx;
@@ -103,7 +100,7 @@ int GetIdealPrimaryAdaptiveLauncherIconSizeInPx() {
 }
 
 int GetIdealSplashIconSizeInPx() {
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   return WebappsIconUtils::GetIdealSplashImageSizeInPx();
 #else
   return kMinimumPrimaryIconSizeInPx;
@@ -111,7 +108,7 @@ int GetIdealSplashIconSizeInPx() {
 }
 
 int GetMinimumSplashIconSizeInPx() {
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   return WebappsIconUtils::GetMinimumSplashImageSizeInPx();
 #else
   return kMinimumPrimaryIconSizeInPx;
@@ -127,10 +124,9 @@ struct ImageTypeDetails {
 
 constexpr ImageTypeDetails kSupportedImageTypes[] = {
     {".png", "image/png"},
-// TODO(https://crbug.com/578122): Add SVG support for Android.
-// TODO(https://crbug.com/466958): Add WebP support for Android.
-#if !defined(OS_ANDROID)
     {".svg", "image/svg+xml"},
+// TODO(https://crbug.com/466958): Add WebP support for Android.
+#if !BUILDFLAG(IS_ANDROID)
     {".webp", "image/webp"},
 #endif
 };
@@ -207,7 +203,7 @@ void OnDidCompleteGetAllErrors(
 void OnDidCompleteGetPrimaryIcon(
     base::OnceCallback<void(const SkBitmap*)> callback,
     const InstallableData& data) {
-  std::move(callback).Run(data.primary_icon);
+  std::move(callback).Run(data.primary_icon.get());
 }
 
 }  // namespace
@@ -220,13 +216,10 @@ InstallableManager::ValidManifestProperty::ValidManifestProperty() = default;
 
 InstallableManager::ValidManifestProperty::~ValidManifestProperty() = default;
 
-InstallableManager::IconProperty::IconProperty()
-    : error(NO_ERROR_DETECTED),
-      purpose(IconPurpose::ANY),
-      icon(),
-      fetched(false) {}
+InstallableManager::IconProperty::IconProperty() = default;
 
-InstallableManager::IconProperty::IconProperty(IconProperty&& other) = default;
+InstallableManager::IconProperty::IconProperty(IconProperty&& other) noexcept =
+    default;
 
 InstallableManager::IconProperty::~IconProperty() = default;
 
@@ -235,6 +228,7 @@ InstallableManager::IconProperty& InstallableManager::IconProperty::operator=(
 
 InstallableManager::InstallableManager(content::WebContents* web_contents)
     : content::WebContentsObserver(web_contents),
+      content::WebContentsUserData<InstallableManager>(*web_contents),
       eligibility_(std::make_unique<EligiblityProperty>()),
       manifest_(std::make_unique<ManifestProperty>()),
       valid_manifest_(std::make_unique<ValidManifestProperty>()),
@@ -468,6 +462,7 @@ bool InstallableManager::IsComplete(const InstallableParams& params) const {
          manifest_->fetched &&
          (!params.valid_manifest || valid_manifest_->fetched) &&
          (!params.has_worker || worker_->fetched) &&
+         (!params.fetch_screenshots || is_screenshots_fetch_complete_) &&
          (!params.valid_primary_icon ||
           IsIconFetchComplete(IconUsage::kPrimary)) &&
          (!params.valid_splash_icon || IsIconFetchComplete(IconUsage::kSplash));
@@ -502,6 +497,7 @@ void InstallableManager::SetManifestDependentTasksComplete() {
   worker_->fetched = true;
   SetIconFetched(IconUsage::kPrimary);
   SetIconFetched(IconUsage::kSplash);
+  is_screenshots_fetch_complete_ = true;
 }
 
 void InstallableManager::CleanupAndStartNextTask() {
@@ -514,6 +510,11 @@ void InstallableManager::CleanupAndStartNextTask() {
   // |valid_manifest_| shouldn't be re-used across tasks because its state is
   // dependent on current task's |params|.
   valid_manifest_ = std::make_unique<ValidManifestProperty>();
+  if (manifest_->error == NO_MANIFEST || manifest_->error == MANIFEST_EMPTY) {
+    valid_manifest_->fetched = true;
+    valid_manifest_->is_valid = false;
+  }
+
   task_queue_.Next();
   WorkOnTask();
 }
@@ -538,6 +539,8 @@ void InstallableManager::RunCallback(
     has_maskable_splash_icon = (splash_icon->purpose == IconPurpose::MASKABLE);
   }
 
+  bool worker_check_passed = worker_->has_worker || !params.has_worker;
+
   InstallableData data = {
       std::move(errors),
       manifest_url(),
@@ -550,7 +553,7 @@ void InstallableManager::RunCallback(
       has_maskable_splash_icon,
       screenshots_,
       valid_manifest_->is_valid,
-      worker_->has_worker,
+      worker_check_passed,
   };
 
   std::move(task.callback).Run(data);
@@ -593,7 +596,8 @@ void InstallableManager::WorkOnTask() {
     CheckAndFetchBestIcon(GetIdealPrimaryIconSizeInPx(),
                           GetMinimumPrimaryIconSizeInPx(), IconPurpose::ANY,
                           IconUsage::kPrimary);
-  } else if (params.fetch_screenshots && !is_screenshots_fetch_complete_) {
+  } else if (params.fetch_screenshots && !screenshots_downloading_ &&
+             !is_screenshots_fetch_complete_) {
     CheckAndFetchScreenshots();
   } else if (params.has_worker && !worker_->fetched) {
     CheckServiceWorker();
@@ -718,11 +722,6 @@ bool InstallableManager::IsManifestValidForWebApp(
 void InstallableManager::CheckServiceWorker() {
   DCHECK(!worker_->fetched);
   DCHECK(!blink::IsEmptyManifest(manifest()));
-  // Service workers need a StorageKey (storage partitioning key), since we only
-  // install for top-level frames we can assume the StorageKey will always be in
-  // a 1P context. DCHECK this just to be sure.
-  DCHECK(GetWebContents() &&
-         GetWebContents()->GetMainFrame()->GetParent() == nullptr);
 
   if (!service_worker_context_)
     return;
@@ -914,7 +913,7 @@ void InstallableManager::CheckAndFetchScreenshots() {
   }
 }
 
-void InstallableManager::OnScreenshotFetched(const GURL screenshot_url,
+void InstallableManager::OnScreenshotFetched(GURL screenshot_url,
                                              const SkBitmap& bitmap) {
   DCHECK_GT(screenshots_downloading_, 0);
 
@@ -949,7 +948,8 @@ void InstallableManager::OnScreenshotFetched(const GURL screenshot_url,
         continue;
       }
 
-      auto dimensions = std::minmax(screenshot.width(), screenshot.height());
+      std::pair<int, int> dimensions =
+          std::minmax(screenshot.width(), screenshot.height());
       if (dimensions.second > dimensions.first * kMaximumScreenshotRatio)
         continue;
 
@@ -988,12 +988,8 @@ void InstallableManager::OnDestruct(content::ServiceWorkerContext* context) {
   service_worker_context_ = nullptr;
 }
 
-void InstallableManager::DidFinishNavigation(
-    content::NavigationHandle* handle) {
-  if (handle->IsInPrimaryMainFrame() && handle->HasCommitted() &&
-      !handle->IsSameDocument()) {
-    Reset(USER_NAVIGATED);
-  }
+void InstallableManager::PrimaryPageChanged(content::Page& page) {
+  Reset(USER_NAVIGATED);
 }
 
 void InstallableManager::DidUpdateWebManifestURL(content::RenderFrameHost* rfh,
@@ -1024,6 +1020,6 @@ bool InstallableManager::has_worker() {
   return worker_->has_worker;
 }
 
-WEB_CONTENTS_USER_DATA_KEY_IMPL(InstallableManager)
+WEB_CONTENTS_USER_DATA_KEY_IMPL(InstallableManager);
 
 }  // namespace webapps

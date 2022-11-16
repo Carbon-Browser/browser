@@ -4,12 +4,14 @@
 
 #include "cc/layers/solid_color_layer.h"
 
+#include <memory>
+
 #include "cc/layers/solid_color_layer_impl.h"
 
 namespace cc {
 
 std::unique_ptr<LayerImpl> SolidColorLayer::CreateLayerImpl(
-    LayerTreeImpl* tree_impl) {
+    LayerTreeImpl* tree_impl) const {
   return SolidColorLayerImpl::Create(tree_impl, id());
 }
 
@@ -21,8 +23,8 @@ SolidColorLayer::SolidColorLayer() = default;
 
 SolidColorLayer::~SolidColorLayer() = default;
 
-void SolidColorLayer::SetBackgroundColor(SkColor color) {
-  SetContentsOpaque(SkColorGetA(color) == 255);
+void SolidColorLayer::SetBackgroundColor(SkColor4f color) {
+  SetContentsOpaque(color.isOpaque());
   Layer::SetBackgroundColor(color);
 }
 

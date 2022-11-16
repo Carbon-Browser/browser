@@ -6,10 +6,16 @@ package org.chromium.components.subresource_filter;
 
 import android.content.Context;
 import android.content.res.Resources;
+import android.os.Handler;
+import android.text.Spannable;
+import android.text.SpannableString;
+import android.text.TextUtils;
+import android.text.style.ClickableSpan;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.VisibleForTesting;
 
+import org.chromium.base.ThreadUtils;
 import org.chromium.base.annotations.CalledByNative;
 import org.chromium.base.annotations.NativeMethods;
 import org.chromium.ui.base.WindowAndroid;
@@ -19,6 +25,7 @@ import org.chromium.ui.modaldialog.ModalDialogManager.ModalDialogType;
 import org.chromium.ui.modaldialog.ModalDialogProperties;
 import org.chromium.ui.modaldialog.ModalDialogProperties.ButtonType;
 import org.chromium.ui.modelutil.PropertyModel;
+import org.chromium.ui.text.NoUnderlineClickableSpan;
 
 /**
  * Java part of AdsBlockedDialog pair providing communication between native ads blocked
@@ -29,16 +36,19 @@ public class AdsBlockedDialog implements ModalDialogProperties.Controller {
     private final Context mContext;
     private final ModalDialogManager mModalDialogManager;
     private PropertyModel mDialogModel;
+    private ClickableSpan mClickableSpan;
+    private Handler mDialogHandler;
 
     @CalledByNative
     static AdsBlockedDialog create(long nativeDialog, @NonNull WindowAndroid windowAndroid) {
         return new AdsBlockedDialog(nativeDialog, windowAndroid);
     }
 
-    private AdsBlockedDialog(long nativeDialog, @NonNull WindowAndroid windowAndroid) {
+    AdsBlockedDialog(long nativeDialog, @NonNull WindowAndroid windowAndroid) {
         mNativeDialog = nativeDialog;
         mContext = windowAndroid.getContext().get();
         mModalDialogManager = windowAndroid.getModalDialogManager();
+        mDialogHandler = new Handler(ThreadUtils.getUiThreadLooper());
     }
 
     /**
@@ -48,13 +58,15 @@ public class AdsBlockedDialog implements ModalDialogProperties.Controller {
      * @param nativeDialog The pointer to the dialog instance created by native code.
      * @param context The context for accessing resources.
      * @param modalDialogManager The ModalDialogManager to display the dialog.
+     * @param dialogHandler The {@link Handler} used to post the call to show the dialog.
      */
     @VisibleForTesting
     AdsBlockedDialog(long nativeDialog, @NonNull Context context,
-            @NonNull ModalDialogManager modalDialogManager) {
+            @NonNull ModalDialogManager modalDialogManager, Handler dialogHandler) {
         mNativeDialog = nativeDialog;
         mContext = context;
         mModalDialogManager = modalDialogManager;
+        mDialogHandler = dialogHandler;
     }
 
     @VisibleForTesting
@@ -62,27 +74,65 @@ public class AdsBlockedDialog implements ModalDialogProperties.Controller {
         return mDialogModel;
     }
 
+    @VisibleForTesting
+    ClickableSpan getMessageClickableSpanForTesting() {
+        return mClickableSpan;
+    }
+
     @CalledByNative
-    void show() {
+    void show(boolean shouldPostDialog) {
         Resources resources = mContext.getResources();
-        mDialogModel = new PropertyModel.Builder(ModalDialogProperties.ALL_KEYS)
-                               .with(ModalDialogProperties.CONTROLLER, this)
-                               .with(ModalDialogProperties.TITLE, resources,
-                                       R.string.blocked_ads_dialog_title)
-                               .with(ModalDialogProperties.MESSAGE,
-                                       resources.getString(R.string.blocked_ads_dialog_message))
-                               .with(ModalDialogProperties.POSITIVE_BUTTON_TEXT, resources,
-                                       R.string.blocked_ads_dialog_always_allow)
-                               .with(ModalDialogProperties.NEGATIVE_BUTTON_TEXT, resources,
-                                       R.string.blocked_ads_dialog_learn_more)
-                               .with(ModalDialogProperties.CANCEL_ON_TOUCH_OUTSIDE, true)
-                               .build();
-        mModalDialogManager.showDialog(mDialogModel, ModalDialogType.TAB);
+        mClickableSpan = new NoUnderlineClickableSpan(
+                mContext, (view) -> AdsBlockedDialogJni.get().onLearnMoreClicked(mNativeDialog));
+        mDialogModel =
+                new PropertyModel.Builder(ModalDialogProperties.ALL_KEYS)
+                        .with(ModalDialogProperties.CONTROLLER, this)
+                        .with(ModalDialogProperties.TITLE, resources,
+                                R.string.blocked_ads_dialog_title)
+                        .with(ModalDialogProperties.MESSAGE_PARAGRAPH_1, getFormattedMessageText())
+                        .with(ModalDialogProperties.POSITIVE_BUTTON_TEXT, resources,
+                                R.string.blocked_ads_dialog_always_allow)
+                        .with(ModalDialogProperties.NEGATIVE_BUTTON_TEXT, resources,
+                                R.string.cancel)
+                        .with(ModalDialogProperties.CANCEL_ON_TOUCH_OUTSIDE, true)
+                        .with(ModalDialogProperties.FOCUS_DIALOG, true)
+                        .build();
+
+        // shouldPostDialog determines if ModalDialogManager#showDialog should be invoked directly
+        // or using Handler#post.
+        // The dialog should be re-shown on the original tab on navigation back from the redirected
+        // support link tab. This redirection is observed by
+        // WebContentsObserver#OnWebContentsFocused and
+        // TabModelSelectorTabModelObserver#didSelectTab. The sequence of invocation of these
+        // methods is not consistent on phones and tablets. Using #post will delay the
+        // #showDialog request reliably to after both tab events are handled on the UI thread,
+        // guaranteeing that the dialog will be re-shown as expected. See crbug.com/1261967 for
+        // details.
+        // TODO (crbug.com/1272049): Investigate tab event observer ordering and tab modal
+        // suspension logic as a follow up.
+        if (shouldPostDialog) {
+            mDialogHandler.post(
+                    () -> mModalDialogManager.showDialog(mDialogModel, ModalDialogType.TAB));
+        } else {
+            mModalDialogManager.showDialog(mDialogModel, ModalDialogType.TAB);
+        }
     }
 
     @CalledByNative
     void dismiss() {
         mModalDialogManager.dismissDialog(mDialogModel, DialogDismissalCause.DISMISSED_BY_NATIVE);
+    }
+
+    // Returns link-formatted message text for the ads blocked dialog.
+    @VisibleForTesting
+    CharSequence getFormattedMessageText() {
+        Resources resources = mContext.getResources();
+        String messageText = resources.getString(R.string.blocked_ads_dialog_message);
+        String learnMoreLinkText = resources.getString(R.string.blocked_ads_dialog_learn_more);
+        final SpannableString formattedLinkText = new SpannableString(learnMoreLinkText);
+        formattedLinkText.setSpan(
+                mClickableSpan, 0, learnMoreLinkText.length(), Spannable.SPAN_INCLUSIVE_EXCLUSIVE);
+        return TextUtils.expandTemplate(messageText, formattedLinkText);
     }
 
     // ModalDialogProperties.Controller implementation.
@@ -91,8 +141,6 @@ public class AdsBlockedDialog implements ModalDialogProperties.Controller {
         assert mNativeDialog != 0;
         if (buttonType == ButtonType.POSITIVE) {
             AdsBlockedDialogJni.get().onAllowAdsClicked(mNativeDialog);
-        } else {
-            AdsBlockedDialogJni.get().onLearnMoreClicked(mNativeDialog);
         }
         mModalDialogManager.dismissDialog(model,
                 buttonType == ButtonType.POSITIVE ? DialogDismissalCause.POSITIVE_BUTTON_CLICKED
@@ -101,6 +149,7 @@ public class AdsBlockedDialog implements ModalDialogProperties.Controller {
 
     @Override
     public void onDismiss(PropertyModel model, @DialogDismissalCause int dismissalCause) {
+        mDialogHandler.removeCallbacksAndMessages(null);
         AdsBlockedDialogJni.get().onDismissed(mNativeDialog);
         mNativeDialog = 0;
     }

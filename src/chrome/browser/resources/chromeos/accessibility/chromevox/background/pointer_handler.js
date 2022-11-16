@@ -6,18 +6,19 @@
  * @fileoverview ChromeVox pointer handler. A pointer, in this context, is
  * either user touch or mouse input.
  */
+import {EventGenerator} from '../../common/event_generator.js';
+import {CustomAutomationEvent} from '../common/custom_automation_event.js';
 
-goog.provide('PointerHandler');
-
-goog.require('constants');
-goog.require('AutomationTreeWalker');
-goog.require('BaseAutomationHandler');
+import {BaseAutomationHandler} from './base_automation_handler.js';
+import {ChromeVoxState} from './chromevox_state.js';
+import {DesktopAutomationInterface} from './desktop_automation_interface.js';
+import {Output} from './output/output.js';
 
 const AutomationEvent = chrome.automation.AutomationEvent;
 const EventType = chrome.automation.EventType;
 const RoleType = chrome.automation.RoleType;
 
-PointerHandler = class extends BaseAutomationHandler {
+export class PointerHandler extends BaseAutomationHandler {
   constructor() {
     super(null);
 
@@ -34,13 +35,13 @@ PointerHandler = class extends BaseAutomationHandler {
     /** @private {!Date} */
     this.lastHoverRequested_ = new Date();
 
-    chrome.automation.getDesktop((desktop) => {
+    chrome.automation.getDesktop(desktop => {
       this.node_ = desktop;
       this.addListener_(EventType.MOUSE_MOVED, this.onMouseMove);
 
       // This is needed for ARC++ and Lacros. They send mouse move and hit test
       // respectively. Each responds with hover.
-      this.addListener_(EventType.HOVER, (evt) => {
+      this.addListener_(EventType.HOVER, evt => {
         if (this.expectingHoverCount_ === 0) {
           return;
         }
@@ -63,7 +64,7 @@ PointerHandler = class extends BaseAutomationHandler {
       chrome.accessibilityPrivate.enableMouseEvents(true);
     }
 
-    chrome.chromeosInfoPrivate.get(['deviceType'], (result) => {
+    chrome.chromeosInfoPrivate.get(['deviceType'], result => {
       this.isChromebox_ = result['deviceType'] ===
           chrome.chromeosInfoPrivate.DeviceType.CHROMEBOX;
     });
@@ -90,7 +91,7 @@ PointerHandler = class extends BaseAutomationHandler {
     }
 
     const actOnNode = specificNode ? specificNode : this.node_;
-    actOnNode.hitTestWithReply(this.mouseX_, this.mouseY_, (target) => {
+    actOnNode.hitTestWithReply(this.mouseX_, this.mouseY_, target => {
       this.handleHitTestResult(target);
     });
   }
@@ -193,11 +194,12 @@ PointerHandler = class extends BaseAutomationHandler {
     }
 
     Output.forceModeForNextSpeechUtterance(QueueMode.FLUSH);
-    DesktopAutomationHandler.instance.onEventDefault(new CustomAutomationEvent(
-        EventType.HOVER, target,
-        {eventFromAction: chrome.automation.ActionType.HIT_TEST}));
+    DesktopAutomationInterface.instance.onEventDefault(
+        new CustomAutomationEvent(
+            EventType.HOVER, target,
+            {eventFromAction: chrome.automation.ActionType.HIT_TEST}));
   }
-};
+}
 
 /** @const {number} */
 PointerHandler.MIN_NO_POINTER_ANCHOR_SOUND_DELAY_MS = 500;

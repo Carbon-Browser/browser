@@ -10,18 +10,18 @@
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/scoped_refptr.h"
-#include "base/single_thread_task_runner.h"
-#include "chromeos/services/libassistant/grpc/grpc_client_cq_tag.h"
+#include "base/task/single_thread_task_runner.h"
+#include "chromeos/assistant/internal/grpc_transport/grpc_client_cq_tag.h"
 
 namespace chromeos {
 namespace libassistant {
 
 GrpcClientThread::GrpcClientThread(const std::string& thread_name,
-                                   base::ThreadPriority priority)
+                                   base::ThreadType thread_type)
     : thread_(thread_name) {
   base::Thread::Options thread_options = {/*type=*/base::MessagePumpType::IO,
                                           /*size=*/0};
-  thread_options.priority = priority;
+  thread_options.thread_type = thread_type;
   thread_.StartWithOptions(std::move(thread_options));
   StartCQ();
 }

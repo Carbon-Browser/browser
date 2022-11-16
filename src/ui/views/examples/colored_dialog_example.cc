@@ -12,7 +12,6 @@
 #include "ui/base/ui_base_types.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/gfx/vector_icon_types.h"
-#include "ui/native_theme/native_theme_color_id.h"
 #include "ui/views/controls/button/checkbox.h"
 #include "ui/views/controls/button/md_text_button.h"
 #include "ui/views/controls/label.h"
@@ -146,8 +145,7 @@ void ColoredDialogChooser::ButtonPressed() {
 }
 
 void ColoredDialogChooser::OnFeedbackSubmit(std::u16string text) {
-  constexpr base::TimeDelta kConfirmationDuration =
-      base::TimeDelta::FromSeconds(3);
+  constexpr base::TimeDelta kConfirmationDuration = base::Seconds(3);
 
   confirmation_label_->SetText(l10n_util::GetStringFUTF16(
       IDS_COLORED_DIALOG_CHOOSER_CONFIRM_LABEL, text));

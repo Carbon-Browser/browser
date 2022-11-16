@@ -41,4 +41,8 @@ bool FakeProxy::MainFrameWillHappenForTesting() {
   return false;
 }
 
+double FakeProxy::GetPercentDroppedFrames() const {
+  return 0.0;
+}
+
 }  // namespace cc

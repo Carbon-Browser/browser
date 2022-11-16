@@ -10,7 +10,6 @@
 
 #include "base/bind.h"
 #include "base/callback.h"
-#include "base/macros.h"
 #include "dbus/object_path.h"
 #include "dbus/property.h"
 #include "device/bluetooth/bluetooth_export.h"
@@ -28,6 +27,12 @@ class DEVICE_BLUETOOTH_EXPORT FakeBluetoothLEAdvertisingManagerClient
     : public BluetoothLEAdvertisingManagerClient {
  public:
   FakeBluetoothLEAdvertisingManagerClient();
+
+  FakeBluetoothLEAdvertisingManagerClient(
+      const FakeBluetoothLEAdvertisingManagerClient&) = delete;
+  FakeBluetoothLEAdvertisingManagerClient& operator=(
+      const FakeBluetoothLEAdvertisingManagerClient&) = delete;
+
   ~FakeBluetoothLEAdvertisingManagerClient() override;
 
   // DBusClient overrides:
@@ -80,8 +85,6 @@ class DEVICE_BLUETOOTH_EXPORT FakeBluetoothLEAdvertisingManagerClient
 
   // Holds currently registered advertisements.
   std::vector<dbus::ObjectPath> currently_registered_;
-
-  DISALLOW_COPY_AND_ASSIGN(FakeBluetoothLEAdvertisingManagerClient);
 };
 
 }  // namespace bluez

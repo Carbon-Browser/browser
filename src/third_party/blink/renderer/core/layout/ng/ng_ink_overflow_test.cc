@@ -12,11 +12,11 @@ namespace blink {
 
 namespace {
 
-PhysicalRect FromFloatRound(const FloatRect& rect) {
-  return {LayoutUnit::FromFloatRound(rect.X()),
-          LayoutUnit::FromFloatRound(rect.Y()),
-          LayoutUnit::FromFloatRound(rect.Width()),
-          LayoutUnit::FromFloatRound(rect.Height())};
+PhysicalRect FromFloatRound(const gfx::RectF& rect) {
+  return {LayoutUnit::FromFloatRound(rect.x()),
+          LayoutUnit::FromFloatRound(rect.y()),
+          LayoutUnit::FromFloatRound(rect.width()),
+          LayoutUnit::FromFloatRound(rect.height())};
 }
 
 using testing::ElementsAre;
@@ -47,8 +47,8 @@ TEST_F(NGInkOverflowTest, Empty) {
 
 struct RectData {
   PhysicalSize size;
-  FloatRect rect;
-  FloatRect expect;
+  gfx::RectF rect;
+  gfx::RectF expect;
   NGInkOverflow::Type type;
 
   NGInkOverflow::Type ExpectedTypeForContents() const {

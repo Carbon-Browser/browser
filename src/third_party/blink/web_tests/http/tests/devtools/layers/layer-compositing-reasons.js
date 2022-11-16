@@ -4,7 +4,7 @@
 
 (async function() {
   TestRunner.addResult(`Tests layer compositing reasons in Layers Panel`);
-  await TestRunner.loadModule('panels/layers'); await TestRunner.loadTestModule('layers_test_runner');
+  await TestRunner.loadTestModule('layers_test_runner');
   await TestRunner.navigatePromise(TestRunner.url('resources/compositing-reasons.html'));
 
   async function dumpCompositingReasons(layer) {
@@ -17,7 +17,8 @@
   }
 
   const idsToTest = [
-    'transform3d', 'transform3d-individual', 'backface-visibility', 'animation', 'animation-individual',
+    'transform3d', 'scale3d', 'rotate3d', 'translate3d', 'backface-visibility',
+    'animation', 'animation-scale', 'animation-rotate', 'animation-translate',
     'transformWithCompositedDescendants', 'transformWithCompositedDescendants-individual',
     'opacityWithCompositedDescendants', 'reflectionWithCompositedDescendants', 'perspective', 'preserve3d'
   ];

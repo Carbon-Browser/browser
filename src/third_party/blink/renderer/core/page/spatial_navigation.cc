@@ -46,7 +46,7 @@
 #include "third_party/blink/renderer/core/page/page.h"
 #include "third_party/blink/renderer/core/paint/paint_layer.h"
 #include "third_party/blink/renderer/core/paint/paint_layer_scrollable_area.h"
-#include "third_party/blink/renderer/platform/geometry/int_rect.h"
+#include "ui/gfx/geometry/rect.h"
 
 namespace blink {
 
@@ -149,10 +149,10 @@ int LineBoxes(const LayoutObject& layout_object) {
 
   // If it has empty quads, it's most likely not a line broken ("fragmented")
   // text. <a><div></div></a> has for example one empty rect.
-  Vector<FloatQuad> quads;
+  Vector<gfx::QuadF> quads;
   layout_object.AbsoluteQuads(quads);
-  for (const FloatQuad& quad : quads) {
-    if (quad.IsEmpty())
+  for (const gfx::QuadF& quad : quads) {
+    if (quad.BoundingBox().IsEmpty())
       return 1;
   }
 
@@ -163,28 +163,27 @@ bool IsFragmentedInline(const LayoutObject& layout_object) {
   return LineBoxes(layout_object) > 1;
 }
 
-FloatRect RectInViewport(const Node& node) {
+gfx::RectF RectInViewport(const Node& node) {
   LocalFrameView* frame_view = node.GetDocument().View();
   if (!frame_view)
-    return FloatRect();
+    return gfx::RectF();
 
   DCHECK(!frame_view->NeedsLayout());
 
   LayoutObject* object = node.GetLayoutObject();
   if (!object)
-    return FloatRect();
+    return gfx::RectF();
 
   PhysicalRect rect_in_root_frame = NodeRectInRootFrame(&node);
 
   // Convert to the visual viewport which will account for pinch zoom.
   VisualViewport& visual_viewport =
       object->GetDocument().GetPage()->GetVisualViewport();
-  FloatRect rect_in_viewport =
-      visual_viewport.RootFrameToViewport(FloatRect(rect_in_root_frame));
+  gfx::RectF rect_in_viewport =
+      visual_viewport.RootFrameToViewport(gfx::RectF(rect_in_root_frame));
 
   // RootFrameToViewport doesn't clip so manually apply the viewport clip here.
-  FloatRect viewport_rect =
-      FloatRect(FloatPoint(), FloatSize(visual_viewport.Size()));
+  gfx::RectF viewport_rect(gfx::SizeF(visual_viewport.Size()));
   rect_in_viewport.Intersect(viewport_rect);
 
   return rect_in_viewport;
@@ -387,21 +386,21 @@ bool CanScrollInDirection(const Node* container,
     case SpatialNavigationDirection::kLeft:
       return (container->GetLayoutObject()->Style()->OverflowX() !=
                   EOverflow::kHidden &&
-              scrollable_area->ScrollPosition().X() > 0);
+              scrollable_area->ScrollPosition().x() > 0);
     case SpatialNavigationDirection::kUp:
       return (container->GetLayoutObject()->Style()->OverflowY() !=
                   EOverflow::kHidden &&
-              scrollable_area->ScrollPosition().Y() > 0);
+              scrollable_area->ScrollPosition().y() > 0);
     case SpatialNavigationDirection::kRight:
       return (container->GetLayoutObject()->Style()->OverflowX() !=
                   EOverflow::kHidden &&
-              LayoutUnit(scrollable_area->ScrollPosition().X()) +
+              LayoutUnit(scrollable_area->ScrollPosition().x()) +
                       container->GetLayoutBox()->ClientWidth() <
                   container->GetLayoutBox()->ScrollWidth());
     case SpatialNavigationDirection::kDown:
       return (container->GetLayoutObject()->Style()->OverflowY() !=
                   EOverflow::kHidden &&
-              LayoutUnit(scrollable_area->ScrollPosition().Y()) +
+              LayoutUnit(scrollable_area->ScrollPosition().y()) +
                       container->GetLayoutBox()->ClientHeight() <
                   container->GetLayoutBox()->ScrollHeight());
     default:
@@ -615,7 +614,7 @@ bool BothOnTopmostPaintLayerInStackingContext(
   if (focused_layer != candidate_layer)
     return false;
 
-  return !candidate_layer->HasVisibleDescendant();
+  return !candidate_layer->HasVisibleSelfPaintingDescendant();
 }
 
 double ComputeDistanceDataForNode(SpatialNavigationDirection direction,
@@ -875,7 +874,7 @@ PhysicalRect SearchOriginFragment(const PhysicalRect& visible_part,
                                   const SpatialNavigationDirection direction) {
   // For accuracy, use the first visible fragment (not the fragmented element's
   // entire bounding rect which is a union of all fragments) as search origin.
-  Vector<FloatQuad> fragments;
+  Vector<gfx::QuadF> fragments;
   fragmented.AbsoluteQuads(
       fragments, kTraverseDocumentBoundaries | kApplyRemoteMainFrameTransform);
   switch (direction) {

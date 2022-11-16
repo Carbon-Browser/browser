@@ -20,7 +20,7 @@
 namespace storage {
 class FileSystemContext;
 class FileSystemOperationContext;
-}
+}  // namespace storage
 
 namespace sync_file_system {
 
@@ -54,15 +54,17 @@ class SyncableFileSystemOperation : public storage::FileSystemOperation {
                        StatusCallback callback) override;
   void Copy(const storage::FileSystemURL& src_url,
             const storage::FileSystemURL& dest_url,
-            CopyOrMoveOption option,
+            CopyOrMoveOptionSet options,
             ErrorBehavior error_behavior,
-            const CopyOrMoveProgressCallback& progress_callback,
+            std::unique_ptr<storage::CopyOrMoveHookDelegate>
+                copy_or_move_hook_delegate,
             StatusCallback callback) override;
   void Move(const storage::FileSystemURL& src_url,
             const storage::FileSystemURL& dest_url,
-            CopyOrMoveOption option,
+            CopyOrMoveOptionSet options,
             ErrorBehavior error_behavior,
-            const CopyOrMoveProgressCallback& progress_callback,
+            std::unique_ptr<storage::CopyOrMoveHookDelegate>
+                copy_or_move_hook_delegate,
             StatusCallback callback) override;
   void DirectoryExists(const storage::FileSystemURL& url,
                        StatusCallback callback) override;
@@ -92,7 +94,7 @@ class SyncableFileSystemOperation : public storage::FileSystemOperation {
                  const base::Time& last_modified_time,
                  StatusCallback callback) override;
   void OpenFile(const storage::FileSystemURL& url,
-                int file_flags,
+                uint32_t file_flags,
                 OpenFileCallback callback) override;
   void Cancel(StatusCallback cancel_callback) override;
   void CreateSnapshotFile(const storage::FileSystemURL& path,
@@ -106,12 +108,12 @@ class SyncableFileSystemOperation : public storage::FileSystemOperation {
                        StatusCallback callback) override;
   void CopyFileLocal(const storage::FileSystemURL& src_url,
                      const storage::FileSystemURL& dest_url,
-                     CopyOrMoveOption option,
+                     CopyOrMoveOptionSet options,
                      const CopyFileProgressCallback& progress_callback,
                      StatusCallback callback) override;
   void MoveFileLocal(const storage::FileSystemURL& src_url,
                      const storage::FileSystemURL& dest_url,
-                     CopyOrMoveOption option,
+                     CopyOrMoveOptionSet options,
                      StatusCallback callback) override;
   base::File::Error SyncGetPlatformPath(const storage::FileSystemURL& url,
                                         base::FilePath* platform_path) override;

@@ -69,7 +69,7 @@ class ASH_EXPORT ClipboardHistoryMenuModelAdapter : views::MenuModelAdapter {
   const ClipboardHistoryItem& GetItemFromCommandId(int command_id) const;
 
   // Returns the count of menu items.
-  int GetMenuItemsCount() const;
+  size_t GetMenuItemsCount() const;
 
   // Selects the menu item specified by `command_id`.
   void SelectMenuItemWithCommandId(int command_id);
@@ -89,12 +89,8 @@ class ASH_EXPORT ClipboardHistoryMenuModelAdapter : views::MenuModelAdapter {
   // Returns menu bounds in screen coordinates.
   gfx::Rect GetMenuBoundsInScreenForTest() const;
 
-  const views::MenuItemView* GetMenuItemViewAtForTest(int index) const;
-  views::MenuItemView* GetMenuItemViewAtForTest(int index);
-
-  void set_item_removal_callback_for_test(base::RepeatingClosure new_callback) {
-    item_removal_callback_for_test_ = std::move(new_callback);
-  }
+  const views::MenuItemView* GetMenuItemViewAtForTest(size_t index) const;
+  views::MenuItemView* GetMenuItemViewAtForTest(size_t index);
 
  private:
   class ScopedA11yIgnore;
@@ -119,7 +115,7 @@ class ASH_EXPORT ClipboardHistoryMenuModelAdapter : views::MenuModelAdapter {
   // views::MenuModelAdapter:
   views::MenuItemView* AppendMenuItem(views::MenuItemView* menu,
                                       ui::MenuModel* model,
-                                      int index) override;
+                                      size_t index) override;
   void OnMenuClosed(views::MenuItemView* menu) override;
 
   // The model which holds the contents of the menu.
@@ -159,9 +155,6 @@ class ASH_EXPORT ClipboardHistoryMenuModelAdapter : views::MenuModelAdapter {
 
   // Indicates whether `Run()` has been called before.
   bool run_before_ = false;
-
-  // Called when an item view is removed from the root menu.
-  base::RepeatingClosure item_removal_callback_for_test_;
 
   base::WeakPtrFactory<ClipboardHistoryMenuModelAdapter> weak_ptr_factory_{
       this};

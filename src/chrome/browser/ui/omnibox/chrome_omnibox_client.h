@@ -8,8 +8,7 @@
 #include <memory>
 #include <vector>
 
-#include "base/compiler_specific.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "chrome/browser/autocomplete/chrome_autocomplete_scheme_classifier.h"
@@ -26,15 +25,15 @@ class Profile;
 class ChromeOmniboxClient : public OmniboxClient {
  public:
   ChromeOmniboxClient(OmniboxEditController* controller, Profile* profile);
+
+  ChromeOmniboxClient(const ChromeOmniboxClient&) = delete;
+  ChromeOmniboxClient& operator=(const ChromeOmniboxClient&) = delete;
+
   ~ChromeOmniboxClient() override;
 
   // OmniboxClient.
   std::unique_ptr<AutocompleteProviderClient> CreateAutocompleteProviderClient()
       override;
-  std::unique_ptr<OmniboxNavigationObserver> CreateOmniboxNavigationObserver(
-      const std::u16string& text,
-      const AutocompleteMatch& match,
-      const AutocompleteMatch& alternate_nav_match) override;
   bool CurrentPageExists() const override;
   const GURL& GetURL() const override;
   const std::u16string& GetTitle() const override;
@@ -50,20 +49,22 @@ class ChromeOmniboxClient : public OmniboxClient {
   AutocompleteClassifier* GetAutocompleteClassifier() override;
   bool ShouldDefaultTypedNavigationsToHttps() const override;
   int GetHttpsPortForTesting() const override;
+  bool IsUsingFakeHttpsForHttpsUpgradeTesting() const override;
   gfx::Image GetIconIfExtensionMatch(
       const AutocompleteMatch& match) const override;
   gfx::Image GetSizedIcon(const gfx::VectorIcon& vector_icon_type,
                           SkColor vector_icon_color) const override;
   gfx::Image GetSizedIcon(const gfx::Image& icon) const override;
-  bool ProcessExtensionKeyword(const TemplateURL* template_url,
+  bool ProcessExtensionKeyword(const std::u16string& text,
+                               const TemplateURL* template_url,
                                const AutocompleteMatch& match,
-                               WindowOpenDisposition disposition,
-                               OmniboxNavigationObserver* observer) override;
+                               WindowOpenDisposition disposition) override;
   void OnInputStateChanged() override;
   void OnFocusChanged(OmniboxFocusState state,
                       OmniboxFocusChangeReason reason) override;
   void OnResultChanged(const AutocompleteResult& result,
                        bool default_match_changed,
+                       bool should_prerender,
                        const BitmapFetchedCallback& on_bitmap_fetched) override;
   gfx::Image GetFaviconForPageUrl(
       const GURL& page_url,
@@ -83,13 +84,14 @@ class ChromeOmniboxClient : public OmniboxClient {
   void OnBookmarkLaunched() override;
   void DiscardNonCommittedNavigations() override;
   void OpenUpdateChromeDialog() override;
+  void FocusWebContents() override;
+  void OnSelectedMatchChanged(size_t index,
+                              const AutocompleteMatch& match) override;
 
-  // OmniboxAction::Client:
-  void OpenSharingHub() override;
-  void NewIncognitoWindow() override;
-  void OpenIncognitoClearBrowsingDataDialog() override;
-  void CloseIncognitoWindows() override;
-  void PromptPageTranslation() override;
+  // Update shortcuts when a navigation succeeds.
+  static void OnSuccessfulNavigation(Profile* profile,
+                                     const std::u16string& text,
+                                     const AutocompleteMatch& match);
 
  private:
   // Performs prerendering for |match|.
@@ -100,19 +102,15 @@ class ChromeOmniboxClient : public OmniboxClient {
 
   void OnBitmapFetched(const BitmapFetchedCallback& callback,
                        int result_index,
-                       bool is_cached,
-                       base::TimeTicks start_time,
                        const SkBitmap& bitmap);
 
-  ChromeOmniboxEditController* controller_;
-  Profile* profile_;
+  raw_ptr<ChromeOmniboxEditController> controller_;
+  raw_ptr<Profile> profile_;
   ChromeAutocompleteSchemeClassifier scheme_classifier_;
   std::vector<BitmapFetcherService::RequestId> request_ids_;
   FaviconCache favicon_cache_;
 
   base::WeakPtrFactory<ChromeOmniboxClient> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ChromeOmniboxClient);
 };
 
 #endif  // CHROME_BROWSER_UI_OMNIBOX_CHROME_OMNIBOX_CLIENT_H_

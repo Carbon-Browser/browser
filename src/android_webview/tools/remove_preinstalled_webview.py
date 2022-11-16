@@ -1,4 +1,4 @@
-#!/usr/bin/env vpython
+#!/usr/bin/env vpython3
 #
 # Copyright 2018 The Chromium Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
@@ -36,6 +36,7 @@ import sys
 
 sys.path.append(os.path.join(
     os.path.dirname(__file__), os.pardir, os.pardir, 'build', 'android'))
+# pylint: disable=wrong-import-position,import-error
 import devil_chromium
 from devil.android import device_errors
 from devil.android import device_utils
@@ -87,7 +88,7 @@ def RemovePreinstalledWebViews(device):
     UninstallWebViewSystemImages(device)
     CheckWebViewIsUninstalled(device)
   except device_errors.CommandFailedError:
-    if device.adb.is_emulator:
+    if device.is_emulator:
       # Point the user to documentation, since there's a good chance they can
       # workaround this. Use lots of newlines to make sure this message doesn't
       # get lost.

@@ -53,16 +53,15 @@ const char* kSwitchesToPropagate[] = {
 
 std::map<SandboxType, base::Process>* g_target_processes = nullptr;  // Leaked.
 
-scoped_refptr<sandbox::TargetPolicy> GetSandboxPolicy(
+std::unique_ptr<sandbox::TargetPolicy> GetSandboxPolicy(
     sandbox::BrokerServices* sandbox_broker_services) {
-  scoped_refptr<sandbox::TargetPolicy> policy(
-      sandbox_broker_services->CreatePolicy());
+  auto policy = sandbox_broker_services->CreatePolicy();
 
   sandbox::ResultCode sandbox_result = policy->SetTokenLevel(
       sandbox::USER_RESTRICTED_SAME_ACCESS, sandbox::USER_LOCKDOWN);
   CHECK_EQ(sandbox::SBOX_ALL_OK, sandbox_result);
 
-  sandbox_result = policy->SetJobLevel(sandbox::JOB_LOCKDOWN, 0);
+  sandbox_result = policy->SetJobLevel(sandbox::JobLevel::kLockdown, 0);
   CHECK_EQ(sandbox::SBOX_ALL_OK, sandbox_result);
 
 #ifdef NDEBUG
@@ -109,9 +108,8 @@ scoped_refptr<sandbox::TargetPolicy> GetSandboxPolicy(
 
   // This rule is needed to allow user32.dll and gdi32.dll to initialize during
   // load, while still blocking other WIN32K calls.
-  sandbox_result =
-      policy->AddRule(sandbox::TargetPolicy::SUBSYS_WIN32K_LOCKDOWN,
-                      sandbox::TargetPolicy::FAKE_USER_GDI_INIT, nullptr);
+  sandbox_result = policy->AddRule(sandbox::SubSystem::kWin32kLockdown,
+                                   sandbox::Semantics::kFakeGdiInit, nullptr);
   CHECK_EQ(sandbox::SBOX_ALL_OK, sandbox_result);
 
 #if !BUILDFLAG(IS_OFFICIAL_CHROME_CLEANER_BUILD)
@@ -120,8 +118,8 @@ scoped_refptr<sandbox::TargetPolicy> GetSandboxPolicy(
   if (!product_path.value().empty()) {
     // In developer builds, let the sandbox target process write logs to the
     // product directory.
-    sandbox_result = policy->AddRule(sandbox::TargetPolicy::SUBSYS_FILES,
-                                     sandbox::TargetPolicy::FILES_ALLOW_ANY,
+    sandbox_result = policy->AddRule(sandbox::SubSystem::kFiles,
+                                     sandbox::Semantics::kFilesAllowAny,
                                      product_path.Append(L"*").value().c_str());
     LOG_IF(ERROR, sandbox_result != sandbox::SBOX_ALL_OK)
         << "Failed to give the target process access to the product directory";
@@ -222,7 +220,7 @@ ResultCode StartSandboxTarget(const base::CommandLine& sandbox_command_line,
   if (g_target_processes->erase(type))
     DCHECK_EQ(SandboxType::kTest, type);
 
-  base::ScopedClosureRunner notify_hooks_on_failure(base::DoNothing::Once());
+  base::ScopedClosureRunner notify_hooks_on_failure;
 
   if (hooks) {
     // Unretained is safe because |hooks| lives for the entire enclosing scope.
@@ -244,8 +242,7 @@ ResultCode StartSandboxTarget(const base::CommandLine& sandbox_command_line,
     return RESULT_CODE_FAILED_TO_START_SANDBOX_PROCESS;
   }
 
-  scoped_refptr<sandbox::TargetPolicy> policy =
-      GetSandboxPolicy(sandbox_broker_services);
+  auto policy = GetSandboxPolicy(sandbox_broker_services);
   base::CommandLine command_line = sandbox_command_line;
 
   // Create an event so the sandboxed process can notify the broker when it
@@ -276,8 +273,8 @@ ResultCode StartSandboxTarget(const base::CommandLine& sandbox_command_line,
             << command_line.GetArgumentsString();
   sandbox::ResultCode sandbox_result = sandbox_broker_services->SpawnTarget(
       command_line.GetProgram().value().c_str(),
-      command_line.GetCommandLineString().c_str(), policy, &last_sbox_warning,
-      &last_win_error, &temp_process_info);
+      command_line.GetCommandLineString().c_str(), std::move(policy),
+      &last_sbox_warning, &last_win_error, &temp_process_info);
   if (sandbox_result != sandbox::SBOX_ALL_OK) {
     LOG(DFATAL) << "Failed to spawn sandbox target: " << sandbox_result
                 << ", last sandbox warning: " << last_sbox_warning
@@ -356,8 +353,8 @@ ResultCode StartSandboxTarget(const base::CommandLine& sandbox_command_line,
   // global that will be cleaned up by the OS on exit, so that it can be polled
   // in |IsSandboxTargetRunning|.
   g_target_processes->emplace(type, base::Process(std::move(process_handle)));
-  terminate_process_on_failure.ReplaceClosure(base::DoNothing::Once());
-  notify_hooks_on_failure.ReplaceClosure(base::DoNothing::Once());
+  terminate_process_on_failure.ReplaceClosure(base::NullCallback());
+  notify_hooks_on_failure.ReplaceClosure(base::NullCallback());
 
   return RESULT_CODE_SUCCESS;
 }

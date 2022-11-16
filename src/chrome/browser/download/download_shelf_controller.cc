@@ -26,7 +26,7 @@ DownloadShelfController::DownloadShelfController(Profile* profile)
     : profile_(profile) {
   aggregator_ =
       OfflineContentAggregatorFactory::GetForKey(profile_->GetProfileKey());
-  observation_.Observe(aggregator_);
+  observation_.Observe(aggregator_.get());
 }
 
 DownloadShelfController::~DownloadShelfController() = default;
@@ -80,7 +80,7 @@ void DownloadShelfController::OnNewOfflineItemReady(
     DownloadUIModel::DownloadUIModelPtr model) {
   Browser* browser = chrome::FindLastActiveWithProfile(profile_);
 
-  if (browser && browser->window()) {
+  if (browser && browser->window() && browser->window()->GetDownloadShelf()) {
     // Add the offline item to DownloadShelf in the browser window.
     browser->window()->GetDownloadShelf()->AddDownload(std::move(model));
   }

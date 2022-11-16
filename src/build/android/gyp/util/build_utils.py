@@ -14,6 +14,7 @@ import logging
 import os
 import pipes
 import re
+import shlex
 import shutil
 import stat
 import subprocess
@@ -190,7 +191,7 @@ class CalledProcessError(Exception):
   exits with a non-zero exit code."""
 
   def __init__(self, cwd, args, output):
-    super(CalledProcessError, self).__init__()
+    super().__init__()
     self.cwd = cwd
     self.args = args
     self.output = output
@@ -280,18 +281,31 @@ def CheckOutput(args,
 
   has_stdout = print_stdout and stdout
   has_stderr = print_stderr and stderr
-  if fail_on_output and (has_stdout or has_stderr):
-    MSG = """\
-Command failed because it wrote to {}.
-You can often set treat_warnings_as_errors=false to not treat output as \
-failure (useful when developing locally)."""
+  if has_stdout or has_stderr:
     if has_stdout and has_stderr:
       stream_string = 'stdout and stderr'
     elif has_stdout:
       stream_string = 'stdout'
     else:
       stream_string = 'stderr'
-    raise CalledProcessError(cwd, args, MSG.format(stream_string))
+
+    if fail_on_output:
+      MSG = """
+Command failed because it wrote to {}.
+You can often set treat_warnings_as_errors=false to not treat output as \
+failure (useful when developing locally)."""
+      raise CalledProcessError(cwd, args, MSG.format(stream_string))
+
+    MSG = """
+The above {} output was from:
+{}
+"""
+    if sys.version_info.major == 2:
+      joined_args = ' '.join(args)
+    else:
+      joined_args = shlex.join(args)
+
+    sys.stderr.write(MSG.format(stream_string, joined_args))
 
   return stdout
 
@@ -398,12 +412,10 @@ def HermeticZipInfo(*args, **kwargs):
   """
   # The caller may have provided a date_time either as a positional parameter
   # (args[1]) or as a keyword parameter. Use the default hermetic date_time if
-  # none was provided.
-  date_time = None
+  # none was provided. Note that even if date_time is set, it can be None.
+  date_time = kwargs.get('date_time')
   if len(args) >= 2:
     date_time = args[1]
-  elif 'date_time' in kwargs:
-    date_time = kwargs['date_time']
   if not date_time:
     kwargs['date_time'] = HermeticDateTime()
   ret = zipfile.ZipInfo(*args, **kwargs)

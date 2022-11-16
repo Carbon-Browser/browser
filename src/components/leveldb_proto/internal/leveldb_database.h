@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "base/component_export.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_split.h"
 #include "components/leveldb_proto/public/proto_database.h"
 #include "third_party/leveldatabase/env_chromium.h"
@@ -46,6 +47,10 @@ class COMPONENT_EXPORT(LEVELDB_PROTO) LevelDB {
   // for UMA statics as so: LevelDB.<value>.<client name>. It is best to not
   // change once shipped.
   explicit LevelDB(const char* client_name);
+
+  LevelDB(const LevelDB&) = delete;
+  LevelDB& operator=(const LevelDB&) = delete;
+
   virtual ~LevelDB();
 
   // Initializes a leveldb with the given options. If |database_dir| is
@@ -135,9 +140,7 @@ class COMPONENT_EXPORT(LEVELDB_PROTO) LevelDB {
   std::unique_ptr<leveldb::DB> db_;
   base::FilePath database_dir_;
   leveldb_env::Options open_options_;
-  base::HistogramBase* approx_memtable_mem_histogram_;
-
-  DISALLOW_COPY_AND_ASSIGN(LevelDB);
+  raw_ptr<base::HistogramBase> approx_memtable_mem_histogram_;
 };
 
 }  // namespace leveldb_proto

@@ -31,19 +31,20 @@
 #include "third_party/blink/renderer/platform/graphics/picture_snapshot.h"
 
 #include <memory>
-#include "third_party/blink/renderer/platform/geometry/int_size.h"
+#include "base/time/time.h"
 #include "third_party/blink/renderer/platform/graphics/logging_canvas.h"
 #include "third_party/blink/renderer/platform/graphics/profiling_canvas.h"
 #include "third_party/blink/renderer/platform/graphics/replaying_canvas.h"
-#include "third_party/blink/renderer/platform/graphics/skia/image_pixel_locker.h"
 #include "third_party/blink/renderer/platform/image-decoders/image_decoder.h"
 #include "third_party/blink/renderer/platform/image-decoders/image_frame.h"
 #include "third_party/blink/renderer/platform/image-decoders/segment_reader.h"
 #include "third_party/blink/renderer/platform/image-encoders/image_encoder.h"
 #include "third_party/blink/renderer/platform/wtf/text/text_encoding.h"
-
 #include "third_party/skia/include/core/SkImage.h"
 #include "third_party/skia/include/core/SkPictureRecorder.h"
+#include "ui/gfx/geometry/rect_f.h"
+#include "ui/gfx/geometry/size.h"
+#include "ui/gfx/geometry/skia_conversions.h"
 
 namespace blink {
 
@@ -55,25 +56,25 @@ scoped_refptr<PictureSnapshot> PictureSnapshot::Load(
   DCHECK(!tiles.IsEmpty());
   Vector<sk_sp<SkPicture>> pictures;
   pictures.ReserveCapacity(tiles.size());
-  FloatRect union_rect;
+  gfx::RectF union_rect;
   for (const auto& tile_stream : tiles) {
     sk_sp<SkPicture> picture = std::move(tile_stream->picture);
     if (!picture)
       return nullptr;
-    FloatRect cull_rect(picture->cullRect());
-    cull_rect.MoveBy(tile_stream->layer_offset);
-    union_rect.Unite(cull_rect);
+    gfx::RectF cull_rect = gfx::SkRectToRectF(picture->cullRect());
+    cull_rect.Offset(tile_stream->layer_offset.OffsetFromOrigin());
+    union_rect.Union(cull_rect);
     pictures.push_back(std::move(picture));
   }
   if (tiles.size() == 1)
     return base::AdoptRef(new PictureSnapshot(std::move(pictures[0])));
   SkPictureRecorder recorder;
   SkCanvas* canvas =
-      recorder.beginRecording(union_rect.Width(), union_rect.Height());
+      recorder.beginRecording(union_rect.width(), union_rect.height());
   for (wtf_size_t i = 0; i < pictures.size(); ++i) {
     canvas->save();
-    canvas->translate(tiles[i]->layer_offset.X() - union_rect.X(),
-                      tiles[i]->layer_offset.Y() - union_rect.Y());
+    canvas->translate(tiles[i]->layer_offset.x() - union_rect.x(),
+                      tiles[i]->layer_offset.y() - union_rect.y());
     pictures[i]->playback(canvas, nullptr);
     canvas->restore();
   }
@@ -128,7 +129,7 @@ Vector<uint8_t> PictureSnapshot::Replay(unsigned from_step,
 Vector<Vector<base::TimeDelta>> PictureSnapshot::Profile(
     unsigned min_repeat_count,
     base::TimeDelta min_duration,
-    const FloatRect* clip_rect) const {
+    const gfx::RectF* clip_rect) const {
   Vector<Vector<base::TimeDelta>> timings;
   timings.ReserveInitialCapacity(min_repeat_count);
   const SkIRect bounds = picture_->cullRect().roundOut();
@@ -145,9 +146,9 @@ Vector<Vector<base::TimeDelta>> PictureSnapshot::Profile(
       current_timings.ReserveInitialCapacity(timings.front().size());
     ProfilingCanvas canvas(bitmap);
     if (clip_rect) {
-      canvas.clipRect(SkRect::MakeXYWH(clip_rect->X(), clip_rect->Y(),
-                                       clip_rect->Width(),
-                                       clip_rect->Height()));
+      canvas.clipRect(SkRect::MakeXYWH(clip_rect->x(), clip_rect->y(),
+                                       clip_rect->width(),
+                                       clip_rect->height()));
       canvas.ResetStepCount();
     }
     canvas.SetTimings(&current_timings);

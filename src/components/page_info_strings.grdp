@@ -28,7 +28,7 @@
 
   <!-- Internal page summary strings -->
   <!-- Note: IDS_PAGE_INFO_INTERNAL_PAGE would be here, but it is in components_{chromium,google_chrome}_strings.grd because it uses the browser name. -->
-  <message name="IDS_PAGE_INFO_EXTENSION_PAGE" desc="Message to display in the page info bubble when the page you are on is a chrome-extension:// page. This refers to Carbon Browser Browser Browser extensions.">
+  <message name="IDS_PAGE_INFO_EXTENSION_PAGE" desc="Message to display in the page info bubble when the page you are on is a chrome-extension:// page. This refers to Carbon Browser extensions.">
     You're viewing an extension page
   </message>
   <message name="IDS_PAGE_INFO_VIEW_SOURCE_PAGE" desc="Message to display in the page info bubble when you are viewing page sources by using |View page source| option from the right click menu.">
@@ -38,10 +38,10 @@
     You're viewing a developer tools page
   </message>
   <message name="IDS_PAGE_INFO_READER_MODE_PAGE_SECURE" desc="Message to display in the page info bubble when the page you are viewing is the reader mode version of an article which was retrieved over a secure connection.">
-    Carbon Browser Browser Browser simplified this page to make it easier to read. Carbon Browser Browser Browser retrieved the original page over a secure connection.
+    Carbon Browser simplified this page to make it easier to read. Carbon Browser retrieved the original page over a secure connection.
   </message>
   <message name="IDS_PAGE_INFO_READER_MODE_PAGE" desc="Message to display in the page info bubble when the page you are viewing is the reader mode version of an article which was retrieved over an insecure connection.">
-    Carbon Browser Browser Browser simplified this page to make it easier to read. Carbon Browser Browser Browser retrieved the original page over an insecure connection.
+    Carbon Browser simplified this page to make it easier to read. Carbon Browser retrieved the original page over an insecure connection.
   </message>
 
   <!-- Safety Tip summary strings -->
@@ -65,7 +65,7 @@
   </message>
 
   <!-- Accuracy Tip strings -->
-  <message name="IDS_PAGE_INFO_ACCURACY_TIP_TITLE" desc="Message to display in the page info bubble when the page you are on triggered an accuracy tip.">
+  <message name="IDS_PAGE_INFO_ACCURACY_TIP_TITLE" meaning="Text for feature that encourages the user to think about how accurate the content is" desc="With this feature, the user will see a reminder on the page they're visiting that encourages the user to think about how accurate the content is. You may translate 'Accuracy' as 'Trustworthiness' or 'Reliability,' if those terms work better in your language. This text appears in the page info bubble when a user visits a page.">
     Take a moment to consider accuracy
   </message>
   <message name="IDS_PAGE_INFO_ACCURACY_TIP_LEARN_MORE_BUTTON" desc="Text of button to learn more about inaccurate pages. Shown on the accuracy tip page info bubble.">
@@ -77,13 +77,13 @@
   <message name="IDS_PAGE_INFO_ACCURACY_TIP_OPT_OUT_BUTTON" desc="Text of button to close the accuracy tip page info bubble and not show it again.">
     Don't show again
   </message>
-  <message name="IDS_PAGE_INFO_ACCURACY_TIP_BODY_LINE_1" desc="Text shown inside an accuracy tip.">
+  <message name="IDS_PAGE_INFO_ACCURACY_TIP_BODY_LINE_1" meaning="Text for feature that encourages the user to think about how accurate the content is" desc="With this feature, the user will see a reminder on the page they're visiting that encourages the user to think about how accurate the content is. This text appears in the page info bubble when a user visits a page. It is the first item in a bulleted list.">
     Who’s behind this information?
   </message>
-    <message name="IDS_PAGE_INFO_ACCURACY_TIP_BODY_LINE_2" desc="Text shown inside an accuracy tip.">
+  <message name="IDS_PAGE_INFO_ACCURACY_TIP_BODY_LINE_2" meaning="Text for feature that encourages the user to think about how accurate the content is" desc="With this feature, the user will see a reminder on the page they're visiting that encourages the user to think about how accurate the content is. This text appears in the page info bubble when a user visits a page. It is the second item in a bulleted list.">
     What evidence supports it?
   </message>
-    <message name="IDS_PAGE_INFO_ACCURACY_TIP_BODY_LINE_3" desc="Text shown inside an accuracy tip.">
+  <message name="IDS_PAGE_INFO_ACCURACY_TIP_BODY_LINE_3" meaning="Text for feature that encourages the user to think about how accurate the content is" desc="With this feature, the user will see a reminder on the page they're visiting that encourages the user to think about how accurate the content is. This text appears in the page info bubble when a user visits a page. It is the third item in a bulleted list.">
     What do other sources say?
   </message>
 
@@ -97,7 +97,7 @@
     Your information (for example, passwords or credit card numbers) is private when it is sent to this site.
   </message>
   <message name="IDS_PAGE_INFO_SECURE_DETAILS_V2" desc="A short paragraph explaining a secure site to the user.">
-    The site's connection is secure unless Carbon Browser Browser Browser tells you otherwise.
+    The site's connection is secure unless Carbon Browser tells you otherwise.
   </message>
   <message name="IDS_PAGE_INFO_ADMIN_PROVIDED_CERT_DETAILS" desc="A short paragraph explaining a site using an administrator-provided certificate to the user.">
     You have accessed content using an administrator-provided certificate. Data you provide to <ph name="DOMAIN">$1<ex>www.google.com</ex></ph> can be intercepted by your administrator.
@@ -123,39 +123,24 @@
 
   <!-- Identity detail strings shared with iOS -->
   <message name="IDS_PAGE_INFO_SECURITY_TAB_INSECURE_IDENTITY" desc="The text of the identity section when the page is not secure.">
-    The identity of this website has not been verified.
+    The identity of this website isn't verified.
   </message>
 
   <!-- Password Protection strings shared with iOS -->
   <message name="IDS_PAGE_INFO_CHANGE_PASSWORD_SUMMARY" desc="A one-line summary at the top of the Page Info bubble (which shows when you click the security indicator) if user has reuse their google password on current website.">
     Your password may be compromised
   </message>
+  <message name="IDS_PAGE_INFO_CHANGE_PASSWORD_SAVED_PASSWORD_SUMMARY" desc="A one-line summary at the top of the Page Info bubble (which shows when you click the security indicator) if user has reuse a saved password on current website.">
+    Check your passwords
+  </message>
   <if expr="_google_chrome">
-    <message name="IDS_PAGE_INFO_CHANGE_PASSWORD_DETAILS_SAVED" desc="A short paragraph explaining to a Carbon Browser Browser Browser user that they have reused their saved password on the current website.">
-      You just entered your password on a deceptive site. Carbon Browser Browser Browser recommends changing your password now.
-    </message>
-    <message name="IDS_PAGE_INFO_CHECK_PASSWORD_DETAILS_SAVED_1_DOMAIN" desc="A short paragraph explaining to a Carbon Browser Browser Browser user that they have reused their saved password on the current website and to check their password on one domain.">
-      You just entered your password on a deceptive site. Carbon Browser Browser Browser recommends checking your saved passwords for <ph name="WEBSITE_1">$1<ex>www.google.com</ex></ph> and other sites where you use this password now.
-    </message>
-    <message name="IDS_PAGE_INFO_CHECK_PASSWORD_DETAILS_SAVED_2_DOMAIN" desc="A short paragraph explaining to a Carbon Browser Browser Browser user that they have reused their saved password on the current website and to check their password on two domains.">
-      You just entered your password on a deceptive site. Carbon Browser Browser Browser recommends checking your saved passwords for <ph name="WEBSITE_1">$1<ex>www.google.com</ex></ph>, <ph name="WEBSITE_2">$2<ex>www.reddit.com</ex></ph>, and other sites where you use this password now.
-    </message>
-    <message name="IDS_PAGE_INFO_CHECK_PASSWORD_DETAILS_SAVED_3_DOMAIN" desc="A short paragraph explaining to a Carbon Browser Browser Browser user that they have reused their saved password on the current website and to check their password on three domains.">
-      You just entered your password on a deceptive site. Carbon Browser Browser Browser recommends checking your saved passwords for <ph name="WEBSITE_1">$1<ex>www.google.com</ex></ph>, <ph name="WEBSITE_2">$2<ex>www.reddit.com</ex></ph>, <ph name="WEBSITE_3">$3<ex>www.amazon.com</ex></ph>, and other sites where you use this password now.
+    <message name="IDS_PAGE_INFO_CHANGE_PASSWORD_DETAILS_SAVED" desc="A short paragraph explaining to a Carbon Browser user that they have reused their saved password on the current website.">
+      You just entered your password on a deceptive site. To secure your accounts, Carbon Browser recommends checking your saved passwords.
     </message>
   </if>
   <if expr="not _google_chrome">
-    <message name="IDS_PAGE_INFO_CHANGE_PASSWORD_DETAILS_SAVED" desc="A short paragraph explaining to a Carbon Browser Browser Browser user that they have reused their saved password on the current website.">
-      You just entered your password on a deceptive site. Carbon Browser Browser Browser recommends changing your password now.
-    </message>
-    <message name="IDS_PAGE_INFO_CHECK_PASSWORD_DETAILS_SAVED_1_DOMAIN" desc="A short paragraph explaining to a Carbon Browser Browser Browser user that they have reused their saved password on the current website and to check their password on one domain.">
-      You just entered your password on a deceptive site. Carbon Browser Browser Browser recommends checking your saved passwords for <ph name="WEBSITE_1">$1<ex>www.google.com</ex></ph> and other sites where you use this password now.
-    </message>
-    <message name="IDS_PAGE_INFO_CHECK_PASSWORD_DETAILS_SAVED_2_DOMAIN" desc="A short paragraph explaining to a Carbon Browser Browser Browser user that they have reused their saved password on the current website and to check their password on two domains.">
-      You just entered your password on a deceptive site. Carbon Browser Browser Browser recommends checking your saved passwords for <ph name="WEBSITE_1">$1<ex>www.google.com</ex></ph>, <ph name="WEBSITE_2">$2<ex>www.reddit.com</ex></ph>, and other sites where you use this password now.
-    </message>
-    <message name="IDS_PAGE_INFO_CHECK_PASSWORD_DETAILS_SAVED_3_DOMAIN" desc="A short paragraph explaining to a Carbon Browser Browser Browser user that they have reused their saved password on the current website and to check their password on three domains.">
-      You just entered your password on a deceptive site. Carbon Browser Browser Browser recommends checking your saved passwords for <ph name="WEBSITE_1">$1<ex>www.google.com</ex></ph>, <ph name="WEBSITE_2">$2<ex>www.reddit.com</ex></ph>, <ph name="WEBSITE_3">$3<ex>www.amazon.com</ex></ph>, and other sites where you use this password now.
+    <message name="IDS_PAGE_INFO_CHANGE_PASSWORD_DETAILS_SAVED" desc="A short paragraph explaining to a Carbon Browser user that they have reused their saved password on the current website.">
+      You just entered your password on a deceptive site. To secure your accounts, Carbon Browser recommends checking your saved passwords.
     </message>
   </if>
   <if expr="use_titlecase">
@@ -175,10 +160,10 @@
     <!-- Certificate exception decision UI (after clicking through an SSL certificate error) -->
     <!-- TODO(crbug.com/502473): Support revoking certificate overrides on iOS Page Info. -->
     <message name="IDS_PAGE_INFO_INVALID_CERTIFICATE_DESCRIPTION" desc="A short paragraph to the user that security warnings are disabled. This is the case when the user has encountered a certificate error for the current site and chosen to override it.">
-      You have chosen to disable security warnings for this site.
+      You have chosen to turn off security warnings for this site.
     </message>
     <message name="IDS_PAGE_INFO_RESET_INVALID_CERTIFICATE_DECISIONS_BUTTON" desc="Text of button in the page info that resets allow/deny decisions of invalid certificates, which will start showing security warnings for the page again.">
-      Re-enable warnings
+      Turn on warnings
     </message>
 
     <!-- Old connection info UI. Only used on Android, but still compiled on desktop. -->
@@ -241,7 +226,7 @@
       <ph name="CITY">$1<ex>Mountain View</ex></ph>, <ph name="COUNTRY">$2<ex>US</ex></ph>
     </message>
     <message name="IDS_PAGE_INFO_SECURITY_TAB_SECURE_IDENTITY_EV_VERIFIED" desc="Describes the legal entity that the current page's HTTPS certificate was issued to. Shown in the certificate area in the Page Info bubble when a HTTPS site with a valid EV certificate is loaded.">
-      Issued to: <ph name="ORGANIZATION">$1<ex>Carbon Browser X Labs</ex></ph> [<ph name="JURISDICTION">$2<ex>US</ex></ph>]
+      Issued to: <ph name="ORGANIZATION">$1<ex>Carbon X Labs</ex></ph> [<ph name="JURISDICTION">$2<ex>US</ex></ph>]
     </message>
 
     <!-- Certificate Viewer link -->
@@ -282,7 +267,7 @@
     <if expr="is_android">
     <!-- Only used in the dialog shown after tapping "Details" in page info -->
     <message name="IDS_PAGE_INFO_SECURE_IDENTITY_VERIFIED" desc="The text of the identity section when the page is secure and uses a valid certificate">
-      <ph name="BROWSER">$1<ex>Carbon Browser Browser Browser</ex></ph> verified that <ph name="ISSUER">$2<ex>VeriSign</ex></ph> issued this website's certificate.
+      <ph name="BROWSER">$1<ex>Carbon Browser</ex></ph> verified that <ph name="ISSUER">$2<ex>VeriSign</ex></ph> issued this website's certificate.
     </message>
     </if>
 
@@ -390,7 +375,7 @@
       Not allowed
     </message>
     <message name="IDS_PAGE_INFO_STATE_TEXT_NOT_ALLOWED_IN_INCOGNITO" desc="The Page Info permission subpage and the main page info page contain a label which shows the state of the site permission. This is the text shown if the permission is not allowed in private mode.">
-      Not allowed in Private
+      Not allowed in private
     </message>
     <message name="IDS_PAGE_INFO_STATE_TEXT_NOT_ALLOWED_INSECURE" desc="The Page Info permission subpage and the main page info page contain a label which shows the state of the site permission. This is the text shown if the permission is not allowed in non-secure sites.">
       Not allowed for non-secure sites
@@ -456,17 +441,14 @@
     <message name="IDS_PAGE_INFO_STATE_TEXT_FONT_ACCESS_ASK" desc="The Page Info permission subpage and the main page info page contain a label which shows the state of the site permission. This is the text shown if the fonts permission is in the ask state and the site can prompt the user to ask if they allow the site to use fonts installed on your device.">
       Can ask to use fonts installed on your device
     </message>
-    <message name="IDS_PAGE_INFO_STATE_TEXT_FILE_HANDLING_ASK" desc="The Page Info permission subpage and the main page info page contain a label which shows the state of the site permission. This is the text shown if the file handling permission is in the ask state and the site can prompt the user to ask if they allow the site to open types of files.">
-      Can ask to open types of files
-    </message>
     <message name="IDS_PAGE_INFO_STATE_TEXT_SERIAL_ASK" desc="The Page Info permission subpage and the main page info page contain a label which shows the state of the site permission. This is the text shown if the serial permission is in the ask state and the site can prompt the user to ask if they allow the site to connect to serial ports.">
       Can ask to connect to serial ports
     </message>
     <message name="IDS_PAGE_INFO_STATE_TEXT_IDLE_DETECTION_ASK" desc="The Page Info permission subpage and the main page info page contain a label which shows the state of the site permission. This is the text shown if the idle detection permission is in the ask state and the site can prompt the user to ask if they allow the site to know when you're actively using this device.">
       Can ask to know when you're actively using this device
     </message>
-    <message name="IDS_PAGE_INFO_STATE_TEXT_WINDOW_PLACEMENT_ASK" desc="The Page Info permission subpage and the main page info page contain a label which shows the state of the site permission. This is the text shown if the window placement permission is in the ask state and the site can prompt the user to ask if they allow the site to open and place windows on your screens.">
-      Can ask to open and place windows on your screens
+    <message name="IDS_PAGE_INFO_STATE_TEXT_WINDOW_PLACEMENT_ASK" desc="The Page Info permission subpage and the main page info page contain a label which shows the state of the site permission. This is the text shown if the window placement permission is in the ask state and the site can prompt the user to ask if they allow the site to use info about your screens to open and place windows.">
+      Can ask to use info about your screens
     </message>
     <message name="IDS_PAGE_INFO_STATE_TEXT_BLUETOOTH_SCANNING_ASK" desc="The Page Info permission subpage and the main page info page contain a label which shows the state of the site permission. This is the text shown if the bluetooth scanning permission is in the ask state and the site can prompt the user to ask if they allow the site to discover nearby Bluetooth devices.">
       Can ask to discover nearby Bluetooth devices
@@ -500,12 +482,15 @@
     <message name="IDS_PAGE_INFO_HID_DEVICE_SECONDARY_LABEL" desc="The label displayed underneath the device name to inform the user that the permission listed refers to a HID device.">
       HID device
     </message>
+    <message name="IDS_PAGE_INFO_HID_DEVICE_ALLOWED_BY_POLICY_LABEL" desc="The label displayed underneath the device name to inform the user that the item listed is refering to a HID device explicitly allowed by the user's enterprise policy.">
+      HID device allowed by your administrator
+    </message>
     <message name="IDS_PAGE_INFO_DELETE_HID_DEVICE" desc="The tooltip displayed when hovering over the button that will remove permission to access a HID device that the user previously granted to the site.">
       Revoke access
     </message>
 
     <!-- Site settings link -->
-    <message name="IDS_PAGE_INFO_SITE_SETTINGS_LINK" desc="This is the text of the link pointing to Carbon Browser Browser Browser's Site Settings page. This appears at the bottom of the Permissions pane of the Page Information Window.">
+    <message name="IDS_PAGE_INFO_SITE_SETTINGS_LINK" desc="This is the text of the link pointing to Carbon Browser's Site Settings page. This appears at the bottom of the Permissions pane of the Page Information Window.">
       Site settings
     </message>
     <message name="IDS_PAGE_INFO_SITE_SETTINGS_TOOLTIP" desc="The text of the tooltip on IDS_PAGE_INFO_SITE_SETTINGS_LINK.">
@@ -531,7 +516,7 @@
     <message name="IDS_PAGE_INFO_PERMISSION_ASK_BY_EXTENSION" desc="The label used underneath a permission listed in the Page Info bubble if the permission was explicitly set to 'Ask' by one of the user's extensions.">
       Setting controlled by an extension
     </message>
-    <message name="IDS_PAGE_INFO_PERMISSION_AUTOMATICALLY_BLOCKED" desc="The label used underneath a permission listed in the Page Info bubble if the permission was blocked by Carbon Browser Browser Browser on behalf of the user.">
+    <message name="IDS_PAGE_INFO_PERMISSION_AUTOMATICALLY_BLOCKED" desc="The label used underneath a permission listed in the Page Info bubble if the permission was blocked by Carbon Browser on behalf of the user.">
       Automatically blocked
     </message>
     <message name="IDS_PAGE_INFO_PERMISSION_ADS_SUBTITLE" desc="A subtitle shown under the ‘Ads’ setting indicating that a site has, in the past, shown intrusive or misleading ads. Shown when user clicks/taps the lock/'Danger' icon in the address bar. Used on both desktop and Android platforms" formatter_data="android_java">
@@ -557,54 +542,36 @@
     <!-- Password Protection -->
     <if expr="_google_chrome">
       <message name="IDS_PAGE_INFO_CHANGE_PASSWORD_DETAILS" desc="A short paragraph explaining to the user that they has reuse their google password on current website.">
-        You could lose access to your Google Account. Carbon Browser Browser Browser recommends changing your password now. You'll be asked to sign in.
+        You could lose access to your Google Account. Carbon Browser recommends changing your password now. You'll be asked to sign in.
       </message>
-      <message name="IDS_PAGE_INFO_CHANGE_PASSWORD_DETAILS_SAVED_1_DOMAIN" desc="A short paragraph explaining to a Carbon Browser Browser Browser user that they have reused their saved password on the current website and to change their password on one domain.">
-        You just entered your password on a deceptive site. Carbon Browser Browser Browser recommends going to <ph name="WEBSITE_1">$1<ex>www.google.com</ex></ph> and other sites where you use this password and changing it now.
-      </message>
-      <message name="IDS_PAGE_INFO_CHANGE_PASSWORD_DETAILS_SAVED_2_DOMAINS" desc="A short paragraph explaining to a Carbon Browser Browser Browser user that they have reused their saved password on the current website and to change their password on two domains.">
-        You just entered your password on a deceptive site. Carbon Browser Browser Browser recommends going to <ph name="WEBSITE_1">$1<ex>www.google.com</ex></ph>, <ph name="WEBSITE_2">$2<ex>www.reddit.com</ex></ph>, and other sites where you use this password and changing it now.
-      </message>
-      <message name="IDS_PAGE_INFO_CHANGE_PASSWORD_DETAILS_SAVED_3_DOMAINS" desc="A short paragraph explaining to a Carbon Browser Browser Browser user that they have reused their saved password on the current website and to change their password on three domains.">
-        You just entered your password on a deceptive site. Carbon Browser Browser Browser recommends going to <ph name="WEBSITE_1">$1<ex>www.google.com</ex></ph>, <ph name="WEBSITE_2">$2<ex>www.reddit.com</ex></ph>, <ph name="WEBSITE_3">$3<ex>www.amazon.com</ex></ph>, and other sites where you use this password and changing it now.
-      </message>
-      <message name="IDS_PAGE_INFO_CHANGE_PASSWORD_DETAILS_SYNC" desc="A short paragraph explaining to a Carbon Browser Browser Browser sync user that they have reused their Google password on the current website.">
-        Carbon Browser Browser Browser can help you protect your Google Account and change your password.
+      <message name="IDS_PAGE_INFO_CHANGE_PASSWORD_DETAILS_SYNC" desc="A short paragraph explaining to a Carbon Browser sync user that they have reused their Google password on the current website.">
+        Carbon Browser can help you protect your Google Account and change your password.
       </message>
       <message name="IDS_PAGE_INFO_CHANGE_PASSWORD_DETAILS_SIGNED_IN_NON_SYNC" desc="A short paragraph explaining to a non-sync user that they have reused their Google password on the current website.">
-        You just entered your password on a deceptive site. Carbon Browser Browser Browser can help. To change your password and notify Google that your account may be at risk, click Protect Account.
+        You just entered your password on a deceptive site. Carbon Browser can help. To change your password and notify Google that your account may be at risk, click Protect Account.
       </message>
       <message name="IDS_PAGE_INFO_CHANGE_PASSWORD_DETAILS_ENTERPRISE" desc="A short paragraph explaining to the user that they have reused their password on the current website.">
-        You could lose access to your organization's account or experience identity theft. Carbon Browser Browser Browser recommends changing your password now.
+        You could lose access to your organization's account or experience identity theft. Carbon Browser recommends changing your password now.
       </message>
       <message name="IDS_PAGE_INFO_CHANGE_PASSWORD_DETAILS_ENTERPRISE_WITH_ORG_NAME" desc="A short paragraph explaining to the user that they have reused their password on the current website.">
-        You could lose access to your <ph name="ORG_NAME">$1<ex>Google</ex></ph> account or experience identity theft. Carbon Browser Browser Browser recommends changing your password now.
+        You could lose access to your <ph name="ORG_NAME">$1<ex>Google</ex></ph> account or experience identity theft. Carbon Browser recommends changing your password now.
       </message>
     </if>
     <if expr="not _google_chrome">
       <message name="IDS_PAGE_INFO_CHANGE_PASSWORD_DETAILS" desc="A short paragraph explaining to the user that they has reuse their google password on current website.">
-        You could lose access to your Google Account. Carbon Browser Browser Browser recommends changing your password now. You'll be asked to sign in.
+        You could lose access to your Google Account. Carbon Browser recommends changing your password now. You'll be asked to sign in.
       </message>
-      <message name="IDS_PAGE_INFO_CHANGE_PASSWORD_DETAILS_SAVED_1_DOMAIN" desc="A short paragraph explaining to a Carbon Browser Browser Browser user that they have reused their saved password on the current website and to change their password on one domain.">
-        You just entered your password on a deceptive site. Carbon Browser Browser Browser recommends going to <ph name="WEBSITE_1">$1<ex>www.google.com</ex></ph> and other sites where you use this password and changing it now.
-      </message>
-      <message name="IDS_PAGE_INFO_CHANGE_PASSWORD_DETAILS_SAVED_2_DOMAINS" desc="A short paragraph explaining to a Carbon Browser Browser Browser user that they have reused their saved password on the current website and to change their password on two domains.">
-        You just entered your password on a deceptive site. Carbon Browser Browser Browser recommends going to <ph name="WEBSITE_1">$1<ex>www.google.com</ex></ph>, <ph name="WEBSITE_2">$2<ex>www.reddit.com</ex></ph>, and other sites where you use this password and changing it now.
-      </message>
-      <message name="IDS_PAGE_INFO_CHANGE_PASSWORD_DETAILS_SAVED_3_DOMAINS" desc="A short paragraph explaining to a Carbon Browser Browser Browser user that they have reused their saved password on the current website and to change their password on three domains.">
-        You just entered your password on a deceptive site. Carbon Browser Browser Browser recommends going to <ph name="WEBSITE_1">$1<ex>www.google.com</ex></ph>, <ph name="WEBSITE_2">$2<ex>www.reddit.com</ex></ph>, <ph name="WEBSITE_3">$3<ex>www.amazon.com</ex></ph>, and other sites where you use this password and changing it now.
-      </message>
-      <message name="IDS_PAGE_INFO_CHANGE_PASSWORD_DETAILS_SYNC" desc="A short paragraph explaining to a Carbon Browser Browser Browser sync user that they have reused their Google password on the current website.">
-        Carbon Browser Browser Browser can help you protect your Google Account and change your password.
+      <message name="IDS_PAGE_INFO_CHANGE_PASSWORD_DETAILS_SYNC" desc="A short paragraph explaining to a Carbon Browser sync user that they have reused their Google password on the current website.">
+        Carbon Browser can help you protect your Google Account and change your password.
       </message>
       <message name="IDS_PAGE_INFO_CHANGE_PASSWORD_DETAILS_SIGNED_IN_NON_SYNC" desc="A short paragraph explaining to a non-sync user that they have reused their Google password on the current website.">
-        You just entered your password on a deceptive site. Carbon Browser Browser Browser can help. To change your password and notify Google that your account may be at risk, click Protect Account.
+        You just entered your password on a deceptive site. Carbon Browser can help. To change your password and notify Google that your account may be at risk, click Protect Account.
       </message>
       <message name="IDS_PAGE_INFO_CHANGE_PASSWORD_DETAILS_ENTERPRISE" desc="A short paragraph explaining to the user that they have reused their password on the current website.">
-        You could lose access to your organization's account or experience identity theft. Carbon Browser Browser Browser recommends changing your password now.
+        You could lose access to your organization's account or experience identity theft. Carbon Browser recommends changing your password now.
       </message>
       <message name="IDS_PAGE_INFO_CHANGE_PASSWORD_DETAILS_ENTERPRISE_WITH_ORG_NAME" desc="A short paragraph explaining to the user that they have reused their password on the current website.">
-        You could lose access to your <ph name="ORG_NAME">$1<ex>Google</ex></ph> account or experience identity theft. Carbon Browser Browser Browser recommends changing your password now.
+        You could lose access to your <ph name="ORG_NAME">$1<ex>Google</ex></ph> account or experience identity theft. Carbon Browser recommends changing your password now.
       </message>
     </if>
 
@@ -719,5 +686,58 @@
   </message>
   <message name="IDS_PAGE_INFO_RESET_PERMISSIONS" desc="The label of the button to reset permissions for a site.">
     {NUM_PERMISSIONS, plural, =1 {Reset permission} other {Reset permissions}}
+  </message>
+
+  <!-- About this site strings -->
+  <message name="IDS_PAGE_INFO_ABOUT_THIS_SITE_HEADER" desc="The header label of the 'About this site' subpage in Page Info bubble.">
+    From the web
+  </message>
+  <message name="IDS_PAGE_INFO_ABOUT_THIS_PAGE_TITLE" desc="The title of the 'About this page' row in the Page Info bubble.">
+    About this page
+  </message>
+  <message name="IDS_PAGE_INFO_ABOUT_THIS_SITE_TOOLTIP" desc="The tooltip of the button that opens 'About this site' subpage in Page Info bubble.">
+    Show information from the web
+  </message>
+  <message name="IDS_PAGE_INFO_ABOUT_THIS_PAGE_TOOLTIP" desc="The tooltip of the button that opens 'About this page' details in Page Info bubble.">
+    Learn about this page's source &amp; topic
+  </message>
+  <message name="IDS_PAGE_INFO_ABOUT_THIS_SITE_SUBPAGE_FROM_LABEL" desc="The label containing the source of the description in the 'About this site' subpage in Page Info bubble.">
+    From <ph name="SOURCE_NAME">$1<ex>Wikipedia</ex></ph>
+  </message>
+  <!-- History strings -->
+  <message name="IDS_PAGE_INFO_HISTORY" desc="The button label of the 'History' row in Page Info bubble. The button opens history page for the site.">
+    History
+  </message>
+  <message name="IDS_PAGE_INFO_HISTORY_LAST_VISIT_TODAY" desc="Summary string for page info history row. The site was last visited today.">
+    Last visited today
+  </message>
+  <message name="IDS_PAGE_INFO_HISTORY_LAST_VISIT_YESTERDAY" desc="Summary string for page info history row. The site was last visited yesterday.">
+    Last visited yesterday
+  </message>
+  <message name="IDS_PAGE_INFO_HISTORY_LAST_VISIT_DAYS" desc="Summary string for page info history row. The site was last visited NUM_DAYS days ago.">
+    Last visited <ph name="NUM_DAYS">$1<ex>2</ex></ph> days ago
+  </message>
+  <message name="IDS_PAGE_INFO_HISTORY_LAST_VISIT_DATE" desc="Summary string for page info history row. The site was last visited on a particular date.">
+    Last visited <ph name="DATE">$1<ex>Apr 4, 2021</ex></ph>
+  </message>
+
+  <!-- Ad personalization strings -->
+  <message name="IDS_PAGE_INFO_AD_PERSONALIZATION_HEADER" desc="The header label of the 'Ad personalization' subpage in Page Info bubble.">
+    Ad personalization
+  </message>
+  <message name="IDS_PAGE_INFO_AD_PERSONALIZATION_TOOLTIP" desc="The tooltip of the button that opens the 'Ad personalization' subpage in Page Info bubble.">
+    Show ad personalization details
+  </message>
+  <message name="IDS_PAGE_INFO_AD_PERSONALIZATION_TOPICS_AND_INTEREST_GROUP_DESCRIPTION" desc="The description label that explains to the user that the current site has accessed the Topics API and joined the user to an interest group. The label is located in 'Ad personalization' subpage in page info bubble.">
+    This site defines interests other sites can use to show you ads. This site also gets your interests from Carbon Browser to show you more relevant ads.
+  </message>
+  <message name="IDS_PAGE_INFO_AD_PERSONALIZATION_TOPICS_DESCRIPTION"  desc="The description label that explains to the user that the current site has accessed the Topics API. The label is located in 'Ad personalization' subpage in page info bubble.">
+   This site gets your interests from Carbon Browser to show you more relevant ads
+  </message>
+  <message name="IDS_PAGE_INFO_AD_PERSONALIZATION_INTEREST_GROUP_DESCRIPTION" desc="The description label that explains to the user that the current site has joined the user to an interest group. The label is located in 'Ad personalization' subpage in page info bubble.">
+    This site defines interests other sites can use to show you ads
+  </message>
+  <message name="IDS_PAGE_INFO_AD_PERSONALIZATION_SUBPAGE_MANAGE_BUTTON" desc="The text on the button, that opens privacy sandbox settings page, in 'Ad personalization' subpage in page info bubble. ">
+    Manage interests
   </message>
 </grit-part>

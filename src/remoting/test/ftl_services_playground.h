@@ -9,7 +9,6 @@
 #include <string>
 
 #include "base/callback_forward.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "remoting/base/oauth_token_getter.h"
 #include "remoting/signaling/ftl_messaging_client.h"
@@ -31,6 +30,10 @@ class TestTokenStorage;
 class FtlServicesPlayground {
  public:
   FtlServicesPlayground();
+
+  FtlServicesPlayground(const FtlServicesPlayground&) = delete;
+  FtlServicesPlayground& operator=(const FtlServicesPlayground&) = delete;
+
   ~FtlServicesPlayground();
 
   bool ShouldPrintHelp();
@@ -77,7 +80,6 @@ class FtlServicesPlayground {
   base::OnceClosure receive_messages_done_callback_;
 
   base::WeakPtrFactory<FtlServicesPlayground> weak_factory_{this};
-  DISALLOW_COPY_AND_ASSIGN(FtlServicesPlayground);
 };
 
 }  // namespace remoting

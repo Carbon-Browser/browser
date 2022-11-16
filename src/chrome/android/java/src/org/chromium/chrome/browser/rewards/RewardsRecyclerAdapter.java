@@ -47,6 +47,7 @@ import android.widget.PopupWindow;
 import android.os.Handler;
 import android.os.Looper;
 import java.lang.Runnable;
+import androidx.appcompat.widget.AppCompatImageButton;
 import android.graphics.Color;
 
 public class RewardsRecyclerAdapter extends RecyclerView.Adapter<RewardsRecyclerAdapter.ViewHolder> implements RewardsAPIBridge.RewardsAPIBridgeCommunicator {
@@ -59,12 +60,15 @@ public class RewardsRecyclerAdapter extends RecyclerView.Adapter<RewardsRecycler
     private TextView mErrorMessageTextView;
     private LinearLayout mLoadingIndicator;
     private PopupWindow mPopup;
+    private RewardsCommunicator mRewardsCommunicator;
 
     // data is passed into the constructor
-    public RewardsRecyclerAdapter(Context context, LinearLayout loadingIndicator, TextView errorMessageTextView, PopupWindow popup) {
+    public RewardsRecyclerAdapter(Context context, LinearLayout loadingIndicator, TextView errorMessageTextView, PopupWindow popup, RewardsCommunicator communicator) {
         this.mInflater = LayoutInflater.from(context);
 
         if (mPrefs == null) mPrefs = ContextUtils.getAppSharedPreferences();
+
+        mRewardsCommunicator = communicator;
 
         mLoadingIndicator = loadingIndicator;
         mErrorMessageTextView = errorMessageTextView;
@@ -138,13 +142,30 @@ public class RewardsRecyclerAdapter extends RecyclerView.Adapter<RewardsRecycler
             });
 
         TextView mRewardMonetary = view.findViewById(R.id.reward_monetary_value);
-        mRewardMonetary.setText("$"+mRewardObject.valueDollar + " USD");
+
+        String rewardPointsString = mRewardObject.valueDollar + " $CSIX";
+        if (mRewardObject.valueDollar < mRewardObject.valuePoints) {
+            rewardPointsString = "$" + mRewardObject.valueDollar + " in $CSIX";
+        }
+
+        mRewardMonetary.setText(rewardPointsString);
 
         TextView mRewardName = view.findViewById(R.id.reward_name);
         mRewardName.setText(mRewardObject.name);
 
-        // TextView mRewardPoints = view.findViewById(R.id.reward_points_value);
-        // mRewardPoints.setText(mRewardObject.valuePoints + " pts");
+        if (mRewardObject.name.equals("Carbon PRO (6mo)")) {
+            AppCompatImageButton mProHelpBtn = view.findViewById(R.id.pro_help_btn);
+            mProHelpBtn.setVisibility(View.VISIBLE);
+
+            mProHelpBtn.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View view) {
+                    mRewardsCommunicator.loadRewardsUrl("https://trycarbon.io/#pro", view);
+
+                    mPopup.dismiss();
+                }
+            });
+        }
 
         LinearLayout mRedeemButton = view.findViewById(R.id.reward_redeem_button);
         if (RewardsAPIBridge.getInstance().getTotalCreditBalance() < mRewardObject.valuePoints) {
@@ -157,7 +178,7 @@ public class RewardsRecyclerAdapter extends RecyclerView.Adapter<RewardsRecycler
                 intent.setClass(view.getContext(), RewardsRedeemActivity.class);
 
                 intent.putExtra("rewardImageUrl", imageUrl);
-                intent.putExtra("rewardValueDollar", "$"+mRewardObject.valueDollar+ " USD");
+                intent.putExtra("rewardValueDollar", mRewardObject.valueDollar+ " $CSIX");
                 intent.putExtra("rewardValuePoints", mRewardObject.valuePoints);
                 intent.putExtra("rewardName", mRewardObject.name);
                 intent.putExtra("rewardId", mRewardObject.id);

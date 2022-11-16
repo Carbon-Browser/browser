@@ -32,9 +32,9 @@ TEST_F(AppLaunchingStateTest, TestUpdateWithLaunchRequest) {
   EXPECT_EQ(2, state.consecutiveLaunchesCount);
   [state updateWithLaunchRequest];
   EXPECT_EQ(3, state.consecutiveLaunchesCount);
-  // Wait for more than |maxSecondsBetweenLaunches|.
+  // Wait for more than `maxSecondsBetweenLaunches`.
   base::test::ios::SpinRunLoopWithMinDelay(
-      base::TimeDelta::FromSecondsD(maxSecondsBetweenLaunches + 0.1));
+      base::Seconds(maxSecondsBetweenLaunches + 0.1));
   // consecutiveLaunchesCount should reset.
   [state updateWithLaunchRequest];
   EXPECT_EQ(1, state.consecutiveLaunchesCount);

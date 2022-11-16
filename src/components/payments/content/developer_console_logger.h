@@ -5,7 +5,6 @@
 #ifndef COMPONENTS_PAYMENTS_CONTENT_DEVELOPER_CONSOLE_LOGGER_H_
 #define COMPONENTS_PAYMENTS_CONTENT_DEVELOPER_CONSOLE_LOGGER_H_
 
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "components/payments/core/error_logger.h"
 
@@ -19,6 +18,10 @@ namespace payments {
 class DeveloperConsoleLogger : public ErrorLogger {
  public:
   explicit DeveloperConsoleLogger(content::WebContents* web_contents);
+
+  DeveloperConsoleLogger(const DeveloperConsoleLogger&) = delete;
+  DeveloperConsoleLogger& operator=(const DeveloperConsoleLogger&) = delete;
+
   ~DeveloperConsoleLogger() override;
 
   // Gets the WebContents being logged to.
@@ -30,8 +33,6 @@ class DeveloperConsoleLogger : public ErrorLogger {
 
  private:
   base::WeakPtr<content::WebContents> web_contents_;
-
-  DISALLOW_COPY_AND_ASSIGN(DeveloperConsoleLogger);
 };
 
 }  // namespace payments

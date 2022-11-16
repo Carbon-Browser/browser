@@ -9,6 +9,7 @@
 #include <utility>
 
 #include "base/component_export.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/memory/scoped_refptr.h"
 #include "ui/gfx/x/xproto.h"
@@ -25,8 +26,9 @@ void ReadEvent(Event* event, Connection* connection, ReadBuffer* buffer);
 class COMPONENT_EXPORT(X11) Event {
  public:
   template <typename T>
-  explicit Event(T&& xproto_event) {
+  Event(bool send_event, T&& xproto_event) {
     using DecayT = std::decay_t<T>;
+    send_event_ = send_event;
     sequence_ = xproto_event.sequence;
     type_id_ = DecayT::type_id;
     deleter_ = [](void* event) { delete reinterpret_cast<DecayT*>(event); };
@@ -53,7 +55,7 @@ class COMPONENT_EXPORT(X11) Event {
   template <typename T>
   T* As() {
     if (type_id_ == T::type_id)
-      return reinterpret_cast<T*>(event_);
+      return reinterpret_cast<T*>(event_.get());
     return nullptr;
   }
 
@@ -61,6 +63,8 @@ class COMPONENT_EXPORT(X11) Event {
   const T* As() const {
     return const_cast<Event*>(this)->As<T>();
   }
+
+  bool send_event() const { return send_event_; }
 
   uint32_t sequence() const { return sequence_; }
 
@@ -79,16 +83,19 @@ class COMPONENT_EXPORT(X11) Event {
 
   void Dealloc();
 
+  // True if this event was sent from another X client.  False if this event
+  // was sent by the X server.
+  bool send_event_ = false;
   uint16_t sequence_ = 0;
 
   // XProto event state.
   int type_id_ = 0;
   void (*deleter_)(void*) = nullptr;
-  void* event_ = nullptr;
+  raw_ptr<void, DanglingUntriaged> event_ = nullptr;
 
   // This member points to a field in |event_|, or may be nullptr if there's no
   // associated window for the event.  It's owned by |event_|, not us.
-  Window* window_ = nullptr;
+  raw_ptr<Window, DanglingUntriaged> window_ = nullptr;
 };
 
 }  // namespace x11

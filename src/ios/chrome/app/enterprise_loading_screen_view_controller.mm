@@ -4,6 +4,7 @@
 
 #import "ios/chrome/app/enterprise_loading_screen_view_controller.h"
 
+#import "ios/chrome/browser/ui/first_run/first_run_constants.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
 #include "ios/chrome/common/ui/util/dynamic_type_util.h"
@@ -23,7 +24,8 @@ constexpr CGFloat kLogoMultiplier = 0.381966;
 constexpr CGFloat kBrandWidth = 107;
 
 constexpr CGFloat kStatusWidth = 195;
-
+constexpr CGFloat kSpacingHeight = 10;
+constexpr CGFloat kPaddingHeight = 50;
 }  // namespace
 
 @interface EnterpriseLoadScreenViewController ()
@@ -39,6 +41,8 @@ constexpr CGFloat kStatusWidth = 195;
 
 - (void)viewDidLoad {
   [super viewDidLoad];
+  self.view.accessibilityIdentifier =
+      first_run::kEnterpriseLoadingScreenAccessibilityIdentifier;
 
   self.view.backgroundColor = [UIColor colorNamed:kBackgroundColor];
 
@@ -115,18 +119,31 @@ constexpr CGFloat kStatusWidth = 195;
       UIContentSizeCategoryExtraExtraExtraLarge);
 
   self.loadingLabel.numberOfLines = 0;
-  self.loadingLabel.textColor = [UIColor colorNamed:kGrey600Color];
+  self.loadingLabel.textColor = [UIColor colorNamed:kTextSecondaryColor];
   self.loadingLabel.textAlignment = NSTextAlignmentCenter;
 
   UIActivityIndicatorView* spinner = [[UIActivityIndicatorView alloc] init];
   [spinner startAnimating];
 
-  UIStackView* statusStackView = [[UIStackView alloc]
-      initWithArrangedSubviews:@[ spinner, self.loadingLabel ]];
+  UIView* spacing = [[UIView alloc] init];
+  spacing.translatesAutoresizingMaskIntoConstraints = NO;
+
+  UIView* bottomPadding = [[UIView alloc] init];
+  bottomPadding.translatesAutoresizingMaskIntoConstraints = NO;
+
+  UIStackView* statusStackView =
+      [[UIStackView alloc] initWithArrangedSubviews:@[
+        spinner, spacing, self.loadingLabel, bottomPadding
+      ]];
   statusStackView.axis = UILayoutConstraintAxisVertical;
   statusStackView.translatesAutoresizingMaskIntoConstraints = NO;
   statusStackView.alignment = UIStackViewAlignmentCenter;
   statusStackView.spacing = UIStackViewSpacingUseSystem;
+
+  [NSLayoutConstraint activateConstraints:@[
+    [spacing.heightAnchor constraintEqualToConstant:kSpacingHeight],
+    [bottomPadding.heightAnchor constraintEqualToConstant:kPaddingHeight]
+  ]];
   return statusStackView;
 }
 

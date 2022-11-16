@@ -8,15 +8,19 @@
 
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
-#include "chrome/browser/chromeos/printing/cups_print_job.h"
-#include "chrome/browser/chromeos/printing/history/print_job_info.pb.h"
+#include "chrome/browser/ash/printing/cups_print_job.h"
+#include "chrome/browser/ash/printing/history/print_job_info.pb.h"
 #include "chrome/browser/chromeos/printing/printer_error_codes.h"
 #include "url/gurl.h"
 
-namespace chromeos {
+namespace ash {
 namespace printing {
 namespace print_management {
 namespace {
+
+namespace mojom = printing_manager::mojom;
+
+using ::chromeos::PrinterErrorCode;
 
 mojom::PrintJobCompletionStatus PrintJobStatusProtoToMojom(
     proto::PrintJobInfo_PrintJobStatus print_job_status_proto) {
@@ -82,6 +86,8 @@ mojom::PrinterErrorCode PrinterErrorCodeProtoToMojom(
       return mojom::PrinterErrorCode::kFilterFailed;
     case proto::PrintJobInfo_PrinterErrorCode_UNKNOWN_ERROR:
       return mojom::PrinterErrorCode::kUnknownError;
+    case proto::PrintJobInfo_PrinterErrorCode_CLIENT_UNAUTHORIZED:
+      return mojom::PrinterErrorCode::kClientUnauthorized;
     case proto::
         PrintJobInfo_PrinterErrorCode_PrintJobInfo_PrinterErrorCode_INT_MIN_SENTINEL_DO_NOT_USE_:
     case proto::
@@ -116,6 +122,8 @@ mojom::PrinterErrorCode PrinterErrorCodeToMojom(PrinterErrorCode error_code) {
       return mojom::PrinterErrorCode::kFilterFailed;
     case PrinterErrorCode::UNKNOWN_ERROR:
       return mojom::PrinterErrorCode::kUnknownError;
+    case PrinterErrorCode::CLIENT_UNAUTHORIZED:
+      return mojom::PrinterErrorCode::kClientUnauthorized;
   }
   return mojom::PrinterErrorCode::kUnknownError;
 }
@@ -170,4 +178,4 @@ mojom::PrintJobInfoPtr CupsPrintJobToMojom(const CupsPrintJob& job) {
 
 }  // namespace print_management
 }  // namespace printing
-}  // namespace chromeos
+}  // namespace ash

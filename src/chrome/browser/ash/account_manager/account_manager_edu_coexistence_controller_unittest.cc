@@ -14,7 +14,6 @@
 #include "base/values.h"
 #include "chrome/browser/ash/child_accounts/edu_coexistence_tos_store_utils.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/supervised_user/supervised_user_constants.h"
 #include "chrome/browser/ui/webui/chromeos/edu_coexistence/edu_coexistence_login_handler_chromeos.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
@@ -55,20 +54,16 @@ const AccountId kDeviceAccount =
 
 ::account_manager::Account GetAccountFor(const std::string& email,
                                          const std::string& gaia_id) {
-  ::account_manager::Account account;
-  account.raw_email = email;
-  account.key.id = gaia_id;
-  account.key.account_type = account_manager::AccountType::kGaia;
-  return account;
+  ::account_manager::AccountKey key(gaia_id,
+                                    ::account_manager::AccountType::kGaia);
+  return {key, email};
 }
 
 void AddAccount(account_manager::AccountManager* account_manager,
                 const std::string& email,
                 const std::string& gaia_id) {
-  ::account_manager::AccountKey account_key;
-  account_key.id = gaia_id;
-  account_key.account_type = account_manager::AccountType::kGaia;
-
+  ::account_manager::AccountKey account_key(
+      gaia_id, ::account_manager::AccountType::kGaia);
   account_manager->UpsertAccount(account_key, email, kValidToken);
 }
 
@@ -112,7 +107,7 @@ class AccountManagerEducoexistenceControllerTest : public testing::Test {
 };
 
 void AccountManagerEducoexistenceControllerTest::SetUp() {
-  testing_profile_.SetSupervisedUserId(supervised_users::kChildAccountSUID);
+  testing_profile_.SetIsSupervisedProfile();
   account_manager_ = g_browser_process->platform_part()
                          ->GetAccountManagerFactory()
                          ->GetAccountManager(profile()->GetPath().value());

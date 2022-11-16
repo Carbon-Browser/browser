@@ -13,6 +13,7 @@
 #include "components/autofill_assistant/browser/actions/action_delegate_util.h"
 #include "components/autofill_assistant/browser/client_status.h"
 #include "components/autofill_assistant/browser/user_data_util.h"
+#include "components/autofill_assistant/browser/web/element_finder_result.h"
 #include "components/autofill_assistant/browser/web/web_controller.h"
 
 namespace autofill_assistant {
@@ -55,7 +56,7 @@ void SelectOptionAction::InternalProcessAction(ProcessActionCallback callback) {
       break;
     case SelectOptionProto::kAutofillRegexpValue: {
       ClientStatus autofill_status = user_data::GetFormattedClientValue(
-          select_option.autofill_regexp_value(), delegate_->GetUserData(),
+          select_option.autofill_regexp_value(), *delegate_->GetUserData(),
           &value_);
       if (!autofill_status.ok()) {
         EndAction(autofill_status);

@@ -11,12 +11,11 @@
 #include <utility>
 #include <vector>
 
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/timer/timer.h"
+#include "chromeos/ash/components/network/network_configuration_observer.h"
+#include "chromeos/ash/components/network/network_metadata_observer.h"
 #include "chromeos/components/sync_wifi/network_identifier.h"
-#include "chromeos/network/network_configuration_observer.h"
-#include "chromeos/network/network_metadata_observer.h"
 #include "components/sync/base/model_type.h"
 #include "components/sync/model/model_type_store.h"
 #include "components/sync/model/model_type_sync_bridge.h"
@@ -58,6 +57,10 @@ class WifiConfigurationBridge : public syncer::ModelTypeSyncBridge,
       PrefService* pref_service,
       std::unique_ptr<syncer::ModelTypeChangeProcessor> change_processor,
       syncer::OnceModelTypeStoreFactory create_store_callback);
+
+  WifiConfigurationBridge(const WifiConfigurationBridge&) = delete;
+  WifiConfigurationBridge& operator=(const WifiConfigurationBridge&) = delete;
+
   ~WifiConfigurationBridge() override;
 
   static void RegisterPrefs(PrefRegistrySimple* registry);
@@ -75,6 +78,8 @@ class WifiConfigurationBridge : public syncer::ModelTypeSyncBridge,
   void GetAllDataForDebugging(DataCallback callback) override;
   std::string GetClientTag(const syncer::EntityData& entity_data) override;
   std::string GetStorageKey(const syncer::EntityData& entity_data) override;
+  void ApplyStopSyncChanges(std::unique_ptr<syncer::MetadataChangeList>
+                                delete_metadata_change_list) override;
 
   // NetworkMetadataObserver:
   void OnFirstConnectionToNetwork(const std::string& guid) override;
@@ -163,8 +168,6 @@ class WifiConfigurationBridge : public syncer::ModelTypeSyncBridge,
   base::WeakPtr<NetworkMetadataStore> network_metadata_store_;
 
   base::WeakPtrFactory<WifiConfigurationBridge> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(WifiConfigurationBridge);
 };
 
 }  // namespace sync_wifi

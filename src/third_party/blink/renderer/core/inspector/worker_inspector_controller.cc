@@ -30,7 +30,7 @@
 
 #include "third_party/blink/renderer/core/inspector/worker_inspector_controller.h"
 
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/renderer/core/core_probe_sink.h"
 #include "third_party/blink/renderer/core/inspector/devtools_session.h"
 #include "third_party/blink/renderer/core/inspector/inspector_audits_agent.h"
@@ -40,7 +40,6 @@
 #include "third_party/blink/renderer/core/inspector/inspector_media_agent.h"
 #include "third_party/blink/renderer/core/inspector/inspector_network_agent.h"
 #include "third_party/blink/renderer/core/inspector/inspector_trace_events.h"
-#include "third_party/blink/renderer/core/inspector/protocol/Protocol.h"
 #include "third_party/blink/renderer/core/inspector/worker_devtools_params.h"
 #include "third_party/blink/renderer/core/inspector/worker_thread_debugger.h"
 #include "third_party/blink/renderer/core/loader/worker_fetch_context.h"
@@ -117,17 +116,16 @@ void WorkerInspectorController::AttachSession(DevToolsSession* session,
     thread_->GetWorkerBackingThread().BackingThread().AddTaskObserver(this);
   session->ConnectToV8(debugger_->GetV8Inspector(),
                        debugger_->ContextGroupId(thread_));
-  session->Append(MakeGarbageCollected<InspectorLogAgent>(
-      thread_->GetConsoleMessageStorage(), nullptr, session->V8Session()));
+  session->CreateAndAppend<InspectorLogAgent>(
+      thread_->GetConsoleMessageStorage(), nullptr, session->V8Session());
   if (auto* scope = DynamicTo<WorkerGlobalScope>(thread_->GlobalScope())) {
-    auto* network_agent = MakeGarbageCollected<InspectorNetworkAgent>(
+    auto* network_agent = session->CreateAndAppend<InspectorNetworkAgent>(
         inspected_frames_.Get(), scope, session->V8Session());
-    session->Append(network_agent);
-    session->Append(MakeGarbageCollected<InspectorEmulationAgent>(nullptr));
-    session->Append(MakeGarbageCollected<InspectorAuditsAgent>(
-        network_agent, thread_->GetInspectorIssueStorage(), nullptr));
-    session->Append(MakeGarbageCollected<InspectorMediaAgent>(
-        inspected_frames_.Get(), scope));
+    session->CreateAndAppend<InspectorEmulationAgent>(nullptr);
+    session->CreateAndAppend<InspectorAuditsAgent>(
+        network_agent, thread_->GetInspectorIssueStorage(), nullptr);
+    session->CreateAndAppend<InspectorMediaAgent>(inspected_frames_.Get(),
+                                                  scope);
   }
   ++session_count_;
 }

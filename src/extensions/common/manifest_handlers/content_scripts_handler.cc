@@ -10,7 +10,6 @@
 
 #include "base/files/file_util.h"
 #include "base/lazy_instance.h"
-#include "base/macros.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
@@ -42,20 +41,6 @@ using ContentScriptsKeys = content_scripts_api::ManifestKeys;
 
 namespace {
 
-mojom::RunLocation ConvertRunLocation(content_scripts_api::RunAt run_at) {
-  switch (run_at) {
-    case content_scripts_api::RUN_AT_DOCUMENT_END:
-      return mojom::RunLocation::kDocumentEnd;
-    case content_scripts_api::RUN_AT_DOCUMENT_IDLE:
-      return mojom::RunLocation::kDocumentIdle;
-    case content_scripts_api::RUN_AT_DOCUMENT_START:
-      return mojom::RunLocation::kDocumentStart;
-    case content_scripts_api::RUN_AT_NONE:
-      NOTREACHED();
-      return mojom::RunLocation::kDocumentIdle;
-  }
-}
-
 void ParseGlobs(const std::vector<std::string>* include_globs,
                 const std::vector<std::string>* exclude_globs,
                 UserScript* result) {
@@ -83,33 +68,41 @@ std::unique_ptr<UserScript> CreateUserScript(
   auto result = std::make_unique<UserScript>();
 
   // run_at
-  if (content_script.run_at != content_scripts_api::RUN_AT_NONE)
-    result->set_run_location(ConvertRunLocation(content_script.run_at));
+  if (content_script.run_at != content_scripts_api::RUN_AT_NONE) {
+    result->set_run_location(
+        script_parsing::ConvertManifestRunLocation(content_script.run_at));
+  }
 
   // all_frames
   if (content_script.all_frames)
     result->set_match_all_frames(*content_script.all_frames);
 
-  // match_origin_as_fallback
-  bool has_match_origin_as_fallback = false;
+  // match_origin_as_fallback and match_about_blank.
+  // Note: `match_about_blank` is ignored if `match_origin_as_fallback` was
+  // specified. `match_origin_as_fallback` can only be specified for extensions
+  // running manifest version 3 or higher. `match_about_blank` can be specified
+  // by any extensions (and is used by MV3+ extensions for compatibility).
+  absl::optional<MatchOriginAsFallbackBehavior> match_origin_as_fallback;
+
   if (content_script.match_origin_as_fallback &&
       base::FeatureList::IsEnabled(
           extensions_features::kContentScriptsMatchOriginAsFallback)) {
-    has_match_origin_as_fallback = true;
-    result->set_match_origin_as_fallback(
-        *content_script.match_origin_as_fallback
-            ? MatchOriginAsFallbackBehavior::kAlways
-            : MatchOriginAsFallbackBehavior::kNever);
+    if (extension->manifest_version() >= 3) {
+      match_origin_as_fallback = *content_script.match_origin_as_fallback
+                                     ? MatchOriginAsFallbackBehavior::kAlways
+                                     : MatchOriginAsFallbackBehavior::kNever;
+    } else {
+      extension->AddInstallWarning(
+          InstallWarning(errors::kMatchOriginAsFallbackRestrictedToMV3,
+                         ContentScriptsKeys::kContentScripts));
+    }
   }
 
-  // match_about_blank
-  // Note: match_about_blank is ignored if |match_origin_as_fallback| was
-  // specified.
-  if (!has_match_origin_as_fallback && content_script.match_about_blank) {
-    result->set_match_origin_as_fallback(
+  if (!match_origin_as_fallback && content_script.match_about_blank) {
+    match_origin_as_fallback =
         *content_script.match_about_blank
             ? MatchOriginAsFallbackBehavior::kMatchForAboutSchemeAndClimbTree
-            : MatchOriginAsFallbackBehavior::kNever);
+            : MatchOriginAsFallbackBehavior::kNever;
   }
 
   bool wants_file_access = false;
@@ -120,6 +113,26 @@ std::unique_ptr<UserScript> CreateUserScript(
           all_urls_includes_chrome_urls, result.get(), error,
           &wants_file_access)) {
     return nullptr;
+  }
+
+  if (match_origin_as_fallback) {
+    // If the extension is using `match_origin_as_fallback`, we require the
+    // pattern to match all paths. This is because origins don't have a path;
+    // thus, if an extension specified `"match_origin_as_fallback": true` for
+    // a pattern of `"https://google.com/maps/*"`, this script would also run
+    // on about:blank, data:, etc frames from https://google.com (because in
+    // both cases, the precursor origin is https://google.com).
+    if (match_origin_as_fallback == MatchOriginAsFallbackBehavior::kAlways) {
+      for (const auto& pattern : result->url_patterns()) {
+        if (pattern.path() != "/*") {
+          *error =
+              base::ASCIIToUTF16(errors::kMatchOriginAsFallbackCantHavePaths);
+          return nullptr;
+        }
+      }
+    }
+
+    result->set_match_origin_as_fallback(*match_origin_as_fallback);
   }
 
   if (wants_file_access)

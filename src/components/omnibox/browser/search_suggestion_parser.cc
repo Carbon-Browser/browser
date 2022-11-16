@@ -10,13 +10,14 @@
 #include <memory>
 
 #include "base/check.h"
+#include "base/containers/contains.h"
+#include "base/containers/fixed_flat_map.h"
 #include "base/i18n/icu_string_conversions.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_string_value_serializer.h"
 #include "base/json/json_writer.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/no_destructor.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
@@ -27,6 +28,7 @@
 #include "components/omnibox/browser/autocomplete_match_classification.h"
 #include "components/omnibox/browser/autocomplete_provider.h"
 #include "components/omnibox/browser/omnibox_field_trial.h"
+#include "components/omnibox/browser/suggestion_group.h"
 #include "components/omnibox/browser/url_prefix.h"
 #include "components/url_formatter/url_fixer.h"
 #include "components/url_formatter/url_formatter.h"
@@ -72,7 +74,7 @@ std::vector<std::vector<int>> ParseMatchSubtypes(
 
   if (subtypes_value == nullptr || !subtypes_value->is_list())
     return result;
-  const auto& subtypes_list = subtypes_value->GetList();
+  auto subtypes_list = subtypes_value->GetListDeprecated();
 
   if (!subtypes_list.empty() && subtypes_list.size() != expected_size) {
     LOG(WARNING) << "The length of reported subtypes (" << subtypes_list.size()
@@ -87,7 +89,7 @@ std::vector<std::vector<int>> ParseMatchSubtypes(
     if (!subtypes_item.is_list())
       continue;
 
-    const auto& subtype_list = subtypes_item.GetList();
+    auto subtype_list = subtypes_item.GetListDeprecated();
     auto& result_subtypes = result[index];
     result_subtypes.reserve(subtype_list.size());
 
@@ -102,10 +104,50 @@ std::vector<std::vector<int>> ParseMatchSubtypes(
   return result;
 }
 
-}  // namespace
+std::string FindStringKeyOrEmpty(const base::Value& value, std::string key) {
+  auto* ptr = value.FindStringKey(key);
+  return ptr ? *ptr : "";
+}
 
-// Value chosen based on SuggestionGroupIds::INVALID in suggestion_config.proto.
-const int SearchSuggestionParser::kNoSuggestionGroupId = -1;
+// The field number for the experiment stat type specified as an int
+// in ExperimentStatsV2.
+constexpr char kTypeIntFieldNumber[] = "4";
+// The field number for the string value in ExperimentStatsV2.
+constexpr char kStringValueFieldNumber[] = "2";
+
+// Used to dynamically convert the server-provided group IDs to those known to
+// Chrome based on the 0-based index of the suggestion groups in the server
+// response.
+constexpr auto kReservedGroupIdsMap =
+    base::MakeFixedFlatMap<int, SuggestionGroupId>(
+        {{0, SuggestionGroupId::kNonPersonalizedZeroSuggest1},
+         {1, SuggestionGroupId::kNonPersonalizedZeroSuggest2},
+         {2, SuggestionGroupId::kNonPersonalizedZeroSuggest3},
+         {3, SuggestionGroupId::kNonPersonalizedZeroSuggest4},
+         {4, SuggestionGroupId::kNonPersonalizedZeroSuggest5},
+         {5, SuggestionGroupId::kNonPersonalizedZeroSuggest6},
+         {6, SuggestionGroupId::kNonPersonalizedZeroSuggest7},
+         {7, SuggestionGroupId::kNonPersonalizedZeroSuggest8},
+         {8, SuggestionGroupId::kNonPersonalizedZeroSuggest9},
+         {9, SuggestionGroupId::kNonPersonalizedZeroSuggest10}});
+
+// Used to dynamically convert the order of suggestion groups in the server
+// response to the group priorities known to Chrome based on the 0-based index
+// of the suggestion groups in the server response.
+constexpr auto kReservedGroupPrioritiesMap =
+    base::MakeFixedFlatMap<int, SuggestionGroupPriority>(
+        {{0, SuggestionGroupPriority::kRemoteZeroSuggest1},
+         {1, SuggestionGroupPriority::kRemoteZeroSuggest2},
+         {2, SuggestionGroupPriority::kRemoteZeroSuggest3},
+         {3, SuggestionGroupPriority::kRemoteZeroSuggest4},
+         {4, SuggestionGroupPriority::kRemoteZeroSuggest5},
+         {5, SuggestionGroupPriority::kRemoteZeroSuggest6},
+         {6, SuggestionGroupPriority::kRemoteZeroSuggest7},
+         {7, SuggestionGroupPriority::kRemoteZeroSuggest8},
+         {8, SuggestionGroupPriority::kRemoteZeroSuggest9},
+         {9, SuggestionGroupPriority::kRemoteZeroSuggest10}});
+
+}  // namespace
 
 // SearchSuggestionParser::Result ----------------------------------------------
 
@@ -151,6 +193,7 @@ SearchSuggestionParser::SuggestResult::SuggestResult(
                     relevance,
                     relevance_from_server,
                     /*should_prefetch=*/false,
+                    /*should_prerender=*/false,
                     input_text) {}
 
 SearchSuggestionParser::SuggestResult::SuggestResult(
@@ -168,6 +211,7 @@ SearchSuggestionParser::SuggestResult::SuggestResult(
     int relevance,
     bool relevance_from_server,
     bool should_prefetch,
+    bool should_prerender,
     const std::u16string& input_text)
     : Result(from_keyword,
              relevance,
@@ -181,7 +225,8 @@ SearchSuggestionParser::SuggestResult::SuggestResult(
       additional_query_params_(additional_query_params),
       image_dominant_color_(image_dominant_color),
       image_url_(GURL(image_url)),
-      should_prefetch_(should_prefetch) {
+      should_prefetch_(should_prefetch),
+      should_prerender_(should_prerender) {
   match_contents_ = match_contents;
   DCHECK(!match_contents_.empty());
   ClassifyMatchContents(true, input_text);
@@ -275,7 +320,7 @@ SearchSuggestionParser::NavigationResult::NavigationResult(
           url_formatter::FormatUrl(url,
                                    url_formatter::kFormatUrlOmitDefaults &
                                        ~url_formatter::kFormatUrlOmitHTTP,
-                                   net::UnescapeRule::SPACES,
+                                   base::UnescapeRule::SPACES,
                                    nullptr,
                                    nullptr,
                                    nullptr),
@@ -325,8 +370,9 @@ void SearchSuggestionParser::NavigationResult::
       GURL(input_text).has_scheme(), match_in_subdomain);
 
   // Find matches in the potentially new match_contents
-  std::u16string match_contents = url_formatter::FormatUrl(
-      url_, format_types, net::UnescapeRule::SPACES, nullptr, nullptr, nullptr);
+  std::u16string match_contents =
+      url_formatter::FormatUrl(url_, format_types, base::UnescapeRule::SPACES,
+                               nullptr, nullptr, nullptr);
   TermMatches term_matches = FindTermMatches(input_text, match_contents);
 
   // Update |match_contents_| and |match_contents_class_| if it's allowed.
@@ -367,6 +413,10 @@ void SearchSuggestionParser::Results::Clear() {
   navigation_results.clear();
   verbatim_relevance = -1;
   metadata.clear();
+  field_trial_triggered = false;
+  experiment_stats_v2s.clear();
+  relevances_from_server = false;
+  suggestion_groups_map.clear();
 }
 
 bool SearchSuggestionParser::Results::HasServerProvidedScores() const {
@@ -449,121 +499,144 @@ bool SearchSuggestionParser::ParseSuggestResults(
     Results* results) {
   if (!root_val.is_list())
     return false;
-  base::Value::ConstListView root_list = root_val.GetList();
+  auto root_list = root_val.GetListDeprecated();
 
+  // 1st element: query.
   if (root_list.empty() || !root_list[0].is_string())
     return false;
   std::u16string query = base::UTF8ToUTF16(root_list[0].GetString());
   if (query != input.text())
     return false;
 
+  // 2nd element: suggestions list.
   if (root_list.size() < 2u || !root_list[1].is_list())
     return false;
-  base::Value::ConstListView results_list = root_list[1].GetList();
+  auto results_list = root_list[1].GetListDeprecated();
 
-  // 3rd element: Description list.
-  absl::optional<base::Value::ConstListView> descriptions;
-  if (root_list.size() > 2u && root_list[2].is_list())
-    descriptions = root_list[2].GetList();
-
-  // 4th element: Disregard the query URL list for now.
+  // 3rd element: Ignore the optional description list for now.
+  // 4th element: Disregard the query URL list.
+  // 5th element: Disregard the optional key-value pairs from the server.
 
   // Reset suggested relevance information.
   results->verbatim_relevance = -1;
 
-  // 5th element: Optional key-value pairs from the Suggest server.
-  const base::ListValue* types = nullptr;
-  const base::ListValue* experiment_stats = nullptr;
-  const base::ListValue* suggestion_details = nullptr;
-  const base::DictionaryValue* extras = nullptr;
-  const base::Value* suggestsubtypes = nullptr;
+  const base::Value* suggest_types = nullptr;
+  const base::Value* suggest_subtypes = nullptr;
+  const base::Value* relevances = nullptr;
+  const base::Value* suggestion_details = nullptr;
+  const base::Value* subtype_identifiers = nullptr;
   int prefetch_index = -1;
+  int prerender_index = -1;
+  std::unordered_map<int, SuggestionGroup> parsed_suggestion_groups_map;
 
-  absl::optional<base::Value::ConstListView> subtype_identifiers;
-  absl::optional<base::Value::ConstListView> relevances;
+  if (root_list.size() > 4u && root_list[4].is_dict()) {
+    const base::Value& extras = root_list[4];
 
-  if (root_list.size() > 4u && root_list[4].GetAsDictionary(&extras)) {
-    extras->GetList("google:suggesttype", &types);
+    suggest_types = extras.FindListKey("google:suggesttype");
 
-    suggestsubtypes = extras->FindPath("google:suggestsubtypes");
+    suggest_subtypes = extras.FindListKey("google:suggestsubtypes");
 
+    relevances = extras.FindListKey("google:suggestrelevance");
     // Discard this list if its size does not match that of the suggestions.
-    const base::Value* relevances_value =
-        extras->FindListKey("google:suggestrelevance");
-    if (relevances_value &&
-        relevances_value->GetList().size() == results_list.size()) {
-      relevances = relevances_value->GetList();
+    if (relevances &&
+        relevances->GetListDeprecated().size() != results_list.size()) {
+      relevances = nullptr;
     }
-    extras->GetInteger("google:verbatimrelevance",
-                       &results->verbatim_relevance);
+
+    if (absl::optional<int> relevance =
+            extras.FindIntKey("google:verbatimrelevance")) {
+      results->verbatim_relevance = *relevance;
+    }
 
     // Check if the active suggest field trial (if any) has triggered either
     // for the default provider or keyword provider.
-    results->field_trial_triggered = false;
-    extras->GetBoolean("google:fieldtrialtriggered",
-                       &results->field_trial_triggered);
+    absl::optional<bool> field_trial_triggered =
+        extras.FindBoolKey("google:fieldtrialtriggered");
+    results->field_trial_triggered = field_trial_triggered.value_or(false);
 
-    results->experiment_stats.clear();
-    if (extras->GetList("google:experimentstats", &experiment_stats) &&
-        experiment_stats) {
-      for (size_t index = 0; index < experiment_stats->GetList().size();
-           index++) {
-        const base::Value* experiment_stat = nullptr;
-        if (experiment_stats->Get(index, &experiment_stat) && experiment_stat) {
-          results->experiment_stats.push_back(experiment_stat->Clone());
+    results->experiment_stats_v2s.clear();
+    const base::Value* experiment_stats_v2s_value =
+        extras.FindListKey("google:experimentstats");
+    const base::Value::List* experiment_stats_v2s_list = nullptr;
+    if (experiment_stats_v2s_value) {
+      experiment_stats_v2s_list = experiment_stats_v2s_value->GetIfList();
+    }
+    if (experiment_stats_v2s_list) {
+      for (const auto& experiment_stats_v2_value : *experiment_stats_v2s_list) {
+        const base::Value::Dict* experiment_stats_v2_dict =
+            experiment_stats_v2_value.GetIfDict();
+        if (!experiment_stats_v2_dict) {
+          continue;
         }
+        absl::optional<int> type_int =
+            experiment_stats_v2_dict->FindInt(kTypeIntFieldNumber);
+        const auto* string_value =
+            experiment_stats_v2_dict->FindString(kStringValueFieldNumber);
+        if (!type_int || !string_value) {
+          continue;
+        }
+        metrics::ChromeSearchboxStats::ExperimentStatsV2 experiment_stats_v2;
+        experiment_stats_v2.set_type_int(*type_int);
+        experiment_stats_v2.set_string_value(*string_value);
+        results->experiment_stats_v2s.push_back(std::move(experiment_stats_v2));
       }
     }
 
-    const base::DictionaryValue* header_texts = nullptr;
-    if (extras->GetDictionary("google:headertexts", &header_texts) &&
-        header_texts) {
-      const base::DictionaryValue* headers = nullptr;
-      if (header_texts->GetDictionary("a", &headers) && headers) {
+    const base::Value* header_texts = extras.FindDictKey("google:headertexts");
+    if (header_texts) {
+      const base::Value* headers = header_texts->FindDictKey("a");
+      if (headers) {
         for (auto it : headers->DictItems()) {
           int suggestion_group_id;
           base::StringToInt(it.first, &suggestion_group_id);
-          results->headers_map[suggestion_group_id] =
+          parsed_suggestion_groups_map[suggestion_group_id].header =
               base::UTF8ToUTF16(it.second.GetString());
         }
       }
 
-      const base::ListValue* hidden_group_ids = nullptr;
-      if (header_texts->GetList("h", &hidden_group_ids) && hidden_group_ids) {
-        for (const auto& value : hidden_group_ids->GetList()) {
-          if (value.is_int())
-            results->hidden_group_ids.emplace_back(value.GetInt());
+      const base::Value* hidden_group_ids = header_texts->FindListKey("h");
+      if (hidden_group_ids) {
+        for (const auto& value : hidden_group_ids->GetListDeprecated()) {
+          if (value.is_int()) {
+            parsed_suggestion_groups_map[value.GetInt()].hidden = true;
+          }
         }
       }
     }
 
-    const base::DictionaryValue* client_data = nullptr;
-    if (extras->GetDictionary("google:clientdata", &client_data) && client_data)
-      client_data->GetInteger("phi", &prefetch_index);
-
-    if (extras->GetList("google:suggestdetail", &suggestion_details) &&
-        suggestion_details->GetList().size() != results_list.size())
-      suggestion_details = nullptr;
-
-    // Legacy code: Get subtype identifiers.
-    const base::Value* subtype_identifiers_value =
-        extras->FindListKey("google:subtypeid");
-    if (subtype_identifiers_value &&
-        subtype_identifiers_value->GetList().size() == results_list.size()) {
-      subtype_identifiers = subtype_identifiers_value->GetList();
+    const base::Value* client_data = extras.FindDictKey("google:clientdata");
+    if (client_data) {
+      prefetch_index = client_data->FindIntKey("phi").value_or(-1);
+      prerender_index = client_data->FindIntKey("pre").value_or(-1);
     }
 
-    // Store the metadata that came with the response in case we need to pass it
-    // along with the prefetch query to Instant.
+    suggestion_details = extras.FindListKey("google:suggestdetail");
+    // Discard this list if its size does not match that of the suggestions.
+    if (suggestion_details &&
+        suggestion_details->GetListDeprecated().size() != results_list.size()) {
+      suggestion_details = nullptr;
+    }
+
+    // Legacy code: Get subtype identifiers.
+    subtype_identifiers = extras.FindListKey("google:subtypeid");
+    // Discard this list if its size does not match that of the suggestions.
+    if (subtype_identifiers &&
+        subtype_identifiers->GetListDeprecated().size() !=
+            results_list.size()) {
+      subtype_identifiers = nullptr;
+    }
+
+    // Store the metadata that came with the response in case we need to pass
+    // it along with the prefetch query to Instant.
     JSONStringValueSerializer json_serializer(&results->metadata);
-    json_serializer.Serialize(*extras);
+    json_serializer.Serialize(extras);
   }
 
   // Processed list of match subtypes, one vector per match.
   // Note: ParseMatchSubtypes will handle the cases where the key does not
   // exist or contains malformed data.
   std::vector<std::vector<int>> subtypes =
-      ParseMatchSubtypes(suggestsubtypes, results_list.size());
+      ParseMatchSubtypes(suggest_subtypes, results_list.size());
 
   // Clear the previous results now that new results are available.
   results->suggest_results.clear();
@@ -573,6 +646,9 @@ bool SearchSuggestionParser::ParseSuggestResults(
   int relevance = default_result_relevance;
   const std::u16string& trimmed_input =
       base::CollapseWhitespace(input.text(), false);
+  int last_suggestion_group_id = static_cast<int>(SuggestionGroupId::kInvalid);
+  int last_suggestion_group_index = -1;
+
   for (size_t index = 0;
        index < results_list.size() && results_list[index].is_string();
        ++index) {
@@ -586,11 +662,10 @@ bool SearchSuggestionParser::ParseSuggestResults(
 
     // Apply valid suggested relevance scores; discard invalid lists.
     if (relevances) {
-      const auto& val = (*relevances)[index];
-      if (!val.is_int()) {
-        relevances = absl::nullopt;
+      if (!relevances->GetListDeprecated()[index].is_int()) {
+        relevances = nullptr;
       } else {
-        relevance = val.GetInt();
+        relevance = relevances->GetListDeprecated()[index].GetInt();
       }
     }
 
@@ -599,23 +674,26 @@ bool SearchSuggestionParser::ParseSuggestResults(
 
     // Legacy code: if the server sends us a single subtype ID, place it beside
     // other subtypes.
-    if (subtype_identifiers) {
-      int subtype_identifier =
-          (*subtype_identifiers)[index].GetIfInt().value_or(0);
-
-      if (subtype_identifier != 0) {
-        subtypes[index].emplace_back(subtype_identifier);
-      }
+    if (subtype_identifiers &&
+        index < subtype_identifiers->GetListDeprecated().size() &&
+        subtype_identifiers->GetListDeprecated()[index].is_int()) {
+      subtypes[index].emplace_back(
+          subtype_identifiers->GetListDeprecated()[index].GetInt());
     }
 
-    if (types && types->GetString(index, &type))
-      match_type = GetAutocompleteMatchType(type);
-    const base::DictionaryValue* suggestion_detail = nullptr;
-    std::string deletion_url;
+    if (suggest_types && index < suggest_types->GetListDeprecated().size() &&
+        suggest_types->GetListDeprecated()[index].is_string()) {
+      match_type = GetAutocompleteMatchType(
+          suggest_types->GetListDeprecated()[index].GetString());
+    }
 
+    std::string deletion_url;
     if (suggestion_details &&
-        suggestion_details->GetDictionary(index, &suggestion_detail)) {
-      suggestion_detail->GetString("du", &deletion_url);
+        index < suggestion_details->GetListDeprecated().size() &&
+        suggestion_details->GetListDeprecated()[index].is_dict()) {
+      const base::Value& suggestion_detail =
+          suggestion_details->GetListDeprecated()[index];
+      deletion_url = FindStringKeyOrEmpty(suggestion_detail, "du");
     }
 
     if ((match_type == AutocompleteMatchType::NAVSUGGEST) ||
@@ -625,13 +703,16 @@ bool SearchSuggestionParser::ParseSuggestResults(
                                        std::string()));
       if (url.is_valid()) {
         std::u16string title;
-        if (descriptions.has_value() && index < descriptions.value().size() &&
-            descriptions.value()[index].is_string()) {
-          title = base::UTF8ToUTF16(descriptions.value()[index].GetString());
+        // 3rd element: optional descriptions list
+        if (root_list.size() > 2u && root_list[2].is_list()) {
+          auto descriptions = root_list[2].GetListDeprecated();
+          if (index < descriptions.size() && descriptions[index].is_string()) {
+            title = base::UTF8ToUTF16(descriptions[index].GetString());
+          }
         }
         results->navigation_results.push_back(NavigationResult(
             scheme_classifier, url, match_type, subtypes[index], title,
-            deletion_url, is_keyword_result, relevance, relevances.has_value(),
+            deletion_url, is_keyword_result, relevance, relevances != nullptr,
             input.text()));
       }
     } else {
@@ -661,55 +742,102 @@ bool SearchSuggestionParser::ParseSuggestResults(
       std::string additional_query_params;
       absl::optional<int> suggestion_group_id;
 
-      if (suggestion_details) {
-        suggestion_details->GetDictionary(index, &suggestion_detail);
-        if (suggestion_detail) {
-          suggestion_detail->GetString("t", &match_contents);
-          suggestion_detail->GetString("mp", &match_contents_prefix);
-          // Error correction for bad data from server.
-          if (match_contents.empty())
-            match_contents = suggestion;
-          suggestion_detail->GetString("a", &annotation);
-          suggestion_detail->GetString("dc", &image_dominant_color);
-          suggestion_detail->GetString("i", &image_url);
-          suggestion_detail->GetString("q", &additional_query_params);
+      if (suggestion_details &&
+          suggestion_details->GetListDeprecated()[index].is_dict() &&
+          !suggestion_details->GetListDeprecated()[index].DictEmpty()) {
+        const base::Value& suggestion_detail =
+            suggestion_details->GetListDeprecated()[index];
+        match_contents =
+            base::UTF8ToUTF16(FindStringKeyOrEmpty(suggestion_detail, "t"));
+        if (match_contents.empty()) {
+          match_contents = suggestion;
+        }
+        match_contents_prefix =
+            base::UTF8ToUTF16(FindStringKeyOrEmpty(suggestion_detail, "mp"));
+        annotation =
+            base::UTF8ToUTF16(FindStringKeyOrEmpty(suggestion_detail, "a"));
+        image_dominant_color = FindStringKeyOrEmpty(suggestion_detail, "dc");
+        image_url = FindStringKeyOrEmpty(suggestion_detail, "i");
+        additional_query_params = FindStringKeyOrEmpty(suggestion_detail, "q");
 
-          // Suggestion group Id.
-          suggestion_group_id = suggestion_detail->FindIntPath("zl");
+        // Suggestion group Id.
+        suggestion_group_id = suggestion_detail.FindIntKey("zl");
 
-          // Extract the Answer, if provided.
-          const base::DictionaryValue* answer_json = nullptr;
-          std::u16string answer_type;
-          if (suggestion_detail->GetDictionary("ansa", &answer_json) &&
-              suggestion_detail->GetString("ansb", &answer_type)) {
-            if (SuggestionAnswer::ParseAnswer(*answer_json, answer_type,
-                                              &answer)) {
-              base::UmaHistogramSparse("Omnibox.AnswerParseType",
-                                       answer.type());
-              answer_parsed_successfully = true;
-            }
-            UMA_HISTOGRAM_BOOLEAN("Omnibox.AnswerParseSuccess",
-                                  answer_parsed_successfully);
+        // Extract the Answer, if provided.
+        const base::Value* answer_json = suggestion_detail.FindDictKey("ansa");
+        const std::string* answer_type =
+            suggestion_detail.FindStringKey("ansb");
+        if (answer_json && answer_type) {
+          if (SuggestionAnswer::ParseAnswer(answer_json->GetDict(),
+                                            base::UTF8ToUTF16(*answer_type),
+                                            &answer)) {
+            base::UmaHistogramSparse("Omnibox.AnswerParseType", answer.type());
+            answer_parsed_successfully = true;
           }
+          UMA_HISTOGRAM_BOOLEAN("Omnibox.AnswerParseSuccess",
+                                answer_parsed_successfully);
         }
       }
 
-      bool should_prefetch = static_cast<int>(index) == prefetch_index;
+      int int_index = static_cast<int>(index);
+      bool should_prefetch = int_index == prefetch_index;
+      bool should_prerender = int_index == prerender_index;
       results->suggest_results.push_back(SuggestResult(
           suggestion, match_type, subtypes[index],
           base::CollapseWhitespace(match_contents, false),
           match_contents_prefix, annotation, additional_query_params,
           deletion_url, image_dominant_color, image_url, is_keyword_result,
-          relevance, relevances.has_value(), should_prefetch, trimmed_input));
+          relevance, relevances != nullptr, should_prefetch, should_prerender,
+          trimmed_input));
 
       if (suggestion_group_id) {
+        if (last_suggestion_group_id != *suggestion_group_id) {
+          // Remember the ID and the 0-based index of the last seen group.
+          last_suggestion_group_id = *suggestion_group_id;
+          last_suggestion_group_index++;
+        }
+
+        // Map the group ID to one known to Chrome. With an exception of the
+        // personalized suggestions whose group ID is known to Chrome, the
+        // mapping is dynamically done based on the 0-based index of the group.
+        SuggestionGroupId mapped_suggestion_group_id =
+            SuggestionGroupId::kInvalid;
+        if (*suggestion_group_id ==
+            static_cast<int>(SuggestionGroupId::kPersonalizedZeroSuggest)) {
+          mapped_suggestion_group_id =
+              SuggestionGroupId::kPersonalizedZeroSuggest;
+        } else if (base::Contains(kReservedGroupIdsMap,
+                                  last_suggestion_group_index)) {
+          mapped_suggestion_group_id =
+              kReservedGroupIdsMap.at(last_suggestion_group_index);
+        } else {
+          continue;
+        }
+
+        // Use the mapped group ID in the result.
         results->suggest_results.back().set_suggestion_group_id(
-            *suggestion_group_id);
+            mapped_suggestion_group_id);
+
+        // Use the mapped group ID to update the suggestion group info, if any.
+        // It is possible for a suggestion to specify a group ID for which there
+        // are no header or default visibility information available. Such group
+        // IDs are generally stripped away later on.
+        if (base::Contains(parsed_suggestion_groups_map,
+                           *suggestion_group_id)) {
+          results->suggestion_groups_map[mapped_suggestion_group_id].MergeFrom(
+              parsed_suggestion_groups_map[*suggestion_group_id]);
+          results->suggestion_groups_map[mapped_suggestion_group_id]
+              .original_group_id = *suggestion_group_id;
+          results->suggestion_groups_map[mapped_suggestion_group_id].priority =
+              kReservedGroupPrioritiesMap.at(last_suggestion_group_index);
+        }
       }
-      if (answer_parsed_successfully)
+
+      if (answer_parsed_successfully) {
         results->suggest_results.back().SetAnswer(answer);
+      }
     }
   }
-  results->relevances_from_server = relevances.has_value();
+  results->relevances_from_server = relevances != nullptr;
   return true;
 }

@@ -6,11 +6,11 @@
 
 #include "base/bind.h"
 #include "base/feature_list.h"
+#include "chrome/browser/ui/webui/settings/ash/os_apps_page/app_notification_handler.h"
+#include "chrome/browser/ui/webui/settings/ash/search/search_handler.h"
+#include "chrome/browser/ui/webui/settings/ash/search/search_tag_registry.h"
 #include "chrome/browser/ui/webui/settings/chromeos/hierarchy.h"
-#include "chrome/browser/ui/webui/settings/chromeos/os_apps_page/app_notification_handler.h"
 #include "chrome/browser/ui/webui/settings/chromeos/os_settings_sections.h"
-#include "chrome/browser/ui/webui/settings/chromeos/search/search_handler.h"
-#include "chrome/browser/ui/webui/settings/chromeos/search/search_tag_registry.h"
 #include "chrome/browser/ui/webui/settings/chromeos/settings_user_action_tracker.h"
 #include "content/public/browser/web_ui_data_source.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -30,7 +30,8 @@ OsSettingsManager::OsSettingsManager(
     signin::IdentityManager* identity_manager,
     android_sms::AndroidSmsService* android_sms_service,
     CupsPrintersManager* printers_manager,
-    apps::AppServiceProxyChromeOs* app_service_proxy)
+    apps::AppServiceProxy* app_service_proxy,
+    ash::eche_app::EcheAppManager* eche_app_manager)
     : search_tag_registry_(
           std::make_unique<SearchTagRegistry>(local_search_service_proxy)),
       sections_(
@@ -45,7 +46,8 @@ OsSettingsManager::OsSettingsManager(
                                                identity_manager,
                                                android_sms_service,
                                                printers_manager,
-                                               app_service_proxy)),
+                                               app_service_proxy,
+                                               eche_app_manager)),
       hierarchy_(std::make_unique<Hierarchy>(sections_.get())),
       settings_user_action_tracker_(
           std::make_unique<SettingsUserActionTracker>(hierarchy_.get(),

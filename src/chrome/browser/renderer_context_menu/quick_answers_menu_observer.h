@@ -8,14 +8,11 @@
 #include <memory>
 #include <string>
 
-#include "ash/components/quick_answers/quick_answers_client.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "components/renderer_context_menu/render_view_context_menu_observer.h"
 #include "ui/gfx/geometry/rect.h"
-
-namespace ash {
-class QuickAnswersController;
-}
 
 class RenderViewContextMenuProxy;
 
@@ -36,13 +33,7 @@ class QuickAnswersMenuObserver : public RenderViewContextMenuObserver {
       const gfx::Rect& bounds_in_screen) override;
   void OnMenuClosed() override;
 
-  void SetQuickAnswerControllerForTesting(
-      ash::QuickAnswersController* controller) {
-    quick_answers_controller_ = controller;
-  }
-
  private:
-  std::string GetDeviceLanguage();
   void OnTextSurroundingSelectionAvailable(
       const std::string& selected_text,
       const std::u16string& surrounding_text,
@@ -50,11 +41,9 @@ class QuickAnswersMenuObserver : public RenderViewContextMenuObserver {
       uint32_t end_offset);
 
   // The interface to add a context-menu item and update it.
-  RenderViewContextMenuProxy* proxy_;
+  raw_ptr<RenderViewContextMenuProxy> proxy_;
 
   gfx::Rect bounds_in_screen_;
-
-  ash::QuickAnswersController* quick_answers_controller_ = nullptr;
 
   // Whether commands other than quick answers is executed.
   bool is_other_command_executed_ = false;

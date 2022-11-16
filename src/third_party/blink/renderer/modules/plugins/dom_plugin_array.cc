@@ -28,7 +28,7 @@
 #include "third_party/blink/renderer/core/page/plugin_data.h"
 #include "third_party/blink/renderer/modules/plugins/dom_mime_type_array.h"
 #include "third_party/blink/renderer/modules/plugins/navigator_plugins.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/wtf/text/atomic_string.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
@@ -69,8 +69,6 @@ DOMPlugin* DOMPluginArray::item(unsigned index) {
 
 DOMPlugin* DOMPluginArray::namedItem(const AtomicString& property_name) {
   if (should_return_fixed_plugin_data_) {
-    // I don't know why namedItem() and NamedPropertyEnumerator go directly to
-    // the plugin data, rather than using dom_plugins_.
     for (const auto& plugin : dom_plugins_) {
       if (plugin->name() == property_name)
         return plugin;
@@ -170,7 +168,6 @@ HeapVector<Member<DOMMimeType>> DOMPluginArray::GetFixedMimeTypeArray() {
 }
 
 bool DOMPluginArray::IsPdfViewerAvailable() {
-  DCHECK(should_return_fixed_plugin_data_);
   auto* data = GetPluginData();
   if (!data)
     return false;

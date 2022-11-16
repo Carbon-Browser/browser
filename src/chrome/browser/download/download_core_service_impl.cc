@@ -28,7 +28,7 @@
 #include "chrome/browser/extensions/api/downloads/downloads_api.h"
 #endif
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/download/android/download_utils.h"
 #endif
 
@@ -81,7 +81,7 @@ DownloadCoreServiceImpl::GetDownloadManagerDelegate() {
   download_ui_ = std::make_unique<DownloadUIController>(
       manager, std::unique_ptr<DownloadUIController::Delegate>());
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
   download_shelf_controller_ =
       std::make_unique<DownloadShelfController>(profile_);
 #endif
@@ -149,11 +149,11 @@ void DownloadCoreServiceImpl::SetDownloadHistoryForTesting(
   download_history_ = std::move(download_history);
 }
 
-bool DownloadCoreServiceImpl::IsShelfEnabled() {
-#if defined(OS_ANDROID)
+bool DownloadCoreServiceImpl::IsDownloadUiEnabled() {
+#if BUILDFLAG(IS_ANDROID)
   return true;
 #else
-  return !extension_event_router_ || extension_event_router_->IsShelfEnabled();
+  return !extension_event_router_ || extension_event_router_->IsUiEnabled();
 #endif
 }
 

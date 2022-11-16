@@ -8,6 +8,11 @@
 #include <string>
 
 #include "ash/public/cpp/ash_public_export.h"
+#include "base/strings/string_piece.h"
+#include "components/access_code_cast/common/access_code_cast_metrics.h"
+#include "components/version_info/channel.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "url/gurl.h"
 
 namespace ash {
 
@@ -22,15 +27,15 @@ class ASH_PUBLIC_EXPORT SystemTrayClient {
   // Shows settings related to Bluetooth devices (e.g. to add a device).
   virtual void ShowBluetoothSettings() = 0;
 
-  // Shows the web UI dialog to pair a Bluetooth device.
-  // |address| is the unique device address in the form "XX:XX:XX:XX:XX:XX"
-  // with hex digits X. |name_for_display| is a human-readable name, not
-  // necessarily the device name.
+  // Shows the detailed settings for the Bluetooth device with ID |device_id|.
+  virtual void ShowBluetoothSettings(const std::string& device_id) = 0;
+
+  // Show the Bluetooth pairing dialog. When provided, |device_address| is the
+  // unique device address that the dialog should attempt to pair with and
+  // should be in the form "XX:XX:XX:XX:XX:XX". When |device_address| is not
+  // provided the dialog will show the device list instead.
   virtual void ShowBluetoothPairingDialog(
-      const std::string& address,
-      const std::u16string& name_for_display,
-      bool paired,
-      bool connected) = 0;
+      absl::optional<base::StringPiece> device_address) = 0;
 
   // Shows the settings related to date, timezone etc.
   virtual void ShowDateSettings() = 0;
@@ -41,11 +46,20 @@ class ASH_PUBLIC_EXPORT SystemTrayClient {
   // Shows settings related to multiple displays.
   virtual void ShowDisplaySettings() = 0;
 
+  // Shows settings related to multiple displays.
+  virtual void ShowDarkModeSettings() = 0;
+
+  // Shows settings related to storage.
+  virtual void ShowStorageSettings() = 0;
+
   // Shows settings related to power.
   virtual void ShowPowerSettings() = 0;
 
   // Shows OS settings related to privacy and security.
   virtual void ShowPrivacyAndSecuritySettings() = 0;
+
+  // Show OS smart privacy settings.
+  virtual void ShowSmartPrivacySettings() = 0;
 
   // Shows the page that lets you disable performance tracing.
   virtual void ShowChromeSlow() = 0;
@@ -66,9 +80,6 @@ class ASH_PUBLIC_EXPORT SystemTrayClient {
   // loaded.
   virtual void ShowAboutChromeOS() = 0;
 
-  // Shows the Chromebook help app.
-  virtual void ShowHelp() = 0;
-
   // Shows accessibility help.
   virtual void ShowAccessibilityHelp() = 0;
 
@@ -83,9 +94,6 @@ class ASH_PUBLIC_EXPORT SystemTrayClient {
 
   // Shows the settings related to the stylus tool palette.
   virtual void ShowPaletteSettings() = 0;
-
-  // Shows information about public account mode.
-  virtual void ShowPublicAccountInfo() = 0;
 
   // Shows information about enterprise enrolled devices.
   virtual void ShowEnterpriseInfo() = 0;
@@ -122,12 +130,34 @@ class ASH_PUBLIC_EXPORT SystemTrayClient {
   // Shows the MultiDevice setup flow dialog.
   virtual void ShowMultiDeviceSetup() = 0;
 
+  // Shows the Firmware update app.
+  virtual void ShowFirmwareUpdate() = 0;
+
   // Attempts to restart the system for update.
   virtual void RequestRestartForUpdate() = 0;
 
   // Sets the UI locale to |locale_iso_code| and exit the session to take
   // effect.
   virtual void SetLocaleAndExit(const std::string& locale_iso_code) = 0;
+
+  // Shows the access code casting dialog. |open_location| is the location
+  // where the dialog was opened.
+  virtual void ShowAccessCodeCastingDialog(
+      AccessCodeCastDialogOpenLocation open_location) = 0;
+
+  // Shows a calendar event. If an event is present then it's opened, otherwise
+  // Google Calendar is opened to `date`. Open in the calendar PWA if
+  // installed (and assign true to `opened_pwa`), in a new browser tab otherwise
+  // (and assign false to |opened_pwa|).
+  //
+  // The calendar PWA requires the event URL to have a specific prefix,
+  // so the URL actually opened may not be the same as the passed-in URL.  This
+  // is guaranteed to be the case if no event URL was passed in.  The URL that's
+  // actually opened is assigned to `finalized_event_url`.
+  virtual void ShowCalendarEvent(const absl::optional<GURL>& event_url,
+                                 const base::Time& date,
+                                 bool& opened_pwa,
+                                 GURL& finalized_event_url) = 0;
 
  protected:
   SystemTrayClient() {}

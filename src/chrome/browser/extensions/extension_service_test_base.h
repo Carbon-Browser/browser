@@ -10,10 +10,9 @@
 #include <memory>
 #include <string>
 
-#include "base/at_exit.h"
 #include "base/files/file_path.h"
 #include "base/files/scoped_temp_dir.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -69,15 +68,20 @@ class ExtensionServiceTestBase : public testing::Test {
     bool extensions_enabled = true;
     bool is_first_run = true;
     bool profile_is_supervised = false;
+    bool profile_is_guest = false;
     bool enable_bookmark_model = false;
+    bool enable_install_limiter = false;
 
-    policy::PolicyService* policy_service = nullptr;
+    raw_ptr<policy::PolicyService> policy_service = nullptr;
 
     // Though you could use this constructor, you probably want to use
     // CreateDefaultInitParams(), and then make a change or two.
     ExtensionServiceInitParams();
     ExtensionServiceInitParams(const ExtensionServiceInitParams& other);
   };
+
+  ExtensionServiceTestBase(const ExtensionServiceTestBase&) = delete;
+  ExtensionServiceTestBase& operator=(const ExtensionServiceTestBase&) = delete;
 
   // Public because parameterized test cases need it to be, or else the compiler
   // barfs.
@@ -109,7 +113,9 @@ class ExtensionServiceTestBase : public testing::Test {
   // |source_install_dir|.
   void InitializeInstalledExtensionService(
       const base::FilePath& prefs_file,
-      const base::FilePath& source_install_dir);
+      const base::FilePath& source_install_dir,
+      const ExtensionServiceInitParams& additional_params =
+          ExtensionServiceInitParams{});
 
   // Initialize an ExtensionService with a few already-installed extensions.
   void InitializeGoodInstalledExtensionService();
@@ -168,10 +174,6 @@ class ExtensionServiceTestBase : public testing::Test {
   // directory so as to ensure files are closed before cleanup.
   base::ScopedTempDir temp_dir_;
 
-  // Destroying at_exit_manager_ will delete all LazyInstances, so it must come
-  // after task_environment_ in the destruction order.
-  base::ShadowingAtExitManager at_exit_manager_;
-
   // The MessageLoop is used by RenderViewHostTestEnabler, so this must be
   // created before it.
   std::unique_ptr<content::BrowserTaskEnvironment> task_environment_;
@@ -197,7 +199,7 @@ class ExtensionServiceTestBase : public testing::Test {
 
   // The ExtensionService, whose lifetime is managed by |profile|'s
   // ExtensionSystem.
-  ExtensionService* service_;
+  raw_ptr<ExtensionService> service_;
   ScopedTestingLocalState testing_local_state_;
 
  private:
@@ -212,7 +214,7 @@ class ExtensionServiceTestBase : public testing::Test {
   content::InProcessUtilityThreadHelper in_process_utility_thread_helper_;
 
   // The associated ExtensionRegistry, for convenience.
-  extensions::ExtensionRegistry* registry_;
+  raw_ptr<extensions::ExtensionRegistry> registry_;
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   ash::ScopedCrosSettingsTestHelper cros_settings_test_helper_;
@@ -226,8 +228,6 @@ class ExtensionServiceTestBase : public testing::Test {
   // An override that ignores CRX3 publisher signatures.
   SandboxedUnpacker::ScopedVerifierFormatOverrideForTest
       verifier_format_override_;
-
-  DISALLOW_COPY_AND_ASSIGN(ExtensionServiceTestBase);
 };
 
 }  // namespace extensions

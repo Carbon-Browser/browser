@@ -15,9 +15,10 @@
 #include <string>
 #include <vector>
 
+#include "ash/components/drivefs/mojom/drivefs.mojom-forward.h"
 #include "base/callback_forward.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
+#include "chrome/browser/ash/policy/dlp/dlp_files_controller.h"
 #include "chrome/browser/chromeos/extensions/file_manager/logged_extension_function.h"
 #include "components/drive/file_errors.h"
 #include "extensions/browser/extension_function.h"
@@ -51,6 +52,10 @@ struct HashAndFilePath {
   base::FilePath path;
 };
 
+namespace policy {
+class DlpFilesController;
+}  // namespace policy
+
 }  // namespace drive
 
 namespace extensions {
@@ -76,6 +81,11 @@ class FileManagerPrivateGrantAccessFunction : public ExtensionFunction {
  public:
   FileManagerPrivateGrantAccessFunction();
 
+  FileManagerPrivateGrantAccessFunction(
+      const FileManagerPrivateGrantAccessFunction&) = delete;
+  FileManagerPrivateGrantAccessFunction& operator=(
+      const FileManagerPrivateGrantAccessFunction&) = delete;
+
   DECLARE_EXTENSION_FUNCTION("fileManagerPrivate.grantAccess",
                              FILEMANAGERPRIVATE_GRANTACCESS)
 
@@ -84,7 +94,6 @@ class FileManagerPrivateGrantAccessFunction : public ExtensionFunction {
 
  private:
   ExtensionFunction::ResponseAction Run() override;
-  DISALLOW_COPY_AND_ASSIGN(FileManagerPrivateGrantAccessFunction);
 };
 
 // Base class for FileManagerPrivateInternalAddFileWatchFunction and
@@ -149,7 +158,6 @@ class FileManagerPrivateInternalAddFileWatchFunction
       base::WeakPtr<file_manager::EventRouter> event_router) override;
 };
 
-
 // Implements the chrome.fileManagerPrivate.removeFileWatch method.
 // Stops watching changes in directories.
 class FileManagerPrivateInternalRemoveFileWatchFunction
@@ -192,8 +200,29 @@ class FileManagerPrivateGetSizeStatsFunction : public LoggedExtensionFunction {
                                             const uint64_t available_bytes,
                                             const uint64_t capacity_bytes);
 
+  void OnGetDriveQuotaUsage(drive::FileError error,
+                            drivefs::mojom::QuotaUsagePtr usage);
+
   void OnGetSizeStats(const uint64_t* total_size,
                       const uint64_t* remaining_size);
+};
+
+// Implements the chrome.fileManagerPrivate.getDriveQuotaMetadata method.
+class FileManagerPrivateGetDriveQuotaMetadataFunction
+    : public LoggedExtensionFunction {
+ public:
+  DECLARE_EXTENSION_FUNCTION("fileManagerPrivate.getDriveQuotaMetadata",
+                             FILEMANAGERPRIVATE_GETDRIVEQUOTAMETADATA)
+
+ protected:
+  ~FileManagerPrivateGetDriveQuotaMetadataFunction() override = default;
+
+  // ExtensionFunction overrides.
+  ResponseAction Run() override;
+
+ private:
+  void OnGetDriveQuotaMetadata(drive::FileError error,
+                               drivefs::mojom::PooledQuotaUsagePtr usage);
 };
 
 // Implements the chrome.fileManagerPrivate.validatePathNameLength method.
@@ -255,6 +284,59 @@ class FileManagerPrivateRenameVolumeFunction : public LoggedExtensionFunction {
 
   // ExtensionFunction overrides.
   ResponseAction Run() override;
+};
+
+// Implements the chrome.fileManagerPrivate.getDisallowedTransfers method.
+class FileManagerPrivateInternalGetDisallowedTransfersFunction
+    : public LoggedExtensionFunction {
+ public:
+  FileManagerPrivateInternalGetDisallowedTransfersFunction();
+
+  DECLARE_EXTENSION_FUNCTION(
+      "fileManagerPrivateInternal.getDisallowedTransfers",
+      FILEMANAGERPRIVATEINTERNAL_GETDISALLOWEDTRANSFERS)
+
+ protected:
+  ~FileManagerPrivateInternalGetDisallowedTransfersFunction() override;
+
+  // ExtensionFunction overrides.
+  ResponseAction Run() override;
+
+ private:
+  void OnGetDisallowedFiles(
+      std::vector<storage::FileSystemURL> disallowed_files);
+  void OnConvertFileDefinitionListToEntryDefinitionList(
+      std::unique_ptr<file_manager::util::EntryDefinitionList>
+          entry_definition_list);
+
+  Profile* profile_ = nullptr;
+
+  std::unique_ptr<policy::DlpFilesController> files_controller_;
+  std::vector<storage::FileSystemURL> source_urls_;
+  storage::FileSystemURL destination_url_;
+};
+
+// Implements the chrome.fileManagerPrivateInternal.getDlpMetadata method.
+class FileManagerPrivateInternalGetDlpMetadataFunction
+    : public LoggedExtensionFunction {
+ public:
+  FileManagerPrivateInternalGetDlpMetadataFunction();
+
+  DECLARE_EXTENSION_FUNCTION("fileManagerPrivateInternal.getDlpMetadata",
+                             FILEMANAGERPRIVATEINTERNAL_GETDLPMETADATA)
+
+ protected:
+  ~FileManagerPrivateInternalGetDlpMetadataFunction() override;
+
+  // ExtensionFunction overrides.
+  ResponseAction Run() override;
+
+ private:
+  void OnGetDlpMetadata(
+      std::vector<policy::DlpFilesController::DlpFileMetadata> dlp_metadata);
+
+  std::unique_ptr<policy::DlpFilesController> files_controller_;
+  std::vector<storage::FileSystemURL> source_urls_;
 };
 
 // Implements the chrome.fileManagerPrivate.startCopy method.
@@ -344,7 +426,7 @@ class FileManagerPrivateInternalComputeChecksumFunction
   ResponseAction Run() override;
 
  private:
-  std::unique_ptr<drive::util::FileStreamMd5Digester> digester_;
+  scoped_refptr<drive::util::FileStreamMd5Digester> digester_;
 
   void RespondWith(std::string hash);
 };
@@ -408,6 +490,33 @@ class FileManagerPrivateInternalGetDirectorySizeFunction
   ~FileManagerPrivateInternalGetDirectorySizeFunction() override = default;
 
   void OnDirectorySizeRetrieved(int64_t size);
+
+  // ExtensionFunction overrides
+  ResponseAction Run() override;
+};
+
+// Implements the chrome.fileManagerPrivate.startIOTask method.
+class FileManagerPrivateInternalStartIOTaskFunction
+    : public LoggedExtensionFunction {
+ public:
+  DECLARE_EXTENSION_FUNCTION("fileManagerPrivateInternal.startIOTask",
+                             FILEMANAGERPRIVATEINTERNAL_STARTIOTASK)
+
+ protected:
+  ~FileManagerPrivateInternalStartIOTaskFunction() override = default;
+
+  // ExtensionFunction overrides
+  ResponseAction Run() override;
+};
+
+// Implements the chrome.fileManagerPrivate.cancelIOTask method.
+class FileManagerPrivateCancelIOTaskFunction : public LoggedExtensionFunction {
+ public:
+  DECLARE_EXTENSION_FUNCTION("fileManagerPrivate.cancelIOTask",
+                             FILEMANAGERPRIVATE_CANCELIOTASK)
+
+ protected:
+  ~FileManagerPrivateCancelIOTaskFunction() override = default;
 
   // ExtensionFunction overrides
   ResponseAction Run() override;

@@ -129,6 +129,18 @@ Polymer({
     this.browserProxy_.notifyFastPairPairing();
   },
 
+  onFastPairDeviceApplicationAvailableNotificationClicked_() {
+    this.browserProxy_.notifyFastPairApplicationAvailable();
+  },
+
+  onFastPairDeviceApplicationInstalledNotificationClicked_() {
+    this.browserProxy_.notifyFastPairApplicationInstalled();
+  },
+
+  onFastPairAssociateAccountNotificationClicked_() {
+    this.browserProxy_.notifyFastPairAssociateAccount();
+  },
+
   /**
    * Triggers RegisterReceiveSurface with Foreground as Receive state.
    * @private

@@ -10,18 +10,18 @@
 #include <string>
 #include <utility>
 
+#include "ash/components/arc/mojom/file_system.mojom.h"
 #include "base/bind.h"
 #include "base/files/file_path.h"
-#include "base/macros.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/string_util.h"
 #include "chrome/browser/ash/arc/arc_util.h"
 #include "chrome/browser/ash/arc/fileapi/arc_documents_provider_root.h"
 #include "chrome/browser/ash/arc/fileapi/arc_documents_provider_root_map.h"
 #include "chrome/browser/ash/arc/fileapi/arc_documents_provider_util.h"
+#include "chrome/browser/ash/arc/fileapi/arc_media_view_util.h"
 #include "chrome/browser/chromeos/fileapi/recent_file.h"
 #include "chrome/browser/profiles/profile.h"
-#include "components/arc/mojom/file_system.mojom.h"
 #include "content/public/browser/browser_thread.h"
 #include "storage/browser/file_system/external_mount_points.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -36,23 +36,22 @@ namespace {
 
 const char kAndroidDownloadDirPrefix[] = "/storage/emulated/0/Download/";
 // The path of the MyFiles directory inside Android. The UUID "0000....2019" is
-// defined in components/arc/volume_mounter/arc_volume_mounter_bridge.cc.
+// defined in ash/components/arc/volume_mounter/arc_volume_mounter_bridge.cc.
 // TODO(crbug.com/929031): Move MyFiles constants to a common place.
 const char kAndroidMyFilesDirPrefix[] =
     "/storage/0000000000000000000000000000CAFEF00D2019/";
 
-const char kMediaDocumentsProviderAuthority[] =
-    "com.android.providers.media.documents";
-constexpr char kMediaDocumentsProviderImagesRoot[] = "images_root";
-constexpr char kMediaDocumentsProviderVideosRoot[] = "videos_root";
+// Android's MediaDocumentsProvider.queryRecentDocuments() doesn't support
+// audio files, http://b/175155820
 const char* kMediaDocumentsProviderRootIds[] = {
-    kMediaDocumentsProviderImagesRoot,
-    kMediaDocumentsProviderVideosRoot,
+    arc::kImagesRootDocumentId,
+    arc::kVideosRootDocumentId,
+    arc::kDocumentsRootDocumentId,
 };
 
 base::FilePath GetRelativeMountPath(const std::string& root_id) {
   base::FilePath mount_path =
-      arc::GetDocumentsProviderMountPath(kMediaDocumentsProviderAuthority,
+      arc::GetDocumentsProviderMountPath(arc::kMediaDocumentsProviderAuthority,
                                          // In MediaDocumentsProvider, |root_id|
                                          // and |root_document_id| are the same.
                                          root_id);
@@ -95,6 +94,10 @@ const char RecentArcMediaSource::kLoadHistogramName[] =
 class RecentArcMediaSource::MediaRoot {
  public:
   MediaRoot(const std::string& root_id, Profile* profile);
+
+  MediaRoot(const MediaRoot&) = delete;
+  MediaRoot& operator=(const MediaRoot&) = delete;
+
   ~MediaRoot();
 
   void GetRecentFiles(Params params);
@@ -134,8 +137,6 @@ class RecentArcMediaSource::MediaRoot {
   std::map<std::string, absl::optional<RecentFile>> document_id_to_file_;
 
   base::WeakPtrFactory<MediaRoot> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(MediaRoot);
 };
 
 RecentArcMediaSource::MediaRoot::MediaRoot(const std::string& root_id,
@@ -173,7 +174,7 @@ void RecentArcMediaSource::MediaRoot::GetRecentFiles(Params params) {
     return;
   }
 
-  runner->GetRecentDocuments(kMediaDocumentsProviderAuthority, root_id_,
+  runner->GetRecentDocuments(arc::kMediaDocumentsProviderAuthority, root_id_,
                              base::BindOnce(&MediaRoot::OnGetRecentDocuments,
                                             weak_ptr_factory_.GetWeakPtr()));
 }
@@ -226,7 +227,8 @@ void RecentArcMediaSource::MediaRoot::ScanDirectory(
   }
 
   // In MediaDocumentsProvider, |root_id| and |root_document_id| are the same.
-  auto* root = root_map->Lookup(kMediaDocumentsProviderAuthority, root_id_);
+  auto* root =
+      root_map->Lookup(arc::kMediaDocumentsProviderAuthority, root_id_);
   if (!root) {
     // Media roots should always exist.
     LOG(ERROR) << "ArcDocumentsProviderRoot is missing";
@@ -312,9 +314,11 @@ bool RecentArcMediaSource::MediaRoot::MatchesFileType(
     case FileType::kAll:
       return true;
     case FileType::kImage:
-      return root_id_ == kMediaDocumentsProviderImagesRoot;
+      return root_id_ == arc::kImagesRootDocumentId;
     case FileType::kVideo:
-      return root_id_ == kMediaDocumentsProviderVideosRoot;
+      return root_id_ == arc::kVideosRootDocumentId;
+    case FileType::kDocument:
+      return root_id_ == arc::kDocumentsRootDocumentId;
     default:
       return false;
   }

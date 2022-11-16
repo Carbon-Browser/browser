@@ -7,7 +7,7 @@
 
 #include <vector>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
@@ -86,6 +86,9 @@ class SafeBrowsingUrlCheckerImpl : public mojom::SafeBrowsingUrlChecker,
   // enabled real time URL lookups for subresource URLs.
   // |real_time_lookup_enabled| must be true if |can_rt_check_subresource_url|
   // is true.
+  // |last_committed_url| is used for obtaining the page load token when the URL
+  // being checked is not a mainframe URL. Only used when real time lookup is
+  // performed.
   // |webui_delegate_| is allowed to be null. If non-null, it must outlive this
   // object.
   SafeBrowsingUrlCheckerImpl(
@@ -103,6 +106,7 @@ class SafeBrowsingUrlCheckerImpl : public mojom::SafeBrowsingUrlChecker,
       bool real_time_lookup_enabled,
       bool can_rt_check_subresource_url,
       bool can_check_db,
+      GURL last_committed_url,
       scoped_refptr<base::SequencedTaskRunner> ui_task_runner,
       base::WeakPtr<RealTimeUrlLookupServiceBase> url_lookup_service_on_ui,
       WebUIDelegate* webui_delegate);
@@ -117,11 +121,15 @@ class SafeBrowsingUrlCheckerImpl : public mojom::SafeBrowsingUrlChecker,
   SafeBrowsingUrlCheckerImpl(
       network::mojom::RequestDestination request_destination,
       scoped_refptr<UrlCheckerDelegate> url_checker_delegate,
-      const base::RepeatingCallback<web::WebState*()>& web_state_getter,
+      base::WeakPtr<web::WebState> weak_web_state,
       bool real_time_lookup_enabled,
       bool can_rt_check_subresource_url,
       scoped_refptr<base::SequencedTaskRunner> ui_task_runner,
       base::WeakPtr<RealTimeUrlLookupServiceBase> url_lookup_service_on_ui);
+
+  SafeBrowsingUrlCheckerImpl(const SafeBrowsingUrlCheckerImpl&) = delete;
+  SafeBrowsingUrlCheckerImpl& operator=(const SafeBrowsingUrlCheckerImpl&) =
+      delete;
 
   ~SafeBrowsingUrlCheckerImpl() override;
 
@@ -200,6 +208,17 @@ class SafeBrowsingUrlCheckerImpl : public mojom::SafeBrowsingUrlChecker,
   // Perform the hash based check for the url.
   void PerformHashBasedCheck(const GURL& url);
 
+  // Checks the eligibility of sending a sampled ping first;
+  // Send a sampled report if one should be sent, otherwise, exit.
+  static void MaybeSendSampleRequest(
+      base::WeakPtr<SafeBrowsingUrlCheckerImpl> weak_checker_on_io,
+      const GURL& url,
+      const GURL& last_committed_url,
+      bool is_mainframe,
+      base::WeakPtr<RealTimeUrlLookupServiceBase> url_lookup_service_on_ui,
+      scoped_refptr<SafeBrowsingDatabaseManager> database_manager,
+      scoped_refptr<base::SequencedTaskRunner> io_task_runner);
+
   // This function has to be static because it is called in UI thread.
   // This function starts a real time url check if |url_lookup_service_on_ui| is
   // available and is not in backoff mode. Otherwise, hop back to IO thread and
@@ -207,6 +226,8 @@ class SafeBrowsingUrlCheckerImpl : public mojom::SafeBrowsingUrlChecker,
   static void StartLookupOnUIThread(
       base::WeakPtr<SafeBrowsingUrlCheckerImpl> weak_checker_on_io,
       const GURL& url,
+      const GURL& last_committed_url,
+      bool is_mainframe,
       base::WeakPtr<RealTimeUrlLookupServiceBase> url_lookup_service_on_ui,
       scoped_refptr<SafeBrowsingDatabaseManager> database_manager,
       scoped_refptr<base::SequencedTaskRunner> io_task_runner);
@@ -275,7 +296,7 @@ class SafeBrowsingUrlCheckerImpl : public mojom::SafeBrowsingUrlChecker,
   const int load_flags_;
   const network::mojom::RequestDestination request_destination_;
   const bool has_user_gesture_;
-  // TODO(crbug.com/1069047): |web_state_getter| is only used on iOS, and
+  // TODO(crbug.com/1069047): |weak_web_state_| is only used on iOS, and
   // |web_contents_getter_|, |render_process_id_|, |render_frame_id_|, and
   // |frame_tree_node_id_| are used on all other platforms.  This class should
   // be refactored to use only the common functionality can be shared across
@@ -289,7 +310,7 @@ class SafeBrowsingUrlCheckerImpl : public mojom::SafeBrowsingUrlChecker,
   const security_interstitials::UnsafeResource::FrameTreeNodeId
       frame_tree_node_id_ =
           security_interstitials::UnsafeResource::kNoFrameTreeNodeId;
-  base::RepeatingCallback<web::WebState*()> web_state_getter_;
+  base::WeakPtr<web::WebState> weak_web_state_;
   scoped_refptr<UrlCheckerDelegate> url_checker_delegate_;
   scoped_refptr<SafeBrowsingDatabaseManager> database_manager_;
 
@@ -320,6 +341,11 @@ class SafeBrowsingUrlCheckerImpl : public mojom::SafeBrowsingUrlChecker,
   // for this profile.
   bool can_check_db_;
 
+  // The last committed URL when the checker is constructed. It is used to
+  // obtain page load token when the URL being checked is not a mainframe URL.
+  // Only used when real time lookup is performed.
+  GURL last_committed_url_;
+
   // The task runner for the UI thread.
   scoped_refptr<base::SequencedTaskRunner> ui_task_runner_;
 
@@ -330,11 +356,9 @@ class SafeBrowsingUrlCheckerImpl : public mojom::SafeBrowsingUrlChecker,
   // May be null on certain platforms that don't support chrome://safe-browsing
   // and in unit tests. If non-null, guaranteed to outlive this object by
   // contract.
-  WebUIDelegate* webui_delegate_ = nullptr;
+  raw_ptr<WebUIDelegate> webui_delegate_ = nullptr;
 
   base::WeakPtrFactory<SafeBrowsingUrlCheckerImpl> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(SafeBrowsingUrlCheckerImpl);
 };
 
 }  // namespace safe_browsing

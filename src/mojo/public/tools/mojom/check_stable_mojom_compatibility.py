@@ -18,7 +18,6 @@ import json
 import os
 import os.path
 import shutil
-import six
 import sys
 import tempfile
 
@@ -40,6 +39,8 @@ def _ValidateDelta(root, delta):
   not produce or rely on cached module translations, but instead parses the full
   transitive closure of a mojom's input dependencies all at once.
   """
+
+  translate.is_running_backwards_compatibility_check_hack = True
 
   # First build a map of all files covered by the delta
   affected_files = set()
@@ -73,11 +74,20 @@ def _ValidateDelta(root, delta):
     try:
       ast = parser.Parse(contents, mojom)
     except Exception as e:
-      six.reraise(
-          ParseError,
-          'encountered exception {0} while parsing {1}'.format(e, mojom),
-          sys.exc_info()[2])
+      raise ParseError('encountered exception {0} while parsing {1}'.format(
+          e, mojom))
     for imp in ast.import_list:
+      if (not file_overrides.get(imp.import_filename)
+          and not os.path.exists(os.path.join(root, imp.import_filename))):
+        # Speculatively construct a path prefix to locate the import_filename
+        mojom_path = os.path.dirname(os.path.normpath(mojom)).split(os.sep)
+        test_prefix = ''
+        for path_component in mojom_path:
+          test_prefix = os.path.join(test_prefix, path_component)
+          test_import_filename = os.path.join(test_prefix, imp.import_filename)
+          if os.path.exists(os.path.join(root, test_import_filename)):
+            imp.import_filename = test_import_filename
+            break
       parseMojom(imp.import_filename, file_overrides, override_modules)
 
     # Now that the transitive set of dependencies has been imported and parsed

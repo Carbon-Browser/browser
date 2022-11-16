@@ -8,13 +8,16 @@
 
 #include "base/bind.h"
 #include "base/callback_helpers.h"
+#include "base/check.h"
 #include "base/command_line.h"
 #include "base/location.h"
 #include "base/logging.h"
+#include "base/numerics/ranges.h"
 #include "base/strings/string_split.h"
 #include "base/task/current_thread.h"
 #include "chromecast/base/chromecast_switches.h"
 #include "chromecast/base/metrics/cast_metrics_helper.h"
+#include "chromecast/media/cma/backend/alsa/scoped_alsa_mixer.h"
 #include "media/base/media_switches.h"
 
 #define ALSA_ASSERT(func, ...)                                        \
@@ -32,79 +35,9 @@ const char kAlsaDefaultDeviceName[] = "default";
 const char kAlsaDefaultVolumeElementName[] = "Master";
 const char kAlsaMuteMixerElementName[] = "Mute";
 
-constexpr base::TimeDelta kPowerSaveCheckTime = base::TimeDelta::FromMinutes(5);
+constexpr base::TimeDelta kPowerSaveCheckTime = base::Minutes(5);
 
 }  // namespace
-
-class AlsaVolumeControl::ScopedAlsaMixer {
- public:
-  ScopedAlsaMixer(::media::AlsaWrapper* alsa,
-                  const std::string& mixer_device_name,
-                  const std::string& mixer_element_name)
-      : alsa_(alsa),
-        mixer_device_name_(mixer_device_name),
-        mixer_element_name_(mixer_element_name) {
-    DCHECK(alsa_);
-    Refresh();
-  }
-
-  ~ScopedAlsaMixer() {
-    if (mixer) {
-      alsa_->MixerClose(mixer);
-    }
-  }
-
-  void Refresh() {
-    if (mixer) {
-      alsa_->MixerClose(mixer);
-      DVLOG(2) << "Reopening mixer element \"" << mixer_element_name_
-               << "\" on device \"" << mixer_device_name_ << "\"";
-    } else {
-      LOG(INFO) << "Opening mixer element \"" << mixer_element_name_
-                << "\" on device \"" << mixer_device_name_ << "\"";
-    }
-
-    int alsa_err = alsa_->MixerOpen(&mixer, 0);
-    if (alsa_err < 0) {
-      LOG(ERROR) << "MixerOpen error: " << alsa_->StrError(alsa_err);
-      mixer = nullptr;
-      return;
-    }
-    alsa_err = alsa_->MixerAttach(mixer, mixer_device_name_.c_str());
-    if (alsa_err < 0) {
-      LOG(ERROR) << "MixerAttach error: " << alsa_->StrError(alsa_err);
-      alsa_->MixerClose(mixer);
-      mixer = nullptr;
-      return;
-    }
-    ALSA_ASSERT(MixerElementRegister, mixer, NULL, NULL);
-    alsa_err = alsa_->MixerLoad(mixer);
-    if (alsa_err < 0) {
-      LOG(ERROR) << "MixerLoad error: " << alsa_->StrError(alsa_err);
-      alsa_->MixerClose(mixer);
-      mixer = nullptr;
-      return;
-    }
-    snd_mixer_selem_id_t* sid = NULL;
-    ALSA_ASSERT(MixerSelemIdMalloc, &sid);
-    alsa_->MixerSelemIdSetIndex(sid, 0);
-    alsa_->MixerSelemIdSetName(sid, mixer_element_name_.c_str());
-    element = alsa_->MixerFindSelem(mixer, sid);
-    if (!element) {
-      LOG(ERROR) << "Simple mixer control element \"" << mixer_element_name_
-                 << "\" not found.";
-    }
-    alsa_->MixerSelemIdFree(sid);
-  }
-
-  snd_mixer_elem_t* element = nullptr;
-  snd_mixer_t* mixer = nullptr;
-
- private:
-  ::media::AlsaWrapper* const alsa_;
-  const std::string mixer_device_name_;
-  const std::string mixer_element_name_;
-};
 
 // static
 std::string AlsaVolumeControl::GetVolumeElementName() {
@@ -270,7 +203,8 @@ AlsaVolumeControl::AlsaVolumeControl(Delegate* delegate)
       mute_mixer_ptr_ = mute_mixer_.get();
 
       alsa_->MixerElemSetCallback(
-          mute_mixer_->element, &AlsaVolumeControl::VolumeOrMuteChangeCallback);
+          mute_mixer_->element,
+          &AlsaVolumeControl::VolumeOrMuteChangeCallback);
       alsa_->MixerElemSetCallbackPrivate(mute_mixer_->element,
                                          reinterpret_cast<void*>(this));
       RefreshMixerFds(mute_mixer_.get());
@@ -296,8 +230,34 @@ float AlsaVolumeControl::GetRoundtripVolume(float volume) {
   }
 
   long level = 0;  // NOLINT(runtime/int)
-  level = std::round((volume * (volume_range_max_ - volume_range_min_)) +
+  level = std::round((base::ClampToRange(volume, 0.0f, 1.0f) *
+                      (volume_range_max_ - volume_range_min_)) +
                      volume_range_min_);
+  return static_cast<float>(level - volume_range_min_) /
+         static_cast<float>(volume_range_max_ - volume_range_min_);
+}
+
+float AlsaVolumeControl::VolumeLevelToDb(float volume) {
+  long level = 0;  // NOLINT(runtime/int)
+  if (volume_range_max_ == volume_range_min_) {
+    level = volume_range_max_;
+  } else {
+    level = std::round((volume * (volume_range_max_ - volume_range_min_)) +
+                       volume_range_min_);
+  }
+  long volume_db = 0;  // NOLINT(runtime/int)
+  ALSA_ASSERT(MixerSelemAskPlaybackVolDb, volume_mixer_->element, level,
+              &volume_db);
+  return static_cast<float>(volume_db * 0.01f);
+}
+
+float AlsaVolumeControl::DbToVolumeLevel(float volume_db) {
+  if (volume_range_max_ == volume_range_min_) {
+    return 0.0f;
+  }
+  long level = 0.0f;  // NOLINT(runtime/int)
+  ALSA_ASSERT(MixerSelemAskPlaybackDbVol, volume_mixer_->element,
+              std::round(volume_db * 100.0f), &level);
   return static_cast<float>(level - volume_range_min_) /
          static_cast<float>(volume_range_max_ - volume_range_min_);
 }
@@ -366,10 +326,6 @@ void AlsaVolumeControl::SetPowerSave(bool power_save_on) {
   } else {
     power_save_timer_.Stop();
   }
-}
-
-void AlsaVolumeControl::CheckPowerSave() {
-  SetPowerSave(last_power_save_on_);
 }
 
 void AlsaVolumeControl::SetLimit(float limit) {}
@@ -451,6 +407,10 @@ void AlsaVolumeControl::OnFileCanWriteWithoutBlocking(int fd) {
 
 void AlsaVolumeControl::OnVolumeOrMuteChanged() {
   delegate_->OnSystemVolumeOrMuteChange(GetVolume(), IsMuted());
+}
+
+void AlsaVolumeControl::CheckPowerSave() {
+  SetPowerSave(last_power_save_on_);
 }
 
 // static

@@ -23,6 +23,7 @@ import android.view.GestureDetector;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.accessibility.AccessibilityEvent;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
 import android.widget.TextView;
@@ -60,6 +61,13 @@ public abstract class UrlBar extends AutocompleteEditText {
     // of what is displayed to the user, see limitDisplayableLength().
     private static final int MAX_DISPLAYABLE_LENGTH = 4000;
     private static final int MAX_DISPLAYABLE_LENGTH_LOW_END = 1000;
+
+    // Stylus handwriting: Setting this ime option instructs stylus writing service to restrict
+    // capturing writing events slightly outside the Url bar area. This is needed to prevent stylus
+    // handwriting in inputs in web content area that are very close to url bar area, from being
+    // committed to Url bar's Edit text. Ex: google.com search field.
+    private static final String IME_OPTION_RESTRICT_STYLUS_WRITING_AREA =
+            "restrictDirectWritingArea=true";
 
     private boolean mFirstDrawComplete;
 
@@ -273,6 +281,10 @@ public abstract class UrlBar extends AutocompleteEditText {
         mTextContextMenuDelegate = delegate;
     }
 
+    /**
+     * When predictive back gesture is enabled, keycode_back will not be sent from Android OS
+     * starting from T. {@link LocationBarMediator} will intercept the back press instead.
+     */
     @Override
     public boolean onKeyPreIme(int keyCode, KeyEvent event) {
         if (KeyEvent.KEYCODE_BACK == keyCode && event.getAction() == KeyEvent.ACTION_UP) {
@@ -304,6 +316,12 @@ public abstract class UrlBar extends AutocompleteEditText {
         fixupTextDirection();
     }
 
+    @Override
+    public void onFinishInflate() {
+        super.onFinishInflate();
+        setPrivateImeOptions(IME_OPTION_RESTRICT_STYLUS_WRITING_AREA);
+    }
+
     /**
      * Sets whether this {@link UrlBar} should be focusable.
      */
@@ -311,6 +329,14 @@ public abstract class UrlBar extends AutocompleteEditText {
         mAllowFocus = allowFocus;
         setFocusable(allowFocus);
         setFocusableInTouchMode(allowFocus);
+    }
+
+    /**
+     * Sends an accessibility event to the URL bar to request accessibility focus on it (e.g. for
+     * TalkBack).
+     */
+    public void requestAccessibilityFocus() {
+        sendAccessibilityEvent(AccessibilityEvent.TYPE_VIEW_FOCUSED);
     }
 
     /**

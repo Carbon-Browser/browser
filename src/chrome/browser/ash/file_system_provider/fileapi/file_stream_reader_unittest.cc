@@ -15,7 +15,6 @@
 #include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "base/files/scoped_temp_dir.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/numerics/safe_math.h"
 #include "base/run_loop.h"
@@ -49,6 +48,10 @@ const ProviderId kProviderId = ProviderId::CreateFromExtensionId(kExtensionId);
 class EventLogger {
  public:
   EventLogger() {}
+
+  EventLogger(const EventLogger&) = delete;
+  EventLogger& operator=(const EventLogger&) = delete;
+
   virtual ~EventLogger() {}
 
   void OnRead(int result) { results_.push_back(result); }
@@ -63,8 +66,6 @@ class EventLogger {
  private:
   std::vector<int64_t> results_;
   base::WeakPtrFactory<EventLogger> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(EventLogger);
 };
 
 // Creates a cracked FileSystemURL for tests.

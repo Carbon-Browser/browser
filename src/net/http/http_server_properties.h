@@ -16,8 +16,8 @@
 #include <vector>
 
 #include "base/callback.h"
-#include "base/containers/mru_cache.h"
-#include "base/macros.h"
+#include "base/containers/lru_cache.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/threading/thread_checker.h"
 #include "base/time/time.h"
@@ -29,11 +29,11 @@
 #include "net/base/network_isolation_key.h"
 #include "net/http/alternative_service.h"
 #include "net/http/broken_alternative_services.h"
-#include "net/third_party/quiche/src/quic/core/quic_bandwidth.h"
-#include "net/third_party/quiche/src/quic/core/quic_server_id.h"
-#include "net/third_party/quiche/src/quic/core/quic_versions.h"
-#include "net/third_party/quiche/src/spdy/core/spdy_framer.h"  // TODO(willchan): Reconsider this.
-#include "net/third_party/quiche/src/spdy/core/spdy_protocol.h"
+#include "net/third_party/quiche/src/quiche/quic/core/quic_bandwidth.h"
+#include "net/third_party/quiche/src/quiche/quic/core/quic_server_id.h"
+#include "net/third_party/quiche/src/quiche/quic/core/quic_versions.h"
+#include "net/third_party/quiche/src/quiche/spdy/core/spdy_framer.h"  // TODO(willchan): Reconsider this.
+#include "net/third_party/quiche/src/quiche/spdy/core/spdy_protocol.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/scheme_host_port.h"
 
@@ -182,9 +182,12 @@ class NET_EXPORT HttpServerProperties
   };
 
   class NET_EXPORT ServerInfoMap
-      : public base::MRUCache<ServerInfoMapKey, ServerInfo> {
+      : public base::LRUCache<ServerInfoMapKey, ServerInfo> {
    public:
     ServerInfoMap();
+
+    ServerInfoMap(const ServerInfoMap&) = delete;
+    ServerInfoMap& operator=(const ServerInfoMap&) = delete;
 
     // If there's an entry corresponding to |key|, brings that entry to the
     // front and returns an iterator to it. Otherwise, inserts an empty
@@ -195,9 +198,6 @@ class NET_EXPORT HttpServerProperties
     // data. The iterator must point to an entry in the map. Regardless of
     // whether the entry is removed or not, returns iterator for the next entry.
     iterator EraseIfEmpty(iterator server_info_it);
-
-   private:
-    DISALLOW_COPY_AND_ASSIGN(ServerInfoMap);
   };
 
   struct NET_EXPORT QuicServerInfoMapKey {
@@ -218,12 +218,12 @@ class NET_EXPORT HttpServerProperties
   };
 
   // Max number of quic servers to store is not hardcoded and can be set.
-  // Because of this, QuicServerInfoMap will not be a subclass of MRUCache.
+  // Because of this, QuicServerInfoMap will not be a subclass of LRUCache.
   // Separate from ServerInfoMap because the key includes privacy mode (Since
   // this is analogous to the SSL session cache, which has separate caches for
   // privacy mode), and each entry can be quite large, so it has its own size
   // limit, which is much smaller than the ServerInfoMap's limit.
-  typedef base::MRUCache<QuicServerInfoMapKey, std::string> QuicServerInfoMap;
+  typedef base::LRUCache<QuicServerInfoMapKey, std::string> QuicServerInfoMap;
 
   // If a |pref_delegate| is specified, it will be used to read/write the
   // properties to a pref file. Writes are rate limited to improve performance.
@@ -234,10 +234,14 @@ class NET_EXPORT HttpServerProperties
   //
   // |clock| is used for converting base::TimeTicks to base::Time for
   // wherever base::Time is preferable.
-  HttpServerProperties(std::unique_ptr<PrefDelegate> pref_delegate = nullptr,
-                       NetLog* net_log = nullptr,
-                       const base::TickClock* tick_clock = nullptr,
-                       base::Clock* clock = nullptr);
+  explicit HttpServerProperties(
+      std::unique_ptr<PrefDelegate> pref_delegate = nullptr,
+      NetLog* net_log = nullptr,
+      const base::TickClock* tick_clock = nullptr,
+      base::Clock* clock = nullptr);
+
+  HttpServerProperties(const HttpServerProperties&) = delete;
+  HttpServerProperties& operator=(const HttpServerProperties&) = delete;
 
   ~HttpServerProperties() override;
 
@@ -410,6 +414,13 @@ class NET_EXPORT HttpServerProperties
   void SetMaxServerConfigsStoredInProperties(
       size_t max_server_configs_stored_in_properties);
 
+  // If values are present, sets initial_delay and
+  // exponential_backoff_on_initial_delay which are used to calculate delay of
+  // broken alternative services.
+  void SetBrokenAlternativeServicesDelayParams(
+      absl::optional<base::TimeDelta> initial_delay,
+      absl::optional<bool> exponential_backoff_on_initial_delay);
+
   // Returns whether HttpServerProperties is initialized.
   bool IsInitialized() const;
 
@@ -452,6 +463,15 @@ class NET_EXPORT HttpServerProperties
 
   const ServerInfoMap& server_info_map_for_testing() const {
     return server_info_map_;
+  }
+
+  const BrokenAlternativeServices& broken_alternative_services_for_testing()
+      const {
+    return broken_alternative_services_;
+  }
+
+  const QuicServerInfoMap& quic_server_info_map_for_testing() const {
+    return quic_server_info_map_;
   }
 
   // TODO(mmenke): Look into removing this.
@@ -586,8 +606,8 @@ class NET_EXPORT HttpServerProperties
   // Invokes |callback| on completion, if non-null.
   void WriteProperties(base::OnceClosure callback) const;
 
-  const base::TickClock* tick_clock_;  // Unowned
-  base::Clock* clock_;                 // Unowned
+  raw_ptr<const base::TickClock> tick_clock_;  // Unowned
+  raw_ptr<base::Clock> clock_;                 // Unowned
 
   // Cached value of kPartitionHttpServerPropertiesByNetworkIsolationKey
   // feature. Cached to improve performance.
@@ -600,7 +620,7 @@ class NET_EXPORT HttpServerProperties
   // Queue a write when resources finish loading. Set to true when
   // MaybeQueueWriteProperties() is invoked while still waiting on
   // initialization to complete.
-  bool queue_write_on_load_;
+  bool queue_write_on_load_ = false;
 
   // Used to load/save properties from/to preferences. May be nullptr.
   std::unique_ptr<HttpServerPropertiesManager> properties_manager_;
@@ -637,8 +657,6 @@ class NET_EXPORT HttpServerProperties
   base::OneShotTimer prefs_update_timer_;
 
   THREAD_CHECKER(thread_checker_);
-
-  DISALLOW_COPY_AND_ASSIGN(HttpServerProperties);
 };
 
 }  // namespace net

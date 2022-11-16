@@ -16,14 +16,17 @@
 #include <vector>
 
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
-#include "base/memory/singleton.h"
 #include "base/observer_list_threadsafe.h"
+#include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "content/browser/gpu/gpu_data_manager_impl.h"
+#include "content/common/content_export.h"
+#include "media/base/supported_video_decoder_config.h"
+#include "media/video/video_encode_accelerator.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/display/display_observer.h"
 #include "ui/gl/gpu_preference.h"
@@ -32,16 +35,16 @@ namespace base {
 class CommandLine;
 }
 
-namespace media {
-struct SupportedVideoDecoderConfig;
-using SupportedVideoDecoderConfigs = std::vector<SupportedVideoDecoderConfig>;
-}  // namespace media
-
 namespace content {
 
 class CONTENT_EXPORT GpuDataManagerImplPrivate {
  public:
   explicit GpuDataManagerImplPrivate(GpuDataManagerImpl* owner);
+
+  GpuDataManagerImplPrivate(const GpuDataManagerImplPrivate&) = delete;
+  GpuDataManagerImplPrivate& operator=(const GpuDataManagerImplPrivate&) =
+      delete;
+
   virtual ~GpuDataManagerImplPrivate();
 
   void StartUmaTimer();
@@ -69,14 +72,14 @@ class CONTENT_EXPORT GpuDataManagerImplPrivate {
   void UpdateGpuInfo(
       const gpu::GPUInfo& gpu_info,
       const absl::optional<gpu::GPUInfo>& optional_gpu_info_for_hardware_gpu);
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   void UpdateDxDiagNode(const gpu::DxDiagNode& dx_diagnostics);
   void UpdateDx12Info(uint32_t d3d12_feature_level);
   void UpdateVulkanInfo(uint32_t vulkan_version);
   void UpdateDevicePerfInfo(const gpu::DevicePerfInfo& device_perf_info);
 
   void UpdateOverlayInfo(const gpu::OverlayInfo& overlay_info);
-  void UpdateHDRStatus(bool hdr_enabled);
+  void UpdateDXGIInfo(gfx::mojom::DXGIInfoPtr dxgi_info);
   void UpdateDxDiagNodeRequestStatus(bool request_continues);
   void UpdateDx12RequestStatus(bool request_continues);
   void UpdateVulkanRequestStatus(bool request_continues);
@@ -91,8 +94,11 @@ class CONTENT_EXPORT GpuDataManagerImplPrivate {
                             const absl::optional<gpu::GpuFeatureInfo>&
                                 gpu_feature_info_for_hardware_gpu);
   void UpdateGpuExtraInfo(const gfx::GpuExtraInfo& process_info);
-  void UpdateMojoMediaVideoCapabilities(
+  void UpdateMojoMediaVideoDecoderCapabilities(
       const media::SupportedVideoDecoderConfigs& configs);
+  void UpdateMojoMediaVideoEncoderCapabilities(
+      const media::VideoEncodeAccelerator::SupportedProfiles&
+          supported_profiles);
 
   gpu::GpuFeatureInfo GetGpuFeatureInfo() const;
   gpu::GpuFeatureInfo GetGpuFeatureInfoForHardwareGpu() const;
@@ -113,7 +119,7 @@ class CONTENT_EXPORT GpuDataManagerImplPrivate {
                      const std::string& header,
                      const std::string& message);
 
-  void ProcessCrashed(base::TerminationStatus exit_code);
+  void ProcessCrashed();
 
   std::unique_ptr<base::ListValue> GetLogMessages() const;
 
@@ -218,12 +224,12 @@ class CONTENT_EXPORT GpuDataManagerImplPrivate {
 
   void RecordCompositingMode();
 
-  GpuDataManagerImpl* const owner_;
+  const raw_ptr<GpuDataManagerImpl> owner_;
 
   gpu::GpuFeatureInfo gpu_feature_info_;
   gpu::GPUInfo gpu_info_;
   gl::GpuPreference active_gpu_heuristic_ = gl::GpuPreference::kDefault;
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   bool gpu_info_dx_diag_requested_ = false;
   bool gpu_info_dx_diag_request_failed_ = false;
   bool gpu_info_dx12_valid_ = false;
@@ -278,8 +284,6 @@ class CONTENT_EXPORT GpuDataManagerImplPrivate {
   bool application_is_visible_ = true;
 
   bool disable_gpu_compositing_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(GpuDataManagerImplPrivate);
 };
 
 }  // namespace content

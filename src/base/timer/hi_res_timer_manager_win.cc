@@ -11,14 +11,13 @@
 #include "base/command_line.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/power_monitor/power_monitor.h"
-#include "base/task/post_task.h"
 #include "base/time/time.h"
 
 namespace base {
 
 namespace {
 
-constexpr TimeDelta kUsageSampleInterval = TimeDelta::FromMinutes(10);
+constexpr TimeDelta kUsageSampleInterval = Minutes(10);
 
 void ReportHighResolutionTimerUsage() {
   UMA_HISTOGRAM_PERCENTAGE("Windows.HighResolutionTimerUsage",

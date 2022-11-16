@@ -8,6 +8,7 @@
 #include <cstdint>
 
 #include "base/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "ui/ozone/platform/wayland/test/test_data_device.h"
 #include "ui/ozone/platform/wayland/test/test_data_source.h"
@@ -42,6 +43,7 @@ class WaylandDragDropTest : public WaylandTest,
   void SendDndEnter(WaylandWindow* window, const gfx::Point& location);
   void SendDndLeave();
   void SendDndMotion(const gfx::Point& location);
+  void SendDndDrop();
   void SendDndCancelled();
   void ReadData(const std::string& mime_type,
                 wl::TestDataSource::ReadDataCallback callback);
@@ -59,6 +61,7 @@ class WaylandDragDropTest : public WaylandTest,
                              MockPlatformWindowDelegate* delegate,
                              int id,
                              const gfx::Point& location);
+  virtual void SendTouchUp(int id);
   virtual void SendTouchMotion(WaylandWindow* window,
                                MockPlatformWindowDelegate* delegate,
                                int id,
@@ -90,10 +93,10 @@ class WaylandDragDropTest : public WaylandTest,
   }
 
   // Server objects
-  wl::TestDataDeviceManager* data_device_manager_;
-  wl::TestDataSource* data_source_;
-  wl::MockPointer* pointer_;
-  wl::TestTouch* touch_;
+  raw_ptr<wl::TestDataDeviceManager> data_device_manager_;
+  raw_ptr<wl::TestDataSource> data_source_;
+  raw_ptr<wl::MockPointer> pointer_;
+  raw_ptr<wl::TestTouch> touch_;
 
   uint32_t current_serial_;
 };

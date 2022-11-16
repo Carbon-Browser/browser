@@ -11,7 +11,9 @@
 #include "base/feature_list.h"
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/threading/platform_thread.h"
 #include "base/threading/sequenced_task_runner_handle.h"
+#include "base/threading/thread_task_runner_handle.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
 #include "cc/metrics/video_playback_roughness_reporter.h"
@@ -45,7 +47,7 @@ namespace {
 // FrameSinkId. This is used to aggregate Viz communication and substantially
 // reduce IPC traffic when many VideoFrameSubmitters are active within a frame.
 const base::Feature kUseVideoFrameSinkBundle{"UseVideoFrameSinkBundle",
-                                             base::FEATURE_DISABLED_BY_DEFAULT};
+                                             base::FEATURE_ENABLED_BY_DEFAULT};
 
 }  // namespace
 
@@ -137,6 +139,12 @@ class VideoFrameSubmitter::FrameSinkBundleProxy
     }
     bundle_->InitializeCompositorFrameSinkType(frame_sink_id_.sink_id(), type);
   }
+
+#if BUILDFLAG(IS_ANDROID)
+  void SetThreadIds(const WTF::Vector<int32_t>& thread_ids) override {
+    bundle_->SetThreadIds(frame_sink_id_.sink_id(), thread_ids);
+  }
+#endif
 
  private:
   const base::WeakPtr<VideoFrameSinkBundle> bundle_;
@@ -282,6 +290,9 @@ void VideoFrameSubmitter::OnContextLost() {
   waiting_for_compositor_ack_ = false;
   last_frame_id_.reset();
 
+  if (video_frame_provider_)
+    video_frame_provider_->OnContextLost();
+
   resource_provider_->OnContextLost();
 
   // NOTE: These objects should be reset last; and if `bundle_proxy`_ is set, it
@@ -321,7 +332,7 @@ void VideoFrameSubmitter::OnBeginFrame(
       continue;
     auto& feedback =
         timing_details.find(frame_token)->value.presentation_feedback;
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
     // TODO: On Linux failure flag is unreliable, and perfectly rendered frames
     // are reported as failures all the time.
     bool presentation_failure = false;
@@ -432,39 +443,40 @@ void VideoFrameSubmitter::OnReceivedContextProvider(
     return;
   }
 
-  bool has_good_context = false;
-  while (!has_good_context) {
-    if (!context_provider) {
-      // Delay to retry getting the context_provider.
-      constexpr base::TimeDelta kGetContextProviderRetryTimeout =
-          base::TimeDelta::FromMilliseconds(150);
-
-      base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
-          FROM_HERE,
-          base::BindOnce(
-              context_provider_callback_, context_provider_,
-              base::BindOnce(&VideoFrameSubmitter::OnReceivedContextProvider,
-                             weak_ptr_factory_.GetWeakPtr())),
-          kGetContextProviderRetryTimeout);
-      return;
-    }
-
-    // Note that |context_provider| is now null after the move, such that if we
-    // end up having !|has_good_context|, we will retry to obtain the
-    // context_provider.
-    context_provider_ = std::move(context_provider);
-    auto result = context_provider_->BindToCurrentThread();
-
-    has_good_context =
-        result == gpu::ContextResult::kSuccess &&
-        context_provider_->ContextGL()->GetGraphicsResetStatusKHR() ==
-            GL_NO_ERROR;
+  if (!MaybeAcceptContextProvider(std::move(context_provider))) {
+    constexpr base::TimeDelta kGetContextProviderRetryTimeout =
+        base::Milliseconds(150);
+    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+        FROM_HERE,
+        base::BindOnce(
+            context_provider_callback_, context_provider_,
+            base::BindOnce(&VideoFrameSubmitter::OnReceivedContextProvider,
+                           weak_ptr_factory_.GetWeakPtr())),
+        kGetContextProviderRetryTimeout);
+    return;
   }
+
   context_provider_->AddObserver(this);
   resource_provider_->Initialize(context_provider_.get(), nullptr);
 
   if (frame_sink_id_.is_valid())
     StartSubmitting();
+}
+
+bool VideoFrameSubmitter::MaybeAcceptContextProvider(
+    scoped_refptr<viz::RasterContextProvider> context_provider) {
+  if (!context_provider) {
+    return false;
+  }
+
+  context_provider_ = std::move(context_provider);
+  if (context_provider_->BindToCurrentThread() !=
+      gpu::ContextResult::kSuccess) {
+    return false;
+  }
+
+  return context_provider_->ContextGL()->GetGraphicsResetStatusKHR() ==
+         GL_NO_ERROR;
 }
 
 void VideoFrameSubmitter::StartSubmitting() {
@@ -502,6 +514,14 @@ void VideoFrameSubmitter::StartSubmitting() {
   compositor_frame_sink_->InitializeCompositorFrameSinkType(
       is_media_stream_ ? viz::mojom::CompositorFrameSinkType::kMediaStream
                        : viz::mojom::CompositorFrameSinkType::kVideo);
+
+#if BUILDFLAG(IS_ANDROID)
+  WTF::Vector<base::PlatformThreadId> thread_ids;
+  thread_ids.push_back(base::PlatformThread::CurrentId());
+  thread_ids.push_back(Platform::Current()->GetIOThreadId());
+  compositor_frame_sink_->SetThreadIds(thread_ids);
+#endif
+
   UpdateSubmissionState();
 }
 
@@ -509,7 +529,6 @@ void VideoFrameSubmitter::UpdateSubmissionState() {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   if (!compositor_frame_sink_)
     return;
-
   const auto is_driving_frame_updates = IsDrivingFrameUpdates();
   compositor_frame_sink_->SetNeedsBeginFrame(is_driving_frame_updates);
   power_mode_voter_->VoteFor(power_scheduler::PowerMode::kVideoPlayback);
@@ -550,7 +569,7 @@ void VideoFrameSubmitter::UpdateSubmissionState() {
     // If there are any in-flight empty frame requests, this cancels them. We
     // want to wait until any group of state changes stabilizes.
     empty_frame_timer_.Start(
-        FROM_HERE, base::TimeDelta::FromMilliseconds(500),
+        FROM_HERE, base::Milliseconds(500),
         base::BindOnce(&VideoFrameSubmitter::SubmitEmptyFrameIfNeeded,
                        base::Unretained(this)));
   }
@@ -747,6 +766,10 @@ viz::CompositorFrame VideoFrameSubmitter::CreateCompositorFrame(
   compositor_frame.metadata.begin_frame_ack.has_damage = true;
   compositor_frame.metadata.device_scale_factor = 1;
   compositor_frame.metadata.may_contain_video = true;
+  // If we're submitting frames even if we're not visible, then also turn off
+  // throttling.  This is for picture in picture, which can be throttled if the
+  // opener window is minimized without this.
+  compositor_frame.metadata.may_throttle_if_undrawn_frames = force_submit_;
 
   // Specify size of shared quad state and quad lists so that RenderPass doesn't
   // allocate using the defaults of 32 and 128 since we only append one quad.

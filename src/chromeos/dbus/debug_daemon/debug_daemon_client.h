@@ -16,13 +16,12 @@
 #include "base/callback.h"
 #include "base/component_export.h"
 #include "base/files/file.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/observer_list_types.h"
-#include "base/task_runner.h"
+#include "base/task/task_runner.h"
 #include "base/trace_event/tracing_agent.h"
-#include "chromeos/dbus/dbus_client.h"
-#include "chromeos/dbus/dbus_method_call_status.h"
+#include "chromeos/dbus/common/dbus_client.h"
+#include "chromeos/dbus/common/dbus_method_call_status.h"
 #include "dbus/message.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
@@ -43,6 +42,25 @@ class COMPONENT_EXPORT(DEBUG_DAEMON) DebugDaemonClient
     : public DBusClient,
       public base::trace_event::TracingAgent {
  public:
+  // Returns the global instance if initialized. May return null.
+  static DebugDaemonClient* Get();
+
+  // Creates and initializes the global instance. |bus| must not be null.
+  static void Initialize(dbus::Bus* bus);
+
+  // Creates and initializes a fake global instance.
+  static void InitializeFake();
+
+  // Sets a temporary instance for testing. Overrides the existing
+  // global instance, if any.
+  static void SetInstanceForTest(DebugDaemonClient* client);
+
+  // Destroys the global instance if it has been initialized.
+  static void Shutdown();
+
+  DebugDaemonClient(const DebugDaemonClient&) = delete;
+  DebugDaemonClient& operator=(const DebugDaemonClient&) = delete;
+
   ~DebugDaemonClient() override;
 
   // Observes the signals that are received from D-Bus.
@@ -78,6 +96,7 @@ class COMPONENT_EXPORT(DEBUG_DAEMON) DebugDaemonClient
   virtual void GetRoutes(
       bool numeric,
       bool ipv6,
+      bool all_tables,
       DBusMethodCallback<std::vector<std::string> /* routes */> callback) = 0;
 
   // Gets information about network status as json.
@@ -89,16 +108,16 @@ class COMPONENT_EXPORT(DEBUG_DAEMON) DebugDaemonClient
   virtual void GetNetworkInterfaces(
       DBusMethodCallback<std::string> callback) = 0;
 
-  // Runs perf (via quipper) with arguments for |duration| (converted to
-  // seconds) and returns data collected over the passed |file_descriptor|.
+  // Runs perf (via quipper) with |quipper_args| and returns data collected
+  // over the passed |file_descriptor|.
   // |callback| is called on the completion of the D-Bus call.
   // Note that quipper failures may occur after successfully running the D-Bus
   // method. Such errors can be detected by |file_descriptor| and all its
   // duplicates being closed with no data written.
   // This method duplicates |file_descriptor| so it's OK to close the FD without
   // waiting for the result.
-  virtual void GetPerfOutput(base::TimeDelta duration,
-                             const std::vector<std::string>& perf_args,
+  virtual void GetPerfOutput(const std::vector<std::string>& quipper_args,
+                             bool disable_cpu_idle,
                              int file_descriptor,
                              DBusMethodCallback<uint64_t> callback) = 0;
 
@@ -144,7 +163,7 @@ class COMPONENT_EXPORT(DEBUG_DAEMON) DebugDaemonClient
   using KstaledRatioCallback = base::OnceCallback<void(bool)>;
 
   // Sets the kstaled ratio to the provided value, for more information
-  // see chromeos/memory/README.md.
+  // see chromeos/ash/components/memory/README.md.
   virtual void SetKstaledRatio(uint8_t val, KstaledRatioCallback) = 0;
 
   // Called once TestICMP() is complete. Takes an optional string.
@@ -253,21 +272,6 @@ class COMPONENT_EXPORT(DEBUG_DAEMON) DebugDaemonClient
                                  CupsRemovePrinterCallback callback,
                                  base::OnceClosure error_callback) = 0;
 
-  // Request a list of kernel features supported by device, passing it
-  // a |callback| on receiving the result. |result| is true on
-  // success.
-  using KernelFeatureListCallback =
-      base::OnceCallback<void(bool result, const std::string& feature_list)>;
-  virtual void GetKernelFeatureList(KernelFeatureListCallback callback) = 0;
-
-  // Request a kernel feature |name| to be enabled, passing it a
-  // |callback| which is invoked once on receiving the result. |result|
-  // is true on success. On failure, |err_str| contains the failure reason.
-  using KernelFeatureEnableCallback =
-      base::OnceCallback<void(bool result, const std::string& err_str)>;
-  virtual void KernelFeatureEnable(const std::string& name,
-                                   KernelFeatureEnableCallback callback) = 0;
-
   // A callback to handle the result of
   // StartPluginVmDispatcher/StopPluginVmDispatcher.
   using PluginVmDispatcherCallback = base::OnceCallback<void(bool success)>;
@@ -312,6 +316,22 @@ class COMPONENT_EXPORT(DEBUG_DAEMON) DebugDaemonClient
                                 int32_t value,
                                 DBusMethodCallback<std::string> callback) = 0;
 
+  // Zram Writeback Dbus Messages
+  virtual void SwapZramEnableWriteback(
+      uint32_t size_mb,
+      DBusMethodCallback<std::string> callback) = 0;
+
+  virtual void SwapZramSetWritebackLimit(
+      uint32_t limit_pages,
+      DBusMethodCallback<std::string> callback) = 0;
+
+  virtual void SwapZramMarkIdle(uint32_t age_seconds,
+                                DBusMethodCallback<std::string> callback) = 0;
+
+  virtual void InitiateSwapZramWriteback(
+      debugd::ZramWritebackMode mode,
+      DBusMethodCallback<std::string> callback) = 0;
+
   // Stops the packet capture process identified with |handle|. |handle| is a
   // unique process identifier that is returned from debugd's PacketCaptureStart
   // D-Bus method when the packet capture process is started. Stops all on-going
@@ -321,20 +341,16 @@ class COMPONENT_EXPORT(DEBUG_DAEMON) DebugDaemonClient
   virtual void PacketCaptureStartSignalReceived(dbus::Signal* signal) = 0;
   virtual void PacketCaptureStopSignalReceived(dbus::Signal* signal) = 0;
 
-  // Factory function, creates a new instance and returns ownership.
-  // For normal usage, access the singleton via DBusThreadManager::Get().
-  static std::unique_ptr<DebugDaemonClient> Create();
-
  protected:
-  // For calling Init() in initiating a DebugDaemonClient instance for private
-  // connections.
+  // For creating a second instance of DebugDaemonClient on another thread for
+  // private connections.
   friend class DebugDaemonClientProvider;
 
-  // Create() should be used instead.
+  // Initialize() should be used instead.
   DebugDaemonClient();
 
- private:
-  DISALLOW_COPY_AND_ASSIGN(DebugDaemonClient);
+  // See DebugDaemonClientProvider for details.
+  static std::unique_ptr<DebugDaemonClient> CreateInstance();
 };
 
 }  // namespace chromeos
@@ -342,7 +358,8 @@ class COMPONENT_EXPORT(DEBUG_DAEMON) DebugDaemonClient
 // TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
 // source migration is finished.
 namespace ash {
+using ::chromeos::DbusLibraryError;
 using ::chromeos::DebugDaemonClient;
-}
+}  // namespace ash
 
 #endif  // CHROMEOS_DBUS_DEBUG_DAEMON_DEBUG_DAEMON_CLIENT_H_

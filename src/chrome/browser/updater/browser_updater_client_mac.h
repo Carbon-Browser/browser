@@ -7,22 +7,29 @@
 
 #include <string>
 
+#include "base/callback_forward.h"
 #include "base/mac/scoped_nsobject.h"
 #include "base/sequence_checker.h"
 #include "chrome/browser/updater/browser_updater_client.h"
 #import "chrome/updater/app/server/mac/service_protocol.h"
 #include "chrome/updater/update_service.h"
+#include "chrome/updater/updater_scope.h"
 
 @interface CRUUpdateClientOnDemandImpl : NSObject <CRUUpdateServicing>
+- (instancetype)initWithScope:(updater::UpdaterScope)scope;
 @end
 
 class BrowserUpdaterClientMac : public BrowserUpdaterClient {
  public:
-  BrowserUpdaterClientMac();
+  explicit BrowserUpdaterClientMac(updater::UpdaterScope scope);
   explicit BrowserUpdaterClientMac(
       base::scoped_nsobject<CRUUpdateClientOnDemandImpl> client);
+  void GetUpdaterVersion(
+      base::OnceCallback<void(const std::string&)> callback) override;
 
  private:
+  friend class UpdateClientMacTest;
+
   ~BrowserUpdaterClientMac() override;
 
   SEQUENCE_CHECKER(sequence_checker_);

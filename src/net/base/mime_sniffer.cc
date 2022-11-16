@@ -92,6 +92,7 @@
 #include "base/containers/span.h"
 #include "base/notreached.h"
 #include "base/strings/string_util.h"
+#include "build/build_config.h"
 #include "url/gurl.h"
 
 namespace net {
@@ -655,13 +656,11 @@ static bool SniffCRX(base::StringPiece content,
 }
 
 bool ShouldSniffMimeType(const GURL& url, base::StringPiece mime_type) {
-  bool sniffable_scheme = url.is_empty() ||
-                          url.SchemeIsHTTPOrHTTPS() ||
-#if defined(OS_ANDROID)
+  bool sniffable_scheme = url.is_empty() || url.SchemeIsHTTPOrHTTPS() ||
+#if BUILDFLAG(IS_ANDROID)
                           url.SchemeIs("content") ||
 #endif
-                          url.SchemeIsFile() ||
-                          url.SchemeIsFileSystem();
+                          url.SchemeIsFile() || url.SchemeIsFileSystem();
   if (!sniffable_scheme)
     return false;
 
@@ -829,8 +828,8 @@ bool LooksLikeBinary(base::StringPiece content) {
   // represents byte 0x1F.
   const uint32_t kBinaryBits =
       ~(1u << '\t' | 1u << '\n' | 1u << '\r' | 1u << '\f' | 1u << '\x1b');
-  for (size_t i = 0; i < content.length(); ++i) {
-    uint8_t byte = static_cast<uint8_t>(content[i]);
+  for (char c : content) {
+    uint8_t byte = static_cast<uint8_t>(c);
     if (byte < 0x20 && (kBinaryBits & (1u << byte)))
       return true;
   }

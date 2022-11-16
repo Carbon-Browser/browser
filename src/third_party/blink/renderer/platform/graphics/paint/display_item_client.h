@@ -6,12 +6,13 @@
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_GRAPHICS_PAINT_DISPLAY_ITEM_CLIENT_H_
 
 #include "base/dcheck_is_on.h"
-#include "third_party/blink/renderer/platform/geometry/int_rect.h"
 #include "third_party/blink/renderer/platform/graphics/dom_node_id.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_types.h"
 #include "third_party/blink/renderer/platform/graphics/paint_invalidation_reason.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
+#include "ui/gfx/geometry/rect.h"
 
 namespace blink {
 
@@ -20,7 +21,7 @@ namespace blink {
 // in which its display items are created during painting. After the document
 // cycle, a pointer/reference to DisplayItemClient should be no longer
 // dereferenced unless we can make sure the client is still alive.
-class PLATFORM_EXPORT DisplayItemClient {
+class PLATFORM_EXPORT DisplayItemClient : public GarbageCollectedMixin {
  public:
   DisplayItemClient()
       : paint_invalidation_reason_(
@@ -95,6 +96,7 @@ class PLATFORM_EXPORT DisplayItemClient {
   friend class ObjectPaintInvalidatorTest;
   friend class PaintChunker;
   friend class PaintController;
+  friend class PaintControllerCycleScope;
 
   void MarkForValidation() const { marked_for_validation_ = 1; }
   bool IsMarkedForValidation() const { return marked_for_validation_; }
@@ -103,11 +105,6 @@ class PLATFORM_EXPORT DisplayItemClient {
         static_cast<uint8_t>(PaintInvalidationReason::kNone);
     marked_for_validation_ = 0;
   }
-
-#if DCHECK_IS_ON()
-  void OnCreate();
-  void OnDestroy();
-#endif
 
   mutable uint8_t paint_invalidation_reason_ : 7;
   mutable uint8_t marked_for_validation_ : 1;

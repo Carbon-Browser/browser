@@ -10,7 +10,6 @@
 
 #include "base/bind.h"
 #include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "build/build_config.h"
 #include "components/permissions/permission_request.h"
 #include "components/permissions/permission_request_manager.h"
@@ -26,7 +25,7 @@
 #include "ui/base/l10n/l10n_util.h"
 #include "url/gurl.h"
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #include "components/resources/android/theme_resources.h"
 #else
 #include "components/vector_icons/vector_icons.h"
@@ -49,11 +48,14 @@ class QuotaPermissionRequest : public PermissionRequest {
       bool is_large_quota_request,
       content::QuotaPermissionContext::PermissionCallback callback);
 
+  QuotaPermissionRequest(const QuotaPermissionRequest&) = delete;
+  QuotaPermissionRequest& operator=(const QuotaPermissionRequest&) = delete;
+
   ~QuotaPermissionRequest() override;
 
   // PermissionRequest:
   bool IsDuplicateOf(PermissionRequest* other_request) const override;
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   std::u16string GetDialogMessageText() const override;
 #endif
 
@@ -64,8 +66,6 @@ class QuotaPermissionRequest : public PermissionRequest {
   const scoped_refptr<QuotaPermissionContextImpl> context_;
   const bool is_large_quota_request_;
   content::QuotaPermissionContext::PermissionCallback callback_;
-
-  DISALLOW_COPY_AND_ASSIGN(QuotaPermissionRequest);
 };
 
 QuotaPermissionRequest::QuotaPermissionRequest(
@@ -97,7 +97,7 @@ bool QuotaPermissionRequest::IsDuplicateOf(
                  ->is_large_quota_request_;
 }
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 std::u16string QuotaPermissionRequest::GetDialogMessageText() const {
   // If the site requested larger quota than this threshold, show a different
   // message to the user.
@@ -106,7 +106,7 @@ std::u16string QuotaPermissionRequest::GetDialogMessageText() const {
                                : IDS_REQUEST_QUOTA_INFOBAR_TEXT),
       url_formatter::FormatUrlForSecurityDisplay(requesting_origin()));
 }
-#endif  // defined(OS_ANDROID)
+#endif  // BUILDFLAG(IS_ANDROID)
 
 void QuotaPermissionRequest::PermissionDecided(ContentSetting result,
                                                bool is_one_time) {

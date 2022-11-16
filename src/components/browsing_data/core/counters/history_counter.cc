@@ -80,9 +80,9 @@ void HistoryCounter::Count() {
 
   web_counting_finished_ = false;
 
-  web_history_timeout_.Start(
-      FROM_HERE, base::TimeDelta::FromSeconds(kWebHistoryTimeoutSeconds), this,
-      &HistoryCounter::OnWebHistoryTimeout);
+  web_history_timeout_.Start(FROM_HERE,
+                             base::Seconds(kWebHistoryTimeoutSeconds), this,
+                             &HistoryCounter::OnWebHistoryTimeout);
 
   history::QueryOptions options;
   options.max_count = 1;
@@ -154,7 +154,7 @@ void HistoryCounter::OnGetWebHistoryCount(
   if (!result)
     has_synced_visits_ = true;
   else if (const base::Value* events = result->FindListKey("event"))
-    has_synced_visits_ = !events->GetList().empty();
+    has_synced_visits_ = !events->GetListDeprecated().empty();
   else
     has_synced_visits_ = false;
   web_counting_finished_ = true;

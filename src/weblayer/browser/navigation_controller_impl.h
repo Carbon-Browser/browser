@@ -8,7 +8,6 @@
 #include <map>
 
 #include <memory>
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "build/build_config.h"
@@ -17,7 +16,7 @@
 #include "weblayer/browser/navigation_impl.h"
 #include "weblayer/public/navigation_controller.h"
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #include "base/android/scoped_java_ref.h"
 #endif
 
@@ -34,6 +33,10 @@ class NavigationControllerImpl : public NavigationController,
                                  public content::WebContentsObserver {
  public:
   explicit NavigationControllerImpl(TabImpl* tab);
+
+  NavigationControllerImpl(const NavigationControllerImpl&) = delete;
+  NavigationControllerImpl& operator=(const NavigationControllerImpl&) = delete;
+
   ~NavigationControllerImpl() override;
 
   // Creates the NavigationThrottle used to ensure WebContents::Stop() is called
@@ -66,7 +69,7 @@ class NavigationControllerImpl : public NavigationController,
   void OnPageDestroyed(Page* page);
   void OnPageLanguageDetermined(Page* page, const std::string& language);
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   void SetNavigationControllerImpl(
       JNIEnv* env,
       const base::android::JavaParamRef<jobject>& java_controller);
@@ -173,7 +176,7 @@ class NavigationControllerImpl : public NavigationController,
   // Set to non-null while in WillRedirectRequest().
   NavigationThrottleImpl* active_throttle_ = nullptr;
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   base::android::ScopedJavaGlobalRef<jobject> java_controller_;
 #endif
 
@@ -187,8 +190,6 @@ class NavigationControllerImpl : public NavigationController,
       delayed_load_params_;
 
   base::WeakPtrFactory<NavigationControllerImpl> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(NavigationControllerImpl);
 };
 
 }  // namespace weblayer

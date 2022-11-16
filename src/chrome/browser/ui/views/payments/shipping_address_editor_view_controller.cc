@@ -13,6 +13,7 @@
 #include "chrome/browser/ui/views/payments/validating_combobox.h"
 #include "chrome/browser/ui/views/payments/validating_textfield.h"
 #include "chrome/grit/generated_resources.h"
+#include "components/autofill/core/browser/address_normalizer.h"
 #include "components/autofill/core/browser/autofill_address_util.h"
 #include "components/autofill/core/browser/autofill_type.h"
 #include "components/autofill/core/browser/field_types.h"
@@ -178,10 +179,9 @@ void ShippingAddressEditorViewController::OnPerformAction(
   EditorViewController::OnPerformAction(sender);
   if (sender->GetID() != GetInputFieldViewId(autofill::ADDRESS_HOME_COUNTRY))
     return;
-  DCHECK_GE(sender->GetSelectedIndex(), 0);
-  if (chosen_country_index_ !=
-      static_cast<size_t>(sender->GetSelectedIndex())) {
-    chosen_country_index_ = sender->GetSelectedIndex();
+  DCHECK(sender->GetSelectedIndex().has_value());
+  if (chosen_country_index_ != sender->GetSelectedIndex()) {
+    chosen_country_index_ = sender->GetSelectedIndex().value();
     failed_to_load_region_data_ = false;
     // View update must be asynchronous to let the combobox finish performing
     // the action.
@@ -198,8 +198,7 @@ void ShippingAddressEditorViewController::UpdateEditorView() {
         static_cast<views::Combobox*>(dialog()->GetViewByID(
             GetInputFieldViewId(autofill::ADDRESS_HOME_COUNTRY)));
     DCHECK(country_combo_box);
-    DCHECK_EQ(countries_.size(),
-              static_cast<size_t>(country_combo_box->GetRowCount()));
+    DCHECK_EQ(countries_.size(), country_combo_box->GetRowCount());
     country_combo_box->SetSelectedIndex(chosen_country_index_);
   } else if (countries_.size() > 0UL) {
     chosen_country_index_ = 0UL;
@@ -254,8 +253,9 @@ bool ShippingAddressEditorViewController::ShippingAddressValidationDelegate::
 bool ShippingAddressEditorViewController::ShippingAddressValidationDelegate::
     IsValidCombobox(ValidatingCombobox* combobox,
                     std::u16string* error_message) {
-  return ValidateValue(combobox->GetTextForRow(combobox->GetSelectedIndex()),
-                       error_message);
+  return ValidateValue(
+      combobox->GetTextForRow(combobox->GetSelectedIndex().value()),
+      error_message);
 }
 
 bool ShippingAddressEditorViewController::ShippingAddressValidationDelegate::
@@ -273,7 +273,8 @@ bool ShippingAddressEditorViewController::ShippingAddressValidationDelegate::
     ComboboxValueChanged(ValidatingCombobox* combobox) {
   std::u16string error_message;
   bool is_valid = ValidateValue(
-      combobox->GetTextForRow(combobox->GetSelectedIndex()), &error_message);
+      combobox->GetTextForRow(combobox->GetSelectedIndex().value()),
+      &error_message);
   controller_->DisplayErrorMessageForField(field_.type, error_message);
   return is_valid;
 }
@@ -453,7 +454,7 @@ void ShippingAddressEditorViewController::UpdateEditorFields() {
               : EditorField::LengthHint::HINT_SHORT;
 
       autofill::ServerFieldType server_field_type =
-          autofill::AddressFieldToServerFieldType(component.field);
+          autofill::i18n::TypeForField(component.field);
 
       EditorField::ControlType control_type =
           EditorField::ControlType::TEXTFIELD;
@@ -509,7 +510,7 @@ bool ShippingAddressEditorViewController::SaveFieldsToProfile(
   // the view.
   if (combobox) {
     std::u16string country(
-        combobox->GetTextForRow(combobox->GetSelectedIndex()));
+        combobox->GetTextForRow(combobox->GetSelectedIndex().value()));
     bool success =
         profile->SetInfo(autofill::ADDRESS_HOME_COUNTRY, country, locale);
     LOG_IF(ERROR, !success && !ignore_errors)
@@ -535,21 +536,24 @@ bool ShippingAddressEditorViewController::SaveFieldsToProfile(
   }
   for (const auto& field : comboboxes()) {
     // ValidatingCombobox* is the key, EditorField is the value.
-    ValidatingCombobox* combobox = field.first;
+    ValidatingCombobox* validating_combobox = field.first;
     // The country has already been dealt with.
-    if (combobox->GetID() ==
+    if (validating_combobox->GetID() ==
         GetInputFieldViewId(autofill::ADDRESS_HOME_COUNTRY))
       continue;
-    if (combobox->IsValid()) {
-      success = profile->SetInfo(
-          field.second.type,
-          combobox->GetTextForRow(combobox->GetSelectedIndex()), locale);
+    if (validating_combobox->IsValid()) {
+      success =
+          profile->SetInfo(field.second.type,
+                           validating_combobox->GetTextForRow(
+                               validating_combobox->GetSelectedIndex().value()),
+                           locale);
     } else {
       success = false;
     }
     LOG_IF(ERROR, !success && !ignore_errors)
         << "Can't setinfo(" << field.second.type << ", "
-        << combobox->GetTextForRow(combobox->GetSelectedIndex());
+        << validating_combobox->GetTextForRow(
+               validating_combobox->GetSelectedIndex().value());
     if (!success && !ignore_errors)
       return false;
   }

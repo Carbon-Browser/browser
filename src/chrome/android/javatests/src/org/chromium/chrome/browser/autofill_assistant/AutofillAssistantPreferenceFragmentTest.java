@@ -23,6 +23,8 @@ import org.chromium.chrome.browser.settings.SettingsActivityTestRule;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.util.browser.Features.DisableFeatures;
 import org.chromium.chrome.test.util.browser.Features.EnableFeatures;
+import org.chromium.components.autofill_assistant.AssistantFeatures;
+import org.chromium.components.autofill_assistant.AutofillAssistantPreferencesUtil;
 import org.chromium.components.browser_ui.settings.ChromeSwitchPreference;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
 
@@ -48,7 +50,7 @@ public class AutofillAssistantPreferenceFragmentTest {
     @Test
     @LargeTest
     @Feature({"Sync"})
-    @EnableFeatures(ChromeFeatureList.AUTOFILL_ASSISTANT)
+    @EnableFeatures(AssistantFeatures.AUTOFILL_ASSISTANT_NAME)
     public void testAutofillAssistantNoPreferenceIfOnboardingNeverShown() {
         final AutofillAssistantPreferenceFragment prefs =
                 startAutofillAssistantPreferenceFragment();
@@ -68,7 +70,7 @@ public class AutofillAssistantPreferenceFragmentTest {
     @Test
     @LargeTest
     @Feature({"Sync"})
-    @EnableFeatures(ChromeFeatureList.AUTOFILL_ASSISTANT)
+    @EnableFeatures(AssistantFeatures.AUTOFILL_ASSISTANT_NAME)
     public void testAutofillAssistantPreferenceShownIfOnboardingShown() {
         setAutofillAssistantSwitchValue(true);
         final AutofillAssistantPreferenceFragment prefs =
@@ -86,7 +88,7 @@ public class AutofillAssistantPreferenceFragmentTest {
     @Test
     @LargeTest
     @Feature({"Sync"})
-    @DisableFeatures(ChromeFeatureList.AUTOFILL_ASSISTANT)
+    @DisableFeatures(AssistantFeatures.AUTOFILL_ASSISTANT_NAME)
     public void testAutofillAssistantNoPreferenceIfFeatureDisabled() {
         setAutofillAssistantSwitchValue(true);
         final AutofillAssistantPreferenceFragment prefs =
@@ -104,7 +106,7 @@ public class AutofillAssistantPreferenceFragmentTest {
     @Test
     @LargeTest
     @Feature({"Sync"})
-    @EnableFeatures(ChromeFeatureList.AUTOFILL_ASSISTANT)
+    @EnableFeatures(AssistantFeatures.AUTOFILL_ASSISTANT_NAME)
     public void testAutofillAssistantSwitchOn() {
         TestThreadUtils.runOnUiThreadBlocking(() -> { setAutofillAssistantSwitchValue(true); });
         final AutofillAssistantPreferenceFragment prefs =
@@ -117,20 +119,18 @@ public class AutofillAssistantPreferenceFragmentTest {
             assertTrue(autofillAssistantSwitch.isChecked());
 
             autofillAssistantSwitch.performClick();
-            assertFalse(mSharedPreferencesManager.readBoolean(
-                    ChromePreferenceKeys.AUTOFILL_ASSISTANT_ENABLED, true));
+            assertFalse(AutofillAssistantPreferencesUtil.getAssistantEnabledPreference(true));
             autofillAssistantSwitch.performClick();
-            assertTrue(mSharedPreferencesManager.readBoolean(
-                    ChromePreferenceKeys.AUTOFILL_ASSISTANT_ENABLED, false));
+            assertTrue(AutofillAssistantPreferencesUtil.getAssistantEnabledPreference(false));
         });
     }
 
     @Test
     @LargeTest
     @Feature({"Sync"})
-    @EnableFeatures({ChromeFeatureList.AUTOFILL_ASSISTANT,
-            ChromeFeatureList.AUTOFILL_ASSISTANT_PROACTIVE_HELP})
-    @DisableFeatures(ChromeFeatureList.AUTOFILL_ASSISTANT_DISABLE_PROACTIVE_HELP_TIED_TO_MSBB)
+    @EnableFeatures({AssistantFeatures.AUTOFILL_ASSISTANT_NAME,
+            AssistantFeatures.AUTOFILL_ASSISTANT_PROACTIVE_HELP_NAME})
+    @DisableFeatures(AssistantFeatures.AUTOFILL_ASSISTANT_DISABLE_PROACTIVE_HELP_TIED_TO_MSBB_NAME)
     public void
     testProactiveHelpDisabledIfMsbbDisabled() {
         final AutofillAssistantPreferenceFragment prefs =
@@ -153,9 +153,9 @@ public class AutofillAssistantPreferenceFragmentTest {
     @Test
     @LargeTest
     @Feature({"Sync"})
-    @EnableFeatures({ChromeFeatureList.AUTOFILL_ASSISTANT,
-            ChromeFeatureList.AUTOFILL_ASSISTANT_PROACTIVE_HELP,
-            ChromeFeatureList.AUTOFILL_ASSISTANT_DISABLE_PROACTIVE_HELP_TIED_TO_MSBB})
+    @EnableFeatures({AssistantFeatures.AUTOFILL_ASSISTANT_NAME,
+            AssistantFeatures.AUTOFILL_ASSISTANT_PROACTIVE_HELP_NAME,
+            AssistantFeatures.AUTOFILL_ASSISTANT_DISABLE_PROACTIVE_HELP_TIED_TO_MSBB_NAME})
     public void
     testProactiveHelpNotLinkedToMsbbIfLinkDisabled() {
         final AutofillAssistantPreferenceFragment prefs =
@@ -178,9 +178,9 @@ public class AutofillAssistantPreferenceFragmentTest {
     @Test
     @LargeTest
     @Feature({"Sync"})
-    @EnableFeatures({ChromeFeatureList.AUTOFILL_ASSISTANT,
-            ChromeFeatureList.AUTOFILL_ASSISTANT_PROACTIVE_HELP})
-    @DisableFeatures(ChromeFeatureList.AUTOFILL_ASSISTANT_DISABLE_PROACTIVE_HELP_TIED_TO_MSBB)
+    @EnableFeatures({AssistantFeatures.AUTOFILL_ASSISTANT_NAME,
+            AssistantFeatures.AUTOFILL_ASSISTANT_PROACTIVE_HELP_NAME})
+    @DisableFeatures(AssistantFeatures.AUTOFILL_ASSISTANT_DISABLE_PROACTIVE_HELP_TIED_TO_MSBB_NAME)
     public void
     testProactiveHelpDisabledIfAutofillAssistantDisabled() {
         TestThreadUtils.runOnUiThreadBlocking(() -> { setAutofillAssistantSwitchValue(true); });
@@ -211,7 +211,7 @@ public class AutofillAssistantPreferenceFragmentTest {
     @Test
     @LargeTest
     @Feature({"Sync"})
-    @DisableFeatures(ChromeFeatureList.AUTOFILL_ASSISTANT_PROACTIVE_HELP)
+    @DisableFeatures(AssistantFeatures.AUTOFILL_ASSISTANT_PROACTIVE_HELP_NAME)
     public void testProactiveHelpInvisibleIfProactiveHelpDisabled() {
         final AutofillAssistantPreferenceFragment prefs =
                 startAutofillAssistantPreferenceFragment();
@@ -228,8 +228,8 @@ public class AutofillAssistantPreferenceFragmentTest {
     @Test
     @LargeTest
     @Feature({"Sync"})
-    @DisableFeatures({ChromeFeatureList.AUTOFILL_ASSISTANT,
-            ChromeFeatureList.AUTOFILL_ASSISTANT_PROACTIVE_HELP})
+    @DisableFeatures({AssistantFeatures.AUTOFILL_ASSISTANT_NAME,
+            AssistantFeatures.AUTOFILL_ASSISTANT_PROACTIVE_HELP_NAME})
     public void
     testWebAssistanceInvisibleIfAutofillAssistantCompletelyDisabled() {
         final AutofillAssistantPreferenceFragment prefs =
@@ -269,6 +269,29 @@ public class AutofillAssistantPreferenceFragmentTest {
     @Test
     @LargeTest
     @Feature({"AssistantVoiceSearch"})
+    @EnableFeatures({ChromeFeatureList.OMNIBOX_ASSISTANT_VOICE_SEARCH,
+            ChromeFeatureList.ASSISTANT_NON_PERSONALIZED_VOICE_SEARCH})
+    public void
+    testEnhancedVoiceSearch_DisabledForNonPersonalizedSearch() {
+        final AutofillAssistantPreferenceFragment prefs =
+                startAutofillAssistantPreferenceFragment();
+
+        TestThreadUtils.runOnUiThreadBlocking(() -> {
+            PreferenceCategory assistantVoiceSearchCategory = prefs.findPreference(
+                    AutofillAssistantPreferenceFragment.PREF_ASSISTANT_VOICE_SEARCH_CATEGORY);
+            assertFalse(assistantVoiceSearchCategory.isVisible());
+
+            ChromeSwitchPreference assistantVoiceSearchEnabledSwitch =
+                    (ChromeSwitchPreference) prefs.findPreference(
+                            AutofillAssistantPreferenceFragment
+                                    .PREF_ASSISTANT_VOICE_SEARCH_ENABLED_SWTICH);
+            assertFalse(assistantVoiceSearchEnabledSwitch.isVisible());
+        });
+    }
+
+    @Test
+    @LargeTest
+    @Feature({"AssistantVoiceSearch"})
     @DisableFeatures(ChromeFeatureList.OMNIBOX_ASSISTANT_VOICE_SEARCH)
     public void testEnhancedVoiceSearch_Disabled() {
         final AutofillAssistantPreferenceFragment prefs =
@@ -288,8 +311,7 @@ public class AutofillAssistantPreferenceFragmentTest {
     }
 
     private void setAutofillAssistantSwitchValue(boolean newValue) {
-        SharedPreferencesManager.getInstance().writeBoolean(
-                ChromePreferenceKeys.AUTOFILL_ASSISTANT_ENABLED, newValue);
+        AutofillAssistantPreferencesUtil.setAssistantEnabledPreference(newValue);
     }
 
     private AutofillAssistantPreferenceFragment startAutofillAssistantPreferenceFragment() {
@@ -298,7 +320,6 @@ public class AutofillAssistantPreferenceFragmentTest {
     }
 
     public boolean isAutofillAssistantSwitchOn() {
-        return mSharedPreferencesManager.readBoolean(
-                ChromePreferenceKeys.AUTOFILL_ASSISTANT_ENABLED, false);
+        return AutofillAssistantPreferencesUtil.getAssistantEnabledPreference(false);
     }
 }

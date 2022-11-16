@@ -38,7 +38,6 @@ export class DriveOfflinePinningBanner extends EducationalBanner {
    * DOM.
    */
   connectedCallback() {
-    console.log(this, this.shadowRoot);
     const subtitle = this.shadowRoot.querySelector('span[slot="subtitle"]');
     subtitle.innerText =
         strf('DRIVE_OFFLINE_BANNER_SUBTITLE', str('OFFLINE_COLUMN_LABEL'));
@@ -53,7 +52,7 @@ export class DriveOfflinePinningBanner extends EducationalBanner {
     if (util.isDriveDssPinEnabled()) {
       return [{
         type: VolumeManagerCommon.VolumeType.DRIVE,
-        root: VolumeManagerCommon.RootType.DRIVE
+        root: VolumeManagerCommon.RootType.DRIVE,
       }];
     }
     return [];

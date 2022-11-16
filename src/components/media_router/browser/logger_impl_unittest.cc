@@ -53,13 +53,13 @@ class LoggerImplTest : public testing::Test {
   std::string GetAttributeOfFirstEntry(const std::string& logs_json,
                                        const std::string& attribute) {
     base::Value logs = base::JSONReader::Read(logs_json).value();
-    return *logs.GetList()[0].FindStringKey(attribute);
+    return *logs.GetListDeprecated()[0].FindStringKey(attribute);
   }
 };
 
 TEST_F(LoggerImplTest, RecordAndGetLogs) {
   const base::Time time1 = base::Time::Now();
-  const base::Time time2 = time1 + base::TimeDelta::FromSeconds(20);
+  const base::Time time2 = time1 + base::Seconds(20);
   const std::string expected_logs =
       R"([
     {

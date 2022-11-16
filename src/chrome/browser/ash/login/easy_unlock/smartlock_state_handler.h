@@ -7,8 +7,7 @@
 
 #include <string>
 
-#include "base/macros.h"
-#include "chromeos/components/proximity_auth/screenlock_bridge.h"
+#include "ash/components/proximity_auth/screenlock_bridge.h"
 #include "components/account_id/account_id.h"
 
 namespace proximity_auth {
@@ -49,6 +48,10 @@ class SmartLockStateHandler
                         HardlockState initial_hardlock_state,
                         proximity_auth::ScreenlockBridge* screenlock_bridge,
                         proximity_auth::ProximityAuthPrefManager* pref_manager);
+
+  SmartLockStateHandler(const SmartLockStateHandler&) = delete;
+  SmartLockStateHandler& operator=(const SmartLockStateHandler&) = delete;
+
   ~SmartLockStateHandler() override;
 
   // Returns true if handler is not in INACTIVE state.
@@ -107,8 +110,6 @@ class SmartLockStateHandler
 
   // Whether the user's phone was ever locked while on the current lock screen.
   bool did_see_locked_phone_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(SmartLockStateHandler);
 };
 
 }  // namespace ash

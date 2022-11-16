@@ -10,7 +10,6 @@
 #include <memory>
 #include <string>
 
-#include "base/macros.h"
 #include "base/memory/singleton.h"
 #include "chrome/browser/media/webrtc/desktop_media_list.h"
 #include "chrome/browser/media/webrtc/desktop_media_picker_controller.h"
@@ -35,14 +34,21 @@ class DesktopCaptureChooseDesktopMediaFunctionBase : public ExtensionFunction {
  protected:
   ~DesktopCaptureChooseDesktopMediaFunctionBase() override;
 
-  // |web_contents| is the WebContents for which the stream is created, and will
-  // also be used to determine where to show the picker's UI.
+  static const char kTargetNotFoundError[];
+
+  // |exclude_system_audio| is piped from the original call. It is a constraint
+  // that needs to be applied before the picker is shown to the user, as it
+  // affects the picker. It is therefore provided to the extension function
+  // rather than to getUserMedia(), as is the case for other constraints.
+  //
   // |origin| is the origin for which the stream is created.
+  //
   // |target_name| is the display name of the stream target.
   ResponseAction Execute(
       const std::vector<api::desktop_capture::DesktopCaptureSourceType>&
           sources,
-      content::WebContents* web_contents,
+      bool exclude_system_audio,
+      content::RenderFrameHost* render_frame_host,
       const GURL& origin,
       const std::u16string target_name);
 
@@ -52,10 +58,11 @@ class DesktopCaptureChooseDesktopMediaFunctionBase : public ExtensionFunction {
   int request_id_;
 
  private:
-  void OnPickerDialogResults(const GURL& origin,
-                             content::WebContents* web_contents,
-                             const std::string& err,
-                             content::DesktopMediaID source);
+  void OnPickerDialogResults(
+      const GURL& origin,
+      const content::GlobalRenderFrameHostId& render_frame_host_id,
+      const std::string& err,
+      content::DesktopMediaID source);
 
   std::unique_ptr<DesktopMediaPickerController> picker_controller_;
 };
@@ -76,6 +83,12 @@ class DesktopCaptureCancelChooseDesktopMediaFunctionBase
 class DesktopCaptureRequestsRegistry {
  public:
   DesktopCaptureRequestsRegistry();
+
+  DesktopCaptureRequestsRegistry(const DesktopCaptureRequestsRegistry&) =
+      delete;
+  DesktopCaptureRequestsRegistry& operator=(
+      const DesktopCaptureRequestsRegistry&) = delete;
+
   ~DesktopCaptureRequestsRegistry();
 
   static DesktopCaptureRequestsRegistry* GetInstance();
@@ -103,8 +116,6 @@ class DesktopCaptureRequestsRegistry {
       std::map<RequestId, DesktopCaptureChooseDesktopMediaFunctionBase*>;
 
   RequestsMap requests_;
-
-  DISALLOW_COPY_AND_ASSIGN(DesktopCaptureRequestsRegistry);
 };
 
 }  // namespace extensions

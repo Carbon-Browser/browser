@@ -50,12 +50,12 @@ import org.chromium.base.test.util.UrlUtils;
 import org.chromium.components.embedder_support.util.WebResourceResponseInfo;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.content_public.browser.WebContentsObserver;
-import org.chromium.content_public.browser.test.util.DOMUtils;
 import org.chromium.content_public.browser.test.util.HistoryUtils;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
 import org.chromium.content_public.common.ContentSwitches;
 import org.chromium.content_public.common.ContentUrlConstants;
 import org.chromium.net.test.EmbeddedTestServer;
+import org.chromium.net.test.ServerCertificate;
 import org.chromium.net.test.util.TestWebServer;
 import org.chromium.ui.display.DisplayAndroid;
 import org.chromium.ui.display.DisplayUtil;
@@ -165,8 +165,13 @@ public class AwSettingsTest {
         }
 
         protected String executeJavaScriptAndWaitForResult(String script) throws Exception {
+            return executeJavaScriptAndWaitForResult(script, /*shouldCheckSettings=*/true);
+        }
+
+        protected String executeJavaScriptAndWaitForResult(
+                String script, boolean shouldCheckSettings) throws Exception {
             return mActivityTestRule.executeJavaScriptAndWaitForResult(
-                    mAwContents, mContentViewClient, script);
+                    mAwContents, mContentViewClient, script, shouldCheckSettings);
         }
 
         private void ensureSettingHasValue(T value) throws Throwable {
@@ -233,7 +238,9 @@ public class AwSettingsTest {
         protected void doEnsureSettingHasValue(Boolean value) throws Throwable {
             String oldTitle = getTitleOnUiThread();
             String newTitle = oldTitle + "_modified";
-            executeJavaScriptAndWaitForResult(getScript(newTitle));
+            // Do not check if JavaScript is enabled, since the point of this test is to verify that
+            // when JavaScript is disabled the script does not execute and cannot change the title.
+            executeJavaScriptAndWaitForResult(getScript(newTitle), /*shouldCheckSettings=*/false);
             Assert.assertEquals(value == ENABLED ? newTitle : oldTitle, getTitleOnUiThread());
         }
 
@@ -416,6 +423,10 @@ public class AwSettingsTest {
             super(containerView, contentViewClient, true);
         }
 
+        // A string which can be encoded by UTF-8 charset but not by Latin-1 charset. Translates to
+        // "Hello world."
+        private static final String NON_LATIN_TEXT = "你好世界";
+
         @Override
         protected String getAlteredValue() {
             return "Latin-1";
@@ -439,11 +450,21 @@ public class AwSettingsTest {
         @Override
         protected void doEnsureSettingHasValue(String value) throws Throwable {
             loadDataSync(getData());
-            Assert.assertEquals(value, getTitleOnUiThread());
+
+            if ("UTF-8".equals(value)) {
+                Assert.assertEquals("Title should be decoded correctly when charset is UTF-8",
+                        NON_LATIN_TEXT, getTitleOnUiThread());
+            } else {
+                // The content seems to decode as "ä½ å¥½ä¸–ç•Œ", but it's sufficient to just
+                // enforce the text decodes incorrectly.
+                Assert.assertNotEquals(
+                        "Title should be garbled (decoded incorrectly) when charset is Latin-1",
+                        NON_LATIN_TEXT, getTitleOnUiThread());
+            }
         }
 
         private String getData() {
-            return "<html><body onload='document.title=document.defaultCharset'></body></html>";
+            return "<html><body onload='document.title=\"" + NON_LATIN_TEXT + "\"'></body></html>";
         }
     }
 
@@ -1740,12 +1761,9 @@ public class AwSettingsTest {
                     views.getContainer1(), views.getClient1(), new ImagePageGenerator(1, true)));
     }
 
-    /*
-     * @SmallTest
-     * @Feature({"AndroidWebView", "Preferences"})
-     */
     @Test
-    @DisabledTest(message = "Disabled due to document.defaultCharset removal. crbug.com/587484")
+    @SmallTest
+    @Feature({"AndroidWebView", "Preferences"})
     public void testDefaultTextEncodingWithTwoViews() throws Throwable {
         ViewPair views = createViews();
         runPerViewSettingsTest(
@@ -1928,6 +1946,40 @@ public class AwSettingsTest {
             String userAgent =
                     mActivityTestRule.getJavaScriptResultBodyTextContent(awContents, contentClient);
             Assert.assertEquals(customUserAgentString, userAgent);
+        } finally {
+            testServer.stopAndDestroyServer();
+        }
+    }
+
+    @Test
+    @SmallTest
+    @Feature({"AndroidWebView", "Preferences"})
+    @CommandLineFlags.Add({"enable-features=UserAgentClientHint,UACHOverrideBlank"})
+    public void testUserAgentOverrideClientHints() throws Throwable {
+        final TestAwContentsClient contentClient = new TestAwContentsClient();
+        final AwTestContainerView testContainerView =
+                mActivityTestRule.createAwTestContainerViewOnMainSync(contentClient);
+        final String customUserAgentString = "testUserAgentOverrideClientHints";
+        AwContents awContents = testContainerView.getAwContents();
+        AwSettings settings = mActivityTestRule.getAwSettingsOnUiThread(awContents);
+        settings.setUserAgentString(customUserAgentString);
+
+        EmbeddedTestServer testServer = EmbeddedTestServer.createAndStartHTTPSServer(
+                InstrumentationRegistry.getInstrumentation().getContext(),
+                ServerCertificate.CERT_OK);
+
+        AwActivityTestRule.enableJavaScriptOnUiThread(awContents);
+
+        try {
+            String targetUrl = testServer.getURL("/android_webview/test/data/fetch-echo.html")
+                    + "?url="
+                    + URLEncoder.encode("/echoheader?Sec-CH-UA&Sec-CH-UA-Mobile&User-Agent");
+            mActivityTestRule.loadUrlSync(
+                    awContents, contentClient.getOnPageFinishedHelper(), targetUrl);
+            AwActivityTestRule.pollInstrumentationThread(
+                    () -> !"running".equals(mActivityTestRule.getTitleOnUiThread(awContents)));
+            Assert.assertEquals("?0 " + customUserAgentString,
+                    mActivityTestRule.getTitleOnUiThread(awContents));
         } finally {
             testServer.stopAndDestroyServer();
         }
@@ -2542,7 +2594,7 @@ public class AwSettingsTest {
             int count = callback.getCallCount();
             mActivityTestRule.loadDataSync(awContents, contentClient.getOnPageFinishedHelper(),
                     pageHtml, "text/html", false);
-            DOMUtils.clickNode(testContainer.getWebContents(), "play");
+            JSUtils.clickNodeWithUserGesture(testContainer.getWebContents(), "play");
             callback.waitForCallback(count, 1);
             Assert.assertEquals(0, webServer.getRequestCount(httpPath));
 
@@ -2562,11 +2614,10 @@ public class AwSettingsTest {
         }
     }
 
-    // Test an assert URL (file:///android_asset/)
+    // Test an Android asset URL (file:///android_asset/)
     @Test
     @SmallTest
     @Feature({"AndroidWebView", "Navigation"})
-    @DisabledTest(message = "https://crbug.com/1144938")
     public void testAssetUrl() throws Throwable {
         // Note: this text needs to be kept in sync with the contents of the html file referenced
         // below.
@@ -2580,7 +2631,7 @@ public class AwSettingsTest {
         Assert.assertEquals(expectedTitle, mActivityTestRule.getTitleOnUiThread(awContents));
     }
 
-    // Test a resource URL (file:///android_res/).
+    // Test an Android resource URL (file:///android_res/).
     @Test
     @SmallTest
     @Feature({"AndroidWebView", "Navigation"})
@@ -3066,12 +3117,9 @@ public class AwSettingsTest {
                         views.getContainer1(), views.getClient1(), true));
     }
 
-    /*
-     * @SmallTest
-     * @Feature({"AndroidWebView", "Preferences"})
-     */
     @Test
-    @DisabledTest(message = "crbug.com/644894")
+    @SmallTest
+    @Feature({"AndroidWebView", "Preferences"})
     public void testSetInitialScale() throws Throwable {
         final TestAwContentsClient contentClient = new TestAwContentsClient();
         final AwTestContainerView testContainerView =

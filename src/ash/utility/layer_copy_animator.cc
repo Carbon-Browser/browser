@@ -9,6 +9,7 @@
 #include "ui/aura/window.h"
 #include "ui/base/class_property.h"
 #include "ui/compositor/layer_animation_sequence.h"
+#include "ui/compositor/layer_animator.h"
 
 DEFINE_UI_CLASS_PROPERTY_TYPE(ash::LayerCopyAnimator*)
 
@@ -58,6 +59,9 @@ LayerCopyAnimator::LayerCopyAnimator(aura::Window* window) : window_(window) {
 
 LayerCopyAnimator::~LayerCopyAnimator() {
   window_->layer()->SetOpacity(1.0f);
+  if (fake_sequence_)
+    NotifyWithFakeSequence(/*abort=*/true);
+  DCHECK(!observer_);
 }
 
 void LayerCopyAnimator::MaybeStartAnimation(

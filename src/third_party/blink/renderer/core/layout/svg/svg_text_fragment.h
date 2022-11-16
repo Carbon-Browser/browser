@@ -48,15 +48,15 @@ struct SVGTextFragment {
     kTransformIgnoringTextLength
   };
 
-  FloatRect BoundingBox(float baseline) const {
-    FloatRect fragment_rect(x, y - baseline, width, height);
+  gfx::RectF BoundingBox(float baseline) const {
+    gfx::RectF fragment_rect(x, y - baseline, width, height);
     if (!IsTransformed())
       return fragment_rect;
     return BuildNormalFragmentTransform().MapRect(fragment_rect);
   }
 
-  FloatRect OverflowBoundingBox(float baseline) const {
-    FloatRect fragment_rect(
+  gfx::RectF OverflowBoundingBox(float baseline) const {
+    gfx::RectF fragment_rect(
         x - glyph_overflow.left, y - baseline - glyph_overflow.top,
         width + glyph_overflow.left + glyph_overflow.right,
         height + glyph_overflow.top + glyph_overflow.bottom);
@@ -65,8 +65,8 @@ struct SVGTextFragment {
     return BuildNormalFragmentTransform().MapRect(fragment_rect);
   }
 
-  FloatQuad BoundingQuad(float baseline) const {
-    FloatQuad fragment_quad(FloatRect(x, y - baseline, width, height));
+  gfx::QuadF BoundingQuad(float baseline) const {
+    gfx::QuadF fragment_quad(gfx::RectF(x, y - baseline, width, height));
     if (!IsTransformed())
       return fragment_quad;
     return BuildNormalFragmentTransform().MapQuad(fragment_quad);

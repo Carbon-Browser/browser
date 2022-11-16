@@ -8,7 +8,7 @@
 
 #include "base/bind.h"
 #include "base/memory/scoped_refptr.h"
-#include "base/sequenced_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 #include "storage/browser/file_system/file_system_usage_cache.h"
 #include "storage/browser/file_system/file_system_util.h"
 #include "storage/browser/file_system/sandbox_file_system_backend_delegate.h"
@@ -44,8 +44,9 @@ void SandboxQuotaObserver::OnUpdate(const FileSystemURL& url, int64_t delta) {
 
   if (quota_manager_proxy_.get()) {
     quota_manager_proxy_->NotifyStorageModified(
-        QuotaClientType::kFileSystem, blink::StorageKey(url.origin()),
-        FileSystemTypeToQuotaStorageType(url.type()), delta, base::Time::Now());
+        QuotaClientType::kFileSystem, url.storage_key(),
+        FileSystemTypeToQuotaStorageType(url.type()), delta, base::Time::Now(),
+        base::SequencedTaskRunnerHandle::Get(), base::DoNothing());
   }
 
   base::FilePath usage_file_path = GetUsageCachePath(url);
@@ -81,8 +82,8 @@ void SandboxQuotaObserver::OnEndUpdate(const FileSystemURL& url) {
 void SandboxQuotaObserver::OnAccess(const FileSystemURL& url) {
   if (quota_manager_proxy_.get()) {
     quota_manager_proxy_->NotifyStorageAccessed(
-        blink::StorageKey(url.origin()),
-        FileSystemTypeToQuotaStorageType(url.type()), base::Time::Now());
+        url.storage_key(), FileSystemTypeToQuotaStorageType(url.type()),
+        base::Time::Now());
   }
 }
 
@@ -100,9 +101,15 @@ base::FilePath SandboxQuotaObserver::GetUsageCachePath(
     const FileSystemURL& url) {
   DCHECK(sandbox_file_util_);
   base::File::Error error = base::File::FILE_OK;
-  base::FilePath path =
-      SandboxFileSystemBackendDelegate::GetUsageCachePathForOriginAndType(
-          sandbox_file_util_, url.origin(), url.type(), &error);
+  base::FilePath path;
+  if (url.bucket().has_value()) {
+    path = SandboxFileSystemBackendDelegate::GetUsageCachePathForBucketAndType(
+        sandbox_file_util_, url.bucket().value(), url.type(), &error);
+  } else {
+    path =
+        SandboxFileSystemBackendDelegate::GetUsageCachePathForStorageKeyAndType(
+            sandbox_file_util_, url.storage_key(), url.type(), &error);
+  }
   if (error != base::File::FILE_OK) {
     LOG(WARNING) << "Could not get usage cache path for: " << url.DebugString();
     return base::FilePath();

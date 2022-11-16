@@ -6,7 +6,6 @@
 
 #include "base/bind.h"
 #include "base/callback_helpers.h"
-#include "base/macros.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "content/browser/browser_interface_binders.h"
@@ -32,6 +31,9 @@ class VibrationTest : public ContentBrowserTest,
         &VibrationTest::BindVibrationManager, base::Unretained(this)));
   }
 
+  VibrationTest(const VibrationTest&) = delete;
+  VibrationTest& operator=(const VibrationTest&) = delete;
+
   ~VibrationTest() override {
     OverrideVibrationManagerBinderForTesting(base::NullCallback());
   }
@@ -45,7 +47,7 @@ class VibrationTest : public ContentBrowserTest,
   void TriggerVibrate(int duration, base::OnceClosure vibrate_done) {
     vibrate_done_ = std::move(vibrate_done);
 
-    RenderFrameHost* frame = shell()->web_contents()->GetMainFrame();
+    RenderFrameHost* frame = shell()->web_contents()->GetPrimaryMainFrame();
     std::string script =
         "navigator.vibrate(" + base::NumberToString(duration) + ")";
     EXPECT_TRUE(ExecJs(frame, script));
@@ -65,8 +67,6 @@ class VibrationTest : public ContentBrowserTest,
   int64_t vibrate_milliseconds_ = -1;
   base::OnceClosure vibrate_done_;
   mojo::Receiver<device::mojom::VibrationManager> receiver_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(VibrationTest);
 };
 
 IN_PROC_BROWSER_TEST_F(VibrationTest, Vibrate) {

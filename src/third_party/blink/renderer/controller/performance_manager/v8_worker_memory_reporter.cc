@@ -13,12 +13,12 @@
 #include "third_party/blink/renderer/core/workers/worker_global_scope.h"
 #include "third_party/blink/renderer/core/workers/worker_or_worklet_global_scope.h"
 #include "third_party/blink/renderer/core/workers/worker_thread.h"
-#include "third_party/blink/renderer/platform/heap/heap_allocator.h"
 #include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/scheduler/public/post_cross_thread_task.h"
 #include "third_party/blink/renderer/platform/scheduler/public/thread.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
-#include "third_party/blink/renderer/platform/wtf/cross_thread_copier.h"
+#include "third_party/blink/renderer/platform/wtf/cross_thread_copier_base.h"
+#include "third_party/blink/renderer/platform/wtf/cross_thread_copier_std.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
@@ -35,8 +35,7 @@ struct CrossThreadCopier<blink::V8WorkerMemoryReporter::WorkerMemoryUsage>
 
 namespace blink {
 
-const base::TimeDelta V8WorkerMemoryReporter::kTimeout =
-    base::TimeDelta::FromSeconds(60);
+const base::TimeDelta V8WorkerMemoryReporter::kTimeout = base::Seconds(60);
 
 namespace {
 
@@ -106,8 +105,7 @@ void WorkerMeasurementDelegate::MeasurementComplete(
   memory_usage->bytes = bytes;
   if (worker_global_scope->IsUrlValid() &&
       worker_global_scope->Url().GetString().length() < kMaxReportedUrlLength) {
-    // Copy the URL to send it over to the main thread.
-    memory_usage->url = worker_global_scope->Url().Copy();
+    memory_usage->url = worker_global_scope->Url();
   }
   NotifyMeasurementSuccess(std::move(memory_usage));
 }

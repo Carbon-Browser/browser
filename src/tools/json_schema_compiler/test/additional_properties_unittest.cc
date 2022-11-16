@@ -40,13 +40,12 @@ TEST(JsonSchemaCompilerAdditionalPropertiesTest,
   auto param_object_value = std::make_unique<base::DictionaryValue>();
   param_object_value->SetString("str", "a");
   param_object_value->SetInteger("num", 1);
-  std::vector<base::Value> params_value;
-  params_value.push_back(param_object_value->Clone());
+  base::Value::List params_value;
+  params_value.Append(param_object_value->Clone());
   std::unique_ptr<ap::AdditionalProperties::Params> params(
       ap::AdditionalProperties::Params::Create(params_value));
   EXPECT_TRUE(params.get());
-  EXPECT_TRUE(params->param_object.additional_properties.Equals(
-      param_object_value.get()));
+  EXPECT_EQ(params->param_object.additional_properties, *param_object_value);
 }
 
 TEST(JsonSchemaCompilerAdditionalPropertiesTest,
@@ -55,12 +54,12 @@ TEST(JsonSchemaCompilerAdditionalPropertiesTest,
   result_object.integer = 5;
   result_object.additional_properties["key"] = "value";
 
-  std::vector<base::Value> expected;
+  base::Value::List expected;
   {
     base::Value dict(base::Value::Type::DICTIONARY);
     dict.SetIntKey("integer", 5);
     dict.SetStringKey("key", "value");
-    expected.push_back(std::move(dict));
+    expected.Append(std::move(dict));
   }
 
   EXPECT_EQ(expected,

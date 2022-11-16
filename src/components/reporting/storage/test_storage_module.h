@@ -6,8 +6,8 @@
 #define COMPONENTS_REPORTING_STORAGE_TEST_STORAGE_MODULE_H_
 
 #include "base/callback.h"
-#include "components/reporting/proto/record.pb.h"
-#include "components/reporting/proto/record_constants.pb.h"
+#include "components/reporting/proto/synced/record.pb.h"
+#include "components/reporting/proto/synced/record_constants.pb.h"
 #include "components/reporting/storage/storage_module_interface.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -24,19 +24,17 @@ class TestStorageModuleStrict : public StorageModuleInterface {
 
   MOCK_METHOD(void,
               AddRecord,
-              (Priority priority,
-               Record record,
-               base::OnceCallback<void(Status)> callback),
+              (Priority priority, Record record, EnqueueCallback callback),
               (override));
 
   MOCK_METHOD(void,
               Flush,
-              (Priority priority, base::OnceCallback<void(Status)> callback),
+              (Priority priority, FlushCallback callback),
               (override));
 
   MOCK_METHOD(void,
               ReportSuccess,
-              (SequencingInformation sequencing_information, bool force),
+              (SequenceInformation sequence_information, bool force),
               (override));
 
   MOCK_METHOD(void,
@@ -44,7 +42,7 @@ class TestStorageModuleStrict : public StorageModuleInterface {
               (SignedEncryptionInfo signed_encryption_key),
               (override));
 
-  Record record() const;
+  const Record& record() const;
   Priority priority() const;
 
  protected:
@@ -53,7 +51,7 @@ class TestStorageModuleStrict : public StorageModuleInterface {
  private:
   void AddRecordSuccessfully(Priority priority,
                              Record record,
-                             base::OnceCallback<void(Status)> callback);
+                             EnqueueCallback callback);
 
   absl::optional<Record> record_;
   absl::optional<Priority> priority_;

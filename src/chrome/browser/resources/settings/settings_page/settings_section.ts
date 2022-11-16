@@ -18,16 +18,16 @@
 
 import '//resources/cr_elements/shared_vars_css.m.js';
 
-import {html, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {getTemplate} from './settings_section.html.js';
 
-/** @polymer */
 export class SettingsSectionElement extends PolymerElement {
   static get is() {
     return 'settings-section';
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
   }
 
   static get properties() {
@@ -75,8 +75,14 @@ export class SettingsSectionElement extends PolymerElement {
     return this.pageTitle ? false : 'true';
   }
 
-  focus() {
+  override focus() {
     this.shadowRoot!.querySelector<HTMLElement>('.title')!.focus();
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'settings-section': SettingsSectionElement;
   }
 }
 

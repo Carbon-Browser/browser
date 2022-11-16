@@ -6,14 +6,17 @@
 #define CHROME_BROWSER_SIGNIN_SIGNIN_FEATURES_H_
 
 #include "base/feature_list.h"
-#include "build/chromeos_buildflags.h"
+
+#if BUILDFLAG(IS_ANDROID)
+extern const base::Feature kEnableFamilyInfoFeedback;
+#endif
 
 extern const base::Feature kProcessGaiaRemoveLocalAccountHeader;
 
-extern const base::Feature kAccountPoliciesLoadedWithoutSync;
+extern const base::Feature kSyncPromoAfterSigninIntercept;
 
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-extern const base::Feature kMultiProfileAccountConsistency;
-#endif
+extern const base::Feature kSigninInterceptBubbleV2;
+
+extern const base::Feature kShowEnterpriseDialogForAllManagedAccountsSignin;
 
 #endif  // CHROME_BROWSER_SIGNIN_SIGNIN_FEATURES_H_

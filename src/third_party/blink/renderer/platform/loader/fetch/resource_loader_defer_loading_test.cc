@@ -46,6 +46,9 @@ class TestCodeCacheLoader : public WebCodeCacheLoader {
     process_request_.Run(std::move(callback));
   }
 
+  void ClearCodeCacheEntry(blink::mojom::CodeCacheType cache_type,
+                           const WebURL& url) override {}
+
  private:
   ProcessCodeCacheRequestCallback process_request_;
 };
@@ -169,6 +172,9 @@ class ResourceLoaderDefersLoadingTest : public testing::Test {
 
   ScopedTestingPlatformSupport<TestingPlatformSupportWithMockScheduler>
       platform_;
+
+ private:
+  base::test::SingleThreadTaskEnvironment task_environment_;
 };
 
 TEST_F(ResourceLoaderDefersLoadingTest, CodeCacheFetchCheckDefers) {

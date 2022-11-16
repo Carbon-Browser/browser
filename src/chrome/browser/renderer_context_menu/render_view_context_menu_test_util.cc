@@ -11,13 +11,13 @@
 #include "ui/base/models/menu_model.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chrome/browser/ash/policy/dlp/dlp_rules_manager.h"
+#include "chrome/browser/chromeos/policy/dlp/dlp_rules_manager.h"
 #endif
 
 using ui::MenuModel;
 
 TestRenderViewContextMenu::TestRenderViewContextMenu(
-    content::RenderFrameHost* render_frame_host,
+    content::RenderFrameHost& render_frame_host,
     content::ContextMenuParams params)
     : RenderViewContextMenu(render_frame_host, params) {}
 
@@ -34,18 +34,19 @@ std::unique_ptr<TestRenderViewContextMenu> TestRenderViewContextMenu::Create(
   params.link_url = link_url;
   params.frame_url = frame_url;
   auto menu = std::make_unique<TestRenderViewContextMenu>(
-      web_contents->GetMainFrame(), params);
+      *web_contents->GetPrimaryMainFrame(), params);
   menu->Init();
   return menu;
 }
 
 bool TestRenderViewContextMenu::IsItemPresent(int command_id) const {
-  return menu_model_.GetIndexOfCommandId(command_id) != -1;
+  return menu_model_.GetIndexOfCommandId(command_id).has_value();
 }
 
 bool TestRenderViewContextMenu::IsItemChecked(int command_id) const {
-  return menu_model_.IsItemCheckedAt(
-      menu_model_.GetIndexOfCommandId(command_id));
+  const absl::optional<size_t> index =
+      menu_model_.GetIndexOfCommandId(command_id);
+  return index.has_value() && menu_model_.IsItemCheckedAt(index.value());
 }
 
 bool TestRenderViewContextMenu::IsItemInRangePresent(
@@ -63,14 +64,14 @@ bool TestRenderViewContextMenu::IsItemInRangePresent(
 bool TestRenderViewContextMenu::GetMenuModelAndItemIndex(
     int command_id,
     MenuModel** found_model,
-    int* found_index) {
+    size_t* found_index) {
   std::vector<MenuModel*> models_to_search;
   models_to_search.push_back(&menu_model_);
 
   while (!models_to_search.empty()) {
     MenuModel* model = models_to_search.back();
     models_to_search.pop_back();
-    for (int i = 0; i < model->GetItemCount(); i++) {
+    for (size_t i = 0; i < model->GetItemCount(); i++) {
       if (model->GetCommandIdAt(i) == command_id) {
         *found_model = model;
         *found_index = i;

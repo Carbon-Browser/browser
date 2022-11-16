@@ -14,17 +14,15 @@
 
 namespace payments {
 
-class PaymentRequestOrderSummaryViewControllerTest
-    : public PaymentRequestBrowserTestBase {
- protected:
-  PaymentRequestOrderSummaryViewControllerTest() {}
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(PaymentRequestOrderSummaryViewControllerTest);
-};
+using PaymentRequestOrderSummaryViewControllerTest =
+    PaymentRequestBrowserTestBase;
 
 IN_PROC_BROWSER_TEST_F(PaymentRequestOrderSummaryViewControllerTest,
                        OrderSummaryReflectsShippingOption) {
+  std::string payment_method_name;
+  InstallPaymentApp("a.com", "payment_request_success_responder.js",
+                    &payment_method_name);
+
   NavigateTo("/payment_request_dynamic_shipping_test.html");
   // In MI state, shipping is $5.00.
   autofill::AutofillProfile michigan = autofill::test::GetFullProfile2();
@@ -35,7 +33,8 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestOrderSummaryViewControllerTest,
   california.set_use_count(50U);
   AddAutofillProfile(california);
 
-  InvokePaymentRequestUI();
+  InvokePaymentRequestUIWithJs("buyWithMethods([{supportedMethods:'" +
+                               payment_method_name + "'}]);");
 
   OpenOrderSummaryScreen();
 

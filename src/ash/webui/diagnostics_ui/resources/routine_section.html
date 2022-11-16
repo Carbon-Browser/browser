@@ -1,26 +1,33 @@
 <style include="diagnostics-shared">
   #additionalMessage {
-    @apply --diagnostics-routine-additional-message-font;
+    color: var(--cros-text-color-primary);
+    font-family: var(--diagnostics-roboto-font-family);
+    font-size: 13px;
+    font-weight: var(--diagnostics-regular-font-weight);
   }
 
   .button-container {
-    @apply --diagnostics-button-font;
     padding: 8px 0 4px;
   }
 
   .learn-more-button {
-    @apply --diagnostics-button-font;
-    background-color: rgba(var(--google-blue-600), .06);
     border-radius: 4px;
     height: 32px;
     margin-top: 12px;
     padding: 8px 16px;
   }
 
+  .button-container,
+  .learn-more-button {
+    font-family: var(--diagnostics-roboto-font-family);
+    font-size: 13px;
+    font-weight: var(--diagnostics-medium-font-weight);
+  }
+
   #messageIcon {
     --iron-icon-height: 20px;
     --iron-icon-width: 20px;
-    fill: var(--google-grey-700);
+    fill: var(--cros-icon-color-secondary);
     margin-inline-end: 8px;
   }
 
@@ -48,15 +55,29 @@
   }
 
   #testStatusText {
-    @apply --diagnostics-test-status-text-font;
+    color: var(--cros-text-color-secondary);
+    font-family: var(--diagnostics-roboto-font-family);
+    font-size: 13px;
+    font-weight: var(--diagnostics-regular-font-weight);
     padding-inline-start: 6px;
   }
 
   #toggleReportButton {
-    margin-right: 8px;
+    margin-inline-end: 8px;
+  }
+
+  :host([hide-routine-status]) .container-spacing {
+    padding-inline: 20px;
+  }
+
+  :host(:not([hide-routine-status])) .container-spacing {
+    margin-bottom: 16px;
+    margin-top: 12px;
+    padding-inline: 20px;
   }
 </style>
-<div class="routine-section-container">
+<div class="routine-section-container container-spacing"
+    hidden$="[[hideRoutineSection(routines.*)]]">
   <div id="routineSection" class="routine-container">
     <div class="routine-status-container" hidden$="[[hideRoutineStatus]]">
       <text-badge id="testStatusBadge" badge-type="[[badgeType_]]"
@@ -102,7 +123,8 @@
   <iron-collapse id="collapse" opened="{{opened}}">
     <div class="result-list">
       <routine-result-list id="resultList"
-          hide-vertical-lines="[[hideVerticalLines]]">
+          hide-vertical-lines="[[hideVerticalLines]]"
+          using-routine-groups="[[usingRoutineGroups]]">
       </routine-result-list>
     </div>
     <cr-button id="learnMoreButton" class="learn-more-button"

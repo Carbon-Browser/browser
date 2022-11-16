@@ -11,7 +11,6 @@
 
 #include "base/cxx17_backports.h"
 #include "base/logging.h"
-#include "base/macros.h"
 #include "base/memory/singleton.h"
 #include "base/metrics/histogram_macros.h"
 #include "build/build_config.h"
@@ -23,6 +22,7 @@
 #include "ui/events/devices/x11/device_list_cache_x11.h"
 #include "ui/events/devices/x11/touch_factory_x11.h"
 #include "ui/events/devices/x11/xinput_util.h"
+#include "ui/events/event_constants.h"
 #include "ui/events/keycodes/keyboard_code_conversion_x.h"
 #include "ui/events/pointer_details.h"
 #include "ui/gfx/geometry/point.h"
@@ -47,6 +47,9 @@ class XModifierStateWatcher {
   static XModifierStateWatcher* GetInstance() {
     return base::Singleton<XModifierStateWatcher>::get();
   }
+
+  XModifierStateWatcher(const XModifierStateWatcher&) = delete;
+  XModifierStateWatcher& operator=(const XModifierStateWatcher&) = delete;
 
   x11::KeyButMask StateFromKeyboardCode(ui::KeyboardCode keyboard_code) {
     switch (keyboard_code) {
@@ -93,8 +96,6 @@ class XModifierStateWatcher {
   XModifierStateWatcher() = default;
 
   unsigned int state_{};
-
-  DISALLOW_COPY_AND_ASSIGN(XModifierStateWatcher);
 };
 
 // Detects if a touch event is a driver-generated 'special event'.
@@ -184,8 +185,8 @@ int GetEventFlagsFromXKeyEvent(const x11::Event& xev) {
       fabricated_by_xim ? ui::EF_IME_FABRICATED_KEY : 0;
 #endif
 
-  return GetEventFlagsFromXState(state) | (key->send_event ? ui::EF_FINAL : 0) |
-         ime_fabricated_flag;
+  return GetEventFlagsFromXState(state) |
+         (xev.send_event() ? ui::EF_FINAL : 0) | ime_fabricated_flag;
 }
 
 int GetEventFlagsFromXGenericEvent(const x11::Event& x11_event) {
@@ -194,7 +195,7 @@ int GetEventFlagsFromXGenericEvent(const x11::Event& x11_event) {
   DCHECK(xievent->opcode == x11::Input::DeviceEvent::KeyPress ||
          xievent->opcode == x11::Input::DeviceEvent::KeyRelease);
   return GetEventFlagsFromXState(xievent->mods.effective) |
-         (xievent->send_event ? ui::EF_FINAL : 0);
+         (x11_event.send_event() ? ui::EF_FINAL : 0);
 }
 
 // Get the event flag for the button in XButtonEvent. During a ButtonPress
@@ -336,8 +337,7 @@ base::TimeTicks TimeTicksFromXEventTime(x11::Time timestamp) {
 
   g_last_seen_timestamp_ms = timestamp64;
   if (!had_recent_rollover)
-    return base::TimeTicks() +
-           base::TimeDelta::FromMilliseconds(g_rollover_ms + timestamp32);
+    return base::TimeTicks() + base::Milliseconds(g_rollover_ms + timestamp32);
 
   DCHECK(timestamp64 <= UINT32_MAX)
       << "X11 Time does not roll over 32 bit, the below logic is likely wrong";
@@ -347,7 +347,7 @@ base::TimeTicks TimeTicksFromXEventTime(x11::Time timestamp) {
 
   g_rollover_ms = now_ms & ~static_cast<int64_t>(UINT32_MAX);
   uint32_t delta = static_cast<uint32_t>(now_ms - timestamp32);
-  return base::TimeTicks() + base::TimeDelta::FromMilliseconds(now_ms - delta);
+  return base::TimeTicks() + base::Milliseconds(now_ms - delta);
 }
 
 base::TimeTicks TimeTicksFromXEvent(const x11::Event& xev) {
@@ -744,10 +744,17 @@ float GetTouchForceFromXEvent(const x11::Event& x11_event) {
 }
 
 PointerDetails GetTouchPointerDetailsFromXEvent(const x11::Event& xev) {
+  auto* event = xev.As<x11::Input::DeviceEvent>();
+
+  // Use touch as the default pointer type if `event` is null.
+  EventPointerType pointer_type =
+      event ? ui::TouchFactory::GetInstance()->GetTouchDevicePointerType(
+                  event->sourceid)
+            : EventPointerType::kTouch;
   return PointerDetails(
-      EventPointerType::kTouch, GetTouchIdFromXEvent(xev),
-      GetTouchRadiusXFromXEvent(xev), GetTouchRadiusYFromXEvent(xev),
-      GetTouchForceFromXEvent(xev), GetTouchAngleFromXEvent(xev));
+      pointer_type, GetTouchIdFromXEvent(xev), GetTouchRadiusXFromXEvent(xev),
+      GetTouchRadiusYFromXEvent(xev), GetTouchForceFromXEvent(xev),
+      GetTouchAngleFromXEvent(xev));
 }
 
 bool GetScrollOffsetsFromXEvent(const x11::Event& xev,
@@ -780,11 +787,11 @@ bool GetScrollOffsetsFromXEvent(const x11::Event& xev,
 
   if (DeviceDataManagerX11::GetInstance()->GetScrollClassEventDetail(xev) !=
       SCROLL_TYPE_NO_SCROLL) {
-    double x_scroll_offset, y_scroll_offset;
+    double x_scroll_offset_dbl, y_scroll_offset_dbl;
     DeviceDataManagerX11::GetInstance()->GetScrollClassOffsets(
-        xev, &x_scroll_offset, &y_scroll_offset);
-    *x_offset = x_scroll_offset * kWheelScrollAmount;
-    *y_offset = y_scroll_offset * kWheelScrollAmount;
+        xev, &x_scroll_offset_dbl, &y_scroll_offset_dbl);
+    *x_offset = x_scroll_offset_dbl * kWheelScrollAmount;
+    *y_offset = y_scroll_offset_dbl * kWheelScrollAmount;
 
     if (DeviceDataManagerX11::GetInstance()->IsTouchpadXInputEvent(xev)) {
       *x_offset_ordinal = *x_offset;

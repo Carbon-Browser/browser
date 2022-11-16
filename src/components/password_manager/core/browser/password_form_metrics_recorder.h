@@ -12,7 +12,7 @@
 #include <set>
 #include <vector>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/time/clock.h"
 #include "components/autofill/core/common/mojom/autofill_types.mojom.h"
@@ -55,6 +55,10 @@ class PasswordFormMetricsRecorder
   PasswordFormMetricsRecorder(bool is_main_frame_secure,
                               ukm::SourceId source_id,
                               PrefService* pref_service);
+
+  PasswordFormMetricsRecorder(const PasswordFormMetricsRecorder&) = delete;
+  PasswordFormMetricsRecorder& operator=(const PasswordFormMetricsRecorder&) =
+      delete;
 
   // ManagerAction - What does the PasswordFormManager do with this form? Either
   // it fills it, or it doesn't. If it doesn't fill it, that's either
@@ -416,14 +420,6 @@ class PasswordFormMetricsRecorder
   // JavaScript. The result is stored in |js_only_input_|.
   void CalculateJsOnlyInput(const autofill::FormData& submitted_form);
 
-  void set_user_typed_password_on_chrome_sign_in_page() {
-    user_typed_password_on_chrome_sign_in_page_ = true;
-  }
-
-  void set_password_hash_saved_on_chrome_sing_in_page() {
-    password_hash_saved_on_chrome_sing_in_page_ = true;
-  }
-
   void set_possible_username_used(bool value) {
     possible_username_used_ = value;
   }
@@ -433,6 +429,11 @@ class PasswordFormMetricsRecorder
   }
 
   void set_clock_for_testing(base::Clock* clock) { clock_ = clock; }
+
+  void set_submitted_form_frame(
+      metrics_util::SubmittedFormFrame submitted_form_frame) {
+    submitted_form_frame_ = submitted_form_frame;
+  }
 
  private:
   friend class base::RefCounted<PasswordFormMetricsRecorder>;
@@ -454,7 +455,7 @@ class PasswordFormMetricsRecorder
 
   // Not owned. Points to base::DefaultClock::GetInstance() by default, but can
   // be overridden for testing.
-  base::Clock* clock_;
+  raw_ptr<base::Clock> clock_;
 
   // True if the main frame's committed URL, at the time PasswordFormManager
   // was created, is secure.
@@ -498,7 +499,7 @@ class PasswordFormMetricsRecorder
   // Holds URL keyed metrics (UKMs) to be recorded on destruction.
   ukm::builders::PasswordForm ukm_entry_builder_;
 
-  PrefService* const pref_service_;
+  const raw_ptr<PrefService> pref_service_;
 
   // Counter for DetailedUserActions observed during the lifetime of a
   // PasswordFormManager. Reported upon destruction.
@@ -518,13 +519,11 @@ class PasswordFormMetricsRecorder
 
   bool recorded_preferred_matched_password_type = false;
 
-  bool user_typed_password_on_chrome_sign_in_page_ = false;
-  bool password_hash_saved_on_chrome_sing_in_page_ = false;
-
   absl::optional<FillingAssistance> filling_assistance_;
   absl::optional<FillingSource> filling_source_;
   absl::optional<metrics_util::PasswordAccountStorageUsageLevel>
       account_storage_usage_level_;
+  absl::optional<metrics_util::SubmittedFormFrame> submitted_form_frame_;
 
   // Whether a single username candidate was populated in prompt.
   bool possible_username_used_ = false;
@@ -534,8 +533,6 @@ class PasswordFormMetricsRecorder
   absl::optional<JsOnlyInput> js_only_input_;
 
   bool is_mixed_content_form_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(PasswordFormMetricsRecorder);
 };
 
 }  // namespace password_manager

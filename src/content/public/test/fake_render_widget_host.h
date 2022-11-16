@@ -7,7 +7,6 @@
 
 #include <utility>
 
-#include "base/macros.h"
 #include "mojo/public/cpp/bindings/associated_receiver.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -15,6 +14,7 @@
 #include "third_party/blink/public/mojom/input/input_handler.mojom.h"
 #include "third_party/blink/public/mojom/input/touch_event.mojom-forward.h"
 #include "third_party/blink/public/mojom/page/widget.mojom.h"
+#include "third_party/blink/public/mojom/widget/platform_widget.mojom.h"
 #include "ui/base/ime/mojom/text_input_state.mojom.h"
 
 namespace content {
@@ -25,6 +25,10 @@ class FakeRenderWidgetHost : public blink::mojom::FrameWidgetHost,
                              public blink::mojom::WidgetInputHandlerHost {
  public:
   FakeRenderWidgetHost();
+
+  FakeRenderWidgetHost(const FakeRenderWidgetHost&) = delete;
+  FakeRenderWidgetHost& operator=(const FakeRenderWidgetHost&) = delete;
+
   ~FakeRenderWidgetHost() override;
 
   std::pair<mojo::PendingAssociatedRemote<blink::mojom::FrameWidgetHost>,
@@ -89,6 +93,7 @@ class FakeRenderWidgetHost : public blink::mojom::FrameWidgetHost,
 
   // blink::mojom::WidgetInputHandlerHost overrides.
   void SetTouchActionFromMain(cc::TouchAction touch_action) override;
+  void SetPanAction(blink::mojom::PanAction pan_action) override;
   void DidOverscroll(blink::mojom::DidOverscrollParamsPtr params) override;
   void DidStartScrollingViewport() override;
   void ImeCancelComposition() override;
@@ -131,8 +136,6 @@ class FakeRenderWidgetHost : public blink::mojom::FrameWidgetHost,
       widget_input_handler_host_{this};
   mojo::AssociatedRemote<blink::mojom::FrameWidgetInputHandler>
       frame_widget_input_handler_;
-
-  DISALLOW_COPY_AND_ASSIGN(FakeRenderWidgetHost);
 };
 
 }  // namespace content

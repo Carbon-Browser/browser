@@ -6,7 +6,6 @@
 #define NET_SSL_CLIENT_CERT_STORE_NSS_H_
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "net/base/net_export.h"
 #include "net/ssl/client_cert_store.h"
 
@@ -23,14 +22,17 @@ class SSLCertRequestInfo;
 
 class NET_EXPORT ClientCertStoreNSS : public ClientCertStore {
  public:
-  typedef base::RepeatingCallback<crypto::CryptoModuleBlockingPasswordDelegate*(
-      const HostPortPair& /* server */)>
-      PasswordDelegateFactory;
-
+  using PasswordDelegateFactory =
+      base::RepeatingCallback<crypto::CryptoModuleBlockingPasswordDelegate*(
+          const HostPortPair& /* server */)>;
   using CertFilter = base::RepeatingCallback<bool(CERTCertificate*)>;
 
   explicit ClientCertStoreNSS(
       const PasswordDelegateFactory& password_delegate_factory);
+
+  ClientCertStoreNSS(const ClientCertStoreNSS&) = delete;
+  ClientCertStoreNSS& operator=(const ClientCertStoreNSS&) = delete;
+
   ~ClientCertStoreNSS() override;
 
   // ClientCertStore:
@@ -64,8 +66,6 @@ class NET_EXPORT ClientCertStoreNSS : public ClientCertStore {
   // The factory for creating the delegate for requesting a password to a
   // PKCS#11 token. May be null.
   PasswordDelegateFactory password_delegate_factory_;
-
-  DISALLOW_COPY_AND_ASSIGN(ClientCertStoreNSS);
 };
 
 }  // namespace net

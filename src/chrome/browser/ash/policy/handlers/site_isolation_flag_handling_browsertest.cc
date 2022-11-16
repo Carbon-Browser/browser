@@ -7,10 +7,11 @@
 #include <string>
 #include <vector>
 
+#include "ash/components/cryptohome/cryptohome_parameters.h"
+#include "ash/components/settings/cros_settings_names.h"
 #include "base/bind.h"
 #include "base/command_line.h"
 #include "base/containers/cxx20_erase.h"
-#include "base/macros.h"
 #include "base/strings/string_util.h"
 #include "chrome/browser/ash/login/existing_user_controller.h"
 #include "chrome/browser/ash/login/session/user_session_manager.h"
@@ -29,9 +30,7 @@
 #include "chrome/browser/ui/webui/chromeos/login/gaia_screen_handler.h"
 #include "chrome/browser/ui/webui/chromeos/login/oobe_ui.h"
 #include "chrome/test/base/in_process_browser_test.h"
-#include "chromeos/cryptohome/cryptohome_parameters.h"
-#include "chromeos/dbus/session_manager/fake_session_manager_client.h"
-#include "chromeos/settings/cros_settings_names.h"
+#include "chromeos/ash/components/dbus/session_manager/fake_session_manager_client.h"
 #include "components/flags_ui/pref_service_flags_storage.h"
 #include "components/policy/core/browser/browser_policy_connector.h"
 #include "components/policy/core/common/mock_configuration_policy_provider.h"
@@ -169,15 +168,20 @@ const Params kTestCases[] = {
            {"https://example.com"} /* expected_isolated_origins */)};
 
 class SiteIsolationFlagHandlingTest
-    : public OobeBaseTest,
+    : public ash::OobeBaseTest,
       public ::testing::WithParamInterface<Params> {
+ public:
+  SiteIsolationFlagHandlingTest(const SiteIsolationFlagHandlingTest&) = delete;
+  SiteIsolationFlagHandlingTest& operator=(
+      const SiteIsolationFlagHandlingTest&) = delete;
+
  protected:
   SiteIsolationFlagHandlingTest()
       : account_id_(AccountId::FromUserEmailGaiaId("username@examle.com",
                                                    "1111111111")) {}
 
   void SetUpInProcessBrowserTestFixture() override {
-    chromeos::SessionManagerClient::InitializeFakeInMemory();
+    ash::SessionManagerClient::InitializeFakeInMemory();
 
     // Mark that chrome restart can be requested.
     // Note that AttemptRestart() is mocked out in UserSessionManager through
@@ -252,7 +256,7 @@ class SiteIsolationFlagHandlingTest
     // Start user sign-in. We can't use |LoginPolicyTestBase::LogIn|, because
     // it waits for a user session start unconditionally, which will not happen
     // if chrome requests a restart to set user-session flags.
-    ash::WizardController::SkipPostLoginScreensForTesting();
+    login_manager_.SkipPostLoginScreens();
     OobeBaseTest::WaitForSigninScreen();
     login_manager_.LoginWithDefaultContext(user_);
 
@@ -272,16 +276,13 @@ class SiteIsolationFlagHandlingTest
       ash::DeviceStateMixin::State::OOBE_COMPLETED_CLOUD_ENROLLED};
   ash::UserPolicyMixin user_policy_{&mixin_host_, account_id_};
 
-  const LoginManagerMixin::TestUserInfo user_{account_id_};
-  LoginManagerMixin login_manager_{&mixin_host_, {user_}};
+  const ash::LoginManagerMixin::TestUserInfo user_{account_id_};
+  ash::LoginManagerMixin login_manager_{&mixin_host_, {user_}};
 
-  ash::FakeGaiaMixin fake_gaia_{&mixin_host_, embedded_test_server()};
+  ash::FakeGaiaMixin fake_gaia_{&mixin_host_};
 
   // Observes for user session start.
   std::unique_ptr<ash::SessionStateWaiter> user_session_started_observer_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(SiteIsolationFlagHandlingTest);
 };
 
 }  // namespace
@@ -290,7 +291,7 @@ IN_PROC_BROWSER_TEST_P(SiteIsolationFlagHandlingTest, PRE_FlagHandlingTest) {
   LogIn();
 
   if (!GetParam().user_flag_internal_names.empty()) {
-    Profile* profile = chromeos::ProfileHelper::Get()->GetProfileByUserUnsafe(
+    Profile* profile = ash::ProfileHelper::Get()->GetProfileByUser(
         user_manager::UserManager::Get()->GetActiveUser());
     ASSERT_TRUE(profile);
     flags_ui::PrefServiceFlagsStorage flags_storage(profile->GetPrefs());

@@ -7,7 +7,10 @@
 
 #include <stddef.h>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/time/time.h"
+#include "content/common/content_export.h"
 #include "content/public/browser/navigation_throttle.h"
 
 namespace content {
@@ -37,6 +40,10 @@ class CONTENT_EXPORT NavigationThrottleRunner {
   };
 
   NavigationThrottleRunner(Delegate* delegate, int64_t navigation_id);
+
+  NavigationThrottleRunner(const NavigationThrottleRunner&) = delete;
+  NavigationThrottleRunner& operator=(const NavigationThrottleRunner&) = delete;
+
   ~NavigationThrottleRunner();
 
   // Will call the appropriate NavigationThrottle function based on |event| on
@@ -66,11 +73,15 @@ class CONTENT_EXPORT NavigationThrottleRunner {
   // |navigation_throttle|.
   void AddThrottle(std::unique_ptr<NavigationThrottle> navigation_throttle);
 
+  void set_first_deferral_callback_for_testing(base::OnceClosure callback) {
+    first_deferral_callback_for_testing_ = std::move(callback);
+  }
+
  private:
   void ProcessInternal();
   void InformDelegate(const NavigationThrottle::ThrottleCheckResult& result);
 
-  Delegate* const delegate_;
+  const raw_ptr<Delegate> delegate_;
 
   // A list of Throttles registered for this navigation.
   std::vector<std::unique_ptr<NavigationThrottle>> throttles_;
@@ -85,11 +96,13 @@ class CONTENT_EXPORT NavigationThrottleRunner {
   // The time a throttle started deferring the navigation.
   base::Time defer_start_time_;
 
+  // This test-only callback will be run the first time a NavigationThrottle
+  // defers this navigation.
+  base::OnceClosure first_deferral_callback_for_testing_;
+
   // The event currently being processed.
   Event current_event_ = Event::NoEvent;
   base::WeakPtrFactory<NavigationThrottleRunner> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(NavigationThrottleRunner);
 };
 
 }  // namespace content

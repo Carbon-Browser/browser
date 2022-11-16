@@ -6,6 +6,7 @@
 
 #include <memory>
 
+#include "ash/components/cryptohome/cryptohome_parameters.h"
 #include "base/memory/ptr_util.h"
 #include "base/run_loop.h"
 #include "chrome/browser/ash/ownership/owner_settings_service_ash.h"
@@ -13,12 +14,11 @@
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/ash/settings/device_settings_service.h"
 #include "chrome/test/base/testing_profile.h"
-#include "chromeos/cryptohome/cryptohome_parameters.h"
-#include "chromeos/dbus/concierge/concierge_client.h"
+#include "chromeos/ash/components/dbus/concierge/concierge_client.h"
+#include "chromeos/ash/components/dbus/userdataauth/cryptohome_misc_client.h"
+#include "chromeos/ash/components/dbus/userdataauth/userdataauth_client.h"
 #include "chromeos/dbus/power/fake_power_manager_client.h"
 #include "chromeos/dbus/tpm_manager/tpm_manager_client.h"
-#include "chromeos/dbus/userdataauth/cryptohome_misc_client.h"
-#include "chromeos/dbus/userdataauth/userdataauth_client.h"
 #include "components/ownership/mock_owner_key_util.h"
 #include "components/policy/proto/chrome_device_policy.pb.h"
 #include "content/public/browser/browser_thread.h"
@@ -58,9 +58,9 @@ void DeviceSettingsTestBase::SetUp() {
       base::WrapUnique(user_manager_));
   owner_key_util_ = new ownership::MockOwnerKeyUtil();
   device_settings_service_ = std::make_unique<DeviceSettingsService>();
-  chromeos::ConciergeClient::InitializeFake(/*fake_cicerone_client=*/nullptr);
-  chromeos::UserDataAuthClient::InitializeFake();
-  chromeos::CryptohomeMiscClient::InitializeFake();
+  ConciergeClient::InitializeFake(/*fake_cicerone_client=*/nullptr);
+  UserDataAuthClient::InitializeFake();
+  CryptohomeMiscClient::InitializeFake();
   PowerManagerClient::InitializeFake();
   chromeos::TpmManagerClient::InitializeFake();
   OwnerSettingsServiceAshFactory::SetDeviceSettingsServiceForTesting(
@@ -87,9 +87,9 @@ void DeviceSettingsTestBase::TearDown() {
   device_settings_service_.reset();
   chromeos::TpmManagerClient::Shutdown();
   PowerManagerClient::Shutdown();
-  chromeos::CryptohomeMiscClient::Shutdown();
-  chromeos::UserDataAuthClient::Shutdown();
-  chromeos::ConciergeClient::Shutdown();
+  CryptohomeMiscClient::Shutdown();
+  UserDataAuthClient::Shutdown();
+  ConciergeClient::Shutdown();
   device_policy_.reset();
   base::RunLoop().RunUntilIdle();
   profile_.reset();
@@ -125,7 +125,7 @@ void DeviceSettingsTestBase::InitOwner(const AccountId& account_id,
       OwnerSettingsServiceAshFactory::GetForBrowserContext(profile_.get());
   CHECK(service);
   if (tpm_is_ready)
-    service->OnTPMTokenReady(true /* token is enabled */);
+    service->OnTPMTokenReady();
 }
 
 }  // namespace ash

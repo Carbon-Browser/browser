@@ -6,14 +6,21 @@
 """//testing/scripts wrapper for the network traffic annotations checks.
 This script is used to run check_annotations.py on the trybots to ensure that
 all network traffic annotations have correct syntax and semantics, and all
-functions requiring annotations have one."""
+functions requiring annotations have one.
+
+This is a wrapper around tools/traffic_annotation/scripts/auditor.py.
+
+See tools/traffic_annotation/scripts/auditor/README.md for instructions on
+running locally."""
 
 import json
 import os
 import sys
 
-
-import common
+# Add src/testing/ into sys.path for importing common without pylint errors.
+sys.path.append(
+    os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
+from scripts import common
 
 
 def main_run(args):
@@ -34,7 +41,7 @@ def main_run(args):
 
 
 def main_compile_targets(args):
-  json.dump(['shipped_binaries'], args.output)
+  json.dump(['traffic_annotation_auditor_dependencies'], args.output)
 
 
 if __name__ == '__main__':

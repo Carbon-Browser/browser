@@ -12,13 +12,14 @@
 #include "base/callback_helpers.h"
 #include "base/containers/contains.h"
 #include "base/files/file_enumerator.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
+#include "chrome/browser/web_applications/test/fake_web_app_database_factory.h"
+#include "chrome/browser/web_applications/test/fake_web_app_registry_controller.h"
 #include "chrome/browser/web_applications/test/test_file_utils.h"
-#include "chrome/browser/web_applications/test/test_web_app_database_factory.h"
-#include "chrome/browser/web_applications/test/test_web_app_registry_controller.h"
 #include "chrome/browser/web_applications/test/web_app_icon_test_utils.h"
 #include "chrome/browser/web_applications/test/web_app_test.h"
 #include "chrome/browser/web_applications/test/web_app_test_utils.h"
@@ -26,14 +27,14 @@
 #include "chrome/browser/web_applications/web_app_constants.h"
 #include "chrome/browser/web_applications/web_app_helpers.h"
 #include "chrome/browser/web_applications/web_app_icon_generator.h"
+#include "chrome/browser/web_applications/web_app_install_info.h"
+#include "chrome/browser/web_applications/web_app_install_manager.h"
 #include "chrome/browser/web_applications/web_app_registrar.h"
 #include "chrome/browser/web_applications/web_app_registry_update.h"
 #include "chrome/browser/web_applications/web_app_sync_bridge.h"
 #include "chrome/browser/web_applications/web_app_utils.h"
-#include "chrome/browser/web_applications/web_application_info.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/test/base/testing_profile.h"
-#include "extensions/common/constants.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkBitmap.h"
@@ -54,15 +55,15 @@ class WebAppIconManagerTest : public WebAppTest {
   void SetUp() override {
     WebAppTest::SetUp();
 
-    test_registry_controller_ =
-        std::make_unique<TestWebAppRegistryController>();
-    test_registry_controller_->SetUp(profile());
+    fake_registry_controller_ =
+        std::make_unique<FakeWebAppRegistryController>();
+    fake_registry_controller_->SetUp(profile());
 
-    auto file_utils = std::make_unique<TestFileUtils>();
-    file_utils_ = file_utils.get();
+    install_manager_ = std::make_unique<WebAppInstallManager>(profile());
 
-    icon_manager_ = std::make_unique<WebAppIconManager>(profile(), registrar(),
-                                                        std::move(file_utils));
+    file_utils_ = base::MakeRefCounted<TestFileUtils>();
+    icon_manager_ = std::make_unique<WebAppIconManager>(profile(), file_utils_);
+    icon_manager_->SetSubsystems(&registrar(), &install_manager());
 
     controller().Init();
   }
@@ -82,9 +83,10 @@ class WebAppIconManagerTest : public WebAppTest {
 
         std::map<SquareSizePx, SkBitmap> generated_bitmaps;
 
-        for (size_t i = 0; i < info.sizes_px.size(); ++i)
-          AddGeneratedIcon(&generated_bitmaps, info.sizes_px[i],
-                           info.colors[i]);
+        for (size_t j = 0; j < info.sizes_px.size(); ++j) {
+          AddGeneratedIcon(&generated_bitmaps, info.sizes_px[j],
+                           info.colors[j]);
+        }
 
         menu_item_icon_map.SetBitmapsForPurpose(info.purpose,
                                                 std::move(generated_bitmaps));
@@ -160,7 +162,7 @@ class WebAppIconManagerTest : public WebAppTest {
         app_id, purposes, min_icon_size,
         base::BindLambdaForTesting([&](IconPurpose purpose, SkBitmap bitmap) {
           result.purpose = purpose;
-          result.bitmap = bitmap;
+          result.bitmap = std::move(bitmap);
           run_loop.Quit();
         }));
     run_loop.Run();
@@ -173,7 +175,7 @@ class WebAppIconManagerTest : public WebAppTest {
     base::RunLoop run_loop;
     icon_manager().ReadSmallestIconAny(
         app_id, min_icon_size, base::BindLambdaForTesting([&](SkBitmap bitmap) {
-          result = bitmap;
+          result = std::move(bitmap);
           run_loop.Quit();
         }));
     run_loop.Run();
@@ -235,11 +237,12 @@ class WebAppIconManagerTest : public WebAppTest {
     return ReadIconAndResize(app_id, IconPurpose::ANY, desired_icon_size);
   }
 
-  TestWebAppRegistryController& controller() {
-    return *test_registry_controller_;
+  FakeWebAppRegistryController& controller() {
+    return *fake_registry_controller_;
   }
 
   WebAppRegistrar& registrar() { return controller().registrar(); }
+  WebAppInstallManager& install_manager() { return *install_manager_; }
   WebAppSyncBridge& sync_bridge() { return controller().sync_bridge(); }
   WebAppIconManager& icon_manager() { return *icon_manager_; }
   TestFileUtils& file_utils() {
@@ -248,15 +251,14 @@ class WebAppIconManagerTest : public WebAppTest {
   }
 
  private:
-  std::unique_ptr<TestWebAppRegistryController> test_registry_controller_;
+  std::unique_ptr<FakeWebAppRegistryController> fake_registry_controller_;
   std::unique_ptr<WebAppIconManager> icon_manager_;
-
-  // Owned by icon_manager_:
-  TestFileUtils* file_utils_ = nullptr;
+  std::unique_ptr<WebAppInstallManager> install_manager_;
+  scoped_refptr<TestFileUtils> file_utils_;
 };
 
 TEST_F(WebAppIconManagerTest, WriteAndReadIcons_AnyOnly) {
-  auto web_app = test::CreateMinimalWebApp();
+  auto web_app = test::CreateWebApp();
   const AppId app_id = web_app->app_id();
 
   const std::vector<int> sizes_px{icon_size::k256, icon_size::k512};
@@ -296,7 +298,7 @@ TEST_F(WebAppIconManagerTest, WriteAndReadIcons_AnyOnly) {
 }
 
 TEST_F(WebAppIconManagerTest, WriteAndReadIcons_MaskableOnly) {
-  auto web_app = test::CreateMinimalWebApp();
+  auto web_app = test::CreateWebApp();
   const AppId app_id = web_app->app_id();
 
   const std::vector<int> sizes_px{icon_size::k256, icon_size::k512};
@@ -335,7 +337,7 @@ TEST_F(WebAppIconManagerTest, WriteAndReadIcons_MaskableOnly) {
 }
 
 TEST_F(WebAppIconManagerTest, WriteAndReadIcons_MonochromeOnly) {
-  auto web_app = test::CreateMinimalWebApp();
+  auto web_app = test::CreateWebApp();
   const AppId app_id = web_app->app_id();
 
   const std::vector<int> sizes_px{icon_size::k128, icon_size::k256};
@@ -377,7 +379,7 @@ TEST_F(WebAppIconManagerTest, WriteAndReadIcons_MonochromeOnly) {
 }
 
 TEST_F(WebAppIconManagerTest, WriteAndReadIcons_AnyAndMaskable) {
-  auto web_app = test::CreateMinimalWebApp();
+  auto web_app = test::CreateWebApp();
   const AppId app_id = web_app->app_id();
 
   const std::vector<int> sizes_px{icon_size::k256, icon_size::k512};
@@ -440,7 +442,7 @@ TEST_F(WebAppIconManagerTest, WriteAndReadIcons_AnyAndMaskable) {
 }
 
 TEST_F(WebAppIconManagerTest, WriteAndReadIcons_AnyAndMonochrome) {
-  auto web_app = test::CreateMinimalWebApp();
+  auto web_app = test::CreateWebApp();
   const AppId app_id = web_app->app_id();
 
   const std::vector<int> sizes_px_any{icon_size::k256, icon_size::k512};
@@ -511,7 +513,7 @@ TEST_F(WebAppIconManagerTest, WriteAndReadIcons_AnyAndMonochrome) {
 }
 
 TEST_F(WebAppIconManagerTest, OverwriteIcons) {
-  auto web_app = test::CreateMinimalWebApp();
+  auto web_app = test::CreateWebApp();
   const AppId app_id = web_app->app_id();
 
   // Write initial red icons to be overwritten.
@@ -608,7 +610,7 @@ TEST_F(WebAppIconManagerTest, OverwriteIcons) {
 }
 
 TEST_F(WebAppIconManagerTest, ReadAllIcons_AnyOnly) {
-  auto web_app = test::CreateMinimalWebApp();
+  auto web_app = test::CreateWebApp();
   const AppId app_id = web_app->app_id();
 
   const std::vector<int> sizes_px{icon_size::k256, icon_size::k512};
@@ -637,7 +639,7 @@ TEST_F(WebAppIconManagerTest, ReadAllIcons_AnyOnly) {
 }
 
 TEST_F(WebAppIconManagerTest, ReadAllIcons_AnyAndMaskable) {
-  auto web_app = test::CreateMinimalWebApp();
+  auto web_app = test::CreateWebApp();
   const AppId app_id = web_app->app_id();
 
   const std::vector<int> sizes_px{icon_size::k256, icon_size::k512};
@@ -670,7 +672,7 @@ TEST_F(WebAppIconManagerTest, ReadAllIcons_AnyAndMaskable) {
 }
 
 TEST_F(WebAppIconManagerTest, ReadShortcutsMenuIconsFailed) {
-  auto web_app = test::CreateMinimalWebApp();
+  auto web_app = test::CreateWebApp();
   const AppId app_id = web_app->app_id();
 
   const std::vector<SquareSizePx> sizes_px_any{icon_size::k96, icon_size::k256};
@@ -694,7 +696,7 @@ TEST_F(WebAppIconManagerTest, ReadShortcutsMenuIconsFailed) {
 }
 
 TEST_F(WebAppIconManagerTest, WriteAndReadAllShortcutsMenuIcons) {
-  auto web_app = test::CreateMinimalWebApp();
+  auto web_app = test::CreateWebApp();
   const AppId app_id = web_app->app_id();
 
   const int num_menu_items = 3;
@@ -771,7 +773,7 @@ TEST_F(WebAppIconManagerTest, WriteAndReadAllShortcutsMenuIcons) {
 }
 
 TEST_F(WebAppIconManagerTest, WriteNonProductIconsEmptyMaps) {
-  auto web_app = test::CreateMinimalWebApp();
+  auto web_app = test::CreateWebApp();
   const AppId app_id = web_app->app_id();
 
   web_app->SetDownloadedShortcutsMenuIconsSizes(std::vector<IconSizes>{});
@@ -797,7 +799,7 @@ TEST_F(WebAppIconManagerTest, WriteNonProductIconsEmptyMaps) {
 }
 
 TEST_F(WebAppIconManagerTest, WriteOtherIconsToDisk) {
-  auto web_app = test::CreateMinimalWebApp();
+  auto web_app = test::CreateWebApp();
   const AppId app_id = web_app->app_id();
 
   controller().RegisterApp(std::move(web_app));
@@ -821,7 +823,7 @@ TEST_F(WebAppIconManagerTest, WriteOtherIconsToDisk) {
 }
 
 TEST_F(WebAppIconManagerTest, ReadIconsFailed) {
-  auto web_app = test::CreateMinimalWebApp();
+  auto web_app = test::CreateWebApp();
   const AppId app_id = web_app->app_id();
 
   const std::vector<SquareSizePx> icon_sizes_px{icon_size::k256};
@@ -853,7 +855,7 @@ TEST_F(WebAppIconManagerTest, ReadIconsFailed) {
 }
 
 TEST_F(WebAppIconManagerTest, FindExact) {
-  auto web_app = test::CreateMinimalWebApp();
+  auto web_app = test::CreateWebApp();
   const AppId app_id = web_app->app_id();
 
   const std::vector<int> sizes_px{10, 60, 50, 20, 30};
@@ -894,7 +896,7 @@ bool operator==(const IconSizeAndPurpose& a, const IconSizeAndPurpose& b) {
 }
 
 TEST_F(WebAppIconManagerTest, FindSmallest) {
-  auto web_app = test::CreateMinimalWebApp();
+  auto web_app = test::CreateWebApp();
   const AppId app_id = web_app->app_id();
 
   const std::vector<int> sizes_px{10, 60, 50, 20, 30};
@@ -1039,7 +1041,7 @@ TEST_F(WebAppIconManagerTest, DeleteData_Failure) {
 }
 
 TEST_F(WebAppIconManagerTest, ReadSmallestCompressedIcon_Success_AnyOnly) {
-  auto web_app = test::CreateMinimalWebApp();
+  auto web_app = test::CreateWebApp();
   const AppId app_id = web_app->app_id();
 
   const std::vector<int> sizes_px{icon_size::k128};
@@ -1072,7 +1074,7 @@ TEST_F(WebAppIconManagerTest, ReadSmallestCompressedIcon_Success_AnyOnly) {
 }
 
 TEST_F(WebAppIconManagerTest, ReadSmallestCompressedIcon_Success) {
-  auto web_app = test::CreateMinimalWebApp();
+  auto web_app = test::CreateWebApp();
   const AppId app_id = web_app->app_id();
 
   const std::vector<int> sizes_px{icon_size::k64, icon_size::k128};
@@ -1140,7 +1142,7 @@ TEST_F(WebAppIconManagerTest, ReadSmallestCompressedIcon_Success) {
 }
 
 TEST_F(WebAppIconManagerTest, ReadSmallestCompressedIcon_Failure) {
-  auto web_app = test::CreateMinimalWebApp();
+  auto web_app = test::CreateWebApp();
   const AppId app_id = web_app->app_id();
 
   const std::vector<int> sizes_px{icon_size::k64};
@@ -1172,7 +1174,7 @@ TEST_F(WebAppIconManagerTest, ReadSmallestCompressedIcon_Failure) {
 }
 
 TEST_F(WebAppIconManagerTest, ReadIconAndResize_Success_AnyOnly) {
-  auto web_app = test::CreateMinimalWebApp();
+  auto web_app = test::CreateWebApp();
   const AppId app_id = web_app->app_id();
 
   const std::vector<int> sizes_px{icon_size::k32, icon_size::k64,
@@ -1210,7 +1212,7 @@ TEST_F(WebAppIconManagerTest, ReadIconAndResize_Success_AnyOnly) {
 }
 
 TEST_F(WebAppIconManagerTest, ReadIconAndResize_Success_AnyAndMaskable) {
-  auto web_app = test::CreateMinimalWebApp();
+  auto web_app = test::CreateWebApp();
   const AppId app_id = web_app->app_id();
 
   const std::vector<int> sizes_px{icon_size::k32, icon_size::k64,
@@ -1252,7 +1254,7 @@ TEST_F(WebAppIconManagerTest, ReadIconAndResize_Success_AnyAndMaskable) {
 }
 
 TEST_F(WebAppIconManagerTest, ReadIconAndResize_Failure) {
-  auto web_app = test::CreateMinimalWebApp();
+  auto web_app = test::CreateWebApp();
   const AppId app_id = web_app->app_id();
 
   web_app->SetDownloadedIconSizes(IconPurpose::ANY,
@@ -1286,12 +1288,8 @@ TEST_F(WebAppIconManagerTest, ReadIconAndResize_Failure) {
   }
 }
 
-TEST_F(WebAppIconManagerTest, MatchSizes) {
-  EXPECT_EQ(kWebAppIconSmall, extension_misc::EXTENSION_ICON_SMALL);
-}
-
 TEST_F(WebAppIconManagerTest, CacheExistingAppFavicon) {
-  auto web_app = test::CreateMinimalWebApp();
+  auto web_app = test::CreateWebApp();
   const AppId app_id = web_app->app_id();
 
   const std::vector<int> sizes_px{gfx::kFaviconSize, icon_size::k48};
@@ -1313,7 +1311,7 @@ TEST_F(WebAppIconManagerTest, CacheExistingAppFavicon) {
 }
 
 TEST_F(WebAppIconManagerTest, CacheAppFaviconWithResize) {
-  auto web_app = test::CreateMinimalWebApp();
+  auto web_app = test::CreateWebApp();
   const AppId app_id = web_app->app_id();
 
   // App does not declare an icon of gfx::kFaviconSize, forcing a resize.
@@ -1340,7 +1338,7 @@ TEST_F(WebAppIconManagerTest, CacheAppFaviconWithResize) {
 TEST_F(WebAppIconManagerTest, CacheNewAppFavicon) {
   icon_manager().Start();
 
-  auto web_app = test::CreateMinimalWebApp();
+  auto web_app = test::CreateWebApp();
   const AppId app_id = web_app->app_id();
 
   const std::vector<int> sizes_px{gfx::kFaviconSize, icon_size::k48};
@@ -1358,7 +1356,7 @@ TEST_F(WebAppIconManagerTest, CacheNewAppFavicon) {
       }));
 
   controller().RegisterApp(std::move(web_app));
-  registrar().NotifyWebAppInstalled(app_id);
+  install_manager().NotifyWebAppInstalled(app_id);
 
   run_loop.Run();
 
@@ -1373,7 +1371,7 @@ TEST_F(WebAppIconManagerTest, CacheAppFavicon_UiScaleFactors_NoMissingIcons) {
   ui::test::ScopedSetSupportedResourceScaleFactors scoped_scale_factors(
       {ui::k100Percent, ui::k200Percent, ui::k300Percent});
 
-  std::unique_ptr<WebApp> web_app = test::CreateMinimalWebApp();
+  std::unique_ptr<WebApp> web_app = test::CreateWebApp();
   const AppId app_id = web_app->app_id();
 
   // App declares icons precisely matching suspported UI scale factors.
@@ -1417,7 +1415,7 @@ TEST_F(WebAppIconManagerTest, CacheAppFavicon_UiScaleFactors_DownsizingIcons) {
   ui::test::ScopedSetSupportedResourceScaleFactors scoped_scale_factors(
       {ui::k100Percent, ui::k200Percent});
 
-  std::unique_ptr<WebApp> web_app = test::CreateMinimalWebApp();
+  std::unique_ptr<WebApp> web_app = test::CreateWebApp();
   const AppId app_id = web_app->app_id();
 
   // App declares only bigger icons, forcing a downsize to suspported UI scale
@@ -1456,7 +1454,7 @@ TEST_F(WebAppIconManagerTest, CacheAppFavicon_UiScaleFactors_NoIcons) {
   ui::test::ScopedSetSupportedResourceScaleFactors scoped_scale_factors(
       {ui::k100Percent, ui::k200Percent});
 
-  std::unique_ptr<WebApp> web_app = test::CreateMinimalWebApp();
+  std::unique_ptr<WebApp> web_app = test::CreateWebApp();
   const AppId app_id = web_app->app_id();
   controller().RegisterApp(std::move(web_app));
 
@@ -1470,7 +1468,7 @@ TEST_F(WebAppIconManagerTest, CacheAppFavicon_UiScaleFactors_NoMatchSmaller) {
   ui::test::ScopedSetSupportedResourceScaleFactors scoped_scale_factors(
       {ui::k200Percent, ui::k300Percent});
 
-  std::unique_ptr<WebApp> web_app = test::CreateMinimalWebApp();
+  std::unique_ptr<WebApp> web_app = test::CreateWebApp();
   const AppId app_id = web_app->app_id();
 
   // App declares only smaller icon and implementations ignore it: no upsizing.
@@ -1493,7 +1491,7 @@ TEST_F(WebAppIconManagerTest,
   ui::test::ScopedSetSupportedResourceScaleFactors scoped_scale_factors(
       {ui::k100Percent, ui::k200Percent});
 
-  std::unique_ptr<WebApp> web_app = test::CreateMinimalWebApp();
+  std::unique_ptr<WebApp> web_app = test::CreateWebApp();
   const AppId app_id = web_app->app_id();
 
   // App declares only one jumbo icon.
@@ -1529,7 +1527,7 @@ TEST_F(WebAppIconManagerTest,
   ui::test::ScopedSetSupportedResourceScaleFactors scoped_scale_factors(
       {ui::k100Percent, ui::k300Percent});
 
-  std::unique_ptr<WebApp> web_app = test::CreateMinimalWebApp();
+  std::unique_ptr<WebApp> web_app = test::CreateWebApp();
   const AppId app_id = web_app->app_id();
 
   // App declares the icon which is ok for 100P but small for 300P.
@@ -1557,23 +1555,15 @@ TEST_F(WebAppIconManagerTest,
   EXPECT_FALSE(image_skia.HasRepresentation(3.0f));
 }
 
-class WebAppIconManagerTest_NotificationIconAndTitle
-    : public WebAppIconManagerTest {
- public:
-  WebAppIconManagerTest_NotificationIconAndTitle() {
-    scoped_feature_list_.InitAndEnableFeature(
-        features::kDesktopPWAsNotificationIconAndTitle);
-  }
-
-  base::test::ScopedFeatureList scoped_feature_list_;
-};
+#if BUILDFLAG(IS_CHROMEOS)
+using WebAppIconManagerTest_NotificationIconAndTitle = WebAppIconManagerTest;
 
 TEST_F(WebAppIconManagerTest_NotificationIconAndTitle,
        CacheAppMonochromeFavicon_NoMissingIcons) {
   ui::test::ScopedSetSupportedResourceScaleFactors scoped_scale_factors(
       {ui::k100Percent, ui::k200Percent, ui::k300Percent});
 
-  std::unique_ptr<WebApp> web_app = test::CreateMinimalWebApp();
+  std::unique_ptr<WebApp> web_app = test::CreateWebApp();
   web_app->SetThemeColor(absl::make_optional(SK_ColorBLUE));
 
   const AppId app_id = web_app->app_id();
@@ -1623,7 +1613,7 @@ TEST_F(WebAppIconManagerTest_NotificationIconAndTitle,
 
   icon_manager().Start();
 
-  std::unique_ptr<WebApp> web_app = test::CreateMinimalWebApp();
+  std::unique_ptr<WebApp> web_app = test::CreateWebApp();
   web_app->SetThemeColor(absl::make_optional(SK_ColorGREEN));
 
   const AppId app_id = web_app->app_id();
@@ -1643,7 +1633,7 @@ TEST_F(WebAppIconManagerTest_NotificationIconAndTitle,
       }));
 
   controller().RegisterApp(std::move(web_app));
-  registrar().NotifyWebAppInstalled(app_id);
+  install_manager().NotifyWebAppInstalled(app_id);
 
   run_loop.Run();
 
@@ -1669,7 +1659,7 @@ TEST_F(WebAppIconManagerTest_NotificationIconAndTitle,
   ui::test::ScopedSetSupportedResourceScaleFactors scoped_scale_factors(
       {ui::k100Percent, ui::k300Percent});
 
-  std::unique_ptr<WebApp> web_app = test::CreateMinimalWebApp();
+  std::unique_ptr<WebApp> web_app = test::CreateWebApp();
   web_app->SetThemeColor(absl::nullopt);
 
   const AppId app_id = web_app->app_id();
@@ -1704,7 +1694,7 @@ TEST_F(WebAppIconManagerTest_NotificationIconAndTitle,
   ui::test::ScopedSetSupportedResourceScaleFactors scoped_scale_factors(
       {ui::k100Percent, ui::k200Percent});
 
-  std::unique_ptr<WebApp> web_app = test::CreateMinimalWebApp();
+  std::unique_ptr<WebApp> web_app = test::CreateWebApp();
   const AppId app_id = web_app->app_id();
   controller().RegisterApp(std::move(web_app));
 
@@ -1713,5 +1703,6 @@ TEST_F(WebAppIconManagerTest_NotificationIconAndTitle,
   gfx::ImageSkia monochrome_image = icon_manager().GetMonochromeFavicon(app_id);
   EXPECT_TRUE(monochrome_image.isNull());
 }
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 }  // namespace web_app

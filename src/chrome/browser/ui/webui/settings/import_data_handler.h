@@ -9,8 +9,7 @@
 
 #include <memory>
 
-#include "base/compiler_specific.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/importer/importer_progress_observer.h"
 #include "chrome/browser/ui/webui/settings/settings_page_ui_handler.h"
 #include "chrome/common/importer/importer_data_types.h"
@@ -27,6 +26,10 @@ class ImportDataHandler : public SettingsPageUIHandler,
                           public ui::SelectFileDialog::Listener {
  public:
   ImportDataHandler();
+
+  ImportDataHandler(const ImportDataHandler&) = delete;
+  ImportDataHandler& operator=(const ImportDataHandler&) = delete;
+
   ~ImportDataHandler() override;
 
   // SettingsPageUIHandler
@@ -40,15 +43,15 @@ class ImportDataHandler : public SettingsPageUIHandler,
 
   // Handler for the "importData" message. First argument is the selected
   // browser index, and second argument is the types of data to import.
-  void HandleImportData(const base::ListValue* args);
+  void HandleImportData(const base::Value::List& args);
 
   // Handler for the "initializeImportDialog" message. First argument is a
   // callback id.
-  void HandleInitializeImportDialog(const base::ListValue* args);
+  void HandleInitializeImportDialog(const base::Value::List& args);
 
   // Handler for the "importFromBookmarksFile" message. Opens a file selection
   // dialog to choose the bookmarks HTML file.
-  void HandleImportFromBookmarksFile(const base::ListValue* args);
+  void HandleImportFromBookmarksFile(const base::Value::List& args);
 
   void SendBrowserProfileData(const std::string& callback_id);
 
@@ -68,14 +71,12 @@ class ImportDataHandler : public SettingsPageUIHandler,
 
   // If non-null it means importing is in progress. ImporterHost takes care
   // of deleting itself when import is complete.
-  ExternalProcessImporterHost* importer_host_;  // weak
+  raw_ptr<ExternalProcessImporterHost> importer_host_;  // weak
 
   bool import_did_succeed_{false};
   bool importer_list_loaded_{false};
 
   scoped_refptr<ui::SelectFileDialog> select_file_dialog_;
-
-  DISALLOW_COPY_AND_ASSIGN(ImportDataHandler);
 };
 
 }  // namespace settings

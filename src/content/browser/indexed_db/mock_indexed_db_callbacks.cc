@@ -7,8 +7,8 @@
 #include <memory>
 #include <utility>
 
+#include "components/services/storage/public/cpp/buckets/bucket_locator.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/blink/public/common/storage_key/storage_key.h"
 
 using blink::IndexedDBDatabaseMetadata;
 using blink::IndexedDBKey;
@@ -17,12 +17,12 @@ namespace content {
 
 MockIndexedDBCallbacks::MockIndexedDBCallbacks()
     : IndexedDBCallbacks(nullptr,
-                         blink::StorageKey(),
+                         storage::BucketLocator(),
                          mojo::NullAssociatedRemote(),
                          base::SequencedTaskRunnerHandle::Get()) {}
 MockIndexedDBCallbacks::MockIndexedDBCallbacks(bool expect_connection)
     : IndexedDBCallbacks(nullptr,
-                         blink::StorageKey(),
+                         storage::BucketLocator(),
                          mojo::NullAssociatedRemote(),
                          base::SequencedTaskRunnerHandle::Get()),
       expect_connection_(expect_connection) {}
@@ -42,6 +42,8 @@ void MockIndexedDBCallbacks::OnSuccess(int64_t result) {}
 void MockIndexedDBCallbacks::OnSuccess(
     std::vector<blink::mojom::IDBNameAndVersionPtr> names_and_versions) {
   info_called_ = true;
+  if (call_on_info_success_)
+    call_on_info_success_.Run();
 }
 
 void MockIndexedDBCallbacks::OnSuccess(
@@ -69,6 +71,9 @@ void MockIndexedDBCallbacks::CallOnUpgradeNeeded(base::OnceClosure closure) {
 }
 void MockIndexedDBCallbacks::CallOnDBSuccess(base::OnceClosure closure) {
   call_on_db_success_ = std::move(closure);
+}
+void MockIndexedDBCallbacks::CallOnInfoSuccess(base::RepeatingClosure closure) {
+  call_on_info_success_ = std::move(closure);
 }
 
 }  // namespace content

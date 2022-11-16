@@ -6,7 +6,6 @@
 #define COMPONENTS_METRICS_METRICS_SERVICE_CLIENT_H_
 
 #include <stdint.h>
-
 #include <memory>
 #include <string>
 
@@ -18,12 +17,16 @@
 #include "third_party/metrics_proto/system_profile.pb.h"
 #include "url/gurl.h"
 
-namespace base {
-class FilePath;
-}
-
 namespace ukm {
 class UkmService;
+}
+
+namespace network_time {
+class NetworkTimeTracker;
+}
+
+namespace variations {
+class SyntheticTrialRegistry;
 }
 
 namespace metrics {
@@ -36,7 +39,15 @@ class MetricsService;
 class MetricsServiceClient {
  public:
   MetricsServiceClient();
+
+  MetricsServiceClient(const MetricsServiceClient&) = delete;
+  MetricsServiceClient& operator=(const MetricsServiceClient&) = delete;
+
   virtual ~MetricsServiceClient();
+
+  // Returns the synthetic trial registry shared by MetricsService and
+  // UkmService.
+  virtual variations::SyntheticTrialRegistry* GetSyntheticTrialRegistry() = 0;
 
   // Returns the MetricsService instance that this client is associated with.
   // With the exception of testing contexts, the returned instance must be valid
@@ -62,6 +73,9 @@ class MetricsServiceClient {
 
   // Returns the current application locale (e.g. "en-US").
   virtual std::string GetApplicationLocale() = 0;
+
+  // Return a NetworkTimeTracker for access to a server-provided clock.
+  virtual const network_time::NetworkTimeTracker* GetNetworkTimeTracker() = 0;
 
   // Retrieves the brand code string associated with the install, returning
   // false if no brand code is available.
@@ -119,9 +133,6 @@ class MetricsServiceClient {
   // Called when loading state changed, e.g. start/stop loading.
   virtual void LoadingStateChanged(bool is_loading) {}
 
-  // Called on plugin loading errors.
-  virtual void OnPluginLoadingError(const base::FilePath& plugin_path) {}
-
   // Called on renderer crashes in some embedders (e.g., those that do not use
   // //content and thus do not have //content's notification system available
   // as a mechanism for observing renderer crashes).
@@ -178,10 +189,44 @@ class MetricsServiceClient {
   // Checks if the user has forced metrics collection on via the override flag.
   bool IsMetricsReportingForceEnabled() const;
 
+  // Initializes per-user metrics collection. For more details what per-user
+  // metrics collection is, refer to MetricsService::InitPerUserMetrics.
+  //
+  // Since the concept of a user is only applicable in Ash Chrome, this function
+  // should no-op for other platforms.
+  virtual void InitPerUserMetrics() {}
+
+  // Updates the current user's metrics consent. This allows embedders to update
+  // the user consent. If there is no current user, then this function will
+  // no-op.
+  //
+  // Since the concept of a user is only applicable on Ash Chrome, this function
+  // should no-op for other platforms.
+  virtual void UpdateCurrentUserMetricsConsent(bool user_metrics_consent) {}
+
+  // Returns the current user metrics consent if it should be applied to decide
+  // the current metrics reporting state. This allows embedders to determine
+  // when a user metric consent state should not be applied (ie no logged in
+  // user or managed policy).
+  //
+  // Will return absl::nullopt if there is no current user or current user
+  // metrics consent should not be applied to determine metrics reporting state.
+  //
+  // Not all platforms support per-user consent. If per-user consent is not
+  // supported, this function should return absl::nullopt.
+  virtual absl::optional<bool> GetCurrentUserMetricsConsent() const;
+
+  // Returns the current user id.
+  //
+  // Will return absl::nullopt if there is no current user, metrics reporting is
+  // disabled, or current user should not have a user id.
+  //
+  // Not all platforms support per-user consent. If per-user consent is not
+  // supported, this function should return absl::nullopt.
+  virtual absl::optional<std::string> GetCurrentUserId() const;
+
  private:
   base::RepeatingClosure update_running_services_;
-
-  DISALLOW_COPY_AND_ASSIGN(MetricsServiceClient);
 };
 
 }  // namespace metrics

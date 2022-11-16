@@ -5,15 +5,19 @@
 #ifndef COMPONENTS_AUTOFILL_ASSISTANT_BROWSER_FAKE_SCRIPT_EXECUTOR_DELEGATE_H_
 #define COMPONENTS_AUTOFILL_ASSISTANT_BROWSER_FAKE_SCRIPT_EXECUTOR_DELEGATE_H_
 
-#include <map>
 #include <memory>
-#include <set>
 #include <string>
 #include <vector>
 
+#include "base/containers/flat_set.h"
+#include "base/memory/raw_ptr.h"
 #include "components/autofill_assistant/browser/client_settings.h"
 #include "components/autofill_assistant/browser/script_executor_delegate.h"
 #include "components/autofill_assistant/browser/trigger_context.h"
+
+namespace password_manager {
+class PasswordChangeSuccessTracker;
+}
 
 namespace autofill_assistant {
 
@@ -22,6 +26,11 @@ namespace autofill_assistant {
 class FakeScriptExecutorDelegate : public ScriptExecutorDelegate {
  public:
   FakeScriptExecutorDelegate();
+
+  FakeScriptExecutorDelegate(const FakeScriptExecutorDelegate&) = delete;
+  FakeScriptExecutorDelegate& operator=(const FakeScriptExecutorDelegate&) =
+      delete;
+
   ~FakeScriptExecutorDelegate() override;
 
   const ClientSettings& GetSettings() override;
@@ -33,56 +42,24 @@ class FakeScriptExecutorDelegate : public ScriptExecutorDelegate {
   TriggerContext* GetTriggerContext() override;
   autofill::PersonalDataManager* GetPersonalDataManager() override;
   WebsiteLoginManager* GetWebsiteLoginManager() override;
+  password_manager::PasswordChangeSuccessTracker*
+  GetPasswordChangeSuccessTracker() override;
   content::WebContents* GetWebContents() override;
+  const std::string GetLocale() override;
+  void SetJsFlowLibrary(const std::string& js_flow_library) override;
+  JsFlowDevtoolsWrapper* GetJsFlowDevtoolsWrapper() override;
   std::string GetEmailAddressForAccessTokenAccount() override;
-  std::string GetLocale() override;
+  ukm::UkmRecorder* GetUkmRecorder() override;
   bool EnterState(AutofillAssistantState state) override;
+  AutofillAssistantState GetState() const override;
   void SetTouchableElementArea(const ElementAreaProto& element) override;
-  void SetStatusMessage(const std::string& message) override;
-  std::string GetStatusMessage() const override;
-  void SetBubbleMessage(const std::string& message) override;
-  std::string GetBubbleMessage() const override;
-  void SetTtsMessage(const std::string& message) override;
-  std::string GetTtsMessage() const override;
-  TtsButtonState GetTtsButtonState() const override;
-  void MaybePlayTtsMessage() override;
-  void SetDetails(std::unique_ptr<Details> details,
-                  base::TimeDelta delay) override;
-  void AppendDetails(std::unique_ptr<Details> details,
-                     base::TimeDelta delay) override;
-  void SetInfoBox(const InfoBox& info_box) override;
-  void ClearInfoBox() override;
-  void SetProgress(int progress) override;
-  bool SetProgressActiveStepIdentifier(
-      const std::string& active_step_identifier) override;
-  void SetProgressActiveStep(int active_step) override;
-  void SetProgressVisible(bool visible) override;
-  void SetProgressBarErrorState(bool error) override;
-  void SetStepProgressBarConfiguration(
-      const ShowProgressBarProto::StepProgressBarConfiguration& configuration)
-      override;
-  void SetUserActions(
-      std::unique_ptr<std::vector<UserAction>> user_actions) override;
-  void SetCollectUserDataOptions(CollectUserDataOptions* options) override;
-  void SetLastSuccessfulUserDataOptions(std::unique_ptr<CollectUserDataOptions>
-                                            collect_user_data_options) override;
-  const CollectUserDataOptions* GetLastSuccessfulUserDataOptions()
-      const override;
   void WriteUserData(
-      base::OnceCallback<void(UserData*, UserData::FieldChange*)>) override;
+      base::OnceCallback<void(UserData*, UserDataFieldChange*)>) override;
   void SetViewportMode(ViewportMode mode) override;
   ViewportMode GetViewportMode() override;
-  void SetPeekMode(ConfigureBottomSheetProto::PeekMode peek_mode) override;
-  ConfigureBottomSheetProto::PeekMode GetPeekMode() override;
-  void ExpandBottomSheet() override;
-  void CollapseBottomSheet() override;
   void SetClientSettings(const ClientSettingsProto& client_settings) override;
-  bool SetForm(
-      std::unique_ptr<FormProto> form,
-      base::RepeatingCallback<void(const FormProto::Result*)> changed_callback,
-      base::OnceCallback<void(const ClientStatus&)> cancel_callback) override;
   UserModel* GetUserModel() override;
-  EventHandler* GetEventHandler() override;
+  UserData* GetUserData() override;
   void ExpectNavigation() override;
   bool HasNavigationError() override;
   bool IsNavigatingToNewDocument() override;
@@ -91,25 +68,14 @@ class FakeScriptExecutorDelegate : public ScriptExecutorDelegate {
       ScriptExecutorDelegate::NavigationListener* listener) override;
   void RemoveNavigationListener(
       ScriptExecutorDelegate::NavigationListener* listener) override;
-  void AddListener(ScriptExecutorDelegate::Listener* listener) override;
-  void RemoveListener(ScriptExecutorDelegate::Listener* listener) override;
-  void SetExpandSheetForPromptAction(bool expand) override;
   void SetBrowseDomainsAllowlist(std::vector<std::string> domains) override;
-  void SetGenericUi(
-      std::unique_ptr<GenericUserInterfaceProto> generic_ui,
-      base::OnceCallback<void(const ClientStatus&)> end_action_callback,
-      base::OnceCallback<void(const ClientStatus&)>
-          view_inflation_finished_callback) override;
-  void SetPersistentGenericUi(
-      std::unique_ptr<GenericUserInterfaceProto> generic_ui,
-      base::OnceCallback<void(const ClientStatus&)>
-          view_inflation_finished_callback) override;
-  void ClearGenericUi() override;
-  void ClearPersistentGenericUi() override;
   void SetOverlayBehavior(
       ConfigureUiStateProto::OverlayBehavior overlay_behavior) override;
   void SetBrowseModeInvisible(bool invisible) override;
-  void SetShowFeedbackChip(bool show_feedback_chip) override;
+  ProcessedActionStatusDetailsProto& GetLogInfo() override;
+  bool MustUseBackendData() const override;
+  void OnActionsResponseReceived(
+      const RoundtripNetworkStats& network_stats) override;
 
   bool ShouldShowWarning() override;
 
@@ -123,6 +89,10 @@ class FakeScriptExecutorDelegate : public ScriptExecutorDelegate {
     web_controller_ = web_controller;
   }
 
+  void SetWebContents(content::WebContents* web_contents) {
+    web_contents_ = web_contents;
+  }
+
   void SetTriggerContext(std::unique_ptr<TriggerContext> trigger_context) {
     trigger_context_ = std::move(trigger_context);
   }
@@ -131,23 +101,9 @@ class FakeScriptExecutorDelegate : public ScriptExecutorDelegate {
   std::vector<AutofillAssistantState> GetStateHistory() {
     return state_history_;
   }
-
-  AutofillAssistantState GetState() const {
-    return state_history_.empty() ? AutofillAssistantState::INACTIVE
-                                  : state_history_.back();
+  std::vector<ElementAreaProto> GetTouchableElementAreaHistory() {
+    return touchable_element_area_history_;
   }
-
-  const std::vector<Details>& GetDetails() { return details_; }
-
-  const GenericUserInterfaceProto* GetPersistentGenericUi() {
-    return persistent_generic_ui_.get();
-  }
-
-  InfoBox* GetInfoBox() { return info_box_.get(); }
-
-  std::vector<UserAction>* GetUserActions() { return user_actions_.get(); }
-
-  CollectUserDataOptions* GetOptions() { return payment_request_options_; }
 
   void UpdateNavigationState(bool navigating, bool error) {
     navigating_to_new_document_ = navigating;
@@ -160,43 +116,43 @@ class FakeScriptExecutorDelegate : public ScriptExecutorDelegate {
 
   bool HasNavigationListeners() { return !navigation_listeners_.empty(); }
 
-  bool HasListeners() { return !listeners_.empty(); }
-
   bool IsUIRequired() { return require_ui_; }
+
+  std::vector<std::string>* GetCurrentBrowseDomainsList();
+
+  void SetMustUseBackendData(bool must_use_backend_data) {
+    must_use_backend_data_ = must_use_backend_data;
+  }
+
+  RoundtripNetworkStats GetRoundtripNetworkStats() const {
+    return roundtrip_network_stats_;
+  }
 
  private:
   ClientSettings client_settings_;
   GURL current_url_;
-  Service* service_ = nullptr;
-  WebController* web_controller_ = nullptr;
+  raw_ptr<Service> service_ = nullptr;
+  raw_ptr<WebController> web_controller_ = nullptr;
+  raw_ptr<content::WebContents> web_contents_ = nullptr;
+  std::unique_ptr<JsFlowDevtoolsWrapper> js_flow_devtools_wrapper_;
+  std::string js_flow_library_;
   std::unique_ptr<TriggerContext> trigger_context_;
   std::vector<AutofillAssistantState> state_history_;
-  std::string status_message_;
-  std::string tts_message_;
-  std::string bubble_message_;
-  std::vector<Details> details_;
-  std::unique_ptr<InfoBox> info_box_;
-  std::unique_ptr<std::vector<UserAction>> user_actions_;
-  std::unique_ptr<CollectUserDataOptions> last_payment_request_options_;
-  CollectUserDataOptions* payment_request_options_;
+  std::vector<ElementAreaProto> touchable_element_area_history_;
   std::unique_ptr<UserData> payment_request_info_;
   bool navigating_to_new_document_ = false;
   bool navigation_error_ = false;
-  std::set<ScriptExecutorDelegate::NavigationListener*> navigation_listeners_;
-  std::set<ScriptExecutorDelegate::Listener*> listeners_;
+  base::flat_set<ScriptExecutorDelegate::NavigationListener*>
+      navigation_listeners_;
   ViewportMode viewport_mode_ = ViewportMode::NO_RESIZE;
-  ConfigureBottomSheetProto::PeekMode peek_mode_ =
-      ConfigureBottomSheetProto::HANDLE;
-  bool expand_or_collapse_updated_ = false;
-  bool expand_or_collapse_value_ = false;
-  bool expand_sheet_for_prompt_ = true;
   std::vector<std::string> browse_domains_;
-  UserModel* user_model_ = nullptr;
-  std::unique_ptr<GenericUserInterfaceProto> persistent_generic_ui_;
+  raw_ptr<UserModel> user_model_ = nullptr;
+  raw_ptr<UserData> user_data_ = nullptr;
+  ProcessedActionStatusDetailsProto log_info_;
+  bool must_use_backend_data_ = false;
+  RoundtripNetworkStats roundtrip_network_stats_;
 
   bool require_ui_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(FakeScriptExecutorDelegate);
 };
 
 }  // namespace autofill_assistant

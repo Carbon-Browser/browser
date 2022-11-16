@@ -6,7 +6,6 @@
 
 #include "ash/app_list/app_list_controller_impl.h"
 #include "ash/display/screen_orientation_controller.h"
-#include "ash/public/cpp/presentation_time_recorder.h"
 #include "ash/public/cpp/shelf_config.h"
 #include "ash/public/cpp/window_backdrop.h"
 #include "ash/public/cpp/window_properties.h"
@@ -40,10 +39,11 @@
 #include "ui/base/hit_test.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_animation_observer.h"
+#include "ui/compositor/presentation_time_recorder.h"
 #include "ui/compositor/scoped_layer_animation_settings.h"
 #include "ui/display/screen.h"
 #include "ui/gfx/geometry/point_f.h"
-#include "ui/gfx/transform_util.h"
+#include "ui/gfx/geometry/transform_util.h"
 #include "ui/wm/core/coordinate_conversion.h"
 #include "ui/wm/core/window_util.h"
 
@@ -61,7 +61,7 @@ constexpr float kMinYDisplayHeightRatio = 0.125f;
 // Amount of time to wait to show overview after the user slows down or stops
 // window dragging.
 constexpr base::TimeDelta kShowOverviewTimeWhenDragSuspend =
-    base::TimeDelta::FromMilliseconds(40);
+    base::Milliseconds(40);
 
 // The scroll update threshold to restart the show overview timer.
 constexpr float kScrollUpdateOverviewThreshold = 2.f;
@@ -99,6 +99,9 @@ class DragWindowFromShelfController::WindowsHider
     }
     window_util::MinimizeAndHideWithoutAnimation(hidden_windows_);
   }
+
+  WindowsHider(const WindowsHider&) = delete;
+  WindowsHider& operator=(const WindowsHider&) = delete;
 
   ~WindowsHider() override {
     for (auto* window : hidden_windows_) {
@@ -138,8 +141,6 @@ class DragWindowFromShelfController::WindowsHider
  private:
   aura::Window* dragged_window_;
   std::vector<aura::Window*> hidden_windows_;
-
-  DISALLOW_COPY_AND_ASSIGN(WindowsHider);
 };
 
 // static
@@ -421,6 +422,8 @@ void DragWindowFromShelfController::OnDragEnded(
       SplitViewController::Get(Shell::GetPrimaryRootWindow());
   if (split_view_controller->InSplitViewMode() ||
       snap_position != SplitViewController::NONE) {
+    WindowState::Get(window_)->set_snap_action_source(
+        WindowSnapActionSource::kDragUpFromShelfToSnap);
     split_view_controller->OnWindowDragEnded(
         window_, snap_position, gfx::ToRoundedPoint(location_in_screen));
   }
@@ -441,14 +444,18 @@ void DragWindowFromShelfController::OnDragEnded(
   switch (*window_drag_result_) {
     case ShelfWindowDragResult::kGoToHomeScreen:
       ScaleDownWindowAfterDrag();
+      windows_hider_.reset();
       break;
     case ShelfWindowDragResult::kRestoreToOriginalBounds:
       ScaleUpToRestoreWindowAfterDrag();
+      // Do not reset |windows_hider_| here because
+      // |ScaleUpToRestoreWindowAfterDrag()| ends up using |windows_hider_| in
+      // an async manner.
       break;
     case ShelfWindowDragResult::kGoToOverviewMode:
     case ShelfWindowDragResult::kGoToSplitviewMode:
     case ShelfWindowDragResult::kDragCanceled:
-      // No action is needed.
+      windows_hider_.reset();
       break;
   }
   window_drag_result_.reset();
@@ -685,17 +692,12 @@ void DragWindowFromShelfController::ScaleDownWindowAfterDrag() {
       /*percent_shown=*/100,
       display::Screen::GetScreen()->GetPrimaryDisplay().id());
 
-  // Do the scale-down transform for the entire transient tree.
-  for (auto* window : GetTransientTreeIterator(window_)) {
-    // self-destructed when window transform animation is done.
-    new WindowScaleAnimation(
-        window, WindowScaleAnimation::WindowScaleType::kScaleDownToShelf,
-        window == window_
-            ? base::BindOnce(
-                  &DragWindowFromShelfController::OnWindowScaledDownAfterDrag,
-                  weak_ptr_factory_.GetWeakPtr())
-            : base::NullCallback());
-  }
+  (new WindowScaleAnimation(
+       window_, WindowScaleAnimation::WindowScaleType::kScaleDownToShelf,
+       base::BindOnce(
+           &DragWindowFromShelfController::OnWindowScaledDownAfterDrag,
+           weak_ptr_factory_.GetWeakPtr())))
+      ->Start();
 }
 
 void DragWindowFromShelfController::OnWindowScaledDownAfterDrag() {
@@ -709,15 +711,13 @@ void DragWindowFromShelfController::OnWindowScaledDownAfterDrag() {
 }
 
 void DragWindowFromShelfController::ScaleUpToRestoreWindowAfterDrag() {
-  // Do the scale up transform for the entire transient tee.
-  for (auto* window : GetTransientTreeIterator(window_)) {
-    new WindowScaleAnimation(
-        window, WindowScaleAnimation::WindowScaleType::kScaleUpToRestore,
-        base::BindOnce(
-            &DragWindowFromShelfController::OnWindowRestoredToOrignalBounds,
-            weak_ptr_factory_.GetWeakPtr(),
-            /*should_end_overview=*/!started_in_overview_));
-  }
+  (new WindowScaleAnimation(
+       window_, WindowScaleAnimation::WindowScaleType::kScaleUpToRestore,
+       base::BindOnce(
+           &DragWindowFromShelfController::OnWindowRestoredToOrignalBounds,
+           weak_ptr_factory_.GetWeakPtr(),
+           /*should_end_overview=*/!started_in_overview_)))
+      ->Start();
 }
 
 void DragWindowFromShelfController::OnWindowRestoredToOrignalBounds(

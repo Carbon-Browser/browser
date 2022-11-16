@@ -65,6 +65,9 @@ class SessionFileReader {
   typedef sessions::SessionCommand::id_type id_type;
   typedef sessions::SessionCommand::size_type size_type;
 
+  SessionFileReader(const SessionFileReader&) = delete;
+  SessionFileReader& operator=(const SessionFileReader&) = delete;
+
   // Returns true if the header is valid. If false, the file does not contain
   // a valid sessions file.
   static bool IsHeaderValid(const base::FilePath& path,
@@ -183,8 +186,6 @@ class SessionFileReader {
   // The version the file was written with. Should only be used if
   // IsHeaderValid() returns true.
   int32_t version_ = 0;
-
-  DISALLOW_COPY_AND_ASSIGN(SessionFileReader);
 };
 
 CommandStorageBackend::ReadCommandsResult SessionFileReader::Read() {
@@ -351,9 +352,9 @@ bool SessionFileReader::FillBuffer() {
 }
 
 base::FilePath::StringType TimestampToString(const base::Time time) {
-#if defined(OS_POSIX) || defined(OS_FUCHSIA)
+#if BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
   return base::NumberToString(time.ToDeltaSinceWindowsEpoch().InMicroseconds());
-#elif defined(OS_WIN)
+#elif BUILDFLAG(IS_WIN)
   return base::NumberToWString(
       time.ToDeltaSinceWindowsEpoch().InMicroseconds());
 #endif
@@ -522,8 +523,8 @@ bool CommandStorageBackend::TimestampFromPath(const base::FilePath& path,
   if (!base::StringToInt64(parts[1], &result))
     return false;
 
-  timestamp_result = base::Time::FromDeltaSinceWindowsEpoch(
-      base::TimeDelta::FromMicroseconds(result));
+  timestamp_result =
+      base::Time::FromDeltaSinceWindowsEpoch(base::Microseconds(result));
   return true;
 }
 
@@ -652,13 +653,12 @@ void CommandStorageBackend::TruncateOrOpenFile() {
   // Ensure we don't reuse the current file (this is extremely unlikely to
   // ever be true).
   if (new_timestamp == timestamp_)
-    new_timestamp += base::TimeDelta::FromMicroseconds(1);
+    new_timestamp += base::Microseconds(1);
   if (last_session_info_) {
     // Ensure that the last session's timestamp is before the current file's.
     // This might not be true if the system clock has changed.
     if (last_session_info_->timestamp > new_timestamp) {
-      new_timestamp =
-          last_session_info_->timestamp + base::TimeDelta::FromMicroseconds(1);
+      new_timestamp = last_session_info_->timestamp + base::Microseconds(1);
     }
   }
   timestamp_ = new_timestamp;
@@ -673,8 +673,8 @@ std::unique_ptr<base::File> CommandStorageBackend::OpenAndWriteHeader(
   DCHECK(!path.empty());
   std::unique_ptr<base::File> file = std::make_unique<base::File>(
       path, base::File::FLAG_CREATE_ALWAYS | base::File::FLAG_WRITE |
-                base::File::FLAG_EXCLUSIVE_WRITE |
-                base::File::FLAG_EXCLUSIVE_READ);
+                base::File::FLAG_WIN_EXCLUSIVE_WRITE |
+                base::File::FLAG_WIN_EXCLUSIVE_READ);
   if (!file->IsValid())
     return nullptr;
   FileHeader header;

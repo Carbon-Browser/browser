@@ -12,7 +12,7 @@
 #include "base/memory/weak_ptr.h"
 #include "base/strings/string_split.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/task_runner.h"
+#include "base/task/task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "components/query_tiles/internal/stats.h"
@@ -191,8 +191,7 @@ class TileManagerImpl : public TileManager {
     }
 
     // Keep the stats group in memory for tile score calculation.
-    if (loaded_groups.find(kTileStatsGroup) != loaded_groups.end() &&
-        base::FeatureList::IsEnabled(features::kQueryTilesLocalOrdering)) {
+    if (loaded_groups.find(kTileStatsGroup) != loaded_groups.end()) {
       tile_stats_group_ = std::move(loaded_groups[kTileStatsGroup]);
       // prevent the stats group from being deleted.
       loaded_groups.erase(kTileStatsGroup);

@@ -15,7 +15,9 @@ ClientDataHeaderWebContentsObserver::~ClientDataHeaderWebContentsObserver() =
 
 ClientDataHeaderWebContentsObserver::ClientDataHeaderWebContentsObserver(
     content::WebContents* web_contents)
-    : WebContentsObserver(web_contents) {}
+    : WebContentsObserver(web_contents),
+      content::WebContentsUserData<ClientDataHeaderWebContentsObserver>(
+          *web_contents) {}
 
 void ClientDataHeaderWebContentsObserver::SetHeader(const std::string& header) {
   header_ = header;
@@ -38,6 +40,6 @@ void ClientDataHeaderWebContentsObserver::UpdateFrameCCTHeader(
   client->SetCCTClientHeader(header_);
 }
 
-WEB_CONTENTS_USER_DATA_KEY_IMPL(ClientDataHeaderWebContentsObserver)
+WEB_CONTENTS_USER_DATA_KEY_IMPL(ClientDataHeaderWebContentsObserver);
 
 }  // namespace customtabs

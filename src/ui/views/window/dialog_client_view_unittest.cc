@@ -10,7 +10,7 @@
 #include <string>
 #include <utility>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "ui/base/ui_base_types.h"
@@ -36,6 +36,9 @@ namespace views {
 class DialogClientViewTest : public test::WidgetTest {
  public:
   DialogClientViewTest() = default;
+
+  DialogClientViewTest(const DialogClientViewTest&) = delete;
+  DialogClientViewTest& operator=(const DialogClientViewTest&) = delete;
 
   // testing::Test:
   void SetUp() override {
@@ -164,19 +167,17 @@ class DialogClientViewTest : public test::WidgetTest {
     gfx::Size GetMaximumSize() const override { return parent_->max_size_; }
 
    private:
-    DialogClientViewTest* const parent_;
+    const raw_ptr<DialogClientViewTest> parent_;
   };
 
   // The dialog Widget.
   std::unique_ptr<test::TestLayoutProvider> layout_provider_;
-  Widget* widget_ = nullptr;
-  DialogDelegateView* delegate_ = nullptr;
+  raw_ptr<Widget> widget_ = nullptr;
+  raw_ptr<DialogDelegateView> delegate_ = nullptr;
 
   gfx::Size preferred_size_;
   gfx::Size min_size_;
   gfx::Size max_size_;
-
-  DISALLOW_COPY_AND_ASSIGN(DialogClientViewTest);
 };
 
 TEST_F(DialogClientViewTest, UpdateButtons) {
@@ -277,7 +278,13 @@ TEST_F(DialogClientViewTest, SetupFocusChain) {
 
   // Views are added to the contents view, not the client view, so the focus
   // chain within the client view is not affected.
-  EXPECT_EQ(nullptr, client_view()->cancel_button()->GetNextFocusableView());
+  // NOTE: The TableLayout requires a view to be in every cell. "Dummy" non-
+  // focusable views are inserted to satisfy this requirement.
+  EXPECT_TRUE(!client_view()->cancel_button()->GetNextFocusableView() ||
+              client_view()
+                      ->cancel_button()
+                      ->GetNextFocusableView()
+                      ->GetFocusBehavior() == View::FocusBehavior::NEVER);
 }
 
 // Test that the contents view gets its preferred size in the basic dialog
@@ -530,8 +537,7 @@ TEST_F(DialogClientViewTest, IgnorePossiblyUnintendedClicks_ClickAfterShown) {
 
   cancel_button.NotifyClick(ui::MouseEvent(
       ui::ET_MOUSE_PRESSED, gfx::Point(), gfx::Point(),
-      ui::EventTimeForNow() +
-          base::TimeDelta::FromMilliseconds(GetDoubleClickInterval()),
+      ui::EventTimeForNow() + base::Milliseconds(GetDoubleClickInterval()),
       ui::EF_NONE, ui::EF_NONE));
   EXPECT_TRUE(widget()->IsClosed());
 }
@@ -544,7 +550,7 @@ TEST_F(DialogClientViewTest, IgnorePossiblyUnintendedClicks_RepeatedClicks) {
 
   const base::TimeTicks kNow = ui::EventTimeForNow();
   const base::TimeDelta kShortClickInterval =
-      base::TimeDelta::FromMilliseconds(GetDoubleClickInterval());
+      base::Milliseconds(GetDoubleClickInterval());
 
   // Should ignore clicks right after the dialog is shown.
   ui::MouseEvent mouse_event(ui::ET_MOUSE_PRESSED, gfx::Point(), gfx::Point(),

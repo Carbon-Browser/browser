@@ -1,23 +1,23 @@
-// This file is part of Adblock Plus <https://adblockplus.org/>,
+// This file is part of eyeo Chromium SDK,
 // Copyright (C) 2006-present eyeo GmbH
 //
-// Adblock Plus is free software: you can redistribute it and/or modify
+// eyeo Chromium SDK is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
 // published by the Free Software Foundation.
 //
-// Adblock Plus is distributed in the hope that it will be useful,
+// eyeo Chromium SDK is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with Adblock Plus.  If not, see <http://www.gnu.org/licenses/>.
+// along with eyeo Chromium SDK.  If not, see <http://www.gnu.org/licenses/>.
 
 #ifndef CHROME_BROWSER_EXTENSIONS_API_ADBLOCK_PRIVATE_ADBLOCK_PRIVATE_API_H_
 #define CHROME_BROWSER_EXTENSIONS_API_ADBLOCK_PRIVATE_ADBLOCK_PRIVATE_API_H_
 
 #include "chrome/common/extensions/api/adblock_private.h"
-#include "components/adblock/adblock_controller.h"
+#include "components/adblock/core/adblock_controller.h"
 #include "extensions/browser/browser_context_keyed_api_factory.h"
 #include "extensions/browser/event_router.h"
 #include "extensions/browser/extension_function.h"
@@ -40,7 +40,7 @@ class AdblockPrivateAPI : public BrowserContextKeyedAPI,
   // BrowserContextKeyedAPI implementation.
   static const char* service_name() { return "AdblockPrivateAPI"; }
   static const bool kServiceRedirectedInIncognito = true;
-  static const bool kServiceIsCreatedWithBrowserContext = false;
+  static const bool kServiceIsCreatedWithBrowserContext = true;
   void Shutdown() override;
 
   // EventRouter::Observer:
@@ -160,9 +160,7 @@ class AdblockPrivateIsAcceptableAdsEnabledFunction : public ExtensionFunction {
       const AdblockPrivateIsAcceptableAdsEnabledFunction&) = delete;
 };
 
-class AdblockPrivateGetBuiltInSubscriptionsFunction
-    : public ExtensionFunction,
-      public adblock::AdblockController::Observer {
+class AdblockPrivateGetBuiltInSubscriptionsFunction : public ExtensionFunction {
  public:
   DECLARE_EXTENSION_FUNCTION("adblockPrivate.getBuiltInSubscriptions",
                              ADBLOCKPRIVATE_GETBUILTINSUBSCRIPTIONS)
@@ -171,10 +169,6 @@ class AdblockPrivateGetBuiltInSubscriptionsFunction
  private:
   ~AdblockPrivateGetBuiltInSubscriptionsFunction() override;
 
-  // adblock::AdblockController::Observer:
-  void OnRecommendedSubscriptionsAvailable(
-      const std::vector<adblock::Subscription>& recommended) override;
-
   // ExtensionFunction:
   ResponseAction Run() override;
 
@@ -182,7 +176,6 @@ class AdblockPrivateGetBuiltInSubscriptionsFunction
       const AdblockPrivateGetBuiltInSubscriptionsFunction&) = delete;
   AdblockPrivateGetBuiltInSubscriptionsFunction& operator=(
       const AdblockPrivateGetBuiltInSubscriptionsFunction&) = delete;
-  bool respond_when_ready_{false};
 };
 
 class AdblockPrivateSelectBuiltInSubscriptionFunction
@@ -374,6 +367,42 @@ class AdblockPrivateRemoveCustomFilterFunction : public ExtensionFunction {
       const AdblockPrivateRemoveCustomFilterFunction&) = delete;
   AdblockPrivateRemoveCustomFilterFunction& operator=(
       const AdblockPrivateRemoveCustomFilterFunction&) = delete;
+};
+
+class AdblockPrivateGetSessionAllowedAdsCountFunction
+    : public ExtensionFunction {
+ public:
+  DECLARE_EXTENSION_FUNCTION("adblockPrivate.getSessionAllowedAdsCount",
+                             ADBLOCKPRIVATE_GETSESSIONALLOWEDADSCOUNT)
+  AdblockPrivateGetSessionAllowedAdsCountFunction();
+
+ private:
+  ~AdblockPrivateGetSessionAllowedAdsCountFunction() override;
+
+  ResponseAction Run() override;
+
+  AdblockPrivateGetSessionAllowedAdsCountFunction(
+      const AdblockPrivateGetSessionAllowedAdsCountFunction&) = delete;
+  AdblockPrivateGetSessionAllowedAdsCountFunction& operator=(
+      const AdblockPrivateGetSessionAllowedAdsCountFunction&) = delete;
+};
+
+class AdblockPrivateGetSessionBlockedAdsCountFunction
+    : public ExtensionFunction {
+ public:
+  DECLARE_EXTENSION_FUNCTION("adblockPrivate.getSessionBlockedAdsCount",
+                             ADBLOCKPRIVATE_GETSESSIONBLOCKEDADSCOUNT)
+  AdblockPrivateGetSessionBlockedAdsCountFunction();
+
+ private:
+  ~AdblockPrivateGetSessionBlockedAdsCountFunction() override;
+
+  ResponseAction Run() override;
+
+  AdblockPrivateGetSessionBlockedAdsCountFunction(
+      const AdblockPrivateGetSessionBlockedAdsCountFunction&) = delete;
+  AdblockPrivateGetSessionBlockedAdsCountFunction& operator=(
+      const AdblockPrivateGetSessionBlockedAdsCountFunction&) = delete;
 };
 
 }  // namespace api

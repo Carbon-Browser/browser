@@ -4,12 +4,12 @@
 
 #include "chrome/browser/ash/policy/core/dm_token_storage.h"
 
+#include "ash/components/cryptohome/system_salt_getter.h"
 #include "base/bind.h"
-#include "base/task/post_task.h"
+#include "base/logging.h"
 #include "base/task/thread_pool.h"
 #include "chrome/browser/ash/settings/token_encryptor.h"
 #include "chrome/common/pref_names.h"
-#include "chromeos/cryptohome/system_salt_getter.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/browser_thread.h"
@@ -38,7 +38,7 @@ DMTokenStorage::DMTokenStorage(PrefService* local_state)
     : local_state_(local_state) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   chromeos::SystemSaltGetter::Get()->GetSystemSalt(base::BindOnce(
-      &DMTokenStorage::OnSystemSaltRecevied, weak_ptr_factory_.GetWeakPtr()));
+      &DMTokenStorage::OnSystemSaltReceived, weak_ptr_factory_.GetWeakPtr()));
 }
 
 DMTokenStorage::~DMTokenStorage() {
@@ -107,7 +107,7 @@ void DMTokenStorage::RetrieveDMToken(RetrieveCallback callback) {
   }
 }
 
-void DMTokenStorage::OnSystemSaltRecevied(const std::string& system_salt) {
+void DMTokenStorage::OnSystemSaltReceived(const std::string& system_salt) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   system_salt_ = system_salt;
   if (system_salt_.empty()) {

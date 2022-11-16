@@ -4,7 +4,7 @@
 
 (async function() {
   TestRunner.addResult(`Verify that CSS variables are resolved properly for DOM inheritance`);
-  await TestRunner.loadModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
+  await TestRunner.loadLegacyModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
   await TestRunner.showPanel('elements');
   await TestRunner.loadHTML(`
     <style>
@@ -26,7 +26,7 @@
   `);
 
   const node = await ElementsTestRunner.selectNodeAndWaitForStylesPromise('inspected');
-  const matchedStyles = await TestRunner.cssModel.matchedStylesPromise(node.id);
+  const matchedStyles = await TestRunner.cssModel.getMatchedStyles(node.id);
   for (const style of matchedStyles.nodeStyles()) {
     const selector = style.parentRule ? style.parentRule.selectorText() : 'element.style';
     const value = 'var(--color)';

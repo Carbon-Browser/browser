@@ -13,7 +13,7 @@
 #include "base/time/time.h"
 #include "chrome/browser/ash/attestation/tpm_challenge_key_subtle.h"
 #include "chrome/browser/ash/cert_provisioning/cert_provisioning_common.h"
-#include "chrome/browser/chromeos/platform_keys/platform_keys_service.h"
+#include "chrome/browser/ash/platform_keys/platform_keys_service.h"
 #include "chrome/browser/platform_keys/platform_keys.h"
 #include "components/policy/core/common/cloud/cloud_policy_constants.h"
 #include "net/base/backoff_entry.h"
@@ -36,6 +36,16 @@ using CertProvisioningWorkerCallback =
                             CertProvisioningWorkerState state)>;
 
 class CertProvisioningWorker;
+
+struct BackendServerError {
+  // info on the last failed DMServer call attempt.
+  BackendServerError(policy::DeviceManagementStatus dm_status,
+                     base::Time error_time)
+      : time(error_time), status(dm_status) {}
+
+  base::Time time;
+  policy::DeviceManagementStatus status;
+};
 
 class CertProvisioningWorkerFactory {
  public:
@@ -102,6 +112,12 @@ class CertProvisioningWorker {
   virtual CertProvisioningWorkerState GetPreviousState() const = 0;
   // Returns the time when this worker has been last updated.
   virtual base::Time GetLastUpdateTime() const = 0;
+  // Return the info of when this worker has last faced an unsuccessful attempt.
+  virtual const absl::optional<BackendServerError>& GetLastBackendServerError()
+      const = 0;
+  // Return a message describing the reason for failure when the worker fails.
+  // In case the worker did not fail, the message is empty.
+  virtual const std::string& GetFailureMessage() const = 0;
 };
 
 class CertProvisioningWorkerImpl : public CertProvisioningWorker {
@@ -127,6 +143,9 @@ class CertProvisioningWorkerImpl : public CertProvisioningWorker {
   CertProvisioningWorkerState GetState() const override;
   CertProvisioningWorkerState GetPreviousState() const override;
   base::Time GetLastUpdateTime() const override;
+  const absl::optional<BackendServerError>& GetLastBackendServerError()
+      const override;
+  const std::string& GetFailureMessage() const override;
 
  private:
   friend class CertProvisioningSerializer;
@@ -200,7 +219,8 @@ class CertProvisioningWorkerImpl : public CertProvisioningWorker {
   // If it is called with kSucceed or kFailed, it will call the |callback_|. The
   // worker can be destroyed in callback and should not use any member fields
   // after that.
-  void UpdateState(CertProvisioningWorkerState state);
+  void UpdateState(const base::Location& from_here,
+                   CertProvisioningWorkerState state);
 
   // Serializes the worker or deletes serialized state accroding to the current
   // state. Some states are considered unrecoverable, some can be reached again
@@ -237,9 +257,17 @@ class CertProvisioningWorkerImpl : public CertProvisioningWorker {
   // State that was before the current one. Useful for debugging and cleaning
   // on failure.
   CertProvisioningWorkerState prev_state_ = state_;
-  // Time when this worker has been last updated.
+  // Time when this worker has been last updated. An update is when the worker
+  // advances to the next state or for states that wait for a backend-side
+  // condition (e.g CertProvisioningWorkerState:kFinishCsrResponseReceived):
+  // when it successfully checked with the backend that the condition is not
+  // fulfilled yet.
   base::Time last_update_time_;
-
+  // Consequently, it is not updated if waiting for a backend-side condition,
+  // but communication with the backend is not possible (e.g. due to server
+  // errors or network connectivity issues).
+  // The last error received in communicating to the backend server.
+  absl::optional<BackendServerError> last_backend_server_error_;
   bool is_waiting_ = false;
   // Used for an UMA metric to track situation when the worker did not receive
   // an invalidation for a completed server side task.
@@ -247,6 +275,8 @@ class CertProvisioningWorkerImpl : public CertProvisioningWorker {
   // Calculates retry timeout for network related failures.
   net::BackoffEntry request_backoff_;
 
+  // Public key - represented as DER-encoded X.509 SubjectPublicKeyInfo
+  // (binary).
   std::string public_key_;
   std::string invalidation_topic_;
 
@@ -258,6 +288,10 @@ class CertProvisioningWorkerImpl : public CertProvisioningWorker {
   std::string va_challenge_response_;
   absl::optional<chromeos::platform_keys::HashAlgorithm> hashing_algorithm_;
   std::string signature_;
+
+  // Holds a message describing the reason for failure when the worker fails.
+  // If the worker did not fail, this message is empty.
+  std::string failure_message_;
 
   // IMPORTANT:
   // Increment this when you add/change any member in CertProvisioningWorkerImpl

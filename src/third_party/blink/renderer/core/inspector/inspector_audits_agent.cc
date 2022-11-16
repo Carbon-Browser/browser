@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/core/inspector/inspector_audits_agent.h"
 
+#include "base/numerics/safe_conversions.h"
 #include "third_party/blink/public/mojom/devtools/inspector_issue.mojom-blink.h"
 #include "third_party/blink/public/mojom/fetch/fetch_api_request.mojom-blink.h"
 #include "third_party/blink/public/platform/web_data.h"
@@ -16,7 +17,6 @@
 #include "third_party/blink/renderer/core/inspector/identifiers_factory.h"
 #include "third_party/blink/renderer/core/inspector/inspector_issue_storage.h"
 #include "third_party/blink/renderer/core/inspector/inspector_network_agent.h"
-#include "third_party/blink/renderer/core/inspector/protocol/Audits.h"
 #include "third_party/blink/renderer/platform/graphics/image_data_buffer.h"
 #include "third_party/blink/renderer/platform/wtf/text/base64.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
@@ -53,7 +53,7 @@ bool EncodeAsImage(char* body,
                         kUnpremul_SkAlphaType);
   uint32_t row_bytes = static_cast<uint32_t>(info.minRowBytes());
   Vector<unsigned char> pixel_storage(
-      SafeCast<wtf_size_t>(info.computeByteSize(row_bytes)));
+      base::checked_cast<wtf_size_t>(info.computeByteSize(row_bytes)));
   SkPixmap pixmap(info, pixel_storage.data(), row_bytes);
   sk_sp<SkImage> image = SkImage::MakeFromBitmap(bitmap);
 
@@ -121,7 +121,9 @@ InspectorAuditsAgent::InspectorAuditsAgent(InspectorNetworkAgent* network_agent,
     : inspector_issue_storage_(storage),
       enabled_(&agent_state_, false),
       network_agent_(network_agent),
-      inspected_frames_(inspected_frames) {}
+      inspected_frames_(inspected_frames) {
+  DCHECK(network_agent);
+}
 
 InspectorAuditsAgent::~InspectorAuditsAgent() = default;
 

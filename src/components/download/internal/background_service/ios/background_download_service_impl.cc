@@ -28,7 +28,7 @@ namespace download {
 namespace {
 
 // Interval to throttle the download update that results in a database update.
-const base::TimeDelta kUpdateInterval = base::TimeDelta::FromSeconds(5);
+const base::TimeDelta kUpdateInterval = base::Seconds(5);
 
 }  // namespace
 
@@ -317,7 +317,8 @@ void BackgroundDownloadServiceImpl::OnDownloadFinished(
   // bytes downloaded.
   Entry* entry = model_->Get(guid);
   if (!success) {
-    stats::LogDownloadCompletion(CompletionType::FAIL, file_size);
+    stats::LogDownloadCompletion(download_client, CompletionType::FAIL,
+                                 file_size);
     if (entry) {
       log_sink_->OnServiceDownloadFailed(CompletionType::UNKNOWN, *entry);
       model_->Remove(guid);
@@ -335,7 +336,8 @@ void BackgroundDownloadServiceImpl::OnDownloadFinished(
   entry->state = Entry::State::COMPLETE;
   model_->Update(*entry);
   log_sink_->OnServiceDownloadChanged(guid);
-  stats::LogDownloadCompletion(CompletionType::SUCCEED, file_size);
+  stats::LogDownloadCompletion(download_client, CompletionType::SUCCEED,
+                               file_size);
 
   CompletionInfo completion_info;
   completion_info.path = file_path;

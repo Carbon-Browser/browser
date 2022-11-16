@@ -14,6 +14,7 @@
 #include "extensions/renderer/activity_log_converter_strategy.h"
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/public/platform/web_url.h"
+#include "v8/include/v8-isolate.h"
 
 using blink::WebString;
 using blink::WebURL;
@@ -37,7 +38,7 @@ void AppendV8Value(const std::string& api_name,
       v8_value, v8::Isolate::GetCurrent()->GetCurrentContext()));
 
   if (value.get())
-    list->Append(std::move(value));
+    list->Append(base::Value::FromUniquePtrValue(std::move(value)));
 }
 
 }  // namespace

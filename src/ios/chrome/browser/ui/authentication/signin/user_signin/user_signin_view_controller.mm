@@ -9,10 +9,10 @@
 #import "base/check_op.h"
 #import "base/logging.h"
 #import "ios/chrome/browser/ui/authentication/signin/signin_constants.h"
-#import "ios/chrome/browser/ui/authentication/signin/user_signin/gradient_view.h"
 #import "ios/chrome/browser/ui/util/rtl_geometry.h"
 #import "ios/chrome/browser/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
+#import "ios/chrome/common/ui/elements/gradient_view.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
 #import "ios/chrome/common/ui/util/pointer_interaction_util.h"
 #import "ios/chrome/grit/ios_strings.h"
@@ -173,8 +173,7 @@ enum AuthenticationButtonType {
   } else {
     // By default display 'Yes I'm in' button.
     [self.primaryActionButton
-        setTitle:l10n_util::GetNSString(
-                     IDS_IOS_ACCOUNT_UNIFIED_CONSENT_OK_BUTTON)
+        setTitle:l10n_util::GetNSString(self.acceptSigninButtonStringId)
         forState:UIControlStateNormal];
     [self.primaryActionButton setImage:nil forState:UIControlStateNormal];
     self.primaryActionButton.tag = AuthenticationButtonTypeConfirmation;
@@ -275,9 +274,9 @@ enum AuthenticationButtonType {
 
   [NSLayoutConstraint activateConstraints:@[
     // Note that the bottom constraint of the container view and
-    // |embeddedViewController.view| is dependent on the selected
+    // `embeddedViewController.view` is dependent on the selected
     // Accessibility options in Settings, e.g. text size. These constraints
-    // are computed in |setAccessibilityLayoutConstraints|.
+    // are computed in `setAccessibilityLayoutConstraints`.
     [self.containerView.topAnchor constraintEqualToAnchor:self.view.topAnchor],
     [self.containerView.leadingAnchor
         constraintEqualToAnchor:self.view.leadingAnchor],
@@ -377,7 +376,10 @@ enum AuthenticationButtonType {
 
 - (UIView*)gradientView {
   if (!_gradientView) {
-    _gradientView = [[GradientView alloc] init];
+    _gradientView = [[GradientView alloc]
+        initWithTopColor:[[UIColor colorNamed:kPrimaryBackgroundColor]
+                             colorWithAlphaComponent:0]
+             bottomColor:[UIColor colorNamed:kPrimaryBackgroundColor]];
   }
   return _gradientView;
 }
@@ -445,7 +447,7 @@ enum AuthenticationButtonType {
           constraintEqualToConstant:kUserConsentMaxSize],
     ];
     for (NSLayoutConstraint* constraints in lowerPriorityConstraints) {
-      // We do not use |UILayoutPriorityDefaultHigh| because it makes some
+      // We do not use `UILayoutPriorityDefaultHigh` because it makes some
       // multiline labels on one line and truncated on iPad.
       constraints.priority = UILayoutPriorityRequired - 1;
     }
@@ -505,14 +507,12 @@ enum AuthenticationButtonType {
     }
   }
 
-  if (@available(iOS 13.4, *)) {
-    button.pointerInteractionEnabled = YES;
-    button.pointerStyleProvider =
-        CreateOpaqueOrTransparentButtonPointerStyleProvider();
-  }
+  button.pointerInteractionEnabled = YES;
+  button.pointerStyleProvider =
+      CreateOpaqueOrTransparentButtonPointerStyleProvider();
 }
 
-// Applies font and inset to |button| according to the current size class.
+// Applies font and inset to `button` according to the current size class.
 - (void)applyDefaultSizeWithButton:(UIButton*)button
                          fontStyle:(UIFontTextStyle)fontStyle {
   const AuthenticationViewConstants& constants =

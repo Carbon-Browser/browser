@@ -9,14 +9,10 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
+#include "base/values.h"
 #include "extensions/renderer/ipc_message_sender.h"
 #include "extensions/renderer/object_backed_native_handler.h"
-#include "v8/include/v8.h"
-
-namespace base {
-class ListValue;
-}
+#include "v8/include/v8-forward.h"
 
 namespace extensions {
 
@@ -26,6 +22,10 @@ namespace extensions {
 class APIActivityLogger : public ObjectBackedNativeHandler {
  public:
   APIActivityLogger(IPCMessageSender* ipc_sender, ScriptContext* context);
+
+  APIActivityLogger(const APIActivityLogger&) = delete;
+  APIActivityLogger& operator=(const APIActivityLogger&) = delete;
+
   ~APIActivityLogger() override;
 
   // ObjectBackedNativeHandler:
@@ -46,7 +46,7 @@ class APIActivityLogger : public ObjectBackedNativeHandler {
   static void LogEvent(IPCMessageSender* ipc_sender,
                        ScriptContext* script_context,
                        const std::string& event_name,
-                       std::unique_ptr<base::ListValue> arguments);
+                       base::Value::List arguments);
 
   static void set_log_for_testing(bool log);
 
@@ -65,7 +65,7 @@ class APIActivityLogger : public ObjectBackedNativeHandler {
                           const IPCMessageSender::ActivityLogCallType call_type,
                           const std::string& extension_id,
                           const std::string& call_name,
-                          std::unique_ptr<base::ListValue> arguments,
+                          base::Value::List arguments,
                           const std::string& extra);
 
   // Not owned by |this|.
@@ -74,8 +74,6 @@ class APIActivityLogger : public ObjectBackedNativeHandler {
   // Valid to use so long as there's a valid ScriptContext associated with the
   // call-site.
   IPCMessageSender* ipc_sender_ = nullptr;
-
-  DISALLOW_COPY_AND_ASSIGN(APIActivityLogger);
 };
 
 }  // namespace extensions

@@ -1,18 +1,18 @@
 <?xml version="1.0" ?>
 <!DOCTYPE translationbundle>
 <translationbundle lang="et">
-<translation id="1016765312371154165">Carbon Browser Browser Browser ei sulgunud õigesti.</translation>
+<translation id="1016765312371154165">Carbon Browser ei sulgunud õigesti.</translation>
 <translation id="130631256467250065">Muudatused jõustuvad järgmine kord, kui seadme taaskäivitate.</translation>
-<translation id="1635457557763038537">Teie muudatused jõustuvad järgmisel korral, kui käivitate Carbon Browser Browser Browser'i uuesti.</translation>
-<translation id="2447485272386224171">Carbon Browser Browser Browser'i aluseks on avatud lähtekoodiga projekt <ph name="BEGIN_LINK_CHROMIUM" />Carbon Browser Browser Browser<ph name="END_LINK_CHROMIUM" /> ja muu <ph name="BEGIN_LINK_OSS" />avatud lähtekoodiga tarkvara<ph name="END_LINK_OSS" />.</translation>
-<translation id="2588322182880276190">Carbon Browser Browser Browser'i logo</translation>
+<translation id="1635457557763038537">Teie muudatused jõustuvad järgmisel korral, kui käivitate Carbon Browser'i uuesti.</translation>
+<translation id="2447485272386224171">Carbon Browser'i aluseks on avatud lähtekoodiga projekt <ph name="BEGIN_LINK_CHROMIUM" />Carbon Browser<ph name="END_LINK_CHROMIUM" /> ja muu <ph name="BEGIN_LINK_OSS" />avatud lähtekoodiga tarkvara<ph name="END_LINK_OSS" />.</translation>
+<translation id="2505647373045235387">Chrome OS pole algseadistust lõpetanud.</translation>
+<translation id="2588322182880276190">Carbon Browser'i logo</translation>
 <translation id="3444832043240812445">Lehel näidatakse vaid teavet hiljutiste krahhide kohta, kui olete <ph name="BEGIN_LINK" />krahhide aruandluse lubanud<ph name="END_LINK" />.</translation>
-<translation id="3875312571075912821">Lubage Carbon Browser Browser Browser'i juurdepääs võrgule tulemüüri või viirusetõrje
+<translation id="3875312571075912821">Lubage Carbon Browser'i juurdepääs võrgule tulemüüri või viirusetõrje
          seadetes.</translation>
-<translation id="4010643444566880169">Chrome OS pole algseadistust lõpetanud.</translation>
-<translation id="5005121315113832363">Carbon Browser Browser Browser blokeeris selle lehe</translation>
+<translation id="5005121315113832363">Carbon Browser blokeeris selle lehe</translation>
 <translation id="6011049234605203654">Minge
-          Carbon Browser Browser Browser'i menüüsse &gt;
+          Carbon Browser'i menüüsse &gt;
           <ph name="SETTINGS_TITLE" />
           &gt;
           <ph name="ADVANCED_TITLE" />
@@ -20,7 +20,7 @@
           <ph name="PROXIES_TITLE" />
           ja veenduge, et konfiguratsioon on määratud valikule „Puhverserverita” või „Otse”</translation>
 <translation id="6341737370356890233">Avage
-        Carbon Browser Browser Browser'i menüü &gt;
+        Carbon Browser'i menüü &gt;
         <ph name="SETTINGS_TITLE" />
         &gt;
         <ph name="ADVANCED_TITLE" />
@@ -28,7 +28,7 @@
         Kui see probleemi ei lahenda, soovitame toimivuse parandamiseks
         selle valiku uuesti teha.</translation>
 <translation id="6855094794438142393">Valige
-          Carbon Browser Browser Browser'i menüü &gt;
+          Carbon Browser'i menüü &gt;
           <ph name="SETTINGS_TITLE" />
           &gt;
           <ph name="ADVANCED_TITLE" />
@@ -37,8 +37,9 @@
           &gt;
           LAN-seaded
           ja tühistage valik „Kasuta LAN-i jaoks puhverserverit”.</translation>
-<translation id="7230956101631259640">Vaatate turvalist Carbon Browser Browser Browser'i lehte</translation>
+<translation id="7230956101631259640">Vaatate turvalist Carbon Browser'i lehte</translation>
 <translation id="8187289872471304532">Tehke valikud
           Rakendused &gt; Süsteemieelised &gt; Võrk &gt; Täpsem &gt; Puhverserverid
           ja tühjendage kõigi valitud puhverserverite märkeruudud.</translation>
+<translation id="864712724203364111">Chrome OS Flex pole esialgset seadistamist lõpetanud.</translation>
 </translationbundle>

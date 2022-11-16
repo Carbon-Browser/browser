@@ -29,6 +29,7 @@
 #include "third_party/blink/public/common/input/web_mouse_event.h"
 #include "third_party/blink/public/mojom/input/pointer_lock_result.mojom-blink.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
+#include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_pointer_lock_options.h"
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
 #include "third_party/blink/renderer/core/dom/element.h"
@@ -41,7 +42,7 @@
 #include "third_party/blink/renderer/core/page/chrome_client.h"
 #include "third_party/blink/renderer/core/page/focus_controller.h"
 #include "third_party/blink/renderer/core/page/page.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/widget/frame_widget.h"
 
 namespace blink {
@@ -96,15 +97,22 @@ ScriptPromise PointerLockController::RequestPointerLock(
           network::mojom::blink::WebSandboxFlags::kPointerLock)) {
     // FIXME: This message should be moved off the console once a solution to
     // https://bugs.webkit.org/show_bug.cgi?id=103274 exists.
-    window->AddConsoleMessage(MakeGarbageCollected<ConsoleMessage>(
-        mojom::blink::ConsoleMessageSource::kSecurity,
-        mojom::blink::ConsoleMessageLevel::kError,
-        "Blocked pointer lock on an element because the element's frame is "
-        "sandboxed and the 'allow-pointer-lock' permission is not set."));
+    if (!window->GetFrame()->IsInFencedFrameTree()) {
+      window->AddConsoleMessage(MakeGarbageCollected<ConsoleMessage>(
+          mojom::blink::ConsoleMessageSource::kSecurity,
+          mojom::blink::ConsoleMessageLevel::kError,
+          "Blocked pointer lock on an element because the element's frame is "
+          "sandboxed and the 'allow-pointer-lock' permission is not set."));
+    }
     EnqueueEvent(event_type_names::kPointerlockerror, target);
     exception_state.ThrowSecurityError(
-        "Blocked pointer lock on an element because the element's frame is "
-        "sandboxed and the 'allow-pointer-lock' permission is not set.",
+        window->GetFrame()->IsInFencedFrameTree()
+            ? "Blocked pointer lock on an element because the element is "
+              "contained "
+              "in a fence frame tree."
+            : "Blocked pointer lock on an element because the element's frame "
+              "is "
+              "sandboxed and the 'allow-pointer-lock' permission is not set.",
         "");
     return promise;
   }
@@ -369,8 +377,8 @@ void PointerLockController::DispatchLockedMouseEvent(
 }
 
 void PointerLockController::GetPointerLockPosition(
-    FloatPoint* lock_position,
-    FloatPoint* lock_screen_position) {
+    gfx::PointF* lock_position,
+    gfx::PointF* lock_screen_position) {
   if (element_ && !lock_pending_) {
     DCHECK(lock_position);
     DCHECK(lock_screen_position);

@@ -9,6 +9,7 @@
 #include "base/bind.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
+#include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/values.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -40,7 +41,6 @@ HeadlessDevToolsClient::CreateWithExternalHost(ExternalHost* external_host) {
 HeadlessDevToolsClientImpl::HeadlessDevToolsClientImpl()
     : accessibility_domain_(this),
       animation_domain_(this),
-      application_cache_domain_(this),
       browser_domain_(this),
       cache_storage_domain_(this),
       console_domain_(this),
@@ -162,9 +162,9 @@ void HeadlessDevToolsClientImpl::ReceiveProtocolMessage(
   std::unique_ptr<base::DictionaryValue> message_dict =
       base::DictionaryValue::From(std::move(message));
 
-  std::string session_id;
-  if (message_dict->GetString("sessionId", &session_id)) {
-    auto it = sessions_.find(session_id);
+  const std::string* session_id = message_dict->FindStringKey("sessionId");
+  if (session_id) {
+    auto it = sessions_.find(*session_id);
     if (it != sessions_.end()) {
       it->second->ReceiveProtocolMessage(json_message, std::move(message_dict));
       return;
@@ -190,7 +190,7 @@ void HeadlessDevToolsClientImpl::ReceiveProtocolMessage(
   }
 
   bool success = false;
-  if (message_dict->HasKey("id"))
+  if (message_dict->FindKey("id"))
     success = DispatchMessageReply(std::move(message), *message_dict);
   else
     success = DispatchEvent(std::move(message), *message_dict);
@@ -318,10 +318,6 @@ accessibility::Domain* HeadlessDevToolsClientImpl::GetAccessibility() {
 
 animation::Domain* HeadlessDevToolsClientImpl::GetAnimation() {
   return &animation_domain_;
-}
-
-application_cache::Domain* HeadlessDevToolsClientImpl::GetApplicationCache() {
-  return &application_cache_domain_;
 }
 
 browser::Domain* HeadlessDevToolsClientImpl::GetBrowser() {
@@ -526,7 +522,7 @@ HeadlessDevToolsClientImpl::Callback::Callback(
 
 HeadlessDevToolsClientImpl::Callback::~Callback() = default;
 
-HeadlessDevToolsClientImpl::Callback& HeadlessDevToolsClientImpl::Callback::
-operator=(Callback&& other) = default;
+HeadlessDevToolsClientImpl::Callback&
+HeadlessDevToolsClientImpl::Callback::operator=(Callback&& other) = default;
 
 }  // namespace headless

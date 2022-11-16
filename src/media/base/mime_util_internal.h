@@ -10,7 +10,7 @@
 
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
-#include "base/macros.h"
+#include "build/build_config.h"
 #include "media/base/media_export.h"
 #include "media/base/mime_util.h"
 #include "media/base/video_codecs.h"
@@ -25,6 +25,10 @@ namespace internal {
 class MEDIA_EXPORT MimeUtil {
  public:
   MimeUtil();
+
+  MimeUtil(const MimeUtil&) = delete;
+  MimeUtil& operator=(const MimeUtil&) = delete;
+
   ~MimeUtil();
 
   enum Codec {
@@ -47,13 +51,14 @@ class MEDIA_EXPORT MimeUtil {
     DOLBY_VISION,
     AV1,
     MPEG_H_AUDIO,
-    LAST_CODEC = MPEG_H_AUDIO
+    DTS,
+    DTSXP2,
+    LAST_CODEC = DTSXP2
   };
 
   // Platform configuration structure.  Controls which codecs are supported at
   // runtime.  Also used by tests to simulate platform differences.
   struct PlatformInfo {
-    bool has_platform_decoders = false;
 #if BUILDFLAG(ENABLE_PLATFORM_DOLBY_VISION)
     bool has_platform_dv_decoder = false;
 #endif
@@ -189,15 +194,13 @@ class MEDIA_EXPORT MimeUtil {
   bool GetDefaultCodec(const std::string& mime_type_lower_case,
                        Codec* default_codec) const;
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   // Indicates the support of various codecs within the platform.
   PlatformInfo platform_info_;
 #endif
 
   // A map of mime_types and hash map of the supported codecs for the mime_type.
   MediaFormatMappings media_format_map_;
-
-  DISALLOW_COPY_AND_ASSIGN(MimeUtil);
 };
 
 }  // namespace internal

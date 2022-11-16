@@ -30,11 +30,17 @@ class ASH_EXPORT UnifiedSliderBubbleController
   enum SliderType {
     SLIDER_TYPE_VOLUME = 0,
     SLIDER_TYPE_DISPLAY_BRIGHTNESS,
+    SLIDER_TYPE_KEYBOARD_BACKLIGHT_TOGGLE,
     SLIDER_TYPE_KEYBOARD_BRIGHTNESS,
     SLIDER_TYPE_MIC
   };
 
   explicit UnifiedSliderBubbleController(UnifiedSystemTray* tray);
+
+  UnifiedSliderBubbleController(const UnifiedSliderBubbleController&) = delete;
+  UnifiedSliderBubbleController& operator=(
+      const UnifiedSliderBubbleController&) = delete;
+
   ~UnifiedSliderBubbleController() override;
 
   // Show a slider of |slider_type|. If the slider of same type is already
@@ -58,7 +64,8 @@ class ASH_EXPORT UnifiedSliderBubbleController
 
   // UnifiedSystemTrayModel::Observer:
   void OnDisplayBrightnessChanged(bool by_user) override;
-  void OnKeyboardBrightnessChanged(bool by_user) override;
+  void OnKeyboardBrightnessChanged(
+      power_manager::BacklightBrightnessChange_Cause cause) override;
 
   // UnifiedVolumeSliderController::Delegate:
   void OnAudioSettingsButtonClicked() override;
@@ -92,8 +99,6 @@ class ASH_EXPORT UnifiedSliderBubbleController
   // Controller of the current slider view. If a slider is not shown, it's null.
   // Owned.
   std::unique_ptr<UnifiedSliderListener> slider_controller_;
-
-  DISALLOW_COPY_AND_ASSIGN(UnifiedSliderBubbleController);
 };
 
 }  // namespace ash

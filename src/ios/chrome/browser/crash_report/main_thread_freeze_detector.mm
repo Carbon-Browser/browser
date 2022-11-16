@@ -5,6 +5,7 @@
 #include "ios/chrome/browser/crash_report/main_thread_freeze_detector.h"
 
 #include "base/debug/debugger.h"
+#import "base/files/file_util.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/time/time.h"
@@ -34,6 +35,11 @@ void LogRecoveryTime(base::TimeDelta time) {
   UMA_HISTOGRAM_TIMES("IOS.MainThreadFreezeDetection.RecoveredAfter", time);
 }
 
+void LogRecordHangGenerationTime(base::TimeTicks start_time) {
+  UMA_HISTOGRAM_TIMES("IOS.MainThreadFreezeDetection.RecordGenerationTime",
+                      base::TimeTicks::Now() - start_time);
+}
+
 // Key indicating that UI thread is frozen.
 NSString* const kHangReportKey = @"hang-report";
 
@@ -50,6 +56,13 @@ enum class IOSMainThreadFreezeDetectionNotRunningAfterReportBlock {
   kAfterCrashpadDumpWithoutCrash = 2,
   kMaxValue = kAfterCrashpadDumpWithoutCrash,
 };
+
+// Only MetricKit reports currently use attachements.
+bool IsMetricKitReport(crash_reporter::Report report) {
+  return base::ComputeDirectorySize(crash_reporter::GetCrashpadDatabasePath()
+                                        .Append("attachments")
+                                        .Append(report.local_id)) > 0;
+}
 
 }  // namespace
 
@@ -86,9 +99,6 @@ enum class IOSMainThreadFreezeDetectionNotRunningAfterReportBlock {
   // The directory containing UTE crash reports eligible for crashpad
   // processing.
   NSString* _UTEPendingCrashpadDirectory;
-  // The block to call (on main thread) once the UTE report is restored in the
-  // breakpad directory.
-  ProceduralBlock _restorationCompletion;
 }
 
 + (instancetype)sharedInstance {
@@ -152,8 +162,11 @@ enum class IOSMainThreadFreezeDetectionNotRunningAfterReportBlock {
 - (void)setEnabled:(BOOL)enabled {
   static dispatch_once_t onceToken;
   dispatch_once(&onceToken, ^{
+    dispatch_async(_freezeDetectionQueue, ^{
+      [self handleLastSessionReport];
+    });
     if (_lastSessionEndedFrozen) {
-      LogRecoveryTime(base::TimeDelta::FromSeconds(0));
+      LogRecoveryTime(base::Seconds(0));
     }
   });
   _enabled = enabled;
@@ -191,7 +204,7 @@ enum class IOSMainThreadFreezeDetectionNotRunningAfterReportBlock {
     // Remove information about the last session info.
     [[NSUserDefaults standardUserDefaults]
         removeObjectForKey:@(kNsUserDefaultKeyLastSessionInfo)];
-    LogRecoveryTime(base::TimeDelta::FromSecondsD(
+    LogRecoveryTime(base::Seconds(
         [[NSDate date] timeIntervalSinceDate:oldLastSeenMainThread]));
     // Restart the freeze detection.
     dispatch_async(_freezeDetectionQueue, ^{
@@ -209,16 +222,12 @@ enum class IOSMainThreadFreezeDetectionNotRunningAfterReportBlock {
 }
 
 - (void)cleanAndRunInFreezeDetectionQueue {
-  if (_canUploadBreakpadCrashReports) {
-    // If the prevous session is not processed yet, do not delete the directory.
-    // It will be cleared on completion of processing the previous session.
-    NSFileManager* fileManager = [[NSFileManager alloc] init];
-    [fileManager removeItemAtPath:_UTEDirectory error:nil];
-    [fileManager createDirectoryAtPath:_UTEDirectory
-           withIntermediateDirectories:NO
-                            attributes:nil
-                                 error:nil];
-  }
+  NSFileManager* fileManager = [[NSFileManager alloc] init];
+  [fileManager removeItemAtPath:_UTEDirectory error:nil];
+  [fileManager createDirectoryAtPath:_UTEDirectory
+         withIntermediateDirectories:NO
+                          attributes:nil
+                               error:nil];
   [self runInFreezeDetectionQueue];
 }
 
@@ -229,9 +238,12 @@ enum class IOSMainThreadFreezeDetectionNotRunningAfterReportBlock {
   if ([[NSDate date] timeIntervalSinceDate:self.lastSeenMainThread] >
       self.delay) {
     if (crash_reporter::IsCrashpadRunning()) {
+      const base::TimeTicks start = base::TimeTicks::Now();
       static crash_reporter::CrashKeyString<4> key("hang-report");
       crash_reporter::ScopedCrashKeyString auto_clear(&key, "yes");
-      base::FilePath path(base::SysNSStringToUTF8(_UTEDirectory));
+      NSString* intermediate_dump = [_UTEDirectory
+          stringByAppendingPathComponent:[[NSUUID UUID] UUIDString]];
+      base::FilePath path(base::SysNSStringToUTF8(intermediate_dump));
       crash_reporter::DumpWithoutCrashAndDeferProcessingAtPath(path);
       if (!self.running) {
         UMA_HISTOGRAM_ENUMERATION(
@@ -245,12 +257,15 @@ enum class IOSMainThreadFreezeDetectionNotRunningAfterReportBlock {
           setObject:@{@"dump" : @"", @"config" : @"", @"date" : [NSDate date]}
              forKey:@(kNsUserDefaultKeyLastSessionInfo)];
       self.reportGenerated = YES;
+      LogRecordHangGenerationTime(start);
       return;
     }
 
     [[BreakpadController sharedInstance]
         withBreakpadRef:^(BreakpadRef breakpadRef) {
+          const base::TimeTicks start = base::TimeTicks::Now();
           [self recordHangWithBreakpadRef:breakpadRef];
+          LogRecordHangGenerationTime(start);
         }];
     return;
   }
@@ -319,12 +334,16 @@ enum class IOSMainThreadFreezeDetectionNotRunningAfterReportBlock {
     return;
 
   // Get the most recent crash capture_time. -GetReports is already sorted
-  // by newest first so just grab the first one.
+  // by newest first so just grab the first non-MetricKit report.
   time_t newest_crash = 0;
   std::vector<crash_reporter::Report> reports;
   crash_reporter::GetReports(&reports);
-  if (reports.size())
-    newest_crash = reports[0].capture_time;
+  for (size_t i = 0; i < reports.size(); i++) {
+    if (!IsMetricKitReport(reports[i])) {
+      newest_crash = reports[i].capture_time;
+      break;
+    }
+  }
 
   // Process any hang reports that have a modification time newer than the
   // newest crash.
@@ -343,17 +362,6 @@ enum class IOSMainThreadFreezeDetectionNotRunningAfterReportBlock {
   }
   // Delete the directory when done to clear any un-processed reports.
   [fileManager removeItemAtPath:_UTEPendingCrashpadDirectory error:nil];
-}
-
-- (void)prepareCrashReportsForUpload:(ProceduralBlock)completion {
-  DCHECK(completion);
-  _restorationCompletion = completion;
-  static dispatch_once_t onceToken;
-  dispatch_once(&onceToken, ^{
-    dispatch_async(_freezeDetectionQueue, ^{
-      [self handleLastSessionReport];
-    });
-  });
 }
 
 - (void)restoreLastSessionReportIfNeeded {
@@ -438,23 +446,13 @@ enum class IOSMainThreadFreezeDetectionNotRunningAfterReportBlock {
   NSFileManager* fileManager = [[NSFileManager alloc] init];
   // It is possible that this call will delete a report on the current session.
   // But this is unlikely because |handleLastSessionReport| run on the
-  // |_freezeDetectionQueue| and is called directly from the main thread
-  // |prepareToUpload| which mean that main thread was responding recently.
+  // |_freezeDetectionQueue| and is called directly from setEnabled which means
+  // that main thread was responding recently.
   [fileManager removeItemAtPath:_UTEDirectory error:nil];
   [fileManager createDirectoryAtPath:_UTEDirectory
          withIntermediateDirectories:NO
                           attributes:nil
                                error:nil];
-
-  dispatch_async(dispatch_get_main_queue(), ^{
-    [self handleSessionRestorationCompletion];
-  });
-}
-
-- (void)handleSessionRestorationCompletion {
-  _canUploadBreakpadCrashReports = YES;
-  DCHECK(_restorationCompletion);
-  _restorationCompletion();
 }
 
 @end

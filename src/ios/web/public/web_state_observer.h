@@ -5,17 +5,20 @@
 #ifndef IOS_WEB_PUBLIC_WEB_STATE_OBSERVER_H_
 #define IOS_WEB_PUBLIC_WEB_STATE_OBSERVER_H_
 
+#include <Foundation/Foundation.h>
+
 #include <stddef.h>
 
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
+#include "base/observer_list_types.h"
 
 namespace web {
 
 struct FaviconURL;
 class NavigationContext;
+enum Permission : NSUInteger;
 class WebFrame;
 class WebState;
 
@@ -23,9 +26,12 @@ enum class PageLoadCompletionStatus : bool { SUCCESS = 0, FAILURE = 1 };
 
 // An observer API implemented by classes which are interested in various page
 // load events from WebState.
-class WebStateObserver {
+class WebStateObserver : public base::CheckedObserver {
  public:
-  virtual ~WebStateObserver();
+  WebStateObserver(const WebStateObserver&) = delete;
+  WebStateObserver& operator=(const WebStateObserver&) = delete;
+
+  ~WebStateObserver() override;
 
   // These methods are invoked every time the WebState changes visibility.
   virtual void WasShown(WebState* web_state) {}
@@ -122,6 +128,11 @@ class WebStateObserver {
   virtual void FaviconUrlUpdated(WebState* web_state,
                                  const std::vector<FaviconURL>& candidates) {}
 
+  // Invoked when the state of a certain permission has changed.
+  virtual void PermissionStateChanged(WebState* web_state,
+                                      Permission permission)
+      API_AVAILABLE(ios(15.0)) {}
+
   // Called when a frame was created or navigated to a new document.
   // Receivers can keep references to |web_frame| until
   // |WebFrameWillBecomeUnavailable| is called but must not assume that the
@@ -140,15 +151,16 @@ class WebStateObserver {
   // possibly by other means).
   virtual void RenderProcessGone(WebState* web_state) {}
 
+  // Invoked when the WebState becomes realized (e.g. when it becomes fully
+  // operational after being restored).
+  virtual void WebStateRealized(WebState* web_state) {}
+
   // Invoked when the WebState is being destroyed. Gives subclasses a chance
   // to cleanup.
   virtual void WebStateDestroyed(WebState* web_state) {}
 
  protected:
   WebStateObserver();
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(WebStateObserver);
 };
 
 }  // namespace web

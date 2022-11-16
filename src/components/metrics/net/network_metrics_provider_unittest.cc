@@ -7,7 +7,6 @@
 #include <memory>
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/memory/ptr_util.h"
 #include "base/run_loop.h"
 #include "base/threading/thread_task_runner_handle.h"
@@ -18,21 +17,25 @@
 #include "third_party/metrics_proto/system_profile.pb.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chromeos/network/network_handler_test_helper.h"
+#include "chromeos/ash/components/network/network_handler_test_helper.h"
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
-#if defined(OS_IOS)
+#if BUILDFLAG(IS_IOS)
 #include "ios/web/public/test/web_task_environment.h"
 using MetricsTaskEnvironment = web::WebTaskEnvironment;
-#else  // !defined(OS_IOS)
+#else  // !BUILDFLAG(IS_IOS)
 #include "content/public/test/browser_task_environment.h"
 using MetricsTaskEnvironment = content::BrowserTaskEnvironment;
-#endif  // defined(OS_IOS)
+#endif  // BUILDFLAG(IS_IOS)
 
 namespace metrics {
 
 class NetworkMetricsProviderTest : public testing::Test {
  public:
+  NetworkMetricsProviderTest(const NetworkMetricsProviderTest&) = delete;
+  NetworkMetricsProviderTest& operator=(const NetworkMetricsProviderTest&) =
+      delete;
+
  protected:
   NetworkMetricsProviderTest()
       : task_environment_(MetricsTaskEnvironment::IO_MAINLOOP) {}
@@ -43,8 +46,6 @@ class NetworkMetricsProviderTest : public testing::Test {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   chromeos::NetworkHandlerTestHelper network_handler_test_helper_;
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
-
-  DISALLOW_COPY_AND_ASSIGN(NetworkMetricsProviderTest);
 };
 
 // Verifies that the effective connection type is correctly set.

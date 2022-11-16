@@ -30,7 +30,7 @@ namespace {
 std::unique_ptr<TransformationMatrix> TryGetTransformationMatrix(
     const absl::optional<gfx::Transform>& transform) {
   if (transform) {
-    return std::make_unique<TransformationMatrix>(transform->matrix());
+    return std::make_unique<TransformationMatrix>(*transform);
   }
 
   return nullptr;
@@ -496,9 +496,9 @@ void XRInputSource::ProcessOverlayHitTest(
   // Do a hit test at the overlay pointer position to see if the pointer
   // intersects a cross origin iframe. If yes, set the visibility to false which
   // causes targetRaySpace and gripSpace to return null poses.
-  FloatPoint point(new_state->overlay_pointer_position->x(),
-                   new_state->overlay_pointer_position->y());
-  DVLOG(3) << __func__ << ": hit test point=" << point;
+  gfx::PointF point(new_state->overlay_pointer_position->x(),
+                    new_state->overlay_pointer_position->y());
+  DVLOG(3) << __func__ << ": hit test point=" << point.ToString();
 
   HitTestRequest::HitTestRequestType hit_type = HitTestRequest::kTouchEvent |
                                                 HitTestRequest::kReadOnly |
@@ -525,7 +525,7 @@ void XRInputSource::ProcessOverlayHitTest(
     if (hit_document) {
       Frame* hit_frame = hit_document->GetFrame();
       DCHECK(hit_frame);
-      if (hit_frame->IsCrossOriginToMainFrame()) {
+      if (hit_frame->IsCrossOriginToOutermostMainFrame()) {
         // Mark the input source as invisible until the primary button is
         // released.
         state_.is_visible = false;

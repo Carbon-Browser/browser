@@ -16,6 +16,10 @@ namespace content {
 class BrowserAccessibilityTest : public testing::Test {
  public:
   BrowserAccessibilityTest();
+
+  BrowserAccessibilityTest(const BrowserAccessibilityTest&) = delete;
+  BrowserAccessibilityTest& operator=(const BrowserAccessibilityTest&) = delete;
+
   ~BrowserAccessibilityTest() override;
 
  protected:
@@ -27,8 +31,6 @@ class BrowserAccessibilityTest : public testing::Test {
 
   BrowserTaskEnvironment task_environment_;
   ui::testing::ScopedAxModeSetter ax_mode_setter_;
-
-  DISALLOW_COPY_AND_ASSIGN(BrowserAccessibilityTest);
 };
 
 BrowserAccessibilityTest::BrowserAccessibilityTest()
@@ -63,20 +65,20 @@ TEST_F(BrowserAccessibilityTest, TestCanFireEvents) {
           test_browser_accessibility_delegate_.get()));
 
   BrowserAccessibility* root_obj = manager->GetRoot();
-  EXPECT_FALSE(root_obj->PlatformIsLeaf());
+  EXPECT_FALSE(root_obj->IsLeaf());
   EXPECT_TRUE(root_obj->CanFireEvents());
 
   BrowserAccessibility* para_obj = root_obj->PlatformGetChild(0);
   EXPECT_TRUE(para_obj->CanFireEvents());
-#if defined(OS_ANDROID)
-  EXPECT_TRUE(para_obj->PlatformIsLeaf());
+#if BUILDFLAG(IS_ANDROID)
+  EXPECT_TRUE(para_obj->IsLeaf());
 #else
-  EXPECT_FALSE(para_obj->PlatformIsLeaf());
+  EXPECT_FALSE(para_obj->IsLeaf());
 #endif
 
   BrowserAccessibility* text_obj = manager->GetFromID(111);
-  EXPECT_TRUE(text_obj->PlatformIsLeaf());
-#if !defined(OS_ANDROID)
+  EXPECT_TRUE(text_obj->IsLeaf());
+#if !BUILDFLAG(IS_ANDROID)
   EXPECT_TRUE(text_obj->CanFireEvents());
 #endif
   BrowserAccessibility* retarget = manager->RetargetForEvents(
@@ -87,7 +89,7 @@ TEST_F(BrowserAccessibilityTest, TestCanFireEvents) {
   manager.reset();
 }
 
-#if defined(OS_WIN) || BUILDFLAG(USE_ATK)
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(USE_ATK)
 TEST_F(BrowserAccessibilityTest, PlatformChildIterator) {
   // (i) => node is ignored
   // Parent Tree
@@ -178,12 +180,10 @@ TEST_F(BrowserAccessibilityTest, PlatformChildIterator) {
   child_tree_update.nodes[4].id = 5;
 
   std::unique_ptr<BrowserAccessibilityManager> parent_manager(
-      BrowserAccessibilityManager::Create(
-          parent_tree_update, test_browser_accessibility_delegate_.get()));
+      BrowserAccessibilityManager::Create(parent_tree_update, nullptr));
 
   std::unique_ptr<BrowserAccessibilityManager> child_manager(
-      BrowserAccessibilityManager::Create(
-          child_tree_update, test_browser_accessibility_delegate_.get()));
+      BrowserAccessibilityManager::Create(child_tree_update, nullptr));
 
   BrowserAccessibility* root_obj = parent_manager->GetRoot();
   // Test traversal
@@ -271,7 +271,7 @@ TEST_F(BrowserAccessibilityTest, PlatformChildIterator) {
   }
   ASSERT_EQ(platform_iterator, platform_iterator2);
 }
-#endif  // defined(OS_WIN) || BUILDFLAG(USE_ATK)
+#endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(USE_ATK)
 
 TEST_F(BrowserAccessibilityTest, GetInnerTextRangeBoundsRect) {
   ui::AXNodeData root;
@@ -333,7 +333,7 @@ TEST_F(BrowserAccessibilityTest, GetInnerTextRangeBoundsRect) {
       root_accessible->PlatformGetChild(0);
   ASSERT_NE(nullptr, static_text_accessible);
 
-#ifdef OS_ANDROID
+#if BUILDFLAG(IS_ANDROID)
   // Android disallows getting inner text from root accessibility nodes.
   EXPECT_EQ(gfx::Rect(0, 0, 0, 0).ToString(),
             root_accessible
@@ -375,7 +375,7 @@ TEST_F(BrowserAccessibilityTest, GetInnerTextRangeBoundsRect) {
                     ui::AXClippingBehavior::kUnclipped)
                 .ToString());
 
-#ifdef OS_ANDROID
+#if BUILDFLAG(IS_ANDROID)
   // Android disallows getting inner text from root accessibility nodes.
   EXPECT_EQ(gfx::Rect(0, 0, 0, 0).ToString(),
             root_accessible
@@ -546,7 +546,7 @@ TEST_F(BrowserAccessibilityTest, GetInnerTextRangeBoundsRectMultiElement) {
                     ui::AXClippingBehavior::kUnclipped)
                 .ToString());
 
-#ifdef OS_ANDROID
+#if BUILDFLAG(IS_ANDROID)
   // Android disallows getting inner text from accessibility root nodes.
   EXPECT_EQ(gfx::Rect(0, 0, 0, 0).ToString(),
             root_accessible
@@ -827,7 +827,8 @@ TEST_F(BrowserAccessibilityTest, NextWordPositionWithHypertext) {
 
   BrowserAccessibility::AXPosition next_word_start =
       position->CreateNextWordStartPosition(
-          ui::AXBoundaryBehavior::CrossBoundary);
+          {ui::AXBoundaryBehavior::kCrossBoundary,
+           ui::AXBoundaryDetection::kDontCheckInitialPosition});
   if (position->MaxTextOffset() == 0) {
     EXPECT_TRUE(next_word_start->IsNullPosition());
   } else {
@@ -839,7 +840,8 @@ TEST_F(BrowserAccessibilityTest, NextWordPositionWithHypertext) {
 
   BrowserAccessibility::AXPosition next_word_end =
       position->CreateNextWordEndPosition(
-          ui::AXBoundaryBehavior::CrossBoundary);
+          {ui::AXBoundaryBehavior::kCrossBoundary,
+           ui::AXBoundaryDetection::kDontCheckInitialPosition});
   if (position->MaxTextOffset() == 0) {
     EXPECT_TRUE(next_word_end->IsNullPosition());
   } else {
@@ -879,12 +881,10 @@ TEST_F(BrowserAccessibilityTest, PortalName) {
       ax::mojom::StringAttribute::kName, "name");
 
   std::unique_ptr<BrowserAccessibilityManager> parent_manager(
-      BrowserAccessibilityManager::Create(
-          parent_tree_update, test_browser_accessibility_delegate_.get()));
+      BrowserAccessibilityManager::Create(parent_tree_update, nullptr));
 
   std::unique_ptr<BrowserAccessibilityManager> child_manager(
-      BrowserAccessibilityManager::Create(
-          child_tree_update, test_browser_accessibility_delegate_.get()));
+      BrowserAccessibilityManager::Create(child_tree_update, nullptr));
 
   // Portal node should use name from root of child tree.
   EXPECT_EQ("name", child_manager->GetRoot()->GetName());
@@ -921,12 +921,13 @@ TEST_F(BrowserAccessibilityTest, GetIndexInParent) {
   BrowserAccessibility* root_accessible =
       browser_accessibility_manager->GetRoot();
   ASSERT_NE(nullptr, root_accessible);
-  // Should be -1 for kRootWebArea since it doesn't have a calculated index.
-  EXPECT_EQ(-1, root_accessible->GetIndexInParent());
+  // Should be nullopt for kRootWebArea since it doesn't have a calculated
+  // index.
+  EXPECT_FALSE(root_accessible->GetIndexInParent().has_value());
   BrowserAccessibility* child_accessible = root_accessible->InternalGetChild(0);
   ASSERT_NE(nullptr, child_accessible);
   // Returns the index calculated in AXNode.
-  EXPECT_EQ(0, child_accessible->GetIndexInParent());
+  EXPECT_EQ(0u, child_accessible->GetIndexInParent());
 }
 
 TEST_F(BrowserAccessibilityTest, CreatePositionAt) {
@@ -958,11 +959,18 @@ TEST_F(BrowserAccessibilityTest, CreatePositionAt) {
   BrowserAccessibility::AXPosition pos = gc_accessible->CreatePositionAt(0);
   EXPECT_TRUE(pos->IsTreePosition());
 
+  ASSERT_EQ(1U, gc_accessible->InternalChildCount());
+#if BUILDFLAG(IS_ANDROID)
+  // On Android, nodes with only static text can drop their children.
+  ASSERT_EQ(0U, gc_accessible->PlatformChildCount());
+#else
+  ASSERT_EQ(1U, gc_accessible->PlatformChildCount());
   BrowserAccessibility* text_accessible = gc_accessible->PlatformGetChild(0);
   ASSERT_NE(nullptr, text_accessible);
 
   pos = text_accessible->CreatePositionAt(0);
   EXPECT_TRUE(pos->IsTextPosition());
+#endif  // BUILDFLAG(IS_ANDROID)
 }
 
 }  // namespace content

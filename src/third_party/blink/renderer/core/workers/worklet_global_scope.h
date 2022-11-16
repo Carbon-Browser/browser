@@ -6,7 +6,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_WORKERS_WORKLET_GLOBAL_SCOPE_H_
 
 #include <memory>
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
 #include "third_party/blink/public/platform/web_url_request.h"
 #include "third_party/blink/renderer/bindings/core/v8/active_script_wrappable.h"
@@ -16,7 +16,8 @@
 #include "third_party/blink/renderer/core/workers/worker_or_worklet_global_scope.h"
 #include "third_party/blink/renderer/core/workers/worklet_module_responses_map.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
-#include "third_party/blink/renderer/platform/heap/handle.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/loader/fetch/code_cache_host.h"
 #include "third_party/blink/renderer/platform/wtf/casting.h"
 
 namespace blink {
@@ -66,15 +67,16 @@ class CORE_EXPORT WorkletGlobalScope
   scoped_refptr<base::SingleThreadTaskRunner> GetTaskRunner(TaskType) final;
   FrameOrWorkerScheduler* GetScheduler() final;
   bool CrossOriginIsolatedCapability() const final;
-  bool DirectSocketCapability() const final;
+  bool IsolatedApplicationCapability() const final;
   ukm::UkmRecorder* UkmRecorder() final;
+  ukm::SourceId UkmSourceID() const final;
 
   // WorkerOrWorkletGlobalScope
   void Dispose() override;
   WorkerThread* GetThread() const final;
   const base::UnguessableToken& GetDevToolsToken() const override;
   bool IsInitialized() const final { return true; }
-  blink::mojom::CodeCacheHost* GetCodeCacheHost() override;
+  CodeCacheHost* GetCodeCacheHost() override;
 
   virtual LocalFrame* GetFrame() const;
 
@@ -106,7 +108,7 @@ class CORE_EXPORT WorkletGlobalScope
   // For origin trials, instead consider the context of the document which
   // created the worklet, since the origin trial tokens are inherited from the
   // document.
-  bool DocumentSecureContext() const { return document_secure_context_; }
+  bool DocumentSecureContext() const { return IsCreatorSecureContext(); }
 
   void Trace(Visitor*) const override;
 
@@ -160,6 +162,10 @@ class CORE_EXPORT WorkletGlobalScope
                      WorkerThread*,
                      bool create_microtask_queue);
 
+  // Returns a destination used for fetching worklet scripts.
+  // https://html.spec.whatwg.org/C/#worklet-destination-type
+  virtual network::mojom::RequestDestination GetDestination() const = 0;
+
   EventTarget* ErrorEventTarget() final { return nullptr; }
 
   // The |url_| and |user_agent_| are inherited from the parent Document.
@@ -169,9 +175,6 @@ class CORE_EXPORT WorkletGlobalScope
   // Used for module fetch and origin trials, inherited from the parent
   // Document.
   const scoped_refptr<const SecurityOrigin> document_security_origin_;
-
-  // Used for origin trials, inherited from the parent Document.
-  const bool document_secure_context_;
 
   CrossThreadPersistent<WorkletModuleResponsesMap> module_responses_map_;
 
@@ -202,7 +205,7 @@ class CORE_EXPORT WorkletGlobalScope
   // This is the interface that handles generated code cache
   // requests both to fetch code cache when loading resources
   // and to store generated code cache to disk.
-  mojo::Remote<blink::mojom::CodeCacheHost> code_cache_host_;
+  std::unique_ptr<CodeCacheHost> code_cache_host_;
 };
 
 template <>

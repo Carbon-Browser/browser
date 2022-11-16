@@ -12,7 +12,7 @@
 #include "base/cxx17_backports.h"
 #include "base/location.h"
 #include "base/logging.h"
-#include "base/sequenced_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chromecast/media/audio/net/common.pb.h"
 #include "chromecast/media/audio/net/conversions.h"
 #include "chromecast/media/cma/base/decoder_buffer_adapter.h"
@@ -75,7 +75,7 @@ CmaBackendShim::CmaBackendShim(
       delegate_task_runner_(std::move(delegate_task_runner)),
       params_(params),
       backend_manager_(backend_manager),
-      media_task_runner_(backend_manager_->task_runner()),
+      media_task_runner_(backend_manager_->GetMediaTaskRunner()),
       backend_task_runner_(backend_manager_->task_runner()),
       audio_decoder_(nullptr) {
   DETACH_FROM_SEQUENCE(media_sequence_checker_);

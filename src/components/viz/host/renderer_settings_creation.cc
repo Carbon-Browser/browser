@@ -18,12 +18,7 @@
 #include "components/viz/common/switches.h"
 #include "ui/base/ui_base_switches.h"
 
-#if defined(OS_APPLE)
-#include "ui/base/cocoa/remote_layer_api.h"
-#endif
-
 #if defined(USE_OZONE)
-#include "ui/base/ui_base_features.h"
 #include "ui/ozone/public/ozone_platform.h"
 #endif
 
@@ -57,13 +52,13 @@ RendererSettings CreateRendererSettings() {
   renderer_settings.partial_swap_enabled =
       !command_line->HasSwitch(switches::kUIDisablePartialSwap);
 
-#if defined(OS_APPLE) || defined(OS_LINUX)
+#if BUILDFLAG(IS_APPLE) || BUILDFLAG(IS_LINUX)
   // Simple frame rate throttling only works on macOS and Linux
   renderer_settings.apply_simple_frame_rate_throttling =
       features::IsSimpleFrameRateThrottlingEnabled();
 #endif
 
-#if defined(OS_APPLE)
+#if BUILDFLAG(IS_APPLE)
   renderer_settings.release_overlay_resources_after_gpu_query = true;
   renderer_settings.auto_resize_output_surface = false;
 #elif BUILDFLAG(IS_CHROMEOS_ASH)
@@ -71,13 +66,6 @@ RendererSettings CreateRendererSettings() {
 #endif
   renderer_settings.allow_antialiasing =
       !command_line->HasSwitch(switches::kDisableCompositedAntialiasing);
-  renderer_settings.use_skia_renderer = features::IsUsingSkiaRenderer();
-#if defined(OS_APPLE)
-  renderer_settings.allow_overlays =
-      ui::RemoteLayerAPISupported() &&
-      !base::CommandLine::ForCurrentProcess()->HasSwitch(
-          switches::kDisableMacOverlays);
-#endif
 
   if (command_line->HasSwitch(switches::kSlowDownCompositingScaleFactor)) {
     const int kMinSlowDownScaleFactor = 1;
@@ -88,7 +76,6 @@ RendererSettings CreateRendererSettings() {
   }
 
 #if defined(USE_OZONE)
-  if (features::IsUsingOzonePlatform()) {
     if (command_line->HasSwitch(switches::kEnableHardwareOverlays)) {
       renderer_settings.overlay_strategies = ParseOverlayStrategies(
           command_line->GetSwitchValueASCII(switches::kEnableHardwareOverlays));
@@ -101,7 +88,6 @@ RendererSettings CreateRendererSettings() {
                                                 OverlayStrategy::kUnderlay};
       }
     }
-  }
 #endif
 
   return renderer_settings;

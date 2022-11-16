@@ -12,10 +12,14 @@
 #include <vector>
 
 #include "base/files/scoped_file.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/time/time.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/gfx_export.h"
+#include "ui/gfx/hdr_metadata.h"
 #include "ui/gfx/overlay_transform.h"
 
 extern "C" {
@@ -51,6 +55,9 @@ class GFX_EXPORT SurfaceControl {
   // Returns true if OnCommit callback is supported.
   static bool SupportsOnCommit();
 
+  // Returns true if tagging a transaction with vsync id is supported.
+  static GFX_EXPORT bool SupportsSetFrameTimeline();
+
   // Applies transaction. Used to emulate webview functor interface, where we
   // pass raw ASurfaceTransaction object. For use inside Chromium use
   // Transaction class below instead.
@@ -68,16 +75,17 @@ class GFX_EXPORT SurfaceControl {
     Surface(const Surface& parent, const char* name);
     Surface(ANativeWindow* parent, const char* name);
 
+    Surface(const Surface&) = delete;
+    Surface& operator=(const Surface&) = delete;
+
     ASurfaceControl* surface() const { return surface_; }
 
    private:
     friend class base::RefCounted<Surface>;
     ~Surface();
 
-    ASurfaceControl* surface_ = nullptr;
-    ASurfaceControl* owned_surface_ = nullptr;
-
-    DISALLOW_COPY_AND_ASSIGN(Surface);
+    raw_ptr<ASurfaceControl> surface_ = nullptr;
+    raw_ptr<ASurfaceControl> owned_surface_ = nullptr;
   };
 
   struct GFX_EXPORT SurfaceStats {
@@ -87,7 +95,7 @@ class GFX_EXPORT SurfaceControl {
     SurfaceStats(SurfaceStats&& other);
     SurfaceStats& operator=(SurfaceStats&& other);
 
-    ASurfaceControl* surface = nullptr;
+    raw_ptr<ASurfaceControl> surface = nullptr;
 
     // The fence which is signaled when the reads for the previous buffer for
     // the given |surface| are finished.
@@ -97,6 +105,10 @@ class GFX_EXPORT SurfaceControl {
   struct GFX_EXPORT TransactionStats {
    public:
     TransactionStats();
+
+    TransactionStats(const TransactionStats&) = delete;
+    TransactionStats& operator=(const TransactionStats&) = delete;
+
     ~TransactionStats();
 
     TransactionStats(TransactionStats&& other);
@@ -107,14 +119,15 @@ class GFX_EXPORT SurfaceControl {
     base::ScopedFD present_fence;
     std::vector<SurfaceStats> surface_stats;
     base::TimeTicks latch_time;
-
-   private:
-    DISALLOW_COPY_AND_ASSIGN(TransactionStats);
   };
 
   class GFX_EXPORT Transaction {
    public:
     Transaction();
+
+    Transaction(const Transaction&) = delete;
+    Transaction& operator=(const Transaction&) = delete;
+
     ~Transaction();
 
     Transaction(Transaction&& other);
@@ -133,11 +146,14 @@ class GFX_EXPORT SurfaceControl {
     void SetDamageRect(const Surface& surface, const gfx::Rect& rect);
     void SetColorSpace(const Surface& surface,
                        const gfx::ColorSpace& color_space);
+    void SetHDRMetadata(const Surface& surface,
+                        const absl::optional<HDRMetadata>& hdr_metadata);
     void SetFrameRate(const Surface& surface, float frame_rate);
     void SetParent(const Surface& surface, Surface* new_parent);
     void SetPosition(const Surface& surface, const gfx::Point& position);
     void SetScale(const Surface& surface, float sx, float sy);
     void SetCrop(const Surface& surface, const gfx::Rect& rect);
+    void SetFrameTimelineId(int64_t vsync_id);
 
     // Sets the callback which will be dispatched when the transaction is acked
     // by the framework.
@@ -162,8 +178,6 @@ class GFX_EXPORT SurfaceControl {
     ASurfaceTransaction* transaction_;
     OnCommitCb on_commit_cb_;
     OnCompleteCb on_complete_cb_;
-
-    DISALLOW_COPY_AND_ASSIGN(Transaction);
   };
 };
 }  // namespace gfx

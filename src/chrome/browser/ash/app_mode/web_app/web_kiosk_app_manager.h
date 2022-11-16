@@ -8,14 +8,14 @@
 #include <memory>
 #include <vector>
 
-#include "base/macros.h"
 #include "chrome/browser/ash/app_mode/kiosk_app_manager_base.h"
 #include "chrome/browser/ash/app_mode/web_app/web_kiosk_app_data.h"
 #include "components/account_id/account_id.h"
 
 class Browser;
 class PrefRegistrySimple;
-struct WebApplicationInfo;
+class Profile;
+struct WebAppInstallInfo;
 
 namespace ash {
 
@@ -54,13 +54,13 @@ class WebKioskAppManager : public KioskAppManagerBase {
 
   // Updates app by the data obtained during installation.
   void UpdateAppByAccountId(const AccountId& account_id,
-                            std::unique_ptr<WebApplicationInfo> app_info);
+                            const WebAppInstallInfo& app_info);
 
   // Adds fake apps in tests.
   void AddAppForTesting(const AccountId& account_id, const GURL& install_url);
 
   // Initialize current app session with the browser that is running the app.
-  void InitSession(Browser* browser);
+  void InitSession(Browser* browser, Profile* profile);
 
  private:
   // KioskAppManagerBase:
@@ -72,11 +72,5 @@ class WebKioskAppManager : public KioskAppManagerBase {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::WebKioskAppManager;
-}
 
 #endif  // CHROME_BROWSER_ASH_APP_MODE_WEB_APP_WEB_KIOSK_APP_MANAGER_H_

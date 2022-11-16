@@ -6,6 +6,7 @@
 
 #include "base/format_macros.h"
 #include "base/logging.h"
+#include "base/observer_list.h"
 #include "base/strings/stringprintf.h"
 #include "build/build_config.h"
 #include "ui/base/user_activity/user_activity_observer.h"
@@ -84,8 +85,8 @@ void UserActivityDetector::RemoveObserver(UserActivityObserver* observer) {
 }
 
 void UserActivityDetector::OnDisplayPowerChanging() {
-  honor_mouse_events_time_ = GetCurrentTime() +
-      base::TimeDelta::FromMilliseconds(kDisplayPowerChangeIgnoreMouseMs);
+  honor_mouse_events_time_ =
+      GetCurrentTime() + base::Milliseconds(kDisplayPowerChangeIgnoreMouseMs);
 }
 
 void UserActivityDetector::HandleExternalUserActivity() {

@@ -50,17 +50,15 @@ base::Value RulesToValue(const std::vector<const api::events::Rule*>& rules) {
 std::vector<api::events::Rule> RulesFromValue(const base::Value* value) {
   std::vector<api::events::Rule> rules;
 
-  const base::ListValue* list = NULL;
-  if (!value || !value->GetAsList(&list))
+  if (!value || !value->is_list())
     return rules;
 
-  rules.reserve(list->GetList().size());
-  for (size_t i = 0; i < list->GetList().size(); ++i) {
-    const base::DictionaryValue* dict = NULL;
-    if (!list->GetDictionary(i, &dict))
+  rules.reserve(value->GetList().size());
+  for (const base::Value& value : value->GetList()) {
+    if (!value.is_dict())
       continue;
     api::events::Rule rule;
-    if (api::events::Rule::Populate(*dict, &rule))
+    if (api::events::Rule::Populate(value, &rule))
       rules.push_back(std::move(rule));
   }
 

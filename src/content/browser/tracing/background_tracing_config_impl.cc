@@ -8,7 +8,6 @@
 #include <utility>
 
 #include "base/json/json_reader.h"
-#include "base/macros.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/process/process_handle.h"
 #include "base/system/sys_info.h"
@@ -32,7 +31,6 @@ const char kConfigModeReactive[] = "REACTIVE_TRACING_MODE";
 const char kConfigModeSystem[] = "SYSTEM_TRACING_MODE";
 
 const char kConfigScenarioName[] = "scenario_name";
-const char kConfigTraceBrowserProcessOnly[] = "trace_browser_process_only";
 const char kEnabledDataSourcesKey[] = "enabled_data_sources";
 
 const char kConfigCategoryKey[] = "category";
@@ -87,55 +85,60 @@ bool BackgroundTracingConfigImpl::StringToCategoryPreset(
   return false;
 }
 
-void BackgroundTracingConfigImpl::IntoDict(base::DictionaryValue* dict) {
+base::Value BackgroundTracingConfigImpl::ToDict() {
+  base::Value dict(base::Value::Type::DICTIONARY);
+
   if (category_preset_ == CUSTOM_CATEGORY_PRESET) {
-    dict->SetString(kConfigCustomCategoriesKey, custom_categories_);
+    dict.SetStringKey(kConfigCustomCategoriesKey, custom_categories_);
   } else if (category_preset_ == CUSTOM_TRACE_CONFIG) {
     absl::optional<base::Value> trace_config =
         base::JSONReader::Read(trace_config_.ToString());
     if (trace_config) {
-      dict->SetKey(kConfigTraceConfigKey, std::move(*trace_config));
+      dict.SetKey(kConfigTraceConfigKey, std::move(*trace_config));
     }
   }
   if (!enabled_data_sources_.empty()) {
-    dict->SetString(kEnabledDataSourcesKey, enabled_data_sources_);
+    dict.SetStringKey(kEnabledDataSourcesKey, enabled_data_sources_);
   }
 
   switch (tracing_mode()) {
     case BackgroundTracingConfigImpl::PREEMPTIVE:
-      dict->SetString(kConfigModeKey, kConfigModePreemptive);
-      dict->SetString(kConfigCategoryKey,
-                      CategoryPresetToString(category_preset_));
+      dict.SetStringKey(kConfigModeKey, kConfigModePreemptive);
+      dict.SetStringKey(kConfigCategoryKey,
+                        CategoryPresetToString(category_preset_));
       break;
     case BackgroundTracingConfigImpl::REACTIVE:
-      dict->SetString(kConfigModeKey, kConfigModeReactive);
+      dict.SetStringKey(kConfigModeKey, kConfigModeReactive);
       break;
     case BackgroundTracingConfigImpl::SYSTEM:
-      dict->SetString(kConfigModeKey, kConfigModeSystem);
+      dict.SetStringKey(kConfigModeKey, kConfigModeSystem);
       break;
   }
 
   base::ListValue configs_list;
   for (const auto& rule : rules_) {
-    std::unique_ptr<base::DictionaryValue> config_dict(
-        new base::DictionaryValue());
     DCHECK(rule);
-    rule->IntoDict(config_dict.get());
-    configs_list.Append(std::move(config_dict));
+    configs_list.Append(rule->ToDict());
   }
 
-  dict->SetKey(kConfigsKey, std::move(configs_list));
+  dict.SetKey(kConfigsKey, std::move(configs_list));
 
   if (!scenario_name_.empty())
-    dict->SetString(kConfigScenarioName, scenario_name_);
+    dict.SetStringKey(kConfigScenarioName, scenario_name_);
+
+  return dict;
 }
 
-void BackgroundTracingConfigImpl::AddPreemptiveRule(const base::Value* dict) {
+void BackgroundTracingConfigImpl::SetPackageNameFilteringEnabled(bool enabled) {
+  trace_config_.SetEventPackageNameFilterEnabled(enabled);
+}
+
+void BackgroundTracingConfigImpl::AddPreemptiveRule(const base::Value& dict) {
   AddRule(dict);
 }
 
 void BackgroundTracingConfigImpl::AddReactiveRule(
-    const base::Value* dict,
+    const base::Value& dict,
     BackgroundTracingConfigImpl::CategoryPreset category_preset) {
   BackgroundTracingRule* rule = AddRule(dict);
   if (rule) {
@@ -143,7 +146,7 @@ void BackgroundTracingConfigImpl::AddReactiveRule(
   }
 }
 
-void BackgroundTracingConfigImpl::AddSystemRule(const base::Value* dict) {
+void BackgroundTracingConfigImpl::AddSystemRule(const base::Value& dict) {
   AddRule(dict);
 }
 
@@ -167,14 +170,11 @@ TraceConfig BackgroundTracingConfigImpl::GetTraceConfig() const {
     chrome_config = GetConfigForCategoryPreset(category_preset(), record_mode);
   }
 
-  if (trace_browser_process_only_) {
-    TraceConfig::ProcessFilterConfig process_config({base::GetCurrentProcId()});
-    chrome_config.SetProcessFilterConfig(process_config);
-  }
-
   chrome_config.SetTraceBufferSizeInKb(GetMaximumTraceBufferSizeKb());
+  chrome_config.SetEventPackageNameFilterEnabled(
+      trace_config_.IsEventPackageNameFilterEnabled());
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   // For legacy tracing backend, set low trace buffer size on Android in order
   // to upload small trace files.
   if (tracing_mode() == BackgroundTracingConfigImpl::PREEMPTIVE) {
@@ -186,7 +186,7 @@ TraceConfig BackgroundTracingConfigImpl::GetTraceConfig() const {
 }
 
 size_t BackgroundTracingConfigImpl::GetTraceUploadLimitKb() const {
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   auto type = net::NetworkChangeNotifier::GetConnectionType();
   UMA_HISTOGRAM_ENUMERATION(
       "Tracing.Background.NetworkConnectionTypeWhenUploaded", type,
@@ -210,11 +210,11 @@ BackgroundTracingConfigImpl::FromDict(base::Value&& dict) {
   std::unique_ptr<BackgroundTracingConfigImpl> config;
 
   if (*mode == kConfigModePreemptive) {
-    config = PreemptiveFromDict(&dict);
+    config = PreemptiveFromDict(dict);
   } else if (*mode == kConfigModeReactive) {
-    config = ReactiveFromDict(&dict);
+    config = ReactiveFromDict(dict);
   } else if (*mode == kConfigModeSystem) {
-    config = SystemFromDict(&dict);
+    config = SystemFromDict(dict);
   } else {
     return nullptr;
   }
@@ -224,9 +224,6 @@ BackgroundTracingConfigImpl::FromDict(base::Value&& dict) {
       config->scenario_name_ = *scenario;
     }
     config->SetBufferSizeLimits(&dict);
-    config->trace_browser_process_only_ =
-        dict.FindBoolKey(kConfigTraceBrowserProcessOnly)
-            .value_or(config->trace_browser_process_only_);
   }
 
   return config;
@@ -234,24 +231,23 @@ BackgroundTracingConfigImpl::FromDict(base::Value&& dict) {
 
 // static
 std::unique_ptr<BackgroundTracingConfigImpl>
-BackgroundTracingConfigImpl::PreemptiveFromDict(const base::Value* dict) {
-  DCHECK(dict);
-  DCHECK(dict->is_dict());
+BackgroundTracingConfigImpl::PreemptiveFromDict(const base::Value& dict) {
+  DCHECK(dict.is_dict());
 
   std::unique_ptr<BackgroundTracingConfigImpl> config(
       new BackgroundTracingConfigImpl(BackgroundTracingConfigImpl::PREEMPTIVE));
 
   if (const base::Value* trace_config =
-          dict->FindDictKey(kConfigTraceConfigKey)) {
+          dict.FindDictKey(kConfigTraceConfigKey)) {
     config->trace_config_ = TraceConfig(*trace_config);
     config->category_preset_ = CUSTOM_TRACE_CONFIG;
   } else if (const std::string* categories =
-                 dict->FindStringKey(kConfigCustomCategoriesKey)) {
+                 dict.FindStringKey(kConfigCustomCategoriesKey)) {
     config->custom_categories_ = *categories;
     config->category_preset_ = CUSTOM_CATEGORY_PRESET;
   } else {
     const std::string* category_preset_string =
-        dict->FindStringKey(kConfigCategoryKey);
+        dict.FindStringKey(kConfigCategoryKey);
     if (!category_preset_string)
       return nullptr;
 
@@ -261,19 +257,19 @@ BackgroundTracingConfigImpl::PreemptiveFromDict(const base::Value* dict) {
     }
   }
   if (const std::string* enabled_data_sources =
-          dict->FindStringKey(kEnabledDataSourcesKey)) {
+          dict.FindStringKey(kEnabledDataSourcesKey)) {
     config->enabled_data_sources_ = *enabled_data_sources;
   }
 
-  const base::Value* configs_list = dict->FindListKey(kConfigsKey);
+  const base::Value* configs_list = dict.FindListKey(kConfigsKey);
   if (!configs_list)
     return nullptr;
 
-  for (const auto& config_dict : configs_list->GetList()) {
+  for (const auto& config_dict : configs_list->GetListDeprecated()) {
     if (!config_dict.is_dict())
       return nullptr;
 
-    config->AddPreemptiveRule(&config_dict);
+    config->AddPreemptiveRule(config_dict);
   }
 
   if (config->rules().empty())
@@ -284,26 +280,25 @@ BackgroundTracingConfigImpl::PreemptiveFromDict(const base::Value* dict) {
 
 // static
 std::unique_ptr<BackgroundTracingConfigImpl>
-BackgroundTracingConfigImpl::ReactiveFromDict(const base::Value* dict) {
-  DCHECK(dict);
-  DCHECK(dict->is_dict());
+BackgroundTracingConfigImpl::ReactiveFromDict(const base::Value& dict) {
+  DCHECK(dict.is_dict());
 
   std::unique_ptr<BackgroundTracingConfigImpl> config(
       new BackgroundTracingConfigImpl(BackgroundTracingConfigImpl::REACTIVE));
 
   bool has_global_categories = false;
   if (const base::Value* trace_config =
-          dict->FindDictKey(kConfigTraceConfigKey)) {
+          dict.FindDictKey(kConfigTraceConfigKey)) {
     config->trace_config_ = TraceConfig(*trace_config);
     config->category_preset_ = CUSTOM_TRACE_CONFIG;
     has_global_categories = true;
   } else if (const std::string* categories =
-                 dict->FindStringKey(kConfigCustomCategoriesKey)) {
+                 dict.FindStringKey(kConfigCustomCategoriesKey)) {
     config->custom_categories_ = *categories;
     config->category_preset_ = CUSTOM_CATEGORY_PRESET;
     has_global_categories = true;
   } else if (const std::string* category_preset_string =
-                 dict->FindStringKey(kConfigCategoryKey)) {
+                 dict.FindStringKey(kConfigCategoryKey)) {
     if (!StringToCategoryPreset(*category_preset_string,
                                 &config->category_preset_)) {
       return nullptr;
@@ -312,15 +307,15 @@ BackgroundTracingConfigImpl::ReactiveFromDict(const base::Value* dict) {
   }
 
   if (const std::string* enabled_data_sources =
-          dict->FindStringKey(kEnabledDataSourcesKey)) {
+          dict.FindStringKey(kEnabledDataSourcesKey)) {
     config->enabled_data_sources_ = *enabled_data_sources;
   }
 
-  const base::Value* configs_list = dict->FindListKey(kConfigsKey);
+  const base::Value* configs_list = dict.FindListKey(kConfigsKey);
   if (!configs_list)
     return nullptr;
 
-  for (const auto& config_dict : configs_list->GetList()) {
+  for (const auto& config_dict : configs_list->GetListDeprecated()) {
     if (!config_dict.is_dict())
       return nullptr;
 
@@ -336,7 +331,7 @@ BackgroundTracingConfigImpl::ReactiveFromDict(const base::Value* dict) {
       }
     }
 
-    config->AddReactiveRule(&config_dict, config->category_preset_);
+    config->AddReactiveRule(config_dict, config->category_preset_);
   }
 
   if (config->rules().empty())
@@ -347,22 +342,21 @@ BackgroundTracingConfigImpl::ReactiveFromDict(const base::Value* dict) {
 
 // static
 std::unique_ptr<BackgroundTracingConfigImpl>
-BackgroundTracingConfigImpl::SystemFromDict(const base::Value* dict) {
-  DCHECK(dict);
-  DCHECK(dict->is_dict());
+BackgroundTracingConfigImpl::SystemFromDict(const base::Value& dict) {
+  DCHECK(dict.is_dict());
 
   auto config = std::make_unique<BackgroundTracingConfigImpl>(
       BackgroundTracingConfigImpl::SYSTEM);
 
-  const base::Value* configs_list = dict->FindListKey(kConfigsKey);
+  const base::Value* configs_list = dict.FindListKey(kConfigsKey);
   if (!configs_list)
     return nullptr;
 
-  for (const auto& config_dict : configs_list->GetList()) {
+  for (const auto& config_dict : configs_list->GetListDeprecated()) {
     if (!config_dict.is_dict())
       return nullptr;
 
-    config->AddSystemRule(&config_dict);
+    config->AddSystemRule(config_dict);
   }
 
   if (config->rules().empty())
@@ -389,7 +383,7 @@ TraceConfig BackgroundTracingConfigImpl::GetConfigForCategoryPreset(
 }
 
 BackgroundTracingRule* BackgroundTracingConfigImpl::AddRule(
-    const base::Value* dict) {
+    const base::Value& dict) {
   std::unique_ptr<BackgroundTracingRule> rule =
       BackgroundTracingRule::CreateRuleFromDict(dict);
   if (rule) {
@@ -401,22 +395,32 @@ BackgroundTracingRule* BackgroundTracingConfigImpl::AddRule(
 }
 
 void BackgroundTracingConfigImpl::SetBufferSizeLimits(const base::Value* dict) {
-  low_ram_buffer_size_kb_ = dict->FindIntKey(kConfigLowRamBufferSizeKb)
-                                .value_or(low_ram_buffer_size_kb_);
-  medium_ram_buffer_size_kb_ = dict->FindIntKey(kConfigMediumRamBufferSizeKb)
-                                   .value_or(medium_ram_buffer_size_kb_);
-  mobile_network_buffer_size_kb_ =
-      dict->FindIntKey(kConfigMobileNetworkBuferSizeKb)
-          .value_or(mobile_network_buffer_size_kb_);
-  max_buffer_size_kb_ =
-      dict->FindIntKey(kConfigMaxBufferSizeKb).value_or(max_buffer_size_kb_);
-  upload_limit_kb_ =
-      dict->FindIntKey(kConfigUploadLimitKb).value_or(upload_limit_kb_);
-  upload_limit_network_kb_ = dict->FindIntKey(kConfigUploadLimitNetworkKb)
-                                 .value_or(upload_limit_network_kb_);
-  interning_reset_interval_ms_ =
-      dict->FindIntKey(kConfigInterningResetIntervalMs)
-          .value_or(interning_reset_interval_ms_);
+  if (auto low_ram_buffer_size_kb =
+          dict->FindIntKey(kConfigLowRamBufferSizeKb)) {
+    low_ram_buffer_size_kb_ = *low_ram_buffer_size_kb;
+  }
+  if (auto medium_ram_buffer_size_kb =
+          dict->FindIntKey(kConfigMediumRamBufferSizeKb)) {
+    medium_ram_buffer_size_kb_ = *medium_ram_buffer_size_kb;
+  }
+  if (auto mobile_network_buffer_size_kb =
+          dict->FindIntKey(kConfigMobileNetworkBuferSizeKb)) {
+    mobile_network_buffer_size_kb_ = *mobile_network_buffer_size_kb;
+  }
+  if (auto max_buffer_size_kb = dict->FindIntKey(kConfigMaxBufferSizeKb)) {
+    max_buffer_size_kb_ = *max_buffer_size_kb;
+  }
+  if (auto upload_limit_kb = dict->FindIntKey(kConfigUploadLimitKb)) {
+    upload_limit_kb_ = *upload_limit_kb;
+  }
+  if (auto upload_limit_network_kb =
+          dict->FindIntKey(kConfigUploadLimitNetworkKb)) {
+    upload_limit_network_kb_ = *upload_limit_network_kb;
+  }
+  if (auto interning_reset_interval_ms =
+          dict->FindIntKey(kConfigInterningResetIntervalMs)) {
+    interning_reset_interval_ms_ = *interning_reset_interval_ms;
+  }
 }
 
 int BackgroundTracingConfigImpl::GetMaximumTraceBufferSizeKb() const {
@@ -424,7 +428,7 @@ int BackgroundTracingConfigImpl::GetMaximumTraceBufferSizeKb() const {
   if (ram_mb > 0 && ram_mb <= 1024) {
     return low_ram_buffer_size_kb_;
   }
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   auto type = net::NetworkChangeNotifier::GetConnectionType();
   UMA_HISTOGRAM_ENUMERATION(
       "Tracing.Background.NetworkConnectionTypeWhenStarted", type,

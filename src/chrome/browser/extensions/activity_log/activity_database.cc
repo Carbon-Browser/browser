@@ -22,8 +22,8 @@
 #include "sql/transaction.h"
 #include "third_party/sqlite/sqlite3.h"
 
-#if defined(OS_MAC)
-#include "base/mac/mac_util.h"
+#if BUILDFLAG(IS_MAC)
+#include "base/mac/backup_util.h"
 #endif
 
 namespace extensions {
@@ -54,9 +54,9 @@ ActivityDatabase::ActivityDatabase(ActivityDatabase::Delegate* delegate)
   DETACH_FROM_SEQUENCE(sequence_checker_);
   if (base::CommandLine::ForCurrentProcess()->HasSwitch(
           switches::kEnableExtensionActivityLogTesting)) {
-    batching_period_ = base::TimeDelta::FromSeconds(10);
+    batching_period_ = base::Seconds(10);
   } else {
-    batching_period_ = base::TimeDelta::FromMinutes(2);
+    batching_period_ = base::Minutes(2);
   }
 }
 
@@ -85,9 +85,9 @@ void ActivityDatabase::Init(const base::FilePath& db_name) {
   if (!committer.Begin())
     return LogInitFailure();
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   // Exclude the database from backups.
-  base::mac::SetFileBackupExclusion(db_name);
+  base::mac::SetBackupExclusion(db_name);
 #endif
 
   if (!delegate_->InitDatabase(&db_))
@@ -210,9 +210,7 @@ void ActivityDatabase::RecordBatchedActionsWhileTesting() {
 void ActivityDatabase::SetTimerForTesting(int ms) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   timer_.Stop();
-  timer_.Start(FROM_HERE,
-               base::TimeDelta::FromMilliseconds(ms),
-               this,
+  timer_.Start(FROM_HERE, base::Milliseconds(ms), this,
                &ActivityDatabase::RecordBatchedActionsWhileTesting);
 }
 

@@ -23,7 +23,7 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/l10n/l10n_util.h"
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include "base/win/win_util.h"
 #endif
 
@@ -48,14 +48,28 @@ const char kTestManagementPolicy2[] =
     "    \"installation_mode\": \"blocked\","
     "  },"
     "}";
-#if defined(OS_WIN)
-const char kSanitizedTestManagementPolicy2[] =
+
+const char kSensitiveTestManagementPolicy[] = R"({
+  "[BLOCKED]abcdefghijklmnopabcdefghijklmnop": {
+    "installation_mode": "force_installed",
+    "update_url": "https://example.com/app",
+  },
+  "[BLOCKED]abcdefghijklmnopabcdefghijklmnpo,
+    abcdefghijklmnopabcdefghijklmopn": {
+      "installation_mode": "normal_installed",
+      "update_url": "https://example.com/app",
+  },
+  "*": {
+    "installation_mode": "blocked",
+  },
+})";
+
+const char kSanitizedTestManagementPolicy[] =
     "{"
     "  \"*\": {"
     "    \"installation_mode\": \"blocked\","
     "  },"
     "}";
-#endif  // defined(OS_WIN)
 
 const char kTestManagementPolicy3[] =
     "{"
@@ -86,6 +100,9 @@ const char kSanitizedTestManagementPolicy5[] =
     "    \"toolbar_pin\": \"force_pinned\""
     "  },"
     "}";
+
+constexpr int kJsonParseOptions =
+    base::JSON_PARSE_CHROMIUM_EXTENSIONS | base::JSON_ALLOW_TRAILING_COMMAS;
 
 TEST(ExtensionListPolicyHandlerTest, CheckPolicySettings) {
   base::ListValue list;
@@ -142,8 +159,8 @@ TEST(ExtensionSettingsPolicyHandlerTest, CheckPolicySettingsURL) {
   auto url_parses_successfully = [](const char* policy_template,
                                     const std::string& url) {
     std::string policy = base::StringPrintf(policy_template, url.c_str());
-    absl::optional<base::Value> policy_value = base::JSONReader::Read(
-        policy, base::JSONParserOptions::JSON_ALLOW_TRAILING_COMMAS);
+    absl::optional<base::Value> policy_value =
+        base::JSONReader::Read(policy, kJsonParseOptions);
     if (!policy_value)
       return false;
 
@@ -380,11 +397,9 @@ TEST(ExtensionURLPatternListPolicyHandlerTest, ApplyPolicySettings) {
 }
 
 TEST(ExtensionSettingsPolicyHandlerTest, CheckPolicySettings) {
-  base::JSONReader::ValueWithError policy_result =
-      base::JSONReader::ReadAndReturnValueWithError(
-          kTestManagementPolicy1,
-          base::JSONParserOptions::JSON_ALLOW_TRAILING_COMMAS);
-  ASSERT_TRUE(policy_result.value) << policy_result.error_message;
+  auto policy_result = base::JSONReader::ReadAndReturnValueWithError(
+      kTestManagementPolicy1, kJsonParseOptions);
+  ASSERT_TRUE(policy_result.has_value()) << policy_result.error().message;
 
   policy::Schema chrome_schema =
       policy::Schema::Wrap(policy::GetChromeSchemaData());
@@ -395,7 +410,7 @@ TEST(ExtensionSettingsPolicyHandlerTest, CheckPolicySettings) {
 
   policy_map.Set(policy::key::kExtensionSettings,
                  policy::POLICY_LEVEL_MANDATORY, policy::POLICY_SCOPE_USER,
-                 policy::POLICY_SOURCE_CLOUD, std::move(*policy_result.value),
+                 policy::POLICY_SOURCE_CLOUD, std::move(*policy_result),
                  nullptr);
   // CheckPolicySettings() has an error message because of the missing update
   // URL.
@@ -427,8 +442,8 @@ TEST(ExtensionSettingsPolicyHandlerTest, CheckPolicySettingsTooManyHosts) {
       base::StringPrintf(policy_template, urls.c_str(), urls.c_str());
 
   std::string error;
-  auto policy_value = base::JSONReader::ReadAndReturnValueWithError(
-      policy, base::JSONParserOptions::JSON_ALLOW_TRAILING_COMMAS);
+  auto policy_value =
+      base::JSONReader::ReadAndReturnValueWithError(policy, kJsonParseOptions);
   policy::Schema chrome_schema =
       policy::Schema::Wrap(policy::GetChromeSchemaData());
   policy::PolicyMap policy_map;
@@ -437,8 +452,7 @@ TEST(ExtensionSettingsPolicyHandlerTest, CheckPolicySettingsTooManyHosts) {
 
   policy_map.Set(policy::key::kExtensionSettings,
                  policy::POLICY_LEVEL_MANDATORY, policy::POLICY_SCOPE_USER,
-                 policy::POLICY_SOURCE_CLOUD,
-                 policy_value.value.value().Clone(), nullptr);
+                 policy::POLICY_SOURCE_CLOUD, policy_value->Clone(), nullptr);
 
   EXPECT_TRUE(handler.CheckPolicySettings(policy_map, &errors));
   EXPECT_EQ(2u, errors.size());
@@ -455,16 +469,10 @@ TEST(ExtensionSettingsPolicyHandlerTest, CheckPolicySettingsTooManyHosts) {
 }
 
 TEST(ExtensionSettingsPolicyHandlerTest, ApplyPolicySettings) {
-// Mark as enterprise managed.
-#if defined(OS_WIN)
-  base::win::ScopedDomainStateForTesting scoped_domain(true);
-#endif
-
-  base::JSONReader::ValueWithError policy_result =
-      base::JSONReader::ReadAndReturnValueWithError(
-          kTestManagementPolicy2,
-          base::JSONParserOptions::JSON_ALLOW_TRAILING_COMMAS);
-  ASSERT_TRUE(policy_result.value) << policy_result.error_message;
+  // Mark as enterprise managed.
+  auto policy_result = base::JSONReader::ReadAndReturnValueWithError(
+      kTestManagementPolicy2, kJsonParseOptions);
+  ASSERT_TRUE(policy_result.has_value()) << policy_result.error().message;
 
   policy::Schema chrome_schema =
       policy::Schema::Wrap(policy::GetChromeSchemaData());
@@ -475,31 +483,26 @@ TEST(ExtensionSettingsPolicyHandlerTest, ApplyPolicySettings) {
 
   policy_map.Set(policy::key::kExtensionSettings,
                  policy::POLICY_LEVEL_MANDATORY, policy::POLICY_SCOPE_USER,
-                 policy::POLICY_SOURCE_CLOUD, policy_result.value->Clone(),
-                 nullptr);
+                 policy::POLICY_SOURCE_CLOUD, policy_result->Clone(), nullptr);
   EXPECT_TRUE(handler.CheckPolicySettings(policy_map, &errors));
   handler.ApplyPolicySettings(policy_map, &prefs);
   base::Value* value = NULL;
   ASSERT_TRUE(prefs.GetValue(pref_names::kExtensionManagement, &value));
-  EXPECT_EQ(*policy_result.value, *value);
+  EXPECT_EQ(*policy_result, *value);
 }
 
 TEST(ExtensionSettingsPolicyHandlerTest, DropInvalidKeys) {
   // Check that invalid keys are dropped from the dictionary, but the rest of
   // the settings apply correctly.
 
-  base::JSONReader::ValueWithError policy_result =
-      base::JSONReader::ReadAndReturnValueWithError(
-          kTestManagementPolicy5,
-          base::JSONParserOptions::JSON_ALLOW_TRAILING_COMMAS);
-  ASSERT_TRUE(policy_result.value) << policy_result.error_message;
+  auto policy_result = base::JSONReader::ReadAndReturnValueWithError(
+      kTestManagementPolicy5, kJsonParseOptions);
+  ASSERT_TRUE(policy_result.has_value()) << policy_result.error().message;
 
-  base::JSONReader::ValueWithError stripped_policy_result =
-      base::JSONReader::ReadAndReturnValueWithError(
-          kSanitizedTestManagementPolicy5,
-          base::JSONParserOptions::JSON_ALLOW_TRAILING_COMMAS);
-  ASSERT_TRUE(stripped_policy_result.value)
-      << stripped_policy_result.error_message;
+  auto stripped_policy_result = base::JSONReader::ReadAndReturnValueWithError(
+      kSanitizedTestManagementPolicy5, kJsonParseOptions);
+  ASSERT_TRUE(stripped_policy_result.has_value())
+      << stripped_policy_result.error().message;
 
   policy::Schema chrome_schema =
       policy::Schema::Wrap(policy::GetChromeSchemaData());
@@ -510,7 +513,7 @@ TEST(ExtensionSettingsPolicyHandlerTest, DropInvalidKeys) {
 
   policy_map.Set(policy::key::kExtensionSettings,
                  policy::POLICY_LEVEL_MANDATORY, policy::POLICY_SCOPE_USER,
-                 policy::POLICY_SOURCE_CLOUD, std::move(*policy_result.value),
+                 policy::POLICY_SOURCE_CLOUD, std::move(*policy_result),
                  nullptr);
   // CheckPolicySettings() has an error message because of the missing update
   // URL.
@@ -521,26 +524,21 @@ TEST(ExtensionSettingsPolicyHandlerTest, DropInvalidKeys) {
   handler.ApplyPolicySettings(policy_map, &prefs);
   base::Value* value = nullptr;
   ASSERT_TRUE(prefs.GetValue(pref_names::kExtensionManagement, &value));
-  EXPECT_EQ(*stripped_policy_result.value, *value);
+  EXPECT_EQ(*stripped_policy_result, *value);
 }
 
 // Only enterprise managed machines can auto install extensions from a location
 // other than the webstore https://crbug.com/809004.
-#if defined(OS_WIN)
 TEST(ExtensionSettingsPolicyHandlerTest, NonManagedOffWebstoreExtension) {
   // Mark as not enterprise managed.
-  base::win::ScopedDomainStateForTesting scoped_domain(false);
-
   auto policy_result = base::JSONReader::ReadAndReturnValueWithError(
-      kTestManagementPolicy2,
-      base::JSONParserOptions::JSON_ALLOW_TRAILING_COMMAS);
-  ASSERT_TRUE(policy_result.value) << policy_result.error_message;
+      kSensitiveTestManagementPolicy, kJsonParseOptions);
+  ASSERT_TRUE(policy_result.has_value()) << policy_result.error().message;
 
   auto sanitized_policy_result = base::JSONReader::ReadAndReturnValueWithError(
-      kSanitizedTestManagementPolicy2,
-      base::JSONParserOptions::JSON_ALLOW_TRAILING_COMMAS);
-  ASSERT_TRUE(sanitized_policy_result.value)
-      << sanitized_policy_result.error_message;
+      kSanitizedTestManagementPolicy, kJsonParseOptions);
+  ASSERT_TRUE(sanitized_policy_result.has_value())
+      << sanitized_policy_result.error().message;
 
   policy::Schema chrome_schema =
       policy::Schema::Wrap(policy::GetChromeSchemaData());
@@ -551,16 +549,14 @@ TEST(ExtensionSettingsPolicyHandlerTest, NonManagedOffWebstoreExtension) {
 
   policy_map.Set(policy::key::kExtensionSettings,
                  policy::POLICY_LEVEL_MANDATORY, policy::POLICY_SCOPE_USER,
-                 policy::POLICY_SOURCE_CLOUD, policy_result.value->Clone(),
-                 nullptr);
+                 policy::POLICY_SOURCE_CLOUD, policy_result->Clone(), nullptr);
   EXPECT_TRUE(handler.CheckPolicySettings(policy_map, &errors));
   EXPECT_FALSE(errors.empty());
 
   handler.ApplyPolicySettings(policy_map, &prefs);
   base::Value* value = nullptr;
   ASSERT_TRUE(prefs.GetValue(pref_names::kExtensionManagement, &value));
-  EXPECT_EQ(*sanitized_policy_result.value, *value);
+  EXPECT_EQ(*sanitized_policy_result, *value);
 }
-#endif
 
 }  // namespace extensions

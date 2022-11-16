@@ -12,12 +12,13 @@
 #include <vector>
 
 #include "base/bind.h"
-#include "base/cxx17_backports.h"
+#include "base/command_line.h"
 #include "base/no_destructor.h"
 #include "base/path_service.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/pattern.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/single_thread_task_runner.h"
+#include "build/build_config.h"
 #include "cc/base/switches.h"
 #include "content/public/browser/browser_child_process_observer.h"
 #include "content/public/browser/browser_context.h"
@@ -42,6 +43,7 @@
 #include "content/web_test/browser/fake_bluetooth_delegate.h"
 #include "content/web_test/browser/mojo_echo.h"
 #include "content/web_test/browser/mojo_web_test_helper.h"
+#include "content/web_test/browser/web_test_attribution_manager.h"
 #include "content/web_test/browser/web_test_bluetooth_fake_adapter_setter_impl.h"
 #include "content/web_test/browser/web_test_browser_context.h"
 #include "content/web_test/browser/web_test_browser_main_parts.h"
@@ -69,11 +71,13 @@
 #include "storage/browser/quota/quota_settings.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_registry.h"
 #include "third_party/blink/public/common/web_preferences/web_preferences.h"
+#include "third_party/blink/public/mojom/conversions/attribution_reporting_automation.mojom.h"
 #include "ui/base/ui_base_switches.h"
 #include "url/origin.h"
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include "base/strings/utf_string_conversions.h"
+#include "sandbox/policy/mojom/sandbox.mojom.h"
 #include "sandbox/policy/win/sandbox_win.h"
 #include "sandbox/win/src/sandbox.h"
 #endif
@@ -91,7 +95,7 @@ void BindWebTestHelper(
 
 // An OverlayWindow that returns the last given video natural size as the
 // window's bounds.
-class BoundsMatchVideoSizeOverlayWindow : public OverlayWindow {
+class BoundsMatchVideoSizeOverlayWindow : public VideoOverlayWindow {
  public:
   BoundsMatchVideoSizeOverlayWindow() = default;
   ~BoundsMatchVideoSizeOverlayWindow() override = default;
@@ -108,7 +112,7 @@ class BoundsMatchVideoSizeOverlayWindow : public OverlayWindow {
   bool IsVisible() override { return false; }
   bool IsAlwaysOnTop() override { return false; }
   gfx::Rect GetBounds() override { return gfx::Rect(size_); }
-  void UpdateVideoSize(const gfx::Size& natural_size) override {
+  void UpdateNaturalSize(const gfx::Size& natural_size) override {
     size_ = natural_size;
   }
   void SetPlaybackState(PlaybackState playback_state) override {}
@@ -343,30 +347,28 @@ void WebTestContentBrowserClient::AppendExtraCommandLineSwitches(
     switches::kEnableFontAntialiasing,
     switches::kAlwaysUseComplexText,
     switches::kStableReleaseMode,
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
     switches::kRegisterFontFiles,
 #endif
   };
 
   command_line->CopySwitchesFrom(*base::CommandLine::ForCurrentProcess(),
-                                 kForwardSwitches,
-                                 base::size(kForwardSwitches));
+                                 kForwardSwitches, std::size(kForwardSwitches));
 }
 
 std::unique_ptr<BrowserMainParts>
 WebTestContentBrowserClient::CreateBrowserMainParts(
-    const MainFunctionParams& parameters) {
-  auto browser_main_parts =
-      std::make_unique<WebTestBrowserMainParts>(parameters);
+    bool /* is_integration_test */) {
+  auto browser_main_parts = std::make_unique<WebTestBrowserMainParts>();
 
   set_browser_main_parts(browser_main_parts.get());
 
   return browser_main_parts;
 }
 
-std::unique_ptr<OverlayWindow>
-WebTestContentBrowserClient::CreateWindowForPictureInPicture(
-    PictureInPictureWindowController* controller) {
+std::unique_ptr<VideoOverlayWindow>
+WebTestContentBrowserClient::CreateWindowForVideoPictureInPicture(
+    VideoPictureInPictureWindowController* controller) {
   return std::make_unique<BoundsMatchVideoSizeOverlayWindow>();
 }
 
@@ -409,8 +411,8 @@ WebTestContentBrowserClient::GetOriginsRequiringDedicatedProcess() {
     };
 
     origins_to_isolate.reserve(origins_to_isolate.size() +
-                               base::size(kWptHostnames) *
-                                   base::size(kOriginTemplates));
+                               std::size(kWptHostnames) *
+                                   std::size(kOriginTemplates));
     for (const char* kWptHostname : kWptHostnames) {
       for (const char* kOriginTemplate : kOriginTemplates) {
         std::string origin = base::StringPrintf(kOriginTemplate, kWptHostname);
@@ -471,6 +473,10 @@ void WebTestContentBrowserClient::RegisterBrowserInterfaceBindersForFrame(
   map->Add<blink::test::mojom::CookieManagerAutomation>(base::BindRepeating(
       &WebTestContentBrowserClient::BindCookieManagerAutomation,
       base::Unretained(this)));
+  map->Add<blink::test::mojom::AttributionReportingAutomation>(
+      base::BindRepeating(
+          &WebTestContentBrowserClient::BindAttributionReportingAutomation,
+          base::Unretained(this)));
 }
 
 bool WebTestContentBrowserClient::CanAcceptUntrustedExchangesIfNeeded() {
@@ -523,11 +529,21 @@ void WebTestContentBrowserClient::BindCookieManagerAutomation(
                        std::move(receiver));
 }
 
+void WebTestContentBrowserClient::BindAttributionReportingAutomation(
+    RenderFrameHost* render_frame_host,
+    mojo::PendingReceiver<blink::test::mojom::AttributionReportingAutomation>
+        receiver) {
+  attribution_reporting_receivers_.Add(
+      std::make_unique<WebTestAttributionManager>(
+          *GetWebTestBrowserContext()->GetDefaultStoragePartition()),
+      std::move(receiver));
+}
+
 std::unique_ptr<LoginDelegate> WebTestContentBrowserClient::CreateLoginDelegate(
     const net::AuthChallengeInfo& auth_info,
     content::WebContents* web_contents,
     const content::GlobalRequestID& request_id,
-    bool is_main_frame,
+    bool is_request_for_primary_main_frame,
     const GURL& url,
     scoped_refptr<net::HttpResponseHeaders> response_headers,
     bool first_auth_attempt,
@@ -543,7 +559,6 @@ void WebTestContentBrowserClient::ConfigureNetworkContextParamsForShell(
   ShellContentBrowserClient::ConfigureNetworkContextParamsForShell(
       context, context_params, cert_verifier_creation_params);
 
-#if BUILDFLAG(ENABLE_REPORTING)
   // Configure the Reporting service in a manner expected by certain Web
   // Platform Tests (network-error-logging and reporting-api).
   //
@@ -552,7 +567,6 @@ void WebTestContentBrowserClient::ConfigureNetworkContextParamsForShell(
   context_params->reporting_delivery_interval =
       kReportingDeliveryIntervalTimeForWebTests;
   context_params->skip_reporting_send_permission_check = true;
-#endif
 }
 
 void WebTestContentBrowserClient::CreateFakeBluetoothChooserFactory(
@@ -570,29 +584,37 @@ void WebTestContentBrowserClient::BindWebTestControlHost(
         render_process_id, std::move(receiver));
 }
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 bool WebTestContentBrowserClient::PreSpawnChild(
     sandbox::TargetPolicy* policy,
-    sandbox::policy::SandboxType sandbox_type,
+    sandbox::mojom::Sandbox sandbox_type,
     ChildSpawnFlags flags) {
-  if (sandbox_type == sandbox::policy::SandboxType::kRenderer) {
+  if (sandbox_type == sandbox::mojom::Sandbox::kRenderer) {
     // Add sideloaded font files for testing. See also DIR_WINDOWS_FONTS
     // addition in |StartSandboxedProcess|.
     std::vector<std::string> font_files = switches::GetSideloadFontFiles();
     for (std::vector<std::string>::const_iterator i(font_files.begin());
          i != font_files.end(); ++i) {
-      policy->AddRule(sandbox::TargetPolicy::SUBSYS_FILES,
-                      sandbox::TargetPolicy::FILES_ALLOW_READONLY,
+      policy->AddRule(sandbox::SubSystem::kFiles,
+                      sandbox::Semantics::kFilesAllowReadonly,
                       base::UTF8ToWide(*i).c_str());
     }
   }
   return true;
 }
-#endif  // OS_WIN
+#endif  // BUILDFLAG(IS_WIN)
 
 std::string WebTestContentBrowserClient::GetAcceptLangs(
     BrowserContext* context) {
   return content::GetShellLanguage();
+}
+
+bool WebTestContentBrowserClient::IsInterestGroupAPIAllowed(
+    content::RenderFrameHost* render_frame_host,
+    InterestGroupApiOperation operation,
+    const url::Origin& top_frame_origin,
+    const url::Origin& api_origin) {
+  return true;
 }
 
 void WebTestContentBrowserClient::GetHyphenationDictionary(

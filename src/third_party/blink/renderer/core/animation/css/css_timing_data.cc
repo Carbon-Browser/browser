@@ -19,12 +19,12 @@ CSSTimingData::CSSTimingData(const CSSTimingData& other) = default;
 Timing CSSTimingData::ConvertToTiming(size_t index) const {
   Timing timing;
   timing.start_delay =
-      AnimationTimeDelta::FromSecondsD(GetRepeated(delay_list_, index));
+      ANIMATION_TIME_DELTA_FROM_SECONDS(GetRepeated(delay_list_, index));
   double duration = GetRepeated(duration_list_, index);
   timing.iteration_duration =
       std::isnan(duration)
           ? absl::nullopt
-          : absl::make_optional(AnimationTimeDelta::FromSecondsD(duration));
+          : absl::make_optional(ANIMATION_TIME_DELTA_FROM_SECONDS(duration));
   timing.timing_function = GetRepeated(timing_function_list_, index);
   timing.AssertValid();
   return timing;
@@ -40,8 +40,8 @@ bool CSSTimingData::TimingMatchForStyleRecalc(
     return false;
 
   for (wtf_size_t i = 0; i < timing_function_list_.size(); i++) {
-    if (!DataEquivalent(timing_function_list_.at(i),
-                        other.timing_function_list_.at(i))) {
+    if (!ValuesEquivalent(timing_function_list_.at(i),
+                          other.timing_function_list_.at(i))) {
       return false;
     }
   }

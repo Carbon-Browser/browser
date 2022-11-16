@@ -19,6 +19,9 @@ class ImageSkia;
 
 namespace ash {
 
+class AmbientClient;
+class AmbientAccessTokenController;
+
 // Interface for downloading and decoding photos for Ambient mode. Mocked for
 // testing to isolate from network and file system.
 // Each cache entry is written to disk as three files in the |root_path|, with
@@ -30,7 +33,13 @@ class ASH_EXPORT AmbientPhotoCache {
   AmbientPhotoCache& operator=(const AmbientPhotoCache&) = delete;
   virtual ~AmbientPhotoCache() = default;
 
-  static std::unique_ptr<AmbientPhotoCache> Create(base::FilePath root_path);
+  // `root_path` is where the cached photos stored on disk.
+  // `ambient_client` and `access_token_controller` are used to obtain url
+  // loader factory and access tokens to fetch the online images.
+  static std::unique_ptr<AmbientPhotoCache> Create(
+      base::FilePath root_path,
+      AmbientClient& ambient_client,
+      AmbientAccessTokenController& access_token_controller);
 
   virtual void DownloadPhoto(
       const std::string& url,
@@ -49,14 +58,15 @@ class ASH_EXPORT AmbientPhotoCache {
   // Write photo cache to disk at |cache_index| and call |callback| when
   // complete.
   virtual void WritePhotoCache(int cache_index,
-                               const ambient::PhotoCacheEntry& cache_entry,
+                               const ::ambient::PhotoCacheEntry& cache_entry,
                                base::OnceClosure callback) = 0;
 
   // Read the photo cache at |cache_index| and call |callback| when complete.
   // If a particular cache fails to be read, |cache_entry| will be empty.
-  virtual void ReadPhotoCache(int cache_index,
-                              ambient::PhotoCacheEntry* cache_entry,
-                              base::OnceCallback<void()> callback) = 0;
+  virtual void ReadPhotoCache(
+      int cache_index,
+      base::OnceCallback<void(::ambient::PhotoCacheEntry cache_entry)>
+          callback) = 0;
 
   // Erase all stored files from disk.
   virtual void Clear() = 0;

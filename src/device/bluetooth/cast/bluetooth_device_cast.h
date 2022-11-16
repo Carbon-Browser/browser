@@ -14,7 +14,6 @@
 
 #include "base/callback.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "build/build_config.h"
@@ -33,6 +32,10 @@ class BluetoothDeviceCast : public BluetoothDevice {
   BluetoothDeviceCast(
       BluetoothAdapter* adapter,
       scoped_refptr<chromecast::bluetooth::RemoteDevice> device);
+
+  BluetoothDeviceCast(const BluetoothDeviceCast&) = delete;
+  BluetoothDeviceCast& operator=(const BluetoothDeviceCast&) = delete;
+
   ~BluetoothDeviceCast() override;
 
   // BluetoothDevice implementation:
@@ -133,8 +136,6 @@ class BluetoothDeviceCast : public BluetoothDevice {
   absl::optional<std::string> name_;
 
   base::WeakPtrFactory<BluetoothDeviceCast> weak_factory_;
-
-  DISALLOW_COPY_AND_ASSIGN(BluetoothDeviceCast);
 };
 
 }  // namespace device

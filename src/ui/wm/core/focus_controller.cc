@@ -5,6 +5,7 @@
 #include "ui/wm/core/focus_controller.h"
 
 #include "base/auto_reset.h"
+#include "base/observer_list.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/aura/client/capture_client.h"
 #include "ui/aura/client/focus_change_observer.h"
@@ -247,7 +248,7 @@ void FocusController::FocusAndActivateWindow(
   if (!updating_focus_) {
     aura::Window* const new_active_window = pending_activation_.has_value()
                                                 ? pending_activation_.value()
-                                                : active_window_;
+                                                : active_window_.get();
     const bool activation_changed_focus =
         last_focused_window != focused_window_;
     if (!activation_changed_focus || !focused_window_) {
@@ -276,14 +277,14 @@ void FocusController::SetFocusedWindow(aura::Window* window) {
   if (lost_focus)
     window_tracker.Add(lost_focus);
   if (focused_window_ &&
-      observation_manager_.IsObservingSource(focused_window_) &&
+      observation_manager_.IsObservingSource(focused_window_.get()) &&
       focused_window_ != active_window_) {
-    observation_manager_.RemoveObservation(focused_window_);
+    observation_manager_.RemoveObservation(focused_window_.get());
   }
   focused_window_ = window;
   if (focused_window_ &&
-      !observation_manager_.IsObservingSource(focused_window_))
-    observation_manager_.AddObservation(focused_window_);
+      !observation_manager_.IsObservingSource(focused_window_.get()))
+    observation_manager_.AddObservation(focused_window_.get());
 
   for (auto& observer : focus_observers_) {
     observer.OnWindowFocused(
@@ -356,9 +357,9 @@ bool FocusController::SetActiveWindow(
   }
 
   if (active_window_ &&
-      observation_manager_.IsObservingSource(active_window_) &&
+      observation_manager_.IsObservingSource(active_window_.get()) &&
       focused_window_ != active_window_) {
-    observation_manager_.RemoveObservation(active_window_);
+    observation_manager_.RemoveObservation(active_window_.get());
   }
 
   active_window_ = window;

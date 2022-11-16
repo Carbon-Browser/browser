@@ -5,7 +5,6 @@
 #include <map>
 
 #include "base/bind.h"
-#include "base/macros.h"
 #include "base/strings/stringprintf.h"
 #include "chrome/browser/devtools/devtools_window.h"
 #include "chrome/browser/devtools/devtools_window_testing.h"
@@ -42,6 +41,11 @@ class ExtensionNavigationUIDataObserver : public content::WebContentsObserver {
   explicit ExtensionNavigationUIDataObserver(content::WebContents* web_contents)
       : WebContentsObserver(web_contents) {}
 
+  ExtensionNavigationUIDataObserver(const ExtensionNavigationUIDataObserver&) =
+      delete;
+  ExtensionNavigationUIDataObserver& operator=(
+      const ExtensionNavigationUIDataObserver&) = delete;
+
   const ExtensionNavigationUIData* GetExtensionNavigationUIData(
       content::RenderFrameHost* rfh) const {
     auto iter = navigation_ui_data_map_.find(rfh);
@@ -66,8 +70,6 @@ class ExtensionNavigationUIDataObserver : public content::WebContentsObserver {
   std::map<content::RenderFrameHost*,
            std::unique_ptr<ExtensionNavigationUIData>>
       navigation_ui_data_map_;
-
-  DISALLOW_COPY_AND_ASSIGN(ExtensionNavigationUIDataObserver);
 };
 
 }  // namespace
@@ -205,7 +207,8 @@ IN_PROC_BROWSER_TEST_F(ExtensionBrowserTest, ExtensionNavigationUIData) {
   // Test ExtensionNavigationUIData for the main frame.
   {
     const auto* extension_navigation_ui_data =
-        observer.GetExtensionNavigationUIData(web_contents->GetMainFrame());
+        observer.GetExtensionNavigationUIData(
+            web_contents->GetPrimaryMainFrame());
     ASSERT_TRUE(extension_navigation_ui_data);
     EXPECT_FALSE(extension_navigation_ui_data->is_web_view());
 
@@ -222,7 +225,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionBrowserTest, ExtensionNavigationUIData) {
   {
     const auto* extension_navigation_ui_data =
         observer.GetExtensionNavigationUIData(
-            content::ChildFrameAt(web_contents->GetMainFrame(), 0));
+            content::ChildFrameAt(web_contents->GetPrimaryMainFrame(), 0));
     ASSERT_TRUE(extension_navigation_ui_data);
     EXPECT_FALSE(extension_navigation_ui_data->is_web_view());
 

@@ -4,6 +4,7 @@
 
 import("//build/config/chromeos/ui_mode.gni")
 import("//mojo/public/tools/bindings/mojom.gni")
+import("//printing/buildflags/buildflags.gni")
 
 mojom("mojom") {
   sources = [ "print_backend.mojom" ]
@@ -50,6 +51,22 @@ mojom("mojom") {
           {
             mojom = "printing.mojom.AdvancedCapabilityValue"
             cpp = "::printing::AdvancedCapabilityValue"
+          },
+        ]
+      },
+    ]
+  }
+  if (is_win) {
+    cpp_typemaps += [
+      {
+        types = [
+          {
+            mojom = "printing.mojom.PageOutputQualityAttribute"
+            cpp = "::printing::PageOutputQualityAttribute"
+          },
+          {
+            mojom = "printing.mojom.PageOutputQuality"
+            cpp = "::printing::PageOutputQuality"
           },
         ]
       },

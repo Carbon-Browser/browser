@@ -24,26 +24,21 @@ class Size;
 
 namespace web_app {
 
+enum class IconsDownloadedResult;
+
 // Class to help download all icons (including favicons and web app manifest
 // icons) for a tab.
 class WebAppIconDownloader : public content::WebContentsObserver {
  public:
-  enum class Histogram {
-    kForCreate,
-    kForSync,
-    kForUpdate,
-  };
-
   using WebAppIconDownloaderCallback =
-      base::OnceCallback<void(bool success, IconsMap icons_map)>;
+      base::OnceCallback<void(IconsDownloadedResult result,
+                              IconsMap icons_map,
+                              DownloadedIconsHttpResults icons_http_results)>;
 
   // |extra_favicon_urls| allows callers to provide icon urls that aren't
   // provided by the renderer (e.g touch icons on non-android environments).
-  // |https_status_code_class_histogram_name| optionally specifies a histogram
-  // to use for logging http status code class results from fetch attempts.
   WebAppIconDownloader(content::WebContents* web_contents,
-                       const std::vector<GURL>& extra_favicon_urls,
-                       Histogram histogram,
+                       base::flat_set<GURL> extra_favicon_urls,
                        WebAppIconDownloaderCallback callback);
   WebAppIconDownloader(const WebAppIconDownloader&) = delete;
   WebAppIconDownloader& operator=(const WebAppIconDownloader&) = delete;
@@ -58,22 +53,20 @@ class WebAppIconDownloader : public content::WebContentsObserver {
 
   void Start();
 
- private:
-  friend class TestWebAppIconDownloader;
+  size_t pending_requests() const { return in_progress_requests_.size(); }
 
+ private:
   // Initiates a download of the image at |url| and returns the download id.
-  // This is overridden in testing.
-  virtual int DownloadImage(const GURL& url);
+  int DownloadImage(const GURL& url);
 
   // Queries WebContents for the page's current favicon URLs.
-  // This is overridden in testing.
-  virtual const std::vector<blink::mojom::FaviconURLPtr>&
+  const std::vector<blink::mojom::FaviconURLPtr>&
   GetFaviconURLsFromWebContents();
 
   // Fetches icons for the given urls.
   // |callback_| is run when all downloads complete.
   void FetchIcons(const std::vector<blink::mojom::FaviconURLPtr>& favicon_urls);
-  void FetchIcons(const std::vector<GURL>& urls);
+  void FetchIcons(const base::flat_set<GURL>& urls);
 
   // Icon download callback.
   void DidDownloadFavicon(int id,
@@ -82,29 +75,33 @@ class WebAppIconDownloader : public content::WebContentsObserver {
                           const std::vector<SkBitmap>& bitmaps,
                           const std::vector<gfx::Size>& original_bitmap_sizes);
 
-  // content::WebContentsObserver overrides:
-  void DidFinishNavigation(
-      content::NavigationHandle* navigation_handle) override;
+  // content::WebContentsObserver:
+  void PrimaryPageChanged(content::Page& page) override;
   void DidUpdateFaviconURL(
       content::RenderFrameHost* rfh,
       const std::vector<blink::mojom::FaviconURLPtr>& candidates) override;
+  void WebContentsDestroyed() override;
 
-  void CancelDownloads();
+  void CompleteCallback();
+  void CancelDownloads(IconsDownloadedResult result,
+                       DownloadedIconsHttpResults icons_http_results);
 
   // Whether we need to fetch favicons from the renderer.
-  bool need_favicon_urls_;
+  bool need_favicon_urls_ = true;
 
   // Whether we consider all requests to have failed if any individual URL fails
   // to load.
-  bool fail_all_if_any_fail_;
+  bool fail_all_if_any_fail_ = false;
 
   // URLs that aren't given by WebContentsObserver::DidUpdateFaviconURL() that
   // should be used for this favicon. This is necessary in order to get touch
   // icons on non-android environments.
-  std::vector<GURL> extra_favicon_urls_;
+  base::flat_set<GURL> extra_favicon_urls_;
 
   // The icons which were downloaded. Populated by FetchIcons().
   IconsMap icons_map_;
+  // The http status codes resulted from url downloading requests.
+  DownloadedIconsHttpResults icons_http_results_;
 
   // Request ids of in-progress requests.
   std::set<int> in_progress_requests_;
@@ -115,9 +112,6 @@ class WebAppIconDownloader : public content::WebContentsObserver {
 
   // Callback to run on favicon download completion.
   WebAppIconDownloaderCallback callback_;
-
-  // Which histogram to log individual fetch results under.
-  Histogram histogram_;
 
   base::WeakPtrFactory<WebAppIconDownloader> weak_ptr_factory_{this};
 };

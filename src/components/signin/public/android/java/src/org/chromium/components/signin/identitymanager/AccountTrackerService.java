@@ -4,11 +4,10 @@
 
 package org.chromium.components.signin.identitymanager;
 
-import android.os.Build.VERSION;
-import android.os.Build.VERSION_CODES;
 import android.os.SystemClock;
 
 import androidx.annotation.IntDef;
+import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.Log;
@@ -26,7 +25,6 @@ import org.chromium.components.signin.base.CoreAccountInfo;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Queue;
@@ -82,9 +80,7 @@ public class AccountTrackerService {
     AccountTrackerService(long nativeAccountTrackerService) {
         mNativeAccountTrackerService = nativeAccountTrackerService;
         mAccountsSeedingStatus = AccountsSeedingStatus.NOT_STARTED;
-        mRunnablesWaitingForAccountsSeeding = VERSION.SDK_INT >= VERSION_CODES.LOLLIPOP
-                ? new ConcurrentLinkedDeque<>()
-                : new ArrayDeque<>();
+        mRunnablesWaitingForAccountsSeeding = new ConcurrentLinkedDeque<>();
         mExistsPendingSeedAccountsTask = false;
     }
 
@@ -210,8 +206,8 @@ public class AccountTrackerService {
             return;
         }
 
-        while (!mRunnablesWaitingForAccountsSeeding.isEmpty()) {
-            Runnable runnable = mRunnablesWaitingForAccountsSeeding.remove();
+        for (@Nullable Runnable runnable = mRunnablesWaitingForAccountsSeeding.poll();
+                runnable != null; runnable = mRunnablesWaitingForAccountsSeeding.poll()) {
             runnable.run();
         }
 

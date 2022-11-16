@@ -12,11 +12,11 @@
 #include "base/environment.h"
 #include "base/files/file_util.h"
 #include "base/logging.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
-#include "base/single_thread_task_runner.h"
 #include "base/synchronization/lock.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_timeouts.h"
 #include "base/threading/thread_task_runner_handle.h"
@@ -74,6 +74,12 @@ void OnLogMessage(const std::string& message) {}
 
 // Test fixture class.
 class AudioLowLatencyInputOutputTest : public testing::Test {
+ public:
+  AudioLowLatencyInputOutputTest(const AudioLowLatencyInputOutputTest&) =
+      delete;
+  AudioLowLatencyInputOutputTest& operator=(
+      const AudioLowLatencyInputOutputTest&) = delete;
+
  protected:
   AudioLowLatencyInputOutputTest() {
     audio_manager_ =
@@ -91,8 +97,6 @@ class AudioLowLatencyInputOutputTest : public testing::Test {
   base::test::TaskEnvironment task_environment_{
       base::test::TaskEnvironment::MainThreadType::UI};
   std::unique_ptr<AudioManager> audio_manager_;
-
-  DISALLOW_COPY_AND_ASSIGN(AudioLowLatencyInputOutputTest);
 };
 
 // This audio source/sink implementation should be used for manual tests
@@ -289,7 +293,7 @@ class StreamWrapper {
   explicit StreamWrapper(AudioManager* audio_manager)
       : audio_manager_(audio_manager),
         format_(AudioParameters::AUDIO_PCM_LOW_LATENCY),
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
         channel_layout_(CHANNEL_LAYOUT_MONO)
 #else
         channel_layout_(CHANNEL_LAYOUT_STEREO)
@@ -328,7 +332,7 @@ class StreamWrapper {
     return stream;
   }
 
-  AudioManager* audio_manager_;
+  raw_ptr<AudioManager> audio_manager_;
   AudioParameters::Format format_;
   ChannelLayout channel_layout_;
   int sample_rate_;

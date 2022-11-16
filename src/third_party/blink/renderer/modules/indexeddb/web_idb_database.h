@@ -6,9 +6,10 @@
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_INDEXEDDB_WEB_IDB_DATABASE_H_
 
 #include <stdint.h>
+#include <cstdint>
 #include <memory>
 
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
 #include "mojo/public/cpp/bindings/pending_associated_receiver.h"
 #include "mojo/public/cpp/bindings/pending_associated_remote.h"
@@ -62,6 +63,15 @@ class MODULES_EXPORT WebIDBDatabase final {
       bool key_only,
       mojo::PendingReceiver<mojom::blink::IDBDatabaseGetAllResultSink>
           receiver);
+  void BatchGetAll(int64_t transaction_id,
+                   int64_t object_store_id,
+                   int64_t index_id,
+                   Vector<mojom::blink::IDBKeyRangePtr> key_ranges,
+                   uint32_t max_count,
+                   WebIDBCallbacks*);
+  void BatchGetAllCallback(
+      std::unique_ptr<WebIDBCallbacks> callbacks,
+      mojom::blink::IDBDatabaseBatchGetAllResultPtr result);
   void SetIndexKeys(int64_t transaction_id,
                     int64_t object_store_id,
                     std::unique_ptr<IDBKey> primary_key,

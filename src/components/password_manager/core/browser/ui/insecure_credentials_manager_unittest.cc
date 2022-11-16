@@ -9,13 +9,16 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/mock_callback.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "base/timer/elapsed_timer.h"
 #include "build/build_config.h"
 #include "components/password_manager/core/browser/insecure_credentials_table.h"
 #include "components/password_manager/core/browser/password_form.h"
 #include "components/password_manager/core/browser/test_password_store.h"
+#include "components/password_manager/core/browser/ui/credential_ui_entry.h"
 #include "components/password_manager/core/browser/ui/saved_passwords_presenter.h"
+#include "components/password_manager/core/common/password_manager_features.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -34,7 +37,7 @@ constexpr char kPassword2[] = "s3cr3t";
 constexpr char16_t kPassword216[] = u"s3cr3t";
 constexpr char16_t kPassword3[] = u"484her";
 
-#if !defined(OS_ANDROID) && !defined(OS_IOS)
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
 constexpr char16_t kWeakPassword1[] = u"123456";
 constexpr char kWeakPassword2[] = "abcdabcdabcdabcdabcdabcdabcdabcdabcdabcda";
 constexpr char16_t kWeakPassword216[] =
@@ -45,11 +48,12 @@ constexpr char16_t kStrongPassword2[] =
     u"pmsFlsnoab4nsl#losb@skpfnsbkjb^klsnbs!cns";
 // Delay in milliseconds.
 constexpr int kDelay = 2;
-#endif  // !defined(OS_ANDROID) && !defined(OS_IOS)
+#endif  // !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
 
 using ::testing::ElementsAre;
 using ::testing::ElementsAreArray;
 using ::testing::IsEmpty;
+using ::testing::SizeIs;
 
 struct MockInsecureCredentialsManagerObserver
     : InsecureCredentialsManager::Observer {
@@ -73,6 +77,7 @@ PasswordForm MakeSavedPassword(base::StringPiece signon_realm,
   form.username_value = std::u16string(username);
   form.password_value = std::u16string(password);
   form.username_element = std::u16string(username_element);
+  form.in_store = PasswordForm::Store::kProfileStore;
   return form;
 }
 
@@ -84,14 +89,16 @@ LeakCheckCredential MakeLeakCredential(base::StringPiece16 username,
 
 CredentialWithPassword MakeCompromisedCredential(
     const PasswordForm& form,
-    InsecureCredentialTypeFlags type =
-        InsecureCredentialTypeFlags::kCredentialLeaked) {
+    const InsecureCredentialTypeFlags type =
+        InsecureCredentialTypeFlags::kCredentialLeaked,
+    const bool is_muted = false) {
   CredentialWithPassword credential_with_password((CredentialView(form)));
   credential_with_password.insecure_type = type;
+  credential_with_password.is_muted = IsMuted(is_muted);
   return credential_with_password;
 }
 
-#if !defined(OS_ANDROID) && !defined(OS_IOS)
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
 CredentialWithPassword MakeWeakCredential(const PasswordForm& form) {
   CredentialWithPassword weak_credential{CredentialView(form)};
   weak_credential.insecure_type = InsecureCredentialTypeFlags::kWeakCredential;
@@ -106,11 +113,13 @@ CredentialWithPassword MakeWeakAndCompromisedCredential(
       InsecureCredentialTypeFlags::kWeakCredential;
   return credential_with_password;
 }
-#endif  // !defined(OS_ANDROID) && !defined(OS_IOS)
+#endif  // !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
 
 class InsecureCredentialsManagerTest : public ::testing::Test {
  protected:
-  InsecureCredentialsManagerTest() { store_->Init(/*prefs=*/nullptr); }
+  InsecureCredentialsManagerTest() {
+    store_->Init(/*prefs=*/nullptr, /*affiliated_match_helper=*/nullptr);
+  }
 
   ~InsecureCredentialsManagerTest() override {
     store_->ShutdownOnUIThread();
@@ -157,7 +166,7 @@ class InsecureCredentialsManagerTest : public ::testing::Test {
 bool operator==(const CredentialWithPassword& lhs,
                 const CredentialWithPassword& rhs) {
   return lhs.signon_realm == rhs.signon_realm && lhs.username == rhs.username &&
-         lhs.create_time == rhs.create_time &&
+         lhs.create_time == rhs.create_time && lhs.is_muted == rhs.is_muted &&
          lhs.insecure_type == rhs.insecure_type && lhs.password == rhs.password;
 }
 
@@ -166,7 +175,7 @@ std::ostream& operator<<(std::ostream& out,
   return out << "{ signon_realm: " << credential.signon_realm
              << ", username: " << credential.username
              << ", create_time: " << credential.create_time
-             << ", insecure_type: "
+             << ", is_muted: " << credential.is_muted << ", insecure_type: "
              << static_cast<int>(credential.insecure_type)
              << ", password: " << credential.password << " }";
 }
@@ -403,7 +412,7 @@ TEST_F(InsecureCredentialsManagerTest, MapCompromisedPasswordsToPasswords) {
               ElementsAreArray(store().stored_passwords().at(kExampleOrg)));
 }
 
-#if !defined(OS_ANDROID) && !defined(OS_IOS)
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
 TEST_F(InsecureCredentialsManagerTest, StartWeakCheckNotifiesOnCompletion) {
   base::MockOnceClosure closure;
   provider().StartWeakCheck(closure.Get());
@@ -418,7 +427,7 @@ TEST_F(InsecureCredentialsManagerTest, StartWeakCheckOnEmptyPasswordsList) {
 
   RunUntilIdle();
   provider().StartWeakCheck();
-  AdvanceClock(base::TimeDelta::FromMilliseconds(kDelay));
+  AdvanceClock(base::Milliseconds(kDelay));
   RunUntilIdle();
 
   EXPECT_THAT(provider().GetWeakCredentials(), IsEmpty());
@@ -444,7 +453,7 @@ TEST_F(InsecureCredentialsManagerTest, WeakCredentialsNotFound) {
 
   RunUntilIdle();
   provider().StartWeakCheck();
-  AdvanceClock(base::TimeDelta::FromMilliseconds(2 * kDelay));
+  AdvanceClock(base::Milliseconds(2 * kDelay));
   RunUntilIdle();
 
   EXPECT_THAT(provider().GetWeakCredentials(), IsEmpty());
@@ -472,7 +481,7 @@ TEST_F(InsecureCredentialsManagerTest, DetectedWeakCredential) {
 
   RunUntilIdle();
   provider().StartWeakCheck();
-  AdvanceClock(base::TimeDelta::FromMilliseconds(kDelay));
+  AdvanceClock(base::Milliseconds(kDelay));
   RunUntilIdle();
 
   std::vector<CredentialWithPassword> weak_credentials =
@@ -506,7 +515,7 @@ TEST_F(InsecureCredentialsManagerTest,
 
   RunUntilIdle();
   provider().StartWeakCheck();
-  AdvanceClock(base::TimeDelta::FromMilliseconds(kDelay));
+  AdvanceClock(base::Milliseconds(kDelay));
   RunUntilIdle();
 
   std::vector<CredentialWithPassword> weak_credentials =
@@ -539,7 +548,7 @@ TEST_F(InsecureCredentialsManagerTest,
 
   RunUntilIdle();
   provider().StartWeakCheck();
-  AdvanceClock(base::TimeDelta::FromMilliseconds(kDelay));
+  AdvanceClock(base::Milliseconds(kDelay));
   RunUntilIdle();
 
   std::vector<CredentialWithPassword> weak_credentials =
@@ -573,7 +582,7 @@ TEST_F(InsecureCredentialsManagerTest, BothWeakAndCompromisedCredentialsExist) {
 
   RunUntilIdle();
   provider().StartWeakCheck();
-  AdvanceClock(base::TimeDelta::FromMilliseconds(kDelay));
+  AdvanceClock(base::Milliseconds(kDelay));
   RunUntilIdle();
 
   std::vector<CredentialWithPassword> returned_weak_credentials =
@@ -613,7 +622,7 @@ TEST_F(InsecureCredentialsManagerTest, SingleCredentialIsWeakAndCompromised) {
 
   RunUntilIdle();
   provider().StartWeakCheck();
-  AdvanceClock(base::TimeDelta::FromMilliseconds(kDelay));
+  AdvanceClock(base::Milliseconds(kDelay));
   RunUntilIdle();
 
   std::vector<CredentialWithPassword> returned_weak_credentials =
@@ -643,7 +652,7 @@ TEST_F(InsecureCredentialsManagerTest, SingleCredentialIsWeakAndCompromised) {
   histogram_tester().ExpectUniqueSample(
       "PasswordManager.WeakCheck.PasswordScore", 0, 1);
 }
-#endif  // !defined(OS_ANDROID) && !defined(OS_IOS)
+#endif  // !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
 
 // Test verifies that saving LeakCheckCredential via provider adds expected
 // compromised credential.
@@ -664,6 +673,447 @@ TEST_F(InsecureCredentialsManagerTest, SaveCompromisedPassword) {
   EXPECT_THAT(provider().GetInsecureCredentials(), ElementsAre(expected));
 }
 
+// Test verifies that saving LeakCheckCredential doesn't occur for already
+// leaked passwords.
+TEST_F(InsecureCredentialsManagerTest, SaveCompromisedPasswordForExistingLeak) {
+  PasswordForm password_form =
+      MakeSavedPassword(kExampleCom, kUsername1, kPassword1);
+  LeakCheckCredential credential = MakeLeakCredential(kUsername1, kPassword1);
+
+  InsecurityMetadata insecurity_metadata(base::Time::Now() - base::Days(3),
+                                         IsMuted(true));
+  password_form.password_issues.insert(
+      {InsecureType::kLeaked, insecurity_metadata});
+
+  store().AddLogin(password_form);
+  RunUntilIdle();
+
+  provider().SaveInsecureCredential(credential);
+  RunUntilIdle();
+
+  EXPECT_EQ(insecurity_metadata,
+            store()
+                .stored_passwords()
+                .at(kExampleCom)
+                .back()
+                .password_issues.at(InsecureType::kLeaked));
+}
+
+TEST_F(InsecureCredentialsManagerTest, MuteCompromisedCredential) {
+  PasswordForm password =
+      MakeSavedPassword(kExampleCom, kUsername1, kPassword1);
+  password.password_issues.insert(
+      {InsecureType::kLeaked, InsecurityMetadata()});
+
+  store().AddLogin(password);
+  RunUntilIdle();
+
+  ASSERT_THAT(provider().GetInsecureCredentialEntries(),
+              ElementsAre(CredentialUIEntry(password)));
+
+  EXPECT_TRUE(provider().MuteCredential(CredentialUIEntry(password)));
+  RunUntilIdle();
+
+  EXPECT_TRUE(provider()
+                  .GetInsecureCredentialEntries()[0]
+                  .password_issues.at(InsecureType::kLeaked)
+                  .is_muted.value());
+  EXPECT_TRUE(store()
+                  .stored_passwords()
+                  .at(kExampleCom)
+                  .back()
+                  .password_issues.at(InsecureType::kLeaked)
+                  .is_muted.value());
+}
+
+TEST_F(InsecureCredentialsManagerTest, UnmuteCompromisedMutedCredential) {
+  PasswordForm password =
+      MakeSavedPassword(kExampleCom, kUsername1, kPassword1);
+  password.password_issues.insert(
+      {InsecureType::kLeaked, InsecurityMetadata(base::Time(), IsMuted(true))});
+
+  store().AddLogin(password);
+  RunUntilIdle();
+
+  ASSERT_THAT(provider().GetInsecureCredentialEntries(),
+              ElementsAre(CredentialUIEntry(password)));
+
+  EXPECT_TRUE(provider().UnmuteCredential(CredentialUIEntry(password)));
+  RunUntilIdle();
+  EXPECT_FALSE(provider()
+                   .GetInsecureCredentialEntries()[0]
+                   .password_issues.at(InsecureType::kLeaked)
+                   .is_muted.value());
+  EXPECT_FALSE(store()
+                   .stored_passwords()
+                   .at(kExampleCom)
+                   .back()
+                   .password_issues.at(InsecureType::kLeaked)
+                   .is_muted.value());
+}
+
+TEST_F(InsecureCredentialsManagerTest, UnmuteCompromisedNotMutedCredential) {
+  PasswordForm password =
+      MakeSavedPassword(kExampleCom, kUsername1, kPassword1);
+  password.password_issues.insert(
+      {InsecureType::kLeaked,
+       InsecurityMetadata(base::Time(), IsMuted(false))});
+
+  store().AddLogin(password);
+  RunUntilIdle();
+
+  ASSERT_THAT(provider().GetInsecureCredentialEntries(),
+              ElementsAre(CredentialUIEntry(password)));
+
+  EXPECT_FALSE(provider().UnmuteCredential(CredentialUIEntry(password)));
+  RunUntilIdle();
+  EXPECT_FALSE(provider()
+                   .GetInsecureCredentialEntries()[0]
+                   .password_issues.at(InsecureType::kLeaked)
+                   .is_muted.value());
+  EXPECT_FALSE(store()
+                   .stored_passwords()
+                   .at(kExampleCom)
+                   .back()
+                   .password_issues.at(InsecureType::kLeaked)
+                   .is_muted.value());
+}
+
+TEST_F(InsecureCredentialsManagerTest,
+       UnmuteCompromisedMutedCredentialWithMultipleInsecurityTypes) {
+  PasswordForm password =
+      MakeSavedPassword(kExampleCom, kUsername1, kPassword1);
+  password.password_issues.insert(
+      {InsecureType::kLeaked, InsecurityMetadata(base::Time(), IsMuted(true))});
+  password.password_issues.insert(
+      {InsecureType::kPhished,
+       InsecurityMetadata(base::Time(), IsMuted(true))});
+
+  store().AddLogin(password);
+  RunUntilIdle();
+
+  ASSERT_THAT(provider().GetInsecureCredentialEntries(),
+              ElementsAre(CredentialUIEntry(password)));
+
+  EXPECT_TRUE(provider().UnmuteCredential(CredentialUIEntry(password)));
+  RunUntilIdle();
+  EXPECT_FALSE(provider()
+                   .GetInsecureCredentialEntries()[0]
+                   .password_issues.at(InsecureType::kLeaked)
+                   .is_muted.value());
+  EXPECT_FALSE(provider()
+                   .GetInsecureCredentialEntries()[0]
+                   .password_issues.at(InsecureType::kPhished)
+                   .is_muted.value());
+  EXPECT_FALSE(store()
+                   .stored_passwords()
+                   .at(kExampleCom)
+                   .back()
+                   .password_issues.at(InsecureType::kLeaked)
+                   .is_muted.value());
+  EXPECT_FALSE(store()
+                   .stored_passwords()
+                   .at(kExampleCom)
+                   .back()
+                   .password_issues.at(InsecureType::kPhished)
+                   .is_muted.value());
+}
+
+TEST_F(InsecureCredentialsManagerTest,
+       FilterThenUnmuteMultipleInsecurityTypes) {
+  PasswordForm password =
+      MakeSavedPassword(kExampleCom, kUsername1, kPassword1);
+  password.password_issues.insert(
+      {InsecureType::kLeaked, InsecurityMetadata(base::Time(), IsMuted(true))});
+  password.password_issues.insert(
+      {InsecureType::kPhished,
+       InsecurityMetadata(base::Time(), IsMuted(true))});
+  password.password_issues.insert(
+      {InsecureType::kReused, InsecurityMetadata(base::Time(), IsMuted(true))});
+  password.password_issues.insert(
+      {InsecureType::kWeak, InsecurityMetadata(base::Time(), IsMuted(true))});
+
+  store().AddLogin(password);
+  RunUntilIdle();
+
+  ASSERT_THAT(provider().GetInsecureCredentialEntries(),
+              ElementsAre(CredentialUIEntry(password)));
+
+  EXPECT_TRUE(provider().UnmuteCredential(CredentialUIEntry(password)));
+  RunUntilIdle();
+
+  PasswordForm expected = password;
+  expected.password_issues[InsecureType::kLeaked].is_muted = IsMuted(false);
+  expected.password_issues[InsecureType::kPhished].is_muted = IsMuted(false);
+  EXPECT_THAT(provider().GetInsecureCredentialEntries(),
+              ElementsAre(CredentialUIEntry(expected)));
+  EXPECT_FALSE(store()
+                   .stored_passwords()
+                   .at(kExampleCom)
+                   .back()
+                   .password_issues.at(InsecureType::kLeaked)
+                   .is_muted.value());
+  EXPECT_FALSE(store()
+                   .stored_passwords()
+                   .at(kExampleCom)
+                   .back()
+                   .password_issues.at(InsecureType::kPhished)
+                   .is_muted.value());
+  EXPECT_TRUE(store()
+                  .stored_passwords()
+                  .at(kExampleCom)
+                  .back()
+                  .password_issues.at(InsecureType::kReused)
+                  .is_muted.value());
+  EXPECT_TRUE(store()
+                  .stored_passwords()
+                  .at(kExampleCom)
+                  .back()
+                  .password_issues.at(InsecureType::kWeak)
+                  .is_muted.value());
+}
+
+TEST_F(InsecureCredentialsManagerTest, MuteCompromisedCredentialOnMutedIsNoOp) {
+  PasswordForm password =
+      MakeSavedPassword(kExampleCom, kUsername1, kPassword1);
+  password.password_issues.insert(
+      {InsecureType::kLeaked, InsecurityMetadata(base::Time(), IsMuted(true))});
+
+  store().AddLogin(password);
+  RunUntilIdle();
+
+  ASSERT_THAT(provider().GetInsecureCredentialEntries(),
+              ElementsAre(CredentialUIEntry(password)));
+
+  EXPECT_FALSE(provider().MuteCredential(CredentialUIEntry(password)));
+  RunUntilIdle();
+  EXPECT_THAT(provider().GetInsecureCredentialEntries(),
+              ElementsAre(CredentialUIEntry(password)));
+  EXPECT_TRUE(store()
+                  .stored_passwords()
+                  .at(kExampleCom)
+                  .back()
+                  .password_issues.at(InsecureType::kLeaked)
+                  .is_muted.value());
+}
+
+TEST_F(InsecureCredentialsManagerTest,
+       MuteCompromisedCredentialLeakedMutesMultipleInsecurityTypes) {
+  PasswordForm password =
+      MakeSavedPassword(kExampleCom, kUsername1, kPassword1);
+  password.password_issues.insert(
+      {InsecureType::kLeaked,
+       InsecurityMetadata(base::Time(), IsMuted(false))});
+  password.password_issues.insert(
+      {InsecureType::kPhished,
+       InsecurityMetadata(base::Time(), IsMuted(false))});
+
+  store().AddLogin(password);
+  RunUntilIdle();
+
+  ASSERT_THAT(provider().GetInsecureCredentialEntries(),
+              ElementsAre(CredentialUIEntry(password)));
+
+  EXPECT_TRUE(provider().MuteCredential(CredentialUIEntry(password)));
+  RunUntilIdle();
+  PasswordForm expected = password;
+  expected.password_issues[InsecureType::kLeaked].is_muted = IsMuted(true);
+  expected.password_issues[InsecureType::kPhished].is_muted = IsMuted(true);
+  EXPECT_THAT(provider().GetInsecureCredentialEntries(),
+              ElementsAre(CredentialUIEntry(expected)));
+  EXPECT_TRUE(store()
+                  .stored_passwords()
+                  .at(kExampleCom)
+                  .back()
+                  .password_issues.at(InsecureType::kLeaked)
+                  .is_muted.value());
+  EXPECT_TRUE(store()
+                  .stored_passwords()
+                  .at(kExampleCom)
+                  .back()
+                  .password_issues.at(InsecureType::kPhished)
+                  .is_muted.value());
+}
+
+TEST_F(InsecureCredentialsManagerTest, FilterThenMuteMultipleInsecurityTypes) {
+  PasswordForm password =
+      MakeSavedPassword(kExampleCom, kUsername1, kPassword1);
+  password.password_issues.insert(
+      {InsecureType::kLeaked,
+       InsecurityMetadata(base::Time(), IsMuted(false))});
+  password.password_issues.insert(
+      {InsecureType::kPhished,
+       InsecurityMetadata(base::Time(), IsMuted(false))});
+  password.password_issues.insert(
+      {InsecureType::kReused,
+       InsecurityMetadata(base::Time(), IsMuted(false))});
+  password.password_issues.insert(
+      {InsecureType::kWeak, InsecurityMetadata(base::Time(), IsMuted(false))});
+
+  store().AddLogin(password);
+  RunUntilIdle();
+
+  ASSERT_THAT(provider().GetInsecureCredentialEntries(),
+              ElementsAre(CredentialUIEntry(password)));
+
+  EXPECT_TRUE(provider().MuteCredential(CredentialUIEntry(password)));
+
+  RunUntilIdle();
+
+  PasswordForm expected = password;
+  expected.password_issues[InsecureType::kLeaked].is_muted = IsMuted(true);
+  expected.password_issues[InsecureType::kPhished].is_muted = IsMuted(true);
+  EXPECT_THAT(provider().GetInsecureCredentialEntries(),
+              ElementsAre(CredentialUIEntry(expected)));
+  EXPECT_TRUE(store()
+                  .stored_passwords()
+                  .at(kExampleCom)
+                  .back()
+                  .password_issues.at(InsecureType::kLeaked)
+                  .is_muted.value());
+  EXPECT_TRUE(store()
+                  .stored_passwords()
+                  .at(kExampleCom)
+                  .back()
+                  .password_issues.at(InsecureType::kPhished)
+                  .is_muted.value());
+  EXPECT_FALSE(store()
+                   .stored_passwords()
+                   .at(kExampleCom)
+                   .back()
+                   .password_issues.at(InsecureType::kReused)
+                   .is_muted.value());
+  EXPECT_FALSE(store()
+                   .stored_passwords()
+                   .at(kExampleCom)
+                   .back()
+                   .password_issues.at(InsecureType::kWeak)
+                   .is_muted.value());
+}
+
+TEST_F(InsecureCredentialsManagerTest, MuteWeakPasswordNoOp) {
+  PasswordForm password =
+      MakeSavedPassword(kExampleCom, kUsername1, kPassword1);
+
+  password.password_issues.insert(
+      {InsecureType::kWeak, InsecurityMetadata(base::Time(), IsMuted(false))});
+
+  store().AddLogin(password);
+  RunUntilIdle();
+
+  ASSERT_THAT(provider().GetInsecureCredentialEntries(), IsEmpty());
+
+  EXPECT_FALSE(provider().MuteCredential(CredentialUIEntry(password)));
+
+  RunUntilIdle();
+
+  EXPECT_THAT(provider().GetInsecureCredentialEntries(), IsEmpty());
+  EXPECT_FALSE(store()
+                   .stored_passwords()
+                   .at(kExampleCom)
+                   .back()
+                   .password_issues.at(InsecureType::kWeak)
+                   .is_muted.value());
+}
+
+TEST_F(InsecureCredentialsManagerTest, UnMuteWeakPasswordNoOp) {
+  PasswordForm password =
+      MakeSavedPassword(kExampleCom, kUsername1, kPassword1);
+
+  password.password_issues.insert(
+      {InsecureType::kWeak, InsecurityMetadata(base::Time(), IsMuted(true))});
+
+  store().AddLogin(password);
+  RunUntilIdle();
+
+  ASSERT_THAT(provider().GetInsecureCredentialEntries(), IsEmpty());
+
+  EXPECT_FALSE(provider().UnmuteCredential(CredentialUIEntry(password)));
+
+  RunUntilIdle();
+
+  EXPECT_THAT(provider().GetInsecureCredentialEntries(), IsEmpty());
+
+  EXPECT_TRUE(store()
+                  .stored_passwords()
+                  .at(kExampleCom)
+                  .back()
+                  .password_issues.at(InsecureType::kWeak)
+                  .is_muted.value());
+}
+
+TEST_F(InsecureCredentialsManagerTest, MuteReusedPasswordNoOp) {
+  PasswordForm password =
+      MakeSavedPassword(kExampleCom, kUsername1, kPassword1);
+
+  password.password_issues.insert(
+      {InsecureType::kReused,
+       InsecurityMetadata(base::Time(), IsMuted(false))});
+
+  store().AddLogin(password);
+  RunUntilIdle();
+
+  ASSERT_THAT(provider().GetInsecureCredentialEntries(), IsEmpty());
+
+  EXPECT_FALSE(provider().MuteCredential(CredentialUIEntry(password)));
+
+  RunUntilIdle();
+
+  EXPECT_THAT(provider().GetInsecureCredentialEntries(), IsEmpty());
+  EXPECT_FALSE(store()
+                   .stored_passwords()
+                   .at(kExampleCom)
+                   .back()
+                   .password_issues.at(InsecureType::kReused)
+                   .is_muted.value());
+}
+
+TEST_F(InsecureCredentialsManagerTest, UnMuteReusedPasswordNoOp) {
+  PasswordForm password =
+      MakeSavedPassword(kExampleCom, kUsername1, kPassword1);
+
+  password.password_issues.insert(
+      {InsecureType::kReused, InsecurityMetadata(base::Time(), IsMuted(true))});
+
+  store().AddLogin(password);
+  RunUntilIdle();
+
+  ASSERT_THAT(provider().GetInsecureCredentialEntries(), IsEmpty());
+
+  EXPECT_FALSE(provider().UnmuteCredential(CredentialUIEntry(password)));
+
+  RunUntilIdle();
+
+  EXPECT_THAT(provider().GetInsecureCredentialEntries(), IsEmpty());
+  EXPECT_TRUE(store()
+                  .stored_passwords()
+                  .at(kExampleCom)
+                  .back()
+                  .password_issues.at(InsecureType::kReused)
+                  .is_muted.value());
+}
+
+TEST_F(InsecureCredentialsManagerTest, GetInsecureCredentialEntriesWithFlag) {
+  PasswordForm password_form =
+      MakeSavedPassword(kExampleCom, kUsername1, kPassword1);
+
+  store().AddLogin(password_form);
+  RunUntilIdle();
+
+  EXPECT_THAT(provider().GetInsecureCredentialEntries(), IsEmpty());
+
+  // Turn on the field trial parameter to force password leaks everywhere.
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndEnableFeatureWithParameters(
+      password_manager::features::kPasswordChangeInSettings,
+      {{password_manager::features::
+            kPasswordChangeInSettingsWithForcedWarningForEverySite,
+        "true"}});
+
+  // The credential is now returned as insecure.
+  EXPECT_THAT(provider().GetInsecureCredentialEntries(), SizeIs(1u));
+}
+
 // Test verifies that editing Compromised Credential via provider change the
 // original password form.
 TEST_F(InsecureCredentialsManagerTest, UpdateCompromisedPassword) {
@@ -676,7 +1126,7 @@ TEST_F(InsecureCredentialsManagerTest, UpdateCompromisedPassword) {
 
   RunUntilIdle();
   CredentialWithPassword expected =
-#if !defined(OS_ANDROID) && !defined(OS_IOS)
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
       MakeWeakAndCompromisedCredential(password_form);
 #else
       MakeCompromisedCredential(password_form);
@@ -689,7 +1139,7 @@ TEST_F(InsecureCredentialsManagerTest, UpdateCompromisedPassword) {
   EXPECT_TRUE(provider().GetInsecureCredentials().empty());
 }
 
-#if !defined(OS_ANDROID) && !defined(OS_IOS)
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
 // Test verifies that editing weak credential via provider has affect on weak
 // credentials and updates password in the store.
 TEST_F(InsecureCredentialsManagerTest, UpdateWeakPassword) {
@@ -757,7 +1207,7 @@ TEST_F(InsecureCredentialsManagerTest, UpdateInsecurePassword) {
   EXPECT_EQ(GetSavedPasswordForUsername(kExampleCom, kUsername1),
             kStrongPassword116);
 }
-#endif  // !defined(OS_ANDROID) && !defined(OS_IOS)
+#endif  // !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
 
 TEST_F(InsecureCredentialsManagerTest, RemoveCompromisedCredential) {
   PasswordForm password =
@@ -778,7 +1228,7 @@ TEST_F(InsecureCredentialsManagerTest, RemoveCompromisedCredential) {
   EXPECT_THAT(provider().GetInsecureCredentials(), IsEmpty());
 }
 
-#if !defined(OS_ANDROID) && !defined(OS_IOS)
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
 TEST_F(InsecureCredentialsManagerTest, RemoveWeakCredential) {
   PasswordForm password =
       MakeSavedPassword(kExampleCom, kUsername1, kWeakPassword1);
@@ -838,14 +1288,74 @@ TEST_F(InsecureCredentialsManagerTest, GetWeakCredentialsReturnsSortedData) {
                           MakeWeakCredential(password_forms[2]),
                           MakeWeakCredential(password_forms[3])));
 }
-#endif  // !defined(OS_ANDROID) && !defined(OS_IOS)
+
+// Verifues that GetWeakCredentials() returns sorted weak credentials by using
+// CreateSortKey.
+TEST_F(InsecureCredentialsManagerTest, GetWeakCredentialEntries) {
+  const std::vector<PasswordForm> password_forms = {
+      MakeSavedPassword("http://example-a.com", u"user_a1", u"pwd"),
+      MakeSavedPassword("http://example-a.com", u"user_a2", u"pwd")};
+  store().AddLogin(password_forms[0]);
+  store().AddLogin(password_forms[1]);
+  RunUntilIdle();
+
+  provider().StartWeakCheck();
+  RunUntilIdle();
+
+  EXPECT_THAT(provider().GetWeakCredentialEntries(),
+              ElementsAre(CredentialUIEntry(password_forms[0]),
+                          CredentialUIEntry(password_forms[1])));
+}
+#endif  // !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
+
+TEST_F(InsecureCredentialsManagerTest, GetInsecureCredentialsFiltersWeak) {
+  PasswordForm password1 =
+      MakeSavedPassword(kExampleCom, kUsername1, kPassword1);
+  PasswordForm password2 =
+      MakeSavedPassword(kExampleCom, kUsername2, kPassword216);
+
+  password1.password_issues.insert(
+      {InsecureType::kLeaked, InsecurityMetadata()});
+  password2.password_issues.insert({InsecureType::kWeak, InsecurityMetadata()});
+
+  store().AddLogin(password1);
+  store().AddLogin(password2);
+
+  RunUntilIdle();
+
+  EXPECT_THAT(provider().GetInsecureCredentialEntries(),
+              ElementsAre(CredentialUIEntry(password1)));
+}
+
+TEST_F(InsecureCredentialsManagerTest,
+       GetInsecureCredentialsFiltersDuplicates) {
+  PasswordForm password1 =
+      MakeSavedPassword(kExampleCom, kUsername1, kPassword1);
+  PasswordForm password2 = MakeSavedPassword(kExampleCom, kUsername1,
+                                             kPassword1, u"username_element");
+
+  password1.password_issues.insert(
+      {InsecureType::kLeaked, InsecurityMetadata()});
+  password2.password_issues.insert(
+      {InsecureType::kLeaked, InsecurityMetadata()});
+
+  store().AddLogin(password1);
+  store().AddLogin(password2);
+
+  RunUntilIdle();
+
+  EXPECT_THAT(provider().GetInsecureCredentialEntries(),
+              ElementsAre(CredentialUIEntry(password1)));
+}
 
 namespace {
 class InsecureCredentialsManagerWithTwoStoresTest : public ::testing::Test {
  protected:
   InsecureCredentialsManagerWithTwoStoresTest() {
-    profile_store_->Init(/*prefs=*/nullptr);
-    account_store_->Init(/*prefs=*/nullptr);
+    profile_store_->Init(/*prefs=*/nullptr,
+                         /*affiliated_match_helper=*/nullptr);
+    account_store_->Init(/*prefs=*/nullptr,
+                         /*affiliated_match_helper=*/nullptr);
   }
 
   ~InsecureCredentialsManagerWithTwoStoresTest() override {
@@ -903,24 +1413,24 @@ TEST_F(InsecureCredentialsManagerWithTwoStoresTest,
 
   // Each password should be joined only with compromised credential from
   // their store.
-  EXPECT_THAT(provider().GetSavedPasswordsFor(
-                  CredentialView(kExampleCom, GURL(), kUsername1, kPassword1)),
+  EXPECT_THAT(provider().GetSavedPasswordsFor(CredentialView(
+                  kExampleCom, GURL(), kUsername1, kPassword1, base::Time())),
               IsEmpty());
 
   EXPECT_EQ(provider()
-                .GetSavedPasswordsFor(
-                    CredentialView(kExampleOrg, GURL(), kUsername1, kPassword3))
+                .GetSavedPasswordsFor(CredentialView(
+                    kExampleOrg, GURL(), kUsername1, kPassword3, base::Time()))
                 .size(),
             1u);
 
   EXPECT_EQ(provider()
-                .GetSavedPasswordsFor(
-                    CredentialView(kExampleCom, GURL(), kUsername1, kPassword3))
+                .GetSavedPasswordsFor(CredentialView(
+                    kExampleCom, GURL(), kUsername1, kPassword3, base::Time()))
                 .size(),
             1u);
 
   EXPECT_THAT(provider().GetSavedPasswordsFor(CredentialView(
-                  kExampleOrg, GURL(), kUsername1, kPassword216)),
+                  kExampleOrg, GURL(), kUsername1, kPassword216, base::Time())),
               IsEmpty());
 }
 
@@ -1003,8 +1513,8 @@ TEST_F(InsecureCredentialsManagerWithTwoStoresTest,
   RunUntilIdle();
 
   // Now remove the compromised credentials
-  EXPECT_TRUE(provider().RemoveCredential(
-      CredentialView(kExampleCom, GURL(), kUsername1, kPassword1)));
+  EXPECT_TRUE(provider().RemoveCredential(CredentialView(
+      kExampleCom, GURL(), kUsername1, kPassword1, base::Time())));
   RunUntilIdle();
 
   // It should have been removed from both stores.
@@ -1012,7 +1522,7 @@ TEST_F(InsecureCredentialsManagerWithTwoStoresTest,
   EXPECT_TRUE(account_store().stored_passwords().at(kExampleCom).empty());
 }
 
-#if !defined(OS_ANDROID) && !defined(OS_IOS)
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
 TEST_F(InsecureCredentialsManagerWithTwoStoresTest, RemoveWeakCredential) {
   // Add `kUsername1`,`kPassword1` to both stores.
   profile_store().AddLogin(
@@ -1024,14 +1534,34 @@ TEST_F(InsecureCredentialsManagerWithTwoStoresTest, RemoveWeakCredential) {
   RunUntilIdle();
 
   // Now remove the weak credential
-  EXPECT_TRUE(provider().RemoveCredential(
-      CredentialView(kExampleCom, GURL(), kUsername1, kWeakPassword1)));
+  EXPECT_TRUE(provider().RemoveCredential(CredentialView(
+      kExampleCom, GURL(), kUsername1, kWeakPassword1, base::Time())));
   RunUntilIdle();
 
   // It should have been removed from both stores.
   EXPECT_THAT(profile_store().stored_passwords().at(kExampleCom), IsEmpty());
   EXPECT_THAT(account_store().stored_passwords().at(kExampleCom), IsEmpty());
 }
-#endif  // !defined(OS_ANDROID) && !defined(OS_IOS)
+
+TEST_F(InsecureCredentialsManagerWithTwoStoresTest,
+       GetInsecureCredentialsWeak) {
+  profile_store().AddLogin(
+      MakeSavedPassword(kExampleCom, kUsername1, kWeakPassword1));
+  account_store().AddLogin(
+      MakeSavedPassword(kExampleCom, kUsername1, kWeakPassword1));
+  RunUntilIdle();
+  provider().StartWeakCheck();
+  RunUntilIdle();
+
+  PasswordForm expected_form =
+      MakeSavedPassword(kExampleCom, kUsername1, kWeakPassword1);
+  expected_form.in_store =
+      PasswordForm::Store::kProfileStore | PasswordForm::Store::kAccountStore;
+
+  EXPECT_THAT(provider().GetWeakCredentialEntries(),
+              ElementsAre(CredentialUIEntry(expected_form)));
+}
+
+#endif  // !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
 
 }  // namespace password_manager

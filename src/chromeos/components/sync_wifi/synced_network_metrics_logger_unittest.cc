@@ -9,11 +9,11 @@
 #include "base/run_loop.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
+#include "chromeos/ash/components/network/network_metadata_store.h"
+#include "chromeos/ash/components/network/network_state_handler.h"
+#include "chromeos/ash/components/network/network_state_test_helper.h"
 #include "chromeos/components/sync_wifi/network_test_helper.h"
 #include "chromeos/login/login_state/login_state.h"
-#include "chromeos/network/network_metadata_store.h"
-#include "chromeos/network/network_state_handler.h"
-#include "chromeos/network/network_state_test_helper.h"
 #include "chromeos/services/network_config/public/mojom/cros_network_config.mojom.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -30,6 +30,12 @@ class SyncedNetworkMetricsLoggerTest : public testing::Test {
       : task_environment_(base::test::TaskEnvironment::TimeSource::MOCK_TIME) {
     network_test_helper_ = std::make_unique<NetworkTestHelper>();
   }
+
+  SyncedNetworkMetricsLoggerTest(const SyncedNetworkMetricsLoggerTest&) =
+      delete;
+  SyncedNetworkMetricsLoggerTest& operator=(
+      const SyncedNetworkMetricsLoggerTest&) = delete;
+
   ~SyncedNetworkMetricsLoggerTest() override = default;
 
   void SetUp() override {
@@ -99,15 +105,11 @@ class SyncedNetworkMetricsLoggerTest : public testing::Test {
   }
 
   // Skips the system clock ahead by 10 seconds.
-  void SkipAhead() {
-    task_environment_.FastForwardBy(base::TimeDelta::FromSeconds(10));
-  }
+  void SkipAhead() { task_environment_.FastForwardBy(base::Seconds(10)); }
 
  private:
   std::unique_ptr<NetworkTestHelper> network_test_helper_;
   std::unique_ptr<SyncedNetworkMetricsLogger> synced_network_metrics_logger_;
-
-  DISALLOW_COPY_AND_ASSIGN(SyncedNetworkMetricsLoggerTest);
 };
 
 TEST_F(SyncedNetworkMetricsLoggerTest,

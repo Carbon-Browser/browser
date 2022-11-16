@@ -5,6 +5,27 @@
 import {RequestHandler} from './post_message_api_request_handler.m.js';
 
 /**
+ * Creates a new JavaScript native Promise and captures its resolve and reject
+ * callbacks. The promise, resolve, and reject are available as properties
+ * @final
+ * @template T
+ */
+class NativeResolver {
+  constructor() {
+    /** @type {function((T|!IThenable<T>|!Thenable)=)} */
+    this.resolve;
+    /** @type {function(*=)} */
+    this.reject;
+
+    /** @type {!Promise<T>} */
+    this.promise = new Promise((resolve, reject) => {
+      this.resolve = resolve;
+      this.reject = reject;
+    });
+  }
+}
+
+/**
  * Class that provides the functionality for talking to a PostMessageAPIServer
  * over the postMessage API.  This should be subclassed and the subclass should
  * expose methods that are implemented by the server. The following is an
@@ -38,9 +59,9 @@ export class PostMessageAPIClient {
     this.nextMethodId_ = 0;
     /**
      * Map of methods awaiting a response.
-     * @private {!Map}
+     * @private {!Map<number, !NativeResolver>}
      */
-    this.methodsAwaitingResponse_ = new Map;
+    this.methodsAwaitingResponse_ = new Map();
 
     /**
      * The parent window.
@@ -91,14 +112,6 @@ export class PostMessageAPIClient {
    */
   isInitialized() {
     return this.targetWindow_ !== null;
-  }
-
-  /**
-   * Adds a handler object to the client so that it could handle calls received.
-   * @param {RequestHandler} handler
-   */
-  setHandler(handler) {
-    this.requestHandler_ = handler;
   }
 
   //
@@ -155,21 +168,24 @@ export class PostMessageAPIClient {
       return;
     }
 
-    if (this.requestHandler_ !== null && event.data.fn !== null &&
-        this.requestHandler_.canHandle(event.data.fn)) {
-      this.sendResponse_(
-          event.data.methodId,
-          await this.requestHandler_.handle(event.data.fn, event.data.args));
-    }
-
-    if (!this.methodsAwaitingResponse_.has(event.data.methodId)) {
-      console.log('discarding event method is not waiting for a response');
+    // If there is a function call associated with the message being received,
+    // then it is intended for the RequestHandler. Therefore, return early.
+    if (event.data.fn) {
       return;
     }
 
-    const method = this.methodsAwaitingResponse_.get(event.data.methodId);
+    if (!this.methodsAwaitingResponse_.has(event.data.methodId)) {
+      console.info('discarding event method is not waiting for a response');
+      return;
+    }
+
+    const resolver = this.methodsAwaitingResponse_.get(event.data.methodId);
     this.methodsAwaitingResponse_.delete(event.data.methodId);
-    method(event.data.result);
+    if (event.data.rejected) {
+      resolver.reject(event.data.error);
+    } else {
+      resolver.resolve(event.data.result);
+    }
   }
 
   /**
@@ -180,35 +196,22 @@ export class PostMessageAPIClient {
    * @return {!Promise} A promise capturing the executing of the function.
    */
   callApiFn(fn, args) {
+    if (!this.targetWindow_) {
+      return Promise.reject('No parent window defined');
+    }
+
     const newMethodId = this.nextMethodId_++;
-    const promise = new Promise((resolve, reject) => {
-      if (!this.targetWindow_) {
-        reject('No parent window defined');
-      }
-      this.targetWindow_.postMessage(
-          {
-            methodId: newMethodId,
-            fn: fn,
-            args: args,
-          },
-          this.serverOriginURLFilter_);
-
-      this.methodsAwaitingResponse_.set(newMethodId, resolve);
-    });
-    return promise;
-  }
-
-  /**
-   * Method that returns a response to a request that had been received.
-   * @param {number} methodId, The callback method id provided in the request.
-   * @param {Object} result, The result of the callback.
-   */
-  sendResponse_(methodId, result) {
+    const resolver = new NativeResolver();
     this.targetWindow_.postMessage(
         {
-          methodId: methodId,
-          result: result,
+          methodId: newMethodId,
+          fn: fn,
+          args: args,
         },
         this.serverOriginURLFilter_);
+
+    this.methodsAwaitingResponse_.set(newMethodId, resolver);
+
+    return resolver.promise;
   }
 }

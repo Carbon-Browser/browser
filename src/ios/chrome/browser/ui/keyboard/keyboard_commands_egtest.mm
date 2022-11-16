@@ -21,7 +21,7 @@
 #endif
 
 using chrome_test_util::BookmarksNavigationBarDoneButton;
-using chrome_test_util::RecentTabsMenuButton;
+using chrome_test_util::RecentTabsDestinationButton;
 using chrome_test_util::SettingsDoneButton;
 
 // Test cases to verify that keyboard commands are and are not registered when
@@ -104,7 +104,8 @@ using chrome_test_util::SettingsDoneButton;
 
 // Tests that keyboard commands are not registered when the bookmark UI is
 // shown.
-- (void)testKeyboardCommandsNotRegistered_AddBookmarkPresented {
+// TODO(crbug.com/1341363): Disabled due to flakiness. Re-enabled when fixed.
+- (void)DISABLED_testKeyboardCommandsNotRegistered_AddBookmarkPresented {
   [ChromeEarlGrey waitForBookmarksToFinishLoading];
   [ChromeEarlGrey clearBookmarks];
 
@@ -126,7 +127,9 @@ using chrome_test_util::SettingsDoneButton;
     // Tap on the HUD.
     id<GREYMatcher> edit = chrome_test_util::ButtonWithAccessibilityLabelId(
         IDS_IOS_NAVIGATION_BAR_EDIT_BUTTON);
-    [[EarlGrey selectElementWithMatcher:edit] performAction:grey_tap()];
+    [[EarlGrey
+        selectElementWithMatcher:grey_allOf(edit, grey_sufficientlyVisible(),
+                                            nil)] performAction:grey_tap()];
 
     [self waitForSingleBookmarkEditorToDisplay];
 
@@ -141,7 +144,8 @@ using chrome_test_util::SettingsDoneButton;
 - (void)testKeyboardCommandsNotRegistered_BookmarksPresented {
   // Open Bookmarks
   [ChromeEarlGreyUI openToolsMenu];
-  [ChromeEarlGreyUI tapToolsMenuButton:chrome_test_util::BookmarksMenuButton()];
+  [ChromeEarlGreyUI
+      tapToolsMenuButton:chrome_test_util::BookmarksDestinationButton()];
   [ChromeEarlGreyUI waitForAppToIdle];
 
   [self verifyNoKeyboardCommandsAreRegistered];
@@ -155,7 +159,7 @@ using chrome_test_util::SettingsDoneButton;
 - (void)testKeyboardCommands_RecentTabsPresented {
   // Open Recent Tabs
   [ChromeEarlGreyUI openToolsMenu];
-  [ChromeEarlGreyUI tapToolsMenuButton:RecentTabsMenuButton()];
+  [ChromeEarlGreyUI tapToolsMenuButton:RecentTabsDestinationButton()];
   [ChromeEarlGreyUI waitForAppToIdle];
 
   [self verifyNoKeyboardCommandsAreRegistered];

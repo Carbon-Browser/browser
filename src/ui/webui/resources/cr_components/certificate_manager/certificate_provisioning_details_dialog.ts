@@ -10,22 +10,23 @@ import '../../cr_elements/cr_expand_button/cr_expand_button.m.js';
 import '../../cr_elements/cr_dialog/cr_dialog.m.js';
 import 'chrome://resources/polymer/v3_0/iron-flex-layout/iron-flex-layout-classes.js';
 
-import {html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {CrDialogElement} from '../../cr_elements/cr_dialog/cr_dialog.m.js';
-import {I18nBehavior} from '../../js/i18n_behavior.m.js';
+import {I18nMixin} from '../../js/i18n_mixin.js';
 
 import {CertificateProvisioningBrowserProxyImpl, CertificateProvisioningProcess} from './certificate_provisioning_browser_proxy.js';
+import {getTemplate} from './certificate_provisioning_details_dialog.html.js';
 
 export interface CertificateProvisioningDetailsDialogElement {
   $: {
     dialog: CrDialogElement,
+    refresh: HTMLElement,
   };
 }
 
 const CertificateProvisioningDetailsDialogElementBase =
-    mixinBehaviors([I18nBehavior], PolymerElement) as
-    {new (): PolymerElement & I18nBehavior};
+    I18nMixin(PolymerElement);
 
 export class CertificateProvisioningDetailsDialogElement extends
     CertificateProvisioningDetailsDialogElementBase {
@@ -34,7 +35,7 @@ export class CertificateProvisioningDetailsDialogElement extends
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
   }
 
   static get properties() {
@@ -53,8 +54,11 @@ export class CertificateProvisioningDetailsDialogElement extends
 
   private onRefresh_() {
     CertificateProvisioningBrowserProxyImpl.getInstance()
-        .triggerCertificateProvisioningProcessUpdate(
-            this.model.certProfileId, this.model.isDeviceWide);
+        .triggerCertificateProvisioningProcessUpdate(this.model.certProfileId);
+  }
+
+  private shouldHideLastFailedStatus_(): boolean {
+    return this.model.lastUnsuccessfulMessage.length === 0;
   }
 
   private arrowState_(opened: boolean): string {

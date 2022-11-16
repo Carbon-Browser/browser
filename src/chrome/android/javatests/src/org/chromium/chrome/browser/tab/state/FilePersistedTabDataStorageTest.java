@@ -8,7 +8,6 @@ import androidx.test.filters.SmallTest;
 
 import org.junit.Assert;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.MockitoAnnotations;
@@ -17,9 +16,7 @@ import org.chromium.base.ThreadUtils;
 import org.chromium.base.test.BaseJUnit4ClassRunner;
 import org.chromium.base.test.util.Batch;
 import org.chromium.chrome.browser.crypto.CipherFactory;
-import org.chromium.chrome.browser.tab.TabTestUtils;
-import org.chromium.chrome.browser.tab.state.FilePersistedTabDataStorage.FileSaveRequest;
-import org.chromium.chrome.test.ChromeBrowserTestRule;
+import org.chromium.chrome.test.util.ByteBufferTestUtils;
 
 import java.io.File;
 import java.nio.ByteBuffer;
@@ -31,9 +28,6 @@ import java.util.concurrent.Semaphore;
 @RunWith(BaseJUnit4ClassRunner.class)
 @Batch(Batch.PER_CLASS)
 public class FilePersistedTabDataStorageTest {
-    @Rule
-    public final ChromeBrowserTestRule mBrowserTestRule = new ChromeBrowserTestRule();
-
     private static final int TAB_ID_1 = 1;
     private static final String DATA_ID_1 = "DataId1";
     private static final int TAB_ID_2 = 2;
@@ -91,7 +85,7 @@ public class FilePersistedTabDataStorageTest {
         semaphore.acquire();
         ThreadUtils.runOnUiThreadBlocking(() -> {
             persistedTabDataStorage.restore(TAB_ID_1, DATA_ID_1, (res) -> {
-                TabTestUtils.verifyByteBuffer(DATA_A, res);
+                ByteBufferTestUtils.verifyByteBuffer(DATA_A, res);
                 semaphore.release();
             });
         });
@@ -131,5 +125,23 @@ public class FilePersistedTabDataStorageTest {
         ThreadUtils.runOnUiThreadBlocking(() -> { storage.processNextItemOnQueue(); });
         semaphore.acquire();
         Assert.assertTrue(storage.mQueue.isEmpty());
+    }
+
+    @Test
+    @SmallTest
+    public void testOutOfMemoryError() throws InterruptedException {
+        // Ensure no data for Tab ID 1 / Data ID 1 (could be cross talk from other batch tests)
+        File file = FilePersistedTabDataStorage.getFile(TAB_ID_1, DATA_ID_1);
+        file.delete();
+        Assert.assertFalse(file.exists());
+        FilePersistedTabDataStorage storage = new FilePersistedTabDataStorage();
+        final Semaphore semaphore = new Semaphore(0);
+        storage.addSaveRequest(storage.new FileSaveRequest(TAB_ID_1, DATA_ID_1, () -> {
+            // OutOfMemory error on ByteBuffer supplier.
+            throw new OutOfMemoryError("OutOfMemoryError mock");
+        }, semaphore::release));
+        ThreadUtils.runOnUiThreadBlocking(() -> { storage.processNextItemOnQueue(); });
+        semaphore.acquire();
+        Assert.assertFalse(file.exists());
     }
 }

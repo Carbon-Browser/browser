@@ -1,4 +1,4 @@
-#!/usr/bin/env vpython
+#!/usr/bin/env vpython3
 # Copyright 2015 The Chromium Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -7,7 +7,7 @@
 
 import argparse
 import json
-import optparse
+import optparse  # pylint: disable=deprecated-module
 import os
 import sys
 import logging

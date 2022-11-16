@@ -19,9 +19,9 @@
 
 #include "base/bind.h"
 #include "base/posix/eintr_wrapper.h"
-#include "base/single_thread_task_runner.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/system/sys_info.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
@@ -95,7 +95,7 @@ BPF_TEST_C(ParameterRestrictions,
   CheckClock(CLOCK_REALTIME);
   CheckClock(CLOCK_REALTIME_COARSE);
   CheckClock(CLOCK_THREAD_CPUTIME_ID);
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   clockid_t clock_id;
   pthread_getcpuclockid(pthread_self(), &clock_id);
   CheckClock(clock_id);
@@ -140,7 +140,7 @@ BPF_DEATH_TEST_C(ParameterRestrictions,
   syscall(SYS_clock_nanosleep, (~0) | CLOCKFD, 0, &ts, &out_ts);
 }
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
 BPF_DEATH_TEST_C(ParameterRestrictions,
                  clock_gettime_crash_cpu_clock,
                  DEATH_SEGV_MESSAGE(sandbox::GetErrorMessageContentForTests()),
@@ -154,7 +154,7 @@ BPF_DEATH_TEST_C(ParameterRestrictions,
   struct timespec ts;
   clock_gettime(kInitCPUClockID, &ts);
 }
-#endif  // !defined(OS_ANDROID)
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 class RestrictSchedPolicy : public bpf_dsl::Policy {
  public:
@@ -211,7 +211,7 @@ BPF_TEST_C(ParameterRestrictions,
   BPF_ASSERT(getparam_thread.Start());
   getparam_thread.task_runner()->PostTask(
       FROM_HERE, base::BindOnce(&SchedGetParamThread, &thread_run));
-  BPF_ASSERT(thread_run.TimedWait(base::TimeDelta::FromMilliseconds(5000)));
+  BPF_ASSERT(thread_run.TimedWait(base::Milliseconds(5000)));
   getparam_thread.Stop();
 }
 

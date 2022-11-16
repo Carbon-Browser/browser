@@ -13,8 +13,8 @@
 
 #include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
-#include "base/memory/weak_ptr.h"
 #include "components/signin/public/identity_manager/account_info.h"
 #include "components/sync/driver/trusted_vault_histograms.h"
 #include "components/sync/protocol/local_trusted_vault.pb.h"
@@ -109,6 +109,8 @@ class StandaloneTrustedVaultBackend
                                 int method_type_hint,
                                 base::OnceClosure cb);
 
+  void ClearDataForAccount(const CoreAccountInfo& account_info);
+
   absl::optional<CoreAccountInfo> GetPrimaryAccountForTesting() const;
 
   sync_pb::LocalDeviceRegistrationInfo GetDeviceRegistrationInfoForTesting(
@@ -116,10 +118,17 @@ class StandaloneTrustedVaultBackend
 
   std::vector<uint8_t> GetLastAddedRecoveryMethodPublicKeyForTesting() const;
 
+  void SetDeviceRegisteredVersionForTesting(const std::string& gaia_id,
+                                            int version);
+
   void SetClockForTesting(base::Clock* clock);
 
  private:
   friend class base::RefCountedThreadSafe<StandaloneTrustedVaultBackend>;
+
+  static TrustedVaultDownloadKeysStatusForUMA
+  GetDownloadKeysStatusForUMAFromResponse(
+      TrustedVaultDownloadKeysStatus response_status);
 
   ~StandaloneTrustedVaultBackend();
 
@@ -144,7 +153,7 @@ class StandaloneTrustedVaultBackend
       const TrustedVaultKeyAndVersion& vault_key_and_version);
 
   void OnKeysDownloaded(TrustedVaultDownloadKeysStatus status,
-                        const std::vector<std::vector<uint8_t>>& vault_keys,
+                        const std::vector<std::vector<uint8_t>>& new_vault_keys,
                         int last_vault_key_version);
 
   void OnTrustedRecoveryMethodAdded(base::OnceClosure cb,
@@ -152,7 +161,8 @@ class StandaloneTrustedVaultBackend
 
   void AbandonConnectionRequest();
 
-  void FulfillOngoingFetchKeys();
+  void FulfillOngoingFetchKeys(
+      absl::optional<TrustedVaultDownloadKeysStatusForUMA> status_for_uma);
 
   // Returns true if the last failed request time imply that upcoming requests
   // should be throttled now (certain amount of time should pass since the last
@@ -167,6 +177,8 @@ class StandaloneTrustedVaultBackend
   // Removes all data for non-primary accounts if they were previously marked
   // for deletion due to accounts in cookie jar changes.
   void RemoveNonPrimaryAccountKeysIfMarkedForDeletion();
+
+  void VerifyDeviceRegistrationForUMA(const std::string& gaia_id);
 
   const base::FilePath file_path_;
 
@@ -211,6 +223,8 @@ class StandaloneTrustedVaultBackend
 
   // Destroying this will cancel the ongoing request.
   std::unique_ptr<TrustedVaultConnection::Request> ongoing_connection_request_;
+  std::unique_ptr<TrustedVaultConnection::Request>
+      ongoing_verify_registration_request_;
 
   // Same as above, but specifically used for recoverability-related requests.
   // TODO(crbug.com/1201659): Move elsewhere.
@@ -221,7 +235,7 @@ class StandaloneTrustedVaultBackend
 
   // Used to determine current time, set to base::DefaultClock in prod and can
   // be overridden in tests.
-  base::Clock* clock_;
+  raw_ptr<base::Clock> clock_;
 
   std::vector<uint8_t> last_added_recovery_method_public_key_for_testing_;
 

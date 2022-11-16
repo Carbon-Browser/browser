@@ -10,6 +10,7 @@
 #include "base/android/jni_android.h"
 #include "base/android/jni_string.h"
 #include "base/android/scoped_java_ref.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/task_environment.h"
 #include "base/values.h"
 #include "components/policy/android/test_jni_headers/PolicyCacheUpdaterTestSupporter_jni.h"
@@ -47,7 +48,8 @@ class StubPolicyHandler : public ConfigurationPolicyHandler {
     if (has_error_) {
       errors->AddError(policy_name_, IDS_POLICY_BLOCKED);
     }
-    return policies.GetValue(kPolicyName) && !has_error_;
+    return policies.GetValue(kPolicyName, base::Value::Type::INTEGER) &&
+           !has_error_;
   }
 
  private:
@@ -103,7 +105,7 @@ class PolicyCacheUpdaterAndroidTest : public ::testing::Test {
   PolicyMap* policy_map() { return &policy_map_; }
 
  private:
-  JNIEnv* env_ = base::android::AttachCurrentThread();
+  raw_ptr<JNIEnv> env_ = base::android::AttachCurrentThread();
   base::android::ScopedJavaLocalRef<jobject> j_support_;
   PolicyMap policy_map_;
   testing::NiceMock<MockConfigurationPolicyProvider> policy_provider_;

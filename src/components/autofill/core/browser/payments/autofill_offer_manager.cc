@@ -4,27 +4,25 @@
 
 #include "components/autofill/core/browser/payments/autofill_offer_manager.h"
 
-#include <map>
-
 #include "base/bind.h"
-#include "base/ranges/algorithm.h"
+#include "base/containers/contains.h"
 #include "base/ranges/ranges.h"
-#include "base/strings/utf_string_conversions.h"
-#include "base/time/time.h"
-#include "base/timer/timer.h"
 #include "components/autofill/core/browser/autofill_client.h"
 #include "components/autofill/core/browser/data_model/autofill_offer_data.h"
 #include "components/autofill/core/browser/data_model/credit_card.h"
 #include "components/autofill/core/browser/payments/payments_client.h"
+#include "components/autofill/core/browser/personal_data_manager.h"
 #include "components/autofill/core/common/autofill_payments_features.h"
 #include "components/strings/grit/components_strings.h"
 #include "ui/base/l10n/l10n_util.h"
-#include "url/gurl.h"
 
 namespace autofill {
 
-AutofillOfferManager::AutofillOfferManager(PersonalDataManager* personal_data)
-    : personal_data_(personal_data) {
+AutofillOfferManager::AutofillOfferManager(
+    PersonalDataManager* personal_data,
+    CouponServiceDelegate* coupon_service_delegate)
+    : personal_data_(personal_data),
+      coupon_service_delegate_(coupon_service_delegate) {
   personal_data_->AddObserver(this);
   UpdateEligibleMerchantDomains();
 }
@@ -37,10 +35,15 @@ void AutofillOfferManager::OnPersonalDataChanged() {
   UpdateEligibleMerchantDomains();
 }
 
+void AutofillOfferManager::OnDidNavigateFrame(AutofillClient* client) {
+  notification_handler_.UpdateOfferNotificationVisibility(client);
+}
+
 void AutofillOfferManager::UpdateSuggestionsWithOffers(
     const GURL& last_committed_url,
     std::vector<Suggestion>& suggestions) {
-  GURL last_committed_url_origin = last_committed_url.GetOrigin();
+  GURL last_committed_url_origin =
+      last_committed_url.DeprecatedGetOriginAsURL();
   if (eligible_merchant_domains_.count(last_committed_url_origin) == 0) {
     return;
   }
@@ -50,7 +53,7 @@ void AutofillOfferManager::UpdateSuggestionsWithOffers(
 
   // Update |offer_label| for each suggestion.
   for (auto& suggestion : suggestions) {
-    std::string id = suggestion.backend_id;
+    std::string id = suggestion.GetPayload<std::string>();
     if (eligible_offers_map.count(id)) {
       suggestion.offer_label =
           l10n_util::GetStringUTF16(IDS_AUTOFILL_OFFERS_CASHBACK);
@@ -58,31 +61,40 @@ void AutofillOfferManager::UpdateSuggestionsWithOffers(
   }
   // Sort the suggestions such that suggestions with offers are shown at the
   // top.
-  if (base::FeatureList::IsEnabled(
-          features::kAutofillSortSuggestionsBasedOnOfferPresence)) {
-    std::sort(suggestions.begin(), suggestions.end(),
-              [](const Suggestion& a, const Suggestion& b) {
-                if (!a.offer_label.empty() && b.offer_label.empty()) {
-                  return true;
-                }
-                return false;
-              });
-  }
+  std::sort(suggestions.begin(), suggestions.end(),
+            [](const Suggestion& a, const Suggestion& b) {
+              if (!a.offer_label.empty() && b.offer_label.empty()) {
+                return true;
+              }
+              return false;
+            });
 }
 
 bool AutofillOfferManager::IsUrlEligible(const GURL& last_committed_url) {
-  // Checking set::empty and using set::count to prevent possible crashes (see
-  // crbug.com/1195949).
-  // For most cases this vector will be empty, so add the empty check to avoid
-  // unnecessary calls.
-  return !eligible_merchant_domains_.empty() &&
-         eligible_merchant_domains_.count(last_committed_url.GetOrigin());
+  if (coupon_service_delegate_ &&
+      coupon_service_delegate_->IsUrlEligible(last_committed_url)) {
+    return true;
+  }
+  return base::Contains(eligible_merchant_domains_,
+                        last_committed_url.DeprecatedGetOriginAsURL());
 }
 
 AutofillOfferData* AutofillOfferManager::GetOfferForUrl(
     const GURL& last_committed_url) {
+  if (coupon_service_delegate_) {
+    for (AutofillOfferData* offer :
+         coupon_service_delegate_->GetFreeListingCouponsForUrl(
+             last_committed_url)) {
+      if (offer->IsActiveAndEligibleForOrigin(
+              last_committed_url.DeprecatedGetOriginAsURL())) {
+        return offer;
+      }
+    }
+  }
+
   for (AutofillOfferData* offer : personal_data_->GetAutofillOffers()) {
-    if (offer->IsActiveAndEligibleForOrigin(last_committed_url.GetOrigin())) {
+    if (offer->IsActiveAndEligibleForOrigin(
+            last_committed_url.DeprecatedGetOriginAsURL())) {
       return offer;
     }
   }
@@ -94,8 +106,8 @@ void AutofillOfferManager::UpdateEligibleMerchantDomains() {
   std::vector<AutofillOfferData*> offers = personal_data_->GetAutofillOffers();
 
   for (auto* offer : offers) {
-    eligible_merchant_domains_.insert(offer->merchant_origins.begin(),
-                                      offer->merchant_origins.end());
+    eligible_merchant_domains_.insert(offer->GetMerchantOrigins().begin(),
+                                      offer->GetMerchantOrigins().end());
   }
 }
 
@@ -121,8 +133,8 @@ AutofillOfferManager::OffersMap AutofillOfferManager::CreateCardLinkedOffersMap(
       // If card has an offer, add the backend ID to the map. There is currently
       // a one-to-one mapping between cards and offer data, however, this may
       // change in the future.
-      if (std::count(offer->eligible_instrument_id.begin(),
-                     offer->eligible_instrument_id.end(),
+      if (std::count(offer->GetEligibleInstrumentIds().begin(),
+                     offer->GetEligibleInstrumentIds().end(),
                      card->instrument_id())) {
         offers_map[card->guid()] = offer;
       }

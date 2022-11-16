@@ -10,9 +10,9 @@
 #include "ash/app_list/app_list_controller_impl.h"
 #include "ash/app_list/views/app_list_view.h"
 #include "ash/assistant/test/test_assistant_setup.h"
-#include "ash/assistant/test/test_assistant_web_view_factory.h"
 #include "ash/assistant/ui/main_stage/assistant_onboarding_suggestion_view.h"
 #include "ash/assistant/ui/main_stage/suggestion_chip_view.h"
+#include "ash/constants/ash_features.h"
 #include "ash/keyboard/ui/keyboard_ui_controller.h"
 #include "ash/keyboard/ui/test/keyboard_test_util.h"
 #include "ash/public/cpp/assistant/assistant_state.h"
@@ -21,10 +21,11 @@
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
 #include "ash/test/ash_test_helper.h"
+#include "ash/test/test_ash_web_view_factory.h"
 #include "ash/test/view_drawn_waiter.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
-#include "chromeos/services/assistant/test_support/scoped_assistant_browser_delegate.h"
+#include "chromeos/ash/services/assistant/test_support/scoped_assistant_browser_delegate.h"
 #include "ui/views/view_utils.h"
 
 namespace ash {
@@ -105,7 +106,7 @@ AssistantAshTestBase::AssistantAshTestBase(
     : AshTestBase(time),
       test_api_(AssistantTestApi::Create()),
       test_setup_(std::make_unique<TestAssistantSetup>()),
-      test_web_view_factory_(std::make_unique<TestAssistantWebViewFactory>()),
+      test_web_view_factory_(std::make_unique<TestAshWebViewFactory>()),
       delegate_(std::make_unique<
                 chromeos::assistant::ScopedAssistantBrowserDelegate>()) {}
 
@@ -216,6 +217,10 @@ bool AssistantAshTestBase::IsVisible() {
 }
 
 views::View* AssistantAshTestBase::main_view() {
+  DCHECK(!features::IsProductivityLauncherEnabled())
+      << "ProductivityLauncher does not have a main_view(). Prefer "
+         "page_view(), which is supported both with and without "
+         "ProductivityLauncher enabled.";
   return test_api_->main_view();
 }
 

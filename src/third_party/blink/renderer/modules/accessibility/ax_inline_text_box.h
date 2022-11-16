@@ -29,7 +29,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_ACCESSIBILITY_AX_INLINE_TEXT_BOX_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_ACCESSIBILITY_AX_INLINE_TEXT_BOX_H_
 
-#include "base/macros.h"
+#include "base/notreached.h"
 #include "third_party/blink/renderer/core/editing/markers/document_marker.h"
 #include "third_party/blink/renderer/core/layout/line/abstract_inline_text_box.h"
 #include "third_party/blink/renderer/modules/accessibility/ax_object.h"
@@ -45,6 +45,9 @@ class AXInlineTextBox final : public AXObject {
  public:
   AXInlineTextBox(scoped_refptr<AbstractInlineTextBox>, AXObjectCacheImpl&);
 
+  AXInlineTextBox(const AXInlineTextBox&) = delete;
+  AXInlineTextBox& operator=(const AXInlineTextBox&) = delete;
+
   // AXObject overrides.
   RGBA32 GetColor() const override { return Color::kTransparent; }
   String GetName(ax::mojom::blink::NameFrom&,
@@ -55,8 +58,8 @@ class AXInlineTextBox final : public AXObject {
   int TextOffsetInFormattingContext(int offset) const override;
   int TextOffsetInContainer(int offset) const override;
   void GetRelativeBounds(AXObject** out_container,
-                         FloatRect& out_bounds_in_container,
-                         skia::Matrix44& out_container_transform,
+                         gfx::RectF& out_bounds_in_container,
+                         gfx::Transform& out_container_transform,
                          bool* clips_children = nullptr) const override;
   ax::mojom::blink::WritingDirection GetTextDirection() const override;
   Node* GetNode() const override;
@@ -65,7 +68,6 @@ class AXInlineTextBox final : public AXObject {
   AXObject* PreviousOnLine() const override;
   void SerializeMarkerAttributes(ui::AXNodeData* node_data) const override;
   ax::mojom::blink::Role NativeRoleIgnoringAria() const override {
-    // role_ is set manually in Init(), but must implement pure virtual method.
     NOTREACHED();
     return ax::mojom::blink::Role::kInlineTextBox;
   }
@@ -86,8 +88,6 @@ class AXInlineTextBox final : public AXObject {
   bool ComputeAccessibilityIsIgnored(IgnoredReasons* = nullptr) const override;
 
   scoped_refptr<AbstractInlineTextBox> inline_text_box_;
-
-  DISALLOW_COPY_AND_ASSIGN(AXInlineTextBox);
 };
 
 }  // namespace blink

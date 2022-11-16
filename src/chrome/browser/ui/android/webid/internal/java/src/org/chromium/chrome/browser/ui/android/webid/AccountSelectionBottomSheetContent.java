@@ -5,11 +5,15 @@
 package org.chromium.chrome.browser.ui.android.webid;
 
 import android.view.View;
+import android.view.accessibility.AccessibilityEvent;
 
 import androidx.annotation.Nullable;
 
+import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.base.supplier.Supplier;
+import org.chromium.chrome.browser.ui.android.webid.AccountSelectionProperties.ItemProperties;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetContent;
+import org.chromium.ui.modelutil.PropertyKey;
 
 /**
  * This view renders content that gets displayed inside the bottom sheet. This
@@ -19,6 +23,9 @@ import org.chromium.components.browser_ui.bottomsheet.BottomSheetContent;
 public class AccountSelectionBottomSheetContent implements BottomSheetContent {
     private final View mContentView;
     private final Supplier<Integer> mScrollOffsetSupplier;
+    private @Nullable Runnable mBackPressHandler;
+    private final ObservableSupplierImpl<Boolean> mBackPressStateChangedSupplier =
+            new ObservableSupplierImpl<>();
 
     /**
      * Constructs the AccountSelection bottom sheet view.
@@ -26,6 +33,36 @@ public class AccountSelectionBottomSheetContent implements BottomSheetContent {
     AccountSelectionBottomSheetContent(View contentView, Supplier<Integer> scrollOffsetSupplier) {
         mContentView = contentView;
         mScrollOffsetSupplier = scrollOffsetSupplier;
+    }
+
+    /**
+     * Updates the sheet content back press handling behavior. This should be invoked during an
+     * event that updates the back press handling behavior of the sheet content.
+     * @param backPressHandler A runnable that will be invoked by the sheet content to handle a back
+     *         press. A null value indicates that back press will not be handled by the content.
+     */
+    public void setCustomBackPressBehavior(@Nullable Runnable backPressHandler) {
+        mBackPressHandler = backPressHandler;
+        mBackPressStateChangedSupplier.set(backPressHandler != null);
+    }
+
+    public void focusForAccessibility(PropertyKey focusItem) {
+        // {@link mContentView} is null for some tests.
+        if (mContentView == null) return;
+
+        View focusView = null;
+        if (focusItem == ItemProperties.HEADER) {
+            focusView = mContentView.findViewById(R.id.header_title);
+        } else if (focusItem == ItemProperties.CONTINUE_BUTTON) {
+            focusView = mContentView.findViewById(R.id.account_selection_continue_btn);
+        } else {
+            assert false;
+        }
+
+        if (focusView != null) {
+            focusView.requestFocus();
+            focusView.sendAccessibilityEvent(AccessibilityEvent.TYPE_VIEW_FOCUSED);
+        }
     }
 
     @Override
@@ -60,7 +97,7 @@ public class AccountSelectionBottomSheetContent implements BottomSheetContent {
 
     @Override
     public boolean swipeToDismissEnabled() {
-        return false;
+        return true;
     }
 
     @Override
@@ -81,6 +118,25 @@ public class AccountSelectionBottomSheetContent implements BottomSheetContent {
     @Override
     public boolean hideOnScroll() {
         return false;
+    }
+
+    @Override
+    public boolean handleBackPress() {
+        if (mBackPressHandler != null) {
+            mBackPressHandler.run();
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public ObservableSupplierImpl<Boolean> getBackPressStateChangedSupplier() {
+        return mBackPressStateChangedSupplier;
+    }
+
+    @Override
+    public void onBackPressed() {
+        handleBackPress();
     }
 
     @Override

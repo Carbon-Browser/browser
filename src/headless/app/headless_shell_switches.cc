@@ -22,11 +22,6 @@ const char kEnableBeginFrameControl[] = "enable-begin-frame-control";
 // Enable crash reporter for headless.
 const char kEnableCrashReporter[] = "enable-crash-reporter";
 
-// If enabled, generate a tagged (accessible) file when printing to PDF.
-// The plan is for this to go away once tagged PDFs become the default.
-// See https://crbug.com/607777
-const char kExportTaggedPDF[] = "export-tagged-pdf";
-
 // Disable crash reporter for headless. It is enabled by default in official
 // builds.
 const char kDisableCrashReporter[] = "disable-crash-reporter";
@@ -64,6 +59,9 @@ const char kPrintToPDF[] = "print-to-pdf";
 
 // Do not display header and footer in the pdf file.
 const char kPrintToPDFNoHeader[] = "print-to-pdf-no-header";
+
+// Do not emit tags when printing PDFs.
+const char kDisablePDFTagging[] = "disable-pdf-tagging";
 
 // Specifies a list of hosts for whom we bypass proxy settings and use direct
 // connections. Ignored unless --proxy-server is also specified. This is a
@@ -113,8 +111,13 @@ const char kUseANGLE[] = "use-angle";
 const char kUserAgent[] = "user-agent";
 
 // Directory where the browser stores the user profile. Note that if this switch
-// is added, the session will no longer be Incognito.
+// is added, the session will no longer be Incognito, unless Incognito mode is
+// forced with --incognito switch.
 const char kUserDataDir[] = "user-data-dir";
+
+// Forces Incognito mode even if user data directory is specified using the
+// --user-data-dir switch.
+const char kIncognito[] = "incognito";
 
 // If set the system waits the specified number of virtual milliseconds before
 // deeming the page to be ready.  For determinism virtual time does not advance
@@ -129,7 +132,6 @@ const char kWindowSize[] = "window-size";
 
 // Allowlist for Negotiate Auth servers.
 const char kAuthServerAllowlist[] = "auth-server-allowlist";
-const char kAuthServerAllowlistDeprecated[] = "auth-server-whitelist";
 
 // Sets font render hinting when running headless, affects Skia rendering and
 // whether glyph subpixel positioning is enabled.
@@ -138,5 +140,10 @@ const char kFontRenderHinting[] = "font-render-hinting";
 
 // If true, then all pop-ups and calls to window.open will fail.
 const char kBlockNewWebContents[] = "block-new-web-contents";
+
+// Allows overriding the list of restricted ports by passing a comma-separated
+// list of port numbers.
+const char kExplicitlyAllowedPorts[] = "explicitly-allowed-ports";
+
 }  // namespace switches
 }  // namespace headless

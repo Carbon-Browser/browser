@@ -8,7 +8,6 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
@@ -36,6 +35,7 @@ class AutofillWebDataBackendImpl;
 class AutofillWebDataServiceObserverOnDBSequence;
 class AutofillWebDataServiceObserverOnUISequence;
 class CreditCard;
+class Iban;
 
 // API for Autofill web data.
 class AutofillWebDataService : public WebDataServiceBase {
@@ -47,6 +47,9 @@ class AutofillWebDataService : public WebDataServiceBase {
       scoped_refptr<WebDatabaseService> wdbs,
       scoped_refptr<base::SingleThreadTaskRunner> ui_task_runner,
       scoped_refptr<base::SingleThreadTaskRunner> db_task_runner);
+
+  AutofillWebDataService(const AutofillWebDataService&) = delete;
+  AutofillWebDataService& operator=(const AutofillWebDataService&) = delete;
 
   // WebDataServiceBase implementation.
   void ShutdownOnUISequence() override;
@@ -111,9 +114,22 @@ class AutofillWebDataService : public WebDataServiceBase {
   void SetAutofillProfileChangedCallback(
       base::RepeatingCallback<void(const AutofillProfileDeepChange&)>
           change_cb);
-  void SetCardArtImagesChangedCallback(
-      base::RepeatingCallback<void(const std::vector<std::string>&)>
-          on_card_art_image_change_callback);
+
+  // Schedules a task to add Iban to the web database.
+  void AddIban(const Iban& iban);
+
+  // Initiates the request for local Ibans. The method
+  // OnWebDataServiceRequestDone of |consumer| gets called when the request is
+  // finished, with the Iban included in the argument |result|. The consumer
+  // owns the Iban.
+  WebDataServiceBase::Handle GetIbans(WebDataServiceConsumer* consumer);
+
+  // Schedules a task to update iban in the web database.
+  void UpdateIban(const Iban& iban);
+
+  // Schedules a task to remove an iban from the web database.
+  // |guid| is the identifier of the iban to remove.
+  void RemoveIban(const std::string& guid);
 
   // Schedules a task to add credit card to the web database.
   void AddCreditCard(const CreditCard& credit_card);
@@ -244,8 +260,6 @@ class AutofillWebDataService : public WebDataServiceBase {
   // This factory is used on the UI sequence. All vended weak pointers are
   // invalidated in ShutdownOnUISequence().
   base::WeakPtrFactory<AutofillWebDataService> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(AutofillWebDataService);
 };
 
 }  // namespace autofill

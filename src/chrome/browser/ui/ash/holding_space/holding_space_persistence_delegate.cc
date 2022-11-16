@@ -25,7 +25,7 @@ namespace {
 bool ShouldIgnoreItem(Profile* profile, const HoldingSpaceItem* item) {
   return file_manager::util::GetAndroidFilesPath().IsParent(
              item->file_path()) &&
-         !chromeos::ProfileHelper::IsPrimaryProfile(profile);
+         !ProfileHelper::IsPrimaryProfile(profile);
 }
 
 }  // namespace
@@ -132,18 +132,18 @@ void HoldingSpacePersistenceDelegate::OnHoldingSpaceItemUpdated(
 void HoldingSpacePersistenceDelegate::RestoreModelFromPersistence() {
   DCHECK(model()->items().empty());
 
-  const auto* persisted_holding_space_items =
-      profile()->GetPrefs()->GetList(kPersistencePath);
+  const auto& persisted_holding_space_items =
+      profile()->GetPrefs()->GetValueList(kPersistencePath);
 
   // If persistent storage is empty we can immediately notify the callback of
   // persistence restoration completion and quit early.
-  if (persisted_holding_space_items->GetList().empty()) {
+  if (persisted_holding_space_items.empty()) {
     std::move(persistence_restored_callback_).Run();
     return;
   }
 
   for (const auto& persisted_holding_space_item :
-       persisted_holding_space_items->GetList()) {
+       persisted_holding_space_items) {
     std::unique_ptr<HoldingSpaceItem> holding_space_item =
         HoldingSpaceItem::Deserialize(
             base::Value::AsDictionaryValue(persisted_holding_space_item),

@@ -205,18 +205,18 @@ int WebMStreamParser::ParseInfoAndTracks(const uint8_t* data, int size) {
 
   if (info_parser.duration() > 0) {
     int64_t duration_in_us = info_parser.duration() * timecode_scale_in_us;
-    params.duration = base::TimeDelta::FromMicroseconds(duration_in_us);
+    params.duration = base::Microseconds(duration_in_us);
   }
 
   params.timeline_offset = info_parser.date_utc();
 
   if (unknown_segment_size_ && (info_parser.duration() <= 0) &&
       !info_parser.date_utc().is_null()) {
-    params.liveness = DemuxerStream::LIVENESS_LIVE;
+    params.liveness = StreamLiveness::kLive;
   } else if (info_parser.duration() >= 0) {
-    params.liveness = DemuxerStream::LIVENESS_RECORDED;
+    params.liveness = StreamLiveness::kRecorded;
   } else {
-    params.liveness = DemuxerStream::LIVENESS_UNKNOWN;
+    params.liveness = StreamLiveness::kUnknown;
   }
 
   const AudioDecoderConfig& audio_config = tracks_parser.audio_decoder_config();

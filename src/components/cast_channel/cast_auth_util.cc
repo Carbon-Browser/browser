@@ -8,7 +8,6 @@
 
 #include "base/feature_list.h"
 #include "base/logging.h"
-#include "base/macros.h"
 #include "base/memory/singleton.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/string_number_conversions.h"
@@ -18,7 +17,7 @@
 #include "components/cast_channel/cast_channel_enum.h"
 #include "components/cast_channel/cast_message_util.h"
 #include "crypto/random.h"
-#include "net/cert/internal/signature_algorithm.h"
+#include "net/cert/pki/signature_algorithm.h"
 #include "net/cert/x509_certificate.h"
 #include "net/cert/x509_util.h"
 #include "net/der/parse_values.h"
@@ -124,8 +123,7 @@ class CastNonce {
 
   void EnsureNonceTimely() {
     if (base::Time::Now() >
-        (nonce_generation_time_ +
-         base::TimeDelta::FromHours(kNonceExpirationTimeInHours))) {
+        (nonce_generation_time_ + base::Hours(kNonceExpirationTimeInHours))) {
       GenerateNonce();
     }
   }
@@ -299,18 +297,18 @@ AuthResult AuthContext::VerifySenderNonce(
 
 AuthResult VerifyAndMapDigestAlgorithm(
     cast::channel::HashAlgorithm response_digest_algorithm,
-    net::DigestAlgorithm* digest_algorithm) {
+    cast_certificate::CastDigestAlgorithm* digest_algorithm) {
   switch (response_digest_algorithm) {
     case cast::channel::SHA1:
       RecordSignatureEvent(SIGNATURE_ALGORITHM_UNSUPPORTED);
-      *digest_algorithm = net::DigestAlgorithm::Sha1;
+      *digest_algorithm = cast_certificate::CastDigestAlgorithm::SHA1;
       if (base::FeatureList::IsEnabled(kEnforceSHA256Checking)) {
         return AuthResult("Unsupported digest algorithm.",
                           AuthResult::ERROR_DIGEST_UNSUPPORTED);
       }
       break;
     case cast::channel::SHA256:
-      *digest_algorithm = net::DigestAlgorithm::Sha256;
+      *digest_algorithm = cast_certificate::CastDigestAlgorithm::SHA256;
       break;
   }
   return AuthResult();
@@ -331,8 +329,7 @@ AuthResult VerifyTLSCertificate(const net::X509Certificate& peer_cert,
   // is repurposed as this signature's expiration.
   base::Time expiry = peer_cert.valid_expiry();
   base::Time lifetime_limit =
-      verification_time +
-      base::TimeDelta::FromDays(kMaxSelfSignedCertLifetimeInDays);
+      verification_time + base::Days(kMaxSelfSignedCertLifetimeInDays);
   if (peer_cert.valid_start().is_null() ||
       peer_cert.valid_start() > verification_time) {
     return AuthResult::CreateWithParseError(
@@ -444,7 +441,7 @@ AuthResult VerifyCredentialsImpl(const AuthResponse& response,
     RecordSignatureEvent(SIGNATURE_EMPTY);
     return AuthResult("Signature is empty.", AuthResult::ERROR_SIGNATURE_EMPTY);
   }
-  net::DigestAlgorithm digest_algorithm;
+  cast_certificate::CastDigestAlgorithm digest_algorithm;
   AuthResult digest_result =
       VerifyAndMapDigestAlgorithm(response.hash_algorithm(), &digest_algorithm);
   if (!digest_result.success())

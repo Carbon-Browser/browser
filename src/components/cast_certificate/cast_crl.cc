@@ -9,25 +9,24 @@
 
 #include <memory>
 
-#include "base/base64.h"
+#include "base/containers/span.h"
 #include "base/logging.h"
 #include "base/memory/singleton.h"
 #include "crypto/sha2.h"
-#include "net/cert/internal/cert_errors.h"
-#include "net/cert/internal/parse_certificate.h"
-#include "net/cert/internal/parsed_certificate.h"
-#include "net/cert/internal/path_builder.h"
-#include "net/cert/internal/signature_algorithm.h"
-#include "net/cert/internal/simple_path_builder_delegate.h"
-#include "net/cert/internal/trust_store_in_memory.h"
-#include "net/cert/internal/verify_certificate_chain.h"
-#include "net/cert/internal/verify_signed_data.h"
-#include "net/cert/x509_certificate.h"
+#include "net/cert/pki/cert_errors.h"
+#include "net/cert/pki/parse_certificate.h"
+#include "net/cert/pki/parsed_certificate.h"
+#include "net/cert/pki/path_builder.h"
+#include "net/cert/pki/simple_path_builder_delegate.h"
+#include "net/cert/pki/trust_store_in_memory.h"
+#include "net/cert/pki/verify_certificate_chain.h"
 #include "net/cert/x509_util.h"
 #include "net/der/encode_values.h"
 #include "net/der/input.h"
 #include "net/der/parse_values.h"
-#include "net/der/parser.h"
+#include "third_party/boringssl/src/include/openssl/bytestring.h"
+#include "third_party/boringssl/src/include/openssl/digest.h"
+#include "third_party/boringssl/src/include/openssl/evp.h"
 #include "third_party/openscreen/src/cast/common/certificate/proto/revocation.pb.h"
 
 namespace cast_certificate {
@@ -72,6 +71,9 @@ class CastCRLTrustStore {
                                                   CastCRLTrustStore>>::get();
   }
 
+  CastCRLTrustStore(const CastCRLTrustStore&) = delete;
+  CastCRLTrustStore& operator=(const CastCRLTrustStore&) = delete;
+
   static net::TrustStore& Get() { return GetInstance()->store_; }
 
  private:
@@ -80,16 +82,16 @@ class CastCRLTrustStore {
   CastCRLTrustStore() {
     // Initialize the trust store with the root certificate.
     net::CertErrors errors;
-    scoped_refptr<net::ParsedCertificate> cert =
-        net::ParsedCertificate::CreateWithoutCopyingUnsafe(
-            kCastCRLRootCaDer, sizeof(kCastCRLRootCaDer), {}, &errors);
+    scoped_refptr<net::ParsedCertificate> cert = net::ParsedCertificate::Create(
+        net::x509_util::CreateCryptoBufferFromStaticDataUnsafe(
+            kCastCRLRootCaDer),
+        {}, &errors);
     CHECK(cert) << errors.ToDebugString();
     // Enforce pathlen constraints and policies defined on the root certificate.
     store_.AddTrustAnchorWithConstraints(std::move(cert));
   }
 
   net::TrustStoreInMemory store_;
-  DISALLOW_COPY_AND_ASSIGN(CastCRLTrustStore);
 };
 
 // Converts a uint64_t unix timestamp to net::der::GeneralizedTime.
@@ -97,7 +99,7 @@ bool ConvertTimeSeconds(uint64_t seconds,
                         net::der::GeneralizedTime* generalized_time) {
   base::Time unix_timestamp =
       base::Time::UnixEpoch() +
-      base::TimeDelta::FromSeconds(base::saturated_cast<int64_t>(seconds));
+      base::Seconds(base::saturated_cast<int64_t>(seconds));
   return net::der::EncodeTimeAsGeneralizedTime(unix_timestamp,
                                                generalized_time);
 }
@@ -118,7 +120,6 @@ bool VerifyCRL(const Crl& crl,
     return false;
   }
 
-  // Verify the trust of the CRL authority.
   net::CertErrors parse_errors;
   scoped_refptr<net::ParsedCertificate> parsed_cert =
       net::ParsedCertificate::Create(
@@ -130,16 +131,28 @@ bool VerifyCRL(const Crl& crl,
     return false;
   }
 
-  // Wrap the signature in a BitString.
-  net::der::BitString signature_value_bit_string = net::der::BitString(
-      net::der::Input(base::StringPiece(crl.signature())), 0);
+  CBS spki;
+  CBS_init(&spki, parsed_cert->tbs().spki_tlv.UnsafeData(),
+           parsed_cert->tbs().spki_tlv.Length());
+  bssl::UniquePtr<EVP_PKEY> pubkey(EVP_parse_public_key(&spki));
+  if (!pubkey || CBS_len(&spki) != 0) {
+    VLOG(2) << "CRL - Parsing public key failed";
+#ifndef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
+    return false;
+#endif
+  }
 
-  // Verify the signature.
-  std::unique_ptr<net::SignatureAlgorithm> signature_algorithm_type =
-      net::SignatureAlgorithm::CreateRsaPkcs1(net::DigestAlgorithm::Sha256);
-  if (!VerifySignedData(
-          *signature_algorithm_type, net::der::Input(&crl.tbs_crl()),
-          signature_value_bit_string, parsed_cert->tbs().spki_tlv)) {
+  // Verify the signature in the CRL. It should be signed with RSASSA-PKCS1-v1_5
+  // and SHA-256.
+  auto signature_bytes = base::as_bytes(base::make_span(crl.signature()));
+  auto tbs_crl_bytes = base::as_bytes(base::make_span(crl.tbs_crl()));
+  bssl::ScopedEVP_MD_CTX ctx;
+  if (EVP_PKEY_id(pubkey.get()) != EVP_PKEY_RSA ||
+      !EVP_DigestVerifyInit(ctx.get(), nullptr, EVP_sha256(), nullptr,
+                            pubkey.get()) ||
+      !EVP_DigestVerify(ctx.get(), signature_bytes.data(),
+                        signature_bytes.size(), tbs_crl_bytes.data(),
+                        tbs_crl_bytes.size())) {
     VLOG(2) << "CRL - Signature verification failed";
 #ifndef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
     return false;
@@ -158,10 +171,12 @@ bool VerifyCRL(const Crl& crl,
   net::SimplePathBuilderDelegate path_builder_delegate(
       2048, net::SimplePathBuilderDelegate::DigestPolicy::kWeakAllowSha1);
 
+  // Verify the trust of the CRL authority.
   net::CertPathBuilder path_builder(
       parsed_cert.get(), trust_store, &path_builder_delegate, verification_time,
       net::KeyPurpose::ANY_EKU, net::InitialExplicitPolicy::kFalse,
-      {net::AnyPolicy()}, net::InitialPolicyMappingInhibit::kFalse,
+      {net::der::Input(net::kAnyPolicyOid)},
+      net::InitialPolicyMappingInhibit::kFalse,
       net::InitialAnyPolicyInhibit::kFalse);
   net::CertPathBuilder::Result result = path_builder.Run();
   if (!result.HasValidPath()) {
@@ -227,6 +242,10 @@ class CastCRLImpl : public CastCRL {
  public:
   CastCRLImpl(const TbsCrl& tbs_crl,
               const net::der::GeneralizedTime& overall_not_after);
+
+  CastCRLImpl(const CastCRLImpl&) = delete;
+  CastCRLImpl& operator=(const CastCRLImpl&) = delete;
+
   ~CastCRLImpl() override;
 
   bool CheckRevocation(const net::ParsedCertificateList& trusted_chain,
@@ -250,7 +269,6 @@ class CastCRLImpl : public CastCRL {
   // The value is a list of revoked serial number ranges.
   std::unordered_map<std::string, std::vector<SerialNumberRange>>
       revoked_serial_numbers_;
-  DISALLOW_COPY_AND_ASSIGN(CastCRLImpl);
 };
 
 CastCRLImpl::CastCRLImpl(const TbsCrl& tbs_crl,

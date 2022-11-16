@@ -4,9 +4,9 @@
 
 #include "content/browser/renderer_host/mixed_content_navigation_throttle.h"
 
-#include "base/macros.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/ssl_status.h"
+#include "content/public/browser/web_contents.h"
 #include "content/public/test/mock_navigation_handle.h"
 #include "content/public/test/test_renderer_host.h"
 #include "content/test/navigation_simulator_impl.h"

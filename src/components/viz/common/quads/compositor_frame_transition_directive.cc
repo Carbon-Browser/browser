@@ -4,6 +4,7 @@
 
 #include "components/viz/common/quads/compositor_frame_transition_directive.h"
 
+#include <string>
 #include <utility>
 
 #include "base/time/time.h"
@@ -11,10 +12,8 @@
 namespace viz {
 namespace {
 
-constexpr base::TimeDelta kDefaultTransitionDuration =
-    base::TimeDelta::FromMilliseconds(250);
-constexpr base::TimeDelta kDefaultTransitionDelay =
-    base::TimeDelta::FromMilliseconds(0);
+constexpr base::TimeDelta kDefaultTransitionDuration = base::Milliseconds(250);
+constexpr base::TimeDelta kDefaultTransitionDelay = base::Milliseconds(0);
 
 }  // namespace
 
@@ -24,11 +23,13 @@ CompositorFrameTransitionDirective::CompositorFrameTransitionDirective() =
 CompositorFrameTransitionDirective::CompositorFrameTransitionDirective(
     uint32_t sequence_id,
     Type type,
+    bool is_renderer_driven_animation,
     Effect effect,
     const TransitionConfig& root_config,
     std::vector<SharedElement> shared_elements)
     : sequence_id_(sequence_id),
       type_(type),
+      is_renderer_driven_animation_(is_renderer_driven_animation),
       effect_(effect),
       root_config_(root_config),
       shared_elements_(std::move(shared_elements)) {}
@@ -48,8 +49,8 @@ CompositorFrameTransitionDirective::TransitionConfig::TransitionConfig()
 
 bool CompositorFrameTransitionDirective::TransitionConfig::IsValid(
     std::string* error) const {
-  constexpr base::TimeDelta kMinValue = base::TimeDelta::FromSeconds(0);
-  constexpr base::TimeDelta kMaxValue = base::TimeDelta::FromSeconds(5);
+  constexpr base::TimeDelta kMinValue = base::Seconds(0);
+  constexpr base::TimeDelta kMaxValue = base::Seconds(5);
 
   if (duration < kMinValue || duration > kMaxValue) {
     if (error)

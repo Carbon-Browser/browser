@@ -11,10 +11,9 @@
 #include <vector>
 
 #include "base/callback.h"
-#include "base/macros.h"
 #import "ios/web/navigation/navigation_item_impl.h"
+#include "ios/web/navigation/synthesized_session_restore.h"
 #include "ios/web/navigation/time_smoother.h"
-#import "ios/web/public/deprecated/navigation_item_list.h"
 #import "ios/web/public/navigation/navigation_manager.h"
 #include "ios/web/public/navigation/reload_type.h"
 #include "ui/base/page_transition_types.h"
@@ -145,15 +144,14 @@ class NavigationManagerImpl : public NavigationManager {
   // nil if there isn't one. The item starts out as pending, and will be lost
   // unless |-commitPendingItem| is called.
   // |is_post_navigation| is true if the navigation is using a POST HTTP method.
-  //|is_using_https_as_default_scheme| must be true for navigations that use
-  // https:// as the default scheme
-  // in their URL, if the user typed the URL without a scheme.
+  // |https_upgrade_type| indicates the type of the HTTPS upgrade applied on
+  // this navigation.
   void AddPendingItem(const GURL& url,
                       const web::Referrer& referrer,
                       ui::PageTransition navigation_type,
                       NavigationInitiationType initiation_type,
                       bool is_post_navigation,
-                      bool is_using_https_as_default_scheme);
+                      web::HttpsUpgradeType https_upgrade_type);
 
   // Commits the pending item, if any.
   // TODO(crbug.com/936933): Remove this method.
@@ -186,15 +184,12 @@ class NavigationManagerImpl : public NavigationManager {
   // new navigation.
   void SetPendingItemIndex(int index);
 
-  // Applies the workaround for crbug.com/887497.
-  void ApplyWKWebViewForwardHistoryClobberWorkaround();
-
   // Set ShouldSkipSerialization to true for the next pending item, provided it
   // matches |url|.  Applies the workaround for crbug.com/997182
   void SetWKWebViewNextPendingUrlNotSerializable(const GURL& url);
 
-  // Returns true if URL was restored via session restoration cache.
-  bool RestoreSessionFromCache(const GURL& url);
+  // Returns true if URL was restored via the native WKWebView API.
+  bool RestoreNativeSession(const GURL& url);
 
   // Resets the transient url rewriter list.
   void RemoveTransientURLRewriters();
@@ -249,8 +244,8 @@ class NavigationManagerImpl : public NavigationManager {
   void GoToIndex(int index) final;
   void Reload(ReloadType reload_type, bool check_for_reposts) final;
   void ReloadWithUserAgentType(UserAgentType user_agent_type) final;
-  NavigationItemList GetBackwardItems() const final;
-  NavigationItemList GetForwardItems() const final;
+  std::vector<NavigationItem*> GetBackwardItems() const final;
+  std::vector<NavigationItem*> GetForwardItems() const final;
   void Restore(int last_committed_item_index,
                std::vector<std::unique_ptr<NavigationItem>> items) final;
   bool IsRestoreSessionInProgress() const final;
@@ -280,6 +275,10 @@ class NavigationManagerImpl : public NavigationManager {
   class WKWebViewCache {
    public:
     explicit WKWebViewCache(NavigationManagerImpl* navigation_manager);
+
+    WKWebViewCache(const WKWebViewCache&) = delete;
+    WKWebViewCache& operator=(const WKWebViewCache&) = delete;
+
     ~WKWebViewCache();
 
     // Returns true if the navigation manager is attached to a WKWebView.
@@ -329,8 +328,6 @@ class NavigationManagerImpl : public NavigationManager {
 
     std::vector<std::unique_ptr<NavigationItemImpl>> cached_items_;
     int cached_current_item_index_;
-
-    DISALLOW_COPY_AND_ASSIGN(WKWebViewCache);
   };
 
   // Type of the list passed to restore items.
@@ -371,7 +368,7 @@ class NavigationManagerImpl : public NavigationManager {
       const Referrer& referrer,
       ui::PageTransition transition,
       NavigationInitiationType initiation_type,
-      bool is_using_https_as_default_scheme,
+      HttpsUpgradeType https_upgrade_type,
       const GURL& previous_url,
       const std::vector<BrowserURLRewriter::URLRewriter>* url_rewriters) const;
 
@@ -470,6 +467,11 @@ class NavigationManagerImpl : public NavigationManager {
   // registered in AddRestoreCompletionCallback() and are executed in
   // FinalizeSessionRestore().
   std::vector<base::OnceClosure> restore_session_completion_callbacks_;
+
+  // Used to trigger a WKWebView native session restore with a synthesized
+  // data blob (rather than a cached one). This is useful for when there is a
+  // cache miss, or when syncing tabs between devices.
+  SynthesizedSessionRestore synthesized_restore_helper_;
 };
 
 }  // namespace web

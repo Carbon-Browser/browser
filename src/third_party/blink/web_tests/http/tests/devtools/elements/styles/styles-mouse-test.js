@@ -4,7 +4,7 @@
 
 (async function() {
   TestRunner.addResult(`Tests that the styles sidebar can be used with a mouse.\n`);
-  await TestRunner.loadModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
+  await TestRunner.loadLegacyModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
   await TestRunner.showPanel('elements');
   await TestRunner.loadHTML(`
     <style>
@@ -69,7 +69,7 @@
       TestRunner.addResult('Not editing');
       return;
     }
-    TestRunner.addResult('Editing: "' + TestRunner.textContentWithoutStyles(document.deepActiveElement()) + '"');
+    TestRunner.addResult('Editing: "' + TestRunner.textContentWithoutStyles(Platform.DOMUtilities.deepActiveElement(document)) + '"');
   }
 
   function mouseDown(element, offset = 0) {

@@ -11,10 +11,10 @@
 #include "base/bind.h"
 #include "base/cxx17_backports.h"
 #include "base/location.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_checker.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
@@ -152,6 +152,11 @@ gfx::ColorSpace GetDefaultColorSpace(VideoPixelFormat format) {
     case PIXEL_FORMAT_YUV444P12:
     case PIXEL_FORMAT_P016LE:
     case PIXEL_FORMAT_Y16:
+    case PIXEL_FORMAT_I422A:
+    case PIXEL_FORMAT_I444A:
+    case PIXEL_FORMAT_YUV420AP10:
+    case PIXEL_FORMAT_YUV422AP10:
+    case PIXEL_FORMAT_YUV444AP10:
       return gfx::ColorSpace::CreateREC601();
     case PIXEL_FORMAT_ARGB:
     case PIXEL_FORMAT_XRGB:
@@ -200,7 +205,7 @@ class FrameDeliverer {
 
  private:
   const std::unique_ptr<PacmanFramePainter> frame_painter_;
-  const FakeDeviceState* device_state_ = nullptr;
+  raw_ptr<const FakeDeviceState> device_state_ = nullptr;
   std::unique_ptr<VideoCaptureDevice::Client> client_;
   base::TimeTicks first_ref_time_;
 };
@@ -258,7 +263,7 @@ class GpuMemoryBufferFrameDeliverer : public FrameDeliverer {
   void PaintAndDeliverNextFrame(base::TimeDelta timestamp_to_paint) override;
 
  private:
-  gpu::GpuMemoryBufferSupport* gmb_support_;
+  raw_ptr<gpu::GpuMemoryBufferSupport> gmb_support_;
 };
 
 FrameDelivererFactory::FrameDelivererFactory(
@@ -721,8 +726,8 @@ void OwnBufferFrameDeliverer::Initialize(
     std::unique_ptr<VideoCaptureDevice::Client> client,
     const FakeDeviceState* device_state) {
   FrameDeliverer::Initialize(pixel_format, std::move(client), device_state);
-  buffer_.reset(new uint8_t[VideoFrame::AllocationSize(
-      pixel_format, device_state->format.frame_size)]);
+  buffer_ = std::make_unique<uint8_t[]>(VideoFrame::AllocationSize(
+      pixel_format, device_state->format.frame_size));
 }
 
 void OwnBufferFrameDeliverer::PaintAndDeliverNextFrame(
@@ -859,10 +864,9 @@ void GpuMemoryBufferFrameDeliverer::PaintAndDeliverNextFrame(
 void FakeVideoCaptureDevice::BeepAndScheduleNextCapture(
     base::TimeTicks expected_execution_time) {
   DCHECK(thread_checker_.CalledOnValidThread());
-  const base::TimeDelta beep_interval =
-      base::TimeDelta::FromMilliseconds(kBeepInterval);
+  const base::TimeDelta beep_interval = base::Milliseconds(kBeepInterval);
   const base::TimeDelta frame_interval =
-      base::TimeDelta::FromMicroseconds(1e6 / device_state_->format.frame_rate);
+      base::Microseconds(1e6 / device_state_->format.frame_rate);
   beep_time_ += frame_interval;
   elapsed_time_ += frame_interval;
 

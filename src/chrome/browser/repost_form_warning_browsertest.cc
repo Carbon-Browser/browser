@@ -23,6 +23,10 @@ using web_modal::WebContentsModalDialogManager;
 class RepostFormWarningTest : public DialogBrowserTest {
  public:
   RepostFormWarningTest() {}
+
+  RepostFormWarningTest(const RepostFormWarningTest&) = delete;
+  RepostFormWarningTest& operator=(const RepostFormWarningTest&) = delete;
+
   ~RepostFormWarningTest() override {}
 
   // BrowserTestBase:
@@ -33,9 +37,6 @@ class RepostFormWarningTest : public DialogBrowserTest {
 
  protected:
   content::WebContents* TryReload();
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(RepostFormWarningTest);
 };
 
 void RepostFormWarningTest::SetUpOnMainThread() {
@@ -112,7 +113,7 @@ IN_PROC_BROWSER_TEST_F(RepostFormWarningTest, TestLoginAfterRepost) {
 
 // Disable on Mac OS until dialogs are using toolkit-views for MacViews project.
 // https://crbug.com/683356
-#if !defined(OS_MAC)
+#if !BUILDFLAG(IS_MAC)
 IN_PROC_BROWSER_TEST_F(RepostFormWarningTest, InvokeUi_TestRepostWarning) {
   ShowAndVerifyUi();
 }

@@ -49,7 +49,7 @@ TEST(TranslateServiceTest, CheckTranslatableURL) {
   EXPECT_TRUE(TranslateService::IsTranslatableURL(file_url));
 
   // kContentScheme is only used on Android.
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   std::string content = std::string(url::kContentScheme) + "://";
   GURL content_url = GURL(content);
   EXPECT_TRUE(TranslateService::IsTranslatableURL(content_url));
@@ -62,10 +62,6 @@ TEST(TranslateServiceTest, CheckTranslatableURL) {
   GURL filemanager_url = GURL(filemanager);
   EXPECT_FALSE(TranslateService::IsTranslatableURL(filemanager_url));
 #endif
-
-  std::string ftp = std::string(url::kFtpScheme) + "://google.com/pub";
-  GURL ftp_url = GURL(ftp);
-  EXPECT_FALSE(TranslateService::IsTranslatableURL(ftp_url));
 
   GURL right_url = GURL("http://www.tamurayukari.com/");
   EXPECT_TRUE(TranslateService::IsTranslatableURL(right_url));

@@ -1,0 +1,49 @@
+#
+# This file is part of eyeo Chromium SDK,
+# Copyright (C) 2006-present eyeo GmbH
+#
+# eyeo Chromium SDK is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 3 as
+# published by the Free Software Foundation.
+#
+# eyeo Chromium SDK is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with eyeo Chromium SDK.  If not, see <http://www.gnu.org/licenses/>.
+
+source_set("common_impl") {
+  visibility = [
+    ":*",
+    "//components/adblock/content:*",
+  ]
+  sources = [
+    "adblock_url_loader_factory.cc",
+    "adblock_url_loader_factory.h"
+  ]
+
+  deps = [
+    "//components/adblock/core",
+    "//third_party/blink/public/common:headers",
+  ]
+
+  public_deps =
+      [ "//components/adblock/content/common/mojom:adblock_interfaces" ]
+}
+
+source_set("test_support") {
+  testonly = true
+  sources = [
+    "test/mock_adblock_mojo_interface.cc",
+    "test/mock_adblock_mojo_interface.h",
+  ]
+
+  deps = [ "//components/adblock/content/common/mojom:adblock_interfaces" ]
+
+  public_deps = [
+    "//testing/gmock",
+    "//testing/gtest",
+  ]
+}

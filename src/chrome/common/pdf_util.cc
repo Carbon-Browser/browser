@@ -31,22 +31,26 @@ std::string GetPDFPlaceholderHTML(const GURL& pdf_url) {
           IDR_PDF_PLUGIN_HTML);
   webui::AppendWebUiCssTextDefaults(&template_html);
 
-  base::DictionaryValue values;
-  values.SetString("fileName", pdf_url.ExtractFileName());
-  values.SetString("open", l10n_util::GetStringUTF8(IDS_ACCNAME_OPEN));
-  values.SetString("pdfUrl", pdf_url.spec());
+  base::Value::Dict values;
+  values.Set("fileName", pdf_url.ExtractFileName());
+  values.Set("open", l10n_util::GetStringUTF8(IDS_ACCNAME_OPEN));
+  values.Set("pdfUrl", pdf_url.spec());
 
-  return webui::GetI18nTemplateHtml(template_html, &values);
+  return webui::GetI18nTemplateHtml(template_html, values);
+}
+
+bool IsPdfExtensionOrigin(const url::Origin& origin) {
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+  return origin.scheme() == extensions::kExtensionScheme &&
+         origin.host() == extension_misc::kPdfExtensionId;
+#else
+  return false;
+#endif
 }
 
 bool IsPdfInternalPluginAllowedOrigin(const url::Origin& origin) {
-#if BUILDFLAG(ENABLE_EXTENSIONS)
-  // Allow embedding the internal PDF plugin in the built-in PDF extension.
-  if (origin.scheme() == extensions::kExtensionScheme &&
-      origin.host() == extension_misc::kPdfExtensionId) {
+  if (IsPdfExtensionOrigin(origin))
     return true;
-  }
-#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
   // Allow embedding the internal PDF plugin in chrome://print.
   if (origin == url::Origin::Create(GURL(chrome::kChromeUIPrintURL)))

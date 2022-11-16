@@ -48,7 +48,7 @@ std::string GetCanonicalGUIDInternal(StringPieceType input, bool strict) {
     } else {
       if (strict ? !IsLowerHexDigit(current) : !IsHexDigit(current))
         return std::string();
-      lowercase_[i] = ToLowerASCII(current);
+      lowercase_[i] = static_cast<char>(ToLowerASCII(current));
     }
   }
 
@@ -140,6 +140,10 @@ GUID::GUID() = default;
 GUID::GUID(const GUID& other) = default;
 
 GUID& GUID::operator=(const GUID& other) = default;
+
+GUID::GUID(GUID&& other) = default;
+
+GUID& GUID::operator=(GUID&& other) = default;
 
 const std::string& GUID::AsLowercaseString() const {
   return lowercase_;

@@ -7,11 +7,12 @@
 #include "ash/constants/ash_switches.h"
 #include "base/command_line.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/sessions/exit_type_service.h"
 #include "chrome/common/pref_names.h"
-#include "chromeos/network/network_handler.h"
-#include "chromeos/network/network_state.h"
-#include "chromeos/network/network_state_handler.h"
-#include "chromeos/network/network_type_pattern.h"
+#include "chromeos/ash/components/network/network_handler.h"
+#include "chromeos/ash/components/network/network_state.h"
+#include "chromeos/ash/components/network/network_state_handler.h"
+#include "chromeos/ash/components/network/network_type_pattern.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/network_service_instance.h"
 
@@ -47,8 +48,8 @@ bool InstallEventLogCollectorBase::GetOnlineState() {
 void InstallEventLogCollectorBase::OnLogin() {
   // Don't log in case session is restared or recovered from crash.
   if (base::CommandLine::ForCurrentProcess()->HasSwitch(
-          chromeos::switches::kLoginUser) ||
-      profile_->GetLastSessionExitType() == Profile::EXIT_CRASHED) {
+          ash::switches::kLoginUser) ||
+      ExitTypeService::GetLastSessionExitType(profile_) == ExitType::kCrashed) {
     return;
   }
 

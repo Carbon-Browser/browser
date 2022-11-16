@@ -4,9 +4,10 @@
 
 #include "ash/login/ui/system_label_button.h"
 
-#include "ash/public/cpp/shelf_config.h"
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/style/ash_color_provider.h"
+#include "ash/style/style_util.h"
+#include "ui/color/color_id.h"
 #include "ui/compositor/layer.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/color_palette.h"
@@ -63,8 +64,7 @@ SystemLabelButton::SystemLabelButton(PressedCallback callback,
 
   SetFocusBehavior(FocusBehavior::ALWAYS);
   SetInstallFocusRingOnFocus(true);
-  views::FocusRing::Get(this)->SetColor(
-      ShelfConfig::Get()->shelf_focus_border_color());
+  views::FocusRing::Get(this)->SetColorId(ui::kColorAshFocusRing);
   views::InstallRoundRectHighlightPathGenerator(this, gfx::Insets(),
                                                 kSystemButtonBorderRadius);
 }
@@ -78,7 +78,7 @@ void SystemLabelButton::PaintButtonContents(gfx::Canvas* canvas) {
 }
 
 gfx::Insets SystemLabelButton::GetInsets() const {
-  return gfx::Insets(
+  return gfx::Insets::TLBR(
       kSystemButtonMarginTopBottomDp, kSystemButtonMarginLeftRightDp,
       kSystemButtonMarginTopBottomDp, kSystemButtonMarginLeftRightDp);
 }
@@ -113,12 +113,11 @@ void SystemLabelButton::SetBackgroundAndFont(bool alert_mode) {
   SkColor effective_background_color = color_utils::GetResultingPaintColor(
       background_color_,
       AshColorProvider::Get()->GetBaseLayerColor(kBubbleLayerType));
-  AshColorProvider::Get()->DecorateInkDrop(
-      views::InkDrop::Get(this),
-      AshColorProvider::kConfigBaseColor |
-          AshColorProvider::kConfigHighlightOpacity |
-          AshColorProvider::kConfigVisibleOpacity,
-      effective_background_color);
+  StyleUtil::ConfigureInkDropAttributes(this,
+                                        StyleUtil::kBaseColor |
+                                            StyleUtil::kInkDropOpacity |
+                                            StyleUtil::kHighlightOpacity,
+                                        effective_background_color);
 }
 
 }  // namespace ash

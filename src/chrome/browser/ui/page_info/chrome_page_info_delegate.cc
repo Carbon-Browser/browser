@@ -4,8 +4,11 @@
 
 #include "chrome/browser/ui/page_info/chrome_page_info_delegate.h"
 
+#include "base/metrics/histogram_functions.h"
 #include "build/build_config.h"
+#include "build/chromeos_buildflags.h"
 #include "chrome/browser/bluetooth/bluetooth_chooser_context_factory.h"
+#include "chrome/browser/browser_process.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/content_settings/page_specific_content_settings_delegate.h"
 #include "chrome/browser/permissions/permission_decision_auto_blocker_factory.h"
@@ -21,6 +24,7 @@
 #include "chrome/common/url_constants.h"
 #include "components/content_settings/browser/page_specific_content_settings.h"
 #include "components/infobars/content/content_infobar_manager.h"
+#include "components/page_info/core/features.h"
 #include "components/permissions/contexts/bluetooth_chooser_context.h"
 #include "components/permissions/object_permission_context_base.h"
 #include "components/permissions/permission_manager.h"
@@ -35,19 +39,25 @@
 #include "chrome/browser/safe_browsing/chrome_password_protection_service.h"
 #endif
 
-#if !defined(OS_ANDROID)
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "chrome/browser/ui/webui/settings/ash/app_management/app_management_uma.h"
+#endif
+
+#if !BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/certificate_viewer.h"
 #include "chrome/browser/hid/hid_chooser_context.h"
 #include "chrome/browser/hid/hid_chooser_context_factory.h"
 #include "chrome/browser/reputation/safety_tip_ui_helper.h"
 #include "chrome/browser/serial/serial_chooser_context.h"
 #include "chrome/browser/serial/serial_chooser_context_factory.h"
+#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/chrome_pages.h"
 #include "chrome/browser/ui/hats/trust_safety_sentiment_service.h"
 #include "chrome/browser/ui/hats/trust_safety_sentiment_service_factory.h"
 #include "chrome/browser/ui/page_info/page_info_infobar_delegate.h"
 #include "chrome/browser/ui/tab_dialogs.h"
+#include "chrome/browser/ui/web_applications/web_app_ui_utils.h"
 #include "ui/events/event.h"
 #else
 #include "chrome/grit/chromium_strings.h"
@@ -57,10 +67,13 @@
 ChromePageInfoDelegate::ChromePageInfoDelegate(
     content::WebContents* web_contents)
     : web_contents_(web_contents) {
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
   sentiment_service_ =
       TrustSafetySentimentServiceFactory::GetForProfile(GetProfile());
 #endif
+  base::UmaHistogramBoolean("Security.PageInfo.AboutThisSiteLanguageSupported",
+                            page_info::IsAboutThisSiteFeatureEnabled(
+                                g_browser_process->GetApplicationLocale()));
 }
 
 Profile* ChromePageInfoDelegate::GetProfile() const {
@@ -79,14 +92,14 @@ ChromePageInfoDelegate::GetChooserContext(ContentSettingsType type) {
       }
       return nullptr;
     case ContentSettingsType::SERIAL_CHOOSER_DATA:
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
       return SerialChooserContextFactory::GetForProfile(GetProfile());
 #else
       NOTREACHED();
       return nullptr;
 #endif
     case ContentSettingsType::HID_CHOOSER_DATA:
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
       return HidChooserContextFactory::GetForProfile(GetProfile());
 #else
       NOTREACHED();
@@ -126,7 +139,6 @@ void ChromePageInfoDelegate::OnUserActionOnPasswordUi(
 }
 
 std::u16string ChromePageInfoDelegate::GetWarningDetailText() {
-  std::vector<size_t> placeholder_offsets;
   auto* chrome_password_protection_service =
       GetChromePasswordProtectionService();
 
@@ -134,8 +146,7 @@ std::u16string ChromePageInfoDelegate::GetWarningDetailText() {
   return chrome_password_protection_service
              ? chrome_password_protection_service->GetWarningDetailText(
                    chrome_password_protection_service
-                       ->reused_password_account_type_for_last_shown_warning(),
-                   &placeholder_offsets)
+                       ->reused_password_account_type_for_last_shown_warning())
              : std::u16string();
 }
 #endif
@@ -147,9 +158,10 @@ permissions::PermissionResult ChromePageInfoDelegate::GetPermissionStatus(
   // about *all* permissions once it has default behaviour implemented for
   // ContentSettingTypes that aren't permissions.
   return PermissionManagerFactory::GetForProfile(GetProfile())
-      ->GetPermissionStatus(type, site_url, site_url);
+      ->GetPermissionStatusForDisplayOnSettingsUI(type, site_url);
 }
-#if !defined(OS_ANDROID)
+
+#if !BUILDFLAG(IS_ANDROID)
 bool ChromePageInfoDelegate::CreateInfoBarDelegate() {
   infobars::ContentInfoBarManager* infobar_manager =
       infobars::ContentInfoBarManager::FromWebContents(web_contents_);
@@ -161,8 +173,11 @@ bool ChromePageInfoDelegate::CreateInfoBarDelegate() {
 }
 
 void ChromePageInfoDelegate::ShowSiteSettings(const GURL& site_url) {
-  chrome::ShowSiteSettings(chrome::FindBrowserWithWebContents(web_contents_),
-                           site_url);
+  if (web_app::HandleAppManagementLinkClickedInPageInfo(web_contents_))
+    return;
+
+  Browser* browser = chrome::FindBrowserWithWebContents(web_contents_);
+  chrome::ShowSiteSettings(browser, site_url);
 }
 
 void ChromePageInfoDelegate::OpenCookiesDialog() {
@@ -275,7 +290,7 @@ ChromePageInfoDelegate::GetPageSpecificContentSettingsDelegate() {
   return std::move(delegate);
 }
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 const std::u16string ChromePageInfoDelegate::GetClientApplicationName() {
   return l10n_util::GetStringUTF16(IDS_SHORT_PRODUCT_NAME);
 }

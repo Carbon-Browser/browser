@@ -9,32 +9,52 @@
 #include <vector>
 
 #include "base/callback_helpers.h"
+#include "base/containers/flat_map.h"
+#include "base/containers/flat_set.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
+#include "base/test/scoped_feature_list.h"
+#include "build/chromeos_buildflags.h"
 #include "chrome/browser/web_applications/externally_installed_web_app_prefs.h"
-#include "chrome/browser/web_applications/test/test_externally_managed_app_manager.h"
-#include "chrome/browser/web_applications/test/test_web_app_registry_controller.h"
+#include "chrome/browser/web_applications/test/fake_externally_managed_app_manager.h"
+#include "chrome/browser/web_applications/test/fake_web_app_registry_controller.h"
 #include "chrome/browser/web_applications/test/web_app_test.h"
+#include "chrome/browser/web_applications/test/web_app_test_utils.h"
+#include "chrome/browser/web_applications/user_display_mode.h"
 #include "chrome/browser/web_applications/web_app.h"
-#include "chrome/browser/web_applications/web_app_constants.h"
 #include "chrome/browser/web_applications/web_app_helpers.h"
 #include "chrome/browser/web_applications/web_app_registrar.h"
+#include "chrome/common/chrome_features.h"
+#include "components/webapps/browser/install_result_code.h"
 
 namespace web_app {
 
-class ExternallyManagedAppManagerTest : public WebAppTest {
+class ExternallyManagedAppManagerTest
+    : public WebAppTest,
+      public testing::WithParamInterface<bool> {
+ public:
+  ExternallyManagedAppManagerTest() {
+    bool enable_migration = GetParam();
+    if (enable_migration) {
+      scoped_feature_list_.InitWithFeatures(
+          {features::kUseWebAppDBInsteadOfExternalPrefs}, {});
+    } else {
+      scoped_feature_list_.InitWithFeatures(
+          {}, {features::kUseWebAppDBInsteadOfExternalPrefs});
+    }
+  }
+
  protected:
   void SetUp() override {
     WebAppTest::SetUp();
-
-    test_registry_controller_ =
-        std::make_unique<TestWebAppRegistryController>();
+    fake_registry_controller_ =
+        std::make_unique<FakeWebAppRegistryController>();
     controller().SetUp(profile());
 
     externally_installed_app_prefs_ =
         std::make_unique<ExternallyInstalledWebAppPrefs>(profile()->GetPrefs());
     externally_managed_app_manager_ =
-        std::make_unique<TestExternallyManagedAppManager>(profile());
+        std::make_unique<FakeExternallyManagedAppManager>(profile());
 
     externally_managed_app_manager().SetSubsystems(&app_registrar(), nullptr,
                                                    nullptr, nullptr, nullptr);
@@ -45,7 +65,10 @@ class ExternallyManagedAppManagerTest : public WebAppTest {
               const GURL& install_url = install_options.install_url;
               if (!app_registrar().GetAppById(GenerateAppId(
                       /*manifest_id=*/absl::nullopt, install_url))) {
-                std::unique_ptr<WebApp> web_app = CreateWebApp(install_url);
+                std::unique_ptr<WebApp> web_app =
+                    test::CreateWebApp(install_url, WebAppManagement::kDefault);
+                web_app->AddInstallURLToManagementExternalConfigMap(
+                    WebAppManagement::kDefault, install_url);
                 controller().RegisterApp(std::move(web_app));
 
                 externally_installed_app_prefs().Insert(
@@ -54,7 +77,8 @@ class ExternallyManagedAppManagerTest : public WebAppTest {
                     install_options.install_source);
                 ++deduped_install_count_;
               }
-              return {.code = InstallResultCode::kSuccessNewInstall};
+              return ExternallyManagedAppManager::InstallResult(
+                  webapps::InstallResultCode::kSuccessNewInstall);
             }));
     externally_managed_app_manager().SetHandleUninstallRequestCallback(
         base::BindLambdaForTesting(
@@ -76,13 +100,14 @@ class ExternallyManagedAppManagerTest : public WebAppTest {
     externally_managed_app_manager_.reset();
   }
 
-  void Sync(std::vector<GURL> urls) {
+  void Sync(const std::vector<GURL>& urls) {
     ResetCounts();
 
     std::vector<ExternalInstallOptions> install_options_list;
+    install_options_list.reserve(urls.size());
     for (const auto& url : urls) {
       install_options_list.emplace_back(
-          url, DisplayMode::kStandalone,
+          url, UserDisplayMode::kStandalone,
           ExternalInstallSource::kInternalDefault);
     }
 
@@ -101,14 +126,16 @@ class ExternallyManagedAppManagerTest : public WebAppTest {
 
   void Expect(int deduped_install_count,
               int deduped_uninstall_count,
-              std::vector<GURL> installed_app_urls) {
+              const std::vector<GURL>& installed_app_urls) {
     EXPECT_EQ(deduped_install_count, deduped_install_count_);
     EXPECT_EQ(deduped_uninstall_count, deduped_uninstall_count_);
-    std::map<AppId, GURL> apps = app_registrar().GetExternallyInstalledApps(
-        ExternalInstallSource::kInternalDefault);
+    base::flat_map<AppId, base::flat_set<GURL>> apps =
+        app_registrar().GetExternallyInstalledApps(
+            ExternalInstallSource::kInternalDefault);
     std::vector<GURL> urls;
-    for (auto it : apps)
-      urls.push_back(it.second);
+    for (const auto& it : apps) {
+      std::copy(it.second.begin(), it.second.end(), std::back_inserter(urls));
+    }
 
     std::sort(urls.begin(), urls.end());
     EXPECT_EQ(installed_app_urls, urls);
@@ -119,30 +146,17 @@ class ExternallyManagedAppManagerTest : public WebAppTest {
     deduped_uninstall_count_ = 0;
   }
 
-  std::unique_ptr<WebApp> CreateWebApp(const GURL& start_url) {
-    const AppId app_id =
-        GenerateAppId(/*manifest_id=*/absl::nullopt, start_url);
-
-    auto web_app = std::make_unique<WebApp>(app_id);
-    web_app->SetStartUrl(start_url);
-    web_app->SetName("App Name");
-    web_app->AddSource(Source::kDefault);
-    web_app->SetDisplayMode(DisplayMode::kStandalone);
-    web_app->SetUserDisplayMode(DisplayMode::kStandalone);
-    return web_app;
+  FakeWebAppRegistryController& controller() {
+    return *fake_registry_controller_;
   }
 
-  TestWebAppRegistryController& controller() {
-    return *test_registry_controller_;
-  }
-
-  web_app::WebAppRegistrar& app_registrar() { return controller().registrar(); }
+  WebAppRegistrar& app_registrar() { return controller().registrar(); }
 
   ExternallyInstalledWebAppPrefs& externally_installed_app_prefs() {
     return *externally_installed_app_prefs_;
   }
 
-  TestExternallyManagedAppManager& externally_managed_app_manager() {
+  FakeExternallyManagedAppManager& externally_managed_app_manager() {
     return *externally_managed_app_manager_;
   }
 
@@ -150,23 +164,24 @@ class ExternallyManagedAppManagerTest : public WebAppTest {
   int deduped_install_count_ = 0;
   int deduped_uninstall_count_ = 0;
 
-  std::unique_ptr<TestWebAppRegistryController> test_registry_controller_;
+  std::unique_ptr<FakeWebAppRegistryController> fake_registry_controller_;
   std::unique_ptr<ExternallyInstalledWebAppPrefs>
       externally_installed_app_prefs_;
-  std::unique_ptr<TestExternallyManagedAppManager>
+  std::unique_ptr<FakeExternallyManagedAppManager>
       externally_managed_app_manager_;
+  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 // Test that destroying ExternallyManagedAppManager during a synchronize call
 // that installs an app doesn't crash. Regression test for
 // https://crbug.com/962808
-TEST_F(ExternallyManagedAppManagerTest, DestroyDuringInstallInSynchronize) {
+TEST_P(ExternallyManagedAppManagerTest, DestroyDuringInstallInSynchronize) {
   std::vector<ExternalInstallOptions> install_options_list;
   install_options_list.emplace_back(GURL("https://foo.example"),
-                                    DisplayMode::kStandalone,
+                                    UserDisplayMode::kStandalone,
                                     ExternalInstallSource::kInternalDefault);
   install_options_list.emplace_back(GURL("https://bar.example"),
-                                    DisplayMode::kStandalone,
+                                    UserDisplayMode::kStandalone,
                                     ExternalInstallSource::kInternalDefault);
 
   externally_managed_app_manager().SynchronizeInstalledApps(
@@ -181,12 +196,12 @@ TEST_F(ExternallyManagedAppManagerTest, DestroyDuringInstallInSynchronize) {
 // Test that destroying ExternallyManagedAppManager during a synchronize call
 // that uninstalls an app doesn't crash. Regression test for
 // https://crbug.com/962808
-TEST_F(ExternallyManagedAppManagerTest, DestroyDuringUninstallInSynchronize) {
+TEST_P(ExternallyManagedAppManagerTest, DestroyDuringUninstallInSynchronize) {
   // Install an app that will be uninstalled next.
   {
     std::vector<ExternalInstallOptions> install_options_list;
     install_options_list.emplace_back(GURL("https://foo.example"),
-                                      DisplayMode::kStandalone,
+                                      UserDisplayMode::kStandalone,
                                       ExternalInstallSource::kInternalDefault);
     base::RunLoop run_loop;
     externally_managed_app_manager().SynchronizeInstalledApps(
@@ -209,7 +224,7 @@ TEST_F(ExternallyManagedAppManagerTest, DestroyDuringUninstallInSynchronize) {
   base::RunLoop().RunUntilIdle();
 }
 
-TEST_F(ExternallyManagedAppManagerTest, SynchronizeInstalledApps) {
+TEST_P(ExternallyManagedAppManagerTest, SynchronizeInstalledApps) {
   GURL a("https://a.example.com/");
   GURL b("https://b.example.com/");
   GURL c("https://c.example.com/");
@@ -254,5 +269,57 @@ TEST_F(ExternallyManagedAppManagerTest, SynchronizeInstalledApps) {
   Sync(std::vector<GURL>{});
   Expect(0, 1, std::vector<GURL>{});
 }
+
+#if BUILDFLAG(IS_CHROMEOS)
+using ExternallyManagedAppManagerTestAndroidSMS =
+    ExternallyManagedAppManagerTest;
+// This test verifies that AndroidSMS is not uninstalled during the Syncing
+// process.
+TEST_P(ExternallyManagedAppManagerTestAndroidSMS,
+       SynchronizeAppsAndroidSMSTest) {
+  GURL android_sms_url1(
+      "https://messages-web.sandbox.google.com/web/authentication");
+  GURL android_sms_url2("https://messages.google.com/web/authentication");
+  GURL extra_url("https://extra.com/");
+
+  // Install all URLs first.
+  Sync(std::vector<GURL>{android_sms_url1, android_sms_url2, extra_url});
+  Expect(/*deduped_install_count=*/3, /*deduped_uninstall_count=*/0,
+         std::vector<GURL>{extra_url, android_sms_url1, android_sms_url2});
+
+  // Assume that extra_url is the only URL desired.
+  // install_count = 0 as no new installs happen.
+  // uninstall_count = 0 as android sms URLs does not get uninstalled.
+  // Both android SMS URLs remain.
+  Sync(std::vector<GURL>{extra_url});
+  Expect(/*deduped_install_count=*/0, /*deduped_uninstall_count=*/0,
+         std::vector<GURL>{extra_url, android_sms_url1, android_sms_url2});
+
+  // Assume that android_sms_url1 is only required.
+  // install_count = 0 as no new installs happen.
+  // uninstall_count = 1 as extra.com gets uninstalled.
+  // Both android SMS URLs remain.
+  Sync(std::vector<GURL>{android_sms_url1});
+  Expect(/*deduped_install_count=*/0, /*deduped_uninstall_count=*/1,
+         std::vector<GURL>{android_sms_url1, android_sms_url2});
+
+  // Assume that no URL is required.
+  // install_count = 0 as no new installs happen.
+  // uninstall_count = 0 as android sms URLs does not get uninstalled.
+  // Both android SMS URLs remain.
+  Sync(std::vector<GURL>{});
+  Expect(/*deduped_install_count=*/0, /*deduped_uninstall_count=*/0,
+         std::vector<GURL>{android_sms_url1, android_sms_url2});
+}
+
+INSTANTIATE_TEST_SUITE_P(All,
+                         ExternallyManagedAppManagerTestAndroidSMS,
+                         ::testing::Values(false));
+
+#endif
+
+INSTANTIATE_TEST_SUITE_P(All,
+                         ExternallyManagedAppManagerTest,
+                         ::testing::Bool());
 
 }  // namespace web_app

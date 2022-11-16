@@ -26,13 +26,6 @@
 #error "This file requires ARC support."
 #endif
 
-// TODO(crbug.com/1015113): The EG2 macro is breaking indexing for some reason
-// without the trailing semicolon.  For now, disable the extra semi warning
-// so Xcode indexing works for the egtest.
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wc++98-compat-extra-semi"
-GREY_STUB_CLASS_IN_APP_MAIN_QUEUE(FindInPageControllerAppInterface);
-
 namespace {
 
 // Test web page content.
@@ -43,7 +36,7 @@ const std::string kFindInPageResponse = "Find in page. Find in page.";
 // Tests for Find in Page.
 @interface FindInPageTestCase : WebHttpServerChromeTestCase
 
-// URL for a test page with |kFindInPageResponse|.
+// URL for a test page with `kFindInPageResponse`.
 @property(nonatomic, assign) GURL testURL;
 
 // Opens Find in Page.
@@ -54,14 +47,14 @@ const std::string kFindInPageResponse = "Find in page. Find in page.";
 - (void)typeFindInPageText:(NSString*)text;
 // Matcher for find in page textfield.
 - (id<GREYMatcher>)findInPageInputField;
-// Asserts that there is a string "|resultIndex| of |resultCount|" present on
+// Asserts that there is a string "`resultIndex` of `resultCount`" present on
 // screen. Waits for up to 2 seconds for this to happen.
 - (void)assertResultStringIsResult:(int)resultIndex outOfTotal:(int)resultCount;
 // Taps Next button in Find in page.
 - (void)advanceToNextResult;
 // Taps Previous button in Find in page.
 - (void)advanceToPreviousResult;
-// Navigates to |self.testURL| and waits for the page to load.
+// Navigates to `self.testURL` and waits for the page to load.
 - (void)navigateToTestPage;
 
 @end
@@ -71,7 +64,7 @@ const std::string kFindInPageResponse = "Find in page. Find in page.";
 
 #pragma mark - XCTest.
 
-// After setup, a page with |kFindInPageResponse| is displayed and Find In Page
+// After setup, a page with `kFindInPageResponse` is displayed and Find In Page
 // bar is opened.
 - (void)setUp {
   [super setUp];

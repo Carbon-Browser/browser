@@ -8,7 +8,7 @@
 #include <memory>
 
 #include "base/containers/flat_set.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/types/pass_key.h"
 #include "base/unguessable_token.h"
@@ -53,6 +53,9 @@ class FrameNodeImpl
                 const blink::LocalFrameToken& frame_token,
                 content::BrowsingInstanceId browsing_instance_id,
                 content::SiteInstanceId site_instance_id);
+
+  FrameNodeImpl(const FrameNodeImpl&) = delete;
+  FrameNodeImpl& operator=(const FrameNodeImpl&) = delete;
 
   ~FrameNodeImpl() override;
 
@@ -246,9 +249,9 @@ class FrameNodeImpl
 
   mojo::Receiver<mojom::DocumentCoordinationUnit> receiver_{this};
 
-  FrameNodeImpl* const parent_frame_node_;
-  PageNodeImpl* const page_node_;
-  ProcessNodeImpl* const process_node_;
+  const raw_ptr<FrameNodeImpl> parent_frame_node_;
+  const raw_ptr<PageNodeImpl> page_node_;
+  const raw_ptr<ProcessNodeImpl> process_node_;
   // The routing id of the frame.
   const int render_frame_id_;
 
@@ -354,8 +357,6 @@ class FrameNodeImpl
   base::WeakPtr<FrameNodeImpl> weak_this_;
   base::WeakPtrFactory<FrameNodeImpl> weak_factory_
       GUARDED_BY_CONTEXT(sequence_checker_){this};
-
-  DISALLOW_COPY_AND_ASSIGN(FrameNodeImpl);
 };
 
 }  // namespace performance_manager

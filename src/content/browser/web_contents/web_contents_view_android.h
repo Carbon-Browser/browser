@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "content/browser/renderer_host/render_view_host_delegate_view.h"
 #include "content/browser/web_contents/web_contents_view.h"
 #include "content/public/browser/web_contents_view_delegate.h"
@@ -34,7 +34,11 @@ class WebContentsViewAndroid : public WebContentsView,
                                public ui::EventHandlerAndroid {
  public:
   WebContentsViewAndroid(WebContentsImpl* web_contents,
-                         WebContentsViewDelegate* delegate);
+                         std::unique_ptr<WebContentsViewDelegate> delegate);
+
+  WebContentsViewAndroid(const WebContentsViewAndroid&) = delete;
+  WebContentsViewAndroid& operator=(const WebContentsViewAndroid&) = delete;
+
   ~WebContentsViewAndroid() override;
 
   void SetContentUiEventHandler(std::unique_ptr<ContentUiEventHandler> handler);
@@ -78,9 +82,10 @@ class WebContentsViewAndroid : public WebContentsView,
   void RenderViewHostChanged(RenderViewHost* old_host,
                              RenderViewHost* new_host) override;
   void SetOverscrollControllerEnabled(bool enabled) override;
+  void OnCapturerCountChanged() override;
 
   // Backend implementation of RenderViewHostDelegateView.
-  void ShowContextMenu(RenderFrameHost* render_frame_host,
+  void ShowContextMenu(RenderFrameHost& render_frame_host,
                        const ContextMenuParams& params) override;
   void ShowPopupMenu(
       RenderFrameHost* render_frame_host,
@@ -149,7 +154,7 @@ class WebContentsViewAndroid : public WebContentsView,
   SelectPopup* GetSelectPopup();
 
   // The WebContents whose contents we display.
-  WebContentsImpl* web_contents_;
+  raw_ptr<WebContentsImpl> web_contents_;
 
   // Handles UI events in Java layer when necessary.
   std::unique_ptr<ContentUiEventHandler> content_ui_event_handler_;
@@ -164,19 +169,25 @@ class WebContentsViewAndroid : public WebContentsView,
   ui::ViewAndroid view_;
 
   // Interface used to get notified of events from the synchronous compositor.
-  SynchronousCompositorClient* synchronous_compositor_client_;
+  raw_ptr<SynchronousCompositorClient> synchronous_compositor_client_;
 
-  SelectionPopupController* selection_popup_controller_ = nullptr;
+  raw_ptr<SelectionPopupController> selection_popup_controller_ = nullptr;
 
   int device_orientation_ = 0;
 
   // Show/hide popup UI for <select> tag.
   std::unique_ptr<SelectPopup> select_popup_;
 
+  // Whether drag went beyond the movement threshold to be considered as an
+  // intentional drag. If true, ::ShowContextMenu will be ignored.
+  bool drag_exceeded_movement_threshold_ = false;
+  // Whether there's an active drag process.
+  bool is_active_drag_ = false;
+  // The first drag location during a specific drag process.
+  gfx::PointF drag_entered_location_;
+
   gfx::PointF drag_location_;
   gfx::PointF drag_screen_location_;
-
-  DISALLOW_COPY_AND_ASSIGN(WebContentsViewAndroid);
 };
 
 } // namespace content

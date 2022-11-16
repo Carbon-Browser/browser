@@ -41,10 +41,8 @@ using autofill::AutofillWebDataServiceObserverOnDBSequence;
 using autofill::CreditCard;
 using autofill::FormFieldData;
 using autofill::PersonalDataManager;
-using autofill::PersonalDataManagerObserver;
 using base::WaitableEvent;
 using sync_datatype_helper::test;
-using testing::_;
 
 namespace {
 
@@ -303,8 +301,8 @@ void SetCreditCards(int profile, std::vector<CreditCard>* credit_cards) {
 
 void AddProfile(int profile, const AutofillProfile& autofill_profile) {
   std::vector<AutofillProfile> autofill_profiles;
-  for (AutofillProfile* profile : GetAllAutoFillProfiles(profile)) {
-    autofill_profiles.push_back(*profile);
+  for (AutofillProfile* p : GetAllAutoFillProfiles(profile)) {
+    autofill_profiles.push_back(*p);
   }
   autofill_profiles.push_back(autofill_profile);
   autofill_helper::SetProfiles(profile, &autofill_profiles);
@@ -312,9 +310,9 @@ void AddProfile(int profile, const AutofillProfile& autofill_profile) {
 
 void RemoveProfile(int profile, const std::string& guid) {
   std::vector<AutofillProfile> autofill_profiles;
-  for (AutofillProfile* profile : GetAllAutoFillProfiles(profile)) {
-    if (profile->guid() != guid) {
-      autofill_profiles.push_back(*profile);
+  for (AutofillProfile* p : GetAllAutoFillProfiles(profile)) {
+    if (p->guid() != guid) {
+      autofill_profiles.push_back(*p);
     }
   }
   autofill_helper::SetProfiles(profile, &autofill_profiles);
@@ -326,9 +324,9 @@ void UpdateProfile(int profile,
                    const std::u16string& value,
                    autofill::structured_address::VerificationStatus status) {
   std::vector<AutofillProfile> profiles;
-  for (AutofillProfile* profile : GetAllAutoFillProfiles(profile)) {
-    profiles.push_back(*profile);
-    if (profile->guid() == guid) {
+  for (AutofillProfile* p : GetAllAutoFillProfiles(profile)) {
+    profiles.push_back(*p);
+    if (p->guid() == guid) {
       profiles.back().SetRawInfoWithVerificationStatus(type.GetStorableType(),
                                                        value, status);
     }
@@ -420,8 +418,10 @@ bool AutofillProfileChecker::Wait() {
   PersonalDataLoadedObserverMock personal_data_observer;
   base::RunLoop run_loop_a;
   base::RunLoop run_loop_b;
-  auto* pdm_a = autofill_helper::GetPersonalDataManager(profile_a_);
-  auto* pdm_b = autofill_helper::GetPersonalDataManager(profile_b_);
+  PersonalDataManager* pdm_a =
+      autofill_helper::GetPersonalDataManager(profile_a_);
+  PersonalDataManager* pdm_b =
+      autofill_helper::GetPersonalDataManager(profile_b_);
   pdm_a->AddObserver(&personal_data_observer);
   pdm_b->AddObserver(&personal_data_observer);
 
@@ -465,5 +465,5 @@ void AutofillProfileChecker::OnPersonalDataChanged() {
   CheckExitCondition();
 }
 
-PersonalDataLoadedObserverMock::PersonalDataLoadedObserverMock() {}
-PersonalDataLoadedObserverMock::~PersonalDataLoadedObserverMock() {}
+PersonalDataLoadedObserverMock::PersonalDataLoadedObserverMock() = default;
+PersonalDataLoadedObserverMock::~PersonalDataLoadedObserverMock() = default;

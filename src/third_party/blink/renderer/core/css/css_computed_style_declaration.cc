@@ -24,7 +24,7 @@
 
 #include "third_party/blink/renderer/core/css/css_computed_style_declaration.h"
 
-#include "base/cxx17_backports.h"
+#include "base/memory/values_equivalent.h"
 #include "third_party/blink/renderer/core/css/computed_style_css_value_mapping.h"
 #include "third_party/blink/renderer/core/css/css_identifier_value.h"
 #include "third_party/blink/renderer/core/css/css_primitive_value.h"
@@ -37,6 +37,7 @@
 #include "third_party/blink/renderer/core/css/properties/css_property_ref.h"
 #include "third_party/blink/renderer/core/css/style_engine.h"
 #include "third_party/blink/renderer/core/css/zoom_adjusted_pixel_value.h"
+#include "third_party/blink/renderer/core/display_lock/display_lock_document_state.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/flat_tree_traversal.h"
 #include "third_party/blink/renderer/core/dom/node_computed_style.h"
@@ -46,7 +47,7 @@
 #include "third_party/blink/renderer/core/layout/layout_object.h"
 #include "third_party/blink/renderer/core/style/computed_style.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
@@ -82,7 +83,7 @@ CSSComputedStyleDeclaration::ComputableProperties(
   if (properties.IsEmpty()) {
     CSSProperty::FilterWebExposedCSSPropertiesIntoVector(
         execution_context, kCSSComputableProperties,
-        base::size(kCSSComputableProperties), properties);
+        std::size(kCSSComputableProperties), properties);
   }
   return properties;
 }
@@ -181,9 +182,10 @@ Node* CSSComputedStyleDeclaration::StyledNode() const {
     return nullptr;
 
   if (auto* node_element = DynamicTo<Element>(node_.Get())) {
-    if (PseudoElement* element =
-            node_element->GetPseudoElement(pseudo_element_specifier_))
+    if (PseudoElement* element = node_element->GetNestedPseudoElement(
+            pseudo_element_specifier_, pseudo_argument_)) {
       return element;
+    }
   }
   return node_.Get();
 }
@@ -210,7 +212,7 @@ const CSSValue* CSSComputedStyleDeclaration::GetPropertyCSSValue(
 }
 
 const CSSValue* CSSComputedStyleDeclaration::GetPropertyCSSValue(
-    AtomicString custom_property_name) const {
+    const AtomicString& custom_property_name) const {
   return GetPropertyCSSValue(CSSPropertyName(custom_property_name));
 }
 
@@ -245,8 +247,10 @@ void CSSComputedStyleDeclaration::UpdateStyleAndLayoutTreeIfNeeded(
         property_name && !property_name->IsCustomProperty() &&
         CSSProperty::Get(property_name->Id()).IsLayoutDependentProperty();
     if (is_for_layout_dependent_property) {
-      owner->GetDocument().UpdateStyleAndLayout(
-          DocumentUpdateReason::kJavaScript);
+      auto& owner_doc = owner->GetDocument();
+      owner_doc.GetDisplayLockDocumentState().UnlockShapingDeferredElements(
+          *styled_node, property_name->Id());
+      owner_doc.UpdateStyleAndLayout(DocumentUpdateReason::kJavaScript);
       // The style recalc could have caused the styled node to be discarded or
       // replaced if it was a PseudoElement so we need to update it.
       styled_node = StyledNode();
@@ -263,12 +267,18 @@ void CSSComputedStyleDeclaration::UpdateStyleAndLayoutIfNeeded(
     return;
 
   bool is_for_layout_dependent_property =
-      property &&
-      property->IsLayoutDependent(ComputeComputedStyle(), StyledLayoutObject());
+      property && property->IsLayoutDependent(styled_node->GetComputedStyle(),
+                                              StyledLayoutObject());
 
   if (is_for_layout_dependent_property) {
-    styled_node->GetDocument().UpdateStyleAndLayoutForNode(
-        styled_node, DocumentUpdateReason::kJavaScript);
+    auto& doc = styled_node->GetDocument();
+    // EditingStyle uses this class with DisallowTransitionScope.
+    if (!doc.Lifecycle().StateTransitionDisallowed()) {
+      doc.GetDisplayLockDocumentState().UnlockShapingDeferredElements(
+          *styled_node, property->PropertyID());
+      doc.UpdateStyleAndLayoutForNode(styled_node,
+                                      DocumentUpdateReason::kJavaScript);
+    }
   }
 }
 
@@ -361,7 +371,7 @@ bool CSSComputedStyleDeclaration::CssPropertyMatches(
     }
   }
   const CSSValue* value = GetPropertyCSSValue(property_id);
-  return DataEquivalent(value, &property_value);
+  return base::ValuesEquivalent(value, &property_value);
 }
 
 MutableCSSPropertyValueSet* CSSComputedStyleDeclaration::CopyProperties()
@@ -371,7 +381,7 @@ MutableCSSPropertyValueSet* CSSComputedStyleDeclaration::CopyProperties()
 
 MutableCSSPropertyValueSet* CSSComputedStyleDeclaration::CopyPropertiesInSet(
     const Vector<const CSSProperty*>& properties) const {
-  HeapVector<CSSPropertyValue, 256> list;
+  HeapVector<CSSPropertyValue, 64> list;
   list.ReserveInitialCapacity(properties.size());
   for (unsigned i = 0; i < properties.size(); ++i) {
     CSSPropertyName name = properties[i]->GetCSSPropertyName();
@@ -445,7 +455,7 @@ const CSSValue* CSSComputedStyleDeclaration::GetPropertyCSSValueInternal(
 }
 
 const CSSValue* CSSComputedStyleDeclaration::GetPropertyCSSValueInternal(
-    AtomicString custom_property_name) {
+    const AtomicString& custom_property_name) {
   DCHECK_EQ(CSSPropertyID::kVariable,
             CssPropertyID(GetExecutionContext(), custom_property_name));
   return GetPropertyCSSValue(custom_property_name);
@@ -454,6 +464,20 @@ const CSSValue* CSSComputedStyleDeclaration::GetPropertyCSSValueInternal(
 String CSSComputedStyleDeclaration::GetPropertyValueInternal(
     CSSPropertyID property_id) {
   return GetPropertyValue(property_id);
+}
+
+String CSSComputedStyleDeclaration::GetPropertyValueWithHint(
+    const String& property_name,
+    unsigned index) {
+  NOTREACHED();
+  return "";
+}
+
+String CSSComputedStyleDeclaration::GetPropertyPriorityWithHint(
+    const String& property_name,
+    unsigned index) {
+  NOTREACHED();
+  return "";
 }
 
 void CSSComputedStyleDeclaration::SetPropertyInternal(

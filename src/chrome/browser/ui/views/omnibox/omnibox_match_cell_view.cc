@@ -6,8 +6,8 @@
 
 #include <algorithm>
 
-#include "base/macros.h"
 #include "base/metrics/field_trial_params.h"
+#include "chrome/browser/ui/color/chrome_color_id.h"
 #include "chrome/browser/ui/layout_constants.h"
 #include "chrome/browser/ui/omnibox/omnibox_theme.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
@@ -17,19 +17,19 @@
 #include "chrome/grit/theme_resources.h"
 #include "components/omnibox/browser/autocomplete_match.h"
 #include "components/omnibox/browser/vector_icons.h"
-#include "extensions/common/image_util.h"
+#include "content/public/common/color_parser.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/pointer/touch_ui_controller.h"
+#include "ui/color/color_provider.h"
 #include "ui/gfx/canvas.h"
-#include "ui/gfx/color_palette.h"
+#include "ui/gfx/geometry/skia_conversions.h"
 #include "ui/gfx/image/canvas_image_source.h"
 #include "ui/gfx/image/image_skia_operations.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/gfx/render_text.h"
-#include "ui/gfx/skia_util.h"
 #include "ui/views/border.h"
 #include "ui/views/controls/image_view.h"
 #include "ui/views/layout/layout_provider.h"
@@ -211,12 +211,16 @@ void OmniboxMatchCellView::OnMatchUpdate(const OmniboxResultView* result_view,
                                           : icon_view_->GetPreferredSize());
 
   const auto apply_vector_icon = [=](const gfx::VectorIcon& vector_icon) {
-    const auto& icon = gfx::CreateVectorIcon(vector_icon, SK_ColorWHITE);
+    const auto* color_provider = GetColorProvider();
+    const auto& icon = gfx::CreateVectorIcon(
+        vector_icon,
+        color_provider->GetColor(kColorOmniboxAnswerIconForeground));
     answer_image_view_->SetImageSize(
         gfx::Size(kAnswerImageSize, kAnswerImageSize));
     answer_image_view_->SetImage(
         gfx::ImageSkiaOperations::CreateImageWithCircleBackground(
-            kAnswerImageSize / 2, gfx::kGoogleBlue600, icon));
+            kAnswerImageSize / 2,
+            color_provider->GetColor(kColorOmniboxAnswerIconBackground), icon));
   };
   if (match.type == AutocompleteMatchType::CALCULATOR) {
     apply_vector_icon(omnibox::kAnswerCalculatorIcon);
@@ -235,9 +239,9 @@ void OmniboxMatchCellView::OnMatchUpdate(const OmniboxResultView* result_view,
             AutocompleteMatch::AnswerTypeToAnswerIcon(match.answer->type()));
       }
     } else {
-      SkColor color = result_view->GetColor(OmniboxPart::RESULTS_BACKGROUND);
-      extensions::image_util::ParseHexColorString(match.image_dominant_color,
-                                                  &color);
+      SkColor color = GetColorProvider()->GetColor(
+          GetOmniboxBackgroundColorId(result_view->GetThemeState()));
+      content::ParseHexColorString(match.image_dominant_color, &color);
       color = SkColorSetA(color, 0x40);  // 25% transparency (arbitrary).
       constexpr gfx::Size size(kEntityImageSize, kEntityImageSize);
       answer_image_view_->SetImageSize(size);
@@ -273,8 +277,8 @@ gfx::Insets OmniboxMatchCellView::GetInsets() const {
   const int vertical_margin = ChromeLayoutProvider::Get()->GetDistanceMetric(
       single_line ? DISTANCE_OMNIBOX_CELL_VERTICAL_PADDING
                   : DISTANCE_OMNIBOX_TWO_LINE_CELL_VERTICAL_PADDING);
-  return gfx::Insets(vertical_margin, OmniboxMatchCellView::kMarginLeft,
-                     vertical_margin, OmniboxMatchCellView::kMarginRight);
+  return gfx::Insets::TLBR(vertical_margin, OmniboxMatchCellView::kMarginLeft,
+                           vertical_margin, OmniboxMatchCellView::kMarginRight);
 }
 
 void OmniboxMatchCellView::Layout() {
@@ -285,8 +289,9 @@ void OmniboxMatchCellView::Layout() {
   int x = child_area.x();
   int y = child_area.y();
   const int row_height = child_area.height();
-  views::ImageView* const image_view =
-      (two_line && is_rich_suggestion_) ? answer_image_view_ : icon_view_;
+  views::ImageView* const image_view = (two_line && is_rich_suggestion_)
+                                           ? answer_image_view_.get()
+                                           : icon_view_.get();
   image_view->SetBounds(x, y, OmniboxMatchCellView::kImageBoundsWidth,
                         row_height);
 

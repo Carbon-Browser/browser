@@ -2,9 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "chrome/app/chrome_command_ids.h"
+#include "chrome/browser/interstitials/security_interstitial_page_test_utils.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_command_controller.h"
 #include "chrome/browser/ui/browser_commands.h"
@@ -19,7 +21,10 @@
 #include "chrome/browser/ui/views/tabs/tab_strip.h"
 #include "chrome/grit/generated_resources.h"
 #include "chrome/test/base/ui_test_utils.h"
+#include "components/reputation/core/safety_tip_test_utils.h"
 #include "content/public/test/browser_test.h"
+#include "net/base/url_util.h"
+#include "net/dns/mock_host_resolver.h"
 #include "ui/gfx/animation/animation_test_api.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/test/widget_test.h"
@@ -84,8 +89,9 @@ class TabHoverCardBubbleViewBrowserTest : public DialogBrowserTest {
     // We don't use Tab::OnMouseEntered here to invoke the hover card because
     // that path is disabled in browser tests. If we enabled it, the real mouse
     // might interfere with the test.
-    tab_strip()->UpdateHoverCard(tab_strip()->tab_at(index),
-                                 TabController::HoverCardUpdateType::kHover);
+    tab_strip()->UpdateHoverCard(
+        tab_strip()->tab_at(index),
+        TabSlotController::HoverCardUpdateType::kHover);
   }
 
   // DialogBrowserTest:
@@ -98,7 +104,7 @@ class TabHoverCardBubbleViewBrowserTest : public DialogBrowserTest {
   std::unique_ptr<base::AutoReset<gfx::Animation::RichAnimationRenderMode>>
       animation_mode_reset_;
 
-  TabStrip* tab_strip_ = nullptr;
+  raw_ptr<TabStrip> tab_strip_ = nullptr;
 };
 
 IN_PROC_BROWSER_TEST_F(TabHoverCardBubbleViewBrowserTest,
@@ -109,7 +115,7 @@ IN_PROC_BROWSER_TEST_F(TabHoverCardBubbleViewBrowserTest,
 // Verify hover card is visible while hovering and not visible outside of the
 // tabstrip.
 // TODO(crbug.com/1050765): the test is flaky.
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #define MAYBE_WidgetVisibleOnHover DISABLED_WidgetVisibleOnHover
 #else
 #define MAYBE_WidgetVisibleOnHover WidgetVisibleOnHover
@@ -127,7 +133,7 @@ IN_PROC_BROWSER_TEST_F(TabHoverCardBubbleViewBrowserTest,
 
 // Verify hover card is visible when tab is focused.
 // TODO(crbug.com/1050765): the test is flaky.
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 #define MAYBE_WidgetVisibleOnTabFocus DISABLED_WidgetVisibleOnTabFocus
 #else
 #define MAYBE_WidgetVisibleOnTabFocus WidgetVisibleOnTabFocus
@@ -145,7 +151,7 @@ IN_PROC_BROWSER_TEST_F(TabHoverCardBubbleViewBrowserTest,
 // Verify hover card is visible when focus moves from the tab to tab close
 // button.
 // TODO(crbug.com/1050765): the test is flaky.
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 #define MAYBE_WidgetVisibleOnTabCloseButtonFocusAfterTabFocus \
   DISABLED_WidgetVisibleOnTabCloseButtonFocusAfterTabFocus
 #else
@@ -198,7 +204,7 @@ IN_PROC_BROWSER_TEST_F(TabHoverCardBubbleViewBrowserTest,
 // Verify hover card is visible after navigating to the tab strip using keyboard
 // accelerators.
 // TODO(crbug.com/1050765): the test is flaky.
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 #define MAYBE_WidgetVisibleOnTabFocusFromKeyboardAccelerator \
   DISABLED_WidgetVisibleOnTabFocusFromKeyboardAccelerator
 #else
@@ -211,7 +217,7 @@ IN_PROC_BROWSER_TEST_F(TabHoverCardBubbleViewBrowserTest,
   new_tab_data.title = u"Test Tab 2";
   new_tab_data.last_committed_url =
       GURL("http://example.com/this/should/not/be/seen");
-  tab_strip()->AddTabAt(1, new_tab_data, false);
+  tab_strip()->AddTabAt(1, new_tab_data);
 
   // Cycle focus until it reaches a tab.
   while (!tab_strip()->IsFocusInTabs())
@@ -230,7 +236,7 @@ IN_PROC_BROWSER_TEST_F(TabHoverCardBubbleViewBrowserTest,
 
 // Verify hover card is not visible after clicking on a tab.
 // TODO(crbug.com/1050765): the test is flaky.
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #define MAYBE_WidgetNotVisibleOnClick DISABLED_WidgetNotVisibleOnClick
 #else
 #define MAYBE_WidgetNotVisibleOnClick WidgetNotVisibleOnClick
@@ -249,7 +255,7 @@ IN_PROC_BROWSER_TEST_F(TabHoverCardBubbleViewBrowserTest,
 // Verify title, domain, and anchor are correctly updated when moving hover
 // from one tab to another.
 // TODO(crbug.com/1050765): the test is flaky.
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #define MAYBE_WidgetDataUpdate DISABLED_WidgetDataUpdate
 #else
 #define MAYBE_WidgetDataUpdate WidgetDataUpdate
@@ -260,7 +266,7 @@ IN_PROC_BROWSER_TEST_F(TabHoverCardBubbleViewBrowserTest,
   new_tab_data.title = u"Test Tab 2";
   new_tab_data.last_committed_url =
       GURL("http://example.com/this/should/not/be/seen");
-  tab_strip()->AddTabAt(1, new_tab_data, false);
+  tab_strip()->AddTabAt(1, new_tab_data);
 
   ShowUi("default");
 
@@ -279,7 +285,7 @@ IN_PROC_BROWSER_TEST_F(TabHoverCardBubbleViewBrowserTest,
 // Verify inactive window remains inactive when showing a hover card for a tab
 // in the inactive window.
 // TODO(crbug.com/1050765): the test is flaky.
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #define MAYBE_InactiveWindowStaysInactiveOnHover \
   DISABLED_InactiveWindowStaysInactiveOnHover
 #else
@@ -313,8 +319,8 @@ IN_PROC_BROWSER_TEST_F(TabHoverCardBubbleViewBrowserTest,
 
 IN_PROC_BROWSER_TEST_F(TabHoverCardBubbleViewBrowserTest,
                        HoverCardsSeenRatioMetric) {
-  tab_strip()->AddTabAt(1, TabRendererData(), false);
-  tab_strip()->AddTabAt(2, TabRendererData(), false);
+  tab_strip()->AddTabAt(1, TabRendererData());
+  tab_strip()->AddTabAt(2, TabRendererData());
 
   HoverMouseOverTabAt(0);
 
@@ -334,4 +340,75 @@ IN_PROC_BROWSER_TEST_F(TabHoverCardBubbleViewBrowserTest,
   tab_strip()->SetSelection(selection);
   EXPECT_EQ(GetHoverCardsSeenCount(), 0);
   EXPECT_FALSE(widget->IsVisible());
+}
+
+// Tests for tabs showing interstitials to check whether the URL in the hover
+// card is displayed or hidden as appropriate.
+class TabHoverCardBubbleViewInterstitialBrowserTest
+    : public TabHoverCardBubbleViewBrowserTest {
+ public:
+  void SetUpOnMainThread() override {
+    host_resolver()->AddRule("*", "127.0.0.1");
+
+    https_server_mismatched_ = std::make_unique<net::EmbeddedTestServer>(
+        net::EmbeddedTestServer::TYPE_HTTPS);
+    https_server_mismatched_->SetSSLConfig(
+        net::EmbeddedTestServer::CERT_MISMATCHED_NAME);
+    https_server_mismatched_->AddDefaultHandlers(GetChromeTestDataDir());
+
+    TabHoverCardBubbleViewBrowserTest::SetUpOnMainThread();
+    reputation::InitializeSafetyTipConfig();
+  }
+
+  net::EmbeddedTestServer* https_server_mismatched() {
+    return https_server_mismatched_.get();
+  }
+
+ private:
+  std::unique_ptr<net::EmbeddedTestServer> https_server_mismatched_;
+};
+
+// Verify that the domain field of tab's hover card is empty if the tab is
+// showing a lookalike interstitial is ("Did you mean google.com?").
+IN_PROC_BROWSER_TEST_F(TabHoverCardBubbleViewInterstitialBrowserTest,
+                       LookalikeInterstitial_ShouldHideHoverCardUrl) {
+  ASSERT_TRUE(embedded_test_server()->Start());
+  // Navigate the tab to a lookalike URL and check the hover card. The domain
+  // field must be empty.
+  content::WebContents* tab =
+      browser()->tab_strip_model()->GetActiveWebContents();
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(
+      browser(), embedded_test_server()->GetURL("googlé.com", "/empty.html")));
+  ASSERT_TRUE(chrome_browser_interstitials::IsShowingInterstitial(tab));
+
+  // Open another tab.
+  chrome::NewTab(browser());
+  HoverMouseOverTabAt(0);
+  views::test::WidgetVisibleWaiter(hover_card()->GetWidget()).Wait();
+
+  EXPECT_TRUE(GetHoverCardDomain().empty());
+  EXPECT_EQ(GetHoverCardsSeenCount(), 1);
+  ASSERT_NE(nullptr, hover_card()->GetWidget());
+  EXPECT_TRUE(hover_card()->GetWidget()->IsVisible());
+}
+
+// Verify that the domain field of tab's hover card is not empty on other types
+// of interstitials (here, SSL).
+IN_PROC_BROWSER_TEST_F(TabHoverCardBubbleViewInterstitialBrowserTest,
+                       SSLInterstitial_ShouldShowHoverCardUrl) {
+  ASSERT_TRUE(https_server_mismatched()->Start());
+  // Navigate the tab to an SSL error.
+  const GURL url =
+      https_server_mismatched()->GetURL("site.test", "/empty.html");
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
+
+  // Open another tab.
+  chrome::NewTab(browser());
+  HoverMouseOverTabAt(0);
+  views::test::WidgetVisibleWaiter(hover_card()->GetWidget()).Wait();
+
+  EXPECT_EQ(base::UTF8ToUTF16(net::GetHostAndPort(url)), GetHoverCardDomain());
+  EXPECT_EQ(GetHoverCardsSeenCount(), 1);
+  ASSERT_NE(nullptr, hover_card()->GetWidget());
+  EXPECT_TRUE(hover_card()->GetWidget()->IsVisible());
 }

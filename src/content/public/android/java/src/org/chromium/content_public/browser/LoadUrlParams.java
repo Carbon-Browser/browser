@@ -4,6 +4,7 @@
 
 package org.chromium.content_public.browser;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 
@@ -17,6 +18,7 @@ import org.chromium.ui.base.PageTransition;
 import org.chromium.url.GURL;
 import org.chromium.url.Origin;
 
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 
@@ -47,11 +49,6 @@ public class LoadUrlParams {
     private long mInputStartTimestamp;
     private boolean mHasUserGesture;
     private boolean mShouldClearHistoryList;
-    private String mAttributionSourcePackageName;
-    private String mAttributionSourceEventId;
-    private String mAttributionDestination;
-    private String mAttributionReportTo;
-    private long mAttributionExpiry;
 
     /**
      * Creates an instance with default page transition type.
@@ -95,6 +92,33 @@ public class LoadUrlParams {
         mBaseUrlForDataUrl = null;
         mVirtualUrlForDataUrl = null;
         mDataUrlAsString = null;
+    }
+
+    /** Creates a new LoadUrlParams that is a copy of {@code other}. */
+    public static LoadUrlParams copy(@NonNull LoadUrlParams other) {
+        LoadUrlParams copy = new LoadUrlParams(other.mUrl);
+        copy.mInitiatorOrigin = other.mInitiatorOrigin;
+        copy.mLoadUrlType = other.mLoadUrlType;
+        copy.mTransitionType = other.mTransitionType;
+        copy.mReferrer = other.mReferrer;
+        if (other.mExtraHeaders != null) {
+            copy.mExtraHeaders = new HashMap<>(other.mExtraHeaders);
+        }
+
+        copy.mVerbatimHeaders = other.mVerbatimHeaders;
+        copy.mUaOverrideOption = other.mUaOverrideOption;
+        copy.mPostData = other.mPostData;
+        copy.mBaseUrlForDataUrl = other.mBaseUrlForDataUrl;
+        copy.mVirtualUrlForDataUrl = other.mVirtualUrlForDataUrl;
+        copy.mDataUrlAsString = other.mDataUrlAsString;
+        copy.mCanLoadLocalResources = other.mCanLoadLocalResources;
+        copy.mIsRendererInitiated = other.mIsRendererInitiated;
+        copy.mShouldReplaceCurrentEntry = other.mShouldReplaceCurrentEntry;
+        copy.mIntentReceivedTimestamp = other.mIntentReceivedTimestamp;
+        copy.mInputStartTimestamp = other.mInputStartTimestamp;
+        copy.mHasUserGesture = other.mHasUserGesture;
+        copy.mShouldClearHistoryList = other.mShouldClearHistoryList;
+        return copy;
     }
 
     /**
@@ -553,67 +577,6 @@ public class LoadUrlParams {
             return true;
         }
         return LoadUrlParamsJni.get().isDataScheme(mBaseUrlForDataUrl);
-    }
-
-    /**
-     * Sets the Attribution Parameters for this load, used to construct a blink::Impression.
-     *
-     * @param sourcePackageName The Package Name of the app that triggered this navigation.
-     * @param sourceEventId A uint64_t encoded as a string identifying the attribution source.
-     * @param destination The origin on which this navigation is intended to finish.
-     * @param reportTo An optional origin to send any attribution report to.
-     * @param expiryMs An optional offset in milliseconds from the current time, after which the
-     *          attribution expires. 0 represents an unset expiry time.
-     *
-     * For more information see https://wicg.github.io/conversion-measurement-api/
-     */
-    public void setAttributionParameters(String sourcePackageName, String sourceEventId,
-            String destination, String reportTo, long expiryMs) {
-        mAttributionSourcePackageName = sourcePackageName;
-        mAttributionSourceEventId = sourceEventId;
-        mAttributionDestination = destination;
-        mAttributionReportTo = reportTo;
-        mAttributionExpiry = expiryMs;
-    }
-
-    /**
-     * {@see #setAttributionParameters}
-     * @return the PackageName for the source of this navigation with Attribution, if any.
-     */
-    public String getAttributionSourcePackageName() {
-        return mAttributionSourcePackageName;
-    }
-
-    /**
-     * {@see #setAttributionParameters}
-     * @return the Attribution SourceEventId for this navigation, if any.
-     */
-    public String getAttributionSourceEventId() {
-        return mAttributionSourceEventId;
-    }
-
-    /**
-     * {@see #setAttributionParameters}
-     * @return the Attribution Destination for this navigation, if any.
-     */
-    public String getAttributionDestination() {
-        return mAttributionDestination;
-    }
-
-    /**
-     * {@see #setAttributionParameters}
-     * @return the Attribution ReportTo for this navigation, if any.
-     */
-    public String getAttributionReportTo() {
-        return mAttributionReportTo;
-    }
-
-    /**
-     * {@see #setAttributionParameters}
-     * @return the Attribution Expiry for this navigation, if any.
-     */
-    public long getAttributionExpiry() {
-        return mAttributionExpiry;
     }
 
     @NativeMethods

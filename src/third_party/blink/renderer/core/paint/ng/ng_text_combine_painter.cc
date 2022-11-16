@@ -6,6 +6,7 @@
 
 #include "third_party/blink/renderer/core/layout/ng/inline/layout_ng_text_combine.h"
 #include "third_party/blink/renderer/core/layout/ng/ng_text_decoration_offset.h"
+#include "third_party/blink/renderer/core/paint/paint_auto_dark_mode.h"
 #include "third_party/blink/renderer/core/paint/paint_info.h"
 #include "third_party/blink/renderer/core/style/computed_style.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_context.h"
@@ -20,6 +21,7 @@ NGTextCombinePainter::NGTextCombinePainter(GraphicsContext& context,
                       style.GetFont(),
                       text_frame_rect.offset,
                       text_frame_rect,
+                      /* inline_context */ nullptr,
                       /* horizontal */ false),
       style_(style) {}
 
@@ -50,7 +52,7 @@ void NGTextCombinePainter::Paint(const PaintInfo& paint_info,
 
   const ComputedStyle& style = text_combine.Parent()->StyleRef();
   const bool has_text_decoration =
-      style.TextDecorationsInEffect() != TextDecoration::kNone;
+      style.TextDecorationsInEffect() != TextDecorationLine::kNone;
   const bool has_emphasis_mark =
       style.GetTextEmphasisMark() != TextEmphasisMark::kNone;
   DCHECK(has_text_decoration | has_emphasis_mark);
@@ -69,7 +71,8 @@ void NGTextCombinePainter::Paint(const PaintInfo& paint_info,
 
   if (has_emphasis_mark) {
     text_painter.PaintEmphasisMark(text_style,
-                                   text_combine.Parent()->StyleRef().GetFont());
+                                   text_combine.Parent()->StyleRef().GetFont(),
+                                   text_combine.GetDocument());
   }
 
   if (has_text_decoration)
@@ -80,7 +83,7 @@ void NGTextCombinePainter::Paint(const PaintInfo& paint_info,
 bool NGTextCombinePainter::ShouldPaint(
     const LayoutNGTextCombine& text_combine) {
   const auto& style = text_combine.Parent()->StyleRef();
-  return style.TextDecorationsInEffect() != TextDecoration::kNone ||
+  return style.TextDecorationsInEffect() != TextDecorationLine::kNone ||
          style.GetTextEmphasisMark() != TextEmphasisMark::kNone;
 }
 
@@ -94,34 +97,32 @@ void NGTextCombinePainter::PaintDecorations(const PaintInfo& paint_info,
                                             const TextPaintStyle& text_style) {
   // Setup arguments for painting text decorations
   const absl::optional<AppliedTextDecoration> selection_text_decoration;
-  const ComputedStyle* const decorating_box_style = nullptr;
   TextDecorationInfo decoration_info(
-      text_frame_rect_.offset, text_frame_rect_.size.width,
-      style_.GetFontBaseline(), style_, style_.GetFont(),
-      selection_text_decoration, decorating_box_style);
+      text_frame_rect_.offset, text_frame_rect_.size.width, style_,
+      /* inline_context */ nullptr, selection_text_decoration);
 
-  const NGTextDecorationOffset decoration_offset(style_, style_, nullptr);
+  const NGTextDecorationOffset decoration_offset(style_, style_);
   const auto& applied_text_decorations = style_.AppliedTextDecorations();
 
   // Paint text decorations except line through
-  bool has_line_through_decoration = false;
   PaintDecorationsExceptLineThrough(decoration_offset, decoration_info,
-                                    paint_info, applied_text_decorations,
-                                    text_style, &has_line_through_decoration);
-  if (!has_line_through_decoration)
-    return;
+                                    ~TextDecorationLine::kNone, paint_info,
+                                    applied_text_decorations, text_style);
 
-  // Paint line through
+  // Paint line through if needed
   PaintDecorationsOnlyLineThrough(decoration_info, paint_info,
                                   applied_text_decorations, text_style);
 }
 
 void NGTextCombinePainter::PaintEmphasisMark(const TextPaintStyle& text_style,
-                                             const Font& emphasis_mark_font) {
+                                             const Font& emphasis_mark_font,
+                                             const Document& document) {
   DCHECK_NE(style_.GetTextEmphasisMark(), TextEmphasisMark::kNone);
   SetEmphasisMark(style_.TextEmphasisMarkString(),
                   style_.GetTextEmphasisPosition());
-  PaintEmphasisMarkForCombinedText(text_style, emphasis_mark_font);
+  PaintEmphasisMarkForCombinedText(
+      text_style, emphasis_mark_font,
+      PaintAutoDarkMode(style_, DarkModeFilter::ElementRole::kForeground));
 }
 
 }  // namespace blink

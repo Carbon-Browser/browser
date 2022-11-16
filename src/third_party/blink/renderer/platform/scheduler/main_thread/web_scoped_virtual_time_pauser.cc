@@ -6,7 +6,7 @@
 
 #include "base/trace_event/trace_event.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/traced_value.h"
-#include "third_party/blink/renderer/platform/scheduler/main_thread/main_thread_scheduler_impl.h"
+#include "third_party/blink/renderer/platform/scheduler/common/thread_scheduler_impl.h"
 
 namespace blink {
 
@@ -14,7 +14,7 @@ WebScopedVirtualTimePauser::WebScopedVirtualTimePauser()
     : scheduler_(nullptr) {}
 
 WebScopedVirtualTimePauser::WebScopedVirtualTimePauser(
-    scheduler::MainThreadSchedulerImpl* scheduler,
+    scheduler::ThreadSchedulerImpl* scheduler,
     VirtualTaskDuration duration,
     const WebString& name)
     : duration_(duration),
@@ -83,7 +83,7 @@ void WebScopedVirtualTimePauser::DecrementVirtualTimePauseCount() {
   scheduler_->DecrementVirtualTimePauseCount();
   if (duration_ == VirtualTaskDuration::kNonInstant) {
     scheduler_->MaybeAdvanceVirtualTime(virtual_time_when_paused_ +
-                                        base::TimeDelta::FromMilliseconds(10));
+                                        base::Milliseconds(10));
   }
   if (virtual_time_enabled_when_paused_) {
     TRACE_EVENT_NESTABLE_ASYNC_END0(

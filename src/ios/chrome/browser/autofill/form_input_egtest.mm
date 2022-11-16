@@ -38,10 +38,11 @@ NSString* GetFocusedElementId() {
   NSString* js = @"(function() {"
                   "  return document.activeElement.id;"
                   "})();";
-  return [ChromeEarlGrey executeJavaScript:js];
+  base::Value result = [ChromeEarlGrey evaluateJavaScript:js];
+  return result.is_string() ? base::SysUTF8ToNSString(result.GetString()) : @"";
 }
 
-// Verifies that |elementId| is the selected element in the web page.
+// Verifies that `elementId` is the selected element in the web page.
 void AssertElementIsFocused(const std::string& element_id) {
   NSString* description =
       [NSString stringWithFormat:@"Timeout waiting for the focused element in "
@@ -108,7 +109,7 @@ void AssertElementIsFocused(const std::string& element_id) {
     };
     GREYAssert(WaitUntilConditionOrTimeout(kWaitForUIElementTimeout, condition),
                description);
-    base::test::ios::SpinRunLoopWithMinDelay(base::TimeDelta::FromSeconds(1));
+    base::test::ios::SpinRunLoopWithMinDelay(base::Seconds(1));
 
     // Verifies that the taped element is focused.
     AssertElementIsFocused(kFormElementId1);

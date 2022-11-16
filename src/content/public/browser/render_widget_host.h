@@ -26,6 +26,7 @@
 #include "third_party/perfetto/include/perfetto/tracing/traced_value_forward.h"
 #include "ui/base/dragdrop/mojom/drag_drop_types.mojom-forward.h"
 #include "ui/base/ui_base_types.h"
+#include "ui/display/screen_infos.h"
 #include "ui/surface/transport_dib.h"
 
 namespace blink {
@@ -225,7 +226,7 @@ class CONTENT_EXPORT RenderWidgetHost {
                                  blink::mojom::InputEventResultState state,
                                  const blink::WebInputEvent&) {}
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
     // Not all key events are triggered through InputEvent on Android.
     // InputEvents are only triggered when user typed in through number bar on
     // Android keyboard. This function is triggered when text is committed in
@@ -245,7 +246,7 @@ class CONTENT_EXPORT RenderWidgetHost {
   virtual void AddInputEventObserver(InputEventObserver* observer) = 0;
   virtual void RemoveInputEventObserver(InputEventObserver* observer) = 0;
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   // Add/remove an Ime input event observer.
   virtual void AddImeInputEventObserver(InputEventObserver* observer) = 0;
   virtual void RemoveImeInputEventObserver(InputEventObserver* observer) = 0;
@@ -258,7 +259,11 @@ class CONTENT_EXPORT RenderWidgetHost {
   virtual void RemoveObserver(RenderWidgetHostObserver* observer) = 0;
 
   // Get info regarding the screen showing this RenderWidgetHost.
-  virtual void GetScreenInfo(display::ScreenInfo* screen_info) = 0;
+  virtual display::ScreenInfo GetScreenInfo() const = 0;
+
+  // Get info regarding all screens, including which screen is currently showing
+  // this RenderWidgetHost.
+  virtual display::ScreenInfos GetScreenInfos() const = 0;
 
   // This must always return the same device scale factor as GetScreenInfo.
   virtual float GetDeviceScaleFactor() = 0;

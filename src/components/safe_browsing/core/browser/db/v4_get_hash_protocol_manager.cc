@@ -10,14 +10,15 @@
 #include "base/base64url.h"
 #include "base/bind.h"
 #include "base/containers/contains.h"
-#include "base/macros.h"
 #include "base/memory/ptr_util.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/string_split.h"
 #include "base/timer/timer.h"
 #include "base/trace_event/trace_event.h"
 #include "base/trace_event/traced_value.h"
 #include "components/safe_browsing/core/common/features.h"
+#include "components/safe_browsing/core/common/utils.h"
 #include "net/base/load_flags.h"
 #include "net/http/http_response_headers.h"
 #include "net/http/http_status_code.h"
@@ -28,7 +29,6 @@
 #include "services/network/public/mojom/url_response_head.mojom.h"
 
 using base::Time;
-using base::TimeDelta;
 
 namespace {
 
@@ -37,6 +37,12 @@ void RecordGetHashResult(safe_browsing::V4OperationResult result) {
   UMA_HISTOGRAM_ENUMERATION(
       "SafeBrowsing.V4GetHash.Result", result,
       safe_browsing::V4OperationResult::OPERATION_RESULT_MAX);
+}
+
+// Record a backoff error count
+void RecordBackoffErrorCountResult(size_t count) {
+  base::UmaHistogramCounts100(
+      "SafeBrowsing.V4GetHash.Result.BackoffErrorCount", count);
 }
 
 // Enumerate parsing failures for histogramming purposes.  DO NOT CHANGE
@@ -125,6 +131,12 @@ void RecordV4GetHashCheckResult(V4GetHashCheckResultType result_type) {
                             GET_HASH_CHECK_RESULT_MAX);
 }
 
+bool ErrorIsRetriable(int net_error, int http_error) {
+  return (net_error == net::ERR_INTERNET_DISCONNECTED ||
+          net_error == net::ERR_NETWORK_CHANGED) &&
+         http_error != net::HTTP_OK;
+}
+
 const char kPermission[] = "permission";
 const char kPhaPatternType[] = "pha_pattern_type";
 const char kMalwareThreatType[] = "malware_threat_type";
@@ -144,6 +156,12 @@ class V4GetHashProtocolManagerFactoryImpl
     : public V4GetHashProtocolManagerFactory {
  public:
   V4GetHashProtocolManagerFactoryImpl() {}
+
+  V4GetHashProtocolManagerFactoryImpl(
+      const V4GetHashProtocolManagerFactoryImpl&) = delete;
+  V4GetHashProtocolManagerFactoryImpl& operator=(
+      const V4GetHashProtocolManagerFactoryImpl&) = delete;
+
   ~V4GetHashProtocolManagerFactoryImpl() override {}
   std::unique_ptr<V4GetHashProtocolManager> CreateProtocolManager(
       scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
@@ -152,9 +170,6 @@ class V4GetHashProtocolManagerFactoryImpl
     return base::WrapUnique(new V4GetHashProtocolManager(
         url_loader_factory, stores_to_check, config));
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(V4GetHashProtocolManagerFactoryImpl);
 };
 
 // ----------------------------------------------------------------
@@ -295,6 +310,7 @@ void V4GetHashProtocolManager::GetFullHashes(
   if (clock_->Now() <= next_gethash_time_) {
     if (gethash_error_count_) {
       RecordGetHashResult(V4OperationResult::BACKOFF_ERROR);
+      backoff_error_count_++;
     } else {
       RecordGetHashResult(V4OperationResult::MIN_WAIT_DURATION_ERROR);
     }
@@ -341,8 +357,7 @@ void V4GetHashProtocolManager::GetFullHashes(
                        &resource_request->headers);
 
   resource_request->load_flags = net::LOAD_DISABLE_CACHE;
-  if (base::FeatureList::IsEnabled(kSafeBrowsingRemoveCookies))
-    resource_request->credentials_mode = network::mojom::CredentialsMode::kOmit;
+  resource_request->credentials_mode = network::mojom::CredentialsMode::kOmit;
   std::unique_ptr<network::SimpleURLLoader> owned_loader =
       network::SimpleURLLoader::Create(std::move(resource_request),
                                        traffic_annotation);
@@ -367,7 +382,8 @@ void V4GetHashProtocolManager::GetFullHashesWithApis(
   DCHECK(url.SchemeIs(url::kHttpScheme) || url.SchemeIs(url::kHttpsScheme));
 
   std::vector<FullHash> full_hashes;
-  V4ProtocolManagerUtil::UrlToFullHashes(url.GetOrigin(), &full_hashes);
+  V4ProtocolManagerUtil::UrlToFullHashes(url.DeprecatedGetOriginAsURL(),
+                                         &full_hashes);
 
   FullHashToStoreAndHashPrefixesMap full_hash_to_store_and_hash_prefixes;
   for (const FullHash& full_hash : full_hashes) {
@@ -525,7 +541,7 @@ void V4GetHashProtocolManager::GetHashUrlAndHeaders(
 
 void V4GetHashProtocolManager::HandleGetHashError(const Time& now) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  TimeDelta next = V4ProtocolManagerUtil::GetNextBackOffInterval(
+  base::TimeDelta next = V4ProtocolManagerUtil::GetNextBackOffInterval(
       &gethash_error_count_, &gethash_back_off_mult_);
   next_gethash_time_ = now + next;
 }
@@ -562,13 +578,13 @@ bool V4GetHashProtocolManager::ParseHashResponse(
   // Seconds resolution is good enough so we ignore the nanos field.
   *negative_cache_expire =
       clock_->Now() +
-      TimeDelta::FromSeconds(response.negative_cache_duration().seconds());
+      base::Seconds(response.negative_cache_duration().seconds());
 
   if (response.has_minimum_wait_duration()) {
     // Seconds resolution is good enough so we ignore the nanos field.
     next_gethash_time_ =
         clock_->Now() +
-        TimeDelta::FromSeconds(response.minimum_wait_duration().seconds());
+        base::Seconds(response.minimum_wait_duration().seconds());
   }
 
   for (const ThreatMatch& match : response.matches()) {
@@ -602,10 +618,10 @@ bool V4GetHashProtocolManager::ParseHashResponse(
     base::Time positive_expiry;
     if (match.has_cache_duration()) {
       // Seconds resolution is good enough so we ignore the nanos field.
-      positive_expiry = clock_->Now() + TimeDelta::FromSeconds(
-                                            match.cache_duration().seconds());
+      positive_expiry =
+          clock_->Now() + base::Seconds(match.cache_duration().seconds());
     } else {
-      positive_expiry = clock_->Now() - base::TimeDelta::FromSeconds(1);
+      positive_expiry = clock_->Now() - base::Seconds(1);
     }
     FullHashInfo full_hash_info(match.threat().hash(), list_id,
                                 positive_expiry);
@@ -706,6 +722,7 @@ void V4GetHashProtocolManager::ParseMetadata(const ThreatMatch& match,
 void V4GetHashProtocolManager::ResetGetHashErrors() {
   gethash_error_count_ = 0;
   gethash_back_off_mult_ = 1;
+  backoff_error_count_ = 0;
   next_gethash_time_ = base::Time();
 }
 
@@ -793,17 +810,24 @@ void V4GetHashProtocolManager::OnURLLoaderCompleteInternal(
     const std::string& data) {
   auto it = pending_hash_requests_.find(url_loader);
   DCHECK(it != pending_hash_requests_.end()) << "Request not found";
-  V4ProtocolManagerUtil::RecordHttpResponseOrErrorCode(
-      "SafeBrowsing.V4GetHash.Network.Result", net_error, response_code);
+  RecordHttpResponseOrErrorCode("SafeBrowsing.V4GetHash.Network.Result",
+                                net_error, response_code);
 
   std::vector<FullHashInfo> full_hash_infos;
   Time negative_cache_expire;
   if (net_error == net::OK && response_code == net::HTTP_OK) {
     RecordGetHashResult(V4OperationResult::STATUS_200);
+    if (gethash_error_count_) RecordBackoffErrorCountResult(backoff_error_count_);
     ResetGetHashErrors();
     if (!ParseHashResponse(data, &full_hash_infos, &negative_cache_expire)) {
       full_hash_infos.clear();
       RecordGetHashResult(V4OperationResult::PARSE_ERROR);
+    }
+  } else if (ErrorIsRetriable(net_error, response_code)) {
+    if (net_error != net::OK) {
+      RecordGetHashResult(V4OperationResult::RETRIABLE_NETWORK_ERROR);
+    } else {
+      RecordGetHashResult(V4OperationResult::RETRIABLE_HTTP_ERROR);
     }
   } else {
     HandleGetHashError(clock_->Now());

@@ -10,8 +10,9 @@
 
 #include "base/bind.h"
 #include "base/callback_helpers.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/simple_test_tick_clock.h"
+#include "base/time/time.h"
 #include "build/chromeos_buildflags.h"
 #include "content/browser/web_contents/web_contents_impl.h"
 #include "content/public/browser/invalidate_type.h"
@@ -51,8 +52,11 @@ class AudioStreamMonitorTest : public RenderViewHostTestHarness {
  public:
   AudioStreamMonitorTest() {
     // Start |clock_| at non-zero.
-    clock_.Advance(base::TimeDelta::FromSeconds(1000000));
+    clock_.Advance(base::Seconds(1000000));
   }
+
+  AudioStreamMonitorTest(const AudioStreamMonitorTest&) = delete;
+  AudioStreamMonitorTest& operator=(const AudioStreamMonitorTest&) = delete;
 
   void SetUp() override {
     RenderViewHostTestHarness::SetUp();
@@ -125,13 +129,10 @@ class AudioStreamMonitorTest : public RenderViewHostTestHarness {
   }
 
   // A small time step useful for testing the passage of time.
-  static base::TimeDelta one_time_step() {
-    return base::TimeDelta::FromSeconds(1) / 15;
-  }
+  static base::TimeDelta one_time_step() { return base::Seconds(1) / 15; }
 
   static base::TimeDelta holding_period() {
-    return base::TimeDelta::FromMilliseconds(
-        AudioStreamMonitor::kHoldOnMilliseconds);
+    return base::Milliseconds(AudioStreamMonitor::kHoldOnMilliseconds);
   }
 
   void StartMonitoring(int render_process_id,
@@ -161,7 +162,7 @@ class AudioStreamMonitorTest : public RenderViewHostTestHarness {
   WebContents* web_contents() { return monitor_->web_contents_; }
 
  protected:
-  AudioStreamMonitor* monitor_;
+  raw_ptr<AudioStreamMonitor> monitor_;
 
  private:
   void ExpectWasRecentlyAudible() const {
@@ -179,8 +180,6 @@ class AudioStreamMonitorTest : public RenderViewHostTestHarness {
 
   MockWebContentsDelegate mock_web_contents_delegate_;
   base::SimpleTestTickClock clock_;
-
-  DISALLOW_COPY_AND_ASSIGN(AudioStreamMonitorTest);
 };
 
 TEST_F(AudioStreamMonitorTest, MonitorsWhenProvidedAStream) {
@@ -384,7 +383,7 @@ TEST_F(AudioStreamMonitorTest, RenderProcessGone) {
 }
 
 TEST_F(AudioStreamMonitorTest, RenderFrameGone) {
-  RenderFrameHost* render_frame_host = web_contents()->GetMainFrame();
+  RenderFrameHost* render_frame_host = web_contents()->GetPrimaryMainFrame();
   int render_process_id = render_frame_host->GetProcess()->GetID();
   int render_frame_id = render_frame_host->GetRoutingID();
 

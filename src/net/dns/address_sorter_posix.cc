@@ -8,8 +8,12 @@
 
 #include <memory>
 #include <utility>
+#include <vector>
 
-#if defined(OS_APPLE) || defined(OS_BSD)
+#include "base/memory/raw_ptr.h"
+#include "build/build_config.h"
+
+#if BUILDFLAG(IS_APPLE) || BUILDFLAG(IS_BSD)
 #include <sys/socket.h>  // Must be included before ifaddrs.h.
 #include <ifaddrs.h>
 #include <net/if.h>
@@ -23,12 +27,13 @@
 
 #include "base/cxx17_backports.h"
 #include "base/logging.h"
+#include "net/base/ip_endpoint.h"
 #include "net/base/net_errors.h"
 #include "net/log/net_log_source.h"
 #include "net/socket/client_socket_factory.h"
 #include "net/socket/datagram_client_socket.h"
 
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 #include "net/base/address_tracker_linux.h"
 #endif
 
@@ -62,8 +67,7 @@ unsigned GetPolicyValue(const AddressSorterPosix::PolicyTable& table,
                         const IPAddress& address) {
   if (address.IsIPv4())
     return GetPolicyValue(table, ConvertIPv4ToIPv4MappedIPv6(address));
-  for (unsigned i = 0; i < table.size(); ++i) {
-    const AddressSorterPosix::PolicyEntry& entry = table[i];
+  for (const auto& entry : table) {
     IPAddress prefix(entry.prefix);
     if (IPAddressMatchesPrefix(address, prefix, entry.prefix_length))
       return entry.value;
@@ -187,11 +191,11 @@ const AddressSorterPosix::PolicyEntry kDefaultIPv4ScopeTable[] = {
 };
 
 struct DestinationInfo {
-  IPAddress address;
+  IPEndPoint endpoint;
   AddressSorterPosix::AddressScope scope;
   unsigned precedence;
   unsigned label;
-  const AddressSorterPosix::SourceAddressInfo* src;
+  raw_ptr<const AddressSorterPosix::SourceAddressInfo> src;
   size_t common_prefix_length;
 };
 
@@ -237,7 +241,7 @@ bool CompareDestinations(const std::unique_ptr<DestinationInfo>& dst_a,
     return dst_a->scope < dst_b->scope;
 
   // Rule 9: Use longest matching prefix. Only for matching address families.
-  if (dst_a->address.size() == dst_b->address.size()) {
+  if (dst_a->endpoint.address().size() == dst_b->endpoint.address().size()) {
     if (dst_a->common_prefix_length != dst_b->common_prefix_length)
       return dst_a->common_prefix_length > dst_b->common_prefix_length;
   }
@@ -252,11 +256,11 @@ bool CompareDestinations(const std::unique_ptr<DestinationInfo>& dst_a,
 AddressSorterPosix::AddressSorterPosix(ClientSocketFactory* socket_factory)
     : socket_factory_(socket_factory),
       precedence_table_(LoadPolicy(kDefaultPrecedenceTable,
-                                   base::size(kDefaultPrecedenceTable))),
+                                   std::size(kDefaultPrecedenceTable))),
       label_table_(
-          LoadPolicy(kDefaultLabelTable, base::size(kDefaultLabelTable))),
+          LoadPolicy(kDefaultLabelTable, std::size(kDefaultLabelTable))),
       ipv4_scope_table_(LoadPolicy(kDefaultIPv4ScopeTable,
-                                   base::size(kDefaultIPv4ScopeTable))) {
+                                   std::size(kDefaultIPv4ScopeTable))) {
   NetworkChangeNotifier::AddIPAddressObserver(this);
   OnIPAddressChanged();
 }
@@ -266,17 +270,18 @@ AddressSorterPosix::~AddressSorterPosix() {
   NetworkChangeNotifier::RemoveIPAddressObserver(this);
 }
 
-void AddressSorterPosix::Sort(const AddressList& list,
+void AddressSorterPosix::Sort(const std::vector<IPEndPoint>& endpoints,
                               CallbackType callback) const {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   std::vector<std::unique_ptr<DestinationInfo>> sort_list;
 
-  for (size_t i = 0; i < list.size(); ++i) {
-    std::unique_ptr<DestinationInfo> info(new DestinationInfo());
-    info->address = list[i].address();
-    info->scope = GetScope(ipv4_scope_table_, info->address);
-    info->precedence = GetPolicyValue(precedence_table_, info->address);
-    info->label = GetPolicyValue(label_table_, info->address);
+  for (const IPEndPoint& endpoint : endpoints) {
+    auto info = std::make_unique<DestinationInfo>();
+    info->endpoint = endpoint;
+    info->scope = GetScope(ipv4_scope_table_, info->endpoint.address());
+    info->precedence =
+        GetPolicyValue(precedence_table_, info->endpoint.address());
+    info->label = GetPolicyValue(label_table_, info->endpoint.address());
 
     // Each socket can only be bound once.
     std::unique_ptr<DatagramClientSocket> socket(
@@ -284,8 +289,10 @@ void AddressSorterPosix::Sort(const AddressList& list,
             DatagramSocket::DEFAULT_BIND, nullptr /* NetLog */,
             NetLogSource()));
 
+    IPEndPoint dest = info->endpoint;
     // Even though no packets are sent, cannot use port 0 in Connect.
-    IPEndPoint dest(info->address, 80 /* port */);
+    if (dest.port() == 0)
+      dest = IPEndPoint(dest.address(), /*port=*/80);
     int rv = socket->Connect(dest);
     if (rv != OK) {
       VLOG(1) << "Could not connect to " << dest.ToStringWithoutPort()
@@ -309,9 +316,9 @@ void AddressSorterPosix::Sort(const AddressList& list,
     }
     info->src = &src_info;
 
-    if (info->address.size() == src.address().size()) {
+    if (info->endpoint.address().size() == src.address().size()) {
       info->common_prefix_length =
-          std::min(CommonPrefixLength(info->address, src.address()),
+          std::min(CommonPrefixLength(info->endpoint.address(), src.address()),
                    info->src->prefix_length);
     }
     sort_list.push_back(std::move(info));
@@ -319,17 +326,17 @@ void AddressSorterPosix::Sort(const AddressList& list,
 
   std::stable_sort(sort_list.begin(), sort_list.end(), CompareDestinations);
 
-  AddressList result;
-  for (size_t i = 0; i < sort_list.size(); ++i)
-    result.push_back(IPEndPoint(sort_list[i]->address, 0 /* port */));
+  std::vector<IPEndPoint> sorted_result;
+  for (const auto& info : sort_list)
+    sorted_result.push_back(info->endpoint);
 
-  std::move(callback).Run(true, result);
+  std::move(callback).Run(true, std::move(sorted_result));
 }
 
 void AddressSorterPosix::OnIPAddressChanged() {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   source_map_.clear();
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   const internal::AddressTrackerLinux* tracker =
       NetworkChangeNotifier::GetAddressTracker();
   if (!tracker)
@@ -346,7 +353,7 @@ void AddressSorterPosix::OnIPAddressChanged() {
     info.prefix_length = msg.ifa_prefixlen;
     FillPolicy(address, &info);
   }
-#elif defined(OS_APPLE) || defined(OS_BSD)
+#elif BUILDFLAG(IS_APPLE) || BUILDFLAG(IS_BSD)
   // It's not clear we will receive notification when deprecated flag changes.
   // Socket for ioctl.
   int ioctl_socket = socket(AF_INET6, SOCK_DGRAM, 0);
@@ -361,7 +368,7 @@ void AddressSorterPosix::OnIPAddressChanged() {
     return;
   }
 
-  for (struct ifaddrs* ifa = addrs; ifa != NULL; ifa = ifa->ifa_next) {
+  for (struct ifaddrs* ifa = addrs; ifa != nullptr; ifa = ifa->ifa_next) {
     IPEndPoint src;
     if (!src.FromSockAddr(ifa->ifa_addr, ifa->ifa_addr->sa_len))
       continue;
@@ -404,8 +411,8 @@ void AddressSorterPosix::FillPolicy(const IPAddress& address,
 
 // static
 std::unique_ptr<AddressSorter> AddressSorter::CreateAddressSorter() {
-  return std::unique_ptr<AddressSorter>(
-      new AddressSorterPosix(ClientSocketFactory::GetDefaultFactory()));
+  return std::make_unique<AddressSorterPosix>(
+      ClientSocketFactory::GetDefaultFactory());
 }
 
 }  // namespace net

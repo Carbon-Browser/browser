@@ -125,13 +125,13 @@
       Tinutukoy ang tagal bago ipakita ang screen saver sa screen sa pag-sign-in para sa mga device sa mode ng retail.
 
       Dapat na tinukoy sa milliseconds ang halaga ng patakaran.</translation>
-<translation id="1141767714195601945">Kinokontrol ng patakarang ito ang mga command-line parameter para sa Carbon Browser Browser Browser mula sa Internet Explorer.
+<translation id="1141767714195601945">Kinokontrol ng patakarang ito ang mga command-line parameter para sa Carbon Browser mula sa Internet Explorer.
 
       Kung hindi naka-install ang add-in na 'Legacy Browser Support' para sa Internet Explorer, walang epekto ang patakarang ito.
 
-      Kapag hinayaang hindi nakatakda ang patakarang ito, ipinapasa lang ng Internet Explorer ang URL sa Carbon Browser Browser Browser bilang command-line parameter.
+      Kapag hinayaang hindi nakatakda ang patakarang ito, ipinapasa lang ng Internet Explorer ang URL sa Carbon Browser bilang command-line parameter.
 
-      Kapag nakatakda ang patakarang ito sa isang listahan ng mga string, pagsasama-samahin ang mga string gamit ang mga espasyo at ipapasa ang mga ito sa Carbon Browser Browser Browser bilang mga command-line parameter.
+      Kapag nakatakda ang patakarang ito sa isang listahan ng mga string, pagsasama-samahin ang mga string gamit ang mga espasyo at ipapasa ang mga ito sa Carbon Browser bilang mga command-line parameter.
 
       Kung may ${url} ang isang element, mapapalitan ito ng URL ng page na bubuksan.
 
@@ -270,7 +270,7 @@
 
       Ang bawat item sa listahan ng patakaran ay isang string na naglalaman ng extension ID at URL ng "update" na pinaghihiwalay ng semicolon (<ph name="SEMICOLON" />). Ang extension ID ay ang string na may 32 titik na makikita halimbawa sa <ph name="CHROME_EXTENSIONS_LINK" /> kapag nasa developer mode. Dapat humantong ang URL ng "update" sa isang Update Manifest XML document gaya ng nakasaad sa <ph name="LINK_TO_EXTENSION_DOC1" />. Tandaang ginagamit lang ang URL ng "update" na itinakda sa patakarang ito para sa unang pag-install; ine-employ ng mga kasunod na update ng extension ang URL ng update na nakalagay sa manifest ng extension.
 
-      Halimbawa, ini-install ng <ph name="EXTENSION_POLICY_EXAMPLE" /> ang <ph name="EXTENSION_POLICY_EXAMPLE_EXTENSION_NAME" /> app mula sa karaniwang URL ng "update" sa Carbon Browser Browser Browser Web Store. Para sa higit pang impormasyon tungkol sa pag-host ng mga extension, tingnan ang: <ph name="LINK_TO_EXTENSION_DOC2" />.</translation>
+      Halimbawa, ini-install ng <ph name="EXTENSION_POLICY_EXAMPLE" /> ang <ph name="EXTENSION_POLICY_EXAMPLE_EXTENSION_NAME" /> app mula sa karaniwang URL ng "update" sa Carbon Browser Web Store. Para sa higit pang impormasyon tungkol sa pag-host ng mga extension, tingnan ang: <ph name="LINK_TO_EXTENSION_DOC2" />.</translation>
 <translation id="1435659902881071157">Configuration ng network sa antas ng device</translation>
 <translation id="1438739959477268107">Default na setting sa pagbuo ng key</translation>
 <translation id="1454846751303307294">Binibigyang-daan kang magtakda ng isang listahan ng mga pattern ng url na tumutukoy ng mga site na hindi pinapayagang magpatakbo ng JavaScript.
@@ -429,11 +429,11 @@
 
       Kung hindi naitakda ang patakaran, hindi magiging available ang functionality ng pag-update sa <ph name="TPM_FIRMWARE_UPDATE_TPM" /> firmware.</translation>
 <translation id="1708496595873025510">Itakda ang paghihigpit sa pagkuha ng seed ng Mga Variation</translation>
-<translation id="1717817358640580294">Kung hindi ito nakatakda at makatukoy ang Carbon Browser Browser Browser Cleanup ng hindi gustong software, maaari itong mag-ulat ng metadata tungkol sa pag-scan sa Google alinsunod sa patakarang itinakda ng SafeBrowsingExtendedReportingEnabled. Pagkatapos, tatanungin ng Carbon Browser Browser Browser Cleanup ang user kung gusto niyang linisin ang hindi gustong software. Maaaring piliin ng user na ibahagi ang mga resulta ng paglilinis sa Google para makatulong sa pagtukoy ng hindi gustong software sa hinaharap. Ang mga resultang ito ay naglalaman ng metadata ng file, mga awtomatikong na-install na extension, at mga key ng registry, ayon sa inilalarawan sa Whitepaper sa Privacy ng Carbon Browser Browser Browser.
+<translation id="1717817358640580294">Kung hindi ito nakatakda at makatukoy ang Carbon Browser Cleanup ng hindi gustong software, maaari itong mag-ulat ng metadata tungkol sa pag-scan sa Google alinsunod sa patakarang itinakda ng SafeBrowsingExtendedReportingEnabled. Pagkatapos, tatanungin ng Carbon Browser Cleanup ang user kung gusto niyang linisin ang hindi gustong software. Maaaring piliin ng user na ibahagi ang mga resulta ng paglilinis sa Google para makatulong sa pagtukoy ng hindi gustong software sa hinaharap. Ang mga resultang ito ay naglalaman ng metadata ng file, mga awtomatikong na-install na extension, at mga key ng registry, ayon sa inilalarawan sa Whitepaper sa Privacy ng Carbon Browser.
 
-      Kung naka-disable ito at makatukoy ang Carbon Browser Browser Browser Cleanup ng hindi gustong software, hindi ito mag-uulat ng metadata tungkol sa pag-scan sa Google, na mag-o-override sa patakarang itinakda ng SafeBrowsingExtendedReportingEnabled. Tatanungin ng Carbon Browser Browser Browser Cleanup ang user kung gusto niyang linisin ang hindi gustong software.  Hindi iuulat sa Google ang mga resulta ng paglilinis, at hindi magkakaroon ng opsyon ang user na gawin ito.
+      Kung naka-disable ito at makatukoy ang Carbon Browser Cleanup ng hindi gustong software, hindi ito mag-uulat ng metadata tungkol sa pag-scan sa Google, na mag-o-override sa patakarang itinakda ng SafeBrowsingExtendedReportingEnabled. Tatanungin ng Carbon Browser Cleanup ang user kung gusto niyang linisin ang hindi gustong software.  Hindi iuulat sa Google ang mga resulta ng paglilinis, at hindi magkakaroon ng opsyon ang user na gawin ito.
 
-      Kung naka-enable ito at makatukoy ang Carbon Browser Browser Browser Cleanup ng hindi gustong software, maaari itong mag-ulat ng metadata tungkol sa pag-scan sa Google alinsunod sa patakarang itinakda ng SafeBrowsingExtendedReportingEnabled. Tatanungin ng Carbon Browser Browser Browser Cleanup ang user kung gusto niyang linisin ang hindi gustong software.  Iuulat sa Google ang mga resulta ng paglilinis, at hindi magkakaroon ng opsyon ang user na pigilan ito.
+      Kung naka-enable ito at makatukoy ang Carbon Browser Cleanup ng hindi gustong software, maaari itong mag-ulat ng metadata tungkol sa pag-scan sa Google alinsunod sa patakarang itinakda ng SafeBrowsingExtendedReportingEnabled. Tatanungin ng Carbon Browser Cleanup ang user kung gusto niyang linisin ang hindi gustong software.  Iuulat sa Google ang mga resulta ng paglilinis, at hindi magkakaroon ng opsyon ang user na pigilan ito.
 
       Available lang ang patakarang ito sa mga instance ng Windows na kasama sa domain ng<ph name="MS_AD_NAME" />. O kaya, sa mga instance ng Windows 10 Pro o Enterprise na naka-enroll para sa pamamahala sa device.</translation>
 <translation id="172374442286684480">Payagan ang lahat ng site na magtakda ng lokal na data</translation>
@@ -629,7 +629,7 @@
 <translation id="2073552873076775140">Payagan ang pag-sign in sa <ph name="PRODUCT_NAME" /></translation>
 <translation id="2077129598763517140">Gamitin ang pagpapabilis ng hardware kapag available</translation>
 <translation id="2077273864382355561">Delay ng pag-off ng screen kapag tumatakbo gamit ang power ng baterya</translation>
-<translation id="2082205219176343977">I-configure ang minimum na pinapayagang bersyon ng Carbon Browser Browser Browser para sa device.</translation>
+<translation id="2082205219176343977">I-configure ang minimum na pinapayagang bersyon ng Carbon Browser para sa device.</translation>
 <translation id="209586405398070749">Stable na channel</translation>
 <translation id="2098658257603918882">Paganahin ang pag-uulat ng data ng paggamit at kaugnay ng crash</translation>
 <translation id="2104418465060359056">Nag-uulat ng impormasyon ng Mga Extension at Plugin</translation>
@@ -674,7 +674,7 @@
       Kung idi-disable mo ang setting na ito o kung hahayaan mo itong hindi nakatakda, ipapakita sa (regular) bagong tab ng browser ang anumang page sa pag-authenticate ng captive portal, gamit ang mga setting ng proxy ng kasalukuyang user.</translation>
 <translation id="21394354835637379">Nagbibigay-daan sa iyong tukuyin kung aling mga URL ang pinapayagang mag-install ng mga extension, app, at tema.
 
-          Simula sa <ph name="PRODUCT_NAME" /> 21, mas mahirap nang mag-install ng mga extension, app, at script ng user mula sa labas ng Carbon Browser Browser Browser Web Store. Dati, puwedeng i-click ng mga user ang link sa isang *.crx file, at mag-aalok ang <ph name="PRODUCT_NAME" /> na i-install ang file pagkatapos ng ilang babala. Pagkatapos ng <ph name="PRODUCT_NAME" /> 21, dapat ay i-download at i-drag ang mga naturang file sa page ng mga setting ng <ph name="PRODUCT_NAME" />. Nagbibigay-daan sa mga partikular na URL ang setting na ito para magamit ang luma at mas madaling flow ng pag-install.
+          Simula sa <ph name="PRODUCT_NAME" /> 21, mas mahirap nang mag-install ng mga extension, app, at script ng user mula sa labas ng Carbon Browser Web Store. Dati, puwedeng i-click ng mga user ang link sa isang *.crx file, at mag-aalok ang <ph name="PRODUCT_NAME" /> na i-install ang file pagkatapos ng ilang babala. Pagkatapos ng <ph name="PRODUCT_NAME" /> 21, dapat ay i-download at i-drag ang mga naturang file sa page ng mga setting ng <ph name="PRODUCT_NAME" />. Nagbibigay-daan sa mga partikular na URL ang setting na ito para magamit ang luma at mas madaling flow ng pag-install.
 
           Ang bawat item sa listahang ito ay isang extension-style match pattern (tingnan ang https://developer.chrome.com/extensions/match_patterns). Magagawa ng mga user na madaling ma-install ang mga item mula sa anumang URL na tumutugma sa isang item sa listahang ito. Dapat ay pahintulutan ng mga pattern na ito ang lokasyon ng *.crx file at ang page kung saan sinimulan ang pag-download (ibig sabihin, ang referrer).
 
@@ -750,11 +750,11 @@
 
       Kapag naka-disable o hindi nakatakda ang patakaran, hindi pinapayagang magpakita ng mga popup ang mga page habang ina-unload ang mga ito, ayon sa mga detalye (https://html.spec.whatwg.org/#apis-for-creating-and-navigating-browsing-contexts-by-name).
 
-      Aalisin ang patakarang ito sa Carbon Browser Browser Browser 82.
+      Aalisin ang patakarang ito sa Carbon Browser 82.
 
       Tingnan ang https://www.chromestatus.com/feature/5989473649164288 .</translation>
 <translation id="2269319728625047531">I-enable ang pagpapakita ng Pahintulot sa Pag-sync habang nagsa-sign in</translation>
-<translation id="2274864612594831715">Kino-configure ng patakarang ito ang pag-e-enable ng virtual na keyboard bilang isang input device sa Carbon Browser Browser BrowserOS. Hindi maaaring i-override ng mga user ang patakarang ito.
+<translation id="2274864612594831715">Kino-configure ng patakarang ito ang pag-e-enable ng virtual na keyboard bilang isang input device sa Carbon BrowserOS. Hindi maaaring i-override ng mga user ang patakarang ito.
 
       Kung nakatakda ang patakaran sa true, palaging magiging naka-enable ang on-screen na virtual na keyboard.
 
@@ -824,9 +824,9 @@
 <translation id="2463034609187171371">I-enable ang mga DHE cipher suite sa TLS</translation>
 <translation id="2463365186486772703">Lokal ng application</translation>
 <translation id="2466131534462628618">Binabalewala ng pagpapatotoo ng captive portal ang proxy</translation>
-<translation id="2471748297300970300">Kung naka-disable, pinipigilang lumabas ang mga babala sa seguridad kapag inilunsad ang Carbon Browser Browser Browser na may ilang potensyal na mapapanganib na command-line flag.
+<translation id="2471748297300970300">Kung naka-disable, pinipigilang lumabas ang mga babala sa seguridad kapag inilunsad ang Carbon Browser na may ilang potensyal na mapapanganib na command-line flag.
 
-          Kung naka-enable o hindi nakatakda, ipapakita ang mga babala sa seguridad kapag ginamit ang ilang command-line flag para ilunsad ang Carbon Browser Browser Browser.
+          Kung naka-enable o hindi nakatakda, ipapakita ang mga babala sa seguridad kapag ginamit ang ilang command-line flag para ilunsad ang Carbon Browser.
 
           Sa Windows, available lang ang patakarang ito sa mga instance na kasama sa domain ng <ph name="MS_AD_NAME" /> o sa mga instance ng Windows 10 Pro o Enterprise na naka-enroll para sa pamamahala sa device.</translation>
 <translation id="2482676533225429905">Native na Pagmemensahe</translation>
@@ -948,7 +948,7 @@
           Ang URL sa paghahanap ng Google ay maaaring tukuyin bilang: <ph name="GOOGLE_SEARCH_URL" />.
 
           Dapat na itakda ang opsyong ito kapag naka-enable ang patakaran na 'DefaultSearchProviderEnabled' at kikilalanin lang kung ganito ang sitwasyon.</translation>
-<translation id="2659019163577049044">Kung naka-enable ang setting na ito, papayagan ang mga user na i-set up ang kanilang mga device para ma-sync ang mga mensaheng SMS sa kanilang mga telepono at Carbon Browser Browser Browserbook. Tandaang kung papayagan ang patakarang ito, dapat ay tahasang mag-opt in ang mga user sa feature na ito sa pamamagitan ng pagkumpleto sa proseso ng pag-set up. Kapag kumpleto na ang proseso ng pag-set up, magagawa na ng mga user na magpadala at tumanggap ng mga mensaheng SMS sa kanilang Mga Carbon Browser Browser Browserbook.
+<translation id="2659019163577049044">Kung naka-enable ang setting na ito, papayagan ang mga user na i-set up ang kanilang mga device para ma-sync ang mga mensaheng SMS sa kanilang mga telepono at Carbon Browserbook. Tandaang kung papayagan ang patakarang ito, dapat ay tahasang mag-opt in ang mga user sa feature na ito sa pamamagitan ng pagkumpleto sa proseso ng pag-set up. Kapag kumpleto na ang proseso ng pag-set up, magagawa na ng mga user na magpadala at tumanggap ng mga mensaheng SMS sa kanilang Mga Carbon Browserbook.
 
       Kung naka-disable ang setting na ito, hindi papayagan ang mga user na i-set up ang pag-sync ng SMS.
 
@@ -966,7 +966,7 @@
 <translation id="2706708761587205154">Payagan lang ang pag-print gamit ang PIN</translation>
 <translation id="2710534340210290498">Kung itatakda ang patakarang ito sa false, hindi magagawa ng mga user na i-lock ang screen (tanging pag-sign out lang mula sa session ng user ang magiging posible). Kung itatakda ang setting na ito sa true o kung hindi ito itatakda, magagawa ng mga user na nag-authenticate gamit ang password na i-lock ang screen.</translation>
 <translation id="2731627323327011390">I-disable ang paggamit ng mga certificate ng <ph name="PRODUCT_OS_NAME" /> sa mga ARC app</translation>
-<translation id="2742843273354638707">Itago ang Carbon Browser Browser Browser Web Store app at link ng footer mula sa Page ng Bagong Tab at sa app launcher ng <ph name="PRODUCT_OS_NAME" />.
+<translation id="2742843273354638707">Itago ang Carbon Browser Web Store app at link ng footer mula sa Page ng Bagong Tab at sa app launcher ng <ph name="PRODUCT_OS_NAME" />.
 
       Kapag nakatakda ang patakarang ito sa true, nakatago ang mga icon.
 
@@ -1029,12 +1029,12 @@
       Kapag itinakda ang patakarang ito sa isang listahang may lamang mga agwat ng panahon:
       Hindi awtomatikong matitingnan ng mga device kung may mga update sa mga tinukoy na agwat ng panahon. Ang mga device na nangangailangan ng rollback o mas luma sa minimum na bersyon ng <ph name="PRODUCT_OS_NAME" /> ay hindi maaapektuhan ng patakarang ito dahil sa mga potensyal na isyu sa seguridad. Gayundin, hindi iba-block ng patakarang ito ang mga pagtingin ng update na hinihiling ng mga user o administrator.
       Kapag ang patakarang ito ay na-unset o hindi naglalaman ng mga agwat ng panahon:
-      Walang awtomatikong pagtingin ng update ang iba-block ng patakarang ito, ngunit maaaring i-block ng iba pang patakaran ang mga iyon. Naka-enable lang ang feature na ito sa mga Carbon Browser Browser Browser device na naka-configure bilang mga auto-launch kiosk. Hindi paghihigpitan ng patakarang ito ang iba pang device.</translation>
+      Walang awtomatikong pagtingin ng update ang iba-block ng patakarang ito, ngunit maaaring i-block ng iba pang patakaran ang mga iyon. Naka-enable lang ang feature na ito sa mga Carbon Browser device na naka-configure bilang mga auto-launch kiosk. Hindi paghihigpitan ng patakarang ito ang iba pang device.</translation>
 <translation id="2823870601012066791">Lokasyon ng registry ng Windows para sa mga <ph name="PRODUCT_OS_NAME" /> client:</translation>
-<translation id="2824715612115726353">Paganahin ang Private mode</translation>
+<translation id="2824715612115726353">Paganahin ang private mode</translation>
 <translation id="2836621397261130126">Nagkokontrol kung susundin ba ang pag-apruba ng patakaran ng KDC para magpasya kung maglalaan ba ng mga ticket ng <ph name="KERBEROS" />.
 
-          Kung "true" ang patakarang ito, susundin ng pag-authenticate ng HTTP ang pag-apruba ng patakaran ng KDC, ibig sabihin, maglalaan lang ang Carbon Browser Browser Browser ng mga kredensyal kung itatakda ng KDC ang <ph name="OK_AS_DELEGATE" /> sa isang ticket ng serbisyo. Pakitingnan ang https://tools.ietf.org/html/rfc5896.html para sa higit pang impormasyon. Dapat ding tumugma ang serbisyo sa patakaran ng 'AuthNegotiateDelegateWhitelist.'
+          Kung "true" ang patakarang ito, susundin ng pag-authenticate ng HTTP ang pag-apruba ng patakaran ng KDC, ibig sabihin, maglalaan lang ang Carbon Browser ng mga kredensyal kung itatakda ng KDC ang <ph name="OK_AS_DELEGATE" /> sa isang ticket ng serbisyo. Pakitingnan ang https://tools.ietf.org/html/rfc5896.html para sa higit pang impormasyon. Dapat ding tumugma ang serbisyo sa patakaran ng 'AuthNegotiateDelegateWhitelist.'
 
           Kung hindi nakatakda o nakatakda sa "false" ang patakarang ito, babalewalain ang patakaran ng KDC sa mga sinusuportahang platform at ang patakaran ng 'AuthNegotiateDelegateWhitelist' lang ang susundin.
 
@@ -1182,7 +1182,7 @@
           Kung hinayaang hindi nakatakda ang patakarang ito, gagamitin ang 'AllowJavaScript' at magagawa ng user na baguhin ito.</translation>
 <translation id="3038323923255997294">Magpatuloy sa pagpapatakbo ng apps sa background kapag nakasara ang <ph name="PRODUCT_NAME" /></translation>
 <translation id="3046192273793919231">Magpadala ng mga network packet sa server sa pamamahala upang masubaybayan ang online status</translation>
-<translation id="3047732214002457234">Kinokontrol kung paano nag-uulat ng data sa Google ang Carbon Browser Browser Browser Cleanup</translation>
+<translation id="3047732214002457234">Kinokontrol kung paano nag-uulat ng data sa Google ang Carbon Browser Cleanup</translation>
 <translation id="304775240152542058">Kinokontrol ng patakarang ito ang mga command-line parameter na ilulunsad sa alternatibong browser.
 
       Kapag hinayaang hindi nakatakda ang patakarang ito, ang URL lang ang ipapasa bilang mga command-line parameter.
@@ -1254,9 +1254,9 @@
       Kung hindi nakatakda ang patakaran, o kung nakatakda ito sa false, hindi mae-enable ang mga DHE na cipher suite sa TLS. Kung hindi naman ay maaari itong itakda sa true upang i-enable ang mga DHE na cipher suite at mapanatili ang compatibility sa isang lumang server. Isa itong pansamantalang solusyon at dapat na i-configure muli ang server.
 
       Hinihimok ang mga server na mag-migrate sa mga ECDHE na cipher suite. Kung hindi available ang mga ito, tiyaking naka-enable ang isang cipher suite gamit ang RSA key exchange.</translation>
-<translation id="3117706142826400449">Kung naka-disable, pumipigil sa Carbon Browser Browser Browser Cleanup na i-scan ang system para sa mga hindi gustong software at magsagawa ng mga paglilinis. Naka-disable ang manual na pag-trigger sa Carbon Browser Browser Browser Cleanup mula sa chrome://settings/cleanup.
+<translation id="3117706142826400449">Kung naka-disable, pumipigil sa Carbon Browser Cleanup na i-scan ang system para sa mga hindi gustong software at magsagawa ng mga paglilinis. Naka-disable ang manual na pag-trigger sa Carbon Browser Cleanup mula sa chrome://settings/cleanup.
 
-      Kung naka-enable o hindi nakatakda, pana-panahong isa-scan ng Carbon Browser Browser Browser Cleanup ang system para sa hindi gustong software, at kung may mahanap na ganito, magtatanong sa user kung gusto niya itong alisin. Naka-enable ang manual na pag-trigger sa Carbon Browser Browser Browser Cleanup mula sa chrome://settings.
+      Kung naka-enable o hindi nakatakda, pana-panahong isa-scan ng Carbon Browser Cleanup ang system para sa hindi gustong software, at kung may mahanap na ganito, magtatanong sa user kung gusto niya itong alisin. Naka-enable ang manual na pag-trigger sa Carbon Browser Cleanup mula sa chrome://settings.
 
       Available lang ang patakarang ito sa mga instance ng Windows na kasama sa domain ng<ph name="MS_AD_NAME" />. O kaya, sa mga instance ng Windows 10 Pro o Enterprise na naka-enroll para sa pamamahala sa device.</translation>
 <translation id="3152425128389603870">Gawing available ang Unified Desktop at i-on bilang default</translation>
@@ -1371,7 +1371,7 @@
       Kung itatakda ang setting na ito sa Naka-off o wala kang itatakdang value, hindi ipapatupad ng <ph name="PRODUCT_NAME" /> ang Restricted Mode sa YouTube. Gayunpaman, ang Restricted Mode ay maaari pa ring ipatupad ng mga panlabas na patakaran gaya ng mga patakaran ng YouTube.</translation>
 <translation id="3428247105888806363">Paganahin ang paghula sa network</translation>
 <translation id="3432863169147125747">Nagkokontrol sa mga setting ng pag-print.</translation>
-<translation id="3434932177006334880">Pinangalanang EnableWebBasedSignin ang setting na ito bago pa ang Carbon Browser Browser Browser 42, at tuluyang aalisin sa Carbon Browser Browser Browser 43 ang suporta para rito.
+<translation id="3434932177006334880">Pinangalanang EnableWebBasedSignin ang setting na ito bago pa ang Carbon Browser 42, at tuluyang aalisin sa Carbon Browser 43 ang suporta para rito.
 
       Kapaki-pakinabang ang setting na ito para sa mga customer ng enterprise na gumagamit ng SSO solutions na hindi pa compatible sa bagong inline na flow ng pag-sign in.
       Kung ie-enable mo ang setting na ito, gagamitin ang lumang web-based na flow ng pag-sign in.
@@ -1469,9 +1469,9 @@
 <translation id="3646859102161347133">Itakda ang uri ng magnifier sa screen</translation>
 <translation id="3653237928288822292">Default na icon ng provider ng paghahanap</translation>
 <translation id="3660510274595679517">
-        Kung nakatakda ang patakarang ito sa True, mandatoryo ang pag-enroll sa pamamahala sa cloud at iba-block ang proseso ng paglunsad ng Carbon Browser Browser Browser kung hindi ito magtatagumpay.
+        Kung nakatakda ang patakarang ito sa True, mandatoryo ang pag-enroll sa pamamahala sa cloud at iba-block ang proseso ng paglunsad ng Carbon Browser kung hindi ito magtatagumpay.
 
-        Kung hindi itinakda o kung nakatakda sa False ang patakarang ito, opsyonal ang pag-enroll sa pamamahala sa cloud at hindi iba-block ang proseso ng paglunsad ng Carbon Browser Browser Browser kung hindi ito magtatagumpay.
+        Kung hindi itinakda o kung nakatakda sa False ang patakarang ito, opsyonal ang pag-enroll sa pamamahala sa cloud at hindi iba-block ang proseso ng paglunsad ng Carbon Browser kung hindi ito magtatagumpay.
 
         Ginagamit ang patakarang ito ng pag-enroll sa patakaran ng cloud ng saklaw ng machine sa desktop at maaari itong itakda ng Registry o GPO sa Windows, plist sa Mac, at JSON na file ng patakaran sa Linux.</translation>
 <translation id="3660562134618097814">Ilipat ang cookies ng SAML IdP sa pag-log in</translation>
@@ -1666,11 +1666,11 @@
 <translation id="3984028218719007910">Tinutukoy kung pinapanatili ng <ph name="PRODUCT_OS_NAME" /> ang lokal na data ng account pagkatapos ng pag-logout. Kung nakatakda sa true, walang mga umiiral nang account ang pananatilihin ng <ph name="PRODUCT_OS_NAME" /> at idi-discard ang lahat ng data mula sa session ng user pagkatapos ng pag-logout. Kung nakatakda sa false o hindi naka-configure ang patakarang ito, maaaring magpanatili ng (na-encrypt na) lokal na data ng user ang device.</translation>
 <translation id="398475542699441679">Kinokontrol ng patakarang ito kung ie-enable ang Suporta sa Legacy Browser.
 
-      Kung ang patakarang ito ay iiwanang hindi nakatakda, o nakatakda sa false, hindi susubukan ng Carbon Browser Browser Browser na maglunsad ng mga itinalagang URL sa isang alternatibong browser.
+      Kung ang patakarang ito ay iiwanang hindi nakatakda, o nakatakda sa false, hindi susubukan ng Carbon Browser na maglunsad ng mga itinalagang URL sa isang alternatibong browser.
 
-      Kapag nakatakda sa true ang patakarang ito, susubukan ng Carbon Browser Browser Browser na maglunsad ng ilang URL sa isang alternatibong browser (gaya ng Internet Explorer). Ang feature na ito ay kino-configure gamit ang mga patakaran sa grupong <ph name="LEGACY_BROWSER_SUPPORT_POLICY_GROUP" />.
+      Kapag nakatakda sa true ang patakarang ito, susubukan ng Carbon Browser na maglunsad ng ilang URL sa isang alternatibong browser (gaya ng Internet Explorer). Ang feature na ito ay kino-configure gamit ang mga patakaran sa grupong <ph name="LEGACY_BROWSER_SUPPORT_POLICY_GROUP" />.
 
-      Ang feature na ito ay pamalit sa extension na <ph name="LEGACY_BROWSER_SUPPORT_EXTENSION_NAME" />. Ipapasa sa feature na ito ang configuration mula sa extension, ngunit lubos na inirerekomendang ang mga patakaran ng Carbon Browser Browser Browser na lang ang gamitin. Tinitiyak nitong magiging mas maayos ang compatibility sa hinaharap.</translation>
+      Ang feature na ito ay pamalit sa extension na <ph name="LEGACY_BROWSER_SUPPORT_EXTENSION_NAME" />. Ipapasa sa feature na ito ang configuration mula sa extension, ngunit lubos na inirerekomendang ang mga patakaran ng Carbon Browser na lang ang gamitin. Tinitiyak nitong magiging mas maayos ang compatibility sa hinaharap.</translation>
 <translation id="3997519162482760140">Mga URL na bibigyan ng access sa mga device na nagka-capture ng video sa mga page ng pag-login ng SAML</translation>
 <translation id="4001275826058808087">Magagamit ng mga IT admin para sa mga enterprise device ang flag na ito upang kontrolin kung papayagan ang mga user na kumuha ng mga alok sa pamamagitan ng Pagpaparehistro ng Chrome OS.
 
@@ -1688,13 +1688,13 @@
 
           Nangingibaw ang patakarang ito sa potensyal na sumasalungat na patakarang <ph name="EXTENSION_INSTALL_BLACKLIST_POLICY_NAME" />. Kung inalis sa listahang ito ang isang app o extension na dati nang sapilitang na-install, awtomatiko itong ia-uninstall ng <ph name="PRODUCT_NAME" />.
 
-          Para sa mga sitwasyon ng Windows na hindi kasali sa isang <ph name="MS_AD_NAME" /> na domain, para lang sa mga app at extension na nakalista sa Carbon Browser Browser Browser Web Store ang sapilitang pag-install.
+          Para sa mga sitwasyon ng Windows na hindi kasali sa isang <ph name="MS_AD_NAME" /> na domain, para lang sa mga app at extension na nakalista sa Carbon Browser Web Store ang sapilitang pag-install.
 
           Tandaang puwedeng mabago ng mga user ang source code ng anumang extension sa pamamagitan ng Mga Tool ng Developer (na puwedeng humantong sa maling paggana ng extension). Kung isa itong alalahanin, dapat itakda ang patakarang <ph name="DEVELOPER_TOOLS_POLICY_NAME" />.
 
-          Ang bawat item sa listahan ng patakaran ay isang string na may extension ID at, bilang opsyon, isang URL ng "update" na hinihiwalay ng semicolon (<ph name="SEMICOLON" />). Ang extension ID ay ang 32 titik na string na makikita, halimbawa sa <ph name="CHROME_EXTENSIONS_LINK" />, kapag nasa developer mode. Dapat ay nakadirekta ang URL ng "update," kung tutukuyin, sa isang dokumentong Update Manifest XML gaya ng nakasaad sa <ph name="LINK_TO_EXTENSION_DOC1" />. Bilang default, ginagamit ang URL ng update ng Carbon Browser Browser Browser Web Store (na kasalukuyang "https://clients2.google.com/service/update2/crx"). Tandaang ginagamit lang ang nakatakdang URL ng "update" sa patakarang ito para sa paunang pag-install; gagamitin ng mga susunod na pag-update ng extension ang URL ng update na nakasaad sa manifest ng extension. Tandaan ding mandatoryo ang hayagang pagtukoy sa URL ng "update" sa mga bersyon ng <ph name="PRODUCT_NAME" /> hanggang sa at kabilang ang 67.
+          Ang bawat item sa listahan ng patakaran ay isang string na may extension ID at, bilang opsyon, isang URL ng "update" na hinihiwalay ng semicolon (<ph name="SEMICOLON" />). Ang extension ID ay ang 32 titik na string na makikita, halimbawa sa <ph name="CHROME_EXTENSIONS_LINK" />, kapag nasa developer mode. Dapat ay nakadirekta ang URL ng "update," kung tutukuyin, sa isang dokumentong Update Manifest XML gaya ng nakasaad sa <ph name="LINK_TO_EXTENSION_DOC1" />. Bilang default, ginagamit ang URL ng update ng Carbon Browser Web Store (na kasalukuyang "https://clients2.google.com/service/update2/crx"). Tandaang ginagamit lang ang nakatakdang URL ng "update" sa patakarang ito para sa paunang pag-install; gagamitin ng mga susunod na pag-update ng extension ang URL ng update na nakasaad sa manifest ng extension. Tandaan ding mandatoryo ang hayagang pagtukoy sa URL ng "update" sa mga bersyon ng <ph name="PRODUCT_NAME" /> hanggang sa at kabilang ang 67.
 
-          Halimbawa, ini-install ng <ph name="EXTENSION_POLICY_EXAMPLE" /> ang extension na may id na <ph name="EXTENSION_ID_SAMPLE" /> mula sa karaniwang URL ng "update" ng Carbon Browser Browser Browser Web Store. Para sa higit pang impormasyon tungkol sa pag-host ng mga extension, tingnan ang: <ph name="LINK_TO_EXTENSION_DOC2" />.
+          Halimbawa, ini-install ng <ph name="EXTENSION_POLICY_EXAMPLE" /> ang extension na may id na <ph name="EXTENSION_ID_SAMPLE" /> mula sa karaniwang URL ng "update" ng Carbon Browser Web Store. Para sa higit pang impormasyon tungkol sa pag-host ng mga extension, tingnan ang: <ph name="LINK_TO_EXTENSION_DOC2" />.
 
           Kung hahayaang hindi nakatakda ang patakarang ito, walang app o extension ang ii-install nang awtomatiko at puwedeng i-uninstall ng user ang anumang app o extension sa <ph name="PRODUCT_NAME" />.
 
@@ -1801,7 +1801,7 @@
           Kung itatakda mo ang patakarang ito, hindi ito mababago o mao-override ng mga user.
 
           Kung hahayaang hindi nakatakda ang patakarang ito, naka-disable sa simula ang mga sticky key pero puwede ito i-enable ng user anumang oras.</translation>
-<translation id="4171331498167688968">Kung nakatakda sa false ang patakaran, papayagan ang third party software na magpasok ng executable code sa mga proseso ng Carbon Browser Browser Browser. Kung hindi nakatakda ang patakaran o nakatakda sa true, pipigilan ang third party software sa pagpasok ng executable code sa mga proseso ng Carbon Browser Browser Browser.
+<translation id="4171331498167688968">Kung nakatakda sa false ang patakaran, papayagan ang third party software na magpasok ng executable code sa mga proseso ng Carbon Browser. Kung hindi nakatakda ang patakaran o nakatakda sa true, pipigilan ang third party software sa pagpasok ng executable code sa mga proseso ng Carbon Browser.
 
       Anuman ang value ng patakarang ito, hindi iba-block ng broser sa kasalukuyan ang third party software sa pagpasok ng executable code sa mga proseso nito sa isang machine na kasama sa domain ng <ph name="MS_AD_NAME" />.</translation>
 <translation id="4183229833636799228">Default na setting ng <ph name="FLASH_PLUGIN_NAME" /></translation>
@@ -1870,11 +1870,11 @@
 <translation id="4298509794364745131">Tumutukoy ng listahan ng mga app na maaaring i-enable bilang app sa paggawa ng tala sa lock screen ng <ph name="PRODUCT_OS_NAME" />.
 
       Kung naka-enable sa lock screen ang piniling app sa paggawa ng tala, maglalaman ang lock screen ng elemento ng UI para sa paglulunsad ng piniling app sa paggawa ng tala.
-      Kapag inilunsad, makakagawa ang app ng isang window sa itaas na bahagi ng lock screen, at makakagawa ng mga item ng data (mga tala) sa konteksto ng lock screen. Makakapag-import ang app ng mga nagawang tala sa session ng pangunahing user kapag naka-unlock ang screen. Sa kasalukuyan, ang mga app sa paggawa ng tala ng Carbon Browser Browser Browser lang ang sinusuportahan sa lock screen.
+      Kapag inilunsad, makakagawa ang app ng isang window sa itaas na bahagi ng lock screen, at makakagawa ng mga item ng data (mga tala) sa konteksto ng lock screen. Makakapag-import ang app ng mga nagawang tala sa session ng pangunahing user kapag naka-unlock ang screen. Sa kasalukuyan, ang mga app sa paggawa ng tala ng Carbon Browser lang ang sinusuportahan sa lock screen.
 
       Kung nakatakda ang patakaran, papayagan lang ang user na mag-enable ng app sa lock screen kung ang extension ID ng app ay nasa value ng listahan ng patakaran.
       Bilang resulta, kapag itinakda ang patakarang ito sa isang listahang walang laman, tuluyang madi-disable ang paggawa ng tala sa lock screen.
-      Tandaan na ang patakarang naglalaman ng app ID ay hindi nangangahulugang mae-enable ng user ang app bilang app sa paggawa ng tala sa lock screen - halimbawa, sa Carbon Browser Browser Browser 61, may karagdagang paghihigpit ayon sa platform ang hanay ng mga available na app.
+      Tandaan na ang patakarang naglalaman ng app ID ay hindi nangangahulugang mae-enable ng user ang app bilang app sa paggawa ng tala sa lock screen - halimbawa, sa Carbon Browser 61, may karagdagang paghihigpit ayon sa platform ang hanay ng mga available na app.
 
       Kung hindi nakatakda ang patakaran, walang ipapatupad na paghihigpit ang patakaran para sa hanay ng mga app na maaaring i-enable ng user sa lock screen.</translation>
 <translation id="4313767483634435271">Nakatalagang MAC address ng dock ng device</translation>
@@ -2031,7 +2031,7 @@
 <translation id="467236746355332046">Mga suportadong tampok:</translation>
 <translation id="4674167212832291997">I-customize ang listahan ng mga pattern ng URL na dapat na palaging i-render ng <ph name="PRODUCT_FRAME_NAME" />.
 
-          Kung hindi nakatakda ang patakarang ito, gagamitin ang default na tagapag-render para sa lahat ng site tulad ng tinukoy sa patakarang 'Carbon Browser Browser BrowserFrameRendererSettings.'
+          Kung hindi nakatakda ang patakarang ito, gagamitin ang default na tagapag-render para sa lahat ng site tulad ng tinukoy sa patakarang 'Carbon BrowserFrameRendererSettings.'
 
           Para sa mga halimbawang pattern, tingnan ang https://www.chromium.org/developers/how-tos/chrome-frame-getting-started.</translation>
 <translation id="467449052039111439">Magbukas ng listahan ng mga URL</translation>
@@ -2129,10 +2129,10 @@
 
       Kung nakatakda sa false ang patakarang ito, hindi papayagan ng <ph name="PRODUCT_NAME" /> ang paggawa ng mga bagong profile mula sa user manager.</translation>
 <translation id="4970855112942626932">I-disable ang pag-sign in sa browser</translation>
-<translation id="4978405676361550165">Kung nakatakda ang patakarang "OffHours," babalewalain ang mga tinukoy na patakaran sa device (gagamitin ang mga default na setting ng mga patakarang ito) sa mga tinukoy na pagitan ng oras. Muling ilalapat ng Carbon Browser Browser Browser ang mga patakaran sa device sa bawat kaganapan kapag nagsimula o natapos ang "OffHours" na yugto. Aabisuhan at sapilitang isa-sign out ang user kapag natapos ang oras ng "OffHours" at kapag nabago ang mga setting ng patakaran sa device (hal., kapag sa hindi pinapayagang account naka-log in ang user).</translation>
+<translation id="4978405676361550165">Kung nakatakda ang patakarang "OffHours," babalewalain ang mga tinukoy na patakaran sa device (gagamitin ang mga default na setting ng mga patakarang ito) sa mga tinukoy na pagitan ng oras. Muling ilalapat ng Carbon Browser ang mga patakaran sa device sa bawat kaganapan kapag nagsimula o natapos ang "OffHours" na yugto. Aabisuhan at sapilitang isa-sign out ang user kapag natapos ang oras ng "OffHours" at kapag nabago ang mga setting ng patakaran sa device (hal., kapag sa hindi pinapayagang account naka-log in ang user).</translation>
 <translation id="4980635395568992380">Uri ng data:</translation>
 <translation id="4983201894483989687">Payagan ang pagpapatakbo ng mga plugin na wala na sa panahon</translation>
-<translation id="4986560318567565414">Path sa Carbon Browser Browser Browser para sa paglipat mula sa alternatibong browser.</translation>
+<translation id="4986560318567565414">Path sa Carbon Browser para sa paglipat mula sa alternatibong browser.</translation>
 <translation id="4988291787868618635">Pagkilos na gagawin kapag naabot ang idle delay</translation>
 <translation id="5034604678285451405">Itakda ang limitasyon ng baterya ng power peak shift sa porsyento.
 
@@ -2206,11 +2206,11 @@
       Kung nakatakda ang patakaran sa 0, naka-disable ang pagpapalit ng password ng machine account.
 
       Tandaan na maaaring maging mas luma kaysa sa tinukoy na bilang ng araw ang mga password kung nag-offline ang client sa loob ng mas mahabang panahon.</translation>
-<translation id="510196893779239086">Kinokontrol ng patakarang ito kung ganap na isasara ang Carbon Browser Browser Browser kapag lumipat sa ibang browser ang huling tab.
+<translation id="510196893779239086">Kinokontrol ng patakarang ito kung ganap na isasara ang Carbon Browser kapag lumipat sa ibang browser ang huling tab.
 
-      Kapag iniwang hindi nakatakda ang patakarang ito, o nakatakda sa true, magpapanatili ang Carbon Browser Browser Browser ng kahit isang nakabukas na tab, pagkatapos lumipat sa isang alternatibong browser.
+      Kapag iniwang hindi nakatakda ang patakarang ito, o nakatakda sa true, magpapanatili ang Carbon Browser ng kahit isang nakabukas na tab, pagkatapos lumipat sa isang alternatibong browser.
 
-      Kapag nakatakda sa false ang patakarang ito, isasara ng Carbon Browser Browser Browser ang tab pagkatapos lumipat sa isang alternatibong browser, kahit na ito ang huling tab. Magiging dahilan ito ng ganap na pagsasara ng Carbon Browser Browser Browser.</translation>
+      Kapag nakatakda sa false ang patakarang ito, isasara ng Carbon Browser ang tab pagkatapos lumipat sa isang alternatibong browser, kahit na ito ang huling tab. Magiging dahilan ito ng ganap na pagsasara ng Carbon Browser.</translation>
 <translation id="5102203758995933166">Nagbibigay-daan na malapat sa bawat user ang configuration ng pushing network sa <ph name="PRODUCT_OS_NAME" /> device. Ang configuration ng network ay isang string na naka-format sa JSON gaya ng tinutukoy ng format ng Configuration ng Open Network.</translation>
 <translation id="5105313908130842249">Delay ng pag-lock ng screen kapag tumatakbo gamit ang power ng baterya</translation>
 <translation id="5108031557082757679">Mga naka-disable na printer ng device ng enterprise</translation>
@@ -2225,7 +2225,7 @@
 <translation id="5148753489738115745">Binibigyang-daan kang tukuyin ang mga karagdagang parameter na ginagamit kapag nilunsad ng <ph name="PRODUCT_FRAME_NAME" /> ang <ph name="PRODUCT_NAME" />.
 
           Kung hindi naitakda ang patakarang ito, ang default na command line ang gagamitin.</translation>
-<translation id="5152787786897382519">Ang parehong Carbon Browser Browser Browser at Carbon Browser Browser Browser ay may ilang pangkat ng mga patakaran na nakadepende sa isa't isa para makapagbigay ng kontrol sa isang feature. Ang mga hanay na ito ay kinakatawan ng mga sumusunod na pangkat ng patakaran. Dahil puwedeng magkaroon ng maraming pinagmulan ang mga patakaran, ang mga value lang na mula sa pinagmulang may pinakamataas na priyoridad ang ilalapat. Babalewalain ang mga value na mula sa pinagmulang may mababang priyoridad. Tutukuyin ang pagkakasunud-sunod ng priyoridad sa <ph name="POLICY_PRIORITY_DOC_URL" />.</translation>
+<translation id="5152787786897382519">Ang parehong Carbon Browser at Carbon Browser ay may ilang pangkat ng mga patakaran na nakadepende sa isa't isa para makapagbigay ng kontrol sa isang feature. Ang mga hanay na ito ay kinakatawan ng mga sumusunod na pangkat ng patakaran. Dahil puwedeng magkaroon ng maraming pinagmulan ang mga patakaran, ang mga value lang na mula sa pinagmulang may pinakamataas na priyoridad ang ilalapat. Babalewalain ang mga value na mula sa pinagmulang may mababang priyoridad. Tutukuyin ang pagkakasunud-sunod ng priyoridad sa <ph name="POLICY_PRIORITY_DOC_URL" />.</translation>
 <translation id="5159469559091666409">Gaano kadalas ipinapadala ang mga sinusubaybayang network packet, sa millisecond.
 
       Kung hindi nakatakda ang patakarang ito, ang default na pagitan ay 3 minuto.
@@ -2336,7 +2336,7 @@
           Ang value ng blacklist na '*' ay nangangahulugang naka-blacklist ang lahat ng host ng native na pagmemensahe maliban kung tahasang nakalista ang mga ito sa whitelist.
 
           Kung ang patakarang ito ay naiwang hindi nakatakda, ilo-load ng <ph name="PRODUCT_NAME" /> ang lahat ng naka-install na host ng native na pagmemensahe.</translation>
-<translation id="5272684451155669299">Kung true, magagamit ng user ang hardware sa mga Carbon Browser Browser Browser device upang malayuang patunayan ang pagkakakilanlan nito sa CA ng privacy sa pamamagitan ng <ph name="ENTERPRISE_PLATFORM_KEYS_API" /> gamit ang <ph name="CHALLENGE_USER_KEY_FUNCTION" />.
+<translation id="5272684451155669299">Kung true, magagamit ng user ang hardware sa mga Carbon Browser device upang malayuang patunayan ang pagkakakilanlan nito sa CA ng privacy sa pamamagitan ng <ph name="ENTERPRISE_PLATFORM_KEYS_API" /> gamit ang <ph name="CHALLENGE_USER_KEY_FUNCTION" />.
 
           Kung nakatakda ito sa false, o kung hindi ito nakatakda, papalya ang mga call sa API na may code ng error.</translation>
 <translation id="5277806246014825877">I-enable ang user na itong patakbuhin ang Crostini.
@@ -2553,7 +2553,7 @@ lumagpas na sa partikular na haba ng panahon ang oras na hindi ito nagamit.
         Kung nakatakda sa false ang patakaran, hindi makakapagpadala ang mga user ng feedback sa Google.
 
         Kung hindi nakatakda o nakatakda sa true ang patakaran, makakapagpadala ang mga user ng feedback sa Google sa pamamagitan ng Menu-&gt;Tulong-&gt;Mag-ulat ng Isyu o kumbinasyon ng key.</translation>
-<translation id="5581292529942108810">I-configure ang mga patakarang nauugnay sa Carbon Browser Browser Browser Reporting Extension.
+<translation id="5581292529942108810">I-configure ang mga patakarang nauugnay sa Carbon Browser Reporting Extension.
 
       May bisa lang ang patakarang ito kapag naka-enable ang <ph name="CHROME_REPORTING_EXTENSION_NAME" />, at naka-enroll sa <ph name="MACHINE_LEVEL_USER_CLOUD_POLICY_ENROLLMENT_TOKEN_POLICY_NAME" /> ang machine.</translation>
 <translation id="5583806683960333345">Kung ie-enable ang setting na ito, papayagan ang mga user na gamitin ang Instant na Pag-tether, na nagbibigay-daan sa kanilang Google phone na ibahagi ang mobile data nito sa kanilang device.
@@ -2583,7 +2583,7 @@ lumagpas na sa partikular na haba ng panahon ang oras na hindi ito nagamit.
 
       TANDAAN: Sa Android, pang-eksperimento ang Pag-isolate ng Site. Huhusay ang suporta sa paglipas ng panahon, ngunit sa kasalukuyan, maaari itong magdulot ng mga problema sa performance.
 
-      TANDAAN: Nalalapat lang ang patakarang ito sa Carbon Browser Browser Browser sa Android na tumatakbo sa mga device lang na mayroong mahigit sa 1GB na RAM. Para mailapat ang patakaran sa mga hindi Android na platform, gamitin ang IsolateOrigins.
+      TANDAAN: Nalalapat lang ang patakarang ito sa Carbon Browser sa Android na tumatakbo sa mga device lang na mayroong mahigit sa 1GB na RAM. Para mailapat ang patakaran sa mga hindi Android na platform, gamitin ang IsolateOrigins.
       </translation>
 <translation id="5599461642204007579">Mga setting ng pamamahala ng <ph name="MS_AD_NAME" /></translation>
 <translation id="5610104657949692379">Kapag nakatakda ang patakarang ito, tinutukoy nito ang isinasagawang pagkilos ng <ph name="PRODUCT_OS_NAME" /> kapag nananatiling idle ang user sa loob ng tagal ng panahong ibinibigay ng delay bago maging idle, na puwedeng hiwalay na i-configure.
@@ -2591,7 +2591,7 @@ lumagpas na sa partikular na haba ng panahon ang oras na hindi ito nagamit.
           Kapag hindi nakatakda ang patakarang ito, isasagawa ang default na pagkilos, ang pagsususpinde.
 
           Kung ang pagkilos ay pagsususpinde, maaaring hiwalay na i-configure ang <ph name="PRODUCT_OS_NAME" /> para i-lock o huwag i-lock ang screen bago ang pagsususpinde.</translation>
-<translation id="5618398258385745432">Ginamit ang nauugnay na setting bago ipinakilala ang muling pag-authenticate sa pagtingin ng mga password. Simula noon, wala nang bisa ang setting at ang patakarang ito sa gawi ng Carbon Browser Browser Browser. Pareho na ang kasalukuyang gawi ng Carbon Browser Browser Browser na para bang itinakda ang patakaran para i-disable ang pagpapakita ng mga password sa malinaw na text sa page ng mga setting ng password manager. Ibig sabihin, placeholder lang ang nilalaman ng page ng mga setting, at ipapakita lang ng Carbon Browser Browser Browser ang password kapag na-click ng user ang "Ipakita" (at muling pag-authenticate, kung naaangkop). Kasunod nito ang orihinal na paglalarawan sa patakaran sa ibaba.
+<translation id="5618398258385745432">Ginamit ang nauugnay na setting bago ipinakilala ang muling pag-authenticate sa pagtingin ng mga password. Simula noon, wala nang bisa ang setting at ang patakarang ito sa gawi ng Carbon Browser. Pareho na ang kasalukuyang gawi ng Carbon Browser na para bang itinakda ang patakaran para i-disable ang pagpapakita ng mga password sa malinaw na text sa page ng mga setting ng password manager. Ibig sabihin, placeholder lang ang nilalaman ng page ng mga setting, at ipapakita lang ng Carbon Browser ang password kapag na-click ng user ang "Ipakita" (at muling pag-authenticate, kung naaangkop). Kasunod nito ang orihinal na paglalarawan sa patakaran sa ibaba.
 
           Kinokontrol kung puwedeng magpakita ang user ng mga password sa malinaw na text sa password manager.
 
@@ -2680,13 +2680,13 @@ lumagpas na sa partikular na haba ng panahon ang oras na hindi ito nagamit.
       Tingnan ang https://www.chromium.org/administrators/policy-list-3/user-data-directory-variables para sa isang listahan ng mga variable na magagamit.
 
       Kung hinayaang hindi nakatakda ang setting na ito, gagamitin ang default na direktoryo ng profile.</translation>
-<translation id="5826047473100157858">Tinutukoy kung maaaring buksan ng user o hindi ang mga pahina sa mode na Private sa <ph name="PRODUCT_NAME" />.
+<translation id="5826047473100157858">Tinutukoy kung maaaring buksan ng user o hindi ang mga pahina sa mode na private sa <ph name="PRODUCT_NAME" />.
 
-      Kung pinili ang 'Pinagana' o hinayaang hindi nakatakda ang patakaran, maaaring buksan sa mode na Private ang mga pahina.
+      Kung pinili ang 'Pinagana' o hinayaang hindi nakatakda ang patakaran, maaaring buksan sa mode na private ang mga pahina.
 
-      Kung pinili ang 'Hindi Pinagana', hindi maaaring buksan sa mode na Private ang mga pahina.
+      Kung pinili ang 'Hindi Pinagana', hindi maaaring buksan sa mode na private ang mga pahina.
 
-      Kung pinili ang 'Ipinilit', maaari LAMANG buksan ang mga pahina sa mode na Private.</translation>
+      Kung pinili ang 'Ipinilit', maaari LAMANG buksan ang mga pahina sa mode na private.</translation>
 <translation id="582857022372205358">I-enable ang short edge duplex na pag-print</translation>
 <translation id="583091600226586337">
       Kung naka-enable ang patakaran, itatanong sa user kung saan ise-save ang bawat file bago i-download ang mga ito.
@@ -2694,7 +2694,7 @@ lumagpas na sa partikular na haba ng panahon ang oras na hindi ito nagamit.
       Kung hindi na-configure ang patakaran, mababago ng user ang setting na ito.
       </translation>
 <translation id="5832274826894536455">Mga patakarang hindi na ginagamit</translation>
-<translation id="5835124959204887277">Tumutukoy ng mga URL at domain kung saan walang ipapakitang prompt kapag humiling ng mga certificate ng pagpapatunay mula sa Mga Security Key. Bukod pa rito, may ipapadalang signal sa Security Key na nagsasaad na maaaring gumamit ng indibidwal na pagpapatunay. Kung wala ito, ipo-prompt ang mga user sa Carbon Browser Browser Browser 65+ kapag humiling ang mga site ng pagpapatunay ng Mga Security Key.
+<translation id="5835124959204887277">Tumutukoy ng mga URL at domain kung saan walang ipapakitang prompt kapag humiling ng mga certificate ng pagpapatunay mula sa Mga Security Key. Bukod pa rito, may ipapadalang signal sa Security Key na nagsasaad na maaaring gumamit ng indibidwal na pagpapatunay. Kung wala ito, ipo-prompt ang mga user sa Carbon Browser 65+ kapag humiling ang mga site ng pagpapatunay ng Mga Security Key.
 
       Tutugma lang ang mga URL (tulad ng https://example.com/some/path) bilang mga U2F appID. Tutugma lang ang mga domain (tulad ng example.com) bilang mga webauthn RP ID. Samakatuwid, upang masaklaw ang mga U2F at webauthn API para sa isang partikular na site, kailangang parehong ilista ang appID URL at domain.</translation>
 <translation id="5836064773277134605">Paghigpitan ang saklaw ng UDP port na ginamit ng host ng malayuang pag-access</translation>
@@ -2829,7 +2829,7 @@ lumagpas na sa partikular na haba ng panahon ang oras na hindi ito nagamit.
 
       Kapag ang patakarang ito ay hinayaang hindi nakatakda o nakatakda sa False, walang kokolektahin o ia-upload na data.
       Kapag ang patakarang ito ay nakatakda sa True, kokolektahin at ia-upload ang data sa Google Admin console.
-      Para makontrol kung anong data ang ina-upload, pakigamit ang mga patakaran sa grupong Carbon Browser Browser Browser Reporting Extension.
+      Para makontrol kung anong data ang ina-upload, pakigamit ang mga patakaran sa grupong Carbon Browser Reporting Extension.
 
       May bisa lang ang patakarang ito kapag naka-enroll ang machine sa <ph name="MACHINE_LEVEL_USER_CLOUD_POLICY_ENROLLMENT_TOKEN_POLICY_NAME" />.
 
@@ -2916,7 +2916,7 @@ lumagpas na sa partikular na haba ng panahon ang oras na hindi ito nagamit.
 <translation id="6282799760374509080">Payagan o tanggihan ang pagkuha ng audio</translation>
 <translation id="6284362063448764300">TLS 1.1</translation>
 <translation id="6310223829319187614">I-enable ang pag-autocomplete ng domain name sa pag-sign in ng user</translation>
-<translation id="6315673513957120120">Nagpapakita ang Carbon Browser Browser Browser ng page ng babala kapag nag-navigate ang mga user sa mga site na may mga SSL error. Bilang default o kapag itinakda ang patakarang ito sa true, maaaring mag-click ang mga user sa mga page ng babala na ito.
+<translation id="6315673513957120120">Nagpapakita ang Carbon Browser ng page ng babala kapag nag-navigate ang mga user sa mga site na may mga SSL error. Bilang default o kapag itinakda ang patakarang ito sa true, maaaring mag-click ang mga user sa mga page ng babala na ito.
       Kapag itinakda ang patakarang ito sa false, hindi makakapag-click ang mga user sa anumang page ng babala.</translation>
 <translation id="6319198883324703402">Itakda ang oras ng notifcation ng unang paglunsad ulit ng user</translation>
 <translation id="6352543686437322588">Awtomatikong pag-log in ng lokal na account ng device pagkatapos ng pagkaantala.
@@ -2958,7 +2958,7 @@ lumagpas na sa partikular na haba ng panahon ang oras na hindi ito nagamit.
           Kung pipiliin mong awtomatikong i-detect ang proxy server, ibibigay sa mga Android app ang script URL na "http://wpad/wpad.dat." Walang gagamiting ibang bahagi ng protocol ng awtomatikong pag-detect ng proxy.
 
           Kung pipiliin mong gumamit ng isang .pac proxy script, ibibigay sa mga Android app ang script URL.</translation>
-<translation id="6430366557948788869">Carbon Browser Browser Browser Reporting Extension</translation>
+<translation id="6430366557948788869">Carbon Browser Reporting Extension</translation>
 <translation id="6440051664870270040">Payagan ang mga site na sabay na mag-navigate at magbukas ng mga pop-up</translation>
 <translation id="6447948611083700881">Na-disable ang pag-backup at pag-restore</translation>
 <translation id="6449476513004303784">Huwag payagan ang mga user na pamahalaan ang mga certificate</translation>
@@ -3016,9 +3016,9 @@ lumagpas na sa partikular na haba ng panahon ang oras na hindi ito nagamit.
 <translation id="6536600139108165863">Awtomatikong pag-reboot sa pag-shutdown ng device</translation>
 <translation id="6539246272469751178">Walang epekto ang patakarang ito sa mga Android app. Palaging ginagamit ng mga Android app ang default na directory ng mga download at hindi maaaring i-access ang anumang file na na-download ng <ph name="PRODUCT_OS_NAME" /> patungo sa isang hindi default na directory ng mga download.</translation>
 <translation id="654303922206238013">Diskarte sa paglipat para sa ecryptfs</translation>
-<translation id="6544897973797372144">Kung nakatakda sa True ang patakaran at hindi tinukoy ang patakaran sa Carbon Browser Browser BrowserOsReleaseChannel, papayagan ang mga user ng nagpapatalang domain na baguhin ang release channel ng device. Kung nakatakda sa false ang patakarang ito, ila-lock ang device sa channel kung saan ito huling itinakda.
+<translation id="6544897973797372144">Kung nakatakda sa True ang patakaran at hindi tinukoy ang patakaran sa Carbon BrowserOsReleaseChannel, papayagan ang mga user ng nagpapatalang domain na baguhin ang release channel ng device. Kung nakatakda sa false ang patakarang ito, ila-lock ang device sa channel kung saan ito huling itinakda.
 
-      Papalitan ng patakarang Carbon Browser Browser BrowserOsReleaseChannel ang channel na pinili ng user, ngunit kung mas matatag ang channel ng patakaran sa channel na na-install sa device, lilipat lang ang channel kapag naabot na ng mas matatag na channel ang numero ng bersyon na mahigit sa numerong naka-install sa device.</translation>
+      Papalitan ng patakarang Carbon BrowserOsReleaseChannel ang channel na pinili ng user, ngunit kung mas matatag ang channel ng patakaran sa channel na na-install sa device, lilipat lang ang channel kapag naabot na ng mas matatag na channel ang numero ng bersyon na mahigit sa numerong naka-install sa device.</translation>
 <translation id="6553143066970470539">Porsyento ng liwanag ng screen</translation>
 <translation id="6559057113164934677">Huwag payagan ang anumang site na i-access ang camera at mikropono</translation>
 <translation id="6561396069801924653">Ipakita ang mga pagpipilian sa accessibility sa tray menu ng system</translation>
@@ -3098,15 +3098,15 @@ lumagpas na sa partikular na haba ng panahon ang oras na hindi ito nagamit.
 <translation id="6698632841807204978">I-enable ang monochrome na pag-print</translation>
 <translation id="6699880231565102694">Paganahin ang pagpapatotoong may dalawang salik para sa mga host ng malayuang pag-access</translation>
 <translation id="6731757988219967594">Mag-filter ng mga nangungunang site (ngunit hindi mga naka-embed na iframe) para sa pang-adult na content</translation>
-<translation id="6734521799274931721">Kumokontrol sa Mga File Share sa Network para sa availability ng Carbon Browser Browser BrowserOS</translation>
+<translation id="6734521799274931721">Kumokontrol sa Mga File Share sa Network para sa availability ng Carbon BrowserOS</translation>
 <translation id="6735701345096330595">Puwersahang ine-enable ang mga wika ng spellcheck</translation>
 <translation id="673699536430961464">Nagbibigay-daan ang setting na ito sa mga user na lumipat ng Google account sa lugar ng content ng window ng kanilang browser pagkatapos nilang mag-sign in sa kanilang <ph name="PRODUCT_OS_NAME" /> device.
 
-      Kung nakatakda sa false ang patakarang ito, hindi papayagan ang pag-sign in sa ibang account mula sa lugar ng content ng hindi Private browser.
+      Kung nakatakda sa false ang patakarang ito, hindi papayagan ang pag-sign in sa ibang account mula sa lugar ng content ng hindi private browser.
 
-      Kung hindi nakatakda ang patakarang ito o nakatakda ito sa true, gagamitin ang default na gawi: papayagan ang pag-sign in sa ibang account mula sa lugar ng content ng browser, maliban sa mga account ng bata kung saan iba-block ito para sa hindi Private na lugar ng content.
+      Kung hindi nakatakda ang patakarang ito o nakatakda ito sa true, gagamitin ang default na gawi: papayagan ang pag-sign in sa ibang account mula sa lugar ng content ng browser, maliban sa mga account ng bata kung saan iba-block ito para sa hindi private na lugar ng content.
 
-      Kung sakaling hindi dapat payagan ang pag-sign in sa ibang account sa pamamagitan ng Private mode, pag-isipang i-block ang mode na iyon gamit ang patakarang PrivateModeAvailability.
+      Kung sakaling hindi dapat payagan ang pag-sign in sa ibang account sa pamamagitan ng private mode, pag-isipang i-block ang mode na iyon gamit ang patakarang privateModeAvailability.
 
       Tandaang maa-access ng mga user ang mga serbisyo ng Google sa hindi na-authenticate na status sa pamamagitan ng pag-block sa cookies ng mga ito.</translation>
 <translation id="6757438632136860443">Nagbibigay-daan sa iyo na magtakda ng isang listahan ng mga pattern ng url na tumutukoy sa mga site na pinapahintulutang magpatakbo sa plugin na <ph name="FLASH_PLUGIN_NAME" />.
@@ -3143,7 +3143,7 @@ lumagpas na sa partikular na haba ng panahon ang oras na hindi ito nagamit.
 
       Kung itatakda sa false ang patakarang ito, hindi kailanman gagamitin ang built-in na DNS client.
 
-      Kung iiwang hindi nakatakda ang patakarang ito, mae-enable bilang default ang built-in na DNS client sa MacOS, Android (kapag hindi naka-enable ang Private DNS at VPN), at Carbon Browser Browser BrowserOS, at magagawa ng mga user na baguhin kung gagamitin ang built-in na DNS client sa pamamagitan ng pag-edit ng chrome://flags o pagtukoy ng command-line flag.</translation>
+      Kung iiwang hindi nakatakda ang patakarang ito, mae-enable bilang default ang built-in na DNS client sa MacOS, Android (kapag hindi naka-enable ang Private DNS at VPN), at Carbon BrowserOS, at magagawa ng mga user na baguhin kung gagamitin ang built-in na DNS client sa pamamagitan ng pag-edit ng chrome://flags o pagtukoy ng command-line flag.</translation>
 <translation id="6843296367238757293">Hindi na ginagamit ang patakarang ito. Hindi hinihikayat ang paggamit nito. Magbasa pa sa https://support.google.com/chrome/a/answer/7643500</translation>
 <translation id="684856667300805181">Inalis ang patakarang ito sa <ph name="PRODUCT_NAME" /> 68 at pinalitan ito ng <ph name="ARC_GLS_POLICY_NAME" />.</translation>
 <translation id="6856743875250214792">Hindi na ginagamit at tinanggal na ang patakarang ito sa M66, dahil ginamit lang ito para sa internal na pagsubok at isa itong sagutin sa seguridad.
@@ -3186,7 +3186,7 @@ lumagpas na sa partikular na haba ng panahon ang oras na hindi ito nagamit.
 
       TANDAAN: Sa Android, pang-eksperimento ang Pag-isolate ng Site. Huhusay ang suporta sa paglipas ng panahon, ngunit maaari itong magdulot ng mga problema sa performance sa kasalukuyan.
 
-      TANDAAN: Nalalapat lang ang patakarang ito sa Carbon Browser Browser Browser sa Android na gumagana sa mga device na may mahigit lang sa 1GB ng RAM. Para ilapat ang patakaran sa mga platform na hindi Android, gamitin ang SitePerProcess.
+      TANDAAN: Nalalapat lang ang patakarang ito sa Carbon Browser sa Android na gumagana sa mga device na may mahigit lang sa 1GB ng RAM. Para ilapat ang patakaran sa mga platform na hindi Android, gamitin ang SitePerProcess.
       </translation>
 <translation id="6922884955650325312">I-block ang plugin na <ph name="FLASH_PLUGIN_NAME" /></translation>
 <translation id="6923366716660828830">Tinutukoy ang pangalan ng default na provider ng paghahanap. Kung hinayaang walang laman o hindi nakatakda, gagamitin ang pangalan ng host na tinukoy ng URL ng paghahanap.
@@ -3283,7 +3283,7 @@ lumagpas na sa partikular na haba ng panahon ang oras na hindi ito nagamit.
 
       Kung nakatakda ang patakaran sa false, o hindi ito nakatakda, hindi maaaring kolektahin o i-upload ng <ph name="PRODUCT_NAME" /> ang mga nasabing log.
 
-      Ang mga log na ito ay naglalaman ng diagnostic na impormasyong makakatulong kapag nagde-debug ng mga isyu sa mga audio o video call sa Carbon Browser Browser Browser, gaya ng oras at laki ng mga naipadala at natanggap na RTP packet, feedback tungkol sa pagdami ng gumagamit sa network, at metadata tungkol sa oras at kalidad ng mga audio at video frame. Ang mga log na ito ay hindi naglalaman ng mga audio o video content mula sa tawag.
+      Ang mga log na ito ay naglalaman ng diagnostic na impormasyong makakatulong kapag nagde-debug ng mga isyu sa mga audio o video call sa Carbon Browser, gaya ng oras at laki ng mga naipadala at natanggap na RTP packet, feedback tungkol sa pagdami ng gumagamit sa network, at metadata tungkol sa oras at kalidad ng mga audio at video frame. Ang mga log na ito ay hindi naglalaman ng mga audio o video content mula sa tawag.
 
       Mati-trigger lang ang ganitong pagkolekta ng data sa pamamagitan ng mga serbisyo sa web ng Google, gaya ng Google Hangouts o Google Meet.
 
@@ -3381,12 +3381,12 @@ lumagpas na sa partikular na haba ng panahon ang oras na hindi ito nagamit.
 <translation id="7185078796915954712">TLS 1.3</translation>
 <translation id="718956142899066210">Mga uri ng koneksyon na pinapayagan para sa mga update</translation>
 <translation id="7194407337890404814">Pangalan ng default na provider ng paghahanap</translation>
-<translation id="7199304109870655950">Kino-configure ang mga opsyon sa remote na access sa host ng Remote na Desktop ng Carbon Browser Browser Browser.
+<translation id="7199304109870655950">Kino-configure ang mga opsyon sa remote na access sa host ng Remote na Desktop ng Carbon Browser.
 
-      Ang host ng Remote na Desktop ng Carbon Browser Browser Browser ay isang native na serbisyong tumatakbo sa target na machine kung saan makakakonekta ang isang user gamit ang application na Remote na Desktop ng Carbon Browser Browser Browser.  Naka-package ang native na serbisyo at isinasagawa ito nang hiwalay sa <ph name="PRODUCT_NAME" /> browser.
+      Ang host ng Remote na Desktop ng Carbon Browser ay isang native na serbisyong tumatakbo sa target na machine kung saan makakakonekta ang isang user gamit ang application na Remote na Desktop ng Carbon Browser.  Naka-package ang native na serbisyo at isinasagawa ito nang hiwalay sa <ph name="PRODUCT_NAME" /> browser.
 
       Babalewalain ang mga patakarang ito maliban na lang kung naka-install ang
-      host ng Remote na Desktop ng Carbon Browser Browser Browser.</translation>
+      host ng Remote na Desktop ng Carbon Browser.</translation>
 <translation id="7202925763179776247">Payagan ang mga paghihigpit sa pag-download</translation>
 <translation id="7207095846245296855">Puwersahin ang Google SafeSearch</translation>
 <translation id="7211368186050418507">Huwag awtomatikong mag-detect ng timezone kahit kailan</translation>
@@ -3488,9 +3488,9 @@ lumagpas na sa partikular na haba ng panahon ang oras na hindi ito nagamit.
 <translation id="7329968046053403405">Tinutukoy ang uri ng account ng mga account na ibinigay ng app sa pagpapatotoo ng Android na sumusuporta sa pagpapatotoo ng <ph name="HTTP_NEGOTIATE" /> (hal. pagpapatotoo ng Kerberos). Dapat na available ang impormasyong ito mula sa supplier ng app sa pagpapatotoo. Para sa higit pang mga detalye, tingnan ang https://goo.gl/hajyfN.
 
           Kung walang ibinigay na setting, idi-disable ang pagpapatotoo ng <ph name="HTTP_NEGOTIATE" /> sa Android.</translation>
-<translation id="7331962793961469250">Kapag nakatakda sa True, hindi lilitaw sa bagong pahina ng tab ang mga pag-promote para sa mga Carbon Browser Browser Browser Web Store app.
+<translation id="7331962793961469250">Kapag nakatakda sa True, hindi lilitaw sa bagong pahina ng tab ang mga pag-promote para sa mga Carbon Browser Web Store app.
 
-      Palilitawin ng pagtatakda sa pagpipiliang ito sa False o pag-iwan dito na hindi nakatakda sa bagong pahina ng tab ang mga pag-promote para sa mga Carbon Browser Browser Browser Web Store app</translation>
+      Palilitawin ng pagtatakda sa pagpipiliang ito sa False o pag-iwan dito na hindi nakatakda sa bagong pahina ng tab ang mga pag-promote para sa mga Carbon Browser Web Store app</translation>
 <translation id="7332963785317884918">Hindi na ginagamit ang patakarang ito. Palaging gagamitin ng <ph name="PRODUCT_OS_NAME" /> ang 'RemoveLRU' na diskarte ng pag-clean-up.
 
       Kinokontrol ang awtomatikong gawi ng pag-clean-up sa mga <ph name="PRODUCT_OS_NAME" /> na device. Nati-trigger ang awtomatikong pag-clean-up kapag umabot sa kritikal na antas ang bakanteng espasyo sa disk upang makabawi ng kaunting espasyo sa disk.
@@ -3550,7 +3550,7 @@ lumagpas na sa partikular na haba ng panahon ang oras na hindi ito nagamit.
       </translation>
 <translation id="7506269062143646163">I-enable ang suporta para sa Signed HTTP Exchange (SXG).
 
-          Kung hindi naitakda o naitakda sa Naka-enable ang patakarang ito, tatanggap ang Carbon Browser Browser Browser ng mga content ng web na ihinahatid bilang Mga Signed HTTP Exchange.
+          Kung hindi naitakda o naitakda sa Naka-enable ang patakarang ito, tatanggap ang Carbon Browser ng mga content ng web na ihinahatid bilang Mga Signed HTTP Exchange.
 
           Kung naitakda sa Naka-disable ang patakarang ito, hindi malo-load ang Mga Signed HTTP Exchange.</translation>
 <translation id="7511361072385293666">Kung nakatakda ang patakaran na ito sa true o hindi ito nakatakda, ang paggamit ng QUIC protocol sa <ph name="PRODUCT_NAME" /> ay pinapayagan.
@@ -3591,7 +3591,7 @@ lumagpas na sa partikular na haba ng panahon ang oras na hindi ito nagamit.
 
       Kapag iniwang hindi nakatakda ang patakarang ito, o nakatakda sa 0, ang pag-navigate sa isang itinalagang URL ay agad na magbubukas rito sa isang alternatibong browser.
 
-      Kapag nakatakda ang patakarang ito sa isang numero, magpapakita ang Carbon Browser Browser Browser ng mensahe para sa ganoon karaming millisecond, at pagkatapos ay bubuksan ang alternatibong browser.</translation>
+      Kapag nakatakda ang patakarang ito sa isang numero, magpapakita ang Carbon Browser ng mensahe para sa ganoon karaming millisecond, at pagkatapos ay bubuksan ang alternatibong browser.</translation>
 <translation id="7593523670408385997">Kino-configure ang laki ng cache na gagamitin ng <ph name="PRODUCT_NAME" /> sa pag-iimbak ng mga na-cache na file sa disk.
 
       Kung itinakda mo ang patakarang ito, gagamitin ng <ph name="PRODUCT_NAME" /> ang ibinigay na laki ng cache tinukoy man ng user ang '--disk-cache-size' flag o hindi. Ang value na tinutukoy sa patakarang ito ay hindi isang ganap na hangganan ngunit sa halip ay isang suhestiyon sa sistema sa pagka-cache, masyadong maliit ang anumang value na mas mababa sa ilang megabyte at ira-round up sa isang maayos na minimum.
@@ -3777,7 +3777,7 @@ lumagpas na sa partikular na haba ng panahon ang oras na hindi ito nagamit.
 
       TANDAAN: Hanggang sa bersyon 45, sinusuportahan lang ang patakarang ito sa Kiosk mode.</translation>
 <translation id="7912255076272890813">I-configure ang mga pinapayagang uri ng app/extension</translation>
-<translation id="7922358664346625612">Panatilihing nakabukas ang huling tab sa Carbon Browser Browser Browser.</translation>
+<translation id="7922358664346625612">Panatilihing nakabukas ang huling tab sa Carbon Browser.</translation>
 <translation id="793134539373873765">Tinutukoy kung gagamitin ang p2p para sa mga payload sa pag-update ng OS. Kung nakatakda sa True, ang mga device ay magbabahagi at susubukang gamitin ang mga payload sa pag-update sa LAN, na malamang na babawasan ang paggamit at pagsikip sa Internet bandwidth. Kung hindi available sa LAN ang payload sa pag-update, babalik ang device sa pag-download mula sa server sa pag-update. Kung nakatakda sa False o hindi naka-configure, hindi gagamitin ang p2p.</translation>
 <translation id="7933141401888114454">I-enable ang paggawa ng mga pinapangasiwaang user</translation>
 <translation id="793473937901685727">Itakda ang availability ng certificate para sa mga ARC app</translation>
@@ -3908,7 +3908,7 @@ lumagpas na sa partikular na haba ng panahon ang oras na hindi ito nagamit.
 
       Sa mode na ito, pinapanatili lang sa disk ang data ng profile para lang sa tagal ng session ng user. Ang mga feature tulad ng history ng browser, mga extension at ang data ng mga ito, data sa web tulad ng cookies at mga database sa web ay hindi mananatili kapag naisara na ang browser. Gayunpaman, hindi nito pinipigilan ang user na manual na mag-download ng anumang data sa disk, mag-save ng mga page o mag-print ng mga ito.
 
-      Kung na-enable ng user ang pag-sync, pinapanatili ang lahat ng data na ito sa profile sa pag-sync ng mga ito tulad sa mga regular na profile. Available din ang Private mode kung hindi hayagang dini-disable ng patakaran.
+      Kung na-enable ng user ang pag-sync, pinapanatili ang lahat ng data na ito sa profile sa pag-sync ng mga ito tulad sa mga regular na profile. Available din ang private mode kung hindi hayagang dini-disable ng patakaran.
 
       Kung nakatakda ang patakaran sa naka-disable o hinayaang hindi nakatakda, hahantong ang mga pag-sign in sa mga regular na profile.</translation>
 <translation id="8158758865057576716">I-enable ang paggawa ng mga roaming na kopya para sa data ng profile sa <ph name="PRODUCT_NAME" />.</translation>
@@ -3940,7 +3940,7 @@ lumagpas na sa partikular na haba ng panahon ang oras na hindi ito nagamit.
       Kung hindi nakatakda ang patakaran, gagamitin ng <ph name="PRODUCT_OS_NAME" /> ang ID ng email account ng account na lokal sa device bilang display name sa screen sa pag-login.
 
       Binabalewala ang patakarang ito para sa mga regular na account ng user.</translation>
-<translation id="8259375588339409826">Sinusuportahan ng Carbon Browser Browser Browser at Carbon Browser Browser Browser ang iisang hanay ng mga patakaran. Pakitandaang maaaring masama sa dokumentong ito ang mga hindi pa nailalabas na patakaran (ibig sabihin, ang entry na 'Sinusuportahan sa' nito ay tumutukoy sa hindi pa nailalabas na bersyon ng <ph name="PRODUCT_NAME" />) na maaaring baguhin o alisin nang walang abiso at walang garantiyang ibinibigay para sa mga ito, kabilang ang mga garantiya kaugnay ng mga property sa seguridad at privacy.
+<translation id="8259375588339409826">Sinusuportahan ng Carbon Browser at Carbon Browser ang iisang hanay ng mga patakaran. Pakitandaang maaaring masama sa dokumentong ito ang mga hindi pa nailalabas na patakaran (ibig sabihin, ang entry na 'Sinusuportahan sa' nito ay tumutukoy sa hindi pa nailalabas na bersyon ng <ph name="PRODUCT_NAME" />) na maaaring baguhin o alisin nang walang abiso at walang garantiyang ibinibigay para sa mga ito, kabilang ang mga garantiya kaugnay ng mga property sa seguridad at privacy.
 
 Ang mga patakarang ito ay mahigpit na nilalayong gamitin upang i-configure ang mga instance ng <ph name="PRODUCT_NAME" /> sa loob ng iyong organisasyon. Ang paggamit sa mga patakarang ito sa labas ng iyong organisasyon (halimbawa, sa isang program na ipinamamahagi sa publiko) ay itinuturing na malware at malamang na ituring ng Google at mga vendor ng anti-virus bilang malware.
 
@@ -3957,7 +3957,7 @@ Ang inirerekomendang paraan upang mag-configure ng patakaran sa Windows ay sa pa
 
       Kung itatakda sa false ang patakaran, hindi iuulat ang mga istatistika.
       Kung itatakda sa true o iiwanang hindi nakatakda, iuulat ang mga istatistika.</translation>
-<translation id="8294750666104911727">Karaniwang ire-render ang mga pahina na may X-UA-Compatible na nakatakda sa chrome=1 sa <ph name="PRODUCT_FRAME_NAME" /> hindi alintana ang patakaran sa 'Carbon Browser Browser BrowserFrameRendererSettings.'
+<translation id="8294750666104911727">Karaniwang ire-render ang mga pahina na may X-UA-Compatible na nakatakda sa chrome=1 sa <ph name="PRODUCT_FRAME_NAME" /> hindi alintana ang patakaran sa 'Carbon BrowserFrameRendererSettings.'
 
           Kung i-e-enable mo ang setting na ito, hindi iii-scan ang mga pahina para sa mga meta tag.
 
@@ -3983,7 +3983,7 @@ Ang inirerekomendang paraan upang mag-configure ng patakaran sa Windows ay sa pa
 <translation id="8344454543174932833">Mag-import ng mga bookmark mula sa default na browser sa unang pagtakbo</translation>
 <translation id="8357681633047935212">Nililimitahan ang haba ng session ng user</translation>
 <translation id="8359734107661430198">I-enable ang ExampleDeprecatedFeature API sa 2008/09/02</translation>
-<translation id="8367209241899435947">Ine-enable ang Carbon Browser Browser Browser Cleanup sa Windows</translation>
+<translation id="8367209241899435947">Ine-enable ang Carbon Browser Cleanup sa Windows</translation>
 <translation id="8369602308428138533">Delay ng pag-off ng screen kapag tumatakbo habang nakasaksak sa kuryente</translation>
 <translation id="8371178326720637170">Nagbibigay-daan sa mga pinapamahalaang extension na gamitin ang Enterprise Hardware Platform API</translation>
 <translation id="8374747520743832795">Iulat ang mga istatistika at identifier ng hardware na may kaugnayan sa power.
@@ -4055,13 +4055,13 @@ Ang inirerekomendang paraan upang mag-configure ng patakaran sa Windows ay sa pa
       Aalisin sa M75 ang patakaran.</translation>
 <translation id="8484458986062090479">I-customize ang listahan ng mga pattern ng URL na dapat na palaging i-render ng browser ng host.
 
-          Kung hindi nakatakda ang patakarang ito, gagamitin ang default na tagapag-render para sa lahat ng site tulad ng tinukoy sa patakarang 'Carbon Browser Browser BrowserFrameRendererSettings.'
+          Kung hindi nakatakda ang patakarang ito, gagamitin ang default na tagapag-render para sa lahat ng site tulad ng tinukoy sa patakarang 'Carbon BrowserFrameRendererSettings.'
 
           Para sa mga halimbawang pattern, tingnan ang https://www.chromium.org/developers/how-tos/chrome-frame-getting-started.</translation>
 <translation id="8489964335640955763">PluginVm</translation>
 <translation id="8493645415242333585">Huwag paganahin ang pag-save ng kasaysayan ng browser</translation>
 <translation id="8499172469244085141">Mga Default na Setting (maaaring i-override ng mga user)</translation>
-<translation id="849962487677588458">Hindi na ginagamit ang patakarang ito, at nasa slate para alisin sa Carbon Browser Browser Browser 78, nang walang kapalit.
+<translation id="849962487677588458">Hindi na ginagamit ang patakarang ito, at nasa slate para alisin sa Carbon Browser 78, nang walang kapalit.
 
       Pinapagana ng patakarang ito ang HTTP/0.9 sa mga port bukod sa 80 para sa HTTP at 443 para sa HTTPS.
 
@@ -4089,7 +4089,7 @@ Ang inirerekomendang paraan upang mag-configure ng patakaran sa Windows ay sa pa
 
       Dito, ang "Bersyon" ay maaaring maging eksaktong bersyon tulad ng '61.0.3163.120' o prefix ng bersyon, tulad ng '61.0'  </translation>
 <translation id="8544375438507658205">Default na taga-render ng HTML para sa <ph name="PRODUCT_FRAME_NAME" /></translation>
-<translation id="8544465954173828789">Payagan ang Mga Mensaheng SMS na ma-sync mula sa telepono papunta sa Carbon Browser Browser Browserbook.</translation>
+<translation id="8544465954173828789">Payagan ang Mga Mensaheng SMS na ma-sync mula sa telepono papunta sa Carbon Browserbook.</translation>
 <translation id="8548832052135586762">Itinatakda ang pag-print sa may kulay lang, monochrome lang, o walang paghihigpit sa color mode. Itinuturing na walang paghihigpit ang hindi nakatakdang patakaran.</translation>
 <translation id="8549772397068118889">Magbabala kapag bumibisita ng mga site na nasa labas ng mga pack ng nilalaman</translation>
 <translation id="8566729013138025202">Tumutukoy ng isang hanay ng mga patakarang maililipat sa runtime ng ARC. Ang value ay dapat isang wastong JSON.
@@ -4305,7 +4305,7 @@ Ang inirerekomendang paraan upang mag-configure ng patakaran sa Windows ay sa pa
 
           Nagmamapa ang patakarang ito ng extension ID o ng URL ng update sa configuration nito. Gamit ang isang extension ID, ilalapat ang configuration sa tinukoy na extension lang. Puwedeng itakda ang isang default na configuration para sa espesyal na ID <ph name="DEFAULT_SCOPE" /> na ilalapat sa lahat ng extension na walang nakatakdang custom na configuration sa patakarang ito. Gamit ang isang URL ng update, ilalapat ang configuration sa lahat ng extension na may eksaktong URL ng update na nakasaad sa manifest ng extension na ito, gaya ng nakasaad sa <ph name="LINK_TO_EXTENSION_DOC1" />.
 
-          Para sa mga instance ng Windows na hindi kasali sa isang <ph name="MS_AD_NAME" /> na domain, para lang sa mga app at extension na nakalista sa Carbon Browser Browser Browser Web Store ang sapilitang pag-install.
+          Para sa mga instance ng Windows na hindi kasali sa isang <ph name="MS_AD_NAME" /> na domain, para lang sa mga app at extension na nakalista sa Carbon Browser Web Store ang sapilitang pag-install.
           </translation>
 <translation id="8947415621777543415">I-ulat ang lokasyon ng device</translation>
 <translation id="8951350807133946005">Itakda ang direktoryo ng cache ng disk</translation>
@@ -4396,8 +4396,8 @@ Ang inirerekomendang paraan upang mag-configure ng patakaran sa Windows ay sa pa
 
       Kung nakatakda sa true ang patakarang ito, ipapadala ang mga log ng system. Kung nakatakda
       sa false o hindi ito nakatakda, walang ipapadalang mga log ng system.</translation>
-<translation id="9150416707757015439">Hindi na ginagamit ang patakarang ito. Pakiusap, sa halip ay gamitin ang PrivateModeAvailability.
-      Pinapagana ang mode na Private sa <ph name="PRODUCT_NAME" />.
+<translation id="9150416707757015439">Hindi na ginagamit ang patakarang ito. Pakiusap, sa halip ay gamitin ang privateModeAvailability.
+      Pinapagana ang mode na private sa <ph name="PRODUCT_NAME" />.
 
       Kung pinagana o hindi na-configure ang setting na ito, makakapagbukas ng mga web page sa mode na private ang mga user.
 
@@ -4443,7 +4443,7 @@ Ang inirerekomendang paraan upang mag-configure ng patakaran sa Windows ay sa pa
 
       Kapag nakatakda ang patakarang ito, gagamitin ito para ilunsad ang <ph name="PRODUCT_NAME" /> kapag inilulunsad ang <ph name="PRODUCT_NAME" /> mula sa Internet Explorer.
 
-      Maaaring itakda ang patakarang ito sa isang executable file path, o sa ${chrome} para awtomatikong i-detect ang lokasyon sa pag-install ng Carbon Browser Browser Browser.</translation>
+      Maaaring itakda ang patakarang ito sa isang executable file path, o sa ${chrome} para awtomatikong i-detect ang lokasyon sa pag-install ng Carbon Browser.</translation>
 <translation id="930930237275114205">Itakda ang direktoryo ng data ng user ng <ph name="PRODUCT_FRAME_NAME" /></translation>
 <translation id="943865157632139008">Nagbibigay-daan sa iyong i-configure ang default na HTML renderer kapag naka-install ang <ph name="PRODUCT_FRAME_NAME" />.
       Ang default na setting ay payagan ang host na browser na gawin ang pag-render, ngunit puwede mo rin itong i-override at ipa-render sa <ph name="PRODUCT_FRAME_NAME" /> ang mga HTML na page bilang default.</translation>

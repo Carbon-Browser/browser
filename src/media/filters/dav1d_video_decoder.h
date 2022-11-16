@@ -6,7 +6,7 @@
 #define MEDIA_FILTERS_DAV1D_VIDEO_DECODER_H_
 
 #include "base/callback_forward.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/sequence_checker.h"
 #include "media/base/supported_video_decoder_config.h"
@@ -27,6 +27,10 @@ class MEDIA_EXPORT Dav1dVideoDecoder : public OffloadableVideoDecoder {
 
   Dav1dVideoDecoder(MediaLog* media_log,
                     OffloadState offload_state = OffloadState::kNormal);
+
+  Dav1dVideoDecoder(const Dav1dVideoDecoder&) = delete;
+  Dav1dVideoDecoder& operator=(const Dav1dVideoDecoder&) = delete;
+
   ~Dav1dVideoDecoder() override;
 
   // VideoDecoder implementation.
@@ -39,7 +43,6 @@ class MEDIA_EXPORT Dav1dVideoDecoder : public OffloadableVideoDecoder {
                   const WaitingCB& waiting_cb) override;
   void Decode(scoped_refptr<DecoderBuffer> buffer, DecodeCB decode_cb) override;
   void Reset(base::OnceClosure reset_cb) override;
-  bool IsOptimizedForRTC() const override;
 
   // OffloadableVideoDecoder implementation.
   void Detach() override;
@@ -62,7 +65,7 @@ class MEDIA_EXPORT Dav1dVideoDecoder : public OffloadableVideoDecoder {
   scoped_refptr<VideoFrame> BindImageToVideoFrame(const Dav1dPicture* img);
 
   // Used to report error messages to the client.
-  MediaLog* const media_log_ = nullptr;
+  const raw_ptr<MediaLog> media_log_ = nullptr;
 
   // Indicates if the decoder is being wrapped by OffloadVideoDecoder; controls
   // whether callbacks are bound to the current loop on calls.
@@ -87,8 +90,6 @@ class MEDIA_EXPORT Dav1dVideoDecoder : public OffloadableVideoDecoder {
   // The allocated decoder; null before Initialize() and anytime after
   // CloseDecoder().
   Dav1dContext* dav1d_decoder_ = nullptr;
-
-  DISALLOW_COPY_AND_ASSIGN(Dav1dVideoDecoder);
 };
 
 // Helper class for creating a Dav1dVideoDecoder which will offload all AV1

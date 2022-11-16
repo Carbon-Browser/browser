@@ -12,9 +12,9 @@
 #include <vector>
 
 #include "base/callback.h"
+#include "base/component_export.h"
 #include "base/strings/string_piece.h"
 #include "base/version.h"
-#include "chromeos/chromeos_export.h"
 #include "chromeos/printing/printer_configuration.h"
 #include "chromeos/printing/usb_printer_id.h"
 
@@ -36,7 +36,7 @@ class PpdMetadataManager;
 //
 // Fields are listed in search order preference -- we use earlier
 // fields first to attempt to find a match.
-struct CHROMEOS_EXPORT PrinterSearchData {
+struct COMPONENT_EXPORT(CHROMEOS_PRINTING) PrinterSearchData {
   PrinterSearchData();
   PrinterSearchData(const PrinterSearchData& other);
   ~PrinterSearchData();
@@ -77,7 +77,8 @@ struct CHROMEOS_EXPORT PrinterSearchData {
 // based on manufacturer/model of the printer.
 //
 // All functions in this class must be called from a sequenced context.
-class CHROMEOS_EXPORT PpdProvider : public base::RefCounted<PpdProvider> {
+class COMPONENT_EXPORT(CHROMEOS_PRINTING) PpdProvider
+    : public base::RefCounted<PpdProvider> {
  public:
   // Possible result codes of a Resolve*() call.
   enum CallbackResultCode {
@@ -106,7 +107,7 @@ class CHROMEOS_EXPORT PpdProvider : public base::RefCounted<PpdProvider> {
     // non-authoritative -- PpdProvider will attempt to re-resolve from the
     // network anyways and only use the cache results if the network is
     // unavailable.
-    base::TimeDelta cache_staleness_age = base::TimeDelta::FromDays(14);
+    base::TimeDelta cache_staleness_age = base::Days(14);
 
     // Root of the ppd serving hierarchy.
     std::string ppd_server_root = "https://www.gstatic.com/chromeos_printing";

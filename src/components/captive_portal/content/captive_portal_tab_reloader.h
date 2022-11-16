@@ -7,7 +7,7 @@
 
 #include "base/callback_forward.h"
 #include "base/compiler_specific.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
@@ -81,6 +81,9 @@ class CaptivePortalTabReloader {
   CaptivePortalTabReloader(CaptivePortalService* captive_portal_service,
                            content::WebContents* web_contents,
                            const OpenLoginTabCallback& open_login_tab_callback);
+
+  CaptivePortalTabReloader(const CaptivePortalTabReloader&) = delete;
+  CaptivePortalTabReloader& operator=(const CaptivePortalTabReloader&) = delete;
 
   virtual ~CaptivePortalTabReloader();
 
@@ -165,8 +168,8 @@ class CaptivePortalTabReloader {
   // Has |captive_portal_service_| (if present) start a captive portal check.
   virtual void CheckForCaptivePortal();
 
-  CaptivePortalService* captive_portal_service_;
-  content::WebContents* web_contents_;
+  raw_ptr<CaptivePortalService> captive_portal_service_;
+  raw_ptr<content::WebContents> web_contents_;
 
   State state_;
 
@@ -187,8 +190,6 @@ class CaptivePortalTabReloader {
   const OpenLoginTabCallback open_login_tab_callback_;
 
   base::WeakPtrFactory<CaptivePortalTabReloader> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(CaptivePortalTabReloader);
 };
 
 }  // namespace captive_portal

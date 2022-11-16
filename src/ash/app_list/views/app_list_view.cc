@@ -10,9 +10,9 @@
 #include <utility>
 #include <vector>
 
+#include "ash/app_list/app_list_event_targeter.h"
 #include "ash/app_list/app_list_metrics.h"
 #include "ash/app_list/app_list_util.h"
-#include "ash/app_list/model/app_list_model.h"
 #include "ash/app_list/views/app_list_a11y_announcer.h"
 #include "ash/app_list/views/app_list_folder_view.h"
 #include "ash/app_list/views/app_list_main_view.h"
@@ -20,12 +20,9 @@
 #include "ash/app_list/views/contents_view.h"
 #include "ash/app_list/views/paged_apps_grid_view.h"
 #include "ash/app_list/views/search_box_view.h"
-#include "ash/assistant/ui/assistant_ui_constants.h"
 #include "ash/constants/ash_features.h"
 #include "ash/keyboard/ui/keyboard_ui_controller.h"
 #include "ash/public/cpp/app_list/app_list_color_provider.h"
-#include "ash/public/cpp/app_list/app_list_config.h"
-#include "ash/public/cpp/app_list/app_list_config_provider.h"
 #include "ash/public/cpp/app_list/app_list_features.h"
 #include "ash/public/cpp/app_list/app_list_types.h"
 #include "ash/public/cpp/metrics_util.h"
@@ -33,9 +30,9 @@
 #include "ash/public/cpp/style/color_provider.h"
 #include "ash/public/cpp/wallpaper/wallpaper_types.h"
 #include "ash/shell.h"
+#include "ash/strings/grit/ash_strings.h"
 #include "ash/wm/work_area_insets.h"
 #include "base/bind.h"
-#include "base/macros.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/user_metrics.h"
 #include "base/strings/string_util.h"
@@ -44,10 +41,8 @@
 #include "ui/accessibility/ax_node.h"
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/aura/window.h"
-#include "ui/aura/window_targeter.h"
 #include "ui/aura/window_tree_host.h"
 #include "ui/base/l10n/l10n_util.h"
-#include "ui/base/ui_base_switches.h"
 #include "ui/compositor/animation_throughput_reporter.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_animation_element.h"
@@ -63,8 +58,6 @@
 #include "ui/gfx/geometry/vector2d.h"
 #include "ui/gfx/image/image_skia.h"
 #include "ui/gfx/interpolated_transform.h"
-#include "ui/gfx/skia_util.h"
-#include "ui/strings/grit/ui_strings.h"
 #include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/controls/image_view.h"
 #include "ui/views/controls/textfield/textfield.h"
@@ -82,8 +75,11 @@ namespace {
 // Default color for classic, unthemed app list.
 constexpr SkColor kAppListBackgroundColor = gfx::kGoogleGrey900;
 
-// The height of the half app list from the bottom of the screen.
-constexpr int kHalfAppListHeight = 545;
+// The height of the peeking app list, measured from the bottom of the screen.
+constexpr int kPeekingHeight = 284;
+
+// The height of the half app list, measured from the bottom of the screen.
+constexpr int kHalfHeight = 545;
 
 // The DIP distance from the bezel in which a gesture drag end results in a
 // closed app list.
@@ -93,13 +89,8 @@ constexpr int kAppListBezelMargin = 50;
 constexpr int kAppInfoDialogWidth = 512;
 constexpr int kAppInfoDialogHeight = 384;
 
-// The duration of app list animations when |short_animations_for_testing| are
-// enabled.
+// The duration of app list animations when they should run immediately.
 constexpr int kAppListAnimationDurationImmediateMs = 0;
-
-// Set animation durations to 0 for testing.
-// TODO(oshima): Use ui::ScopedAnimationDurationScaleMode instead.
-bool short_animations_for_testing;
 
 // Histogram for the app list dragging in clamshell mode.
 constexpr char kAppListDragInClamshellHistogram[] =
@@ -145,6 +136,9 @@ class SearchBoxFocusHost : public views::View {
   explicit SearchBoxFocusHost(views::Widget* search_box_widget)
       : search_box_widget_(search_box_widget) {}
 
+  SearchBoxFocusHost(const SearchBoxFocusHost&) = delete;
+  SearchBoxFocusHost& operator=(const SearchBoxFocusHost&) = delete;
+
   ~SearchBoxFocusHost() override = default;
 
   views::FocusTraversable* GetFocusTraversable() override {
@@ -158,8 +152,6 @@ class SearchBoxFocusHost : public views::View {
 
  private:
   views::Widget* search_box_widget_;
-
-  DISALLOW_COPY_AND_ASSIGN(SearchBoxFocusHost);
 };
 
 SkColor GetBackgroundShieldColor(const std::vector<SkColor>& colors,
@@ -188,8 +180,6 @@ SkColor GetBackgroundShieldColor(const std::vector<SkColor>& colors,
                      sk_opacity_value);
 }
 
-DEFINE_UI_CLASS_PROPERTY_KEY(bool, kExcludeWindowFromEventHandling, false)
-
 // Gets radius for app list background corners when the app list has the
 // provided height. The rounded corner should match the current app list height
 // (so the rounded corners bottom edge matches the shelf top), until it reaches
@@ -202,43 +192,6 @@ double GetBackgroundRadiusForAppListHeight(double height,
   return std::min(static_cast<double>(shelf_background_corner_radius),
                   std::max(height, 0.));
 }
-
-// This targeter prevents routing events to sub-windows, such as
-// RenderHostWindow in order to handle events in context of app list.
-class AppListEventTargeter : public aura::WindowTargeter {
- public:
-  explicit AppListEventTargeter(AppListViewDelegate* delegate)
-      : delegate_(delegate) {}
-  ~AppListEventTargeter() override = default;
-
-  // aura::WindowTargeter:
-  bool SubtreeShouldBeExploredForEvent(aura::Window* window,
-                                       const ui::LocatedEvent& event) override {
-    if (delegate_ && !delegate_->CanProcessEventsOnApplistViews())
-      return false;
-
-    if (window->GetProperty(kExcludeWindowFromEventHandling)) {
-      // Allow routing to sub-windows for ET_MOUSE_MOVED event which is used by
-      // accessibility to enter the mode of exploration of WebView contents.
-      if (event.type() != ui::ET_MOUSE_MOVED)
-        return false;
-    }
-
-    if (window->GetProperty(ash::assistant::ui::kOnlyAllowMouseClickEvents)) {
-      if (event.type() != ui::ET_MOUSE_PRESSED &&
-          event.type() != ui::ET_MOUSE_RELEASED) {
-        return false;
-      }
-    }
-
-    return aura::WindowTargeter::SubtreeShouldBeExploredForEvent(window, event);
-  }
-
- private:
-  AppListViewDelegate* delegate_;  // Weak. Owned by AppListService.
-
-  DISALLOW_COPY_AND_ASSIGN(AppListEventTargeter);
-};
 
 float ComputeSubpixelOffset(const display::Display& display, float value) {
   float pixel_position = std::round(display.device_scale_factor() * value);
@@ -439,6 +392,9 @@ class StateTransitionNotifier : public ui::ImplicitAnimationObserver {
  public:
   explicit StateTransitionNotifier(AppListView* view) : view_(view) {}
 
+  StateTransitionNotifier(const StateTransitionNotifier&) = delete;
+  StateTransitionNotifier& operator=(const StateTransitionNotifier&) = delete;
+
   ~StateTransitionNotifier() override = default;
 
   // Resets the notifier, and set a new target app list state.
@@ -507,8 +463,6 @@ class StateTransitionNotifier : public ui::ImplicitAnimationObserver {
   State state_ = State::kIdle;
   AppListView* const view_;
   absl::optional<AppListViewState> target_app_list_view_state_;
-
-  DISALLOW_COPY_AND_ASSIGN(StateTransitionNotifier);
 };
 
 // The view for the app list background shield which changes color and radius.
@@ -526,6 +480,10 @@ class AppListBackgroundShieldView : public views::View {
     layer()->SetColor(color_);
     layer()->SetName("launcher/BackgroundShield");
   }
+
+  AppListBackgroundShieldView(const AppListBackgroundShieldView&) = delete;
+  AppListBackgroundShieldView& operator=(const AppListBackgroundShieldView&) =
+      delete;
 
   ~AppListBackgroundShieldView() override = default;
 
@@ -588,7 +546,8 @@ class AppListBackgroundShieldView : public views::View {
     // add the inset to the bottom to keep padding at the top of the AppList the
     // same.
     gfx::Rect new_bounds = bounds;
-    new_bounds.Inset(0, 0, 0, -shelf_background_corner_radius_ * 2);
+    new_bounds.Inset(
+        gfx::Insets::TLBR(0, 0, -shelf_background_corner_radius_ * 2, 0));
     SetBoundsRect(new_bounds);
   }
 
@@ -607,8 +566,6 @@ class AppListBackgroundShieldView : public views::View {
   SkColor color_;
 
   int shelf_background_corner_radius_ = 0;
-
-  DISALLOW_COPY_AND_ASSIGN(AppListBackgroundShieldView);
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -629,8 +586,6 @@ PagedAppsGridView* AppListView::TestApi::GetRootAppsGridView() {
 
 AppListView::AppListView(AppListViewDelegate* delegate)
     : delegate_(delegate),
-      model_(delegate->GetModel()),
-      search_model_(delegate->GetSearchModel()),
       is_background_blur_enabled_(features::IsBackgroundBlurEnabled()),
       state_transition_notifier_(
           std::make_unique<StateTransitionNotifier>(this)),
@@ -654,12 +609,6 @@ AppListView::~AppListView() {
 }
 
 // static
-void AppListView::ExcludeWindowFromEventHandling(aura::Window* window) {
-  DCHECK(window);
-  window->SetProperty(kExcludeWindowFromEventHandling, true);
-}
-
-// static
 float AppListView::GetTransitionProgressForState(AppListViewState state) {
   switch (state) {
     case AppListViewState::kClosed:
@@ -676,16 +625,6 @@ float AppListView::GetTransitionProgressForState(AppListViewState state) {
 }
 
 // static
-void AppListView::SetShortAnimationForTesting(bool enabled) {
-  short_animations_for_testing = enabled;
-}
-
-// static
-bool AppListView::ShortAnimationsForTesting() {
-  return short_animations_for_testing;
-}
-
-// static
 void AppListView::SetSkipPageResetTimerForTesting(bool enabled) {
   skip_page_reset_timer_for_testing = enabled;
 }
@@ -693,7 +632,6 @@ void AppListView::SetSkipPageResetTimerForTesting(bool enabled) {
 void AppListView::InitView(gfx::NativeView parent) {
   base::AutoReset<bool> auto_reset(&is_building_, true);
   time_shown_ = base::Time::Now();
-  UpdateAppListConfig(parent);
   InitContents();
   InitWidget(parent);
   InitChildWidget();
@@ -721,6 +659,7 @@ void AppListView::InitContents() {
   SearchBoxViewBase::InitParams params;
   params.show_close_button_when_active = true;
   params.create_background = true;
+  params.animate_changing_search_icon = true;
   search_box_view_->Init(params);
 
   // Assign |app_list_main_view_| here since it is accessed during Init().
@@ -786,6 +725,7 @@ void AppListView::InitChildWidget() {
   views::Widget* search_box_widget = new views::Widget;
   search_box_widget->Init(std::move(search_box_widget_params));
   search_box_widget->SetContentsView(search_box_view_);
+  search_box_view_->MaybeCreateFocusRing();
   DCHECK_EQ(search_box_widget, search_box_view_->GetWidget());
 
   // Assign an accessibility role to the native window of |search_box_widget|,
@@ -842,7 +782,6 @@ void AppListView::Show(AppListViewState preferred_state, bool is_side_shelf) {
   UMA_HISTOGRAM_TIMES("Apps.AppListCreationTime",
                       base::Time::Now() - time_shown_.value());
   time_shown_ = absl::nullopt;
-  RecordFolderMetrics();
 }
 
 void AppListView::SetDragAndDropHostOfCurrentAppList(
@@ -941,10 +880,6 @@ void AppListView::OnThemeChanged() {
   SetBackgroundShieldColor();
 }
 
-const AppListConfig& AppListView::GetAppListConfig() const {
-  return *app_list_config_;
-}
-
 views::View* AppListView::GetAppListBackgroundShieldForTest() {
   return app_list_background_shield_;
 }
@@ -969,10 +904,9 @@ void AppListView::UpdatePageResetTimer(bool app_list_visibility) {
     page_reset_timer_.Stop();
     return;
   }
-  page_reset_timer_.Start(
-      FROM_HERE,
-      base::TimeDelta::FromMinutes(kAppListPageResetTimeLimitMinutes), this,
-      &AppListView::SelectInitialAppsPage);
+  page_reset_timer_.Start(FROM_HERE,
+                          base::Minutes(kAppListPageResetTimeLimitMinutes),
+                          this, &AppListView::SelectInitialAppsPage);
 
   if (skip_page_reset_timer_for_testing)
     page_reset_timer_.FireNow();
@@ -982,35 +916,9 @@ gfx::Insets AppListView::GetMainViewInsetsForShelf() const {
   if (is_side_shelf()) {
     // Set both horizontal insets so the app list remains centered on the
     // screen.
-    return gfx::Insets(0, delegate_->GetShelfSize());
+    return gfx::Insets::VH(0, delegate_->GetShelfSize());
   }
-  return gfx::Insets(0, 0, delegate_->GetShelfSize(), 0);
-}
-
-void AppListView::UpdateAppListConfig(aura::Window* parent_window) {
-  // Create the app list configuration override if it's needed for the current
-  // display bounds and the available apps grid size.
-  std::unique_ptr<AppListConfig> new_config =
-      AppListConfigProvider::Get().CreateForAppListWidget(
-          display::Screen::GetScreen()
-              ->GetDisplayNearestView(parent_window)
-              .work_area()
-              .size(),
-          GetMainViewInsetsForShelf(), app_list_config_.get());
-
-  if (!new_config)
-    return;
-
-  const bool is_initial_config = !app_list_config_.get();
-  app_list_config_ = std::move(new_config);
-
-  // Initial config should be set before the app list main view is initialized.
-  DCHECK(!is_initial_config || !app_list_main_view_);
-
-  // If the config changed, notify apps container the config has changed, so
-  // root and folder apps grids are updated for the new config.
-  if (!is_initial_config)
-    GetAppsContainerView()->OnAppListConfigUpdated();
+  return gfx::Insets::TLBR(0, 0, delegate_->GetShelfSize(), 0);
 }
 
 void AppListView::UpdateWidget() {
@@ -1070,7 +978,8 @@ void AppListView::HandleClickOrTap(ui::LocatedEvent* event) {
   }
 
   if (!search_box_view_->is_search_box_active() &&
-      model_->state() != AppListState::kStateEmbeddedAssistant) {
+      delegate_->GetCurrentAppListPage() !=
+          AppListState::kStateEmbeddedAssistant) {
     if (!delegate_->IsInTabletMode())
       Dismiss();
     return;
@@ -1144,23 +1053,7 @@ void AppListView::EndDrag(const gfx::PointF& location_in_root) {
       }
     }
   } else {
-    const int fullscreen_height = GetFullscreenStateHeight();
-    int app_list_height = 0;
-    switch (app_list_state_) {
-      case AppListViewState::kFullscreenAllApps:
-      case AppListViewState::kFullscreenSearch:
-        app_list_height = fullscreen_height;
-        break;
-      case AppListViewState::kHalf:
-        app_list_height = std::min(fullscreen_height, kHalfAppListHeight);
-        break;
-      case AppListViewState::kPeeking:
-        app_list_height = GetAppListConfig().peeking_app_list_height();
-        break;
-      case AppListViewState::kClosed:
-        NOTREACHED();
-        break;
-    }
+    int app_list_height = GetHeightForState(app_list_state_);
 
     const int app_list_threshold =
         app_list_height / kAppListThresholdDenominator;
@@ -1329,12 +1222,6 @@ void AppListView::EnsureWidgetBoundsMatchCurrentState() {
   aura::Window* window = GetWidget()->GetNativeView();
   if (new_target_bounds == window->GetTargetBounds())
     return;
-
-  // Update the app list config to match the new window bounds - do this before
-  // updating the bounds, so app list config is updated before apps container is
-  // laid out (to avoid separate layouts for window bounds change and app list
-  // config change).
-  UpdateAppListConfig(GetWidget()->GetNativeView());
 
   // Set the widget size to fit the new display metrics.
   GetWidget()->GetNativeView()->SetBounds(new_target_bounds);
@@ -1516,8 +1403,9 @@ void AppListView::OnMouseEvent(ui::MouseEvent* event) {
       break;
     case ui::ET_MOUSEWHEEL:
       if (HandleScroll(event->location(), event->AsMouseWheelEvent()->offset(),
-                       ui::ET_MOUSEWHEEL))
+                       ui::ET_MOUSEWHEEL)) {
         event->SetHandled();
+      }
       break;
     default:
       break;
@@ -1577,12 +1465,6 @@ void AppListView::OnGestureEvent(ui::GestureEvent* event) {
       event->SetHandled();
       break;
     }
-    case ui::ET_MOUSEWHEEL: {
-      if (HandleScroll(event->location(), event->AsMouseWheelEvent()->offset(),
-                       ui::ET_MOUSEWHEEL))
-        event->SetHandled();
-      break;
-    }
     default:
       break;
   }
@@ -1594,7 +1476,6 @@ void AppListView::OnKeyEvent(ui::KeyEvent* event) {
 
 void AppListView::OnTabletModeChanged(bool started) {
   search_box_view_->OnTabletModeChanged(started);
-  search_model_->SetTabletMode(started);
   app_list_main_view_->contents_view()->OnTabletModeChanged(started);
 
   if (is_in_drag_) {
@@ -1674,18 +1555,23 @@ bool AppListView::HandleScroll(const gfx::Point& location,
   if ((offset.y() == 0 && offset.x() == 0) || ShouldIgnoreScrollEvents())
     return false;
 
-  AppsGridView* apps_grid_view = GetAppsContainerView()->IsInFolderView()
-                                     ? GetFolderAppsGridView()
-                                     : GetRootAppsGridView();
-  gfx::Point apps_grid_location(location);
-  views::View::ConvertPointToTarget(this, apps_grid_view, &apps_grid_location);
+  // Don't forward scroll information if a folder is open. The folder view will
+  // handle scroll events itself.
+  if (GetAppsContainerView()->IsInFolderView())
+    return false;
+
+  PagedAppsGridView* apps_grid_view = GetRootAppsGridView();
+
+  gfx::Point root_apps_grid_location(location);
+  views::View::ConvertPointToTarget(this, apps_grid_view,
+                                    &root_apps_grid_location);
 
   // For the purposes of whether or not to dismiss the AppList, we treat any
   // scroll to the left or the right of the apps grid as though it was in the
   // apps grid, as long as it is within the vertical bounds of the apps grid.
   bool is_in_vertical_bounds =
-      location.y() > GetRootAppsGridView()->bounds().y() &&
-      location.y() < GetRootAppsGridView()->bounds().bottom();
+      root_apps_grid_location.y() > apps_grid_view->GetLocalBounds().y() &&
+      root_apps_grid_location.y() < apps_grid_view->GetLocalBounds().bottom();
 
   // First see if we need to collapse the app list from this scroll when in a
   // side shelf alignment. We do this first because if this happens anywhere on
@@ -1708,19 +1594,12 @@ bool AppListView::HandleScroll(const gfx::Point& location,
     return true;
   }
 
-  // Now if we haven't dismissed or expanded we pass the event on to
-  // `apps_grid_view`.
-  if (app_list_state_ == AppListViewState::kFullscreenAllApps) {
-    bool is_in_active_apps_grid =
-        apps_grid_view->bounds().Contains(apps_grid_location);
-    // If we are not in a folder, the event just need to be within the vertical
-    // bounds of the apps grid. If we are in a folder, it must be inside that
-    // folder's view.
-    if ((!GetAppsContainerView()->IsInFolderView() && is_in_vertical_bounds) ||
-        is_in_active_apps_grid) {
-      apps_grid_view->HandleScrollFromAppListView(offset, type);
-      return true;
-    }
+  // In fullscreen, forward events to `apps_grid_view`. For example, this allows
+  // scroll events to the right of the page switcher (not inside the apps grid)
+  // to switch pages.
+  if (app_list_state_ == AppListViewState::kFullscreenAllApps &&
+      is_in_vertical_bounds) {
+    apps_grid_view->HandleScrollFromParentView(offset, type);
   }
   return true;
 }
@@ -1769,7 +1648,6 @@ void AppListView::SetState(AppListViewState new_state) {
   StartAnimationForState(new_state_override);
   MaybeIncreasePrivacyInfoRowShownCounts(new_state_override);
   RecordStateTransitionForUma(new_state_override);
-  model_->SetStateFullscreen(new_state_override);
   app_list_state_ = new_state_override;
   if (delegate_)
     delegate_->OnViewStateChanged(new_state_override);
@@ -1803,7 +1681,7 @@ void AppListView::UpdateWindowTitle() {
   if (!GetWidget())
     return;
   gfx::NativeView window = GetWidget()->GetNativeView();
-  AppListState contents_view_state = app_list_main_view_->model()->state();
+  AppListState contents_view_state = delegate_->GetCurrentAppListPage();
   if (window) {
     if (contents_view_state == AppListState::kStateSearchResults ||
         contents_view_state == AppListState::kStateEmbeddedAssistant) {
@@ -1828,24 +1706,29 @@ void AppListView::UpdateWindowTitle() {
   }
 }
 
+void AppListView::OnAppListVisibilityWillChange(bool visible) {
+  GetAppsContainerView()->OnAppListVisibilityWillChange(visible);
+}
+
+void AppListView::OnAppListVisibilityChanged(bool shown) {
+  GetAppsContainerView()->OnAppListVisibilityChanged(shown);
+}
+
 base::TimeDelta AppListView::GetStateTransitionAnimationDuration(
     AppListViewState target_state) {
-  if (ShortAnimationsForTesting() || is_side_shelf_ ||
-      (target_state == AppListViewState::kClosed &&
-       delegate_->ShouldDismissImmediately())) {
-    return base::TimeDelta::FromMilliseconds(
-        kAppListAnimationDurationImmediateMs);
+  if (is_side_shelf_ || (target_state == AppListViewState::kClosed &&
+                         delegate_->ShouldDismissImmediately())) {
+    return base::Milliseconds(kAppListAnimationDurationImmediateMs);
   }
 
   if (is_fullscreen() || target_state == AppListViewState::kFullscreenAllApps ||
       target_state == AppListViewState::kFullscreenSearch) {
     // Animate over more time to or from a fullscreen state, to maintain a
     // similar speed.
-    return base::TimeDelta::FromMilliseconds(
-        kAppListAnimationDurationFromFullscreenMs);
+    return base::Milliseconds(kAppListAnimationDurationFromFullscreenMs);
   }
 
-  return base::TimeDelta::FromMilliseconds(kAppListAnimationDurationMs);
+  return base::Milliseconds(kAppListAnimationDurationMs);
 }
 
 void AppListView::StartAnimationForState(AppListViewState target_state) {
@@ -2131,9 +2014,8 @@ float AppListView::GetAppListTransitionProgress(int flags) const {
 
   const int fullscreen_height = GetFullscreenStateHeight();
   const int baseline_height = std::min(
-      fullscreen_height, (flags & kProgressFlagSearchResults)
-                             ? kHalfAppListHeight
-                             : GetAppListConfig().peeking_app_list_height());
+      fullscreen_height,
+      (flags & kProgressFlagSearchResults) ? kHalfHeight : kPeekingHeight);
 
   // If vertical space is limited, the baseline and fullscreen height might be
   // the same. To handle this case, if the height has reached the
@@ -2165,6 +2047,20 @@ float AppListView::GetAppListTransitionProgress(int flags) const {
   DCHECK_GT(fullscreen_height_above_baseline, 0);
   DCHECK_LE(current_height_above_baseline, fullscreen_height_above_baseline);
   return 1 + current_height_above_baseline / fullscreen_height_above_baseline;
+}
+
+int AppListView::GetHeightForState(AppListViewState state) const {
+  switch (app_list_state_) {
+    case AppListViewState::kFullscreenAllApps:
+    case AppListViewState::kFullscreenSearch:
+      return GetFullscreenStateHeight();
+    case AppListViewState::kHalf:
+      return std::min(GetFullscreenStateHeight(), kHalfHeight);
+    case AppListViewState::kPeeking:
+      return kPeekingHeight;
+    case AppListViewState::kClosed:
+      return 0;
+  }
 }
 
 int AppListView::GetFullscreenStateHeight() const {
@@ -2240,8 +2136,6 @@ void AppListView::OnWindowBoundsChanged(aura::Window* window,
                                         ui::PropertyChangeReason reason) {
   DCHECK_EQ(GetWidget()->GetNativeView(), window);
 
-  UpdateAppListConfig(window);
-
   gfx::Transform transform;
   if (ShouldHideRoundedCorners(target_app_list_state_, new_bounds))
     transform.Translate(0, -(delegate_->GetShelfSize() / 2));
@@ -2280,16 +2174,6 @@ void AppListView::OnBoundsAnimationCompleted(AppListViewState target_state) {
   // for state changes during drag, and with side shelf.
   delegate_->OnStateTransitionAnimationCompleted(target_state,
                                                  was_animation_interrupted);
-}
-
-gfx::Rect AppListView::GetItemScreenBoundsInFirstGridPage(
-    const std::string& id) const {
-  const AppsGridView* apps_grid_view = app_list_main_view_->contents_view()
-                                           ->apps_container_view()
-                                           ->apps_grid_view();
-  gfx::Rect item_bounds = apps_grid_view->GetExpectedItemBoundsInFirstPage(id);
-  ConvertRectToScreen(apps_grid_view, &item_bounds);
-  return item_bounds;
 }
 
 void AppListView::SetShelfHasRoundedCorners(bool shelf_has_rounded_corners) {
@@ -2443,32 +2327,6 @@ void AppListView::SetBackgroundShieldColor() {
                                color_opacity, delegate_->IsInTabletMode()));
 }
 
-void AppListView::RecordFolderMetrics() {
-  int number_of_apps_in_folders = 0;
-  int number_of_folders = 0;
-  int non_system_folders = 0;
-  AppListItemList* item_list =
-      app_list_main_view_->model()->top_level_item_list();
-  for (size_t i = 0; i < item_list->item_count(); ++i) {
-    AppListItem* item = item_list->item_at(i);
-    if (item->GetItemType() != AppListFolderItem::kItemType)
-      continue;
-    ++number_of_folders;
-    AppListFolderItem* folder = static_cast<AppListFolderItem*>(item);
-    if (folder->folder_type() == AppListFolderItem::FOLDER_TYPE_OEM)
-      continue;  // Don't count items in OEM folders.
-    number_of_apps_in_folders += folder->item_list()->item_count();
-    if (folder->id() == kCrostiniFolderId)
-      continue;
-    // Folders that are not the OEM folder and not "Linux apps".
-    ++non_system_folders;
-  }
-  UMA_HISTOGRAM_COUNTS_100("Apps.NumberOfFolders", number_of_folders);
-  UMA_HISTOGRAM_COUNTS_100("Apps.NumberOfNonSystemFolders", non_system_folders);
-  UMA_HISTOGRAM_COUNTS_100("Apps.AppsInFolders.FullscreenAppListEnabled",
-                           number_of_apps_in_folders);
-}
-
 bool AppListView::ShouldIgnoreScrollEvents() {
   // When the app list is doing state change animation or the apps grid view is
   // in transition, ignore the scroll events to prevent triggering extra state
@@ -2500,11 +2358,10 @@ int AppListView::GetPreferredWidgetYForState(AppListViewState state) const {
 
   switch (state) {
     case AppListViewState::kPeeking:
-      return display.bounds().height() -
-             GetAppListConfig().peeking_app_list_height();
+      return display.bounds().height() - kPeekingHeight;
     case AppListViewState::kHalf:
       return std::max(work_area_bounds.y() - display.bounds().y(),
-                      display.bounds().height() - kHalfAppListHeight);
+                      display.bounds().height() - kHalfHeight);
     case AppListViewState::kFullscreenAllApps:
     case AppListViewState::kFullscreenSearch:
       return fullscreen_height;

@@ -111,13 +111,13 @@ servera, pretože objekty GPO sa znova sťahujú pri každom načítaní pravidi
       Určuje čas, ktorý musí uplynúť pred zobrazením šetriča obrazovky na prihlasovacej obrazovke v režime určenom pre predaj.
 
       Hodnota pre toto pravidlo by mala byť zadaná v milisekundách.</translation>
-<translation id="1141767714195601945">Toto pravidlo ovláda parametre príkazového riadka pre Carbon Browser Browser Browser z prehliadača Internet Explorer.
+<translation id="1141767714195601945">Toto pravidlo ovláda parametre príkazového riadka pre Carbon Browser z prehliadača Internet Explorer.
 
       Ak nie je nainštalovaný doplnok Podpora staršieho prehliadača pre Internet Explorer, toto pravidlo nemá žiadny účinok.
 
-      Keď toto pravidlo nenastavíte, Internet Explorer postúpi webovú adresu Carbon Browser Browser Browser iba ako parameter príkazového riadka.
+      Keď toto pravidlo nenastavíte, Internet Explorer postúpi webovú adresu Carbon Browser iba ako parameter príkazového riadka.
 
-      Keď toto pravidlo nastavíte na zoznam reťazcov, reťazce sa spoja medzerami a budú postúpené Carbon Browser Browser Browser ako parametre príkazového riadka.
+      Keď toto pravidlo nastavíte na zoznam reťazcov, reťazce sa spoja medzerami a budú postúpené Carbon Browser ako parametre príkazového riadka.
 
       Ak určitý prvok obsahuje zástupný znak ${url}, nahradí sa webovou adresou stránky, ktorá sa má otvoriť.
 
@@ -252,7 +252,7 @@ servera, pretože objekty GPO sa znova sťahujú pri každom načítaní pravidi
 
       Každá položka v zozname pravidla predstavuje reťazec, ktorý obsahuje identifikátor rozšírenia a webovú adresu aktualizácie oddelené bodkočiarkou (<ph name="SEMICOLON" />). Identifikátor rozšírenia je reťazec s 32 znakmi a nájdete ho napríklad tu: <ph name="CHROME_EXTENSIONS_LINK" /> (v režime pre vývojárov). Webová adresa aktualizácie by mala odkazovať na dokument XML s manifestom aktualizácií, ktorého popis nájdete na <ph name="LINK_TO_EXTENSION_DOC1" />. Upozorňujeme, že webová adresa aktualizácie nastavená v tom pravidle sa používa iba na prvotnú inštaláciu; nasledujúce aktualizácie rozšírenia využívajú webovú adresu aktualizácie uvedenú v manifeste rozšírenia.
 
-      Napríklad pravidlo <ph name="EXTENSION_POLICY_EXAMPLE" /> nainštaluje aplikáciu <ph name="EXTENSION_POLICY_EXAMPLE_EXTENSION_NAME" /> zo štandardnej webovej adresy aktualizácie Internetového obchodu Carbon Browser Browser Browser. Ďalšie informácie o hostení rozšírení nájdete na: <ph name="LINK_TO_EXTENSION_DOC2" />.</translation>
+      Napríklad pravidlo <ph name="EXTENSION_POLICY_EXAMPLE" /> nainštaluje aplikáciu <ph name="EXTENSION_POLICY_EXAMPLE_EXTENSION_NAME" /> zo štandardnej webovej adresy aktualizácie Internetového obchodu Carbon Browser. Ďalšie informácie o hostení rozšírení nájdete na: <ph name="LINK_TO_EXTENSION_DOC2" />.</translation>
 <translation id="1435659902881071157">Konfigurácia siete na úrovni zariadenia</translation>
 <translation id="1438739959477268107">Predvolené nastavenie generovania kľúčov</translation>
 <translation id="1454846751303307294">Umožňuje nastaviť zoznam vzorov webových adries určujúcich webové stránky, ktoré nemôžu spúšťať kód JavaScript.
@@ -405,11 +405,11 @@ Ak je toto nastavenie zakázané alebo nie je nakonfigurované, nebudú môcť p
 
       Ak toto pravidlo nenastavíte, funkcie aktualizácie firmvéru <ph name="TPM_FIRMWARE_UPDATE_TPM" /> nebudú k dispozícii.</translation>
 <translation id="1708496595873025510">Nastaviť obmedzenie pre načítanie počiatočnej hodnoty variácie</translation>
-<translation id="1717817358640580294">Ak ho nenastavíte a Carbon Browser Browser Browser Cleanup rozpozná nechcený softvér, môže Googlu nahlásiť metadáta o vyhľadávaní v súlade s pravidlami určenými parametrom SafeBrowsingExtendedReportingEnabled. Carbon Browser Browser Browser Cleanup sa potom používateľa spýta, či chce vymazať nechcený softvér. Používateľ sa môže rozhodnúť zdieľať výsledky vymazania s Googlom, čím mu pomôže s rozpoznávaním nechcených softvérov v budúcnosti. Tieto výsledky obsahujú metadáta súboru, automaticky nainštalované rozšírenia a kľúče databázy tak, ako je uvedené v informáciách o ochrane súkromia v Carbon Browser Browser Browser.
+<translation id="1717817358640580294">Ak ho nenastavíte a Carbon Browser Cleanup rozpozná nechcený softvér, môže Googlu nahlásiť metadáta o vyhľadávaní v súlade s pravidlami určenými parametrom SafeBrowsingExtendedReportingEnabled. Carbon Browser Cleanup sa potom používateľa spýta, či chce vymazať nechcený softvér. Používateľ sa môže rozhodnúť zdieľať výsledky vymazania s Googlom, čím mu pomôže s rozpoznávaním nechcených softvérov v budúcnosti. Tieto výsledky obsahujú metadáta súboru, automaticky nainštalované rozšírenia a kľúče databázy tak, ako je uvedené v informáciách o ochrane súkromia v Carbon Browser.
 
-      Ak ho zakážete a Carbon Browser Browser Browser Cleanup rozpozná nechcený softvér, nebude Googlu nahlasovať metadáta vyhľadávania a pravidlá určené parametrom SafeBrowsingExtendedReportingEnabled budú prepísané. Carbon Browser Browser Browser Cleanup sa používateľa spýta, či chce nechcený softvér vymazať.  Výsledky vymazania sa nenahlásia Googlu a používateľ nebude mať k dispozícii možnosť ich nahlásiť.
+      Ak ho zakážete a Carbon Browser Cleanup rozpozná nechcený softvér, nebude Googlu nahlasovať metadáta vyhľadávania a pravidlá určené parametrom SafeBrowsingExtendedReportingEnabled budú prepísané. Carbon Browser Cleanup sa používateľa spýta, či chce nechcený softvér vymazať.  Výsledky vymazania sa nenahlásia Googlu a používateľ nebude mať k dispozícii možnosť ich nahlásiť.
 
-      Ak ho povolíte a Carbon Browser Browser Browser Cleanup rozpozná nechcený softvér, môže Googlu nahlasovať metadáta o vyhľadávaní v súlade s pravidlami určenými parametrom SafeBrowsingExtendedReportingEnabled. Carbon Browser Browser Browser Cleanup sa používateľa spýta, či chce nechcený softvér vymazať.  Výsledky vymazania budú nahlásené Googlu a používateľ nebude mať k dispozícii možnosť tomu zabrániť.
+      Ak ho povolíte a Carbon Browser Cleanup rozpozná nechcený softvér, môže Googlu nahlasovať metadáta o vyhľadávaní v súlade s pravidlami určenými parametrom SafeBrowsingExtendedReportingEnabled. Carbon Browser Cleanup sa používateľa spýta, či chce nechcený softvér vymazať.  Výsledky vymazania budú nahlásené Googlu a používateľ nebude mať k dispozícii možnosť tomu zabrániť.
 
       Toto pravidlo je k dispozícii iba v inštanciách systému Windows, ktoré sú zapojené do domény <ph name="MS_AD_NAME" />, alebo v inštanciách systému Windows 10 Pro alebo Enterprise, ktoré sú zaregistrované do správy zariadení.</translation>
 <translation id="172374442286684480">Povoliť všetkým webovým stránkam nastavovať miestne údaje</translation>
@@ -605,7 +605,7 @@ Ak je toto nastavenie zakázané alebo nie je nakonfigurované, nebudú môcť p
 <translation id="2073552873076775140">Povoliť prihlásenie do prehliadača <ph name="PRODUCT_NAME" /></translation>
 <translation id="2077129598763517140">Používať hardvérovú akceleráciu (keď je dostupná)</translation>
 <translation id="2077273864382355561">Oneskorenie vypnutia obrazovky pri napájaní z batérie</translation>
-<translation id="2082205219176343977">Konfigurácia minimálnej povolenej verzie Carbon Browser Browser Browser pre zariadenie.</translation>
+<translation id="2082205219176343977">Konfigurácia minimálnej povolenej verzie Carbon Browser pre zariadenie.</translation>
 <translation id="209586405398070749">Stabilná verzia</translation>
 <translation id="2098658257603918882">Povoliť hlásenie údajov týkajúcich sa používania a zlyhaní</translation>
 <translation id="2104418465060359056">Nahlasovanie informácií o rozšíreniach a doplnkoch</translation>
@@ -650,7 +650,7 @@ Ak je toto nastavenie zakázané alebo nie je nakonfigurované, nebudú môcť p
       Ak toto nastavenie zakážete alebo pravidlo nenastavíte, akékoľvek overovacie stránky prihlasovacieho portálu sa budú zobrazovať v bežnej novej karte prehliadača s použitím nastavení proxy servera aktuálneho používateľa.</translation>
 <translation id="21394354835637379">Umožňuje určiť, ktoré webové adresy môžu inštalovať rozšírenia, aplikácie a motívy.
 
-          Od verzie 21 prehliadača <ph name="PRODUCT_NAME" /> je inštalácia rozšírení, aplikácií a skriptov používateľov z iných zdrojov ako Internetového obchodu Carbon Browser Browser Browser náročnejšia. Predtým mohli používatelia kliknúť na odkaz na súbor *.crx a prehliadač <ph name="PRODUCT_NAME" /> im po niekoľkých upozorneniach ponúkol možnosť inštalácie tohto súboru. V prehliadači <ph name="PRODUCT_NAME" /> 21 a novších verziách je potrebné takéto súbory stiahnuť a presunúť na stránku s nastaveniami prehliadača <ph name="PRODUCT_NAME" />. Toto nastavenie umožňuje určitým webovým adresám využiť starší a jednoduchší proces inštalácie.
+          Od verzie 21 prehliadača <ph name="PRODUCT_NAME" /> je inštalácia rozšírení, aplikácií a skriptov používateľov z iných zdrojov ako Internetového obchodu Carbon Browser náročnejšia. Predtým mohli používatelia kliknúť na odkaz na súbor *.crx a prehliadač <ph name="PRODUCT_NAME" /> im po niekoľkých upozorneniach ponúkol možnosť inštalácie tohto súboru. V prehliadači <ph name="PRODUCT_NAME" /> 21 a novších verziách je potrebné takéto súbory stiahnuť a presunúť na stránku s nastaveniami prehliadača <ph name="PRODUCT_NAME" />. Toto nastavenie umožňuje určitým webovým adresám využiť starší a jednoduchší proces inštalácie.
 
           Každá položka v tomto zozname predstavuje vzor zodpovedajúci typu rozšírenia (pozrite si https://developer.chrome.com/extensions/match_patterns). Používatelia budú môcť poľahky inštalovať položky z ľubovoľnej webovej adresy, ktorá bude zodpovedať položke v tomto zozname. Pomocou týchto vzorov musíte povoliť umiestnenie súboru *.crx a stránku, na ktorej sa spustí sťahovanie (t. j. sprostredkovateľa).
 
@@ -722,11 +722,11 @@ Ak je toto nastavenie zakázané alebo nie je nakonfigurované, nebudú môcť p
 
       Keď je pravidlo zakázané alebo nie je nastavené, stránky nemôžu zobrazovať vyskakovacie okná počas rušenia ich načítania podľa špecifikácií (https://html.spec.whatwg.org/#apis-for-creating-and-navigating-browsing-contexts-by-name).
 
-      Toto pravidlo bude odstránené v Carbon Browser Browser Browser verzie 82.
+      Toto pravidlo bude odstránené v Carbon Browser verzie 82.
 
       Ďalšie informácie nájdete na https://www.chromestatus.com/feature/5989473649164288.</translation>
 <translation id="2269319728625047531">Povolenie zobrazovania súhlasu so synchronizáciou počas prihlasovania</translation>
-<translation id="2274864612594831715">Toto pravidlo konfiguruje povolenie virtuálnej klávesnice ako zariadenia vstupu v systéme OS Carbon Browser Browser Browser. Používatelia nemôžu toto pravidlo prepísať.
+<translation id="2274864612594831715">Toto pravidlo konfiguruje povolenie virtuálnej klávesnice ako zariadenia vstupu v systéme OS Carbon Browser. Používatelia nemôžu toto pravidlo prepísať.
 
       Ak je toto pravidlo povolené, bude virtuálna klávesnica na obrazovke vždy povolená.
 
@@ -800,9 +800,9 @@ Ak je toto nastavenie zakázané alebo nie je nakonfigurované, nebudú môcť p
 <translation id="2463034609187171371">Povoliť šifrovacie súpravy DHE v protokole TLS</translation>
 <translation id="2463365186486772703">Miestne nastavenie aplikácie</translation>
 <translation id="2466131534462628618">Overenie totožnosti pomocou prihlasovacieho portálu ignoruje proxy server</translation>
-<translation id="2471748297300970300">Keď je toto pravidlo zakázané, zabráni zobrazeniu bezpečnostných upozornení pri spustení Carbon Browser Browser Browser s potenciálne nebezpečnými príznakmi príkazového riadka.
+<translation id="2471748297300970300">Keď je toto pravidlo zakázané, zabráni zobrazeniu bezpečnostných upozornení pri spustení Carbon Browser s potenciálne nebezpečnými príznakmi príkazového riadka.
 
-          Keď je povolené alebo nie je nastavené, pri spustení Carbon Browser Browser Browser pomocou príznakov príkazového riadka sa zobrazia bezpečnostné upozornenia.
+          Keď je povolené alebo nie je nastavené, pri spustení Carbon Browser pomocou príznakov príkazového riadka sa zobrazia bezpečnostné upozornenia.
 
           V systéme Windows je toto pravidlo k dispozícii iba v inštanciách, ktoré sú pripojené k doméne <ph name="MS_AD_NAME" />, alebo v inštanciách systému Windows 10 Pro či Enterprise, ktoré sú zaregistrované do správy zariadení.</translation>
 <translation id="2482676533225429905">Odosielanie natívnych správ</translation>
@@ -924,7 +924,7 @@ Ak je toto nastavenie zakázané alebo nie je nakonfigurované, nebudú môcť p
           Webovú adresu vyhľadávania Google je možné špecifikovať ako: <ph name="GOOGLE_SEARCH_URL" />.
 
           Táto možnosť musí byť nastavená v prípade, že je povolené pravidlo DefaultSearchProviderEnabled, a bude uplatnená len v takom prípade.</translation>
-<translation id="2659019163577049044">Ak toto nastavenie povolíte, používatelia budú môcť nastaviť svoje zariadenia tak, aby synchronizovali správy SMS medzi telefónmi a Carbon Browser Browser Browserbookmi. Upozorňujeme, že ak je toto pravidlo povolené, používatelia sa musia špeciálne zaregistrovať na používanie tejto funkcie dokončením procesu nastavenia. Po jeho dokončení budú môcť vo svojich Carbon Browser Browser Browserbookoch odosielať a prijímať správy SMS.
+<translation id="2659019163577049044">Ak toto nastavenie povolíte, používatelia budú môcť nastaviť svoje zariadenia tak, aby synchronizovali správy SMS medzi telefónmi a Carbon Browserbookmi. Upozorňujeme, že ak je toto pravidlo povolené, používatelia sa musia špeciálne zaregistrovať na používanie tejto funkcie dokončením procesu nastavenia. Po jeho dokončení budú môcť vo svojich Carbon Browserbookoch odosielať a prijímať správy SMS.
 
       Ak toto nastavenie zakážete, používatelia nebudú môcť nastaviť synchronizovanie správ SMS.
 
@@ -942,7 +942,7 @@ Ak je toto nastavenie zakázané alebo nie je nakonfigurované, nebudú môcť p
 <translation id="2706708761587205154">Povoliť tlač iba s kódom PIN</translation>
 <translation id="2710534340210290498">Ak je toto pravidlo nastavené na hodnotu false, používatelia nebudú môcť uzamykať obrazovku (možné bude iba odhlásenie sa z relácie používateľa). Ak je toto pravidlo nastavené na hodnotu true alebo je ponechané nenastavené, používatelia, ktorí overili svoju totožnosť heslom, budú môcť obrazovku uzamykať.</translation>
 <translation id="2731627323327011390">Zakázať použitie certifikátov systému <ph name="PRODUCT_OS_NAME" /> v aplikáciách ARC</translation>
-<translation id="2742843273354638707">Skryje na stránke Nová karta a v spúšťači systému <ph name="PRODUCT_OS_NAME" /> aplikáciu Internetový obchod Carbon Browser Browser Browser a odkaz na pätu stránky.
+<translation id="2742843273354638707">Skryje na stránke Nová karta a v spúšťači systému <ph name="PRODUCT_OS_NAME" /> aplikáciu Internetový obchod Carbon Browser a odkaz na pätu stránky.
 
       Ak je pravidlo nastavené na hodnotu true, ikony sa skryjú.
 
@@ -1005,12 +1005,12 @@ Ak je toto nastavenie zakázané alebo nie je nakonfigurované, nebudú môcť p
       Keď toto pravidlo nastavíte na neprázdny zoznam časových intervalov:
       zariadenia nebudú môcť počas určených časových období automaticky kontrolovať dostupnosť aktualizácií. Toto pravidlo neovplyvní z dôvodu potenciálnych bezpečnostných problémov zariadenia vyžadujúce prechod na predchádzajúcu verziu ani také, ktoré sú staršie ako minimálna verzia <ph name="PRODUCT_OS_NAME" />. Navyše nezablokuje kontroly dostupnosti aktualizácií vyžiadané používateľmi alebo správcami.
       Keď toto pravidlo nenastavíte alebo nebude obsahovať žiadne časové obdobia:
-      nebude blokovať žiadne automatické kontroly dostupnosti aktualizácií, ktoré však môžu blokovať iné pravidlá. Táto funkcia je povolená iba v zariadeniach Carbon Browser Browser Browser nakonfigurovaných ako automaticky sa spúšťajúce terminály. Iné zariadenia nebudú týmto pravidlom obmedzované.</translation>
+      nebude blokovať žiadne automatické kontroly dostupnosti aktualizácií, ktoré však môžu blokovať iné pravidlá. Táto funkcia je povolená iba v zariadeniach Carbon Browser nakonfigurovaných ako automaticky sa spúšťajúce terminály. Iné zariadenia nebudú týmto pravidlom obmedzované.</translation>
 <translation id="2823870601012066791">Umiestnenie v registri systému Windows pre klienty <ph name="PRODUCT_OS_NAME" />:</translation>
 <translation id="2824715612115726353">Povoliť režim inkognito</translation>
 <translation id="2836621397261130126">Ovláda, či sa pri rozhodovaní o delegovaní tiketov <ph name="KERBEROS" /> bude rešpektovať schválenie pravidlom KDC.
 
-          Ak toto pravidlo nastavíte na hodnotu true, overenie HTTP bude rešpektovať schválenie pravidlom KDC, t. j. Carbon Browser Browser Browser deleguje poverenia iba v prípade, že pravidlo KDC nastaví v tikete služby možnosť <ph name="OK_AS_DELEGATE" />. Ďalšie informácie nájdete na https://tools.ietf.org/html/rfc5896.html. Služba by mala tiež zodpovedať pravidlu AuthNegotiateDelegateWhitelist.
+          Ak toto pravidlo nastavíte na hodnotu true, overenie HTTP bude rešpektovať schválenie pravidlom KDC, t. j. Carbon Browser deleguje poverenia iba v prípade, že pravidlo KDC nastaví v tikete služby možnosť <ph name="OK_AS_DELEGATE" />. Ďalšie informácie nájdete na https://tools.ietf.org/html/rfc5896.html. Služba by mala tiež zodpovedať pravidlu AuthNegotiateDelegateWhitelist.
 
           Ak toto pravidlo nenastavíte alebo ho nastavíte na hodnotu false, pravidlo KDC sa bude v podporovaných platformách ignorovať a bude sa rešpektovať iba pravidlo AuthNegotiateDelegateWhitelist.
 
@@ -1158,7 +1158,7 @@ Ak je toto nastavenie zakázané alebo nie je nakonfigurované, nebudú môcť p
           Ak toto pravidlo ponecháte nenastavené, použije sa pravidlo „AllowJavaScript“ a používateľ to bude môcť zmeniť.</translation>
 <translation id="3038323923255997294">Po zatvorení prehliadača <ph name="PRODUCT_NAME" /> nechať aplikácie na pozadí spustené</translation>
 <translation id="3046192273793919231">Odosielať sieťové pakety na správcovský server s cieľom sledovania online stavu</translation>
-<translation id="3047732214002457234">Určuje, ako nástroj Carbon Browser Browser Browser Cleanup hlási dáta do Googlu</translation>
+<translation id="3047732214002457234">Určuje, ako nástroj Carbon Browser Cleanup hlási dáta do Googlu</translation>
 <translation id="304775240152542058">Toto pravidlo ovláda parametre príkazového riadka, ktoré sa majú spustiť v alternatívnom prehliadači.
 
       Keď toto pravidlo nenastavíte, ako parametre príkazového riadka sa budú odovzdávať iba webové adresy.
@@ -1230,9 +1230,9 @@ Ak je toto nastavenie zakázané alebo nie je nakonfigurované, nebudú môcť p
       Ak toto pravidlo nie je nastavené alebo je nastavené na hodnotu False, v protokole TLS nebudú povolené šifrovacie súpravy DHE. Nastavením tohto pravidla na hodnotu True je možné povoliť šifrovacie súpravy DHE a zaistiť kompatibilitu so zastaraným serverom. Ide o krátkodobé riešenie, takže konfigurácia príslušného servera by mala byť upravená.
 
       Odporúčame migráciu serverov na šifrovacie súpravy ECDHE. Ak nie sú k dispozícii, povoľte šifrovaciu súpravu používajúcu výmenu kľúčov RSA.</translation>
-<translation id="3117706142826400449">Ak toto pravidlo zakážete, zabráni nástroju Carbon Browser Browser Browser Cleanup hľadať v systéme nechcený softvér a vykonávať čistenia. Ručné spúšťanie nástroja Carbon Browser Browser Browser Cleanup z chrome://settings/cleanup je zakázané.
+<translation id="3117706142826400449">Ak toto pravidlo zakážete, zabráni nástroju Carbon Browser Cleanup hľadať v systéme nechcený softvér a vykonávať čistenia. Ručné spúšťanie nástroja Carbon Browser Cleanup z chrome://settings/cleanup je zakázané.
 
-      Ak ho povolíte alebo ponecháte nenastavené, Carbon Browser Browser Browser Cleanup bude pravidelne hľadať v systéme nechcený softvér a v prípade jeho nájdenia sa používateľa opýta, či ho chce odstrániť. Ručné spúšťanie nástroja Carbon Browser Browser Browser Cleanup z chrome://settings je povolené.
+      Ak ho povolíte alebo ponecháte nenastavené, Carbon Browser Cleanup bude pravidelne hľadať v systéme nechcený softvér a v prípade jeho nájdenia sa používateľa opýta, či ho chce odstrániť. Ručné spúšťanie nástroja Carbon Browser Cleanup z chrome://settings je povolené.
 
       Toto pravidlo je k dispozícii iba v inštanciách systému Windows, ktoré sú zapojené do domény <ph name="MS_AD_NAME" />, alebo v inštanciách systému Windows 10 Pro alebo Enterprise, ktoré sú zaregistrované do správy zariadení.</translation>
 <translation id="3152425128389603870">Sprístupnenie režimu zjednotenej plochy a jeho zapnutie v predvolenom nastavení</translation>
@@ -1346,7 +1346,7 @@ Ak je toto nastavenie zakázané alebo nie je nakonfigurované, nebudú môcť p
       Ak toto nastavenie vypnete alebo nenastavíte žiadnu hodnotu, <ph name="PRODUCT_NAME" /> nebude vynucovať obmedzený režim v službe YouTube. Externé pravidlá (napríklad pravidlá služby YouTube) však môžu naďalej vynucovať obmedzený režim.</translation>
 <translation id="3428247105888806363">Povolenie predpovede siete</translation>
 <translation id="3432863169147125747">Umožňuje ovládať nastavenia tlače.</translation>
-<translation id="3434932177006334880">Toto nastavenie bolo pomenované EnableWebBasedSignin pred verziou Carbon Browser Browser Browser 42 a jeho podpora bude ukončená vo verzii Carbon Browser Browser Browser 43.
+<translation id="3434932177006334880">Toto nastavenie bolo pomenované EnableWebBasedSignin pred verziou Carbon Browser 42 a jeho podpora bude ukončená vo verzii Carbon Browser 43.
 
       Toto nastavenie je užitočné pre podnikových zákazníkov používajúcich riešenia jediného prihlásenia, ktoré ešte nie sú kompatibilné s novým vloženým prihlasovacím procesom.
       Ak toto nastavenie povolíte, použije sa starý webový prihlasovací proces.
@@ -1444,9 +1444,9 @@ Ak je toto nastavenie zakázané alebo nie je nakonfigurované, nebudú môcť p
 <translation id="3646859102161347133">Nastavenie typu lupy obrazovky</translation>
 <translation id="3653237928288822292">Ikona predvoleného poskytovateľa vyhľadávania</translation>
 <translation id="3660510274595679517">
-        Ak toto pravidlo nastavíte na hodnotu True, registrácia na správu cloudu je povinná a v prípade zlyhania zablokuje proces spustenia Carbon Browser Browser Browser.
+        Ak toto pravidlo nastavíte na hodnotu True, registrácia na správu cloudu je povinná a v prípade zlyhania zablokuje proces spustenia Carbon Browser.
 
-        Ak ho nenastavíte alebo ho nastavíte na hodnotu False, registrácia na správu cloudu je voliteľná a v prípade zlyhania nezablokuje proces spustenia Carbon Browser Browser Browser.
+        Ak ho nenastavíte alebo ho nastavíte na hodnotu False, registrácia na správu cloudu je voliteľná a v prípade zlyhania nezablokuje proces spustenia Carbon Browser.
 
         Toto pravidlo využíva registrácia pravidla rozsahu používania cloudu v počítači a je ho možné nastaviť pomocou databázy Registry alebo objektu skupinovej politiky (GPO) v systéme Windows, súboru plist v počítači Mac a súboru s pravidlami JSON v systéme Linux.</translation>
 <translation id="3660562134618097814">Preniesť súbory cookie poskytovateľa identity SAML počas prihlásenia</translation>
@@ -1641,15 +1641,15 @@ Ak je toto nastavenie zakázané alebo nie je nakonfigurované, nebudú môcť p
 <translation id="3984028218719007910">Určuje, či má systém <ph name="PRODUCT_OS_NAME" /> po odhlásení zachovať miestne údaje o účte. Ak je toto pravidlo nastavené na hodnotu true, systém <ph name="PRODUCT_OS_NAME" /> nebude uchovávať žiadne trvalé účty a všetky údaje z relácií používateľov budú po odhlásení odstránené. Ak je toto pravidlo nastavené na hodnotu false, alebo nie je nakonfigurované, zariadenie môže uchovávať (zašifrované) miestne údaje používateľa.</translation>
 <translation id="398475542699441679">Toto pravidlo ovláda, či má byť zapnutá Podpora starších prehliadačov.
 
-      Keď ho nenastavíte alebo nastavíte na hodnotu false, Carbon Browser Browser Browser sa nebude pokúšať určené webové adresy spúšťať v alternatívnom prehliadači.
+      Keď ho nenastavíte alebo nastavíte na hodnotu false, Carbon Browser sa nebude pokúšať určené webové adresy spúšťať v alternatívnom prehliadači.
 
-      Keď ho nastavíte na hodnotu true, Carbon Browser Browser Browser sa bude pokúšať niektoré webové adresy spúšťať v alternatívnom prehliadači (napríklad Internet Explorer). Túto funkciu nakonfigurujete pomocou pravidiel v skupine <ph name="LEGACY_BROWSER_SUPPORT_POLICY_GROUP" />.
+      Keď ho nastavíte na hodnotu true, Carbon Browser sa bude pokúšať niektoré webové adresy spúšťať v alternatívnom prehliadači (napríklad Internet Explorer). Túto funkciu nakonfigurujete pomocou pravidiel v skupine <ph name="LEGACY_BROWSER_SUPPORT_POLICY_GROUP" />.
 
-      Ide o náhradu za rozšírenie <ph name="LEGACY_BROWSER_SUPPORT_EXTENSION_NAME" />. Konfigurácia z tohto rozšírenia sa prenesie na túto funkciu, ale dôrazne odporúčame použiť namiesto nej pravidlá Carbon Browser Browser Browser. Zaistíte tým lepšiu kompatibilitu v budúcnosti.</translation>
+      Ide o náhradu za rozšírenie <ph name="LEGACY_BROWSER_SUPPORT_EXTENSION_NAME" />. Konfigurácia z tohto rozšírenia sa prenesie na túto funkciu, ale dôrazne odporúčame použiť namiesto nej pravidlá Carbon Browser. Zaistíte tým lepšiu kompatibilitu v budúcnosti.</translation>
 <translation id="3997519162482760140">Webové adresy, ktorým bude udelený prístup k zariadeniam na zaznamenávanie videa na prihlasovacích stránkach SAML</translation>
-<translation id="4001275826058808087">Správcovia IT spravujúci podnikové zariadenia môžu pomocou tohto pravidla povoliť alebo zakázať používateľom uplatniť ponuky pri registrácii OS Carbon Browser Browser Browser.
+<translation id="4001275826058808087">Správcovia IT spravujúci podnikové zariadenia môžu pomocou tohto pravidla povoliť alebo zakázať používateľom uplatniť ponuky pri registrácii OS Carbon Browser.
 
-      Ak je toto pravidlo nastavené na hodnotu true alebo je ponechané bez nastavenia, používatelia si pri registrácii OS Carbon Browser Browser Browser budú môcť uplatniť ponuky.
+      Ak je toto pravidlo nastavené na hodnotu true alebo je ponechané bez nastavenia, používatelia si pri registrácii OS Carbon Browser budú môcť uplatniť ponuky.
 
       Ak je toto pravidlo nastavené na hodnotu false, používatelia si nebudú môcť uplatniť ponuky.</translation>
 <translation id="4008233182078913897">Umožňuje určiť zoznam aplikácií a rozšírení, ktoré sa inštalujú potichu bez interakcie s používateľom a používateľ ich nemôže odinštalovať ani zakázať. Všetky povolenia vyžadované aplikáciami alebo rozšíreniami sú bezpodmienečne udelené bez interakcie s používateľom, a to vrátane všetkých ďalších povolení vyžiadaných budúcimi verziami daných aplikácií alebo rozšírení. 
@@ -1657,13 +1657,13 @@ Ak je toto nastavenie zakázané alebo nie je nakonfigurované, nebudú môcť p
 
           Toto pravidlo má prednosť v prípade potenciálneho konfliktu s pravidlom <ph name="EXTENSION_INSTALL_BLACKLIST_POLICY_NAME" />. Ak je z tohto zoznamu odstránená aplikácia alebo rozšírenie, ktorého inštalácia bola v minulosti vynútená, <ph name="PRODUCT_NAME" /> ich automaticky odinštaluje.
 
-          V prípade inštancií systému Windows nepripojených k doméne <ph name="MS_AD_NAME" /> sa vynucuje iba inštalácia aplikácií a rozšírení uvedených v Internetovom obchode Carbon Browser Browser Browser.
+          V prípade inštancií systému Windows nepripojených k doméne <ph name="MS_AD_NAME" /> sa vynucuje iba inštalácia aplikácií a rozšírení uvedených v Internetovom obchode Carbon Browser.
 
           Všimnite si, že zdrojový kód jednotlivých rozšírení je možné pozmeniť pomocou nástrojov pre vývojárov (t. j. potenciálne tým znefunkčniť dané rozšírenie). Ak sa toho obávate, nastavte pravidlo <ph name="DEVELOPER_TOOLS_POLICY_NAME" />.
 
-          Každá položka zoznamu je reťazec s identifikátorom rozšírenia a webovou adresou aktualizácie oddelenou bodkočiarkou (<ph name="SEMICOLON" />). Identifikátor rozšírenia je reťazec pozostávajúci z 32 písmen a nájdete ho napríklad v adrese <ph name="CHROME_EXTENSIONS_LINK" />, keď prejdete do režimu pre vývojárov. Ak je určená webová adresa aktualizácie, mala by odkazovať na dokument XML manifestu aktualizácie tak, ako je to uvedené na <ph name="LINK_TO_EXTENSION_DOC1" />. Predvolene sa použije webová adresa aktualizácie z Internetového obchodu Carbon Browser Browser Browser (ktorá je momentálne https://clients2.google.com/service/update2/crx). Upozorňujeme, že webová adresa aktualizácie nastavená v tomto pravidle sa použije iba pri prvej inštalácii. Následné inštalácie rozšírenia používajú webovú adresu aktualizácie uvedenú v manifeste príslušného rozšírenia. Zreteľné uvedenie webovej adresy aktualizácie bolo v prehliadači <ph name="PRODUCT_NAME" /> do verzie 67 (vrátane) povinné.
+          Každá položka zoznamu je reťazec s identifikátorom rozšírenia a webovou adresou aktualizácie oddelenou bodkočiarkou (<ph name="SEMICOLON" />). Identifikátor rozšírenia je reťazec pozostávajúci z 32 písmen a nájdete ho napríklad v adrese <ph name="CHROME_EXTENSIONS_LINK" />, keď prejdete do režimu pre vývojárov. Ak je určená webová adresa aktualizácie, mala by odkazovať na dokument XML manifestu aktualizácie tak, ako je to uvedené na <ph name="LINK_TO_EXTENSION_DOC1" />. Predvolene sa použije webová adresa aktualizácie z Internetového obchodu Carbon Browser (ktorá je momentálne https://clients2.google.com/service/update2/crx). Upozorňujeme, že webová adresa aktualizácie nastavená v tomto pravidle sa použije iba pri prvej inštalácii. Následné inštalácie rozšírenia používajú webovú adresu aktualizácie uvedenú v manifeste príslušného rozšírenia. Zreteľné uvedenie webovej adresy aktualizácie bolo v prehliadači <ph name="PRODUCT_NAME" /> do verzie 67 (vrátane) povinné.
 
-          <ph name="EXTENSION_POLICY_EXAMPLE" /> napríklad nainštaluje aplikáciu <ph name="EXTENSION_ID_SAMPLE" /> zo štandardnej webovej adresy aktualizácie v Internetovom obchode Carbon Browser Browser Browser. Ďalšie informácie o hostení rozšírení nájdete na <ph name="LINK_TO_EXTENSION_DOC2" />.
+          <ph name="EXTENSION_POLICY_EXAMPLE" /> napríklad nainštaluje aplikáciu <ph name="EXTENSION_ID_SAMPLE" /> zo štandardnej webovej adresy aktualizácie v Internetovom obchode Carbon Browser. Ďalšie informácie o hostení rozšírení nájdete na <ph name="LINK_TO_EXTENSION_DOC2" />.
 
           Ak toto pravidlo nenastavíte, nebudú sa automaticky inštalovať žiadne aplikácie ani rozšírenia a používateľ môže odinštalovať ľubovoľnú aplikáciu alebo rozšírenie v prehliadači <ph name="PRODUCT_NAME" />.
 
@@ -1770,7 +1770,7 @@ Ak je toto nastavenie zakázané alebo nie je nakonfigurované, nebudú môcť p
           Ak toto pravidlo nastavíte, používatelia ho nebudú môcť zmeniť ani prepísať.
 
           Ak ho ponecháte nenastavené, pevne umiestnené klávesy sú pôvodne zakázané, ale používateľ ich môže kedykoľvek povoliť.</translation>
-<translation id="4171331498167688968">Ak toto pravidlo nastavíte na hodnotu false, softvér tretej strany bude môcť vkladať spustiteľný kód do procesov Carbon Browser Browser Browser. Ak ho nastavíte na hodnotu true alebo ponecháte nenastavené, softvér tretej strany bude mať vkladanie spustiteľného kódu do procesov Carbon Browser Browser Browser zakázané.
+<translation id="4171331498167688968">Ak toto pravidlo nastavíte na hodnotu false, softvér tretej strany bude môcť vkladať spustiteľný kód do procesov Carbon Browser. Ak ho nastavíte na hodnotu true alebo ponecháte nenastavené, softvér tretej strany bude mať vkladanie spustiteľného kódu do procesov Carbon Browser zakázané.
 
       Bez ohľadu na hodnotu tohto pravidla nebude prehliadač momentálne brániť softvéru tretej strany vkladať spustiteľný kód do jeho procesov v počítači spojenom s doménou <ph name="MS_AD_NAME" />.</translation>
 <translation id="4183229833636799228">Predvolené nastavenie doplnku <ph name="FLASH_PLUGIN_NAME" /></translation>
@@ -1839,11 +1839,11 @@ Ak je toto nastavenie zakázané alebo nie je nakonfigurované, nebudú môcť p
 <translation id="4298509794364745131">Špecifikuje zoznam aplikácií, ktoré môžu byť na uzamknutej obrazovke systému <ph name="PRODUCT_OS_NAME" /> povolené ako aplikácie na písanie poznámok.
 
       Ak je na uzamknutej obrazovke povolená preferovaná aplikácia na písanie poznámok, na uzamknutej obrazovke bude prvok používateľského rozhrania na spustenie preferovanej aplikácie na písanie poznámok.
-      Po spustení bude táto aplikácia môcť otvoriť okno aplikácie na uzamknutej obrazovke a vytvárať dátové položky (poznámky) v kontexte uzamknutej obrazovky. Aplikácia bude môcť vytvorené poznámky importovať do primárnej používateľskej relácie (keď bude odomknutá). Na uzamknutej obrazovke sú momentálne podporované iba aplikácie na písanie poznámok prehliadača Carbon Browser Browser Browser.
+      Po spustení bude táto aplikácia môcť otvoriť okno aplikácie na uzamknutej obrazovke a vytvárať dátové položky (poznámky) v kontexte uzamknutej obrazovky. Aplikácia bude môcť vytvorené poznámky importovať do primárnej používateľskej relácie (keď bude odomknutá). Na uzamknutej obrazovke sú momentálne podporované iba aplikácie na písanie poznámok prehliadača Carbon Browser.
 
       Ak je toto pravidlo nastavené, používateľ bude môcť povoliť aplikáciu na uzamknutej obrazovke iba v prípade, ak bude ID rozšírenia aplikácie zahrnuté ako hodnota v zozname pravidla.
       Preto ak nastavíte toto pravidlo na prázdny zoznam, písanie poznámok bude na uzamknutej obrazovke úplne zakázané.
-      Upozorňujeme, že pravidlo zahrnujúce ID aplikácie automaticky neznamená, že používateľ bude môcť na uzamknutej obrazovke povoliť príslušnú aplikáciu ako aplikáciu na písanie poznámok – v systéme Carbon Browser Browser Browser 61 je napríklad skupina dostupných aplikácií ďalej obmedzená platformou.
+      Upozorňujeme, že pravidlo zahrnujúce ID aplikácie automaticky neznamená, že používateľ bude môcť na uzamknutej obrazovke povoliť príslušnú aplikáciu ako aplikáciu na písanie poznámok – v systéme Carbon Browser 61 je napríklad skupina dostupných aplikácií ďalej obmedzená platformou.
 
       Ak pravidlo ponecháte nenastavené, nebudú existovať žiadne obmedzenia skupiny aplikácií, ktoré používateľ môže povoliť na uzamknutej obrazovke na základe tohto pravidla.</translation>
 <translation id="4313767483634435271">Určená adresa MAC doku zariadenia</translation>
@@ -2000,7 +2000,7 @@ Ak je toto nastavenie zakázané alebo nie je nakonfigurované, nebudú môcť p
 <translation id="467236746355332046">Podporované funkcie:</translation>
 <translation id="4674167212832291997">Umožňuje prispôsobiť zoznam vzorov webových adries, ktoré by mal doplnok <ph name="PRODUCT_FRAME_NAME" /> vždy vykresliť.
 
-          Ak toto pravidlo nenastavíte, bude pre všetky webové stránky použitý predvolený vykresľovací modul (ako je určené pravidlom „Carbon Browser Browser BrowserFrameRendererSettings“).
+          Ak toto pravidlo nenastavíte, bude pre všetky webové stránky použitý predvolený vykresľovací modul (ako je určené pravidlom „Carbon BrowserFrameRendererSettings“).
 
           Príklady vzorov nájdete na adrese http://www.chromium.org/developers/how-tos/chrome-frame-getting-started.</translation>
 <translation id="467449052039111439">Otvoriť zoznam webových adries</translation>
@@ -2097,10 +2097,10 @@ Ak je toto nastavenie zakázané alebo nie je nakonfigurované, nebudú môcť p
 
       Ak je toto pravidlo nastavené na možnosť False, <ph name="PRODUCT_NAME" /> nepovolí vytvorenie nového profilu prostredníctvom správcu používateľov.</translation>
 <translation id="4970855112942626932">Zakázať prihlásenie do prehliadača</translation>
-<translation id="4978405676361550165">Ak nastavíte pravidlo OffHours, zadané pravidlá zariadenia budú ignorované (použite predvolené nastavenia týchto pravidiel) počas stanovených časových intervalov. Carbon Browser Browser Browser znova začne používať pravidlá zariadenia, keď sa obdobie pravidla OffHours začne alebo skončí. Používateľ bude upozornený a systém vynúti jeho odhlásenie, keď sa časové obdobie pravidla OffHours skončí a nastavenia pravidiel zariadenia sa zmenia (t. j. keď sa používateľ prihlási pomocou účtu, ktorý nie je povolený).</translation>
+<translation id="4978405676361550165">Ak nastavíte pravidlo OffHours, zadané pravidlá zariadenia budú ignorované (použite predvolené nastavenia týchto pravidiel) počas stanovených časových intervalov. Carbon Browser znova začne používať pravidlá zariadenia, keď sa obdobie pravidla OffHours začne alebo skončí. Používateľ bude upozornený a systém vynúti jeho odhlásenie, keď sa časové obdobie pravidla OffHours skončí a nastavenia pravidiel zariadenia sa zmenia (t. j. keď sa používateľ prihlási pomocou účtu, ktorý nie je povolený).</translation>
 <translation id="4980635395568992380">Typ údajov:</translation>
 <translation id="4983201894483989687">Povoliť spúšťanie zastaraných doplnkov</translation>
-<translation id="4986560318567565414">Cesta prepnutia na Carbon Browser Browser Browser v alternatívnom prehliadači</translation>
+<translation id="4986560318567565414">Cesta prepnutia na Carbon Browser v alternatívnom prehliadači</translation>
 <translation id="4988291787868618635">Akcia po určitej dobe nečinnosti</translation>
 <translation id="5034604678285451405">Nastavenie prahu batérie (v percentách) pre funkciu prepnutia napájania počas špičky.
 
@@ -2171,11 +2171,11 @@ Ak je toto nastavenie zakázané alebo nie je nakonfigurované, nebudú môcť p
       Ak pravidlo nastavíte na hodnotu 0, zmena hesla účtu zariadenia bude zakázaná.
 
       Upozorňujeme, že heslá môžu byť staršie ako zadaný počet dní, ak je klient dlhší čas offline.</translation>
-<translation id="510196893779239086">Toto pravidlo ovláda, či sa má Carbon Browser Browser Browser úplne zavrieť, keď sa posledná karta prepne na iný prehliadač.
+<translation id="510196893779239086">Toto pravidlo ovláda, či sa má Carbon Browser úplne zavrieť, keď sa posledná karta prepne na iný prehliadač.
 
-      Keď ho nenastavíte alebo nastavíte na hodnotu True, Carbon Browser Browser Browser ponechá po prepnutí na alternatívny prehliadač otvorenú aspoň jednu kartu.
+      Keď ho nenastavíte alebo nastavíte na hodnotu True, Carbon Browser ponechá po prepnutí na alternatívny prehliadač otvorenú aspoň jednu kartu.
 
-      Keď ho nastavíte na hodnotu False, Carbon Browser Browser Browser po prepnutí na alternatívny prehliadač príslušnú kartu zavrie dokonca aj vtedy, keď je posledná. Carbon Browser Browser Browser sa tak úplne ukončí.</translation>
+      Keď ho nastavíte na hodnotu False, Carbon Browser po prepnutí na alternatívny prehliadač príslušnú kartu zavrie dokonca aj vtedy, keď je posledná. Carbon Browser sa tak úplne ukončí.</translation>
 <translation id="5102203758995933166">Umožňuje preniesť konfiguráciu siete, ktorá sa použije pre jednotlivých používateľov v zariadení so systémom <ph name="PRODUCT_OS_NAME" />. Konfigurácia siete je reťazec vo formáte JSON, ktorý sa riadi definíciou formátu Open Network Configuration.</translation>
 <translation id="5105313908130842249">Oneskorenie uzamknutia obrazovky pri napájaní z batérie</translation>
 <translation id="5108031557082757679">Zakázané podnikové tlačiarne zariadenia</translation>
@@ -2190,7 +2190,7 @@ Ak je toto nastavenie zakázané alebo nie je nakonfigurované, nebudú môcť p
 <translation id="5148753489738115745">Umožňuje nastaviť dodatočné parametre, ktoré doplnok <ph name="PRODUCT_FRAME_NAME" /> pri spúšťaní aplikácie <ph name="PRODUCT_NAME" /> použije.
 
           Ak toto pravidlo nie je nastavené, použije sa predvolený príkazový riadok.</translation>
-<translation id="5152787786897382519">Carbon Browser Browser Browser aj Carbon Browser Browser Browser majú skupiny pravidiel, ktoré navzájom súvisia pri poskytovaní ovládania určitých funkcií. Tieto zoskupenia sú reprezentované nasledujúcimi skupinami pravidiel. Keďže pravidlá môžu mať viacero zdrojov, použijú sa iba hodnoty pochádzajúce zo zdroja s najvyššou prioritou. Hodnoty pochádzajúce zo zdroja s nižšou prioritou budú v rovnakej skupine ignorované. Poradie priority definuje stránka <ph name="POLICY_PRIORITY_DOC_URL" />.</translation>
+<translation id="5152787786897382519">Carbon Browser aj Carbon Browser majú skupiny pravidiel, ktoré navzájom súvisia pri poskytovaní ovládania určitých funkcií. Tieto zoskupenia sú reprezentované nasledujúcimi skupinami pravidiel. Keďže pravidlá môžu mať viacero zdrojov, použijú sa iba hodnoty pochádzajúce zo zdroja s najvyššou prioritou. Hodnoty pochádzajúce zo zdroja s nižšou prioritou budú v rovnakej skupine ignorované. Poradie priority definuje stránka <ph name="POLICY_PRIORITY_DOC_URL" />.</translation>
 <translation id="5159469559091666409">Ako často sa odosielajú sledovacie sieťové pakety (v milisekundách).
 
       Ak toto pravidlo nie je nastavené, použije sa predvolená frekvencia tri minúty. Minimálna
@@ -2299,7 +2299,7 @@ Ak je toto nastavenie zakázané alebo nie je nakonfigurované, nebudú môcť p
           Hodnota * v zozname zakázaných položiek znamená, že všetci hostitelia pre odosielanie natívnych správ sú zakázaní. Povolení budú iba tí, ktorí sú výslovne uvedení na bielej listine.
 
           Ak toto pravidlo nebude nastavené, produkt <ph name="PRODUCT_NAME" /> načíta všetkých nainštalovaných hostiteľov pre odosielanie natívnych správ.</translation>
-<translation id="5272684451155669299">Ak pravidlo nastavíte na hodnotu True, používateľ môže pomocou hardvéru zariadení Carbon Browser Browser Browser diaľkovo overiť svoju identitu pre certifikačnú autoritu (CA) ochrany súkromia prostredníctvom metódy <ph name="CHALLENGE_USER_KEY_FUNCTION" /> rozhrania <ph name="ENTERPRISE_PLATFORM_KEYS_API" />.
+<translation id="5272684451155669299">Ak pravidlo nastavíte na hodnotu True, používateľ môže pomocou hardvéru zariadení Carbon Browser diaľkovo overiť svoju identitu pre certifikačnú autoritu (CA) ochrany súkromia prostredníctvom metódy <ph name="CHALLENGE_USER_KEY_FUNCTION" /> rozhrania <ph name="ENTERPRISE_PLATFORM_KEYS_API" />.
 
           Ak je nastavené na možnosť False alebo nie je nenastavené, 
 volania rozhrania API zlyhajú a nahlásia kód chyby.</translation>
@@ -2514,7 +2514,7 @@ volania rozhrania API zlyhajú a nahlásia kód chyby.</translation>
         Ak pravidlo nastavíte na hodnotu false, používatelia nemôžu odosielať spätnú väzbu do Googlu.
 
         Ak ho nenastavíte alebo nastavíte na hodnotu true, používatelia môžu odoslať spätnú väzbu Googlu v časti ponuka -&gt;Pomocník-&gt;Nahlásiť problém alebo kombináciou klávesov.</translation>
-<translation id="5581292529942108810">Umožňuje konfigurovať pravidlá súvisiace s rozšírením na nahlasovanie údajov o Carbon Browser Browser Browser.
+<translation id="5581292529942108810">Umožňuje konfigurovať pravidlá súvisiace s rozšírením na nahlasovanie údajov o Carbon Browser.
 
       Toto pravidlo je účinné iba vtedy, keď povolíte aj rozšírenie <ph name="CHROME_REPORTING_EXTENSION_NAME" /> a zariadenie zaregistrujete prostredníctvom tokenu <ph name="MACHINE_LEVEL_USER_CLOUD_POLICY_ENROLLMENT_TOKEN_POLICY_NAME" />.</translation>
 <translation id="5583806683960333345">Ak je toto nastavenie povolené, používatelia budú môcť používať dynamický tethering, prostredníctvom ktorého môže telefón Google zdieľať svoje mobilné dátové pripojenie so zariadením.
@@ -2539,7 +2539,7 @@ volania rozhrania API zlyhajú a nahlásia kód chyby.</translation>
 
       POZNÁMKA: V Androide je izolovanie webov experimentálna funkcia. Podpora sa časom zlepší, ale momentálne môže spôsobovať problémy s výkonnosťou.
 
-      POZNÁMKA: Toto pravidlo platí iba pre Carbon Browser Browser Browser v systéme Android spustenom v zariadeniach s minimálne 1 GB pamäte RAM. Ak chcete toto pravidlo použiť v platformách, ktoré nepoužívajú Android, použite pravidlo IsolateOrigins.
+      POZNÁMKA: Toto pravidlo platí iba pre Carbon Browser v systéme Android spustenom v zariadeniach s minimálne 1 GB pamäte RAM. Ak chcete toto pravidlo použiť v platformách, ktoré nepoužívajú Android, použite pravidlo IsolateOrigins.
       </translation>
 <translation id="5599461642204007579">Nastavenia správy <ph name="MS_AD_NAME" /></translation>
 <translation id="5610104657949692379">Ak je toto pravidlo nastavené, určuje akciu, ktorú <ph name="PRODUCT_OS_NAME" /> vykoná po určitom čase nečinnosti. Tento čas je možné nakonfigurovať samostatne.
@@ -2547,7 +2547,7 @@ volania rozhrania API zlyhajú a nahlásia kód chyby.</translation>
           Ak toto pravidlo nie je nastavené, vykoná sa predvolená akcia (pozastavenie).
 
           Ak je vybranou akciou pozastavenie, môžete osobitne nastaviť, či má <ph name="PRODUCT_OS_NAME" /> pred prechodom do tohto režimu uzamknúť obrazovku.</translation>
-<translation id="5618398258385745432">Toto súvisiace nastavenie sa používalo predtým, ako bolo predstavené opätovné overenie pri zobrazovaní hesiel. Odvtedy nemalo toto nastavenie, a teda ani toto pravidlo, žiadny vplyv na správanie Carbon Browser Browser Browser. Aktuálne správanie Carbon Browser Browser Browser je teraz rovnaké, ako keby bolo toto pravidlo nastavené na možnosť, ktorá zakazuje zobrazovanie hesiel formou čitateľného textu na stránke s nastaveniami správcu hesiel. Znamená to, že stránka s nastaveniami obsahuje iba zástupný symbol a Carbon Browser Browser Browser zobrazí heslo iba po kliknutí na možnosť Zobraziť (a po opätovnom overení, ak ho používate). Pôvodný popis tohto pravidla je uvedený nižšie.
+<translation id="5618398258385745432">Toto súvisiace nastavenie sa používalo predtým, ako bolo predstavené opätovné overenie pri zobrazovaní hesiel. Odvtedy nemalo toto nastavenie, a teda ani toto pravidlo, žiadny vplyv na správanie Carbon Browser. Aktuálne správanie Carbon Browser je teraz rovnaké, ako keby bolo toto pravidlo nastavené na možnosť, ktorá zakazuje zobrazovanie hesiel formou čitateľného textu na stránke s nastaveniami správcu hesiel. Znamená to, že stránka s nastaveniami obsahuje iba zástupný symbol a Carbon Browser zobrazí heslo iba po kliknutí na možnosť Zobraziť (a po opätovnom overení, ak ho používate). Pôvodný popis tohto pravidla je uvedený nižšie.
 
           Určuje, či môžu používatelia zobraziť heslá v správcovi hesiel formou čitateľného textu.
 
@@ -2651,7 +2651,7 @@ Ak toto nastavenie zakážete, v okne správcu hesiel nebude možné zobraziť 
       Ak toto pravidlo nenakonfigurujete, používateľ bude môcť toto nastavenie zmeniť.
       </translation>
 <translation id="5832274826894536455">Pravidlá s ukončenou podporou</translation>
-<translation id="5835124959204887277">Umožňuje určiť webové adresy a domény, pri ktorých sa nebude zobrazovať žiadna výzva, keď sa budú vyžadovať atestačné certifikáty z bezpečnostných kľúčov. Okrem toho bude do bezpečnostného kľúča odoslaný signál označujúci, že je možné použiť individuálnu atestáciu. Bez toho sa používateľom v Carbon Browser Browser Browser 65 alebo novšom zobrazí výzva, keď budú weby požadovať atestáciu bezpečnostných kľúčov.
+<translation id="5835124959204887277">Umožňuje určiť webové adresy a domény, pri ktorých sa nebude zobrazovať žiadna výzva, keď sa budú vyžadovať atestačné certifikáty z bezpečnostných kľúčov. Okrem toho bude do bezpečnostného kľúča odoslaný signál označujúci, že je možné použiť individuálnu atestáciu. Bez toho sa používateľom v Carbon Browser 65 alebo novšom zobrazí výzva, keď budú weby požadovať atestáciu bezpečnostných kľúčov.
 
       Webové adresy (ako https://príklad.com/nejaká/cesta) sa budú zhodovať iba ako identifikátory aplikácie U2F. Domény (ako príklad.com) sa budú zhodovať iba ako identifikátory webauthn RP. Ak majú byť pokryté obe rozhrania U2F aj webauthn API pre daný web, je potrebné uviesť webovú adresu a doménu identifikátora aplikácie.</translation>
 <translation id="5836064773277134605">Obmedzí rozsah portov UDP používaných hostiteľom vzdialeného prístupu</translation>
@@ -2761,7 +2761,7 @@ Ak toto nastavenie zakážete, v okne správcu hesiel nebude možné zobraziť 
           Hodnota tohto pravidla sa zadáva v milisekundách. Ak zadáte hodnotu vyššiu ako je čas nečinnosti, použije sa hodnota času nečinnosti.</translation>
 <translation id="6097601282776163274">Povoliť anonymizované zhromažďovanie dát prostredníctvom kódovaných webových adries</translation>
 <translation id="6099853574908182288">Predvolený režim farebnej tlače</translation>
-<translation id="6107642964266628393">Umožňuje ovládať, ako a kedy sa použijú aktualizácie systému Carbon Browser Browser Browser OS.</translation>
+<translation id="6107642964266628393">Umožňuje ovládať, ako a kedy sa použijú aktualizácie systému Carbon Browser OS.</translation>
 <translation id="6111936128861357925">Povoliť hru s dinosaurom</translation>
 <translation id="6114416803310251055">zamietnuté</translation>
 <translation id="6133088669883929098">Povoliť všetkým webovým stránkam používať generovanie kľúčov</translation>
@@ -2788,7 +2788,7 @@ Ak toto nastavenie zakážete, v okne správcu hesiel nebude možné zobraziť 
 
       Keď toto pravidlo ponecháte nenastavené alebo nastavené na možnosť false, nezhromažďujú sa ani sa nenahrávajú žiadne údaje.
       Keď ho nastavíte na hodnotu true, údaje sa zhromažďujú a nahrávajú do konzoly Google Admin.
-      Ak chcete ovládať, ktoré údaje sa nahrávajú, použite pravidlá v skupine rozšírenia na nahlasovanie údajov o Carbon Browser Browser Browser.
+      Ak chcete ovládať, ktoré údaje sa nahrávajú, použite pravidlá v skupine rozšírenia na nahlasovanie údajov o Carbon Browser.
 
 
 
@@ -2867,7 +2867,7 @@ Ak značku recommended nastavíte na hodnotu true, používatelia môžu zmeniť
 <translation id="6282799760374509080">Povoliť alebo zakázať zaznamenávanie zvuku</translation>
 <translation id="6284362063448764300">TLS 1.1</translation>
 <translation id="6310223829319187614">Povolenie automatického dopĺňania názvu domény počas prihlasovania používateľa</translation>
-<translation id="6315673513957120120">Keď používateľ prejde na weby, ktoré obsahujú chyby protokolu SSL, Carbon Browser Browser Browser zobrazí stránku s upozornením. V predvolenom nastavení alebo vtedy, keď je toto pravidlo nastavené na možnosť True, môžu používatelia preskočiť tieto stránky s upozornením prostredníctvom kliknutia.
+<translation id="6315673513957120120">Keď používateľ prejde na weby, ktoré obsahujú chyby protokolu SSL, Carbon Browser zobrazí stránku s upozornením. V predvolenom nastavení alebo vtedy, keď je toto pravidlo nastavené na možnosť True, môžu používatelia preskočiť tieto stránky s upozornením prostredníctvom kliknutia.
       Nastavením tohto pravidla na možnosť False zakážete používateľom, aby mohli stránku s upozornením preskočiť kliknutím.</translation>
 <translation id="6319198883324703402">Nastavenie času prvého upozornenia na opätovné spustenie používateľom</translation>
 <translation id="6352543686437322588">Miestny účet zariadenia na automatické prihlásenie po uplynutí oddialenia.
@@ -2909,7 +2909,7 @@ Ak značku recommended nastavíte na hodnotu true, používatelia môžu zmeniť
           Ak zvolíte možnosť „Automaticky zisťovať proxy server“, aplikácie pre Android budú mať k dispozícii webovú adresu skriptu http://wpad/wpad.dat. Nepoužije sa žiadna iná časť protokolu automatického zisťovania proxy servera.
 
           Ak zvolíte, že chcete používať skript .pac proxy servera, budú mať aplikácie pre Android k dispozícii webovú adresu skriptu.</translation>
-<translation id="6430366557948788869">Rozšírenie na nahlasovanie údajov o Carbon Browser Browser Browser</translation>
+<translation id="6430366557948788869">Rozšírenie na nahlasovanie údajov o Carbon Browser</translation>
 <translation id="6440051664870270040">Povoliť webom súbežne navigovať a otvárať vyskakovacie okná</translation>
 <translation id="6447948611083700881">Zálohovanie a obnovenie je zakázané</translation>
 <translation id="6449476513004303784">Zakázať používateľom spravovať certifikáty</translation>
@@ -2967,9 +2967,9 @@ Ak značku recommended nastavíte na hodnotu true, používatelia môžu zmeniť
 <translation id="6536600139108165863">Automaticky reštartovať po vypnutí zariadenia</translation>
 <translation id="6539246272469751178">Toto pravidlo nemá žiaden vplyv na aplikácie pre Android. Aplikácie pre Android vždy používajú predvolený adresár sťahovania a nemôžu pristupovať k súborom stiahnutým systémom <ph name="PRODUCT_OS_NAME" /> do iného ako predvoleného adresára.</translation>
 <translation id="654303922206238013">Stratégia migrácie pre šifrovanie ecryptfs</translation>
-<translation id="6544897973797372144">Ak je toto pravidlo nastavené na možnosť True a pravidlo Carbon Browser Browser BrowserOsReleaseChannel nie je nastavené, používatelia budú môcť v zariadení meniť kanál verzií. Ak je toto pravidlo nastavené na možnosť False, zariadenie bude uzamknuté v kanáli, v ktorom bolo naposledy nastavené.
+<translation id="6544897973797372144">Ak je toto pravidlo nastavené na možnosť True a pravidlo Carbon BrowserOsReleaseChannel nie je nastavené, používatelia budú môcť v zariadení meniť kanál verzií. Ak je toto pravidlo nastavené na možnosť False, zariadenie bude uzamknuté v kanáli, v ktorom bolo naposledy nastavené.
 
-      Kanál vybratý používateľom bude prepísaný pravidlom Carbon Browser Browser BrowserOsReleaseChannel, avšak ak je kanál pravidla stabilnejší ako kanál nainštalovaný v zariadení, kanál sa zmení až potom, čo bude stabilnejší kanál vo vyššej verzii ako kanál nainštalovaný v zariadení.</translation>
+      Kanál vybratý používateľom bude prepísaný pravidlom Carbon BrowserOsReleaseChannel, avšak ak je kanál pravidla stabilnejší ako kanál nainštalovaný v zariadení, kanál sa zmení až potom, čo bude stabilnejší kanál vo vyššej verzii ako kanál nainštalovaný v zariadení.</translation>
 <translation id="6553143066970470539">Percento jasu obrazovky</translation>
 <translation id="6559057113164934677">Nepovoliť žiadnym stránkam používať kameru a mikrofón</translation>
 <translation id="6561396069801924653">Zobraziť možnosti dostupnosti v oblasti oznámení</translation>
@@ -3057,7 +3057,7 @@ Ak značku recommended nastavíte na hodnotu true, používatelia môžu zmeniť
 
       Ak toto pravidlo nastavíte na hodnotu True alebo ponecháte nenastavené, použije sa predvolené správanie: prihlasovanie do druhého účtu v oblasti s obsahom v prehliadači bude povolené. Výnimku predstavujú účty detí, kde bude v oblasti s obsahom bez aktívneho režimu inkognito zablokované.
 
-      V prípade, ak by prihlasovanie do iného účtu prostredníctvom režimu inkognito nemalo byť povolené, zvážte zablokovanie tohto režimu pomocou pravidla PrivateModeAvailability.
+      V prípade, ak by prihlasovanie do iného účtu prostredníctvom režimu inkognito nemalo byť povolené, zvážte zablokovanie tohto režimu pomocou pravidla privateModeAvailability.
 
       Upozorňujeme, že keď používatelia zablokujú svoje súbory cookie, budú mať prístup k službám Googlu v neoverenom stave.</translation>
 <translation id="6757438632136860443">Umožňuje nastaviť zoznam vzorov webových adries určujúcich weby, ktoré majú povolené spustiť doplnok <ph name="FLASH_PLUGIN_NAME" />.
@@ -3094,7 +3094,7 @@ Ak toto pravidlo nastavíte na hodnotu True, vstavaný klient DNS sa použije (p
 
       Ak toto pravidlo nastavíte na hodnotu False, vstavaný klient DNS sa nepoužije nikdy.
 
-      Ak toto pravidlo nenastavíte, v systémoch MacOS, Android (keď nie sú povolené súkromné DNS ani VPN) a Carbon Browser Browser BrowserOS bude predvolene povolený vstavaný klient DNS, a používatelia budú môcť ovládať používanie vstavaného klienta DNS pomocou úprav na chrome://flags alebo určením príznaku v príkazovom riadku.</translation>
+      Ak toto pravidlo nenastavíte, v systémoch MacOS, Android (keď nie sú povolené súkromné DNS ani VPN) a Carbon BrowserOS bude predvolene povolený vstavaný klient DNS, a používatelia budú môcť ovládať používanie vstavaného klienta DNS pomocou úprav na chrome://flags alebo určením príznaku v príkazovom riadku.</translation>
 <translation id="6843296367238757293">Podpora tohto pravidla bola ukončená. Neodporúča sa používať. Ďalšie informácie nájdete na https://support.google.com/chrome/a/answer/7643500</translation>
 <translation id="684856667300805181">Toto pravidlo bolo odstránené v systéme <ph name="PRODUCT_NAME" /> verzie 68 a nahradené pravidlom <ph name="ARC_GLS_POLICY_NAME" />.</translation>
 <translation id="6856743875250214792">Toto pravidlo je vo verzii M66 deaktivované a odstránené, pretože sa používalo iba na interné testovanie a predstavuje bezpečnostné riziko.
@@ -3137,7 +3137,7 @@ Ak toto pravidlo nastavíte na hodnotu True, vstavaný klient DNS sa použije (p
 
       POZNÁMKA: Funkcia Izolácia webov v Androide je experimentálna. Jej podpora sa časom zlepší, ale v súčasnosti môže spôsobovať problémy s výkonnosťou.
 
-      POZNÁMKA: Toto pravidlo platí len pre Carbon Browser Browser Browser v Androide v zariadeniach s minimálne 1 GB pamäte RAM. Ak ho chcete použiť v iných platformách ako Android, použite pravidlo SitePerProcess.
+      POZNÁMKA: Toto pravidlo platí len pre Carbon Browser v Androide v zariadeniach s minimálne 1 GB pamäte RAM. Ak ho chcete použiť v iných platformách ako Android, použite pravidlo SitePerProcess.
       </translation>
 <translation id="6922884955650325312">Blokovať doplnok <ph name="FLASH_PLUGIN_NAME" /></translation>
 <translation id="6923366716660828830">Určuje názov predvoleného poskytovateľa vyhľadávania. Ak sa pole nevyplní alebo bude pravidlo ponechané nenastavené, použije sa názov hostiteľa určený webovou adresou vyhľadávania.
@@ -3234,7 +3234,7 @@ Ak toto pravidlo nastavíte na hodnotu True, vstavaný klient DNS sa použije (p
 
       Ak ho nastavíte na hodnotu false alebo ho ponecháte nenastavené, <ph name="PRODUCT_NAME" /> nemôže zhromažďovať tieto denníky ani ich nahrávať.
 
-      Tieto denníky obsahujú diagnostické informácie, ktoré sú užitočné pri ladení problémov s audiohovormi alebo videohovormi v Carbon Browser Browser Browser, ako sú napríklad čas a veľkosť odoslaných a prijatých balíkov RTP, spätnú väzbu týkajúcu sa preťaženia siete a metadáta o čase a kvalite zvuku a snímok videa. Nezahŕňajú zvukový obsah ani videoobsah hovoru.
+      Tieto denníky obsahujú diagnostické informácie, ktoré sú užitočné pri ladení problémov s audiohovormi alebo videohovormi v Carbon Browser, ako sú napríklad čas a veľkosť odoslaných a prijatých balíkov RTP, spätnú väzbu týkajúcu sa preťaženia siete a metadáta o čase a kvalite zvuku a snímok videa. Nezahŕňajú zvukový obsah ani videoobsah hovoru.
 
       Zhromažďovanie týchto dát sa dá spustiť iba pomocou webových služieb Googlu, ako je napríklad Google Hangouts alebo Google Meet.
 
@@ -3332,11 +3332,11 @@ Ak toto pravidlo nastavíte na hodnotu True, vstavaný klient DNS sa použije (p
 <translation id="7185078796915954712">TLS 1.3</translation>
 <translation id="718956142899066210">Typy pripojenia, pre ktoré sú povolené aktualizácie</translation>
 <translation id="7194407337890404814">Názov predvoleného poskytovateľa vyhľadávania</translation>
-<translation id="7199304109870655950">Konfiguruje vzdialený prístup prostredníctvom hostiteľa Vzdialenej plochy Carbon Browser Browser Browser.
+<translation id="7199304109870655950">Konfiguruje vzdialený prístup prostredníctvom hostiteľa Vzdialenej plochy Carbon Browser.
 
-      Hostiteľ Vzdialenej plochy Carbon Browser Browser Browser je natívna služba spustená v cieľovom zariadení, v ktorom sa môže používateľ prihlásiť, aby mohol používať aplikáciu Vzdialená plocha Carbon Browser Browser Browser.  Táto natívna služba je súčasťou samostatného balíka a spúšťa sa oddelene od prehliadača <ph name="PRODUCT_NAME" />.
+      Hostiteľ Vzdialenej plochy Carbon Browser je natívna služba spustená v cieľovom zariadení, v ktorom sa môže používateľ prihlásiť, aby mohol používať aplikáciu Vzdialená plocha Carbon Browser.  Táto natívna služba je súčasťou samostatného balíka a spúšťa sa oddelene od prehliadača <ph name="PRODUCT_NAME" />.
 
-      Tieto pravidlá sa ignorujú a neplatí to iba vtedy, keď máte nainštalovaného hostiteľa Vzdialenej plochy Carbon Browser Browser Browser.</translation>
+      Tieto pravidlá sa ignorujú a neplatí to iba vtedy, keď máte nainštalovaného hostiteľa Vzdialenej plochy Carbon Browser.</translation>
 <translation id="7202925763179776247">Povoliť obmedzenia súborov na stiahnutie</translation>
 <translation id="7207095846245296855">Vynútiť Bezpečné vyhľadávanie Google</translation>
 <translation id="7211368186050418507">Časové pásmo automaticky nezisťovať</translation>
@@ -3438,9 +3438,9 @@ Ak toto pravidlo nastavíte na hodnotu True, vstavaný klient DNS sa použije (p
 <translation id="7329968046053403405">Určí typ účtov poskytnutých aplikáciou pre Android na overenie totožnosti, ktorá podporuje overenie <ph name="HTTP_NEGOTIATE" /> (napr. overenie Kerberos). Tieto informácie by ste mali mať k dispozícii od poskytovateľa danej aplikácie na overenie totožnosti. Ďalšie podrobnosti získate na adrese https://goo.gl/hajyfN.
 
           Ak neposkytnete žiadne nastavenie, overenie <ph name="HTTP_NEGOTIATE" /> bude v systéme Android zakázané.</translation>
-<translation id="7331962793961469250">Ak je nastavená možnosť True, na stránke Nová karta sa nezobrazia propagácie aplikácií v Internetovom obchode Carbon Browser Browser Browser.
+<translation id="7331962793961469250">Ak je nastavená možnosť True, na stránke Nová karta sa nezobrazia propagácie aplikácií v Internetovom obchode Carbon Browser.
 
-      Ak ju nastavíte na možnosť False alebo ju ponecháte nenastavenú, propagácie aplikácií v Internetovom obchode Carbon Browser Browser Browser sa na stránke Nová karta budú zobrazovať</translation>
+      Ak ju nastavíte na možnosť False alebo ju ponecháte nenastavenú, propagácie aplikácií v Internetovom obchode Carbon Browser sa na stránke Nová karta budú zobrazovať</translation>
 <translation id="7332963785317884918">Podpora tohto pravidlo bola ukončená. Systém <ph name="PRODUCT_OS_NAME" /> bude vždy používať stratégiu čistenia RemoveLRU.
 
       Ovláda správanie automatického čistenia na zariadeniach so systémom <ph name="PRODUCT_OS_NAME" />. Automatické čistenie sa spustí s cieľom uvoľniť miesto na disku, keď množstvo voľného miesta dosiahne kritickú úroveň.
@@ -3500,7 +3500,7 @@ Ak toto pravidlo nastavíte na hodnotu True, vstavaný klient DNS sa použije (p
       </translation>
 <translation id="7506269062143646163">Povolenie podpory technológie Signed HTTP Exchange (SXG).
 
-          Ak toto pravidlo nenastavíte alebo ho povolíte, Carbon Browser Browser Browser bude prijímať obsah webu poskytovaný prostredníctvom technológie SXG.
+          Ak toto pravidlo nenastavíte alebo ho povolíte, Carbon Browser bude prijímať obsah webu poskytovaný prostredníctvom technológie SXG.
 
           Ak toto pravidlo zakážete, obsah poskytovaný prostredníctvom technológie SXG sa nebude dať načítať.</translation>
 <translation id="7511361072385293666">Ak je toto pravidlo nastavené na možnosť True alebo nie je nastavené vôbec, použitie protokolu QUIC je v prehliadači <ph name="PRODUCT_NAME" /> povolené.
@@ -3541,7 +3541,7 @@ Ak toto pravidlo nastavíte na hodnotu True, vstavaný klient DNS sa použije (p
 
       Keď toto pravidlo ponecháte nenastavené alebo ho nastavíte na hodnotu 0, pri prejdení na určenú webovú adresu sa táto adresa okamžite otvorí v alternatívnom prehliadači.
 
-      Keď toto pravidlo nastavíte na číslo, Carbon Browser Browser Browser zobrazí hlásenie na daný počet milisekúnd a potom otvorí alternatívny prehliadač.</translation>
+      Keď toto pravidlo nastavíte na číslo, Carbon Browser zobrazí hlásenie na daný počet milisekúnd a potom otvorí alternatívny prehliadač.</translation>
 <translation id="7593523670408385997">Umožňuje nakonfigurovať veľkosť vyrovnávacej pamäte, ktorú služba <ph name="PRODUCT_NAME" /> použije na ukladanie súborov vo vyrovnávacej pamäti na disk.
 
       Ak nastavíte toto pravidlo, služba <ph name="PRODUCT_NAME" /> použije uvedenú veľkosť vyrovnávacej pamäte bez ohľadu na to, či používateľ určil príznak --disk-cache-size. Hodnota určená v tomto pravidle nie je pevnou hraničnou hodnotou, ale skôr návrhom pre systém ukladania do vyrovnávacej pamäte. Každá hodnota menšia ako niekoľko megabajtov je príliš malá a zaokrúhli sa smerom nahor na rozumné minimum.
@@ -3725,7 +3725,7 @@ Ak toto pravidlo nastavíte na hodnotu True, vstavaný klient DNS sa použije (p
 
       POZNÁMKA: Do verzie 45 bolo toto pravidlo podporované iba v režime verejného terminálu.</translation>
 <translation id="7912255076272890813">Nakonfigurovať povolené typy aplikácií/rozšírení</translation>
-<translation id="7922358664346625612">Ponechať poslednú kartu v Carbon Browser Browser Browser otvorenú</translation>
+<translation id="7922358664346625612">Ponechať poslednú kartu v Carbon Browser otvorenú</translation>
 <translation id="793134539373873765">Určuje, či sa pri aktualizovaní OS má použiť protokol p2p. Ak je táto možnosť nastavená na hodnotu True, zariadenia budú zdieľať aktualizácie a pokúsia sa ich sťahovať v sieti LAN, čím potenciálne znížia využitie a preťaženie rýchlosti pripojenia. Ak sa aktualizácie nedajú vykonať v sieti LAN, zariadenie ich prevezme z aktualizačného servera. Ak je táto možnosť nastavená na hodnotu False alebo nie je nakonfigurovaná, protokol p2p sa nepoužije.</translation>
 <translation id="7933141401888114454">Povoliť vytváranie kontrolovaných používateľov</translation>
 <translation id="793473937901685727">Nastaviť dostupnosť certifikátov pre aplikácie ARC</translation>
@@ -3842,7 +3842,7 @@ Ak toto pravidlo ponecháte nenastavené, bude táto možnosť povolená, ale po
       Ak je pravidlo nastavené na hodnotu False, zoznam rozhraní sa nenahlási.</translation>
 <translation id="8141795997560411818">Toto pravidlo nezabráni používateľovi používať aplikáciu Disk Google pre Android. Ak chcete zakázať prístup k Disku Google, mali by ste zakázať aj inštaláciu aplikácie Disk Google.</translation>
 <translation id="8142894094385450823">Nastavenie odporúčaných miestnych nastavení pre spravovanú reláciu</translation>
-<translation id="8146727383888924340">Povoliť používateľom uplatniť ponuky pri registrácii systému OS Carbon Browser Browser Browser</translation>
+<translation id="8146727383888924340">Povoliť používateľom uplatniť ponuky pri registrácii systému OS Carbon Browser</translation>
 <translation id="8148785525797916822">Zruší zobrazenie upozornenia spúšťaného vtedy, keď <ph name="PRODUCT_NAME" /> používate v počítači alebo operačnom systéme, ktorý už nie je podporovaný.</translation>
 <translation id="8148901634826284024">Povolí režim vysokého kontrastu (funkcia na uľahčenie prístupu).
 
@@ -3889,7 +3889,7 @@ Ak toto pravidlo ponecháte nenastavené, bude táto možnosť povolená, ale po
       Ak je toto pravidlo ponechané nenastavené, systém <ph name="PRODUCT_OS_NAME" /> použije ID e-mailového účtu pre miestny účet na zariadení ako meno, ktoré zobrazí na obrazovke prihlásenia.
 
       Toto pravidlo sa v prípade bežných používateľských účtov ignoruje.</translation>
-<translation id="8259375588339409826">Prehliadače Carbon Browser Browser Browser a Carbon Browser Browser Browser podporujú rovnaké pravidlá. Upozorňujeme, že tento dokument môže obsahovať zatiaľ nevydané pravidlá (t. j. ich záznam „Podporované v“ odkazuje na zatiaľ nevydanú verziu softvéru <ph name="PRODUCT_NAME" />) a že tieto pravidlá môžu byť zmenené alebo odstránené bez predchádzajúceho upozornenia, pričom nie sú kryté zárukou akéhokoľvek druhu vrátane záruk týkajúcich sa bezpečnosti a súkromia.
+<translation id="8259375588339409826">Prehliadače Carbon Browser a Carbon Browser podporujú rovnaké pravidlá. Upozorňujeme, že tento dokument môže obsahovať zatiaľ nevydané pravidlá (t. j. ich záznam „Podporované v“ odkazuje na zatiaľ nevydanú verziu softvéru <ph name="PRODUCT_NAME" />) a že tieto pravidlá môžu byť zmenené alebo odstránené bez predchádzajúceho upozornenia, pričom nie sú kryté zárukou akéhokoľvek druhu vrátane záruk týkajúcich sa bezpečnosti a súkromia.
 
 Tieto pravidlá sú výhradne určené na použitie pri konfigurácii inštancií prehliadača <ph name="PRODUCT_NAME" /> vo vašej organizácii. Použitie týchto pravidiel mimo vašej organizácie (napr. vo verejne distribuovanom programe) je považované za malvér. Google a dodávatelia antivírusových softvérov ho pravdepodobne budú označovať ako malvér.
 
@@ -3906,7 +3906,7 @@ Odporúčaný spôsob nastavenia pravidiel v systéme Windows je prostredníctv
 
       Ak toto pravidlo nastavíte na hodnotu false, štatistiky sa nebudú nahlasovať.
       Ak ho nastavíte na hodnotu true alebo ho nenastavíte, štatistiky sa budú nahlasovať.</translation>
-<translation id="8294750666104911727">Stránky s prvkom X-UA-Compatible nastaveným na hodnotu chrome=1 sa obvykle vykreslia v rámci služby <ph name="PRODUCT_FRAME_NAME" /> bez ohľadu na pravidlo Carbon Browser Browser BrowserFrameRendererSettings.
+<translation id="8294750666104911727">Stránky s prvkom X-UA-Compatible nastaveným na hodnotu chrome=1 sa obvykle vykreslia v rámci služby <ph name="PRODUCT_FRAME_NAME" /> bez ohľadu na pravidlo Carbon BrowserFrameRendererSettings.
 
           Ak toto nastavenie povolíte, na stránkach sa nebudú hľadať metaznačky.
 
@@ -3932,7 +3932,7 @@ Odporúčaný spôsob nastavenia pravidiel v systéme Windows je prostredníctv
 <translation id="8344454543174932833">Importovanie záložiek z predvoleného prehliadača pri prvom spustení</translation>
 <translation id="8357681633047935212">Obmedziť dĺžku relácie používateľa</translation>
 <translation id="8359734107661430198">Povoliť rozhranie ExampleDeprecatedFeature API platné do 2. 9. 2008</translation>
-<translation id="8367209241899435947">Povoliť nástroj Carbon Browser Browser Browser Cleanup v systéme Windows</translation>
+<translation id="8367209241899435947">Povoliť nástroj Carbon Browser Cleanup v systéme Windows</translation>
 <translation id="8369602308428138533">Oneskorenie vypnutia obrazovky pri používaní napájacieho zdroja</translation>
 <translation id="8371178326720637170">Umožňuje spravovaným rozšíreniam používať rozhranie Enterprise Hardware Platform API</translation>
 <translation id="8374747520743832795">Nahlasovať štatistiky hardvéru a identifikátory týkajúce sa napájania
@@ -3999,13 +3999,13 @@ Platí to pre všetky skripty PAC bez ohľadu na ich pôvod (vrátane tých, kto
       Toto pravidlo bude odstránené vo verzii M75.</translation>
 <translation id="8484458986062090479">Prispôsobte si zoznam vzorov webových adries, ktoré by mali byť vždy vykresľované hostiteľským prehliadačom.
 
-          Ak toto pravidlo nenastavíte, pre všetky webové stránky sa použije predvolený vykresľovací modul (ako je určené pravidlom „Carbon Browser Browser BrowserFrameRendererSettings“).
+          Ak toto pravidlo nenastavíte, pre všetky webové stránky sa použije predvolený vykresľovací modul (ako je určené pravidlom „Carbon BrowserFrameRendererSettings“).
 
           Príklady vzorov nájdete na adrese http://www.chromium.org/developers/how-tos/chrome-frame-getting-started.</translation>
 <translation id="8489964335640955763">PluginVm</translation>
 <translation id="8493645415242333585">Zakázať ukladanie histórie prehliadača</translation>
 <translation id="8499172469244085141">Predvolené nastavenia (používatelia ich môžu nahradiť)</translation>
-<translation id="849962487677588458">Toto pravidlo je zastarané a navrhnuté na odstránenie v Carbon Browser Browser Browser 78 bez náhrady.
+<translation id="849962487677588458">Toto pravidlo je zastarané a navrhnuté na odstránenie v Carbon Browser 78 bez náhrady.
 
       Toto pravidlo umožňuje používať protokol HTTP/0.9 pre iné porty než 80 pre HTTP a 443 pre HTTPS.
 
@@ -4033,7 +4033,7 @@ Platí to pre všetky skripty PAC bez ohľadu na ich pôvod (vrátane tých, kto
 
       V tomto prípade znamená výraz „verzia“ buď presnú verziu, ako napríklad 61.0.3163.120, alebo predponu verzie, napríklad 61.0.  </translation>
 <translation id="8544375438507658205">Predvolený vykresľovací modul HTML pre doplnok <ph name="PRODUCT_FRAME_NAME" /></translation>
-<translation id="8544465954173828789">Povoliť synchronizáciu správ SMS z telefónu do Carbon Browser Browser Browserbooku</translation>
+<translation id="8544465954173828789">Povoliť synchronizáciu správ SMS z telefónu do Carbon Browserbooku</translation>
 <translation id="8548832052135586762">Nastaví iba farebnú tlač, iba monochromatickú tlač alebo žiadne obmedzenie farebného režimu. Ak toto pravidlo nenastavíte, znamená to, že sa nepoužijú žiadne obmedzenia.</translation>
 <translation id="8549772397068118889">Upozorniť na návštevu stránky, ktorá je mimo balíkov obsahu</translation>
 <translation id="8566729013138025202">Určuje skupinu pravidiel, ktoré budú postúpené na spustenie ARC. Hodnota musí mať platný formát JSON.
@@ -4082,7 +4082,7 @@ Platí to pre všetky skripty PAC bez ohľadu na ich pôvod (vrátane tých, kto
 
       Používatelia nemôžu toto nastavenie zmeniť ani prepísať.</translation>
 <translation id="8631434304112909927">po verziu <ph name="UNTIL_VERSION" /></translation>
-<translation id="8649763579836720255">Zariadenia OS Carbon Browser Browser Browser môžu používať vzdialené overenie (overený prístup) na získanie certifikátu vydaného certifikačnou autoritou OS Carbon Browser Browser Browser, ktorý potvrdzuje, že zariadenie môže prehrávať chránený obsah. Tento proces zahrnuje odoslanie informácií o hardvére certifikačnej autorite OS Carbon Browser Browser Browser, ktoré dané zariadenie jedinečne identifikujú.
+<translation id="8649763579836720255">Zariadenia OS Carbon Browser môžu používať vzdialené overenie (overený prístup) na získanie certifikátu vydaného certifikačnou autoritou OS Carbon Browser, ktorý potvrdzuje, že zariadenie môže prehrávať chránený obsah. Tento proces zahrnuje odoslanie informácií o hardvére certifikačnej autorite OS Carbon Browser, ktoré dané zariadenie jedinečne identifikujú.
 
           Ak je toto nastavenie nastavené na hodnotu False, dané zariadenie nepoužije vzdialené overenie na ochranu obsahu a pravdepodobne nebude môcť prehrávať chránený obsah.
 
@@ -4237,7 +4237,7 @@ Podpora tohto pravidla bola ukončená vo verzii M69 a používa sa namiesto n
 
           Toto pravidlo namapuje identifikátor rozšírenia alebo webovú adresu aktualizácie na svoju konfiguráciu. Keď bude mať k dispozícii identifikátor rozšírenia, konfigurácia sa použije iba pre ním určené rozšírenie. Pre špeciálny identifikátor <ph name="DEFAULT_SCOPE" /> môžete nastaviť predvolenú konfiguráciu. Tá sa použije pre všetky rozšírenia, pre ktoré ste v rámci tohto pravidla nenastavili vlastnú konfiguráciu. Keď bude mať k dispozícii webovú adresu aktualizácie, konfigurácia sa použije pre všetky rozšírenia s presnou webovou adresou aktualizácie stanovenou v manifeste tohto rozšírenia tak, ako je to uvedené na <ph name="LINK_TO_EXTENSION_DOC1" />.
 
-          V prípade inštancií systému Windows nepripojených k doméne <ph name="MS_AD_NAME" /> sa vynucuje inštalácia iba rozšírení uvedených v Internetovom obchode Carbon Browser Browser Browser.
+          V prípade inštancií systému Windows nepripojených k doméne <ph name="MS_AD_NAME" /> sa vynucuje inštalácia iba rozšírení uvedených v Internetovom obchode Carbon Browser.
           </translation>
 <translation id="8947415621777543415">Nahlasovať polohu zariadenia</translation>
 <translation id="8951350807133946005">Nastaviť adresár diskovej vyrovnávacej pamäte</translation>
@@ -4283,13 +4283,13 @@ Podpora tohto pravidla bola ukončená vo verzii M69 a používa sa namiesto n
       Ak nastavíte hodnotu pravidla na token, ktorý mapuje na zostavu s rýchlou opravou, zariadenie bude aktualizované na zodpovedajúcu zostavu s rýchlou opravou (ak danú aktualizáciu neblokuje iné pravidlo).
 
       Ak toto pravidlo nenastavíte alebo jeho hodnota nemapuje na zostavu s rýchlou opravou, zariadenie sa na túto zostavu neaktualizuje. Ak zariadenie už používa zostavu s rýchlou opravou a pravidlo už nie je nastavené alebo jeho hodnota nemapuje na zostavu s rýchlou opravou, zariadenie sa aktualizuje na bežnú zostavu (ak danú aktualizáciu neblokuje iné pravidlo).</translation>
-<translation id="9054012305936267950">Toto pravidlo ovláda prihlasovacie správanie prehliadača. Umožňuje určiť, či sa používateľ môže prihlásiť do prehliadača <ph name="PRODUCT_NAME" /> pomocou svojho účtu a používať služby súvisiace s účtom, ako je napríklad synchronizácia Carbon Browser Browser Browser.
+<translation id="9054012305936267950">Toto pravidlo ovláda prihlasovacie správanie prehliadača. Umožňuje určiť, či sa používateľ môže prihlásiť do prehliadača <ph name="PRODUCT_NAME" /> pomocou svojho účtu a používať služby súvisiace s účtom, ako je napríklad synchronizácia Carbon Browser.
 
-      Ak ho nastavíte na možnosť Zakázať prihlásenie do prehliadača, používateľ sa nebude môcť prihlásiť do prehliadača ani používať služby využívajúce účet. V tomto prípade nie je možné použiť funkcie na úrovni prehliadača, ako napríklad synchronizáciu Carbon Browser Browser Browser, pričom nebudú k dispozícii. Ak bol používateľ prihlásený a pravidlo nastavíte na možnosť Zakázané, bude pri ďalšom spustení Carbon Browser Browser Browser odhlásený, ale údaje jeho miestneho profilu (napríklad záložky, heslá atď.) sa zachovajú. Používateľ sa bude môcť naďalej prihlasovať do webových služieb Googlu, ako je napríklad Gmail, a používať ich.
+      Ak ho nastavíte na možnosť Zakázať prihlásenie do prehliadača, používateľ sa nebude môcť prihlásiť do prehliadača ani používať služby využívajúce účet. V tomto prípade nie je možné použiť funkcie na úrovni prehliadača, ako napríklad synchronizáciu Carbon Browser, pričom nebudú k dispozícii. Ak bol používateľ prihlásený a pravidlo nastavíte na možnosť Zakázané, bude pri ďalšom spustení Carbon Browser odhlásený, ale údaje jeho miestneho profilu (napríklad záložky, heslá atď.) sa zachovajú. Používateľ sa bude môcť naďalej prihlasovať do webových služieb Googlu, ako je napríklad Gmail, a používať ich.
 
-      Ak ho nastavíte na možnosť Povoliť prihlásenie do prehliadača, používateľ sa môže prihlásiť do prehliadača a automaticky bude prihlasovaný do prehliadača pri prihlásení do webových služieb Googlu, ako je napríklad Gmail. To, že je používateľ prihlásený do prehliadača, znamená, že prehliadač bude uchovávať informácie o jeho účte. Neznamená to však, že synchronizácia Carbon Browser Browser Browser bude predvolene zapnutá. Používateľ si musí túto funkciu samostatne aktivovať. Povolením tohto pravidla zabránite používateľovi vypnúť nastavenie umožňujúce prihlásenie do účtu. Ak chcete ovládať dostupnosť synchronizácie Carbon Browser Browser Browser, použite pravidlo SyncDisabled.
+      Ak ho nastavíte na možnosť Povoliť prihlásenie do prehliadača, používateľ sa môže prihlásiť do prehliadača a automaticky bude prihlasovaný do prehliadača pri prihlásení do webových služieb Googlu, ako je napríklad Gmail. To, že je používateľ prihlásený do prehliadača, znamená, že prehliadač bude uchovávať informácie o jeho účte. Neznamená to však, že synchronizácia Carbon Browser bude predvolene zapnutá. Používateľ si musí túto funkciu samostatne aktivovať. Povolením tohto pravidla zabránite používateľovi vypnúť nastavenie umožňujúce prihlásenie do účtu. Ak chcete ovládať dostupnosť synchronizácie Carbon Browser, použite pravidlo SyncDisabled.
 
-      Ak ho nastavíte na možnosť Presadzovať prihlásenie do prehliadača, používateľovi sa zobrazí dialógové okno na výber účtu, v ktorom musí vybrať účet a prihlásiť sa doň, aby mohol prehliadač používať. Tým sa zaistí, že v prípade spravovaných účtov sa budú uplatňovať a presadzovať pravidlá priradené k danému účtu. Predvolene sa tým v danom účte zapne aj synchronizácia Carbon Browser Browser Browser. Výnimku predstavujú prípady, keď je zakázaná správcom domény alebo pravidlom SyncDisabled. Predvolená hodnota pravidla BrowserGuestModeEnabled bude nastavená na hodnotu False. Upozorňujeme, že po povolení tohto pravidla sa existujúce nepriradené profily uzamknú a budú neprístupné. Ďalšie informácie nájdete v článku centra pomoci na https://support.google.com/chrome/a/answer/7572556. Táto možnosť nie je podporovaná v systéme Linux a v prípade jej použitia sa ako záložná hodnota použije Povoliť prihlásenie do prehliadača.
+      Ak ho nastavíte na možnosť Presadzovať prihlásenie do prehliadača, používateľovi sa zobrazí dialógové okno na výber účtu, v ktorom musí vybrať účet a prihlásiť sa doň, aby mohol prehliadač používať. Tým sa zaistí, že v prípade spravovaných účtov sa budú uplatňovať a presadzovať pravidlá priradené k danému účtu. Predvolene sa tým v danom účte zapne aj synchronizácia Carbon Browser. Výnimku predstavujú prípady, keď je zakázaná správcom domény alebo pravidlom SyncDisabled. Predvolená hodnota pravidla BrowserGuestModeEnabled bude nastavená na hodnotu False. Upozorňujeme, že po povolení tohto pravidla sa existujúce nepriradené profily uzamknú a budú neprístupné. Ďalšie informácie nájdete v článku centra pomoci na https://support.google.com/chrome/a/answer/7572556. Táto možnosť nie je podporovaná v systéme Linux a v prípade jej použitia sa ako záložná hodnota použije Povoliť prihlásenie do prehliadača.
 
       Ak toto pravidlo nenastavíte, používateľ sa môže rozhodnúť, či chce možnosť prihlásenia do prehliadača povoliť, a následne ju použiť, keď to považuje za vhodné.</translation>
 <translation id="9072600218500597787">Nakonfiguruje požadované názvy domén hostiteľa, ktoré budú použité pre hostiteľov vzdialeného prístupu, a zabráni používateľom ich zmeniť.
@@ -4336,7 +4336,7 @@ Podpora tohto pravidla bola ukončená vo verzii M69 a používa sa namiesto n
 
       Ak toto pravidlo nastavíte na možnosť True, denníky systému sa budú odosielať. Ak ho
       nastavíte na možnosť False alebo ho nenastavíte, denníky systému sa nebudú odosielať.</translation>
-<translation id="9150416707757015439">Toto pravidlo je zastarané. Použite namiesto neho pravidlo PrivateModeAvailability.
+<translation id="9150416707757015439">Toto pravidlo je zastarané. Použite namiesto neho pravidlo privateModeAvailability.
       Povoľuje v prehliadači <ph name="PRODUCT_NAME" /> režim Inkognito.
 
       Ak je toto nastavenie povolené alebo nie je nakonfigurované, používatelia môžu otvárať webové stránky v režime Inkognito.
@@ -4383,7 +4383,7 @@ Podpora tohto pravidla bola ukončená vo verzii M69 a používa sa namiesto n
 
       Keď toto pravidlo nastavíte, použije sa na spustenie prehliadača <ph name="PRODUCT_NAME" /> pri spustení prehliadača <ph name="PRODUCT_NAME" /> z programu Internet Explorer.
 
-      Toto pravidlo je možné nastaviť na cestu k spustiteľnému súboru alebo na hodnotu ${chrome}, ktorá automaticky zistí miesto nainštalovania Carbon Browser Browser Browser.</translation>
+      Toto pravidlo je možné nastaviť na cestu k spustiteľnému súboru alebo na hodnotu ${chrome}, ktorá automaticky zistí miesto nainštalovania Carbon Browser.</translation>
 <translation id="930930237275114205">Nastaviť adresár na údaje používateľov pre aplikáciu <ph name="PRODUCT_FRAME_NAME" /></translation>
 <translation id="943865157632139008">Umožňuje konfigurovať vykresľovací modul HTML počas inštalácie doplnku <ph name="PRODUCT_FRAME_NAME" />.
       V predvolenom nastavení môže vykresľovanie vykonávať hostiteľský prehliadač, toto nastavenie však môžete prekonať a namiesto toho vykresľovať stránky HTML pomocou doplnku <ph name="PRODUCT_FRAME_NAME" />.</translation>

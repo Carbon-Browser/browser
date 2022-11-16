@@ -7,6 +7,7 @@
 #include "build/build_config.h"
 #include "skia/ext/platform_canvas.h"
 #include "third_party/blink/renderer/platform/theme/web_theme_engine_conversions.h"
+#include "ui/color/color_provider_utils.h"
 #include "ui/native_theme/native_theme.h"
 #include "ui/native_theme/overlay_scrollbar_constants_aura.h"
 
@@ -16,7 +17,7 @@ using mojom::ColorScheme;
 
 namespace {
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 // The width of a vertical scroll bar in dips.
 int32_t g_vertical_scroll_bar_width;
 
@@ -109,7 +110,7 @@ static void GetNativeThemeExtraParams(
       native_theme_extra_params->slider.zoom = extra_params->slider.zoom;
       native_theme_extra_params->slider.right_to_left =
           extra_params->slider.right_to_left;
-      FALLTHROUGH;
+      [[fallthrough]];
       // vertical and in_drag properties are used by both slider track and
       // slider thumb.
     case WebThemeEngine::kPartSliderThumb:
@@ -157,12 +158,17 @@ static void GetNativeThemeExtraParams(
   }
 }
 
+WebThemeEngineDefault::WebThemeEngineDefault() {
+  light_color_provider_.GenerateColorMap();
+  dark_color_provider_.GenerateColorMap();
+}
+
 WebThemeEngineDefault::~WebThemeEngineDefault() = default;
 
 gfx::Size WebThemeEngineDefault::GetSize(WebThemeEngine::Part part) {
   ui::NativeTheme::ExtraParams extra;
   ui::NativeTheme::Part native_theme_part = NativeThemePart(part);
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   switch (native_theme_part) {
     case ui::NativeTheme::kScrollbarDownArrow:
     case ui::NativeTheme::kScrollbarLeftArrow:
@@ -196,8 +202,9 @@ void WebThemeEngineDefault::Paint(
   GetNativeThemeExtraParams(part, state, extra_params,
                             &native_theme_extra_params);
   ui::NativeTheme::GetInstanceForWeb()->Paint(
-      canvas, NativeThemePart(part), NativeThemeState(state), rect,
-      native_theme_extra_params, NativeColorScheme(color_scheme), accent_color);
+      canvas, GetColorProviderForPainting(color_scheme), NativeThemePart(part),
+      NativeThemeState(state), rect, native_theme_extra_params,
+      NativeColorScheme(color_scheme), accent_color);
 }
 
 void WebThemeEngineDefault::GetOverlayScrollbarStyle(ScrollbarStyle* style) {
@@ -229,7 +236,7 @@ absl::optional<SkColor> WebThemeEngineDefault::GetSystemColor(
       NativeSystemThemeColor(system_theme_color));
 }
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 // static
 void WebThemeEngineDefault::cacheScrollBarMetrics(
     int32_t vertical_scroll_bar_width,
@@ -249,9 +256,93 @@ ForcedColors WebThemeEngineDefault::GetForcedColors() const {
              : ForcedColors::kNone;
 }
 
+void WebThemeEngineDefault::OverrideForcedColorsTheme(bool is_dark_theme) {
+  const base::flat_map<ui::NativeTheme::SystemThemeColor, uint32_t> dark_theme{
+      {ui::NativeTheme::SystemThemeColor::kButtonFace, 4278190080},
+      {ui::NativeTheme::SystemThemeColor::kButtonText, 4294967295},
+      {ui::NativeTheme::SystemThemeColor::kGrayText, 4282380863},
+      {ui::NativeTheme::SystemThemeColor::kHighlight, 4279954431},
+      {ui::NativeTheme::SystemThemeColor::kHighlightText, 4278190080},
+      {ui::NativeTheme::SystemThemeColor::kHotlight, 4294967040},
+      {ui::NativeTheme::SystemThemeColor::kMenuHighlight, 4286578816},
+      {ui::NativeTheme::SystemThemeColor::kScrollbar, 4278190080},
+      {ui::NativeTheme::SystemThemeColor::kWindow, 4278190080},
+      {ui::NativeTheme::SystemThemeColor::kWindowText, 4294967295},
+  };
+  const base::flat_map<ui::NativeTheme::SystemThemeColor, uint32_t> light_theme{
+      {ui::NativeTheme::SystemThemeColor::kButtonFace, 4294967295},
+      {ui::NativeTheme::SystemThemeColor::kButtonText, 4278190080},
+      {ui::NativeTheme::SystemThemeColor::kGrayText, 4284481536},
+      {ui::NativeTheme::SystemThemeColor::kHighlight, 4281794670},
+      {ui::NativeTheme::SystemThemeColor::kHighlightText, 4294967295},
+      {ui::NativeTheme::SystemThemeColor::kHotlight, 4278190239},
+      {ui::NativeTheme::SystemThemeColor::kMenuHighlight, 4278190080},
+      {ui::NativeTheme::SystemThemeColor::kScrollbar, 4294967295},
+      {ui::NativeTheme::SystemThemeColor::kWindow, 4294967295},
+      {ui::NativeTheme::SystemThemeColor::kWindowText, 4278190080},
+  };
+  ui::NativeTheme::GetInstanceForWeb()->UpdateSystemColorInfo(
+      false, true, is_dark_theme ? dark_theme : light_theme);
+}
+
 void WebThemeEngineDefault::SetForcedColors(const ForcedColors forced_colors) {
   ui::NativeTheme::GetInstanceForWeb()->set_forced_colors(
       forced_colors == ForcedColors::kActive);
+}
+
+void WebThemeEngineDefault::ResetToSystemColors(
+    SystemColorInfoState system_color_info_state) {
+  base::flat_map<ui::NativeTheme::SystemThemeColor, uint32_t> colors;
+
+  for (const auto& color : system_color_info_state.colors) {
+    colors.insert({NativeSystemThemeColor(color.first), color.second});
+  }
+
+  ui::NativeTheme::GetInstanceForWeb()->UpdateSystemColorInfo(
+      system_color_info_state.is_dark_mode,
+      system_color_info_state.forced_colors, colors);
+}
+
+WebThemeEngine::SystemColorInfoState
+WebThemeEngineDefault::GetSystemColorInfo() {
+  WebThemeEngine::SystemColorInfoState state;
+  state.is_dark_mode =
+      ui::NativeTheme::GetInstanceForWeb()->ShouldUseDarkColors();
+  state.forced_colors =
+      ui::NativeTheme::GetInstanceForWeb()->InForcedColorsMode();
+
+  std::map<SystemThemeColor, uint32_t> colors;
+  auto native_theme_colors =
+      ui::NativeTheme::GetInstanceForWeb()->GetSystemColors();
+  for (const auto& color : native_theme_colors) {
+    colors.insert({WebThemeSystemThemeColor(color.first), color.second});
+  }
+  state.colors = colors;
+
+  return state;
+}
+
+bool WebThemeEngineDefault::UpdateColorProviders(
+    const ui::RendererColorMap& light_colors,
+    const ui::RendererColorMap& dark_colors) {
+  // Do not create new ColorProviders if the renderer color maps match the
+  // existing ColorProviders.
+  if (IsRendererColorMappingEquivalent(light_color_provider_, light_colors) &&
+      IsRendererColorMappingEquivalent(dark_color_provider_, dark_colors)) {
+    return false;
+  }
+
+  light_color_provider_ =
+      ui::CreateColorProviderFromRendererColorMap(light_colors);
+  dark_color_provider_ =
+      ui::CreateColorProviderFromRendererColorMap(dark_colors);
+  return true;
+}
+
+const ui::ColorProvider* WebThemeEngineDefault::GetColorProviderForPainting(
+    mojom::ColorScheme color_scheme) const {
+  return color_scheme == mojom::ColorScheme::kLight ? &light_color_provider_
+                                                    : &dark_color_provider_;
 }
 
 }  // namespace blink

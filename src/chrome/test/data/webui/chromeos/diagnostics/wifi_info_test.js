@@ -4,6 +4,7 @@
 
 import 'chrome://diagnostics/wifi_info.js';
 import {Network, SecurityType, WiFiStateProperties} from 'chrome://diagnostics/diagnostics_types.js';
+import {getSignalStrength} from 'chrome://diagnostics/diagnostics_utils.js';
 import {fakeDisconnectedWifiNetwork, fakeWifiNetwork, fakeWiFiStateProperties} from 'chrome://diagnostics/fake_data.js';
 
 import {assertEquals, assertFalse, assertTrue} from '../../chai_assert.js';
@@ -52,7 +53,7 @@ export function wifiInfoTestSuite() {
     return /** @type {!Network} */ (Object.assign({}, fakeWifiNetwork, {
       typeProperties: {
         wifi: wifiTypeProperties,
-      }
+      },
     }));
   }
 
@@ -76,7 +77,8 @@ export function wifiInfoTestSuite() {
       assertDataPointHasExpectedHeaderAndValue(
           wifiInfoElement, '#signalStrength',
           wifiInfoElement.i18n('networkSignalStrengthLabel'),
-          `${fakeWifiNetwork.typeProperties.wifi.signalStrength}`);
+          getSignalStrength(
+              fakeWifiNetwork.typeProperties.wifi.signalStrength));
       assertDataPointHasExpectedHeaderAndValue(
           wifiInfoElement, '#channel',
           wifiInfoElement.i18n('networkChannelLabel'),
@@ -184,6 +186,14 @@ export function wifiInfoTestSuite() {
   test('SignalStrengthZeroDisplaysEmptyString', () => {
     const testNetwork = getWifiNetworkWithWiFiStatePropertiesOf(
         /** @type {!WiFiStateProperties} */ ({signalStrength: 0}));
+    return initializeWifiInfo(testNetwork).then(() => {
+      assertEquals(getDataPointValue(wifiInfoElement, '#signalStrength'), '');
+    });
+  });
+
+  test('SignalStrengthOneDisplaysEmptyString', () => {
+    const testNetwork = getWifiNetworkWithWiFiStatePropertiesOf(
+        /** @type {!WiFiStateProperties} */ ({signalStrength: 1}));
     return initializeWifiInfo(testNetwork).then(() => {
       assertEquals(getDataPointValue(wifiInfoElement, '#signalStrength'), '');
     });

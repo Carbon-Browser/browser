@@ -5,9 +5,7 @@
 #ifndef CHROME_BROWSER_GUEST_VIEW_WEB_VIEW_CHROME_WEB_VIEW_PERMISSION_HELPER_DELEGATE_H_
 #define CHROME_BROWSER_GUEST_VIEW_WEB_VIEW_CHROME_WEB_VIEW_PERMISSION_HELPER_DELEGATE_H_
 
-#include "base/macros.h"
 #include "chrome/common/buildflags.h"
-#include "components/content_settings/core/common/content_settings.h"
 #include "content/public/browser/render_frame_host_receiver_set.h"
 #include "extensions/browser/guest_view/web_view/web_view_permission_helper.h"
 #include "extensions/browser/guest_view/web_view/web_view_permission_helper_delegate.h"
@@ -37,6 +35,12 @@ class ChromeWebViewPermissionHelperDelegate
 
   explicit ChromeWebViewPermissionHelperDelegate(
       WebViewPermissionHelper* web_view_permission_helper);
+
+  ChromeWebViewPermissionHelperDelegate(
+      const ChromeWebViewPermissionHelperDelegate&) = delete;
+  ChromeWebViewPermissionHelperDelegate& operator=(
+      const ChromeWebViewPermissionHelperDelegate&) = delete;
+
   ~ChromeWebViewPermissionHelperDelegate() override;
 
   // WebViewPermissionHelperDelegate implementation.
@@ -72,7 +76,7 @@ class ChromeWebViewPermissionHelperDelegate
 
   void OnGeolocationPermissionResponse(
       bool user_gesture,
-      base::OnceCallback<void(ContentSetting)> callback,
+      base::OnceCallback<void(blink::mojom::PermissionStatus)> callback,
       bool allow,
       const std::string& user_input);
 
@@ -100,8 +104,6 @@ class ChromeWebViewPermissionHelperDelegate
 
   base::WeakPtrFactory<ChromeWebViewPermissionHelperDelegate> weak_factory_{
       this};
-
-  DISALLOW_COPY_AND_ASSIGN(ChromeWebViewPermissionHelperDelegate);
 };
 
 }  // namespace extensions

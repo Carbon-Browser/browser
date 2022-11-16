@@ -7,6 +7,7 @@
 
 #include "base/memory/weak_ptr.h"
 #include "base/task/task_observer.h"
+#include "base/time/time.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/scheduler/common/cancelable_closure_holder.h"
 #include "third_party/blink/renderer/platform/scheduler/common/scheduler_helper.h"
@@ -85,7 +86,7 @@ class PLATFORM_EXPORT IdleHelper : public base::TaskObserver,
   };
 
   // The maximum length of an idle period.
-  static const int kMaximumIdlePeriodMillis = 50;
+  static constexpr base::TimeDelta kMaximumIdlePeriod = base::Milliseconds(50);
 
   // |helper| and |delegate| are not owned by IdleHelper object and must
   // outlive it.

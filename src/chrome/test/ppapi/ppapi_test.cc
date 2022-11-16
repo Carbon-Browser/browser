@@ -12,9 +12,9 @@
 #include "base/location.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
@@ -47,6 +47,7 @@
 #include "ppapi/shared_impl/ppapi_switches.h"
 #include "third_party/blink/public/common/input/synthetic_web_input_event_builders.h"
 #include "third_party/blink/public/common/input/web_input_event.h"
+#include "third_party/blink/public/common/switches.h"
 #include "ui/gl/gl_switches.h"
 
 using content::RenderViewHost;
@@ -198,7 +199,7 @@ GURL PPAPITestBase::GetTestFileUrl(const std::string& test_case) {
 
   GURL::Replacements replacements;
   std::string query = BuildQuery(std::string(), test_case);
-  replacements.SetQuery(query.c_str(), url::Component(0, query.size()));
+  replacements.SetQueryStr(query);
   return test_url.ReplaceComponents(replacements);
 }
 
@@ -293,6 +294,10 @@ void PPAPITest::SetUpCommandLine(base::CommandLine* command_line) {
   command_line->AppendSwitchASCII(switches::kAllowNaClSocketAPI, "127.0.0.1");
   if (in_process_)
     command_line->AppendSwitch(switches::kPpapiInProcess);
+
+  // TODO(https://crbug.com/1172495): Remove once NaCl code can be deleted.
+  command_line->AppendSwitchASCII(blink::switches::kBlinkSettings,
+                                  "allowNonEmptyNavigatorPlugins=true");
 }
 
 std::string PPAPITest::BuildQuery(const std::string& base,
@@ -315,7 +320,7 @@ void OutOfProcessPPAPITest::SetUpCommandLine(base::CommandLine* command_line) {
 }
 
 void OutOfProcessPPAPITest::RunTest(const std::string& test_case) {
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   // See crbug.com/1231528 for context.
   if (test_case == "Printing")
     return;
@@ -332,7 +337,7 @@ void OutOfProcessPPAPITest::RunTouchEventTest(const std::string& test_case) {
   RenderViewHost* rvh = browser()
                             ->tab_strip_model()
                             ->GetActiveWebContents()
-                            ->GetMainFrame()
+                            ->GetPrimaryMainFrame()
                             ->GetRenderViewHost();
   auto watcher = content::RenderViewHostTester::CreateInputWatcher(
       rvh, blink::WebInputEvent::Type::kTouchStart);
@@ -343,7 +348,7 @@ void OutOfProcessPPAPITest::RunTouchEventTest(const std::string& test_case) {
   browser()
       ->tab_strip_model()
       ->GetActiveWebContents()
-      ->GetMainFrame()
+      ->GetPrimaryMainFrame()
       ->InsertVisualStateCallback(base::BindOnce(
           [](base::OnceClosure quit_closure, bool result) {
             EXPECT_TRUE(result);
@@ -462,27 +467,6 @@ std::string PPAPINaClPNaClTest::BuildQuery(const std::string& base,
 void PPAPIPrivateNaClPNaClTest::SetUpCommandLine(
     base::CommandLine* command_line) {
   PPAPINaClPNaClTest::SetUpCommandLine(command_line);
-  AddPrivateSwitches(command_line);
-}
-
-void PPAPINaClPNaClNonSfiTest::SetUpCommandLine(
-    base::CommandLine* command_line) {
-  PPAPINaClTest::SetUpCommandLine(command_line);
-#if BUILDFLAG(ENABLE_NACL)
-  command_line->AppendSwitch(switches::kEnableNaClNonSfiMode);
-#endif
-}
-
-std::string PPAPINaClPNaClNonSfiTest::BuildQuery(
-    const std::string& base,
-    const std::string& test_case) {
-  return base::StringPrintf("%smode=nacl_pnacl_nonsfi&testcase=%s",
-                            base.c_str(), test_case.c_str());
-}
-
-void PPAPIPrivateNaClPNaClNonSfiTest::SetUpCommandLine(
-    base::CommandLine* command_line) {
-  PPAPINaClPNaClNonSfiTest::SetUpCommandLine(command_line);
   AddPrivateSwitches(command_line);
 }
 

@@ -21,7 +21,7 @@
 #include "chrome/common/extensions/api/file_manager_private.h"
 #include "chrome/common/extensions/api/file_manager_private_internal.h"
 #include "chrome/services/printing/public/mojom/printing_service.mojom.h"
-#include "components/signin/public/identity_manager/consent_level.h"
+#include "components/signin/public/base/consent_level.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "mojo/public/cpp/bindings/callback_helpers.h"
@@ -31,7 +31,10 @@
 #include "storage/common/file_system/file_system_types.h"
 #include "storage/common/file_system/file_system_util.h"
 #include "third_party/skia/include/core/SkBitmap.h"
+#include "third_party/skia/include/core/SkData.h"
+#include "third_party/skia/include/core/SkEncodedImageFormat.h"
 #include "third_party/skia/include/core/SkImage.h"
+#include "third_party/skia/include/core/SkRefCnt.h"
 #include "ui/gfx/geometry/size.h"
 
 namespace extensions {
@@ -122,8 +125,7 @@ void FileManagerPrivateGetThumbnailFunction::SendEncodedThumbnail(
 
 FileManagerPrivateInternalGetDriveThumbnailFunction::
     FileManagerPrivateInternalGetDriveThumbnailFunction() {
-  SetWarningThresholds(base::TimeDelta::FromSeconds(5),
-                       base::TimeDelta::FromMinutes(1));
+  SetWarningThresholds(base::Seconds(5), base::Minutes(1));
 }
 
 FileManagerPrivateInternalGetDriveThumbnailFunction::

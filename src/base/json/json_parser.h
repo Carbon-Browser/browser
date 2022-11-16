@@ -15,8 +15,8 @@
 #include "base/compiler_specific.h"
 #include "base/gtest_prod_util.h"
 #include "base/json/json_common.h"
-#include "base/macros.h"
 #include "base/strings/string_piece.h"
+#include "base/third_party/icu/icu_utf.h"
 #include "base/values.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -55,7 +55,6 @@ class BASE_EXPORT JSONParser {
     JSON_UNEXPECTED_DATA_AFTER_ROOT,
     JSON_UNSUPPORTED_ENCODING,
     JSON_UNQUOTED_DICTIONARY_KEY,
-    JSON_TOO_LARGE,
     JSON_UNREPRESENTABLE_NUMBER,
     JSON_PARSE_ERROR_COUNT
   };
@@ -69,10 +68,13 @@ class BASE_EXPORT JSONParser {
   static const char kUnexpectedDataAfterRoot[];
   static const char kUnsupportedEncoding[];
   static const char kUnquotedDictionaryKey[];
-  static const char kInputTooLarge[];
   static const char kUnrepresentableNumber[];
 
   explicit JSONParser(int options, size_t max_depth = kAbsoluteMaxDepth);
+
+  JSONParser(const JSONParser&) = delete;
+  JSONParser& operator=(const JSONParser&) = delete;
+
   ~JSONParser();
 
   // Parses the input string according to the set options and returns the
@@ -132,7 +134,7 @@ class BASE_EXPORT JSONParser {
     // Appends the Unicode code point |point| to the string, either by
     // increasing the |length_| of the string if the string has not been
     // converted, or by appending the UTF8 bytes for the code point.
-    void Append(uint32_t point);
+    void Append(base_icu::UChar32 point);
 
     // Converts the builder from its default StringPiece to a full std::string,
     // performing a copy. Once a builder is converted, it cannot be made a
@@ -211,7 +213,7 @@ class BASE_EXPORT JSONParser {
   // bytes (parser is wound to the first character of a HEX sequence, with the
   // potential for consuming another \uXXXX for a surrogate). Returns true on
   // success and places the code point |out_code_point|, and false on failure.
-  bool DecodeUTF16(uint32_t* out_code_point);
+  bool DecodeUTF16(base_icu::UChar32* out_code_point);
 
   // Assuming that the parser is wound to the start of a valid JSON number,
   // this parses and converts it to either an int or double value.
@@ -250,7 +252,7 @@ class BASE_EXPORT JSONParser {
   StringPiece input_;
 
   // The index in the input stream to which the parser is wound.
-  int index_;
+  size_t index_;
 
   // The number of times the parser has recursed (current stack depth).
   size_t stack_depth_;
@@ -259,7 +261,7 @@ class BASE_EXPORT JSONParser {
   int line_number_;
 
   // The last value of |index_| on the previous line.
-  int index_last_line_;
+  size_t index_last_line_;
 
   // Error information.
   JsonParseError error_code_;
@@ -274,8 +276,6 @@ class BASE_EXPORT JSONParser {
   FRIEND_TEST_ALL_PREFIXES(JSONParserTest, ConsumeLiterals);
   FRIEND_TEST_ALL_PREFIXES(JSONParserTest, ConsumeNumbers);
   FRIEND_TEST_ALL_PREFIXES(JSONParserTest, ErrorMessages);
-
-  DISALLOW_COPY_AND_ASSIGN(JSONParser);
 };
 
 // Used when decoding and an invalid utf-8 sequence is encountered.

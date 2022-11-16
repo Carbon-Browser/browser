@@ -11,7 +11,7 @@
 #include <unordered_set>
 
 #include "base/callback.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/sequence_checker.h"
 #include "base/time/time.h"
@@ -33,9 +33,7 @@ class NetworkQualityEstimatorParams;
 class NetworkQualityEstimator;
 class URLRequest;
 
-namespace nqe {
-
-namespace internal {
+namespace nqe::internal {
 
 // Makes throughput observations. Polls NetworkActivityMonitor
 // (TrafficStats on Android) to count number of bits received over throughput
@@ -67,6 +65,10 @@ class NET_EXPORT_PRIVATE ThroughputAnalyzer {
       ThroughputObservationCallback throughput_observation_callback,
       const base::TickClock* tick_clock,
       const NetLogWithSource& net_log);
+
+  ThroughputAnalyzer(const ThroughputAnalyzer&) = delete;
+  ThroughputAnalyzer& operator=(const ThroughputAnalyzer&) = delete;
+
   virtual ~ThroughputAnalyzer();
 
   // Notifies |this| that the headers of |request| are about to be sent.
@@ -191,10 +193,10 @@ class NET_EXPORT_PRIVATE ThroughputAnalyzer {
   void BoundRequestsSize();
 
   // Guaranteed to be non-null during the duration of |this|.
-  const NetworkQualityEstimator* network_quality_estimator_;
+  const raw_ptr<const NetworkQualityEstimator> network_quality_estimator_;
 
   // Guaranteed to be non-null during the duration of |this|.
-  const NetworkQualityEstimatorParams* params_;
+  const raw_ptr<const NetworkQualityEstimatorParams> params_;
 
   scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
 
@@ -202,7 +204,8 @@ class NET_EXPORT_PRIVATE ThroughputAnalyzer {
   ThroughputObservationCallback throughput_observation_callback_;
 
   // Guaranteed to be non-null during the lifetime of |this|.
-  const base::TickClock* tick_clock_;
+  // This isn't a const pointer since SetTickClockForTesting() modifies it.
+  raw_ptr<const base::TickClock> tick_clock_;
 
   // Time when last connection change was observed.
   base::TimeTicks last_connection_change_;
@@ -213,7 +216,7 @@ class NET_EXPORT_PRIVATE ThroughputAnalyzer {
 
   // Number of bits received prior to |start_| as reported by
   // NetworkActivityMonitor.
-  int64_t bits_received_at_window_start_;
+  int64_t bits_received_at_window_start_ = 0;
 
   // Container that holds active requests that reduce the accuracy of
   // throughput computation. These requests are not used in throughput
@@ -229,7 +232,7 @@ class NET_EXPORT_PRIVATE ThroughputAnalyzer {
   ResponseContentSizes response_content_sizes_;
 
   // The running total of response content size for all inflight requests.
-  int64_t total_response_content_size_;
+  int64_t total_response_content_size_ = 0;
 
   // Last time when the check for hanging requests was run.
   base::TimeTicks last_hanging_request_check_;
@@ -238,22 +241,18 @@ class NET_EXPORT_PRIVATE ThroughputAnalyzer {
   // observations until Chromium is restarted. This may happen if the throughput
   // analyzer has lost track of the requests that degrade throughput computation
   // accuracy.
-  bool disable_throughput_measurements_;
+  bool disable_throughput_measurements_ = false;
 
   // Determines if the requests to local host can be used in estimating the
   // network quality. Set to true only for tests.
-  bool use_localhost_requests_for_tests_;
+  bool use_localhost_requests_for_tests_ = false;
 
   SEQUENCE_CHECKER(sequence_checker_);
 
   NetLogWithSource net_log_;
-
-  DISALLOW_COPY_AND_ASSIGN(ThroughputAnalyzer);
 };
 
-}  // namespace internal
-
-}  // namespace nqe
+}  // namespace nqe::internal
 
 }  // namespace net
 

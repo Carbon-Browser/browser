@@ -8,7 +8,7 @@
 #include <memory>
 #include <string>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/aura/window_tree_host.h"
 #include "ui/views/views_export.h"
 #include "ui/views/widget/desktop_aura/desktop_window_tree_host.h"
@@ -54,6 +54,10 @@ class VIEWS_EXPORT DesktopWindowTreeHostWin
   DesktopWindowTreeHostWin(
       internal::NativeWidgetDelegate* native_widget_delegate,
       DesktopNativeWidgetAura* desktop_native_widget_aura);
+
+  DesktopWindowTreeHostWin(const DesktopWindowTreeHostWin&) = delete;
+  DesktopWindowTreeHostWin& operator=(const DesktopWindowTreeHostWin&) = delete;
+
   ~DesktopWindowTreeHostWin() override;
 
   // A way of converting an HWND into a content window.
@@ -154,6 +158,8 @@ class VIEWS_EXPORT DesktopWindowTreeHostWin
   bool ShouldUpdateWindowTransparency() const override;
   bool ShouldUseDesktopNativeCursorManager() const override;
   bool ShouldCreateVisibilityController() const override;
+  DesktopNativeCursorManager* GetSingletonDesktopNativeCursorManager() override;
+  void SetBoundsInDIP(const gfx::Rect& bounds) override;
 
   // Overridden from aura::WindowTreeHost:
   ui::EventSource* GetEventSource() override;
@@ -162,6 +168,7 @@ class VIEWS_EXPORT DesktopWindowTreeHostWin
   void HideImpl() override;
   gfx::Rect GetBoundsInPixels() const override;
   void SetBoundsInPixels(const gfx::Rect& bounds) override;
+  gfx::Rect GetBoundsInAcceleratedWidgetPixelCoordinates() override;
   gfx::Point GetLocationOnScreenInPixels() const override;
   void SetCapture() override;
   void ReleaseCapture() override;
@@ -281,12 +288,12 @@ class VIEWS_EXPORT DesktopWindowTreeHostWin
 
   // TODO(beng): Consider providing an interface to DesktopNativeWidgetAura
   //             instead of providing this route back to Widget.
-  internal::NativeWidgetDelegate* native_widget_delegate_;
+  raw_ptr<internal::NativeWidgetDelegate> native_widget_delegate_;
 
-  DesktopNativeWidgetAura* desktop_native_widget_aura_;
+  raw_ptr<DesktopNativeWidgetAura> desktop_native_widget_aura_;
 
   // Owned by DesktopNativeWidgetAura.
-  DesktopDragDropClientWin* drag_drop_client_;
+  raw_ptr<DesktopDragDropClientWin> drag_drop_client_;
 
   // When certain windows are being shown, we augment the window size
   // temporarily for animation. The following two members contain the top left
@@ -319,7 +326,7 @@ class VIEWS_EXPORT DesktopWindowTreeHostWin
 
   // Owned by TooltipController, but we need to forward events to it so we keep
   // a reference.
-  corewm::TooltipWin* tooltip_;
+  raw_ptr<corewm::TooltipWin> tooltip_;
 
   // Visibility of the cursor. On Windows we can have multiple root windows and
   // the implementation of ::ShowCursor() is based on a counter, so making this
@@ -336,11 +343,6 @@ class VIEWS_EXPORT DesktopWindowTreeHostWin
   // become activated.
   bool wants_mouse_events_when_inactive_ = false;
 
-  // The location of the most recent mouse event on an occluded window. This is
-  // used to generate the OccludedWindowMouseEvents stat and can be removed
-  // when that stat is no longer tracked.
-  gfx::Point occluded_window_mouse_event_loc_;
-
   // Set to true when DesktopDragDropClientWin starts a touch-initiated drag
   // drop and false when it finishes. While in touch drag, if touch move events
   // are received, the equivalent mouse events are generated, because ole32
@@ -352,8 +354,6 @@ class VIEWS_EXPORT DesktopWindowTreeHostWin
   // The z-order level of the window; the window exhibits "always on top"
   // behavior if > 0.
   ui::ZOrderLevel z_order_ = ui::ZOrderLevel::kNormal;
-
-  DISALLOW_COPY_AND_ASSIGN(DesktopWindowTreeHostWin);
 };
 
 }  // namespace views

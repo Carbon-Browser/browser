@@ -5,11 +5,10 @@
 #ifndef CHROME_BROWSER_ASH_DBUS_METRICS_EVENT_SERVICE_PROVIDER_H_
 #define CHROME_BROWSER_ASH_DBUS_METRICS_EVENT_SERVICE_PROVIDER_H_
 
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "chrome/browser/resource_coordinator/tab_lifecycle_observer.h"
-#include "chromeos/dbus/metrics_event/metrics_event.pb.h"
-#include "chromeos/dbus/services/cros_dbus_service.h"
+#include "chromeos/ash/components/dbus/metrics_event/metrics_event.pb.h"
+#include "chromeos/ash/components/dbus/services/cros_dbus_service.h"
 #include "dbus/exported_object.h"
 
 namespace ash {
@@ -22,6 +21,11 @@ class MetricsEventServiceProvider
       public resource_coordinator::TabLifecycleObserver {
  public:
   MetricsEventServiceProvider();
+
+  MetricsEventServiceProvider(const MetricsEventServiceProvider&) = delete;
+  MetricsEventServiceProvider& operator=(const MetricsEventServiceProvider&) =
+      delete;
+
   ~MetricsEventServiceProvider() override;
 
   // CrosDBusService::ServiceProviderInterface overrides:
@@ -38,8 +42,6 @@ class MetricsEventServiceProvider
 
   // A reference on ExportedObject for sending signals.
   scoped_refptr<dbus::ExportedObject> exported_object_;
-
-  DISALLOW_COPY_AND_ASSIGN(MetricsEventServiceProvider);
 };
 
 }  // namespace ash

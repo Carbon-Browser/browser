@@ -42,6 +42,9 @@ class OriginAccessListTest : public testing::Test {
         https_google_origin_(url::Origin::Create(GURL("https://google.com"))),
         source_origin_(url::Origin::Create(GURL("https://chromium.org"))) {}
 
+  OriginAccessListTest(const OriginAccessListTest&) = delete;
+  OriginAccessListTest& operator=(const OriginAccessListTest&) = delete;
+
   ~OriginAccessListTest() override = default;
 
  protected:
@@ -130,8 +133,6 @@ class OriginAccessListTest : public testing::Test {
   url::Origin source_origin_;
 
   OriginAccessList list_;
-
-  DISALLOW_COPY_AND_ASSIGN(OriginAccessListTest);
 };
 
 TEST_F(OriginAccessListTest, IsAccessAllowedWithPort) {
@@ -262,6 +263,20 @@ TEST_F(OriginAccessListTest, IsPriorityRespected) {
                     mojom::CorsOriginAccessMatchPriority::kMediumPriority);
   EXPECT_TRUE(IsAllowed(https_example_origin()));
   EXPECT_FALSE(IsAllowed(https_sub_example_origin()));
+}
+
+TEST_F(OriginAccessListTest, BlockWhenAllowAndBlockHaveSamePriority) {
+  AddAllowListEntry("https", "example.com", kAnyPort, kAllowSubdomains,
+                    kAllowAnyPort,
+                    mojom::CorsOriginAccessMatchPriority::kLowPriority);
+  EXPECT_TRUE(IsAllowed(https_example_origin()));
+
+  // Add a blocklist rule with the same priority. We should default to blocking
+  // access.
+  AddBlockListEntry("https", "example.com", kAnyPort, kAllowSubdomains,
+                    kAllowAnyPort,
+                    mojom::CorsOriginAccessMatchPriority::kLowPriority);
+  EXPECT_FALSE(IsAllowed(https_example_origin()));
 }
 
 TEST_F(OriginAccessListTest, IsPriorityRespectedReverse) {

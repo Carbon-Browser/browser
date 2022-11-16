@@ -5,6 +5,7 @@
 #include "ash/assistant/ui/main_stage/assistant_card_element_view.h"
 
 #include <memory>
+#include <tuple>
 
 #include "ash/assistant/model/ui/assistant_card_element.h"
 #include "ash/assistant/ui/assistant_ui_constants.h"
@@ -29,6 +30,9 @@ namespace {
 using assistant::util::DeepLinkParam;
 using assistant::util::DeepLinkType;
 
+constexpr char kAssistantCardElementHistogram[] =
+    "Ash.Assistant.AnimationSmoothness.CardElement";
+
 // Helpers ---------------------------------------------------------------------
 
 void CreateAndSendMouseClick(aura::WindowTreeHost* host,
@@ -51,7 +55,7 @@ void CreateAndSendMouseClick(aura::WindowTreeHost* host,
                                ui::EF_LEFT_MOUSE_BUTTON);
 
   // Send an ET_MOUSE_RELEASED event.
-  ignore_result(host->GetEventSink()->OnEventFromSource(&release_event));
+  std::ignore = host->GetEventSink()->OnEventFromSource(&release_event);
 }
 
 }  // namespace
@@ -76,6 +80,10 @@ const char* AssistantCardElementView::GetClassName() const {
 }
 
 ui::Layer* AssistantCardElementView::GetLayerForAnimating() {
+  // native_view() can be nullptr if this runs in unit test.
+  if (!native_view())
+    return nullptr;
+
   return native_view()->layer();
 }
 
@@ -84,6 +92,10 @@ std::string AssistantCardElementView::ToStringForTesting() const {
 }
 
 void AssistantCardElementView::AddedToWidget() {
+  // native_view() can be nullptr if this runs in unit test.
+  if (!native_view())
+    return;
+
   aura::Window* const top_level_window = native_view()->GetToplevelWindow();
 
   // Find the window for the Assistant card.
@@ -198,7 +210,7 @@ void AssistantCardElementView::InitLayout() {
 
 std::unique_ptr<ElementAnimator> AssistantCardElementView::CreateAnimator() {
   return std::make_unique<AssistantUiElementViewAnimator>(
-      this, assistant::ui::kAssistantCardElementHistogram);
+      this, kAssistantCardElementHistogram);
 }
 
 }  // namespace ash

@@ -10,7 +10,6 @@
 
 #include "ash/components/audio/audio_devices_pref_handler.h"
 #include "base/component_export.h"
-#include "base/macros.h"
 #include "base/observer_list.h"
 #include "base/values.h"
 #include "components/prefs/pref_change_registrar.h"
@@ -27,6 +26,10 @@ class COMPONENT_EXPORT(ASH_COMPONENTS_AUDIO) AudioDevicesPrefHandlerImpl
  public:
   // |local_state| is the device-wide preference service.
   explicit AudioDevicesPrefHandlerImpl(PrefService* local_state);
+
+  AudioDevicesPrefHandlerImpl(const AudioDevicesPrefHandlerImpl&) = delete;
+  AudioDevicesPrefHandlerImpl& operator=(const AudioDevicesPrefHandlerImpl&) =
+      delete;
 
   // Overridden from AudioDevicesPrefHandler.
   double GetOutputVolumeValue(const AudioDevice* device) override;
@@ -46,7 +49,7 @@ class COMPONENT_EXPORT(ASH_COMPONENTS_AUDIO) AudioDevicesPrefHandlerImpl
   bool GetNoiseCancellationState() override;
   void SetNoiseCancellationState(bool noise_cancellation_state) override;
 
-  bool GetAudioOutputAllowedValue() override;
+  bool GetAudioOutputAllowedValue() const override;
 
   void AddAudioPrefObserver(AudioPrefObserver* observer) override;
   void RemoveAudioPrefObserver(AudioPrefObserver* observer) override;
@@ -111,17 +114,15 @@ class COMPONENT_EXPORT(ASH_COMPONENTS_AUDIO) AudioDevicesPrefHandlerImpl
   // Notifies the AudioPrefObserver for audio policy pref changes.
   void NotifyAudioPolicyChange();
 
-  std::unique_ptr<base::DictionaryValue> device_mute_settings_;
-  std::unique_ptr<base::DictionaryValue> device_volume_settings_;
-  std::unique_ptr<base::DictionaryValue> device_gain_settings_;
-  std::unique_ptr<base::DictionaryValue> device_state_settings_;
+  base::Value device_mute_settings_;
+  base::Value device_volume_settings_;
+  base::Value device_gain_settings_;
+  base::Value device_state_settings_;
 
   PrefService* local_state_;  // not owned
 
   PrefChangeRegistrar pref_change_registrar_;
   base::ObserverList<AudioPrefObserver>::Unchecked observers_;
-
-  DISALLOW_COPY_AND_ASSIGN(AudioDevicesPrefHandlerImpl);
 };
 
 }  // namespace ash

@@ -12,9 +12,7 @@
 #include <vector>
 
 #include "base/callback_forward.h"
-#include "base/compiler_specific.h"  // for WARN_UNUSED_RESULT
 #include "base/containers/span.h"
-#include "base/macros.h"
 #include "base/memory/scoped_refptr.h"
 #include "net/base/net_export.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -38,7 +36,10 @@ class NET_EXPORT WebSocketEventInterface {
  public:
   typedef int WebSocketMessageType;
 
-  virtual ~WebSocketEventInterface() {}
+  WebSocketEventInterface(const WebSocketEventInterface&) = delete;
+  WebSocketEventInterface& operator=(const WebSocketEventInterface&) = delete;
+
+  virtual ~WebSocketEventInterface() = default;
 
   // Called when a URLRequest is created for handshaking.
   virtual void OnCreateURLRequest(URLRequest* request) = 0;
@@ -116,7 +117,7 @@ class NET_EXPORT WebSocketEventInterface {
   // due to layering constraints).
   class NET_EXPORT SSLErrorCallbacks {
    public:
-    virtual ~SSLErrorCallbacks() {}
+    virtual ~SSLErrorCallbacks() = default;
 
     // Cancels the SSL response in response to the error.
     virtual void CancelSSLRequest(int error, const SSLInfo* ssl_info) = 0;
@@ -155,10 +156,7 @@ class NET_EXPORT WebSocketEventInterface {
       absl::optional<AuthCredentials>* credentials) = 0;
 
  protected:
-  WebSocketEventInterface() {}
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(WebSocketEventInterface);
+  WebSocketEventInterface() = default;
 };
 
 }  // namespace net

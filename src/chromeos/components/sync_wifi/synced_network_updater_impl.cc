@@ -7,14 +7,14 @@
 #include "base/bind.h"
 #include "base/guid.h"
 #include "base/values.h"
+#include "chromeos/ash/components/network/network_configuration_handler.h"
+#include "chromeos/ash/components/network/network_event_log.h"
+#include "chromeos/ash/components/network/network_handler.h"
+#include "chromeos/ash/components/network/network_metadata_store.h"
+#include "chromeos/ash/components/network/network_profile_handler.h"
+#include "chromeos/ash/components/network/network_state.h"
 #include "chromeos/components/sync_wifi/network_type_conversions.h"
 #include "chromeos/components/sync_wifi/timer_factory.h"
-#include "chromeos/network/network_configuration_handler.h"
-#include "chromeos/network/network_event_log.h"
-#include "chromeos/network/network_handler.h"
-#include "chromeos/network/network_metadata_store.h"
-#include "chromeos/network/network_profile_handler.h"
-#include "chromeos/network/network_state.h"
 #include "components/device_event_log/device_event_log.h"
 #include "components/proxy_config/proxy_config_dictionary.h"
 #include "third_party/cros_system_api/dbus/shill/dbus-constants.h"
@@ -26,7 +26,7 @@ namespace sync_wifi {
 namespace {
 
 const int kMaxRetries = 3;
-constexpr base::TimeDelta kTimeout = base::TimeDelta::FromMinutes(1);
+constexpr base::TimeDelta kTimeout = base::Minutes(1);
 
 }  // namespace
 
@@ -159,8 +159,7 @@ void SyncedNetworkUpdaterImpl::OnConfigureNetworkResult(
         NetworkHandler::Get()->network_metadata_store();
     metadata_store->SetIsConfiguredBySync(*network_guid);
     metadata_store->SetLastConnectedTimestamp(
-        *network_guid,
-        base::TimeDelta::FromMilliseconds(proto.last_connected_timestamp()));
+        *network_guid, base::Milliseconds(proto.last_connected_timestamp()));
   } else {
     NET_LOG(ERROR) << "Failed to configure network "
                    << NetworkId(NetworkStateFromNetworkIdentifier(id))
@@ -184,8 +183,7 @@ void SyncedNetworkUpdaterImpl::OnSetPropertiesResult(
         NetworkHandler::Get()->network_metadata_store();
     metadata_store->SetIsConfiguredBySync(network_guid);
     metadata_store->SetLastConnectedTimestamp(
-        network_guid,
-        base::TimeDelta::FromMilliseconds(proto.last_connected_timestamp()));
+        network_guid, base::Milliseconds(proto.last_connected_timestamp()));
   } else {
     NET_LOG(ERROR) << "Failed to update network "
                    << NetworkGuidId(network_guid);

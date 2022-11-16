@@ -25,8 +25,10 @@
 
 #include <iterator>
 
+#include "base/check_op.h"
 #include "base/dcheck_is_on.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/notreached.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/dom/text.h"
 #include "third_party/blink/renderer/core/layout/layout_object.h"
@@ -89,10 +91,11 @@ class CORE_EXPORT LayoutText : public LayoutObject {
                                           scoped_refptr<const ComputedStyle>,
                                           LegacyLayout);
 
-  static LayoutText* CreateAnonymous(Document&,
-                                     scoped_refptr<const ComputedStyle>,
-                                     scoped_refptr<StringImpl>,
-                                     LegacyLayout legacy);
+  static LayoutText* CreateAnonymousForFormattedText(
+      Document&,
+      scoped_refptr<const ComputedStyle>,
+      scoped_refptr<StringImpl>,
+      LegacyLayout legacy);
 
   const char* GetName() const override {
     NOT_DESTROYED();
@@ -136,15 +139,15 @@ class CORE_EXPORT LayoutText : public LayoutObject {
   void DirtyOrDeleteLineBoxesIfNeeded(bool full_layout);
   void DirtyLineBoxes();
 
-  void AbsoluteQuads(Vector<FloatQuad>&,
+  void AbsoluteQuads(Vector<gfx::QuadF>&,
                      MapCoordinatesFlags mode = 0) const final;
-  void AbsoluteQuadsForRange(Vector<FloatQuad>&,
+  void AbsoluteQuadsForRange(Vector<gfx::QuadF>&,
                              unsigned start_offset = 0,
                              unsigned end_offset = INT_MAX) const;
-  FloatRect LocalBoundingBoxRectForAccessibility() const final;
+  gfx::RectF LocalBoundingBoxRectForAccessibility() const final;
 
   enum ClippingOption { kNoClipping, kClipToEllipsis };
-  void LocalQuadsInFlippedBlocksDirection(Vector<FloatQuad>&,
+  void LocalQuadsInFlippedBlocksDirection(Vector<gfx::QuadF>&,
                                           ClippingOption = kNoClipping) const;
 
   PositionWithAffinity PositionForPoint(const PhysicalOffset&) const override;
@@ -192,7 +195,7 @@ class CORE_EXPORT LayoutText : public LayoutObject {
                       LayoutUnit x_pos,
                       TextDirection,
                       HashSet<const SimpleFontData*>* fallback_fonts = nullptr,
-                      FloatRect* glyph_bounds = nullptr,
+                      gfx::RectF* glyph_bounds = nullptr,
                       float expansion = 0) const;
   virtual float Width(unsigned from,
                       unsigned len,
@@ -200,7 +203,7 @@ class CORE_EXPORT LayoutText : public LayoutObject {
                       TextDirection,
                       bool first_line = false,
                       HashSet<const SimpleFontData*>* fallback_fonts = nullptr,
-                      FloatRect* glyph_bounds = nullptr,
+                      gfx::RectF* glyph_bounds = nullptr,
                       float expansion = 0) const;
 
   float MinLogicalWidth() const;
@@ -487,7 +490,7 @@ class CORE_EXPORT LayoutText : public LayoutObject {
   void ComputePreferredLogicalWidths(
       float lead_width,
       HashSet<const SimpleFontData*>& fallback_fonts,
-      FloatRect& glyph_bounds);
+      gfx::RectF& glyph_bounds);
 
   // Make length() private so that callers that have a LayoutText*
   // will use the more efficient textLength() instead, while
@@ -509,7 +512,7 @@ class CORE_EXPORT LayoutText : public LayoutObject {
   bool NodeAtPoint(HitTestResult&,
                    const HitTestLocation&,
                    const PhysicalOffset&,
-                   HitTestAction) final {
+                   HitTestPhase) final {
     NOT_DESTROYED();
     NOTREACHED();
     return false;
@@ -523,7 +526,7 @@ class CORE_EXPORT LayoutText : public LayoutObject {
                       float text_width_so_far,
                       TextDirection,
                       HashSet<const SimpleFontData*>* fallback_fonts,
-                      FloatRect* glyph_bounds_accumulation,
+                      gfx::RectF* glyph_bounds_accumulation,
                       float expansion = 0) const;
 
   void ApplyTextTransform();
@@ -574,7 +577,7 @@ class CORE_EXPORT LayoutText : public LayoutObject {
   unsigned is_text_fragment_ : 1;
 
  private:
-  ContentCaptureManager* GetContentCaptureManager();
+  ContentCaptureManager* GetOrResetContentCaptureManager();
   void DetachAbstractInlineTextBoxes();
 
   // Used for LayoutNG with accessibility. True if inline fragments are

@@ -8,6 +8,8 @@ import android.content.Intent;
 import android.view.ActionMode;
 import android.view.textclassifier.TextClassifier;
 
+import org.chromium.base.supplier.ObservableSupplier;
+import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.content_public.browser.ActionModeCallbackHelper;
 import org.chromium.content_public.browser.SelectionClient;
 import org.chromium.content_public.browser.SelectionPopupController;
@@ -20,7 +22,7 @@ public class TestSelectionPopupController implements SelectionPopupController {
     public TestSelectionPopupController() {}
 
     @Override
-    public void setActionModeCallback(ActionMode.Callback callback) {}
+    public void setActionModeCallback(ActionMode.Callback2 callback) {}
 
     @Override
     public void setNonSelectionActionModeCallback(ActionMode.Callback callback) {}
@@ -51,6 +53,11 @@ public class TestSelectionPopupController implements SelectionPopupController {
     @Override
     public boolean isSelectActionBarShowing() {
         return false;
+    }
+
+    @Override
+    public ObservableSupplier<Boolean> isSelectActionBarShowingSupplier() {
+        return new ObservableSupplierImpl<>();
     }
 
     @Override

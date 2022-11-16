@@ -8,6 +8,7 @@
 
 #include "base/files/file_path.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/scoped_feature_list.h"
@@ -40,17 +41,24 @@ const char kRemoteUrl[] = "www.example.com";
 class MockDelegate : public AnnouncementNotificationService::Delegate {
  public:
   MockDelegate() = default;
+
+  MockDelegate(const MockDelegate&) = delete;
+  MockDelegate& operator=(const MockDelegate&) = delete;
+
   ~MockDelegate() override = default;
   MOCK_METHOD0(ShowNotification, void());
   MOCK_METHOD0(IsFirstRun, bool());
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(MockDelegate);
 };
 
 class AnnouncementNotificationServiceTest : public testing::Test {
  public:
   AnnouncementNotificationServiceTest() = default;
+
+  AnnouncementNotificationServiceTest(
+      const AnnouncementNotificationServiceTest&) = delete;
+  AnnouncementNotificationServiceTest& operator=(
+      const AnnouncementNotificationServiceTest&) = delete;
+
   ~AnnouncementNotificationServiceTest() override = default;
 
  protected:
@@ -157,8 +165,7 @@ class AnnouncementNotificationServiceTest : public testing::Test {
   std::unique_ptr<AnnouncementNotificationService> service_;
   std::unique_ptr<TestingPrefServiceSimple> pref_service_;
   std::unique_ptr<TestingProfile> test_profile_;
-  MockDelegate* delegate_ = nullptr;
-  DISALLOW_COPY_AND_ASSIGN(AnnouncementNotificationServiceTest);
+  raw_ptr<MockDelegate> delegate_ = nullptr;
 };
 
 TEST_F(AnnouncementNotificationServiceTest, RequireSignOut) {
@@ -316,10 +323,13 @@ class AnnouncementNotificationServiceVersionTest
       public ::testing::WithParamInterface<VersionTestParam> {
  public:
   AnnouncementNotificationServiceVersionTest() = default;
-  ~AnnouncementNotificationServiceVersionTest() override = default;
 
- private:
-  DISALLOW_COPY_AND_ASSIGN(AnnouncementNotificationServiceVersionTest);
+  AnnouncementNotificationServiceVersionTest(
+      const AnnouncementNotificationServiceVersionTest&) = delete;
+  AnnouncementNotificationServiceVersionTest& operator=(
+      const AnnouncementNotificationServiceVersionTest&) = delete;
+
+  ~AnnouncementNotificationServiceVersionTest() override = default;
 };
 
 const VersionTestParam kVersionTestParams[] = {

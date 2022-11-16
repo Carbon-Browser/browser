@@ -21,13 +21,13 @@
 #import "ios/chrome/browser/snapshots/snapshot_browser_agent.h"
 #import "ios/chrome/browser/ui/browser_view/browser_coordinator.h"
 #import "ios/chrome/browser/ui/browser_view/browser_view_controller.h"
-#import "ios/chrome/browser/ui/browser_view/browser_view_controller_dependency_factory.h"
 #import "ios/chrome/browser/ui/commands/application_commands.h"
 #import "ios/chrome/browser/ui/commands/browsing_data_commands.h"
 #import "ios/chrome/browser/ui/commands/command_dispatcher.h"
 #import "ios/chrome/browser/ui/incognito_reauth/incognito_reauth_scene_agent.h"
 #import "ios/chrome/browser/ui/main/scene_state.h"
 #import "ios/chrome/browser/ui/main/scene_state_browser_agent.h"
+#import "ios/chrome/browser/ui/settings/sync/utils/sync_presenter.h"
 #import "ios/chrome/browser/web_state_list/web_state_list.h"
 
 #if !defined(__has_feature) || !__has_feature(objc_arc)
@@ -60,6 +60,10 @@
 
 - (BrowserViewController*)bvc {
   return self.coordinator.viewController;
+}
+
+- (id<SyncPresenter>)syncPresenter {
+  return self.coordinator;
 }
 
 - (Browser*)browser {
@@ -175,7 +179,7 @@
 
 - (void)setCurrentInterface:(WrangledBrowser*)interface {
   DCHECK(interface);
-  // |interface| must be one of the interfaces this class already owns.
+  // `interface` must be one of the interfaces this class already owns.
   DCHECK(self.mainInterface == interface ||
          self.incognitoInterface == interface);
   if (self.currentInterface == interface) {
@@ -239,7 +243,7 @@
     WebStateList* webStateList = self.mainBrowser->GetWebStateList();
     breakpad::StopMonitoringTabStateForWebStateList(webStateList);
     breakpad::StopMonitoringURLsForWebStateList(webStateList);
-    // Close all webstates in |webStateList|. Do this in an @autoreleasepool as
+    // Close all webstates in `webStateList`. Do this in an @autoreleasepool as
     // WebStateList observers will be notified (they are unregistered later). As
     // some of them may be implemented in Objective-C and unregister themselves
     // in their -dealloc method, ensure they -autorelease introduced by ARC are
@@ -256,7 +260,7 @@
   if (_otrBrowser.get()) {
     WebStateList* webStateList = self.otrBrowser->GetWebStateList();
     breakpad::StopMonitoringTabStateForWebStateList(webStateList);
-    // Close all webstates in |webStateList|. Do this in an @autoreleasepool as
+    // Close all webstates in `webStateList`. Do this in an @autoreleasepool as
     // WebStateList observers will be notified (they are unregistered later). As
     // some of them may be implemented in Objective-C and unregister themselves
     // in their -dealloc method, ensure they -autorelease introduced by ARC are

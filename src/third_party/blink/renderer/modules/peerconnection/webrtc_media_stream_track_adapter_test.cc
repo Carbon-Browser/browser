@@ -10,8 +10,8 @@
 #include "base/memory/ptr_util.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
-#include "base/single_thread_task_runner.h"
 #include "base/synchronization/waitable_event.h"
+#include "base/task/single_thread_task_runner.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/platform/scheduler/test/renderer_scheduler_test_support.h"
 #include "third_party/blink/public/platform/web_string.h"
@@ -20,7 +20,7 @@
 #include "third_party/blink/renderer/modules/mediastream/mock_media_stream_video_source.h"
 #include "third_party/blink/renderer/modules/peerconnection/mock_peer_connection_dependency_factory.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_audio_source.h"
-#include "third_party/blink/renderer/platform/mediastream/media_stream_component.h"
+#include "third_party/blink/renderer/platform/mediastream/media_stream_component_impl.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_source.h"
 #include "third_party/blink/renderer/platform/testing/io_task_runner_testing_platform_support.h"
 
@@ -45,27 +45,30 @@ class WebRtcMediaStreamTrackAdapterTest : public ::testing::Test {
   }
 
   MediaStreamComponent* CreateLocalAudioTrack() {
-    auto* source = MakeGarbageCollected<MediaStreamSource>(
-        String::FromUTF8("local_audio_id"), MediaStreamSource::kTypeAudio,
-        String::FromUTF8("local_audio_track"), false);
     auto audio_source = std::make_unique<MediaStreamAudioSource>(
         scheduler::GetSingleThreadTaskRunnerForTesting(), true);
     auto* audio_source_ptr = audio_source.get();
-    source->SetPlatformSource(std::move(audio_source));
+    auto* source = MakeGarbageCollected<MediaStreamSource>(
+        String::FromUTF8("local_audio_id"), MediaStreamSource::kTypeAudio,
+        String::FromUTF8("local_audio_track"), false, std::move(audio_source));
 
     auto* component =
-        MakeGarbageCollected<MediaStreamComponent>(source->Id(), source);
+        MakeGarbageCollected<MediaStreamComponentImpl>(source->Id(), source);
     audio_source_ptr->ConnectToTrack(component);
     return component;
   }
 
   MediaStreamComponent* CreateLocalVideoTrack() {
-    auto* source = MakeGarbageCollected<MediaStreamSource>(
-        String::FromUTF8("local_video_id"), MediaStreamSource::kTypeVideo,
-        String::FromUTF8("local_video_track"), false);
     auto video_source = std::make_unique<MockMediaStreamVideoSource>();
     auto* video_source_ptr = video_source.get();
-    source->SetPlatformSource(std::move(video_source));
+    // Dropping the MediaStreamSource reference here is ok, as video_source will
+    // have a weak pointer to it as Owner(), which is picked up by the
+    // MediaStreamComponent created with CreateVideoTrack() below.
+    // TODO(https://crbug.com/1302689): Fix this crazy lifecycle jumping back
+    // and forth between GCed and non-GCed objects...
+    MakeGarbageCollected<MediaStreamSource>(
+        String::FromUTF8("local_video_id"), MediaStreamSource::kTypeVideo,
+        String::FromUTF8("local_video_track"), false, std::move(video_source));
 
     return MediaStreamVideoTrack::CreateVideoTrack(
         video_source_ptr,

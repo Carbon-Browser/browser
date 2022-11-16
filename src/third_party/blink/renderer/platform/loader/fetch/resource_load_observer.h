@@ -9,7 +9,6 @@
 
 #include "base/containers/span.h"
 #include "base/types/strong_alias.h"
-#include "third_party/blink/public/mojom/frame/back_forward_cache_controller.mojom-blink-forward.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_load_priority.h"
@@ -51,7 +50,8 @@ class PLATFORM_EXPORT ResourceLoadObserver
                                const ResourceResponse& redirect_response,
                                ResourceType,
                                const ResourceLoaderOptions&,
-                               RenderBlockingBehavior) = 0;
+                               RenderBlockingBehavior,
+                               const Resource*) = 0;
 
   // Called when the priority of the request changes.
   virtual void DidChangePriority(uint64_t identifier,

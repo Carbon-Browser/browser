@@ -26,7 +26,7 @@ async function setupForDirectoryTreeContextMenuTest() {
                      lastModifiedTime: 'Jan 1, 1980, 11:59 PM',
                      nameText: 'destination',
                      sizeText: '--',
-                     typeText: 'Folder'
+                     typeText: 'Folder',
                    })]);
   return appId;
 }
@@ -46,7 +46,7 @@ const ITEMS_IN_DEST_DIR_AFTER_PASTE =
       lastModifiedTime: 'Jan 1, 1980, 11:59 PM',
       nameText: 'photos',
       sizeText: '--',
-      typeText: 'Folder'
+      typeText: 'Folder',
     })]);
 
 /**
@@ -452,7 +452,7 @@ testcase.dirRenameUpdateChildrenBreadcrumbs = async () => {
                      lastModifiedTime: 'Jan 1, 1980, 11:59 PM',
                      nameText: 'child-folder',
                      sizeText: '--',
-                     typeText: 'Folder'
+                     typeText: 'Folder',
                    })]);
 
   // Navigate to child folder.
@@ -820,46 +820,35 @@ testcase.dirContextMenuRecent = async () => {
 };
 
 /**
- * Tests context menu for a Zip root and a folder inside it.
+ * Tests context menu for a ZIP root inside it.
  */
 testcase.dirContextMenuZip = async () => {
   await sendTestMessage({
     name: 'expectFileTask',
     fileNames: [ENTRIES.zipArchive.targetPath],
-    openType: 'launch'
+    openType: 'launch',
   });
 
   const zipMenus = [
     ['#unmount', true],
-  ];
-  const folderMenus = [
-    ['#cut', false],
-    ['#copy', true],
-    ['#paste-into-folder', false],
-    ['#rename', false],
-    ['#delete', false],
-    ['#new-folder', false],
+    ['#share-with-linux', true],
   ];
 
-  // Open Files app on Downloads containing a zip file.
+  // Open Files app on Downloads containing a ZIP file.
   const appId = await setupAndWaitUntilReady(
       RootPath.DOWNLOADS, [ENTRIES.zipArchive], []);
 
-  // Select the zip file.
+  // Select the ZIP file.
   chrome.test.assertTrue(
       !!await remoteCall.callRemoteTestUtil(
           'selectFile', appId, ['archive.zip']),
       'selectFile failed');
 
-  // Press the Enter key to mount the zip file.
+  // Press the Enter key to mount the ZIP file.
   const key = ['#file-list', 'Enter', false, false, false];
   chrome.test.assertTrue(
       !!await remoteCall.callRemoteTestUtil('fakeKeyDown', appId, key),
       'fakeKeyDown failed');
-
-  // Check the context menu for a folder inside the zip.
-  await checkContextMenu(
-      appId, '/archive.zip/folder', folderMenus, false /* rootMenu */);
 
   // Check the context menu is on desired state.
   await checkContextMenu(appId, '/archive.zip', zipMenus, true /* rootMenu */);
@@ -875,27 +864,26 @@ testcase.dirContextMenuZip = async () => {
 };
 
 /**
- * Tests context menu on the eject button of a zip root.
- * crbug.com/991002
+ * Tests context menu on the Eject button of a ZIP root.
  */
-testcase.dirEjectContextMenuZip = async () => {
+testcase.dirContextMenuZipEject = async () => {
   await sendTestMessage({
     name: 'expectFileTask',
     fileNames: [ENTRIES.zipArchive.targetPath],
-    openType: 'launch'
+    openType: 'launch',
   });
 
   // Open Files app on Downloads containing a zip file.
   const appId = await setupAndWaitUntilReady(
       RootPath.DOWNLOADS, [ENTRIES.zipArchive], []);
 
-  // Select the zip file.
+  // Select the ZIP file.
   chrome.test.assertTrue(
       !!await remoteCall.callRemoteTestUtil(
           'selectFile', appId, ['archive.zip']),
       'selectFile failed');
 
-  // Press the Enter key to mount the zip file.
+  // Press the Enter key to mount the ZIP file.
   const key = ['#file-list', 'Enter', false, false, false];
   chrome.test.assertTrue(
       !!await remoteCall.callRemoteTestUtil('fakeKeyDown', appId, key),
@@ -990,7 +978,7 @@ testcase.dirContextMenuMyFilesWithPaste = async () => {
     lastModifiedTime: 'Jan 1, 1990, 11:59 PM',
     nameText: 'photosTwo',
     sizeText: '--',
-    typeText: 'Folder'
+    typeText: 'Folder',
   });
 
   const photosT = new TestEntryInfo({
@@ -1001,7 +989,7 @@ testcase.dirContextMenuMyFilesWithPaste = async () => {
     lastModifiedTime: 'Jan 1, 1993, 11:59 PM',
     nameText: 'photosT',
     sizeText: '51 bytes',
-    typeText: 'Plain text'
+    typeText: 'Plain text',
   });
 
   // Open Files app on local Downloads.

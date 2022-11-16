@@ -5,10 +5,10 @@
 package org.chromium.chrome.browser.firstrun;
 
 import android.app.Activity;
+import android.content.res.Configuration;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.SystemClock;
-import android.text.TextUtils;
 import android.view.View;
 import android.view.ViewTreeObserver.OnPreDrawListener;
 
@@ -20,19 +20,17 @@ import androidx.fragment.app.Fragment;
 import androidx.viewpager2.widget.ViewPager2;
 
 import org.chromium.base.ActivityState;
-import org.chromium.base.ApiCompatibilityUtils;
 import org.chromium.base.ApplicationStatus;
 import org.chromium.base.ApplicationStatus.ActivityStateListener;
 import org.chromium.base.metrics.RecordHistogram;
+import org.chromium.base.supplier.BooleanSupplier;
+import org.chromium.base.supplier.OneshotSupplierImpl;
 import org.chromium.base.supplier.Supplier;
 import org.chromium.chrome.R;
+import org.chromium.chrome.browser.BackPressHelper;
 import org.chromium.chrome.browser.customtabs.CustomTabActivity;
-import org.chromium.chrome.browser.datareduction.DataReductionPromoUtils;
-import org.chromium.chrome.browser.datareduction.DataReductionProxyUma;
 import org.chromium.chrome.browser.fonts.FontPreloader;
-import org.chromium.chrome.browser.lifecycle.NativeInitObserver;
 import org.chromium.chrome.browser.metrics.UmaUtils;
-import org.chromium.chrome.browser.net.spdyproxy.DataReductionProxySettings;
 import org.chromium.chrome.browser.search_engines.TemplateUrlServiceFactory;
 import org.chromium.chrome.browser.signin.SigninFirstRunFragment;
 import org.chromium.chrome.browser.signin.services.FREMobileIdentityConsistencyFieldTrial;
@@ -42,6 +40,7 @@ import org.chromium.ui.modaldialog.ModalDialogManager;
 import org.chromium.ui.modaldialog.ModalDialogManager.ModalDialogType;
 
 import java.util.ArrayList;
+import java.util.BitSet;
 import java.util.List;
 
 /**
@@ -58,14 +57,13 @@ public class FirstRunActivity extends FirstRunActivityBase implements FirstRunPa
      * TODO(crbug.com/1114319): Rework and use a better testing setup.
      */
     public interface FirstRunActivityObserver {
-        /** See {@link #onCreatePostNativeAndPoliciesPageSequence}. */
-        void onCreatePostNativeAndPoliciesPageSequence(
-                FirstRunActivity caller, Bundle freProperties);
+        /** See {@link #createPostNativeAndPoliciesPageSequence}. */
+        void onCreatePostNativeAndPoliciesPageSequence(FirstRunActivity caller);
 
         /** See {@link #acceptTermsOfService}. */
         void onAcceptTermsOfService(FirstRunActivity caller);
 
-        /** See {@link #jumpToPage}. */
+        /** See {@link #setCurrentItemForPager}. */
         void onJumpToPage(FirstRunActivity caller, int position);
 
         /** Called when First Run is completed. */
@@ -94,35 +92,15 @@ public class FirstRunActivity extends FirstRunActivityBase implements FirstRunPa
         }
     }
 
-    // UMA constants.
-    private static final int SIGNIN_SETTINGS_DEFAULT_ACCOUNT = 0;
-    private static final int SIGNIN_SETTINGS_ANOTHER_ACCOUNT = 1;
-    private static final int SIGNIN_ACCEPT_DEFAULT_ACCOUNT = 2;
-    private static final int SIGNIN_ACCEPT_ANOTHER_ACCOUNT = 3;
-    private static final int SIGNIN_NO_THANKS = 4;
-    private static final int SIGNIN_MAX = 5;
-
-    private static final int FRE_PROGRESS_STARTED = 0;
-    private static final int FRE_PROGRESS_WELCOME_SHOWN = 1;
-    private static final int FRE_PROGRESS_DATA_SAVER_SHOWN = 2;
-    private static final int FRE_PROGRESS_SIGNIN_SHOWN = 3;
-    private static final int FRE_PROGRESS_COMPLETED_SIGNED_IN = 4;
-    private static final int FRE_PROGRESS_COMPLETED_NOT_SIGNED_IN = 5;
-    private static final int FRE_PROGRESS_DEFAULT_SEARCH_ENGINE_SHOWN = 6;
-    private static final int FRE_PROGRESS_ADBLOCK_ONBOARDING_MESSAGE_SHOWN = 7;
-    private static final int FRE_PROGRESS_REWARD_ONBOARDING_MESSAGE_SHOWN = 8;
-    private static final int FRE_PROGRESS_MAX = 9;
+    private final BitSet mFreProgressStepsRecorded = new BitSet(MobileFreProgress.MAX);
 
     @Nullable
     private static FirstRunActivityObserver sObserver;
 
-    private String mResultSignInAccountName;
-    private boolean mResultIsDefaultAccount;
-    private boolean mResultShowSignInSettings;
-
-    private boolean mFlowIsKnown;
     private boolean mPostNativeAndPolicyPagesCreated;
-    private boolean mNativeSideIsInitialized;
+    // Use hasValue() to simplify access. Will be null before initialized.
+    private final OneshotSupplierImpl<Boolean> mNativeSideIsInitializedSupplier =
+            new OneshotSupplierImpl<>();
 
     private FirstRunFlowSequencer mFirstRunFlowSequencer;
 
@@ -151,19 +129,35 @@ public class FirstRunActivity extends FirstRunActivityBase implements FirstRunPa
      */
     private FirstRunPagerAdapter mPagerAdapter;
 
-    /**
-     * Defines a sequence of pages to be shown (depending on parameters etc).
-     */
-    private void createPageSequence() {
-        FREMobileIdentityConsistencyFieldTrial.createFirstRunTrial();
+    @Override
+    protected void onPreCreate() {
+        super.onPreCreate();
+        BackPressHelper.create(this, getOnBackPressedDispatcher(), () -> {
+            handleBackPressed();
+            return true;
+        });
+    }
+
+    private boolean isFlowKnown() {
+        return mFreProperties != null;
+    }
+
+    /** Creates first page and sets up adapter. Should result UI being shown on the screen. */
+    private void createFirstPage() {
+        BooleanSupplier showWelcomePage = () -> !FirstRunStatus.shouldSkipWelcomePage();
         if (FREMobileIdentityConsistencyFieldTrial.isEnabled()) {
-            mPages.add(SigninFirstRunFragment::new);
+            mPages.add(new FirstRunPage<>(SigninFirstRunFragment.class, showWelcomePage));
         } else {
+            // TODO(crbug.com/1111490): Revisit during post-MVP.
+            // There's an edge case where we accept the welcome page in the main app, abort the FRE,
+            // then go through this CCT FRE again.
             mPages.add(shouldCreateEnterpriseCctTosPage()
-                            ? new TosAndUmaFirstRunFragmentWithEnterpriseSupport.Page()
-                            : new ToSAndUMAFirstRunFragment.Page());
+                            ? new FirstRunPage<>(
+                                    TosAndUmaFirstRunFragmentWithEnterpriseSupport.class,
+                                    showWelcomePage)
+                            : new FirstRunPage<>(ToSAndUMAFirstRunFragment.class, showWelcomePage));
         }
-        mFreProgressStates.add(FRE_PROGRESS_WELCOME_SHOWN);
+        mFreProgressStates.add(MobileFreProgress.WELCOME_SHOWN);
         mPagerAdapter = new FirstRunPagerAdapter(FirstRunActivity.this, mPages);
         mPager.setAdapter(mPagerAdapter);
         // Other pages will be created by createPostNativeAndPoliciesPageSequence() after
@@ -188,57 +182,48 @@ public class FirstRunActivity extends FirstRunActivityBase implements FirstRunPa
     private void createPostNativeAndPoliciesPageSequence() {
         assert !mPostNativeAndPolicyPagesCreated;
         assert areNativeAndPoliciesInitialized();
-        mFirstRunFlowSequencer.onNativeAndPoliciesInitialized(mFreProperties);
+        mFirstRunFlowSequencer.updateFirstRunProperties(mFreProperties);
 
-        boolean notifyAdapter = false;
-        // An optional sign-in page.
-        if (FREMobileIdentityConsistencyFieldTrial.isEnabled()
-                && mFreProperties.getBoolean(SHOW_SIGNIN_PAGE)) {
-            mPages.add(SyncConsentFirstRunFragment::new);
-            mFreProgressStates.add(FRE_PROGRESS_SIGNIN_SHOWN);
-            notifyAdapter = true;
-        }
-
-        // An optional Data Saver page.
-        if (mFreProperties.getBoolean(SHOW_DATA_REDUCTION_PAGE)) {
-            mPages.add(new DataReductionProxyFirstRunFragment.Page());
-            mFreProgressStates.add(FRE_PROGRESS_DATA_SAVER_SHOWN);
-            notifyAdapter = true;
-        }
+        BooleanSupplier showSearchEnginePromo =
+                () -> mFreProperties.getBoolean(SHOW_SEARCH_ENGINE_PAGE);
+        BooleanSupplier showSyncConsent = () -> mFreProperties.getBoolean(SHOW_SYNC_CONSENT_PAGE);
 
         // An optional page to select a default search engine.
-        if (mFreProperties.getBoolean(SHOW_SEARCH_ENGINE_PAGE)) {
-            mPages.add(new DefaultSearchEngineFirstRunFragment.Page());
-            mFreProgressStates.add(FRE_PROGRESS_DEFAULT_SEARCH_ENGINE_SHOWN);
-            notifyAdapter = true;
-        }
+        // if (showSearchEnginePromo.getAsBoolean()) {
+        //     mPages.add(new FirstRunPage<>(
+        //             DefaultSearchEngineFirstRunFragment.class, showSearchEnginePromo));
+        //     mFreProgressStates.add(MobileFreProgress.DEFAULT_SEARCH_ENGINE_SHOWN);
+        // }
 
-        // An optional sign-in page.
-        if (!FREMobileIdentityConsistencyFieldTrial.isEnabled()
-                && mFreProperties.getBoolean(SHOW_SIGNIN_PAGE)) {
-            mPages.add(SyncConsentFirstRunFragment::new);
-            mFreProgressStates.add(FRE_PROGRESS_SIGNIN_SHOWN);
-            notifyAdapter = true;
-        }
+        // An optional sync consent page, the visibility of this page will be decided on the fly
+        // according to the situation.
+        mPages.add(new FirstRunPage<>(SyncConsentFirstRunFragment.class, showSyncConsent));
+        mFreProgressStates.add(MobileFreProgress.SYNC_CONSENT_SHOWN);
+
+        BooleanSupplier alwaysTrue =  () -> true;
+
+        // set default
+        mPages.add(new FirstRunPage<>(
+                DefaultBrowserFreFragment.class, alwaysTrue));
+        mFreProgressStates.add(MobileFreProgress.FRE_PROGRESS_DEFAULT_BROWSER);
 
         // adblock on-boarding message
-        mPages.add(new AdblockOnBoardingMessageFragment.Page());
-        mFreProgressStates.add(FRE_PROGRESS_ADBLOCK_ONBOARDING_MESSAGE_SHOWN);
-        notifyAdapter = true;
+        mPages.add(new FirstRunPage<>(
+                AdblockOnBoardingMessageFragment.class, alwaysTrue));
+        mFreProgressStates.add(MobileFreProgress.FRE_PROGRESS_ADBLOCK_ONBOARDING_MESSAGE_SHOWN);
 
         // adblock on-boarding message
-        mPages.add(new RewardOnBoardingMessageFragment.Page());
-        mFreProgressStates.add(FRE_PROGRESS_REWARD_ONBOARDING_MESSAGE_SHOWN);
-        notifyAdapter = true;
+        mPages.add(new FirstRunPage<>(
+                RewardOnBoardingMessageFragment.class, alwaysTrue));
+        mFreProgressStates.add(MobileFreProgress.FRE_PROGRESS_REWARD_ONBOARDING_MESSAGE_SHOWN);
 
-        if (notifyAdapter && mPagerAdapter != null) {
+        if (mPagerAdapter != null) {
             mPagerAdapter.notifyDataSetChanged();
         }
         mPostNativeAndPolicyPagesCreated = true;
 
         if (sObserver != null) {
-            sObserver.onCreatePostNativeAndPoliciesPageSequence(
-                    FirstRunActivity.this, mFreProperties);
+            sObserver.onCreatePostNativeAndPoliciesPageSequence(FirstRunActivity.this);
         }
     }
 
@@ -276,6 +261,12 @@ public class FirstRunActivity extends FirstRunActivityBase implements FirstRunPa
 
     @Override
     public void triggerLayoutInflation() {
+        // Generate trial group as early as possible to guarantee it's available by the time native
+        // needs to register the synthetic trial group. See https://crbug.com/1295692 for details.
+        FREMobileIdentityConsistencyFieldTrial.createFirstRunTrial();
+
+        super.triggerLayoutInflation();
+
         initializeStateFromLaunchData();
         RecordHistogram.recordTimesHistogram("MobileFre.FromLaunch.TriggerLayoutInflation",
                 SystemClock.elapsedRealtime() - mIntentCreationElapsedRealtimeMs);
@@ -283,14 +274,22 @@ public class FirstRunActivity extends FirstRunActivityBase implements FirstRunPa
         setFinishOnTouchOutside(true);
 
         setContentView(createContentView());
-        ViewDrawBlocker.blockViewDrawUntilReady(
-                findViewById(android.R.id.content), () -> mPages.size() > 0);
+        if (FREMobileIdentityConsistencyFieldTrial.isEnabled() && mPagerAdapter == null) {
+            // SigninFirstRunFragment doesn't use getProperties() and can be shown right away,
+            // without waiting for FirstRunFlowSequencer.
+            createFirstPage();
+        } else {
+            ViewDrawBlocker.blockViewDrawUntilReady(
+                    findViewById(android.R.id.content), () -> mPages.size() > 0);
+        }
 
-        mFirstRunFlowSequencer = new FirstRunFlowSequencer(this) {
+        mFirstRunFlowSequencer = new FirstRunFlowSequencer(this, getChildAccountStatusSupplier()) {
             @Override
             public void onFlowIsKnown(Bundle freProperties) {
-                mFlowIsKnown = true;
+                assert freProperties != null;
                 mFreProperties = freProperties;
+                RecordHistogram.recordTimesHistogram("MobileFre.FromLaunch.ChildStatusAvailable",
+                        SystemClock.elapsedRealtime() - mIntentCreationElapsedRealtimeMs);
 
                 onInternalStateChanged();
 
@@ -314,7 +313,7 @@ public class FirstRunActivity extends FirstRunActivityBase implements FirstRunPa
         };
         mFirstRunFlowSequencer.start();
         FirstRunStatus.setFirstRunTriggered(true);
-        recordFreProgressHistogram(FRE_PROGRESS_STARTED);
+        recordFreProgressHistogram(MobileFreProgress.STARTED);
         onInitialLayoutInflationComplete();
 
         RecordHistogram.recordTimesHistogram("MobileFre.FromLaunch.ActivityInflated",
@@ -344,7 +343,7 @@ public class FirstRunActivity extends FirstRunActivityBase implements FirstRunPa
     }
 
     private void onNativeDependenciesFullyInitialized() {
-        mNativeSideIsInitialized = true;
+        mNativeSideIsInitializedSupplier.set(true);
 
         onInternalStateChanged();
     }
@@ -352,22 +351,19 @@ public class FirstRunActivity extends FirstRunActivityBase implements FirstRunPa
     @Override
     protected void onPolicyLoadListenerAvailable(boolean onDevicePolicyFound) {
         super.onPolicyLoadListenerAvailable(onDevicePolicyFound);
+        RecordHistogram.recordTimesHistogram("MobileFre.FromLaunch.PoliciesLoaded",
+                SystemClock.elapsedRealtime() - mIntentCreationElapsedRealtimeMs);
 
         onInternalStateChanged();
     }
 
     private void onInternalStateChanged() {
-        if (!mFlowIsKnown) {
-            return;
-        }
-
-        if (mNativeSideIsInitialized && mFreProperties == null) {
-            completeFirstRunExperience();
+        if (!isFlowKnown()) {
             return;
         }
 
         if (mPagerAdapter == null) {
-            createPageSequence();
+            createFirstPage();
         }
 
         if (!mPostNativeAndPolicyPagesCreated && areNativeAndPoliciesInitialized()) {
@@ -380,7 +376,7 @@ public class FirstRunActivity extends FirstRunActivityBase implements FirstRunPa
     }
 
     private boolean areNativeAndPoliciesInitialized() {
-        return mNativeSideIsInitialized && mFlowIsKnown
+        return mNativeSideIsInitializedSupplier.hasValue() && isFlowKnown()
                 && this.getPolicyLoadListener().get() != null;
     }
 
@@ -391,18 +387,14 @@ public class FirstRunActivity extends FirstRunActivityBase implements FirstRunPa
         if (!(fragment instanceof FirstRunFragment)) return;
 
         FirstRunFragment page = (FirstRunFragment) fragment;
-        // Important that this check delegates to the dispatcher instead of using
-        // mNativeSideIsInitialized, the two flags are not updated atomically. The dispatcher does
-        // not call #onFinishNativeInitialization() if it already happened.
-        if (getLifecycleDispatcher().isNativeInitializationFinished()) {
+        // Delay notifying the child page until native and the TemplateUrlService are initialized.
+        // Tracked by mNativeSideIsInitializedSupplier is ready. Otherwise if the next page handles
+        // the default search engine, it will be missing dependencies. See https://crbug.com/1275950
+        // for when this didn't work.
+        if (mNativeSideIsInitializedSupplier.hasValue()) {
             page.onNativeInitialized();
         } else {
-            getLifecycleDispatcher().register(new NativeInitObserver() {
-                @Override
-                public void onFinishNativeInitialization() {
-                    page.onNativeInitialized();
-                }
-            });
+            mNativeSideIsInitializedSupplier.onAvailable((ignored) -> page.onNativeInitialized());
         }
     }
 
@@ -432,7 +424,7 @@ public class FirstRunActivity extends FirstRunActivityBase implements FirstRunPa
                 if (activity.getTaskId() == this.getTaskId()) {
                     activity.finish();
                 } else {
-                    ApiCompatibilityUtils.finishAndRemoveTask(activity);
+                    activity.finishAndRemoveTask();
                     if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.LOLLIPOP_MR1) {
                         // On L ApiCompatibilityUtils.finishAndRemoveTask() sometimes fails. Try one
                         // last time, see crbug.com/781396 for origin of this approach.
@@ -445,18 +437,24 @@ public class FirstRunActivity extends FirstRunActivityBase implements FirstRunPa
         }
     }
 
-    @Override
-    public void onBackPressed() {
+    private void handleBackPressed() {
         // Terminate if we are still waiting for the native or for Android EDU / GAIA Child checks.
-        if (mPagerAdapter == null) {
+        if (!mPostNativeAndPolicyPagesCreated) {
             abortFirstRunExperience();
             return;
         }
 
-        if (mPager.getCurrentItem() == 0) {
+        mFirstRunFlowSequencer.updateFirstRunProperties(mFreProperties);
+
+        int position = mPager.getCurrentItem() - 1;
+        while (position > 0 && !mPages.get(position).shouldShow()) {
+            --position;
+        }
+
+        if (position < 0) {
             abortFirstRunExperience();
         } else {
-            setCurrentItemForPager(mPager.getCurrentItem() - 1);
+            setCurrentItemForPager(position);
         }
     }
 
@@ -467,8 +465,17 @@ public class FirstRunActivity extends FirstRunActivityBase implements FirstRunPa
     }
 
     @Override
-    public void advanceToNextPage() {
-        jumpToPage(mPager.getCurrentItem() + 1);
+    public boolean advanceToNextPage() {
+        mFirstRunFlowSequencer.updateFirstRunProperties(mFreProperties);
+
+        int position = mPager.getCurrentItem() + 1;
+        while (position < mPagerAdapter.getItemCount() && !mPages.get(position).shouldShow()) {
+            ++position;
+        }
+        if (!setCurrentItemForPager(position)) return false;
+
+        recordFreProgressHistogram(mFreProgressStates.get(position));
+        return true;
     }
 
     @Override
@@ -483,35 +490,8 @@ public class FirstRunActivity extends FirstRunActivityBase implements FirstRunPa
     public void completeFirstRunExperience() {
         RecordHistogram.recordMediumTimesHistogram("MobileFre.FromLaunch.FreCompleted",
                 SystemClock.elapsedRealtime() - mIntentCreationElapsedRealtimeMs);
-        if (!TextUtils.isEmpty(mResultSignInAccountName)) {
-            final int choice;
-            if (mResultShowSignInSettings) {
-                choice = mResultIsDefaultAccount ? SIGNIN_SETTINGS_DEFAULT_ACCOUNT
-                                                 : SIGNIN_SETTINGS_ANOTHER_ACCOUNT;
-            } else {
-                choice = mResultIsDefaultAccount ? SIGNIN_ACCEPT_DEFAULT_ACCOUNT
-                                                 : SIGNIN_ACCEPT_ANOTHER_ACCOUNT;
-            }
-            recordSigninChoiceHistogram(choice);
-            recordFreProgressHistogram(FRE_PROGRESS_COMPLETED_SIGNED_IN);
-        } else {
-            recordFreProgressHistogram(FRE_PROGRESS_COMPLETED_NOT_SIGNED_IN);
-        }
 
-        FirstRunFlowSequencer.markFlowAsCompleted(
-                mResultSignInAccountName, mResultShowSignInSettings);
-
-        if (DataReductionPromoUtils.getDisplayedFreOrSecondRunPromo()) {
-            if (DataReductionProxySettings.getInstance().isDataReductionProxyEnabled()) {
-                DataReductionProxyUma
-                        .dataReductionProxyUIAction(DataReductionProxyUma.ACTION_FRE_ENABLED);
-                DataReductionPromoUtils.saveFrePromoOptOut(false);
-            } else {
-                DataReductionProxyUma
-                        .dataReductionProxyUIAction(DataReductionProxyUma.ACTION_FRE_DISABLED);
-                DataReductionPromoUtils.saveFrePromoOptOut(true);
-            }
-        }
+        FirstRunFlowSequencer.markFlowAsCompleted();
 
         if (sObserver != null) sObserver.onUpdateCachedEngineName(this);
 
@@ -553,26 +533,19 @@ public class FirstRunActivity extends FirstRunActivityBase implements FirstRunPa
     }
 
     @Override
-    public void refuseSignIn() {
-        recordSigninChoiceHistogram(SIGNIN_NO_THANKS);
-        mResultSignInAccountName = null;
-        mResultShowSignInSettings = false;
-    }
-
-    @Override
-    public void acceptSignIn(String accountName, boolean isDefaultAccount, boolean openSettings) {
-        mResultSignInAccountName = accountName;
-        mResultIsDefaultAccount = isDefaultAccount;
-        mResultShowSignInSettings = openSettings;
-    }
-
-    @Override
     public boolean didAcceptTermsOfService() {
         return FirstRunUtils.didAcceptTermsOfService();
     }
 
     @Override
+    public boolean isLaunchedFromCct() {
+        return mLaunchedFromCCT;
+    }
+
+    @Override
     public void acceptTermsOfService(boolean allowCrashUpload) {
+        assert mNativeSideIsInitializedSupplier.hasValue();
+
         // If default is true then it corresponds to opt-out and false corresponds to opt-in.
         UmaUtils.recordMetricsReportingDefaultOptIn(!DEFAULT_METRICS_AND_CRASH_REPORTING);
         RecordHistogram.recordMediumTimesHistogram("MobileFre.FromLaunch.TosAccepted",
@@ -582,8 +555,6 @@ public class FirstRunActivity extends FirstRunActivityBase implements FirstRunPa
         flushPersistentData();
 
         if (sObserver != null) sObserver.onAcceptTermsOfService(this);
-
-        jumpToPage(mPager.getCurrentItem() + 1);
     }
 
     /** Initialize local state from launch intent and from saved instance state. */
@@ -598,25 +569,9 @@ public class FirstRunActivity extends FirstRunActivityBase implements FirstRunPa
         }
     }
 
-    /**
-     * Transitions to a given page.
-     * @param position A page index to transition to.
-     * @return Whether the transition to a given page was allowed.
-     */
-    private boolean jumpToPage(int position) {
+    private boolean setCurrentItemForPager(int position) {
         if (sObserver != null) sObserver.onJumpToPage(this, position);
 
-        if (!didAcceptTermsOfService()) {
-            return position == 0;
-        }
-        if (!setCurrentItemForPager(position)) {
-            return false;
-        }
-        recordFreProgressHistogram(mFreProgressStates.get(position));
-        return true;
-    }
-
-    private boolean setCurrentItemForPager(int position) {
         if (position >= mPagerAdapter.getItemCount()) {
             completeFirstRunExperience();
             return false;
@@ -639,26 +594,37 @@ public class FirstRunActivity extends FirstRunActivityBase implements FirstRunPa
     }
 
     private void skipPagesIfNecessary() {
-        boolean shouldSkip = mPages.get(mPager.getCurrentItem()).shouldSkipPageOnCreate();
-        while (shouldSkip) {
-            if (!jumpToPage(mPager.getCurrentItem() + 1)) return;
-            shouldSkip = mPages.get(mPager.getCurrentItem()).shouldSkipPageOnCreate();
+        while (!mPages.get(mPager.getCurrentItem()).shouldShow() && advanceToNextPage()) {
         }
     }
 
-    private void recordFreProgressHistogram(int state) {
+    @Override
+    public void recordFreProgressHistogram(@MobileFreProgress int state) {
+        assert 0 <= state && state < MobileFreProgress.MAX;
+
+        if (mFreProgressStepsRecorded.get(state)) return;
+
+        mFreProgressStepsRecorded.set(state);
         if (mLaunchedFromChromeIcon) {
             RecordHistogram.recordEnumeratedHistogram(
-                    "MobileFre.Progress.MainIntent", state, FRE_PROGRESS_MAX);
+                    "MobileFre.Progress.MainIntent", state, MobileFreProgress.MAX);
         } else {
             RecordHistogram.recordEnumeratedHistogram(
-                    "MobileFre.Progress.ViewIntent", state, FRE_PROGRESS_MAX);
+                    "MobileFre.Progress.ViewIntent", state, MobileFreProgress.MAX);
         }
     }
 
-    private static void recordSigninChoiceHistogram(int signInChoice) {
-        RecordHistogram.recordEnumeratedHistogram(
-                "MobileFre.SignInChoice", signInChoice, SIGNIN_MAX);
+    @Override
+    public void recordNativePolicyAndChildStatusLoadedHistogram() {
+        RecordHistogram.recordTimesHistogram(
+                "MobileFre.FromLaunch.NativePolicyAndChildStatusLoaded",
+                SystemClock.elapsedRealtime() - mIntentCreationElapsedRealtimeMs);
+    }
+
+    @Override
+    public void recordNativeInitializedHistogram() {
+        RecordHistogram.recordTimesHistogram("MobileFre.FromLaunch.NativeInitialized",
+                SystemClock.elapsedRealtime() - mIntentCreationElapsedRealtimeMs);
     }
 
     @Override
@@ -667,9 +633,25 @@ public class FirstRunActivity extends FirstRunActivityBase implements FirstRunPa
                 this, LocalizationUtils.substituteLocalePlaceholder(getString(url)));
     }
 
+    @Override
+    public boolean canUseLandscapeLayout() {
+        return !getResources().getConfiguration().isLayoutSizeAtLeast(
+                Configuration.SCREENLAYOUT_SIZE_LARGE);
+    }
+
+    @VisibleForTesting
+    boolean hasPages() {
+        return mPagerAdapter != null && mPagerAdapter.getItemCount() > 0;
+    }
+
     @VisibleForTesting
     public boolean isNativeSideIsInitializedForTest() {
-        return mNativeSideIsInitialized;
+        return mNativeSideIsInitializedSupplier.hasValue();
+    }
+
+    @VisibleForTesting
+    public FirstRunFragment getCurrentFragmentForTesting() {
+        return mPagerAdapter.getFirstRunFragment(mPager.getCurrentItem());
     }
 
     @VisibleForTesting

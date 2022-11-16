@@ -9,7 +9,6 @@
 #include <string>
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "components/autofill_assistant/browser/actions/action.h"
 #include "components/autofill_assistant/browser/actions/fallback_handler/required_fields_fallback_handler.h"
@@ -26,6 +25,10 @@ class UseCreditCardAction : public Action {
  public:
   explicit UseCreditCardAction(ActionDelegate* delegate,
                                const ActionProto& proto);
+
+  UseCreditCardAction(const UseCreditCardAction&) = delete;
+  UseCreditCardAction& operator=(const UseCreditCardAction&) = delete;
+
   ~UseCreditCardAction() override;
 
  private:
@@ -59,8 +62,6 @@ class UseCreditCardAction : public Action {
 
   ProcessActionCallback process_action_callback_;
   base::WeakPtrFactory<UseCreditCardAction> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(UseCreditCardAction);
 };
 
 }  // namespace autofill_assistant

@@ -6,6 +6,7 @@
 
 #include <cstddef>
 
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
@@ -21,18 +22,19 @@
 #include "components/content_settings/core/test/content_settings_test_utils.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
 #include "extensions/buildflags/buildflags.h"
+#include "net/base/features.h"
 #include "net/cookies/cookie_constants.h"
 #include "net/cookies/cookie_util.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/gurl.h"
 
-#if defined(OS_IOS)
+#if BUILDFLAG(IS_IOS)
 #include "components/content_settings/core/common/features.h"
 #else
 #include "third_party/blink/public/common/features.h"
 namespace {
 constexpr char kAllowedRequestsHistogram[] =
-    "API.StorageAccess.AllowedRequests";
+    "API.StorageAccess.AllowedRequests2";
 }
 #endif
 
@@ -47,6 +49,9 @@ class CookieSettingsObserver : public CookieSettings::Observer {
     scoped_observation_.Observe(settings);
   }
 
+  CookieSettingsObserver(const CookieSettingsObserver&) = delete;
+  CookieSettingsObserver& operator=(const CookieSettingsObserver&) = delete;
+
   void OnThirdPartyCookieBlockingChanged(
       bool block_third_party_cookies) override {
     ASSERT_EQ(block_third_party_cookies,
@@ -57,12 +62,10 @@ class CookieSettingsObserver : public CookieSettings::Observer {
   bool last_value() { return last_value_; }
 
  private:
-  CookieSettings* settings_;
+  raw_ptr<CookieSettings> settings_;
   bool last_value_ = false;
   base::ScopedObservation<CookieSettings, CookieSettings::Observer>
       scoped_observation_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(CookieSettingsObserver);
 };
 
 class CookieSettingsTest : public testing::Test {
@@ -84,7 +87,7 @@ class CookieSettingsTest : public testing::Test {
         kHttpsSubdomainSite("https://www.example.com"),
         kHttpsSite8080("https://example.com:8080"),
         kAllHttpsSitesPattern(ContentSettingsPattern::FromString("https://*")) {
-#ifdef OS_IOS
+#if BUILDFLAG(IS_IOS)
     feature_list_.InitAndEnableFeature(kImprovedCookieControls);
 #else
     feature_list_.Init();
@@ -112,10 +115,8 @@ class CookieSettingsTest : public testing::Test {
 
  protected:
   bool ShouldDeleteCookieOnExit(const std::string& domain, bool is_https) {
-    ContentSettingsForOneType settings;
-    cookie_settings_->GetCookieSettings(&settings);
-    return cookie_settings_->ShouldDeleteCookieOnExit(settings, domain,
-                                                      is_https);
+    return cookie_settings_->ShouldDeleteCookieOnExit(
+        cookie_settings_->GetCookieSettings(), domain, is_https);
   }
 
   // There must be a valid ThreadTaskRunnerHandle in HostContentSettingsMap's
@@ -213,7 +214,7 @@ TEST_F(CookieSettingsTest, CookiesControlsEnabledForIncognito) {
       kBlockedSite, kFirstPartySite));
 }
 
-#if defined(OS_IOS)
+#if BUILDFLAG(IS_IOS)
 // Test fixture with ImprovedCookieControls disabled.
 class ImprovedCookieControlsDisabledCookieSettingsTest
     : public CookieSettingsTest {
@@ -445,7 +446,7 @@ TEST_F(CookieSettingsTest, CookiesBlockEverythingExceptAllowed) {
   EXPECT_FALSE(cookie_settings_->IsCookieSessionOnly(kAllowedSite));
 }
 
-#if !defined(OS_IOS)
+#if !BUILDFLAG(IS_IOS)
 TEST_F(CookieSettingsTest, GetCookieSettingAllowedTelemetry) {
   const GURL top_level_url = GURL(kFirstPartySite);
   const GURL url = GURL(kAllowedSite);
@@ -469,7 +470,7 @@ TEST_F(CookieSettingsTest, GetCookieSettingAllowedTelemetry) {
 // should behave like normal.
 TEST_F(CookieSettingsTest, GetCookieSettingDisabledSAA) {
   base::test::ScopedFeatureList scoped_disable;
-  scoped_disable.InitAndDisableFeature(blink::features::kStorageAccessAPI);
+  scoped_disable.InitAndDisableFeature(net::features::kStorageAccessAPI);
 
   const GURL top_level_url = GURL(kFirstPartySite);
   const GURL url = GURL(kAllowedSite);
@@ -516,7 +517,7 @@ TEST_F(CookieSettingsTest, GetCookieSettingDefaultSAA) {
 // otherwise be blocked.
 TEST_F(CookieSettingsTest, GetCookieSettingEnabledSAA) {
   base::test::ScopedFeatureList scoped_enable;
-  scoped_enable.InitAndEnableFeature(blink::features::kStorageAccessAPI);
+  scoped_enable.InitAndEnableFeature(net::features::kStorageAccessAPI);
 
   const GURL top_level_url = GURL(kFirstPartySite);
   const GURL url = GURL(kAllowedSite);
@@ -562,7 +563,7 @@ TEST_F(CookieSettingsTest, GetCookieSettingEnabledSAA) {
 // grant exists.
 TEST_F(CookieSettingsTest, GetCookieSettingSAAResourceWildcards) {
   base::test::ScopedFeatureList scoped_enable;
-  scoped_enable.InitAndEnableFeature(blink::features::kStorageAccessAPI);
+  scoped_enable.InitAndEnableFeature(net::features::kStorageAccessAPI);
 
   const GURL top_level_url = GURL(kFirstPartySite);
   const GURL url = GURL(kHttpSite);
@@ -586,7 +587,7 @@ TEST_F(CookieSettingsTest, GetCookieSettingSAAResourceWildcards) {
 // grant exists.
 TEST_F(CookieSettingsTest, GetCookieSettingSAATopLevelWildcards) {
   base::test::ScopedFeatureList scoped_enable;
-  scoped_enable.InitAndEnableFeature(blink::features::kStorageAccessAPI);
+  scoped_enable.InitAndEnableFeature(net::features::kStorageAccessAPI);
 
   const GURL top_level_url = GURL(kHttpSite);
   const GURL url = GURL(kFirstPartySite);
@@ -610,7 +611,7 @@ TEST_F(CookieSettingsTest, GetCookieSettingSAATopLevelWildcards) {
 // cookie access.
 TEST_F(CookieSettingsTest, GetCookieSettingSAARespectsSettings) {
   base::test::ScopedFeatureList scoped_enable;
-  scoped_enable.InitAndEnableFeature(blink::features::kStorageAccessAPI);
+  scoped_enable.InitAndEnableFeature(net::features::kStorageAccessAPI);
 
   const GURL top_level_url = GURL(kFirstPartySite);
   const GURL url = GURL(kAllowedSite);
@@ -629,7 +630,7 @@ TEST_F(CookieSettingsTest, GetCookieSettingSAARespectsSettings) {
 // Once a grant expires access should no longer be given.
 TEST_F(CookieSettingsTest, GetCookieSettingSAAExpiredGrant) {
   base::test::ScopedFeatureList scoped_enable;
-  scoped_enable.InitAndEnableFeature(blink::features::kStorageAccessAPI);
+  scoped_enable.InitAndEnableFeature(net::features::kStorageAccessAPI);
 
   const GURL top_level_url = GURL(kFirstPartySite);
   const GURL url = GURL(kAllowedSite);
@@ -641,8 +642,7 @@ TEST_F(CookieSettingsTest, GetCookieSettingSAAExpiredGrant) {
       ContentSettingsPattern::FromURLNoWildcard(url),
       ContentSettingsPattern::FromURLNoWildcard(top_level_url),
       ContentSettingsType::STORAGE_ACCESS, CONTENT_SETTING_ALLOW,
-      {content_settings::GetConstraintExpiration(
-           base::TimeDelta::FromSeconds(100)),
+      {content_settings::GetConstraintExpiration(base::Seconds(100)),
        SessionModel::UserSession});
 
   // When requesting our setting for the url/top-level combination our
@@ -653,7 +653,7 @@ TEST_F(CookieSettingsTest, GetCookieSettingSAAExpiredGrant) {
 
   // If we fastforward past the expiration of our grant the result should be
   // CONTENT_SETTING_BLOCK now.
-  FastForwardTime(base::TimeDelta::FromSeconds(101));
+  FastForwardTime(base::Seconds(101));
   EXPECT_EQ(cookie_settings_->GetCookieSetting(url, top_level_url, nullptr),
             CONTENT_SETTING_BLOCK);
 }

@@ -5,7 +5,6 @@
 #ifndef CHROME_BROWSER_UI_WEBUI_SETTINGS_CHROMEOS_BLUETOOTH_HANDLER_H_
 #define CHROME_BROWSER_UI_WEBUI_SETTINGS_CHROMEOS_BLUETOOTH_HANDLER_H_
 
-#include "base/macros.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ui/webui/settings/settings_page_ui_handler.h"
@@ -33,7 +32,8 @@ class BluetoothHandler : public ::settings::SettingsPageUIHandler {
   void BluetoothDeviceAdapterReady(
       scoped_refptr<device::BluetoothAdapter> adapter);
 
-  void HandleIsDeviceBlockedByPolicy(const base::ListValue* args);
+  void HandleIsDeviceBlockedByPolicy(const base::Value::List& args);
+  void HandleRequestFastPairDeviceSupport(const base::Value::List& args);
 
   scoped_refptr<device::BluetoothAdapter> bluetooth_adapter_;
   base::WeakPtrFactory<BluetoothHandler> weak_ptr_factory_{this};

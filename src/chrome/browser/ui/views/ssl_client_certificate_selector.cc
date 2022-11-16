@@ -8,7 +8,9 @@
 #include <utility>
 
 #include "base/bind.h"
+#include "base/callback.h"
 #include "base/callback_helpers.h"
+#include "base/no_destructor.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "chrome/browser/ssl/ssl_client_auth_observer.h"
@@ -24,6 +26,18 @@
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/widget/widget.h"
+
+namespace {
+
+// Returns the storage of a test hook for `ShowSSLClientCertificateSelector()`.
+chrome::ShowSSLClientCertificateSelectorTestingHook&
+GetShowSSLClientCertificateSelectorTestingHook() {
+  static base::NoDestructor<chrome::ShowSSLClientCertificateSelectorTestingHook>
+      instance;
+  return *instance;
+}
+
+}  // namespace
 
 class SSLClientCertificateSelector::SSLClientAuthObserverImpl
     : public SSLClientAuthObserver,
@@ -100,8 +114,6 @@ SSLClientCertificateSelector::SSLClientCertificateSelector(
           dialog->auth_observer_impl_->CertificateSelected(nullptr, nullptr);
       },
       this));
-  chrome::RecordDialogCreation(
-      chrome::DialogIdentifier::SSL_CLIENT_CERTIFICATE_SELECTOR);
 }
 
 SSLClientCertificateSelector::~SSLClientCertificateSelector() {}
@@ -155,6 +167,12 @@ base::OnceClosure ShowSSLClientCertificateSelector(
     std::unique_ptr<content::ClientCertificateDelegate> delegate) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
+  if (!GetShowSSLClientCertificateSelectorTestingHook().is_null()) {
+    return GetShowSSLClientCertificateSelectorTestingHook().Run(
+        contents, cert_request_info, std::move(client_certs),
+        std::move(delegate));
+  }
+
   // Not all WebContentses can show modal dialogs.
   //
   // TODO(davidben): Move this hook to the WebContentsDelegate and only try to
@@ -168,6 +186,12 @@ base::OnceClosure ShowSSLClientCertificateSelector(
   selector->Init();
   selector->Show();
   return selector->GetCancellationCallback();
+}
+
+void SetShowSSLClientCertificateSelectorHookForTest(
+    ShowSSLClientCertificateSelectorTestingHook hook) {
+  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+  GetShowSSLClientCertificateSelectorTestingHook() = std::move(hook);
 }
 
 }  // namespace chrome

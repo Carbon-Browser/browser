@@ -10,7 +10,6 @@
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/lazy_instance.h"
-#include "base/macros.h"
 #include "base/path_service.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/bind.h"
@@ -22,11 +21,11 @@
 #include "chrome/browser/content_settings/cookie_settings_factory.h"
 #include "chrome/browser/defaults.h"
 #include "chrome/browser/prefs/session_startup_pref.h"
+#include "chrome/browser/profiles/keep_alive/profile_keep_alive_types.h"
+#include "chrome/browser/profiles/keep_alive/scoped_profile_keep_alive.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_impl.h"
-#include "chrome/browser/profiles/profile_keep_alive_types.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "chrome/browser/profiles/scoped_profile_keep_alive.h"
 #include "chrome/browser/sessions/session_data_service.h"
 #include "chrome/browser/sessions/session_data_service_factory.h"
 #include "chrome/browser/sessions/session_restore_test_helper.h"
@@ -62,8 +61,15 @@
 #include "services/network/public/cpp/features.h"
 #include "services/network/test/test_utils.h"
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 #include "base/mac/scoped_nsautorelease_pool.h"
+#endif
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+#include "chromeos/startup/browser_init_params.h"
+#include "components/account_manager_core/account.h"
+#include "components/account_manager_core/account_manager_util.h"
+#include "components/signin/public/identity_manager/identity_test_utils.h"
 #endif
 
 namespace {
@@ -153,6 +159,25 @@ class BetterSessionRestoreTest : public InProcessBrowserTest {
               return false;
             }));
   }
+
+  BetterSessionRestoreTest(const BetterSessionRestoreTest&) = delete;
+  BetterSessionRestoreTest& operator=(const BetterSessionRestoreTest&) = delete;
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  void CreatedBrowserMainParts(
+      content::BrowserMainParts* browser_main_parts) override {
+    crosapi::mojom::BrowserInitParamsPtr init_params =
+        crosapi::mojom::BrowserInitParams::New();
+    std::string device_account_email = "primaryaccount@gmail.com";
+    account_manager::AccountKey key(
+        signin::GetTestGaiaIdForEmail(device_account_email),
+        ::account_manager::AccountType::kGaia);
+    init_params->device_account =
+        account_manager::ToMojoAccount({key, device_account_email});
+    chromeos::BrowserInitParams::SetInitParamsForTests(std::move(init_params));
+    InProcessBrowserTest::CreatedBrowserMainParts(browser_main_parts);
+  }
+#endif
 
  protected:
   void SetUpOnMainThread() override {
@@ -344,13 +369,15 @@ class BetterSessionRestoreTest : public InProcessBrowserTest {
   const std::u16string title_error_empty_;
 
   std::unique_ptr<content::URLLoaderInterceptor> url_loader_interceptor_;
-
-  DISALLOW_COPY_AND_ASSIGN(BetterSessionRestoreTest);
 };
 
 class ContinueWhereILeftOffTest : public BetterSessionRestoreTest {
  public:
   ContinueWhereILeftOffTest() = default;
+
+  ContinueWhereILeftOffTest(const ContinueWhereILeftOffTest&) = delete;
+  ContinueWhereILeftOffTest& operator=(const ContinueWhereILeftOffTest&) =
+      delete;
 
   void SetUpOnMainThread() override {
     BetterSessionRestoreTest::SetUpOnMainThread();
@@ -367,8 +394,6 @@ class ContinueWhereILeftOffTest : public BetterSessionRestoreTest {
     session_restore_observer.Wait();
     return new_browser;
   }
-
-  DISALLOW_COPY_AND_ASSIGN(ContinueWhereILeftOffTest);
 };
 
 IN_PROC_BROWSER_TEST_F(ContinueWhereILeftOffTest, PRE_SessionCookies) {
@@ -471,7 +496,7 @@ IN_PROC_BROWSER_TEST_F(ContinueWhereILeftOffTest,
 }
 
 // Flaky on Mac: https://crbug.com/709504
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 #define MAYBE_SessionCookiesCloseAllBrowsers \
   DISABLED_SessionCookiesCloseAllBrowsers
 #else
@@ -555,6 +580,10 @@ IN_PROC_BROWSER_TEST_F(ContinueWhereILeftOffTest,
 class RestartTest : public BetterSessionRestoreTest {
  public:
   RestartTest() = default;
+
+  RestartTest(const RestartTest&) = delete;
+  RestartTest& operator=(const RestartTest&) = delete;
+
   ~RestartTest() override = default;
 
  protected:
@@ -568,9 +597,6 @@ class RestartTest : public BetterSessionRestoreTest {
     PrefService* pref_service = g_browser_process->local_state();
     pref_service->SetBoolean(prefs::kWasRestarted, true);
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(RestartTest);
 };
 
 IN_PROC_BROWSER_TEST_F(RestartTest, PRE_SessionCookies) {
@@ -641,14 +667,14 @@ class NoSessionRestoreTest : public BetterSessionRestoreTest {
  public:
   NoSessionRestoreTest() = default;
 
+  NoSessionRestoreTest(const NoSessionRestoreTest&) = delete;
+  NoSessionRestoreTest& operator=(const NoSessionRestoreTest&) = delete;
+
   void SetUpOnMainThread() override {
     BetterSessionRestoreTest::SetUpOnMainThread();
     SessionStartupPref::SetStartupPref(
         browser()->profile(), SessionStartupPref(SessionStartupPref::DEFAULT));
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(NoSessionRestoreTest);
 };
 
 IN_PROC_BROWSER_TEST_F(NoSessionRestoreTest, PRE_SessionCookies) {

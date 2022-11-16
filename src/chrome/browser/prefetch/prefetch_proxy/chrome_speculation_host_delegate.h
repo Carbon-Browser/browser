@@ -32,10 +32,12 @@ class ChromeSpeculationHostDelegate : public content::SpeculationHostDelegate {
 
   // content::SpeculationRulesDelegate implementation.
   void ProcessCandidates(
-      std::vector<blink::mojom::SpeculationCandidatePtr>& candidates) override;
+      std::vector<blink::mojom::SpeculationCandidatePtr>& candidates,
+      base::WeakPtr<content::SpeculationHostDevToolsObserver> devtools_observer)
+      override;
 
  private:
-  // content::SpeculationHostImpl, which inherits content::DocumentServiceBase,
+  // content::SpeculationHostImpl, which inherits content::DocumentService,
   // owns `this`, so `this` can access `render_frame_host_` safely.
   content::RenderFrameHost& render_frame_host_;
 

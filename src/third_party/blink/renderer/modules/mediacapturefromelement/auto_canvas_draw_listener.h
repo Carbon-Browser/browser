@@ -8,7 +8,7 @@
 #include <memory>
 #include "third_party/blink/renderer/core/html/canvas/canvas_draw_listener.h"
 #include "third_party/blink/renderer/modules/mediacapturefromelement/canvas_capture_handler.h"
-#include "third_party/blink/renderer/platform/heap/handle.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 
 namespace blink {
 
@@ -18,9 +18,8 @@ class AutoCanvasDrawListener : public GarbageCollected<AutoCanvasDrawListener>,
   explicit AutoCanvasDrawListener(std::unique_ptr<CanvasCaptureHandler>);
   ~AutoCanvasDrawListener() override = default;
 
-  void SendNewFrame(
-      scoped_refptr<StaticBitmapImage>,
-      base::WeakPtr<WebGraphicsContext3DProviderWrapper>) override;
+  NewFrameCallback GetNewFrameCallback() override;
+  bool CanDiscardAlpha() const final;
   bool NeedsNewFrame() const final;
   void RequestFrame() final;
 

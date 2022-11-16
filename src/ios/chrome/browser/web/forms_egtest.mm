@@ -30,6 +30,7 @@
 #error "This file requires ARC support."
 #endif
 
+using base::test::ios::kWaitForActionTimeout;
 using chrome_test_util::ButtonWithAccessibilityLabelId;
 using chrome_test_util::OmniboxText;
 using chrome_test_util::TapWebElement;
@@ -144,6 +145,16 @@ void TestFormResponseProvider::GetResponseHeadersAndBody(
   NOTREACHED();
 }
 
+// Waits for the keyboard to appear. Returns NO on timeout.
+BOOL WaitForKeyboardToAppear() {
+  GREYCondition* waitForKeyboard = [GREYCondition
+      conditionWithName:@"Wait for keyboard"
+                  block:^BOOL {
+                    return [EarlGrey isKeyboardShownWithError:nil];
+                  }];
+  return [waitForKeyboard waitWithTimeout:kWaitForActionTimeout];
+}
+
 }  // namespace
 
 // Tests submition of HTTP forms POST data including cases involving navigation.
@@ -230,8 +241,7 @@ id<GREYMatcher> ResendPostButtonMatcher() {
         std::make_unique<ScopedSynchronizationDisabler>();
     // TODO(crbug.com/989615): Investigate why this is necessary even with a
     // visible check below.
-    base::test::ios::SpinRunLoopWithMinDelay(
-        base::TimeDelta::FromSecondsD(0.5));
+    base::test::ios::SpinRunLoopWithMinDelay(base::Seconds(0.5));
 
     [ChromeEarlGrey
         waitForSufficientlyVisibleElementWithMatcher:ResendPostButtonMatcher()];
@@ -275,8 +285,7 @@ id<GREYMatcher> ResendPostButtonMatcher() {
         std::make_unique<ScopedSynchronizationDisabler>();
       // TODO(crbug.com/989615): Investigate why this is necessary even with a
       // visible check below.
-      base::test::ios::SpinRunLoopWithMinDelay(
-          base::TimeDelta::FromSecondsD(0.5));
+    base::test::ios::SpinRunLoopWithMinDelay(base::Seconds(0.5));
 
     [ChromeEarlGrey
         waitForSufficientlyVisibleElementWithMatcher:ResendPostButtonMatcher()];
@@ -319,8 +328,7 @@ id<GREYMatcher> ResendPostButtonMatcher() {
         std::make_unique<ScopedSynchronizationDisabler>();
       // TODO(crbug.com/989615): Investigate why this is necessary even with a
       // visible check below.
-      base::test::ios::SpinRunLoopWithMinDelay(
-          base::TimeDelta::FromSecondsD(0.5));
+    base::test::ios::SpinRunLoopWithMinDelay(base::Seconds(0.5));
 
     [ChromeEarlGrey
         waitForSufficientlyVisibleElementWithMatcher:ResendPostButtonMatcher()];
@@ -577,22 +585,17 @@ id<GREYMatcher> ResendPostButtonMatcher() {
         performAction:TapWebElement(
                           [ElementSelector selectorWithElementID:ID])];
 
-    // Wait until the keyboard shows up before tapping.
-    GREYCondition* condition = [GREYCondition
-        conditionWithName:@"Wait for the keyboard to show up."
-                    block:^BOOL {
-                      NSError* error = nil;
-                      [[EarlGrey selectElementWithMatcher:GoButtonMatcher()]
-                          assertWithMatcher:grey_notNil()
-                                      error:&error];
-                      return (error == nil);
-                    }];
-    GREYAssert(
-        [condition waitWithTimeout:base::test::ios::kWaitForUIElementTimeout],
-        @"No keyboard with 'Go' button showed up.");
+    // Wait for the accessory icon to appear.
+    GREYAssert(WaitForKeyboardToAppear(), @"Keyboard didn't appear.");
 
-    [[EarlGrey selectElementWithMatcher:grey_accessibilityID(@"Go")]
-        performAction:grey_tap()];
+    if (@available(iOS 16, *)) {
+      // TODO(crbug.com/1331347): Move this logic into EG.
+      XCUIApplication* app = [[XCUIApplication alloc] init];
+      [[[app keyboards] buttons][@"go"] tap];
+    } else {
+      [[EarlGrey selectElementWithMatcher:grey_accessibilityID(@"Go")]
+          performAction:grey_tap()];
+    }
   }
 }
 

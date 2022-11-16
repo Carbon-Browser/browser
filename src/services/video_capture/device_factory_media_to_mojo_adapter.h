@@ -6,8 +6,9 @@
 #define SERVICES_VIDEO_CAPTURE_DEVICE_FACTORY_MEDIA_TO_MOJO_ADAPTER_H_
 
 #include <map>
-#include "build/chromeos_buildflags.h"
 
+#include "build/build_config.h"
+#include "build/chromeos_buildflags.h"
 #include "media/capture/video/video_capture_device_client.h"
 #include "media/capture/video/video_capture_system.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -39,6 +40,12 @@ class DeviceFactoryMediaToMojoAdapter : public DeviceFactory {
   DeviceFactoryMediaToMojoAdapter(
       std::unique_ptr<media::VideoCaptureSystem> capture_system);
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
+  DeviceFactoryMediaToMojoAdapter(const DeviceFactoryMediaToMojoAdapter&) =
+      delete;
+  DeviceFactoryMediaToMojoAdapter& operator=(
+      const DeviceFactoryMediaToMojoAdapter&) = delete;
+
   ~DeviceFactoryMediaToMojoAdapter() override;
 
   // DeviceFactory implementation.
@@ -63,6 +70,10 @@ class DeviceFactoryMediaToMojoAdapter : public DeviceFactory {
   void RegisterVirtualDevicesChangedObserver(
       mojo::PendingRemote<mojom::DevicesChangedObserver> observer,
       bool raise_event_if_virtual_devices_already_present) override;
+
+#if BUILDFLAG(IS_WIN)
+  void OnGpuInfoUpdate(const CHROME_LUID& luid) override;
+#endif
 
  private:
   struct ActiveDeviceEntry {
@@ -95,8 +106,6 @@ class DeviceFactoryMediaToMojoAdapter : public DeviceFactory {
 
   bool has_called_get_device_infos_;
   base::WeakPtrFactory<DeviceFactoryMediaToMojoAdapter> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(DeviceFactoryMediaToMojoAdapter);
 };
 
 }  // namespace video_capture

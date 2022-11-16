@@ -16,6 +16,7 @@ import android.graphics.drawable.Drawable;
 
 import androidx.annotation.ColorInt;
 import androidx.annotation.NonNull;
+import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.ApiCompatibilityUtils;
 import org.chromium.base.annotations.CalledByNative;
@@ -71,7 +72,8 @@ public class FaviconHelper {
             Canvas c = new Canvas(tintedBitmap);
             @ColorInt
             int tintColor = ApiCompatibilityUtils.getColor(resources,
-                    useDarkIcon ? R.color.default_icon_color : R.color.default_icon_color_light);
+                    useDarkIcon ? R.color.default_icon_color_baseline
+                                : R.color.default_icon_color_light);
             Paint p = new Paint();
             p.setColorFilter(new PorterDuffColorFilter(tintColor, PorterDuff.Mode.SRC_IN));
             c.drawBitmap(origBitmap, 0f, 0f, p);
@@ -215,8 +217,9 @@ public class FaviconHelper {
                 urls.toArray(new GURL[0]), desiredSizeInPixel, faviconImageCallback);
     }
 
+    @VisibleForTesting(otherwise = VisibleForTesting.PACKAGE_PRIVATE)
     @NativeMethods
-    interface Natives {
+    public interface Natives {
         long init();
         void destroy(long nativeFaviconHelper);
         boolean getComposedFaviconImage(long nativeFaviconHelper, Profile profile, GURL[] urls,

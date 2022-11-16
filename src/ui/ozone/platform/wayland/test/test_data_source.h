@@ -7,7 +7,6 @@
 
 #include <wayland-server-protocol.h>
 
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "ui/ozone/platform/wayland/test/test_selection_device_manager.h"
 
@@ -20,6 +19,10 @@ extern const struct wl_data_source_interface kTestDataSourceImpl;
 class TestDataSource : public TestSelectionSource {
  public:
   explicit TestDataSource(wl_resource* resource);
+
+  TestDataSource(const TestDataSource&) = delete;
+  TestDataSource& operator=(const TestDataSource&) = delete;
+
   ~TestDataSource() override;
 
   void SetActions(uint32_t dnd_actions);
@@ -28,8 +31,6 @@ class TestDataSource : public TestSelectionSource {
 
  private:
   uint32_t actions_ = WL_DATA_DEVICE_MANAGER_DND_ACTION_NONE;
-
-  DISALLOW_COPY_AND_ASSIGN(TestDataSource);
 };
 
 }  // namespace wl

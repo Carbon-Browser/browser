@@ -7,18 +7,18 @@
 #include <utility>
 
 #include "base/bind.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "content/browser/payments/installed_payment_apps_finder_impl.h"
 #include "content/browser/payments/payment_app_content_unittest_base.h"
 #include "content/public/browser/payment_app_provider.h"
-#include "content/public/browser/permission_type.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/mock_permission_manager.h"
 #include "content/public/test/test_browser_context.h"
 #include "content/public/test/test_web_contents_factory.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/blink/public/common/permissions/permission_utils.h"
 #include "third_party/blink/public/mojom/payments/payment_app.mojom.h"
 #include "third_party/blink/public/mojom/permissions/permission_status.mojom.h"
 #include "url/gurl.h"
@@ -73,8 +73,8 @@ class PaymentAppProviderTest : public PaymentAppContentUnitTestBase {
     std::unique_ptr<MockPermissionManager> mock_permission_manager(
         new testing::NiceMock<MockPermissionManager>());
     ON_CALL(*mock_permission_manager,
-            GetPermissionStatus(PermissionType::PAYMENT_HANDLER, testing::_,
-                                testing::_))
+            GetPermissionStatus(blink::PermissionType::PAYMENT_HANDLER,
+                                testing::_, testing::_))
         .WillByDefault(
             testing::Return(blink::mojom::PermissionStatus::GRANTED));
     static_cast<TestBrowserContext*>(browser_context())
@@ -83,6 +83,10 @@ class PaymentAppProviderTest : public PaymentAppContentUnitTestBase {
     web_contents_ =
         test_web_contents_factory_.CreateWebContents(browser_context());
   }
+
+  PaymentAppProviderTest(const PaymentAppProviderTest&) = delete;
+  PaymentAppProviderTest& operator=(const PaymentAppProviderTest&) = delete;
+
   ~PaymentAppProviderTest() override {}
 
   void SetPaymentInstrument(
@@ -141,9 +145,7 @@ class PaymentAppProviderTest : public PaymentAppContentUnitTestBase {
 
  private:
   TestWebContentsFactory test_web_contents_factory_;
-  WebContents* web_contents_;
-
-  DISALLOW_COPY_AND_ASSIGN(PaymentAppProviderTest);
+  raw_ptr<WebContents> web_contents_;
 };
 
 TEST_F(PaymentAppProviderTest, AbortPaymentTest) {

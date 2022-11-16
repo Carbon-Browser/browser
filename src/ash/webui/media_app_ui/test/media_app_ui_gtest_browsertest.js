@@ -8,6 +8,8 @@
 GEN('#include "ash/webui/media_app_ui/test/media_app_ui_browsertest.h"');
 
 GEN('#include "ash/constants/ash_features.h"');
+GEN('#include "ash/public/cpp/style/dark_light_mode_controller.h"');
+GEN('#include "chromeos/constants/chromeos_features.h"');
 GEN('#include "content/public/test/browser_test.h"');
 GEN('#include "third_party/blink/public/common/features.h"');
 
@@ -35,13 +37,67 @@ var MediaAppUIGtestBrowserTest = class extends testing.Test {
   }
 
   /** @override */
-  get runAccessibilityChecks() {
-    return false;
+  get typedefCppFixture() {
+    return 'MediaAppUiBrowserTest';
+  }
+};
+
+// js2gtest fixtures require var here (https://crbug.com/1033337).
+// eslint-disable-next-line no-var
+var MediaAppUIWithDarkLightModeGtestBrowserTest =
+    class extends MediaAppUIGtestBrowserTest {
+  /** @override */
+  get featureList() {
+    return {
+      enabled: [
+        ...super.featureList.enabled,
+        'chromeos::features::kDarkLightMode',
+      ],
+    };
   }
 
   /** @override */
-  get typedefCppFixture() {
-    return 'MediaAppUiBrowserTest';
+  get testGenPreamble() {
+    return () => {
+      // Switch to light mode.
+      GEN('ash::DarkLightModeController::Get()->SetDarkModeEnabledForTest(false);');
+    };
+  }
+};
+
+// js2gtest fixtures require var here (https://crbug.com/1033337).
+// eslint-disable-next-line no-var
+var MediaAppUIWithDarkLightModeDarkGtestBrowserTest =
+    class extends MediaAppUIGtestBrowserTest {
+  /** @override */
+  get featureList() {
+    return {
+      enabled: [
+        ...super.featureList.enabled,
+        'chromeos::features::kDarkLightMode',
+      ],
+    };
+  }
+
+  /** @override */
+  get testGenPreamble() {
+    return () => {
+      // Switch to dark mode.
+      GEN('ash::DarkLightModeController::Get()->SetDarkModeEnabledForTest(true);');
+    };
+  }
+};
+
+// js2gtest fixtures require var here (https://crbug.com/1033337).
+// eslint-disable-next-line no-var
+var MediaAppUIWithoutDarkLightModeGtestBrowserTest =
+    class extends MediaAppUIGtestBrowserTest {
+  /** @override */
+  get featureList() {
+    return {
+      enabled: super.featureList.enabled,
+      disabled: ['chromeos::features::kDarkLightMode'],
+    };
   }
 };
 
@@ -92,9 +148,19 @@ function runTestInGuest(name) {
 // Ensure every test body has a TEST_F call in this file.
 TEST_F('MediaAppUIGtestBrowserTest', 'ConsistencyCheck', async () => {
   const MediaAppUIBrowserTest = await GetTestHarness();
-  const bodies =
-      /** @type {{testCaseBodies: Object}} */ (MediaAppUIGtestBrowserTest)
-          .testCaseBodies;
+  const bodies = {
+    ...(/** @type {{testCaseBodies: Object}} */ (MediaAppUIGtestBrowserTest))
+        .testCaseBodies,
+    ...(/** @type {{testCaseBodies: Object}} */ (
+            MediaAppUIWithDarkLightModeGtestBrowserTest))
+        .testCaseBodies,
+    ...(/** @type {{testCaseBodies: Object}} */ (
+            MediaAppUIWithDarkLightModeDarkGtestBrowserTest))
+        .testCaseBodies,
+    ...(/** @type {{testCaseBodies: Object}} */ (
+            MediaAppUIWithoutDarkLightModeGtestBrowserTest))
+        .testCaseBodies,
+  };
   for (const f in MediaAppUIBrowserTest) {
     if (f === 'runTestInGuest') {
       continue;
@@ -134,12 +200,38 @@ TEST_F('MediaAppUIGtestBrowserTest', 'MultipleFilesHaveTokens', () => {
   runMediaAppTest('MultipleFilesHaveTokens');
 });
 
+TEST_F('MediaAppUIGtestBrowserTest', 'SingleAudioLaunch', () => {
+  runMediaAppTest('SingleAudioLaunch');
+});
+
 TEST_F('MediaAppUIGtestBrowserTest', 'MultipleSelectionLaunch', () => {
   runMediaAppTest('MultipleSelectionLaunch');
 });
 
+TEST_F(
+    'MediaAppUIWithDarkLightModeGtestBrowserTest', 'NotifyCurrentFileLight',
+    () => {
+      runMediaAppTest('NotifyCurrentFileLight');
+    });
+
+TEST_F(
+    'MediaAppUIWithDarkLightModeDarkGtestBrowserTest', 'NotifyCurrentFileDark',
+    () => {
+      runMediaAppTest('NotifyCurrentFileDark');
+    });
+
+TEST_F(
+    'MediaAppUIWithDarkLightModeDarkGtestBrowserTest',
+    'NotifyCurrentFileAppIconDark', () => {
+      runMediaAppTest('NotifyCurrentFileAppIconDark');
+    });
+
 TEST_F('MediaAppUIGtestBrowserTest', 'LaunchUnopenableFile', () => {
   runMediaAppTest('LaunchUnopenableFile');
+});
+
+TEST_F('MediaAppUIGtestBrowserTest', 'LaunchUnnavigableDirectory', () => {
+  runMediaAppTest('LaunchUnnavigableDirectory');
 });
 
 TEST_F('MediaAppUIGtestBrowserTest', 'NavigateWithUnopenableSibling', () => {
@@ -198,6 +290,10 @@ TEST_F('MediaAppUIGtestBrowserTest', 'RenameMissingFile', () => {
   runMediaAppTest('RenameMissingFile');
 });
 
+TEST_F('MediaAppUIGtestBrowserTest', 'OpenAllowedFileIPC', () => {
+  runMediaAppTest('OpenAllowedFileIPC');
+});
+
 TEST_F('MediaAppUIGtestBrowserTest', 'NavigateIPC', () => {
   runMediaAppTest('NavigateIPC');
 });
@@ -226,8 +322,8 @@ TEST_F('MediaAppUIGtestBrowserTest', 'SaveAsErrorHandling', () => {
   runMediaAppTest('SaveAsErrorHandling');
 });
 
-TEST_F('MediaAppUIGtestBrowserTest', 'OpenFileIPC', () => {
-  runMediaAppTest('OpenFileIPC');
+TEST_F('MediaAppUIGtestBrowserTest', 'OpenFilesWithFilePickerIPC', () => {
+  runMediaAppTest('OpenFilesWithFilePickerIPC');
 });
 
 TEST_F('MediaAppUIGtestBrowserTest', 'RelatedFiles', () => {
@@ -250,6 +346,18 @@ TEST_F('MediaAppUIGtestBrowserTest', 'GuestHasFocus', () => {
   runMediaAppTest('GuestHasFocus');
 });
 
+TEST_F(
+    'MediaAppUIWithDarkLightModeGtestBrowserTest',
+    'BodyHasCorrectBackgroundColorWithDarkLight', () => {
+      runMediaAppTest('BodyHasCorrectBackgroundColorWithDarkLight');
+    });
+
+TEST_F(
+    'MediaAppUIWithoutDarkLightModeGtestBrowserTest',
+    'BodyHasCorrectBackgroundColorWithoutDarkLight', () => {
+      runMediaAppTest('BodyHasCorrectBackgroundColorWithoutDarkLight');
+    });
+
 // Test cases injected into the guest context.
 // See implementations in media_app_guest_ui_browsertest.js.
 
@@ -271,4 +379,12 @@ TEST_F('MediaAppUIGtestBrowserTest', 'GuestCanLoadWithCspRestrictions', () => {
 
 TEST_F('MediaAppUIGtestBrowserTest', 'GuestStartsWithDefaultFileList', () => {
   runTestInGuest('GuestStartsWithDefaultFileList');
+});
+
+TEST_F('MediaAppUIGtestBrowserTest', 'GuestFailsToFetchMissingFonts', () => {
+  runTestInGuest('GuestFailsToFetchMissingFonts');
+});
+
+TEST_F('MediaAppUIGtestBrowserTest', 'GuestCanFilterInPlace', () => {
+  runTestInGuest('GuestCanFilterInPlace');
 });

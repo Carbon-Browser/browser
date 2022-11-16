@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "base/bind.h"
+#include "base/threading/thread_task_runner_handle.h"
 #include "components/download/internal/common/resource_downloader.h"
 #include "components/download/public/common/download_create_info.h"
 #include "components/download/public/common/download_interrupt_reasons.h"
@@ -31,6 +32,10 @@ bool IsURLSafe(int render_process_id, const GURL& url) {
 class CompletedInputStream : public InputStream {
  public:
   CompletedInputStream(DownloadInterruptReason status) : status_(status) {}
+
+  CompletedInputStream(const CompletedInputStream&) = delete;
+  CompletedInputStream& operator=(const CompletedInputStream&) = delete;
+
   ~CompletedInputStream() override = default;
 
   // InputStream
@@ -45,7 +50,6 @@ class CompletedInputStream : public InputStream {
 
  private:
   DownloadInterruptReason status_;
-  DISALLOW_COPY_AND_ASSIGN(CompletedInputStream);
 };
 
 void CreateUrlDownloadHandler(

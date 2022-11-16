@@ -7,6 +7,7 @@
 
 #include "ui/display/display_export.h"
 #include "ui/display/mojom/screen_orientation.mojom-shared.h"
+#include "ui/display/types/display_constants.h"
 #include "ui/gfx/display_color_spaces.h"
 #include "ui/gfx/geometry/rect.h"
 
@@ -64,23 +65,29 @@ struct DISPLAY_EXPORT ScreenInfo {
   // TODO(crbug.com/840189): we should use an enum rather than a number here.
   uint16_t orientation_angle = 0;
 
-  // Proposed: https://github.com/webscreens/window-placement
+  // Proposed: https://github.com/w3c/window-placement"
   // Whether this Screen is part of a multi-screen extended visual workspace.
   bool is_extended = false;
 
-  // Proposed: https://github.com/webscreens/window-placement
+  // Proposed: https://github.com/w3c/window-placement"
   // Whether this screen is designated as the 'primary' screen by the OS
   // (otherwise it is a 'secondary' screen).
   bool is_primary = false;
 
-  // Proposed: https://github.com/webscreens/window-placement
+  // Proposed: https://github.com/w3c/window-placement"
   // Whether this screen is an 'internal' panel built into the device, like a
   // laptop display (otherwise it is 'external', like a wired monitor).
   bool is_internal = false;
 
+  // Proposed: https://github.com/w3c/window-placement"
+  // A user-friendly label for the screen, determined by the platform.
+  std::string label;
+
   // Not web-exposed; the display::Display::id(), for internal tracking only.
-  static constexpr int64_t kInvalidDisplayId = -1;
-  int64_t display_id = kInvalidDisplayId;
+  int64_t display_id = kDefaultDisplayId;
+
+  // Expose this constant to Blink.
+  static constexpr int64_t kInvalidDisplayId = display::kInvalidDisplayId;
 
   ScreenInfo();
   ScreenInfo(const ScreenInfo& other);

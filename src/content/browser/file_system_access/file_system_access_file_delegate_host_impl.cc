@@ -14,6 +14,7 @@
 #include "base/memory/scoped_refptr.h"
 #include "base/numerics/safe_math.h"
 #include "components/services/storage/public/cpp/big_io_buffer.h"
+#include "content/browser/file_system_access/file_system_access_manager_impl.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "mojo/public/cpp/base/big_buffer.h"
@@ -30,7 +31,7 @@ namespace {
 
 void ReadOnIOThread(scoped_refptr<storage::FileSystemContext> context,
                     storage::FileSystemURL url,
-                    uint64_t offset,
+                    int64_t offset,
                     scoped_refptr<storage::BigIOBuffer> buffer,
                     scoped_refptr<base::SequencedTaskRunner> reply_runner,
                     base::OnceCallback<void(int)> callback) {
@@ -82,19 +83,29 @@ FileSystemAccessFileDelegateHostImpl::~FileSystemAccessFileDelegateHostImpl() =
 
 struct FileSystemAccessFileDelegateHostImpl::WriteState {
   WriteCallback callback;
-  uint64_t bytes_written = 0;
+  int64_t bytes_written = 0;
 };
 
-void FileSystemAccessFileDelegateHostImpl::Read(uint64_t offset,
-                                                uint64_t bytes_to_read,
+void FileSystemAccessFileDelegateHostImpl::Read(int64_t offset,
+                                                int bytes_to_read,
                                                 ReadCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  if (offset < 0) {
+    receiver_.ReportBadMessage("SyncAccesHandle with a negative read offset.");
+    return;
+  }
+  if (bytes_to_read < 0) {
+    receiver_.ReportBadMessage(
+        "SyncAccesHandle trying to read a negative number of bytes.");
+    return;
+  }
 
   // FileStreamReader::Read takes an int. Do not allocate more memory than
   // Chrome will be allowed to contiguously allocate at once.
   int max_bytes_to_read =
-      std::min(base::saturated_cast<int>(bytes_to_read),
-               base::saturated_cast<int>(base::MaxDirectMapped()));
+      std::min(bytes_to_read,
+               base::saturated_cast<int>(partition_alloc::MaxDirectMapped()));
 
   auto buffer = base::MakeRefCounted<storage::BigIOBuffer>(max_bytes_to_read);
 
@@ -135,12 +146,17 @@ void FileSystemAccessFileDelegateHostImpl::DidRead(
 }
 
 void FileSystemAccessFileDelegateHostImpl::Write(
-    uint64_t offset,
+    int64_t offset,
     mojo::ScopedDataPipeConsumerHandle data,
     WriteCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  DoFileSystemOperation(
+  if (offset < 0) {
+    receiver_.ReportBadMessage("SyncAccesHandle with a negative write offset.");
+    return;
+  }
+
+  manager()->DoFileSystemOperation(
       FROM_HERE, &storage::FileSystemOperationRunner::WriteStream,
       base::BindRepeating(&FileSystemAccessFileDelegateHostImpl::DidWrite,
                           weak_factory_.GetWeakPtr(),
@@ -168,7 +184,7 @@ void FileSystemAccessFileDelegateHostImpl::GetLength(
     GetLengthCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  DoFileSystemOperation(
+  manager()->DoFileSystemOperation(
       FROM_HERE, &storage::FileSystemOperationRunner::GetMetadata,
       base::BindOnce(
           [](GetLengthCallback callback, base::File::Error file_error,
@@ -184,18 +200,19 @@ void FileSystemAccessFileDelegateHostImpl::GetLength(
 }
 
 void FileSystemAccessFileDelegateHostImpl::SetLength(
-    uint64_t length,
+    int64_t length,
     SetLengthCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  DoFileSystemOperation(
+  if (length < 0) {
+    receiver_.ReportBadMessage(
+        "SyncAccesHandle with a negative truncate length.");
+    return;
+  }
+
+  manager()->DoFileSystemOperation(
       FROM_HERE, &storage::FileSystemOperationRunner::Truncate,
-      base::BindOnce(
-          [](SetLengthCallback callback, base::File::Error result) {
-            std::move(callback).Run(result == base::File::Error::FILE_OK);
-          },
-          std::move(callback)),
-      url(), length);
+      std::move(callback), url(), length);
 }
 
 void FileSystemAccessFileDelegateHostImpl::OnDisconnect() {

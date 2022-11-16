@@ -7,7 +7,6 @@
 
 #include <string>
 
-#include "base/macros.h"
 #include "build/build_config.h"
 #include "google_apis/gaia/gaia_auth_fetcher.h"
 
@@ -50,6 +49,10 @@ class AccountsCookieMutator {
   };
 
   AccountsCookieMutator() = default;
+
+  AccountsCookieMutator(const AccountsCookieMutator&) = delete;
+  AccountsCookieMutator& operator=(const AccountsCookieMutator&) = delete;
+
   virtual ~AccountsCookieMutator() = default;
 
   typedef base::OnceCallback<void(const CoreAccountId& account_id,
@@ -113,7 +116,7 @@ class AccountsCookieMutator {
   // know that the contents of the Gaia cookie might have changed.
   virtual void TriggerCookieJarUpdate() = 0;
 
-#if defined(OS_IOS)
+#if BUILDFLAG(IS_IOS)
   // Forces the processing of GaiaCookieManagerService::OnCookieChange. On
   // iOS, it's necessary to force-trigger the processing of cookie changes
   // from the client as the normal mechanism for internally observing them
@@ -134,9 +137,6 @@ class AccountsCookieMutator {
   // Indicates that an account previously listed via ListAccounts should now
   // be removed.
   virtual void RemoveLoggedOutAccountByGaiaId(const std::string& gaia_id) = 0;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(AccountsCookieMutator);
 };
 
 }  // namespace signin

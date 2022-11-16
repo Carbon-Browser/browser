@@ -7,10 +7,10 @@
 #include "base/bind.h"
 #include "base/location.h"
 #include "base/synchronization/waitable_event.h"
-#include "base/task/post_task.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
 #include "base/threading/thread.h"
+#include "base/time/time.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -30,8 +30,8 @@ constexpr int kHung =
 constexpr int kRecovered =
     static_cast<int>(AudioThreadHangMonitor::ThreadStatus::kRecovered);
 
-constexpr base::TimeDelta kShortHangDeadline = base::TimeDelta::FromSeconds(5);
-constexpr base::TimeDelta kLongHangDeadline = base::TimeDelta::FromMinutes(30);
+constexpr base::TimeDelta kShortHangDeadline = base::Seconds(5);
+constexpr base::TimeDelta kLongHangDeadline = base::Minutes(30);
 
 }  // namespace
 
@@ -107,7 +107,7 @@ TEST_F(AudioThreadHangMonitorTest, DoesNotLogThreadHungWhenOk) {
     // Flush the audio thread, then advance the clock. The audio thread should
     // register as "alive" every time.
     FlushAudioThread();
-    task_env_.FastForwardBy(base::TimeDelta::FromMinutes(1));
+    task_env_.FastForwardBy(base::Minutes(1));
   }
 
   EXPECT_THAT(histograms_.GetAllSamples("Media.AudioThreadStatus"),
@@ -118,7 +118,7 @@ TEST_F(AudioThreadHangMonitorTest, LogsHungWhenAudioThreadIsBlocked) {
   RunUntilIdle();
 
   BlockAudioThreadUntilEvent();
-  task_env_.FastForwardBy(base::TimeDelta::FromMinutes(10));
+  task_env_.FastForwardBy(base::Minutes(10));
   event_.Signal();
 
   EXPECT_THAT(histograms_.GetAllSamples("Media.AudioThreadStatus"),
@@ -200,14 +200,14 @@ TEST_F(AudioThreadHangMonitorTest, ZeroDeadlineMeansDefaultDeadline) {
     // Flush the audio thread, then advance the clock. The audio thread should
     // register as "alive" every time.
     FlushAudioThread();
-    task_env_.FastForwardBy(base::TimeDelta::FromMinutes(1));
+    task_env_.FastForwardBy(base::Minutes(1));
   }
 
   EXPECT_THAT(histograms_.GetAllSamples("Media.AudioThreadStatus"),
               ElementsAre(base::Bucket(kStarted, 2)));
 
   BlockAudioThreadUntilEvent();
-  task_env_.FastForwardBy(base::TimeDelta::FromMinutes(10));
+  task_env_.FastForwardBy(base::Minutes(10));
   event_.Signal();
 
   EXPECT_THAT(histograms_.GetAllSamples("Media.AudioThreadStatus"),
@@ -219,14 +219,14 @@ TEST_F(AudioThreadHangMonitorTest,
   RunUntilIdle();
 
   BlockAudioThreadUntilEvent();
-  task_env_.FastForwardBy(base::TimeDelta::FromMinutes(10));
+  task_env_.FastForwardBy(base::Minutes(10));
   event_.Signal();
 
   for (int i = 0; i < 10; ++i) {
     // Flush the audio thread, then advance the clock. The audio thread should
     // register as "alive" every time.
     FlushAudioThread();
-    task_env_.FastForwardBy(base::TimeDelta::FromMinutes(1));
+    task_env_.FastForwardBy(base::Minutes(1));
   }
 
   EXPECT_THAT(histograms_.GetAllSamples("Media.AudioThreadStatus"),
@@ -242,7 +242,7 @@ TEST_F(AudioThreadHangMonitorTest, NoHangActionWhenOk) {
     // Flush the audio thread, then advance the clock. The audio thread should
     // register as "alive" every time.
     FlushAudioThread();
-    task_env_.FastForwardBy(base::TimeDelta::FromMinutes(1));
+    task_env_.FastForwardBy(base::Minutes(1));
   }
 
   EXPECT_THAT(histograms_.GetAllSamples("Media.AudioThreadStatus"),
@@ -259,7 +259,7 @@ TEST_F(AudioThreadHangMonitorTest, DumpsWhenAudioThreadIsBlocked) {
   EXPECT_CALL(*this, HangActionDump).Times(1);
 
   BlockAudioThreadUntilEvent();
-  task_env_.FastForwardBy(base::TimeDelta::FromMinutes(10));
+  task_env_.FastForwardBy(base::Minutes(10));
   event_.Signal();
 
   EXPECT_THAT(histograms_.GetAllSamples("Media.AudioThreadStatus"),
@@ -277,7 +277,7 @@ TEST_F(AudioThreadHangMonitorTest, TerminatesProcessWhenAudioThreadIsBlocked) {
   EXPECT_CALL(*this, HangActionTerminate).Times(1);
 
   BlockAudioThreadUntilEvent();
-  task_env_.FastForwardBy(base::TimeDelta::FromMinutes(10));
+  task_env_.FastForwardBy(base::Minutes(10));
   event_.Signal();
 
   EXPECT_THAT(histograms_.GetAllSamples("Media.AudioThreadStatus"),
@@ -297,7 +297,7 @@ TEST_F(AudioThreadHangMonitorTest,
   EXPECT_CALL(*this, HangActionTerminate).Times(1);
 
   BlockAudioThreadUntilEvent();
-  task_env_.FastForwardBy(base::TimeDelta::FromMinutes(10));
+  task_env_.FastForwardBy(base::Minutes(10));
   event_.Signal();
 
   EXPECT_THAT(histograms_.GetAllSamples("Media.AudioThreadStatus"),

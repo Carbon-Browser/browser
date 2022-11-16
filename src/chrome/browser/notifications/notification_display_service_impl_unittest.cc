@@ -8,11 +8,13 @@
 #include <vector>
 
 #include "base/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
+#include "build/chromeos_buildflags.h"
 #include "chrome/browser/browser_features.h"
 #include "chrome/browser/notifications/notification_blocker.h"
 #include "chrome/browser/notifications/notification_display_queue.h"
@@ -35,7 +37,7 @@
 #include "chrome/browser/nearby_sharing/nearby_sharing_service_factory.h"
 #endif
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/notifications/muted_notification_handler.h"
 #include "chrome/browser/notifications/screen_capture_notification_blocker.h"
 #endif
@@ -93,7 +95,7 @@ class TestNotificationPlatformBridgeDelegator
 message_center::Notification CreateNotification(const std::string& id) {
   return message_center::Notification(
       message_center::NOTIFICATION_TYPE_SIMPLE, id, /*title=*/std::u16string(),
-      /*message=*/std::u16string(), /*icon=*/gfx::Image(),
+      /*message=*/std::u16string(), /*icon=*/ui::ImageModel(),
       /*display_source=*/std::u16string(),
       /*origin_url=*/GURL(), message_center::NotifierId(),
       message_center::RichNotificationData(), /*delegate=*/nullptr);
@@ -162,7 +164,8 @@ class BaseNotificationDisplayServiceImplTest : public testing::Test {
   content::BrowserTaskEnvironment task_environment_;
   TestingProfile profile_;
   std::unique_ptr<NotificationDisplayServiceImpl> service_;
-  TestNotificationPlatformBridgeDelegator* notification_delegator_ = nullptr;
+  raw_ptr<TestNotificationPlatformBridgeDelegator> notification_delegator_ =
+      nullptr;
 };
 
 // Test class that uses a FakeNotificationBlocker instead of the real ones.
@@ -189,7 +192,7 @@ class NotificationDisplayServiceImplTest
   }
 
  private:
-  FakeNotificationBlocker* notification_blocker_ = nullptr;
+  raw_ptr<FakeNotificationBlocker> notification_blocker_ = nullptr;
 };
 
 TEST_F(NotificationDisplayServiceImplTest, DisplayWithoutBlockers) {
@@ -273,7 +276,7 @@ TEST_F(NotificationDisplayServiceImplTest, NearbyNotificationHandler) {
 }
 #endif
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
 
 // Desktop specific test class that uses the default NotificationBlockers.
 class DesktopNotificationDisplayServiceImplTest
@@ -300,7 +303,7 @@ class DesktopNotificationDisplayServiceImplTest
   }
 
  private:
-  ScreenCaptureNotificationBlocker* screen_capture_blocker_ = nullptr;
+  raw_ptr<ScreenCaptureNotificationBlocker> screen_capture_blocker_ = nullptr;
 };
 
 TEST_F(DesktopNotificationDisplayServiceImplTest, SnoozeDuringScreenCapture) {
@@ -347,4 +350,4 @@ TEST_F(DesktopNotificationDisplayServiceImplTest, SnoozeDuringScreenCapture) {
   EXPECT_EQ(1u, GetDisplayedPlatformSync().count(notification_id_2));
 }
 
-#endif  // !defined(OS_ANDROID)
+#endif  // !BUILDFLAG(IS_ANDROID)

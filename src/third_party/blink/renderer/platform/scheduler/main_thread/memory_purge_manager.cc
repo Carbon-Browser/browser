@@ -24,8 +24,7 @@ base::TimeDelta FreezePurgeMemoryAllPagesFrozenDelay() {
           &blink::features::kFreezePurgeMemoryAllPagesFrozen,
           "delay-in-minutes",
           MemoryPurgeManager::kDefaultTimeToPurgeAfterFreezing};
-  return base::TimeDelta::FromMinutes(
-      kFreezePurgeMemoryAllPagesFrozenDelayInMinutes.Get());
+  return base::Minutes(kFreezePurgeMemoryAllPagesFrozenDelayInMinutes.Get());
 }
 
 int MinTimeToPurgeAfterBackgroundedInSeconds() {
@@ -147,11 +146,7 @@ void MemoryPurgeManager::PerformMemoryPurge() {
 
   if (AreAllPagesFrozen())
     base::MemoryPressureListener::SetNotificationsSuppressed(true);
-
-  if (backgrounded_purge_pending_) {
-    Platform::Current()->RecordMetricsForBackgroundedRendererPurge();
-    backgrounded_purge_pending_ = false;
-  }
+  backgrounded_purge_pending_ = false;
 }
 
 bool MemoryPurgeManager::CanPurge() const {
@@ -179,8 +174,7 @@ bool MemoryPurgeManager::AreAllPagesFrozen() const {
 base::TimeDelta MemoryPurgeManager::GetTimeToPurgeAfterBackgrounded() const {
   int min_time_in_seconds = MinTimeToPurgeAfterBackgroundedInSeconds();
   int max_time_in_seconds = MaxTimeToPurgeAfterBackgroundedInSeconds();
-  return base::TimeDelta::FromSeconds(
-      base::RandInt(min_time_in_seconds, max_time_in_seconds));
+  return base::Seconds(base::RandInt(min_time_in_seconds, max_time_in_seconds));
 }
 
 }  // namespace blink

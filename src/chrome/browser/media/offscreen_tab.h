@@ -10,7 +10,7 @@
 #include <memory>
 #include <string>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "chrome/browser/profiles/profile_observer.h"
@@ -58,6 +58,10 @@ class OffscreenTab final : public ProfileObserver,
   };
 
   OffscreenTab(Owner* owner, content::BrowserContext* context);
+
+  OffscreenTab(const OffscreenTab&) = delete;
+  OffscreenTab& operator=(const OffscreenTab&) = delete;
+
   ~OffscreenTab() final;
 
   // The WebContents instance hosting the rendering engine for this
@@ -89,7 +93,7 @@ class OffscreenTab final : public ProfileObserver,
   void CanDownload(const GURL& url,
                    const std::string& request_method,
                    base::OnceCallback<void(bool)> callback) final;
-  bool HandleContextMenu(content::RenderFrameHost* render_frame_host,
+  bool HandleContextMenu(content::RenderFrameHost& render_frame_host,
                          const content::ContextMenuParams& params) final;
   content::KeyboardEventProcessingResult PreHandleKeyboardEvent(
       content::WebContents* source,
@@ -134,7 +138,7 @@ class OffscreenTab final : public ProfileObserver,
   // ProfileObserver:
   void OnProfileWillBeDestroyed(Profile* profile) override;
 
-  Owner* const owner_;  // Outlives this class.
+  const raw_ptr<Owner> owner_;  // Outlives this class.
 
   // The initial navigation URL, which may or may not match the current URL if
   // page-initiated navigations have occurred.
@@ -142,7 +146,7 @@ class OffscreenTab final : public ProfileObserver,
 
   // A non-shared off-the-record profile based on the profile of the extension
   // background page.
-  Profile* otr_profile_;
+  raw_ptr<Profile> otr_profile_;
 
   // The WebContents containing the off-screen tab's page.
   std::unique_ptr<content::WebContents> offscreen_tab_web_contents_;
@@ -157,10 +161,8 @@ class OffscreenTab final : public ProfileObserver,
   // Poll timer to monitor the capturer count on |offscreen_tab_web_contents_|.
   // When the capturer count returns to zero, this OffscreenTab is automatically
   // destroyed.
-  //
-  // TODO(miu): Add a method to WebContentsObserver to report capturer count
-  // changes and get rid of this polling-based approach.
-  // http://crbug.com/540965
+  // TODO(https://crbug.com/540965): add a method to WebContentsObserver to
+  // report capturer count and get rid of this polling-based approach.
   base::OneShotTimer capture_poll_timer_;
 
   // This is false until after the Start() method is called, and capture of the
@@ -173,8 +175,6 @@ class OffscreenTab final : public ProfileObserver,
 #if defined(USE_AURA)
   std::unique_ptr<WindowAdoptionAgent> window_agent_;
 #endif  // defined(USE_AURA)
-
-  DISALLOW_COPY_AND_ASSIGN(OffscreenTab);
 };
 
 #endif  // CHROME_BROWSER_MEDIA_OFFSCREEN_TAB_H_

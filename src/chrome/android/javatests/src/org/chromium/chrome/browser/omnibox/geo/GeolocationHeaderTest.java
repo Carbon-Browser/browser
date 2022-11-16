@@ -18,15 +18,15 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import org.chromium.base.test.util.CommandLineFlags;
+import org.chromium.base.test.util.DisabledTest;
 import org.chromium.base.test.util.Feature;
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
-import org.chromium.chrome.test.util.browser.Features.DisableFeatures;
-import org.chromium.chrome.test.util.browser.Features.EnableFeatures;
+import org.chromium.chrome.test.util.OmniboxTestUtils;
+import org.chromium.chrome.test.util.browser.LocationSettingsTestUtil;
 import org.chromium.components.browser_ui.site_settings.PermissionInfo;
 import org.chromium.components.content_settings.ContentSettingValues;
 import org.chromium.components.content_settings.ContentSettingsType;
@@ -37,9 +37,12 @@ import org.chromium.content_public.browser.test.util.TestThreadUtils;
  */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
+@DisabledTest(message = "https://crbug.com/1338183")
 public class GeolocationHeaderTest {
     @Rule
     public ChromeTabbedActivityTestRule mActivityTestRule = new ChromeTabbedActivityTestRule();
+
+    private OmniboxTestUtils mOmniboxTestUtils;
 
     private static final String SEARCH_URL_1 = "https://www.google.com/search?q=potatoes";
     private static final String SEARCH_URL_2 = "https://www.google.co.jp/webhp?#q=dinosaurs";
@@ -53,6 +56,8 @@ public class GeolocationHeaderTest {
     @Before
     public void setUp() throws InterruptedException {
         mActivityTestRule.startMainActivityOnBlankPage();
+        mOmniboxTestUtils = new OmniboxTestUtils(mActivityTestRule.getActivity());
+        GeolocationHeader.setAppPermissionGrantedForTesting(true);
     }
 
     @Test
@@ -87,24 +92,6 @@ public class GeolocationHeaderTest {
     @SmallTest
     @Feature({"Location"})
     @CommandLineFlags.Add({GOOGLE_BASE_URL_SWITCH})
-    @DisableFeatures(ChromeFeatureList.REVERT_DSE_AUTOMATIC_PERMISSIONS)
-    public void testPermissionWithAutogrant() {
-        long now = setMockLocationNow();
-
-        // X-Geo shouldn't be sent when location is disallowed for the origin.
-        checkHeaderWithPermission(ContentSettingValues.ALLOW, now, false);
-        checkHeaderWithPermission(ContentSettingValues.BLOCK, now, true);
-
-        // The default permission for the DSE is to allow access, so the header
-        // should be sent in this case.
-        checkHeaderWithPermission(ContentSettingValues.DEFAULT, now, false);
-    }
-
-    @Test
-    @SmallTest
-    @Feature({"Location"})
-    @CommandLineFlags.Add({GOOGLE_BASE_URL_SWITCH})
-    @EnableFeatures(ChromeFeatureList.REVERT_DSE_AUTOMATIC_PERMISSIONS)
     public void testPermissionWithoutAutogrant() {
         long now = setMockLocationNow();
 
@@ -171,6 +158,42 @@ public class GeolocationHeaderTest {
         assertNonNullHeader(SEARCH_URL_1, false, now);
     }
 
+    @Test
+    @SmallTest
+    @Feature({"Location"})
+    public void testGeolocationHeaderPrimingEnabledPermissionAllow() {
+        setPermission(ContentSettingValues.ALLOW);
+        LocationSettingsTestUtil.setSystemLocationSettingEnabled(true);
+        checkHeaderPriming(true /* shouldPrimeHeader */);
+    }
+
+    @Test
+    @SmallTest
+    @Feature({"Location"})
+    public void testGeolocationHeaderPrimingDisabledPermissionBlock() {
+        setPermission(ContentSettingValues.BLOCK);
+        LocationSettingsTestUtil.setSystemLocationSettingEnabled(true);
+        checkHeaderPriming(false /* shouldPrimeHeader */);
+    }
+
+    @Test
+    @SmallTest
+    @Feature({"Location"})
+    public void testGeolocationHeaderPrimingDisabledPermissionAsk() {
+        setPermission(ContentSettingValues.ASK);
+        LocationSettingsTestUtil.setSystemLocationSettingEnabled(true);
+        checkHeaderPriming(false /* shouldPrimeHeader */);
+    }
+
+    @Test
+    @SmallTest
+    @Feature({"Location"})
+    public void testGeolocationHeaderPrimingDisabledOSPermissionBlocked() {
+        setPermission(ContentSettingValues.ALLOW);
+        LocationSettingsTestUtil.setSystemLocationSettingEnabled(false);
+        checkHeaderPriming(false /* shouldPrimeHeader */);
+    }
+
     private void checkHeaderWithPermission(final @ContentSettingValues int httpsPermission,
             final long locationTime, final boolean shouldBeNull) {
         TestThreadUtils.runOnUiThreadBlocking(() -> {
@@ -190,6 +213,21 @@ public class GeolocationHeaderTest {
                     SEARCH_URL_1, mActivityTestRule.getActivity().getActivityTab());
             assertHeaderState(header, locationTime, shouldBeNull);
         });
+    }
+
+    private void checkHeaderPriming(boolean shouldPrimeHeader) {
+        mActivityTestRule.loadUrlInNewTab("about:blank", false);
+        mOmniboxTestUtils.requestFocus();
+        mOmniboxTestUtils.typeText("aaaaaaaaaa", false);
+        mOmniboxTestUtils.waitAnimationsComplete();
+        // We use the existance of the GeolocationHeader.sFirstLocation field to indicate whether
+        // there has been a location request yet.
+        if (shouldPrimeHeader) {
+            Assert.assertNotEquals(
+                    Long.MAX_VALUE, GeolocationHeader.getFirstLocationTimeForTesting());
+        } else {
+            Assert.assertEquals(Long.MAX_VALUE, GeolocationHeader.getFirstLocationTimeForTesting());
+        }
     }
 
     private void assertHeaderState(String header, long locationTime, boolean shouldBeNull) {

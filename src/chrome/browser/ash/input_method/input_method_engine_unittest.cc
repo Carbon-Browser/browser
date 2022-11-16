@@ -8,7 +8,6 @@
 #include <utility>
 
 #include "base/callback_helpers.h"
-#include "base/macros.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/histogram_samples.h"
 #include "base/metrics/statistics_recorder.h"
@@ -17,16 +16,17 @@
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
 #include "chrome/browser/ash/input_method/input_method_configuration.h"
-#include "chrome/browser/ash/input_method/input_method_engine_base.h"
+#include "chrome/browser/ash/input_method/input_method_engine.h"
 #include "chrome/browser/ash/input_method/mock_input_method_manager_impl.h"
+#include "chrome/browser/ash/input_method/stub_input_method_engine_observer.h"
 #include "chrome/browser/ui/ash/keyboard/chrome_keyboard_controller_client_test_helper.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "ui/base/ime/chromeos/extension_ime_util.h"
-#include "ui/base/ime/chromeos/ime_bridge.h"
-#include "ui/base/ime/chromeos/ime_engine_handler_interface.h"
-#include "ui/base/ime/chromeos/mock_component_extension_ime_manager_delegate.h"
-#include "ui/base/ime/chromeos/mock_ime_input_context_handler.h"
+#include "ui/base/ime/ash/extension_ime_util.h"
+#include "ui/base/ime/ash/ime_bridge.h"
+#include "ui/base/ime/ash/ime_engine_handler_interface.h"
+#include "ui/base/ime/ash/mock_component_extension_ime_manager_delegate.h"
+#include "ui/base/ime/ash/mock_ime_input_context_handler.h"
 #include "ui/base/ime/text_input_flags.h"
 #include "ui/events/base_event_utils.h"
 #include "ui/events/keycodes/dom/dom_code.h"
@@ -78,10 +78,11 @@ void InitInputMethod() {
   InitializeForTesting(manager);
 }
 
-// TODO(crbug.com/1148157): Use StubInputMethodEngineObserver.
-class TestObserver : public InputMethodEngineBase::Observer {
+class TestObserver : public StubInputMethodEngineObserver {
  public:
   TestObserver() : calls_bitmap_(NONE) {}
+  TestObserver(const TestObserver&) = delete;
+  TestObserver& operator=(const TestObserver&) = delete;
   ~TestObserver() override = default;
 
   void OnActivate(const std::string& engine_id) override {
@@ -107,26 +108,10 @@ class TestObserver : public InputMethodEngineBase::Observer {
       ui::IMEEngineHandlerInterface::KeyEventDoneCallback callback) override {
     std::move(callback).Run(/* handled */ true);
   }
-  void OnCandidateClicked(
-      const std::string& engine_id,
-      int candidate_id,
-      InputMethodEngineBase::MouseButtonEvent button) override {}
-  void OnMenuItemActivated(const std::string& engine_id,
-                           const std::string& menu_id) override {}
-  void OnSurroundingTextChanged(const std::string& engine_id,
-                                const std::u16string& text,
-                                int cursor_pos,
-                                int anchor_pos,
-                                int offset) override {}
   void OnCompositionBoundsChanged(
       const std::vector<gfx::Rect>& bounds) override {
     calls_bitmap_ |= ONCOMPOSITIONBOUNDSCHANGED;
   }
-  void OnScreenProjectionChanged(bool is_projected) override {}
-
-  void OnSuggestionsChanged(
-      const std::vector<std::string>& suggestions) override {}
-  void OnInputMethodOptionsChanged(const std::string& engine_id) override {}
 
   void OnReset(const std::string& engine_id) override {
     calls_bitmap_ |= RESET;
@@ -148,8 +133,6 @@ class TestObserver : public InputMethodEngineBase::Observer {
  private:
   unsigned char calls_bitmap_;
   std::string engine_id_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestObserver);
 };
 
 class InputMethodEngineTest : public testing::Test {
@@ -158,7 +141,6 @@ class InputMethodEngineTest : public testing::Test {
     languages_.emplace_back("en-US");
     layouts_.emplace_back("us");
     InitInputMethod();
-    ui::IMEBridge::Initialize();
     mock_ime_input_context_handler_ =
         std::make_unique<ui::MockIMEInputContextHandler>();
     ui::IMEBridge::Get()->SetInputContextHandler(
@@ -167,6 +149,10 @@ class InputMethodEngineTest : public testing::Test {
     chrome_keyboard_controller_client_test_helper_ =
         ChromeKeyboardControllerClientTestHelper::InitializeWithFake();
   }
+
+  InputMethodEngineTest(const InputMethodEngineTest&) = delete;
+  InputMethodEngineTest& operator=(const InputMethodEngineTest&) = delete;
+
   ~InputMethodEngineTest() override {
     ui::IMEBridge::Get()->SetInputContextHandler(nullptr);
     engine_.reset();
@@ -178,7 +164,7 @@ class InputMethodEngineTest : public testing::Test {
   void CreateEngine(bool allowlisted) {
     engine_ = std::make_unique<InputMethodEngine>();
     observer_ = new TestObserver();
-    std::unique_ptr<InputMethodEngineBase::Observer> observer_ptr(observer_);
+    std::unique_ptr<InputMethodEngineObserver> observer_ptr(observer_);
     engine_->Initialize(std::move(observer_ptr),
                         allowlisted ? kTestExtensionId : kTestExtensionId2,
                         nullptr);
@@ -206,9 +192,6 @@ class InputMethodEngineTest : public testing::Test {
       mock_ime_input_context_handler_;
   std::unique_ptr<ChromeKeyboardControllerClientTestHelper>
       chrome_keyboard_controller_client_test_helper_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(InputMethodEngineTest);
 };
 
 }  // namespace
@@ -316,7 +299,7 @@ TEST_F(InputMethodEngineTest, TestHistograms) {
   CreateEngine(true);
   FocusIn(ui::TEXT_INPUT_TYPE_TEXT);
   engine_->Enable(kTestImeComponentId);
-  std::vector<InputMethodEngineBase::SegmentInfo> segments;
+  std::vector<InputMethodEngine::SegmentInfo> segments;
   int context = engine_->GetContextIdForTesting();
   std::string error;
   base::HistogramTester histograms;
@@ -348,30 +331,30 @@ TEST_F(InputMethodEngineTest, TestSetSelectionRange) {
   CreateEngine(true);
   const int context = engine_->GetContextIdForTesting();
   std::string error;
-  engine_->InputMethodEngineBase::SetSelectionRange(context, /* start */ 0,
-                                                    /* end */ 0, &error);
+  engine_->InputMethodEngine::SetSelectionRange(context, /* start */ 0,
+                                                /* end */ 0, &error);
   EXPECT_EQ(kErrorNotActive, error);
   EXPECT_EQ(0,
             mock_ime_input_context_handler_->set_selection_range_call_count());
   error = "";
 
   engine_->Enable(kTestImeComponentId);
-  engine_->InputMethodEngineBase::SetSelectionRange(context, /* start */ 0,
-                                                    /* end */ 0, &error);
+  engine_->InputMethodEngine::SetSelectionRange(context, /* start */ 0,
+                                                /* end */ 0, &error);
   EXPECT_EQ("", error);
   EXPECT_EQ(1,
             mock_ime_input_context_handler_->set_selection_range_call_count());
   error = "";
 
-  engine_->InputMethodEngineBase::SetSelectionRange(context, /* start */ -1,
-                                                    /* end */ 0, &error);
+  engine_->InputMethodEngine::SetSelectionRange(context, /* start */ -1,
+                                                /* end */ 0, &error);
   EXPECT_EQ(base::StringPrintf(kErrorInvalidValue, "start", -1), error);
   EXPECT_EQ(1,
             mock_ime_input_context_handler_->set_selection_range_call_count());
   error = "";
 
-  engine_->InputMethodEngineBase::SetSelectionRange(context, /* start */ 0,
-                                                    /* end */ -1, &error);
+  engine_->InputMethodEngine::SetSelectionRange(context, /* start */ 0,
+                                                /* end */ -1, &error);
   EXPECT_EQ(base::StringPrintf(kErrorInvalidValue, "end", -1), error);
   EXPECT_EQ(1,
             mock_ime_input_context_handler_->set_selection_range_call_count());
@@ -392,8 +375,7 @@ TEST_F(InputMethodEngineTest, TestDisableAfterSetCompositionRange) {
   EXPECT_EQ(u"text", mock_ime_input_context_handler_->last_commit_text());
 
   // Change composition range to include "text".
-  engine_->InputMethodEngineBase::SetCompositionRange(context, 0, 4, {},
-                                                      &error);
+  engine_->InputMethodEngine::SetCompositionRange(context, 0, 4, {}, &error);
   EXPECT_EQ("", error);
 
   // Disable to commit
@@ -418,5 +400,42 @@ TEST_F(InputMethodEngineTest, KeyEventHandledRecordsLatencyHistogram) {
   histogram_tester.ExpectTotalCount("InputMethod.KeyEventLatency", 1);
 }
 
+TEST_F(InputMethodEngineTest, AcceptSuggestionCandidateCommitsCandidate) {
+  CreateEngine(true);
+  FocusIn(ui::TEXT_INPUT_TYPE_TEXT);
+  engine_->Enable(kTestImeComponentId);
+
+  const int context = engine_->GetContextIdForTesting();
+
+  std::string error;
+  engine_->AcceptSuggestionCandidate(context, u"suggestion", 0, &error);
+
+  EXPECT_EQ("", error);
+  EXPECT_EQ(
+      0, mock_ime_input_context_handler_->delete_surrounding_text_call_count());
+  EXPECT_EQ(u"suggestion", mock_ime_input_context_handler_->last_commit_text());
+}
+
+TEST_F(InputMethodEngineTest,
+       AcceptSuggestionCandidateDeletesSurroundingAndCommitsCandidate) {
+  CreateEngine(true);
+  FocusIn(ui::TEXT_INPUT_TYPE_TEXT);
+  engine_->Enable(kTestImeComponentId);
+
+  const int context = engine_->GetContextIdForTesting();
+
+  std::string error;
+  engine_->CommitText(context, u"text", &error);
+  engine_->AcceptSuggestionCandidate(context, u"suggestion", 1, &error);
+
+  EXPECT_EQ("", error);
+  EXPECT_EQ(
+      1, mock_ime_input_context_handler_->delete_surrounding_text_call_count());
+  auto deleteSurroundingTextArg =
+      mock_ime_input_context_handler_->last_delete_surrounding_text_arg();
+  EXPECT_EQ(deleteSurroundingTextArg.offset, -1);
+  EXPECT_EQ(deleteSurroundingTextArg.length, 1u);
+  EXPECT_EQ(u"suggestion", mock_ime_input_context_handler_->last_commit_text());
+}
 }  // namespace input_method
 }  // namespace ash

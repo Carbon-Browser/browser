@@ -7,7 +7,6 @@
 
 #include <string>
 
-#include "base/macros.h"
 #include "services/data_decoder/public/mojom/json_parser.mojom.h"
 
 namespace data_decoder {
@@ -15,13 +14,17 @@ namespace data_decoder {
 class JsonParserImpl : public mojom::JsonParser {
  public:
   JsonParserImpl();
+
+  JsonParserImpl(const JsonParserImpl&) = delete;
+  JsonParserImpl& operator=(const JsonParserImpl&) = delete;
+
   ~JsonParserImpl() override;
 
  private:
   // mojom::JsonParser implementation.
-  void Parse(const std::string& json, ParseCallback callback) override;
-
-  DISALLOW_COPY_AND_ASSIGN(JsonParserImpl);
+  void Parse(const std::string& json,
+             uint32_t options,
+             ParseCallback callback) override;
 };
 
 }  // namespace data_decoder

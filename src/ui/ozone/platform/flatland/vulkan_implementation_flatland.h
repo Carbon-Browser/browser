@@ -9,7 +9,7 @@
 
 #include "gpu/vulkan/vulkan_implementation.h"
 #include "gpu/vulkan/vulkan_instance.h"
-#include "ui/ozone/public/mojom/scenic_gpu_host.mojom.h"
+#include "ui/ozone/platform/scenic/mojom/scenic_gpu_host.mojom.h"
 
 namespace ui {
 
@@ -21,6 +21,7 @@ class VulkanImplementationFlatland : public gpu::VulkanImplementation {
   VulkanImplementationFlatland(
       FlatlandSurfaceFactory* flatland_surface_factory,
       FlatlandSysmemBufferManager* flatland_sysmem_buffer_manager,
+      bool use_swiftshader,
       bool allow_protected_memory);
   ~VulkanImplementationFlatland() override;
   VulkanImplementationFlatland(const VulkanImplementationFlatland&) = delete;
@@ -49,6 +50,7 @@ class VulkanImplementationFlatland : public gpu::VulkanImplementation {
                                           VkSemaphore vk_semaphore) override;
   VkExternalMemoryHandleTypeFlagBits GetExternalImageHandleType() override;
   bool CanImportGpuMemoryBuffer(
+      gpu::VulkanDeviceQueue* device_queue,
       gfx::GpuMemoryBufferType memory_buffer_type) override;
   std::unique_ptr<gpu::VulkanImage> CreateImageFromGpuMemoryHandle(
       gpu::VulkanDeviceQueue* device_queue,

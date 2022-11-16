@@ -15,10 +15,12 @@
 #include <vector>
 
 #include "base/memory/memory_pressure_listener.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/threading/thread_checker.h"
+#include "base/time/time.h"
 #include "third_party/blink/public/platform/media/multi_buffer.h"
 #include "third_party/blink/public/platform/web_common.h"
 #include "url/gurl.h"
@@ -55,7 +57,7 @@ class BLINK_PLATFORM_EXPORT ResourceMultiBuffer : public MultiBuffer {
  protected:
   // Do not access from destructor, it is a pointer to the
   // object that contains us.
-  UrlData* url_data_;
+  raw_ptr<UrlData> url_data_;
   const scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
 };
 
@@ -79,6 +81,8 @@ class BLINK_PLATFORM_EXPORT UrlData : public base::RefCounted<UrlData> {
   CorsMode cors_mode() const { return cors_mode_; }
 
   bool has_access_control() const { return has_access_control_; }
+
+  const std::string& mime_type() const { return mime_type_; }
 
   // Are HTTP range requests supported?
   bool range_supported() const { return range_supported_; }
@@ -136,6 +140,7 @@ class BLINK_PLATFORM_EXPORT UrlData : public base::RefCounted<UrlData> {
   void set_etag(const std::string& etag);
   void set_is_cors_cross_origin(bool is_cors_cross_origin);
   void set_has_access_control();
+  void set_mime_type(std::string mime_type);
 
   // A redirect has occurred (or we've found a better UrlData for the same
   // resource).
@@ -183,8 +188,8 @@ class BLINK_PLATFORM_EXPORT UrlData : public base::RefCounted<UrlData> {
   // the same url.
   const GURL url_;
 
-  // Origin of the data, should only be different from the url_.GetOrigin()
-  // when service workers are involved.
+  // Origin of the data, should only be different from the
+  // url_.DeprecatedGetOriginAsURL() when service workers are involved.
   GURL data_origin_;
   bool have_data_origin_;
 
@@ -192,7 +197,10 @@ class BLINK_PLATFORM_EXPORT UrlData : public base::RefCounted<UrlData> {
   const CorsMode cors_mode_;
   bool has_access_control_;
 
-  UrlIndex* const url_index_;
+  // Mime type category (stashed for UMA / metrics).
+  std::string mime_type_;
+
+  const raw_ptr<UrlIndex> url_index_;
 
   // Length of resource this url points to. (in bytes)
   int64_t length_;
@@ -293,7 +301,7 @@ class BLINK_PLATFORM_EXPORT UrlIndex {
   void OnMemoryPressure(
       base::MemoryPressureListener::MemoryPressureLevel memory_pressure_level);
 
-  ResourceFetchContext* fetch_context_;
+  raw_ptr<ResourceFetchContext> fetch_context_;
   using UrlDataMap = std::map<UrlData::KeyType, scoped_refptr<UrlData>>;
   UrlDataMap indexed_data_;
   scoped_refptr<MultiBuffer::GlobalLRU> lru_;

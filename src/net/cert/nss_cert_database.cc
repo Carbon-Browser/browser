@@ -17,11 +17,11 @@
 #include "base/bind.h"
 #include "base/callback.h"
 #include "base/logging.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list_threadsafe.h"
-#include "base/task/post_task.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
+#include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "crypto/nss_util_internal.h"
 #include "crypto/scoped_nss_types.h"
@@ -57,14 +57,16 @@ class CertNotificationForwarder : public NSSCertDatabase::Observer {
   explicit CertNotificationForwarder(CertDatabase* cert_db)
       : cert_db_(cert_db) {}
 
+  CertNotificationForwarder(const CertNotificationForwarder&) = delete;
+  CertNotificationForwarder& operator=(const CertNotificationForwarder&) =
+      delete;
+
   ~CertNotificationForwarder() override = default;
 
   void OnCertDBChanged() override { cert_db_->NotifyObserversCertDBChanged(); }
 
  private:
-  CertDatabase* cert_db_;
-
-  DISALLOW_COPY_AND_ASSIGN(CertNotificationForwarder);
+  raw_ptr<CertDatabase> cert_db_;
 };
 
 }  // namespace
@@ -89,7 +91,8 @@ NSSCertDatabase::NSSCertDatabase(crypto::ScopedPK11Slot public_slot,
                                  crypto::ScopedPK11Slot private_slot)
     : public_slot_(std::move(public_slot)),
       private_slot_(std::move(private_slot)),
-      observer_list_(new base::ObserverListThreadSafe<Observer>) {
+      observer_list_(
+          base::MakeRefCounted<base::ObserverListThreadSafe<Observer>>()) {
   CHECK(public_slot_);
 
   CertDatabase* cert_db = CertDatabase::GetInstance();
@@ -131,7 +134,7 @@ void NSSCertDatabase::ListCertsInfo(ListCertsInfoCallback callback) {
       std::move(callback));
 }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 crypto::ScopedPK11Slot NSSCertDatabase::GetSystemSlot() const {
   return crypto::ScopedPK11Slot();
 }
@@ -144,7 +147,7 @@ bool NSSCertDatabase::IsCertificateOnSlot(CERTCertificate* cert,
 
   return PK11_FindCertInSlot(slot, cert, nullptr) != CK_INVALID_HANDLE;
 }
-#endif
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 crypto::ScopedPK11Slot NSSCertDatabase::GetPublicSlot() const {
   return crypto::ScopedPK11Slot(PK11_ReferenceSlot(public_slot_.get()));
@@ -196,14 +199,9 @@ int NSSCertDatabase::ImportFromPKCS12(
     const std::u16string& password,
     bool is_extractable,
     ScopedCERTCertificateList* imported_certs) {
-  DVLOG(1) << __func__ << " "
-           << PK11_GetModuleID(slot_info) << ":"
-           << PK11_GetSlotID(slot_info);
-  int result = psm::nsPKCS12Blob_Import(slot_info,
-                                        data.data(), data.size(),
-                                        password,
-                                        is_extractable,
-                                        imported_certs);
+  int result =
+      psm::nsPKCS12Blob_Import(slot_info, data.data(), data.size(), password,
+                               is_extractable, imported_certs);
   if (result == OK)
     NotifyObserversCertDBChanged();
 
@@ -436,6 +434,13 @@ bool NSSCertDatabase::IsReadOnly(const CERTCertificate* cert) {
 }
 
 // static
+// `cfi-icall` is a clang flag to enable extra checks to prevent "Indirect call
+// of a function with wrong dynamic type". To work properly it requires the
+// called function or the function taking the address of the called function
+// to be compiled with "-fsanitize=cfi-icall" that is not true for libnss3.
+// Because of that we are getting a false positive result around using the
+// dynamically loaded `pk11_has_attribute_set` method.
+NO_SANITIZE("cfi-icall")
 bool NSSCertDatabase::IsHardwareBacked(const CERTCertificate* cert) {
   PK11SlotInfo* slot = cert->slot;
   if (!slot)

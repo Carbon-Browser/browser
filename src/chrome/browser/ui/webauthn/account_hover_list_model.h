@@ -8,11 +8,11 @@
 #include <stddef.h>
 #include <vector>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/webauthn/hover_list_model.h"
 
 namespace device {
-class PublicKeyCredentialUserEntity;
+class DiscoverableCredentialMetadata;
 }
 
 class AccountHoverListModel : public HoverListModel {
@@ -25,8 +25,12 @@ class AccountHoverListModel : public HoverListModel {
   };
 
   AccountHoverListModel(
-      const std::vector<device::PublicKeyCredentialUserEntity>* users_list,
+      const std::vector<device::DiscoverableCredentialMetadata>* creds,
       Delegate* delegate);
+
+  AccountHoverListModel(const AccountHoverListModel&) = delete;
+  AccountHoverListModel& operator=(const AccountHoverListModel&) = delete;
+
   ~AccountHoverListModel() override;
 
   // HoverListModel:
@@ -43,10 +47,8 @@ class AccountHoverListModel : public HoverListModel {
   bool StyleForTwoLines() const override;
 
  private:
-  const std::vector<device::PublicKeyCredentialUserEntity>* users_list_;
-  Delegate* const delegate_;
-
-  DISALLOW_COPY_AND_ASSIGN(AccountHoverListModel);
+  raw_ptr<const std::vector<device::DiscoverableCredentialMetadata>> creds_;
+  const raw_ptr<Delegate> delegate_;
 };
 
 #endif  // CHROME_BROWSER_UI_WEBAUTHN_ACCOUNT_HOVER_LIST_MODEL_H_

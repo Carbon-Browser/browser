@@ -1,3 +1,4 @@
+
 // Copyright 2020 The Chromium Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
@@ -9,6 +10,7 @@
 #include "base/strings/stringprintf.h"
 #include "ui/base/x/x11_util.h"
 #include "ui/events/event_constants.h"
+#include "ui/events/event_utils.h"
 #include "ui/events/platform/x11/x11_event_source.h"
 #include "ui/gfx/native_widget_types.h"
 #include "ui/gfx/x/x11_atom_cache.h"
@@ -16,9 +18,9 @@
 #include "ui/gfx/x/xproto.h"
 #include "ui/gfx/x/xproto_util.h"
 #include "ui/gtk/gtk_compat.h"
+#include "ui/gtk/gtk_util.h"
 #include "ui/gtk/x/gtk_event_loop_x11.h"
-#include "ui/platform_window/x11/x11_window.h"
-#include "ui/platform_window/x11/x11_window_manager.h"
+#include "ui/linux/linux_ui_delegate.h"
 
 namespace gtk {
 
@@ -48,24 +50,31 @@ GdkKeymap* GtkUiPlatformX11::GetGdkKeymap() {
   return gdk_keymap_get_for_display(GetGdkDisplay());
 }
 
+GdkModifierType GtkUiPlatformX11::GetGdkKeyEventState(
+    const ui::KeyEvent& key_event) {
+  return gtk::GetGdkKeyEventState(key_event);
+}
+
+int GtkUiPlatformX11::GetGdkKeyEventGroup(const ui::KeyEvent& key_event) {
+  return GetKeyEventProperty(key_event, ui::kPropertyKeyboardGroup);
+}
+
 GdkWindow* GtkUiPlatformX11::GetGdkWindow(gfx::AcceleratedWidget window_id) {
   DCHECK(!gtk::GtkCheckVersion(4));
   GdkDisplay* display = GetGdkDisplay();
   GdkWindow* gdk_window = gdk_x11_window_lookup_for_display(
       display, static_cast<uint32_t>(window_id));
-  if (gdk_window)
+  if (gdk_window) {
     g_object_ref(gdk_window);
-  else
+  } else if (base::Environment::Create()->HasVar("XLIB_SKIP_ARGB_VISUALS")) {
+    // gdk_x11_window_foreign_new_for_display calls XVisualIDFromVisual which
+    // will crash when XLIB_SKIP_ARGB_VISUALS is set.
+    return nullptr;
+  } else {
     gdk_window = gdk_x11_window_foreign_new_for_display(
         display, static_cast<uint32_t>(window_id));
+  }
   return gdk_window;
-}
-
-bool GtkUiPlatformX11::ExportWindowHandle(
-    gfx::AcceleratedWidget window_id,
-    base::OnceCallback<void(std::string)> callback) {
-  std::move(callback).Run(base::StringPrintf("x11:%#x", window_id));
-  return true;
 }
 
 bool GtkUiPlatformX11::SetGtkWidgetTransientFor(GtkWidget* widget,
@@ -80,19 +89,14 @@ bool GtkUiPlatformX11::SetGtkWidgetTransientFor(GtkWidget* widget,
   SetProperty(x11_window, x11::GetAtom("_NET_WM_WINDOW_TYPE"), x11::Atom::ATOM,
               x11::GetAtom("_NET_WM_WINDOW_TYPE_DIALOG"));
 
-  ui::X11Window* parent_window =
-      ui::X11WindowManager::GetInstance()->GetWindow(parent);
-  parent_window->SetTransientWindow(x11_window);
-
+  ui::LinuxUiDelegate::GetInstance()->SetTransientWindowForParent(
+      parent, static_cast<gfx::AcceleratedWidget>(x11_window));
   return true;
 }
 
 void GtkUiPlatformX11::ClearTransientFor(gfx::AcceleratedWidget parent) {
-  ui::X11Window* parent_window =
-      ui::X11WindowManager::GetInstance()->GetWindow(parent);
-  // parent_window might be dead if there was a top-down window close
-  if (parent_window)
-    parent_window->SetTransientWindow(x11::Window::None);
+  ui::LinuxUiDelegate::GetInstance()->SetTransientWindowForParent(
+      parent, static_cast<gfx::AcceleratedWidget>(x11::Window::None));
 }
 
 GdkDisplay* GtkUiPlatformX11::GetGdkDisplay() {

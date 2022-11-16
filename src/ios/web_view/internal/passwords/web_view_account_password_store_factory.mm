@@ -9,13 +9,13 @@
 
 #include "base/bind.h"
 #include "base/callback_helpers.h"
-#include "base/task/post_task.h"
+#include "base/no_destructor.h"
 #include "components/keyed_service/ios/browser_state_dependency_manager.h"
 #include "components/password_manager/core/browser/login_database.h"
 #include "components/password_manager/core/browser/password_manager_constants.h"
 #include "components/password_manager/core/browser/password_manager_util.h"
+#include "components/password_manager/core/browser/password_store_built_in_backend.h"
 #include "components/password_manager/core/browser/password_store_factory_util.h"
-#include "components/password_manager/core/browser/password_store_impl.h"
 #include "components/password_manager/core/common/password_manager_features.h"
 #include "components/prefs/pref_service.h"
 #include "ios/web/public/thread/web_task_traits.h"
@@ -47,27 +47,15 @@ void UpdateFormManager(WebViewBrowserState* browser_state) {
 }
 
 void SyncEnabledOrDisabled(WebViewBrowserState* browser_state) {
-  base::PostTask(FROM_HERE, {web::WebThread::UI},
-                 base::BindOnce(&UpdateFormManager, browser_state));
+  web::GetUIThreadTaskRunner({})->PostTask(
+      FROM_HERE, base::BindOnce(&UpdateFormManager, browser_state));
 }
 
 }  // namespace
 
-// TODO(crbug.com/1218413) Delete this method once the migration to
-// PasswordStoreInterface is complete and change the name of the
-// method below to GetForBrowserState.
-// static
-scoped_refptr<password_manager::PasswordStore>
-WebViewAccountPasswordStoreFactory::GetForBrowserState(
-    WebViewBrowserState* browser_state,
-    ServiceAccessType access_type) {
-  return base::WrapRefCounted(static_cast<password_manager::PasswordStore*>(
-      GetInterfaceForBrowserState(browser_state, access_type).get()));
-}
-
 // static
 scoped_refptr<password_manager::PasswordStoreInterface>
-WebViewAccountPasswordStoreFactory::GetInterfaceForBrowserState(
+WebViewAccountPasswordStoreFactory::GetForBrowserState(
     WebViewBrowserState* browser_state,
     ServiceAccessType access_type) {
   if (!base::FeatureList::IsEnabled(
@@ -117,8 +105,11 @@ WebViewAccountPasswordStoreFactory::BuildServiceInstanceFor(
           browser_state->GetStatePath()));
 
   scoped_refptr<password_manager::PasswordStore> ps =
-      new password_manager::PasswordStoreImpl(std::move(login_db));
+      new password_manager::PasswordStore(
+          std::make_unique<password_manager::PasswordStoreBuiltInBackend>(
+              std::move(login_db)));
   if (!ps->Init(browser_state->GetPrefs(),
+                /*affiliated_match_helper=*/nullptr,
                 base::BindRepeating(&SyncEnabledOrDisabled, browser_state))) {
     // TODO(crbug.com/479725): Remove the LOG once this error is visible in the
     // UI.

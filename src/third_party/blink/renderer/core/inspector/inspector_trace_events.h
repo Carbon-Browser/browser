@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "base/trace_event/trace_event.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_streamer.h"
 #include "third_party/blink/renderer/core/animation/compositor_animations.h"
@@ -14,8 +15,7 @@
 #include "third_party/blink/renderer/core/core_probe_sink.h"
 #include "third_party/blink/renderer/core/css/css_selector.h"
 #include "third_party/blink/renderer/core/loader/frame_loader_types.h"
-#include "third_party/blink/renderer/platform/heap/handle.h"
-#include "third_party/blink/renderer/platform/instrumentation/tracing/trace_event.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/traced_value.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_load_priority.h"
 #include "third_party/blink/renderer/platform/scheduler/public/thread.h"
@@ -25,6 +25,11 @@
 
 namespace base {
 class UnguessableToken;
+}
+
+namespace gfx {
+class RectF;
+class QuadF;
 }
 
 namespace v8 {
@@ -47,8 +52,7 @@ class Element;
 class EncodedFormData;
 class Event;
 class ExecutionContext;
-class FloatRect;
-class GraphicsLayer;
+class Frame;
 class HitTestLocation;
 class HitTestRequest;
 class HitTestResult;
@@ -61,7 +65,6 @@ struct LayoutObjectWithDepth;
 class LocalFrame;
 class LocalFrameView;
 class Node;
-struct PhysicalRect;
 class QualifiedName;
 enum class RenderBlockingBehavior : uint8_t;
 class Resource;
@@ -295,6 +298,7 @@ extern const char kSvgChanged[];
 extern const char kScrollbarChanged[];
 extern const char kDisplayLock[];
 extern CORE_EXPORT const char kCanvasFormattedTextRunChange[];
+extern const char kDevtools[];
 }  // namespace layout_invalidation_reason
 
 // LayoutInvalidationReasonForTracing is strictly for tracing. Blink logic must
@@ -422,26 +426,33 @@ namespace inspector_xhr_load_event {
 void Data(perfetto::TracedValue context, ExecutionContext*, XMLHttpRequest*);
 }
 
+// We use this for two distincts types of paint-related events:
+//  1. A timed event showing how long we spent painting a LocalFrameView,
+//     including any iframes. The quad associated with this event is the cull
+//     rect used when painting the LocalFrameView.
+//  2. An instant event for each cc::Layer which had damage. The quad
+//     associated with this event is the bounding damage rect.
 namespace inspector_paint_event {
 void Data(perfetto::TracedValue context,
-          LayoutObject*,
-          const PhysicalRect& clip_rect,
-          const GraphicsLayer*);
+          Frame*,
+          const LayoutObject*,
+          const gfx::QuadF& quad,
+          int layer_id);
 }
 
 namespace inspector_paint_image_event {
 void Data(perfetto::TracedValue context,
           const LayoutImage&,
-          const FloatRect& src_rect,
-          const FloatRect& dest_rect);
+          const gfx::RectF& src_rect,
+          const gfx::RectF& dest_rect);
 void Data(perfetto::TracedValue context,
           const LayoutObject&,
           const StyleImage&);
 void Data(perfetto::TracedValue context,
           Node*,
           const StyleImage&,
-          const FloatRect& src_rect,
-          const FloatRect& dest_rect);
+          const gfx::RectF& src_rect,
+          const gfx::RectF& dest_rect);
 void Data(perfetto::TracedValue context,
           const LayoutObject*,
           const ImageResourceContent&);
@@ -459,7 +470,7 @@ namespace inspector_scroll_layer_event {
 void Data(perfetto::TracedValue context, LayoutObject*);
 }
 
-namespace inspector_update_layer_tree_event {
+namespace inspector_pre_paint_event {
 void Data(perfetto::TracedValue context, LocalFrame*);
 }
 
@@ -517,7 +528,7 @@ void Data(perfetto::TracedValue context);
 }
 
 namespace inspector_invalidate_layout_event {
-void Data(perfetto::TracedValue context, LocalFrame*);
+void Data(perfetto::TracedValue context, LocalFrame*, DOMNodeId);
 }
 
 namespace inspector_recalculate_styles_event {

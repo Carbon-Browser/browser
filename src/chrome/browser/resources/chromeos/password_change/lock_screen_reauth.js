@@ -79,6 +79,14 @@ Polymer({
       value: false,
     },
 
+    /**
+     * Whether to show Saml Notice Message.
+     */
+    showSamlNoticeMessage_: {
+      type: Boolean,
+      value: false,
+    },
+
     passwordConfirmAttempt_: {
       type: Number,
       value: 0,
@@ -111,10 +119,8 @@ Polymer({
         'authDomainChange', () => void this.onAuthDomainChange_());
     this.authenticator_.addEventListener(
         'authCompleted', (e) => void this.onAuthCompletedMessage_(e));
-    this.authenticator_.confirmPasswordCallback = (email, password) =>
-        void this.onAuthConfirmPassword_(email, password);
-    this.authenticator_.noPasswordCallback = (email) =>
-        void this.onAuthNoPassword_(email);
+    this.authenticator_.addEventListener(
+        'loadAbort', (e) => void this.onLoadAbortMessage_(e));
     chrome.send('initialize');
   },
 
@@ -126,6 +132,7 @@ Polymer({
     this.isConfirmPassword_ = false;
     this.isManualInput_ = false;
     this.isPasswordChanged_ = false;
+    this.showSamlNoticeMessage_ = false;
   },
 
   /**
@@ -168,8 +175,8 @@ Polymer({
    */
   loadAuthenticator(data) {
     this.authenticator_.setWebviewPartition(data.webviewPartitionName);
-    let params = {};
-    for (let i in cr.login.Authenticator.SUPPORTED_PARAMS) {
+    const params = {};
+    for (const i in cr.login.Authenticator.SUPPORTED_PARAMS) {
       const name = cr.login.Authenticator.SUPPORTED_PARAMS[i];
       if (data[name]) {
         params[name] = data[name];
@@ -177,6 +184,9 @@ Polymer({
     }
     this.authenticatorParams_ = params;
     this.email_ = data.email;
+    if (!data['doSamlRedirect']) {
+      this.doGaiaRedirect_();
+    }
     chrome.send('authenticatorLoaded');
   },
 
@@ -194,6 +204,15 @@ Polymer({
   },
 
   /**
+   * Reloads the page.
+   */
+  reloadAuthenticator() {
+    this.signinFrame_.clearData({since: 0}, clearDataType, () => {
+      this.authenticator_.resetStates();
+    });
+  },
+
+  /**
    * @return {!Element}
    * @private
    */
@@ -207,68 +226,58 @@ Polymer({
   },
 
   onAuthCompletedMessage_(e) {
-    let credentials = e.detail;
+    const credentials = e.detail;
     chrome.send('completeAuthentication', [
-      credentials.gaiaId, credentials.email, credentials.password,
-      credentials.usingSAML, credentials.services,
-      credentials.passwordAttributes
+      credentials.gaiaId,
+      credentials.email,
+      credentials.password,
+      credentials.scrapedSAMLPasswords,
+      credentials.usingSAML,
+      credentials.services,
+      credentials.passwordAttributes,
     ]);
+  },
+
+  /**
+   * Invoked when onLoadAbort message received.
+   * @param {!CustomEvent<!Object>} e Event with the payload containing
+   *     additional information about error event like:
+   *     {number} error_code Error code such as net::ERR_INTERNET_DISCONNECTED.
+   *     {string} src The URL that failed to load.
+   * @private
+   */
+  onLoadAbortMessage_(e) {
+    this.onWebviewError_(e.detail);
+  },
+
+  /**
+   * Handler for webview error handling.
+   * @param {!Object} data Additional information about error event like:
+   *     {number} error_code Error code such as net::ERR_INTERNET_DISCONNECTED.
+   *     {string} src The URL that failed to load.
+   * @private
+   */
+  onWebviewError_(data) {
+    chrome.send('webviewLoadAborted', [data.error_code]);
   },
 
   /**
    * Invoked when the user has successfully authenticated via SAML,
    * the Chrome Credentials Passing API was not used and the authenticator needs
    * the user to confirm the scraped password.
-   * @param {string} email The authenticated user's e-mail.
    * @param {number} passwordCount The number of passwords that were scraped.
-   * @private
    */
-  onAuthConfirmPassword_(email, passwordCount) {
+  showSamlConfirmPassword(passwordCount) {
     this.resetState_();
     /** This statement override resetState_ calls.
      * Thus have to be AFTER resetState_. */
     this.isConfirmPassword_ = true;
+    this.isManualInput_ = (passwordCount === 0);
     if (this.passwordConfirmAttempt_ > 0) {
       this.$.passwordInput.value = '';
       this.$.passwordInput.invalid = true;
     }
-  },
-
-  /**
-   * Invoked when the user has successfully authenticated via SAML, the
-   * Chrome Credentials Passing API was not used and no passwords
-   * could be scraped.
-   * The user will be asked to pick a manual password for the device.
-   * @param {string} email The authenticated user's e-mail.
-   * @private
-   */
-  onAuthNoPassword_(email) {
-    this.resetState_();
-    /** These two statement override resetState_ calls.
-     * Thus have to be AFTER resetState_. */
-    this.isConfirmPassword_ = true;
-    this.isManualInput_ = true;
-  },
-
-  /**
-   * Invoked when the dialog where the user enters a manual password for the
-   * device, when password scraping fails.
-   * @param {string} password The password the user entered. Not necessarily
-   *     the same as their SAML password.
-   * @private
-   */
-  onManualPasswordCollected(password) {
-    this.authenticator_.completeAuthWithManualPassword(password);
-  },
-
-  /**
-   * Invoked when the confirm password screen is dismissed.
-   * @param {string} password The password entered at the confirm screen.
-   * @private
-   */
-  onConfirmPasswordCollected(password) {
     this.passwordConfirmAttempt_++;
-    this.authenticator_.verifyConfirmedPassword(password);
   },
 
   /**
@@ -289,20 +298,25 @@ Polymer({
     this.authenticator_.load(
       cr.login.Authenticator.AuthMode.DEFAULT, this.authenticatorParams_);
     this.resetState_();
-    /** This statement override resetStates_ calls.
-     * Thus have to be AFTER resetState_. */
+    /**
+     * These statements override resetStates_ calls.
+     * Thus have to be AFTER resetState_.
+     */
     this.isSamlPage_ = true;
+    this.showSamlNoticeMessage_ = true;
   },
 
   /** @private */
   onConfirm_() {
-    if (!this.$.passwordInput.validate())
+    if (!this.$.passwordInput.validate()) {
       return;
+    }
     if (this.isManualInput_) {
       // When using manual password entry, both passwords must match.
-      let confirmPasswordInput = this.$$('#confirmPasswordInput');
-      if (!confirmPasswordInput.validate())
+      const confirmPasswordInput = this.$$('#confirmPasswordInput');
+      if (!confirmPasswordInput.validate()) {
         return;
+      }
 
       if (confirmPasswordInput.value != this.$.passwordInput.value) {
         this.$.passwordInput.invalid = true;
@@ -311,11 +325,7 @@ Polymer({
       }
     }
 
-    if (this.isManualInput_) {
-      this.onManualPasswordCollected(this.$.passwordInput.value);
-    } else {
-      this.onConfirmPasswordCollected(this.$.passwordInput.value);
-    }
+    chrome.send('onPasswordTyped', [this.$.passwordInput.value]);
   },
 
   /** @private */
@@ -323,6 +333,7 @@ Polymer({
     chrome.send('dialogClose');
   },
 
+  /** @private */
   onResetAndClose_() {
     this.signinFrame_.clearData({since: 0}, clearDataType, () => {
       onCloseTap_();
@@ -337,6 +348,18 @@ Polymer({
     }
     chrome.send('updateUserPassword', [this.$.oldPasswordInput.value]);
     this.$.oldPasswordInput.value = '';
+  },
+
+  /** @private */
+  doGaiaRedirect_() {
+    this.authenticator_.load(
+        cr.login.Authenticator.AuthMode.DEFAULT, this.authenticatorParams_);
+    this.resetState_();
+    /**
+     * These statements override resetStates_ calls.
+     * Thus have to be AFTER resetState_.
+     */
+    this.isSamlPage_ = true;
   },
 
   /** @private */

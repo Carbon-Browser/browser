@@ -4,9 +4,11 @@
 
 #include "content/public/test/prerender_test_util.h"
 
+#include <tuple>
+
 #include "base/callback_helpers.h"
 #include "base/trace_event/typed_macros.h"
-#include "content/browser/prerender/prerender_host_registry.h"
+#include "content/browser/preloading/prerender/prerender_host_registry.h"
 #include "content/browser/renderer_host/frame_tree.h"
 #include "content/browser/renderer_host/render_frame_host_impl.h"
 #include "content/browser/web_contents/web_contents_impl.h"
@@ -123,9 +125,10 @@ void PrerenderHostRegistryObserver::NotifyOnTrigger(
 class PrerenderHostObserverImpl : public PrerenderHost::Observer {
  public:
   PrerenderHostObserverImpl(WebContents& web_contents, int host_id) {
-    StartObserving(
-        web_contents,
-        GetPrerenderHostById(&web_contents, host_id)->GetInitialUrl());
+    PrerenderHost* host = GetPrerenderHostById(&web_contents, host_id);
+    DCHECK(host)
+        << "A PrerenderHost with the given id does not, or no longer, exists.";
+    StartObserving(*host);
   }
 
   PrerenderHostObserverImpl(WebContents& web_contents, const GURL& gurl) {
@@ -133,11 +136,11 @@ class PrerenderHostObserverImpl : public PrerenderHost::Observer {
         std::make_unique<PrerenderHostRegistryObserver>(web_contents);
     if (PrerenderHost* host = GetPrerenderHostRegistry(&web_contents)
                                   .FindHostByUrlForTesting(gurl)) {
-      StartObserving(web_contents, host->GetInitialUrl());
+      StartObserving(*host);
     } else {
       registry_observer_->NotifyOnTrigger(
           gurl,
-          base::BindOnce(&PrerenderHostObserverImpl::StartObserving,
+          base::BindOnce(&PrerenderHostObserverImpl::OnTrigger,
                          base::Unretained(this), std::ref(web_contents), gurl));
     }
   }
@@ -175,12 +178,16 @@ class PrerenderHostObserverImpl : public PrerenderHost::Observer {
   bool was_activated() const { return was_activated_; }
 
  private:
-  void StartObserving(WebContents& web_contents, const GURL& gurl) {
+  void OnTrigger(WebContents& web_contents, const GURL& gurl) {
     PrerenderHost* host =
         GetPrerenderHostRegistry(&web_contents).FindHostByUrlForTesting(gurl);
-    DCHECK_NE(host, nullptr);
+    DCHECK(host) << "Attempted to trigger a prerender for [" << gurl << "] "
+                 << "but canceled before a PrerenderHost was created.";
+    StartObserving(*host);
+  }
+  void StartObserving(PrerenderHost& host) {
     did_observe_ = true;
-    observation_.Observe(host);
+    observation_.Observe(&host);
 
     // This method may be bound and called from |registry_observer_| so don't
     // add code below the reset.
@@ -221,13 +228,26 @@ bool PrerenderHostObserver::was_activated() const {
   return impl_->was_activated();
 }
 
-PrerenderTestHelper::PrerenderTestHelper(const WebContents::Getter& fn)
-    : get_web_contents_fn_(fn) {
-  feature_list_.InitWithFeatures({blink::features::kPrerender2},
+ScopedPrerenderFeatureList::ScopedPrerenderFeatureList() {
+  std::vector<base::Feature> enabled_features;
+#if !BUILDFLAG(IS_ANDROID)
+  // Prerender2 for Speculation Rules should be enabled by default on Android.
+  // To test the default behavior on Android, explicitly enable the feature only
+  // on non-Android.
+  //
+  // This is useful for preventing breakages by future changes on the complex
+  // flag structure. See review comments on https://crrev.com/c/3670822 for
+  // details.
+  enabled_features.push_back(blink::features::kPrerender2);
+#endif
+  feature_list_.InitWithFeatures(enabled_features,
                                  // Disable the memory requirement of Prerender2
                                  // so the test can run on any bot.
                                  {blink::features::kPrerender2MemoryControls});
 }
+
+PrerenderTestHelper::PrerenderTestHelper(const WebContents::Getter& fn)
+    : get_web_contents_fn_(fn) {}
 
 PrerenderTestHelper::~PrerenderTestHelper() = default;
 
@@ -300,8 +320,27 @@ void PrerenderTestHelper::AddPrerenderAsync(const GURL& prerendering_url) {
   // Have to use ExecuteJavaScriptForTests instead of ExecJs/EvalJs here,
   // because some test pages have ContentSecurityPolicy and EvalJs cannot work
   // with it. See the quick migration guide for EvalJs for more information.
-  GetWebContents()->GetMainFrame()->ExecuteJavaScriptForTests(
+  GetWebContents()->GetPrimaryMainFrame()->ExecuteJavaScriptForTests(
       base::UTF8ToUTF16(script), base::NullCallback());
+}
+
+std::unique_ptr<PrerenderHandle>
+PrerenderTestHelper::AddEmbedderTriggeredPrerenderAsync(
+    const GURL& prerendering_url,
+    PrerenderTriggerType trigger_type,
+    const std::string& embedder_histogram_suffix,
+    ui::PageTransition page_transition) {
+  TRACE_EVENT("test", "PrerenderTestHelper::AddEmbedderTriggeredPrerenderAsync",
+              "prerendering_url", prerendering_url, "trigger_type",
+              trigger_type, "embedder_histogram_suffix",
+              embedder_histogram_suffix, "page_transition", page_transition);
+  if (!content::BrowserThread::CurrentlyOn(BrowserThread::UI))
+    return nullptr;
+
+  WebContents* web_contents = GetWebContents();
+  return web_contents->StartPrerendering(prerendering_url, trigger_type,
+                                         embedder_histogram_suffix,
+                                         page_transition, nullptr);
 }
 
 void PrerenderTestHelper::NavigatePrerenderedPage(int host_id,
@@ -323,8 +362,8 @@ void PrerenderTestHelper::NavigatePrerenderedPage(int host_id,
   // approach just to ignore it instead of fixing the timing issue. When
   // ExecJs() actually fails, the remaining test steps should fail, so it
   // should be safe to ignore it.
-  ignore_result(
-      ExecJs(prerender_render_frame_host, JsReplace("location = $1", gurl)));
+  std::ignore =
+      ExecJs(prerender_render_frame_host, JsReplace("location = $1", gurl));
 }
 
 // static
@@ -357,8 +396,8 @@ void PrerenderTestHelper::NavigatePrimaryPage(WebContents& web_contents,
   // approach just to ignore it instead of fixing the timing issue. When
   // ExecJs() actually fails, the remaining test steps should fail, so it
   // should be safe to ignore it.
-  ignore_result(
-      ExecJs(web_contents.GetMainFrame(), JsReplace("location = $1", gurl)));
+  std::ignore = ExecJs(web_contents.GetPrimaryMainFrame(),
+                       JsReplace("location = $1", gurl));
   observer.Wait();
 }
 
@@ -373,7 +412,7 @@ void PrerenderTestHelper::NavigatePrimaryPage(const GURL& gurl) {
   RenderFrameHostImpl* prerendered_render_frame_host =
       prerender_host->GetPrerenderedMainFrameHost();
   std::vector<RenderFrameHost*> frames =
-      prerendered_render_frame_host->GetFramesInSubtree();
+      CollectAllRenderFrameHosts(prerendered_render_frame_host);
   for (auto* frame : frames) {
     auto* rfhi = static_cast<RenderFrameHostImpl*>(frame);
     // All the subframes should be in LifecycleStateImpl::kPrerendering state
@@ -439,6 +478,37 @@ void PrerenderTestHelper::MonitorResourceRequest(
 
 WebContents* PrerenderTestHelper::GetWebContents() {
   return get_web_contents_fn_.Run();
+}
+
+std::string PrerenderTestHelper::GenerateHistogramName(
+    const std::string& histogram_base_name,
+    content::PrerenderTriggerType trigger_type,
+    const std::string& embedder_suffix) {
+  switch (trigger_type) {
+    case content::PrerenderTriggerType::kSpeculationRule:
+      DCHECK(embedder_suffix.empty());
+      return std::string(histogram_base_name) + ".SpeculationRule";
+    case content::PrerenderTriggerType::kEmbedder:
+      DCHECK(!embedder_suffix.empty());
+      return std::string(histogram_base_name) + ".Embedder_" + embedder_suffix;
+  }
+  NOTREACHED();
+}
+
+ScopedPrerenderWebContentsDelegate::ScopedPrerenderWebContentsDelegate(
+    WebContents& web_contents)
+    : web_contents_(web_contents.GetWeakPtr()) {
+  web_contents_->SetDelegate(this);
+}
+
+ScopedPrerenderWebContentsDelegate::~ScopedPrerenderWebContentsDelegate() {
+  if (web_contents_)
+    web_contents_.get()->SetDelegate(nullptr);
+}
+
+bool ScopedPrerenderWebContentsDelegate::IsPrerender2Supported(
+    WebContents& web_contents) {
+  return true;
 }
 
 }  // namespace test

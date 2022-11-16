@@ -56,7 +56,7 @@ int PrefetchBackgroundTaskHandlerImpl::GetAdditionalBackoffSeconds() const {
 
 std::unique_ptr<net::BackoffEntry>
 PrefetchBackgroundTaskHandlerImpl::GetCurrentBackoff() const {
-  const base::ListValue* value = prefs_->GetList(prefetch_prefs::kBackoff);
+  const base::Value* value = prefs_->GetList(prefetch_prefs::kBackoff);
   std::unique_ptr<net::BackoffEntry> result;
   if (value) {
     result = net::BackoffEntrySerializer::DeserializeFromValue(
@@ -95,9 +95,8 @@ void PrefetchBackgroundTaskHandlerImpl::Suspend() {
   current->Reset();
   // Set a custom delay to be a 1 day interval. After the day passes, the next
   // backoff value will be back to the initial 30s delay.
-  current->SetCustomReleaseTime(
-      tick_clock_->NowTicks() +
-      base::TimeDelta::FromDays(kDefaultSuspensionDays));
+  current->SetCustomReleaseTime(tick_clock_->NowTicks() +
+                                base::Days(kDefaultSuspensionDays));
   UpdateBackoff(current.get());
 }
 

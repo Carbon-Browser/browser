@@ -21,6 +21,9 @@ class GeometryStructTraitsTest : public testing::Test,
  public:
   GeometryStructTraitsTest() {}
 
+  GeometryStructTraitsTest(const GeometryStructTraitsTest&) = delete;
+  GeometryStructTraitsTest& operator=(const GeometryStructTraitsTest&) = delete;
+
  protected:
   mojo::Remote<mojom::GeometryTraitsTestService> GetTraitsTestRemote() {
     mojo::Remote<mojom::GeometryTraitsTestService> remote;
@@ -87,8 +90,6 @@ class GeometryStructTraitsTest : public testing::Test,
 
   base::test::TaskEnvironment task_environment_;
   mojo::ReceiverSet<GeometryTraitsTestService> traits_test_receivers_;
-
-  DISALLOW_COPY_AND_ASSIGN(GeometryStructTraitsTest);
 };
 
 }  // namespace
@@ -185,7 +186,7 @@ TEST_F(GeometryStructTraitsTest, Insets) {
   const int32_t left = 5678;
   const int32_t bottom = 4321;
   const int32_t right = 8765;
-  gfx::Insets input(top, left, bottom, right);
+  auto input = gfx::Insets::TLBR(top, left, bottom, right);
   mojo::Remote<mojom::GeometryTraitsTestService> remote = GetTraitsTestRemote();
   gfx::Insets output;
   remote->EchoInsets(input, &output);
@@ -200,7 +201,7 @@ TEST_F(GeometryStructTraitsTest, InsetsF) {
   const float left = 5678.2f;
   const float bottom = 4321.3f;
   const float right = 8765.4f;
-  gfx::InsetsF input(top, left, bottom, right);
+  auto input = gfx::InsetsF::TLBR(top, left, bottom, right);
   mojo::Remote<mojom::GeometryTraitsTestService> remote = GetTraitsTestRemote();
   gfx::InsetsF output;
   remote->EchoInsetsF(input, &output);

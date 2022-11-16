@@ -11,6 +11,8 @@
 #import "ios/chrome/browser/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/string_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
+#import "ios/chrome/common/ui/util/constraints_ui_util.h"
+#import "ios/chrome/common/ui/util/text_view_util.h"
 #include "ios/chrome/grit/ios_strings.h"
 #import "net/base/mac/url_conversions.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -36,7 +38,7 @@ const CGFloat kVerticalMargin = 16.0;
 @implementation DisabledTabViewController
 
 namespace {
-// Create a NSString for the title based on |page|.
+// Create a NSString for the title based on `page`.
 NSString* GetTitleString(TabGridPage page) {
   switch (page) {
     case TabGridPageIncognitoTabs:
@@ -112,7 +114,7 @@ NSAttributedString* GetBodyString(TabGridPage page) {
   topLabel.numberOfLines = 0;
   topLabel.textAlignment = NSTextAlignmentCenter;
 
-  UITextView* bottomTextView = [[UITextView alloc] init];
+  UITextView* bottomTextView = CreateUITextViewWithTextKit1();
   bottomTextView.translatesAutoresizingMaskIntoConstraints = NO;
   bottomTextView.attributedText = GetBodyString(self.page);
   bottomTextView.scrollEnabled = NO;
@@ -129,13 +131,9 @@ NSAttributedString* GetBodyString(TabGridPage page) {
   [scrollView addSubview:container];
   [self.view addSubview:scrollView];
 
-  NSLayoutConstraint* scrollViewHeightConstraint = [scrollView.heightAnchor
-      constraintEqualToAnchor:container.heightAnchor
-                     constant:(self.scrollViewContentInsets.top +
-                               self.scrollViewContentInsets.bottom)];
-  scrollViewHeightConstraint.priority = UILayoutPriorityDefaultLow;
-  scrollViewHeightConstraint.active = YES;
-  self.scrollViewHeight = scrollViewHeightConstraint;
+  self.scrollViewHeight = VerticalConstraintsWithInset(
+      container, scrollView,
+      self.scrollViewContentInsets.top + self.scrollViewContentInsets.bottom);
 
   [NSLayoutConstraint activateConstraints:@[
     [topLabel.topAnchor constraintEqualToAnchor:container.topAnchor

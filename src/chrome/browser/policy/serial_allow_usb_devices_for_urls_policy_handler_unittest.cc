@@ -2,7 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/json/json_reader.h"
+#include "base/memory/raw_ptr.h"
+#include "base/test/values_test_util.h"
 #include "chrome/common/pref_names.h"
 #include "components/content_settings/core/common/pref_names.h"
 #include "components/policy/core/browser/configuration_policy_handler.h"
@@ -19,11 +20,7 @@ namespace policy {
 
 namespace {
 
-absl::optional<base::Value> ReadJson(base::StringPiece json) {
-  auto result = base::JSONReader::ReadAndReturnValueWithError(json);
-  EXPECT_TRUE(result.value) << result.error_message;
-  return std::move(result.value);
-}
+using ::base::test::ParseJson;
 
 }  // namespace
 
@@ -55,7 +52,7 @@ class SerialAllowUsbDevicesForUrlsPolicyHandlerTest
     handler_list_.AddHandler(std::move(handler));
   }
 
-  ConfigurationPolicyHandler* handler_;
+  raw_ptr<ConfigurationPolicyHandler> handler_;
 };
 
 TEST_F(SerialAllowUsbDevicesForUrlsPolicyHandlerTest, CheckPolicySettings) {
@@ -80,7 +77,7 @@ TEST_F(SerialAllowUsbDevicesForUrlsPolicyHandlerTest, CheckPolicySettings) {
   policy.Set(key::kSerialAllowUsbDevicesForUrls,
              PolicyLevel::POLICY_LEVEL_MANDATORY,
              PolicyScope::POLICY_SCOPE_MACHINE,
-             PolicySource::POLICY_SOURCE_CLOUD, ReadJson(kPolicy), nullptr);
+             PolicySource::POLICY_SOURCE_CLOUD, ParseJson(kPolicy), nullptr);
 
   PolicyErrorMap errors;
   EXPECT_TRUE(handler()->CheckPolicySettings(policy, &errors));
@@ -140,7 +137,7 @@ TEST_F(SerialAllowUsbDevicesForUrlsPolicyHandlerTest, MissingUrls) {
   policy.Set(key::kSerialAllowUsbDevicesForUrls,
              PolicyLevel::POLICY_LEVEL_MANDATORY,
              PolicyScope::POLICY_SCOPE_MACHINE,
-             PolicySource::POLICY_SOURCE_CLOUD, ReadJson(kPolicy), nullptr);
+             PolicySource::POLICY_SOURCE_CLOUD, ParseJson(kPolicy), nullptr);
 
   PolicyErrorMap errors;
   EXPECT_FALSE(handler()->CheckPolicySettings(policy, &errors));
@@ -178,7 +175,7 @@ TEST_F(SerialAllowUsbDevicesForUrlsPolicyHandlerTest, MissingDevices) {
   policy.Set(key::kSerialAllowUsbDevicesForUrls,
              PolicyLevel::POLICY_LEVEL_MANDATORY,
              PolicyScope::POLICY_SCOPE_MACHINE,
-             PolicySource::POLICY_SOURCE_CLOUD, ReadJson(kPolicy), nullptr);
+             PolicySource::POLICY_SOURCE_CLOUD, ParseJson(kPolicy), nullptr);
 
   PolicyErrorMap errors;
   EXPECT_FALSE(handler()->CheckPolicySettings(policy, &errors));
@@ -214,16 +211,15 @@ TEST_F(SerialAllowUsbDevicesForUrlsPolicyHandlerTest, DevicesMustBeList) {
   policy.Set(key::kSerialAllowUsbDevicesForUrls,
              PolicyLevel::POLICY_LEVEL_MANDATORY,
              PolicyScope::POLICY_SCOPE_MACHINE,
-             PolicySource::POLICY_SOURCE_CLOUD, ReadJson(kPolicy), nullptr);
+             PolicySource::POLICY_SOURCE_CLOUD, ParseJson(kPolicy), nullptr);
 
   PolicyErrorMap errors;
   EXPECT_FALSE(handler()->CheckPolicySettings(policy, &errors));
   EXPECT_EQ(1ul, errors.size());
 
   constexpr char16_t kExpected[] =
-      u"Schema validation error at \"items[0].devices\": The value type "
-      u"doesn't "
-      u"match the schema type.";
+      u"Schema validation error at \"items[0].devices\": Policy type mismatch: "
+      u"expected: \"list\", actual: \"integer\".";
   EXPECT_EQ(kExpected, errors.GetErrors(key::kSerialAllowUsbDevicesForUrls));
 
   // Now try to apply the policy, it should have no effect.
@@ -257,15 +253,15 @@ TEST_F(SerialAllowUsbDevicesForUrlsPolicyHandlerTest, UrlsMustBeList) {
   policy.Set(key::kSerialAllowUsbDevicesForUrls,
              PolicyLevel::POLICY_LEVEL_MANDATORY,
              PolicyScope::POLICY_SCOPE_MACHINE,
-             PolicySource::POLICY_SOURCE_CLOUD, ReadJson(kPolicy), nullptr);
+             PolicySource::POLICY_SOURCE_CLOUD, ParseJson(kPolicy), nullptr);
 
   PolicyErrorMap errors;
   EXPECT_FALSE(handler()->CheckPolicySettings(policy, &errors));
   EXPECT_EQ(1ul, errors.size());
 
   constexpr char16_t kExpected[] =
-      u"Schema validation error at \"items[0].urls\": The value type doesn't "
-      u"match the schema type.";
+      u"Schema validation error at \"items[0].urls\": Policy type mismatch: "
+      u"expected: \"list\", actual: \"integer\".";
   EXPECT_EQ(kExpected, errors.GetErrors(key::kSerialAllowUsbDevicesForUrls));
 
   // Now try to apply the policy, it should have no effect.
@@ -293,7 +289,7 @@ TEST_F(SerialAllowUsbDevicesForUrlsPolicyHandlerTest, VendorIdMustBeInt) {
   policy.Set(key::kSerialAllowUsbDevicesForUrls,
              PolicyLevel::POLICY_LEVEL_MANDATORY,
              PolicyScope::POLICY_SCOPE_MACHINE,
-             PolicySource::POLICY_SOURCE_CLOUD, ReadJson(kPolicy), nullptr);
+             PolicySource::POLICY_SOURCE_CLOUD, ParseJson(kPolicy), nullptr);
 
   PolicyErrorMap errors;
   EXPECT_FALSE(handler()->CheckPolicySettings(policy, &errors));
@@ -301,7 +297,7 @@ TEST_F(SerialAllowUsbDevicesForUrlsPolicyHandlerTest, VendorIdMustBeInt) {
 
   constexpr char16_t kExpected[] =
       u"Schema validation error at \"items[0].devices.items[0].vendor_id\": "
-      u"The value type doesn't match the schema type.";
+      u"Policy type mismatch: expected: \"integer\", actual: \"string\".";
   EXPECT_EQ(kExpected, errors.GetErrors(key::kSerialAllowUsbDevicesForUrls));
 
   // Now try to apply the policy, it should have no effect.
@@ -329,7 +325,7 @@ TEST_F(SerialAllowUsbDevicesForUrlsPolicyHandlerTest, VendorIdOutOfRange) {
   policy.Set(key::kSerialAllowUsbDevicesForUrls,
              PolicyLevel::POLICY_LEVEL_MANDATORY,
              PolicyScope::POLICY_SCOPE_MACHINE,
-             PolicySource::POLICY_SOURCE_CLOUD, ReadJson(kPolicy), nullptr);
+             PolicySource::POLICY_SOURCE_CLOUD, ParseJson(kPolicy), nullptr);
 
   PolicyErrorMap errors;
   EXPECT_FALSE(handler()->CheckPolicySettings(policy, &errors));
@@ -366,7 +362,7 @@ TEST_F(SerialAllowUsbDevicesForUrlsPolicyHandlerTest,
   policy.Set(key::kSerialAllowUsbDevicesForUrls,
              PolicyLevel::POLICY_LEVEL_MANDATORY,
              PolicyScope::POLICY_SCOPE_MACHINE,
-             PolicySource::POLICY_SOURCE_CLOUD, ReadJson(kPolicy), nullptr);
+             PolicySource::POLICY_SOURCE_CLOUD, ParseJson(kPolicy), nullptr);
 
   PolicyErrorMap errors;
   EXPECT_FALSE(handler()->CheckPolicySettings(policy, &errors));
@@ -407,7 +403,7 @@ TEST_F(SerialAllowUsbDevicesForUrlsPolicyHandlerTest, ProductIdMustBeInt) {
   policy.Set(key::kSerialAllowUsbDevicesForUrls,
              PolicyLevel::POLICY_LEVEL_MANDATORY,
              PolicyScope::POLICY_SCOPE_MACHINE,
-             PolicySource::POLICY_SOURCE_CLOUD, ReadJson(kPolicy), nullptr);
+             PolicySource::POLICY_SOURCE_CLOUD, ParseJson(kPolicy), nullptr);
 
   PolicyErrorMap errors;
   EXPECT_FALSE(handler()->CheckPolicySettings(policy, &errors));
@@ -415,7 +411,7 @@ TEST_F(SerialAllowUsbDevicesForUrlsPolicyHandlerTest, ProductIdMustBeInt) {
 
   constexpr char16_t kExpected[] =
       u"Schema validation error at \"items[0].devices.items[0].product_id\": "
-      u"The value type doesn't match the schema type.";
+      u"Policy type mismatch: expected: \"integer\", actual: \"string\".";
   EXPECT_EQ(kExpected, errors.GetErrors(key::kSerialAllowUsbDevicesForUrls));
 
   // Now try to apply the policy, it should have no effect.
@@ -448,7 +444,7 @@ TEST_F(SerialAllowUsbDevicesForUrlsPolicyHandlerTest, ProductIdOutOfRange) {
   policy.Set(key::kSerialAllowUsbDevicesForUrls,
              PolicyLevel::POLICY_LEVEL_MANDATORY,
              PolicyScope::POLICY_SCOPE_MACHINE,
-             PolicySource::POLICY_SOURCE_CLOUD, ReadJson(kPolicy), nullptr);
+             PolicySource::POLICY_SOURCE_CLOUD, ParseJson(kPolicy), nullptr);
 
   PolicyErrorMap errors;
   EXPECT_FALSE(handler()->CheckPolicySettings(policy, &errors));

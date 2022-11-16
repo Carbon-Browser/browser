@@ -6,8 +6,7 @@
 <animated-vector
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:aapt="http://schemas.android.com/aapt"
-    xmlns:tools="http://schemas.android.com/tools"
-    tools:targetApi="21">
+    xmlns:tools="http://schemas.android.com/tools">
 
     <aapt:attr name="android:drawable">
         <vector
@@ -21,7 +20,7 @@
                 android:name="ic_check"
                 android:pathData="M4.12,12.705 l4.88,4.88 l11.295,-11.29"
                 android:strokeWidth="2"
-                android:strokeColor="@color/default_icon_color_blue"/>
+                android:strokeColor="@macro/default_icon_color_accent1"/>
         </vector>
     </aapt:attr>
 

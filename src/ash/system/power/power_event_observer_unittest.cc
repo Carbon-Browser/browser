@@ -17,7 +17,7 @@
 #include "ash/wm/test_session_state_animator.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/time/time.h"
-#include "chromeos/components/feature_usage/feature_usage_metrics.h"
+#include "chromeos/ash/components/feature_usage/feature_usage_metrics.h"
 #include "chromeos/dbus/power/fake_power_manager_client.h"
 #include "chromeos/dbus/power_manager/suspend.pb.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -31,6 +31,10 @@ namespace ash {
 class PowerEventObserverTest : public AshTestBase {
  public:
   PowerEventObserverTest() = default;
+
+  PowerEventObserverTest(const PowerEventObserverTest&) = delete;
+  PowerEventObserverTest& operator=(const PowerEventObserverTest&) = delete;
+
   ~PowerEventObserverTest() override = default;
 
   // AshTestBase:
@@ -62,9 +66,6 @@ class PowerEventObserverTest : public AshTestBase {
   }
 
   std::unique_ptr<PowerEventObserver> observer_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(PowerEventObserverTest);
 };
 
 TEST_F(PowerEventObserverTest, LockBeforeSuspend) {
@@ -232,7 +233,7 @@ TEST_F(PowerEventObserverTest, DelaySuspendForCompositing_MultiDisplay) {
   SetCanLockScreen(true);
   SetShouldLockScreenAutomatically(true);
 
-  UpdateDisplay("100x100,300x200");
+  UpdateDisplay("200x100,300x200");
 
   chromeos::FakePowerManagerClient* client =
       chromeos::FakePowerManagerClient::Get();
@@ -281,7 +282,7 @@ TEST_F(PowerEventObserverTest,
   SetCanLockScreen(true);
   SetShouldLockScreenAutomatically(true);
 
-  UpdateDisplay("100x100,300x200");
+  UpdateDisplay("200x100,300x200");
 
   chromeos::FakePowerManagerClient* client =
       chromeos::FakePowerManagerClient::Get();
@@ -309,7 +310,7 @@ TEST_F(PowerEventObserverTest,
 
   // Remove the second display, and verify the remaining compositor is hidden
   // at this point.
-  UpdateDisplay("100x100");
+  UpdateDisplay("200x100");
   base::RunLoop().RunUntilIdle();
 
   EXPECT_EQ(0, client->num_pending_suspend_readiness_callbacks());
@@ -385,8 +386,9 @@ TEST_F(PowerEventObserverTest, ImmediateLockAnimations) {
 // Tests that displays will not be considered ready to suspend until the
 // animated wallpaper change finishes (if the wallpaper is being animated to
 // another wallpaper after the screen is locked).
+// Flaky: https://crbug.com/1293178
 TEST_F(PowerEventObserverTest,
-       DisplaysNotReadyForSuspendUntilWallpaperAnimationEnds) {
+       DISABLED_DisplaysNotReadyForSuspendUntilWallpaperAnimationEnds) {
   chromeos::FakePowerManagerClient* client =
       chromeos::FakePowerManagerClient::Get();
   ASSERT_EQ(0, client->num_pending_suspend_readiness_callbacks());
@@ -569,7 +571,7 @@ TEST_F(PowerEventObserverTest, DisplayRemovedDuringWallpaperAnimation) {
   SetCanLockScreen(true);
   SetShouldLockScreenAutomatically(true);
 
-  UpdateDisplay("100x100,300x200");
+  UpdateDisplay("200x100,300x200");
 
   // Set up animation state so wallpaper widget animations are not ended on
   // their creation.
@@ -582,7 +584,7 @@ TEST_F(PowerEventObserverTest, DisplayRemovedDuringWallpaperAnimation) {
   observer_->OnLockAnimationsComplete();
 
   // Remove a display before wallpaper animation ends.
-  UpdateDisplay("100x100");
+  UpdateDisplay("200x100");
   base::RunLoop().RunUntilIdle();
 
   // Start suspend and verify the suspend proceeds when the primary window's

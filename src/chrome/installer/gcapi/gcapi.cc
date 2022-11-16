@@ -12,6 +12,9 @@
 
 #include <windows.h>
 
+// Must be after windows.h.
+#include <versionhelpers.h>
+
 #include <sddl.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -48,7 +51,6 @@
 #include "google_update/google_update_idl.h"
 
 using base::Time;
-using base::TimeDelta;
 using base::win::RegKey;
 using base::win::ScopedCOMInitializer;
 using base::win::ScopedHandle;
@@ -219,15 +221,7 @@ bool IsC1FSent() {
 }
 
 bool IsWindowsVersionSupported() {
-  OSVERSIONINFOEX version_info = {sizeof version_info};
-  GetVersionEx(reinterpret_cast<OSVERSIONINFO*>(&version_info));
-
-  // Windows 7 is version 6.1.
-  if (version_info.dwMajorVersion > 6 ||
-      (version_info.dwMajorVersion == 6 && version_info.dwMinorVersion > 0))
-    return true;
-
-  return false;
+  return IsWindows7OrGreater();
 }
 
 // Note this function should not be called on old Windows versions where these
@@ -340,7 +334,7 @@ BOOL CALLBACK ChromeWindowEnumProc(HWND hwnd, LPARAM lparam) {
   SetWindowPosParams* params = reinterpret_cast<SetWindowPosParams*>(lparam);
 
   if (!params->shunted_hwnds.count(hwnd) &&
-      ::GetClassName(hwnd, window_class, base::size(window_class)) &&
+      ::GetClassName(hwnd, window_class, std::size(window_class)) &&
       base::StartsWith(window_class, kChromeWindowClassPrefix,
                        base::CompareCase::INSENSITIVE_ASCII) &&
       ::SetWindowPos(hwnd, params->window_insert_after, params->x, params->y,
@@ -584,10 +578,10 @@ int __stdcall GoogleChromeDaysSinceLastRun() {
                                  &last_run) == ERROR_SUCCESS &&
           base::StringToInt64(last_run, &last_run_value)) {
         Time last_run_time = Time::FromInternalValue(last_run_value);
-        TimeDelta difference = Time::NowFromSystemTime() - last_run_time;
+        base::TimeDelta difference = Time::NowFromSystemTime() - last_run_time;
 
         // We can end up with negative numbers here, given changes in system
-        // clock time or due to TimeDelta's int64_t -> int truncation.
+        // clock time or due to base::TimeDelta's int64_t -> int truncation.
         int new_days_since_last_run = difference.InDays();
         if (new_days_since_last_run >= 0 &&
             new_days_since_last_run < days_since_last_run) {

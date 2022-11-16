@@ -12,14 +12,13 @@
 #include <memory>
 #include <string>
 
+#include "ash/components/arc/mojom/file_system.mojom-forward.h"
+#include "ash/components/arc/session/connection_observer.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "chrome/browser/ash/arc/fileapi/arc_select_files_handler.h"
 #include "chrome/browser/ash/arc/fileapi/file_stream_forwarder.h"
-#include "components/arc/mojom/file_system.mojom-forward.h"
-#include "components/arc/session/connection_observer.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "storage/browser/file_system/file_system_operation.h"
 #include "storage/browser/file_system/watcher_manager.h"
@@ -42,6 +41,8 @@ class ArcFileSystemBridge
       public ConnectionObserver<mojom::FileSystemInstance>,
       public mojom::FileSystemHost {
  public:
+  using OpenFileToReadCallback = mojom::FileSystemHost::OpenFileToReadCallback;
+
   class Observer {
    public:
     virtual void OnDocumentChanged(int64_t watcher_id,
@@ -54,6 +55,10 @@ class ArcFileSystemBridge
 
   ArcFileSystemBridge(content::BrowserContext* context,
                       ArcBridgeService* bridge_service);
+
+  ArcFileSystemBridge(const ArcFileSystemBridge&) = delete;
+  ArcFileSystemBridge& operator=(const ArcFileSystemBridge&) = delete;
+
   ~ArcFileSystemBridge() override;
 
   // Returns the factory instance for this class.
@@ -192,8 +197,6 @@ class ArcFileSystemBridge
   std::unique_ptr<ArcSelectFilesHandlersManager> select_files_handlers_manager_;
 
   base::WeakPtrFactory<ArcFileSystemBridge> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ArcFileSystemBridge);
 };
 
 }  // namespace arc

@@ -8,9 +8,10 @@
 #include <utility>
 
 #include "base/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
-#include "base/single_thread_task_runner.h"
 #include "base/synchronization/lock.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/thread_annotations.h"
 #include "base/time/tick_clock.h"
 #include "base/time/time.h"
@@ -109,6 +110,7 @@ class BLINK_PLATFORM_EXPORT VideoFrameCompositor
   scoped_refptr<media::VideoFrame> GetCurrentFrame() override;
   void PutCurrentFrame() override;
   base::TimeDelta GetPreferredRenderInterval() override;
+  void OnContextLost() override;
 
   // Returns |current_frame_|, without offering a guarantee as to how recently
   // it was updated. In certain applications, one might need to periodically
@@ -233,7 +235,7 @@ class BLINK_PLATFORM_EXPORT VideoFrameCompositor
   // media thread.
   scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
 
-  const base::TickClock* tick_clock_;
+  raw_ptr<const base::TickClock> tick_clock_;
 
   // Allows tests to disable the background rendering task.
   bool background_rendering_enabled_ = true;
@@ -248,7 +250,7 @@ class BLINK_PLATFORM_EXPORT VideoFrameCompositor
   base::RetainingOneShotTimer force_begin_frames_timer_;
 
   // These values are only set and read on the compositor thread.
-  cc::VideoFrameProvider::Client* client_ = nullptr;
+  raw_ptr<cc::VideoFrameProvider::Client> client_ = nullptr;
   bool rendering_ = false;
   bool rendered_last_frame_ = false;
   bool is_background_rendering_ = false;
@@ -275,13 +277,13 @@ class BLINK_PLATFORM_EXPORT VideoFrameCompositor
 
   // These values are updated and read from the media and compositor threads.
   base::Lock callback_lock_;
-  media::VideoRendererSink::RenderCallback* callback_
+  raw_ptr<media::VideoRendererSink::RenderCallback> callback_
       GUARDED_BY(callback_lock_) = nullptr;
 
   // Assume 60Hz before the first UpdateCurrentFrame() call.
   // Updated/read by the compositor thread, but also read on the media thread.
   base::TimeDelta last_interval_ GUARDED_BY(callback_lock_) =
-      base::TimeDelta::FromSecondsD(1.0 / 60);
+      base::Seconds(1.0 / 60);
 
   // AutoOpenCloseEvent for begin/end events.
   std::unique_ptr<base::trace_event::AutoOpenCloseEvent<kTracingCategory>>

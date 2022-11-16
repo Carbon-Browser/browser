@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "base/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "gpu/command_buffer/common/sync_token.h"
 #include "gpu/command_buffer/service/sequence_id.h"
 #include "gpu/ipc/gl_in_process_context_export.h"
@@ -17,7 +18,6 @@ class TimeTicks;
 }
 
 namespace viz {
-class VizProcessContextProvider;
 class DisplayCompositorMemoryAndTaskController;
 }
 
@@ -35,10 +35,9 @@ class InProcessCommandBuffer;
 // when this class is used outside of actual CommandBuffer, we would need to
 // make sure the order of post tasks still corresponds to the order that tasks
 // are posted to the CommandBuffer.
-// This class is per display compositor. When this is used with command buffer,
-// it is created on VizProcessContextProvider. When this is used with
-// SkiaRenderer, it is created on SkiaOutputSurfaceImpl. Each user of this class
-// would hold a reference.
+// This class is per display compositor. When this is used with SkiaRenderer, it
+// is created on SkiaOutputSurfaceImpl. Each user of this class would hold a
+// reference.
 class GL_IN_PROCESS_CONTEXT_EXPORT GpuTaskSchedulerHelper {
  public:
   // This constructor is only used for SkiaOutputSurface.
@@ -47,6 +46,10 @@ class GL_IN_PROCESS_CONTEXT_EXPORT GpuTaskSchedulerHelper {
   // This constructor is used for command buffer GLOutputSurface.
   explicit GpuTaskSchedulerHelper(
       CommandBufferTaskExecutor* command_buffer_task_executor);
+
+  GpuTaskSchedulerHelper(const GpuTaskSchedulerHelper&) = delete;
+  GpuTaskSchedulerHelper& operator=(const GpuTaskSchedulerHelper&) = delete;
+
   ~GpuTaskSchedulerHelper();
 
   // This function sets up the |command_buffer_helper| which flushes the command
@@ -81,7 +84,6 @@ class GL_IN_PROCESS_CONTEXT_EXPORT GpuTaskSchedulerHelper {
 
   friend class gpu::GLInProcessContext;
   friend class gpu::InProcessCommandBuffer;
-  friend class viz::VizProcessContextProvider;
   friend class viz::DisplayCompositorMemoryAndTaskController;
   // Only used for inside CommandBuffer implementation.
   SingleTaskSequence* GetTaskSequence() const;
@@ -101,9 +103,7 @@ class GL_IN_PROCESS_CONTEXT_EXPORT GpuTaskSchedulerHelper {
   // before posting tasks from a different user. This gives the command buffer a
   // chance to post any pending tasks and maintains the ordering between command
   // buffer and other user tasks.
-  CommandBufferHelper* command_buffer_helper_ = nullptr;
-
-  DISALLOW_COPY_AND_ASSIGN(GpuTaskSchedulerHelper);
+  raw_ptr<CommandBufferHelper> command_buffer_helper_ = nullptr;
 };
 
 }  // namespace gpu

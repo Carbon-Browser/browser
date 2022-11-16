@@ -8,7 +8,6 @@
 #include <memory>
 #include <vector>
 
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "ui/display/display.h"
@@ -47,6 +46,10 @@ class CastDisplayConfigurator : public display::NativeDisplayObserver {
   };
 
   explicit CastDisplayConfigurator(CastScreen* screen);
+
+  CastDisplayConfigurator(const CastDisplayConfigurator&) = delete;
+  CastDisplayConfigurator& operator=(const CastDisplayConfigurator&) = delete;
+
   ~CastDisplayConfigurator() override;
 
   // display::NativeDisplayObserver implementation
@@ -88,8 +91,6 @@ class CastDisplayConfigurator : public display::NativeDisplayObserver {
   CastScreen* const cast_screen_;
 
   base::WeakPtrFactory<CastDisplayConfigurator> weak_factory_;
-
-  DISALLOW_COPY_AND_ASSIGN(CastDisplayConfigurator);
 };
 
 }  // namespace shell

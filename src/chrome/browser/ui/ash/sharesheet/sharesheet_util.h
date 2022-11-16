@@ -19,6 +19,18 @@ class Label;
 namespace ash {
 namespace sharesheet {
 
+enum SharesheetViewID {
+  SHARESHEET_BUBBLE_VIEW_ID = 1,
+  HEADER_VIEW_ID,
+  BODY_VIEW_ID,
+  FOOTER_VIEW_ID,
+  // ID for the view populated with targets that shows in the default
+  // sharesheet.
+  TARGETS_DEFAULT_VIEW_ID,
+  HEADER_VIEW_TEXT_PREVIEW_ID,
+  SHARE_ACTION_VIEW_ID,
+};
+
 std::unique_ptr<views::Label> CreateShareLabel(
     const std::u16string& text,
     const int text_context,

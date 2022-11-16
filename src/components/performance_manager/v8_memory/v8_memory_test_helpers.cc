@@ -14,7 +14,7 @@
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
-#include "components/performance_manager/embedder/graph_features_helper.h"
+#include "components/performance_manager/embedder/graph_features.h"
 #include "components/performance_manager/graph/frame_node_impl.h"
 #include "components/performance_manager/graph/page_node_impl.h"
 #include "components/performance_manager/graph/process_node_impl.h"
@@ -23,6 +23,7 @@
 #include "components/performance_manager/public/performance_manager.h"
 #include "components/performance_manager/v8_memory/v8_context_tracker.h"
 #include "content/public/browser/render_process_host.h"
+#include "content/public/browser/web_contents.h"
 #include "content/public/test/navigation_simulator.h"
 #include "content/public/test/test_renderer_host.h"
 #include "content/public/test/test_utils.h"
@@ -167,8 +168,8 @@ V8MemoryPerformanceManagerTestHarness::V8MemoryPerformanceManagerTestHarness()
     : PerformanceManagerTestHarness(
           // Use MOCK_TIME so that ExpectQueryAndDelayReply can be used.
           base::test::TaskEnvironment::TimeSource::MOCK_TIME) {
-  GetGraphFeaturesHelper().EnableExecutionContextRegistry();
-  GetGraphFeaturesHelper().EnableV8ContextTracker();
+  GetGraphFeatures().EnableExecutionContextRegistry();
+  GetGraphFeatures().EnableV8ContextTracker();
 }
 
 V8MemoryPerformanceManagerTestHarness::
@@ -229,7 +230,7 @@ WebMemoryTestHarness::WebMemoryTestHarness() = default;
 WebMemoryTestHarness::~WebMemoryTestHarness() = default;
 
 void WebMemoryTestHarness::SetUp() {
-  GetGraphFeaturesHelper().EnableV8ContextTracker();
+  GetGraphFeatures().EnableV8ContextTracker();
   Super::SetUp();
   process_ = CreateNode<ProcessNodeImpl>();
   other_process_ = CreateNode<ProcessNodeImpl>();

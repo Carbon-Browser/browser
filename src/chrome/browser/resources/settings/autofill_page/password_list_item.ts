@@ -11,25 +11,47 @@
 
 import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.m.js';
 import 'chrome://resources/cr_elements/cr_icons_css.m.js';
-import '../settings_shared_css.js';
+import '../settings_shared.css.js';
 import '../site_favicon.js';
-import './passwords_shared_css.js';
+import './passwords_shared.css.js';
 
-import {FocusRowBehavior} from 'chrome://resources/js/cr/ui/focus_row_behavior.m.js';
-import {html, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {loadTimeData} from '../i18n_setup.js';
+import {routes} from '../route.js';
+import {Router} from '../router.js';
 
+import {getTemplate} from './password_list_item.html.js';
+import {PasswordViewPageInteractions, PasswordViewPageUrlParams, recordPasswordViewInteraction} from './password_view.js';
 import {ShowPasswordMixin, ShowPasswordMixinInterface} from './show_password_mixin.js';
+
+
+declare global {
+  interface HTMLElementEventMap {
+    [PASSWORD_MORE_ACTIONS_CLICKED_EVENT_NAME]: PasswordMoreActionsClickedEvent;
+    [PASSWORD_VIEW_PAGE_CLICKED_EVENT_NAME]: PasswordViewPageClickedEvent;
+  }
+}
+
+export type PasswordViewPageClickedEvent = CustomEvent<PasswordListItemElement>;
+
+export const PASSWORD_VIEW_PAGE_CLICKED_EVENT_NAME =
+    'password-view-page-clicked';
 
 export type PasswordMoreActionsClickedEvent = CustomEvent<{
   target: HTMLElement,
   listItem: PasswordListItemElement,
 }>;
 
+export const PASSWORD_MORE_ACTIONS_CLICKED_EVENT_NAME =
+    'password-more-actions-clicked';
+
 export interface PasswordListItemElement {
   $: {
     moreActionsButton: HTMLElement,
+    originUrl: HTMLAnchorElement,
+    seePasswordDetails: HTMLElement,
+    username: HTMLInputElement,
   };
 }
 
@@ -42,19 +64,55 @@ export class PasswordListItemElement extends PasswordListItemElementBase {
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
   }
 
   static get properties() {
     return {
+      isPasswordViewPageEnabled_: {
+        type: Boolean,
+        value() {
+          return loadTimeData.getBoolean('enablePasswordViewPage');
+        },
+      },
+
       /**
-       * Whether to hide the 3 dot button that open the more actions menu.
+       * Whether subpage button is visible or not. Subpage button should be
+       * visible only if password notes is enabled and |shouldHideActionButton|
+       * is false.
        */
-      shouldHideMoreActionsButton: {
+      shouldShowSubpageButton_: {
+        type: Boolean,
+        computed: 'computeShouldShowSubpageButton_(' +
+            'isPasswordViewPageEnabled_, shouldHideActionButtons)',
+        reflectToAttribute: true,
+      },
+
+      /**
+       * Whether to hide buttons that open the subpage or the more actions menu.
+       */
+      shouldHideActionButtons: {
         type: Boolean,
         value: false,
       },
     };
+  }
+
+  private isPasswordViewPageEnabled_: boolean;
+  private shouldShowSubpageButton_: boolean;
+  shouldHideActionButtons: boolean;
+
+  override focus() {
+    this.shouldShowSubpageButton_ ? this.$.seePasswordDetails.focus() :
+                                    super.focus();
+  }
+
+  private computeShouldShowSubpageButton_(): boolean {
+    return !this.shouldHideActionButtons && this.isPasswordViewPageEnabled_;
+  }
+
+  private shouldHideMoreActionsButton_(): boolean {
+    return this.isPasswordViewPageEnabled_ || this.shouldHideActionButtons;
   }
 
   /**
@@ -65,6 +123,22 @@ export class PasswordListItemElement extends PasswordListItemElementBase {
       (this.shadowRoot!.querySelector('#password') as HTMLInputElement)
           .select();
     }
+  }
+
+  private onRowClick_() {
+    if (!this.shouldShowSubpageButton_) {
+      return;
+    }
+    const params = new URLSearchParams();
+    params.set(PasswordViewPageUrlParams.ID, this.entry.id.toString());
+    recordPasswordViewInteraction(
+        PasswordViewPageInteractions.CREDENTIAL_ROW_CLICKED);
+    Router.getInstance().navigateTo(routes.PASSWORD_VIEW, params);
+    this.dispatchEvent(new CustomEvent(PASSWORD_VIEW_PAGE_CLICKED_EVENT_NAME, {
+      bubbles: true,
+      composed: true,
+      detail: this,
+    }));
   }
 
   private onPasswordMoreActionsButtonTap_() {
@@ -82,13 +156,28 @@ export class PasswordListItemElement extends PasswordListItemElementBase {
    * Get the aria label for the More Actions button on this row.
    */
   private getMoreActionsLabel_(): string {
-    // Avoid using I18nBehavior.i18n, because it will filter sequences, which
+    // Avoid using I18nMixin.i18n, because it will filter sequences, which
     // are otherwise not illegal for usernames. Polymer still protects against
     // XSS injection.
     return loadTimeData.getStringF(
         (this.entry.federationText) ? 'passwordRowFederatedMoreActionsButton' :
                                       'passwordRowMoreActionsButton',
         this.entry.username, this.entry.urls.shown);
+  }
+
+  /**
+   * Get the aria label for the password details subpage.
+   */
+  private getSubpageLabel_(): string {
+    return loadTimeData.getStringF(
+        'passwordRowPasswordDetailPageButton', this.entry.username,
+        this.entry.urls.shown);
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'password-list-item': PasswordListItemElement;
   }
 }
 

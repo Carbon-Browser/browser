@@ -12,7 +12,6 @@
 
 #include "base/android/scoped_java_ref.h"
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/time/time.h"
 #include "media/base/android/media_codec_bridge.h"
 #include "media/base/android/media_codec_direction.h"
@@ -30,6 +29,10 @@ class VideoColorSpace;
 class MEDIA_EXPORT VideoCodecConfig {
  public:
   VideoCodecConfig();
+
+  VideoCodecConfig(const VideoCodecConfig&) = delete;
+  VideoCodecConfig& operator=(const VideoCodecConfig&) = delete;
+
   ~VideoCodecConfig();
 
   VideoCodec codec = VideoCodec::kUnknown;
@@ -59,12 +62,7 @@ class MEDIA_EXPORT VideoCodecConfig {
   // Enables the async MediaCodec.Callback API. |on_buffers_available_cb|
   // will be called when input or output buffers are available. This will be
   // called on an arbitrary thread, so use BindToCurrentLoop if needed.
-  //
-  // May only be used on API level 23 and higher.
   base::RepeatingClosure on_buffers_available_cb;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(VideoCodecConfig);
 };
 
 // A bridge to a Java MediaCodec.
@@ -102,6 +100,9 @@ class MEDIA_EXPORT MediaCodecBridgeImpl : public MediaCodecBridge {
   // creating a MediaCodec. Does nothing unless on API level 23+.
   static void SetupCallbackHandlerForTesting();
 
+  MediaCodecBridgeImpl(const MediaCodecBridgeImpl&) = delete;
+  MediaCodecBridgeImpl& operator=(const MediaCodecBridgeImpl&) = delete;
+
   ~MediaCodecBridgeImpl() override;
 
   // MediaCodecBridge implementation.
@@ -110,6 +111,9 @@ class MEDIA_EXPORT MediaCodecBridgeImpl : public MediaCodecBridge {
   MediaCodecStatus GetOutputSize(gfx::Size* size) override;
   MediaCodecStatus GetOutputSamplingRate(int* sampling_rate) override;
   MediaCodecStatus GetOutputChannelCount(int* channel_count) override;
+  MediaCodecStatus GetOutputColorSpace(gfx::ColorSpace* color_space) override;
+  MediaCodecStatus GetInputFormatStride(int* stride) override;
+  MediaCodecStatus GetInputFormatYPlaneHeight(int* height) override;
   MediaCodecStatus QueueInputBuffer(int index,
                                     const uint8_t* data,
                                     size_t data_size,
@@ -158,9 +162,9 @@ class MEDIA_EXPORT MediaCodecBridgeImpl : public MediaCodecBridge {
 
   // Fills the given input buffer. Returns false if |data_size| exceeds the
   // input buffer's capacity (and doesn't touch the input buffer in that case).
-  bool FillInputBuffer(int index,
-                       const uint8_t* data,
-                       size_t data_size) WARN_UNUSED_RESULT;
+  [[nodiscard]] bool FillInputBuffer(int index,
+                                     const uint8_t* data,
+                                     size_t data_size);
 
   // Gets the address of the data in the given output buffer given by |index|
   // and |offset|. The number of bytes available to read is written to
@@ -182,7 +186,8 @@ class MEDIA_EXPORT MediaCodecBridgeImpl : public MediaCodecBridge {
   // The Java MediaCodecBridge instance.
   base::android::ScopedJavaGlobalRef<jobject> j_bridge_;
 
-  DISALLOW_COPY_AND_ASSIGN(MediaCodecBridgeImpl);
+  // Controls if we return real color space or hardcode sRGB.
+  const bool use_real_color_space_;
 };
 
 }  // namespace media

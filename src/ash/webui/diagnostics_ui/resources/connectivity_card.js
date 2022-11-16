@@ -3,18 +3,20 @@
 // found in the LICENSE file.
 
 import './diagnostics_card.js';
-import './diagnostics_fonts_css.js';
+import './diagnostics_network_icon.js';
 import './diagnostics_shared_css.js';
 import './ip_config_info_drawer.js';
 import './network_info.js';
 import './routine_section.js';
 
 import {I18nBehavior} from 'chrome://resources/js/i18n_behavior.m.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
 import {html, Polymer} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {Network, NetworkHealthProviderInterface, NetworkStateObserverInterface, NetworkStateObserverReceiver, NetworkType, RoutineType} from './diagnostics_types.js';
-import {getNetworkState, getNetworkType, getRoutinesByNetworkType} from './diagnostics_utils.js';
+import {filterNameServers, formatMacAddress, getNetworkCardTitle, getNetworkState, getNetworkType, getRoutineGroups} from './diagnostics_utils.js';
 import {getNetworkHealthProvider} from './mojo_interface_provider.js';
+import {RoutineGroup} from './routine_group.js';
 import {TestSuiteStatus} from './routine_list_executor.js';
 
 
@@ -48,8 +50,8 @@ Polymer({
       notify: true,
     },
 
-    /** @private {!Array<!RoutineType>} */
-    routines_: {
+    /** @private {!Array<!RoutineGroup>} */
+    routineGroups_: {
       type: Array,
       value: () => [],
     },
@@ -83,6 +85,12 @@ Polymer({
       type: String,
       value: '',
     },
+
+    /** @protected {string} */
+    macAddress_: {
+      type: String,
+      value: '',
+    },
   },
 
   /** @override */
@@ -100,8 +108,12 @@ Polymer({
     this.getRoutineSectionElem_().stopTests();
   },
 
-  displayRoutines_() {
-    return this.routines_ && this.routines_.length > 0;
+  /**
+   * @protected
+   * @return {boolean}
+   */
+  hasRoutines_() {
+    return this.routineGroups_ && this.routineGroups_.length > 0;
   },
 
   /** @private */
@@ -129,12 +141,17 @@ Polymer({
   onNetworkStateChanged(network) {
     this.networkType_ = getNetworkType(network.type);
     this.networkState_ = getNetworkState(network.state);
+    this.macAddress_ = network.macAddress || '';
 
     if (this.testSuiteStatus === TestSuiteStatus.kNotRunning) {
-      this.routines_ = getRoutinesByNetworkType(network.type);
+      const isArcEnabled =
+          loadTimeData.getBoolean('enableArcNetworkDiagnostics');
+      this.routineGroups_ = getRoutineGroups(network.type, isArcEnabled);
       this.getRoutineSectionElem_().runTests();
     }
 
+    // Remove '0.0.0.0' (if present) from list of name servers.
+    filterNameServers(network);
     this.set('network', network);
   },
 
@@ -146,12 +163,7 @@ Polymer({
 
   /** @protected */
   getNetworkCardTitle_() {
-    var title = this.networkType_;
-    if (this.networkState_) {
-      title = title + ' (' + this.networkState_ + ')';
-    }
-
-    return title;
+    return getNetworkCardTitle(this.networkType_, this.networkState_);
   },
 
   /**
@@ -179,8 +191,19 @@ Polymer({
       return;
     }
 
-    if (this.routines_.length > 0) {
+    if (this.routineGroups_.length > 0) {
       this.getRoutineSectionElem_().runTests();
     }
+  },
+
+  /**
+   * @protected
+   * @return {string}
+   */
+  getMacAddress_() {
+    if (!this.macAddress_) {
+      return '';
+    }
+    return formatMacAddress(this.macAddress_);
   },
 });

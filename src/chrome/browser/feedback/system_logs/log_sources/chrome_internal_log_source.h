@@ -5,7 +5,6 @@
 #ifndef CHROME_BROWSER_FEEDBACK_SYSTEM_LOGS_LOG_SOURCES_CHROME_INTERNAL_LOG_SOURCE_H_
 #define CHROME_BROWSER_FEEDBACK_SYSTEM_LOGS_LOG_SOURCES_CHROME_INTERNAL_LOG_SOURCE_H_
 
-#include "base/macros.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "components/feedback/system_logs/system_logs_source.h"
@@ -21,6 +20,10 @@ namespace system_logs {
 class ChromeInternalLogSource : public SystemLogsSource {
  public:
   ChromeInternalLogSource();
+
+  ChromeInternalLogSource(const ChromeInternalLogSource&) = delete;
+  ChromeInternalLogSource& operator=(const ChromeInternalLogSource&) = delete;
+
   ~ChromeInternalLogSource() override;
 
   // SystemLogsSource override.
@@ -38,7 +41,7 @@ class ChromeInternalLogSource : public SystemLogsSource {
   void PopulateOnboardingTime(SystemLogsResponse* response);
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   void PopulateUsbKeyboardDetected(SystemLogsResponse* response);
   void PopulateEnrolledToDomain(SystemLogsResponse* response);
   void PopulateInstallerBrandCode(SystemLogsResponse* response);
@@ -48,8 +51,6 @@ class ChromeInternalLogSource : public SystemLogsSource {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   mojo::Remote<ash::mojom::CrosDisplayConfigController> cros_display_config_;
 #endif
-
-  DISALLOW_COPY_AND_ASSIGN(ChromeInternalLogSource);
 };
 
 }  // namespace system_logs

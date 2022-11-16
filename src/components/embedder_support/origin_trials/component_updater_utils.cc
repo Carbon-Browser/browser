@@ -4,7 +4,6 @@
 
 #include "components/embedder_support/origin_trials/component_updater_utils.h"
 
-#include <memory>
 #include <string>
 
 #include "base/check.h"
@@ -25,35 +24,34 @@ constexpr char kManifestDisabledTokenSignaturesPath[] =
 
 namespace embedder_support {
 
-void ReadOriginTrialsConfigAndPopulateLocalState(
-    PrefService* local_state,
-    std::unique_ptr<base::DictionaryValue> manifest) {
+void ReadOriginTrialsConfigAndPopulateLocalState(PrefService* local_state,
+                                                 base::Value manifest) {
   DCHECK(local_state);
 
-  std::string override_public_key;
-  if (manifest->GetString(kManifestPublicKeyPath, &override_public_key)) {
+  if (std::string* override_public_key =
+          manifest.FindStringPath(kManifestPublicKeyPath)) {
     local_state->Set(prefs::kOriginTrialPublicKey,
-                     base::Value(override_public_key));
+                     base::Value(*override_public_key));
   } else {
     local_state->ClearPref(prefs::kOriginTrialPublicKey);
   }
-  base::ListValue* override_disabled_feature_list = nullptr;
-  const bool manifest_has_disabled_features = manifest->GetList(
-      kManifestDisabledFeaturesPath, &override_disabled_feature_list);
-  if (manifest_has_disabled_features &&
-      !override_disabled_feature_list->GetList().empty()) {
+
+  base::Value* override_disabled_feature_list =
+      manifest.FindListPath(kManifestDisabledFeaturesPath);
+  if (override_disabled_feature_list &&
+      !override_disabled_feature_list->GetListDeprecated().empty()) {
     ListPrefUpdate update(local_state, prefs::kOriginTrialDisabledFeatures);
-    update->Swap(override_disabled_feature_list);
+    *update = std::move(*override_disabled_feature_list);
   } else {
     local_state->ClearPref(prefs::kOriginTrialDisabledFeatures);
   }
-  base::ListValue* disabled_tokens_list = nullptr;
-  const bool manifest_has_disabled_tokens = manifest->GetList(
-      kManifestDisabledTokenSignaturesPath, &disabled_tokens_list);
-  if (manifest_has_disabled_tokens &&
-      !disabled_tokens_list->GetList().empty()) {
+
+  base::Value* disabled_tokens_list =
+      manifest.FindListPath(kManifestDisabledTokenSignaturesPath);
+  if (disabled_tokens_list &&
+      !disabled_tokens_list->GetListDeprecated().empty()) {
     ListPrefUpdate update(local_state, prefs::kOriginTrialDisabledTokens);
-    update->Swap(disabled_tokens_list);
+    *update = std::move(*disabled_tokens_list);
   } else {
     local_state->ClearPref(prefs::kOriginTrialDisabledTokens);
   }

@@ -6,12 +6,13 @@
 
 #include "base/strings/utf_string_conversions.h"
 #include "base/trace_event/memory_usage_estimator.h"
+#include "build/build_config.h"
 #include "components/omnibox/browser/omnibox_client.h"
 #include "components/omnibox/browser/omnibox_edit_controller.h"
 #include "components/omnibox/browser/omnibox_field_trial.h"
 #include "ui/base/l10n/l10n_util.h"
 
-#if (!defined(OS_ANDROID) || BUILDFLAG(ENABLE_VR)) && !defined(OS_IOS)
+#if defined(SUPPORT_PEDALS_VECTOR_ICONS)
 #include "components/omnibox/browser/vector_icons.h"  // nogncheck
 #endif
 
@@ -47,6 +48,20 @@ size_t EstimateMemoryUsage(const OmniboxAction::LabelStrings& self) {
 
 // =============================================================================
 
+OmniboxAction::ExecutionContext::ExecutionContext(
+    Client& client,
+    OpenUrlCallback callback,
+    base::TimeTicks match_selection_timestamp,
+    WindowOpenDisposition disposition)
+    : client_(client),
+      open_url_callback_(std::move(callback)),
+      match_selection_timestamp_(match_selection_timestamp),
+      disposition_(disposition) {}
+
+OmniboxAction::ExecutionContext::~ExecutionContext() = default;
+
+// =============================================================================
+
 OmniboxAction::OmniboxAction(LabelStrings strings, GURL url)
     : strings_(strings), url_(url) {}
 
@@ -67,7 +82,7 @@ bool OmniboxAction::IsReadyToTrigger(
   return true;
 }
 
-#if (!defined(OS_ANDROID) || BUILDFLAG(ENABLE_VR)) && !defined(OS_IOS)
+#if defined(SUPPORT_PEDALS_VECTOR_ICONS)
 const gfx::VectorIcon& OmniboxAction::GetVectorIcon() const {
   // TODO(tommycli): Replace with real icon.
   return omnibox::kPedalIcon;
@@ -85,6 +100,13 @@ int32_t OmniboxAction::GetID() const {
   return 0;
 }
 
+#if BUILDFLAG(IS_ANDROID)
+base::android::ScopedJavaGlobalRef<jobject> OmniboxAction::GetJavaObject()
+    const {
+  return base::android::ScopedJavaGlobalRef<jobject>();
+}
+#endif
+
 void OmniboxAction::OpenURL(OmniboxAction::ExecutionContext& context,
                             const GURL& url) const {
   // Set `match_type` as if the user just typed |url| verbatim.
@@ -92,10 +114,10 @@ void OmniboxAction::OpenURL(OmniboxAction::ExecutionContext& context,
   // navigations typed without a scheme and upgraded to HTTPS should fall back
   // to HTTP. The URL might have been entered without a scheme, but Action
   // destination URLs don't need a fallback so it's fine to pass false here.
-  context.controller_.OnAutocompleteAccept(
-      url, nullptr, WindowOpenDisposition::CURRENT_TAB,
-      ui::PAGE_TRANSITION_GENERATED,
-      /*match_type=*/AutocompleteMatchType::URL_WHAT_YOU_TYPED,
-      context.match_selection_timestamp_,
-      /*destination_url_entered_without_scheme=*/false);
+  std::move(context.open_url_callback_)
+      .Run(url, nullptr, context.disposition_, ui::PAGE_TRANSITION_GENERATED,
+           /*match_type=*/AutocompleteMatchType::URL_WHAT_YOU_TYPED,
+           context.match_selection_timestamp_,
+           /*destination_url_entered_without_scheme=*/false, u"",
+           AutocompleteMatch(), AutocompleteMatch());
 }

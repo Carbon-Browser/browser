@@ -6,7 +6,6 @@
 #define ANDROID_WEBVIEW_RENDERER_AW_RENDER_FRAME_EXT_H_
 
 #include "android_webview/common/mojom/frame.mojom.h"
-#include "base/macros.h"
 #include "content/public/renderer/render_frame_observer.h"
 #include "mojo/public/cpp/bindings/associated_receiver.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
@@ -20,6 +19,7 @@
 
 namespace blink {
 class WebFrameWidget;
+class WebHitTestResult;
 class WebView;
 }
 
@@ -33,6 +33,9 @@ class AwRenderFrameExt : public content::RenderFrameObserver,
  public:
   explicit AwRenderFrameExt(content::RenderFrame* render_frame);
 
+  AwRenderFrameExt(const AwRenderFrameExt&) = delete;
+  AwRenderFrameExt& operator=(const AwRenderFrameExt&) = delete;
+
   static AwRenderFrameExt* FromRenderFrame(content::RenderFrame* render_frame);
 
  private:
@@ -45,6 +48,7 @@ class AwRenderFrameExt : public content::RenderFrameObserver,
   void DidCommitProvisionalLoad(ui::PageTransition transition) override;
 
   void FocusedElementChanged(const blink::WebElement& element) override;
+  void DidCreateDocumentElement() override;
   void OnDestruct() override;
 
   // mojom::LocalMainFrame overrides:
@@ -61,6 +65,8 @@ class AwRenderFrameExt : public content::RenderFrameObserver,
   void BindLocalMainFrame(
       mojo::PendingAssociatedReceiver<mojom::LocalMainFrame> pending_receiver);
 
+  void HandleHitTestResult(const blink::WebHitTestResult& result);
+
   const mojo::AssociatedRemote<mojom::FrameHost>& GetFrameHost();
 
   blink::WebView* GetWebView();
@@ -73,8 +79,6 @@ class AwRenderFrameExt : public content::RenderFrameObserver,
       this};
 
   mojo::AssociatedRemote<mojom::FrameHost> frame_host_remote_;
-
-  DISALLOW_COPY_AND_ASSIGN(AwRenderFrameExt);
 };
 
 }  // namespace android_webview

@@ -4,33 +4,30 @@
 
 /**
  * @fileoverview Handles automation intents for speech feedback.
+ * Braille is *not* handled in this module.
  */
+import {CursorRange} from '../../../common/cursors/range.js';
+import {Output} from '../output/output.js';
+import {OutputRoleInfo} from '../output/output_role_info.js';
+import {OutputEventType} from '../output/output_types.js';
 
-goog.provide('IntentHandler');
+import {EditableLine} from './editable_line.js';
 
-goog.require('constants');
-goog.require('editing.EditableLine');
-goog.require('Output');
-
-goog.scope(function() {
 const AutomationIntent = chrome.automation.AutomationIntent;
-const Cursor = cursors.Cursor;
 const Dir = constants.Dir;
 const IntentCommandType = chrome.automation.IntentCommandType;
 const IntentTextBoundaryType = chrome.automation.IntentTextBoundaryType;
-const Movement = cursors.Movement;
-const Range = cursors.Range;
-const Unit = cursors.Unit;
+const RoleType = chrome.automation.RoleType;
 
 /**
  * A stateless class that turns intents into speech.
  */
-IntentHandler = class {
+export class IntentHandler {
   /**
    * Called when intents are received from an AutomationEvent.
    * @param {!Array<AutomationIntent>} intents
-   * @param {!editing.EditableLine} cur The current line.
-   * @param {editing.EditableLine} prev The previous line.
+   * @param {!EditableLine} cur The current line.
+   * @param {EditableLine} prev The previous line.
    * @return {boolean} Whether intents are handled.
    */
   static onIntents(intents, cur, prev) {
@@ -51,8 +48,8 @@ IntentHandler = class {
   /**
    * Called when an intent is received.
    * @param {!AutomationIntent} intent
-   * @param {!editing.EditableLine} cur The current line.
-   * @param {editing.EditableLine} prev The previous line.
+   * @param {!EditableLine} cur The current line.
+   * @param {EditableLine} prev The previous line.
    * @return {boolean} Whether the intent was handled.
    */
   static onIntent(intent, cur, prev) {
@@ -80,41 +77,13 @@ IntentHandler = class {
    * Called when the text selection moves.
    * @param {!AutomationIntent} intent A move selection
    *     intent.
-   * @param {!editing.EditableLine} cur The current line.
-   * @param {editing.EditableLine} prev The previous line.
+   * @param {!EditableLine} cur The current line.
+   * @param {EditableLine} prev The previous line.
    * @return {boolean} Whether the intent was handled.
    */
   static onMoveSelection(intent, cur, prev) {
     switch (intent.textBoundary) {
       case IntentTextBoundaryType.CHARACTER: {
-        const text = cur.text.substring(cur.startOffset, cur.startOffset + 1);
-
-        // First, handle the case where there is no text to the right of the
-        // cursor.
-        if (!text && prev) {
-          // Detect cases where |cur| is immediately before an abstractSpan.
-          const enteredAncestors =
-              AutomationUtil.getUniqueAncestors(prev.end.node, cur.end.node);
-          const exitedAncestors =
-              AutomationUtil.getUniqueAncestors(cur.end.node, prev.end.node);
-
-          // Scan up only to a root or the editable root.
-          let ancestor;
-          const ancestors = enteredAncestors.concat(exitedAncestors);
-          while ((ancestor = ancestors.pop()) &&
-                 !AutomationPredicate.rootOrEditableRoot(ancestor)) {
-            const roleInfo = Output.ROLE_INFO[ancestor.role];
-            if (roleInfo && roleInfo['inherits'] === 'abstractSpan') {
-              // Let the caller handle this case.
-              return false;
-            }
-          }
-
-          // It is assumed to be a new line otherwise.
-          ChromeVox.tts.speak('\n', QueueMode.CATEGORY_FLUSH);
-          return true;
-        }
-
         // Read character to the right of the cursor by building a character
         // range.
         let prevRange = null;
@@ -126,10 +95,41 @@ IntentHandler = class {
         // Use the Output module for feedback so that we get contextual
         // information e.g. if we've entered a suggestion, insertion, or
         // deletion.
-        new Output()
-            .withContextFirst()
-            .withRichSpeechAndBraille(
-                newRange, prevRange, OutputEventType.NAVIGATE)
+        const output = new Output();
+        const text = cur.text;
+        if (text.substring(cur.startOffset, cur.startOffset + 1).length === 0) {
+          // There isn't any text to the right of the cursor.
+          if (prev) {
+            // Detect cases where |cur| is immediately before an abstractSpan.
+            const enteredAncestors =
+                AutomationUtil.getUniqueAncestors(prev.end.node, cur.end.node);
+            const exitedAncestors =
+                AutomationUtil.getUniqueAncestors(cur.end.node, prev.end.node);
+
+            // Scan up only to a root or the editable root.
+            let ancestor;
+            const ancestors = enteredAncestors.concat(exitedAncestors);
+            while ((ancestor = ancestors.pop()) &&
+                   !AutomationPredicate.rootOrEditableRoot(ancestor)) {
+              const roleInfo = OutputRoleInfo[ancestor.role];
+              if (roleInfo && roleInfo['inherits'] === 'abstractSpan') {
+                // Let the caller handle this case.
+                return false;
+              }
+            }
+          }
+
+          // This block special cases readout of the cursor when it reaches the
+          // end of a line.
+          if (text === '\u00a0') {
+            output.withString('\u00a0');
+          } else {
+            // It is assumed to be a new line otherwise.
+            output.withString('\n');
+          }
+        }
+
+        output.withRichSpeech(newRange, prevRange, OutputEventType.NAVIGATE)
             .go();
 
         // Handled.
@@ -141,17 +141,38 @@ IntentHandler = class {
         cur.speakLine(prev);
         return true;
 
+      case IntentTextBoundaryType.PARAGRAPH_START: {
+        let node = cur.startContainer;
+
+        if (node.role === RoleType.LINE_BREAK) {
+          return false;
+        }
+
+        while (node && AutomationPredicate.text(node)) {
+          node = node.parent;
+        }
+
+        if (!node || node.role === RoleType.TEXT_FIELD) {
+          return false;
+        }
+
+        new Output()
+            .withRichSpeech(
+                CursorRange.fromNode(node), null, OutputEventType.NAVIGATE)
+            .go();
+        return true;
+      }
+
       case IntentTextBoundaryType.WORD_END:
       case IntentTextBoundaryType.WORD_START: {
-        const shouldMoveToPreviousWord =
-            intent.textBoundary === IntentTextBoundaryType.WORD_END;
         let prevRange = null;
         if (prev) {
-          prevRange = prev.createWordRange(shouldMoveToPreviousWord);
+          prevRange = prev.createWordRange(false);
         }
-        const newRange = cur.createWordRange(shouldMoveToPreviousWord);
+
+        const newRange = cur.createWordRange(
+            intent.textBoundary === IntentTextBoundaryType.WORD_END);
         new Output()
-            .withContextFirst()
             .withSpeech(newRange, prevRange, OutputEventType.NAVIGATE)
             .go();
         return true;
@@ -165,7 +186,6 @@ IntentHandler = class {
       case IntentTextBoundaryType.PAGE_START:
       case IntentTextBoundaryType.PAGE_START_OR_END:
       case IntentTextBoundaryType.PARAGRAPH_END:
-      case IntentTextBoundaryType.PARAGRAPH_START:
       case IntentTextBoundaryType.PARAGRAPH_START_OR_END:
       case IntentTextBoundaryType.SENTENCE_END:
       case IntentTextBoundaryType.SENTENCE_START:
@@ -177,5 +197,4 @@ IntentHandler = class {
 
     return false;
   }
-};
-});  // goog.scope
+}

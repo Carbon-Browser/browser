@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/containers/mru_cache.h"
+#include "base/containers/lru_cache.h"
 #include "base/containers/stack_container.h"
 #include "cc/paint/paint_export.h"
 #include "third_party/skia/include/core/SkPath.h"
@@ -38,7 +38,7 @@ namespace cc {
 
 using PaintCacheId = uint32_t;
 using PaintCacheIds = std::vector<PaintCacheId>;
-enum class PaintCacheDataType : uint32_t { kTextBlob, kPath, kLast = kPath };
+enum class PaintCacheDataType : uint32_t { kPath, kLast = kPath };
 enum class PaintCacheEntryState : uint32_t {
   kEmpty,
   kCached,
@@ -87,7 +87,7 @@ class CC_PAINT_EXPORT ClientPaintCache {
 
  private:
   using CacheKey = std::pair<PaintCacheDataType, PaintCacheId>;
-  using CacheMap = base::MRUCache<CacheKey, size_t>;
+  using CacheMap = base::LRUCache<CacheKey, size_t>;
 
   template <typename Iterator>
   void EraseFromMap(Iterator it);
@@ -107,13 +107,6 @@ class CC_PAINT_EXPORT ServicePaintCache {
   ServicePaintCache();
   ~ServicePaintCache();
 
-  // Stores the |blob| received from the client in the cache.
-  void PutTextBlob(PaintCacheId id, sk_sp<SkTextBlob> blob);
-
-  // Retrieves an entry for |id| stored in the cache. Or nullptr if the entry
-  // is not found.
-  sk_sp<SkTextBlob> GetTextBlob(PaintCacheId id) const;
-
   // Stores |path| received from the client in the cache.
   void PutPath(PaintCacheId, SkPath path);
 
@@ -125,11 +118,9 @@ class CC_PAINT_EXPORT ServicePaintCache {
              size_t n,
              const volatile PaintCacheId* ids);
   void PurgeAll();
-  bool empty() const { return cached_blobs_.empty() && cached_paths_.empty(); }
+  bool empty() const { return cached_paths_.empty(); }
 
  private:
-  using BlobMap = std::map<PaintCacheId, sk_sp<SkTextBlob>>;
-  BlobMap cached_blobs_;
   using PathMap = std::map<PaintCacheId, SkPath>;
   PathMap cached_paths_;
 };

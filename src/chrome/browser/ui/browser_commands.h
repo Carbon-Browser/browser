@@ -12,10 +12,10 @@
 #include "build/build_config.h"
 #include "chrome/browser/devtools/devtools_toggle_action.h"
 #include "chrome/browser/devtools/devtools_window.h"
-#include "chrome/browser/image_editor/screenshot_flow.h"
 #include "chrome/browser/ui/chrome_pages.h"
-#include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/tabs/tab_strip_model_delegate.h"
+#include "chrome/browser/ui/tabs/tab_strip_user_gesture_details.h"
+#include "components/services/screen_ai/buildflags/buildflags.h"
 #include "content/public/common/page_zoom.h"
 #include "printing/buildflags/buildflags.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -83,7 +83,7 @@ void Reload(Browser* browser, WindowOpenDisposition disposition);
 void ReloadBypassingCache(Browser* browser, WindowOpenDisposition disposition);
 bool CanReload(const Browser* browser);
 void Home(Browser* browser, WindowOpenDisposition disposition);
-void OpenCurrentURL(Browser* browser);
+base::WeakPtr<content::NavigationHandle> OpenCurrentURL(Browser* browser);
 void Stop(Browser* browser);
 void NewWindow(Browser* browser);
 void NewIncognitoWindow(Profile* profile);
@@ -97,23 +97,23 @@ bool CanResetZoom(content::WebContents* contents);
 void RestoreTab(Browser* browser);
 void SelectNextTab(
     Browser* browser,
-    TabStripModel::UserGestureDetails gesture_detail =
-        TabStripModel::UserGestureDetails(TabStripModel::GestureType::kOther));
+    TabStripUserGestureDetails gesture_detail = TabStripUserGestureDetails(
+        TabStripUserGestureDetails::GestureType::kOther));
 void SelectPreviousTab(
     Browser* browser,
-    TabStripModel::UserGestureDetails gesture_detail =
-        TabStripModel::UserGestureDetails(TabStripModel::GestureType::kOther));
+    TabStripUserGestureDetails gesture_detail = TabStripUserGestureDetails(
+        TabStripUserGestureDetails::GestureType::kOther));
 void MoveTabNext(Browser* browser);
 void MoveTabPrevious(Browser* browser);
 void SelectNumberedTab(
     Browser* browser,
     int index,
-    TabStripModel::UserGestureDetails gesture_detail =
-        TabStripModel::UserGestureDetails(TabStripModel::GestureType::kOther));
+    TabStripUserGestureDetails gesture_detail = TabStripUserGestureDetails(
+        TabStripUserGestureDetails::GestureType::kOther));
 void SelectLastTab(
     Browser* browser,
-    TabStripModel::UserGestureDetails gesture_detail =
-        TabStripModel::UserGestureDetails(TabStripModel::GestureType::kOther));
+    TabStripUserGestureDetails gesture_detail = TabStripUserGestureDetails(
+        TabStripUserGestureDetails::GestureType::kOther));
 void DuplicateTab(Browser* browser);
 bool CanDuplicateTab(const Browser* browser);
 bool CanDuplicateKeyboardFocusedTab(const Browser* browser);
@@ -157,12 +157,12 @@ bool MoveCurrentTabToReadLater(Browser* browser);
 bool MoveTabToReadLater(Browser* browser, content::WebContents* web_contents);
 bool MarkCurrentTabAsReadInReadLater(Browser* browser);
 bool IsCurrentTabUnreadInReadLater(Browser* browser);
-void MaybeShowBookmarkBarForReadLater(Browser* browser);
 void ShowOffersAndRewardsForPage(Browser* browser);
 void SaveCreditCard(Browser* browser);
 void MigrateLocalCards(Browser* browser);
 void SaveAutofillAddress(Browser* browser);
 void ShowVirtualCardManualFallbackBubble(Browser* browser);
+void ShowVirtualCardEnrollBubble(Browser* browser);
 void Translate(Browser* browser);
 void ManagePasswordsForPage(Browser* browser);
 void SendTabToSelfFromPageAction(Browser* browser);
@@ -198,7 +198,6 @@ void FocusSearch(Browser* browser);
 void FocusAppMenu(Browser* browser);
 void FocusBookmarksToolbar(Browser* browser);
 void FocusInactivePopupForAccessibility(Browser* browser);
-void FocusHelpBubble(Browser* browser);
 void FocusNextPane(Browser* browser);
 void FocusPreviousPane(Browser* browser);
 void FocusWebContentsPane(Browser* browser);
@@ -247,6 +246,16 @@ bool ShouldInterceptChromeURLNavigationInIncognito(Browser* browser,
                                                    const GURL& url);
 void ProcessInterceptedChromeURLNavigationInIncognito(Browser* browser,
                                                       const GURL& url);
+
+// Follows/unfollows a web feed associated with the main frame of specified web
+// contents.
+void FollowSite(content::WebContents* web_contents);
+void UnfollowSite(content::WebContents* web_contents);
+
+#if BUILDFLAG(ENABLE_SCREEN_AI_SERVICE)
+// Triggers the Screen AI visual annotations to be run once on the |browser|.
+void RunScreenAIVisualAnnotation(Browser* browser);
+#endif  // BUILDFLAG(ENABLE_SCREEN_AI_SERVICE)
 
 }  // namespace chrome
 

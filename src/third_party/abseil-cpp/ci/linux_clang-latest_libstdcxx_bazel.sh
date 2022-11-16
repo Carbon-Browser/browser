@@ -25,7 +25,7 @@ if [[ -z ${ABSEIL_ROOT:-} ]]; then
 fi
 
 if [[ -z ${STD:-} ]]; then
-  STD="c++11 c++14 c++17"
+  STD="c++14 c++17"
 fi
 
 if [[ -z ${COMPILATION_MODE:-} ]]; then
@@ -75,6 +75,7 @@ for std in ${STD}; do
         /usr/local/bin/bazel test ... \
           --compilation_mode="${compilation_mode}" \
           --copt="--gcc-toolchain=/usr/local" \
+          --copt="-DGTEST_REMOVE_LEGACY_TEST_CASEAPI_=1" \
           --copt="${exceptions_mode}" \
           --copt=-Werror \
           --define="absl=1" \

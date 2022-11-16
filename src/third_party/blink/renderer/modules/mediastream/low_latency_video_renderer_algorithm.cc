@@ -24,6 +24,9 @@ constexpr int16_t kDefaultMaxConsecutiveFramesToDrop = 0;
 // Default count of consecutive rendered frames with a new frame in the queue to
 // initiate a steady state reduction.
 constexpr int16_t kDefaultReduceSteadyThreshold = 10;
+// Vsyncs boundaries are not aligned to 16.667ms boundaries on some platforms
+// due to hardware and software clock mismatch.
+constexpr double kVsyncBoundaryErrorRate = 0.05;
 
 }  // namespace
 
@@ -63,27 +66,54 @@ scoped_refptr<media::VideoFrame> LowLatencyVideoRendererAlgorithm::Render(
 
   stats_.accumulated_queue_length += frame_queue_.size();
   ++stats_.accumulated_queue_length_count;
-
+  stats_.max_queue_length =
+      std::max<int>(frame_queue_.size(), stats_.max_queue_length);
   // Determine how many fractional frames that should be rendered based on how
   // much time has passed since the last renderer deadline.
   double fractional_frames_to_render = 1.0;
+  double vsync_error_allowed = 0.0;
   if (last_render_deadline_min_) {
     base::TimeDelta elapsed_time = deadline_min - *last_render_deadline_min_;
+    // Fraction of media frame duration that is elapsed from the last vsync
+    // call along with the fraction of frame duration that is unrendered from
+    // the last vsync call.
     fractional_frames_to_render =
         elapsed_time.InMillisecondsF() /
             average_frame_duration().InMillisecondsF() +
         unrendered_fractional_frames_;
+
+    // Different platformms follow different modes of vsync callbacks. Windows
+    // and Chrome OS VideoFrameSubmitter::BeginFrame are based on hardware
+    // callbacks. MacOS delivers consistent deadlines on major scenarios except
+    // when vsync callbacks are missed.
+    base::TimeDelta render_time_length = deadline_max - deadline_min;
+    // VSync errors are added to calculate the renderer timestamp boundaries
+    // only. This number is not the part of unrendered frame calculation, which
+    // is carried forward to the next Render() call for vsync boundary
+    // calculation.
+    vsync_error_allowed =
+        kVsyncBoundaryErrorRate * (render_time_length.InMillisecondsF() /
+                                   average_frame_duration().InMillisecondsF());
   }
 
-  size_t number_of_frames_to_render =
-      DetermineModeAndNumberOfFramesToRender(fractional_frames_to_render);
+  // Adjusted fraction of media frame duration that should be rendered under
+  // kNormal mode.
+  double adjusted_fractional_frames_to_render =
+      fractional_frames_to_render + vsync_error_allowed;
+  // Find the number of complete frame duration (on media timeline) that should
+  // be rendered for the current call.
+  size_t number_of_frames_to_render = DetermineModeAndNumberOfFramesToRender(
+      adjusted_fractional_frames_to_render);
 
   if (mode_ == Mode::kDrain) {
     // Render twice as many frames in drain mode.
     fractional_frames_to_render *= 2.0;
+    adjusted_fractional_frames_to_render *= 2.0;
     stats_.drained_frames +=
         (fractional_frames_to_render - number_of_frames_to_render);
-    number_of_frames_to_render = fractional_frames_to_render;
+    // Recalculate the complete frame durations for the drain mode to render
+    // twice as many frames.
+    number_of_frames_to_render = adjusted_fractional_frames_to_render;
   } else if (ReduceSteadyStateQueue(number_of_frames_to_render)) {
     // Increment counters to drop one extra frame.
     ++fractional_frames_to_render;
@@ -124,7 +154,7 @@ scoped_refptr<media::VideoFrame> LowLatencyVideoRendererAlgorithm::Render(
     // Record stats for every 100 s, corresponding to roughly 6000 frames in
     // normal conditions.
     if (deadline_min - *last_deadline_min_stats_recorded_ >
-        base::TimeDelta::FromSeconds(100)) {
+        base::Seconds(100)) {
       RecordAndResetStats();
       last_deadline_min_stats_recorded_ = deadline_min;
     }
@@ -279,6 +309,8 @@ void LowLatencyVideoRendererAlgorithm::RecordAndResetStats() {
   base::UmaHistogramCounts1000(uma_prefix + ".AverageQueueLengthX10",
                                10 * stats_.accumulated_queue_length /
                                    stats_.accumulated_queue_length_count);
+  base::UmaHistogramCounts100(uma_prefix + ".MaxQueueLength",
+                              stats_.max_queue_length);
   // Enter drain mode count.
   base::UmaHistogramCounts10000(uma_prefix + ".EnterDrainModeCount",
                                 stats_.enter_drain_mode);

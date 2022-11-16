@@ -6,21 +6,26 @@
 
 #include "base/numerics/checked_math.h"
 #include "base/numerics/safe_conversions.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "net/base/net_errors.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/platform/heap/persistent.h"
 #include "third_party/blink/renderer/platform/loader/fetch/bytes_consumer.h"
+#include "third_party/blink/renderer/platform/wtf/functional.h"
 
 namespace blink {
 
 BytesUploader::BytesUploader(
+    ExecutionContext* execution_context,
     BytesConsumer* consumer,
     mojo::PendingReceiver<network::mojom::blink::ChunkedDataPipeGetter>
         pending_receiver,
-    scoped_refptr<base::SingleThreadTaskRunner> task_runner)
-    : consumer_(consumer),
+    scoped_refptr<base::SingleThreadTaskRunner> task_runner,
+    Client* client)
+    : ExecutionContextLifecycleObserver(execution_context),
+      consumer_(consumer),
+      client_(client),
       receiver_(this, std::move(pending_receiver)),
       upload_pipe_watcher_(FROM_HERE,
                            mojo::SimpleWatcher::ArmingPolicy::MANUAL,
@@ -34,7 +39,9 @@ BytesUploader::~BytesUploader() = default;
 
 void BytesUploader::Trace(blink::Visitor* visitor) const {
   visitor->Trace(consumer_);
+  visitor->Trace(client_);
   BytesConsumer::Client::Trace(visitor);
+  ExecutionContextLifecycleObserver::Trace(visitor);
 }
 
 void BytesUploader::GetSize(GetSizeCallback get_size_callback) {
@@ -61,6 +68,11 @@ void BytesUploader::StartReading(
       BytesConsumer::PublicState::kReadableOrWaiting) {
     WriteDataOnPipe();
   }
+}
+
+void BytesUploader::ContextDestroyed() {
+  CloseOnError();
+  Dispose();
 }
 
 void BytesUploader::OnStateChange() {
@@ -156,6 +168,10 @@ void BytesUploader::Close() {
   if (get_size_callback_)
     std::move(get_size_callback_).Run(net::OK, total_size_);
   consumer_->Cancel();
+  if (Client* client = client_) {
+    client_ = nullptr;
+    client->OnComplete();
+  }
   Dispose();
 }
 
@@ -164,6 +180,10 @@ void BytesUploader::CloseOnError() {
   if (get_size_callback_)
     std::move(get_size_callback_).Run(net::ERR_FAILED, total_size_);
   consumer_->Cancel();
+  if (Client* client = client_) {
+    client_ = nullptr;
+    client->OnError();
+  }
   Dispose();
 }
 

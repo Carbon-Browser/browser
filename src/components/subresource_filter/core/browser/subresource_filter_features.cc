@@ -39,9 +39,12 @@ class CommaSeparatedStrings {
                                        base::TRIM_WHITESPACE,
                                        base::SPLIT_WANT_NONEMPTY)) {}
 
+  CommaSeparatedStrings(const CommaSeparatedStrings&) = delete;
+  CommaSeparatedStrings& operator=(const CommaSeparatedStrings&) = delete;
+
   bool CaseInsensitiveContains(base::StringPiece lowercase_key) const {
     const auto predicate = [lowercase_key](base::StringPiece element) {
-      return base::LowerCaseEqualsASCII(element, lowercase_key);
+      return base::EqualsCaseInsensitiveASCII(element, lowercase_key);
     };
     return std::find_if(pieces_.begin(), pieces_.end(), predicate) !=
            pieces_.end();
@@ -50,8 +53,6 @@ class CommaSeparatedStrings {
  private:
   const std::string backing_string_;
   const std::vector<base::StringPiece> pieces_;
-
-  DISALLOW_COPY_AND_ASSIGN(CommaSeparatedStrings);
 };
 
 std::string TakeVariationParamOrReturnEmpty(
@@ -67,18 +68,21 @@ std::string TakeVariationParamOrReturnEmpty(
 
 mojom::ActivationLevel ParseActivationLevel(
     const base::StringPiece activation_level) {
-  if (base::LowerCaseEqualsASCII(activation_level, kActivationLevelEnabled))
+  if (base::EqualsCaseInsensitiveASCII(activation_level,
+                                       kActivationLevelEnabled))
     return mojom::ActivationLevel::kEnabled;
-  else if (base::LowerCaseEqualsASCII(activation_level, kActivationLevelDryRun))
+  else if (base::EqualsCaseInsensitiveASCII(activation_level,
+                                            kActivationLevelDryRun))
     return mojom::ActivationLevel::kDryRun;
   return mojom::ActivationLevel::kDisabled;
 }
 
 ActivationScope ParseActivationScope(const base::StringPiece activation_scope) {
-  if (base::LowerCaseEqualsASCII(activation_scope, kActivationScopeAllSites))
+  if (base::EqualsCaseInsensitiveASCII(activation_scope,
+                                       kActivationScopeAllSites))
     return ActivationScope::ALL_SITES;
-  else if (base::LowerCaseEqualsASCII(activation_scope,
-                                      kActivationScopeActivationList))
+  else if (base::EqualsCaseInsensitiveASCII(activation_scope,
+                                            kActivationScopeActivationList))
     return ActivationScope::ACTIVATION_LIST;
   return ActivationScope::NO_SITES;
 }
@@ -241,8 +245,7 @@ const base::Feature kAdsInterventionsEnforced{
     "AdsInterventionsEnforced", base::FEATURE_DISABLED_BY_DEFAULT};
 
 const base::FeatureParam<base::TimeDelta> kAdsInterventionDuration = {
-    &kAdsInterventionsEnforced, "kAdsInterventionDuration",
-    base::TimeDelta::FromDays(3)};
+    &kAdsInterventionsEnforced, "kAdsInterventionDuration", base::Days(3)};
 
 // Legacy name `activation_state` is used in variation parameters.
 const char kActivationLevelParameterName[] = "activation_state";

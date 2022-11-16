@@ -7,9 +7,9 @@
 #include <memory>
 #include <utility>
 
+#include "ash/services/ime/constants.h"
+#include "ash/services/ime/public/mojom/ime_service.mojom.h"
 #include "base/files/file_util.h"
-#include "chromeos/services/ime/constants.h"
-#include "chromeos/services/ime/public/mojom/ime_service.mojom.h"
 #include "chromeos/strings/grit/chromeos_strings.h"
 #include "content/public/browser/service_process_host.h"
 #include "net/base/load_flags.h"
@@ -49,8 +49,8 @@ bool IsDownloadPathValid(const base::FilePath& file_path) {
     return false;
 
   // Target path must be restricted in the provided path.
-  base::FilePath parent(chromeos::ime::kInputMethodsDirName);
-  parent = parent.Append(chromeos::ime::kLanguageDataDirName);
+  base::FilePath parent(ime::kInputMethodsDirName);
+  parent = parent.Append(ime::kLanguageDataDirName);
   return parent.IsParent(file_path);
 }
 
@@ -58,7 +58,7 @@ bool IsDownloadURLValid(const GURL& url) {
   // TODO(https://crbug.com/837156): Allowlist all URLs instead of some general
   // checks below.
   return url.SchemeIs(url::kHttpsScheme) &&
-         url.DomainIs(chromeos::ime::kGoogleKeyboardDownloadDomain);
+         url.DomainIs(ime::kGoogleKeyboardDownloadDomain);
 }
 
 }  // namespace
@@ -94,7 +94,7 @@ void ImeServiceConnector::DownloadImeFileTo(
   url_loader_ = network::SimpleURLLoader::Create(std::move(resource_request),
                                                  traffic_annotation);
   // TODO(https://crbug.com/971954): Allow the client to specify the timeout.
-  url_loader_->SetTimeoutDuration(base::TimeDelta::FromMinutes(10));
+  url_loader_->SetTimeoutDuration(base::Minutes(10));
 
   // Download the language module into a preconfigured ime folder of current
   // user's home which is allowed in IME service's sandbox.
@@ -107,7 +107,7 @@ void ImeServiceConnector::DownloadImeFileTo(
 }
 
 void ImeServiceConnector::SetupImeService(
-    mojo::PendingReceiver<chromeos::ime::mojom::InputEngineManager> receiver) {
+    mojo::PendingReceiver<ime::mojom::InputEngineManager> receiver) {
   if (!remote_service_) {
     content::ServiceProcessHost::Launch(
         remote_service_.BindNewPipeAndPassReceiver(),

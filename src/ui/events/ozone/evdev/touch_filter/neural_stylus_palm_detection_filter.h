@@ -36,6 +36,12 @@ class COMPONENT_EXPORT(EVDEV) NeuralStylusPalmDetectionFilter
       const EventDeviceInfo& devinfo,
       std::unique_ptr<NeuralStylusPalmDetectionFilterModel> palm_model,
       SharedPalmDetectionFilterState* shared_palm_state);
+
+  NeuralStylusPalmDetectionFilter(const NeuralStylusPalmDetectionFilter&) =
+      delete;
+  NeuralStylusPalmDetectionFilter& operator=(
+      const NeuralStylusPalmDetectionFilter&) = delete;
+
   ~NeuralStylusPalmDetectionFilter() override;
   void Filter(const std::vector<InProgressTouchEvdev>& touches,
               base::TimeTicks time,
@@ -58,18 +64,18 @@ class COMPONENT_EXPORT(EVDEV) NeuralStylusPalmDetectionFilter
  private:
   void FindNearestNeighborsWithin(
       int neighbor_count,
+      unsigned long neighbor_min_sample_count,
       float max_distance,
       const PalmFilterStroke& stroke,
       std::vector<std::pair<float, int>>* nearest_strokes) const;
   void FindBiggestNeighborsWithin(
       int neighbor_count,
-      unsigned long min_sample_count,
+      unsigned long neighbor_min_sample_count,
       float max_distance,
       const PalmFilterStroke& stroke,
       std::vector<std::pair<float, int>>* biggest_strokes) const;
 
   bool DetectSpuriousStroke(const std::vector<float>& features,
-                            int tracking_id,
                             float threshold) const;
   // Extracts the feature vector for the specified stroke.
   std::vector<float> ExtractFeatures(int tracking_id) const;
@@ -92,8 +98,6 @@ class COMPONENT_EXPORT(EVDEV) NeuralStylusPalmDetectionFilter
   int tracking_ids_[kNumTouchEvdevSlots];
   const PalmFilterDeviceInfo palm_filter_dev_info_;
   std::unique_ptr<NeuralStylusPalmDetectionFilterModel> model_;
-
-  DISALLOW_COPY_AND_ASSIGN(NeuralStylusPalmDetectionFilter);
 };
 
 }  // namespace ui

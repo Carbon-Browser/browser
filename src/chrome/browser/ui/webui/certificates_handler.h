@@ -8,11 +8,10 @@
 #include <memory>
 #include <string>
 
-#include "base/compiler_specific.h"
 #include "base/containers/id_map.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/cancelable_task_tracker.h"
+#include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/certificate_manager_model.h"
 #include "content/public/browser/web_ui_message_handler.h"
@@ -24,7 +23,6 @@ namespace user_prefs {
 class PrefRegistrySyncable;
 }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
 enum class Slot { kUser, kSystem };
 enum class CertificateSource { kBuiltIn, kImported };
 
@@ -51,7 +49,6 @@ enum class CACertificateManagementPermission : int {
   // Disallow users from managing certificates
   kNone = 2
 };
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 namespace certificate_manager {
 
@@ -62,6 +59,10 @@ class CertificatesHandler : public content::WebUIMessageHandler,
                             public ui::SelectFileDialog::Listener {
  public:
   CertificatesHandler();
+
+  CertificatesHandler(const CertificatesHandler&) = delete;
+  CertificatesHandler& operator=(const CertificatesHandler&) = delete;
+
   ~CertificatesHandler() override;
 
   // content::WebUIMessageHandler.
@@ -76,25 +77,25 @@ class CertificatesHandler : public content::WebUIMessageHandler,
                     void* params) override;
   void FileSelectionCanceled(void* params) override;
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   // Register profile preferences.
   static void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry);
-#endif
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
  private:
   // View certificate.
-  void HandleViewCertificate(const base::ListValue* args);
+  void HandleViewCertificate(const base::Value::List& args);
 
   // Edit certificate authority trust values.  The sequence goes like:
   //  1. user clicks edit button -> Edit dialog is shown ->
   //  HandleGetCATrust -> Edit dialog is populated.
   //  2. User checks/unchecks boxes, and clicks ok -> HandleEditCATrust ->
   //  edit dialog is dismissed upon success.
-  void HandleGetCATrust(const base::ListValue* args);
-  void HandleEditCATrust(const base::ListValue* args);
+  void HandleGetCATrust(const base::Value::List& args);
+  void HandleEditCATrust(const base::Value::List& args);
 
   // Cleanup state stored during import or export process.
-  void HandleCancelImportExportProcess(const base::ListValue* args);
+  void HandleCancelImportExportProcess(const base::Value::List& args);
   void ImportExportCleanup();
 
   // Export to PKCS #12 file.  The sequence goes like:
@@ -107,9 +108,9 @@ class CertificatesHandler : public content::WebUIMessageHandler,
   //  4. slots unlocked -> ExportPersonalSlotsUnlocked -> exports to memory
   //  buffer -> starts async write operation
   //  5. write finishes (or fails) -> ExportPersonalFileWritten
-  void HandleExportPersonal(const base::ListValue* args);
+  void HandleExportPersonal(const base::Value::List& args);
   void ExportPersonalFileSelected(const base::FilePath& path);
-  void HandleExportPersonalPasswordSelected(const base::ListValue* args);
+  void HandleExportPersonalPasswordSelected(const base::Value::List& args);
   void ExportPersonalSlotsUnlocked();
   void ExportPersonalFileWritten(const int* write_errno,
                                  const int* bytes_written);
@@ -129,10 +130,10 @@ class CertificatesHandler : public content::WebUIMessageHandler,
   //  6a. if import succeeds -> ImportExportCleanup
   //  6b. if import fails -> show error, ImportExportCleanup
   //  TODO(mattm): allow retrying with different password
-  void HandleImportPersonal(const base::ListValue* args);
+  void HandleImportPersonal(const base::Value::List& args);
   void ImportPersonalFileSelected(const base::FilePath& path);
   void ImportPersonalFileRead(const int* read_errno, const std::string* data);
-  void HandleImportPersonalPasswordSelected(const base::ListValue* args);
+  void HandleImportPersonalPasswordSelected(const base::Value::List& args);
   void ImportPersonalSlotUnlocked();
 
   // Import Server certificates from file.  Sequence goes like:
@@ -142,7 +143,7 @@ class CertificatesHandler : public content::WebUIMessageHandler,
   //  3. read completes -> ImportServerFileRead -> parse certs -> attempt import
   //  4a. if import succeeds -> ImportExportCleanup
   //  4b. if import fails -> show error, ImportExportCleanup
-  void HandleImportServer(const base::ListValue* args);
+  void HandleImportServer(const base::Value::List& args);
   void ImportServerFileSelected(const base::FilePath& path);
   void ImportServerFileRead(const int* read_errno, const std::string* data);
 
@@ -155,16 +156,16 @@ class CertificatesHandler : public content::WebUIMessageHandler,
   //  4. user clicks ok -> HandleImportCATrustSelected -> attempt import
   //  5a. if import succeeds -> ImportExportCleanup
   //  5b. if import fails -> show error, ImportExportCleanup
-  void HandleImportCA(const base::ListValue* args);
+  void HandleImportCA(const base::Value::List& args);
   void ImportCAFileSelected(const base::FilePath& path);
   void ImportCAFileRead(const int* read_errno, const std::string* data);
-  void HandleImportCATrustSelected(const base::ListValue* args);
+  void HandleImportCATrustSelected(const base::Value::List& args);
 
   // Export a certificate.
-  void HandleExportCertificate(const base::ListValue* args);
+  void HandleExportCertificate(const base::Value::List& args);
 
   // Delete certificate and private key (if any).
-  void HandleDeleteCertificate(const base::ListValue* args);
+  void HandleDeleteCertificate(const base::Value::List& args);
 
   // Model initialization methods.
   void OnCertificateManagerModelCreated(
@@ -172,7 +173,7 @@ class CertificatesHandler : public content::WebUIMessageHandler,
   void CertificateManagerModelReady();
 
   // Populate the trees in all the tabs.
-  void HandleRefreshCertificates(const base::ListValue* args);
+  void HandleRefreshCertificates(const base::Value::List& args);
 
   // Populate the given tab's tree.
   void PopulateTree(const std::string& tab_name, net::CertType type);
@@ -189,9 +190,10 @@ class CertificatesHandler : public content::WebUIMessageHandler,
       const std::string& title,
       const net::NSSCertDatabase::ImportCertFailureList& not_imported);
 
-  // Assigns a new |webui_callback_id_|. Ensures that previous in-flight request
-  // has been fulfilled.
-  void AssignWebUICallbackId(const base::ListValue* args);
+  // Assigns a new |webui_callback_id_|. Returns false if a previous request
+  // is still in-flight, in which case the new request should be rejected and
+  // ignored.
+  [[nodiscard]] bool AssignWebUICallbackId(const base::Value::List& args);
 
   gfx::NativeWindow GetParentWindow();
 
@@ -199,10 +201,20 @@ class CertificatesHandler : public content::WebUIMessageHandler,
   // |cert_info_id_map_| and looks up the corresponding CertInfo. If there is
   // an error parsing the list, returns nullptr.
   CertificateManagerModel::CertInfo* GetCertInfoFromCallbackArgs(
-      const base::Value& args,
+      const base::Value::List& args,
       size_t arg_index);
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+  // Returns true if it is allowed to display the list of client certificates
+  // for the current profile.
+  bool ShouldDisplayClientCertificates();
+
+  // Returns true if the user may manage client certificates on |slot|.
+  bool IsClientCertificateManagementAllowed(Slot slot);
+
+  // Returns true if the user may manage CA certificates.
+  bool IsCACertificateManagementAllowed(CertificateSource source);
+
+#if BUILDFLAG(IS_CHROMEOS)
   // Returns true if the user may manage certificates on |slot| according
   // to ClientCertificateManagementAllowed policy.
   bool IsClientCertificateManagementAllowedPolicy(Slot slot);
@@ -210,7 +222,7 @@ class CertificatesHandler : public content::WebUIMessageHandler,
   // Returns true if the user may manage certificates according
   // to CACertificateManagementAllowed policy.
   bool IsCACertificateManagementAllowedPolicy(CertificateSource source);
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
   // Returns true if the certificate represented by |cert_info| can be deleted.
   bool CanDeleteCertificate(const CertificateManagerModel::CertInfo* cert_info);
@@ -244,8 +256,6 @@ class CertificatesHandler : public content::WebUIMessageHandler,
       cert_info_id_map_;
 
   base::WeakPtrFactory<CertificatesHandler> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(CertificatesHandler);
   friend class ::CertificateHandlerTest;
 };
 

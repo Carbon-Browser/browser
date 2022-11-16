@@ -5,9 +5,13 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_PROFILES_PROFILE_PICKER_VIEW_H_
 #define CHROME_BROWSER_UI_VIEWS_PROFILES_PROFILE_PICKER_VIEW_H_
 
+#include "base/callback_forward.h"
 #include "base/cancelable_callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
+#include "build/buildflag.h"
+#include "build/chromeos_buildflags.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/chrome_web_modal_dialog_manager_delegate.h"
 #include "chrome/browser/ui/profile_picker.h"
@@ -25,9 +29,12 @@
 
 #if BUILDFLAG(ENABLE_DICE_SUPPORT)
 class ProfilePickerDiceSignInProvider;
+class ProfilePickerDiceSignInToolbar;
 #endif
 
+class Profile;
 class ProfilePickerSignedInFlowController;
+class ScopedProfileKeepAlive;
 
 namespace base {
 class FilePath;
@@ -40,10 +47,6 @@ class RenderFrameHost;
 class WebContents;
 }  // namespace content
 
-namespace ui {
-class ThemeProvider;
-}  // namespace ui
-
 // Dialog widget that contains the Desktop Profile picker webui.
 class ProfilePickerView : public views::WidgetDelegateView,
                           public ProfilePickerWebContentsHost {
@@ -53,32 +56,28 @@ class ProfilePickerView : public views::WidgetDelegateView,
   ProfilePickerView(const ProfilePickerView&) = delete;
   ProfilePickerView& operator=(const ProfilePickerView&) = delete;
 
-  const ui::ThemeProvider* GetThemeProviderForProfileBeingCreated() const;
+  Profile* GetProfileBeingCreated() const;
+  ui::ColorProviderManager::ThemeInitializerSupplier*
+  GetCustomThemeForProfileBeingCreated() const;
+
+  // Updates the parameters. This calls existing callbacks with error values,
+  // and requires `ProfilePicker::Params::CanReusePickerWindow()` to be true.
+  void UpdateParams(ProfilePicker::Params&& params);
 
   // Displays sign in error message that is created by Chrome but not GAIA
   // without browser window. If the dialog is not currently shown, this does
   // nothing.
   void DisplayErrorMessage();
 
-  // Sets the URL to be opened after the user selects a profile.
-  void set_on_select_profile_target_url(const GURL& url) {
-    on_select_profile_target_url_ = url;
-  }
-
   // ProfilePickerWebContentsHost:
   void ShowScreen(content::WebContents* contents,
                   const GURL& url,
-                  bool show_toolbar,
-                  bool enable_navigating_back = true,
                   base::OnceClosure navigation_finished_closure =
                       base::OnceClosure()) override;
-  void ShowScreenInSystemContents(
+  void ShowScreenInPickerContents(
       const GURL& url,
-      bool show_toolbar,
-      bool enable_navigating_back = true,
       base::OnceClosure navigation_finished_closure =
           base::OnceClosure()) override;
-  void CreateToolbarBackButton() override;
   void Clear() override;
   bool ShouldUseDarkColors() const override;
 
@@ -86,7 +85,7 @@ class ProfilePickerView : public views::WidgetDelegateView,
   bool HandleKeyboardEvent(
       content::WebContents* source,
       const content::NativeWebKeyboardEvent& event) override;
-  bool HandleContextMenu(content::RenderFrameHost* render_frame_host,
+  bool HandleContextMenu(content::RenderFrameHost& render_frame_host,
                          const content::ContextMenuParams& params) override;
 
   // web_modal::WebContentsModalDialogHost
@@ -100,7 +99,7 @@ class ProfilePickerView : public views::WidgetDelegateView,
   friend class ProfilePicker;
 
   // To display the Profile picker, use ProfilePicker::Show().
-  ProfilePickerView();
+  explicit ProfilePickerView(ProfilePicker::Params&& params);
   ~ProfilePickerView() override;
 
   enum State { kNotStarted = 0, kInitializing = 1, kReady = 2, kClosing = 3 };
@@ -124,15 +123,19 @@ class ProfilePickerView : public views::WidgetDelegateView,
     base::OnceClosure closure_;
   };
 
-  // Displays the profile picker.
-  void Display(ProfilePicker::EntryPoint entry_point);
+  // If the picker needs to be re-opened, this function schedules the reopening,
+  // closes the picker and return true. Otherwise, it returns false.
+  bool MaybeReopen(ProfilePicker::Params& params);
 
-  // On system profile creation success, it initializes the view.
-  void OnSystemProfileCreated(Profile* system_profile,
+  // Displays the profile picker.
+  void Display();
+
+  // On picker profile creation success, it initializes the view.
+  void OnPickerProfileCreated(Profile* picker_profile,
                               Profile::CreateStatus status);
 
   // Creates and shows the dialog.
-  void Init(Profile* system_profile);
+  void Init(Profile* picker_profile);
 
 #if BUILDFLAG(ENABLE_DICE_SUPPORT)
   // Switches the layout to the sign-in screen (and creates a new profile).
@@ -177,9 +180,6 @@ class ProfilePickerView : public views::WidgetDelegateView,
   gfx::Size CalculatePreferredSize() const override;
   gfx::Size GetMinimumSize() const override;
   bool AcceleratorPressed(const ui::Accelerator& accelerator) override;
-#if BUILDFLAG(ENABLE_DICE_SUPPORT)
-  void OnThemeChanged() override;
-#endif
 
   // Builds the views hieararchy.
   void BuildLayout();
@@ -188,8 +188,6 @@ class ProfilePickerView : public views::WidgetDelegateView,
 
   void ShowScreenFinished(
       content::WebContents* contents,
-      bool show_toolbar,
-      bool enable_navigating_back,
       base::OnceClosure navigation_finished_closure = base::OnceClosure());
 
   void BackButtonPressed(const ui::Event& event);
@@ -221,27 +219,39 @@ class ProfilePickerView : public views::WidgetDelegateView,
   // profile selection instead of the new tab page.
   GURL GetOnSelectProfileTargetUrl() const;
 
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  // Called when the user selects an account on the Lacros-specific account
+  // selection screen. Only called for existing profiles, not as part of profile
+  // creation.
+  void NotifyAccountSelected(const std::string& gaia_id);
+#endif
+
   ScopedKeepAlive keep_alive_;
-  ProfilePicker::EntryPoint entry_point_ =
-      ProfilePicker::EntryPoint::kOnStartup;
+  std::unique_ptr<ScopedProfileKeepAlive> profile_keep_alive_;
+
   State state_ = State::kNotStarted;
-  absl::optional<ProfilePicker::EntryPoint>
-      restart_with_entry_point_on_window_closing_;
+
+  // During destruction, `params_` should stay alive longer than
+  // `signed_in_flow_` (below) as the flow may want to trigger a callback owned
+  // by `params_`.
+  ProfilePicker::Params params_;
+
+  // Callback that gets called (if set) when the current window has closed -
+  // used to reshow the picker (with different params).
+  base::OnceClosure restart_on_window_closing_;
 
   // A mapping between accelerators and command IDs.
   std::map<ui::Accelerator, int> accelerator_table_;
-  bool enable_navigating_back_ = true;
 
   // Handler for unhandled key events from renderer.
   views::UnhandledKeyboardEventHandler unhandled_keyboard_event_handler_;
 
-  // Views, owned by the view hierarchy.
-  views::View* toolbar_ = nullptr;
-  views::WebView* web_view_ = nullptr;
+  // Owned by the view hierarchy.
+  raw_ptr<views::WebView> web_view_ = nullptr;
 
-  // The web contents backed by the system profile. This is used for displaying
-  // the WebUI pages.
-  std::unique_ptr<content::WebContents> system_profile_contents_;
+  // The web contents backed by the picker profile (mostly the system profile).
+  // This is used for displaying the WebUI pages.
+  std::unique_ptr<content::WebContents> contents_;
 
   // Observer used for implementing screen switching. Non-null only shorty
   // after switching a screen. Must be below all WebContents instances so that
@@ -249,6 +259,11 @@ class ProfilePickerView : public views::WidgetDelegateView,
   std::unique_ptr<NavigationFinishedObserver> show_screen_finished_observer_;
 
 #if BUILDFLAG(ENABLE_DICE_SUPPORT)
+  // Toolbar view displayed on top of the WebView for GAIA sign-in, owned by the
+  // view hierarchy.
+  raw_ptr<ProfilePickerDiceSignInToolbar> toolbar_ = nullptr;
+
+  // Handles the logic for signing-in to GAIA.
   std::unique_ptr<ProfilePickerDiceSignInProvider> dice_sign_in_provider_;
 #endif
 
@@ -263,10 +278,6 @@ class ProfilePickerView : public views::WidgetDelegateView,
 
   // Hosts dialog displayed when a locked profile is selected in ProfilePicker.
   ProfilePickerForceSigninDialogHost dialog_host_;
-
-  // A target page url that opens on profile selection instead of the new tab
-  // page.
-  GURL on_select_profile_target_url_;
 
   base::WeakPtrFactory<ProfilePickerView> weak_ptr_factory_{this};
 };

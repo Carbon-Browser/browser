@@ -66,9 +66,12 @@ GLenum TextureFormat(gfx::BufferFormat format) {
       return GL_R16_EXT;
     case gfx::BufferFormat::RG_88:
       return GL_RG;
+    case gfx::BufferFormat::RG_1616:
+      return GL_RG16_EXT;
     case gfx::BufferFormat::BGRA_8888:
     case gfx::BufferFormat::BGRX_8888:  // See https://crbug.com/595948.
     case gfx::BufferFormat::RGBA_8888:
+    case gfx::BufferFormat::RGBX_8888:
     case gfx::BufferFormat::RGBA_F16:
     case gfx::BufferFormat::BGRA_1010102:
       return GL_RGBA;
@@ -78,7 +81,6 @@ GLenum TextureFormat(gfx::BufferFormat format) {
       return GL_RGB_YCBCR_P010_CHROMIUM;
     case gfx::BufferFormat::BGR_565:
     case gfx::BufferFormat::RGBA_4444:
-    case gfx::BufferFormat::RGBX_8888:
     case gfx::BufferFormat::RGBA_1010102:
     case gfx::BufferFormat::YVU_420:
       NOTREACHED() << gfx::BufferFormatToString(format);
@@ -97,6 +99,8 @@ GLenum DataFormat(gfx::BufferFormat format) {
       return GL_R16_EXT;
     case gfx::BufferFormat::RG_88:
       return GL_RG;
+    case gfx::BufferFormat::RG_1616:
+      return GL_RG16_EXT;
     case gfx::BufferFormat::BGRA_8888:
     case gfx::BufferFormat::BGRX_8888:
     case gfx::BufferFormat::RGBA_8888:  // See https://crbug.com/533677#c6.
@@ -125,6 +129,7 @@ GLenum DataType(gfx::BufferFormat format) {
     case gfx::BufferFormat::RG_88:
       return GL_UNSIGNED_BYTE;
     case gfx::BufferFormat::R_16:
+    case gfx::BufferFormat::RG_1616:
       return GL_UNSIGNED_SHORT;
     case gfx::BufferFormat::BGRA_8888:
     case gfx::BufferFormat::BGRX_8888:
@@ -168,10 +173,7 @@ GLImageIOSurface* GLImageIOSurface::Create(const gfx::Size& size,
   switch (GetGLImplementation()) {
     case kGLImplementationEGLGLES2:
     case kGLImplementationEGLANGLE:
-    case kGLImplementationSwiftShaderGL:
-      return new GLImageIOSurfaceEGL(
-          size, internalformat,
-          GetGLImplementation() == kGLImplementationSwiftShaderGL);
+      return new GLImageIOSurfaceEGL(size, internalformat);
     default:
       break;
   }
@@ -385,18 +387,6 @@ bool GLImageIOSurface::CopyTexSubImage(unsigned target,
   return false;
 }
 
-bool GLImageIOSurface::ScheduleOverlayPlane(
-    gfx::AcceleratedWidget widget,
-    int z_order,
-    gfx::OverlayTransform transform,
-    const gfx::Rect& bounds_rect,
-    const gfx::RectF& crop_rect,
-    bool enable_blend,
-    std::unique_ptr<gfx::GpuFence> gpu_fence) {
-  NOTREACHED();
-  return false;
-}
-
 void GLImageIOSurface::OnMemoryDump(base::trace_event::ProcessMemoryDump* pmd,
                                     uint64_t process_tracing_id,
                                     const std::string& dump_name) {
@@ -441,6 +431,8 @@ void GLImageIOSurface::OnMemoryDump(base::trace_event::ProcessMemoryDump* pmd,
         base::trace_event::MemoryAllocatorDump::kNameSize,
         base::trace_event::MemoryAllocatorDump::kUnitsBytes,
         static_cast<uint64_t>(size_bytes));
+    anonymous_dump->AddScalar("width", "pixels", size_.width());
+    anonymous_dump->AddScalar("height", "pixels", size_.height());
   }
 }
 
@@ -525,18 +517,19 @@ bool GLImageIOSurface::ValidFormat(gfx::BufferFormat format) {
   switch (format) {
     case gfx::BufferFormat::R_8:
     case gfx::BufferFormat::RG_88:
+    case gfx::BufferFormat::R_16:
+    case gfx::BufferFormat::RG_1616:
     case gfx::BufferFormat::BGRA_8888:
     case gfx::BufferFormat::BGRX_8888:
     case gfx::BufferFormat::RGBA_8888:
+    case gfx::BufferFormat::RGBX_8888:
     case gfx::BufferFormat::RGBA_F16:
     case gfx::BufferFormat::BGRA_1010102:
     case gfx::BufferFormat::YUV_420_BIPLANAR:
     case gfx::BufferFormat::P010:
       return true;
-    case gfx::BufferFormat::R_16:
     case gfx::BufferFormat::BGR_565:
     case gfx::BufferFormat::RGBA_4444:
-    case gfx::BufferFormat::RGBX_8888:
     case gfx::BufferFormat::RGBA_1010102:
     case gfx::BufferFormat::YVU_420:
       return false;

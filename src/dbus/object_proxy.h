@@ -14,10 +14,9 @@
 #include <vector>
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
-#include "base/sequenced_task_runner.h"
 #include "base/strings/string_piece.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "dbus/dbus_export.h"
 #include "dbus/object_path.h"
@@ -47,6 +46,9 @@ class CHROME_DBUS_EXPORT ObjectProxy
               const std::string& service_name,
               const ObjectPath& object_path,
               int options);
+
+  ObjectProxy(const ObjectProxy&) = delete;
+  ObjectProxy& operator=(const ObjectProxy&) = delete;
 
   // Options to be OR-ed together when calling Bus::GetObjectProxyWithOptions().
   // Set the IGNORE_SERVICE_UNKNOWN_ERRORS option to silence logging of
@@ -237,6 +239,9 @@ class CHROME_DBUS_EXPORT ObjectProxy
     // This is movable to be bound to an OnceCallback.
     ReplyCallbackHolder(ReplyCallbackHolder&& other);
 
+    ReplyCallbackHolder(const ReplyCallbackHolder&) = delete;
+    ReplyCallbackHolder& operator=(const ReplyCallbackHolder&) = delete;
+
     // |callback_| needs to be destroyed on the origin thread.
     // If this is not destroyed on non-origin thread, it PostTask()s the
     // callback to the origin thread for destroying.
@@ -246,14 +251,9 @@ class CHROME_DBUS_EXPORT ObjectProxy
     // This must be called on the origin thread.
     ResponseOrErrorCallback ReleaseCallback();
 
-    // Whether |callback_| is null.
-    // TODO(http://crbug/1211451): Remove after fix.
-    bool IsNullCallback() const;
-
    private:
     scoped_refptr<base::SequencedTaskRunner> origin_task_runner_;
     ResponseOrErrorCallback callback_;
-    DISALLOW_COPY_AND_ASSIGN(ReplyCallbackHolder);
   };
 
   // Starts the async method call. This is a helper function to implement
@@ -363,8 +363,6 @@ class CHROME_DBUS_EXPORT ObjectProxy
   std::string service_name_owner_;
 
   std::set<DBusPendingCall*> pending_calls_;
-
-  DISALLOW_COPY_AND_ASSIGN(ObjectProxy);
 };
 
 }  // namespace dbus

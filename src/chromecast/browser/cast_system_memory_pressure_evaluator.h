@@ -8,7 +8,6 @@
 #include <string>
 
 #include "base/containers/flat_set.h"
-#include "base/macros.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chromecast/browser/cast_system_memory_pressure_evaluator_adjuster.h"
@@ -28,6 +27,12 @@ class CastSystemMemoryPressureEvaluator
  public:
   explicit CastSystemMemoryPressureEvaluator(
       std::unique_ptr<memory_pressure::MemoryPressureVoter> voter);
+
+  CastSystemMemoryPressureEvaluator(const CastSystemMemoryPressureEvaluator&) =
+      delete;
+  CastSystemMemoryPressureEvaluator& operator=(
+      const CastSystemMemoryPressureEvaluator&) = delete;
+
   ~CastSystemMemoryPressureEvaluator() override;
 
   // CastSystemMemoryPressureEvaluatorAdjuster implementation:
@@ -63,8 +68,6 @@ class CastSystemMemoryPressureEvaluator
   const int system_reserved_kb_;
   scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
   base::WeakPtrFactory<CastSystemMemoryPressureEvaluator> weak_ptr_factory_;
-
-  DISALLOW_COPY_AND_ASSIGN(CastSystemMemoryPressureEvaluator);
 };
 
 }  // namespace chromecast

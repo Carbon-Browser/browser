@@ -14,9 +14,12 @@ import org.chromium.base.annotations.NativeMethods;
 import org.chromium.base.task.PostTask;
 import org.chromium.chrome.browser.autofill.AutofillExpirationDateFixFlowPrompt.AutofillExpirationDateFixFlowPromptDelegate;
 import org.chromium.chrome.browser.autofill.AutofillNameFixFlowPrompt.AutofillNameFixFlowPromptDelegate;
+import org.chromium.chrome.browser.autofill.AutofillSaveCardConfirmFlowPrompt.AutofillSaveCardConfirmFlowPromptDelegate;
 import org.chromium.content_public.browser.UiThreadTaskTraits;
 import org.chromium.ui.base.WindowAndroid;
 import org.chromium.ui.modaldialog.DialogDismissalCause;
+
+import java.util.LinkedList;
 
 /**
  * Bridge for SaveCardMessageControllerAndroid to show a confirmation dialog of name or expiration
@@ -24,15 +27,14 @@ import org.chromium.ui.modaldialog.DialogDismissalCause;
  */
 @JNINamespace("autofill")
 public class AutofillMessageConfirmFlowBridge
-        implements AutofillExpirationDateFixFlowPromptDelegate, AutofillNameFixFlowPromptDelegate {
+        implements AutofillExpirationDateFixFlowPromptDelegate, AutofillNameFixFlowPromptDelegate,
+                   AutofillSaveCardConfirmFlowPromptDelegate {
     @Nullable
-    private AutofillNameFixFlowPrompt mCardholderNameFixFlowPrompt;
-    @Nullable
-    private AutofillExpirationDateFixFlowPrompt mExpirationDateFixFlowPrompt;
+    private AutofillSaveCardPromptBase mSaveCardPrompt;
 
     private long mNativeSaveCardMessageConfirmDelegate;
     private final WindowAndroid mWindowAndroid;
-    private LegalMessageLine mLegalMessageLine;
+    private LinkedList<LegalMessageLine> mLegalMessageLines = new LinkedList<>();
 
     private AutofillMessageConfirmFlowBridge(
             long nativeSaveCardMessageConfirmDelegate, WindowAndroid windowAndroid) {
@@ -51,24 +53,32 @@ public class AutofillMessageConfirmFlowBridge
     }
 
     @Override
-    public void onUserAccept(String name) {
+    public void onUserConfirmedCard() {
+        AutofillMessageConfirmFlowBridgeJni.get().onSaveCardConfirmed(
+                mNativeSaveCardMessageConfirmDelegate);
+    }
+
+    @Override
+    public void onUserAcceptCardholderName(String name) {
         AutofillMessageConfirmFlowBridgeJni.get().onNameConfirmed(
                 mNativeSaveCardMessageConfirmDelegate, name);
     }
 
     @Override
-    public void onUserAccept(String month, String year) {
+    public void onUserAcceptExpirationDate(String month, String year) {
         AutofillMessageConfirmFlowBridgeJni.get().onDateConfirmed(
                 mNativeSaveCardMessageConfirmDelegate, month, year);
     }
 
-    // no-op
     @Override
-    public void onUserDismiss() {}
+    public void onUserDismiss() {
+        AutofillMessageConfirmFlowBridgeJni.get().onUserDismiss(
+                mNativeSaveCardMessageConfirmDelegate);
+    }
 
     @Override
     public void onLinkClicked(String url) {
-        AutofillMessageConfirmFlowBridgeJni.get().onLegalMessageLinkClicked(
+        AutofillMessageConfirmFlowBridgeJni.get().onLinkClicked(
                 mNativeSaveCardMessageConfirmDelegate, url);
     }
 
@@ -79,50 +89,69 @@ public class AutofillMessageConfirmFlowBridge
                 nativeAutofillMessageConfirmDelegate, windowAndroid);
     }
 
-    @CalledByNative
-    private void confirmDate(
-            String month, String year, String title, String confirmButtonLabel, String cardLabel) {
-        Activity activity = mWindowAndroid.getActivity().get();
+    /**
+     * @return False if dialog should not be displayed in the next steps, e.g. when activity
+     *         has been destroyed.
+     */
+    private boolean prepareToShowDialog(Activity activity) {
         if (activity == null) {
             // Clean up the native counterpart. Post the dismissal to allow the native
             // caller to finish execution before we attempt to delete it.
             PostTask.postTask(UiThreadTaskTraits.DEFAULT, this::onPromptDismissed);
-            return;
+            return false;
         }
-        if (mExpirationDateFixFlowPrompt == null) {
-            mExpirationDateFixFlowPrompt =
-                    AutofillExpirationDateFixFlowPrompt.createAsMessageFixFlowPrompt(
-                            activity, this, month, year, title, confirmButtonLabel, cardLabel);
-            mExpirationDateFixFlowPrompt.setLegalMessageLine(mLegalMessageLine);
-        }
-        mExpirationDateFixFlowPrompt.show(activity, mWindowAndroid.getModalDialogManager());
+        return true;
     }
 
     @CalledByNative
-    private void confirmName(
-            String title, String inferredName, String confirmButtonLabel, String cardLabel) {
+    private void fixDate(
+            String title, String cardLabel, String cardholderAccount, String confirmButtonLabel) {
         Activity activity = mWindowAndroid.getActivity().get();
-        if (activity == null) {
-            // Clean up the native counterpart. Post the dismissal to allow the native
-            // caller to finish execution before we attempt to delete it.
-            PostTask.postTask(UiThreadTaskTraits.DEFAULT, this::onPromptDismissed);
-            return;
+        if (!prepareToShowDialog(activity)) return;
+        if (mSaveCardPrompt == null) {
+            mSaveCardPrompt = AutofillExpirationDateFixFlowPrompt.createAsMessageFixFlowPrompt(
+                    activity, this, title, cardLabel, cardholderAccount, confirmButtonLabel);
+            for (LegalMessageLine line : mLegalMessageLines) {
+                mSaveCardPrompt.addLegalMessageLine(line);
+            }
         }
-        if (mCardholderNameFixFlowPrompt == null) {
-            mCardholderNameFixFlowPrompt = AutofillNameFixFlowPrompt.createAsMessageFixFlowPrompt(
-                    activity, this, title, inferredName, confirmButtonLabel, cardLabel);
-            mCardholderNameFixFlowPrompt.setLegalMessageLine(mLegalMessageLine);
+        mSaveCardPrompt.show(activity, mWindowAndroid.getModalDialogManager());
+    }
+
+    @CalledByNative
+    private void fixName(String title, String inferredName, String cardLabel,
+            String cardholderAccount, String confirmButtonLabel) {
+        Activity activity = mWindowAndroid.getActivity().get();
+        if (!prepareToShowDialog(activity)) return;
+        if (mSaveCardPrompt == null) {
+            mSaveCardPrompt = AutofillNameFixFlowPrompt.createAsMessageFixFlowPrompt(activity, this,
+                    inferredName, title, cardLabel, cardholderAccount, confirmButtonLabel);
+            for (LegalMessageLine line : mLegalMessageLines) {
+                mSaveCardPrompt.addLegalMessageLine(line);
+            }
         }
-        mCardholderNameFixFlowPrompt.show(activity, mWindowAndroid.getModalDialogManager());
+        mSaveCardPrompt.show(activity, mWindowAndroid.getModalDialogManager());
+    }
+
+    @CalledByNative
+    private void confirmSaveCard(
+            String title, String cardLabel, String cardholderAccount, String confirmButtonLabel) {
+        Activity activity = mWindowAndroid.getActivity().get();
+        if (!prepareToShowDialog(activity)) return;
+        if (mSaveCardPrompt == null) {
+            mSaveCardPrompt = AutofillSaveCardConfirmFlowPrompt.createPrompt(
+                    activity, this, title, cardLabel, cardholderAccount, confirmButtonLabel);
+            for (LegalMessageLine line : mLegalMessageLines) {
+                mSaveCardPrompt.addLegalMessageLine(line);
+            }
+        }
+        mSaveCardPrompt.show(activity, mWindowAndroid.getModalDialogManager());
     }
 
     @CalledByNative
     private void dismiss() {
-        if (mExpirationDateFixFlowPrompt != null) {
-            mExpirationDateFixFlowPrompt.dismiss(DialogDismissalCause.DISMISSED_BY_NATIVE);
-        }
-        if (mCardholderNameFixFlowPrompt != null) {
-            mCardholderNameFixFlowPrompt.dismiss(DialogDismissalCause.DISMISSED_BY_NATIVE);
+        if (mSaveCardPrompt != null) {
+            mSaveCardPrompt.dismiss(DialogDismissalCause.DISMISSED_BY_NATIVE);
         }
     }
 
@@ -132,13 +161,13 @@ public class AutofillMessageConfirmFlowBridge
     }
 
     /**
-     * Sets a line of legal message plain text to the dialog.
+     * Adds a line of legal message plain text to the dialog.
      *
      * @param text The legal message plain text.
      */
     @CalledByNative
-    private void setLegalMessageLine(String text) {
-        mLegalMessageLine = new LegalMessageLine(text);
+    private void addLegalMessageLine(String text) {
+        mLegalMessageLines.add(new LegalMessageLine(text));
     }
 
     /**
@@ -150,14 +179,16 @@ public class AutofillMessageConfirmFlowBridge
      */
     @CalledByNative
     private void addLinkToLastLegalMessageLine(int start, int end, String url) {
-        mLegalMessageLine.links.add(new LegalMessageLine.Link(start, end, url));
+        mLegalMessageLines.getLast().links.add(new LegalMessageLine.Link(start, end, url));
     }
 
     @NativeMethods
     interface Natives {
         void onDateConfirmed(long nativeSaveCardMessageConfirmDelegate, String month, String year);
-        void dialogDismissed(long nativeSaveCardMessageConfirmDelegate);
         void onNameConfirmed(long nativeSaveCardMessageConfirmDelegate, String name);
-        void onLegalMessageLinkClicked(long nativeSaveCardMessageConfirmDelegate, String url);
+        void onSaveCardConfirmed(long nativeSaveCardMessageConfirmDelegate);
+        void onUserDismiss(long nativeSaveCardMessageConfirmDelegate);
+        void onLinkClicked(long nativeSaveCardMessageConfirmDelegate, String url);
+        void dialogDismissed(long nativeSaveCardMessageConfirmDelegate);
     }
 }

@@ -8,7 +8,7 @@
 #include <memory>
 
 #include "base/containers/id_map.h"
-#include "base/macros.h"
+#include "base/values.h"
 #include "components/guest_view/browser/guest_view.h"
 #include "extensions/browser/guest_view/app_view/app_view_guest_delegate.h"
 #include "extensions/browser/lazy_context_task_queue.h"
@@ -23,6 +23,9 @@ class Extension;
 class AppViewGuest : public guest_view::GuestView<AppViewGuest> {
  public:
   static const char Type[];
+
+  AppViewGuest(const AppViewGuest&) = delete;
+  AppViewGuest& operator=(const AppViewGuest&) = delete;
 
   // Completes the creation of a WebContents associated with the provided
   // |guest_extension_id| and |guest_instance_id| for the given
@@ -53,14 +56,14 @@ class AppViewGuest : public guest_view::GuestView<AppViewGuest> {
   ~AppViewGuest() override;
 
   // GuestViewBase implementation.
-  void CreateWebContents(const base::DictionaryValue& create_params,
+  void CreateWebContents(const base::Value::Dict& create_params,
                          WebContentsCreatedCallback callback) final;
-  void DidInitialize(const base::DictionaryValue& create_params) final;
+  void DidInitialize(const base::Value::Dict& create_params) final;
   const char* GetAPINamespace() const final;
   int GetTaskPrefix() const final;
 
   // content::WebContentsDelegate implementation.
-  bool HandleContextMenu(content::RenderFrameHost* render_frame_host,
+  bool HandleContextMenu(content::RenderFrameHost& render_frame_host,
                          const content::ContextMenuParams& params) final;
   void RequestMediaAccessPermission(
       content::WebContents* web_contents,
@@ -75,7 +78,7 @@ class AppViewGuest : public guest_view::GuestView<AppViewGuest> {
                                  WebContentsCreatedCallback callback);
 
   void LaunchAppAndFireEvent(
-      std::unique_ptr<base::DictionaryValue> data,
+      base::Value::Dict data,
       WebContentsCreatedCallback callback,
       std::unique_ptr<LazyContextTaskQueue::ContextInfo> context_info);
 
@@ -87,8 +90,6 @@ class AppViewGuest : public guest_view::GuestView<AppViewGuest> {
   // This is used to ensure pending tasks will not fire after this object is
   // destroyed.
   base::WeakPtrFactory<AppViewGuest> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(AppViewGuest);
 };
 
 }  // namespace extensions

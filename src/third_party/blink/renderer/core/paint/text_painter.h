@@ -31,6 +31,7 @@ class CORE_EXPORT TextPainter : public TextPainterBase {
                         font,
                         text_origin,
                         text_frame_rect,
+                        /* inline_context */ nullptr,
                         horizontal),
         run_(run) {}
   ~TextPainter() = default;
@@ -46,14 +47,14 @@ class CORE_EXPORT TextPainter : public TextPainterBase {
              unsigned end_offset,
              unsigned length,
              const TextPaintStyle&,
-             DOMNodeId node_id);
+             DOMNodeId node_id,
+             const AutoDarkMode& auto_dark_mode);
 
   void PaintDecorationsExceptLineThrough(const TextDecorationOffsetBase&,
                                          TextDecorationInfo&,
                                          const PaintInfo&,
                                          const Vector<AppliedTextDecoration>&,
-                                         const TextPaintStyle& text_style,
-                                         bool* has_line_through_decoration);
+                                         const TextPaintStyle& text_style);
   void PaintDecorationsOnlyLineThrough(TextDecorationInfo&,
                                        const PaintInfo&,
                                        const Vector<AppliedTextDecoration>&,
@@ -64,13 +65,15 @@ class CORE_EXPORT TextPainter : public TextPainterBase {
   void PaintInternalRun(TextRunPaintInfo&,
                         unsigned from,
                         unsigned to,
-                        DOMNodeId node_id);
+                        DOMNodeId node_id,
+                        const AutoDarkMode& auto_dark_mode);
 
   template <PaintInternalStep step>
   void PaintInternal(unsigned start_offset,
                      unsigned end_offset,
                      unsigned truncation_point,
-                     DOMNodeId node_id);
+                     DOMNodeId node_id,
+                     const AutoDarkMode& auto_dark_mode);
 
   const TextRun& run_;
   LayoutTextCombine* combined_text_ = nullptr;

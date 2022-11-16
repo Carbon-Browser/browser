@@ -17,6 +17,8 @@
 #include "components/password_manager/core/browser/ui/insecure_credentials_manager.h"
 #include "url/android/gurl_android.h"
 
+using password_manager::PasswordChangeSuccessTracker;
+
 namespace {
 
 password_manager::CredentialView ConvertJavaObjectToCredentialView(
@@ -39,7 +41,23 @@ password_manager::CredentialView ConvertJavaObjectToCredentialView(
       ConvertJavaStringToUTF16(
           env, Java_CompromisedCredential_getUsername(env, credential)),
       ConvertJavaStringToUTF16(
-          env, Java_CompromisedCredential_getPassword(env, credential)));
+          env, Java_CompromisedCredential_getPassword(env, credential)),
+      base::Time::FromJavaTime(
+          Java_CompromisedCredential_getLastUsedTime(env, credential)));
+}
+
+// Checks whether the credential is leaked but not phished. Other compromising
+// states are ignored (e.g. weak or reused).
+constexpr bool IsOnlyLeaked(
+    const PasswordCheckManager::CompromisedCredentialForUI& credential) {
+  return credential.IsLeaked() && !credential.IsPhished();
+}
+
+// Checks whether the credential is phished but not leaked. Other compromising
+// states are ignored (e.g. weak or reused).
+constexpr bool IsOnlyPhished(
+    const PasswordCheckManager::CompromisedCredentialForUI& credential) {
+  return credential.IsPhished() && !credential.IsLeaked();
 }
 
 }  // namespace
@@ -96,12 +114,10 @@ void PasswordCheckBridge::GetCompromisedCredentials(
         base::android::ConvertUTF8ToJavaString(env,
                                                credential.change_password_url),
         base::android::ConvertUTF8ToJavaString(env, credential.package_name),
-        credential.create_time.ToJavaTime(),
-        (credential.insecure_type ==
-         password_manager::InsecureCredentialTypeFlags::kCredentialLeaked),
-        (credential.insecure_type ==
-         password_manager::InsecureCredentialTypeFlags::kCredentialPhished),
-        credential.has_startable_script, credential.has_auto_change_button);
+        credential.GetLastLeakedOrPhishedTime().ToJavaTime(),
+        credential.last_used_time.ToJavaTime(), IsOnlyLeaked(credential),
+        IsOnlyPhished(credential), credential.has_startable_script,
+        credential.has_auto_change_button);
   }
 }
 

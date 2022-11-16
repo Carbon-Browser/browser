@@ -7,16 +7,13 @@
 #include <algorithm>
 #include <utility>
 
+#include "base/notreached.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/time/tick_clock.h"
 #include "base/values.h"
 #include "net/base/backoff_entry.h"
 
 namespace {
-// Increment this number when changing the serialization format, to avoid old
-// serialized values loaded from disk etc being misinterpreted.
-const int kSerializationFormatVersion = 1;
-
 // This max defines how many times we are willing to call
 // |BackoffEntry::InformOfRequest| in |DeserializeFromValue|.
 //
@@ -26,11 +23,12 @@ const int kSerializationFormatVersion = 1;
 // ceil(log(2**63-1, 1.01)) = 4389.
 const int kMaxFailureCount = 4389;
 
-// This function returns true iff |duration| is finite and can be converted to
-// double and back without becoming infinite.
+// This function returns true iff |duration| is finite and can be serialized and
+// deserialized without becoming infinite. This function is aligned with the
+// latest version.
 bool BackoffDurationSafeToSerialize(const base::TimeDelta& duration) {
   return !duration.is_inf() &&
-         !base::TimeDelta::FromSecondsD(duration.InSecondsF()).is_inf();
+         !base::Microseconds(duration.InMicroseconds()).is_inf();
 }
 }  // namespace
 
@@ -38,10 +36,10 @@ namespace net {
 
 base::Value BackoffEntrySerializer::SerializeToValue(const BackoffEntry& entry,
                                                      base::Time time_now) {
-  std::vector<base::Value> serialized;
-  serialized.emplace_back(kSerializationFormatVersion);
+  base::Value::List serialized;
+  serialized.Append(SerializationFormatVersion::kVersion2);
 
-  serialized.emplace_back(entry.failure_count());
+  serialized.Append(entry.failure_count());
 
   // Convert both |base::TimeTicks| values into |base::TimeDelta| values by
   // subtracting |kZeroTicks. This way, the top-level subtraction uses
@@ -66,8 +64,8 @@ base::Value BackoffEntrySerializer::SerializeToValue(const BackoffEntry& entry,
 
   // Redundantly stores both the remaining time delta and the absolute time.
   // The delta is used to work around some cases where wall clock time changes.
-  serialized.emplace_back(backoff_duration.InSecondsF());
-  serialized.emplace_back(
+  serialized.Append(base::NumberToString(backoff_duration.InMicroseconds()));
+  serialized.Append(
       base::NumberToString(absolute_release_time.ToInternalValue()));
 
   return base::Value(std::move(serialized));
@@ -80,32 +78,55 @@ std::unique_ptr<BackoffEntry> BackoffEntrySerializer::DeserializeFromValue(
     base::Time time_now) {
   if (!serialized.is_list())
     return nullptr;
-  const base::Value::ConstListView& list_view = serialized.GetList();
+  const base::Value::List& list = serialized.GetList();
 
-  if (list_view.size() != 4)
-    return nullptr;
-
-  if (!list_view[0].is_int())
-    return nullptr;
-  int version_number = list_view[0].GetInt();
-  if (version_number != kSerializationFormatVersion)
+  if (list.size() != 4)
     return nullptr;
 
-  if (!list_view[1].is_int())
+  if (!list[0].is_int())
     return nullptr;
-  int failure_count = list_view[1].GetInt();
+  int version_number = list[0].GetInt();
+  if (version_number != kVersion1 && version_number != kVersion2)
+    return nullptr;
+
+  if (!list[1].is_int())
+    return nullptr;
+  int failure_count = list[1].GetInt();
   if (failure_count < 0) {
     return nullptr;
   }
   failure_count = std::min(failure_count, kMaxFailureCount);
 
-  if (!list_view[2].is_double())
-    return nullptr;
-  double original_backoff_duration_double = list_view[2].GetDouble();
+  base::TimeDelta original_backoff_duration;
+  switch (version_number) {
+    case kVersion1: {
+      if (!list[2].is_double())
+        return nullptr;
+      double original_backoff_duration_double = list[2].GetDouble();
+      original_backoff_duration =
+          base::Seconds(original_backoff_duration_double);
+      break;
+    }
+    case kVersion2: {
+      if (!list[2].is_string())
+        return nullptr;
+      std::string original_backoff_duration_string = list[2].GetString();
+      int64_t original_backoff_duration_us;
+      if (!base::StringToInt64(original_backoff_duration_string,
+                               &original_backoff_duration_us)) {
+        return nullptr;
+      }
+      original_backoff_duration =
+          base::Microseconds(original_backoff_duration_us);
+      break;
+    }
+    default:
+      NOTREACHED() << "Unexpected version_number: " << version_number;
+  }
 
-  if (!list_view[3].is_string())
+  if (!list[3].is_string())
     return nullptr;
-  std::string absolute_release_time_string = list_view[3].GetString();
+  std::string absolute_release_time_string = list[3].GetString();
 
   int64_t absolute_release_time_us;
   if (!base::StringToInt64(absolute_release_time_string,
@@ -113,13 +134,11 @@ std::unique_ptr<BackoffEntry> BackoffEntrySerializer::DeserializeFromValue(
     return nullptr;
   }
 
-  std::unique_ptr<BackoffEntry> entry(new BackoffEntry(policy, tick_clock));
+  auto entry = std::make_unique<BackoffEntry>(policy, tick_clock);
 
   for (int n = 0; n < failure_count; n++)
     entry->InformOfRequest(false);
 
-  base::TimeDelta original_backoff_duration =
-      base::TimeDelta::FromSecondsD(original_backoff_duration_double);
   base::Time absolute_release_time =
       base::Time::FromInternalValue(absolute_release_time_us);
 
@@ -146,8 +165,12 @@ std::unique_ptr<BackoffEntry> BackoffEntrySerializer::DeserializeFromValue(
   }
   if (!BackoffDurationSafeToSerialize(backoff_duration))
     return nullptr;
-  entry->SetCustomReleaseTime(
-      entry->BackoffDurationToReleaseTime(backoff_duration));
+
+  const base::TimeTicks release_time =
+      entry->BackoffDurationToReleaseTime(backoff_duration);
+  if (release_time.is_inf())
+    return nullptr;
+  entry->SetCustomReleaseTime(release_time);
 
   return entry;
 }

@@ -16,32 +16,28 @@ class BrowserContext;
 
 namespace sharing_hub {
 
-// Returns true if the app menu sharing hub is enabled for |context|. Only for
-// Windows/Mac/Linux.
-bool SharingHubAppMenuEnabled(content::BrowserContext* context);
+// Returns true if the sharing hub page action icon should exist in the location
+// bar for some combination of |context|, |is_popup_mode|, and platform (from
+// build flag). Note: having the page action does not necessarily mean that the
+// sharing hub is enabled, e.g. ChromeOS uses the sharing hub page action icon
+// to open the native sharesheet.
+bool HasPageAction(content::BrowserContext* context, bool is_popup_mode);
 
 // Returns true if the omnibox sharing hub is enabled for |context|. Only for
-// Windows/Mac/Linux.
+// Windows/Mac/Linux. ChromeOS opens the native sharesheet.
 bool SharingHubOmniboxEnabled(content::BrowserContext* context);
 
 // Returns true if the desktop screenshots feature is enabled.
 // This feature is only accessed through the sharing hub. It allows the user to
 // select and capture a region of a page, and optionally to edit it with an
 // image editor before sharing.
-bool DesktopScreenshotsFeatureEnabled();
-
-// Feature flag to enable the 3-dot menu entry point for the desktop sharing
-// hub.
-extern const base::Feature kSharingHubDesktopAppMenu;
-
-// Feature flag to enable the omnibox entry point for the desktop sharing hub.
-extern const base::Feature kSharingHubDesktopOmnibox;
+bool DesktopScreenshotsFeatureEnabled(content::BrowserContext* context);
 
 // Feature flag to enable the screenshots feature, currently accessed only
 // through the sharing hub.
 extern const base::Feature kDesktopScreenshots;
 
-#if !defined(OS_ANDROID) && !defined(OS_CHROMEOS)
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_CHROMEOS)
 void RegisterProfilePrefs(PrefRegistrySimple* registry);
 #endif
 

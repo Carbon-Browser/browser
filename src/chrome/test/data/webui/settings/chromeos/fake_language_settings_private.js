@@ -10,7 +10,7 @@
 import {assert, assertNotReached} from 'chrome://resources/js/assert.m.js';
 import {isChromeOS} from 'chrome://resources/js/cr.m.js';
 
-import {FakeChromeEvent} from '../../fake_chrome_event.m.js';
+import {FakeChromeEvent} from '../../fake_chrome_event.js';
 import {TestBrowserProxy} from '../../test_browser_proxy.js';
 
 /**
@@ -89,7 +89,7 @@ export class FakeLanguageSettingsPrivate extends TestBrowserProxy {
         // A standalone language that doesn't support anything.
         code: 'tk',
         displayName: 'Turkmen',
-        nativeDisplayName: 'Turkmen'
+        nativeDisplayName: 'Turkmen',
       },
       {
         // Edge cases:
@@ -120,7 +120,7 @@ export class FakeLanguageSettingsPrivate extends TestBrowserProxy {
       {
         // A fake language for ARC IMEs which is for internal use only. The
         // value of the |code| must be the same as |kArcImeLanguage| in
-        // ui/base/ime/chromeos/extension_ime_util.cc.
+        // ui/base/ime/ash/extension_ime_util.cc.
         code: '_arc_ime_language_',
         displayName: 'Keyboard apps',
       },
@@ -165,7 +165,10 @@ export class FakeLanguageSettingsPrivate extends TestBrowserProxy {
         displayName: 'US Swahili keyboard',
         languageCodes: ['en', 'en-US', 'sw'],
         tags: [
-          'US Swahili keyboard', 'English', 'English(United States)', 'Swahili'
+          'US Swahili keyboard',
+          'English',
+          'English(United States)',
+          'Swahili',
         ],
         enabled: false,
       },
@@ -216,7 +219,7 @@ export class FakeLanguageSettingsPrivate extends TestBrowserProxy {
     setTimeout(function() {
       callback(
           /** @type {!Array<!string>} */ (
-              this.settingsPrefs_.get('prefs.translate_whitelists.value')));
+              this.settingsPrefs_.get('prefs.translate_allowlists.value')));
     }.bind(this));
   }
 
@@ -227,7 +230,7 @@ export class FakeLanguageSettingsPrivate extends TestBrowserProxy {
    */
   setLanguageAlwaysTranslateState(languageCode, alwaysTranslate) {
     const alwaysTranslateList =
-        this.settingsPrefs_.get('prefs.translate_whitelists.value');
+        this.settingsPrefs_.get('prefs.translate_allowlists.value');
     if (alwaysTranslate) {
       if (!alwaysTranslateList.includes(languageCode)) {
         alwaysTranslateList.push(languageCode);
@@ -240,7 +243,7 @@ export class FakeLanguageSettingsPrivate extends TestBrowserProxy {
       alwaysTranslateList.splice(index, 1);
     }
     this.settingsPrefs_.set(
-        'prefs.translate_whitelists.value', alwaysTranslateList);
+        'prefs.translate_allowlists.value', alwaysTranslateList);
   }
 
   /**
@@ -550,7 +553,7 @@ export function getFakeLanguagePrefs() {
     // of {always translate: target}, however only the keys are needed for
     // testing.
     {
-      key: 'translate_whitelists',
+      key: 'translate_allowlists',
       type: chrome.settingsPrivate.PrefType.LIST,
       value: [],
     },
@@ -558,7 +561,7 @@ export function getFakeLanguagePrefs() {
       key: 'translate_recent_target',
       type: chrome.settingsPrivate.PrefType.STRING,
       value: 'en-US',
-    }
+    },
   ];
   if (isChromeOS) {
     fakePrefs.push({

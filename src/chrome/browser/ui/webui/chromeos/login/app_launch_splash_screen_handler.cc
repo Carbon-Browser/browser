@@ -17,8 +17,8 @@
 #include "chrome/grit/chrome_unscaled_resources.h"
 #include "chrome/grit/chromium_strings.h"
 #include "chrome/grit/generated_resources.h"
-#include "chromeos/network/network_state.h"
-#include "chromeos/network/network_state_handler.h"
+#include "chromeos/ash/components/network/network_state.h"
+#include "chromeos/ash/components/network/network_state_handler.h"
 #include "components/login/localized_values_builder.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/resource/resource_bundle.h"
@@ -43,10 +43,9 @@ namespace chromeos {
 constexpr StaticOobeScreenId AppLaunchSplashScreenView::kScreenId;
 
 AppLaunchSplashScreenHandler::AppLaunchSplashScreenHandler(
-    JSCallsContainer* js_calls_container,
     const scoped_refptr<NetworkStateInformer>& network_state_informer,
     ErrorScreen* error_screen)
-    : BaseScreenHandler(kScreenId, js_calls_container),
+    : BaseScreenHandler(kScreenId),
       network_state_informer_(network_state_informer),
       error_screen_(error_screen) {
   network_state_informer_->AddObserver(this);
@@ -70,7 +69,7 @@ void AppLaunchSplashScreenHandler::DeclareLocalizedValues(
                                           product_os_name));
 }
 
-void AppLaunchSplashScreenHandler::Initialize() {
+void AppLaunchSplashScreenHandler::InitializeDeprecated() {
   if (show_on_init_) {
     show_on_init_ = false;
     Show();
@@ -78,23 +77,23 @@ void AppLaunchSplashScreenHandler::Initialize() {
 }
 
 void AppLaunchSplashScreenHandler::Show() {
-  if (!page_is_ready()) {
+  if (!IsJavascriptAllowed()) {
     show_on_init_ = true;
     return;
   }
 
   is_shown_ = true;
 
-  base::DictionaryValue data;
-  data.SetBoolean("shortcutEnabled",
-                  !KioskAppManager::Get()->GetDisableBailoutShortcut());
+  base::Value::Dict data;
+  data.Set("shortcutEnabled",
+           !KioskAppManager::Get()->GetDisableBailoutShortcut());
 
   base::DictionaryValue app_info;
   PopulateAppInfo(&app_info);
-  data.SetKey("appInfo", std::move(app_info));
+  data.Set("appInfo", std::move(app_info));
 
   SetLaunchText(l10n_util::GetStringUTF8(GetProgressMessageFromState(state_)));
-  ShowScreenWithData(kScreenId, &data);
+  ShowInWebUI(std::move(data));
   if (toggle_network_config_on_show_.has_value()) {
     DoToggleNetworkConfig(toggle_network_config_on_show_.value());
     toggle_network_config_on_show_.reset();
@@ -106,12 +105,6 @@ void AppLaunchSplashScreenHandler::Show() {
 void AppLaunchSplashScreenHandler::RegisterMessages() {
   AddCallback("configureNetwork",
               &AppLaunchSplashScreenHandler::HandleConfigureNetwork);
-  AddCallback("cancelAppLaunch",
-              &AppLaunchSplashScreenHandler::HandleCancelAppLaunch);
-  AddCallback("continueAppLaunch",
-              &AppLaunchSplashScreenHandler::HandleContinueAppLaunch);
-  AddCallback("networkConfigRequest",
-              &AppLaunchSplashScreenHandler::HandleNetworkConfigRequested);
 }
 
 void AppLaunchSplashScreenHandler::Hide() {
@@ -131,7 +124,7 @@ void AppLaunchSplashScreenHandler::UpdateAppLaunchState(AppLaunchState state) {
     return;
 
   state_ = state;
-  if (page_is_ready()) {
+  if (IsJavascriptAllowed()) {
     SetLaunchText(
         l10n_util::GetStringUTF8(GetProgressMessageFromState(state_)));
   }
@@ -240,12 +233,13 @@ void AppLaunchSplashScreenHandler::PopulateAppInfo(
 
   // Display app domain if present.
   if (!app.url.is_empty()) {
-    app.url = app.url.GetOrigin();
+    app.url = app.url.DeprecatedGetOriginAsURL();
   }
 
-  out_info->SetString("name", app.name);
-  out_info->SetString("iconURL", webui::GetBitmapDataUrl(*app.icon.bitmap()));
-  out_info->SetString("url", app.url.spec());
+  out_info->SetStringKey("name", app.name);
+  out_info->SetStringKey("iconURL",
+                         webui::GetBitmapDataUrl(*app.icon.bitmap()));
+  out_info->SetStringKey("url", app.url.spec());
 }
 
 void AppLaunchSplashScreenHandler::SetLaunchText(const std::string& text) {
@@ -281,20 +275,7 @@ void AppLaunchSplashScreenHandler::HandleConfigureNetwork() {
     LOG(WARNING) << "No delegate set to handle network configuration.";
 }
 
-void AppLaunchSplashScreenHandler::HandleCancelAppLaunch() {
-  if (delegate_)
-    delegate_->OnCancelAppLaunch();
-  else
-    LOG(WARNING) << "No delegate set to handle cancel app launch";
-}
-
-void AppLaunchSplashScreenHandler::HandleNetworkConfigRequested() {
-  if (!delegate_)
-    return;
-  delegate_->OnNetworkConfigRequested();
-}
-
-void AppLaunchSplashScreenHandler::HandleContinueAppLaunch() {
+void AppLaunchSplashScreenHandler::ContinueAppLaunch() {
   if (!delegate_)
     return;
 

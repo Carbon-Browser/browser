@@ -58,6 +58,10 @@ void GetFlatBufferStringFromMappedMemory(
 
 TEST(ClientSidePhishingModelTest, NotifiesOnUpdate) {
   ResetClientSidePhishingModel();
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitWithFeatures(
+      /*enabled_features=*/{},
+      /*disabled_features=*/{kClientSideDetectionModelIsFlatBuffer});
 
   content::BrowserTaskEnvironment task_environment;
   base::RunLoop run_loop;
@@ -204,13 +208,16 @@ TEST(ClientSidePhishingModelTest, DoesNotNotifyOnBadFollowingUpdate) {
 
 TEST(ClientSidePhishingModelTest, CanOverrideProtoWithFlag) {
   ResetClientSidePhishingModel();
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitWithFeatures(
+      /*enabled_features=*/{},
+      /*disabled_features=*/{kClientSideDetectionModelIsFlatBuffer});
   base::ScopedTempDir temp_dir;
   ASSERT_TRUE(temp_dir.CreateUniqueTempDir());
-  const base::FilePath file_path =
-      temp_dir.GetPath().AppendASCII("overridden_model.proto");
-  base::File file(file_path, base::File::FLAG_OPEN_ALWAYS |
-                                 base::File::FLAG_READ |
-                                 base::File::FLAG_WRITE);
+  const base::FilePath file_path = temp_dir.GetPath();
+  base::File file(file_path.AppendASCII("client_model.pb"),
+                  base::File::FLAG_OPEN_ALWAYS | base::File::FLAG_READ |
+                      base::File::FLAG_WRITE);
   ClientSideModel model_proto;
   model_proto.set_version(123);
   model_proto.set_max_words_per_term(0);  // Required field
@@ -252,11 +259,10 @@ TEST(ClientSidePhishingModelTest, CanOverrideFlatBufferWithFlag) {
       /*disabled_features=*/{});
   base::ScopedTempDir temp_dir;
   ASSERT_TRUE(temp_dir.CreateUniqueTempDir());
-  const base::FilePath file_path =
-      temp_dir.GetPath().AppendASCII("overridden_model.fb");
-  base::File file(file_path, base::File::FLAG_OPEN_ALWAYS |
-                                 base::File::FLAG_READ |
-                                 base::File::FLAG_WRITE);
+  const base::FilePath file_path = temp_dir.GetPath();
+  base::File file(file_path.AppendASCII("client_model.pb"),
+                  base::File::FLAG_OPEN_ALWAYS | base::File::FLAG_READ |
+                      base::File::FLAG_WRITE);
 
   const std::string file_contents = CreateFlatBufferString();
   file.WriteAtCurrentPos(file_contents.data(), file_contents.size());
@@ -383,8 +389,8 @@ TEST(ClientSidePhishingModelTest, FlatbufferonFollowingUpdate) {
   // See https://crbug.com/815537 and base/test/gtest_util.h.
   // Can remove this if flaky.
   // Windows ASAN flake: crbug.com/1234652
-#if defined(GTEST_HAS_DEATH_TEST) && !defined(OS_ANDROID) && \
-    !(defined(OS_WIN) && defined(ADDRESS_SANITIZER))
+#if defined(GTEST_HAS_DEATH_TEST) && !BUILDFLAG(IS_ANDROID) && \
+    !(BUILDFLAG(IS_WIN) && defined(ADDRESS_SANITIZER))
   EXPECT_DEATH_IF_SUPPORTED(memset(memory_addr, 'G', 1), "");
 #endif
 }

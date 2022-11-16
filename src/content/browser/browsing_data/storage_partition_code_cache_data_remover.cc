@@ -7,9 +7,8 @@
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/location.h"
-#include "base/sequenced_task_runner_helpers.h"
-#include "base/single_thread_task_runner.h"
-#include "base/task/post_task.h"
+#include "base/task/sequenced_task_runner_helpers.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "content/browser/browsing_data/conditional_cache_deletion_helper.h"
@@ -105,6 +104,9 @@ void StoragePartitionCodeCacheDataRemover::ClearCache(
 void StoragePartitionCodeCacheDataRemover::ClearJSCodeCache() {
   if (generated_code_cache_context_ &&
       generated_code_cache_context_->generated_js_code_cache()) {
+    generated_code_cache_context_->generated_js_code_cache()
+        ->ClearInMemoryCache();
+
     net::CompletionOnceCallback callback = base::BindOnce(
         &StoragePartitionCodeCacheDataRemover::ClearWASMCodeCache,
         base::Unretained(this));
@@ -123,6 +125,9 @@ void StoragePartitionCodeCacheDataRemover::ClearJSCodeCache() {
 void StoragePartitionCodeCacheDataRemover::ClearWASMCodeCache(int rv) {
   if (generated_code_cache_context_ &&
       generated_code_cache_context_->generated_wasm_code_cache()) {
+    generated_code_cache_context_->generated_wasm_code_cache()
+        ->ClearInMemoryCache();
+
     net::CompletionOnceCallback callback = base::BindOnce(
         &StoragePartitionCodeCacheDataRemover::ClearWebUIJSCodeCache,
         base::Unretained(this));
@@ -140,6 +145,9 @@ void StoragePartitionCodeCacheDataRemover::ClearWASMCodeCache(int rv) {
 void StoragePartitionCodeCacheDataRemover::ClearWebUIJSCodeCache(int rv) {
   if (generated_code_cache_context_ &&
       generated_code_cache_context_->generated_webui_js_code_cache()) {
+    generated_code_cache_context_->generated_webui_js_code_cache()
+        ->ClearInMemoryCache();
+
     net::CompletionOnceCallback callback = base::BindOnce(
         &StoragePartitionCodeCacheDataRemover::DoneClearCodeCache,
         base::Unretained(this));

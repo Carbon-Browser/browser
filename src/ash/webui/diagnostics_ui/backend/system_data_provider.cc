@@ -8,17 +8,17 @@
 #include <utility>
 #include <vector>
 
+#include "ash/system/diagnostics/telemetry_log.h"
 #include "ash/webui/diagnostics_ui/backend/cros_healthd_helpers.h"
 #include "ash/webui/diagnostics_ui/backend/power_manager_client_conversions.h"
-#include "ash/webui/diagnostics_ui/backend/telemetry_log.h"
 #include "base/bind.h"
 #include "base/callback.h"
 #include "base/i18n/time_formatting.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
+#include "chromeos/ash/services/cros_healthd/public/cpp/service_connection.h"
+#include "chromeos/ash/services/cros_healthd/public/mojom/cros_healthd_probe.mojom.h"
 #include "chromeos/dbus/power_manager/power_supply_properties.pb.h"
-#include "chromeos/services/cros_healthd/public/cpp/service_connection.h"
-#include "chromeos/services/cros_healthd/public/mojom/cros_healthd_probe.mojom.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
@@ -36,34 +36,42 @@ constexpr int kCpuUsageRefreshIntervalInSeconds = 1;
 constexpr int kMemoryUsageRefreshIntervalInSeconds = 10;
 constexpr int kMilliampsInAnAmp = 1000;
 
-void PopulateBoardName(const healthd::SystemInfo& system_info,
+void PopulateBoardName(const healthd::SystemInfoV2& system_info_v2,
                        mojom::SystemInfo& out_system_info) {
-  const absl::optional<std::string>& product_name = system_info.product_name;
+  out_system_info.board_name = system_info_v2.os_info->code_name;
+}
 
-  if (!product_name.has_value()) {
-    DVLOG(1) << "No board name in SystemInfo response.";
+void PopulateMarketingName(const healthd::SystemInfoV2& system_info_v2,
+                           mojom::SystemInfo& out_system_info) {
+  const absl::optional<std::string>& marketing_name =
+      system_info_v2.os_info->marketing_name;
+
+  if (!marketing_name.has_value()) {
+    DVLOG(1) << "No marketing name in SystemInfoV2 response.";
     return;
   }
 
-  out_system_info.board_name = product_name.value();
-}
-
-void PopulateMarketingName(const healthd::SystemInfo& system_info,
-                           mojom::SystemInfo& out_system_info) {
-  out_system_info.marketing_name = system_info.marketing_name;
+  out_system_info.marketing_name = marketing_name.value();
 }
 
 void PopulateCpuInfo(const healthd::CpuInfo& cpu_info,
                      mojom::SystemInfo& out_system_info) {
   const PhysicalCpuInfos& physical_cpus = cpu_info.physical_cpus;
-  DCHECK_GE(physical_cpus.size(), 1u);
-
   out_system_info.cpu_threads_count = cpu_info.num_total_threads;
+
+  if (physical_cpus.empty()) {
+    LOG(ERROR) << "No physical cpus in SystemInfo response.";
+    return;
+  }
 
   // If there is more than one physical cpu on the device, use the name of the
   // first CPU.
   out_system_info.cpu_model_name = physical_cpus[0]->model_name.value_or("");
 
+  if (physical_cpus[0]->logical_cpus.empty()) {
+    LOG(ERROR) << "Device reported having 0 logical CPUs.";
+    return;
+  }
   // Calculate `max_clock_speed_khz` as the average of all logical core clock
   // speeds until we decide the best way to consume the information in the UI.
   uint32_t total_max_ghz = 0;
@@ -76,13 +84,14 @@ void PopulateCpuInfo(const healthd::CpuInfo& cpu_info,
       total_max_ghz / physical_cpus[0]->logical_cpus.size();
 }
 
-void PopulateVersionInfo(const healthd::SystemInfo& system_info,
+void PopulateVersionInfo(const healthd::SystemInfoV2& system_info,
                          mojom::SystemInfo& out_system_info) {
-  const std::string full_version = system_info.os_version->release_milestone +
-                                   '.' + system_info.os_version->build_number +
-                                   '.' + system_info.os_version->patch_number;
+  const std::string full_version =
+      system_info.os_info->os_version->release_milestone + '.' +
+      system_info.os_info->os_version->build_number + '.' +
+      system_info.os_info->os_version->patch_number;
   out_system_info.version_info = mojom::VersionInfo::New(
-      system_info.os_version->release_milestone, full_version);
+      system_info.os_info->os_version->release_milestone, full_version);
 }
 
 void PopulateMemorySize(const healthd::MemoryInfo& memory_info,
@@ -140,11 +149,25 @@ void PopulateBatteryChargeStatus(
 
 void PopulateBatteryHealth(const healthd::BatteryInfo& battery_info,
                            mojom::BatteryHealth& out_battery_health) {
+  out_battery_health.cycle_count = battery_info.cycle_count;
+
+  // Handle values in battery_info which could cause a SIGFPE. See b/227485637.
+  if (isnan(battery_info.charge_full) ||
+      isnan(battery_info.charge_full_design) ||
+      battery_info.charge_full_design == 0) {
+    LOG(ERROR) << "battery_info values could cause SIGFPE crash: { "
+               << "charge_full_design: " << battery_info.charge_full_design
+               << ", charge_full: " << battery_info.charge_full << " }";
+    out_battery_health.charge_full_now_milliamp_hours = 0;
+    out_battery_health.charge_full_design_milliamp_hours = 0;
+    out_battery_health.battery_wear_percentage = 0;
+    return;
+  }
+
   out_battery_health.charge_full_now_milliamp_hours =
       battery_info.charge_full * kMilliampsInAnAmp;
   out_battery_health.charge_full_design_milliamp_hours =
       battery_info.charge_full_design * kMilliampsInAnAmp;
-  out_battery_health.cycle_count = battery_info.cycle_count;
   out_battery_health.battery_wear_percentage =
       100 * out_battery_health.charge_full_now_milliamp_hours /
       out_battery_health.charge_full_design_milliamp_hours;
@@ -190,6 +213,11 @@ void PopulateCpuUsagePercentages(const CpuUsageData& new_usage,
 
 void PopulateAverageCpuTemperature(const healthd::CpuInfo& cpu_info,
                                    mojom::CpuUsage& out_cpu_usage) {
+  if (cpu_info.temperature_channels.empty()) {
+    LOG(ERROR) << "Device reported having 0 temperature channels.";
+    return;
+  }
+
   uint32_t cumulative_total = 0;
   for (const auto& temp_channel_ptr : cpu_info.temperature_channels) {
     cumulative_total += temp_channel_ptr->temperature_celsius;
@@ -202,6 +230,12 @@ void PopulateAverageCpuTemperature(const healthd::CpuInfo& cpu_info,
 
 void PopulateAverageScaledClockSpeed(const healthd::CpuInfo& cpu_info,
                                      mojom::CpuUsage& out_cpu_usage) {
+  if (cpu_info.physical_cpus.empty() ||
+      cpu_info.physical_cpus[0]->logical_cpus.empty()) {
+    LOG(ERROR) << "Device reported having 0 logical CPUs.";
+    return;
+  }
+
   uint32_t total_scaled_ghz = 0;
   for (const auto& logical_cpu_ptr : cpu_info.physical_cpus[0]->logical_cpus) {
     total_scaled_ghz += logical_cpu_ptr->scaling_current_frequency_khz;
@@ -255,8 +289,7 @@ void SystemDataProvider::ObserveBatteryChargeStatus(
 
   if (!battery_charge_status_timer_->IsRunning()) {
     battery_charge_status_timer_->Start(
-        FROM_HERE,
-        base::TimeDelta::FromSeconds(kChargeStatusRefreshIntervalInSeconds),
+        FROM_HERE, base::Seconds(kChargeStatusRefreshIntervalInSeconds),
         base::BindRepeating(&SystemDataProvider::UpdateBatteryChargeStatus,
                             base::Unretained(this)));
   }
@@ -269,8 +302,7 @@ void SystemDataProvider::ObserveBatteryHealth(
 
   if (!battery_health_timer_->IsRunning()) {
     battery_health_timer_->Start(
-        FROM_HERE,
-        base::TimeDelta::FromSeconds(kBatteryHealthRefreshIntervalInSeconds),
+        FROM_HERE, base::Seconds(kBatteryHealthRefreshIntervalInSeconds),
         base::BindRepeating(&SystemDataProvider::UpdateBatteryHealth,
                             base::Unretained(this)));
   }
@@ -283,8 +315,7 @@ void SystemDataProvider::ObserveMemoryUsage(
 
   if (!memory_usage_timer_->IsRunning()) {
     memory_usage_timer_->Start(
-        FROM_HERE,
-        base::TimeDelta::FromSeconds(kMemoryUsageRefreshIntervalInSeconds),
+        FROM_HERE, base::Seconds(kMemoryUsageRefreshIntervalInSeconds),
         base::BindRepeating(&SystemDataProvider::UpdateMemoryUsage,
                             base::Unretained(this)));
   }
@@ -297,8 +328,7 @@ void SystemDataProvider::ObserveCpuUsage(
   if (!cpu_usage_timer_->IsRunning()) {
     previous_cpu_usage_data_ = CpuUsageData();
     cpu_usage_timer_->Start(
-        FROM_HERE,
-        base::TimeDelta::FromSeconds(kCpuUsageRefreshIntervalInSeconds),
+        FROM_HERE, base::Seconds(kCpuUsageRefreshIntervalInSeconds),
         base::BindRepeating(&SystemDataProvider::UpdateCpuUsage,
                             base::Unretained(this)));
   }
@@ -322,18 +352,8 @@ void SystemDataProvider::PowerChanged(
 
 void SystemDataProvider::BindInterface(
     mojo::PendingReceiver<mojom::SystemDataProvider> pending_receiver) {
-  DCHECK(!ReceiverIsBound());
-  receiver_.Bind(std::move(pending_receiver));
-  receiver_.set_disconnect_handler(base::BindOnce(
-      &SystemDataProvider::OnBoundInterfaceDisconnect, base::Unretained(this)));
-}
-
-bool SystemDataProvider::ReceiverIsBound() {
-  return receiver_.is_bound();
-}
-
-void SystemDataProvider::OnBoundInterfaceDisconnect() {
   receiver_.reset();
+  receiver_.Bind(std::move(pending_receiver));
 }
 
 void SystemDataProvider::SetBatteryChargeStatusTimerForTesting(
@@ -369,7 +389,7 @@ void SystemDataProvider::OnSystemInfoProbeResponse(
     return;
   }
 
-  const healthd::SystemInfo* system_info_ptr =
+  const healthd::SystemInfoV2* system_info_ptr =
       diagnostics::GetSystemInfo(*info_ptr);
   if (system_info_ptr) {
     PopulateBoardName(*system_info_ptr, *system_info.get());
@@ -554,6 +574,8 @@ void SystemDataProvider::OnCpuUsageUpdated(healthd::TelemetryInfoPtr info_ptr) {
     return;
   }
 
+  // TODO(ashleydp): Add metrics to track the occurrence of invalid cros_healthd
+  // CpuInfo responses.
   const healthd::CpuInfo* cpu_info = GetCpuInfo(*info_ptr);
   if (cpu_info == nullptr) {
     LOG(ERROR) << "No CpuInfo in response from cros_healthd.";
@@ -571,12 +593,22 @@ void SystemDataProvider::OnCpuUsageUpdated(healthd::TelemetryInfoPtr info_ptr) {
 void SystemDataProvider::ComputeAndPopulateCpuUsage(
     const healthd::CpuInfo& cpu_info,
     mojom::CpuUsage& out_cpu_usage) {
+  if (cpu_info.physical_cpus.empty()) {
+    LOG(ERROR) << "Device reported having zero physical CPUs";
+    return;
+  }
+
+  if (cpu_info.physical_cpus[0]->logical_cpus.empty()) {
+    LOG(ERROR) << "Device reported having zero logical CPUs";
+    return;
+  }
+
   // For simplicity, assume that all devices have just one physical CPU, made
   // up of one or more virtual CPUs.
 
   // TODO(baileyberro): Handle devices with multiple physical CPUs.
   if (cpu_info.physical_cpus.size() > 1) {
-    LOG(ERROR) << "Device has more than one physical CPU";
+    VLOG(1) << "Device has more than one physical CPU";
   }
 
   const healthd::PhysicalCpuInfoPtr& physical_cpu_ptr =

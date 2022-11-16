@@ -12,6 +12,8 @@ import org.chromium.mojo.bindings.Interface;
 import org.chromium.url.GURL;
 import org.chromium.url.Origin;
 
+import java.util.List;
+
 /**
  * The RenderFrameHost Java wrapper to allow communicating with the native RenderFrameHost object.
  */
@@ -61,6 +63,13 @@ public interface RenderFrameHost {
     void getCanonicalUrlForSharing(Callback<GURL> callback);
 
     /**
+     * Fetch all RenderFramesHosts from the current frame.
+     *
+     * @return A list of RenderFramesHosts including the current frame and all descendents.
+     */
+    public List<RenderFrameHost> getAllRenderFrameHosts();
+
+    /**
      * Returns whether the feature policy allows the feature in this frame.
      *
      * @param feature A feature controlled by feature policy.
@@ -76,7 +85,7 @@ public interface RenderFrameHost {
      *
      * Callers are responsible to ensure that the renderer Frame exists before
      * trying to make a mojo connection to it. This can be done via
-     * isRenderFrameCreated() if the caller is not inside the call-stack of an
+     * isRenderFrameLive() if the caller is not inside the call-stack of an
      * IPC form the renderer (which would guarantee its existence at that time).
      *
      * @param pipe The message pipe to be connected to the renderer. If it fails
@@ -99,10 +108,10 @@ public interface RenderFrameHost {
     void notifyUserActivation();
 
     /**
-     * If a ModalCloseWatcher is active in this RenderFrameHost, signal it to close.
+     * If a CloseWatcher is active in this RenderFrameHost, signal it to close.
      * @return Whether a close signal was sent.
      */
-    boolean signalModalCloseWatcherIfActive();
+    boolean signalCloseWatcherIfActive();
 
     /**
      * Returns whether we're in incognito mode.
@@ -112,11 +121,11 @@ public interface RenderFrameHost {
     boolean isIncognito();
 
     /**
-     * See native RenderFrameHost::IsRenderFrameCreated().
+     * See native RenderFrameHost::IsRenderFrameLive().
      *
      * @return {@code true} if render frame is created.
      */
-    boolean isRenderFrameCreated();
+    boolean isRenderFrameLive();
 
     /**
      * @return Whether input events from the renderer are ignored on the browser side.

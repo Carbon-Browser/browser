@@ -6,6 +6,9 @@
 #define CHROME_UPDATER_UPDATER_SCOPE_H_
 
 #include <ostream>
+#include <string>
+
+#include "base/command_line.h"
 
 namespace updater {
 
@@ -18,14 +21,26 @@ enum class UpdaterScope {
   kSystem = 2,
 };
 
-inline std::ostream& operator<<(std::ostream& os, UpdaterScope scope) {
+inline std::string UpdaterScopeToString(UpdaterScope scope) {
   switch (scope) {
     case UpdaterScope::kUser:
-      return os << "User";
+      return "User";
     case UpdaterScope::kSystem:
-      return os << "System";
+      return "System";
   }
 }
+
+inline std::ostream& operator<<(std::ostream& os, UpdaterScope scope) {
+  return os << UpdaterScopeToString(scope).c_str();
+}
+
+// Returns `true` if the tag has a "needsadmin=prefers" argument.
+bool IsPrefersForCommandLine(const base::CommandLine& command_line);
+
+// Returns the scope of the updater, which is either per-system or per-user.
+// The updater scope is determined from the `command_line` argument.
+UpdaterScope GetUpdaterScopeForCommandLine(
+    const base::CommandLine& command_line);
 
 // Returns the scope of the updater, which is either per-system or per-user.
 // The updater scope is determined from command line arguments of the process,

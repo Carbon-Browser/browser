@@ -14,10 +14,6 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
-namespace password_manager {
-class IsPublicSuffixMatchTag;
-}  // namespace password_manager
-
 namespace autofill {
 
 // Represents a selectable item within a UserInfo or a PromoCodeInfo in the
@@ -78,18 +74,18 @@ class AccessorySheetField {
 };
 
 // Represents user data to be shown on the manual fallback UI (e.g. a Profile,
-// or a Credit Card, or the credentials for a website).
+// or a Credit Card, or the credentials for a website). For credentials,
+// 'is_exact_match' is used to determine the origin (first-party match, a PSL or
+// affiliated match) of the credential.
 class UserInfo {
  public:
-
-  using IsPslMatch =
-      base::StrongAlias<password_manager::IsPublicSuffixMatchTag, bool>;
+  using IsExactMatch = base::StrongAlias<class IsExactMatchTag, bool>;
 
   UserInfo();
   explicit UserInfo(std::string origin);
-  UserInfo(std::string origin, IsPslMatch is_psl_match);
+  UserInfo(std::string origin, IsExactMatch is_exact_match);
   UserInfo(std::string origin, GURL icon_url);
-  UserInfo(std::string origin, IsPslMatch is_psl_match, GURL icon_url);
+  UserInfo(std::string origin, IsExactMatch is_exact_match, GURL icon_url);
   UserInfo(const UserInfo& user_info);
   UserInfo(UserInfo&& field);
 
@@ -105,7 +101,7 @@ class UserInfo {
 
   const std::vector<AccessorySheetField>& fields() const { return fields_; }
   const std::string& origin() const { return origin_; }
-  IsPslMatch is_psl_match() const { return is_psl_match_; }
+  IsExactMatch is_exact_match() const { return is_exact_match_; }
   const GURL icon_url() const { return icon_url_; }
 
   bool operator==(const UserInfo& user_info) const;
@@ -118,7 +114,8 @@ class UserInfo {
   // IMPORTANT(https://crbug.com/1169167): Add the size of newly added strings
   // to the memory estimation member!
   std::string origin_;
-  IsPslMatch is_psl_match_{false};
+  // True means it's neither PSL match nor affiliated match, false otherwise.
+  IsExactMatch is_exact_match_{true};
   std::vector<AccessorySheetField> fields_;
   GURL icon_url_;
   size_t estimated_dynamic_memory_use_ = 0;
@@ -127,10 +124,42 @@ class UserInfo {
 std::ostream& operator<<(std::ostream& out, const AccessorySheetField& field);
 std::ostream& operator<<(std::ostream& out, const UserInfo& user_info);
 
+// Represents data pertaining to promo code offers to be shown on the Payments
+// tab of manual fallback UI.
+class PromoCodeInfo {
+ public:
+  PromoCodeInfo(std::u16string promo_code, std::u16string details_text);
+  PromoCodeInfo(const PromoCodeInfo& promo_code_info);
+  PromoCodeInfo(PromoCodeInfo&& promo_code_info);
+
+  ~PromoCodeInfo();
+
+  PromoCodeInfo& operator=(const PromoCodeInfo& promo_code_info);
+  PromoCodeInfo& operator=(PromoCodeInfo&& promo_code_info);
+
+  const AccessorySheetField promo_code() const { return promo_code_; }
+
+  const std::u16string details_text() const { return details_text_; }
+
+  bool operator==(const PromoCodeInfo& promo_code_info) const;
+
+  // Estimates dynamic memory usage.
+  // See base/trace_event/memory_usage_estimator.h for more info.
+  size_t EstimateMemoryUsage() const;
+
+ private:
+  AccessorySheetField promo_code_;
+  std::u16string details_text_;
+  size_t estimated_dynamic_memory_use_ = 0;
+};
+
+std::ostream& operator<<(std::ostream& out,
+                         const PromoCodeInfo& promo_code_info);
+
 // Represents a command below the suggestions, such as "Manage password...".
 class FooterCommand {
  public:
-  FooterCommand(std::u16string display_text, autofill::AccessoryAction action);
+  FooterCommand(std::u16string display_text, AccessoryAction action);
   FooterCommand(const FooterCommand& footer_command);
   FooterCommand(FooterCommand&& footer_command);
 
@@ -141,9 +170,7 @@ class FooterCommand {
 
   const std::u16string& display_text() const { return display_text_; }
 
-  autofill::AccessoryAction accessory_action() const {
-    return accessory_action_;
-  }
+  AccessoryAction accessory_action() const { return accessory_action_; }
 
   bool operator==(const FooterCommand& fc) const;
 
@@ -155,7 +182,7 @@ class FooterCommand {
   // IMPORTANT(https://crbug.com/1169167): Add the size of newly added strings
   // to the memory estimation member!
   std::u16string display_text_;
-  autofill::AccessoryAction accessory_action_;
+  AccessoryAction accessory_action_;
   size_t estimated_memory_use_by_strings_ = 0;
 };
 
@@ -195,7 +222,7 @@ class OptionToggle {
   // to the memory estimation member!
   std::u16string display_text_;
   bool enabled_;
-  autofill::AccessoryAction accessory_action_;
+  AccessoryAction accessory_action_;
   size_t estimated_memory_use_by_strings_ = 0;
 };
 
@@ -240,6 +267,14 @@ class AccessorySheetData {
 
   std::vector<UserInfo>& mutable_user_info_list() { return user_info_list_; }
 
+  void add_promo_code_info(PromoCodeInfo promo_code_info) {
+    promo_code_info_list_.emplace_back(std::move(promo_code_info));
+  }
+
+  const std::vector<PromoCodeInfo>& promo_code_info_list() const {
+    return promo_code_info_list_;
+  }
+
   void add_footer_command(FooterCommand footer_command) {
     footer_commands_.emplace_back(std::move(footer_command));
   }
@@ -260,6 +295,7 @@ class AccessorySheetData {
   std::u16string warning_;
   absl::optional<OptionToggle> option_toggle_;
   std::vector<UserInfo> user_info_list_;
+  std::vector<PromoCodeInfo> promo_code_info_list_;
   std::vector<FooterCommand> footer_commands_;
 };
 
@@ -290,19 +326,19 @@ class AccessorySheetData::Builder {
   // Sets the option toggle in the accessory sheet.
   Builder&& SetOptionToggle(std::u16string display_text,
                             bool enabled,
-                            autofill::AccessoryAction action) &&;
+                            AccessoryAction action) &&;
   Builder& SetOptionToggle(std::u16string display_text,
                            bool enabled,
-                           autofill::AccessoryAction action) &;
+                           AccessoryAction action) &;
 
   // Adds a new UserInfo object to |accessory_sheet_data_|.
   Builder&& AddUserInfo(
       std::string origin = std::string(),
-      UserInfo::IsPslMatch is_psl_match = UserInfo::IsPslMatch(false),
+      UserInfo::IsExactMatch is_exact_match = UserInfo::IsExactMatch(true),
       GURL icon_url = GURL()) &&;
   Builder& AddUserInfo(
       std::string origin = std::string(),
-      UserInfo::IsPslMatch is_psl_match = UserInfo::IsPslMatch(false),
+      UserInfo::IsExactMatch is_exact_match = UserInfo::IsExactMatch(true),
       GURL icon_url = GURL()) &;
 
   // Appends a selectable, non-obfuscated field to the last UserInfo object.
@@ -333,11 +369,17 @@ class AccessorySheetData::Builder {
                        bool is_obfuscated,
                        bool selectable) &;
 
+  // Adds a new PromoCodeInfo object to |accessory_sheet_data_|.
+  Builder&& AddPromoCodeInfo(std::u16string promo_code,
+                             std::u16string details_text) &&;
+  Builder& AddPromoCodeInfo(std::u16string promo_code,
+                            std::u16string details_text) &;
+
   // Appends a new footer command to |accessory_sheet_data_|.
   Builder&& AppendFooterCommand(std::u16string display_text,
-                                autofill::AccessoryAction action) &&;
+                                AccessoryAction action) &&;
   Builder& AppendFooterCommand(std::u16string display_text,
-                               autofill::AccessoryAction action) &;
+                               AccessoryAction action) &;
 
   // This class returns the constructed AccessorySheetData object. Since this
   // would render the builder unusable, it's required to destroy the object

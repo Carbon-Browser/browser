@@ -1,21 +1,19 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # Copyright 2021 The Chromium Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-from __future__ import print_function
-
 import argparse
 import json
 import os
-import urllib
+import urllib.request
 
 _RELEASES_URL = 'https://api.github.com/repos/google/bundletool/releases/latest'
 _RELEASE_URL = 'https://api.github.com/repos/google/bundletool/releases/tags/{}'
 
 
 def fetch_json(url):
-    return json.loads(urllib.urlopen(url).read())
+    return json.load(urllib.request.urlopen(url))
 
 
 def do_latest():
@@ -34,8 +32,11 @@ def get_download_url():
 
     partial_manifest = {
         'url': urls,
-        'ext': '',  # Used only if recipe needs to extract.
-        'name': [urls[0].split('/')[-1]],  # Used as the file name.
+        # Used only if recipe needs to extract.
+        'ext': '',
+        # Use constant filename, so as to not need to update filepaths when
+        # bundletool is autorolled.
+        'name': ['bundletool.jar'],
     }
     print(json.dumps(partial_manifest))
 

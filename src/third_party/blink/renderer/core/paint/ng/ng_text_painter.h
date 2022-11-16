@@ -13,6 +13,7 @@
 
 namespace blink {
 
+struct AutoDarkMode;
 class LayoutObject;
 class LayoutSVGInlineText;
 class NGFragmentItem;
@@ -65,17 +66,21 @@ class CORE_EXPORT NGTextPainter : public TextPainterBase {
   NGTextPainter(GraphicsContext& context,
                 const Font& font,
                 const NGTextFragmentPaintInfo& fragment_paint_info,
-                const IntRect& visual_rect,
+                const gfx::Rect& visual_rect,
                 const PhysicalOffset& text_origin,
                 const PhysicalRect& text_frame_rect,
+                NGInlinePaintContext* inline_context,
                 bool horizontal)
       : TextPainterBase(context,
                         font,
                         text_origin,
                         text_frame_rect,
+                        inline_context,
                         horizontal),
         fragment_paint_info_(fragment_paint_info),
-        visual_rect_(visual_rect) {}
+        visual_rect_(visual_rect) {
+    DCHECK(inline_context_);
+  }
   ~NGTextPainter() = default;
 
   void ClipDecorationsStripe(float upper,
@@ -86,6 +91,7 @@ class CORE_EXPORT NGTextPainter : public TextPainterBase {
              unsigned length,
              const TextPaintStyle&,
              DOMNodeId,
+             const AutoDarkMode& auto_dark_mode,
              ShadowMode = kBothShadowsAndTextProper);
 
   void PaintSelectedText(unsigned start_offset,
@@ -94,15 +100,16 @@ class CORE_EXPORT NGTextPainter : public TextPainterBase {
                          const TextPaintStyle& text_style,
                          const TextPaintStyle& selection_style,
                          const PhysicalRect& selection_rect,
-                         DOMNodeId node_id);
+                         DOMNodeId node_id,
+                         const AutoDarkMode& auto_dark_mode);
 
   void PaintDecorationsExceptLineThrough(const NGFragmentItem& text_item,
                                          const PaintInfo& paint_info,
                                          const ComputedStyle& style,
                                          const TextPaintStyle& text_style,
                                          TextDecorationInfo& decoration_info,
-                                         const PhysicalRect& decoration_rect,
-                                         bool* has_line_through_decoration);
+                                         TextDecorationLine lines_to_paint,
+                                         const PhysicalRect& decoration_rect);
 
   void PaintDecorationsOnlyLineThrough(const NGFragmentItem& text_item,
                                        const PaintInfo& paint_info,
@@ -122,22 +129,27 @@ class CORE_EXPORT NGTextPainter : public TextPainterBase {
 
  private:
   template <PaintInternalStep step>
-  void PaintInternalFragment(unsigned from, unsigned to, DOMNodeId node_id);
+  void PaintInternalFragment(unsigned from,
+                             unsigned to,
+                             DOMNodeId node_id,
+                             const AutoDarkMode& auto_dark_mode);
 
   template <PaintInternalStep step>
   void PaintInternal(unsigned start_offset,
                      unsigned end_offset,
                      unsigned truncation_point,
-                     DOMNodeId node_id);
+                     DOMNodeId node_id,
+                     const AutoDarkMode& auto_dark_mode);
 
-  void PaintSvgTextFragment(DOMNodeId node_id);
+  void PaintSvgTextFragment(DOMNodeId node_id,
+                            const AutoDarkMode& auto_dark_mode);
   void PaintSvgDecorationsExceptLineThrough(
       const TextDecorationOffsetBase& decoration_offset,
       TextDecorationInfo& decoration_info,
+      TextDecorationLine lines_to_paint,
       const PaintInfo& paint_info,
       const Vector<AppliedTextDecoration>& decorations,
-      const TextPaintStyle& text_style,
-      bool* has_line_through_decoration);
+      const TextPaintStyle& text_style);
   void PaintSvgDecorationsOnlyLineThrough(
       TextDecorationInfo& decoration_info,
       const PaintInfo& paint_info,
@@ -145,7 +157,7 @@ class CORE_EXPORT NGTextPainter : public TextPainterBase {
       const TextPaintStyle& text_style);
 
   NGTextFragmentPaintInfo fragment_paint_info_;
-  const IntRect& visual_rect_;
+  const gfx::Rect visual_rect_;
   absl::optional<SvgTextPaintState> svg_text_paint_state_;
 };
 

@@ -9,24 +9,24 @@
 #include <utility>
 #include <vector>
 
+#include "ash/components/settings/cros_settings_names.h"
+#include "ash/components/settings/cros_settings_provider.h"
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/containers/contains.h"
 #include "base/logging.h"
-#include "base/macros.h"
 #include "base/values.h"
 #include "chrome/browser/ash/policy/core/device_local_account.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/policy/profile_policy_connector.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chromeos/settings/cros_settings_names.h"
-#include "chromeos/settings/cros_settings_provider.h"
 #include "components/policy/core/common/cloud/cloud_policy_core.h"
 #include "components/policy/core/common/cloud/cloud_policy_store.h"
 #include "components/policy/core/common/external_data_fetcher.h"
 #include "components/policy/core/common/policy_namespace.h"
 #include "components/policy/core/common/policy_service.h"
 #include "components/user_manager/user.h"
+
 namespace policy {
 
 // Helper class that observes a policy for a logged-in user, notifying the
@@ -37,6 +37,10 @@ class CloudExternalDataPolicyObserver::PolicyServiceObserver
   PolicyServiceObserver(CloudExternalDataPolicyObserver* parent,
                         const std::string& user_id,
                         PolicyService* policy_service);
+
+  PolicyServiceObserver(const PolicyServiceObserver&) = delete;
+  PolicyServiceObserver& operator=(const PolicyServiceObserver&) = delete;
+
   ~PolicyServiceObserver() override;
 
   // PolicyService::Observer:
@@ -48,8 +52,6 @@ class CloudExternalDataPolicyObserver::PolicyServiceObserver
   CloudExternalDataPolicyObserver* parent_;
   const std::string user_id_;
   PolicyService* policy_service_;
-
-  DISALLOW_COPY_AND_ASSIGN(PolicyServiceObserver);
 };
 
 CloudExternalDataPolicyObserver::PolicyServiceObserver::PolicyServiceObserver(
@@ -131,7 +133,7 @@ CloudExternalDataPolicyObserver::CloudExternalDataPolicyObserver(
     device_local_account_policy_service_->AddObserver(this);
 
   device_local_accounts_subscription_ = cros_settings_->AddSettingsObserver(
-      chromeos::kAccountsPrefDeviceLocalAccounts,
+      ash::kAccountsPrefDeviceLocalAccounts,
       base::BindRepeating(
           &CloudExternalDataPolicyObserver::RetrieveDeviceLocalAccounts,
           base::Unretained(this)));
@@ -150,9 +152,9 @@ void CloudExternalDataPolicyObserver::Init() {
 void CloudExternalDataPolicyObserver::OnUserProfileLoaded(
     const AccountId& account_id) {
   Profile* profile =
-      chromeos::ProfileHelper::Get()->GetProfileByAccountId(account_id);
+      ash::ProfileHelper::Get()->GetProfileByAccountId(account_id);
   const user_manager::User* user =
-      chromeos::ProfileHelper::Get()->GetUserByProfile(profile);
+      ash::ProfileHelper::Get()->GetUserByProfile(profile);
   if (!user) {
     NOTREACHED();
     return;
@@ -222,7 +224,7 @@ void CloudExternalDataPolicyObserver::OnDeviceLocalAccountsChanged() {
 
 void CloudExternalDataPolicyObserver::RetrieveDeviceLocalAccounts() {
   // Schedule a callback if device policy has not yet been verified.
-  if (chromeos::CrosSettingsProvider::TRUSTED !=
+  if (ash::CrosSettingsProvider::TRUSTED !=
       cros_settings_->PrepareTrustedValues(base::BindOnce(
           &CloudExternalDataPolicyObserver::RetrieveDeviceLocalAccounts,
           weak_factory_.GetWeakPtr()))) {
@@ -230,7 +232,7 @@ void CloudExternalDataPolicyObserver::RetrieveDeviceLocalAccounts() {
   }
 
   std::vector<DeviceLocalAccount> device_local_account_list =
-      policy::GetDeviceLocalAccounts(cros_settings_);
+      GetDeviceLocalAccounts(cros_settings_);
   std::set<std::string> device_local_accounts;
   for (std::vector<DeviceLocalAccount>::const_iterator it =
            device_local_account_list.begin();

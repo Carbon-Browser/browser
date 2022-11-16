@@ -27,11 +27,10 @@ const char16_t kGcpwServiceFetchExperimentsPath[] = u"/v1/experiments";
 
 // Default timeout when trying to make requests to the GCPW service.
 const base::TimeDelta kDefaultFetchExperimentsRequestTimeout =
-    base::TimeDelta::FromMilliseconds(5000);
+    base::Milliseconds(5000);
 
 // The period of refreshing experiments.
-const base::TimeDelta kExperimentsRefreshExecutionPeriod =
-    base::TimeDelta::FromHours(3);
+const base::TimeDelta kExperimentsRefreshExecutionPeriod = base::Hours(3);
 
 // Maximum number of retries if a HTTP call to the backend fails.
 constexpr unsigned int kMaxNumHttpRetries = 1;
@@ -203,7 +202,7 @@ HRESULT ExperimentsFetcher::FetchAndStoreExperimentsInternal(
 
   uint32_t open_flags = base::File::FLAG_CREATE_ALWAYS |
                         base::File::FLAG_WRITE |
-                        base::File::FLAG_EXCLUSIVE_WRITE;
+                        base::File::FLAG_WIN_EXCLUSIVE_WRITE;
   std::unique_ptr<base::File> experiments_file = GetOpenedFileForUser(
       sid, open_flags, kGcpwExperimentsDirectory, kGcpwUserExperimentsFileName);
   if (!experiments_file) {

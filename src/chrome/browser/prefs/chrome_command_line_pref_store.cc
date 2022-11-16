@@ -2,9 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
-// This source code is a part of ABP Chromium.
-// Use of this source code is governed by the GPLv3 that can be found in the docs_abp/LICENSE file.
-
+// This source code is a part of eyeo Chromium SDK.
+// Use of this source code is governed by the GPLv3 that can be found in the
+// components/adblock/LICENSE file.
 
 #include "chrome/browser/prefs/chrome_command_line_pref_store.h"
 
@@ -15,8 +15,6 @@
 #include <utility>
 #include <vector>
 
-#include "ash/constants/ash_switches.h"
-#include "base/cxx17_backports.h"
 #include "base/files/file_path.h"
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
@@ -27,9 +25,9 @@
 #include "build/chromeos_buildflags.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/pref_names.h"
+#include "components/adblock/core/common/adblock_prefs.h"
+#include "components/adblock/core/adblock_switches.h"
 #include "components/browser_sync/browser_sync_switches.h"
-#include "components/data_reduction_proxy/core/common/data_reduction_proxy_pref_names.h"
-#include "components/data_reduction_proxy/core/common/data_reduction_proxy_switches.h"
 #include "components/language/core/browser/pref_names.h"
 #include "components/proxy_config/proxy_config_dictionary.h"
 #include "components/proxy_config/proxy_config_pref_names.h"
@@ -42,27 +40,32 @@
 #include "ui/base/ui_base_switches.h"
 #include "ui/display/display_switches.h"
 
-#if defined(OS_ANDROID)
-#include "components/adblock/adblock_prefs.h"
-#include "components/adblock/adblock_switches.h"
-#endif
-
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "ash/constants/ash_switches.h"
+#include "chrome/browser/ash/borealis/borealis_prefs.h"
+#include "chrome/browser/ash/borealis/borealis_switches.h"
 #endif
 
 const CommandLinePrefStore::SwitchToPreferenceMapEntry
     ChromeCommandLinePrefStore::string_switch_map_[] = {
         {switches::kLang, language::prefs::kApplicationLocale},
+        {switches::kAcceptLang, language::prefs::kSelectedLanguages},
+        // `switches::kAuthServerAllowlistDeprecated` must be before
+        // `switches::kAuthServerAllowlist` so that the deprecated value is
+        // overridden in `ChromeCommandLinePrefStore::ApplyStringSwitches`.
+        {switches::kAuthServerAllowlistDeprecated, prefs::kAuthServerAllowlist},
         {switches::kAuthServerAllowlist, prefs::kAuthServerAllowlist},
         {switches::kSSLVersionMin, prefs::kSSLVersionMin},
         {switches::kSSLVersionMax, prefs::kSSLVersionMax},
-#if defined(OS_ANDROID)
+        {switches::kWebRtcIPHandlingPolicy, prefs::kWebRTCIPHandlingPolicy},
+#if BUILDFLAG(IS_ANDROID)
         {switches::kAuthAndroidNegotiateAccountType,
          prefs::kAuthAndroidNegotiateAccountType},
 #endif
 #if BUILDFLAG(IS_CHROMEOS_ASH)
         {switches::kSchedulerConfiguration, prefs::kSchedulerConfiguration},
+        {borealis::switches::kLaunchOptions,
+         borealis::prefs::kExtraLaunchOptions},
 #endif
 };
 
@@ -86,22 +89,19 @@ const CommandLinePrefStore::BooleanSwitchToPreferenceMapEntry
         {safe_browsing::switches::kSbEnableEnhancedProtection,
          prefs::kSafeBrowsingEnhanced, true},
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-        {chromeos::switches::kEnableTouchpadThreeFingerClick,
+        {ash::switches::kEnableTouchpadThreeFingerClick,
          prefs::kEnableTouchpadThreeFingerClick, true},
         {switches::kEnableUnifiedDesktop,
          prefs::kUnifiedDesktopEnabledByDefault, true},
-        {chromeos::switches::kEnableCastReceiver, prefs::kCastReceiverEnabled,
-         true},
+        {ash::switches::kEnableCastReceiver, prefs::kCastReceiverEnabled, true},
 #endif
         {switches::kEnableLocalSyncBackend,
          syncer::prefs::kEnableLocalSyncBackend, true},
-#if defined(OS_ANDROID)
-        {adblock::switches::kDisableAdblock,
-         adblock::prefs::kEnableAdblock, false},
+        {adblock::switches::kDisableAdblock, adblock::prefs::kEnableAdblock,
+         false},
         {adblock::switches::kDisableAcceptableAds,
          adblock::prefs::kEnableAcceptableAds, false},
-#endif
-#if !BUILDFLAG(IS_CHROMEOS_ASH) && !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_CHROMEOS_ASH) && !BUILDFLAG(IS_ANDROID)
         {switches::kUseSystemDefaultPrinter,
          prefs::kPrintPreviewUseSystemDefaultPrinter, true},
 #endif
@@ -140,10 +140,10 @@ bool ChromeCommandLinePrefStore::ValidateProxySwitches() {
 
 void ChromeCommandLinePrefStore::ApplySimpleSwitches() {
   // Look for each switch we know about and set its preference accordingly.
-  ApplyStringSwitches(string_switch_map_, base::size(string_switch_map_));
-  ApplyPathSwitches(path_switch_map_, base::size(path_switch_map_));
-  ApplyIntegerSwitches(integer_switch_map_, base::size(integer_switch_map_));
-  ApplyBooleanSwitches(boolean_switch_map_, base::size(boolean_switch_map_));
+  ApplyStringSwitches(string_switch_map_, std::size(string_switch_map_));
+  ApplyPathSwitches(path_switch_map_, std::size(path_switch_map_));
+  ApplyIntegerSwitches(integer_switch_map_, std::size(integer_switch_map_));
+  ApplyBooleanSwitches(boolean_switch_map_, std::size(boolean_switch_map_));
 }
 
 void ChromeCommandLinePrefStore::ApplyProxyMode() {

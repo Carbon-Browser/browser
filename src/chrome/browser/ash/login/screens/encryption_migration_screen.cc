@@ -8,6 +8,8 @@
 #include <string>
 #include <utility>
 
+#include "ash/components/cryptohome/cryptohome_util.h"
+#include "ash/components/cryptohome/userdataauth_util.h"
 #include "ash/constants/ash_switches.h"
 #include "base/bind.h"
 #include "base/check.h"
@@ -17,7 +19,6 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
 #include "base/system/sys_info.h"
-#include "base/task/post_task.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
@@ -29,13 +30,11 @@
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chromeos/cryptohome/cryptohome_util.h"
-#include "chromeos/cryptohome/userdataauth_util.h"
+#include "chromeos/ash/components/dbus/userdataauth/userdataauth_client.h"
 #include "chromeos/dbus/dbus_thread_manager.h"
 #include "chromeos/dbus/power/power_manager_client.h"
 #include "chromeos/dbus/power/power_policy_controller.h"
 #include "chromeos/dbus/power_manager/power_supply_properties.pb.h"
-#include "chromeos/dbus/userdataauth/userdataauth_client.h"
 #include "components/user_manager/user_manager.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/device_service.h"
@@ -313,7 +312,8 @@ void EncryptionMigrationScreen::SetEncryptionMigrationScreenTestDelegate(
   test_delegate = delegate;
 }
 
-void EncryptionMigrationScreen::OnUserAction(const std::string& action_id) {
+void EncryptionMigrationScreen::OnUserActionDeprecated(
+    const std::string& action_id) {
   if (action_id == kUserActionStartMigration) {
     HandleStartMigration();
   } else if (action_id == kUserActionSkipMigration) {
@@ -325,7 +325,7 @@ void EncryptionMigrationScreen::OnUserAction(const std::string& action_id) {
   } else if (action_id == kUserActionOpenFeedbackDialog) {
     HandleOpenFeedbackDialog();
   } else {
-    BaseScreen::OnUserAction(action_id);
+    BaseScreen::OnUserActionDeprecated(action_id);
   }
 }
 
@@ -404,7 +404,7 @@ void EncryptionMigrationScreen::HandleOpenFeedbackDialog() {
       base::NumberToString(base::Time::Now().ToInternalValue()).c_str());
   login_feedback_ = std::make_unique<LoginFeedback>(Profile::FromWebUI(
       LoginDisplayHost::default_host()->GetOobeUI()->web_ui()));
-  login_feedback_->Request(description, base::OnceClosure());
+  login_feedback_->Request(description);
 }
 
 void EncryptionMigrationScreen::UpdateUIState(
@@ -437,7 +437,7 @@ void EncryptionMigrationScreen::UpdateUIState(
       FROM_HERE,
       base::BindOnce(&EncryptionMigrationScreen::OnDelayedRecordVisibleScreen,
                      weak_ptr_factory_.GetWeakPtr(), state),
-      base::TimeDelta::FromSeconds(1));
+      base::Seconds(1));
 }
 
 void EncryptionMigrationScreen::CheckAvailableStorage() {

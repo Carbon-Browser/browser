@@ -5,9 +5,10 @@
 #ifndef CHROME_BROWSER_UI_PASSWORDS_CREDENTIAL_LEAK_DIALOG_CONTROLLER_IMPL_H_
 #define CHROME_BROWSER_UI_PASSWORDS_CREDENTIAL_LEAK_DIALOG_CONTROLLER_IMPL_H_
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/passwords/credential_leak_dialog_controller.h"
 #include "components/password_manager/core/browser/leak_detection_dialog_utils.h"
+#include "components/password_manager/core/browser/password_manager_metrics_util.h"
 #include "url/gurl.h"
 
 class CredentialLeakPrompt;
@@ -19,7 +20,17 @@ class CredentialLeakDialogControllerImpl
  public:
   CredentialLeakDialogControllerImpl(
       PasswordsLeakDialogDelegate* delegate,
-      password_manager::CredentialLeakType leak_type);
+      password_manager::CredentialLeakType leak_type,
+      const GURL& url,
+      const std::u16string& username,
+      std::unique_ptr<
+          password_manager::metrics_util::LeakDialogMetricsRecorder>);
+
+  CredentialLeakDialogControllerImpl(
+      const CredentialLeakDialogControllerImpl&) = delete;
+  CredentialLeakDialogControllerImpl& operator=(
+      const CredentialLeakDialogControllerImpl&) = delete;
+
   ~CredentialLeakDialogControllerImpl() override;
 
   // Pop up the credential leak dialog.
@@ -30,22 +41,26 @@ class CredentialLeakDialogControllerImpl
   void OnCancelDialog() override;
   void OnAcceptDialog() override;
   void OnCloseDialog() override;
+  void ResetDialog() override;
   std::u16string GetAcceptButtonLabel() const override;
   std::u16string GetCancelButtonLabel() const override;
   std::u16string GetDescription() const override;
   std::u16string GetTitle() const override;
   bool ShouldCheckPasswords() const override;
+  bool ShouldOfferAutomatedPasswordChange() const override;
   bool ShouldShowCancelButton() const override;
 
  private:
-  // Release |credential_leak_dialog_| and close the open dialog.
-  void ResetDialog();
-
-  CredentialLeakPrompt* credential_leak_dialog_ = nullptr;
-  PasswordsLeakDialogDelegate* delegate_;
+  raw_ptr<CredentialLeakPrompt> credential_leak_dialog_ = nullptr;
+  raw_ptr<PasswordsLeakDialogDelegate> delegate_;
   const password_manager::CredentialLeakType leak_type_;
+  std::unique_ptr<password_manager::LeakDialogTraits> leak_dialog_traits_;
+  GURL url_;
+  std::u16string username_;
 
-  DISALLOW_COPY_AND_ASSIGN(CredentialLeakDialogControllerImpl);
+  // Metrics recorder for leak dialog related UMA and UKM logging.
+  std::unique_ptr<password_manager::metrics_util::LeakDialogMetricsRecorder>
+      metrics_recorder_;
 };
 
 #endif  // CHROME_BROWSER_UI_PASSWORDS_CREDENTIAL_LEAK_DIALOG_CONTROLLER_IMPL_H_

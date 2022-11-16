@@ -12,13 +12,27 @@ namespace wayland {
 
 WaylandWatcher::WaylandWatcher(wayland::Server* server)
     : controller_(FROM_HERE), server_(server) {
+  Start();
+}
+
+WaylandWatcher::~WaylandWatcher() {
+  controller_.StopWatchingFileDescriptor();
+}
+
+void WaylandWatcher::StartForTesting() {
+  Start();
+}
+
+void WaylandWatcher::StopForTesting() {
+  controller_.StopWatchingFileDescriptor();
+}
+
+void WaylandWatcher::Start() {
   base::CurrentUIThread::Get()->WatchFileDescriptor(
       server_->GetFileDescriptor(),
       true,  // persistent
       base::MessagePumpForUI::WATCH_READ, &controller_, this);
 }
-
-WaylandWatcher::~WaylandWatcher() {}
 
 void WaylandWatcher::OnFileCanReadWithoutBlocking(int fd) {
   server_->Dispatch(base::TimeDelta());

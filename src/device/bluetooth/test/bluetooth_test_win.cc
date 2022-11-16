@@ -18,6 +18,7 @@
 #include "base/callback_helpers.h"
 #include "base/containers/circular_deque.h"
 #include "base/location.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
@@ -88,6 +89,7 @@ using ABI::Windows::Devices::Bluetooth::Advertisement::
     IBluetoothLEAdvertisementWatcher;
 using ABI::Windows::Devices::Bluetooth::Advertisement::
     IBluetoothLEManufacturerDataFactory;
+using ABI::Windows::Devices::Enumeration::DevicePairingKinds;
 using ABI::Windows::Devices::Enumeration::IDeviceInformation;
 using ABI::Windows::Devices::Enumeration::IDeviceInformationStatics;
 using ABI::Windows::Devices::Radios::IRadioStatics;
@@ -151,7 +153,7 @@ class TestBluetoothDeviceWinrt : public BluetoothDeviceWinrt {
   }
 
  private:
-  BluetoothTestWinrt* bluetooth_test_winrt_ = nullptr;
+  raw_ptr<BluetoothTestWinrt> bluetooth_test_winrt_ = nullptr;
 };
 
 class TestBluetoothAdapterWinrt : public BluetoothAdapterWinrt {
@@ -215,7 +217,7 @@ class TestBluetoothAdapterWinrt : public BluetoothAdapterWinrt {
   ComPtr<IBluetoothAdapter> adapter_;
   ComPtr<IDeviceInformation> device_information_;
   ComPtr<FakeBluetoothLEAdvertisementWatcherWinrt> watcher_;
-  BluetoothTestWinrt* bluetooth_test_winrt_ = nullptr;
+  raw_ptr<BluetoothTestWinrt> bluetooth_test_winrt_ = nullptr;
 };
 
 BLUETOOTH_ADDRESS
@@ -702,6 +704,9 @@ BluetoothTestWinrt::BluetoothTestWinrt() {
   } else {
     disabled.push_back(kNewBLEGattSessionHandling);
   }
+  // TODO(crbug.com/1335586): Remove once `kWebBluetoothConfirmPairingSupport`
+  // is enabled by default.
+  enabled.push_back(features::kWebBluetoothConfirmPairingSupport);
   scoped_feature_list_.InitWithFeatures(enabled, disabled);
 }
 
@@ -878,6 +883,14 @@ void BluetoothTestWinrt::SimulatePairingPinCode(BluetoothDevice* device,
       static_cast<TestBluetoothDeviceWinrt*>(device)->ble_device();
   DCHECK(ble_device);
   ble_device->SimulatePairingPinCode(std::move(pin_code));
+}
+
+void BluetoothTestWinrt::SimulatePairingKind(BluetoothDevice* device,
+                                             DevicePairingKinds pairing_kind) {
+  auto* const ble_device =
+      static_cast<TestBluetoothDeviceWinrt*>(device)->ble_device();
+  DCHECK(ble_device);
+  ble_device->SimulatePairingKind(pairing_kind);
 }
 
 void BluetoothTestWinrt::SimulateAdvertisementStarted(

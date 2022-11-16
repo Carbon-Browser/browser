@@ -9,6 +9,7 @@
 #include <string>
 #include <utility>
 
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/test/metrics/histogram_tester.h"
@@ -59,8 +60,8 @@ class NavigationPredictorTest : public ChromeRenderViewHostTestHarness {
     SetupFieldTrial();
 
     ChromeRenderViewHostTestHarness::SetUp();
-    new NavigationPredictor(main_rfh(),
-                            predictor_service_.BindNewPipeAndPassReceiver());
+    NavigationPredictor::Create(
+        main_rfh(), predictor_service_.BindNewPipeAndPassReceiver());
   }
 
   void SetupFieldTrial() {
@@ -246,7 +247,7 @@ class MetricsBuilder {
   }
 
  private:
-  NavigationPredictorTest* tester_;
+  raw_ptr<NavigationPredictorTest> tester_;
   ukm::TestAutoSetUkmRecorder ukm_recorder_;
   std::vector<blink::mojom::AnchorElementMetricsPtr> metrics_;
   std::vector<blink::mojom::AnchorElementEnteredViewportPtr> entered_viewport_;

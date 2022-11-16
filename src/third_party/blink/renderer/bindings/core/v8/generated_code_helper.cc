@@ -9,6 +9,7 @@
 #include "third_party/blink/renderer/bindings/core/v8/v8_css_style_declaration.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_element.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_set_return_value_for_core.h"
+#include "third_party/blink/renderer/core/css/css_style_declaration.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/range.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
@@ -89,6 +90,15 @@ bool IsCallbackFunctionRunnableIgnoringPause(
                                             IgnorePause::kIgnore);
 }
 
+void ExceptionToRejectPromiseScope::ConvertExceptionToRejectPromise() {
+  // As exceptions must always be created in the current realm, reject
+  // promises must also be created in the current realm while regular promises
+  // are created in the relevant realm of the context object.
+  ScriptState* script_state = ScriptState::ForCurrentRealm(info_);
+  V8SetReturnValue(
+      info_, ScriptPromise::Reject(script_state, exception_state_).V8Value());
+}
+
 namespace bindings {
 
 void SetupIDLInterfaceTemplate(
@@ -132,6 +142,17 @@ void SetupIDLCallbackInterfaceTemplate(
   interface_template->RemovePrototype();
   interface_template->SetClassName(
       V8AtomicString(isolate, wrapper_type_info->interface_name));
+}
+
+void SetupIDLObservableArrayBackingListTemplate(
+    v8::Isolate* isolate,
+    const WrapperTypeInfo* wrapper_type_info,
+    v8::Local<v8::ObjectTemplate> instance_template,
+    v8::Local<v8::FunctionTemplate> interface_template) {
+  interface_template->SetClassName(
+      V8AtomicString(isolate, wrapper_type_info->interface_name));
+
+  instance_template->SetInternalFieldCount(kV8DefaultWrapperInternalFieldCount);
 }
 
 absl::optional<size_t> FindIndexInEnumStringTable(
@@ -188,7 +209,7 @@ void ReportInvalidEnumSetToAttribute(v8::Isolate* isolate,
 bool IsEsIterableObject(v8::Isolate* isolate,
                         v8::Local<v8::Value> value,
                         ExceptionState& exception_state) {
-  // https://heycam.github.io/webidl/#es-overloads
+  // https://webidl.spec.whatwg.org/#es-overloads
   // step 9. Otherwise: if Type(V) is Object and ...
   if (!value->IsObject())
     return false;
@@ -288,7 +309,7 @@ void InstallUnscopablePropertyNames(
     v8::Local<v8::Object> prototype_object,
     base::span<const char* const> property_name_table) {
   // 3.6.3. Interface prototype object
-  // https://heycam.github.io/webidl/#interface-prototype-object
+  // https://webidl.spec.whatwg.org/#interface-prototype-object
   // step 8. If interface has any member declared with the [Unscopable]
   //   extended attribute, then:
   // step 8.1. Let unscopableObject be the result of performing
@@ -380,13 +401,13 @@ void CSSPropertyAttributeSet(const v8::FunctionCallbackInfo<v8::Value>& info) {
   CSSStyleDeclaration* blink_receiver =
       V8CSSStyleDeclaration::ToWrappableUnsafe(v8_receiver);
   v8::Local<v8::Value> v8_property_value = info[0];
-  auto&& arg1_value =
-      NativeValueTraits<IDLStringTreatNullAsEmptyString>::NativeValue(
-          isolate, v8_property_value, exception_state);
+  auto&& arg1_value = NativeValueTraits<IDLAny>::NativeValue(
+      isolate, v8_property_value, exception_state);
   if (UNLIKELY(exception_state.HadException())) {
     return;
   }
-  v8::Local<v8::Context> receiver_context = v8_receiver->CreationContext();
+  v8::Local<v8::Context> receiver_context =
+      v8_receiver->GetCreationContextChecked();
   ScriptState* receiver_script_state = ScriptState::From(receiver_context);
   // TODO(andruud): AnonymousNamedSetter is not the best function.  Change the
   // function to a more appropriate one.  It's better to pass |exception_state|

@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#import <objc/runtime.h>
+
 #include "base/bind.h"
 #include "base/strings/sys_string_conversions.h"
 #import "base/test/ios/wait_util.h"
@@ -13,6 +15,7 @@
 #include "ios/net/url_test_util.h"
 #import "ios/testing/earl_grey/app_launch_manager.h"
 #import "ios/testing/earl_grey/earl_grey_test.h"
+#import "ios/web/common/features.h"
 #include "net/test/embedded_test_server/default_handlers.h"
 #include "net/test/embedded_test_server/http_request.h"
 #include "net/test/embedded_test_server/http_response.h"
@@ -87,8 +90,7 @@ std::unique_ptr<net::test_server::HttpResponse> CountResponse(
 
 // Returns true when omnibox contains |text|, otherwise returns false after
 // after a timeout.
-bool WaitForOmniboxContaining(std::string text) WARN_UNUSED_RESULT;
-bool WaitForOmniboxContaining(std::string text) {
+[[nodiscard]] bool WaitForOmniboxContaining(std::string text) {
   return base::test::ios::WaitUntilConditionOrTimeout(
       base::test::ios::kWaitForUIElementTimeout, ^bool {
         NSError* error = nil;
@@ -136,8 +138,7 @@ bool WaitForOmniboxContaining(std::string text) {
 @implementation RestoreTestCase
 
 - (AppLaunchConfiguration)appConfigurationForTestCase {
-  AppLaunchConfiguration config;
-  config.features_disabled.push_back(kStartSurface);
+  AppLaunchConfiguration config = [super appConfigurationForTestCase];
   return config;
 }
 
@@ -155,13 +156,7 @@ bool WaitForOmniboxContaining(std::string text) {
 
 // Navigates to a set of cross-domains, chrome URLs and error pages, and then
 // tests that they are properly restored.
-// TODO(crbug.com/1247051): Fix flakiness.
-#if TARGET_OS_SIMULATOR
-#define MAYBE_testRestoreHistory testRestoreHistory
-#else
-#define MAYBE_testRestoreHistory FLAKY_testRestoreHistory
-#endif
-- (void)MAYBE_testRestoreHistory {
+- (void)testRestoreHistory {
   [self setUpRestoreServers];
   [self loadTestPages];
   [self verifyRestoredTestPages:YES];
@@ -169,13 +164,7 @@ bool WaitForOmniboxContaining(std::string text) {
 
 // Navigates to a set of cross-domains, chrome URLs and error pages, and then
 // tests that they are properly restored in airplane mode.
-// TODO(crbug.com/1247051): Fix flakiness.
-#if TARGET_OS_SIMULATOR
-#define MAYBE_testRestoreNoNetwork testRestoreNoNetwork
-#else
-#define MAYBE_testRestoreNoNetwork FLAKY_testRestoreNoNetwork
-#endif
-- (void)MAYBE_testRestoreNoNetwork {
+- (void)testRestoreNoNetwork {
   [self setUpRestoreServers];
   [self loadTestPages];
   self.serverRespondsWithContent = false;
@@ -183,13 +172,7 @@ bool WaitForOmniboxContaining(std::string text) {
 }
 
 // Tests that only the selected web state is loaded on a session restore.
-// TODO(crbug.com/1247051): Fix flakiness.
-#if TARGET_OS_SIMULATOR
-#define MAYBE_testRestoreOneWebstateOnly testRestoreOneWebstateOnly
-#else
-#define MAYBE_testRestoreOneWebstateOnly FLAKY_testRestoreOneWebstateOnly
-#endif
-- (void)MAYBE_testRestoreOneWebstateOnly {
+- (void)testRestoreOneWebstateOnly {
   // Visit the background page.
   int visitCounter = 0;
   self.testServer->RegisterRequestHandler(

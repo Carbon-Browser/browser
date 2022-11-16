@@ -8,6 +8,7 @@
 
 #include "base/guid.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/observer_list.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/time/time.h"
 #include "content/public/browser/browser_context.h"
@@ -103,7 +104,7 @@ void DevToolsBackgroundServicesContextImpl::StartRecording(
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
   // TODO(rayankans): Make the time delay finch configurable.
-  base::Time expiration_time = base::Time::Now() + base::TimeDelta::FromDays(3);
+  base::Time expiration_time = base::Time::Now() + base::Days(3);
   expiration_times_[service] = expiration_time;
 
   GetContentClient()->browser()->UpdateDevToolsBackgroundServiceExpiration(

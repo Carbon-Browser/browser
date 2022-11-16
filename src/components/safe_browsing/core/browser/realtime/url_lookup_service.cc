@@ -8,9 +8,9 @@
 #include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/rand_util.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_piece.h"
-#include "base/task/post_task.h"
 #include "base/time/time.h"
 #include "components/prefs/pref_service.h"
 #include "components/safe_browsing/buildflags.h"
@@ -31,9 +31,10 @@
 
 namespace {
 
-constexpr char kRealTimeUrlLookupReferrerLengthParam[] =
-    "SafeBrowsingRealTimeUrlLookupReferrerLengthParam";
 constexpr int kDefaultRealTimeUrlLookupReferrerLength = 2;
+
+// Probability for sending protego requests for urls on the allowlist
+const float kProbabilityForSendingSampledRequests = 0.01;
 
 }  // namespace
 
@@ -72,13 +73,16 @@ RealTimeUrlLookupService::RealTimeUrlLookupService(
 
 void RealTimeUrlLookupService::GetAccessToken(
     const GURL& url,
+    const GURL& last_committed_url,
+    bool is_mainframe,
     RTLookupRequestCallback request_callback,
     RTLookupResponseCallback response_callback,
     scoped_refptr<base::SequencedTaskRunner> callback_task_runner) {
   token_fetcher_->Start(base::BindOnce(
       &RealTimeUrlLookupService::OnGetAccessToken, weak_factory_.GetWeakPtr(),
-      url, std::move(request_callback), std::move(response_callback),
-      std::move(callback_task_runner), base::TimeTicks::Now()));
+      url, last_committed_url, is_mainframe, std::move(request_callback),
+      std::move(response_callback), std::move(callback_task_runner),
+      base::TimeTicks::Now()));
 }
 
 void RealTimeUrlLookupService::OnPrefChanged() {
@@ -89,6 +93,8 @@ void RealTimeUrlLookupService::OnPrefChanged() {
 
 void RealTimeUrlLookupService::OnGetAccessToken(
     const GURL& url,
+    const GURL& last_committed_url,
+    bool is_mainframe,
     RTLookupRequestCallback request_callback,
     RTLookupResponseCallback response_callback,
     scoped_refptr<base::SequencedTaskRunner> callback_task_runner,
@@ -101,8 +107,9 @@ void RealTimeUrlLookupService::OnGetAccessToken(
                           base::TimeTicks::Now() - get_token_start_time);
   base::UmaHistogramBoolean("SafeBrowsing.RT.HasTokenFromFetcher",
                             !access_token.empty());
-  SendRequest(url, access_token, std::move(request_callback),
-              std::move(response_callback), std::move(callback_task_runner));
+  SendRequest(url, last_committed_url, is_mainframe, access_token,
+              std::move(request_callback), std::move(response_callback),
+              std::move(callback_task_runner), /* is_sampled_report */ false);
 }
 
 void RealTimeUrlLookupService::OnResponseUnauthorized(
@@ -123,14 +130,12 @@ bool RealTimeUrlLookupService::CanPerformFullURLLookupWithToken() const {
       variations_);
 }
 
-bool RealTimeUrlLookupService::CanAttachReferrerChain() const {
-  return base::FeatureList::IsEnabled(kRealTimeUrlLookupReferrerChain);
+int RealTimeUrlLookupService::GetReferrerUserGestureLimit() const {
+  return kDefaultRealTimeUrlLookupReferrerLength;
 }
 
-int RealTimeUrlLookupService::GetReferrerUserGestureLimit() const {
-  return base::GetFieldTrialParamByFeatureAsInt(
-      kRealTimeUrlLookupReferrerChain, kRealTimeUrlLookupReferrerLengthParam,
-      kDefaultRealTimeUrlLookupReferrerLength);
+bool RealTimeUrlLookupService::CanSendPageLoadToken() const {
+  return base::FeatureList::IsEnabled(kSafeBrowsingPageLoadToken);
 }
 
 bool RealTimeUrlLookupService::CanCheckSubresourceURL() const {
@@ -141,6 +146,14 @@ bool RealTimeUrlLookupService::CanCheckSafeBrowsingDb() const {
   // Always return true, because consumer real time URL check only works when
   // safe browsing is enabled.
   return true;
+}
+
+bool RealTimeUrlLookupService::CanSendRTSampleRequest() const {
+  return IsExtendedReportingEnabled(*pref_service_) &&
+         base::FeatureList::IsEnabled(
+             safe_browsing::kSendSampledPingsForProtegoAllowlistDomains) &&
+         (bypass_protego_probability_for_tests_ ||
+          base::RandDouble() <= kProbabilityForSendingSampledRequests);
 }
 
 void RealTimeUrlLookupService::Shutdown() {

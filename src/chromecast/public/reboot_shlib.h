@@ -103,6 +103,14 @@ class CHROMECAST_EXPORT RebootShlib {
     // risky to attempt without a full process restart. Very few experiments
     // trigger this path.
     EXPERIMENT_CHANGE = 19,
+
+    // A reboot is triggered when the anomaly detection service detects a
+    // system-level anomaly and needs to recover from it with restarting the
+    // Cast component.
+    ANOMALY = 20,
+
+    // A reboot is triggered when the kernel panics.
+    KERNEL_PANIC = 21,
   };
 
   // Initializes any platform-specific reboot systems.
@@ -163,6 +171,15 @@ class CHROMECAST_EXPORT RebootShlib {
   // must result in any available OTA update getting applied upon the next
   // reboot (regardless of the RebootSource or cause of reboot).
   static void SetOtaForNextReboot();
+
+  // If IsClearOtaFromNextRebootSupported() returns true and
+  // ClearOtaForNextReboot() has been called, then the device will cancel any
+  // pending OTA waiting to be applied.
+  static bool IsClearOtaForNextRebootSupported();
+
+  // If IsClearOtaForNextRebootSupported() returns true then calling
+  // ClearOtaForNextReboot voids any prior call to SetOtaForNextReboot.
+  static void ClearOtaForNextReboot();
 };
 
 }  // namespace chromecast

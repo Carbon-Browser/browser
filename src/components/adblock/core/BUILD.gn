@@ -1,0 +1,211 @@
+#
+# This file is part of eyeo Chromium SDK,
+# Copyright (C) 2006-present eyeo GmbH
+#
+# eyeo Chromium SDK is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 3 as
+# published by the Free Software Foundation.
+#
+# eyeo Chromium SDK is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with eyeo Chromium SDK.  If not, see <http://www.gnu.org/licenses/>.
+
+import("//components/adblock/core/features.gni")
+import("//third_party/flatbuffers/flatbuffer.gni")
+
+flatbuffer("schema") {
+  sources = [ "schema/filter_list_schema.fbs" ]
+}
+
+template("generate_sha256_header") {
+  output_prefix_ = "${target_gen_dir}/hash/${target_name}"
+  generated_files = [
+    "${output_prefix_}.h",
+    "${output_prefix_}.cc",
+  ]
+
+  # Generates .h and .cc files which contain the hashes of invoker.files_to_hash.
+  action("${target_name}_hash") {
+    # The script lives in /chrome but has no dependencies to the //chrome target.
+    # According to the script's author, it could be moved to /build but only if
+    # there's code *upstream* that needs it outside of /chrome.
+    script = "//chrome/tools/build/sha256_file.py"
+    outputs = generated_files
+    inputs = invoker.files_to_hash
+
+    args = [ rebase_path(output_prefix_, root_build_dir) ] +
+           rebase_path(inputs, root_build_dir)
+
+    deps = invoker.deps
+  }
+
+  # Allows linking the generated .h and .cc files, is the main target of
+  # this template.
+  source_set("${target_name}") {
+    sources = generated_files
+
+    deps = [ ":${target_name}_hash" ]
+  }
+}
+
+generate_sha256_header("schema_hash") {
+  deps = [ ":schema" ]
+
+  # Using the generated flatbuffer header instead of source .fbs file to:
+  # - avoid generating new schema hash if just a comment in the .fbs changes
+  # - generate a new schema hash if .fbs -> .h conversion changes unexpectedly
+  files_to_hash = [ "${target_gen_dir}/schema/filter_list_schema_generated.h" ]
+}
+
+config("adblock_core_config") {
+  defines = []
+
+  if (eyeo_telemetry_server_url != "") {
+    # Expicitly setting Telemetry server URL, used for testing with a test
+    # server.
+    defines += [ "EYEO_TELEMETRY_SERVER_URL=\"$eyeo_telemetry_server_url\"" ]
+  } else if (abp_telemetry_server_url != "") {
+    print("WARNING! abp_telemetry_server_url is deprecated, " +
+          "use eyeo_telemetry_server_url instead.")
+    eyeo_telemetry_server_url = abp_telemetry_server_url
+    defines += [ "EYEO_TELEMETRY_SERVER_URL=\"$eyeo_telemetry_server_url\"" ]
+  } else {
+    # Implicitly setting production Telemetry server URL based on
+    # eyeo_telemetry_client_id (or a default client id as a fallback).
+    if (eyeo_telemetry_client_id != "") {
+      defines += [ "EYEO_TELEMETRY_CLIENT_ID=\"$eyeo_telemetry_client_id\"" ]
+    } else if (abp_telemetry_client_id != "") {
+      print("WARNING! abp_telemetry_client_id is deprecated, " +
+            "use eyeo_telemetry_client_id instead.")
+      eyeo_telemetry_client_id = abp_telemetry_client_id
+      defines += [ "EYEO_TELEMETRY_CLIENT_ID=\"$eyeo_telemetry_client_id\"" ]
+    } else {
+      print("WARNING! gn arg eyeo_telemetry_client_id is not set. " +
+            "Users will not be counted correctly by eyeo.")
+      eyeo_telemetry_client_id = "eyeochromium"
+    }
+    eyeo_telemetry_server_url =
+        "https://${eyeo_telemetry_client_id}.telemetry.eyeo.com/"
+    defines += [ "EYEO_TELEMETRY_SERVER_URL=\"$eyeo_telemetry_server_url\"" ]
+  }
+
+  if (eyeo_telemetry_activeping_auth_token != "") {
+    defines += [ "EYEO_TELEMETRY_ACTIVEPING_AUTH_TOKEN=\"$eyeo_telemetry_activeping_auth_token\"" ]
+  } else if (abp_telemetry_activeping_auth_token != "") {
+    print("WARNING! abp_telemetry_activeping_auth_token is deprecated, " +
+          "use eyeo_telemetry_activeping_auth_token instead.")
+    eyeo_telemetry_activeping_auth_token = abp_telemetry_activeping_auth_token
+    defines += [ "EYEO_TELEMETRY_ACTIVEPING_AUTH_TOKEN=\"$eyeo_telemetry_activeping_auth_token\"" ]
+  } else {
+    print("WARNING! gn arg eyeo_telemetry_activeping_auth_token is not set. " +
+          "Users will not be counted correctly by eyeo.")
+  }
+
+  if (eyeo_application_name != "") {
+    defines += [ "EYEO_APPLICATION_NAME=\"$eyeo_application_name\"" ]
+  } else if (abp_application_name != "") {
+    print("WARNING! abp_application_name is deprecated, " +
+          "use eyeo_application_name instead.")
+    eyeo_application_name = abp_application_name
+    defines += [ "EYEO_APPLICATION_NAME=\"$eyeo_application_name\"" ]
+  }
+
+  if (eyeo_application_version != "") {
+    defines += [ "EYEO_APPLICATION_VERSION=\"$eyeo_application_version\"" ]
+  } else if (abp_application_version != "") {
+    print("WARNING! abp_application_version is deprecated, " +
+          "use eyeo_application_version instead.")
+    eyeo_application_version = abp_application_version
+    defines += [ "EYEO_APPLICATION_VERSION=\"$eyeo_application_version\"" ]
+  }
+}
+
+source_set("core") {
+  output_name = "adblock_core"
+  sources = [
+    "activeping_telemetry_topic_provider.cc",
+    "activeping_telemetry_topic_provider.h",
+    "adblock_controller.h",
+    "adblock_controller_impl.cc",
+    "adblock_controller_impl.h",
+    "adblock_switches.cc",
+    "adblock_switches.h",
+    "adblock_telemetry_service.cc",
+    "adblock_telemetry_service.h",
+    "features.cc",
+    "features.h",
+    "sitekey_storage.h",
+    "sitekey_storage_impl.cc",
+    "sitekey_storage_impl.h",
+  ]
+
+  deps = [
+    "//components/language/core/common",
+    "//third_party/flatbuffers",
+  ]
+
+  public_deps = [
+    "//components/adblock/core/classifier",
+    "//components/adblock/core/common",
+    "//components/adblock/core/converter",
+    "//components/adblock/core/subscription",
+    "//components/pref_registry:pref_registry",
+  ]
+
+  all_dependent_configs = [ ":adblock_core_config" ]
+}
+
+source_set("test_support") {
+  testonly = true
+  sources = [
+    "test/mock_adblock_controller.cc",
+    "test/mock_adblock_controller.h",
+    "test/mock_sitekey_storage.cc",
+    "test/mock_sitekey_storage.h",
+  ]
+
+  public_deps = [
+    ":core",
+    "//components/adblock/core/subscription:test_support",
+    "//testing/gmock",
+    "//testing/gtest",
+  ]
+}
+
+source_set("unit_tests") {
+  testonly = true
+  sources = [
+    "test/activeping_telemetry_topic_provider_test.cc",
+    "test/adblock_controller_impl_test.cc",
+    "test/bundled_subscription_test.cc",
+    "test/sitekey_storage_impl_test.cc",
+  ]
+
+  if (eyeo_telemetry_client_id != "") {
+    sources += [ "test/adblock_telemetry_service_unittest.cc" ]
+  }
+
+  deps = [
+    ":core",
+    ":test_support",
+    "//base/test:test_support",
+    "//components/adblock/core/subscription:test_support",
+    "//components/prefs:test_support",
+    "//components/sync_preferences:test_support",
+    "//net:test_support",
+    "//services/network:test_support",
+    "//testing/gtest",
+  ]
+}
+
+# This group is for referencing standalone executables that would otherwise be
+# ignored by GN as not required by the dependency tree and thus un-buildable.
+group("unreferenced_standalone_executables") {
+  testonly = true
+
+  deps = [ "//components/adblock_comparison:verify_flatbuffer_adblocking" ]
+}

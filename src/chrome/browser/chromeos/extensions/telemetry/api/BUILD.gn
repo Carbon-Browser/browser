@@ -12,24 +12,44 @@ assert(enable_extensions,
 
 source_set("api") {
   sources = [
+    "api_guard_delegate.cc",
+    "api_guard_delegate.h",
     "base_telemetry_extension_api_guard_function.cc",
     "base_telemetry_extension_api_guard_function.h",
     "diagnostics_api.cc",
     "diagnostics_api.h",
     "diagnostics_api_converters.cc",
     "diagnostics_api_converters.h",
+    "hardware_info_delegate.cc",
+    "hardware_info_delegate.h",
+    "remote_diagnostics_service_strategy.cc",
+    "remote_diagnostics_service_strategy.h",
+    "remote_probe_service_strategy.cc",
+    "remote_probe_service_strategy.h",
     "telemetry_api.cc",
     "telemetry_api.h",
+    "telemetry_api_converters.cc",
+    "telemetry_api_converters.h",
   ]
 
   deps = [
     "//ash/webui/telemetry_extension_ui/mojom",
     "//ash/webui/telemetry_extension_ui/services:telemetry_services",
     "//base",
+    "//chrome/browser/ash/telemetry_extension",
+    "//chrome/browser/extensions",
+    "//chrome/browser/profiles:profile",
+    "//chrome/browser/ui",
+    "//chrome/common/chromeos/extensions",
     "//chrome/common/chromeos/extensions/api",
+    "//chromeos/crosapi/mojom",
+    "//components/security_state/content",
+    "//components/security_state/core",
     "//components/user_manager",
+    "//content/public/browser",
     "//extensions/browser",
     "//extensions/common",
+    "//url",
   ]
 }
 
@@ -56,25 +76,44 @@ source_set("browser_tests") {
     "base_telemetry_extension_browser_test.cc",
     "base_telemetry_extension_browser_test.h",
     "diagnostics_api_browsertest.cc",
+    "fake_api_guard_delegate.cc",
+    "fake_api_guard_delegate.h",
     "telemetry_api_browsertest.cc",
+    "telemetry_extension_capabilities_browser_test.cc",
   ]
 
   deps = [
     ":api",
+    ":fake_hardware_info_delegate",
+    "//ash/webui/telemetry_extension_ui/services:telemetry_services",
+    "//ash/webui/telemetry_extension_ui/services:telemetry_services_test",
+    "//base",
+    "//chrome/browser/ash/telemetry_extension",
+    "//chrome/browser/ash/telemetry_extension:test_support",
     "//chrome/browser/ash/wilco_dtc_supportd:mojo_utils",
+    "//chrome/common/chromeos/extensions",
     "//chrome/test:test_support",
+    "//chromeos/crosapi/mojom",
     "//chromeos/dbus",
-    "//chromeos/dbus/cros_healthd",
     "//chromeos/dbus/debug_daemon",
-    "//chromeos/services/cros_healthd/public/cpp",
-    "//chromeos/services/cros_healthd/public/mojom",
+    "//components/user_manager",
+    "//content/test:test_support",
     "//extensions:test_support",
+    "//extensions/browser",
+    "//extensions/browser:test_support",
+    "//extensions/common",
+    "//net",
+    "//net:test_support",
+    "//url",
   ]
 }
 
 source_set("unit_tests") {
   testonly = true
-  sources = [ "diagnostics_api_converters_unittest.cc" ]
+  sources = [
+    "diagnostics_api_converters_unittest.cc",
+    "telemetry_api_converters_unittest.cc",
+  ]
 
   deps = [
     ":api",
@@ -82,5 +121,22 @@ source_set("unit_tests") {
     "//base",
     "//chrome/common/chromeos/extensions/api",
     "//chrome/test:test_support",
+    "//chromeos/crosapi/mojom",
+  ]
+}
+
+# This is needed as a dependency for api_guard_delegate_unittest.cc in
+# /chrome/test/BUILD.gn.
+# TODO(b/207754758): Move into the appropriate target.
+source_set("fake_hardware_info_delegate") {
+  testonly = true
+  sources = [
+    "fake_hardware_info_delegate.cc",
+    "fake_hardware_info_delegate.h",
+  ]
+
+  deps = [
+    ":api",
+    "//base",
   ]
 }

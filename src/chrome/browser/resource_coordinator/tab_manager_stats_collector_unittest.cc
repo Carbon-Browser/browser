@@ -9,10 +9,11 @@
 #include <vector>
 
 #include "base/bind.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/metrics_hashes.h"
 #include "base/task/current_thread.h"
 #include "base/test/metrics/histogram_tester.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/test/simple_test_tick_clock.h"
 #include "base/test/test_mock_time_task_runner.h"
 #include "base/time/tick_clock.h"
@@ -27,11 +28,14 @@
 #include "chrome/test/base/testing_profile.h"
 #include "components/ukm/test_ukm_recorder.h"
 #include "content/public/browser/web_contents.h"
+#include "content/public/test/navigation_simulator.h"
+#include "content/public/test/prerender_test_util.h"
 #include "content/public/test/web_contents_tester.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/blink/public/common/features.h"
 
 using base::Bucket;
 using ::testing::ElementsAre;
@@ -56,8 +60,12 @@ class TabManagerStatsCollectorTest : public ChromeRenderViewHostTestHarness {
     base::CurrentThread::Get()->SetTaskRunner(task_runner_);
 
     // Start with a non-zero time.
-    task_runner_->FastForwardBy(base::TimeDelta::FromSeconds(42));
+    task_runner_->FastForwardBy(base::Seconds(42));
   }
+
+  TabManagerStatsCollectorTest(const TabManagerStatsCollectorTest&) = delete;
+  TabManagerStatsCollectorTest& operator=(const TabManagerStatsCollectorTest&) =
+      delete;
 
   ~TabManagerStatsCollectorTest() override = default;
 
@@ -101,12 +109,16 @@ class TabManagerStatsCollectorTest : public ChromeRenderViewHostTestHarness {
 
  private:
   TabManager* tab_manager() const { return g_browser_process->GetTabManager(); }
-
-  DISALLOW_COPY_AND_ASSIGN(TabManagerStatsCollectorTest);
 };
 
 class TabManagerStatsCollectorTabSwitchTest
     : public TabManagerStatsCollectorTest {
+ public:
+  TabManagerStatsCollectorTabSwitchTest(
+      const TabManagerStatsCollectorTabSwitchTest&) = delete;
+  TabManagerStatsCollectorTabSwitchTest& operator=(
+      const TabManagerStatsCollectorTabSwitchTest&) = delete;
+
  protected:
   TabManagerStatsCollectorTabSwitchTest() = default;
   ~TabManagerStatsCollectorTabSwitchTest() override = default;
@@ -146,10 +158,8 @@ class TabManagerStatsCollectorTabSwitchTest
   }
 
  private:
-  WebContents* foreground_tab_;
-  WebContents* background_tab_;
-
-  DISALLOW_COPY_AND_ASSIGN(TabManagerStatsCollectorTabSwitchTest);
+  raw_ptr<WebContents> foreground_tab_;
+  raw_ptr<WebContents> background_tab_;
 };
 
 TEST_F(TabManagerStatsCollectorTabSwitchTest, HistogramsSwitchToTab) {
@@ -234,4 +244,67 @@ TEST_F(TabManagerStatsCollectorTabSwitchTest, HistogramsTabSwitchLoadTime) {
   histogram_tester_.ExpectTotalCount(
       TabManagerStatsCollector::kHistogramSessionRestoreTabSwitchLoadTime, 2);
 }
+
+class TabManagerStatsCollectorPrerenderingTest
+    : public TabManagerStatsCollectorTabSwitchTest {
+ public:
+  TabManagerStatsCollectorPrerenderingTest() {
+    scoped_feature_list_.InitWithFeatures(
+        {blink::features::kPrerender2},
+        // Disable the memory requirement of Prerender2 so the test can run on
+        // any bot.
+        {blink::features::kPrerender2MemoryControls});
+  }
+  ~TabManagerStatsCollectorPrerenderingTest() override = default;
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
+// Tests that prerendering loading doesn't remove its WebContents from
+// `foreground_contents_switched_to_times_` and doesn't add the histogram
+// since it's not a primary page.
+TEST_F(TabManagerStatsCollectorPrerenderingTest,
+       KeepingWebContentsMapInPrerendering) {
+  std::unique_ptr<WebContents> tab1(CreateTestWebContents());
+  std::unique_ptr<WebContents> tab2(CreateTestWebContents());
+  content::test::ScopedPrerenderWebContentsDelegate tab1_delegate(*tab1.get());
+  content::test::ScopedPrerenderWebContentsDelegate tab2_delegate(*tab2.get());
+
+  GURL init_url("https://example1.test/");
+  content::NavigationSimulator::NavigateAndCommitFromBrowser(tab2.get(),
+                                                             init_url);
+
+  SetForegroundAndBackgroundTabs(tab1.get(), tab2.get());
+
+  StartSessionRestore();
+
+  SetBackgroundTabLoadingState(UNLOADED);
+  SetForegroundTabLoadingState(LOADED);
+  SwitchToBackgroundTab();
+
+  // Set prerendering loading.
+  const GURL kPrerenderingUrl("https://example1.test/?prerendering");
+  auto* prerender_rfh = content::WebContentsTester::For(tab2.get())
+                            ->AddPrerenderAndCommitNavigation(kPrerenderingUrl);
+  DCHECK_NE(prerender_rfh, nullptr);
+
+  // Even though prerendering navigation is committed, TabManagerStatsCollector
+  // should keep `tab2` at `foreground_contents_switched_to_times_`.
+  EXPECT_TRUE(base::Contains(
+      tab_manager_stats_collector()->foreground_contents_switched_to_times_,
+      tab2.get()));
+  histogram_tester_.ExpectTotalCount(
+      TabManagerStatsCollector::kHistogramSessionRestoreTabSwitchLoadTime, 0);
+
+  FinishLoadingForegroundTab();
+  // `tab2` is removed from `foreground_contents_switched_to_times_` in
+  // OnTabIsLoaded().
+  EXPECT_FALSE(base::Contains(
+      tab_manager_stats_collector()->foreground_contents_switched_to_times_,
+      tab2.get()));
+  histogram_tester_.ExpectTotalCount(
+      TabManagerStatsCollector::kHistogramSessionRestoreTabSwitchLoadTime, 1);
+}
+
 }  // namespace resource_coordinator

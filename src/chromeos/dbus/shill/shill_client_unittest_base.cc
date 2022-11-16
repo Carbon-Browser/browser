@@ -12,8 +12,8 @@
 #include "base/bind.h"
 #include "base/json/json_writer.h"
 #include "base/location.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/values.h"
 #include "dbus/message.h"
 #include "dbus/object_path.h"
@@ -240,9 +240,9 @@ void ShillClientUnittestBase::ExpectStringAndValueArguments(
   std::string str;
   ASSERT_TRUE(reader->PopString(&str));
   EXPECT_EQ(expected_string, str);
-  std::unique_ptr<base::Value> value(dbus::PopDataAsValue(reader));
-  ASSERT_TRUE(value.get());
-  EXPECT_EQ(*value, *expected_value);
+  base::Value value(dbus::PopDataAsValue(reader));
+  ASSERT_TRUE(!value.is_none());
+  EXPECT_EQ(value, *expected_value);
   EXPECT_FALSE(reader->HasMoreData());
 }
 
@@ -280,7 +280,9 @@ void ShillClientUnittestBase::ExpectValueDictionaryArgument(
       case dbus::Message::BOOL:
       case dbus::Message::INT32:
       case dbus::Message::STRING:
-        value = dbus::PopDataAsValue(&variant_reader);
+        value = base::Value::ToUniquePtrValue(
+            dbus::PopDataAsValue(&variant_reader));
+        ASSERT_FALSE(value->is_none());
         break;
       default:
         NOTREACHED();

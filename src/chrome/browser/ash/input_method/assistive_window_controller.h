@@ -7,14 +7,13 @@
 
 #include <memory>
 
-#include "base/macros.h"
 #include "chrome/browser/ash/input_method/assistive_window_properties.h"
 #include "chrome/browser/ash/input_method/ui/assistive_accessibility_view.h"
 #include "chrome/browser/ash/input_method/ui/assistive_delegate.h"
 #include "chrome/browser/ash/input_method/ui/grammar_suggestion_window.h"
 #include "chrome/browser/ash/input_method/ui/suggestion_window_view.h"
 #include "chrome/browser/ash/input_method/ui/undo_window.h"
-#include "ui/base/ime/chromeos/ime_assistive_window_handler_interface.h"
+#include "ui/base/ime/ash/ime_assistive_window_handler_interface.h"
 #include "ui/gfx/native_widget_types.h"
 
 class Profile;
@@ -37,12 +36,16 @@ class AssistiveWindowController : public views::WidgetObserver,
       AssistiveWindowControllerDelegate* delegate,
       Profile* profile,
       ui::ime::AssistiveAccessibilityView* accessibility_view = nullptr);
+
+  AssistiveWindowController(const AssistiveWindowController&) = delete;
+  AssistiveWindowController& operator=(const AssistiveWindowController&) =
+      delete;
+
   ~AssistiveWindowController() override;
 
   ui::ime::SuggestionWindowView* GetSuggestionWindowViewForTesting();
   ui::ime::UndoWindow* GetUndoWindowForTesting() const;
 
- private:
   // IMEAssistiveWindowHandlerInterface implementation.
   void SetBounds(const Bounds& bounds) override;
   void SetAssistiveWindowProperties(
@@ -55,14 +58,18 @@ class AssistiveWindowController : public views::WidgetObserver,
   std::u16string GetSuggestionText() const override;
   size_t GetConfirmedLength() const override;
   void FocusStateChanged() override;
-  void OnWidgetClosing(views::Widget* widget) override;
+  void OnWidgetDestroying(views::Widget* widget) override;
   void Announce(const std::u16string& message) override;
 
   // ui::ime::AssistiveDelegate implementation.
   void AssistiveWindowButtonClicked(
       const ui::ime::AssistiveWindowButton& button) const override;
 
-  void InitSuggestionWindow();
+ private:
+  ui::ime::SuggestionWindowView::Orientation WindowOrientationFor(
+      ui::ime::AssistiveWindowType window_type);
+  void InitSuggestionWindow(
+      ui::ime::SuggestionWindowView::Orientation orientation);
   void InitUndoWindow();
   void InitGrammarSuggestionWindow();
   void InitAccessibilityView();
@@ -77,8 +84,6 @@ class AssistiveWindowController : public views::WidgetObserver,
   size_t confirmed_length_ = 0;
   Bounds bounds_;
   bool tracking_last_suggestion_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(AssistiveWindowController);
 };
 
 }  // namespace input_method

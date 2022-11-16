@@ -9,7 +9,6 @@
 #include <map>
 #include <vector>
 
-#include "base/macros.h"
 #include "base/test/scoped_feature_list.h"
 #include "chrome/common/privacy_budget/types.h"
 #include "third_party/blink/public/common/privacy_budget/identifiable_surface.h"
@@ -34,17 +33,21 @@ class ScopedPrivacyBudgetConfig {
   // number is that it is the default.
   constexpr static int kDefaultGeneration = 17;
 
-  // An expected surface count of one implies that the probability of selecting
-  // a surface is 1/1.
-  constexpr static int kDefaultExpectedSurfaceCount = 1;
+  enum class Presets {
+    // Enables the study with random sampling and with a probability of 1 of
+    // selecting each surface.
+    kEnableRandomSampling,
+
+    // Disables the study. The other parameters are undefined and should not be
+    // relied upon.
+    kDisable
+  };
 
   // These fields correspond to the equivalent features described in
   // privacy_budget_features.h
-  //
-  // The default values enable the identifiability study with a sampling rate of
-  // 1, which means every surface is included in UKM reports.
   struct Parameters {
     Parameters();
+    explicit Parameters(Presets);
     Parameters(const Parameters&);
     Parameters(Parameters&&);
     ~Parameters();
@@ -52,29 +55,22 @@ class ScopedPrivacyBudgetConfig {
     bool enabled = true;
     int generation = kDefaultGeneration;
 
-    std::vector<blink::IdentifiableSurface> blocked_surfaces;
-    std::vector<blink::IdentifiableSurface::Type> blocked_types;
-    int surface_selection_rate = kDefaultExpectedSurfaceCount;
-    int max_surfaces = std::numeric_limits<int>::max();
-    std::map<blink::IdentifiableSurface, int> per_surface_sampling_rate;
-    std::map<blink::IdentifiableSurface::Type, int> per_type_sampling_rate;
+    IdentifiableSurfaceList blocked_surfaces;
+    IdentifiableSurfaceTypeList blocked_types;
+    int expected_surface_count = 0;
+    int active_surface_budget = std::numeric_limits<int>::max();
     IdentifiableSurfaceCostMap per_surface_cost;
     IdentifiableSurfaceTypeCostMap per_type_cost;
     SurfaceSetEquivalentClassesList equivalence_classes;
-  };
-
-  enum Presets {
-    // Represents the default state of `Parameters` which enables the study with
-    // the following settings:
-    //
-    // * `generation` = 1
-    // * `surface_selection_rate`= 1 (i.e. includes every surface)
-    // * `max_surfaces` = <very large number> (i.e. unlimited)
-    kEnable,
-
-    // Disables the study. The other parameters are undefined and should not be
-    // relied upon.
-    kDisable
+    IdentifiableSurfaceBlocks blocks;
+    std::vector<double> block_weights;
+    IdentifiableSurfaceBlocks reid_blocks;
+    std::vector<uint64_t> reid_salts_ranges;
+    std::vector<int> reid_bits;
+    std::vector<double> reid_noise;
+    std::vector<blink::IdentifiableSurface::Type> allowed_random_types;
+    bool enable_active_sampling = false;
+    std::vector<std::string> actively_sampled_fonts;
   };
 
   // Doesn't do anything until Apply() is called.

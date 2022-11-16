@@ -4,7 +4,7 @@
 
 #include "content/shell/browser/shell_platform_data_aura.h"
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "content/shell/browser/shell.h"
 #include "ui/aura/client/default_capture_client.h"
@@ -21,13 +21,12 @@
 #include "ui/platform_window/platform_window_init_properties.h"
 #include "ui/wm/core/default_activation_client.h"
 
-#if defined(OS_FUCHSIA)
+#if BUILDFLAG(IS_FUCHSIA)
 #include "ui/platform_window/fuchsia/initialize_presenter_api_view.h"
 #endif
 
 #if defined(USE_OZONE)
 #include "ui/aura/screen_ozone.h"
-#include "ui/base/ui_base_features.h"
 #endif
 
 namespace content {
@@ -38,6 +37,9 @@ class FillLayout : public aura::LayoutManager {
  public:
   explicit FillLayout(aura::Window* root)
       : root_(root), has_bounds_(!root->bounds().IsEmpty()) {}
+
+  FillLayout(const FillLayout&) = delete;
+  FillLayout& operator=(const FillLayout&) = delete;
 
   ~FillLayout() override {}
 
@@ -69,10 +71,8 @@ class FillLayout : public aura::LayoutManager {
     SetChildBoundsDirect(child, requested_bounds);
   }
 
-  aura::Window* root_;
+  raw_ptr<aura::Window> root_;
   bool has_bounds_;
-
-  DISALLOW_COPY_AND_ASSIGN(FillLayout);
 };
 
 }
@@ -82,14 +82,13 @@ ShellPlatformDataAura::ShellPlatformDataAura(const gfx::Size& initial_size) {
 
 #if defined(USE_OZONE)
   // Setup global display::Screen singleton.
-  if (features::IsUsingOzonePlatform() && !display::Screen::GetScreen())
-    screen_ = std::make_unique<aura::ScreenOzone>();
+  screen_ = std::make_unique<aura::ScopedScreenOzone>();
 #endif  // defined(USE_OZONE)
 
   ui::PlatformWindowInitProperties properties;
   properties.bounds = gfx::Rect(initial_size);
 
-#if defined(OS_FUCHSIA)
+#if BUILDFLAG(IS_FUCHSIA)
   // When using Scenic Ozone platform we need to supply a view_token to the
   // window. This is not necessary when using the headless ozone platform.
   if (ui::OzonePlatform::GetInstance()

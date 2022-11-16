@@ -5,7 +5,6 @@
 #ifndef IOS_CHROME_BROWSER_SEARCH_ENGINES_TEMPLATE_URL_SERVICE_CLIENT_IMPL_H_
 #define IOS_CHROME_BROWSER_SEARCH_ENGINES_TEMPLATE_URL_SERVICE_CLIENT_IMPL_H_
 
-#include "base/macros.h"
 #include "base/scoped_observation.h"
 #include "components/history/core/browser/history_service.h"
 #include "components/history/core/browser/history_service_observer.h"
@@ -22,6 +21,11 @@ class TemplateURLServiceClientImpl : public TemplateURLServiceClient,
  public:
   explicit TemplateURLServiceClientImpl(
       history::HistoryService* history_service);
+
+  TemplateURLServiceClientImpl(const TemplateURLServiceClientImpl&) = delete;
+  TemplateURLServiceClientImpl& operator=(const TemplateURLServiceClientImpl&) =
+      delete;
+
   ~TemplateURLServiceClientImpl() override;
 
  private:
@@ -38,7 +42,6 @@ class TemplateURLServiceClientImpl : public TemplateURLServiceClient,
   void OnURLVisited(history::HistoryService* history_service,
                     ui::PageTransition transition,
                     const history::URLRow& row,
-                    const history::RedirectList& redirects,
                     base::Time visit_time) override;
 
   TemplateURLService* owner_;
@@ -46,8 +49,6 @@ class TemplateURLServiceClientImpl : public TemplateURLServiceClient,
   base::ScopedObservation<history::HistoryService,
                           history::HistoryServiceObserver>
       history_service_observation_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(TemplateURLServiceClientImpl);
 };
 
 }  // namespace ios

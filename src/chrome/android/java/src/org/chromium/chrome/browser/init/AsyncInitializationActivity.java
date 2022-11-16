@@ -12,7 +12,6 @@ import android.graphics.Rect;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
-import android.os.Process;
 import android.os.SystemClock;
 import android.provider.Settings;
 import android.provider.Settings.SettingNotFoundException;
@@ -27,8 +26,8 @@ import androidx.annotation.CallSuper;
 import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 
-import org.chromium.base.ApiCompatibilityUtils;
 import org.chromium.base.StrictModeContext;
+import org.chromium.base.SysUtils;
 import org.chromium.base.TraceEvent;
 import org.chromium.base.library_loader.LibraryLoader;
 import org.chromium.base.library_loader.LoaderErrors;
@@ -95,6 +94,9 @@ public abstract class AsyncInitializationActivity
 
     private Runnable mOnInflationCompleteCallback;
     private boolean mInitialLayoutInflationComplete;
+
+    // See enableHardwareAcceleration()
+    private boolean mSetWindowHWA;
 
     private static boolean sInterceptMoveTaskToBackForTesting;
     private static boolean sBackInterceptedForTesting;
@@ -164,8 +166,7 @@ public abstract class AsyncInitializationActivity
 
     @Override
     public final void setContentViewAndLoadLibrary(Runnable onInflationCompleteCallback) {
-        boolean enableInstantStart =
-                TabUiFeatureUtilities.supportInstantStart(isTablet(), this) && !mHadWarmStart;
+        boolean enableInstantStart = isInstantStartEnabled() && !mHadWarmStart;
         mOnInflationCompleteCallback = onInflationCompleteCallback;
         if (enableInstantStart) {
             triggerLayoutInflation();
@@ -225,7 +226,7 @@ public abstract class AsyncInitializationActivity
             mFirstDrawComplete = true;
             StartSurfaceConfiguration.recordHistogram(FIRST_DRAW_COMPLETED_TIME_MS_UMA,
                     SystemClock.elapsedRealtime() - getOnCreateTimestampMs(),
-                    TabUiFeatureUtilities.supportInstantStart(isTablet(), this));
+                    isInstantStartEnabled());
             if (!mStartupDelayed) {
                 onFirstDrawComplete();
             }
@@ -393,19 +394,7 @@ public abstract class AsyncInitializationActivity
             return;
         } else {
             assert dispatchAction == LaunchIntentDispatcher.Action.FINISH_ACTIVITY_REMOVE_TASK;
-            ApiCompatibilityUtils.finishAndRemoveTask(this);
-
-            if (Build.VERSION.SDK_INT == Build.VERSION_CODES.LOLLIPOP
-                    || Build.VERSION.SDK_INT == Build.VERSION_CODES.LOLLIPOP_MR1) {
-                // On L ApiCompatibilityUtils.finishAndRemoveTask() sometimes fails, which causes
-                // NPE in onStart() later, see crbug.com/781396. We can't let this activity to
-                // start, and we don't want to crash either. So try finishing one more time and
-                // suicide if that fails.
-                if (!isFinishing()) {
-                    finish();
-                    if (!isFinishing()) Process.killProcess(Process.myPid());
-                }
-            }
+            finishAndRemoveTask();
         }
         overridePendingTransition(0, R.anim.no_anim);
     }
@@ -707,6 +696,10 @@ public abstract class AsyncInitializationActivity
         super.recreate();
 
         mLifecycleDispatcher.dispatchOnRecreate();
+
+        // TODO(https://crbug.com/1252526): Remove stack trace logging once root cause of bug is
+        // identified & fixed.
+        Thread.dumpStack();
     }
 
     /**
@@ -714,6 +707,13 @@ public abstract class AsyncInitializationActivity
      */
     public boolean isTablet() {
         return mIsTablet;
+    }
+
+    /**
+     * Returns whether the instant start is enabled.
+     */
+    protected boolean isInstantStartEnabled() {
+        return TabUiFeatureUtilities.supportInstantStart(isTablet(), this);
     }
 
     /**
@@ -939,5 +939,42 @@ public abstract class AsyncInitializationActivity
 
     public static boolean wasMoveTaskToBackInterceptedForTesting() {
         return sBackInterceptedForTesting;
+    }
+
+    private boolean shouldDisableHardwareAcceleration() {
+        // Low end devices should disable hardware acceleration for memory gains.
+        return SysUtils.isLowEndDevice();
+    }
+
+    protected void enableHardwareAcceleration() {
+        // HW acceleration is disabled in the manifest and may be re-enabled here.
+        if (!shouldDisableHardwareAcceleration()) {
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED);
+
+            // When HW acceleration is enabled manually for an activity, child windows (e.g.
+            // dialogs) don't inherit HW acceleration state. However, when HW acceleration is
+            // enabled in the manifest, child windows do inherit HW acceleration state. That
+            // looks like a bug, so I filed b/23036374
+            //
+            // In the meanwhile the workaround is to call
+            //   window.setWindowManager(..., hardwareAccelerated=true)
+            // to let the window know that it's HW accelerated. However, since there is no way
+            // to know 'appToken' argument until window's view is attached to the window (!!),
+            // we have to do the workaround in onAttachedToWindow()
+            mSetWindowHWA = true;
+        }
+    }
+
+    @Override
+    public void onAttachedToWindow() {
+        super.onAttachedToWindow();
+
+        // See enableHardwareAcceleration()
+        if (mSetWindowHWA) {
+            mSetWindowHWA = false;
+            getWindow().setWindowManager(getWindow().getWindowManager(),
+                    getWindow().getAttributes().token, getComponentName().flattenToString(),
+                    true /* hardwareAccelerated */);
+        }
     }
 }

@@ -6,16 +6,16 @@
 
 #include <memory>
 
+#include "ash/components/tpm/stub_install_attributes.h"
 #include "ash/constants/ash_features.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
-#include "chrome/browser/chromeos/net/system_proxy_manager.h"
+#include "chrome/browser/ash/net/system_proxy_manager.h"
 #include "chrome/test/base/scoped_testing_local_state.h"
 #include "chrome/test/base/testing_browser_process.h"
-#include "chromeos/dbus/services/service_provider_test_helper.h"
-#include "chromeos/dbus/system_proxy/system_proxy_client.h"
-#include "chromeos/network/network_handler_test_helper.h"
-#include "chromeos/tpm/stub_install_attributes.h"
+#include "chromeos/ash/components/dbus/services/service_provider_test_helper.h"
+#include "chromeos/ash/components/dbus/system_proxy/system_proxy_client.h"
+#include "chromeos/ash/components/network/network_handler_test_helper.h"
 #include "dbus/message.h"
 #include "dbus/object_path.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -50,6 +50,10 @@ struct LookupProxyForURLMockResult {
 class MockNetworkContext : public network::TestNetworkContext {
  public:
   MockNetworkContext() {}
+
+  MockNetworkContext(const MockNetworkContext&) = delete;
+  MockNetworkContext& operator=(const MockNetworkContext&) = delete;
+
   ~MockNetworkContext() override {}
 
   // network::mojom::NetworkContext implementation:
@@ -88,11 +92,8 @@ class MockNetworkContext : public network::TestNetworkContext {
 
   LookupProxyForURLMockResult lookup_proxy_result_;
 
-  chromeos::ScopedStubInstallAttributes test_install_attributes_{
-      chromeos::StubInstallAttributes::CreateCloudManaged("fake-domain",
-                                                          "fake-id")};
-
-  DISALLOW_COPY_AND_ASSIGN(MockNetworkContext);
+  ScopedStubInstallAttributes test_install_attributes_{
+      StubInstallAttributes::CreateCloudManaged("fake-domain", "fake-id")};
 };
 
 }  // namespace
@@ -109,6 +110,11 @@ class ProxyResolutionServiceProviderTest : public testing::Test {
                        chromeos::kNetworkProxyServiceResolveProxyMethod,
                        service_provider_.get());
   }
+
+  ProxyResolutionServiceProviderTest(
+      const ProxyResolutionServiceProviderTest&) = delete;
+  ProxyResolutionServiceProviderTest& operator=(
+      const ProxyResolutionServiceProviderTest&) = delete;
 
   ~ProxyResolutionServiceProviderTest() override {
     test_helper_.TearDown();
@@ -141,8 +147,6 @@ class ProxyResolutionServiceProviderTest : public testing::Test {
 
   std::unique_ptr<ProxyResolutionServiceProvider> service_provider_;
   ServiceProviderTestHelper test_helper_;
-
-  DISALLOW_COPY_AND_ASSIGN(ProxyResolutionServiceProviderTest);
 };
 
 // Tests the normal success case. The proxy resolver returns a single proxy.

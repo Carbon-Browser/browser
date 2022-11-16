@@ -19,9 +19,16 @@
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/extensions/api/bookmarks/bookmark_api_constants.h"
 #include "chrome/browser/extensions/api/bookmarks/bookmark_api_helpers.h"
+#include "chrome/browser/extensions/api/tabs/windows_util.h"
+#include "chrome/browser/extensions/chrome_extension_function_details.h"
+#include "chrome/browser/extensions/extension_tab_util.h"
 #include "chrome/browser/platform_util.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/bookmarks/bookmark_drag_drop.h"
+#include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/browser_commands.h"
+#include "chrome/browser/ui/browser_navigator.h"
+#include "chrome/browser/ui/window_sizer/window_sizer.h"
 #include "chrome/browser/undo/bookmark_undo_service_factory.h"
 #include "chrome/common/extensions/api/bookmark_manager_private.h"
 #include "chrome/common/extensions/extension_constants.h"
@@ -65,6 +72,8 @@ namespace Paste = api::bookmark_manager_private::Paste;
 namespace RemoveTrees = api::bookmark_manager_private::RemoveTrees;
 namespace SortChildren = api::bookmark_manager_private::SortChildren;
 namespace StartDrag = api::bookmark_manager_private::StartDrag;
+namespace OpenInNewTab = api::bookmark_manager_private::OpenInNewTab;
+namespace OpenInNewWindow = api::bookmark_manager_private::OpenInNewWindow;
 
 namespace {
 
@@ -188,7 +197,7 @@ BookmarkManagerPrivateEventRouter::~BookmarkManagerPrivateEventRouter() {
 void BookmarkManagerPrivateEventRouter::DispatchEvent(
     events::HistogramValue histogram_value,
     const std::string& event_name,
-    std::vector<base::Value> event_args) {
+    base::Value::List event_args) {
   EventRouter::Get(browser_context_)
       ->BroadcastEvent(std::make_unique<Event>(histogram_value, event_name,
                                                std::move(event_args)));
@@ -232,13 +241,13 @@ void BookmarkManagerPrivateAPI::OnListenerAdded(
 
 BookmarkManagerPrivateDragEventRouter::BookmarkManagerPrivateDragEventRouter(
     content::WebContents* web_contents)
-    : web_contents_(web_contents),
-      profile_(
-          Profile::FromBrowserContext(web_contents_->GetBrowserContext())) {
+    : content::WebContentsUserData<BookmarkManagerPrivateDragEventRouter>(
+          *web_contents),
+      profile_(Profile::FromBrowserContext(web_contents->GetBrowserContext())) {
   // We need to guarantee the BookmarkTabHelper is created.
-  BookmarkTabHelper::CreateForWebContents(web_contents_);
+  BookmarkTabHelper::CreateForWebContents(web_contents);
   BookmarkTabHelper* bookmark_tab_helper =
-      BookmarkTabHelper::FromWebContents(web_contents_);
+      BookmarkTabHelper::FromWebContents(web_contents);
   bookmark_tab_helper->set_bookmark_drag_delegate(this);
 }
 
@@ -251,7 +260,7 @@ BookmarkManagerPrivateDragEventRouter::
 void BookmarkManagerPrivateDragEventRouter::DispatchEvent(
     events::HistogramValue histogram_value,
     const std::string& event_name,
-    std::vector<base::Value> args) {
+    base::Value::List args) {
   EventRouter* event_router = EventRouter::Get(profile_);
   if (!event_router)
     return;
@@ -475,17 +484,18 @@ BookmarkManagerPrivateDropFunction::RunOnReady() {
 
   content::WebContents* web_contents = GetSenderWebContents();
   size_t drop_index;
-  if (params->index)
+  if (params->index) {
     drop_index = static_cast<size_t>(*params->index);
-  else
+    CHECK(drop_index >= 0 && drop_index <= drop_parent->children().size());
+  } else {
     drop_index = drop_parent->children().size();
+  }
 
   BookmarkManagerPrivateDragEventRouter* router =
       BookmarkManagerPrivateDragEventRouter::FromWebContents(web_contents);
 
-  DCHECK(router);
   const BookmarkNodeData* drag_data = router->GetBookmarkNodeData();
-  DCHECK_NE(nullptr, drag_data) << "Somehow we're dropping null bookmark data";
+  CHECK_NE(nullptr, drag_data) << "Somehow we're dropping null bookmark data";
   const bool copy = false;
   chrome::DropBookmarks(
       GetProfile(), *drag_data, drop_parent, drop_index, copy);
@@ -568,6 +578,89 @@ BookmarkManagerPrivateRedoFunction::RunOnReady() {
   return NoArguments();
 }
 
-WEB_CONTENTS_USER_DATA_KEY_IMPL(BookmarkManagerPrivateDragEventRouter)
+ExtensionFunction::ResponseValue
+BookmarkManagerPrivateOpenInNewTabFunction::RunOnReady() {
+  std::unique_ptr<OpenInNewTab::Params> params(
+      OpenInNewTab::Params::Create(args()));
+  if (!params)
+    return BadMessage();
+
+  std::string error;
+  const BookmarkNode* node = GetBookmarkNodeFromId(params->id, &error);
+  if (!node)
+    return Error(error);
+  if (!node->is_url())
+    return Error("Cannot open a folder in a new tab.");
+
+  ExtensionTabUtil::OpenTabParams options;
+  options.url = std::make_unique<std::string>(node->url().spec());
+  options.active = std::make_unique<bool>(params->active);
+
+  std::unique_ptr<base::DictionaryValue> result(
+      extensions::ExtensionTabUtil::OpenTab(this, options, user_gesture(),
+                                            &error));
+  if (!result)
+    return Error(error);
+
+  return NoArguments();
+}
+
+ExtensionFunction::ResponseValue
+BookmarkManagerPrivateOpenInNewWindowFunction::RunOnReady() {
+  std::unique_ptr<OpenInNewWindow::Params> params(
+      OpenInNewWindow::Params::Create(args()));
+  if (!params)
+    return BadMessage();
+
+  Profile* calling_profile = Profile::FromBrowserContext(browser_context());
+
+  BookmarkModel* model =
+      BookmarkModelFactory::GetForBrowserContext(calling_profile);
+  std::vector<const BookmarkNode*> nodes;
+  if (!GetNodesFromVector(model, params->id_list, &nodes)) {
+    return Error(bookmark_keys::kBookmarkNodesNotFoundFromIdListError,
+                 base::JoinString(params->id_list, ", "));
+  }
+
+  std::vector<GURL> urls;
+  urls.reserve(nodes.size());
+  for (const auto* node : nodes) {
+    if (!node->is_url())
+      return Error("Cannot open a folder in a new window.");
+    urls.push_back(node->url());
+  }
+
+  std::string error;
+  windows_util::IncognitoResult incognito_result =
+      windows_util::ShouldOpenIncognitoWindow(calling_profile,
+                                              params->incognito, &urls, &error);
+  if (incognito_result == windows_util::IncognitoResult::kError)
+    return Error(std::move(error));
+
+  DCHECK(!calling_profile->IsOffTheRecord());
+  Profile* window_profile =
+      incognito_result == windows_util::IncognitoResult::kIncognito
+          ? calling_profile->GetPrimaryOTRProfile(/*create_if_needed=*/true)
+          : calling_profile;
+
+  bool first_tab = true;
+  for (auto& url : urls) {
+    NavigateParams navigate_params(window_profile, url,
+                                   ui::PAGE_TRANSITION_LINK);
+    navigate_params.window_action = NavigateParams::WindowAction::SHOW_WINDOW;
+    navigate_params.disposition =
+        first_tab ? WindowOpenDisposition::NEW_WINDOW
+                  : WindowOpenDisposition::NEW_FOREGROUND_TAB;
+    if (params->incognito)
+      navigate_params.disposition = WindowOpenDisposition::OFF_THE_RECORD;
+    Navigate(&navigate_params);
+
+    first_tab = false;
+  }
+
+  return NoArguments();
+}
+
+WEB_CONTENTS_USER_DATA_KEY_IMPL(BookmarkManagerPrivateDragEventRouter);
 
 }  // namespace extensions

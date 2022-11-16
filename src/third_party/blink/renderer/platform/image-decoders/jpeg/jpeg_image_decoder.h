@@ -47,10 +47,10 @@ class PLATFORM_EXPORT JPEGImageDecoder final : public ImageDecoder {
   // ImageDecoder:
   String FilenameExtension() const override { return "jpg"; }
   void OnSetData(SegmentReader* data) override;
-  IntSize DecodedSize() const override { return decoded_size_; }
+  gfx::Size DecodedSize() const override { return decoded_size_; }
   bool SetSize(unsigned width, unsigned height) override;
   cc::YUVSubsampling GetYUVSubsampling() const override;
-  IntSize DecodedYUVSize(cc::YUVIndex) const override;
+  gfx::Size DecodedYUVSize(cc::YUVIndex) const override;
   wtf_size_t DecodedYUVWidthBytes(cc::YUVIndex) const override;
   void DecodeToYUV() override;
   SkYUVColorSpace GetYUVColorSpace() const override;
@@ -60,6 +60,9 @@ class PLATFORM_EXPORT JPEGImageDecoder final : public ImageDecoder {
 
   bool OutputScanlines();
   unsigned DesiredScaleNumerator() const;
+  static unsigned DesiredScaleNumerator(wtf_size_t max_decoded_bytes,
+                                        wtf_size_t original_bytes,
+                                        unsigned scale_denominator);
   bool ShouldGenerateAllSizes() const;
   void Complete();
 
@@ -67,7 +70,7 @@ class PLATFORM_EXPORT JPEGImageDecoder final : public ImageDecoder {
     orientation_ = orientation;
   }
 
-  void SetDensityCorrectedSize(const IntSize& size) {
+  void SetDensityCorrectedSize(const gfx::Size& size) {
     density_corrected_size_ = size;
   }
   void SetDecodedSize(unsigned width, unsigned height);
@@ -104,7 +107,7 @@ class PLATFORM_EXPORT JPEGImageDecoder final : public ImageDecoder {
 
   std::unique_ptr<JPEGImageReader> reader_;
   const wtf_size_t offset_;
-  IntSize decoded_size_;
+  gfx::Size decoded_size_;
   Vector<SkISize> supported_decode_sizes_;
 };
 

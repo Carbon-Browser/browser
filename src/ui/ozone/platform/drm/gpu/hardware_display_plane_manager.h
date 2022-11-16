@@ -8,15 +8,19 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <xf86drmMode.h>
+#include <cstdint>
+#include <map>
 #include <memory>
 #include <vector>
 
-#include "base/macros.h"
+#include "base/containers/flat_set.h"
+#include "base/trace_event/traced_value.h"
 #include "ui/display/types/gamma_ramp_rgb_entry.h"
 #include "ui/ozone/platform/drm/common/scoped_drm_types.h"
 #include "ui/ozone/platform/drm/gpu/crtc_commit_request.h"
 #include "ui/ozone/platform/drm/gpu/drm_device.h"
 #include "ui/ozone/platform/drm/gpu/drm_overlay_plane.h"
+#include "ui/ozone/public/hardware_capabilities.h"
 #include "ui/ozone/public/swap_completion_callback.h"
 
 namespace gfx {
@@ -53,6 +57,8 @@ struct HardwareDisplayPlaneList {
   std::vector<PageFlipInfo> legacy_page_flips;
 
   ScopedDrmAtomicReqPtr atomic_property_set;
+
+  void AsValueInto(base::trace_event::TracedValue* value) const;
 };
 
 class HardwareDisplayPlaneManager {
@@ -97,6 +103,11 @@ class HardwareDisplayPlaneManager {
   };
 
   explicit HardwareDisplayPlaneManager(DrmDevice* drm);
+
+  HardwareDisplayPlaneManager(const HardwareDisplayPlaneManager&) = delete;
+  HardwareDisplayPlaneManager& operator=(const HardwareDisplayPlaneManager&) =
+      delete;
+
   virtual ~HardwareDisplayPlaneManager();
 
   // This parses information from the drm driver, adding any new planes
@@ -162,6 +173,9 @@ class HardwareDisplayPlaneManager {
   virtual bool ValidatePrimarySize(const DrmOverlayPlane& primary,
                                    const drmModeModeInfo& mode) = 0;
 
+  // Get the set of CRTC IDs from a plane's possible CRTCs bitmap
+  base::flat_set<uint32_t> CrtcMaskToCrtcIds(uint32_t crtc_mask) const;
+
   const std::vector<std::unique_ptr<HardwareDisplayPlane>>& planes() const {
     return planes_;
   }
@@ -191,6 +205,11 @@ class HardwareDisplayPlaneManager {
   // HardwareDisplayPlaneManager and which should be taken care of by the
   // caller.
   void ResetModesetStateForCrtc(uint32_t crtc_id);
+
+  // Gets `HardwareCapabilities` based on planes available to the specified
+  // CRTC. num_overlay_capable_planes counts both `DRM_PLANE_TYPE_PRIMARY` and
+  // `DRM_PLANE_TYPE_OVERLAY` planes.
+  ui::HardwareCapabilities GetHardwareCapabilities(uint32_t crtc_id);
 
  protected:
   struct ConnectorProperties {
@@ -225,25 +244,25 @@ class HardwareDisplayPlaneManager {
   virtual std::unique_ptr<HardwareDisplayPlane> CreatePlane(uint32_t plane_id);
 
   // Finds the plane located at or after |*index| that is not in use and can
-  // be used with |crtc_index|.
+  // be used with |crtc_id|.
   HardwareDisplayPlane* FindNextUnusedPlane(
       size_t* index,
-      uint32_t crtc_index,
+      uint32_t crtc_id,
       const DrmOverlayPlane& overlay) const;
 
-  // Convert |crtc/connector_id| into an index, returning -1 if the ID couldn't
-  // be found.
-  int LookupCrtcIndex(uint32_t crtc_id) const;
-  int LookupConnectorIndex(uint32_t connector_id) const;
+  // Convert |crtc/connector_id| into an index, returning empty if the ID
+  // couldn't be found.
+  absl::optional<int> LookupCrtcIndex(uint32_t crtc_id) const;
+  absl::optional<int> LookupConnectorIndex(uint32_t connector_id) const;
 
   // Get Mutable CRTC State.
   CrtcState& CrtcStateForCrtcId(uint32_t crtc_id);
 
   // Returns true if |plane| can support |overlay| and compatible with
-  // |crtc_index|.
+  // |crtc_id|.
   virtual bool IsCompatible(HardwareDisplayPlane* plane,
                             const DrmOverlayPlane& overlay,
-                            uint32_t crtc_index) const;
+                            uint32_t crtc_id) const;
 
   // Resets |plane_list| setting all planes to unused.
   // Frees any temporary data structure in |plane_list| used for pageflipping.
@@ -270,8 +289,6 @@ class HardwareDisplayPlaneManager {
   std::vector<CrtcState> crtc_state_;
   std::vector<ConnectorProperties> connectors_props_;
   std::vector<uint32_t> supported_formats_;
-
-  DISALLOW_COPY_AND_ASSIGN(HardwareDisplayPlaneManager);
 };
 
 }  // namespace ui

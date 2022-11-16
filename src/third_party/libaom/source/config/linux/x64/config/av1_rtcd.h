@@ -82,6 +82,121 @@ typedef void (*cfl_predict_lbd_fn)(const int16_t* src,
 extern "C" {
 #endif
 
+void aom_comp_avg_upsampled_pred_c(MACROBLOCKD* xd,
+                                   const struct AV1Common* const cm,
+                                   int mi_row,
+                                   int mi_col,
+                                   const MV* const mv,
+                                   uint8_t* comp_pred,
+                                   const uint8_t* pred,
+                                   int width,
+                                   int height,
+                                   int subpel_x_q3,
+                                   int subpel_y_q3,
+                                   const uint8_t* ref,
+                                   int ref_stride,
+                                   int subpel_search);
+void aom_comp_avg_upsampled_pred_sse2(MACROBLOCKD* xd,
+                                      const struct AV1Common* const cm,
+                                      int mi_row,
+                                      int mi_col,
+                                      const MV* const mv,
+                                      uint8_t* comp_pred,
+                                      const uint8_t* pred,
+                                      int width,
+                                      int height,
+                                      int subpel_x_q3,
+                                      int subpel_y_q3,
+                                      const uint8_t* ref,
+                                      int ref_stride,
+                                      int subpel_search);
+#define aom_comp_avg_upsampled_pred aom_comp_avg_upsampled_pred_sse2
+
+void aom_comp_mask_upsampled_pred_c(MACROBLOCKD* xd,
+                                    const struct AV1Common* const cm,
+                                    int mi_row,
+                                    int mi_col,
+                                    const MV* const mv,
+                                    uint8_t* comp_pred,
+                                    const uint8_t* pred,
+                                    int width,
+                                    int height,
+                                    int subpel_x_q3,
+                                    int subpel_y_q3,
+                                    const uint8_t* ref,
+                                    int ref_stride,
+                                    const uint8_t* mask,
+                                    int mask_stride,
+                                    int invert_mask,
+                                    int subpel_search);
+void aom_comp_mask_upsampled_pred_sse2(MACROBLOCKD* xd,
+                                       const struct AV1Common* const cm,
+                                       int mi_row,
+                                       int mi_col,
+                                       const MV* const mv,
+                                       uint8_t* comp_pred,
+                                       const uint8_t* pred,
+                                       int width,
+                                       int height,
+                                       int subpel_x_q3,
+                                       int subpel_y_q3,
+                                       const uint8_t* ref,
+                                       int ref_stride,
+                                       const uint8_t* mask,
+                                       int mask_stride,
+                                       int invert_mask,
+                                       int subpel_search);
+#define aom_comp_mask_upsampled_pred aom_comp_mask_upsampled_pred_sse2
+
+void aom_dist_wtd_comp_avg_upsampled_pred_c(
+    MACROBLOCKD* xd,
+    const struct AV1Common* const cm,
+    int mi_row,
+    int mi_col,
+    const MV* const mv,
+    uint8_t* comp_pred,
+    const uint8_t* pred,
+    int width,
+    int height,
+    int subpel_x_q3,
+    int subpel_y_q3,
+    const uint8_t* ref,
+    int ref_stride,
+    const DIST_WTD_COMP_PARAMS* jcp_param,
+    int subpel_search);
+void aom_dist_wtd_comp_avg_upsampled_pred_ssse3(
+    MACROBLOCKD* xd,
+    const struct AV1Common* const cm,
+    int mi_row,
+    int mi_col,
+    const MV* const mv,
+    uint8_t* comp_pred,
+    const uint8_t* pred,
+    int width,
+    int height,
+    int subpel_x_q3,
+    int subpel_y_q3,
+    const uint8_t* ref,
+    int ref_stride,
+    const DIST_WTD_COMP_PARAMS* jcp_param,
+    int subpel_search);
+RTCD_EXTERN void (*aom_dist_wtd_comp_avg_upsampled_pred)(
+    MACROBLOCKD* xd,
+    const struct AV1Common* const cm,
+    int mi_row,
+    int mi_col,
+    const MV* const mv,
+    uint8_t* comp_pred,
+    const uint8_t* pred,
+    int width,
+    int height,
+    int subpel_x_q3,
+    int subpel_y_q3,
+    const uint8_t* ref,
+    int ref_stride,
+    const DIST_WTD_COMP_PARAMS* jcp_param,
+    int subpel_search);
+
 void aom_quantize_b_helper_c(const tran_low_t* coeff_ptr,
                              intptr_t n_coeffs,
                              const int16_t* zbin_ptr,
@@ -98,6 +213,79 @@ void aom_quantize_b_helper_c(const tran_low_t* coeff_ptr,
                              const qm_val_t* iqm_ptr,
                              const int log_scale);
 #define aom_quantize_b_helper aom_quantize_b_helper_c
+
+void aom_upsampled_pred_c(MACROBLOCKD* xd,
+                          const struct AV1Common* const cm,
+                          int mi_row,
+                          int mi_col,
+                          const MV* const mv,
+                          uint8_t* comp_pred,
+                          int width,
+                          int height,
+                          int subpel_x_q3,
+                          int subpel_y_q3,
+                          const uint8_t* ref,
+                          int ref_stride,
+                          int subpel_search);
+void aom_upsampled_pred_sse2(MACROBLOCKD* xd,
+                             const struct AV1Common* const cm,
+                             int mi_row,
+                             int mi_col,
+                             const MV* const mv,
+                             uint8_t* comp_pred,
+                             int width,
+                             int height,
+                             int subpel_x_q3,
+                             int subpel_y_q3,
+                             const uint8_t* ref,
+                             int ref_stride,
+                             int subpel_search);
+#define aom_upsampled_pred aom_upsampled_pred_sse2
+
+void av1_apply_selfguided_restoration_c(const uint8_t* dat,
+                                        int width,
+                                        int height,
+                                        int stride,
+                                        int eps,
+                                        const int* xqd,
+                                        uint8_t* dst,
+                                        int dst_stride,
+                                        int32_t* tmpbuf,
+                                        int bit_depth,
+                                        int highbd);
+void av1_apply_selfguided_restoration_sse4_1(const uint8_t* dat,
+                                             int width,
+                                             int height,
+                                             int stride,
+                                             int eps,
+                                             const int* xqd,
+                                             uint8_t* dst,
+                                             int dst_stride,
+                                             int32_t* tmpbuf,
+                                             int bit_depth,
+                                             int highbd);
+void av1_apply_selfguided_restoration_avx2(const uint8_t* dat,
+                                           int width,
+                                           int height,
+                                           int stride,
+                                           int eps,
+                                           const int* xqd,
+                                           uint8_t* dst,
+                                           int dst_stride,
+                                           int32_t* tmpbuf,
+                                           int bit_depth,
+                                           int highbd);
+RTCD_EXTERN void (*av1_apply_selfguided_restoration)(const uint8_t* dat,
+                                                     int width,
+                                                     int height,
+                                                     int stride,
+                                                     int eps,
+                                                     const int* xqd,
+                                                     uint8_t* dst,
+                                                     int dst_stride,
+                                                     int32_t* tmpbuf,
+                                                     int bit_depth,
+                                                     int highbd);
 
 int64_t av1_block_error_c(const tran_low_t* coeff,
                           const tran_low_t* dqcoeff,
@@ -119,6 +307,9 @@ RTCD_EXTERN int64_t (*av1_block_error)(const tran_low_t* coeff,
 int64_t av1_block_error_lp_c(const int16_t* coeff,
                              const int16_t* dqcoeff,
                              intptr_t block_size);
+int64_t av1_block_error_lp_sse2(const int16_t* coeff,
+                                const int16_t* dqcoeff,
+                                intptr_t block_size);
 int64_t av1_block_error_lp_avx2(const int16_t* coeff,
                                 const int16_t* dqcoeff,
                                 intptr_t block_size);
@@ -201,43 +392,30 @@ RTCD_EXTERN void (*av1_build_compound_diffwtd_mask_d16)(
     ConvolveParams* conv_params,
     int bd);
 
-void av1_build_compound_diffwtd_mask_highbd_c(uint8_t* mask,
-                                              DIFFWTD_MASK_TYPE mask_type,
-                                              const uint8_t* src0,
-                                              int src0_stride,
-                                              const uint8_t* src1,
-                                              int src1_stride,
-                                              int h,
-                                              int w,
-                                              int bd);
-void av1_build_compound_diffwtd_mask_highbd_ssse3(uint8_t* mask,
-                                                  DIFFWTD_MASK_TYPE mask_type,
-                                                  const uint8_t* src0,
-                                                  int src0_stride,
-                                                  const uint8_t* src1,
-                                                  int src1_stride,
-                                                  int h,
-                                                  int w,
-                                                  int bd);
-void av1_build_compound_diffwtd_mask_highbd_avx2(uint8_t* mask,
-                                                 DIFFWTD_MASK_TYPE mask_type,
-                                                 const uint8_t* src0,
-                                                 int src0_stride,
-                                                 const uint8_t* src1,
-                                                 int src1_stride,
-                                                 int h,
-                                                 int w,
-                                                 int bd);
-RTCD_EXTERN void (*av1_build_compound_diffwtd_mask_highbd)(
-    uint8_t* mask,
-    DIFFWTD_MASK_TYPE mask_type,
-    const uint8_t* src0,
-    int src0_stride,
-    const uint8_t* src1,
-    int src1_stride,
-    int h,
-    int w,
-    int bd);
+int64_t av1_calc_frame_error_c(const uint8_t* const ref,
+                               int stride,
+                               const uint8_t* const dst,
+                               int p_width,
+                               int p_height,
+                               int p_stride);
+int64_t av1_calc_frame_error_sse2(const uint8_t* const ref,
+                                  int stride,
+                                  const uint8_t* const dst,
+                                  int p_width,
+                                  int p_height,
+                                  int p_stride);
+int64_t av1_calc_frame_error_avx2(const uint8_t* const ref,
+                                  int stride,
+                                  const uint8_t* const dst,
+                                  int p_width,
+                                  int p_height,
+                                  int p_stride);
+RTCD_EXTERN int64_t (*av1_calc_frame_error)(const uint8_t* const ref,
+                                            int stride,
+                                            const uint8_t* const dst,
+                                            int p_width,
+                                            int p_height,
+                                            int p_stride);
 
 void av1_calc_indices_dim1_c(const int* data,
                              const int* centroids,
@@ -685,6 +863,15 @@ void av1_dr_prediction_z1_c(uint8_t* dst,
                             int upsample_above,
                             int dx,
                             int dy);
+void av1_dr_prediction_z1_sse4_1(uint8_t* dst,
+                                 ptrdiff_t stride,
+                                 int bw,
+                                 int bh,
+                                 const uint8_t* above,
+                                 const uint8_t* left,
+                                 int upsample_above,
+                                 int dx,
+                                 int dy);
 void av1_dr_prediction_z1_avx2(uint8_t* dst,
                                ptrdiff_t stride,
                                int bw,
@@ -714,6 +901,16 @@ void av1_dr_prediction_z2_c(uint8_t* dst,
                             int upsample_left,
                             int dx,
                             int dy);
+void av1_dr_prediction_z2_sse4_1(uint8_t* dst,
+                                 ptrdiff_t stride,
+                                 int bw,
+                                 int bh,
+                                 const uint8_t* above,
+                                 const uint8_t* left,
+                                 int upsample_above,
+                                 int upsample_left,
+                                 int dx,
+                                 int dy);
 void av1_dr_prediction_z2_avx2(uint8_t* dst,
                                ptrdiff_t stride,
                                int bw,
@@ -744,6 +941,15 @@ void av1_dr_prediction_z3_c(uint8_t* dst,
                             int upsample_left,
                             int dx,
                             int dy);
+void av1_dr_prediction_z3_sse4_1(uint8_t* dst,
+                                 ptrdiff_t stride,
+                                 int bw,
+                                 int bh,
+                                 const uint8_t* above,
+                                 const uint8_t* left,
+                                 int upsample_left,
+                                 int dx,
+                                 int dy);
 void av1_dr_prediction_z3_avx2(uint8_t* dst,
                                ptrdiff_t stride,
                                int bw,
@@ -1100,104 +1306,6 @@ void av1_get_nz_map_contexts_sse2(const uint8_t* const levels,
                                   const TX_CLASS tx_class,
                                   int8_t* const coeff_contexts);
 #define av1_get_nz_map_contexts av1_get_nz_map_contexts_sse2
-
-void av1_highbd_convolve8_c(const uint8_t* src,
-                            ptrdiff_t src_stride,
-                            uint8_t* dst,
-                            ptrdiff_t dst_stride,
-                            const int16_t* filter_x,
-                            int x_step_q4,
-                            const int16_t* filter_y,
-                            int y_step_q4,
-                            int w,
-                            int h,
-                            int bps);
-void av1_highbd_convolve8_sse2(const uint8_t* src,
-                               ptrdiff_t src_stride,
-                               uint8_t* dst,
-                               ptrdiff_t dst_stride,
-                               const int16_t* filter_x,
-                               int x_step_q4,
-                               const int16_t* filter_y,
-                               int y_step_q4,
-                               int w,
-                               int h,
-                               int bps);
-#define av1_highbd_convolve8 av1_highbd_convolve8_sse2
-
-void av1_highbd_convolve8_horiz_c(const uint8_t* src,
-                                  ptrdiff_t src_stride,
-                                  uint8_t* dst,
-                                  ptrdiff_t dst_stride,
-                                  const int16_t* filter_x,
-                                  int x_step_q4,
-                                  const int16_t* filter_y,
-                                  int y_step_q4,
-                                  int w,
-                                  int h,
-                                  int bps);
-void av1_highbd_convolve8_horiz_sse2(const uint8_t* src,
-                                     ptrdiff_t src_stride,
-                                     uint8_t* dst,
-                                     ptrdiff_t dst_stride,
-                                     const int16_t* filter_x,
-                                     int x_step_q4,
-                                     const int16_t* filter_y,
-                                     int y_step_q4,
-                                     int w,
-                                     int h,
-                                     int bps);
-#define av1_highbd_convolve8_horiz av1_highbd_convolve8_horiz_sse2
-
-void av1_highbd_convolve8_vert_c(const uint8_t* src,
-                                 ptrdiff_t src_stride,
-                                 uint8_t* dst,
-                                 ptrdiff_t dst_stride,
-                                 const int16_t* filter_x,
-                                 int x_step_q4,
-                                 const int16_t* filter_y,
-                                 int y_step_q4,
-                                 int w,
-                                 int h,
-                                 int bps);
-void av1_highbd_convolve8_vert_sse2(const uint8_t* src,
-                                    ptrdiff_t src_stride,
-                                    uint8_t* dst,
-                                    ptrdiff_t dst_stride,
-                                    const int16_t* filter_x,
-                                    int x_step_q4,
-                                    const int16_t* filter_y,
-                                    int y_step_q4,
-                                    int w,
-                                    int h,
-                                    int bps);
-#define av1_highbd_convolve8_vert av1_highbd_convolve8_vert_sse2
-
-void av1_highbd_convolve_avg_c(const uint8_t* src,
-                               ptrdiff_t src_stride,
-                               uint8_t* dst,
-                               ptrdiff_t dst_stride,
-                               const int16_t* filter_x,
-                               int x_step_q4,
-                               const int16_t* filter_y,
-                               int y_step_q4,
-                               int w,
-                               int h,
-                               int bps);
-#define av1_highbd_convolve_avg av1_highbd_convolve_avg_c
-
-void av1_highbd_convolve_copy_c(const uint8_t* src,
-                                ptrdiff_t src_stride,
-                                uint8_t* dst,
-                                ptrdiff_t dst_stride,
-                                const int16_t* filter_x,
-                                int x_step_q4,
-                                const int16_t* filter_y,
-                                int y_step_q4,
-                                int w,
-                                int h,
-                                int bps);
-#define av1_highbd_convolve_copy av1_highbd_convolve_copy_c
 
 void av1_highbd_fwht4x4_c(const int16_t* input, tran_low_t* output, int stride);
 void av1_highbd_fwht4x4_sse4_1(const int16_t* input,
@@ -1748,7 +1856,18 @@ void av1_quantize_lp_c(const int16_t* coeff_ptr,
                        int16_t* dqcoeff_ptr,
                        const int16_t* dequant_ptr,
                        uint16_t* eob_ptr,
-                       const int16_t* scan);
+                       const int16_t* scan,
+                       const int16_t* iscan);
+void av1_quantize_lp_sse2(const int16_t* coeff_ptr,
+                          intptr_t n_coeffs,
+                          const int16_t* round_ptr,
+                          const int16_t* quant_ptr,
+                          int16_t* qcoeff_ptr,
+                          int16_t* dqcoeff_ptr,
+                          const int16_t* dequant_ptr,
+                          uint16_t* eob_ptr,
+                          const int16_t* scan,
+                          const int16_t* iscan);
 void av1_quantize_lp_avx2(const int16_t* coeff_ptr,
                           intptr_t n_coeffs,
                           const int16_t* round_ptr,
@@ -1757,7 +1876,8 @@ void av1_quantize_lp_avx2(const int16_t* coeff_ptr,
                           int16_t* dqcoeff_ptr,
                           const int16_t* dequant_ptr,
                           uint16_t* eob_ptr,
-                          const int16_t* scan);
+                          const int16_t* scan,
+                          const int16_t* iscan);
 RTCD_EXTERN void (*av1_quantize_lp)(const int16_t* coeff_ptr,
                                     intptr_t n_coeffs,
                                     const int16_t* round_ptr,
@@ -1766,7 +1886,8 @@ RTCD_EXTERN void (*av1_quantize_lp)(const int16_t* coeff_ptr,
                                     int16_t* dqcoeff_ptr,
                                     const int16_t* dequant_ptr,
                                     uint16_t* eob_ptr,
-                                    const int16_t* scan);
+                                    const int16_t* scan,
+                                    const int16_t* iscan);
 
 void av1_resize_and_extend_frame_c(const YV12_BUFFER_CONFIG* src,
                                    YV12_BUFFER_CONFIG* dst,
@@ -1787,6 +1908,47 @@ RTCD_EXTERN void (*av1_resize_and_extend_frame)(const YV12_BUFFER_CONFIG* src,
 void av1_round_shift_array_c(int32_t* arr, int size, int bit);
 void av1_round_shift_array_sse4_1(int32_t* arr, int size, int bit);
 RTCD_EXTERN void (*av1_round_shift_array)(int32_t* arr, int size, int bit);
+
+int av1_selfguided_restoration_c(const uint8_t* dgd8,
+                                 int width,
+                                 int height,
+                                 int dgd_stride,
+                                 int32_t* flt0,
+                                 int32_t* flt1,
+                                 int flt_stride,
+                                 int sgr_params_idx,
+                                 int bit_depth,
+                                 int highbd);
+int av1_selfguided_restoration_sse4_1(const uint8_t* dgd8,
+                                      int width,
+                                      int height,
+                                      int dgd_stride,
+                                      int32_t* flt0,
+                                      int32_t* flt1,
+                                      int flt_stride,
+                                      int sgr_params_idx,
+                                      int bit_depth,
+                                      int highbd);
+int av1_selfguided_restoration_avx2(const uint8_t* dgd8,
+                                    int width,
+                                    int height,
+                                    int dgd_stride,
+                                    int32_t* flt0,
+                                    int32_t* flt1,
+                                    int flt_stride,
+                                    int sgr_params_idx,
+                                    int bit_depth,
+                                    int highbd);
+RTCD_EXTERN int (*av1_selfguided_restoration)(const uint8_t* dgd8,
+                                              int width,
+                                              int height,
+                                              int dgd_stride,
+                                              int32_t* flt0,
+                                              int32_t* flt1,
+                                              int flt_stride,
+                                              int sgr_params_idx,
+                                              int bit_depth,
+                                              int highbd);
 
 void av1_txb_init_levels_c(const tran_low_t* const coeff,
                            const int width,
@@ -1812,6 +1974,79 @@ RTCD_EXTERN void (*av1_upsample_intra_edge)(uint8_t* p, int sz);
 void av1_upsample_intra_edge_high_c(uint16_t* p, int sz, int bd);
 void av1_upsample_intra_edge_high_sse4_1(uint16_t* p, int sz, int bd);
 RTCD_EXTERN void (*av1_upsample_intra_edge_high)(uint16_t* p, int sz, int bd);
+
+void av1_warp_affine_c(const int32_t* mat,
+                       const uint8_t* ref,
+                       int width,
+                       int height,
+                       int stride,
+                       uint8_t* pred,
+                       int p_col,
+                       int p_row,
+                       int p_width,
+                       int p_height,
+                       int p_stride,
+                       int subsampling_x,
+                       int subsampling_y,
+                       ConvolveParams* conv_params,
+                       int16_t alpha,
+                       int16_t beta,
+                       int16_t gamma,
+                       int16_t delta);
+void av1_warp_affine_sse4_1(const int32_t* mat,
+                            const uint8_t* ref,
+                            int width,
+                            int height,
+                            int stride,
+                            uint8_t* pred,
+                            int p_col,
+                            int p_row,
+                            int p_width,
+                            int p_height,
+                            int p_stride,
+                            int subsampling_x,
+                            int subsampling_y,
+                            ConvolveParams* conv_params,
+                            int16_t alpha,
+                            int16_t beta,
+                            int16_t gamma,
+                            int16_t delta);
+void av1_warp_affine_avx2(const int32_t* mat,
+                          const uint8_t* ref,
+                          int width,
+                          int height,
+                          int stride,
+                          uint8_t* pred,
+                          int p_col,
+                          int p_row,
+                          int p_width,
+                          int p_height,
+                          int p_stride,
+                          int subsampling_x,
+                          int subsampling_y,
+                          ConvolveParams* conv_params,
+                          int16_t alpha,
+                          int16_t beta,
+                          int16_t gamma,
+                          int16_t delta);
+RTCD_EXTERN void (*av1_warp_affine)(const int32_t* mat,
+                                    const uint8_t* ref,
+                                    int width,
+                                    int height,
+                                    int stride,
+                                    uint8_t* pred,
+                                    int p_col,
+                                    int p_row,
+                                    int p_width,
+                                    int p_height,
+                                    int p_stride,
+                                    int subsampling_x,
+                                    int subsampling_y,
+                                    ConvolveParams* conv_params,
+                                    int16_t alpha,
+                                    int16_t beta,
+                                    int16_t gamma,
+                                    int16_t delta);
 
 void av1_wedge_compute_delta_squares_c(int16_t* d,
                                        const int16_t* a,
@@ -1984,19 +2219,29 @@ RTCD_EXTERN void (*cdef_copy_rect8_8bit_to_16bit)(uint16_t* dst,
                                                   int v,
                                                   int h);
 
-void cdef_filter_block_c(uint8_t* dst8,
-                         uint16_t* dst16,
-                         int dstride,
-                         const uint16_t* in,
-                         int pri_strength,
-                         int sec_strength,
-                         int dir,
-                         int pri_damping,
-                         int sec_damping,
-                         int bsize,
-                         int coeff_shift);
-void cdef_filter_block_sse2(uint8_t* dst8,
-                            uint16_t* dst16,
+void cdef_filter_16_0_c(void* dst16,
+                        int dstride,
+                        const uint16_t* in,
+                        int pri_strength,
+                        int sec_strength,
+                        int dir,
+                        int pri_damping,
+                        int sec_damping,
+                        int coeff_shift,
+                        int block_width,
+                        int block_height);
+void cdef_filter_16_0_sse2(void* dst16,
+                           int dstride,
+                           const uint16_t* in,
+                           int pri_strength,
+                           int sec_strength,
+                           int dir,
+                           int pri_damping,
+                           int sec_damping,
+                           int coeff_shift,
+                           int block_width,
+                           int block_height);
+void cdef_filter_16_0_ssse3(void* dst16,
                             int dstride,
                             const uint16_t* in,
                             int pri_strength,
@@ -2004,10 +2249,10 @@ void cdef_filter_block_sse2(uint8_t* dst8,
                             int dir,
                             int pri_damping,
                             int sec_damping,
-                            int bsize,
-                            int coeff_shift);
-void cdef_filter_block_ssse3(uint8_t* dst8,
-                             uint16_t* dst16,
+                            int coeff_shift,
+                            int block_width,
+                            int block_height);
+void cdef_filter_16_0_sse4_1(void* dst16,
                              int dstride,
                              const uint16_t* in,
                              int pri_strength,
@@ -2015,21 +2260,55 @@ void cdef_filter_block_ssse3(uint8_t* dst8,
                              int dir,
                              int pri_damping,
                              int sec_damping,
-                             int bsize,
-                             int coeff_shift);
-void cdef_filter_block_sse4_1(uint8_t* dst8,
-                              uint16_t* dst16,
-                              int dstride,
-                              const uint16_t* in,
-                              int pri_strength,
-                              int sec_strength,
-                              int dir,
-                              int pri_damping,
-                              int sec_damping,
-                              int bsize,
-                              int coeff_shift);
-void cdef_filter_block_avx2(uint8_t* dst8,
-                            uint16_t* dst16,
+                             int coeff_shift,
+                             int block_width,
+                             int block_height);
+void cdef_filter_16_0_avx2(void* dst16,
+                           int dstride,
+                           const uint16_t* in,
+                           int pri_strength,
+                           int sec_strength,
+                           int dir,
+                           int pri_damping,
+                           int sec_damping,
+                           int coeff_shift,
+                           int block_width,
+                           int block_height);
+RTCD_EXTERN void (*cdef_filter_16_0)(void* dst16,
+                                     int dstride,
+                                     const uint16_t* in,
+                                     int pri_strength,
+                                     int sec_strength,
+                                     int dir,
+                                     int pri_damping,
+                                     int sec_damping,
+                                     int coeff_shift,
+                                     int block_width,
+                                     int block_height);
+
+void cdef_filter_16_1_c(void* dst16,
+                        int dstride,
+                        const uint16_t* in,
+                        int pri_strength,
+                        int sec_strength,
+                        int dir,
+                        int pri_damping,
+                        int sec_damping,
+                        int coeff_shift,
+                        int block_width,
+                        int block_height);
+void cdef_filter_16_1_sse2(void* dst16,
+                           int dstride,
+                           const uint16_t* in,
+                           int pri_strength,
+                           int sec_strength,
+                           int dir,
+                           int pri_damping,
+                           int sec_damping,
+                           int coeff_shift,
+                           int block_width,
+                           int block_height);
+void cdef_filter_16_1_ssse3(void* dst16,
                             int dstride,
                             const uint16_t* in,
                             int pri_strength,
@@ -2037,19 +2316,444 @@ void cdef_filter_block_avx2(uint8_t* dst8,
                             int dir,
                             int pri_damping,
                             int sec_damping,
-                            int bsize,
-                            int coeff_shift);
-RTCD_EXTERN void (*cdef_filter_block)(uint8_t* dst8,
-                                      uint16_t* dst16,
-                                      int dstride,
-                                      const uint16_t* in,
-                                      int pri_strength,
-                                      int sec_strength,
-                                      int dir,
-                                      int pri_damping,
-                                      int sec_damping,
-                                      int bsize,
-                                      int coeff_shift);
+                            int coeff_shift,
+                            int block_width,
+                            int block_height);
+void cdef_filter_16_1_sse4_1(void* dst16,
+                             int dstride,
+                             const uint16_t* in,
+                             int pri_strength,
+                             int sec_strength,
+                             int dir,
+                             int pri_damping,
+                             int sec_damping,
+                             int coeff_shift,
+                             int block_width,
+                             int block_height);
+void cdef_filter_16_1_avx2(void* dst16,
+                           int dstride,
+                           const uint16_t* in,
+                           int pri_strength,
+                           int sec_strength,
+                           int dir,
+                           int pri_damping,
+                           int sec_damping,
+                           int coeff_shift,
+                           int block_width,
+                           int block_height);
+RTCD_EXTERN void (*cdef_filter_16_1)(void* dst16,
+                                     int dstride,
+                                     const uint16_t* in,
+                                     int pri_strength,
+                                     int sec_strength,
+                                     int dir,
+                                     int pri_damping,
+                                     int sec_damping,
+                                     int coeff_shift,
+                                     int block_width,
+                                     int block_height);
+
+void cdef_filter_16_2_c(void* dst16,
+                        int dstride,
+                        const uint16_t* in,
+                        int pri_strength,
+                        int sec_strength,
+                        int dir,
+                        int pri_damping,
+                        int sec_damping,
+                        int coeff_shift,
+                        int block_width,
+                        int block_height);
+void cdef_filter_16_2_sse2(void* dst16,
+                           int dstride,
+                           const uint16_t* in,
+                           int pri_strength,
+                           int sec_strength,
+                           int dir,
+                           int pri_damping,
+                           int sec_damping,
+                           int coeff_shift,
+                           int block_width,
+                           int block_height);
+void cdef_filter_16_2_ssse3(void* dst16,
+                            int dstride,
+                            const uint16_t* in,
+                            int pri_strength,
+                            int sec_strength,
+                            int dir,
+                            int pri_damping,
+                            int sec_damping,
+                            int coeff_shift,
+                            int block_width,
+                            int block_height);
+void cdef_filter_16_2_sse4_1(void* dst16,
+                             int dstride,
+                             const uint16_t* in,
+                             int pri_strength,
+                             int sec_strength,
+                             int dir,
+                             int pri_damping,
+                             int sec_damping,
+                             int coeff_shift,
+                             int block_width,
+                             int block_height);
+void cdef_filter_16_2_avx2(void* dst16,
+                           int dstride,
+                           const uint16_t* in,
+                           int pri_strength,
+                           int sec_strength,
+                           int dir,
+                           int pri_damping,
+                           int sec_damping,
+                           int coeff_shift,
+                           int block_width,
+                           int block_height);
+RTCD_EXTERN void (*cdef_filter_16_2)(void* dst16,
+                                     int dstride,
+                                     const uint16_t* in,
+                                     int pri_strength,
+                                     int sec_strength,
+                                     int dir,
+                                     int pri_damping,
+                                     int sec_damping,
+                                     int coeff_shift,
+                                     int block_width,
+                                     int block_height);
+
+void cdef_filter_16_3_c(void* dst16,
+                        int dstride,
+                        const uint16_t* in,
+                        int pri_strength,
+                        int sec_strength,
+                        int dir,
+                        int pri_damping,
+                        int sec_damping,
+                        int coeff_shift,
+                        int block_width,
+                        int block_height);
+void cdef_filter_16_3_sse2(void* dst16,
+                           int dstride,
+                           const uint16_t* in,
+                           int pri_strength,
+                           int sec_strength,
+                           int dir,
+                           int pri_damping,
+                           int sec_damping,
+                           int coeff_shift,
+                           int block_width,
+                           int block_height);
+void cdef_filter_16_3_ssse3(void* dst16,
+                            int dstride,
+                            const uint16_t* in,
+                            int pri_strength,
+                            int sec_strength,
+                            int dir,
+                            int pri_damping,
+                            int sec_damping,
+                            int coeff_shift,
+                            int block_width,
+                            int block_height);
+void cdef_filter_16_3_sse4_1(void* dst16,
+                             int dstride,
+                             const uint16_t* in,
+                             int pri_strength,
+                             int sec_strength,
+                             int dir,
+                             int pri_damping,
+                             int sec_damping,
+                             int coeff_shift,
+                             int block_width,
+                             int block_height);
+void cdef_filter_16_3_avx2(void* dst16,
+                           int dstride,
+                           const uint16_t* in,
+                           int pri_strength,
+                           int sec_strength,
+                           int dir,
+                           int pri_damping,
+                           int sec_damping,
+                           int coeff_shift,
+                           int block_width,
+                           int block_height);
+RTCD_EXTERN void (*cdef_filter_16_3)(void* dst16,
+                                     int dstride,
+                                     const uint16_t* in,
+                                     int pri_strength,
+                                     int sec_strength,
+                                     int dir,
+                                     int pri_damping,
+                                     int sec_damping,
+                                     int coeff_shift,
+                                     int block_width,
+                                     int block_height);
+
+void cdef_filter_8_0_c(void* dst8,
+                       int dstride,
+                       const uint16_t* in,
+                       int pri_strength,
+                       int sec_strength,
+                       int dir,
+                       int pri_damping,
+                       int sec_damping,
+                       int coeff_shift,
+                       int block_width,
+                       int block_height);
+void cdef_filter_8_0_sse2(void* dst8,
+                          int dstride,
+                          const uint16_t* in,
+                          int pri_strength,
+                          int sec_strength,
+                          int dir,
+                          int pri_damping,
+                          int sec_damping,
+                          int coeff_shift,
+                          int block_width,
+                          int block_height);
+void cdef_filter_8_0_ssse3(void* dst8,
+                           int dstride,
+                           const uint16_t* in,
+                           int pri_strength,
+                           int sec_strength,
+                           int dir,
+                           int pri_damping,
+                           int sec_damping,
+                           int coeff_shift,
+                           int block_width,
+                           int block_height);
+void cdef_filter_8_0_sse4_1(void* dst8,
+                            int dstride,
+                            const uint16_t* in,
+                            int pri_strength,
+                            int sec_strength,
+                            int dir,
+                            int pri_damping,
+                            int sec_damping,
+                            int coeff_shift,
+                            int block_width,
+                            int block_height);
+void cdef_filter_8_0_avx2(void* dst8,
+                          int dstride,
+                          const uint16_t* in,
+                          int pri_strength,
+                          int sec_strength,
+                          int dir,
+                          int pri_damping,
+                          int sec_damping,
+                          int coeff_shift,
+                          int block_width,
+                          int block_height);
+RTCD_EXTERN void (*cdef_filter_8_0)(void* dst8,
+                                    int dstride,
+                                    const uint16_t* in,
+                                    int pri_strength,
+                                    int sec_strength,
+                                    int dir,
+                                    int pri_damping,
+                                    int sec_damping,
+                                    int coeff_shift,
+                                    int block_width,
+                                    int block_height);
+
+void cdef_filter_8_1_c(void* dst8,
+                       int dstride,
+                       const uint16_t* in,
+                       int pri_strength,
+                       int sec_strength,
+                       int dir,
+                       int pri_damping,
+                       int sec_damping,
+                       int coeff_shift,
+                       int block_width,
+                       int block_height);
+void cdef_filter_8_1_sse2(void* dst8,
+                          int dstride,
+                          const uint16_t* in,
+                          int pri_strength,
+                          int sec_strength,
+                          int dir,
+                          int pri_damping,
+                          int sec_damping,
+                          int coeff_shift,
+                          int block_width,
+                          int block_height);
+void cdef_filter_8_1_ssse3(void* dst8,
+                           int dstride,
+                           const uint16_t* in,
+                           int pri_strength,
+                           int sec_strength,
+                           int dir,
+                           int pri_damping,
+                           int sec_damping,
+                           int coeff_shift,
+                           int block_width,
+                           int block_height);
+void cdef_filter_8_1_sse4_1(void* dst8,
+                            int dstride,
+                            const uint16_t* in,
+                            int pri_strength,
+                            int sec_strength,
+                            int dir,
+                            int pri_damping,
+                            int sec_damping,
+                            int coeff_shift,
+                            int block_width,
+                            int block_height);
+void cdef_filter_8_1_avx2(void* dst8,
+                          int dstride,
+                          const uint16_t* in,
+                          int pri_strength,
+                          int sec_strength,
+                          int dir,
+                          int pri_damping,
+                          int sec_damping,
+                          int coeff_shift,
+                          int block_width,
+                          int block_height);
+RTCD_EXTERN void (*cdef_filter_8_1)(void* dst8,
+                                    int dstride,
+                                    const uint16_t* in,
+                                    int pri_strength,
+                                    int sec_strength,
+                                    int dir,
+                                    int pri_damping,
+                                    int sec_damping,
+                                    int coeff_shift,
+                                    int block_width,
+                                    int block_height);
+
+void cdef_filter_8_2_c(void* dst8,
+                       int dstride,
+                       const uint16_t* in,
+                       int pri_strength,
+                       int sec_strength,
+                       int dir,
+                       int pri_damping,
+                       int sec_damping,
+                       int coeff_shift,
+                       int block_width,
+                       int block_height);
+void cdef_filter_8_2_sse2(void* dst8,
+                          int dstride,
+                          const uint16_t* in,
+                          int pri_strength,
+                          int sec_strength,
+                          int dir,
+                          int pri_damping,
+                          int sec_damping,
+                          int coeff_shift,
+                          int block_width,
+                          int block_height);
+void cdef_filter_8_2_ssse3(void* dst8,
+                           int dstride,
+                           const uint16_t* in,
+                           int pri_strength,
+                           int sec_strength,
+                           int dir,
+                           int pri_damping,
+                           int sec_damping,
+                           int coeff_shift,
+                           int block_width,
+                           int block_height);
+void cdef_filter_8_2_sse4_1(void* dst8,
+                            int dstride,
+                            const uint16_t* in,
+                            int pri_strength,
+                            int sec_strength,
+                            int dir,
+                            int pri_damping,
+                            int sec_damping,
+                            int coeff_shift,
+                            int block_width,
+                            int block_height);
+void cdef_filter_8_2_avx2(void* dst8,
+                          int dstride,
+                          const uint16_t* in,
+                          int pri_strength,
+                          int sec_strength,
+                          int dir,
+                          int pri_damping,
+                          int sec_damping,
+                          int coeff_shift,
+                          int block_width,
+                          int block_height);
+RTCD_EXTERN void (*cdef_filter_8_2)(void* dst8,
+                                    int dstride,
+                                    const uint16_t* in,
+                                    int pri_strength,
+                                    int sec_strength,
+                                    int dir,
+                                    int pri_damping,
+                                    int sec_damping,
+                                    int coeff_shift,
+                                    int block_width,
+                                    int block_height);
+
+void cdef_filter_8_3_c(void* dst8,
+                       int dstride,
+                       const uint16_t* in,
+                       int pri_strength,
+                       int sec_strength,
+                       int dir,
+                       int pri_damping,
+                       int sec_damping,
+                       int coeff_shift,
+                       int block_width,
+                       int block_height);
+void cdef_filter_8_3_sse2(void* dst8,
+                          int dstride,
+                          const uint16_t* in,
+                          int pri_strength,
+                          int sec_strength,
+                          int dir,
+                          int pri_damping,
+                          int sec_damping,
+                          int coeff_shift,
+                          int block_width,
+                          int block_height);
+void cdef_filter_8_3_ssse3(void* dst8,
+                           int dstride,
+                           const uint16_t* in,
+                           int pri_strength,
+                           int sec_strength,
+                           int dir,
+                           int pri_damping,
+                           int sec_damping,
+                           int coeff_shift,
+                           int block_width,
+                           int block_height);
+void cdef_filter_8_3_sse4_1(void* dst8,
+                            int dstride,
+                            const uint16_t* in,
+                            int pri_strength,
+                            int sec_strength,
+                            int dir,
+                            int pri_damping,
+                            int sec_damping,
+                            int coeff_shift,
+                            int block_width,
+                            int block_height);
+void cdef_filter_8_3_avx2(void* dst8,
+                          int dstride,
+                          const uint16_t* in,
+                          int pri_strength,
+                          int sec_strength,
+                          int dir,
+                          int pri_damping,
+                          int sec_damping,
+                          int coeff_shift,
+                          int block_width,
+                          int block_height);
+RTCD_EXTERN void (*cdef_filter_8_3)(void* dst8,
+                                    int dstride,
+                                    const uint16_t* in,
+                                    int pri_strength,
+                                    int sec_strength,
+                                    int dir,
+                                    int pri_damping,
+                                    int sec_damping,
+                                    int coeff_shift,
+                                    int block_width,
+                                    int block_height);
 
 int cdef_find_dir_c(const uint16_t* img,
                     int stride,
@@ -2075,6 +2779,55 @@ RTCD_EXTERN int (*cdef_find_dir)(const uint16_t* img,
                                  int stride,
                                  int32_t* var,
                                  int coeff_shift);
+
+void cdef_find_dir_dual_c(const uint16_t* img1,
+                          const uint16_t* img2,
+                          int stride,
+                          int32_t* var1,
+                          int32_t* var2,
+                          int coeff_shift,
+                          int* out1,
+                          int* out2);
+void cdef_find_dir_dual_sse2(const uint16_t* img1,
+                             const uint16_t* img2,
+                             int stride,
+                             int32_t* var1,
+                             int32_t* var2,
+                             int coeff_shift,
+                             int* out1,
+                             int* out2);
+void cdef_find_dir_dual_ssse3(const uint16_t* img1,
+                              const uint16_t* img2,
+                              int stride,
+                              int32_t* var1,
+                              int32_t* var2,
+                              int coeff_shift,
+                              int* out1,
+                              int* out2);
+void cdef_find_dir_dual_sse4_1(const uint16_t* img1,
+                               const uint16_t* img2,
+                               int stride,
+                               int32_t* var1,
+                               int32_t* var2,
+                               int coeff_shift,
+                               int* out1,
+                               int* out2);
+void cdef_find_dir_dual_avx2(const uint16_t* img1,
+                             const uint16_t* img2,
+                             int stride,
+                             int32_t* var1,
+                             int32_t* var2,
+                             int coeff_shift,
+                             int* out1,
+                             int* out2);
+RTCD_EXTERN void (*cdef_find_dir_dual)(const uint16_t* img1,
+                                       const uint16_t* img2,
+                                       int stride,
+                                       int32_t* var1,
+                                       int32_t* var2,
+                                       int coeff_shift,
+                                       int* out1,
+                                       int* out2);
 
 cfl_subsample_lbd_fn cfl_get_luma_subsampling_420_lbd_c(TX_SIZE tx_size);
 cfl_subsample_lbd_fn cfl_get_luma_subsampling_420_lbd_ssse3(TX_SIZE tx_size);
@@ -2114,10 +2867,19 @@ static void setup_rtcd_internal(void) {
 
   (void)flags;
 
+  aom_dist_wtd_comp_avg_upsampled_pred = aom_dist_wtd_comp_avg_upsampled_pred_c;
+  if (flags & HAS_SSSE3)
+    aom_dist_wtd_comp_avg_upsampled_pred =
+        aom_dist_wtd_comp_avg_upsampled_pred_ssse3;
+  av1_apply_selfguided_restoration = av1_apply_selfguided_restoration_c;
+  if (flags & HAS_SSE4_1)
+    av1_apply_selfguided_restoration = av1_apply_selfguided_restoration_sse4_1;
+  if (flags & HAS_AVX2)
+    av1_apply_selfguided_restoration = av1_apply_selfguided_restoration_avx2;
   av1_block_error = av1_block_error_sse2;
   if (flags & HAS_AVX2)
     av1_block_error = av1_block_error_avx2;
-  av1_block_error_lp = av1_block_error_lp_c;
+  av1_block_error_lp = av1_block_error_lp_sse2;
   if (flags & HAS_AVX2)
     av1_block_error_lp = av1_block_error_lp_avx2;
   av1_build_compound_diffwtd_mask = av1_build_compound_diffwtd_mask_c;
@@ -2132,14 +2894,9 @@ static void setup_rtcd_internal(void) {
   if (flags & HAS_AVX2)
     av1_build_compound_diffwtd_mask_d16 =
         av1_build_compound_diffwtd_mask_d16_avx2;
-  av1_build_compound_diffwtd_mask_highbd =
-      av1_build_compound_diffwtd_mask_highbd_c;
-  if (flags & HAS_SSSE3)
-    av1_build_compound_diffwtd_mask_highbd =
-        av1_build_compound_diffwtd_mask_highbd_ssse3;
+  av1_calc_frame_error = av1_calc_frame_error_sse2;
   if (flags & HAS_AVX2)
-    av1_build_compound_diffwtd_mask_highbd =
-        av1_build_compound_diffwtd_mask_highbd_avx2;
+    av1_calc_frame_error = av1_calc_frame_error_avx2;
   av1_calc_indices_dim1 = av1_calc_indices_dim1_sse2;
   if (flags & HAS_AVX2)
     av1_calc_indices_dim1 = av1_calc_indices_dim1_avx2;
@@ -2181,12 +2938,18 @@ static void setup_rtcd_internal(void) {
   if (flags & HAS_AVX2)
     av1_dist_wtd_convolve_y = av1_dist_wtd_convolve_y_avx2;
   av1_dr_prediction_z1 = av1_dr_prediction_z1_c;
+  if (flags & HAS_SSE4_1)
+    av1_dr_prediction_z1 = av1_dr_prediction_z1_sse4_1;
   if (flags & HAS_AVX2)
     av1_dr_prediction_z1 = av1_dr_prediction_z1_avx2;
   av1_dr_prediction_z2 = av1_dr_prediction_z2_c;
+  if (flags & HAS_SSE4_1)
+    av1_dr_prediction_z2 = av1_dr_prediction_z2_sse4_1;
   if (flags & HAS_AVX2)
     av1_dr_prediction_z2 = av1_dr_prediction_z2_avx2;
   av1_dr_prediction_z3 = av1_dr_prediction_z3_c;
+  if (flags & HAS_SSE4_1)
+    av1_dr_prediction_z3 = av1_dr_prediction_z3_sse4_1;
   if (flags & HAS_AVX2)
     av1_dr_prediction_z3 = av1_dr_prediction_z3_avx2;
   av1_filter_intra_edge = av1_filter_intra_edge_c;
@@ -2323,7 +3086,7 @@ static void setup_rtcd_internal(void) {
   av1_quantize_fp_64x64 = av1_quantize_fp_64x64_c;
   if (flags & HAS_AVX2)
     av1_quantize_fp_64x64 = av1_quantize_fp_64x64_avx2;
-  av1_quantize_lp = av1_quantize_lp_c;
+  av1_quantize_lp = av1_quantize_lp_sse2;
   if (flags & HAS_AVX2)
     av1_quantize_lp = av1_quantize_lp_avx2;
   av1_resize_and_extend_frame = av1_resize_and_extend_frame_c;
@@ -2332,6 +3095,11 @@ static void setup_rtcd_internal(void) {
   av1_round_shift_array = av1_round_shift_array_c;
   if (flags & HAS_SSE4_1)
     av1_round_shift_array = av1_round_shift_array_sse4_1;
+  av1_selfguided_restoration = av1_selfguided_restoration_c;
+  if (flags & HAS_SSE4_1)
+    av1_selfguided_restoration = av1_selfguided_restoration_sse4_1;
+  if (flags & HAS_AVX2)
+    av1_selfguided_restoration = av1_selfguided_restoration_avx2;
   av1_txb_init_levels = av1_txb_init_levels_c;
   if (flags & HAS_SSE4_1)
     av1_txb_init_levels = av1_txb_init_levels_sse4_1;
@@ -2343,6 +3111,11 @@ static void setup_rtcd_internal(void) {
   av1_upsample_intra_edge_high = av1_upsample_intra_edge_high_c;
   if (flags & HAS_SSE4_1)
     av1_upsample_intra_edge_high = av1_upsample_intra_edge_high_sse4_1;
+  av1_warp_affine = av1_warp_affine_c;
+  if (flags & HAS_SSE4_1)
+    av1_warp_affine = av1_warp_affine_sse4_1;
+  if (flags & HAS_AVX2)
+    av1_warp_affine = av1_warp_affine_avx2;
   av1_wedge_compute_delta_squares = av1_wedge_compute_delta_squares_sse2;
   if (flags & HAS_AVX2)
     av1_wedge_compute_delta_squares = av1_wedge_compute_delta_squares_avx2;
@@ -2369,13 +3142,62 @@ static void setup_rtcd_internal(void) {
     cdef_copy_rect8_8bit_to_16bit = cdef_copy_rect8_8bit_to_16bit_sse4_1;
   if (flags & HAS_AVX2)
     cdef_copy_rect8_8bit_to_16bit = cdef_copy_rect8_8bit_to_16bit_avx2;
-  cdef_filter_block = cdef_filter_block_sse2;
+  cdef_filter_16_0 = cdef_filter_16_0_sse2;
   if (flags & HAS_SSSE3)
-    cdef_filter_block = cdef_filter_block_ssse3;
+    cdef_filter_16_0 = cdef_filter_16_0_ssse3;
   if (flags & HAS_SSE4_1)
-    cdef_filter_block = cdef_filter_block_sse4_1;
+    cdef_filter_16_0 = cdef_filter_16_0_sse4_1;
   if (flags & HAS_AVX2)
-    cdef_filter_block = cdef_filter_block_avx2;
+    cdef_filter_16_0 = cdef_filter_16_0_avx2;
+  cdef_filter_16_1 = cdef_filter_16_1_sse2;
+  if (flags & HAS_SSSE3)
+    cdef_filter_16_1 = cdef_filter_16_1_ssse3;
+  if (flags & HAS_SSE4_1)
+    cdef_filter_16_1 = cdef_filter_16_1_sse4_1;
+  if (flags & HAS_AVX2)
+    cdef_filter_16_1 = cdef_filter_16_1_avx2;
+  cdef_filter_16_2 = cdef_filter_16_2_sse2;
+  if (flags & HAS_SSSE3)
+    cdef_filter_16_2 = cdef_filter_16_2_ssse3;
+  if (flags & HAS_SSE4_1)
+    cdef_filter_16_2 = cdef_filter_16_2_sse4_1;
+  if (flags & HAS_AVX2)
+    cdef_filter_16_2 = cdef_filter_16_2_avx2;
+  cdef_filter_16_3 = cdef_filter_16_3_sse2;
+  if (flags & HAS_SSSE3)
+    cdef_filter_16_3 = cdef_filter_16_3_ssse3;
+  if (flags & HAS_SSE4_1)
+    cdef_filter_16_3 = cdef_filter_16_3_sse4_1;
+  if (flags & HAS_AVX2)
+    cdef_filter_16_3 = cdef_filter_16_3_avx2;
+  cdef_filter_8_0 = cdef_filter_8_0_sse2;
+  if (flags & HAS_SSSE3)
+    cdef_filter_8_0 = cdef_filter_8_0_ssse3;
+  if (flags & HAS_SSE4_1)
+    cdef_filter_8_0 = cdef_filter_8_0_sse4_1;
+  if (flags & HAS_AVX2)
+    cdef_filter_8_0 = cdef_filter_8_0_avx2;
+  cdef_filter_8_1 = cdef_filter_8_1_sse2;
+  if (flags & HAS_SSSE3)
+    cdef_filter_8_1 = cdef_filter_8_1_ssse3;
+  if (flags & HAS_SSE4_1)
+    cdef_filter_8_1 = cdef_filter_8_1_sse4_1;
+  if (flags & HAS_AVX2)
+    cdef_filter_8_1 = cdef_filter_8_1_avx2;
+  cdef_filter_8_2 = cdef_filter_8_2_sse2;
+  if (flags & HAS_SSSE3)
+    cdef_filter_8_2 = cdef_filter_8_2_ssse3;
+  if (flags & HAS_SSE4_1)
+    cdef_filter_8_2 = cdef_filter_8_2_sse4_1;
+  if (flags & HAS_AVX2)
+    cdef_filter_8_2 = cdef_filter_8_2_avx2;
+  cdef_filter_8_3 = cdef_filter_8_3_sse2;
+  if (flags & HAS_SSSE3)
+    cdef_filter_8_3 = cdef_filter_8_3_ssse3;
+  if (flags & HAS_SSE4_1)
+    cdef_filter_8_3 = cdef_filter_8_3_sse4_1;
+  if (flags & HAS_AVX2)
+    cdef_filter_8_3 = cdef_filter_8_3_avx2;
   cdef_find_dir = cdef_find_dir_sse2;
   if (flags & HAS_SSSE3)
     cdef_find_dir = cdef_find_dir_ssse3;
@@ -2383,6 +3205,13 @@ static void setup_rtcd_internal(void) {
     cdef_find_dir = cdef_find_dir_sse4_1;
   if (flags & HAS_AVX2)
     cdef_find_dir = cdef_find_dir_avx2;
+  cdef_find_dir_dual = cdef_find_dir_dual_sse2;
+  if (flags & HAS_SSSE3)
+    cdef_find_dir_dual = cdef_find_dir_dual_ssse3;
+  if (flags & HAS_SSE4_1)
+    cdef_find_dir_dual = cdef_find_dir_dual_sse4_1;
+  if (flags & HAS_AVX2)
+    cdef_find_dir_dual = cdef_find_dir_dual_avx2;
   cfl_get_luma_subsampling_420_lbd = cfl_get_luma_subsampling_420_lbd_c;
   if (flags & HAS_SSSE3)
     cfl_get_luma_subsampling_420_lbd = cfl_get_luma_subsampling_420_lbd_ssse3;

@@ -9,6 +9,8 @@
 #include <string>
 
 #include "base/check_op.h"
+#include "base/memory/raw_ptr.h"
+#include "base/run_loop.h"
 #include "build/chromeos_buildflags.h"
 #include "components/keep_alive_registry/keep_alive_registry.h"
 #include "extensions/browser/app_window/app_window.h"
@@ -18,7 +20,6 @@
 #include "ui/aura/window.h"
 #include "ui/aura/window_tree_host.h"
 #include "ui/base/cursor/cursor.h"
-#include "ui/base/cursor/cursor_loader.h"
 #include "ui/base/cursor/mojom/cursor_type.mojom-shared.h"
 #include "ui/base/ime/init/input_method_factory.h"
 #include "ui/base/ime/input_method.h"
@@ -28,6 +29,7 @@
 #include "ui/gfx/native_widget_types.h"
 #include "ui/wm/core/base_focus_rules.h"
 #include "ui/wm/core/compound_event_filter.h"
+#include "ui/wm/core/cursor_loader.h"
 #include "ui/wm/core/cursor_manager.h"
 #include "ui/wm/core/focus_controller.h"
 #include "ui/wm/core/native_cursor_manager.h"
@@ -59,6 +61,10 @@ class ShellNativeCursorManager : public wm::NativeCursorManager {
   explicit ShellNativeCursorManager(
       ShellDesktopControllerAura* desktop_controller)
       : desktop_controller_(desktop_controller) {}
+
+  ShellNativeCursorManager(const ShellNativeCursorManager&) = delete;
+  ShellNativeCursorManager& operator=(const ShellNativeCursorManager&) = delete;
+
   ~ShellNativeCursorManager() override {}
 
   // wm::NativeCursorManager overrides.
@@ -113,24 +119,23 @@ class ShellNativeCursorManager : public wm::NativeCursorManager {
       window->GetHost()->SetCursor(cursor);
   }
 
-  ShellDesktopControllerAura* desktop_controller_;  // Not owned.
+  raw_ptr<ShellDesktopControllerAura> desktop_controller_;  // Not owned.
 
-  ui::CursorLoader cursor_loader_{/*use_platform_cursors=*/false};
-
-  DISALLOW_COPY_AND_ASSIGN(ShellNativeCursorManager);
+  wm::CursorLoader cursor_loader_{/*use_platform_cursors=*/false};
 };
 
 class AppsFocusRules : public wm::BaseFocusRules {
  public:
   AppsFocusRules() {}
+
+  AppsFocusRules(const AppsFocusRules&) = delete;
+  AppsFocusRules& operator=(const AppsFocusRules&) = delete;
+
   ~AppsFocusRules() override {}
 
   bool SupportsChildActivation(const aura::Window* window) const override {
     return true;
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(AppsFocusRules);
 };
 
 }  // namespace

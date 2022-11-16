@@ -11,7 +11,7 @@
 
 #include "base/containers/flat_set.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/values.h"
 #include "chrome/browser/engagement/important_sites_util.h"
@@ -37,6 +37,10 @@ class ClearBrowsingDataHandler : public SettingsPageUIHandler,
                                  public TemplateURLServiceObserver {
  public:
   ClearBrowsingDataHandler(content::WebUI* webui, Profile* profile);
+
+  ClearBrowsingDataHandler(const ClearBrowsingDataHandler&) = delete;
+  ClearBrowsingDataHandler& operator=(const ClearBrowsingDataHandler&) = delete;
+
   ~ClearBrowsingDataHandler() override;
 
   // WebUIMessageHandler implementation.
@@ -50,7 +54,7 @@ class ClearBrowsingDataHandler : public SettingsPageUIHandler,
  protected:
   // Fetches a list of installed apps to be displayed in the clear browsing
   // data confirmation dialog. Called by Javascript.
-  void GetRecentlyLaunchedInstalledApps(const base::ListValue* args);
+  void GetRecentlyLaunchedInstalledApps(const base::Value::List& args);
 
  private:
   friend class TestingClearBrowsingDataHandler;
@@ -76,7 +80,7 @@ class ClearBrowsingDataHandler : public SettingsPageUIHandler,
       base::Value::ConstListView installed_apps);
 
   // Clears browsing data, called by Javascript.
-  void HandleClearBrowsingData(const base::ListValue* value);
+  void HandleClearBrowsingData(const base::Value::List& value);
 
   // Called when a clearing task finished. |webui_callback_id| is provided
   // by the WebUI action that initiated it.
@@ -89,13 +93,19 @@ class ClearBrowsingDataHandler : public SettingsPageUIHandler,
       uint64_t failed_data_types);
 
   // Initializes the dialog UI. Called by JavaScript when the DOM is ready.
-  void HandleInitialize(const base::ListValue* args);
+  void HandleInitialize(const base::Value::List& args);
+
+  // Returns the current sync state to the WebUI.
+  void HandleGetSyncState(const base::Value::List& args);
 
   // Implementation of SyncServiceObserver.
   void OnStateChanged(syncer::SyncService* sync) override;
 
   // Updates the footer of the dialog when the sync state changes.
   virtual void UpdateSyncState();
+
+  // Create a SyncStateEvent containing the current sync state.
+  base::DictionaryValue CreateSyncStateEvent();
 
   // Finds out whether we should show notice about other forms of history stored
   // in user's account.
@@ -121,13 +131,13 @@ class ClearBrowsingDataHandler : public SettingsPageUIHandler,
   void OnTemplateURLServiceChanged() override;
 
   // Cached profile corresponding to the WebUI of this handler.
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
 
   // Counters that calculate the data volume for individual data types.
   std::vector<std::unique_ptr<browsing_data::BrowsingDataCounter>> counters_;
 
   // SyncService to observe sync state changes.
-  syncer::SyncService* sync_service_;
+  raw_ptr<syncer::SyncService> sync_service_;
   base::ScopedObservation<syncer::SyncService, syncer::SyncServiceObserver>
       sync_service_observation_{this};
 
@@ -146,8 +156,6 @@ class ClearBrowsingDataHandler : public SettingsPageUIHandler,
   // The weak pointers are invalidated in |OnJavascriptDisallowed()| and
   // |HandleInitialize()| to cancel previously initiated tasks.
   base::WeakPtrFactory<ClearBrowsingDataHandler> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ClearBrowsingDataHandler);
 };
 
 }  // namespace settings

@@ -16,7 +16,6 @@
 #include "base/android/jni_string.h"
 #include "base/bind.h"
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/android/features/keyboard_accessory/jni_headers/ManualFillingComponentBridge_jni.h"
 #include "chrome/android/features/keyboard_accessory/jni_headers/UserInfoField_jni.h"
@@ -183,7 +182,7 @@ ManualFillingViewAndroid::ConvertAccessorySheetDataToJavaObject(
         Java_ManualFillingComponentBridge_addUserInfoToAccessorySheetData(
             env, java_object_internal_, j_tab_data,
             ConvertUTF8ToJavaString(env, user_info.origin()),
-            user_info.is_psl_match().value(),
+            user_info.is_exact_match().value(),
             url::GURLAndroid::FromNativeGURL(env, user_info.icon_url()));
     for (const AccessorySheetField& field : user_info.fields()) {
       Java_ManualFillingComponentBridge_addFieldToUserInfo(
@@ -195,6 +194,20 @@ ManualFillingViewAndroid::ConvertAccessorySheetDataToJavaObject(
           ConvertUTF8ToJavaString(env, field.id()), field.is_obfuscated(),
           field.selectable());
     }
+  }
+
+  for (const autofill::PromoCodeInfo& promo_code_info :
+       tab_data.promo_code_info_list()) {
+    const AccessorySheetField promo_code = promo_code_info.promo_code();
+    const std::u16string detailsText = promo_code_info.details_text();
+    Java_ManualFillingComponentBridge_addPromoCodeInfoToAccessorySheetData(
+        env, java_object_internal_, j_tab_data,
+        static_cast<int>(tab_data.get_sheet_type()),
+        ConvertUTF16ToJavaString(env, promo_code.display_text()),
+        ConvertUTF16ToJavaString(env, promo_code.text_to_fill()),
+        ConvertUTF16ToJavaString(env, promo_code.a11y_description()),
+        ConvertUTF8ToJavaString(env, promo_code.id()),
+        promo_code.is_obfuscated(), ConvertUTF16ToJavaString(env, detailsText));
   }
 
   for (const FooterCommand& footer_command : tab_data.footer_commands()) {
@@ -248,7 +261,8 @@ void JNI_ManualFillingComponentBridge_CachePasswordSheetDataForTesting(
   content::WebContents* web_contents =
       content::WebContents::FromJavaWebContents(j_web_contents);
 
-  url::Origin origin = url::Origin::Create(web_contents->GetLastCommittedURL());
+  url::Origin origin =
+      web_contents->GetPrimaryMainFrame()->GetLastCommittedOrigin();
   std::vector<std::string> usernames;
   std::vector<std::string> passwords;
   base::android::AppendJavaStringArrayToStringVector(env, j_usernames,

@@ -107,9 +107,9 @@ IN_PROC_BROWSER_TEST_F(CommanderUITest, Dismiss) {
 }
 
 IN_PROC_BROWSER_TEST_F(CommanderUITest, HeightChanged) {
-  EXPECT_EQ(height_changed_invocations().size(), 0u);
+  size_t calls = height_changed_invocations().size();
   ExecuteJS("chrome.send('heightChanged', [42])");
-  ASSERT_EQ(height_changed_invocations().size(), 1u);
+  ASSERT_EQ(height_changed_invocations().size(), calls + 1);
   ASSERT_EQ(height_changed_invocations().back(), 42);
 }
 
@@ -153,20 +153,21 @@ TEST(CommanderHandlerTest, DisplayResultsViewModelPassed) {
   EXPECT_EQ("view-model-updated", call_data.arg1()->GetString());
 
   const base::Value* arg = call_data.arg2();
-  EXPECT_EQ(
-      "Test item",
-      arg->FindPath("options")->GetList()[0].FindPath("title")->GetString());
+  EXPECT_EQ("Test item", arg->FindPath("options")
+                             ->GetListDeprecated()[0]
+                             .FindPath("title")
+                             ->GetString());
   EXPECT_EQ(0, arg->FindPath("options")
-                   ->GetList()[0]
+                   ->GetListDeprecated()[0]
                    .FindPath("matchedRanges")
-                   ->GetList()[0]
-                   .GetList()[0]
+                   ->GetListDeprecated()[0]
+                   .GetListDeprecated()[0]
                    .GetInt());
   EXPECT_EQ(4, arg->FindPath("options")
-                   ->GetList()[0]
+                   ->GetListDeprecated()[0]
                    .FindPath("matchedRanges")
-                   ->GetList()[0]
-                   .GetList()[1]
+                   ->GetListDeprecated()[0]
+                   .GetListDeprecated()[1]
                    .GetInt());
   EXPECT_EQ(42, arg->FindPath("resultSetId")->GetInt());
 }

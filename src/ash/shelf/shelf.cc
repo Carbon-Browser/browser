@@ -8,6 +8,7 @@
 
 #include "ash/animation/animation_change_type.h"
 #include "ash/app_list/app_list_controller_impl.h"
+#include "ash/constants/ash_features.h"
 #include "ash/constants/ash_switches.h"
 #include "ash/public/cpp/keyboard/keyboard_controller_observer.h"
 #include "ash/public/cpp/shelf_item_delegate.h"
@@ -205,6 +206,9 @@ class Shelf::AutoHideEventHandler : public ui::EventHandler {
     Shell::Get()->AddPreTargetHandler(this);
   }
 
+  AutoHideEventHandler(const AutoHideEventHandler&) = delete;
+  AutoHideEventHandler& operator=(const AutoHideEventHandler&) = delete;
+
   ~AutoHideEventHandler() override {
     Shell::Get()->RemovePreTargetHandler(this);
   }
@@ -236,13 +240,13 @@ class Shelf::AutoHideEventHandler : public ui::EventHandler {
       shelf_layout_manager->LockAutoHideState(true);
     } else if (event->type() == ui::ET_TOUCH_RELEASED ||
                event->type() == ui::ET_TOUCH_CANCELLED) {
+      // Unlock auto hide (and eventually recompute auto hide state).
       shelf_layout_manager->LockAutoHideState(false);
     }
   }
 
  private:
   Shelf* shelf_;
-  DISALLOW_COPY_AND_ASSIGN(AutoHideEventHandler);
 };
 
 // Shelf::AutoDimEventHandler -----------------------------------------------
@@ -257,6 +261,9 @@ class Shelf::AutoDimEventHandler : public ui::EventHandler,
     shelf_observation_.Observe(shelf_);
     UndimShelf();
   }
+
+  AutoDimEventHandler(const AutoDimEventHandler&) = delete;
+  AutoDimEventHandler& operator=(const AutoDimEventHandler&) = delete;
 
   ~AutoDimEventHandler() override {
     Shell::Get()->RemovePreTargetHandler(this);
@@ -321,9 +328,7 @@ class Shelf::AutoDimEventHandler : public ui::EventHandler,
   base::ScopedObservation<Shelf, ShelfObserver> shelf_observation_{this};
 
   // Delay before dimming the shelf.
-  const base::TimeDelta kDimDelay = base::TimeDelta::FromSeconds(5);
-
-  DISALLOW_COPY_AND_ASSIGN(AutoDimEventHandler);
+  const base::TimeDelta kDimDelay = base::Seconds(5);
 };
 
 // Shelf ---------------------------------------------------------------------
@@ -370,6 +375,13 @@ void Shelf::ActivateShelfItemOnDisplay(int item_index, int64_t display_id) {
       ui::ET_KEY_RELEASED, ui::VKEY_UNKNOWN, ui::EF_NONE);
   item_delegate->ItemSelected(std::move(event), display_id, LAUNCH_FROM_SHELF,
                               base::DoNothing(), base::NullCallback());
+}
+
+// static
+void Shelf::UpdateShelfVisibility() {
+  for (auto* root : Shell::Get()->GetAllRootWindows()) {
+    Shelf::ForWindow(root)->UpdateVisibilityState();
+  }
 }
 
 void Shelf::CreateNavigationWidget(aura::Window* container) {
@@ -431,13 +443,16 @@ void Shelf::CreateShelfWidget(aura::Window* root) {
 }
 
 void Shelf::ShutdownShelfWidget() {
+  // Remove observers prior to destroying child widgets, this prevents
+  // activation changes from triggering during shutdown, see
+  // https://crbug.com/1307898.
+  shelf_widget_->Shutdown();
+
   // The contents view of the hotseat widget may rely on the status area widget.
   // So do explicit destruction here.
   hotseat_widget_.reset();
   status_area_widget_.reset();
   navigation_widget_.reset();
-
-  shelf_widget_->Shutdown();
 }
 
 void Shelf::DestroyShelfWidget() {
@@ -483,8 +498,8 @@ void Shelf::SetAlignment(ShelfAlignment alignment) {
   }
 }
 
-bool Shelf::IsHorizontalAlignment() const {
-  switch (alignment_) {
+bool IsHorizontalAlignment(ShelfAlignment alignment) {
+  switch (alignment) {
     case ShelfAlignment::kBottom:
     case ShelfAlignment::kBottomLocked:
       return true;
@@ -496,6 +511,10 @@ bool Shelf::IsHorizontalAlignment() const {
   return true;
 }
 
+bool Shelf::IsHorizontalAlignment() const {
+  return ash::IsHorizontalAlignment(alignment_);
+}
+
 void Shelf::SetAutoHideBehavior(ShelfAutoHideBehavior auto_hide_behavior) {
   DCHECK(shelf_layout_manager_);
 
@@ -503,8 +522,9 @@ void Shelf::SetAutoHideBehavior(ShelfAutoHideBehavior auto_hide_behavior) {
     return;
 
   auto_hide_behavior_ = auto_hide_behavior;
-  Shell::Get()->NotifyShelfAutoHideBehaviorChanged(
-      GetWindow()->GetRootWindow());
+
+  for (auto& observer : observers_)
+    observer.OnShelfAutoHideBehaviorChanged();
 }
 
 ShelfAutoHideState Shelf::GetAutoHideState() const {
@@ -575,6 +595,11 @@ void Shelf::ProcessScrollEvent(ui::ScrollEvent* event) {
   if (!shelf_layout_manager_->is_active_session_state())
     return;
 
+  // Productivity launcher does not show or hide on scroll events. The legacy
+  // peeking launcher had this behavior, but it doesn't make sense for a bubble.
+  if (features::IsProductivityLauncherEnabled())
+    return;
+
   auto* app_list_controller = Shell::Get()->app_list_controller();
   DCHECK(app_list_controller);
   // If the App List is not visible, send Scroll events to the
@@ -591,6 +616,11 @@ void Shelf::ProcessScrollEvent(ui::ScrollEvent* event) {
 void Shelf::ProcessMouseWheelEvent(ui::MouseWheelEvent* event) {
   if (!shelf_layout_manager_->is_active_session_state() ||
       !IsHorizontalAlignment())
+    return;
+
+  // Productivity launcher does not show or hide on wheel events. The legacy
+  // peeking launcher had this behavior, but it doesn't make sense for a bubble.
+  if (features::IsProductivityLauncherEnabled())
     return;
 
   auto* app_list_controller = Shell::Get()->app_list_controller();
@@ -620,10 +650,6 @@ void Shelf::NotifyShelfIconPositionsChanged() {
 
 StatusAreaWidget* Shelf::GetStatusAreaWidget() const {
   return shelf_widget_ ? shelf_widget_->status_area_widget() : nullptr;
-}
-
-TrayBackgroundView* Shelf::GetSystemTrayAnchorView() const {
-  return GetStatusAreaWidget()->GetSystemTrayAnchor();
 }
 
 gfx::Rect Shelf::GetSystemTrayAnchorRect() const {

@@ -30,41 +30,41 @@ const char kHourInt[] = "hour";
 const char kMinInt[] = "minute";
 const char kActivityReportingEnabled[] = "activity_reporting_enabled";
 
-apps::mojom::AppType PolicyStringToAppType(const std::string& app_type) {
+apps::AppType PolicyStringToAppType(const std::string& app_type) {
   if (app_type == "ARC")
-    return apps::mojom::AppType::kArc;
+    return apps::AppType::kArc;
   if (app_type == "BOREALIS")
-    return apps::mojom::AppType::kBorealis;
+    return apps::AppType::kBorealis;
   if (app_type == "BUILT-IN")
-    return apps::mojom::AppType::kBuiltIn;
+    return apps::AppType::kBuiltIn;
   if (app_type == "CROSTINI")
-    return apps::mojom::AppType::kCrostini;
+    return apps::AppType::kCrostini;
   if (app_type == "EXTENSION")
-    return apps::mojom::AppType::kExtension;
+    return apps::AppType::kChromeApp;
   if (app_type == "PLUGIN-VM")
-    return apps::mojom::AppType::kPluginVm;
+    return apps::AppType::kPluginVm;
   if (app_type == "WEB")
-    return apps::mojom::AppType::kWeb;
+    return apps::AppType::kWeb;
 
   NOTREACHED();
-  return apps::mojom::AppType::kUnknown;
+  return apps::AppType::kUnknown;
 }
 
-std::string AppTypeToPolicyString(apps::mojom::AppType app_type) {
+std::string AppTypeToPolicyString(apps::AppType app_type) {
   switch (app_type) {
-    case apps::mojom::AppType::kArc:
+    case apps::AppType::kArc:
       return "ARC";
-    case apps::mojom::AppType::kBorealis:
+    case apps::AppType::kBorealis:
       return "BOREALIS";
-    case apps::mojom::AppType::kBuiltIn:
+    case apps::AppType::kBuiltIn:
       return "BUILT-IN";
-    case apps::mojom::AppType::kCrostini:
+    case apps::AppType::kCrostini:
       return "CROSTINI";
-    case apps::mojom::AppType::kExtension:
+    case apps::AppType::kChromeApp:
       return "EXTENSION";
-    case apps::mojom::AppType::kPluginVm:
+    case apps::AppType::kPluginVm:
       return "PLUGIN-VM";
-    case apps::mojom::AppType::kWeb:
+    case apps::AppType::kWeb:
       return "WEB";
     default:
       NOTREACHED();
@@ -154,9 +154,9 @@ absl::optional<AppLimit> AppLimitFromDict(const base::Value& dict) {
 
   absl::optional<base::TimeDelta> daily_limit;
   if (daily_limit_mins) {
-    daily_limit = base::TimeDelta::FromMinutes(*daily_limit_mins);
-    if (daily_limit && (*daily_limit < base::TimeDelta::FromHours(0) ||
-                        *daily_limit > base::TimeDelta::FromHours(24))) {
+    daily_limit = base::Minutes(*daily_limit_mins);
+    if (daily_limit &&
+        (*daily_limit < base::Hours(0) || *daily_limit > base::Hours(24))) {
       DLOG(ERROR) << "Invalid daily limit.";
       return absl::nullopt;
     }
@@ -172,8 +172,7 @@ absl::optional<AppLimit> AppLimitFromDict(const base::Value& dict) {
   }
 
   const base::Time last_updated =
-      base::Time::UnixEpoch() +
-      base::TimeDelta::FromMilliseconds(last_updated_millis);
+      base::Time::UnixEpoch() + base::Milliseconds(last_updated_millis);
 
   return AppLimit(restriction, daily_limit, last_updated);
 }
@@ -213,9 +212,8 @@ absl::optional<base::TimeDelta> ResetTimeFromDict(const base::Value& dict) {
     return absl::nullopt;
   }
 
-  const int hour_in_mins = base::TimeDelta::FromHours(1).InMinutes();
-  return base::TimeDelta::FromMinutes(hour.value() * hour_in_mins +
-                                      minutes.value());
+  const int hour_in_mins = base::Hours(1).InMinutes();
+  return base::Minutes(hour.value() * hour_in_mins + minutes.value());
 }
 
 base::Value ResetTimeToDict(int hour, int minutes) {
@@ -241,7 +239,7 @@ std::map<AppId, AppLimit> AppLimitsFromDict(const base::Value& dict) {
     return app_limits;
   }
 
-  base::Value::ConstListView list_view = limits_array->GetList();
+  base::Value::ConstListView list_view = limits_array->GetListDeprecated();
   for (const base::Value& dict : list_view) {
     if (!dict.is_dict()) {
       DLOG(ERROR) << "Invalid app limits entry. ";

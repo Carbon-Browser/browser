@@ -7,7 +7,6 @@ package org.chromium.ui.base;
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.annotation.SuppressLint;
-import android.annotation.TargetApi;
 import android.app.Activity;
 import android.app.PendingIntent;
 import android.app.UiModeManager;
@@ -27,6 +26,7 @@ import android.view.WindowManager;
 import android.view.accessibility.AccessibilityManager;
 
 import androidx.annotation.Nullable;
+import androidx.annotation.RequiresApi;
 import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.ActivityState;
@@ -48,6 +48,9 @@ import org.chromium.ui.KeyboardVisibilityDelegate;
 import org.chromium.ui.display.DisplayAndroid;
 import org.chromium.ui.display.DisplayAndroid.DisplayAndroidObserver;
 import org.chromium.ui.modaldialog.ModalDialogManager;
+import org.chromium.ui.permissions.AndroidPermissionDelegate;
+import org.chromium.ui.permissions.CachedActivityAndroidPermissionDelegate;
+import org.chromium.ui.permissions.PermissionCallback;
 import org.chromium.ui.widget.Toast;
 
 import java.lang.ref.WeakReference;
@@ -141,6 +144,9 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
     // A container for UnownedUserData objects that are not owned by, but can be accessed through
     // WindowAndroid.
     private final UnownedUserDataHost mUnownedUserDataHost = new UnownedUserDataHost();
+
+    private float mRefreshRate;
+    private boolean mHasFocus = true;
 
     /**
      * An interface to notify listeners that a context menu is closed.
@@ -478,6 +484,12 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
         return false;
     }
 
+    @Override
+    public boolean shouldShowRequestPermissionRationale(String permission) {
+        return mPermissionDelegate != null
+                && mPermissionDelegate.shouldShowRequestPermissionRationale(permission);
+    }
+
     /**
      * Displays an error message with a provided error message string.
      * @param error The error message string to be displayed.
@@ -557,6 +569,10 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
     }
 
     protected void onActivityPaused() {
+        if (mPermissionDelegate instanceof CachedActivityAndroidPermissionDelegate) {
+            ((CachedActivityAndroidPermissionDelegate) mPermissionDelegate).invalidateCache();
+        }
+
         for (ActivityStateObserver observer : mActivityStateObservers) observer.onActivityPaused();
     }
 
@@ -650,6 +666,7 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
     /**
      * Destroys the c++ WindowAndroid object if one has been created.
      */
+    @CalledByNative
     public void destroy() {
         LifetimeAssert.setSafeToGc(mLifetimeAssert, true);
         if (mNativeWindowAndroid != 0) {
@@ -702,7 +719,7 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
     // result returning value.
     private Window getWindow() {
         Activity activity = ContextUtils.activityFromContext(mContextRef.get());
-        if (activity == null) return null;
+        if (activity == null || activity.isFinishing()) return null;
         return activity.getWindow();
     }
 
@@ -826,8 +843,7 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
     /**
      * Return the current window token, or null.
      */
-    @CalledByNative
-    protected IBinder getWindowToken() {
+    public IBinder getWindowToken() {
         Window window = getWindow();
         if (window == null) return null;
         View decorView = window.peekDecorView();
@@ -877,19 +893,30 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
         }
     }
 
+    protected void onWindowFocusChanged(boolean hasFocus) {
+        mHasFocus = hasFocus;
+        if (!mHasFocus) {
+            // `preferredDisplayModeId` affects other windows even when this window is not in focus,
+            // so reset to no preference when not in focus.
+            doSetPreferredRefreshRate(0);
+        } else {
+            doSetPreferredRefreshRate(mRefreshRate);
+        }
+    }
+
     @Override
-    @TargetApi(Build.VERSION_CODES.M)
+    @RequiresApi(Build.VERSION_CODES.M)
     public void onCurrentModeChanged(Display.Mode currentMode) {
         recomputeSupportedRefreshRates();
     }
 
     @Override
-    @TargetApi(Build.VERSION_CODES.M)
+    @RequiresApi(Build.VERSION_CODES.M)
     public void onDisplayModesChanged(List<Display.Mode> supportedModes) {
         recomputeSupportedRefreshRates();
     }
 
-    @TargetApi(Build.VERSION_CODES.O)
+    @RequiresApi(Build.VERSION_CODES.O)
     @CalledByNative
     public void setWideColorEnabled(boolean enabled) {
         // Although this API was added in Android O, it was buggy.
@@ -907,7 +934,7 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
     }
 
     @SuppressLint("NewApi") // This should only be called if Display.Mode is available.
-    @TargetApi(Build.VERSION_CODES.M)
+    @RequiresApi(Build.VERSION_CODES.M)
     private void recomputeSupportedRefreshRates() {
         Display.Mode currentMode = mDisplayAndroid.getCurrentMode();
         assert currentMode != null;
@@ -950,7 +977,7 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
 
     @SuppressLint("NewApi")
     // mSupportedRefreshRateModes should only be set if Display.Mode is available.
-    @TargetApi(Build.VERSION_CODES.M)
+    @RequiresApi(Build.VERSION_CODES.M)
     @CalledByNative
     private float[] getSupportedRefreshRates() {
         if (mSupportedRefreshRateModes == null || !mAllowChangeRefreshRate) return null;
@@ -965,6 +992,11 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
     @SuppressLint("NewApi")
     @CalledByNative
     private void setPreferredRefreshRate(float preferredRefreshRate) {
+        mRefreshRate = preferredRefreshRate;
+        if (mHasFocus) doSetPreferredRefreshRate(preferredRefreshRate);
+    }
+
+    private void doSetPreferredRefreshRate(float preferredRefreshRate) {
         if (mSupportedRefreshRateModes == null || !mAllowChangeRefreshRate) return;
 
         int preferredModeId = getPreferredModeId(preferredRefreshRate);
@@ -979,7 +1011,7 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
 
     @SuppressLint("NewApi")
     // mSupportedRefreshRateModes should only be set if Display.Mode is available.
-    @TargetApi(Build.VERSION_CODES.M)
+    @RequiresApi(Build.VERSION_CODES.M)
     private int getPreferredModeId(float preferredRefreshRate) {
         if (preferredRefreshRate == 0) return 0;
 

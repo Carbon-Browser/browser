@@ -110,8 +110,8 @@ Length Length::BlendSameTypes(const Length& from,
     result_type = from.GetType();
 
   float blended_value = blink::Blend(from.Value(), Value(), progress);
-  if (range == kValueRangeNonNegative)
-    blended_value = clampTo<float>(blended_value, 0);
+  if (range == ValueRange::kNonNegative)
+    blended_value = ClampTo<float>(blended_value, 0);
   return Length(blended_value, result_type);
 }
 
@@ -132,7 +132,7 @@ PixelsAndPercent Length::GetPixelsAndPercent() const {
 scoped_refptr<const CalculationValue> Length::AsCalculationValue() const {
   if (IsCalculated())
     return &GetCalculationValue();
-  return CalculationValue::Create(GetPixelsAndPercent(), kValueRangeAll);
+  return CalculationValue::Create(GetPixelsAndPercent(), ValueRange::kAll);
 }
 
 Length Length::SubtractFromOneHundredPercent() const {
@@ -176,9 +176,12 @@ void Length::DecrementCalculatedRef() const {
   CalcHandles().DecrementRef(CalculationHandle());
 }
 
-float Length::NonNanCalculatedValue(LayoutUnit max_value) const {
+float Length::NonNanCalculatedValue(
+    LayoutUnit max_value,
+    const AnchorEvaluator* anchor_evaluator) const {
   DCHECK(IsCalculated());
-  float result = GetCalculationValue().Evaluate(max_value.ToFloat());
+  float result =
+      GetCalculationValue().Evaluate(max_value.ToFloat(), anchor_evaluator);
   if (std::isnan(result))
     return 0;
   return result;
@@ -190,6 +193,22 @@ bool Length::IsCalculatedEqual(const Length& o) const {
           GetCalculationValue() == o.GetCalculationValue());
 }
 
+absl::optional<LayoutUnit> Length::AnchorEvaluator::EvaluateAnchor(
+    const AtomicString& anchor_name,
+    AnchorValue anchor_value) const {
+  return absl::nullopt;
+}
+
+absl::optional<LayoutUnit> Length::AnchorEvaluator::EvaluateAnchorSize(
+    const AtomicString& anchor_name,
+    AnchorSizeValue anchor_size_value) const {
+  return absl::nullopt;
+}
+
+bool Length::HasAnchorQueries() const {
+  return IsCalculated() && GetCalculationValue().HasAnchorQueries();
+}
+
 String Length::ToString() const {
   StringBuilder builder;
   builder.Append("Length(");
@@ -198,7 +217,7 @@ String Length::ToString() const {
       "MaxContent", "MinIntrinsic", "FillAvailable", "FitContent",
       "Calculated", "ExtendToZoom", "DeviceWidth",   "DeviceHeight",
       "None",       "Content"};
-  if (type_ < base::size(kTypeNames))
+  if (type_ < std::size(kTypeNames))
     builder.Append(kTypeNames[type_]);
   else
     builder.Append("?");

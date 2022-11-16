@@ -47,7 +47,8 @@ class LookalikeUrlTabHelperTest : public PlatformTest {
           policy_decision = decision;
           callback_called = true;
         });
-    web_state_.ShouldAllowResponse(response, for_main_frame,
+    web::WebStatePolicyDecider::ResponseInfo response_info(for_main_frame);
+    web_state_.ShouldAllowResponse(response, response_info,
                                    std::move(callback));
     EXPECT_TRUE(callback_called);
     return policy_decision;
@@ -108,20 +109,11 @@ TEST_F(LookalikeUrlTabHelperTest, ShouldAllowResponseForAllowlistedDomains) {
 }
 
 // Tests that ShouldAllowResponse properly blocks lookalike navigations
-// to IDNs when the feature is enabled.
+// to IDNs.
 TEST_F(LookalikeUrlTabHelperTest, ShouldAllowResponseForPunycode) {
   GURL lookalike_url("https://ɴoτ-τoρ-ďoᛖaiɴ.com/");
   reputation::InitializeSafetyTipConfig();
 
-  base::test::ScopedFeatureList feature_list_disabled;
-  feature_list_disabled.InitAndDisableFeature(
-      lookalikes::features::kLookalikeInterstitialForPunycode);
-  EXPECT_TRUE(ShouldAllowResponseUrl(lookalike_url, /*main_frame=*/true)
-                  .ShouldAllowNavigation());
-
-  base::test::ScopedFeatureList feature_list_enabled;
-  feature_list_enabled.InitAndEnableFeature(
-      lookalikes::features::kLookalikeInterstitialForPunycode);
   EXPECT_FALSE(ShouldAllowResponseUrl(lookalike_url, /*main_frame=*/true)
                    .ShouldAllowNavigation());
   std::unique_ptr<LookalikeUrlContainer::LookalikeUrlInfo> lookalike_url_info =

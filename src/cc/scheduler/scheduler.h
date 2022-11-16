@@ -10,7 +10,9 @@
 #include <vector>
 
 #include "base/cancelable_callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
+#include "base/timer/timer.h"
 #include "cc/cc_export.h"
 #include "cc/metrics/event_metrics.h"
 #include "cc/scheduler/begin_frame_tracker.h"
@@ -22,7 +24,6 @@
 #include "components/viz/common/frame_sinks/begin_frame_args.h"
 #include "components/viz/common/frame_sinks/begin_frame_source.h"
 #include "components/viz/common/frame_sinks/delay_based_time_source.h"
-#include "ui/gfx/rendering_pipeline.h"
 
 namespace perfetto {
 namespace protos {
@@ -66,6 +67,7 @@ class SchedulerClient {
   // compositor thread, which allows Compositor thread to update its layer tree
   // to match the state of the layer tree on the main thread.
   virtual void ScheduledActionCommit() = 0;
+  virtual void ScheduledActionPostCommit() = 0;
   virtual void ScheduledActionActivateSyncTree() = 0;
   virtual void ScheduledActionBeginLayerTreeFrameSinkCreation() = 0;
   virtual void ScheduledActionPrepareTiles() = 0;
@@ -88,7 +90,7 @@ class SchedulerClient {
   virtual void FrameIntervalUpdated(base::TimeDelta interval) = 0;
 
   // Functions used for reporting animation targeting UMA, crbug.com/758439.
-  virtual bool HasCustomPropertyAnimations() const = 0;
+  virtual bool HasInvalidationAnimation() const = 0;
 
  protected:
   virtual ~SchedulerClient() {}
@@ -102,8 +104,6 @@ class CC_EXPORT Scheduler : public viz::BeginFrameObserverBase {
       int layer_tree_host_id,
       base::SingleThreadTaskRunner* task_runner,
       std::unique_ptr<CompositorTimingHistory> compositor_timing_history,
-      gfx::RenderingPipeline* main_thread_pipeline,
-      gfx::RenderingPipeline* compositor_thread_pipeline,
       CompositorFrameReportingController* compositor_frame_reporting_controller,
       power_scheduler::PowerModeArbiter* power_mode_arbiter);
   Scheduler(const Scheduler&) = delete;
@@ -133,6 +133,7 @@ class CC_EXPORT Scheduler : public viz::BeginFrameObserverBase {
   // pending_tree, call this method to notify that this pending tree is ready to
   // be activated, that is to be copied to the active tree.
   void NotifyReadyToActivate();
+  bool IsReadyToActivate();
   void NotifyReadyToDraw();
   void SetBeginFrameSource(viz::BeginFrameSource* source);
 
@@ -156,9 +157,6 @@ class CC_EXPORT Scheduler : public viz::BeginFrameObserverBase {
   // can send a CompositorFrame to the display compositor with appropriate
   // timing.
   void SetNeedsBeginMainFrame();
-  bool needs_begin_main_frame() const {
-    return state_machine_.needs_begin_main_frame();
-  }
 
   // Requests a single impl frame (after the current frame if there is one
   // active).
@@ -180,9 +178,14 @@ class CC_EXPORT Scheduler : public viz::BeginFrameObserverBase {
   // new tree can be activated.
   void SetNeedsImplSideInvalidation(bool needs_first_draw_on_activation);
 
+  bool pending_tree_is_ready_for_activation() const {
+    return state_machine_.pending_tree_is_ready_for_activation();
+  }
+
   // Drawing should result in submitting a CompositorFrame to the
   // LayerTreeFrameSink and then calling this.
   void DidSubmitCompositorFrame(uint32_t frame_token,
+                                base::TimeTicks submit_time,
                                 EventMetricsSet events_metrics,
                                 bool has_missing_content);
   // The LayerTreeFrameSink acks when it is ready for a new frame which
@@ -198,7 +201,6 @@ class CC_EXPORT Scheduler : public viz::BeginFrameObserverBase {
   // main thread updates are completed to signal it is ready for the commmit.
   void NotifyReadyToCommit(std::unique_ptr<BeginMainFrameMetrics> details);
   void BeginMainFrameAborted(CommitEarlyOutReason reason);
-  void DidCommit();
 
   // In the PrepareTiles step, compositor thread divides the layers into tiles
   // to reduce cost of raster large layers. Then, each tile is rastered by a
@@ -265,24 +267,27 @@ class CC_EXPORT Scheduler : public viz::BeginFrameObserverBase {
   const viz::BeginFrameArgs& last_dispatched_begin_main_frame_args() const {
     return last_dispatched_begin_main_frame_args_;
   }
+  const viz::BeginFrameArgs& last_commit_origin_frame_args() const {
+    return last_commit_origin_frame_args_;
+  }
   const viz::BeginFrameArgs& last_activate_origin_frame_args() const {
     return last_activate_origin_frame_args_;
   }
 
   void ClearHistory();
 
-  bool IsBeginMainFrameSent() const;
+  size_t CommitDurationSampleCountForTesting() const;
 
  protected:
   // Virtual for testing.
   virtual base::TimeTicks Now() const;
 
   const SchedulerSettings settings_;
-  SchedulerClient* const client_;
+  const raw_ptr<SchedulerClient> client_;
   const int layer_tree_host_id_;
-  base::SingleThreadTaskRunner* task_runner_;
+  raw_ptr<base::SingleThreadTaskRunner> task_runner_;
 
-  viz::BeginFrameSource* begin_frame_source_ = nullptr;
+  raw_ptr<viz::BeginFrameSource> begin_frame_source_ = nullptr;
   bool observing_begin_frame_source_ = false;
 
   bool skipped_last_frame_missed_exceeded_deadline_ = false;
@@ -291,7 +296,8 @@ class CC_EXPORT Scheduler : public viz::BeginFrameObserverBase {
 
   // Owned by LayerTreeHostImpl and is destroyed when LayerTreeHostImpl is
   // destroyed.
-  CompositorFrameReportingController* compositor_frame_reporting_controller_;
+  raw_ptr<CompositorFrameReportingController, DanglingUntriaged>
+      compositor_frame_reporting_controller_;
 
   // What the latest deadline was, and when it was scheduled.
   base::TimeTicks deadline_;
@@ -319,7 +325,7 @@ class CC_EXPORT Scheduler : public viz::BeginFrameObserverBase {
   // scheduled to run immediately.
   // NOTE: Scheduler weak ptrs are not necessary if CancelableOnceCallback is
   // used.
-  base::CancelableOnceClosure begin_impl_frame_deadline_task_;
+  base::DeadlineTimer begin_impl_frame_deadline_timer_;
 
   // This is used for queueing begin frames while scheduler is waiting for
   // previous frame's deadline, or if it's inside ProcessScheduledActions().
@@ -341,14 +347,6 @@ class CC_EXPORT Scheduler : public viz::BeginFrameObserverBase {
   // Keeps track of the begin frame interval from the last BeginFrameArgs to
   // arrive so that |client_| can be informed about changes.
   base::TimeDelta last_frame_interval_;
-
-  gfx::RenderingPipeline* const main_thread_pipeline_;
-  absl::optional<gfx::RenderingPipeline::ScopedPipelineActive>
-      main_thread_pipeline_active_;
-
-  gfx::RenderingPipeline* const compositor_thread_pipeline_;
-  absl::optional<gfx::RenderingPipeline::ScopedPipelineActive>
-      compositor_thread_pipeline_active_;
 
   std::unique_ptr<power_scheduler::PowerModeVoter> power_mode_voter_;
   power_scheduler::PowerMode last_power_mode_vote_ =

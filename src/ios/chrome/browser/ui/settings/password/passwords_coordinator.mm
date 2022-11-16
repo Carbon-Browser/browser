@@ -8,9 +8,13 @@
 #include "components/keyed_service/core/service_access_type.h"
 #include "components/password_manager/core/browser/password_manager_metrics_util.h"
 #include "components/password_manager/core/common/password_manager_features.h"
+#import "ios/chrome/browser/favicon/favicon_loader.h"
+#include "ios/chrome/browser/favicon/ios_chrome_favicon_loader_factory.h"
 #import "ios/chrome/browser/main/browser.h"
 #include "ios/chrome/browser/passwords/ios_chrome_password_check_manager.h"
 #include "ios/chrome/browser/passwords/ios_chrome_password_check_manager_factory.h"
+#include "ios/chrome/browser/signin/identity_manager_factory.h"
+#include "ios/chrome/browser/sync/sync_service_factory.h"
 #include "ios/chrome/browser/sync/sync_setup_service_factory.h"
 #import "ios/chrome/browser/ui/commands/application_commands.h"
 #import "ios/chrome/browser/ui/commands/command_dispatcher.h"
@@ -19,12 +23,12 @@
 #import "ios/chrome/browser/ui/settings/password/password_details/password_details_coordinator.h"
 #import "ios/chrome/browser/ui/settings/password/password_details/password_details_coordinator_delegate.h"
 #import "ios/chrome/browser/ui/settings/password/password_issues_coordinator.h"
+#import "ios/chrome/browser/ui/settings/password/password_manager_view_controller.h"
+#import "ios/chrome/browser/ui/settings/password/password_manager_view_controller_presentation_delegate.h"
 #import "ios/chrome/browser/ui/settings/password/passwords_consumer.h"
+#import "ios/chrome/browser/ui/settings/password/passwords_in_other_apps/passwords_in_other_apps_coordinator.h"
 #import "ios/chrome/browser/ui/settings/password/passwords_mediator.h"
 #import "ios/chrome/browser/ui/settings/password/passwords_settings_commands.h"
-#import "ios/chrome/browser/ui/settings/password/passwords_table_view_controller.h"
-#import "ios/chrome/browser/ui/settings/password/passwords_table_view_controller_presentation_delegate.h"
-#include "ios/chrome/browser/ui/ui_feature_flags.h"
 #import "ios/chrome/common/ui/reauthentication/reauthentication_module.h"
 
 #if !defined(__has_feature) || !__has_feature(objc_arc)
@@ -35,12 +39,13 @@
     AddPasswordCoordinatorDelegate,
     PasswordDetailsCoordinatorDelegate,
     PasswordIssuesCoordinatorDelegate,
+    PasswordsInOtherAppsCoordinatorDelegate,
     PasswordsSettingsCommands,
-    PasswordsTableViewControllerPresentationDelegate>
+    PasswordManagerViewControllerPresentationDelegate>
 
 // Main view controller for this coordinator.
 @property(nonatomic, strong)
-    PasswordsTableViewController* passwordsViewController;
+    PasswordManagerViewController* passwordsViewController;
 
 // Main mediator for this coordinator.
 @property(nonatomic, strong) PasswordsMediator* mediator;
@@ -48,7 +53,7 @@
 // Reauthentication module used by passwords export and password details.
 @property(nonatomic, strong) ReauthenticationModule* reauthModule;
 
-// The dispatcher used by |viewController|.
+// The dispatcher used by `viewController`.
 @property(nonatomic, weak)
     id<ApplicationCommands, BrowserCommands, BrowsingDataCommands>
         dispatcher;
@@ -63,6 +68,10 @@
 
 // Coordinator for add password details.
 @property(nonatomic, strong) AddPasswordCoordinator* addPasswordCoordinator;
+
+// Coordinator for passwords in other apps promotion view.
+@property(nonatomic, strong)
+    PasswordsInOtherAppsCoordinator* passwordsInOtherAppsCoordinator;
 
 @end
 
@@ -99,21 +108,30 @@
 #pragma mark - ChromeCoordinator
 
 - (void)start {
+  ChromeBrowserState* browserState = self.browser->GetBrowserState();
+  FaviconLoader* faviconLoader =
+      IOSChromeFaviconLoaderFactory::GetForBrowserState(browserState);
   self.mediator = [[PasswordsMediator alloc]
       initWithPasswordCheckManager:[self passwordCheckManager]
-                       syncService:SyncSetupServiceFactory::GetForBrowserState(
-                                       self.browser->GetBrowserState())];
+                  syncSetupService:SyncSetupServiceFactory::GetForBrowserState(
+                                       browserState)
+                     faviconLoader:faviconLoader
+                   identityManager:IdentityManagerFactory::GetForBrowserState(
+                                       browserState)
+                       syncService:SyncServiceFactory::GetForBrowserState(
+                                       browserState)];
   self.reauthModule = [[ReauthenticationModule alloc]
       initWithSuccessfulReauthTimeAccessor:self.mediator];
 
   self.passwordsViewController =
-      [[PasswordsTableViewController alloc] initWithBrowser:self.browser];
+      [[PasswordManagerViewController alloc] initWithBrowser:self.browser];
 
   self.passwordsViewController.handler = self;
   self.passwordsViewController.delegate = self.mediator;
   self.passwordsViewController.dispatcher = self.dispatcher;
   self.passwordsViewController.presentationDelegate = self;
   self.passwordsViewController.reauthenticationModule = self.reauthModule;
+  self.passwordsViewController.imageDataSource = self.mediator;
 
   self.mediator.consumer = self.passwordsViewController;
 
@@ -122,6 +140,7 @@
 }
 
 - (void)stop {
+  self.passwordsViewController.delegate = nil;
   self.passwordsViewController = nil;
 
   [self.passwordIssuesCoordinator stop];
@@ -131,6 +150,12 @@
   [self.passwordDetailsCoordinator stop];
   self.passwordDetailsCoordinator.delegate = nil;
   self.passwordDetailsCoordinator = nil;
+
+  [self.passwordsInOtherAppsCoordinator stop];
+  self.passwordsInOtherAppsCoordinator.delegate = nil;
+  self.passwordsInOtherAppsCoordinator = nil;
+
+  [self.mediator disconnect];
 }
 
 #pragma mark - PasswordsSettingsCommands
@@ -169,9 +194,19 @@
   [self.addPasswordCoordinator start];
 }
 
-#pragma mark - PasswordsTableViewControllerPresentationDelegate
+- (void)showPasswordsInOtherAppsPromo {
+  DCHECK(!self.passwordsInOtherAppsCoordinator);
+  self.passwordsInOtherAppsCoordinator =
+      [[PasswordsInOtherAppsCoordinator alloc]
+          initWithBaseNavigationController:self.baseNavigationController
+                                   browser:self.browser];
+  self.passwordsInOtherAppsCoordinator.delegate = self;
+  [self.passwordsInOtherAppsCoordinator start];
+}
 
-- (void)passwordsTableViewControllerDismissed {
+#pragma mark - PasswordManagerViewControllerPresentationDelegate
+
+- (void)PasswordManagerViewControllerDismissed {
   [self.delegate passwordsCoordinatorDidRemove:self];
 }
 
@@ -217,6 +252,33 @@
   [self.addPasswordCoordinator stop];
   self.addPasswordCoordinator.delegate = nil;
   self.addPasswordCoordinator = nil;
+}
+
+- (void)setMostRecentlyUpdatedPasswordDetails:
+    (const password_manager::PasswordForm&)password {
+  [self.passwordsViewController setMostRecentlyUpdatedPasswordDetails:password];
+}
+
+- (void)dismissAddViewControllerAndShowPasswordDetails:
+            (const password_manager::PasswordForm&)password
+                                           coordinator:(AddPasswordCoordinator*)
+                                                           coordinator {
+  DCHECK(self.addPasswordCoordinator &&
+         self.addPasswordCoordinator == coordinator);
+  [self passwordDetailsTableViewControllerDidFinish:coordinator];
+  [self showDetailedViewForForm:password];
+  [self.passwordDetailsCoordinator
+          showPasswordDetailsInEditModeWithoutAuthentication];
+}
+
+#pragma mark - PasswordsInOtherAppsCoordinatorDelegate
+
+- (void)passwordsInOtherAppsCoordinatorDidRemove:
+    (PasswordsInOtherAppsCoordinator*)coordinator {
+  DCHECK_EQ(self.passwordsInOtherAppsCoordinator, coordinator);
+  [self.passwordsInOtherAppsCoordinator stop];
+  self.passwordsInOtherAppsCoordinator.delegate = nil;
+  self.passwordsInOtherAppsCoordinator = nil;
 }
 
 #pragma mark Private

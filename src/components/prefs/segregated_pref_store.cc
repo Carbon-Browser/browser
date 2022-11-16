@@ -10,6 +10,7 @@
 #include "base/check_op.h"
 #include "base/containers/contains.h"
 #include "base/notreached.h"
+#include "base/observer_list.h"
 #include "base/values.h"
 
 SegregatedPrefStore::UnderlyingPrefStoreObserver::UnderlyingPrefStoreObserver(
@@ -92,8 +93,7 @@ std::unique_ptr<base::DictionaryValue> SegregatedPrefStore::GetValues() const {
   auto values = default_pref_store_->GetValues();
   auto selected_pref_store_values = selected_pref_store_->GetValues();
   for (const auto& key : selected_preference_names_) {
-    const base::Value* value = nullptr;
-    if (selected_pref_store_values->Get(key, &value)) {
+    if (const base::Value* value = selected_pref_store_values->FindPath(key)) {
       values->SetPath(key, value->Clone());
     } else {
       values->RemoveKey(key);
@@ -193,12 +193,6 @@ void SegregatedPrefStore::CommitPendingWrite(
                                           synchronous_callback_wrapper);
   selected_pref_store_->CommitPendingWrite(reply_callback_wrapper,
                                            synchronous_callback_wrapper);
-}
-
-void SegregatedPrefStore::CommitPendingWriteSynchronously() {
-  // This function was added for one very specific use case and is intentionally
-  // not implemented for other pref stores.
-  NOTREACHED();
 }
 
 void SegregatedPrefStore::SchedulePendingLossyWrites() {

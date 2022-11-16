@@ -10,14 +10,18 @@
 #include "base/containers/flat_set.h"
 #include "base/containers/unique_ptr_adapters.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/threading/sequence_bound.h"
+#include "components/services/storage/public/cpp/buckets/bucket_info.h"
+#include "components/services/storage/public/cpp/quota_error_or.h"
 #include "components/services/storage/public/mojom/service_worker_storage_control.mojom.h"
 #include "content/browser/service_worker/service_worker_registration.h"
 #include "content/common/content_export.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "storage/browser/quota/storage_policy_observer.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/blink/public/mojom/service_worker/service_worker_ancestor_frame_type.mojom.h"
 
 namespace blink {
 class StorageKey;
@@ -104,6 +108,7 @@ class CONTENT_EXPORT ServiceWorkerRegistry {
   void CreateNewRegistration(
       blink::mojom::ServiceWorkerRegistrationOptions options,
       const blink::StorageKey& key,
+      blink::mojom::AncestorFrameType ancestor_frame_type,
       NewRegistrationCallback callback);
 
   // Create a new instance of ServiceWorkerVersion which is associated with the
@@ -296,6 +301,13 @@ class CONTENT_EXPORT ServiceWorkerRegistry {
       mojo::PendingRemote<storage::mojom::ServiceWorkerLiveVersionRef>
           version_reference);
 
+  void CreateNewRegistrationWithBucketInfo(
+      blink::mojom::ServiceWorkerRegistrationOptions options,
+      const blink::StorageKey& key,
+      blink::mojom::AncestorFrameType ancestor_frame_type,
+      NewRegistrationCallback callback,
+      storage::QuotaErrorOr<storage::BucketInfo> result);
+
   // Looks up live registrations and returns an optional value which may contain
   // a "findable" registration. See the implementation of this method for
   // what "findable" means and when a registration is returned.
@@ -380,6 +392,7 @@ class CONTENT_EXPORT ServiceWorkerRegistry {
   void DidGetNewRegistrationId(
       blink::mojom::ServiceWorkerRegistrationOptions options,
       const blink::StorageKey& key,
+      blink::mojom::AncestorFrameType ancestor_frame_type,
       NewRegistrationCallback callback,
       int64_t registration_id);
 
@@ -458,7 +471,7 @@ class CONTENT_EXPORT ServiceWorkerRegistry {
       Args&&... args);
 
   // The ServiceWorkerContextCore object must outlive this.
-  ServiceWorkerContextCore* const context_;
+  const raw_ptr<ServiceWorkerContextCore> context_;
 
   mojo::Remote<storage::mojom::ServiceWorkerStorageControl>
       remote_storage_control_;

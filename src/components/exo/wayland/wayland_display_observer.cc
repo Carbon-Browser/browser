@@ -9,10 +9,16 @@
 
 #include <string>
 
+#include "chrome-color-management-server-protocol.h"
+#include "components/exo/wayland/server_util.h"
 #include "components/exo/wayland/wayland_display_output.h"
+#include "components/exo/wayland/wayland_display_util.h"
+#include "components/exo/wayland/zcr_color_manager.h"
 #include "components/exo/wm_helper.h"
+#include "ui/display/display_observer.h"
 #include "ui/display/manager/managed_display_info.h"
 #include "ui/display/screen.h"
+#include "wayland-server-protocol-core.h"
 
 namespace exo {
 namespace wayland {
@@ -20,14 +26,18 @@ namespace wayland {
 WaylandDisplayHandler::WaylandDisplayHandler(WaylandDisplayOutput* output,
                                              wl_resource* output_resource)
     : output_(output), output_resource_(output_resource) {
-  output_->RegisterOutput(output_resource_);
-
-  // Adding itself as an observer will send the initial display metrics.
-  AddObserver(this);
 }
 
 WaylandDisplayHandler::~WaylandDisplayHandler() {
+  if (xdg_output_resource_)
+    wl_resource_set_user_data(xdg_output_resource_, nullptr);
   output_->UnregisterOutput(output_resource_);
+}
+
+void WaylandDisplayHandler::Initialize() {
+  // Adding itself as an observer will send the initial display metrics.
+  AddObserver(this);
+  output_->RegisterOutput(output_resource_);
 }
 
 void WaylandDisplayHandler::AddObserver(WaylandDisplayObserver* observer) {
@@ -98,6 +108,21 @@ void WaylandDisplayHandler::UnsetXdgOutputResource() {
   xdg_output_resource_ = nullptr;
 }
 
+void WaylandDisplayHandler::XdgOutputSendLogicalPosition(
+    const gfx::Point& position) {
+  zxdg_output_v1_send_logical_position(xdg_output_resource_, position.x(),
+                                       position.y());
+}
+
+void WaylandDisplayHandler::XdgOutputSendLogicalSize(const gfx::Size& size) {
+  zxdg_output_v1_send_logical_size(xdg_output_resource_, size.width(),
+                                   size.height());
+}
+
+void WaylandDisplayHandler::XdgOutputSendDescription(const std::string& desc) {
+  zxdg_output_v1_send_description(xdg_output_resource_, desc.c_str());
+}
+
 bool WaylandDisplayHandler::SendDisplayMetrics(const display::Display& display,
                                                uint32_t changed_metrics) {
   if (!output_resource_)
@@ -164,10 +189,9 @@ bool WaylandDisplayHandler::SendDisplayMetrics(const display::Display& display,
                       static_cast<int>(60000));
 
   if (xdg_output_resource_) {
-    const gfx::Size logical_size = ScaleToRoundedSize(
-        physical_size_px, 1.0f / display.device_scale_factor());
-    zxdg_output_v1_send_logical_size(xdg_output_resource_, logical_size.width(),
-                                     logical_size.height());
+    XdgOutputSendLogicalPosition(origin);
+    XdgOutputSendLogicalSize(display.bounds().size());
+    XdgOutputSendDescription(display.label());
   } else {
     if (wl_resource_get_version(output_resource_) >=
         WL_OUTPUT_SCALE_SINCE_VERSION) {
@@ -179,25 +203,6 @@ bool WaylandDisplayHandler::SendDisplayMetrics(const display::Display& display,
   }
 
   return true;
-}
-
-wl_output_transform WaylandDisplayHandler::OutputTransform(
-    display::Display::Rotation rotation) {
-  // Note: |rotation| describes the counter clockwise rotation that a
-  // display's output is currently adjusted for, which is the inverse
-  // of what we need to return.
-  switch (rotation) {
-    case display::Display::ROTATE_0:
-      return WL_OUTPUT_TRANSFORM_NORMAL;
-    case display::Display::ROTATE_90:
-      return WL_OUTPUT_TRANSFORM_270;
-    case display::Display::ROTATE_180:
-      return WL_OUTPUT_TRANSFORM_180;
-    case display::Display::ROTATE_270:
-      return WL_OUTPUT_TRANSFORM_90;
-  }
-  NOTREACHED();
-  return WL_OUTPUT_TRANSFORM_NORMAL;
 }
 
 }  // namespace wayland

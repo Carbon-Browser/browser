@@ -67,6 +67,9 @@ class FileSystemHelperTest : public testing::Test {
         native_io_context);
   }
 
+  FileSystemHelperTest(const FileSystemHelperTest&) = delete;
+  FileSystemHelperTest& operator=(const FileSystemHelperTest&) = delete;
+
   // Blocks on the run_loop quits.
   void BlockUntilQuit(base::RunLoop* run_loop) {
     run_loop->Run();                  // Won't return until Quit().
@@ -76,7 +79,7 @@ class FileSystemHelperTest : public testing::Test {
   // Callback that should be executed in response to
   // storage::FileSystemContext::OpenFileSystem.
   void OpenFileSystemCallback(base::RunLoop* run_loop,
-                              const GURL& root,
+                              const storage::FileSystemURL& root,
                               const std::string& name,
                               base::File::Error error) {
     open_file_system_result_ = error;
@@ -90,7 +93,8 @@ class FileSystemHelperTest : public testing::Test {
     browser_context_.GetDefaultStoragePartition()
         ->GetFileSystemContext()
         ->OpenFileSystem(
-            blink::StorageKey(origin), type, open_mode,
+            blink::StorageKey(origin), /*bucket=*/absl::nullopt, type,
+            open_mode,
             base::BindOnce(&FileSystemHelperTest::OpenFileSystemCallback,
                            base::Unretained(this), &run_loop));
     BlockUntilQuit(&run_loop);
@@ -181,9 +185,6 @@ class FileSystemHelperTest : public testing::Test {
 
   scoped_refptr<FileSystemHelper> helper_;
   scoped_refptr<CannedFileSystemHelper> canned_helper_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(FileSystemHelperTest);
 };
 
 // Verifies that the FileSystemHelper correctly finds the test file

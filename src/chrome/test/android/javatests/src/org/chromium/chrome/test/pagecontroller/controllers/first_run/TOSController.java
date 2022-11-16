@@ -33,7 +33,7 @@ public class TOSController extends PageController {
     }
 
     public boolean isSendingReports() {
-        return false;//mLocatorHelper.getOneChecked(LOCATOR_SEND_REPORT_CHECKBOX);
+        return false;
     }
 
     public TOSController toggleSendReports() {

@@ -6,7 +6,6 @@
 #define GOOGLE_APIS_GAIA_FAKE_OAUTH2_ACCESS_TOKEN_MANAGER_H_
 
 #include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "google_apis/gaia/oauth2_access_token_manager.h"
 
@@ -33,6 +32,11 @@ class FakeOAuth2AccessTokenManager : public OAuth2AccessTokenManager {
 
   explicit FakeOAuth2AccessTokenManager(
       OAuth2AccessTokenManager::Delegate* delegate);
+
+  FakeOAuth2AccessTokenManager(const FakeOAuth2AccessTokenManager&) = delete;
+  FakeOAuth2AccessTokenManager& operator=(const FakeOAuth2AccessTokenManager&) =
+      delete;
+
   ~FakeOAuth2AccessTokenManager() override;
 
   // Gets a list of active requests (can be used by tests to validate that the
@@ -117,8 +121,6 @@ class FakeOAuth2AccessTokenManager : public OAuth2AccessTokenManager {
   bool auto_post_fetch_response_on_message_loop_;
 
   base::WeakPtrFactory<FakeOAuth2AccessTokenManager> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(FakeOAuth2AccessTokenManager);
 };
 
 #endif  // GOOGLE_APIS_GAIA_FAKE_OAUTH2_ACCESS_TOKEN_MANAGER_H_

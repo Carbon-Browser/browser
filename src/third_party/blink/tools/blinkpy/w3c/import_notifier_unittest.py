@@ -25,7 +25,8 @@ class ImportNotifierTest(unittest.TestCase):
         # Mock a virtual test suite at virtual/gpu/external/wpt/foo.
         self.host.filesystem = MockFileSystem({
             MOCK_WEB_TESTS + 'VirtualTestSuites':
-            '[{"prefix": "gpu", "bases": ["external/wpt/foo"], "args": ["--foo"]}]'
+            b'[{"prefix": "gpu", "platforms": ["Linux", "Mac", "Win"], '
+            b'"bases": ["external/wpt/foo"], "args": ["--foo"]}]'
         })
         self.git = self.host.git()
         self.local_wpt = MockLocalWPT()
@@ -281,7 +282,7 @@ class ImportNotifierTest(unittest.TestCase):
         self.host.filesystem.write_text_file(
             MOCK_WEB_TESTS + 'external/wpt/bar/OWNERS', 'test@chromium.org')
 
-        data = ('{"dirs":{"external/wpt/foo":{"monorail":{"component":'
+        data = ('{"dirs":{"third_party/blink/web_tests/external/wpt/foo":{"monorail":{"component":'
                 '"Blink>Infra>Ecosystem"},"teamEmail":"email","wpt":{'
                 '"notify":"YES"}}}}')
 

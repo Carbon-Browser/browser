@@ -17,7 +17,7 @@
 #include <vector>
 
 #include "base/logging.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "dbus/bus.h"
@@ -49,6 +49,10 @@ enum { NM_DEVICE_TYPE_WIFI = 2 };
 class NetworkManagerWlanApi : public WifiDataProviderCommon::WlanApiInterface {
  public:
   NetworkManagerWlanApi();
+
+  NetworkManagerWlanApi(const NetworkManagerWlanApi&) = delete;
+  NetworkManagerWlanApi& operator=(const NetworkManagerWlanApi&) = delete;
+
   ~NetworkManagerWlanApi() override;
 
   // Must be called before any other interface method. Will return false if the
@@ -84,9 +88,7 @@ class NetworkManagerWlanApi : public WifiDataProviderCommon::WlanApiInterface {
       const std::string& property_name);
 
   scoped_refptr<dbus::Bus> system_bus_;
-  dbus::ObjectProxy* network_manager_proxy_ = nullptr;
-
-  DISALLOW_COPY_AND_ASSIGN(NetworkManagerWlanApi);
+  raw_ptr<dbus::ObjectProxy> network_manager_proxy_ = nullptr;
 };
 
 // Convert a wifi frequency to the corresponding channel. Adapted from

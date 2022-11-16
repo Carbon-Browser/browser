@@ -8,6 +8,8 @@
 #include <string>
 #include <utility>
 
+#include "ash/components/arc/session/arc_service_manager.h"
+#include "ash/components/arc/session/arc_session.h"
 #include "base/bind.h"
 #include "base/callback.h"
 #include "base/command_line.h"
@@ -19,10 +21,12 @@
 #include "base/test/simple_test_tick_clock.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager.h"
 #include "chrome/browser/ash/arc/test/test_arc_session_manager.h"
+#include "chrome/browser/ash/lock_screen_apps/lock_screen_apps.h"
+#include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/browser/ash/login/users/scoped_test_user_manager.h"
+#include "chrome/browser/ash/note_taking_helper.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/ash/settings/scoped_cros_settings_test_helper.h"
-#include "chrome/browser/chromeos/note_taking_helper.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/test_extension_system.h"
 #include "chrome/browser/profiles/profile_manager.h"
@@ -31,13 +35,12 @@
 #include "chrome/test/base/scoped_testing_local_state.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
-#include "chromeos/dbus/concierge/concierge_client.h"
+#include "chromeos/ash/components/dbus/concierge/concierge_client.h"
 #include "chromeos/dbus/dbus_thread_manager.h"
-#include "components/arc/arc_service_manager.h"
-#include "components/arc/session/arc_session.h"
 #include "components/crx_file/id_util.h"
 #include "components/prefs/pref_service.h"
 #include "components/safe_browsing/core/common/safe_browsing_prefs.h"
+#include "components/user_manager/scoped_user_manager.h"
 #include "content/public/test/browser_task_environment.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/extension_builder.h"
@@ -47,7 +50,7 @@
 
 namespace {
 
-using chromeos::ProfileHelper;
+using ::ash::ProfileHelper;
 using extensions::DictionaryBuilder;
 using extensions::ListBuilder;
 using lock_screen_apps::LockScreenProfileCreator;
@@ -76,6 +79,10 @@ void SetWasRun(bool* was_run) {
 class PendingProfileCreation : public Profile::Delegate {
  public:
   PendingProfileCreation() {}
+
+  PendingProfileCreation(const PendingProfileCreation&) = delete;
+  PendingProfileCreation& operator=(const PendingProfileCreation&) = delete;
+
   ~PendingProfileCreation() override {}
 
   // Sets the pending profile creation to track a profile creation,
@@ -170,8 +177,6 @@ class PendingProfileCreation : public Profile::Delegate {
   Profile* profile_ = nullptr;
   bool success_ = false;
   bool is_new_profile_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(PendingProfileCreation);
 };
 
 // Test profile manager implementation used to track async profile creation.
@@ -211,13 +216,19 @@ class LockScreenProfileCreatorImplTest : public testing::Test {
  public:
   LockScreenProfileCreatorImplTest()
       : local_state_(TestingBrowserProcess::GetGlobal()) {}
+
+  LockScreenProfileCreatorImplTest(const LockScreenProfileCreatorImplTest&) =
+      delete;
+  LockScreenProfileCreatorImplTest& operator=(
+      const LockScreenProfileCreatorImplTest&) = delete;
+
   ~LockScreenProfileCreatorImplTest() override {}
 
   void SetUp() override {
     // Need to initialize DBusThreadManager before ArcSessionManager's
     // constructor calls DBusThreadManager::Get().
     chromeos::DBusThreadManager::Initialize();
-    chromeos::ConciergeClient::InitializeFake(/*fake_cicerone_client=*/nullptr);
+    ash::ConciergeClient::InitializeFake(/*fake_cicerone_client=*/nullptr);
 
     base::CommandLine::ForCurrentProcess()->AppendSwitchASCII(
         extensions::switches::kAllowlistedExtensionID,
@@ -230,13 +241,15 @@ class LockScreenProfileCreatorImplTest : public testing::Test {
     TestingBrowserProcess::GetGlobal()->SetProfileManager(
         std::move(profile_manager_unique));
 
+    CreatePrimaryProfile();
+
+    InitExtensionSystem(primary_profile_);
+
     // Needed by note taking helper.
     arc_session_manager_ = arc::CreateTestArcSessionManager(
         std::make_unique<arc::ArcSessionRunner>(
             base::BindRepeating(&ArcSessionFactory)));
-    chromeos::NoteTakingHelper::Initialize();
-
-    AddTestUserProfile();
+    ash::NoteTakingHelper::Initialize();
 
     lock_screen_profile_creator_ =
         std::make_unique<LockScreenProfileCreatorImpl>(primary_profile_,
@@ -246,10 +259,10 @@ class LockScreenProfileCreatorImplTest : public testing::Test {
   void TearDown() override {
     lock_screen_profile_creator_.reset();
     arc_session_manager_.reset();
-    chromeos::NoteTakingHelper::Shutdown();
+    ash::NoteTakingHelper::Shutdown();
     TestingBrowserProcess::GetGlobal()->SetProfileManager(nullptr);
 
-    chromeos::ConciergeClient::Shutdown();
+    ash::ConciergeClient::Shutdown();
     chromeos::DBusThreadManager::Shutdown();
   }
 
@@ -314,9 +327,9 @@ class LockScreenProfileCreatorImplTest : public testing::Test {
   void SetAppEnabledOnLockScreen(Profile* profile,
                                  const extensions::Extension* app,
                                  bool enabled) {
-    chromeos::NoteTakingHelper::Get()->SetPreferredApp(profile, app->id());
-    chromeos::NoteTakingHelper::Get()->SetPreferredAppEnabledOnLockScreen(
-        profile, enabled);
+    ash::NoteTakingHelper::Get()->SetPreferredApp(profile, app->id());
+    ash::NoteTakingHelper::Get()->SetPreferredAppEnabledOnLockScreen(profile,
+                                                                     enabled);
   }
 
   // Marks extension system as ready.
@@ -340,21 +353,23 @@ class LockScreenProfileCreatorImplTest : public testing::Test {
         false /* autoupdate_enabled */);
   }
 
-  // Creates a testing primary user profile for this test.
-  void AddTestUserProfile() {
+  void CreatePrimaryProfile() {
+    DCHECK(!scoped_user_manager_) << "there can be only one primary profile";
+    auto user_manager = std::make_unique<ash::FakeChromeUserManager>();
+    const AccountId account_id(AccountId::FromUserEmail(kPrimaryUser));
+    user_manager->AddUser(account_id);
+    user_manager->LoginUser(account_id);
+    scoped_user_manager_ = std::make_unique<user_manager::ScopedUserManager>(
+        std::move(user_manager));
+
     base::FilePath user_profile_path =
         user_data_dir_.GetPath().Append(ProfileHelper::Get()->GetUserProfileDir(
             ProfileHelper::GetUserIdHashByUserIdForTesting(kPrimaryUser)));
-
-    std::unique_ptr<TestingProfile> primary_profile =
-        std::make_unique<TestingProfile>(user_profile_path);
-    primary_profile_ = primary_profile.get();
-    profile_manager_->RegisterTestingProfile(std::move(primary_profile),
+    auto profile = std::make_unique<TestingProfile>(user_profile_path);
+    primary_profile_ = profile.get();
+    profile_manager_->RegisterTestingProfile(std::move(profile),
                                              false /*add_to_storage*/);
-    InitExtensionSystem(primary_profile_);
-
-    chromeos::NoteTakingHelper::Get()->SetProfileWithEnabledLockScreenApps(
-        primary_profile_);
+    DCHECK(ash::ProfileHelper::IsPrimaryProfile(primary_profile_));
   }
 
   base::ScopedTempDir user_data_dir_;
@@ -362,7 +377,7 @@ class LockScreenProfileCreatorImplTest : public testing::Test {
   content::BrowserTaskEnvironment task_environment_;
 
   ash::ScopedCrosSettingsTestHelper cros_settings_test_helper_;
-  ash::ScopedTestUserManager test_user_manager_;
+  std::unique_ptr<user_manager::ScopedUserManager> scoped_user_manager_;
 
   UnittestProfileManager* profile_manager_;
 
@@ -374,8 +389,6 @@ class LockScreenProfileCreatorImplTest : public testing::Test {
   std::unique_ptr<arc::ArcSessionManager> arc_session_manager_;
 
   std::unique_ptr<LockScreenProfileCreator> lock_screen_profile_creator_;
-
-  DISALLOW_COPY_AND_ASSIGN(LockScreenProfileCreatorImplTest);
 };
 
 }  // namespace
@@ -618,7 +631,7 @@ TEST_F(LockScreenProfileCreatorImplTest, MetricsOnSuccess) {
   ASSERT_EQ(ProfileHelper::GetLockScreenAppProfilePath(),
             profile_manager()->pending_profile_creation()->path());
 
-  tick_clock()->Advance(base::TimeDelta::FromMilliseconds(20));
+  tick_clock()->Advance(base::Milliseconds(20));
 
   ASSERT_TRUE(profile_manager()
                   ->pending_profile_creation()
@@ -627,8 +640,8 @@ TEST_F(LockScreenProfileCreatorImplTest, MetricsOnSuccess) {
   EXPECT_TRUE(callback_run);
 
   histogram_tester->ExpectTimeBucketCount(
-      "Apps.LockScreen.AppsProfile.Creation.Duration",
-      base::TimeDelta::FromMilliseconds(20), 1);
+      "Apps.LockScreen.AppsProfile.Creation.Duration", base::Milliseconds(20),
+      1);
   histogram_tester->ExpectUniqueSample(
       "Apps.LockScreen.AppsProfile.Creation.Success", 1, 1);
 }
@@ -653,7 +666,7 @@ TEST_F(LockScreenProfileCreatorImplTest, MetricsOnFailure) {
   ASSERT_EQ(ProfileHelper::GetLockScreenAppProfilePath(),
             profile_manager()->pending_profile_creation()->path());
 
-  tick_clock()->Advance(base::TimeDelta::FromMilliseconds(20));
+  tick_clock()->Advance(base::Milliseconds(20));
 
   ASSERT_TRUE(profile_manager()
                   ->pending_profile_creation()

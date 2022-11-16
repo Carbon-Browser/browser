@@ -12,8 +12,8 @@
 
 #include <string>
 
-#include "base/macros.h"
 #include "components/autofill/core/browser/autofill_regex_constants.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace autofill {
@@ -33,7 +33,7 @@ TEST_P(PositiveSampleTest, SampleRegexes) {
   EXPECT_TRUE(MatchesPattern(test_case.input, test_case.pattern));
 }
 
-INSTANTIATE_TEST_SUITE_P(AutofillRegexes,
+INSTANTIATE_TEST_SUITE_P(AutofillRegexesTest,
                          PositiveSampleTest,
                          testing::Values(
                              // Empty pattern
@@ -61,7 +61,7 @@ TEST_P(NegativeSampleTest, SampleRegexes) {
   EXPECT_FALSE(MatchesPattern(test_case.input, test_case.pattern));
 }
 
-INSTANTIATE_TEST_SUITE_P(AutofillRegexes,
+INSTANTIATE_TEST_SUITE_P(AutofillRegexesTest,
                          NegativeSampleTest,
                          testing::Values(
                              // Empty string
@@ -75,6 +75,44 @@ INSTANTIATE_TEST_SUITE_P(AutofillRegexes,
                              // Substring at end
                              InputPatternTestCase{u"string", u"ring "},
                              InputPatternTestCase{u"string", u"rin$"}));
+
+// Tests for capture groups.
+struct CapturePatternTestCase {
+  const char16_t* const input;
+  const char16_t* const pattern;
+  const bool matches;
+  const std::vector<std::u16string> groups;
+};
+
+class CaptureTest : public testing::TestWithParam<CapturePatternTestCase> {};
+
+TEST_P(CaptureTest, SampleRegexes) {
+  auto test_case = GetParam();
+  std::vector<std::u16string> groups;
+  EXPECT_EQ(test_case.matches,
+            MatchesPattern(test_case.input, test_case.pattern, &groups));
+  EXPECT_THAT(groups, testing::Eq(test_case.groups));
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    AutofillRegexes,
+    CaptureTest,
+    testing::Values(
+        // Find substrings in the input.
+        CapturePatternTestCase{u"Foo abcde Bar",
+                               u"a(b+)c(d+)e",
+                               true,
+                               {u"abcde", u"b", u"d"}},
+        // Deal with optional capture groups.
+        CapturePatternTestCase{u"Foo acde Bar",
+                               u"a(b+)?c(d+)e",  // There is no b in the input.
+                               true,
+                               {u"acde", u"", u"d"}},
+        // Deal with non-matching capture groups.
+        CapturePatternTestCase{u"Foo acde Bar",
+                               u"a(b+)c(d+)e",  // There is no b in the input.
+                               false,
+                               {}}));
 
 struct InputTestCase {
   const char16_t* const input;

@@ -4,6 +4,8 @@
 
 #include "components/services/storage/dom_storage/local_storage_impl.h"
 
+#include <tuple>
+
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/containers/span.h"
@@ -11,9 +13,9 @@
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/run_loop.h"
-#include "base/sequenced_task_runner.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
 #include "build/build_config.h"
@@ -106,6 +108,9 @@ class LocalStorageImplTest : public testing::Test {
  public:
   LocalStorageImplTest() { EXPECT_TRUE(temp_path_.CreateUniqueTempDir()); }
 
+  LocalStorageImplTest(const LocalStorageImplTest&) = delete;
+  LocalStorageImplTest& operator=(const LocalStorageImplTest&) = delete;
+
   ~LocalStorageImplTest() override {
     if (storage_)
       ShutDownStorage();
@@ -151,7 +156,6 @@ class LocalStorageImplTest : public testing::Test {
     WaitForDatabaseOpen();
     base::RunLoop loop;
     context()->GetDatabaseForTesting().PostTaskWithThisObject(
-        FROM_HERE,
         base::BindLambdaForTesting([&](const DomStorageDatabase& db) {
           leveldb::Status status =
               db.Put(base::as_bytes(base::make_span(key)),
@@ -166,7 +170,6 @@ class LocalStorageImplTest : public testing::Test {
     WaitForDatabaseOpen();
     base::RunLoop loop;
     context()->GetDatabaseForTesting().PostTaskWithThisObject(
-        FROM_HERE,
         base::BindLambdaForTesting([&](const DomStorageDatabase& db) {
           leveldb::WriteBatch batch;
           leveldb::Status status = db.DeletePrefixed({}, &batch);
@@ -183,7 +186,6 @@ class LocalStorageImplTest : public testing::Test {
     WaitForDatabaseOpen();
     base::RunLoop loop;
     context()->GetDatabaseForTesting().PostTaskWithThisObject(
-        FROM_HERE,
         base::BindLambdaForTesting([&](const DomStorageDatabase& db) {
           leveldb::Status status = db.GetPrefixed({}, &entries);
           ASSERT_TRUE(status.ok());
@@ -255,7 +257,7 @@ class LocalStorageImplTest : public testing::Test {
     base::RunLoop run_loop;
     std::vector<blink::mojom::KeyValuePtr> data;
     mojo::PendingRemote<blink::mojom::StorageAreaObserver> unused_observer;
-    ignore_result(unused_observer.InitWithNewPipeAndPassReceiver());
+    std::ignore = unused_observer.InitWithNewPipeAndPassReceiver();
     area->GetAll(std::move(unused_observer),
                  test::MakeGetAllCallback(run_loop.QuitClosure(), &data));
     run_loop.Run();
@@ -293,8 +295,6 @@ class LocalStorageImplTest : public testing::Test {
   base::ScopedTempDir temp_path_;
 
   std::unique_ptr<LocalStorageImpl> storage_;
-
-  DISALLOW_COPY_AND_ASSIGN(LocalStorageImplTest);
 };
 
 TEST_F(LocalStorageImplTest, Basic) {
@@ -929,7 +929,7 @@ TEST_F(LocalStorageImplTest, RecreateOnCommitFailure) {
 
   bool first_database_destroyed = false;
   context()->GetDatabaseForTesting().PostTaskWithThisObject(
-      FROM_HERE, base::BindLambdaForTesting([&](DomStorageDatabase* db) {
+      base::BindLambdaForTesting([&](DomStorageDatabase* db) {
         db->MakeAllCommitsFailForTesting();
         db->SetDestructionCallbackForTesting(base::BindLambdaForTesting([&] {
           first_database_destroyed = true;
@@ -1043,7 +1043,7 @@ TEST_F(LocalStorageImplTest, DontRecreateOnRepeatedCommitFailure) {
   // Ensure that all commits fail on the database, and that we observe its
   // destruction.
   context()->GetDatabaseForTesting().PostTaskWithThisObject(
-      FROM_HERE, base::BindLambdaForTesting([&](DomStorageDatabase* db) {
+      base::BindLambdaForTesting([&](DomStorageDatabase* db) {
         db->MakeAllCommitsFailForTesting();
         db->SetDestructionCallbackForTesting(
             base::BindLambdaForTesting([&] { ++num_databases_destroyed; }));
@@ -1085,10 +1085,8 @@ TEST_F(LocalStorageImplTest, DontRecreateOnRepeatedCommitFailure) {
   open_loop->Run();
   EXPECT_EQ(2u, num_database_open_requests);
   EXPECT_EQ(1u, num_databases_destroyed);
-  context()->GetDatabaseForTesting().PostTaskWithThisObject(
-      FROM_HERE, base::BindOnce([](DomStorageDatabase* db) {
-        db->MakeAllCommitsFailForTesting();
-      }));
+  context()->GetDatabaseForTesting().PostTaskWithThisObject(base::BindOnce(
+      [](DomStorageDatabase* db) { db->MakeAllCommitsFailForTesting(); }));
 
   // Reconnect a area to the database, and repeatedly write data to it again.
   // This time all should just keep getting written, and commit errors are

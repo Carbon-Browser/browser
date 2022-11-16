@@ -20,9 +20,6 @@ const char kPreviewUIID[] = "previewUIID";
 // Capabilities option. Contains the capabilities in CDD format.
 const char kSettingCapabilities[] = "capabilities";
 
-// Print using cloud print: true if selected, false if not.
-const char kSettingCloudPrintId[] = "cloudPrintID";
-
 // Print job setting 'collate'.
 const char kSettingCollate[] = "collate";
 
@@ -92,6 +89,24 @@ const char kSettingMediaSizeHeightMicrons[] = "height_microns";
 
 // Key that specifies the requested media width in microns.
 const char kSettingMediaSizeWidthMicrons[] = "width_microns";
+
+// Key that specifies the left side of the bounding box for the requested
+// media's printable area.
+const char kSettingsImageableAreaLeftMicrons[] = "imageable_area_left_microns";
+
+// Key that specifies the bottom side of the bounding box for the requested
+// media's printable area.
+const char kSettingsImageableAreaBottomMicrons[] =
+    "imageable_area_bottom_microns";
+
+// Key that specifies the right side of the bounding box for the requested
+// media's printable area.
+const char kSettingsImageableAreaRightMicrons[] =
+    "imageable_area_right_microns";
+
+// Key that specifies the top side of the bounding box for the requested
+// media's printable area.
+const char kSettingsImageableAreaTopMicrons[] = "imageable_area_top_microns";
 
 // Key that specifies the requested media platform specific vendor id.
 const char kSettingMediaSizeVendorId[] = "vendor_id";
@@ -209,7 +224,7 @@ const int FIRST_PAGE_INDEX = 0;
 const int COMPLETE_PREVIEW_DOCUMENT_INDEX = -1;
 
 // Whether to show PDF in view provided by OS. Implemented for MacOS only.
-const char kSettingOpenPDFInPreview[] = "OpenPDFInPreview";
+const char kSettingOpenPDFInPreview[] = "openPDFInPreview";
 
 const uint32_t kInvalidPageIndex = std::numeric_limits<int>::max();
 const uint32_t kMaxPageCount = std::numeric_limits<int>::max();

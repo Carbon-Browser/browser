@@ -15,7 +15,9 @@
 #include "chrome/common/pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/browser_thread.h"
+#include "content/public/browser/render_frame_host.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
+#include "url/gurl.h"
 #include "url/origin.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -25,27 +27,27 @@
 #include "components/user_manager/user_manager.h"
 #endif
 
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+#include "chrome/browser/lacros/app_mode/kiosk_session_service_lacros.h"
+#include "components/policy/core/common/policy_loader_lacros.h"
+#endif
+
 namespace {
 
 // Check whether the target origin is allowed to access to the device
 // attributes.
 bool CanAccessDeviceAttributes(const PrefService* prefs,
                                const url::Origin& origin) {
-  const base::ListValue* prefs_list =
-      prefs->GetList(prefs::kDeviceAttributesAllowedForOrigins);
-  if (!prefs_list)
-    return false;
+  const base::Value::List& prefs_list =
+      prefs->GetValueList(prefs::kDeviceAttributesAllowedForOrigins);
 
-  return base::Contains(prefs_list->GetList(), origin, [](const auto& entry) {
+  return base::Contains(prefs_list, origin, [](const auto& entry) {
     return url::Origin::Create(GURL(entry.GetString()));
   });
 }
 
 // Check whether the target origin is the same as the main application running
 // in the Kiosk session.
-// TODO(anqing): After Kiosk is migrated to Lacros, the launch url needs to be
-// stored in the lacros-browser when the app is launched. Then it can be used to
-// compare with |origin|.
 bool IsEqualToKioskOrigin(const url::Origin& origin) {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   const AccountId& account_id =
@@ -53,6 +55,10 @@ bool IsEqualToKioskOrigin(const url::Origin& origin) {
   const ash::WebKioskAppData* app_data =
       ash::WebKioskAppManager::Get()->GetAppByAccountId(account_id);
   return url::Origin::Create(app_data->install_url()) == origin;
+#elif BUILDFLAG(IS_CHROMEOS_LACROS)
+  DCHECK(KioskSessionServiceLacros::Get());
+  return url::Origin::Create(
+             KioskSessionServiceLacros::Get()->GetInstallURL()) == origin;
 #else
   return false;
 #endif
@@ -62,22 +68,20 @@ bool IsEqualToKioskOrigin(const url::Origin& origin) {
 // policy.
 bool IsForceInstalledOrigin(const PrefService* prefs,
                             const url::Origin& origin) {
-  const base::ListValue* prefs_list =
-      prefs->GetList(prefs::kWebAppInstallForceList);
-  if (!prefs_list)
-    return false;
+  const base::Value::List& prefs_list =
+      prefs->GetValueList(prefs::kWebAppInstallForceList);
 
-  return base::Contains(prefs_list->GetList(), origin, [](const auto& entry) {
+  return base::Contains(prefs_list, origin, [](const auto& entry) {
     std::string entry_url = entry.FindKey(web_app::kUrlKey)->GetString();
     return url::Origin::Create(GURL(entry_url));
   });
 }
 
-const Profile* GetProfile(content::RenderFrameHost* host) {
-  return Profile::FromBrowserContext(host->GetBrowserContext());
+const Profile* GetProfile(content::RenderFrameHost& host) {
+  return Profile::FromBrowserContext(host.GetBrowserContext());
 }
 
-const PrefService* GetPrefs(content::RenderFrameHost* host) {
+const PrefService* GetPrefs(content::RenderFrameHost& host) {
   return GetProfile(host)->GetPrefs();
 }
 
@@ -86,12 +90,14 @@ bool IsAffiliatedUser() {
   const user_manager::User* user =
       user_manager::UserManager::Get()->GetPrimaryUser();
   return user && user->IsAffiliated();
+#elif BUILDFLAG(IS_CHROMEOS_LACROS)
+  return policy::PolicyLoaderLacros::IsMainUserAffiliated();
 #else
   return false;
 #endif
 }
 
-bool IsTrustedContext(content::RenderFrameHost* host,
+bool IsTrustedContext(content::RenderFrameHost& host,
                       const url::Origin& origin) {
   // TODO(anqing): This feature flag is turned on by default for origin trial.
   // The flag will be removed when permission policies are ready.
@@ -112,11 +118,11 @@ bool IsTrustedContext(content::RenderFrameHost* host,
 }  // namespace
 
 DeviceServiceImpl::DeviceServiceImpl(
-    content::RenderFrameHost* host,
+    content::RenderFrameHost& host,
     mojo::PendingReceiver<blink::mojom::DeviceAPIService> receiver)
-    : DocumentServiceBase(host, std::move(receiver)), host_(host) {
+    : DocumentService(host, std::move(receiver)) {
   pref_change_registrar_.Init(
-      Profile::FromBrowserContext(host->GetBrowserContext())->GetPrefs());
+      Profile::FromBrowserContext(host.GetBrowserContext())->GetPrefs());
   pref_change_registrar_.Add(
       prefs::kDeviceAttributesAllowedForOrigins,
       base::BindRepeating(&DeviceServiceImpl::OnDisposingIfNeeded,
@@ -133,17 +139,18 @@ DeviceServiceImpl::~DeviceServiceImpl() = default;
 void DeviceServiceImpl::Create(
     content::RenderFrameHost* host,
     mojo::PendingReceiver<blink::mojom::DeviceAPIService> receiver) {
+  CHECK(host);
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
-  if (!IsTrustedContext(host,
-                        url::Origin::Create(host->GetLastCommittedURL()))) {
+  if (!IsTrustedContext(*host,
+                        host->GetMainFrame()->GetLastCommittedOrigin())) {
     // Not sending bad message here since the API is always exposed to the end
     // user.
     return;
   }
   // The object is bound to the lifetime of |host| and the mojo
-  // connection. See DocumentServiceBase for details.
-  new DeviceServiceImpl(host, std::move(receiver));
+  // connection. See DocumentService for details.
+  new DeviceServiceImpl(*host, std::move(receiver));
 }
 
 // static
@@ -154,8 +161,8 @@ void DeviceServiceImpl::RegisterProfilePrefs(PrefRegistrySimple* registry) {
 void DeviceServiceImpl::OnDisposingIfNeeded() {
   // DeviceServiceImpl is allocated on the heap, thus it is safe to remove it
   // like this.
-  if (!IsTrustedContext(host_, origin())) {
-    delete this;
+  if (!IsTrustedContext(render_frame_host(), origin())) {
+    ResetAndDeleteThis();
   }
 }
 
@@ -194,7 +201,7 @@ void DeviceServiceImpl::GetDeviceAttribute(
     return;
   }
 
-  if (!CanAccessDeviceAttributes(GetPrefs(host_), origin())) {
+  if (!CanAccessDeviceAttributes(GetPrefs(render_frame_host()), origin())) {
     device_attribute_api::ReportNotAllowedError(std::move(callback));
     return;
   }

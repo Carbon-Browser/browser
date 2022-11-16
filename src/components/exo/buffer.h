@@ -11,9 +11,12 @@
 #include "base/cancelable_callback.h"
 #include "base/containers/flat_map.h"
 #include "base/files/file_descriptor_watcher_posix.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
+#include "base/time/time.h"
+#include "components/exo/protected_native_pixmap_query_delegate.h"
 #include "components/viz/common/resources/transferable_resource.h"
+#include "media/media_buildflags.h"
+#include "third_party/skia/include/core/SkColor.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/gpu_fence.h"
 #include "ui/gfx/gpu_memory_buffer.h"
@@ -34,7 +37,9 @@ class Buffer : public base::SupportsWeakPtr<Buffer> {
          bool use_zero_copy,
          bool is_overlay_candidate,
          bool y_invert);
-  ~Buffer();
+  Buffer(const Buffer&) = delete;
+  Buffer& operator=(const Buffer&) = delete;
+  virtual ~Buffer();
 
   const gfx::GpuMemoryBuffer* gfx_buffer() const {
     return gpu_memory_buffer_.get();
@@ -55,11 +60,12 @@ class Buffer : public base::SupportsWeakPtr<Buffer> {
   // are no longer required.
   using PerCommitExplicitReleaseCallback =
       base::OnceCallback<void(gfx::GpuFenceHandle)>;
-  bool ProduceTransferableResource(
+  virtual bool ProduceTransferableResource(
       FrameSinkResourceManager* resource_manager,
       std::unique_ptr<gfx::GpuFence> acquire_fence,
       bool secure_output_only,
       viz::TransferableResource* resource,
+      ProtectedNativePixmapQueryDelegate* protected_native_pixmap_query,
       PerCommitExplicitReleaseCallback per_commit_explicit_release_callback);
 
   // This should be called when the buffer is attached to a Surface.
@@ -69,10 +75,20 @@ class Buffer : public base::SupportsWeakPtr<Buffer> {
   void OnDetach();
 
   // Returns the size of the buffer.
-  gfx::Size GetSize() const;
+  virtual gfx::Size GetSize() const;
 
   // Returns the format of the buffer.
   gfx::BufferFormat GetFormat() const;
+
+  // The default color to be used should transferable resource production fail.
+  virtual SkColor4f GetColor() const;
+
+#if BUILDFLAG(USE_ARC_PROTECTED_MEDIA)
+  // Returns true if the underlying buffer is hardware protected. This should
+  // only be checked if the corresponding surface requires secure output,
+  // otherwise it will yield false positives.
+  bool NeedsHardwareProtection();
+#endif  // BUILDFLAG(USE_ARC_PROTECTED_MEDIA)
 
   // Set the amount of time to wait for buffer release.
   void set_wait_for_release_delay_for_testing(
@@ -103,6 +119,13 @@ class Buffer : public base::SupportsWeakPtr<Buffer> {
     base::OnceClosure buffer_release_callback;
   };
 
+#if BUILDFLAG(USE_ARC_PROTECTED_MEDIA)
+  // For ARC protected content support this tracks the state of the
+  // asynchronous query to determine if the GMB is using a protected buffer or
+  // not.
+  enum class ProtectedBufferState { UNKNOWN, QUERYING, PROTECTED, UNPROTECTED };
+#endif  // BUILDFLAG(USE_ARC_PROTECTED_MEDIA)
+
   // This should be called when buffer is released and will notify the
   // client that buffer has been released.
   void Release();
@@ -129,6 +152,10 @@ class Buffer : public base::SupportsWeakPtr<Buffer> {
                                 base::OnceClosure buffer_release_callback);
 
   void FenceSignalled(uint64_t commit_id);
+
+#if BUILDFLAG(USE_ARC_PROTECTED_MEDIA)
+  void OnIsProtectedNativePixmapHandle(bool is_protected);
+#endif  // BUILDFLAG(USE_ARC_PROTECTED_MEDIA)
 
   // The GPU memory buffer that contains the contents of this buffer.
   std::unique_ptr<gfx::GpuMemoryBuffer> gpu_memory_buffer_;
@@ -183,7 +210,32 @@ class Buffer : public base::SupportsWeakPtr<Buffer> {
   // protocol requires us to send regular buffer release events.
   base::flat_map<uint64_t, BufferRelease> buffer_releases_;
 
-  DISALLOW_COPY_AND_ASSIGN(Buffer);
+#if BUILDFLAG(USE_ARC_PROTECTED_MEDIA)
+  ProtectedBufferState protected_buffer_state_ = ProtectedBufferState::UNKNOWN;
+#endif  // BUILDFLAG(USE_ARC_PROTECTED_MEDIA)
+};
+
+class SolidColorBuffer : public Buffer {
+ public:
+  SolidColorBuffer(const SkColor4f& color, const gfx::Size& size);
+  SolidColorBuffer(const SolidColorBuffer& buffer) = delete;
+  SolidColorBuffer& operator=(const SolidColorBuffer&) = delete;
+  ~SolidColorBuffer() override;
+
+  SkColor4f GetColor() const override;
+  gfx::Size GetSize() const override;
+  bool ProduceTransferableResource(
+      FrameSinkResourceManager* resource_manager,
+      std::unique_ptr<gfx::GpuFence> acquire_fence,
+      bool secure_output_only,
+      viz::TransferableResource* resource,
+      ProtectedNativePixmapQueryDelegate* protected_native_pixmap_query,
+      PerCommitExplicitReleaseCallback per_commit_explicit_release_callback)
+      override;
+
+ private:
+  SkColor4f color_;
+  gfx::Size size_;
 };
 
 }  // namespace exo

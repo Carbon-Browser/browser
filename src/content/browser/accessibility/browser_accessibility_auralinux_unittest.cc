@@ -20,6 +20,12 @@ namespace content {
 class BrowserAccessibilityAuraLinuxTest : public testing::Test {
  public:
   BrowserAccessibilityAuraLinuxTest();
+
+  BrowserAccessibilityAuraLinuxTest(const BrowserAccessibilityAuraLinuxTest&) =
+      delete;
+  BrowserAccessibilityAuraLinuxTest& operator=(
+      const BrowserAccessibilityAuraLinuxTest&) = delete;
+
   ~BrowserAccessibilityAuraLinuxTest() override;
 
  protected:
@@ -31,8 +37,6 @@ class BrowserAccessibilityAuraLinuxTest : public testing::Test {
 
   content::BrowserTaskEnvironment task_environment_;
   ui::testing::ScopedAxModeSetter ax_mode_setter_;
-
-  DISALLOW_COPY_AND_ASSIGN(BrowserAccessibilityAuraLinuxTest);
 };
 
 BrowserAccessibilityAuraLinuxTest::BrowserAccessibilityAuraLinuxTest()
@@ -167,6 +171,7 @@ TEST_F(BrowserAccessibilityAuraLinuxTest, TestComplexHypertext) {
   combo_box.role = ax::mojom::Role::kTextFieldWithComboBox;
   combo_box.AddState(ax::mojom::State::kEditable);
   combo_box.AddStringAttribute(ax::mojom::StringAttribute::kHtmlTag, "input");
+  combo_box.AddStringAttribute(ax::mojom::StringAttribute::kInputType, "text");
   combo_box.SetName(combo_box_name);
   combo_box.SetValue(combo_box_value);
 
@@ -680,6 +685,7 @@ TEST_F(BrowserAccessibilityAuraLinuxTest,
   combo_box.role = ax::mojom::Role::kTextFieldWithComboBox;
   combo_box.AddState(ax::mojom::State::kEditable);
   combo_box.AddStringAttribute(ax::mojom::StringAttribute::kHtmlTag, "input");
+  combo_box.AddStringAttribute(ax::mojom::StringAttribute::kInputType, "text");
   combo_box.AddState(ax::mojom::State::kFocusable);
   combo_box.SetValue(value1 + value2);
 

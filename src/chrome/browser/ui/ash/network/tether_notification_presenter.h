@@ -8,12 +8,12 @@
 #include <memory>
 #include <string>
 
+#include "ash/components/multidevice/remote_device_ref.h"
+#include "ash/components/tether/notification_presenter.h"
+#include "ash/constants/notifier_catalogs.h"
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
-#include "chromeos/components/multidevice/remote_device_ref.h"
-#include "chromeos/components/tether/notification_presenter.h"
-#include "chromeos/network/network_state.h"
+#include "chromeos/ash/components/network/network_state.h"
 #include "ui/message_center/public/cpp/notification.h"
 
 class Profile;
@@ -36,6 +36,11 @@ class TetherNotificationPresenter : public NotificationPresenter {
   // instance.
   TetherNotificationPresenter(Profile* profile,
                               NetworkConnect* network_connect);
+
+  TetherNotificationPresenter(const TetherNotificationPresenter&) = delete;
+  TetherNotificationPresenter& operator=(const TetherNotificationPresenter&) =
+      delete;
+
   ~TetherNotificationPresenter() override;
 
   // NotificationPresenter:
@@ -91,6 +96,7 @@ class TetherNotificationPresenter : public NotificationPresenter {
 
   std::unique_ptr<message_center::Notification> CreateNotification(
       const std::string& id,
+      const ash::NotificationCatalogName& catalog_name,
       const std::u16string& title,
       const std::u16string& message,
       const gfx::ImageSkia& small_image,
@@ -117,8 +123,6 @@ class TetherNotificationPresenter : public NotificationPresenter {
   // in the "multiple hotspots available" mode, this pointer is null.
   std::unique_ptr<std::string> hotspot_nearby_device_id_;
   base::WeakPtrFactory<TetherNotificationPresenter> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(TetherNotificationPresenter);
 };
 
 }  // namespace tether

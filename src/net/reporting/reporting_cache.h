@@ -11,8 +11,8 @@
 #include <vector>
 
 #include "base/callback.h"
+#include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
-#include "base/macros.h"
 #include "base/time/time.h"
 #include "base/unguessable_token.h"
 #include "base/values.h"
@@ -27,13 +27,14 @@
 namespace net {
 
 class ReportingContext;
+class IsolationInfo;
 
 // The cache holds undelivered reports and clients (per-origin endpoint
 // configurations) in memory. (It is not responsible for persisting them.)
 //
 // Each Reporting "endpoint" represents a report collector at some specified
 // URL. Endpoints are organized into named "endpoint groups", each of which
-// additionally specifes some properties such as expiration time.
+// additionally specifies some properties such as expiration time.
 // A "client" represents the entire endpoint configuration set by an origin via
 // a Report-To header, which consists of multiple endpoint groups, each of which
 // consists of multiple endpoints. An endpoint group is keyed by its name.  An
@@ -46,7 +47,7 @@ class ReportingContext;
 //
 // The cache implementation has the notion of "pending" reports. These are
 // reports that are part of an active delivery attempt, so they won't be
-// actually deallocated. Any attempt to remove a pending report wil mark it
+// actually deallocated. Any attempt to remove a pending report will mark it
 // "doomed", which will cause it to be deallocated once it is no longer pending.
 class NET_EXPORT ReportingCache {
  public:
@@ -71,7 +72,7 @@ class NET_EXPORT ReportingCache {
       const std::string& user_agent,
       const std::string& group_name,
       const std::string& type,
-      std::unique_ptr<const base::Value> body,
+      base::Value::Dict body,
       int depth,
       base::TimeTicks queued,
       int attempts) = 0;
@@ -173,13 +174,11 @@ class NET_EXPORT ReportingCache {
   // received Reporting-Endpoints header.
   // |reporting_source| is the token identifying the document or worker with
   // which this header was received, and may not be empty.
-  // |origin| is the origin of the document or worker represented by
-  // |reporting_source|, and |network_isolation_key| is the appropriate NIK for
-  // that source. These two parameters are currently needed because the new
-  // Reporting API currently shares the cache, delivery agent and
-  // ReportingEndpoint struct with the old API.
+  // |isolation_info| is the appropriate network isolation info struct for that
+  // source, and is used for determining credentials to send with reports.
   virtual void OnParsedReportingEndpointsHeader(
       const base::UnguessableToken& reporting_source,
+      const IsolationInfo& isolation_info,
       std::vector<ReportingEndpoint> parsed_header) = 0;
 
   // Gets all the origins of clients in the cache.
@@ -256,6 +255,10 @@ class NET_EXPORT ReportingCache {
   // Flush the contents of the cache to disk, if applicable.
   virtual void Flush() = 0;
 
+  // Returns all V1 endpoints keyed by origin.
+  virtual base::flat_map<url::Origin, std::vector<ReportingEndpoint>>
+  GetV1ReportingEndpointsByOrigin() const = 0;
+
   // Returns the endpoint named |endpoint_name| for the reporting source, if it
   // was configured with the Reporting-Endpoints header, otherwise returns an
   // invalid ReportingEndpoint.
@@ -304,13 +307,23 @@ class NET_EXPORT ReportingCache {
                                      int priority,
                                      int weight) = 0;
 
-  // Sets a V1 named endpoint with the given key for |reporting_source|,
+  // Sets a V1 named endpoint with the given key for `reporting_source`,
   // bypassing header parsing. This method inserts a single endpoint while
-  // leaving the existing configuration for that source intact.
+  // leaving the existing configuration for that source intact. If any
+  // endpoints already exist for this source, then `isolation_info` must
+  // match the value that was previously associated with it.
   virtual void SetV1EndpointForTesting(
       const ReportingEndpointGroupKey& group_key,
       const base::UnguessableToken& reporting_source,
+      const IsolationInfo& isolation_info,
       const GURL& url) = 0;
+
+  // Gets the isolation info associated with `reporting_source`, used when
+  // determining which credentials to send for a given report. If
+  // `reporting_source` is nullopt, as when a report is being delivered to a V0
+  // reporting endpoint group, this always will return an empty site.
+  virtual IsolationInfo GetIsolationInfoForEndpoint(
+      const ReportingEndpoint& endpoint) const = 0;
 };
 
 // Persistent storage for Reporting reports and clients.
@@ -321,6 +334,10 @@ class NET_EXPORT ReportingCache::PersistentReportingStore {
                               std::vector<CachedReportingEndpointGroup>)>;
 
   PersistentReportingStore() = default;
+
+  PersistentReportingStore(const PersistentReportingStore&) = delete;
+  PersistentReportingStore& operator=(const PersistentReportingStore&) = delete;
+
   virtual ~PersistentReportingStore() = default;
 
   // Initializes the store and retrieves stored endpoints and endpoint groups.
@@ -355,9 +372,6 @@ class NET_EXPORT ReportingCache::PersistentReportingStore {
 
   // Flushes the store.
   virtual void Flush() = 0;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(PersistentReportingStore);
 };
 
 }  // namespace net

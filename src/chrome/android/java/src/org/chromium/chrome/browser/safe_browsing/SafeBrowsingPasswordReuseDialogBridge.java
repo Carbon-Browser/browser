@@ -45,12 +45,11 @@ public class SafeBrowsingPasswordReuseDialogBridge {
 
     @CalledByNative
     public void showDialog(String dialogTitle, String dialogDetails, String primaryButtonText,
-            @Nullable String secondaryButtonText, int[] boldStartRanges, int[] boldEndRanges) {
+            @Nullable String secondaryButtonText) {
         if (mWindowAndroid.getActivity().get() == null) return;
 
         PasswordManagerDialogContents contents = createDialogContents(
                 dialogTitle, dialogDetails, primaryButtonText, secondaryButtonText);
-        contents.setBoldRanges(boldStartRanges, boldEndRanges);
         contents.setPrimaryButtonFilled(secondaryButtonText != null);
 
         mDialogCoordinator.initialize(mWindowAndroid.getActivity().get(), contents);
@@ -64,7 +63,7 @@ public class SafeBrowsingPasswordReuseDialogBridge {
                 : this::onClickWithNegativeButtonDisabled;
 
         return new PasswordManagerDialogContents(credentialLeakTitle, credentialLeakDetails,
-                R.drawable.password_checkup_warning, positiveButton, negativeButton, onClick);
+                R.drawable.password_checkup_warning, positiveButton, 0, negativeButton, onClick);
     }
 
     @CalledByNative

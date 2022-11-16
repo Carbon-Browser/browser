@@ -7,7 +7,6 @@
 #include <memory>
 #include <string>
 
-#include "base/macros.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/test/gmock_callback_support.h"
@@ -16,7 +15,7 @@
 #include "chrome/browser/ash/attestation/mock_enrollment_certificate_uploader.h"
 #include "chrome/browser/ash/settings/device_settings_test_helper.h"
 #include "chrome/common/pref_names.h"
-#include "chromeos/dbus/userdataauth/fake_cryptohome_misc_client.h"
+#include "chromeos/ash/components/dbus/userdataauth/fake_cryptohome_misc_client.h"
 #include "components/policy/core/common/cloud/mock_cloud_policy_store.h"
 #include "components/policy/proto/device_management_backend.pb.h"
 #include "components/prefs/pref_registry_simple.h"
@@ -37,6 +36,10 @@ const char kValidRsuDeviceIdEncoded[] =
     "MTIz";  // base::Base64Encode(kValidRsuDeviceId, kValidRsuDeviceencoded)
 }
 class LookupKeyUploaderTest : public ash::DeviceSettingsTestBase {
+ public:
+  LookupKeyUploaderTest(const LookupKeyUploaderTest&) = delete;
+  LookupKeyUploaderTest& operator=(const LookupKeyUploaderTest&) = delete;
+
  protected:
   LookupKeyUploaderTest() = default;
 
@@ -48,7 +51,7 @@ class LookupKeyUploaderTest : public ash::DeviceSettingsTestBase {
         nullptr, &pref_service_, &certificate_uploader_);
     lookup_key_uploader_->SetClock(&clock_);
     // We initialize clock to imitate real time.
-    clock_.Advance(base::TimeDelta::FromDays(50));
+    clock_.Advance(base::Days(50));
   }
 
   void TearDown() override { ash::DeviceSettingsTestBase::TearDown(); }
@@ -59,7 +62,7 @@ class LookupKeyUploaderTest : public ash::DeviceSettingsTestBase {
   bool NeedsUpload() { return lookup_key_uploader_->needs_upload_; }
 
   void SetCryptohomeReplyTo(const std::string& rsu_device_id) {
-    chromeos::FakeCryptohomeMiscClient::Get()->set_rsu_device_id(rsu_device_id);
+    ash::FakeCryptohomeMiscClient::Get()->set_rsu_device_id(rsu_device_id);
   }
 
   void AdvanceTime() { clock_.Advance(lookup_key_uploader_->kRetryFrequency); }
@@ -73,9 +76,6 @@ class LookupKeyUploaderTest : public ash::DeviceSettingsTestBase {
   MockEnrollmentCertificateUploader certificate_uploader_;
   std::unique_ptr<LookupKeyUploader> lookup_key_uploader_;
   MockCloudPolicyStore policy_store_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(LookupKeyUploaderTest);
 };
 
 TEST_F(LookupKeyUploaderTest, Uploads) {
@@ -142,9 +142,10 @@ TEST_F(LookupKeyUploaderTest, UploadsEvenWhenSubmittedBeforeIfForcedByPolicy) {
   EXPECT_FALSE(NeedsUpload());
 
   // We set the policy for obtaining RSU lookup key.
-  policy_store_.policy_ = std::make_unique<enterprise_management::PolicyData>();
-  policy_store_.policy_->mutable_client_action_required()
+  auto policy_data = std::make_unique<enterprise_management::PolicyData>();
+  policy_data->mutable_client_action_required()
       ->set_enrollment_certificate_needed(true);
+  policy_store_.set_policy_data_for_testing(std::move(policy_data));
 
   // We expect the ObtainAndUploadCertificate to called twice.
   AdvanceTime();

@@ -8,7 +8,7 @@
 #include "base/auto_reset.h"
 #include "base/feature_list.h"
 #include "base/strings/string_piece_forward.h"
-#include "build/chromeos_buildflags.h"
+#include "build/build_config.h"
 
 class Profile;
 
@@ -20,19 +20,24 @@ extern const base::Feature kMigrateDefaultChromeAppToWebAppsNonGSuite;
 
 extern const base::Feature kDefaultCalculatorWebApp;
 
-#if BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_CHROMEOS_LACROS)
+#if BUILDFLAG(IS_CHROMEOS)
 extern const base::Feature kAllowDefaultWebAppMigrationForChromeOsManagedUsers;
 
-extern const base::Feature kDefaultChatWebApp;
+extern const base::Feature kCursiveStylusPreinstall;
 
-extern const base::Feature kDefaultMeetWebApp;
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_CHROMEOS_LACROS)
+extern const base::Feature kCursiveManagedStylusPreinstall;
+
+extern const base::Feature kMessagesPreinstall;
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 // Returns the base::Feature in |kPreinstalledAppInstallFeatures| that
 // corresponds to |feature_name|. Used by external app install configs to gate
 // installation on features listed in |kPreinstalledAppInstallFeatures|.
 bool IsPreinstalledAppInstallFeatureEnabled(base::StringPiece feature_name,
                                             const Profile& profile);
+
+// Checks if migration flag is enabled on all OS.
+bool IsAnyChromeAppToWebAppMigrationEnabled(const Profile& profile);
 
 base::AutoReset<bool> SetPreinstalledAppInstallFeatureAlwaysEnabledForTesting();
 

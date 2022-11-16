@@ -4,17 +4,21 @@
 
 #include "chrome/browser/ash/settings/about_flags.h"
 
+#include "ash/components/cryptohome/cryptohome_parameters.h"
+#include "ash/components/settings/cros_settings_names.h"
+#include "base/check.h"
 #include "base/command_line.h"
 #include "base/json/json_reader.h"
 #include "base/logging.h"
+#include "base/strings/string_piece.h"
 #include "base/values.h"
 #include "chrome/browser/about_flags.h"
+#include "chrome/browser/ash/crosapi/browser_util.h"
 #include "chrome/browser/ash/login/session/user_session_manager.h"
+#include "chrome/browser/browser_process.h"
 #include "chrome/browser/site_isolation/about_flags.h"
 #include "chrome/common/pref_names.h"
-#include "chromeos/cryptohome/cryptohome_parameters.h"
-#include "chromeos/dbus/session_manager/session_manager_client.h"
-#include "chromeos/settings/cros_settings_names.h"
+#include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
 #include "components/account_id/account_id.h"
 #include "components/flags_ui/flags_storage.h"
 #include "components/flags_ui/flags_ui_pref_names.h"
@@ -43,7 +47,7 @@ std::set<std::string> ParseFlagsFromCommandLine(
     return flags;
   }
 
-  for (const auto& flag : flags_list.value().GetList()) {
+  for (const auto& flag : flags_list.value().GetListDeprecated()) {
     if (!flag.is_string()) {
       LOG(WARNING) << "Invalid entry in encoded feature flags";
       continue;
@@ -96,9 +100,9 @@ bool OwnerFlagsStorage::SetFlags(const std::set<std::string>& flags) {
   // Also write the flags to device settings so they get applied to the Chrome
   // OS login screen. The device setting is read by session_manager and passed
   // to Chrome via a command line flag on startup.
-  std::vector<base::Value> feature_flags_list;
+  base::Value::List feature_flags_list;
   for (const auto& flag : flags) {
-    feature_flags_list.push_back(base::Value(flag));
+    feature_flags_list.Append(flag);
   }
   owner_settings_service_->Set(kFeatureFlags,
                                base::Value(std::move(feature_flags_list)));
@@ -183,10 +187,52 @@ bool FeatureFlagsUpdate::DiffersFromCommandLine(
 }
 
 void FeatureFlagsUpdate::UpdateSessionManager() {
+  // TODO(crbug.com/832857): Introduce a CHECK to ensure primary user.
+  // Early out so that switches for secondary users are not applied to the whole
+  // session. This could be removed when things like flags UI of secondary users
+  // are fixed properly and TODO above to add CHECK() is done.
+  user_manager::UserManager* user_manager = user_manager::UserManager::Get();
+  const user_manager::User* primary_user = user_manager->GetPrimaryUser();
+  if (!primary_user || primary_user != user_manager->GetActiveUser())
+    return;
+
+  std::set<std::string> flags = flags_;
+
+  // If LacrosAvailability policy is set, inject it into the feature flag,
+  // so that the value is preserved on restarting the Chrome.
+  // This is a kind of pseudo feature flag, so do not apply it in
+  // ApplyUserPolicyToFlags to store in |flags_|, otherwise the value will
+  // be used to decide whether or not to reboot to apply feature flags.
+  const PrefService::Preference* lacros_launch_switch_pref =
+      g_browser_process->local_state()->FindPreference(
+          ::prefs::kLacrosLaunchSwitch);
+  if (lacros_launch_switch_pref->IsManaged()) {
+    // If there's the value, convert it into the feature name.
+    base::StringPiece value =
+        crosapi::browser_util::GetLacrosAvailabilityPolicyName(
+            static_cast<crosapi::browser_util::LacrosAvailability>(
+                lacros_launch_switch_pref->GetValue()->GetInt()));
+    DCHECK(!value.empty())
+        << "The unexpect value is set to LacrosAvailability: "
+        << lacros_launch_switch_pref->GetValue()->GetInt();
+    auto* entry = ::about_flags::GetCurrentFlagsState()->FindFeatureEntryByName(
+        crosapi::browser_util::kLacrosAvailabilityPolicyInternalName);
+    DCHECK(entry);
+    int index;
+    for (index = 0; index < entry->NumOptions(); ++index) {
+      if (value == entry->ChoiceForOption(index).command_line_value)
+        break;
+    }
+    if (static_cast<size_t>(index) != entry->choices.size()) {
+      LOG(ERROR) << "Updating the lacros_availability: " << index;
+      flags.insert(entry->NameForOption(index));
+    }
+  }
+
   auto account_id = cryptohome::CreateAccountIdentifierFromAccountId(
-      user_manager::UserManager::Get()->GetActiveUser()->GetAccountId());
+      primary_user->GetAccountId());
   SessionManagerClient::Get()->SetFeatureFlagsForUser(
-      account_id, {flags_.begin(), flags_.end()}, origin_list_flags_);
+      account_id, {flags.begin(), flags.end()}, origin_list_flags_);
 }
 
 // static

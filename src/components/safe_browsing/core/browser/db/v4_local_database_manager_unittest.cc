@@ -12,10 +12,11 @@
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
-#include "base/sequenced_task_runner.h"
 #include "base/strings/string_tokenizer.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_simple_task_runner.h"
@@ -165,9 +166,11 @@ class FakeV4Database : public V4Database {
       bool stores_available,
       int64_t store_file_size) {
     // Mimics the semantics of V4Database::CreateOnTaskRunner
-    std::unique_ptr<FakeV4Database> fake_v4_database(new FakeV4Database(
-        db_task_runner, std::move(store_map), store_and_hash_prefixes,
-        stores_available, store_file_size));
+    std::unique_ptr<FakeV4Database, base::OnTaskRunnerDeleter> fake_v4_database(
+        new FakeV4Database(db_task_runner, std::move(store_map),
+                           store_and_hash_prefixes, stores_available,
+                           store_file_size),
+        base::OnTaskRunnerDeleter(db_task_runner));
     callback_task_runner->PostTask(FROM_HERE,
                                    base::BindOnce(std::move(new_db_callback),
                                                   std::move(fake_v4_database)));
@@ -247,7 +250,7 @@ class TestClient : public SafeBrowsingDatabaseManager::Client {
   bool on_check_browse_url_result_called_ = false;
   bool on_check_download_urls_result_called_ = false;
   bool on_check_resource_url_result_called_ = false;
-  V4LocalDatabaseManager* manager_to_cancel_;
+  raw_ptr<V4LocalDatabaseManager> manager_to_cancel_;
 };
 
 class TestAllowlistClient : public SafeBrowsingDatabaseManager::Client {
@@ -420,9 +423,7 @@ class V4LocalDatabaseManagerTest : public PlatformTest {
     StartLocalDatabaseManager();
   }
 
-  void ResetV4Database() {
-    V4Database::Destroy(std::move(v4_local_database_manager_->v4_database_));
-  }
+  void ResetV4Database() { v4_local_database_manager_->v4_database_.reset(); }
 
   void StartLocalDatabaseManager() {
     v4_local_database_manager_->StartOnIOThread(test_shared_loader_factory_,
@@ -475,11 +476,6 @@ TEST_F(V4LocalDatabaseManagerTest, TestGetThreatSource) {
   WaitForTasksOnTaskRunner();
   EXPECT_EQ(ThreatSource::LOCAL_PVER4,
             v4_local_database_manager_->GetThreatSource());
-}
-
-TEST_F(V4LocalDatabaseManagerTest, TestIsSupported) {
-  WaitForTasksOnTaskRunner();
-  EXPECT_TRUE(v4_local_database_manager_->IsSupported());
 }
 
 TEST_F(V4LocalDatabaseManagerTest, TestCanCheckUrl) {
@@ -1043,33 +1039,6 @@ TEST_F(V4LocalDatabaseManagerTest, UsingWeakPtrDropsCallback) {
   WaitForTasksOnTaskRunner();
 }
 
-TEST_F(V4LocalDatabaseManagerTest, TestMatchDownloadAllowlistString) {
-  SetupFakeManager();
-  const std::string good_cert = "Good Cert";
-  const std::string other_cert = "Other Cert";
-  FullHash good_hash(crypto::SHA256HashString(good_cert));
-
-  StoreAndHashPrefixes store_and_hash_prefixes;
-  store_and_hash_prefixes.emplace_back(GetCertCsdDownloadAllowlistId(),
-                                       good_hash);
-
-  ReplaceV4Database(store_and_hash_prefixes, false /* not available */);
-  // Verify it defaults to false when DB is not available.
-  EXPECT_FALSE(
-      v4_local_database_manager_->MatchDownloadAllowlistString(good_cert));
-
-  ReplaceV4Database(store_and_hash_prefixes, true /* available */);
-  // Not allowlisted.
-  EXPECT_FALSE(
-      v4_local_database_manager_->MatchDownloadAllowlistString(other_cert));
-  // Allowlisted.
-  EXPECT_TRUE(
-      v4_local_database_manager_->MatchDownloadAllowlistString(good_cert));
-
-  EXPECT_FALSE(FakeV4LocalDatabaseManager::PerformFullHashCheckCalled(
-      v4_local_database_manager_));
-}
-
 TEST_F(V4LocalDatabaseManagerTest, TestMatchDownloadAllowlistUrl) {
   SetupFakeManager();
   GURL good_url("http://safe.com");
@@ -1462,7 +1431,7 @@ TEST_F(V4LocalDatabaseManagerTest, FlagMultipleUrls) {
 TEST_F(V4LocalDatabaseManagerTest, SyncedLists) {
   WaitForTasksOnTaskRunner();
 
-#if defined(OS_IOS)
+#if BUILDFLAG(IS_IOS)
   std::vector<ListIdentifier> expected_lists{
       GetUrlSocEngId(), GetUrlMalwareId(), GetUrlBillingId(),
       GetUrlCsdAllowlistId(), GetUrlHighConfidenceAllowlistId()};
@@ -1473,7 +1442,6 @@ TEST_F(V4LocalDatabaseManagerTest, SyncedLists) {
                                              GetUrlUwsId(),
                                              GetUrlMalBinId(),
                                              GetChromeExtMalwareId(),
-                                             GetCertCsdDownloadAllowlistId(),
                                              GetChromeUrlClientIncidentId(),
                                              GetUrlBillingId(),
                                              GetUrlCsdDownloadAllowlistId(),
@@ -1553,7 +1521,6 @@ TEST_F(V4LocalDatabaseManagerTest, RenameStoreFile_RenameSuccessMultiple) {
 
   const auto kStoreFilesToRename =
       base::MakeFixedFlatMap<std::string, std::string>({
-          {"CertCsdDownloadWhitelist", "CertCsdDownloadAllowlist"},
           {"UrlCsdDownloadWhitelist", "UrlCsdDownloadAllowlist"},
           {"UrlCsdWhitelist", "UrlCsdAllowlist"},
       });

@@ -62,6 +62,11 @@ const char kHttpServerProperties[] = "net.http_server_properties";
 // 2 - Forced. All pages/sessions are forced into Incognito.
 const char kIncognitoModeAvailability[] = "incognito.mode_availability";
 
+// Boolean that is true when the Incognito interstitial for third-party intents
+// is enabled.
+const char kIncognitoInterstitialEnabled[] =
+    "ios.settings.incognito_interstitial_enabled";
+
 // Caches the folder id of user's position in the bookmark hierarchy navigator.
 const char kIosBookmarkCachedFolderId[] = "ios.bookmark.cached_folder_id";
 
@@ -93,6 +98,16 @@ const char kIosSettingsPromoAlreadySeen[] = "ios.settings.promo_already_seen";
 const char kIosSettingsSigninPromoDisplayedCount[] =
     "ios.settings.signin_promo_displayed_count";
 
+// Preference that hold a boolean indicating if the user has already dismissed
+// the sign-in promo in the ntp feed top section.
+const char kIosNtpFeedTopPromoAlreadySeen[] =
+    "ios.ntp_feed_top.promo_already_seen";
+
+// Integer to represent the number of time the sign-in promo has been displayed
+// in the ntp feed top section.
+const char kIosNtpFeedTopSigninPromoDisplayedCount[] =
+    "ios.ntp_feed_top.signin_promo_displayed_count";
+
 // Preference that holds a boolean indicating whether the link previews are
 // enabled. Link previews display a live preview of the selected link after a
 // long press.
@@ -103,8 +118,20 @@ const char kLinkPreviewEnabled[] = "ios.link_preview_enabled";
 const char kNTPContentSuggestionsEnabled[] =
     "ios.ntp.content_suggestions_enabled";
 
+// Preference that represents the sorting order of the Following feed content.
+const char kNTPFollowingFeedSortType[] = "ios.ntp.following_feed.sort_type";
+
+// Dictionary preference which tracks day(s) a given destination is clicked from
+// the new overflow menu carousel.
+const char kOverflowMenuDestinationUsageHistory[] =
+    "overflow_menu.destination_usage_history";
+
 // Boolean that is true when Suggest support is enabled.
 const char kSearchSuggestEnabled[] = "search.suggest_enabled";
+
+// Boolean indicating if displaying price drops for shopping URLs on Tabs
+// in the Tab Switching UI is enabled.
+const char kTrackPricesOnTabsEnabled[] = "track_prices_on_tabs.enabled";
 
 // An integer set to one of the NetworkPredictionSetting enum values indicating
 // network prediction settings.
@@ -134,10 +161,6 @@ const char kSigninShouldPromptForSigninAgain[] =
 const char kSigninWebSignDismissalCount[] =
     "ios.signin.web_signin_dismissal_count";
 
-// Integer to count the number of times the MICE web sign-in is displayed.
-const char kSigninBottomSheetShownCount[] =
-    "ios.signin.bottom_sheet_shown_count";
-
 // Dictionary which stores the zoom levels the user has changed. The zoom levels
 // are unique for a given (iOS Dynamic Type, website domain) pair. Thus, the
 // dictionary keys are the iOS Dynamic Type level, mapping to sub-dictionarys
@@ -154,5 +177,15 @@ const char kIncognitoAuthenticationSetting[] =
 // Integer that represents the value of BrowserSigninPolicy. Values are defined
 // in ios/chrome/browser/policy/policy_util.h.
 const char kBrowserSigninPolicy[] = "signin.browser_signin_policy";
+
+// Bool that represents whether iCloud backups are allowed by policy.
+const char kAllowChromeDataInBackups[] = "ios.allow_chrome_data_in_backups";
+
+// Preference that holds the string value indicating the NTP URL to use for the
+// NTP Location policy.
+const char kNewTabPageLocationOverride[] = "ios.ntp.location_override";
+
+// A boolean specifying whether HTTPS-Only Mode is enabled.
+const char kHttpsOnlyModeEnabled[] = "ios.https_only_mode_enabled";
 
 }  // namespace prefs

@@ -2,10 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-declare_args() {
-  # Allow use of custom Cast root certificate for authentication.
-  cast_allow_developer_certificate = false
-}
+import("//third_party/openscreen/src/build/config/cast.gni")
 
 config("certificate_config") {
   defines = []
@@ -25,19 +22,26 @@ source_set("cast_certificate_reader") {
   ]
 }
 
+source_set("cast_certificate_roots") {
+  sources = [
+    "cast_root_ca_cert_der-inc.h",
+    "eureka_root_ca_der-inc.h",
+  ]
+}
+
 static_library("cast_certificate") {
   sources = [
     "cast_cert_validator.cc",
     "cast_cert_validator.h",
     "cast_crl.cc",
     "cast_crl.h",
-    "cast_root_ca_cert_der-inc.h",
-    "eureka_root_ca_der-inc.h",
   ]
   configs += [ ":certificate_config" ]
   deps = [
+    ":cast_certificate_roots",
     "//base",
     "//net",
+    "//third_party/boringssl",
     "//third_party/openscreen/src/cast/common/certificate/proto:certificate_proto",
 
     # Although we won't use the reader unless cast_allow_developer_certificate
@@ -51,6 +55,21 @@ static_library("cast_certificate") {
       "switches.h",
     ]
   }
+}
+
+source_set("openscreen_certificate_verifier") {
+  sources = [
+    "net_parsed_certificate.cc",
+    "net_parsed_certificate.h",
+    "net_trust_store.cc",
+    "net_trust_store.h",
+  ]
+  public_deps = [
+    ":cast_certificate_roots",
+    "//base",
+    "//net",
+    "//third_party/openscreen/src/cast/common:public",
+  ]
 }
 
 static_library("test_support") {

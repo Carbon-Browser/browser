@@ -8,6 +8,7 @@
 
 #include "base/containers/contains.h"
 #include "base/containers/cxx20_erase.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/media_session/audio_focus_request.h"
@@ -40,6 +41,9 @@ class MediaController::ImageObserverHolder {
     // Flush the observer with the latest state.
     ImagesChanged(current_images);
   }
+
+  ImageObserverHolder(const ImageObserverHolder&) = delete;
+  ImageObserverHolder& operator=(const ImageObserverHolder&) = delete;
 
   ~ImageObserverHolder() = default;
 
@@ -79,7 +83,7 @@ class MediaController::ImageObserverHolder {
 
   media_session::MediaImageManager manager_;
 
-  MediaController* const owner_;
+  const raw_ptr<MediaController> owner_;
 
   mojom::MediaSessionImageType const type_;
 
@@ -93,8 +97,6 @@ class MediaController::ImageObserverHolder {
   bool did_send_image_last_ = false;
 
   base::WeakPtrFactory<ImageObserverHolder> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ImageObserverHolder);
 };
 
 MediaController::MediaController() {

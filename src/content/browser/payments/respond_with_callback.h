@@ -6,10 +6,8 @@
 #define CONTENT_BROWSER_PAYMENTS_RESPOND_WITH_CALLBACK_H_
 
 #include "base/callback_forward.h"
-#include "base/memory/singleton.h"
 #include "base/metrics/histogram_macros.h"
 #include "content/browser/service_worker/service_worker_context_wrapper.h"
-#include "content/common/content_export.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/payment_app_provider.h"
 #include "content/public/browser/payment_app_provider_util.h"
@@ -19,7 +17,7 @@
 
 namespace content {
 
-class ServiceWorkerCoreThreadEventDispatcher;
+class PaymentEventDispatcher;
 enum class RespondWithCallbackType { kInvoke, kAbort, kCanMakePayment };
 
 // Abstract base class for event callbacks that are invoked when the payment
@@ -38,7 +36,7 @@ class RespondWithCallback
   RespondWithCallback(
       ServiceWorkerMetrics::EventType event_type,
       scoped_refptr<ServiceWorkerVersion> service_worker_version,
-      base::WeakPtr<ServiceWorkerCoreThreadEventDispatcher> event_dispatcher);
+      base::WeakPtr<PaymentEventDispatcher> event_dispatcher);
 
   ~RespondWithCallback() override;
 
@@ -63,7 +61,7 @@ class RespondWithCallback
  private:
   int request_id_;
   scoped_refptr<ServiceWorkerVersion> service_worker_version_;
-  base::WeakPtr<ServiceWorkerCoreThreadEventDispatcher> event_dispatcher_;
+  base::WeakPtr<PaymentEventDispatcher> event_dispatcher_;
   mojo::Receiver<payments::mojom::PaymentHandlerResponseCallback> receiver_{
       this};
 
@@ -77,7 +75,7 @@ class CanMakePaymentRespondWithCallback : public RespondWithCallback {
  public:
   CanMakePaymentRespondWithCallback(
       scoped_refptr<ServiceWorkerVersion> service_worker_version,
-      base::WeakPtr<ServiceWorkerCoreThreadEventDispatcher> event_dispatcher,
+      base::WeakPtr<PaymentEventDispatcher> event_dispatcher,
       PaymentAppProvider::CanMakePaymentCallback callback);
   ~CanMakePaymentRespondWithCallback() override;
 
@@ -106,7 +104,7 @@ class InvokeRespondWithCallback : public RespondWithCallback {
  public:
   InvokeRespondWithCallback(
       scoped_refptr<ServiceWorkerVersion> service_worker_version,
-      base::WeakPtr<ServiceWorkerCoreThreadEventDispatcher> event_dispatcher,
+      base::WeakPtr<PaymentEventDispatcher> event_dispatcher,
       PaymentAppProvider::InvokePaymentAppCallback callback);
   ~InvokeRespondWithCallback() override;
 
@@ -140,7 +138,7 @@ class AbortRespondWithCallback : public RespondWithCallback {
  public:
   AbortRespondWithCallback(
       scoped_refptr<ServiceWorkerVersion> service_worker_version,
-      base::WeakPtr<ServiceWorkerCoreThreadEventDispatcher> event_dispatcher,
+      base::WeakPtr<PaymentEventDispatcher> event_dispatcher,
       PaymentAppProvider::AbortCallback callback);
   ~AbortRespondWithCallback() override;
 

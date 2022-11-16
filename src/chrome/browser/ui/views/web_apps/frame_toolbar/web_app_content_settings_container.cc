@@ -16,7 +16,7 @@
 namespace {
 
 constexpr base::TimeDelta kContentSettingsFadeInDuration =
-    base::TimeDelta::FromMilliseconds(500);
+    base::Milliseconds(500);
 
 }  // namespace
 
@@ -71,8 +71,11 @@ void WebAppContentSettingsContainer::SetUpForFadeIn() {
 void WebAppContentSettingsContainer::FadeIn() {
   if (GetVisible())
     return;
+
+  // The layer may have been destroyed since SetUpForFadeIn() was called.
+  SetPaintToLayer();
+
   SetVisible(true);
-  DCHECK_EQ(layer()->opacity(), 0);
   ui::ScopedLayerAnimationSettings settings(layer()->GetAnimator());
   settings.SetTransitionDuration(kContentSettingsFadeInDuration);
   layer()->SetOpacity(1);

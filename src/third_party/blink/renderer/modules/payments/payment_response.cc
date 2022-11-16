@@ -11,12 +11,14 @@
 #include "third_party/blink/renderer/bindings/core/v8/v8_object_builder.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_payment_validation_errors.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
-#include "third_party/blink/renderer/modules/credentialmanager/authenticator_assertion_response.h"
-#include "third_party/blink/renderer/modules/credentialmanager/public_key_credential.h"
+#include "third_party/blink/renderer/modules/credentialmanagement/authenticator_assertion_response.h"
+#include "third_party/blink/renderer/modules/credentialmanagement/credential_manager_type_converters.h"
+#include "third_party/blink/renderer/modules/credentialmanagement/public_key_credential.h"
 #include "third_party/blink/renderer/modules/payments/payment_address.h"
 #include "third_party/blink/renderer/modules/payments/payment_state_resolver.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
+#include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 
 namespace blink {
 namespace {
@@ -41,6 +43,7 @@ v8::Local<v8::Value> BuildDetails(
         DOMArrayBuffer::Create(static_cast<const void*>(info->raw_id.data()),
                                info->raw_id.size()),
         authenticator_response,
+        secure_payment_confirmation->authenticator_attachment,
         AuthenticationExtensionsClientOutputs::Create());
     return result->Wrap(script_state).ToLocalChecked();
   }

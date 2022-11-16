@@ -5,7 +5,7 @@
 (async function() {
   TestRunner.addResult(
       `Tests that adding a new rule does not crash the renderer and modifying an inline style does not report errors when forbidden by Content-Security-Policy.\n`);
-  await TestRunner.loadModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
+  await TestRunner.loadLegacyModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
   await TestRunner.showPanel('elements');
   await TestRunner.loadHTML(`
       <div id="inspected">Text</div>
@@ -74,7 +74,7 @@
 
     function testModifyInlineStyle(next) {
       var inlineStyle;
-      TestRunner.cssModel.inlineStylesPromise(nodeId).then(stylesCallback);
+      TestRunner.cssModel.getInlineStyles(nodeId).then(stylesCallback);
       TestRunner.cssModel.addEventListener(SDK.CSSModel.Events.StyleSheetChanged, onStyleSheetChanged);
       function onStyleSheetChanged(event) {
         if (event.data && event.data.edit)

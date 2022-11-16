@@ -32,10 +32,14 @@
 #include "third_party/blink/renderer/core/dom/range_boundary_point.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
-#include "third_party/blink/renderer/platform/geometry/float_rect.h"
-#include "third_party/blink/renderer/platform/geometry/int_rect.h"
-#include "third_party/blink/renderer/platform/heap/handle.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/wtf/forward.h"
+#include "ui/gfx/geometry/rect.h"
+#include "ui/gfx/geometry/rect_f.h"
+
+namespace gfx {
+class QuadF;
+}
 
 namespace blink {
 
@@ -45,7 +49,6 @@ class ContainerNode;
 class Document;
 class DocumentFragment;
 class ExceptionState;
-class FloatQuad;
 class Node;
 class NodeWithIndex;
 class Text;
@@ -90,12 +93,6 @@ class CORE_EXPORT Range final : public AbstractRange {
   void collapse(bool to_start);
   bool isPointInRange(Node* ref_node, unsigned offset, ExceptionState&) const;
   int16_t comparePoint(Node* ref_node, unsigned offset, ExceptionState&) const;
-  enum CompareResults {
-    NODE_BEFORE,
-    NODE_AFTER,
-    NODE_BEFORE_AND_AFTER,
-    NODE_INSIDE
-  };
   enum CompareHow { kStartToStart, kStartToEnd, kEndToEnd, kEndToStart };
   int16_t compareBoundaryPoints(unsigned how,
                                 const Range* source_range,
@@ -142,11 +139,11 @@ class CORE_EXPORT Range final : public AbstractRange {
   Node* PastLastNode() const;
 
   // Not transform-friendly
-  IntRect BoundingBox() const;
+  gfx::Rect BoundingBox() const;
 
   // Transform-friendly
-  void GetBorderAndTextQuads(Vector<FloatQuad>&) const;
-  FloatRect BoundingRect() const;
+  void GetBorderAndTextQuads(Vector<gfx::QuadF>&) const;
+  gfx::RectF BoundingRect() const;
 
   void NodeChildrenWillBeRemoved(ContainerNode&);
   void NodeWillBeRemoved(Node&);
@@ -182,7 +179,7 @@ class CORE_EXPORT Range final : public AbstractRange {
   void CheckExtractPrecondition(ExceptionState&);
   bool HasSameRoot(const Node&) const;
 
-  enum ActionType { DELETE_CONTENTS, EXTRACT_CONTENTS, CLONE_CONTENTS };
+  enum ActionType { kDeleteContents, kExtractContents, kCloneContents };
   DocumentFragment* ProcessContents(ActionType, ExceptionState&);
   static Node* ProcessContentsBetweenOffsets(ActionType,
                                              DocumentFragment*,
@@ -224,7 +221,7 @@ using RangeVector = HeapVector<Member<Range>>;
 
 #if DCHECK_IS_ON()
 // Outside the blink namespace for ease of invocation from gdb.
-void showTree(const blink::Range*);
+void ShowTree(const blink::Range*);
 #endif
 
 #endif  // THIRD_PARTY_BLINK_RENDERER_CORE_DOM_RANGE_H_

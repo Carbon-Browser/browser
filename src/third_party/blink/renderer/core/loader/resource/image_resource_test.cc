@@ -49,7 +49,8 @@
 #include "third_party/blink/renderer/platform/exported/wrapped_resource_response.h"
 #include "third_party/blink/renderer/platform/graphics/bitmap_image.h"
 #include "third_party/blink/renderer/platform/graphics/image.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/heap/thread_state.h"
 #include "third_party/blink/renderer/platform/instrumentation/instance_counters.h"
 #include "third_party/blink/renderer/platform/loader/fetch/console_logger.h"
 #include "third_party/blink/renderer/platform/loader/fetch/fetch_initiator_info.h"
@@ -123,7 +124,7 @@ class ImageResourceTest : public testing::Test,
     // Trigger a GC so MockFinishObserver gets destroyed and EXPECT_CALL gets
     // checked before the test ends.
     ThreadState::Current()->CollectAllGarbageForTesting(
-        BlinkGC::kNoHeapPointersOnStack);
+        ThreadState::StackState::kNoHeapPointers);
   }
 };
 
@@ -238,8 +239,8 @@ TEST_F(ImageResourceTest, MultipartImage) {
   ImageResource* image_resource = ImageResource::CreateForTest(test_url);
   fetcher->StartLoad(image_resource);
 
-  auto observer =
-      std::make_unique<MockImageResourceObserver>(image_resource->GetContent());
+  auto* observer = MakeGarbageCollected<MockImageResourceObserver>(
+      image_resource->GetContent());
   EXPECT_EQ(ResourceStatus::kPending, image_resource->GetStatus());
 
   // Send the multipart response. No image or data buffer is created. Note that
@@ -283,8 +284,8 @@ TEST_F(ImageResourceTest, MultipartImage) {
 
   // Add an observer to check an assertion error doesn't happen
   // (crbug.com/630983).
-  auto observer2 =
-      std::make_unique<MockImageResourceObserver>(image_resource->GetContent());
+  auto* observer2 = MakeGarbageCollected<MockImageResourceObserver>(
+      image_resource->GetContent());
   EXPECT_EQ(0, observer2->ImageChangedCount());
   EXPECT_FALSE(observer2->ImageNotifyFinishedCalled());
 
@@ -369,8 +370,8 @@ TEST_F(ImageResourceTest, CancelOnRemoveObserver) {
   fetcher->StartLoad(image_resource);
   GetMemoryCache()->Add(image_resource);
 
-  auto observer =
-      std::make_unique<MockImageResourceObserver>(image_resource->GetContent());
+  auto* observer = MakeGarbageCollected<MockImageResourceObserver>(
+      image_resource->GetContent());
   EXPECT_EQ(ResourceStatus::kPending, image_resource->GetStatus());
 
   // The load should still be alive, but a timer should be started to cancel the
@@ -445,8 +446,8 @@ TEST_F(ImageResourceTest, DecodedDataRemainsWhileHasClients) {
   ImageResource* image_resource = ImageResource::CreateForTest(NullURL());
   image_resource->NotifyStartLoad();
 
-  auto observer =
-      std::make_unique<MockImageResourceObserver>(image_resource->GetContent());
+  auto* observer = MakeGarbageCollected<MockImageResourceObserver>(
+      image_resource->GetContent());
 
   // Send the image response.
   ResourceResponse resource_response(NullURL());
@@ -487,8 +488,8 @@ TEST_F(ImageResourceTest, UpdateBitmapImages) {
   ImageResource* image_resource = ImageResource::CreateForTest(NullURL());
   image_resource->NotifyStartLoad();
 
-  auto observer =
-      std::make_unique<MockImageResourceObserver>(image_resource->GetContent());
+  auto* observer = MakeGarbageCollected<MockImageResourceObserver>(
+      image_resource->GetContent());
 
   // Send the image response.
 
@@ -510,8 +511,8 @@ TEST_F(ImageResourceTest, UpdateBitmapImages) {
 TEST_F(ImageResourceTest, SVGImage) {
   KURL url("http://127.0.0.1:8000/foo");
   ImageResource* image_resource = ImageResource::CreateForTest(url);
-  auto observer =
-      std::make_unique<MockImageResourceObserver>(image_resource->GetContent());
+  auto* observer = MakeGarbageCollected<MockImageResourceObserver>(
+      image_resource->GetContent());
 
   ReceiveResponse(image_resource, url, "image/svg+xml", kSvgImage,
                   strlen(kSvgImage));
@@ -525,16 +526,10 @@ TEST_F(ImageResourceTest, SVGImage) {
 }
 
 TEST_F(ImageResourceTest, SVGImageWithSubresource) {
-  // SVG images block all subresources other than data urls. This test
-  // explicitly asserts asynchronous loading of data url fonts, and will not
-  // work when SyncLoadDataUrlFonts is enabled.
-  // TODO(xiaochengh): Try other types of subresources encoded as a data url.
-  ScopedSyncLoadDataUrlFontsForTest disabled_scope(false);
-
   KURL url("http://127.0.0.1:8000/foo");
   ImageResource* image_resource = ImageResource::CreateForTest(url);
-  auto observer =
-      std::make_unique<MockImageResourceObserver>(image_resource->GetContent());
+  auto* observer = MakeGarbageCollected<MockImageResourceObserver>(
+      image_resource->GetContent());
 
   ReceiveResponse(image_resource, url, "image/svg+xml",
                   kSvgImageWithSubresource, strlen(kSvgImageWithSubresource));
@@ -555,8 +550,8 @@ TEST_F(ImageResourceTest, SVGImageWithSubresource) {
   EXPECT_EQ(100, image_resource->GetContent()->GetImage()->height());
 
   // A new client added here shouldn't notified of finish.
-  auto observer2 =
-      std::make_unique<MockImageResourceObserver>(image_resource->GetContent());
+  auto* observer2 = MakeGarbageCollected<MockImageResourceObserver>(
+      image_resource->GetContent());
   EXPECT_EQ(1, observer2->ImageChangedCount());
   EXPECT_FALSE(observer2->ImageNotifyFinishedCalled());
 
@@ -578,8 +573,8 @@ TEST_F(ImageResourceTest, SVGImageWithSubresource) {
 TEST_F(ImageResourceTest, SuccessfulRevalidationJpeg) {
   KURL url("http://127.0.0.1:8000/foo");
   ImageResource* image_resource = ImageResource::CreateForTest(url);
-  auto observer =
-      std::make_unique<MockImageResourceObserver>(image_resource->GetContent());
+  auto* observer = MakeGarbageCollected<MockImageResourceObserver>(
+      image_resource->GetContent());
 
   ReceiveResponse(image_resource, url, "image/jpeg",
                   reinterpret_cast<const char*>(kJpegImage),
@@ -615,8 +610,8 @@ TEST_F(ImageResourceTest, SuccessfulRevalidationJpeg) {
 TEST_F(ImageResourceTest, SuccessfulRevalidationSvg) {
   KURL url("http://127.0.0.1:8000/foo");
   ImageResource* image_resource = ImageResource::CreateForTest(url);
-  auto observer =
-      std::make_unique<MockImageResourceObserver>(image_resource->GetContent());
+  auto* observer = MakeGarbageCollected<MockImageResourceObserver>(
+      image_resource->GetContent());
 
   ReceiveResponse(image_resource, url, "image/svg+xml", kSvgImage,
                   strlen(kSvgImage));
@@ -648,8 +643,8 @@ TEST_F(ImageResourceTest, SuccessfulRevalidationSvg) {
 TEST_F(ImageResourceTest, FailedRevalidationJpegToJpeg) {
   KURL url("http://127.0.0.1:8000/foo");
   ImageResource* image_resource = ImageResource::CreateForTest(url);
-  auto observer =
-      std::make_unique<MockImageResourceObserver>(image_resource->GetContent());
+  auto* observer = MakeGarbageCollected<MockImageResourceObserver>(
+      image_resource->GetContent());
 
   ReceiveResponse(image_resource, url, "image/jpeg",
                   reinterpret_cast<const char*>(kJpegImage),
@@ -683,8 +678,8 @@ TEST_F(ImageResourceTest, FailedRevalidationJpegToJpeg) {
 TEST_F(ImageResourceTest, FailedRevalidationJpegToSvg) {
   KURL url("http://127.0.0.1:8000/foo");
   ImageResource* image_resource = ImageResource::CreateForTest(url);
-  auto observer =
-      std::make_unique<MockImageResourceObserver>(image_resource->GetContent());
+  auto* observer = MakeGarbageCollected<MockImageResourceObserver>(
+      image_resource->GetContent());
 
   ReceiveResponse(image_resource, url, "image/jpeg",
                   reinterpret_cast<const char*>(kJpegImage),
@@ -717,8 +712,8 @@ TEST_F(ImageResourceTest, FailedRevalidationJpegToSvg) {
 TEST_F(ImageResourceTest, FailedRevalidationSvgToJpeg) {
   KURL url("http://127.0.0.1:8000/foo");
   ImageResource* image_resource = ImageResource::CreateForTest(url);
-  auto observer =
-      std::make_unique<MockImageResourceObserver>(image_resource->GetContent());
+  auto* observer = MakeGarbageCollected<MockImageResourceObserver>(
+      image_resource->GetContent());
 
   ReceiveResponse(image_resource, url, "image/svg+xml", kSvgImage,
                   strlen(kSvgImage));
@@ -751,8 +746,8 @@ TEST_F(ImageResourceTest, FailedRevalidationSvgToJpeg) {
 TEST_F(ImageResourceTest, FailedRevalidationSvgToSvg) {
   KURL url("http://127.0.0.1:8000/foo");
   ImageResource* image_resource = ImageResource::CreateForTest(url);
-  auto observer =
-      std::make_unique<MockImageResourceObserver>(image_resource->GetContent());
+  auto* observer = MakeGarbageCollected<MockImageResourceObserver>(
+      image_resource->GetContent());
 
   ReceiveResponse(image_resource, url, "image/svg+xml", kSvgImage,
                   strlen(kSvgImage));
@@ -819,8 +814,8 @@ TEST_F(ImageResourceTest, CancelOnDecodeError) {
   FetchParameters params =
       FetchParameters::CreateForTest(ResourceRequest(test_url));
   ImageResource* image_resource = ImageResource::Fetch(params, fetcher);
-  auto observer =
-      std::make_unique<MockImageResourceObserver>(image_resource->GetContent());
+  auto* observer = MakeGarbageCollected<MockImageResourceObserver>(
+      image_resource->GetContent());
 
   ResourceResponse resource_response(test_url);
   resource_response.SetMimeType("image/jpeg");
@@ -848,8 +843,8 @@ TEST_F(ImageResourceTest, DecodeErrorWithEmptyBody) {
   FetchParameters params =
       FetchParameters::CreateForTest(ResourceRequest(test_url));
   ImageResource* image_resource = ImageResource::Fetch(params, fetcher);
-  auto observer =
-      std::make_unique<MockImageResourceObserver>(image_resource->GetContent());
+  auto* observer = MakeGarbageCollected<MockImageResourceObserver>(
+      image_resource->GetContent());
 
   ResourceResponse resource_response(test_url);
   resource_response.SetMimeType("image/jpeg");
@@ -882,8 +877,8 @@ TEST_F(ImageResourceTest, PartialContentWithoutDimensions) {
       FetchParameters::CreateForTest(std::move(resource_request));
   ResourceFetcher* fetcher = CreateFetcher();
   ImageResource* image_resource = ImageResource::Fetch(params, fetcher);
-  auto observer =
-      std::make_unique<MockImageResourceObserver>(image_resource->GetContent());
+  auto* observer = MakeGarbageCollected<MockImageResourceObserver>(
+      image_resource->GetContent());
 
   ResourceResponse partial_response(test_url);
   partial_response.SetMimeType("image/jpeg");
@@ -924,7 +919,7 @@ TEST_F(ImageResourceTest, PeriodicFlushTest) {
 
   std::unique_ptr<DummyPageHolder> page_holder =
       std::make_unique<DummyPageHolder>(
-          IntSize(800, 600), /*chrome_client=*/nullptr,
+          gfx::Size(800, 600), /*chrome_client=*/nullptr,
           MakeGarbageCollected<EmptyLocalFrameClient>());
 
   KURL test_url(kTestURL);
@@ -951,14 +946,13 @@ TEST_F(ImageResourceTest, PeriodicFlushTest) {
   ImageResource* image_resource = ImageResource::CreateForTest(test_url);
 
   // Ensure that |image_resource| has a loader.
-  auto* loader =
+  [[maybe_unused]] auto* loader =
       MakeGarbageCollected<ResourceLoader>(fetcher, scheduler, image_resource);
-  ALLOW_UNUSED_LOCAL(loader);
 
   image_resource->NotifyStartLoad();
 
-  auto observer =
-      std::make_unique<MockImageResourceObserver>(image_resource->GetContent());
+  auto* observer = MakeGarbageCollected<MockImageResourceObserver>(
+      image_resource->GetContent());
 
   // Send the image response.
   ResourceResponse resource_response(NullURL());
@@ -1033,8 +1027,8 @@ TEST_F(ImageResourceTest, PeriodicFlushTest) {
 
 TEST_F(ImageResourceTest, DeferredInvalidation) {
   ImageResource* image_resource = ImageResource::CreateForTest(NullURL());
-  std::unique_ptr<MockImageResourceObserver> obs =
-      std::make_unique<MockImageResourceObserver>(image_resource->GetContent());
+  auto* obs = MakeGarbageCollected<MockImageResourceObserver>(
+      image_resource->GetContent());
 
   // Image loaded.
   ReceiveResponse(image_resource, NullURL(), "image/jpeg",

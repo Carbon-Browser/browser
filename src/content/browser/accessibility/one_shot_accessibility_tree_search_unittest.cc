@@ -6,12 +6,13 @@
 
 #include <memory>
 
-#include "base/macros.h"
 #include "build/build_config.h"
 #include "content/browser/accessibility/browser_accessibility.h"
 #include "content/browser/accessibility/browser_accessibility_manager.h"
-#ifdef OS_ANDROID
+#if BUILDFLAG(IS_ANDROID)
 #include "content/browser/accessibility/browser_accessibility_manager_android.h"
+#elif OS_FUCHSIA
+#include "content/browser/accessibility/browser_accessibility_manager_fuchsia.h"
 #endif
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -20,12 +21,19 @@ namespace content {
 
 namespace {
 
-#ifdef OS_ANDROID
+#if BUILDFLAG(IS_ANDROID)
 class TestBrowserAccessibilityManager
     : public BrowserAccessibilityManagerAndroid {
  public:
   explicit TestBrowserAccessibilityManager(const ui::AXTreeUpdate& initial_tree)
       : BrowserAccessibilityManagerAndroid(initial_tree, nullptr, nullptr) {}
+};
+#elif OS_FUCHSIA
+class TestBrowserAccessibilityManager
+    : public BrowserAccessibilityManagerFuchsia {
+ public:
+  explicit TestBrowserAccessibilityManager(const ui::AXTreeUpdate& initial_tree)
+      : BrowserAccessibilityManagerFuchsia(initial_tree, nullptr) {}
 };
 #else
 class TestBrowserAccessibilityManager : public BrowserAccessibilityManager {
@@ -40,6 +48,12 @@ class TestBrowserAccessibilityManager : public BrowserAccessibilityManager {
 class OneShotAccessibilityTreeSearchTest : public testing::Test {
  public:
   OneShotAccessibilityTreeSearchTest() = default;
+
+  OneShotAccessibilityTreeSearchTest(
+      const OneShotAccessibilityTreeSearchTest&) = delete;
+  OneShotAccessibilityTreeSearchTest& operator=(
+      const OneShotAccessibilityTreeSearchTest&) = delete;
+
   ~OneShotAccessibilityTreeSearchTest() override = default;
 
  protected:
@@ -48,9 +62,6 @@ class OneShotAccessibilityTreeSearchTest : public testing::Test {
   BrowserTaskEnvironment task_environment_;
 
   std::unique_ptr<BrowserAccessibilityManager> tree_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(OneShotAccessibilityTreeSearchTest);
 };
 
 void OneShotAccessibilityTreeSearchTest::SetUp() {
@@ -131,7 +142,7 @@ void OneShotAccessibilityTreeSearchTest::SetUp() {
 
 TEST_F(OneShotAccessibilityTreeSearchTest, GetAll) {
   OneShotAccessibilityTreeSearch search(tree_->GetRoot());
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   ASSERT_EQ(13U, search.CountMatches());
 #else
   ASSERT_EQ(10U, search.CountMatches());
@@ -143,7 +154,7 @@ TEST_F(OneShotAccessibilityTreeSearchTest, BackwardsWrapFromRoot) {
   search.SetDirection(OneShotAccessibilityTreeSearch::BACKWARDS);
   search.SetResultLimit(100);
   search.SetCanWrapToLastElement(true);
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   ASSERT_EQ(13U, search.CountMatches());
 #else
   ASSERT_EQ(10U, search.CountMatches());
@@ -153,7 +164,7 @@ TEST_F(OneShotAccessibilityTreeSearchTest, BackwardsWrapFromRoot) {
   EXPECT_EQ(9, search.GetMatchAtIndex(2)->GetId());
   EXPECT_EQ(8, search.GetMatchAtIndex(3)->GetId());
   EXPECT_EQ(7, search.GetMatchAtIndex(4)->GetId());
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   EXPECT_EQ(-3, search.GetMatchAtIndex(5)->GetId());
   EXPECT_EQ(-2, search.GetMatchAtIndex(6)->GetId());
   EXPECT_EQ(-1, search.GetMatchAtIndex(7)->GetId());

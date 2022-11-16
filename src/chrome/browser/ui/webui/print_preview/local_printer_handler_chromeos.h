@@ -8,6 +8,7 @@
 #include <memory>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
@@ -53,7 +54,7 @@ class LocalPrinterHandlerChromeos : public PrinterHandler {
 
   // Returns a CapabilitiesResponse object (defined in
   // chrome/browser/resources/print_preview/native_layer.js).
-  static base::Value CapabilityToValue(
+  static base::Value::Dict CapabilityToValue(
       crosapi::mojom::CapabilitiesResponsePtr caps);
 
   // Returns a PrinterStatus object (defined in
@@ -68,7 +69,7 @@ class LocalPrinterHandlerChromeos : public PrinterHandler {
   void StartGetCapability(const std::string& destination_id,
                           GetCapabilityCallback callback) override;
   void StartPrint(const std::u16string& job_title,
-                  base::Value settings,
+                  base::Value::Dict settings,
                   scoped_refptr<base::RefCountedMemory> print_data,
                   PrintCallback callback) override;
   void StartGetEulaUrl(const std::string& destination_id,
@@ -78,13 +79,13 @@ class LocalPrinterHandlerChromeos : public PrinterHandler {
       PrinterStatusRequestCallback callback) override;
 
  private:
-  void OnProfileUsernameReady(base::Value settings,
+  void OnProfileUsernameReady(base::Value::Dict settings,
                               scoped_refptr<base::RefCountedMemory> print_data,
                               PrinterHandler::PrintCallback callback,
                               const absl::optional<std::string>& username);
 
-  content::WebContents* const preview_web_contents_;
-  crosapi::mojom::LocalPrinter* local_printer_ = nullptr;
+  const raw_ptr<content::WebContents> preview_web_contents_;
+  raw_ptr<crosapi::mojom::LocalPrinter> local_printer_ = nullptr;
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
   int local_printer_version_ = 0;
 #endif

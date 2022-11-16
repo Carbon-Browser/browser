@@ -33,21 +33,20 @@ struct InternalFormatType {
 
 // Convert a gfx::BufferFormat to a (internal format, type) combination from the
 // EGL_ANGLE_iosurface_client_buffer extension spec.
-InternalFormatType BufferFormatToInternalFormatType(gfx::BufferFormat format,
-                                                    bool emulate_rgb) {
+InternalFormatType BufferFormatToInternalFormatType(gfx::BufferFormat format) {
   switch (format) {
     case gfx::BufferFormat::R_8:
       return {GL_RED, GL_UNSIGNED_BYTE};
     case gfx::BufferFormat::R_16:
+      // TODO(https://crbug.com/1233228): This should be GL_RED.
       return {GL_RED_INTEGER, GL_UNSIGNED_SHORT};
     case gfx::BufferFormat::RG_88:
       return {GL_RG, GL_UNSIGNED_BYTE};
+    case gfx::BufferFormat::RG_1616:
+      return {GL_RG, GL_UNSIGNED_SHORT};
     case gfx::BufferFormat::BGRX_8888:
-      if (emulate_rgb) {
-        return {GL_BGRA_EXT, GL_UNSIGNED_BYTE};
-      } else {
-        return {GL_RGB, GL_UNSIGNED_BYTE};
-      }
+    case gfx::BufferFormat::RGBX_8888:
+      return {GL_RGB, GL_UNSIGNED_BYTE};
     case gfx::BufferFormat::BGRA_8888:
     case gfx::BufferFormat::RGBA_8888:
       return {GL_BGRA_EXT, GL_UNSIGNED_BYTE};
@@ -57,7 +56,6 @@ InternalFormatType BufferFormatToInternalFormatType(gfx::BufferFormat format,
       return {GL_RGB10_A2, GL_UNSIGNED_INT_2_10_10_10_REV};
     case gfx::BufferFormat::BGR_565:
     case gfx::BufferFormat::RGBA_4444:
-    case gfx::BufferFormat::RGBX_8888:
     case gfx::BufferFormat::RGBA_1010102:
     case gfx::BufferFormat::YVU_420:
     case gfx::BufferFormat::YUV_420_BIPLANAR:
@@ -113,11 +111,9 @@ GLenum TargetGetterFromGLTarget(GLint gl_target) {
 }  // anonymous namespace
 
 GLImageIOSurfaceEGL::GLImageIOSurfaceEGL(const gfx::Size& size,
-                                         unsigned internalformat,
-                                         bool emulate_rgb)
+                                         unsigned internalformat)
     : GLImageIOSurface(size, internalformat),
-      emulate_rgb_(emulate_rgb),
-      display_(GLSurfaceEGL::GetHardwareDisplay()),
+      display_(GLSurfaceEGL::GetGLDisplayEGL()->GetDisplay()),
       pbuffer_(EGL_NO_SURFACE),
       dummy_config_(nullptr),
       texture_target_(EGL_TEXTURE_RECTANGLE_ANGLE),
@@ -130,7 +126,7 @@ GLImageIOSurfaceEGL::GLImageIOSurfaceEGL(const gfx::Size& size,
   EGLBoolean result =
       eglChooseConfig(display_, nullptr, &dummy_config_, 1, &numConfigs);
   DCHECK(result == EGL_TRUE);
-  DCHECK(numConfigs = 1);
+  DCHECK_EQ(numConfigs, 1);
   DCHECK(dummy_config_ != nullptr);
   const char* extensions = eglQueryString(display_, EGL_EXTENSIONS);
   if (GLSurface::ExtensionsContain(extensions,
@@ -202,8 +198,7 @@ bool GLImageIOSurfaceEGL::BindTexImageImpl(unsigned target,
   // in the constructor if we're going to be used to bind plane 0 to a texture,
   // or to transform YUV to RGB.
   if (pbuffer_ == EGL_NO_SURFACE) {
-    InternalFormatType formatType =
-        BufferFormatToInternalFormatType(format_, emulate_rgb_);
+    InternalFormatType formatType = BufferFormatToInternalFormatType(format_);
 
     // clang-format off
     const EGLint attribs[] = {
@@ -309,6 +304,12 @@ bool GLImageIOSurfaceEGL::CopyTexImage(unsigned target) {
   const EGLint texture_type =
       format_ == gfx::BufferFormat::P010 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_BYTE;
 
+  // GL_UNSIGNED_SHORT is not supported for all contexts. Use half-float
+  // instead.
+  // https://crbug.com/1282350
+  const GLenum rgb_texture_type =
+      format_ == gfx::BufferFormat::P010 ? GL_HALF_FLOAT_OES : GL_UNSIGNED_BYTE;
+
   // clang-format off
   const EGLint yAttribs[] = {
     EGL_WIDTH,                         size_.width(),
@@ -376,7 +377,7 @@ bool GLImageIOSurfaceEGL::CopyTexImage(unsigned target) {
   }
 
   yuv_to_rgb_converter->CopyYUV420ToRGB(target, size_, rgb_texture,
-                                        texture_type);
+                                        rgb_texture_type);
   if (glGetError() != GL_NO_ERROR) {
     LOG(ERROR) << "Failed converting from YUV to RGB";
     return false;

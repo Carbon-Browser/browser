@@ -5,12 +5,11 @@
 #ifndef MOJO_CORE_PLATFORM_HANDLE_IN_TRANSIT_H_
 #define MOJO_CORE_PLATFORM_HANDLE_IN_TRANSIT_H_
 
-#include "base/macros.h"
 #include "base/process/process.h"
 #include "build/build_config.h"
 #include "mojo/public/cpp/platform/platform_handle.h"
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include <windows.h>
 #endif
 
@@ -28,6 +27,10 @@ class PlatformHandleInTransit {
   PlatformHandleInTransit();
   explicit PlatformHandleInTransit(PlatformHandle handle);
   PlatformHandleInTransit(PlatformHandleInTransit&&);
+
+  PlatformHandleInTransit(const PlatformHandleInTransit&) = delete;
+  PlatformHandleInTransit& operator=(const PlatformHandleInTransit&) = delete;
+
   ~PlatformHandleInTransit();
 
   PlatformHandleInTransit& operator=(PlatformHandleInTransit&&);
@@ -53,10 +56,9 @@ class PlatformHandleInTransit {
   void CompleteTransit();
 
   // Transfers ownership of this (local) handle to |target_process|.
-  bool TransferToProcess(base::Process target_process,
-                         bool check_on_failure = true);
+  bool TransferToProcess(base::Process target_process);
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   HANDLE remote_handle() const { return remote_handle_; }
 
   // Indicates whether |handle| is a known pseudo handle value. In a fuzzing
@@ -87,7 +89,7 @@ class PlatformHandleInTransit {
 #endif
 
  private:
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   // We don't use a ScopedHandle (or, by extension, PlatformHandle) here because
   // the handle verifier expects all handle values to be owned by this process.
   // On Windows we use |handle_| for locally owned handles and |remote_handle_|
@@ -97,8 +99,6 @@ class PlatformHandleInTransit {
 
   PlatformHandle handle_;
   base::Process owning_process_;
-
-  DISALLOW_COPY_AND_ASSIGN(PlatformHandleInTransit);
 };
 
 }  // namespace core

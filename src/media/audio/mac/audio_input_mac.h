@@ -14,7 +14,7 @@
 #include "base/atomicops.h"
 #include "base/cancelable_callback.h"
 #include "base/compiler_specific.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "media/audio/audio_io.h"
@@ -25,13 +25,18 @@ namespace media {
 class AudioBus;
 class AudioManagerMac;
 
-// Implementation of AudioInputStream for Mac OS X using the audio queue service
-// present in OS 10.5 and later. Design reflects PCMQueueOutAudioOutputStream.
+// Implementation of AudioInputStream for macOS using the Audio Queue service
+// in Audio Toolbox. Design reflects PCMQueueOutAudioOutputStream.
 class PCMQueueInAudioInputStream : public AudioInputStream {
  public:
   // Parameters as per AudioManager::MakeAudioInputStream.
   PCMQueueInAudioInputStream(AudioManagerMac* manager,
                              const AudioParameters& params);
+
+  PCMQueueInAudioInputStream(const PCMQueueInAudioInputStream&) = delete;
+  PCMQueueInAudioInputStream& operator=(const PCMQueueInAudioInputStream&) =
+      delete;
+
   ~PCMQueueInAudioInputStream() override;
 
   // Implementation of AudioInputStream.
@@ -85,9 +90,9 @@ class PCMQueueInAudioInputStream : public AudioInputStream {
   void CheckInputStartupSuccess();
 
   // Manager that owns this stream, used for closing down.
-  AudioManagerMac* manager_;
+  raw_ptr<AudioManagerMac> manager_;
   // We use the callback mostly to periodically supply the recorded audio data.
-  AudioInputCallback* callback_;
+  raw_ptr<AudioInputCallback> callback_;
   // Structure that holds the stream format details such as bitrate.
   AudioStreamBasicDescription format_;
   // Handle to the OS audio queue object.
@@ -111,8 +116,6 @@ class PCMQueueInAudioInputStream : public AudioInputStream {
   std::unique_ptr<base::OneShotTimer> input_callback_timer_;
 
   std::unique_ptr<media::AudioBus> audio_bus_;
-
-  DISALLOW_COPY_AND_ASSIGN(PCMQueueInAudioInputStream);
 };
 
 }  // namespace media

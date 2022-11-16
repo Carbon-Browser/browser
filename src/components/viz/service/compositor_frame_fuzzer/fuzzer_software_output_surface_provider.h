@@ -19,13 +19,18 @@ class FuzzerSoftwareOutputSurfaceProvider : public OutputSurfaceProvider {
  public:
   explicit FuzzerSoftwareOutputSurfaceProvider(
       absl::optional<base::FilePath> png_dir_path);
+
+  FuzzerSoftwareOutputSurfaceProvider(
+      const FuzzerSoftwareOutputSurfaceProvider&) = delete;
+  FuzzerSoftwareOutputSurfaceProvider& operator=(
+      const FuzzerSoftwareOutputSurfaceProvider&) = delete;
+
   ~FuzzerSoftwareOutputSurfaceProvider() override;
 
   // OutputSurfaceProvider implementation.
   std::unique_ptr<DisplayCompositorMemoryAndTaskController> CreateGpuDependency(
       bool gpu_compositing,
-      gpu::SurfaceHandle surface_handle,
-      const RendererSettings& renderer_settings) override;
+      gpu::SurfaceHandle surface_handle) override;
   std::unique_ptr<OutputSurface> CreateOutputSurface(
       gpu::SurfaceHandle surface_handle,
       bool gpu_compositing,
@@ -36,8 +41,6 @@ class FuzzerSoftwareOutputSurfaceProvider : public OutputSurfaceProvider {
 
  private:
   absl::optional<base::FilePath> png_dir_path_;
-
-  DISALLOW_COPY_AND_ASSIGN(FuzzerSoftwareOutputSurfaceProvider);
 };
 
 }  // namespace viz

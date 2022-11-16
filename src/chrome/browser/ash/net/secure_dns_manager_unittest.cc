@@ -9,8 +9,8 @@
 #include "base/values.h"
 #include "chrome/browser/net/secure_dns_config.h"
 #include "chrome/common/pref_names.h"
+#include "chromeos/ash/components/network/network_handler_test_helper.h"
 #include "chromeos/dbus/shill/shill_manager_client.h"
-#include "chromeos/network/network_handler_test_helper.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/testing_pref_service.h"
 #include "content/public/test/browser_task_environment.h"
@@ -19,6 +19,7 @@
 
 #include "base/logging.h"
 
+namespace ash {
 namespace {
 
 constexpr const char kGoogleDns[] = "https://dns.google/dns-query{?dns}";
@@ -56,14 +57,12 @@ std::map<std::string, std::string> GetDOHProviders() {
   return props;
 }
 
-}  // namespace
-
-namespace net {
-namespace {
-
 class SecureDnsManagerTest : public testing::Test {
  public:
   SecureDnsManagerTest() = default;
+
+  SecureDnsManagerTest(const SecureDnsManagerTest&) = delete;
+  SecureDnsManagerTest& operator=(const SecureDnsManagerTest&) = delete;
 
   void SetUp() override {
     pref_service_.registry()->RegisterStringPref(prefs::kDnsOverHttpsMode,
@@ -78,8 +77,6 @@ class SecureDnsManagerTest : public testing::Test {
   content::BrowserTaskEnvironment task_environment_;
   chromeos::NetworkHandlerTestHelper network_handler_test_helper_;
   TestingPrefServiceSimple pref_service_;
-
-  DISALLOW_COPY_AND_ASSIGN(SecureDnsManagerTest);
 };
 
 TEST_F(SecureDnsManagerTest, SetModeOff) {
@@ -115,7 +112,7 @@ TEST_F(SecureDnsManagerTest, SetModeSecure) {
   EXPECT_TRUE(it != providers.end());
   EXPECT_EQ(it->first, kGoogleDns);
   EXPECT_TRUE(it->second.empty());
-  EXPECT_EQ(providers.size(), 1);
+  EXPECT_EQ(providers.size(), 1u);
 }
 
 TEST_F(SecureDnsManagerTest, SetModeSecureMultipleTemplates) {
@@ -131,7 +128,7 @@ TEST_F(SecureDnsManagerTest, SetModeSecureMultipleTemplates) {
 
   EXPECT_TRUE(providers.find(kGoogleDns) != providers.end());
   EXPECT_TRUE(providers.find(kCloudflareDns) != providers.end());
-  EXPECT_EQ(providers.size(), 2);
+  EXPECT_EQ(providers.size(), 2u);
 }
 
 TEST_F(SecureDnsManagerTest, SetModeAutomaticWithTemplates) {
@@ -151,8 +148,8 @@ TEST_F(SecureDnsManagerTest, SetModeAutomaticWithTemplates) {
   it = providers.find(kCloudflareDns);
   EXPECT_TRUE(it != providers.end());
   EXPECT_FALSE(it->second.empty());
-  EXPECT_EQ(providers.size(), 2);
+  EXPECT_EQ(providers.size(), 2u);
 }
 
 }  // namespace
-}  // namespace net
+}  // namespace ash

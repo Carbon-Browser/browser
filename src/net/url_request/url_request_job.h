@@ -11,7 +11,7 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "net/base/completion_once_callback.h"
 #include "net/base/completion_repeating_callback.h"
@@ -52,6 +52,10 @@ class X509Certificate;
 class NET_EXPORT URLRequestJob {
  public:
   explicit URLRequestJob(URLRequest* request);
+
+  URLRequestJob(const URLRequestJob&) = delete;
+  URLRequestJob& operator=(const URLRequestJob&) = delete;
+
   virtual ~URLRequestJob();
 
   // Returns the request that owns this job.
@@ -227,10 +231,10 @@ class NET_EXPORT URLRequestJob {
   // canceled by an explicit NetworkDelegate::NotifyURLRequestDestroyed() call.
   virtual void NotifyURLRequestDestroyed();
 
-  // Populates |out| with the connection attempts made at the socket layer in
-  // the course of executing the URLRequestJob. Should be called after the job
-  // has failed or the response headers have been received.
-  virtual void GetConnectionAttempts(ConnectionAttempts* out) const;
+  // Returns the connection attempts made at the socket layer in the course of
+  // executing the URLRequestJob. Should be called after the job has failed or
+  // the response headers have been received.
+  virtual ConnectionAttempts GetConnectionAttempts() const;
 
   // Sets a callback that will be invoked each time the request is about to
   // be actually sent and will receive actual request headers that are about
@@ -279,16 +283,8 @@ class NET_EXPORT URLRequestJob {
                                  bool fatal);
 
   // Delegates to URLRequest.
-  void AnnotateAndMoveUserBlockedCookies(
-      CookieAccessResultList& maybe_included_cookies,
-      CookieAccessResultList& excluded_cookies) const;
-
-  // Delegates to URLRequest.
   bool CanSetCookie(const net::CanonicalCookie& cookie,
                     CookieOptions* options) const;
-
-  // Delegates to URLRequest.
-  PrivacyMode privacy_mode() const;
 
   // Notifies the job that headers have been received.
   void NotifyHeadersComplete();
@@ -357,7 +353,7 @@ class NET_EXPORT URLRequestJob {
   void ReadRawDataComplete(int bytes_read);
 
   // The request that initiated this job. This value will never be nullptr.
-  URLRequest* const request_;
+  const raw_ptr<URLRequest> request_;
 
  private:
   class URLRequestJobSourceStream;
@@ -412,13 +408,13 @@ class NET_EXPORT URLRequestJob {
   // Indicates that the job is done producing data, either it has completed
   // all the data or an error has been encountered. Set exclusively by
   // NotifyDone so that it is kept in sync with the request.
-  bool done_;
+  bool done_ = false;
 
   // Number of raw network bytes read from job subclass.
-  int64_t prefilter_bytes_read_;
+  int64_t prefilter_bytes_read_ = 0;
 
   // Number of bytes after applying |source_stream_| filters.
-  int64_t postfilter_bytes_read_;
+  int64_t postfilter_bytes_read_ = 0;
 
   // The first SourceStream of the SourceStream chain used.
   std::unique_ptr<SourceStream> source_stream_;
@@ -433,10 +429,10 @@ class NET_EXPORT URLRequestJob {
 
   // Used by HandleResponseIfNecessary to track whether we've sent the
   // OnResponseStarted callback and potentially redirect callbacks as well.
-  bool has_handled_response_;
+  bool has_handled_response_ = false;
 
   // Expected content size
-  int64_t expected_content_size_;
+  int64_t expected_content_size_ = -1;
 
   // Set when a redirect is deferred. Redirects are deferred after validity
   // checks are performed, so this field must not be modified.
@@ -447,8 +443,6 @@ class NET_EXPORT URLRequestJob {
   CompletionOnceCallback read_raw_callback_;
 
   base::WeakPtrFactory<URLRequestJob> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(URLRequestJob);
 };
 
 }  // namespace net

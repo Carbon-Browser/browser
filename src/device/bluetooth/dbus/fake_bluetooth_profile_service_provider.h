@@ -7,7 +7,7 @@
 
 #include "base/bind.h"
 #include "base/callback.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "dbus/object_path.h"
 #include "device/bluetooth/bluetooth_export.h"
 #include "device/bluetooth/dbus/bluetooth_profile_service_provider.h"
@@ -24,6 +24,12 @@ class DEVICE_BLUETOOTH_EXPORT FakeBluetoothProfileServiceProvider
  public:
   FakeBluetoothProfileServiceProvider(const dbus::ObjectPath& object_path,
                                       Delegate* delegate);
+
+  FakeBluetoothProfileServiceProvider(
+      const FakeBluetoothProfileServiceProvider&) = delete;
+  FakeBluetoothProfileServiceProvider& operator=(
+      const FakeBluetoothProfileServiceProvider&) = delete;
+
   ~FakeBluetoothProfileServiceProvider() override;
 
   // Each of these calls the equivalent
@@ -49,9 +55,7 @@ class DEVICE_BLUETOOTH_EXPORT FakeBluetoothProfileServiceProvider
   // All incoming method calls are passed on to the Delegate and a callback
   // passed to generate the reply. |delegate_| is generally the object that
   // owns this one, and must outlive it.
-  Delegate* delegate_;
-
-  DISALLOW_COPY_AND_ASSIGN(FakeBluetoothProfileServiceProvider);
+  raw_ptr<Delegate> delegate_;
 };
 
 }  // namespace bluez

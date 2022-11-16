@@ -106,6 +106,9 @@ following questions and answer them in a comment on the issue:
   experiments active in any release channels?
 5. [Chrome OS only]: Was the change reviewed and approved by the
   [Eng Prod Representative](https://goto.google.com/cros-engprodcomponents)?
+6. If this merge addresses a major issue in the stable channel, does it require
+   manual verification by the test team? If so, please describe required
+   testing.
 
 ## Monitoring merge requests
 
@@ -158,15 +161,17 @@ rejected for merge.
 
 ### Using Gerrit UI
 
-Select the "More" button in the Gerrit UI, then choose "Cherry Pick". When
+Select the "..." button in the Gerrit UI, then choose "Cherry Pick". When
 prompted for a branch, enter *refs/branch-heads/####*, where #### corresponds
 to the release branch you are merging to (available on
-[Chromium Dash](https://chromiumdash.appspot.com/branches)).
+[Chromium Dash](https://chromiumdash.appspot.com/branches) in the "Chromium"
+column).
 
 Once the cherry-pick CL is prepared, you can have it approved and landed by
 adding Rubber Stamper (rubber-stamper@appspot.gserviceaccount.com) as a
-reviewer and setting Auto-Submit+1;the Rubber Stamper bot will approve and
-submit the CL to CQ on your behalf.
+reviewer and setting Auto-Submit+1; the Rubber Stamper bot will approve by
+voting *Bot-Commit+1* label and submit the CL to CQ on your behalf.
+*Bot-Commit* is a label voted by bots to bypass code review.
 
 *Note: the Rubber Stamper does not provide OWNERS approval, and only works
 within 7 days of the original change; Googlers can learn more
@@ -177,7 +182,8 @@ within 7 days of the original change; Googlers can learn more
 The commands below should set up your environment to be able to successfully
 upload a cherry-pick to a release branch, where *####* corresponds to the
 release branch you are merging to (available on
-[Chromium Dash](https://chromiumdash.appspot.com/branches)):
+[Chromium Dash](https://chromiumdash.appspot.com/branches) in the "Chromium"
+column):
 
 ```
 $ gclient sync --with_branch_heads
@@ -266,8 +272,8 @@ Chromium Dash [front-end](https://chromiumdash.appspot.com/branches) and
 | branch                   | M(X) Branch     | M(X) Beta       | Polish issues for Finch-gated features (no workflow changes), any new regressions, any release blockers, any security issues, any string issues (.GRD changes)                           |
 | beta                     | M(X) Beta       | M(X) Stable Cut | Non-functional issues for Finch-gated features (e.g. add metrics, fix crash), noticeable new regressions, any release blockers, any security issues, urgent string issues (.GRD changes) |
 | stable_cut               | M(X) Stable Cut | M(X) Stable     | Urgent new regressions, all release blockers, important security issues (medium severity or higher), emergency string issues (.GRD changes)                                              |
-| stable                   | M(X) Stable     | M(X+1) Stable   | Urgent new regressions (especially user reports), urgent release blockers, important security issues (medium severity or higher)                                                         |
-| extended (if applicable) | M(X+1) Stable   | M(X+2) Stable   | Important security issues (medium severity or higher) applicable to Windows, Mac or Chrome OS                                                                                            |
+| stable                   | M(X) Stable     | M(X+1) Stable   | Urgent new regressions (especially user reports), urgent release blockers, important security issues (medium severity or higher) requested by the security team                          |
+| extended (if applicable) | M(X+1) Stable   | M(X+2) Stable   | Important security issues (medium severity or higher) applicable to any platform supported by Chrome Browser requested by the security team                                              |
 
 ### Merge states and labels
 

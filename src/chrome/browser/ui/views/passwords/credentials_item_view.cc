@@ -8,10 +8,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/macros.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/app/vector_icons/vector_icons.h"
-#include "chrome/browser/ui/passwords/manage_passwords_view_utils.h"
+#include "chrome/browser/ui/passwords/ui_utils.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/browser/ui/views/chrome_typography.h"
 #include "chrome/grit/theme_resources.h"
@@ -21,6 +20,8 @@
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/resource/resource_bundle.h"
+#include "ui/color/color_id.h"
+#include "ui/color/color_provider.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/paint_vector_icon.h"
@@ -69,6 +70,7 @@ CredentialsItemView::CredentialsItemView(
     const std::u16string& lower_text,
     const password_manager::PasswordForm* form,
     network::mojom::URLLoaderFactory* loader_factory,
+    const url::Origin& initiator,
     int upper_text_style,
     int lower_text_style)
     : Button(std::move(callback)) {
@@ -95,7 +97,7 @@ CredentialsItemView::CredentialsItemView(
     // Fetch the actual avatar.
     AccountAvatarFetcher* fetcher = new AccountAvatarFetcher(
         form->icon_url, weak_ptr_factory_.GetWeakPtr());
-    fetcher->Start(loader_factory);
+    fetcher->Start(loader_factory, initiator);
   }
   AddChildView(std::move(image_view));
 
@@ -132,7 +134,7 @@ CredentialsItemView::CredentialsItemView(
   if (password_manager_util::GetMatchType(*form) !=
       password_manager_util::GetLoginMatchType::kExact) {
     info_icon_ = AddChildView(std::make_unique<views::TooltipIcon>(
-        base::UTF8ToUTF16(form->url.GetOrigin().spec())));
+        base::UTF8ToUTF16(form->url.DeprecatedGetOriginAsURL().spec())));
   }
 
   if (!upper_text.empty() && !lower_text.empty())
@@ -176,8 +178,8 @@ int CredentialsItemView::GetPreferredHeight() const {
 
 void CredentialsItemView::OnPaintBackground(gfx::Canvas* canvas) {
   if (GetState() == STATE_PRESSED || GetState() == STATE_HOVERED) {
-    canvas->DrawColor(GetNativeTheme()->GetSystemColor(
-        ui::NativeTheme::kColorId_FocusedMenuItemBackgroundColor));
+    canvas->DrawColor(
+        GetColorProvider()->GetColor(ui::kColorMenuItemBackgroundSelected));
   }
 }
 

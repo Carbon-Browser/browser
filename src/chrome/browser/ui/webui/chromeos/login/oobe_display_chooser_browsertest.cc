@@ -23,6 +23,10 @@ namespace {
 class OobeDisplayChooserTest : public OobeBaseTest {
  public:
   OobeDisplayChooserTest() {}
+
+  OobeDisplayChooserTest(const OobeDisplayChooserTest&) = delete;
+  OobeDisplayChooserTest& operator=(const OobeDisplayChooserTest&) = delete;
+
   ~OobeDisplayChooserTest() override {}
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
@@ -30,9 +34,6 @@ class OobeDisplayChooserTest : public OobeBaseTest {
 
     OobeBaseTest::SetUpCommandLine(command_line);
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(OobeDisplayChooserTest);
 };
 
 display::DisplayManager* display_manager() {
@@ -47,9 +48,8 @@ int64_t GetPrimaryDisplayId() {
 
 // Test that display removal does not trigger CHECK in
 // WindowTreeHostManager::GetPrimaryDisplayId().
-// TODO(crbug.com/1183020): Align with RWHI::GetVisualProperties and re-enable.
 IN_PROC_BROWSER_TEST_F(OobeDisplayChooserTest,
-                       DISABLED_RemovingPrimaryDisplaySanityCheck) {
+                       RemovingPrimaryDisplaySanityCheck) {
   display::ManagedDisplayInfo info1(1, "x-1", false);
   info1.SetBounds(gfx::Rect(0, 0, 1280, 800));
   display::ManagedDisplayInfo info2(2, "x-2", false);

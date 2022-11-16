@@ -30,6 +30,8 @@
 #include "third_party/blink/renderer/platform/graphics/static_bitmap_image.h"
 #include "third_party/blink/renderer/platform/graphics/unaccelerated_static_bitmap_image.h"
 #include "third_party/blink/renderer/platform/scheduler/public/post_cross_thread_task.h"
+#include "third_party/blink/renderer/platform/wtf/cross_thread_copier_base.h"
+#include "third_party/blink/renderer/platform/wtf/cross_thread_copier_gpu.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "third_party/skia/include/gpu/GrDirectContext.h"
@@ -40,12 +42,12 @@ namespace blink {
 
 CanvasResource::CanvasResource(base::WeakPtr<CanvasResourceProvider> provider,
                                cc::PaintFlags::FilterQuality filter_quality,
-                               const CanvasResourceParams& params)
+                               const SkColorInfo& info)
     : owning_thread_ref_(base::PlatformThread::CurrentRef()),
       owning_thread_task_runner_(Thread::Current()->GetTaskRunner()),
       provider_(std::move(provider)),
-      filter_quality_(filter_quality),
-      params_(params) {}
+      info_(info),
+      filter_quality_(filter_quality) {}
 
 CanvasResource::~CanvasResource() {
 #if DCHECK_IS_ON()
@@ -150,12 +152,15 @@ bool CanvasResource::PrepareAcceleratedTransferableResource(
     return false;
 
   *out_resource = viz::TransferableResource::MakeGL(
-      mailbox, GLFilter(), TextureTarget(), GetSyncToken(), gfx::Size(Size()),
+      mailbox, GLFilter(), TextureTarget(), GetSyncToken(), Size(),
       IsOverlayCandidate());
 
-  out_resource->color_space = params_.GetSamplerGfxColorSpace();
-  out_resource->format = params_.TransferableResourceFormat();
-  out_resource->read_lock_fences_enabled = NeedsReadLockFences();
+  out_resource->color_space = GetColorSpace();
+  out_resource->format = GetResourceFormat();
+  if (NeedsReadLockFences()) {
+    out_resource->synchronization_type =
+        viz::TransferableResource::SynchronizationType::kGpuCommandsCompleted;
+  }
 
   return true;
 }
@@ -172,10 +177,10 @@ bool CanvasResource::PrepareUnacceleratedTransferableResource(
   // the resource type and completely ignores the format set on the
   // TransferableResource. Clients are expected to render in N32 format but use
   // RGBA as the tagged format on resources.
-  *out_resource = viz::TransferableResource::MakeSoftware(
-      mailbox, gfx::Size(Size()), viz::RGBA_8888);
+  *out_resource =
+      viz::TransferableResource::MakeSoftware(mailbox, Size(), viz::RGBA_8888);
 
-  out_resource->color_space = params_.GetSamplerGfxColorSpace();
+  out_resource->color_space = GetColorSpace();
 
   return true;
 }
@@ -187,9 +192,8 @@ GrDirectContext* CanvasResource::GetGrContext() const {
 }
 
 SkImageInfo CanvasResource::CreateSkImageInfo() const {
-  return SkImageInfo::Make(
-      Size().Width(), Size().Height(), ColorParams().GetSkColorType(),
-      ColorParams().GetSkAlphaType(), ColorParams().GetSkColorSpace());
+  return SkImageInfo::Make(SkISize::Make(Size().width(), Size().height()),
+                           info_);
 }
 
 GLenum CanvasResource::GLFilter() const {
@@ -197,19 +201,33 @@ GLenum CanvasResource::GLFilter() const {
                                                                  : GL_LINEAR;
 }
 
+viz::ResourceFormat CanvasResource::GetResourceFormat() const {
+  return viz::SkColorTypeToResourceFormat(info_.colorType());
+}
+
+gfx::BufferFormat CanvasResource::GetBufferFormat() const {
+  return viz::BufferFormat(GetResourceFormat());
+}
+
+gfx::ColorSpace CanvasResource::GetColorSpace() const {
+  SkColorSpace* color_space = info_.colorSpace();
+  return color_space ? gfx::ColorSpace(*color_space)
+                     : gfx::ColorSpace::CreateSRGB();
+}
+
 // CanvasResourceSharedBitmap
 //==============================================================================
 
 CanvasResourceSharedBitmap::CanvasResourceSharedBitmap(
-    const IntSize& size,
-    const CanvasResourceParams& params,
+    const SkImageInfo& info,
     base::WeakPtr<CanvasResourceProvider> provider,
     cc::PaintFlags::FilterQuality filter_quality)
-    : CanvasResource(std::move(provider), filter_quality, params), size_(size) {
+    : CanvasResource(std::move(provider), filter_quality, info.colorInfo()),
+      size_(info.width(), info.height()) {
   // Software compositing lazily uses RGBA_8888 as the resource format
   // everywhere but the content is expected to be rendered in N32 format.
-  base::MappedReadOnlyRegion shm = viz::bitmap_allocation::AllocateSharedBitmap(
-      gfx::Size(Size()), viz::RGBA_8888);
+  base::MappedReadOnlyRegion shm =
+      viz::bitmap_allocation::AllocateSharedBitmap(Size(), viz::RGBA_8888);
 
   if (!shm.IsValid())
     return;
@@ -233,7 +251,7 @@ bool CanvasResourceSharedBitmap::IsValid() const {
   return shared_mapping_.IsValid();
 }
 
-IntSize CanvasResourceSharedBitmap::Size() const {
+gfx::Size CanvasResourceSharedBitmap::Size() const {
   return size_;
 }
 
@@ -245,8 +263,7 @@ scoped_refptr<StaticBitmapImage> CanvasResourceSharedBitmap::Bitmap() {
   // canvas resource that owns the shared memory stays alive at least until
   // the SkImage is destroyed.
   SkImageInfo image_info = SkImageInfo::Make(
-      Size().Width(), Size().Height(), ColorParams().GetSkColorType(),
-      ColorParams().GetSkAlphaType(), ColorParams().GetSkColorSpace());
+      SkISize::Make(Size().width(), Size().height()), GetSkColorInfo());
   SkPixmap pixmap(image_info, shared_mapping_.memory(),
                   image_info.minRowBytes());
   AddRef();
@@ -262,12 +279,11 @@ scoped_refptr<StaticBitmapImage> CanvasResourceSharedBitmap::Bitmap() {
 }
 
 scoped_refptr<CanvasResourceSharedBitmap> CanvasResourceSharedBitmap::Create(
-    const IntSize& size,
-    const CanvasResourceParams& params,
+    const SkImageInfo& info,
     base::WeakPtr<CanvasResourceProvider> provider,
     cc::PaintFlags::FilterQuality filter_quality) {
   auto resource = AdoptRef(new CanvasResourceSharedBitmap(
-      size, params, std::move(provider), filter_quality));
+      info, std::move(provider), filter_quality));
   return resource->IsValid() ? resource : nullptr;
 }
 
@@ -300,9 +316,7 @@ bool CanvasResourceSharedBitmap::HasGpuMailbox() const {
 
 void CanvasResourceSharedBitmap::TakeSkImage(sk_sp<SkImage> image) {
   SkImageInfo image_info = SkImageInfo::Make(
-      Size().Width(), Size().Height(), ColorParams().GetSkColorType(),
-      ColorParams().GetSkAlphaType(), ColorParams().GetSkColorSpace());
-
+      SkISize::Make(Size().width(), Size().height()), GetSkColorInfo());
   bool read_pixels_successful = image->readPixels(
       image_info, shared_mapping_.memory(), image_info.minRowBytes(), 0, 0);
   DCHECK(read_pixels_successful);
@@ -314,27 +328,28 @@ void CanvasResourceSharedBitmap::TakeSkImage(sk_sp<SkImage> image) {
 CanvasResourceSharedImage::CanvasResourceSharedImage(
     base::WeakPtr<CanvasResourceProvider> provider,
     cc::PaintFlags::FilterQuality filter_quality,
-    const CanvasResourceParams& params)
-    : CanvasResource(provider, filter_quality, params) {}
+    const SkColorInfo& info)
+    : CanvasResource(provider, filter_quality, info) {}
 
 // CanvasResourceRasterSharedImage
 //==============================================================================
 
 CanvasResourceRasterSharedImage::CanvasResourceRasterSharedImage(
-    const IntSize& size,
+    const SkImageInfo& info,
     base::WeakPtr<WebGraphicsContext3DProviderWrapper> context_provider_wrapper,
     base::WeakPtr<CanvasResourceProvider> provider,
     cc::PaintFlags::FilterQuality filter_quality,
-    const CanvasResourceParams& params,
     bool is_origin_top_left,
     bool is_accelerated,
     uint32_t shared_image_usage_flags)
-    : CanvasResourceSharedImage(std::move(provider), filter_quality, params),
+    : CanvasResourceSharedImage(std::move(provider),
+                                filter_quality,
+                                info.colorInfo()),
       context_provider_wrapper_(std::move(context_provider_wrapper)),
-      size_(size),
+      size_(info.width(), info.height()),
       is_origin_top_left_(is_origin_top_left),
       is_accelerated_(is_accelerated),
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
       // On Mac, WebGPU usage is always backed by an IOSurface which should
       // should also use the GL_TEXTURE_RECTANGLE target instead of
       // GL_TEXTURE_2D. Setting |is_overlay_candidate_| both allows overlays,
@@ -347,14 +362,15 @@ CanvasResourceRasterSharedImage::CanvasResourceRasterSharedImage(
       is_overlay_candidate_(shared_image_usage_flags &
                             gpu::SHARED_IMAGE_USAGE_SCANOUT),
 #endif
-      texture_target_(
-          is_overlay_candidate_
-              ? gpu::GetBufferTextureTarget(
-                    gfx::BufferUsage::SCANOUT,
-                    BufferFormat(ColorParams().TransferableResourceFormat()),
-                    context_provider_wrapper_->ContextProvider()
-                        ->GetCapabilities())
-              : GL_TEXTURE_2D),
+      supports_display_compositing_(shared_image_usage_flags &
+                                    gpu::SHARED_IMAGE_USAGE_DISPLAY),
+      texture_target_(is_overlay_candidate_
+                          ? gpu::GetBufferTextureTarget(
+                                gfx::BufferUsage::SCANOUT,
+                                GetBufferFormat(),
+                                context_provider_wrapper_->ContextProvider()
+                                    ->GetCapabilities())
+                          : GL_TEXTURE_2D),
       use_oop_rasterization_(is_accelerated &&
                              context_provider_wrapper_->ContextProvider()
                                  ->GetCapabilities()
@@ -366,13 +382,12 @@ CanvasResourceRasterSharedImage::CanvasResourceRasterSharedImage(
     DCHECK(shared_image_usage_flags & gpu::SHARED_IMAGE_USAGE_DISPLAY);
 
     gpu_memory_buffer_ = gpu_memory_buffer_manager->CreateGpuMemoryBuffer(
-        gfx::Size(size), ColorParams().GetBufferFormat(),
-        gfx::BufferUsage::SCANOUT_CPU_READ_WRITE, gpu::kNullSurfaceHandle,
-        nullptr);
+        Size(), GetBufferFormat(), gfx::BufferUsage::SCANOUT_CPU_READ_WRITE,
+        gpu::kNullSurfaceHandle, nullptr);
     if (!gpu_memory_buffer_)
       return;
 
-    gpu_memory_buffer_->SetColorSpace(params.GetStorageGfxColorSpace());
+    gpu_memory_buffer_->SetColorSpace(GetColorSpace());
   }
 
   auto* shared_image_interface =
@@ -398,17 +413,15 @@ CanvasResourceRasterSharedImage::CanvasResourceRasterSharedImage(
   GrSurfaceOrigin surface_origin = is_origin_top_left_
                                        ? kTopLeft_GrSurfaceOrigin
                                        : kBottomLeft_GrSurfaceOrigin;
-  SkAlphaType surface_alpha_type = ColorParams().GetSkAlphaType();
+  SkAlphaType surface_alpha_type = GetSkColorInfo().alphaType();
   gpu::Mailbox shared_image_mailbox;
   if (gpu_memory_buffer_) {
     shared_image_mailbox = shared_image_interface->CreateSharedImage(
-        gpu_memory_buffer_.get(), gpu_memory_buffer_manager,
-        ColorParams().GetStorageGfxColorSpace(), surface_origin,
-        surface_alpha_type, shared_image_usage_flags);
+        gpu_memory_buffer_.get(), gpu_memory_buffer_manager, GetColorSpace(),
+        surface_origin, surface_alpha_type, shared_image_usage_flags);
   } else {
     shared_image_mailbox = shared_image_interface->CreateSharedImage(
-        ColorParams().TransferableResourceFormat(), gfx::Size(size),
-        ColorParams().GetStorageGfxColorSpace(), surface_origin,
+        GetResourceFormat(), Size(), GetColorSpace(), surface_origin,
         surface_alpha_type, shared_image_usage_flags, gpu::kNullSurfaceHandle);
   }
 
@@ -442,18 +455,17 @@ CanvasResourceRasterSharedImage::CanvasResourceRasterSharedImage(
 
 scoped_refptr<CanvasResourceRasterSharedImage>
 CanvasResourceRasterSharedImage::Create(
-    const IntSize& size,
+    const SkImageInfo& info,
     base::WeakPtr<WebGraphicsContext3DProviderWrapper> context_provider_wrapper,
     base::WeakPtr<CanvasResourceProvider> provider,
     cc::PaintFlags::FilterQuality filter_quality,
-    const CanvasResourceParams& params,
     bool is_origin_top_left,
     bool is_accelerated,
     uint32_t shared_image_usage_flags) {
   TRACE_EVENT0("blink", "CanvasResourceRasterSharedImage::Create");
   auto resource = base::AdoptRef(new CanvasResourceRasterSharedImage(
-      size, std::move(context_provider_wrapper), std::move(provider),
-      filter_quality, params, is_origin_top_left, is_accelerated,
+      info, std::move(context_provider_wrapper), std::move(provider),
+      filter_quality, is_origin_top_left, is_accelerated,
       shared_image_usage_flags));
   return resource->IsValid() ? resource : nullptr;
 }
@@ -484,11 +496,15 @@ void CanvasResourceRasterSharedImage::EndWriteAccess() {
 }
 
 GrBackendTexture CanvasResourceRasterSharedImage::CreateGrTexture() const {
+  const auto& capabilities =
+      context_provider_wrapper_->ContextProvider()->GetCapabilities();
+
   GrGLTextureInfo texture_info = {};
   texture_info.fID = GetTextureIdForWriteAccess();
   texture_info.fTarget = TextureTarget();
-  texture_info.fFormat = ColorParams().GLSizedInternalFormat();
-  return GrBackendTexture(Size().Width(), Size().Height(), GrMipMapped::kNo,
+  texture_info.fFormat = viz::TextureStorageFormat(
+      GetResourceFormat(), capabilities.angle_rgbx_internal_format);
+  return GrBackendTexture(Size().width(), Size().height(), GrMipMapped::kNo,
                           texture_info);
 }
 
@@ -638,9 +654,11 @@ scoped_refptr<StaticBitmapImage> CanvasResourceRasterSharedImage::Bitmap() {
     owning_thread_data().mailbox_sync_mode = kUnverifiedSyncToken;
   }
   image = AcceleratedStaticBitmapImage::CreateFromCanvasMailbox(
-      mailbox(), GetSyncToken(), texture_id_for_image, image_info, texture_target_,
-      is_origin_top_left_, context_provider_wrapper_, owning_thread_ref_,
-      owning_thread_task_runner_, std::move(release_callback));
+      mailbox(), GetSyncToken(), texture_id_for_image, image_info,
+      texture_target_, is_origin_top_left_, context_provider_wrapper_,
+      owning_thread_ref_, owning_thread_task_runner_,
+      std::move(release_callback), supports_display_compositing_,
+      is_overlay_candidate_);
 
   DCHECK(image);
   return image;
@@ -727,18 +745,21 @@ CanvasResourceRasterSharedImage::ContextProviderWrapper() const {
 
 #if BUILDFLAG(SKIA_USE_DAWN)
 CanvasResourceSkiaDawnSharedImage::CanvasResourceSkiaDawnSharedImage(
-    const IntSize& size,
+    const SkImageInfo& info,
     base::WeakPtr<WebGraphicsContext3DProviderWrapper> context_provider_wrapper,
     base::WeakPtr<CanvasResourceProvider> provider,
     cc::PaintFlags::FilterQuality filter_quality,
-    const CanvasResourceParams& params,
     bool is_origin_top_left,
     uint32_t shared_image_usage_flags)
-    : CanvasResourceSharedImage(std::move(provider), filter_quality, params),
+    : CanvasResourceSharedImage(std::move(provider),
+                                filter_quality,
+                                info.colorInfo()),
       context_provider_wrapper_(std::move(context_provider_wrapper)),
-      size_(size),
+      size_(info.width(), info.height()),
       owning_thread_task_runner_(Thread::Current()->GetTaskRunner()),
-      is_origin_top_left_(is_origin_top_left) {
+      is_origin_top_left_(is_origin_top_left),
+      is_overlay_candidate_(shared_image_usage_flags &
+                            gpu::SHARED_IMAGE_USAGE_SCANOUT) {
   if (!context_provider_wrapper_)
     return;
 
@@ -755,38 +776,31 @@ CanvasResourceSkiaDawnSharedImage::CanvasResourceSkiaDawnSharedImage(
   gpu::Mailbox shared_image_mailbox;
 
   shared_image_mailbox = shared_image_interface->CreateSharedImage(
-      ColorParams().TransferableResourceFormat(), gfx::Size(size),
-      ColorParams().GetStorageGfxColorSpace(), surface_origin,
-      ColorParams().GetSkAlphaType(), shared_image_usage_flags,
+      GetResourceFormat(), size_, GetColorSpace(), surface_origin,
+      GetSkColorInfo().alphaType(), shared_image_usage_flags,
       gpu::kNullSurfaceHandle);
-
-  auto* webgpu = WebGPUInterface();
 
   // Wait for the mailbox to be ready to be used.
   WaitSyncToken(shared_image_interface->GenUnverifiedSyncToken());
 
   // Ensure Dawn wire is initialized.
-  webgpu->RequestAdapterAsync(gpu::webgpu::PowerPreference::kHighPerformance,
-                              base::DoNothing());
-  WGPUDeviceProperties properties{};
-  webgpu->RequestDeviceAsync(0, properties, base::DoNothing());
+  WebGPUInterface()->DeprecatedEnsureDefaultDeviceSync();
 
   owning_thread_data().shared_image_mailbox = shared_image_mailbox;
 }
 
 scoped_refptr<CanvasResourceSkiaDawnSharedImage>
 CanvasResourceSkiaDawnSharedImage::Create(
-    const IntSize& size,
+    const SkImageInfo& info,
     base::WeakPtr<WebGraphicsContext3DProviderWrapper> context_provider_wrapper,
     base::WeakPtr<CanvasResourceProvider> provider,
     cc::PaintFlags::FilterQuality filter_quality,
-    const CanvasResourceParams& params,
     bool is_origin_top_left,
     uint32_t shared_image_usage_flags) {
   TRACE_EVENT0("blink", "CanvasResourceSkiaDawnSharedImage::Create");
   auto resource = base::AdoptRef(new CanvasResourceSkiaDawnSharedImage(
-      size, std::move(context_provider_wrapper), std::move(provider),
-      filter_quality, params, is_origin_top_left, shared_image_usage_flags));
+      info, std::move(context_provider_wrapper), std::move(provider),
+      filter_quality, is_origin_top_left, shared_image_usage_flags));
   return resource->IsValid() ? resource : nullptr;
 }
 
@@ -795,8 +809,8 @@ bool CanvasResourceSkiaDawnSharedImage::IsValid() const {
 }
 
 GLenum CanvasResourceSkiaDawnSharedImage::TextureTarget() const {
-#if defined(OS_MAC)
-  return GL_TEXTURE_RECTANGLE_ARB;
+#if BUILDFLAG(IS_MAC)
+  return gpu::GetPlatformSpecificTextureTarget();
 #else
   return GL_TEXTURE_2D;
 #endif
@@ -870,13 +884,13 @@ void CanvasResourceSkiaDawnSharedImage::EndAccess() {
 GrBackendTexture CanvasResourceSkiaDawnSharedImage::CreateGrTexture() const {
   GrDawnTextureInfo info = {};
   info.fTexture = texture();
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   info.fFormat = wgpu::TextureFormat::BGRA8Unorm;
 #else
   info.fFormat = wgpu::TextureFormat::RGBA8Unorm;
 #endif
   info.fLevelCount = 1;
-  return GrBackendTexture(Size().Width(), Size().Height(), info);
+  return GrBackendTexture(Size().width(), Size().height(), info);
 }
 
 void CanvasResourceSkiaDawnSharedImage::CopyRenderingResultsToGpuMemoryBuffer(
@@ -968,7 +982,8 @@ scoped_refptr<StaticBitmapImage> CanvasResourceSkiaDawnSharedImage::Bitmap() {
   image = AcceleratedStaticBitmapImage::CreateFromCanvasMailbox(
       mailbox(), GetSyncToken(), 0, image_info, GL_TEXTURE_2D,
       is_origin_top_left_, context_provider_wrapper_, owning_thread_ref_,
-      owning_thread_task_runner_, std::move(release_callback));
+      owning_thread_task_runner_, std::move(release_callback),
+      /*supports_display_compositing=*/true, is_overlay_candidate_);
 
   DCHECK(image);
   return image;
@@ -1040,9 +1055,8 @@ scoped_refptr<ExternalCanvasResource> ExternalCanvasResource::Create(
     const gpu::Mailbox& mailbox,
     viz::ReleaseCallback release_callback,
     gpu::SyncToken sync_token,
-    const IntSize& size,
+    const SkImageInfo& info,
     GLenum texture_target,
-    const CanvasResourceParams& params,
     base::WeakPtr<WebGraphicsContext3DProviderWrapper> context_provider_wrapper,
     base::WeakPtr<CanvasResourceProvider> provider,
     cc::PaintFlags::FilterQuality filter_quality,
@@ -1050,9 +1064,9 @@ scoped_refptr<ExternalCanvasResource> ExternalCanvasResource::Create(
     bool is_overlay_candidate) {
   TRACE_EVENT0("blink", "ExternalCanvasResource::Create");
   auto resource = AdoptRef(new ExternalCanvasResource(
-      mailbox, std::move(release_callback), sync_token, size, texture_target,
-      params, std::move(context_provider_wrapper), std::move(provider),
-      filter_quality, is_origin_top_left, is_overlay_candidate));
+      mailbox, std::move(release_callback), sync_token, info, texture_target,
+      std::move(context_provider_wrapper), std::move(provider), filter_quality,
+      is_origin_top_left, is_overlay_candidate));
   return resource->IsValid() ? resource : nullptr;
 }
 
@@ -1090,7 +1104,8 @@ scoped_refptr<StaticBitmapImage> ExternalCanvasResource::Bitmap() {
       mailbox_, GetSyncToken(), /*shared_image_texture_id=*/0u,
       CreateSkImageInfo(), texture_target_, is_origin_top_left_,
       context_provider_wrapper_, owning_thread_ref_, owning_thread_task_runner_,
-      std::move(release_callback));
+      std::move(release_callback), /*supports_display_compositing=*/true,
+      is_overlay_candidate_);
 }
 
 void ExternalCanvasResource::TearDown() {
@@ -1140,17 +1155,16 @@ ExternalCanvasResource::ExternalCanvasResource(
     const gpu::Mailbox& mailbox,
     viz::ReleaseCallback out_callback,
     gpu::SyncToken sync_token,
-    const IntSize& size,
+    const SkImageInfo& info,
     GLenum texture_target,
-    const CanvasResourceParams& params,
     base::WeakPtr<WebGraphicsContext3DProviderWrapper> context_provider_wrapper,
     base::WeakPtr<CanvasResourceProvider> provider,
     cc::PaintFlags::FilterQuality filter_quality,
     bool is_origin_top_left,
     bool is_overlay_candidate)
-    : CanvasResource(std::move(provider), filter_quality, params),
+    : CanvasResource(std::move(provider), filter_quality, info.colorInfo()),
       context_provider_wrapper_(std::move(context_provider_wrapper)),
-      size_(size),
+      size_(info.width(), info.height()),
       mailbox_(mailbox),
       texture_target_(texture_target),
       release_callback_(std::move(out_callback)),
@@ -1163,15 +1177,14 @@ ExternalCanvasResource::ExternalCanvasResource(
 // CanvasResourceSwapChain
 //==============================================================================
 scoped_refptr<CanvasResourceSwapChain> CanvasResourceSwapChain::Create(
-    const IntSize& size,
-    const CanvasResourceParams& params,
+    const SkImageInfo& info,
     base::WeakPtr<WebGraphicsContext3DProviderWrapper> context_provider_wrapper,
     base::WeakPtr<CanvasResourceProvider> provider,
     cc::PaintFlags::FilterQuality filter_quality) {
   TRACE_EVENT0("blink", "CanvasResourceSwapChain::Create");
-  auto resource = AdoptRef(new CanvasResourceSwapChain(
-      size, params, std::move(context_provider_wrapper), std::move(provider),
-      filter_quality));
+  auto resource = AdoptRef(
+      new CanvasResourceSwapChain(info, std::move(context_provider_wrapper),
+                                  std::move(provider), filter_quality));
   return resource->IsValid() ? resource : nullptr;
 }
 
@@ -1189,8 +1202,7 @@ void CanvasResourceSwapChain::TakeSkImage(sk_sp<SkImage> image) {
 
 scoped_refptr<StaticBitmapImage> CanvasResourceSwapChain::Bitmap() {
   SkImageInfo image_info = SkImageInfo::Make(
-      Size().Width(), Size().Height(), ColorParams().GetSkColorType(),
-      ColorParams().GetSkAlphaType(), ColorParams().GetSkColorSpace());
+      SkISize::Make(Size().width(), Size().height()), GetSkColorInfo());
 
   // It's safe to share the back buffer texture id if we're on the same thread
   // since the |release_callback| ensures this resource will be alive.
@@ -1208,7 +1220,8 @@ scoped_refptr<StaticBitmapImage> CanvasResourceSwapChain::Bitmap() {
       back_buffer_mailbox_, GetSyncToken(), shared_texture_id, image_info,
       GL_TEXTURE_2D, true /*is_origin_top_left*/, context_provider_wrapper_,
       owning_thread_ref_, owning_thread_task_runner_,
-      std::move(release_callback));
+      std::move(release_callback), /*supports_display_compositing=*/true,
+      /*is_overlay_candidate=*/true);
 }
 
 void CanvasResourceSwapChain::Abandon() {
@@ -1282,8 +1295,8 @@ void CanvasResourceSwapChain::PresentSwapChain() {
   // copied into the back buffer to support a retained mode like canvas expects.
   // The wait sync token ensure that the present executes before we do the copy.
   raster_interface->CopySubTexture(front_buffer_mailbox_, back_buffer_mailbox_,
-                                   GL_TEXTURE_2D, 0, 0, 0, 0, size_.Width(),
-                                   size_.Height(), false /* unpack_flip_y */,
+                                   GL_TEXTURE_2D, 0, 0, 0, 0, size_.width(),
+                                   size_.height(), false /* unpack_flip_y */,
                                    false /* unpack_premultiply_alpha */);
   // Don't generate sync token here so that the copy is not on critical path.
 }
@@ -1294,14 +1307,13 @@ CanvasResourceSwapChain::ContextProviderWrapper() const {
 }
 
 CanvasResourceSwapChain::CanvasResourceSwapChain(
-    const IntSize& size,
-    const CanvasResourceParams& params,
+    const SkImageInfo& info,
     base::WeakPtr<WebGraphicsContext3DProviderWrapper> context_provider_wrapper,
     base::WeakPtr<CanvasResourceProvider> provider,
     cc::PaintFlags::FilterQuality filter_quality)
-    : CanvasResource(std::move(provider), filter_quality, params),
+    : CanvasResource(std::move(provider), filter_quality, info.colorInfo()),
       context_provider_wrapper_(std::move(context_provider_wrapper)),
-      size_(size),
+      size_(info.width(), info.height()),
       use_oop_rasterization_(context_provider_wrapper_->ContextProvider()
                                  ->GetCapabilities()
                                  .supports_oop_raster) {
@@ -1322,10 +1334,9 @@ CanvasResourceSwapChain::CanvasResourceSwapChain(
       context_provider_wrapper_->ContextProvider()->SharedImageInterface();
   DCHECK(sii);
   gpu::SharedImageInterface::SwapChainMailboxes mailboxes =
-      sii->CreateSwapChain(
-          ColorParams().TransferableResourceFormat(), gfx::Size(size),
-          ColorParams().GetStorageGfxColorSpace(), kTopLeft_GrSurfaceOrigin,
-          kPremul_SkAlphaType, usage);
+      sii->CreateSwapChain(GetResourceFormat(), Size(), GetColorSpace(),
+                           kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType,
+                           usage);
   back_buffer_mailbox_ = mailboxes.back_buffer;
   front_buffer_mailbox_ = mailboxes.front_buffer;
   sync_token_ = sii->GenVerifiedSyncToken();

@@ -10,9 +10,10 @@ for more details on the presubmit API built into depot_tools.
 
 USE_PYTHON3 = True
 
+import sys
+
 
 def CommonChecks(input_api, output_api):
-  import sys
   def join(*args):
     return input_api.os_path.join(input_api.PresubmitLocalPath(), *args)
 
@@ -22,7 +23,8 @@ def CommonChecks(input_api, output_api):
     sys.path = [
       join('..', 'linux'),
     ] + sys.path
-    output.extend(input_api.canned_checks.RunPylint(input_api, output_api))
+    output.extend(
+        input_api.canned_checks.RunPylint(input_api, output_api, version='2.7'))
   finally:
     sys.path = sys_path_backup
 
@@ -31,12 +33,9 @@ def CommonChecks(input_api, output_api):
           input_api,
           output_api,
           input_api.os_path.join(input_api.PresubmitLocalPath(), 'tests'),
-          files_to_check=[r'.+_tests\.py$']))
-
-  if input_api.is_committing:
-    output.extend(input_api.canned_checks.PanProjectChecks(input_api,
-                                                           output_api,
-                                                           owners_check=False))
+          files_to_check=[r'.+_tests\.py$'],
+          run_on_python2=False,
+          skip_shebang_check=True))
   return output
 
 

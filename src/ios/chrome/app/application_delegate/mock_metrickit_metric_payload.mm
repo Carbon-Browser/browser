@@ -17,13 +17,9 @@
 #endif
 
 id MockMXMetadata() {
-  // TODO(crbug.com/1140474): See related bug for why |bundleVersion| comes from
-  // mainBundle instead of from version_info::GetVersionNumber(). Remove once
-  // iOS 14.2 reaches mass adoption.
-  NSString* bundleVersion =
-      [[NSBundle mainBundle] infoDictionary][(NSString*)kCFBundleVersionKey];
   id metadata = OCMClassMock([MXMetaData class]);
-  OCMStub([metadata applicationBuildVersion]).andReturn(bundleVersion);
+  OCMStub([metadata applicationBuildVersion])
+      .andReturn(base::SysUTF8ToNSString(version_info::GetVersionNumber()));
   return metadata;
 }
 
@@ -136,7 +132,6 @@ id MockMXAppResponsivenessMetric(NSDictionary* dictionary) {
   return responsiveness;
 }
 
-#if defined(__IPHONE_14_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_14_0
 id MockMXAppExitMetric(NSDictionary* dictionary) API_AVAILABLE(ios(14.0)) {
   id app_exit_metric = OCMClassMock([MXAppExitMetric class]);
   id foreground = OCMClassMock([MXForegroundExitData class]);
@@ -198,7 +193,6 @@ id MockMXAppExitMetric(NSDictionary* dictionary) API_AVAILABLE(ios(14.0)) {
 
   return app_exit_metric;
 }
-#endif
 
 id MockMetricPayload(NSDictionary* dictionary) {
   id mock_report = OCMClassMock([MXMetricPayload class]);
@@ -230,16 +224,12 @@ id MockMetricPayload(NSDictionary* dictionary) {
     OCMStub([mock_report applicationResponsivenessMetrics])
         .andReturn(responsiveness_metrics);
   }
-#if defined(__IPHONE_14_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_14_0
-  if (@available(iOS 14, *)) {
-    NSDictionary* exit_metrics_dict =
-        [dictionary objectForKey:@"applicationExitMetrics"];
-    if (exit_metrics_dict) {
-      id exit_metrics = MockMXAppExitMetric(exit_metrics_dict);
-      OCMStub([mock_report applicationExitMetrics]).andReturn(exit_metrics);
-    }
+  NSDictionary* exit_metrics_dict =
+      [dictionary objectForKey:@"applicationExitMetrics"];
+  if (exit_metrics_dict) {
+    id exit_metrics = MockMXAppExitMetric(exit_metrics_dict);
+    OCMStub([mock_report applicationExitMetrics]).andReturn(exit_metrics);
   }
-#endif
 
   OCMStub([mock_report metaData]).andReturn(MockMXMetadata());
   return mock_report;

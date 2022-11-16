@@ -130,7 +130,7 @@ public class AndroidPaymentApp
                 denyCallback.onResult(ErrorStrings.ACTIVITY_NOT_FOUND);
                 return;
             }
-            new AlertDialog.Builder(context, R.style.Theme_Chromium_AlertDialog)
+            new AlertDialog.Builder(context, R.style.ThemeOverlay_BrowserUI_AlertDialog)
                     .setTitle(R.string.external_app_leave_incognito_warning_title)
                     .setMessage(R.string.external_payment_app_leave_incognito_warning)
                     .setPositiveButton(
@@ -260,7 +260,9 @@ public class AndroidPaymentApp
         Intent isReadyToPayIntent = WebPaymentIntentHelper.createIsReadyToPayIntent(
                 /*packageName=*/mPackageName, /*serviceName=*/mIsReadyToPayServiceName,
                 removeUrlScheme(origin), removeUrlScheme(iframeOrigin), certificateChain,
-                WebPaymentIntentHelperTypeConverter.fromMojoPaymentMethodDataMap(methodDataMap));
+                WebPaymentIntentHelperTypeConverter.fromMojoPaymentMethodDataMap(methodDataMap),
+                PaymentFeatureList.isEnabled(
+                        PaymentFeatureList.IDENTITY_IN_CAN_MAKE_PAYMENT_EVENT_FEATURE));
         if (mBypassIsReadyToPayServiceInTest) {
             respondToIsReadyToPayQuery(true);
             return;

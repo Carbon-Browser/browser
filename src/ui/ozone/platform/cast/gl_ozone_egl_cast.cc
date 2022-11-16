@@ -11,7 +11,6 @@
 
 #include "base/command_line.h"
 #include "base/logging.h"
-#include "base/macros.h"
 #include "base/strings/string_number_conversions.h"
 #include "chromecast/base/chromecast_switches.h"
 #include "chromecast/public/cast_egl_platform.h"
@@ -98,7 +97,8 @@ scoped_refptr<gl::GLSurface> GLOzoneEglCast::CreateViewGLSurface(
 
 scoped_refptr<gl::GLSurface> GLOzoneEglCast::CreateOffscreenGLSurface(
     const gfx::Size& size) {
-  return gl::InitializeGLSurface(new gl::PbufferGLSurfaceEGL(size));
+  return gl::InitializeGLSurface(
+      new gl::PbufferGLSurfaceEGL(gl::GLSurfaceEGL::GetGLDisplayEGL(), size));
 }
 
 gl::EGLDisplayPlatform GLOzoneEglCast::GetNativeDisplay() {

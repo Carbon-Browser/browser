@@ -2,11 +2,11 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-import httplib
+import http.client
 import json
 import os
 import sys
-from urlparse import urlparse
+from urllib.parse import urlparse
 
 _THIS_DIR = os.path.abspath(os.path.dirname(__file__))
 _PARENT_DIR = os.path.join(_THIS_DIR, os.pardir)
@@ -83,6 +83,12 @@ class Command(object):
       _Method.GET, '/session/:sessionId/element/:id/computedlabel')
   GET_ELEMENT_COMPUTED_ROLE = (
       _Method.GET, '/session/:sessionId/element/:id/computedrole')
+  GET_ELEMENT_SHADOW_ROOT = (
+      _Method.GET, '/session/:sessionId/element/:id/shadow')
+  FIND_ELEMENT_FROM_SHADOW_ROOT = (
+      _Method.POST, '/session/:sessionId/shadow/:id/element')
+  FIND_ELEMENTS_FROM_SHADOW_ROOT = (
+      _Method.POST, '/session/:sessionId/shadow/:id/elements')
   ELEMENT_EQUALS = (
       _Method.GET, '/session/:sessionId/element/:id/equals/:other')
   GET_COOKIES = (_Method.GET, '/session/:sessionId/cookie')
@@ -204,6 +210,9 @@ class Command(object):
   SET_USER_VERIFIED = (
       _Method.POST,
       '/session/:sessionId/webauthn/authenticator/:authenticatorId/uv')
+  SET_SPC_TRANSACTION_MODE = (
+      _Method.POST,
+      '/session/:sessionId/secure-payment-confirmation/set-mode')
   SET_PERMISSION = (
       _Method.POST, '/session/:sessionId/permissions')
 
@@ -218,7 +227,7 @@ class CommandExecutor(object):
     # see https://crbug.com/1045241: short timeout seems to introduce flakiness
     if util.IsMac() or util.IsWindows():
       timeout = 30
-    self._http_client = httplib.HTTPConnection(
+    self._http_client = http.client.HTTPConnection(
       parsed_url.hostname, parsed_url.port, timeout=timeout)
 
   @staticmethod

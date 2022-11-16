@@ -8,7 +8,6 @@
 #include <memory>
 #include <string>
 
-#include "base/macros.h"
 #include "base/synchronization/lock.h"
 #include "base/threading/platform_thread.h"
 #include "base/threading/thread.h"
@@ -23,7 +22,7 @@ class GrpcClientThread {
  public:
   explicit GrpcClientThread(
       const std::string& thread_name,
-      base::ThreadPriority priority = base::ThreadPriority::NORMAL);
+      base::ThreadType thread_type = base::ThreadType::kDefault);
   GrpcClientThread(const GrpcClientThread&) = delete;
   GrpcClientThread& operator=(const GrpcClientThread&) = delete;
   ~GrpcClientThread();

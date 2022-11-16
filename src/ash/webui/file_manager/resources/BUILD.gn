@@ -2,6 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import("//build/config/chromeos/ui_mode.gni")
 import("//chrome/browser/resources/tools/optimize_webui.gni")
 import("//chrome/common/features.gni")
 import("//third_party/closure_compiler/compile_js.gni")
@@ -9,13 +10,12 @@ import("//tools/grit/grit_rule.gni")
 import("//tools/grit/preprocess_if_expr.gni")
 import("//ui/webui/resources/tools/generate_grd.gni")
 
+assert(is_chromeos_ash)
+
 preprocess_folder = "$target_gen_dir/preprocessed"
 mojom_webui_folder = "$root_gen_dir/mojom-webui/ash/webui/file_manager/mojom"
 
-js_library("crt0") {
-}
-
-js_library("browser_proxy") {
+js_library("init_globals") {
 }
 
 js_library("runtime_loaded_test_util_swa") {
@@ -32,11 +32,13 @@ js_library("main") {
 
 js_library("main_js") {
   sources = [
-    "browser_proxy.js",
     "main.js",
     "script_loader.js",
   ]
-  deps = [ "//ash/webui/file_manager/mojom:mojom_webui_js" ]
+  deps = [
+    "//ash/webui/file_manager/mojom:mojom_webui_js",
+    "//ui/file_manager/file_manager/common/js:glitch",
+  ]
 
   externs_list = [ "$externs_path/chrome_extensions.js" ]
 }
@@ -55,7 +57,7 @@ js_type_check("closure_compile") {
                     "js_module_root=" + rebase_path(".", root_build_dir),
                     "js_module_root=" +
                         rebase_path(mojom_webui_folder, root_build_dir),
-                    "browser_resolver_prefix_replacements=\"chrome-extension://hhaomjibdihmijegdhdafkllkbggdgoj/=../../ui/file_manager/file_manager/\"",
+                    "browser_resolver_prefix_replacements=\"chrome://file-manager/=../../ui/file_manager/file_manager/\"",
                   ]
 }
 
@@ -83,8 +85,7 @@ preprocess_if_expr("preprocess") {
   out_manifest = "$target_gen_dir/manifest_preprocess.json"
 
   in_files = [
-    "browser_proxy.js",
-    "crt0.js",
+    "init_globals.js",
     "main.js",
     "runtime_loaded_test_util_swa.js",
     "script_loader.js",
@@ -92,8 +93,7 @@ preprocess_if_expr("preprocess") {
   ]
 
   deps = [
-    ":browser_proxy",
-    ":crt0",
+    ":init_globals",
     ":main",
     ":script_loader",
   ]
@@ -108,7 +108,7 @@ preprocess_if_expr("preprocess_mojo") {
 }
 
 optimize_webui("build") {
-  host = "file_manager"
+  host = "file-manager"
   input = rebase_path(preprocess_folder, root_build_dir)
 
   js_module_in_files = [
@@ -124,8 +124,7 @@ optimize_webui("build") {
 
   excludes = [ "chrome://resources/mojo/mojo/public/js/bindings.js" ]
 
-  external_paths =
-      [ "chrome-extension://hhaomjibdihmijegdhdafkllkbggdgoj|$files_app_path" ]
+  external_paths = [ "chrome://file-manager|$files_app_path" ]
 
   deps = [
     ":preprocess",
@@ -144,10 +143,7 @@ generate_grd("build_static_grdp") {
 
   input_files_base_dir = rebase_path(".", "//")
 
-  input_files = [
-    "images/icon192.png",
-    "file_manager_fakes.js",
-  ]
+  input_files = [ "images/icon192.png" ]
 }
 
 grd_prefix = "file_manager_swa"

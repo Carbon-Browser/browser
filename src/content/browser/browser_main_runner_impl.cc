@@ -31,11 +31,11 @@
 #include "ui/base/ime/init/input_method_initializer.h"
 #include "ui/gfx/font_util.h"
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #include "content/browser/android/tracing_controller_android.h"
 #endif
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include "base/win/windows_version.h"
 #include "ui/base/win/scoped_ole_initializer.h"
 #endif
@@ -63,7 +63,7 @@ BrowserMainRunnerImpl::~BrowserMainRunnerImpl() {
     Shutdown();
 }
 
-int BrowserMainRunnerImpl::Initialize(const MainFunctionParams& parameters) {
+int BrowserMainRunnerImpl::Initialize(MainFunctionParams parameters) {
   SCOPED_UMA_HISTOGRAM_LONG_TIMER(
       "Startup.BrowserMainRunnerImplInitializeLongTime");
   TRACE_EVENT0("startup", "BrowserMainRunnerImpl::Initialize");
@@ -79,41 +79,46 @@ int BrowserMainRunnerImpl::Initialize(const MainFunctionParams& parameters) {
 
     SkGraphics::Init();
 
-    if (parameters.command_line.HasSwitch(switches::kWaitForDebugger))
+    if (parameters.command_line->HasSwitch(switches::kWaitForDebugger))
       base::debug::WaitForDebugger(60, true);
 
-    if (parameters.command_line.HasSwitch(switches::kBrowserStartupDialog))
+    if (parameters.command_line->HasSwitch(switches::kBrowserStartupDialog))
       WaitForDebugger("Browser");
 
     notification_service_ = std::make_unique<NotificationServiceImpl>();
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
     // Ole must be initialized before starting message pump, so that TSF
     // (Text Services Framework) module can interact with the message pump
     // on Windows 8 Metro mode.
     ole_initializer_ = std::make_unique<ui::ScopedOleInitializer>();
-#endif  // OS_WIN
+#endif  // BUILDFLAG(IS_WIN)
 
     gfx::InitializeFonts();
 
+    auto created_main_parts_closure =
+        std::move(parameters.created_main_parts_closure);
+
     main_loop_ = std::make_unique<BrowserMainLoop>(
-        parameters, std::move(scoped_execution_fence_));
+        std::move(parameters), std::move(scoped_execution_fence_));
 
     main_loop_->Init();
 
-    if (parameters.created_main_parts_closure) {
-      std::move(*parameters.created_main_parts_closure)
-          .Run(main_loop_->parts());
-      delete parameters.created_main_parts_closure;
+    if (created_main_parts_closure) {
+      std::move(created_main_parts_closure).Run(main_loop_->parts());
     }
 
     const int early_init_error_code = main_loop_->EarlyInitialization();
-    if (early_init_error_code > 0)
+    if (early_init_error_code > 0) {
+      main_loop_->CreateMessageLoopForEarlyShutdown();
       return early_init_error_code;
+    }
 
     // Must happen before we try to use a message loop or display any UI.
-    if (!main_loop_->InitializeToolkit())
+    if (!main_loop_->InitializeToolkit()) {
+      main_loop_->CreateMessageLoopForEarlyShutdown();
       return 1;
+    }
 
     main_loop_->PreCreateMainMessageLoop();
     main_loop_->CreateMainMessageLoop();
@@ -140,7 +145,7 @@ int BrowserMainRunnerImpl::Initialize(const MainFunctionParams& parameters) {
   return -1;
 }
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 void BrowserMainRunnerImpl::SynchronouslyFlushStartupTasks() {
   main_loop_->SynchronouslyFlushStartupTasks();
 }
@@ -179,10 +184,10 @@ void BrowserMainRunnerImpl::Shutdown() {
     main_loop_->ShutdownThreadsAndCleanUp();
 
     ui::ShutdownInputMethod();
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
     ole_initializer_.reset(NULL);
 #endif
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
     // Forcefully terminates the RunLoop inside MessagePumpForUI, ensuring
     // proper shutdown for content_browsertests. Shutdown() is not used by
     // the actual browser.

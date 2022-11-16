@@ -6,9 +6,9 @@
 
 #include <utility>
 
-#include "base/single_thread_task_runner.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "chromecast/app/grit/shell_resources.h"
@@ -37,7 +37,7 @@ constexpr int kElementSpacing = 16;
 constexpr int kVolumeBarHeight = 16;
 constexpr int kVolumePopupPadding = 16;
 constexpr int kVolumePopupBottomInset = 32;
-constexpr base::TimeDelta kUiHideDelay = base::TimeDelta::FromSeconds(3);
+constexpr base::TimeDelta kUiHideDelay = base::Seconds(3);
 
 }  // namespace
 
@@ -55,8 +55,8 @@ MediaOverlayImpl::MediaOverlayImpl(CastWindowManager* window_manager)
   auto container_view = std::make_unique<views::View>();
   auto layout = std::make_unique<views::BoxLayout>(
       views::BoxLayout::Orientation::kVertical,
-      gfx::Insets(0, window_bounds.width() / 4, kVolumePopupBottomInset,
-                  window_bounds.width() / 4),
+      gfx::Insets::TLBR(0, window_bounds.width() / 4, kVolumePopupBottomInset,
+                        window_bounds.width() / 4),
       0);
   layout->set_main_axis_alignment(views::BoxLayout::MainAxisAlignment::kEnd);
   layout->set_cross_axis_alignment(
@@ -115,8 +115,7 @@ void MediaOverlayImpl::AddToast(views::View* container) {
   toast_label_->SetBackgroundColor(
       color_utils::GetResultingPaintColor(kBackgroundColor, SK_ColorWHITE));
   toast_label_->SetBackground(views::CreateSolidBackground(kBackgroundColor));
-  toast_label_->SetBorder(
-      views::CreateEmptyBorder(gfx::Insets(kVolumePopupPadding)));
+  toast_label_->SetBorder(views::CreateEmptyBorder(kVolumePopupPadding));
   toast_label_->SetMultiLine(true);
 
   container->AddChildView(toast_label_);
@@ -195,6 +194,8 @@ void MediaOverlayImpl::OnAudioPipelineInitialized(
     const ::media::AudioDecoderConfig& config) {
   if (config.codec() == ::media::AudioCodec::kAC3 ||
       config.codec() == ::media::AudioCodec::kEAC3 ||
+      config.codec() == ::media::AudioCodec::kDTS ||
+      config.codec() == ::media::AudioCodec::kDTSXP2 ||
       config.codec() == ::media::AudioCodec::kMpegHAudio) {
     passthrough_pipelines_.insert(pipeline);
   }

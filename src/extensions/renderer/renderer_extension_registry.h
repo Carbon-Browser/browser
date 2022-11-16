@@ -9,7 +9,6 @@
 
 #include <string>
 
-#include "base/macros.h"
 #include "base/synchronization/lock.h"
 #include "extensions/common/activation_sequence.h"
 #include "extensions/common/extension_id.h"
@@ -25,6 +24,11 @@ namespace extensions {
 class RendererExtensionRegistry {
  public:
   RendererExtensionRegistry();
+
+  RendererExtensionRegistry(const RendererExtensionRegistry&) = delete;
+  RendererExtensionRegistry& operator=(const RendererExtensionRegistry&) =
+      delete;
+
   ~RendererExtensionRegistry();
 
   static RendererExtensionRegistry* Get();
@@ -43,10 +47,12 @@ class RendererExtensionRegistry {
 
   // Forwards to the ExtensionSet methods by the same name.
   bool Contains(const std::string& id) const;
+  bool ContainsGUID(const std::string& guid) const;
   bool Insert(const scoped_refptr<const Extension>& extension);
   bool Remove(const std::string& id);
   std::string GetExtensionOrAppIDByURL(const GURL& url) const;
-  const Extension* GetExtensionOrAppByURL(const GURL& url) const;
+  const Extension* GetExtensionOrAppByURL(const GURL& url,
+                                          bool include_guid = false) const;
   const Extension* GetHostedAppByURL(const GURL& url) const;
   const Extension* GetByID(const std::string& id) const;
   ExtensionIdSet GetIDs() const;
@@ -70,8 +76,6 @@ class RendererExtensionRegistry {
   std::map<ExtensionId, ActivationSequence> worker_activation_sequences_;
 
   mutable base::Lock lock_;
-
-  DISALLOW_COPY_AND_ASSIGN(RendererExtensionRegistry);
 };
 
 }  // namespace extensions

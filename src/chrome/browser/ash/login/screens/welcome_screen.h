@@ -10,14 +10,12 @@
 
 #include "ash/public/cpp/locale_update_controller.h"
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 // TODO(https://crbug.com/1164001): forward declare LanguageSwitchResult
 // after this file is moved to ash.
 #include "chrome/browser/ash/base/locale_util.h"
-#include "chrome/browser/ash/login/demo_mode/demo_mode_detector.h"
 #include "chrome/browser/ash/login/screens/base_screen.h"
 #include "chrome/browser/ash/login/screens/chromevox_hint/chromevox_hint_detector.h"
 // TODO(https://crbug.com/1164001): move to forward declaration.
@@ -25,13 +23,12 @@
 #include "chrome/browser/ash/login/wizard_context.h"
 // TODO(https://crbug.com/1164001): move to forward declaration.
 #include "chrome/browser/ui/webui/chromeos/login/welcome_screen_handler.h"
-#include "ui/base/ime/chromeos/input_method_manager.h"
+#include "ui/base/ime/ash/input_method_manager.h"
 
 namespace ash {
 
 class WelcomeScreen : public BaseScreen,
                       public input_method::InputMethodManager::Observer,
-                      public DemoModeDetector::Observer,
                       public ChromeVoxHintDetector::Observer {
  public:
   using TView = WelcomeView;
@@ -60,17 +57,27 @@ class WelcomeScreen : public BaseScreen,
 
   class Observer {
    public:
-    virtual ~Observer() {}
+    virtual ~Observer() = default;
 
     // Called when language list is reloaded.
     virtual void OnLanguageListReloaded() = 0;
   };
 
-  enum class Result { NEXT, SETUP_DEMO, ENABLE_DEBUGGING, START_OS_INSTALL };
+  enum class Result {
+    NEXT,
+    NEXT_OS_INSTALL,
+    SETUP_DEMO,
+    ENABLE_DEBUGGING,
+    QUICK_START
+  };
 
   using ScreenExitCallback = base::RepeatingCallback<void(Result result)>;
 
   WelcomeScreen(WelcomeView* view, const ScreenExitCallback& exit_callback);
+
+  WelcomeScreen(const WelcomeScreen&) = delete;
+  WelcomeScreen& operator=(const WelcomeScreen&) = delete;
+
   ~WelcomeScreen() override;
 
   static std::string GetResultString(Result result);
@@ -82,7 +89,7 @@ class WelcomeScreen : public BaseScreen,
   const std::string& language_list_locale() const {
     return language_list_locale_;
   }
-  const base::ListValue* language_list() const { return language_list_.get(); }
+  const base::Value& language_list() const { return language_list_; }
 
   void UpdateLanguageList();
 
@@ -94,7 +101,7 @@ class WelcomeScreen : public BaseScreen,
   std::string GetApplicationLocale();
   std::string GetInputMethod() const;
 
-  void SetApplicationLocale(const std::string& locale);
+  void SetApplicationLocale(const std::string& locale, const bool is_from_ui);
   void SetInputMethod(const std::string& input_method);
   void SetTimezone(const std::string& timezone_id);
   std::string GetTimezone() const;
@@ -120,7 +127,7 @@ class WelcomeScreen : public BaseScreen,
   // BaseScreen:
   void ShowImpl() override;
   void HideImpl() override;
-  void OnUserAction(const std::string& action_id) override;
+  void OnUserActionDeprecated(const std::string& action_id) override;
   bool HandleAccelerator(LoginAcceleratorAction action) override;
 
   // ChromeVoxHintDetector::Observer:
@@ -138,8 +145,6 @@ class WelcomeScreen : public BaseScreen,
   void OnSetupDemoMode();
   // Proceed with Enable debugging features flow.
   void OnEnableDebugging();
-  // Proceed with OS installation flow.
-  void OnStartOsInstall();
 
   // Async callback after ReloadResourceBundle(locale) completed.
   void OnLanguageChangedCallback(
@@ -165,10 +170,17 @@ class WelcomeScreen : public BaseScreen,
   void NotifyLocaleChange();
   void OnLocaleChangeResult(LocaleNotificationResult result);
 
+  // Updates the local variable according to the existence of the Chromad
+  // migration flag file. Then, simulates a user action, if the flag is set and
+  // the screen is not hidden.
+  void UpdateChromadMigrationOobeFlow(bool exists);
+
+  // Adds data to the OOBE.WelcomeScreen.UserChangedLocale metric and calls
+  // exit_callback with given Result
+  void Exit(Result result) const;
+
   WelcomeView* view_ = nullptr;
   ScreenExitCallback exit_callback_;
-
-  std::unique_ptr<DemoModeDetector> demo_mode_detector_;
 
   std::unique_ptr<ChromeVoxHintDetector> chromevox_hint_detector_;
 
@@ -178,16 +190,28 @@ class WelcomeScreen : public BaseScreen,
   // Creation of language list happens on Blocking Pool, so we cache
   // resolved data.
   std::string language_list_locale_;
-  std::unique_ptr<base::ListValue> language_list_;
+  base::Value language_list_{base::Value::Type::LIST};
 
   // The exact language code selected by user in the menu.
   std::string selected_language_code_;
 
   base::ObserverList<Observer>::Unchecked observers_;
 
-  base::WeakPtrFactory<WelcomeScreen> weak_factory_{this};
+  // This local flag should be true if the OOBE flow is operating as part of the
+  // Chromad to cloud device migration. If so, this screen should be skipped.
+  bool is_chromad_migration_oobe_flow_ = false;
 
-  DISALLOW_COPY_AND_ASSIGN(WelcomeScreen);
+  // This local flag should be true if there was a language change from the UI,
+  // it's value will be written into the OOBE.WelcomeScreen.UserChangedLocale
+  // metric when we exit the WelcomeScreen.
+  bool is_locale_changed_ = false;
+
+  // WeakPtrFactory used to schedule and cancel tasks related to language update
+  // in this object.
+  base::WeakPtrFactory<WelcomeScreen> language_weak_ptr_factory_{this};
+
+  // WeakPtrFactory used to schedule other tasks in this object.
+  base::WeakPtrFactory<WelcomeScreen> weak_ptr_factory_{this};
 };
 
 }  // namespace ash

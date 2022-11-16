@@ -68,7 +68,7 @@ constexpr NSUInteger kUIViewAnimationCurveToOptionsShift = 16;
 @interface AlertViewController () <UITextFieldDelegate,
                                    UIGestureRecognizerDelegate>
 
-// The actions for to this alert. |copy| for safety against mutable objects.
+// The actions for to this alert. `copy` for safety against mutable objects.
 @property(nonatomic, copy) NSArray<AlertAction*>* actions;
 
 // This maps UIButtons' tags with AlertActions' uniqueIdentifiers.
@@ -83,7 +83,7 @@ constexpr NSUInteger kUIViewAnimationCurveToOptionsShift = 16;
 @property(nonatomic, copy) NSString* message;
 
 // Text field configurations for this alert. One text field will be created for
-// each |TextFieldConfiguration|. |copy| for safety against mutable objects.
+// each `TextFieldConfiguration`. `copy` for safety against mutable objects.
 @property(nonatomic, copy)
     NSArray<TextFieldConfiguration*>* textFieldConfigurations;
 
@@ -101,7 +101,7 @@ constexpr NSUInteger kUIViewAnimationCurveToOptionsShift = 16;
 @property(nonatomic, strong) UISwipeGestureRecognizer* swipeRecognizer;
 
 // This is the last focused text field, the gestures to dismiss the keyboard
-// will end up calling |resignFirstResponder| on this.
+// will end up calling `resignFirstResponder` on this.
 @property(nonatomic, weak) UITextField* lastFocusedTextField;
 
 // This holds the text field stack view. A reference is needed because its
@@ -118,13 +118,11 @@ constexpr NSUInteger kUIViewAnimationCurveToOptionsShift = 16;
 - (void)traitCollectionDidChange:(UITraitCollection*)previousTraitCollection {
   [super traitCollectionDidChange:previousTraitCollection];
 
-  if (@available(iOS 13, *)) {
-    if ([self.traitCollection
-            hasDifferentColorAppearanceComparedToTraitCollection:
-                previousTraitCollection]) {
-      self.textFieldStackHolder.layer.borderColor =
-          [UIColor colorNamed:kSeparatorColor].CGColor;
-    }
+  if ([self.traitCollection
+          hasDifferentColorAppearanceComparedToTraitCollection:
+              previousTraitCollection]) {
+    self.textFieldStackHolder.layer.borderColor =
+        [UIColor colorNamed:kSeparatorColor].CGColor;
   }
 }
 
@@ -279,20 +277,18 @@ constexpr NSUInteger kUIViewAnimationCurveToOptionsShift = 16;
   }
 
   if (self.textFieldConfigurations.count) {
-    // |stackHolder| has the background, border and round corners of the stacked
+    // `stackHolder` has the background, border and round corners of the stacked
     // fields.
     UIView* stackHolder = [[UIView alloc] init];
     stackHolder.layer.cornerRadius = kTextFieldCornerRadius;
     stackHolder.layer.borderColor =
         [UIColor colorNamed:kSeparatorColor].CGColor;
-    if (@available(iOS 13, *)) {
-      // Use performAsCurrentTraitCollection to get the correct CGColor for the
-      // given dynamic color and current userInterfaceStyle.
-      [self.traitCollection performAsCurrentTraitCollection:^{
-        stackHolder.layer.borderColor =
-            [UIColor colorNamed:kSeparatorColor].CGColor;
-      }];
-    }
+    // Use performAsCurrentTraitCollection to get the correct CGColor for the
+    // given dynamic color and current userInterfaceStyle.
+    [self.traitCollection performAsCurrentTraitCollection:^{
+      stackHolder.layer.borderColor =
+          [UIColor colorNamed:kSeparatorColor].CGColor;
+    }];
     stackHolder.layer.borderWidth = 1.0 / [UIScreen mainScreen].scale;
     stackHolder.clipsToBounds = YES;
     stackHolder.backgroundColor =
@@ -353,6 +349,8 @@ constexpr NSUInteger kUIViewAnimationCurveToOptionsShift = 16;
       UITextField* textField = [[UITextField alloc] init];
       textField.text = textFieldConfiguration.text;
       textField.placeholder = textFieldConfiguration.placeholder;
+      textField.autocapitalizationType =
+          textFieldConfiguration.autocapitalizationType;
       textField.secureTextEntry = textFieldConfiguration.secureTextEntry;
       textField.accessibilityIdentifier =
           textFieldConfiguration.accessibilityIdentifier;

@@ -6,11 +6,13 @@ package org.chromium.chrome.browser.tab;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.UnownedUserData;
 import org.chromium.base.UnownedUserDataKey;
 import org.chromium.base.annotations.CalledByNative;
 import org.chromium.base.annotations.NativeMethods;
+import org.chromium.components.embedder_support.util.UrlUtilities;
 import org.chromium.components.security_state.ConnectionSecurityLevel;
 import org.chromium.components.security_state.SecurityStateModel;
 import org.chromium.content_public.browser.WebContents;
@@ -83,12 +85,33 @@ public class TrustedCdn extends TabWebContentsUserData {
         return cdn != null ? cdn.getPublisherUrl() : null;
     }
 
+    /**
+     * @param tab Tab object currently being shown.
+     * @return The name of the publisher of the content if it can be reliably extracted, or null
+     *         otherwise.
+     */
+    public static String getContentPublisher(Tab tab) {
+        if (tab == null) return null;
+
+        String publisherUrl = TrustedCdn.getPublisherUrl(tab);
+        if (publisherUrl != null) {
+            return UrlUtilities.extractPublisherFromPublisherUrl(publisherUrl);
+        }
+
+        return null;
+    }
+
     static TrustedCdn from(@NonNull Tab tab) {
         TrustedCdn trustedCdn = get(tab);
         if (trustedCdn == null) {
             trustedCdn = tab.getUserDataHost().setUserData(USER_DATA_KEY, new TrustedCdn(tab));
         }
         return trustedCdn;
+    }
+
+    @VisibleForTesting
+    public static void setPublisherUrlForTesting(@NonNull Tab tab, @Nullable String publisherUrl) {
+        from(tab).setPublisherUrl(publisherUrl);
     }
 
     private static TrustedCdn get(@Nullable Tab tab) {
@@ -139,7 +162,7 @@ public class TrustedCdn extends TabWebContentsUserData {
     }
 
     @NativeMethods
-    interface Natives {
+    public interface Natives {
         long init(TrustedCdn caller);
         void onDestroyed(long nativeTrustedCdn, TrustedCdn caller);
         void setWebContents(long nativeTrustedCdn, TrustedCdn caller, WebContents webContents);

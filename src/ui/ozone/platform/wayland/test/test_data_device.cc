@@ -8,9 +8,11 @@
 
 #include <cstdint>
 
+#include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
 #include "ui/ozone/platform/wayland/test/mock_surface.h"
 #include "ui/ozone/platform/wayland/test/server_object.h"
+#include "ui/ozone/platform/wayland/test/test_data_device_manager.h"
 #include "ui/ozone/platform/wayland/test/test_data_offer.h"
 #include "ui/ozone/platform/wayland/test/test_data_source.h"
 #include "ui/ozone/platform/wayland/test/test_selection_device_manager.h"
@@ -66,7 +68,7 @@ struct WlDataDeviceImpl : public TestSelectionDevice::Delegate {
   void OnDestroying() override { delete this; }
 
  private:
-  TestDataDevice* const device_;
+  const raw_ptr<TestDataDevice> device_;
 };
 
 }  // namespace
@@ -75,15 +77,19 @@ const struct wl_data_device_interface kTestDataDeviceImpl = {
     &DataDeviceStartDrag, &TestSelectionDevice::SetSelection,
     &DataDeviceRelease};
 
-TestDataDevice::TestDataDevice(wl_resource* resource, wl_client* client)
+TestDataDevice::TestDataDevice(wl_resource* resource,
+                               wl_client* client,
+                               TestDataDeviceManager* manager)
     : TestSelectionDevice(resource, new WlDataDeviceImpl(this)),
-      client_(client) {}
+      client_(client),
+      manager_(manager) {}
 
 TestDataDevice::~TestDataDevice() = default;
 
 void TestDataDevice::SetSelection(TestDataSource* data_source,
                                   uint32_t serial) {
-  NOTIMPLEMENTED();
+  CHECK(manager_);
+  manager_->set_data_source(data_source);
 }
 
 TestDataOffer* TestDataDevice::CreateAndSendDataOffer() {
@@ -95,6 +101,10 @@ void TestDataDevice::StartDrag(TestDataSource* source,
                                uint32_t serial) {
   DCHECK(source);
   DCHECK(origin);
+
+  CHECK(manager_);
+  manager_->set_data_source(source);
+
   if (drag_delegate_)
     drag_delegate_->StartDrag(source, origin, serial);
   wl_client_flush(client_);

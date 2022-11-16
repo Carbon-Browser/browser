@@ -11,6 +11,7 @@
 
 #include <list>
 #include <memory>
+#include <tuple>
 #include <utility>
 
 #include "base/bind.h"
@@ -69,7 +70,7 @@ SignalListener* g_signal_listener = nullptr;
 
 void GlobalSignalHandler(int signal) {
   char byte = signal;
-  ignore_result(write(g_write_fd, &byte, 1));
+  std::ignore = write(g_write_fd, &byte, 1);
 }
 
 }  // namespace

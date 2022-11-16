@@ -102,7 +102,7 @@ bool ConvertHourBinPredictor(const Value* value,
   if (!bin_weights)
     return false;
 
-  for (const Value& bin_weight : bin_weights.value()->GetList()) {
+  for (const Value& bin_weight : bin_weights.value()->GetListDeprecated()) {
     const auto& bin = GetInt(&bin_weight, "bin");
     const auto& weight = GetDouble(&bin_weight, "weight");
     if (!bin || !weight)
@@ -127,7 +127,7 @@ bool ConvertExponentialWeightsEnsemble(
   proto->set_learning_rate(learning_rate.value());
 
   bool success = true;
-  for (const Value& predictor : predictors.value()->GetList())
+  for (const Value& predictor : predictors.value()->GetListDeprecated())
     success &= ConvertRecurrencePredictor(&predictor, proto->add_predictors());
   return success;
 }
@@ -254,7 +254,7 @@ void JsonConfigConverter::OnJsonParsed(
     const std::string& model_identifier,
     data_decoder::DataDecoder::ValueOrError result) {
   RecurrenceRankerConfigProto proto;
-  if (result.value && ConvertRecurrenceRanker(&result.value.value(), &proto)) {
+  if (result.has_value() && ConvertRecurrenceRanker(&*result, &proto)) {
     std::move(callback).Run(std::move(proto));
   } else {
     std::move(callback).Run(absl::nullopt);

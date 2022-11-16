@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/memory/raw_ptr.h"
+
 #import "chrome/browser/ui/views/frame/browser_frame_mac.h"
 
 #import "base/mac/foundation_util.h"
@@ -32,6 +34,7 @@
 #include "components/remote_cocoa/common/native_widget_ns_window_host.mojom.h"
 #include "components/web_modal/web_contents_modal_dialog_host.h"
 #include "content/public/browser/native_web_keyboard_event.h"
+#include "ui/accessibility/platform/ax_platform_node.h"
 #import "ui/base/cocoa/window_size_constants.h"
 #include "ui/base/l10n/l10n_util.h"
 #import "ui/views/cocoa/native_widget_mac_ns_window_host.h"
@@ -59,17 +62,16 @@ bool ShouldHandleKeyboardEvent(const content::NativeWebKeyboardEvent& event) {
   DCHECK(event.os_event);
 
   // Do not fire shortcuts on key up.
-  return [event.os_event type] == NSKeyDown;
+  return [event.os_event type] == NSEventTypeKeyDown;
 }
 
 }  // namespace
 
 // Bridge Obj-C class for WindowTouchBarDelegate and
 // BrowserWindowTouchBarController.
-API_AVAILABLE(macos(10.12.2))
 @interface BrowserWindowTouchBarViewsDelegate
     : NSObject<WindowTouchBarDelegate> {
-  Browser* _browser;  // Weak.
+  raw_ptr<Browser> _browser;  // Weak.
   NSWindow* _window;  // Weak.
   base::scoped_nsobject<BrowserWindowTouchBarController> _touchBarController;
 }
@@ -93,7 +95,7 @@ API_AVAILABLE(macos(10.12.2))
   return _touchBarController.get();
 }
 
-- (NSTouchBar*)makeTouchBar API_AVAILABLE(macos(10.12.2)) {
+- (NSTouchBar*)makeTouchBar {
   if (!_touchBarController) {
     _touchBarController.reset([[BrowserWindowTouchBarController alloc]
         initWithBrowser:_browser
@@ -252,10 +254,11 @@ void BrowserFrameMac::ValidateUserInterfaceItem(
     }
     case IDC_WINDOW_MUTE_SITE: {
       TabStripModel* model = browser->tab_strip_model();
-      bool will_mute = model->WillContextMenuMuteSites(model->active_index());
       // Menu items may be validated during browser startup, before the
-      // TabStripModel has been populated.
-      result->new_toggle_state = !model->empty() && !will_mute;
+      // TabStripModel has been populated. Short-circuit to false in that case.
+      result->new_toggle_state =
+          !model->empty() &&
+          !model->WillContextMenuMuteSites(model->active_index());
       break;
     }
     case IDC_WINDOW_PIN_TAB: {
@@ -311,13 +314,14 @@ bool BrowserFrameMac::ExecuteCommand(
 void BrowserFrameMac::PopulateCreateWindowParams(
     const views::Widget::InitParams& widget_params,
     remote_cocoa::mojom::CreateWindowParams* params) {
-  params->style_mask = NSTitledWindowMask | NSClosableWindowMask |
-                       NSMiniaturizableWindowMask | NSResizableWindowMask;
+  params->style_mask = NSWindowStyleMaskTitled | NSWindowStyleMaskClosable |
+                       NSWindowStyleMaskMiniaturizable |
+                       NSWindowStyleMaskResizable;
 
   base::scoped_nsobject<NativeWidgetMacNSWindow> ns_window;
   if (browser_view_->GetIsNormalType() || browser_view_->GetIsWebAppType()) {
     params->window_class = remote_cocoa::mojom::WindowClass::kBrowser;
-    params->style_mask |= NSFullSizeContentViewWindowMask;
+    params->style_mask |= NSWindowStyleMaskFullSizeContentView;
 
     // Ensure tabstrip/profile button are visible.
     params->titlebar_appears_transparent = true;
@@ -334,12 +338,10 @@ void BrowserFrameMac::PopulateCreateWindowParams(
 NativeWidgetMacNSWindow* BrowserFrameMac::CreateNSWindow(
     const remote_cocoa::mojom::CreateWindowParams* params) {
   NativeWidgetMacNSWindow* ns_window = NativeWidgetMac::CreateNSWindow(params);
-  if (@available(macOS 10.12.2, *)) {
-    touch_bar_delegate_.reset([[BrowserWindowTouchBarViewsDelegate alloc]
-        initWithBrowser:browser_view_->browser()
-                 window:ns_window]);
-    [ns_window setWindowTouchBarDelegate:touch_bar_delegate_.get()];
-  }
+  touch_bar_delegate_.reset([[BrowserWindowTouchBarViewsDelegate alloc]
+      initWithBrowser:browser_view_->browser()
+               window:ns_window]);
+  [ns_window setWindowTouchBarDelegate:touch_bar_delegate_.get()];
 
   return ns_window;
 }
@@ -434,4 +436,24 @@ bool BrowserFrameMac::HandleKeyboardEvent(
 
 bool BrowserFrameMac::ShouldRestorePreviousBrowserWidgetState() const {
   return true;
+}
+
+bool BrowserFrameMac::ShouldUseInitialVisibleOnAllWorkspaces() const {
+  return true;
+}
+
+void BrowserFrameMac::AnnounceTextInInProcessWindow(
+    const std::u16string& text) {
+  NSAccessibilityPriorityLevel priority = NSAccessibilityPriorityHigh;
+  NSDictionary* notification_info = @{
+    NSAccessibilityAnnouncementKey : base::SysUTF16ToNSString(text),
+    NSAccessibilityPriorityKey : @(priority)
+  };
+
+  NSWindow* ns_window = GetNSWindowHost()->GetInProcessNSWindow();
+  if (ns_window) {
+    NSAccessibilityPostNotificationWithUserInfo(
+        ns_window, NSAccessibilityAnnouncementRequestedNotification,
+        notification_info);
+  }
 }

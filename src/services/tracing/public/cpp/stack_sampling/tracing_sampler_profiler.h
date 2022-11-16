@@ -13,26 +13,27 @@
 #include "base/callback.h"
 #include "base/component_export.h"
 #include "base/debug/debugging_buildflags.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/profiler/sampling_profiler_thread_token.h"
 #include "base/profiler/stack_sampling_profiler.h"
 #include "base/profiler/unwinder.h"
 #include "base/sequence_checker.h"
 #include "base/threading/platform_thread.h"
+#include "base/time/time.h"
 #include "build/build_config.h"
 #include "services/tracing/public/cpp/buildflags.h"
 #include "services/tracing/public/cpp/perfetto/interning_index.h"
 #include "third_party/perfetto/include/perfetto/ext/tracing/core/trace_writer.h"
 
-#if defined(OS_ANDROID) && defined(ARCH_CPU_ARM64) && \
+#if BUILDFLAG(IS_ANDROID) && defined(ARCH_CPU_ARM64) && \
     BUILDFLAG(CAN_UNWIND_WITH_FRAME_POINTERS)
 #define ANDROID_ARM64_UNWINDING_SUPPORTED 1
 #else
 #define ANDROID_ARM64_UNWINDING_SUPPORTED 0
 #endif
 
-#if defined(OS_ANDROID) && BUILDFLAG(CAN_UNWIND_WITH_CFI_TABLE) && \
+#if BUILDFLAG(IS_ANDROID) && BUILDFLAG(CAN_UNWIND_WITH_CFI_TABLE) && \
     defined(OFFICIAL_BUILD)
 #define ANDROID_CFI_UNWINDING_SUPPORTED 1
 #else
@@ -95,7 +96,11 @@ class COMPONENT_EXPORT(TRACING_CPP) TracingSamplerProfiler {
    public:
     TracingProfileBuilder(
         base::PlatformThreadId sampled_thread_id,
+#if BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
+        bool is_startup_tracing,
+#else
         std::unique_ptr<perfetto::TraceWriter> trace_writer,
+#endif
         bool should_enable_filtering,
         const base::RepeatingClosure& sample_callback_for_testing =
             base::RepeatingClosure());
@@ -108,31 +113,54 @@ class COMPONENT_EXPORT(TRACING_CPP) TracingSamplerProfiler {
     void OnProfileCompleted(base::TimeDelta profile_duration,
                             base::TimeDelta sampling_period) override {}
 
+#if BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
+    void SetIsStartupTracing(bool is_startup_tracing) {
+      is_startup_tracing_ = is_startup_tracing;
+    };
+#else
     void SetTraceWriter(std::unique_ptr<perfetto::TraceWriter> trace_writer);
+#endif
 
    private:
     struct BufferedSample {
       BufferedSample(base::TimeTicks, std::vector<base::Frame>&&);
+
+      BufferedSample(const BufferedSample&) = delete;
+      BufferedSample& operator=(const BufferedSample&) = delete;
+
       BufferedSample(BufferedSample&& other);
+
       ~BufferedSample();
 
       base::TimeTicks timestamp;
       std::vector<base::Frame> sample;
-
-      DISALLOW_COPY_AND_ASSIGN(BufferedSample);
     };
 
     void WriteSampleToTrace(const BufferedSample& sample);
 
+    // TODO(ssid): Consider using an interning scheme to reduce memory usage
+    // and increase the sample size.
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
     // We usually sample at 50ms, and expect that tracing should have started in
-    // 10s.
+    // 10s (5s for 2 threads). Approximately 100 frames and 200 samples would use
+    // 300KiB.
     constexpr static size_t kMaxBufferedSamples = 200;
+#else
+    // 2000 samples are enough to store samples for 100 seconds (50s for 2
+    // threads), and consumes about 3MiB of memory.
+    constexpr static size_t kMaxBufferedSamples = 2000;
+#endif
     std::vector<BufferedSample> buffered_samples_;
 
     base::ModuleCache module_cache_;
     const base::PlatformThreadId sampled_thread_id_;
+#if BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
+    // In non-SDK build, (trace_writer_ == nullptr) is equivalent of this flag.
+    bool is_startup_tracing_ = true;
+#else
     base::Lock trace_writer_lock_;
     std::unique_ptr<perfetto::TraceWriter> trace_writer_;
+#endif
     StackProfileWriter stack_profile_writer_;
     bool reset_incremental_state_ = true;
     uint32_t last_incremental_state_reset_id_ = 0;
@@ -143,6 +171,9 @@ class COMPONENT_EXPORT(TRACING_CPP) TracingSamplerProfiler {
   // Creates sampling profiler on main thread. The profiler *must* be
   // destroyed prior to process shutdown.
   static std::unique_ptr<TracingSamplerProfiler> CreateOnMainThread();
+
+  TracingSamplerProfiler(const TracingSamplerProfiler&) = delete;
+  TracingSamplerProfiler& operator=(const TracingSamplerProfiler&) = delete;
 
   // Sets up tracing sampling profiler on a child thread. The profiler will be
   // stored in SequencedLocalStorageSlot and will be destroyed with the thread
@@ -163,12 +194,12 @@ class COMPONENT_EXPORT(TRACING_CPP) TracingSamplerProfiler {
   static void DeleteOnChildThreadForTesting();
   static void StartTracingForTesting(tracing::PerfettoProducer* producer);
   static void StopTracingForTesting();
-  static void MangleModuleIDIfNeeded(std::string* module_id);
+  static void ResetDataSourceForTesting();
 
   // Returns whether of not the sampler profiling is able to unwind the stack
   // on this platform.
   constexpr static bool IsStackUnwindingSupported() {
-#if defined(OS_MAC) || defined(OS_WIN) && defined(_WIN64) || \
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN) && defined(_WIN64) || \
     ANDROID_ARM64_UNWINDING_SUPPORTED || ANDROID_CFI_UNWINDING_SUPPORTED
     return true;
 #else
@@ -192,8 +223,14 @@ class COMPONENT_EXPORT(TRACING_CPP) TracingSamplerProfiler {
   void SetSampleCallbackForTesting(
       const base::RepeatingClosure& sample_callback_for_testing);
 
-  void StartTracing(std::unique_ptr<perfetto::TraceWriter> trace_writer,
-                    bool should_enable_filtering);
+  void StartTracing(
+#if !BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
+      std::unique_ptr<perfetto::TraceWriter> trace_writer,
+#else
+      bool is_startup_tracing,
+#endif
+      bool should_enable_filtering);
+
   void StopTracing();
 
  private:
@@ -204,7 +241,7 @@ class COMPONENT_EXPORT(TRACING_CPP) TracingSamplerProfiler {
 
   base::Lock lock_;
   std::unique_ptr<base::StackSamplingProfiler> profiler_;  // under |lock_|
-  TracingProfileBuilder* profile_builder_ = nullptr;
+  raw_ptr<TracingProfileBuilder> profile_builder_ = nullptr;
   base::RepeatingClosure sample_callback_for_testing_;
 
 #if BUILDFLAG(ENABLE_LOADER_LOCK_SAMPLING)
@@ -212,8 +249,6 @@ class COMPONENT_EXPORT(TRACING_CPP) TracingSamplerProfiler {
   // and stop at the same time that stack sampling does.
   std::unique_ptr<LoaderLockSamplingThread> loader_lock_sampling_thread_;
 #endif
-
-  DISALLOW_COPY_AND_ASSIGN(TracingSamplerProfiler);
 };
 
 }  // namespace tracing

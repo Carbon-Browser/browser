@@ -11,11 +11,8 @@
 #include "chromeos/login/login_state/login_state.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
+#include "mojo/public/cpp/bindings/remote_set.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
-
-namespace chromeos {
-class TPMTokenInfoGetter;
-}  // namespace chromeos
 
 namespace crosapi {
 
@@ -44,19 +41,30 @@ class CertDatabaseAsh : public mojom::CertDatabase,
   // subsequent calls during current user session.
   void GetCertDatabaseInfo(GetCertDatabaseInfoCallback callback) override;
 
+  // mojom::CertDatabase
+  void OnCertsChangedInLacros() override;
+  void AddAshCertDatabaseObserver(
+      mojo::PendingRemote<mojom::AshCertDatabaseObserver> observer) override;
+
+  // Notifies observers that were added with `AddAshCertDatabaseObserver` about
+  // cert changes in Ash.
+  void NotifyCertsChangedInAsh();
+
  private:
   // chromeos::LoginState::Observer
   void LoggedInStateChanged() override;
 
-  // The fact that TpmTokenInfo can be retrieved is used as a signal that
-  // certificate database is ready to be initialized in Lacros-Chrome.
-  void WaitForTpmTokenReady(GetCertDatabaseInfoCallback callback);
-  void OnTpmTokenReady(
-      std::unique_ptr<chromeos::TPMTokenInfoGetter> token_getter,
-      GetCertDatabaseInfoCallback callback,
-      absl::optional<user_data_auth::TpmTokenInfo> token_info);
+  void WaitForCertDatabaseReady(GetCertDatabaseInfoCallback callback);
+  void OnCertDatabaseReady(GetCertDatabaseInfoCallback callback,
+                           unsigned long private_slot_id,
+                           absl::optional<unsigned long> system_slot_id);
 
-  absl::optional<bool> is_tpm_token_ready_;
+  absl::optional<bool> is_cert_database_ready_;
+  unsigned long private_slot_id_;
+  absl::optional<unsigned long> system_slot_id_;
+
+  // The observers that will receive notifications about cert changes in Ash.
+  mojo::RemoteSet<mojom::AshCertDatabaseObserver> observers_;
 
   // This class supports any number of connections. This allows the client to
   // have multiple, potentially thread-affine, remotes.

@@ -20,7 +20,6 @@
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/task/post_task.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_command_line.h"
 #include "base/test/scoped_feature_list.h"
@@ -28,10 +27,10 @@
 #include "base/test/test_timeouts.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "components/autofill/core/browser/autofill_field.h"
-#include "components/autofill/core/browser/autofill_metrics.h"
 #include "components/autofill/core/browser/autofill_test_utils.h"
 #include "components/autofill/core/browser/autofill_type.h"
 #include "components/autofill/core/browser/form_structure.h"
+#include "components/autofill/core/browser/metrics/autofill_metrics.h"
 #include "components/autofill/core/browser/randomized_encoder.h"
 #include "components/autofill/core/browser/test_autofill_clock.h"
 #include "components/autofill/core/browser/test_autofill_driver.h"
@@ -58,11 +57,12 @@
 #include "third_party/re2/src/re2/re2.h"
 #include "url/third_party/mozilla/url_parse.h"
 
-using base::UTF8ToUTF16;
-using net::test_server::BasicHttpResponse;
-using net::test_server::EmbeddedTestServer;
-using net::test_server::HttpRequest;
-using net::test_server::HttpResponse;
+using ::base::UTF8ToUTF16;
+using ::net::test_server::BasicHttpResponse;
+using ::net::test_server::EmbeddedTestServer;
+using ::net::test_server::HttpRequest;
+using ::net::test_server::HttpResponse;
+using ::testing::ElementsAre;
 namespace autofill {
 
 using mojom::SubmissionSource;
@@ -344,6 +344,10 @@ TEST_F(AutofillDownloadManagerTest, QueryAndUploadTest) {
   form.fields.push_back(field);
 
   form_structures.push_back(std::make_unique<FormStructure>(form));
+  for (auto& form_structure : form_structures) {
+    for (auto& field : *form_structure)
+      field->host_form_signature = form_structure->form_signature();
+  }
 
   // Make download manager.
   AutofillDownloadManager download_manager(
@@ -719,8 +723,11 @@ TEST_F(AutofillDownloadManagerTest, UploadToAPITest) {
   field.name = u"lastname";
   field.form_control_type = "text";
   form.fields.push_back(field);
+
   FormStructure form_structure(form);
   form_structure.set_submission_source(SubmissionSource::FORM_SUBMISSION);
+  for (auto& field : form_structure)
+    field->host_form_signature = form_structure.form_signature();
 
   std::unique_ptr<PrefService> pref_service = test::PrefServiceForTesting();
   AutofillDownloadManager download_manager(
@@ -798,6 +805,8 @@ TEST_F(AutofillDownloadManagerTest, UploadWithRawMetadata) {
     form.fields.push_back(field);
     FormStructure form_structure(form);
     form_structure.set_submission_source(SubmissionSource::FORM_SUBMISSION);
+    for (auto& field : form_structure)
+      field->host_form_signature = form_structure.form_signature();
 
     std::unique_ptr<PrefService> pref_service = test::PrefServiceForTesting();
     AutofillDownloadManager download_manager(
@@ -871,6 +880,10 @@ TEST_F(AutofillDownloadManagerTest, BackoffLogic_Query) {
 
   std::vector<std::unique_ptr<FormStructure>> form_structures;
   form_structures.push_back(std::make_unique<FormStructure>(form));
+  for (auto& form_structure : form_structures) {
+    for (auto& field : *form_structure)
+      field->host_form_signature = form_structure->form_signature();
+  }
 
   // Request with id 0.
   base::HistogramTester histogram;
@@ -888,11 +901,10 @@ TEST_F(AutofillDownloadManagerTest, BackoffLogic_Query) {
 
   EXPECT_EQ(1U, responses_.size());
   EXPECT_LT(download_manager_.loader_backoff_.GetTimeUntilRelease(),
-            base::TimeDelta::FromMilliseconds(1100));
+            base::Milliseconds(1100));
   base::RunLoop run_loop;
   base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
-      FROM_HERE, run_loop.QuitClosure(),
-      base::TimeDelta::FromMilliseconds(1100));
+      FROM_HERE, run_loop.QuitClosure(), base::Milliseconds(1100));
   run_loop.Run();
 
   // Get the retried request.
@@ -906,7 +918,7 @@ TEST_F(AutofillDownloadManagerTest, BackoffLogic_Query) {
 
   EXPECT_EQ(2U, responses_.size());
   EXPECT_LT(download_manager_.loader_backoff_.GetTimeUntilRelease(),
-            base::TimeDelta::FromMilliseconds(2100));
+            base::Milliseconds(2100));
 
   // There should not be an additional retry.
   ASSERT_EQ(test_url_loader_factory_.NumPending(), 0);
@@ -942,6 +954,8 @@ TEST_F(AutofillDownloadManagerTest, BackoffLogic_Upload) {
 
   auto form_structure = std::make_unique<FormStructure>(form);
   form_structure->set_submission_source(SubmissionSource::FORM_SUBMISSION);
+  for (auto& field : *form_structure)
+    field->host_form_signature = form_structure->form_signature();
 
   // Request with id 0.
   EXPECT_TRUE(download_manager_.StartUploadRequest(
@@ -956,11 +970,10 @@ TEST_F(AutofillDownloadManagerTest, BackoffLogic_Upload) {
       "", network::URLLoaderCompletionStatus(net::OK));
   EXPECT_EQ(1U, responses_.size());
   EXPECT_LT(download_manager_.loader_backoff_.GetTimeUntilRelease(),
-            base::TimeDelta::FromMilliseconds(1100));
+            base::Milliseconds(1100));
   base::RunLoop run_loop;
   base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
-      FROM_HERE, run_loop.QuitClosure(),
-      base::TimeDelta::FromMilliseconds(1100));
+      FROM_HERE, run_loop.QuitClosure(), base::Milliseconds(1100));
   run_loop.Run();
 
   // Check that it was a failure.
@@ -1038,7 +1051,7 @@ TEST_F(AutofillDownloadManagerTest, RetryLimit_Query) {
   histogram.ExpectUniqueSample("Autofill.ServerQueryResponse",
                                AutofillMetrics::QUERY_SENT, 1);
 
-  const auto kTimeDeltaMargin = base::TimeDelta::FromMilliseconds(100);
+  const auto kTimeDeltaMargin = base::Milliseconds(100);
   const int max_attempts = download_manager_.GetMaxServerAttempts();
   int attempt = 0;
   while (true) {
@@ -1106,10 +1119,12 @@ TEST_F(AutofillDownloadManagerTest, RetryLimit_Upload) {
   form.fields.push_back(field);
 
   base::HistogramTester histogram;
-  const auto kTimeDeltaMargin = base::TimeDelta::FromMilliseconds(100);
+  const auto kTimeDeltaMargin = base::Milliseconds(100);
 
   auto form_structure = std::make_unique<FormStructure>(form);
   form_structure->set_submission_source(SubmissionSource::FORM_SUBMISSION);
+  for (auto& field : *form_structure)
+    field->host_form_signature = form_structure->form_signature();
 
   // Request with id 0.
   EXPECT_TRUE(download_manager_.StartUploadRequest(
@@ -1411,7 +1426,7 @@ class AutofillServerCommunicationTest
       case COMMAND_LINE_URL:
         scoped_command_line_.GetProcessCommandLine()->AppendSwitchASCII(
             switches::kAutofillServerURL, autofill_server_url.spec());
-        FALLTHROUGH;
+        [[fallthrough]];
       case DEFAULT_URL:
         scoped_feature_list_2_.InitAndEnableFeature(
             features::kAutofillServerCommunication);
@@ -1479,10 +1494,10 @@ class AutofillServerCommunicationTest
       response->set_content_type("text/proto");
       response->AddCustomHeader(
           "Cache-Control",
-          base::StringPrintf("max-age=%" PRId64,
-                             base::TimeDelta::FromMilliseconds(
-                                 cache_expiration_in_milliseconds_)
-                                 .InSeconds()));
+          base::StringPrintf(
+              "max-age=%" PRId64,
+              base::Milliseconds(cache_expiration_in_milliseconds_)
+                  .InSeconds()));
       return response;
     }
 
@@ -1714,6 +1729,51 @@ TEST_P(AutofillQueryTest, SendsExperiment) {
   }
 }
 
+TEST_P(AutofillQueryTest, SendsExperimentFromFeatureParam) {
+  FormFieldData field;
+  field.label = u"First Name:";
+  field.name = u"firstname";
+  field.form_control_type = "text";
+
+  FormData form;
+  form.fields.push_back(field);
+
+  std::vector<std::unique_ptr<FormStructure>> form_structures;
+  form_structures.push_back(std::make_unique<FormStructure>(form));
+
+  {
+    SCOPED_TRACE("Query without experiment");
+    call_count_ = 0;
+    payloads_.clear();
+    ASSERT_TRUE(SendQueryRequest(form_structures));
+    EXPECT_EQ(1u, call_count_);
+
+    ASSERT_EQ(1u, payloads_.size());
+    AutofillPageQueryRequest query_contents;
+    ASSERT_TRUE(query_contents.ParseFromString(payloads_[0]));
+    EXPECT_THAT(query_contents.experiments(), ElementsAre());
+  }
+
+  {
+    SCOPED_TRACE("Query with experiment");
+
+    base::test::ScopedFeatureList features;
+    features.InitAndEnableFeatureWithParameters(
+        features::kAutofillServerBehaviors,
+        {{"server_prediction_source", "19890601"}});
+
+    call_count_ = 0;
+    payloads_.clear();
+    ASSERT_TRUE(SendQueryRequest(form_structures));
+    EXPECT_EQ(1u, call_count_);
+
+    ASSERT_EQ(1u, payloads_.size());
+    AutofillPageQueryRequest query_contents;
+    ASSERT_TRUE(query_contents.ParseFromString(payloads_[0]));
+    EXPECT_THAT(query_contents.experiments(), ElementsAre(19890601));
+  }
+}
+
 TEST_P(AutofillQueryTest, ExpiredCacheInResponse) {
   FormFieldData field;
   field.label = u"First Name:";
@@ -1747,8 +1807,7 @@ TEST_P(AutofillQueryTest, ExpiredCacheInResponse) {
   // (ie this should go to the embedded server).
   base::RunLoop run_loop;
   base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
-      FROM_HERE, run_loop.QuitClosure(),
-      base::TimeDelta::FromMilliseconds(100));
+      FROM_HERE, run_loop.QuitClosure(), base::Milliseconds(100));
   run_loop.Run();
 
   {
@@ -1851,7 +1910,6 @@ using AutofillUploadTest = AutofillServerCommunicationTest;
 
 TEST_P(AutofillUploadTest, RichMetadata) {
   base::test::ScopedFeatureList local_feature;
-  local_feature.InitAndEnableFeature(features::kAutofillMetadataUploads);
 
   FormData form;
   form.url = GURL("https://origin.com");
@@ -1898,6 +1956,8 @@ TEST_P(AutofillUploadTest, RichMetadata) {
   AutofillDownloadManager download_manager(driver_.get(), this);
   FormStructure form_structure(form);
   form_structure.set_current_page_language(LanguageCode("fr"));
+  for (auto& field : form_structure)
+    field->host_form_signature = form_structure.form_signature();
 
   pref_service_->SetBoolean(
       RandomizedEncoder::kUrlKeyedAnonymizedDataCollectionEnabled, true);
@@ -2036,6 +2096,10 @@ TEST_P(AutofillUploadTest, ThrottlingDisabled) {
   AutofillDownloadManager download_manager(driver_.get(), this);
   FormStructure form_structure(form);
   FormStructure small_form_structure(small_form);
+  for (auto& field : form_structure)
+    field->host_form_signature = form_structure.form_signature();
+  for (auto& field : small_form_structure)
+    field->host_form_signature = small_form_structure.form_signature();
 
   for (int i = 0; i <= static_cast<int>(SubmissionSource::kMaxValue); ++i) {
     base::HistogramTester histogram_tester;
@@ -2074,16 +2138,16 @@ TEST_P(AutofillUploadTest, ThrottlingDisabled) {
 
     // The last middle two uploads were marked as throttle-able.
     ASSERT_EQ(4u, payloads_.size());
-    for (size_t i = 0; i < payloads_.size(); ++i) {
+    for (size_t j = 0; j < payloads_.size(); ++j) {
       AutofillUploadRequest request;
-      ASSERT_TRUE(request.ParseFromString(payloads_[i]));
+      ASSERT_TRUE(request.ParseFromString(payloads_[j]));
       ASSERT_TRUE(request.has_upload());
       const AutofillUploadContents& upload_contents = request.upload();
-      EXPECT_EQ(upload_contents.was_throttleable(), (i == 1 || i == 2))
-          << "Wrong was_throttleable value for upload " << i;
+      EXPECT_EQ(upload_contents.was_throttleable(), (j == 1 || j == 2))
+          << "Wrong was_throttleable value for upload " << j;
       EXPECT_FALSE(upload_contents.has_randomized_form_metadata());
-      for (const auto& field : upload_contents.field()) {
-        EXPECT_FALSE(field.has_randomized_field_metadata());
+      for (const auto& upload_contents_field : upload_contents.field()) {
+        EXPECT_FALSE(upload_contents_field.has_randomized_field_metadata());
       }
     }
   }
@@ -2131,12 +2195,12 @@ TEST_P(AutofillUploadTest, PeriodicReset) {
 
   // Advance the clock, but not past the reset period. The pref won't reset,
   // so the upload should not be sent.
-  test_clock.Advance(base::TimeDelta::FromDays(15));
+  test_clock.Advance(base::Days(15));
   EXPECT_FALSE(SendUploadRequest(form_structure, true, {}, "", true));
 
   // Advance the clock beyond the reset period. The pref should be reset and
   // the upload should succeed.
-  test_clock.Advance(base::TimeDelta::FromDays(2));  // Total = 29
+  test_clock.Advance(base::Days(2));  // Total = 29
   EXPECT_TRUE(SendUploadRequest(form_structure, true, {}, "", true));
 
   // One upload was not sent.

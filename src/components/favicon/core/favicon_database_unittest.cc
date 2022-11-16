@@ -98,7 +98,7 @@ void VerifyDatabaseEmpty(sql::Database* db) {
 }
 
 // Helper to check that an expected mapping exists.
-WARN_UNUSED_RESULT bool CheckPageHasIcon(
+[[nodiscard]] bool CheckPageHasIcon(
     FaviconDatabase* db,
     const GURL& page_url,
     favicon_base::IconType expected_icon_type,
@@ -176,8 +176,8 @@ base::Time GetLastUpdated(FaviconDatabase* db, favicon_base::FaviconID icon) {
 
 class FaviconDatabaseTest : public testing::Test {
  public:
-  FaviconDatabaseTest() {}
-  ~FaviconDatabaseTest() override {}
+  FaviconDatabaseTest() = default;
+  ~FaviconDatabaseTest() override = default;
 
   // Initialize a favicon database instance from the SQL file at
   // |golden_path| in the "History/" subdirectory of test data.
@@ -317,7 +317,7 @@ TEST_F(FaviconDatabaseTest, GetFaviconLastUpdatedTimeReturnsMaxTime) {
   base::Time add_time1;
   ASSERT_TRUE(
       base::Time::FromUTCExploded({2017, 5, 0, 1, 0, 0, 0, 0}, &add_time1));
-  base::Time add_time2 = add_time1 - base::TimeDelta::FromSeconds(1);
+  base::Time add_time2 = add_time1 - base::Seconds(1);
   std::vector<unsigned char> data(kBlob1, kBlob1 + sizeof(kBlob1));
   scoped_refptr<base::RefCountedBytes> favicon(new base::RefCountedBytes(data));
 
@@ -356,8 +356,7 @@ TEST_F(FaviconDatabaseTest, TouchUpdatesOnDemandFavicons) {
       icon, favicon, FaviconBitmapType::ON_DEMAND, start, gfx::Size());
   ASSERT_NE(0, bitmap);
 
-  base::Time end =
-      start + base::TimeDelta::FromDays(kFaviconUpdateLastRequestedAfterDays);
+  base::Time end = start + base::Days(kFaviconUpdateLastRequestedAfterDays);
   EXPECT_TRUE(db.TouchOnDemandFavicon(url, end));
 
   base::Time last_updated;
@@ -388,7 +387,7 @@ TEST_F(FaviconDatabaseTest, TouchUpdatesOnlyInfrequently) {
       icon, favicon, FaviconBitmapType::ON_DEMAND, start, gfx::Size());
   ASSERT_NE(0, bitmap);
 
-  base::Time end = start + base::TimeDelta::FromMinutes(1);
+  base::Time end = start + base::Minutes(1);
   EXPECT_TRUE(db.TouchOnDemandFavicon(url, end));
 
   base::Time last_requested;
@@ -416,8 +415,7 @@ TEST_F(FaviconDatabaseTest, TouchDoesNotUpdateStandardFavicons) {
       icon, favicon, FaviconBitmapType::ON_VISIT, start, gfx::Size());
   EXPECT_NE(0, bitmap);
 
-  base::Time end =
-      start + base::TimeDelta::FromDays(kFaviconUpdateLastRequestedAfterDays);
+  base::Time end = start + base::Days(kFaviconUpdateLastRequestedAfterDays);
   db.TouchOnDemandFavicon(url, end);
 
   base::Time last_updated;
@@ -451,7 +449,7 @@ TEST_F(FaviconDatabaseTest, GetOldOnDemandFaviconsReturnsOld) {
   GURL page_url2("http://google.com/2");
   ASSERT_NE(0, db.AddIconMapping(page_url2, icon));
 
-  base::Time get_older_than = start + base::TimeDelta::FromSeconds(1);
+  base::Time get_older_than = start + base::Seconds(1);
   auto map = db.GetOldOnDemandFavicons(get_older_than);
 
   // The icon is returned.
@@ -484,7 +482,7 @@ TEST_F(FaviconDatabaseTest, GetOldOnDemandFaviconsDoesNotReturnExpired) {
   ASSERT_NE(0, db.AddIconMapping(page_url, icon));
   ASSERT_TRUE(db.SetFaviconOutOfDate(icon));
 
-  base::Time get_older_than = start + base::TimeDelta::FromSeconds(1);
+  base::Time get_older_than = start + base::Seconds(1);
   auto map = db.GetOldOnDemandFavicons(get_older_than);
 
   // No icon is returned.
@@ -511,10 +509,10 @@ TEST_F(FaviconDatabaseTest, GetOldOnDemandFaviconsDoesNotReturnFresh) {
   ASSERT_NE(0, db.AddIconMapping(GURL("http://google.com/"), icon));
 
   // Touch the icon 3 weeks later.
-  base::Time now = start + base::TimeDelta::FromDays(21);
+  base::Time now = start + base::Days(21);
   EXPECT_TRUE(db.TouchOnDemandFavicon(url, now));
 
-  base::Time get_older_than = start + base::TimeDelta::FromSeconds(1);
+  base::Time get_older_than = start + base::Seconds(1);
   auto map = db.GetOldOnDemandFavicons(get_older_than);
 
   // No icon is returned.
@@ -539,7 +537,7 @@ TEST_F(FaviconDatabaseTest, GetOldOnDemandFaviconsDoesNotDeleteStandard) {
   ASSERT_NE(0, icon);
   ASSERT_NE(0, db.AddIconMapping(GURL("http://google.com/"), icon));
 
-  base::Time get_older_than = start + base::TimeDelta::FromSeconds(1);
+  base::Time get_older_than = start + base::Seconds(1);
   auto map = db.GetOldOnDemandFavicons(get_older_than);
 
   // No icon is returned.
@@ -1032,64 +1030,60 @@ TEST_F(FaviconDatabaseTest, Recovery) {
                                  kLargeSize, sizeof(kBlob2), kBlob2));
   }
 
-  // Corrupt the |icon_mapping.page_url| index by deleting an element
-  // from the backing table but not the index.
+  // Corrupt the `icon_mapping.page_url` index by zeroing its root page.
   {
     sql::Database raw_db;
     EXPECT_TRUE(raw_db.Open(file_name_));
-    ASSERT_EQ("ok", sql::test::IntegrityCheck(&raw_db));
+    ASSERT_EQ("ok", sql::test::IntegrityCheck(raw_db));
   }
   static const char kIndexName[] = "icon_mapping_page_url_idx";
-  static const char kDeleteSql[] =
-      "DELETE FROM icon_mapping WHERE page_url = 'http://yahoo.com/'";
-  EXPECT_TRUE(
-      sql::test::CorruptTableOrIndex(file_name_, kIndexName, kDeleteSql));
+  ASSERT_TRUE(sql::test::CorruptIndexRootPage(file_name_, kIndexName));
 
   // Database should be corrupt at the SQLite level.
   {
     sql::Database raw_db;
     EXPECT_TRUE(raw_db.Open(file_name_));
-    ASSERT_NE("ok", sql::test::IntegrityCheck(&raw_db));
+    EXPECT_NE("ok", sql::test::IntegrityCheck(raw_db));
   }
 
   // Open the database and access the corrupt index.
   {
-    sql::test::ScopedErrorExpecter expecter;
-    expecter.ExpectError(SQLITE_CORRUPT);
     FaviconDatabase db;
     ASSERT_EQ(sql::INIT_OK, db.Init(file_name_));
 
-    // Data for kPageUrl2 was deleted, but the index entry remains,
-    // this will throw SQLITE_CORRUPT.  The corruption handler will
-    // recover the database and poison the handle, so the outer call
-    // fails.
-    EXPECT_FALSE(db.GetIconMappingsForPageURL(kPageUrl2, nullptr));
-
-    ASSERT_TRUE(expecter.SawExpectedErrors());
+    {
+      sql::test::ScopedErrorExpecter expecter;
+      expecter.ExpectError(SQLITE_CORRUPT);
+      // Accessing the index will throw SQLITE_CORRUPT. The corruption handler
+      // will recover the database and poison the handle, so the outer call
+      // fails.
+      EXPECT_FALSE(db.GetIconMappingsForPageURL(kPageUrl2, nullptr));
+      ASSERT_TRUE(expecter.SawExpectedErrors());
+    }
   }
 
   // Check that the database is recovered at the SQLite level.
   {
     sql::Database raw_db;
     EXPECT_TRUE(raw_db.Open(file_name_));
-    ASSERT_EQ("ok", sql::test::IntegrityCheck(&raw_db));
+    ASSERT_EQ("ok", sql::test::IntegrityCheck(raw_db));
 
     // Check that the expected tables exist.
     VerifyTablesAndColumns(&raw_db);
   }
 
-  // Database should also be recovered at higher levels.
+  // Database should also be recovered at higher levels. Recovery should have
+  // regenerated the index with no data loss.
   {
     FaviconDatabase db;
     ASSERT_EQ(sql::INIT_OK, db.Init(file_name_));
 
-    // Now this fails because there is no mapping.
-    EXPECT_FALSE(db.GetIconMappingsForPageURL(kPageUrl2, nullptr));
-
-    // Other data was retained by recovery.
     EXPECT_TRUE(CheckPageHasIcon(&db, kPageUrl1,
                                  favicon_base::IconType::kFavicon, kIconUrl1,
                                  kLargeSize, sizeof(kBlob1), kBlob1));
+    EXPECT_TRUE(CheckPageHasIcon(&db, kPageUrl2,
+                                 favicon_base::IconType::kFavicon, kIconUrl2,
+                                 kLargeSize, sizeof(kBlob2), kBlob2));
   }
 
   // Corrupt the database again by adjusting the header.
@@ -1097,27 +1091,32 @@ TEST_F(FaviconDatabaseTest, Recovery) {
 
   // Database is unusable at the SQLite level.
   {
-    sql::test::ScopedErrorExpecter expecter;
-    expecter.ExpectError(SQLITE_CORRUPT);
     sql::Database raw_db;
-    EXPECT_TRUE(raw_db.Open(file_name_));
-    EXPECT_FALSE(raw_db.IsSQLValid("PRAGMA integrity_check"));
-    ASSERT_TRUE(expecter.SawExpectedErrors());
+    {
+      sql::test::ScopedErrorExpecter expecter;
+      expecter.ExpectError(SQLITE_CORRUPT);
+      EXPECT_TRUE(raw_db.Open(file_name_));
+      EXPECT_TRUE(expecter.SawExpectedErrors());
+    }
+    EXPECT_EQ("ok", sql::test::IntegrityCheck(raw_db));
   }
 
   // Database should be recovered during open.
   {
-    sql::test::ScopedErrorExpecter expecter;
-    expecter.ExpectError(SQLITE_CORRUPT);
     FaviconDatabase db;
-    ASSERT_EQ(sql::INIT_OK, db.Init(file_name_));
+    {
+      sql::test::ScopedErrorExpecter expecter;
+      expecter.ExpectError(SQLITE_CORRUPT);
+      ASSERT_EQ(sql::INIT_OK, db.Init(file_name_));
+      ASSERT_TRUE(expecter.SawExpectedErrors());
+    }
 
-    EXPECT_FALSE(db.GetIconMappingsForPageURL(kPageUrl2, nullptr));
     EXPECT_TRUE(CheckPageHasIcon(&db, kPageUrl1,
                                  favicon_base::IconType::kFavicon, kIconUrl1,
                                  kLargeSize, sizeof(kBlob1), kBlob1));
-
-    ASSERT_TRUE(expecter.SawExpectedErrors());
+    EXPECT_TRUE(CheckPageHasIcon(&db, kPageUrl2,
+                                 favicon_base::IconType::kFavicon, kIconUrl2,
+                                 kLargeSize, sizeof(kBlob2), kBlob2));
   }
 }
 
@@ -1126,65 +1125,60 @@ TEST_F(FaviconDatabaseTest, Recovery7) {
   // (which would upgrade it).
   EXPECT_TRUE(history::CreateDatabaseFromSQL(file_name_, "Favicons.v7.sql"));
 
-  // Corrupt the |icon_mapping.page_url| index by deleting an element
-  // from the backing table but not the index.
+  // Corrupt the `icon_mapping.page_url` index by zeroing its root page.
   {
     sql::Database raw_db;
     EXPECT_TRUE(raw_db.Open(file_name_));
-    ASSERT_EQ("ok", sql::test::IntegrityCheck(&raw_db));
+    ASSERT_EQ("ok", sql::test::IntegrityCheck(raw_db));
   }
   static const char kIndexName[] = "icon_mapping_page_url_idx";
-  static const char kDeleteSql[] =
-      "DELETE FROM icon_mapping WHERE page_url = 'http://yahoo.com/'";
-  EXPECT_TRUE(
-      sql::test::CorruptTableOrIndex(file_name_, kIndexName, kDeleteSql));
+  ASSERT_TRUE(sql::test::CorruptIndexRootPage(file_name_, kIndexName));
 
   // Database should be corrupt at the SQLite level.
   {
     sql::Database raw_db;
     EXPECT_TRUE(raw_db.Open(file_name_));
-    ASSERT_NE("ok", sql::test::IntegrityCheck(&raw_db));
+    EXPECT_NE("ok", sql::test::IntegrityCheck(raw_db));
   }
 
   // Open the database and access the corrupt index. Note that this upgrades
   // the database.
   {
-    sql::test::ScopedErrorExpecter expecter;
-    expecter.ExpectError(SQLITE_CORRUPT);
     FaviconDatabase db;
     ASSERT_EQ(sql::INIT_OK, db.Init(file_name_));
-
-    // Data for kPageUrl2 was deleted, but the index entry remains,
-    // this will throw SQLITE_CORRUPT.  The corruption handler will
-    // recover the database and poison the handle, so the outer call
-    // fails.
-    EXPECT_FALSE(db.GetIconMappingsForPageURL(kPageUrl2, nullptr));
-
-    ASSERT_TRUE(expecter.SawExpectedErrors());
+    {
+      sql::test::ScopedErrorExpecter expecter;
+      expecter.ExpectError(SQLITE_CORRUPT);
+      // Accessing the index will throw SQLITE_CORRUPT. The corruption handler
+      // will recover the database and poison the handle, so the outer call
+      // fails.
+      EXPECT_FALSE(db.GetIconMappingsForPageURL(kPageUrl2, nullptr));
+      EXPECT_TRUE(expecter.SawExpectedErrors());
+    }
   }
 
   // Check that the database is recovered at the SQLite level.
   {
     sql::Database raw_db;
     EXPECT_TRUE(raw_db.Open(file_name_));
-    ASSERT_EQ("ok", sql::test::IntegrityCheck(&raw_db));
+    ASSERT_EQ("ok", sql::test::IntegrityCheck(raw_db));
 
     // Check that the expected tables exist.
     VerifyTablesAndColumns(&raw_db);
   }
 
-  // Database should also be recovered at higher levels.
+  // Database should also be recovered at higher levels. Recovery should have
+  // regenerated the index with no data loss.
   {
     FaviconDatabase db;
     ASSERT_EQ(sql::INIT_OK, db.Init(file_name_));
 
-    // Now this fails because there is no mapping.
-    EXPECT_FALSE(db.GetIconMappingsForPageURL(kPageUrl2, nullptr));
-
-    // Other data was retained by recovery.
     EXPECT_TRUE(CheckPageHasIcon(&db, kPageUrl1,
                                  favicon_base::IconType::kFavicon, kIconUrl1,
                                  kLargeSize, sizeof(kBlob1), kBlob1));
+    EXPECT_TRUE(CheckPageHasIcon(&db, kPageUrl2,
+                                 favicon_base::IconType::kFavicon, kIconUrl2,
+                                 kLargeSize, sizeof(kBlob2), kBlob2));
   }
 
   // Corrupt the database again by adjusting the header.
@@ -1192,27 +1186,32 @@ TEST_F(FaviconDatabaseTest, Recovery7) {
 
   // Database is unusable at the SQLite level.
   {
-    sql::test::ScopedErrorExpecter expecter;
-    expecter.ExpectError(SQLITE_CORRUPT);
     sql::Database raw_db;
-    EXPECT_TRUE(raw_db.Open(file_name_));
-    EXPECT_FALSE(raw_db.IsSQLValid("PRAGMA integrity_check"));
-    ASSERT_TRUE(expecter.SawExpectedErrors());
+    {
+      sql::test::ScopedErrorExpecter expecter;
+      expecter.ExpectError(SQLITE_CORRUPT);
+      ASSERT_TRUE(raw_db.Open(file_name_));
+      EXPECT_TRUE(expecter.SawExpectedErrors());
+    }
+    EXPECT_EQ("ok", sql::test::IntegrityCheck(raw_db));
   }
 
   // Database should be recovered during open.
   {
-    sql::test::ScopedErrorExpecter expecter;
-    expecter.ExpectError(SQLITE_CORRUPT);
     FaviconDatabase db;
-    ASSERT_EQ(sql::INIT_OK, db.Init(file_name_));
+    {
+      sql::test::ScopedErrorExpecter expecter;
+      expecter.ExpectError(SQLITE_CORRUPT);
+      ASSERT_EQ(sql::INIT_OK, db.Init(file_name_));
+      EXPECT_TRUE(expecter.SawExpectedErrors());
+    }
 
-    EXPECT_FALSE(db.GetIconMappingsForPageURL(kPageUrl2, nullptr));
     EXPECT_TRUE(CheckPageHasIcon(&db, kPageUrl1,
                                  favicon_base::IconType::kFavicon, kIconUrl1,
                                  kLargeSize, sizeof(kBlob1), kBlob1));
-
-    ASSERT_TRUE(expecter.SawExpectedErrors());
+    EXPECT_TRUE(CheckPageHasIcon(&db, kPageUrl2,
+                                 favicon_base::IconType::kFavicon, kIconUrl2,
+                                 kLargeSize, sizeof(kBlob2), kBlob2));
   }
 }
 
@@ -1228,21 +1227,23 @@ TEST_F(FaviconDatabaseTest, Recovery6) {
 
   // Database is unusable at the SQLite level.
   {
-    sql::test::ScopedErrorExpecter expecter;
-    expecter.ExpectError(SQLITE_CORRUPT);
     sql::Database raw_db;
-    EXPECT_TRUE(raw_db.Open(file_name_));
-    EXPECT_FALSE(raw_db.IsSQLValid("PRAGMA integrity_check"));
-    ASSERT_TRUE(expecter.SawExpectedErrors());
+    {
+      sql::test::ScopedErrorExpecter expecter;
+      expecter.ExpectError(SQLITE_CORRUPT);
+      EXPECT_TRUE(raw_db.Open(file_name_));
+      EXPECT_TRUE(expecter.SawExpectedErrors());
+    }
+    EXPECT_EQ("ok", sql::test::IntegrityCheck(raw_db));
   }
 
   // Database open should succeed.
   {
+    FaviconDatabase db;
     sql::test::ScopedErrorExpecter expecter;
     expecter.ExpectError(SQLITE_CORRUPT);
-    FaviconDatabase db;
     ASSERT_EQ(sql::INIT_OK, db.Init(file_name_));
-    ASSERT_TRUE(expecter.SawExpectedErrors());
+    EXPECT_TRUE(expecter.SawExpectedErrors());
   }
 
   // The database should be usable at the SQLite level, with a current schema
@@ -1250,7 +1251,7 @@ TEST_F(FaviconDatabaseTest, Recovery6) {
   {
     sql::Database raw_db;
     EXPECT_TRUE(raw_db.Open(file_name_));
-    ASSERT_EQ("ok", sql::test::IntegrityCheck(&raw_db));
+    ASSERT_EQ("ok", sql::test::IntegrityCheck(raw_db));
 
     // Check that the expected tables exist.
     VerifyTablesAndColumns(&raw_db);
@@ -1272,12 +1273,14 @@ TEST_F(FaviconDatabaseTest, Recovery5) {
 
   // Database is unusable at the SQLite level.
   {
-    sql::test::ScopedErrorExpecter expecter;
-    expecter.ExpectError(SQLITE_CORRUPT);
     sql::Database raw_db;
-    EXPECT_TRUE(raw_db.Open(file_name_));
-    EXPECT_FALSE(raw_db.IsSQLValid("PRAGMA integrity_check"));
-    ASSERT_TRUE(expecter.SawExpectedErrors());
+    {
+      sql::test::ScopedErrorExpecter expecter;
+      expecter.ExpectError(SQLITE_CORRUPT);
+      EXPECT_TRUE(raw_db.Open(file_name_));
+      EXPECT_TRUE(expecter.SawExpectedErrors());
+    }
+    EXPECT_EQ("ok", sql::test::IntegrityCheck(raw_db));
   }
 
   // Database open should succeed.
@@ -1294,7 +1297,7 @@ TEST_F(FaviconDatabaseTest, Recovery5) {
   {
     sql::Database raw_db;
     EXPECT_TRUE(raw_db.Open(file_name_));
-    ASSERT_EQ("ok", sql::test::IntegrityCheck(&raw_db));
+    ASSERT_EQ("ok", sql::test::IntegrityCheck(raw_db));
 
     // Check that the expected tables exist.
     VerifyTablesAndColumns(&raw_db);
@@ -1375,7 +1378,7 @@ TEST_F(FaviconDatabaseTest, GetFaviconsLastUpdatedBefore) {
                     FaviconBitmapType::ON_VISIT, time1, gfx::Size());
   EXPECT_NE(0u, id1);
 
-  const base::Time time2 = time1 - base::TimeDelta::FromSeconds(10);
+  const base::Time time2 = time1 - base::Seconds(10);
   favicon_base::FaviconID id2 =
       db.AddFavicon(url, favicon_base::IconType::kTouchIcon, favicon,
                     FaviconBitmapType::ON_VISIT, time2, gfx::Size());
@@ -1383,27 +1386,23 @@ TEST_F(FaviconDatabaseTest, GetFaviconsLastUpdatedBefore) {
   EXPECT_NE(id1, id2);
 
   // There should be no favicons before |time2|.
-  EXPECT_TRUE(db.GetFaviconsLastUpdatedBefore(
-                    time2 - base::TimeDelta::FromSeconds(1), 10)
-                  .empty());
+  EXPECT_TRUE(
+      db.GetFaviconsLastUpdatedBefore(time2 - base::Seconds(1), 10).empty());
 
   // Requesting a time after |time2| should return |id2|.
-  auto ids = db.GetFaviconsLastUpdatedBefore(
-      time2 + base::TimeDelta::FromSeconds(1), 10);
+  auto ids = db.GetFaviconsLastUpdatedBefore(time2 + base::Seconds(1), 10);
   ASSERT_EQ(1u, ids.size());
   EXPECT_EQ(id2, ids[0]);
 
   // There should two favicons when using a time after |time1|.
-  ids = db.GetFaviconsLastUpdatedBefore(time1 + base::TimeDelta::FromSeconds(1),
-                                        10);
+  ids = db.GetFaviconsLastUpdatedBefore(time1 + base::Seconds(1), 10);
   ASSERT_EQ(2u, ids.size());
   // |id2| is before |id1|, so it should be returned first.
   EXPECT_EQ(id2, ids[0]);
   EXPECT_EQ(id1, ids[1]);
 
   // Repeat previous, but cap the max at 1.
-  ids = db.GetFaviconsLastUpdatedBefore(time1 + base::TimeDelta::FromSeconds(1),
-                                        1);
+  ids = db.GetFaviconsLastUpdatedBefore(time1 + base::Seconds(1), 1);
   ASSERT_EQ(1u, ids.size());
   // |id2| is before |id1|, so it should be returned first.
   EXPECT_EQ(id2, ids[0]);
@@ -1414,9 +1413,9 @@ TEST_F(FaviconDatabaseTest, SetFaviconsOutOfDateBetween) {
   ASSERT_EQ(sql::INIT_OK, db.Init(file_name_));
   db.BeginTransaction();
 
-  base::Time t1 = base::Time::Now() - base::TimeDelta::FromMinutes(3);
-  base::Time t2 = base::Time::Now() - base::TimeDelta::FromMinutes(2);
-  base::Time t3 = base::Time::Now() - base::TimeDelta::FromMinutes(1);
+  base::Time t1 = base::Time::Now() - base::Minutes(3);
+  base::Time t2 = base::Time::Now() - base::Minutes(2);
+  base::Time t3 = base::Time::Now() - base::Minutes(1);
 
   std::vector<unsigned char> data(kBlob1, kBlob1 + sizeof(kBlob1));
   scoped_refptr<base::RefCountedBytes> favicon(new base::RefCountedBytes(data));

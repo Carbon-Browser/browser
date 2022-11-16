@@ -13,14 +13,16 @@
 #include "base/bind.h"
 #include "base/callback.h"
 #include "base/callback_helpers.h"
+#include "base/check.h"
 #include "base/compiler_specific.h"
 #include "base/location.h"
 #include "base/memory/aligned_memory.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
 #include "base/sequence_checker.h"
-#include "base/sequenced_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/sequenced_task_runner_handle.h"
 
 namespace base {
@@ -38,7 +40,7 @@ struct DefaultCrossThreadBindTraits {
   }
 
   template <typename T>
-  static inline auto Unretained(T* ptr) {
+  static inline auto Unretained(T ptr) {
     return base::Unretained(ptr);
   }
 
@@ -287,26 +289,28 @@ class SequenceBound {
   // tasks in current sequence, and using "plain" binds and task posting (here
   // and other places that `CrossThreadBindTraits::PostTask`).
   using ConstPostTaskCallback = CrossThreadTask<void(const T&)>;
-  void PostTaskWithThisObject(const Location& from_here,
-                              ConstPostTaskCallback callback) const {
+  void PostTaskWithThisObject(
+      ConstPostTaskCallback callback,
+      const Location& location = Location::Current()) const {
     DCHECK(!is_null());
     // Even though the lifetime of the object pointed to by `t_` may not have
     // begun yet, the storage has been allocated. Per [basic.life/6] and
     // [basic.life/7], "Indirection through such a pointer is permitted but the
     // resulting lvalue may only be used in limited ways, as described below."
     CrossThreadBindTraits::PostTask(
-        *impl_task_runner_, from_here,
+        *impl_task_runner_, location,
         CrossThreadBindTraits::BindOnce(std::move(callback), std::cref(*t_)));
   }
 
   // Same as above, but for non-const operations. The callback takes a pointer
   // to the wrapped object rather than a const ref.
   using PostTaskCallback = CrossThreadTask<void(T*)>;
-  void PostTaskWithThisObject(const Location& from_here,
-                              PostTaskCallback callback) const {
+  void PostTaskWithThisObject(
+      PostTaskCallback callback,
+      const Location& location = Location::Current()) const {
     DCHECK(!is_null());
     CrossThreadBindTraits::PostTask(
-        *impl_task_runner_, from_here,
+        *impl_task_runner_, location,
         CrossThreadBindTraits::BindOnce(std::move(callback),
                                         CrossThreadBindTraits::Unretained(t_)));
   }
@@ -441,13 +445,14 @@ class SequenceBound {
     //   destructor will `CHECK()` if `sequence_bound_` is non-null, since that
     //   indicates `Then()` was not invoked. Similarly, note this branch should
     //   be eliminated by the optimizer if the code is free of bugs. :)
-    const SequenceBound* sequence_bound_;
+    raw_ptr<const SequenceBound<T, CrossThreadBindTraits>, DanglingUntriaged>
+        sequence_bound_;
     // Subtle: this typically points at a Location *temporary*. This is used to
     // try to detect errors resulting from lifetime extension of the async call
     // factory temporaries, since the factory destructors can perform work. If
     // the lifetime of the factory is incorrectly extended, dereferencing
     // `location_` will trigger a stack-use-after-scope when running with ASan.
-    const Location* const location_;
+    const raw_ptr<const Location> location_;
     MethodRef method_;
   };
 
@@ -595,8 +600,8 @@ class SequenceBound {
     AsyncCallWithBoundArgsBuilderBase& operator=(
         AsyncCallWithBoundArgsBuilderBase&&) noexcept = default;
 
-    const SequenceBound* sequence_bound_;
-    const Location* const location_;
+    raw_ptr<const SequenceBound<T, CrossThreadBindTraits>> sequence_bound_;
+    const raw_ptr<const Location> location_;
     CrossThreadTask<ReturnType()> callback_;
   };
 

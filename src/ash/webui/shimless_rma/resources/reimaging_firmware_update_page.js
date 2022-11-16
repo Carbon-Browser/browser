@@ -2,21 +2,65 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'chrome://resources/cr_elements/icons.m.js';
+import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
 import './shimless_rma_shared_css.js';
 import './base_page.js';
+import './icons.js';
 
-import {html, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {I18nBehavior, I18nBehaviorInterface} from 'chrome://resources/js/i18n_behavior.m.js';
+import {html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {getShimlessRmaService} from './mojo_interface_provider.js';
-import {ShimlessRmaServiceInterface, StateResult} from './shimless_rma_types.js';
+import {ShimlessRmaServiceInterface, StateResult, UpdateRoFirmwareObserverInterface, UpdateRoFirmwareObserverReceiver, UpdateRoFirmwareStatus} from './shimless_rma_types.js';
+import {disableNextButton, enableNextButton} from './shimless_rma_util.js';
+
+/** @type {!Object<!UpdateRoFirmwareStatus, string>} */
+const STATUS_TEXT_KEY_MAP = {
+  // kDownloading state is not used in V1.
+  [UpdateRoFirmwareStatus.kDownloading]: '',
+  [UpdateRoFirmwareStatus.kWaitUsb]: 'firmwareUpdateWaitForUsbText',
+  [UpdateRoFirmwareStatus.kFileNotFound]: 'firmwareUpdateFileNotFoundText',
+  [UpdateRoFirmwareStatus.kUpdating]: 'firmwareUpdatingText',
+  [UpdateRoFirmwareStatus.kRebooting]: 'firmwareUpdateRebootText',
+  [UpdateRoFirmwareStatus.kComplete]: 'firmwareUpdateCompleteText',
+};
+
+/** @type {!Object<!UpdateRoFirmwareStatus, string>} */
+const STATUS_IMG_MAP = {
+  [UpdateRoFirmwareStatus.kWaitUsb]: 'insert_usb',
+  [UpdateRoFirmwareStatus.kFileNotFound]: 'error',
+  [UpdateRoFirmwareStatus.kRebooting]: 'downloading',
+  [UpdateRoFirmwareStatus.kComplete]: 'downloading',
+};
+
+/** @type {!Object<!UpdateRoFirmwareStatus, string>} */
+const STATUS_ALT_MAP = {
+  [UpdateRoFirmwareStatus.kWaitUsb]: 'insertUsbAltText',
+  [UpdateRoFirmwareStatus.kFileNotFound]: 'errorAltText',
+  [UpdateRoFirmwareStatus.kUpdating]: 'updateOsAltText',
+  [UpdateRoFirmwareStatus.kRebooting]: 'downloadingAltText',
+  [UpdateRoFirmwareStatus.kComplete]: 'downloadingAltText',
+};
 
 /**
  * @fileoverview
- * 'reimaging-firmware-update-page' allows user to reimage the firmware via
- * internet or recovery shim.
- * The reimage may be optional in which case skip reimage will be available.
+ * 'firmware-updating-page' displays status of firmware update.
+ *
+ * The kWaitUsb state requires the user to insert a USB with a recovery image.
+ * If there is an error other than 'file not found' an error signal will be
+ * received and handled by |ShimlessRma| and the status will return to kWaitUsb.
  */
-export class ReimagingFirmwareUpdatePageElement extends PolymerElement {
+
+/**
+ * @constructor
+ * @extends {PolymerElement}
+ * @implements {I18nBehaviorInterface}
+ */
+const UpdateRoFirmwarePageBase = mixinBehaviors([I18nBehavior], PolymerElement);
+
+/** @polymer */
+export class UpdateRoFirmwarePage extends UpdateRoFirmwarePageBase {
   static get is() {
     return 'reimaging-firmware-update-page';
   }
@@ -27,91 +71,118 @@ export class ReimagingFirmwareUpdatePageElement extends PolymerElement {
 
   static get properties() {
     return {
-      /** @private {ShimlessRmaServiceInterface} */
-      shimlessRmaService_: {
+      /** @protected {?UpdateRoFirmwareStatus} */
+      status_: {
         type: Object,
-        value: {},
+        value: null,
       },
 
-      /** @private {string} */
-      reimageMethod_: {
+      /** @protected {string} */
+      statusString_: {
+        type: String,
+      },
+
+      /** @protected {boolean} */
+      shouldShowSpinner_: {
+        type: Boolean,
+        value: false,
+      },
+
+      /** @protected {boolean} */
+      shouldShowWarning_: {
+        type: Boolean,
+        value: false,
+        reflectToAttribute: true,
+      },
+
+      /** @protected {string} */
+      imgSrc_: {
         type: String,
         value: '',
       },
 
-      /** @private {boolean} */
-      reimageRequired_: {
-        type: Boolean,
-        value: true,
+      /** @protected {string} */
+      imgAlt_: {
+        type: String,
+        value: '',
       },
     };
   }
 
-  /** @override */
-  ready() {
-    super.ready();
+  constructor() {
+    super();
+    /** @private {ShimlessRmaServiceInterface} */
     this.shimlessRmaService_ = getShimlessRmaService();
-    this.shimlessRmaService_.reimageRequired().then((result) => {
-      this.reimageRequired_ =
-          (result && result.required != undefined) ? result.required : true;
-    });
+    /** @private {UpdateRoFirmwareObserverReceiver} */
+    this.updateRoFirmwareObserverReceiver_ =
+        new UpdateRoFirmwareObserverReceiver(
+            /**
+             * @type {!UpdateRoFirmwareObserverInterface}
+             */
+            (this));
+
+    this.shimlessRmaService_.observeRoFirmwareUpdateProgress(
+        this.updateRoFirmwareObserverReceiver_.$.bindNewPipeAndPassRemote());
+  }
+
+  static get observers() {
+    return ['onStatusChanged_(status_)'];
   }
 
   /**
-   * @param {!CustomEvent<{value: string}>} event
+   * Implements UpdateRoFirmwareObserver.onUpdateRoFirmwareStatusChanged()
+   * @param {!UpdateRoFirmwareStatus} status
    * @protected
    */
-  onFirmwareReimageSelectionChanged_(event) {
-    this.reimageMethod_ = event.detail.value;
-  }
+  onUpdateRoFirmwareStatusChanged(status) {
+    this.status_ = status;
+    this.shouldShowSpinner_ = this.status_ === UpdateRoFirmwareStatus.kUpdating;
+    this.shouldShowWarning_ =
+        this.status_ === UpdateRoFirmwareStatus.kFileNotFound;
 
-  /**
-   * @protected
-   * @param {boolean} reimageRequired
-   * @returns {string}
-   */
-  firmwareReimageDownloadMessage_(reimageRequired) {
-    // TODO(gavindodd): Update text for i18n
-    if (reimageRequired) {
-      return 'Download the firmware image';
+    const disabled = this.status_ != UpdateRoFirmwareStatus.kComplete;
+    if (disabled) {
+      disableNextButton(this);
     } else {
-      return 'Yes, download the firmware image';
+      enableNextButton(this);
     }
   }
 
-  /**
-   * @protected
-   * @param {boolean} reimageRequired
-   * @returns {string}
-   */
-  firmwareReimageUsbMessage_(reimageRequired) {
-    // TODO(gavindodd): Update text for i18n
-    if (reimageRequired) {
-      return 'Use the Chromebook Recovery Utility';
-    } else {
-      return 'Yes, use the Chromebook Recovery Utility';
-    }
-  }
-
-  /** @return {!Promise<!StateResult>} */
+  /** @return {!Promise<!{stateResult: !StateResult}>} */
   onNextButtonClick() {
-    if (this.reimageMethod_ === 'firmwareReimageDownload') {
-      return this.shimlessRmaService_.reimageFromDownload();
-    } else if (this.reimageMethod_ === 'firmwareReimageUsb') {
-      return this.shimlessRmaService_.reimageFromUsb();
-    } else if (this.reimageMethod_ === 'firmwareReimageSkip') {
-      return this.shimlessRmaService_.reimageSkipped();
+    if (this.status_ == UpdateRoFirmwareStatus.kComplete) {
+      return this.shimlessRmaService_.roFirmwareUpdateComplete();
     } else {
-      return Promise.reject(new Error('No reimage option selected'));
+      return Promise.reject(new Error('RO Firmware update is not complete.'));
     }
   }
 
-  /** @protected */
-  linkToRecoveryClicked_() {
-    // TODO(joonbug): Update with real link and check for browser leak.
-    window.open('http://www.google.com');
+  /**
+   * Groups state changes related to the |status_| updating.
+   * @protected
+   */
+  onStatusChanged_() {
+    this.setStatusString_();
+    this.setImgSrcAndAlt_();
   }
-};
 
-customElements.define(
-    ReimagingFirmwareUpdatePageElement.is, ReimagingFirmwareUpdatePageElement);
+  /**
+   * @protected
+   */
+  setStatusString_() {
+    this.statusString_ =
+        !this.status_ ? '' : this.i18n(STATUS_TEXT_KEY_MAP[this.status_]);
+  }
+
+  /**
+   * @protected
+   */
+  setImgSrcAndAlt_() {
+    this.imgSrc_ = `illustrations/${
+    !this.status_ ? 'downloading' : STATUS_IMG_MAP[this.status_]}.svg`;
+    this.imgAlt_ = this.i18n(
+        !this.status_ ? 'downloadingAltText' : STATUS_ALT_MAP[this.status_]);
+  }
+}
+
+customElements.define(UpdateRoFirmwarePage.is, UpdateRoFirmwarePage);

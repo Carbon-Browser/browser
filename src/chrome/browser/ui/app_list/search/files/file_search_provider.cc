@@ -8,6 +8,7 @@
 #include <cmath>
 
 #include "base/files/file_enumerator.h"
+#include "base/i18n/rtl.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/strcat.h"
 #include "base/strings/utf_string_conversions.h"
@@ -17,6 +18,8 @@
 #include "chrome/browser/ash/file_manager/path_util.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/app_list/search/files/file_result.h"
+#include "chrome/grit/generated_resources.h"
+#include "ui/base/l10n/l10n_util.h"
 
 namespace app_list {
 namespace {
@@ -67,7 +70,7 @@ std::vector<FileSearchProvider::PathInfo> SearchFilesByPattern(
       base::FileEnumerator::DIRECTORIES | base::FileEnumerator::FILES,
       CreateFnmatchQuery(query), base::FileEnumerator::FolderSearchPolicy::ALL);
 
-  const auto time_limit = base::TimeDelta::FromMilliseconds(kSearchTimeoutMs);
+  const auto time_limit = base::Milliseconds(kSearchTimeoutMs);
   bool timed_out = false;
   std::vector<FileSearchProvider::PathInfo> matched_paths;
   for (base::FilePath path = enumerator.Next(); !path.empty();
@@ -100,7 +103,7 @@ FileSearchProvider::FileSearchProvider(Profile* profile)
 
 FileSearchProvider::~FileSearchProvider() = default;
 
-ash::AppListSearchResultType FileSearchProvider::ResultType() {
+ash::AppListSearchResultType FileSearchProvider::ResultType() const {
   return ash::AppListSearchResultType::kFileSearch;
 }
 
@@ -111,10 +114,6 @@ void FileSearchProvider::Start(const std::u16string& query) {
   // Clear results and cancel any outgoing requests.
   ClearResultsSilently();
   weak_factory_.InvalidateWeakPtrs();
-
-  // This provider does not handle zero-state.
-  if (query.empty())
-    return;
 
   last_query_ = query;
   last_tokenized_query_.emplace(query, TokenizedString::Mode::kWords);
@@ -130,21 +129,13 @@ void FileSearchProvider::Start(const std::u16string& query) {
 void FileSearchProvider::OnSearchComplete(
     std::vector<FileSearchProvider::PathInfo> paths) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  // Sort paths by the time of last access.
-  std::sort(paths.begin(), paths.end(),
-            [](const FileSearchProvider::PathInfo& a,
-               const FileSearchProvider::PathInfo& b) {
-              return a.last_accessed < b.last_accessed;
-            });
 
-  constexpr float kScoreEps = 1.0e-5f;
   SearchProvider::Results results;
-  for (int i = 0; i < paths.size(); ++i) {
-    // Add increasing score boosts for more recently accessed files.
-    double relevance =
-        FileResult::CalculateRelevance(last_tokenized_query_, paths[i].path);
-    relevance += i * kScoreEps;
-    results.emplace_back(MakeResult(paths[i], relevance));
+  for (const auto& path : paths) {
+    double relevance = FileResult::CalculateRelevance(
+        last_tokenized_query_, path.path, path.last_accessed);
+    DCHECK((relevance >= 0.0) && (relevance <= 1.0));
+    results.push_back(MakeResult(path, relevance));
   }
 
   SwapResults(&results);
@@ -157,9 +148,17 @@ std::unique_ptr<FileResult> FileSearchProvider::MakeResult(
     const double relevance) {
   const auto type = path.is_directory ? FileResult::Type::kDirectory
                                       : FileResult::Type::kFile;
+  // Use the parent directory name as details text. Take care to remove newlines
+  // and handle RTL as this is displayed directly.
+  std::u16string parent_dir_name = base::CollapseWhitespace(
+      path.path.DirName().BaseName().LossyDisplayName(), true);
+  base::i18n::SanitizeUserSuppliedString(&parent_dir_name);
+
   auto result = std::make_unique<FileResult>(
-      kFileSearchSchema, path.path, ash::AppListSearchResultType::kFileSearch,
-      last_query_, relevance, type, profile_);
+      kFileSearchSchema, path.path, parent_dir_name,
+      ash::AppListSearchResultType::kFileSearch,
+      ash::SearchResultDisplayType::kList, relevance, last_query_, type,
+      profile_);
   result->RequestThumbnail(&thumbnail_loader_);
   return result;
 }

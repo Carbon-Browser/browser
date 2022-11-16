@@ -9,7 +9,8 @@
 #include <vector>
 
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
+#include "base/time/time.h"
 #include "build/build_config.h"
 #include "components/content_settings/core/common/content_settings.h"
 #include "components/content_settings/core/common/content_settings_types.h"
@@ -45,9 +46,6 @@ class PageInfoUI;
 // closed.
 class PageInfo {
  public:
-  // TODO(palmer): Figure out if it is possible to unify SiteConnectionStatus
-  // and SiteIdentityStatus.
-  //
   // Status of a connection to a website.
   enum SiteConnectionStatus {
     SITE_CONNECTION_STATUS_UNKNOWN = 0,  // No status available.
@@ -61,7 +59,6 @@ class PageInfo {
     SITE_CONNECTION_STATUS_UNENCRYPTED,      // Connection is not encrypted.
     SITE_CONNECTION_STATUS_ENCRYPTED_ERROR,  // Connection error occurred.
     SITE_CONNECTION_STATUS_INTERNAL_PAGE,    // Internal site.
-    SITE_CONNECTION_STATUS_LEGACY_TLS,  // Connection used a legacy TLS version.
   };
 
   // Validation status of a website's identity.
@@ -148,7 +145,13 @@ class PageInfo {
     PAGE_INFO_SAFETY_TIP_HELP_OPENED = 24,
     PAGE_INFO_CHOOSER_OBJECT_DELETED = 25,
     PAGE_INFO_RESET_DECISIONS_CLICKED = 26,
-    PAGE_INFO_COUNT
+    PAGE_INFO_STORE_INFO_CLICKED = 27,
+    PAGE_INFO_ABOUT_THIS_SITE_PAGE_OPENED = 28,
+    PAGE_INFO_ABOUT_THIS_SITE_SOURCE_LINK_CLICKED = 29,
+    PAGE_INFO_AD_PERSONALIZATION_PAGE_OPENED = 30,
+    PAGE_INFO_AD_PERSONALIZATION_SETTINGS_OPENED = 31,
+    PAGE_INFO_ABOUT_THIS_SITE_MORE_ABOUT_CLICKED = 32,
+    kMaxValue = PAGE_INFO_ABOUT_THIS_SITE_MORE_ABOUT_CLICKED
   };
 
   struct ChooserUIInfo {
@@ -182,6 +185,10 @@ class PageInfo {
   PageInfo(std::unique_ptr<PageInfoDelegate> delegate,
            content::WebContents* web_contents,
            const GURL& url);
+
+  PageInfo(const PageInfo&) = delete;
+  PageInfo& operator=(const PageInfo&) = delete;
+
   ~PageInfo();
 
   // Checks whether this permission is currently the factory default, as set by
@@ -199,7 +206,7 @@ class PageInfo {
 
   // Initializes the current UI and calls present data methods on it to notify
   // the current UI about the data it is subscribed to.
-  void InitializeUiState(PageInfoUI* ui);
+  void InitializeUiState(PageInfoUI* ui, base::OnceClosure done);
 
   // This method is called to update the presenter's security state and forwards
   // that change on to the UI to be redrawn.
@@ -256,6 +263,10 @@ class PageInfo {
   permissions::ObjectPermissionContextBase* GetChooserContextFromUIInfo(
       const ChooserUIInfo& ui_info) const;
 
+  void SetAboutThisSiteShown(bool was_about_this_site_shown) {
+    was_about_this_site_shown_ = was_about_this_site_shown;
+  }
+
   // Accessors.
   const SiteConnectionStatus& site_connection_status() const {
     return site_connection_status_;
@@ -282,6 +293,8 @@ class PageInfo {
 
   PageInfoUI* ui_for_testing() const { return ui_; }
 
+  void SetSiteNameForTesting(const std::u16string& site_name);
+
  private:
   FRIEND_TEST_ALL_PREFIXES(PageInfoTest,
                            NonFactoryDefaultAndRecentlyChangedPermissionsShown);
@@ -295,8 +308,12 @@ class PageInfo {
   // Sets (presents) the information about the site's permissions in the |ui_|.
   void PresentSitePermissions();
 
+  // Helper function which `PresentSiteData` calls after the ignored empty
+  // storage keys have been updated.
+  void PresentSiteDataInternal(base::OnceClosure done);
+
   // Sets (presents) the information about the site's data in the |ui_|.
-  void PresentSiteData();
+  void PresentSiteData(base::OnceClosure done);
 
   // Sets (presents) the information about the site's identity and connection
   // in the |ui_|.
@@ -305,6 +322,9 @@ class PageInfo {
   // Presents feature related info in the |ui_|; like, if VR content is being
   // presented in a headset.
   void PresentPageFeatureInfo();
+
+  // Sets (presents) the information about ad personalization in the |ui_|.
+  void PresentAdPersonalizationData();
 
 #if BUILDFLAG(FULL_SAFE_BROWSING)
   // Records a password reuse event. If FULL_SAFE_BROWSING is defined, this
@@ -346,7 +366,7 @@ class PageInfo {
   // specific data (local stored objects like cookies), site-specific
   // permissions (location, pop-up, plugin, etc. permissions) and site-specific
   // information (identity, connection status, etc.).
-  PageInfoUI* ui_;
+  raw_ptr<PageInfoUI> ui_;
 
   // A web contents getter used to retrieve the associated WebContents object.
   base::WeakPtr<content::WebContents> web_contents_;
@@ -382,7 +402,7 @@ class PageInfo {
   // strings below to the corresponding UI code, in order to prevent
   // unnecessary UTF-8 string conversions.
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   // Details about the website's identity. If the website's identity has been
   // verified then |identity_status_description_android_| contains who verified
   // the identity. This string will be displayed in the UI.
@@ -430,7 +450,13 @@ class PageInfo {
   // MaliciousContentStatus isn't NONE.
   std::u16string safe_browsing_details_;
 
-  DISALLOW_COPY_AND_ASSIGN(PageInfo);
+  // Whether the "About this site" data was available for the site and "About
+  // this site" section was shown in the page info.
+  bool was_about_this_site_shown_ = false;
+
+  std::u16string site_name_for_testing_;
+
+  base::WeakPtrFactory<PageInfo> weak_factory_{this};
 };
 
 #endif  // COMPONENTS_PAGE_INFO_PAGE_INFO_H_

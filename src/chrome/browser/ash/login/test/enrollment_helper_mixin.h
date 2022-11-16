@@ -7,22 +7,20 @@
 
 #include <string>
 
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
-#include "chrome/browser/ash/login/enrollment/enterprise_enrollment_helper.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
-#include "chrome/browser/ash/login/enrollment/enterprise_enrollment_helper_mock.h"
 #include "chrome/browser/ash/policy/enrollment/enrollment_config.h"
-#include "chrome/browser/policy/enrollment_status.h"
 #include "chrome/test/base/mixin_based_in_process_browser_test.h"
 #include "components/policy/core/common/cloud/cloud_policy_constants.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
 namespace policy {
 class ActiveDirectoryJoinDelegate;
+class EnrollmentStatus;
 }
 
-namespace chromeos {
+namespace ash {
+class EnterpriseEnrollmentHelperMock;
+
 namespace test {
 
 // This test mixin covers mocking backend interaction during enterprise
@@ -32,6 +30,10 @@ class EnrollmentHelperMixin : public InProcessBrowserTestMixin {
   static const char kTestAuthCode[];
 
   explicit EnrollmentHelperMixin(InProcessBrowserTestMixinHost* host);
+
+  EnrollmentHelperMixin(const EnrollmentHelperMixin&) = delete;
+  EnrollmentHelperMixin& operator=(const EnrollmentHelperMixin&) = delete;
+
   ~EnrollmentHelperMixin() override;
 
   // Resets mock (to be used in tests that retry enrollment.
@@ -47,6 +49,9 @@ class EnrollmentHelperMixin : public InProcessBrowserTestMixin {
   // Configures and sets expectations for successful auth-token based flow
   // without license selection.
   void ExpectSuccessfulOAuthEnrollment();
+  // Configures and sets expectations for an error during auth-token based
+  // flow.
+  void ExpectOAuthEnrollmentError(policy::EnrollmentStatus status);
 
   // Configures and sets expectations for successful attestation-based flow.
   void ExpectAttestationEnrollmentSuccess();
@@ -55,11 +60,6 @@ class EnrollmentHelperMixin : public InProcessBrowserTestMixin {
   void ExpectAttestationEnrollmentError(policy::EnrollmentStatus status);
   void ExpectAttestationEnrollmentErrorRepeated(
       policy::EnrollmentStatus status);
-
-  // Configures and sets expectations for successful offline demo flow.
-  void ExpectOfflineEnrollmentSuccess();
-  // Configures and sets expectations for offline demo flow resulting in error.
-  void ExpectOfflineEnrollmentError(policy::EnrollmentStatus status);
 
   // Sets up expectation of kTestAuthCode as enrollment credentials.
   void ExpectEnrollmentCredentials();
@@ -87,19 +87,17 @@ class EnrollmentHelperMixin : public InProcessBrowserTestMixin {
   // Unowned reference to last created mock.
   EnterpriseEnrollmentHelperMock* mock_ = nullptr;
   base::WeakPtrFactory<EnrollmentHelperMixin> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(EnrollmentHelperMixin);
 };
 
 }  // namespace test
-}  // namespace chromeos
+}  // namespace ash
 
 // TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
 // source migration is finished.
-namespace ash {
+namespace chromeos {
 namespace test {
-using ::chromeos::test::EnrollmentHelperMixin;
+using ::ash::test::EnrollmentHelperMixin;
 }
-}  // namespace ash
+}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_TEST_ENROLLMENT_HELPER_MIXIN_H_

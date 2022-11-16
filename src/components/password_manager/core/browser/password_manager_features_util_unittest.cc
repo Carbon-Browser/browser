@@ -19,11 +19,11 @@ namespace password_manager {
 namespace features_util {
 namespace {
 
-base::Value CreateOptedInAccountPref() {
-  base::Value global_pref(base::Value::Type::DICTIONARY);
-  base::Value account_pref(base::Value::Type::DICTIONARY);
-  account_pref.SetBoolKey("opted_in", true);
-  global_pref.SetKey("some_gaia_hash", std::move(account_pref));
+base::Value::Dict CreateOptedInAccountPref() {
+  base::Value::Dict global_pref;
+  base::Value::Dict account_pref;
+  account_pref.Set("opted_in", true);
+  global_pref.Set("some_gaia_hash", std::move(account_pref));
   return global_pref;
 }
 }  // namespace
@@ -39,8 +39,8 @@ class PasswordManagerFeaturesUtilTestBase {
   // Sets up |sync_service_| for the case where there is no signed-in user (so
   // |sync_service_| will be fully inactive).
   void SetSyncStateNotSignedIn() {
-    sync_service_.SetAuthenticatedAccountInfo(CoreAccountInfo());
-    sync_service_.SetIsAuthenticatedAccountPrimary(false);
+    sync_service_.SetAccountInfo(CoreAccountInfo());
+    sync_service_.SetHasSyncConsent(false);
     sync_service_.SetTransportState(
         syncer::SyncService::TransportState::DISABLED);
     sync_service_.SetDisableReasons(
@@ -52,8 +52,8 @@ class PasswordManagerFeaturesUtilTestBase {
   // "transport-only" mode, meaning that the user will be eligibe for
   // account-based features such as the account-scoped password storage.
   void SetSyncStateTransportActive(const CoreAccountInfo& account) {
-    sync_service_.SetAuthenticatedAccountInfo(account);
-    sync_service_.SetIsAuthenticatedAccountPrimary(false);
+    sync_service_.SetAccountInfo(account);
+    sync_service_.SetHasSyncConsent(false);
     sync_service_.SetTransportState(
         syncer::SyncService::TransportState::ACTIVE);
     sync_service_.SetDisableReasons(
@@ -64,8 +64,8 @@ class PasswordManagerFeaturesUtilTestBase {
   // Sets up |sync_service_| for the case where the signed-in user has enabled
   // Sync-the-feature.
   void SetSyncStateFeatureActive(const CoreAccountInfo& account) {
-    sync_service_.SetAuthenticatedAccountInfo(account);
-    sync_service_.SetIsAuthenticatedAccountPrimary(true);
+    sync_service_.SetAccountInfo(account);
+    sync_service_.SetHasSyncConsent(true);
     sync_service_.SetTransportState(
         syncer::SyncService::TransportState::ACTIVE);
     sync_service_.SetDisableReasons({});
@@ -143,8 +143,8 @@ TEST_F(PasswordManagerFeaturesUtilWithoutAccountStorageTest,
 
 TEST_P(PasswordManagerFeaturesUtilTest, ShowAccountStorageResignIn) {
   // Add an account to prefs which opted into using the account-storage.
-  pref_service_.Set(prefs::kAccountStoragePerAccountSettings,
-                    CreateOptedInAccountPref());
+  pref_service_.SetDict(prefs::kAccountStoragePerAccountSettings,
+                        CreateOptedInAccountPref());
 
   // SyncService is not running (because no user is signed-in).
   SetSyncStateNotSignedIn();
@@ -156,8 +156,8 @@ TEST_P(PasswordManagerFeaturesUtilTest, ShowAccountStorageResignIn) {
 TEST_F(PasswordManagerFeaturesUtilWithoutAccountStorageTest,
        ShowAccountStorageReSignin) {
   // Add an account to prefs which opted into using the account-storage.
-  pref_service_.Set(prefs::kAccountStoragePerAccountSettings,
-                    CreateOptedInAccountPref());
+  pref_service_.SetDict(prefs::kAccountStoragePerAccountSettings,
+                        CreateOptedInAccountPref());
 
   // SyncService is not running (because no user is signed-in).
   SetSyncStateNotSignedIn();
@@ -169,8 +169,8 @@ TEST_F(PasswordManagerFeaturesUtilWithoutAccountStorageTest,
 TEST_P(PasswordManagerFeaturesUtilTest,
        DontShowAccountStorageResignIn_SyncActive) {
   // Add an account to prefs which opted into using the account-storage.
-  pref_service_.Set(prefs::kAccountStoragePerAccountSettings,
-                    CreateOptedInAccountPref());
+  pref_service_.SetDict(prefs::kAccountStoragePerAccountSettings,
+                        CreateOptedInAccountPref());
 
   // SyncService is running (for a different signed-in user).
   CoreAccountInfo account;
@@ -197,8 +197,8 @@ TEST_P(PasswordManagerFeaturesUtilTest,
 TEST_P(PasswordManagerFeaturesUtilTest,
        DontShowAccountStorageResignIn_GaiaUrl) {
   // Add an account to prefs which opted into using the account-storage.
-  pref_service_.Set(prefs::kAccountStoragePerAccountSettings,
-                    CreateOptedInAccountPref());
+  pref_service_.SetDict(prefs::kAccountStoragePerAccountSettings,
+                        CreateOptedInAccountPref());
 
   // SyncService is not running (because no user is signed-in).
   SetSyncStateNotSignedIn();

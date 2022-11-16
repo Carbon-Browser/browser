@@ -46,16 +46,19 @@ class MockPasswordStoreInterface : public PasswordStoreInterface {
               (override));
   MOCK_METHOD(void,
               GetLogins,
-              (const PasswordFormDigest&, PasswordStoreConsumer*),
+              (const PasswordFormDigest&, base::WeakPtr<PasswordStoreConsumer>),
               (override));
   MOCK_METHOD(void,
               GetAutofillableLogins,
-              (PasswordStoreConsumer*),
+              (base::WeakPtr<PasswordStoreConsumer>),
               (override));
-  MOCK_METHOD(void, GetAllLogins, (PasswordStoreConsumer*), (override));
+  MOCK_METHOD(void,
+              GetAllLogins,
+              (base::WeakPtr<PasswordStoreConsumer>),
+              (override));
   MOCK_METHOD(void,
               GetAllLoginsWithAffiliationAndBrandingInformation,
-              (PasswordStoreConsumer*),
+              (base::WeakPtr<PasswordStoreConsumer>),
               (override));
   MOCK_METHOD(void, AddObserver, (Observer*), (override));
   MOCK_METHOD(void, RemoveObserver, (Observer*), (override));
@@ -66,6 +69,10 @@ class MockPasswordStoreInterface : public PasswordStoreInterface {
               (),
               (override));
   MOCK_METHOD(PasswordStoreBackend*, GetBackendForTesting, (), (override));
+  MOCK_METHOD(void,
+              OnSyncServiceInitialized,
+              (syncer::SyncService*),
+              (override));
 
   // RefcountedKeyedService:
   void ShutdownOnUIThread() override;

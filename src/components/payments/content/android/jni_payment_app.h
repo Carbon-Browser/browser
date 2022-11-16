@@ -46,8 +46,6 @@ class JniPaymentApp : public PaymentApp::Delegate {
 
   bool CanPreselect(JNIEnv* env);
 
-  bool IsUserGestureRequiredToSkipUi(JNIEnv* env);
-
   void InvokePaymentApp(JNIEnv* env,
                         const base::android::JavaParamRef<jobject>& jcallback);
 
@@ -61,12 +59,6 @@ class JniPaymentApp : public PaymentApp::Delegate {
 
   void AbortPaymentApp(JNIEnv* env,
                        const base::android::JavaParamRef<jobject>& jcallback);
-
-  bool IsReadyForMinimalUI(JNIEnv* env);
-
-  base::android::ScopedJavaLocalRef<jstring> AccountBalance(JNIEnv* env);
-
-  void DisableShowingOwnUI(JNIEnv* env);
 
   base::android::ScopedJavaLocalRef<jstring> GetApplicationIdentifierToHide(
       JNIEnv* env);

@@ -54,7 +54,7 @@
 #include "ui/message_center/public/cpp/notification.h"
 #include "url/gurl.h"
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 #include "base/mac/mac_util.h"
 #include "ui/base/test/scoped_fake_nswindow_fullscreen.h"
 #endif
@@ -89,7 +89,7 @@ class ToggledNotificationBlocker : public message_center::NotificationBlocker {
   bool notifications_enabled_;
 };
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
 // Browser test class that creates a fake monitor MediaStream device and auto
 // selects it when requesting one via navigator.mediaDevices.getDisplayMedia().
 class NotificationsTestWithFakeMediaStream : public NotificationsTest {
@@ -107,7 +107,7 @@ class NotificationsTestWithFakeMediaStream : public NotificationsTest {
                                     "Entire screen");
   }
 };
-#endif  // !defined(OS_ANDROID)
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 }  // namespace
 
@@ -283,10 +283,10 @@ IN_PROC_BROWSER_TEST_F(NotificationsTest, TestPermissionAPI) {
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), GetTestPageURL()));
   EXPECT_EQ("default", QueryPermissionStatus(browser()));
 
-  AllowOrigin(GetTestPageURL().GetOrigin());
+  AllowOrigin(GetTestPageURL().DeprecatedGetOriginAsURL());
   EXPECT_EQ("granted", QueryPermissionStatus(browser()));
 
-  DenyOrigin(GetTestPageURL().GetOrigin());
+  DenyOrigin(GetTestPageURL().DeprecatedGetOriginAsURL());
   EXPECT_EQ("denied", QueryPermissionStatus(browser()));
 }
 
@@ -338,7 +338,7 @@ IN_PROC_BROWSER_TEST_F(NotificationsTest, TestDenyDomainAndAllowAll) {
 
   // Verify that denying a domain and allowing all shouldn't show
   // notifications from the denied domain.
-  DenyOrigin(GetTestPageURL().GetOrigin());
+  DenyOrigin(GetTestPageURL().DeprecatedGetOriginAsURL());
   SetDefaultContentSetting(CONTENT_SETTING_ALLOW);
 
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), GetTestPageURL()));
@@ -354,7 +354,7 @@ IN_PROC_BROWSER_TEST_F(NotificationsTest, TestAllowDomainAndDenyAll) {
 
   // Verify that allowing a domain and denying all others should show
   // notifications from the allowed domain.
-  AllowOrigin(GetTestPageURL().GetOrigin());
+  AllowOrigin(GetTestPageURL().DeprecatedGetOriginAsURL());
   SetDefaultContentSetting(CONTENT_SETTING_BLOCK);
 
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), GetTestPageURL()));
@@ -369,7 +369,7 @@ IN_PROC_BROWSER_TEST_F(NotificationsTest, TestDenyAndThenAllowDomain) {
   ASSERT_TRUE(embedded_test_server()->Start());
 
   // Verify that denying and again allowing should show notifications.
-  DenyOrigin(GetTestPageURL().GetOrigin());
+  DenyOrigin(GetTestPageURL().DeprecatedGetOriginAsURL());
 
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), GetTestPageURL()));
 
@@ -378,7 +378,7 @@ IN_PROC_BROWSER_TEST_F(NotificationsTest, TestDenyAndThenAllowDomain) {
 
   ASSERT_EQ(0, GetNotificationCount());
 
-  AllowOrigin(GetTestPageURL().GetOrigin());
+  AllowOrigin(GetTestPageURL().DeprecatedGetOriginAsURL());
   result = CreateSimpleNotification(browser(), true);
   EXPECT_NE("-1", result);
 
@@ -432,10 +432,11 @@ IN_PROC_BROWSER_TEST_F(NotificationsTest, TestCreateDenyCloseNotifications) {
   CreateSimpleNotification(browser(), true);
   ASSERT_EQ(1, GetNotificationCount());
 
-  DenyOrigin(GetTestPageURL().GetOrigin());
+  DenyOrigin(GetTestPageURL().DeprecatedGetOriginAsURL());
   ContentSettingsForOneType settings;
   GetDisabledContentSettings(&settings);
-  ASSERT_TRUE(CheckOriginInSetting(settings, GetTestPageURL().GetOrigin()));
+  ASSERT_TRUE(CheckOriginInSetting(
+      settings, GetTestPageURL().DeprecatedGetOriginAsURL()));
 
   EXPECT_EQ(1, GetNotificationCount());
   message_center::NotificationList::Notifications notifications =
@@ -468,7 +469,8 @@ IN_PROC_BROWSER_TEST_F(NotificationsTest, TestCrashRendererNotificationRemain) {
       browser(), GURL("about:blank"), WindowOpenDisposition::NEW_BACKGROUND_TAB,
       ui_test_utils::BROWSER_TEST_WAIT_FOR_TAB);
   browser()->tab_strip_model()->ActivateTabAt(
-      0, {TabStripModel::GestureType::kOther});
+      0, TabStripUserGestureDetails(
+             TabStripUserGestureDetails::GestureType::kOther));
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), GetTestPageURL()));
   CreateSimpleNotification(browser(), true);
   ASSERT_EQ(1, GetNotificationCount());
@@ -552,8 +554,8 @@ IN_PROC_BROWSER_TEST_F(NotificationsTest, TestNotificationValidIcon) {
 
   auto* notification = *notifications.rbegin();
 
-  EXPECT_EQ(100, notification->icon().Width());
-  EXPECT_EQ(100, notification->icon().Height());
+  EXPECT_EQ(100, notification->icon().Size().width());
+  EXPECT_EQ(100, notification->icon().Size().height());
 }
 
 IN_PROC_BROWSER_TEST_F(NotificationsTest, TestNotificationInvalidIcon) {
@@ -636,7 +638,7 @@ IN_PROC_BROWSER_TEST_F(NotificationsTest, TestShouldDisplayNormal) {
 }
 
 IN_PROC_BROWSER_TEST_F(NotificationsTest, TestShouldDisplayFullscreen) {
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   ui::test::ScopedFakeNSWindowFullscreen fake_fullscreen;
 #endif
   ASSERT_TRUE(embedded_test_server()->Start());
@@ -672,7 +674,7 @@ IN_PROC_BROWSER_TEST_F(NotificationsTest, TestShouldDisplayFullscreen) {
 
 // The Fake OSX fullscreen window doesn't like drawing a second fullscreen
 // window when another is visible.
-#if !defined(OS_MAC)
+#if !BUILDFLAG(IS_MAC)
 IN_PROC_BROWSER_TEST_F(NotificationsTest, TestShouldDisplayMultiFullscreen) {
   ASSERT_TRUE(embedded_test_server()->Start());
   AllowAllOrigins();
@@ -721,7 +723,7 @@ IN_PROC_BROWSER_TEST_F(NotificationsTest, TestShouldDisplayMultiFullscreen) {
 // Verify that a notification is actually displayed when the webpage that
 // creates it is fullscreen with the fullscreen notification flag turned on.
 IN_PROC_BROWSER_TEST_F(NotificationsTest, TestShouldDisplayPopupNotification) {
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   ui::test::ScopedFakeNSWindowFullscreen fake_fullscreen;
 #endif
   ASSERT_TRUE(embedded_test_server()->Start());
@@ -751,12 +753,12 @@ IN_PROC_BROWSER_TEST_F(NotificationsTest, TestShouldDisplayPopupNotification) {
   ASSERT_EQ(1u, notifications.size());
 }
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
 // TODO(crbug.com/1132058): Test fails on Windows and macOS on the bots as there
 // is no real display to test with. Need to find a way to run these without a
 // display and figure out why Lacros is timing out. Tests pass locally with a
 // real display.
-#if defined(OS_MAC) || defined(OS_WIN) || BUILDFLAG(IS_CHROMEOS_LACROS)
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_CHROMEOS_LACROS)
 #define MAYBE_ShouldQueueDuringScreenPresent \
   DISABLED_ShouldQueueDuringScreenPresent
 #else
@@ -839,4 +841,4 @@ IN_PROC_BROWSER_TEST_F(NotificationsTestWithFakeMediaStream,
     EXPECT_EQ(u"My Body", notification->message());
   }
 }
-#endif  // !defined(OS_ANDROID)
+#endif  // !BUILDFLAG(IS_ANDROID)

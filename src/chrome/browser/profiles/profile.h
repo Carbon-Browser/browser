@@ -17,14 +17,11 @@
 #include "build/chromeos_buildflags.h"
 #include "content/public/browser/browser_context.h"
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #include "base/android/scoped_java_ref.h"
 #endif
 
-#if !defined(OS_ANDROID)
 class ChromeZoomLevelPrefs;
-#endif
-
 class ExtensionSpecialStoragePolicy;
 class GURL;
 class PrefService;
@@ -84,17 +81,6 @@ class Profile : public content::BrowserContext {
     CREATE_MODE_ASYNCHRONOUS
   };
 
-  enum ExitType {
-    // A normal shutdown. The user clicked exit/closed last window of the
-    // profile.
-    EXIT_NORMAL,
-
-    // The exit was the result of the system shutting down.
-    EXIT_SESSION_ENDED,
-
-    EXIT_CRASHED,
-  };
-
   // Defines an ID to distinguish different off-the-record profiles of a regular
   // profile.
   class OTRProfileID {
@@ -135,7 +121,7 @@ class Profile : public content::BrowserContext {
 
     bool AllowsBrowserWindows() const;
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
     // Constructs a Java OTRProfileID from the provided C++ OTRProfileID
     base::android::ScopedJavaLocalRef<jobject> ConvertToJavaOTRProfileID(
         JNIEnv* env) const;
@@ -301,9 +287,6 @@ class Profile : public content::BrowserContext {
   // profile is not OffTheRecord.
   virtual const Profile* GetOriginalProfile() const = 0;
 
-  // Returns whether the profile is supervised (either a legacy supervised
-  // user or a child account; see SupervisedUserService).
-  virtual bool IsSupervised() const = 0;
   // Returns whether the profile is associated with a child account.
   virtual bool IsChild() const = 0;
 
@@ -320,12 +303,10 @@ class Profile : public content::BrowserContext {
   virtual PrefService* GetPrefs() = 0;
   virtual const PrefService* GetPrefs() const = 0;
 
-#if !defined(OS_ANDROID)
   // Retrieves a pointer to the PrefService that manages the default zoom
   // level and the per-host zoom levels for this user profile.
   // TODO(wjmaclean): Remove this when HostZoomMap migrates to StoragePartition.
   virtual ChromeZoomLevelPrefs* GetZoomLevelPrefs();
-#endif
 
   // Gives a read-only view of prefs that can be used even if there's no OTR
   // profile at the moment (i.e. HasOffTheRecordProfile is false).
@@ -458,22 +439,9 @@ class Profile : public content::BrowserContext {
     return restored_last_session_;
   }
 
-  // Sets the ExitType for the profile. This may be invoked multiple times
-  // during shutdown; only the first such change (the transition from
-  // EXIT_CRASHED to one of the other values) is written to prefs, any
-  // later calls are ignored.
-  //
-  // NOTE: this is invoked internally on a normal shutdown, but is public so
-  // that it can be invoked when the user logs out/powers down (WM_ENDSESSION),
-  // or to handle backgrounding/foregrounding on mobile.
-  virtual void SetExitType(ExitType exit_type) = 0;
-
-  // Returns how the last session was shutdown.
-  virtual ExitType GetLastSessionExitType() const = 0;
-
   // Returns whether session cookies are restored and saved. The value is
   // ignored for in-memory profiles.
-  virtual bool ShouldRestoreOldSessionCookies() const;
+  virtual bool ShouldRestoreOldSessionCookies();
   virtual bool ShouldPersistSessionCookies() const;
 
   // Stop sending accessibility events until ResumeAccessibilityEvents().
@@ -501,11 +469,9 @@ class Profile : public content::BrowserContext {
   // destroyed by ProfileDestroyer, but in tests, some are not.
   void MaybeSendDestroyedNotification();
 
-#if !defined(OS_ANDROID)
   // Convenience method to retrieve the default zoom level for the default
   // storage partition.
   double GetDefaultZoomLevelForProfile();
-#endif
 
   // Wipes all data for this profile.
   void Wipe();

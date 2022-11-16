@@ -9,7 +9,6 @@
 #include <string>
 
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "components/translate/content/common/translate.mojom.h"
@@ -17,6 +16,7 @@
 #include "content/public/renderer/render_frame_observer.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 namespace blink {
@@ -33,9 +33,11 @@ namespace translate {
 class TranslateAgent : public content::RenderFrameObserver,
                        public mojom::TranslateAgent {
  public:
-  TranslateAgent(content::RenderFrame* render_frame,
-                 int world_id,
-                 const std::string& extension_scheme);
+  TranslateAgent(content::RenderFrame* render_frame, int world_id);
+
+  TranslateAgent(const TranslateAgent&) = delete;
+  TranslateAgent& operator=(const TranslateAgent&) = delete;
+
   ~TranslateAgent() override;
 
   // content::RenderFrameObserver implementation.
@@ -57,6 +59,9 @@ class TranslateAgent : public content::RenderFrameObserver,
                       const std::string& target_lang,
                       TranslateFrameCallback callback) override;
   void RevertTranslation() override;
+
+  // Set the language detection model for used by |this|. For testing only.
+  void SeedLanguageDetectionModelForTesting(base::File model_file);
 
  protected:
   // Returns true if the translate library is available, meaning the JavaScript
@@ -172,9 +177,6 @@ class TranslateAgent : public content::RenderFrameObserver,
   // The world ID to use for script execution.
   int world_id_;
 
-  // The URL scheme for translate extensions.
-  std::string extension_scheme_;
-
   // The page content length at language detection time. Recorded to UMA when a
   // user translates the page.
   size_t page_contents_length_ = 0;
@@ -200,8 +202,6 @@ class TranslateAgent : public content::RenderFrameObserver,
 
   // Weak pointer factory used to provide references to the translate host.
   base::WeakPtrFactory<TranslateAgent> weak_pointer_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(TranslateAgent);
 };
 
 }  // namespace translate

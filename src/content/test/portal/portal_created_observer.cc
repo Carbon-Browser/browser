@@ -11,21 +11,17 @@
 #include "content/browser/renderer_host/render_frame_host_impl.h"
 #include "content/browser/renderer_host/render_frame_proxy_host.h"
 #include "content/test/portal/portal_interceptor_for_testing.h"
-#include "mojo/public/cpp/bindings/associated_remote.h"
+#include "mojo/public/cpp/bindings/associated_receiver.h"
 
 namespace content {
 
 PortalCreatedObserver::PortalCreatedObserver(
     RenderFrameHostImpl* render_frame_host_impl)
-    : render_frame_host_impl_(render_frame_host_impl) {
-  old_impl_ = render_frame_host_impl_->frame_host_receiver_for_testing()
-                  .SwapImplForTesting(this);
-}
+    : render_frame_host_impl_(render_frame_host_impl),
+      swapped_impl_(render_frame_host_impl_->frame_host_receiver_for_testing(),
+                    this) {}
 
-PortalCreatedObserver::~PortalCreatedObserver() {
-  render_frame_host_impl_->frame_host_receiver_for_testing().SwapImplForTesting(
-      old_impl_);
-}
+PortalCreatedObserver::~PortalCreatedObserver() = default;
 
 mojom::FrameHost* PortalCreatedObserver::GetForwardingInterface() {
   return render_frame_host_impl_;
@@ -34,14 +30,15 @@ mojom::FrameHost* PortalCreatedObserver::GetForwardingInterface() {
 void PortalCreatedObserver::CreatePortal(
     mojo::PendingAssociatedReceiver<blink::mojom::Portal> portal,
     mojo::PendingAssociatedRemote<blink::mojom::PortalClient> client,
+    mojom::RemoteFrameInterfacesFromRendererPtr remote_frame_interfaces,
     CreatePortalCallback callback) {
   PortalInterceptorForTesting* portal_interceptor =
       PortalInterceptorForTesting::Create(render_frame_host_impl_,
                                           std::move(portal), std::move(client));
   portal_ = portal_interceptor->GetPortal();
-  RenderFrameProxyHost* proxy_host = portal_->CreateProxyAndAttachPortal();
+  RenderFrameProxyHost* proxy_host =
+      portal_->CreateProxyAndAttachPortal(std::move(remote_frame_interfaces));
   std::move(callback).Run(
-      proxy_host->GetRoutingID(),
       proxy_host->frame_tree_node()->current_replication_state().Clone(),
       portal_->portal_token(), proxy_host->GetFrameToken(),
       portal_->GetDevToolsFrameToken());
@@ -49,15 +46,17 @@ void PortalCreatedObserver::CreatePortal(
   DidCreatePortal();
 }
 
-void PortalCreatedObserver::AdoptPortal(const blink::PortalToken& portal_token,
-                                        AdoptPortalCallback callback) {
+void PortalCreatedObserver::AdoptPortal(
+    const blink::PortalToken& portal_token,
+    mojom::RemoteFrameInterfacesFromRendererPtr remote_frame_interfaces,
+    AdoptPortalCallback callback) {
   Portal* portal = render_frame_host_impl_->FindPortalByToken(portal_token);
   PortalInterceptorForTesting* portal_interceptor =
       PortalInterceptorForTesting::Create(render_frame_host_impl_, portal);
   portal_ = portal_interceptor->GetPortal();
-  RenderFrameProxyHost* proxy_host = portal_->CreateProxyAndAttachPortal();
+  RenderFrameProxyHost* proxy_host =
+      portal_->CreateProxyAndAttachPortal(std::move(remote_frame_interfaces));
   std::move(callback).Run(
-      proxy_host->GetRoutingID(),
       proxy_host->frame_tree_node()->current_replication_state().Clone(),
       proxy_host->GetFrameToken(), portal->GetDevToolsFrameToken());
 
@@ -84,7 +83,7 @@ Portal* PortalCreatedObserver::WaitUntilPortalCreated() {
 void PortalCreatedObserver::DidCreatePortal() {
   DCHECK(portal_);
   if (!created_cb_.is_null())
-    std::move(created_cb_).Run(portal_);
+    std::move(created_cb_).Run(portal_.get());
   if (run_loop_)
     run_loop_->Quit();
 }

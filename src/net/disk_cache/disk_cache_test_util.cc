@@ -15,7 +15,6 @@
 #include "net/disk_cache/cache_util.h"
 
 using base::Time;
-using base::TimeDelta;
 
 std::string GenerateKey(bool same_length) {
   char key[200];
@@ -63,9 +62,9 @@ bool CheckCacheIntegrity(const base::FilePath& path,
                          bool new_eviction,
                          int max_size,
                          uint32_t mask) {
-  std::unique_ptr<disk_cache::BackendImpl> cache(new disk_cache::BackendImpl(
+  auto cache = std::make_unique<disk_cache::BackendImpl>(
       path, mask, base::ThreadTaskRunnerHandle::Get(), net::DISK_CACHE,
-      nullptr));
+      nullptr);
   if (max_size)
     cache->SetMaxSize(max_size);
   if (!cache.get())
@@ -79,6 +78,17 @@ bool CheckCacheIntegrity(const base::FilePath& path,
 }
 
 // -----------------------------------------------------------------------
+TestBackendResultCompletionCallback::TestBackendResultCompletionCallback() =
+    default;
+
+TestBackendResultCompletionCallback::~TestBackendResultCompletionCallback() =
+    default;
+
+disk_cache::BackendResultCallback
+TestBackendResultCompletionCallback::callback() {
+  return base::BindOnce(&TestBackendResultCompletionCallback::SetResult,
+                        base::Unretained(this));
+}
 
 TestEntryResultCompletionCallback::TestEntryResultCompletionCallback() =
     default;
@@ -110,13 +120,7 @@ void TestRangeResultCompletionCallback::HelpSetResult(
 
 // -----------------------------------------------------------------------
 
-MessageLoopHelper::MessageLoopHelper()
-    : num_callbacks_(0),
-      num_iterations_(0),
-      last_(0),
-      completed_(false),
-      callback_reused_error_(false),
-      callbacks_called_(0) {}
+MessageLoopHelper::MessageLoopHelper() = default;
 
 MessageLoopHelper::~MessageLoopHelper() = default;
 
@@ -127,7 +131,7 @@ bool MessageLoopHelper::WaitUntilCacheIoFinished(int num_callbacks) {
   ExpectCallbacks(num_callbacks);
   // Create a recurrent timer of 50 ms.
   base::RepeatingTimer timer;
-  timer.Start(FROM_HERE, TimeDelta::FromMilliseconds(50), this,
+  timer.Start(FROM_HERE, base::Milliseconds(50), this,
               &MessageLoopHelper::TimerExpired);
   run_loop_ = std::make_unique<base::RunLoop>();
   run_loop_->Run();

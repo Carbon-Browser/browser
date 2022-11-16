@@ -8,7 +8,6 @@
 #include <cstdint>
 #include <memory>
 
-#include "base/macros.h"
 #include "base/memory/memory_pressure_listener.h"
 #include "base/memory/weak_ptr.h"
 #include "base/process/process_handle.h"
@@ -25,6 +24,10 @@ class SystemNodeImpl
   static constexpr NodeTypeEnum Type() { return NodeTypeEnum::kSystem; }
 
   SystemNodeImpl();
+
+  SystemNodeImpl(const SystemNodeImpl&) = delete;
+  SystemNodeImpl& operator=(const SystemNodeImpl&) = delete;
+
   ~SystemNodeImpl() override;
 
   // Implements NodeBase:
@@ -51,8 +54,6 @@ class SystemNodeImpl
 
   base::WeakPtrFactory<SystemNodeImpl> weak_factory_
       GUARDED_BY_CONTEXT(sequence_checker_){this};
-
-  DISALLOW_COPY_AND_ASSIGN(SystemNodeImpl);
 };
 
 }  // namespace performance_manager

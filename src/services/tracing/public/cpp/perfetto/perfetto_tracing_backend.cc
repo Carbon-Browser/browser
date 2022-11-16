@@ -6,8 +6,9 @@
 
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
+#include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "base/task/post_task.h"
 #include "base/tracing/tracing_tls.h"
 #include "build/build_config.h"
 #include "mojo/public/cpp/system/data_pipe_drainer.h"
@@ -34,7 +35,7 @@ namespace {
 // TODO(crbug.com/83907): Find a good compromise between performance and
 // data granularity (mainly relevant to running with small buffer sizes
 // when we use background tracing) on Android.
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 constexpr size_t kDefaultSMBPageSizeBytes = 4 * 1024;
 #else
 constexpr size_t kDefaultSMBPageSizeBytes = 32 * 1024;
@@ -75,6 +76,8 @@ class ProducerEndpoint : public perfetto::ProducerEndpoint,
     producer_->OnDisconnect();
   }
 
+  void Disconnect() override { LOG(DFATAL) << "Not implemented yet"; }
+
   // perfetto::ProducerEndpoint implementation:
   void RegisterDataSource(
       const perfetto::DataSourceDescriptor& descriptor) override {
@@ -82,10 +85,17 @@ class ProducerEndpoint : public perfetto::ProducerEndpoint,
     producer_host_->RegisterDataSource(descriptor);
   }
 
+  void UpdateDataSource(
+      const perfetto::DataSourceDescriptor& descriptor) override {
+    DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+    NOTREACHED();
+  }
+
   void UnregisterDataSource(const std::string& name) override {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-    // TODO(skyostil): Implement data source unregistering.
-    NOTREACHED();
+    // TODO(skyostil): Implement data source unregistering. Data sources are
+    // currently only unregistered in tests, and because the tracing service is
+    // also torn down at the same time, we can ignore unregistrations here.
   }
 
   void RegisterTraceWriter(uint32_t writer_id,
@@ -239,7 +249,7 @@ class ProducerEndpoint : public perfetto::ProducerEndpoint,
   struct EndpointBindings {
     mojo::PendingReceiver<mojom::ProducerClient> client_receiver;
     mojo::PendingRemote<mojom::ProducerHost> host_remote;
-    std::unique_ptr<MojoSharedMemory> shared_memory;
+    std::unique_ptr<ChromeBaseSharedMemory> shared_memory;
   };
 
   static void OnConnected(
@@ -258,9 +268,9 @@ class ProducerEndpoint : public perfetto::ProducerEndpoint,
     if (!shmem_page_size_bytes)
       shmem_page_size_bytes = kDefaultSMBPageSizeBytes;
     bindings->shared_memory =
-        std::make_unique<MojoSharedMemory>(shmem_size_bytes);
+        std::make_unique<ChromeBaseSharedMemory>(shmem_size_bytes);
 
-    if (!bindings->shared_memory->shared_buffer().is_valid()) {
+    if (!bindings->shared_memory->region().IsValid()) {
       // There's no way to do tracing after an SMB allocation failure, so let's
       // disconnect Perfetto.
       // TODO(skyostil): Record failure in UMA.
@@ -279,7 +289,7 @@ class ProducerEndpoint : public perfetto::ProducerEndpoint,
         ->ConnectToProducerHost(
             std::move(client),
             bindings->host_remote.InitWithNewPipeAndPassReceiver(),
-            bindings->shared_memory->Clone(), shmem_page_size_bytes);
+            bindings->shared_memory->CloneRegion(), shmem_page_size_bytes);
 
     // Bind the interfaces on Perfetto's sequence so we can avoid extra thread
     // hops.
@@ -320,7 +330,7 @@ class ProducerEndpoint : public perfetto::ProducerEndpoint,
 
   SEQUENCE_CHECKER(sequence_checker_);
 
-  perfetto::Producer* const producer_;
+  const raw_ptr<perfetto::Producer> producer_;
 
   base::flat_map<perfetto::DataSourceInstanceID, StartDataSourceCallback>
       ds_start_callbacks_;
@@ -334,7 +344,7 @@ class ProducerEndpoint : public perfetto::ProducerEndpoint,
   size_t shared_buffer_page_size_kb_ = 0;
 
   // Accessed on arbitrary threads after setup.
-  std::unique_ptr<MojoSharedMemory> shared_memory_;
+  std::unique_ptr<ChromeBaseSharedMemory> shared_memory_;
   std::unique_ptr<perfetto::SharedMemoryArbiter> shared_memory_arbiter_;
 
   base::WeakPtrFactory<ProducerEndpoint> weak_factory_{this};
@@ -368,7 +378,7 @@ class ConsumerEndpoint : public perfetto::ConsumerEndpoint,
                      perfetto::base::ScopedFile file) override {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
     trace_config_ = trace_config;
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
     // TODO(crbug.com/1158482): Add support on Windows.
     DCHECK(!file)
         << "Tracing directly to a file isn't supported on Windows yet";
@@ -638,7 +648,7 @@ class ConsumerEndpoint : public perfetto::ConsumerEndpoint,
   }
 
   SEQUENCE_CHECKER(sequence_checker_);
-  perfetto::Consumer* const consumer_;
+  const raw_ptr<perfetto::Consumer, DanglingUntriaged> consumer_;
   mojo::Remote<tracing::mojom::ConsumerHost> consumer_host_;
   mojo::Remote<tracing::mojom::TracingSessionHost> tracing_session_host_;
   mojo::Receiver<tracing::mojom::TracingSessionClient> tracing_session_client_{

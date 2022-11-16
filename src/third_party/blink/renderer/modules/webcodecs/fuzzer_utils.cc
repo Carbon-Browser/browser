@@ -4,25 +4,33 @@
 
 #include "third_party/blink/renderer/modules/webcodecs/fuzzer_utils.h"
 
+#include <algorithm>
 #include <string>
 
+#include "base/callback_helpers.h"
 #include "media/base/limits.h"
 #include "media/base/sample_format.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_function.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_value.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_dom_rect_init.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_image_bitmap_options.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_audio_data_copy_to_options.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_audio_data_init.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_audio_decoder_config.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_encoded_audio_chunk_init.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_encoded_video_chunk_init.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_plane_layout.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_union_cssimagevalue_htmlcanvaselement_htmlimageelement_htmlvideoelement_imagebitmap_offscreencanvas_svgimageelement_videoframe.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_video_decoder_config.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_video_decoder_init.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_video_encoder_config.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_video_frame_buffer_init.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_video_frame_init.h"
 #include "third_party/blink/renderer/core/html/canvas/image_data.h"
 #include "third_party/blink/renderer/core/imagebitmap/image_bitmap.h"
 #include "third_party/blink/renderer/core/typed_arrays/dom_array_buffer.h"
+#include "third_party/blink/renderer/core/typed_arrays/dom_data_view.h"
+#include "third_party/blink/renderer/core/typed_arrays/dom_shared_array_buffer.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_buffer.h"
 #include "third_party/blink/renderer/modules/webcodecs/allow_shared_buffer_source_util.h"
 #include "third_party/blink/renderer/modules/webcodecs/fuzzer_inputs.pb.h"
@@ -30,25 +38,40 @@
 #include "third_party/blink/renderer/platform/audio/audio_bus.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/bindings/v8_per_isolate_data.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 
 namespace blink {
 
-// static
-FakeFunction* FakeFunction::Create(ScriptState* script_state,
-                                   std::string name) {
-  return MakeGarbageCollected<FakeFunction>(script_state, name);
+namespace {
+
+// 16 MiB ought to be enough for anybody.
+constexpr size_t kMaxBufferLength = 16 * 1024 * 1024;
+
+// Override for maximum frame dimensions to avoid huge allocations.
+constexpr uint32_t kMaxVideoFrameDimension = 1024;
+
+}  // namespace
+
+base::ScopedClosureRunner MakeScopedGarbageCollectionRequest() {
+  return base::ScopedClosureRunner(WTF::Bind([]() {
+    // Request a V8 GC. Oilpan will be invoked by the GC epilogue.
+    //
+    // Multiple GCs may be required to ensure everything is collected (due to
+    // a chain of persistent handles), so some objects may not be collected
+    // until a subsequent iteration. This is slow enough as is, so we compromise
+    // on one major GC, as opposed to the 5 used in V8GCController for unit
+    // tests.
+    V8PerIsolateData::MainThreadIsolate()->RequestGarbageCollectionForTesting(
+        v8::Isolate::kFullGarbageCollection);
+  }));
 }
 
-FakeFunction::FakeFunction(ScriptState* script_state, std::string name)
-    : ScriptFunction(script_state), name_(name) {}
+FakeFunction::FakeFunction(std::string name) : name_(std::move(name)) {}
 
-v8::Local<v8::Function> FakeFunction::Bind() {
-  return BindToV8Function();
-}
-
-ScriptValue FakeFunction::Call(ScriptValue) {
+ScriptValue FakeFunction::Call(ScriptState*, ScriptValue) {
   return ScriptValue();
 }
 
@@ -210,6 +233,123 @@ VideoEncoderEncodeOptions* MakeEncodeOptions(
   return options;
 }
 
+AllowSharedBufferSource* MakeAllowSharedBufferSource(
+    const wc_fuzzer::AllowSharedBufferSource& proto) {
+  size_t length =
+      std::min(static_cast<size_t>(proto.length()), kMaxBufferLength);
+
+  DOMArrayBufferBase* buffer = nullptr;
+  if (proto.shared()) {
+    buffer = DOMSharedArrayBuffer::Create(static_cast<unsigned>(length), 1);
+  } else {
+    buffer = DOMArrayBuffer::Create(length, 1);
+  }
+  DCHECK(buffer);
+
+  size_t view_offset =
+      std::min(static_cast<size_t>(proto.view_offset()), length);
+  size_t view_length =
+      std::min(static_cast<size_t>(proto.view_length()), length - view_offset);
+  switch (proto.view_type()) {
+    case wc_fuzzer::AllowSharedBufferSource_ViewType_NONE:
+      return MakeGarbageCollected<AllowSharedBufferSource>(buffer);
+    case wc_fuzzer::AllowSharedBufferSource_ViewType_INT8:
+      return MakeGarbageCollected<AllowSharedBufferSource>(
+          MaybeShared<DOMInt8Array>(
+              DOMInt8Array::Create(buffer, view_offset, view_length)));
+    case wc_fuzzer::AllowSharedBufferSource_ViewType_UINT32:
+      // View must be element-aligned and is sized by element count.
+      view_offset = std::min(view_offset, length / 4) * 4;
+      view_length = std::min(view_length, length / 4 - view_offset / 4);
+      return MakeGarbageCollected<AllowSharedBufferSource>(
+          MaybeShared<DOMUint32Array>(
+              DOMUint32Array::Create(buffer, view_offset, view_length)));
+    case wc_fuzzer::AllowSharedBufferSource_ViewType_DATA:
+      return MakeGarbageCollected<AllowSharedBufferSource>(
+          MaybeShared<DOMDataView>(
+              DOMDataView::Create(buffer, view_offset, view_length)));
+  }
+
+  NOTREACHED();
+}
+
+PlaneLayout* MakePlaneLayout(const wc_fuzzer::PlaneLayout& proto) {
+  PlaneLayout* plane_layout = PlaneLayout::Create();
+  plane_layout->setOffset(proto.offset());
+  plane_layout->setStride(proto.stride());
+  return plane_layout;
+}
+
+DOMRectInit* MakeDOMRectInit(const wc_fuzzer::DOMRectInit& proto) {
+  DOMRectInit* init = DOMRectInit::Create();
+  init->setX(proto.x());
+  init->setY(proto.y());
+  init->setWidth(proto.width());
+  init->setHeight(proto.height());
+  return init;
+}
+
+VideoFrame* MakeVideoFrame(
+    ScriptState* script_state,
+    const wc_fuzzer::VideoFrameBufferInitInvocation& proto) {
+  AllowSharedBufferSource* data = MakeAllowSharedBufferSource(proto.data());
+  VideoFrameBufferInit* init = VideoFrameBufferInit::Create();
+
+  switch (proto.init().format()) {
+    case wc_fuzzer::VideoFrameBufferInit_VideoPixelFormat_I420:
+      init->setFormat("I420");
+      break;
+    case wc_fuzzer::VideoFrameBufferInit_VideoPixelFormat_I420A:
+      init->setFormat("I420A");
+      break;
+    case wc_fuzzer::VideoFrameBufferInit_VideoPixelFormat_I444:
+      init->setFormat("I444");
+      break;
+    case wc_fuzzer::VideoFrameBufferInit_VideoPixelFormat_NV12:
+      init->setFormat("NV12");
+      break;
+    case wc_fuzzer::VideoFrameBufferInit_VideoPixelFormat_RGBA:
+      init->setFormat("RGBA");
+      break;
+    case wc_fuzzer::VideoFrameBufferInit_VideoPixelFormat_RGBX:
+      init->setFormat("RGBX");
+      break;
+    case wc_fuzzer::VideoFrameBufferInit_VideoPixelFormat_BGRA:
+      init->setFormat("BGRA");
+      break;
+    case wc_fuzzer::VideoFrameBufferInit_VideoPixelFormat_BGRX:
+      init->setFormat("BGRX");
+      break;
+  }
+
+  if (proto.init().layout_size()) {
+    HeapVector<Member<PlaneLayout>> layout{};
+    for (const auto& plane_proto : proto.init().layout())
+      layout.push_back(MakePlaneLayout(plane_proto));
+    init->setLayout(layout);
+  }
+
+  init->setTimestamp(proto.init().timestamp());
+  if (proto.init().has_duration())
+    init->setDuration(proto.init().duration());
+
+  init->setCodedWidth(
+      std::min(proto.init().coded_width(), kMaxVideoFrameDimension));
+  init->setCodedHeight(
+      std::min(proto.init().coded_height(), kMaxVideoFrameDimension));
+
+  if (proto.init().has_visible_rect())
+    init->setVisibleRect(MakeDOMRectInit(proto.init().visible_rect()));
+
+  if (proto.init().has_display_width())
+    init->setDisplayWidth(proto.init().display_width());
+  if (proto.init().has_display_height())
+    init->setDisplayHeight(proto.init().display_height());
+
+  return VideoFrame::Create(script_state, data, init,
+                            IGNORE_EXCEPTION_FOR_TESTING);
+}
+
 VideoFrame* MakeVideoFrame(ScriptState* script_state,
                            const wc_fuzzer::VideoFrameBitmapInit& proto) {
   constexpr size_t kBytesPerPixel = 4;
@@ -243,8 +383,7 @@ VideoFrame* MakeVideoFrame(ScriptState* script_state,
                             IGNORE_EXCEPTION_FOR_TESTING);
 }
 
-AudioData* MakeAudioData(ScriptState* script_state,
-                         const wc_fuzzer::AudioDataInit& proto) {
+AudioData* MakeAudioData(const wc_fuzzer::AudioDataInit& proto) {
   if (!proto.channels().size() ||
       proto.channels().size() > media::limits::kMaxChannels)
     return nullptr;
@@ -284,6 +423,19 @@ AudioData* MakeAudioData(ScriptState* script_state,
   init->setData(MakeGarbageCollected<AllowSharedBufferSource>(buffer));
 
   return AudioData::Create(init, IGNORE_EXCEPTION_FOR_TESTING);
+}
+
+AudioDataCopyToOptions* MakeAudioDataCopyToOptions(
+    const wc_fuzzer::AudioDataCopyToOptions& options_proto) {
+  AudioDataCopyToOptions* options = AudioDataCopyToOptions::Create();
+  options->setPlaneIndex(options_proto.plane_index());
+  if (options_proto.has_frame_offset())
+    options->setFrameOffset(options_proto.frame_offset());
+  if (options_proto.has_frame_count())
+    options->setFrameCount(options_proto.frame_count());
+  if (options_proto.has_format())
+    options->setFormat(ToAudioSampleFormat(options_proto.format()));
+  return options;
 }
 
 }  // namespace blink

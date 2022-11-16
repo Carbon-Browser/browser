@@ -11,7 +11,7 @@
 #include <string>
 
 #include "base/compiler_specific.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/sequence_checker.h"
 #include "build/build_config.h"
@@ -41,6 +41,10 @@ class SyncPrefs {
  public:
   // |pref_service| must not be null and must outlive this object.
   explicit SyncPrefs(PrefService* pref_service);
+
+  SyncPrefs(const SyncPrefs&) = delete;
+  SyncPrefs& operator=(const SyncPrefs&) = delete;
+
   ~SyncPrefs();
 
   static void RegisterProfilePrefs(PrefRegistrySimple* registry);
@@ -86,12 +90,15 @@ class SyncPrefs {
   void SetSelectedOsTypes(bool sync_all_os_types,
                           UserSelectableOsTypeSet registered_types,
                           UserSelectableOsTypeSet selected_types);
-  bool IsOsSyncFeatureEnabled() const;
-  void SetOsSyncFeatureEnabled(bool enabled);
 
   // Maps |type| to its corresponding preference name. Returns nullptr if |type|
   // isn't an OS type.
   static const char* GetPrefNameForOsType(UserSelectableOsType type);
+#endif
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  bool IsAppsSyncEnabledByOs() const;
+  void SetAppsSyncEnabledByOs(bool apps_sync_enabled);
 #endif
 
   // Whether Sync is forced off by enterprise policy. Note that this only covers
@@ -101,18 +108,6 @@ class SyncPrefs {
 
   // Maps |type| to its corresponding preference name.
   static const char* GetPrefNameForType(UserSelectableType type);
-
-#if defined(OS_ANDROID)
-  // Sets a boolean pref representing that Sync should no longer respect whether
-  // Android master sync is enabled/disabled. It is set per-device and never
-  // gets cleared.
-  void SetDecoupledFromAndroidMasterSync();
-
-  // Gets the value for the boolean pref representing whether Sync should no
-  // longer respect if Android master sync is enabled/disabled. Returns false
-  // until |SetDecoupledFromAndroidMasterSync()| is called.
-  bool GetDecoupledFromAndroidMasterSync();
-#endif  // defined(OS_ANDROID)
 
   // For testing.
   void SetManagedForTest(bool is_managed);
@@ -140,7 +135,7 @@ class SyncPrefs {
   void OnSyncRequestedPrefChange();
 
   // Never null.
-  PrefService* const pref_service_;
+  const raw_ptr<PrefService> pref_service_;
 
   base::ObserverList<SyncPrefObserver>::Unchecked sync_pref_observers_;
 
@@ -155,12 +150,17 @@ class SyncPrefs {
   bool local_sync_enabled_;
 
   SEQUENCE_CHECKER(sequence_checker_);
-
-  DISALLOW_COPY_AND_ASSIGN(SyncPrefs);
 };
 
-void ClearObsoletePassphrasePromptPrefs(PrefService* pref_service);
+#if BUILDFLAG(IS_ANDROID)
+void ClearObsoleteSyncDecoupledFromAndroidMasterSync(PrefService* pref_service);
+#endif  // BUILDFLAG(IS_ANDROID)
+
 void MigrateSyncSuppressedPref(PrefService* pref_service);
+
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
+void MigrateSyncRequestedPrefPostMice(PrefService* pref_service);
+#endif  // BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
 
 }  // namespace syncer
 

@@ -5,8 +5,10 @@
 #include "ash/system/palette/tools/metalayer_mode.h"
 
 #include "ash/assistant/assistant_controller_impl.h"
-#include "ash/public/cpp/toast_data.h"
+#include "ash/constants/notifier_catalogs.h"
+#include "ash/public/cpp/system/toast_data.h"
 #include "ash/resources/vector_icons/vector_icons.h"
+#include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/style/ash_color_provider.h"
@@ -17,23 +19,38 @@
 #include "ash/system/tray/tray_constants.h"
 #include "ash/system/tray/tray_popup_utils.h"
 #include "base/bind.h"
+#include "base/metrics/histogram_functions.h"
+#include "chromeos/ash/services/assistant/public/cpp/assistant_prefs.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/events/event.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/views/controls/image_view.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/view.h"
+#include "ui/views/view_utils.h"
 
 namespace ash {
 
 namespace {
 
 const char kToastId[] = "palette_metalayer_mode";
-const int kToastDurationMs = 2500;
+
+// Toast ID for toast that shows for long press stylus actions when metalayer
+// mode is deprecated.
+const char kDeprecateAssistantStylusToastId[] = "deprecate_assistant_stylus";
+
+// Histogram for Assistant stylus features deprecation toast events.
+const char kDeprecateStylusFeaturesToastEvent[] =
+    "Ash.Shelf.Palette.Assistant.DeprecateStylusFeaturesToastEvent";
 
 // If the last stroke happened within this amount of time,
 // assume writing/sketching usage.
 const int kMaxStrokeGapWhenWritingMs = 1000;
+
+// Returns the last active user pref service.
+PrefService* GetPrefs() {
+  return Shell::Get()->session_controller()->GetLastActiveUserPrefService();
+}
 
 }  // namespace
 
@@ -84,7 +101,7 @@ void MetalayerMode::OnDisable() {
 }
 
 const gfx::VectorIcon& MetalayerMode::GetActiveTrayIcon() const {
-  return kPaletteTrayIconMetalayerIcon;
+  return kPaletteModeMetalayerIcon;
 }
 
 const gfx::VectorIcon& MetalayerMode::GetPaletteIcon() const {
@@ -92,6 +109,9 @@ const gfx::VectorIcon& MetalayerMode::GetPaletteIcon() const {
 }
 
 views::View* MetalayerMode::CreateView() {
+  if (ash::features::IsDeprecateAssistantStylusFeaturesEnabled())
+    return nullptr;
+
   views::View* view = CreateDefaultView(std::u16string());
   UpdateView();
   return view;
@@ -120,7 +140,7 @@ void MetalayerMode::OnTouchEvent(ui::TouchEvent* event) {
     return;
 
   if (event->time_stamp() - previous_stroke_end_ <
-      base::TimeDelta::FromMilliseconds(kMaxStrokeGapWhenWritingMs)) {
+      base::Milliseconds(kMaxStrokeGapWhenWritingMs)) {
     // The press is happening too soon after the release, the user is most
     // likely writing/sketching and does not want the metalayer to activate.
     return;
@@ -133,14 +153,50 @@ void MetalayerMode::OnTouchEvent(ui::TouchEvent* event) {
   if (palette_utils::PaletteContainsPointInScreen(event->root_location()))
     return;
 
+  DeprecateStylusFeaturesToastEvent toast_event = kNotDeprecatedToastNotShown;
+
+  // Assistant stylus features are in the process of being deprecated.
+  // After deprecation, which is currently gated by a feature flag, long
+  // press stylus events will not trigger the metalayer mode.
+  if (ash::features::IsDeprecateAssistantStylusFeaturesEnabled()) {
+    // Only show the toast once when the metalayer is triggered for the first
+    // time.
+    toast_event = kDeprecatedToastNotShown;
+    if (!GetPrefs()->GetBoolean(
+            chromeos::assistant::prefs::kAssistantDeprecateStylusToast)) {
+      // Set the deprecate stylus toast assistant pref so that the toast doesn't
+      // repeatedly show.
+      GetPrefs()->SetBoolean(
+          chromeos::assistant::prefs::kAssistantDeprecateStylusToast, true);
+      Shell::Get()->toast_manager()->Show(
+          ToastData(kDeprecateAssistantStylusToastId,
+                    ToastCatalogName::kDeprecateAssistantStylus,
+                    l10n_util::GetStringUTF16(
+                        IDS_ASH_STYLUS_TOOLS_METALAYER_TOAST_DEPRECATE),
+                    ToastData::kDefaultToastDuration,
+                    /*visible_on_lock_screen=*/false,
+                    /*has_dismiss_button=*/true));
+      toast_event = kDeprecatedToastShown;
+    }
+    // Record toast event (feature is deprecated).
+    base::UmaHistogramEnumeration(kDeprecateStylusFeaturesToastEvent,
+                                  toast_event);
+    return;
+  }
+
+  // Record toast event (feature is not deprecated).
+  base::UmaHistogramEnumeration(kDeprecateStylusFeaturesToastEvent,
+                                toast_event);
+
   if (loading()) {
     // Repetitive presses will create toasts with the same id which will be
     // ignored.
-    ToastData toast(
-        kToastId,
+    Shell::Get()->toast_manager()->Show(ToastData(
+        kToastId, ToastCatalogName::kAssistantLoading,
         l10n_util::GetStringUTF16(IDS_ASH_STYLUS_TOOLS_METALAYER_TOAST_LOADING),
-        kToastDurationMs, absl::optional<std::u16string>());
-    Shell::Get()->toast_manager()->Show(toast);
+        ToastData::kDefaultToastDuration,
+        /*visible_on_lock_screen=*/false,
+        /*has_dismiss_button=*/true));
   } else {
     delegate()->RecordPaletteOptionsUsage(
         PaletteToolIdToPaletteTrayOptions(GetToolId()),
@@ -235,7 +291,11 @@ void MetalayerMode::UpdateView() {
       AshColorProvider::ContentLayerType::kIconColorPrimary);
   if (!enabled)
     icon_color = AshColorProvider::GetDisabledColor(icon_color);
-  highlight_view_->left_icon()->SetImage(
+
+  DCHECK(views::IsViewClass<views::ImageView>(highlight_view_->left_view()));
+  views::ImageView* left_icon =
+      static_cast<views::ImageView*>(highlight_view_->left_view());
+  left_icon->SetImage(
       CreateVectorIcon(GetPaletteIcon(), kMenuIconSize, icon_color));
 }
 

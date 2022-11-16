@@ -59,13 +59,12 @@ void PrefetchProxyOriginDecider::ReportOriginRetryAfter(
     const GURL& url,
     base::TimeDelta retry_after) {
   // Ignore negative times.
-  if (retry_after < base::TimeDelta()) {
+  if (retry_after.is_negative()) {
     return;
   }
 
   UMA_HISTOGRAM_CUSTOM_TIMES("PrefetchProxy.Prefetch.Mainframe.RetryAfter",
-                             retry_after, base::TimeDelta::FromSeconds(1),
-                             base::TimeDelta::FromDays(7), 100);
+                             retry_after, base::Seconds(1), base::Days(7), 100);
 
   // Cap values at a maximum per experiment.
   if (retry_after > PrefetchProxyMaxRetryAfterDelta()) {
@@ -80,11 +79,10 @@ void PrefetchProxyOriginDecider::ReportOriginRetryAfter(
 void PrefetchProxyOriginDecider::LoadFromPrefs() {
   origin_retry_afters_.clear();
 
-  const base::DictionaryValue* dictionary =
-      pref_service_->GetDictionary(prefetch::prefs::kRetryAfterPrefPath);
-  DCHECK(dictionary);
+  const base::Value::Dict& dictionary =
+      pref_service_->GetValueDict(prefetch::prefs::kRetryAfterPrefPath);
 
-  for (auto element : dictionary->DictItems()) {
+  for (auto element : dictionary) {
     GURL url_origin(element.first);
     if (!url_origin.is_valid()) {
       // This may happen in the case of corrupted prefs, or otherwise. Handle

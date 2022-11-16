@@ -9,7 +9,7 @@
 #include "third_party/blink/renderer/core/script/classic_pending_script.h"
 #include "third_party/blink/renderer/core/script/script_loader.h"
 #include "third_party/blink/renderer/core/script/xml_parser_script_runner_host.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 
 namespace blink {
 
@@ -74,8 +74,7 @@ void XMLParserScriptRunner::ProcessScriptElement(
   // [Parsing] When the element's end tag is subsequently parsed, the user agent
   // must perform a microtask checkpoint, and then prepare the script element.
   // [spec text]
-  bool success = script_loader->PrepareScript(
-      script_start_position, ScriptLoader::kAllowLegacyTypeInTypeAttribute);
+  bool success = script_loader->PrepareScript(script_start_position);
 
   if (script_loader->GetScriptType() ==
       ScriptLoader::ScriptTypeAtPrepare::kModule) {

@@ -7,12 +7,6 @@
 
 #include "build/build_config.h"
 
-#if defined(OS_NACL_NONSFI)
-static_assert(false,
-              "ipc_message_protobuf_utils is not able to work with "
-              "nacl_nonsfi configuration.");
-#endif
-
 #include "base/pickle.h"
 #include "ipc/ipc_param_traits.h"
 #include "ipc/ipc_message_utils.h"
@@ -31,15 +25,14 @@ struct RepeatedFieldParamTraits {
   static bool Read(const base::Pickle* m,
                    base::PickleIterator* iter,
                    param_type* r) {
-    int size;
-    // ReadLength() checks for < 0 itself.
+    size_t size;
     if (!iter->ReadLength(&size))
       return false;
     // Avoid integer overflow / assertion failure in Reserve() function.
-    if (INT_MAX / sizeof(StorageType) <= static_cast<size_t>(size))
+    if (size > INT_MAX / sizeof(StorageType))
       return false;
     r->Reserve(size);
-    for (int i = 0; i < size; i++) {
+    for (size_t i = 0; i < size; i++) {
       if (!ReadParam(m, iter, r->Add()))
         return false;
     }

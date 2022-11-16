@@ -9,9 +9,9 @@
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/rect_f.h"
+#include "ui/gfx/geometry/skia_conversions.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/gfx/scoped_canvas.h"
-#include "ui/gfx/skia_util.h"
 #include "ui/gfx/vector_icon_types.h"
 #include "ui/gfx/vector_icon_utils.h"
 
@@ -67,13 +67,6 @@ void NetworkIconImageSource::Draw(gfx::Canvas* canvas) {
   // The center badge is scaled and centered over the icon.
   if (badges_.center.icon)
     paint_badge(badges_.center, icon_x, icon_y, icon_.width());
-
-  if (badges_.center_left.icon) {
-    paint_badge(
-        badges_.center_left, 0,
-        (height - gfx::GetDefaultSizeOfVectorIcon(*badges_.center_left.icon)) /
-            2);
-  }
 
   if (badges_.top_left.icon)
     paint_badge(badges_.top_left, 0, icon_y);
@@ -131,11 +124,12 @@ bool SignalStrengthImageSource::HasRepresentationAtAllScales() const {
 
 void SignalStrengthImageSource::DrawArcs(gfx::Canvas* canvas) {
   gfx::RectF oval_bounds((gfx::Rect(size())));
-  oval_bounds.Inset(gfx::Insets(padding_));
+  oval_bounds.Inset(padding_);
   // Double the width and height. The new midpoint should be the former
   // bottom center.
-  oval_bounds.Inset(-oval_bounds.width() / 2, 0, -oval_bounds.width() / 2,
-                    -oval_bounds.height());
+  oval_bounds.Inset(gfx::InsetsF::TLBR(0, -oval_bounds.width() / 2,
+                                       -oval_bounds.height(),
+                                       -oval_bounds.width() / 2));
 
   constexpr SkScalar kAngleAboveHorizontal = 51.f;
   constexpr SkScalar kStartAngle = 180.f + kAngleAboveHorizontal;

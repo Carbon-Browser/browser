@@ -23,6 +23,10 @@ class FirstRunInternalPosixTest : public InProcessBrowserTest {
  protected:
   FirstRunInternalPosixTest() = default;
 
+  FirstRunInternalPosixTest(const FirstRunInternalPosixTest&) = delete;
+  FirstRunInternalPosixTest& operator=(const FirstRunInternalPosixTest&) =
+      delete;
+
   // InProcessBrowserTest:
   void SetUpCommandLine(base::CommandLine* command_line) override {
     command_line->AppendSwitch(switches::kForceFirstRun);
@@ -54,7 +58,7 @@ class FirstRunInternalPosixTest : public InProcessBrowserTest {
 
     // The modal dialog will spawn and spin a nested RunLoop when
     // content::BrowserTestBase::SetUp() invokes content::ContentMain().
-    // BrowserTestBase sets GetContentMainParams()->ui_task before this, but the
+    // BrowserTestBase sets ContentMainParams::ui_task before this, but the
     // ui_task isn't actually Run() until after the dialog is spawned in
     // ChromeBrowserMainParts::PreMainMessageLoopRunImpl(). Instead, try to
     // inspect state by posting a task to run in that nested RunLoop.
@@ -95,16 +99,14 @@ class FirstRunInternalPosixTest : public InProcessBrowserTest {
   }
 
   bool inspected_state_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(FirstRunInternalPosixTest);
 };
 
 // Test the first run flow for showing the modal dialog that surfaces the first
 // run dialog. Ensure browser startup safely handles a signal while the modal
 // RunLoop is running.
 IN_PROC_BROWSER_TEST_F(FirstRunInternalPosixTest, HandleSigint) {
-  // Never reached. PreMainMessageLoopRunImpl() should return before this task
-  // is run.
+  // Never reached. The above SIGINT should prevent the main message loop
+  // (and the browser test hooking it) from running.
   ADD_FAILURE() << "Should never be called";
 }
 

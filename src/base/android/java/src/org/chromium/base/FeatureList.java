@@ -41,7 +41,7 @@ public class FeatureList {
         }
 
         /**
-         * Add an override for a field trial parameter.
+         * Add an override for a feature flag.
          */
         public void addFeatureFlagOverride(String featureName, boolean testValue) {
             mFeatureFlags.put(featureName, testValue);
@@ -151,6 +151,14 @@ public class FeatureList {
     }
 
     /**
+     * @param featureName The name of the feature to query.
+     * @return Whether the feature has a test value configured.
+     */
+    public static boolean hasTestFeature(String featureName) {
+        return hasTestFeatures() && sTestFeatures.mFeatureFlags.containsKey(featureName);
+    }
+
+    /**
      * Returns the test value of the feature with the given name.
      *
      * @param featureName The name of the feature to query.
@@ -164,7 +172,10 @@ public class FeatureList {
                 return override;
             }
             if (!sTestCanUseDefaults) {
-                throw new IllegalArgumentException("No test value configured for " + featureName);
+                throw new IllegalArgumentException("No test value configured for " + featureName
+                        + " and native is not available to provide a default value. Use"
+                        + " @EnableFeatures or @DisableFeatures to provide test values for the"
+                        + " flag.");
             }
         }
         return null;
@@ -188,8 +199,9 @@ public class FeatureList {
         return null;
     }
 
+    @VisibleForTesting(otherwise = VisibleForTesting.PACKAGE_PRIVATE)
     @NativeMethods
-    interface Natives {
+    public interface Natives {
         boolean isInitialized();
     }
 }

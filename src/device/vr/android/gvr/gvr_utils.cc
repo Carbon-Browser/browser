@@ -7,8 +7,8 @@
 #include "device/vr/util/transform_utils.h"
 #include "third_party/gvr-android-sdk/src/libraries/headers/vr/gvr/capi/include/gvr.h"
 #include "ui/gfx/geometry/rect_f.h"
-#include "ui/gfx/transform.h"
-#include "ui/gfx/transform_util.h"
+#include "ui/gfx/geometry/transform.h"
+#include "ui/gfx/geometry/transform_util.h"
 
 namespace {
 
@@ -16,11 +16,11 @@ gfx::Size GetMaximumWebVrSize(gvr::GvrApi* gvr_api) {
   // Get the default, unscaled size for the WebVR transfer surface
   // based on the optimal 1:1 render resolution. A scalar will be applied to
   // this value in the renderer to reduce the render load. This size will also
-  // be reported to the client via CreateVRDisplayInfo as the
-  // client-recommended render_width/render_height and for the GVR
-  // framebuffer. If the client chooses a different size or resizes it
-  // while presenting, we'll resize the transfer surface and GVR
-  // framebuffer to match.
+  // be reported to the client via XRViews (initially on XRSessionDeviceConfig,
+  // and then on XRFrameData) as the client-recommended
+  // render_width/render_height and for the GVR framebuffer. If the client
+  // chooses a different size or resizes it while presenting, we'll resize the
+  // transfer surface and GVR framebuffer to match.
   gvr::Sizei render_target_size =
       gvr_api->GetMaximumEffectiveRenderTargetSize();
 
@@ -47,14 +47,17 @@ device::mojom::XRViewPtr CreateView(
 
   if (eye == GVR_LEFT_EYE) {
     view->eye = device::mojom::XREye::kLeft;
+    view->viewport =
+        gfx::Rect(0, 0, maximum_size.width() / 2, maximum_size.height());
   } else if (eye == GVR_RIGHT_EYE) {
     view->eye = device::mojom::XREye::kRight;
+    view->viewport = gfx::Rect(maximum_size.width() / 2, 0,
+                               maximum_size.width() / 2, maximum_size.height());
   } else {
     NOTREACHED();
   }
 
   view->field_of_view = device::mojom::VRFieldOfView::New();
-  view->viewport = gfx::Size(maximum_size.width() / 2, maximum_size.height());
 
   gvr::BufferViewport eye_viewport = gvr_api->CreateBufferViewport();
   buffers.GetBufferViewport(eye, &eye_viewport);

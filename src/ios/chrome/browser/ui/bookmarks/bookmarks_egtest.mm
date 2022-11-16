@@ -6,6 +6,7 @@
 #import <XCTest/XCTest.h>
 
 #include "base/ios/ios_util.h"
+#import "base/strings/sys_string_conversions.h"
 #include "components/strings/grit/components_strings.h"
 #import "ios/chrome/browser/ui/bookmarks/bookmark_earl_grey.h"
 #import "ios/chrome/browser/ui/bookmarks/bookmark_earl_grey_ui.h"
@@ -108,8 +109,8 @@ using chrome_test_util::TappableBookmarkNodeWithLabel;
          usingSearchAction:grey_scrollInDirection(kGREYDirectionDown, 200)
       onElementWithMatcher:grey_accessibilityID(kPopupMenuToolsMenuTableViewId)]
       assertWithMatcher:grey_notNil()];
-  // After veryfing, close the ToolsMenu by tapping on its button.
-  [ChromeEarlGreyUI openToolsMenu];
+  // After veryfing, close the ToolsMenu.
+  [ChromeEarlGreyUI closeToolsMenu];
 
   // Close the opened tab.
   [ChromeEarlGrey closeCurrentTab];
@@ -184,6 +185,10 @@ using chrome_test_util::TappableBookmarkNodeWithLabel;
 // shows only a snackbar.
 - (void)testKeyboardCommandsRegistered_AddBookmark {
   // Add the bookmark.
+  GREYAssertTrue(self.testServer->Start(), @"Server did not start.");
+
+  const GURL firstURL = self.testServer->GetURL("/pony.html");
+  [ChromeEarlGrey loadURL:firstURL];
   [BookmarkEarlGreyUI starCurrentTab];
   GREYAssertTrue([ChromeEarlGrey registeredKeyCommandCount] > 0,
                  @"Some keyboard commands are registered.");
@@ -217,23 +222,14 @@ using chrome_test_util::TappableBookmarkNodeWithLabel;
 // Test that swiping left to right navigate back.
 // TODO(crbug.com/768339): This test is faling on devices because
 // grey_swipeFastInDirectionWithStartPoint does not work.
-#if !TARGET_IPHONE_SIMULATOR
-#define MAYBE_testNavigateBackWithGesture DISABLED_testNavigateBackWithGesture
-#else
-#define MAYBE_testNavigateBackWithGesture testNavigateBackWithGesture
-#endif
-- (void)MAYBE_testNavigateBackWithGesture {
+// TODO(crbug.com/978877): Fix the bug in EG and enable the test.
+// Navigate back side swipe gesture does not work on iOS13 simulator. This
+// is not specific to Bookmarks. The issue is that the gesture needs to
+// start offscreen, and EG cannot replicate that.
+- (void)DISABLED_testNavigateBackWithGesture {
   // Disabled on iPad as there is not "navigate back" gesture.
   if ([ChromeEarlGrey isIPadIdiom]) {
     EARL_GREY_TEST_SKIPPED(@"Test not applicable for iPad");
-  }
-
-  if (@available(iOS 13, *)) {
-    // Navigate back side swipe gesture does not work on iOS13 simulator. This
-    // is not specific to Bookmarks. The issue is that the gesture needs to
-    // start offscreen, and EG cannot replicate that.
-    // TODO(crbug.com/978877): Fix the bug in EG and enable the test.
-    EARL_GREY_TEST_DISABLED(@"Test disabled on iOS 13.");
   }
 
   [BookmarkEarlGrey setupStandardBookmarks];
@@ -845,6 +841,31 @@ using chrome_test_util::TappableBookmarkNodeWithLabel;
 
   // When the user has no bookmarks, the root view should be an empty state.
   [BookmarkEarlGreyUI verifyEmptyState];
+}
+
+// Tests that bookmarking an incognito tab actually bookmarks the
+// expected URL. Regression test for https://crbug.com/1353114.
+- (void)testBookmarkFromIncognito {
+  GREYAssertTrue(self.testServer->Start(), @"Server did not start.");
+
+  const GURL firstURL = self.testServer->GetURL("/pony.html");
+  [ChromeEarlGrey openNewTab];
+  [ChromeEarlGrey loadURL:firstURL];
+
+  const GURL incognitoURL = self.testServer->GetURL("/destination.html");
+  [ChromeEarlGrey openNewIncognitoTab];
+  [ChromeEarlGrey loadURL:incognitoURL];
+
+  // Add the bookmark from the UI.
+  [BookmarkEarlGrey waitForBookmarkModelLoaded:YES];
+  NSString* bookmarkTitle = @"Test Page";
+  [BookmarkEarlGreyUI bookmarkCurrentTabWithTitle:@"Test Page"];
+
+  [BookmarkEarlGrey verifyExistenceOfBookmarkWithURL:base::SysUTF8ToNSString(
+                                                         incognitoURL.spec())
+                                                name:bookmarkTitle];
+  [BookmarkEarlGrey
+      verifyAbsenceOfBookmarkWithURL:base::SysUTF8ToNSString(firstURL.spec())];
 }
 
 // TODO(crbug.com/695749): Add egtests for:

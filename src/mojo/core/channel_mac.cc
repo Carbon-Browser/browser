@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -68,6 +69,9 @@ class ChannelMac : public Channel,
       NOTREACHED();
     }
   }
+
+  ChannelMac(const ChannelMac&) = delete;
+  ChannelMac& operator=(const ChannelMac&) = delete;
 
   void Start() override {
     io_task_runner_->PostTask(
@@ -208,8 +212,8 @@ class ChannelMac : public Channel,
     incoming_handles_.clear();
 
     if (leak_handles_) {
-      ignore_result(receive_port_.release());
-      ignore_result(send_port_.release());
+      std::ignore = receive_port_.release();
+      std::ignore = send_port_.release();
     } else {
       receive_port_.reset();
       send_port_.reset();
@@ -708,8 +712,6 @@ class ChannelMac : public Channel,
   // When |handshake_done_| is false or |send_buffer_contains_message_| is true,
   // calls to Write() will enqueue messages here.
   base::circular_deque<MessagePtr> pending_messages_;
-
-  DISALLOW_COPY_AND_ASSIGN(ChannelMac);
 };
 
 }  // namespace

@@ -4,24 +4,30 @@
 
 #include "chrome/browser/ash/remote_apps/remote_apps_manager.h"
 
-#include "ash/app_list/app_list_controller_impl.h"
+#include "ash/app_list/app_list_model_provider.h"
 #include "ash/app_list/model/app_list_item.h"
 #include "ash/app_list/model/app_list_model.h"
+#include "ash/components/login/auth/public/user_context.h"
 #include "ash/constants/ash_switches.h"
 #include "ash/public/cpp/accelerators.h"
 #include "ash/public/cpp/app_list/app_list_types.h"
 #include "ash/public/cpp/image_downloader.h"
 #include "ash/public/cpp/shelf_item.h"
 #include "ash/public/cpp/shelf_types.h"
+#include "ash/public/cpp/test/app_list_test_api.h"
 #include "ash/shell.h"
+#include "base/barrier_closure.h"
 #include "base/callback.h"
+#include "base/callback_forward.h"
 #include "base/run_loop.h"
 #include "base/scoped_observation.h"
 #include "base/strings/utf_string_conversions.h"
-#include "chrome/browser/apps/app_service/app_icon_factory.h"
+#include "base/test/bind.h"
+#include "base/test/test_future.h"
+#include "chrome/browser/apps/app_service/app_icon/app_icon_factory.h"
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
-#include "chrome/browser/ash/login/test/local_policy_test_server_mixin.h"
+#include "chrome/browser/ash/login/test/embedded_policy_test_server_mixin.h"
 #include "chrome/browser/ash/login/test/session_manager_state_waiter.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
 #include "chrome/browser/ash/policy/core/device_policy_cros_browser_test.h"
@@ -33,10 +39,17 @@
 #include "chrome/browser/ui/app_list/app_list_client_impl.h"
 #include "chrome/browser/ui/app_list/app_list_syncable_service_factory.h"
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_controller.h"
-#include "chromeos/login/auth/user_context.h"
+#include "chrome/common/pref_names.h"
+#include "chromeos/components/remote_apps/mojom/remote_apps.mojom.h"
 #include "components/account_id/account_id.h"
 #include "components/policy/proto/chrome_device_policy.pb.h"
+#include "components/services/app_service/public/cpp/icon_types.h"
 #include "components/services/app_service/public/mojom/types.mojom.h"
+#include "components/sync/protocol/app_list_specifics.pb.h"
+#include "components/sync/protocol/entity_specifics.pb.h"
+#include "components/sync/test/model/fake_sync_change_processor.h"
+#include "components/sync/test/model/sync_change_processor_wrapper_for_test.h"
+#include "components/sync/test/model/sync_error_factory_mock.h"
 #include "components/user_manager/user.h"
 #include "components/user_manager/user_manager.h"
 #include "components/user_manager/user_type.h"
@@ -55,6 +68,8 @@ constexpr char kId2[] = "id2";
 constexpr char kId3[] = "id3";
 constexpr char kId4[] = "id4";
 constexpr char kMissingId[] = "missing_id";
+constexpr char kExtensionId1[] = "extension_id1";
+constexpr char kExtensionId2[] = "extension_id2";
 
 class AppUpdateWaiter : public apps::AppRegistryCache::Observer {
  public:
@@ -138,13 +153,20 @@ void CheckIconsEqual(const gfx::ImageSkia& expected,
                                  actual.GetRepresentation(1.0f).GetBitmap()));
 }
 
+class MockRemoteAppLaunchObserver
+    : public chromeos::remote_apps::mojom::RemoteAppLaunchObserver {
+ public:
+  MOCK_METHOD(void,
+              OnRemoteAppLaunched,
+              (const std::string&, const std::string&),
+              (override));
+};
+
 }  // namespace
 
 class RemoteAppsManagerBrowsertest
     : public policy::DevicePolicyCrosBrowserTest {
  public:
-  RemoteAppsManagerBrowsertest() : policy::DevicePolicyCrosBrowserTest() {}
-
   // DevicePolicyCrosBrowserTest:
   void SetUp() override {
     DevicePolicyCrosBrowserTest::SetUp();
@@ -156,12 +178,12 @@ class RemoteAppsManagerBrowsertest
     DevicePolicyCrosBrowserTest::SetUpCommandLine(command_line);
     command_line->AppendSwitch(switches::kLoginManager);
     command_line->AppendSwitch(switches::kForceLoginManagerInTests);
+    command_line->AppendSwitch(switches::kOobeSkipPostLogin);
   }
 
   // DevicePolicyCrosBrowserTest:
   void SetUpOnMainThread() override {
     SetUpDeviceLocalAccountPolicy();
-    WizardController::SkipPostLoginScreensForTesting();
     SessionStateWaiter(session_manager::SessionState::ACTIVE).Wait();
 
     user_manager::User* user =
@@ -179,6 +201,7 @@ class RemoteAppsManagerBrowsertest
     manager_->SetImageDownloaderForTesting(std::move(image_downloader));
   }
 
+  // TODO(b/239145899): Refactor to not use MGS setup any more.
   void SetUpDeviceLocalAccountPolicy() {
     enterprise_management::DeviceLocalAccountsProto* const
         device_local_accounts =
@@ -203,36 +226,21 @@ class RemoteAppsManagerBrowsertest
             });
   }
 
-  ash::AppListItem* GetAppListItem(const std::string& id) {
-    ash::AppListControllerImpl* controller =
-        ash::Shell::Get()->app_list_controller();
-    ash::AppListModel* model = controller->GetModel();
-    return model->FindItem(id);
+  AppListItem* GetAppListItem(const std::string& id) {
+    return AppListModelProvider::Get()->model()->FindItem(id);
   }
 
-  std::string AddApp(const std::string& name,
+  std::string AddApp(const std::string& source_id,
+                     const std::string& name,
                      const std::string& folder_id,
                      const GURL& icon_url,
                      bool add_to_front) {
-    base::RunLoop run_loop;
-    std::string id;
-    manager_->AddApp(name, folder_id, icon_url, add_to_front,
-                     base::BindOnce(
-                         [](base::RepeatingClosure closure, std::string* id_arg,
-                            const std::string& id, RemoteAppsError error) {
-                           ASSERT_EQ(RemoteAppsError::kNone, error);
-
-                           ash::AppListControllerImpl* controller =
-                               ash::Shell::Get()->app_list_controller();
-                           ash::AppListModel* model = controller->GetModel();
-                           ASSERT_TRUE(model->FindItem(id));
-                           *id_arg = id;
-
-                           closure.Run();
-                         },
-                         run_loop.QuitClosure(), &id));
-    run_loop.Run();
-    return id;
+    base::test::TestFuture<std::string, RemoteAppsError> future;
+    manager_->AddApp(source_id, name, folder_id, icon_url, add_to_front,
+                     future.GetCallback<const std::string&, RemoteAppsError>());
+    // Ideally ASSERT_EQ should be used, but we are in a non-void function.
+    EXPECT_EQ(RemoteAppsError::kNone, future.Get<1>());
+    return future.Get<0>();
   }
 
   RemoteAppsError DeleteApp(const std::string& id) {
@@ -249,34 +257,29 @@ class RemoteAppsManagerBrowsertest
     return error;
   }
 
-  void AddAppAndWaitForIconChange(const std::string& id,
+  void AddAppAndWaitForIconChange(const std::string& source_id,
+                                  const std::string& app_id,
                                   const std::string& name,
                                   const std::string& folder_id,
                                   const GURL& icon_url,
                                   const gfx::ImageSkia& icon,
                                   bool add_to_front) {
     ExpectImageDownloaderDownload(icon_url, icon);
-    AppUpdateWaiter waiter(profile_, id, AppUpdateWaiter::IconChanged());
-    AddApp(name, folder_id, icon_url, add_to_front);
+    AppUpdateWaiter waiter(profile_, app_id, AppUpdateWaiter::IconChanged());
+    AddApp(source_id, name, folder_id, icon_url, add_to_front);
     waiter.Wait();
   }
 
-  void AddAppAssertError(RemoteAppsError error,
+  void AddAppAssertError(const std::string& source_id,
+                         RemoteAppsError error,
                          const std::string& name,
                          const std::string& folder_id,
                          const GURL& icon_url,
                          bool add_to_front) {
-    base::RunLoop run_loop;
-    manager_->AddApp(
-        name, folder_id, icon_url, add_to_front,
-        base::BindOnce(
-            [](base::RepeatingClosure closure, RemoteAppsError expected_error,
-               const std::string& id, RemoteAppsError error) {
-              ASSERT_EQ(expected_error, error);
-              closure.Run();
-            },
-            run_loop.QuitClosure(), error));
-    run_loop.Run();
+    base::test::TestFuture<std::string, RemoteAppsError> future;
+    manager_->AddApp(source_id, name, folder_id, icon_url, add_to_front,
+                     future.GetCallback<const std::string&, RemoteAppsError>());
+    ASSERT_EQ(error, future.Get<1>());
   }
 
   void ShowLauncherAppsGrid() {
@@ -284,6 +287,10 @@ class RemoteAppsManagerBrowsertest
     EXPECT_FALSE(client->GetAppListWindow());
     ash::AcceleratorController::Get()->PerformActionIfEnabled(
         ash::TOGGLE_APP_LIST_FULLSCREEN, {});
+    if (ash::features::IsProductivityLauncherEnabled()) {
+      ash::AppListTestApi().WaitForBubbleWindow(
+          /*wait_for_opening_animation=*/false);
+    }
     EXPECT_TRUE(client->GetAppListWindow());
   }
 
@@ -291,7 +298,7 @@ class RemoteAppsManagerBrowsertest
   RemoteAppsManager* manager_ = nullptr;
   MockImageDownloader* image_downloader_ = nullptr;
   Profile* profile_ = nullptr;
-  LocalPolicyTestServerMixin local_policy_mixin_{&mixin_host_};
+  EmbeddedPolicyTestServerMixin policy_test_server_mixin_{&mixin_host_};
 };
 
 IN_PROC_BROWSER_TEST_F(RemoteAppsManagerBrowsertest, AddApp) {
@@ -303,32 +310,53 @@ IN_PROC_BROWSER_TEST_F(RemoteAppsManagerBrowsertest, AddApp) {
   gfx::ImageSkia icon = CreateTestIcon(32, SK_ColorRED);
 
   // App has id kId1.
-  AddAppAndWaitForIconChange(kId1, name, std::string(), icon_url, icon,
-                             /*add_to_front=*/false);
-
+  AddAppAndWaitForIconChange(kExtensionId1, kId1, name, std::string(), icon_url,
+                             icon, /*add_to_front=*/false);
   ash::AppListItem* item = GetAppListItem(kId1);
   EXPECT_FALSE(item->is_folder());
   EXPECT_EQ(name, item->name());
-  // kShared uses size hint 64 dip.
-  apps::IconEffects icon_effects = apps::IconEffects::kCrOsStandardIcon;
+  EXPECT_TRUE(item->GetMetadata()->is_ephemeral);
 
-  base::RunLoop run_loop;
-  apps::mojom::IconValuePtr output_data = apps::mojom::IconValue::New();
-  apps::mojom::IconValuePtr iv = apps::mojom::IconValue::New();
-  iv->icon_type = apps::mojom::IconType::kStandard;
+  base::test::TestFuture<apps::IconValuePtr> future;
+  auto iv = std::make_unique<apps::IconValue>();
+  iv->icon_type = apps::IconType::kStandard;
   iv->uncompressed = icon;
+  apps::ApplyIconEffects(apps::IconEffects::kCrOsStandardIcon,
+                         /*size_hint_in_dip=*/64, std::move(iv),
+                         future.GetCallback());
+
+  // App's icon is the downloaded icon.
+  CheckIconsEqual(future.Get()->uncompressed, item->GetDefaultIcon());
+}
+
+// Adds an app with an empty icon URL and checks if the app gets assigned the
+// default placeholder icon.
+IN_PROC_BROWSER_TEST_F(RemoteAppsManagerBrowsertest, AddAppPlaceholderIcon) {
+  // Show launcher UI so that app icons are loaded.
+  ShowLauncherAppsGrid();
+
+  const std::string name = "name";
+
+  // App has id kId1. The downloader returns an empty image that is replaced by
+  // a placeholder icon.
+  AddAppAndWaitForIconChange(kExtensionId1, kId1, name, std::string(), GURL(),
+                             gfx::ImageSkia(), /*add_to_front=*/false);
+  ash::AppListItem* item = GetAppListItem(kId1);
+  EXPECT_FALSE(item->is_folder());
+  EXPECT_EQ(name, item->name());
+
+  base::test::TestFuture<apps::IconValuePtr> future;
+  auto iv = std::make_unique<apps::IconValue>();
+  iv->icon_type = apps::IconType::kStandard;
+  iv->uncompressed =
+      manager_->GetPlaceholderIcon(kId1, /*size_hint_in_dip=*/64);
   iv->is_placeholder_icon = true;
-  apps::ApplyIconEffects(icon_effects, 64, std::move(iv),
-                         base::BindOnce(
-                             [](apps::mojom::IconValuePtr* result,
-                                base::OnceClosure load_app_icon_callback,
-                                apps::mojom::IconValuePtr icon) {
-                               *result = std::move(icon);
-                               std::move(load_app_icon_callback).Run();
-                             },
-                             &output_data, run_loop.QuitClosure()));
-  run_loop.Run();
-  CheckIconsEqual(output_data->uncompressed, item->GetDefaultIcon());
+  apps::ApplyIconEffects(apps::IconEffects::kCrOsStandardIcon,
+                         /*size_hint_in_dip=*/64, std::move(iv),
+                         future.GetCallback());
+
+  // App's icon is placeholder.
+  CheckIconsEqual(future.Get()->uncompressed, item->GetDefaultIcon());
 }
 
 IN_PROC_BROWSER_TEST_F(RemoteAppsManagerBrowsertest, AddAppError) {
@@ -336,8 +364,8 @@ IN_PROC_BROWSER_TEST_F(RemoteAppsManagerBrowsertest, AddAppError) {
   GURL icon_url("icon_url");
   gfx::ImageSkia icon = CreateTestIcon(32, SK_ColorRED);
 
-  AddAppAssertError(RemoteAppsError::kFolderIdDoesNotExist, name, kMissingId,
-                    icon_url, /*add_to_front=*/false);
+  AddAppAssertError(kExtensionId1, RemoteAppsError::kFolderIdDoesNotExist, name,
+                    kMissingId, icon_url, /*add_to_front=*/false);
 }
 
 IN_PROC_BROWSER_TEST_F(RemoteAppsManagerBrowsertest, AddAppErrorNotReady) {
@@ -346,14 +374,15 @@ IN_PROC_BROWSER_TEST_F(RemoteAppsManagerBrowsertest, AddAppErrorNotReady) {
   gfx::ImageSkia icon = CreateTestIcon(32, SK_ColorRED);
 
   manager_->SetIsInitializedForTesting(false);
-  AddAppAssertError(RemoteAppsError::kNotReady, name, std::string(), icon_url,
+  AddAppAssertError(kExtensionId1, RemoteAppsError::kNotReady, name,
+                    std::string(), icon_url,
                     /*add_to_front=*/false);
 }
 
 IN_PROC_BROWSER_TEST_F(RemoteAppsManagerBrowsertest, DeleteApp) {
   // App has id kId1.
-  AddAppAndWaitForIconChange(kId1, "name", std::string(), GURL("icon_url"),
-                             CreateTestIcon(32, SK_ColorRED),
+  AddAppAndWaitForIconChange(kExtensionId1, kId1, "name", std::string(),
+                             GURL("icon_url"), CreateTestIcon(32, SK_ColorRED),
                              /*add_to_front=*/false);
 
   RemoteAppsError error = DeleteApp(kId1);
@@ -386,19 +415,21 @@ IN_PROC_BROWSER_TEST_F(RemoteAppsManagerBrowsertest, AddFolderAndApp) {
   EXPECT_FALSE(GetAppListItem(kId1));
 
   // App has id kId2.
-  AddAppAndWaitForIconChange(kId2, "name", kId1, GURL("icon_url"),
-                             CreateTestIcon(32, SK_ColorRED),
+  AddAppAndWaitForIconChange(kExtensionId1, kId2, "name", kId1,
+                             GURL("icon_url"), CreateTestIcon(32, SK_ColorRED),
                              /*add_to_front=*/false);
 
   // Folder item was created.
   ash::AppListItem* folder_item = GetAppListItem(kId1);
   EXPECT_TRUE(folder_item->is_folder());
+  EXPECT_TRUE(folder_item->GetMetadata()->is_ephemeral);
   EXPECT_EQ(folder_name, folder_item->name());
   EXPECT_EQ(1u, folder_item->ChildItemCount());
   EXPECT_TRUE(folder_item->FindChildItem(kId2));
 
   ash::AppListItem* item = GetAppListItem(kId2);
   EXPECT_EQ(kId1, item->folder_id());
+  EXPECT_TRUE(item->GetMetadata()->is_ephemeral);
 }
 
 IN_PROC_BROWSER_TEST_F(RemoteAppsManagerBrowsertest,
@@ -407,11 +438,12 @@ IN_PROC_BROWSER_TEST_F(RemoteAppsManagerBrowsertest,
   manager_->AddFolder("folder_name", /*add_to_front=*/false);
 
   // App has id kId2.
-  AddAppAndWaitForIconChange(kId2, "name", kId1, GURL("icon_url"),
-                             CreateTestIcon(32, SK_ColorRED),
+  AddAppAndWaitForIconChange(kExtensionId1, kId2, "name", kId1,
+                             GURL("icon_url"), CreateTestIcon(32, SK_ColorRED),
                              /*add_to_front=*/false);
   // App has id kId3.
-  AddAppAndWaitForIconChange(kId3, "name2", kId1, GURL("icon_url2"),
+  AddAppAndWaitForIconChange(kExtensionId1, kId3, "name2", kId1,
+                             GURL("icon_url2"),
                              CreateTestIcon(32, SK_ColorBLUE),
                              /*add_to_front=*/false);
 
@@ -430,7 +462,8 @@ IN_PROC_BROWSER_TEST_F(RemoteAppsManagerBrowsertest,
   EXPECT_FALSE(GetAppListItem(kId1));
 
   // App has id kId4.
-  AddAppAndWaitForIconChange(kId4, "name3", kId1, GURL("icon_url3"),
+  AddAppAndWaitForIconChange(kExtensionId1, kId4, "name3", kId1,
+                             GURL("icon_url3"),
                              CreateTestIcon(32, SK_ColorGREEN),
                              /*add_to_front=*/false);
 
@@ -446,11 +479,12 @@ IN_PROC_BROWSER_TEST_F(RemoteAppsManagerBrowsertest,
   manager_->AddFolder("folder_name", /*add_to_front=*/false);
 
   // App has id kId2.
-  AddAppAndWaitForIconChange(kId2, "name", kId1, GURL("icon_url"),
-                             CreateTestIcon(32, SK_ColorRED),
+  AddAppAndWaitForIconChange(kExtensionId1, kId2, "name", kId1,
+                             GURL("icon_url"), CreateTestIcon(32, SK_ColorRED),
                              /*add_to_front=*/false);
   // App has id kId3.
-  AddAppAndWaitForIconChange(kId3, "name2", kId1, GURL("icon_url2"),
+  AddAppAndWaitForIconChange(kExtensionId1, kId3, "name2", kId1,
+                             GURL("icon_url2"),
                              CreateTestIcon(32, SK_ColorBLUE),
                              /*add_to_front=*/false);
 
@@ -465,13 +499,47 @@ IN_PROC_BROWSER_TEST_F(RemoteAppsManagerBrowsertest,
   EXPECT_EQ(std::string(), item2->folder_id());
 }
 
+// Verifies that folders are not removed after user moves all but single item
+// from them.
+IN_PROC_BROWSER_TEST_F(RemoteAppsManagerBrowsertest,
+                       DontRemoveSingleItemFolders) {
+  // Folder has id kId1.
+  manager_->AddFolder("folder_name", /*add_to_front=*/false);
+
+  // App has id kId2.
+  AddAppAndWaitForIconChange(kExtensionId1, kId2, "name", kId1,
+                             GURL("icon_url"), CreateTestIcon(32, SK_ColorRED),
+                             /*add_to_front=*/false);
+  // App has id kId3.
+  AddAppAndWaitForIconChange(kExtensionId1, kId3, "name2", kId1,
+                             GURL("icon_url2"),
+                             CreateTestIcon(32, SK_ColorBLUE),
+                             /*add_to_front=*/false);
+
+  ash::AppListItem* folder_item = GetAppListItem(kId1);
+  EXPECT_EQ(2u, folder_item->ChildItemCount());
+  EXPECT_TRUE(folder_item->FindChildItem(kId2));
+  EXPECT_TRUE(folder_item->FindChildItem(kId3));
+
+  // Move kId2 item to root app list.
+  ash::AppListItem* item1 = GetAppListItem(kId2);
+  ASSERT_TRUE(item1);
+  ash::AppListModelProvider::Get()->model()->MoveItemToRootAt(
+      item1, folder_item->position().CreateBefore());
+
+  ASSERT_EQ(folder_item, GetAppListItem(kId1));
+  EXPECT_EQ(1u, folder_item->ChildItemCount());
+  EXPECT_FALSE(folder_item->FindChildItem(kId2));
+  EXPECT_TRUE(folder_item->FindChildItem(kId3));
+}
+
 IN_PROC_BROWSER_TEST_F(RemoteAppsManagerBrowsertest, AddToFront) {
   // Folder has id kId1.
   manager_->AddFolder("folder_name", /*add_to_front=*/false);
 
   // App has id kId2.
-  AddAppAndWaitForIconChange(kId2, "name", std::string(), GURL("icon_url"),
-                             CreateTestIcon(32, SK_ColorRED),
+  AddAppAndWaitForIconChange(kExtensionId1, kId2, "name", std::string(),
+                             GURL("icon_url"), CreateTestIcon(32, SK_ColorRED),
                              /*add_to_front=*/false);
 
   EXPECT_FALSE(manager_->ShouldAddToFront(kId1));
@@ -481,8 +549,8 @@ IN_PROC_BROWSER_TEST_F(RemoteAppsManagerBrowsertest, AddToFront) {
   manager_->AddFolder("folder_name2", /*add_to_front=*/true);
 
   // App has id kId4.
-  AddAppAndWaitForIconChange(kId4, "name2", kId3, GURL("icon_url"),
-                             CreateTestIcon(32, SK_ColorRED),
+  AddAppAndWaitForIconChange(kExtensionId1, kId4, "name2", kId3,
+                             GURL("icon_url"), CreateTestIcon(32, SK_ColorRED),
                              /*add_to_front=*/true);
 
   EXPECT_TRUE(manager_->ShouldAddToFront(kId3));
@@ -490,4 +558,165 @@ IN_PROC_BROWSER_TEST_F(RemoteAppsManagerBrowsertest, AddToFront) {
   EXPECT_FALSE(manager_->ShouldAddToFront(kId4));
 }
 
+// Test that app launched events are only dispatched to the extension which
+// added the app, and the all events are dispatched to the Lacros observer.
+IN_PROC_BROWSER_TEST_F(RemoteAppsManagerBrowsertest, OnAppLaunched) {
+  base::test::TestFuture<std::string>
+      on_remote_app_launched_with_app_id1_future;
+  base::test::TestFuture<std::string>
+      on_remote_app_launched_with_app_id2_future;
+  base::test::TestFuture<std::string>
+      on_remote_app_launched_with_app_id1_to_proxy_future;
+  base::test::TestFuture<std::string>
+      on_remote_app_launched_with_app_id2_to_proxy_future;
+
+  testing::StrictMock<MockRemoteAppLaunchObserver> mockObserver1;
+  EXPECT_CALL(mockObserver1, OnRemoteAppLaunched(kId1, kExtensionId1))
+      .WillOnce([&on_remote_app_launched_with_app_id1_future](
+                    const std::string& app_id, const std::string& source_id) {
+        on_remote_app_launched_with_app_id1_future.SetValue(app_id);
+      });
+  testing::StrictMock<MockRemoteAppLaunchObserver> mockObserver2;
+  EXPECT_CALL(mockObserver2, OnRemoteAppLaunched(kId2, kExtensionId2))
+      .WillOnce([&on_remote_app_launched_with_app_id2_future](
+                    const std::string& app_id, const std::string& source_id) {
+        on_remote_app_launched_with_app_id2_future.SetValue(app_id);
+      });
+
+  mojo::Remote<chromeos::remote_apps::mojom::RemoteApps> remote1;
+  mojo::Remote<chromeos::remote_apps::mojom::RemoteApps> remote2;
+  mojo::Receiver<chromeos::remote_apps::mojom::RemoteAppLaunchObserver>
+      observer1{&mockObserver1};
+  mojo::Receiver<chromeos::remote_apps::mojom::RemoteAppLaunchObserver>
+      observer2{&mockObserver2};
+  manager_->BindRemoteAppsAndAppLaunchObserver(
+      kExtensionId1, remote1.BindNewPipeAndPassReceiver(),
+      observer1.BindNewPipeAndPassRemote());
+  manager_->BindRemoteAppsAndAppLaunchObserver(
+      kExtensionId2, remote2.BindNewPipeAndPassReceiver(),
+      observer2.BindNewPipeAndPassRemote());
+
+  testing::StrictMock<MockRemoteAppLaunchObserver> mockObserver3;
+  mojo::Remote<chromeos::remote_apps::mojom::RemoteApps> remote3;
+  mojo::Receiver<chromeos::remote_apps::mojom::RemoteAppLaunchObserver>
+      proxyObserver{&mockObserver3};
+  manager_->BindRemoteAppsAndAppLaunchObserverForLacros(
+      remote3.BindNewPipeAndPassReceiver(),
+      proxyObserver.BindNewPipeAndPassRemote());
+
+  EXPECT_CALL(mockObserver3, OnRemoteAppLaunched(kId1, kExtensionId1))
+      .WillOnce([&on_remote_app_launched_with_app_id1_to_proxy_future](
+                    const std::string& app_id, const std::string& source_id) {
+        on_remote_app_launched_with_app_id1_to_proxy_future.SetValue(app_id);
+      });
+
+  // App has id kId1, added by kExtensionId1.
+  AddAppAndWaitForIconChange(kExtensionId1, kId1, "name", std::string(),
+                             GURL("icon_url"), CreateTestIcon(32, SK_ColorRED),
+                             /*add_to_front=*/false);
+
+  // App has id kId2, added by kExtensionId2.
+  AddAppAndWaitForIconChange(kExtensionId2, kId2, "name", std::string(),
+                             GURL("icon_url"), CreateTestIcon(32, SK_ColorRED),
+                             /*add_to_front=*/false);
+
+  manager_->LaunchApp(kId1);
+  ASSERT_EQ(kId1, on_remote_app_launched_with_app_id1_future.Get());
+  ASSERT_EQ(kId1, on_remote_app_launched_with_app_id1_to_proxy_future.Get());
+  ASSERT_FALSE(on_remote_app_launched_with_app_id2_future.IsReady());
+
+  EXPECT_CALL(mockObserver3, OnRemoteAppLaunched(kId2, kExtensionId2))
+      .WillOnce([&on_remote_app_launched_with_app_id2_to_proxy_future](
+                    const std::string& app_id, const std::string& source_id) {
+        on_remote_app_launched_with_app_id2_to_proxy_future.SetValue(app_id);
+      });
+
+  manager_->LaunchApp(kId2);
+  ASSERT_EQ(kId2, on_remote_app_launched_with_app_id2_future.Get());
+  ASSERT_EQ(kId2, on_remote_app_launched_with_app_id2_to_proxy_future.Get());
+}
+
+// Remote app list items are not supposed to be synced. This test verifies that
+// the added remote app items are marked as ephemeral and are not synced to
+// local storage or uploaded to sync data.
+IN_PROC_BROWSER_TEST_F(RemoteAppsManagerBrowsertest, RemoteAppsNotSynced) {
+  app_list::AppListSyncableService* app_list_syncable_service =
+      app_list::AppListSyncableServiceFactory::GetForProfile(profile_);
+  std::unique_ptr<syncer::FakeSyncChangeProcessor> sync_processor =
+      std::make_unique<syncer::FakeSyncChangeProcessor>();
+  app_list_syncable_service->MergeDataAndStartSyncing(
+      syncer::APP_LIST, {},
+      std::unique_ptr<syncer::SyncChangeProcessor>(
+          new syncer::SyncChangeProcessorWrapperForTest(sync_processor.get())),
+      std::make_unique<syncer::SyncErrorFactoryMock>());
+  content::RunAllTasksUntilIdle();
+
+  // App has id kId1.
+  AddAppAndWaitForIconChange(kExtensionId1, kId1, "name", std::string(),
+                             GURL("icon_url"), CreateTestIcon(32, SK_ColorRED),
+                             /*add_to_front=*/false);
+
+  ash::AppListItem* item = GetAppListItem(kId1);
+  EXPECT_FALSE(item->is_folder());
+  EXPECT_TRUE(item->GetMetadata()->is_ephemeral);
+
+  // Remote app sync item not added to local storage.
+  const base::Value* local_items =
+      profile_->GetPrefs()->GetDictionary(prefs::kAppListLocalState);
+  const base::Value* dict_item =
+      local_items->FindKeyOfType(kId1, base::Value::Type::DICTIONARY);
+  EXPECT_FALSE(dict_item);
+
+  // Remote app sync item not uploaded to sync data.
+  for (auto sync_change : sync_processor->changes()) {
+    const std::string item_id =
+        sync_change.sync_data().GetSpecifics().app_list().item_id();
+    EXPECT_NE(item_id, kId1);
+  }
+}
+
+// Remote folder list items are not supposed to be synced. This test verifies
+// that the added remote folder items are marked as ephemeral and are not synced
+// to local storage or uploaded to sync data.
+IN_PROC_BROWSER_TEST_F(RemoteAppsManagerBrowsertest, RemoteFoldersNotSynced) {
+  app_list::AppListSyncableService* app_list_syncable_service =
+      app_list::AppListSyncableServiceFactory::GetForProfile(profile_);
+  std::unique_ptr<syncer::FakeSyncChangeProcessor> sync_processor =
+      std::make_unique<syncer::FakeSyncChangeProcessor>();
+  AppListModelUpdater* app_list_model_updater =
+      app_list_syncable_service->GetModelUpdater();
+  app_list_model_updater->SetActive(true);
+  app_list_syncable_service->MergeDataAndStartSyncing(
+      syncer::APP_LIST, {},
+      std::unique_ptr<syncer::SyncChangeProcessor>(
+          new syncer::SyncChangeProcessorWrapperForTest(sync_processor.get())),
+      std::make_unique<syncer::SyncErrorFactoryMock>());
+  content::RunAllTasksUntilIdle();
+
+  // Folder has id kId1.
+  manager_->AddFolder("folder_name", /*add_to_front=*/false);
+
+  // App has id kId2. Parent is kId1.
+  AddAppAndWaitForIconChange(kExtensionId1, kId2, "name", kId1,
+                             GURL("icon_url"), CreateTestIcon(32, SK_ColorRED),
+                             /*add_to_front=*/false);
+
+  ash::AppListItem* item = GetAppListItem(kId1);
+  EXPECT_TRUE(item->is_folder());
+  EXPECT_TRUE(item->GetMetadata()->is_ephemeral);
+
+  // Remote folder sync item not added to local storage.
+  const base::Value* local_items =
+      profile_->GetPrefs()->GetDictionary(prefs::kAppListLocalState);
+  const base::Value* dict_item =
+      local_items->FindKeyOfType(kId1, base::Value::Type::DICTIONARY);
+  EXPECT_FALSE(dict_item);
+
+  // Remote folder sync item not uploaded to sync data.
+  for (auto sync_change : sync_processor->changes()) {
+    const std::string item_id =
+        sync_change.sync_data().GetSpecifics().app_list().item_id();
+    EXPECT_NE(item_id, kId1);
+  }
+}
 }  // namespace ash

@@ -10,8 +10,9 @@
 #include "base/containers/flat_map.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_service.h"
+#include "net/dns/public/dns_over_https_server_config.h"
 
-namespace net {
+namespace ash {
 
 // Responds to changes in the SecureDNS preferences and generates and updates
 // the corresponding shill property which can then be used by downstream
@@ -43,9 +44,10 @@ class SecureDnsManager {
   // Maps secure DNS provider URL templates to their corresponding standard DNS
   // name servers. Providers that are either disabled or not applicable for the
   // country have been pre-filtered.
-  base::flat_map<std::string, std::string> local_doh_providers_;
+  base::flat_map<net::DnsOverHttpsServerConfig, std::string>
+      local_doh_providers_;
 };
 
-}  // namespace net
+}  // namespace ash
 
 #endif  // CHROME_BROWSER_ASH_NET_SECURE_DNS_MANAGER_H_

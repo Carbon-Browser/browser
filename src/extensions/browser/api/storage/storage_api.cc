@@ -20,7 +20,6 @@
 #include "extensions/browser/api/storage/session_storage_manager.h"
 #include "extensions/browser/api/storage/storage_frontend.h"
 #include "extensions/browser/extension_prefs.h"
-#include "extensions/browser/extensions_browser_client.h"
 #include "extensions/browser/quota_service.h"
 #include "extensions/common/api/storage.h"
 #include "extensions/common/features/feature.h"
@@ -34,8 +33,6 @@ namespace extensions {
 
 namespace {
 
-constexpr char kSessionStorageManagerKeyName[] =
-    "StorageAPI SessionStorageManager";
 constexpr PrefMap kPrefSessionStorageAccessLevel = {
     "storage_session_access_level", PrefType::kInteger,
     PrefScope::kExtensionSpecific};
@@ -77,11 +74,9 @@ base::Value MapAsValueDict(
 void GetModificationQuotaLimitHeuristics(QuotaLimitHeuristics* heuristics) {
   // See storage.json for the current value of these limits.
   QuotaLimitHeuristic::Config short_limit_config = {
-      api::storage::sync::MAX_WRITE_OPERATIONS_PER_MINUTE,
-      base::TimeDelta::FromMinutes(1)};
+      api::storage::sync::MAX_WRITE_OPERATIONS_PER_MINUTE, base::Minutes(1)};
   QuotaLimitHeuristic::Config long_limit_config = {
-      api::storage::sync::MAX_WRITE_OPERATIONS_PER_HOUR,
-      base::TimeDelta::FromHours(1)};
+      api::storage::sync::MAX_WRITE_OPERATIONS_PER_HOUR, base::Hours(1)};
   heuristics->push_back(std::make_unique<QuotaService::TimedLimit>(
       short_limit_config,
       std::make_unique<QuotaLimitHeuristic::SingletonBucketMapper>(),
@@ -90,27 +85,6 @@ void GetModificationQuotaLimitHeuristics(QuotaLimitHeuristics* heuristics) {
       long_limit_config,
       std::make_unique<QuotaLimitHeuristic::SingletonBucketMapper>(),
       "MAX_WRITE_OPERATIONS_PER_HOUR"));
-}
-
-// Creates the SessionStorageManager if it doesn't exist and returns it.
-SessionStorageManager* GetOrCreateSessionStorage(
-    content::BrowserContext* context) {
-  // Share storage between incognito and on-the-record profiles by using the
-  // original context of an incognito window.
-  content::BrowserContext* original_context =
-      ExtensionsBrowserClient::Get()->GetOriginalContext(context);
-
-  SessionStorageManager* storage = static_cast<SessionStorageManager*>(
-      original_context->GetUserData(kSessionStorageManagerKeyName));
-  if (storage)
-    return storage;
-
-  auto session_manager_ptr = std::make_unique<SessionStorageManager>(
-      api::storage::session::QUOTA_BYTES);
-  auto* session_manager = session_manager_ptr.get();
-  original_context->SetUserData(kSessionStorageManagerKeyName,
-                                std::move(session_manager_ptr));
-  return session_manager;
 }
 
 // Returns a nested dictionary Value converted from a ValueChange.
@@ -193,7 +167,9 @@ ExtensionFunction::ResponseAction SettingsFunction::Run() {
                            storage_area_string.c_str())));
   }
 
-  observers_ = frontend->GetObservers();
+  observer_ = GetSequenceBoundSettingsChangedCallback(
+      base::SequencedTaskRunnerHandle::Get(), frontend->GetObserver());
+
   frontend->RunWithStorage(
       extension(), settings_namespace_,
       base::BindOnce(&SettingsFunction::AsyncRunWithStorage, this));
@@ -214,9 +190,7 @@ ExtensionFunction::ResponseValue SettingsFunction::UseReadResult(
   if (!result.status().ok())
     return Error(result.status().message);
 
-  std::unique_ptr<base::DictionaryValue> dict(new base::DictionaryValue());
-  dict->Swap(&result.settings());
-  return OneArgument(base::Value::FromUniquePtrValue(std::move(dict)));
+  return OneArgument(base::Value(result.PassSettings()));
 }
 
 ExtensionFunction::ResponseValue SettingsFunction::UseWriteResult(
@@ -227,9 +201,8 @@ ExtensionFunction::ResponseValue SettingsFunction::UseWriteResult(
     return Error(result.status().message);
 
   if (!result.changes().empty()) {
-    observers_->Notify(
-        FROM_HERE, &SettingsObserver::OnSettingsChanged, extension_id(),
-        storage_area_,
+    observer_->Run(
+        extension_id(), storage_area_,
         value_store::ValueStoreChange::ToValue(result.PassChanges()));
   }
 
@@ -239,11 +212,14 @@ ExtensionFunction::ResponseValue SettingsFunction::UseWriteResult(
 void SettingsFunction::OnSessionSettingsChanged(
     std::vector<SessionStorageManager::ValueChange> changes) {
   if (!changes.empty()) {
-    scoped_refptr<SettingsObserverList> observers =
-        StorageFrontend::Get(browser_context())->GetObservers();
-    observers->Notify(FROM_HERE, &SettingsObserver::OnSettingsChanged,
-                      extension_id(), storage_area_,
-                      ValueChangeToValue(std::move(changes)));
+    SettingsChangedCallback observer =
+        StorageFrontend::Get(browser_context())->GetObserver();
+    // This used to dispatch asynchronously as a result of a
+    // ObserverListThreadSafe. Ideally, we'd just run this synchronously, but it
+    // appears at least some tests rely on the asynchronous behavior.
+    base::SequencedTaskRunnerHandle::Get()->PostTask(
+        FROM_HERE, base::BindOnce(observer, extension_id(), storage_area_,
+                                  ValueChangeToValue(std::move(changes))));
   }
 }
 
@@ -287,9 +263,8 @@ ExtensionFunction::ResponseValue StorageStorageAreaGetFunction::RunWithStorage(
       if (!result.status().ok()) {
         return UseReadResult(std::move(result));
       }
-      std::unique_ptr<base::DictionaryValue> with_default_values =
-          base::Value::AsDictionaryValue(input).CreateDeepCopy();
-      with_default_values->MergeDictionary(&result.settings());
+      base::Value::Dict with_default_values = input.GetDict().Clone();
+      with_default_values.Merge(result.PassSettings());
       return UseReadResult(ValueStore::ReadResult(
           std::move(with_default_values), result.PassStatus()));
     }
@@ -306,7 +281,7 @@ ExtensionFunction::ResponseValue StorageStorageAreaGetFunction::RunInSession() {
 
   base::Value value_dict(base::Value::Type::DICTIONARY);
   SessionStorageManager* session_manager =
-      GetOrCreateSessionStorage(browser_context());
+      SessionStorageManager::GetForBrowserContext(browser_context());
 
   switch (input.type()) {
     case base::Value::Type::NONE:
@@ -383,7 +358,7 @@ StorageStorageAreaGetBytesInUseFunction::RunInSession() {
 
   size_t bytes_in_use = 0;
   SessionStorageManager* session_manager =
-      GetOrCreateSessionStorage(browser_context());
+      SessionStorageManager::GetForBrowserContext(browser_context());
 
   switch (input.type()) {
     case base::Value::Type::NONE:
@@ -416,9 +391,8 @@ ExtensionFunction::ResponseValue StorageStorageAreaSetFunction::RunWithStorage(
                "extension_id", extension_id());
   if (args().empty() || !args()[0].is_dict())
     return BadMessage();
-  const base::DictionaryValue& input =
-      base::Value::AsDictionaryValue(args()[0]);
-  return UseWriteResult(storage->Set(ValueStore::DEFAULTS, input));
+  return UseWriteResult(
+      storage->Set(ValueStore::DEFAULTS, args()[0].GetDict()));
 }
 
 ExtensionFunction::ResponseValue StorageStorageAreaSetFunction::RunInSession() {
@@ -434,7 +408,7 @@ ExtensionFunction::ResponseValue StorageStorageAreaSetFunction::RunInSession() {
   }
 
   std::vector<SessionStorageManager::ValueChange> changes;
-  bool result = GetOrCreateSessionStorage(browser_context())
+  bool result = SessionStorageManager::GetForBrowserContext(browser_context())
                     ->Set(extension_id(), std::move(values), changes);
 
   if (!result) {
@@ -479,7 +453,7 @@ StorageStorageAreaRemoveFunction::RunInSession() {
   const base::Value& input = args()[0];
 
   SessionStorageManager* session_manager =
-      GetOrCreateSessionStorage(browser_context());
+      SessionStorageManager::GetForBrowserContext(browser_context());
   std::vector<SessionStorageManager::ValueChange> changes;
 
   switch (input.type()) {
@@ -514,7 +488,8 @@ StorageStorageAreaClearFunction::RunWithStorage(ValueStore* storage) {
 ExtensionFunction::ResponseValue
 StorageStorageAreaClearFunction::RunInSession() {
   std::vector<SessionStorageManager::ValueChange> changes;
-  GetOrCreateSessionStorage(browser_context())->Clear(extension_id(), changes);
+  SessionStorageManager::GetForBrowserContext(browser_context())
+      ->Clear(extension_id(), changes);
 
   OnSessionSettingsChanged(std::move(changes));
   return NoArguments();

@@ -9,6 +9,7 @@
 #include "ash/keyboard/keyboard_controller_impl.h"
 #include "ash/keyboard/ui/keyboard_ui_controller.h"
 #include "ash/keyboard/virtual_keyboard_controller.h"
+#include "ash/metrics/user_metrics_recorder.h"
 #include "ash/public/cpp/system_tray_client.h"
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/root_window_controller.h"
@@ -17,6 +18,7 @@
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/style/ash_color_provider.h"
+#include "ash/style/icon_button.h"
 #include "ash/system/ime_menu/ime_list_view.h"
 #include "ash/system/model/system_tray_model.h"
 #include "ash/system/tray/detailed_view_delegate.h"
@@ -27,15 +29,14 @@
 #include "ash/system/tray/tray_container.h"
 #include "ash/system/tray/tray_popup_utils.h"
 #include "ash/system/tray/tray_utils.h"
-#include "ash/system/unified/top_shortcut_button.h"
 #include "base/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/user_metrics.h"
 #include "base/strings/utf_string_conversions.h"
 #include "components/session_manager/session_manager_types.h"
 #include "ui/base/emoji/emoji_panel_helper.h"
-#include "ui/base/ime/chromeos/extension_ime_util.h"
-#include "ui/base/ime/chromeos/ime_bridge.h"
+#include "ui/base/ime/ash/extension_ime_util.h"
+#include "ui/base/ime/ash/ime_bridge.h"
 #include "ui/base/ime/text_input_client.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
@@ -60,7 +61,7 @@ namespace {
 const int kEmojiButtonId = 1;
 
 // Insets for the title view (dp).
-constexpr gfx::Insets kTitleViewPadding(0, 0, 0, 16);
+constexpr auto kTitleViewPadding = gfx::Insets::TLBR(0, 0, 0, 16);
 
 // Returns the height range of ImeListView.
 gfx::Range GetImeListViewRange() {
@@ -93,7 +94,7 @@ class ImeMenuLabel : public views::Label {
     // Sometimes the label will be more than 2 characters, e.g. INTL and EXTD.
     // This border makes sure we only leave room for ~2 and the others are
     // truncated.
-    SetBorder(views::CreateEmptyBorder(gfx::Insets(0, 6)));
+    SetBorder(views::CreateEmptyBorder(gfx::Insets::VH(0, 6)));
   }
   ImeMenuLabel(const ImeMenuLabel&) = delete;
   ImeMenuLabel& operator=(const ImeMenuLabel&) = delete;
@@ -113,7 +114,9 @@ class ImeMenuImageView : public views::ImageView {
  public:
   METADATA_HEADER(ImeMenuImageView);
 
-  ImeMenuImageView() { SetBorder(views::CreateEmptyBorder(gfx::Insets(0, 6))); }
+  ImeMenuImageView() {
+    SetBorder(views::CreateEmptyBorder(gfx::Insets::VH(0, 6)));
+  }
   ImeMenuImageView(const ImeMenuImageView&) = delete;
   ImeMenuImageView& operator=(const ImeMenuImageView&) = delete;
   ~ImeMenuImageView() override = default;
@@ -130,18 +133,19 @@ class ImeTitleView : public views::BoxLayoutView {
     auto* color_provider = AshColorProvider::Get();
     SetBorder(views::CreatePaddedBorder(
         views::CreateSolidSidedBorder(
-            0, 0, kMenuSeparatorWidth, 0,
+            gfx::Insets::TLBR(0, 0, kMenuSeparatorWidth, 0),
             color_provider->GetContentLayerColor(
                 AshColorProvider::ContentLayerType::kSeparatorColor)),
-        gfx::Insets(kMenuSeparatorVerticalPadding - kMenuSeparatorWidth, 0)));
+        gfx::Insets::VH(kMenuSeparatorVerticalPadding - kMenuSeparatorWidth,
+                        0)));
     SetOrientation(views::BoxLayout::Orientation::kHorizontal);
     SetInsideBorderInsets(kTitleViewPadding);
     SetMinimumCrossAxisSize(kTrayPopupItemMinHeight);
 
     auto* title_label = AddChildView(std::make_unique<views::Label>(
         l10n_util::GetStringUTF16(IDS_ASH_STATUS_TRAY_IME)));
-    title_label->SetBorder(
-        views::CreateEmptyBorder(0, kMenuEdgeEffectivePadding, 1, 0));
+    title_label->SetBorder(views::CreateEmptyBorder(
+        gfx::Insets::TLBR(0, kMenuEdgeEffectivePadding, 1, 0)));
     title_label->SetHorizontalAlignment(gfx::ALIGN_LEFT);
     title_label->SetEnabledColor(color_provider->GetContentLayerColor(
         AshColorProvider::ContentLayerType::kTextColorPrimary));
@@ -149,13 +153,14 @@ class ImeTitleView : public views::BoxLayoutView {
                                      TrayPopupUtils::FontStyle::kPodMenuHeader);
     SetFlexForView(title_label, 1);
 
-    settings_button_ = AddChildView(std::make_unique<TopShortcutButton>(
+    settings_button_ = AddChildView(std::make_unique<IconButton>(
         base::BindRepeating([]() {
           base::RecordAction(
               base::UserMetricsAction("StatusArea_IME_Detailed"));
           Shell::Get()->system_tray_model()->client()->ShowIMESettings();
         }),
-        kSystemMenuSettingsIcon, IDS_ASH_STATUS_TRAY_IME_SETTINGS));
+        IconButton::Type::kSmall, &kSystemMenuSettingsIcon,
+        IDS_ASH_STATUS_TRAY_IME_SETTINGS));
     settings_button_->SetEnabled(TrayPopupUtils::CanOpenWebUISettings());
   }
   ImeTitleView(const ImeTitleView&) = delete;
@@ -164,7 +169,7 @@ class ImeTitleView : public views::BoxLayoutView {
   ~ImeTitleView() override = default;
 
  private:
-  TopShortcutButton* settings_button_ = nullptr;
+  IconButton* settings_button_ = nullptr;
 };
 
 BEGIN_METADATA(ImeTitleView, views::BoxLayoutView)
@@ -188,7 +193,7 @@ class ImeButtonsView : public views::View {
 
   ~ImeButtonsView() override = default;
 
-  void KeysetButtonPressed(chromeos::input_method::ImeKeyset keyset) {
+  void KeysetButtonPressed(input_method::ImeKeyset keyset) {
     // TODO(dcheng): When https://crbug.com/742517 is fixed, Mojo will generate
     // a constant for the number of values in the enum. For now, we just define
     // it here and keep it in sync with the enum.
@@ -209,11 +214,11 @@ class ImeButtonsView : public views::View {
     SetLayoutManager(std::move(box_layout));
     SetBorder(views::CreatePaddedBorder(
         views::CreateSolidSidedBorder(
-            kMenuSeparatorWidth, 0, 0, 0,
+            gfx::Insets::TLBR(kMenuSeparatorWidth, 0, 0, 0),
             AshColorProvider::Get()->GetContentLayerColor(
                 AshColorProvider::ContentLayerType::kSeparatorColor)),
-        gfx::Insets(kMenuSeparatorVerticalPadding - kMenuSeparatorWidth,
-                    kMenuExtraMarginFromLeftEdge)));
+        gfx::Insets::VH(kMenuSeparatorVerticalPadding - kMenuSeparatorWidth,
+                        kMenuExtraMarginFromLeftEdge)));
 
     if (show_emoji) {
       emoji_button_ = new SystemMenuButton(
@@ -227,7 +232,7 @@ class ImeButtonsView : public views::View {
       handwriting_button_ = new SystemMenuButton(
           base::BindRepeating(&ImeButtonsView::KeysetButtonPressed,
                               base::Unretained(this),
-                              chromeos::input_method::ImeKeyset::kHandwriting),
+                              input_method::ImeKeyset::kHandwriting),
           kImeMenuWriteIcon, IDS_ASH_STATUS_TRAY_IME_HANDWRITING);
       AddChildView(handwriting_button_);
     }
@@ -236,7 +241,7 @@ class ImeButtonsView : public views::View {
       voice_button_ = new SystemMenuButton(
           base::BindRepeating(&ImeButtonsView::KeysetButtonPressed,
                               base::Unretained(this),
-                              chromeos::input_method::ImeKeyset::kVoice),
+                              input_method::ImeKeyset::kVoice),
           kImeMenuMicrophoneIcon, IDS_ASH_STATUS_TRAY_IME_VOICE);
       AddChildView(voice_button_);
     }
@@ -268,16 +273,12 @@ class ImeMenuListView : public ImeListView {
    public:
     Delegate() : DetailedViewDelegate(nullptr /* tray_controller */) {}
 
+    Delegate(const Delegate&) = delete;
+    Delegate& operator=(const Delegate&) = delete;
+
     // DetailedViewDelegate:
     void TransitionToMainView(bool restore_focus) override {}
     void CloseBubble() override {}
-
-    gfx::Insets GetInsetsForDetailedView() const override {
-      return gfx::Insets();
-    }
-
-   private:
-    DISALLOW_COPY_AND_ASSIGN(Delegate);
   };
 
   explicit ImeMenuListView(std::unique_ptr<Delegate> delegate)
@@ -335,7 +336,7 @@ ImeMenuTray::~ImeMenuTray() {
 
 void ImeMenuTray::ShowImeMenuBubbleInternal() {
   TrayBubbleView::InitParams init_params;
-  init_params.delegate = this;
+  init_params.delegate = GetWeakPtr();
   init_params.parent_window = GetBubbleWindowContainer();
   init_params.anchor_view = nullptr;
   init_params.anchor_mode = TrayBubbleView::AnchorMode::kRect;
@@ -344,7 +345,6 @@ void ImeMenuTray::ShowImeMenuBubbleInternal() {
   init_params.shelf_alignment = shelf()->alignment();
   init_params.preferred_width = kTrayMenuWidth;
   init_params.close_on_deactivate = true;
-  init_params.has_shadow = false;
   init_params.translucent = true;
   init_params.corner_radius = kTrayItemCornerRadius;
   init_params.reroute_event_handler = true;
@@ -379,8 +379,7 @@ void ImeMenuTray::ShowImeMenuBubbleInternal() {
   SetIsActive(true);
 }
 
-void ImeMenuTray::ShowKeyboardWithKeyset(
-    chromeos::input_method::ImeKeyset keyset) {
+void ImeMenuTray::ShowKeyboardWithKeyset(input_method::ImeKeyset keyset) {
   CloseBubble();
 
   Shell::Get()
@@ -395,12 +394,12 @@ bool ImeMenuTray::ShouldShowBottomButtons() {
   // 2) login/lock screen.
   // 3) password input client.
 
-  bool should_show_buttom_buttoms =
+  const bool should_show_bottom_buttons =
       ime_controller_->is_extra_input_options_enabled() &&
       !ime_controller_->current_ime().third_party && !IsInLoginOrLockScreen() &&
       !IsInPasswordInputContext();
 
-  if (!should_show_buttom_buttoms) {
+  if (!should_show_bottom_buttons) {
     is_emoji_enabled_ = is_handwriting_enabled_ = is_voice_enabled_ = false;
     return false;
   }
@@ -534,7 +533,7 @@ void ImeMenuTray::UpdateTrayLabel() {
 
   // For ARC IMEs, we use the globe icon instead of the short name of the active
   // IME.
-  if (chromeos::extension_ime_util::IsArcIME(current_ime.id)) {
+  if (extension_ime_util::IsArcIME(current_ime.id)) {
     CreateImageView();
     image_view_->SetImage(gfx::CreateVectorIcon(
         kShelfGlobeIcon,

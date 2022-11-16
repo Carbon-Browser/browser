@@ -6,17 +6,32 @@ import("//build/config/chromeos/ui_mode.gni")
 import("//build/config/features.gni")
 
 source_set("common") {
-  sources = [
-    "attestation_service.cc",
-    "attestation_utils.cc",
-  ]
+  sources = [ "attestation_utils.cc" ]
 
   public = [
     "attestation_service.h",
     "attestation_utils.h",
   ]
 
-  public_deps = [ "//base" ]
+  public_deps = [
+    ":types",
+    "//base",
+    "//components/device_signals/core/common",
+    "//third_party/abseil-cpp:absl",
+  ]
+}
+
+source_set("types") {
+  public = [ "signals_type.h" ]
+
+  public_deps = [ "//build:chromeos_buildflags" ]
+
+  if (is_chromeos_ash) {
+    public_deps +=
+        [ "//chromeos/ash/components/dbus/attestation:attestation_proto" ]
+  } else {
+    public_deps += [ "//chrome/browser/enterprise/connectors/device_trust/attestation/common/proto:attestation_ca_proto" ]
+  }
 }
 
 source_set("test_support") {
@@ -27,7 +42,7 @@ source_set("test_support") {
 
   public_deps = [
     ":common",
-    "//chrome/browser/enterprise/connectors/device_trust/attestation/common/proto:attestation_ca_proto",
+    ":types",
     "//testing/gmock",
   ]
 }

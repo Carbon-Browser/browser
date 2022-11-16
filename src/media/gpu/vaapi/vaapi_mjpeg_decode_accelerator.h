@@ -10,8 +10,8 @@
 #include <memory>
 
 #include "base/containers/span.h"
-#include "base/macros.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/memory/shared_memory_mapping.h"
 #include "base/memory/weak_ptr.h"
 #include "base/threading/thread.h"
 #include "components/chromeos_camera/mjpeg_decode_accelerator.h"
@@ -27,7 +27,6 @@ namespace media {
 
 class BitstreamBuffer;
 class ScopedVAImage;
-class UnalignedSharedMemory;
 class VaapiWrapper;
 class VideoFrame;
 
@@ -44,6 +43,11 @@ class MEDIA_GPU_EXPORT VaapiMjpegDecodeAccelerator
  public:
   VaapiMjpegDecodeAccelerator(
       const scoped_refptr<base::SingleThreadTaskRunner>& io_task_runner);
+
+  VaapiMjpegDecodeAccelerator(const VaapiMjpegDecodeAccelerator&) = delete;
+  VaapiMjpegDecodeAccelerator& operator=(const VaapiMjpegDecodeAccelerator&) =
+      delete;
+
   ~VaapiMjpegDecodeAccelerator() override;
 
   // chromeos_camera::MjpegDecodeAccelerator implementation.
@@ -71,7 +75,7 @@ class MEDIA_GPU_EXPORT VaapiMjpegDecodeAccelerator
 
   // Processes one decode request.
   void DecodeFromShmTask(int32_t task_id,
-                         std::unique_ptr<UnalignedSharedMemory> shm,
+                         base::WritableSharedMemoryMapping mapping,
                          scoped_refptr<VideoFrame> dst_frame);
   void DecodeFromDmaBufTask(int32_t task_id,
                             base::ScopedFD src_dmabuf_fd,
@@ -146,8 +150,6 @@ class MEDIA_GPU_EXPORT VaapiMjpegDecodeAccelerator
   // posted from the |decoder_task_runner_| to |task_runner_| should use a
   // WeakPtr (obtained via weak_this_factory_.GetWeakPtr()).
   base::WeakPtrFactory<VaapiMjpegDecodeAccelerator> weak_this_factory_;
-
-  DISALLOW_COPY_AND_ASSIGN(VaapiMjpegDecodeAccelerator);
 };
 
 }  // namespace media

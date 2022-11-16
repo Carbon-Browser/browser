@@ -20,15 +20,17 @@ const NGBlockBreakToken* CreateBreakToken(
     const NGBreakTokenVector* child_break_tokens = nullptr,
     bool has_seen_all_children = false) {
   NGBoxFragmentBuilder builder(
-      node, &node.Style(), /* space */ nullptr,
+      node, &node.Style(), NGConstraintSpace(),
       WritingDirectionMode(WritingMode::kHorizontalTb, TextDirection::kLtr));
+  DCHECK(!builder.HasBreakTokenData());
+  builder.SetBreakTokenData(MakeGarbageCollected<NGBlockBreakTokenData>());
   if (has_seen_all_children)
     builder.SetHasSeenAllChildren();
   if (child_break_tokens) {
     for (const NGBreakToken* token : *child_break_tokens)
       builder.AddBreakToken(token);
   }
-  return NGBlockBreakToken::Create(builder);
+  return NGBlockBreakToken::Create(&builder);
 }
 
 using NGBlockChildIteratorTest = NGLayoutTest;

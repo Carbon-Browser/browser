@@ -10,32 +10,34 @@
 #include "ui/ozone/platform/wayland/host/wayland_connection.h"
 #include "ui/ozone/platform/wayland/host/wayland_event_source.h"
 #include "ui/ozone/platform/wayland/host/wayland_pointer.h"
+#include "ui/ozone/platform/wayland/host/wayland_seat.h"
 
 namespace ui {
 
 namespace {
-constexpr uint32_t kMinZwpRelativePointerManagerVersion = 1;
+constexpr uint32_t kMinVersion = 1;
 }
 
 // static
-void WaylandZwpRelativePointerManager::Register(WaylandConnection* connection) {
-  connection->RegisterGlobalObjectFactory(
-      "zwp_relative_pointer_manager_v1",
-      &WaylandZwpRelativePointerManager::Instantiate);
-}
+constexpr char WaylandZwpRelativePointerManager::kInterfaceName[];
 
 // static
 void WaylandZwpRelativePointerManager::Instantiate(
     WaylandConnection* connection,
     wl_registry* registry,
     uint32_t name,
+    const std::string& interface,
     uint32_t version) {
+  DCHECK_EQ(interface, kInterfaceName);
+
   if (connection->wayland_zwp_relative_pointer_manager_ ||
-      version < kMinZwpRelativePointerManagerVersion)
+      !wl::CanBind(interface, version, kMinVersion, kMinVersion)) {
     return;
+  }
 
   auto zwp_relative_pointer_manager_v1 =
-      wl::Bind<struct zwp_relative_pointer_manager_v1>(registry, name, version);
+      wl::Bind<struct zwp_relative_pointer_manager_v1>(registry, name,
+                                                       kMinVersion);
   if (!zwp_relative_pointer_manager_v1) {
     LOG(ERROR) << "Failed to bind zwp_relative_pointer_manager_v1";
     return;
@@ -60,7 +62,7 @@ WaylandZwpRelativePointerManager::~WaylandZwpRelativePointerManager() = default;
 
 void WaylandZwpRelativePointerManager::EnableRelativePointer() {
   relative_pointer_.reset(zwp_relative_pointer_manager_v1_get_relative_pointer(
-      obj_.get(), connection_->pointer()->wl_object()));
+      obj_.get(), connection_->seat()->pointer()->wl_object()));
 
   static constexpr zwp_relative_pointer_v1_listener relative_pointer_listener =
       {

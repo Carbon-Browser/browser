@@ -6,9 +6,7 @@
 
 #include "base/base64.h"
 #include "base/bind.h"
-#include "base/cxx17_backports.h"
 #include "base/location.h"
-#include "base/macros.h"
 #include "base/no_destructor.h"
 #include "base/time/time.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -23,9 +21,9 @@ const int kApprovedStreamTimeToLiveSeconds = 10;
 
 std::string GenerateRandomStreamId() {
   char buffer[kStreamIdLengthBytes];
-  crypto::RandBytes(buffer, base::size(buffer));
+  crypto::RandBytes(buffer, std::size(buffer));
   std::string result;
-  base::Base64Encode(base::StringPiece(buffer, base::size(buffer)), &result);
+  base::Base64Encode(base::StringPiece(buffer, std::size(buffer)), &result);
   return result;
 }
 
@@ -70,7 +68,7 @@ std::string DesktopStreamsRegistryImpl::RegisterStream(
       FROM_HERE,
       base::BindOnce(&DesktopStreamsRegistryImpl::CleanupStream,
                      base::Unretained(this), id),
-      base::TimeDelta::FromSeconds(kApprovedStreamTimeToLiveSeconds));
+      base::Seconds(kApprovedStreamTimeToLiveSeconds));
 
   return id;
 }

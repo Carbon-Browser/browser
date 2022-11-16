@@ -9,7 +9,6 @@
 
 #include "base/check_op.h"
 #include "base/metrics/metrics_hashes.h"
-#include "base/task/post_task.h"
 #include "base/threading/sequenced_task_runner_handle.h"
 #include "services/metrics/public/cpp/delegating_ukm_recorder.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
@@ -38,8 +37,8 @@ void MergeEntry(const mojom::UkmEntry* in, mojom::UkmEntry* out) {
 
 TestUkmRecorder::TestUkmRecorder() {
   EnableRecording(/*extensions=*/true);
-  StoreWhitelistedEntries();
-  DisableSamplingForTesting();
+  InitDecodeMap();
+  SetSamplingForTesting(1);  // 1-in-1 == unsampled
 }
 
 TestUkmRecorder::~TestUkmRecorder() {}
@@ -50,18 +49,12 @@ bool TestUkmRecorder::ShouldRestrictToWhitelistedSourceIds() const {
   return false;
 }
 
-bool TestUkmRecorder::ShouldRestrictToWhitelistedEntries() const {
-  // In tests, we want to record all entries (not just those that are
-  // whitelisted).
-  return false;
-}
-
 void TestUkmRecorder::AddEntry(mojom::UkmEntryPtr entry) {
   const bool should_run_callback =
       on_add_entry_ && entry && entry_hash_to_wait_for_ == entry->event_hash;
   UkmRecorderImpl::AddEntry(std::move(entry));
   if (should_run_callback)
-    std::move(on_add_entry_).Run();
+    on_add_entry_.Run();
 }
 
 const UkmSource* TestUkmRecorder::GetSourceForSourceId(
@@ -86,8 +79,9 @@ const ukm::mojom::UkmEntry* TestUkmRecorder::GetDocumentCreatedEntryForSourceId(
   return nullptr;
 }
 
-void TestUkmRecorder::SetOnAddEntryCallback(base::StringPiece entry_name,
-                                            base::OnceClosure on_add_entry) {
+void TestUkmRecorder::SetOnAddEntryCallback(
+    base::StringPiece entry_name,
+    base::RepeatingClosure on_add_entry) {
   on_add_entry_ = std::move(on_add_entry);
   entry_hash_to_wait_for_ = base::HashMetricName(entry_name);
 }
@@ -163,8 +157,9 @@ TestAutoSetUkmRecorder::~TestAutoSetUkmRecorder() {
 }
 
 std::vector<TestUkmRecorder::HumanReadableUkmMetrics>
-TestUkmRecorder::GetMetrics(std::string entry_name,
-                            const std::vector<std::string>& metric_names) {
+TestUkmRecorder::GetMetrics(
+    std::string entry_name,
+    const std::vector<std::string>& metric_names) const {
   std::vector<TestUkmRecorder::HumanReadableUkmMetrics> result;
   for (const auto& entry : GetEntries(entry_name, metric_names)) {
     result.push_back(entry.metrics);
@@ -174,7 +169,7 @@ TestUkmRecorder::GetMetrics(std::string entry_name,
 
 std::vector<TestUkmRecorder::HumanReadableUkmEntry> TestUkmRecorder::GetEntries(
     std::string entry_name,
-    const std::vector<std::string>& metric_names) {
+    const std::vector<std::string>& metric_names) const {
   std::vector<TestUkmRecorder::HumanReadableUkmEntry> results;
   for (const ukm::mojom::UkmEntry* entry : GetEntriesByName(entry_name)) {
     HumanReadableUkmEntry result;
@@ -188,6 +183,25 @@ std::vector<TestUkmRecorder::HumanReadableUkmEntry> TestUkmRecorder::GetEntries(
     results.push_back(std::move(result));
   }
   return results;
+}
+
+std::vector<ukm::TestAutoSetUkmRecorder::HumanReadableUkmMetrics>
+TestUkmRecorder::FilteredHumanReadableMetricForEntry(
+    const std::string& entry_name,
+    const std::string& metric_name) const {
+  std::vector<std::string> metric_name_vector(1, metric_name);
+  auto metrics = GetMetrics(entry_name, metric_name_vector);
+  std::vector<ukm::TestAutoSetUkmRecorder::HumanReadableUkmMetrics>
+      filtered_result;
+  std::copy_if(
+      metrics.begin(), metrics.end(), std::back_inserter(filtered_result),
+      [&metric_name](
+          ukm::TestAutoSetUkmRecorder::HumanReadableUkmMetrics metric) {
+        if (metric.empty())
+          return false;
+        return metric.begin()->first == metric_name;
+      });
+  return filtered_result;
 }
 
 TestUkmRecorder::HumanReadableUkmEntry::HumanReadableUkmEntry() = default;

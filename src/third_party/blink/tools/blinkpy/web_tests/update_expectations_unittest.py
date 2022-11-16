@@ -22,7 +22,7 @@ class FakeBotTestExpectations(object):
         self._results = {}
 
         # Make the results distinct like the real BotTestExpectations.
-        for path, results in results_by_path.iteritems():
+        for path, results in results_by_path.items():
             self._results[path] = list(set(results))
 
     def all_results_by_path(self):
@@ -1197,7 +1197,9 @@ class UpdateTestExpectationsTest(LoggingTestCase):
             test/c.html [ Failure ]
             # Keep since there's a failure on debug bot.
             [ Linux ] test/d.html [ Failure ]""")
-        files = {test_expectation_path: test_expectations}
+        files = {
+            test_expectation_path: test_expectations.encode('utf8', 'replace')
+        }
         host.filesystem = MockFileSystem(files)
         self._write_tests_into_filesystem(host.filesystem)
 
@@ -1220,7 +1222,7 @@ class UpdateTestExpectationsTest(LoggingTestCase):
 
         main(host, expectation_factory, [])
         self.assertEqual(
-            host.filesystem.files[test_expectation_path],
+            host.filesystem.read_text_file(test_expectation_path),
             _strip_multiline_string_spaces("""
             # tags: [ Linux ]
             # tags: [ Release ]
@@ -1290,7 +1292,7 @@ class UpdateTestExpectationsTest(LoggingTestCase):
         # Write out a fake TestExpectations file.
         test_expectation_path = (
             host.port_factory.get().path_to_generic_test_expectations_file())
-        test_expectations = """
+        test_expectations = b"""
             # Remove since passing on both bots.
             # tags: [ Linux ]
             # results: [ Failure Pass ]
@@ -1315,7 +1317,7 @@ class UpdateTestExpectationsTest(LoggingTestCase):
 
         self.assertTrue(host.filesystem.isfile(test_expectation_path))
         self.assertEqual(
-            host.filesystem.files[test_expectation_path], """
+            host.filesystem.read_text_file(test_expectation_path), """
             # Remove since passing on both bots.
             # tags: [ Linux ]
             # results: [ Failure Pass ]""")

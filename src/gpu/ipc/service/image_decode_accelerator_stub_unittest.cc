@@ -15,7 +15,6 @@
 #include "base/check_op.h"
 #include "base/containers/queue.h"
 #include "base/files/scoped_file.h"
-#include "base/macros.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/notreached.h"
@@ -149,6 +148,7 @@ class TestImageFactory : public ImageFactory {
       gfx::GpuMemoryBufferHandle handle,
       const gfx::Size& size,
       gfx::BufferFormat format,
+      const gfx::ColorSpace& color_space,
       gfx::BufferPlane plane,
       int client_id,
       SurfaceHandle surface_handle) override {
@@ -175,6 +175,11 @@ class MockImageDecodeAcceleratorWorker : public ImageDecodeAcceleratorWorker {
  public:
   MockImageDecodeAcceleratorWorker(gfx::BufferFormat format_for_decodes)
       : format_for_decodes_(format_for_decodes) {}
+
+  MockImageDecodeAcceleratorWorker(const MockImageDecodeAcceleratorWorker&) =
+      delete;
+  MockImageDecodeAcceleratorWorker& operator=(
+      const MockImageDecodeAcceleratorWorker&) = delete;
 
   void Decode(std::vector<uint8_t> encoded_data,
               const gfx::Size& output_size,
@@ -222,8 +227,6 @@ class MockImageDecodeAcceleratorWorker : public ImageDecodeAcceleratorWorker {
 
   const gfx::BufferFormat format_for_decodes_;
   base::queue<PendingDecode> pending_decodes_;
-
-  DISALLOW_COPY_AND_ASSIGN(MockImageDecodeAcceleratorWorker);
 };
 
 const int kChannelId = 1;
@@ -243,6 +246,12 @@ class ImageDecodeAcceleratorStubTest
   ImageDecodeAcceleratorStubTest()
       : GpuChannelTestCommon(false /* use_stub_bindings */),
         image_decode_accelerator_worker_(GetParam()) {}
+
+  ImageDecodeAcceleratorStubTest(const ImageDecodeAcceleratorStubTest&) =
+      delete;
+  ImageDecodeAcceleratorStubTest& operator=(
+      const ImageDecodeAcceleratorStubTest&) = delete;
+
   ~ImageDecodeAcceleratorStubTest() override = default;
 
   SyncPointManager* sync_point_manager() const {
@@ -295,9 +304,9 @@ class ImageDecodeAcceleratorStubTest
 
     GpuChannel* channel = CreateChannel(kChannelId, false /* is_gpu_host */);
     ASSERT_TRUE(channel);
-    ASSERT_TRUE(channel->GetImageDecodeAcceleratorStub());
-    channel->GetImageDecodeAcceleratorStub()->SetImageFactoryForTesting(
-        &image_factory_);
+    ASSERT_TRUE(channel->GetImageDecodeAcceleratorStubForTesting());
+    channel->GetImageDecodeAcceleratorStubForTesting()
+        ->SetImageFactoryForTesting(&image_factory_);
 
     // Create a raster command buffer so that the ImageDecodeAcceleratorStub can
     // have access to a TransferBufferManager. Note that we mock the
@@ -653,8 +662,6 @@ class ImageDecodeAcceleratorStubTest
   TestImageFactory image_factory_;
   base::test::ScopedFeatureList feature_list_;
   base::WeakPtrFactory<ImageDecodeAcceleratorStubTest> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ImageDecodeAcceleratorStubTest);
 };
 
 // Tests the following flow: two decode requests are sent. One of the decodes is

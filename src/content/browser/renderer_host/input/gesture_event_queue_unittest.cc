@@ -11,7 +11,7 @@
 #include <vector>
 
 #include "base/location.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "base/threading/thread_task_runner_handle.h"
@@ -24,10 +24,6 @@
 #include "third_party/blink/public/common/input/web_input_event.h"
 #include "third_party/blink/public/mojom/input/input_event_result.mojom-shared.h"
 #include "ui/events/blink/blink_features.h"
-
-#if defined(OS_WIN)
-#include "ui/display/win/test/scoped_screen_win.h"
-#endif
 
 using blink::WebGestureDevice;
 using blink::WebGestureEvent;
@@ -67,7 +63,7 @@ class GestureEventQueueTest : public testing::Test,
         true;
     gesture_config.fling_config.touchscreen_tap_suppression_config
         .max_cancel_to_down_time =
-        base::TimeDelta::FromMilliseconds(max_cancel_to_down_time_ms);
+        base::Milliseconds(max_cancel_to_down_time_ms);
     queue_ =
         std::make_unique<GestureEventQueue>(this, this, this, gesture_config);
   }
@@ -244,9 +240,6 @@ class GestureEventQueueTest : public testing::Test,
   std::unique_ptr<blink::mojom::InputEventResultState> sync_ack_result_;
   std::unique_ptr<WebGestureEvent> sync_followup_event_;
   base::test::ScopedFeatureList feature_list_;
-#if defined(OS_WIN)
-  display::win::test::ScopedScreenWin scoped_screen_win_;
-#endif
 };
 
 class GestureEventQueueWithCompositorEventQueueTest
@@ -314,7 +307,7 @@ TEST_F(GestureEventQueueTest, DebounceDefersFollowingGestureEvents) {
   EXPECT_EQ(2U, GestureEventQueueSize());
   EXPECT_EQ(2U, GestureEventDebouncingQueueSize());
 
-  FastForwardBy(base::TimeDelta::FromMilliseconds(5));
+  FastForwardBy(base::Milliseconds(5));
 
   // The deferred events are correctly queued in coalescing queue.
   EXPECT_EQ(2U, GetAndResetSentGestureEventCount());

@@ -42,6 +42,7 @@
 #include "third_party/blink/renderer/core/editing/editor.h"
 #include "third_party/blink/renderer/core/editing/ephemeral_range.h"
 #include "third_party/blink/renderer/core/editing/frame_selection.h"
+#include "third_party/blink/renderer/core/editing/ime/input_method_controller.h"
 #include "third_party/blink/renderer/core/editing/serializers/serialization.h"
 #include "third_party/blink/renderer/core/events/clipboard_event.h"
 #include "third_party/blink/renderer/core/events/text_event.h"
@@ -281,7 +282,7 @@ bool ClipboardCommands::CanDeleteRange(const EphemeralRange& range) {
   const Node& start_container = *range.StartPosition().ComputeContainerNode();
   const Node& end_container = *range.EndPosition().ComputeContainerNode();
 
-  return HasEditableStyle(start_container) && HasEditableStyle(end_container);
+  return IsEditable(start_container) && IsEditable(end_container);
 }
 
 static DeleteMode ConvertSmartReplaceOptionToDeleteMode(
@@ -413,8 +414,6 @@ void ClipboardCommands::PasteFromClipboard(LocalFrame& frame,
 
   if (!fragment_and_plain_text.first)
     return;
-  frame.GetSystemClipboard()->RecordClipboardImageUrls(
-      fragment_and_plain_text.first);
   PasteAsFragment(frame, fragment_and_plain_text.first,
                   CanSmartReplaceInClipboard(frame),
                   fragment_and_plain_text.second, source);

@@ -10,13 +10,14 @@
 
 #include "base/callback.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
+#include "base/scoped_observation.h"
 #include "base/timer/timer.h"
 // TODO(https://crbug.com/1164001): move to forward declaration.
 #include "chrome/browser/ash/login/helper.h"
 #include "chrome/browser/ash/login/screens/base_screen.h"
-#include "chromeos/network/network_state_handler_observer.h"
+#include "chromeos/ash/components/network/network_state_handler.h"
+#include "chromeos/ash/components/network/network_state_handler_observer.h"
 // TODO(https://crbug.com/1164001): move to forward declaration.
 #include "chrome/browser/ui/webui/chromeos/login/network_screen_handler.h"
 
@@ -27,7 +28,17 @@ class NetworkScreen : public BaseScreen, public NetworkStateHandlerObserver {
  public:
   using TView = NetworkScreenView;
 
-  enum class Result { CONNECTED, OFFLINE_DEMO_SETUP, BACK };
+  enum class Result {
+    CONNECTED_REGULAR,
+    CONNECTED_DEMO,
+    CONNECTED_REGULAR_CONSOLIDATED_CONSENT,
+    BACK_REGULAR,
+    BACK_DEMO,
+    BACK_OS_INSTALL,
+    NOT_APPLICABLE,
+    NOT_APPLICABLE_CONSOLIDATED_CONSENT,
+    NOT_APPLICABLE_CONNECTED_DEMO,
+  };
 
   static std::string GetResultString(Result result);
 
@@ -35,6 +46,10 @@ class NetworkScreen : public BaseScreen, public NetworkStateHandlerObserver {
 
   NetworkScreen(NetworkScreenView* view,
                 const ScreenExitCallback& exit_callback);
+
+  NetworkScreen(const NetworkScreen&) = delete;
+  NetworkScreen& operator=(const NetworkScreen&) = delete;
+
   ~NetworkScreen() override;
 
   // Called when `view` has been destroyed. If this instance is destroyed before
@@ -55,13 +70,18 @@ class NetworkScreen : public BaseScreen, public NetworkStateHandlerObserver {
   friend class DemoSetupTest;
   FRIEND_TEST_ALL_PREFIXES(NetworkScreenTest, CanConnect);
   FRIEND_TEST_ALL_PREFIXES(NetworkScreenTest, Timeout);
+  FRIEND_TEST_ALL_PREFIXES(NetworkScreenTest, HandsOffCanConnect_Skipped);
+  FRIEND_TEST_ALL_PREFIXES(NetworkScreenTest, HandsOffTimeout_NotSkipped);
+  FRIEND_TEST_ALL_PREFIXES(NetworkScreenTest,
+                           DelayedEthernetConnection_Skipped);
   FRIEND_TEST_ALL_PREFIXES(NetworkScreenUnitTest, ContinuesAutomatically);
   FRIEND_TEST_ALL_PREFIXES(NetworkScreenUnitTest, ContinuesOnlyOnce);
 
   // BaseScreen:
+  bool MaybeSkip(WizardContext* context) override;
   void ShowImpl() override;
   void HideImpl() override;
-  void OnUserAction(const std::string& action_id) override;
+  void OnUserActionDeprecated(const std::string& action_id) override;
   bool HandleAccelerator(LoginAcceleratorAction action) override;
 
   // NetworkStateHandlerObserver:
@@ -83,7 +103,7 @@ class NetworkScreen : public BaseScreen, public NetworkStateHandlerObserver {
   void UnsubscribeNetworkNotification();
 
   // Notifies wizard on successful connection.
-  inline void NotifyOnConnection() { exit_callback_.Run(Result::CONNECTED); }
+  void NotifyOnConnection();
 
   // Called by `connection_timer_` when connection to the network timed out.
   void OnConnectionTimeout();
@@ -103,11 +123,9 @@ class NetworkScreen : public BaseScreen, public NetworkStateHandlerObserver {
   // Called when continue button is clicked.
   void OnContinueButtonClicked();
 
-  // Called when the preinstalled demo resources check has completed.
-  void OnHasPreinstalledDemoResources(bool has_preinstalled_demo_resources);
-
-  // Called when offline demo mode setup was selected.
-  void OnOfflineDemoModeSetupSelected();
+  // Skip this screen or automatically continue if the device is connected to
+  // Ethernet for the first time in this session.
+  bool UpdateStatusIfConnectedToEthernet();
 
   // True if subscribed to network change notification.
   bool is_network_subscribed_ = false;
@@ -125,6 +143,10 @@ class NetworkScreen : public BaseScreen, public NetworkStateHandlerObserver {
   // Indicates that we should proceed with OOBE as soon as we are connected.
   bool continue_pressed_ = false;
 
+  // Indicates whether the device has already been connected to Ethernet in this
+  // session or not.
+  bool first_ethernet_connection_ = true;
+
   // Timer for connection timeout.
   base::OneShotTimer connection_timer_;
 
@@ -132,9 +154,11 @@ class NetworkScreen : public BaseScreen, public NetworkStateHandlerObserver {
   ScreenExitCallback exit_callback_;
   std::unique_ptr<login::NetworkStateHelper> network_state_helper_;
 
-  base::WeakPtrFactory<NetworkScreen> weak_ptr_factory_{this};
+  base::ScopedObservation<chromeos::NetworkStateHandler,
+                          chromeos::NetworkStateHandlerObserver>
+      network_state_handler_observer_{this};
 
-  DISALLOW_COPY_AND_ASSIGN(NetworkScreen);
+  base::WeakPtrFactory<NetworkScreen> weak_ptr_factory_{this};
 };
 
 }  // namespace ash

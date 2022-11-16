@@ -6,7 +6,7 @@
 #define CONTENT_BROWSER_INDEXED_DB_INDEXED_DB_CONTROL_WRAPPER_H_
 
 #include "base/threading/sequence_bound.h"
-#include "components/services/storage/public/mojom/indexed_db_control.mojom.h"
+#include "components/services/storage/privileged/mojom/indexed_db_control.mojom.h"
 #include "components/services/storage/public/mojom/storage_policy_update.mojom.h"
 #include "content/browser/indexed_db/indexed_db_context_impl.h"
 #include "storage/browser/quota/storage_policy_observer.h"
@@ -18,8 +18,7 @@ class StorageKey;
 namespace content {
 
 // All functions should be called on the UI thread.
-class CONTENT_EXPORT IndexedDBControlWrapper
-    : public storage::mojom::IndexedDBControl {
+class IndexedDBControlWrapper : public storage::mojom::IndexedDBControl {
  public:
   explicit IndexedDBControlWrapper(
       const base::FilePath& data_path,
@@ -32,6 +31,10 @@ class CONTENT_EXPORT IndexedDBControlWrapper
           file_system_access_context,
       scoped_refptr<base::SequencedTaskRunner> io_task_runner,
       scoped_refptr<base::SequencedTaskRunner> custom_task_runner);
+
+  IndexedDBControlWrapper(const IndexedDBControlWrapper&) = delete;
+  IndexedDBControlWrapper& operator=(const IndexedDBControlWrapper&) = delete;
+
   ~IndexedDBControlWrapper() override;
 
   // mojom::IndexedDBControl implementation:
@@ -46,10 +49,9 @@ class CONTENT_EXPORT IndexedDBControlWrapper
                   base::OnceClosure callback) override;
   void GetConnectionCount(const blink::StorageKey& storage_key,
                           GetConnectionCountCallback callback) override;
-  void DownloadStorageKeyData(const blink::StorageKey& storage_key,
-                              DownloadStorageKeyDataCallback callback) override;
-  void GetAllStorageKeysDetails(
-      GetAllStorageKeysDetailsCallback callback) override;
+  void DownloadBucketData(const blink::StorageKey& storage_key,
+                          DownloadBucketDataCallback callback) override;
+  void GetAllBucketsDetails(GetAllBucketsDetailsCallback callback) override;
   void SetForceKeepSessionState() override;
   void ApplyPolicyUpdates(std::vector<storage::mojom::StoragePolicyUpdatePtr>
                               policy_updates) override;
@@ -72,8 +74,6 @@ class CONTENT_EXPORT IndexedDBControlWrapper
 
   SEQUENCE_CHECKER(sequence_checker_);
   base::WeakPtrFactory<IndexedDBControlWrapper> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(IndexedDBControlWrapper);
 };
 
 }  // namespace content

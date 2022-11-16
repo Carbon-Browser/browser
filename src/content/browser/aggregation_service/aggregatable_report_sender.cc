@@ -10,9 +10,12 @@
 
 #include "base/callback.h"
 #include "base/check.h"
-#include "base/json/json_string_value_serializer.h"
+#include "base/json/json_writer.h"
+#include "base/logging.h"
+#include "base/memory/ptr_util.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/time/time.h"
 #include "base/values.h"
 #include "content/public/browser/storage_partition.h"
@@ -26,19 +29,41 @@
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/cpp/simple_url_loader.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 namespace content {
 
 AggregatableReportSender::AggregatableReportSender(
     StoragePartition* storage_partition)
-    : storage_partition_(storage_partition) {}
+    : storage_partition_(storage_partition) {
+  DCHECK(storage_partition_);
+}
+
+AggregatableReportSender::AggregatableReportSender(
+    scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
+    bool enable_debug_logging)
+    : url_loader_factory_(std::move(url_loader_factory)),
+      enable_debug_logging_(enable_debug_logging) {
+  DCHECK(url_loader_factory_);
+}
 
 AggregatableReportSender::~AggregatableReportSender() = default;
+
+// static
+std::unique_ptr<AggregatableReportSender>
+AggregatableReportSender::CreateForTesting(
+    scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
+    bool enable_debug_logging) {
+  return base::WrapUnique(new AggregatableReportSender(
+      std::move(url_loader_factory), enable_debug_logging));
+}
 
 void AggregatableReportSender::SendReport(const GURL& url,
                                           const base::Value& contents,
                                           ReportSentCallback callback) {
+  DCHECK(storage_partition_ || url_loader_factory_);
+
   // The browser process URLLoaderFactory is not created by default, so don't
   // create it until it is directly needed.
   if (!url_loader_factory_) {
@@ -67,7 +92,7 @@ void AggregatableReportSender::SendReport(const GURL& url,
             "Sends the aggregatable report to reporting endpoint requested by "
             "APIs that rely on private, secure aggregation (e.g. Attribution "
             "Reporting API, see "
-            "https://github.com/WICG/conversion-measurement-api)."
+            "https://github.com/WICG/attribution-reporting-api)."
           trigger:
             "When an aggregatable report has become eligible for reporting."
           data:
@@ -89,13 +114,12 @@ void AggregatableReportSender::SendReport(const GURL& url,
 
   auto it = loaders_in_progress_.insert(loaders_in_progress_.begin(),
                                         std::move(simple_url_loader));
-  simple_url_loader_ptr->SetTimeoutDuration(base::TimeDelta::FromSeconds(30));
+  simple_url_loader_ptr->SetTimeoutDuration(base::Seconds(30));
 
   std::string contents_json;
-  JSONStringValueSerializer serializer(&contents_json);
 
   // TODO(crbug.com/1244991): Check for required fields of contents.
-  bool succeeded = serializer.Serialize(contents);
+  bool succeeded = base::JSONWriter::Write(contents, &contents_json);
   DCHECK(succeeded);
   simple_url_loader_ptr->AttachStringForUpload(contents_json,
                                                "application/json");
@@ -121,29 +145,44 @@ void AggregatableReportSender::SendReport(const GURL& url,
                      std::move(callback)));
 }
 
-void AggregatableReportSender::SetURLLoaderFactoryForTesting(
-    scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory) {
-  url_loader_factory_ = url_loader_factory;
-}
-
 void AggregatableReportSender::OnReportSent(
     UrlLoaderList::iterator it,
     ReportSentCallback callback,
     scoped_refptr<net::HttpResponseHeaders> headers) {
   RequestStatus status;
 
+  absl::optional<int> http_response_code;
+  if (headers)
+    http_response_code = headers->response_code();
+
   network::SimpleURLLoader* loader = it->get();
   if (loader->NetError() != net::OK) {
     status = RequestStatus::kNetworkError;
-  } else if (headers &&
-             headers->response_code() == net::HttpStatusCode::HTTP_OK) {
+  } else if (http_response_code == net::HTTP_OK) {
     status = RequestStatus::kOk;
   } else {
     status = RequestStatus::kServerError;
   }
 
+  if (enable_debug_logging_ && status != RequestStatus::kOk) {
+    LOG(ERROR) << "Report sending failed, net error: "
+               << net::ErrorToShortString(loader->NetError())
+               << ", HTTP response code: "
+               << (http_response_code
+                       ? base::NumberToString(*http_response_code)
+                       : "N/A");
+  }
+
   base::UmaHistogramEnumeration(
-      "PrivacySandbox.AggregationService.ReportStatus", status);
+      "PrivacySandbox.AggregationService.ReportSender.Status", status);
+
+  // Since net errors are always negative and HTTP errors are always positive,
+  // it is fine to combine these in a single histogram.
+  base::UmaHistogramSparse(
+      "PrivacySandbox.AggregationService.ReportSender."
+      "HttpResponseOrNetErrorCode",
+      loader->NetError() != net::OK ? loader->NetError()
+                                    : http_response_code.value_or(1));
 
   loaders_in_progress_.erase(it);
   std::move(callback).Run(status);

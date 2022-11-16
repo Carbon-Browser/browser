@@ -5,7 +5,7 @@
 #ifndef REMOTING_HOST_FTL_SIGNALING_CONNECTOR_H_
 #define REMOTING_HOST_FTL_SIGNALING_CONNECTOR_H_
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/timer/timer.h"
 #include "net/base/backoff_entry.h"
@@ -29,6 +29,10 @@ class FtlSignalingConnector
   // called.
   FtlSignalingConnector(SignalStrategy* signal_strategy,
                         base::OnceClosure auth_failed_callback);
+
+  FtlSignalingConnector(const FtlSignalingConnector&) = delete;
+  FtlSignalingConnector& operator=(const FtlSignalingConnector&) = delete;
+
   ~FtlSignalingConnector() override;
 
   void Start();
@@ -48,7 +52,7 @@ class FtlSignalingConnector
   void TryReconnect(base::TimeDelta delay);
   void DoReconnect();
 
-  SignalStrategy* signal_strategy_;
+  raw_ptr<SignalStrategy> signal_strategy_;
   base::OnceClosure auth_failed_callback_;
 
   net::BackoffEntry backoff_;
@@ -59,8 +63,6 @@ class FtlSignalingConnector
   base::OneShotTimer backoff_reset_timer_;
 
   SEQUENCE_CHECKER(sequence_checker_);
-
-  DISALLOW_COPY_AND_ASSIGN(FtlSignalingConnector);
 };
 
 }  // namespace remoting

@@ -6,6 +6,7 @@
 #include "base/metrics/field_trial_param_associator.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/time/time.h"
 
 #include <algorithm>
 #include <map>
@@ -31,9 +32,9 @@ base::TimeDelta GetTokenInvalidationInterval() {
   if (!override_value.empty()) {
     int override_value_days;
     if (base::StringToInt(override_value, &override_value_days))
-      return base::TimeDelta::FromDays(override_value_days);
+      return base::Days(override_value_days);
   }
-  return base::TimeDelta::FromDays(kDefaultTokenInvalidationPeriod);
+  return base::Days(kDefaultTokenInvalidationPeriod);
 }
 
 }  // namespace features

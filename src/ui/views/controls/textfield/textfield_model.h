@@ -13,7 +13,7 @@
 #include <vector>
 
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "build/chromeos_buildflags.h"
 #include "ui/base/ime/composition_text.h"
 #include "ui/gfx/render_text.h"
@@ -62,6 +62,10 @@ class VIEWS_EXPORT TextfieldModel {
   };
 
   explicit TextfieldModel(Delegate* delegate);
+
+  TextfieldModel(const TextfieldModel&) = delete;
+  TextfieldModel& operator=(const TextfieldModel&) = delete;
+
   virtual ~TextfieldModel();
 
   // Edit related methods.
@@ -235,7 +239,7 @@ class VIEWS_EXPORT TextfieldModel {
   // composition text.
   void SetCompositionText(const ui::CompositionText& composition);
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   // Return the text range corresponding to the autocorrected text.
   const gfx::Range& autocorrect_range() const { return autocorrect_range_; }
 
@@ -329,14 +333,14 @@ class VIEWS_EXPORT TextfieldModel {
   static void ClearKillBuffer();
 
   // The TextfieldModel::Delegate instance should be provided by the owner.
-  Delegate* delegate_;
+  raw_ptr<Delegate> delegate_;
 
   // The stylized text, cursor, selection, and the visual layout model.
   std::unique_ptr<gfx::RenderText> render_text_;
 
   gfx::Range composition_range_;
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   gfx::Range autocorrect_range_;
 #endif
 
@@ -358,8 +362,6 @@ class VIEWS_EXPORT TextfieldModel {
   //   2) new edit is added. (redo history is cleared)
   //   3) redone all undone edits.
   EditHistory::iterator current_edit_;
-
-  DISALLOW_COPY_AND_ASSIGN(TextfieldModel);
 };
 
 }  // namespace views

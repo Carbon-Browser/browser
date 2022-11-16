@@ -4,6 +4,11 @@
 
 #include "ui/ozone/platform/flatland/flatland_sysmem_buffer_collection.h"
 
+#include <fuchsia/sysmem/cpp/fidl.h>
+#include <lib/zx/eventpair.h>
+
+#include <tuple>
+
 #include "base/bits.h"
 #include "base/fuchsia/fuchsia_logging.h"
 #include "build/build_config.h"
@@ -71,6 +76,127 @@ size_t GetBytesPerPixel(gfx::BufferFormat buffer_format) {
   }
 }
 
+bool IsYuvVkFormat(VkFormat format) {
+  switch (format) {
+    case VK_FORMAT_G8_B8_R8_3PLANE_420_UNORM:
+    case VK_FORMAT_G8_B8R8_2PLANE_420_UNORM:
+      return true;
+    case VK_FORMAT_R8_UNORM:
+    case VK_FORMAT_R8G8_UNORM:
+    case VK_FORMAT_B8G8R8A8_UNORM:
+    case VK_FORMAT_R8G8B8A8_UNORM:
+      return false;
+    default:
+      NOTREACHED();
+      return false;
+  }
+}
+
+VkFormatFeatureFlags GetFormatFeatureFlagsFromUsage(VkImageUsageFlags usage) {
+  VkFormatFeatureFlags result = {};
+  if (usage & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) {
+    result |= VK_FORMAT_FEATURE_TRANSFER_SRC_BIT;
+  }
+  if (usage & VK_IMAGE_USAGE_TRANSFER_DST_BIT) {
+    result |= VK_FORMAT_FEATURE_TRANSFER_DST_BIT;
+  }
+  if (usage & VK_IMAGE_USAGE_SAMPLED_BIT) {
+    result |= VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
+  }
+  if (usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) {
+    result |= VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT;
+  }
+  if (usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) {
+    result |= VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT;
+  }
+  if (usage & VK_IMAGE_USAGE_STORAGE_BIT) {
+    result |= VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT;
+  }
+  return result;
+}
+
+VkImageFormatConstraintsInfoFUCHSIA GetDefaultImageFormatConstraintsInfo(
+    const VkImageCreateInfo& create_info) {
+  DCHECK(create_info.format != VK_FORMAT_UNDEFINED);
+  DCHECK(create_info.usage != 0);
+
+  static const VkSysmemColorSpaceFUCHSIA kSrgbColorSpace = {
+      .sType = VK_STRUCTURE_TYPE_SYSMEM_COLOR_SPACE_FUCHSIA,
+      .pNext = nullptr,
+      .colorSpace =
+          static_cast<uint32_t>(fuchsia::sysmem::ColorSpaceType::SRGB),
+  };
+
+  static const VkSysmemColorSpaceFUCHSIA kYuvDefaultColorSpace = {
+      .sType = VK_STRUCTURE_TYPE_SYSMEM_COLOR_SPACE_FUCHSIA,
+      .pNext = nullptr,
+      .colorSpace =
+          static_cast<uint32_t>(fuchsia::sysmem::ColorSpaceType::REC709),
+  };
+
+  VkImageFormatConstraintsInfoFUCHSIA format_info = {
+      .sType = VK_STRUCTURE_TYPE_IMAGE_FORMAT_CONSTRAINTS_INFO_FUCHSIA,
+      .pNext = nullptr,
+      .imageCreateInfo = create_info,
+      .requiredFormatFeatures =
+          GetFormatFeatureFlagsFromUsage(create_info.usage),
+      .sysmemPixelFormat = 0u,
+      .colorSpaceCount = 1u,
+      .pColorSpaces = IsYuvVkFormat(create_info.format) ? &kYuvDefaultColorSpace
+                                                        : &kSrgbColorSpace,
+  };
+  return format_info;
+}
+
+struct ImageConstraintsInfo {
+  VkImageConstraintsInfoFUCHSIA image_constraints;
+  VkImageFormatConstraintsInfoFUCHSIA format_constraints;
+
+  ImageConstraintsInfo(
+      const VkImageConstraintsInfoFUCHSIA& image_constraints_in,
+      const VkImageFormatConstraintsInfoFUCHSIA& format_constraints_in)
+      : image_constraints(image_constraints_in),
+        format_constraints(format_constraints_in) {
+    image_constraints.pFormatConstraints = &format_constraints;
+    image_constraints.formatConstraintsCount = 1u;
+  }
+
+  ImageConstraintsInfo(ImageConstraintsInfo&& from) = delete;
+  ImageConstraintsInfo(const ImageConstraintsInfo&) = delete;
+  ImageConstraintsInfo& operator=(const ImageConstraintsInfo&) = delete;
+};
+
+std::unique_ptr<ImageConstraintsInfo> InitializeImageConstraintsInfo(
+    const VkImageCreateInfo& vk_image_info,
+    bool allow_protected_memory) {
+  VkImageFormatConstraintsInfoFUCHSIA format_constraints =
+      GetDefaultImageFormatConstraintsInfo(vk_image_info);
+  VkImageConstraintsInfoFUCHSIA image_constraints = {
+      .sType = VK_STRUCTURE_TYPE_IMAGE_CONSTRAINTS_INFO_FUCHSIA,
+      .pNext = nullptr,
+      .bufferCollectionConstraints =
+          VkBufferCollectionConstraintsInfoFUCHSIA{
+              .sType =
+                  VK_STRUCTURE_TYPE_BUFFER_COLLECTION_CONSTRAINTS_INFO_FUCHSIA,
+              .pNext = nullptr,
+              .minBufferCount = 1u,
+              // Using the default value (0) for the fields below means that
+              // there is no other constraints except for the minimum buffer
+              // count.
+              .maxBufferCount = 0u,
+              .minBufferCountForCamping = 0u,
+              .minBufferCountForDedicatedSlack = 0u,
+              .minBufferCountForSharedSlack = 0u,
+          },
+      .flags = allow_protected_memory
+                   ? VK_IMAGE_CONSTRAINTS_INFO_PROTECTED_OPTIONAL_FUCHSIA
+                   : 0u,
+  };
+
+  return std::make_unique<ImageConstraintsInfo>(image_constraints,
+                                                format_constraints);
+}
+
 }  // namespace
 
 // static
@@ -113,21 +239,18 @@ FlatlandSysmemBufferCollection::FlatlandSysmemBufferCollection(
     : id_(id) {}
 
 bool FlatlandSysmemBufferCollection::Initialize(
-    fuchsia::sysmem::Allocator_Sync* allocator,
+    fuchsia::sysmem::Allocator_Sync* sysmem_allocator,
+    fuchsia::ui::composition::Allocator* flatland_allocator,
     FlatlandSurfaceFactory* flatland_surface_factory,
     zx::channel token_handle,
     gfx::Size size,
     gfx::BufferFormat format,
     gfx::BufferUsage usage,
     VkDevice vk_device,
-    size_t min_buffer_count,
-    bool register_with_allocator) {
+    size_t min_buffer_count) {
   DCHECK(IsNativePixmapConfigSupported(format, usage));
   DCHECK(!collection_);
   DCHECK(!vk_buffer_collection_);
-
-  // TODO(crbug.com/1230150): Use Allocator API if |register_with_allocator| is
-  // true.
 
   // Currently all supported |usage| values require GPU access, which requires
   // a valid VkDevice.
@@ -158,8 +281,8 @@ bool FlatlandSysmemBufferCollection::Initialize(
   if (token_handle) {
     collection_token.Bind(std::move(token_handle));
   } else {
-    zx_status_t status =
-        allocator->AllocateSharedCollection(collection_token.NewRequest());
+    zx_status_t status = sysmem_allocator->AllocateSharedCollection(
+        collection_token.NewRequest());
     if (status != ZX_OK) {
       ZX_DLOG(ERROR, status)
           << "fuchsia.sysmem.Allocator.AllocateSharedCollection()";
@@ -167,8 +290,10 @@ bool FlatlandSysmemBufferCollection::Initialize(
     }
   }
 
-  return InitializeInternal(allocator, std::move(collection_token),
-                            min_buffer_count);
+  return InitializeInternal(
+      sysmem_allocator, flatland_allocator, std::move(collection_token),
+      /*register_with_flatland_allocator=*/usage == gfx::BufferUsage::SCANOUT,
+      min_buffer_count);
 }
 
 scoped_refptr<gfx::NativePixmap>
@@ -310,8 +435,8 @@ bool FlatlandSysmemBufferCollection::CreateVkImage(
 
     case fuchsia::sysmem::ColorSpaceType::REC709: {
       // Currently sysmem doesn't specify location of chroma samples relative to
-      // luma (see fxb/13677). Assume they are cosited with luma. YCbCr info
-      // here must match the values passed for the same buffer in
+      // luma (see fxbug.dev/13677). Assume they are cosited with luma. YCbCr
+      // info here must match the values passed for the same buffer in
       // FuchsiaVideoDecoder. |format_features| are resolved later in the GPU
       // process before the ycbcr info is passed to Skia.
       *ycbcr_info = gpu::VulkanYCbCrInfo(
@@ -331,10 +456,20 @@ bool FlatlandSysmemBufferCollection::CreateVkImage(
   return true;
 }
 
-void FlatlandSysmemBufferCollection::SetOnDeletedCallback(
+fuchsia::ui::composition::BufferCollectionImportToken
+FlatlandSysmemBufferCollection::GetFlatlandImportToken() const {
+  fuchsia::ui::composition::BufferCollectionImportToken import_dup;
+  zx_status_t status = flatland_import_token_.value.duplicate(
+      ZX_RIGHT_SAME_RIGHTS, &import_dup.value);
+  if (status != ZX_OK) {
+    ZX_DLOG(ERROR, status) << "BufferCollectionImportToken duplicate failed";
+  }
+  return import_dup;
+}
+
+void FlatlandSysmemBufferCollection::AddOnDeletedCallback(
     base::OnceClosure on_deleted) {
-  DCHECK(!on_deleted_);
-  on_deleted_ = std::move(on_deleted);
+  on_deleted_.push_back(std::move(on_deleted));
 }
 
 FlatlandSysmemBufferCollection::~FlatlandSysmemBufferCollection() {
@@ -346,23 +481,27 @@ FlatlandSysmemBufferCollection::~FlatlandSysmemBufferCollection() {
   if (collection_)
     collection_->Close();
 
-  if (on_deleted_)
-    std::move(on_deleted_).Run();
+  for (auto& callback : on_deleted_)
+    std::move(callback).Run();
 }
 
 bool FlatlandSysmemBufferCollection::InitializeInternal(
-    fuchsia::sysmem::Allocator_Sync* allocator,
+    fuchsia::sysmem::Allocator_Sync* sysmem_allocator,
+    fuchsia::ui::composition::Allocator* flatland_allocator,
     fuchsia::sysmem::BufferCollectionTokenSyncPtr collection_token,
+    bool register_with_flatland_allocator,
     size_t min_buffer_count) {
   fidl::InterfaceHandle<fuchsia::sysmem::BufferCollectionToken>
       collection_token_for_vulkan;
   collection_token->Duplicate(ZX_RIGHT_SAME_RIGHTS,
                               collection_token_for_vulkan.NewRequest());
 
-  // Duplicate one more token for Flatland if this collection can be used as an
-  // overlay.
   fidl::InterfaceHandle<fuchsia::sysmem::BufferCollectionToken>
       collection_token_for_flatland;
+  if (register_with_flatland_allocator) {
+    collection_token->Duplicate(ZX_RIGHT_SAME_RIGHTS,
+                                collection_token_for_flatland.NewRequest());
+  }
 
   zx_status_t status = collection_token->Sync();
   if (status != ZX_OK) {
@@ -370,13 +509,14 @@ bool FlatlandSysmemBufferCollection::InitializeInternal(
     return false;
   }
 
-  status = allocator->BindSharedCollection(std::move(collection_token),
-                                           collection_.NewRequest());
+  status = sysmem_allocator->BindSharedCollection(std::move(collection_token),
+                                                  collection_.NewRequest());
   if (status != ZX_OK) {
     ZX_DLOG(ERROR, status) << "fuchsia.sysmem.Allocator.BindSharedCollection()";
     return false;
   }
 
+  // Set |min_buffer_count| constraints.
   fuchsia::sysmem::BufferCollectionConstraints constraints;
   if (is_mappable()) {
     constraints.usage.cpu =
@@ -400,6 +540,29 @@ bool FlatlandSysmemBufferCollection::InitializeInternal(
     return false;
   }
 
+  // Set Flatland allocator constraints.
+  if (register_with_flatland_allocator) {
+    DCHECK(flatland_allocator);
+    fuchsia::ui::composition::BufferCollectionExportToken export_token;
+    status = zx::eventpair::create(0, &export_token.value,
+                                   &flatland_import_token_.value);
+
+    fuchsia::ui::composition::RegisterBufferCollectionArgs args;
+    args.set_export_token(std::move(export_token));
+    args.set_buffer_collection_token(std::move(collection_token_for_flatland));
+    args.set_usage(
+        fuchsia::ui::composition::RegisterBufferCollectionUsage::DEFAULT);
+    flatland_allocator->RegisterBufferCollection(
+        std::move(args),
+        [](fuchsia::ui::composition::Allocator_RegisterBufferCollection_Result
+               result) {
+          if (result.is_err()) {
+            LOG(FATAL) << "RegisterBufferCollection failed";
+          }
+        });
+  }
+
+  // Set Vulkan constraints.
   zx::channel token_channel = collection_token_for_vulkan.TakeChannel();
   VkBufferCollectionCreateInfoFUCHSIA buffer_collection_create_info = {
       VK_STRUCTURE_TYPE_BUFFER_COLLECTION_CREATE_INFO_FUCHSIA};
@@ -413,14 +576,20 @@ bool FlatlandSysmemBufferCollection::InitializeInternal(
   }
 
   // vkCreateBufferCollectionFUCHSIA() takes ownership of the token on success.
-  ignore_result(token_channel.release());
+  std::ignore = token_channel.release();
 
   VkImageCreateInfo image_create_info;
   InitializeImageCreateInfo(&image_create_info, min_size_);
 
-  if (vkSetBufferCollectionConstraintsFUCHSIA(vk_device_, vk_buffer_collection_,
-                                              &image_create_info) !=
-      VK_SUCCESS) {
+  // TODO(crbug.com/1289315): Instead of always allowing protected memory,
+  // Chrome should query if the Vulkan physical device supports protected
+  // memory and only set the flag if it is supported.
+  auto image_constraints_info = InitializeImageConstraintsInfo(
+      image_create_info, /* allow_protected_memory */ true);
+
+  if (vkSetBufferCollectionImageConstraintsFUCHSIA(
+          vk_device_, vk_buffer_collection_,
+          &image_constraints_info->image_constraints) != VK_SUCCESS) {
     DLOG(ERROR) << "vkSetBufferCollectionConstraintsFUCHSIA() failed";
     return false;
   }
@@ -479,8 +648,7 @@ void FlatlandSysmemBufferCollection::InitializeImageCreateInfo(
   vk_image_info->usage = VK_IMAGE_USAGE_SAMPLED_BIT |
                          VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
                          VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-  if (usage_ == gfx::BufferUsage::SCANOUT ||
-      usage_ == gfx::BufferUsage::SCANOUT_CPU_READ_WRITE) {
+  if (usage_ == gfx::BufferUsage::SCANOUT) {
     vk_image_info->usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
   }
 

@@ -6,7 +6,6 @@
 #define EXTENSIONS_SHELL_COMMON_SHELL_CONTENT_CLIENT_H_
 
 #include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "content/public/common/content_client.h"
 #include "url/url_util.h"
 
@@ -15,6 +14,10 @@ namespace extensions {
 class ShellContentClient : public content::ContentClient {
  public:
   ShellContentClient();
+
+  ShellContentClient(const ShellContentClient&) = delete;
+  ShellContentClient& operator=(const ShellContentClient&) = delete;
+
   ~ShellContentClient() override;
 
   void AddPepperPlugins(
@@ -26,9 +29,6 @@ class ShellContentClient : public content::ContentClient {
       ui::ResourceScaleFactor scale_factor) override;
   base::RefCountedMemory* GetDataResourceBytes(int resource_id) override;
   gfx::Image& GetNativeImageNamed(int resource_id) override;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ShellContentClient);
 };
 
 }  // namespace extensions

@@ -5,6 +5,7 @@
 #include "chrome/browser/ash/file_manager/guest_os_file_tasks.h"
 
 #include "base/files/file_path.h"
+#include "base/strings/escape.h"
 #include "base/values.h"
 #include "chrome/browser/ash/crostini/fake_crostini_features.h"
 #include "chrome/browser/ash/file_manager/path_util.h"
@@ -16,7 +17,6 @@
 #include "components/prefs/scoped_user_pref_update.h"
 #include "content/public/test/browser_task_environment.h"
 #include "extensions/browser/entry_info.h"
-#include "net/base/escape.h"
 #include "storage/browser/file_system/external_mount_points.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -25,16 +25,17 @@ namespace file_manager {
 namespace file_tasks {
 namespace {
 
-static constexpr auto VM_TERMINA =
-    guest_os::GuestOsRegistryService::VmType::ApplicationList_VmType_TERMINA;
-static constexpr auto PLUGIN_VM =
-    guest_os::GuestOsRegistryService::VmType::ApplicationList_VmType_PLUGIN_VM;
+static constexpr auto VM_TERMINA = guest_os::VmType::TERMINA;
+static constexpr auto PLUGIN_VM = guest_os::VmType::PLUGIN_VM;
 
 }  // namespace
 
 class GuestOsFileTasksTest : public testing::Test {
  protected:
   GuestOsFileTasksTest() = default;
+
+  GuestOsFileTasksTest(const GuestOsFileTasksTest&) = delete;
+  GuestOsFileTasksTest& operator=(const GuestOsFileTasksTest&) = delete;
 
   void SetUp() override {
     storage::ExternalMountPoints::GetSystemInstance()->RegisterFileSystem(
@@ -54,12 +55,12 @@ class GuestOsFileTasksTest : public testing::Test {
               const std::string& name,
               const std::vector<std::string>& mimes,
               const std::vector<std::string>& extensions,
-              guest_os::GuestOsRegistryService::VmType vm_type) {
+              guest_os::VmType vm_type) {
     // crostini.registry {<id>: {container_name: "penguin", name: {"": <name>},
     //                           mime_types: [<mime>,], vm_name: "termina"}}
     DictionaryPrefUpdate update(profile_.GetPrefs(),
                                 guest_os::prefs::kGuestOsRegistry);
-    base::DictionaryValue* registry = update.Get();
+    base::Value* registry = update.Get();
     base::Value app(base::Value::Type::DICTIONARY);
     app.SetKey("container_name", base::Value("penguin"));
     base::Value mime_list(base::Value::Type::LIST);
@@ -81,7 +82,7 @@ class GuestOsFileTasksTest : public testing::Test {
   void AddEntry(const std::string& path, const std::string& mime) {
     entries_.push_back(
         extensions::EntryInfo(base::FilePath(path), mime, false));
-    std::string virtual_path = net::EscapeUrlEncodedData(
+    std::string virtual_path = base::EscapeUrlEncodedData(
         util::GetDownloadsMountPointName(&profile_) + "/" + path,
         /*use_plus=*/false);
     urls_.push_back(
@@ -92,7 +93,7 @@ class GuestOsFileTasksTest : public testing::Test {
     // crostini.mime_types.termina.penguin.<file_ext>: <mime>
     DictionaryPrefUpdate update(profile_.GetPrefs(),
                                 guest_os::prefs::kGuestOsMimeTypes);
-    base::DictionaryValue* mimes = update.Get();
+    base::Value* mimes = update.Get();
     mimes->SetStringPath("termina.penguin." + file_ext, mime);
   }
 
@@ -102,11 +103,9 @@ class GuestOsFileTasksTest : public testing::Test {
   std::vector<GURL> urls_;
   std::vector<std::string> app_ids_;
   std::vector<std::string> app_names_;
-  std::vector<guest_os::GuestOsRegistryService::VmType> app_vm_types_;
+  std::vector<guest_os::VmType> app_vm_types_;
   crostini::FakeCrostiniFeatures fake_crostini_features_;
   plugin_vm::FakePluginVmFeatures fake_plugin_vm_features_;
-
-  DISALLOW_COPY_AND_ASSIGN(GuestOsFileTasksTest);
 };
 
 TEST_F(GuestOsFileTasksTest, CheckPathsCanBeShared) {
@@ -153,6 +152,16 @@ TEST_F(GuestOsFileTasksTest, Termina_AppRegistered) {
   EXPECT_THAT(app_vm_types_, testing::ElementsAre(VM_TERMINA));
 }
 
+TEST_F(GuestOsFileTasksTest, Termina_IgnoreCase) {
+  AddApp("app1", "name1", {"Test/Mime1"}, {}, VM_TERMINA);
+  AddEntry("entry.txt", "tesT/mimE1");
+  FindGuestOsApps(&profile_, entries_, urls_, &app_ids_, &app_names_,
+                  &app_vm_types_);
+  EXPECT_THAT(app_ids_, testing::ElementsAre("app1"));
+  EXPECT_THAT(app_names_, testing::ElementsAre("name1"));
+  EXPECT_THAT(app_vm_types_, testing::ElementsAre(VM_TERMINA));
+}
+
 TEST_F(GuestOsFileTasksTest, Termina_NotEnabled) {
   fake_crostini_features_.set_enabled(false);
   AddApp("app1", "name1", {"test/mime1"}, {}, VM_TERMINA);
@@ -167,6 +176,16 @@ TEST_F(GuestOsFileTasksTest, Termina_NotEnabled) {
 TEST_F(GuestOsFileTasksTest, PluginVm_AppRegistered) {
   AddApp("app1", "name1", {}, {"txt"}, PLUGIN_VM);
   AddEntry("entry.txt", "test/mime1");
+  FindGuestOsApps(&profile_, entries_, urls_, &app_ids_, &app_names_,
+                  &app_vm_types_);
+  EXPECT_THAT(app_ids_, testing::ElementsAre("app1"));
+  EXPECT_THAT(app_names_, testing::ElementsAre("name1 (Windows)"));
+  EXPECT_THAT(app_vm_types_, testing::ElementsAre(PLUGIN_VM));
+}
+
+TEST_F(GuestOsFileTasksTest, PluginVm_IgnoreCase) {
+  AddApp("app1", "name1", {}, {"Txt"}, PLUGIN_VM);
+  AddEntry("entry.txT", "test/mime1");
   FindGuestOsApps(&profile_, entries_, urls_, &app_ids_, &app_names_,
                   &app_vm_types_);
   EXPECT_THAT(app_ids_, testing::ElementsAre("app1"));

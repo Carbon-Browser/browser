@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "ui/accessibility/platform/ax_unique_id.h"
 #include "ui/views/accessibility/ax_aura_obj_wrapper.h"
@@ -41,14 +42,13 @@ class AXWidgetObjWrapper : public AXAuraObjWrapper,
   // WidgetObserver overrides.
   void OnWidgetDestroying(Widget* widget) override;
   void OnWidgetDestroyed(Widget* widget) override;
-  void OnWidgetClosing(Widget* widget) override;
   void OnWidgetVisibilityChanged(Widget*, bool) override;
 
   // WidgetRemovalsObserver overrides.
   void OnWillRemoveView(Widget* widget, View* view) override;
 
  private:
-  Widget* widget_;
+  raw_ptr<Widget> widget_;
 
   const ui::AXUniqueId unique_id_;
 

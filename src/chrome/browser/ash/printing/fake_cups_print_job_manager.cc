@@ -8,12 +8,12 @@
 
 #include "base/bind.h"
 #include "base/threading/sequenced_task_runner_handle.h"
-#include "chrome/browser/chromeos/printing/cups_print_job.h"
-#include "chrome/browser/chromeos/printing/cups_print_job_manager.h"
+#include "chrome/browser/ash/printing/cups_print_job.h"
+#include "chrome/browser/ash/printing/cups_print_job_manager.h"
 #include "content/public/browser/browser_context.h"
 #include "ui/message_center/public/cpp/notification.h"
 
-namespace chromeos {
+namespace ash {
 
 FakeCupsPrintJobManager::FakeCupsPrintJobManager(Profile* profile)
     : CupsPrintJobManager(profile) {
@@ -30,7 +30,7 @@ bool FakeCupsPrintJobManager::CreatePrintJob(
     ::printing::PrintJob::Source source,
     const std::string& source_id,
     const printing::proto::PrintSettings& settings) {
-  Printer printer(printer_id);
+  chromeos::Printer printer(printer_id);
   printer.set_display_name(printer_id);
 
   // Create a new print job.
@@ -74,7 +74,7 @@ bool FakeCupsPrintJobManager::ResumePrintJob(CupsPrintJob* job) {
       FROM_HERE,
       base::BindOnce(&FakeCupsPrintJobManager::ChangePrintJobState,
                      weak_ptr_factory_.GetWeakPtr(), job),
-      base::TimeDelta::FromMilliseconds(3000));
+      base::Milliseconds(3000));
 
   return true;
 }
@@ -136,7 +136,7 @@ void FakeCupsPrintJobManager::ChangePrintJobState(CupsPrintJob* job) {
       FROM_HERE,
       base::BindOnce(&FakeCupsPrintJobManager::ChangePrintJobState,
                      weak_ptr_factory_.GetWeakPtr(), job),
-      base::TimeDelta::FromMilliseconds(3000));
+      base::Milliseconds(3000));
 }
 
 // static
@@ -144,4 +144,4 @@ CupsPrintJobManager* CupsPrintJobManager::CreateInstance(Profile* profile) {
   return new FakeCupsPrintJobManager(profile);
 }
 
-}  // namespace chromeos
+}  // namespace ash

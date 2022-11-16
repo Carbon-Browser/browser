@@ -6,7 +6,6 @@
 
 #include "base/command_line.h"
 #include "base/files/file_util.h"
-#include "base/macros.h"
 #include "base/strings/string_split.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
@@ -53,6 +52,9 @@ namespace content {
 class MediaCapabilitiesTest : public ContentBrowserTest {
  public:
   MediaCapabilitiesTest() = default;
+
+  MediaCapabilitiesTest(const MediaCapabilitiesTest&) = delete;
+  MediaCapabilitiesTest& operator=(const MediaCapabilitiesTest&) = delete;
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
     command_line->AppendSwitchASCII(switches::kEnableBlinkFeatures,
@@ -149,9 +151,6 @@ class MediaCapabilitiesTest : public ContentBrowserTest {
     title_watcher.AlsoWaitForTitle(kError);
     return base::UTF16ToASCII(title_watcher.WaitAndGetTitle());
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(MediaCapabilitiesTest);
 };
 
 // Adds param for query type (file vs media-source) to
@@ -173,7 +172,7 @@ class MediaCapabilitiesTestWithConfigType
 };
 
 // Fails on Linux and Chrome OS: http://crbug.com/1220321.
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 #define MAYBE_CommonVideoDecodeTypes DISABLED_CommonVideoDecodeTypes
 #else
 #define MAYBE_CommonVideoDecodeTypes CommonVideoDecodeTypes
@@ -373,7 +372,7 @@ IN_PROC_BROWSER_TEST_P(MediaCapabilitiesTestWithConfigType,
 }
 
 // Fails on Linux and Chrome OS: http://crbug.com/1220321.
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 #define MAYBE_VideoTypesWithDynamicRange DISABLED_VideoTypesWithDynamicRange
 #else
 #define MAYBE_VideoTypesWithDynamicRange VideoTypesWithDynamicRange

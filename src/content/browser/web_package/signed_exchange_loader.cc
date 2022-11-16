@@ -42,7 +42,6 @@ namespace content {
 
 namespace {
 
-constexpr char kLoadResultHistogram[] = "SignedExchange.LoadResult2";
 constexpr char kPrefetchLoadResultHistogram[] =
     "SignedExchange.Prefetch.LoadResult2";
 
@@ -70,10 +69,10 @@ SignedExchangeLoader::SignedExchangeLoader(
     : outer_request_(outer_request),
       outer_response_head_(std::move(outer_response_head)),
       forwarding_client_(std::move(forwarding_client)),
+      reporter_(std::move(reporter)),
       url_loader_options_(url_loader_options),
       should_redirect_on_failure_(should_redirect_on_failure),
       devtools_proxy_(std::move(devtools_proxy)),
-      reporter_(std::move(reporter)),
       url_loader_factory_(std::move(url_loader_factory)),
       url_loader_throttles_getter_(std::move(url_loader_throttles_getter)),
       network_isolation_key_(network_isolation_key),
@@ -119,7 +118,8 @@ void SignedExchangeLoader::OnReceiveEarlyHints(
 }
 
 void SignedExchangeLoader::OnReceiveResponse(
-    network::mojom::URLResponseHeadPtr response_head) {
+    network::mojom::URLResponseHeadPtr response_head,
+    mojo::ScopedDataPipeConsumerHandle body) {
   // Must not be called because this SignedExchangeLoader and the client
   // endpoints were bound after OnReceiveResponse() is called.
   NOTREACHED();
@@ -186,6 +186,9 @@ void SignedExchangeLoader::OnStartLoadingResponseBody(
       base::BindOnce(&SignedExchangeLoader::OnHTTPExchangeFound,
                      weak_factory_.GetWeakPtr()),
       std::move(cert_fetcher_factory), network_isolation_key_,
+      outer_request_.trusted_params
+          ? absl::make_optional(outer_request_.trusted_params->isolation_info)
+          : absl::nullopt,
       outer_request_.load_flags, outer_response_head_->remote_endpoint,
       std::make_unique<blink::WebPackageRequestMatcher>(outer_request_.headers,
                                                         accept_langs_),
@@ -304,7 +307,6 @@ void SignedExchangeLoader::OnHTTPExchangeFound(
   }
   inner_response_head_shown_to_client->was_fetched_via_cache =
       outer_response_head_->was_fetched_via_cache;
-  client_->OnReceiveResponse(std::move(inner_response_head_shown_to_client));
 
   // Currently we always assume that we have body.
   // TODO(https://crbug.com/80374): Add error handling and bail out
@@ -323,7 +325,10 @@ void SignedExchangeLoader::OnHTTPExchangeFound(
         network::URLLoaderCompletionStatus(net::ERR_INSUFFICIENT_RESOURCES));
     return;
   }
-  pending_body_consumer_ = std::move(consumer_handle);
+
+  client_->OnReceiveResponse(std::move(inner_response_head_shown_to_client),
+                             std::move(consumer_handle));
+
   body_data_pipe_adapter_ = std::make_unique<network::SourceStreamToDataPipe>(
       std::move(payload_stream), std::move(producer_handle));
 
@@ -332,7 +337,6 @@ void SignedExchangeLoader::OnHTTPExchangeFound(
 
 void SignedExchangeLoader::StartReadingBody() {
   DCHECK(body_data_pipe_adapter_);
-  DCHECK(pending_body_consumer_.is_valid());
 
   // If it's not for prefetch, kSignedHTTPExchangePingValidity is enabled
   // and validity_pinger_ is not initialized yet, create a validity pinger
@@ -359,7 +363,6 @@ void SignedExchangeLoader::StartReadingBody() {
   validity_pinger_.reset();
 
   // Start reading.
-  client_->OnStartLoadingResponseBody(std::move(pending_body_consumer_));
   body_data_pipe_adapter_->Start(base::BindOnce(
       &SignedExchangeLoader::FinishReadingBody, base::Unretained(this)));
 }
@@ -401,7 +404,7 @@ void SignedExchangeLoader::NotifyClientOnCompleteIfReady() {
 }
 
 void SignedExchangeLoader::ReportLoadResult(SignedExchangeLoadResult result) {
-  UMA_HISTOGRAM_ENUMERATION(kLoadResultHistogram, result);
+  signed_exchange_utils::RecordLoadResultHistogram(result);
   // |metric_recorder_| could be null in some tests.
   if ((outer_request_.load_flags & net::LOAD_PREFETCH) && metric_recorder_) {
     UMA_HISTOGRAM_ENUMERATION(kPrefetchLoadResultHistogram, result);

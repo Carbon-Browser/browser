@@ -9,11 +9,13 @@
 #include <vector>
 
 #include "base/bind.h"
+#include "base/callback.h"
 #include "base/check_op.h"
 #include "base/location.h"
-#include "base/macros.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
+#include "build/build_config.h"
+#include "build/chromeos_buildflags.h"
 #include "ui/aura/client/screen_position_client.h"
 #include "ui/aura/env.h"
 #include "ui/aura/test/aura_test_utils.h"
@@ -23,7 +25,7 @@
 #include "ui/ozone/public/ozone_platform.h"
 #include "ui/ozone/public/ozone_ui_controls_test_helper.h"
 #include "ui/views/test/test_desktop_screen_ozone.h"
-#include "ui/views/widget/desktop_aura/desktop_window_tree_host_linux.h"
+#include "ui/views/widget/desktop_aura/desktop_window_tree_host_platform.h"
 
 namespace views {
 namespace test {
@@ -44,6 +46,10 @@ class UIControlsDesktopOzone : public UIControlsAura {
     DCHECK(ozone_ui_controls_test_helper_)
         << "The test suite cannot be run without OzoneUIControlsTestHelper.";
   }
+
+  UIControlsDesktopOzone(const UIControlsDesktopOzone&) = delete;
+  UIControlsDesktopOzone& operator=(const UIControlsDesktopOzone&) = delete;
+
   ~UIControlsDesktopOzone() override = default;
 
   bool SendKeyPress(gfx::NativeWindow window,
@@ -145,6 +151,33 @@ class UIControlsDesktopOzone : public UIControlsAura {
     return SendMouseEvents(type, UP | DOWN, ui_controls::kNoAccelerator);
   }
 
+#if BUILDFLAG(IS_CHROMEOS)
+  bool SendTouchEvents(int action, int id, int x, int y) override {
+    return SendTouchEventsNotifyWhenDone(action, id, x, y, base::OnceClosure());
+  }
+  bool SendTouchEventsNotifyWhenDone(int action,
+                                     int id,
+                                     int x,
+                                     int y,
+                                     base::OnceClosure closure) override {
+    gfx::Point screen_location(x, y);
+    aura::Window* root_window;
+
+    // Touch release events might not have coordinates that match any window, so
+    // just use whichever window is on top.
+    if (action & ui_controls::RELEASE)
+      root_window = TopRootWindow();
+    else
+      root_window = RootWindowForPoint(screen_location);
+
+    ozone_ui_controls_test_helper_->SendTouchEvent(
+        root_window->GetHost()->GetAcceleratedWidget(), action, id,
+        screen_location, std::move(closure));
+
+    return true;
+  }
+#endif
+
  private:
   aura::Window* RootWindowForPoint(const gfx::Point& point) {
     // Most interactive_ui_tests run inside of the aura_test_helper
@@ -153,7 +186,7 @@ class UIControlsDesktopOzone : public UIControlsAura {
     // iterating across the windows owned DesktopWindowTreeHostLinux since this
     // doesn't rely on having a DesktopScreenX11.
     std::vector<aura::Window*> windows =
-        DesktopWindowTreeHostLinux::GetAllOpenWindows();
+        DesktopWindowTreeHostPlatform::GetAllOpenWindows();
     const auto i =
         std::find_if(windows.cbegin(), windows.cend(), [point](auto* window) {
           return window->GetBoundsInScreen().Contains(point) ||
@@ -164,9 +197,14 @@ class UIControlsDesktopOzone : public UIControlsAura {
     return (*i)->GetRootWindow();
   }
 
-  std::unique_ptr<ui::OzoneUIControlsTestHelper> ozone_ui_controls_test_helper_;
+  aura::Window* TopRootWindow() {
+    std::vector<aura::Window*> windows =
+        DesktopWindowTreeHostPlatform::GetAllOpenWindows();
+    DCHECK(!windows.empty());
+    return windows[0]->GetRootWindow();
+  }
 
-  DISALLOW_COPY_AND_ASSIGN(UIControlsDesktopOzone);
+  std::unique_ptr<ui::OzoneUIControlsTestHelper> ozone_ui_controls_test_helper_;
 };
 
 }  // namespace

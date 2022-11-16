@@ -63,10 +63,10 @@ SystemClipboard::SystemClipboard(LocalFrame* frame)
   frame->GetBrowserInterfaceBroker().GetInterface(
       clipboard_.BindNewPipeAndPassReceiver(
           frame->GetTaskRunner(TaskType::kUserInteraction)));
-#if defined(USE_OZONE) || defined(USE_X11)
+#if defined(USE_OZONE)
   is_selection_buffer_available_ =
       frame->GetSettings()->GetSelectionClipboardBufferAvailable();
-#endif  // defined(USE_OZONE) || defined(USE_X11)
+#endif  // defined(USE_OZONE)
 }
 
 bool SystemClipboard::IsSelectionMode() const {
@@ -106,7 +106,7 @@ String SystemClipboard::ReadPlainText() {
   return ReadPlainText(buffer_);
 }
 
-String SystemClipboard::ReadPlainText(mojom::ClipboardBuffer buffer) {
+String SystemClipboard::ReadPlainText(mojom::blink::ClipboardBuffer buffer) {
   if (!IsValidBufferType(buffer) || !clipboard_.is_bound())
     return String();
   String text;
@@ -114,12 +114,22 @@ String SystemClipboard::ReadPlainText(mojom::ClipboardBuffer buffer) {
   return text;
 }
 
+void SystemClipboard::ReadPlainText(
+    mojom::blink::ClipboardBuffer buffer,
+    mojom::blink::ClipboardHost::ReadTextCallback callback) {
+  if (!IsValidBufferType(buffer) || !clipboard_.is_bound()) {
+    std::move(callback).Run(String());
+    return;
+  }
+  clipboard_->ReadText(buffer_, std::move(callback));
+}
+
 void SystemClipboard::WritePlainText(const String& plain_text,
                                      SmartReplaceOption) {
   // TODO(https://crbug.com/106449): add support for smart replace, which is
   // currently under-specified.
   String text = plain_text;
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   ReplaceNewlinesWithWindowsStyleNewlines(text);
 #endif
   if (clipboard_.is_bound())
@@ -141,6 +151,15 @@ String SystemClipboard::ReadHTML(KURL& url,
     fragment_end = 0;
   }
   return html;
+}
+
+void SystemClipboard::ReadHTML(
+    mojom::blink::ClipboardHost::ReadHtmlCallback callback) {
+  if (!IsValidBufferType(buffer_) || !clipboard_.is_bound()) {
+    std::move(callback).Run(String(), KURL(), 0, 0);
+    return;
+  }
+  clipboard_->ReadHtml(buffer_, std::move(callback));
 }
 
 void SystemClipboard::WriteHTML(const String& markup,
@@ -184,24 +203,10 @@ mojo_base::BigBuffer SystemClipboard::ReadPng(
   return png;
 }
 
-SkBitmap SystemClipboard::ReadImage(mojom::ClipboardBuffer buffer) {
-  if (!IsValidBufferType(buffer) || !clipboard_.is_bound())
-    return SkBitmap();
-  SkBitmap image;
-  clipboard_->ReadImage(buffer, &image);
-  return image;
-}
-
 String SystemClipboard::ReadImageAsImageMarkup(
     mojom::blink::ClipboardBuffer buffer) {
-  // TODO(crbug.com/1223849): Remove check once `ReadImage()` is removed.
-  if (RuntimeEnabledFeatures::ClipboardReadPngEnabled()) {
-    mojo_base::BigBuffer png_data = ReadPng(buffer);
-    return PNGToImageMarkup(png_data);
-  } else {
-    SkBitmap bitmap = ReadImage(buffer);
-    return BitmapToImageMarkup(bitmap);
-  }
+  mojo_base::BigBuffer png_data = ReadPng(buffer);
+  return PNGToImageMarkup(png_data);
 }
 
 void SystemClipboard::WriteImageWithTag(Image* image,
@@ -210,6 +215,14 @@ void SystemClipboard::WriteImageWithTag(Image* image,
   DCHECK(image);
 
   PaintImage paint_image = image->PaintImageForCurrentFrame();
+
+  // Orient the data.
+  if (!image->HasDefaultOrientation()) {
+    paint_image = Image::ResizeAndOrientImage(
+        paint_image, image->CurrentFrameOrientation(), gfx::Vector2dF(1, 1), 1,
+        kInterpolationNone);
+  }
+
   SkBitmap bitmap;
   if (sk_sp<SkImage> sk_image = paint_image.GetSwSkImage())
     sk_image->asLegacyBitmap(&bitmap);
@@ -226,7 +239,7 @@ void SystemClipboard::WriteImageWithTag(Image* image,
   }
 
   if (url.IsValid() && !url.IsEmpty()) {
-#if !defined(OS_MAC)
+#if !BUILDFLAG(IS_MAC)
     // See http://crbug.com/838808: Not writing text/plain on Mac for
     // consistency between platforms, and to help fix errors in applications
     // which prefer text/plain content over image content for compatibility with
@@ -301,73 +314,10 @@ void SystemClipboard::CommitWrite() {
 }
 
 void SystemClipboard::CopyToFindPboard(const String& text) {
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   if (clipboard_.is_bound())
     clipboard_->WriteStringToFindPboard(text);
 #endif
-}
-
-void SystemClipboard::RecordClipboardImageUrls(
-    DocumentFragment* pasting_fragment) {
-  if (!pasting_fragment)
-    return;
-  image_urls_in_paste_.clear();
-  bool rtf_format_available =
-      IsFormatAvailable(blink::mojom::ClipboardFormat::kRtf);
-  for (Element& element : ElementTraversal::DescendantsOf(*pasting_fragment)) {
-    if (!IsA<HTMLImageElement>(&element))
-      continue;
-
-    auto* html_image_element = DynamicTo<HTMLImageElement>(&element);
-    const AtomicString& image_src_url = html_image_element->ImageSourceURL();
-    if (image_src_url.IsEmpty())
-      continue;
-    // Save the image url so we can record it when the image loading fails.
-    image_urls_in_paste_.insert(image_src_url.GetString());
-    static constexpr char kFilePrefix[] = "file:";
-    static constexpr char kCidPrefix[] = "cid:";
-    static constexpr char kHttpPrefix[] = "http:";
-    static constexpr char kHttpsPrefix[] = "https:";
-    static constexpr char kDataPrefix[] = "data:";
-    static constexpr char kBase64[] = "base64,";
-    ClipboardPastedImageUrls image_src_url_prefix =
-        ClipboardPastedImageUrls::kUnknown;
-    if (image_src_url.StartsWithIgnoringCase(kFilePrefix)) {
-      // Record local file urls.
-      image_src_url_prefix = ClipboardPastedImageUrls::kLocalFileUrls;
-    } else if (image_src_url.StartsWithIgnoringCase(kCidPrefix)) {
-      // Record cid prefix.
-      image_src_url_prefix = ClipboardPastedImageUrls::kCidUrls;
-    } else if (image_src_url.StartsWithIgnoringCase(kHttpPrefix) ||
-               image_src_url.StartsWithIgnoringCase(kHttpsPrefix)) {
-      // Record http prefix.
-      image_src_url_prefix = ClipboardPastedImageUrls::kHttpUrls;
-    } else if (image_src_url.StartsWithIgnoringCase(kDataPrefix) &&
-               image_src_url.Contains(kBase64)) {
-      // Record base64 encoded image.
-      image_src_url_prefix = ClipboardPastedImageUrls::kBase64EncodedImage;
-    } else {
-      image_src_url_prefix = ClipboardPastedImageUrls::kOtherUrls;
-    }
-    base::UmaHistogramEnumeration("Blink.Clipboard.Paste.Image",
-                                  image_src_url_prefix);
-    // Check if RTF is present in the clipboard.
-    if (image_src_url_prefix == ClipboardPastedImageUrls::kLocalFileUrls &&
-        rtf_format_available) {
-      image_src_url_prefix = ClipboardPastedImageUrls::kLocalFileUrlWithRtf;
-      base::UmaHistogramEnumeration("Blink.Clipboard.Paste.Image",
-                                    image_src_url_prefix);
-    }
-  }
-}
-
-void SystemClipboard::RecordImageLoadError(const String& image_url) {
-  if (image_urls_in_paste_.IsEmpty())
-    return;
-  if (base::Contains(image_urls_in_paste_, image_url)) {
-    base::UmaHistogramEnumeration("Blink.Clipboard.Paste.Image",
-                                  ClipboardPastedImageUrls::kImageLoadError);
-  }
 }
 
 void SystemClipboard::ReadAvailableCustomAndStandardFormats(

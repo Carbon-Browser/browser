@@ -8,7 +8,7 @@
 
 #include "base/time/time.h"
 #include "pdf/document_layout.h"
-#include "pdf/ppapi_migration/url_loader.h"
+#include "pdf/loader/url_loader.h"
 #include "third_party/skia/include/core/SkColor.h"
 
 namespace chrome_pdf {
@@ -53,7 +53,7 @@ bool TestClient::IsPrintPreview() const {
   return false;
 }
 
-SkColor TestClient::GetBackgroundColor() {
+SkColor TestClient::GetBackgroundColor() const {
   return SK_ColorTRANSPARENT;
 }
 
@@ -64,10 +64,5 @@ void TestClient::SetLinkUnderCursor(const std::string& link_under_cursor) {}
 bool TestClient::IsValidLink(const std::string& url) {
   return !url.empty();
 }
-
-void TestClient::ScheduleTaskOnMainThread(const base::Location& from_here,
-                                          ResultCallback callback,
-                                          int32_t result,
-                                          base::TimeDelta delay) {}
 
 }  // namespace chrome_pdf

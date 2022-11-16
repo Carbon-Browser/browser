@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #import "ios/web/public/test/fakes/fake_navigation_manager.h"
+#import "ios/web/public/navigation/navigation_item.h"
 
 #if !defined(__has_feature) || !__has_feature(objc_arc)
 #error "This file requires ARC support."
@@ -140,15 +141,27 @@ void FakeNavigationManager::Reload(ReloadType reload_type,
 
 void FakeNavigationManager::ReloadWithUserAgentType(
     UserAgentType user_agent_type) {
-  NOTREACHED();
+  if (user_agent_type == web::UserAgentType::MOBILE) {
+    request_mobile_site_was_called_ = true;
+  } else if (user_agent_type == web::UserAgentType::DESKTOP) {
+    request_desktop_site_was_called_ = true;
+  }
 }
 
-NavigationItemList FakeNavigationManager::GetBackwardItems() const {
-  return NavigationItemList();
+std::vector<NavigationItem*> FakeNavigationManager::GetBackwardItems() const {
+  std::vector<NavigationItem*> back_items;
+  for (int i = static_cast<int>(items_index_ - 1); i >= 0; --i) {
+    back_items.push_back(items_[i].get());
+  }
+  return back_items;
 }
 
-NavigationItemList FakeNavigationManager::GetForwardItems() const {
-  return NavigationItemList();
+std::vector<NavigationItem*> FakeNavigationManager::GetForwardItems() const {
+  std::vector<NavigationItem*> forward_items;
+  for (unsigned int i = items_index_ + 1; i < items_.size(); ++i) {
+    forward_items.push_back(items_[i].get());
+  }
+  return forward_items;
 }
 
 void FakeNavigationManager::Restore(
@@ -190,6 +203,14 @@ bool FakeNavigationManager::LoadIfNecessaryWasCalled() {
 
 bool FakeNavigationManager::ReloadWasCalled() {
   return reload_was_called_;
+}
+
+bool FakeNavigationManager::RequestDesktopSiteWasCalled() {
+  return request_desktop_site_was_called_;
+}
+
+bool FakeNavigationManager::RequestMobileSiteWasCalled() {
+  return request_mobile_site_was_called_;
 }
 
 }  // namespace web

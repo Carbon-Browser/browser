@@ -19,8 +19,14 @@ class GPUSampler : public DawnObject<WGPUSampler> {
                             const GPUSamplerDescriptor* webgpu_desc);
   explicit GPUSampler(GPUDevice* device, WGPUSampler sampler);
 
+  GPUSampler(const GPUSampler&) = delete;
+  GPUSampler& operator=(const GPUSampler&) = delete;
+
  private:
-  DISALLOW_COPY_AND_ASSIGN(GPUSampler);
+  void setLabelImpl(const String& value) override {
+    std::string utf8_label = value.Utf8();
+    GetProcs().samplerSetLabel(GetHandle(), utf8_label.c_str());
+  }
 };
 
 }  // namespace blink

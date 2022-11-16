@@ -30,7 +30,9 @@
 <translation id="1189258430971676908">Zona e praktikës: Listat zbritëse</translation>
 <translation id="1195238899008218998">Pasthënie</translation>
 <translation id="1197088940767939838">Portokalli</translation>
+<translation id="1198865190323699001">Gjestet me prekje</translation>
 <translation id="1201402288615127009">Para</translation>
+<translation id="1202112913213080585">anulo</translation>
 <translation id="1206619573307042055">tenda</translation>
 <translation id="1207086294218137981">Nuk ka titull tjetër të nivelit 4</translation>
 <translation id="1212770441379271564">Këto pak shkurtore të mëposhtme nuk janë komanda të ChromeVox, por gjithsesi mund të jenë shumë të dobishme për të shfrytëzuar Chrome në maksimum.
@@ -42,6 +44,7 @@ Për të lëvizur përpara mes skedave të hapura, përdor Control+Tab.
 Për të hapur menynë e shfletuesit Chrome, shtyp Alt+F.</translation>
 <translation id="1213216066620407844">ChromeVox - i jep zë Chrome</translation>
 <translation id="1225969361094801578">Gri rrasë e errët</translation>
+<translation id="122928249241119550">kalo te fjalia e mëparshme</translation>
 <translation id="1230503547248836149">Fillimi i përzgjedhjes</translation>
 <translation id="1236794971743289975">Nota e fundit</translation>
 <translation id="1237797094773582699">Në të njëjtën mënyrë, rrëshqitja e shpejtë me katër gishta nga e djathta në të majtë mund të përdoret për të kaluar te seksioni i mëparshëm. Provoje tani!</translation>
@@ -66,8 +69,10 @@ Për të hapur menynë e shfletuesit Chrome, shtyp Alt+F.</translation>
 <translation id="133801305381959373">Nuk ka asnjë fushë tjetër të redaktueshme të tekstit</translation>
 <translation id="1342835525016946179">artikull</translation>
 <translation id="1346059596910821859">Këshillë</translation>
+<translation id="1354356357730355833">kopjo</translation>
 <translation id="135978014023467274">Je përditësuar me ChromeVox 63!</translation>
 <translation id="1360699455582016846">Kliko tek artikulli nën tastin e rrugëzimit <ph name="ROUTING_KEY_NUMBER" /></translation>
+<translation id="1376703628032300005">kalo te karakteri tjetër</translation>
 <translation id="1377925789329510816">Ky është titulli i fundit. Shtyp "Kërko+H" për të kaluar te titulli i parë ose "Kërko+Shift+H" për të shkuar te titulli i dytë në këtë faqe.</translation>
 <translation id="138218114945450791">Blu e çelur</translation>
 <translation id="1383876407941801731">Kërko</translation>
@@ -210,8 +215,10 @@ Për të hapur menynë e shfletuesit Chrome, shtyp Alt+F.</translation>
 <translation id="2435422727584637732">Blu Dodger</translation>
 <translation id="2438712309510062123">Sugjero</translation>
 <translation id="2450814015951372393">Shëno kutinë</translation>
+<translation id="2450992626945324272">kalo te fjalia tjetër</translation>
 <translation id="2461822463642141190">Rryma</translation>
 <translation id="2462626033734746142">Grupi i butonit të radios</translation>
+<translation id="2467741090055146971">anulo zgjedhjen</translation>
 <translation id="2471138580042810658">Titulli 6</translation>
 <translation id="248982282205370495">{COUNT,plural, =1{yllth}other{# yllthe}}</translation>
 <translation id="2490721194269245365">Kafe rozë</translation>
@@ -242,6 +249,7 @@ Për të hapur menynë e shfletuesit Chrome, shtyp Alt+F.</translation>
 <translation id="267442004702508783">rifresko</translation>
 <translation id="2675533876313964202">Shartrus</translation>
 <translation id="2684412629217766642">Mbyll udhëzuesin e ChromeVox</translation>
+<translation id="2692503699962701720">Ndrysho ritmin kur thua llojet e elementeve dhe tekstin e formatuar</translation>
 <translation id="2697408785920771974">autoinl</translation>
 <translation id="2697786971245905543">Kandidat për konvertim teksti</translation>
 <translation id="2704429362613743330">{COUNT,plural, =1{kllapë e majtë}other{# kllapa të majta}}</translation>
@@ -352,6 +360,7 @@ Për të hapur menynë e shfletuesit Chrome, shtyp Alt+F.</translation>
 <translation id="3286372614333682499">portret</translation>
 <translation id="3286390186030710347">Rrëshqitës</translation>
 <translation id="3300348286427369683">Mbështetja për tekstin e pasuruar. ChromeVox tani mbështet fushat e tekstit të pasuruar, duke përfshirë komandat e kërcimit, rrugëzimin e kursorit të shkrimit breil, përzgjedhjen etj.</translation>
+<translation id="3300733168898541351">zhbëj</translation>
 <translation id="3307886118343381874">Shko në fund të tabelës</translation>
 <translation id="3312997241656799641">Lidhja tjetër e vizituar</translation>
 <translation id="3313245066383501820">Tasti modifikues i ChromeVox</translation>
@@ -372,6 +381,7 @@ Për të hapur menynë e shfletuesit Chrome, shtyp Alt+F.</translation>
 <translation id="3406283310380167331">Shfaq listën e formularëve</translation>
 <translation id="3414400929511680526">Blu Alice</translation>
 <translation id="3418936350470374046">Nuk ka asnjë qelizë më poshtë</translation>
+<translation id="3419269701801640163">ngjit</translation>
 <translation id="3435494200763325275">Vazhdim i navigimit të skedës</translation>
 <translation id="344800400831402066">Peru</translation>
 <translation id="3457000393508828486">I shtypur pjesërisht</translation>
@@ -383,7 +393,9 @@ Për të hapur menynë e shfletuesit Chrome, shtyp Alt+F.</translation>
 <translation id="3492609944033322585">{COUNT,plural, =1{kllapë katrore e djathtë}other{# kllapa katrore të djathta}}</translation>
 <translation id="3494946239022273294">mnuitm</translation>
 <translation id="3497063866483065785">{COUNT,plural, =1{pikëpyetje}other{# pikëpyetje}}</translation>
+<translation id="3505359110822747654">Palos menytë e ChromeVox</translation>
 <translation id="3514822174137761109">{COUNT,plural, =1{kursor teksti}other{# kursorë teksti}}</translation>
+<translation id="3518600448524470129">{COUNT,plural, =1{pikë e bardhë}other{# pika të bardha}}</translation>
 <translation id="352577523970648069">Një fushë teksti e redaktueshme</translation>
 <translation id="3538907380453898475">listë përshkrimesh</translation>
 <translation id="3549141990712742152">prit <ph name="TEXT" />.</translation>
@@ -452,6 +464,7 @@ Për të hapur menynë e shfletuesit Chrome, shtyp Alt+F.</translation>
 <translation id="4006140876663370126">img</translation>
 <translation id="4021716437419160885">Lëviz poshtë</translation>
 <translation id="4035381225449278841">Pranverë</translation>
+<translation id="4038098586530338813">ribëj</translation>
 <translation id="4047216625641135770">Shenjë</translation>
 <translation id="4047910800766704982">Mund të përdorësh një zë natyral, të ngjashëm me të njeriut, kur pajisja jote është në linjë. Teksti do të dërgohet te Google për përpunim. Këtë mund ta çaktivizosh në çdo kohë te "Cilësimet".</translation>
 <translation id="4053520724192563562">E gjelbër limoni</translation>
@@ -479,6 +492,7 @@ Për të hapur menynë e shfletuesit Chrome, shtyp Alt+F.</translation>
 <translation id="42164919740161077">Blu kadet</translation>
 <translation id="4217571870635786043">Diktimi</translation>
 <translation id="4218529045364428769">{COUNT,plural, =1{vizë}other{# viza}}</translation>
+<translation id="4220024144662591089">zgjidh "<ph name="START_PHRASE" />" ose "<ph name="END_PHRASE" />"</translation>
 <translation id="4221012616705981690">Nuk ka asnjë listë të mëparshme</translation>
 <translation id="4225355998815256469">Kontrollet e formave</translation>
 <translation id="4230834257931120629">Gri rrase e çelur</translation>
@@ -497,6 +511,7 @@ Për të hapur menynë e shfletuesit Chrome, shtyp Alt+F.</translation>
 <translation id="4300318234632215983">Njofto URL-në prapa një lidhjeje</translation>
 <translation id="4322625298640984693">Siena</translation>
 <translation id="4342180618051828363">{COUNT,plural, =1{pikë}=3{heqje teksti}other{# pika}}</translation>
+<translation id="4352022650330571548">shkruaj "<ph name="PHRASE" />"</translation>
 <translation id="4372435075475052704">min.:<ph name="X" /></translation>
 <translation id="4372705107434148843">Ndalo ligjërimin</translation>
 <translation id="4376316291247992553">Shiko grafikën si braille</translation>
@@ -526,6 +541,7 @@ Për të hapur menynë e shfletuesit Chrome, shtyp Alt+F.</translation>
 <translation id="4601367666219428522">tbl <ph name="TABLENAME" /> <ph name="TABLEROWS" />x<ph name="TABLECOLS" /></translation>
 <translation id="4615592953348396470">Po shpërfill shtypjen tjetër të çelësit</translation>
 <translation id="4623097797855662355">Kolofon</translation>
+<translation id="4624970070706497034">TalkBack nuk e ofron më personalizimin për pajisjet Chromebook. Mund ta përdorësh përsëri, por përdor shkurtoret e parazgjedhura të tastierës të TalkBack. Shtyp Kërko+A dhe më pas K për të parë shkurtoret e disponueshme. Nëse dëshiron të përdorësh përsëri TalkBack, shtyp përsëri komandën.</translation>
 <translation id="463135993322337640">Shtyp ChromeVox o, n për të zbuluar të rejat</translation>
 <translation id="4649220074413114917">Trokitja me dy gishta në ekran mund të përdoret për të ndaluar çdo ligjërim aktual. Kjo është e dobishme nëse nuk dëshiron që ChromeVox të lexojë diçka. Për të vazhduar, trokit në ekran me dy gishta.</translation>
 <translation id="4660783501463101648">Versioni klasik u hoq. Ndryshimi i tastierës për të kaluar përsëri te versioni klasik i ChromeVox është hequr.</translation>
@@ -560,6 +576,7 @@ Për të hapur menynë e shfletuesit Chrome, shtyp Alt+F.</translation>
 <translation id="4854380505292502090">Nuk ka asnjë miniaplikacion të mëparshëm të medias</translation>
 <translation id="4855927945655956315">Tastet thelbësore: Control</translation>
 <translation id="4862744964787595316">Jo i trashësuar</translation>
+<translation id="4865995900839719272">kalo te reshti i mëparshëm</translation>
 <translation id="4866956062845190338">rdmnuitm</translation>
 <translation id="4867316986324544967">Aktivizo regjistrimin në TTS</translation>
 <translation id="4886524826165775965"><ph name="INDEX" />/<ph name="TOTAL" /></translation>
@@ -617,6 +634,7 @@ Për të hapur menynë e shfletuesit Chrome, shtyp Alt+F.</translation>
 <translation id="5304943142864553931"><ph name="TITLE" />, skeda</translation>
 <translation id="5308380583665731573">Lidh</translation>
 <translation id="5310788376443009632">u hoq:</translation>
+<translation id="5316825363044614340">kalo te reshti tjetër</translation>
 <translation id="5320727453979144100">Modaliteti "i ngjitur" është aktivizuar</translation>
 <translation id="5321085947096604457">{COUNT,plural, =1{presje}other{# presje}}</translation>
 <translation id="532485153932049746">Formatimi i tekstit
@@ -653,6 +671,7 @@ Për të hapur menynë e shfletuesit Chrome, shtyp Alt+F.</translation>
 <translation id="5522423213731659107">Orientimi i shpejtë përfundoi!</translation>
 <translation id="5534303576632885660">hdr</translation>
 <translation id="5539820223028224601">Gainsboro</translation>
+<translation id="554893713779400387">Ndërro diktimin</translation>
 <translation id="5549179427201066174">Aktivizo ose çaktivizo reagimet e tingujve (tingujt e shkurtër)</translation>
 <translation id="556042886152191864">Buton</translation>
 <translation id="5561345396546889625">Lista tjetër</translation>
@@ -663,6 +682,7 @@ Për të hapur menynë e shfletuesit Chrome, shtyp Alt+F.</translation>
 <translation id="5597170376237141345">Kutia tjetër e kontrollit</translation>
 <translation id="5598905979683743333"><ph name="NAME" />, u anulua zgjedhja e butonit të radios</translation>
 <translation id="5601172225407283979">Kryej veprimin e parazgjedhur</translation>
+<translation id="5604302400025591178">{COUNT,plural, =1{pikë katrore}other{# pika katrore}}</translation>
 <translation id="5608798115546226984">Plotësim automatik brenda linjës</translation>
 <translation id="5616029807486814372">Mësimi tjetër</translation>
 <translation id="561939826962581046">koha</translation>
@@ -670,6 +690,8 @@ Për të hapur menynë e shfletuesit Chrome, shtyp Alt+F.</translation>
 <translation id="5623842676595125836">Ditari</translation>
 <translation id="5628125749885014029">h4</translation>
 <translation id="5632083598315326067">Simbol grafik</translation>
+<translation id="5648939288050772726">Urime! Ke mësuar me sukses bazat e përdorimit të ChromeVox. Ki parasysh se mund ta hapësh menynë e komandës së ChromeVox në çdo moment duke shtypur Kërko+Pikë. Për të mësuar edhe më shumë rreth ChromeVox dhe ChromeOS, vizito artikujt e mëposhtëm.
+    Nëse ke mbaruar me udhëzuesin, përdor ChromeVox për të naviguar te butoni "Mbyll" dhe kliko tek ai.</translation>
 <translation id="5653397561111110475">Përdor veçoritë e qasshmërisë së ekranit me prekje të Chromebook</translation>
 <translation id="5655682562155942719">Komandat e kërcimit</translation>
 <translation id="56637627897541303">Zona e tekstit</translation>
@@ -734,6 +756,7 @@ Për të hapur menynë e shfletuesit Chrome, shtyp Alt+F.</translation>
 <translation id="6034000775414344507">Gri e çelur</translation>
 <translation id="6036135911048686884">Prek "Eksploro"</translation>
 <translation id="6037602951055904232">Lëviz para</translation>
+<translation id="604240746417122825">gabim gramatikor</translation>
 <translation id="6082768461603900813">Navigimi bazë</translation>
 <translation id="609281021724813947">Nuk ka asnjë rrëshqitës të mëparshëm</translation>
 <translation id="6100239002225743044">Lëviz lart një rresht</translation>
@@ -741,6 +764,7 @@ Për të hapur menynë e shfletuesit Chrome, shtyp Alt+F.</translation>
 <translation id="611827076493383239">vtd</translation>
 <translation id="6122013438240733403">btn</translation>
 <translation id="6132506484792346370">Një kuti liste ose kuti kombinuese</translation>
+<translation id="613344593214611552">fshi fjalinë e mëparshme</translation>
 <translation id="6142308968191113180">Titulli 4</translation>
 <translation id="6150023170003443621">E gjelbër e verdhë</translation>
 <translation id="6158882249329863701">rreshti <ph name="TABLECELLROWINDEX" /> kolona <ph name="TABLECELLCOLUMNINDEX" /></translation>
@@ -750,6 +774,7 @@ Për të hapur menynë e shfletuesit Chrome, shtyp Alt+F.</translation>
 <translation id="6186305613600865047">Kalo në fund të faqes</translation>
 <translation id="6187190722927752226">Akuamarinë</translation>
 <translation id="6197361807490522975">Blu e errët</translation>
+<translation id="6218813441317556731">zëvendëso "<ph name="DELETE_PHRASE" />" me "<ph name="INSERT_PHRASE" />"</translation>
 <translation id="6236061028292614533">Titulli tjetër</translation>
 <translation id="6254901459154107917">Zona tjetër e redaktueshme e tekstit</translation>
 <translation id="6259464875943891919">Doli nga <ph name="TYPE" />.</translation>
@@ -790,6 +815,7 @@ Për të hapur menynë e shfletuesit Chrome, shtyp Alt+F.</translation>
 <translation id="6544923685317771506">Guaskë deti</translation>
 <translation id="6551185905438378412">E fildishtë</translation>
 <translation id="6561818612645211875">Shto në fillim të rreshtit aktual</translation>
+<translation id="6563126228219321999">Nuk ka artikull të vlefshëm</translation>
 <translation id="6579990219486187401">Rozë e çelur</translation>
 <translation id="6583174818554398774">Kalo te niveli tjetër i detajeve</translation>
 <translation id="6584162722998608255">Më pas do të mësosh se si të lëvizësh nëpër ekran. Mund të rrëshqasësh shpejt një gisht nga e majta në të djathtë për të kaluar tek artikulli tjetër. Provoje tani për të kaluar te hapi tjetër.</translation>
@@ -820,6 +846,7 @@ Për të hapur menynë e shfletuesit Chrome, shtyp Alt+F.</translation>
 <translation id="6815255864998354418">Byrynxhyk limoni</translation>
 <translation id="6816066673340002913">Purtekë e artë e zbehtë</translation>
 <translation id="6826226459053491773">Rrëshqit shpejt dy gishta poshtë</translation>
+<translation id="6826669432862053130">Artikulli tjetër i vlefshëm</translation>
 <translation id="6833103209700200188">Fundi i faqes</translation>
 <translation id="6837853484260746864">Zgjidh një zë:</translation>
 <translation id="6858047746862060282">Prolog</translation>
@@ -833,6 +860,7 @@ Për të hapur menynë e shfletuesit Chrome, shtyp Alt+F.</translation>
 <translation id="6910211073230771657">Fshirë</translation>
 <translation id="6910969481785184048">Aktivizimi, çaktivizimi dhe ndalimi</translation>
 <translation id="6919104639734799681">Shfaq listën e tabelave</translation>
+<translation id="692135145298539227">fshi</translation>
 <translation id="6945221475159498467">Përzgjidhe</translation>
 <translation id="6949846980769640811">Akuamarinë e mesme</translation>
 <translation id="6951482098621102657">Nuk ka titull tjetër të nivelit 5</translation>
@@ -892,6 +920,7 @@ Për të hapur menynë e shfletuesit Chrome, shtyp Alt+F.</translation>
 <translation id="7292195267473691167"><ph name="LOCALE" /> (<ph name="VARIANT" />)</translation>
 <translation id="7308519659008003150">Nuk ka fushë të mëparshme në formular</translation>
 <translation id="731121099745151312">tritm</translation>
+<translation id="7313717760367325059">ndihmë</translation>
 <translation id="7317017974771324508">pjesërisht i zgjedhur</translation>
 <translation id="7322442671176251901">Eksploro me prekje</translation>
 <translation id="7344012264516629579">Komandat shtesë të kërcimit përfshijnë kërcimin përmes lidhjes, butonit dhe kutisë së zgjedhjes, për të përmendur disa. Një listë e plotë komandash kërcimi mund të gjendet në menytë ChromeVox, që mund të hapen duke shtypur Search + Period (tasti i pikës).</translation>
@@ -913,13 +942,13 @@ Për të hapur menynë e shfletuesit Chrome, shtyp Alt+F.</translation>
 <translation id="7439060726180460871">Direktoria</translation>
 <translation id="744163271241493234">pwded</translation>
 <translation id="7465123027577412805">Të përdoret zëri natyral?</translation>
-<translation id="7484805699335881122">Ndrysho tonalitetin kur flet lloje elementi dhe tekst të cituar, të fshirë, të trashësuar, me kllapa ose me shkronja të mëdha.</translation>
 <translation id="7491962110804786152">tab</translation>
 <translation id="7492497529767769458">Lëviz te seksioni tjetër. Shembujt përfshijnë "Tabakanë e statusit" dhe "Nisësin".</translation>
 <translation id="7505149250476994901">Thuaj "kapitale" para shkronjës</translation>
 <translation id="7533226154149229506">Purtekë e artë e verdhë e çelur</translation>
 <translation id="7543255924852002459">Hiqe etiketën</translation>
 <translation id="7552432549459840808">Shkurtore të dobishme të Chrome</translation>
+<translation id="7553679324939294712">fut "<ph name="INSERT_PHRASE" />" para "<ph name="BEFORE_PHRASE" />"</translation>
 <translation id="7569983096843329377">E zezë</translation>
 <translation id="7579911500627256166">pika <ph name="DOT" /></translation>
 <translation id="7592060599656252486">Disa</translation>
@@ -943,12 +972,11 @@ Për të hapur menynë e shfletuesit Chrome, shtyp Alt+F.</translation>
 <translation id="7684431668231950609">Redakto tekstin, hyrje URL-je</translation>
 <translation id="7685589220304187312">tlbar</translation>
 <translation id="7693840228159394336">Butoni i mëparshëm i radios</translation>
+<translation id="7696631298608145306">kalo te fjala tjetër</translation>
 <translation id="7701040980221191251">Asnjë</translation>
 <translation id="7701196182766842984">autolst</translation>
 <translation id="7713139339518499741">Zë natyral</translation>
 <translation id="7714340021005120797">Nuk ka kuti tjetër të kombinuar</translation>
-<translation id="772146615414628379">Urime! Ke mësuar me sukses bazat e përdorimit të ChromeVox. Ki parasysh se mund ta hapësh menynë e komandës së ChromeVox në çdo moment duke shtypur Kërko+Pikë. Për të mësuar edhe më shumë rreth ChromeVox dhe Chrome OS, vizito artikujt e mëposhtëm.
-    Nëse ke mbaruar me udhëzuesin, përdor ChromeVox për të naviguar te butoni "Mbyll" dhe kliko tek ai.</translation>
 <translation id="7724603315864178912">Prite</translation>
 <translation id="7731785449856576010">Nuk ka asnjë miniaplikacion tjetër të medias</translation>
 <translation id="7735498529470878067">Eksplorimi me prekje mund të të ndihmojë të kuptosh me shpejtësi se çfarë ka në ekran.</translation>
@@ -1009,8 +1037,10 @@ Për të hapur menynë e shfletuesit Chrome, shtyp Alt+F.</translation>
 <translation id="8126386426083591964">Nuk ka titull të mëparshëm të nivelit 5</translation>
 <translation id="812886159861361726">Shkarkimi i <ph name="FILE_NAME" /> ndaloi</translation>
 <translation id="8129445297241948503">Nuk ka qelizë më sipër</translation>
+<translation id="8132248161074464367">Artikulli i vlefshëm i mëparshëm</translation>
 <translation id="8138880386467279117">Prek</translation>
 <translation id="8146613869421949343">Më pas, do të mësosh rreth tastit Search. Tasti Search përdoret në kombinim me taste të tjera për komandat ChromeVox. Tasti Search ndodhet menjëherë mbi tastin e majtë Shift. Për të vazhduar, shtyp tastin Search.</translation>
+<translation id="8158033275290782295">zgjidhi të gjitha</translation>
 <translation id="816818801578874684">Ky është titulli i parë. Shtyp Search + H për të shkuar te titulli tjetër.</translation>
 <translation id="8173092779156526980">Rrëshqit shpejt katër gishta majtas</translation>
 <translation id="817440585505441544">{COUNT,plural, =1{nënvizim}other{# nënvizime}}</translation>
@@ -1050,6 +1080,7 @@ Për të hapur menynë e shfletuesit Chrome, shtyp Alt+F.</translation>
 <translation id="8455868257606149352">Maks. <ph name="X" /></translation>
 <translation id="84575901236241018">ka çelësin e qasjes, <ph name="KEY" /></translation>
 <translation id="8463645336674919227">Po largohesh nga gabimi gramatikor</translation>
+<translation id="8465573210279050749">fshi fjalën e mëparshme</translation>
 <translation id="847040613207937740">Nuk ka asnjë kuti kontrolli tjetër</translation>
 <translation id="8473540203671727883">Lexo me zë tekstin poshtë miut</translation>
 <translation id="8476408756881832830">Vendosje luajtjen në pauzë kur flet ChromeVox</translation>
@@ -1080,11 +1111,13 @@ Për të hapur menynë e shfletuesit Chrome, shtyp Alt+F.</translation>
 <translation id="8659501358298941449">Listat zbritëse</translation>
 <translation id="8666733765751421568">Fundi i <ph name="TYPE" /></translation>
 <translation id="867187640362843212">Titulli 5</translation>
+<translation id="8690400660839620419">{COUNT,plural, =1{}other{niveli i ndërfutur #}}</translation>
 <translation id="8693391540059827073">Stina ime e preferuar</translation>
 <translation id="8696284982970258155">Vesë mjalti</translation>
 <translation id="8697111817566059991">{COUNT,plural, =1{tub}other{# tuba vertikalë}}</translation>
 <translation id="8741370088760768424">Sugjerim: Shtyp Search + Space për të aktivizuar artikullin aktual.</translation>
 <translation id="8743786158317878347">fut përmbajtje të strukturuar, siç janë tabelat</translation>
+<translation id="8746846427395705317">kalo te fjala e mëparshme</translation>
 <translation id="8747966237988593539">Lista e renditur</translation>
 <translation id="8749988712346667988">E argjendtë</translation>
 <translation id="875769700429317857">Shkarkimi përfundoi <ph name="FILE_NAME" /></translation>
@@ -1112,12 +1145,14 @@ Për të hapur menynë e shfletuesit Chrome, shtyp Alt+F.</translation>
 <translation id="8970172509886453271">Nuk ka asnjë seksion të mëparshëm</translation>
 <translation id="89720367119469899">Largohu</translation>
 <translation id="8978496506222343566">tltip</translation>
+<translation id="898089897833732740">fshi "<ph name="PHRASE" />"</translation>
 <translation id="8986362086234534611">Harro</translation>
 <translation id="8989104346085848538">Për të ndaluar çdo ligjërim aktual të ChromeVox, shtyp tastin Control.</translation>
 <translation id="8993737615451556423">Ofron kontrollet për të shpejtuar, ngadalësuar dhe vendosur në pauzë zërin e leximit</translation>
 <translation id="9014206344398081366">Udhëzuesi i ChromeVox</translation>
 <translation id="9040132695316389094">Titulli 1</translation>
 <translation id="9061884144798498064">Zgjidh një tabelë brejl me 8 pika:</translation>
+<translation id="9063946545000394379">kalo te karakteri i mëparshëm</translation>
 <translation id="9065283790526219006">+ dritare kërcyese</translation>
 <translation id="9065912140022662363">Nuk ka asnjë buton tjetër të radios</translation>
 <translation id="9067522039955793016">Thyerje faqeje</translation>
@@ -1126,6 +1161,7 @@ Për të hapur menynë e shfletuesit Chrome, shtyp Alt+F.</translation>
 <translation id="9077305471618729969">E gjelbër deti e çelur</translation>
 <translation id="9080299285199342830">Kalo në fund</translation>
 <translation id="9089864840575085222">Qarkullo jehonën e shkrimit</translation>
+<translation id="9099429023611373837">pri</translation>
 <translation id="9108370397979208512">matematikor</translation>
 <translation id="9108589040018540527">scbr</translation>
 <translation id="911476240645808512">{COUNT,plural, =1{për qind}other{# shenja përqindjeje}}</translation>
@@ -1145,6 +1181,7 @@ Për të hapur menynë e shfletuesit Chrome, shtyp Alt+F.</translation>
 <translation id="9223032053830369045">E kuqe e errët</translation>
 <translation id="923331726185079994">ChromeVox është përditësuar</translation>
 <translation id="93384979447910801">E gjelbër deti e errët</translation>
+<translation id="937605981140327129">TalkBack nuk është instaluar aktualisht. Instalo AccessibilitySuite të Android nëpërmjet "Dyqanit të Play" dhe provo sërish.</translation>
 <translation id="948171205378458592">Ul shpejtësinë e ligjërimit</translation>
 <translation id="957570623732056069">Rrëshqit shpejt majtas ose djathtas me një gisht për të naviguar në këtë mësim</translation>
 <translation id="958854023026327378">Rrëshqit shpejt një gisht poshtë</translation>

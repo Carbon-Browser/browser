@@ -31,7 +31,7 @@ bool ParseLifetime(const std::string& string, base::TimeDelta* result) {
       !base::StringToDouble(string.substr(0, string.size() - 1), &seconds)) {
     return false;
   }
-  *result = base::TimeDelta::FromSecondsD(seconds);
+  *result = base::Seconds(seconds);
   return true;
 }
 
@@ -122,10 +122,10 @@ IceConfig IceConfig::Parse(const base::DictionaryValue& dictionary) {
   IceConfig ice_config;
 
   // Parse lifetimeDuration field.
-  std::string lifetime_str;
+  const std::string* lifetime_str =
+      dictionary.FindStringKey("lifetimeDuration");
   base::TimeDelta lifetime;
-  if (!dictionary.GetString("lifetimeDuration", &lifetime_str) ||
-      !ParseLifetime(lifetime_str, &lifetime)) {
+  if (!lifetime_str || !ParseLifetime(*lifetime_str, &lifetime)) {
     LOG(ERROR) << "Received invalid lifetimeDuration value: " << lifetime_str;
 
     // If the |lifetimeDuration| field is missing or cannot be parsed then mark
@@ -138,7 +138,7 @@ IceConfig IceConfig::Parse(const base::DictionaryValue& dictionary) {
   // Parse iceServers list and store them in |ice_config|.
   bool errors_found = false;
   ice_config.max_bitrate_kbps = 0;
-  for (const auto& server : ice_servers_list->GetList()) {
+  for (const auto& server : ice_servers_list->GetListDeprecated()) {
     if (!server.is_dict()) {
       errors_found = true;
       continue;
@@ -171,7 +171,7 @@ IceConfig IceConfig::Parse(const base::DictionaryValue& dictionary) {
                            static_cast<int>(new_bitrate_double.value()));
     }
 
-    for (const auto& url : urls_list->GetList()) {
+    for (const auto& url : urls_list->GetListDeprecated()) {
       const std::string* url_str = url.GetIfString();
       if (!url_str) {
         errors_found = true;
@@ -231,8 +231,8 @@ IceConfig IceConfig::Parse(const apis::v1::GetIceConfigResponse& config) {
 
   // Parse lifetimeDuration field.
   base::TimeDelta lifetime =
-      base::TimeDelta::FromSeconds(config.lifetime_duration().seconds()) +
-      base::TimeDelta::FromNanoseconds(config.lifetime_duration().nanos());
+      base::Seconds(config.lifetime_duration().seconds()) +
+      base::Nanoseconds(config.lifetime_duration().nanos());
   ice_config.expiration_time = base::Time::Now() + lifetime;
 
   // Parse iceServers list and store them in |ice_config|.

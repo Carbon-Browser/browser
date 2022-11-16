@@ -4,6 +4,8 @@
 
 #include "components/sync/driver/data_type_manager.h"
 
+#include "base/notreached.h"
+
 namespace syncer {
 
 DataTypeManager::ConfigureResult::ConfigureResult() : status(UNKNOWN) {}
@@ -15,7 +17,7 @@ DataTypeManager::ConfigureResult::ConfigureResult(ConfigureStatus status,
 DataTypeManager::ConfigureResult::ConfigureResult(
     const ConfigureResult& other) = default;
 
-DataTypeManager::ConfigureResult::~ConfigureResult() {}
+DataTypeManager::ConfigureResult::~ConfigureResult() = default;
 
 // Static.
 std::string DataTypeManager::ConfigureStatusToString(ConfigureStatus status) {

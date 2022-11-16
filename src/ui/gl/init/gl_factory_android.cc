@@ -30,12 +30,15 @@ class GLNonOwnedContext : public GLContextReal {
  public:
   explicit GLNonOwnedContext(GLShareGroup* share_group);
 
+  GLNonOwnedContext(const GLNonOwnedContext&) = delete;
+  GLNonOwnedContext& operator=(const GLNonOwnedContext&) = delete;
+
   // Implement GLContext.
   bool Initialize(GLSurface* compatible_surface,
                   const GLContextAttribs& attribs) override;
   bool MakeCurrentImpl(GLSurface* surface) override;
   void ReleaseCurrent(GLSurface* surface) override {}
-  bool IsCurrent(GLSurface* surface) override { return true; }
+  bool IsCurrent(GLSurface* surface) override;
   void* GetHandle() override { return nullptr; }
 
  protected:
@@ -43,8 +46,6 @@ class GLNonOwnedContext : public GLContextReal {
 
  private:
   EGLDisplay display_;
-
-  DISALLOW_COPY_AND_ASSIGN(GLNonOwnedContext);
 };
 
 GLNonOwnedContext::GLNonOwnedContext(GLShareGroup* share_group)
@@ -61,6 +62,10 @@ bool GLNonOwnedContext::MakeCurrentImpl(GLSurface* surface) {
   SetCurrent(surface);
   InitializeDynamicBindings();
   return true;
+}
+
+bool GLNonOwnedContext::IsCurrent(GLSurface* surface) {
+  return GetRealCurrent() == this;
 }
 
 }  // namespace
@@ -118,7 +123,8 @@ scoped_refptr<GLSurface> CreateViewGLSurface(gfx::AcceleratedWidget window) {
     case kGLImplementationEGLGLES2:
     case kGLImplementationEGLANGLE:
       if (window != gfx::kNullAcceleratedWidget) {
-        return InitializeGLSurface(new NativeViewGLSurfaceEGL(window, nullptr));
+        return InitializeGLSurface(new NativeViewGLSurfaceEGL(
+            GLSurfaceEGL::GetGLDisplayEGL(), window, nullptr));
       } else {
         return InitializeGLSurface(new GLSurfaceStub());
       }
@@ -135,12 +141,14 @@ scoped_refptr<GLSurface> CreateOffscreenGLSurfaceWithFormat(
   switch (GetGLImplementation()) {
     case kGLImplementationEGLGLES2:
     case kGLImplementationEGLANGLE: {
-      if (GLSurfaceEGL::IsEGLSurfacelessContextSupported() &&
+      if (GLSurfaceEGL::GetGLDisplayEGL()->IsEGLSurfacelessContextSupported() &&
           (size.width() == 0 && size.height() == 0)) {
-        return InitializeGLSurfaceWithFormat(new SurfacelessEGL(size), format);
+        return InitializeGLSurfaceWithFormat(
+            new SurfacelessEGL(GLSurfaceEGL::GetGLDisplayEGL(), size), format);
       } else {
-        return InitializeGLSurfaceWithFormat(new PbufferGLSurfaceEGL(size),
-                                             format);
+        return InitializeGLSurfaceWithFormat(
+            new PbufferGLSurfaceEGL(GLSurfaceEGL::GetGLDisplayEGL(), size),
+            format);
       }
     }
     case kGLImplementationMockGL:
@@ -168,13 +176,14 @@ void SetDisabledExtensionsPlatform(const std::string& disabled_extensions) {
   }
 }
 
-bool InitializeExtensionSettingsOneOffPlatform() {
+bool InitializeExtensionSettingsOneOffPlatform(GLDisplay* display) {
   GLImplementation implementation = GetGLImplementation();
   DCHECK_NE(kGLImplementationNone, implementation);
   switch (implementation) {
     case kGLImplementationEGLGLES2:
     case kGLImplementationEGLANGLE:
-      return InitializeExtensionSettingsOneOffEGL();
+      return InitializeExtensionSettingsOneOffEGL(
+          static_cast<GLDisplayEGL*>(display));
     case kGLImplementationMockGL:
     case kGLImplementationStubGL:
       return true;

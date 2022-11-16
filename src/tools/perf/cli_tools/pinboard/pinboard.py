@@ -124,7 +124,7 @@ def StartPinpointJobs(state, date):
   configs = LoadJsonFile(JOB_CONFIGS_PATH)
   for config in configs:
     config['base_git_hash'] = revision
-    with tempfile_ext.NamedTemporaryFile() as tmp:
+    with tempfile_ext.NamedTemporaryFile(mode='w') as tmp:
       json.dump(config, tmp)
       tmp.close()
       output = subprocess.check_output(
@@ -181,9 +181,8 @@ def LoadJobsState():
   local_path = CachedFilePath(JOBS_STATE_FILE)
   if os.path.exists(local_path) or DownloadFromCloudStorage(local_path):
     return LoadJsonFile(local_path)
-  else:
-    logging.info('No jobs state found. Creating empty state.')
-    return []
+  logging.info('No jobs state found. Creating empty state.')
+  return []
 
 
 def UpdateJobsState(state):
@@ -194,7 +193,7 @@ def UpdateJobsState(state):
   storage are updated.
   """
   local_path = CachedFilePath(JOBS_STATE_FILE)
-  with tempfile_ext.NamedTemporaryFile() as tmp:
+  with tempfile_ext.NamedTemporaryFile(mode='w') as tmp:
     json.dump(state, tmp, sort_keys=True, indent=2, separators=(',', ': '))
     tmp.close()
     if not os.path.exists(local_path) or not filecmp.cmp(tmp.name, local_path):
@@ -207,8 +206,7 @@ def GetCachedDataset():
   local_path = CachedFilePath(DATASET_PKL_FILE)
   if os.path.exists(local_path) or DownloadFromCloudStorage(local_path):
     return pd.read_pickle(local_path)
-  else:
-    return None
+  return None
 
 
 def UpdateCachedDataset(df):
@@ -382,8 +380,7 @@ def FindCommit(before_date=None, after_date=None):
     commit_time = pd.Timestamp(
         int(commit_time), unit='s', tz=TZ).isoformat()
     return revision, commit_time
-  else:
-    return None
+  return None
 
 
 def RevisionResultsFile(item):

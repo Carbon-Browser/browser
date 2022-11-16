@@ -9,13 +9,16 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
 #import "ios/web/public/web_client.h"
 
 // Chrome implementation of WebClient.
 class ChromeWebClient : public web::WebClient {
  public:
   ChromeWebClient();
+
+  ChromeWebClient(const ChromeWebClient&) = delete;
+  ChromeWebClient& operator=(const ChromeWebClient&) = delete;
+
   ~ChromeWebClient() override;
 
   // WebClient implementation.
@@ -39,8 +42,6 @@ class ChromeWebClient : public web::WebClient {
       web::BrowserState* browser_state) const override;
   NSString* GetDocumentStartScriptForMainFrame(
       web::BrowserState* browser_state) const override;
-  bool IsLegacyTLSAllowedForHost(web::WebState* web_state,
-                                 const std::string& hostname) override;
   void PrepareErrorPage(web::WebState* web_state,
                         const GURL& url,
                         NSError* error,
@@ -52,16 +53,18 @@ class ChromeWebClient : public web::WebClient {
   UIView* GetWindowedContainer() override;
   bool EnableLongPressAndForceTouchHandling() const override;
   bool EnableLongPressUIContextMenu() const override;
-  bool ForceMobileVersionByDefault(const GURL& url) override;
-  web::UserAgentType GetDefaultUserAgent(id<UITraitEnvironment> web_view,
-                                         const GURL& url) override;
+  web::UserAgentType GetDefaultUserAgent(web::WebState* web_state,
+                                         const GURL& url) const override;
+  void LogDefaultUserAgent(web::WebState* web_state,
+                           const GURL& url) const override;
   bool RestoreSessionFromCache(web::WebState* web_state) const override;
+  void CleanupNativeRestoreURLs(web::WebState* web_state) const override;
+  void WillDisplayMediaCapturePermissionPrompt(
+      web::WebState* web_state) const override;
 
  private:
   // Reference to a view that is attached to a window.
   UIView* windowed_container_ = nil;
-
-  DISALLOW_COPY_AND_ASSIGN(ChromeWebClient);
 };
 
 #endif  // IOS_CHROME_BROWSER_WEB_CHROME_WEB_CLIENT_H_

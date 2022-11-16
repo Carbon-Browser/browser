@@ -32,10 +32,12 @@ void RendererMainPlatformDelegate::PlatformUninitialize() {
 bool RendererMainPlatformDelegate::EnableSandbox() {
   TRACE_EVENT0("startup", "RendererMainPlatformDelegate::EnableSandbox");
   auto* info = base::android::BuildInfo::GetInstance();
-  sandbox::SeccompStarterAndroid starter(info->sdk_int(), info->device());
+  sandbox::SeccompStarterAndroid starter(info->sdk_int());
   // The policy compiler is only available if USE_SECCOMP_BPF is enabled.
 #if BUILDFLAG(USE_SECCOMP_BPF)
-  starter.set_policy(std::make_unique<sandbox::BaselinePolicyAndroid>());
+  sandbox::BaselinePolicyAndroid::RuntimeOptions options(
+      starter.GetDefaultBaselineOptions());
+  starter.set_policy(std::make_unique<sandbox::BaselinePolicyAndroid>(options));
 #endif
   starter.StartSandbox();
 

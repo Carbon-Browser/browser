@@ -4,8 +4,8 @@
 
 from telemetry import story
 from page_sets.desktop_ui import \
-    download_shelf_story, new_tab_page_story, omnibox_story, \
-    tab_search_story, webui_tab_strip_story
+    new_tab_page_story, omnibox_story, \
+    side_search_story, tab_search_story, webui_tab_strip_story
 from page_sets.desktop_ui.ui_devtools_utils import IsMac
 
 
@@ -29,20 +29,6 @@ class DesktopUIStorySet(story.StorySet):
       tab_search_story.TabSearchStoryMeasureMemory3TabSearch,
   ]
 
-  DOWNLOAD_SHELF_STORIES = [
-      download_shelf_story.DownloadShelfStory1File,
-      download_shelf_story.DownloadShelfStory5File,
-      download_shelf_story.DownloadShelfStoryMeasureMemory,
-      download_shelf_story.DownloadShelfStoryTop10Loading,
-  ]
-
-  DOWNLOAD_SHELF_WEBUI_STORIES = [
-      download_shelf_story.DownloadShelfWebUIStory1File,
-      download_shelf_story.DownloadShelfWebUIStory5File,
-      download_shelf_story.DownloadShelfWebUIStoryMeasureMemory,
-      download_shelf_story.DownloadShelfWebUIStoryTop10Loading,
-  ]
-
   WEBUI_TAB_STRIP_STORIES = [
       webui_tab_strip_story.WebUITabStripStoryCleanSlate,
       webui_tab_strip_story.WebUITabStripStoryMeasureMemory,
@@ -61,6 +47,11 @@ class DesktopUIStorySet(story.StorySet):
       new_tab_page_story.NewTabPageStoryLoading,
   ]
 
+  SIDE_SEARCH_STORIES = [
+      side_search_story.SideSearchStoryMeasureMemory,
+      side_search_story.SideSearchStoryNavigation,
+  ]
+
   def __init__(self):
     super(DesktopUIStorySet,
           self).__init__(archive_data_file=('../data/desktop_ui.json'),
@@ -68,20 +59,8 @@ class DesktopUIStorySet(story.StorySet):
     for cls in self.TAB_SEARCH_STORIES:
       self.AddStory(
           cls(self, [
-              '--enable-ui-devtools=0',
               '--top-chrome-touch-ui=disabled',
-          ]))
-
-    for cls in self.DOWNLOAD_SHELF_STORIES:
-      self.AddStory(cls(self, [
-          '--enable-ui-devtools=0',
-      ]))
-
-    for cls in self.DOWNLOAD_SHELF_WEBUI_STORIES:
-      self.AddStory(
-          cls(self, [
-              '--enable-features=WebUIDownloadShelf',
-              '--enable-ui-devtools=0',
+              '--enable-features=TabSearchUseMetricsReporter',
           ]))
 
     # WebUI Tab Strip is not available on Mac.
@@ -90,17 +69,24 @@ class DesktopUIStorySet(story.StorySet):
         self.AddStory(
             cls(self, [
                 '--enable-features=WebUITabStrip',
-                '--enable-ui-devtools=0',
                 '--top-chrome-touch-ui=enabled',
             ]))
 
     for cls in self.OMNIBOX_STORIES:
-      self.AddStory(cls(self, ['--enable-ui-devtools=0']))
+      self.AddStory(cls(self))
 
     for cls in self.NEW_TAB_PAGE_STORIES:
       self.AddStory(
           cls(self, [
               '--enable-features=NtpModules,\
-              NtpRecipeTasksModule:NtpRecipeTasksModuleDataParam/fake',
-              '--enable-ui-devtools=0',
+              NtpRecipeTasksModule:NtpRecipeTasksModuleDataParam/fake,\
+              NtpChromeCartModule:NtpChromeCartModuleDataParam/fake,\
+              NtpDriveModule:NtpDriveModuleDataParam/fake,\
+              NtpPhotosModule:NtpPhotosModuleDataParam/1',
+              '--signed-out-ntp-modules',
           ]))
+
+    for cls in self.SIDE_SEARCH_STORIES:
+      self.AddStory(cls(self, [
+          '--enable-features=SideSearch',
+      ]))

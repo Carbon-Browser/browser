@@ -4,15 +4,6 @@
      found in the LICENSE file. -->
 
 <resources>
-    <style name="SpeedDialDialogAnimation" parent="Theme.AppCompat.Light.Dialog">
-        <item name="android:windowAnimationStyle">@style/SpeedDialAnimation</item>
-        <item name="android:backgroundDimEnabled">false</item>
-    </style>
-    <style name="SpeedDialAnimation">
-        <item name="android:windowEnterAnimation">@anim/speed_dial_enter</item>
-        <item name="android:windowExitAnimation">@anim/speed_dial_exit</item>
-    </style>
-
     <style name="NavigationPopupDialog" parent="Widget.AppCompat.Light.ListPopupWindow">
         <item name="android:popupElevation">0dp</item>
     </style>
@@ -21,7 +12,7 @@
         <!-- Set android alert dialog attributes because the context menu dialog is
              OS-dependent. Not setting alertDialogTheme pre-v21 because the window background
              causes bad visual states with alert dialog list. -->
-        <item name="android:alertDialogTheme">@style/Theme.Chromium.AlertDialog</item>
+        <item name="android:alertDialogTheme">@style/ThemeOverlay.BrowserUI.AlertDialog</item>
     </style>
     <style name="Base.Theme.Chromium" parent="Base.V21.Theme.Chromium" />
 

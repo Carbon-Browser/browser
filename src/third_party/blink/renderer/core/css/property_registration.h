@@ -7,6 +7,7 @@
 
 #include "base/memory/scoped_refptr.h"
 #include "third_party/blink/renderer/core/animation/interpolation_types_map.h"
+#include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/css/css_syntax_definition.h"
 #include "third_party/blink/renderer/core/css/css_value.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
@@ -24,9 +25,12 @@ class StyleRuleProperty;
 class CORE_EXPORT PropertyRegistration final
     : public GarbageCollected<PropertyRegistration> {
  public:
-  static void DeclareProperty(Document&,
-                              const AtomicString& name,
-                              StyleRuleProperty&);
+  // Creates a PropertyRegistration for a valid @property rule, or returns
+  // nullptr if the rule is invalid.
+  static PropertyRegistration* MaybeCreateForDeclaredProperty(
+      Document&,
+      const AtomicString& name,
+      StyleRuleProperty&);
 
   static void registerProperty(ExecutionContext*,
                                const PropertyDefinition*,

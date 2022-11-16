@@ -8,7 +8,6 @@
 #include "base/test/scoped_feature_list.h"
 #include "components/prefs/pref_service.h"
 #include "components/safe_browsing/content/browser/client_side_detection_service.h"
-#include "components/safe_browsing/content/browser/client_side_model_loader.h"
 #include "components/safe_browsing/content/browser/client_side_phishing_model.h"
 #include "components/safe_browsing/content/common/safe_browsing.mojom.h"
 #include "components/safe_browsing/core/common/proto/client_model.pb.h"
@@ -71,7 +70,7 @@ IN_PROC_BROWSER_TEST_F(ClientSideDetectionServiceBrowserTest,
 
   base::RunLoop run_loop;
 
-  content::RenderFrameHost* rfh = GetWebContents()->GetMainFrame();
+  content::RenderFrameHost* rfh = GetWebContents()->GetPrimaryMainFrame();
   mojo::Remote<safe_browsing::mojom::PhishingDetector> phishing_detector;
   rfh->GetRemoteInterfaces()->GetInterface(
       phishing_detector.BindNewPipeAndPassReceiver());

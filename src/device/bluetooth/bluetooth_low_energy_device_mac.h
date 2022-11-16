@@ -11,13 +11,12 @@
 #include <set>
 
 #include "base/mac/scoped_nsobject.h"
-#include "base/macros.h"
 #include "build/build_config.h"
 #include "crypto/sha2.h"
 #include "device/bluetooth/bluetooth_device_mac.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
-#if !defined(OS_IOS)
+#if !BUILDFLAG(IS_IOS)
 #import <IOBluetooth/IOBluetooth.h>
 #endif
 
@@ -36,6 +35,11 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothLowEnergyDeviceMac
  public:
   BluetoothLowEnergyDeviceMac(BluetoothAdapterMac* adapter,
                               CBPeripheral* peripheral);
+
+  BluetoothLowEnergyDeviceMac(const BluetoothLowEnergyDeviceMac&) = delete;
+  BluetoothLowEnergyDeviceMac& operator=(const BluetoothLowEnergyDeviceMac&) =
+      delete;
+
   ~BluetoothLowEnergyDeviceMac() override;
 
   // BluetoothDevice overrides.
@@ -79,6 +83,7 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothLowEnergyDeviceMac
       const device::BluetoothUUID& uuid,
       ConnectToServiceCallback callback,
       ConnectToServiceErrorCallback error_callback) override;
+  bool IsLowEnergyDevice() override;
 
  protected:
   // BluetoothDevice override.
@@ -168,8 +173,6 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothLowEnergyDeviceMac
   // decreases each time DidDiscoverPrimaryServices() is called. Once the
   // value is set to 0, characteristics and properties are discovered.
   int discovery_pending_count_;
-
-  DISALLOW_COPY_AND_ASSIGN(BluetoothLowEnergyDeviceMac);
 };
 
 // Stream operator for logging.

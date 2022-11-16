@@ -9,13 +9,13 @@
 #include <utility>
 
 #include "ash/components/drivefs/mojom/drivefs.mojom.h"
-#include "base/macros.h"
 #include "base/strings/strcat.h"
 #include "base/test/bind.h"
 #include "chrome/common/extensions/api/file_manager_private.h"
 #include "extensions/common/extension.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/abseil-cpp/absl/utility/utility.h"
 #include "url/gurl.h"
 
 namespace file_manager {
@@ -78,9 +78,12 @@ class TestDriveFsEventRouter : public DriveFsEventRouter {
             extensions::Extension::GetBaseURLFromExtensionId("ext")}));
   }
 
+  TestDriveFsEventRouter(const TestDriveFsEventRouter&) = delete;
+  TestDriveFsEventRouter& operator=(const TestDriveFsEventRouter&) = delete;
+
   void BroadcastEvent(extensions::events::HistogramValue histogram_value,
                       const std::string& event_name,
-                      std::vector<base::Value> event_args) override {
+                      base::Value::List event_args) override {
     BroadcastEventImpl(event_name, base::Value(std::move(event_args)));
   }
 
@@ -100,9 +103,6 @@ class TestDriveFsEventRouter : public DriveFsEventRouter {
               GetEventListenerURLs,
               (const std::string& event_name),
               (override));
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(TestDriveFsEventRouter);
 };
 
 class DriveFsEventRouterTest : public testing::Test {
@@ -162,16 +162,16 @@ TEST_F(DriveFsEventRouterTest, OnSyncingStatusUpdate_Basic) {
 
   drivefs::mojom::SyncingStatus syncing_status;
   syncing_status.item_events.emplace_back(
-      base::in_place, 1, 1, "a", drivefs::mojom::ItemEvent::State::kInProgress,
+      absl::in_place, 1, 1, "a", drivefs::mojom::ItemEvent::State::kInProgress,
       50, 100, drivefs::mojom::ItemEventReason::kTransfer);
   syncing_status.item_events.emplace_back(
-      base::in_place, 2, 3, "b", drivefs::mojom::ItemEvent::State::kQueued, 0,
+      absl::in_place, 2, 3, "b", drivefs::mojom::ItemEvent::State::kQueued, 0,
       100, drivefs::mojom::ItemEventReason::kTransfer);
   syncing_status.item_events.emplace_back(
-      base::in_place, 3, 4, "c", drivefs::mojom::ItemEvent::State::kInProgress,
+      absl::in_place, 3, 4, "c", drivefs::mojom::ItemEvent::State::kInProgress,
       25, 40, drivefs::mojom::ItemEventReason::kPin);
   syncing_status.item_events.emplace_back(
-      base::in_place, 3, 4, "d", drivefs::mojom::ItemEvent::State::kQueued, 0,
+      absl::in_place, 3, 4, "d", drivefs::mojom::ItemEvent::State::kQueued, 0,
       40, drivefs::mojom::ItemEventReason::kPin);
   observer().OnSyncingStatusUpdate(syncing_status);
 }
@@ -198,10 +198,10 @@ TEST_F(DriveFsEventRouterTest,
        OnSyncingStatusUpdate_EmptyStatus_ClearsInProgressOrCompleted) {
   drivefs::mojom::SyncingStatus syncing_status;
   syncing_status.item_events.emplace_back(
-      base::in_place, 1, 1, "a", drivefs::mojom::ItemEvent::State::kInProgress,
+      absl::in_place, 1, 1, "a", drivefs::mojom::ItemEvent::State::kInProgress,
       50, 100, drivefs::mojom::ItemEventReason::kTransfer);
   syncing_status.item_events.emplace_back(
-      base::in_place, 2, 3, "b", drivefs::mojom::ItemEvent::State::kQueued, 0,
+      absl::in_place, 2, 3, "b", drivefs::mojom::ItemEvent::State::kQueued, 0,
       100, drivefs::mojom::ItemEventReason::kTransfer);
   EXPECT_CALL(mock(),
               BroadcastEventImpl(
@@ -215,10 +215,10 @@ TEST_F(DriveFsEventRouterTest,
 
   syncing_status.item_events.clear();
   syncing_status.item_events.emplace_back(
-      base::in_place, 1, 1, "a", drivefs::mojom::ItemEvent::State::kCompleted,
+      absl::in_place, 1, 1, "a", drivefs::mojom::ItemEvent::State::kCompleted,
       -1, -1, drivefs::mojom::ItemEventReason::kTransfer);
   syncing_status.item_events.emplace_back(
-      base::in_place, 2, 3, "b", drivefs::mojom::ItemEvent::State::kInProgress,
+      absl::in_place, 2, 3, "b", drivefs::mojom::ItemEvent::State::kInProgress,
       10, 100, drivefs::mojom::ItemEventReason::kTransfer);
   observer().OnSyncingStatusUpdate(syncing_status);
   testing::Mock::VerifyAndClearExpectations(&observer());
@@ -255,7 +255,7 @@ TEST_F(DriveFsEventRouterTest,
               "", file_manager_private::TRANSFER_STATE_COMPLETED, 0, 0, 0)));
 
   syncing_status.item_events.emplace_back(
-      base::in_place, 1, 1, "c", drivefs::mojom::ItemEvent::State::kInProgress,
+      absl::in_place, 1, 1, "c", drivefs::mojom::ItemEvent::State::kInProgress,
       60, 70, drivefs::mojom::ItemEventReason::kTransfer);
   observer().OnSyncingStatusUpdate(syncing_status);
 }
@@ -263,7 +263,7 @@ TEST_F(DriveFsEventRouterTest,
 TEST_F(DriveFsEventRouterTest, OnSyncingStatusUpdate_FailedSync) {
   drivefs::mojom::SyncingStatus syncing_status;
   syncing_status.item_events.emplace_back(
-      base::in_place, 1, 1, "a", drivefs::mojom::ItemEvent::State::kInProgress,
+      absl::in_place, 1, 1, "a", drivefs::mojom::ItemEvent::State::kInProgress,
       50, 100, drivefs::mojom::ItemEventReason::kPin);
   EXPECT_CALL(
       mock(),
@@ -280,7 +280,7 @@ TEST_F(DriveFsEventRouterTest, OnSyncingStatusUpdate_FailedSync) {
 
   syncing_status.item_events.clear();
   syncing_status.item_events.emplace_back(
-      base::in_place, 1, 1, "a", drivefs::mojom::ItemEvent::State::kInProgress,
+      absl::in_place, 1, 1, "a", drivefs::mojom::ItemEvent::State::kInProgress,
       80, 100, drivefs::mojom::ItemEventReason::kPin);
   observer().OnSyncingStatusUpdate(syncing_status);
 
@@ -300,7 +300,7 @@ TEST_F(DriveFsEventRouterTest, OnSyncingStatusUpdate_FailedSync) {
                       100, 0)));
   syncing_status.item_events.clear();
   syncing_status.item_events.emplace_back(
-      base::in_place, 1, 1, "a", drivefs::mojom::ItemEvent::State::kFailed, -1,
+      absl::in_place, 1, 1, "a", drivefs::mojom::ItemEvent::State::kFailed, -1,
       -1, drivefs::mojom::ItemEventReason::kPin);
   observer().OnSyncingStatusUpdate(syncing_status);
 }
@@ -308,7 +308,7 @@ TEST_F(DriveFsEventRouterTest, OnSyncingStatusUpdate_FailedSync) {
 TEST_F(DriveFsEventRouterTest, OnSyncingStatusUpdate_CompletedSync) {
   drivefs::mojom::SyncingStatus syncing_status;
   syncing_status.item_events.emplace_back(
-      base::in_place, 1, 1, "a", drivefs::mojom::ItemEvent::State::kInProgress,
+      absl::in_place, 1, 1, "a", drivefs::mojom::ItemEvent::State::kInProgress,
       50, 100, drivefs::mojom::ItemEventReason::kTransfer);
   EXPECT_CALL(mock(),
               BroadcastEventImpl(
@@ -325,7 +325,7 @@ TEST_F(DriveFsEventRouterTest, OnSyncingStatusUpdate_CompletedSync) {
 
   syncing_status.item_events.clear();
   syncing_status.item_events.emplace_back(
-      base::in_place, 1, 1, "a", drivefs::mojom::ItemEvent::State::kInProgress,
+      absl::in_place, 1, 1, "a", drivefs::mojom::ItemEvent::State::kInProgress,
       80, 100, drivefs::mojom::ItemEventReason::kTransfer);
   observer().OnSyncingStatusUpdate(syncing_status);
 
@@ -345,7 +345,7 @@ TEST_F(DriveFsEventRouterTest, OnSyncingStatusUpdate_CompletedSync) {
               "", file_manager_private::TRANSFER_STATE_COMPLETED, 0, 0, 0)));
   syncing_status.item_events.clear();
   syncing_status.item_events.emplace_back(
-      base::in_place, 1, 1, "a", drivefs::mojom::ItemEvent::State::kCompleted,
+      absl::in_place, 1, 1, "a", drivefs::mojom::ItemEvent::State::kCompleted,
       -1, -1, drivefs::mojom::ItemEventReason::kTransfer);
   observer().OnSyncingStatusUpdate(syncing_status);
 }
@@ -354,10 +354,10 @@ TEST_F(DriveFsEventRouterTest,
        OnSyncingStatusUpdate_CompletedSync_WithInProgress) {
   drivefs::mojom::SyncingStatus syncing_status;
   syncing_status.item_events.emplace_back(
-      base::in_place, 1, 1, "a", drivefs::mojom::ItemEvent::State::kInProgress,
+      absl::in_place, 1, 1, "a", drivefs::mojom::ItemEvent::State::kInProgress,
       50, 100, drivefs::mojom::ItemEventReason::kTransfer);
   syncing_status.item_events.emplace_back(
-      base::in_place, 2, 3, "b", drivefs::mojom::ItemEvent::State::kQueued, 0,
+      absl::in_place, 2, 3, "b", drivefs::mojom::ItemEvent::State::kQueued, 0,
       100, drivefs::mojom::ItemEventReason::kTransfer);
   EXPECT_CALL(mock(),
               BroadcastEventImpl(
@@ -393,10 +393,10 @@ TEST_F(DriveFsEventRouterTest,
               "", file_manager_private::TRANSFER_STATE_COMPLETED, 0, 0, 0)));
   syncing_status.item_events.clear();
   syncing_status.item_events.emplace_back(
-      base::in_place, 1, 1, "a", drivefs::mojom::ItemEvent::State::kCompleted,
+      absl::in_place, 1, 1, "a", drivefs::mojom::ItemEvent::State::kCompleted,
       -1, -1, drivefs::mojom::ItemEventReason::kTransfer);
   syncing_status.item_events.emplace_back(
-      base::in_place, 2, 3, "b", drivefs::mojom::ItemEvent::State::kInProgress,
+      absl::in_place, 2, 3, "b", drivefs::mojom::ItemEvent::State::kInProgress,
       10, 100, drivefs::mojom::ItemEventReason::kTransfer);
   observer().OnSyncingStatusUpdate(syncing_status);
 }
@@ -404,10 +404,10 @@ TEST_F(DriveFsEventRouterTest,
 TEST_F(DriveFsEventRouterTest, OnSyncingStatusUpdate_CompletedSync_WithQueued) {
   drivefs::mojom::SyncingStatus syncing_status;
   syncing_status.item_events.emplace_back(
-      base::in_place, 1, 1, "a", drivefs::mojom::ItemEvent::State::kInProgress,
+      absl::in_place, 1, 1, "a", drivefs::mojom::ItemEvent::State::kInProgress,
       50, 100, drivefs::mojom::ItemEventReason::kTransfer);
   syncing_status.item_events.emplace_back(
-      base::in_place, 2, 3, "b", drivefs::mojom::ItemEvent::State::kQueued, 0,
+      absl::in_place, 2, 3, "b", drivefs::mojom::ItemEvent::State::kQueued, 0,
       100, drivefs::mojom::ItemEventReason::kTransfer);
   EXPECT_CALL(mock(),
               BroadcastEventImpl(
@@ -443,10 +443,10 @@ TEST_F(DriveFsEventRouterTest, OnSyncingStatusUpdate_CompletedSync_WithQueued) {
               "", file_manager_private::TRANSFER_STATE_COMPLETED, 0, 0, 0)));
   syncing_status.item_events.clear();
   syncing_status.item_events.emplace_back(
-      base::in_place, 1, 1, "a", drivefs::mojom::ItemEvent::State::kCompleted,
+      absl::in_place, 1, 1, "a", drivefs::mojom::ItemEvent::State::kCompleted,
       -1, -1, drivefs::mojom::ItemEventReason::kTransfer);
   syncing_status.item_events.emplace_back(
-      base::in_place, 2, 3, "b", drivefs::mojom::ItemEvent::State::kQueued, 10,
+      absl::in_place, 2, 3, "b", drivefs::mojom::ItemEvent::State::kQueued, 10,
       100, drivefs::mojom::ItemEventReason::kTransfer);
   observer().OnSyncingStatusUpdate(syncing_status);
 }
@@ -455,7 +455,7 @@ TEST_F(DriveFsEventRouterTest,
        OnSyncingStatusUpdate_CompletedSync_OtherQueued) {
   drivefs::mojom::SyncingStatus syncing_status;
   syncing_status.item_events.emplace_back(
-      base::in_place, 1, 1, "a", drivefs::mojom::ItemEvent::State::kInProgress,
+      absl::in_place, 1, 1, "a", drivefs::mojom::ItemEvent::State::kInProgress,
       50, 100, drivefs::mojom::ItemEventReason::kTransfer);
   EXPECT_CALL(mock(),
               BroadcastEventImpl(
@@ -491,10 +491,10 @@ TEST_F(DriveFsEventRouterTest,
               "", file_manager_private::TRANSFER_STATE_COMPLETED, 0, 0, 0)));
   syncing_status.item_events.clear();
   syncing_status.item_events.emplace_back(
-      base::in_place, 1, 1, "a", drivefs::mojom::ItemEvent::State::kCompleted,
+      absl::in_place, 1, 1, "a", drivefs::mojom::ItemEvent::State::kCompleted,
       -1, -1, drivefs::mojom::ItemEventReason::kTransfer);
   syncing_status.item_events.emplace_back(
-      base::in_place, 2, 3, "b", drivefs::mojom::ItemEvent::State::kQueued, 10,
+      absl::in_place, 2, 3, "b", drivefs::mojom::ItemEvent::State::kQueued, 10,
       100, drivefs::mojom::ItemEventReason::kTransfer);
   observer().OnSyncingStatusUpdate(syncing_status);
 }
@@ -502,7 +502,7 @@ TEST_F(DriveFsEventRouterTest,
 TEST_F(DriveFsEventRouterTest, OnSyncingStatusUpdate_CompletedSync_ThenQueued) {
   drivefs::mojom::SyncingStatus syncing_status;
   syncing_status.item_events.emplace_back(
-      base::in_place, 1, 1, "a", drivefs::mojom::ItemEvent::State::kInProgress,
+      absl::in_place, 1, 1, "a", drivefs::mojom::ItemEvent::State::kInProgress,
       50, 100, drivefs::mojom::ItemEventReason::kTransfer);
   EXPECT_CALL(mock(),
               BroadcastEventImpl(
@@ -519,7 +519,7 @@ TEST_F(DriveFsEventRouterTest, OnSyncingStatusUpdate_CompletedSync_ThenQueued) {
 
   syncing_status.item_events.clear();
   syncing_status.item_events.emplace_back(
-      base::in_place, 1, 1, "a", drivefs::mojom::ItemEvent::State::kCompleted,
+      absl::in_place, 1, 1, "a", drivefs::mojom::ItemEvent::State::kCompleted,
       -1, -1, drivefs::mojom::ItemEventReason::kTransfer);
   observer().OnSyncingStatusUpdate(syncing_status);
 
@@ -539,7 +539,7 @@ TEST_F(DriveFsEventRouterTest, OnSyncingStatusUpdate_CompletedSync_ThenQueued) {
               "", file_manager_private::TRANSFER_STATE_COMPLETED, 0, 0, 0)));
   syncing_status.item_events.clear();
   syncing_status.item_events.emplace_back(
-      base::in_place, 2, 3, "b", drivefs::mojom::ItemEvent::State::kQueued, 10,
+      absl::in_place, 2, 3, "b", drivefs::mojom::ItemEvent::State::kQueued, 10,
       100, drivefs::mojom::ItemEventReason::kTransfer);
   observer().OnSyncingStatusUpdate(syncing_status);
 }
@@ -548,7 +548,7 @@ TEST_F(DriveFsEventRouterTest,
        OnSyncingStatusUpdate_CompletedSync_ThenInProgress) {
   drivefs::mojom::SyncingStatus syncing_status;
   syncing_status.item_events.emplace_back(
-      base::in_place, 1, 1, "a", drivefs::mojom::ItemEvent::State::kInProgress,
+      absl::in_place, 1, 1, "a", drivefs::mojom::ItemEvent::State::kInProgress,
       50, 100, drivefs::mojom::ItemEventReason::kTransfer);
   EXPECT_CALL(mock(),
               BroadcastEventImpl(
@@ -575,7 +575,7 @@ TEST_F(DriveFsEventRouterTest,
               "", file_manager_private::TRANSFER_STATE_COMPLETED, 0, 0, 0)));
   syncing_status.item_events.clear();
   syncing_status.item_events.emplace_back(
-      base::in_place, 1, 1, "a", drivefs::mojom::ItemEvent::State::kCompleted,
+      absl::in_place, 1, 1, "a", drivefs::mojom::ItemEvent::State::kCompleted,
       -1, -1, drivefs::mojom::ItemEventReason::kTransfer);
   observer().OnSyncingStatusUpdate(syncing_status);
 
@@ -595,7 +595,7 @@ TEST_F(DriveFsEventRouterTest,
               "", file_manager_private::TRANSFER_STATE_COMPLETED, 0, 0, 0)));
   syncing_status.item_events.clear();
   syncing_status.item_events.emplace_back(
-      base::in_place, 2, 3, "b", drivefs::mojom::ItemEvent::State::kInProgress,
+      absl::in_place, 2, 3, "b", drivefs::mojom::ItemEvent::State::kInProgress,
       10, 500, drivefs::mojom::ItemEventReason::kTransfer);
   observer().OnSyncingStatusUpdate(syncing_status);
 }
@@ -603,7 +603,7 @@ TEST_F(DriveFsEventRouterTest,
 TEST_F(DriveFsEventRouterTest, OnSyncingStatusUpdate_QueuedOnly) {
   drivefs::mojom::SyncingStatus syncing_status;
   syncing_status.item_events.emplace_back(
-      base::in_place, 2, 3, "b", drivefs::mojom::ItemEvent::State::kQueued, 0,
+      absl::in_place, 2, 3, "b", drivefs::mojom::ItemEvent::State::kQueued, 0,
       100, drivefs::mojom::ItemEventReason::kTransfer);
 
   testing::Mock::VerifyAndClearExpectations(&observer());
@@ -623,7 +623,7 @@ TEST_F(DriveFsEventRouterTest, OnSyncingStatusUpdate_QueuedOnly) {
 
   syncing_status.item_events.clear();
   syncing_status.item_events.emplace_back(
-      base::in_place, 2, 3, "b", drivefs::mojom::ItemEvent::State::kQueued, 10,
+      absl::in_place, 2, 3, "b", drivefs::mojom::ItemEvent::State::kQueued, 10,
       100, drivefs::mojom::ItemEventReason::kTransfer);
   observer().OnSyncingStatusUpdate(syncing_status);
 }
@@ -635,10 +635,10 @@ TEST_F(DriveFsEventRouterTest, OnSyncingStatusUpdate_OnUnmounted) {
 TEST_F(DriveFsEventRouterTest, OnFilesChanged_Basic) {
   FileWatchEvent event;
   event.event_type = file_manager_private::FILE_WATCH_EVENT_TYPE_CHANGED;
-  event.entry.additional_properties.SetString("fileSystemRoot", "ext:/");
-  event.entry.additional_properties.SetString("fileSystemName", "drivefs");
-  event.entry.additional_properties.SetString("fileFullPath", "/root");
-  event.entry.additional_properties.SetBoolean("fileIsDirectory", true);
+  event.entry.additional_properties.SetStringKey("fileSystemRoot", "ext:/");
+  event.entry.additional_properties.SetStringKey("fileSystemName", "drivefs");
+  event.entry.additional_properties.SetStringKey("fileFullPath", "/root");
+  event.entry.additional_properties.SetBoolKey("fileIsDirectory", true);
   event.changed_files =
       std::make_unique<std::vector<file_manager_private::FileChange>>();
   event.changed_files->emplace_back();
@@ -685,10 +685,10 @@ TEST_F(DriveFsEventRouterTest, OnFilesChanged_Basic) {
 TEST_F(DriveFsEventRouterTest, OnFilesChanged_MultipleDirectories) {
   FileWatchEvent event;
   event.event_type = file_manager_private::FILE_WATCH_EVENT_TYPE_CHANGED;
-  event.entry.additional_properties.SetString("fileSystemRoot", "ext:/");
-  event.entry.additional_properties.SetString("fileSystemName", "drivefs");
-  event.entry.additional_properties.SetString("fileFullPath", "/root/a");
-  event.entry.additional_properties.SetBoolean("fileIsDirectory", true);
+  event.entry.additional_properties.SetStringKey("fileSystemRoot", "ext:/");
+  event.entry.additional_properties.SetStringKey("fileSystemName", "drivefs");
+  event.entry.additional_properties.SetStringKey("fileFullPath", "/root/a");
+  event.entry.additional_properties.SetBoolKey("fileIsDirectory", true);
   event.changed_files =
       std::make_unique<std::vector<file_manager_private::FileChange>>();
   event.changed_files->emplace_back();
@@ -702,10 +702,10 @@ TEST_F(DriveFsEventRouterTest, OnFilesChanged_MultipleDirectories) {
                           MatchFileWatchEvent(event)));
 
   event.event_type = file_manager_private::FILE_WATCH_EVENT_TYPE_CHANGED;
-  event.entry.additional_properties.SetString("fileSystemRoot", "ext:/");
-  event.entry.additional_properties.SetString("fileSystemName", "drivefs");
-  event.entry.additional_properties.SetString("fileFullPath", "/root/b");
-  event.entry.additional_properties.SetBoolean("fileIsDirectory", true);
+  event.entry.additional_properties.SetStringKey("fileSystemRoot", "ext:/");
+  event.entry.additional_properties.SetStringKey("fileSystemName", "drivefs");
+  event.entry.additional_properties.SetStringKey("fileFullPath", "/root/b");
+  event.entry.additional_properties.SetBoolKey("fileIsDirectory", true);
   event.changed_files =
       std::make_unique<std::vector<file_manager_private::FileChange>>();
   event.changed_files->emplace_back();
@@ -740,6 +740,23 @@ TEST_F(DriveFsEventRouterTest, OnError_CantUploadStorageFull) {
 
   observer().OnError({drivefs::mojom::DriveError::Type::kCantUploadStorageFull,
                       base::FilePath("/a")});
+}
+
+TEST_F(DriveFsEventRouterTest, OnError_CantUploadStorageFullOrganization) {
+  DriveSyncErrorEvent event;
+  event.type =
+      file_manager_private::DRIVE_SYNC_ERROR_TYPE_NO_SERVER_SPACE_ORGANIZATION;
+  event.file_url = "ext:/a";
+  EXPECT_CALL(
+      mock(),
+      BroadcastEventImpl(
+          file_manager_private::OnDriveSyncError::kEventName,
+          testing::MakeMatcher(new ValueMatcher(base::Value(
+              file_manager_private::OnDriveSyncError::Create(event))))));
+
+  observer().OnError(
+      {drivefs::mojom::DriveError::Type::kCantUploadStorageFullOrganization,
+       base::FilePath("/a")});
 }
 
 TEST_F(DriveFsEventRouterTest, OnError_CantPinDiskFull) {

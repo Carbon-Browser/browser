@@ -41,8 +41,8 @@ const char16_t kStreetNameRe[] =
     u"|((?<!do |de )endereço)"  // pt-BR
     u"|calle";                  // es-MX
 const char16_t kHouseNumberRe[] =
-    u"(house.?|street.?|^)number"              // en
-    u"|(haus|^)(nummer|nr\\.?)"                // de
+    u"(house.?|street.?|^)(number|no\\.?$)"    // en
+    u"|(haus|^)(nummer|nr)"                    // de
     u"|^\\*?.?número(.?\\*?$| da residência)"  // pt-BR, pt-PT
     u"|дом|номер.?дома"                        // ru
     u"|exterior";                              // es-MX
@@ -315,7 +315,7 @@ const char16_t kEmailRe[] =
     u"|correo.*electr(o|ó)nico"      // es-ES
     u"|メールアドレス"               // ja-JP
     u"|Электронн(ая|ой).?Почт(а|ы)"  // ru
-    u"|邮件|邮箱"                    // zh-CN
+    u"|邮件|邮箱|電子郵件"           // zh-CN
     u"|電郵地址|電子信箱"            // zh-TW
     u"|ഇ-മെയില്‍|ഇലക്ട്രോണിക്.?"
     u"മെയിൽ"                                        // ml
@@ -328,11 +328,11 @@ const char16_t kEmailRe[] =
 // name_field.cc
 /////////////////////////////////////////////////////////////////////////////
 const char16_t kNameIgnoredRe[] =
-    u"user.?name|user.?id|nickname|maiden name|title|prefix|suffix"
+    u"user.?name|user.?id|nickname|maiden name|title|prefix|suffix|mail"
     u"|vollständiger.?name"              // de-DE
     u"|用户名"                           // zh-CN
     u"|(?:사용자.?)?아이디|사용자.?ID";  // ko-KR
-const char16_t kNameRe[] =
+const char16_t kFullNameRe[] =
     u"^name|full.?name|your.?name|customer.?name|bill.?name|ship.?name"
     u"|name.*first.*last|firstandlastname|contact.?(name|person)"
     u"|nombre.*y.*apellidos"                    // es
@@ -340,12 +340,12 @@ const char16_t kNameRe[] =
     u"|お名前|氏名"                             // ja-JP
     u"|^nome"                                   // pt-BR, pt-PT
     u"|نام.*نام.*خانوادگی"                      // fa
-    u"|姓名"                                    // zh-CN
+    u"|姓\\s*名"                                // zh-CN
     u"|контактное.?лицо"                        // ru
     u"|(\\b|_|\\*)ad[ı]? soyad[ı]?(\\b|_|\\*)"  // tr
     u"|성명"                                    // ko-KR
     u"|nama.?(lengkap|penerima|kamu)";          // id
-const char16_t kNameSpecificRe[] =
+const char16_t kNameGenericRe[] =
     u"^name"
     u"|^nom"    // fr-FR
     u"|^nome";  // pt-BR, pt-PT
@@ -603,8 +603,10 @@ const char16_t kHiddenValueRe[] = u"^(\\W)\\1+$";
 /////////////////////////////////////////////////////////////////////////////
 // merchant_promo_code_field.cc
 /////////////////////////////////////////////////////////////////////////////
+// "promo code", "promotion code", "promotional code" are all acceptable
+// keywords.
 const char16_t kMerchantPromoCodeRe[] =
-    u"\\bpromo code\\b|\\bcoupon code\\b|\\bgift code\\b";
+    u"(promo(tion|tional)?|gift|discount|coupon)[-_. ]*code";
 
 /////////////////////////////////////////////////////////////////////////////
 // votes_uploader.cc

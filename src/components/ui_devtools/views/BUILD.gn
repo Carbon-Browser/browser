@@ -5,11 +5,6 @@
 import("//build/config/ui.gni")
 
 source_set("views") {
-  cflags = []
-  if (is_win) {
-    cflags += [ "/wd4800" ]  # Value forced to bool.
-  }
-
   sources = [
     "devtools_event_util.cc",
     "devtools_event_util.h",
@@ -33,7 +28,6 @@ source_set("views") {
 
   deps = [
     "//components/ui_devtools",
-    "//extensions/common",
     "//skia",
     "//ui/views",
   ]
@@ -64,11 +58,6 @@ source_set("views") {
 
 source_set("unit_tests") {
   testonly = true
-
-  cflags = []
-  if (is_win) {
-    cflags += [ "/wd4800" ]  # Value forced to bool.
-  }
 
   sources = [
     "dom_agent_unittest.cc",

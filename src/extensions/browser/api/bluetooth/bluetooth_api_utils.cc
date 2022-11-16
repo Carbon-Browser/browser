@@ -8,6 +8,7 @@
 
 #include "base/strings/utf_string_conversions.h"
 #include "base/values.h"
+#include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "device/bluetooth/bluetooth_adapter.h"
 #include "device/bluetooth/bluetooth_common.h"
@@ -19,7 +20,7 @@ namespace bluetooth = extensions::api::bluetooth;
 using bluetooth::VendorIdSource;
 using device::BluetoothDevice;
 using device::BluetoothDeviceType;
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 using device::BluetoothTransport;
 #endif
 
@@ -93,7 +94,7 @@ bool ConvertDeviceTypeToApi(const BluetoothDeviceType& input,
   }
 }
 
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 bool ConvertTransportToApi(const BluetoothTransport& input,
                            bluetooth::Transport* output) {
   switch (input) {
@@ -165,14 +166,17 @@ void BluetoothDeviceToApiDevice(const device::BluetoothDevice& device,
   }
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  if (device.battery_percentage())
+  absl::optional<device::BluetoothDevice::BatteryInfo> battery_info =
+      device.GetBatteryInfo(device::BluetoothDevice::BatteryType::kDefault);
+
+  if (battery_info && battery_info->percentage.has_value())
     out->battery_percentage =
-        std::make_unique<int>(device.battery_percentage().value());
+        std::make_unique<int>(battery_info->percentage.value());
   else
     out->battery_percentage.reset();
 #endif
 
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   ConvertTransportToApi(device.GetType(), &(out->transport));
 #endif
 }

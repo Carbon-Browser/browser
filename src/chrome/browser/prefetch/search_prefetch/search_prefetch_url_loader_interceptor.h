@@ -7,13 +7,9 @@
 
 #include <memory>
 
-#include "base/callback_forward.h"
-#include "base/macros.h"
-#include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "content/public/browser/url_loader_request_interceptor.h"
 #include "services/network/public/cpp/resource_request.h"
-#include "url/gurl.h"
 
 namespace content {
 class BrowserContext;
@@ -39,7 +35,7 @@ class SearchPrefetchURLLoaderInterceptor
       const network::ResourceRequest& tentative_resource_request,
       int frame_tree_node_id);
 
-  // content::URLLaoderRequestInterceptor:
+  // content::URLLoaderRequestInterceptor:
   void MaybeCreateLoader(
       const network::ResourceRequest& tentative_resource_request,
       content::BrowserContext* browser_context,

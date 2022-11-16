@@ -5,6 +5,8 @@
 #import "ios/chrome/browser/ui/overlays/overlay_request_coordinator.h"
 #import "ios/chrome/browser/ui/overlays/overlay_request_coordinator+subclassing.h"
 
+#include <ostream>
+
 #include "base/check.h"
 #include "base/notreached.h"
 #include "ios/chrome/browser/overlays/public/overlay_request_support.h"
@@ -25,7 +27,7 @@
 @implementation OverlayRequestCoordinator
 
 - (void)dealloc {
-  // ChromeCoordinator's |-dealloc| calls |-stop|, which defaults to an animated
+  // ChromeCoordinator's `-dealloc` calls `-stop`, which defaults to an animated
   // dismissal.  OverlayRequestCoordinators should instead stop without
   // animation so that the OverlayRequestCoordinatorDelegate can be notified of
   // the dismissal immediately.

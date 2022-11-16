@@ -5,7 +5,6 @@
 #ifndef IOS_WEB_VIEW_INTERNAL_PASSWORDS_WEB_VIEW_PASSWORD_STORE_FACTORY_H_
 #define IOS_WEB_VIEW_INTERNAL_PASSWORDS_WEB_VIEW_PASSWORD_STORE_FACTORY_H_
 
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/no_destructor.h"
 #include "components/keyed_service/ios/refcounted_browser_state_keyed_service_factory.h"
@@ -13,7 +12,6 @@
 enum class ServiceAccessType;
 
 namespace password_manager {
-class PasswordStore;
 class PasswordStoreInterface;
 }
 
@@ -26,15 +24,15 @@ class WebViewBrowserState;
 class WebViewPasswordStoreFactory
     : public RefcountedBrowserStateKeyedServiceFactory {
  public:
-  static scoped_refptr<password_manager::PasswordStore> GetForBrowserState(
-      WebViewBrowserState* browser_state,
-      ServiceAccessType access_type);
-
   static scoped_refptr<password_manager::PasswordStoreInterface>
-  GetInterfaceForBrowserState(WebViewBrowserState* browser_state,
-                              ServiceAccessType access_type);
+  GetForBrowserState(WebViewBrowserState* browser_state,
+                     ServiceAccessType access_type);
 
   static WebViewPasswordStoreFactory* GetInstance();
+
+  WebViewPasswordStoreFactory(const WebViewPasswordStoreFactory&) = delete;
+  WebViewPasswordStoreFactory& operator=(const WebViewPasswordStoreFactory&) =
+      delete;
 
  private:
   friend class base::NoDestructor<WebViewPasswordStoreFactory>;
@@ -48,8 +46,6 @@ class WebViewPasswordStoreFactory
   web::BrowserState* GetBrowserStateToUse(
       web::BrowserState* context) const override;
   bool ServiceIsNULLWhileTesting() const override;
-
-  DISALLOW_COPY_AND_ASSIGN(WebViewPasswordStoreFactory);
 };
 
 }  // namespace ios_web_view

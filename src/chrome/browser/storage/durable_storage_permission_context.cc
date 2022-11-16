@@ -35,7 +35,6 @@ DurableStoragePermissionContext::DurableStoragePermissionContext(
 }
 
 void DurableStoragePermissionContext::DecidePermission(
-    content::WebContents* web_contents,
     const permissions::PermissionRequestID& id,
     const GURL& requesting_origin,
     const GURL& embedding_origin,
@@ -119,8 +118,9 @@ void DurableStoragePermissionContext::UpdateContentSetting(
     ContentSetting content_setting,
     bool is_one_time) {
   DCHECK(!is_one_time);
-  DCHECK_EQ(requesting_origin, requesting_origin.GetOrigin());
-  DCHECK_EQ(embedding_origin_ignored, embedding_origin_ignored.GetOrigin());
+  DCHECK_EQ(requesting_origin, requesting_origin.DeprecatedGetOriginAsURL());
+  DCHECK_EQ(embedding_origin_ignored,
+            embedding_origin_ignored.DeprecatedGetOriginAsURL());
   DCHECK(content_setting == CONTENT_SETTING_ALLOW ||
          content_setting == CONTENT_SETTING_BLOCK);
 

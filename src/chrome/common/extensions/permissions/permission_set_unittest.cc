@@ -2,13 +2,16 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// This source code is a part of eyeo Chromium SDK.
+// Use of this source code is governed by the GPLv3 that can be found in the
+// components/adblock/LICENSE file.
+
 #include <stddef.h>
 
 #include <memory>
 #include <utility>
 
 #include "base/command_line.h"
-#include "base/cxx17_backports.h"
 #include "base/json/json_file_value_serializer.h"
 #include "base/memory/ptr_util.h"
 #include "base/strings/string_number_conversions.h"
@@ -689,7 +692,7 @@ TEST(PermissionsTest, IsPrivilegeIncrease) {
       {"sockets3", true},           // tcp:a.com:80 -> tcp:*:*
   };
 
-  for (size_t i = 0; i < base::size(kTests); ++i) {
+  for (size_t i = 0; i < std::size(kTests); ++i) {
     scoped_refptr<Extension> old_extension(
         LoadManifest("allow_silent_upgrade",
                      std::string(kTests[i].base_name) + "_old.json"));
@@ -753,6 +756,7 @@ TEST(PermissionsTest, PermissionMessages) {
   skip.insert(APIPermissionID::kDiagnostics);
   skip.insert(APIPermissionID::kDns);
   skip.insert(APIPermissionID::kDownloadsShelf);
+  skip.insert(APIPermissionID::kDownloadsUi);
   skip.insert(APIPermissionID::kFontSettings);
   skip.insert(APIPermissionID::kFullscreen);
   skip.insert(APIPermissionID::kGcm);
@@ -760,12 +764,14 @@ TEST(PermissionsTest, PermissionMessages) {
   skip.insert(APIPermissionID::kImeWindowEnabled);
   skip.insert(APIPermissionID::kIdltest);
   skip.insert(APIPermissionID::kLoginState);
+  skip.insert(APIPermissionID::kOffscreen);
   skip.insert(APIPermissionID::kOverrideEscFullscreen);
   skip.insert(APIPermissionID::kPointerLock);
   skip.insert(APIPermissionID::kPower);
   skip.insert(APIPermissionID::kPrinterProvider);
   skip.insert(APIPermissionID::kSearch);
   skip.insert(APIPermissionID::kSessions);
+  skip.insert(APIPermissionID::kSidePanel);
   skip.insert(APIPermissionID::kStorage);
   skip.insert(APIPermissionID::kSystemCpu);
   skip.insert(APIPermissionID::kSystemDisplay);
@@ -829,6 +835,7 @@ TEST(PermissionsTest, PermissionMessages) {
   skip.insert(APIPermissionID::kFileBrowserHandlerInternal);
   skip.insert(APIPermissionID::kFileManagerPrivate);
   skip.insert(APIPermissionID::kFirstRunPrivate);
+  skip.insert(APIPermissionID::kSharedStoragePrivate);
   skip.insert(APIPermissionID::kIdentityPrivate);
   skip.insert(APIPermissionID::kInputMethodPrivate);
   skip.insert(APIPermissionID::kLanguageSettingsPrivate);
@@ -846,7 +853,6 @@ TEST(PermissionsTest, PermissionMessages) {
   skip.insert(APIPermissionID::kTabCaptureForTab);
   skip.insert(APIPermissionID::kTerminalPrivate);
   skip.insert(APIPermissionID::kVirtualKeyboardPrivate);
-  skip.insert(APIPermissionID::kWallpaperPrivate);
   skip.insert(APIPermissionID::kWebrtcAudioPrivate);
   skip.insert(APIPermissionID::kWebrtcDesktopCapturePrivate);
   skip.insert(APIPermissionID::kWebrtcLoggingPrivate);
@@ -866,7 +872,6 @@ TEST(PermissionsTest, PermissionMessages) {
   skip.insert(APIPermissionID::kHid);
   skip.insert(APIPermissionID::kFileSystem);
   skip.insert(APIPermissionID::kFileSystemProvider);
-  skip.insert(APIPermissionID::kFileSystemRequestDownloads);
   skip.insert(APIPermissionID::kFileSystemRequestFileSystem);
   skip.insert(APIPermissionID::kFileSystemRetainEntries);
   skip.insert(APIPermissionID::kFileSystemWrite);
@@ -1676,7 +1681,7 @@ TEST(PermissionsTest, IsHostPrivilegeIncrease) {
        false},
   };
   const PermissionMessageProvider* provider = PermissionMessageProvider::Get();
-  for (size_t i = 0; i < base::size(test_cases); ++i) {
+  for (size_t i = 0; i < std::size(test_cases); ++i) {
     URLPatternSet explicit_hosts1;
     URLPatternSet explicit_hosts2;
     const auto& test_case = test_cases[i];
@@ -1776,8 +1781,8 @@ TEST(PermissionsTest, SyncFileSystemPermission) {
 }
 
 // Make sure that we don't crash when we're trying to show the permissions
-// even though chrome://thumb (and everything that's not chrome://favicon with
-// a chrome:// scheme) is not a valid permission.
+// even though everything with a chrome:// scheme except chrome://favicon is
+// not a valid permission.
 // More details here: crbug/246314.
 TEST(PermissionsTest, ChromeURLs) {
   URLPatternSet allowed_hosts;
@@ -1786,7 +1791,7 @@ TEST(PermissionsTest, ChromeURLs) {
   allowed_hosts.AddPattern(
       URLPattern(URLPattern::SCHEME_ALL, "chrome://favicon/"));
   allowed_hosts.AddPattern(
-      URLPattern(URLPattern::SCHEME_ALL, "chrome://thumb/"));
+      URLPattern(URLPattern::SCHEME_ALL, "chrome://not-favicon/"));
   PermissionSet permissions(APIPermissionSet(), ManifestPermissionSet(),
                             std::move(allowed_hosts), URLPatternSet());
   PermissionMessageProvider::Get()->GetPermissionMessages(

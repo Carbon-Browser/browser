@@ -19,10 +19,8 @@ RasterQuery::RasterQuery() = default;
 RasterQuery::~RasterQuery() = default;
 
 RasterQueryQueue::RasterQueryQueue(
-    viz::RasterContextProvider* const worker_context_provider,
-    bool oop_rasterization_enabled)
-    : worker_context_provider_(worker_context_provider),
-      oop_rasterization_enabled_(oop_rasterization_enabled) {}
+    viz::RasterContextProvider* const worker_context_provider)
+    : worker_context_provider_(worker_context_provider) {}
 
 RasterQueryQueue::~RasterQueryQueue() = default;
 
@@ -36,8 +34,7 @@ void RasterQueryQueue::Append(RasterQuery raster_query) {
 
 #define UMA_HISTOGRAM_RASTER_TIME_CUSTOM_MICROSECONDS(name, total_time) \
   UMA_HISTOGRAM_CUSTOM_MICROSECONDS_TIMES(                              \
-      name, total_time, base::TimeDelta::FromMicroseconds(1),           \
-      base::TimeDelta::FromMilliseconds(100), 100);
+      name, total_time, base::Microseconds(1), base::Milliseconds(100), 100);
 
 bool RasterQueryQueue::CheckRasterFinishedQueries() {
   base::AutoLock hold(pending_raster_queries_lock_);
@@ -76,8 +73,7 @@ bool RasterQueryQueue::CheckRasterFinishedQueries() {
     ri->DeleteQueriesEXT(1, &it->raster_duration_query_id);
 
     base::TimeDelta raster_duration =
-        it->worker_raster_duration +
-        base::TimeDelta::FromMicroseconds(gpu_raster_duration);
+        it->worker_raster_duration + base::Microseconds(gpu_raster_duration);
 
     // It is safe to use the UMA macros here with runtime generated strings
     // because the client name should be initialized once in the process, before
@@ -95,7 +91,7 @@ bool RasterQueryQueue::CheckRasterFinishedQueries() {
       // should have been generated using base::TimeDelta::InMicroseconds()
       // there, so the result should fit in an int64_t.
       base::TimeDelta raster_scheduling_delay =
-          base::TimeDelta::FromMicroseconds(
+          base::Microseconds(
               base::checked_cast<int64_t>(gpu_raster_start_time)) -
           it->raster_buffer_creation_time.since_origin();
 
@@ -125,17 +121,10 @@ bool RasterQueryQueue::CheckRasterFinishedQueries() {
       }
     }
 
-    if (oop_rasterization_enabled_) {
-      UMA_HISTOGRAM_RASTER_TIME_CUSTOM_MICROSECONDS(
-          base::StringPrintf("Renderer4.%s.RasterTaskTotalDuration.Oop",
-                             client_name),
-          raster_duration);
-    } else {
-      UMA_HISTOGRAM_RASTER_TIME_CUSTOM_MICROSECONDS(
-          base::StringPrintf("Renderer4.%s.RasterTaskTotalDuration.Gpu",
-                             client_name),
-          raster_duration);
-    }
+    UMA_HISTOGRAM_RASTER_TIME_CUSTOM_MICROSECONDS(
+        base::StringPrintf("Renderer4.%s.RasterTaskTotalDuration.Oop",
+                           client_name),
+        raster_duration);
 
     it = pending_raster_queries_.erase(it);
   }

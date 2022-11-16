@@ -17,7 +17,6 @@ enum ClipboardFormat {
   kHtml,
   kSmartPaste,
   kBookmark,
-  kRtf,
 };
 
 enum ClipboardBuffer {
@@ -25,7 +24,7 @@ enum ClipboardBuffer {
   // Used on platforms like the X Window System that treat selection
   // as a type of clipboard.
   // TODO(crbug.com/676224): When preprocessing of mojom is available only
-  // define this value for USE_X11.
+  // define this value for USE_OZONE.
   kSelection,
 };
 
@@ -109,10 +108,6 @@ interface ClipboardHost {
   [Sync]
   ReadPng(ClipboardBuffer buffer) => (mojo_base.mojom.BigBuffer png);
 
-  // TODO(crbug.com/1223849): Transition call sites to ReadPng, then remove.
-  [Sync]
-  ReadImage(ClipboardBuffer buffer) => (skia.mojom.BitmapN32? image);
-
   // Read Files from clipboard. Called on paste event to provide
   // clipboardData.files.
   // Security notes:
@@ -136,11 +131,11 @@ interface ClipboardHost {
   ReadAvailableCustomAndStandardFormats() =>
       (array<mojo_base.mojom.String16> format_types);
 
-  // Reads an unsanitized custom format from the clipboard.
+  // Reads an unsanitized custom format from the clipboard. This is currently
+  // only used in async clipboard API.
   // `format` contains the custom format name.
   // Returns the data from the clipboard corresponding to the `format`.
   // Returns empty `data` if the `format` is not available in the clipboard.
-  [Sync]
   ReadUnsanitizedCustomFormat(mojo_base.mojom.String16 format) =>
       (mojo_base.mojom.BigBuffer data);
 

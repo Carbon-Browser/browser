@@ -9,16 +9,15 @@
 #include <string>
 
 #include "base/files/scoped_temp_dir.h"
-#include "base/macros.h"
 
 class Profile;
 
-namespace base {
-class Value;
-}
+namespace ash {
+class EmbeddedPolicyTestServerMixin;
+}  // namespace ash
 
-namespace chromeos {
-class LocalPolicyTestServerMixin;
+namespace enterprise_management {
+class CloudPolicySettings;
 }
 
 namespace policy {
@@ -29,10 +28,14 @@ class UserPolicyTestHelper {
  public:
   UserPolicyTestHelper(
       const std::string& account_id,
-      chromeos::LocalPolicyTestServerMixin* local_policy_server);
+      ash::EmbeddedPolicyTestServerMixin* embedded_policy_server);
+
+  UserPolicyTestHelper(const UserPolicyTestHelper&) = delete;
+  UserPolicyTestHelper& operator=(const UserPolicyTestHelper&) = delete;
+
   virtual ~UserPolicyTestHelper();
 
-  void SetPolicy(const base::Value& mandatory, const base::Value& recommended);
+  void SetPolicy(const enterprise_management::CloudPolicySettings& policy);
 
   // Can be optionally used to wait for the initial policy to be applied to the
   // profile. Alternatively, a login can be simulated, which makes it
@@ -41,18 +44,16 @@ class UserPolicyTestHelper {
 
   // Updates the policy test server with the given policy. Then calls
   // RefreshPolicyAndWait().
-  void SetPolicyAndWait(const base::Value& mandatory_policy,
-                        const base::Value& recommended_policy,
-                        Profile* profile);
+  void SetPolicyAndWait(
+      const enterprise_management::CloudPolicySettings& policy,
+      Profile* profile);
 
   // Refreshes and waits for the new policy being applied to |profile|.
   void RefreshPolicyAndWait(Profile* profile);
 
  private:
   const std::string account_id_;
-  chromeos::LocalPolicyTestServerMixin* local_policy_server_;
-
-  DISALLOW_COPY_AND_ASSIGN(UserPolicyTestHelper);
+  ash::EmbeddedPolicyTestServerMixin* embedded_policy_server_ = nullptr;
 };
 
 }  // namespace policy

@@ -10,7 +10,6 @@
 #include "ash/shell.h"
 #include "base/bind.h"
 #include "base/command_line.h"
-#include "base/macros.h"
 #include "chrome/browser/ash/accessibility/accessibility_manager.h"
 #include "chrome/browser/ash/accessibility/magnification_manager.h"
 #include "chrome/browser/ash/login/helper.h"
@@ -19,6 +18,7 @@
 #include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
+#include "chrome/browser/profiles/profile_test_util.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/testing_profile.h"
@@ -91,17 +91,22 @@ void PrepareNonNewProfile(const AccountId& account_id) {
   // To prepare a non-new profile for tests, we must ensure the profile
   // directory and the preference files are created, because that's what
   // Profile::IsNewProfile() checks. CreateSession(), however, does not yet
-  // create the profile directory until GetProfileByUserIdHashForTest() is
-  // called.
-  ProfileHelper::Get()->GetProfileByUserIdHashForTest(
-      account_id.GetUserEmail());
+  // create the profile directory, so create the profile actually here.
+  profiles::testing::CreateProfileSync(
+      g_browser_process->profile_manager(),
+      ProfileHelper::GetProfilePathByUserIdHash(user_manager::UserManager::Get()
+                                                    ->FindUser(account_id)
+                                                    ->username_hash()));
 }
 
 // Simulates how UserSessionManager starts a user session by loading user
 // profile, notify user profile is loaded, and mark session as started.
 void StartUserSession(const AccountId& account_id) {
-  ProfileHelper::GetProfileByUserIdHashForTest(
-      user_manager::UserManager::Get()->FindUser(account_id)->username_hash());
+  profiles::testing::CreateProfileSync(
+      g_browser_process->profile_manager(),
+      ProfileHelper::GetProfilePathByUserIdHash(user_manager::UserManager::Get()
+                                                    ->FindUser(account_id)
+                                                    ->username_hash()));
 
   auto* session_manager = session_manager::SessionManager::Get();
   session_manager->NotifyUserProfileLoaded(account_id);
@@ -120,6 +125,10 @@ class MockMagnificationObserver {
             &MockMagnificationObserver::OnAccessibilityStatusChanged,
             base::Unretained(this)));
   }
+
+  MockMagnificationObserver(const MockMagnificationObserver&) = delete;
+  MockMagnificationObserver& operator=(const MockMagnificationObserver&) =
+      delete;
 
   virtual ~MockMagnificationObserver() {}
 
@@ -142,19 +151,22 @@ class MockMagnificationObserver {
   bool observed_enabled_ = false;
 
   base::CallbackListSubscription accessibility_subscription_;
-
-  DISALLOW_COPY_AND_ASSIGN(MockMagnificationObserver);
 };
 
 class MagnificationManagerTest : public InProcessBrowserTest {
  protected:
   MagnificationManagerTest() {}
+
+  MagnificationManagerTest(const MagnificationManagerTest&) = delete;
+  MagnificationManagerTest& operator=(const MagnificationManagerTest&) = delete;
+
   ~MagnificationManagerTest() override {}
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
     command_line->AppendSwitch(switches::kLoginManager);
     command_line->AppendSwitchASCII(switches::kLoginProfile,
                                     TestingProfile::kTestUserProfileDir);
+    command_line->AppendSwitch(switches::kAllowFailedPolicyFetchForTest);
   }
 
   void SetUpOnMainThread() override {
@@ -165,8 +177,6 @@ class MagnificationManagerTest : public InProcessBrowserTest {
 
   const AccountId test_account_id_ =
       AccountId::FromUserEmailGaiaId(kTestUserName, kTestUserGaiaId);
-
-  DISALLOW_COPY_AND_ASSIGN(MagnificationManagerTest);
 };
 
 IN_PROC_BROWSER_TEST_F(MagnificationManagerTest, PRE_LoginOffToOff) {

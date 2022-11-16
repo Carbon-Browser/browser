@@ -3,8 +3,8 @@
 // found in the LICENSE file.
 
 #include "ash/public/cpp/clipboard_history_controller.h"
-#include "base/macros.h"
 #include "base/path_service.h"
+#include "chrome/browser/ash/login/lock/screen_locker_tester.h"
 #include "chrome/browser/extensions/extension_apitest.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "content/public/test/browser_test.h"
@@ -69,8 +69,9 @@ class VirtualKeyboardPrivateApiTest : public extensions::ExtensionApiTest {
     // Select one part of the web page. Wait until the selection region updates.
     // Then copy the selected part to clipboard.
     auto* web_contents = browser()->tab_strip_model()->GetActiveWebContents();
+    content::BoundingBoxUpdateWaiter select_waiter(web_contents);
     ASSERT_TRUE(ExecuteScript(web_contents, "selectPart1();"));
-    content::WaitForSelectionBoundingBoxUpdate(web_contents);
+    select_waiter.Wait();
     ASSERT_TRUE(ExecuteScript(web_contents, "copyToClipboard();"));
     base::RunLoop().RunUntilIdle();
   }
@@ -84,6 +85,23 @@ IN_PROC_BROWSER_TEST_F(VirtualKeyboardPrivateApiTest, Multipaste) {
   CopyFileItem();
 
   ASSERT_TRUE(RunExtensionTest("virtual_keyboard_private", {},
+                               {.load_as_component = true}))
+      << message_;
+}
+
+IN_PROC_BROWSER_TEST_F(VirtualKeyboardPrivateApiTest, MultipasteLockedScreen) {
+  // Copy to the clipboard an item of each display format type.
+  CopyHtmlItem();
+  CopyTextItem();
+  CopyBitmapItem();
+  CopyFileItem();
+
+  // Verify that no clipboard items are returned when the screen is locked.
+  ash::ScreenLockerTester tester;
+  tester.Lock();
+
+  ASSERT_TRUE(RunExtensionTest("virtual_keyboard_private",
+                               {.custom_arg = "locked"},
                                {.load_as_component = true}))
       << message_;
 }

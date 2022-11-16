@@ -8,7 +8,6 @@
 #include <memory>
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "remoting/base/protobuf_http_client.h"
 #include "remoting/protocol/ice_config_request.h"
@@ -37,6 +36,10 @@ class RemotingIceConfigRequest final : public IceConfigRequest {
   RemotingIceConfigRequest(
       scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
       OAuthTokenGetter* oauth_token_getter);
+
+  RemotingIceConfigRequest(const RemotingIceConfigRequest&) = delete;
+  RemotingIceConfigRequest& operator=(const RemotingIceConfigRequest&) = delete;
+
   ~RemotingIceConfigRequest() override;
 
   // IceConfigRequest implementation.
@@ -51,8 +54,6 @@ class RemotingIceConfigRequest final : public IceConfigRequest {
   bool make_authenticated_requests_ = false;
   OnIceConfigCallback on_ice_config_callback_;
   ProtobufHttpClient http_client_;
-
-  DISALLOW_COPY_AND_ASSIGN(RemotingIceConfigRequest);
 };
 
 }  // namespace protocol

@@ -4,10 +4,12 @@
 
 #include "chrome/browser/ash/login/saml/in_session_password_change_manager.h"
 
+#include "ash/components/login/auth/public/saml_password_attributes.h"
 #include "ash/public/cpp/session/session_activation_observer.h"
 #include "ash/public/cpp/session/session_controller.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/task_environment.h"
+#include "build/build_config.h"
 #include "chrome/browser/ash/login/login_pref_names.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/browser/browser_process.h"
@@ -17,7 +19,6 @@
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chrome/test/base/testing_profile_manager.h"
-#include "chromeos/login/auth/saml_password_attributes.h"
 #include "components/user_manager/scoped_user_manager.h"
 #include "components/user_manager/user_names.h"
 #include "content/public/test/browser_task_environment.h"
@@ -29,11 +30,11 @@ namespace {
 
 using ::message_center::Notification;
 
-constexpr base::TimeDelta kOneHour = base::TimeDelta::FromHours(1);
-constexpr base::TimeDelta kOneDay = base::TimeDelta::FromDays(1);
-constexpr base::TimeDelta kAdvanceWarningTime = base::TimeDelta::FromDays(14);
-constexpr base::TimeDelta kOneYear = base::TimeDelta::FromDays(365);
-constexpr base::TimeDelta kTenYears = base::TimeDelta::FromDays(10 * 365);
+constexpr base::TimeDelta kOneHour = base::Hours(1);
+constexpr base::TimeDelta kOneDay = base::Days(1);
+constexpr base::TimeDelta kAdvanceWarningTime = base::Days(14);
+constexpr base::TimeDelta kOneYear = base::Days(365);
+constexpr base::TimeDelta kTenYears = base::Days(10 * 365);
 
 inline std::u16string utf16(const char* ascii) {
   return base::ASCIIToUTF16(ascii);
@@ -236,7 +237,10 @@ TEST_F(InSessionPasswordChangeManagerTest, TimePasses_NoUserActionTaken) {
   EXPECT_EQ(utf16("Choose a new one now"), Notification()->message());
 }
 
-TEST_F(InSessionPasswordChangeManagerTest, TimePasses_NotificationDismissed) {
+// Timing out on ASan LSan: http://crbug.com/1306035.
+// Disabling due to timeout in chromeos-dgb on Linux: http://crbug.com/1307706
+TEST_F(InSessionPasswordChangeManagerTest,
+       DISABLED_TimePasses_NotificationDismissed) {
   SetExpirationTime(base::Time::Now() + kOneYear + kAdvanceWarningTime / 2);
   manager_->MaybeShowExpiryNotification();
 

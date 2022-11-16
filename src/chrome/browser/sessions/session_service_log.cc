@@ -91,7 +91,7 @@ bool DeserializeEvent(const base::Value& serialized_event,
   int64_t time_int;
   if (!base::StringToInt64(*time_value, &time_int))
     return false;
-  event.time = base::Time() + base::TimeDelta::FromMicroseconds(time_int);
+  event.time = base::Time() + base::Microseconds(time_int);
 
   switch (event.type) {
     case SessionServiceEventLogType::kStart: {
@@ -176,12 +176,10 @@ void SaveEventsToPrefs(Profile* profile,
 }  // namespace
 
 std::list<SessionServiceEvent> GetSessionServiceEvents(Profile* profile) {
-  const base::ListValue* serialized_events =
-      profile->GetPrefs()->GetList(kEventPrefKey);
-  if (!serialized_events)
-    return {};
+  const base::Value::List& serialized_events =
+      profile->GetPrefs()->GetValueList(kEventPrefKey);
   std::list<SessionServiceEvent> events;
-  for (const auto& serialized_event : serialized_events->GetList()) {
+  for (const auto& serialized_event : serialized_events) {
     SessionServiceEvent event;
     if (DeserializeEvent(serialized_event, event))
       events.push_back(std::move(event));

@@ -11,7 +11,6 @@
 #include "base/check_op.h"
 #include "base/command_line.h"
 #include "base/notreached.h"
-#include "base/task/post_task.h"
 #include "components/autofill/core/browser/webdata/autofill_profile_sync_bridge.h"
 #include "components/autofill/core/common/autofill_features.h"
 #include "components/invalidation/impl/profile_invalidation_provider.h"
@@ -31,6 +30,7 @@
 #import "ios/web_view/internal/sync/web_view_model_type_store_service_factory.h"
 #import "ios/web_view/internal/sync/web_view_profile_invalidation_provider_factory.h"
 #import "ios/web_view/internal/sync/web_view_sync_invalidations_service_factory.h"
+#include "ios/web_view/internal/sync/web_view_trusted_vault_client.h"
 #include "ios/web_view/internal/webdata_services/web_view_web_data_service_wrapper_factory.h"
 
 #if !defined(__has_feature) || !__has_feature(objc_arc)
@@ -61,10 +61,10 @@ std::unique_ptr<WebViewSyncClient> WebViewSyncClient::Create(
       WebViewWebDataServiceWrapperFactory::GetAutofillWebDataForAccount(
           browser_state, ServiceAccessType::IMPLICIT_ACCESS)
           .get(),
-      WebViewPasswordStoreFactory::GetInterfaceForBrowserState(
+      WebViewPasswordStoreFactory::GetForBrowserState(
           browser_state, ServiceAccessType::IMPLICIT_ACCESS)
           .get(),
-      WebViewAccountPasswordStoreFactory::GetInterfaceForBrowserState(
+      WebViewAccountPasswordStoreFactory::GetForBrowserState(
           browser_state, ServiceAccessType::IMPLICIT_ACCESS)
           .get(),
       browser_state->GetPrefs(),
@@ -100,13 +100,13 @@ WebViewSyncClient::WebViewSyncClient(
       invalidation_service_(invalidation_service),
       sync_invalidations_service_(sync_invalidations_service) {
   component_factory_ =
-      std::make_unique<browser_sync::ProfileSyncComponentsFactoryImpl>(
-          this, version_info::Channel::STABLE,
-          base::CreateSingleThreadTaskRunner({web::WebThread::UI}),
+      std::make_unique<browser_sync::SyncApiComponentFactoryImpl>(
+          this, version_info::Channel::STABLE, web::GetUIThreadTaskRunner({}),
           profile_web_data_service_->GetDBTaskRunner(),
           profile_web_data_service_, account_web_data_service_,
           profile_password_store_, account_password_store_,
           /*bookmark_sync_service=*/nullptr);
+  trusted_vault_client_ = std::make_unique<WebViewTrustedVaultClient>();
 }
 
 WebViewSyncClient::~WebViewSyncClient() {}
@@ -131,10 +131,6 @@ syncer::ModelTypeStoreService* WebViewSyncClient::GetModelTypeStoreService() {
 
 syncer::DeviceInfoSyncService* WebViewSyncClient::GetDeviceInfoSyncService() {
   return device_info_sync_service_;
-}
-
-bookmarks::BookmarkModel* WebViewSyncClient::GetBookmarkModel() {
-  return nullptr;
 }
 
 favicon::FaviconService* WebViewSyncClient::GetFaviconService() {
@@ -166,10 +162,6 @@ WebViewSyncClient::CreateDataTypeControllers(
                                                              sync_service);
 }
 
-BookmarkUndoService* WebViewSyncClient::GetBookmarkUndoService() {
-  return nullptr;
-}
-
 invalidation::InvalidationService* WebViewSyncClient::GetInvalidationService() {
   return invalidation_service_;
 }
@@ -180,7 +172,7 @@ WebViewSyncClient::GetSyncInvalidationsService() {
 }
 
 syncer::TrustedVaultClient* WebViewSyncClient::GetTrustedVaultClient() {
-  return nullptr;
+  return trusted_vault_client_.get();
 }
 
 scoped_refptr<syncer::ExtensionsActivity>

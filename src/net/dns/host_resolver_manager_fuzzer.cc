@@ -25,6 +25,7 @@
 #include "net/dns/host_resolver.h"
 #include "net/dns/public/dns_query_type.h"
 #include "net/dns/public/host_resolver_source.h"
+#include "net/log/net_log.h"
 #include "net/log/net_log_with_source.h"
 #include "net/log/test_net_log.h"
 #include "net/net_buildflags.h"
@@ -43,6 +44,9 @@ class DnsRequest {
         data_provider_(data_provider),
         dns_requests_(dns_requests) {}
 
+  DnsRequest(const DnsRequest&) = delete;
+  DnsRequest& operator=(const DnsRequest&) = delete;
+
   ~DnsRequest() = default;
 
   // Creates and starts a DNS request using fuzzed parameters. If the request
@@ -51,8 +55,8 @@ class DnsRequest {
       net::HostResolver* host_resolver,
       FuzzedDataProvider* data_provider,
       std::vector<std::unique_ptr<DnsRequest>>* dns_requests) {
-    std::unique_ptr<DnsRequest> dns_request(
-        new DnsRequest(host_resolver, data_provider, dns_requests));
+    auto dns_request = std::make_unique<DnsRequest>(
+        host_resolver, data_provider, dns_requests);
 
     if (dns_request->Start() == net::ERR_IO_PENDING)
       dns_requests->push_back(std::move(dns_request));
@@ -159,7 +163,14 @@ class DnsRequest {
         data_provider_->ConsumeBool()
             ? net::HostResolver::ResolveHostParameters::CacheUsage::ALLOWED
             : net::HostResolver::ResolveHostParameters::CacheUsage::DISALLOWED;
-    parameters.include_canonical_name = data_provider_->ConsumeBool();
+
+    // `include_canonical_name` only allowed for address queries and only when
+    // the system resolver can be used.
+    if (net::IsAddressType(parameters.dns_query_type) &&
+        parameters.source != net::HostResolverSource::DNS &&
+        parameters.source != net::HostResolverSource::MULTICAST_DNS) {
+      parameters.include_canonical_name = data_provider_->ConsumeBool();
+    }
 
     if (!IsParameterCombinationAllowed(parameters)) {
       return net::ERR_FAILED;
@@ -180,7 +191,7 @@ class DnsRequest {
   void WaitUntilDone() {
     CHECK(!run_loop_);
     if (request_) {
-      run_loop_.reset(new base::RunLoop());
+      run_loop_ = std::make_unique<base::RunLoop>();
       run_loop_->Run();
       run_loop_.reset();
     }
@@ -219,8 +230,6 @@ class DnsRequest {
   net::AddressList address_list_;
 
   std::unique_ptr<base::RunLoop> run_loop_;
-
-  DISALLOW_COPY_AND_ASSIGN(DnsRequest);
 };
 
 }  // namespace
@@ -235,7 +244,9 @@ class DnsRequest {
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
   {
     FuzzedDataProvider data_provider(data, size);
-    net::RecordingTestNetLog net_log;
+    // Including an observer; even though the recorded results aren't currently
+    // used, it'll ensure the netlogging code is fuzzed as well.
+    net::RecordingNetLogObserver net_log_observer;
 
     net::HostResolver::ManagerOptions options;
     options.max_concurrent_resolves =
@@ -243,8 +254,8 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
     options.insecure_dns_client_enabled = data_provider.ConsumeBool();
     bool enable_caching = data_provider.ConsumeBool();
     std::unique_ptr<net::ContextHostResolver> host_resolver =
-        net::CreateFuzzedContextHostResolver(options, &net_log, &data_provider,
-                                             enable_caching);
+        net::CreateFuzzedContextHostResolver(options, net::NetLog::Get(),
+                                             &data_provider, enable_caching);
 
     std::vector<std::unique_ptr<DnsRequest>> dns_requests;
     bool done = false;

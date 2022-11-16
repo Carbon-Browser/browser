@@ -17,9 +17,9 @@ namespace web {
 // |kFakeJavaScriptFeatureLoadedText|, exposes the function
 // |kScriptReplaceDivContents| and tracks the count of received errors.
 const char kJavaScriptFeatureInjectOnceTestScript[] =
-    "java_script_feature_test_inject_once_js";
+    "java_script_feature_test_inject_once";
 const char kJavaScriptFeatureReinjectTestScript[] =
-    "java_script_feature_test_reinject_js";
+    "java_script_feature_test_reinject";
 
 const char kFakeJavaScriptFeatureLoadedText[] = "injected_script_loaded";
 
@@ -77,7 +77,7 @@ void FakeJavaScriptFeature::GetErrorCount(
     WebFrame* web_frame,
     base::OnceCallback<void(const base::Value*)> callback) {
   CallJavaScriptFunction(web_frame, kGetErrorCount, {}, std::move(callback),
-                         base::TimeDelta::FromSeconds(kGetErrorCountTimeout));
+                         base::Seconds(kGetErrorCountTimeout));
 }
 
 absl::optional<std::string> FakeJavaScriptFeature::GetScriptMessageHandlerName()

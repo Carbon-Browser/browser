@@ -7,13 +7,13 @@
 
 #include <memory>
 
-#include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "base/scoped_multi_source_observation.h"
+#include "build/build_config.h"
 #include "chrome/browser/chrome_browser_main_extra_parts.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager_observer.h"
 #include "chrome/browser/profiles/profile_observer.h"
+#include "extensions/buildflags/buildflags.h"
 
 class Profile;
 
@@ -27,9 +27,20 @@ class Graph;
 class PageLiveStateDecoratorHelper;
 class PageLoadMetricsObserver;
 class PageLoadTrackerDecoratorHelper;
-class PerformanceManager;
 class PerformanceManagerFeatureObserverClient;
-class PerformanceManagerRegistry;
+class PerformanceManagerLifetime;
+
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+class ExtensionWatcher;
+#endif
+
+namespace policies {
+class HighEfficiencyModePolicyHelper;
+}
+
+namespace user_tuning {
+class ProfileDiscardOptOutListHelper;
+}
 }  // namespace performance_manager
 
 // Handles the initialization of the performance manager and a few dependent
@@ -40,6 +51,12 @@ class ChromeBrowserMainExtraPartsPerformanceManager
       public ProfileObserver {
  public:
   ChromeBrowserMainExtraPartsPerformanceManager();
+
+  ChromeBrowserMainExtraPartsPerformanceManager(
+      const ChromeBrowserMainExtraPartsPerformanceManager&) = delete;
+  ChromeBrowserMainExtraPartsPerformanceManager& operator=(
+      const ChromeBrowserMainExtraPartsPerformanceManager&) = delete;
+
   ~ChromeBrowserMainExtraPartsPerformanceManager() override;
 
   // Returns the only instance of this class.
@@ -56,6 +73,7 @@ class ChromeBrowserMainExtraPartsPerformanceManager
 
   // ChromeBrowserMainExtraParts overrides.
   void PostCreateThreads() override;
+  void PreMainMessageLoopRun() override;
   void PostMainMessageLoopRun() override;
 
   // ProfileManagerObserver:
@@ -65,8 +83,10 @@ class ChromeBrowserMainExtraPartsPerformanceManager
   void OnOffTheRecordProfileCreated(Profile* off_the_record) override;
   void OnProfileWillBeDestroyed(Profile* profile) override;
 
-  std::unique_ptr<performance_manager::PerformanceManager> performance_manager_;
-  std::unique_ptr<performance_manager::PerformanceManagerRegistry> registry_;
+  // Manages the lifetime of the PerformanceManager graph and registry for the
+  // browser process.
+  std::unique_ptr<performance_manager::PerformanceManagerLifetime>
+      performance_manager_lifetime_;
 
   const std::unique_ptr<
       performance_manager::PerformanceManagerFeatureObserverClient>
@@ -90,7 +110,17 @@ class ChromeBrowserMainExtraPartsPerformanceManager
   std::unique_ptr<performance_manager::PageLoadTrackerDecoratorHelper>
       page_load_tracker_decorator_helper_;
 
-  DISALLOW_COPY_AND_ASSIGN(ChromeBrowserMainExtraPartsPerformanceManager);
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+  std::unique_ptr<performance_manager::ExtensionWatcher> extension_watcher_;
+#endif
+
+#if !BUILDFLAG(IS_ANDROID)
+  std::unique_ptr<performance_manager::policies::HighEfficiencyModePolicyHelper>
+      high_efficiency_mode_policy_helper_;
+  std::unique_ptr<
+      performance_manager::user_tuning::ProfileDiscardOptOutListHelper>
+      profile_discard_opt_out_list_helper_;
+#endif  // !BUILDFLAG(IS_ANDROID)
 };
 
 #endif  // CHROME_BROWSER_PERFORMANCE_MANAGER_CHROME_BROWSER_MAIN_EXTRA_PARTS_PERFORMANCE_MANAGER_H_

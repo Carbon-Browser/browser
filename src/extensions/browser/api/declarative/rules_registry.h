@@ -14,9 +14,10 @@
 #include <vector>
 
 #include "base/compiler_specific.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/one_shot_event.h"
+#include "base/time/time.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/notification_observer.h"
 #include "content/public/browser/notification_registrar.h"
@@ -53,6 +54,9 @@ class RulesRegistry : public base::RefCountedThreadSafe<RulesRegistry> {
                 content::BrowserThread::ID owner_thread,
                 RulesCacheDelegate* cache_delegate,
                 int id);
+
+  RulesRegistry(const RulesRegistry&) = delete;
+  RulesRegistry& operator=(const RulesRegistry&) = delete;
 
   const base::OneShotEvent& ready() const { return ready_; }
 
@@ -238,7 +242,7 @@ class RulesRegistry : public base::RefCountedThreadSafe<RulesRegistry> {
                            const std::string& error);
 
   // The context to which this rules registry belongs.
-  content::BrowserContext* browser_context_;
+  raw_ptr<content::BrowserContext> browser_context_;
 
   // The ID of the thread on which the rules registry lives.
   const content::BrowserThread::ID owner_thread_;
@@ -299,8 +303,6 @@ class RulesRegistry : public base::RefCountedThreadSafe<RulesRegistry> {
   base::WeakPtr<RulesCacheDelegate> cache_delegate_;
 
   base::WeakPtrFactory<RulesRegistry> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(RulesRegistry);
 };
 
 }  // namespace extensions

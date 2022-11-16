@@ -8,7 +8,6 @@
 #include <memory>
 
 #include "base/compiler_specific.h"
-#include "base/macros.h"
 #import "ios/web/public/web_client.h"
 
 namespace web {
@@ -18,6 +17,10 @@ class ShellWebMainParts;
 class ShellWebClient : public WebClient {
  public:
   ShellWebClient();
+
+  ShellWebClient(const ShellWebClient&) = delete;
+  ShellWebClient& operator=(const ShellWebClient&) = delete;
+
   ~ShellWebClient() override;
 
   // WebClient implementation.
@@ -36,8 +39,6 @@ class ShellWebClient : public WebClient {
 
  private:
   ShellWebMainParts* web_main_parts_;
-
-  DISALLOW_COPY_AND_ASSIGN(ShellWebClient);
 };
 
 }  // namespace web

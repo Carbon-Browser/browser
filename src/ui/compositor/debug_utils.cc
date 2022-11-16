@@ -12,11 +12,12 @@
 
 #include "base/logging.h"
 #include "base/numerics/math_constants.h"
+#include "cc/trees/layer_tree_host.h"
 #include "ui/compositor/layer.h"
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/geometry/point_conversions.h"
+#include "ui/gfx/geometry/transform.h"
 #include "ui/gfx/interpolated_transform.h"
-#include "ui/gfx/transform.h"
 
 namespace ui {
 
@@ -72,7 +73,7 @@ void PrintLayerHierarchyImp(const Layer* layer,
     // Property trees must be updated in order to get valid render surface
     // reasons.
     if (cc_layer->layer_tree_host() &&
-        !cc_layer->layer_tree_host()->property_trees()->needs_rebuild) {
+        !cc_layer->layer_tree_host()->property_trees()->needs_rebuild()) {
       cc::RenderSurfaceReason render_surface =
           cc_layer->GetRenderSurfaceReason();
       if (render_surface != cc::RenderSurfaceReason::kNone) {

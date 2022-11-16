@@ -9,12 +9,14 @@
 #include <utility>
 #include <vector>
 
-#include "base/cxx17_backports.h"
+#include "base/feature_list_buildflags.h"
 #include "base/format_macros.h"
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/metrics/field_trial.h"
+#include "base/metrics/field_trial_param_associator.h"
 #include "base/metrics/persistent_memory_allocator.h"
 #include "base/ranges/algorithm.h"
+#include "base/strings/strcat.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
@@ -80,7 +82,7 @@ TEST_F(FeatureListTest, InitializeFromCommandLine) {
       {"OnByDefault", "OnByDefault,OffByDefault", false, false},
   };
 
-  for (size_t i = 0; i < base::size(test_cases); ++i) {
+  for (size_t i = 0; i < std::size(test_cases); ++i) {
     const auto& test_case = test_cases[i];
     SCOPED_TRACE(base::StringPrintf("Test[%" PRIuS "]: [%s] [%s]", i,
                                     test_case.enable_features,
@@ -114,6 +116,11 @@ TEST_F(FeatureListTest, InitializeFromCommandLineWithFeatureParams) {
        {{"x", "test"}, {"y", "uma"}, {"z", "ukm"}}},
   };
 
+  // Clear global state so that repeated runs of this test don't flake.
+  // When https://crrev.com/c/3694674 is submitted, we should be able to remove
+  // this.
+  base::FieldTrialParamAssociator::GetInstance()->ClearAllParamsForTesting();
+
   const Feature kFeature = {"Feature", FEATURE_DISABLED_BY_DEFAULT};
   for (const auto& test_case : test_cases) {
     SCOPED_TRACE(test_case.enable_features);
@@ -126,9 +133,9 @@ TEST_F(FeatureListTest, InitializeFromCommandLineWithFeatureParams) {
     EXPECT_TRUE(FeatureList::IsEnabled(kFeature));
     EXPECT_TRUE(
         FieldTrialList::IsTrialActive(test_case.expected_field_trial_created));
-    std::map<std::string, std::string> actualParams;
-    EXPECT_TRUE(GetFieldTrialParamsByFeature(kFeature, &actualParams));
-    EXPECT_EQ(test_case.expected_feature_params, actualParams);
+    std::map<std::string, std::string> actual_params;
+    EXPECT_TRUE(GetFieldTrialParamsByFeature(kFeature, &actual_params));
+    EXPECT_EQ(test_case.expected_feature_params, actual_params);
   }
 }
 
@@ -171,7 +178,7 @@ TEST_F(FeatureListTest, FieldTrialOverrides) {
   };
 
   FieldTrial::ActiveGroup active_group;
-  for (size_t i = 0; i < base::size(test_cases); ++i) {
+  for (size_t i = 0; i < std::size(test_cases); ++i) {
     const auto& test_case = test_cases[i];
     SCOPED_TRACE(base::StringPrintf("Test[%" PRIuS "]", i));
 
@@ -389,7 +396,7 @@ TEST_F(FeatureListTest, AssociateReportingFieldTrial) {
   const char kForcedOnGroupName[] = "ForcedOn";
   const char kForcedOffGroupName[] = "ForcedOff";
 
-  for (size_t i = 0; i < base::size(test_cases); ++i) {
+  for (size_t i = 0; i < std::size(test_cases); ++i) {
     const auto& test_case = test_cases[i];
     SCOPED_TRACE(base::StringPrintf("Test[%" PRIuS "]: [%s] [%s]", i,
                                     test_case.enable_features,
@@ -672,6 +679,118 @@ TEST_F(FeatureListTest, StoreAndRetrieveAssociatedFeaturesFromSharedMemory) {
       feature_list2->GetAssociatedFieldTrial(kFeatureOffByDefault);
   EXPECT_EQ(associated_trial1, trial1);
   EXPECT_EQ(associated_trial2, trial2);
+}
+
+#if BUILDFLAG(ENABLE_BANNED_BASE_FEATURE_PREFIX) && \
+    defined(GTEST_HAS_DEATH_TEST)
+using FeatureListDeathTest = FeatureListTest;
+TEST_F(FeatureListDeathTest, DiesWithBadFeatureName) {
+  EXPECT_DEATH(
+      Feature(
+          StrCat({BUILDFLAG(BANNED_BASE_FEATURE_PREFIX), "MyFeature"}).c_str(),
+          FEATURE_DISABLED_BY_DEFAULT),
+      StrCat({"Invalid feature name ", BUILDFLAG(BANNED_BASE_FEATURE_PREFIX),
+              "MyFeature"}));
+}
+#endif  // BUILDFLAG(ENABLE_BANNED_BASE_FEATURE_PREFIX) &&
+        // defined(GTEST_HAS_DEATH_TEST)
+
+TEST(FeatureListAccessorTest, DefaultStates) {
+  auto feature_list = std::make_unique<FeatureList>();
+  auto feature_list_accessor = feature_list->ConstructAccessor();
+  test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitWithFeatureList(std::move(feature_list));
+
+  EXPECT_EQ(feature_list_accessor->GetOverrideStateByFeatureName(
+                kFeatureOnByDefault.name),
+            FeatureList::OVERRIDE_USE_DEFAULT);
+  EXPECT_EQ(feature_list_accessor->GetOverrideStateByFeatureName(
+                kFeatureOffByDefault.name),
+            FeatureList::OVERRIDE_USE_DEFAULT);
+}
+
+TEST(FeatureListAccessorTest, InitializeFromCommandLine) {
+  struct {
+    const char* enable_features;
+    const char* disable_features;
+    FeatureList::OverrideState expected_feature_on_state;
+    FeatureList::OverrideState expected_feature_off_state;
+  } test_cases[] = {
+      {"", "", FeatureList::OVERRIDE_USE_DEFAULT,
+       FeatureList::OVERRIDE_USE_DEFAULT},
+      {"OffByDefault", "", FeatureList::OVERRIDE_USE_DEFAULT,
+       FeatureList::OVERRIDE_ENABLE_FEATURE},
+      {"OffByDefault", "OnByDefault", FeatureList::OVERRIDE_DISABLE_FEATURE,
+       FeatureList::OVERRIDE_ENABLE_FEATURE},
+      {"OnByDefault,OffByDefault", "", FeatureList::OVERRIDE_ENABLE_FEATURE,
+       FeatureList::OVERRIDE_ENABLE_FEATURE},
+      {"", "OnByDefault,OffByDefault", FeatureList::OVERRIDE_DISABLE_FEATURE,
+       FeatureList::OVERRIDE_DISABLE_FEATURE},
+      // In the case an entry is both, disable takes precedence.
+      {"OnByDefault", "OnByDefault,OffByDefault",
+       FeatureList::OVERRIDE_DISABLE_FEATURE,
+       FeatureList::OVERRIDE_DISABLE_FEATURE},
+  };
+
+  for (size_t i = 0; i < std::size(test_cases); ++i) {
+    const auto& test_case = test_cases[i];
+    SCOPED_TRACE(base::StringPrintf("Test[%" PRIuS "]: [%s] [%s]", i,
+                                    test_case.enable_features,
+                                    test_case.disable_features));
+
+    auto feature_list = std::make_unique<FeatureList>();
+    auto feature_list_accessor = feature_list->ConstructAccessor();
+
+    feature_list->InitializeFromCommandLine(test_case.enable_features,
+                                            test_case.disable_features);
+    test::ScopedFeatureList scoped_feature_list;
+    scoped_feature_list.InitWithFeatureList(std::move(feature_list));
+
+    EXPECT_EQ(test_case.expected_feature_on_state,
+              feature_list_accessor->GetOverrideStateByFeatureName(
+                  kFeatureOnByDefault.name))
+        << i;
+    EXPECT_EQ(test_case.expected_feature_off_state,
+              feature_list_accessor->GetOverrideStateByFeatureName(
+                  kFeatureOffByDefault.name))
+        << i;
+  }
+}
+
+TEST(FeatureListAccessorTest, InitializeFromCommandLineWithFeatureParams) {
+  struct {
+    const std::string enable_features;
+    const std::map<std::string, std::string> expected_feature_params;
+  } test_cases[] = {
+      {"Feature:x/100/y/test", {{"x", "100"}, {"y", "test"}}},
+      {"Feature<Trial:asdf/ghjkl/y/123", {{"asdf", "ghjkl"}, {"y", "123"}}},
+  };
+
+  // Clear global state so that repeated runs of this test don't flake.
+  // When https://crrev.com/c/3694674 is submitted, we should be able to remove
+  // this.
+  base::FieldTrialParamAssociator::GetInstance()->ClearAllParamsForTesting();
+
+  for (size_t i = 0; i < std::size(test_cases); ++i) {
+    const auto& test_case = test_cases[i];
+    SCOPED_TRACE(test_case.enable_features);
+
+    auto feature_list = std::make_unique<FeatureList>();
+    auto feature_list_accessor = feature_list->ConstructAccessor();
+
+    feature_list->InitializeFromCommandLine(test_case.enable_features, "");
+    test::ScopedFeatureList scoped_feature_list;
+    scoped_feature_list.InitWithFeatureList(std::move(feature_list));
+
+    EXPECT_EQ(FeatureList::OVERRIDE_ENABLE_FEATURE,
+              feature_list_accessor->GetOverrideStateByFeatureName("Feature"))
+        << i;
+    std::map<std::string, std::string> actual_params;
+    EXPECT_TRUE(feature_list_accessor->GetParamsByFeatureName("Feature",
+                                                              &actual_params))
+        << i;
+    EXPECT_EQ(test_case.expected_feature_params, actual_params) << i;
+  }
 }
 
 }  // namespace base

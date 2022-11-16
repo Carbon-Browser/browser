@@ -9,7 +9,6 @@
 #include <vector>
 
 #include "base/hash/hash.h"
-#include "base/macros.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
@@ -34,6 +33,10 @@ namespace webui {
 class LogWebUIUrlTest : public InProcessBrowserTest {
  public:
   LogWebUIUrlTest() {}
+
+  LogWebUIUrlTest(const LogWebUIUrlTest&) = delete;
+  LogWebUIUrlTest& operator=(const LogWebUIUrlTest&) = delete;
+
   ~LogWebUIUrlTest() override {}
 
   void RunTest(int title_ids, const GURL& url) {
@@ -42,15 +45,13 @@ class LogWebUIUrlTest : public InProcessBrowserTest {
     content::TitleWatcher title_watcher(tab, title);
     ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
     ASSERT_EQ(title, title_watcher.WaitAndGetTitle());
-    uint32_t origin_hash = base::Hash(url.GetOrigin().spec());
+    uint32_t origin_hash = base::Hash(url.DeprecatedGetOriginAsURL().spec());
     EXPECT_THAT(histogram_tester_.GetAllSamples(webui::kWebUICreatedForUrl),
                 ElementsAre(Bucket(origin_hash, 1)));
   }
 
  private:
   base::HistogramTester histogram_tester_;
-
-  DISALLOW_COPY_AND_ASSIGN(LogWebUIUrlTest);
 };
 
 IN_PROC_BROWSER_TEST_F(LogWebUIUrlTest, TestExtensionsPage) {

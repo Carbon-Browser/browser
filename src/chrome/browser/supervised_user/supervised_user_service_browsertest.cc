@@ -45,8 +45,8 @@ class SupervisedUserServiceTestSupervised
     MixinBasedInProcessBrowserTest::SetUp();
   }
 
-  chromeos::LoggedInUserMixin logged_in_user_mixin_{
-      &mixin_host_, chromeos::LoggedInUserMixin::LogInType::kChild,
+  ash::LoggedInUserMixin logged_in_user_mixin_{
+      &mixin_host_, ash::LoggedInUserMixin::LogInType::kChild,
       embedded_test_server(), this};
   base::ScopedTempDir fake_user_data_dir_;
 };
@@ -82,9 +82,9 @@ IN_PROC_BROWSER_TEST_F(SupervisedUserServiceTestSupervised, LocalPolicies) {
   logged_in_user_mixin_.LogInUser();
   Profile* profile = browser()->profile();
   PrefService* prefs = profile->GetPrefs();
-  EXPECT_FALSE(prefs->GetBoolean(prefs::kForceGoogleSafeSearch));
+  EXPECT_TRUE(prefs->GetBoolean(prefs::kForceGoogleSafeSearch));
   EXPECT_EQ(prefs->GetInteger(prefs::kForceYouTubeRestrict),
-            safe_search_util::YOUTUBE_RESTRICT_OFF);
+            safe_search_util::YOUTUBE_RESTRICT_MODERATE);
   EXPECT_FALSE(
       prefs->IsUserModifiablePreference(prefs::kForceGoogleSafeSearch));
   EXPECT_FALSE(prefs->IsUserModifiablePreference(prefs::kForceYouTubeRestrict));
@@ -128,7 +128,9 @@ IN_PROC_BROWSER_TEST_F(SupervisedUserServiceTestSupervised, ProfileName) {
   EXPECT_EQ(original_name, base::UTF16ToUTF8(entry->GetName()));
 }
 
-IN_PROC_BROWSER_TEST_F(SupervisedUserServiceTestSupervised, DenylistLoaded) {
+// Disabled due to excessive flakiness (crbug/1251785).
+IN_PROC_BROWSER_TEST_F(SupervisedUserServiceTestSupervised,
+                       DISABLED_DenylistLoaded) {
   base::HistogramTester histogram_tester;
   histogram_tester.ExpectTotalCount(
       SupervisedUserService::GetDenylistSourceHistogramForTesting(), 0);
@@ -137,7 +139,7 @@ IN_PROC_BROWSER_TEST_F(SupervisedUserServiceTestSupervised, DenylistLoaded) {
   base::ScopedPathOverride path_override(chrome::DIR_USER_DATA,
                                          fake_user_data_dir_.GetPath());
   base::FilePath denylist_path =
-      SupervisedUserService::GetDenylistPathForTesting(/*isOldPath=*/false);
+      SupervisedUserService::GetDenylistPathForTesting();
   EXPECT_FALSE(base::PathExists(denylist_path));
 
   base::RunLoop run_loop;
@@ -161,8 +163,9 @@ IN_PROC_BROWSER_TEST_F(SupervisedUserServiceTestSupervised, DenylistLoaded) {
       SupervisedUserService::DenylistSource::kDenylist, 1);
 }
 
+// Disabled due to excessive flakiness (crbug/1251785).
 IN_PROC_BROWSER_TEST_F(SupervisedUserServiceTestSupervised,
-                       ExistingDenylistLoaded) {
+                       DISABLED_ExistingDenylistLoaded) {
   base::HistogramTester histogram_tester;
   histogram_tester.ExpectTotalCount(
       SupervisedUserService::GetDenylistSourceHistogramForTesting(), 0);
@@ -172,7 +175,7 @@ IN_PROC_BROWSER_TEST_F(SupervisedUserServiceTestSupervised,
                                          fake_user_data_dir_.GetPath());
 
   base::FilePath denylist_path =
-      SupervisedUserService::GetDenylistPathForTesting(/*isOldPath=*/false);
+      SupervisedUserService::GetDenylistPathForTesting();
   base::WriteFile(denylist_path, "");
   EXPECT_TRUE(base::PathExists(denylist_path));
 
@@ -183,43 +186,9 @@ IN_PROC_BROWSER_TEST_F(SupervisedUserServiceTestSupervised,
       SupervisedUserService::DenylistSource::kDenylist, 1);
 }
 
-IN_PROC_BROWSER_TEST_F(SupervisedUserServiceTestSupervised, OldDenylistLoaded) {
-  base::HistogramTester histogram_tester;
-  histogram_tester.ExpectTotalCount(
-      SupervisedUserService::GetDenylistSourceHistogramForTesting(), 0);
-
-  base::ScopedAllowBlockingForTesting allow_blocking;
-  base::ScopedPathOverride path_override(chrome::DIR_USER_DATA,
-                                         fake_user_data_dir_.GetPath());
-
-  base::FilePath old_denylist_path =
-      SupervisedUserService::GetDenylistPathForTesting(/*isOldPath=*/true);
-  base::WriteFile(old_denylist_path, "");
-  EXPECT_TRUE(base::PathExists(old_denylist_path));
-
-  base::RunLoop run_loop;
-  content::URLLoaderInterceptor interceptor(base::BindLambdaForTesting(
-      [&](content::URLLoaderInterceptor::RequestParams* params) {
-        LOG(ERROR) << params->url_request.url.path();
-        std::string headers = "HTTP/1.1 500 Internal Server Error\n\n";
-        content::URLLoaderInterceptor::WriteResponse(headers, "",
-                                                     params->client.get());
-        run_loop.Quit();
-        return true;
-      }));
-
-  logged_in_user_mixin_.LogInUser();
-  run_loop.Run();
-
-  base::FilePath denylist_path =
-      SupervisedUserService::GetDenylistPathForTesting(/*isOldPath=*/false);
-  EXPECT_FALSE(base::PathExists(denylist_path));
-  histogram_tester.ExpectUniqueSample(
-      SupervisedUserService::GetDenylistSourceHistogramForTesting(),
-      SupervisedUserService::DenylistSource::kOldDenylist, 1);
-}
-
-IN_PROC_BROWSER_TEST_F(SupervisedUserServiceTestSupervised, NoDenylistLoaded) {
+// Disabled due to excessive flakiness (crbug/1251785).
+IN_PROC_BROWSER_TEST_F(SupervisedUserServiceTestSupervised,
+                       DISABLED_NoDenylistLoaded) {
   base::HistogramTester histogram_tester;
   histogram_tester.ExpectTotalCount(
       SupervisedUserService::GetDenylistSourceHistogramForTesting(), 0);
@@ -243,7 +212,7 @@ IN_PROC_BROWSER_TEST_F(SupervisedUserServiceTestSupervised, NoDenylistLoaded) {
   run_loop.Run();
 
   base::FilePath denylist_path =
-      SupervisedUserService::GetDenylistPathForTesting(/*isOldPath=*/false);
+      SupervisedUserService::GetDenylistPathForTesting();
   EXPECT_FALSE(base::PathExists(denylist_path));
   histogram_tester.ExpectUniqueSample(
       SupervisedUserService::GetDenylistSourceHistogramForTesting(),

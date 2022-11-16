@@ -8,7 +8,6 @@
 #include <memory>
 #include <string>
 
-#include "base/macros.h"
 #include "components/download/public/common/download_item.h"
 #include "components/offline_items_collection/core/offline_item.h"
 #include "components/offline_items_collection/core/rename_result.h"
@@ -20,9 +19,15 @@ class OfflineItemUtils {
   using DownloadRenameResult = download::DownloadItem::DownloadRenameResult;
 
  public:
+  OfflineItemUtils(const OfflineItemUtils&) = delete;
+  OfflineItemUtils& operator=(const OfflineItemUtils&) = delete;
+
   static offline_items_collection::OfflineItem CreateOfflineItem(
       const std::string& name_space,
       download::DownloadItem* item);
+
+  static offline_items_collection::ContentId GetContentIdForDownload(
+      download::DownloadItem* download);
 
   static std::string GetDownloadNamespacePrefix(bool is_off_the_record);
 
@@ -56,9 +61,6 @@ class OfflineItemUtils {
   static absl::optional<offline_items_collection::OfflineItemSchedule>
   ToOfflineItemSchedule(
       absl::optional<download::DownloadSchedule> download_schedule);
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(OfflineItemUtils);
 };
 
 #endif  // CHROME_BROWSER_DOWNLOAD_OFFLINE_ITEM_UTILS_H_

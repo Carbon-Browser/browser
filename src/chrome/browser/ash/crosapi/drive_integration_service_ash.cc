@@ -24,7 +24,7 @@ drive::DriveIntegrationService* GetDriveService() {
                       : nullptr;
 }
 
-const base::FilePath GetMountPoint() {
+base::FilePath GetMountPoint() {
   return GetDriveService() && GetDriveService()->IsMounted()
              ? GetDriveService()->GetMountPointPath().Append(
                    drive::util::kDriveMyDriveRootDirName)
@@ -70,6 +70,9 @@ void DriveIntegrationServiceAsh::OnFileSystemBeingUnmounted() {
 void DriveIntegrationServiceAsh::OnFileSystemMountFailed() {
   for (auto& observer : observers_)
     observer->OnMountPointPathChanged(base::FilePath());
+}
+void DriveIntegrationServiceAsh::OnDriveIntegrationServiceDestroyed() {
+  drive_service_observation_.Reset();
 }
 
 }  // namespace crosapi

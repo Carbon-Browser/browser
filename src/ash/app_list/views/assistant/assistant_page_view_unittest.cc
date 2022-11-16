@@ -16,14 +16,19 @@
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
 #include "ash/style/ash_color_provider.h"
+#include "ash/style/dark_light_mode_controller_impl.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/scoped_feature_list.h"
-#include "chromeos/services/assistant/public/cpp/assistant_service.h"
+#include "chromeos/ash/services/assistant/public/cpp/assistant_service.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/skia/include/core/SkColor.h"
+#include "third_party/skia/include/core/SkTypes.h"
+#include "ui/compositor/layer.h"
 #include "ui/compositor/scoped_animation_duration_scale_mode.h"
 #include "ui/events/event.h"
+#include "ui/views/accessibility/accessibility_paint_checks.h"
 #include "ui/views/background.h"
 #include "ui/views/controls/textfield/textfield.h"
 #include "ui/views/focus/focus_manager.h"
@@ -81,6 +86,10 @@ views::View* AddTextfield(views::Widget* widget) {
   // Give the text field a non-zero size, otherwise things like tapping on it
   // will fail.
   result->SetSize(gfx::Size(20, 10));
+  // TODO(crbug.com/1218186): Remove this, this is in place temporarily to be
+  // able to submit accessibility checks, but this focusable View needs to
+  // add a name so that the screen reader knows what to announce.
+  result->SetProperty(views::kSkipAccessibilityPaintChecks, true);
   return result;
 }
 
@@ -92,6 +101,10 @@ class FocusChangeListenerStub : public views::FocusChangeListener {
       : focus_manager_(view->GetFocusManager()) {
     focus_manager_->AddFocusChangeListener(this);
   }
+
+  FocusChangeListenerStub(const FocusChangeListenerStub&) = delete;
+  FocusChangeListenerStub& operator=(const FocusChangeListenerStub&) = delete;
+
   ~FocusChangeListenerStub() override {
     focus_manager_->RemoveFocusChangeListener(this);
   }
@@ -112,8 +125,6 @@ class FocusChangeListenerStub : public views::FocusChangeListener {
  private:
   std::vector<views::View*> focused_views_;
   views::FocusManager* focus_manager_;
-
-  DISALLOW_COPY_AND_ASSIGN(FocusChangeListenerStub);
 };
 
 // |ViewObserver| that simply remembers whether the given view was drawn
@@ -160,8 +171,8 @@ class GestureEventForTest : public ui::GestureEvent {
                      base::TimeTicks(),
                      details) {}
 
- private:
-  DISALLOW_COPY_AND_ASSIGN(GestureEventForTest);
+  GestureEventForTest(const GestureEventForTest&) = delete;
+  GestureEventForTest& operator=(const GestureEventForTest&) = delete;
 };
 
 // Base class for tests of the embedded assistant page in:
@@ -171,6 +182,9 @@ class GestureEventForTest : public ui::GestureEvent {
 class AssistantPageViewTest : public AssistantAshTestBase {
  public:
   AssistantPageViewTest() = default;
+
+  AssistantPageViewTest(const AssistantPageViewTest&) = delete;
+  AssistantPageViewTest& operator=(const AssistantPageViewTest&) = delete;
 
   void ShowAssistantUiInTextMode() {
     ShowAssistantUi(AssistantEntryPoint::kUnspecified);
@@ -204,17 +218,25 @@ class AssistantPageViewTest : public AssistantAshTestBase {
     SetNumberOfSessionsWhereOnboardingShown(
         assistant::ui::kOnboardingMaxSessionsShown);
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(AssistantPageViewTest);
 };
 
 // Tests for the legacy non-bubble app list ("peeking launcher").
-// These tests can be deleted when features::kAppListBubble is fully launched.
+// These tests can be deleted when features::kProductivityLauncher is fully
+// launched.
 class AssistantPageNonBubbleTest : public AssistantPageViewTest {
  public:
   AssistantPageNonBubbleTest() {
-    scoped_feature_list_.InitAndDisableFeature(features::kAppListBubble);
+    scoped_feature_list_.InitAndDisableFeature(features::kProductivityLauncher);
+  }
+
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
+// Tests that only apply to the clamshell bubble launcher.
+class AssistantPageBubbleTest : public AssistantPageViewTest {
+ public:
+  AssistantPageBubbleTest() {
+    scoped_feature_list_.InitAndEnableFeature(features::kProductivityLauncher);
   }
 
   base::test::ScopedFeatureList scoped_feature_list_;
@@ -346,15 +368,17 @@ TEST_F(AssistantPageNonBubbleTest,
 
 //------------------------------------------------------------------------------
 // Tests for the clamshell mode launcher, parameterized by the feature
-// kAppListBubble.
+// kProductivityLauncher.
 class AssistantPageClamshellTest : public AssistantPageViewTest,
                                    public testing::WithParamInterface<bool> {
  public:
   AssistantPageClamshellTest() {
     if (GetParam())
-      scoped_feature_list_.InitAndEnableFeature(features::kAppListBubble);
+      scoped_feature_list_.InitAndEnableFeature(
+          features::kProductivityLauncher);
     else
-      scoped_feature_list_.InitAndDisableFeature(features::kAppListBubble);
+      scoped_feature_list_.InitAndDisableFeature(
+          features::kProductivityLauncher);
   }
 
   base::test::ScopedFeatureList scoped_feature_list_;
@@ -553,10 +577,9 @@ TEST_P(AssistantPageClamshellTest,
 TEST_P(AssistantPageClamshellTest, ShouldShowOnboardingForNewUsers) {
   // A user is considered new if they haven't had an Assistant interaction in
   // the past 28 days.
-  const base::Time new_user_cutoff =
-      base::Time::Now() - base::TimeDelta::FromDays(28);
+  const base::Time new_user_cutoff = base::Time::Now() - base::Days(28);
 
-  SetTimeOfLastInteraction(new_user_cutoff + base::TimeDelta::FromMinutes(1));
+  SetTimeOfLastInteraction(new_user_cutoff + base::Minutes(1));
   ShowAssistantUi();
 
   // This user *has* interacted with Assistant more recently than 28 days ago so
@@ -574,7 +597,7 @@ TEST_P(AssistantPageClamshellTest, ShouldShowOnboardingForNewUsers) {
 }
 
 TEST_P(AssistantPageClamshellTest, ShouldShowOnboardingUntilInteractionOccurs) {
-  SetTimeOfLastInteraction(base::Time::Now() - base::TimeDelta::FromDays(28));
+  SetTimeOfLastInteraction(base::Time::Now() - base::Days(28));
   ShowAssistantUi();
 
   // This user has *not* interacted with Assistant more recently than 28 days
@@ -792,8 +815,9 @@ TEST_P(AssistantPageClamshellTest,
   EXPECT_HAS_FOCUS(input_text_field());
 }
 
+// TODO(b/234164113): Test is flaky.
 TEST_P(AssistantPageClamshellTest,
-       ShouldFocusMicWhenSubmittingSuggestionChipInVoiceMode) {
+       DISABLED_ShouldFocusMicWhenSubmittingSuggestionChipInVoiceMode) {
   ShowAssistantUi();
   ash::SuggestionChipView* suggestion_chip =
       CreateAndGetSuggestionChip("<suggestion chip query>");
@@ -814,10 +838,7 @@ TEST_P(AssistantPageClamshellTest,
   EXPECT_HAS_FOCUS(input_text_field());
 }
 
-// TODO(crbug.com/1229797): Switch to TEST_P and AssistantPageClamshellTest.
-// It fails with kAppListBubble enabled because the vertical position of the
-// suggestion chip doesn't match.
-TEST_F(AssistantPageViewTest,
+TEST_P(AssistantPageClamshellTest,
        ShouldNotScrollSuggestionChipsWhenSubmittingQuery) {
   ShowAssistantUiInTextMode();
   MockTextInteraction()
@@ -901,33 +922,149 @@ TEST_P(AssistantPageClamshellTest, ShouldHavePopulatedSuggestionChips) {
   EXPECT_EQ(kAnyChip, base::UTF16ToUTF8(chip->GetText()));
 }
 
-TEST_P(AssistantPageClamshellTest, Theme) {
-  ASSERT_FALSE(features::IsDarkLightModeEnabled());
+TEST_F(AssistantPageNonBubbleTest, Theme) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitWithFeatures(
+      /*enabled_features=*/{},
+      /*disabled_features=*/{features::kNotificationsRefresh,
+                             chromeos::features::kDarkLightMode});
 
   ShowAssistantUi();
 
-  EXPECT_EQ(page_view()->background()->get_color(), SK_ColorWHITE);
+  EXPECT_EQ(page_view()->layer()->GetTargetColor(), SK_ColorWHITE);
 }
 
-TEST_P(AssistantPageClamshellTest, ThemeDarkLightMode) {
-  base::test::ScopedFeatureList scoped_feature_list(features::kDarkLightMode);
-  AshColorProvider::Get()->OnActiveUserPrefServiceChanged(
+TEST_F(AssistantPageNonBubbleTest, ThemeDarkLightMode) {
+  base::test::ScopedFeatureList scoped_feature_list_enable_dark_light_mode(
+      chromeos::features::kDarkLightMode);
+  base::test::ScopedFeatureList scoped_feature_list_disable_blur;
+  scoped_feature_list_disable_blur.InitAndDisableFeature(
+      features::kEnableBackgroundBlur);
+
+  DarkLightModeControllerImpl::Get()->OnActiveUserPrefServiceChanged(
       Shell::Get()->session_controller()->GetActivePrefService());
+
+  ASSERT_FALSE(features::IsBackgroundBlurEnabled());
+
+  // Confirm that our opacity matches with that of AppListView using.
+  const SkColor shield_layer_color_95_light =
+      ColorProvider::Get()->GetShieldLayerColor(
+          ColorProvider::ShieldLayerType::kShield95);
+  EXPECT_EQ(SkColorGetA(shield_layer_color_95_light),
+            static_cast<uint32_t>(AppListView::kAppListOpacity * 255));
 
   ShowAssistantUi();
 
-  EXPECT_EQ(page_view()->background()->get_color(),
-            assistant_colors::ResolveColor(
-                assistant_colors::ColorName::kBgAssistantPlate,
-                /*is_dark_mode=*/false, /*use_debug_colors=*/false));
+  ASSERT_FALSE(Shell::Get()->IsInTabletMode());
+  EXPECT_FLOAT_EQ(page_view()->layer()->background_blur(), 0.0f);
+  EXPECT_EQ(page_view()->layer()->GetTargetColor(),
+            shield_layer_color_95_light);
 
   Shell::Get()->session_controller()->GetActivePrefService()->SetBoolean(
       prefs::kDarkModeEnabled, true);
 
-  EXPECT_EQ(page_view()->background()->get_color(),
-            assistant_colors::ResolveColor(
-                assistant_colors::ColorName::kBgAssistantPlate,
-                /*is_dark_mode=*/true, /*use_debug_colors=*/false));
+  const SkColor shield_layer_color_95_dark =
+      ColorProvider::Get()->GetShieldLayerColor(
+          ColorProvider::ShieldLayerType::kShield95);
+  EXPECT_EQ(page_view()->layer()->GetTargetColor(), shield_layer_color_95_dark);
+
+  // Simulate the case where tablet mode is enabled in the middle of a session.
+  SetTabletMode(true);
+
+  // Unlike with-blur case, it does not get a background blur if the blur flag
+  // is off. But it gets 0.95 opacity.
+  EXPECT_FLOAT_EQ(page_view()->layer()->background_blur(), 0.0f);
+  EXPECT_EQ(page_view()->layer()->GetTargetColor(), shield_layer_color_95_dark);
+}
+
+TEST_F(AssistantPageNonBubbleTest, ThemeDarkLightModeWithBlur) {
+  base::test::ScopedFeatureList scoped_feature_list(
+      chromeos::features::kDarkLightMode);
+  DarkLightModeControllerImpl::Get()->OnActiveUserPrefServiceChanged(
+      Shell::Get()->session_controller()->GetActivePrefService());
+  ASSERT_TRUE(features::IsBackgroundBlurEnabled());
+
+  // Confirm that our opacity matches with that of AppListView using.
+  const SkColor shield_layer_color_80_light =
+      ColorProvider::Get()->GetShieldLayerColor(
+          ColorProvider::ShieldLayerType::kShield80);
+  EXPECT_EQ(SkColorGetA(shield_layer_color_80_light),
+            static_cast<uint32_t>(AppListView::kAppListOpacityWithBlur * 255));
+
+  ShowAssistantUi();
+  ASSERT_FALSE(Shell::Get()->IsInTabletMode());
+  EXPECT_FLOAT_EQ(page_view()->layer()->background_blur(), 0.0f);
+
+  EXPECT_EQ(page_view()->layer()->GetTargetColor(),
+            shield_layer_color_80_light);
+
+  Shell::Get()->session_controller()->GetActivePrefService()->SetBoolean(
+      prefs::kDarkModeEnabled, true);
+  const SkColor shield_layer_color_80_dark =
+      ColorProvider::Get()->GetShieldLayerColor(
+          ColorProvider::ShieldLayerType::kShield80);
+
+  EXPECT_EQ(page_view()->layer()->GetTargetColor(), shield_layer_color_80_dark);
+
+  // Simulate the case where tablet mode is enabled in the middle of a session.
+  // We add a background blur as we don't get a blur from AppListView in tablet
+  // mode.
+  SetTabletMode(true);
+  EXPECT_FLOAT_EQ(page_view()->layer()->background_blur(),
+                  ColorProvider::kBackgroundBlurSigma);
+
+  // Confirm that background blur is removed if it leaves tablet mode.
+  SetTabletMode(false);
+  EXPECT_FLOAT_EQ(page_view()->layer()->background_blur(), 0.0f);
+}
+
+// ProductivityLauncher only uses AssistantPageView in tablet mode. Clamshell
+// mode uses AppListBubbleAssistantPage, which is tested in
+// AppListBubbleViewTest.AssistantPageDoesNotHaveBackground.
+TEST_F(AssistantPageBubbleTest, PageViewHasBackgroundBlurInTabletMode) {
+  ASSERT_TRUE(features::IsProductivityLauncherEnabled());
+
+  SetTabletMode(true);
+  ShowAssistantUi();
+
+  EXPECT_FALSE(page_view()->background());
+  ui::Layer* page_view_layer = page_view()->layer();
+  ASSERT_TRUE(page_view_layer);
+  EXPECT_FALSE(page_view_layer->fills_bounds_opaquely());
+  EXPECT_EQ(page_view_layer->background_blur(),
+            ColorProvider::kBackgroundBlurSigma);
+  EXPECT_EQ(page_view_layer->GetTargetColor(),
+            ColorProvider::Get()->GetBaseLayerColor(
+                ColorProvider::BaseLayerType::kTransparent80));
+}
+
+TEST_F(AssistantPageBubbleTest, BackgroundColorInDarkLightMode) {
+  ASSERT_TRUE(features::IsProductivityLauncherEnabled());
+
+  base::test::ScopedFeatureList scoped_feature_list(
+      chromeos::features::kDarkLightMode);
+  auto* color_provider = AshColorProvider::Get();
+  auto* dark_light_mode_controller = DarkLightModeControllerImpl::Get();
+  dark_light_mode_controller->OnActiveUserPrefServiceChanged(
+      Shell::Get()->session_controller()->GetActivePrefService());
+
+  SetTabletMode(true);
+  ShowAssistantUi();
+
+  const bool initial_dark_mode_status =
+      dark_light_mode_controller->IsDarkModeEnabled();
+  EXPECT_EQ(page_view()->layer()->GetTargetColor(),
+            color_provider->GetBaseLayerColor(
+                ColorProvider::BaseLayerType::kTransparent80));
+
+  // Switch the color mode.
+  dark_light_mode_controller->ToggleColorMode();
+  ASSERT_NE(initial_dark_mode_status,
+            dark_light_mode_controller->IsDarkModeEnabled());
+
+  EXPECT_EQ(page_view()->layer()->GetTargetColor(),
+            color_provider->GetBaseLayerColor(
+                ColorProvider::BaseLayerType::kTransparent80));
 }
 
 //------------------------------------------------------------------------------
@@ -935,6 +1072,11 @@ TEST_P(AssistantPageClamshellTest, ThemeDarkLightMode) {
 class AssistantPageViewTabletModeTest : public AssistantPageViewTest {
  public:
   AssistantPageViewTabletModeTest() = default;
+
+  AssistantPageViewTabletModeTest(const AssistantPageViewTabletModeTest&) =
+      delete;
+  AssistantPageViewTabletModeTest& operator=(
+      const AssistantPageViewTabletModeTest&) = delete;
 
   void SetUp() override {
     AssistantPageViewTest::SetUp();
@@ -973,9 +1115,6 @@ class AssistantPageViewTabletModeTest : public AssistantPageViewTest {
   gfx::Point GetPointInside(const views::View* view) {
     return view->GetBoundsInScreen().CenterPoint();
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(AssistantPageViewTabletModeTest);
 };
 
 TEST_F(AssistantPageViewTabletModeTest,

@@ -9,7 +9,8 @@
 #include <cmath>
 
 #include "base/auto_reset.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
+#include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
 #include "ui/events/event_constants.h"
 #include "ui/events/gesture_detection/gesture_configuration.h"
@@ -121,6 +122,9 @@ class GestureProvider::GestureListenerImpl : public ScaleGestureListener,
         max_diameter_before_show_press_(0),
         show_press_event_sent_(false) {}
 
+  GestureListenerImpl(const GestureListenerImpl&) = delete;
+  GestureListenerImpl& operator=(const GestureListenerImpl&) = delete;
+
   void OnTouchEvent(const MotionEvent& event) {
     const bool in_scale_gesture = IsScaleGestureDetectionInProgress();
     snap_scroll_controller_.SetSnapScrollMode(event, in_scale_gesture);
@@ -138,7 +142,7 @@ class GestureProvider::GestureListenerImpl : public ScaleGestureListener,
       scroll_event_sent_ = false;
       pinch_event_sent_ = false;
       show_press_event_sent_ = false;
-      gesture_detector_.set_longpress_enabled(true);
+      gesture_detector_.set_press_and_hold_enabled(true);
       tap_down_point_ = gfx::PointF(event.GetX(), event.GetY());
       max_diameter_before_show_press_ = event.GetTouchMajor();
     }
@@ -577,7 +581,7 @@ class GestureProvider::GestureListenerImpl : public ScaleGestureListener,
   bool OnDoubleTapEvent(const MotionEvent& e) override {
     switch (e.GetAction()) {
       case MotionEvent::Action::DOWN:
-        gesture_detector_.set_longpress_enabled(false);
+        gesture_detector_.set_press_and_hold_enabled(false);
         break;
 
       case MotionEvent::Action::UP:
@@ -591,6 +595,15 @@ class GestureProvider::GestureListenerImpl : public ScaleGestureListener,
         break;
     }
     return false;
+  }
+
+  void OnShortPress(const MotionEvent& e) override {
+    DCHECK(!IsDoubleTapInProgress());
+    GestureEventDetails short_press_details(ET_GESTURE_SHORT_PRESS);
+    short_press_details.set_device_type(GestureDeviceType::DEVICE_TOUCHSCREEN);
+    short_press_details.set_primary_unique_touch_event_id(
+        current_down_action_unique_touch_event_id_);
+    Send(CreateGesture(short_press_details, e));
   }
 
   void OnLongPress(const MotionEvent& e) override {
@@ -792,8 +805,8 @@ class GestureProvider::GestureListenerImpl : public ScaleGestureListener,
   }
 
   const GestureProvider::Config config_;
-  GestureProviderClient* const client_;
-  GestureProvider* const gesture_provider_;
+  const raw_ptr<GestureProviderClient> client_;
+  const raw_ptr<GestureProvider> gesture_provider_;
 
   GestureDetector gesture_detector_;
   ScaleGestureDetector scale_gesture_detector_;
@@ -838,7 +851,6 @@ class GestureProvider::GestureListenerImpl : public ScaleGestureListener,
   // The scroll focus point is set to the first touch down point when scroll
   // begins and is later updated based on the delta of touch points.
   gfx::PointF scroll_focus_point_;
-  DISALLOW_COPY_AND_ASSIGN(GestureListenerImpl);
 };
 
 // GestureProvider

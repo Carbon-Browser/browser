@@ -11,9 +11,12 @@
 
 #include "base/strings/sys_string_conversions.h"
 #import "ios/chrome/browser/browser_state/test_chrome_browser_state.h"
+#include "ios/chrome/browser/browser_state/test_chrome_browser_state.h"
 #include "ios/chrome/browser/main/test_browser.h"
 #import "ios/chrome/browser/ntp/new_tab_page_tab_helper.h"
 #import "ios/chrome/browser/ntp/new_tab_page_tab_helper_delegate.h"
+#import "ios/chrome/browser/ui/main/scene_state.h"
+#import "ios/chrome/browser/ui/main/scene_state_browser_agent.h"
 #import "ios/chrome/browser/url_loading/scene_url_loading_service.h"
 #import "ios/chrome/browser/url_loading/test_scene_url_loading_service.h"
 #import "ios/chrome/browser/url_loading/url_loading_notifier_browser_agent.h"
@@ -53,16 +56,20 @@
 namespace {
 class URLLoadingBrowserAgentTest : public BlockCleanupTest {
  public:
-  URLLoadingBrowserAgentTest()
-      : browser_(std::make_unique<TestBrowser>()),
-        chrome_browser_state_(browser_->GetBrowserState()),
-        otr_browser_state_(
-            chrome_browser_state_->GetOffTheRecordChromeBrowserState()),
-        url_loading_delegate_([[URLLoadingTestDelegate alloc] init]),
-        scene_loader_(std::make_unique<TestSceneUrlLoadingService>()),
-        otr_browser_(std::make_unique<TestBrowser>(otr_browser_state_)) {
+  URLLoadingBrowserAgentTest() {
+    chrome_browser_state_ = TestChromeBrowserState::Builder().Build();
+    browser_ = std::make_unique<TestBrowser>(chrome_browser_state_.get());
+    otr_browser_state_ =
+        chrome_browser_state_->GetOffTheRecordChromeBrowserState();
+    url_loading_delegate_ = [[URLLoadingTestDelegate alloc] init];
+    scene_loader_ = std::make_unique<TestSceneUrlLoadingService>();
+    otr_browser_ = std::make_unique<TestBrowser>(otr_browser_state_);
+    scene_state_ = [[SceneState alloc] initWithAppState:nil];
+
     // Configure app service.
     scene_loader_->current_browser_ = browser_.get();
+    SceneStateBrowserAgent::CreateForBrowser(browser_.get(), scene_state_);
+    SceneStateBrowserAgent::CreateForBrowser(otr_browser_.get(), scene_state_);
 
     // Disable web usage on both browsers
     WebUsageEnablerBrowserAgent::CreateForBrowser(browser_.get());
@@ -107,7 +114,7 @@ class URLLoadingBrowserAgentTest : public BlockCleanupTest {
   // Returns a new unique_ptr containing a test webstate.
   std::unique_ptr<web::FakeWebState> CreateFakeWebState() {
     auto web_state = std::make_unique<web::FakeWebState>();
-    web_state->SetBrowserState(chrome_browser_state_);
+    web_state->SetBrowserState(chrome_browser_state_.get());
     web_state->SetNavigationManager(
         std::make_unique<web::FakeNavigationManager>());
     return web_state;
@@ -115,14 +122,15 @@ class URLLoadingBrowserAgentTest : public BlockCleanupTest {
 
   web::WebTaskEnvironment task_environment_;
   IOSChromeScopedTestingLocalState local_state_;
-  std::unique_ptr<Browser> browser_;
-  ChromeBrowserState* chrome_browser_state_;
+  std::unique_ptr<TestChromeBrowserState> chrome_browser_state_;
+  std::unique_ptr<TestBrowser> browser_;
   ChromeBrowserState* otr_browser_state_;
   URLLoadingTestDelegate* url_loading_delegate_;
   std::unique_ptr<TestSceneUrlLoadingService> scene_loader_;
   UrlLoadingBrowserAgent* loader_;
   std::unique_ptr<Browser> otr_browser_;
   UrlLoadingBrowserAgent* otr_loader_;
+  SceneState* scene_state_;
 };
 
 TEST_F(URLLoadingBrowserAgentTest, TestSwitchToTab) {

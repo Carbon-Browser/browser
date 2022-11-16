@@ -9,10 +9,11 @@
 
 #include "base/memory/weak_ptr.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "device/bluetooth/bluetooth_common.h"
 #include "device/bluetooth/bluetooth_device.h"
 #include "device/bluetooth/bluetooth_export.h"
+#include "device/bluetooth/floss/bluetooth_pairing_floss.h"
+#include "device/bluetooth/floss/floss_adapter_client.h"
 
 namespace floss {
 
@@ -47,13 +48,13 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothDeviceFloss
   uint16_t GetAppearance() const override;
   absl::optional<std::string> GetName() const override;
   bool IsPaired() const override;
+#if BUILDFLAG(IS_CHROMEOS)
+  bool IsBonded() const override;
+#endif  // BUILDFLAG(IS_CHROMEOS)
   bool IsConnected() const override;
   bool IsGattConnected() const override;
   bool IsConnectable() const override;
   bool IsConnecting() const override;
-#if defined(OS_CHROMEOS)
-  bool IsBlockedByPolicy() const override;
-#endif
   UUIDSet GetUUIDs() const override;
   absl::optional<int8_t> GetInquiryRSSI() const override;
   absl::optional<int8_t> GetInquiryTxPower() const override;
@@ -66,6 +67,11 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothDeviceFloss
                             ErrorCallback error_callback) override;
   void Connect(device::BluetoothDevice::PairingDelegate* pairing_delegate,
                ConnectCallback callback) override;
+#if BUILDFLAG(IS_CHROMEOS)
+  void ConnectClassic(
+      device::BluetoothDevice::PairingDelegate* pairing_delegate,
+      ConnectCallback callback) override;
+#endif  // BUILDFLAG(IS_CHROMEOS)
   void SetPinCode(const std::string& pincode) override;
   void SetPasskey(uint32_t passkey) override;
   void ConfirmPairing() override;
@@ -88,14 +94,26 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothDeviceFloss
   bool IsGattServicesDiscoveryComplete() const override;
   void Pair(device::BluetoothDevice::PairingDelegate* pairing_delegate,
             ConnectCallback callback) override;
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   void ExecuteWrite(base::OnceClosure callback,
                     ExecuteWriteErrorCallback error_callback) override;
   void AbortWrite(base::OnceClosure callback,
                   AbortWriteErrorCallback error_callback) override;
-#endif
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
+  FlossDeviceId AsFlossDeviceId() const;
   void SetName(const std::string& name);
+  void SetBondState(FlossAdapterClient::BondState bond_state);
+  void SetIsConnected(bool is_connected);
+  void ConnectAllEnabledProfiles();
+  void ResetPairing();
+  // Triggers the pending callback of Connect() method.
+  void TriggerConnectCallback(
+      absl::optional<BluetoothDevice::ConnectErrorCode> error_code);
+
+  BluetoothPairingFloss* pairing() const { return pairing_.get(); }
+
+  void InitializeDeviceProperties();
 
  protected:
   // BluetoothDevice override
@@ -121,6 +139,22 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothDeviceFloss
 
   void OnCancelPairingError(const Error& error);
   void OnForgetError(ErrorCallback error_callback, const Error& error);
+  void OnGetRemoteType(
+      const absl::optional<FlossAdapterClient::BluetoothDeviceType>& ret,
+      const absl::optional<Error>& error);
+  void OnGetRemoteClass(const absl::optional<uint32_t>& ret,
+                        const absl::optional<Error>& error);
+  void OnGetRemoteUuids(const absl::optional<UUIDList>& ret,
+                        const absl::optional<Error>& error);
+  void OnConnectAllEnabledProfiles(const absl::optional<Void>& ret,
+                                   const absl::optional<Error>& error);
+  void OnDisconnectAllEnabledProfiles(base::OnceClosure callback,
+                                      ErrorCallback error_callback,
+                                      const absl::optional<Void>& ret,
+                                      const absl::optional<Error>& error);
+
+  absl::optional<ConnectCallback> pending_callback_on_connect_profiles_ =
+      absl::nullopt;
 
   // Address of this device. Changing this should necessitate creating a new
   // BluetoothDeviceFloss object.
@@ -128,6 +162,29 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothDeviceFloss
 
   // Name of this device. Can be queried later and isn't mandatory for creation.
   std::string name_;
+
+  // Transport type of device.
+  // TODO(b/204708206): Update with property framework when available
+  device::BluetoothTransport transport_;
+
+  // Class of device.
+  // TODO(b/204708206): Update with property framework when available
+  uint32_t cod_;
+
+  // Whether the device is bonded/paired.
+  FlossAdapterClient::BondState bond_state_ =
+      FlossAdapterClient::BondState::kNotBonded;
+
+  // Whether the device is connected at link layer level (not profile level).
+  // Mirrors the connection state of Floss:
+  // 0 if not connected; 1 if connected and > 1 if connection is encrypted
+  // (https://android.googlesource.com/platform/system/bt/+/refs/heads/android10-c2f2-release/btif/src/btif_dm.cc#737),
+  // but squashing all connected states >= 1 as a single "connected" since it's
+  // not used in the Chrome layer.
+  bool is_connected_ = false;
+
+  // Represents currently ongoing pairing with this remote device.
+  std::unique_ptr<BluetoothPairingFloss> pairing_;
 
   base::WeakPtrFactory<BluetoothDeviceFloss> weak_ptr_factory_{this};
 };

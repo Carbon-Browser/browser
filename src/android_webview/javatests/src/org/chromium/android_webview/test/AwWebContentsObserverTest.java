@@ -199,12 +199,15 @@ public class AwWebContentsObserverTest {
             boolean isSameDocument, boolean isFragmentNavigation, boolean isRendererInitiated,
             int transition) {
         NavigationHandle navigation = new NavigationHandle(0 /* navigationHandleProxy */, gurl,
-                isInPrimaryMainFrame, isSameDocument, isRendererInitiated, null, null);
-        mWebContentsObserver.didStartNavigation(navigation);
+                GURL.emptyGURL(), GURL.emptyGURL(), isInPrimaryMainFrame, isSameDocument,
+                isRendererInitiated, null /* initiatorOrigin */, transition, false /* isPost */,
+                false /* hasUserGesture */, false /* isRedirect */, false /* isExternalProtocol */,
+                0 /* navigationId */, false /* isPageActivation */, false /* isReload */);
+        mWebContentsObserver.didStartNavigationInPrimaryMainFrame(navigation);
 
         navigation.didFinish(gurl, isErrorPage, true /* hasCommitted */, isFragmentNavigation,
                 false /* isDownload */, false /* isValidSearchFormUrl */, transition,
-                0 /* errorCode*/, 200 /* httpStatusCode*/);
+                0 /* errorCode*/, 200 /* httpStatusCode*/, false /* isExternalProtocol */);
         mWebContentsObserver.didFinishNavigation(navigation);
     }
 }

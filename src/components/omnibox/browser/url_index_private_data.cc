@@ -20,6 +20,7 @@
 #include "base/i18n/break_iterator.h"
 #include "base/i18n/case_conversion.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/stl_util.h"
 #include "base/strings/string_split.h"
@@ -106,7 +107,7 @@ class UpdateRecentVisitsFromHistoryDBTask : public history::HistoryDBTask {
 
   // The URLIndexPrivateData that gets updated after the historyDB
   // task returns.
-  URLIndexPrivateData* private_data_;
+  raw_ptr<URLIndexPrivateData> private_data_;
   // The ID of the URL to get visits for and then update.
   history::URLID url_id_;
   // Whether fetching the recent visits for the URL succeeded.
@@ -197,17 +198,17 @@ ScoredHistoryMatches URLIndexPrivateData::HistoryItemsForTerms(
     // Have to convert to UTF-8 and back, because UnescapeURLComponent doesn't
     // support unescaping UTF-8 characters and converting them to UTF-16.
     std::u16string lower_unescaped_string =
-        base::UTF8ToUTF16(net::UnescapeURLComponent(
+        base::UTF8ToUTF16(base::UnescapeURLComponent(
             base::UTF16ToUTF8(lower_raw_string),
-            net::UnescapeRule::SPACES | net::UnescapeRule::PATH_SEPARATORS |
-                net::UnescapeRule::URL_SPECIAL_CHARS_EXCEPT_PATH_SEPARATORS));
+            base::UnescapeRule::SPACES | base::UnescapeRule::PATH_SEPARATORS |
+                base::UnescapeRule::URL_SPECIAL_CHARS_EXCEPT_PATH_SEPARATORS));
 
     // Extract individual 'words' (as opposed to 'terms'; see comment in
     // HistoryIdsToScoredMatches()) from the search string. When the user types
     // "colspec=ID%20Mstone Release" we get four 'words': "colspec", "id",
     // "mstone" and "release".
     String16Vector lower_words(
-        String16VectorFromString16(lower_unescaped_string, false, nullptr));
+        String16VectorFromString16(lower_unescaped_string, nullptr));
     if (lower_words.empty())
       continue;
     // If we've already searched for this list of words, don't do it again.
@@ -233,7 +234,9 @@ ScoredHistoryMatches URLIndexPrivateData::HistoryItemsForTerms(
         scored_items.end(), ScoredHistoryMatch::MatchScoreGreater);
     scored_items.resize(first_pass_size);
 
-    // Filter unique matches to maximize the use of the |max_matches| capacity.
+    // Filter unique matches to maximize the use of the `max_matches` capacity.
+    // It's possible this'll still end up with duplicates as having unique
+    // URL IDs does not guarantee having unique `stripped_destination_url`.
     std::set<HistoryID> seen_history_ids;
     base::EraseIf(scored_items, [&](const auto& scored_item) {
       HistoryID scored_item_id = scored_item.url_info.id();
@@ -801,7 +804,7 @@ bool URLIndexPrivateData::IndexRow(
   // Strip out username and password before saving and indexing.
   std::u16string url(url_formatter::FormatUrl(
       gurl, url_formatter::kFormatUrlOmitUsernamePassword,
-      net::UnescapeRule::NONE, nullptr, nullptr, nullptr));
+      base::UnescapeRule::NONE, nullptr, nullptr, nullptr));
 
   HistoryID history_id = static_cast<HistoryID>(row_id);
   DCHECK_LT(history_id, std::numeric_limits<HistoryID>::max());
@@ -858,9 +861,7 @@ void URLIndexPrivateData::AddRowWordsToIndex(const history::URLRow& row,
 
 void URLIndexPrivateData::AddWordToIndex(const std::u16string& term,
                                          HistoryID history_id) {
-  WordMap::iterator word_pos;
-  bool is_new;
-  std::tie(word_pos, is_new) = word_map_.insert(std::make_pair(term, WordID()));
+  auto [word_pos, is_new] = word_map_.insert(std::make_pair(term, WordID()));
 
   // Adding a new word (i.e. a word that is not already in the word index).
   if (is_new) {
@@ -1081,8 +1082,7 @@ bool URLIndexPrivateData::RestorePrivateData(
       base::Time::FromInternalValue(cache.last_rebuild_timestamp());
   const base::TimeDelta rebuilt_ago =
       base::Time::Now() - last_time_rebuilt_from_history_;
-  if ((rebuilt_ago > base::TimeDelta::FromDays(7)) ||
-      (rebuilt_ago < base::TimeDelta::FromDays(-1))) {
+  if ((rebuilt_ago > base::Days(7)) || (rebuilt_ago < base::Days(-1))) {
     // Cache is more than a week old or, somehow, from some time in the future.
     // It's probably a good time to rebuild the index from history to
     // allow synced entries to now appear, expired entries to disappear, etc.
@@ -1248,10 +1248,10 @@ bool URLIndexPrivateData::RestoreWordStartsMap(
       const history::URLRow& row = entry.second.url_row;
       const std::u16string& url =
           bookmarks::CleanUpUrlForMatching(row.url(), nullptr);
-      String16VectorFromString16(url, false, &word_starts.url_word_starts_);
+      String16VectorFromString16(url, &word_starts.url_word_starts_);
       const std::u16string& title =
           bookmarks::CleanUpTitleForMatching(row.title());
-      String16VectorFromString16(title, false, &word_starts.title_word_starts_);
+      String16VectorFromString16(title, &word_starts.title_word_starts_);
       word_starts_map_[entry.first] = std::move(word_starts);
     }
   }

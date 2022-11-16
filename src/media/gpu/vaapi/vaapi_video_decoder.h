@@ -12,10 +12,10 @@
 #include <memory>
 #include <utility>
 
-#include "base/containers/mru_cache.h"
+#include "base/containers/lru_cache.h"
 #include "base/containers/queue.h"
 #include "base/containers/small_map.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
@@ -30,7 +30,7 @@
 #include "media/base/video_frame_layout.h"
 #include "media/gpu/chromeos/video_decoder_pipeline.h"
 #include "media/gpu/decode_surface_handler.h"
-#include "media/gpu/vaapi/vaapi_utils.h"
+#include "media/gpu/vaapi/vaapi_status.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
@@ -54,6 +54,9 @@ class VaapiVideoDecoder : public VideoDecoderMixin,
       scoped_refptr<base::SequencedTaskRunner> decoder_task_runner,
       base::WeakPtr<VideoDecoderMixin::Client> client);
 
+  VaapiVideoDecoder(const VaapiVideoDecoder&) = delete;
+  VaapiVideoDecoder& operator=(const VaapiVideoDecoder&) = delete;
+
   static absl::optional<SupportedVideoDecoderConfigs> GetSupportedConfigs();
 
   // VideoDecoderMixin implementation, VideoDecoder part.
@@ -76,11 +79,6 @@ class VaapiVideoDecoder : public VideoDecoderMixin,
 
   // DecodeSurfaceHandler<VASurface> implementation.
   scoped_refptr<VASurface> CreateSurface() override;
-  scoped_refptr<VASurface> CreateDecodeSurface() override;
-  bool IsScalingDecode() override;
-  const gfx::Rect GetOutputVisibleRect(
-      const gfx::Rect& decode_visible_rect,
-      const gfx::Size& output_picture_size) override;
   void SurfaceReady(scoped_refptr<VASurface> va_surface,
                     int32_t buffer_id,
                     const gfx::Rect& visible_rect,
@@ -92,13 +90,18 @@ class VaapiVideoDecoder : public VideoDecoderMixin,
     DecodeTask(scoped_refptr<DecoderBuffer> buffer,
                int32_t buffer_id,
                DecodeCB decode_done_cb);
-    ~DecodeTask();
+
+    DecodeTask(const DecodeTask&) = delete;
+    DecodeTask& operator=(const DecodeTask&) = delete;
+
     DecodeTask(DecodeTask&&);
     DecodeTask& operator=(DecodeTask&&) = default;
+
+    ~DecodeTask();
+
     scoped_refptr<DecoderBuffer> buffer_;
     int32_t buffer_id_ = -1;
     DecodeCB decode_done_cb_;
-    DISALLOW_COPY_AND_ASSIGN(DecodeTask);
   };
 
   enum class State {
@@ -128,7 +131,7 @@ class VaapiVideoDecoder : public VideoDecoderMixin,
   void HandleDecodeTask();
   // Clear the decode task queue. This is done when resetting or destroying the
   // decoder, or encountering an error.
-  void ClearDecodeTaskQueue(DecodeStatus status);
+  void ClearDecodeTaskQueue(DecoderStatus status);
 
   // Releases the local reference to the VideoFrame associated with the
   // specified |surface_id| on the decoder thread. This is called when
@@ -150,7 +153,7 @@ class VaapiVideoDecoder : public VideoDecoderMixin,
   void ResetDone(base::OnceClosure reset_cb);
 
   // Create codec-specific AcceleratedVideoDecoder and reset related variables.
-  Status CreateAcceleratedVideoDecoder();
+  VaapiStatus CreateAcceleratedVideoDecoder();
 
   // Change the current |state_| to the specified |state|.
   void SetState(State state);
@@ -167,12 +170,28 @@ class VaapiVideoDecoder : public VideoDecoderMixin,
   void ApplyResolutionChangeWithScreenSizes(
       const std::vector<gfx::Size>& screen_resolution);
 
-  // Callback for when a VASurface in the decode pool is no longer used as a
-  // reference frame and should then be returned to the pool. We ignore the
-  // VASurfaceID in the normal callback because it is retained in the |surface|
-  // object.
-  void ReturnDecodeSurfaceToPool(std::unique_ptr<ScopedVASurface> surface,
-                                 VASurfaceID);
+  // Private static helper to allow using weak ptr instead of an unretained ptr.
+  static CroStatus::Or<scoped_refptr<VideoFrame>> AllocateCustomFrameProxy(
+      base::WeakPtr<VaapiVideoDecoder> decoder,
+      VideoPixelFormat format,
+      const gfx::Size& coded_size,
+      const gfx::Rect& visible_rect,
+      const gfx::Size& natural_size,
+      bool use_protected,
+      bool use_linear_buffers,
+      base::TimeDelta timestamp);
+
+  // Allocates a new VideoFrame using a new VASurface directly. Since this is
+  // only used on linux, it also sets the required YCbCr information for the
+  // frame it creates.
+  CroStatus::Or<scoped_refptr<VideoFrame>> AllocateCustomFrame(
+      VideoPixelFormat format,
+      const gfx::Size& coded_size,
+      const gfx::Rect& visible_rect,
+      const gfx::Size& natural_size,
+      bool use_protected,
+      bool use_linear_buffers,
+      base::TimeDelta timestamp);
 
   // Having too many decoder instances at once may cause us to run out of FDs
   // and subsequently crash (b/181264362). To avoid that, we limit the maximum
@@ -206,7 +225,7 @@ class VaapiVideoDecoder : public VideoDecoderMixin,
   // operation leads to a frame being output and frames might be reordered, so
   // we don't know when it's safe to drop a timestamp. This means we need to use
   // a cache here, with a size large enough to account for frame reordering.
-  base::MRUCache<int32_t, base::TimeDelta> buffer_id_to_timestamp_;
+  base::LRUCache<int32_t, base::TimeDelta> buffer_id_to_timestamp_;
 
   // Queue containing all requested decode tasks.
   base::queue<DecodeTask> decode_task_queue_;
@@ -250,16 +269,7 @@ class VaapiVideoDecoder : public VideoDecoderMixin,
   scoped_refptr<VaapiWrapper> vaapi_wrapper_;
   // TODO(crbug.com/1022246): Instead of having the raw pointer here, getting
   // the pointer from AcceleratedVideoDecoder.
-  VaapiVideoDecoderDelegate* decoder_delegate_ = nullptr;
-
-  // When we are doing scaled decoding, this is the pool of surfaces used by the
-  // decoder for reference frames.
-  base::queue<std::unique_ptr<ScopedVASurface>>
-      decode_surface_pool_for_scaling_;
-
-  // When we are doing scaled decoding, this is the scale factor we are using,
-  // and applies the same in both dimensions.
-  absl::optional<float> decode_to_output_scale_factor_;
+  raw_ptr<VaapiVideoDecoderDelegate> decoder_delegate_ = nullptr;
 
   // This is used on AMD protected content implementations to indicate that the
   // DecoderBuffers we receive have been transcrypted and need special handling.
@@ -269,8 +279,6 @@ class VaapiVideoDecoder : public VideoDecoderMixin,
 
   base::WeakPtr<VaapiVideoDecoder> weak_this_;
   base::WeakPtrFactory<VaapiVideoDecoder> weak_this_factory_;
-
-  DISALLOW_COPY_AND_ASSIGN(VaapiVideoDecoder);
 };
 
 }  // namespace media

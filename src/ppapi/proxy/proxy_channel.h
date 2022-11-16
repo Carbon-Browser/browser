@@ -8,7 +8,6 @@
 #include <memory>
 
 #include "base/files/scoped_file.h"
-#include "base/macros.h"
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/memory/unsafe_shared_memory_region.h"
 #include "base/process/process.h"
@@ -66,6 +65,9 @@ class PPAPI_PROXY_EXPORT ProxyChannel
         const base::ReadOnlySharedMemoryRegion& region,
         base::ProcessId remote_pid) = 0;
   };
+
+  ProxyChannel(const ProxyChannel&) = delete;
+  ProxyChannel& operator=(const ProxyChannel&) = delete;
 
   ~ProxyChannel() override;
 
@@ -142,8 +144,6 @@ class PPAPI_PROXY_EXPORT ProxyChannel
   // Will be null for some tests when there is a test_sink_, and if the
   // remote side has crashed.
   std::unique_ptr<IPC::SyncChannel> channel_;
-
-  DISALLOW_COPY_AND_ASSIGN(ProxyChannel);
 };
 
 }  // namespace proxy

@@ -8,9 +8,14 @@
 #include <memory>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "components/bookmarks/browser/bookmark_client.h"
 #include "components/bookmarks/browser/bookmark_node.h"
+
+namespace base {
+class TimeTicks;
+}
 
 namespace bookmarks {
 
@@ -90,12 +95,14 @@ class BookmarkLoadDetails {
   void CreateUrlIndex();
   UrlIndex* url_index() { return url_index_.get(); }
 
+  base::TimeTicks load_start() { return load_start_; }
+
  private:
   std::unique_ptr<BookmarkNode> root_node_;
-  BookmarkNode* root_node_ptr_;
-  BookmarkPermanentNode* bb_node_ = nullptr;
-  BookmarkPermanentNode* other_folder_node_ = nullptr;
-  BookmarkPermanentNode* mobile_folder_node_ = nullptr;
+  raw_ptr<BookmarkNode> root_node_ptr_;
+  raw_ptr<BookmarkPermanentNode> bb_node_ = nullptr;
+  raw_ptr<BookmarkPermanentNode> other_folder_node_ = nullptr;
+  raw_ptr<BookmarkPermanentNode> mobile_folder_node_ = nullptr;
   LoadManagedNodeCallback load_managed_node_callback_;
   std::unique_ptr<TitledUrlIndex> index_;
   BookmarkNode::MetaInfoMap model_meta_info_map_;
@@ -107,6 +114,7 @@ class BookmarkLoadDetails {
   scoped_refptr<UrlIndex> url_index_;
   // A string blob represetning the sync metadata stored in the json file.
   std::string sync_metadata_str_;
+  base::TimeTicks load_start_;
 };
 
 }  // namespace bookmarks

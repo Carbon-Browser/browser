@@ -9,6 +9,7 @@
 
 #include "base/bind.h"
 #include "base/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/test/metrics/histogram_tester.h"
@@ -23,7 +24,6 @@
 #include "content/browser/service_worker/service_worker_registration.h"
 #include "content/browser/service_worker/service_worker_test_utils.h"
 #include "content/browser/service_worker/service_worker_version.h"
-#include "content/common/service_worker/service_worker_utils.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/mock_render_process_host.h"
 #include "mojo/public/cpp/system/data_pipe_utils.h"
@@ -120,6 +120,10 @@ class FetchEventServiceWorker : public FakeServiceWorker {
       : FakeServiceWorker(helper),
         task_environment_(task_environment),
         embedded_worker_instance_client_(embedded_worker_instance_client) {}
+
+  FetchEventServiceWorker(const FetchEventServiceWorker&) = delete;
+  FetchEventServiceWorker& operator=(const FetchEventServiceWorker&) = delete;
+
   ~FetchEventServiceWorker() override = default;
 
   // Tells this worker to dispatch a fetch event 1s after the fetch event is
@@ -263,7 +267,7 @@ class FetchEventServiceWorker : public FakeServiceWorker {
             std::move(finish_callback));
         break;
       case ResponseMode::kDispatchAfter1sDelay:
-        task_environment_->AdvanceClock(base::TimeDelta::FromSeconds(1));
+        task_environment_->AdvanceClock(base::Seconds(1));
         FakeServiceWorker::DispatchFetchEventForMainResource(
             std::move(params), response_callback.Unbind(),
             std::move(finish_callback));
@@ -286,7 +290,8 @@ class FetchEventServiceWorker : public FakeServiceWorker {
             .Run(blink::mojom::ServiceWorkerEventStatus::COMPLETED);
         break;
       case ResponseMode::kFallbackResponse:
-        response_callback->OnFallback(std::move(timing));
+        response_callback->OnFallback(/*request_body=*/absl::nullopt,
+                                      std::move(timing));
         std::move(finish_callback)
             .Run(blink::mojom::ServiceWorkerEventStatus::COMPLETED);
         break;
@@ -357,7 +362,7 @@ class FetchEventServiceWorker : public FakeServiceWorker {
     kHeaders
   };
 
-  BrowserTaskEnvironment* const task_environment_;
+  const raw_ptr<BrowserTaskEnvironment> task_environment_;
 
   ResponseMode response_mode_ = ResponseMode::kDefault;
   scoped_refptr<network::ResourceRequestBody> request_body_;
@@ -383,15 +388,14 @@ class FetchEventServiceWorker : public FakeServiceWorker {
   bool has_received_fetch_event_ = false;
   base::OnceClosure quit_closure_for_fetch_event_;
 
-  FakeEmbeddedWorkerInstanceClient* const embedded_worker_instance_client_;
+  const raw_ptr<FakeEmbeddedWorkerInstanceClient>
+      embedded_worker_instance_client_;
 
   network::mojom::FetchResponseSource response_source_ =
       network::mojom::FetchResponseSource::kUnspecified;
 
   std::string cache_storage_cache_name_;
   base::Time response_time_;
-
-  DISALLOW_COPY_AND_ASSIGN(FetchEventServiceWorker);
 };
 
 // Returns typical response info for a resource load that went through a service
@@ -497,9 +501,9 @@ class ServiceWorkerMainResourceLoaderTest : public testing::Test {
                                   /*mock frame_routing_id=*/1),
           /*is_parent_frame_secure=*/true, helper_->context()->AsWeakPtr(),
           &container_endpoints_);
-      container_host_->UpdateUrls(request->url,
-                                  net::SiteForCookies::FromUrl(request->url),
-                                  url::Origin::Create(request->url));
+      container_host_->UpdateUrls(
+          request->url, url::Origin::Create(request->url),
+          blink::StorageKey(url::Origin::Create(request->url)));
       container_host_->AddMatchingRegistration(registration_.get());
       container_host_->SetControllerRegistration(
           registration_, /*notify_controllerchange=*/false);
@@ -509,7 +513,8 @@ class ServiceWorkerMainResourceLoaderTest : public testing::Test {
     loader_ = std::make_unique<ServiceWorkerMainResourceLoader>(
         base::BindOnce(&ServiceWorkerMainResourceLoaderTest::Fallback,
                        base::Unretained(this)),
-        container_host_);
+        container_host_,
+        /*frame_tree_node_id=*/RenderFrameHost::kNoFrameTreeNodeId);
 
     // Load |request.url|.
     loader_->StartRequest(*request, loader_remote_.BindNewPipeAndPassReceiver(),
@@ -585,7 +590,7 @@ class ServiceWorkerMainResourceLoaderTest : public testing::Test {
   std::unique_ptr<EmbeddedWorkerTestHelper> helper_;
   scoped_refptr<ServiceWorkerRegistration> registration_;
   scoped_refptr<ServiceWorkerVersion> version_;
-  FetchEventServiceWorker* service_worker_;
+  raw_ptr<FetchEventServiceWorker> service_worker_;
   storage::BlobStorageContext blob_context_;
   network::TestURLLoaderClient client_;
   std::unique_ptr<ServiceWorkerMainResourceLoader> loader_;
@@ -636,8 +641,8 @@ TEST_F(ServiceWorkerMainResourceLoaderTest, NoActiveWorker) {
       &container_endpoints_);
   container_host_->UpdateUrls(
       GURL("https://example.com/"),
-      net::SiteForCookies::FromUrl(GURL("https://example.com/")),
-      url::Origin::Create(GURL("https://example.com/")));
+      url::Origin::Create(GURL("https://example.com/")),
+      blink::StorageKey(url::Origin::Create(GURL("https://example.com/"))));
 
   // Perform the request.
   StartRequest(CreateRequest());
@@ -1120,15 +1125,35 @@ TEST_F(ServiceWorkerMainResourceLoaderTest, TimingInfo) {
   auto& info = client_.response_head();
   EXPECT_EQ(200, info->headers->response_code());
   ExpectResponseInfo(*info, *CreateResponseInfoFromServiceWorker());
-  EXPECT_EQ(base::TimeDelta::FromSeconds(1),
-            info->load_timing.service_worker_ready_time -
-                info->load_timing.service_worker_start_time);
-  EXPECT_EQ(base::TimeDelta::FromSeconds(1),
-            info->load_timing.service_worker_fetch_start -
-                info->load_timing.service_worker_start_time);
-  EXPECT_EQ(base::TimeDelta::FromSeconds(1),
+  EXPECT_EQ(base::Seconds(1), info->load_timing.service_worker_ready_time -
+                                  info->load_timing.service_worker_start_time);
+  EXPECT_EQ(base::Seconds(1), info->load_timing.service_worker_fetch_start -
+                                  info->load_timing.service_worker_start_time);
+  EXPECT_EQ(base::Seconds(1),
             info->load_timing.service_worker_respond_with_settled -
                 info->load_timing.service_worker_start_time);
+}
+
+TEST_F(ServiceWorkerMainResourceLoaderTest, FencedFrameNavigationPreload) {
+  registration_->EnableNavigationPreload(true);
+
+  std::unique_ptr<network::ResourceRequest> request = CreateRequest();
+  request->destination = network::mojom::RequestDestination::kFencedframe;
+
+  // Perform the request.
+  StartRequest(std::move(request));
+  client_.RunUntilComplete();
+
+  EXPECT_EQ(net::OK, client_.completion_status().error_code);
+  const auto& info = client_.response_head();
+  EXPECT_EQ(200, info->headers->response_code());
+  EXPECT_FALSE(info->load_timing.receive_headers_start.is_null());
+  EXPECT_FALSE(info->load_timing.receive_headers_end.is_null());
+  EXPECT_LE(info->load_timing.receive_headers_start,
+            info->load_timing.receive_headers_end);
+  auto expected_info = CreateResponseInfoFromServiceWorker();
+  expected_info->did_service_worker_navigation_preload = true;
+  ExpectResponseInfo(*info, *expected_info);
 }
 
 }  // namespace service_worker_main_resource_loader_unittest

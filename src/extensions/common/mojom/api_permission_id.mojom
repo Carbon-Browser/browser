@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
-// This source code is a part of ABP Chromium.
-// Use of this source code is governed by the GPLv3 that can be found in the docs_abp/LICENSE file.
+// This source code is a part of eyeo Chromium SDK.
+// Use of this source code is governed by the GPLv3 that can be found in the components/adblock/LICENSE file.
 
 
 module extensions.mojom;
@@ -131,7 +131,7 @@ enum APIPermissionID {
   kMediaRouterPrivate = 101,
   kMetricsPrivate = 102,
   kMDns = 103,
-  kMusicManagerPrivate = 104,
+  kDeleted_MusicManagerPrivate = 104,
   kNativeMessaging = 105,
   kDeleted_NetworkingConfig = 106,
   kNetworkingPrivate = 107,
@@ -157,7 +157,7 @@ enum APIPermissionID {
   kSerial = 127,
   kSessions = 128,
   kSettingsPrivate = 129,
-  kSignedInDevices = 130,
+  kDeleted_SignedInDevices = 130,
   kSocket = 131,
   kStartupPages = 132,
   kStorage = 133,
@@ -181,7 +181,7 @@ enum APIPermissionID {
   kVirtualKeyboardPrivate = 151,
   kVpnProvider = 152,
   kWallpaper = 153,
-  kWallpaperPrivate = 154,
+  kDeleted_WallpaperPrivate = 154,
   kWebcamPrivate = 155,
   kDeleted_kWebConnectable = 156,
   kWebNavigation = 157,
@@ -240,7 +240,7 @@ enum APIPermissionID {
   kEnterpriseReportingPrivate = 210,
   kCecPrivate = 211,
   kSafeBrowsingPrivate = 212,
-  kFileSystemRequestDownloads = 213,
+  kDeleted_FileSystemRequestDownloads = 213,
   kDeleted_SystemPowerSource = 214,
   kArcAppsPrivate = 215,
   kEnterpriseHardwarePlatform = 216,
@@ -261,6 +261,15 @@ enum APIPermissionID {
   kWmDesksPrivate = 231,
   kWebAuthenticationProxy = 232,
   kDeclarativeNetRequestWithHostAccess = 233,
+  kChromeOSTelemetry = 234,
+  kSpeechRecognitionPrivate = 235,
+  kChromeOSDiagnostics = 236,
+  kChromeOSTelemetrySerialNumber = 237,
+  kSharedStoragePrivate = 238,
+  kEnterpriseRemoteApps = 239,
+  kOffscreen = 240,
+  kSidePanel = 241,
+  kDownloadsUi = 242,
   kAdblockPrivate = 999,
 
   // Add new entries at the end of the enum and be sure to update the

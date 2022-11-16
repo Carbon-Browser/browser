@@ -5,7 +5,6 @@
 #include <string>
 
 #include "base/command_line.h"
-#include "base/macros.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/bookmarks/bookmark_model_factory.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
@@ -30,6 +29,11 @@
 class DurableStorageBrowserTest : public InProcessBrowserTest {
  public:
   DurableStorageBrowserTest() = default;
+
+  DurableStorageBrowserTest(const DurableStorageBrowserTest&) = delete;
+  DurableStorageBrowserTest& operator=(const DurableStorageBrowserTest&) =
+      delete;
+
   ~DurableStorageBrowserTest() override = default;
 
   void SetUpCommandLine(base::CommandLine*) override;
@@ -37,7 +41,9 @@ class DurableStorageBrowserTest : public InProcessBrowserTest {
 
  protected:
   content::RenderFrameHost* GetRenderFrameHost(Browser* browser) {
-    return browser->tab_strip_model()->GetActiveWebContents()->GetMainFrame();
+    return browser->tab_strip_model()
+        ->GetActiveWebContents()
+        ->GetPrimaryMainFrame();
   }
 
   content::RenderFrameHost* GetRenderFrameHost() {
@@ -85,9 +91,6 @@ class DurableStorageBrowserTest : public InProcessBrowserTest {
   }
 
   GURL url_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(DurableStorageBrowserTest);
 };
 
 void DurableStorageBrowserTest::SetUpCommandLine(

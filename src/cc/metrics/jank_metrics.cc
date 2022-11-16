@@ -11,6 +11,7 @@
 
 #include "base/metrics/histogram.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/notreached.h"
 #include "base/strings/strcat.h"
 #include "base/trace_event/trace_event.h"
 #include "cc/metrics/frame_sequence_tracker.h"
@@ -25,24 +26,23 @@ constexpr int kBuiltinSequenceNum =
 constexpr int kMaximumJankHistogramIndex = 2 * kBuiltinSequenceNum;
 constexpr int kMaximumStaleHistogramIndex = kBuiltinSequenceNum;
 
-constexpr base::TimeDelta kStaleHistogramMin =
-    base::TimeDelta::FromMicroseconds(1);
-constexpr base::TimeDelta kStaleHistogramMax =
-    base::TimeDelta::FromMilliseconds(1000);
+constexpr base::TimeDelta kStaleHistogramMin = base::Microseconds(1);
+constexpr base::TimeDelta kStaleHistogramMax = base::Milliseconds(1000);
 constexpr int kStaleHistogramBucketCount = 200;
 
-constexpr bool IsValidJankThreadType(FrameSequenceMetrics::ThreadType type) {
-  return type == FrameSequenceMetrics::ThreadType::kCompositor ||
-         type == FrameSequenceMetrics::ThreadType::kMain;
+constexpr bool IsValidJankThreadType(
+    FrameInfo::SmoothEffectDrivingThread type) {
+  return type == FrameInfo::SmoothEffectDrivingThread::kCompositor ||
+         type == FrameInfo::SmoothEffectDrivingThread::kMain;
 }
 
-const char* GetJankThreadTypeName(FrameSequenceMetrics::ThreadType type) {
+const char* GetJankThreadTypeName(FrameInfo::SmoothEffectDrivingThread type) {
   DCHECK(IsValidJankThreadType(type));
 
   switch (type) {
-    case FrameSequenceMetrics::ThreadType::kCompositor:
+    case FrameInfo::SmoothEffectDrivingThread::kCompositor:
       return "Compositor";
-    case FrameSequenceMetrics::ThreadType::kMain:
+    case FrameInfo::SmoothEffectDrivingThread::kMain:
       return "Main";
     default:
       NOTREACHED();
@@ -50,13 +50,13 @@ const char* GetJankThreadTypeName(FrameSequenceMetrics::ThreadType type) {
   }
 }
 
-int GetIndexForJankMetric(FrameSequenceMetrics::ThreadType thread_type,
+int GetIndexForJankMetric(FrameInfo::SmoothEffectDrivingThread thread_type,
                           FrameSequenceTrackerType type) {
   DCHECK(IsValidJankThreadType(thread_type));
-  if (thread_type == FrameSequenceMetrics::ThreadType::kMain)
+  if (thread_type == FrameInfo::SmoothEffectDrivingThread::kMain)
     return static_cast<int>(type);
 
-  DCHECK_EQ(thread_type, FrameSequenceMetrics::ThreadType::kCompositor);
+  DCHECK_EQ(thread_type, FrameInfo::SmoothEffectDrivingThread::kCompositor);
   return static_cast<int>(type) + kBuiltinSequenceNum;
 }
 
@@ -86,7 +86,7 @@ std::string GetMaxStaleHistogramName(FrameSequenceTrackerType type) {
 }  // namespace
 
 JankMetrics::JankMetrics(FrameSequenceTrackerType tracker_type,
-                         FrameSequenceMetrics::ThreadType effective_thread)
+                         FrameInfo::SmoothEffectDrivingThread effective_thread)
     : tracker_type_(tracker_type), effective_thread_(effective_thread) {
   DCHECK(IsValidJankThreadType(effective_thread));
 }
@@ -177,7 +177,7 @@ void JankMetrics::AddPresentedFrame(
 
   // Exclude the presentation delay introduced by no-update frames. If this
   // exclusion results in negative frame delta, treat the frame delta as 0.
-  const base::TimeDelta zero_delta = base::TimeDelta::FromMilliseconds(0);
+  const base::TimeDelta zero_delta = base::Milliseconds(0);
 
   // Setting the current_frame_delta to zero conveniently excludes the current
   // frame to be ignored from jank/stale calculation.

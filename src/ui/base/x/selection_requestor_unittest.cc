@@ -8,9 +8,9 @@
 #include <memory>
 
 #include "base/bind.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted_memory.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -28,6 +28,9 @@ namespace ui {
 class SelectionRequestorTest : public testing::Test {
  public:
   explicit SelectionRequestorTest() : connection_(x11::Connection::Get()) {}
+
+  SelectionRequestorTest(const SelectionRequestorTest&) = delete;
+  SelectionRequestorTest& operator=(const SelectionRequestorTest&) = delete;
 
   ~SelectionRequestorTest() override = default;
 
@@ -64,19 +67,16 @@ class SelectionRequestorTest : public testing::Test {
     connection_->DestroyWindow({x_window_});
   }
 
-  x11::Connection* connection_;
+  raw_ptr<x11::Connection> connection_;
 
   // |requestor_|'s window.
   x11::Window x_window_ = x11::Window::None;
 
   std::unique_ptr<XClipboardHelper> helper_;
-  SelectionRequestor* requestor_ = nullptr;
+  raw_ptr<SelectionRequestor> requestor_ = nullptr;
 
   base::test::SingleThreadTaskEnvironment task_environment_{
       base::test::SingleThreadTaskEnvironment::MainThreadType::UI};
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(SelectionRequestorTest);
 };
 
 namespace {

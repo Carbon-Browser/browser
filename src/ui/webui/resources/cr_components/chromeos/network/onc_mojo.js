@@ -19,6 +19,13 @@
  * strings and for debugging. They are not intended to be drectly user facing.
  */
 
+// Used to indicate a saved but unknown credential value. Will appear as
+// placeholder character in the credential (passphrase, password, etc.) field by
+// default.
+// See |kFakeCredential| in chromeos/network/policy_util.h.
+/** @type {string} */
+/* #export */ const FAKE_CREDENTIAL = 'FAKE_CREDENTIAL_VPaJDV9x';
+
   /**
    * Regex expression to validate RFC compliant DNS characters.
    */
@@ -643,6 +650,7 @@
           networkTechnology: '',
           roaming: false,
           signalStrength: 0,
+          simLockEnabled: false,
           simLocked: false,
         };
         break;
@@ -776,6 +784,7 @@
       ipAddressConfigType: OncMojo.createManagedString('DHCP'),
       nameServersConfigType: OncMojo.createManagedString('DHCP'),
       portalState: mojom.PortalState.kUnknown,
+      trafficCounterProperties: OncMojo.createTrafficCounterProperties(),
     };
     switch (type) {
       case mojom.NetworkType.kCellular:
@@ -785,7 +794,7 @@
             signalStrength: 0,
             simLocked: false,
             supportNetworkScan: false,
-          }
+          },
         };
         break;
       case mojom.NetworkType.kEthernet:
@@ -800,7 +809,7 @@
             carrier: '',
             hasConnectedToHost: false,
             signalStrength: 0,
-          }
+          },
         };
         break;
       case mojom.NetworkType.kVPN:
@@ -809,7 +818,7 @@
             providerName: '',
             type: mojom.VpnType.kOpenVPN,
             openVpn: {},
-          }
+          },
         };
         break;
       case mojom.NetworkType.kWiFi:
@@ -822,7 +831,7 @@
             signalStrength: 0,
             isSyncable: false,
             isConfiguredByActiveUser: false,
-          }
+          },
         };
         break;
     }
@@ -854,9 +863,9 @@
           typeConfig: {
             wifi: {
               security: mojom.SecurityType.kNone,
-              hiddenSsid: mojom.HiddenSsidMode.kAutomatic
-            }
-          }
+              hiddenSsid: mojom.HiddenSsidMode.kAutomatic,
+            },
+          },
         };
         break;
     }
@@ -922,7 +931,7 @@
    * Returns IPConfigProperties for |type|. For IPv4, these will be the static
    * properties if IPAddressConfigType is Static and StaticIPConfig is set.
    * @param {!chromeos.networkConfig.mojom.ManagedProperties} properties
-   * @param {string} desiredType Desired ip config type (IPv4 or IPv6).
+   * @param {!chromeos.networkConfig.mojom.IPConfigType} desiredType
    * @return {!chromeos.networkConfig.mojom.IPConfigProperties|undefined}
    */
   static getIPConfigForType(properties, desiredType) {
@@ -931,13 +940,13 @@
     let ipConfig;
     if (ipConfigs) {
       ipConfig = ipConfigs.find(ipconfig => ipconfig.type === desiredType);
-      if (ipConfig && desiredType !== 'IPv4') {
+      if (ipConfig && desiredType !== mojom.IPConfigType.kIPv4) {
         return ipConfig;
       }
     }
 
     // Only populate static ip config properties for IPv4.
-    if (desiredType !== 'IPv4') {
+    if (desiredType !== mojom.IPConfigType.kIPv4) {
       return undefined;
     }
 
@@ -962,9 +971,7 @@
       if (staticIpConfig.routingPrefix) {
         ipConfig.routingPrefix = staticIpConfig.routingPrefix.activeValue;
       }
-      if (staticIpConfig.type) {
-        ipConfig.type = staticIpConfig.type.activeValue;
-      }
+      ipConfig.type = staticIpConfig.type;
     }
     if (properties.nameServersConfigType &&
         properties.nameServersConfigType.activeValue === 'Static') {
@@ -1022,7 +1029,8 @@
     let nsConfigType =
         OncMojo.getActiveString(managedProperties.nameServersConfigType) ||
         'DHCP';
-    let staticIpConfig = OncMojo.getIPConfigForType(managedProperties, 'IPv4');
+    let staticIpConfig =
+        OncMojo.getIPConfigForType(managedProperties, mojom.IPConfigType.kIPv4);
     let nameServers = staticIpConfig ? staticIpConfig.nameServers : undefined;
     if (field === 'ipAddressConfigType') {
       const newIpConfigType = /** @type {string} */ (newValue);
@@ -1039,7 +1047,7 @@
     } else if (field === 'staticIpConfig') {
       const ipConfigValue =
           /** @type {!mojom.IPConfigProperties} */ (newValue);
-      if (!ipConfigValue.type || !ipConfigValue.ipAddress) {
+      if (!ipConfigValue.ipAddress) {
         console.error('Invalid StaticIPConfig: ' + JSON.stringify(newValue));
         return null;
       }
@@ -1070,7 +1078,7 @@
     config.ipAddressConfigType = ipConfigType;
     config.nameServersConfigType = nsConfigType;
     if (ipConfigType === 'Static') {
-      assert(staticIpConfig && staticIpConfig.type && staticIpConfig.ipAddress);
+      assert(staticIpConfig && staticIpConfig.ipAddress);
       config.staticIpConfig = staticIpConfig;
     }
     if (nsConfigType === 'Static') {
@@ -1108,7 +1116,7 @@
     return {
       activeValue: s,
       policySource: chromeos.networkConfig.mojom.PolicySource.kNone,
-      policyValue: undefined
+      policyValue: undefined,
     };
   }
 
@@ -1120,7 +1128,7 @@
     return {
       activeValue: n,
       policySource: chromeos.networkConfig.mojom.PolicySource.kNone,
-      policyValue: 0
+      policyValue: 0,
     };
   }
 
@@ -1132,7 +1140,18 @@
     return {
       activeValue: b,
       policySource: chromeos.networkConfig.mojom.PolicySource.kNone,
-      policyValue: false
+      policyValue: false,
+    };
+  }
+
+  /**
+   * @return {!chromeos.networkConfig.mojom.TrafficCounterProperties}
+   */
+  static createTrafficCounterProperties() {
+    return {
+      lastResetTime: null,
+      autoReset: false,
+      userSpecifiedResetDay: 1,
     };
   }
 
@@ -1366,7 +1385,7 @@
       /*@type {Array<!chromeos.networkConfig.mojom.SubjectAltName>}*/[];
 
     for (const entry of entries) {
-      if (entry === "") {
+      if (entry === '') {
         continue;
       }
       let type;
@@ -1390,7 +1409,7 @@
       }
       result.push(/* @type {!chromeos.networkConfig.mojom.SubjectAltName} */ {
         type: type,
-        value: value[0]
+        value: value[0],
       });
     }
     return result;
@@ -1401,7 +1420,7 @@
  * The value of ApnProperties.attach must be equivalent to this value
  * in order for an Attach APN to occur.
  */
-OncMojo.USE_ATTACH_APN_NAME = "attach";
+OncMojo.USE_ATTACH_APN_NAME = 'attach';
 
 /** @typedef {chromeos.networkConfig.mojom.DeviceStateProperties} */
 OncMojo.DeviceStateProperties;
@@ -1427,7 +1446,7 @@ OncMojo.ManagedProperty;
  *   ipAddress: (string|undefined),
  *   nameServers: (Array<string>|undefined),
  *   netmask: (string|undefined),
- *   type: (string|undefined),
+ *   type: !chromeos.networkConfig.mojom.IPConfigType,
  *   webProxyAutoDiscoveryUrl: (string|undefined),
  * }}
  */

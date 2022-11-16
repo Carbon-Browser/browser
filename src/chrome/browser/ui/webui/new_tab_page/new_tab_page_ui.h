@@ -5,9 +5,11 @@
 #ifndef CHROME_BROWSER_UI_WEBUI_NEW_TAB_PAGE_NEW_TAB_PAGE_UI_H_
 #define CHROME_BROWSER_UI_WEBUI_NEW_TAB_PAGE_NEW_TAB_PAGE_UI_H_
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
+#include "base/time/time.h"
 #include "chrome/browser/cart/chrome_cart.mojom.h"
 #include "chrome/browser/new_tab_page/modules/drive/drive.mojom.h"
+#include "chrome/browser/new_tab_page/modules/feed/feed.mojom.h"
 #include "chrome/browser/new_tab_page/modules/photos/photos.mojom.h"
 #include "chrome/browser/new_tab_page/modules/task_module/task_module.mojom.h"
 #include "ui/webui/resources/js/browser_command/browser_command.mojom.h"
@@ -60,7 +62,9 @@ class TaskModuleHandler;
 class CartHandler;
 class DriveHandler;
 class PhotosHandler;
-
+namespace ntp {
+class FeedHandler;
+}
 class NewTabPageUI
     : public ui::MojoWebUIController,
       public new_tab_page::mojom::PageHandlerFactory,
@@ -73,6 +77,10 @@ class NewTabPageUI
       content::WebContentsObserver {
  public:
   explicit NewTabPageUI(content::WebUI* web_ui);
+
+  NewTabPageUI(const NewTabPageUI&) = delete;
+  NewTabPageUI& operator=(const NewTabPageUI&) = delete;
+
   ~NewTabPageUI() override;
 
   static bool IsNewTabPageOrigin(const GURL& url);
@@ -113,7 +121,7 @@ class NewTabPageUI
           pending_receiver);
 
   // Instantiates the implementor of the
-  // shopping_tasks::mojom::ShoppingTasksHandler mojo interface passing the
+  // recipe_tasks::mojom::RecipeTasksHandler mojo interface passing the
   // pending receiver that will be internally bound.
   void BindInterface(
       mojo::PendingReceiver<task_module::mojom::TaskModuleHandler>
@@ -128,6 +136,11 @@ class NewTabPageUI
   // passing the pending receiver that will be internally bound.
   void BindInterface(
       mojo::PendingReceiver<photos::mojom::PhotosHandler> pending_receiver);
+
+  // Instantiates the implementor of ntp::feed::mojom::FeedHandler mojo
+  // interface passing the pending receiver that will be internally bound.
+  void BindInterface(
+      mojo::PendingReceiver<ntp::feed::mojom::FeedHandler> pending_receiver);
 
 #if !defined(OFFICIAL_BUILD)
   // Instantiates the implementor of the foo::mojom::FooHandler mojo interface
@@ -191,6 +204,8 @@ class NewTabPageUI
   void OnCustomLinksEnabledPrefChanged();
   // Callback for when the value of the pref for showing the NTP tiles changes.
   void OnTilesVisibilityPrefChanged();
+  // Called when the NTP (re)loads. Sets mutable load time data.
+  void OnLoad();
 
   std::unique_ptr<NewTabPageHandler> page_handler_;
   mojo::Receiver<new_tab_page::mojom::PageHandlerFactory>
@@ -209,9 +224,9 @@ class NewTabPageUI
   std::unique_ptr<FooHandler> foo_handler_;
 #endif
   std::unique_ptr<CartHandler> cart_handler_;
-  Profile* profile_;
-  ThemeService* theme_service_;
-  NtpCustomBackgroundService* ntp_custom_background_service_;
+  raw_ptr<Profile> profile_;
+  raw_ptr<ThemeService> theme_service_;
+  raw_ptr<NtpCustomBackgroundService> ntp_custom_background_service_;
   base::ScopedObservation<ui::NativeTheme, ui::NativeThemeObserver>
       native_theme_observation_{this};
   base::ScopedObservation<ThemeService, ThemeServiceObserver>
@@ -219,7 +234,7 @@ class NewTabPageUI
   base::ScopedObservation<NtpCustomBackgroundService,
                           NtpCustomBackgroundServiceObserver>
       ntp_custom_background_service_observation_{this};
-  content::WebContents* web_contents_;
+  raw_ptr<content::WebContents> web_contents_;
   // Time the NTP started loading. Used for logging the WebUI NTP's load
   // performance.
   base::Time navigation_start_time_;
@@ -228,14 +243,13 @@ class NewTabPageUI
   std::unique_ptr<TaskModuleHandler> task_module_handler_;
   std::unique_ptr<DriveHandler> drive_handler_;
   std::unique_ptr<PhotosHandler> photos_handler_;
+  std::unique_ptr<ntp::FeedHandler> feed_handler_;
 
   PrefChangeRegistrar pref_change_registrar_;
 
   base::WeakPtrFactory<NewTabPageUI> weak_ptr_factory_{this};
 
   WEB_UI_CONTROLLER_TYPE_DECL();
-
-  DISALLOW_COPY_AND_ASSIGN(NewTabPageUI);
 };
 
 #endif  // CHROME_BROWSER_UI_WEBUI_NEW_TAB_PAGE_NEW_TAB_PAGE_UI_H_

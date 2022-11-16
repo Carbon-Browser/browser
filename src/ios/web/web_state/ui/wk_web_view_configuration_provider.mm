@@ -77,7 +77,7 @@ WKWebViewConfigurationProvider::WKWebViewConfigurationProvider(
     BrowserState* browser_state)
     : browser_state_(browser_state),
       content_rule_list_provider_(
-          std::make_unique<WKContentRuleListProvider>(browser_state)) {}
+          std::make_unique<WKContentRuleListProvider>()) {}
 
 WKWebViewConfigurationProvider::~WKWebViewConfigurationProvider() = default;
 
@@ -104,27 +104,33 @@ void WKWebViewConfigurationProvider::ResetWithWebViewConfiguration(
 
   [configuration_ setIgnoresViewportScaleLimits:YES];
 
-  if (@available(iOS 13, *)) {
-    @try {
-      // Disable system context menu on iOS 13 and later. Disabling
-      // "longPressActions" prevents the WKWebView ContextMenu from being
-      // displayed and also prevents the iOS 13 ContextMenu delegate methods
-      // from being called.
-      // https://github.com/WebKit/webkit/blob/1233effdb7826a5f03b3cdc0f67d713741e70976/Source/WebKit/UIProcess/API/Cocoa/WKWebViewConfiguration.mm#L307
-      BOOL enable_webkit_long_press_actions =
-          !web::GetWebClient()->EnableLongPressAndForceTouchHandling();
-      [configuration_ setValue:@(enable_webkit_long_press_actions)
-                        forKey:@"longPressActionsEnabled"];
-    } @catch (NSException* exception) {
-      NOTREACHED() << "Error setting value for longPressActionsEnabled";
-    }
-
-    // WKWebView's "fradulentWebsiteWarning" is an iOS 13+ feature that is
-    // conceptually similar to Safe Browsing but uses a non-Google provider and
-    // only works for devices in certain locales. Disable this feature since
-    // Chrome uses Google-provided Safe Browsing.
-    [[configuration_ preferences] setFraudulentWebsiteWarningEnabled:NO];
+  @try {
+    // Disable system context menu on iOS 13 and later. Disabling
+    // "longPressActions" prevents the WKWebView ContextMenu from being
+    // displayed and also prevents the iOS 13 ContextMenu delegate methods
+    // from being called.
+    // https://github.com/WebKit/webkit/blob/1233effdb7826a5f03b3cdc0f67d713741e70976/Source/WebKit/UIProcess/API/Cocoa/WKWebViewConfiguration.mm#L307
+    BOOL enable_webkit_long_press_actions =
+        !web::GetWebClient()->EnableLongPressAndForceTouchHandling();
+    [configuration_ setValue:@(enable_webkit_long_press_actions)
+                      forKey:@"longPressActionsEnabled"];
+  } @catch (NSException* exception) {
+    NOTREACHED() << "Error setting value for longPressActionsEnabled";
   }
+
+  // WKWebView's "fradulentWebsiteWarning" is an iOS 13+ feature that is
+  // conceptually similar to Safe Browsing but uses a non-Google provider and
+  // only works for devices in certain locales. Disable this feature since
+  // Chrome uses Google-provided Safe Browsing.
+  [[configuration_ preferences] setFraudulentWebsiteWarningEnabled:NO];
+
+#if defined(__IPHONE_16_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_16_0
+  if (@available(iOS 16.0, *)) {
+    if (base::FeatureList::IsEnabled(features::kEnableFullscreenAPI)) {
+      [[configuration_ preferences] setElementFullscreenEnabled:YES];
+    }
+  }
+#endif  // defined(__IPHONE_16_0)
 
   [configuration_ setAllowsInlineMediaPlayback:YES];
   // setJavaScriptCanOpenWindowsAutomatically is required to support popups.

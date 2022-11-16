@@ -15,8 +15,8 @@
 #include "ui/aura/env.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_tree_host.h"
-#include "ui/base/cursor/cursor_lookup.h"
 #include "ui/base/cursor/mojom/cursor_type.mojom-shared.h"
+#include "ui/wm/core/cursor_lookup.h"
 
 namespace {
 
@@ -73,8 +73,8 @@ void MouseCursorMonitorAura::NotifyCursorChanged(const ui::Cursor& cursor) {
   }
 
   std::unique_ptr<SkBitmap> cursor_bitmap =
-      std::make_unique<SkBitmap>(GetCursorBitmap(cursor));
-  gfx::Point cursor_hotspot = GetCursorHotspot(cursor);
+      std::make_unique<SkBitmap>(wm::GetCursorBitmap(cursor));
+  gfx::Point cursor_hotspot = wm::GetCursorHotspot(cursor);
 
   if (cursor_bitmap->isNull()) {
     LOG(ERROR) << "Failed to load bitmap for cursor type:"

@@ -97,6 +97,12 @@ class MODULES_EXPORT CanvasPath : public GarbageCollectedMixin,
       double double_height,
       const HeapVector<Member<V8UnionDOMPointInitOrUnrestrictedDouble>>& radii,
       ExceptionState& exception_state);
+  void roundRect(double double_x,
+                 double double_y,
+                 double double_width,
+                 double double_height,
+                 const Member<V8UnionDOMPointInitOrUnrestrictedDouble>& radius,
+                 ExceptionState& exception_state);
 
   bool IsTransformInvertible() const;
 
@@ -109,6 +115,7 @@ class MODULES_EXPORT CanvasPath : public GarbageCollectedMixin,
     return identifiability_study_helper_.GetToken();
   }
 
+  virtual ExecutionContext* GetTopExecutionContext() const = 0;
   virtual CanvasRenderingContextHost* GetCanvasRenderingContextHost() {
     return nullptr;
   }

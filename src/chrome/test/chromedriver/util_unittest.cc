@@ -2,7 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <memory>
 #include <string>
+#include <utility>
 
 #include "base/base64.h"
 #include "base/files/file_path.h"
@@ -66,7 +68,7 @@ class DictInitBool {
  public:
   explicit DictInitBool(bool v) : init_value(v) {}
   void operator()(base::DictionaryValue* dict) {
-    dict->SetBoolean(key, init_value);
+    dict->GetDict().Set(key, init_value);
   }
 };
 
@@ -76,7 +78,7 @@ class DictInitInt {
  public:
   explicit DictInitInt(int v) : init_value(v) {}
   void operator()(base::DictionaryValue* dict) {
-    dict->SetInteger(key, init_value);
+    dict->GetDict().Set(key, init_value);
   }
 };
 
@@ -86,7 +88,7 @@ class DictInitDouble {
  public:
   explicit DictInitDouble(double v) : init_value(v) {}
   void operator()(base::DictionaryValue* dict) {
-    dict->SetDoubleKey(key, init_value);
+    dict->GetDict().Set(key, init_value);
   }
 };
 
@@ -96,7 +98,7 @@ class DictInitString {
  public:
   explicit DictInitString(const std::string& v) : init_value(v) {}
   void operator()(base::DictionaryValue* dict) {
-    dict->SetString(key, init_value);
+    dict->GetDict().Set(key, init_value);
   }
 };
 
@@ -157,10 +159,10 @@ TEST(GetOptionalValue, DictionaryNone) {
 }
 
 TEST(GetOptionalValue, ListNone) {
-  base::ListValue lv;
-  const base::ListValue* tmp = &lv;
-  TestGetOptionalValue<const base::ListValue*>(GetOptionalList, DictNoInit, tmp,
-                                               tmp, true, false);
+  base::Value::List lv;
+  const base::Value::List* tmp = &lv;
+  TestGetOptionalValue<const base::Value::List*>(GetOptionalList, DictNoInit,
+                                                 tmp, tmp, true, false);
 }
 
 TEST(GetOptionalValue, SafeIntNone) {
@@ -196,10 +198,10 @@ TEST(GetOptionalValue, DictionaryNull) {
 }
 
 TEST(GetOptionalValue, ListNull) {
-  base::ListValue lv;
-  const base::ListValue* tmp = &lv;
-  TestGetOptionalValue<const base::ListValue*>(GetOptionalList, DictInitNull,
-                                               tmp, tmp, false, false);
+  base::Value::List lv;
+  const base::Value::List* tmp = &lv;
+  TestGetOptionalValue<const base::Value::List*>(GetOptionalList, DictInitNull,
+                                                 tmp, tmp, false, false);
 }
 
 TEST(GetOptionalValue, SafeIntNull) {
@@ -235,9 +237,9 @@ TEST(GetOptionalValue, DictionaryWrongType) {
 }
 
 TEST(GetOptionalValue, ListWrongType) {
-  base::ListValue lv;
-  const base::ListValue* tmp = &lv;
-  TestGetOptionalValue<const base::ListValue*>(
+  base::Value::List lv;
+  const base::Value::List* tmp = &lv;
+  TestGetOptionalValue<const base::Value::List*>(
       GetOptionalList, DictInitString("test"), tmp, tmp, false, false);
 }
 
@@ -268,14 +270,12 @@ TEST(GetOptionalValue, StringNoConversion) {
 
 TEST(GetOptionalValue, DictionaryNoConversion) {
   base::DictionaryValue dv1;
-  dv1.SetString("dv", "1");
+  dv1.GetDict().Set("dv", "1");
   base::DictionaryValue dv2;
-  dv2.SetString("dv", "2");
-
-  std::unique_ptr<base::DictionaryValue> params(dv1.DeepCopy());
+  dv2.GetDict().Set("dv", "2");
 
   base::DictionaryValue dict;
-  dict.SetDictionary(key, std::move(params));
+  dict.GetDict().Set(key, dv1.Clone());
   const base::DictionaryValue* res = &dv2;
   bool has_value;
   bool has_dict = GetOptionalDictionary(&dict, key, &res, &has_value);
@@ -287,23 +287,22 @@ TEST(GetOptionalValue, DictionaryNoConversion) {
 }
 
 TEST(GetOptionalValue, ListNoConversion) {
-  base::ListValue lv1;
+  base::Value::List lv1;
   lv1.Append("1");
-  base::ListValue lv2;
+  base::Value::List lv2;
   lv2.Append("2");
 
-  base::Value params = lv1.Clone();
+  base::Value::List params = lv1.Clone();
 
-  base::DictionaryValue dict;
-  dict.SetPath(key, std::move(params));
-  const base::ListValue* res = &lv2;
+  base::Value dict(base::Value::Type::DICT);
+  dict.GetDict().SetByDottedPath(key, std::move(params));
+  const base::Value::List* res = &lv2;
   bool has_value;
-  bool has_dict = GetOptionalList(&dict, key, &res, &has_value);
+  bool has_dict = GetOptionalList(&base::Value::AsDictionaryValue(dict), key,
+                                  &res, &has_value);
   ASSERT_EQ(has_value, true);
   ASSERT_EQ(has_dict, true);
-  // Cast to base class to ensure print properly if different
-  ASSERT_EQ(static_cast<const base::Value&>(*res),
-            static_cast<const base::Value&>(lv1));
+  ASSERT_EQ(*res, lv1);
 }
 
 TEST(GetOptionalValue, SafeIntNoConversion) {

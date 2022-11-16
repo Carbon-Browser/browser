@@ -4,7 +4,6 @@
 
 #include "third_party/blink/renderer/platform/loader/fetch/url_loader/request_conversion.h"
 
-#include "media/media_buildflags.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/system/data_pipe.h"
@@ -21,8 +20,7 @@
 #include "services/network/public/mojom/data_pipe_getter.mojom.h"
 #include "services/network/public/mojom/trust_tokens.mojom-blink.h"
 #include "services/network/public/mojom/trust_tokens.mojom.h"
-#include "third_party/blink/public/common/buildflags.h"
-#include "third_party/blink/public/common/features.h"
+#include "third_party/blink/public/common/loader/network_utils.h"
 #include "third_party/blink/public/mojom/blob/blob.mojom-blink.h"
 #include "third_party/blink/public/mojom/blob/blob.mojom.h"
 #include "third_party/blink/public/mojom/fetch/fetch_api_request.mojom-blink.h"
@@ -39,31 +37,10 @@
 #include "third_party/blink/renderer/platform/network/wrapped_data_pipe_getter.h"
 
 namespace blink {
-
-const char* ImageAcceptHeader() {
-#if BUILDFLAG(ENABLE_JXL_DECODER) && BUILDFLAG(ENABLE_AV1_DECODER)
-  if (base::FeatureList::IsEnabled(blink::features::kJXL)) {
-    return "image/jxl,image/avif,image/webp,image/apng,image/svg+xml,image/*,*/"
-           "*;q=0.8";
-  } else {
-    return "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8";
-  }
-#elif BUILDFLAG(ENABLE_JXL_DECODER)
-  if (base::FeatureList::IsEnabled(blink::features::kJXL)) {
-    return "image/jxl,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8";
-  } else {
-    return "image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8";
-  }
-#elif BUILDFLAG(ENABLE_AV1_DECODER)
-  return "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8";
-#else
-  return "image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8";
-#endif
-}
 namespace {
 
 constexpr char kStylesheetAcceptHeader[] = "text/css,*/*;q=0.1";
-constexpr char kWebBundleAcceptHeader[] = "application/webbundle;v=b1";
+constexpr char kWebBundleAcceptHeader[] = "application/webbundle;v=b2";
 
 // TODO(yhirano): Unify these with variables in
 // content/public/common/content_constants.h.
@@ -139,6 +116,7 @@ mojom::ResourceType RequestContextToResourceType(
       return mojom::ResourceType::kObject;
 
     // Ping
+    case mojom::blink::RequestContextType::ATTRIBUTION_SRC:
     case mojom::blink::RequestContextType::BEACON:
     case mojom::blink::RequestContextType::PING:
       return mojom::ResourceType::kPing;
@@ -254,8 +232,7 @@ void PopulateResourceRequestBody(const EncodedFormData& src,
 }  // namespace
 
 scoped_refptr<network::ResourceRequestBody> NetworkResourceRequestBodyFor(
-    ResourceRequestBody src_body,
-    bool allow_http1_for_streaming_upload) {
+    ResourceRequestBody src_body) {
   scoped_refptr<network::ResourceRequestBody> dest_body;
   if (const EncodedFormData* form_body = src_body.FormBody().get()) {
     dest_body = base::MakeRefCounted<network::ResourceRequestBody>();
@@ -268,8 +245,9 @@ scoped_refptr<network::ResourceRequestBody> NetworkResourceRequestBodyFor(
     dest_body->SetToChunkedDataPipe(
         ToCrossVariantMojoType(std::move(stream_body)),
         network::ResourceRequestBody::ReadOnlyOnce(true));
-    dest_body->SetAllowHTTP1ForStreamingUpload(
-        allow_http1_for_streaming_upload);
+  }
+  if (dest_body) {
+    dest_body->SetAllowHTTP1ForStreamingUpload(false);
   }
   return dest_body;
 }
@@ -278,7 +256,7 @@ void PopulateResourceRequest(const ResourceRequestHead& src,
                              ResourceRequestBody src_body,
                              network::ResourceRequest* dest) {
   dest->method = src.HttpMethod().Latin1();
-  dest->url = src.Url();
+  dest->url = GURL(src.Url());
   dest->site_for_cookies = src.SiteForCookies();
   dest->upgrade_if_insecure = src.UpgradeIfInsecure();
   dest->is_revalidating = src.IsRevalidating();
@@ -299,6 +277,13 @@ void PopulateResourceRequest(const ResourceRequestHead& src,
   } else {
     dest->request_initiator = src.RequestorOrigin()->ToUrlOrigin();
   }
+
+  DCHECK(dest->navigation_redirect_chain.empty());
+  dest->navigation_redirect_chain.reserve(src.NavigationRedirectChain().size());
+  for (const KURL& url : src.NavigationRedirectChain()) {
+    dest->navigation_redirect_chain.push_back(GURL(url));
+  }
+
   if (src.IsolatedWorldOrigin()) {
     dest->isolated_world_origin = src.IsolatedWorldOrigin()->ToUrlOrigin();
   }
@@ -332,8 +317,6 @@ void PopulateResourceRequest(const ResourceRequestHead& src,
                          .GetLoadFlagsForWebUrlRequest();
   dest->recursive_prefetch_token = src.RecursivePrefetchToken();
   dest->priority = ConvertWebKitPriorityToNetPriority(src.Priority());
-  dest->should_reset_appcache = src.ShouldResetAppCache();
-  dest->is_external_request = src.IsExternalRequest();
   dest->cors_preflight_policy = src.CorsPreflightPolicy();
   dest->skip_service_worker = src.GetSkipServiceWorker();
   dest->mode = src.GetMode();
@@ -344,7 +327,7 @@ void PopulateResourceRequest(const ResourceRequestHead& src,
   if (src.GetWebBundleTokenParams().has_value()) {
     dest->web_bundle_token_params =
         absl::make_optional(network::ResourceRequest::WebBundleTokenParams(
-            src.GetWebBundleTokenParams()->bundle_url,
+            GURL(src.GetWebBundleTokenParams()->bundle_url),
             src.GetWebBundleTokenParams()->token,
             ToCrossVariantMojoType(
                 src.GetWebBundleTokenParams()->CloneHandle())));
@@ -367,9 +350,6 @@ void PopulateResourceRequest(const ResourceRequestHead& src,
   dest->has_user_gesture = src.HasUserGesture();
   dest->enable_load_timing = true;
   dest->enable_upload_progress = src.ReportUploadProgress();
-  // TODO(ryansturm): Remove dest->previews_state once it is no
-  // longer used in a network delegate. https://crbug.com/842233
-  dest->previews_state = static_cast<int>(src.GetPreviewsState());
   dest->throttling_profile_id = src.GetDevToolsToken();
   dest->trust_token_params = ConvertTrustTokenParams(src.TrustTokenParams());
 
@@ -394,8 +374,7 @@ void PopulateResourceRequest(const ResourceRequestHead& src,
 
   dest->is_favicon = src.IsFavicon();
 
-  dest->request_body = NetworkResourceRequestBodyFor(
-      std::move(src_body), src.AllowHTTP1ForStreamingUpload());
+  dest->request_body = NetworkResourceRequestBodyFor(std::move(src_body));
   if (dest->request_body) {
     DCHECK_NE(dest->method, net::HttpRequestHeaders::kGetMethod);
     DCHECK_NE(dest->method, net::HttpRequestHeaders::kHeadMethod);
@@ -410,7 +389,7 @@ void PopulateResourceRequest(const ResourceRequestHead& src,
   } else if (request_destination ==
              network::mojom::RequestDestination::kImage) {
     dest->headers.SetHeaderIfMissing(net::HttpRequestHeaders::kAccept,
-                                     ImageAcceptHeader());
+                                     network_utils::ImageAcceptHeader());
   } else if (request_destination ==
              network::mojom::RequestDestination::kWebBundle) {
     dest->headers.SetHeader(net::HttpRequestHeaders::kAccept,
@@ -421,6 +400,8 @@ void PopulateResourceRequest(const ResourceRequestHead& src,
     dest->headers.SetHeaderIfMissing(net::HttpRequestHeaders::kAccept,
                                      network::kDefaultAcceptHeaderValue);
   }
+
+  dest->original_destination = src.GetOriginalDestination();
 }
 
 }  // namespace blink

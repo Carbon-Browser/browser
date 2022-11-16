@@ -30,6 +30,7 @@
 
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/time/time.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/platform/graphics/decoding_image_generator.h"
 #include "third_party/blink/renderer/platform/graphics/image_decoding_store.h"
@@ -39,6 +40,7 @@
 #include "third_party/blink/renderer/platform/image-decoders/segment_reader.h"
 #include "third_party/blink/renderer/platform/instrumentation/histogram.h"
 #include "third_party/blink/renderer/platform/wtf/shared_buffer.h"
+#include "third_party/skia/include/core/SkColorSpace.h"
 #include "third_party/skia/include/core/SkImage.h"
 
 namespace blink {
@@ -127,7 +129,7 @@ struct DeferredFrameData {
   DeferredFrameData& operator=(const DeferredFrameData&) = delete;
 
   ImageOrientation orientation_;
-  IntSize density_corrected_size_;
+  gfx::Size density_corrected_size_;
   base::TimeDelta duration_;
   bool is_received_;
 };
@@ -300,11 +302,11 @@ bool DeferredImageDecoder::HasEmbeddedColorProfile() const {
                            : has_embedded_color_profile_;
 }
 
-IntSize DeferredImageDecoder::Size() const {
+gfx::Size DeferredImageDecoder::Size() const {
   return metadata_decoder_ ? metadata_decoder_->Size() : size_;
 }
 
-IntSize DeferredImageDecoder::FrameSizeAtIndex(wtf_size_t index) const {
+gfx::Size DeferredImageDecoder::FrameSizeAtIndex(wtf_size_t index) const {
   // FIXME: LocalFrame size is assumed to be uniform. This might not be true for
   // future supported codecs.
   return metadata_decoder_ ? metadata_decoder_->FrameSizeAtIndex(index) : size_;
@@ -354,8 +356,8 @@ base::TimeDelta DeferredImageDecoder::FrameDurationAtIndex(
   // possible. We follow Firefox's behavior and use a duration of 100 ms for any
   // frames that specify a duration of <= 10 ms. See <rdar://problem/7689300>
   // and <http://webkit.org/b/36082> for more information.
-  if (duration <= base::TimeDelta::FromMilliseconds(10))
-    duration = base::TimeDelta::FromMilliseconds(100);
+  if (duration <= base::Milliseconds(10))
+    duration = base::Milliseconds(100);
 
   return duration;
 }
@@ -369,7 +371,7 @@ ImageOrientation DeferredImageDecoder::OrientationAtIndex(
   return ImageOrientationEnum::kDefault;
 }
 
-IntSize DeferredImageDecoder::DensityCorrectedSizeAtIndex(
+gfx::Size DeferredImageDecoder::DensityCorrectedSizeAtIndex(
     wtf_size_t index) const {
   if (metadata_decoder_)
     return metadata_decoder_->DensityCorrectedSize();
@@ -397,8 +399,8 @@ void DeferredImageDecoder::ActivateLazyDecoding() {
       metadata_decoder_->RepetitionCount() == kAnimationNone ||
       (all_data_received_ && metadata_decoder_->FrameCount() == 1u);
   const SkISize decoded_size =
-      SkISize::Make(metadata_decoder_->DecodedSize().Width(),
-                    metadata_decoder_->DecodedSize().Height());
+      SkISize::Make(metadata_decoder_->DecodedSize().width(),
+                    metadata_decoder_->DecodedSize().height());
   frame_generator_ = ImageFrameGenerator::Create(
       decoded_size, !is_single_frame, metadata_decoder_->GetColorBehavior(),
       metadata_decoder_->GetSupportedDecodeSizes());
@@ -465,7 +467,7 @@ void DeferredImageDecoder::PrepareLazyDecodedFrames() {
   }
 }
 
-bool DeferredImageDecoder::HotSpot(IntPoint& hot_spot) const {
+bool DeferredImageDecoder::HotSpot(gfx::Point& hot_spot) const {
   if (metadata_decoder_)
     return metadata_decoder_->HotSpot(hot_spot);
   if (has_hot_spot_)

@@ -12,9 +12,9 @@
 #include <sys/types.h>
 
 #include "base/check_op.h"
-#include "base/cxx17_backports.h"
 #include "base/mac/scoped_mach_port.h"
 #include "base/notreached.h"
+#include "base/numerics/safe_conversions.h"
 #include "base/process/process_metrics.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
@@ -29,7 +29,7 @@ namespace {
 // system or the empty string on failure.
 std::string GetSysctlValue(const char* key_name) {
   char value[256];
-  size_t len = base::size(value);
+  size_t len = std::size(value);
   if (sysctlbyname(key_name, &value, &len, nullptr, 0) == 0) {
     DCHECK_GE(len, 1u);
     DCHECK_EQ('\0', value[len - 1]);
@@ -116,7 +116,7 @@ std::string SysInfo::GetIOSBuildNumber() {
 }
 
 // static
-int64_t SysInfo::AmountOfPhysicalMemoryImpl() {
+uint64_t SysInfo::AmountOfPhysicalMemoryImpl() {
   struct host_basic_info hostinfo;
   mach_msg_type_number_t count = HOST_BASIC_INFO_COUNT;
   base::mac::ScopedMachSendRight host(mach_host_self());
@@ -127,17 +127,17 @@ int64_t SysInfo::AmountOfPhysicalMemoryImpl() {
     return 0;
   }
   DCHECK_EQ(HOST_BASIC_INFO_COUNT, count);
-  return static_cast<int64_t>(hostinfo.max_mem);
+  return hostinfo.max_mem;
 }
 
 // static
-int64_t SysInfo::AmountOfAvailablePhysicalMemoryImpl() {
+uint64_t SysInfo::AmountOfAvailablePhysicalMemoryImpl() {
   SystemMemoryInfoKB info;
   if (!GetSystemMemoryInfo(&info))
     return 0;
   // We should add inactive file-backed memory also but there is no such
   // information from iOS unfortunately.
-  return static_cast<int64_t>(info.free + info.speculative) * 1024;
+  return checked_cast<uint64_t>(info.free + info.speculative) * 1024;
 }
 
 // static

@@ -51,44 +51,21 @@ AutoAdvancingVirtualTimeDomain::~AutoAdvancingVirtualTimeDomain() {
   AutoAdvancingVirtualTimeDomain::g_time_domain_ = nullptr;
 }
 
-base::sequence_manager::LazyNow AutoAdvancingVirtualTimeDomain::CreateLazyNow()
-    const {
-  base::AutoLock lock(now_ticks_lock_);
-  return base::sequence_manager::LazyNow(now_ticks_);
-}
-
-base::TimeTicks AutoAdvancingVirtualTimeDomain::Now() const {
+base::TimeTicks AutoAdvancingVirtualTimeDomain::NowTicks() const {
   base::AutoLock lock(now_ticks_lock_);
   return now_ticks_;
 }
 
-absl::optional<base::TimeDelta>
-AutoAdvancingVirtualTimeDomain::DelayTillNextTask(
-    base::sequence_manager::LazyNow* lazy_now) {
-  absl::optional<base::TimeTicks> run_time = NextScheduledRunTime();
-  if (!run_time)
-    return absl::nullopt;
-
-  // We may have advanced virtual time past the next task when a
-  // WebScopedVirtualTimePauser unpauses.
-  if (run_time <= Now())
-    return base::TimeDelta();
-
-  // Rely on MaybeFastForwardToNextTask to be called to advance
-  // virtual time.
-  return absl::nullopt;
-}
-
-bool AutoAdvancingVirtualTimeDomain::MaybeFastForwardToNextTask(
+bool AutoAdvancingVirtualTimeDomain::MaybeFastForwardToWakeUp(
+    absl::optional<base::sequence_manager::WakeUp> wakeup,
     bool quit_when_idle_requested) {
   if (!can_advance_virtual_time_)
     return false;
 
-  absl::optional<base::TimeTicks> run_time = NextScheduledRunTime();
-  if (!run_time)
+  if (!wakeup)
     return false;
 
-  if (MaybeAdvanceVirtualTime(*run_time)) {
+  if (MaybeAdvanceVirtualTime(wakeup->time)) {
     task_starvation_count_ = 0;
     return true;
   }
@@ -96,24 +73,11 @@ bool AutoAdvancingVirtualTimeDomain::MaybeFastForwardToNextTask(
   return false;
 }
 
-void AutoAdvancingVirtualTimeDomain::SetNextDelayedDoWork(
-    base::sequence_manager::LazyNow* lazy_now,
-    base::TimeTicks run_time) {
-  // Ignore cancelation since no delayed work is actually being posted.
-  if (run_time == base::TimeTicks::Max())
-    return;
-
-  // Avoid posting pointless DoWorks, i.e. if the time domain has more then one
-  // scheduled wake up then we don't need to do anything.
-  if (can_advance_virtual_time_ && NumberOfScheduledWakeUps() == 1u)
-    RequestDoWork();
-}
-
 void AutoAdvancingVirtualTimeDomain::SetCanAdvanceVirtualTime(
     bool can_advance_virtual_time) {
   can_advance_virtual_time_ = can_advance_virtual_time;
   if (can_advance_virtual_time_)
-    RequestDoWork();
+    NotifyPolicyChanged();
 }
 
 void AutoAdvancingVirtualTimeDomain::SetMaxVirtualTimeTaskStarvationCount(
@@ -141,7 +105,7 @@ bool AutoAdvancingVirtualTimeDomain::MaybeAdvanceVirtualTime(
     requested_next_virtual_time_ = base::TimeTicks();
   }
 
-  if (new_virtual_time <= Now())
+  if (new_virtual_time <= NowTicks())
     return false;
 
   {
@@ -169,13 +133,13 @@ void AutoAdvancingVirtualTimeDomain::DidProcessTask(
 
   // Delayed tasks are being excessively starved, so allow virtual time to
   // advance.
-  absl::optional<base::TimeTicks> run_time = NextScheduledRunTime();
-  if (run_time && MaybeAdvanceVirtualTime(*run_time))
+  auto wake_up = helper_->GetNextWakeUp();
+  if (wake_up && MaybeAdvanceVirtualTime(wake_up->time))
     task_starvation_count_ = 0;
 }
 
 base::Time AutoAdvancingVirtualTimeDomain::Date() const {
-  base::TimeDelta offset = Now() - initial_time_ticks_;
+  base::TimeDelta offset = NowTicks() - initial_time_ticks_;
   return initial_time_ + offset;
 }
 
@@ -190,7 +154,7 @@ base::TimeTicks AutoAdvancingVirtualTimeDomain::GetVirtualTimeTicks() {
   // loading |g_time_domain_|.
   std::atomic_thread_fence(std::memory_order_acquire);
   DCHECK(AutoAdvancingVirtualTimeDomain::g_time_domain_);
-  return AutoAdvancingVirtualTimeDomain::g_time_domain_->Now();
+  return AutoAdvancingVirtualTimeDomain::g_time_domain_->NowTicks();
 }
 
 // static

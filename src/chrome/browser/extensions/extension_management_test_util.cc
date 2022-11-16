@@ -80,15 +80,14 @@ void ExtensionManagementPrefUpdaterBase::SetBlocklistedByDefault(bool value) {
 
 void ExtensionManagementPrefUpdaterBase::
     ClearInstallationModesForIndividualExtensions() {
-  for (base::DictionaryValue::Iterator it(*pref_); !it.IsAtEnd();
-       it.Advance()) {
-    DCHECK(it.value().is_dict());
-    if (it.key() != schema::kWildcard) {
-      DCHECK(crx_file::id_util::IdIsValid(it.key()));
+  for (auto it : pref_->DictItems()) {
+    DCHECK(it.second.is_dict());
+    if (it.first != schema::kWildcard) {
+      DCHECK(crx_file::id_util::IdIsValid(it.first));
       RemoveDictionaryPath(pref_.get(),
-                           make_path(it.key(), schema::kInstallationMode));
+                           make_path(it.first, schema::kInstallationMode));
       RemoveDictionaryPath(pref_.get(),
-                           make_path(it.key(), schema::kUpdateUrl));
+                           make_path(it.first, schema::kUpdateUrl));
     }
   }
 }
@@ -325,7 +324,8 @@ void ExtensionManagementPrefUpdaterBase::AddStringToList(
     list_value_weak = list_value.get();
     pref_->Set(path, std::move(list_value));
   }
-  CHECK(!base::Contains(list_value_weak->GetList(), base::Value(str)));
+  CHECK(
+      !base::Contains(list_value_weak->GetListDeprecated(), base::Value(str)));
   list_value_weak->Append(str);
 }
 
@@ -344,9 +344,10 @@ ExtensionManagementPolicyUpdater::ExtensionManagementPolicyUpdater(
     : provider_(policy_provider), policies_(new policy::PolicyBundle) {
   policies_->CopyFrom(provider_->policies());
   const base::Value* policy_value =
-      policies_->Get(policy::PolicyNamespace(policy::POLICY_DOMAIN_CHROME,
-                                             std::string()))
-          .GetValue(policy::key::kExtensionSettings);
+      policies_
+          ->Get(policy::PolicyNamespace(policy::POLICY_DOMAIN_CHROME,
+                                        std::string()))
+          .GetValue(policy::key::kExtensionSettings, base::Value::Type::DICT);
   const base::DictionaryValue* dict_value = nullptr;
   if (policy_value && policy_value->GetAsDictionary(&dict_value))
     SetPref(dict_value->DeepCopy());

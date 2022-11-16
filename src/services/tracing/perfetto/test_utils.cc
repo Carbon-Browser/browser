@@ -351,9 +351,9 @@ MockProducerHost::MockProducerHost(
   mojo::PendingRemote<mojom::ProducerHost> host_remote;
   auto client_receiver = client.InitWithNewPipeAndPassReceiver();
   Initialize(std::move(client), service->GetService(), producer_name_,
-             static_cast<MojoSharedMemory*>(
+             static_cast<ChromeBaseSharedMemory*>(
                  producer_client->shared_memory_for_testing())
-                 ->Clone(),
+                 ->CloneRegion(),
              PerfettoProducer::kSMBPageSizeBytes);
   receiver_.Bind(host_remote.InitWithNewPipeAndPassReceiver());
   producer_client->BindClientAndHostPipesForTesting(std::move(client_receiver),
@@ -441,9 +441,10 @@ void TracingUnitTest::SetUp() {
   setup_called_ = true;
 
   // Also tell PerfettoTracedProcess to use the current task environment.
-  PerfettoTracedProcess::ResetTaskRunnerForTesting(
+  test_handle_ = PerfettoTracedProcess::SetupForTesting(
       base::ThreadTaskRunnerHandle::Get());
-  PerfettoTracedProcess::Get()->ClearDataSourcesForTesting();
+  PerfettoTracedProcess::Get()->OnThreadPoolAvailable(
+      /* enable_consumer */ true);
 
   // Wait for any posted construction tasks to execute.
   RunUntilIdle();
@@ -463,6 +464,7 @@ void TracingUnitTest::TearDown() {
   PerfettoTracedProcess::Get()->GetTaskRunner()->ResetTaskRunnerForTesting(
       nullptr);
   PerfettoTracedProcess::Get()->ClearDataSourcesForTesting();
+  test_handle_.reset();
 }
 
 }  // namespace tracing

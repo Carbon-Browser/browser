@@ -69,13 +69,21 @@ class COMPONENT_EXPORT(CHROMEOS_METRICS) LoginEventRecorder {
     // Returns true on successful conversion.
     bool UptimeDouble(double* result) const;
 
-    void RecordStats(const std::string& name) const;
+    // Stores stats to 'type-name' file with the given |name|.
+    // I.e. '/tmp/uptime-logout-started' and '/tmp/disk-logout-started' for
+    // name='logout-started'.
+    //
+    // When |write_flag_file| is true, also creates 'stats-name.written' flag
+    // file to signal that stats were appended.
+    // I.e. '/tmp/stats-logout-started.written' for name='logout-started'.
+    void RecordStats(const std::string& name, bool write_flag_file) const;
     void RecordStatsWithCallback(const std::string& name,
+                                 bool write_flag_file,
                                  base::OnceClosure callback) const;
 
    private:
     // Runs asynchronously when RecordStats(WithCallback) is called.
-    void RecordStatsAsync(const std::string& name) const;
+    void RecordStatsAsync(const std::string& name, bool write_flag_file) const;
 
     std::string uptime_;
     std::string disk_;
@@ -133,6 +141,13 @@ class COMPONENT_EXPORT(CHROMEOS_METRICS) LoginEventRecorder {
                         const std::string uma_name,
                         const std::string uma_prefix);
 
+  // Stores a copy of the events to be retrieved by tests.
+  // Also all future events will have stored copies for testing.
+  void PrepareEventCollectionForTesting();
+
+  // Returns list of all events collected.
+  const std::vector<TimeMarker>& GetCollectedLoginEventsForTesting();
+
  private:
   void AddMarker(std::vector<TimeMarker>* vector, TimeMarker&& marker);
 
@@ -143,9 +158,19 @@ class COMPONENT_EXPORT(CHROMEOS_METRICS) LoginEventRecorder {
   base::OnceCallback<void(std::vector<TimeMarker>)> callback_;
   scoped_refptr<base::SequencedTaskRunner> task_runner_;
 
+  // This list is never cleared. It has copy of all the login events that
+  // login_time_markers_ had when PrepareEventCollectionForTesting() was
+  // called and all login avents since that moment.
+  absl::optional<std::vector<TimeMarker>> login_time_markers_for_testing_;
+
   base::WeakPtrFactory<LoginEventRecorder> weak_ptr_factory_{this};
 };
 
 }  // namespace chromeos
+
+// TODO(https://crbug.com/1164001): remove after the migration is finished.
+namespace ash {
+using ::chromeos::LoginEventRecorder;
+}
 
 #endif  // CHROMEOS_METRICS_LOGIN_EVENT_RECORDER_H_

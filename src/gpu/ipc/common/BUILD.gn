@@ -100,7 +100,7 @@ source_set("ipc_common_sources") {
     ]
     libs = [ "d3d11.lib" ]
   }
-  if (is_linux || is_chromeos || use_ozone) {
+  if (use_ozone) {
     sources += [
       "gpu_memory_buffer_impl_native_pixmap.cc",
       "gpu_memory_buffer_impl_native_pixmap.h",
@@ -153,7 +153,6 @@ source_set("ipc_common_sources") {
       "gpu_memory_buffer_impl_io_surface.cc",
       "gpu_memory_buffer_impl_io_surface.h",
     ]
-    deps += [ "//ui/gfx:gfx_io_surface_hdr_metadata" ]
     frameworks = [ "IOSurface.framework" ]
   }
 
@@ -334,14 +333,12 @@ mojom("interfaces") {
     "//mojo/public/mojom/base",
     "//ui/gfx/geometry/mojom",
     "//ui/gfx/mojom",
+    "//ui/gl/mojom",
   ]
   enabled_features = []
   if (enable_vulkan) {
     public_deps += [ ":vulkan_interface" ]
     enabled_features += [ "supports_vulkan" ]
-  }
-  if (use_x11) {
-    enabled_features += [ "use_x11" ]
   }
   if (is_win || is_chromeos || is_chromeos_lacros) {
     enabled_features += [ "has_gpu_revision_info" ]

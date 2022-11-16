@@ -17,6 +17,7 @@
 #include "services/network/public/mojom/web_client_hints_types.mojom-shared.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/frame/frame_policy.h"
+#include "third_party/blink/public/common/navigation/impression.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
 #include "third_party/blink/public/mojom/blob/blob_url_store.mojom-shared.h"
@@ -24,12 +25,11 @@
 #include "third_party/blink/public/mojom/frame/policy_container.mojom-forward.h"
 #include "third_party/blink/public/mojom/frame/triggering_event_info.mojom-shared.h"
 #include "third_party/blink/public/platform/cross_variant_mojo_util.h"
-#include "third_party/blink/public/platform/modules/service_worker/web_service_worker_network_provider.h"
 #include "third_party/blink/public/platform/web_common.h"
 #include "third_party/blink/public/platform/web_content_security_policy_struct.h"
 #include "third_party/blink/public/platform/web_data.h"
+#include "third_party/blink/public/platform/web_fenced_frame_reporting.h"
 #include "third_party/blink/public/platform/web_http_body.h"
-#include "third_party/blink/public/platform/web_impression.h"
 #include "third_party/blink/public/platform/web_navigation_body_loader.h"
 #include "third_party/blink/public/platform/web_policy_container.h"
 #include "third_party/blink/public/platform/web_security_origin.h"
@@ -44,7 +44,6 @@
 #include "third_party/blink/public/web/web_navigation_policy.h"
 #include "third_party/blink/public/web/web_navigation_timings.h"
 #include "third_party/blink/public/web/web_navigation_type.h"
-#include "third_party/blink/public/web/web_origin_policy.h"
 
 #if INSIDE_BLINK
 #include "base/memory/scoped_refptr.h"
@@ -58,6 +57,7 @@ namespace blink {
 
 class KURL;
 class WebDocumentLoader;
+class WebServiceWorkerNetworkProvider;
 
 // This structure holds all information collected by Blink when
 // navigation is being initiated.
@@ -107,6 +107,13 @@ struct BLINK_EXPORT WebNavigationInfo {
   // by the window.open'd frame.
   bool is_opener_navigation = false;
 
+  // Whether this is a navigation to _unfencedTop, i.e. to the top-level frame
+  // from a renderer process that does not get a handle to the frame.
+  // The browser should ignore the specified target frame and pick (and
+  // validate) the top-level frame instead.
+  // TODO(crbug.com/1315802): Refactor _unfencedTop handling.
+  bool is_unfenced_top_navigation = false;
+
   // Event information. See TriggeringEventInfo.
   blink::mojom::TriggeringEventInfo triggering_event_info =
       blink::mojom::TriggeringEventInfo::kUnknown;
@@ -149,11 +156,7 @@ struct BLINK_EXPORT WebNavigationInfo {
   // Optional impression associated with this navigation. This is attached when
   // a navigation results from a click on an anchor tag that has conversion
   // measurement attributes.
-  absl::optional<WebImpression> impression;
-
-  // The navigation initiator's address space.
-  network::mojom::IPAddressSpace initiator_address_space =
-      network::mojom::IPAddressSpace::kUnknown;
+  absl::optional<Impression> impression;
 
   // The frame policy specified by the frame owner element.
   // For top-level window with no opener, this is the default lax FramePolicy.
@@ -321,15 +324,6 @@ struct BLINK_EXPORT WebNavigationParams {
   // taking into account the origin computed by the renderer.
   StorageKey storage_key;
 
-  // The sandbox flags to apply to the new document. This is the union of:
-  // - the frame's current sandbox attribute, taken when the navigation started.
-  // - the navigation response's CSP sandbox flags.
-  // - the result of CSP embedded enforcement required CSP sandbox flags.
-  // - Various edge cases: MHTML document, error pages, ...
-  // See content/browser/renderer_host/sandbox_flags.md
-  network::mojom::WebSandboxFlags sandbox_flags =
-      network::mojom::WebSandboxFlags::kAll;
-
   // The devtools token for this navigation. See DocumentLoader
   // for details.
   base::UnguessableToken devtools_navigation_token;
@@ -353,14 +347,10 @@ struct BLINK_EXPORT WebNavigationParams {
   bool is_browser_initiated = false;
   // Whether the document should be able to access local file:// resources.
   bool grant_load_local_resources = false;
-  // The previews state which should be used for this navigation.
-  PreviewsState previews_state = PreviewsTypes::kPreviewsUnspecified;
   // The service worker network provider to be used in the new
   // document.
   std::unique_ptr<blink::WebServiceWorkerNetworkProvider>
       service_worker_network_provider;
-  // The AppCache host id for this navigation.
-  base::UnguessableToken appcache_host_id;
 
   // This is `true` only for commit requests coming from
   // `RenderFrameImpl::SynchronouslyConmmitAboutBlankForBug778318`.
@@ -395,8 +385,6 @@ struct BLINK_EXPORT WebNavigationParams {
   // navigation that should be applied in the document being navigated to.
   WebVector<int> initiator_origin_trial_features;
 
-  absl::optional<WebOriginPolicy> origin_policy;
-
   // The physical URL of Web Bundle from which the document is loaded.
   // Used as an additional identifier for MemoryCache.
   WebURL web_bundle_physical_url;
@@ -421,6 +409,11 @@ struct BLINK_EXPORT WebNavigationParams {
   // https://html.spec.whatwg.org/C/#is-origin-keyed
   bool origin_agent_cluster = false;
 
+  // Whether the decision to use origin-keyed or site-keyed agent clustering
+  // (which itself is recorded in origin_agent_cluster, above) has been
+  // made based on absent Origin-Agent-Cluster http header.
+  bool origin_agent_cluster_left_as_default = true;
+
   // List of client hints enabled for top-level frame. These still need to be
   // checked against permissions policy before use.
   WebVector<network::mojom::WebClientHintsType> enabled_client_hints;
@@ -433,14 +426,42 @@ struct BLINK_EXPORT WebNavigationParams {
   // enforced on the document created by this navigation.
   std::unique_ptr<WebPolicyContainer> policy_container;
 
+  // Blink's copy of a permissions policy constructed in the browser that should
+  // take precedence over any permissions policy constructed in blink. This is
+  // useful for isolated applications, which use a different base permissions
+  // policy than blink, which uses a fully permissive policy as its base.
+  absl::optional<blink::ParsedPermissionsPolicy> permissions_policy_override;
+
   // These are used to construct a subset of the back/forward list for the
-  // appHistory API. They only have the attributes that are needed for
-  // appHistory.
-  WebVector<WebHistoryItem> app_history_back_entries;
-  WebVector<WebHistoryItem> app_history_forward_entries;
+  // window.navigation API. They only have the attributes that are needed for
+  // that API.
+  WebVector<WebHistoryItem> navigation_api_back_entries;
+  WebVector<WebHistoryItem> navigation_api_forward_entries;
 
   // List of URLs which are preloaded by HTTP Early Hints.
+  // TODO(https://crbug.com/1317936): Pass information more than URL such as
+  // request destination so that ResourceFetcher can provide more useful
+  // console messages when Early Hints preloaded resources are not used.
   WebVector<WebURL> early_hints_preloaded_resources;
+
+  // If this is a navigation to fenced frame from an interest group auction,
+  // contains URNs mapped to the ad components returned by the winning bid.
+  // Null, otherwise.
+  absl::optional<WebVector<WebURL>> ad_auction_components;
+
+  // If this is a navigation to a "opaque-ads" mode fenced frame, there might
+  // be associated reporting metadata. This is a map from destination type to
+  // reporting metadata which in turn is a map from the event type to the
+  // reporting url. Null, otherwise.
+  // https://github.com/WICG/turtledove/blob/main/Fenced_Frames_Ads_Reporting.md
+  absl::optional<WebFencedFrameReporting> fenced_frame_reporting;
+
+  // Whether the current context would be allowed to create an opaque-ads
+  //  frame (based on the browser-side calculations). See
+  // HTMLFencedFrameElement::canLoadOpaqueURL for usage and
+  // ::blink::mojom::CommitNavigationParams::ancestor_or_self_has_cspee for
+  // where the value is coming from.
+  bool ancestor_or_self_has_cspee = false;
 };
 
 }  // namespace blink

@@ -11,7 +11,6 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.support.test.InstrumentationRegistry;
 import android.support.test.internal.runner.listener.InstrumentationResultPrinter;
-import android.view.Menu;
 
 import org.hamcrest.Matchers;
 import org.junit.Assert;
@@ -34,11 +33,11 @@ import org.chromium.chrome.browser.document.ChromeLauncherActivity;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.infobar.InfoBarContainer;
 import org.chromium.chrome.browser.init.ChromeBrowserInitializer;
-import org.chromium.chrome.browser.privacy.settings.PrivacyPreferencesManagerImpl;
+import org.chromium.chrome.browser.prefetch.settings.PreloadPagesSettingsBridge;
+import org.chromium.chrome.browser.prefetch.settings.PreloadPagesState;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab.TabLaunchType;
 import org.chromium.chrome.browser.ui.appmenu.AppMenuCoordinator;
-import org.chromium.chrome.browser.ui.appmenu.AppMenuTestSupport;
 import org.chromium.chrome.test.util.ChromeApplicationTestUtils;
 import org.chromium.chrome.test.util.ChromeTabUtils;
 import org.chromium.chrome.test.util.NewTabPageTestUtils;
@@ -47,6 +46,7 @@ import org.chromium.components.embedder_support.util.UrlUtilities;
 import org.chromium.components.infobars.InfoBar;
 import org.chromium.content_public.browser.LoadUrlParams;
 import org.chromium.content_public.browser.WebContents;
+import org.chromium.content_public.browser.test.util.Coordinates;
 import org.chromium.content_public.browser.test.util.JavaScriptUtils;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
 import org.chromium.content_public.common.ContentSwitches;
@@ -142,12 +142,6 @@ public class ChromeActivityTestRule<T extends ChromeActivity> extends BaseActivi
         return super.getActivity();
     }
 
-    /** Retrieves the application Menu */
-    public Menu getMenu() throws ExecutionException {
-        return TestThreadUtils.runOnUiThreadBlocking(
-                () -> AppMenuTestSupport.getMenu(getAppMenuCoordinator()));
-    }
-
     /**
      * TODO(https://crbug.com/1146574): This only exists here because legacy ActivityTestRule
      * inherited from UiThreadTestRule. This function should be removed.
@@ -206,7 +200,11 @@ public class ChromeActivityTestRule<T extends ChromeActivity> extends BaseActivi
     public void startActivityCompletely(Intent intent) {
         launchActivity(intent);
         waitForActivityNativeInitializationComplete();
+        waitForActivityCompletelyLoaded();
+    }
 
+    /** Wait until the activity is completely loaded, and a tab is shown. */
+    public void waitForActivityCompletelyLoaded() {
         CriteriaHelper.pollUiThread(
                 () -> getActivity().getActivityTab() != null, "Tab never selected/initialized.");
         Tab tab = getActivity().getActivityTab();
@@ -249,7 +247,11 @@ public class ChromeActivityTestRule<T extends ChromeActivity> extends BaseActivi
         InstrumentationRegistry.getInstrumentation().runOnMainSync(new Runnable() {
             @Override
             public void run() {
-                PrivacyPreferencesManagerImpl.getInstance().setNetworkPredictionEnabled(enabled);
+                if (enabled) {
+                    PreloadPagesSettingsBridge.setState(PreloadPagesState.STANDARD_PRELOADING);
+                } else {
+                    PreloadPagesSettingsBridge.setState(PreloadPagesState.NO_PRELOADING);
+                }
             }
         });
     }
@@ -355,7 +357,7 @@ public class ChromeActivityTestRule<T extends ChromeActivity> extends BaseActivi
                 }
             });
         } catch (ExecutionException e) {
-            Assert.fail("Failed to create new tab");
+            throw new AssertionError("Failed to create new tab", e);
         }
         ChromeTabUtils.waitForTabPageLoaded(tab, url);
         ChromeTabUtils.waitForInteractable(tab);
@@ -418,11 +420,29 @@ public class ChromeActivityTestRule<T extends ChromeActivity> extends BaseActivi
     }
 
     /**
+     * Executes the given snippet of JavaScript code within the current tab, acting as if a user
+     * gesture has been made. Returns the result of its execution in JSON format.
+     */
+    public String runJavaScriptCodeWithUserGestureInCurrentTab(String code)
+            throws TimeoutException {
+        return JavaScriptUtils.executeJavaScriptWithUserGestureAndWaitForResult(
+                getActivity().getCurrentWebContents(), code);
+    }
+
+    /**
      * Waits till the WebContents receives the expected page scale factor
      * from the compositor and asserts that this happens.
      */
     public void assertWaitForPageScaleFactorMatch(float expectedScale) {
         ChromeApplicationTestUtils.assertWaitForPageScaleFactorMatch(getActivity(), expectedScale);
+    }
+
+    /**
+     * Waits till the WebContents receives a page scale factor different
+     * from the specified value and asserts that this happens.
+     */
+    public void assertWaitForPageScaleFactorChange(float initialScale) {
+        ChromeApplicationTestUtils.assertWaitForPageScaleFactorChange(getActivity(), initialScale);
     }
 
     public String getName() {
@@ -502,6 +522,17 @@ public class ChromeActivityTestRule<T extends ChromeActivity> extends BaseActivi
                     ((ChromeActivity) holder[0]).getActivityTab(), Matchers.notNullValue());
         }, maxTimeToPoll, CriteriaHelper.DEFAULT_POLLING_INTERVAL);
         return (T) holder[0];
+    }
+
+    /**
+     * Waits for the first frame so that the page scale factor is set. Skipping this causes
+     * flakiness when clicking DOM objects since the page scale factor might not have been set yet,
+     * and coordinates can be wrong.
+     */
+    protected void waitForFirstFrame() {
+        final Coordinates coord = Coordinates.createFor(getWebContents());
+        CriteriaHelper.pollUiThread(
+                coord::frameInfoUpdated, "FrameInfo has not been updated in time.");
     }
 
     private class ChromeUncaughtExceptionHandler implements Thread.UncaughtExceptionHandler {

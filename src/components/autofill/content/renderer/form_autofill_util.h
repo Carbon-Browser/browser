@@ -13,7 +13,6 @@
 
 #include "base/containers/flat_map.h"
 #include "base/i18n/rtl.h"
-#include "base/macros.h"
 #include "components/autofill/core/common/autofill_constants.h"
 #include "components/autofill/core/common/form_data.h"
 #include "components/autofill/core/common/form_field_data.h"
@@ -32,7 +31,6 @@ class WebDocument;
 class WebElement;
 class WebFormControlElement;
 class WebFormElement;
-class WebFrame;
 class WebInputElement;
 class WebLocalFrame;
 class WebNode;
@@ -87,7 +85,7 @@ enum ExtractMask {
 //
 // Future potential improvements include:
 // * Detect potential visibility of elements with "overflow: visible".
-//   (See Element::scrollWidth().)
+//   (See WebElement::GetScrollSize().)
 // * Detect invisibility of elements with
 //   - "position: absolute; {left,top,right,bottol}: -100px"
 //   - "opacity: 0.0"
@@ -95,6 +93,21 @@ enum ExtractMask {
 //
 // Exposed for testing purposes.
 bool IsVisibleIframe(const blink::WebElement& iframe_element);
+
+// Returns the topmost <form> ancestor of |node|, or an IsNull() pointer.
+//
+// Generally, WebFormElements must not be nested [1]. When parsing HTML, Blink
+// ignores nested form tags; the inner forms therefore never make it into the
+// DOM. Howevery, nested forms can be created and added to the DOM dynamically,
+// in which case Blink associates each field with its closest ancestor.
+//
+// For some elements, Autofill determines the associated form without Blink's
+// help (currently, these are only iframe elements). For consistency with
+// Blink's behaviour, we associate them with their closest form element
+// ancestor.
+//
+// [1] https://html.spec.whatwg.org/multipage/forms.html#the-form-element
+blink::WebFormElement GetClosestAncestorFormElement(blink::WebNode node);
 
 // Returns true if a DOM traversal (pre-order, depth-first) visits |x| before
 // |y|. |common_ancestor| can be any shared ancestor of |x| and |y| (including
@@ -121,27 +134,10 @@ bool ExtractFormData(const blink::WebFormElement& form_element,
                      const FieldDataManager& field_data_manager,
                      FormData* data);
 
-// Helper function to check if a form with renderer id |form_renderer_id| exists
-// in |frame| and is visible.
-bool IsFormVisible(blink::WebLocalFrame* frame,
-                   FormRendererId form_renderer_id);
-
-// Helper function to check if a field with renderer id |field_renderer_id|
-// exists in |frame| and is visible.
-bool IsFormControlVisible(blink::WebLocalFrame* frame,
-                          FieldRendererId field_renderer_id);
-
-// Returns true if at least one element from |control_elements| is visible.
-bool IsSomeControlElementVisible(
-    const blink::WebVector<blink::WebFormControlElement>& control_elements);
-
 // Returns true if at least one element from |control_elements| is visible.
 bool IsSomeControlElementVisible(
     blink::WebLocalFrame* frame,
     const std::set<FieldRendererId>& control_elements);
-
-// Returns true if some control elements of |form| are visible.
-bool AreFormContentsVisible(const blink::WebFormElement& form);
 
 // Helper functions to assist in getting the canonical form of the action and
 // origin. The action will proplerly take into account <BASE>, and both will
@@ -150,10 +146,10 @@ GURL GetCanonicalActionForForm(const blink::WebFormElement& form);
 GURL GetDocumentUrlWithoutAuth(const blink::WebDocument& document);
 
 // Returns true if |element| is a month input element.
-bool IsMonthInput(const blink::WebInputElement* element);
+bool IsMonthInput(const blink::WebInputElement& element);
 
 // Returns true if |element| is a text input element.
-bool IsTextInput(const blink::WebInputElement* element);
+bool IsTextInput(const blink::WebInputElement& element);
 
 // Returns true if |element| is a select element.
 bool IsSelectElement(const blink::WebFormControlElement& element);
@@ -162,23 +158,43 @@ bool IsSelectElement(const blink::WebFormControlElement& element);
 bool IsTextAreaElement(const blink::WebFormControlElement& element);
 
 // Returns true if |element| is a checkbox or a radio button element.
-bool IsCheckableElement(const blink::WebInputElement* element);
+bool IsCheckableElement(const blink::WebInputElement& element);
 
 // Returns true if |element| is one of the input element types that can be
 // autofilled. {Text, Radiobutton, Checkbox}.
-bool IsAutofillableInputElement(const blink::WebInputElement* element);
+bool IsAutofillableInputElement(const blink::WebInputElement& element);
 
 // Returns true if |element| is one of the element types that can be autofilled.
 // {Text, Radiobutton, Checkbox, Select, TextArea}.
 bool IsAutofillableElement(const blink::WebFormControlElement& element);
 
-// True if this node can take focus. If layout is blocked, then the function
-// checks if the element takes up space in the layout, ie. this element or a
-// descendant has a non-empty bounding bounding client rect.
-bool IsWebElementVisible(const blink::WebElement& element);
+// True if this node can take focus. If the layout is blocked, then the function
+// checks if the element takes up space in the layout, i.e., this element or a
+// descendant has a non-empty bounding client rect.
+bool IsWebElementFocusable(const blink::WebElement& element);
 
-// The number of edges from |frame| to its main frame.
-size_t GetFrameDepth(const blink::WebFrame* frame);
+// A heuristic visibility detection. See crbug.com/1335257 for an overview of
+// relevant aspects.
+//
+// Note that WebElement::BoundsInViewport(), WebElement::GetClientSize(), and
+// WebElement::GetScrollSize() include the padding but do not include the border
+// and margin. BoundsInViewport() additionally scales the dimensions according
+// to the zoom factor.
+//
+// It seems that invisible fields on websites typically have dimensions between
+// 0 and 10 pixels, before the zoom factor. Therefore choosing `kMinPixelSize`
+// is easier without including the zoom factor. For that reason, this function
+// prefers GetClientSize() over BoundsInViewport().
+//
+// This function does not check the position in the viewport because fields in
+// iframes commonly are visible despite the body having height zero. Therefore,
+// `e.GetDocument().Body().BoundsInViewport().Intersects(e.BoundsInViewport())`
+// yields false negatives.
+//
+// Exposed for testing purposes.
+//
+// TODO(crbug.com/1335257): Can input fields or iframes actually overflow?
+bool IsWebElementVisible(const blink::WebElement& element);
 
 // Returns the form's |name| attribute if non-empty; otherwise the form's |id|
 // attribute.
@@ -350,20 +366,23 @@ std::u16string FindChildTextWithIgnoreListForTesting(
     const blink::WebNode& node,
     const std::set<blink::WebNode>& divs_to_skip);
 bool InferLabelForElementForTesting(const blink::WebFormControlElement& element,
-                                    std::u16string* label,
-                                    FormFieldData::LabelSource* label_source);
+                                    std::u16string& label,
+                                    FormFieldData::LabelSource& label_source);
 
-// Returns form by unique renderer id. Return null element if there is no form
-// with given form renderer id.
+// Returns the form element by unique renderer id. Returns the null element if
+// there is no form with the |form_renderer_id|.
 blink::WebFormElement FindFormByUniqueRendererId(
-    blink::WebDocument doc,
+    const blink::WebDocument& doc,
     FormRendererId form_renderer_id);
 
-// Returns form control element by unique renderer id. Return null element if
-// there is no element with given renderer id.
+// Returns the form control element by unique renderer id. It searches the
+// |form_to_be_searched| if specified, otherwise the whole document. Returns the
+// null element if there is no element with the |queried_form_control| renderer
+// id.
 blink::WebFormControlElement FindFormControlElementByUniqueRendererId(
-    blink::WebDocument doc,
-    FieldRendererId form_control_renderer_id);
+    const blink::WebDocument& doc,
+    FieldRendererId queried_form_control,
+    absl::optional<FormRendererId> form_to_be_searched = absl::nullopt);
 
 // Note: The vector-based API of the following two functions is a tax for
 // limiting the frequency and duration of retrieving a lot of DOM elements.
@@ -376,7 +395,7 @@ blink::WebFormControlElement FindFormControlElementByUniqueRendererId(
 // expensive, because it retrieves all DOM elements.
 std::vector<blink::WebFormControlElement>
 FindFormControlElementsByUniqueRendererId(
-    blink::WebDocument doc,
+    const blink::WebDocument& doc,
     const std::vector<FieldRendererId>& queried_form_controls);
 
 // Returns form control elements by unique renderer id from the form with
@@ -387,7 +406,7 @@ FindFormControlElementsByUniqueRendererId(
 // single form.
 std::vector<blink::WebFormControlElement>
 FindFormControlElementsByUniqueRendererId(
-    blink::WebDocument doc,
+    const blink::WebDocument& doc,
     FormRendererId form_renderer_id,
     const std::vector<FieldRendererId>& queried_form_controls);
 

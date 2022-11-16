@@ -2,6 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// This source code is a part of eyeo Chromium SDK.
+// Use of this source code is governed by the GPLv3 that can be found in the
+// components/adblock/LICENSE file.
+
 #include "third_party/blink/renderer/platform/loader/fetch/url_loader/mojo_url_loader_client.h"
 
 #include <iterator>
@@ -10,8 +14,7 @@
 #include "base/callback.h"
 #include "base/containers/queue.h"
 #include "base/feature_list.h"
-#include "base/metrics/histogram_macros.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "mojo/public/cpp/system/data_pipe_drainer.h"
 #include "net/url_request/redirect_info.h"
@@ -23,6 +26,7 @@
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/web_back_forward_cache_loader_helper.h"
 #include "third_party/blink/public/platform/web_resource_request_sender.h"
+#include "third_party/blink/renderer/platform/back_forward_cache_buffer_limit_tracker.h"
 #include "third_party/blink/renderer/platform/back_forward_cache_utils.h"
 #include "third_party/blink/renderer/platform/loader/fetch/back_forward_cache_loader_helper.h"
 #include "third_party/blink/renderer/platform/loader/fetch/loader_freeze_mode.h"
@@ -31,9 +35,8 @@
 namespace blink {
 namespace {
 
-constexpr size_t kDefaultMaxBufferedBodyBytesPerRequest = 100 * 1000;
 constexpr base::TimeDelta kGracePeriodToFinishLoadingWhileInBackForwardCache =
-    base::TimeDelta::FromSeconds(60);
+    base::Seconds(60);
 
 }  // namespace
 
@@ -53,17 +56,21 @@ class MojoURLLoaderClient::DeferredOnReceiveResponse final
     : public DeferredMessage {
  public:
   explicit DeferredOnReceiveResponse(
-      network::mojom::URLResponseHeadPtr response_head)
-      : response_head_(std::move(response_head)) {}
+      network::mojom::URLResponseHeadPtr response_head,
+      base::TimeTicks response_arrival)
+      : response_head_(std::move(response_head)),
+        response_arrival_(response_arrival) {}
 
   void HandleMessage(
       WebResourceRequestSender* resource_request_sender) override {
-    resource_request_sender->OnReceivedResponse(std::move(response_head_));
+    resource_request_sender->OnReceivedResponse(std::move(response_head_),
+                                                response_arrival_);
   }
   bool IsCompletionMessage() const override { return false; }
 
  private:
   network::mojom::URLResponseHeadPtr response_head_;
+  const base::TimeTicks response_arrival_;
 };
 
 class MojoURLLoaderClient::DeferredOnReceiveRedirect final
@@ -166,10 +173,7 @@ class MojoURLLoaderClient::BodyBuffer final
         writable_(std::move(writable)),
         writable_watcher_(FROM_HERE,
                           mojo::SimpleWatcher::ArmingPolicy::MANUAL,
-                          std::move(task_runner)),
-        max_bytes_drained_(GetLoadingTasksUnfreezableParamAsInt(
-            "max_buffered_bytes",
-            kDefaultMaxBufferedBodyBytesPerRequest)) {
+                          std::move(task_runner)) {
     pipe_drainer_ =
         std::make_unique<mojo::DataPipeDrainer>(this, std::move(readable));
     writable_watcher_.Watch(
@@ -190,15 +194,9 @@ class MojoURLLoaderClient::BodyBuffer final
     SCOPED_CRASH_KEY_STRING256("OnDataAvailable", "last_loaded_url",
                                owner_->last_loaded_url().GetString().Utf8());
 
-    total_bytes_drained_ += num_bytes;
-    TRACE_EVENT2("loading", "MojoURLLoaderClient::BodyBuffer::OnDataAvailable",
-                 "total_bytes_drained", static_cast<int>(total_bytes_drained_),
-                 "added_bytes", static_cast<int>(num_bytes));
-
     if (owner_->freeze_mode() == WebLoaderFreezeMode::kBufferIncoming) {
       owner_->DidBufferLoadWhileInBackForwardCache(num_bytes);
-      if (total_bytes_drained_ > max_bytes_drained_ ||
-          !owner_->CanContinueBufferingWhileInBackForwardCache()) {
+      if (!owner_->CanContinueBufferingWhileInBackForwardCache()) {
         owner_->EvictFromBackForwardCache(
             blink::mojom::RendererEvictionReason::kNetworkExceedsBufferLimit);
         return;
@@ -278,8 +276,6 @@ class MojoURLLoaderClient::BodyBuffer final
   // memory as soon as we finish sending a chunk completely.
   base::queue<std::vector<char>> buffered_body_;
   uint32_t offset_in_current_chunk_ = 0;
-  size_t total_bytes_drained_ = 0;
-  const size_t max_bytes_drained_;
   bool draining_ = true;
 };
 
@@ -290,7 +286,7 @@ MojoURLLoaderClient::MojoURLLoaderClient(
     const GURL& request_url,
     WebBackForwardCacheLoaderHelper back_forward_cache_loader_helper)
     : back_forward_cache_timeout_(
-          base::TimeDelta::FromSeconds(GetLoadingTasksUnfreezableParamAsInt(
+          base::Seconds(GetLoadingTasksUnfreezableParamAsInt(
               "grace_period_to_finish_loading_in_seconds",
               static_cast<int>(
                   kGracePeriodToFinishLoadingWhileInBackForwardCache
@@ -305,8 +301,12 @@ MojoURLLoaderClient::~MojoURLLoaderClient() = default;
 
 void MojoURLLoaderClient::Freeze(WebLoaderFreezeMode mode) {
   freeze_mode_ = mode;
-  if (mode == WebLoaderFreezeMode::kNone) {
+  if (mode != WebLoaderFreezeMode::kBufferIncoming) {
+    // Back/forward cache eviction should only be triggered when `freeze_mode_`
+    // is kBufferIncoming.
     StopBackForwardCacheEvictionTimer();
+  }
+  if (mode == WebLoaderFreezeMode::kNone) {
     task_runner_->PostTask(
         FROM_HERE, WTF::Bind(&MojoURLLoaderClient::FlushDeferredMessages,
                              weak_factory_.GetWeakPtr()));
@@ -327,19 +327,63 @@ void MojoURLLoaderClient::OnReceiveEarlyHints(
     network::mojom::EarlyHintsPtr early_hints) {}
 
 void MojoURLLoaderClient::OnReceiveResponse(
-    network::mojom::URLResponseHeadPtr response_head) {
+    network::mojom::URLResponseHeadPtr response_head,
+    mojo::ScopedDataPipeConsumerHandle body) {
   TRACE_EVENT1("loading", "MojoURLLoaderClient::OnReceiveResponse", "url",
                last_loaded_url_.GetString().Utf8());
 
   has_received_response_head_ = true;
-  on_receive_response_time_ = base::TimeTicks::Now();
+  base::TimeTicks response_arrival_timing = base::TimeTicks::Now();
 
+  base::WeakPtr<MojoURLLoaderClient> weak_this = weak_factory_.GetWeakPtr();
   if (NeedsStoringMessage()) {
-    StoreAndDispatch(
-        std::make_unique<DeferredOnReceiveResponse>(std::move(response_head)));
+    StoreAndDispatch(std::make_unique<DeferredOnReceiveResponse>(
+        std::move(response_head), response_arrival_timing));
   } else {
-    resource_request_sender_->OnReceivedResponse(std::move(response_head));
+    resource_request_sender_->OnReceivedResponse(std::move(response_head),
+                                                 response_arrival_timing);
   }
+
+  if (!weak_this)
+    return;
+
+  if (!body)
+    return;
+
+  has_received_response_body_ = true;
+
+  if (!NeedsStoringMessage()) {
+    // Send the message immediately.
+    resource_request_sender_->OnStartLoadingResponseBody(std::move(body));
+    return;
+  }
+
+  if (freeze_mode_ != WebLoaderFreezeMode::kBufferIncoming) {
+    // Defer the message, storing the original body pipe.
+    StoreAndDispatch(
+        std::make_unique<DeferredOnStartLoadingResponseBody>(std::move(body)));
+    return;
+  }
+
+  DCHECK(IsInflightNetworkRequestBackForwardCacheSupportEnabled());
+  // We want to run loading tasks while deferred (but without dispatching the
+  // messages). Drain the original pipe containing the response body into a
+  // new pipe so that we won't block the network service if we're deferred for
+  // a long time.
+  mojo::ScopedDataPipeProducerHandle new_body_producer;
+  mojo::ScopedDataPipeConsumerHandle new_body_consumer;
+  MojoResult result =
+      mojo::CreateDataPipe(nullptr, new_body_producer, new_body_consumer);
+  if (result != MOJO_RESULT_OK) {
+    OnComplete(
+        network::URLLoaderCompletionStatus(net::ERR_INSUFFICIENT_RESOURCES));
+    return;
+  }
+  body_buffer_ = std::make_unique<BodyBuffer>(
+      this, std::move(body), std::move(new_body_producer), task_runner_);
+
+  StoreAndDispatch(std::make_unique<DeferredOnStartLoadingResponseBody>(
+      std::move(new_body_consumer)));
 }
 
 BackForwardCacheLoaderHelper*
@@ -349,6 +393,7 @@ MojoURLLoaderClient::GetBackForwardCacheLoaderHelper() {
 
 void MojoURLLoaderClient::EvictFromBackForwardCache(
     blink::mojom::RendererEvictionReason reason) {
+  DCHECK_EQ(freeze_mode_, WebLoaderFreezeMode::kBufferIncoming);
   StopBackForwardCacheEvictionTimer();
   auto* back_forward_cache_loader_helper = GetBackForwardCacheLoaderHelper();
   if (!back_forward_cache_loader_helper)
@@ -366,11 +411,8 @@ void MojoURLLoaderClient::DidBufferLoadWhileInBackForwardCache(
 }
 
 bool MojoURLLoaderClient::CanContinueBufferingWhileInBackForwardCache() {
-  auto* back_forward_cache_loader_helper = GetBackForwardCacheLoaderHelper();
-  if (!back_forward_cache_loader_helper)
-    return false;
-  return back_forward_cache_loader_helper
-      ->CanContinueBufferingWhileInBackForwardCache();
+  return BackForwardCacheBufferLimitTracker::Get()
+      .IsUnderPerProcessBufferLimit();
 }
 
 void MojoURLLoaderClient::EvictFromBackForwardCacheDueToTimeout() {
@@ -393,8 +435,8 @@ void MojoURLLoaderClient::OnReceiveRedirect(
     OnComplete(network::URLLoaderCompletionStatus(net::ERR_ABORTED));
     return;
   }
-  if (!bypass_redirect_checks_ &&
-      !Platform::Current()->IsRedirectSafe(last_loaded_url_,
+  if (!bypass_redirect_checks_ && !redirect_info.bypass_redirect_checks &&
+      !Platform::Current()->IsRedirectSafe(GURL(last_loaded_url_),
                                            redirect_info.new_url)) {
     OnComplete(network::URLLoaderCompletionStatus(net::ERR_UNSAFE_REDIRECT));
     return;
@@ -438,55 +480,6 @@ void MojoURLLoaderClient::OnTransferSizeUpdated(int32_t transfer_size_diff) {
   } else {
     resource_request_sender_->OnTransferSizeUpdated(transfer_size_diff);
   }
-}
-
-void MojoURLLoaderClient::OnStartLoadingResponseBody(
-    mojo::ScopedDataPipeConsumerHandle body) {
-  TRACE_EVENT1("loading", "MojoURLLoaderClient::OnStartLoadingResponseBody",
-               "url", last_loaded_url_.GetString().Utf8());
-
-  DCHECK(has_received_response_head_);
-  DCHECK(!has_received_response_body_);
-  has_received_response_body_ = true;
-
-  if (!on_receive_response_time_.is_null()) {
-    UMA_HISTOGRAM_TIMES(
-        "Renderer.OnReceiveResponseToOnStartLoadingResponseBody",
-        base::TimeTicks::Now() - on_receive_response_time_);
-  }
-
-  if (!NeedsStoringMessage()) {
-    // Send the message immediately.
-    resource_request_sender_->OnStartLoadingResponseBody(std::move(body));
-    return;
-  }
-
-  if (freeze_mode_ != WebLoaderFreezeMode::kBufferIncoming) {
-    // Defer the message, storing the original body pipe.
-    StoreAndDispatch(
-        std::make_unique<DeferredOnStartLoadingResponseBody>(std::move(body)));
-    return;
-  }
-
-  DCHECK(IsInflightNetworkRequestBackForwardCacheSupportEnabled());
-  // We want to run loading tasks while deferred (but without dispatching the
-  // messages). Drain the original pipe containing the response body into a
-  // new pipe so that we won't block the network service if we're deferred for
-  // a long time.
-  mojo::ScopedDataPipeProducerHandle new_body_producer;
-  mojo::ScopedDataPipeConsumerHandle new_body_consumer;
-  MojoResult result =
-      mojo::CreateDataPipe(nullptr, new_body_producer, new_body_consumer);
-  if (result != MOJO_RESULT_OK) {
-    OnComplete(
-        network::URLLoaderCompletionStatus(net::ERR_INSUFFICIENT_RESOURCES));
-    return;
-  }
-  body_buffer_ = std::make_unique<BodyBuffer>(
-      this, std::move(body), std::move(new_body_producer), task_runner_);
-
-  StoreAndDispatch(std::make_unique<DeferredOnStartLoadingResponseBody>(
-      std::move(new_body_consumer)));
 }
 
 void MojoURLLoaderClient::OnComplete(

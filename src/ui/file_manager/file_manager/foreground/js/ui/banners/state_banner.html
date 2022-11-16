@@ -11,7 +11,7 @@
     width: 100%;
   }
 
-  .state-text-group {
+  #state-text-group {
     align-items: center;
     display: flex;
     flex-direction: row;
@@ -41,20 +41,32 @@
     padding-inline-start: 40px;
   }
 
-  ::slotted(cr-button) {
-    border: 0;
+  ::slotted(cr-button),
+  #dismiss-button {
+    --active-bg: var(--cros-button-background-color-secondary-hover);
+    --hover-bg-color: var(--cros-button-background-color-secondary-hover);
+    --ink-color: rgba(var(--cros-button-ripple-color-secondary-rgb), var(--cros-button-secondary-ripple-opacity));
+    --paper-ripple-opacity: 100%;
+    --text-color: var(--cros-button-label-color-secondary);
+    border: none;
     box-shadow: none;
     height: 32px;
-    padding-inline-end: 16px;
-    padding-inline-start: 16px;
+    margin-inline: 4px;
+    padding-inline: 16px;
     position: relative;
+  }
+
+  :host-context(.focus-outline-visible) ::slotted(cr-button:focus),
+  :host-context(.focus-outline-visible) #dismiss-button:focus {
+    outline: 2px solid var(--cros-focus-ring-color);
+    outline-offset: 2px;
   }
 </style>
 <div class="state-banner">
-  <div class="state-text-group">
+  <div id="state-text-group">
     <div class="state-icon"></div>
     <div class="state-message body2-primary">
-      <slot name="text" tabindex="0"></slot>
+      <slot name="text"></slot>
     </div>
   </div>
   <div class="button-group">

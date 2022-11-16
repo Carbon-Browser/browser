@@ -5,11 +5,16 @@
 #include "chrome/browser/media/cdm_document_service_impl.h"
 
 #include <memory>
+#include <tuple>
 
+#include "base/files/file.h"
+#include "base/files/file_util.h"
 #include "base/json/values_util.h"
+#include "base/logging.h"
 #include "base/run_loop.h"
 #include "base/test/gmock_callback_support.h"
 #include "base/test/mock_callback.h"
+#include "base/time/time.h"
 #include "base/unguessable_token.h"
 #include "base/values.h"
 #include "chrome/browser/media/cdm_pref_service_helper.h"
@@ -19,6 +24,7 @@
 #include "components/prefs/scoped_user_pref_update.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
 #include "components/user_prefs/user_prefs.h"
+#include "content/public/browser/web_contents.h"
 #include "media/cdm/win/media_foundation_cdm.h"
 #include "media/mojo/mojom/cdm_document_service.mojom.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -33,6 +39,17 @@ using testing::SaveArg;
 namespace {
 // copied from cdm_pref_service_helper.cc for testing
 const char kOriginId[] = "origin_id";
+
+base::FilePath CreateDummyCdmDataFile(const base::FilePath& cdm_store_path_root,
+                                      const base::UnguessableToken& origin_id) {
+  // Create a fake CDM file
+  auto cdm_store_path = cdm_store_path_root.AppendASCII(origin_id.ToString());
+  base::CreateDirectory(cdm_store_path);
+  auto cdm_data_file_path = cdm_store_path.AppendASCII("cdm_data_file.txt");
+  base::File file(cdm_data_file_path,
+                  base::File::FLAG_CREATE | base::File::FLAG_WRITE);
+  return cdm_data_file_path;
+}
 }  // namespace
 
 namespace content {
@@ -63,7 +80,7 @@ class CdmDocumentServiceImplTest : public ChromeRenderViewHostTestHarness {
       ASSERT_TRUE(cdm_document_service_.Unbind());
     NavigateAndCommit(url);
     CdmDocumentServiceImpl::Create(
-        web_contents()->GetMainFrame(),
+        web_contents()->GetPrimaryMainFrame(),
         cdm_document_service_.BindNewPipeAndPassReceiver());
   }
 
@@ -99,9 +116,11 @@ class CdmDocumentServiceImplTest : public ChromeRenderViewHostTestHarness {
                                 base::UnguessableToken::Create()));
 
     DictionaryPrefUpdate update(user_prefs, prefs::kMediaCdmOriginData);
-    base::DictionaryValue* dict = update.Get();
-    const std::string serialized_origin =
-        web_contents()->GetMainFrame()->GetLastCommittedOrigin().Serialize();
+    base::Value* dict = update.Get();
+    const std::string serialized_origin = web_contents()
+                                              ->GetPrimaryMainFrame()
+                                              ->GetLastCommittedOrigin()
+                                              .Serialize();
     dict->SetKey(serialized_origin, std::move(entry));
   }
 
@@ -157,7 +176,7 @@ TEST_F(CdmDocumentServiceImplTest, SetClientToken) {
   // Call GetMediaFoundationCdmData to create the origin id first, otherwise
   // `SetCdmClientToken()` will assume the preference data associated with the
   // origin was recently cleared and will not save the client token.
-  ignore_result(GetMediaFoundationCdmData());
+  std::ignore = GetMediaFoundationCdmData();
 
   std::vector<uint8_t> expected_client_token = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
   SetCdmClientToken(expected_client_token);
@@ -177,12 +196,12 @@ TEST_F(CdmDocumentServiceImplTest, GetSameClientToken) {
   // Call GetMediaFoundationCdmData to create the origin id first, otherwise
   // `SetCdmClientToken()` will assume the preference data associated with the
   // origin was recently cleared and will not save the client token.
-  ignore_result(GetMediaFoundationCdmData());
+  std::ignore = GetMediaFoundationCdmData();
   std::vector<uint8_t> expected_client_token = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
   SetCdmClientToken(expected_client_token);
 
   NavigateToUrlAndCreateCdmDocumentService(GURL(kTestOrigin2));
-  ignore_result(GetMediaFoundationCdmData());
+  std::ignore = GetMediaFoundationCdmData();
   SetCdmClientToken({1, 2, 3, 4, 5});
 
   NavigateToUrlAndCreateCdmDocumentService(GURL(kTestOrigin));
@@ -195,7 +214,7 @@ TEST_F(CdmDocumentServiceImplTest, GetSameClientToken) {
 // remove that entry and return without saving the client token.
 TEST_F(CdmDocumentServiceImplTest, SetClientTokenAfterCorruption) {
   NavigateToUrlAndCreateCdmDocumentService(GURL(kTestOrigin));
-  ignore_result(GetMediaFoundationCdmData());
+  std::ignore = GetMediaFoundationCdmData();
   CorruptCdmPreference();
 
   std::vector<uint8_t> expected_client_token = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
@@ -211,9 +230,13 @@ TEST_F(CdmDocumentServiceImplTest, ClearCdmPreferenceData) {
   const auto kOrigin = url::Origin::Create(GURL(kTestOrigin));
 
   NavigateToUrlAndCreateCdmDocumentService(GURL(kTestOrigin));
-  base::UnguessableToken origin_id = GetMediaFoundationCdmData()->origin_id;
+  auto cdm_data = GetMediaFoundationCdmData();
+  base::UnguessableToken origin_id = cdm_data->origin_id;
 
-  base::Time start = base::Time::Now() - base::TimeDelta::FromHours(1);
+  base::FilePath cdm_data_file_path = CreateDummyCdmDataFile(
+      cdm_data->cdm_store_path_root, cdm_data->origin_id);
+
+  base::Time start = base::Time::Now() - base::Hours(1);
   base::Time end;  // null time
 
   base::RunLoop loop1;
@@ -228,6 +251,7 @@ TEST_F(CdmDocumentServiceImplTest, ClearCdmPreferenceData) {
   base::UnguessableToken same_origin_id =
       GetMediaFoundationCdmData()->origin_id;
   ASSERT_EQ(origin_id, same_origin_id);
+  ASSERT_TRUE(base::PathExists(cdm_data_file_path));
 
   base::RunLoop loop2;
 
@@ -240,6 +264,7 @@ TEST_F(CdmDocumentServiceImplTest, ClearCdmPreferenceData) {
 
   base::UnguessableToken new_origin_id = GetMediaFoundationCdmData()->origin_id;
   ASSERT_NE(origin_id, new_origin_id);
+  ASSERT_FALSE(base::PathExists(cdm_data_file_path));
 }
 
 // Check that we only clear the CDM preference that were set between start and
@@ -248,10 +273,13 @@ TEST_F(CdmDocumentServiceImplTest, ClearCdmPreferenceDataWrongTime) {
   const auto kOrigin = url::Origin::Create(GURL(kTestOrigin));
 
   NavigateToUrlAndCreateCdmDocumentService(GURL(kTestOrigin));
-  base::UnguessableToken origin_id = GetMediaFoundationCdmData()->origin_id;
+  auto cdm_data = GetMediaFoundationCdmData();
+  base::UnguessableToken origin_id = cdm_data->origin_id;
+  base::FilePath cdm_data_file_path =
+      CreateDummyCdmDataFile(cdm_data->cdm_store_path_root, origin_id);
 
-  base::Time start = base::Time::Now() - base::TimeDelta::FromHours(4);
-  base::Time end = start - base::TimeDelta::FromHours(2);
+  base::Time start = base::Time::Now() - base::Hours(4);
+  base::Time end = start - base::Hours(2);
 
   auto null_filter = base::RepeatingCallback<bool(const GURL&)>();
 
@@ -264,6 +292,7 @@ TEST_F(CdmDocumentServiceImplTest, ClearCdmPreferenceDataWrongTime) {
 
   base::UnguessableToken new_origin_id = GetMediaFoundationCdmData()->origin_id;
   ASSERT_EQ(origin_id, new_origin_id);
+  ASSERT_TRUE(base::PathExists(cdm_data_file_path));
 }
 
 TEST_F(CdmDocumentServiceImplTest, ClearCdmPreferenceDataNullFilter) {
@@ -275,7 +304,7 @@ TEST_F(CdmDocumentServiceImplTest, ClearCdmPreferenceDataNullFilter) {
   NavigateToUrlAndCreateCdmDocumentService(GURL(kTestOrigin2));
   base::UnguessableToken origin_id_2 = GetMediaFoundationCdmData()->origin_id;
 
-  base::Time start = base::Time::Now() - base::TimeDelta::FromHours(1);
+  base::Time start = base::Time::Now() - base::Hours(1);
   base::Time end;  // null time
 
   auto null_filter = base::RepeatingCallback<bool(const GURL&)>();

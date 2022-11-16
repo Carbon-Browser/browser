@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/strings/string_piece_forward.h"
 #include "base/time/time.h"
@@ -58,6 +58,7 @@ namespace extensions {
 class AppSorting;
 class EarlyExtensionPrefsObserver;
 class ExtensionPrefsObserver;
+class PermissionSet;
 class URLPatternSet;
 
 // Class for managing global and per-extension preferences.
@@ -110,6 +111,10 @@ class ExtensionPrefs : public KeyedService {
     ScopedDictionaryUpdate(ExtensionPrefs* prefs,
                            const std::string& extension_id,
                            const std::string& key);
+
+    ScopedDictionaryUpdate(const ScopedDictionaryUpdate&) = delete;
+    ScopedDictionaryUpdate& operator=(const ScopedDictionaryUpdate&) = delete;
+
     ~ScopedDictionaryUpdate();
 
     // Returns a mutable value for the key, if one exists. Otherwise, returns
@@ -123,8 +128,6 @@ class ExtensionPrefs : public KeyedService {
    private:
     std::unique_ptr<prefs::ScopedDictionaryPrefUpdate> update_;
     const std::string key_;
-
-    DISALLOW_COPY_AND_ASSIGN(ScopedDictionaryUpdate);
   };
 
   class ScopedListUpdate {
@@ -132,6 +135,10 @@ class ExtensionPrefs : public KeyedService {
     ScopedListUpdate(ExtensionPrefs* prefs,
                      const std::string& extension_id,
                      const std::string& key);
+
+    ScopedListUpdate(const ScopedListUpdate&) = delete;
+    ScopedListUpdate& operator=(const ScopedListUpdate&) = delete;
+
     ~ScopedListUpdate();
 
     // Returns a mutable value for the key (ownership remains with the prefs),
@@ -146,8 +153,6 @@ class ExtensionPrefs : public KeyedService {
    private:
     std::unique_ptr<prefs::ScopedDictionaryPrefUpdate> update_;
     const std::string key_;
-
-    DISALLOW_COPY_AND_ASSIGN(ScopedListUpdate);
   };
 
   // Creates an ExtensionPrefs object.
@@ -174,6 +179,9 @@ class ExtensionPrefs : public KeyedService {
       bool extensions_disabled,
       const std::vector<EarlyExtensionPrefsObserver*>& early_observers,
       base::Clock* clock);
+
+  ExtensionPrefs(const ExtensionPrefs&) = delete;
+  ExtensionPrefs& operator=(const ExtensionPrefs&) = delete;
 
   ~ExtensionPrefs() override;
 
@@ -273,6 +281,11 @@ class ExtensionPrefs : public KeyedService {
   GURL GetPrefAsGURL(const PrefMap& pref) const;
   const base::DictionaryValue* GetPrefAsDictionary(const PrefMap& pref) const;
 
+  // Returns a wrapper that allows to update an ExtensionPref with a
+  // PrefType::kDictionary.
+  std::unique_ptr<prefs::ScopedDictionaryPrefUpdate> CreatePrefUpdate(
+      const PrefMap& pref);
+
   // Increments/decrements an ExtensionPref with a PrefType::kInteger.
   void IncrementPref(const PrefMap& pref);
   void DecrementPref(const PrefMap& pref);
@@ -346,6 +359,20 @@ class ExtensionPrefs : public KeyedService {
                             base::StringPiece pref_key,
                             const base::DictionaryValue** out_value) const;
 
+  // Interprets the list pref, |pref_key| in |extension_id|'s preferences, as a
+  // URLPatternSet. The |valid_schemes| specify how to parse the URLPatterns.
+  bool ReadPrefAsURLPatternSet(const std::string& extension_id,
+                               base::StringPiece pref_key,
+                               URLPatternSet* result,
+                               int valid_schemes) const;
+
+  // Converts |set| to a list of strings and sets the |pref_key| pref belonging
+  // to |extension_id|. If |set| is empty, the preference for |pref_key| is
+  // cleared.
+  void SetExtensionPrefURLPatternSet(const std::string& extension_id,
+                                     base::StringPiece pref_key,
+                                     const URLPatternSet& set);
+
   bool HasPrefForExtension(const std::string& extension_id) const;
 
   // Did the extension ask to escalate its permission during an upgrade?
@@ -371,11 +398,6 @@ class ExtensionPrefs : public KeyedService {
   // Clears disable reasons that do not apply to component extensions.
   void ClearInapplicableDisableReasonsForComponentExtension(
       const std::string& component_extension_id);
-
-  // Gets the key of blocklist acknowledged pref.
-  // TODO(crbug.com/1193695): Remove this method once kPrefBlocklistAcknowledged
-  // is removed.
-  base::StringPiece GetPrefBlocklistAcknowledgedKey();
 
   // Returns the version string for the currently installed extension, or
   // the empty string if not found.
@@ -459,15 +481,31 @@ class ExtensionPrefs : public KeyedService {
   void RemoveGrantedPermissions(const std::string& extension_id,
                                 const PermissionSet& permissions);
 
-  // Gets the active permission set for the specified extension. This may
-  // differ from the permissions in the manifest due to the optional
-  // permissions API. This passes ownership of the set to the caller.
-  std::unique_ptr<const PermissionSet> GetActivePermissions(
+  // Gets the set of permissions that the extension would like to be active.
+  // This should always include at least the required permissions from the
+  // manifest and can include a subset of optional permissions, if the extension
+  // requested and was granted them.
+  // This differs from the set of permissions *actually* active on the extension
+  // because the user may have withheld certain permissions, as well as because
+  // of possible enterprise policy settings. Use `PermissionsData` to determine
+  // the current effective permissions of an extension.
+  std::unique_ptr<const PermissionSet> GetDesiredActivePermissions(
       const std::string& extension_id) const;
 
-  // Sets the active |permissions| for the extension with |extension_id|.
-  void SetActivePermissions(const std::string& extension_id,
-                            const PermissionSet& permissions);
+  // Sets the desired active permissions for the given `extension_id` to
+  // `permissions`.
+  void SetDesiredActivePermissions(const std::string& extension_id,
+                                   const PermissionSet& permissions);
+
+  // Adds `permissions` to the set of permissions the extension desires to be
+  // active.
+  void AddDesiredActivePermissions(const ExtensionId& extension_id,
+                                   const PermissionSet& permissions);
+
+  // Removes `permissions` to the set of permissions the extension desires to be
+  // active.
+  void RemoveDesiredActivePermissions(const ExtensionId& extension_id,
+                                      const PermissionSet& permissions);
 
   // Sets/Gets the value indicating if an extension should be granted all the
   // requested host permissions without requiring explicit runtime-granted
@@ -578,10 +616,6 @@ class ExtensionPrefs : public KeyedService {
 
   // Returns true if the extension was installed from the Chrome Web Store.
   bool IsFromWebStore(const std::string& extension_id) const;
-
-  // Returns true if the extension was installed from an App generated from a
-  // bookmark.
-  bool IsFromBookmark(const std::string& extension_id) const;
 
   // Returns true if the extension was installed as a default app.
   bool WasInstalledByDefault(const std::string& extension_id) const;
@@ -727,11 +761,6 @@ class ExtensionPrefs : public KeyedService {
   // TODO(devlin): Remove this once clients are migrated over, around M84.
   void MigrateToNewExternalUninstallPref();
 
-  // Migrates kPrefBlocklist with kPrefBlocklistState.
-  // TODO(crbug.com/1232243): Remove this once clients are migrated over, around
-  // M97.
-  void MigrateOldBlocklistPrefs();
-
   // Returns true if the given component extension should be installed, even
   // though it has been obsoleted. Installing it allows us to ensure it is
   // cleaned/deleted up properly. After that cleanup is done, this will return
@@ -791,27 +820,8 @@ class ExtensionPrefs : public KeyedService {
   // |extension| dictionary.
   std::unique_ptr<ExtensionInfo> GetInstalledInfoHelper(
       const std::string& extension_id,
-      const base::DictionaryValue* extension,
+      const base::Value* extension,
       bool include_component_extensions) const;
-
-  // Interprets the list pref, |pref_key| in |extension_id|'s preferences, as a
-  // URLPatternSet. The |valid_schemes| specify how to parse the URLPatterns.
-  bool ReadPrefAsURLPatternSet(const std::string& extension_id,
-                               base::StringPiece pref_key,
-                               URLPatternSet* result,
-                               int valid_schemes) const;
-
-  // Deprecated kPrefBlocklistAcknowledged kPrefBlocklist. Use
-  // kPrefBlocklistState instead.
-  // TODO(crbug.com/1193695): Remove kPrefBlocklistAcknowledged kPrefBlocklist
-  // once all clients are updated.
-
-  // Converts |set| to a list of strings and sets the |pref_key| pref belonging
-  // to |extension_id|. If |set| is empty, the preference for |pref_key| is
-  // cleared.
-  void SetExtensionPrefURLPatternSet(const std::string& extension_id,
-                                     base::StringPiece pref_key,
-                                     const URLPatternSet& set);
 
   // Read the boolean preference entry and return true if the preference exists
   // and the preference's value is true; false otherwise.
@@ -912,25 +922,23 @@ class ExtensionPrefs : public KeyedService {
   // Clears the bit indicating that an external extension was uninstalled.
   void ClearExternalUninstallBit(const ExtensionId& extension_id);
 
-  content::BrowserContext* browser_context_;
+  raw_ptr<content::BrowserContext> browser_context_;
 
   // The pref service specific to this set of extension prefs. Owned by the
   // BrowserContext.
-  PrefService* prefs_;
+  raw_ptr<PrefService> prefs_;
 
   // Base extensions install directory.
   base::FilePath install_directory_;
 
   // Weak pointer, owned by BrowserContext.
-  ExtensionPrefValueMap* extension_pref_value_map_;
+  raw_ptr<ExtensionPrefValueMap> extension_pref_value_map_;
 
-  base::Clock* clock_;
+  raw_ptr<base::Clock> clock_;
 
   bool extensions_disabled_;
 
   base::ObserverList<ExtensionPrefsObserver>::Unchecked observer_list_;
-
-  DISALLOW_COPY_AND_ASSIGN(ExtensionPrefs);
 };
 
 }  // namespace extensions

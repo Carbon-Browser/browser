@@ -8,7 +8,7 @@
 #include <memory>
 
 #include "base/compiler_specific.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/power_monitor/power_observer.h"
 #include "base/threading/thread_checker.h"
@@ -26,6 +26,10 @@ class NET_EXPORT HttpNetworkLayer : public HttpTransactionFactory,
   // contains a valid ProxyResolutionService. The HttpNetworkLayer must be
   // destroyed before |session|.
   explicit HttpNetworkLayer(HttpNetworkSession* session);
+
+  HttpNetworkLayer(const HttpNetworkLayer&) = delete;
+  HttpNetworkLayer& operator=(const HttpNetworkLayer&) = delete;
+
   ~HttpNetworkLayer() override;
 
   // HttpTransactionFactory methods:
@@ -39,12 +43,10 @@ class NET_EXPORT HttpNetworkLayer : public HttpTransactionFactory,
   void OnResume() override;
 
  private:
-  HttpNetworkSession* const session_;
-  bool suspended_;
+  const raw_ptr<HttpNetworkSession> session_;
+  bool suspended_ = false;
 
   THREAD_CHECKER(thread_checker_);
-
-  DISALLOW_COPY_AND_ASSIGN(HttpNetworkLayer);
 };
 
 }  // namespace net

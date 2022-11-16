@@ -6,13 +6,13 @@
 #define CONTENT_BROWSER_FILE_SYSTEM_ACCESS_FILE_SYSTEM_ACCESS_FILE_WRITER_IMPL_H_
 
 #include "base/memory/weak_ptr.h"
+#include "base/thread_annotations.h"
 #include "base/types/pass_key.h"
-#include "components/download/public/common/quarantine_connection.h"
 #include "components/services/filesystem/public/mojom/types.mojom.h"
 #include "content/browser/file_system_access/file_system_access_file_handle_impl.h"
 #include "content/browser/file_system_access/file_system_access_handle_base.h"
+#include "content/browser/file_system_access/safe_move_helper.h"
 #include "content/common/content_export.h"
-#include "content/public/browser/file_system_access_permission_context.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -59,6 +59,7 @@ class CONTENT_EXPORT FileSystemAccessFileWriterImpl
 
   const storage::FileSystemURL& swap_url() const { return swap_url_; }
   const base::WeakPtr<FileSystemAccessFileWriterImpl> weak_ptr() const {
+    DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
     return weak_factory_.GetWeakPtr();
   }
 
@@ -71,12 +72,6 @@ class CONTENT_EXPORT FileSystemAccessFileWriterImpl
   void Close(CloseCallback callback) override;
   // The writer will be destroyed upon completion.
   void Abort(AbortCallback callback) override;
-
-  using HashCallback = base::OnceCallback<
-      void(base::File::Error error, const std::string& hash, int64_t size)>;
-  void ComputeHashForSwapFileForTesting(HashCallback callback) {
-    ComputeHashForSwapFile(std::move(callback));
-  }
 
  private:
   // State that is kept for the duration of a write operation, to keep track of
@@ -104,60 +99,48 @@ class CONTENT_EXPORT FileSystemAccessFileWriterImpl
   void TruncateImpl(uint64_t length, TruncateCallback callback);
   void CloseImpl(CloseCallback callback);
   void AbortImpl(AbortCallback callback);
-  void DoAfterWriteCheck(base::File::Error hash_result,
-                         const std::string& hash,
-                         int64_t size);
-  void DidAfterWriteCheck(
-      FileSystemAccessPermissionContext::AfterWriteCheckResult result);
-  void DidSwapFileSkipQuarantine(base::File::Error result);
-  void DidSwapFileDoQuarantine(
-      const storage::FileSystemURL& target_url,
-      const GURL& referrer_url,
-      mojo::Remote<quarantine::mojom::Quarantine> quarantine_remote,
-      base::File::Error result);
-  void DidAnnotateFile(
-      mojo::Remote<quarantine::mojom::Quarantine> quarantine_remote,
-      quarantine::mojom::QuarantineFileResult result);
+  void DidReplaceSwapFile(
+      std::unique_ptr<content::SafeMoveHelper> safe_move_helper,
+      blink::mojom::FileSystemAccessErrorPtr result);
 
-  // After write and quarantine checks should apply to paths on all filesystems
-  // except temporary file systems.
-  // TOOD(crbug.com/1103076): Extend this check to non-native paths.
-  bool RequireSecurityChecks() const {
-    return url().type() != storage::kFileSystemTypeTemporary;
+  bool is_close_pending() const {
+    DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+    return !close_callback_.is_null();
   }
-
-  void ComputeHashForSwapFile(HashCallback callback);
-
-  bool is_close_pending() const { return !close_callback_.is_null(); }
 
   // We write using this file URL. When `Close()` is invoked, we
   // execute a move operation from the swap URL to the target URL at `url_`. In
   // most filesystems, this move operation is atomic.
-  storage::FileSystemURL swap_url_;
+  storage::FileSystemURL swap_url_ GUARDED_BY_CONTEXT(sequence_checker_);
 
   // Shared write lock on the file. It is released on destruction.
-  scoped_refptr<FileSystemAccessWriteLockManager::WriteLock> lock_;
+  scoped_refptr<FileSystemAccessWriteLockManager::WriteLock> lock_
+      GUARDED_BY_CONTEXT(sequence_checker_);
 
-  CloseCallback close_callback_;
+  CloseCallback close_callback_ GUARDED_BY_CONTEXT(sequence_checker_);
 
-  download::QuarantineConnectionCallback quarantine_connection_callback_;
+  download::QuarantineConnectionCallback quarantine_connection_callback_
+      GUARDED_BY_CONTEXT(sequence_checker_);
 
   // Keeps track of user activation state at creation time for after write
   // checks.
-  bool has_transient_user_activation_ = false;
+  bool has_transient_user_activation_ GUARDED_BY_CONTEXT(sequence_checker_) =
+      false;
 
   // Changes will be written to the target file even if the stream isn't
   // explicitly closed.
-  bool auto_close_ = false;
+  bool auto_close_ GUARDED_BY_CONTEXT(sequence_checker_) = false;
 
   // The writer should not attempt to purge the swap file if the move operation
   // to the target file is successful, since this may incidentally remove the
   // active swap file of a different writer.
-  bool should_purge_swap_file_on_destruction_ = true;
+  bool should_purge_swap_file_on_destruction_
+      GUARDED_BY_CONTEXT(sequence_checker_) = true;
 
   base::WeakPtr<FileSystemAccessHandleBase> AsWeakPtr() override;
 
-  base::WeakPtrFactory<FileSystemAccessFileWriterImpl> weak_factory_{this};
+  base::WeakPtrFactory<FileSystemAccessFileWriterImpl> weak_factory_
+      GUARDED_BY_CONTEXT(sequence_checker_){this};
 };
 
 }  // namespace content

@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "ash/webui/telemetry_extension_ui/mojom/diagnostics_service.mojom-forward.h"
-#include "chromeos/services/cros_healthd/public/mojom/cros_healthd_diagnostics.mojom.h"
+#include "chromeos/ash/services/cros_healthd/public/mojom/cros_healthd_diagnostics.mojom.h"
 #include "mojo/public/cpp/system/handle.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -68,6 +68,12 @@ cros_healthd::mojom::NvmeSelfTestTypeEnum Convert(
 
 cros_healthd::mojom::DiskReadRoutineTypeEnum Convert(
     health::mojom::DiskReadRoutineTypeEnum input);
+
+template <class InputT>
+auto ConvertDiagnosticsPtr(InputT input) {
+  return (!input.is_null()) ? unchecked::UncheckedConvertPtr(std::move(input))
+                            : nullptr;
+}
 
 }  // namespace converters
 }  // namespace ash

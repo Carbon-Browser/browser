@@ -10,22 +10,22 @@
 #include "chrome/browser/ash/login/enrollment/enterprise_enrollment_helper_mock.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
 #include "chrome/browser/ash/policy/active_directory/active_directory_join_delegate.h"
+#include "chrome/browser/ash/policy/enrollment/enrollment_status.h"
 
-using testing::_;
-using testing::AtLeast;
-using testing::Invoke;
-using testing::InvokeWithoutArgs;
-
+namespace ash {
+namespace test {
 namespace {
+
+using ::testing::_;
+using ::testing::AtLeast;
+using ::testing::Invoke;
+using ::testing::InvokeWithoutArgs;
 
 MATCHER_P(ConfigModeMatches, mode, "") {
   return arg.mode == mode;
 }
 
 }  // namespace
-
-namespace chromeos {
-namespace test {
 
 // static
 const char EnrollmentHelperMixin::kTestAuthCode[] = "test_auth_code";
@@ -61,23 +61,32 @@ void EnrollmentHelperMixin::ResetMock() {
 }
 
 void EnrollmentHelperMixin::ExpectNoEnrollment() {
-  EXPECT_CALL(*mock_, Setup(_, _, _)).Times(0);
+  EXPECT_CALL(*mock_, Setup(_, _, _, _)).Times(0);
 }
 
 void EnrollmentHelperMixin::ExpectEnrollmentMode(
     policy::EnrollmentConfig::Mode mode) {
-  EXPECT_CALL(*mock_, Setup(_, ConfigModeMatches(mode), _));
+  EXPECT_CALL(*mock_, Setup(_, ConfigModeMatches(mode), _, _));
 }
 
 void EnrollmentHelperMixin::ExpectEnrollmentModeRepeated(
     policy::EnrollmentConfig::Mode mode) {
-  EXPECT_CALL(*mock_, Setup(_, ConfigModeMatches(mode), _)).Times(AtLeast(1));
+  EXPECT_CALL(*mock_, Setup(_, ConfigModeMatches(mode), _, _))
+      .Times(AtLeast(1));
 }
 
 void EnrollmentHelperMixin::ExpectSuccessfulOAuthEnrollment() {
   EXPECT_CALL(*mock_, EnrollUsingAuthCode(kTestAuthCode))
       .WillOnce(InvokeWithoutArgs(
           [this]() { mock_->status_consumer()->OnDeviceEnrolled(); }));
+}
+
+void EnrollmentHelperMixin::ExpectOAuthEnrollmentError(
+    policy::EnrollmentStatus status) {
+  EXPECT_CALL(*mock_, EnrollUsingAuthCode(kTestAuthCode))
+      .WillOnce(InvokeWithoutArgs([this, status]() {
+        mock_->status_consumer()->OnEnrollmentError(status);
+      }));
 }
 
 void EnrollmentHelperMixin::ExpectAttestationEnrollmentSuccess() {
@@ -99,23 +108,6 @@ void EnrollmentHelperMixin::ExpectAttestationEnrollmentErrorRepeated(
   EXPECT_CALL(*mock_, EnrollUsingAttestation())
       .Times(AtLeast(1))
       .WillRepeatedly(InvokeWithoutArgs([this, status]() {
-        mock_->status_consumer()->OnEnrollmentError(status);
-      }));
-}
-
-void EnrollmentHelperMixin::ExpectOfflineEnrollmentSuccess() {
-  ExpectEnrollmentMode(policy::EnrollmentConfig::MODE_OFFLINE_DEMO);
-
-  EXPECT_CALL(*mock_, EnrollForOfflineDemo())
-      .WillOnce(testing::InvokeWithoutArgs(
-          [this]() { mock_->status_consumer()->OnDeviceEnrolled(); }));
-}
-
-void EnrollmentHelperMixin::ExpectOfflineEnrollmentError(
-    policy::EnrollmentStatus status) {
-  ExpectEnrollmentMode(policy::EnrollmentConfig::MODE_OFFLINE_DEMO);
-  EXPECT_CALL(*mock_, EnrollForOfflineDemo())
-      .WillOnce(testing::InvokeWithoutArgs([this, status]() {
         mock_->status_consumer()->OnEnrollmentError(status);
       }));
 }
@@ -172,4 +164,4 @@ void EnrollmentHelperMixin::SetupActiveDirectoryJoin(
 }
 
 }  // namespace test
-}  // namespace chromeos
+}  // namespace ash

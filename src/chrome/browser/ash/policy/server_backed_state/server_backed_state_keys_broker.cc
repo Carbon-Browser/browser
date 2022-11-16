@@ -10,7 +10,7 @@
 #include "base/logging.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
-#include "chromeos/dbus/session_manager/session_manager_client.h"
+#include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
 
 namespace policy {
 
@@ -20,16 +20,16 @@ namespace {
 // state key generation, so they rotate over time. The quantum size is pretty
 // coarse though (currently 2^23 seconds), so simply polling for a new state
 // keys once a day is good enough.
-constexpr base::TimeDelta kPollInterval = base::TimeDelta::FromDays(1);
+constexpr base::TimeDelta kPollInterval = base::Days(1);
 
 // In case state key fetching failed, we need to try again, sooner than
 // |kPollInterval|.
-constexpr base::TimeDelta kRetryInterval = base::TimeDelta::FromMinutes(1);
+constexpr base::TimeDelta kRetryInterval = base::Minutes(1);
 
 }  // namespace
 
 ServerBackedStateKeysBroker::ServerBackedStateKeysBroker(
-    chromeos::SessionManagerClient* session_manager_client)
+    ash::SessionManagerClient* session_manager_client)
     : session_manager_client_(session_manager_client), requested_(false) {}
 
 ServerBackedStateKeysBroker::~ServerBackedStateKeysBroker() {}

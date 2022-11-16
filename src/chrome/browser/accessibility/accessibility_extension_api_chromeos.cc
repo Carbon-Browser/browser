@@ -25,7 +25,6 @@
 #include "chrome/browser/ash/accessibility/magnification_manager.h"
 #include "chrome/browser/ash/arc/accessibility/arc_accessibility_helper_bridge.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
-#include "chrome/browser/extensions/api/tabs/tabs_constants.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/extension_tab_util.h"
 #include "chrome/browser/profiles/profile.h"
@@ -38,10 +37,10 @@
 #include "components/infobars/core/confirm_infobar_delegate.h"
 #include "components/infobars/core/infobar.h"
 #include "content/public/browser/browser_accessibility_state.h"
+#include "content/public/common/color_parser.h"
 #include "extensions/browser/event_router.h"
 #include "extensions/browser/extension_system.h"
 #include "extensions/common/error_utils.h"
-#include "extensions/common/image_util.h"
 #include "extensions/common/manifest_handlers/background_info.h"
 #include "ui/accessibility/accessibility_features.h"
 #include "ui/accessibility/accessibility_switches.h"
@@ -51,7 +50,7 @@
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
 #include "ui/events/base_event_utils.h"
-#include "ui/events/keycodes/dom/dom_codes.h"
+#include "ui/events/keycodes/dom/dom_codes_array.h"
 #include "ui/events/keycodes/keyboard_code_conversion.h"
 #include "ui/events/keycodes/keyboard_codes.h"
 #include "ui/events/ozone/layout/keyboard_layout_engine.h"
@@ -62,6 +61,41 @@ namespace {
 
 namespace accessibility_private = ::extensions::api::accessibility_private;
 using ::ash::AccessibilityManager;
+
+ash::DictationBubbleHintType ConvertDictationHintType(
+    accessibility_private::DictationBubbleHintType hint_type) {
+  switch (hint_type) {
+    case accessibility_private::DictationBubbleHintType::
+        DICTATION_BUBBLE_HINT_TYPE_TRYSAYING:
+      return ash::DictationBubbleHintType::kTrySaying;
+    case accessibility_private::DictationBubbleHintType::
+        DICTATION_BUBBLE_HINT_TYPE_TYPE:
+      return ash::DictationBubbleHintType::kType;
+    case accessibility_private::DictationBubbleHintType::
+        DICTATION_BUBBLE_HINT_TYPE_DELETE:
+      return ash::DictationBubbleHintType::kDelete;
+    case accessibility_private::DictationBubbleHintType::
+        DICTATION_BUBBLE_HINT_TYPE_SELECTALL:
+      return ash::DictationBubbleHintType::kSelectAll;
+    case accessibility_private::DictationBubbleHintType::
+        DICTATION_BUBBLE_HINT_TYPE_UNDO:
+      return ash::DictationBubbleHintType::kUndo;
+    case accessibility_private::DictationBubbleHintType::
+        DICTATION_BUBBLE_HINT_TYPE_HELP:
+      return ash::DictationBubbleHintType::kHelp;
+    case accessibility_private::DictationBubbleHintType::
+        DICTATION_BUBBLE_HINT_TYPE_UNSELECT:
+      return ash::DictationBubbleHintType::kUnselect;
+    case accessibility_private::DictationBubbleHintType::
+        DICTATION_BUBBLE_HINT_TYPE_COPY:
+      return ash::DictationBubbleHintType::kCopy;
+    case accessibility_private::DictationBubbleHintType::
+        DICTATION_BUBBLE_HINT_TYPE_NONE:
+      NOTREACHED();
+      return ash::DictationBubbleHintType::kTrySaying;
+      ;
+  }
+}
 
 }  // namespace
 
@@ -87,7 +121,7 @@ AccessibilityPrivateOpenSettingsSubpageFunction::Run() {
   // TODO(chrome-a11y-core): we can't open a settings page when you're on the
   // signin profile, but maybe we should notify the user and explain why?
   Profile* profile = AccessibilityManager::Get()->profile();
-  if (!chromeos::ProfileHelper::IsSigninProfile(profile) &&
+  if (!ash::ProfileHelper::IsSigninProfile(profile) &&
       chromeos::settings::IsOSSettingsSubPage(params->subpage)) {
     chrome::SettingsWindowManager::GetInstance()->ShowOSSettings(
         profile, params->subpage);
@@ -119,15 +153,14 @@ AccessibilityPrivateSetFocusRingsFunction::Run() {
     const std::string id = accessibility_manager->GetFocusRingId(
         extension_id(), focus_ring_info.id ? *(focus_ring_info.id) : "");
 
-    if (!extensions::image_util::ParseHexColorString(focus_ring_info.color,
-                                                     &(focus_ring->color))) {
+    if (!content::ParseHexColorString(focus_ring_info.color,
+                                      &(focus_ring->color))) {
       return RespondNow(Error("Could not parse hex color"));
     }
 
     if (focus_ring_info.secondary_color &&
-        !extensions::image_util::ParseHexColorString(
-            *(focus_ring_info.secondary_color),
-            &(focus_ring->secondary_color))) {
+        !content::ParseHexColorString(*(focus_ring_info.secondary_color),
+                                      &(focus_ring->secondary_color))) {
       return RespondNow(Error("Could not parse secondary hex color"));
     }
 
@@ -163,9 +196,8 @@ AccessibilityPrivateSetFocusRingsFunction::Run() {
     }
 
     if (focus_ring_info.background_color &&
-        !extensions::image_util::ParseHexColorString(
-            *(focus_ring_info.background_color),
-            &(focus_ring->background_color))) {
+        !content::ParseHexColorString(*(focus_ring_info.background_color),
+                                      &(focus_ring->background_color))) {
       return RespondNow(Error("Could not parse background hex color"));
     }
 
@@ -197,7 +229,7 @@ AccessibilityPrivateSetHighlightsFunction::Run() {
   }
 
   SkColor color;
-  if (!extensions::image_util::ParseHexColorString(params->color, &color))
+  if (!content::ParseHexColorString(params->color, &color))
     return RespondNow(Error("Could not parse hex color"));
 
   // Set the highlights to cover all of these rects.
@@ -255,9 +287,30 @@ AccessibilityPrivateSetNativeChromeVoxArcSupportForCurrentAppFunction::Run() {
     EXTENSION_FUNCTION_VALIDATE(args().size() >= 1);
     EXTENSION_FUNCTION_VALIDATE(args()[0].is_bool());
     bool enabled = args()[0].GetBool();
-    bridge->SetNativeChromeVoxArcSupport(enabled);
+    bridge->SetNativeChromeVoxArcSupport(
+        enabled,
+        base::BindOnce(
+            &AccessibilityPrivateSetNativeChromeVoxArcSupportForCurrentAppFunction::
+                OnResponse,
+            this));
+    return did_respond() ? AlreadyResponded() : RespondLater();
   }
-  return RespondNow(NoArguments());
+  return RespondNow(ArgumentList(
+      extensions::api::accessibility_private::
+          SetNativeChromeVoxArcSupportForCurrentApp::Results::Create(
+              extensions::api::accessibility_private::
+                  SetNativeChromeVoxResponse::
+                      SET_NATIVE_CHROME_VOX_RESPONSE_FAILURE)));
+}
+
+void AccessibilityPrivateSetNativeChromeVoxArcSupportForCurrentAppFunction::
+    OnResponse(
+        extensions::api::accessibility_private::SetNativeChromeVoxResponse
+            response) {
+  Respond(ArgumentList(
+      extensions::api::accessibility_private::
+          SetNativeChromeVoxArcSupportForCurrentApp::Results::Create(
+              response)));
 }
 
 ExtensionFunction::ResponseAction
@@ -637,17 +690,18 @@ AccessibilityPrivateIsFeatureEnabledFunction::Run() {
   bool enabled;
   switch (params_feature) {
     case accessibility_private::AccessibilityFeature::
-        ACCESSIBILITY_FEATURE_SELECTTOSPEAKNAVIGATIONCONTROL:
-      enabled = ::features::IsSelectToSpeakNavigationControlEnabled();
-      break;
-    case accessibility_private::AccessibilityFeature::
         ACCESSIBILITY_FEATURE_ENHANCEDNETWORKVOICES:
       enabled = ::features::IsEnhancedNetworkVoicesEnabled();
       break;
     case accessibility_private::AccessibilityFeature::
-        ACCESSIBILITY_FEATURE_DICTATIONCOMMANDS:
+        ACCESSIBILITY_FEATURE_GOOGLETTSLANGUAGEPACKS:
+      enabled = ::features::
+          IsExperimentalAccessibilityGoogleTtsLanguagePacksEnabled();
+      break;
+    case accessibility_private::AccessibilityFeature::
+        ACCESSIBILITY_FEATURE_DICTATIONPUMPKINPARSING:
       enabled =
-          ::features::IsExperimentalAccessibilityDictationCommandsEnabled();
+          ::features::IsExperimentalAccessibilityDictationWithPumpkinEnabled();
       break;
     case accessibility_private::AccessibilityFeature::
         ACCESSIBILITY_FEATURE_NONE:
@@ -736,7 +790,7 @@ AccessibilityPrivateGetLocalizedDomKeyStringForKeyCodeFunction::Run() {
     }
   }
 
-  for (const auto& dom_code : ui::dom_codes) {
+  for (const auto& dom_code : ui::kDomCodesArray) {
     if (!layout_engine->Lookup(dom_code, /*flags=*/ui::EF_NONE, &dom_key,
                                &key_code_to_compare)) {
       continue;
@@ -750,4 +804,75 @@ AccessibilityPrivateGetLocalizedDomKeyStringForKeyCodeFunction::Run() {
   }
 
   return RespondNow(OneArgument(base::Value(std::string())));
+}
+
+ExtensionFunction::ResponseAction
+AccessibilityPrivateUpdateDictationBubbleFunction::Run() {
+  std::unique_ptr<accessibility_private::UpdateDictationBubble::Params> params(
+      accessibility_private::UpdateDictationBubble::Params::Create(args()));
+  EXTENSION_FUNCTION_VALIDATE(params);
+  accessibility_private::DictationBubbleProperties& properties =
+      params->properties;
+
+  // Extract the icon type.
+  ash::DictationBubbleIconType icon = ash::DictationBubbleIconType::kHidden;
+  switch (properties.icon) {
+    case accessibility_private::DictationBubbleIconType::
+        DICTATION_BUBBLE_ICON_TYPE_HIDDEN:
+      icon = ash::DictationBubbleIconType::kHidden;
+      break;
+    case accessibility_private::DictationBubbleIconType::
+        DICTATION_BUBBLE_ICON_TYPE_STANDBY:
+      icon = ash::DictationBubbleIconType::kStandby;
+      break;
+    case accessibility_private::DictationBubbleIconType::
+        DICTATION_BUBBLE_ICON_TYPE_MACROSUCCESS:
+      icon = ash::DictationBubbleIconType::kMacroSuccess;
+      break;
+    case accessibility_private::DictationBubbleIconType::
+        DICTATION_BUBBLE_ICON_TYPE_MACROFAIL:
+      icon = ash::DictationBubbleIconType::kMacroFail;
+      break;
+    case accessibility_private::DictationBubbleIconType::
+        DICTATION_BUBBLE_ICON_TYPE_NONE:
+      NOTREACHED();
+      break;
+  }
+
+  // Extract text.
+  absl::optional<std::u16string> text;
+  if (properties.text)
+    text = base::UTF8ToUTF16(*properties.text);
+
+  // Extract hints.
+  absl::optional<std::vector<ash::DictationBubbleHintType>> hints;
+  if (properties.hints) {
+    std::vector<ash::DictationBubbleHintType> converted_hints;
+    for (size_t i = 0; i < (*properties.hints).size(); ++i) {
+      converted_hints.push_back(
+          ConvertDictationHintType((*properties.hints)[i]));
+    }
+    hints = converted_hints;
+  }
+
+  if (hints.has_value() && hints.value().size() > 5)
+    return RespondNow(Error("Should not provide more than five hints."));
+
+  ash::AccessibilityController::Get()->UpdateDictationBubble(properties.visible,
+                                                             icon, text, hints);
+  return RespondNow(NoArguments());
+}
+
+ExtensionFunction::ResponseAction
+AccessibilityPrivateInstallPumpkinForDictationFunction::Run() {
+  AccessibilityManager::Get()->InstallPumpkinForDictation(
+      base::BindOnce(&AccessibilityPrivateInstallPumpkinForDictationFunction::
+                         OnPumpkinInstallFinished,
+                     base::RetainedRef(this)));
+  return RespondLater();
+}
+
+void AccessibilityPrivateInstallPumpkinForDictationFunction::
+    OnPumpkinInstallFinished(bool success) {
+  Respond(OneArgument(base::Value(success)));
 }

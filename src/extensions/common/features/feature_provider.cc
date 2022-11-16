@@ -34,14 +34,14 @@ namespace {
 // This is provided in feature_util because for some reason features are prone
 // to mysterious crashes in named map lookups. For example see crbug.com/365192
 // and crbug.com/461915.
-#define CRASH_WITH_MINIDUMP(message)                                  \
-  {                                                                   \
-    std::string message_copy(message);                                \
-    char minidump[BUFSIZ];                                            \
-    base::debug::Alias(&minidump);                                    \
-    base::snprintf(minidump, base::size(minidump), "e::%s:%d:\"%s\"", \
-                   __FILE__, __LINE__, message_copy.c_str());         \
-    LOG(FATAL) << message_copy;                                       \
+#define CRASH_WITH_MINIDUMP(message)                                           \
+  {                                                                            \
+    std::string message_copy(message);                                         \
+    char minidump[BUFSIZ];                                                     \
+    base::debug::Alias(&minidump);                                             \
+    base::snprintf(minidump, std::size(minidump), "e::%s:%d:\"%s\"", __FILE__, \
+                   __LINE__, message_copy.c_str());                            \
+    LOG(FATAL) << message_copy;                                                \
   }
 
 class FeatureProviderStatic {
@@ -73,6 +73,9 @@ class FeatureProviderStatic {
     }
   }
 
+  FeatureProviderStatic(const FeatureProviderStatic&) = delete;
+  FeatureProviderStatic& operator=(const FeatureProviderStatic&) = delete;
+
   FeatureProvider* GetFeatures(const std::string& name) const {
     auto it = feature_providers_.find(name);
     if (it == feature_providers_.end())
@@ -82,8 +85,6 @@ class FeatureProviderStatic {
 
  private:
   std::map<std::string, std::unique_ptr<FeatureProvider>> feature_providers_;
-
-  DISALLOW_COPY_AND_ASSIGN(FeatureProviderStatic);
 };
 
 base::LazyInstance<FeatureProviderStatic>::Leaky g_feature_provider_static =

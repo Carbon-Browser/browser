@@ -9,7 +9,6 @@
 
 #include "base/auto_reset.h"
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/timer/timer.h"
 #include "chrome/browser/ash/login/screens/base_screen.h"
@@ -50,6 +49,10 @@ class PinSetupScreen : public BaseScreen {
   using ScreenExitCallback = base::RepeatingCallback<void(Result result)>;
   PinSetupScreen(PinSetupScreenView* view,
                  const ScreenExitCallback& exit_callback);
+
+  PinSetupScreen(const PinSetupScreen&) = delete;
+  PinSetupScreen& operator=(const PinSetupScreen&) = delete;
+
   ~PinSetupScreen() override;
 
   void set_exit_callback_for_testing(const ScreenExitCallback& exit_callback) {
@@ -65,7 +68,7 @@ class PinSetupScreen : public BaseScreen {
   bool MaybeSkip(WizardContext* context) override;
   void ShowImpl() override;
   void HideImpl() override;
-  void OnUserAction(const std::string& action_id) override;
+  void OnUserActionDeprecated(const std::string& action_id) override;
 
  private:
   // Inticates whether the device supports usage of PIN for login.
@@ -84,8 +87,6 @@ class PinSetupScreen : public BaseScreen {
   void OnTokenTimedOut();
 
   base::WeakPtrFactory<PinSetupScreen> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(PinSetupScreen);
 };
 
 }  // namespace ash

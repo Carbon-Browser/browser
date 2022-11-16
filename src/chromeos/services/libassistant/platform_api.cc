@@ -5,7 +5,7 @@
 #include "chromeos/services/libassistant/platform_api.h"
 
 #include "base/check.h"
-#include "chromeos/services/assistant/public/cpp/features.h"
+#include "chromeos/ash/services/assistant/public/cpp/features.h"
 #include "chromeos/services/libassistant/audio/audio_output_provider_impl.h"
 #include "chromeos/services/libassistant/fake_auth_provider.h"
 #include "chromeos/services/libassistant/file_provider_impl.h"
@@ -75,6 +75,14 @@ assistant_client::NetworkProvider& PlatformApi::GetNetworkProvider() {
 assistant_client::SystemProvider& PlatformApi::GetSystemProvider() {
   DCHECK(system_provider_);
   return *system_provider_;
+}
+
+void PlatformApi::OnAssistantClientCreated(AssistantClient* assistant_client) {
+  audio_output_provider_->BindAudioDecoderFactory();
+}
+
+void PlatformApi::OnAssistantClientDestroyed() {
+  audio_output_provider_->UnBindAudioDecoderFactory();
 }
 
 }  // namespace libassistant

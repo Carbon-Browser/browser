@@ -111,12 +111,16 @@ error::Error RasterDecoderImpl::HandleBeginRasterCHROMIUMImmediate(
   const volatile raster::cmds::BeginRasterCHROMIUMImmediate& c =
       *static_cast<const volatile raster::cmds::BeginRasterCHROMIUMImmediate*>(
           cmd_data);
-  GLuint sk_color = static_cast<GLuint>(c.sk_color);
+  GLfloat r = static_cast<GLfloat>(c.r);
+  GLfloat g = static_cast<GLfloat>(c.g);
+  GLfloat b = static_cast<GLfloat>(c.b);
+  GLfloat a = static_cast<GLfloat>(c.a);
   GLboolean needs_clear = static_cast<GLboolean>(c.needs_clear);
   GLuint msaa_sample_count = static_cast<GLuint>(c.msaa_sample_count);
   gpu::raster::MsaaMode msaa_mode =
       static_cast<gpu::raster::MsaaMode>(c.msaa_mode);
   GLboolean can_use_lcd_text = static_cast<GLboolean>(c.can_use_lcd_text);
+  GLboolean visible = static_cast<GLboolean>(c.visible);
   uint32_t mailbox_size;
   if (!gles2::GLES2Util::ComputeDataSize<GLbyte, 16>(1, &mailbox_size)) {
     return error::kOutOfBounds;
@@ -130,8 +134,8 @@ error::Error RasterDecoderImpl::HandleBeginRasterCHROMIUMImmediate(
   if (mailbox == nullptr) {
     return error::kOutOfBounds;
   }
-  DoBeginRasterCHROMIUM(sk_color, needs_clear, msaa_sample_count, msaa_mode,
-                        can_use_lcd_text, mailbox);
+  DoBeginRasterCHROMIUM(r, g, b, a, needs_clear, msaa_sample_count, msaa_mode,
+                        can_use_lcd_text, visible, mailbox);
   return error::kNoError;
 }
 
@@ -140,10 +144,6 @@ error::Error RasterDecoderImpl::HandleRasterCHROMIUM(
     const volatile void* cmd_data) {
   const volatile raster::cmds::RasterCHROMIUM& c =
       *static_cast<const volatile raster::cmds::RasterCHROMIUM*>(cmd_data);
-  if (!features().chromium_raster_transport) {
-    return error::kUnknownCommand;
-  }
-
   GLuint raster_shm_id = static_cast<GLuint>(c.raster_shm_id);
   GLuint raster_shm_offset = static_cast<GLuint>(c.raster_shm_offset);
   GLuint raster_shm_size = static_cast<GLuint>(c.raster_shm_size);
@@ -205,28 +205,6 @@ error::Error RasterDecoderImpl::HandleUnlockTransferCacheEntryINTERNAL(
   GLuint entry_type = static_cast<GLuint>(c.entry_type);
   GLuint entry_id = static_cast<GLuint>(c.entry_id);
   DoUnlockTransferCacheEntryINTERNAL(entry_type, entry_id);
-  return error::kNoError;
-}
-
-error::Error
-RasterDecoderImpl::HandleDeletePaintCacheTextBlobsINTERNALImmediate(
-    uint32_t immediate_data_size,
-    const volatile void* cmd_data) {
-  const volatile raster::cmds::DeletePaintCacheTextBlobsINTERNALImmediate& c =
-      *static_cast<const volatile raster::cmds::
-                       DeletePaintCacheTextBlobsINTERNALImmediate*>(cmd_data);
-  GLsizei n = static_cast<GLsizei>(c.n);
-  uint32_t ids_size;
-  if (!base::CheckMul(n, sizeof(GLuint)).AssignIfValid(&ids_size)) {
-    return error::kOutOfBounds;
-  }
-  volatile const GLuint* ids =
-      gles2::GetImmediateDataAs<volatile const GLuint*>(c, ids_size,
-                                                        immediate_data_size);
-  if (ids == nullptr) {
-    return error::kOutOfBounds;
-  }
-  DeletePaintCacheTextBlobsINTERNALHelper(n, ids);
   return error::kNoError;
 }
 

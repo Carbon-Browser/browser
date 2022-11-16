@@ -5,28 +5,29 @@
 #include "ash/accessibility/accessibility_controller_impl.h"
 #include "ash/accessibility/ui/accessibility_confirmation_dialog.h"
 #include "ash/shell.h"
+#include "base/test/scoped_feature_list.h"
 #include "chrome/browser/ash/accessibility/accessibility_manager.h"
+#include "chrome/browser/ash/accessibility/dictation_bubble_test_helper.h"
+#include "chrome/browser/ash/system_web_apps/system_web_app_manager.h"
 #include "chrome/browser/extensions/extension_apitest.h"
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/chrome_pages.h"
 #include "chrome/browser/ui/settings_window_manager_chromeos.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
-#include "chrome/browser/web_applications/system_web_apps/system_web_app_manager.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/common/webui_url_constants.h"
 #include "content/public/test/browser_test.h"
+#include "extensions/test/extension_test_message_listener.h"
 #include "extensions/test/result_catcher.h"
 #include "ui/accessibility/accessibility_features.h"
 #include "ui/base/ui_base_features.h"
 
-namespace extensions {
+namespace ash {
 
-using ::ash::AccessibilityManager;
-
-using ContextType = ExtensionBrowserTest::ContextType;
+using ContextType = ::extensions::ExtensionBrowserTest::ContextType;
 
 class AccessibilityPrivateApiTest
-    : public ExtensionApiTest,
+    : public extensions::ExtensionApiTest,
       public testing::WithParamInterface<ContextType> {
  public:
   AccessibilityPrivateApiTest() : ExtensionApiTest(GetParam()) {}
@@ -36,9 +37,30 @@ class AccessibilityPrivateApiTest
   AccessibilityPrivateApiTest(const AccessibilityPrivateApiTest&) = delete;
 
  protected:
-  bool RunSubtest(const char* subtest) WARN_UNUSED_RESULT {
+  // ExtensionApiTest:
+  void SetUpCommandLine(base::CommandLine* command_line) override {
+    ExtensionApiTest::SetUpCommandLine(command_line);
+    scoped_feature_list_.InitAndEnableFeature(
+        ::features::kExperimentalAccessibilityDictationWithPumpkin);
+  }
+
+  void SetUpOnMainThread() override {
+    ExtensionApiTest::SetUpOnMainThread();
+    dictation_bubble_test_helper_ =
+        std::make_unique<DictationBubbleTestHelper>();
+  }
+
+  [[nodiscard]] bool RunSubtest(const char* subtest) {
     return RunExtensionTest("accessibility_private", {.custom_arg = subtest});
   }
+
+  DictationBubbleTestHelper* dictation_bubble_test_helper() {
+    return dictation_bubble_test_helper_.get();
+  }
+
+ private:
+  std::unique_ptr<DictationBubbleTestHelper> dictation_bubble_test_helper_;
+  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 IN_PROC_BROWSER_TEST_P(AccessibilityPrivateApiTest, SendSyntheticKeyEvent) {
@@ -50,19 +72,11 @@ IN_PROC_BROWSER_TEST_P(AccessibilityPrivateApiTest,
   ASSERT_TRUE(RunSubtest("testGetDisplayNameForLocale")) << message_;
 }
 
-// Flaky on a debug build, see crbug.com/1030507.
-#if !defined(NDEBUG)
-#define MAYBE_OpenSettingsSubpage DISABLED_OpenSettingsSubpage
-#else
-#define MAYBE_OpenSettingsSubpage OpenSettingsSubpage
-#endif
 IN_PROC_BROWSER_TEST_P(AccessibilityPrivateApiTest, OpenSettingsSubpage) {
   Profile* profile = AccessibilityManager::Get()->profile();
 
   // Install the Settings App.
-  web_app::WebAppProvider::GetForTest(profile)
-      ->system_web_app_manager()
-      .InstallSystemAppsForTesting();
+  ash::SystemWebAppManager::GetForTest(profile)->InstallSystemAppsForTesting();
 
   ASSERT_TRUE(RunSubtest("testOpenSettingsSubpage")) << message_;
 
@@ -86,9 +100,7 @@ IN_PROC_BROWSER_TEST_P(AccessibilityPrivateApiTest,
   Profile* profile = AccessibilityManager::Get()->profile();
 
   // Install the Settings App.
-  web_app::WebAppProvider::GetForTest(profile)
-      ->system_web_app_manager()
-      .InstallSystemAppsForTesting();
+  ash::SystemWebAppManager::GetForTest(profile)->InstallSystemAppsForTesting();
 
   ASSERT_TRUE(RunSubtest("testOpenSettingsSubpageInvalidSubpage")) << message_;
 
@@ -103,20 +115,24 @@ IN_PROC_BROWSER_TEST_P(AccessibilityPrivateApiTest,
 template <bool enabled>
 class AccessibilityPrivateApiFeatureTest : public AccessibilityPrivateApiTest {
  public:
-  AccessibilityPrivateApiFeatureTest() {
-    if (enabled) {
-      scoped_feature_list_.InitAndEnableFeature(
-          ::features::kSelectToSpeakNavigationControl);
-    } else {
-      scoped_feature_list_.InitAndDisableFeature(
-          ::features::kSelectToSpeakNavigationControl);
-    }
-  }
+  AccessibilityPrivateApiFeatureTest() = default;
   ~AccessibilityPrivateApiFeatureTest() override = default;
   AccessibilityPrivateApiFeatureTest& operator=(
       const AccessibilityPrivateApiFeatureTest&) = delete;
   AccessibilityPrivateApiFeatureTest(
       const AccessibilityPrivateApiFeatureTest&) = delete;
+
+  // AccessibilityPrivateApiTest:
+  void SetUpCommandLine(base::CommandLine* command_line) override {
+    AccessibilityPrivateApiTest::SetUpCommandLine(command_line);
+    if (enabled) {
+      scoped_feature_list_.InitAndEnableFeature(
+          ::features::kEnhancedNetworkVoices);
+    } else {
+      scoped_feature_list_.InitAndDisableFeature(
+          ::features::kEnhancedNetworkVoices);
+    }
+  }
 
  private:
   base::test::ScopedFeatureList scoped_feature_list_;
@@ -146,16 +162,14 @@ IN_PROC_BROWSER_TEST_P(AccessibilityPrivateApiTest, AcceptConfirmationDialog) {
 
   // The test has requested to open the confirmation dialog. Check that
   // it was created, then confirm it.
-  ash::AccessibilityConfirmationDialog* dialog_ =
-      ash::Shell::Get()
-          ->accessibility_controller()
-          ->GetConfirmationDialogForTest();
+  AccessibilityConfirmationDialog* dialog_ =
+      Shell::Get()->accessibility_controller()->GetConfirmationDialogForTest();
   ASSERT_NE(dialog_, nullptr);
 
   EXPECT_EQ(dialog_->GetWindowTitle(), u"Confirm me! 🐶");
 
   // Accept the dialog and wait for the JS test to get the confirmation.
-  ResultCatcher catcher;
+  extensions::ResultCatcher catcher;
   dialog_->Accept();
   EXPECT_TRUE(catcher.GetNextResult()) << catcher.message();
 }
@@ -165,16 +179,14 @@ IN_PROC_BROWSER_TEST_P(AccessibilityPrivateApiTest, CancelConfirmationDialog) {
 
   // The test has requested to open the confirmation dialog. Check that
   // it was created, then cancel it.
-  ash::AccessibilityConfirmationDialog* dialog_ =
-      ash::Shell::Get()
-          ->accessibility_controller()
-          ->GetConfirmationDialogForTest();
+  AccessibilityConfirmationDialog* dialog_ =
+      Shell::Get()->accessibility_controller()->GetConfirmationDialogForTest();
   ASSERT_NE(dialog_, nullptr);
 
   EXPECT_EQ(dialog_->GetWindowTitle(), u"Cancel me!");
 
   // Cancel the dialog and wait for the JS test to get the callback.
-  ResultCatcher catcher;
+  extensions::ResultCatcher catcher;
   dialog_->Cancel();
   EXPECT_TRUE(catcher.GetNextResult()) << catcher.message();
 }
@@ -184,18 +196,103 @@ IN_PROC_BROWSER_TEST_P(AccessibilityPrivateApiTest, CloseConfirmationDialog) {
 
   // The test has requested to open the confirmation dialog. Check that
   // it was created, then close it.
-  ash::AccessibilityConfirmationDialog* dialog_ =
-      ash::Shell::Get()
-          ->accessibility_controller()
-          ->GetConfirmationDialogForTest();
+  AccessibilityConfirmationDialog* dialog_ =
+      Shell::Get()->accessibility_controller()->GetConfirmationDialogForTest();
   ASSERT_TRUE(dialog_ != nullptr);
 
   EXPECT_EQ(dialog_->GetWindowTitle(), u"Cancel me!");
 
   // Close the dialog and wait for the JS test to get the callback.
-  ResultCatcher catcher;
+  extensions::ResultCatcher catcher;
   dialog_->Close();
   EXPECT_TRUE(catcher.GetNextResult()) << catcher.message();
+}
+
+IN_PROC_BROWSER_TEST_P(AccessibilityPrivateApiTest, UpdateDictationBubble) {
+  // Enable Dictation to allow the API to work.
+  Shell::Get()->accessibility_controller()->dictation().SetEnabled(true);
+
+  // This test requires some back and forth communication between C++ and JS.
+  // Use message listeners to force the synchronicity of this test.
+  ExtensionTestMessageListener standby_listener("Standby",
+                                                ReplyBehavior::kWillReply);
+  ExtensionTestMessageListener show_text_listener("Show text",
+                                                  ReplyBehavior::kWillReply);
+  ExtensionTestMessageListener macro_success_listener(
+      "Show macro success", ReplyBehavior::kWillReply);
+  ExtensionTestMessageListener reset_listener("Reset",
+                                              ReplyBehavior::kWillReply);
+  ExtensionTestMessageListener hide_listener("Hide");
+
+  extensions::ResultCatcher result_catcher;
+  ASSERT_TRUE(RunSubtest("testUpdateDictationBubble")) << message_;
+
+  ASSERT_TRUE(standby_listener.WaitUntilSatisfied());
+  EXPECT_TRUE(dictation_bubble_test_helper()->IsVisible());
+  EXPECT_EQ(std::u16string(), dictation_bubble_test_helper()->GetText());
+  EXPECT_EQ(DictationBubbleIconType::kStandby,
+            dictation_bubble_test_helper()->GetVisibleIcon());
+  standby_listener.Reply("Continue");
+
+  ASSERT_TRUE(show_text_listener.WaitUntilSatisfied());
+  EXPECT_TRUE(dictation_bubble_test_helper()->IsVisible());
+  EXPECT_EQ(u"Hello", dictation_bubble_test_helper()->GetText());
+  EXPECT_EQ(DictationBubbleIconType::kHidden,
+            dictation_bubble_test_helper()->GetVisibleIcon());
+  show_text_listener.Reply("Continue");
+
+  ASSERT_TRUE(macro_success_listener.WaitUntilSatisfied());
+  EXPECT_TRUE(dictation_bubble_test_helper()->IsVisible());
+  EXPECT_EQ(u"Hello", dictation_bubble_test_helper()->GetText());
+  EXPECT_EQ(DictationBubbleIconType::kMacroSuccess,
+            dictation_bubble_test_helper()->GetVisibleIcon());
+  macro_success_listener.Reply("Continue");
+
+  ASSERT_TRUE(reset_listener.WaitUntilSatisfied());
+  EXPECT_TRUE(dictation_bubble_test_helper()->IsVisible());
+  EXPECT_EQ(std::u16string(), dictation_bubble_test_helper()->GetText());
+  EXPECT_EQ(DictationBubbleIconType::kStandby,
+            dictation_bubble_test_helper()->GetVisibleIcon());
+  reset_listener.Reply("Continue");
+
+  ASSERT_TRUE(hide_listener.WaitUntilSatisfied());
+  EXPECT_FALSE(dictation_bubble_test_helper()->IsVisible());
+  EXPECT_EQ(std::u16string(), dictation_bubble_test_helper()->GetText());
+  EXPECT_EQ(DictationBubbleIconType::kHidden,
+            dictation_bubble_test_helper()->GetVisibleIcon());
+
+  ASSERT_TRUE(result_catcher.GetNextResult()) << result_catcher.message();
+}
+
+IN_PROC_BROWSER_TEST_P(AccessibilityPrivateApiTest,
+                       UpdateDictationBubbleWithHints) {
+  Shell::Get()->accessibility_controller()->dictation().SetEnabled(true);
+  ExtensionTestMessageListener show_listener("Some hints",
+                                             ReplyBehavior::kWillReply);
+  ExtensionTestMessageListener no_hints_listener("No hints");
+  extensions::ResultCatcher result_catcher;
+  ASSERT_TRUE(RunSubtest("testUpdateDictationBubbleWithHints")) << message_;
+
+  ASSERT_TRUE(show_listener.WaitUntilSatisfied());
+  EXPECT_TRUE(dictation_bubble_test_helper()->IsVisible());
+  EXPECT_TRUE(dictation_bubble_test_helper()->HasVisibleHints(
+      std::vector<std::u16string>{u"Try saying:", u"\"Type [word / phrase]\"",
+                                  u"\"Help\""}));
+  show_listener.Reply("Continue");
+
+  ASSERT_TRUE(no_hints_listener.WaitUntilSatisfied());
+  EXPECT_TRUE(dictation_bubble_test_helper()->IsVisible());
+  EXPECT_TRUE(dictation_bubble_test_helper()->HasVisibleHints(
+      std::vector<std::u16string>()));
+
+  ASSERT_TRUE(result_catcher.GetNextResult()) << result_catcher.message();
+}
+
+IN_PROC_BROWSER_TEST_P(AccessibilityPrivateApiTest,
+                       InstallPumpkinForDictation) {
+  // Enable Dictation to allow the API to work.
+  Shell::Get()->accessibility_controller()->dictation().SetEnabled(true);
+  ASSERT_TRUE(RunSubtest("testInstallPumpkinForDictation")) << message_;
 }
 
 INSTANTIATE_TEST_SUITE_P(PersistentBackground,
@@ -217,4 +314,4 @@ INSTANTIATE_TEST_SUITE_P(ServiceWorker,
                          AccessibilityPrivateApiFeatureEnabledTest,
                          ::testing::Values(ContextType::kServiceWorker));
 
-}  // namespace extensions
+}  // namespace ash

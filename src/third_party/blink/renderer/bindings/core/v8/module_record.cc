@@ -38,7 +38,7 @@ ModuleRecordProduceCacheData::ModuleRecordProduceCacheData(
     v8::Local<v8::UnboundModuleScript> unbound_script =
         module->GetUnboundModuleScript();
     if (!unbound_script.IsEmpty())
-      unbound_script_.Set(isolate, unbound_script);
+      unbound_script_.Reset(isolate, unbound_script);
   }
 }
 
@@ -115,7 +115,8 @@ ScriptValue ModuleRecord::Instantiate(ScriptState* script_state,
 
   // Script IDs are not available on errored modules or on non-source text
   // modules, so we give them a default value.
-  probe::ExecuteScript probe(ExecutionContext::From(script_state), source_url,
+  probe::ExecuteScript probe(ExecutionContext::From(script_state), context,
+                             source_url,
                              record->GetStatus() != v8::Module::kErrored &&
                                      record->IsSourceTextModule()
                                  ? record->ScriptId()

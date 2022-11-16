@@ -18,8 +18,7 @@ import './print_management_shared_css.js';
 import './printing_manager.mojom-lite.js';
 import './strings.m.js';
 
-import {assertNotReached} from 'chrome://resources/js/assert.m.js';
-import {assert} from 'chrome://resources/js/assert.m.js';
+import {assert, assertNotReached} from 'chrome://resources/js/assert.m.js';
 import {FocusRowBehavior} from 'chrome://resources/js/cr/ui/focus_row_behavior.m.js';
 import {I18nBehavior} from 'chrome://resources/js/i18n_behavior.m.js';
 import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
@@ -31,6 +30,24 @@ import {getMetadataProvider} from './mojo_interface_provider.js';
 (function() {
 
 const GENERIC_FILE_EXTENSION_ICON = 'print-management:file-generic';
+
+/**
+ * Lookup table maps icons to the correct display class.
+ * @private {Map<string, string>}
+ */
+const ICON_CLASS_MAP = new Map([
+  ['print-management:file-gdoc', 'file-icon-blue'],
+  ['print-management:file-word', 'file-icon-blue'],
+  ['print-management:file-generic', 'file-icon-gray'],
+  ['print-management:file-excel', 'file-icon-green'],
+  ['print-management:file-gform', 'file-icon-green'],
+  ['print-management:file-gsheet', 'file-icon-green'],
+  ['print-management:file-image', 'file-icon-red'],
+  ['print-management:file-gdraw', 'file-icon-red'],
+  ['print-management:file-gslide', 'file-icon-yellow'],
+  ['print-management:file-pdf', 'file-icon-red'],
+  ['print-management:file-ppt', 'file-icon-red'],
+]);
 
 /**
  * Converts a mojo time to a JS time.
@@ -51,7 +68,7 @@ function convertMojoTimeToJS(mojoTime) {
   const timeInMs = Number(mojoTime.internalValue) / 1000;
 
   return new Date(timeInMs - epochDeltaInMs);
-};
+}
 
 /**
  * Returns true if |date| is today, false otherwise.
@@ -59,11 +76,11 @@ function convertMojoTimeToJS(mojoTime) {
  * @return {boolean}
  */
 function isToday(date) {
-  const today_date = new Date();
-  return date.getDate() === today_date.getDate() &&
-         date.getMonth() === today_date.getMonth() &&
-         date.getFullYear() === today_date.getFullYear();
-};
+  const todayDate = new Date();
+  return date.getDate() === todayDate.getDate() &&
+      date.getMonth() === todayDate.getMonth() &&
+      date.getFullYear() === todayDate.getFullYear();
+}
 
 /**
  * Best effort attempt of finding the file icon name based off of the file's
@@ -108,7 +125,7 @@ function getFileExtensionIconName(fileName) {
     default:
       return GENERIC_FILE_EXTENSION_ICON;
   }
-};
+}
 
 /**
  * Best effort to get the file icon name for a Google-file
@@ -142,7 +159,7 @@ function getGFileIconName(fileName) {
     default:
       return '';
   }
-};
+}
 
 /**
  * @fileoverview
@@ -161,13 +178,13 @@ Polymer({
 
   /**
    * @private {
-   *  ?chromeos.printing.printingManager.mojom.PrintingMetadataProviderInterface
+   *  ?ash.printing.printingManager.mojom.PrintingMetadataProviderInterface
    * }
    */
   mojoInterfaceProvider_: null,
 
   properties: {
-    /** @type {!chromeos.printing.printingManager.mojom.PrintJobInfo} */
+    /** @type {!ash.printing.printingManager.mojom.PrintJobInfo} */
     jobEntry: {
       type: Object,
     },
@@ -229,6 +246,18 @@ Polymer({
      * @private
      */
     showFullOngoingStatus_: Boolean,
+
+    /** @private {string} */
+    fileIcon_: {
+      type: String,
+      computed: 'computeFileIcon_(jobTitle_)',
+    },
+
+    /** @private {string} */
+    fileIconClass_: {
+      type: String,
+      computed: 'computeFileIconClass_(fileIcon_)',
+    },
   },
 
   observers: [
@@ -246,17 +275,15 @@ Polymer({
    * @private
    */
   printJobEntryDataChanged_() {
-    Array.from(this.shadowRoot.querySelectorAll('.overflow-ellipsis')).forEach(
-      (/** @type {HTMLElement} */ e) => {
-        // Checks if text is truncated
-        if (e.offsetWidth < e.scrollWidth) {
-          e.setAttribute("title", e.textContent);
-        }
-        else {
-          e.removeAttribute("title");
-        }
-      }
-                                                                              )
+    Array.from(this.shadowRoot.querySelectorAll('.overflow-ellipsis'))
+        .forEach((/** @type {HTMLElement} */ e) => {
+          // Checks if text is truncated
+          if (e.offsetWidth < e.scrollWidth) {
+            e.setAttribute('title', e.textContent);
+          } else {
+            e.removeAttribute('title');
+          }
+        });
   },
 
   /** @private */
@@ -304,16 +331,18 @@ Polymer({
       return '';
     }
 
-    return loadTimeData.getStringF('printedPagesFraction',
+    return loadTimeData.getStringF(
+        'printedPagesFraction',
         this.jobEntry.activePrintJobInfo.printedPages.toString(),
         this.jobEntry.numberOfPages.toString());
   },
 
   /** @private */
   onCancelPrintJobClicked_() {
-    this.mojoInterfaceProvider_.cancelPrintJob(this.jobEntry.id).then(
-      (/** @param {{attemptedCancel: boolean}} response */(response) =>
-          this.onPrintJobCanceled_(response.attemptedCancel)));
+    this.mojoInterfaceProvider_.cancelPrintJob(this.jobEntry.id)
+        .then(
+            (/** @param {{attemptedCancel: boolean}} response */ (response) =>
+                 this.onPrintJobCanceled_(response.attemptedCancel)));
   },
 
   /**
@@ -323,9 +352,9 @@ Polymer({
   onPrintJobCanceled_(attemptedCancel) {
     // TODO(crbug/1093527): Handle error case in which attempted cancellation
     // failed. Need to discuss with UX on error states.
-    this.fire('iron-announce', {
-      text: loadTimeData.getStringF('cancelledPrintJob', this.jobTitle_)
-    });
+    this.fire(
+        'iron-announce',
+        {text: loadTimeData.getStringF('cancelledPrintJob', this.jobTitle_)});
     this.fire('remove-print-job', this.jobEntry.id);
   },
 
@@ -351,32 +380,30 @@ Polymer({
     // Date() is constructed with the current time in UTC. If the Date() matches
     // |jsDate|'s date, display the 12hour time of the current date.
     if (isToday(jsDate)) {
-      return jsDate.toLocaleTimeString(/*locales=*/undefined,
-          {hour: 'numeric', minute: 'numeric'});
+      return jsDate.toLocaleTimeString(
+          /*locales=*/ undefined, {hour: 'numeric', minute: 'numeric'});
     }
     // Remove the day of the week from the date.
-    return jsDate.toLocaleDateString(/*locales=*/undefined,
+    return jsDate.toLocaleDateString(
+        /*locales=*/ undefined,
         {month: 'short', day: 'numeric', year: 'numeric'});
   },
 
   /**
    * Returns the corresponding completion status from |mojoCompletionStatus|.
-   * @param {!chromeos.printing.printingManager.mojom.PrintJobCompletionStatus}
+   * @param {!ash.printing.printingManager.mojom.PrintJobCompletionStatus}
    *     mojoCompletionStatus
    * @return {string}
    * @private
    */
   convertStatusToString_(mojoCompletionStatus) {
     switch (mojoCompletionStatus) {
-      case chromeos.printing.printingManager.mojom.PrintJobCompletionStatus
-           .kFailed:
-        return this.getFailedStatusString_(
-            this.jobEntry.printerErrorCode);
-      case chromeos.printing.printingManager.mojom.PrintJobCompletionStatus
-           .kCanceled:
+      case ash.printing.printingManager.mojom.PrintJobCompletionStatus.kFailed:
+        return this.getFailedStatusString_(this.jobEntry.printerErrorCode);
+      case ash.printing.printingManager.mojom.PrintJobCompletionStatus
+          .kCanceled:
         return loadTimeData.getString('completionStatusCanceled');
-      case chromeos.printing.printingManager.mojom.PrintJobCompletionStatus
-           .kPrinted:
+      case ash.printing.printingManager.mojom.PrintJobCompletionStatus.kPrinted:
         return loadTimeData.getString('completionStatusPrinted');
       default:
         assertNotReached();
@@ -408,20 +435,23 @@ Polymer({
     // exclusive and one of which has to be non-null. Assert that if
     // |completionStatus_| is non-null that |jobEntry.activePrintJobInfo| is
     // null and vice-versa.
-    assert(this.completionStatus_ ?
-        !this.jobEntry.activePrintJobInfo : this.jobEntry.activePrintJobInfo);
+    assert(
+        this.completionStatus_ ? !this.jobEntry.activePrintJobInfo :
+                                 this.jobEntry.activePrintJobInfo);
 
     if (this.isCompletedPrintJob_()) {
-      return loadTimeData.getStringF('completePrintJobLabel', this.jobTitle_,
-          this.printerName_, this.creationTime_, this.completionStatus_);
+      return loadTimeData.getStringF(
+          'completePrintJobLabel', this.jobTitle_, this.printerName_,
+          this.creationTime_, this.completionStatus_);
     }
     if (this.ongoingErrorStatus_) {
-      return loadTimeData.getStringF('stoppedOngoingPrintJobLabel',
-          this.jobTitle_, this.printerName_, this.creationTime_,
-          this.ongoingErrorStatus_);
+      return loadTimeData.getStringF(
+          'stoppedOngoingPrintJobLabel', this.jobTitle_, this.printerName_,
+          this.creationTime_, this.ongoingErrorStatus_);
     }
-    return loadTimeData.getStringF('ongoingPrintJobLabel', this.jobTitle_,
-        this.printerName_, this.creationTime_,
+    return loadTimeData.getStringF(
+        'ongoingPrintJobLabel', this.jobTitle_, this.printerName_,
+        this.creationTime_,
         this.jobEntry.activePrintJobInfo.printedPages.toString(),
         this.jobEntry.numberOfPages.toString());
   },
@@ -446,60 +476,69 @@ Polymer({
    * (i.e. [iron-iconset-svg name]:[SVG <g> tag id]) for a given file.
    * This is a best effort approach, as we are only given the file name and
    * not necessarily its extension.
-   * @param {string} fileName
    * @return {string}
    * @private
    */
-  getFileIcon_(fileName) {
-    const file_extension = getFileExtensionIconName(fileName);
+  computeFileIcon_() {
+    const fileExtension = getFileExtensionIconName(this.jobTitle_);
     // It's valid for a file to have '.' in its name and not be its extension.
     // If this is the case and we don't have a non-generic file icon, attempt to
     // see if this is a Google file.
-    if (file_extension && file_extension !== GENERIC_FILE_EXTENSION_ICON) {
-      return file_extension;
+    if (fileExtension && fileExtension !== GENERIC_FILE_EXTENSION_ICON) {
+      return fileExtension;
     }
-    const gfile_extension = getGFileIconName(fileName);
-    if (gfile_extension) {
-      return gfile_extension;
+    const gfileExtension = getGFileIconName(this.jobTitle_);
+    if (gfileExtension) {
+      return gfileExtension;
     }
 
     return GENERIC_FILE_EXTENSION_ICON;
   },
 
   /**
-   * @param {!chromeos.printing.printingManager.mojom.PrinterErrorCode}
+   * Uses file-icon SVG id to determine correct class to apply for file icon.
+   * @return {string}
+   * @private
+   */
+  computeFileIconClass_() {
+    const iconClass = ICON_CLASS_MAP.get(this.fileIcon_);
+    return `flex-center ${iconClass}`;
+  },
+
+  /**
+   * @param {!ash.printing.printingManager.mojom.PrinterErrorCode}
    *     mojoPrinterErrorCode
    * @return {string}
    * @private
    */
   getFailedStatusString_(mojoPrinterErrorCode) {
     switch (mojoPrinterErrorCode) {
-      case chromeos.printing.printingManager.mojom.PrinterErrorCode.kNoError:
+      case ash.printing.printingManager.mojom.PrinterErrorCode.kNoError:
         return loadTimeData.getString('completionStatusPrinted');
-      case chromeos.printing.printingManager.mojom.PrinterErrorCode.kPaperJam:
+      case ash.printing.printingManager.mojom.PrinterErrorCode.kPaperJam:
         return loadTimeData.getString('paperJam');
-      case chromeos.printing.printingManager.mojom.PrinterErrorCode.kOutOfPaper:
+      case ash.printing.printingManager.mojom.PrinterErrorCode.kOutOfPaper:
         return loadTimeData.getString('outOfPaper');
-      case chromeos.printing.printingManager.mojom.PrinterErrorCode.kOutOfInk:
+      case ash.printing.printingManager.mojom.PrinterErrorCode.kOutOfInk:
         return loadTimeData.getString('outOfInk');
-      case chromeos.printing.printingManager.mojom.PrinterErrorCode.kDoorOpen:
+      case ash.printing.printingManager.mojom.PrinterErrorCode.kDoorOpen:
         return loadTimeData.getString('doorOpen');
-      case chromeos.printing.printingManager.mojom.PrinterErrorCode
+      case ash.printing.printingManager.mojom.PrinterErrorCode
           .kPrinterUnreachable:
         return loadTimeData.getString('printerUnreachable');
-      case chromeos.printing.printingManager.mojom.PrinterErrorCode
-          .kTrayMissing:
+      case ash.printing.printingManager.mojom.PrinterErrorCode.kTrayMissing:
         return loadTimeData.getString('trayMissing');
-      case chromeos.printing.printingManager.mojom.PrinterErrorCode.kOutputFull:
+      case ash.printing.printingManager.mojom.PrinterErrorCode.kOutputFull:
         return loadTimeData.getString('outputFull');
-      case chromeos.printing.printingManager.mojom.PrinterErrorCode.kStopped:
+      case ash.printing.printingManager.mojom.PrinterErrorCode.kStopped:
         return loadTimeData.getString('stopped');
-      case chromeos.printing.printingManager.mojom.PrinterErrorCode
-          .kFilterFailed:
+      case ash.printing.printingManager.mojom.PrinterErrorCode.kFilterFailed:
         return loadTimeData.getString('filterFailed');
-      case chromeos.printing.printingManager.mojom.PrinterErrorCode
-          .kUnknownError:
+      case ash.printing.printingManager.mojom.PrinterErrorCode.kUnknownError:
         return loadTimeData.getString('unknownPrinterError');
+      case ash.printing.printingManager.mojom.PrinterErrorCode
+          .kClientUnauthorized:
+        return loadTimeData.getString('clientUnauthorized');
       default:
         assertNotReached();
         return loadTimeData.getString('unknownPrinterError');
@@ -507,7 +546,7 @@ Polymer({
   },
 
   /**
-   * @param {!chromeos.printing.printingManager.mojom.PrinterErrorCode}
+   * @param {!ash.printing.printingManager.mojom.PrinterErrorCode}
    *     mojoPrinterErrorCode
    * @return {string}
    * @private
@@ -518,30 +557,30 @@ Polymer({
     }
 
     switch (mojoPrinterErrorCode) {
-      case chromeos.printing.printingManager.mojom.PrinterErrorCode.kNoError:
+      case ash.printing.printingManager.mojom.PrinterErrorCode.kNoError:
         return '';
-      case chromeos.printing.printingManager.mojom.PrinterErrorCode.kPaperJam:
+      case ash.printing.printingManager.mojom.PrinterErrorCode.kPaperJam:
         return loadTimeData.getString('paperJamStopped');
-      case chromeos.printing.printingManager.mojom.PrinterErrorCode.kOutOfPaper:
+      case ash.printing.printingManager.mojom.PrinterErrorCode.kOutOfPaper:
         return loadTimeData.getString('outOfPaperStopped');
-      case chromeos.printing.printingManager.mojom.PrinterErrorCode.kOutOfInk:
+      case ash.printing.printingManager.mojom.PrinterErrorCode.kOutOfInk:
         return loadTimeData.getString('outOfInkStopped');
-      case chromeos.printing.printingManager.mojom.PrinterErrorCode.kDoorOpen:
+      case ash.printing.printingManager.mojom.PrinterErrorCode.kDoorOpen:
         return loadTimeData.getString('doorOpenStopped');
-      case chromeos.printing.printingManager.mojom.PrinterErrorCode
-          .kTrayMissing:
+      case ash.printing.printingManager.mojom.PrinterErrorCode.kTrayMissing:
         return loadTimeData.getString('trayMissingStopped');
-      case chromeos.printing.printingManager.mojom.PrinterErrorCode.kOutputFull:
+      case ash.printing.printingManager.mojom.PrinterErrorCode.kOutputFull:
         return loadTimeData.getString('outputFullStopped');
-      case chromeos.printing.printingManager.mojom.PrinterErrorCode.kStopped:
+      case ash.printing.printingManager.mojom.PrinterErrorCode.kStopped:
         return loadTimeData.getString('stoppedGeneric');
-      case chromeos.printing.printingManager.mojom.PrinterErrorCode
-          .kFilterFailed:
+      case ash.printing.printingManager.mojom.PrinterErrorCode.kFilterFailed:
         return loadTimeData.getString('filterFailed');
-      case chromeos.printing.printingManager.mojom.PrinterErrorCode
-          .kUnknownError:
+      case ash.printing.printingManager.mojom.PrinterErrorCode.kUnknownError:
         return loadTimeData.getString('unknownPrinterErrorStopped');
-      case chromeos.printing.printingManager.mojom.PrinterErrorCode
+      case ash.printing.printingManager.mojom.PrinterErrorCode
+          .kClientUnauthorized:
+        return loadTimeData.getString('clientUnauthorized');
+      case ash.printing.printingManager.mojom.PrinterErrorCode
           .kPrinterUnreachable:
         assertNotReached();
         return loadTimeData.getString('unknownPrinterErrorStopped');
@@ -551,4 +590,4 @@ Polymer({
     }
   },
 });
-})()
+})();

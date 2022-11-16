@@ -54,9 +54,9 @@ void SecurityInterstitialTabHelper::AssociateBlockingPage(
     content::NavigationHandle* navigation_handle,
     std::unique_ptr<security_interstitials::SecurityInterstitialPage>
         blocking_page) {
-  // Security interstitials are not supported with prerendered pages.
-  if (!navigation_handle->IsInPrimaryMainFrame())
-    return;
+  // An interstitial should not be shown in a prerendered page or in a fenced
+  // frame. The prerender should just be canceled.
+  DCHECK(navigation_handle->IsInPrimaryMainFrame());
 
   // CreateForWebContents() creates a tab helper if it doesn't yet exist for the
   // WebContents provided by |navigation_handle|.
@@ -107,7 +107,10 @@ SecurityInterstitialTabHelper::
 
 SecurityInterstitialTabHelper::SecurityInterstitialTabHelper(
     content::WebContents* web_contents)
-    : WebContentsObserver(web_contents), receivers_(web_contents, this) {}
+    : WebContentsObserver(web_contents),
+      content::WebContentsUserData<SecurityInterstitialTabHelper>(
+          *web_contents),
+      receivers_(web_contents, this) {}
 
 void SecurityInterstitialTabHelper::SetBlockingPage(
     int64_t navigation_id,
@@ -198,6 +201,6 @@ void SecurityInterstitialTabHelper::OpenEnhancedProtectionSettings() {
                     CMD_OPEN_ENHANCED_PROTECTION_SETTINGS);
 }
 
-WEB_CONTENTS_USER_DATA_KEY_IMPL(SecurityInterstitialTabHelper)
+WEB_CONTENTS_USER_DATA_KEY_IMPL(SecurityInterstitialTabHelper);
 
 }  //  namespace security_interstitials

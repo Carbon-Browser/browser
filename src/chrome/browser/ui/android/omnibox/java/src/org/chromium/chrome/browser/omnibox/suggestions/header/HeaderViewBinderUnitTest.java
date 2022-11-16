@@ -28,15 +28,15 @@ import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.robolectric.Robolectric;
 
+import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.chrome.R;
-import org.chromium.testing.local.LocalRobolectricTestRunner;
 import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.ui.modelutil.PropertyModelChangeProcessor;
 
 /**
  * Tests for {@link BaseSuggestionViewProcessor}.
  */
-@RunWith(LocalRobolectricTestRunner.class)
+@RunWith(BaseRobolectricTestRunner.class)
 public class HeaderViewBinderUnitTest {
     Activity mActivity;
     PropertyModel mModel;
@@ -51,9 +51,7 @@ public class HeaderViewBinderUnitTest {
     public void setUp() {
         MockitoAnnotations.initMocks(this);
         mActivity = Robolectric.buildActivity(Activity.class).setup().get();
-        // First set the app theme, then apply the feed theme overlay.
         mActivity.setTheme(R.style.Theme_BrowserUI_DayNight);
-        mActivity.setTheme(R.style.ThemeOverlay_Feed_Light);
 
         mHeaderView = mock(HeaderView.class,
                 Mockito.withSettings().useConstructor(mActivity).defaultAnswer(
@@ -143,5 +141,16 @@ public class HeaderViewBinderUnitTest {
         mHeaderView.onInitializeAccessibilityNodeInfo(info);
         verify(info, never()).addAction(AccessibilityAction.ACTION_COLLAPSE);
         verify(info, times(1)).addAction(AccessibilityAction.ACTION_EXPAND);
+    }
+
+    @Test
+    public void headerView_removeSuggestionHeaderChevron() {
+        // Remove Chevron.
+        mModel.set(HeaderViewProperties.SHOULD_REMOVE_CHEVRON, true);
+        verify(mHeaderView, times(1)).setShouldRemoveSuggestionHeaderChevron(true);
+
+        // Restore Chevron.
+        mModel.set(HeaderViewProperties.SHOULD_REMOVE_CHEVRON, false);
+        verify(mHeaderView, times(1)).setShouldRemoveSuggestionHeaderChevron(false);
     }
 }

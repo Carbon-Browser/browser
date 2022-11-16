@@ -7,11 +7,13 @@
 
 #include <map>
 
+#include "base/check.h"
 #include "base/component_export.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ui/frame/caption_buttons/caption_button_model.h"
 #include "chromeos/ui/frame/caption_buttons/frame_size_button_delegate.h"
 #include "chromeos/ui/frame/caption_buttons/snap_controller.h"
+#include "chromeos/ui/wm/features.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/animation/animation_delegate_views.h"
 #include "ui/views/layout/box_layout_view.h"
@@ -84,9 +86,16 @@ class COMPONENT_EXPORT(CHROMEOS_UI_FRAME) FrameCaptionButtonContainerView
       return container_view_->custom_button_;
     }
 
+    views::FrameCaptionButton* float_button() const {
+      DCHECK(chromeos::wm::features::IsFloatWindowEnabled());
+      return container_view_->float_button_;
+    }
+
    private:
-    FrameCaptionButtonContainerView* container_view_;
+    raw_ptr<FrameCaptionButtonContainerView> container_view_;
   };
+
+  views::FrameCaptionButton* size_button() { return size_button_; }
 
   // Sets the id of the vector image to paint the button for |icon|. The
   // FrameCaptionButtonContainerView will keep track of the image to use for
@@ -104,6 +113,11 @@ class COMPONENT_EXPORT(CHROMEOS_UI_FRAME) FrameCaptionButtonContainerView
 
   // Tell the window controls to reset themselves to the normal state.
   void ResetWindowControls();
+
+  // Creates or removes a layer for the caption button container when window
+  // controls overlay is enabled or disabled.
+  void OnWindowControlsOverlayEnabledChanged(bool enabled,
+                                             SkColor background_color);
 
   // Updates the caption buttons' state based on the caption button model's
   // state. A parent view should relayout to reflect the change in states.
@@ -146,6 +160,7 @@ class COMPONENT_EXPORT(CHROMEOS_UI_FRAME) FrameCaptionButtonContainerView
                      views::CaptionButtonIcon icon,
                      Animate animate);
 
+  void FloatButtonPressed();
   void MinimizeButtonPressed();
   void SizeButtonPressed();
   void CloseButtonPressed();
@@ -163,19 +178,20 @@ class COMPONENT_EXPORT(CHROMEOS_UI_FRAME) FrameCaptionButtonContainerView
       const views::FrameCaptionButton* to_hover,
       const views::FrameCaptionButton* to_press) override;
   bool CanSnap() override;
-  void ShowSnapPreview(SnapDirection snap) override;
+  void ShowSnapPreview(SnapDirection snap, bool allow_haptic_feedback) override;
   void CommitSnap(SnapDirection snap) override;
 
   // The widget that the buttons act on.
-  views::Widget* frame_;
+  raw_ptr<views::Widget> frame_;
 
   // The buttons. In the normal button style, at most one of |minimize_button_|
   // and |size_button_| is visible.
-  views::FrameCaptionButton* custom_button_ = nullptr;
-  views::FrameCaptionButton* menu_button_ = nullptr;
-  views::FrameCaptionButton* minimize_button_ = nullptr;
-  views::FrameCaptionButton* size_button_ = nullptr;
-  views::FrameCaptionButton* close_button_ = nullptr;
+  raw_ptr<views::FrameCaptionButton> custom_button_ = nullptr;
+  raw_ptr<views::FrameCaptionButton> float_button_ = nullptr;
+  raw_ptr<views::FrameCaptionButton> menu_button_ = nullptr;
+  raw_ptr<views::FrameCaptionButton> minimize_button_ = nullptr;
+  raw_ptr<views::FrameCaptionButton> size_button_ = nullptr;
+  raw_ptr<views::FrameCaptionButton> close_button_ = nullptr;
 
   // Mapping of the image needed to paint a button for each of the values of
   // CaptionButtonIcon.
@@ -191,6 +207,11 @@ class COMPONENT_EXPORT(CHROMEOS_UI_FRAME) FrameCaptionButtonContainerView
   // Callback for the size button action, which overrides the default behavior.
   // If the callback returns false, it will fall back to the default dehavior.
   base::RepeatingCallback<bool()> on_size_button_pressed_callback_;
+
+  // Keeps track of the window-controls-overlay toggle, and defines if the
+  // background of the entire view should be updated when the background of the
+  // button container changes and SetBackgroundColor() gets called.
+  bool window_controls_overlay_enabled_ = false;
 };
 
 }  // namespace chromeos

@@ -169,7 +169,7 @@ class ManageSyncSettingsMediatorTest : public PlatformTest {
 
 // Tests for Advanced Settings items.
 
-// Tests that encryption is not accessible when Sync settings have not been
+// Tests that encryption is  accessible even when Sync settings have not been
 // confirmed.
 TEST_F(ManageSyncSettingsMediatorTest, SyncServiceSetupNotCommitted) {
   FirstSetupSyncOff();
@@ -178,44 +178,19 @@ TEST_F(ManageSyncSettingsMediatorTest, SyncServiceSetupNotCommitted) {
 
   [mediator_ manageSyncSettingsTableViewControllerLoadModel:mediator_.consumer];
 
-  ASSERT_TRUE([mediator_.consumer.tableViewModel
+  EXPECT_FALSE([mediator_.consumer.tableViewModel
       hasSectionForSectionIdentifier:SyncSettingsSectionIdentifier::
                                          SignOutSectionIdentifier]);
 
-  // Encryption item is disabled.
+  // Encryption item is enabled.
   NSArray* advanced_settings_items = [mediator_.consumer.tableViewModel
       itemsInSectionWithIdentifier:SyncSettingsSectionIdentifier::
                                        AdvancedSettingsSectionIdentifier];
   ASSERT_EQ(2UL, advanced_settings_items.count);
 
   TableViewImageItem* encryption_item = advanced_settings_items[0];
-  ASSERT_EQ(encryption_item.type, SyncSettingsItemType::EncryptionItemType);
-  ASSERT_FALSE(encryption_item.enabled);
-}
-
-// Tests that encryption is not accessible when Sync is disabled by the
-// administrator.
-TEST_F(ManageSyncSettingsMediatorTest, SyncServiceDisabledByAdministrator) {
-  FirstSetupSyncOff();
-  ON_CALL(*sync_service_mock_, GetDisableReasons())
-      .WillByDefault(
-          Return(syncer::SyncService::DISABLE_REASON_ENTERPRISE_POLICY));
-
-  [mediator_ manageSyncSettingsTableViewControllerLoadModel:mediator_.consumer];
-
-  ASSERT_TRUE([mediator_.consumer.tableViewModel
-      hasSectionForSectionIdentifier:SyncSettingsSectionIdentifier::
-                                         SignOutSectionIdentifier]);
-
-  // Encryption item is disabled.
-  NSArray* advanced_settings_items = [mediator_.consumer.tableViewModel
-      itemsInSectionWithIdentifier:SyncSettingsSectionIdentifier::
-                                       AdvancedSettingsSectionIdentifier];
-  ASSERT_EQ(2UL, advanced_settings_items.count);
-
-  TableViewImageItem* encryption_item = advanced_settings_items[0];
-  ASSERT_EQ(encryption_item.type, SyncSettingsItemType::EncryptionItemType);
-  ASSERT_FALSE(encryption_item.enabled);
+  EXPECT_EQ(encryption_item.type, SyncSettingsItemType::EncryptionItemType);
+  EXPECT_TRUE(encryption_item.enabled);
 }
 
 // Tests that encryption is accessible when there is a Sync error due to a
@@ -233,8 +208,8 @@ TEST_F(ManageSyncSettingsMediatorTest, SyncServiceDisabledNeedsPassphrase) {
   ASSERT_EQ(3UL, advanced_settings_items.count);
 
   TableViewImageItem* encryption_item = advanced_settings_items[0];
-  ASSERT_EQ(encryption_item.type, SyncSettingsItemType::EncryptionItemType);
-  ASSERT_TRUE(encryption_item.enabled);
+  EXPECT_EQ(encryption_item.type, SyncSettingsItemType::EncryptionItemType);
+  EXPECT_TRUE(encryption_item.enabled);
 }
 
 // Tests that encryption is accessible when Sync is enabled.
@@ -251,10 +226,10 @@ TEST_F(ManageSyncSettingsMediatorTest, SyncServiceEnabledWithEncryption) {
   ASSERT_EQ(3UL, advanced_settings_items.count);
 
   TableViewImageItem* encryption_item = advanced_settings_items[0];
-  ASSERT_EQ(encryption_item.type, SyncSettingsItemType::EncryptionItemType);
-  ASSERT_TRUE(encryption_item.enabled);
+  EXPECT_EQ(encryption_item.type, SyncSettingsItemType::EncryptionItemType);
+  EXPECT_TRUE(encryption_item.enabled);
 
-  ASSERT_FALSE([mediator_.consumer.tableViewModel
+  EXPECT_FALSE([mediator_.consumer.tableViewModel
       hasSectionForSectionIdentifier:SyncErrorsSectionIdentifier]);
 }
 
@@ -266,11 +241,10 @@ TEST_F(ManageSyncSettingsMediatorTest, SyncServiceDisabledWithTurnOffSync) {
 
   [mediator_ manageSyncSettingsTableViewControllerLoadModel:mediator_.consumer];
 
-  // "Turn off Sync" item is shown.
-  NSArray* sign_out_items = [mediator_.consumer.tableViewModel
-      itemsInSectionWithIdentifier:SyncSettingsSectionIdentifier::
-                                       SignOutSectionIdentifier];
-  ASSERT_EQ(0UL, sign_out_items.count);
+  // Sign out section not added.
+  EXPECT_FALSE([mediator_.consumer.tableViewModel
+      hasSectionForSectionIdentifier:SyncSettingsSectionIdentifier::
+                                         SignOutSectionIdentifier]);
 }
 
 // Tests that "Turn off Sync" is accessible when Sync is enabled.
@@ -285,7 +259,34 @@ TEST_F(ManageSyncSettingsMediatorTest, SyncServiceEnabledWithTurnOffSync) {
   NSArray* sign_out_items = [mediator_.consumer.tableViewModel
       itemsInSectionWithIdentifier:SyncSettingsSectionIdentifier::
                                        SignOutSectionIdentifier];
-  ASSERT_EQ(1UL, sign_out_items.count);
+  EXPECT_EQ(1UL, sign_out_items.count);
+}
+
+// Tests that the policy info is shown below the "Turn off Sync" item when the
+// forced sign-in policy is enabled.
+TEST_F(ManageSyncSettingsMediatorTest,
+       SyncServiceEnabledWithTurnOffSyncWithForcedSigninPolicy) {
+  FirstSetupSyncOnWithConsentEnabled();
+  ON_CALL(*sync_setup_service_mock_, GetSyncServiceState())
+      .WillByDefault(Return(SyncSetupService::kNoSyncServiceError));
+
+  mediator_.forcedSigninEnabled = YES;
+
+  [mediator_ manageSyncSettingsTableViewControllerLoadModel:mediator_.consumer];
+
+  // "Turn off Sync" item is shown.
+  NSArray* sign_out_items = [mediator_.consumer.tableViewModel
+      itemsInSectionWithIdentifier:SyncSettingsSectionIdentifier::
+                                       SignOutSectionIdentifier];
+  EXPECT_EQ(1UL, sign_out_items.count);
+
+  // The footer below "Turn off Sync" is shown.
+  ListItem* footer = [mediator_.consumer.tableViewModel
+      footerForSectionWithIdentifier:SyncSettingsSectionIdentifier::
+                                         SignOutSectionIdentifier];
+  TableViewLinkHeaderFooterItem* footerTextItem =
+      base::mac::ObjCCastStrict<TableViewLinkHeaderFooterItem>(footer);
+  EXPECT_GT([footerTextItem.text length], 0UL);
 }
 
 // Tests that a Sync error that occurs after the user has loaded the Settings
@@ -301,13 +302,13 @@ TEST_F(ManageSyncSettingsMediatorTest, SyncServiceSuccessThenDisabled) {
   // Loads the Sync page again in disabled state.
   [mediator_ onSyncStateChanged];
 
-  ASSERT_TRUE([mediator_.consumer.tableViewModel
+  EXPECT_TRUE([mediator_.consumer.tableViewModel
       hasSectionForSectionIdentifier:SyncSettingsSectionIdentifier::
                                          SyncErrorsSectionIdentifier]);
   NSArray* error_items = [mediator_.consumer.tableViewModel
       itemsInSectionWithIdentifier:SyncSettingsSectionIdentifier::
                                        SyncErrorsSectionIdentifier];
-  ASSERT_EQ(1UL, error_items.count);
+  EXPECT_EQ(1UL, error_items.count);
 }
 
 // Tests that Sync errors display a single error message when loaded one after
@@ -325,7 +326,7 @@ TEST_F(ManageSyncSettingsMediatorTest, SyncServiceMultipleErrors) {
   // Loads the Sync page again in the needs encryption passphrase error state.
   [mediator_ onSyncStateChanged];
 
-  ASSERT_TRUE([mediator_.consumer.tableViewModel
+  EXPECT_TRUE([mediator_.consumer.tableViewModel
       hasSectionForSectionIdentifier:SyncSettingsSectionIdentifier::
                                          SyncErrorsSectionIdentifier]);
   NSArray* error_items = [mediator_.consumer.tableViewModel
@@ -334,7 +335,7 @@ TEST_F(ManageSyncSettingsMediatorTest, SyncServiceMultipleErrors) {
   ASSERT_EQ(1UL, error_items.count);
   SettingsImageDetailTextItem* error_item =
       base::mac::ObjCCastStrict<SettingsImageDetailTextItem>(error_items[0]);
-  ASSERT_NSEQ(
+  EXPECT_NSEQ(
       error_item.detailText,
       l10n_util::GetNSString(
           IDS_IOS_GOOGLE_SERVICES_SETTINGS_ENTER_PASSPHRASE_TO_START_SYNC));
@@ -351,11 +352,10 @@ TEST_F(ManageSyncSettingsMediatorTest,
 
   [mediator_ manageSyncSettingsTableViewControllerLoadModel:mediator_.consumer];
 
-  // "Turn off Sync" item is hidden.
-  NSArray* hidden_sign_out_items = [mediator_.consumer.tableViewModel
-      itemsInSectionWithIdentifier:SyncSettingsSectionIdentifier::
-                                       SignOutSectionIdentifier];
-  ASSERT_EQ(0UL, hidden_sign_out_items.count);
+  // Sign out section not added.
+  EXPECT_FALSE([mediator_.consumer.tableViewModel
+      hasSectionForSectionIdentifier:SyncSettingsSectionIdentifier::
+                                         SignOutSectionIdentifier]);
 
   // Set Sync enabled expectations.
   FirstSetupSyncOnWithConsentEnabled();
@@ -369,7 +369,7 @@ TEST_F(ManageSyncSettingsMediatorTest,
   NSArray* shown_sign_out_items = [mediator_.consumer.tableViewModel
       itemsInSectionWithIdentifier:SyncSettingsSectionIdentifier::
                                        SignOutSectionIdentifier];
-  ASSERT_EQ(1UL, shown_sign_out_items.count);
+  EXPECT_EQ(1UL, shown_sign_out_items.count);
 }
 
 // Tests Signout is shown when first setup is complete and sync engine is off.
@@ -385,7 +385,7 @@ TEST_F(ManageSyncSettingsMediatorTest, SyncEngineOffSignOutVisible) {
   NSArray* hidden_sign_out_items = [mediator_.consumer.tableViewModel
       itemsInSectionWithIdentifier:SyncSettingsSectionIdentifier::
                                        SignOutSectionIdentifier];
-  ASSERT_EQ(1UL, hidden_sign_out_items.count);
+  EXPECT_EQ(1UL, hidden_sign_out_items.count);
 }
 
 // Tests data types are editable when first setup is complete and sync engine
@@ -405,9 +405,9 @@ TEST_F(ManageSyncSettingsMediatorTest,
     SyncSwitchItem* switch_item =
         base::mac::ObjCCastStrict<SyncSwitchItem>(item);
     if (switch_item.type == AutocompleteWalletItemType) {
-      ASSERT_FALSE(switch_item.enabled);
+      EXPECT_FALSE(switch_item.enabled);
     } else {
-      ASSERT_TRUE(switch_item.enabled);
+      EXPECT_TRUE(switch_item.enabled);
     }
   }
 }
@@ -432,19 +432,19 @@ TEST_F(ManageSyncSettingsMediatorTest,
       itemsInSectionWithIdentifier:SyncDataTypeSectionIdentifier];
   for (TableViewItem* item in items) {
     if (item.type == SyncEverythingItemType) {
-      ASSERT_FALSE([item isKindOfClass:[SyncSwitchItem class]]);
+      EXPECT_FALSE([item isKindOfClass:[SyncSwitchItem class]]);
       continue;
     } else if (item.type == BookmarksDataTypeItemType ||
                item.type == PasswordsDataTypeItemType) {
-      ASSERT_TRUE([item isKindOfClass:[TableViewInfoButtonItem class]]);
+      EXPECT_TRUE([item isKindOfClass:[TableViewInfoButtonItem class]]);
       continue;
     }
     SyncSwitchItem* switch_item =
         base::mac::ObjCCastStrict<SyncSwitchItem>(item);
     if (switch_item.type == AutocompleteWalletItemType) {
-      ASSERT_FALSE(switch_item.enabled);
+      EXPECT_FALSE(switch_item.enabled);
     } else {
-      ASSERT_TRUE(switch_item.enabled);
+      EXPECT_TRUE(switch_item.enabled);
     }
   }
 }

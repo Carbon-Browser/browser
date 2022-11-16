@@ -19,15 +19,16 @@ class DictationNudgeControllerTest;
 // that their Dictation language now works offline.
 class ASH_EXPORT DictationNudge : public SystemNudge {
  public:
-  DictationNudge(DictationNudgeController* controller);
+  explicit DictationNudge(DictationNudgeController* controller);
   DictationNudge(const DictationNudge&) = delete;
   DictationNudge& operator=(const DictationNudge&) = delete;
   ~DictationNudge() override;
 
  protected:
   // SystemNudge:
-  std::unique_ptr<views::View> CreateLabelView() const override;
+  std::unique_ptr<SystemNudgeLabel> CreateLabelView() const override;
   const gfx::VectorIcon& GetIcon() const override;
+  std::u16string GetAccessibilityText() const override;
 
  private:
   friend class DictationNudgeControllerTest;

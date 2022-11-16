@@ -27,6 +27,17 @@
           }
         },
         "description": "The collection of user-specified settings relating to an extension's action."
+      },
+      {
+        "id": "OpenPopupOptions",
+        "type": "object",
+        "properties": {
+          "windowId": {
+            "type": "integer",
+            "description": "The id of the window to open the action popup in. Defaults to the currently-active window if unspecified.",
+            "optional": true
+          }
+        }
       }
     ],
     "functions": [{
@@ -104,12 +115,12 @@
             "description": "Limits the change to when a particular tab is selected. Automatically resets when the tab is closed."
           }
         }
-      }, {
-        "type": "function",
+      }],
+      "returns_async": {
         "name": "callback",
         "optional": true,
         "parameters": []
-      }]
+      }
     }, {
       "name": "setPopup",
       "type": "function",
@@ -280,6 +291,20 @@
           "name": "userSettings",
           "$ref": "UserSettings"
         }]
+      }
+    }, {
+      "name": "openPopup",
+      "type": "function",
+      "description": "Opens the extension's popup.",
+      "parameters": [{
+        "$ref": "OpenPopupOptions",
+        "name": "options",
+        "optional": true,
+        "description": "Specifies options for opening the popup."
+      }],
+      "returns_async": {
+        "name": "callback",
+        "parameters": []
       }
     }],
     "events": [{

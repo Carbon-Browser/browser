@@ -8,7 +8,6 @@
 #include "base/callback_helpers.h"
 #include "base/containers/contains.h"
 #include "base/run_loop.h"
-#include "base/task/post_task.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "content/browser/service_worker/embedded_worker_test_helper.h"
 #include "content/browser/service_worker/service_worker_context_core.h"
@@ -93,6 +92,11 @@ class MockServiceWorkerInstalledScriptsManager
           receiver)
       : receiver_(this, std::move(receiver)) {}
 
+  MockServiceWorkerInstalledScriptsManager(
+      const MockServiceWorkerInstalledScriptsManager&) = delete;
+  MockServiceWorkerInstalledScriptsManager& operator=(
+      const MockServiceWorkerInstalledScriptsManager&) = delete;
+
   blink::mojom::ServiceWorkerScriptInfoPtr WaitUntilTransferInstalledScript() {
     EXPECT_TRUE(incoming_script_info_.is_null());
     EXPECT_FALSE(transfer_installed_script_waiter_);
@@ -116,8 +120,6 @@ class MockServiceWorkerInstalledScriptsManager
   mojo::Receiver<blink::mojom::ServiceWorkerInstalledScriptsManager> receiver_;
   base::OnceClosure transfer_installed_script_waiter_;
   blink::mojom::ServiceWorkerScriptInfoPtr incoming_script_info_;
-
-  DISALLOW_COPY_AND_ASSIGN(MockServiceWorkerInstalledScriptsManager);
 };
 
 class ServiceWorkerInstalledScriptsSenderTest : public testing::Test {
@@ -134,7 +136,7 @@ class ServiceWorkerInstalledScriptsSenderTest : public testing::Test {
     options.scope = scope_;
     registration_ = base::MakeRefCounted<ServiceWorkerRegistration>(
         options, blink::StorageKey(url::Origin::Create(scope_)), 1L,
-        context()->AsWeakPtr());
+        context()->AsWeakPtr(), blink::mojom::AncestorFrameType::kNormalFrame);
     version_ = CreateNewServiceWorkerVersion(
         context()->registry(), registration_.get(),
         GURL("http://www.example.com/test/service_worker.js"),

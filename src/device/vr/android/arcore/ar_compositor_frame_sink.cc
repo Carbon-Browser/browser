@@ -5,15 +5,19 @@
 #include "device/vr/android/arcore/ar_compositor_frame_sink.h"
 
 #include "base/bind.h"
-#include "base/bind_post_task.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
+#include "base/task/bind_post_task.h"
 #include "components/viz/common/quads/compositor_frame.h"
+#include "components/viz/common/quads/surface_draw_quad.h"
+#include "components/viz/common/quads/texture_draw_quad.h"
 #include "components/viz/host/host_display_client.h"
 #include "components/viz/host/renderer_settings_creation.h"
 #include "device/vr/android/arcore/ar_image_transport.h"
 #include "device/vr/android/web_xr_presentation_state.h"
 #include "device/vr/public/cpp/xr_frame_sink_client.h"
 #include "ui/android/window_android.h"
+#include "ui/gfx/video_types.h"
 #include "ui/gl/gl_bindings.h"
 
 namespace {
@@ -45,7 +49,7 @@ class ArCoreHostDisplayClient : public viz::HostDisplayClient {
   }
 
  private:
-  ui::WindowAndroid* root_window_;
+  raw_ptr<ui::WindowAndroid> root_window_;
 };
 }  // namespace
 
@@ -377,7 +381,8 @@ viz::CompositorFrame ArCompositorFrameSink::CreateFrame(WebXrFrame* xr_frame,
           render_pass->CreateAndAppendDrawQuad<viz::SurfaceDrawQuad>();
       dom_quad->SetNew(dom_quad_state, gfx::Rect(output_rect.size()),
                        gfx::Rect(output_rect.size()),
-                       viz::SurfaceRange(*dom_surface_id), SK_ColorTRANSPARENT,
+                       viz::SurfaceRange(*dom_surface_id),
+                       SkColors::kTransparent,
                        /*stretch_content_to_fill_bounds=*/true);
     }
   }
@@ -411,7 +416,7 @@ viz::CompositorFrame ArCompositorFrameSink::CreateFrame(WebXrFrame* xr_frame,
         /*premultiplied_alpha=*/true,
         /*uv_top_left=*/xr_frame->bounds_left.origin(),
         /*uv_bottom_right=*/xr_frame->bounds_left.bottom_right(),
-        /*background_color=*/SK_ColorTRANSPARENT, opacity,
+        /*background_color=*/SkColors::kTransparent, opacity,
         /*y_flipped=*/true,
         /*nearest_neighbor=*/false,
         /*secure_output_only=*/false, gfx::ProtectedVideoType::kClear);
@@ -450,7 +455,7 @@ viz::CompositorFrame ArCompositorFrameSink::CreateFrame(WebXrFrame* xr_frame,
                       /*premultiplied_alpha=*/true,
                       /*uv_top_left=*/gfx::PointF(0.f, 0.f),
                       /*uv_bottom_right=*/gfx::PointF(1.f, 1.f),
-                      /*background_color=*/SK_ColorTRANSPARENT, opacity,
+                      /*background_color=*/SkColors::kTransparent, opacity,
                       /*y_flipped=*/true,
                       /*nearest_neighbor=*/false,
                       /*secure_output_only=*/false,

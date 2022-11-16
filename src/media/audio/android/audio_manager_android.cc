@@ -45,16 +45,22 @@ static const base::FilePath::CharType kAaudioLib[] =
 namespace media {
 namespace {
 
-void AddDefaultDevice(AudioDeviceNames* device_names) {
-  DCHECK(device_names->empty());
-  device_names->push_front(AudioDeviceName::CreateDefault());
-}
-
 // Maximum number of output streams that can be open simultaneously.
 const int kMaxOutputStreams = 10;
 
 const int kDefaultInputBufferSize = 1024;
 const int kDefaultOutputBufferSize = 2048;
+
+void AddDefaultDevice(AudioDeviceNames* device_names) {
+  DCHECK(device_names->empty());
+  device_names->push_front(AudioDeviceName::CreateDefault());
+}
+
+// Returns whether the currently connected device is an audio sink.
+bool IsAudioSinkConnected() {
+  return Java_AudioManagerAndroid_isAudioSinkConnected(
+      base::android::AttachCurrentThread());
+}
 
 }  // namespace
 
@@ -348,7 +354,7 @@ bool AudioManagerAndroid::HasOutputVolumeOverride(double* out_volume) const {
 base::TimeDelta AudioManagerAndroid::GetOutputLatency() {
   DCHECK(GetTaskRunner()->BelongsToCurrentThread());
   JNIEnv* env = AttachCurrentThread();
-  return base::TimeDelta::FromMilliseconds(
+  return base::Milliseconds(
       Java_AudioManagerAndroid_getOutputLatency(env, GetJavaAudioManager()));
 }
 
@@ -366,15 +372,10 @@ AudioParameters AudioManagerAndroid::GetPreferredOutputStreamParameters(
     // Use the client's input parameters if they are valid.
     sample_rate = input_params.sample_rate();
 
-    // Pre-Lollipop devices don't support > stereo OpenSLES output and the
     // AudioManager APIs for GetOptimalOutputFrameSize() don't support channel
     // layouts greater than stereo unless low latency audio is supported.
-    if (input_params.channels() <= 2 ||
-        (base::android::BuildInfo::GetInstance()->sdk_int() >=
-             base::android::SDK_VERSION_LOLLIPOP &&
-         IsAudioLowLatencySupported())) {
+    if (input_params.channels() <= 2 || IsAudioLowLatencySupported())
       channel_layout = input_params.channel_layout();
-    }
 
     // For high latency playback on supported platforms, pass through the
     // requested buffer size; this provides significant power savings (~25%) and
@@ -391,6 +392,12 @@ AudioParameters AudioManagerAndroid::GetPreferredOutputStreamParameters(
   int user_buffer_size = GetUserBufferSize();
   if (user_buffer_size)
     buffer_size = user_buffer_size;
+
+  // Check if device supports additional audio encodings.
+  if (IsAudioSinkConnected()) {
+    return GetAudioFormatsSupportedBySinkDevice(
+        output_device_id, channel_layout, sample_rate, buffer_size);
+  }
 
   return AudioParameters(AudioParameters::AUDIO_PCM_LOW_LATENCY, channel_layout,
                          sample_rate, buffer_size);
@@ -462,6 +469,29 @@ int AudioManagerAndroid::GetOptimalOutputFrameSize(int sample_rate,
                   Java_AudioManagerAndroid_getMinOutputFrameSize(
                       base::android::AttachCurrentThread(),
                       sample_rate, channels));
+}
+
+// Returns a bit mask of AudioParameters::Format enum values sink device
+// supports.
+int AudioManagerAndroid::GetSinkAudioEncodingFormats() {
+  JNIEnv* env = AttachCurrentThread();
+  return Java_AudioManagerAndroid_getAudioEncodingFormatsSupported(env);
+}
+
+// Returns encoding bitstream formats supported by Sink device. Returns
+// AudioParameters structure.
+AudioParameters AudioManagerAndroid::GetAudioFormatsSupportedBySinkDevice(
+    const std::string& output_device_id,
+    ChannelLayout channel_layout,
+    int sample_rate,
+    int buffer_size) {
+  int formats = GetSinkAudioEncodingFormats();
+  DVLOG(1) << __func__ << ": IsAudioSinkConnected()==true, output_device_id="
+           << output_device_id << ", Supported Encodings=" << formats;
+
+  return AudioParameters(AudioParameters::AUDIO_PCM_LOW_LATENCY, channel_layout,
+                         sample_rate, buffer_size,
+                         AudioParameters::HardwareCapabilities(formats));
 }
 
 void AudioManagerAndroid::DoSetMuteOnAudioThread(bool muted) {

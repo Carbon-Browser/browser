@@ -38,7 +38,7 @@ class TabStatsObserver : public base::CheckedObserver {
 
   // Called whenever a main frame navigation to a different document is
   // committed in any of the observed tabs.
-  virtual void OnMainFrameNavigationCommitted(
+  virtual void OnPrimaryMainFrameNavigationCommitted(
       content::WebContents* web_contents) {}
 
   // Records that there's been a direct user interaction with a tab, see the
@@ -58,6 +58,11 @@ class TabStatsObserver : public base::CheckedObserver {
   virtual void OnMediaEffectivelyFullscreenChanged(
       content::WebContents* web_contents,
       bool is_fullscreen) {}
+
+  // Invoked when a media is destroyed. Note: When a fullscreen media is
+  // destroyed, this will be invoked but not necessarily
+  // OnMediaEffectivelyFullscreenChanged().
+  virtual void OnMediaDestroyed(content::WebContents* web_contents) {}
 
   // Called whenever a tab starts playing video. If this tab has multiple video
   // players this will only be called when the first one starts.

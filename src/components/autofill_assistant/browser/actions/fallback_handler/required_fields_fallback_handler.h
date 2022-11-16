@@ -5,23 +5,23 @@
 #ifndef COMPONENTS_AUTOFILL_ASSISTANT_BROWSER_ACTIONS_FALLBACK_HANDLER_REQUIRED_FIELDS_FALLBACK_HANDLER_H_
 #define COMPONENTS_AUTOFILL_ASSISTANT_BROWSER_ACTIONS_FALLBACK_HANDLER_REQUIRED_FIELDS_FALLBACK_HANDLER_H_
 
-#include <map>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "base/callback.h"
-#include "base/macros.h"
+#include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "components/autofill/core/browser/data_model/autofill_profile.h"
 #include "components/autofill_assistant/browser/actions/action.h"
 #include "components/autofill_assistant/browser/actions/fallback_handler/required_field.h"
 #include "components/autofill_assistant/browser/batch_element_checker.h"
 #include "components/autofill_assistant/browser/field_formatter.h"
-#include "components/autofill_assistant/browser/web/element_finder.h"
 
 namespace autofill_assistant {
 class ClientStatus;
+class ElementFinderResult;
 
 // A handler for required fields and fallback values, used by UseAddressAction
 // and UseCreditCardAction.
@@ -29,8 +29,12 @@ class RequiredFieldsFallbackHandler {
  public:
   explicit RequiredFieldsFallbackHandler(
       const std::vector<RequiredField>& required_fields,
-      const std::map<field_formatter::Key, std::string>& fallback_values,
+      const base::flat_map<field_formatter::Key, std::string>& fallback_values,
       ActionDelegate* delegate);
+
+  RequiredFieldsFallbackHandler(const RequiredFieldsFallbackHandler&) = delete;
+  RequiredFieldsFallbackHandler& operator=(
+      const RequiredFieldsFallbackHandler&) = delete;
 
   ~RequiredFieldsFallbackHandler();
 
@@ -72,14 +76,14 @@ class RequiredFieldsFallbackHandler {
                      const RequiredField& required_field,
                      base::OnceCallback<void()> set_next_field,
                      const ClientStatus& element_status,
-                     std::unique_ptr<ElementFinder::Result> element_result);
+                     std::unique_ptr<ElementFinderResult> element_result);
 
   // Called after retrieving tag name from a field.
   void OnGetFallbackFieldElementTag(
       const std::string& value,
       const RequiredField& required_field,
       base::OnceCallback<void()> set_next_field,
-      std::unique_ptr<ElementFinder::Result> element,
+      std::unique_ptr<ElementFinderResult> element,
       const ClientStatus& element_tag_status,
       const std::string& element_tag);
 
@@ -105,20 +109,18 @@ class RequiredFieldsFallbackHandler {
   // fallback after failed validation.
   void OnSetFallbackFieldValue(const RequiredField& required_field,
                                base::OnceCallback<void()> set_next_field,
-                               std::unique_ptr<ElementFinder::Result> element,
+                               std::unique_ptr<ElementFinderResult> element,
                                const ClientStatus& status);
 
   ClientStatus client_status_;
 
   std::vector<RequiredField> required_fields_;
-  std::map<field_formatter::Key, std::string> fallback_values_;
+  base::flat_map<field_formatter::Key, std::string> fallback_values_;
   base::OnceCallback<void(const ClientStatus&)> status_update_callback_;
-  ActionDelegate* action_delegate_;
+  raw_ptr<ActionDelegate> action_delegate_;
   std::unique_ptr<BatchElementChecker> batch_element_checker_;
-  base::TimeDelta total_wait_time_ = base::TimeDelta::FromSeconds(0);
+  base::TimeDelta total_wait_time_ = base::Seconds(0);
   base::WeakPtrFactory<RequiredFieldsFallbackHandler> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(RequiredFieldsFallbackHandler);
 };
 
 }  // namespace autofill_assistant

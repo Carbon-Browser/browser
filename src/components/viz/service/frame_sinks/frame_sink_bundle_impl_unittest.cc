@@ -9,6 +9,7 @@
 
 #include "base/bind.h"
 #include "base/json/values_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/test/bind.h"
@@ -55,11 +56,11 @@ constexpr FrameSinkId kSubFrameB(2, 3);
 constexpr FrameSinkId kSubFrameC(2, 4);
 
 const base::UnguessableToken kSurfaceTokenA =
-    base::UnguessableToken::Deserialize(3, 42);
+    base::UnguessableToken::CreateForTesting(3, 42);
 const base::UnguessableToken kSurfaceTokenB =
-    base::UnguessableToken::Deserialize(5, 42);
+    base::UnguessableToken::CreateForTesting(5, 42);
 const base::UnguessableToken kSurfaceTokenC =
-    base::UnguessableToken::Deserialize(7, 42);
+    base::UnguessableToken::CreateForTesting(7, 42);
 
 const LocalSurfaceId kSurfaceA{2, kSurfaceTokenA};
 const LocalSurfaceId kSurfaceB{3, kSurfaceTokenB};
@@ -120,12 +121,12 @@ struct TestFrameSink {
   TestFrameSink(
       FrameSinkManagerImpl& manager,
       const FrameSinkId& id,
-      const absl::optional<FrameSinkId>& parent_id,
+      const FrameSinkId& parent_id,
       const absl::optional<FrameSinkBundleId>& bundle_id = absl::nullopt)
       : manager_(manager), id_(id) {
     manager_.RegisterFrameSinkId(id, /*report_activation=*/true);
-    if (parent_id) {
-      manager_.RegisterFrameSinkHierarchy(*parent_id, id);
+    if (parent_id.is_valid()) {
+      manager_.RegisterFrameSinkHierarchy(parent_id, id);
     }
     manager_.CreateCompositorFrameSink(
         id, bundle_id, frame_sink.BindNewPipeAndPassReceiver(),
@@ -211,9 +212,9 @@ class TestBundleClient : public mojom::FrameSinkBundleClient {
   }
 
   absl::optional<base::RunLoop> wait_loop_;
-  std::vector<mojom::BundledReturnedResourcesPtr>* acks_;
-  std::vector<mojom::BeginFrameInfoPtr>* begin_frames_;
-  std::vector<mojom::BundledReturnedResourcesPtr>* reclaimed_resources_;
+  raw_ptr<std::vector<mojom::BundledReturnedResourcesPtr>> acks_;
+  raw_ptr<std::vector<mojom::BeginFrameInfoPtr>> begin_frames_;
+  raw_ptr<std::vector<mojom::BundledReturnedResourcesPtr>> reclaimed_resources_;
 };
 
 class FrameSinkBundleImplTest : public testing::Test {
@@ -265,6 +266,9 @@ class FrameSinkBundleImplTest : public testing::Test {
   FrameSinkManagerImpl& manager() { return manager_; }
   TestBundleClient& test_client() { return test_client_; }
   mojo::Remote<mojom::FrameSinkBundle>& bundle() { return bundle_; }
+  FakeExternalBeginFrameSource& begin_frame_source() {
+    return begin_frame_source_;
+  }
 
  private:
   const gpu::SyncToken frame_sync_token_{MakeVerifiedSyncToken(42)};
@@ -299,9 +303,17 @@ TEST_F(FrameSinkBundleImplTest, DestroyOnDisconnect) {
 }
 
 TEST_F(FrameSinkBundleImplTest, OnBeginFrame) {
+  // By default the bundle does not observe the BeginFrameSource. The only
+  // observer is the (non-bundled) main-frame sink.
+  EXPECT_EQ(1u, begin_frame_source().num_observers());
+
   TestFrameSink frame_a(manager(), kSubFrameA, kMainFrame, kBundleId);
   TestFrameSink frame_b(manager(), kSubFrameB, kMainFrame, kBundleId);
   TestFrameSink frame_c(manager(), kSubFrameC, kMainFrame, kBundleId);
+
+  // The bundle should observe the BeginFrameSource on behalf of all its sinks,
+  // so the only observers should now be the main-frame sink and the bundle.
+  EXPECT_EQ(2u, begin_frame_source().num_observers());
 
   // OnBeginFrame() should elicit a single batch of notifications to the bundle
   // client, with a notification for each frame in the bundle.
@@ -319,6 +331,14 @@ TEST_F(FrameSinkBundleImplTest, OnBeginFrame) {
   test_client().WaitForNextFlush(nullptr, &begin_frames, nullptr);
   EXPECT_THAT(begin_frames,
               UnorderedElementsAre(ForSink(kSubFrameA), ForSink(kSubFrameC)));
+
+  // Finally, if all sinks unsubscribe from BeginFrame notifications, the bundle
+  // should stop observing the BeginFrameSource.
+  EXPECT_EQ(2u, begin_frame_source().num_observers());
+  manager().GetFrameSinkForId(kSubFrameA)->SetNeedsBeginFrame(false);
+  EXPECT_EQ(2u, begin_frame_source().num_observers());
+  manager().GetFrameSinkForId(kSubFrameC)->SetNeedsBeginFrame(false);
+  EXPECT_EQ(1u, begin_frame_source().num_observers());
 }
 
 TEST_F(FrameSinkBundleImplTest, SubmitAndAck) {

@@ -5,9 +5,10 @@
 #ifndef IOS_CHROME_BROWSER_APPLICATION_CONTEXT_H_
 #define IOS_CHROME_BROWSER_APPLICATION_CONTEXT_H_
 
+#import <Foundation/Foundation.h>
+
 #include <string>
 
-#include "base/macros.h"
 #include "base/memory/scoped_refptr.h"
 
 namespace breadcrumbs {
@@ -55,6 +56,10 @@ namespace network_time {
 class NetworkTimeTracker;
 }
 
+namespace segmentation_platform {
+class OTRWebStateObserver;
+}
+
 namespace ukm {
 class UkmRecorder;
 }
@@ -68,6 +73,7 @@ class BrowserPolicyConnectorIOS;
 class IOSChromeIOThread;
 class PrefService;
 class SafeBrowsingService;
+@protocol SingleSignOnService;
 
 // Gets the global application context. Cannot return null.
 ApplicationContext* GetApplicationContext();
@@ -75,6 +81,10 @@ ApplicationContext* GetApplicationContext();
 class ApplicationContext {
  public:
   ApplicationContext();
+
+  ApplicationContext(const ApplicationContext&) = delete;
+  ApplicationContext& operator=(const ApplicationContext&) = delete;
+
   virtual ~ApplicationContext();
 
   // Invoked when application enters foreground. Cancels the effect of
@@ -157,12 +167,16 @@ class ApplicationContext {
   virtual breadcrumbs::BreadcrumbPersistentStorageManager*
   GetBreadcrumbPersistentStorageManager() = 0;
 
+  // Returns the SingleSignOnService instance used by this application.
+  virtual id<SingleSignOnService> GetSSOService() = 0;
+
+  // Returns the application's OTRWebStateObserver for segmentation platform.
+  virtual segmentation_platform::OTRWebStateObserver*
+  GetSegmentationOTRWebStateObserver() = 0;
+
  protected:
   // Sets the global ApplicationContext instance.
   static void SetApplicationContext(ApplicationContext* context);
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ApplicationContext);
 };
 
 #endif  // IOS_CHROME_BROWSER_APPLICATION_CONTEXT_H_

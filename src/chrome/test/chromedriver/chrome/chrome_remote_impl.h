@@ -8,11 +8,12 @@
 #include <memory>
 #include <string>
 
-#include "base/compiler_specific.h"
 #include "chrome/test/chromedriver/chrome/chrome_impl.h"
+#include "chrome/test/chromedriver/net/sync_websocket_factory.h"
 
 class DevToolsClient;
 class DevToolsHttpClient;
+struct DeviceMetrics;
 
 class ChromeRemoteImpl : public ChromeImpl {
  public:
@@ -20,6 +21,8 @@ class ChromeRemoteImpl : public ChromeImpl {
                    std::unique_ptr<DevToolsClient> websocket_client,
                    std::vector<std::unique_ptr<DevToolsEventListener>>
                        devtools_event_listeners,
+                   std::unique_ptr<DeviceMetrics> device_metrics,
+                   SyncWebSocketFactory socket_factory,
                    std::string page_load_strategy);
   ~ChromeRemoteImpl() override;
 

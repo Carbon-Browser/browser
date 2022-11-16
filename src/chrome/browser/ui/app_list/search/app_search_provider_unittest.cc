@@ -11,11 +11,11 @@
 #include <string>
 #include <utility>
 
+#include "ash/components/arc/test/fake_app_instance.h"
 #include "ash/public/cpp/app_list/app_list_features.h"
 #include "base/callback_helpers.h"
 #include "base/containers/contains.h"
 #include "base/feature_list.h"
-#include "base/macros.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
@@ -34,17 +34,22 @@
 #include "chrome/browser/ui/app_list/search/chrome_search_result.h"
 #include "chrome/browser/ui/app_list/search/search_result_ranker/app_search_result_ranker.h"
 #include "chrome/browser/ui/app_list/search/search_result_ranker/ranking_item_util.h"
+#include "chrome/browser/ui/app_list/search/test/test_search_controller.h"
 #include "chrome/browser/ui/app_list/test/fake_app_list_model_updater.h"
 #include "chrome/browser/ui/app_list/test/test_app_list_controller_delegate.h"
 #include "chrome/browser/web_applications/test/web_app_install_test_utils.h"
+#include "chrome/browser/web_applications/web_app_id_constants.h"
 #include "chrome/common/chrome_constants.h"
 #include "chrome/test/base/testing_profile.h"
-#include "chromeos/dbus/cicerone/cicerone_client.h"
-#include "chromeos/dbus/concierge/concierge_client.h"
+#include "chromeos/ash/components/dbus/chunneld/chunneld_client.h"
+#include "chromeos/ash/components/dbus/cicerone/cicerone_client.h"
+#include "chromeos/ash/components/dbus/concierge/concierge_client.h"
+#include "chromeos/ash/components/dbus/seneschal/seneschal_client.h"
 #include "chromeos/dbus/dbus_thread_manager.h"
-#include "chromeos/dbus/seneschal/seneschal_client.h"
-#include "components/arc/test/fake_app_instance.h"
 #include "components/crx_file/id_util.h"
+#include "components/services/app_service/public/cpp/app_types.h"
+#include "components/services/app_service/public/cpp/features.h"
+#include "components/services/app_service/public/cpp/icon_types.h"
 #include "components/services/app_service/public/cpp/stub_icon_loader.h"
 #include "components/services/app_service/public/mojom/types.mojom.h"
 #include "components/sessions/content/content_test_helper.h"
@@ -98,13 +103,13 @@ constexpr char kWebAppName[] = "WebApp1";
 void WaitTimeUpdated() {
   base::RunLoop run_loop;
   base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
-      FROM_HERE, run_loop.QuitClosure(), base::TimeDelta::FromMilliseconds(1));
+      FROM_HERE, run_loop.QuitClosure(), base::Milliseconds(1));
   run_loop.Run();
 }
 
 base::Time MicrosecondsSinceEpoch(int microseconds) {
   return base::Time::FromDeltaSinceWindowsEpoch(
-      base::TimeDelta::FromMicroseconds(microseconds));
+      base::Microseconds(microseconds));
 }
 
 }  // namespace
@@ -116,24 +121,32 @@ bool MoreRelevant(const ChromeSearchResult* result1,
   return result1->relevance() > result2->relevance();
 }
 
-void UpdateIconKey(apps::AppServiceProxyChromeOs& proxy,
-                   const std::string& app_id) {
-  apps::mojom::AppPtr app = apps::mojom::App::New();
-  app->app_id = app_id;
+void UpdateIconKey(apps::AppServiceProxy& proxy, const std::string& app_id) {
+  apps::AppType app_type;
+  apps::IconKeyPtr icon_key;
   proxy.AppRegistryCache().ForOneApp(
-      app_id, [&app](const apps::AppUpdate& update) {
-        app->app_type = update.AppType();
-        app->icon_key = apps::mojom::IconKey::New(
+      app_id, [&app_type, &icon_key](const apps::AppUpdate& update) {
+        app_type = update.AppType();
+        icon_key = std::make_unique<apps::IconKey>(
             update.IconKey()->timeline + 1, update.IconKey()->resource_id,
             update.IconKey()->icon_effects);
       });
 
-  std::vector<apps::mojom::AppPtr> apps;
-  apps.push_back(app.Clone());
-  proxy.AppRegistryCache().OnApps(std::move(apps),
-                                  apps::mojom::AppType::kUnknown,
-                                  false /* should_notify_initialized */);
-  proxy.FlushMojoCallsForTesting();
+  std::vector<apps::AppPtr> apps;
+  apps::AppPtr app = std::make_unique<apps::App>(app_type, app_id);
+  app->icon_key = std::move(*icon_key);
+  apps.push_back(std::move(app));
+  if (base::FeatureList::IsEnabled(apps::kAppServiceOnAppUpdateWithoutMojom)) {
+    proxy.AppRegistryCache().OnApps(std::move(apps), apps::AppType::kUnknown,
+                                    false /* should_notify_initialized */);
+  } else {
+    std::vector<apps::mojom::AppPtr> mojom_apps;
+    mojom_apps.push_back(apps::ConvertAppToMojomApp(apps[0]));
+    proxy.AppRegistryCache().OnApps(std::move(mojom_apps),
+                                    apps::mojom::AppType::kUnknown,
+                                    false /* should_notify_initialized */);
+    proxy.FlushMojoCallsForTesting();
+  }
 }
 
 class AppSearchProviderTest : public AppListTestBase {
@@ -145,21 +158,29 @@ class AppSearchProviderTest : public AppListTestBase {
     scoped_feature_list_.InitWithFeatures(
         {}, {app_list_features::kEnableFuzzyAppSearch});
   }
+
+  AppSearchProviderTest(const AppSearchProviderTest&) = delete;
+  AppSearchProviderTest& operator=(const AppSearchProviderTest&) = delete;
+
   ~AppSearchProviderTest() override {}
 
   // AppListTestBase overrides:
   void SetUp() override {
     AppListTestBase::SetUp();
 
-    model_updater_ = std::make_unique<FakeAppListModelUpdater>();
+    model_updater_ = std::make_unique<FakeAppListModelUpdater>(
+        /*profile=*/nullptr, /*reorder_delegate=*/nullptr);
     controller_ = std::make_unique<::test::TestAppListControllerDelegate>();
     ASSERT_TRUE(temp_dir_.CreateUniqueTempDir());
   }
 
   void CreateSearch() {
     clock_.SetNow(kTestCurrentTime);
-    app_search_ = std::make_unique<AppSearchProvider>(
+    search_controller_ = std::make_unique<TestSearchController>();
+    auto app_search = std::make_unique<AppSearchProvider>(
         profile_.get(), nullptr, &clock_, model_updater_.get());
+    app_search_ = app_search.get();
+    search_controller_->AddProvider(0, std::move(app_search));
   }
 
   void CreateSearchWithContinueReading() {
@@ -176,17 +197,23 @@ class AppSearchProviderTest : public AppListTestBase {
   }
 
   std::string RunQuery(const std::string& query) {
-    app_search_->Start(base::UTF8ToUTF16(query));
+    if (query.empty()) {
+      search_controller_->StartZeroState(base::DoNothing(), base::TimeDelta());
+    } else {
+      search_controller_->StartSearch(base::UTF8ToUTF16(query));
+    }
 
     // Sort results by relevance.
     std::vector<ChromeSearchResult*> sorted_results;
-    for (const auto& result : app_search_->results())
+    for (const auto& result : results())
       sorted_results.emplace_back(result.get());
     std::sort(sorted_results.begin(), sorted_results.end(), &MoreRelevant);
 
-    // If the query is empty, every other result is a chip result identical to
-    // the tile result. Skip these.
-    const int increment = query.empty() ? 2 : 1;
+    // If the query is empty and we're in the non-productivity launcher, every
+    // other result is a chip result identical to the tile result. Skip these.
+    const int increment =
+        (!app_list_features::IsCategoricalSearchEnabled() && query.empty()) ? 2
+                                                                            : 1;
     std::string result_str;
     for (size_t i = 0; i < sorted_results.size(); i += increment) {
       if (!result_str.empty())
@@ -201,11 +228,11 @@ class AppSearchProviderTest : public AppListTestBase {
   // container based on index flags instead of relevance, use this methodology
   // to generate list of test results.
   std::string RunQueryNotSortingByRelevance(const std::string& query) {
-    app_search_->Start(base::UTF8ToUTF16(query));
+    search_controller_->StartSearch(base::UTF8ToUTF16(query));
 
     std::vector<ChromeSearchResult*> non_relevance_results;
     std::vector<ChromeSearchResult*> priority_results;
-    for (const auto& result : app_search_->results()) {
+    for (const auto& result : results()) {
       if (result->display_index() == ash::kFirstIndex &&
           (result->display_type() == ash::kChip ||
            result->display_type() == ash::kTile)) {
@@ -287,7 +314,14 @@ class AppSearchProviderTest : public AppListTestBase {
                                     extensions::kInstallFlagNone);
   }
 
-  const SearchProvider::Results& results() { return app_search_->results(); }
+  const SearchProvider::Results& results() {
+    if (app_list_features::IsCategoricalSearchEnabled()) {
+      return search_controller_->last_results();
+    } else {
+      return app_search_->results();
+    }
+  }
+
   ArcAppTest& arc_test() { return arc_test_; }
 
   void CallViewClosing() { app_search_->ViewClosing(); }
@@ -301,7 +335,8 @@ class AppSearchProviderTest : public AppListTestBase {
   base::ScopedTempDir temp_dir_;
   base::test::ScopedFeatureList scoped_feature_list_;
   std::unique_ptr<FakeAppListModelUpdater> model_updater_;
-  std::unique_ptr<AppSearchProvider> app_search_;
+  std::unique_ptr<TestSearchController> search_controller_;
+  AppSearchProvider* app_search_ = nullptr;
   std::unique_ptr<::test::TestAppListControllerDelegate> controller_;
   ArcAppTest arc_test_;
 
@@ -310,14 +345,13 @@ class AppSearchProviderTest : public AppListTestBase {
       mock_sync_sessions_client_;
   std::unique_ptr<sync_sessions::SyncedSessionTracker> session_tracker_;
   std::unique_ptr<sync_sessions::OpenTabsUIDelegateImpl> open_tabs_ui_delegate_;
-
-  DISALLOW_COPY_AND_ASSIGN(AppSearchProviderTest);
 };
 
 TEST_F(AppSearchProviderTest, Basic) {
   arc_test().SetUp(profile());
-  std::vector<arc::mojom::AppInfo> arc_apps(arc_test().fake_apps().begin(),
-                                            arc_test().fake_apps().begin() + 2);
+  std::vector<arc::mojom::AppInfoPtr> arc_apps;
+  for (int i = 0; i < 2; i++)
+    arc_apps.emplace_back(arc_test().fake_apps()[i]->Clone());
   arc_test().app_instance()->SendRefreshAppList(arc_apps);
 
   // Allow async callbacks to run.
@@ -386,7 +420,7 @@ TEST_F(AppSearchProviderTest, UninstallExtension) {
 
 TEST_F(AppSearchProviderTest, InstallUninstallArc) {
   arc_test().SetUp(profile());
-  std::vector<arc::mojom::AppInfo> arc_apps;
+  std::vector<arc::mojom::AppInfoPtr> arc_apps;
   arc_test().app_instance()->SendRefreshAppList(arc_apps);
 
   // Allow async callbacks to run.
@@ -397,7 +431,7 @@ TEST_F(AppSearchProviderTest, InstallUninstallArc) {
   EXPECT_TRUE(results().empty());
   EXPECT_EQ("", RunQuery("fapp0"));
 
-  arc_apps.push_back(arc_test().fake_apps()[0]);
+  arc_apps.emplace_back(arc_test().fake_apps()[0]->Clone());
   arc_test().app_instance()->SendRefreshAppList(arc_apps);
 
   // Allow async callbacks to run.
@@ -442,8 +476,7 @@ TEST_F(AppSearchProviderTest, FetchRecommendations) {
   EXPECT_EQ("Packaged App 2,Packaged App 1,Hosted App", RunQuery(""));
 
   // Times in the future should just be handled as highest priority.
-  prefs->SetLastLaunchTime(kHostedAppId,
-                           kTestCurrentTime + base::TimeDelta::FromSeconds(5));
+  prefs->SetLastLaunchTime(kHostedAppId, kTestCurrentTime + base::Seconds(5));
   prefs->SetLastLaunchTime(kPackagedApp1Id, MicrosecondsSinceEpoch(10));
   prefs->SetLastLaunchTime(kPackagedApp2Id, MicrosecondsSinceEpoch(5));
   // Allow async callbacks to run.
@@ -451,219 +484,79 @@ TEST_F(AppSearchProviderTest, FetchRecommendations) {
   EXPECT_EQ("Hosted App,Packaged App 1,Packaged App 2", RunQuery(""));
 }
 
-TEST_F(AppSearchProviderTest, FetchRecommendationsWithContinueReading) {
-  constexpr char kLocalSessionTag[] = "local";
-  constexpr char kLocalSessionName[] = "LocalSessionName";
-  constexpr char kForeignSessionTag1[] = "foreign1";
-  constexpr char kForeignSessionTag2[] = "foreign2";
-  constexpr char kForeignSessionTag3[] = "foreign3";
-  constexpr SessionID kWindowId1 = SessionID::FromSerializedValue(1);
-  constexpr SessionID kWindowId2 = SessionID::FromSerializedValue(2);
-  constexpr SessionID kWindowId3 = SessionID::FromSerializedValue(3);
-  constexpr SessionID kTabId1 = SessionID::FromSerializedValue(111);
-  constexpr SessionID kTabId2 = SessionID::FromSerializedValue(222);
-  constexpr SessionID kTabId3 = SessionID::FromSerializedValue(333);
+TEST_F(AppSearchProviderTest, DefaultRecommendedAppRanking) {
+  // Disable the pre-installed high-priority extensions. This test simulates
+  // a brand new profile being added to a device, and should not include these.
+  service_->UninstallExtension(
+      kHostedAppId, extensions::UNINSTALL_REASON_FOR_TESTING, nullptr);
+  service_->UninstallExtension(
+      kPackagedApp1Id, extensions::UNINSTALL_REASON_FOR_TESTING, nullptr);
+  service_->UninstallExtension(
+      kPackagedApp2Id, extensions::UNINSTALL_REASON_FOR_TESTING, nullptr);
 
-  const base::Time now = base::Time::Now();
+  base::RunLoop().RunUntilIdle();
 
-  // Case 1: test that ContinueReading is recommended for the latest foreign
-  // tab.
-  {
-    CreateSearchWithContinueReading();
-    session_tracker()->InitLocalSession(kLocalSessionTag, kLocalSessionName,
-                                        sync_pb::SyncEnums::TYPE_CROS);
-    const base::Time kTimestamp1 = now - base::TimeDelta::FromMinutes(2);
-    const base::Time kTimestamp2 = now - base::TimeDelta::FromMinutes(1);
-    const base::Time kTimestamp3 = now - base::TimeDelta::FromMinutes(3);
+  profile_->SetIsNewProfile(true);
+  ASSERT_TRUE(profile()->IsNewProfile());
 
-    session_tracker()->PutWindowInSession(kForeignSessionTag1, kWindowId1);
-    session_tracker()->PutTabInWindow(kForeignSessionTag1, kWindowId1, kTabId1);
-    session_tracker()
-        ->GetTab(kForeignSessionTag1, kTabId1)
-        ->navigations.push_back(sessions::ContentTestHelper::CreateNavigation(
-            "http://url1", "title1"));
-    session_tracker()->GetTab(kForeignSessionTag1, kTabId1)->timestamp =
-        kTimestamp1;
-    session_tracker()->GetSession(kForeignSessionTag1)->modified_time =
-        kTimestamp1;
-    session_tracker()->GetSession(kForeignSessionTag1)->device_type =
-        sync_pb::SyncEnums::TYPE_PHONE;
+  // There are four default web apps. We use real app IDs here, as these are
+  // used internally by the ranking logic. We can use arbitrary app names.
+  //
+  // TODO(crbug.com/1235272): There is one default ARC app (PlayStore). Figure
+  // out how to test-install PlayStore as a default ARC app.
+  const std::vector<std::string> kDefaultRecommendedWebAppIds = {
+      web_app::kCanvasAppId, web_app::kHelpAppId, web_app::kOsSettingsAppId,
+      web_app::kCameraAppId};
+  const std::vector<std::string> kDefaultRecommendedWebAppNames = {
+      "Canvas", "Help", "OsSettings", "Camera"};
 
-    session_tracker()->PutWindowInSession(kForeignSessionTag2, kWindowId2);
-    session_tracker()->PutTabInWindow(kForeignSessionTag2, kWindowId2, kTabId2);
-    session_tracker()
-        ->GetTab(kForeignSessionTag2, kTabId2)
-        ->navigations.push_back(sessions::ContentTestHelper::CreateNavigation(
-            "http://url2", "title2"));
-    session_tracker()->GetTab(kForeignSessionTag2, kTabId2)->timestamp =
-        kTimestamp2;
-    session_tracker()->GetSession(kForeignSessionTag2)->modified_time =
-        kTimestamp2;
-    session_tracker()->GetSession(kForeignSessionTag2)->device_type =
-        sync_pb::SyncEnums::TYPE_PHONE;
+  ASSERT_EQ(kDefaultRecommendedWebAppNames.size(),
+            kDefaultRecommendedWebAppIds.size());
 
-    session_tracker()->PutWindowInSession(kForeignSessionTag3, kWindowId3);
-    session_tracker()->PutTabInWindow(kForeignSessionTag3, kWindowId3, kTabId3);
-    session_tracker()
-        ->GetTab(kForeignSessionTag3, kTabId3)
-        ->navigations.push_back(sessions::ContentTestHelper::CreateNavigation(
-            "http://url3", "title3"));
-    session_tracker()->GetTab(kForeignSessionTag3, kTabId3)->timestamp =
-        kTimestamp3;
-    session_tracker()->GetSession(kForeignSessionTag3)->modified_time =
-        kTimestamp3;
-    session_tracker()->GetSession(kForeignSessionTag3)->device_type =
-        sync_pb::SyncEnums::TYPE_PHONE;
-
-    EXPECT_EQ("title2,Hosted App,Packaged App 1,Packaged App 2",
-              RunQueryNotSortingByRelevance(""));
+  // Install the default recommended web apps.
+  // N.B. These are web apps and not extensions, but these installations are
+  // simulated using extensions because it allows us to set the app ID.
+  for (size_t i = 0; i < kDefaultRecommendedWebAppNames.size(); ++i) {
+    AddExtension(kDefaultRecommendedWebAppIds[i],
+                 kDefaultRecommendedWebAppNames[i],
+                 ManifestLocation::kExternalPrefDownload,
+                 extensions::Extension::WAS_INSTALLED_BY_DEFAULT);
+    service_->EnableExtension(kDefaultRecommendedWebAppIds[i]);
   }
 
-  // Case 2: test that ContinueReading is not recommended for local session.
-  {
-    CreateSearchWithContinueReading();
-    session_tracker()->InitLocalSession(kLocalSessionTag, kLocalSessionName,
-                                        sync_pb::SyncEnums::TYPE_CROS);
-    const base::Time kTimestamp1 = now - base::TimeDelta::FromMinutes(1);
+  // Allow app installations to finish.
+  base::RunLoop().RunUntilIdle();
+  CreateSearch();
 
-    session_tracker()->PutWindowInSession(kLocalSessionTag, kWindowId1);
-    session_tracker()->PutTabInWindow(kLocalSessionTag, kWindowId1, kTabId1);
-    session_tracker()
-        ->GetTab(kLocalSessionTag, kTabId1)
-        ->navigations.push_back(sessions::ContentTestHelper::CreateNavigation(
-            "http://url1", "title1"));
-    session_tracker()->GetTab(kLocalSessionTag, kTabId1)->timestamp =
-        kTimestamp1;
-    session_tracker()->GetSession(kLocalSessionTag)->modified_time =
-        kTimestamp1;
-    session_tracker()->GetSession(kLocalSessionTag)->device_type =
-        sync_pb::SyncEnums::TYPE_PHONE;
+  EXPECT_EQ("OsSettings,Help,Canvas,Camera", RunQuery(""));
 
-    EXPECT_EQ("Hosted App,Packaged App 1,Packaged App 2",
-              RunQueryNotSortingByRelevance(""));
-  }
+  // Install a normal (non-default-installed) app.
+  const std::string normal_app_id =
+      crx_file::id_util::GenerateId(kRankingNormalAppName);
+  AddExtension(normal_app_id, kRankingNormalAppName,
+               ManifestLocation::kExternalPrefDownload,
+               extensions::Extension::NO_FLAGS);
+  WaitTimeUpdated();
 
-  // Case 3: test that ContinueReading is not recommended for foreign tab more
-  // than 120 minutes ago.
-  {
-    CreateSearchWithContinueReading();
-    session_tracker()->InitLocalSession(kLocalSessionTag, kLocalSessionName,
-                                        sync_pb::SyncEnums::TYPE_CROS);
-    const base::Time kTimestamp1 = now - base::TimeDelta::FromMinutes(121);
+  extensions::ExtensionPrefs* const prefs =
+      extensions::ExtensionPrefs::Get(profile());
+  ASSERT_TRUE(prefs);
 
-    session_tracker()->PutWindowInSession(kForeignSessionTag1, kWindowId1);
-    session_tracker()->PutTabInWindow(kForeignSessionTag1, kWindowId1, kTabId1);
-    session_tracker()
-        ->GetTab(kForeignSessionTag1, kTabId1)
-        ->navigations.push_back(sessions::ContentTestHelper::CreateNavigation(
-            "http://url1", "title1"));
-    session_tracker()->GetTab(kForeignSessionTag1, kTabId1)->timestamp =
-        kTimestamp1;
-    session_tracker()->GetSession(kForeignSessionTag1)->modified_time =
-        kTimestamp1;
-    session_tracker()->GetSession(kForeignSessionTag1)->device_type =
-        sync_pb::SyncEnums::TYPE_PHONE;
+  // Simulate launching the normal app. Expect that an app with a recorded
+  // launch time takes precedence over the default-installed apps.
+  prefs->SetLastLaunchTime(normal_app_id, base::Time::Now());
+  CreateSearch();
+  EXPECT_EQ(
+      std::string(kRankingNormalAppName) + ",OsSettings,Help,Canvas,Camera",
+      RunQuery(""));
 
-    EXPECT_EQ("Hosted App,Packaged App 1,Packaged App 2",
-              RunQueryNotSortingByRelevance(""));
-  }
-
-  // Case 4: test that ContinueReading is recommended for foreign tab with
-  // TYPE_TABLET.
-  {
-    CreateSearchWithContinueReading();
-    session_tracker()->InitLocalSession(kLocalSessionTag, kLocalSessionName,
-                                        sync_pb::SyncEnums::TYPE_CROS);
-    const base::Time kTimestamp1 = now - base::TimeDelta::FromMinutes(1);
-
-    session_tracker()->PutWindowInSession(kForeignSessionTag1, kWindowId1);
-    session_tracker()->PutTabInWindow(kForeignSessionTag1, kWindowId1, kTabId1);
-    session_tracker()
-        ->GetTab(kForeignSessionTag1, kTabId1)
-        ->navigations.push_back(sessions::ContentTestHelper::CreateNavigation(
-            "http://url1", "title1"));
-    session_tracker()->GetTab(kForeignSessionTag1, kTabId1)->timestamp =
-        kTimestamp1;
-    session_tracker()->GetSession(kForeignSessionTag1)->modified_time =
-        kTimestamp1;
-    session_tracker()->GetSession(kForeignSessionTag1)->device_type =
-        sync_pb::SyncEnums::TYPE_TABLET;
-
-    EXPECT_EQ("title1,Hosted App,Packaged App 1,Packaged App 2",
-              RunQueryNotSortingByRelevance(""));
-  }
-
-  // Case 5: test that ContinueReading is not recommended for foreign tab with
-  // TYPE_CROS.
-  {
-    CreateSearchWithContinueReading();
-    session_tracker()->InitLocalSession(kLocalSessionTag, kLocalSessionName,
-                                        sync_pb::SyncEnums::TYPE_CROS);
-    const base::Time kTimestamp1 = now - base::TimeDelta::FromMinutes(1);
-
-    session_tracker()->PutWindowInSession(kForeignSessionTag1, kWindowId1);
-    session_tracker()->PutTabInWindow(kForeignSessionTag1, kWindowId1, kTabId1);
-    session_tracker()
-        ->GetTab(kForeignSessionTag1, kTabId1)
-        ->navigations.push_back(sessions::ContentTestHelper::CreateNavigation(
-            "http://url1", "title1"));
-    session_tracker()->GetTab(kForeignSessionTag1, kTabId1)->timestamp =
-        kTimestamp1;
-    session_tracker()->GetSession(kForeignSessionTag1)->modified_time =
-        kTimestamp1;
-    session_tracker()->GetSession(kForeignSessionTag1)->device_type =
-        sync_pb::SyncEnums::TYPE_CROS;
-
-    EXPECT_EQ("Hosted App,Packaged App 1,Packaged App 2",
-              RunQueryNotSortingByRelevance(""));
-  }
-
-  // Case 6: test that ContinueReading is not recommended for foreign tab which
-  // is not SchemeIsHTTPOrHTTPS.
-  {
-    CreateSearchWithContinueReading();
-    session_tracker()->InitLocalSession(kLocalSessionTag, kLocalSessionName,
-                                        sync_pb::SyncEnums::TYPE_CROS);
-    const base::Time kTimestamp1 = now - base::TimeDelta::FromMinutes(1);
-
-    session_tracker()->PutWindowInSession(kForeignSessionTag1, kWindowId1);
-    session_tracker()->PutTabInWindow(kForeignSessionTag1, kWindowId1, kTabId1);
-    session_tracker()
-        ->GetTab(kForeignSessionTag1, kTabId1)
-        ->navigations.push_back(sessions::ContentTestHelper::CreateNavigation(
-            "data://url1", "title1"));
-    session_tracker()->GetTab(kForeignSessionTag1, kTabId1)->timestamp =
-        kTimestamp1;
-    session_tracker()->GetSession(kForeignSessionTag1)->modified_time =
-        kTimestamp1;
-    session_tracker()->GetSession(kForeignSessionTag1)->device_type =
-        sync_pb::SyncEnums::TYPE_CROS;
-
-    EXPECT_EQ("Hosted App,Packaged App 1,Packaged App 2",
-              RunQueryNotSortingByRelevance(""));
-  }
-
-  // Case 7: test that ContinueReading is not recommended when searching.
-  {
-    CreateSearchWithContinueReading();
-    session_tracker()->InitLocalSession(kLocalSessionTag, kLocalSessionName,
-                                        sync_pb::SyncEnums::TYPE_CROS);
-    const base::Time kTimestamp1 = now - base::TimeDelta::FromMinutes(1);
-
-    session_tracker()->PutWindowInSession(kForeignSessionTag1, kWindowId1);
-    session_tracker()->PutTabInWindow(kForeignSessionTag1, kWindowId1, kTabId1);
-    session_tracker()
-        ->GetTab(kForeignSessionTag1, kTabId1)
-        ->navigations.push_back(sessions::ContentTestHelper::CreateNavigation(
-            "http://url1", "title1"));
-    session_tracker()->GetTab(kForeignSessionTag1, kTabId1)->timestamp =
-        kTimestamp1;
-    session_tracker()->GetSession(kForeignSessionTag1)->modified_time =
-        kTimestamp1;
-    session_tracker()->GetSession(kForeignSessionTag1)->device_type =
-        sync_pb::SyncEnums::TYPE_PHONE;
-    EXPECT_EQ("", RunQueryNotSortingByRelevance("ti"));
-  }
+  // Simulate launching one of the default apps. Expect that this brings it to
+  // higher precedence than all the others.
+  prefs->SetLastLaunchTime(web_app::kCanvasAppId, base::Time::Now());
+  CreateSearch();
+  EXPECT_EQ("Canvas," + std::string(kRankingNormalAppName) +
+                ",OsSettings,Help,Camera",
+            RunQuery(""));
 }
 
 TEST_F(AppSearchProviderTest, FetchUnlaunchedRecommendations) {
@@ -704,7 +597,7 @@ TEST_F(AppSearchProviderTest, FilterDuplicate) {
 
   extension_prefs->SetLastLaunchTime(
       extension_misc::kGmailAppId,
-      arc_gmail_app_info->last_launch_time - base::TimeDelta::FromSeconds(1));
+      arc_gmail_app_info->last_launch_time - base::Seconds(1));
 
   // Allow async callbacks to run.
   base::RunLoop().RunUntilIdle();
@@ -714,7 +607,7 @@ TEST_F(AppSearchProviderTest, FilterDuplicate) {
 
   extension_prefs->SetLastLaunchTime(
       extension_misc::kGmailAppId,
-      arc_gmail_app_info->last_launch_time + base::TimeDelta::FromSeconds(1));
+      arc_gmail_app_info->last_launch_time + base::Seconds(1));
 
   // Allow async callbacks to run.
   base::RunLoop().RunUntilIdle();
@@ -751,9 +644,10 @@ class AppSearchProviderCrostiniTest : public AppSearchProviderTest {
  public:
   void SetUp() override {
     chromeos::DBusThreadManager::Initialize();
-    chromeos::CiceroneClient::InitializeFake();
-    chromeos::ConciergeClient::InitializeFake();
-    chromeos::SeneschalClient::InitializeFake();
+    ash::ChunneldClient::InitializeFake();
+    ash::CiceroneClient::InitializeFake();
+    ash::ConciergeClient::InitializeFake();
+    ash::SeneschalClient::InitializeFake();
     AppSearchProviderTest::SetUp();
   }
 
@@ -766,45 +660,13 @@ class AppSearchProviderCrostiniTest : public AppSearchProviderTest {
     // DBusThreadManager to ensure all keyed services that might rely on DBus
     // clients are destroyed.
     profile_.reset();
-    chromeos::SeneschalClient::Shutdown();
-    chromeos::ConciergeClient::Shutdown();
-    chromeos::CiceroneClient::Shutdown();
+    ash::SeneschalClient::Shutdown();
+    ash::ConciergeClient::Shutdown();
+    ash::CiceroneClient::Shutdown();
+    ash::ChunneldClient::Shutdown();
     chromeos::DBusThreadManager::Shutdown();
   }
 };
-
-TEST_F(AppSearchProviderCrostiniTest, CrostiniTerminal) {
-  CreateSearch();
-
-  // Crostini UI is not allowed yet.
-  EXPECT_EQ("", RunQuery("terminal"));
-  EXPECT_EQ("", RunQuery("linux"));
-
-  // This both allows Crostini UI and enables Crostini.
-  crostini::CrostiniTestHelper crostini_test_helper(testing_profile());
-  crostini_test_helper.ReInitializeAppServiceIntegration();
-  CreateSearch();
-  EXPECT_EQ("Terminal,Hosted App", RunQuery("te"));
-  EXPECT_EQ("Terminal", RunQuery("ter"));
-  EXPECT_EQ("Terminal", RunQuery("terminal"));
-  EXPECT_EQ("Terminal", RunQuery("li"));
-  EXPECT_EQ("Terminal", RunQuery("linux"));
-  EXPECT_EQ("Terminal", RunQuery("crosti"));
-
-  // If Crostini UI is allowed but disabled (i.e. not installed), a match score
-  // of 0.8 is required before surfacing search results.
-  crostini::CrostiniTestHelper::DisableCrostini(testing_profile());
-  CreateSearch();
-  EXPECT_EQ("Hosted App", RunQuery("te"));
-  EXPECT_EQ("Terminal", RunQuery("ter"));
-  EXPECT_EQ("Terminal", RunQuery("terminal"));
-  EXPECT_EQ("", RunQuery("li"));
-  EXPECT_EQ("Terminal", RunQuery("lin"));
-  EXPECT_EQ("Terminal", RunQuery("linux"));
-  EXPECT_EQ("", RunQuery("cr"));
-  EXPECT_EQ("Terminal", RunQuery("cro"));
-  EXPECT_EQ("Terminal", RunQuery("cros"));
-}
 
 TEST_F(AppSearchProviderCrostiniTest, CrostiniApp) {
   // This both allows Crostini UI and enables Crostini.
@@ -833,7 +695,7 @@ TEST_F(AppSearchProviderCrostiniTest, CrostiniApp) {
 }
 
 TEST_F(AppSearchProviderTest, AppServiceIconCache) {
-  apps::AppServiceProxyChromeOs* proxy =
+  apps::AppServiceProxy* proxy =
       apps::AppServiceProxyFactory::GetForProfile(profile());
   ASSERT_NE(proxy, nullptr);
 
@@ -862,6 +724,15 @@ TEST_F(AppSearchProviderTest, AppServiceIconCache) {
   // The number of LoadIconFromIconKey calls should not change, when hiding the
   // UI (i.e. calling ViewClosing).
   CallViewClosing();
+
+  EXPECT_FALSE(results().empty());
+  // Allow async callbacks to run.
+  base::RunLoop().RunUntilIdle();
+  if (!app_list_features::IsCategoricalSearchEnabled()) {
+    // Verify the search results are cleared async.
+    EXPECT_TRUE(results().empty());
+  }
+
   EXPECT_EQ(2, stub_icon_loader.NumLoadIconFromIconKeyCalls());
 
   // The icon has been added to the map, so issuing the same "pa" query should
@@ -903,10 +774,13 @@ class AppSearchProviderWithExtensionInstallType
       public ::testing::WithParamInterface<TestExtensionInstallType> {
  public:
   AppSearchProviderWithExtensionInstallType() = default;
-  ~AppSearchProviderWithExtensionInstallType() override = default;
 
- private:
-  DISALLOW_COPY_AND_ASSIGN(AppSearchProviderWithExtensionInstallType);
+  AppSearchProviderWithExtensionInstallType(
+      const AppSearchProviderWithExtensionInstallType&) = delete;
+  AppSearchProviderWithExtensionInstallType& operator=(
+      const AppSearchProviderWithExtensionInstallType&) = delete;
+
+  ~AppSearchProviderWithExtensionInstallType() override = default;
 };
 
 TEST_P(AppSearchProviderWithExtensionInstallType, InstallInternallyRanking) {
@@ -1033,10 +907,13 @@ class AppSearchProviderWithArcAppInstallType
       public ::testing::WithParamInterface<TestArcAppInstallType> {
  public:
   AppSearchProviderWithArcAppInstallType() = default;
-  ~AppSearchProviderWithArcAppInstallType() override = default;
 
- private:
-  DISALLOW_COPY_AND_ASSIGN(AppSearchProviderWithArcAppInstallType);
+  AppSearchProviderWithArcAppInstallType(
+      const AppSearchProviderWithArcAppInstallType&) = delete;
+  AppSearchProviderWithArcAppInstallType& operator=(
+      const AppSearchProviderWithArcAppInstallType&) = delete;
+
+  ~AppSearchProviderWithArcAppInstallType() override = default;
 };
 
 // TODO (879413): Enable this after resolving flakiness.

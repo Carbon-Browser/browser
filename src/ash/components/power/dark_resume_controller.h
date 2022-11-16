@@ -6,8 +6,8 @@
 #define ASH_COMPONENTS_POWER_DARK_RESUME_CONTROLLER_H_
 
 #include "base/component_export.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
+#include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "base/unguessable_token.h"
 #include "chromeos/dbus/power/power_manager_client.h"
@@ -49,12 +49,16 @@ class COMPONENT_EXPORT(ASH_POWER) DarkResumeController
  public:
   explicit DarkResumeController(
       mojo::PendingRemote<device::mojom::WakeLockProvider> wake_lock_provider);
+
+  DarkResumeController(const DarkResumeController&) = delete;
+  DarkResumeController& operator=(const DarkResumeController&) = delete;
+
   ~DarkResumeController() override;
 
   // Time after a dark resume when wake lock count is checked and a decision is
   // made to re-suspend or wait for wake lock release.
   static constexpr base::TimeDelta kDarkResumeWakeLockCheckTimeout =
-      base::TimeDelta::FromSeconds(3);
+      base::Seconds(3);
 
   // chromeos::PowerManagerClient::Observer overrides.
   void PowerManagerInitialized() override;
@@ -127,18 +131,9 @@ class COMPONENT_EXPORT(ASH_POWER) DarkResumeController
   // tasks or callbacks need to be added separate from the dark resume state
   // machine lifetime then a separate factory needs to be created and used.
   base::WeakPtrFactory<DarkResumeController> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(DarkResumeController);
 };
 
 }  // namespace system
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when ChromeOS code migration is done.
-namespace chromeos {
-namespace system {
-using ::ash::system::DarkResumeController;
-}  // namespace system
-}  // namespace chromeos
 
 #endif  // ASH_COMPONENTS_POWER_DARK_RESUME_CONTROLLER_H_

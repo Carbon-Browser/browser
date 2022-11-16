@@ -6,7 +6,6 @@
 #define GPU_COMMAND_BUFFER_SERVICE_GL_CONTEXT_VIRTUAL_H_
 
 #include <string>
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "build/build_config.h"
@@ -29,6 +28,9 @@ class GPU_GLES2_EXPORT GLContextVirtual : public gl::GLContext {
                    gl::GLContext* shared_context,
                    base::WeakPtr<GLContextVirtualDelegate> delegate);
 
+  GLContextVirtual(const GLContextVirtual&) = delete;
+  GLContextVirtual& operator=(const GLContextVirtual&) = delete;
+
   // Implement GLContext.
   bool Initialize(gl::GLSurface* compatible_surface,
                   const gl::GLContextAttribs& attribs) override;
@@ -46,10 +48,14 @@ class GPU_GLES2_EXPORT GLContextVirtual : public gl::GLContext {
   gl::YUVToRGBConverter* GetYUVToRGBConverter(
       const gfx::ColorSpace& color_space) override;
   void ForceReleaseVirtuallyCurrent() override;
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   uint64_t BackpressureFenceCreate() override;
   void BackpressureFenceWait(uint64_t fence) override;
   void FlushForDriverCrashWorkaround() override;
+#endif
+
+#if defined(USE_EGL)
+  gl::GLDisplayEGL* GetGLDisplayEGL() override;
 #endif
 
  protected:
@@ -61,8 +67,6 @@ class GPU_GLES2_EXPORT GLContextVirtual : public gl::GLContext {
 
   scoped_refptr<gl::GLContext> shared_context_;
   base::WeakPtr<GLContextVirtualDelegate> delegate_;
-
-  DISALLOW_COPY_AND_ASSIGN(GLContextVirtual);
 };
 
 }  // namespace gpu

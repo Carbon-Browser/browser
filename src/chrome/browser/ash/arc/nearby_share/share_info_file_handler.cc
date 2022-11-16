@@ -7,6 +7,7 @@
 #include <cinttypes>
 #include <string>
 
+#include "ash/components/arc/arc_util.h"
 #include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
@@ -16,17 +17,21 @@
 #include "base/strings/stringprintf.h"
 #include "chrome/browser/ash/arc/arc_util.h"
 #include "chrome/browser/ash/arc/fileapi/arc_content_file_system_url_util.h"
+#include "chrome/browser/ash/arc/nearby_share/arc_nearby_share_uma.h"
 #include "chrome/browser/ash/file_manager/fileapi_util.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/chromeos/fileapi/external_file_url_util.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "components/arc/arc_util.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/storage_partition.h"
 #include "storage/browser/file_system/file_system_context.h"
 #include "storage/browser/file_system/isolated_context.h"
 #include "url/gurl.h"
+
+// Enable VLOG level 1.
+#undef ENABLED_VLOG_LEVEL
+#define ENABLED_VLOG_LEVEL 1
 
 namespace arc {
 
@@ -39,8 +44,7 @@ constexpr int kStreamReaderBufSizeInBytes = 32 * 1024;
 // before Nearby Share can consume it.  Since we don't have limit on number
 // of files or size of files users can share via Nearby Share, set to some
 // reasonable number of minutes per GB of transfer.
-constexpr base::TimeDelta kFileStreamingTimeoutPerGB =
-    base::TimeDelta::FromMinutes(2);
+constexpr base::TimeDelta kFileStreamingTimeoutPerGB = base::Minutes(2);
 
 int64_t GetTimeoutInSecondsFromBytes(uint64_t transfer_bytes) {
   constexpr double kGBInBytes = 1 * 1024 * 1024 * 1024;
@@ -103,21 +107,16 @@ ShareInfoFileHandler::ShareInfoFileHandler(
       file_config_.mime_types.emplace_back(file_info->mime_type);
       file_config_.names.emplace_back(file_info->name);
       file_config_.sizes.emplace_back(file_info->size);
-      file_config_.total_size += base::checked_cast<uint64_t>(file_info->size);
+      if (file_info->size > 0) {
+        file_config_.total_size +=
+            base::checked_cast<uint64_t>(file_info->size);
+      }
     }
     file_config_.num_files = file_config_.external_urls.size();
   }
 }
 
-ShareInfoFileHandler::~ShareInfoFileHandler() {
-  DCHECK(task_runner_);
-
-  task_runner_->PostTask(
-      FROM_HERE,
-      base::BindOnce(
-          [](std::list<base::ScopedTempDir> dirs_list) { dirs_list.clear(); },
-          std::move(scoped_temp_dirs_)));
-}
+ShareInfoFileHandler::~ShareInfoFileHandler() = default;
 
 // static
 file_manager::util::FileSystemURLAndHandle
@@ -161,6 +160,7 @@ void ShareInfoFileHandler::StartPreparingFiles(
 
   if (!g_browser_process) {
     LOG(ERROR) << "Unexpected null g_browser_process";
+    UpdateNearbyShareDataHandlingFail(DataHandlingResult::kNullGBrowserProcess);
     NotifyFileSharingCompleted(base::File::FILE_ERROR_INVALID_OPERATION);
     return;
   }
@@ -170,54 +170,59 @@ void ShareInfoFileHandler::StartPreparingFiles(
   if (g_browser_process->profile_manager() &&
       !g_browser_process->profile_manager()->IsValidProfile(profile_)) {
     LOG(ERROR) << "Invalid profile: " << profile_->GetProfileUserName();
+    UpdateNearbyShareDataHandlingFail(DataHandlingResult::kInvalidProfile);
     NotifyFileSharingCompleted(base::File::FILE_ERROR_INVALID_OPERATION);
     return;
   }
 
   if (file_config_.directory.empty()) {
     LOG(ERROR) << "Base directory is empty.";
+    UpdateNearbyShareDataHandlingFail(DataHandlingResult::kEmptyDirectory);
     NotifyFileSharingCompleted(base::File::FILE_ERROR_NOT_A_DIRECTORY);
     return;
   }
 
-  // Keep track of all scoped directories created so they can be cleaned up.
-  scoped_temp_dirs_.emplace_front();
-  auto it_temp_dir = scoped_temp_dirs_.begin();
-
   VLOG(1) << "Creating unique directory for share and converting URLs to files";
   task_runner_->PostTaskAndReplyWithResult(
       FROM_HERE,
-      base::BindOnce(&ShareInfoFileHandler::CreateShareDirectory, this,
-                     it_temp_dir),
-      base::BindOnce(&ShareInfoFileHandler::OnCreatedDirectoryAndStartStreaming,
-                     weak_ptr_factory_.GetWeakPtr(), it_temp_dir));
+      base::BindOnce(&ShareInfoFileHandler::CreateShareDirectory, this),
+      base::BindOnce(&ShareInfoFileHandler::OnShareDirectoryPathCreated,
+                     weak_ptr_factory_.GetWeakPtr()));
 }
 
-bool ShareInfoFileHandler::CreateShareDirectory(
-    std::list<base::ScopedTempDir>::iterator it_dir) {
+base::FilePath ShareInfoFileHandler::CreateShareDirectory() {
   if (!base::PathExists(file_config_.directory)) {
-    LOG(ERROR) << "Share directory does not exist: " << file_config_.directory;
-    return false;
+    LOG(ERROR) << "Base directory does not exist: " << file_config_.directory;
+    UpdateNearbyShareDataHandlingFail(
+        DataHandlingResult::kDirectoryDoesNotExist);
+    return base::FilePath();
   }
 
-  // Prepare a temporary directory for the session to store cached share files.
-  if (!it_dir->CreateUniqueTempDirUnderPath(file_config_.directory)) {
-    LOG(ERROR) << "Failed to create unique temp directory for: "
+  // Prepare a temporary share directory to store cached share files.
+  base::FilePath temp_dir;
+  constexpr char kShareDirPrefix[] = "share-";
+  if (!base::CreateTemporaryDirInDir(file_config_.directory, kShareDirPrefix,
+                                     &temp_dir) ||
+      !base::PathExists(temp_dir)) {
+    LOG(ERROR) << "Failed to create unique temp share directory under: "
                << file_config_.directory;
-    return false;
+    UpdateNearbyShareDataHandlingFail(
+        DataHandlingResult::kFailedToCreateDirectory);
+    return base::FilePath();
   }
-  return true;
+  return temp_dir;
 }
 
-void ShareInfoFileHandler::OnCreatedDirectoryAndStartStreaming(
-    std::list<base::ScopedTempDir>::iterator it,
-    bool result) {
+void ShareInfoFileHandler::OnShareDirectoryPathCreated(
+    base::FilePath share_dir) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   DCHECK(started_callback_);
   DCHECK(task_runner_);
 
-  if (!result) {
-    LOG(ERROR) << "Failed to prepare temp directory.";
+  if (share_dir.empty()) {
+    LOG(ERROR) << "Failed to prepare temp share directory.";
+    UpdateNearbyShareDataHandlingFail(
+        DataHandlingResult::kFailedPrepTempDirectory);
     NotifyFileSharingCompleted(base::File::FILE_ERROR_FAILED);
     return;
   }
@@ -225,23 +230,26 @@ void ShareInfoFileHandler::OnCreatedDirectoryAndStartStreaming(
   auto urls_size = file_config_.external_urls.size();
   if (!urls_size) {
     LOG(ERROR) << "External urls are empty.";
+    UpdateNearbyShareDataHandlingFail(DataHandlingResult::kEmptyExternalURL);
     NotifyFileSharingCompleted(base::File::FILE_ERROR_INVALID_URL);
     return;
   }
 
-  for (auto i = 0; i < urls_size; i++) {
+  for (size_t i = 0; i < urls_size; i++) {
     const GURL& url = file_config_.external_urls[i];
     const std::string file_name = file_config_.names[i];
     int64_t file_size = file_config_.sizes[i];
 
     if (file_size < 0) {
       LOG(ERROR) << "Invalid size provided for file name: " << file_name;
+      UpdateNearbyShareDataHandlingFail(
+          DataHandlingResult::kInvalidFileNameSize);
       NotifyFileSharingCompleted(base::File::FILE_ERROR_NOT_A_FILE);
       return;
     }
 
     const base::FilePath dest_file_path =
-        it->GetPath().AppendASCII(StripPathComponents(file_name));
+        share_dir.AppendASCII(StripPathComponents(file_name));
 
     task_runner_->PostTaskAndReplyWithResult(
         FROM_HERE,
@@ -262,6 +270,8 @@ base::ScopedFD ShareInfoFileHandler::CreateFileForWrite(
                        base::File::FLAG_CREATE | base::File::FLAG_WRITE);
   if (!dest_file.IsValid() || !base::PathExists(file_path)) {
     LOG(ERROR) << "Invalid destination file at path: " << file_path;
+    UpdateNearbyShareDataHandlingFail(
+        DataHandlingResult::kInvalidDestinationFilePath);
     return base::ScopedFD();
   }
 
@@ -280,6 +290,8 @@ void ShareInfoFileHandler::OnFileDescriptorCreated(
 
   if (!dest_fd.is_valid()) {
     LOG(ERROR) << "Invalid destination file descriptor.";
+    UpdateNearbyShareDataHandlingFail(
+        DataHandlingResult::kInvalidDestinationFileDescriptor);
     NotifyFileSharingCompleted(base::File::FILE_ERROR_FAILED);
     return;
   }
@@ -294,6 +306,8 @@ void ShareInfoFileHandler::OnFileDescriptorCreated(
 
   if (!isolated_file_system.url.is_valid()) {
     LOG(ERROR) << "Invalid FileSystemURL from handle.";
+    UpdateNearbyShareDataHandlingFail(
+        DataHandlingResult::kInvalidFileSystemURL);
     NotifyFileSharingCompleted(base::File::FILE_ERROR_INVALID_URL);
     return;
   }
@@ -301,6 +315,7 @@ void ShareInfoFileHandler::OnFileDescriptorCreated(
   // Check if the obtained path providing external file URL or not.
   if (!chromeos::IsExternalFileURLType(isolated_file_system.url.type())) {
     LOG(ERROR) << "FileSystemURL is not of external file type.";
+    UpdateNearbyShareDataHandlingFail(DataHandlingResult::kNotExternalFileType);
     NotifyFileSharingCompleted(base::File::FILE_ERROR_INVALID_URL);
     return;
   }
@@ -308,7 +323,7 @@ void ShareInfoFileHandler::OnFileDescriptorCreated(
   file_stream_adapters_.emplace_front();
   auto it_stream_adapter = file_stream_adapters_.begin();
   *it_stream_adapter = base::MakeRefCounted<ShareInfoFileStreamAdapter>(
-      *it_context, isolated_file_system.url, /* offset = */ 0, file_size,
+      *it_context, isolated_file_system.url, /*offset=*/0, file_size,
       kStreamReaderBufSizeInBytes, std::move(dest_fd),
       base::BindOnce(&ShareInfoFileHandler::OnFileStreamReadCompleted,
                      weak_ptr_factory_.GetWeakPtr(),
@@ -320,8 +335,10 @@ void ShareInfoFileHandler::OnFileDescriptorCreated(
   (*it_stream_adapter)->StartRunner();
   file_config_.paths.push_back(dest_file_path);
 
-  // TODO(b/187358883): Add UMA metrics to measure time duration of file stream
-  // transfers. From local testing on caroline for 1.2GB takes around 1 minute.
+  // Used to measure time duration of file stream transfers. For reference,
+  // local testing on caroline for 1.2GB takes around 1 minute.
+  file_streaming_started_ = base::TimeTicks::Now();
+
   const int64_t timeout_seconds =
       GetTimeoutInSecondsFromBytes(GetTotalSizeOfFiles());
   const std::string timeout_message = base::StringPrintf(
@@ -329,7 +346,7 @@ void ShareInfoFileHandler::OnFileDescriptorCreated(
       timeout_seconds);
   if (!file_streaming_timer_.IsRunning()) {
     file_streaming_timer_.Start(
-        FROM_HERE, base::TimeDelta::FromSeconds(timeout_seconds),
+        FROM_HERE, base::Seconds(timeout_seconds),
         base::BindOnce(&ShareInfoFileHandler::OnFileStreamingTimeout,
                        weak_ptr_factory_.GetWeakPtr(), timeout_message));
   }
@@ -351,6 +368,8 @@ void ShareInfoFileHandler::OnFileStreamReadCompleted(
 
   if (!result) {
     LOG(ERROR) << "Failed to stream file IO data using url: " << url_str;
+    UpdateNearbyShareDataHandlingFail(
+        DataHandlingResult::kFailedStreamFileIOData);
     NotifyFileSharingCompleted(base::File::FILE_ERROR_IO);
     return;
   }
@@ -373,9 +392,17 @@ void ShareInfoFileHandler::OnFileStreamReadCompleted(
     if (num_bytes_read_ > expected_total_bytes) {
       LOG(ERROR) << "Invalid number of bytes read: " << num_bytes_read_ << " > "
                  << expected_total_bytes;
+      UpdateNearbyShareDataHandlingFail(
+          DataHandlingResult::kInvalidNumberBytesRead);
       NotifyFileSharingCompleted(base::File::FILE_ERROR_INVALID_OPERATION);
       return;
     }
+
+    // Update file streaming duration UMA metric if transfer was successful.
+    const base::TimeDelta file_streaming_duration =
+        base::TimeTicks::Now() - file_streaming_started_;
+    UpdateNearbyShareFileStreamCompleteTime(file_streaming_duration);
+
     DVLOG(1) << "OnFileStreamReadCompleted: Completed streaming all files";
     NotifyFileSharingCompleted(base::File::FILE_OK);
   }
@@ -386,6 +413,7 @@ void ShareInfoFileHandler::OnFileStreamingTimeout(
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
   LOG(ERROR) << timeout_message;
+  UpdateNearbyShareDataHandlingFail(DataHandlingResult::kTimeout);
   NotifyFileSharingCompleted(base::File::FILE_ERROR_ABORT);
 }
 

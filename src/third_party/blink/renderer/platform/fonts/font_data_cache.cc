@@ -35,7 +35,7 @@
 
 namespace blink {
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
 const unsigned kCMaxInactiveFontData = 250;
 const unsigned kCTargetInactiveFontData = 200;
 #else
@@ -43,9 +43,23 @@ const unsigned kCMaxInactiveFontData = 225;
 const unsigned kCTargetInactiveFontData = 200;
 #endif
 
-scoped_refptr<SimpleFontData> FontDataCache::Get(const FontPlatformData* platform_data,
-                                          ShouldRetain should_retain,
-                                          bool subpixel_ascent_descent) {
+#if defined(USE_PARALLEL_TEXT_SHAPING)
+// static
+FontDataCache& FontDataCache::SharedInstance() {
+  DEFINE_THREAD_SAFE_STATIC_LOCAL(FontDataCache, shared_font_data_cache, ());
+  return shared_font_data_cache;
+}
+#endif
+
+// static
+std::unique_ptr<FontDataCache> FontDataCache::Create() {
+  return std::make_unique<FontDataCache>();
+}
+
+scoped_refptr<SimpleFontData> FontDataCache::Get(
+    const FontPlatformData* platform_data,
+    ShouldRetain should_retain,
+    bool subpixel_ascent_descent) {
   if (!platform_data)
     return nullptr;
 
@@ -58,6 +72,7 @@ scoped_refptr<SimpleFontData> FontDataCache::Get(const FontPlatformData* platfor
     return nullptr;
   }
 
+  AutoLockForParallelTextShaping guard(lock_);
   Cache::iterator result = cache_.find(platform_data);
   if (result == cache_.end()) {
     std::pair<scoped_refptr<SimpleFontData>, unsigned> new_value(
@@ -92,12 +107,14 @@ scoped_refptr<SimpleFontData> FontDataCache::Get(const FontPlatformData* platfor
 }
 
 bool FontDataCache::Contains(const FontPlatformData* font_platform_data) const {
+  AutoLockForParallelTextShaping guard(lock_);
   return cache_.Contains(font_platform_data);
 }
 
 void FontDataCache::Release(const SimpleFontData* font_data) {
   DCHECK(!font_data->IsCustomFont());
 
+  AutoLockForParallelTextShaping guard(lock_);
   Cache::iterator it = cache_.find(&(font_data->PlatformData()));
   DCHECK_NE(it, cache_.end());
   if (it == cache_.end())
@@ -109,6 +126,7 @@ void FontDataCache::Release(const SimpleFontData* font_data) {
 }
 
 bool FontDataCache::Purge(PurgeSeverity purge_severity) {
+  AutoLockForParallelTextShaping guard(lock_);
   if (purge_severity == kForcePurge)
     return PurgeLeastRecentlyUsed(INT_MAX);
 
@@ -125,6 +143,8 @@ bool FontDataCache::PurgeLeastRecentlyUsed(int count) {
   static bool is_purging;
   if (is_purging)
     return false;
+
+  lock_.AssertAcquired();
 
   is_purging = true;
 

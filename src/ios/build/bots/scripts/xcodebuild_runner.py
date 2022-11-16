@@ -99,6 +99,7 @@ class LaunchCommand(object):
                udid,
                shards,
                retries,
+               readline_timeout,
                out_dir=os.path.basename(os.getcwd()),
                use_clang_coverage=False,
                env=None):
@@ -108,6 +109,8 @@ class LaunchCommand(object):
       egtests_app: (EgtestsApp) An egtests_app to run.
       udid: (str) UDID of a device/simulator.
       shards: (int) A number of shards.
+      readline_timeout: (int) Timeout to kill a test process when it doesn't
+        have output (in seconds).
       retries: (int) A number of retries.
       out_dir: (str) A folder in which xcodebuild will generate test output.
         By default it is a current directory.
@@ -122,6 +125,7 @@ class LaunchCommand(object):
     self.egtests_app = egtests_app
     self.udid = udid
     self.shards = shards
+    self.readline_timeout = readline_timeout
     self.retries = retries
     self.out_dir = out_dir
     self.use_clang_coverage = use_clang_coverage
@@ -143,7 +147,7 @@ class LaunchCommand(object):
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
     )
-    return test_runner.print_process_output(proc)
+    return test_runner.print_process_output(proc, timeout=self.readline_timeout)
 
   def launch(self):
     """Launches tests using xcodebuild."""
@@ -289,6 +293,7 @@ class SimulatorParallelTestRunner(test_runner.SimulatorTestRunner):
         env_vars=self.env_vars,
         test_args=self.test_args,
         release=self.release,
+        repeat_count=self.repeat_count,
         host_app_path=self.host_app_path)
 
   def launch(self):
@@ -298,6 +303,7 @@ class SimulatorParallelTestRunner(test_runner.SimulatorTestRunner):
         test_app,
         udid=self.udid,
         shards=self.shards,
+        readline_timeout=self.readline_timeout,
         retries=self.retries,
         out_dir=os.path.join(self.out_dir, self.udid),
         use_clang_coverage=(hasattr(self, 'use_clang_coverage') and
@@ -334,20 +340,22 @@ class SimulatorParallelTestRunner(test_runner.SimulatorTestRunner):
           test_log=('The test is compiled in test target but was unexpectedly '
                     'not run or not finished.'))
 
-    # Reports a dummy crashed test result to indicate the crash status, i.e.
-    # some tests might be unexpectedly skipped and do not appear in result.
-    if unexpectedly_skipped or (overall_result.crashed and
-                                tests_selected_at_runtime):
-      overall_result.add_and_report_crash(
+    # Add a final crash status to result collection. It will be reported as
+    # part of step log in LUCI build.
+    if unexpectedly_skipped or overall_result.crashed:
+      overall_result.set_crashed_with_prefix(
           crash_message_prefix_line=('Test application crash happened and may '
                                      'result in missing tests:'))
 
     self.test_results = overall_result.standard_json_output(path_delimiter='/')
     self.logs.update(overall_result.test_runner_logs())
 
-    # |never_expected_tests| includes all unexpected results, including the
-    # dummy crached status result if any.
-    return not overall_result.never_expected_tests()
+    # Return False when:
+    # - There are unexpected tests (all results of the tests are unexpected), or
+    # - The overall status is crashed and tests are selected at runtime. (i.e.
+    # runner is unable to know if all scheduled tests appear in result.)
+    return (not overall_result.never_expected_tests() and
+            not (tests_selected_at_runtime and overall_result.crashed))
 
 
 class DeviceXcodeTestRunner(SimulatorParallelTestRunner,

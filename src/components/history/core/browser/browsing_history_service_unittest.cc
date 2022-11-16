@@ -8,11 +8,12 @@
 
 #include "base/callback_helpers.h"
 #include "base/files/scoped_temp_dir.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
 #include "base/task/cancelable_task_tracker.h"
 #include "base/test/task_environment.h"
+#include "base/time/time.h"
 #include "base/timer/mock_timer.h"
 #include "base/values.h"
 #include "components/history/core/browser/browsing_history_driver.h"
@@ -26,7 +27,6 @@
 #include "url/gurl.h"
 
 using base::Time;
-using base::TimeDelta;
 
 namespace history {
 
@@ -119,7 +119,7 @@ class TestBrowsingHistoryDriver : public BrowsingHistoryDriver {
   int history_deleted_count_ = 0;
   std::vector<QueryResult> query_results_;
   base::OnceClosure continuation_closure_;
-  WebHistoryService* web_history_;
+  raw_ptr<WebHistoryService> web_history_;
 };
 
 class TestWebHistoryService : public FakeWebHistoryService {
@@ -193,8 +193,7 @@ class BrowsingHistoryServiceTest : public ::testing::Test {
   // before Time::UnixEpoch() that cannot be represented. By adding 1 day we
   // ensure all test data is after Time::UnixEpoch().
   BrowsingHistoryServiceTest()
-      : baseline_time_(Time::UnixEpoch().LocalMidnight() +
-                       TimeDelta::FromDays(1)),
+      : baseline_time_(Time::UnixEpoch().LocalMidnight() + base::Days(1)),
         driver_(&web_history_) {
     EXPECT_TRUE(history_dir_.CreateUniqueTempDir());
     local_history_ = CreateHistoryService(history_dir_.GetPath(), true);
@@ -216,7 +215,7 @@ class BrowsingHistoryServiceTest : public ::testing::Test {
   }
 
   Time OffsetToTime(int64_t hour_offset) {
-    return baseline_time_ + TimeDelta::FromHours(hour_offset);
+    return baseline_time_ + base::Hours(hour_offset);
   }
 
   void AddHistory(const std::vector<TestResult>& data,
@@ -315,7 +314,7 @@ class BrowsingHistoryServiceTest : public ::testing::Test {
   TestWebHistoryService web_history_;
   TestSyncService sync_service_;
   TestBrowsingHistoryDriver driver_;
-  base::MockOneShotTimer* timer_;
+  raw_ptr<base::MockOneShotTimer> timer_;
   std::unique_ptr<TestBrowsingHistoryService> browsing_history_service_;
 };
 

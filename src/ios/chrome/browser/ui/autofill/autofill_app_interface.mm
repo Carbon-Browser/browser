@@ -47,7 +47,7 @@ scoped_refptr<password_manager::PasswordStoreInterface> GetPasswordStore() {
   // This test does not deal with Incognito, and should not run in Incognito
   // context. Therefore IMPLICIT_ACCESS is used to let the test fail if in
   // Incognito context.
-  return IOSChromePasswordStoreFactory::GetInterfaceForBrowserState(
+  return IOSChromePasswordStoreFactory::GetForBrowserState(
       chrome_test_util::GetOriginalBrowserState(),
       ServiceAccessType::IMPLICIT_ACCESS);
 }
@@ -66,7 +66,7 @@ class TestStoreConsumer : public password_manager::PasswordStoreConsumer {
   const std::vector<password_manager::PasswordForm>& GetStoreResults() {
     results_.clear();
     ResetObtained();
-    GetPasswordStore()->GetAllLogins(this);
+    GetPasswordStore()->GetAllLogins(weak_ptr_factory_.GetWeakPtr());
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-result"
     base::test::ios::WaitUntilConditionOrTimeout(
@@ -79,14 +79,14 @@ class TestStoreConsumer : public password_manager::PasswordStoreConsumer {
   }
 
  private:
-  // Puts |obtained_| in a known state not corresponding to any PasswordStore
+  // Puts `obtained_` in a known state not corresponding to any PasswordStore
   // state.
   void ResetObtained() {
     obtained_.clear();
     obtained_.emplace_back(nullptr);
   }
 
-  // Returns true if |obtained_| are in the reset state.
+  // Returns true if `obtained_` are in the reset state.
   bool AreObtainedReset() { return obtained_.size() == 1 && !obtained_[0]; }
 
   void AppendObtainedToResults() {
@@ -101,21 +101,17 @@ class TestStoreConsumer : public password_manager::PasswordStoreConsumer {
 
   // Combination of fillable and blocked credentials from the store.
   std::vector<password_manager::PasswordForm> results_;
+
+  base::WeakPtrFactory<TestStoreConsumer> weak_ptr_factory_{this};
 };
 
-// Saves |form| to the password store and waits until the async processing is
+// Saves `form` to the password store and waits until the async processing is
 // done.
 void SaveToPasswordStore(const password_manager::PasswordForm& form) {
   GetPasswordStore()->AddLogin(form);
-  // When we retrieve the form from the store, |in_store| should be set.
+  // When we retrieve the form from the store, `in_store` should be set.
   password_manager::PasswordForm expected_form = form;
   expected_form.in_store = password_manager::PasswordForm::Store::kProfileStore;
-  // TODO(crbug.com/1223022): Once all places that operate changes on forms
-  // via UpdateLogin properly set |password_issues|, setting them to an empty
-  // map should be part of the default constructor.
-  expected_form.password_issues =
-      base::flat_map<password_manager::InsecureType,
-                     password_manager::InsecurityMetadata>();
   // Check the result and ensure PasswordStore processed this.
   TestStoreConsumer consumer;
   for (const auto& result : consumer.GetStoreResults()) {
@@ -170,7 +166,7 @@ void AddAutofillProfile(autofill::PersonalDataManager* personalDataManager) {
   };
   base::test::ios::TimeUntilCondition(
       nil, conditionBlock, false,
-      base::TimeDelta::FromSeconds(base::test::ios::kWaitForActionTimeout));
+      base::Seconds(base::test::ios::kWaitForActionTimeout));
 }
 
 }  // namespace
@@ -235,7 +231,7 @@ class SaveCardInfobarEGTestHelper
                                           max);
   }
 
-  // Reset the IOSTestEventWaiter and make it watch |events|.
+  // Reset the IOSTestEventWaiter and make it watch `events`.
   void ResetEventWaiterForEvents(NSArray* events, NSTimeInterval timeout) {
     std::list<CreditCardSaveManagerObserverEvent> events_list;
     for (NSNumber* e : events) {
@@ -278,7 +274,7 @@ class SaveCardInfobarEGTestHelper
     OnEvent(CreditCardSaveManagerObserverEvent::kOnStrikeChangeCompleteCalled);
   }
 
-  // Triggers |event| on the IOSTestEventWaiter.
+  // Triggers `event` on the IOSTestEventWaiter.
   bool OnEvent(CreditCardSaveManagerObserverEvent event) {
     return event_waiter_->OnEvent(event);
   }
@@ -376,7 +372,7 @@ class SaveCardInfobarEGTestHelper
   };
   base::test::ios::TimeUntilCondition(
       nil, conditionBlock, false,
-      base::TimeDelta::FromSeconds(base::test::ios::kWaitForActionTimeout));
+      base::Seconds(base::test::ios::kWaitForActionTimeout));
 
   autofill::prefs::SetAutofillProfileEnabled(browserState->GetPrefs(), YES);
 }
@@ -416,8 +412,7 @@ class SaveCardInfobarEGTestHelper
   };
   base::test::ios::TimeUntilCondition(
       nil, conditionBlock, false,
-      base::TimeDelta::FromSeconds(
-          base::test::ios::kWaitForFileOperationTimeout));
+      base::Seconds(base::test::ios::kWaitForFileOperationTimeout));
   personalDataManager->NotifyPersonalDataObserver();
   return base::SysUTF16ToNSString(card.NetworkAndLastFourDigits());
 }

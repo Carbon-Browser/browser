@@ -25,6 +25,7 @@
 #include "ui/base/class_property.h"
 #include "ui/compositor/animation_throughput_reporter.h"
 #include "ui/compositor/callback_layer_animation_observer.h"
+#include "ui/compositor/compositor.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_animation_element.h"
 #include "ui/compositor/layer_animation_sequence.h"
@@ -40,8 +41,8 @@
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size_f.h"
-#include "ui/gfx/transform.h"
-#include "ui/gfx/transform_util.h"
+#include "ui/gfx/geometry/transform.h"
+#include "ui/gfx/geometry/transform_util.h"
 #include "ui/wm/core/window_util.h"
 
 DEFINE_UI_CLASS_PROPERTY_TYPE(ash::ScreenRotationAnimator*)
@@ -381,8 +382,7 @@ void ScreenRotationAnimator::AnimateRotation(
                                                 rotation_request->new_rotation);
   const int old_layer_initial_rotation_degrees = GetInitialDegrees(
       rotation_request->old_rotation, rotation_request->new_rotation);
-  const base::TimeDelta duration =
-      base::TimeDelta::FromMilliseconds(kRotationDurationInMs);
+  const base::TimeDelta duration = base::Milliseconds(kRotationDurationInMs);
   const gfx::Tween::Type tween_type = gfx::Tween::FAST_OUT_LINEAR_IN;
   const gfx::Rect rotated_screen_bounds = root_window_->GetTargetBounds();
   const gfx::Point pivot = gfx::Point(rotated_screen_bounds.width() / 2,
@@ -492,7 +492,7 @@ void ScreenRotationAnimator::Rotate(
   switch (screen_rotation_state_) {
     case IDLE:
       DCHECK(!current_async_rotation_request_);
-      FALLTHROUGH;
+      [[fallthrough]];
     case COPY_REQUESTED:
       if (current_async_rotation_request_ &&
           !RootWindowChangedForDisplayId(

@@ -7,15 +7,16 @@
 
 #include <vector>
 
-#include "base/macros.h"
 #include "base/synchronization/lock.h"
-#include "chrome/browser/chromeos/printing/printer_detector.h"
+#include "chrome/browser/ash/printing/printer_detector.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "third_party/metrics_proto/printer_event.pb.h"
 
 namespace chromeos {
-
 class Printer;
+}  // namespace chromeos
+
+namespace ash {
 
 // Aggregates printer events for logging.  This class is thread-safe.
 class PrinterEventTracker : public KeyedService {
@@ -30,6 +31,10 @@ class PrinterEventTracker : public KeyedService {
   };
 
   PrinterEventTracker();
+
+  PrinterEventTracker(const PrinterEventTracker&) = delete;
+  PrinterEventTracker& operator=(const PrinterEventTracker&) = delete;
+
   ~PrinterEventTracker() override;
 
   // If |logging| is true, logging is enabled. If |logging| is false, logging is
@@ -44,16 +49,17 @@ class PrinterEventTracker : public KeyedService {
 
   // Store a succesful network printer installation. |mode| indicates if
   // the PPD was selected automatically or chosen by the user.
-  void RecordIppPrinterInstalled(const Printer& printer, SetupMode mode);
+  void RecordIppPrinterInstalled(const chromeos::Printer& printer,
+                                 SetupMode mode);
 
   // Record an abandoned setup.
-  void RecordSetupAbandoned(const Printer& printer);
+  void RecordSetupAbandoned(const chromeos::Printer& printer);
 
   // Record an abandoned setup for a USB printer.
   void RecordUsbSetupAbandoned(const PrinterDetector::DetectedPrinter& printer);
 
   // Store a printer removal.
-  void RecordPrinterRemoved(const Printer& printer);
+  void RecordPrinterRemoved(const chromeos::Printer& printer);
 
   // Writes stored events to |events|.
   void FlushPrinterEvents(std::vector<metrics::PrinterEventProto>* events);
@@ -63,10 +69,8 @@ class PrinterEventTracker : public KeyedService {
   bool logging_ = false;
   std::vector<metrics::PrinterEventProto> events_;
   base::Lock lock_;
-
-  DISALLOW_COPY_AND_ASSIGN(PrinterEventTracker);
 };
 
-}  // namespace chromeos
+}  // namespace ash
 
 #endif  // CHROME_BROWSER_ASH_PRINTING_PRINTER_EVENT_TRACKER_H_

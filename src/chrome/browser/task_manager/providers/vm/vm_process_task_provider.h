@@ -9,11 +9,13 @@
 
 #include "base/containers/flat_map.h"
 #include "base/memory/weak_ptr.h"
-#include "base/sequenced_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
-#include "chrome/browser/chromeos/process_snapshot_server.h"
+#include "chrome/browser/ash/process_snapshot_server.h"
 #include "chrome/browser/task_manager/providers/task_provider.h"
 #include "chrome/browser/task_manager/providers/vm/vm_process_task.h"
+#include "chromeos/ash/components/dbus/concierge/concierge_service.pb.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace task_manager {
 
@@ -23,7 +25,7 @@ struct VmProcessData;
 // display tasks for the VMs themselves, later that will be expanded to also
 // include the processes inside of the VM as part of the TaskGroup.
 class VmProcessTaskProvider : public TaskProvider,
-                              public ProcessSnapshotServer::Observer {
+                              public ash::ProcessSnapshotServer::Observer {
  public:
   VmProcessTaskProvider();
   VmProcessTaskProvider(const VmProcessTaskProvider&) = delete;
@@ -33,7 +35,7 @@ class VmProcessTaskProvider : public TaskProvider,
   // task_manager::TaskProvider:
   Task* GetTaskOfUrlRequest(int child_id, int route_id) override;
 
-  // ProcessSnapshotServer::Observer:
+  // ash::ProcessSnapshotServer::Observer:
   void OnProcessSnapshotRefreshed(
       const base::ProcessIterator::ProcessEntries& snapshot) override;
 
@@ -44,12 +46,20 @@ class VmProcessTaskProvider : public TaskProvider,
 
   void OnUpdateVmProcessList(const std::vector<VmProcessData>& vm_process_list);
 
+  // Called as a response to a ListVms made to the concierge.
+  void OnListVms(const base::ProcessIterator::ProcessEntries& snapshot,
+                 absl::optional<vm_tools::concierge::ListVmsResponse> response);
+
   // The time at which the most recent process snapshot was received from the
-  // ProcessSnapshotServer.
+  // `ash::ProcessSnapshotServer`.
   base::Time last_process_snapshot_time_;
 
   // Map of PIDs to the corresponding Task object for a running VM.
   base::flat_map<base::ProcessId, std::unique_ptr<VmProcessTask>> task_map_;
+
+  // Always keep this the last member of this class to make sure it's the
+  // first thing to be destructed.
+  base::WeakPtrFactory<VmProcessTaskProvider> weak_ptr_factory_{this};
 };
 
 }  // namespace task_manager

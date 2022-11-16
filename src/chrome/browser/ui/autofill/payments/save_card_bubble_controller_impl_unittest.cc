@@ -11,6 +11,7 @@
 
 #include "base/bind.h"
 #include "base/json/json_reader.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/metrics/user_action_tester.h"
@@ -24,9 +25,10 @@
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/test/base/browser_with_test_window_test.h"
 #include "chrome/test/base/chrome_render_view_host_test_harness.h"
-#include "components/autofill/core/browser/autofill_metrics.h"
 #include "components/autofill/core/browser/autofill_test_utils.h"
 #include "components/autofill/core/browser/data_model/credit_card.h"
+#include "components/autofill/core/browser/metrics/autofill_metrics.h"
+#include "components/autofill/core/browser/metrics/payments/manage_cards_prompt_metrics.h"
 #include "components/autofill/core/browser/sync_utils.h"
 #include "components/autofill/core/browser/test_autofill_clock.h"
 #include "components/autofill/core/common/autofill_features.h"
@@ -106,8 +108,7 @@ class SaveCardBubbleControllerImplTest : public BrowserWithTestWindowTest {
       const std::string& message_json,
       AutofillClient::SaveCreditCardOptions options =
           AutofillClient::SaveCreditCardOptions().with_show_prompt()) {
-    std::unique_ptr<base::Value> value(
-        base::JSONReader::ReadDeprecated(message_json));
+    absl::optional<base::Value> value(base::JSONReader::Read(message_json));
     ASSERT_TRUE(value);
     base::DictionaryValue* dictionary;
     ASSERT_TRUE(value->GetAsDictionary(&dictionary));
@@ -166,7 +167,7 @@ class SaveCardBubbleControllerImplTest : public BrowserWithTestWindowTest {
 
   TestAutofillClock test_clock_;
   base::test::ScopedFeatureList scoped_feature_list_;
-  MockTrustSafetySentimentService* mock_sentiment_service_;
+  raw_ptr<MockTrustSafetySentimentService> mock_sentiment_service_;
 
  private:
   static void UploadSaveCardCallback(
@@ -275,12 +276,13 @@ struct SaveCardOptionParam {
   bool has_non_focusable_field;
   bool should_request_name_from_user;
   bool should_request_expiration_date_from_user;
+  bool has_multiple_legal_lines;
 };
 
 const SaveCardOptionParam kSaveCardOptionParam[] = {
-    {false, false, false, false}, {true, false, false, false},
-    {false, true, false, false},  {false, false, true, false},
-    {false, false, false, true},
+    {false, false, false, false, false}, {true, false, false, false, false},
+    {false, true, false, false, false},  {false, false, true, false, false},
+    {false, false, false, true, false},  {false, false, false, false, true},
 };
 
 // Param of the SaveCardBubbleSingletonTestData:
@@ -307,8 +309,9 @@ class SaveCardBubbleLoggingTest
             .with_should_request_name_from_user(
                 save_card_option_param.should_request_name_from_user)
             .with_should_request_expiration_date_from_user(
-                save_card_option_param
-                    .should_request_expiration_date_from_user);
+                save_card_option_param.should_request_expiration_date_from_user)
+            .with_has_multiple_legal_lines(
+                save_card_option_param.has_multiple_legal_lines);
   }
 
   ~SaveCardBubbleLoggingTest() override = default;
@@ -529,8 +532,8 @@ TEST_F(SaveCardBubbleControllerImplTestWithoutStatusChip,
   ClickSaveButton();
   EXPECT_THAT(
       histogram_tester.GetAllSamples("Autofill.ManageCardsPrompt.Local"),
-      ElementsAre(Bucket(AutofillMetrics::MANAGE_CARDS_SHOWN, 1),
-                  Bucket(AutofillMetrics::MANAGE_CARDS_DONE, 1)));
+      ElementsAre(Bucket(ManageCardsPromptMetric::kManageCardsShown, 1),
+                  Bucket(ManageCardsPromptMetric::kManageCardsDone, 1)));
 }
 
 TEST_F(SaveCardBubbleControllerImplTestWithoutStatusChip,
@@ -543,8 +546,8 @@ TEST_F(SaveCardBubbleControllerImplTestWithoutStatusChip,
   controller()->OnManageCardsClicked();
   EXPECT_THAT(
       histogram_tester.GetAllSamples("Autofill.ManageCardsPrompt.Local"),
-      ElementsAre(Bucket(AutofillMetrics::MANAGE_CARDS_SHOWN, 1),
-                  Bucket(AutofillMetrics::MANAGE_CARDS_MANAGE_CARDS, 1)));
+      ElementsAre(Bucket(ManageCardsPromptMetric::kManageCardsShown, 1),
+                  Bucket(ManageCardsPromptMetric::kManageCardsManageCards, 1)));
 }
 
 TEST_F(
@@ -560,7 +563,7 @@ TEST_F(
   // up the Manage cards bubble.
   EXPECT_THAT(
       histogram_tester.GetAllSamples("Autofill.ManageCardsPrompt.Local"),
-      ElementsAre(Bucket(AutofillMetrics::MANAGE_CARDS_SHOWN, 2)));
+      ElementsAre(Bucket(ManageCardsPromptMetric::kManageCardsShown, 2)));
 }
 
 TEST_F(
@@ -575,7 +578,7 @@ TEST_F(
   // up the Manage cards bubble.
   EXPECT_THAT(
       histogram_tester.GetAllSamples("Autofill.ManageCardsPrompt.Local"),
-      ElementsAre(Bucket(AutofillMetrics::MANAGE_CARDS_SHOWN, 1)));
+      ElementsAre(Bucket(ManageCardsPromptMetric::kManageCardsShown, 1)));
 }
 
 TEST_F(SaveCardBubbleControllerImplTestWithoutStatusChip,

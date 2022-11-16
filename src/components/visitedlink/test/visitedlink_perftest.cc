@@ -20,7 +20,6 @@
 #include "testing/perf/perf_result_reporter.h"
 #include "url/gurl.h"
 
-using base::TimeDelta;
 
 namespace visitedlink {
 
@@ -53,6 +52,10 @@ perf_test::PerfResultReporter SetUpReporter(const std::string& metric_suffix) {
 class TimeLogger {
  public:
   explicit TimeLogger(std::string metric_suffix);
+
+  TimeLogger(const TimeLogger&) = delete;
+  TimeLogger& operator=(const TimeLogger&) = delete;
+
   ~TimeLogger();
   void Done();
 
@@ -60,8 +63,6 @@ class TimeLogger {
   bool logged_;
   std::string metric_suffix_;
   base::ElapsedTimer timer_;
-
-  DISALLOW_COPY_AND_ASSIGN(TimeLogger);
 };
 
 TimeLogger::TimeLogger(std::string metric_suffix)
@@ -184,7 +185,7 @@ TEST_F(VisitedLink, TestAddAndQuery) {
 
 // Tests how long it takes to write and read a large database to and from disk.
 // TODO(crbug.com/1128183): Fix flakiness on macOS and Android.
-#if defined(OS_MAC) || defined(OS_ANDROID)
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_ANDROID)
 #define MAYBE_TestBigTable DISABLED_TestBigTable
 #else
 #define MAYBE_TestBigTable TestBigTable

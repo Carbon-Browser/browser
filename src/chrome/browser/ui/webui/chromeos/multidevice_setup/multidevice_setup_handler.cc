@@ -24,11 +24,11 @@ MultideviceSetupHandler::MultideviceSetupHandler() = default;
 MultideviceSetupHandler::~MultideviceSetupHandler() = default;
 
 void MultideviceSetupHandler::RegisterMessages() {
-  web_ui()->RegisterDeprecatedMessageCallback(
+  web_ui()->RegisterMessageCallback(
       "getProfileInfo",
       base::BindRepeating(&MultideviceSetupHandler::HandleGetProfileInfo,
                           base::Unretained(this)));
-  web_ui()->RegisterDeprecatedMessageCallback(
+  web_ui()->RegisterMessageCallback(
       "openMultiDeviceSettings",
       base::BindRepeating(
           &MultideviceSetupHandler::HandleOpenMultiDeviceSettings,
@@ -36,31 +36,30 @@ void MultideviceSetupHandler::RegisterMessages() {
 }
 
 void MultideviceSetupHandler::HandleGetProfileInfo(
-    const base::ListValue* args) {
+    const base::Value::List& args) {
   AllowJavascript();
 
-  std::string callback_id;
-  bool result = args->GetString(0, &callback_id);
-  DCHECK(result);
+  DCHECK(!args.empty());
+  std::string callback_id = args[0].GetString();
 
   const user_manager::User* user =
       chromeos::ProfileHelper::Get()->GetUserByProfile(
           Profile::FromWebUI(web_ui()));
 
   base::DictionaryValue response;
-  response.SetString("email", user->GetDisplayEmail());
+  response.SetStringKey("email", user->GetDisplayEmail());
 
   scoped_refptr<base::RefCountedMemory> image =
       chromeos::UserImageSource::GetUserImage(user->GetAccountId());
-  response.SetString("profilePhotoUrl",
-                     webui::GetPngDataUrl(image->front(), image->size()));
+  response.SetStringKey("profilePhotoUrl",
+                        webui::GetPngDataUrl(image->front(), image->size()));
 
   ResolveJavascriptCallback(base::Value(callback_id), response);
 }
 
 void MultideviceSetupHandler::HandleOpenMultiDeviceSettings(
-    const base::ListValue* args) {
-  DCHECK(args->GetList().empty());
+    const base::Value::List& args) {
+  DCHECK(args.empty());
   chrome::SettingsWindowManager::GetInstance()->ShowOSSettings(
       Profile::FromWebUI(web_ui()),
       chromeos::settings::mojom::kMultiDeviceFeaturesSubpagePath);

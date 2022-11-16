@@ -17,13 +17,14 @@ using DrawingRecorderTest = PaintControllerTestBase;
 
 namespace {
 
-const IntRect kBounds(1, 2, 3, 4);
+const gfx::Rect kBounds(1, 2, 3, 4);
 
 TEST_F(DrawingRecorderTest, Nothing) {
-  FakeDisplayItemClient client;
+  FakeDisplayItemClient& client =
+      *MakeGarbageCollected<FakeDisplayItemClient>();
   GraphicsContext context(GetPaintController());
   {
-    PaintController::CycleScope cycle_scope(GetPaintController());
+    PaintControllerCycleScopeForTest cycle_scope(GetPaintController());
     InitRootChunk();
     DrawNothing(context, client, kForegroundType);
     GetPaintController().CommitNewDisplayItems();
@@ -36,10 +37,11 @@ TEST_F(DrawingRecorderTest, Nothing) {
 }
 
 TEST_F(DrawingRecorderTest, Rect) {
-  FakeDisplayItemClient client;
+  FakeDisplayItemClient& client =
+      *MakeGarbageCollected<FakeDisplayItemClient>();
   GraphicsContext context(GetPaintController());
   {
-    PaintController::CycleScope cycle_scope(GetPaintController());
+    PaintControllerCycleScopeForTest cycle_scope(GetPaintController());
     InitRootChunk();
     DrawRect(context, client, kForegroundType, kBounds);
     GetPaintController().CommitNewDisplayItems();
@@ -49,10 +51,11 @@ TEST_F(DrawingRecorderTest, Rect) {
 }
 
 TEST_F(DrawingRecorderTest, Cached) {
-  FakeDisplayItemClient client;
+  FakeDisplayItemClient& client =
+      *MakeGarbageCollected<FakeDisplayItemClient>();
   GraphicsContext context(GetPaintController());
   {
-    PaintController::CycleScope cycle_scope(GetPaintController());
+    PaintControllerCycleScopeForTest cycle_scope(GetPaintController());
     InitRootChunk();
     DrawNothing(context, client, kBackgroundType);
     DrawRect(context, client, kForegroundType, kBounds);
@@ -64,7 +67,7 @@ TEST_F(DrawingRecorderTest, Cached) {
                           IsSameId(client.Id(), kForegroundType)));
 
   {
-    PaintController::CycleScope cycle_scope(GetPaintController());
+    PaintControllerCycleScopeForTest cycle_scope(GetPaintController());
     InitRootChunk();
     DrawNothing(context, client, kBackgroundType);
     DrawRect(context, client, kForegroundType, kBounds);

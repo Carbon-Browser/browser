@@ -6,7 +6,6 @@
 
 #include "base/bind.h"
 #include "base/callback_helpers.h"
-#include "base/macros.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/threading/platform_thread.h"
 #include "build/build_config.h"
@@ -52,6 +51,9 @@ class GenericSensorBrowserTest : public ContentBrowserTest {
             &GenericSensorBrowserTest::BindSensorProviderReceiver,
             base::Unretained(this)));
   }
+
+  GenericSensorBrowserTest(const GenericSensorBrowserTest&) = delete;
+  GenericSensorBrowserTest& operator=(const GenericSensorBrowserTest&) = delete;
 
   ~GenericSensorBrowserTest() override {
     SensorProviderProxyImpl::OverrideSensorProviderBinderForTesting(
@@ -112,8 +114,6 @@ class GenericSensorBrowserTest : public ContentBrowserTest {
   base::test::ScopedFeatureList scoped_feature_list_;
   bool sensor_provider_available_ = true;
   std::unique_ptr<FakeSensorProvider> fake_sensor_provider_;
-
-  DISALLOW_COPY_AND_ASSIGN(GenericSensorBrowserTest);
 };
 
 IN_PROC_BROWSER_TEST_F(GenericSensorBrowserTest, AmbientLightSensorTest) {
@@ -143,7 +143,7 @@ IN_PROC_BROWSER_TEST_F(GenericSensorBrowserTest,
   navigation_observer.Wait();
 
   content::RenderFrameHost* iframe =
-      ChildFrameAt(shell()->web_contents()->GetMainFrame(), 0);
+      ChildFrameAt(shell()->web_contents()->GetPrimaryMainFrame(), 0);
   ASSERT_TRUE(iframe);
   EXPECT_EQ("pass", iframe->GetLastCommittedURL().ref());
 }

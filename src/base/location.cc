@@ -4,11 +4,13 @@
 
 #include "base/location.h"
 
+#include "build/build_config.h"
+
 // location.h is a widely included header and its size can significantly impact
 // build time. Try not to raise this limit unless absolutely necessary. See
 // https://chromium.googlesource.com/chromium/src/+/HEAD/docs/wmax_tokens.md
 #ifndef NACL_TC_REV
-#pragma clang max_tokens_here 240000
+#pragma clang max_tokens_here 390000
 #endif
 
 #if defined(COMPILER_MSVC)
@@ -18,6 +20,7 @@
 #include "base/compiler_specific.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
+#include "base/trace_event/base_tracing.h"
 #include "build/build_config.h"
 
 namespace base {
@@ -38,7 +41,11 @@ constexpr size_t StrLen(const char* str) {
 constexpr size_t StrippedFilePathPrefixLength() {
   constexpr char path[] = __FILE__;
   // Only keep the file path starting from the src directory.
+#if defined(__clang__) && defined(_MSC_VER)
+  constexpr char stripped[] = "base\\location.cc";
+#else
   constexpr char stripped[] = "base/location.cc";
+#endif
   constexpr size_t path_len = StrLen(path);
   constexpr size_t stripped_len = StrLen(stripped);
   static_assert(path_len >= stripped_len,
@@ -66,13 +73,19 @@ constexpr bool StrEndsWith(const char* name,
   return true;
 }
 
+#if defined(__clang__) && defined(_MSC_VER)
+static_assert(StrEndsWith(__FILE__, kStrippedPrefixLength, "base\\location.cc"),
+              "The file name does not match the expected prefix format.");
+#else
 static_assert(StrEndsWith(__FILE__, kStrippedPrefixLength, "base/location.cc"),
               "The file name does not match the expected prefix format.");
+#endif
 
 }  // namespace
 
 Location::Location() = default;
 Location::Location(const Location& other) = default;
+Location::Location(Location&& other) noexcept = default;
 Location& Location::operator=(const Location& other) = default;
 
 Location::Location(const char* file_name, const void* program_counter)
@@ -86,7 +99,7 @@ Location::Location(const char* function_name,
       file_name_(file_name),
       line_number_(line_number),
       program_counter_(program_counter) {
-#if !defined(OS_NACL)
+#if !BUILDFLAG(IS_NACL)
   // The program counter should not be null except in a default constructed
   // (empty) Location object. This value is used for identity, so if it doesn't
   // uniquely identify a location, things will break.
@@ -105,9 +118,16 @@ std::string Location::ToString() const {
   return StringPrintf("pc:%p", program_counter_);
 }
 
+void Location::WriteIntoTrace(perfetto::TracedValue context) const {
+  auto dict = std::move(context).WriteDictionary();
+  dict.Add("function_name", function_name_);
+  dict.Add("file_name", file_name_);
+  dict.Add("line_number", line_number_);
+}
+
 #if defined(COMPILER_MSVC)
 #define RETURN_ADDRESS() _ReturnAddress()
-#elif defined(COMPILER_GCC) && !defined(OS_NACL)
+#elif defined(COMPILER_GCC) && !BUILDFLAG(IS_NACL)
 #define RETURN_ADDRESS() \
   __builtin_extract_return_addr(__builtin_return_address(0))
 #else

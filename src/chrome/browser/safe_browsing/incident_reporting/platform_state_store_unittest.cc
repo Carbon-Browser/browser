@@ -13,7 +13,6 @@
 
 #include <stdint.h>
 
-#include "base/macros.h"
 #include "base/test/values_test_util.h"
 #include "base/values.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -72,7 +71,7 @@ TEST(PlatformStateStoreTest, RoundTrip) {
   PlatformStateStoreLoadResult load_result =
       DeserializeIncidentsSent(data, deserialized.get());
   ASSERT_EQ(PlatformStateStoreLoadResult::SUCCESS, load_result);
-  ASSERT_TRUE(deserialized->Equals(incidents_sent.get()));
+  EXPECT_EQ(*incidents_sent, *deserialized);
 }
 
 }  // namespace platform_state_store

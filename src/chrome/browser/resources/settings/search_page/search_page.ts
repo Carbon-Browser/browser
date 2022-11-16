@@ -15,35 +15,30 @@ import '../controls/extension_controlled_indicator.js';
 import '../i18n_setup.js';
 import '../settings_page/settings_animated_pages.js';
 import '../settings_page/settings_subpage.js';
-import '../settings_shared_css.js';
-import '../settings_vars_css.js';
+import '../settings_shared.css.js';
+import '../settings_vars.css.js';
 
 import {addWebUIListener} from 'chrome://resources/js/cr.m.js';
-import {html, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {I18nMixin} from 'chrome://resources/js/i18n_mixin.js';
+import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {BaseMixin, BaseMixinInterface} from '../base_mixin.js';
+import {BaseMixin} from '../base_mixin.js';
+import {loadTimeData} from '../i18n_setup.js';
 import {routes} from '../route.js';
 import {Router} from '../router.js';
 import {SearchEngine, SearchEnginesBrowserProxy, SearchEnginesBrowserProxyImpl, SearchEnginesInfo} from '../search_engines_page/search_engines_browser_proxy.js';
 
+import {getTemplate} from './search_page.html.js';
 
-/**
- * @constructor
- * @extends {PolymerElement}
- * @appliesMixin {BaseMixin}
- * @implements {BaseMixinInterface}
- */
-const SettingsSearchPageElementBase =
-    BaseMixin(PolymerElement) as unknown as {new (): PolymerElement};
+const SettingsSearchPageElementBase = BaseMixin(I18nMixin(PolymerElement));
 
-/** @polymer */
 export class SettingsSearchPageElement extends SettingsSearchPageElementBase {
   static get is() {
     return 'settings-search-page';
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
   }
 
   static get properties() {
@@ -57,24 +52,37 @@ export class SettingsSearchPageElement extends SettingsSearchPageElementBase {
         type: Array,
         value() {
           return [];
-        }
+        },
       },
 
       /** Filter applied to search engines. */
       searchEnginesFilter_: String,
 
       focusConfig_: Object,
+
+      isActiveSearchEnginesFlagEnabled_: {
+        type: Boolean,
+        value: () =>
+            loadTimeData.getBoolean('isActiveSearchEnginesFlagEnabled'),
+      },
+
+      searchEnginesPageTitle_: {
+        type: String,
+        computed: 'computeSearchEnginesPageTitle_()',
+      },
     };
   }
 
-  private searchEngines_: Array<SearchEngine>;
+  prefs: Object;
+  private searchEnginesPageTitle_: string;
+  private isActiveSearchEnginesFlagEnabled_: boolean;
+  private searchEngines_: SearchEngine[];
   private searchEnginesFilter_: string;
   private focusConfig_: Map<string, string>|null;
   private browserProxy_: SearchEnginesBrowserProxy =
       SearchEnginesBrowserProxyImpl.getInstance();
 
-  /** @override */
-  ready() {
+  override ready() {
     super.ready();
 
     // Omnibox search engine
@@ -101,7 +109,7 @@ export class SettingsSearchPageElement extends SettingsSearchPageElementBase {
     this.dispatchEvent(new CustomEvent('refresh-pref', {
       bubbles: true,
       composed: true,
-      detail: 'default_search_provider.enabled'
+      detail: 'default_search_provider.enabled',
     }));
   }
 
@@ -118,6 +126,18 @@ export class SettingsSearchPageElement extends SettingsSearchPageElementBase {
   private isDefaultSearchEngineEnforced_(
       pref: chrome.settingsPrivate.PrefObject): boolean {
     return pref.enforcement === chrome.settingsPrivate.Enforcement.ENFORCED;
+  }
+
+  private computeSearchEnginesPageTitle_(): string {
+    return this.isActiveSearchEnginesFlagEnabled_ ?
+        this.i18n('searchEnginesManageSiteSearch') :
+        this.i18n('searchEnginesManage');
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'settings-search-page': SettingsSearchPageElement;
   }
 }
 

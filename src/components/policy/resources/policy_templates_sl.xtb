@@ -37,7 +37,7 @@
       izbral ob namestitvi oziroma prvem zagonu.
 
       Ta pravilnik je na voljo samo v primerkih s sistemom Windows, ki so pridruženi v domeno <ph name="MS_AD_NAME" />, ali primerkih s sistemom Windows 10 Pro ali Enterprise, ki so včlanjeni v upravljanje naprav.
-      (Za OS Carbon Browser Browser Browser glejte pravilnik DeviceMetricsReportingEnabled.)</translation>
+      (Za OS Carbon Browser glejte pravilnik DeviceMetricsReportingEnabled.)</translation>
 <translation id="1035385378988781231">Ta pravilnik nadzira, ali bo funkcija omrežnih naprav za skupno rabo datotek za brskalnik <ph name="PRODUCT_NAME" /> uporabljala protokol NTLM za preverjanje pristnosti.
 
       Če je ta pravilnik omogočen, bo protokol NTLM po potrebi uporabljen za preverjanje pristnosti datotečnih sredstev SMB v skupni rabi.
@@ -125,13 +125,13 @@
       Določa trajanje, preden se za naprave v maloprodajnem načinu na zaslonu za prijavo pokaže phranjevalnik zaslona.
 
       Vrednost pravilnika mora biti v milisekundah.</translation>
-<translation id="1141767714195601945">Ta pravilnik nadzira parametre ukazne vrstice za zagon Carbon Browser Browser Browser iz Internet Explorerja.
+<translation id="1141767714195601945">Ta pravilnik nadzira parametre ukazne vrstice za zagon Carbon Browser iz Internet Explorerja.
 
       Če dodatek za Internet Explorer »Podpora za starejše brskalnike« ni nameščen, ta pravilnik nima vpliva.
 
-      Če ta pravilnik ni nastavljen, Internet Explorer zgolj posreduje URL Carbon Browser Browser Browser kot parameter ukazne vrstice.
+      Če ta pravilnik ni nastavljen, Internet Explorer zgolj posreduje URL Carbon Browser kot parameter ukazne vrstice.
 
-      Če je ta pravilnik nastavljen na seznam nizov, so nizi združeni s presledki in posredovani Carbon Browser Browser Browser kot parametri ukazne vrstice.
+      Če je ta pravilnik nastavljen na seznam nizov, so nizi združeni s presledki in posredovani Carbon Browser kot parametri ukazne vrstice.
 
       Če kateri element vsebuje ${url}, ga nadomesti URL strani, ki naj bo odprta.
 
@@ -270,7 +270,7 @@
 
       Vsak element na seznamu pravilnika je niz, ki vsebuje ID razširitve in URL za »posodobitev«, ločen s podpičjem (<ph name="SEMICOLON" />). ID razširitve je 32-mestni črkovni niz, ki ga je mogoče v načinu za razvijalce najti na primer na <ph name="CHROME_EXTENSIONS_LINK" />. URL za »posodobitev« mora kazati na dokument XML manifesta za posodobitev, kot je opisano na <ph name="LINK_TO_EXTENSION_DOC1" />. Upoštevajte, da se URL za »posodobitev«, nastavljen v tem pravilniku, uporabi samo pri začetni namestitvi; pri vseh nadaljnjih posodobitvah razširitve je uporabljen URL, naveden v manifestu razširitve.
 
-      <ph name="EXTENSION_POLICY_EXAMPLE" /> namesti na primer aplikacijo <ph name="EXTENSION_POLICY_EXAMPLE_EXTENSION_NAME" /> s standardnega URL-ja za »posodobitev« v Spletni trgovini Carbon Browser Browser Browser. Več informacij o gostovanju razširitev je na voljo tukaj: <ph name="LINK_TO_EXTENSION_DOC2" />.</translation>
+      <ph name="EXTENSION_POLICY_EXAMPLE" /> namesti na primer aplikacijo <ph name="EXTENSION_POLICY_EXAMPLE_EXTENSION_NAME" /> s standardnega URL-ja za »posodobitev« v Spletni trgovini Carbon Browser. Več informacij o gostovanju razširitev je na voljo tukaj: <ph name="LINK_TO_EXTENSION_DOC2" />.</translation>
 <translation id="1435659902881071157">Konfiguracija omrežja na ravni naprave</translation>
 <translation id="1438739959477268107">Privzeta nastavitev ustvarjanja ključev</translation>
 <translation id="1454846751303307294">Omogoča nastavitev seznama vzorcev URL-jev, s katerimi so določena spletna mesta, ki jim ni dovoljeno izvajanje JavaScripta.
@@ -431,11 +431,11 @@
 
       Če pravilnik ni nastavljen, funkcija posodobitve vdelane programske opreme modula <ph name="TPM_FIRMWARE_UPDATE_TPM" /> ne bo na voljo.</translation>
 <translation id="1708496595873025510">Nastavitev omejitve prenosa semen različic</translation>
-<translation id="1717817358640580294">Če pravilnik ni nastavljen in Carbon Browser Browser Browser čiščenje odkrije neželeno programsko opremo, bo Googlu morda poslalo metapodatke o pregledu v skladu s pravilnikom, nastavljenim z možnostjo SafeBrowsingExtendedReportingEnabled. Carbon Browser Browser Browser čiščenje bo uporabnika nato pozvalo, ali želi počistiti neželeno programsko opremo. Uporabnik se lahko odloči za pošiljanje rezultatov čiščenja Googlu in tako pripomore k odkrivanju neželene programske opreme v prihodnosti. Ti rezultati vsebujejo metapodatke o datotekah, samodejno nameščene razširitve in registrske ključe, kot je opisano v beli knjigi o zasebnosti za Carbon Browser Browser Browser.
+<translation id="1717817358640580294">Če pravilnik ni nastavljen in Carbon Browser čiščenje odkrije neželeno programsko opremo, bo Googlu morda poslalo metapodatke o pregledu v skladu s pravilnikom, nastavljenim z možnostjo SafeBrowsingExtendedReportingEnabled. Carbon Browser čiščenje bo uporabnika nato pozvalo, ali želi počistiti neželeno programsko opremo. Uporabnik se lahko odloči za pošiljanje rezultatov čiščenja Googlu in tako pripomore k odkrivanju neželene programske opreme v prihodnosti. Ti rezultati vsebujejo metapodatke o datotekah, samodejno nameščene razširitve in registrske ključe, kot je opisano v beli knjigi o zasebnosti za Carbon Browser.
 
-      Če je pravilnik onemogočen in Carbon Browser Browser Browser čiščenje odkrije neželeno programsko opremo, Googlu ne bo poslalo metapodatkov o pregledu, pri čemer bo preglašen morebiten pravilnik, nastavljen z možnostjo SafeBrowsingExtendedReportingEnabled. Carbon Browser Browser Browser čiščenje bo uporabnika pozvalo, ali želi počistiti neželeno programsko opremo.  Rezultati čiščenja ne bodo poslani Googlu in tudi uporabnik ne bo imel možnosti tega storiti.
+      Če je pravilnik onemogočen in Carbon Browser čiščenje odkrije neželeno programsko opremo, Googlu ne bo poslalo metapodatkov o pregledu, pri čemer bo preglašen morebiten pravilnik, nastavljen z možnostjo SafeBrowsingExtendedReportingEnabled. Carbon Browser čiščenje bo uporabnika pozvalo, ali želi počistiti neželeno programsko opremo.  Rezultati čiščenja ne bodo poslani Googlu in tudi uporabnik ne bo imel možnosti tega storiti.
 
-      Če je pravilnik omogočen in Carbon Browser Browser Browser čiščenje odkrije neželeno programsko opremo, bo Googlu morda sporočilo metapodatke o pregledu v skladu s pravilnikom, nastavljenim z možnostjo SafeBrowsingExtendedReportingEnabled. Carbon Browser Browser Browser čiščenje bo uporabnika pozvalo, ali želi počistiti neželeno programsko opremo.  Rezultati čiščenja bodo poslani Googlu in uporabnik tega ne bo mogel preprečiti.
+      Če je pravilnik omogočen in Carbon Browser čiščenje odkrije neželeno programsko opremo, bo Googlu morda sporočilo metapodatke o pregledu v skladu s pravilnikom, nastavljenim z možnostjo SafeBrowsingExtendedReportingEnabled. Carbon Browser čiščenje bo uporabnika pozvalo, ali želi počistiti neželeno programsko opremo.  Rezultati čiščenja bodo poslani Googlu in uporabnik tega ne bo mogel preprečiti.
 
       Ta pravilnik je na voljo samo v primerkih s sistemom Windows, ki so pridruženi v domeno <ph name="MS_AD_NAME" />, ali primerkih s sistemom Windows 10 Pro ali Enterprise, ki so včlanjeni v upravljanje naprav.</translation>
 <translation id="172374442286684480">Vsem spletnim mestom je omogočeno nastavljanje lokalnih podatkov</translation>
@@ -631,7 +631,7 @@
 <translation id="2073552873076775140">Dovoli prijavo v izdelek <ph name="PRODUCT_NAME" /></translation>
 <translation id="2077129598763517140">Uporabi strojno pospeševanje, če je na voljo</translation>
 <translation id="2077273864382355561">Časovni zamik izklopa zaslona ob napajanju iz akumulatorja</translation>
-<translation id="2082205219176343977">Konfiguriranje najmanjše dovoljene različice Carbon Browser Browser Browser za napravo.</translation>
+<translation id="2082205219176343977">Konfiguriranje najmanjše dovoljene različice Carbon Browser za napravo.</translation>
 <translation id="209586405398070749">Stabilna različica</translation>
 <translation id="2098658257603918882">Omogoči poročanje o uporabi in podatkih, povezanih z zrušitvami</translation>
 <translation id="2104418465060359056">Sporočanje podatkov o razširitvah in vtičnikih</translation>
@@ -676,7 +676,7 @@
       Če to nastavitev onemogočite ali je ne nastavite, bodo morebitne strani prestreznega portala za preverjanje pristnosti prikazane na (običajnem) novem zavihku brskalnika z nastavitvami strežnika proxy trenutnega uporabnika.</translation>
 <translation id="21394354835637379">Omogoča, da določite URL-je, s katerih je dovoljeno nameščati razširitve, aplikacije in teme.
 
-          Z brskalnikom <ph name="PRODUCT_NAME" /> 21 je težje namestiti razširitve, aplikacije in uporabniške skripte, ki niso iz Spletne trgovine Carbon Browser Browser Browser. Prej so uporabniki lahko kliknili povezavo na datoteko *.crx in <ph name="PRODUCT_NAME" /> je po nekaj opozorilih ponudil namestitev datoteke. Od brskalnika <ph name="PRODUCT_NAME" /> 21 naprej pa je treba te datoteke prenesti in povleči na stran z nastavitvami za <ph name="PRODUCT_NAME" />. S to nastavitvijo je mogoče za določene URL-je omogočiti starejši in preprostejši način namestitve.
+          Z brskalnikom <ph name="PRODUCT_NAME" /> 21 je težje namestiti razširitve, aplikacije in uporabniške skripte, ki niso iz Spletne trgovine Carbon Browser. Prej so uporabniki lahko kliknili povezavo na datoteko *.crx in <ph name="PRODUCT_NAME" /> je po nekaj opozorilih ponudil namestitev datoteke. Od brskalnika <ph name="PRODUCT_NAME" /> 21 naprej pa je treba te datoteke prenesti in povleči na stran z nastavitvami za <ph name="PRODUCT_NAME" />. S to nastavitvijo je mogoče za določene URL-je omogočiti starejši in preprostejši način namestitve.
 
           Vsak element na tem seznamu je vzorec ujemanja v slogu razširitve (glejte https://developer.chrome.com/extensions/match_patterns). Uporabniki lahko preprosto namestijo elemente s poljubnega URL-ja, ki se ujema z elementom na tem seznamu. Mesto datoteke *.crx in strani, kjer se prenos začne (tj. napotitelj), morajo dovoljevati vzorci s tega seznama.
 
@@ -752,7 +752,7 @@
 
       Če je pravilnik onemogočen ali ni nastavljen, stranem med razkladanjem ni dovoljeno prikazovanje pojavnih oken, kar je v skladu s specifikacijo (https://html.spec.whatwg.org/#apis-for-creating-and-navigating-browsing-contexts-by-name).
 
-      Ta pravilnik bo odstranjen v različici Carbon Browser Browser Browser 82.
+      Ta pravilnik bo odstranjen v različici Carbon Browser 82.
 
       Glejte https://www.chromestatus.com/feature/5989473649164288 .</translation>
 <translation id="2269319728625047531">Omogočanje prikaza soglasja za sinhronizacijo med prijavo</translation>
@@ -826,9 +826,9 @@
 <translation id="2463034609187171371">Omogočanje šifrirnih zbirk DHE v protokolu TLS</translation>
 <translation id="2463365186486772703">Območne nastavitve programa</translation>
 <translation id="2466131534462628618">Prestrezni portal za preverjanje pristnosti prezre strežnik proxy</translation>
-<translation id="2471748297300970300">Če je onemogočen, preprečuje prikazovanje varnostnih opozoril, ko je Carbon Browser Browser Browser zagnan z nekaterimi morebitno nevarnimi zastavicami »command-line«.
+<translation id="2471748297300970300">Če je onemogočen, preprečuje prikazovanje varnostnih opozoril, ko je Carbon Browser zagnan z nekaterimi morebitno nevarnimi zastavicami »command-line«.
 
-          Če je omogočen ali ni nastavljen, so varnostna opozorila prikazana, ko se za zagon Carbon Browser Browser Browser uporabijo nekatere zastavice »command-line«.
+          Če je omogočen ali ni nastavljen, so varnostna opozorila prikazana, ko se za zagon Carbon Browser uporabijo nekatere zastavice »command-line«.
 
           V sistemu Windows je ta pravilnik na voljo samo v primerkih, ki so pridruženi v domeno <ph name="MS_AD_NAME" />, ali primerkih s sistemom Windows 10 Pro ali Enterprise, ki so včlanjeni v upravljanje naprav.</translation>
 <translation id="2482676533225429905">Izvorno pošiljanje sporočil</translation>
@@ -950,7 +950,7 @@ napravi konfiguriran tako, da pri samodejni prijavi ni zakasnitve, naprava pa ni
           Googlov URL za iskanje je mogoče določiti kot: <ph name="GOOGLE_SEARCH_URL" />.
 
           Ta možnost mora biti nastavljena, ko je omogočen pravilnik »DefaultSearchProviderEnabled«, in bo veljala samo v tem primeru.</translation>
-<translation id="2659019163577049044">Če je ta nastavitev omogočena, bo uporabnikom dovoljeno, da v napravah nastavijo sinhroniziranje sporočil SMS med telefoni in Carbon Browser Browser Browserbooki. Upoštevajte: če je ta pravilnik dovoljen, morajo uporabniki to funkcijo izrecno omogočiti, in sicer tako, da opravijo postopek nastavitve. Ko ga opravijo, bodo uporabniki lahko pošiljali in prejemali sporočila SMS v Carbon Browser Browser Browserbookih.
+<translation id="2659019163577049044">Če je ta nastavitev omogočena, bo uporabnikom dovoljeno, da v napravah nastavijo sinhroniziranje sporočil SMS med telefoni in Carbon Browserbooki. Upoštevajte: če je ta pravilnik dovoljen, morajo uporabniki to funkcijo izrecno omogočiti, in sicer tako, da opravijo postopek nastavitve. Ko ga opravijo, bodo uporabniki lahko pošiljali in prejemali sporočila SMS v Carbon Browserbookih.
 
       Če je ta nastavitev onemogočena, uporabnikom ne bo dovoljeno nastaviti sinhroniziranja sporočil SMS.
 
@@ -968,7 +968,7 @@ napravi konfiguriran tako, da pri samodejni prijavi ni zakasnitve, naprava pa ni
 <translation id="2706708761587205154">Omogočanje tiskanja samo s kodo PIN</translation>
 <translation id="2710534340210290498">Če je ta pravilnik onemogočen, uporabniki ne bodo mogli zakleniti zaslona (mogoča bo samo odjava iz uporabniške seje). Če je ta nastavitev omogočena ali ni nastavljena, bodo lahko zaslon zaklenili uporabniki, ki so preverili pristnost z geslom.</translation>
 <translation id="2731627323327011390">Onemogočanje uporabe potrdil sistema <ph name="PRODUCT_OS_NAME" /> aplikacijam ARC</translation>
-<translation id="2742843273354638707">Skrivanje aplikacije Spletna trgovina Carbon Browser Browser Browser in povezave v nogi na novem zavihku s povezavami in v zaganjalniku aplikacij v sistemu <ph name="PRODUCT_OS_NAME" />.
+<translation id="2742843273354638707">Skrivanje aplikacije Spletna trgovina Carbon Browser in povezave v nogi na novem zavihku s povezavami in v zaganjalniku aplikacij v sistemu <ph name="PRODUCT_OS_NAME" />.
 
       Če je ta pravilnik nastavljen na »True«, so ikone skrite.
 
@@ -1012,7 +1012,7 @@ napravi konfiguriran tako, da pri samodejni prijavi ni zakasnitve, naprava pa ni
 <translation id="2801155097555584385">Nastavitev prilagojene točke začetka polnjenja akumulatorja v odstotkih</translation>
 <translation id="2801230735743888564">Uporabnikom dovoli igranje skrite igre z dinozavrom, ko je naprava brez internetne povezave.
 
-      Če je ta pravilnik onemogočen, uporabniki ne bodo mogli igrati skrite igre z dinozavrom, ko je naprava brez internetne povezave. Če je nastavitev omogočena, bodo uporabniki lahko igrali igro. Če ta pravilnik ni nastavljen, uporabniki igre ne bodo mogli igrati v včlanjenem OS Carbon Browser Browser Browser, lahko pa jo bodo igrali v drugih okoliščinah.</translation>
+      Če je ta pravilnik onemogočen, uporabniki ne bodo mogli igrati skrite igre z dinozavrom, ko je naprava brez internetne povezave. Če je nastavitev omogočena, bodo uporabniki lahko igrali igro. Če ta pravilnik ni nastavljen, uporabniki igre ne bodo mogli igrati v včlanjenem OS Carbon Browser, lahko pa jo bodo igrali v drugih okoliščinah.</translation>
 <translation id="2802085784857530815">Omogoča nadziranje, ali uporabniki lahko dostopajo do tiskalnikov, ki niso od podjetja.
 
       Če je pravilnik omogočen ali sploh ni nastavljen, lahko uporabniki dodajajo, konfigurirajo in tiskajo s svojimi izvornimi tiskalniki.
@@ -1031,12 +1031,12 @@ napravi konfiguriran tako, da pri samodejni prijavi ni zakasnitve, naprava pa ni
       Če je ta pravilnik nastavljen na seznam časovnih intervalov, ki ni prazen:
       Naprave med določenimi časovnimi intervali ne bodo mogle samodejno preveriti, ali so na voljo posodobitve. Na naprave, ki jih je treba povrniti v prejšnje stanje ali ki uporabljajo nižjo različico operacijskega sistema <ph name="PRODUCT_OS_NAME" /> od najnižje zahtevane, zaradi morebitnih varnostnih težav ta pravilnik ne bo vplival. Poleg tega ta pravilnik ne bo blokiral zahtev za preverjanje, ali so na voljo posodobitve, ki jih izvedejo uporabniki ali skrbniki.
       Če ta pravilnik ni nastavljen ali ne vsebuje časovnih intervalov:
-      Ta pravilnik ne bo blokiral samodejnih preverjanj, ali so na voljo posodobitve, vendar jih bodo morda blokirali drugi pravilniki. Ta funkcija je omogočena samo v napravah Carbon Browser Browser Browser, ki so konfigurirane kot kioski s samodejnim zagonom. Drugih naprav ta pravilnik ne bo omejeval.</translation>
+      Ta pravilnik ne bo blokiral samodejnih preverjanj, ali so na voljo posodobitve, vendar jih bodo morda blokirali drugi pravilniki. Ta funkcija je omogočena samo v napravah Carbon Browser, ki so konfigurirane kot kioski s samodejnim zagonom. Drugih naprav ta pravilnik ne bo omejeval.</translation>
 <translation id="2823870601012066791">Lokacija registra sistema Windows za odjemalce s sistemom <ph name="PRODUCT_OS_NAME" />:</translation>
 <translation id="2824715612115726353">Omogoči način brez beleženja zgodovine</translation>
 <translation id="2836621397261130126">Določa, ali se upošteva odobritev pravilnika KDC za odločanje, ali naj se delegirajo vstopnice za <ph name="KERBEROS" />.
 
-          Če je ta pravilnik omogočen, preverjanje pristnosti HTTP upošteva nastavitve odobritev s pravilnikom KDC, torej Carbon Browser Browser Browser poverilnice delegira samo, če KDC na vstopnici storitve nastavi <ph name="OK_AS_DELEGATE" />. Več informacij je na voljo na https://tools.ietf.org/html/rfc5896.html. Storitev se mora ujemati tudi s pravilnikom »AuthNegotiateDelegateWhitelist«.
+          Če je ta pravilnik omogočen, preverjanje pristnosti HTTP upošteva nastavitve odobritev s pravilnikom KDC, torej Carbon Browser poverilnice delegira samo, če KDC na vstopnici storitve nastavi <ph name="OK_AS_DELEGATE" />. Več informacij je na voljo na https://tools.ietf.org/html/rfc5896.html. Storitev se mora ujemati tudi s pravilnikom »AuthNegotiateDelegateWhitelist«.
 
           Če ta pravilnik ni nastavljen ali je onemogočen, se pravilnik KDC v podprtih okoljih prezre in se upošteva samo pravilnik »AuthNegotiateDelegateWhitelist«.
 
@@ -1184,7 +1184,7 @@ napravi konfiguriran tako, da pri samodejni prijavi ni zakasnitve, naprava pa ni
           Če ta pravilnik ni nastavljen, bo omogočen pravilnik »AllowJavaScript«, uporabnik pa ga bo lahko spremenil.</translation>
 <translation id="3038323923255997294">Nadaljuj izvajanje programov v ozadju, ko je <ph name="PRODUCT_NAME" /> zaprt</translation>
 <translation id="3046192273793919231">Pošiljanje omrežnih paketov v strežnik za upravljanje zaradi spremljanja stanja povezave</translation>
-<translation id="3047732214002457234">Nadzor, kako Carbon Browser Browser Browser čiščenje sporoča podatke Googlu</translation>
+<translation id="3047732214002457234">Nadzor, kako Carbon Browser čiščenje sporoča podatke Googlu</translation>
 <translation id="304775240152542058">Ta pravilnik nadzira parametre ukazne vrstice za zagon nadomestnega brskalnika.
 
       Če ta pravilnik ni nastavljen, se kot parameter ukazne vrstice posreduje samo URL.
@@ -1256,9 +1256,9 @@ napravi konfiguriran tako, da pri samodejni prijavi ni zakasnitve, naprava pa ni
       Če pravilnik ni nastavljen ali je onemogočen, šifrirne zbirke DHE v protokolu TLS ne bodo omogočene, sicer pa je lahko omogočen zaradi omogočanja šifrirnih zbirk DHE in ohranjanja združljivosti z zastarelim strežnikom. To je začasen ukrep in strežnik je treba na novo konfigurirati.
 
       Priporočamo, da začnete v strežnikih uporabljati šifrirne zbirke ECDHE. Če te niso na voljo, poskrbite, da bo omogočena šifrirna zbirka, ki uporablja izmenjavo ključev RSA.</translation>
-<translation id="3117706142826400449">Če je pravilnik onemogočen, Carbon Browser Browser Browseru čiščenju prepreči pregledovanje, ali je v sistemu neželena programska oprema, in čiščenje. Ročna sprožitev Carbon Browser Browser Browser čiščenja v nastavitvah chrome://settings/cleanup je onemogočena.
+<translation id="3117706142826400449">Če je pravilnik onemogočen, Carbon Browseru čiščenju prepreči pregledovanje, ali je v sistemu neželena programska oprema, in čiščenje. Ročna sprožitev Carbon Browser čiščenja v nastavitvah chrome://settings/cleanup je onemogočena.
 
-      Če je pravilnik omogočen ali ni nastavljen, Carbon Browser Browser Browser čiščenje redno pregleduje, ali je v sistemu neželena programska oprema, in če jo najde, uporabnik prejme poziv, ali jo želi odstraniti. Ročna sprožitev Carbon Browser Browser Browser čiščenja v nastavitvah chrome://settings je omogočena.
+      Če je pravilnik omogočen ali ni nastavljen, Carbon Browser čiščenje redno pregleduje, ali je v sistemu neželena programska oprema, in če jo najde, uporabnik prejme poziv, ali jo želi odstraniti. Ročna sprožitev Carbon Browser čiščenja v nastavitvah chrome://settings je omogočena.
 
       Ta pravilnik je na voljo samo v primerkih s sistemom Windows, ki so pridruženi v domeno <ph name="MS_AD_NAME" />, ali primerkih s sistemom Windows 10 Pro ali Enterprise, ki so včlanjeni v upravljanje naprav.</translation>
 <translation id="3152425128389603870">Naj bo enotno namizje na voljo in privzeto vklopljeno</translation>
@@ -1373,7 +1373,7 @@ napravi konfiguriran tako, da pri samodejni prijavi ni zakasnitve, naprava pa ni
       Če je ta nastavitev nastavljena na »Izklopljeno« ali ni nastavljena nobena vrednost, <ph name="PRODUCT_NAME" /> v YouTubu ne uveljavi Omejenega načina. Zunanji pravilniki, na primer pravilniki za YouTube, lahko še vedno uveljavijo Omejeni način.</translation>
 <translation id="3428247105888806363">Omogoči omrežno predvidevanje</translation>
 <translation id="3432863169147125747">Nadzira nastavitve tiskanja.</translation>
-<translation id="3434932177006334880">Ta nastavitev se je pred Carbon Browser Browser Browser različice 42 imenovala »EnableWebBasedSignin«, podpora zanjo pa bo v celoti odstranjena v Carbon Browser Browser Browser različice 43.
+<translation id="3434932177006334880">Ta nastavitev se je pred Carbon Browser različice 42 imenovala »EnableWebBasedSignin«, podpora zanjo pa bo v celoti odstranjena v Carbon Browser različice 43.
 
       Ta nastavitev je koristna za poslovne stranke, ki uporabljajo sisteme enotne prijave, ki še niso združljivi z novim potekom prijave v vrstici.
       Če to nastavitev omogočite, se uporablja stari potek prijave v spletu.
@@ -1453,7 +1453,7 @@ napravi konfiguriran tako, da pri samodejni prijavi ni zakasnitve, naprava pa ni
       Če je jezik vključen v ta pravilnik in pravilnik <ph name="SPELLCHECK_LANGUAGE_BLACKLIST_POLICY_NAME" />, ima ta pravilnik prednost in jezik za preverjanje črkovanja je omogočen.
 
       Za zdaj so podprti jeziki: af, bg, ca, cs, da, de, el, en-AU, en-CA, en-GB, en-US, es, es-419, es-AR, es-ES, es-MX, es-US, et, fa, fo, fr, he, hi, hr, hu, id, it, ko, lt, lv, nb, nl, pl, pt-BR, pt-PT, ro, ru, sh, sk, sl, sq, sr, sv, ta, tg, tr, uk, vi.</translation>
-<translation id="356579196325389849">Uporabniki lahko konfigurirajo kanal za izdaje sistema OS Carbon Browser Browser Browser</translation>
+<translation id="356579196325389849">Uporabniki lahko konfigurirajo kanal za izdaje sistema OS Carbon Browser</translation>
 <translation id="3575011234198230041">Preverjanje pristnosti HTTP</translation>
 <translation id="3577251398714997599">Nastavitve oglasov za spletna mesta z vsiljivimi oglasi</translation>
 <translation id="357917253161699596">Uporabnikom dovoli upravljanje uporabniških potrdil</translation>
@@ -1471,9 +1471,9 @@ napravi konfiguriran tako, da pri samodejni prijavi ni zakasnitve, naprava pa ni
 <translation id="3646859102161347133">Nastavitev vrste lupe</translation>
 <translation id="3653237928288822292">Privzeta ikona iskalnika</translation>
 <translation id="3660510274595679517">
-        Če je ta pravilnik nastavljen na »True«, je včlanitev v upravljanje v oblaku obvezna in blokira postopek zagona Carbon Browser Browser Browser, če je neuspešna.
+        Če je ta pravilnik nastavljen na »True«, je včlanitev v upravljanje v oblaku obvezna in blokira postopek zagona Carbon Browser, če je neuspešna.
 
-        Če pravilnik ni nastavljen ali je nastavljen na »False«, je včlanitev v upravljanje v oblaku izbirna in ne blokira postopka zagona Carbon Browser Browser Browser, če je neuspešna.
+        Če pravilnik ni nastavljen ali je nastavljen na »False«, je včlanitev v upravljanje v oblaku izbirna in ne blokira postopka zagona Carbon Browser, če je neuspešna.
 
         Ta pravilnik uporablja včlanitev v pravilnik oblaka v obsegu naprave v namiznem računalniku in ga je mogoče nastaviti prek registra ali pravilnika skupine v sistemu Windows, prek datoteke plist v sistemu macOS in datoteke pravilnika v obliki zapisa JSON v Linuxu.</translation>
 <translation id="3660562134618097814">Prenesi piškotke SAML IdP pri prijavi</translation>
@@ -1658,9 +1658,9 @@ napravi konfiguriran tako, da pri samodejni prijavi ni zakasnitve, naprava pa ni
 <translation id="3963602271515417124">Če je ta pravilnik omogočen, bo za to napravo dovoljeno potrjevanje na daljavo in samodejno bo ustvarjeno potrdilo, ki bo preneseno v strežnik za upravljanje naprav.
 
           Če je ta pravilnik onemogočen ali ni nastavljen, ne bo ustvarjeno potrdilo in pozivi API-ju za razširitve enterprise.platformKeys ne bodo uspeli.</translation>
-<translation id="3964262920683972987">Konfiguriranje slike za ozadje na ravni naprave, ki je prikazana na prijavnem zaslonu, če se v napravo ni prijavil še noben uporabnik. Pravilnik se nastavi tako, da navedete URL, s katerega lahko naprava s sistemom OS Carbon Browser Browser Browser prenese sliko za ozadje, in kriptografsko zgoščeno vrednost, ki se uporablja za preverjanje celovitosti prenosa. Slika mora biti v obliki JPEG in njena velikost ne sme presegati 16 MB. URL mora biti dostopen brez preverjanja pristnosti. Slika za ozadje se prenese in predpomni. Če se spremeni URL ali zgoščena vrednost, se znova prenese.
+<translation id="3964262920683972987">Konfiguriranje slike za ozadje na ravni naprave, ki je prikazana na prijavnem zaslonu, če se v napravo ni prijavil še noben uporabnik. Pravilnik se nastavi tako, da navedete URL, s katerega lahko naprava s sistemom OS Carbon Browser prenese sliko za ozadje, in kriptografsko zgoščeno vrednost, ki se uporablja za preverjanje celovitosti prenosa. Slika mora biti v obliki JPEG in njena velikost ne sme presegati 16 MB. URL mora biti dostopen brez preverjanja pristnosti. Slika za ozadje se prenese in predpomni. Če se spremeni URL ali zgoščena vrednost, se znova prenese.
 
-      Če je nastavljen pravilnik o sliki za ozadje naprave, bo naprava s sistemom OS Carbon Browser Browser Browser prenesla in uporabila sliko za ozadje na prijavnem zaslonu, če se v napravo ni prijavil še noben uporabnik. Ko se uporabnik prijavi, začne veljati uporabnikov pravilnik o sliki za ozadje.
+      Če je nastavljen pravilnik o sliki za ozadje naprave, bo naprava s sistemom OS Carbon Browser prenesla in uporabila sliko za ozadje na prijavnem zaslonu, če se v napravo ni prijavil še noben uporabnik. Ko se uporabnik prijavi, začne veljati uporabnikov pravilnik o sliki za ozadje.
 
       Če pravilnik o sliki za ozadje naprave ni nastavljen, pravilnik o sliki za ozadje uporabnika izbere, kaj bo prikazano, če je nastavljen uporabnikov pravilnik o sliki za ozadje.</translation>
 <translation id="3965339130942650562">Časovna omejitev za odjavo nedejavnega uporabnika</translation>
@@ -1668,11 +1668,11 @@ napravi konfiguriran tako, da pri samodejni prijavi ni zakasnitve, naprava pa ni
 <translation id="3984028218719007910">Določa, ali <ph name="PRODUCT_OS_NAME" /> po odjavi ohrani lokalne podatke o računu. Če je pravilnik omogočen, <ph name="PRODUCT_OS_NAME" /> ne shrani trajnih računov in vsi podatki seje uporabnika se po odjavi izbrišejo. Če je pravilnik onemogočen ali ni nastavljen, lahko naprava hrani (šifrirane) lokalne podatke uporabnikov.</translation>
 <translation id="398475542699441679">Ta pravilnik nadzira, ali je omogočena podpora za zastarele brskalnike.
 
-      Če ta pravilnik ni nastavljen ali je nastavljen na »false«, Carbon Browser Browser Browser ne bo poskusil odpreti določenih URL-jev v nadomestnem brskalniku.
+      Če ta pravilnik ni nastavljen ali je nastavljen na »false«, Carbon Browser ne bo poskusil odpreti določenih URL-jev v nadomestnem brskalniku.
 
-      Če je ta pravilnik nastavljen na »true«, bo Carbon Browser Browser Browser poskusil odpreti nekatere URL-je v nadomestnem brskalniku (na primer Internet Explorerju). Ta funkcija je konfigurirana s pravilniki v skupini <ph name="LEGACY_BROWSER_SUPPORT_POLICY_GROUP" />.
+      Če je ta pravilnik nastavljen na »true«, bo Carbon Browser poskusil odpreti nekatere URL-je v nadomestnem brskalniku (na primer Internet Explorerju). Ta funkcija je konfigurirana s pravilniki v skupini <ph name="LEGACY_BROWSER_SUPPORT_POLICY_GROUP" />.
 
-      Ta funkcija nadomešča razširitev <ph name="LEGACY_BROWSER_SUPPORT_EXTENSION_NAME" />. Konfiguracija iz razširitve se bo prenesla na to funkcijo, vendar zelo priporočamo, da namesto nje uporabljate Carbon Browser Browser Browser pravilnike. S tem si zagotovite boljšo združljivost v prihodnje.</translation>
+      Ta funkcija nadomešča razširitev <ph name="LEGACY_BROWSER_SUPPORT_EXTENSION_NAME" />. Konfiguracija iz razširitve se bo prenesla na to funkcijo, vendar zelo priporočamo, da namesto nje uporabljate Carbon Browser pravilnike. S tem si zagotovite boljšo združljivost v prihodnje.</translation>
 <translation id="3997519162482760140">URL-ji, ki jim bo odobren dostop do naprav za zajem videa na straneh za prijavo SAML</translation>
 <translation id="4001275826058808087">Skrbniki za IT, ki upravljajo naprave v podjetju, lahko s to zastavico določijo, ali je uporabnikom dovoljeno unovčiti ponudbe prek registracije sistema Chrome OS.
 
@@ -1691,13 +1691,13 @@ napravi konfiguriran tako, da pri samodejni prijavi ni zakasnitve, naprava pa ni
 
           Ta pravilnik ima prednost pred pravilnikom <ph name="EXTENSION_INSTALL_BLACKLIST_POLICY_NAME" /> v primeru njunega spora. Če je aplikacija ali razširitev, ki je bila vsiljeno nameščena, odstranjena s tega seznama, jo brskalnik <ph name="PRODUCT_NAME" /> samodejno odmesti.
 
-          Za primerke sistema Windows, ki niso pridruženi v domeno <ph name="MS_AD_NAME" />, je vsiljeno nameščanje omejeno na aplikacije in razširitve, navedene v Spletni trgovini Carbon Browser Browser Browser.
+          Za primerke sistema Windows, ki niso pridruženi v domeno <ph name="MS_AD_NAME" />, je vsiljeno nameščanje omejeno na aplikacije in razširitve, navedene v Spletni trgovini Carbon Browser.
 
           Upoštevajte, da lahko uporabniki spremenijo izvorno kodo katere koli razširitve z orodji za razvijalce (s čimer razširitev morda izgubi funkcionalnost). Če imate glede tega pomisleke, nastavite pravilnik <ph name="DEVELOPER_TOOLS_POLICY_NAME" />.
 
-          Vsak element na seznamu pravilnika je niz, ki vsebuje ID razširitve in (neobvezno) URL za »posodobitev«, ločen s podpičjem (<ph name="SEMICOLON" />). ID razširitve je 32-mestni črkovni niz, ki ga je mogoče v načinu za razvijalce najti na primer na <ph name="CHROME_EXTENSIONS_LINK" />. Če je URL za »posodobitev« naveden, mora kazati na dokument XML manifesta za posodobitev, kot je opisano na <ph name="LINK_TO_EXTENSION_DOC1" />. Privzeto se uporabi URL za posodobitev v Spletni trgovini Carbon Browser Browser Browser (ki je trenutno »https://clients2.google.com/service/update2/crx«). Upoštevajte, da se URL za »posodobitev«, nastavljen v tem pravilniku, uporabi samo pri začetni namestitvi; pri vseh nadaljnjih posodobitvah razširitve je uporabljen URL, naveden v manifestu razširitve. Upoštevajte tudi, da je bila izrecna navedba URL-ja za »posodobitev« obvezna v različicah brskalnika <ph name="PRODUCT_NAME" /> do vključno različice 67.
+          Vsak element na seznamu pravilnika je niz, ki vsebuje ID razširitve in (neobvezno) URL za »posodobitev«, ločen s podpičjem (<ph name="SEMICOLON" />). ID razširitve je 32-mestni črkovni niz, ki ga je mogoče v načinu za razvijalce najti na primer na <ph name="CHROME_EXTENSIONS_LINK" />. Če je URL za »posodobitev« naveden, mora kazati na dokument XML manifesta za posodobitev, kot je opisano na <ph name="LINK_TO_EXTENSION_DOC1" />. Privzeto se uporabi URL za posodobitev v Spletni trgovini Carbon Browser (ki je trenutno »https://clients2.google.com/service/update2/crx«). Upoštevajte, da se URL za »posodobitev«, nastavljen v tem pravilniku, uporabi samo pri začetni namestitvi; pri vseh nadaljnjih posodobitvah razširitve je uporabljen URL, naveden v manifestu razširitve. Upoštevajte tudi, da je bila izrecna navedba URL-ja za »posodobitev« obvezna v različicah brskalnika <ph name="PRODUCT_NAME" /> do vključno različice 67.
 
-          <ph name="EXTENSION_POLICY_EXAMPLE" /> namesti na primer razširitev z ID-jem <ph name="EXTENSION_ID_SAMPLE" /> s standardnega URL-ja za »posodobitev« v Spletni trgovini Carbon Browser Browser Browser. Več informacij o gostovanju razširitev je na voljo tukaj: <ph name="LINK_TO_EXTENSION_DOC2" />.
+          <ph name="EXTENSION_POLICY_EXAMPLE" /> namesti na primer razširitev z ID-jem <ph name="EXTENSION_ID_SAMPLE" /> s standardnega URL-ja za »posodobitev« v Spletni trgovini Carbon Browser. Več informacij o gostovanju razširitev je na voljo tukaj: <ph name="LINK_TO_EXTENSION_DOC2" />.
 
           Če ta pravilnik ni nastavljen, nobena aplikacija ali razširitev ni nameščena samodejno in uporabnik lahko odmesti katero koli aplikacijo ali razširitev v brskalniku <ph name="PRODUCT_NAME" />.
 
@@ -1804,7 +1804,7 @@ napravi konfiguriran tako, da pri samodejni prijavi ni zakasnitve, naprava pa ni
           Če nastavite ta pravilnik, ga uporabniki ne morejo spremeniti ali preglasiti.
 
           Če tega pravilnika ne nastavite, je zaklepanje tipk prvotno onemogočeno, vendar ga lahko uporabnik kadar koli omogoči.</translation>
-<translation id="4171331498167688968">Če je pravilnik onemogočen, lahko programska oprema drugih ponudnikov vstavlja izvedljivo kodo v Carbon Browser Browser Browser procese. Če pravilnik ni nastavljen ali je omogočen, programska oprema drugih ponudnikov ne more vstavljati izvedljive kode v Carbon Browser Browser Browser procese.
+<translation id="4171331498167688968">Če je pravilnik onemogočen, lahko programska oprema drugih ponudnikov vstavlja izvedljivo kodo v Carbon Browser procese. Če pravilnik ni nastavljen ali je omogočen, programska oprema drugih ponudnikov ne more vstavljati izvedljive kode v Carbon Browser procese.
 
       Ne glede na vrednost tega pravilnika brskalnik programski opremi drugih ponudnikov trenutno ne bo preprečil vstavljanja izvedljive kode v procese brskalnika v računalniku, ki je pridružen v domeno <ph name="MS_AD_NAME" />.</translation>
 <translation id="4183229833636799228">Privzeta nastavitev za <ph name="FLASH_PLUGIN_NAME" /></translation>
@@ -1873,11 +1873,11 @@ Vrednost pravilnika mora vedno biti navedena v sekundah. Vrednosti so navzdol om
 <translation id="4298509794364745131">Določa seznam aplikacij, ki jih je mogoče omogočiti kot aplikacije za zapiske na zaklenjenem zaslonu sistema <ph name="PRODUCT_OS_NAME" />.
 
       Če je prednostna aplikacija za zapiske omogočena na zaklenjenem zaslonu, je na njem element uporabniškega vmesnika za zagon te aplikacije.
-      Aplikacija bo lahko po zagonu ustvarila svoje okno na zaklenjenem zaslonu ter ustvarila podatkovne elemente (zapiske) v kontekstu zaklenjenega zaslona. Lahko bo uvozila ustvarjene zapiske v sejo primarnega uporabnika, ko je seja odklenjena. Na zaklenjenem zaslonu so za zdaj podprte samo aplikacije za zapiske za Carbon Browser Browser Browser.
+      Aplikacija bo lahko po zagonu ustvarila svoje okno na zaklenjenem zaslonu ter ustvarila podatkovne elemente (zapiske) v kontekstu zaklenjenega zaslona. Lahko bo uvozila ustvarjene zapiske v sejo primarnega uporabnika, ko je seja odklenjena. Na zaklenjenem zaslonu so za zdaj podprte samo aplikacije za zapiske za Carbon Browser.
 
       Če je pravilnik nastavljen, lahko uporabnik omogoči aplikacijo na zaklenjenem zaslonu samo, če je ID razširitve aplikacije vsebovan v vrednosti seznama pravilnika.
       Če ta pravilnik nastavite na prazen seznam, bo zato v celoti onemogočeno ustvarjanje zapiskov na zaklenjenem zaslonu.
-      Če pravilnik vsebuje ID aplikacije, še ne pomeni, da lahko uporabnik omogoči aplikacijo kot aplikacijo za zapiske na zaklenjenem zaslonu – v Carbon Browser Browser Browser 61 skupino razpoložljivih aplikacij na primer dodatno omejuje okolje.
+      Če pravilnik vsebuje ID aplikacije, še ne pomeni, da lahko uporabnik omogoči aplikacijo kot aplikacijo za zapiske na zaklenjenem zaslonu – v Carbon Browser 61 skupino razpoložljivih aplikacij na primer dodatno omejuje okolje.
 
       Če pravilnik ni nastavljen, ni omejitev pravilnika za skupino aplikacij, ki jih uporabnik lahko omogoči na zaklenjenem zaslonu.</translation>
 <translation id="4313767483634435271">Določen naslov MAC za nosilec naprave</translation>
@@ -2034,7 +2034,7 @@ Vrednost pravilnika mora vedno biti navedena v sekundah. Vrednosti so navzdol om
 <translation id="467236746355332046">Podprte funkcije:</translation>
 <translation id="4674167212832291997">Prilagaja seznam vzorcev URL-jev, ki jih vedno upodobi <ph name="PRODUCT_FRAME_NAME" />.
 
-          Če ta pravilnik ni nastavljen, bo za vsa spletna mesta uporabljen privzeti upodabljalnik, kot ga določa pravilnik »Carbon Browser Browser BrowserFrameRendererSettings«.
+          Če ta pravilnik ni nastavljen, bo za vsa spletna mesta uporabljen privzeti upodabljalnik, kot ga določa pravilnik »Carbon BrowserFrameRendererSettings«.
 
           Primere vzorcev si lahko ogledate na https://www.chromium.org/developers/how-tos/chrome-frame-getting-started.</translation>
 <translation id="467449052039111439">Odpri seznam URL-jev</translation>
@@ -2132,10 +2132,10 @@ Vrednost pravilnika mora vedno biti navedena v sekundah. Vrednosti so navzdol om
 
       Če je ta pravilnik onemogočen, <ph name="PRODUCT_NAME" /> ne dovoli ustvarjanja novih profilov v upravitelju uporabnikov.</translation>
 <translation id="4970855112942626932">Onemogočanje prijave v brskalnik</translation>
-<translation id="4978405676361550165">Če je nastavljen pravilnik »OffHours«, so določeni pravilniki za naprave prezrti (uporaba privzetih nastavitev teh pravilnikov) med določenimi časovnimi intervali. Carbon Browser Browser Browser znova uporabi pravilnike za naprave pri vsakem dogodku, ko se začne ali konča obdobje »OffHours«. Uporabnik bo obveščen in prisiljen, da se odjavi, ko bodo spremenjeni konec obdobja »OffHours« in nastavitve pravilnikov za naprave (npr. če je uporabnik prijavljen z nedovoljenim računom).</translation>
+<translation id="4978405676361550165">Če je nastavljen pravilnik »OffHours«, so določeni pravilniki za naprave prezrti (uporaba privzetih nastavitev teh pravilnikov) med določenimi časovnimi intervali. Carbon Browser znova uporabi pravilnike za naprave pri vsakem dogodku, ko se začne ali konča obdobje »OffHours«. Uporabnik bo obveščen in prisiljen, da se odjavi, ko bodo spremenjeni konec obdobja »OffHours« in nastavitve pravilnikov za naprave (npr. če je uporabnik prijavljen z nedovoljenim računom).</translation>
 <translation id="4980635395568992380">Vrsta podatkov:</translation>
 <translation id="4983201894483989687">Dovoli izvajanje zastarelih vtičnikov</translation>
-<translation id="4986560318567565414">Pot do Carbon Browser Browser Browser za preklop z nadomestnega brskalnika.</translation>
+<translation id="4986560318567565414">Pot do Carbon Browser za preklop z nadomestnega brskalnika.</translation>
 <translation id="4988291787868618635">Dejanje, ki naj se izvede, ko preteče časovni zamik nedejavnosti</translation>
 <translation id="5034604678285451405">Nastavitev praga za funkcijo preklopa na akumulatorsko napajanje ob konicah v odstotkih.
 
@@ -2209,11 +2209,11 @@ Vrednost pravilnika mora vedno biti navedena v sekundah. Vrednosti so navzdol om
       Če je pravilnik nastavljen na 0, je geslo računa v napravi onemogočeno.
 
       Če je odjemalec dalj časa brez povezave, so lahko zgodi, da so gesla starejša od navedenega števila dni.</translation>
-<translation id="510196893779239086">Ta pravilnik nadzira, ali naj se Carbon Browser Browser Browser povsem zapre, ko bi zadnji zavihek preklopil na drug brskalnik.
+<translation id="510196893779239086">Ta pravilnik nadzira, ali naj se Carbon Browser povsem zapre, ko bi zadnji zavihek preklopil na drug brskalnik.
 
-      Če tega pravilnika ne nastavite ali ga nastavite na »true«, bo Carbon Browser Browser Browser po preklopu na drug brskalnik ohranil odprt vsaj en zavihek.
+      Če tega pravilnika ne nastavite ali ga nastavite na »true«, bo Carbon Browser po preklopu na drug brskalnik ohranil odprt vsaj en zavihek.
 
-      Če je ta pravilnik nastavljen na »false«, bo Carbon Browser Browser Browser po preklopu na drug brskalnik zaprl zavihek, tudi če gre za zadnji zavihek. S tem se bo Carbon Browser Browser Browser povsem zaprl.</translation>
+      Če je ta pravilnik nastavljen na »false«, bo Carbon Browser po preklopu na drug brskalnik zaprl zavihek, tudi če gre za zadnji zavihek. S tem se bo Carbon Browser povsem zaprl.</translation>
 <translation id="5102203758995933166">Omogoča pošiljanje omrežne konfiguracije, ki se uporablja glede na uporabnika, v napravo z operacijskim sistemom <ph name="PRODUCT_OS_NAME" />. Omrežna konfiguracija je niz v obliki zapisa JSON, kot je določeno z obliko konfiguracije odprtega omrežja.</translation>
 <translation id="5105313908130842249">Časovni zamik zaklepa zaslona, če se napaja iz akumulatorja</translation>
 <translation id="5108031557082757679">Onemogočeni tiskalniki za naprave v podjetjih</translation>
@@ -2228,7 +2228,7 @@ Vrednost pravilnika mora vedno biti navedena v sekundah. Vrednosti so navzdol om
 <translation id="5148753489738115745">Določite lahko dodatne parametre, ki so uporabljeni, ko <ph name="PRODUCT_FRAME_NAME" /> zažene <ph name="PRODUCT_NAME" />.
 
           Če ta pravilnik ni nastavljen, je uporabljena privzeta ukazna vrstica.</translation>
-<translation id="5152787786897382519">Carbon Browser Browser Browser in Carbon Browser Browser Browser imata nekatere skupine pravilnikov, ki skupaj nadzirajo funkcijo. Te nabore predstavljajo naslednje skupine pravilnikov. Ker imajo pravilniki lahko več virov, se uporabijo samo vrednosti iz vira z največjo prednostjo. Vrednosti iz vira z manjšo prednostjo v isti skupini so prezrte. Vrstni red prednosti je določen na <ph name="POLICY_PRIORITY_DOC_URL" />.</translation>
+<translation id="5152787786897382519">Carbon Browser in Carbon Browser imata nekatere skupine pravilnikov, ki skupaj nadzirajo funkcijo. Te nabore predstavljajo naslednje skupine pravilnikov. Ker imajo pravilniki lahko več virov, se uporabijo samo vrednosti iz vira z največjo prednostjo. Vrednosti iz vira z manjšo prednostjo v isti skupini so prezrte. Vrstni red prednosti je določen na <ph name="POLICY_PRIORITY_DOC_URL" />.</translation>
 <translation id="5159469559091666409">Kako pogosto se pošiljajo omrežni paketi za spremljanje (v milisekundah).
 
       Če ta pravilnik ni nastavljen, je privzeti interval 3 minute.
@@ -2341,7 +2341,7 @@ Vrednost pravilnika mora vedno biti navedena v sekundah. Vrednosti so navzdol om
           Vrednost * na seznamu blokiranih pomeni, da so vsi gostitelji izvornega pošiljanja sporočil blokirani, razen če niso izrecno navedeni na seznamu dovoljenih.
 
           Če ta pravilnik ni nastavljen, bo izdelek <ph name="PRODUCT_NAME" /> naložil vse nameščene gostitelje izvornega pošiljanja sporočil.</translation>
-<translation id="5272684451155669299">Če je pravilnik omogočen, lahko uporabnik overitelju potrdil za zasebnost s strojno opremo v napravah Carbon Browser Browser Browser na daljavo potrdi svojo identiteto z metodo <ph name="CHALLENGE_USER_KEY_FUNCTION" /> prek API-ja <ph name="ENTERPRISE_PLATFORM_KEYS_API" />.
+<translation id="5272684451155669299">Če je pravilnik omogočen, lahko uporabnik overitelju potrdil za zasebnost s strojno opremo v napravah Carbon Browser na daljavo potrdi svojo identiteto z metodo <ph name="CHALLENGE_USER_KEY_FUNCTION" /> prek API-ja <ph name="ENTERPRISE_PLATFORM_KEYS_API" />.
 
           Če je onemogočen ali če ni nastavljen, pozivi API-ju ne bodo uspeli in bo vrnjena koda napake.</translation>
 <translation id="5277806246014825877">Omogočanje temu uporabniku, da lahko izvaja Crostini.
@@ -2360,7 +2360,7 @@ Vrednost pravilnika mora vedno biti navedena v sekundah. Vrednosti so navzdol om
 <translation id="5318185076587284965">Gostitelju oddaljenega dostopa omogoči uporabo posredovalnih strežnikov</translation>
 <translation id="5323128137188992869">Omogočanje predvajanja vsebine v napravi z napravo <ph name="PRODUCT_NAME" />.
 
-          Če je ta pravilnik onemogočen, uporabniki ne bodo mogli predvajati vsebine v tej napravi. Če je pravilnik omogočen, je uporabnikom dovoljeno predvajanje vsebine. Če ta pravilnik ni nastavljen, uporabnikom ni dovoljeno predvajati vsebine v včlanjenih napravah OS Carbon Browser Browser Browser, vendar jo lahko predvajajo v napravah, ki niso včlanjene.</translation>
+          Če je ta pravilnik onemogočen, uporabniki ne bodo mogli predvajati vsebine v tej napravi. Če je pravilnik omogočen, je uporabnikom dovoljeno predvajanje vsebine. Če ta pravilnik ni nastavljen, uporabnikom ni dovoljeno predvajati vsebine v včlanjenih napravah OS Carbon Browser, vendar jo lahko predvajajo v napravah, ki niso včlanjene.</translation>
 <translation id="5329007337159326804">Opozorilo: pravilnik za najvišjo različico protokola TLS bo v celoti odstranjen iz izdelka <ph name="PRODUCT_NAME" /> okoli različice 75 (okoli junija 2019).
 
       Če ta pravilnik ni konfiguriran, <ph name="PRODUCT_NAME" /> uporablja privzeto najvišjo različico.
@@ -2558,7 +2558,7 @@ Vrednost pravilnika mora vedno biti navedena v sekundah. Vrednosti so navzdol om
         Če je ta pravilnik onemogočen, uporabniki ne morejo pošiljati povratnih informacij Googlu.
 
         Če pravilnik ni nastavljen ali je omogočen, lahko uporabniki pošiljajo povratne informacije Googlu v »Meni -&gt; Pomoč -&gt; Prijava težave« ali s kombinacijo tipk.</translation>
-<translation id="5581292529942108810">Konfiguriranje pravilnikov o razširitvi za poročanje za Carbon Browser Browser Browser. 
+<translation id="5581292529942108810">Konfiguriranje pravilnikov o razširitvi za poročanje za Carbon Browser. 
 
       Ta pravilnik se uporablja samo, ko je omogočena razširitev <ph name="CHROME_REPORTING_EXTENSION_NAME" />, računalnik pa je včlanjen v pravilnik <ph name="MACHINE_LEVEL_USER_CLOUD_POLICY_ENROLLMENT_TOKEN_POLICY_NAME" />.</translation>
 <translation id="5583806683960333345">Če je ta nastavitev omogočena, lahko uporabniki uporabljajo takojšnjo povezavo računalnika z internetom prek mobilnega telefona, s čimer lahko Googlov telefon deli prenos podatkov v mobilnem omrežju z napravo.
@@ -2588,7 +2588,7 @@ Vrednost pravilnika mora vedno biti navedena v sekundah. Vrednosti so navzdol om
 
       OPOMBA: v Androidu je osamitev spletnih mest poskusna. Podpora se bo sčasoma izboljšala, vendar lahko v tem trenutku pride do težav pri delovanju.
 
-      OPOMBA: ta pravilnik se uporablja samo za Carbon Browser Browser Browser v Androidu v napravah, ki imajo več kot 1 GB RAM-a. Če želite pravilnik uporabljati v okoljih, ki niso Android, uporabite IsolateOrigins.
+      OPOMBA: ta pravilnik se uporablja samo za Carbon Browser v Androidu v napravah, ki imajo več kot 1 GB RAM-a. Če želite pravilnik uporabljati v okoljih, ki niso Android, uporabite IsolateOrigins.
       </translation>
 <translation id="5599461642204007579">Nastavitve upravljanja tega: <ph name="MS_AD_NAME" /></translation>
 <translation id="5610104657949692379">Če je pravilnik nastavljen, določa dejanje, ki ga <ph name="PRODUCT_OS_NAME" /> izvede, če uporabnikova nedejavnost doseže trajanje časovnega zamika nedejavnosti, ki ga je mogoče konfigurirati posebej.
@@ -2596,7 +2596,7 @@ Vrednost pravilnika mora vedno biti navedena v sekundah. Vrednosti so navzdol om
           Če pravilnik ni nastavljen, se izvede privzeto dejanje, tj. prekinitev.
 
           Če se izvede prekinitev, lahko <ph name="PRODUCT_OS_NAME" /> posebej konfigurirate, da pred prekinitvijo zaslon zaklene ali ne.</translation>
-<translation id="5618398258385745432">Povezana nastavitev je bila uporabljena pred uvedbo vnovičnega preverjanja pristnosti ob ogledu gesel. Od takrat nastavitev in posledično ta pravilnik nimata nobenega vpliva na način delovanja Carbon Browser Browser Browser. Trenuten način delovanja Carbon Browser Browser Browser je zdaj enak, kot da bi bil pravilnik nastavljen tako, da onemogoča prikaz nešifriranih gesel na strani z nastavitvami upravitelja gesel. To pomeni, da je na strani z nastavitvami samo nadomestni znak in Carbon Browser Browser Browser geslo prikaže šele, ko uporabnik klikne »Pokaži« (in po vnovičnem preverjanju pristnosti, če je treba). Izvirni opis pravilnika je spodaj.
+<translation id="5618398258385745432">Povezana nastavitev je bila uporabljena pred uvedbo vnovičnega preverjanja pristnosti ob ogledu gesel. Od takrat nastavitev in posledično ta pravilnik nimata nobenega vpliva na način delovanja Carbon Browser. Trenuten način delovanja Carbon Browser je zdaj enak, kot da bi bil pravilnik nastavljen tako, da onemogoča prikaz nešifriranih gesel na strani z nastavitvami upravitelja gesel. To pomeni, da je na strani z nastavitvami samo nadomestni znak in Carbon Browser geslo prikaže šele, ko uporabnik klikne »Pokaži« (in po vnovičnem preverjanju pristnosti, če je treba). Izvirni opis pravilnika je spodaj.
 
           Določa, ali lahko uporabnik v upravitelju gesel pokaže nešifrirana gesla.
 
@@ -2703,7 +2703,7 @@ Vrednost pravilnika mora vedno biti navedena v sekundah. Vrednosti so navzdol om
       Če pravilnik ni konfiguriran, bo uporabnik to nastavitev lahko spremenil.
       </translation>
 <translation id="5832274826894536455">Zastareli pravilniki</translation>
-<translation id="5835124959204887277">Določa URL-je in domene, za katere ne bo prikazan poziv, ko so iz varnostnih ključev zahtevana potrditvena potrdila. Poleg tega bo varnostnemu ključu poslan signal, da je posamezno potrditev mogoče uporabiti. Brez tega bo v Carbon Browser Browser Browser 65 in novejših različicah uporabnikom prikazan poziv, ko spletna mesta zahtevajo potrditev varnostnih ključev.
+<translation id="5835124959204887277">Določa URL-je in domene, za katere ne bo prikazan poziv, ko so iz varnostnih ključev zahtevana potrditvena potrdila. Poleg tega bo varnostnemu ključu poslan signal, da je posamezno potrditev mogoče uporabiti. Brez tega bo v Carbon Browser 65 in novejših različicah uporabnikom prikazan poziv, ko spletna mesta zahtevajo potrditev varnostnih ključev.
 
       URL-ji (npr. https://example.com/neka/pot) se bodo ujemali samo kot appID-ji U2F. Domene (npr. example.com) se ujemajo samo kot ID-ji za webauthn RP. Če želite, da so za določeno mesto obravnavani tako API-ji za U2F kot za webauthn, je torej treba navesti URL za appID in domeno.</translation>
 <translation id="5836064773277134605">Omeji obseg vrat UDP, ki jih uporablja gostitelj oddaljenega dostopa</translation>
@@ -2760,7 +2760,7 @@ Vrednost pravilnika mora vedno biti navedena v sekundah. Vrednosti so navzdol om
           Če pravilnik nastavite, ga lahko uporabniki začasno preglasijo tako, da omogočijo ali onemogočijo velik kazalec, vendar ta nastavitev ni trajna, pri čemer se privzeta nastavitev obnovi vsakič, ko je ponovno prikazan prijavni zaslon ali kadar je uporabnik eno minuto nedejaven na prijavnem zaslonu.
 
           Če pravilnika ne nastavite, je velik kazalec onemogočen, ko je prvič prikazan prijavni zaslon. Uporabniki lahko kadar koli omogočijo ali onemogočijo velik kazalec, pri čemer se njegovo stanje na prijavnem zaslonu ohrani med uporabniki.</translation>
-<translation id="5929855945144989709">V napravah je dovoljeno izvajanje navideznih računalnikov v sistemu OS Carbon Browser Browser Browser</translation>
+<translation id="5929855945144989709">V napravah je dovoljeno izvajanje navideznih računalnikov v sistemu OS Carbon Browser</translation>
 <translation id="5932767795525445337">Ta pravilnik je prav tako mogoče uporabiti za pripenjanje aplikacij za Android.</translation>
 <translation id="5936622343001856595">Uveljavi izvajanje poizvedb v Google Spletnem iskanju z aktiviranim Google Varnim iskanjem in uporabnikom prepreči spreminjanje te nastavitve.
 
@@ -2814,7 +2814,7 @@ Vrednost pravilnika mora vedno biti navedena v sekundah. Vrednosti so navzdol om
           Vrednost pravilnika naj bo navedena v milisekundah. Vrednosti morajo biti manjše od zakasnitve zaradi nedejavnosti.</translation>
 <translation id="6097601282776163274">Omogočanje zbiranja anonimiziranih podatkov, ki vključujejo URL-je</translation>
 <translation id="6099853574908182288">Privzeti barvni način tiskanja</translation>
-<translation id="6107642964266628393">Nadzira, kako in kdaj se uporabijo posodobitve OS Carbon Browser Browser Browser.</translation>
+<translation id="6107642964266628393">Nadzira, kako in kdaj se uporabijo posodobitve OS Carbon Browser.</translation>
 <translation id="6111936128861357925">Dovoli skrito igro z dinozavrom</translation>
 <translation id="6114416803310251055">zastarelo</translation>
 <translation id="6133088669883929098">Vsem spletnim mestom dovoli uporabo ustvarjanja ključev</translation>
@@ -2838,7 +2838,7 @@ Vrednost pravilnika mora vedno biti navedena v sekundah. Vrednosti so navzdol om
 
       Če ta pravilnik ni nastavljen ali je onemogočen, se podatki ne zbirajo ali nalagajo.
       Če je ta pravilnik omogočen, se podatki zbirajo in nalagajo v konzolo Google Admin console.
-      Če želite nadzirati, kateri podatki se nalagajo, uporabite pravilnike v razširitvi Poročanje za Carbon Browser Browser Browser za skupine.
+      Če želite nadzirati, kateri podatki se nalagajo, uporabite pravilnike v razširitvi Poročanje za Carbon Browser za skupine.
 
       Ta pravilnik se uporablja samo, če je računalnik včlanjen v pravilnik <ph name="MACHINE_LEVEL_USER_CLOUD_POLICY_ENROLLMENT_TOKEN_POLICY_NAME" />.
 
@@ -2925,7 +2925,7 @@ Vrednost pravilnika mora vedno biti navedena v sekundah. Vrednosti so navzdol om
 <translation id="6282799760374509080">Omogočanje ali onemogočanje snemanja zvoka</translation>
 <translation id="6284362063448764300">TLS 1.1</translation>
 <translation id="6310223829319187614">Omogočanje samodokončanja imena domene med prijavo uporabnika</translation>
-<translation id="6315673513957120120">Carbon Browser Browser Browser prikaže opozorilno stran, ko uporabniki prikrmarijo na spletna mesta, na katerih so napake SSL. Uporabnikom je privzeto (ali če je ta pravilnik omogočen) dovoljeno, da s klikom opustijo te strani z opozorilom.
+<translation id="6315673513957120120">Carbon Browser prikaže opozorilno stran, ko uporabniki prikrmarijo na spletna mesta, na katerih so napake SSL. Uporabnikom je privzeto (ali če je ta pravilnik omogočen) dovoljeno, da s klikom opustijo te strani z opozorilom.
       Če onemogočite ta pravilnik, uporabnikom ni dovoljeno s klikom opustiti katere koli strani z opozorilom.</translation>
 <translation id="6319198883324703402">Nastavite čas prvega obvestila uporabniku glede vnovičnega zagona</translation>
 <translation id="6352543686437322588">Lokalni račun v napravi za samodejno prijavo po zakasnitvi.
@@ -2967,7 +2967,7 @@ Vrednost pravilnika mora vedno biti navedena v sekundah. Vrednosti so navzdol om
           Če izberete, da se samodejno zazna strežnik proxy, se aplikacijam za Android posreduje URL skripta »http://wpad/wpad.dat«. Ne uporabi se noben drug del protokola za samodejno zaznavanje strežnika proxy.
 
           Če izberete, da se uporablja skript .pac za strežnik proxy, se aplikacijam za Android posreduje URL skripta.</translation>
-<translation id="6430366557948788869">Razširitev za poročanje za Carbon Browser Browser Browser</translation>
+<translation id="6430366557948788869">Razširitev za poročanje za Carbon Browser</translation>
 <translation id="6440051664870270040">Spletnim mestom dovoli hkratno krmarjenje in odpiranje pojavnih oken</translation>
 <translation id="6447948611083700881">Varnostno kopiranje in obnovitev sta onemogočena</translation>
 <translation id="6449476513004303784">Uporabnikom ne dovoli upravljanja potrdil</translation>
@@ -3025,9 +3025,9 @@ Vrednost pravilnika mora vedno biti navedena v sekundah. Vrednosti so navzdol om
 <translation id="6536600139108165863">Samodejni vnovični zagon ob zaustavitvi naprave</translation>
 <translation id="6539246272469751178">Ta pravilnik ne vpliva na aplikacije za Android. Aplikacije za Android vedno uporabljajo privzeti imenik za prenose in ne morejo dostopati do datotek, ki jih sistem <ph name="PRODUCT_OS_NAME" /> prenese v imenik za prenose, ki ni privzet.</translation>
 <translation id="654303922206238013">Strategija selitve za ecryptfs</translation>
-<translation id="6544897973797372144">Če je ta pravilnik nastavljen na »True« in pravilnik »Carbon Browser Browser BrowserOsReleaseChannel« ni določen, lahko uporabniki domene za včlanitev spremenijo distribucijski kanal za nove izdaje naprave. Če je pravilnik nastavljen na »False«, je naprava zaklenjena v kanalu, v katerem je bila nazadnje nastavljena.
+<translation id="6544897973797372144">Če je ta pravilnik nastavljen na »True« in pravilnik »Carbon BrowserOsReleaseChannel« ni določen, lahko uporabniki domene za včlanitev spremenijo distribucijski kanal za nove izdaje naprave. Če je pravilnik nastavljen na »False«, je naprava zaklenjena v kanalu, v katerem je bila nazadnje nastavljena.
 
-      Kanal, ki ga izbere uporabnik, preglasi pravilnik Carbon Browser Browser BrowserOsReleaseChannel, vendar če je kanal pravilnika stabilnejši kot pravilnik, nameščen v napravi, se stabilnejši kanal uporabi, ko je številka njegove različice večja od številke različice v napravi.</translation>
+      Kanal, ki ga izbere uporabnik, preglasi pravilnik Carbon BrowserOsReleaseChannel, vendar če je kanal pravilnika stabilnejši kot pravilnik, nameščen v napravi, se stabilnejši kanal uporabi, ko je številka njegove različice večja od številke različice v napravi.</translation>
 <translation id="6553143066970470539">Odstotek svetlosti zaslona</translation>
 <translation id="6559057113164934677">Ne dovoli nobenemu spletnemu mestu dostopa do kamere in mikrofona</translation>
 <translation id="6561396069801924653">Prikaz možnosti funkcij za ljudi s posebnimi potrebami v meniju sistemske vrstice</translation>
@@ -3107,7 +3107,7 @@ URL-ji, ki uporabljajo sheme s tega seznama, se ne bodo naložili in dostop do n
 <translation id="6698632841807204978">Omogočanje enobarvnega tiskanja</translation>
 <translation id="6699880231565102694">Omogočanje preverjanja pristnosti v dveh korakih za gostitelje oddaljenega dostopa</translation>
 <translation id="6731757988219967594">Filtriranje vrhnjih spletnih mest (vendar ne vdelanih elementov iframe) zaradi izločanja  vsebine za odrasle</translation>
-<translation id="6734521799274931721">Nadzira razpoložljivost omrežnih naprav za skupno rabo datotek v okolju OS Carbon Browser Browser Browser</translation>
+<translation id="6734521799274931721">Nadzira razpoložljivost omrežnih naprav za skupno rabo datotek v okolju OS Carbon Browser</translation>
 <translation id="6735701345096330595">Vsiljeno preverjanje črkovanja jezikov</translation>
 <translation id="673699536430961464">Ta nastavitev uporabnikom po prijavi v napravo <ph name="PRODUCT_OS_NAME" /> omogoča preklop med Google Računi na območju z vsebino v oknu brskalnika.
 
@@ -3115,7 +3115,7 @@ URL-ji, ki uporabljajo sheme s tega seznama, se ne bodo naložili in dostop do n
 
       Če ta pravilnik ni nastavljen ali je nastavljen na »true«, se uporabi privzeto delovanje: prijava v drug račun na območju z vsebino brskalnika bo dovoljena z izjemo računov za otroke, pri katerih je to blokirano za območje z vsebino brskalnika z beleženjem zgodovine.
 
-      Če prijava v drug račun ne bi smela biti dovoljena v načinu brez beleženja zgodovine, blokirajte ta način s pravilnikom »PrivateModeAvailability«.
+      Če prijava v drug račun ne bi smela biti dovoljena v načinu brez beleženja zgodovine, blokirajte ta način s pravilnikom »privateModeAvailability«.
 
       Upoštevajte, da bodo lahko uporabniki z blokiranjem piškotkov dostopali do Googlovih storitev v stanju brez preverjanja pristnosti.</translation>
 <translation id="6757438632136860443">Omogoča nastavitev seznama vzorcev URL-jev, ki določa, katerim spletnim mestom je dovoljeno izvajanje vtičnika <ph name="FLASH_PLUGIN_NAME" />.
@@ -3152,7 +3152,7 @@ URL-ji, ki uporabljajo sheme s tega seznama, se ne bodo naložili in dostop do n
 
       Če je ta pravilnik nastavljen na »false«, vgrajeni odjemalec DNS ne bo uporabljen.
 
-      Če ta pravilnik ni nastavljen, bo vgrajeni odjemalec DNS privzeto omogočen v sistemih macOS, Android (če nista omogočena zasebni strežnik DNS in VPN) in OS Carbon Browser Browser Browser, uporabniki pa bodo lahko spreminjali, ali naj se uporablja vgrajeni odjemalec DNS tako, da bodo uredili stran chrome://flags ali določili zastavico v ukazni vrstici.</translation>
+      Če ta pravilnik ni nastavljen, bo vgrajeni odjemalec DNS privzeto omogočen v sistemih macOS, Android (če nista omogočena zasebni strežnik DNS in VPN) in OS Carbon Browser, uporabniki pa bodo lahko spreminjali, ali naj se uporablja vgrajeni odjemalec DNS tako, da bodo uredili stran chrome://flags ali določili zastavico v ukazni vrstici.</translation>
 <translation id="6843296367238757293">Ta pravilnik je zastarel. Njegovo uporabo odsvetujemo. Preberite več na https://support.google.com/chrome/a/answer/7643500</translation>
 <translation id="684856667300805181">Ta pravilnik je bil odstranjen v izdelku <ph name="PRODUCT_NAME" /> in ga je zamenjal pravilnik <ph name="ARC_GLS_POLICY_NAME" />.</translation>
 <translation id="6856743875250214792">Ta pravilnik je zastarel in smo ga v M66 odstranili, ker se je uporabljal samo za interno preskušanje in predstavlja varnostno tveganje.
@@ -3195,7 +3195,7 @@ URL-ji, ki uporabljajo sheme s tega seznama, se ne bodo naložili in dostop do n
 
       OPOMBA: v Androidu je osamitev spletnih mest poskusna. Podpora se bo sčasoma izboljšala, vendar lahko v tem trenutku pride do težav pri delovanju.
 
-      OPOMBA: ta pravilnik se uporablja samo za Carbon Browser Browser Browser v Androidu v napravah, ki imajo več kot 1 GB RAM-a. Če želite pravilnik uporabljati v okoljih, ki niso Android, uporabite SitePerProcess.
+      OPOMBA: ta pravilnik se uporablja samo za Carbon Browser v Androidu v napravah, ki imajo več kot 1 GB RAM-a. Če želite pravilnik uporabljati v okoljih, ki niso Android, uporabite SitePerProcess.
       </translation>
 <translation id="6922884955650325312">Blokiraj vtičnik <ph name="FLASH_PLUGIN_NAME" /></translation>
 <translation id="6923366716660828830">Določa ime privzetega ponudnika iskanja. Če pravilnik ostane prazen ali če ni nastavljen, bo uporabljeno ime gostitelja, določeno z URL-jem iskanja.
@@ -3292,9 +3292,9 @@ URL-ji, ki uporabljajo sheme s tega seznama, se ne bodo naložili in dostop do n
 
       Če je pravilnik onemogočen ali ni nastavljen, <ph name="PRODUCT_NAME" /> tovrstnih dnevnikov ne sme zbirati ne nalagati.
 
-      Ti dnevniki vsebujejo diagnostične podatke, ki so koristni pri odpravljanju težav z zvočnimi klici ali videoklici v Carbon Browser Browser Browser, na primer čas in velikost poslanih ter prejetih paketov RTP, povratne informacije o preobremenjenosti omrežja ter metapodatki o času in kakovosti zvočnih ter slikovnih okvirov. Ti dnevniki ne vsebujejo zvočne ali slikovne vsebine klica.
+      Ti dnevniki vsebujejo diagnostične podatke, ki so koristni pri odpravljanju težav z zvočnimi klici ali videoklici v Carbon Browser, na primer čas in velikost poslanih ter prejetih paketov RTP, povratne informacije o preobremenjenosti omrežja ter metapodatki o času in kakovosti zvočnih ter slikovnih okvirov. Ti dnevniki ne vsebujejo zvočne ali slikovne vsebine klica.
 
-      To zbiranje podatkov v Carbon Browser Browser Browser lahko sprožijo samo Googlove spletne storitve, na primer Google Hangouts ali Google Meet.
+      To zbiranje podatkov v Carbon Browser lahko sprožijo samo Googlove spletne storitve, na primer Google Hangouts ali Google Meet.
 
       Google lahko te dnevnike prek ID-ja seje poveže z drugimi dnevniki, ki jih zbira sama Googlova storitev, in sicer zaradi lažjega odpravljanja napak.
       </translation>
@@ -3390,12 +3390,12 @@ URL-ji, ki uporabljajo sheme s tega seznama, se ne bodo naložili in dostop do n
 <translation id="7185078796915954712">TLS 1.3</translation>
 <translation id="718956142899066210">Dovoljene vrste povezav za posodobitve</translation>
 <translation id="7194407337890404814">Privzeto ime iskalnika</translation>
-<translation id="7199304109870655950">Konfigurirajte možnosti oddaljenega dostopa v gostitelju za Oddaljeno namizje za Carbon Browser Browser Browser.
+<translation id="7199304109870655950">Konfigurirajte možnosti oddaljenega dostopa v gostitelju za Oddaljeno namizje za Carbon Browser.
 
-      Gostitelj za oddaljeno namizje za Carbon Browser Browser Browser je izvorna storitev, ki se izvaja v ciljnem računalniku, s katero se lahko uporabnik poveže z uporabo aplikacije Oddaljeno namizje za Carbon Browser Browser Browser. Izvorna storitev je zapakirana in se izvaja ločeno od brskalnika <ph name="PRODUCT_NAME" />.
+      Gostitelj za oddaljeno namizje za Carbon Browser je izvorna storitev, ki se izvaja v ciljnem računalniku, s katero se lahko uporabnik poveže z uporabo aplikacije Oddaljeno namizje za Carbon Browser. Izvorna storitev je zapakirana in se izvaja ločeno od brskalnika <ph name="PRODUCT_NAME" />.
 
       Ti pravilniki so prezrti, če ni nameščen
-      gostitelj za Oddaljeno namizje za Carbon Browser Browser Browser.</translation>
+      gostitelj za Oddaljeno namizje za Carbon Browser.</translation>
 <translation id="7202925763179776247">Omogoči omejitve prenosov</translation>
 <translation id="7207095846245296855">Uveljavi Google Varno iskanje</translation>
 <translation id="7211368186050418507">Časovnega pasu nikoli ne zaznaj samodejno</translation>
@@ -3497,9 +3497,9 @@ URL-ji, ki uporabljajo sheme s tega seznama, se ne bodo naložili in dostop do n
 <translation id="7329968046053403405">Določa vrsto računov, ki jih ponuja aplikacija za preverjanje pristnosti za Android, ki podpira preverjanje pristnosti z razširitvijo <ph name="HTTP_NEGOTIATE" /> (npr. preverjanje pristnosti Kerberos). Ti podatki bi morali biti na voljo od ponudnika aplikacije za preverjanje pristnosti. Več informacij je na voljo na https://goo.gl/hajyfN.
 
           Če ni določena nobena nastavitev, je v Androidu onemogočeno preverjanje pristnosti z razširitvijo <ph name="HTTP_NEGOTIATE" />.</translation>
-<translation id="7331962793961469250">Ko je pravilnik nastavljen na »True«, se promocije za aplikacije iz Spletne trgovine Carbon Browser Browser Browser ne bodo prikazale na novem zavihku s povezavami.
+<translation id="7331962793961469250">Ko je pravilnik nastavljen na »True«, se promocije za aplikacije iz Spletne trgovine Carbon Browser ne bodo prikazale na novem zavihku s povezavami.
 
-      Če to možnost nastavite na »False« ali je ne nastavite, se bodo promocije za aplikacije iz Spletne trgovine Carbon Browser Browser Browser prikazovale na novem zavihku s povezavami.</translation>
+      Če to možnost nastavite na »False« ali je ne nastavite, se bodo promocije za aplikacije iz Spletne trgovine Carbon Browser prikazovale na novem zavihku s povezavami.</translation>
 <translation id="7332963785317884918">Ta pravilnik je zastarel. Sistem <ph name="PRODUCT_OS_NAME" /> bo vedno uporabljal strategijo čiščenja »RemoveLRU«.
 
       Nadzira delovanje samodejnega čiščenja v napravah s sistemom <ph name="PRODUCT_OS_NAME" />. Samodejno čiščenje sprosti prostor na disku in se sproži, ko količina nezasedenega prostora na disku doseže kritično raven.
@@ -3559,7 +3559,7 @@ URL-ji, ki uporabljajo sheme s tega seznama, se ne bodo naložili in dostop do n
       </translation>
 <translation id="7506269062143646163">Omogoča podporo za podpisano izmenjavo HTTP (SXG).
 
-          Če ta pravilnik ni nastavljen ali je omogočen, bo Carbon Browser Browser Browser sprejemal spletno vsebino, prikazano kot podpisane izmenjave HTTP.
+          Če ta pravilnik ni nastavljen ali je omogočen, bo Carbon Browser sprejemal spletno vsebino, prikazano kot podpisane izmenjave HTTP.
 
           Če je ta pravilnik onemogočen, podpisanih izmenjav HTTP ni mogoče naložiti.</translation>
 <translation id="7511361072385293666">Če je ta pravilnik omogočen ali ni nastavljen, je uporaba protokola QUIC v brskalniku <ph name="PRODUCT_NAME" /> dovoljena.
@@ -3600,7 +3600,7 @@ URL-ji, ki uporabljajo sheme s tega seznama, se ne bodo naložili in dostop do n
 
       Če ta pravilnik ni nastavljen ali je nastavljen na 0, se ob krmarjenju na določeni URL ta takoj odpre v nadomestnem brskalniku.
 
-      Če je ta pravilnik nastavljen na številko, Carbon Browser Browser Browser toliko milisekund prikazuje sporočilo, nato odpre nadomestni brskalnik.</translation>
+      Če je ta pravilnik nastavljen na številko, Carbon Browser toliko milisekund prikazuje sporočilo, nato odpre nadomestni brskalnik.</translation>
 <translation id="7593523670408385997">Nastavi velikost predpomnilnika, ki ga bo izdelek <ph name="PRODUCT_NAME" /> uporabljal za shranjevanje predpomnjenih datotek na disku.
 
       Če nastavite ta pravilnik, bo <ph name="PRODUCT_NAME" /> uporabil navedeno velikost predpomnilnika, ne glede na to, ali je uporabnik nastavil zastavico »--disk-cache-size«. Vrednost, navedena v tem pravilniku, ni fiksna omejitev, temveč predlog predpomnilniškemu sistemu. Vrednosti pod nekaj megabajti so premajhne in bodo zaokrožene na razumno minimalno vrednost.
@@ -3784,7 +3784,7 @@ URL-ji, ki uporabljajo sheme s tega seznama, se ne bodo naložili in dostop do n
 
       OPOMBA: ta pravilnik je bil do različice 45 podprt samo v načinu kioska.</translation>
 <translation id="7912255076272890813">Konfiguracija dovoljenih vrst aplikacij/razširitev</translation>
-<translation id="7922358664346625612">Ohrani zadnji zavihek odprt v Carbon Browser Browser Browser.</translation>
+<translation id="7922358664346625612">Ohrani zadnji zavihek odprt v Carbon Browser.</translation>
 <translation id="793134539373873765">Določa, ali se za prenos posodobitvenih paketov operacijskega sistema uporablja p2p. Če je nastavljeno na »True«, naprave dajo posodobitvene pakete v skupno rabo v krajevnem omrežju in jih poskušajo uporabiti ter s tem morebiti zmanjšati uporabo internetne pasovne širine in zamašitve. Če posodobitveni paket ni na voljo v krajevnem omrežju, ga naprava poskuša prenesti iz posodobitvenegea strežnika. Če je nastavljeno na »False« ali ni nastavljeno, se uporabi p2p.</translation>
 <translation id="7933141401888114454">Omogoči ustvarjanje zaščitenih uporabnikov</translation>
 <translation id="793473937901685727">Nastavitev razpoložljivosti potrdil aplikacijam ARC</translation>
@@ -3820,7 +3820,7 @@ URL-ji, ki uporabljajo sheme s tega seznama, se ne bodo naložili in dostop do n
 <translation id="798856998567564266">Če omogočite to nastavitev, je zaznamke mogoče dodati, odstraniti ali spremeniti. To je privzeto tudi, če ta pravilnik ni nastavljen.
 
       Če onemogočite to nastavitev, zaznamkov ni mogoče dodati, odstraniti ali spremeniti. Obstoječi zaznamki so še vedno na voljo.</translation>
-<translation id="7992136759457836904">Omogoči nadziranje, ali je v sistemu OS Carbon Browser Browser Browser dovoljeno izvajanje navideznih računalnikov.
+<translation id="7992136759457836904">Omogoči nadziranje, ali je v sistemu OS Carbon Browser dovoljeno izvajanje navideznih računalnikov.
 
       Če je pravilnik omogočen, je v napravi dovoljeno izvajanje navideznih računalnikov.
       Če je pravilnik onemogočen, v napravi ni dovoljeno izvajanje navideznih računalnikov. 
@@ -3947,7 +3947,7 @@ URL-ji, ki uporabljajo sheme s tega seznama, se ne bodo naložili in dostop do n
       Če ta pravilnik ni nastavljen, bo <ph name="PRODUCT_OS_NAME" /> za prikazno ime na zaslonu za prijavo uporabil ID e-poštnega računa lokalnega računa za prijavo.
 
       Ta pravilnik ne velja za običajne uporabniške račune.</translation>
-<translation id="8259375588339409826">Carbon Browser Browser Browser in Carbon Browser Browser Browser podpirata isto skupino pravilnikov. Upoštevajte, da so lahko v tem dokumentu neobjavljeni pravilniki (vnos »Podprto na datum« se nanaša na še neobjavljeno različico brskalnika <ph name="PRODUCT_NAME" />), ki jih lahko spremenimo ali odstranimo brez predhodnega obvestila in za katere ne zagotavljamo nobenega jamstva, kakor tudi ne jamčimo za njihove lastnosti z vidika varnosti in zasebnosti.
+<translation id="8259375588339409826">Carbon Browser in Carbon Browser podpirata isto skupino pravilnikov. Upoštevajte, da so lahko v tem dokumentu neobjavljeni pravilniki (vnos »Podprto na datum« se nanaša na še neobjavljeno različico brskalnika <ph name="PRODUCT_NAME" />), ki jih lahko spremenimo ali odstranimo brez predhodnega obvestila in za katere ne zagotavljamo nobenega jamstva, kakor tudi ne jamčimo za njihove lastnosti z vidika varnosti in zasebnosti.
 
 Ti pravilniki so namenjeni izključno uporabi za konfiguriranje primerkov brskalnika <ph name="PRODUCT_NAME" /> znotraj vaše organizacije. Uporaba teh pravilnikov zunaj organizacije (na primer v programu, ki se javno distribuira) se obravnava kot zlonamerna programska oprema ter jo bodo Google in ponudniki protivirusnih programov najverjetneje označili kot tako.
 
@@ -3964,7 +3964,7 @@ Teh nastavitev ni treba konfigurirati ročno. Za sisteme Windows, macOS in Linux
 
       Če je ta pravilnik onemogočen, statistični podatki ne bodo poslani.
       Če je ta pravilnik omogočen ali ni nastavljen, bodo statistični podatki poslani.</translation>
-<translation id="8294750666104911727">Običajno bodo strani, ki imajo možnost »X-UA-Compatible« nastavljeno na »chrome=1«, upodobljene v izdelku <ph name="PRODUCT_FRAME_NAME" />, ne glede na pravilnik »Carbon Browser Browser BrowserFrameRendererSettings«.
+<translation id="8294750666104911727">Običajno bodo strani, ki imajo možnost »X-UA-Compatible« nastavljeno na »chrome=1«, upodobljene v izdelku <ph name="PRODUCT_FRAME_NAME" />, ne glede na pravilnik »Carbon BrowserFrameRendererSettings«.
 
           Če to nastavitev omogočite, se na straneh ne bodo iskale metaoznake.
 
@@ -3990,7 +3990,7 @@ Teh nastavitev ni treba konfigurirati ročno. Za sisteme Windows, macOS in Linux
 <translation id="8344454543174932833">Uvoz zaznamkov privzetega brskalnika ob prvem zagonu</translation>
 <translation id="8357681633047935212">Omejitev dolžine uporabniške seje</translation>
 <translation id="8359734107661430198">Omogočanje API-ja ExampleDeprecatedFeature API do vključno 2. 9. 2008</translation>
-<translation id="8367209241899435947">Omogočeno Carbon Browser Browser Browser čiščenje v sistemu Windows</translation>
+<translation id="8367209241899435947">Omogočeno Carbon Browser čiščenje v sistemu Windows</translation>
 <translation id="8369602308428138533">Časovni zamik izklopa zaslona, če se napaja iz električnega omrežja</translation>
 <translation id="8371178326720637170">Omogoča upravljane razširitve za uporabo API-ja za okolja za strojno opremo za podjetja</translation>
 <translation id="8374747520743832795">Poročanje statističnih podatkov o strojni opremi in identifikatorjev, povezanih z napajanjem.
@@ -4062,13 +4062,13 @@ Teh nastavitev ni treba konfigurirati ročno. Za sisteme Windows, macOS in Linux
       Pravilnik bo odstranjen v različici M75.</translation>
 <translation id="8484458986062090479">Prilagodi seznam vzorcev URL-jev, ki naj jih vedno upodobi gostiteljski brskalnik.
 
-          Če ta pravilnik ni nastavljen, bo za vsa spletna mesta, določena s pravilnikom »Carbon Browser Browser BrowserFrameRendererSettings«, uporabljen privzeti upodabljalnik.
+          Če ta pravilnik ni nastavljen, bo za vsa spletna mesta, določena s pravilnikom »Carbon BrowserFrameRendererSettings«, uporabljen privzeti upodabljalnik.
 
           Primere vzorcev si lahko ogledate na https://www.chromium.org/developers/how-tos/chrome-frame-getting-started.</translation>
 <translation id="8489964335640955763">PluginVm</translation>
 <translation id="8493645415242333585">Onemogoči shranjevanje zgodovine brskalnika</translation>
 <translation id="8499172469244085141">Privzete nastavitve (uporabniki jih lahko preglasijo)</translation>
-<translation id="849962487677588458">Ta pravilnik je zastarel in je načrtovan za odstranitev v Carbon Browser Browser Browser 78. Zanj ne bo zamenjave.
+<translation id="849962487677588458">Ta pravilnik je zastarel in je načrtovan za odstranitev v Carbon Browser 78. Zanj ne bo zamenjave.
 
       Ta pravilnik omogoča HTTP/0.9 za vrata, ki niso 80 (za HTTP) ali 443 (za HTTPS).
 
@@ -4096,7 +4096,7 @@ Teh nastavitev ni treba konfigurirati ročno. Za sisteme Windows, macOS in Linux
 
       »Različica« pomeni točno različico, na primer »61.0.3163.120«, ali predpono različice, na primer »61.0«.  </translation>
 <translation id="8544375438507658205">Privzeti upodabljalnik HTML-ja za <ph name="PRODUCT_FRAME_NAME" /></translation>
-<translation id="8544465954173828789">Dovolitev sinhroniziranja sporočil SMS med telefonom in Carbon Browser Browser Browserbookom.</translation>
+<translation id="8544465954173828789">Dovolitev sinhroniziranja sporočil SMS med telefonom in Carbon Browserbookom.</translation>
 <translation id="8548832052135586762">Nastavi tiskanje na samo barvno, samo enobarvno ali brez omejitve barv. Če pravilnik ni nastavljen, ni omejitve.</translation>
 <translation id="8549772397068118889">Opozori pri odpiranju spletnih mest zunaj paketov vsebine</translation>
 <translation id="8566729013138025202">Določa nabor pravilnikov, ki bodo posredovani izvajalniku ARC. Vrednost mora biti veljavna datoteka JSON.
@@ -4124,7 +4124,7 @@ Teh nastavitev ni treba konfigurirati ročno. Za sisteme Windows, macOS in Linux
 
       Če pravilnik ni nastavljen ali je omogočen, je vsem uporabnikom dovoljena uporaba ARC-ja (razen če je ARC kako drugače onemogočen).
 
-      Spremembe pravilnika bodo uveljavljene samo, ko se ARC ne izvaja, na primer ko se zaganja sistem OS Carbon Browser Browser Browser.</translation>
+      Spremembe pravilnika bodo uveljavljene samo, ko se ARC ne izvaja, na primer ko se zaganja sistem OS Carbon Browser.</translation>
 <translation id="8615400197788843468">Omogoči funkcijo omejene prijave za brskalnik <ph name="PRODUCT_NAME" /> v storitvi G Suite in uporabnikom prepreči spreminjanje te nastavitve.
 
       Če določite to nastavitev, bo lahko uporabnik do storitve Google
@@ -4311,7 +4311,7 @@ Teh nastavitev ni treba konfigurirati ročno. Za sisteme Windows, macOS in Linux
 
           Ta pravilnik preslika ID razširitve ali URL za posodobitev v svojo konfiguracijo. Konfiguracija z ID-jem razširitve bo uporabljena samo za določeno razširitev. Za posebni ID <ph name="DEFAULT_SCOPE" /> je mogoče nastaviti privzeto konfiguracijo, ki se bo uporabila za vse razširitve, ki v tem pravilniku nimajo nastavljene konfiguracije po meri. Konfiguracija z URL-jem za posodobitev bo uporabljena za vse razširitve s točno določenim URL-jem za posodobitev, navedenim v manifestu te razširitve, kot je opisano na <ph name="LINK_TO_EXTENSION_DOC1" />.
 
-          Za primerke sistema Windows, ki niso pridruženi v domeno <ph name="MS_AD_NAME" />, je vsiljeno nameščanje omejeno na aplikacije in razširitve, navedene v Spletni trgovini Carbon Browser Browser Browser.
+          Za primerke sistema Windows, ki niso pridruženi v domeno <ph name="MS_AD_NAME" />, je vsiljeno nameščanje omejeno na aplikacije in razširitve, navedene v Spletni trgovini Carbon Browser.
           </translation>
 <translation id="8947415621777543415">Prijava lokacije naprave</translation>
 <translation id="8951350807133946005">Nastavi imenik predpomnilnika diska</translation>
@@ -4358,13 +4358,13 @@ Teh nastavitev ni treba konfigurirati ročno. Za sisteme Windows, macOS in Linux
       Če je vrednost pravilnika nastavljena na žeton, ki preslika v delovno različico Quick Fixa, bo naprava posodobljena na ustrezno delovno različico Quick Fixa, če posodobitve ne blokira drug pravilnik.
 
       Če ta pravilnik ni nastavljen ali njegova vrednost ne preslika v delovno različico Quick Fixa, naprava ne bo posodobljena na delovno različico Quick Fixa. Če naprava že uporablja delovno različico Quick Fixa in pravilnik ni več nastavljen ali njegova vrednost ne preslika več v delovno različico Quick Fixa, bo naprava posodobljena v običajno različico, če posodobitve ne blokira drug pravilnik.</translation>
-<translation id="9054012305936267950">Ta pravilnik nadzira delovanje prijave v brskalniku. Omogoča vam, da določite, ali se sme uporabnik prijaviti v brskalnik <ph name="PRODUCT_NAME" /> z računom in uporabljati storitve, povezane z računom, na primer sinhronizacijo za Carbon Browser Browser Browser.
+<translation id="9054012305936267950">Ta pravilnik nadzira delovanje prijave v brskalniku. Omogoča vam, da določite, ali se sme uporabnik prijaviti v brskalnik <ph name="PRODUCT_NAME" /> z računom in uporabljati storitve, povezane z računom, na primer sinhronizacijo za Carbon Browser.
 
-      Če je pravilnik nastavljen na »Onemogočanje prijave v brskalnik«, se uporabnik ne more prijaviti v brskalnik in uporabljati storitev, ki temeljijo na računu. V tem primeru funkcij na ravni brskalnika, kot je sinhronizacija za Carbon Browser Browser Browser, ni mogoče uporabljati in niso na voljo. Če je bil uporabnik prijavljen in je pravilnik nastavljen na »Onemogočeno«, bo ob naslednjem zagonu Carbon Browser Browser Browser odjavljen, lokalni podatki profila, kot so zaznamki, gesla ipd., pa se bodo ohranili. Uporabnik se bo še vedno lahko prijavljal v Googlove spletne storitve, na primer Gmail, in jih uporabljal.
+      Če je pravilnik nastavljen na »Onemogočanje prijave v brskalnik«, se uporabnik ne more prijaviti v brskalnik in uporabljati storitev, ki temeljijo na računu. V tem primeru funkcij na ravni brskalnika, kot je sinhronizacija za Carbon Browser, ni mogoče uporabljati in niso na voljo. Če je bil uporabnik prijavljen in je pravilnik nastavljen na »Onemogočeno«, bo ob naslednjem zagonu Carbon Browser odjavljen, lokalni podatki profila, kot so zaznamki, gesla ipd., pa se bodo ohranili. Uporabnik se bo še vedno lahko prijavljal v Googlove spletne storitve, na primer Gmail, in jih uporabljal.
 
-      Če je pravilnik nastavljen na »Omogočanje prijave v brskalnik«, se uporabnik sme prijaviti v brskalnik in je samodejno prijavljen vanj, če je prijavljen v Googlove spletne storitve, na primer Gmail. Če je uporabnik prijavljen v brskalnik, pomeni, da brskalnik ohrani podatke o njegovem računu, vendar to ne pomeni, da je sinhronizacija za Carbon Browser Browser Browser privzeto vklopljena; če želi uporabnik to funkcijo uporabljati, jo mora omogočiti ločeno. Če omogočite ta pravilnik, bo uporabniku preprečen izklop nastavitve, ki omogoča prijavo v brskalnik. Če želite nadzirati razpoložljivost sinhronizacije za Carbon Browser Browser Browser, uporabite pravilnik »SyncDisabled«.
+      Če je pravilnik nastavljen na »Omogočanje prijave v brskalnik«, se uporabnik sme prijaviti v brskalnik in je samodejno prijavljen vanj, če je prijavljen v Googlove spletne storitve, na primer Gmail. Če je uporabnik prijavljen v brskalnik, pomeni, da brskalnik ohrani podatke o njegovem računu, vendar to ne pomeni, da je sinhronizacija za Carbon Browser privzeto vklopljena; če želi uporabnik to funkcijo uporabljati, jo mora omogočiti ločeno. Če omogočite ta pravilnik, bo uporabniku preprečen izklop nastavitve, ki omogoča prijavo v brskalnik. Če želite nadzirati razpoložljivost sinhronizacije za Carbon Browser, uporabite pravilnik »SyncDisabled«.
 
-      Če je pravilnik nastavljen na »Vsiljenje prijave v brskalnik«, je uporabniku prikazano pogovorno okno za izbiro računa, v katerem mora izbrati račun in se prijaviti vanj, če želi uporabljati brskalnik. S tem se zagotovi, da se pri upravljanih računih uporabljajo in izvajajo pravilniki, povezani z računom. S tem je za račun privzeto vklopljena sinhronizacija za Carbon Browser Browser Browser, razen v primeru, če sinhronizacijo prek pravilnika »SyncDisabled« onemogoči skrbnik domene. Privzeta vrednost za BrowserGuestModeEnabled bo nastavljena na onemogočeno. Obstoječi neprijavljeni profili bodo po omogočanju tega pravilnika zaklenjeni in nedostopni. Več informacij je na voljo v tem članku centra za pomoč: https://support.google.com/chrome/a/answer/7572556. Ta možnost ne podpira Linuxa in uporabi »Omogočanje prijave v brskalnik«, če je uporabljena.
+      Če je pravilnik nastavljen na »Vsiljenje prijave v brskalnik«, je uporabniku prikazano pogovorno okno za izbiro računa, v katerem mora izbrati račun in se prijaviti vanj, če želi uporabljati brskalnik. S tem se zagotovi, da se pri upravljanih računih uporabljajo in izvajajo pravilniki, povezani z računom. S tem je za račun privzeto vklopljena sinhronizacija za Carbon Browser, razen v primeru, če sinhronizacijo prek pravilnika »SyncDisabled« onemogoči skrbnik domene. Privzeta vrednost za BrowserGuestModeEnabled bo nastavljena na onemogočeno. Obstoječi neprijavljeni profili bodo po omogočanju tega pravilnika zaklenjeni in nedostopni. Več informacij je na voljo v tem članku centra za pomoč: https://support.google.com/chrome/a/answer/7572556. Ta možnost ne podpira Linuxa in uporabi »Omogočanje prijave v brskalnik«, če je uporabljena.
 
       Če ta pravilnik ni nastavljen, se lahko uporabnik odloči, ali želi omogočiti možnost prijave v brskalnik in jo uporabljati po želji.</translation>
 <translation id="9072600218500597787">Konfigurira zahtevana imena domen gostiteljev, ki bodo veljala za gostitelje oddaljenega dostopa, in prepreči uporabnikom njihovo spreminjanje.
@@ -4411,7 +4411,7 @@ Teh nastavitev ni treba konfigurirati ročno. Za sisteme Windows, macOS in Linux
 
       Če je ta pravilnik omogočen, se sistemski dnevniki pošiljajo. Če je
       onemogočen ali ni nastavljen, se sistemski dnevniki ne pošiljajo.</translation>
-<translation id="9150416707757015439">Ta pravilnik je zastarel. Uporabite pravilnik »PrivateModeAvailability«.
+<translation id="9150416707757015439">Ta pravilnik je zastarel. Uporabite pravilnik »privateModeAvailability«.
       Ta v brskalniku <ph name="PRODUCT_NAME" /> omogoča način brez beleženja zgodovine.
 
       Če je ta nastavitev omogočena ali ni konfigurirana, lahko uporabniki odprejo spletne strani v načinu brez beleženja zgodovine.
@@ -4458,7 +4458,7 @@ Teh nastavitev ni treba konfigurirati ročno. Za sisteme Windows, macOS in Linux
 
       Če je ta pravilnik nastavljen, se uporablja za zagon brskalnika <ph name="PRODUCT_NAME" /> pri zagonu brskalnika <ph name="PRODUCT_NAME" /> iz Internet Explorerja.
 
-      Ta pravilnik je mogoče nastaviti na pot do izvedljive datoteke ali na ${chrome} za samodejno zaznavanje Carbon Browser Browser Browser lokacije za namestitev.</translation>
+      Ta pravilnik je mogoče nastaviti na pot do izvedljive datoteke ali na ${chrome} za samodejno zaznavanje Carbon Browser lokacije za namestitev.</translation>
 <translation id="930930237275114205">Nastavi imenik uporabniških podatkov za <ph name="PRODUCT_FRAME_NAME" /></translation>
 <translation id="943865157632139008">Omogoča nastavitev privzetega upodabljalnika HTML-ja, ko je nameščen <ph name="PRODUCT_FRAME_NAME" />.
           Privzeta nastavitev je, da upodabljanje izvaja gostiteljski brskalnik, vendar lahko to preglasite in določite, da <ph name="PRODUCT_FRAME_NAME" /> privzeto upodablja strani HTML.</translation>

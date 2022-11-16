@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,7 @@
 // NOTE: The format of types has changed. 'FooType' is now
 //   'chrome.passwordsPrivate.FooType'.
 // Please run the closure compiler before committing changes.
-// See
-// https://chromium.googlesource.com/chromium/src/+/master/docs/closure_compilation.md
+// See https://chromium.googlesource.com/chromium/src/+/main/docs/closure_compilation.md
 
 /** @fileoverview Externs generated from namespace: passwordsPrivate */
 
@@ -47,6 +46,15 @@ chrome.passwordsPrivate.CompromiseType = {
 /**
  * @enum {string}
  */
+chrome.passwordsPrivate.PasswordStoreSet = {
+  DEVICE: 'DEVICE',
+  ACCOUNT: 'ACCOUNT',
+  DEVICE_AND_ACCOUNT: 'DEVICE_AND_ACCOUNT',
+};
+
+/**
+ * @enum {string}
+ */
 chrome.passwordsPrivate.PasswordCheckState = {
   IDLE: 'IDLE',
   RUNNING: 'RUNNING',
@@ -57,6 +65,51 @@ chrome.passwordsPrivate.PasswordCheckState = {
   QUOTA_LIMIT: 'QUOTA_LIMIT',
   OTHER_ERROR: 'OTHER_ERROR',
 };
+
+/**
+ * @enum {string}
+ */
+chrome.passwordsPrivate.ImportResultsStatus = {
+  SUCCESS: 'SUCCESS',
+  IO_ERROR: 'IO_ERROR',
+  BAD_FILE_FORMAT: 'BAD_FILE_FORMAT',
+  DISMISSED: 'DISMISSED',
+};
+
+
+/**
+ * @enum {string}
+ */
+chrome.passwordsPrivate.ImportEntryStatus = {
+  MISSING_PASSWORD: 'MISSING_PASSWORD',
+  MISSING_URL: 'MISSING_URL',
+  INVALID_URL: 'INVALID_URL',
+  LONG_PASSWORD: 'LONG_PASSWORD',
+  LONG_USERNAME: 'LONG_USERNAME',
+  CONFLICT_PROFILE: 'CONFLICT_PROFILE',
+  CONFLICT_ACCOUNT: 'CONFLICT_ACCOUNT',
+};
+
+/**
+ * @typedef {{
+ *   status: chrome.passwordsPrivate.ImportEntryStatus,
+ *   url: string,
+ *   username: string
+ * }}
+ */
+chrome.passwordsPrivate.ImportEntry;
+
+
+/**
+ * @typedef {{
+ *   status: chrome.passwordsPrivate.ImportResultsStatus,
+ *   numberImported: number,
+ *   failedImports: (!Array<!chrome.passwordsPrivate.ImportEntry>),
+ *   fileName: string
+ * }}
+ */
+chrome.passwordsPrivate.ImportResults;
+
 
 /**
  * @typedef {{
@@ -73,8 +126,9 @@ chrome.passwordsPrivate.UrlCollection;
  *   username: string,
  *   federationText: (string|undefined),
  *   id: number,
- *   frontendId: number,
- *   fromAccountStore: boolean
+ *   storedIn: !chrome.passwordsPrivate.PasswordStoreSet,
+ *   isAndroidCredential: boolean,
+ *   passwordNote: string
  * }}
  */
 chrome.passwordsPrivate.PasswordUiEntry;
@@ -82,9 +136,7 @@ chrome.passwordsPrivate.PasswordUiEntry;
 /**
  * @typedef {{
  *   urls: !chrome.passwordsPrivate.UrlCollection,
- *   id: number,
- *   frontendId: number,
- *   fromAccountStore: boolean
+ *   id: number
  * }}
  */
 chrome.passwordsPrivate.ExceptionEntry;
@@ -101,7 +153,8 @@ chrome.passwordsPrivate.PasswordExportProgress;
  * @typedef {{
  *   compromiseTime: number,
  *   elapsedTimeSinceCompromise: string,
- *   compromiseType: !chrome.passwordsPrivate.CompromiseType
+ *   compromiseType: !chrome.passwordsPrivate.CompromiseType,
+ *   isMuted: boolean
  * }}
  */
 chrome.passwordsPrivate.CompromisedInfo;
@@ -113,6 +166,7 @@ chrome.passwordsPrivate.CompromisedInfo;
  *   detailedOrigin: string,
  *   isAndroidCredential: boolean,
  *   changePasswordUrl: (string|undefined),
+ *   hasStartableScript: boolean,
  *   signonRealm: string,
  *   username: string,
  *   password: (string|undefined),
@@ -132,6 +186,34 @@ chrome.passwordsPrivate.InsecureCredential;
 chrome.passwordsPrivate.PasswordCheckStatus;
 
 /**
+ * @typedef {{
+ *   url: string,
+ *   username: string,
+ *   password: string,
+ *   note: string,
+ *   useAccountStore: boolean
+ * }}
+ */
+chrome.passwordsPrivate.AddPasswordOptions;
+
+/**
+ * @typedef {{
+ *   username: string,
+ *   password: string,
+ *   note: (string|undefined)
+ * }}
+ */
+chrome.passwordsPrivate.ChangeSavedPasswordParams;
+
+/**
+ * @typedef {{
+ *   accountId: (number|undefined),
+ *   deviceId: (number|undefined)
+ * }}
+ */
+chrome.passwordsPrivate.CredentialIds;
+
+/**
  * Function that logs that the Passwords page was accessed from the Chrome
  * Settings WebUI.
  */
@@ -143,45 +225,29 @@ chrome.passwordsPrivate.recordPasswordsPageAccessInSettings = function() {};
  * password for accountId and deviceId. Invokes |callback| or raises an error
  * depending on whether the operation succeeded.
  * @param {!Array<number>} ids The ids for the password entry being updated.
- * @param {string} new_username The new username.
- * @param {string} new_password The new password.
- * @param {function(): void=} callback The callback that gets invoked in the
- *     end.
+ * @param {!chrome.passwordsPrivate.ChangeSavedPasswordParams} params The
+ *     dictionary which holds the changed parameters.
+ * @param {function(!chrome.passwordsPrivate.CredentialIds): void=} callback The
+ *     callback that gets invoked in the end.
  */
-chrome.passwordsPrivate.changeSavedPassword = function(
-    ids, new_username, new_password, callback) {};
+chrome.passwordsPrivate.changeSavedPassword = function(ids, params, callback) {};
 
 /**
- * Removes the saved password corresponding to |id|. If no saved password for
- * this pair exists, this function is a no-op.
+ * Removes the saved password corresponding to |id| in |fromStores|. If no saved
+ * password for this pair exists, this function is a no-op.
  * @param {number} id The id for the password entry being removed.
+ * @param {!chrome.passwordsPrivate.PasswordStoreSet} fromStores The store(s)
+ *     from which the password entry is being removed.
  */
-chrome.passwordsPrivate.removeSavedPassword = function(id) {};
-
-/**
- * Removes the saved password corresponding to |ids|. If no saved password
- * exists for a certain id, that id is ignored. Undoing this operation via
- * undoRemoveSavedPasswordOrException will restore all the removed passwords in
- * the batch.
- * @param {!Array<number>} ids
- */
-chrome.passwordsPrivate.removeSavedPasswords = function(ids) {};
+chrome.passwordsPrivate.removeSavedPassword = function(id, fromStores) {};
 
 /**
  * Removes the saved password exception corresponding to |id|. If no exception
- * with this id exists, this function is a no-op.
- * @param {number} id The id for the exception url entry being removed.
+ * with this id exists, this function is a no-op. This will remove exception
+ * from both stores.
+ * @param {number} id The id for the exception url entry is being removed.
  */
 chrome.passwordsPrivate.removePasswordException = function(id) {};
-
-/**
- * Removes the saved password exceptions corresponding to |ids|. If no exception
- * exists for a certain id, that id is ignored. Undoing this operation via
- * undoRemoveSavedPasswordOrException will restore all the removed exceptions in
- * the batch.
- * @param {!Array<number>} ids
- */
-chrome.passwordsPrivate.removePasswordExceptions = function(ids) {};
 
 /**
  * Undoes the last removal of saved password(s) or exception(s).
@@ -198,8 +264,7 @@ chrome.passwordsPrivate.undoRemoveSavedPasswordOrException = function() {};
  * @param {function(string): void} callback The callback that gets invoked with
  *     the retrieved password.
  */
-chrome.passwordsPrivate.requestPlaintextPassword = function(
-    id, reason, callback) {};
+chrome.passwordsPrivate.requestPlaintextPassword = function(id, reason, callback) {};
 
 /**
  * Returns the list of saved passwords.
@@ -216,18 +281,21 @@ chrome.passwordsPrivate.getSavedPasswordList = function(callback) {};
 chrome.passwordsPrivate.getPasswordExceptionList = function(callback) {};
 
 /**
- * Moves a list of passwords currently stored on the device to being stored in the
- * signed-in, non-syncing Google Account. For each |id|, the result is a no-op if any of these
- * is true: |id| is invalid; |id| corresponds to a password already stored in
- * the account; or the user is not using the account-scoped password storage.
- * @param {!Array<number>} ids The ids of the password entries being moved.
+ * Moves passwords currently stored on the device to being stored in the
+ * signed-in, non-syncing Google Account. For each id, the result is a no-op if
+ * any of these is true: |id| is invalid; |id| corresponds to a password already
+ * stored in the account; or the user is not using the account-scoped password
+ * storage.
+ * @param {!Array<number>} ids The ids for the password entries being moved.
  */
 chrome.passwordsPrivate.movePasswordsToAccount = function(ids) {};
 
 /**
  * Triggers the Password Manager password import functionality.
+ * @param {!chrome.passwordsPrivate.PasswordStoreSet} toStore
+ * @param {function(!chrome.passwordsPrivate.ImportResults): void} callback
  */
-chrome.passwordsPrivate.importPasswords = function() {};
+chrome.passwordsPrivate.importPasswords = function(toStore, callback) {};
 
 /**
  * Triggers the Password Manager password export functionality. Completion Will
@@ -291,8 +359,7 @@ chrome.passwordsPrivate.getWeakCredentials = function(callback) {};
  * @param {function(!chrome.passwordsPrivate.InsecureCredential): void} callback
  *     The callback that gets invoked with the result.
  */
-chrome.passwordsPrivate.getPlaintextInsecurePassword = function(
-    credential, reason, callback) {};
+chrome.passwordsPrivate.getPlaintextInsecurePassword = function(credential, reason, callback) {};
 
 /**
  * Requests to change the password of |credential| to |new_password|. Invokes
@@ -303,8 +370,7 @@ chrome.passwordsPrivate.getPlaintextInsecurePassword = function(
  * @param {function(): void=} callback The callback that gets invoked in the
  *     end.
  */
-chrome.passwordsPrivate.changeInsecureCredential = function(
-    credential, new_password, callback) {};
+chrome.passwordsPrivate.changeInsecureCredential = function(credential, new_password, callback) {};
 
 /**
  * Requests to remove |credential| from the password store. Invokes |callback|
@@ -312,8 +378,39 @@ chrome.passwordsPrivate.changeInsecureCredential = function(
  * @param {!chrome.passwordsPrivate.InsecureCredential} credential
  * @param {function(): void=} callback
  */
-chrome.passwordsPrivate.removeInsecureCredential = function(
-    credential, callback) {};
+chrome.passwordsPrivate.removeInsecureCredential = function(credential, callback) {};
+
+/**
+ * Requests to mute |credential| from the password store. Invokes |callback| on
+ * completion.
+ * @param {!chrome.passwordsPrivate.InsecureCredential} credential
+ * @param {function(): void=} callback
+ */
+chrome.passwordsPrivate.muteInsecureCredential = function(credential, callback) {};
+
+/**
+ * Requests to unmute |credential| from the password store. Invokes |callback|
+ * on completion.
+ * @param {!chrome.passwordsPrivate.InsecureCredential} credential
+ * @param {function(): void=} callback
+ */
+chrome.passwordsPrivate.unmuteInsecureCredential = function(credential, callback) {};
+
+/**
+ * Records that a change password flow was started for |credential|.
+ * @param {!chrome.passwordsPrivate.InsecureCredential} credential The
+ *     credential for which the flow was triggered.
+ * @param {boolean} isManualFlow
+ * @param {function(): void=} callback
+ */
+chrome.passwordsPrivate.recordChangePasswordFlowStarted = function(credential, isManualFlow, callback) {};
+
+/**
+ * Refreshes the cache for automatic password change scripts if it is stale.
+ * Invokes `callback` on completion.
+ * @param {function(): void=} callback
+ */
+chrome.passwordsPrivate.refreshScriptsIfNecessary = function(callback) {};
 
 /**
  * Starts a check for insecure passwords. Invokes |callback| on completion.
@@ -333,6 +430,43 @@ chrome.passwordsPrivate.stopPasswordCheck = function(callback) {};
  *     callback
  */
 chrome.passwordsPrivate.getPasswordCheckStatus = function(callback) {};
+
+/**
+ * Starts an automated password change for |credential|. Invokes |callback| on
+ * completion with a boolean parameter that signals whether the credential was
+ * changed successfully.
+ * @param {!chrome.passwordsPrivate.InsecureCredential} credential
+ * @param {function(boolean): void=} callback
+ */
+chrome.passwordsPrivate.startAutomatedPasswordChange = function(
+    credential, callback) {};
+
+/**
+ * Requests whether the account store is a default location for saving
+ * passwords. False means the device store is a default one. Must be called when
+ * the current user has already opted-in for account storage.
+ * @param {function(boolean): void} callback
+ */
+chrome.passwordsPrivate.isAccountStoreDefault = function(callback) {};
+
+/**
+ * Requests whether the given |url| meets the requirements to save a password
+ * for it (e.g. valid, has proper scheme etc.) and returns the corresponding
+ * URLCollection on success. Otherwise it raises an error.
+ * @param {string} url
+ * @param {function(!chrome.passwordsPrivate.UrlCollection): void} callback
+ */
+chrome.passwordsPrivate.getUrlCollection = function(url, callback) {};
+
+/**
+ * Saves a new password entry described by the given |options|. Invokes
+ * |callback| or raises an error depending on whether the operation succeeded.
+ * @param {!chrome.passwordsPrivate.AddPasswordOptions} options Details about a
+ *     new password and storage to be used.
+ * @param {function(): void=} callback The callback that gets invoked on
+ *     success.
+ */
+chrome.passwordsPrivate.addPassword = function(options, callback) {};
 
 /**
  * Fired when the saved passwords list has changed, meaning that an entry has

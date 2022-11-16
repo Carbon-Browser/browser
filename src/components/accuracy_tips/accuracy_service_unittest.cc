@@ -5,10 +5,10 @@
 #include "components/accuracy_tips/accuracy_service.h"
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/run_loop.h"
-#include "base/task/post_task.h"
 #include "base/task/task_traits.h"
 #include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
@@ -117,8 +117,8 @@ class AccuracyServiceTest : public content::RenderViewHostTestHarness {
   AccuracyServiceTest() = default;
 
   void SetUp() override {
-    content::RenderViewHostTestHarness::SetUp();
     SetUpFeatureList(feature_list_);
+    content::RenderViewHostTestHarness::SetUp();
 
     AccuracyService::RegisterProfilePrefs(prefs_.registry());
     unified_consent::UnifiedConsentService::RegisterPrefs(prefs_.registry());
@@ -165,7 +165,7 @@ class AccuracyServiceTest : public content::RenderViewHostTestHarness {
   sync_preferences::TestingPrefServiceSyncable prefs_;
   base::SimpleTestClock clock_;
 
-  MockAccuracyServiceDelegate* delegate_;
+  raw_ptr<MockAccuracyServiceDelegate> delegate_;
   scoped_refptr<MockSafeBrowsingDatabaseManager> sb_database_;
   std::unique_ptr<AccuracyService> service_;
 };
@@ -233,7 +233,7 @@ TEST_F(AccuracyServiceTest, TimeBetweenPrompts) {
 
   // Future calls will return that the rate limit is active.
   EXPECT_EQ(CheckAccuracyStatusSync(url), AccuracyTipStatus::kRateLimited);
-  clock()->Advance(base::TimeDelta::FromDays(1));
+  clock()->Advance(base::Days(1));
   EXPECT_EQ(CheckAccuracyStatusSync(url), AccuracyTipStatus::kRateLimited);
 
   // Until sufficient time passed and the tip can be shown again.
@@ -253,7 +253,7 @@ TEST_F(AccuracyServiceTest, OptOut) {
       .WillOnce(Invoke(&OptOutClicked));
   service()->MaybeShowAccuracyTip(web_contents());
 
-  clock()->Advance(base::TimeDelta::FromDays(1));
+  clock()->Advance(base::Days(1));
   EXPECT_EQ(CheckAccuracyStatusSync(url), AccuracyTipStatus::kOptOut);
 
   // Forwarding |kTimeBetweenPrompts| days will also not show the prompt again.
@@ -355,7 +355,7 @@ TEST_F(AccuracyServiceDisabledUiTest, TimeBetweenPrompts) {
 
   // Future calls will return that the rate limit is active.
   EXPECT_EQ(CheckAccuracyStatusSync(url), AccuracyTipStatus::kRateLimited);
-  clock()->Advance(base::TimeDelta::FromDays(1));
+  clock()->Advance(base::Days(1));
   EXPECT_EQ(CheckAccuracyStatusSync(url), AccuracyTipStatus::kRateLimited);
 
   // Until sufficient time passed and the tip can be shown again.
@@ -423,7 +423,7 @@ TEST_F(AccuracyServiceSurveyTest, SurveyTimeRange) {
   testing::Mock::VerifyAndClearExpectations(delegate());
 
   std::map<std::string, std::string> expected_product_specific_data = {
-      {"Tip shown for URL", gurl_.GetOrigin().spec()},
+      {"Tip shown for URL", gurl_.DeprecatedGetOriginAsURL().spec()},
       {"UI interaction", base::NumberToString(static_cast<int>(
                              AccuracyTipInteraction::kLearnMore))}};
 
@@ -487,7 +487,7 @@ TEST_F(AccuracyServiceSurveyTest, DontShowSurveyAfterDeletingHistoryForUrls) {
   history::DeletionInfo deletion_info = history::DeletionInfo::ForUrls(
       {history::URLRow(gurl_)}, std::set<GURL>());
   deletion_info.set_deleted_urls_origin_map({
-      {gurl_.GetOrigin(), {0, base::Time::Now()}},
+      {gurl_.DeprecatedGetOriginAsURL(), {0, base::Time::Now()}},
   });
   service()->OnURLsDeleted(nullptr, deletion_info);
   // ...and even though all other conditions apply, a survey can't be shown
@@ -504,7 +504,7 @@ TEST_F(AccuracyServiceSurveyTest,
   clock()->Advance(features::kMinTimeToShowSurvey.Get());
 
   // History deleted for the last day...
-  base::Time begin = clock()->Now() - base::TimeDelta::FromDays(1);
+  base::Time begin = clock()->Now() - base::Days(1);
   base::Time end = clock()->Now();
   history::DeletionInfo deletion_info(
       history::DeletionTimeRange(begin, end), false /* is_from_expiration */,
@@ -526,12 +526,12 @@ TEST_F(AccuracyServiceSurveyTest, ShowSurveyAfterDeletingHistoryForOtherUrls) {
   history::DeletionInfo deletion_info = history::DeletionInfo::ForUrls(
       {history::URLRow(other_gurl)}, std::set<GURL>());
   deletion_info.set_deleted_urls_origin_map({
-      {other_gurl.GetOrigin(), {0, base::Time::Now()}},
+      {other_gurl.DeprecatedGetOriginAsURL(), {0, base::Time::Now()}},
   });
   service()->OnURLsDeleted(nullptr, deletion_info);
 
   std::map<std::string, std::string> expected_product_specific_data = {
-      {"Tip shown for URL", gurl_.GetOrigin().spec()},
+      {"Tip shown for URL", gurl_.DeprecatedGetOriginAsURL().spec()},
       {"UI interaction", base::NumberToString(static_cast<int>(
                              AccuracyTipInteraction::kLearnMore))}};
 

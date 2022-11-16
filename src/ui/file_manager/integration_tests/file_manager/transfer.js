@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {ENTRIES, EntryType, RootPath, sendTestMessage, TestEntryInfo} from '../test_util.js';
+import {ENTRIES, EntryType, getCaller, pending, repeatUntil, RootPath, sendTestMessage, TestEntryInfo} from '../test_util.js';
 import {testcase} from '../testcase.js';
 
 import {expandTreeItem, isSinglePartitionFormat, navigateWithDirectoryTree, remoteCall, setupAndWaitUntilReady} from './background.js';
@@ -245,25 +245,25 @@ const TRANSFER_LOCATIONS = {
     volumeName: 'drive',
     initialEntries: BASIC_DRIVE_ENTRY_SET.concat([
       ENTRIES.sharedDirectory,
-    ])
+    ]),
   }),
 
   driveWithTeamDriveEntries: new TransferLocationInfo({
     breadcrumbsPath: '/My Drive',
     volumeName: 'drive',
-    initialEntries: SHARED_DRIVE_ENTRY_SET
+    initialEntries: SHARED_DRIVE_ENTRY_SET,
   }),
 
   driveSharedDirectory: new TransferLocationInfo({
     breadcrumbsPath: '/My Drive/Shared',
     volumeName: 'drive',
-    initialEntries: [ENTRIES.sharedDirectoryFile]
+    initialEntries: [ENTRIES.sharedDirectoryFile],
   }),
 
   downloads: new TransferLocationInfo({
     breadcrumbsPath: '/My files/Downloads',
     volumeName: 'downloads',
-    initialEntries: BASIC_LOCAL_ENTRY_SET
+    initialEntries: BASIC_LOCAL_ENTRY_SET,
   }),
 
   sharedWithMe: new TransferLocationInfo({
@@ -272,27 +272,27 @@ const TRANSFER_LOCATIONS = {
     initialEntries: SHARED_WITH_ME_ENTRY_SET.concat([
       ENTRIES.sharedDirectory,
       ENTRIES.sharedDirectoryFile,
-    ])
+    ]),
   }),
 
   driveOffline: new TransferLocationInfo({
     breadcrumbsPath: '/Offline',
     volumeName: 'drive_offline',
-    initialEntries: OFFLINE_ENTRY_SET
+    initialEntries: OFFLINE_ENTRY_SET,
   }),
 
   driveTeamDriveA: new TransferLocationInfo({
     breadcrumbsPath: '/Shared drives/Team Drive A',
     volumeName: 'Team Drive A',
     isTeamDrive: true,
-    initialEntries: SHARED_DRIVE_ENTRY_SET
+    initialEntries: SHARED_DRIVE_ENTRY_SET,
   }),
 
   driveTeamDriveB: new TransferLocationInfo({
     breadcrumbsPath: '/Shared drives/Team Drive B',
     volumeName: 'Team Drive B',
     isTeamDrive: true,
-    initialEntries: SHARED_DRIVE_ENTRY_SET
+    initialEntries: SHARED_DRIVE_ENTRY_SET,
   }),
 
   my_files: new TransferLocationInfo({
@@ -305,7 +305,7 @@ const TRANSFER_LOCATIONS = {
         nameText: 'Play files',
         lastModifiedTime: 'Jan 1, 1980, 11:59 PM',
         sizeText: '--',
-        typeText: 'Folder'
+        typeText: 'Folder',
       }),
       new TestEntryInfo({
         type: EntryType.DIRECTORY,
@@ -313,7 +313,7 @@ const TRANSFER_LOCATIONS = {
         nameText: 'Downloads',
         lastModifiedTime: 'Jan 1, 1980, 11:59 PM',
         sizeText: '--',
-        typeText: 'Folder'
+        typeText: 'Folder',
       }),
       new TestEntryInfo({
         type: EntryType.DIRECTORY,
@@ -321,7 +321,7 @@ const TRANSFER_LOCATIONS = {
         nameText: 'Linux files',
         lastModifiedTime: '...',
         sizeText: '--',
-        typeText: 'Folder'
+        typeText: 'Folder',
       }),
       new TestEntryInfo({
         type: EntryType.DIRECTORY,
@@ -329,9 +329,9 @@ const TRANSFER_LOCATIONS = {
         nameText: 'Trash',
         lastModifiedTime: '...',
         sizeText: '--',
-        typeText: 'Folder'
+        typeText: 'Folder',
       }),
-    ]
+    ],
   }),
 };
 Object.freeze(TRANSFER_LOCATIONS);
@@ -960,6 +960,25 @@ testcase.transferDragAndHover = async () => {
 };
 
 /**
+ * Tests dropping a file originated from the browser.
+ */
+testcase.transferDropBrowserFile = async () => {
+  const appId =
+      await setupAndWaitUntilReady(RootPath.DOWNLOADS, [ENTRIES.hello], []);
+
+  // Send drop event on current directory.
+  chrome.test.assertTrue(
+      await remoteCall.callRemoteTestUtil(
+          'fakeDropBrowserFile', appId,
+          ['browserfile', 'content', 'text/plain', '#file-list']),
+      'fakeDropBrowserFile failed');
+
+  // File should be created.
+  await remoteCall.waitForElement(
+      appId, '#file-list [file-name="browserfile"]');
+};
+
+/**
  * Tests that copying a deleted file shows an error.
  */
 testcase.transferDeletedFile = async () => {
@@ -994,11 +1013,22 @@ testcase.transferDeletedFile = async () => {
       await remoteCall.callRemoteTestUtil('execCommand', appId, ['paste']));
 
   // Check that the error appears in the feedback panel.
-  const element = await remoteCall.waitForElement(
-      appId, ['#progress-panel', 'xf-panel-item']);
-  chrome.test.assertEq(
-      `Whoops, ${entry.nameText} no longer exists.`,
-      element.attributes['primary-text']);
+  let element = {};
+  const caller = getCaller();
+  await repeatUntil(async () => {
+    element = await remoteCall.waitForElement(
+        appId, ['#progress-panel', 'xf-panel-item']);
+    const expectedMsg = `Whoops, ${entry.nameText} no longer exists.`;
+    const actualMsg = element.attributes['primary-text'];
+
+    if (actualMsg === expectedMsg) {
+      return;
+    }
+
+    return pending(
+        caller,
+        `Expected feedback panel msg: "${expectedMsg}", got "${actualMsg}"`);
+  });
 
   // Check that only one line of text is shown.
   chrome.test.assertFalse(!!element.attributes['secondary-text']);
@@ -1091,17 +1121,9 @@ testcase.transferToUsbHasDestinationText = async () => {
   const panel = await remoteCall.waitForElement(
       appId, ['#progress-panel', 'xf-panel-item']);
 
-  // Get FilesTransferDetails enabled state by checking detailed-panel
-  // attribute.
-  const isTransferDetailsEnabled = panel.attributes['detailed-panel'];
-
-  if (isTransferDetailsEnabled) {
-    chrome.test.assertTrue(
-        panel.attributes['primary-text'].includes('to fake-usb'),
-        'Feedback panel does not contain device name.');
-  } else {
-    chrome.test.assertEq('To fake-usb', panel.attributes['secondary-text']);
-  }
+  chrome.test.assertTrue(
+      panel.attributes['primary-text'].includes('to fake-usb'),
+      'Feedback panel does not contain device name.');
 };
 
 /**
@@ -1188,7 +1210,8 @@ testcase.transferNotSupportedOperationHasNoRemainingTimeText = async () => {
   await remoteCall.callRemoteTestUtil('sendProgressItem', null, [
     'item-id-1',
     /* ProgressItemType.FORMAT */ 'format',
-    /* ProgressItemState.PROGRESSING */ 'progressing', 'Formatting'
+    /* ProgressItemState.PROGRESSING */ 'progressing',
+    'Formatting',
   ]);
 
   // Check the progress panel is open.
@@ -1200,8 +1223,10 @@ testcase.transferNotSupportedOperationHasNoRemainingTimeText = async () => {
 
   // Show a |format| error panel.
   await remoteCall.callRemoteTestUtil('sendProgressItem', null, [
-    'item-id-2', /* ProgressItemType.FORMAT */ 'format',
-    /* ProgressItemState.ERROR */ 'error', 'Failed'
+    'item-id-2',
+    /* ProgressItemType.FORMAT */ 'format',
+    /* ProgressItemState.ERROR */ 'error',
+    'Failed',
   ]);
 
   // Check the progress panel is open.
@@ -1221,8 +1246,10 @@ testcase.transferUpdateSamePanelItem = async () => {
 
   // Show a |format| error in feedback panel.
   await remoteCall.callRemoteTestUtil('sendProgressItem', null, [
-    'item-id', /* ProgressItemType.FORMAT */ 'format',
-    /* ProgressItemState.ERROR */ 'error', 'Failed'
+    'item-id',
+    /* ProgressItemType.FORMAT */ 'format',
+    /* ProgressItemState.ERROR */ 'error',
+    'Failed',
   ]);
 
   // Check the error panel is open.
@@ -1231,8 +1258,10 @@ testcase.transferUpdateSamePanelItem = async () => {
 
   // Dispatch another |format| feedback panel with the same id and panel type.
   await remoteCall.callRemoteTestUtil('sendProgressItem', null, [
-    'item-id', /* ProgressItemType.FORMAT */ 'format',
-    /* ProgressItemState.ERROR */ 'error', 'Failed new message'
+    'item-id',
+    /* ProgressItemType.FORMAT */ 'format',
+    /* ProgressItemState.ERROR */ 'error',
+    'Failed new message',
   ]);
 
   // Check the progress panel is open.
@@ -1251,10 +1280,11 @@ testcase.transferShowPendingMessageForZeroRemainingTime = async () => {
 
   // Show a |copy| progress in feedback panel.
   await remoteCall.callRemoteTestUtil('sendProgressItem', null, [
-    'item-id', /* ProgressItemType.COPY */ 'copy',
+    'item-id',
+    /* ProgressItemType.COPY */ 'copy',
     /* ProgressItemState.PROGRESSING */ 'progressing',
     'Copying File1.txt to Downloads',
-    /* remainingTime*/ 0
+    /* remainingTime*/ 0,
   ]);
 
   // Check the error panel is open.

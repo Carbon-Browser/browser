@@ -28,6 +28,7 @@
 #include "content/public/browser/navigation_handle.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/models/image_model.h"
+#include "ui/color/color_id.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/views/bubble/bubble_frame_view.h"
 #include "ui/views/controls/button/md_text_button.h"
@@ -60,9 +61,10 @@ std::unique_ptr<views::View> CreateRow(const std::u16string& text,
       provider->GetDistanceMetric(views::DISTANCE_RELATED_LABEL_HORIZONTAL);
 
   auto icon_view = std::make_unique<NonAccessibleImageView>();
-  icon_view->SetImage(ui::ImageModel::FromVectorIcon(
-      icon, ui::NativeTheme::kColorId_DefaultIconColor, kVectorIconSize));
-  icon_view->SetProperty(views::kMarginsKey, gfx::Insets(0, 0, 0, icon_margin));
+  icon_view->SetImage(
+      ui::ImageModel::FromVectorIcon(icon, ui::kColorIcon, kVectorIconSize));
+  icon_view->SetProperty(views::kMarginsKey,
+                         gfx::Insets::TLBR(0, 0, 0, icon_margin));
   icon_view->SetProperty(views::kCrossAxisAlignmentKey,
                          views::LayoutAlignment::kStart);
   line->AddChildView(std::move(icon_view));
@@ -129,8 +131,8 @@ AccuracyTipBubbleView::AccuracyTipBubbleView(
   auto header_view = std::make_unique<ThemeTrackingNonAccessibleImageView>(
       *bundle.GetImageSkiaNamed(IDR_ACCURACY_TIP_ILLUSTRATION_LIGHT),
       *bundle.GetImageSkiaNamed(IDR_ACCURACY_TIP_ILLUSTRATION_DARK),
-      base::BindRepeating(&views::BubbleFrameView::GetBackgroundColor,
-                          base::Unretained(GetBubbleFrameView())));
+      base::BindRepeating(&views::BubbleDialogDelegate::GetBackgroundColor,
+                          base::Unretained(this)));
   set_fixed_width(header_view->GetPreferredSize().width());
   GetBubbleFrameView()->SetHeaderView(std::move(header_view));
 
@@ -141,7 +143,7 @@ AccuracyTipBubbleView::AccuracyTipBubbleView(
   SetLayoutManager(std::make_unique<views::FlexLayout>())
       ->SetOrientation(views::LayoutOrientation::kVertical)
       .SetCollapseMargins(true)
-      .SetDefault(views::kMarginsKey, gfx::Insets(vertical_margin, 0))
+      .SetDefault(views::kMarginsKey, gfx::Insets::VH(vertical_margin, 0))
       .SetDefault(
           views::kFlexBehaviorKey,
           views::FlexSpecification(views::MinimumFlexSizeRule::kScaleToZero,
@@ -161,11 +163,25 @@ AccuracyTipBubbleView::AccuracyTipBubbleView(
       l10n_util::GetStringUTF16(IDS_PAGE_INFO_ACCURACY_TIP_BODY_LINE_3),
       vector_icons::kFeedIcon));
 
+  permissions::PermissionRequestManager* permission_request_manager =
+      permissions::PermissionRequestManager::FromWebContents(web_contents);
+  if (permission_request_manager) {
+    permission_request_manager->AddObserver(this);
+  }
+
   Layout();
   SizeToContents();
 }
 
-AccuracyTipBubbleView::~AccuracyTipBubbleView() = default;
+AccuracyTipBubbleView::~AccuracyTipBubbleView() {
+  if (web_contents()) {
+    permissions::PermissionRequestManager* permission_request_manager =
+        permissions::PermissionRequestManager::FromWebContents(web_contents());
+    if (permission_request_manager) {
+      permission_request_manager->RemoveObserver(this);
+    }
+  }
+}
 
 void AccuracyTipBubbleView::OnWidgetDestroying(views::Widget* widget) {
   PageInfoBubbleViewBase::OnWidgetDestroying(widget);
@@ -195,6 +211,13 @@ void AccuracyTipBubbleView::OnWidgetDestroying(views::Widget* widget) {
   std::move(close_callback_).Run(action_taken_);
 }
 
+void AccuracyTipBubbleView::OnBubbleAdded() {
+  // The page requested a permission that triggered a permission prompt.
+  // Accuracy tips have lower priority and have to be closed.
+  action_taken_ = AccuracyTipInteraction::kPermissionRequested;
+  GetWidget()->Close();
+}
+
 void AccuracyTipBubbleView::OpenHelpCenter() {
   // TODO(crbug.com/1210891): Add link to the right info page.
   action_taken_ = AccuracyTipInteraction::kLearnMore;
@@ -209,17 +232,6 @@ void AccuracyTipBubbleView::OpenHelpCenter() {
 void AccuracyTipBubbleView::OnSecondaryButtonClicked(
     AccuracyTipInteraction action) {
   action_taken_ = action;
-  GetWidget()->Close();
-}
-
-void AccuracyTipBubbleView::DidStartNavigation(
-    content::NavigationHandle* handle) {
-  // TODO(https://crbug.com/1218946): With MPArch there may be multiple main
-  // frames. This caller was converted automatically to the primary main frame
-  // to preserve its semantics. Follow up to confirm correctness.
-  if (!handle->IsInPrimaryMainFrame() || handle->IsSameDocument()) {
-    return;
-  }
   GetWidget()->Close();
 }
 

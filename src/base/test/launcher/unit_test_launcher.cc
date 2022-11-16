@@ -20,12 +20,13 @@
 #include "base/logging.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/sequence_checker.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/system/sys_info.h"
 #include "base/task/single_thread_task_executor.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/test/allow_check_is_test_to_be_called.h"
 #include "base/test/launcher/test_launcher.h"
 #include "base/test/test_switches.h"
 #include "base/test/test_timeouts.h"
@@ -34,8 +35,12 @@
 #include "build/build_config.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-#if defined(OS_POSIX)
+#if BUILDFLAG(IS_POSIX)
 #include "base/files/file_descriptor_watcher_posix.h"
+#endif
+
+#if BUILDFLAG(IS_WIN)
+#include "base/debug/handle_hooks_win.h"
 #endif
 
 namespace base {
@@ -45,7 +50,7 @@ namespace {
 // This constant controls how many tests are run in a single batch by default.
 const size_t kDefaultTestBatchLimit = 10;
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
 void PrintUsage() {
   fprintf(
       stdout,
@@ -147,7 +152,9 @@ int LaunchUnitTestsInternal(RunTestSuiteCallback run_test_suite,
                             size_t retry_limit,
                             bool use_job_objects,
                             OnceClosure gtest_init) {
-#if defined(OS_ANDROID)
+  base::test::AllowCheckIsTestToBeCalled();
+
+#if BUILDFLAG(IS_ANDROID)
   // We can't easily fork on Android, just run the test suite directly.
   return std::move(run_test_suite).Run();
 #else
@@ -166,6 +173,9 @@ int LaunchUnitTestsInternal(RunTestSuiteCallback run_test_suite,
       force_single_process = true;
     }
   }
+#if BUILDFLAG(IS_WIN)
+  base::debug::HandleHooks::PatchLoadedModules();
+#endif  // BUILDFLAG(IS_WIN)
 
   if (CommandLine::ForCurrentProcess()->HasSwitch(kGTestHelpFlag) ||
       CommandLine::ForCurrentProcess()->HasSwitch(kGTestListTestsFlag) ||
@@ -199,7 +209,7 @@ int LaunchUnitTestsInternal(RunTestSuiteCallback run_test_suite,
   fflush(stdout);
 
   base::SingleThreadTaskExecutor executor(base::MessagePumpType::IO);
-#if defined(OS_POSIX)
+#if BUILDFLAG(IS_POSIX)
   FileDescriptorWatcher file_descriptor_watcher(executor.task_runner());
 #endif
   use_job_objects =
@@ -224,21 +234,42 @@ void InitGoogleTestChar(int* argc, char** argv) {
   testing::InitGoogleTest(argc, argv);
 }
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 void InitGoogleTestWChar(int* argc, wchar_t** argv) {
   testing::InitGoogleTest(argc, argv);
 }
-#endif  // defined(OS_WIN)
+#endif  // BUILDFLAG(IS_WIN)
 
 }  // namespace
 
 // Flag to avoid using job objects
 const char kDontUseJobObjectFlag[] = "dont-use-job-objects";
 
+MergeTestFilterSwitchHandler::~MergeTestFilterSwitchHandler() = default;
+void MergeTestFilterSwitchHandler::ResolveDuplicate(
+    base::StringPiece key,
+    CommandLine::StringPieceType new_value,
+    CommandLine::StringType& out_value) {
+  if (key != switches::kTestLauncherFilterFile) {
+    out_value = CommandLine::StringType(new_value);
+    return;
+  }
+  if (!out_value.empty()) {
+#if BUILDFLAG(IS_WIN)
+    StrAppend(&out_value, {L";"});
+#else
+    StrAppend(&out_value, {";"});
+#endif
+  }
+  StrAppend(&out_value, {new_value});
+}
+
 int LaunchUnitTests(int argc,
                     char** argv,
                     RunTestSuiteCallback run_test_suite,
                     size_t retry_limit) {
+  CommandLine::SetDuplicateSwitchHandler(
+      std::make_unique<MergeTestFilterSwitchHandler>());
   CommandLine::Init(argc, argv);
   size_t parallel_jobs = NumParallelJobs(/*cores_per_job=*/1);
   if (parallel_jobs == 0U) {
@@ -270,7 +301,7 @@ int LaunchUnitTestsWithOptions(int argc,
                                  BindOnce(&InitGoogleTestChar, &argc, argv));
 }
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 int LaunchUnitTests(int argc,
                     wchar_t** argv,
                     bool use_job_objects,
@@ -285,7 +316,7 @@ int LaunchUnitTests(int argc,
                                  kDefaultTestBatchLimit, 1U, use_job_objects,
                                  BindOnce(&InitGoogleTestWChar, &argc, argv));
 }
-#endif  // defined(OS_WIN)
+#endif  // BUILDFLAG(IS_WIN)
 
 DefaultUnitTestPlatformDelegate::DefaultUnitTestPlatformDelegate() = default;
 

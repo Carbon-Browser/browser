@@ -7,7 +7,7 @@
 #include "third_party/blink/public/common/privacy_budget/identifiability_metric_builder.h"
 #include "third_party/blink/public/common/privacy_budget/identifiability_study_settings.h"
 #include "third_party/blink/public/common/privacy_budget/identifiable_token_builder.h"
-#include "third_party/blink/public/mojom/web_feature/web_feature.mojom-blink.h"
+#include "third_party/blink/public/mojom/use_counter/metrics/web_feature.mojom-blink.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/navigator.h"
 #include "third_party/blink/renderer/core/frame/settings.h"
@@ -31,9 +31,8 @@ bool ShouldReturnFixedPluginData(Navigator& navigator) {
       }
     }
   }
-  // Otherwise, depend on the feature flag, which can be disabled via
-  // Finch killswitch.
-  return RuntimeEnabledFeatures::NavigatorPluginsFixedEnabled();
+  // Otherwise, return fixed plugin data.
+  return true;
 }
 }  // namespace
 
@@ -84,7 +83,7 @@ bool NavigatorPlugins::javaEnabled(Navigator& navigator) {
 namespace {
 
 void RecordPlugins(LocalDOMWindow* window, DOMPluginArray* plugins) {
-  if (!IdentifiabilityStudySettings::Get()->IsWebFeatureAllowed(
+  if (!IdentifiabilityStudySettings::Get()->ShouldSampleWebFeature(
           WebFeature::kNavigatorPlugins) ||
       !window) {
     return;
@@ -104,14 +103,15 @@ void RecordPlugins(LocalDOMWindow* window, DOMPluginArray* plugins) {
     }
   }
   IdentifiabilityMetricBuilder(window->UkmSourceID())
-      .SetWebfeature(WebFeature::kNavigatorPlugins, builder.GetToken())
+      .AddWebFeature(WebFeature::kNavigatorPlugins, builder.GetToken())
       .Record(window->UkmRecorder());
 }
 
 void RecordMimeTypes(LocalDOMWindow* window, DOMMimeTypeArray* mime_types) {
   constexpr IdentifiableSurface surface = IdentifiableSurface::FromTypeAndToken(
       IdentifiableSurface::Type::kWebFeature, WebFeature::kNavigatorMimeTypes);
-  if (!IdentifiabilityStudySettings::Get()->ShouldSample(surface) || !window) {
+  if (!IdentifiabilityStudySettings::Get()->ShouldSampleSurface(surface) ||
+      !window) {
     return;
   }
   IdentifiableTokenBuilder builder;
@@ -129,7 +129,7 @@ void RecordMimeTypes(LocalDOMWindow* window, DOMMimeTypeArray* mime_types) {
     }
   }
   IdentifiabilityMetricBuilder(window->UkmSourceID())
-      .Set(surface, builder.GetToken())
+      .Add(surface, builder.GetToken())
       .Record(window->UkmRecorder());
 }
 

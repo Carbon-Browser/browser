@@ -6,7 +6,6 @@
 
 #include "base/bind.h"
 #include "base/command_line.h"
-#include "base/task/post_task.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "components/enterprise/browser/enterprise_switches.h"
 
@@ -115,6 +114,13 @@ bool FakeBrowserDMTokenStorage::MockDelegate::InitEnrollmentErrorOption() {
 BrowserDMTokenStorage::StoreTask
 FakeBrowserDMTokenStorage::MockDelegate::SaveDMTokenTask(
     const std::string& token,
+    const std::string& client_id) {
+  return base::BindOnce([](bool enabled) -> bool { return enabled; },
+                        storage_enabled_);
+}
+
+BrowserDMTokenStorage::StoreTask
+FakeBrowserDMTokenStorage::MockDelegate::DeleteDMTokenTask(
     const std::string& client_id) {
   return base::BindOnce([](bool enabled) -> bool { return enabled; },
                         storage_enabled_);

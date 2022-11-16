@@ -5,8 +5,7 @@
 #ifndef CHROME_BROWSER_ASH_LOGIN_LOGIN_PREF_NAMES_H_
 #define CHROME_BROWSER_ASH_LOGIN_LOGIN_PREF_NAMES_H_
 
-namespace chromeos {
-
+namespace ash {
 namespace prefs {
 
 extern const char kLastLoginInputMethod[];
@@ -14,6 +13,9 @@ extern const char kOobeComplete[];
 extern const char kOobeOnboardingTime[];
 extern const char kOobeMarketingOptInScreenFinished[];
 extern const char kOobeMarketingOptInChoice[];
+// TODO(https://crbug.com/1322394): deprecate this pref once update from
+// CloudReady won't be available anymore.
+extern const char kOobeRevenUpdatedToFlex[];
 extern const char kOobeScreenPending[];
 extern const char kGaiaOfflineSigninTimeLimitDays[];
 extern const char kGaiaLastOnlineSignInTime[];
@@ -26,31 +28,23 @@ extern const char kSamlPasswordExpirationAdvanceWarningDays[];
 extern const char kLockScreenReauthenticationEnabled[];
 extern const char kSamlPasswordSyncToken[];
 extern const char kActivityTimeAfterOnboarding[];
+extern const char kOobeGuestMetricsEnabled[];
+extern const char kOobeGuestAcceptedTos[];
+// TODO(https://crbug.com/1322394): deprecate this pref once update from
+// CloudReady won't be available anymore.
+extern const char kRevenOobeConsolidatedConsentAccepted[];
+extern const char kUrlParameterToAutofillSAMLUsername[];
 
 }  // namespace prefs
-
-}  // namespace chromeos
+}  // namespace ash
 
 // TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
 // source migration is finished.
-namespace ash {
+namespace chromeos {
 namespace prefs {
-using ::chromeos::prefs::kGaiaLastOnlineSignInTime;
-using ::chromeos::prefs::kGaiaLockScreenOfflineSigninTimeLimitDays;
-using ::chromeos::prefs::kGaiaOfflineSigninTimeLimitDays;
-using ::chromeos::prefs::kLastLoginInputMethod;
-using ::chromeos::prefs::kLockScreenReauthenticationEnabled;
-using ::chromeos::prefs::kOobeMarketingOptInChoice;
-using ::chromeos::prefs::kOobeMarketingOptInScreenFinished;
-using ::chromeos::prefs::kOobeOnboardingTime;
-using ::chromeos::prefs::kOobeScreenPending;
-using ::chromeos::prefs::kSamlInSessionPasswordChangeEnabled;
-using ::chromeos::prefs::kSAMLLastGAIASignInTime;
-using ::chromeos::prefs::kSamlLockScreenOfflineSigninTimeLimitDays;
-using ::chromeos::prefs::kSAMLOfflineSigninTimeLimit;
-using ::chromeos::prefs::kSamlPasswordExpirationAdvanceWarningDays;
-using ::chromeos::prefs::kSamlPasswordSyncToken;
-}
-}  // namespace ash
+using ::ash::prefs::kLastLoginInputMethod;
+using ::ash::prefs::kSamlInSessionPasswordChangeEnabled;
+}  // namespace prefs
+}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_LOGIN_PREF_NAMES_H_

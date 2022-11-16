@@ -33,12 +33,12 @@
 #include "ui/views/controls/image_view.h"
 #include "ui/views/controls/scroll_view.h"
 #include "ui/views/layout/box_layout.h"
+#include "ui/views/view_utils.h"
 
 using device::mojom::BluetoothDeviceInfo;
 using device::mojom::BluetoothSystem;
 
 namespace ash {
-namespace tray {
 namespace {
 
 const int kDisabledPanelLabelBaselineY = 20;
@@ -51,32 +51,32 @@ const gfx::VectorIcon& GetBluetoothDeviceIcon(
     BluetoothDeviceInfo::ConnectionState connection_state) {
   switch (device_type) {
     case BluetoothDeviceInfo::DeviceType::kComputer:
-      return ash::kSystemMenuComputerIcon;
+      return ash::kSystemMenuComputerLegacyIcon;
     case BluetoothDeviceInfo::DeviceType::kPhone:
-      return ash::kSystemMenuPhoneIcon;
+      return ash::kSystemMenuPhoneLegacyIcon;
     case BluetoothDeviceInfo::DeviceType::kAudio:
     case BluetoothDeviceInfo::DeviceType::kCarAudio:
-      return ash::kSystemMenuHeadsetIcon;
+      return ash::kSystemMenuHeadsetLegacyIcon;
     case BluetoothDeviceInfo::DeviceType::kVideo:
-      return ash::kSystemMenuVideocamIcon;
+      return ash::kSystemMenuVideocamLegacyIcon;
     case BluetoothDeviceInfo::DeviceType::kJoystick:
     case BluetoothDeviceInfo::DeviceType::kGamepad:
-      return ash::kSystemMenuGamepadIcon;
+      return ash::kSystemMenuGamepadLegacyIcon;
     case BluetoothDeviceInfo::DeviceType::kKeyboard:
     case BluetoothDeviceInfo::DeviceType::kKeyboardMouseCombo:
-      return ash::kSystemMenuKeyboardIcon;
+      return ash::kSystemMenuKeyboardLegacyIcon;
     case BluetoothDeviceInfo::DeviceType::kTablet:
-      return ash::kSystemMenuTabletIcon;
+      return ash::kSystemMenuTabletLegacyIcon;
     case BluetoothDeviceInfo::DeviceType::kMouse:
-      return ash::kSystemMenuMouseIcon;
+      return ash::kSystemMenuMouseLegacyIcon;
     case BluetoothDeviceInfo::DeviceType::kModem:
     case BluetoothDeviceInfo::DeviceType::kPeripheral:
-      return ash::kSystemMenuBluetoothIcon;
+      return ash::kSystemMenuBluetoothLegacyIcon;
     default:
       return connection_state ==
                      BluetoothDeviceInfo::ConnectionState::kConnected
-                 ? ash::kSystemMenuBluetoothConnectedIcon
-                 : ash::kSystemMenuBluetoothIcon;
+                 ? ash::kSystemMenuBluetoothConnectedLegacyIcon
+                 : ash::kSystemMenuBluetoothLegacyIcon;
   }
 }
 
@@ -104,13 +104,13 @@ views::View* CreateDisabledPanel() {
           AshColorProvider::ContentLayerType::kTextColorPrimary)));
   TrayPopupUtils::SetLabelFontList(
       label, TrayPopupUtils::FontStyle::kDetailedViewLabel);
-  label->SetBorder(views::CreateEmptyBorder(
-      kDisabledPanelLabelBaselineY - label->GetBaseline(), 0, 0, 0));
+  label->SetBorder(views::CreateEmptyBorder(gfx::Insets::TLBR(
+      kDisabledPanelLabelBaselineY - label->GetBaseline(), 0, 0, 0)));
 
   // Make top padding of the icon equal to the height of the label so that the
   // icon is vertically aligned to center of the container.
-  image_view->SetBorder(
-      views::CreateEmptyBorder(label->GetPreferredSize().height(), 0, 0, 0));
+  image_view->SetBorder(views::CreateEmptyBorder(
+      gfx::Insets::TLBR(label->GetPreferredSize().height(), 0, 0, 0)));
   return container;
 }
 
@@ -227,7 +227,7 @@ void BluetoothDetailedViewLegacy::UpdateDeviceScrollList(
     index = AddSameTypeDevicesToScrollList(paired_not_connected_devices,
                                            old_device_map, index, false, false);
   } else if (paired_devices_heading_) {
-    scroll_content()->RemoveChildView(paired_devices_heading_);
+    scroll_content()->RemoveChildViewT(paired_devices_heading_);
     paired_devices_heading_ = nullptr;
   }
 
@@ -245,7 +245,7 @@ void BluetoothDetailedViewLegacy::UpdateDeviceScrollList(
 
   if (unpaired_devices_heading_ &&
       (discovered_not_paired_devices.empty() || !has_paired_devices)) {
-    scroll_content()->RemoveChildView(unpaired_devices_heading_);
+    scroll_content()->RemoveChildViewT(unpaired_devices_heading_);
     unpaired_devices_heading_ = nullptr;
   }
 
@@ -259,14 +259,14 @@ void BluetoothDetailedViewLegacy::UpdateDeviceScrollList(
       scroll_content()->ReorderChildView(bluetooth_discovering_label_, index++);
     }
   } else if (bluetooth_discovering_label_) {
-    scroll_content()->RemoveChildView(bluetooth_discovering_label_);
+    scroll_content()->RemoveChildViewT(bluetooth_discovering_label_);
     bluetooth_discovering_label_ = nullptr;
   }
 
   // Remove views for devices from old_device_map that are not in device_map_.
   for (auto& view_and_address : old_device_map) {
     if (device_map_.find(view_and_address.first) == device_map_.end()) {
-      scroll_content()->RemoveChildView(view_and_address.first);
+      scroll_content()->RemoveChildViewT(view_and_address.first);
     }
   }
 
@@ -318,7 +318,11 @@ int BluetoothDetailedViewLegacy::AddSameTypeDevicesToScrollList(
       container = AddScrollListItem(icon, device_name);
     } else {
       container->text_label()->SetText(device_name);
-      container->left_icon()->SetImage(gfx::CreateVectorIcon(
+
+      DCHECK(views::IsViewClass<views::ImageView>(container->left_view()));
+      views::ImageView* left_icon =
+          static_cast<views::ImageView*>(container->left_view());
+      left_icon->SetImage(gfx::CreateVectorIcon(
           icon, AshColorProvider::Get()->GetContentLayerColor(
                     AshColorProvider::ContentLayerType::kIconColorPrimary)));
     }
@@ -454,5 +458,4 @@ void BluetoothDetailedViewLegacy::CreateExtraTitleRowButtons() {
   tri_view()->AddView(TriView::Container::END, settings_);
 }
 
-}  // namespace tray
 }  // namespace ash

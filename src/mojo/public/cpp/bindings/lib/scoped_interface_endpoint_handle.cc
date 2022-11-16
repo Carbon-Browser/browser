@@ -4,6 +4,8 @@
 
 #include "mojo/public/cpp/bindings/scoped_interface_endpoint_handle.h"
 
+#include <string>
+
 #include "base/bind.h"
 #include "base/check.h"
 #include "base/synchronization/lock.h"
@@ -24,6 +26,9 @@ class ScopedInterfaceEndpointHandle::State
   State(InterfaceId id,
         scoped_refptr<AssociatedGroupController> group_controller)
       : id_(id), group_controller_(group_controller) {}
+
+  State(const State&) = delete;
+  State& operator=(const State&) = delete;
 
   void InitPendingState(scoped_refptr<State> peer) {
     DCHECK(!lock_);
@@ -276,8 +281,6 @@ class ScopedInterfaceEndpointHandle::State
 
   InterfaceId id_ = kInvalidInterfaceId;
   scoped_refptr<AssociatedGroupController> group_controller_;
-
-  DISALLOW_COPY_AND_ASSIGN(State);
 };
 
 // ScopedInterfaceEndpointHandle -----------------------------------------------
@@ -348,8 +351,8 @@ void ScopedInterfaceEndpointHandle::reset() {
 
 void ScopedInterfaceEndpointHandle::ResetWithReason(
     uint32_t custom_reason,
-    const std::string& description) {
-  ResetInternal(DisconnectReason(custom_reason, description));
+    base::StringPiece description) {
+  ResetInternal(DisconnectReason(custom_reason, std::string(description)));
 }
 
 ScopedInterfaceEndpointHandle::ScopedInterfaceEndpointHandle(

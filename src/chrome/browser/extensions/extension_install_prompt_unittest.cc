@@ -10,7 +10,6 @@
 #include <utility>
 
 #include "base/bind.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
 #include "base/test/scoped_feature_list.h"
@@ -83,6 +82,12 @@ void SetImage(gfx::Image* image_out,
 class ExtensionInstallPromptUnitTest : public testing::Test {
  public:
   ExtensionInstallPromptUnitTest() {}
+
+  ExtensionInstallPromptUnitTest(const ExtensionInstallPromptUnitTest&) =
+      delete;
+  ExtensionInstallPromptUnitTest& operator=(
+      const ExtensionInstallPromptUnitTest&) = delete;
+
   ~ExtensionInstallPromptUnitTest() override {}
 
   // testing::Test:
@@ -96,8 +101,6 @@ class ExtensionInstallPromptUnitTest : public testing::Test {
  private:
   content::BrowserTaskEnvironment task_environment_;
   std::unique_ptr<TestingProfile> profile_;
-
-  DISALLOW_COPY_AND_ASSIGN(ExtensionInstallPromptUnitTest);
 };
 
 }  // namespace

@@ -16,19 +16,13 @@
       <ph name="URL">$1<ex>maps.google.com</ex></ph> wants to see text and images copied to the clipboard
     </message>
     <message name="IDS_NFC_INFOBAR_TEXT" desc="Text requesting permission for a site to use NFC">
-      <ph name="URL">$1<ex>google.com</ex></ph> wants to send and receive info when you tap your phone on an NFC device
+      <ph name="URL">$1<ex>google.com</ex></ph> wants to see and change information on NFC devices that you tap with your phone
     </message>
     <message name="IDS_VR_INFOBAR_TEXT" desc="Text requesting permission for a site to use VR">
       <ph name="URL">$1<ex>google.com</ex></ph> wants to use your virtual reality device and data
     </message>
     <message name="IDS_AR_INFOBAR_TEXT" desc="Text requesting permission for a site to use AR">
       <ph name="URL">$1<ex>google.com</ex></ph> wants to create a 3D map of your surroundings and track camera position
-    </message>
-    <!-- TODO(https://bugs.chromium.org/p/chromium/issues/detail?id=1106874) -->
-    <message name="IDS_AR_AND_MEDIA_CAPTURE_VIDEO_INFOBAR_TEXT" desc="Text requesting permission for a site to use AR and the Camera Access Feature">
-      <ph name="URL">$1<ex>google.com</ex></ph> wants to:
-      • Create a 3D map of your surroundings and track camera position
-      • Use your camera
     </message>
     <message name="IDS_IDLE_DETECTION_INFOBAR_TEXT" desc="Text requesting permission for a site to know when the user is idle.">
       <ph name="URL">$1<ex>google.com</ex></ph> wants to know when you're actively using this device
@@ -57,7 +51,7 @@
     <message name="IDS_STORAGE_ACCESS_INFOBAR_TEXT" desc="Permission request shown if the user is visiting a site needs access to its data while it is embedded into another site.">
       <ph name="EMBEDDED_URL">$1<ex>news.site</ex></ph> wants to use cookies and site data on <ph name="TOP_LEVEL_URL">$2<ex>content_domain.site</ex></ph>
     </message>
-    <message name="IDS_INFOBAR_UPDATE_PERMISSIONS_BUTTON_TEXT" desc="Button text shown when Carbon Browser Browser Browser does not have the necessary permission required to complete the requested tasks (e.g. a website has request location information, but Carbon Browser Browser Browser is missing that Android permission).">
+    <message name="IDS_INFOBAR_UPDATE_PERMISSIONS_BUTTON_TEXT" desc="Button text shown when Carbon Browser does not have the necessary permission required to complete the requested tasks (e.g. a website has request location information, but Carbon Browser is missing that Android permission).">
       Continue
     </message>
     <message name="IDS_MEDIA_CAPTURE_AUDIO_AND_VIDEO_INFOBAR_TEXT" desc="Text requesting permission for a site to access the computer's microphone and camera.">
@@ -67,23 +61,23 @@
       <ph name="ORIGIN">$1<ex>https://backgroundfetch.com</ex></ph> wants to download multiple files
     </message>
 
-    <message name="IDS_MESSAGE_MISSING_CAMERA_PERMISSION_TITLE" desc="Title text shown in a prompt ui to ask whether user agrees to grant Android camera permission when a website has requested access to camera, but Carbon Browser Browser Browser is missing the Android camera permission.">
+    <message name="IDS_MESSAGE_MISSING_CAMERA_PERMISSION_TITLE" desc="Title text shown in a prompt ui to ask whether user agrees to grant Android camera permission when a website has requested access to camera, but Carbon Browser is missing the Android camera permission.">
       Allow camera?
     </message>
-    <message name="IDS_MESSAGE_MISSING_STORAGE_ACCESS_PERMISSION_TITLE" desc="Title text shown in a prompt ui to ask whether user agrees to grant Android storage access permission when a website has requested access to storage access, but Carbon Browser Browser Browser is missing the Android storage access permission.">
+    <message name="IDS_MESSAGE_MISSING_STORAGE_ACCESS_PERMISSION_TITLE" desc="Title text shown in a prompt ui to ask whether user agrees to grant Android storage access permission when a website has requested access to storage access, but Carbon Browser is missing the Android storage access permission.">
       Allow storage access?
     </message>
-    <message name="IDS_MESSAGE_MISSING_MICROPHONE_PERMISSION_TITLE" desc="Title text shown in a prompt ui to ask whether user agrees to grant Android microphone permission when a website has requested access to microphone, but Carbon Browser Browser Browser is missing the Android microphone permission.">
+    <message name="IDS_MESSAGE_MISSING_MICROPHONE_PERMISSION_TITLE" desc="Title text shown in a prompt ui to ask whether user agrees to grant Android microphone permission when a website has requested access to microphone, but Carbon Browser is missing the Android microphone permission.">
       Allow microphone?
     </message>
-    <message name="IDS_MESSAGE_MISSING_LOCATION_PERMISSION_TITLE" desc="Title text shown in a prompt ui to ask whether user agrees to grant Android location permission when a website has requested access to location, but Carbon Browser Browser Browser is missing the Android location permission.">
+    <message name="IDS_MESSAGE_MISSING_LOCATION_PERMISSION_TITLE" desc="Title text shown in a prompt ui to ask whether user agrees to grant Android location permission when a website has requested access to location, but Carbon Browser is missing the Android location permission.">
       Allow location?
     </message>
-    <message name="IDS_MESSAGE_MISSING_MICROPHONE_CAMERA_PERMISSION_TITLE" desc="Title text shown in a prompt ui to ask whether user agrees to grant Android microphone and camera permission when a website has requested access to microphone and camera, but Carbon Browser Browser Browser is missing the Android microphone and camera permission.">
+    <message name="IDS_MESSAGE_MISSING_MICROPHONE_CAMERA_PERMISSION_TITLE" desc="Title text shown in a prompt ui to ask whether user agrees to grant Android microphone and camera permission when a website has requested access to microphone and camera, but Carbon Browser is missing the Android microphone and camera permission.">
       Allow 2 permissions?
     </message>
 </if>
-  <if expr="is_android or chromeos or lacros or is_win">
+  <if expr="is_android or chromeos_ash or chromeos_lacros or is_win">
     <message name="IDS_PROTECTED_MEDIA_IDENTIFIER_PERMISSION_FRAGMENT" desc="Permission fragment shown in the permissions bubble when a web page requests access to the computer's protected media identifier.">
       Know your unique device identifier
     </message>
@@ -133,7 +127,7 @@ Do you want to allow <ph name="EMBEDDED_URL">$1<ex>news.site</ex></ph> to use co
 This will otherwise be blocked by your privacy settings. This will allow the content you interacted with to work correctly, but may allow <ph name="EMBEDDED_URL">$1<ex>news.site</ex></ph> to track your activity.
   </message>
   <message name="IDS_WINDOW_PLACEMENT_PERMISSION_FRAGMENT" desc="Permission request shown if the user is visiting a site that wants to place windows. Follows a prompt: 'This site would like to:'">
-    Open and place windows on your screens
+    Use info about your screens to open and place windows
   </message>
   <message name="IDS_FONT_ACCESS_PERMISSION_FRAGMENT" desc="Permission request shown if the user is visiting a site that wants to access locally installed font data. Follows a prompt: 'This site would like to:'">
     Use the fonts on your computer so you can create high-fidelity content
@@ -258,6 +252,13 @@ This will otherwise be blocked by your privacy settings. This will allow the con
     </message>
     <message name="IDS_IDLE_DETECTION_PERMISSION_CHIP" desc="Button text representing a request for using using idle detection from a website. When clicked, shows a permission prompt bubble with more information.">
       Know your device use?
+    </message>
+
+    <message name="IDS_GEOLOCATION_PERMISSION_BLOCKED_CHIP" desc="Button text representing a blocked or expired request for the user's physical location from a website. When clicked, shows a permission prompt bubble with more information.">
+      Location blocked
+    </message>
+    <message name="IDS_NOTIFICATION_PERMISSIONS_BLOCKED_CHIP" desc="Button text representing a blocked or expired request for showing notifications from a website. When clicked, shows a permission prompt bubble with more information.">
+      Notifications blocked
     </message>
   </if>
 

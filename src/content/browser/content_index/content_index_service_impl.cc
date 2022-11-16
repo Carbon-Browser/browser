@@ -7,7 +7,6 @@
 #include <memory>
 
 #include "base/bind.h"
-#include "base/task/post_task.h"
 #include "content/browser/bad_message.h"
 #include "content/browser/content_index/content_index_database.h"
 #include "content/browser/storage_partition_impl.h"
@@ -48,14 +47,23 @@ void ContentIndexServiceImpl::CreateForFrame(
 
   RenderProcessHost* render_process_host = render_frame_host->GetProcess();
   DCHECK(render_process_host);
+
+  if (render_frame_host->IsNestedWithinFencedFrame()) {
+    mojo::ReportBadMessage(
+        "Content Index API is not allowed in a fenced frame");
+    return;
+  }
+
   auto* storage_partition = static_cast<StoragePartitionImpl*>(
       render_process_host->GetStoragePartition());
 
-  mojo::MakeSelfOwnedReceiver(std::make_unique<ContentIndexServiceImpl>(
-                                  render_frame_host->GetLastCommittedOrigin(),
-                                  storage_partition->GetContentIndexContext(),
-                                  storage_partition->GetServiceWorkerContext()),
-                              std::move(receiver));
+  mojo::MakeSelfOwnedReceiver(
+      std::make_unique<ContentIndexServiceImpl>(
+          render_frame_host->GetLastCommittedOrigin(),
+          storage_partition->GetContentIndexContext(),
+          storage_partition->GetServiceWorkerContext(),
+          render_frame_host->GetParentOrOuterDocument() == nullptr),
+      std::move(receiver));
 }
 
 // static
@@ -73,20 +81,33 @@ void ContentIndexServiceImpl::CreateForWorker(
   auto* storage_partition = static_cast<StoragePartitionImpl*>(
       render_process_host->GetStoragePartition());
 
+  scoped_refptr<ServiceWorkerRegistration> registration =
+      storage_partition->GetServiceWorkerContext()->GetLiveRegistration(
+          info.registration_id);
+  if (registration && registration->ancestor_frame_type() ==
+                          blink::mojom::AncestorFrameType::kFencedFrame) {
+    mojo::ReportBadMessage(
+        "Content Index API is not allowed in a fenced frame");
+    return;
+  }
+
   mojo::MakeSelfOwnedReceiver(std::make_unique<ContentIndexServiceImpl>(
                                   info.storage_key.origin(),
                                   storage_partition->GetContentIndexContext(),
-                                  storage_partition->GetServiceWorkerContext()),
+                                  storage_partition->GetServiceWorkerContext(),
+                                  info.storage_key.IsFirstPartyContext()),
                               std::move(receiver));
 }
 
 ContentIndexServiceImpl::ContentIndexServiceImpl(
     const url::Origin& origin,
     scoped_refptr<ContentIndexContextImpl> content_index_context,
-    scoped_refptr<ServiceWorkerContextWrapper> service_worker_context)
+    scoped_refptr<ServiceWorkerContextWrapper> service_worker_context,
+    bool is_top_level_context)
     : origin_(origin),
       content_index_context_(std::move(content_index_context)),
-      service_worker_context_(std::move(service_worker_context)) {
+      service_worker_context_(std::move(service_worker_context)),
+      is_top_level_context_(is_top_level_context) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 }
 
@@ -129,16 +150,15 @@ void ContentIndexServiceImpl::Add(
     }
   }
 
-  if (!launch_url.is_valid() ||
-      !origin_.IsSameOriginWith(url::Origin::Create(launch_url.GetOrigin()))) {
+  if (!launch_url.is_valid() || !origin_.IsSameOriginWith(launch_url)) {
     mojo::ReportBadMessage("Invalid launch URL");
     std::move(callback).Run(blink::mojom::ContentIndexError::INVALID_PARAMETER);
     return;
   }
 
   content_index_context_->database().AddEntry(
-      service_worker_registration_id, origin_, std::move(description), icons,
-      launch_url, std::move(callback));
+      service_worker_registration_id, origin_, is_top_level_context_,
+      std::move(description), icons, launch_url, std::move(callback));
 }
 
 void ContentIndexServiceImpl::Delete(int64_t service_worker_registration_id,

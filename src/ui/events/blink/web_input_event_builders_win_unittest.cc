@@ -32,7 +32,7 @@ TEST(WebInputEventBuilderTest, TestMouseEventScale) {
   // Synthesize a mouse move with x = 300 and y = 200.
   WebMouseEvent mouse_move = ui::WebMouseEventBuilder::Build(
       ::GetDesktopWindow(), WM_MOUSEMOVE, 0, MAKELPARAM(300, 200),
-      base::TimeTicks() + base::TimeDelta::FromSeconds(100),
+      base::TimeTicks() + base::Seconds(100),
       blink::WebPointerProperties::PointerType::kMouse);
 
   // The WebMouseEvent.position field should be in pixels on return and hence
@@ -54,7 +54,8 @@ TEST(WebInputEventBuilderTest, TestMouseEventScale) {
 
 TEST(WebInputEventBuilderTest, TestPercentMouseWheelScroll) {
   base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitAndEnableFeature(features::kPercentBasedScrolling);
+  scoped_feature_list.InitAndEnableFeature(
+      features::kWindowsScrollingPersonality);
 
   // We must discount the system scroll settings from the test, as we don't them
   // failing if the test machine has different settings.
@@ -65,7 +66,7 @@ TEST(WebInputEventBuilderTest, TestPercentMouseWheelScroll) {
 
   WebMouseWheelEvent mouse_wheel = WebMouseWheelEventBuilder::Build(
       ::GetDesktopWindow(), WM_MOUSEWHEEL, MAKEWPARAM(0, -WHEEL_DELTA),
-      MAKELPARAM(0, 0), base::TimeTicks() + base::TimeDelta::FromSeconds(100),
+      MAKELPARAM(0, 0), base::TimeTicks() + base::Seconds(100),
       blink::WebPointerProperties::PointerType::kMouse);
   EXPECT_EQ(ui::ScrollGranularity::kScrollByPercentage,
             mouse_wheel.delta_units);
@@ -78,7 +79,7 @@ TEST(WebInputEventBuilderTest, TestPercentMouseWheelScroll) {
   // For a horizontal scroll, Windows is <- -/+ ->, WebKit <- +/- ->.
   mouse_wheel = WebMouseWheelEventBuilder::Build(
       ::GetDesktopWindow(), WM_MOUSEHWHEEL, MAKEWPARAM(0, -WHEEL_DELTA),
-      MAKELPARAM(0, 0), base::TimeTicks() + base::TimeDelta::FromSeconds(100),
+      MAKELPARAM(0, 0), base::TimeTicks() + base::Seconds(100),
       blink::WebPointerProperties::PointerType::kMouse);
   EXPECT_EQ(ui::ScrollGranularity::kScrollByPercentage,
             mouse_wheel.delta_units);
@@ -103,8 +104,7 @@ void VerifyWebMouseWheelEventBuilderHistograms(
     WebMouseWheelEventBuilder::Build(
         ::GetDesktopWindow(), message, MAKEWPARAM(0, -WHEEL_DELTA),
         MAKELPARAM(0, 0),
-        base::TimeTicks() + base::TimeDelta::FromMilliseconds(event_timestamp),
-        type);
+        base::TimeTicks() + base::Milliseconds(event_timestamp), type);
   }
 
   for (std::map<int, int>::iterator it = histogram_expectations.begin();

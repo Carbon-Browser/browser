@@ -43,7 +43,9 @@
 
 @interface ActivityServiceMediator ()
 
-@property(nonatomic, weak) id<BrowserCommands, FindInPageCommands> handler;
+@property(nonatomic, weak)
+    id<BrowserCommands, BrowserCoordinatorCommands, FindInPageCommands>
+        handler;
 
 @property(nonatomic, weak) id<BookmarksCommands> bookmarksHandler;
 
@@ -53,23 +55,34 @@
 
 @property(nonatomic, assign) bookmarks::BookmarkModel* bookmarkModel;
 
+@property(nonatomic, weak) UIViewController* baseViewController;
+
+// The navigation agent.
+@property(nonatomic, readonly) WebNavigationBrowserAgent* navigationAgent;
+
 @end
 
 @implementation ActivityServiceMediator
 
 #pragma mark - Public
 
-- (instancetype)initWithHandler:(id<BrowserCommands, FindInPageCommands>)handler
+- (instancetype)initWithHandler:(id<BrowserCommands,
+                                    BrowserCoordinatorCommands,
+                                    FindInPageCommands>)handler
                bookmarksHandler:(id<BookmarksCommands>)bookmarksHandler
             qrGenerationHandler:(id<QRGenerationCommands>)qrGenerationHandler
                     prefService:(PrefService*)prefService
-                  bookmarkModel:(bookmarks::BookmarkModel*)bookmarkModel {
+                  bookmarkModel:(bookmarks::BookmarkModel*)bookmarkModel
+             baseViewController:(UIViewController*)baseViewController
+                navigationAgent:(WebNavigationBrowserAgent*)navigationAgent {
   if (self = [super init]) {
     _handler = handler;
     _bookmarksHandler = bookmarksHandler;
     _qrGenerationHandler = qrGenerationHandler;
     _prefService = prefService;
     _bookmarkModel = bookmarkModel;
+    _baseViewController = baseViewController;
+    _navigationAgent = navigationAgent;
   }
   return self;
 }
@@ -78,8 +91,8 @@
     (NSArray<ShareToData*>*)dataItems {
   NSMutableArray* items = [[NSMutableArray alloc] init];
 
-  // The |additionalText| is not added when sharing multiple URLs since items
-  // are not associated with each other and the |additionalText| is not likely
+  // The `additionalText` is not added when sharing multiple URLs since items
+  // are not associated with each other and the `additionalText` is not likely
   // be meaningful without the context of the page it came from.
   if (dataItems.count == 1 && dataItems.firstObject.additionalText) {
     [items addObject:[[ChromeActivityTextSource alloc]
@@ -143,13 +156,16 @@
     RequestDesktopOrMobileSiteActivity* requestActivity =
         [[RequestDesktopOrMobileSiteActivity alloc]
             initWithUserAgent:data.userAgent
-                      handler:self.handler];
+                      handler:self.handler
+              navigationAgent:self.navigationAgent];
     [applicationActivities addObject:requestActivity];
   }
 
   if (self.prefService->GetBoolean(prefs::kPrintingEnabled)) {
     PrintActivity* printActivity =
-        [[PrintActivity alloc] initWithData:data handler:self.handler];
+        [[PrintActivity alloc] initWithData:data
+                                    handler:self.handler
+                         baseViewController:self.baseViewController];
     [applicationActivities addObject:printActivity];
   }
 
@@ -163,8 +179,14 @@
 }
 
 - (NSArray*)applicationActivitiesForImageData:(ShareImageData*)data {
-  // For images, we're using the native activities.
-  return @[];
+  // For images, we only customize the print activity. Other activities use
+  // the native ones.
+  PrintActivity* printActivity =
+      [[PrintActivity alloc] initWithImageData:data
+                                       handler:self.handler
+                            baseViewController:self.baseViewController];
+
+  return @[ printActivity ];
 }
 
 - (NSSet*)excludedActivityTypesForItems:

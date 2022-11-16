@@ -9,6 +9,9 @@
 #include "components/google/core/common/google_util.h"
 #include "components/strings/grit/components_strings.h"
 #include "ios/chrome/browser/application_context.h"
+#import "ios/chrome/browser/drag_and_drop/url_drag_drop_handler.h"
+#import "ios/chrome/browser/ui/icons/chrome_symbol.h"
+#import "ios/chrome/browser/ui/ntp/new_tab_page_url_loader_delegate.h"
 #import "ios/chrome/browser/ui/toolbar/public/toolbar_constants.h"
 #import "ios/chrome/browser/ui/toolbar/public/toolbar_utils.h"
 #include "ios/chrome/browser/ui/util/rtl_geometry.h"
@@ -17,6 +20,7 @@
 #import "ios/chrome/common/string_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
+#import "ios/chrome/common/ui/util/text_view_util.h"
 #import "ios/web/public/navigation/navigation_manager.h"
 #include "ios/web/public/navigation/referrer.h"
 #import "net/base/mac/url_conversions.h"
@@ -32,18 +36,29 @@ namespace {
 const CGFloat kStackViewHorizontalMargin = 16.0;
 const CGFloat kStackViewMaxWidth = 470.0;
 const CGFloat kStackViewDefaultSpacing = 32.0;
-const CGFloat kStackViewImageSpacing = 22.0;
-const CGFloat kStackViewDescriptionsSpacing = 16.0;
+const CGFloat kStackViewImageSpacing = 16.0;
+const CGFloat kStackViewDescriptionsSpacing = 20.0;
 const CGFloat kLayoutGuideVerticalMargin = 8.0;
 const CGFloat kLayoutGuideMinHeight = 12.0;
-const CGFloat kDescriptionsInnerMargin = 16.0;
+const CGFloat kDescriptionsInnerMargin = 17.0;
 const CGFloat kLearnMoreVerticalInnerMargin = 8.0;
 const CGFloat kLearnMoreHorizontalInnerMargin = 16.0;
+
+// The size of the incognito symbol image.
+NSInteger kIncognitoSymbolImagePointSize = 72;
 
 // The URL for the the Learn More page shown on incognito new tab.
 // Taken from ntp_resource_cache.cc.
 const char kLearnMoreIncognitoUrl[] =
     "https://support.google.com/chrome/?p=incognito";
+
+// Returns the appropriate learn more URL for the current language of the
+// application.
+GURL GetLearnMoreUrl() {
+  std::string locale = GetApplicationContext()->GetApplicationLocale();
+  return google_util::AppendGoogleLocaleParam(GURL(kLearnMoreIncognitoUrl),
+                                              locale);
+}
 
 // Returns a font, scaled to the current dynamic type settings, that is suitable
 // for the title of the incognito page.
@@ -80,9 +95,11 @@ UIColor* TextBackgroudColor() {
 // properly in a UILabel.  Removes the "<ul>" tag and replaces "<li>" with a
 // bullet unicode character.
 NSAttributedString* FormatHTMLListForUILabel(NSString* listString) {
-  listString =
-      [listString stringByReplacingOccurrencesOfString:@"\n        <ul>"
-                                            withString:@""];
+  listString = [listString
+      stringByReplacingOccurrencesOfString:@"\n +<ul>"
+                                withString:@""
+                                   options:NSRegularExpressionSearch
+                                     range:NSMakeRange(0, [listString length])];
   listString = [listString stringByReplacingOccurrencesOfString:@"</ul>"
                                                      withString:@""];
 
@@ -134,14 +151,10 @@ NSAttributedString* FormatHTMLForLearnMoreSection() {
       [learnMoreText stringByReplacingOccurrencesOfString:@"</a>"
                                                withString:@"END_LINK"];
 
-  NSURL* URL = net::NSURLWithGURL(google_util::AppendGoogleLocaleParam(
-      GURL(kLearnMoreIncognitoUrl),
-      GetApplicationContext()->GetApplicationLocale()));
-
   NSDictionary* linkAttributes = @{
     NSForegroundColorAttributeName : linkTextColor,
     NSFontAttributeName : BodyFont(),
-    NSLinkAttributeName : URL,
+    NSLinkAttributeName : net::NSURLWithGURL(GetLearnMoreUrl()),
   };
 
   NSDictionary* textAttributes = @{
@@ -155,7 +168,7 @@ NSAttributedString* FormatHTMLForLearnMoreSection() {
 
 }  // namespace
 
-@interface RevampedIncognitoView ()
+@interface RevampedIncognitoView () <URLDropDelegate, UITextViewDelegate>
 
 @property(nonatomic, strong) UIView* containerView;
 @property(nonatomic, strong) UIStackView* stackView;
@@ -165,10 +178,22 @@ NSAttributedString* FormatHTMLForLearnMoreSection() {
 @end
 
 @implementation RevampedIncognitoView {
+  // Handles drop interactions for this view.
+  URLDragDropHandler* _dragDropHandler;
 }
+
 - (instancetype)initWithFrame:(CGRect)frame {
+  return [self initWithFrame:frame showTopIncognitoImageAndTitle:YES];
+}
+
+- (instancetype)initWithFrame:(CGRect)frame
+    showTopIncognitoImageAndTitle:(BOOL)showTopIncognitoImageAndTitle {
   self = [super initWithFrame:frame];
   if (self) {
+    _dragDropHandler = [[URLDragDropHandler alloc] init];
+    _dragDropHandler.dropDelegate = self;
+    [self addInteraction:[[UIDropInteraction alloc]
+                             initWithDelegate:_dragDropHandler]];
     self.alwaysBounceVertical = YES;
 
     // Container to hold and vertically position the stack view.
@@ -184,19 +209,33 @@ NSAttributedString* FormatHTMLForLearnMoreSection() {
     self.stackView.alignment = UIStackViewAlignmentCenter;
     [self.containerView addSubview:self.stackView];
 
-    // Incognito icon.
-    UIImage* incognitoImage = [[UIImage imageNamed:@"incognito_icon"]
-        imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
-    UIImageView* incognitoImageView =
-        [[UIImageView alloc] initWithImage:incognitoImage];
-    incognitoImageView.tintColor = [UIColor colorNamed:kTextPrimaryColor];
-    [self.stackView addArrangedSubview:incognitoImageView];
-    [self.stackView setCustomSpacing:kStackViewImageSpacing
-                           afterView:incognitoImageView];
+    if (showTopIncognitoImageAndTitle) {
+      // Incognito icon.
+      UIImage* incognitoImage;
+      if (UseSymbols()) {
+        UIImageSymbolConfiguration* configuration = [UIImageSymbolConfiguration
+            configurationWithPointSize:kIncognitoSymbolImagePointSize
+                                weight:UIImageSymbolWeightLight
+                                 scale:UIImageSymbolScaleMedium];
+        incognitoImage = [CustomSymbolWithConfiguration(
+            kIncognitoCircleFillSymbol, configuration)
+            imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+      } else {
+        incognitoImage = [[UIImage imageNamed:@"incognito_icon"]
+            imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+      }
 
-    [self addTextSections];
+      UIImageView* incognitoImageView =
+          [[UIImageView alloc] initWithImage:incognitoImage];
+      incognitoImageView.tintColor = [UIColor colorNamed:kTextPrimaryColor];
+      [self.stackView addArrangedSubview:incognitoImageView];
+      [self.stackView setCustomSpacing:kStackViewImageSpacing
+                             afterView:incognitoImageView];
+    }
 
-    // |topGuide| and |bottomGuide| exist to vertically position the stackview
+    [self addTextSectionsWithTitleShown:showTopIncognitoImageAndTitle];
+
+    // `topGuide` and `bottomGuide` exist to vertically position the stackview
     // inside the container scrollview.
     UILayoutGuide* topGuide = [[UILayoutGuide alloc] init];
     UILayoutGuide* bottomGuide = [[UILayoutGuide alloc] init];
@@ -262,21 +301,55 @@ NSAttributedString* FormatHTMLForLearnMoreSection() {
   return self;
 }
 
+#pragma mark - URLDropDelegate
+
+- (BOOL)canHandleURLDropInView:(UIView*)view {
+  return YES;
+}
+
+- (void)view:(UIView*)view didDropURL:(const GURL&)URL atPoint:(CGPoint)point {
+  [self.URLLoaderDelegate loadURLInTab:GetLearnMoreUrl()];
+}
+
+#pragma mark - UITextViewDelegate
+
+- (BOOL)textView:(UITextView*)textView
+    shouldInteractWithURL:(NSURL*)URL
+                  inRange:(NSRange)characterRange
+              interaction:(UITextItemInteraction)interaction {
+  [self.URLLoaderDelegate loadURLInTab:GetLearnMoreUrl()];
+
+  // The handler is already handling the tap.
+  return NO;
+}
+
+- (void)textViewDidChangeSelection:(UITextView*)textView {
+  // Always force the `selectedTextRange` to `nil` to prevent users from
+  // selecting text. Setting the `selectable` property to `NO` doesn't help
+  // since it makes links inside the text view untappable. Another solution is
+  // to subclass `UITextView` and override `canBecomeFirstResponder` to return
+  // NO, but that workaround only works on iOS 13.5+. This is the simplest
+  // approach that works well on iOS 12, 13 & 14.
+  textView.selectedTextRange = nil;
+}
+
 #pragma mark - Private
 
-// Adds views containing the text of the incognito page to |self.stackView|.
-- (void)addTextSections {
-  UIColor* titleTextColor = [UIColor colorNamed:kTextPrimaryColor];
+// Adds views containing the text of the incognito page to `self.stackView`.
+- (void)addTextSectionsWithTitleShown:(BOOL)showTitle {
+  if (showTitle) {
+    UIColor* titleTextColor = [UIColor colorNamed:kTextPrimaryColor];
 
-  // Title.
-  UILabel* titleLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-  titleLabel.font = TitleFont();
-  titleLabel.textColor = titleTextColor;
-  titleLabel.numberOfLines = 0;
-  titleLabel.textAlignment = NSTextAlignmentCenter;
-  titleLabel.text = l10n_util::GetNSString(IDS_REVAMPED_INCOGNITO_NTP_TITLE);
-  titleLabel.adjustsFontForContentSizeCategory = YES;
-  [self.stackView addArrangedSubview:titleLabel];
+    // Title.
+    UILabel* titleLabel = [[UILabel alloc] initWithFrame:CGRectZero];
+    titleLabel.font = TitleFont();
+    titleLabel.textColor = titleTextColor;
+    titleLabel.numberOfLines = 0;
+    titleLabel.textAlignment = NSTextAlignmentCenter;
+    titleLabel.text = l10n_util::GetNSString(IDS_REVAMPED_INCOGNITO_NTP_TITLE);
+    titleLabel.adjustsFontForContentSizeCategory = YES;
+    [self.stackView addArrangedSubview:titleLabel];
+  }
 
   // Does section.
   UIView* doesSection = [self
@@ -293,12 +366,14 @@ NSAttributedString* FormatHTMLForLearnMoreSection() {
   [self.stackView addArrangedSubview:doesNotSection];
 
   // Learn more.
-  UITextView* learnMore = [[UITextView alloc] initWithFrame:CGRectZero];
+  UITextView* learnMore = CreateUITextViewWithTextKit1();
   learnMore.scrollEnabled = NO;
   learnMore.editable = NO;
+  learnMore.delegate = self;
   learnMore.attributedText = FormatHTMLForLearnMoreSection();
+  learnMore.textAlignment = NSTextAlignmentCenter;
   learnMore.layer.masksToBounds = YES;
-  learnMore.layer.cornerRadius = 12;
+  learnMore.layer.cornerRadius = 17;
   learnMore.backgroundColor = TextBackgroudColor();
   learnMore.textContainerInset = UIEdgeInsetsMake(
       kLearnMoreVerticalInnerMargin, kLearnMoreHorizontalInnerMargin,
@@ -337,7 +412,7 @@ NSAttributedString* FormatHTMLForLearnMoreSection() {
   stackView.spacing = 8;
   stackView.alignment = UIStackViewAlignmentLeading;
   stackView.backgroundColor = TextBackgroudColor();
-  stackView.layer.cornerRadius = 12;
+  stackView.layer.cornerRadius = 10;
   stackView.layer.masksToBounds = true;
   stackView.layoutMarginsRelativeArrangement = YES;
   stackView.directionalLayoutMargins = NSDirectionalEdgeInsetsMake(

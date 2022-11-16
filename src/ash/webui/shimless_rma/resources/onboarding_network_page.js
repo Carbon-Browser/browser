@@ -13,6 +13,7 @@ import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
 import 'chrome://resources/cr_elements/icons.m.js';
 import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
 
+import {HTMLEscape} from '//resources/js/util.m.js';
 import {NetworkListenerBehavior, NetworkListenerBehaviorInterface} from 'chrome://resources/cr_components/chromeos/network/network_listener_behavior.m.js';
 import {OncMojo} from 'chrome://resources/cr_components/chromeos/network/onc_mojo.m.js';
 import {assert} from 'chrome://resources/js/assert.m.js';
@@ -21,6 +22,7 @@ import {html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v
 
 import {getNetworkConfigService, getShimlessRmaService} from './mojo_interface_provider.js';
 import {NetworkConfigServiceInterface, ShimlessRmaServiceInterface, StateResult} from './shimless_rma_types.js';
+import {enableNextButton} from './shimless_rma_util.js';
 
 /**
  * @fileoverview
@@ -50,17 +52,11 @@ export class OnboardingNetworkPage extends OnboardingNetworkPageBase {
 
   static get properties() {
     return {
-      /** @private {ShimlessRmaServiceInterface} */
-      shimlessRmaService_: {
-        type: Object,
-        value: null,
-      },
-
-      /** @private {?NetworkConfigServiceInterface} */
-      networkConfig_: {
-        type: Object,
-        value: null,
-      },
+      /**
+       * Set by shimless_rma.js.
+       * @type {boolean}
+       */
+      allButtonsDisabled: Boolean,
 
       /**
        * Array of available networks
@@ -75,7 +71,6 @@ export class OnboardingNetworkPage extends OnboardingNetworkPageBase {
       /**
        * Tracks whether network has configuration to be connected
        * @protected
-       * @type {boolean}
        */
       enableConnect_: {
         type: Boolean,
@@ -84,7 +79,6 @@ export class OnboardingNetworkPage extends OnboardingNetworkPageBase {
       /**
        * The type of network to be configured as a string. May be set initially
        * or updated by network-config.
-       * @type {string}
        * @protected
        */
       networkType_: {
@@ -95,7 +89,6 @@ export class OnboardingNetworkPage extends OnboardingNetworkPageBase {
       /**
        * The name of the network. May be set initially or updated by
        * network-config.
-       * @type {string}
        * @protected
        */
       networkName_: {
@@ -114,13 +107,11 @@ export class OnboardingNetworkPage extends OnboardingNetworkPageBase {
       },
 
       /**
-       * Set to true to show the 'connect' button instead of 'disconnect'.
-       * @type {boolean}
+       * Tracks whether network shows connect button or disconnect button.
        * @protected
        */
       networkShowConnect_: {
         type: Boolean,
-        value: true,
       },
 
       /**
@@ -131,15 +122,36 @@ export class OnboardingNetworkPage extends OnboardingNetworkPageBase {
         type: String,
         value: '',
       },
+
+      /**
+       * Set to true to when connected to at least one active network.
+       * @protected
+       */
+      isOnline_: {
+        type: Boolean,
+        value: false,
+        observer: 'onIsOnlineChange_',
+      },
     };
+  }
+
+  constructor() {
+    super();
+    /** @private {ShimlessRmaServiceInterface} */
+    this.shimlessRmaService_ = getShimlessRmaService();
+    /** @private {?NetworkConfigServiceInterface} */
+    this.networkConfig_ = getNetworkConfigService();
   }
 
   /** @override */
   ready() {
     super.ready();
-    this.shimlessRmaService_ = getShimlessRmaService();
-    this.networkConfig_ = getNetworkConfigService();
+
+    // Before displaying the available networks, track the pre-existing
+    // configured networks.
+    this.shimlessRmaService_.trackConfiguredNetworks();
     this.refreshNetworks();
+    enableNextButton(this);
   }
 
   /** CrosNetworkConfigObserver impl */
@@ -160,6 +172,10 @@ export class OnboardingNetworkPage extends OnboardingNetworkPageBase {
           (network) => [chromeos.networkConfig.mojom.NetworkType.kWiFi,
                         chromeos.networkConfig.mojom.NetworkType.kEthernet,
       ].includes(network.type));
+
+      this.isOnline_ = this.networks_.some(function(network) {
+        return OncMojo.connectionStateIsConnected(network.connectionState);
+      });
     });
   }
 
@@ -173,6 +189,10 @@ export class OnboardingNetworkPage extends OnboardingNetworkPageBase {
     const networkState = event.detail;
     const type = networkState.type;
     const displayName = OncMojo.getNetworkStateDisplayName(networkState);
+
+    this.networkShowConnect_ =
+        (networkState.connectionState ===
+         chromeos.networkConfig.mojom.ConnectionStateType.kNotConnected);
 
     if (!this.canAttemptConnection_(networkState)) {
       this.showConfig_(type, networkState.guid, displayName);
@@ -246,6 +266,11 @@ export class OnboardingNetworkPage extends OnboardingNetworkPageBase {
     if (dialog.open) {
       dialog.close();
     }
+
+    // Reset the network state properties.
+    this.networkType_ = '';
+    this.networkName_ = '';
+    this.guid_ = '';
   }
 
   /** @protected */
@@ -254,6 +279,16 @@ export class OnboardingNetworkPage extends OnboardingNetworkPageBase {
         /** @type {!NetworkConfigElement} */ (
             this.shadowRoot.querySelector('#networkConfig'));
     networkConfig.connect();
+  }
+
+  /** @protected */
+  disconnectNetwork_() {
+    this.networkConfig_.startDisconnect(this.guid_).then(response => {
+      if (!response.success) {
+        console.error('Disconnect failed for: ' + this.guid_);
+      }
+    });
+    this.closeConfig_();
   }
 
   /**
@@ -286,19 +321,28 @@ export class OnboardingNetworkPage extends OnboardingNetworkPageBase {
    */
   getDialogTitle_() {
     if (this.networkName_ && !this.networkShowConnect_) {
-      return this.networkName_;
-      // TODO(joonbug): Move these strings to //ui and uncomment this.
-      // return this.i18n('internetConfigName', this.networkName_);
+      return this.i18n('internetConfigName', HTMLEscape(this.networkName_));
     }
     const type = this.i18n('OncType' + this.networkType_);
-    return type;
-    // return this.i18n('internetJoinType', type);
+    return this.i18n('internetJoinType', type);
   }
 
-  /** @return {!Promise<StateResult>} */
+  /** @return {!Promise<{stateResult: !StateResult}>} */
   onNextButtonClick() {
     return this.shimlessRmaService_.networkSelectionComplete();
   }
-};
+
+  /** @private */
+  onIsOnlineChange_() {
+    this.dispatchEvent(new CustomEvent(
+        'set-next-button-label',
+        {
+          bubbles: true,
+          composed: true,
+          detail: this.isOnline_ ? 'nextButtonLabel' : 'skipButtonLabel',
+        },
+        ));
+  }
+}
 
 customElements.define(OnboardingNetworkPage.is, OnboardingNetworkPage);

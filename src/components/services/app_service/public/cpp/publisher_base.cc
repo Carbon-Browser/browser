@@ -6,6 +6,7 @@
 
 #include <vector>
 
+#include "base/notreached.h"
 #include "base/time/time.h"
 
 namespace apps {
@@ -20,7 +21,7 @@ apps::mojom::AppPtr PublisherBase::MakeApp(
     std::string app_id,
     apps::mojom::Readiness readiness,
     const std::string& name,
-    apps::mojom::InstallSource install_source) {
+    apps::mojom::InstallReason install_reason) {
   apps::mojom::AppPtr app = apps::mojom::App::New();
 
   app->app_type = app_type;
@@ -32,7 +33,8 @@ apps::mojom::AppPtr PublisherBase::MakeApp(
   app->last_launch_time = base::Time();
   app->install_time = base::Time();
 
-  app->install_source = install_source;
+  app->install_reason = install_reason;
+  app->install_source = apps::mojom::InstallSource::kUnknown;
 
   app->is_platform_app = apps::mojom::OptionalBool::kFalse;
   app->recommendable = apps::mojom::OptionalBool::kTrue;
@@ -104,13 +106,14 @@ void PublisherBase::LaunchAppWithFiles(const std::string& app_id,
   NOTIMPLEMENTED();
 }
 
-void PublisherBase::LaunchAppWithIntent(
-    const std::string& app_id,
-    int32_t event_flags,
-    apps::mojom::IntentPtr intent,
-    apps::mojom::LaunchSource launch_source,
-    apps::mojom::WindowInfoPtr window_info) {
+void PublisherBase::LaunchAppWithIntent(const std::string& app_id,
+                                        int32_t event_flags,
+                                        apps::mojom::IntentPtr intent,
+                                        apps::mojom::LaunchSource launch_source,
+                                        apps::mojom::WindowInfoPtr window_info,
+                                        LaunchAppWithIntentCallback callback) {
   NOTIMPLEMENTED();
+  std::move(callback).Run(/*success=*/false);
 }
 
 void PublisherBase::SetPermission(const std::string& app_id,
@@ -163,6 +166,11 @@ void PublisherBase::OnPreferredAppSet(
   NOTIMPLEMENTED();
 }
 
+void PublisherBase::OnSupportedLinksPreferenceChanged(const std::string& app_id,
+                                                      bool open_in_app) {
+  NOTIMPLEMENTED();
+}
+
 void PublisherBase::SetResizeLocked(const std::string& app_id,
                                     apps::mojom::OptionalBool locked) {
   NOTIMPLEMENTED();
@@ -170,6 +178,12 @@ void PublisherBase::SetResizeLocked(const std::string& app_id,
 
 void PublisherBase::SetWindowMode(const std::string& app_id,
                                   apps::mojom::WindowMode window_mode) {
+  NOTIMPLEMENTED();
+}
+
+void PublisherBase::SetRunOnOsLoginMode(
+    const std::string& app_id,
+    apps::mojom::RunOnOsLoginMode run_on_os_login_mode) {
   NOTIMPLEMENTED();
 }
 

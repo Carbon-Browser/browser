@@ -4,6 +4,8 @@
 
 #include "ui/gl/gpu_switching_manager.h"
 
+#include "base/observer_list.h"
+
 namespace ui {
 
 // static
@@ -11,9 +13,9 @@ GpuSwitchingManager* GpuSwitchingManager::GetInstance() {
   return base::Singleton<GpuSwitchingManager>::get();
 }
 
-GpuSwitchingManager::GpuSwitchingManager() {}
+GpuSwitchingManager::GpuSwitchingManager() = default;
 
-GpuSwitchingManager::~GpuSwitchingManager() {}
+GpuSwitchingManager::~GpuSwitchingManager() = default;
 
 void GpuSwitchingManager::AddObserver(GpuSwitchingObserver* observer) {
   observer_list_.AddObserver(observer);

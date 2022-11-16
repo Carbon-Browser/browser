@@ -10,7 +10,6 @@
 #include <vector>
 
 #include "base/component_export.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -38,6 +37,10 @@ class COMPONENT_EXPORT(DEVICE_FIDO) FidoDeviceAuthenticator
     : public FidoAuthenticator {
  public:
   explicit FidoDeviceAuthenticator(std::unique_ptr<FidoDevice> device);
+
+  FidoDeviceAuthenticator(const FidoDeviceAuthenticator&) = delete;
+  FidoDeviceAuthenticator& operator=(const FidoDeviceAuthenticator&) = delete;
+
   ~FidoDeviceAuthenticator() override;
 
   // FidoAuthenticator:
@@ -89,6 +92,11 @@ class COMPONENT_EXPORT(DEVICE_FIDO) FidoDeviceAuthenticator
   void DeleteCredential(const pin::TokenResponse& pin_token,
                         const PublicKeyCredentialDescriptor& credential_id,
                         DeleteCredentialCallback callback) override;
+  bool SupportsUpdateUserInformation() const override;
+  void UpdateUserInformation(const pin::TokenResponse& pin_token,
+                             const PublicKeyCredentialDescriptor& credential_id,
+                             const PublicKeyCredentialUserEntity& updated_user,
+                             UpdateUserInformationCallback callback) override;
 
   void GetModality(BioEnrollmentCallback callback) override;
   void GetSensorInfo(BioEnrollmentCallback callback) override;
@@ -106,7 +114,7 @@ class COMPONENT_EXPORT(DEVICE_FIDO) FidoDeviceAuthenticator
                        std::vector<uint8_t> template_id,
                        BioEnrollmentCallback) override;
   void WriteLargeBlob(
-      const std::vector<uint8_t>& large_blob,
+      LargeBlob large_blob,
       const LargeBlobKey& large_blob_key,
       absl::optional<pin::TokenResponse> pin_uv_auth_token,
       base::OnceCallback<void(CtapDeviceResponseCode)> callback) override;
@@ -130,15 +138,6 @@ class COMPONENT_EXPORT(DEVICE_FIDO) FidoDeviceAuthenticator
   bool IsInPairingMode() const override;
   bool IsPaired() const override;
   bool RequiresBlePairingPin() const override;
-#if defined(OS_WIN)
-  bool IsWinNativeApiAuthenticator() const override;
-#endif  // defined(OS_WIN)
-#if defined(OS_MAC)
-  bool IsTouchIdAuthenticator() const override;
-#endif  // defined(OS_MAC)
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  bool IsChromeOSAuthenticator() const override;
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
   base::WeakPtr<FidoAuthenticator> GetWeakPtr() override;
 
   FidoDevice* device() { return device_.get(); }
@@ -216,7 +215,7 @@ class COMPONENT_EXPORT(DEVICE_FIDO) FidoDeviceAuthenticator
       CtapDeviceResponseCode status,
       absl::optional<LargeBlobsResponse> response);
   void OnHaveLargeBlobArrayForWrite(
-      const std::vector<uint8_t>& large_blob,
+      LargeBlob large_blob,
       const LargeBlobKey& large_blob_key,
       absl::optional<pin::TokenResponse> pin_uv_auth_token,
       base::OnceCallback<void(CtapDeviceResponseCode)> callback,
@@ -268,8 +267,6 @@ class COMPONENT_EXPORT(DEVICE_FIDO) FidoDeviceAuthenticator
   absl::optional<PINUVAuthProtocol> chosen_pin_uv_auth_protocol_;
 
   base::WeakPtrFactory<FidoDeviceAuthenticator> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(FidoDeviceAuthenticator);
 };
 
 }  // namespace device

@@ -5,10 +5,7 @@
 #ifndef UI_NATIVE_THEME_NATIVE_THEME_BASE_H_
 #define UI_NATIVE_THEME_NATIVE_THEME_BASE_H_
 
-
-#include "base/compiler_specific.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
 #include "cc/paint/paint_flags.h"
 #include "ui/native_theme/native_theme.h"
 
@@ -22,6 +19,9 @@ namespace ui {
 // Theme support for non-Windows toolkits.
 class NATIVE_THEME_EXPORT NativeThemeBase : public NativeTheme {
  public:
+  NativeThemeBase(const NativeThemeBase&) = delete;
+  NativeThemeBase& operator=(const NativeThemeBase&) = delete;
+
   // NativeTheme implementation:
   gfx::Size GetPartSize(Part part,
                         State state,
@@ -30,6 +30,7 @@ class NATIVE_THEME_EXPORT NativeThemeBase : public NativeTheme {
                                float width,
                                float height) const override;
   void Paint(cc::PaintCanvas* canvas,
+             const ui::ColorProvider* color_provider,
              Part part,
              State state,
              const gfx::Rect& rect,
@@ -111,6 +112,7 @@ class NATIVE_THEME_EXPORT NativeThemeBase : public NativeTheme {
   // Draw the scrollbar thumb over the track.
   virtual void PaintScrollbarThumb(
       cc::PaintCanvas* canvas,
+      const ColorProvider* color_provider,
       Part part,
       State state,
       const gfx::Rect& rect,
@@ -156,11 +158,13 @@ class NATIVE_THEME_EXPORT NativeThemeBase : public NativeTheme {
 
   virtual void PaintMenuPopupBackground(
       cc::PaintCanvas* canvas,
+      const ColorProvider* color_provider,
       const gfx::Size& size,
       const MenuBackgroundExtraParams& menu_background,
       ColorScheme color_scheme) const;
 
   virtual void PaintMenuItemBackground(cc::PaintCanvas* canvas,
+                                       const ColorProvider* color_provider,
                                        State state,
                                        const gfx::Rect& rect,
                                        const MenuItemExtraParams& menu_item,
@@ -168,10 +172,10 @@ class NATIVE_THEME_EXPORT NativeThemeBase : public NativeTheme {
 
   virtual void PaintMenuSeparator(
       cc::PaintCanvas* canvas,
+      const ColorProvider* color_provider,
       State state,
       const gfx::Rect& rect,
-      const MenuSeparatorExtraParams& menu_separator,
-      ColorScheme color_scheme) const;
+      const MenuSeparatorExtraParams& menu_separator) const;
 
   void PaintSliderTrack(cc::PaintCanvas* canvas,
                         State state,
@@ -219,9 +223,6 @@ class NATIVE_THEME_EXPORT NativeThemeBase : public NativeTheme {
   // have different padding from those on desktop Chrome. Get rid of this when
   // crbug.com/530746 is resolved.
   virtual void AdjustCheckboxRadioRectForPadding(SkRect* rect) const;
-
-  virtual float AdjustBorderWidthByZoom(float border_width,
-                                        float zoom_level) const;
 
   void set_scrollbar_button_length(int length) {
     scrollbar_button_length_ = length;
@@ -303,8 +304,6 @@ class NATIVE_THEME_EXPORT NativeThemeBase : public NativeTheme {
 
   // The length of the arrow buttons, 0 means no buttons are drawn.
   int scrollbar_button_length_ = 14;
-
-  DISALLOW_COPY_AND_ASSIGN(NativeThemeBase);
 };
 
 }  // namespace ui

@@ -7,14 +7,16 @@
 #include "base/bind.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
-#include "base/single_thread_task_runner.h"
 #include "base/synchronization/waitable_event.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/gmock_callback_support.h"
 #include "base/test/simple_test_tick_clock.h"
 #include "base/test/task_environment.h"
+#include "base/time/time.h"
 #include "components/viz/common/frame_sinks/begin_frame_args.h"
 #include "components/viz/common/surfaces/frame_sink_id.h"
 #include "media/base/video_frame.h"
+#include "media/video/fake_gpu_memory_buffer.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/platform/web_video_frame_submitter.h"
@@ -218,7 +220,7 @@ TEST_F(VideoFrameCompositorTest, PaintSingleFrame) {
 TEST_F(VideoFrameCompositorTest, RenderFiresPresentationCallback) {
   // Advance the clock so we can differentiate between base::TimeTicks::Now()
   // and base::TimeTicks().
-  tick_clock_.Advance(base::TimeDelta::FromSeconds(1));
+  tick_clock_.Advance(base::Seconds(1));
 
   scoped_refptr<media::VideoFrame> opaque_frame = CreateOpaqueFrame();
   EXPECT_CALL(*this, Render(_, _, RenderingMode::kStartup))
@@ -254,7 +256,7 @@ TEST_F(VideoFrameCompositorTest, PresentationCallbackForcesBeginFrames) {
 TEST_F(VideoFrameCompositorTest, MultiplePresentationCallbacks) {
   // Advance the clock so we can differentiate between base::TimeTicks::Now()
   // and base::TimeTicks().
-  tick_clock_.Advance(base::TimeDelta::FromSeconds(1));
+  tick_clock_.Advance(base::Seconds(1));
 
   // Create frames of different sizes so we can differentiate them.
   constexpr int kSize1 = 8;
@@ -406,7 +408,7 @@ TEST_F(VideoFrameCompositorTest, UpdateCurrentFrameIfStale) {
 
   // Since we have a client, this call should not call background render, even
   // if a lot of time has elapsed between calls.
-  tick_clock_.Advance(base::TimeDelta::FromSeconds(1));
+  tick_clock_.Advance(base::Seconds(1));
   EXPECT_CALL(*this, Render(_, _, _)).Times(0);
   compositor()->UpdateCurrentFrameIfStale();
 
@@ -430,7 +432,7 @@ TEST_F(VideoFrameCompositorTest, UpdateCurrentFrameIfStale) {
   EXPECT_EQ(opaque_frame_2, compositor()->GetCurrentFrame());
 
   // Advancing the tick clock should allow a new frame to be requested.
-  tick_clock_.Advance(base::TimeDelta::FromMilliseconds(10));
+  tick_clock_.Advance(base::Milliseconds(10));
   EXPECT_CALL(*this, Render(_, _, RenderingMode::kBackground))
       .WillOnce(Return(opaque_frame_1));
   compositor()->UpdateCurrentFrameIfStale();
@@ -441,7 +443,7 @@ TEST_F(VideoFrameCompositorTest, UpdateCurrentFrameIfStale) {
   compositor()->SetVideoFrameProviderClient(nullptr);
 
   // Advancing the tick clock should allow a new frame to be requested.
-  tick_clock_.Advance(base::TimeDelta::FromMilliseconds(10));
+  tick_clock_.Advance(base::Milliseconds(10));
   EXPECT_CALL(*this, Render(_, _, RenderingMode::kBackground))
       .WillOnce(Return(opaque_frame_2));
   compositor()->UpdateCurrentFrameIfStale();
@@ -462,7 +464,7 @@ TEST_F(VideoFrameCompositorTest, UpdateCurrentFrameIfStale_ClientBypass) {
 
   // Move the clock forward. Otherwise, the current time will be 0, will appear
   // null, and will cause DCHECKs.
-  tick_clock_.Advance(base::TimeDelta::FromSeconds(1));
+  tick_clock_.Advance(base::Seconds(1));
 
   // Starting the video renderer should return a single frame.
   EXPECT_CALL(*this, Render(_, _, RenderingMode::kStartup))
@@ -472,7 +474,7 @@ TEST_F(VideoFrameCompositorTest, UpdateCurrentFrameIfStale_ClientBypass) {
 
   // This call should return true even if we have a client that is driving frame
   // updates.
-  tick_clock_.Advance(base::TimeDelta::FromSeconds(1));
+  tick_clock_.Advance(base::Seconds(1));
   EXPECT_CALL(*this, Render(_, _, _)).WillOnce(Return(opaque_frame_2));
   compositor()->UpdateCurrentFrameIfStale(
       VideoFrameCompositor::UpdateType::kBypassClient);
@@ -482,13 +484,55 @@ TEST_F(VideoFrameCompositorTest, UpdateCurrentFrameIfStale_ClientBypass) {
 }
 
 TEST_F(VideoFrameCompositorTest, PreferredRenderInterval) {
-  preferred_render_interval_ = base::TimeDelta::FromSeconds(1);
+  preferred_render_interval_ = base::Seconds(1);
   compositor_->Start(this);
   EXPECT_EQ(compositor_->GetPreferredRenderInterval(),
             preferred_render_interval_);
   compositor_->Stop();
   EXPECT_EQ(compositor_->GetPreferredRenderInterval(),
             viz::BeginFrameArgs::MinInterval());
+}
+
+TEST_F(VideoFrameCompositorTest, OnContextLost) {
+  scoped_refptr<media::VideoFrame> non_gpu_frame = CreateOpaqueFrame();
+
+  gfx::Size encode_size(320, 240);
+  std::unique_ptr<gfx::GpuMemoryBuffer> gmb =
+      std::make_unique<media::FakeGpuMemoryBuffer>(
+          encode_size, gfx::BufferFormat::YUV_420_BIPLANAR);
+  gpu::MailboxHolder mailbox_holders[media::VideoFrame::kMaxPlanes];
+  scoped_refptr<media::VideoFrame> gpu_frame =
+      media::VideoFrame::WrapExternalGpuMemoryBuffer(
+          gfx::Rect(encode_size), encode_size, std::move(gmb), mailbox_holders,
+          base::DoNothing(), base::TimeDelta());
+
+  compositor_->set_background_rendering_for_testing(true);
+
+  EXPECT_CALL(*submitter_, IsDrivingFrameUpdates)
+      .Times(AnyNumber())
+      .WillRepeatedly(Return(true));
+
+  // Move the clock forward. Otherwise, the current time will be 0, will appear
+  // null, and will cause DCHECKs.
+  tick_clock_.Advance(base::Seconds(1));
+
+  EXPECT_CALL(*this, Render(_, _, RenderingMode::kStartup))
+      .WillOnce(Return(non_gpu_frame));
+  StartVideoRendererSink();
+  compositor()->OnContextLost();
+  // frame which dose not have gpu resource should be maintained even though
+  // context is lost.
+  EXPECT_EQ(non_gpu_frame, compositor()->GetCurrentFrame());
+
+  tick_clock_.Advance(base::Seconds(1));
+  EXPECT_CALL(*this, Render(_, _, _)).WillOnce(Return(gpu_frame));
+  compositor()->UpdateCurrentFrameIfStale(
+      VideoFrameCompositor::UpdateType::kBypassClient);
+  compositor()->OnContextLost();
+  // frame which has gpu resource should be reset if context is lost
+  EXPECT_NE(gpu_frame, compositor()->GetCurrentFrame());
+
+  StopVideoRendererSink(true);
 }
 
 }  // namespace blink

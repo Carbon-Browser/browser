@@ -7,9 +7,7 @@
 
 #include <stdint.h>
 
-#include "base/callback.h"
-#include "base/compiler_specific.h"
-#include "base/macros.h"
+#include "base/callback_forward.h"
 #include "media/base/media_export.h"
 
 namespace media {
@@ -21,6 +19,10 @@ class MEDIA_EXPORT DataSource {
   enum { kReadError = -1, kAborted = -2 };
 
   DataSource();
+
+  DataSource(const DataSource&) = delete;
+  DataSource& operator=(const DataSource&) = delete;
+
   virtual ~DataSource();
 
   // Reads |size| bytes from |position| into |data|. And when the read is done
@@ -42,7 +44,7 @@ class MEDIA_EXPORT DataSource {
 
   // Returns true and the file size, false if the file size could not be
   // retrieved.
-  virtual bool GetSize(int64_t* size_out) WARN_UNUSED_RESULT = 0;
+  [[nodiscard]] virtual bool GetSize(int64_t* size_out) = 0;
 
   // Returns true if we are performing streaming. In this case seeking is
   // not possible.
@@ -57,9 +59,6 @@ class MEDIA_EXPORT DataSource {
 
   // By default this just returns GetSize().
   virtual int64_t GetMemoryUsage();
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(DataSource);
 };
 
 }  // namespace media

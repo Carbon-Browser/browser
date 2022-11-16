@@ -6,7 +6,6 @@
 
 #include <utility>
 
-#include "base/cxx17_backports.h"
 #include "base/memory/ptr_util.h"
 #include "base/threading/sequence_local_storage_map.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -16,6 +15,11 @@ namespace base {
 namespace {
 
 class SequenceLocalStorageSlotTest : public testing::Test {
+ public:
+  SequenceLocalStorageSlotTest(const SequenceLocalStorageSlotTest&) = delete;
+  SequenceLocalStorageSlotTest& operator=(const SequenceLocalStorageSlotTest&) =
+      delete;
+
  protected:
   SequenceLocalStorageSlotTest()
       : scoped_sequence_local_storage_(&sequence_local_storage_) {}
@@ -23,9 +27,6 @@ class SequenceLocalStorageSlotTest : public testing::Test {
   internal::SequenceLocalStorageMap sequence_local_storage_;
   internal::ScopedSetSequenceLocalStorageMapForCurrentThread
       scoped_sequence_local_storage_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(SequenceLocalStorageSlotTest);
 };
 
 }  // namespace
@@ -131,14 +132,14 @@ TEST(SequenceLocalStorageSlotMultipleMapTest, EmplaceGetMultipleMapsOneSlot) {
 
   // Set the value of the slot to be the index of the current
   // SequenceLocalStorageMaps in the vector
-  for (unsigned int i = 0; i < base::size(sequence_local_storage_maps); ++i) {
+  for (unsigned int i = 0; i < std::size(sequence_local_storage_maps); ++i) {
     internal::ScopedSetSequenceLocalStorageMapForCurrentThread
         scoped_sequence_local_storage(&sequence_local_storage_maps[i]);
 
     slot.emplace(i);
   }
 
-  for (unsigned int i = 0; i < base::size(sequence_local_storage_maps); ++i) {
+  for (unsigned int i = 0; i < std::size(sequence_local_storage_maps); ++i) {
     internal::ScopedSetSequenceLocalStorageMapForCurrentThread
         scoped_sequence_local_storage(&sequence_local_storage_maps[i]);
 

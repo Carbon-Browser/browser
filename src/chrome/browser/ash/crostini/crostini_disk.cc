@@ -12,30 +12,31 @@
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/system/sys_info.h"
-#include "base/task/post_task.h"
 #include "base/task/thread_pool.h"
 #include "chrome/browser/ash/crostini/crostini_features.h"
 #include "chrome/browser/ash/crostini/crostini_manager.h"
 #include "chrome/browser/ash/crostini/crostini_simple_types.h"
 #include "chrome/browser/ash/crostini/crostini_types.mojom.h"
-#include "chromeos/dbus/concierge/concierge_client.h"
-#include "chromeos/dbus/concierge/concierge_service.pb.h"
+#include "chromeos/ash/components/dbus/concierge/concierge_client.h"
+#include "chromeos/ash/components/dbus/concierge/concierge_service.pb.h"
 #include "ui/base/text/bytes_formatting.h"
 
+using DiskImageStatus = vm_tools::concierge::DiskImageStatus;
+
 namespace {
-chromeos::ConciergeClient* GetConciergeClient() {
-  return chromeos::ConciergeClient::Get();
+ash::ConciergeClient* GetConciergeClient() {
+  return ash::ConciergeClient::Get();
 }
 
 std::string FormatBytes(const int64_t value) {
   return base::UTF16ToUTF8(ui::FormatBytes(value));
 }
 
-void EmitResizeResultMetric(vm_tools::concierge::DiskImageStatus status) {
+void EmitResizeResultMetric(DiskImageStatus status) {
   base::UmaHistogramEnumeration(
       "Crostini.DiskResize.Result", status,
-      static_cast<vm_tools::concierge::DiskImageStatus>(
-          vm_tools::concierge::DiskImageStatus_MAX + 1));
+      static_cast<DiskImageStatus>(vm_tools::concierge::DiskImageStatus_MAX +
+                                   1));
 }
 
 int64_t round_up(int64_t n, double increment) {
@@ -93,7 +94,8 @@ void OnAmountOfFreeDiskSpace(OnceDiskInfoCallback callback,
     std::move(callback).Run(nullptr);
   } else {
     VLOG(1) << "Starting vm " << vm_name;
-    auto container_id = ContainerId(vm_name, kCrostiniDefaultContainerName);
+    auto container_id = guest_os::GuestId(kCrostiniDefaultVmType, vm_name,
+                                          kCrostiniDefaultContainerName);
     CrostiniManager::RestartOptions options;
     options.start_vm_only = true;
     CrostiniManager::GetForProfile(profile)->RestartCrostiniWithOptions(
@@ -231,30 +233,28 @@ std::vector<crostini::mojom::DiskSliderTickPtr> GetTicks(
   return ticks;
 }
 
-class Observer : public chromeos::ConciergeClient::DiskImageObserver {
+class Observer : public ash::ConciergeClient::DiskImageObserver {
  public:
   Observer(std::string uuid, base::OnceCallback<void(bool)> callback)
       : uuid_(std::move(uuid)), callback_(std::move(callback)) {}
   ~Observer() override { GetConciergeClient()->RemoveDiskImageObserver(this); }
+
+  // ash::ConciergeClient::DiskImageObserver:
   void OnDiskImageProgress(
       const vm_tools::concierge::DiskImageStatusResponse& signal) override {
-    if (signal.command_uuid() != uuid_) {
+    if (signal.command_uuid() != uuid_ ||
+        signal.status() == DiskImageStatus::DISK_STATUS_IN_PROGRESS) {
       return;
     }
-    switch (signal.status()) {
-      case vm_tools::concierge::DiskImageStatus::DISK_STATUS_IN_PROGRESS:
-        break;
-      case vm_tools::concierge::DiskImageStatus::DISK_STATUS_RESIZED:
-        EmitResizeResultMetric(signal.status());
-        std::move(callback_).Run(true);
-        break;
-      default:
-        LOG(ERROR) << "Failed or unrecognised status when resizing: "
-                   << signal.status() << " " << signal.failure_reason();
-        EmitResizeResultMetric(signal.status());
-        std::move(callback_).Run(false);
-        delete this;
+
+    EmitResizeResultMetric(signal.status());
+    bool resized = signal.status() == DiskImageStatus::DISK_STATUS_RESIZED;
+    if (!resized) {
+      LOG(ERROR) << "Failed or unrecognised status when resizing: "
+                 << signal.status() << " " << signal.failure_reason();
     }
+    std::move(callback_).Run(resized);
+    delete this;
   }
 
  private:
@@ -266,7 +266,8 @@ void ResizeCrostiniDisk(Profile* profile,
                         std::string vm_name,
                         uint64_t size_bytes,
                         base::OnceCallback<void(bool)> callback) {
-  ContainerId container_id(vm_name, kCrostiniDefaultContainerName);
+  guest_os::GuestId container_id(kCrostiniDefaultVmType, vm_name,
+                                 kCrostiniDefaultContainerName);
   CrostiniManager::RestartOptions options;
   options.start_vm_only = true;
   CrostiniManager::GetForProfile(profile)->RestartCrostiniWithOptions(
@@ -300,15 +301,13 @@ void OnResize(
     absl::optional<vm_tools::concierge::ResizeDiskImageResponse> response) {
   if (!response) {
     LOG(ERROR) << "Got null response from concierge";
-    EmitResizeResultMetric(
-        vm_tools::concierge::DiskImageStatus::DISK_STATUS_UNKNOWN);
+    EmitResizeResultMetric(DiskImageStatus::DISK_STATUS_UNKNOWN);
     std::move(callback).Run(false);
-  } else if (response->status() ==
-             vm_tools::concierge::DiskImageStatus::DISK_STATUS_RESIZED) {
+  } else if (response->status() == DiskImageStatus::DISK_STATUS_RESIZED) {
     EmitResizeResultMetric(response->status());
     std::move(callback).Run(true);
-  } else if (response->status() ==
-             vm_tools::concierge::DiskImageStatus::DISK_STATUS_IN_PROGRESS) {
+  } else if (response->status() == DiskImageStatus::DISK_STATUS_IN_PROGRESS) {
+    // The newly created Observer is self-deleting.
     GetConciergeClient()->AddDiskImageObserver(
         new Observer(response->command_uuid(), std::move(callback)));
   } else {

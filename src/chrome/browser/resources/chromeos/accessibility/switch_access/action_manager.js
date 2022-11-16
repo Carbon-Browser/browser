@@ -4,6 +4,7 @@
 
 import {FocusRingManager} from './focus_ring_manager.js';
 import {MenuManager} from './menu_manager.js';
+import {SwitchAccessMetrics} from './metrics.js';
 import {Navigator} from './navigator.js';
 import {SAChildNode, SARootNode} from './nodes/switch_access_node.js';
 import {SwitchAccess} from './switch_access.js';
@@ -93,6 +94,8 @@ export class ActionManager {
    * @param {!SwitchAccessMenuAction} action
    */
   static performAction(action) {
+    SwitchAccessMetrics.recordMenuAction(action);
+
     switch (action) {
       // Global actions:
       case SwitchAccessMenuAction.SETTINGS:
@@ -181,7 +184,7 @@ export class ActionManager {
           SwitchAccessMenuAction.MOVE_FORWARD_ONE_WORD_OF_TEXT,
           SwitchAccessMenuAction.MOVE_BACKWARD_ONE_CHAR_OF_TEXT,
           SwitchAccessMenuAction.MOVE_FORWARD_ONE_CHAR_OF_TEXT,
-          SwitchAccessMenuAction.END_TEXT_SELECTION
+          SwitchAccessMenuAction.END_TEXT_SELECTION,
         ];
       case SAConstants.MenuType.POINT_SCAN_MENU:
         return [
@@ -232,7 +235,7 @@ export class ActionManager {
     }
     let actions = this.actionNode_.actions;
     const possibleActions = this.actionsForType_(this.currentMenuType_);
-    actions = actions.filter((a) => possibleActions.includes(a));
+    actions = actions.filter(a => possibleActions.includes(a));
     if (this.currentMenuType_ === SAConstants.MenuType.MAIN_MENU) {
       actions = this.addGlobalActions_(actions);
     }
@@ -249,7 +252,7 @@ export class ActionManager {
         left: Math.floor(Navigator.byPoint.currentPoint.x),
         top: Math.floor(Navigator.byPoint.currentPoint.y),
         width: 1,
-        height: 1
+        height: 1,
       };
     }
 

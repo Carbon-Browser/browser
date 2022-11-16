@@ -5,8 +5,6 @@
 #ifndef COMPONENTS_OPTIMIZATION_GUIDE_CORE_OPTIMIZATION_GUIDE_PREFS_H_
 #define COMPONENTS_OPTIMIZATION_GUIDE_CORE_OPTIMIZATION_GUIDE_PREFS_H_
 
-#include "base/macros.h"
-
 class PrefRegistrySimple;
 
 namespace optimization_guide {
@@ -18,6 +16,7 @@ extern const char kModelLastFetchSuccess[];
 extern const char kHintsFetcherHostsSuccessfullyFetched[];
 extern const char kPendingHintsProcessingVersion[];
 extern const char kPreviouslyRegisteredOptimizationTypes[];
+extern const char kStoreFilePathsToDelete[];
 
 // Registers the optimization guide's prefs.
 void RegisterProfilePrefs(PrefRegistrySimple* registry);

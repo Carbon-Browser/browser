@@ -10,7 +10,7 @@
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/command_line.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
@@ -29,8 +29,8 @@
 #include "chrome/browser/extensions/suspicious_extension_bubble_delegate.h"
 #include "chrome/browser/extensions/test_extension_message_bubble_delegate.h"
 #include "chrome/browser/extensions/test_extension_system.h"
-#include "chrome/browser/profiles/profile_keep_alive_types.h"
-#include "chrome/browser/profiles/scoped_profile_keep_alive.h"
+#include "chrome/browser/profiles/keep_alive/profile_keep_alive_types.h"
+#include "chrome/browser/profiles/keep_alive/scoped_profile_keep_alive.h"
 #include "chrome/browser/ui/toolbar/toolbar_actions_model.h"
 #include "chrome/browser/ui/toolbar/toolbar_actions_model_factory.h"
 #include "chrome/common/chrome_features.h"
@@ -88,6 +88,12 @@ class TestExtensionMessageBubbleController :
         action_button_callback_count_(0),
         dismiss_button_callback_count_(0),
         link_click_callback_count_(0) {}
+
+  TestExtensionMessageBubbleController(
+      const TestExtensionMessageBubbleController&) = delete;
+  TestExtensionMessageBubbleController& operator=(
+      const TestExtensionMessageBubbleController&) = delete;
+
   ~TestExtensionMessageBubbleController() override {}
 
   // ExtensionMessageBubbleController:
@@ -113,8 +119,6 @@ class TestExtensionMessageBubbleController :
   size_t action_button_callback_count_;
   size_t dismiss_button_callback_count_;
   size_t link_click_callback_count_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestExtensionMessageBubbleController);
 };
 
 // A fake bubble used for testing the controller. Takes an action that specifies
@@ -134,6 +138,10 @@ class FakeExtensionMessageBubble {
       : is_closed_(true),
         action_(BUBBLE_ACTION_CLICK_ACTION_BUTTON),
         controller_(nullptr) {}
+
+  FakeExtensionMessageBubble(const FakeExtensionMessageBubble&) = delete;
+  FakeExtensionMessageBubble& operator=(const FakeExtensionMessageBubble&) =
+      delete;
 
   void set_action_on_show(ExtensionBubbleAction action) {
     action_ = action;
@@ -180,9 +188,7 @@ class FakeExtensionMessageBubble {
 
   bool is_closed_;
   ExtensionBubbleAction action_;
-  ExtensionMessageBubbleController* controller_;
-
-  DISALLOW_COPY_AND_ASSIGN(FakeExtensionMessageBubble);
+  raw_ptr<ExtensionMessageBubbleController> controller_;
 };
 
 class ExtensionMessageBubbleTest : public BrowserWithTestWindowTest {
@@ -356,6 +362,10 @@ class ExtensionMessageBubbleTest : public BrowserWithTestWindowTest {
         profile(), base::BindRepeating(&BuildToolbarModel));
   }
 
+  ExtensionMessageBubbleTest(const ExtensionMessageBubbleTest&) = delete;
+  ExtensionMessageBubbleTest& operator=(const ExtensionMessageBubbleTest&) =
+      delete;
+
   ~ExtensionMessageBubbleTest() override {}
 
   void SetUp() override {
@@ -426,13 +436,11 @@ class ExtensionMessageBubbleTest : public BrowserWithTestWindowTest {
   }
 
  protected:
-  ExtensionService* service_;
+  raw_ptr<ExtensionService> service_;
 
  private:
   std::unique_ptr<base::CommandLine> command_line_;
   std::unique_ptr<ScopedProfileKeepAlive> profile_keep_alive_;
-
-  DISALLOW_COPY_AND_ASSIGN(ExtensionMessageBubbleTest);
 };
 
 // Test that the bubble correctly treats dismissal due to deactivation.
@@ -709,13 +717,13 @@ TEST_F(ExtensionMessageBubbleTest, ShowDevModeBubbleOncePerOriginalProfile) {
 }
 
 // The feature this is meant to test is only implemented on Windows and Mac.
-#if defined(OS_WIN) || defined(OS_MAC)
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
 
 TEST_F(ExtensionMessageBubbleTest, SettingsApiControllerTest) {
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   // On Mac, this API is limited to trunk.
   ScopedCurrentChannel scoped_channel(version_info::Channel::UNKNOWN);
-#endif  // OS_MAC
+#endif  // BUILDFLAG(IS_MAC)
 
   Init();
 
@@ -851,7 +859,7 @@ TEST_F(ExtensionMessageBubbleTest, SettingsApiControllerTest) {
   }
 }
 
-#endif  // defined(OS_WIN) || defined(OS_MAC)
+#endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
 
 // Tests that a displayed extension bubble will be closed after its associated
 // enabled extension is uninstalled.
@@ -998,7 +1006,7 @@ void SetInstallTime(const std::string& extension_id,
 }
 
 // The feature this is meant to test is only implemented on Windows and Mac.
-#if defined(OS_WIN) || defined(OS_MAC)
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
 // http://crbug.com/397426
 #define MAYBE_ProxyOverriddenControllerTest DISABLED_ProxyOverriddenControllerTest
 #else
@@ -1006,10 +1014,10 @@ void SetInstallTime(const std::string& extension_id,
 #endif
 
 TEST_F(ExtensionMessageBubbleTest, MAYBE_ProxyOverriddenControllerTest) {
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   // On Mac, this API is limited to trunk.
   ScopedCurrentChannel scoped_channel(version_info::Channel::UNKNOWN);
-#endif  // OS_MAC
+#endif  // BUILDFLAG(IS_MAC)
 
   Init();
   ExtensionPrefs* prefs = ExtensionPrefs::Get(profile());
@@ -1026,7 +1034,7 @@ TEST_F(ExtensionMessageBubbleTest, MAYBE_ProxyOverriddenControllerTest) {
   // The bubble will not show if the extension was installed in the last 7 days
   // so we artificially set the install time to simulate an old install during
   // testing.
-  base::Time old_enough = base::Time::Now() - base::TimeDelta::FromDays(8);
+  base::Time old_enough = base::Time::Now() - base::Days(8);
   SetInstallTime(kId1, old_enough, prefs);
   SetInstallTime(kId2, base::Time::Now(), prefs);
   SetInstallTime(kId3, old_enough, prefs);

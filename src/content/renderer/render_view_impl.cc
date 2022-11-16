@@ -12,8 +12,10 @@
 #include "base/feature_list.h"
 #include "base/lazy_instance.h"
 #include "base/location.h"
-#include "base/single_thread_task_runner.h"
+#include "base/memory/ptr_util.h"
 #include "base/strings/string_piece.h"
+#include "base/task/single_thread_task_runner.h"
+#include "build/build_config.h"
 #include "cc/trees/ukm_manager.h"
 #include "content/common/agent_scheduling_group.mojom.h"
 #include "content/public/common/content_client.h"
@@ -21,16 +23,15 @@
 #include "content/public/common/content_features.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/renderer/content_renderer_client.h"
-#include "content/public/renderer/render_view_visitor.h"
+#include "content/public/renderer/render_thread.h"
 #include "content/public/renderer/window_features_converter.h"
 #include "content/renderer/agent_scheduling_group.h"
 #include "content/renderer/render_frame_impl.h"
 #include "content/renderer/render_frame_proxy.h"
-#include "content/renderer/render_thread_impl.h"
 #include "third_party/blink/public/mojom/page/page.mojom.h"
-#include "third_party/blink/public/platform/impression_conversions.h"
 #include "third_party/blink/public/platform/modules/video_capture/web_video_capture_impl_manager.h"
 #include "third_party/blink/public/platform/url_conversion.h"
+#include "third_party/blink/public/platform/web_url_request_util.h"
 #include "third_party/blink/public/web/modules/mediastream/web_media_stream_device_observer.h"
 #include "third_party/blink/public/web/web_frame_widget.h"
 #include "third_party/blink/public/web/web_local_frame.h"
@@ -73,6 +74,7 @@ WindowOpenDisposition RenderViewImpl::NavigationPolicyToDisposition(
     case blink::kWebNavigationPolicyNewWindow:
       return WindowOpenDisposition::NEW_WINDOW;
     case blink::kWebNavigationPolicyNewPopup:
+    case blink::kWebNavigationPolicyPictureInPicture:
       return WindowOpenDisposition::NEW_POPUP;
     default:
       NOTREACHED() << "Unexpected WebNavigationPolicy";
@@ -121,6 +123,10 @@ void RenderViewImpl::Initialize(
   webview_ = WebView::Create(
       this, params->hidden, params->is_prerendering,
       params->type == mojom::ViewWidgetType::kPortal ? true : false,
+      params->type == mojom::ViewWidgetType::kFencedFrame
+          ? params->fenced_frame_mode
+          : static_cast<absl::optional<blink::mojom::FencedFrameMode>>(
+                absl::nullopt),
       /*compositing_enabled=*/true, params->never_composited,
       opener_frame ? opener_frame->View() : nullptr,
       std::move(params->blink_page_broadcast),
@@ -128,25 +134,29 @@ void RenderViewImpl::Initialize(
       params->session_storage_namespace_id, params->base_background_color);
 
   g_view_map.Get().insert(std::make_pair(GetWebView(), this));
-  g_routing_id_view_map.Get().insert(std::make_pair(GetRoutingID(), this));
+  g_routing_id_view_map.Get().insert(std::make_pair(routing_id_, this));
 
   bool local_main_frame = params->main_frame->is_local_params();
 
+  webview_->SetRendererPreferences(params->renderer_preferences);
   webview_->SetWebPreferences(params->web_preferences);
 
   if (local_main_frame) {
     RenderFrameImpl::CreateMainFrame(
         agent_scheduling_group_, this, opener_frame,
-        params->type != mojom::ViewWidgetType::kTopLevel,
+        /*is_for_nested_main_frame=*/params->type !=
+            mojom::ViewWidgetType::kTopLevel,
+        /*is_for_scalable_page=*/params->type !=
+            mojom::ViewWidgetType::kFencedFrame,
         std::move(params->replication_state), params->devtools_main_frame_token,
         std::move(params->main_frame->get_local_params()));
   } else {
     RenderFrameProxy::CreateFrameProxy(
         agent_scheduling_group_, params->main_frame->get_remote_params()->token,
-        params->main_frame->get_remote_params()->routing_id,
-        params->opener_frame_token, GetRoutingID(), MSG_ROUTING_NONE,
+        params->opener_frame_token, routing_id_, absl::nullopt,
         blink::mojom::TreeScopeType::kDocument /* ignored for main frames */,
         std::move(params->replication_state), params->devtools_main_frame_token,
+        std::move(params->main_frame->get_remote_params()->frame_interfaces),
         std::move(
             params->main_frame->get_remote_params()->main_frame_interfaces));
   }
@@ -155,15 +165,8 @@ void RenderViewImpl::Initialize(
   if (params->window_was_opened_by_another_window)
     GetWebView()->SetOpenedByDOM();
 
-  webview_->SetRendererPreferences(params->renderer_preferences);
-
-  GetContentClient()->renderer()->WebViewCreated(webview_);
-
-#if defined(OS_ANDROID)
-  // TODO(sgurun): crbug.com/325351 Needed only for android webview's deprecated
-  // HandleNavigation codepath.
-  was_created_by_renderer_ = was_created_by_renderer;
-#endif
+  GetContentClient()->renderer()->WebViewCreated(webview_,
+                                                 was_created_by_renderer);
 }
 
 RenderViewImpl::~RenderViewImpl() {
@@ -184,7 +187,7 @@ RenderViewImpl::~RenderViewImpl() {
 }
 
 /*static*/
-RenderView* RenderView::FromWebView(blink::WebView* webview) {
+RenderViewImpl* RenderViewImpl::FromWebView(blink::WebView* webview) {
   DCHECK(RenderThread::IsMainThread());
   ViewMap* views = g_view_map.Pointer();
   auto it = views->find(webview);
@@ -200,12 +203,10 @@ RenderViewImpl* RenderViewImpl::FromRoutingID(int32_t routing_id) {
 }
 
 /*static*/
-void RenderView::ForEach(RenderViewVisitor* visitor) {
+void RenderViewImpl::DestroyAllRenderViewImpls() {
   DCHECK(RenderThread::IsMainThread());
-  ViewMap* views = g_view_map.Pointer();
-  for (auto it = views->begin(); it != views->end(); ++it) {
-    if (!visitor->Visit(it->second))
-      return;
+  while (!g_view_map.Get().empty()) {
+    g_view_map.Get().begin()->second->Destroy();
   }
 }
 
@@ -252,7 +253,9 @@ WebView* RenderViewImpl::CreateView(
     network::mojom::WebSandboxFlags sandbox_flags,
     const blink::SessionStorageNamespaceId& session_storage_namespace_id,
     bool& consumed_user_gesture,
-    const absl::optional<blink::WebImpression>& impression) {
+    const absl::optional<blink::Impression>& impression,
+    const absl::optional<blink::WebPictureInPictureWindowOptions>&
+        pip_options) {
   consumed_user_gesture = false;
   RenderFrameImpl* creator_frame = RenderFrameImpl::FromWebFrame(creator);
   mojom::CreateNewWindowParamsPtr params = mojom::CreateNewWindowParams::New();
@@ -285,8 +288,19 @@ WebView* RenderViewImpl::CreateView(
   }
   params->features = ConvertWebWindowFeaturesToMojoWindowFeatures(features);
 
-  if (impression) {
-    params->impression = blink::ConvertWebImpressionToImpression(*impression);
+  params->is_form_submission = request.IsFormSubmission();
+  params->form_submission_post_data =
+      blink::GetRequestBodyForWebURLRequest(request);
+  params->form_submission_post_content_type = request.HttpContentType().Utf8();
+
+  params->impression = impression;
+
+  if (pip_options) {
+    CHECK_EQ(policy, blink::kWebNavigationPolicyPictureInPicture);
+    auto pip_mojom_opts = blink::mojom::PictureInPictureWindowOptions::New();
+    pip_mojom_opts->initial_aspect_ratio = pip_options->initial_aspect_ratio;
+    pip_mojom_opts->lock_aspect_ratio = pip_options->lock_aspect_ratio;
+    params->pip_options = std::move(pip_mojom_opts);
   }
 
   params->download_policy.ApplyDownloadFramePolicy(
@@ -304,8 +318,18 @@ WebView* RenderViewImpl::CreateView(
   mojom::CreateNewWindowStatus status;
   mojom::CreateNewWindowReplyPtr reply;
   auto* frame_host = creator_frame->GetFrameHost();
-  bool err = !frame_host->CreateNewWindow(std::move(params), &status, &reply);
-  if (err || status == mojom::CreateNewWindowStatus::kIgnore)
+  if (!frame_host->CreateNewWindow(std::move(params), &status, &reply)) {
+    // The sync IPC failed, e.g. maybe the render process is in the middle of
+    // shutting down. Can't create a new window without the browser process,
+    // so just bail out.
+    return nullptr;
+  }
+
+  // If creation of the window was blocked (e.g. because this frame doesn't
+  // have user activation), return before consuming user activation. A frame
+  // that isn't allowed to open a window  shouldn't be able to consume the
+  // activation for the rest of the frame tree.
+  if (status == mojom::CreateNewWindowStatus::kBlocked)
     return nullptr;
 
   // For Android WebView, we support a pop-up like behavior for window.open()
@@ -320,15 +344,19 @@ WebView* RenderViewImpl::CreateView(
   if (status == mojom::CreateNewWindowStatus::kReuse)
     return GetWebView();
 
+  // Consume the transient user activation in the current renderer.
+  consumed_user_gesture = creator->ConsumeTransientUserActivation(
+      blink::UserActivationUpdateSource::kBrowser);
+
+  // If we should ignore the new window (e.g. because of `noopener`), return
+  // now that user activation was consumed.
+  if (status == mojom::CreateNewWindowStatus::kIgnore)
+    return nullptr;
+
   DCHECK(reply);
   DCHECK_NE(MSG_ROUTING_NONE, reply->route_id);
   DCHECK_NE(MSG_ROUTING_NONE, reply->main_frame_route_id);
   DCHECK_NE(MSG_ROUTING_NONE, reply->widget_params->routing_id);
-
-  // The browser allowed creation of a new window and consumed the user
-  // activation.
-  consumed_user_gesture = creator->ConsumeTransientUserActivation(
-      blink::UserActivationUpdateSource::kBrowser);
 
   // While this view may be a background extension page, it can spawn a visible
   // render view. So we just assume that the new one is not another background
@@ -344,7 +372,7 @@ WebView* RenderViewImpl::CreateView(
   mojom::CreateViewParamsPtr view_params = mojom::CreateViewParams::New();
 
   view_params->opener_frame_token = creator->GetFrameToken();
-  DCHECK_EQ(GetRoutingID(), creator_frame->render_view()->GetRoutingID());
+  DCHECK_EQ(routing_id_, creator_frame->render_view()->routing_id_);
 
   view_params->window_was_opened_by_another_window = true;
   view_params->renderer_preferences = webview_->GetRendererPreferences();
@@ -396,10 +424,6 @@ WebView* RenderViewImpl::CreateView(
 }
 
 // RenderView implementation ---------------------------------------------------
-
-int RenderViewImpl::GetRoutingID() {
-  return routing_id_;
-}
 
 blink::WebView* RenderViewImpl::GetWebView() {
   return webview_;

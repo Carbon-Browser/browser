@@ -9,10 +9,8 @@
 #include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
-#include "base/macros.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
-#include "base/task/post_task.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/timer/elapsed_timer.h"
 #include "chrome/browser/profiles/profile.h"
@@ -78,6 +76,9 @@ class FakeControllerConnection final
  public:
   FakeControllerConnection() {}
 
+  FakeControllerConnection(const FakeControllerConnection&) = delete;
+  FakeControllerConnection& operator=(const FakeControllerConnection&) = delete;
+
   void SendTextMessage(const std::string& message) {
     ASSERT_TRUE(receiver_connection_remote_.is_bound());
     receiver_connection_remote_->OnMessage(
@@ -108,8 +109,6 @@ class FakeControllerConnection final
       receiver_connection_receiver_{this};
   mojo::Remote<blink::mojom::PresentationConnection>
       receiver_connection_remote_;
-
-  DISALLOW_COPY_AND_ASSIGN(FakeControllerConnection);
 };
 
 // This class is used to wait for Terminate to finish before destroying a
@@ -285,7 +284,7 @@ IN_PROC_BROWSER_TEST_F(PresentationReceiverWindowControllerBrowserTest,
           controller_connection.MakeConnectionRequest(),
           media_router::MediaRoute("route",
                                    media_router::MediaSource(presentation_url),
-                                   "sink", "desc", true, true));
+                                   "sink", "desc", true));
 
   base::RunLoop connection_loop;
   EXPECT_CALL(controller_connection, OnMessage(_)).WillOnce([&](auto response) {

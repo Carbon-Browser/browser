@@ -3,9 +3,11 @@
 // found in the LICENSE file.
 
 import {NetworkType, RoutineType} from 'chrome://diagnostics/diagnostics_types.js';
-import {convertKibToGibDecimalString, getRoutinesByNetworkType, getSubnetMaskFromRoutingPrefix} from 'chrome://diagnostics/diagnostics_utils.js';
+import {convertKibToGibDecimalString, getNetworkCardTitle, getRoutineGroups, getSignalStrength, getSubnetMaskFromRoutingPrefix, setDisplayStateInTitleForTesting} from 'chrome://diagnostics/diagnostics_utils.js';
+import {RoutineGroup} from 'chrome://diagnostics/routine_group.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
 
-import {assertArrayEquals, assertEquals} from '../../chai_assert.js';
+import {assertArrayEquals, assertEquals, assertFalse, assertTrue} from '../../chai_assert.js';
 
 export function diagnosticsUtilsTestSuite() {
   test('ProperlyConvertsKibToGib', () => {
@@ -22,6 +24,8 @@ export function diagnosticsUtilsTestSuite() {
   });
 
   test('ConvertRoutingPrefixToSubnetMask', () => {
+    // '0' indicates an unset value.
+    assertEquals(getSubnetMaskFromRoutingPrefix(0), '');
     assertEquals(getSubnetMaskFromRoutingPrefix(1), '128.0.0.0');
     assertEquals(getSubnetMaskFromRoutingPrefix(2), '192.0.0.0');
     assertEquals(getSubnetMaskFromRoutingPrefix(3), '224.0.0.0');
@@ -56,48 +60,74 @@ export function diagnosticsUtilsTestSuite() {
     assertEquals(getSubnetMaskFromRoutingPrefix(32), '255.255.255.255');
   });
 
-  test('GetRoutinesByNetworkType', () => {
-    /** @type {!Array<!RoutineType>} */
-    const expectedRoutinesWifi = [
-      RoutineType.kCaptivePortal,
-      RoutineType.kDnsLatency,
-      RoutineType.kDnsResolution,
-      RoutineType.kDnsResolverPresent,
-      RoutineType.kGatewayCanBePinged,
-      RoutineType.kHttpFirewall,
-      RoutineType.kHttpsFirewall,
-      RoutineType.kHttpsLatency,
-      RoutineType.kLanConnectivity,
-      RoutineType.kArcHttp,
-      RoutineType.kArcPing,
-      // assertArrayEquals wants values in order, code appends values to end
-      // of array.
-      RoutineType.kHasSecureWiFiConnection,
-      RoutineType.kSignalStrength,
-    ];
+  test('AllRoutineGroupsPresent', () => {
+    loadTimeData.overrideValues({enableArcNetworkDiagnostics: true});
+    const isArcEnabled = loadTimeData.getBoolean('enableArcNetworkDiagnostics');
+    const routineGroups = getRoutineGroups(NetworkType.kWiFi, isArcEnabled);
+    const [
+      localNetworkGroup,
+       nameResolutionGroup,
+       wifiGroup,
+       internetConnectivityGroup,
+      ]
+      = routineGroups;
 
-    /** @type {!Array<!RoutineType>} */
-    const expectedRoutinesNotWifi = [
-      RoutineType.kCaptivePortal,
-      RoutineType.kDnsLatency,
-      RoutineType.kDnsResolution,
-      RoutineType.kDnsResolverPresent,
-      RoutineType.kGatewayCanBePinged,
-      RoutineType.kHttpFirewall,
-      RoutineType.kHttpsFirewall,
-      RoutineType.kHttpsLatency,
-      RoutineType.kLanConnectivity,
-      RoutineType.kArcHttp,
-      RoutineType.kArcPing,
-    ];
+    // All groups should be present.
+    assertEquals(routineGroups.length, 4);
 
-    assertArrayEquals(
-        expectedRoutinesWifi, getRoutinesByNetworkType(NetworkType.kWiFi));
-    assertArrayEquals(
-        expectedRoutinesNotWifi,
-        getRoutinesByNetworkType(NetworkType.kEthernet));
-    assertArrayEquals(
-        expectedRoutinesNotWifi,
-        getRoutinesByNetworkType(NetworkType.kCellular));
+    // WiFi group should exist and all three WiFi routines should be present.
+    assertEquals(wifiGroup.routines.length, 3);
+    assertEquals(wifiGroup.groupName, 'wifiGroupLabel');
+
+    // ARC routines should be present in their categories.
+    assertTrue(
+        nameResolutionGroup.routines.includes(RoutineType.kArcDnsResolution));
+
+    assertTrue(localNetworkGroup.routines.includes(RoutineType.kArcPing));
+    assertTrue(
+        internetConnectivityGroup.routines.includes(RoutineType.kArcHttp));
+  });
+
+  test('NetworkTypeIsNotWiFi', () => {
+    const isArcEnabled = loadTimeData.getBoolean('enableArcNetworkDiagnostics');
+    const routineGroups = getRoutineGroups(NetworkType.kEthernet, isArcEnabled);
+    // WiFi group should be missing.
+    assertEquals(routineGroups.length, 3);
+    const groupNames = routineGroups.map(group => group.groupName);
+    assertFalse(groupNames.includes('wifiGroupLabel'));
+  });
+
+  test('ArcRoutinesDisabled', () => {
+    loadTimeData.overrideValues({enableArcNetworkDiagnostics: false});
+    const isArcEnabled = loadTimeData.getBoolean('enableArcNetworkDiagnostics');
+    const routineGroups = getRoutineGroups(NetworkType.kEthernet, isArcEnabled);
+    const [localNetworkGroup, nameResolutionGroup, internetConnectivityGroup] =
+        routineGroups;
+    assertFalse(
+        nameResolutionGroup.routines.includes(RoutineType.kArcDnsResolution));
+
+    assertFalse(localNetworkGroup.routines.includes(RoutineType.kArcPing));
+    assertFalse(
+        internetConnectivityGroup.routines.includes(RoutineType.kArcHttp));
+  });
+
+  test('GetNetworkCardTitle', () => {
+    // Force connection state into title by setting displayStateInTitle to true.
+    setDisplayStateInTitleForTesting(true);
+    assertEquals(
+        'Ethernet (Online)', getNetworkCardTitle('Ethernet', 'Online'));
+
+    // Default state is to not display connection details in title.
+    setDisplayStateInTitleForTesting(false);
+    assertEquals('Ethernet', getNetworkCardTitle('Ethernet', 'Online'));
+  });
+
+  test('GetSignalStrength', () => {
+    assertEquals(getSignalStrength(0), '');
+    assertEquals(getSignalStrength(1), '');
+    assertEquals(getSignalStrength(14), 'Weak (14)');
+    assertEquals(getSignalStrength(33), 'Average (33)');
+    assertEquals(getSignalStrength(63), 'Good (63)');
+    assertEquals(getSignalStrength(98), 'Excellent (98)');
   });
 }

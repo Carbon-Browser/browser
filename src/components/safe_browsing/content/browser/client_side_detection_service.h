@@ -23,7 +23,6 @@
 #include "base/callback_forward.h"
 #include "base/containers/queue.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
@@ -35,6 +34,8 @@
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/notification_observer.h"
 #include "content/public/browser/notification_registrar.h"
+#include "content/public/browser/render_process_host_creation_observer.h"
+#include "net/base/ip_address.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "url/gurl.h"
 
@@ -49,7 +50,9 @@ class ClientSideDetectionHost;
 
 // Main service which pushes models to the renderers, responds to classification
 // requests. This owns two ModelLoader objects.
-class ClientSideDetectionService : public KeyedService {
+class ClientSideDetectionService
+    : public KeyedService,
+      public content::RenderProcessHostCreationObserver {
  public:
   // void(GURL phishing_url, bool is_phishing).
   typedef base::OnceCallback<void(GURL, bool)>
@@ -72,6 +75,11 @@ class ClientSideDetectionService : public KeyedService {
   };
 
   explicit ClientSideDetectionService(std::unique_ptr<Delegate> delegate);
+
+  ClientSideDetectionService(const ClientSideDetectionService&) = delete;
+  ClientSideDetectionService& operator=(const ClientSideDetectionService&) =
+      delete;
+
   ~ClientSideDetectionService() override;
 
   void Shutdown() override;
@@ -81,10 +89,8 @@ class ClientSideDetectionService : public KeyedService {
     return enabled_;
   }
 
-  void AddClientSideDetectionHost(ClientSideDetectionHost* host);
-  void RemoveClientSideDetectionHost(ClientSideDetectionHost* host);
-
   void OnURLLoaderComplete(network::SimpleURLLoader* url_loader,
+                           base::Time start_time,
                            std::unique_ptr<std::string> response_body);
 
   // Sends a request to the SafeBrowsing servers with the ClientPhishingRequest.
@@ -102,15 +108,17 @@ class ClientSideDetectionService : public KeyedService {
       ClientReportPhishingRequestCallback callback,
       const std::string& access_token);
 
-  // Returns true if the given IP address string falls within a private
+  // Returns true if the given IP address falls within a private
   // (unroutable) network block.  Pages which are hosted on these IP addresses
   // are exempt from client-side phishing detection.  This is called by the
   // ClientSideDetectionHost prior to sending the renderer a
   // SafeBrowsingMsg_StartPhishingDetection IPC.
-  //
-  // ip_address should be a dotted IPv4 address, or an unbracketed IPv6
-  // address.
-  virtual bool IsPrivateIPAddress(const std::string& ip_address) const;
+  virtual bool IsPrivateIPAddress(const net::IPAddress& address) const;
+
+  // Returns true if the given IP address does not refer to remote content. For
+  // example, local files and chrome:// pages will create navigations that
+  // return true.
+  virtual bool IsLocalResource(const net::IPAddress& address) const;
 
   // Returns true and sets is_phishing if url is in the cache and valid.
   virtual bool GetValidCachedResult(const GURL& url, bool* is_phishing);
@@ -144,6 +152,12 @@ class ClientSideDetectionService : public KeyedService {
   // Overrides the SharedURLLoaderFactory
   void SetURLLoaderFactoryForTesting(
       scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory);
+
+  // Sends a model to each renderer.
+  void SetPhishingModel(content::RenderProcessHost* rph);
+
+  // Returns a WeakPtr for this service.
+  base::WeakPtr<ClientSideDetectionService> GetWeakPtr();
 
  private:
   friend class ClientSideDetectionServiceTest;
@@ -211,6 +225,9 @@ class ClientSideDetectionService : public KeyedService {
   // Returns the URL that will be used for phishing requests.
   static GURL GetClientReportUrl(const std::string& report_url);
 
+  // content::RenderProcessHostCreationObserver:
+  void OnRenderProcessHostCreated(content::RenderProcessHost* rph) override;
+
   // Whether the service is running or not.  When the service is not running,
   // it won't download the model nor report detected phishing URLs.
   bool enabled_ = false;
@@ -244,8 +261,6 @@ class ClientSideDetectionService : public KeyedService {
   // PrefChangeRegistrar used to track when the Safe Browsing pref changes.
   PrefChangeRegistrar pref_change_registrar_;
 
-  std::vector<ClientSideDetectionHost*> csd_hosts_;
-
   std::unique_ptr<Delegate> delegate_;
 
   base::CallbackListSubscription update_model_subscription_;
@@ -253,8 +268,6 @@ class ClientSideDetectionService : public KeyedService {
   // Used to asynchronously call the callbacks for
   // SendClientReportPhishingRequest.
   base::WeakPtrFactory<ClientSideDetectionService> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ClientSideDetectionService);
 };
 
 }  // namespace safe_browsing

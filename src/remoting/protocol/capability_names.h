@@ -18,6 +18,7 @@ constexpr char kFileTransferCapability[] = "fileTransfer";
 constexpr char kRtcLogTransferCapability[] = "rtcLogTransfer";
 
 constexpr char kRemoteOpenUrlCapability[] = "remoteOpenUrl";
+constexpr char kRemoteWebAuthnCapability[] = "remoteWebAuthn";
 
 // TODO(joedow): Ideally these would be dynamically created via the
 // DataChannelManager, we should consider moving them there if we begin using
@@ -28,6 +29,11 @@ constexpr char kSendAttentionSequenceAction[] = "sendAttentionSequenceAction";
 // Host supports ICE or SDP restart request from control message. Only used for
 // WebRTC clients.
 constexpr char kWebrtcIceSdpRestartAction[] = "webrtcIceSdpRestartAction";
+
+// Host supports creating one video-stream per monitor.
+// TODO(lambroslambrou): Rename to "multiStream" once the feature is fully
+// implemented and working on the host side.
+constexpr char kMultiStreamCapability[] = "multiStream_inProgress";
 
 }  // namespace protocol
 }  // namespace remoting

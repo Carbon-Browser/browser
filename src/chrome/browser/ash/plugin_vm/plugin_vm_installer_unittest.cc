@@ -26,9 +26,11 @@
 #include "chrome/browser/ash/settings/scoped_cros_settings_test_helper.h"
 #include "chrome/browser/prefs/browser_prefs.h"
 #include "chrome/test/base/testing_profile.h"
-#include "chromeos/dbus/concierge/concierge_client.h"
-#include "chromeos/dbus/concierge/fake_concierge_client.h"
+#include "chromeos/ash/components/dbus/concierge/concierge_client.h"
+#include "chromeos/ash/components/dbus/concierge/fake_concierge_client.h"
+#include "chromeos/ash/components/dbus/vm_plugin_dispatcher/vm_plugin_dispatcher_client.h"
 #include "chromeos/dbus/dbus_thread_manager.h"
+#include "chromeos/dbus/debug_daemon/debug_daemon_client.h"
 #include "chromeos/dbus/dlcservice/fake_dlcservice_client.h"
 #include "components/account_id/account_id.h"
 #include "components/download/public/background_service/test/test_download_service.h"
@@ -155,12 +157,19 @@ class SimpleFakeDriveService : public drive::DummyDriveService {
 class PluginVmInstallerTestBase : public testing::Test {
  public:
   PluginVmInstallerTestBase() = default;
+
+  PluginVmInstallerTestBase(const PluginVmInstallerTestBase&) = delete;
+  PluginVmInstallerTestBase& operator=(const PluginVmInstallerTestBase&) =
+      delete;
+
   ~PluginVmInstallerTestBase() override = default;
 
  protected:
   void SetUp() override {
     chromeos::DBusThreadManager::Initialize();
-    chromeos::ConciergeClient::InitializeFake(/*fake_cicerone_client=*/nullptr);
+    ash::ConciergeClient::InitializeFake(/*fake_cicerone_client=*/nullptr);
+    chromeos::DebugDaemonClient::InitializeFake();
+    ash::VmPluginDispatcherClient::InitializeFake();
 
     ASSERT_TRUE(profiles_dir_.CreateUniqueTempDir());
     CreateProfile();
@@ -179,7 +188,7 @@ class PluginVmInstallerTestBase : public testing::Test {
 
     SetDefaultExpectations();
 
-    fake_concierge_client_ = chromeos::FakeConciergeClient::Get();
+    fake_concierge_client_ = ash::FakeConciergeClient::Get();
 
     chromeos::DlcserviceClient::InitializeFake();
     fake_dlcservice_client_ = static_cast<chromeos::FakeDlcserviceClient*>(
@@ -192,16 +201,18 @@ class PluginVmInstallerTestBase : public testing::Test {
     profile_.reset();
     observer_.reset();
 
-    chromeos::ConciergeClient::Shutdown();
+    ash::VmPluginDispatcherClient::Shutdown();
+    chromeos::DebugDaemonClient::Shutdown();
+    ash::ConciergeClient::Shutdown();
     chromeos::DBusThreadManager::Shutdown();
     chromeos::DlcserviceClient::Shutdown();
   }
 
   void SetPluginVmImagePref(std::string url, std::string hash) {
     DictionaryPrefUpdate update(profile_->GetPrefs(), prefs::kPluginVmImage);
-    base::DictionaryValue* plugin_vm_image = update.Get();
-    plugin_vm_image->SetKey("url", base::Value(url));
-    plugin_vm_image->SetKey("hash", base::Value(hash));
+    base::Value* plugin_vm_image = update.Get();
+    plugin_vm_image->SetStringKey("url", url);
+    plugin_vm_image->SetStringKey("hash", hash);
   }
 
   void SetRequiredFreeDiskSpaceGBPref(int required_free_disk_space) {
@@ -269,7 +280,7 @@ class PluginVmInstallerTestBase : public testing::Test {
 
   // A pointer to a singleton object which is valid until
   // ConciergeClient::Shutdown() is called.
-  chromeos::FakeConciergeClient* fake_concierge_client_;
+  ash::FakeConciergeClient* fake_concierge_client_;
   // Owned by chromeos::DBusThreadManager
   chromeos::FakeDlcserviceClient* fake_dlcservice_client_;
 
@@ -291,13 +302,17 @@ class PluginVmInstallerTestBase : public testing::Test {
   }
 
   base::ScopedTempDir profiles_dir_;
-
-  DISALLOW_COPY_AND_ASSIGN(PluginVmInstallerTestBase);
 };
 
 class PluginVmInstallerDownloadServiceTest : public PluginVmInstallerTestBase {
  public:
   PluginVmInstallerDownloadServiceTest() = default;
+
+  PluginVmInstallerDownloadServiceTest(
+      const PluginVmInstallerDownloadServiceTest&) = delete;
+  PluginVmInstallerDownloadServiceTest& operator=(
+      const PluginVmInstallerDownloadServiceTest&) = delete;
+
   ~PluginVmInstallerDownloadServiceTest() override = default;
 
  protected:
@@ -326,12 +341,16 @@ class PluginVmInstallerDownloadServiceTest : public PluginVmInstallerTestBase {
 
  private:
   std::unique_ptr<PluginVmImageDownloadClient> client_;
-  DISALLOW_COPY_AND_ASSIGN(PluginVmInstallerDownloadServiceTest);
 };
 
 class PluginVmInstallerDriveTest : public PluginVmInstallerTestBase {
  public:
   PluginVmInstallerDriveTest() = default;
+
+  PluginVmInstallerDriveTest(const PluginVmInstallerDriveTest&) = delete;
+  PluginVmInstallerDriveTest& operator=(const PluginVmInstallerDriveTest&) =
+      delete;
+
   ~PluginVmInstallerDriveTest() override = default;
 
  protected:
@@ -394,9 +413,6 @@ class PluginVmInstallerDriveTest : public PluginVmInstallerTestBase {
   PluginVmDriveImageDownloadService* drive_download_service_;
   drive::FakeDriveService* fake_drive_service_;
   std::unique_ptr<base::HistogramTester> histogram_tester_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(PluginVmInstallerDriveTest);
 };
 
 TEST_F(PluginVmInstallerDownloadServiceTest, ProgressUpdates) {
@@ -642,8 +658,8 @@ TEST_F(PluginVmInstallerDownloadServiceTest, VerifyDownloadTest) {
 }
 
 TEST_F(PluginVmInstallerDownloadServiceTest, CannotStartIfPluginVmIsDisabled) {
-  profile_->ScopedCrosSettingsTestHelper()->SetBoolean(
-      chromeos::kPluginVmAllowed, false);
+  profile_->ScopedCrosSettingsTestHelper()->SetBoolean(ash::kPluginVmAllowed,
+                                                       false);
   EXPECT_EQ(FailureReason::NOT_ALLOWED, installer_->Start());
   task_environment_.RunUntilIdle();
 }

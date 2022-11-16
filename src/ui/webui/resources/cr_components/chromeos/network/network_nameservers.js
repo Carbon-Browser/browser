@@ -13,7 +13,7 @@
 const NameserversType = {
   AUTOMATIC: 'automatic',
   CUSTOM: 'custom',
-  GOOGLE: 'google'
+  GOOGLE: 'google',
 };
 
 Polymer({
@@ -69,14 +69,14 @@ Polymer({
       value() {
         return this.i18nAdvanced(
             'networkNameserversGoogle', {substitutions: [], tags: ['a']});
-      }
+      },
     },
 
     /** @private */
     canChangeConfigType_: {
       type: Boolean,
       computed: 'computeCanChangeConfigType_(managedProperties)',
-    }
+    },
   },
 
   /** @const */
@@ -190,7 +190,9 @@ Polymer({
 
     // Update the 'nameservers' property.
     let nameservers = [];
-    const ipv4 = OncMojo.getIPConfigForType(this.managedProperties, 'IPv4');
+    const ipv4 = OncMojo.getIPConfigForType(
+        this.managedProperties,
+        chromeos.networkConfig.mojom.IPConfigType.kIPv4);
     if (ipv4 && ipv4.nameServers) {
       nameservers = ipv4.nameServers.slice();
     }

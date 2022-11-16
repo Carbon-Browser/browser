@@ -5,11 +5,10 @@
 #import "components/open_from_clipboard/clipboard_recent_content_ios.h"
 
 #import <CommonCrypto/CommonDigest.h>
+#import <UIKit/UIKit.h>
 #include <stddef.h>
 #include <stdint.h>
-#import <UIKit/UIKit.h>
 
-#include "base/cxx17_backports.h"
 #include "base/metrics/user_metrics.h"
 #include "base/notreached.h"
 #include "base/strings/sys_string_conversions.h"
@@ -35,7 +34,7 @@ const char* kAuthorizedSchemes[] = {
 NSSet<NSString*>* getAuthorizedSchemeList(
     const std::string& application_scheme) {
   NSMutableSet<NSString*>* schemes = [NSMutableSet set];
-  for (size_t i = 0; i < base::size(kAuthorizedSchemes); ++i) {
+  for (size_t i = 0; i < std::size(kAuthorizedSchemes); ++i) {
     [schemes addObject:base::SysUTF8ToNSString(kAuthorizedSchemes[i])];
   }
   if (!application_scheme.empty()) {
@@ -150,6 +149,27 @@ void ClipboardRecentContentIOS::HasRecentContentFromClipboard(
             }];
 }
 
+// This value will be nullopt during the brief period
+// when the clipboard is updating its cache, which is triggered by a
+// pasteboardDidChange notification. It may also be nullopt if the app decides
+// it should not return the value of the clipboard, for example if the current
+// clipboard contents are too old.
+absl::optional<std::set<ClipboardContentType>>
+ClipboardRecentContentIOS::GetCachedClipboardContentTypes() {
+  NSSet<ContentType>* current_content_types =
+      [implementation_ cachedClipboardContentTypes];
+  if (!current_content_types) {
+    return absl::nullopt;
+  }
+  std::set<ClipboardContentType> current_content_types_ios;
+
+  for (ContentType type in current_content_types) {
+    current_content_types_ios.insert(ClipboardContentTypeFromContentType(type));
+  }
+
+  return current_content_types_ios;
+}
+
 void ClipboardRecentContentIOS::GetRecentURLFromClipboard(
     GetRecentURLCallback callback) {
   __block GetRecentURLCallback callback_for_block = std::move(callback);
@@ -222,7 +242,7 @@ void ClipboardRecentContentIOS::GetRecentImageFromClipboard(
 ClipboardRecentContentIOS::~ClipboardRecentContentIOS() {}
 
 base::TimeDelta ClipboardRecentContentIOS::GetClipboardContentAge() const {
-  return base::TimeDelta::FromSeconds(
+  return base::Seconds(
       static_cast<int64_t>([implementation_ clipboardContentAge]));
 }
 

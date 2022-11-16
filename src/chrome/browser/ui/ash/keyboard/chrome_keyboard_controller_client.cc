@@ -28,8 +28,8 @@
 #include "extensions/browser/event_router.h"
 #include "extensions/common/api/virtual_keyboard_private.h"
 #include "extensions/common/extension_messages.h"
-#include "ui/base/ime/chromeos/ime_bridge.h"
-#include "ui/base/ime/chromeos/input_method_manager.h"
+#include "ui/base/ime/ash/ime_bridge.h"
+#include "ui/base/ime/ash/input_method_manager.h"
 #include "ui/base/ime/input_method.h"
 #include "ui/base/ime/text_input_client.h"
 #include "ui/gfx/geometry/rect.h"
@@ -248,8 +248,7 @@ GURL ChromeKeyboardControllerClient::GetVirtualKeyboardUrl() {
   if (!virtual_keyboard_url_for_test_.is_empty())
     return virtual_keyboard_url_for_test_;
 
-  chromeos::input_method::InputMethodManager* ime_manager =
-      chromeos::input_method::InputMethodManager::Get();
+  auto* ime_manager = ash::input_method::InputMethodManager::Get();
   if (!ime_manager || !ime_manager->GetActiveIMEState())
     return GURL(keyboard::kKeyboardURL);
 
@@ -295,7 +294,7 @@ void ChromeKeyboardControllerClient::OnKeyboardEnabledChanged(bool enabled) {
   auto event = std::make_unique<extensions::Event>(
       extensions::events::VIRTUAL_KEYBOARD_PRIVATE_ON_KEYBOARD_CLOSED,
       virtual_keyboard_private::OnKeyboardClosed::kEventName,
-      std::vector<base::Value>(), profile);
+      base::Value::List(), profile);
   router->BroadcastEvent(std::move(event));
 }
 
@@ -341,18 +340,18 @@ void ChromeKeyboardControllerClient::OnKeyboardVisibleBoundsChanged(
 
   // Convert screen bounds to the frame of reference of the keyboard window.
   gfx::Rect bounds = BoundsFromScreen(screen_bounds);
-  auto event_args = std::make_unique<base::ListValue>();
-  auto new_bounds = std::make_unique<base::DictionaryValue>();
-  new_bounds->SetInteger("left", bounds.x());
-  new_bounds->SetInteger("top", bounds.y());
-  new_bounds->SetInteger("width", bounds.width());
-  new_bounds->SetInteger("height", bounds.height());
-  event_args->Append(std::move(new_bounds));
+  base::Value::List event_args;
+  base::Value::Dict new_bounds;
+  new_bounds.Set("left", bounds.x());
+  new_bounds.Set("top", bounds.y());
+  new_bounds.Set("width", bounds.width());
+  new_bounds.Set("height", bounds.height());
+  event_args.Append(std::move(new_bounds));
 
   auto event = std::make_unique<extensions::Event>(
       extensions::events::VIRTUAL_KEYBOARD_PRIVATE_ON_BOUNDS_CHANGED,
       virtual_keyboard_private::OnBoundsChanged::kEventName,
-      std::move(*event_args).TakeList(), profile);
+      std::move(event_args), profile);
   router->BroadcastEvent(std::move(event));
 }
 

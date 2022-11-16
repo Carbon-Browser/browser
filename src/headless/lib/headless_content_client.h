@@ -19,6 +19,10 @@ namespace headless {
 class HeadlessContentClient : public content::ContentClient {
  public:
   HeadlessContentClient();
+
+  HeadlessContentClient(const HeadlessContentClient&) = delete;
+  HeadlessContentClient& operator=(const HeadlessContentClient&) = delete;
+
   ~HeadlessContentClient() override;
 
   // content::ContentClient implementation:
@@ -27,6 +31,7 @@ class HeadlessContentClient : public content::ContentClient {
       int resource_id,
       ui::ResourceScaleFactor scale_factor) override;
   base::RefCountedMemory* GetDataResourceBytes(int resource_id) override;
+  std::string GetDataResourceString(int resource_id) override;
   gfx::Image& GetNativeImageNamed(int resource_id) override;
   blink::OriginTrialPolicy* GetOriginTrialPolicy() override;
 
@@ -34,8 +39,6 @@ class HeadlessContentClient : public content::ContentClient {
   // Used to lock when |origin_trial_policy_| is initialized.
   base::Lock origin_trial_policy_lock_;
   std::unique_ptr<embedder_support::OriginTrialPolicyImpl> origin_trial_policy_;
-
-  DISALLOW_COPY_AND_ASSIGN(HeadlessContentClient);
 };
 
 }  // namespace headless

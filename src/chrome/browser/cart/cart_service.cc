@@ -9,18 +9,24 @@
 #include "base/no_destructor.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/thread_pool.h"
-#include "chrome/browser/cart/cart_db_content.pb.h"
 #include "chrome/browser/cart/cart_discount_metric_collector.h"
-#include "chrome/browser/cart/cart_features.h"
-#include "chrome/browser/commerce/commerce_feature_list.h"
+#include "chrome/browser/cart/chrome_cart.mojom.h"
+#include "chrome/browser/commerce/coupons/coupon_service_factory.h"
 #include "chrome/browser/history/history_service_factory.h"
 #include "chrome/browser/optimization_guide/optimization_guide_keyed_service.h"
 #include "chrome/browser/optimization_guide/optimization_guide_keyed_service_factory.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
+#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
+#include "chrome/browser/ui/commerce/commerce_prompt.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/grit/browser_resources.h"
 #include "chrome/grit/generated_resources.h"
+#include "components/autofill/core/browser/data_model/autofill_offer_data.h"
+#include "components/commerce/core/commerce_feature_list.h"
+#include "components/commerce/core/commerce_heuristics_data.h"
+#include "components/commerce/core/commerce_heuristics_data_metrics_helper.h"
+#include "components/commerce/core/proto/cart_db_content.pb.h"
 #include "components/optimization_guide/proto/hints.pb.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/scoped_user_pref_update.h"
@@ -37,8 +43,12 @@
 
 namespace {
 constexpr char kFakeDataPrefix[] = "Fake:";
-constexpr char kNoRbdUtmTag[] = "chrome_cart_no_rbd";
-constexpr char kRbdUtmTag[] = "chrome_cart_rbd";
+constexpr char kUTMSourceTag[] = "chrome";
+constexpr char kUTMMediumTag[] = "app";
+constexpr char kUTMCampaignChromeCartTag[] = "chrome-cart";
+constexpr char kUTMCampaignDiscountTag[] = "chrome-cart-discount-on";
+constexpr char kUTMCampaignNoDiscountTag[] = "chrome-cart-discount-off";
+constexpr char kCartPrefsKey[] = "chrome_cart";
 
 constexpr base::FeatureParam<std::string> kSkipCartExtractionPattern{
     &ntp_features::kNtpChromeCartModule, "skip-cart-extraction-pattern",
@@ -47,7 +57,7 @@ constexpr base::FeatureParam<std::string> kSkipCartExtractionPattern{
 
 constexpr base::FeatureParam<bool> kRbdUtmParam{
     &ntp_features::kNtpChromeCartModule,
-    ntp_features::kNtpChromeCartModuleAbandonedCartDiscountUseUtmParam, false};
+    ntp_features::kNtpChromeCartModuleAbandonedCartDiscountUseUtmParam, true};
 
 constexpr base::FeatureParam<bool> kBypassDisocuntFetchingThreshold{
     &commerce::kCommerceDeveloper, "bypass-discount-fetching-threshold", false};
@@ -57,15 +67,10 @@ std::string eTLDPlusOne(const GURL& url) {
       url, net::registry_controlled_domains::INCLUDE_PRIVATE_REGISTRIES);
 }
 
-bool IsFakeDataEnabled() {
-  return base::GetFieldTrialParamValueByFeature(
-             ntp_features::kNtpChromeCartModule,
-             ntp_features::kNtpChromeCartModuleDataParam) == "fake";
-}
-
 std::string GetKeyForURL(const GURL& url) {
   std::string domain = eTLDPlusOne(url);
-  return IsFakeDataEnabled() ? std::string(kFakeDataPrefix) + domain : domain;
+  return commerce::IsFakeDataEnabled() ? std::string(kFakeDataPrefix) + domain
+                                       : domain;
 }
 
 bool CompareTimeStampForProtoPair(const CartDB::KeyAndValue pair1,
@@ -74,9 +79,9 @@ bool CompareTimeStampForProtoPair(const CartDB::KeyAndValue pair1,
 }
 
 absl::optional<base::Value> JSONToDictionary(int resource_id) {
-  base::StringPiece json_resource(
-      ui::ResourceBundle::GetSharedInstance().GetRawDataResource(resource_id));
-  absl::optional<base::Value> value = base::JSONReader::Read(json_resource);
+  absl::optional<base::Value> value = base::JSONReader::Read(
+      ui::ResourceBundle::GetSharedInstance().LoadDataResourceString(
+          resource_id));
   DCHECK(value && value.has_value() && value->is_dict());
   return value;
 }
@@ -93,26 +98,43 @@ const re2::RE2& GetSkipCartExtractionPattern() {
                                                options);
   return *instance;
 }
+
+// Check if any product in existing_proto is no longer in new_proto.
+bool ProductsRemoved(cart_db::ChromeCartContentProto existing_proto,
+                     cart_db::ChromeCartContentProto new_proto) {
+  if (existing_proto.product_infos_size() == 0)
+    return false;
+  if (existing_proto.product_infos_size() > new_proto.product_infos_size())
+    return true;
+  std::set<std::string> new_proto_product_ids;
+  for (auto new_product : new_proto.product_infos()) {
+    new_proto_product_ids.insert(new_product.product_id());
+  }
+  for (auto existing_product : existing_proto.product_infos()) {
+    bool product_remains =
+        new_proto_product_ids.find(existing_product.product_id()) !=
+        new_proto_product_ids.end();
+    if (!product_remains)
+      return true;
+  }
+  return false;
+}
 }  // namespace
 
 CartService::CartService(Profile* profile)
     : profile_(profile),
       cart_db_(std::make_unique<CartDB>(profile_)),
-      history_service_(HistoryServiceFactory::GetForProfile(
-          profile_,
-          ServiceAccessType::EXPLICIT_ACCESS)),
       domain_name_mapping_(JSONToDictionary(IDR_CART_DOMAIN_NAME_MAPPING_JSON)),
       domain_cart_url_mapping_(
           JSONToDictionary(IDR_CART_DOMAIN_CART_URL_MAPPING_JSON)),
       discount_link_fetcher_(std::make_unique<CartDiscountLinkFetcher>()),
       metrics_tracker_(std::make_unique<CartMetricsTracker>(
-          chrome::FindTabbedBrowser(profile, false))) {
-  if (history_service_) {
-    history_service_observation_.Observe(history_service_);
-  }
-  if (base::GetFieldTrialParamValueByFeature(
-          ntp_features::kNtpChromeCartModule,
-          ntp_features::kNtpChromeCartModuleDataParam) == "fake") {
+          chrome::FindTabbedBrowser(profile, false))),
+      coupon_service_(CouponServiceFactory::GetForProfile(profile)) {
+  history_service_observation_.Observe(HistoryServiceFactory::GetForProfile(
+      profile_, ServiceAccessType::EXPLICIT_ACCESS));
+  coupon_service_->MaybeFeatureStatusChanged(IsCartAndDiscountEnabled());
+  if (commerce::IsFakeDataEnabled()) {
     AddCartsWithFakeData();
   } else {
     // In case last deconstruction is interrupted and fake data is not deleted.
@@ -128,6 +150,13 @@ CartService::CartService(Profile* profile)
     optimization_guide_decider_->RegisterOptimizationTypes(
         {optimization_guide::proto::SHOPPING_PAGE_PREDICTOR});
   }
+
+  pref_change_registrar_.Init(profile->GetPrefs());
+  auto callback = base::BindRepeating(&CartService::OnCartFeaturesChanged,
+                                      weak_ptr_factory_.GetWeakPtr());
+  pref_change_registrar_.Add(prefs::kNtpDisabledModules, callback);
+  pref_change_registrar_.Add(prefs::kCartDiscountEnabled, callback);
+  pref_change_registrar_.Add(prefs::kNtpModulesVisible, callback);
 }
 
 CartService::~CartService() = default;
@@ -139,19 +168,15 @@ void CartService::RegisterProfilePrefs(PrefRegistrySimple* registry) {
   registry->RegisterBooleanPref(prefs::kCartDiscountEnabled, false);
   registry->RegisterDictionaryPref(prefs::kCartUsedDiscounts);
   registry->RegisterTimePref(prefs::kCartDiscountLastFetchedTime, base::Time());
-}
-
-GURL CartService::AppendUTM(const GURL& base_url, bool is_discount_enabled) {
-  DCHECK(base_url.is_valid() &&
-         cart_features::IsRuleDiscountPartnerMerchant(base_url));
-
-  if (kRbdUtmParam.Get()) {
-    return net::AppendOrReplaceQueryParameter(
-        base_url, "utm_source",
-        is_discount_enabled ? kRbdUtmTag : kNoRbdUtmTag);
-  } else {
-    return base_url;
-  }
+  registry->RegisterBooleanPref(prefs::kCartDiscountConsentShown, false);
+  registry->RegisterTimePref(prefs::kDiscountConsentLastDimissedTime,
+                             base::Time());
+  registry->RegisterIntegerPref(prefs::kDiscountConsentPastDismissedCount, 0);
+  registry->RegisterIntegerPref(prefs::kDiscountConsentDecisionMadeIn, 0);
+  registry->RegisterIntegerPref(prefs::kDiscountConsentDismissedIn, 0);
+  registry->RegisterIntegerPref(prefs::kDiscountConsentLastShownInVariation, 0);
+  registry->RegisterBooleanPref(prefs::kDiscountConsentShowInterest, false);
+  registry->RegisterIntegerPref(prefs::kDiscountConsentShowInterestIn, 0);
 }
 
 void CartService::Hide() {
@@ -163,7 +188,8 @@ void CartService::RestoreHidden() {
 }
 
 bool CartService::IsHidden() {
-  return profile_->GetPrefs()->GetBoolean(prefs::kCartModuleHidden);
+  return !base::FeatureList::IsEnabled(ntp_features::kNtpModulesRedesigned) &&
+         profile_->GetPrefs()->GetBoolean(prefs::kCartModuleHidden);
 }
 
 void CartService::LoadCart(const std::string& domain,
@@ -185,16 +211,17 @@ void CartService::AddCart(const std::string& domain,
                                             domain, cart_url, proto));
 }
 
-void CartService::DeleteCart(const std::string& domain,
-                             bool ignore_remove_status) {
+void CartService::DeleteCart(const GURL& url, bool ignore_remove_status) {
+  coupon_service_->DeleteFreeListingCouponsForUrl(url);
   if (ignore_remove_status) {
-    cart_db_->DeleteCart(domain,
+    cart_db_->DeleteCart(eTLDPlusOne(url),
                          base::BindOnce(&CartService::OnOperationFinished,
                                         weak_ptr_factory_.GetWeakPtr()));
     return;
   }
-  cart_db_->LoadCart(domain, base::BindOnce(&CartService::OnDeleteCart,
-                                            weak_ptr_factory_.GetWeakPtr()));
+  cart_db_->LoadCart(eTLDPlusOne(url),
+                     base::BindOnce(&CartService::OnDeleteCart,
+                                    weak_ptr_factory_.GetWeakPtr()));
 }
 
 void CartService::HideCart(const GURL& cart_url,
@@ -245,26 +272,67 @@ bool CartService::ShouldShowWelcomeSurface() {
 }
 
 void CartService::AcknowledgeDiscountConsent(bool should_enable) {
-  if (IsFakeDataEnabled()) {
+  if (commerce::IsFakeDataEnabled()) {
     return;
   }
   profile_->GetPrefs()->SetBoolean(prefs::kCartDiscountAcknowledged, true);
   profile_->GetPrefs()->SetBoolean(prefs::kCartDiscountEnabled, should_enable);
+  profile_->GetPrefs()->SetInteger(
+      prefs::kDiscountConsentDecisionMadeIn,
+      commerce::kNtpChromeCartModuleDiscountConsentNtpVariation.Get());
 
-  if (should_enable &&
-      base::GetFieldTrialParamValueByFeature(
-          ntp_features::kNtpChromeCartModule,
-          ntp_features::kNtpChromeCartModuleAbandonedCartDiscountParam) ==
-          "true") {
+  if (should_enable && commerce::IsCartDiscountFeatureEnabled()) {
     StartGettingDiscount();
   }
+}
+
+void CartService::DismissedDiscountConsent() {
+  if (commerce::IsFakeDataEnabled()) {
+    return;
+  }
+  profile_->GetPrefs()->SetTime(prefs::kDiscountConsentLastDimissedTime,
+                                base::Time::Now());
+  int past_dimissed_count = profile_->GetPrefs()->GetInteger(
+      prefs::kDiscountConsentPastDismissedCount);
+  profile_->GetPrefs()->SetInteger(prefs::kDiscountConsentPastDismissedCount,
+                                   past_dimissed_count + 1);
+  profile_->GetPrefs()->SetInteger(
+      prefs::kDiscountConsentDismissedIn,
+      commerce::kNtpChromeCartModuleDiscountConsentNtpVariation.Get());
+}
+
+void CartService::InterestedInDiscountConsent() {
+  if (commerce::IsFakeDataEnabled()) {
+    return;
+  }
+  profile_->GetPrefs()->SetBoolean(prefs::kDiscountConsentShowInterest, true);
+  profile_->GetPrefs()->SetInteger(
+      prefs::kDiscountConsentShowInterestIn,
+      commerce::kNtpChromeCartModuleDiscountConsentNtpVariation.Get());
+}
+
+const GURL CartService::AppendUTM(const GURL& base_url) {
+  DCHECK(base_url.is_valid());
+  if (!kRbdUtmParam.Get())
+    return base_url;
+  auto url = base_url;
+  url = net::AppendOrReplaceQueryParameter(url, "utm_source", kUTMSourceTag);
+  url = net::AppendOrReplaceQueryParameter(url, "utm_medium", kUTMMediumTag);
+  if (commerce::IsPartnerMerchant(base_url)) {
+    return net::AppendOrReplaceQueryParameter(url, "utm_campaign",
+                                              IsCartDiscountEnabled()
+                                                  ? kUTMCampaignDiscountTag
+                                                  : kUTMCampaignNoDiscountTag);
+  }
+  return net::AppendOrReplaceQueryParameter(url, "utm_campaign",
+                                            kUTMCampaignChromeCartTag);
 }
 
 void CartService::ShouldShowDiscountConsent(
     base::OnceCallback<void(bool)> callback) {
   DCHECK(content::BrowserThread::CurrentlyOn(content::BrowserThread::UI));
-  if (IsFakeDataEnabled()) {
-    content::GetUIThreadTaskRunner({base::TaskPriority::BEST_EFFORT})
+  if (commerce::IsFakeDataEnabled()) {
+    content::GetUIThreadTaskRunner({base::TaskPriority::USER_BLOCKING})
         ->PostTask(FROM_HERE, base::BindOnce(
                                   [](base::OnceCallback<void(bool)> callback) {
                                     std::move(callback).Run(true);
@@ -272,56 +340,141 @@ void CartService::ShouldShowDiscountConsent(
                                   std::move(callback)));
     return;
   }
-  bool should_not_show =
-      ShouldShowWelcomeSurface() ||
-      base::GetFieldTrialParamValueByFeature(
-          ntp_features::kNtpChromeCartModule,
-          ntp_features::kNtpChromeCartModuleAbandonedCartDiscountParam) !=
-          "true" ||
-      profile_->GetPrefs()->GetBoolean(prefs::kCartDiscountAcknowledged);
-  if (should_not_show) {
-    content::GetUIThreadTaskRunner({base::TaskPriority::BEST_EFFORT})
-        ->PostTask(FROM_HERE, base::BindOnce(
-                                  [](base::OnceCallback<void(bool)> callback) {
-                                    std::move(callback).Run(false);
-                                  },
-                                  std::move(callback)));
+  LoadAllActiveCarts(
+      base::BindOnce(&CartService::ShouldShowDiscountConsentCallback,
+                     weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
+}
+
+void CartService::RecordDiscountConsentStatusAtLoad(bool should_show_consent) {
+  if (profile_->GetPrefs()->GetBoolean(prefs::kCartDiscountAcknowledged)) {
+    CartDiscountMetricCollector::RecordDiscountConsentStatus(
+        profile_->GetPrefs()->GetBoolean(prefs::kCartDiscountEnabled)
+            ? CartDiscountMetricCollector::DiscountConsentStatus::ACCEPTED
+            : CartDiscountMetricCollector::DiscountConsentStatus::DECLINED);
+
+    commerce::DiscountConsentNtpVariation decision_made_in_variation =
+        static_cast<commerce::DiscountConsentNtpVariation>(
+            profile_->GetPrefs()->GetInteger(
+                prefs::kDiscountConsentDecisionMadeIn));
+    if (profile_->GetPrefs()->GetBoolean(prefs::kCartDiscountEnabled)) {
+      CartDiscountMetricCollector::RecordDiscountConsentStatusAcceptedIn(
+          decision_made_in_variation);
+    } else {
+      CartDiscountMetricCollector::RecordDiscountConsentStatusRejectedIn(
+          decision_made_in_variation);
+    }
+    CartDiscountMetricCollector::
+        RecordDiscountConsentStatusNoShowAfterDecidedIn(
+            decision_made_in_variation);
   } else {
-    LoadAllActiveCarts(base::BindOnce(&CartService::HasPartnerCarts,
-                                      weak_ptr_factory_.GetWeakPtr(),
-                                      std::move(callback)));
+    if (profile_->GetPrefs()->GetInteger(
+            prefs::kDiscountConsentPastDismissedCount) > 0) {
+      CartDiscountMetricCollector::RecordDiscountConsentStatusDismissedIn(
+          static_cast<commerce::DiscountConsentNtpVariation>(
+              profile_->GetPrefs()->GetInteger(
+                  prefs::kDiscountConsentDismissedIn)));
+    }
+
+    if (profile_->GetPrefs()->GetBoolean(prefs::kDiscountConsentShowInterest)) {
+      CartDiscountMetricCollector::RecordDiscountConsentStatusShowInterestIn(
+          static_cast<commerce::DiscountConsentNtpVariation>(
+              profile_->GetPrefs()->GetInteger(
+                  prefs::kDiscountConsentShowInterestIn)));
+    }
+
+    commerce::DiscountConsentNtpVariation last_shown_in_variation =
+        static_cast<commerce::DiscountConsentNtpVariation>(
+            profile_->GetPrefs()->GetInteger(
+                prefs::kDiscountConsentLastShownInVariation));
+    commerce::DiscountConsentNtpVariation current_variation =
+        static_cast<commerce::DiscountConsentNtpVariation>(
+            commerce::kNtpChromeCartModuleDiscountConsentNtpVariation.Get());
+    if (!should_show_consent) {
+      CartDiscountMetricCollector::RecordDiscountConsentStatus(
+          profile_->GetPrefs()->GetBoolean(prefs::kCartDiscountConsentShown)
+              ? CartDiscountMetricCollector::DiscountConsentStatus::NO_SHOW
+              : CartDiscountMetricCollector::DiscountConsentStatus::
+                    NEVER_SHOWN);
+
+      if (current_variation != last_shown_in_variation) {
+        CartDiscountMetricCollector::RecordDiscountConsentStatusNeverShowIn(
+            current_variation);
+      } else if (profile_->GetPrefs()->GetBoolean(
+                     prefs::kCartDiscountConsentShown)) {
+        CartDiscountMetricCollector::RecordDiscountConsentStatusNoShowIn(
+            current_variation);
+      }
+
+    } else {
+      profile_->GetPrefs()->SetBoolean(prefs::kCartDiscountConsentShown, true);
+      CartDiscountMetricCollector::RecordDiscountConsentStatus(
+          CartDiscountMetricCollector::DiscountConsentStatus::IGNORED);
+
+      CartDiscountMetricCollector::RecordDiscountConsentStatusIgnoredIn(
+          last_shown_in_variation);
+      CartDiscountMetricCollector::RecordDiscountConsentStatusShownIn(
+          current_variation);
+      profile_->GetPrefs()->SetInteger(
+          prefs::kDiscountConsentLastShownInVariation,
+          static_cast<int>(current_variation));
+    }
   }
 }
 
-void CartService::HasPartnerCarts(
+void CartService::ShouldShowDiscountConsentCallback(
     base::OnceCallback<void(bool)> callback,
     bool success,
     std::vector<CartDB::KeyAndValue> proto_pairs) {
-  for (auto proto_pair : proto_pairs) {
-    if (cart_features::IsPartnerMerchant(
-            GURL(proto_pair.second.merchant_cart_url()))) {
-      std::move(callback).Run(true);
-      return;
+  if (proto_pairs.size() == 0 || ShouldShowWelcomeSurface() ||
+      !commerce::IsCartDiscountFeatureEnabled()) {
+    std::move(callback).Run(false);
+    return;
+  }
+
+  bool should_show = false;
+  if (!profile_->GetPrefs()->GetBoolean(prefs::kCartDiscountAcknowledged)) {
+    // Only show discount consent when there is abandoned cart(s) from partner
+    // merchants.
+    for (auto proto_pair : proto_pairs) {
+      should_show |= commerce::IsPartnerMerchant(
+          GURL(proto_pair.second.merchant_cart_url()));
+    }
+
+    if (base::FeatureList::IsEnabled(commerce::kDiscountConsentV2)) {
+      base::Time last_dismissed_time = profile_->GetPrefs()->GetTime(
+          prefs::kDiscountConsentLastDimissedTime);
+      base::TimeDelta reshow_time_delta =
+          commerce::kNtpChromeCartModuleDiscountConsentReshowTime.Get() -
+          (base::Time::Now() - last_dismissed_time);
+      int last_dismissed_count = profile_->GetPrefs()->GetInteger(
+          prefs::kDiscountConsentPastDismissedCount);
+      should_show &=
+          (last_dismissed_time == base::Time() ||
+           reshow_time_delta.is_negative()) &&
+          last_dismissed_count <
+              commerce::kNtpChromeCartModuleDiscountConsentMaxDismissalCount
+                  .Get();
     }
   }
-  std::move(callback).Run(false);
+
+  RecordDiscountConsentStatusAtLoad(should_show);
+
+  std::move(callback).Run(should_show);
+}
+
+bool CartService::ShouldShowDiscountToggle() {
+  return profile_->GetPrefs()->GetBoolean(prefs::kCartDiscountAcknowledged);
 }
 
 bool CartService::IsCartDiscountEnabled() {
-  if (base::GetFieldTrialParamValueByFeature(
-          ntp_features::kNtpChromeCartModule,
-          ntp_features::kNtpChromeCartModuleAbandonedCartDiscountParam) !=
-      "true") {
+  if (!commerce::IsCartDiscountFeatureEnabled()) {
     return false;
   }
   return profile_->GetPrefs()->GetBoolean(prefs::kCartDiscountEnabled);
 }
 
 void CartService::SetCartDiscountEnabled(bool enabled) {
-  DCHECK(base::GetFieldTrialParamValueByFeature(
-             ntp_features::kNtpChromeCartModule,
-             ntp_features::kNtpChromeCartModuleAbandonedCartDiscountParam) ==
-         "true");
+  DCHECK(commerce::IsCartDiscountFeatureEnabled());
   profile_->GetPrefs()->SetBoolean(prefs::kCartDiscountEnabled, enabled);
 
   if (enabled) {
@@ -336,15 +489,12 @@ void CartService::SetCartDiscountEnabled(bool enabled) {
 void CartService::GetDiscountURL(
     const GURL& cart_url,
     base::OnceCallback<void(const ::GURL&)> callback) {
-  auto url = cart_url;
-  if (cart_features::IsRuleDiscountPartnerMerchant(cart_url)) {
-    url = AppendUTM(cart_url, IsCartDiscountEnabled());
-  }
-
-  if (!cart_features::IsRuleDiscountPartnerMerchant(cart_url) ||
-      !IsCartDiscountEnabled()) {
+  auto url = AppendUTM(cart_url);
+  if (commerce::IsFakeDataEnabled() || !IsCartDiscountEnabled()) {
     std::move(callback).Run(url);
-    CartDiscountMetricCollector::RecordClickedOnDiscount(false);
+    if (!commerce::IsFakeDataEnabled()) {
+      CartDiscountMetricCollector::RecordClickedOnDiscount(false);
+    }
     return;
   }
   LoadCart(eTLDPlusOne(cart_url), base::BindOnce(&CartService::OnGetDiscountURL,
@@ -366,8 +516,12 @@ void CartService::OnGetDiscountURL(
   auto& cart_proto = proto_pairs[0].second;
   if (!IsCartDiscountEnabled() ||
       cart_proto.discount_info().rule_discount_info().empty()) {
+    if (cart_proto.discount_info().has_coupons()) {
+      CartDiscountMetricCollector::RecordClickedOnDiscount(true);
+    } else {
+      CartDiscountMetricCollector::RecordClickedOnDiscount(false);
+    }
     std::move(callback).Run(default_cart_url);
-    CartDiscountMetricCollector::RecordClickedOnDiscount(false);
     return;
   }
   auto pending_factory = profile_->GetDefaultStoragePartition()
@@ -388,9 +542,8 @@ void CartService::OnDiscountURLFetched(
     base::OnceCallback<void(const ::GURL&)> callback,
     const cart_db::ChromeCartContentProto& cart_proto,
     const GURL& discount_url) {
-  std::move(callback).Run(discount_url.is_valid()
-                              ? AppendUTM(discount_url, IsCartDiscountEnabled())
-                              : default_cart_url);
+  std::move(callback).Run(discount_url.is_valid() ? AppendUTM(discount_url)
+                                                  : default_cart_url);
   if (discount_url.is_valid()) {
     CacheUsedDiscounts(cart_proto);
     CleanUpDiscounts(cart_proto);
@@ -401,8 +554,7 @@ void CartService::OnDiscountURLFetched(
 void CartService::PrepareForNavigation(const GURL& cart_url,
                                        bool is_navigating) {
   metrics_tracker_->PrepareToRecordUKM(cart_url);
-  if (is_navigating ||
-      !cart_features::IsRuleDiscountPartnerMerchant(cart_url) ||
+  if (is_navigating || !commerce::IsRuleDiscountPartnerMerchant(cart_url) ||
       !IsCartDiscountEnabled()) {
     return;
   }
@@ -432,10 +584,10 @@ void CartService::OnOperationFinishedWithCallback(
 }
 
 void CartService::Shutdown() {
-  if (history_service_) {
-    history_service_observation_.Reset();
+  history_service_observation_.Reset();
+  if (commerce::IsFakeDataEnabled()) {
+    DeleteCartsWithFakeData();
   }
-  DeleteCartsWithFakeData();
   // Delete content of all carts that are removed.
   cart_db_->LoadAllCarts(base::BindOnce(&CartService::DeleteRemovedCartsContent,
                                         weak_ptr_factory_.GetWeakPtr()));
@@ -451,6 +603,7 @@ void CartService::OnURLsDeleted(history::HistoryService* history_service,
   // history deletion happens.
   cart_db_->DeleteAllCarts(base::BindOnce(&CartService::OnOperationFinished,
                                           weak_ptr_factory_.GetWeakPtr()));
+  coupon_service_->DeleteAllFreeListingCoupons();
 }
 
 CartDB* CartService::GetDB() {
@@ -462,7 +615,7 @@ void CartService::AddCartsWithFakeData() {
   // Polulate and add some carts with fake data.
   double time_now = base::Time::Now().ToDoubleT();
   cart_db::ChromeCartContentProto dummy_proto1;
-  GURL dummy_url1 = GURL("https://shopping.google.com");
+  GURL dummy_url1 = GURL("https://www.example.com");
   dummy_proto1.set_key(std::string(kFakeDataPrefix) + eTLDPlusOne(dummy_url1));
   dummy_proto1.set_merchant("Cart Foo");
   dummy_proto1.set_merchant_cart_url(dummy_url1.spec());
@@ -470,6 +623,7 @@ void CartService::AddCartsWithFakeData() {
   dummy_proto1.mutable_discount_info()->set_discount_text(
       l10n_util::GetStringFUTF8(IDS_NTP_MODULES_CART_DISCOUNT_CHIP_AMOUNT,
                                 u"15%"));
+  dummy_proto1.mutable_discount_info()->set_has_coupons(true);
   dummy_proto1.add_product_image_urls(
       "https://encrypted-tbn3.gstatic.com/"
       "shopping?q=tbn:ANd9GcQpn38jB2_BANnHUFa7kHJsf6SyubcgeU1lNYO_"
@@ -488,13 +642,33 @@ void CartService::AddCartsWithFakeData() {
   cart_db_->AddCart(dummy_proto1.key(), dummy_proto1,
                     base::BindOnce(&CartService::OnOperationFinished,
                                    weak_ptr_factory_.GetWeakPtr()));
+  // Add a fake code coupon associated with this dummy cart. If more fake coupon
+  // data is added, please also delete them in DeleteCartsWithFakeData.
+  base::flat_map<GURL,
+                 std::vector<std::unique_ptr<autofill::AutofillOfferData>>>
+      coupon_map;
+  int64_t offer_id = 123;
+  base::Time expiry = base::Time::Now() + base::Days(3);
+  std::vector<GURL> merchant_origins;
+  merchant_origins.emplace_back(dummy_url1);
+  GURL offer_details_url = GURL();
+  autofill::DisplayStrings display_strings;
+  display_strings.value_prop_text = "15% off on everything";
+  std::string promo_code = "15PERCENTOFF";
+
+  auto offer = std::make_unique<autofill::AutofillOfferData>(
+      autofill::AutofillOfferData::FreeListingCouponOffer(
+          offer_id, expiry, merchant_origins, offer_details_url,
+          display_strings, promo_code));
+  coupon_map[dummy_url1].emplace_back(std::move(offer));
+  coupon_service_->UpdateFreeListingCoupons(coupon_map);
 
   cart_db::ChromeCartContentProto dummy_proto2;
   GURL dummy_url2 = GURL("https://www.amazon.com/");
   dummy_proto2.set_key(std::string(kFakeDataPrefix) + eTLDPlusOne(dummy_url2));
   dummy_proto2.set_merchant("Cart Bar");
   dummy_proto2.set_merchant_cart_url(dummy_url2.spec());
-  dummy_proto2.set_timestamp(time_now + 5);
+  dummy_proto2.set_timestamp(time_now + 3);
   dummy_proto2.mutable_discount_info()->set_discount_text(
       l10n_util::GetStringFUTF8(IDS_NTP_MODULES_CART_DISCOUNT_CHIP_AMOUNT,
                                 u"20%"));
@@ -535,7 +709,7 @@ void CartService::AddCartsWithFakeData() {
   dummy_proto4.set_key(std::string(kFakeDataPrefix) + eTLDPlusOne(dummy_url4));
   dummy_proto4.set_merchant("Cart Qux");
   dummy_proto4.set_merchant_cart_url(dummy_url4.spec());
-  dummy_proto4.set_timestamp(time_now + 3);
+  dummy_proto4.set_timestamp(time_now + 5);
   dummy_proto4.add_product_image_urls(
       "https://encrypted-tbn0.gstatic.com/"
       "shopping?q=tbn:ANd9GcQyMRYWeM2Yq095nOXTL0-"
@@ -602,6 +776,8 @@ void CartService::AddCartsWithFakeData() {
 }
 
 void CartService::DeleteCartsWithFakeData() {
+  coupon_service_->DeleteFreeListingCouponsForUrl(
+      GURL("https://www.example.com"));
   cart_db_->DeleteCartsWithPrefix(
       kFakeDataPrefix, base::BindOnce(&CartService::OnOperationFinished,
                                       weak_ptr_factory_.GetWeakPtr()));
@@ -638,7 +814,9 @@ bool CartService::ShouldSkip(const GURL& url) {
 void CartService::OnLoadCarts(CartDB::LoadCallback callback,
                               bool success,
                               std::vector<CartDB::KeyAndValue> proto_pairs) {
-  if (IsFakeDataEnabled()) {
+  if (commerce::IsFakeDataEnabled()) {
+    std::sort(proto_pairs.begin(), proto_pairs.end(),
+              CompareTimeStampForProtoPair);
     std::move(callback).Run(success, std::move(proto_pairs));
     return;
   }
@@ -648,11 +826,11 @@ void CartService::OnLoadCarts(CartDB::LoadCallback callback,
   }
   std::set<std::string> merchants_to_erase;
   for (CartDB::KeyAndValue kv : proto_pairs) {
-    if (IsExpired(kv.second) ||
-        ShouldSkip(GURL(kv.second.merchant_cart_url()))) {
+    const GURL& cart_url(GURL(kv.second.merchant_cart_url()));
+    if (IsExpired(kv.second) || ShouldSkip(cart_url)) {
       // Removed carts should remain removed.
       if (!kv.second.is_removed()) {
-        DeleteCart(kv.second.key(), true);
+        DeleteCart(cart_url, true);
       }
       merchants_to_erase.emplace(kv.second.key());
     }
@@ -685,10 +863,11 @@ void CartService::SetCartHiddenStatus(
     CartDB::OperationCallback callback,
     bool success,
     std::vector<CartDB::KeyAndValue> proto_pairs) {
-  if (!success) {
+  DCHECK(success);
+  DCHECK_EQ(1U, proto_pairs.size());
+  if (!success || proto_pairs.size() != 1) {
     return;
   }
-  DCHECK_EQ(1U, proto_pairs.size());
   CartDB::KeyAndValue proto_pair = proto_pairs[0];
   proto_pair.second.set_is_hidden(isHidden);
   cart_db_->AddCart(
@@ -702,10 +881,11 @@ void CartService::SetCartRemovedStatus(
     CartDB::OperationCallback callback,
     bool success,
     std::vector<CartDB::KeyAndValue> proto_pairs) {
-  if (!success) {
+  DCHECK(success);
+  DCHECK_EQ(1U, proto_pairs.size());
+  if (!success || proto_pairs.size() != 1) {
     return;
   }
-  DCHECK_EQ(1U, proto_pairs.size());
   CartDB::KeyAndValue proto_pair = proto_pairs[0];
   proto_pair.second.set_is_removed(isRemoved);
   cart_db_->AddCart(
@@ -724,16 +904,35 @@ void CartService::OnAddCart(const std::string& domain,
   }
   // Restore module visibility anytime a cart-related action happens.
   RestoreHidden();
-  std::string* merchant_name = domain_name_mapping_->FindStringKey(domain);
-  if (merchant_name) {
-    proto.set_merchant(*merchant_name);
+  absl::optional<std::string> merchant_name_from_component =
+      commerce_heuristics::CommerceHeuristicsData::GetInstance()
+          .GetMerchantName(domain);
+  std::string* merchant_name_from_resource =
+      domain_name_mapping_->FindStringKey(domain);
+  if (merchant_name_from_component.has_value()) {
+    proto.set_merchant(*merchant_name_from_component);
+    CommerceHeuristicsDataMetricsHelper::RecordMerchantNameSource(
+        CommerceHeuristicsDataMetricsHelper::HeuristicsSource::FROM_COMPONENT);
+  } else if (merchant_name_from_resource) {
+    proto.set_merchant(*merchant_name_from_resource);
+    CommerceHeuristicsDataMetricsHelper::RecordMerchantNameSource(
+        CommerceHeuristicsDataMetricsHelper::HeuristicsSource::FROM_RESOURCE);
+  } else {
+    CommerceHeuristicsDataMetricsHelper::RecordMerchantNameSource(
+        CommerceHeuristicsDataMetricsHelper::HeuristicsSource::MISSING);
   }
   if (cart_url) {
     proto.set_merchant_cart_url(cart_url->spec());
   } else {
-    std::string* fallback_url = domain_cart_url_mapping_->FindStringKey(domain);
-    if (fallback_url) {
-      proto.set_merchant_cart_url(*fallback_url);
+    absl::optional<std::string> fallback_url_from_component =
+        commerce_heuristics::CommerceHeuristicsData::GetInstance()
+            .GetMerchantCartURL(domain);
+    std::string* fallback_url_from_resource =
+        domain_cart_url_mapping_->FindStringKey(domain);
+    if (fallback_url_from_component.has_value()) {
+      proto.set_merchant_cart_url(*fallback_url_from_component);
+    } else if (fallback_url_from_resource) {
+      proto.set_merchant_cart_url(*fallback_url_from_resource);
     }
   }
 
@@ -775,6 +974,12 @@ void CartService::OnAddCart(const std::string& domain,
   if (cart_url) {
     existing_proto.set_merchant_cart_url(cart_url->spec());
   }
+  // If some products in the existing cart are no longer in the new cart, remove
+  // the corresponding coupons.
+  if (has_product_image && ProductsRemoved(existing_proto, proto)) {
+    coupon_service_->DeleteFreeListingCouponsForUrl(
+        GURL(existing_proto.merchant_cart_url()));
+  }
 
   if (proto.product_infos().size()) {
     // If no product images, this addition comes from AddToCart detection and
@@ -782,17 +987,19 @@ void CartService::OnAddCart(const std::string& domain,
     // cart if not included already.
     if (!has_product_image) {
       DCHECK_EQ(1, proto.product_infos().size());
-      auto new_product_info = std::move(proto.product_infos().at(0));
-      bool is_included = false;
-      for (auto product_proto : existing_proto.product_infos()) {
-        is_included |=
-            (product_proto.product_id() == new_product_info.product_id());
-        if (is_included)
-          break;
-      }
-      if (!is_included) {
-        auto* added_product = existing_proto.add_product_infos();
-        *added_product = std::move(new_product_info);
+      if (proto.product_infos().size() == 1) {
+        auto new_product_info = std::move(proto.product_infos().at(0));
+        bool is_included = false;
+        for (auto product_proto : existing_proto.product_infos()) {
+          is_included |=
+              (product_proto.product_id() == new_product_info.product_id());
+          if (is_included)
+            break;
+        }
+        if (!is_included) {
+          auto* added_product = existing_proto.add_product_infos();
+          *added_product = std::move(new_product_info);
+        }
       }
     } else {
       *(existing_proto.mutable_product_infos()) =
@@ -846,9 +1053,9 @@ void CartService::StartGettingDiscount() {
 
   base::Time last_fetched_time =
       profile_->GetPrefs()->GetTime(prefs::kCartDiscountLastFetchedTime);
-  base::TimeDelta fetch_delay = cart_features::kDiscountFetchDelayParam.Get() -
+  base::TimeDelta fetch_delay = commerce::GetDiscountFetchDelay() -
                                 (base::Time::Now() - last_fetched_time);
-  if (last_fetched_time == base::Time() || fetch_delay < base::TimeDelta() ||
+  if (last_fetched_time == base::Time() || fetch_delay.is_negative() ||
       kBypassDisocuntFetchingThreshold.Get()) {
     fetch_delay = base::TimeDelta();
   }
@@ -878,6 +1085,11 @@ bool CartService::IsDiscountUsed(const std::string& rule_id) {
 void CartService::RecordFetchTimestamp() {
   profile_->GetPrefs()->SetTime(prefs::kCartDiscountLastFetchedTime,
                                 base::Time::Now());
+}
+
+void CartService::UpdateFreeListingCoupons(
+    const CouponService::CouponsMap& map) {
+  coupon_service_->UpdateFreeListingCoupons(map);
 }
 
 void CartService::CacheUsedDiscounts(
@@ -915,14 +1127,25 @@ void CartService::CleanUpDiscounts(cart_db::ChromeCartContentProto proto) {
 
 void CartService::OnDeleteCart(bool success,
                                std::vector<CartDB::KeyAndValue> proto_pairs) {
-  if (proto_pairs.empty())
-    return;
-  DCHECK_EQ(1U, proto_pairs.size());
-  if (proto_pairs[0].second.is_removed())
+  if (proto_pairs.size() != 1 || proto_pairs[0].second.is_removed())
     return;
   cart_db_->DeleteCart(proto_pairs[0].first,
                        base::BindOnce(&CartService::OnOperationFinished,
                                       weak_ptr_factory_.GetWeakPtr()));
+}
+
+void CartService::OnCartFeaturesChanged(const std::string& pref_name) {
+  coupon_service_->MaybeFeatureStatusChanged(IsCartAndDiscountEnabled());
+}
+
+bool CartService::IsCartAndDiscountEnabled() {
+  auto* list = profile_->GetPrefs()->GetList(prefs::kNtpDisabledModules);
+  if (list &&
+      base::Contains(list->GetListDeprecated(), base::Value(kCartPrefsKey))) {
+    return false;
+  }
+  return profile_->GetPrefs()->GetBoolean(prefs::kCartDiscountEnabled) &&
+         profile_->GetPrefs()->GetBoolean(prefs::kNtpModulesVisible);
 }
 
 void CartService::SetCartDiscountLinkFetcherForTesting(
@@ -933,4 +1156,16 @@ void CartService::SetCartDiscountLinkFetcherForTesting(
 void CartService::SetFetchDiscountWorkerForTesting(
     std::unique_ptr<FetchDiscountWorker> fetch_discount_worker) {
   fetch_discount_worker_for_testing_ = std::move(fetch_discount_worker);
+}
+
+void CartService::SetCouponServiceForTesting(CouponService* coupon_service) {
+  coupon_service_ = coupon_service;
+}
+
+void CartService::ShowNativeConsentDialog(
+    Browser* browser,
+    base::OnceCallback<void(chrome_cart::mojom::ConsentStatus)>
+        consent_status_callback) {
+  commerce::ShowDiscountConsentPrompt(browser,
+                                      std::move(consent_status_callback));
 }

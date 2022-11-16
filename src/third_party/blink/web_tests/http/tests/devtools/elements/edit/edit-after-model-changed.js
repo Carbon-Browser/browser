@@ -4,7 +4,7 @@
 
 (async function() {
   TestRunner.addResult(`Tests that SSP maintains focus if changes occur while editing\n`);
-  await TestRunner.loadModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
+  await TestRunner.loadLegacyModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
   await TestRunner.showPanel('elements');
   await TestRunner.loadHTML(`
     <div id="inspected">Inspected Node</div>
@@ -38,7 +38,7 @@
   }
 
   function dumpFocus() {
-    const element = document.deepActiveElement();
+    const element = Platform.DOMUtilities.deepActiveElement(document);
     TestRunner.addResult(`Active element: ${element.tagName}, ${element.className}`);
   }
 })();

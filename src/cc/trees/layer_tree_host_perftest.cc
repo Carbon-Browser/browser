@@ -2,8 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "cc/trees/layer_tree_host.h"
-
 #include <stdint.h>
 
 #include <sstream>
@@ -11,10 +9,12 @@
 #include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/path_service.h"
 #include "base/strings/string_piece.h"
 #include "base/time/time.h"
 #include "base/timer/lap_timer.h"
+#include "build/build_config.h"
 #include "cc/layers/nine_patch_layer.h"
 #include "cc/layers/solid_color_layer.h"
 #include "cc/layers/texture_layer.h"
@@ -22,6 +22,7 @@
 #include "cc/test/layer_tree_json_parser.h"
 #include "cc/test/layer_tree_test.h"
 #include "cc/test/test_layer_tree_frame_sink.h"
+#include "cc/trees/layer_tree_host.h"
 #include "cc/trees/layer_tree_impl.h"
 #include "components/viz/test/paths.h"
 #include "gpu/command_buffer/common/mailbox.h"
@@ -39,13 +40,12 @@ class LayerTreeHostPerfTest : public LayerTreeTest {
  public:
   LayerTreeHostPerfTest()
       : draw_timer_(kWarmupRuns,
-                    base::TimeDelta::FromMilliseconds(kTimeLimitMillis),
+                    base::Milliseconds(kTimeLimitMillis),
                     kTimeCheckInterval),
         commit_timer_(0, base::TimeDelta(), 1),
         full_damage_each_frame_(false),
         begin_frame_driven_drawing_(false),
-        measure_commit_cost_(false) {
-  }
+        measure_commit_cost_(false) {}
 
   std::unique_ptr<TestLayerTreeFrameSink> CreateLayerTreeFrameSink(
       const viz::RendererSettings& renderer_settings,
@@ -60,7 +60,7 @@ class LayerTreeHostPerfTest : public LayerTreeTest {
     return std::make_unique<TestLayerTreeFrameSink>(
         compositor_context_provider, std::move(worker_context_provider),
         gpu_memory_buffer_manager(), renderer_settings, &debug_settings_,
-        ImplThreadTaskRunner(), synchronous_composite, disable_display_vsync,
+        task_runner_provider(), synchronous_composite, disable_display_vsync,
         refresh_rate);
   }
 
@@ -166,7 +166,7 @@ class LayerTreeHostPerfTestJsonReader : public LayerTreeHostPerfTest {
 
 // Simulates a tab switcher scene with two stacks of 10 tabs each.
 // Timed out on Android: http://crbug.com/723821
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #define MAYBE_TenTenSingleThread DISABLED_TenTenSingleThread
 #else
 #define MAYBE_TenTenSingleThread TenTenSingleThread
@@ -178,7 +178,7 @@ TEST_F(LayerTreeHostPerfTestJsonReader, MAYBE_TenTenSingleThread) {
 }
 
 // Timed out on Android: http://crbug.com/723821
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #define MAYBE_TenTenThreaded DISABLED_TenTenThreaded
 #else
 #define MAYBE_TenTenThreaded TenTenThreaded
@@ -228,7 +228,7 @@ class LayerTreeHostPerfTestLeafInvalidates
   }
 
  protected:
-  Layer* layer_to_invalidate_;
+  raw_ptr<Layer> layer_to_invalidate_;
 };
 
 // Simulates a tab switcher scene with two stacks of 10 tabs each. Invalidate a
@@ -264,8 +264,7 @@ class ScrollingLayerTreePerfTest : public LayerTreeHostPerfTestJsonReader {
       return;
     static const gfx::Vector2d delta = gfx::Vector2d(0, 10);
     SetScrollOffset(scrollable_.get(),
-                    gfx::ScrollOffsetWithDelta(
-                        CurrentScrollOffset(scrollable_.get()), delta));
+                    CurrentScrollOffset(scrollable_.get()) + delta);
   }
 
  private:
@@ -273,7 +272,7 @@ class ScrollingLayerTreePerfTest : public LayerTreeHostPerfTestJsonReader {
 };
 
 // Timed out on Android: http://crbug.com/723821
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #define MAYBE_LongScrollablePageSingleThread \
     DISABLED_LongScrollablePageSingleThread
 #else
@@ -286,7 +285,7 @@ TEST_F(ScrollingLayerTreePerfTest, MAYBE_LongScrollablePageSingleThread) {
 }
 
 // Timed out on Android: http://crbug.com/723821
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #define MAYBE_LongScrollablePageThreaded DISABLED_LongScrollablePageThreaded
 #else
 #define MAYBE_LongScrollablePageThreaded LongScrollablePageThreaded
@@ -315,7 +314,7 @@ class BrowserCompositorInvalidateLayerTreePerfTest
     ASSERT_TRUE(tab_contents_.get());
   }
 
-  void WillCommit() override {
+  void WillCommit(const CommitState&) override {
     if (CleanUpStarted())
       return;
     gpu::Mailbox gpu_mailbox;
@@ -390,7 +389,7 @@ TEST_F(BrowserCompositorInvalidateLayerTreePerfTest, DenseBrowserUIThreaded) {
 
 // Simulates a page with several large, transformed and animated layers.
 // Timed out on Android: http://crbug.com/723821
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #define MAYBE_HeavyPageThreaded DISABLED_HeavyPageThreaded
 #else
 #define MAYBE_HeavyPageThreaded HeavyPageThreaded

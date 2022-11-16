@@ -11,7 +11,6 @@
 #include "base/bind.h"
 #include "base/compiler_specific.h"
 #include "base/i18n/rtl.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/string_util.h"
 #include "base/strings/sys_string_conversions.h"
@@ -49,6 +48,10 @@ namespace remoting {
 class DisconnectWindowMac : public HostWindow {
  public:
   DisconnectWindowMac();
+
+  DisconnectWindowMac(const DisconnectWindowMac&) = delete;
+  DisconnectWindowMac& operator=(const DisconnectWindowMac&) = delete;
+
   ~DisconnectWindowMac() override;
 
   // HostWindow overrides.
@@ -57,8 +60,6 @@ class DisconnectWindowMac : public HostWindow {
 
  private:
   DisconnectWindowController* window_controller_;
-
-  DISALLOW_COPY_AND_ASSIGN(DisconnectWindowMac);
 };
 
 DisconnectWindowMac::DisconnectWindowMac()
@@ -90,7 +91,7 @@ void DisconnectWindowMac::Start(
   NSRect frame = NSMakeRect(0, 0, 466, 40);
   DisconnectWindow* window =
       [[[DisconnectWindow alloc] initWithContentRect:frame
-                                           styleMask:NSBorderlessWindowMask
+                                           styleMask:NSWindowStyleMaskBorderless
                                              backing:NSBackingStoreBuffered
                                                defer:NO] autorelease];
   window_controller_ = [[DisconnectWindowController alloc]
@@ -235,9 +236,9 @@ std::unique_ptr<HostWindow> HostWindow::CreateDisconnectWindow() {
                           styleMask:(NSUInteger)aStyle
                             backing:(NSBackingStoreType)bufferingType
                               defer:(BOOL)flag {
-  // Pass NSBorderlessWindowMask for the styleMask to remove the title bar.
+  // Pass NSWindowStyleMaskBorderless for the styleMask to remove the title bar.
   self = [super initWithContentRect:contentRect
-                          styleMask:NSBorderlessWindowMask
+                          styleMask:NSWindowStyleMaskBorderless
                             backing:bufferingType
                               defer:flag];
 

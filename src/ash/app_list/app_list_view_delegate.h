@@ -15,7 +15,6 @@
 #include "ash/public/cpp/app_list/app_list_types.h"
 #include "ash/public/cpp/ash_public_export.h"
 #include "base/callback_forward.h"
-#include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/base/ui_base_types.h"
 #include "ui/events/event_constants.h"
@@ -29,23 +28,14 @@ class SimpleMenuModel;
 
 namespace ash {
 
-class AppListModel;
 class AppListNotifier;
 enum class AppListViewState;
 struct AppLaunchedMetricParams;
-class SearchModel;
 
+// Wrapper for AppListControllerImpl, used by various app list views.
 class ASH_PUBLIC_EXPORT AppListViewDelegate {
  public:
   virtual ~AppListViewDelegate() = default;
-
-  // Gets the model associated with the view delegate. The model may be owned
-  // by the delegate, or owned elsewhere (e.g. a profile keyed service).
-  virtual AppListModel* GetModel() = 0;
-
-  // Gets the search model associated with the view delegate. The model may be
-  // owned by the delegate, or owned elsewhere (e.g. a profile keyed service).
-  virtual SearchModel* GetSearchModel() = 0;
 
   // Returns the AppListNotifier instance. The notifier is owned by the
   // AppListClient, and may be nullptr if no client has been set for the
@@ -60,6 +50,13 @@ class ASH_PUBLIC_EXPORT AppListViewDelegate {
   // box by the user.
   virtual void StartSearch(const std::u16string& raw_query) = 0;
 
+  // Starts zero state search to load suggested content shown in productivity
+  // launcher. Called when the tablet mode productivity launcher visibility
+  // starts changing to visible. `callback` is called when the zero state search
+  // completes, or times out (i.e. takes more time than `timeout`).
+  virtual void StartZeroStateSearch(base::OnceClosure callback,
+                                    base::TimeDelta timeout) = 0;
+
   // Invoked to open the search result and log a click. If the result is
   // represented by a SuggestedChipView or is a zero state result,
   // |suggested_index| is the index of the view in the list of suggestions.
@@ -70,7 +67,6 @@ class ASH_PUBLIC_EXPORT AppListViewDelegate {
   // |launch_as_default|: True if the result is launched as the default result
   // by user pressing ENTER key.
   virtual void OpenSearchResult(const std::string& result_id,
-                                AppListSearchResultType result_type,
                                 int event_flags,
                                 AppListLaunchedFrom launched_from,
                                 AppListLaunchType launch_type,
@@ -78,10 +74,8 @@ class ASH_PUBLIC_EXPORT AppListViewDelegate {
                                 bool launch_as_default) = 0;
 
   // Called to invoke a custom action on a result with |result_id|.
-  // |action_index| corresponds to the index of an icon in
-  // |result.action_icons()|.
   virtual void InvokeSearchResultAction(const std::string& result_id,
-                                        int action_index) = 0;
+                                        SearchResultActionType action) = 0;
 
   // Returns the context menu model for a ChromeSearchResult with |result_id|,
   // or nullptr if there is currently no menu for the result.
@@ -112,12 +106,11 @@ class ASH_PUBLIC_EXPORT AppListViewDelegate {
 
   // Returns the context menu model for a ChromeAppListItem with |id|, or
   // nullptr if there is currently no menu for the item (e.g. during install).
-  // Note the returned menu model is owned by that item.
+  // `item_context` indicates which piece of UI is showing the item (e.g. apps
+  // grid or recent apps). Note the returned menu model is owned by that item.
   virtual void GetContextMenuModel(const std::string& id,
+                                   AppListItemContext item_context,
                                    GetContextMenuModelCallback callback) = 0;
-
-  // Sorts app list items (including apps and folders) with the given order.
-  virtual void SortAppList(AppListSortOrder order) = 0;
 
   // Returns an animation observer if the |target_state| is interesting to the
   // delegate.
@@ -136,7 +129,9 @@ class ASH_PUBLIC_EXPORT AppListViewDelegate {
   // its descendants.
   virtual bool CanProcessEventsOnApplistViews() = 0;
 
-  // Returns whether the AppListView should dismiss immediately.
+  // Returns whether the app list should dismiss immediately. For example, when
+  // the assistant takes a screenshot the app list is closed immediately so it
+  // doesn't appear in the screenshot.
   virtual bool ShouldDismissImmediately() = 0;
 
   // Gets the ideal y position for the close animation, which depends on
@@ -151,18 +146,6 @@ class ASH_PUBLIC_EXPORT AppListViewDelegate {
   virtual void OnSearchResultVisibilityChanged(const std::string& id,
                                                bool visibility) = 0;
 
-  // Called if a search result item got clicked, or a list of search result has
-  // been shown to the user after a certain amount of time. |raw_query| is the
-  // raw query that produced the results, |results| is a list of items that were
-  // being shown to the users and their corresponding position indices of them
-  // (see |SearchResultIdWithPositionIndex| for more details),
-  // |position_index| is the position index of the clicked item (if no item got
-  // clicked, |position_index| will be -1).
-  virtual void NotifySearchResultsForLogging(
-      const std::u16string& raw_query,
-      const SearchResultIdWithPositionIndices& results,
-      int position_index) = 0;
-
   // If the |prefs::kSuggestedContentInfoShownInLauncher| value is in the range
   // of allowed values, we will increment it.
   virtual void MaybeIncreaseSuggestedContentInfoShownCount() = 0;
@@ -176,6 +159,17 @@ class ASH_PUBLIC_EXPORT AppListViewDelegate {
   // Called when close button in the Suggested Content privacy info view is
   // pressed to indicate not to show the view any more.
   virtual void MarkSuggestedContentInfoDismissed() = 0;
+
+  // Gets the app list page currently shown in the fullscreen app list, as
+  // reported from the app list view using `OnAppListPageChanged()`.
+  virtual AppListState GetCurrentAppListPage() const = 0;
+
+  // Called when the page shown in the app list contents view is updated.
+  virtual void OnAppListPageChanged(AppListState page) = 0;
+
+  // Gets the current app list view state, as reported by app list view using
+  // `OnViewStateChanged()`. Tracked for fullscreen app list view only.
+  virtual AppListViewState GetAppListViewState() const = 0;
 
   // Called when the app list view state is updated.
   virtual void OnViewStateChanged(AppListViewState state) = 0;
@@ -210,6 +204,21 @@ class ASH_PUBLIC_EXPORT AppListViewDelegate {
 
   // Loads the icon of an app item identified by `app_id`.
   virtual void LoadIcon(const std::string& app_id) = 0;
+
+  // Whether the controller has a valid profile, and hence a valid data model.
+  // Returns false during startup and shutdown.
+  virtual bool HasValidProfile() const = 0;
+
+  // Whether the user wants to hide the continue section and recent apps. Used
+  // by productivity launcher only.
+  virtual bool ShouldHideContinueSection() const = 0;
+
+  // Sets whether the user wants to hide the continue section and recent apps.
+  // Used by productivity launcher only.
+  virtual void SetHideContinueSection(bool hide) = 0;
+
+  // Commits the app list item positions under the temporary sort order.
+  virtual void CommitTemporarySortOrder() = 0;
 };
 
 }  // namespace ash

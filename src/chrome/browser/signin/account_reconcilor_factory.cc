@@ -8,7 +8,6 @@
 #include <utility>
 
 #include "base/check.h"
-#include "base/feature_list.h"
 #include "base/notreached.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -16,7 +15,6 @@
 #include "chrome/browser/signin/account_consistency_mode_manager.h"
 #include "chrome/browser/signin/chrome_signin_client_factory.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/signin/core/browser/account_reconcilor.h"
 #include "components/signin/core/browser/account_reconcilor_delegate.h"
 #include "components/signin/core/browser/mirror_account_reconcilor_delegate.h"
@@ -24,17 +22,21 @@
 #include "components/signin/public/base/signin_buildflags.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "ash/components/tpm/install_attributes.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/account_manager/account_manager_util.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
-#include "chromeos/tpm/install_attributes.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/prefs/pref_service.h"
 #include "components/signin/core/browser/active_directory_account_reconcilor_delegate.h"
 #include "components/signin/public/base/signin_pref_names.h"
 #include "components/user_manager/user_manager.h"
 #include "google_apis/gaia/google_service_auth_error.h"
+#endif
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+#include "components/signin/core/browser/mirror_landing_account_reconcilor_delegate.h"
 #endif
 
 #if BUILDFLAG(ENABLE_DICE_SUPPORT)
@@ -66,10 +68,10 @@ class ChromeOSLimitedAccessAccountReconcilorDelegate
   base::TimeDelta GetReconcileTimeout() const override {
     switch (reconcilor_behavior_) {
       case ReconcilorBehavior::kChild:
-        return base::TimeDelta::FromSeconds(10);
+        return base::Seconds(10);
       case ReconcilorBehavior::kEnterprise:
         // 60 seconds is enough to cover about 99% of all reconcile cases.
-        return base::TimeDelta::FromSeconds(60);
+        return base::Seconds(60);
       default:
         NOTREACHED();
         return MirrorAccountReconcilorDelegate::GetReconcileTimeout();
@@ -111,9 +113,7 @@ class ChromeOSLimitedAccessAccountReconcilorDelegate
 }  // namespace
 
 AccountReconcilorFactory::AccountReconcilorFactory()
-    : BrowserContextKeyedServiceFactory(
-          "AccountReconcilor",
-          BrowserContextDependencyManager::GetInstance()) {
+    : ProfileKeyedServiceFactory("AccountReconcilor") {
   DependsOn(ChromeSigninClientFactory::GetInstance());
   DependsOn(IdentityManagerFactory::GetInstance());
 }
@@ -175,7 +175,7 @@ AccountReconcilorFactory::CreateAccountReconcilorDelegate(Profile* profile) {
       // |IsAccountManagerAvailable| after fixing https://crbug.com/1008349 and
       // https://crbug.com/993317.
       if (ash::IsAccountManagerAvailable(profile) &&
-          chromeos::InstallAttributes::Get()->IsActiveDirectoryManaged()) {
+          ash::InstallAttributes::Get()->IsActiveDirectoryManaged()) {
         return std::make_unique<
             signin::ActiveDirectoryAccountReconcilorDelegate>();
       }
@@ -190,6 +190,12 @@ AccountReconcilorFactory::CreateAccountReconcilorDelegate(Profile* profile) {
 
       return std::make_unique<signin::MirrorAccountReconcilorDelegate>(
           IdentityManagerFactory::GetForProfile(profile));
+#elif BUILDFLAG(IS_CHROMEOS_LACROS)
+      return std::make_unique<signin::MirrorLandingAccountReconcilorDelegate>(
+          IdentityManagerFactory::GetForProfile(profile),
+          ChromeSigninClientFactory::GetForProfile(profile)
+              ->GetInitialPrimaryAccount()
+              .has_value());
 #else
       return std::make_unique<signin::MirrorAccountReconcilorDelegate>(
           IdentityManagerFactory::GetForProfile(profile));
@@ -201,8 +207,7 @@ AccountReconcilorFactory::CreateAccountReconcilorDelegate(Profile* profile) {
     case signin::AccountConsistencyMethod::kDice:
 #if BUILDFLAG(ENABLE_DICE_SUPPORT)
       return std::make_unique<signin::DiceAccountReconcilorDelegate>(
-          ChromeSigninClientFactory::GetForProfile(profile),
-          AccountConsistencyModeManager::IsDiceMigrationCompleted(profile));
+          IdentityManagerFactory::GetForProfile(profile));
 #else
       NOTREACHED();
       return nullptr;

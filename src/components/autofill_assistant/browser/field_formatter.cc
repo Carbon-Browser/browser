@@ -4,6 +4,10 @@
 
 #include "components/autofill_assistant/browser/field_formatter.h"
 
+#include <utility>
+#include <vector>
+
+#include "base/containers/flat_map.h"
 #include "base/i18n/case_conversion.h"
 #include "base/logging.h"
 #include "base/strings/strcat.h"
@@ -28,7 +32,7 @@ const char kPlaceholderExtractor[] = R"re((.*?)\$\{([^{}]+)\})re";
 
 template <typename T>
 absl::optional<std::string> GetFieldValue(
-    const std::map<T, std::string>& mappings,
+    const base::flat_map<T, std::string>& mappings,
     const T& key) {
   auto it = mappings.find(key);
   if (it == mappings.end()) {
@@ -37,17 +41,18 @@ absl::optional<std::string> GetFieldValue(
   return it->second;
 }
 
-std::map<Key, std::string> CreateFormGroupMappings(
+base::flat_map<Key, std::string> CreateFormGroupMappings(
     const autofill::FormGroup& form_group,
     const std::string& locale) {
-  std::map<Key, std::string> mappings;
+  std::vector<std::pair<Key, std::string>> mappings;
   autofill::ServerFieldTypeSet available_fields;
   form_group.GetNonEmptyTypes(locale, &available_fields);
   for (const auto field : available_fields) {
-    mappings.emplace(Key(field), base::UTF16ToUTF8(form_group.GetInfo(
-                                     autofill::AutofillType(field), locale)));
+    mappings.emplace_back(Key(field),
+                          base::UTF16ToUTF8(form_group.GetInfo(
+                              autofill::AutofillType(field), locale)));
   }
-  return mappings;
+  return base::flat_map<Key, std::string>(std::move(mappings));
 }
 
 void GetNameAndAbbreviationViaAlternativeStateNameMap(
@@ -65,12 +70,12 @@ void GetNameAndAbbreviationViaAlternativeStateNameMap(
   }
   if (state_entry->has_canonical_name() &&
       !state_entry->canonical_name().empty()) {
-    std::u16string full = base::ASCIIToUTF16(state_entry->canonical_name());
+    std::u16string full = base::UTF8ToUTF16(state_entry->canonical_name());
     std::u16string abbr;
     size_t curr_min_abbr_size = INT_MAX;
     for (const auto& it_abbr : state_entry->abbreviations()) {
       if (!it_abbr.empty() && it_abbr.size() < curr_min_abbr_size) {
-        abbr = base::ASCIIToUTF16(it_abbr);
+        abbr = base::UTF8ToUTF16(it_abbr);
         curr_min_abbr_size = it_abbr.size();
       }
     }
@@ -83,14 +88,26 @@ void GetNameAndAbbreviationViaAlternativeStateNameMap(
   }
 }
 
-std::string ApplyChunkReplacement(
-    const google::protobuf::Map<std::string, std::string>& replacements,
-    const std::string& value) {
-  const auto& it = replacements.find(value);
-  if (it != replacements.end()) {
-    return it->second;
+std::string ApplyChunkReplacement(const ValueExpression::Chunk& chunk,
+                                  const std::string& value) {
+  std::string result = value;
+  const auto& it = chunk.replacements().find(value);
+  if (it != chunk.replacements().end()) {
+    result = it->second;
   }
-  return value;
+  for (const auto& regexp_replacement : chunk.regexp_replacements()) {
+    re2::RE2::Options options;
+    options.set_case_sensitive(
+        regexp_replacement.text_filter().case_sensitive());
+    re2::RE2 regexp(regexp_replacement.text_filter().re2(), options);
+
+    if (regexp_replacement.global()) {
+      RE2::GlobalReplace(&result, regexp, regexp_replacement.replacement());
+    } else {
+      RE2::Replace(&result, regexp, regexp_replacement.replacement());
+    }
+  }
+  return result;
 }
 
 std::string GetMaybeQuotedChunk(const std::string& value, bool quote_meta) {
@@ -125,7 +142,7 @@ bool Key::operator==(const Key& other) const {
 
 absl::optional<std::string> FormatString(
     const std::string& pattern,
-    const std::map<std::string, std::string>& mappings,
+    const base::flat_map<std::string, std::string>& mappings,
     bool strict) {
   if (pattern.empty()) {
     return std::string();
@@ -156,7 +173,7 @@ absl::optional<std::string> FormatString(
 }
 
 ClientStatus FormatExpression(const ValueExpression& value_expression,
-                              const std::map<Key, std::string>& mappings,
+                              const base::flat_map<Key, std::string>& mappings,
                               bool quote_meta,
                               std::string* out_value) {
   out_value->clear();
@@ -185,7 +202,7 @@ ClientStatus FormatExpression(const ValueExpression& value_expression,
       case ValueExpression::Chunk::CHUNK_NOT_SET:
         return ClientStatus(INVALID_ACTION);
     }
-    out_value->append(ApplyChunkReplacement(chunk.replacements(), chunk_value));
+    out_value->append(ApplyChunkReplacement(chunk, chunk_value));
   }
 
   return OkClientStatus();
@@ -214,7 +231,8 @@ std::string GetHumanReadableValueExpression(
 }
 
 template <>
-std::map<Key, std::string> CreateAutofillMappings<autofill::AutofillProfile>(
+base::flat_map<Key, std::string>
+CreateAutofillMappings<autofill::AutofillProfile>(
     const autofill::AutofillProfile& profile,
     const std::string& locale) {
   auto mappings = CreateFormGroupMappings(profile, locale);
@@ -256,7 +274,7 @@ std::map<Key, std::string> CreateAutofillMappings<autofill::AutofillProfile>(
 }
 
 template <>
-std::map<Key, std::string> CreateAutofillMappings<autofill::CreditCard>(
+base::flat_map<Key, std::string> CreateAutofillMappings<autofill::CreditCard>(
     const autofill::CreditCard& credit_card,
     const std::string& locale) {
   auto mappings = CreateFormGroupMappings(credit_card, locale);

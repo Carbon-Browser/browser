@@ -6,10 +6,11 @@
 #define MEDIA_MOJO_MOJOM_MEDIA_TYPES_ENUM_MOJOM_TRAITS_H_
 
 #include "base/notreached.h"
+#include "build/build_config.h"
 #include "media/base/renderer_factory_selector.h"
 #include "media/base/svc_scalability_mode.h"
-#include "media/base/video_frame_metadata.h"
 #include "media/base/video_transformation.h"
+#include "media/cdm/cdm_document_service.h"
 #include "media/mojo/mojom/media_types.mojom-shared.h"
 
 // Most enums have automatically generated traits, in media_types.mojom.h, due
@@ -17,6 +18,45 @@
 // in files that cannot directly include media_types.mojom.h.
 
 namespace mojo {
+
+#if BUILDFLAG(IS_WIN)
+template <>
+struct EnumTraits<media::mojom::CdmEvent, ::media::CdmEvent> {
+  static media::mojom::CdmEvent ToMojom(::media::CdmEvent input) {
+    switch (input) {
+      case ::media::CdmEvent::kSignificantPlayback:
+        return media::mojom::CdmEvent::kSignificantPlayback;
+      case ::media::CdmEvent::kPlaybackError:
+        return media::mojom::CdmEvent::kPlaybackError;
+      case ::media::CdmEvent::kCdmError:
+        return media::mojom::CdmEvent::kCdmError;
+    }
+
+    NOTREACHED();
+    return media::mojom::CdmEvent::kCdmError;
+  }
+
+  // Returning false results in deserialization failure and causes the
+  // message pipe receiving it to be disconnected.
+  static bool FromMojom(media::mojom::CdmEvent input,
+                        ::media::CdmEvent* output) {
+    switch (input) {
+      case media::mojom::CdmEvent::kSignificantPlayback:
+        *output = ::media::CdmEvent::kSignificantPlayback;
+        return true;
+      case media::mojom::CdmEvent::kPlaybackError:
+        *output = ::media::CdmEvent::kPlaybackError;
+        return true;
+      case media::mojom::CdmEvent::kCdmError:
+        *output = ::media::CdmEvent::kCdmError;
+        return true;
+    }
+
+    NOTREACHED();
+    return false;
+  }
+};
+#endif  // BUILDFLAG(IS_WIN)
 
 template <>
 struct EnumTraits<media::mojom::CdmSessionClosedReason,
@@ -230,40 +270,6 @@ struct EnumTraits<media::mojom::VideoRotation, ::media::VideoRotation> {
 };
 
 template <>
-struct EnumTraits<media::mojom::CopyMode,
-                  ::media::VideoFrameMetadata::CopyMode> {
-  static media::mojom::CopyMode ToMojom(
-      ::media::VideoFrameMetadata::CopyMode input) {
-    switch (input) {
-      case ::media::VideoFrameMetadata::CopyMode::kCopyToNewTexture:
-        return media::mojom::CopyMode::kCopyToNewTexture;
-      case ::media::VideoFrameMetadata::CopyMode::kCopyMailboxesOnly:
-        return media::mojom::CopyMode::kCopyMailboxesOnly;
-    }
-
-    NOTREACHED();
-    return static_cast<media::mojom::CopyMode>(input);
-  }
-
-  // Returning false results in deserialization failure and causes the
-  // message pipe receiving it to be disconnected.
-  static bool FromMojom(media::mojom::CopyMode input,
-                        media::VideoFrameMetadata::CopyMode* output) {
-    switch (input) {
-      case media::mojom::CopyMode::kCopyToNewTexture:
-        *output = ::media::VideoFrameMetadata::CopyMode::kCopyToNewTexture;
-        return true;
-      case media::mojom::CopyMode::kCopyMailboxesOnly:
-        *output = ::media::VideoFrameMetadata::CopyMode::kCopyMailboxesOnly;
-        return true;
-    }
-
-    NOTREACHED();
-    return false;
-  }
-};
-
-template <>
 struct EnumTraits<media::mojom::RendererType, ::media::RendererType> {
   static media::mojom::RendererType ToMojom(::media::RendererType input) {
     switch (input) {
@@ -281,12 +287,12 @@ struct EnumTraits<media::mojom::RendererType, ::media::RendererType> {
         return media::mojom::RendererType::kCast;
       case ::media::RendererType::kMediaFoundation:
         return media::mojom::RendererType::kMediaFoundation;
-      case ::media::RendererType::kFuchsia:
-        return media::mojom::RendererType::kFuchsia;
       case ::media::RendererType::kRemoting:
         return media::mojom::RendererType::kRemoting;
       case ::media::RendererType::kCastStreaming:
         return media::mojom::RendererType::kCastStreaming;
+      case ::media::RendererType::kContentEmbedderDefined:
+        return media::mojom::RendererType::kContentEmbedderDefined;
     }
 
     NOTREACHED();
@@ -319,14 +325,14 @@ struct EnumTraits<media::mojom::RendererType, ::media::RendererType> {
       case media::mojom::RendererType::kMediaFoundation:
         *output = ::media::RendererType::kMediaFoundation;
         return true;
-      case media::mojom::RendererType::kFuchsia:
-        *output = ::media::RendererType::kFuchsia;
-        return true;
       case media::mojom::RendererType::kRemoting:
         *output = ::media::RendererType::kRemoting;
         return true;
       case media::mojom::RendererType::kCastStreaming:
         *output = ::media::RendererType::kCastStreaming;
+        return true;
+      case media::mojom::RendererType::kContentEmbedderDefined:
+        *output = ::media::RendererType::kContentEmbedderDefined;
         return true;
     }
 

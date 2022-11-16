@@ -30,7 +30,7 @@ constexpr int kNonComplianceReasonAppNotInstalled = 5;
 
 // Timeout maintenance session after 30 minutes.
 constexpr base::TimeDelta kArcKioskMaintenanceSessionTimeout =
-    base::TimeDelta::FromMinutes(30);
+    base::Minutes(30);
 
 // static
 ArcKioskAppService* ArcKioskAppService::Create(Profile* profile) {
@@ -159,7 +159,7 @@ void ArcKioskAppService::OnComplianceReportReceived(
     return;
   }
 
-  for (const auto& detail : details->GetList()) {
+  for (const auto& detail : details->GetListDeprecated()) {
     const base::Value* const reason =
         detail.FindKeyOfType("nonComplianceReason", base::Value::Type::INTEGER);
     if (!reason || reason->GetInt() != kNonComplianceReasonAppNotInstalled)

@@ -7,9 +7,8 @@
 
 #include <memory>
 
-#include "base/compiler_specific.h"
 #include "base/files/file_path.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/content_browser_client.h"
@@ -25,9 +24,8 @@ class ClientHintsControllerDelegate;
 class DownloadManagerDelegate;
 class PermissionControllerDelegate;
 class ShellDownloadManagerDelegate;
-#if !defined(OS_ANDROID)
+class ShellFederatedPermissionContext;
 class ZoomLevelDelegate;
-#endif  // !defined(OS_ANDROID)
 
 class ShellBrowserContext : public BrowserContext {
  public:
@@ -35,6 +33,10 @@ class ShellBrowserContext : public BrowserContext {
   // CreateBrowserContextServices() for this BrowserContext.
   ShellBrowserContext(bool off_the_record,
                       bool delay_services_creation = false);
+
+  ShellBrowserContext(const ShellBrowserContext&) = delete;
+  ShellBrowserContext& operator=(const ShellBrowserContext&) = delete;
+
   ~ShellBrowserContext() override;
 
   void set_client_hints_controller_delegate(
@@ -44,10 +46,8 @@ class ShellBrowserContext : public BrowserContext {
 
   // BrowserContext implementation.
   base::FilePath GetPath() override;
-#if !defined(OS_ANDROID)
   std::unique_ptr<ZoomLevelDelegate> CreateZoomLevelDelegate(
       const base::FilePath& partition_path) override;
-#endif  // !defined(OS_ANDROID)
   bool IsOffTheRecord() override;
   DownloadManagerDelegate* GetDownloadManagerDelegate() override;
   ResourceContext* GetResourceContext() override;
@@ -63,16 +63,23 @@ class ShellBrowserContext : public BrowserContext {
   BrowsingDataRemoverDelegate* GetBrowsingDataRemoverDelegate() override;
   ContentIndexProvider* GetContentIndexProvider() override;
   ClientHintsControllerDelegate* GetClientHintsControllerDelegate() override;
+  FederatedIdentityApiPermissionContextDelegate*
+  GetFederatedIdentityApiPermissionContext() override;
+  FederatedIdentitySharingPermissionContextDelegate*
+  GetFederatedIdentitySharingPermissionContext() override;
+  FederatedIdentityActiveSessionPermissionContextDelegate*
+  GetFederatedIdentityActiveSessionPermissionContext() override;
 
  protected:
   // Contains URLRequestContextGetter required for resource loading.
   class ShellResourceContext : public ResourceContext {
    public:
     ShellResourceContext();
-    ~ShellResourceContext() override;
 
-  private:
-    DISALLOW_COPY_AND_ASSIGN(ShellResourceContext);
+    ShellResourceContext(const ShellResourceContext&) = delete;
+    ShellResourceContext& operator=(const ShellResourceContext&) = delete;
+
+    ~ShellResourceContext() override;
   };
 
   bool ignore_certificate_errors() const { return ignore_certificate_errors_; }
@@ -82,6 +89,8 @@ class ShellBrowserContext : public BrowserContext {
   std::unique_ptr<PermissionControllerDelegate> permission_manager_;
   std::unique_ptr<BackgroundSyncController> background_sync_controller_;
   std::unique_ptr<ContentIndexProvider> content_index_provider_;
+  std::unique_ptr<ShellFederatedPermissionContext>
+      federated_permission_context_;
 
  private:
   // Performs initialization of the ShellBrowserContext while IO is still
@@ -93,9 +102,8 @@ class ShellBrowserContext : public BrowserContext {
   bool ignore_certificate_errors_ = false;
   base::FilePath path_;
   std::unique_ptr<SimpleFactoryKey> key_;
-  ClientHintsControllerDelegate* client_hints_controller_delegate_ = nullptr;
-
-  DISALLOW_COPY_AND_ASSIGN(ShellBrowserContext);
+  raw_ptr<ClientHintsControllerDelegate> client_hints_controller_delegate_ =
+      nullptr;
 };
 
 }  // namespace content

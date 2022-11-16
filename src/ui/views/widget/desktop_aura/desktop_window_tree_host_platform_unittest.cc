@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "base/command_line.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "ui/aura/window_tree_host.h"
 #include "ui/aura/window_tree_host_observer.h"
@@ -38,6 +39,10 @@ class TestWidgetObserver : public WidgetObserver {
     DCHECK(widget_);
     widget_->AddObserver(this);
   }
+
+  TestWidgetObserver(const TestWidgetObserver&) = delete;
+  TestWidgetObserver& operator=(const TestWidgetObserver&) = delete;
+
   ~TestWidgetObserver() override {
     // This might have been destroyed by the widget destroying delegate call.
     if (widget_)
@@ -95,12 +100,10 @@ class TestWidgetObserver : public WidgetObserver {
     run_loop_->Quit();
   }
 
-  Widget* widget_;
+  raw_ptr<Widget> widget_;
   std::unique_ptr<base::RunLoop> run_loop_;
   bool on_widget_destroying_ = false;
   bool visible_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(TestWidgetObserver);
 };
 
 std::unique_ptr<Widget> CreateWidgetWithNativeWidgetWithParams(
@@ -125,10 +128,13 @@ std::unique_ptr<Widget> CreateWidgetWithNativeWidget() {
 class DesktopWindowTreeHostPlatformTest : public ViewsTestBase {
  public:
   DesktopWindowTreeHostPlatformTest() {}
-  ~DesktopWindowTreeHostPlatformTest() override {}
 
- private:
-  DISALLOW_COPY_AND_ASSIGN(DesktopWindowTreeHostPlatformTest);
+  DesktopWindowTreeHostPlatformTest(const DesktopWindowTreeHostPlatformTest&) =
+      delete;
+  DesktopWindowTreeHostPlatformTest& operator=(
+      const DesktopWindowTreeHostPlatformTest&) = delete;
+
+  ~DesktopWindowTreeHostPlatformTest() override {}
 };
 
 TEST_F(DesktopWindowTreeHostPlatformTest, CallOnNativeWidgetDestroying) {
@@ -217,6 +223,10 @@ TEST_F(DesktopWindowTreeHostPlatformTest, UpdateWindowShapeFromWindowMask) {
 class CustomSizeWidget : public Widget {
  public:
   CustomSizeWidget() = default;
+
+  CustomSizeWidget(const CustomSizeWidget&) = delete;
+  CustomSizeWidget& operator=(const CustomSizeWidget&) = delete;
+
   ~CustomSizeWidget() override = default;
 
   void set_min_size(const gfx::Size& size) { min_size_ = size; }
@@ -229,8 +239,6 @@ class CustomSizeWidget : public Widget {
  private:
   gfx::Size min_size_;
   gfx::Size max_size_;
-
-  DISALLOW_COPY_AND_ASSIGN(CustomSizeWidget);
 };
 
 TEST_F(DesktopWindowTreeHostPlatformTest, SetBoundsWithMinMax) {
@@ -274,7 +282,7 @@ class ResizeObserver : public aura::WindowTreeHostObserver {
   }
 
  private:
-  aura::WindowTreeHost* const host_;
+  const raw_ptr<aura::WindowTreeHost> host_;
   int resize_count_ = 0;
   int bounds_change_count_ = 0;
 };
@@ -303,8 +311,7 @@ TEST_F(DesktopWindowTreeHostPlatformTest, SetBoundsWithUnchangedSize) {
 TEST_F(DesktopWindowTreeHostPlatformTest, MakesParentChildRelationship) {
   bool context_is_also_parent = false;
 #if defined(USE_OZONE)
-  if (features::IsUsingOzonePlatform() &&
-      ui::OzonePlatform::GetInstance()
+  if (ui::OzonePlatform::GetInstance()
           ->GetPlatformProperties()
           .set_parent_for_non_top_level_windows) {
     context_is_also_parent = true;

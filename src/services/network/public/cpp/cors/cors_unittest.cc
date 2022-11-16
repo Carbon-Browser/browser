@@ -158,7 +158,6 @@ enum class AccessCheckResult {
 constexpr char kAccessCheckHistogram[] = "Net.Cors.AccessCheckResult";
 constexpr char kAccessCheckHistogramNotSecure[] =
     "Net.Cors.AccessCheckResult.NotSecureRequestor";
-constexpr char kAccessCheckHistogramError[] = "Net.Cors.AccessCheckError";
 
 TEST_F(CorsTest, CheckAccessAndReportMetricsForPermittedSecureOrigin) {
   base::HistogramTester histogram_tester;
@@ -172,7 +171,6 @@ TEST_F(CorsTest, CheckAccessAndReportMetricsForPermittedSecureOrigin) {
   histogram_tester.ExpectUniqueSample(kAccessCheckHistogram,
                                       AccessCheckResult::kPermitted, 1);
   histogram_tester.ExpectTotalCount(kAccessCheckHistogramNotSecure, 0);
-  histogram_tester.ExpectTotalCount(kAccessCheckHistogramError, 0);
 }
 
 TEST_F(CorsTest, CheckAccessAndReportMetricsForPermittedNotSecureOrigin) {
@@ -188,7 +186,6 @@ TEST_F(CorsTest, CheckAccessAndReportMetricsForPermittedNotSecureOrigin) {
                                       AccessCheckResult::kPermitted, 1);
   histogram_tester.ExpectUniqueSample(kAccessCheckHistogramNotSecure,
                                       AccessCheckResult::kPermitted, 1);
-  histogram_tester.ExpectTotalCount(kAccessCheckHistogramError, 0);
 }
 
 TEST_F(CorsTest, CheckAccessAndReportMetricsForNotPermittedSecureOrigin) {
@@ -203,142 +200,6 @@ TEST_F(CorsTest, CheckAccessAndReportMetricsForNotPermittedSecureOrigin) {
   histogram_tester.ExpectUniqueSample(kAccessCheckHistogram,
                                       AccessCheckResult::kNotPermitted, 1);
   histogram_tester.ExpectTotalCount(kAccessCheckHistogramNotSecure, 0);
-  histogram_tester.ExpectUniqueSample(
-      kAccessCheckHistogramError, mojom::CorsError::kMissingAllowOriginHeader,
-      1);
-}
-
-// Tests if CheckRedirectLocation detects kCorsDisabledScheme and
-// kRedirectContainsCredentials errors correctly.
-TEST_F(CorsTest, CheckRedirectLocation) {
-  struct TestCase {
-    GURL url;
-    mojom::RequestMode request_mode;
-    bool cors_flag;
-    bool tainted;
-    absl::optional<CorsErrorStatus> expectation;
-  };
-
-  const auto kCors = mojom::RequestMode::kCors;
-  const auto kCorsWithForcedPreflight =
-      mojom::RequestMode::kCorsWithForcedPreflight;
-  const auto kNoCors = mojom::RequestMode::kNoCors;
-
-  const url::Origin origin = url::Origin::Create(GURL("http://example.com/"));
-  const GURL same_origin_url("http://example.com/");
-  const GURL cross_origin_url("http://example2.com/");
-  const GURL data_url("data:,Hello");
-  const GURL same_origin_url_with_user("http://yukari@example.com/");
-  const GURL same_origin_url_with_pass("http://:tamura@example.com/");
-  const GURL cross_origin_url_with_user("http://yukari@example2.com/");
-  const GURL cross_origin_url_with_pass("http://:tamura@example2.com/");
-  const auto ok = absl::nullopt;
-  const CorsErrorStatus kCorsDisabledScheme(
-      mojom::CorsError::kCorsDisabledScheme);
-  const CorsErrorStatus kRedirectContainsCredentials(
-      mojom::CorsError::kRedirectContainsCredentials);
-
-  TestCase cases[] = {
-      // "cors", no credentials information
-      {same_origin_url, kCors, false, false, ok},
-      {cross_origin_url, kCors, false, false, ok},
-      {data_url, kCors, false, false, ok},
-      {same_origin_url, kCors, true, false, ok},
-      {cross_origin_url, kCors, true, false, ok},
-      {data_url, kCors, true, false, ok},
-      {same_origin_url, kCors, false, true, ok},
-      {cross_origin_url, kCors, false, true, ok},
-      {data_url, kCors, false, true, ok},
-      {same_origin_url, kCors, true, true, ok},
-      {cross_origin_url, kCors, true, true, ok},
-      {data_url, kCors, true, true, ok},
-
-      // "cors" with forced preflight, no credentials information
-      {same_origin_url, kCorsWithForcedPreflight, false, false, ok},
-      {cross_origin_url, kCorsWithForcedPreflight, false, false, ok},
-      {data_url, kCorsWithForcedPreflight, false, false, ok},
-      {same_origin_url, kCorsWithForcedPreflight, true, false, ok},
-      {cross_origin_url, kCorsWithForcedPreflight, true, false, ok},
-      {data_url, kCorsWithForcedPreflight, true, false, ok},
-      {same_origin_url, kCorsWithForcedPreflight, false, true, ok},
-      {cross_origin_url, kCorsWithForcedPreflight, false, true, ok},
-      {data_url, kCorsWithForcedPreflight, false, true, ok},
-      {same_origin_url, kCorsWithForcedPreflight, true, true, ok},
-      {cross_origin_url, kCorsWithForcedPreflight, true, true, ok},
-      {data_url, kCorsWithForcedPreflight, true, true, ok},
-
-      // "no-cors", no credentials information
-      {same_origin_url, kNoCors, false, false, ok},
-      {cross_origin_url, kNoCors, false, false, ok},
-      {data_url, kNoCors, false, false, ok},
-      {same_origin_url, kNoCors, false, true, ok},
-      {cross_origin_url, kNoCors, false, true, ok},
-      {data_url, kNoCors, false, true, ok},
-
-      // with credentials information (same origin)
-      {same_origin_url_with_user, kCors, false, false, ok},
-      {same_origin_url_with_user, kCors, true, false,
-       kRedirectContainsCredentials},
-      {same_origin_url_with_user, kCors, true, true,
-       kRedirectContainsCredentials},
-      {same_origin_url_with_user, kNoCors, false, false, ok},
-      {same_origin_url_with_user, kNoCors, false, true, ok},
-      {same_origin_url_with_pass, kCors, false, false, ok},
-      {same_origin_url_with_pass, kCors, true, false,
-       kRedirectContainsCredentials},
-      {same_origin_url_with_pass, kCors, true, true,
-       kRedirectContainsCredentials},
-      {same_origin_url_with_pass, kNoCors, false, false, ok},
-      {same_origin_url_with_pass, kNoCors, false, true, ok},
-
-      // with credentials information (cross origin)
-      {cross_origin_url_with_user, kCors, false, false,
-       kRedirectContainsCredentials},
-      {cross_origin_url_with_user, kCors, true, false,
-       kRedirectContainsCredentials},
-      {cross_origin_url_with_user, kCors, true, true,
-       kRedirectContainsCredentials},
-      {cross_origin_url_with_user, kNoCors, false, true, ok},
-      {cross_origin_url_with_user, kNoCors, false, false, ok},
-      {cross_origin_url_with_pass, kCors, false, false,
-       kRedirectContainsCredentials},
-      {cross_origin_url_with_pass, kCors, true, false,
-       kRedirectContainsCredentials},
-      {cross_origin_url_with_pass, kCors, true, true,
-       kRedirectContainsCredentials},
-      {cross_origin_url_with_pass, kNoCors, false, true, ok},
-      {cross_origin_url_with_pass, kNoCors, false, false, ok},
-  };
-
-  for (const auto& test : cases) {
-    SCOPED_TRACE(testing::Message()
-                 << "url: " << test.url
-                 << ", request mode: " << test.request_mode
-                 << ", origin: " << origin << ", cors_flag: " << test.cors_flag
-                 << ", tainted: " << test.tainted);
-
-    EXPECT_EQ(test.expectation,
-              CheckRedirectLocation(test.url, test.request_mode, origin,
-                                    test.cors_flag, test.tainted));
-  }
-}
-
-TEST_F(CorsTest, CheckExternalPreflightErrors) {
-  EXPECT_FALSE(CheckExternalPreflight(std::string("true")));
-
-  absl::optional<CorsErrorStatus> error2 =
-      CheckExternalPreflight(absl::nullopt);
-  ASSERT_TRUE(error2);
-  EXPECT_EQ(mojom::CorsError::kPreflightMissingAllowExternal,
-            error2->cors_error);
-  EXPECT_EQ("", error2->failed_parameter);
-
-  absl::optional<CorsErrorStatus> error3 =
-      CheckExternalPreflight(std::string("TRUE"));
-  ASSERT_TRUE(error3);
-  EXPECT_EQ(mojom::CorsError::kPreflightInvalidAllowExternal,
-            error3->cors_error);
-  EXPECT_EQ("TRUE", error3->failed_parameter);
 }
 
 TEST_F(CorsTest, SafelistedMethod) {
@@ -370,7 +231,7 @@ TEST_F(CorsTest, SafelistedAccept) {
     SCOPED_TRACE(testing::Message() << "c = static_cast<char>(" << i << ")");
     char c = static_cast<char>(i);
     // 1 for the trailing null character.
-    auto* end = kAllowed + base::size(kAllowed) - 1;
+    auto* end = kAllowed + std::size(kAllowed) - 1;
     EXPECT_EQ(std::find(kAllowed, end, c) != end,
               IsCorsSafelistedHeader("accept", std::string(1, c)));
     EXPECT_EQ(std::find(kAllowed, end, c) != end,
@@ -399,7 +260,7 @@ TEST_F(CorsTest, SafelistedAcceptLanguage) {
     SCOPED_TRACE(testing::Message() << "c = static_cast<char>(" << i << ")");
     char c = static_cast<char>(i);
     // 1 for the trailing null character.
-    auto* end = kAllowed + base::size(kAllowed) - 1;
+    auto* end = kAllowed + std::size(kAllowed) - 1;
     EXPECT_EQ(std::find(kAllowed, end, c) != end,
               IsCorsSafelistedHeader("aCcEPT-lAngUAge", std::string(1, c)));
   }
@@ -416,13 +277,6 @@ TEST_F(CorsTest, SafelistedSecCHPrefersColorScheme) {
                                      "\"Prefers-Color-Scheme!\""));
 }
 
-TEST_F(CorsTest, SafelistedSecCHLang) {
-  EXPECT_TRUE(IsCorsSafelistedHeader("Lang", "\"en\", \"de\""));
-
-  // TODO(mkwst): Validate that `Lang` is a structured header.
-  // https://crbug.com/924969
-}
-
 TEST_F(CorsTest, SafelistedSecCHUA) {
   EXPECT_TRUE(IsCorsSafelistedHeader("Sec-CH-UA", "\"User Agent!\""));
   EXPECT_TRUE(IsCorsSafelistedHeader("Sec-CH-UA-Platform", "\"Platform!\""));
@@ -431,6 +285,7 @@ TEST_F(CorsTest, SafelistedSecCHUA) {
   EXPECT_TRUE(IsCorsSafelistedHeader("Sec-CH-UA-Arch", "\"Architecture!\""));
   EXPECT_TRUE(IsCorsSafelistedHeader("Sec-CH-UA-Model", "\"Model!\""));
   EXPECT_TRUE(IsCorsSafelistedHeader("Sec-CH-UA-Reduced", "\"?1\""));
+  EXPECT_TRUE(IsCorsSafelistedHeader("Sec-CH-UA-Full", "\"?1\""));
 
   // TODO(mkwst): Validate that `Sec-CH-UA-*` is a structured header.
   // https://crbug.com/924969
@@ -451,7 +306,7 @@ TEST_F(CorsTest, SafelistedContentLanguage) {
     SCOPED_TRACE(testing::Message() << "c = static_cast<char>(" << i << ")");
     char c = static_cast<char>(i);
     // 1 for the trailing null character.
-    auto* end = kAllowed + base::size(kAllowed) - 1;
+    auto* end = kAllowed + std::size(kAllowed) - 1;
     EXPECT_EQ(std::find(kAllowed, end, c) != end,
               IsCorsSafelistedHeader("content-language", std::string(1, c)));
     EXPECT_EQ(std::find(kAllowed, end, c) != end,
@@ -475,7 +330,7 @@ TEST_F(CorsTest, SafelistedContentType) {
     SCOPED_TRACE(testing::Message() << "c = static_cast<char>(" << i << ")");
     const char c = static_cast<char>(i);
     // 1 for the trailing null character.
-    const auto* const end = kAllowed + base::size(kAllowed) - 1;
+    const auto* const end = kAllowed + std::size(kAllowed) - 1;
     const bool is_allowed = std::find(kAllowed, end, c) != end;
     const std::string value = std::string("text/plain; charset=") + c;
 
@@ -642,6 +497,41 @@ TEST_F(CorsTest, CorsUnsafeRequestHeaderNames) {
            {"width", std::string(127, '1')},
            {"hogE", "fuga"}}),
       List({"content-type", "hoge"}));
+}
+
+TEST_F(CorsTest, CheckCorsRangeSafelist) {
+  // Missing values
+  EXPECT_FALSE(IsCorsSafelistedHeader("range", ""));
+  EXPECT_FALSE(IsCorsSafelistedHeader("range", "500"));
+
+  // Case
+  EXPECT_TRUE(IsCorsSafelistedHeader("range", "bytes=100-200"));
+  EXPECT_TRUE(IsCorsSafelistedHeader("Range", "bytes=100-200"));
+  EXPECT_TRUE(IsCorsSafelistedHeader("RANGE", "bytes=100-200"));
+  EXPECT_TRUE(IsCorsSafelistedHeader("range", "BYTES=100-200"));
+
+  // Valid values
+  EXPECT_TRUE(IsCorsSafelistedHeader("range", "bytes=100-"));
+
+  // Multiple ranges
+  EXPECT_FALSE(IsCorsSafelistedHeader("range", "bytes=100-200,300-400"));
+  EXPECT_FALSE(IsCorsSafelistedHeader("range", "bytes=100-200,400"));
+  EXPECT_FALSE(IsCorsSafelistedHeader("range", "bytes=100-200-400"));
+  EXPECT_FALSE(IsCorsSafelistedHeader("range", "bytes=100-200,400-"));
+  EXPECT_FALSE(IsCorsSafelistedHeader("range", "bytes=-50,100-"));
+
+  // Invalid ranges
+  EXPECT_FALSE(IsCorsSafelistedHeader("range", "bytes=200-100"));
+  EXPECT_FALSE(IsCorsSafelistedHeader("range", "bytes=-200--100"));
+  EXPECT_FALSE(IsCorsSafelistedHeader("range", "bytes=-50-50"));
+  EXPECT_FALSE(IsCorsSafelistedHeader("range", "bytes=-200"));
+  EXPECT_FALSE(IsCorsSafelistedHeader("range", "bytes=100"));
+
+  // Invalid charset.
+  EXPECT_FALSE(IsCorsSafelistedHeader("range", "bytes = 100-200"));
+  EXPECT_FALSE(IsCorsSafelistedHeader("range", "bytes =100-200"));
+  EXPECT_FALSE(IsCorsSafelistedHeader("range", "bytes=,100-200"));
+  EXPECT_FALSE(IsCorsSafelistedHeader("range", ",bytes=,100-200"));
 }
 
 TEST_F(CorsTest, NoCorsSafelistedHeaderName) {

@@ -7,7 +7,9 @@
  * auditory cues.
  */
 
+import {ChromeVoxState} from './chromevox_state.js';
 import {EarconEngine} from './earcon_engine.js';
+import {LogStore} from './logging/log_store.js';
 
 export class Earcons extends AbstractEarcons {
   constructor() {
@@ -43,8 +45,8 @@ export class Earcons extends AbstractEarcons {
   /**
    * Plays the specified earcon sound.
    * @param {Earcon} earcon An earcon identifier.
-   * @param {Object=} opt_location A location associated with the earcon such as
-   *     a control's bounding rectangle.
+   * @param {chrome.automation.Rect=} opt_location A location associated with
+   *     the earcon such as a control's bounding rectangle.
    * @override
    */
   playEarcon(earcon, opt_location) {
@@ -52,7 +54,7 @@ export class Earcons extends AbstractEarcons {
       return;
     }
     if (localStorage['enableEarconLogging'] === 'true') {
-      LogStore.getInstance().writeTextLog(earcon, LogStore.LogType.EARCON);
+      LogStore.getInstance().writeTextLog(earcon, LogType.EARCON);
       console.log('Earcon ' + earcon);
     }
     if (ChromeVoxState.instance.currentRange &&
@@ -88,7 +90,7 @@ export class Earcons extends AbstractEarcons {
    * @private
    */
   updateShouldPanForDevices_(devices) {
-    this.shouldPan_ = !devices.some((device) => {
+    this.shouldPan_ = !devices.some(device => {
       return device.isActive &&
           device.deviceType === chrome.audio.DeviceType.INTERNAL_SPEAKER;
     });

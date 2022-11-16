@@ -4,15 +4,15 @@
 
 #include <memory>
 
+#include "ash/components/settings/cros_settings_names.h"
 #include "ash/constants/ash_switches.h"
 #include "ash/display/display_configuration_controller.h"
 #include "ash/shell.h"
 #include "base/bind.h"
 #include "base/command_line.h"
 #include "base/location.h"
-#include "base/macros.h"
 #include "base/run_loop.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/ash/login/test/device_state_mixin.h"
 #include "chrome/browser/ash/login/ui/login_display_host.h"
@@ -21,9 +21,8 @@
 #include "chrome/browser/ash/settings/cros_settings.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
 #include "chrome/test/base/mixin_based_in_process_browser_test.h"
-#include "chromeos/dbus/session_manager/fake_session_manager_client.h"
-#include "chromeos/dbus/session_manager/session_manager_client.h"
-#include "chromeos/settings/cros_settings_names.h"
+#include "chromeos/ash/components/dbus/session_manager/fake_session_manager_client.h"
+#include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
 #include "components/policy/proto/chrome_device_policy.pb.h"
 #include "content/public/test/browser_test.h"
 #include "extensions/browser/api/system_display/display_info_provider.h"
@@ -34,9 +33,11 @@
 #include "ui/display/display_switches.h"
 #include "ui/display/manager/display_manager.h"
 
-namespace em = enterprise_management;
+namespace policy {
 
 namespace {
+
+namespace em = ::enterprise_management;
 
 struct PolicyValue {
   absl::optional<int> external_width;
@@ -64,23 +65,23 @@ const int kDefaultDisplayScale = 100;
 
 PolicyValue GetPolicySetting() {
   const base::DictionaryValue* resolution_pref = nullptr;
-  ash::CrosSettings::Get()->GetDictionary(chromeos::kDeviceDisplayResolution,
+  ash::CrosSettings::Get()->GetDictionary(ash::kDeviceDisplayResolution,
                                           &resolution_pref);
   EXPECT_TRUE(resolution_pref) << "DeviceDisplayResolution setting is not set";
   const base::Value* width = resolution_pref->FindKeyOfType(
-      {chromeos::kDeviceDisplayResolutionKeyExternalWidth},
+      {ash::kDeviceDisplayResolutionKeyExternalWidth},
       base::Value::Type::INTEGER);
   const base::Value* height = resolution_pref->FindKeyOfType(
-      {chromeos::kDeviceDisplayResolutionKeyExternalHeight},
+      {ash::kDeviceDisplayResolutionKeyExternalHeight},
       base::Value::Type::INTEGER);
   const base::Value* external_scale = resolution_pref->FindKeyOfType(
-      {chromeos::kDeviceDisplayResolutionKeyExternalScale},
+      {ash::kDeviceDisplayResolutionKeyExternalScale},
       base::Value::Type::INTEGER);
   const base::Value* use_native = resolution_pref->FindKeyOfType(
-      {chromeos::kDeviceDisplayResolutionKeyExternalUseNative},
+      {ash::kDeviceDisplayResolutionKeyExternalUseNative},
       base::Value::Type::BOOLEAN);
   const base::Value* internal_scale = resolution_pref->FindKeyOfType(
-      {chromeos::kDeviceDisplayResolutionKeyInternalScale},
+      {ash::kDeviceDisplayResolutionKeyInternalScale},
       base::Value::Type::INTEGER);
   PolicyValue result;
   if (width)
@@ -160,17 +161,20 @@ std::unique_ptr<extensions::api::system_display::DisplayMode> CreateDisplayMode(
   return result;
 }
 
-}  // anonymous namespace
-
-namespace policy {
+}  // namespace
 
 class DeviceDisplayResolutionTestBase
-    : public policy::DeviceDisplayPolicyCrosBrowserTest,
+    : public DeviceDisplayPolicyCrosBrowserTest,
       public testing::WithParamInterface<PolicyValue> {
  public:
+  DeviceDisplayResolutionTestBase(const DeviceDisplayResolutionTestBase&) =
+      delete;
+  DeviceDisplayResolutionTestBase& operator=(
+      const DeviceDisplayResolutionTestBase&) = delete;
+
   void SetUpCommandLine(base::CommandLine* command_line) override {
-    command_line->AppendSwitch(chromeos::switches::kLoginManager);
-    command_line->AppendSwitch(chromeos::switches::kForceLoginManagerInTests);
+    command_line->AppendSwitch(ash::switches::kLoginManager);
+    command_line->AppendSwitch(ash::switches::kForceLoginManagerInTests);
     command_line->AppendSwitch(switches::kUseFirstDisplayAsInternal);
   }
 
@@ -181,24 +185,22 @@ class DeviceDisplayResolutionTestBase
     em::ChromeDeviceSettingsProto& proto(device_policy()->payload());
     SetPolicyValue(&proto, policy, recommended);
     policy_helper()->RefreshPolicyAndWaitUntilDeviceSettingsUpdated(
-        {chromeos::kDeviceDisplayResolution});
+        {ash::kDeviceDisplayResolution});
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(DeviceDisplayResolutionTestBase);
 };
 
 class DeviceDisplayResolutionTest : public DeviceDisplayResolutionTestBase {
  public:
   DeviceDisplayResolutionTest() {}
 
+  DeviceDisplayResolutionTest(const DeviceDisplayResolutionTest&) = delete;
+  DeviceDisplayResolutionTest& operator=(const DeviceDisplayResolutionTest&) =
+      delete;
+
  protected:
   void SetPolicy(PolicyValue value) {
     DeviceDisplayResolutionTestBase::SetPolicy(value, false);
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(DeviceDisplayResolutionTest);
 };
 
 IN_PROC_BROWSER_TEST_P(DeviceDisplayResolutionTest, Internal) {
@@ -274,7 +276,7 @@ IN_PROC_BROWSER_TEST_P(DeviceDisplayResolutionTest, SetAndUnsetPolicy) {
   const PolicyValue policy_value = GetParam();
   AddExternalDisplay(display_helper()->GetDisplayManager());
   SetPolicy(policy_value);
-  policy_helper()->UnsetPolicy({chromeos::kDeviceDisplayResolution});
+  policy_helper()->UnsetPolicy({ash::kDeviceDisplayResolution});
   EXPECT_EQ(policy_value.external_scale_percentage.value_or(0),
             display_helper()->GetScaleOfSecondDisplay())
       << "Scale of the external display after policy was set and unset";
@@ -303,6 +305,11 @@ INSTANTIATE_TEST_SUITE_P(
 class DisplayResolutionBootTest
     : public MixinBasedInProcessBrowserTest,
       public testing::WithParamInterface<PolicyValue> {
+ public:
+  DisplayResolutionBootTest(const DisplayResolutionBootTest&) = delete;
+  DisplayResolutionBootTest& operator=(const DisplayResolutionBootTest&) =
+      delete;
+
  protected:
   DisplayResolutionBootTest() {
     device_state_.set_skip_initial_policy_setup(true);
@@ -315,14 +322,14 @@ class DisplayResolutionBootTest
 
   void SetUpInProcessBrowserTestFixture() override {
     // Override FakeSessionManagerClient. This will be shut down by the browser.
-    chromeos::SessionManagerClient::InitializeFakeInMemory();
+    ash::SessionManagerClient::InitializeFakeInMemory();
     ash::DisplayConfigurationController::DisableAnimatorForTest();
     MixinBasedInProcessBrowserTest::SetUpInProcessBrowserTestFixture();
   }
 
-  chromeos::DeviceStateMixin device_state_{
+  ash::DeviceStateMixin device_state_{
       &mixin_host_,
-      chromeos::DeviceStateMixin::State::OOBE_COMPLETED_CLOUD_ENROLLED};
+      ash::DeviceStateMixin::State::OOBE_COMPLETED_CLOUD_ENROLLED};
 
   DeviceDisplayCrosTestHelper* display_helper() { return &helper_; }
   DevicePolicyCrosTestHelper* policy_helper() { return &policy_helper_; }
@@ -330,26 +337,24 @@ class DisplayResolutionBootTest
  private:
   DevicePolicyCrosTestHelper policy_helper_;
   DeviceDisplayCrosTestHelper helper_;
-  DISALLOW_COPY_AND_ASSIGN(DisplayResolutionBootTest);
 };
 
 IN_PROC_BROWSER_TEST_P(DisplayResolutionBootTest, PRE_Reboot) {
   const PolicyValue policy_value = GetParam();
 
   // Set policy.
-  policy::DevicePolicyBuilder* const device_policy(
-      policy_helper()->device_policy());
+  DevicePolicyBuilder* const device_policy(policy_helper()->device_policy());
   em::ChromeDeviceSettingsProto& proto(device_policy->payload());
   SetPolicyValue(&proto, policy_value, true);
   base::RunLoop run_loop;
   base::CallbackListSubscription subscription =
       ash::CrosSettings::Get()->AddSettingsObserver(
-          chromeos::kDeviceDisplayResolution, run_loop.QuitClosure());
+          ash::kDeviceDisplayResolution, run_loop.QuitClosure());
   device_policy->SetDefaultSigningKey();
   device_policy->Build();
-  chromeos::FakeSessionManagerClient::Get()->set_device_policy(
+  ash::FakeSessionManagerClient::Get()->set_device_policy(
       device_policy->GetBlob());
-  chromeos::FakeSessionManagerClient::Get()->OnPropertyChangeComplete(true);
+  ash::FakeSessionManagerClient::Get()->OnPropertyChangeComplete(true);
   run_loop.Run();
   // Allow tasks posted by CrosSettings observers to complete:
   base::RunLoop().RunUntilIdle();
@@ -394,6 +399,11 @@ class DeviceDisplayResolutionRecommendedTest
  public:
   DeviceDisplayResolutionRecommendedTest() {}
 
+  DeviceDisplayResolutionRecommendedTest(
+      const DeviceDisplayResolutionRecommendedTest&) = delete;
+  DeviceDisplayResolutionRecommendedTest& operator=(
+      const DeviceDisplayResolutionRecommendedTest&) = delete;
+
  protected:
   void SetPolicy(PolicyValue value) {
     DeviceDisplayResolutionTestBase::SetPolicy(value, true);
@@ -419,7 +429,6 @@ class DeviceDisplayResolutionRecommendedTest
 
  private:
   DeviceDisplayCrosTestHelper display_helper_;
-  DISALLOW_COPY_AND_ASSIGN(DeviceDisplayResolutionRecommendedTest);
 };
 
 IN_PROC_BROWSER_TEST_P(DeviceDisplayResolutionRecommendedTest, Internal) {

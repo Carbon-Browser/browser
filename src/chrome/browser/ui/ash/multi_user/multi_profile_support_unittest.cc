@@ -8,6 +8,7 @@
 #include <set>
 #include <vector>
 
+#include "ash/components/tpm/stub_install_attributes.h"
 #include "ash/display/screen_orientation_controller.h"
 #include "ash/display/screen_orientation_controller_test_api.h"
 #include "ash/multi_user/multi_user_window_manager_impl.h"
@@ -30,7 +31,6 @@
 #include "base/bind.h"
 #include "base/check.h"
 #include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "base/memory/ptr_util.h"
 #include "base/run_loop.h"
 #include "base/strings/string_piece.h"
@@ -54,7 +54,6 @@
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chrome/test/base/testing_profile_manager.h"
-#include "chromeos/tpm/stub_install_attributes.h"
 #include "components/account_id/account_id.h"
 #include "components/user_manager/scoped_user_manager.h"
 #include "components/user_manager/user_info.h"
@@ -92,13 +91,14 @@ class TestShellDelegateChromeOS : public ash::TestShellDelegate {
  public:
   TestShellDelegateChromeOS() {}
 
+  TestShellDelegateChromeOS(const TestShellDelegateChromeOS&) = delete;
+  TestShellDelegateChromeOS& operator=(const TestShellDelegateChromeOS&) =
+      delete;
+
   bool CanShowWindowForUser(const aura::Window* window) const override {
     return ::CanShowWindowForUser(window,
                                   base::BindRepeating(&GetActiveContext));
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(TestShellDelegateChromeOS);
 };
 
 std::unique_ptr<Browser> CreateTestBrowser(aura::Window* window,
@@ -123,6 +123,9 @@ class MultiProfileSupportTest : public ChromeAshTestBase {
   MultiProfileSupportTest()
       : fake_user_manager_(new FakeChromeUserManager),
         user_manager_enabler_(base::WrapUnique(fake_user_manager_)) {}
+
+  MultiProfileSupportTest(const MultiProfileSupportTest&) = delete;
+  MultiProfileSupportTest& operator=(const MultiProfileSupportTest&) = delete;
 
   // ChromeAshTestBase:
   void SetUp() override;
@@ -194,8 +197,7 @@ class MultiProfileSupportTest : public ChromeAshTestBase {
     fake_user_manager_->LoginUser(account_id);
     TestingProfile* profile =
         profile_manager()->CreateTestingProfile(account_id.GetUserEmail());
-    chromeos::ProfileHelper::Get()->SetUserToProfileMappingForTesting(user,
-                                                                      profile);
+    ProfileHelper::Get()->SetUserToProfileMappingForTesting(user, profile);
     return user;
   }
 
@@ -269,7 +271,7 @@ class MultiProfileSupportTest : public ChromeAshTestBase {
  private:
   std::string GetStatusImpl(bool follow_transients);
 
-  chromeos::ScopedStubInstallAttributes test_install_attributes_;
+  ScopedStubInstallAttributes test_install_attributes_;
 
   // These get created for each session.
   // TODO: convert to vector<std::unique_ptr<aura::Window>>.
@@ -284,8 +286,6 @@ class MultiProfileSupportTest : public ChromeAshTestBase {
 
   // The maximized window manager (if enabled).
   std::unique_ptr<TabletModeWindowManager> tablet_mode_window_manager_;
-
-  DISALLOW_COPY_AND_ASSIGN(MultiProfileSupportTest);
 };
 
 void MultiProfileSupportTest::SetUp() {
@@ -1379,6 +1379,10 @@ TEST_F(MultiProfileSupportTest, ShowForUserSwitchesDesktop) {
 class TestWindowObserver : public aura::WindowObserver {
  public:
   TestWindowObserver() : resize_calls_(0) {}
+
+  TestWindowObserver(const TestWindowObserver&) = delete;
+  TestWindowObserver& operator=(const TestWindowObserver&) = delete;
+
   ~TestWindowObserver() override {}
 
   void OnWindowBoundsChanged(aura::Window* window,
@@ -1392,8 +1396,6 @@ class TestWindowObserver : public aura::WindowObserver {
 
  private:
   int resize_calls_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestWindowObserver);
 };
 
 // Test that switching between different user won't change the activated windows

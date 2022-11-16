@@ -6,6 +6,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/time/time.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -48,7 +49,7 @@ class DelegatedInkPointRendererGpuTest : public testing::Test {
     SendDelegatedInkPoint(gfx::DelegatedInkPoint(
         last_point.point() + gfx::Vector2dF(5, 5),
         last_point.timestamp() +
-            base::TimeDelta::FromMicroseconds(kMicrosecondsBetweenEachPoint),
+            base::Microseconds(kMicrosecondsBetweenEachPoint),
         last_point.pointer_id()));
   }
 
@@ -97,8 +98,9 @@ class DelegatedInkPointRendererGpuTest : public testing::Test {
  protected:
   void SetUp() override {
     // Without this, the following check always fails.
-    gl::init::InitializeGLNoExtensionsOneOff(/*init_bindings=*/true);
-    if (!QueryDirectCompositionDevice(QueryD3D11DeviceObjectFromANGLE())) {
+    display_ = gl::init::InitializeGLNoExtensionsOneOff(/*init_bindings=*/true,
+                                                        /*system_device_id=*/0);
+    if (!gl::DirectCompositionSurfaceWin::GetDirectCompositionDevice()) {
       LOG(WARNING)
           << "GL implementation not using DirectComposition, skipping test.";
       return;
@@ -123,14 +125,15 @@ class DelegatedInkPointRendererGpuTest : public testing::Test {
     context_ = nullptr;
     if (surface_)
       DestroySurface(std::move(surface_));
-    gl::init::ShutdownGL(false);
+    gl::init::ShutdownGL(display_, false);
   }
 
  private:
   void CreateDirectCompositionSurfaceWin() {
     DirectCompositionSurfaceWin::Settings settings;
     surface_ = base::MakeRefCounted<DirectCompositionSurfaceWin>(
-        parent_window_, DirectCompositionSurfaceWin::VSyncCallback(), settings);
+        gl::GLSurfaceEGL::GetGLDisplayEGL(), parent_window_,
+        DirectCompositionSurfaceWin::VSyncCallback(), settings);
     EXPECT_TRUE(surface_->Initialize(GLSurfaceFormat()));
 
     // ImageTransportSurfaceDelegate::DidCreateAcceleratedSurfaceChildWindow()
@@ -162,6 +165,7 @@ class DelegatedInkPointRendererGpuTest : public testing::Test {
   HWND parent_window_;
   scoped_refptr<DirectCompositionSurfaceWin> surface_;
   scoped_refptr<GLContext> context_;
+  raw_ptr<GLDisplay> display_ = nullptr;
 
   // Used as a reference when making DelegatedInkMetadatas based on previously
   // sent points.
@@ -219,7 +223,7 @@ TEST_F(DelegatedInkPointRendererGpuTest, StoreAndRemovePointsAndTokens) {
       ink_renderer()->DelegatedInkPointsForTesting(kPointerId).rbegin()->first;
   metadata = gfx::DelegatedInkMetadata(
       last_point.point() + gfx::Vector2dF(2, 2), /*diameter=*/3, SK_ColorBLACK,
-      last_point.timestamp() + base::TimeDelta::FromMicroseconds(20),
+      last_point.timestamp() + base::Microseconds(20),
       gfx::RectF(0, 0, 100, 100), /*hovering=*/false);
   SendMetadata(metadata);
   EXPECT_EQ(ink_renderer()->DelegatedInkPointPointerIdCountForTesting(), 0u);
@@ -260,8 +264,7 @@ TEST_F(DelegatedInkPointRendererGpuTest, DrawPointsAsTheyArrive) {
   gfx::DelegatedInkPoint last_point =
       ink_renderer()->DelegatedInkPointsForTesting(kPointerId).rbegin()->first;
   gfx::DelegatedInkPoint outside_point(
-      gfx::PointF(5, 5),
-      last_point.timestamp() + base::TimeDelta::FromMicroseconds(10),
+      gfx::PointF(5, 5), last_point.timestamp() + base::Microseconds(10),
       /*pointer_id=*/1);
   EXPECT_FALSE(metadata.presentation_area().Contains(outside_point.point()));
   SendDelegatedInkPoint(outside_point);
@@ -298,9 +301,8 @@ TEST_F(DelegatedInkPointRendererGpuTest, MultiplePointerIds) {
       gfx::DelegatedInkPoint(gfx::PointF(16, 22), timestamp, kPointerId1));
   SendDelegatedInkPoint(gfx::DelegatedInkPoint(
       gfx::PointF(40, 13.3f),
-      timestamp +
-          base::TimeDelta::FromMicroseconds(kPointerId2PointsAheadOfPointerId1 *
-                                            kMicrosecondsBetweenEachPoint),
+      timestamp + base::Microseconds(kPointerId2PointsAheadOfPointerId1 *
+                                     kMicrosecondsBetweenEachPoint),
       kPointerId2));
 
   uint64_t pointer_id_1_count = 1u;
@@ -348,9 +350,8 @@ TEST_F(DelegatedInkPointRendererGpuTest, MultiplePointerIds) {
   const int kPointerId3PointsAheadOfPointerId1 = 5;
   SendDelegatedInkPoint(gfx::DelegatedInkPoint(
       gfx::PointF(23, 64),
-      timestamp +
-          base::TimeDelta::FromMicroseconds(kPointerId3PointsAheadOfPointerId1 *
-                                            kMicrosecondsBetweenEachPoint),
+      timestamp + base::Microseconds(kPointerId3PointsAheadOfPointerId1 *
+                                     kMicrosecondsBetweenEachPoint),
       kPointerId3));
 
   const uint64_t kPointsWithPointerId3 = 4u;
@@ -388,7 +389,7 @@ TEST_F(DelegatedInkPointRendererGpuTest, MaximumPointerIds) {
   // make sure they are all correctly added separately.
   const base::TimeTicks kEarliestTimestamp =
       base::TimeTicks::Now() -
-      base::TimeDelta::FromMicroseconds(kMicrosecondsBetweenEachPoint);
+      base::Microseconds(kMicrosecondsBetweenEachPoint);
   const int32_t kEarliestTimestampPointerId = 4;
 
   base::TimeTicks timestamp = base::TimeTicks::Now();
@@ -403,8 +404,7 @@ TEST_F(DelegatedInkPointRendererGpuTest, MaximumPointerIds) {
                                                   : timestamp,
         pointer_id));
     point += gfx::Vector2dF(5, 5);
-    timestamp +=
-        base::TimeDelta::FromMicroseconds(kMicrosecondsBetweenEachPoint);
+    timestamp += base::Microseconds(kMicrosecondsBetweenEachPoint);
   }
 
   EXPECT_EQ(ink_renderer()->DelegatedInkPointPointerIdCountForTesting(),
@@ -425,7 +425,7 @@ TEST_F(DelegatedInkPointRendererGpuTest, MaximumPointerIds) {
   // Finally, add a point with a earlier timestamp than everything else and make
   // sure that it is not added to the map of pointer ids.
   point += gfx::Vector2dF(5, 5);
-  timestamp = kEarliestTimestamp + base::TimeDelta::FromMicroseconds(5);
+  timestamp = kEarliestTimestamp + base::Microseconds(5);
   const int32_t kEarlyTimestampPointerId = kMaxNumberOfPointerIds + 1;
   SendDelegatedInkPoint(
       gfx::DelegatedInkPoint(point, timestamp, kEarlyTimestampPointerId));

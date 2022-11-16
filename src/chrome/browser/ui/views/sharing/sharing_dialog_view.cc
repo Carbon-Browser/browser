@@ -25,6 +25,7 @@
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/models/image_model.h"
 #include "ui/base/resource/resource_bundle.h"
+#include "ui/color/color_id.h"
 #include "ui/gfx/color_utils.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/strings/grit/ui_strings.h"
@@ -36,7 +37,6 @@
 #include "url/origin.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chrome/browser/ui/page_action/page_action_icon_type.h"
 #include "chrome/browser/ui/views/intent_picker_bubble_view.h"
 #endif
 
@@ -57,7 +57,7 @@ bool ShouldShowOrigin(const SharingDialogData& data,
                       content::WebContents* web_contents) {
   return data.initiating_origin &&
          !data.initiating_origin->IsSameOriginWith(
-             web_contents->GetMainFrame()->GetLastCommittedOrigin());
+             web_contents->GetPrimaryMainFrame()->GetLastCommittedOrigin());
 }
 
 std::u16string PrepareHelpTextWithoutOrigin(const SharingDialogData& data) {
@@ -147,8 +147,8 @@ void SharingDialogView::AddedToWidget() {
                               gfx::kPlaceholderColor),
         gfx::CreateVectorIcon(*data_.header_icons->dark,
                               gfx::kPlaceholderColor),
-        base::BindRepeating(&views::BubbleFrameView::GetBackgroundColor,
-                            base::Unretained(frame_view)));
+        base::BindRepeating(&views::BubbleDialogDelegate::GetBackgroundColor,
+                            base::Unretained(this)));
     constexpr gfx::Size kHeaderImageSize(320, 100);
     image_view->SetPreferredSize(kHeaderImageSize);
     image_view->SetVerticalAlignment(views::ImageView::Alignment::kLeading);
@@ -188,7 +188,8 @@ views::BubbleDialogDelegateView* SharingDialogView::GetAsBubbleForClickToCall(
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   if (!dialog) {
     auto* bubble = IntentPickerBubbleView::intent_picker_bubble();
-    if (bubble && bubble->icon_type() == PageActionIconType::kClickToCall)
+    if (bubble && bubble->bubble_type() ==
+                      IntentPickerBubbleView::BubbleType::kClickToCall)
       return bubble;
   }
 #endif
@@ -216,13 +217,14 @@ void SharingDialogView::Init() {
     case SharingDialogType::kDialogWithoutDevicesWithApp:
     case SharingDialogType::kDialogWithDevicesMaybeApps:
       // Spread buttons across the whole dialog width.
-      insets = gfx::Insets(kSharingDialogSpacing, 0, kSharingDialogSpacing, 0);
+      insets = gfx::Insets::VH(kSharingDialogSpacing, 0);
       InitListView();
       break;
   }
 
-  set_margins(gfx::Insets(insets.top(), 0, insets.bottom(), 0));
-  SetBorder(views::CreateEmptyBorder(0, insets.left(), 0, insets.right()));
+  set_margins(gfx::Insets::TLBR(insets.top(), 0, insets.bottom(), 0));
+  SetBorder(views::CreateEmptyBorder(
+      gfx::Insets::TLBR(0, insets.left(), 0, insets.right())));
 
   if (GetWidget())
     SizeToContents();
@@ -231,10 +233,10 @@ void SharingDialogView::Init() {
 void SharingDialogView::InitListView() {
   constexpr int kPrimaryIconSize = 20;
   const gfx::Insets device_border =
-      gfx::Insets(kSharingDialogSpacing, kSharingDialogSpacing * 2,
-                  kSharingDialogSpacing, 0);
+      gfx::Insets::TLBR(kSharingDialogSpacing, kSharingDialogSpacing * 2,
+                        kSharingDialogSpacing, 0);
   // Apps need more padding at the top and bottom as they only have one line.
-  const gfx::Insets app_border = device_border + gfx::Insets(2, 0, 2, 0);
+  const gfx::Insets app_border = device_border + gfx::Insets::VH(2, 0);
 
   auto button_list = std::make_unique<views::View>();
   button_list->SetLayoutManager(std::make_unique<views::BoxLayout>(
@@ -249,7 +251,7 @@ void SharingDialogView::InitListView() {
             device->device_type() == sync_pb::SyncEnums::TYPE_TABLET
                 ? kTabletIcon
                 : kHardwareSmartphoneIcon,
-            ui::NativeTheme::kColorId_DefaultIconColor, kPrimaryIconSize));
+            ui::kColorIcon, kPrimaryIconSize));
 
     auto* dialog_button =
         button_list->AddChildView(std::make_unique<HoverButton>(
@@ -268,8 +270,7 @@ void SharingDialogView::InitListView() {
     std::unique_ptr<views::ImageView> icon;
     if (app.vector_icon) {
       icon = std::make_unique<views::ImageView>(ui::ImageModel::FromVectorIcon(
-          *app.vector_icon, ui::NativeTheme::kColorId_DefaultIconColor,
-          kPrimaryIconSize));
+          *app.vector_icon, ui::kColorIcon, kPrimaryIconSize));
     } else {
       icon = std::make_unique<views::ImageView>();
       icon->SetImage(app.image.AsImageSkia());

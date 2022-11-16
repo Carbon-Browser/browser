@@ -31,6 +31,10 @@ const char kTestAccountEmail[] = "test@test.com";
 class MultiUserUtilTest : public ChromeAshTestBase {
  public:
   MultiUserUtilTest() {}
+
+  MultiUserUtilTest(const MultiUserUtilTest&) = delete;
+  MultiUserUtilTest& operator=(const MultiUserUtilTest&) = delete;
+
   ~MultiUserUtilTest() override {}
 
   void SetUp() override {
@@ -62,8 +66,7 @@ class MultiUserUtilTest : public ChromeAshTestBase {
         multi_user_util::GetAccountIdFromEmail(account_info.email));
     fake_user_manager_->UserLoggedIn(
         multi_user_util::GetAccountIdFromEmail(account_info.email),
-        chromeos::ProfileHelper::GetUserIdHashByUserIdForTesting(
-            account_info.email),
+        ProfileHelper::GetUserIdHashByUserIdForTesting(account_info.email),
         false /* browser_restart */, false /* is_child */);
 
     return account_info.account_id;
@@ -86,8 +89,6 @@ class MultiUserUtilTest : public ChromeAshTestBase {
   // |fake_user_manager_| is owned by |user_manager_enabler_|.
   FakeChromeUserManager* fake_user_manager_;
   std::unique_ptr<user_manager::ScopedUserManager> user_manager_enabler_;
-
-  DISALLOW_COPY_AND_ASSIGN(MultiUserUtilTest);
 };
 
 // Test that during the session it will always return a valid account id if a

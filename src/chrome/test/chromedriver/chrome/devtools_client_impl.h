@@ -11,8 +11,7 @@
 #include <string>
 
 #include "base/callback.h"
-#include "base/compiler_specific.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/scoped_refptr.h"
 #include "chrome/test/chromedriver/chrome/devtools_client.h"
@@ -56,17 +55,16 @@ class DevToolsClientImpl : public DevToolsClient {
  public:
   static const char kBrowserwideDevToolsClientId[];
 
-  DevToolsClientImpl(const SyncWebSocketFactory& factory,
+  DevToolsClientImpl(const std::string& id,
+                     const std::string& session_id,
                      const std::string& url,
-                     const std::string& id);
+                     const SyncWebSocketFactory& factory);
 
   typedef base::RepeatingCallback<Status()> FrontendCloserFunc;
-  DevToolsClientImpl(const SyncWebSocketFactory& factory,
-                     const std::string& url,
-                     const std::string& id,
-                     const FrontendCloserFunc& frontend_closer_func);
 
-  DevToolsClientImpl(DevToolsClientImpl* parent, const std::string& session_id);
+  DevToolsClientImpl(const std::string& id,
+                     const std::string& session_id,
+                     DevToolsClientImpl* parent);
 
   typedef base::RepeatingCallback<bool(const std::string&,
                                        int,
@@ -75,15 +73,14 @@ class DevToolsClientImpl : public DevToolsClient {
                                        internal::InspectorEvent*,
                                        internal::InspectorCommandResponse*)>
       ParserFunc;
-  DevToolsClientImpl(const SyncWebSocketFactory& factory,
-                     const std::string& url,
-                     const std::string& id,
-                     const FrontendCloserFunc& frontend_closer_func,
-                     const ParserFunc& parser_func);
+
+  DevToolsClientImpl(const DevToolsClientImpl&) = delete;
+  DevToolsClientImpl& operator=(const DevToolsClientImpl&) = delete;
 
   ~DevToolsClientImpl() override;
 
   void SetParserFuncForTesting(const ParserFunc& parser_func);
+  void SetFrontendCloserFunc(const FrontendCloserFunc& frontend_closer_func);
 
   // Overridden from DevToolsClient:
   const std::string& GetId() override;
@@ -103,15 +100,13 @@ class DevToolsClientImpl : public DevToolsClient {
   Status SendAsyncCommand(
       const std::string& method,
       const base::DictionaryValue& params) override;
-  Status SendCommandAndGetResult(
-      const std::string& method,
-      const base::DictionaryValue& params,
-      std::unique_ptr<base::DictionaryValue>* result) override;
-  Status SendCommandAndGetResultWithTimeout(
-      const std::string& method,
-      const base::DictionaryValue& params,
-      const Timeout* timeout,
-      std::unique_ptr<base::DictionaryValue>* result) override;
+  Status SendCommandAndGetResult(const std::string& method,
+                                 const base::DictionaryValue& params,
+                                 base::Value* result) override;
+  Status SendCommandAndGetResultWithTimeout(const std::string& method,
+                                            const base::DictionaryValue& params,
+                                            const Timeout* timeout,
+                                            base::Value* result) override;
   Status SendCommandAndIgnoreResponse(
       const std::string& method,
       const base::DictionaryValue& params) override;
@@ -151,7 +146,7 @@ class DevToolsClientImpl : public DevToolsClient {
   };
   Status SendCommandInternal(const std::string& method,
                              const base::DictionaryValue& params,
-                             std::unique_ptr<base::DictionaryValue>* result,
+                             base::Value* result,
                              bool expect_response,
                              bool wait_for_response,
                              int client_command_id,
@@ -170,12 +165,12 @@ class DevToolsClientImpl : public DevToolsClient {
   std::unique_ptr<SyncWebSocket> socket_;
   GURL url_;
   // WebViewImpl that owns this instance; nullptr for browser-wide DevTools.
-  WebViewImpl* owner_;
+  raw_ptr<WebViewImpl> owner_;
   const std::string session_id_;
   // parent_ / children_: it's a flat hierarchy - nesting is at most one level
   // deep. children_ holds child sessions - identified by their session id -
   // which send/receive messages via the socket_ of their parent.
-  DevToolsClientImpl* parent_;
+  raw_ptr<DevToolsClientImpl> parent_;
   std::map<std::string, DevToolsClientImpl*> children_;
   bool crashed_;
   bool detached_;
@@ -187,14 +182,12 @@ class DevToolsClientImpl : public DevToolsClient {
   std::list<DevToolsEventListener*> listeners_;
   std::list<DevToolsEventListener*> unnotified_connect_listeners_;
   std::list<DevToolsEventListener*> unnotified_event_listeners_;
-  const internal::InspectorEvent* unnotified_event_;
+  raw_ptr<const internal::InspectorEvent> unnotified_event_;
   std::list<DevToolsEventListener*> unnotified_cmd_response_listeners_;
   scoped_refptr<ResponseInfo> unnotified_cmd_response_info_;
   std::map<int, scoped_refptr<ResponseInfo>> response_info_map_;
   int next_id_;  // The id identifying a particular request.
   int stack_count_;
-
-  DISALLOW_COPY_AND_ASSIGN(DevToolsClientImpl);
 };
 
 namespace internal {

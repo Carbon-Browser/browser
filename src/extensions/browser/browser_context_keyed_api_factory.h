@@ -5,7 +5,6 @@
 #ifndef EXTENSIONS_BROWSER_BROWSER_CONTEXT_KEYED_API_FACTORY_H_
 #define EXTENSIONS_BROWSER_BROWSER_CONTEXT_KEYED_API_FACTORY_H_
 
-#include "base/macros.h"
 #include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/keyed_service/content/browser_context_keyed_service_factory.h"
 #include "components/keyed_service/core/keyed_service.h"
@@ -126,6 +125,10 @@ class BrowserContextKeyedAPIFactory : public BrowserContextKeyedServiceFactory {
     DeclareFactoryDependencies();
   }
 
+  BrowserContextKeyedAPIFactory(const BrowserContextKeyedAPIFactory&) = delete;
+  BrowserContextKeyedAPIFactory& operator=(
+      const BrowserContextKeyedAPIFactory&) = delete;
+
   ~BrowserContextKeyedAPIFactory() override {}
 
  private:
@@ -157,8 +160,6 @@ class BrowserContextKeyedAPIFactory : public BrowserContextKeyedServiceFactory {
   bool ServiceIsNULLWhileTesting() const override {
     return T::kServiceIsNULLWhileTesting;
   }
-
-  DISALLOW_COPY_AND_ASSIGN(BrowserContextKeyedAPIFactory);
 };
 
 }  // namespace extensions

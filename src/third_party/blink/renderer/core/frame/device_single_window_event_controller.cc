@@ -67,28 +67,9 @@ void DeviceSingleWindowEventController::DidRemoveAllEventListeners(
   has_event_listener_ = false;
 }
 
-bool DeviceSingleWindowEventController::IsSameSecurityOriginAsMainFrame()
-    const {
-  LocalFrame* frame = GetWindow().GetFrame();
-  if (!frame)
-    return false;
-
-  if (frame->IsMainFrame())
-    return true;
-
-  const SecurityOrigin* main_security_origin =
-      frame->GetPage()->MainFrame()->GetSecurityContext()->GetSecurityOrigin();
-
-  if (main_security_origin &&
-      GetWindow().GetSecurityOrigin()->CanAccess(main_security_origin))
-    return true;
-
-  return false;
-}
-
 bool DeviceSingleWindowEventController::CheckPolicyFeatures(
     const Vector<mojom::blink::PermissionsPolicyFeature>& features) const {
-  const LocalDOMWindow& window = GetWindow();
+  LocalDOMWindow& window = GetWindow();
   return std::all_of(features.begin(), features.end(),
                      [&window](mojom::blink::PermissionsPolicyFeature feature) {
                        return window.IsFeatureEnabled(

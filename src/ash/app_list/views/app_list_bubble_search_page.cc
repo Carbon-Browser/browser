@@ -4,107 +4,114 @@
 
 #include "ash/app_list/views/app_list_bubble_search_page.h"
 
-#include <limits>
 #include <memory>
-#include <utility>
 
-#include "ash/app_list/app_list_view_delegate.h"
-#include "ash/app_list/views/result_selection_controller.h"
-#include "ash/app_list/views/search_box_view.h"
-#include "ash/app_list/views/search_result_list_view.h"
-#include "ash/app_list/views/search_result_view.h"
-#include "ash/public/cpp/app_list/app_list_color_provider.h"
-#include "base/bind.h"
-#include "base/check.h"
-#include "base/notreached.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ash/app_list/views/productivity_launcher_search_view.h"
+#include "ash/bubble/bubble_constants.h"
+#include "base/check_op.h"
+#include "base/time/time.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
-#include "ui/views/background.h"
-#include "ui/views/controls/scroll_view.h"
-#include "ui/views/layout/box_layout.h"
-
-using views::BoxLayout;
+#include "ui/compositor/layer.h"
+#include "ui/compositor/layer_type.h"
+#include "ui/compositor/scoped_animation_duration_scale_mode.h"
+#include "ui/views/animation/animation_builder.h"
+#include "ui/views/layout/fill_layout.h"
 
 namespace ash {
+namespace {
+
+// The animation spec says 40 dips up over 250ms, but the opacity animation
+// renders the view invisible after 50ms, so animate the visible fraction.
+constexpr int kHideAnimationVerticalOffset = -40 * 250 / 50;
+
+// Duration for the hide animation (both transform and opacity).
+constexpr base::TimeDelta kHideAnimationDuration = base::Milliseconds(50);
+
+constexpr auto kSearchViewBorder =
+    gfx::Insets::TLBR(0, 0, kBubbleCornerRadius, 0);
+}  // namespace
 
 AppListBubbleSearchPage::AppListBubbleSearchPage(
     AppListViewDelegate* view_delegate,
-    SearchBoxView* search_box_view)
-    : search_box_view_(search_box_view) {
-  DCHECK(view_delegate);
-  DCHECK(search_box_view_);
-  SetUseDefaultFillLayout(true);
-
-  // The entire page scrolls. Use layer scrolling so that the contents will
-  // paint on top of the parent, which uses SetPaintToLayer().
-  auto* scroll = AddChildView(std::make_unique<views::ScrollView>(
-      views::ScrollView::ScrollWithLayers::kEnabled));
-  scroll->ClipHeightTo(0, std::numeric_limits<int>::max());
-  scroll->SetDrawOverflowIndicator(false);
-  scroll->SetHorizontalScrollBarMode(
-      views::ScrollView::ScrollBarMode::kDisabled);
-  // Don't paint a background. The bubble already has one.
-  scroll->SetBackgroundColor(absl::nullopt);
-
-  auto scroll_contents = std::make_unique<views::View>();
-  scroll_contents->SetLayoutManager(
-      std::make_unique<BoxLayout>(BoxLayout::Orientation::kVertical));
-
-  result_selection_controller_ = std::make_unique<ResultSelectionController>(
-      &result_container_views_,
-      base::BindRepeating(&AppListBubbleSearchPage::OnSelectedResultChanged,
-                          base::Unretained(this)));
-  search_box_view_->SetResultSelectionController(
-      result_selection_controller_.get());
-
-  // TODO(https://crbug.com/1204551): Provide a custom search result list view,
-  // instead of recycling this one from fullscreen launcher.
-  auto* result_container =
-      scroll_contents->AddChildView(std::make_unique<SearchResultListView>(
-          /*main_view=*/nullptr, view_delegate));
-  result_container->SetResults(view_delegate->GetSearchModel()->results());
-  result_container->set_delegate(this);
-  result_container_views_.push_back(result_container);
-
-  scroll->SetContents(std::move(scroll_contents));
+    SearchResultPageDialogController* dialog_controller,
+    SearchBoxView* search_box_view) {
+  SetLayoutManager(std::make_unique<views::FillLayout>());
+  search_view_ = AddChildView(std::make_unique<ProductivityLauncherSearchView>(
+      view_delegate, dialog_controller, search_box_view));
+  search_view_->SetBorder(views::CreateEmptyBorder(kSearchViewBorder));
 }
 
 AppListBubbleSearchPage::~AppListBubbleSearchPage() = default;
 
-void AppListBubbleSearchPage::OnSearchResultContainerResultsChanging() {
-  // Block any result selection changes while result updates are in flight.
-  // The selection will be reset once the results are all updated.
-  result_selection_controller_->set_block_selection_changes(true);
+void AppListBubbleSearchPage::AnimateShowPage() {
+  // If skipping animations, just update visibility.
+  if (ui::ScopedAnimationDurationScaleMode::is_zero()) {
+    SetVisible(true);
+    return;
+  }
+
+  // Ensure any in-progress animations have their cleanup callbacks called.
+  // Note that this might call SetVisible(false) from the hide animation.
+  AbortAllAnimations();
+
+  // Ensure the view is visible.
+  SetVisible(true);
+
+  ui::Layer* layer = search_view_->GetPageAnimationLayer();
+  DCHECK_EQ(layer->type(), ui::LAYER_TEXTURED);
+
+  views::AnimationBuilder()
+      .SetPreemptionStrategy(
+          ui::LayerAnimator::IMMEDIATELY_ANIMATE_TO_NEW_TARGET)
+      .Once()
+      .SetOpacity(layer, 0.f)
+      .At(base::Milliseconds(50))
+      .SetDuration(base::Milliseconds(100))
+      .SetOpacity(layer, 1.f);
 }
 
-void AppListBubbleSearchPage::OnSearchResultContainerResultsChanged() {
-  // TODO(crbug.com/1204551): Accessibility notifications, similar to
-  // SearchResultPageView.
+void AppListBubbleSearchPage::AnimateHidePage() {
+  // If skipping animations, just update visibility.
+  if (ui::ScopedAnimationDurationScaleMode::is_zero()) {
+    SetVisible(false);
+    return;
+  }
 
-  // Find the first result view.
-  DCHECK(!result_container_views_.empty());
-  SearchResultBaseView* first_result_view =
-      result_container_views_.front()->GetFirstResultView();
+  // Update view visibility when the animation is done.
+  auto set_visible_false = base::BindRepeating(
+      [](base::WeakPtr<AppListBubbleSearchPage> self) {
+        if (!self)
+          return;
+        self->SetVisible(false);
+        ui::Layer* layer = self->search_view_->GetPageAnimationLayer();
+        layer->SetOpacity(1.f);
+        layer->SetTransform(gfx::Transform());
+      },
+      weak_factory_.GetWeakPtr());
 
-  // Reset selection to first when things change. The first result is set as
-  // as the default result.
-  result_selection_controller_->set_block_selection_changes(false);
-  result_selection_controller_->ResetSelection(/*key_event=*/nullptr,
-                                               /*default_selection=*/true);
-  // Update SearchBoxView search box autocomplete as necessary based on new
-  // first result view.
-  search_box_view_->ProcessAutocomplete(first_result_view);
+  ui::Layer* layer = search_view_->GetPageAnimationLayer();
+  DCHECK_EQ(layer->type(), ui::LAYER_TEXTURED);
+
+  gfx::Transform translate_up;
+  translate_up.Translate(0, kHideAnimationVerticalOffset);
+
+  views::AnimationBuilder()
+      .SetPreemptionStrategy(
+          ui::LayerAnimator::IMMEDIATELY_ANIMATE_TO_NEW_TARGET)
+      .OnEnded(set_visible_false)
+      .OnAborted(set_visible_false)
+      .Once()
+      .SetDuration(kHideAnimationDuration)
+      .SetOpacity(layer, 0.f)
+      .SetTransform(layer, translate_up);
 }
 
-void AppListBubbleSearchPage::OnSelectedResultChanged() {
-  // TODO(crbug.com/1204551): Accessibility announcement, similar to
-  // SearchResultPageView.
-  NOTIMPLEMENTED_LOG_ONCE();
+void AppListBubbleSearchPage::AbortAllAnimations() {
+  search_view_->GetPageAnimationLayer()->GetAnimator()->AbortAllAnimations();
 }
 
-bool AppListBubbleSearchPage::CanSelectSearchResults() {
-  DCHECK(!result_container_views_.empty());
-  return result_container_views_.front()->num_results() > 0;
+ui::Layer* AppListBubbleSearchPage::GetPageAnimationLayerForTest() {
+  return search_view_->GetPageAnimationLayer();
 }
 
 BEGIN_METADATA(AppListBubbleSearchPage, views::View)

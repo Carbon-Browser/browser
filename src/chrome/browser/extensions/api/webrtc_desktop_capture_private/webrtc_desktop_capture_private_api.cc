@@ -19,7 +19,6 @@ namespace extensions {
 
 namespace {
 
-const char kTargetNotFoundError[] = "The specified target is not found.";
 const char kUrlNotSecure[] =
     "URL scheme for the specified target is not secure.";
 
@@ -58,7 +57,7 @@ WebrtcDesktopCapturePrivateChooseDesktopMediaFunction::Run() {
     return RespondNow(Error(kTargetNotFoundError));
   }
 
-  GURL origin = rfh->GetLastCommittedURL().GetOrigin();
+  GURL origin = rfh->GetLastCommittedURL().DeprecatedGetOriginAsURL();
   if (!base::CommandLine::ForCurrentProcess()->HasSwitch(
           ::switches::kAllowHttpScreenCapture) &&
       !network::IsUrlPotentiallyTrustworthy(origin)) {
@@ -69,15 +68,12 @@ WebrtcDesktopCapturePrivateChooseDesktopMediaFunction::Run() {
                             ? net::GetHostAndOptionalPort(origin)
                             : origin.spec());
 
-  content::WebContents* web_contents =
-      content::WebContents::FromRenderFrameHost(rfh);
-  if (!web_contents) {
-    return RespondNow(Error(kTargetNotFoundError));
-  }
-
   using Sources = std::vector<api::desktop_capture::DesktopCaptureSourceType>;
   Sources* sources = reinterpret_cast<Sources*>(&params->sources);
-  return Execute(*sources, web_contents, origin, target_name);
+
+  // TODO(crbug.com/1329129): Plumb systemAudio through here.
+  return Execute(*sources, /*exclude_system_audio=*/false, rfh, origin,
+                 target_name);
 }
 
 WebrtcDesktopCapturePrivateCancelChooseDesktopMediaFunction::

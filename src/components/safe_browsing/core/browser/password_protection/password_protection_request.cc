@@ -7,15 +7,18 @@
 #include <cstddef>
 
 #include "base/bind.h"
+#include "base/metrics/histogram_functions.h"
+#include "base/strings/escape.h"
 #include "base/strings/strcat.h"
 #include "base/strings/utf_string_conversions.h"
+#include "build/build_config.h"
 #include "components/safe_browsing/core/browser/db/allowlist_checker_client.h"
 #include "components/safe_browsing/core/browser/db/database_manager.h"
 #include "components/safe_browsing/core/browser/password_protection/password_protection_service_base.h"
 #include "components/safe_browsing/core/common/features.h"
 #include "components/safe_browsing/core/common/safebrowsing_constants.h"
+#include "components/safe_browsing/core/common/utils.h"
 #include "components/url_formatter/url_formatter.h"
-#include "net/base/escape.h"
 #include "net/base/load_flags.h"
 #include "net/http/http_request_headers.h"
 #include "net/http/http_status_code.h"
@@ -52,7 +55,7 @@ std::vector<std::string> GetMatchingDomains(
             url_formatter::kFormatUrlOmitHTTPS |
             url_formatter::kFormatUrlOmitTrivialSubdomains |
             url_formatter::kFormatUrlTrimAfterHost,
-        net::UnescapeRule::SPACES, nullptr, nullptr, nullptr));
+        base::UnescapeRule::SPACES, nullptr, nullptr, nullptr));
     matching_domains.push_back(std::move(domain));
   }
   return base::flat_set<std::string>(std::move(matching_domains)).extract();
@@ -214,7 +217,8 @@ void PasswordProtectionRequest::FillRequestProto(bool is_sampled_ping) {
     request_proto_->set_report_type(LoginReputationClientRequest::FULL_REPORT);
   }
 
-  password_protection_service_->FillUserPopulation(request_proto_.get());
+  password_protection_service_->FillUserPopulation(main_frame_url_,
+                                                   request_proto_.get());
   request_proto_->set_stored_verdict_cnt(
       password_protection_service_->GetStoredVerdictCount(trigger_type_));
 
@@ -234,9 +238,9 @@ void PasswordProtectionRequest::FillRequestProto(bool is_sampled_ping) {
   }
 #endif  // BUILDFLAG(FULL_SAFE_BROWSING)
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   SetReferringAppInfo();
-#endif  // defined(OS_ANDROID)
+#endif  // BUILDFLAG(IS_ANDROID)
 
   switch (trigger_type_) {
     case LoginReputationClientRequest::UNFAMILIAR_LOGIN_PAGE: {
@@ -260,7 +264,6 @@ void PasswordProtectionRequest::FillRequestProto(bool is_sampled_ping) {
           request_proto_->mutable_password_reuse_event();
       bool matches_signin_password =
           password_type_ == PasswordType::PRIMARY_ACCOUNT_PASSWORD;
-      reuse_event->set_is_chrome_signin_password(matches_signin_password);
       reuse_event->set_reused_password_type(
           password_protection_service_->GetPasswordProtectionReusedPasswordType(
               password_type_));
@@ -279,15 +282,12 @@ void PasswordProtectionRequest::FillRequestProto(bool is_sampled_ping) {
             break;
         }
       }
-      if (base::FeatureList::IsEnabled(
-              safe_browsing::kPasswordProtectionForSignedInUsers)) {
-        ReusedPasswordAccountType password_account_type_to_add =
-            password_protection_service_
-                ->GetPasswordProtectionReusedPasswordAccountType(password_type_,
-                                                                 username_);
-        *reuse_event->mutable_reused_password_account_type() =
-            password_account_type_to_add;
-      }
+      ReusedPasswordAccountType password_account_type_to_add =
+          password_protection_service_
+              ->GetPasswordProtectionReusedPasswordAccountType(password_type_,
+                                                               username_);
+      *reuse_event->mutable_reused_password_account_type() =
+          password_account_type_to_add;
       break;
     }
     default:
@@ -376,9 +376,8 @@ void PasswordProtectionRequest::SendRequestWithToken(
   bool has_access_token = !access_token.empty();
   LogPasswordProtectionRequestTokenHistogram(trigger_type_, has_access_token);
   if (has_access_token) {
-    resource_request->headers.SetHeader(
-        net::HttpRequestHeaders::kAuthorization,
-        base::StrCat({kAuthHeaderBearer, access_token}));
+    SetAccessTokenAndClearCookieInResourceRequest(resource_request.get(),
+                                                  access_token);
   }
   resource_request->url =
       PasswordProtectionServiceBase::GetPasswordProtectionRequestUrl();
@@ -405,7 +404,7 @@ void PasswordProtectionRequest::StartTimeout() {
   ui_task_runner()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&PasswordProtectionRequest::Cancel, AsWeakPtr(), true),
-      base::TimeDelta::FromMilliseconds(request_timeout_in_ms_));
+      base::Milliseconds(request_timeout_in_ms_));
 }
 
 void PasswordProtectionRequest::OnURLLoaderComplete(
@@ -418,8 +417,7 @@ void PasswordProtectionRequest::OnURLLoaderComplete(
   const bool is_success = url_loader_->NetError() == net::OK;
 
   LogPasswordProtectionNetworkResponseAndDuration(
-      is_success ? response_code : url_loader_->NetError(),
-      request_start_time_);
+      response_code, url_loader_->NetError(), request_start_time_);
 
   if (!is_success || net::HTTP_OK != response_code) {
     Finish(RequestOutcome::FETCH_FAILED, nullptr);

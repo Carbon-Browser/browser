@@ -7,8 +7,9 @@
 
 #include <memory>
 
-#include "base/macros.h"
+#include "base/time/time.h"
 #include "chrome/browser/ui/app_list/search/search_provider.h"
+#include "chromeos/components/string_matching/tokenized_string.h"
 #include "components/omnibox/browser/autocomplete_controller.h"
 #include "components/omnibox/browser/favicon_cache.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -26,11 +27,16 @@ class OmniboxProvider : public SearchProvider,
  public:
   explicit OmniboxProvider(Profile* profile,
                            AppListControllerDelegate* list_controller);
+
+  OmniboxProvider(const OmniboxProvider&) = delete;
+  OmniboxProvider& operator=(const OmniboxProvider&) = delete;
+
   ~OmniboxProvider() override;
 
   // SearchProvider overrides:
   void Start(const std::u16string& query) override;
-  ash::AppListSearchResultType ResultType() override;
+  void StartZeroState() override;
+  ash::AppListSearchResultType ResultType() const override;
 
  private:
   // Populates result list from AutocompleteResult.
@@ -46,17 +52,23 @@ class OmniboxProvider : public SearchProvider,
   // True if the input is empty for zero state suggestion.
   bool is_zero_state_input_ = false;
   AppListControllerDelegate* list_controller_;
+
+  std::u16string last_query_;
+  absl::optional<chromeos::string_matching::TokenizedString>
+      last_tokenized_query_;
   base::TimeTicks query_start_time_;
+  AutocompleteInput input_;
 
   // The omnibox AutocompleteController that collects/sorts/dup-
   // eliminates the results as they come in.
   std::unique_ptr<AutocompleteController> controller_;
 
+  // The AutocompleteController can sometimes update its results more than once
+  // after reporting it is done. This flag is set to ensure we only update the
+  // UI once.
+  bool query_finished_ = false;
+
   FaviconCache favicon_cache_;
-
-  // TODO(crbug.com/1247475): Score normalizers removed due to stability issues.
-
-  DISALLOW_COPY_AND_ASSIGN(OmniboxProvider);
 };
 
 }  // namespace app_list

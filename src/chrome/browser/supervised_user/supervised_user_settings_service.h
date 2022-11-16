@@ -11,20 +11,20 @@
 
 #include "base/callback.h"
 #include "base/callback_list.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/values.h"
 #include "chrome/browser/supervised_user/supervised_users.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/prefs/pref_store.h"
 #include "components/sync/model/syncable_service.h"
+#include "url/gurl.h"
 
 class PersistentPrefStore;
 
 namespace base {
 class FilePath;
 class SequencedTaskRunner;
-}
+}  // namespace base
 
 // This class syncs supervised user settings from a server, which are mapped to
 // preferences. The downloaded settings are persisted in a PrefStore (which is
@@ -62,12 +62,26 @@ class SupervisedUserSettingsService : public KeyedService,
   using SettingsCallbackList =
       base::RepeatingCallbackList<SettingsCallbackType>;
 
+  // Called when a new host is remotely approved for this supervised user. The
+  // first param is newly approved host, which might be a pattern containing
+  // wildcards (e.g. "*.google.*"").
+  using WebsiteApprovalCallbackType = void(const std::string& hostname);
+  using WebsiteApprovalCallback =
+      base::RepeatingCallback<WebsiteApprovalCallbackType>;
+  using WebsiteApprovalCallbackList =
+      base::RepeatingCallbackList<WebsiteApprovalCallbackType>;
+
   using ShutdownCallbackType = void();
   using ShutdownCallback = base::RepeatingCallback<ShutdownCallbackType>;
   using ShutdownCallbackList =
       base::RepeatingCallbackList<ShutdownCallbackType>;
 
   SupervisedUserSettingsService();
+
+  SupervisedUserSettingsService(const SupervisedUserSettingsService&) = delete;
+  SupervisedUserSettingsService& operator=(
+      const SupervisedUserSettingsService&) = delete;
+
   ~SupervisedUserSettingsService() override;
 
   // Initializes the service by loading its settings from a file underneath the
@@ -85,8 +99,19 @@ class SupervisedUserSettingsService : public KeyedService,
 
   // Adds a callback to be called when supervised user settings are initially
   // available, or when they change.
-  base::CallbackListSubscription SubscribeForSettingsChange(
-      const SettingsCallback& callback) WARN_UNUSED_RESULT;
+  [[nodiscard]] base::CallbackListSubscription SubscribeForSettingsChange(
+      const SettingsCallback& callback);
+
+  // Subscribes to be notified when a new website is remotely approved for this
+  // user.
+  [[nodiscard]] base::CallbackListSubscription SubscribeForNewWebsiteApproval(
+      const WebsiteApprovalCallback& callback);
+
+  // Records that a website has been locally approved for this user.
+  //
+  // This handles updating local and remote state for this setting, and
+  // notifying observers.
+  void RecordLocalWebsiteApproval(const std::string& host);
 
   // Subscribe for a notification when the keyed service is shut down. The
   // subscription can be destroyed to unsubscribe.
@@ -108,12 +133,14 @@ class SupervisedUserSettingsService : public KeyedService,
   static std::string MakeSplitSettingKey(const std::string& prefix,
                                          const std::string& key);
 
-  // Uploads an item to the Sync server. Items are the same data structure as
-  // supervised user settings (i.e. key-value pairs, as described at the top of
-  // the file), but they are only uploaded (whereas supervised user settings are
-  // only downloaded), and never passed to the preference system.
-  // An example of an uploaded item is an access request to a blocked URL.
-  void UploadItem(const std::string& key, std::unique_ptr<base::Value> value);
+  // Sets an item locally and uploads it to the Sync server.
+  //
+  // This handles notifying subscribers of the change.
+  //
+  // This may be called regardless of whether the sync server has completed
+  // initialization; in either case the local changes will be handled
+  // immediately.
+  void SaveItem(const std::string& key, std::unique_ptr<base::Value> value);
 
   // Sets the setting with the given |key| to a copy of the given |value|.
   void SetLocalSetting(const std::string& key,
@@ -165,9 +192,6 @@ class SupervisedUserSettingsService : public KeyedService,
   // subclass whenever the settings change.
   void InformSubscribers();
 
-  void PushItemToSync(const std::string& key,
-                      std::unique_ptr<base::Value> value);
-
   // Used for persisting the settings. Unlike other PrefStores, this one is not
   // directly hooked up to the PrefService.
   scoped_refptr<PersistentPrefStore> store_;
@@ -184,12 +208,12 @@ class SupervisedUserSettingsService : public KeyedService,
 
   SettingsCallbackList settings_callback_list_;
 
+  WebsiteApprovalCallbackList website_approval_callback_list_;
+
   ShutdownCallbackList shutdown_callback_list_;
 
   std::unique_ptr<syncer::SyncChangeProcessor> sync_processor_;
   std::unique_ptr<syncer::SyncErrorFactory> error_handler_;
-
-  DISALLOW_COPY_AND_ASSIGN(SupervisedUserSettingsService);
 };
 
 #endif  // CHROME_BROWSER_SUPERVISED_USER_SUPERVISED_USER_SETTINGS_SERVICE_H_

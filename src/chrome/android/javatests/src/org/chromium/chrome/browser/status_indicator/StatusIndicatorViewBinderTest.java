@@ -29,19 +29,20 @@ import org.chromium.base.MathUtils;
 import org.chromium.base.test.UiThreadTest;
 import org.chromium.chrome.R;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
-import org.chromium.chrome.test.DummyUiChromeActivityTestCase;
+import org.chromium.components.browser_ui.styles.SemanticColorUtils;
 import org.chromium.components.browser_ui.widget.ViewResourceFrameLayout;
 import org.chromium.components.browser_ui.widget.text.TextViewWithCompoundDrawables;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
 import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.ui.modelutil.PropertyModelChangeProcessor;
-import org.chromium.ui.test.util.DummyUiActivity;
+import org.chromium.ui.test.util.BlankUiTestActivity;
+import org.chromium.ui.test.util.BlankUiTestActivityTestCase;
 
 /**
  * Tests for {@link StatusIndicatorViewBinder}.
  */
 @RunWith(ChromeJUnit4ClassRunner.class)
-public class StatusIndicatorViewBinderTest extends DummyUiChromeActivityTestCase {
+public class StatusIndicatorViewBinderTest extends BlankUiTestActivityTestCase {
     private static final String STATUS_TEXT = "Offline";
 
     private ViewResourceFrameLayout mContainer;
@@ -53,7 +54,7 @@ public class StatusIndicatorViewBinderTest extends DummyUiChromeActivityTestCase
 
     @BeforeClass
     public static void setUpBeforeActivityLaunched() {
-        DummyUiActivity.setTestLayout(R.layout.status_indicator_container);
+        BlankUiTestActivity.setTestLayout(R.layout.status_indicator_container);
     }
 
     @Override
@@ -137,8 +138,8 @@ public class StatusIndicatorViewBinderTest extends DummyUiChromeActivityTestCase
     @SmallTest
     @UiThreadTest
     public void testColorAndTint() {
-        int bgColor = getActivity().getResources().getColor(R.color.default_bg_color);
-        int textColor = getActivity().getResources().getColor(R.color.default_text_color);
+        int bgColor = SemanticColorUtils.getDefaultBgColor(getActivity());
+        int textColor = SemanticColorUtils.getDefaultTextColor(getActivity());
         assertEquals("Wrong initial background color.", bgColor,
                 ((ColorDrawable) mContainer.getBackground()).getColor());
         assertEquals("Wrong initial text color", textColor, mStatusTextView.getCurrentTextColor());

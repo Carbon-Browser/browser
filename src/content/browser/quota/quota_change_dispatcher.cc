@@ -12,9 +12,7 @@
 #include "base/memory/ref_counted_delete_on_sequence.h"
 #include "base/rand_util.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/task/post_task.h"
 #include "base/threading/sequenced_task_runner_handle.h"
-#include "base/time/time.h"
 #include "content/browser/quota/quota_manager_host.h"
 #include "content/public/common/content_switches.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -24,12 +22,12 @@ namespace {
 
 // The minimum delay between successive storage pressure events.
 constexpr base::TimeDelta kDefaultQuotaChangeIntervalSeconds =
-    base::TimeDelta::FromSeconds(60);
+    base::Seconds(60);
 
 base::TimeDelta GetRandomDelay() {
   int64_t delay_micros = static_cast<int64_t>(
       base::RandInt(0, 2 * base::Time::kMicrosecondsPerSecond));
-  return base::TimeDelta::FromMicroseconds(delay_micros);
+  return base::Microseconds(delay_micros);
 }
 
 }  // namespace
@@ -130,7 +128,7 @@ const base::TimeDelta QuotaChangeDispatcher::GetQuotaChangeEventInterval() {
 
       int int_value;
       if (base::StringToInt(string_value, &int_value) && int_value >= 0) {
-        return base::TimeDelta::FromSeconds(int_value);
+        return base::Seconds(int_value);
       }
     } else {
       quota_change_event_interval_ = kDefaultQuotaChangeIntervalSeconds;

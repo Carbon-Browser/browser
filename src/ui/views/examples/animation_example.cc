@@ -28,6 +28,7 @@
 #include "ui/views/animation/bounds_animator.h"
 #include "ui/views/background.h"
 #include "ui/views/controls/button/md_text_button.h"
+#include "ui/views/examples/examples_color_id.h"
 #include "ui/views/examples/grit/views_examples_resources.h"
 #include "ui/views/layout/box_layout.h"
 #include "ui/views/layout/layout_manager_base.h"
@@ -36,8 +37,7 @@
 #include "ui/views/style/typography_provider.h"
 #include "ui/views/view.h"
 
-namespace views {
-namespace examples {
+namespace views::examples {
 
 AnimationExample::AnimationExample() : ExampleBase("Animation") {}
 
@@ -72,8 +72,10 @@ AnimatingSquare::AnimatingSquare(size_t index) : index_(index) {
 void AnimatingSquare::OnPaint(gfx::Canvas* canvas) {
   View::OnPaint(canvas);
   const SkColor color = SkColorSetRGB((5 - index_) * 51, 0, index_ * 51);
-  const SkColor colors[2] = {color,
-                             color_utils::HSLShift(color, {-1.0, -1.0, 0.75})};
+  // TODO(crbug/1308932): Remove this FromColor and make all SkColor4f.
+  const SkColor4f colors[2] = {
+      SkColor4f::FromColor(color),
+      SkColor4f::FromColor(color_utils::HSLShift(color, {-1.0, -1.0, 0.75}))};
   cc::PaintFlags flags;
   gfx::Rect local_bounds = gfx::Rect(layer()->size());
   const float dsf = canvas->UndoDeviceScaleFactor();
@@ -91,8 +93,11 @@ void AnimatingSquare::OnPaint(gfx::Canvas* canvas) {
   canvas->SizeStringInt(counter, font_list_, &width, &height, 0,
                         gfx::Canvas::TEXT_ALIGN_CENTER);
   local_bounds.ClampToCenteredSize(gfx::Size(width, height));
-  canvas->DrawStringRectWithFlags(counter, font_list_, SK_ColorBLACK,
-                                  local_bounds, gfx::Canvas::TEXT_ALIGN_CENTER);
+  canvas->DrawStringRectWithFlags(
+      counter, font_list_,
+      GetColorProvider()->GetColor(
+          ExamplesColorIds::kColorAnimationExampleForeground),
+      local_bounds, gfx::Canvas::TEXT_ALIGN_CENTER);
 }
 
 class SquaresLayoutManager : public LayoutManagerBase {
@@ -156,7 +161,7 @@ void SquaresLayoutManager::LayoutImpl() {
 
 void SquaresLayoutManager::OnInstalled(View* host) {
   bounds_animator_ = std::make_unique<BoundsAnimator>(host, true);
-  bounds_animator_->SetAnimationDuration(base::TimeDelta::FromSeconds(1));
+  bounds_animator_->SetAnimationDuration(base::Seconds(1));
 }
 
 void AnimationExample::CreateExampleView(View* container) {
@@ -164,7 +169,8 @@ void AnimationExample::CreateExampleView(View* container) {
       BoxLayout::Orientation::kVertical, gfx::Insets(), 10));
 
   View* squares_container = container->AddChildView(std::make_unique<View>());
-  squares_container->SetBackground(CreateSolidBackground(SK_ColorWHITE));
+  squares_container->SetBackground(CreateThemedSolidBackground(
+      ExamplesColorIds::kColorAnimationExampleBackground));
   squares_container->SetPaintToLayer();
   squares_container->layer()->SetMasksToBounds(true);
   squares_container->layer()->SetFillsBoundsOpaquely(true);
@@ -176,21 +182,18 @@ void AnimationExample::CreateExampleView(View* container) {
   {
     gfx::RoundedCornersF rounded_corners(12.0f, 12.0f, 12.0f, 12.0f);
     AnimationBuilder b;
+    abort_handle_ = b.GetAbortHandle();
     for (auto* view : squares_container->children()) {
-      // Property setting calls on the builder would be replaced with
-      // view->SetOpacity(..) after animation integration with view::View class
       b.Once()
-          .SetDuration(base::TimeDelta::FromSeconds(10))
+          .SetDuration(base::Seconds(10))
           .SetRoundedCorners(view, rounded_corners);
       b.Repeatedly()
-          .SetDuration(base::TimeDelta::FromSeconds(2))
+          .SetDuration(base::Seconds(2))
           .SetOpacity(view, 0.4f, gfx::Tween::LINEAR_OUT_SLOW_IN)
           .Then()
-          .SetDuration(base::TimeDelta::FromSeconds(2))
+          .SetDuration(base::Seconds(2))
           .SetOpacity(view, 0.9f, gfx::Tween::EASE_OUT_3);
     }
-
-    abort_handle_ = b.GetAbortHandle();
   }
 
   container->AddChildView(std::make_unique<MdTextButton>(
@@ -202,5 +205,4 @@ void AnimationExample::CreateExampleView(View* container) {
       l10n_util::GetStringUTF16(IDS_ABORT_ANIMATION_BUTTON)));
 }
 
-}  // namespace examples
-}  // namespace views
+}  // namespace views::examples

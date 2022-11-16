@@ -12,6 +12,7 @@
 #include "base/memory/ref_counted.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/user_metrics.h"
+#include "base/strings/string_piece.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/synchronization/lock.h"
 
@@ -78,7 +79,8 @@ void ScopedCriticalAction::Core::EndBackgroundTask(scoped_refptr<Core> core) {
     if (core->background_task_id_ == UIBackgroundTaskInvalid) {
       return;
     }
-    task_id = core->background_task_id_;
+    task_id =
+        static_cast<UIBackgroundTaskIdentifier>(core->background_task_id_);
     core->background_task_id_ = UIBackgroundTaskInvalid;
   }
 

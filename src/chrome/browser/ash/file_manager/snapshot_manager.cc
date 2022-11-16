@@ -96,6 +96,9 @@ class SnapshotManager::FileRefsHolder
  public:
   FileRefsHolder() = default;
 
+  FileRefsHolder(const FileRefsHolder&) = delete;
+  FileRefsHolder& operator=(const FileRefsHolder&) = delete;
+
   void FreeSpaceAndCreateSnapshotFile(
       scoped_refptr<storage::FileSystemContext> context,
       const storage::FileSystemURL& url,
@@ -131,8 +134,6 @@ class SnapshotManager::FileRefsHolder
   ~FileRefsHolder() = default;
 
   base::circular_deque<FileReferenceWithSizeInfo> file_refs_;
-
-  DISALLOW_COPY_AND_ASSIGN(FileRefsHolder);
 };
 
 void SnapshotManager::FileRefsHolder::FreeSpaceAndCreateSnapshotFile(
@@ -200,8 +201,30 @@ void SnapshotManager::CreateManagedSnapshot(
     std::move(callback).Run(base::FilePath());
     return;
   }
+
   storage::FileSystemURL filesystem_url =
       context->CrackURLInFirstPartyContext(url);
+
+  ComputeSpaceNeedToBeFreed(
+      profile_, context, filesystem_url,
+      base::BindOnce(&SnapshotManager::CreateManagedSnapshotAfterSpaceComputed,
+                     weak_ptr_factory_.GetWeakPtr(), filesystem_url,
+                     std::move(callback)));
+}
+
+void SnapshotManager::CreateManagedSnapshot(
+    const storage::FileSystemURL& filesystem_url,
+    LocalPathCallback callback) {
+  scoped_refptr<storage::FileSystemContext> context(
+      util::GetFileManagerFileSystemContext(profile_));
+  DCHECK(context.get());
+
+  storage::ExternalFileSystemBackend* const backend =
+      context->external_backend();
+  if (!backend || !backend->CanHandleType(filesystem_url.type())) {
+    std::move(callback).Run(base::FilePath());
+    return;
+  }
 
   ComputeSpaceNeedToBeFreed(
       profile_, context, filesystem_url,

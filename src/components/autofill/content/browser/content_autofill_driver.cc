@@ -9,13 +9,11 @@
 #include <utility>
 
 #include "base/feature_list.h"
-#include "base/metrics/histogram_macros.h"
 #include "build/build_config.h"
 #include "components/autofill/content/browser/bad_message.h"
 #include "components/autofill/content/browser/content_autofill_driver_factory.h"
 #include "components/autofill/content/browser/content_autofill_router.h"
 #include "components/autofill/core/browser/autofill_client.h"
-#include "components/autofill/core/browser/browser_autofill_manager.h"
 #include "components/autofill/core/browser/data_model/autofillable_data.h"
 #include "components/autofill/core/browser/form_structure.h"
 #include "components/autofill/core/browser/payments/payments_service_url.h"
@@ -44,53 +42,11 @@
 
 namespace autofill {
 
-namespace {
-
-bool ShouldEnableHeavyFormDataScraping(const version_info::Channel channel) {
-  switch (channel) {
-    case version_info::Channel::CANARY:
-    case version_info::Channel::DEV:
-      return true;
-    case version_info::Channel::STABLE:
-    case version_info::Channel::BETA:
-    case version_info::Channel::UNKNOWN:
-      return false;
-  }
-  NOTREACHED();
-  return false;
-}
-
-}  // namespace
-
 ContentAutofillDriver::ContentAutofillDriver(
     content::RenderFrameHost* render_frame_host,
-    AutofillClient* client,
-    const std::string& app_locale,
-    ContentAutofillRouter* autofill_router,
-    AutofillManager::AutofillDownloadManagerState enable_download_manager,
-    AutofillManager::AutofillManagerFactoryCallback
-        autofill_manager_factory_callback)
+    ContentAutofillRouter* autofill_router)
     : render_frame_host_(render_frame_host),
-      autofill_router_(autofill_router),
-      browser_autofill_manager_(nullptr),
-      log_manager_(client->GetLogManager()) {
-  // AutofillManager isn't used if provider is valid, Autofill provider is
-  // currently used by Android WebView only.
-  if (autofill_manager_factory_callback) {
-    autofill_manager_ = autofill_manager_factory_callback.Run(
-        this, client, app_locale, enable_download_manager);
-    GetAutofillAgent()->SetUserGestureRequired(false);
-    GetAutofillAgent()->SetSecureContextRequired(true);
-    GetAutofillAgent()->SetFocusRequiresScroll(false);
-    GetAutofillAgent()->SetQueryPasswordSuggestion(true);
-  } else {
-    SetBrowserAutofillManager(std::make_unique<BrowserAutofillManager>(
-        this, client, app_locale, enable_download_manager));
-  }
-  if (client && ShouldEnableHeavyFormDataScraping(client->GetChannel())) {
-    GetAutofillAgent()->EnableHeavyFormDataScraping();
-  }
-}
+      autofill_router_(autofill_router) {}
 
 ContentAutofillDriver::~ContentAutofillDriver() {
   if (autofill_router_)  // Can be nullptr only in tests.
@@ -123,8 +79,12 @@ bool ContentAutofillDriver::IsIncognito() const {
       ->IsOffTheRecord();
 }
 
-bool ContentAutofillDriver::IsInMainFrame() const {
-  return render_frame_host_->GetParent() == nullptr;
+bool ContentAutofillDriver::IsInActiveFrame() const {
+  return render_frame_host_->IsActive();
+}
+
+bool ContentAutofillDriver::IsInAnyMainFrame() const {
+  return render_frame_host_->GetMainFrame() == render_frame_host_;
 }
 
 bool ContentAutofillDriver::IsPrerendering() const {
@@ -157,11 +117,11 @@ bool ContentAutofillDriver::RendererIsAvailable() {
 
 webauthn::InternalAuthenticator*
 ContentAutofillDriver::GetOrCreateCreditCardInternalAuthenticator() {
-  if (!authenticator_impl_ && browser_autofill_manager_ &&
-      browser_autofill_manager_->client()) {
+  if (!authenticator_impl_ && autofill_manager_ &&
+      autofill_manager_->client()) {
     authenticator_impl_ =
-        browser_autofill_manager_->client()
-            ->CreateCreditCardInternalAuthenticator(render_frame_host_);
+        autofill_manager_->client()->CreateCreditCardInternalAuthenticator(
+            render_frame_host_);
   }
   return authenticator_impl_.get();
 }
@@ -169,8 +129,7 @@ ContentAutofillDriver::GetOrCreateCreditCardInternalAuthenticator() {
 void ContentAutofillDriver::PopupHidden() {
   // If the unmask prompt is shown, keep showing the preview. The preview
   // will be cleared when the prompt closes.
-  if (browser_autofill_manager_ &&
-      browser_autofill_manager_->ShouldClearPreviewedForm()) {
+  if (autofill_manager_ && autofill_manager_->ShouldClearPreviewedForm()) {
     RendererShouldClearPreviewedForm();
   }
 }
@@ -192,14 +151,14 @@ net::IsolationInfo ContentAutofillDriver::IsolationInfo() {
   return render_frame_host_->GetIsolationInfoForSubresources();
 }
 
-void ContentAutofillDriver::FillOrPreviewForm(
+std::vector<FieldGlobalId> ContentAutofillDriver::FillOrPreviewForm(
     int query_id,
     mojom::RendererFormDataAction action,
     const FormData& data,
     const url::Origin& triggered_origin,
     const base::flat_map<FieldGlobalId, ServerFieldType>& field_type_map) {
-  GetAutofillRouter().FillOrPreviewForm(this, query_id, action, data,
-                                        triggered_origin, field_type_map);
+  return GetAutofillRouter().FillOrPreviewForm(
+      this, query_id, action, data, triggered_origin, field_type_map);
 }
 
 void ContentAutofillDriver::FillOrPreviewFormImpl(
@@ -210,20 +169,6 @@ void ContentAutofillDriver::FillOrPreviewFormImpl(
     return;
 
   GetAutofillAgent()->FillOrPreviewForm(query_id, data, action);
-}
-
-void ContentAutofillDriver::PropagateAutofillPredictions(
-    const std::vector<FormStructure*>& forms) {
-  AutofillManager* manager = browser_autofill_manager_
-                                 ? browser_autofill_manager_
-                                 : autofill_manager_.get();
-  DCHECK(manager);
-  manager->PropagateAutofillPredictions(render_frame_host_, forms);
-}
-
-void ContentAutofillDriver::HandleParsedForms(
-    const std::vector<const FormData*>& forms) {
-  // No op.
 }
 
 void ContentAutofillDriver::SendAutofillTypePredictionsToRendererImpl(
@@ -334,8 +279,10 @@ void ContentAutofillDriver::RendererShouldSetSuggestionAvailability(
                                                               state);
 }
 
-void ContentAutofillDriver::FormsSeenImpl(const std::vector<FormData>& forms) {
-  autofill_manager_->OnFormsSeen(forms);
+void ContentAutofillDriver::FormsSeenImpl(
+    const std::vector<FormData>& updated_forms,
+    const std::vector<FormGlobalId>& removed_forms) {
+  autofill_manager_->OnFormsSeen(updated_forms, removed_forms);
 }
 
 void ContentAutofillDriver::SetFormToBeProbablySubmittedImpl(
@@ -383,13 +330,15 @@ void ContentAutofillDriver::SelectControlDidChangeImpl(
 }
 
 void ContentAutofillDriver::AskForValuesToFillImpl(
-    int32_t id,
     const FormData& form,
     const FormFieldData& field,
     const gfx::RectF& bounding_box,
-    bool autoselect_first_suggestion) {
-  autofill_manager_->OnAskForValuesToFill(id, form, field, bounding_box,
-                                          autoselect_first_suggestion);
+    int32_t query_id,
+    bool autoselect_first_suggestion,
+    TouchToFillEligible touch_to_fill_eligible) {
+  autofill_manager_->OnAskForValuesToFill(form, field, bounding_box, query_id,
+                                          autoselect_first_suggestion,
+                                          touch_to_fill_eligible);
 }
 
 void ContentAutofillDriver::HidePopupImpl() {
@@ -424,19 +373,28 @@ void ContentAutofillDriver::DidEndTextFieldEditingImpl() {
 
 void ContentAutofillDriver::SelectFieldOptionsDidChangeImpl(
     const FormData& form) {
-  autofill_manager_->SelectFieldOptionsDidChange(form);
+  autofill_manager_->OnSelectFieldOptionsDidChange(form);
+}
+
+void ContentAutofillDriver::JavaScriptChangedAutofilledValueImpl(
+    const FormData& form,
+    const FormFieldData& field,
+    const std::u16string& old_value) {
+  autofill_manager_->OnJavaScriptChangedAutofilledValue(form, field, old_value);
 }
 
 void ContentAutofillDriver::FillFormForAssistantImpl(
     const AutofillableData& fill_data,
     const FormData& form,
-    const FormFieldData& field) {
-  DCHECK(browser_autofill_manager_);
+    const FormFieldData& field,
+    const autofill_assistant::AutofillAssistantIntent intent) {
+  DCHECK(autofill_manager_);
   if (fill_data.is_profile()) {
-    browser_autofill_manager_->FillProfileForm(fill_data.profile(), form,
-                                               field);
+    autofill_manager_->SetProfileFillViaAutofillAssistantIntent(intent);
+    autofill_manager_->FillProfileForm(fill_data.profile(), form, field);
   } else if (fill_data.is_credit_card()) {
-    browser_autofill_manager_->FillCreditCardForm(
+    autofill_manager_->SetCreditCardFillViaAutofillAssistantIntent(intent);
+    autofill_manager_->FillCreditCardForm(
         /*query_id=*/kNoQueryId, form, field, fill_data.credit_card(),
         fill_data.cvc());
   } else {
@@ -462,13 +420,22 @@ void ContentAutofillDriver::SetFormToBeProbablySubmitted(
                  : absl::nullopt);
 }
 
-void ContentAutofillDriver::FormsSeen(const std::vector<FormData>& raw_forms) {
+void ContentAutofillDriver::FormsSeen(
+    const std::vector<FormData>& raw_updated_forms,
+    const std::vector<FormRendererId>& raw_removed_forms) {
   if (!bad_message::CheckFrameNotPrerendering(render_frame_host_))
     return;
-  std::vector<FormData> forms = raw_forms;
-  for (FormData& form : forms)
+  std::vector<FormData> updated_forms = raw_updated_forms;
+  for (FormData& form : updated_forms)
     SetFrameAndFormMetaData(form, nullptr);
-  GetAutofillRouter().FormsSeen(this, forms);
+
+  LocalFrameToken frame_token(render_frame_host_->GetFrameToken().value());
+  std::vector<FormGlobalId> removed_forms;
+  removed_forms.reserve(raw_removed_forms.size());
+  for (FormRendererId form_id : raw_removed_forms)
+    removed_forms.push_back({frame_token, form_id});
+
+  GetAutofillRouter().FormsSeen(this, updated_forms, removed_forms);
 }
 
 void ContentAutofillDriver::FormSubmitted(const FormData& raw_form,
@@ -522,20 +489,21 @@ void ContentAutofillDriver::SelectControlDidChange(
 }
 
 void ContentAutofillDriver::AskForValuesToFill(
-    int32_t id,
     const FormData& raw_form,
     const FormFieldData& raw_field,
     const gfx::RectF& bounding_box,
-    bool autoselect_first_suggestion) {
+    int32_t query_id,
+    bool autoselect_first_suggestion,
+    TouchToFillEligible touch_to_fill_eligible) {
   if (!bad_message::CheckFrameNotPrerendering(render_frame_host_))
     return;
   FormData form = raw_form;
   FormFieldData field = raw_field;
   SetFrameAndFormMetaData(form, &field);
   GetAutofillRouter().AskForValuesToFill(
-      this, id, form, field,
-      TransformBoundingBoxToViewportCoordinates(bounding_box),
-      autoselect_first_suggestion);
+      this, form, field,
+      TransformBoundingBoxToViewportCoordinates(bounding_box), query_id,
+      autoselect_first_suggestion, touch_to_fill_eligible);
 }
 
 void ContentAutofillDriver::HidePopup() {
@@ -591,14 +559,29 @@ void ContentAutofillDriver::SelectFieldOptionsDidChange(
       this, GetFormWithFrameAndFormMetaData(raw_form));
 }
 
-void ContentAutofillDriver::FillFormForAssistant(
-    const AutofillableData& fill_data,
+void ContentAutofillDriver::JavaScriptChangedAutofilledValue(
     const FormData& raw_form,
-    const FormFieldData& raw_field) {
+    const FormFieldData& raw_field,
+    const std::u16string& old_value) {
+  if (!bad_message::CheckFrameNotPrerendering(render_frame_host_))
+    return;
   FormData form = raw_form;
   FormFieldData field = raw_field;
   SetFrameAndFormMetaData(form, &field);
-  GetAutofillRouter().FillFormForAssistant(this, fill_data, form, field);
+  GetAutofillRouter().JavaScriptChangedAutofilledValue(this, form, field,
+                                                       old_value);
+}
+
+void ContentAutofillDriver::FillFormForAssistant(
+    const AutofillableData& fill_data,
+    const FormData& raw_form,
+    const FormFieldData& raw_field,
+    const autofill_assistant::AutofillAssistantIntent intent) {
+  FormData form = raw_form;
+  FormFieldData field = raw_field;
+  SetFrameAndFormMetaData(form, &field);
+  GetAutofillRouter().FillFormForAssistant(this, fill_data, form, field,
+                                           intent);
 }
 
 void ContentAutofillDriver::DidNavigateFrame(
@@ -606,14 +589,21 @@ void ContentAutofillDriver::DidNavigateFrame(
   if (navigation_handle->IsSameDocument()) {
     // On page refresh, reset the rate limiter for fetching authentication
     // details for credit card unmasking.
-    if (browser_autofill_manager_) {
-      browser_autofill_manager_->credit_card_access_manager()
+    if (autofill_manager_ && autofill_manager_->GetCreditCardAccessManager()) {
+      autofill_manager_->GetCreditCardAccessManager()
           ->SignalCanFetchUnmaskDetails();
     }
     return;
   }
 
-  ShowOfferNotificationIfApplicable(navigation_handle);
+  // If the navigation happened in the main frame and the BrowserAutofillManager
+  // exists (not in Android Webview), and the AutofillOfferManager exists (not
+  // in Incognito windows), notifies the navigation event.
+  if (navigation_handle->IsInPrimaryMainFrame() && autofill_manager_ &&
+      autofill_manager_->GetOfferManager()) {
+    autofill_manager_->GetOfferManager()->OnDidNavigateFrame(
+        autofill_manager_->client());
+  }
 
   // When IsServedFromBackForwardCache or IsPrerendererdPageActivation, the form
   // data is not parsed again. So, we should keep and use the autofill manager's
@@ -630,18 +620,6 @@ void ContentAutofillDriver::DidNavigateFrame(
     autofill_router_->UnregisterDriver(this);
   autofill_manager_->Reset();
 }
-
-void ContentAutofillDriver::SetBrowserAutofillManager(
-    std::unique_ptr<BrowserAutofillManager> manager) {
-  autofill_manager_ = std::move(manager);
-  browser_autofill_manager_ =
-      static_cast<BrowserAutofillManager*>(autofill_manager_.get());
-}
-
-ContentAutofillDriver::ContentAutofillDriver(content::RenderFrameHost* rfh)
-    : render_frame_host_(rfh),
-      browser_autofill_manager_(nullptr),
-      log_manager_(nullptr) {}
 
 const mojo::AssociatedRemote<mojom::AutofillAgent>&
 ContentAutofillDriver::GetAutofillAgent() {
@@ -686,6 +664,10 @@ void ContentAutofillDriver::UnsetKeyPressHandlerImpl() {
 void ContentAutofillDriver::SetFrameAndFormMetaData(
     FormData& form,
     FormFieldData* optional_field) const {
+  static FormVersion version_counter;
+  ++*version_counter;
+  form.version = version_counter;
+
   form.host_frame =
       LocalFrameToken(render_frame_host_->GetFrameToken().value());
 
@@ -723,88 +705,6 @@ FormData ContentAutofillDriver::GetFormWithFrameAndFormMetaData(
   SetFrameAndFormMetaData(form, nullptr);
   return form;
 }
-
-bool ContentAutofillDriver::DocumentUsedWebOTP() const {
-  return render_frame_host_->DocumentUsedWebOTP();
-}
-
-void ContentAutofillDriver::MaybeReportAutofillWebOTPMetrics() {
-  // In tests, the browser_autofill_manager_ may be unset or destroyed before
-  // |this|.
-  if (!browser_autofill_manager_)
-    return;
-  // It's possible that a frame without any form uses WebOTP. e.g. a server may
-  // send the verification code to a phone number that was collected beforehand
-  // and uses the WebOTP API for authentication purpose without user manually
-  // entering the code.
-  if (!browser_autofill_manager_->has_parsed_forms() && !DocumentUsedWebOTP())
-    return;
-
-  ReportAutofillWebOTPMetrics(DocumentUsedWebOTP());
-}
-
-void ContentAutofillDriver::ReportAutofillWebOTPMetrics(
-    bool document_used_webotp) {
-  if (browser_autofill_manager_->has_observed_phone_number_field())
-    phone_collection_metric_state_ |= phone_collection_metric::kPhoneCollected;
-  if (browser_autofill_manager_->has_observed_one_time_code_field())
-    phone_collection_metric_state_ |= phone_collection_metric::kOTCUsed;
-  if (document_used_webotp)
-    phone_collection_metric_state_ |= phone_collection_metric::kWebOTPUsed;
-
-  ukm::UkmRecorder* recorder =
-      browser_autofill_manager_->client()->GetUkmRecorder();
-  ukm::SourceId source_id =
-      browser_autofill_manager_->client()->GetUkmSourceId();
-  AutofillMetrics::LogWebOTPPhoneCollectionMetricStateUkm(
-      recorder, source_id, phone_collection_metric_state_);
-
-  UMA_HISTOGRAM_ENUMERATION(
-      "Autofill.WebOTP.PhonePlusWebOTPPlusOTC",
-      static_cast<PhoneCollectionMetricState>(phone_collection_metric_state_));
-}
-
-void ContentAutofillDriver::ShowOfferNotificationIfApplicable(
-    content::NavigationHandle* navigation_handle) {
-  if (!navigation_handle->IsInPrimaryMainFrame())
-    return;
-
-  // TODO(crbug.com/1093057): Android webview does not have
-  // |browser_autofill_manager_|, so flow is not enabled in Android Webview.
-  if (!base::FeatureList::IsEnabled(
-          features::kAutofillEnableOfferNotification) ||
-      !browser_autofill_manager_) {
-    return;
-  }
-
-  AutofillOfferManager* offer_manager =
-      browser_autofill_manager_->offer_manager();
-  // This happens in the Incognito mode.
-  if (!offer_manager)
-    return;
-
-  GURL url = browser_autofill_manager_->client()->GetLastCommittedURL();
-  if (!offer_manager->IsUrlEligible(url))
-    return;
-
-  // Try to show offer notification when the last committed URL has the domain
-  // that an offer is applicable for.
-  // TODO(crbug.com/1203811): GetOfferForUrl needs to know whether to give
-  //   precedence to card-linked offers or promo code offers. Eventually, promo
-  //   code offers should take precedence if a bubble is shown. Currently, if a
-  //   url has both types of offers and the promo code offer is selected, no
-  //   bubble will end up being shown (due to not yet being implemented).
-  AutofillOfferData* offer = offer_manager->GetOfferForUrl(url);
-
-  if (!offer || offer->merchant_origins.empty() ||
-      (offer->IsCardLinkedOffer() && offer->eligible_instrument_id.empty()) ||
-      (offer->IsPromoCodeOffer() && offer->promo_code.empty())) {
-    return;
-  }
-
-  browser_autofill_manager_->client()->ShowOfferNotificationIfApplicable(offer);
-}
-
 ContentAutofillRouter& ContentAutofillDriver::GetAutofillRouter() {
   DCHECK(content::RenderFrameHost::LifecycleState::kPrerendering !=
          render_frame_host_->GetLifecycleState());

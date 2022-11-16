@@ -9,7 +9,9 @@
 #include "device/gamepad/public/mojom/gamepad.mojom-blink-forward.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context_lifecycle_observer.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
 #include "third_party/blink/renderer/platform/heap/member.h"
+#include "third_party/blink/renderer/platform/wtf/hash_set.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 
 namespace blink {
@@ -40,6 +42,8 @@ class GamepadHapticActuator final : public ScriptWrappable,
 
   ScriptPromise reset(ScriptState*);
 
+  bool canPlay(const String& type);
+
   void Trace(Visitor*) const override;
 
  private:
@@ -52,6 +56,7 @@ class GamepadHapticActuator final : public ScriptWrappable,
   int pad_index_;
   String type_;
   bool should_reset_ = false;
+  HashSet<String> supported_effect_types_;
 
   Member<GamepadDispatcher> gamepad_dispatcher_;
 };

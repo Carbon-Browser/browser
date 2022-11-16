@@ -14,7 +14,7 @@
 #include <vector>
 
 #include "base/containers/circular_deque.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "components/sync/base/client_tag_hash.h"
 #include "components/sync/base/model_type.h"
@@ -39,6 +39,10 @@ class MockModelTypeWorker : public CommitQueue {
  public:
   MockModelTypeWorker(const sync_pb::ModelTypeState& model_type_state,
                       ModelTypeProcessor* processor);
+
+  MockModelTypeWorker(const MockModelTypeWorker&) = delete;
+  MockModelTypeWorker& operator=(const MockModelTypeWorker&) = delete;
+
   ~MockModelTypeWorker() override;
 
   // Callback when local changes are received from the processor.
@@ -164,7 +168,7 @@ class MockModelTypeWorker : public CommitQueue {
   sync_pb::ModelTypeState model_type_state_;
 
   // A pointer to the processor for this mock worker.
-  ModelTypeProcessor* processor_;
+  raw_ptr<ModelTypeProcessor> processor_;
 
   // A record of past commits requests.
   base::circular_deque<CommitRequestDataList> pending_commits_;
@@ -175,8 +179,6 @@ class MockModelTypeWorker : public CommitQueue {
 
   // WeakPtrFactory for this worker which will be sent to sync thread.
   base::WeakPtrFactory<MockModelTypeWorker> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(MockModelTypeWorker);
 };
 
 }  // namespace syncer

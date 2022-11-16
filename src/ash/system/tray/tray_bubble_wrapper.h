@@ -7,7 +7,6 @@
 
 #include "ash/ash_export.h"
 #include "ash/system/tray/tray_bubble_base.h"
-#include "base/macros.h"
 #include "ui/views/widget/widget_observer.h"
 #include "ui/wm/public/activation_change_observer.h"
 
@@ -19,10 +18,20 @@ class TrayBubbleView;
 // Creates and manages the Widget and EventFilter components of a bubble.
 // TODO(tetsui): Remove this and use TrayBubbleBase for all bubbles.
 class ASH_EXPORT TrayBubbleWrapper : public TrayBubbleBase,
-                                     public views::WidgetObserver,
                                      public ::wm::ActivationChangeObserver {
  public:
-  TrayBubbleWrapper(TrayBackgroundView* tray, TrayBubbleView* bubble_view);
+  // `event_handling` When set to false disables the tray's event filtering
+  // and also ignores the activation events. Eche window is an example of a use
+  // case in which we do not want the keyboard events (both inside and outside
+  // of the bubble) be filtered and also we do not want activaion of other
+  // windows closes the bubble.
+  TrayBubbleWrapper(TrayBackgroundView* tray,
+                    TrayBubbleView* bubble_view,
+                    bool event_handling = true);
+
+  TrayBubbleWrapper(const TrayBubbleWrapper&) = delete;
+  TrayBubbleWrapper& operator=(const TrayBubbleWrapper&) = delete;
+
   ~TrayBubbleWrapper() override;
 
   // TrayBubbleBase overrides:
@@ -49,7 +58,12 @@ class ASH_EXPORT TrayBubbleWrapper : public TrayBubbleBase,
   TrayBubbleView* bubble_view_;  // unowned
   views::Widget* bubble_widget_;
 
-  DISALLOW_COPY_AND_ASSIGN(TrayBubbleWrapper);
+  // When set to false disables the tray's event filtering
+  // and also ignores the activation events. Eche window is an example of a use
+  // case in which we do not want the keyboard events (both inside and outside
+  // of the bubble) be filtered and also we do not want activaion of other
+  // windows closes the bubble.
+  const bool event_handling_;
 };
 
 }  // namespace ash

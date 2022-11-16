@@ -9,19 +9,18 @@
 #include "ash/webui/print_management/mojom/printing_manager.mojom.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
-#include "chrome/browser/chromeos/printing/cups_print_job.h"
-#include "chrome/browser/chromeos/printing/history/print_job_info.pb.h"
+#include "chrome/browser/ash/printing/cups_print_job.h"
+#include "chrome/browser/ash/printing/history/print_job_info.pb.h"
 #include "chrome/browser/chromeos/printing/printer_error_codes.h"
 #include "chrome/browser/printing/print_job.h"
 #include "chromeos/printing/printer_configuration.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace chromeos {
+namespace ash {
+namespace {
 
 namespace proto = printing::proto;
 namespace mojom = printing::printing_manager::mojom;
-
-namespace {
 
 constexpr char kName[] = "name";
 constexpr char16_t kName16[] = u"name";
@@ -46,10 +45,9 @@ proto::PrintJobInfo CreatePrintJobInfoProto() {
 
   print_job_info.set_id(kId);
   print_job_info.set_title(kTitle);
-  print_job_info.set_status(
-      printing::proto::PrintJobInfo_PrintJobStatus_PRINTED);
+  print_job_info.set_status(proto::PrintJobInfo_PrintJobStatus_PRINTED);
   print_job_info.set_printer_error_code(
-      printing::proto::PrintJobInfo_PrinterErrorCode_NO_ERROR);
+      proto::PrintJobInfo_PrinterErrorCode_NO_ERROR);
   print_job_info.set_creation_time(
       static_cast<int64_t>(base::Time::UnixEpoch().ToJsTime()));
   print_job_info.set_number_of_pages(kPagesNumber);
@@ -59,7 +57,7 @@ proto::PrintJobInfo CreatePrintJobInfoProto() {
 }
 
 std::unique_ptr<CupsPrintJob> CreateCupsPrintJob() {
-  Printer printer;
+  chromeos::Printer printer;
   printer.set_display_name(kName);
   printer.SetUri(kUri);
   printer.set_id(kPrinterId);
@@ -113,4 +111,4 @@ TEST(PrintJobInfoMojomConversionsTest, CupsPrintJobToMojom) {
             print_job_mojo->printer_error_code);
 }
 
-}  // namespace chromeos
+}  // namespace ash

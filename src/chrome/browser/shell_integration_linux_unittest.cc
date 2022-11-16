@@ -21,24 +21,18 @@
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/test/scoped_feature_list.h"
 #include "base/test/scoped_path_override.h"
 #include "build/branding_buildflags.h"
+#include "chrome/browser/web_applications/os_integration/web_app_shortcut.h"
 #include "chrome/browser/web_applications/web_app_helpers.h"
 #include "chrome/browser/web_applications/web_app_id.h"
-#include "chrome/browser/web_applications/web_app_shortcut.h"
 #include "chrome/common/chrome_constants.h"
-#include "chrome/common/chrome_features.h"
 #include "components/services/app_service/public/cpp/file_handler.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "url/gurl.h"
-
-#if defined(USE_OZONE)
-#include "ui/base/ui_base_features.h"
 #include "ui/ozone/public/ozone_platform.h"
-#endif
+#include "url/gurl.h"
 
 using ::testing::ElementsAre;
 
@@ -50,6 +44,9 @@ namespace {
 class MockEnvironment : public base::Environment {
  public:
   MockEnvironment() {}
+
+  MockEnvironment(const MockEnvironment&) = delete;
+  MockEnvironment& operator=(const MockEnvironment&) = delete;
 
   void Set(base::StringPiece name, const std::string& value) {
     variables_[std::string(name)] = value;
@@ -77,8 +74,6 @@ class MockEnvironment : public base::Environment {
 
  private:
   std::map<std::string, std::string> variables_;
-
-  DISALLOW_COPY_AND_ASSIGN(MockEnvironment);
 };
 
 // This helps EXPECT_THAT(..., ElementsAre(...)) print out more meaningful
@@ -315,7 +310,7 @@ TEST(ShellIntegrationTest, GetWebShortcutFilename) {
     { "http___foo_.desktop", "http://foo/bar/././../baz/././../" },
     { "http___.._.desktop", "http://../../../../" },
   };
-  for (size_t i = 0; i < base::size(test_cases); i++) {
+  for (size_t i = 0; i < std::size(test_cases); i++) {
     EXPECT_EQ(std::string(chrome::kBrowserProcessExecutableName) + "-" +
               test_cases[i].path,
               GetWebShortcutFilename(GURL(test_cases[i].url)).value()) <<
@@ -458,7 +453,7 @@ TEST(ShellIntegrationTest, GetDesktopFileContents) {
        "Categories=Image\n"
        "StartupWMClass=paint.app\n"}};
 
-  for (size_t i = 0; i < base::size(test_cases); i++) {
+  for (size_t i = 0; i < std::size(test_cases); i++) {
     SCOPED_TRACE(i);
     EXPECT_EQ(
         test_cases[i].expected_output,
@@ -473,9 +468,6 @@ TEST(ShellIntegrationTest, GetDesktopFileContents) {
 }
 
 TEST(ShellIntegrationTest, GetDesktopFileContentsForApps) {
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeature(
-      features::kDesktopPWAsAppIconShortcutsMenuUI);
   const base::FilePath kChromeExePath("/opt/google/chrome/google-chrome");
   const struct {
     const char* const url;
@@ -499,6 +491,8 @@ TEST(ShellIntegrationTest, GetDesktopFileContentsForApps) {
                                       GURL("https://example.com/action3")),
            web_app::DesktopActionInfo("action4", "Action 4",
                                       GURL("https://example.com/action4")),
+           web_app::DesktopActionInfo("action5", "Action 5",
+                                      GURL("https://example.com/action%205")),
        },
 
        "#!/usr/bin/env xdg-open\n"
@@ -510,7 +504,7 @@ TEST(ShellIntegrationTest, GetDesktopFileContentsForApps) {
        "Exec=/opt/google/chrome/google-chrome --app-id=TestAppId\n"
        "Icon=IconName\n"
        "StartupWMClass=example.app\n"
-       "Actions=action1;action2;action3;action4\n\n"
+       "Actions=action1;action2;action3;action4;action5\n\n"
        "[Desktop Action action1]\n"
        "Name=Action 1\n"
        "Exec=/opt/google/chrome/google-chrome --app-id=TestAppId "
@@ -530,10 +524,15 @@ TEST(ShellIntegrationTest, GetDesktopFileContentsForApps) {
        "Name=Action 4\n"
        "Exec=/opt/google/chrome/google-chrome --app-id=TestAppId "
        "--app-launch-url-for-shortcuts-menu-item=https://example.com/"
-       "action4\n"},
+       "action4\n\n"
+       "[Desktop Action action5]\n"
+       "Name=Action 5\n"
+       "Exec=/opt/google/chrome/google-chrome --app-id=TestAppId "
+       "--app-launch-url-for-shortcuts-menu-item=https://example.com/"
+       "action%%205\n"},
   };
 
-  for (size_t i = 0; i < base::size(test_cases); i++) {
+  for (size_t i = 0; i < std::size(test_cases); i++) {
     SCOPED_TRACE(i);
     EXPECT_EQ(
         test_cases[i].expected_output,
@@ -577,7 +576,7 @@ TEST(ShellIntegrationTest, GetDirectoryFileContents) {
       },
   };
 
-  for (size_t i = 0; i < base::size(test_cases); i++) {
+  for (size_t i = 0; i < std::size(test_cases); i++) {
     SCOPED_TRACE(i);
     EXPECT_EQ(test_cases[i].expected_output,
               GetDirectoryFileContents(base::ASCIIToUTF16(test_cases[i].title),
@@ -615,6 +614,7 @@ TEST(ShellIntegrationTest, GetMimeTypesRegistrationFileContents) {
       accept_entry.file_extensions.insert(".foo");
       file_handler.accept.push_back(accept_entry);
     }
+    file_handler.display_name = u"FoO";
     file_handlers.push_back(file_handler);
   }
   {
@@ -632,6 +632,8 @@ TEST(ShellIntegrationTest, GetMimeTypesRegistrationFileContents) {
     {
       apps::FileHandler::AcceptEntry accept_entry;
       accept_entry.mime_type = "application/bar";
+      // A name that has a reserved XML character.
+      file_handler.display_name = u"ba<r";
       accept_entry.file_extensions.insert(".bar");
       accept_entry.file_extensions.insert(".baz");
       file_handler.accept.push_back(accept_entry);
@@ -642,19 +644,21 @@ TEST(ShellIntegrationTest, GetMimeTypesRegistrationFileContents) {
   const std::string file_contents =
       GetMimeTypesRegistrationFileContents(file_handlers);
   const std::string expected_file_contents =
-      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+      "<?xml version=\"1.0\"?>\n"
       "<mime-info "
       "xmlns=\"http://www.freedesktop.org/standards/shared-mime-info\">\n"
-      "  <mime-type type=\"application/foo\">\n"
-      "    <glob pattern=\"*.foo\"/>\n"
-      "  </mime-type>\n"
-      "  <mime-type type=\"application/foobar\">\n"
-      "    <glob pattern=\"*.foobar\"/>\n"
-      "  </mime-type>\n"
-      "  <mime-type type=\"application/bar\">\n"
-      "    <glob pattern=\"*.bar\"/>\n"
-      "    <glob pattern=\"*.baz\"/>\n"
-      "  </mime-type>\n"
+      " <mime-type type=\"application/foo\">\n"
+      "  <comment>FoO</comment>\n"
+      "  <glob pattern=\"*.foo\"/>\n"
+      " </mime-type>\n"
+      " <mime-type type=\"application/foobar\">\n"
+      "  <glob pattern=\"*.foobar\"/>\n"
+      " </mime-type>\n"
+      " <mime-type type=\"application/bar\">\n"
+      "  <comment>ba&lt;r</comment>\n"
+      "  <glob pattern=\"*.bar\"/>\n"
+      "  <glob pattern=\"*.baz\"/>\n"
+      " </mime-type>\n"
       "</mime-info>\n";
 
   EXPECT_EQ(file_contents, expected_file_contents);
@@ -663,16 +667,11 @@ TEST(ShellIntegrationTest, GetMimeTypesRegistrationFileContents) {
 // The WM class name may be either capitalised or not, depending on the
 // platform.
 void CheckProgramClassClass(const std::string& class_name) {
-#if defined(USE_OZONE)
-  if (features::IsUsingOzonePlatform() &&
-      ui::OzonePlatform::GetPlatformNameForTest() != "x11") {
-    EXPECT_EQ("foo", class_name);
-  } else {
+  if (ui::OzonePlatform::GetPlatformNameForTest() == "x11") {
     EXPECT_EQ("Foo", class_name);
+  } else {
+    EXPECT_EQ("foo", class_name);
   }
-#else
-  EXPECT_EQ("foo", class_name);
-#endif
 }
 
 TEST(ShellIntegrationTest, WmClass) {

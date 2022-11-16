@@ -9,7 +9,9 @@
 #include "base/command_line.h"
 #include "base/debug/alias.h"
 #include "base/logging.h"
+#include "build/build_config.h"
 #include "ui/gl/gl_bindings.h"
+#include "ui/gl/gl_display_manager.h"
 #include "ui/gl/gl_features.h"
 #include "ui/gl/gl_switches.h"
 
@@ -17,20 +19,16 @@
 #include "ui/gl/gl_surface_egl.h"
 #endif  // defined(USE_EGL)
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #include "base/posix/eintr_wrapper.h"
 #include "third_party/libsync/src/include/sync/sync.h"
 #endif
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
+#include <d3d11_1.h>
+#include "base/strings/stringprintf.h"
+#include "media/base/win/mf_helpers.h"
 #include "ui/gl/direct_composition_surface_win.h"
-#endif
-
-#if defined(USE_X11) || defined(USE_OZONE_PLATFORM_X11)
-#include "ui/base/x/visual_picker_glx.h"                 // nogncheck
-#include "ui/gfx/linux/gpu_memory_buffer_support_x11.h"  // nogncheck
-#include "ui/gfx/x/glx.h"                                // nogncheck
-#include "ui/gl/gl_implementation.h"                     // nogncheck
 #endif
 
 namespace gl {
@@ -71,7 +69,7 @@ void Hang() {
   }
 }
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 base::ScopedFD MergeFDs(base::ScopedFD a, base::ScopedFD b) {
   if (!a.is_valid())
     return b;
@@ -103,20 +101,21 @@ bool UsePassthroughCommandDecoder(const base::CommandLine* command_line) {
 
 bool PassthroughCommandDecoderSupported() {
 #if defined(USE_EGL)
+  GLDisplayEGL* display = gl::GLSurfaceEGL::GetGLDisplayEGL();
   // Using the passthrough command buffer requires that specific ANGLE
   // extensions are exposed
-  return gl::GLSurfaceEGL::IsCreateContextBindGeneratesResourceSupported() &&
-         gl::GLSurfaceEGL::IsCreateContextWebGLCompatabilitySupported() &&
-         gl::GLSurfaceEGL::IsRobustResourceInitSupported() &&
-         gl::GLSurfaceEGL::IsDisplayTextureShareGroupSupported() &&
-         gl::GLSurfaceEGL::IsCreateContextClientArraysSupported();
+  return display->ext->b_EGL_CHROMIUM_create_context_bind_generates_resource &&
+         display->ext->b_EGL_ANGLE_create_context_webgl_compatibility &&
+         display->ext->b_EGL_ANGLE_robust_resource_initialization &&
+         display->ext->b_EGL_ANGLE_display_texture_share_group &&
+         display->ext->b_EGL_ANGLE_create_context_client_arrays;
 #else
   // The passthrough command buffer is only supported on top of ANGLE/EGL
   return false;
 #endif  // defined(USE_EGL)
 }
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 // This function is thread safe.
 bool AreOverlaysSupportedWin() {
   return gl::DirectCompositionSurfaceWin::AreOverlaysSupported();
@@ -160,41 +159,68 @@ bool ShouldForceDirectCompositionRootSurfaceFullDamage() {
   }();
   return should_force;
 }
-#endif  // OS_WIN
 
-#if defined(USE_X11) || defined(USE_OZONE_PLATFORM_X11)
-void CollectX11GpuExtraInfo(bool enable_native_gpu_memory_buffers,
-                            gfx::GpuExtraInfo& info) {
-  // TODO(https://crbug.com/1031269): Enable by default.
-  if (enable_native_gpu_memory_buffers) {
-    info.gpu_memory_buffer_support_x11 =
-        ui::GpuMemoryBufferSupportX11::GetInstance()->supported_configs();
+// Labels swapchain buffers with the string name_prefix + _Buffer_ +
+// <buffer_number>
+void LabelSwapChainBuffers(IDXGISwapChain* swap_chain,
+                           const char* name_prefix) {
+  DXGI_SWAP_CHAIN_DESC desc;
+  HRESULT hr = swap_chain->GetDesc(&desc);
+  if (FAILED(hr)) {
+    DLOG(ERROR) << "Failed to GetDesc from swap chain: "
+                << logging::SystemErrorCodeToString(hr);
+    return;
   }
-
-  if (GetGLImplementation() == kGLImplementationDesktopGL) {
-    // Create the VisualPickerGlx singleton now while the GbmSupportX11
-    // singleton is busy being created on another thread.
-    auto* visual_picker = ui::VisualPickerGlx::GetInstance();
-
-    // With GLX, only BGR(A) buffer formats are supported.  EGL does not have
-    // this restriction.
-    info.gpu_memory_buffer_support_x11.erase(
-        std::remove_if(info.gpu_memory_buffer_support_x11.begin(),
-                       info.gpu_memory_buffer_support_x11.end(),
-                       [&](gfx::BufferUsageAndFormat usage_and_format) {
-                         return visual_picker->GetFbConfigForFormat(
-                                    usage_and_format.format) ==
-                                x11::Glx::FbConfig{};
-                       }),
-        info.gpu_memory_buffer_support_x11.end());
-  } else if (GetGLImplementation() == kGLImplementationEGLANGLE) {
-    // ANGLE does not yet support EGL_EXT_image_dma_buf_import[_modifiers].
-    info.gpu_memory_buffer_support_x11.clear();
+  for (unsigned int i = 0; i < desc.BufferCount; i++) {
+    Microsoft::WRL::ComPtr<ID3D11Texture2D> swap_chain_buffer;
+    hr = swap_chain->GetBuffer(i, IID_PPV_ARGS(&swap_chain_buffer));
+    if (FAILED(hr)) {
+      DLOG(ERROR) << "GetBuffer on swap chain buffer " << i
+                  << "failed: " << logging::SystemErrorCodeToString(hr);
+      return;
+    }
+    const std::string buffer_name =
+        base::StringPrintf("%s_Buffer_%d", name_prefix, i);
+    hr = media::SetDebugName(swap_chain_buffer.Get(), buffer_name.c_str());
+    if (FAILED(hr)) {
+      DLOG(ERROR) << "Failed to label swap chain buffer " << i << ": "
+                  << logging::SystemErrorCodeToString(hr);
+    }
   }
 }
-#endif  // defined(USE_X11) || BUILDFLAG(OZONE_PLATFORM_X11)
 
-#if defined(OS_MAC)
+// Same as LabelSwapChainAndBuffers, but only does the buffers. Used for resize
+// operations
+void LabelSwapChainAndBuffers(IDXGISwapChain* swap_chain,
+                              const char* name_prefix) {
+  media::SetDebugName(swap_chain, name_prefix);
+  LabelSwapChainBuffers(swap_chain, name_prefix);
+}
+#endif  // BUILDFLAG(IS_WIN)
+
+#if defined(USE_EGL)
+void SetGpuPreferenceEGL(GpuPreference preference, uint64_t system_device_id) {
+  GLDisplayManagerEGL::GetInstance()->SetGpuPreference(preference,
+                                                       system_device_id);
+}
+
+GLDisplayEGL* GetDefaultDisplayEGL() {
+  return GLDisplayManagerEGL::GetInstance()->GetDisplay(
+      GpuPreference::kDefault);
+}
+
+GLDisplayEGL* GetDisplayEGL(uint64_t system_device_id) {
+  return GLDisplayManagerEGL::GetInstance()->GetDisplay(system_device_id);
+}
+#endif  // USE_EGL
+
+#if defined(USE_GLX)
+GLDisplayX11* GetDisplayX11(uint64_t system_device_id) {
+  return GLDisplayManagerX11::GetInstance()->GetDisplay(system_device_id);
+}
+#endif  // USE_GLX
+
+#if BUILDFLAG(IS_MAC)
 
 ScopedEnableTextureRectangleInShaderCompiler::
     ScopedEnableTextureRectangleInShaderCompiler(gl::GLApi* gl_api) {
@@ -213,7 +239,7 @@ ScopedEnableTextureRectangleInShaderCompiler::
     gl_api_->glDisableFn(GL_TEXTURE_RECTANGLE_ANGLE);
 }
 
-#endif  // defined(OS_MAC)
+#endif  // BUILDFLAG(IS_MAC)
 
 ScopedPixelStore::ScopedPixelStore(unsigned int name, int value)
     : name_(name), old_value_(GetIntegerv(name)), value_(value) {

@@ -11,7 +11,6 @@
 #include "base/callback.h"
 #include "base/containers/cxx20_erase.h"
 #include "base/stl_util.h"
-#include "base/task/post_task.h"
 #include "base/task/thread_pool.h"
 #include "chrome/browser/sharing/features.h"
 #include "chrome/browser/sharing/proto/sharing_message.pb.h"
@@ -44,7 +43,7 @@ bool IsDesktop(sync_pb::SyncEnums::DeviceType type) {
 
 bool IsStale(const syncer::DeviceInfo& device) {
   if (base::FeatureList::IsEnabled(kSharingMatchPulseInterval)) {
-    base::TimeDelta pulse_delta = base::TimeDelta::FromHours(
+    base::TimeDelta pulse_delta = base::Hours(
         IsDesktop(device.device_type()) ? kSharingPulseDeltaDesktopHours.Get()
                                         : kSharingPulseDeltaAndroidHours.Get());
     base::Time min_updated_time =

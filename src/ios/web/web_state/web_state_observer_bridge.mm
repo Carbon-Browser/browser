@@ -10,6 +10,8 @@
 
 namespace web {
 
+enum Permission : NSUInteger;
+
 WebStateObserverBridge::WebStateObserverBridge(id<CRWWebStateObserver> observer)
     : observer_(observer) {}
 
@@ -32,6 +34,15 @@ void WebStateObserverBridge::DidStartNavigation(
     web::NavigationContext* navigation_context) {
   if ([observer_ respondsToSelector:@selector(webState:didStartNavigation:)]) {
     [observer_ webState:web_state didStartNavigation:navigation_context];
+  }
+}
+
+void WebStateObserverBridge::DidRedirectNavigation(
+    web::WebState* web_state,
+    web::NavigationContext* navigation_context) {
+  SEL selector = @selector(webState:didRedirectNavigation:);
+  if ([observer_ respondsToSelector:selector]) {
+    [observer_ webState:web_state didRedirectNavigation:navigation_context];
   }
 }
 
@@ -114,6 +125,15 @@ void WebStateObserverBridge::FaviconUrlUpdated(
   }
 }
 
+void WebStateObserverBridge::PermissionStateChanged(
+    web::WebState* web_state,
+    web::Permission permission) {
+  SEL selector = @selector(webState:didChangeStateForPermission:);
+  if ([observer_ respondsToSelector:selector]) {
+    [observer_ webState:web_state didChangeStateForPermission:permission];
+  }
+}
+
 void WebStateObserverBridge::WebFrameDidBecomeAvailable(
     web::WebState* web_state,
     web::WebFrame* web_frame) {
@@ -138,21 +158,18 @@ void WebStateObserverBridge::RenderProcessGone(web::WebState* web_state) {
   }
 }
 
+void WebStateObserverBridge::WebStateRealized(web::WebState* web_state) {
+  if ([observer_ respondsToSelector:@selector(webStateRealized:)]) {
+    [observer_ webStateRealized:web_state];
+  }
+}
+
 void WebStateObserverBridge::WebStateDestroyed(web::WebState* web_state) {
   SEL selector = @selector(webStateDestroyed:);
   if ([observer_ respondsToSelector:selector]) {
     // |webStateDestroyed:| may delete |this|, so don't expect |this| to be
     // valid afterwards.
     [observer_ webStateDestroyed:web_state];
-  }
-}
-
-void WebStateObserverBridge::DidRedirectNavigation(
-    web::WebState* web_state,
-    web::NavigationContext* navigation_context) {
-  SEL selector = @selector(webState:didRedirectNavigation:);
-  if ([observer_ respondsToSelector:selector]) {
-    [observer_ webState:web_state didRedirectNavigation:navigation_context];
   }
 }
 

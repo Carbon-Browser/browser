@@ -4,11 +4,12 @@
 
 #include "chrome/browser/ash/input_method/ui/suggestion_accessibility_label.h"
 
+#include "ui/accessibility/ax_enums.mojom.h"
+
 namespace ui {
 namespace ime {
 
-constexpr base::TimeDelta kAnnouncementDelayMs =
-    base::TimeDelta::FromMilliseconds(100);
+constexpr base::TimeDelta kAnnouncementDelayMs = base::Milliseconds(100);
 
 SuggestionAccessibilityLabel::SuggestionAccessibilityLabel() = default;
 
@@ -23,6 +24,8 @@ void SuggestionAccessibilityLabel::GetAccessibleNodeData(
 }
 
 void SuggestionAccessibilityLabel::Announce(const std::u16string& text) {
+  if (text.empty())
+    return;
   SetAccessibleName(text);
   delay_timer_ = std::make_unique<base::OneShotTimer>();
   delay_timer_->Start(

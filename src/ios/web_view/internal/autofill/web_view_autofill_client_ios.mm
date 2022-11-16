@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "base/bind.h"
+#include "base/callback.h"
 #include "base/check.h"
 #include "base/memory/ptr_util.h"
 #include "base/notreached.h"
@@ -15,6 +16,7 @@
 #include "components/autofill/core/browser/payments/payments_client.h"
 #include "components/autofill/core/common/autofill_prefs.h"
 #include "components/autofill/ios/browser/autofill_util.h"
+#include "components/password_manager/core/common/password_manager_pref_names.h"
 #include "components/security_state/ios/security_state_utils.h"
 #include "ios/web/public/browser_state.h"
 #import "ios/web/public/web_state.h"
@@ -223,13 +225,32 @@ void WebViewAutofillClientIOS::ConfirmSaveAddressProfile(
     const AutofillProfile& profile,
     const AutofillProfile* original_profile,
     SaveAddressProfilePromptOptions options,
-    AddressProfileSavePromptCallback callback) {}
+    AddressProfileSavePromptCallback callback) {
+  // TODO(crbug.com/1167062): Respect SaveAddressProfilePromptOptions.
+  [bridge_ confirmSaveAddressProfile:profile
+                     originalProfile:original_profile
+                            callback:std::move(callback)];
+}
 
 bool WebViewAutofillClientIOS::HasCreditCardScanFeature() {
   return false;
 }
 
 void WebViewAutofillClientIOS::ScanCreditCard(CreditCardScanCallback callback) {
+  NOTREACHED();
+}
+
+bool WebViewAutofillClientIOS::IsTouchToFillCreditCardSupported() {
+  return false;
+}
+
+bool WebViewAutofillClientIOS::ShowTouchToFillCreditCard(
+    base::WeakPtr<TouchToFillDelegate> delegate) {
+  NOTREACHED();
+  return false;
+}
+
+void WebViewAutofillClientIOS::HideTouchToFillCreditCard() {
   NOTREACHED();
 }
 
@@ -275,8 +296,13 @@ bool WebViewAutofillClientIOS::IsAutocompleteEnabled() {
   return false;
 }
 
+bool WebViewAutofillClientIOS::IsPasswordManagerEnabled() {
+  return GetPrefs()->GetBoolean(
+      password_manager::prefs::kCredentialsEnableService);
+}
+
 void WebViewAutofillClientIOS::PropagateAutofillPredictions(
-    content::RenderFrameHost* rfh,
+    AutofillDriver* driver,
     const std::vector<FormStructure*>& forms) {
   [bridge_ propagateAutofillPredictionsForForms:forms];
 }
@@ -299,6 +325,13 @@ bool WebViewAutofillClientIOS::AreServerCardsSupported() const {
 
 void WebViewAutofillClientIOS::ExecuteCommand(int id) {
   NOTIMPLEMENTED();
+}
+
+void WebViewAutofillClientIOS::OpenPromoCodeOfferDetailsURL(const GURL& url) {
+  web_state_->OpenURL(web::WebState::OpenURLParams(
+      url, web::Referrer(), WindowOpenDisposition::NEW_FOREGROUND_TAB,
+      ui::PageTransition::PAGE_TRANSITION_AUTO_TOPLEVEL,
+      /*is_renderer_initiated=*/false));
 }
 
 void WebViewAutofillClientIOS::LoadRiskData(

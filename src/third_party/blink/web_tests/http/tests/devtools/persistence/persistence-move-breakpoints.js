@@ -4,13 +4,13 @@
 
 (async function() {
   TestRunner.addResult(`Verify that breakpoints are moved appropriately\n`);
-  await TestRunner.loadModule('sources'); await TestRunner.loadTestModule('sources_test_runner');
+  await TestRunner.loadLegacyModule('sources'); await TestRunner.loadTestModule('sources_test_runner');
   await TestRunner.loadTestModule('bindings_test_runner');
   await TestRunner.addScriptTag('resources/foo.js');
   await TestRunner.showPanel('sources');
 
   var testMapping = BindingsTestRunner.initializeTestMapping();
-  var fs = new BindingsTestRunner.TestFileSystem('file:///var/www');
+  var fs = new BindingsTestRunner.TestFileSystem('/var/www');
   var fsEntry = BindingsTestRunner.addFooJSFile(fs);
 
   TestRunner.runTestSuite([
@@ -21,7 +21,7 @@
     async function setBreakpointInFileSystemUISourceCode(next) {
       var uiSourceCode = await TestRunner.waitForUISourceCode('foo.js', Workspace.projectTypes.FileSystem);
       var sourceFrame = await SourcesTestRunner.showUISourceCodePromise(uiSourceCode);
-      await SourcesTestRunner.setBreakpoint(sourceFrame, 0, '', true);
+      await SourcesTestRunner.setBreakpoint(sourceFrame, 2, '', true);
       await SourcesTestRunner.waitBreakpointSidebarPane();
       dumpBreakpointSidebarPane();
       next();

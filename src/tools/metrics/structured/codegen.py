@@ -109,6 +109,8 @@ class ProjectInfo:
           self.event_type = 'RAW_STRING'
           break
 
+    self.key_rotation_period = project.key_rotation_period
+
   def build_event_map(self) -> str:
     event_infos = (EventInfo(event, self) for event in self.events)
 
@@ -138,6 +140,7 @@ class EventInfo:
     self.name_hash = Util.event_name_hash(project_info.name, self.name)
     self.validator_name = '{}EventValidator'.format(self.name)
     self.validator_snake_name = Util.camel_to_snake(self.validator_name)
+    self.project_name = project_info.name
     self.metrics = event.metrics
 
   def build_metric_hash_map(self) -> str:
@@ -167,14 +170,17 @@ class MetricInfo:
       self.type = 'std::string&'
       self.setter = 'AddHmacMetric'
       self.type_enum = 'kHmac'
+      self.base_value = 'base::Value(value)'
     elif metric.type == 'int':
       self.type = 'int64_t'
       self.setter = 'AddIntMetric'
       self.type_enum = 'kLong'
+      self.base_value = 'base::Value(base::NumberToString(value))'
     elif metric.type == 'raw-string':
       self.type = 'std::string&'
       self.setter = 'AddRawStringMetric'
       self.type_enum = 'kRawString'
+      self.base_value = 'base::Value(value)'
     else:
       raise ValueError('Invalid metric type.')
 

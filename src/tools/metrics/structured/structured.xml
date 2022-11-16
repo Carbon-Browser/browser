@@ -5,6 +5,7 @@
   <owner>tby@chromium.org</owner>
   <id>per-project</id>
   <scope>profile</scope>
+  <key-rotation>90</key-rotation>
   <summary>
     Project for recording CrOSActions.
   </summary>
@@ -194,6 +195,7 @@
   <owner>tby@chromium.org</owner>
   <id>per-project</id>
   <scope>profile</scope>
+  <key-rotation>90</key-rotation>
   <summary>
     See event summary.
   </summary>
@@ -258,6 +260,7 @@
   <owner>pdyson@chromium.org</owner>
   <id>per-project</id>
   <scope>device</scope>
+  <key-rotation>90</key-rotation>
   <summary>
     Project for recording events to monitor the creation of Neutrino Devices.
   </summary>
@@ -378,10 +381,37 @@
   </event>
 </project>
 
+<project name="StructuredMetrics">
+  <owner>jongahn@chromium.org</owner>
+  <owner>tby@chromium.org</owner>
+  <id>per-project</id>
+  <scope>device</scope>
+  <key-rotation>90</key-rotation>
+  <summary>
+    Structured Metrics is a logging framework for events. This project is used
+    for monitoring the framework itself.
+  </summary>
+
+  <event name="Initialization">
+    <summary>
+      Records metadata about initialization of Structured Metrics and will be
+      recorded immediately after initialization is successful. Will be sent once
+      per initialization during browser process initialization.
+    </summary>
+    <metric name="Platform" type="int">
+      <summary>
+        The platform for which the client is initialized on. 0: Uninitialized, 1:
+        ASH_CHROME, 2: LACROS_CHROME.
+      </summary>
+    </metric>
+  </event>
+</project>
+
 <project name="TestProjectOne">
   <owner>tby@chromium.org</owner>
   <id>per-project</id>
   <scope>profile</scope>
+  <key-rotation>90</key-rotation>
   <summary>
     Project for unit testing, do not use.
   </summary>
@@ -407,6 +437,7 @@
   <owner>tby@chromium.org</owner>
   <id>per-project</id>
   <scope>profile</scope>
+  <key-rotation>90</key-rotation>
   <summary>
     Project for unit testing, do not use.
   </summary>
@@ -438,6 +469,7 @@
   <owner>tby@chromium.org</owner>
   <id>uma</id>
   <scope>profile</scope>
+  <key-rotation>90</key-rotation>
   <summary>
     Project for unit testing, do not use.
   </summary>
@@ -458,6 +490,7 @@
   <owner>tby@chromium.org</owner>
   <id>per-project</id>
   <scope>device</scope>
+  <key-rotation>90</key-rotation>
   <summary>
     Project for unit testing, do not use.
   </summary>
@@ -478,6 +511,7 @@
   <owner>tby@chromium.org</owner>
   <id>none</id>
   <scope>profile</scope>
+  <key-rotation>90</key-rotation>
   <summary>
     Project for unit testing, do not use.
   </summary>

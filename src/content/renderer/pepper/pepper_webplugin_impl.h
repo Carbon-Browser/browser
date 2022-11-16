@@ -8,9 +8,8 @@
 #include <memory>
 #include <vector>
 
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
-#include "base/sequenced_task_runner_helpers.h"
+#include "base/task/sequenced_task_runner_helpers.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "ppapi/c/pp_var.h"
 #include "third_party/blink/public/mojom/input/focus_type.mojom-forward.h"
@@ -34,6 +33,9 @@ class PepperWebPluginImpl : public blink::WebPlugin {
                       const blink::WebPluginParams& params,
                       RenderFrameImpl* render_frame);
 
+  PepperWebPluginImpl(const PepperWebPluginImpl&) = delete;
+  PepperWebPluginImpl& operator=(const PepperWebPluginImpl&) = delete;
+
   PepperPluginInstanceImpl* instance() { return instance_.get(); }
 
   // blink::WebPlugin implementation.
@@ -41,7 +43,6 @@ class PepperWebPluginImpl : public blink::WebPlugin {
   bool Initialize(blink::WebPluginContainer* container) override;
   void Destroy() override;
   v8::Local<v8::Object> V8ScriptableObject(v8::Isolate* isolate) override;
-  bool SupportsKeyboardFocus() const override;
   void UpdateAllLifecyclePhases(blink::DocumentUpdateReason) override {}
   void Paint(cc::PaintCanvas* canvas, const gfx::Rect& rect) override;
   void UpdateGeometry(const gfx::Rect& window_rect,
@@ -60,28 +61,12 @@ class PepperWebPluginImpl : public blink::WebPlugin {
   bool HasSelection() const override;
   blink::WebString SelectionAsText() const override;
   blink::WebString SelectionAsMarkup() const override;
-  bool CanEditText() const override;
-  bool HasEditableText() const override;
-  bool CanUndo() const override;
-  bool CanRedo() const override;
-  bool ExecuteEditCommand(const blink::WebString& name,
-                          const blink::WebString& value) override;
-  blink::WebURL LinkAtPosition(const gfx::Point& position) const override;
-  bool GetPrintPresetOptionsFromDocument(
-      blink::WebPrintPresetOptions* preset_options) override;
-  bool StartFind(const blink::WebString& search_text,
-                 bool case_sensitive,
-                 int identifier) override;
-  void SelectFindResult(bool forward, int identifier) override;
-  void StopFind() override;
   bool SupportsPaginatedPrint() override;
 
   int PrintBegin(const blink::WebPrintParams& print_params) override;
   void PrintPage(int page_number, cc::PaintCanvas* canvas) override;
   void PrintEnd() override;
 
-  bool CanRotateView() override;
-  void RotateView(blink::WebPlugin::RotationType type) override;
   bool IsPlaceholder() override;
   void DidLoseMouseLock() override;
   void DidReceiveMouseLockResult(bool success) override;
@@ -120,8 +105,6 @@ class PepperWebPluginImpl : public blink::WebPlugin {
   gfx::Rect plugin_rect_;
   PP_Var instance_object_;
   blink::WebPluginContainer* container_;
-
-  DISALLOW_COPY_AND_ASSIGN(PepperWebPluginImpl);
 };
 
 }  // namespace content

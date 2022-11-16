@@ -1,0 +1,87 @@
+#
+# This file is part of eyeo Chromium SDK,
+# Copyright (C) 2006-present eyeo GmbH
+#
+# eyeo Chromium SDK is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 3 as
+# published by the Free Software Foundation.
+#
+# eyeo Chromium SDK is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with eyeo Chromium SDK.  If not, see <http://www.gnu.org/licenses/>.
+
+source_set("common") {
+  sources = [
+    "adblock_prefs.cc",
+    "adblock_prefs.h",
+    "adblock_utils.cc",
+    "adblock_utils.h",
+    "allowed_connection_type.cc",
+    "allowed_connection_type.h",
+    "header_filter_data.h",
+    "sitekey.h",
+  ]
+
+  public_deps= [
+    ":base",
+    "//base",
+    "//components/adblock/core:schema",
+    "//components/keyed_service/core",
+    "//components/prefs:prefs",
+    "//components/resources:components_resources_grit",
+    "//components/version_info:version_info",
+    "//net",
+    "//services/network/public/cpp",
+    "//third_party/icu/",
+    "//third_party/re2",
+    "//ui/base:base",
+    "//url:url",
+  ]
+}
+
+source_set("base") {
+  sources = [
+    "adblock_constants.cc",
+    "adblock_constants.h",
+    "content_type.cc",
+    "content_type.h",
+    "converter_result.cc",
+    "converter_result.h",
+    "flatbuffer_data.cc",
+    "flatbuffer_data.h",
+    "keyword_extractor_utils.cc",
+    "keyword_extractor_utils.h",
+  ]
+
+  deps = [
+    "//components/adblock/core:schema",
+    "//components/adblock/core:schema_hash",
+    "//third_party/flatbuffers",
+    "//third_party/icu/",
+    "//third_party/re2",
+  ]
+
+  public_deps = [
+    "//base",
+    "//url:url",
+  ]
+}
+
+source_set("unit_tests") {
+  testonly = true
+  sources = [
+    "test/adblock_utils_test.cc",
+    "test/flatbuffer_data_test.cc",
+  ]
+
+  deps = [
+    ":common",
+    "//base/test:test_support",
+    "//components/adblock/core/subscription:subscription",
+    "//testing/gtest",
+  ]
+}

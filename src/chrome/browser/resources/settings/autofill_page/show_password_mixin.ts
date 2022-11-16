@@ -4,37 +4,30 @@
 
 import {dedupingMixin, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-// <if expr="chromeos">
-import {BlockingRequestManager} from './blocking_request_manager.js';
-// </if>
+import {loadTimeData} from '../i18n_setup.js';
+
 import {MultiStorePasswordUiEntry} from './multi_store_password_ui_entry.js';
-import {PasswordManagerImpl} from './password_manager_proxy.js';
+import {PasswordRequestorMixin, PasswordRequestorMixinInterface} from './password_requestor_mixin.js';
 
 type Constructor<T> = new (...args: any[]) => T;
 
 /**
  * This mixin bundles functionality required to show a password to the user.
- * It is used by both <password-list-item> and <password-edit-dialog>.
+ * It is used by <password-list-item>.
  */
 export const ShowPasswordMixin = dedupingMixin(
-    <T extends Constructor<PolymerElement>>(superClass: T): T&
+    <T extends Constructor<PolymerElement>>(superClass: T):
+        (T|PasswordRequestorMixinInterface)&
     Constructor<ShowPasswordMixinInterface> => {
-      class ShowPasswordMixin extends superClass {
+      class ShowPasswordMixin extends PasswordRequestorMixin
+      (superClass) {
         static get properties() {
           return {
             entry: Object,
-
-            // <if expr="chromeos">
-            tokenRequestManager: Object
-            // </if>
           };
         }
 
         entry: MultiStorePasswordUiEntry;
-
-        // <if expr="chromeos">
-        tokenRequestManager: BlockingRequestManager;
-        // </if>
 
         getPasswordInputType() {
           return this.entry.password || this.entry.federationText ? 'text' :
@@ -43,6 +36,12 @@ export const ShowPasswordMixin = dedupingMixin(
 
         showPasswordTitle(password: string, hide: string, show: string) {
           return password ? hide : show;
+        }
+
+        getShowButtonLabel(password: string) {
+          return loadTimeData.getStringF(
+              (password) ? 'hidePasswordLabel' : 'showPasswordLabel',
+              this.entry.username, this.entry.urls.shown);
         }
 
         getIconClass() {
@@ -56,26 +55,23 @@ export const ShowPasswordMixin = dedupingMixin(
               ' '.repeat(NUM_PLACEHOLDERS);
         }
 
-        onShowPasswordButtonTap() {
+        /**
+         * Handler for showing the passwords. If the password will be shown in
+         * view password dialog, it should be handled by the dialog via the
+         * event. If the password should be displayed inline, the method should
+         * update the text.
+         */
+        onShowPasswordButtonClick() {
           if (this.entry.password) {
             this.hide();
             return;
           }
-          PasswordManagerImpl.getInstance()
-              .requestPlaintextPassword(
-                  this.entry.getAnyId(),
-                  chrome.passwordsPrivate.PlaintextReason.VIEW)
-              .then(
-                  password => {
-                    this.set('entry.password', password);
-                  },
-                  _error => {
-                    // <if expr="chromeos">
-                    // If no password was found, refresh auth token and retry.
-                    this.tokenRequestManager.request(
-                        () => this.onShowPasswordButtonTap());
-                    // </if>
-                  });
+
+          this.requestPlaintextPassword(
+                  this.entry.id, chrome.passwordsPrivate.PlaintextReason.VIEW)
+              .then(password => {
+                this.set('entry.password', password);
+              }, () => {});
         }
 
         hide() {
@@ -102,6 +98,11 @@ export interface ShowPasswordMixinInterface {
   showPasswordTitle(password: string, hide: string, show: string): string;
 
   /**
+   * Gets the a11y label for the show/hide button.
+   */
+  getShowButtonLabel(password: string): string;
+
+  /**
    * Get the right icon to display when hiding/showing a password.
    */
   getIconClass(): string;
@@ -113,8 +114,8 @@ export interface ShowPasswordMixinInterface {
    */
   getPassword(): string;
 
-  /** Handler for tapping the show/hide button. */
-  onShowPasswordButtonTap(): void;
+  /** Handler for clicking the show/hide button. */
+  onShowPasswordButtonClick(): void;
 
   /** Hides the password. */
   hide(): void;

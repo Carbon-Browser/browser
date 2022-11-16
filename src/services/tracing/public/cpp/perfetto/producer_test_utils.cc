@@ -9,6 +9,10 @@
 #include <utility>
 
 #include "base/debug/leak_annotations.h"
+#include "base/files/file_path.h"
+#include "base/files/file_util.h"
+#include "base/run_loop.h"
+#include "services/tracing/public/cpp/tracing_features.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/perfetto/include/perfetto/ext/base/utils.h"
@@ -56,9 +60,7 @@ TestProducerClient::TestProducerClient(
       delegate_(perfetto::base::kPageSize),
       stream_(&delegate_),
       main_thread_task_runner_(std::move(main_thread_task_runner)),
-      log_only_main_thread_(log_only_main_thread) {
-  trace_packet_.Reset(&stream_);
-}
+      log_only_main_thread_(log_only_main_thread) {}
 
 TestProducerClient::~TestProducerClient() = default;
 
@@ -85,30 +87,34 @@ void TestProducerClient::FlushPacketIfPossible() {
   // buffer already used by protozero to write the TracePacket into.
   protozero::ContiguousMemoryRange buffer = delegate_.GetNewBuffer();
 
-  uint32_t message_size = trace_packet_.Finalize();
-  if (message_size) {
-    EXPECT_GE(buffer.size(), message_size);
+  if (!trace_packet_)
+    return;
 
-    auto proto = std::make_unique<perfetto::protos::TracePacket>();
-    EXPECT_TRUE(proto->ParseFromArray(buffer.begin, message_size));
-    if (proto->has_chrome_events() &&
-        proto->chrome_events().metadata().size() > 0) {
-      legacy_metadata_packets_.push_back(std::move(proto));
-    } else if (proto->has_chrome_metadata()) {
-      proto_metadata_packets_.push_back(std::move(proto));
-    } else {
-      finalized_packets_.push_back(std::move(proto));
-    }
+  uint32_t message_size = trace_packet_->Finalize();
+  EXPECT_GE(buffer.size(), message_size);
+
+  auto proto = std::make_unique<perfetto::protos::TracePacket>();
+  EXPECT_TRUE(proto->ParseFromArray(buffer.begin, message_size));
+  if (proto->has_chrome_events() &&
+      proto->chrome_events().metadata().size() > 0) {
+    legacy_metadata_packets_.push_back(std::move(proto));
+  } else if (proto->has_chrome_metadata()) {
+    proto_metadata_packets_.push_back(std::move(proto));
+  } else if (message_size > 0) {
+    finalized_packets_.push_back(std::move(proto));
+  } else {
+    ++empty_finalized_packets_count_;
   }
 
   stream_.Reset(buffer);
-  trace_packet_.Reset(&stream_);
+  trace_packet_.reset();
 }
 
 perfetto::protos::pbzero::TracePacket* TestProducerClient::NewTracePacket() {
   FlushPacketIfPossible();
-
-  return &trace_packet_;
+  trace_packet_.emplace();
+  trace_packet_->Reset(&stream_);
+  return &trace_packet_.value();
 }
 
 size_t TestProducerClient::GetFinalizedPacketCount() {
@@ -143,6 +149,26 @@ TestProducerClient::GetProtoChromeMetadata(size_t packet_index) {
   return &proto_metadata_packets_[packet_index]->chrome_metadata();
 }
 
+// static
+void TestProducerClient::WriteTraceToFile(
+    const base::FilePath::StringType& filename,
+    const PacketVector& packets) {
+  auto&& raw_trace = TestProducerClient::SerializePacketsAsTrace(packets);
+  EXPECT_TRUE(base::WriteFile(base::FilePath(filename), raw_trace));
+}
+
+// static
+std::string TestProducerClient::SerializePacketsAsTrace(
+    const PacketVector& finalized_packets) {
+  perfetto::protos::Trace trace;
+  for (auto& packet : finalized_packets) {
+    *trace.add_packet() = *packet;
+  }
+  std::string trace_bytes;
+  trace.SerializeToString(&trace_bytes);
+  return trace_bytes;
+}
+
 TestTraceWriter::TestTraceWriter(TestProducerClient* producer_client)
     : producer_client_(producer_client) {}
 
@@ -167,7 +193,6 @@ DataSourceTester::DataSourceTester(
 {
   features_.InitAndDisableFeature(features::kEnablePerfettoSystemTracing);
 #if !BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
-  tracing::PerfettoTracedProcess::ResetTaskRunnerForTesting();
   auto perfetto_wrapper = std::make_unique<base::tracing::PerfettoTaskRunner>(
       base::ThreadTaskRunnerHandle::Get());
 
@@ -176,11 +201,7 @@ DataSourceTester::DataSourceTester(
 #endif  // !BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
 }
 
-DataSourceTester::~DataSourceTester() {
-#if !BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
-  tracing::PerfettoTracedProcess::ResetTaskRunnerForTesting();
-#endif  // !BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
-}
+DataSourceTester::~DataSourceTester() = default;
 
 void DataSourceTester::BeginTrace(
     const base::trace_event::TraceConfig& trace_config) {

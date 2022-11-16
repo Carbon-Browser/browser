@@ -10,7 +10,7 @@
 #include <utility>
 
 #include "base/callback_forward.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "content/public/browser/desktop_media_id.h"
 #include "content/public/browser/media_stream_request.h"
@@ -39,7 +39,7 @@ class DesktopMediaPicker {
     ~Params();
 
     // WebContents this picker is relative to, can be null.
-    content::WebContents* web_contents = nullptr;
+    raw_ptr<content::WebContents> web_contents = nullptr;
     // The context whose root window is used for dialog placement, cannot be
     // null for Aura.
     gfx::NativeWindow context = nullptr;
@@ -56,9 +56,14 @@ class DesktopMediaPicker {
     std::u16string target_name;
     // Whether audio capture should be shown as an option in the picker.
     bool request_audio = false;
+    // If audio is requested, |exclude_system_audio| can indicate that
+    // system-audio should nevertheless not be offered to the user.
+    // Mutually exclusive with |force_audio_checkboxes_to_default_checked|.
+    bool exclude_system_audio = false;
     // Normally, the media-picker sets the default states for the audio
     // checkboxes. If |force_audio_checkboxes_to_default_checked| is |true|,
-    // it sets them all to |checked|.
+    // it sets them all to |checked|. This is used by Chromecasting.
+    // It is mutually exclusive with |exclude_system_audio|.
     bool force_audio_checkboxes_to_default_checked = false;
     // This flag controls the behvior in the case where the picker is invoked to
     // select a screen and there is only one screen available.  If true, the
@@ -80,6 +85,10 @@ class DesktopMediaPicker {
       const content::MediaStreamRequest* request = nullptr);
 
   DesktopMediaPicker() = default;
+
+  DesktopMediaPicker(const DesktopMediaPicker&) = delete;
+  DesktopMediaPicker& operator=(const DesktopMediaPicker&) = delete;
+
   virtual ~DesktopMediaPicker() = default;
 
   // Shows dialog with list of desktop media sources (screens, windows, tabs)
@@ -89,9 +98,6 @@ class DesktopMediaPicker {
   virtual void Show(const Params& params,
                     std::vector<std::unique_ptr<DesktopMediaList>> source_lists,
                     DoneCallback done_callback) = 0;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(DesktopMediaPicker);
 };
 
 #endif  // CHROME_BROWSER_MEDIA_WEBRTC_DESKTOP_MEDIA_PICKER_H_

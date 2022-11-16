@@ -4,7 +4,6 @@
 
 #include "components/language/core/browser/language_usage_metrics.h"
 
-#include "base/macros.h"
 #include "base/metrics/histogram.h"
 #include "base/metrics/histogram_samples.h"
 #include "base/metrics/statistics_recorder.h"
@@ -29,6 +28,9 @@ class MetricsRecorder {
     if (histogram)
       base_samples_ = histogram->SnapshotSamples();
   }
+
+  MetricsRecorder(const MetricsRecorder&) = delete;
+  MetricsRecorder& operator=(const MetricsRecorder&) = delete;
 
   void CheckTotalCount(int count) {
     Snapshot();
@@ -69,8 +71,6 @@ class MetricsRecorder {
   std::string key_;
   std::unique_ptr<HistogramSamples> base_samples_;
   std::unique_ptr<HistogramSamples> samples_;
-
-  DISALLOW_COPY_AND_ASSIGN(MetricsRecorder);
 };
 
 void RecordPageLanguageVisits(UrlLanguageHistogram& language_histogram,

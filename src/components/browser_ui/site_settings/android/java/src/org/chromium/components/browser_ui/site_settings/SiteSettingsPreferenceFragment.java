@@ -29,4 +29,19 @@ public abstract class SiteSettingsPreferenceFragment extends PreferenceFragmentC
         assert mSiteSettingsDelegate != null : "SiteSettingsDelegate not set";
         return mSiteSettingsDelegate;
     }
+
+    /**
+     * @return Whether a SiteSettingsDelegate instance has been assigned to this Fragment.
+     */
+    public boolean hasSiteSettingsDelegate() {
+        return mSiteSettingsDelegate != null;
+    }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        if (mSiteSettingsDelegate != null) {
+            mSiteSettingsDelegate.onDestroyView();
+        }
+    }
 }

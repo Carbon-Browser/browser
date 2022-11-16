@@ -23,10 +23,9 @@ TestStatsReportDictionary::~TestStatsReportDictionary() {
 
 void TestStatsReportDictionary::ForEach(
     std::function<void(const TestStatsDictionary&)> iteration) {
-  for (base::DictionaryValue::Iterator it(*report_); !it.IsAtEnd();
-       it.Advance()) {
+  for (auto it : report_->DictItems()) {
     const base::DictionaryValue* it_value;
-    CHECK(it.value().GetAsDictionary(&it_value));
+    CHECK(it.second.GetAsDictionary(&it_value));
     iteration(TestStatsDictionary(this, it_value));
   }
 }
@@ -144,12 +143,20 @@ std::vector<std::string> TestStatsDictionary::GetSequenceString(
 
 bool TestStatsDictionary::GetBoolean(
     const std::string& key, bool* out) const {
-  return stats_->GetBoolean(key, out);
+  if (absl::optional<bool> value = stats_->FindBoolPath(key)) {
+    *out = *value;
+    return true;
+  }
+  return false;
 }
 
 bool TestStatsDictionary::GetNumber(
     const std::string& key, double* out) const {
-  return stats_->GetDouble(key, out);
+  if (absl::optional<double> value = stats_->FindDoubleKey(key)) {
+    *out = *value;
+    return true;
+  }
+  return false;
 }
 
 bool TestStatsDictionary::GetString(
@@ -164,11 +171,11 @@ bool TestStatsDictionary::GetSequenceBoolean(
   if (!stats_->GetList(key, &list))
     return false;
   std::vector<bool> sequence;
-  bool element;
-  for (size_t i = 0; i < list->GetList().size(); ++i) {
-    if (!list->GetBoolean(i, &element))
+  base::Value::ConstListView args_list = list->GetListDeprecated();
+  for (const base::Value& arg : args_list) {
+    if (!arg.is_bool())
       return false;
-    sequence.push_back(element);
+    sequence.push_back(arg.GetBool());
   }
   *out = std::move(sequence);
   return true;
@@ -182,7 +189,7 @@ bool TestStatsDictionary::GetSequenceNumber(
     return false;
 
   out->clear();
-  for (const base::Value& element : number_sequence->GetList()) {
+  for (const base::Value& element : number_sequence->GetListDeprecated()) {
     absl::optional<double> double_value = element.GetIfDouble();
     if (!double_value)
       return false;
@@ -200,11 +207,11 @@ bool TestStatsDictionary::GetSequenceString(
   if (!stats_->GetList(key, &list))
     return false;
   std::vector<std::string> sequence;
-  std::string element;
-  for (size_t i = 0; i < list->GetList().size(); ++i) {
-    if (!list->GetString(i, &element))
+  for (const base::Value& i : list->GetListDeprecated()) {
+    const std::string* element = i.GetIfString();
+    if (!element)
       return false;
-    sequence.push_back(element);
+    sequence.push_back(*element);
   }
   *out = std::move(sequence);
   return true;

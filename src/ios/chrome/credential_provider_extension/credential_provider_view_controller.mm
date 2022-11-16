@@ -7,6 +7,7 @@
 #import <Foundation/Foundation.h>
 
 #include "base/check.h"
+#include "base/command_line.h"
 #include "ios/chrome/common/app_group/app_group_constants.h"
 #include "ios/chrome/common/app_group/app_group_metrics.h"
 #import "ios/chrome/common/crash_report/crash_helper.h"
@@ -30,6 +31,12 @@
 #if !defined(__has_feature) || !__has_feature(objc_arc)
 #error "This file requires ARC support."
 #endif
+
+namespace {
+UIColor* BackgroundColor() {
+  return [UIColor colorNamed:kGroupedPrimaryBackgroundColor];
+}
+}
 
 @interface CredentialProviderViewController () <ConfirmationAlertActionHandler,
                                                 SuccessfulReauthTimeAccessor>
@@ -60,15 +67,51 @@
 // Loading indicator used for user validation, which APIs can take a long time.
 @property(nonatomic, strong) UIActivityIndicatorView* activityIndicatorView;
 
+// Identfiers cached in |-prepareCredentialListForServiceIdentifiers:| to show
+// the next time this view appears.
+@property(nonatomic, strong)
+    NSArray<ASCredentialServiceIdentifier*>* serviceIdentifiers;
+
 @end
 
 @implementation CredentialProviderViewController
 
 + (void)initialize {
   if (self == [CredentialProviderViewController self]) {
-    if (crash_helper::common::CanCrashpadStart()) {
+    if (crash_helper::common::CanUseCrashpad()) {
       crash_helper::common::StartCrashpad();
     }
+  }
+}
+
+- (void)viewDidLoad {
+  [super viewDidLoad];
+  self.view.backgroundColor = BackgroundColor();
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+  [super viewWillAppear:animated];
+  // If identifiers were stored in
+  // |-prepareCredentialListForServiceIdentifiers:|, handle that now.
+  if (self.serviceIdentifiers) {
+    NSArray<ASCredentialServiceIdentifier*>* serviceIdentifiers =
+        self.serviceIdentifiers;
+    self.serviceIdentifiers = nil;
+    __weak __typeof__(self) weakSelf = self;
+    [self validateUserWithCompletion:^(BOOL userIsValid) {
+      if (!userIsValid) {
+        [weakSelf showStaleCredentials];
+        return;
+      }
+      [weakSelf reauthenticateIfNeededWithCompletionHandler:^(
+                    ReauthenticationResult result) {
+        if (result != ReauthenticationResult::kFailure) {
+          [weakSelf showCredentialListForServiceIdentifiers:serviceIdentifiers];
+        } else {
+          [weakSelf exitWithErrorCode:ASExtensionErrorCodeFailed];
+        }
+      }];
+    }];
   }
 }
 
@@ -76,21 +119,11 @@
 
 - (void)prepareCredentialListForServiceIdentifiers:
     (NSArray<ASCredentialServiceIdentifier*>*)serviceIdentifiers {
-  __weak __typeof__(self) weakSelf = self;
-  [self validateUserWithCompletion:^(BOOL userIsValid) {
-    if (!userIsValid) {
-      [weakSelf showStaleCredentials];
-      return;
-    }
-    [weakSelf reauthenticateIfNeededWithCompletionHandler:^(
-                  ReauthenticationResult result) {
-      if (result != ReauthenticationResult::kFailure) {
-        [weakSelf showCredentialListForServiceIdentifiers:serviceIdentifiers];
-      } else {
-        [weakSelf exitWithErrorCode:ASExtensionErrorCodeFailed];
-      }
-    }];
-  }];
+  // Sometimes, this method is called while the authentication framework thinks
+  // the app is not foregrounded, so authentication fails. Instead of directly
+  // authenticating and showing the credentials, store the list of
+  // identifiers and authenticate once the extension is visible.
+  self.serviceIdentifiers = serviceIdentifiers;
 }
 
 - (void)provideCredentialWithoutUserInteractionForIdentity:
@@ -130,15 +163,9 @@
 }
 
 - (void)prepareInterfaceForExtensionConfiguration {
-  // Reset the consent if the extension was disabled and reenabled.
-  NSUserDefaults* user_defaults = [NSUserDefaults standardUserDefaults];
-  [user_defaults
-      removeObjectForKey:kUserDefaultsCredentialProviderConsentVerified];
   self.consentCoordinator = [[ConsentCoordinator alloc]
-         initWithBaseViewController:self
-                            context:self.extensionContext
-            reauthenticationHandler:self.reauthenticationHandler
-      isInitialConfigurationRequest:YES];
+      initWithBaseViewController:self
+                         context:self.extensionContext];
   [self.consentCoordinator start];
 }
 
@@ -150,18 +177,13 @@
         [[ArchivableCredentialStore alloc]
             initWithFileURL:CredentialProviderSharedArchivableStoreURL()];
 
-    if (IsPasswordCreationEnabled()) {
-      NSString* key = AppGroupUserDefaultsCredentialProviderNewCredentials();
-      UserDefaultsCredentialStore* defaultsStore =
-          [[UserDefaultsCredentialStore alloc]
-              initWithUserDefaults:app_group::GetGroupUserDefaults()
-                               key:key];
-      _credentialStore = [[MultiStoreCredentialStore alloc]
-          initWithStores:@[ defaultsStore, archivableStore ]];
-
-    } else {
-      _credentialStore = archivableStore;
-    }
+    NSString* key = AppGroupUserDefaultsCredentialProviderNewCredentials();
+    UserDefaultsCredentialStore* defaultsStore =
+        [[UserDefaultsCredentialStore alloc]
+            initWithUserDefaults:app_group::GetGroupUserDefaults()
+                             key:key];
+    _credentialStore = [[MultiStoreCredentialStore alloc]
+        initWithStores:@[ defaultsStore, archivableStore ]];
   }
   return _credentialStore;
 }
@@ -286,6 +308,13 @@
 // Starts the credential list feature.
 - (void)showCredentialListForServiceIdentifiers:
     (NSArray<ASCredentialServiceIdentifier*>*)serviceIdentifiers {
+  // Views in the password creation flow (FormInputAccessoryView) use
+  // base::i18n::IsRTL(), which checks some values from the command line.
+  // Initialize the command line for the process running this extension here
+  // before that.
+  if (!base::CommandLine::InitializedForCurrentProcess()) {
+    base::CommandLine::Init(0, nullptr);
+  }
   self.listCoordinator = [[CredentialListCoordinator alloc]
       initWithBaseViewController:self
                  credentialStore:self.credentialStore
@@ -320,14 +349,6 @@
 }
 
 - (void)confirmationAlertPrimaryAction {
-  // No-op.
-}
-
-- (void)confirmationAlertSecondaryAction {
-  // No-op.
-}
-
-- (void)confirmationAlertLearnMoreAction {
   // No-op.
 }
 

@@ -8,7 +8,7 @@
 
 #include "base/bind.h"
 #include "base/logging.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/values.h"
@@ -52,6 +52,11 @@ class BluetoothGattDescriptorClientImpl
       public dbus::ObjectManager::Interface {
  public:
   BluetoothGattDescriptorClientImpl() : object_manager_(nullptr) {}
+
+  BluetoothGattDescriptorClientImpl(const BluetoothGattDescriptorClientImpl&) =
+      delete;
+  BluetoothGattDescriptorClientImpl& operator=(
+      const BluetoothGattDescriptorClientImpl&) = delete;
 
   ~BluetoothGattDescriptorClientImpl() override {
     object_manager_->UnregisterInterface(
@@ -240,7 +245,7 @@ class BluetoothGattDescriptorClientImpl
     std::move(error_callback).Run(error_name, error_message);
   }
 
-  dbus::ObjectManager* object_manager_;
+  raw_ptr<dbus::ObjectManager> object_manager_;
 
   // List of observers interested in event notifications from us.
   base::ObserverList<BluetoothGattDescriptorClient::Observer>::Unchecked
@@ -252,8 +257,6 @@ class BluetoothGattDescriptorClientImpl
   // invalidate its weak pointers before any other members are destroyed.
   base::WeakPtrFactory<BluetoothGattDescriptorClientImpl> weak_ptr_factory_{
       this};
-
-  DISALLOW_COPY_AND_ASSIGN(BluetoothGattDescriptorClientImpl);
 };
 
 BluetoothGattDescriptorClient::BluetoothGattDescriptorClient() = default;

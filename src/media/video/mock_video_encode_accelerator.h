@@ -7,7 +7,7 @@
 
 #include "media/video/video_encode_accelerator.h"
 
-#include "base/macros.h"
+#include "media/base/bitstream_buffer.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
 namespace media {
@@ -15,13 +15,19 @@ namespace media {
 class MockVideoEncodeAccelerator : public VideoEncodeAccelerator {
  public:
   MockVideoEncodeAccelerator();
+
+  MockVideoEncodeAccelerator(const MockVideoEncodeAccelerator&) = delete;
+  MockVideoEncodeAccelerator& operator=(const MockVideoEncodeAccelerator&) =
+      delete;
+
   ~MockVideoEncodeAccelerator() override;
 
   MOCK_METHOD0(GetSupportedProfiles,
                VideoEncodeAccelerator::SupportedProfiles());
-  MOCK_METHOD2(Initialize,
+  MOCK_METHOD3(Initialize,
                bool(const VideoEncodeAccelerator::Config& config,
-                    VideoEncodeAccelerator::Client* client));
+                    VideoEncodeAccelerator::Client* client,
+                    std::unique_ptr<MediaLog> media_log));
   MOCK_METHOD2(Encode,
                void(scoped_refptr<VideoFrame> frame, bool force_keyframe));
   MOCK_METHOD1(UseOutputBitstreamBuffer, void(BitstreamBuffer buffer));
@@ -31,7 +37,6 @@ class MockVideoEncodeAccelerator : public VideoEncodeAccelerator {
 
  private:
   void DeleteThis();
-  DISALLOW_COPY_AND_ASSIGN(MockVideoEncodeAccelerator);
 };
 
 }  // namespace media

@@ -9,8 +9,10 @@
 #include <memory>
 
 #include "base/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
+#include "base/time/time.h"
 #include "remoting/protocol/client_video_stats_dispatcher.h"
 #include "remoting/protocol/video_stats_stub.h"
 #include "third_party/webrtc/api/media_stream_interface.h"
@@ -40,11 +42,17 @@ class WebrtcVideoRendererAdapter
  public:
   WebrtcVideoRendererAdapter(const std::string& label,
                              VideoRenderer* video_renderer);
+
+  WebrtcVideoRendererAdapter(const WebrtcVideoRendererAdapter&) = delete;
+  WebrtcVideoRendererAdapter& operator=(const WebrtcVideoRendererAdapter&) =
+      delete;
+
   ~WebrtcVideoRendererAdapter() override;
 
   std::string label() const { return label_; }
 
-  void SetMediaStream(scoped_refptr<webrtc::MediaStreamInterface> media_stream);
+  void SetMediaStream(
+      rtc::scoped_refptr<webrtc::MediaStreamInterface> media_stream);
   void SetVideoStatsChannel(std::unique_ptr<MessagePipe> message_pipe);
 
   // rtc::VideoSinkInterface implementation.
@@ -70,8 +78,8 @@ class WebrtcVideoRendererAdapter
 
   std::string label_;
 
-  scoped_refptr<webrtc::MediaStreamInterface> media_stream_;
-  VideoRenderer* video_renderer_;
+  rtc::scoped_refptr<webrtc::MediaStreamInterface> media_stream_;
+  raw_ptr<VideoRenderer> video_renderer_;
 
   std::unique_ptr<ClientVideoStatsDispatcher> video_stats_dispatcher_;
 
@@ -81,8 +89,6 @@ class WebrtcVideoRendererAdapter
   std::list<std::pair<uint32_t, HostFrameStats>> host_stats_queue_;
 
   base::WeakPtrFactory<WebrtcVideoRendererAdapter> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(WebrtcVideoRendererAdapter);
 };
 
 }  // namespace remoting

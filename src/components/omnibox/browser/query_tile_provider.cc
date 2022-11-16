@@ -5,6 +5,7 @@
 #include "components/omnibox/browser/query_tile_provider.h"
 
 #include "base/strings/string_util.h"
+#include "base/strings/utf_string_conversions.h"
 #include "components/omnibox/browser/autocomplete_provider_client.h"
 #include "components/omnibox/browser/autocomplete_provider_listener.h"
 #include "components/query_tiles/tile_service.h"
@@ -50,14 +51,15 @@ QueryTileProvider::QueryTileProvider(AutocompleteProviderClient* client,
                                      AutocompleteProviderListener* listener)
     : AutocompleteProvider(AutocompleteProvider::TYPE_QUERY_TILE),
       client_(client),
-      listener_(listener),
-      tile_service_(client_->GetQueryTileService()) {}
+      tile_service_(client_->GetQueryTileService()) {
+  AddListener(listener);
+}
 
 QueryTileProvider::~QueryTileProvider() = default;
 
 void QueryTileProvider::Start(const AutocompleteInput& input,
                               bool minimal_changes) {
-  done_ = !input.want_asynchronous_matches();
+  done_ = input.omit_asynchronous_matches();
   matches_.clear();
   if (!AllowQueryTileSuggestions(input)) {
     done_ = true;
@@ -80,7 +82,7 @@ void QueryTileProvider::Start(const AutocompleteInput& input,
 
 void QueryTileProvider::Stop(bool clear_cached_results,
                              bool due_to_user_inactivity) {
-  done_ = true;
+  AutocompleteProvider::Stop(clear_cached_results, due_to_user_inactivity);
 
   // The request was stopped. Cancel any in-flight requests for fetching query
   // tiles from TileService.
@@ -170,5 +172,5 @@ void QueryTileProvider::BuildSuggestion(const AutocompleteInput& input,
     match.SetAllowedToBeDefault(input);
 
   matches_.push_back(match);
-  listener_->OnProviderUpdate(true);
+  NotifyListeners(true);
 }

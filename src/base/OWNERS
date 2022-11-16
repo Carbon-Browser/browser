@@ -2,18 +2,18 @@
 
 set noparent
 # NOTE: keep this in sync with lsc-owners-override@chromium.org owners
-ajwong@chromium.org
+# by emailing lsc-policy@chromium.org when this list changes.
 danakj@chromium.org
 dcheng@chromium.org
 fdoray@chromium.org
 gab@chromium.org
-jdoerrie@chromium.org
 kylechar@chromium.org
 mark@chromium.org
 thakis@chromium.org
 thestig@chromium.org
 wez@chromium.org
 # NOTE: keep this in sync with lsc-owners-override@chromium.org owners
+# by emailing lsc-policy@chromium.org when this list changes.
 
 # per-file rules:
 # These are for the common case of adding or renaming files. If you're doing
@@ -21,14 +21,13 @@ wez@chromium.org
 per-file BUILD.gn=*
 
 # For Android-specific changes:
-per-file *android*=file://base/android/OWNERS
-per-file BUILD.gn=file://base/android/OWNERS
+per-file ..._android*=file://base/android/OWNERS
 
 # For Fuchsia-specific changes:
-per-file *_fuchsia*=file://build/fuchsia/OWNERS
+per-file ..._fuchsia*=file://build/fuchsia/OWNERS
 
 # For Windows-specific changes:
-per-file *_win*=file://base/win/OWNERS
+per-file ..._win*=file://base/win/OWNERS
 
 per-file callback_list*=pkasting@chromium.org
 per-file feature_list*=asvitkine@chromium.org

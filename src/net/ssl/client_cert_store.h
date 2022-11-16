@@ -6,7 +6,6 @@
 #define NET_SSL_CLIENT_CERT_STORE_H_
 
 #include "base/callback_forward.h"
-#include "base/macros.h"
 #include "net/base/net_export.h"
 #include "net/cert/x509_certificate.h"
 #include "net/ssl/client_cert_identity.h"
@@ -21,7 +20,10 @@ class SSLCertRequestInfo;
 // gets its own uniquely owned handle.
 class NET_EXPORT ClientCertStore {
  public:
-  virtual ~ClientCertStore() {}
+  ClientCertStore(const ClientCertStore&) = delete;
+  ClientCertStore& operator=(const ClientCertStore&) = delete;
+
+  virtual ~ClientCertStore() = default;
 
   using ClientCertListCallback =
       base::OnceCallback<void(ClientCertIdentityList)>;
@@ -34,10 +36,7 @@ class NET_EXPORT ClientCertStore {
                               ClientCertListCallback callback) = 0;
 
  protected:
-  ClientCertStore() {}
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ClientCertStore);
+  ClientCertStore() = default;
 };
 
 }  // namespace net

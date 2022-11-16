@@ -14,7 +14,6 @@
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
 
 namespace metrics {
-
 namespace {
 
 class MojoSingleSampleMetric : public mojom::SingleSampleMetric {
@@ -25,6 +24,10 @@ class MojoSingleSampleMetric : public mojom::SingleSampleMetric {
                          uint32_t bucket_count,
                          int32_t flags)
       : metric_(histogram_name, min, max, bucket_count, flags) {}
+
+  MojoSingleSampleMetric(const MojoSingleSampleMetric&) = delete;
+  MojoSingleSampleMetric& operator=(const MojoSingleSampleMetric&) = delete;
+
   ~MojoSingleSampleMetric() override {}
 
  private:
@@ -34,14 +37,18 @@ class MojoSingleSampleMetric : public mojom::SingleSampleMetric {
   }
 
   base::DefaultSingleSampleMetric metric_;
-
-  DISALLOW_COPY_AND_ASSIGN(MojoSingleSampleMetric);
 };
 
 class MojoSingleSampleMetricsProvider
     : public mojom::SingleSampleMetricsProvider {
  public:
   MojoSingleSampleMetricsProvider() {}
+
+  MojoSingleSampleMetricsProvider(const MojoSingleSampleMetricsProvider&) =
+      delete;
+  MojoSingleSampleMetricsProvider& operator=(
+      const MojoSingleSampleMetricsProvider&) = delete;
+
   ~MojoSingleSampleMetricsProvider() override {
     DCHECK(thread_checker_.CalledOnValidThread());
   }
@@ -64,8 +71,6 @@ class MojoSingleSampleMetricsProvider
 
   // Providers must be created, used on, and destroyed on the same thread.
   base::ThreadChecker thread_checker_;
-
-  DISALLOW_COPY_AND_ASSIGN(MojoSingleSampleMetricsProvider);
 };
 
 }  // namespace

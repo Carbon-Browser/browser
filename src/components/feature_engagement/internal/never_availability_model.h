@@ -7,7 +7,7 @@
 
 #include <stdint.h>
 
-#include "base/macros.h"
+#include "base/memory/weak_ptr.h"
 #include "components/feature_engagement/internal/availability_model.h"
 
 namespace feature_engagement {
@@ -17,6 +17,10 @@ namespace feature_engagement {
 class NeverAvailabilityModel : public AvailabilityModel {
  public:
   NeverAvailabilityModel();
+
+  NeverAvailabilityModel(const NeverAvailabilityModel&) = delete;
+  NeverAvailabilityModel& operator=(const NeverAvailabilityModel&) = delete;
+
   ~NeverAvailabilityModel() override;
 
   // AvailabilityModel implementation.
@@ -33,9 +37,9 @@ class NeverAvailabilityModel : public AvailabilityModel {
   void ForwardedOnInitializedCallback(OnInitializedCallback callback);
 
   // Whether the model has been successfully initialized.
-  bool ready_;
+  bool ready_ = false;
 
-  DISALLOW_COPY_AND_ASSIGN(NeverAvailabilityModel);
+  base::WeakPtrFactory<NeverAvailabilityModel> weak_ptr_factory_{this};
 };
 
 }  // namespace feature_engagement

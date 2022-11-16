@@ -1,0 +1,14 @@
+# If changed, go to https://sequencediagram.org/ to regenerate diagram
+
+title eyeo Chromium SDK User Setting flow
+participant UIFragment.java (UI Thread)
+
+ref over AdblockController.java (UI Thread): Extension API and unit tests start from here.
+
+UIFragment.java (UI Thread) -> AdblockController.java (UI Thread): User event trigger(ex: onPreferenceChange)
+
+AdblockController.java (UI Thread)->Adblock_JNI(UI Thread):ex:JNI_AdblockController_AddCustomFilter
+Adblock_JNI(UI Thread) ->AdblockControllerImpl (UI Thread): ex: AddCustomSubscription(url) \n          (jni binding)
+note over AdblockControllerImpl (UI Thread): Set User Pref
+AdblockControllerImpl (UI Thread) ->> SubscriptionService(UI Thread): Add Custom Filter
+end

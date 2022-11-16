@@ -9,7 +9,7 @@
 #include <set>
 #include <string>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "content/browser/background_fetch/background_fetch.pb.h"
 #include "content/browser/background_fetch/background_fetch_registration_id.h"
@@ -72,6 +72,9 @@ class DatabaseTask : public DatabaseTaskHost {
   using StorageVersionCallback =
       base::OnceCallback<void(proto::BackgroundFetchStorageVersion)>;
 
+  DatabaseTask(const DatabaseTask&) = delete;
+  DatabaseTask& operator=(const DatabaseTask&) = delete;
+
   ~DatabaseTask() override;
 
   virtual void Start() = 0;
@@ -103,7 +106,7 @@ class DatabaseTask : public DatabaseTaskHost {
   ServiceWorkerContextWrapper* service_worker_context();
   std::set<std::string>& ref_counted_unique_ids();
   ChromeBlobStorageContext* blob_storage_context();
-  storage::QuotaManagerProxy* quota_manager_proxy();
+  const scoped_refptr<storage::QuotaManagerProxy>& quota_manager_proxy();
 
   // DatabaseTaskHost implementation.
   void OnTaskFinished(DatabaseTask* finished_subtask) override;
@@ -162,7 +165,7 @@ class DatabaseTask : public DatabaseTaskHost {
 
   base::WeakPtr<DatabaseTaskHost> GetWeakPtr() override;
 
-  DatabaseTaskHost* host_;
+  raw_ptr<DatabaseTaskHost> host_;
 
   // Map the raw pointer to its unique_ptr, to make lookups easier.
   std::map<DatabaseTask*, std::unique_ptr<DatabaseTask>> active_subtasks_;
@@ -175,8 +178,6 @@ class DatabaseTask : public DatabaseTaskHost {
       cache_storage_cache_remote_;
 
   base::WeakPtrFactory<DatabaseTask> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(DatabaseTask);
 };
 
 }  // namespace background_fetch

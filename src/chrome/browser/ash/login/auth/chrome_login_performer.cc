@@ -7,7 +7,6 @@
 #include <memory>
 
 #include "base/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/ash/login/easy_unlock/easy_unlock_user_login_flow.h"
 #include "chrome/browser/ash/login/helper.h"
 #include "chrome/browser/ash/login/session/user_session_manager.h"
@@ -23,8 +22,9 @@
 
 namespace ash {
 
-ChromeLoginPerformer::ChromeLoginPerformer(Delegate* delegate)
-    : LoginPerformer(base::ThreadTaskRunnerHandle::Get(), delegate) {}
+ChromeLoginPerformer::ChromeLoginPerformer(Delegate* delegate,
+                                           MetricsRecorder* metrics_recorder)
+    : LoginPerformer(delegate, metrics_recorder) {}
 
 ChromeLoginPerformer::~ChromeLoginPerformer() {}
 

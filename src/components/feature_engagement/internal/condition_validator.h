@@ -11,8 +11,9 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
+#include "components/feature_engagement/public/configuration.h"
 #include "components/feature_engagement/public/feature_list.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 struct Feature;
@@ -73,6 +74,10 @@ class ConditionValidator {
     // Whether the current snooze timer has expired.
     bool snooze_expiration_ok;
 
+    // Whether the given feature is a priority notification, or there are no
+    // other priority notifications.
+    bool priority_notification_ok;
+
     // Whether the snooze option should be shown.
     // This value is excluded from the NoErrors() check.
     bool should_show_snooze;
@@ -81,6 +86,9 @@ class ConditionValidator {
     // are false.
     bool NoErrors() const;
   };
+
+  ConditionValidator(const ConditionValidator&) = delete;
+  ConditionValidator& operator=(const ConditionValidator&) = delete;
 
   virtual ~ConditionValidator() = default;
 
@@ -91,6 +99,7 @@ class ConditionValidator {
       const EventModel& event_model,
       const AvailabilityModel& availability_model,
       const DisplayLockController& display_lock_controller,
+      const Configuration* configuration,
       uint32_t current_day) const = 0;
 
   // Must be called to notify that the |feature| is currently showing.
@@ -102,11 +111,16 @@ class ConditionValidator {
   // Must be called to notify that the |feature| is no longer showing.
   virtual void NotifyDismissed(const base::Feature& feature) = 0;
 
+  // Called to notify that we have a priority notification to be shown next. All
+  // other IPHs will be blocked until then.
+  virtual void SetPriorityNotification(
+      const absl::optional<std::string>& feature) = 0;
+
+  // Called to get if there is a pending priority notification to be shown next.
+  virtual absl::optional<std::string> GetPendingPriorityNotification() = 0;
+
  protected:
   ConditionValidator() = default;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ConditionValidator);
 };
 
 std::ostream& operator<<(std::ostream& os,

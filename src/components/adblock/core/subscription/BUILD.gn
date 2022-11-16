@@ -1,0 +1,120 @@
+#
+# This file is part of eyeo Chromium SDK,
+# Copyright (C) 2006-present eyeo GmbH
+#
+# eyeo Chromium SDK is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 3 as
+# published by the Free Software Foundation.
+#
+# eyeo Chromium SDK is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with eyeo Chromium SDK.  If not, see <http://www.gnu.org/licenses/>.
+
+source_set("subscription") {
+  sources = [
+    "domain_splitter.cc",
+    "domain_splitter.h",
+    "installed_subscription.cc",
+    "installed_subscription.h",
+    "installed_subscription_impl.cc",
+    "installed_subscription_impl.h",
+    "ongoing_subscription_request.h",
+    "ongoing_subscription_request_impl.cc",
+    "ongoing_subscription_request_impl.h",
+    "preloaded_subscription_provider.h",
+    "preloaded_subscription_provider_impl.cc",
+    "preloaded_subscription_provider_impl.h",
+    "subscription.cc",
+    "subscription.h",
+    "subscription_collection.h",
+    "subscription_collection_impl.cc",
+    "subscription_collection_impl.h",
+    "subscription_config.cc",
+    "subscription_config.h",
+    "subscription_downloader.h",
+    "subscription_downloader_impl.cc",
+    "subscription_downloader_impl.h",
+    "subscription_persistent_metadata.h",
+    "subscription_persistent_metadata_impl.cc",
+    "subscription_persistent_metadata_impl.h",
+    "subscription_persistent_storage.h",
+    "subscription_persistent_storage_impl.cc",
+    "subscription_persistent_storage_impl.h",
+    "subscription_service.h",
+    "subscription_service_impl.cc",
+    "subscription_service_impl.h",
+    "subscription_updater.h",
+    "subscription_updater_impl.cc",
+    "subscription_updater_impl.h",
+    "subscription_validator.cc",
+    "subscription_validator.h",
+    "subscription_validator_impl.cc",
+    "subscription_validator_impl.h",
+    "url_keyword_extractor.cc",
+    "url_keyword_extractor.h",
+  ]
+
+  public_deps = [
+    "//base",
+    "//components/adblock/core/common",
+    "//components/resources:components_resources_grit",
+    "//url:url",
+  ]
+}
+
+source_set("test_support") {
+  testonly = true
+  sources = [
+    "test/mock_installed_subscription.cc",
+    "test/mock_installed_subscription.h",
+    "test/mock_subscription.cc",
+    "test/mock_subscription.h",
+    "test/mock_subscription_collection.cc",
+    "test/mock_subscription_collection.h",
+    "test/mock_subscription_downloader.cc",
+    "test/mock_subscription_downloader.h",
+    "test/mock_subscription_persistent_metadata.cc",
+    "test/mock_subscription_persistent_metadata.h",
+    "test/mock_subscription_service.cc",
+    "test/mock_subscription_service.h",
+    "test/mock_subscription_updater.cc",
+    "test/mock_subscription_updater.h",
+  ]
+
+  public_deps = [
+    ":subscription",
+    "//testing/gmock",
+    "//testing/gtest",
+  ]
+}
+
+source_set("unit_tests") {
+  testonly = true
+  sources = [
+    "test/installed_subscription_impl_test.cc",
+    "test/ongoing_subscription_request_impl_test.cc",
+    "test/preloaded_subscription_provider_impl_test.cc",
+    "test/subscription_collection_impl_test.cc",
+    "test/subscription_downloader_impl_test.cc",
+    "test/subscription_persistent_metadata_impl_test.cc",
+    "test/subscription_persistent_storage_impl_test.cc",
+    "test/subscription_service_impl_test.cc",
+    "test/subscription_updater_impl_test.cc",
+    "test/subscription_validator_impl_test.cc",
+    "test/url_keyword_extractor_test.cc",
+  ]
+
+  deps = [
+    ":test_support",
+    "//components/adblock/core",
+    "//components/prefs:test_support",
+    "//components/sync_preferences:test_support",
+    "//net:test_support",
+    "//services/network:test_support",
+    "//testing/gtest",
+  ]
+}

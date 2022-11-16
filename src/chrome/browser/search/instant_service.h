@@ -11,11 +11,12 @@
 #include <vector>
 
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/scoped_observation.h"
+#include "base/time/time.h"
 #include "build/build_config.h"
 #include "chrome/browser/themes/theme_service_observer.h"
 #include "components/history/core/browser/history_types.h"
@@ -30,7 +31,7 @@
 #include "ui/native_theme/native_theme_observer.h"
 #include "url/gurl.h"
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #error "Instant is only used on desktop";
 #endif
 
@@ -60,6 +61,10 @@ class InstantService : public KeyedService,
                        public ThemeServiceObserver {
  public:
   explicit InstantService(Profile* profile);
+
+  InstantService(const InstantService&) = delete;
+  InstantService& operator=(const InstantService&) = delete;
+
   ~InstantService() override;
 
   // Add, remove, and query RenderProcessHost IDs that are associated with
@@ -153,7 +158,7 @@ class InstantService : public KeyedService,
   // background is used.
   void SetNtpElementsNtpTheme();
 
-  Profile* const profile_;
+  const raw_ptr<Profile> profile_;
 
   // The process ids associated with Instant processes.
   std::set<int> process_ids_;
@@ -174,18 +179,16 @@ class InstantService : public KeyedService,
 
   PrefChangeRegistrar pref_change_registrar_;
 
-  PrefService* pref_service_;
+  raw_ptr<PrefService> pref_service_;
 
   base::ScopedObservation<ui::NativeTheme, ui::NativeThemeObserver>
       theme_observation_{this};
 
-  ui::NativeTheme* native_theme_;
+  raw_ptr<ui::NativeTheme> native_theme_;
 
   base::TimeTicks background_updated_timestamp_;
 
   base::WeakPtrFactory<InstantService> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(InstantService);
 };
 
 #endif  // CHROME_BROWSER_SEARCH_INSTANT_SERVICE_H_

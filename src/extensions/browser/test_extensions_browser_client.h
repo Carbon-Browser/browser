@@ -12,6 +12,7 @@
 
 #include "base/callback.h"
 #include "base/compiler_specific.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -44,6 +45,9 @@ class TestExtensionsBrowserClient : public ExtensionsBrowserClient {
   }
   void set_extension_system_factory(ExtensionSystemProvider* factory) {
     extension_system_factory_ = factory;
+  }
+  void set_pref_service(PrefService* pref_service) {
+    pref_service_ = pref_service;
   }
   void set_extension_cache(std::unique_ptr<ExtensionCache> extension_cache) {
     extension_cache_ = std::move(extension_cache);
@@ -79,6 +83,9 @@ class TestExtensionsBrowserClient : public ExtensionsBrowserClient {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   std::string GetUserIdHashFromContext(
       content::BrowserContext* context) override;
+#endif
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  bool IsFromMainProfile(content::BrowserContext* context) override;
 #endif
   bool IsGuestSession(content::BrowserContext* context) const override;
   bool IsExtensionIncognitoEnabled(
@@ -134,7 +141,7 @@ class TestExtensionsBrowserClient : public ExtensionsBrowserClient {
   void BroadcastEventToRenderers(
       events::HistogramValue histogram_value,
       const std::string& event_name,
-      std::unique_ptr<base::ListValue> args,
+      base::Value::List args,
       bool dispatch_to_off_the_record_profiles) override;
   ExtensionCache* GetExtensionCache() override;
   bool IsBackgroundUpdateAllowed() override;
@@ -153,17 +160,20 @@ class TestExtensionsBrowserClient : public ExtensionsBrowserClient {
 
  private:
   // Not owned.
-  content::BrowserContext* main_context_ = nullptr;
+  raw_ptr<content::BrowserContext> main_context_ = nullptr;
   // Not owned.
-  content::BrowserContext* incognito_context_ = nullptr;
+  raw_ptr<content::BrowserContext> incognito_context_ = nullptr;
   // Not owned.
-  content::BrowserContext* lock_screen_context_ = nullptr;
+  raw_ptr<content::BrowserContext> lock_screen_context_ = nullptr;
 
   // Not owned.
-  ProcessManagerDelegate* process_manager_delegate_ = nullptr;
+  raw_ptr<ProcessManagerDelegate> process_manager_delegate_ = nullptr;
 
   // Not owned.
-  ExtensionSystemProvider* extension_system_factory_ = nullptr;
+  raw_ptr<ExtensionSystemProvider> extension_system_factory_ = nullptr;
+
+  // Not owned.
+  raw_ptr<PrefService> pref_service_ = nullptr;
 
   std::unique_ptr<ExtensionCache> extension_cache_;
 

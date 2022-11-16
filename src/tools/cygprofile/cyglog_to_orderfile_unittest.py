@@ -18,13 +18,6 @@ import test_utils
 from test_utils import SimpleTestSymbol
 
 
-sys.path.insert(
-    0, os.path.join(os.path.dirname(__file__), os.pardir, os.pardir,
-                    'build', 'android'))
-
-import pylib.constants.host_paths as host_paths
-
-
 # Used for fake demangling on bots where c++filt does not exist.
 CTOR_PATTERN = re.compile(r'EEEC[12]Ev$')
 CTOR_REPLACEMENT = 'EEECEv'
@@ -38,17 +31,14 @@ SectionTestSymbol = collections.namedtuple(
 
 class TestObjectFileProcessor(cyglog_to_orderfile.ObjectFileProcessor):
   def __init__(self, symbol_to_sections):
-    super(TestObjectFileProcessor, self).__init__(None)
+    super().__init__(None)
     self._symbol_to_sections_map = symbol_to_sections
 
 
 class TestCyglogToOrderfile(unittest.TestCase):
   def setUp(self):
-    self._old_demangle = None
-    if not os.path.exists(host_paths.ToolPath('c++filt', 'arm')):
-      print('Using fake demangling due to missing c++filt binary')
-      self._old_demangle = symbol_extractor.DemangleSymbol
-      symbol_extractor.DemangleSymbol = _FakeDemangle
+    self._old_demangle = symbol_extractor.DemangleSymbol
+    symbol_extractor.DemangleSymbol = _FakeDemangle
 
   def tearDown(self):
     if self._old_demangle is not None:

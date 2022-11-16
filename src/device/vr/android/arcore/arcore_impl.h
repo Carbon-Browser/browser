@@ -6,7 +6,6 @@
 #define DEVICE_VR_ANDROID_ARCORE_ARCORE_IMPL_H_
 
 #include "base/component_export.h"
-#include "base/macros.h"
 #include "base/time/time.h"
 #include "base/types/id_type.h"
 #include "device/vr/android/arcore/arcore.h"
@@ -77,6 +76,10 @@ class CreatePlaneAttachedAnchorRequest {
 class ArCoreImpl : public ArCore {
  public:
   ArCoreImpl();
+
+  ArCoreImpl(const ArCoreImpl&) = delete;
+  ArCoreImpl& operator=(const ArCoreImpl&) = delete;
+
   ~ArCoreImpl() override;
 
   absl::optional<ArCore::InitializeResult> Initialize(
@@ -322,7 +325,6 @@ class ArCoreImpl : public ArCore {
 
   // Must be last.
   base::WeakPtrFactory<ArCoreImpl> weak_ptr_factory_{this};
-  DISALLOW_COPY_AND_ASSIGN(ArCoreImpl);
 };
 
 // TODO(https://crbug.com/843374): Once the arcore_device class is moved,

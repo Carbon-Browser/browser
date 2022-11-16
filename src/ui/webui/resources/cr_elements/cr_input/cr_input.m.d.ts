@@ -6,12 +6,12 @@ import {LegacyElementMixin} from 'chrome://resources/polymer/v3_0/polymer/lib/le
 
 interface CrInputElement extends LegacyElementMixin, HTMLElement {
   ariaDescription: string|undefined;
-  ariaLabel: string|null|undefined;
   autofocus: boolean;
   autoValidate: boolean|null|undefined;
-  disabled: boolean|null|undefined;
+  disabled: boolean;
   errorMessage: string|null|undefined;
-  invalid: boolean|null|undefined;
+  inputTabindex: number|null;
+  invalid: boolean;
   max: number|null|undefined;
   min: number|null|undefined;
   maxlength: number|null|undefined;
@@ -20,9 +20,8 @@ interface CrInputElement extends LegacyElementMixin, HTMLElement {
   inputmode: string|null|undefined;
   label: string|null|undefined;
   placeholder: string|null;
-  readonly: boolean|null|undefined;
-  required: boolean|null|undefined;
-  tabindex: number|null;
+  readonly: boolean|undefined;
+  required: boolean|undefined;
   type: string|null|undefined;
   value: string;
   hostAttributes: object|null;
@@ -31,6 +30,13 @@ interface CrInputElement extends LegacyElementMixin, HTMLElement {
   focusInput(): boolean;
   select(start?: number, end?: number): void;
   validate(): boolean;
+
+  $: {
+    error: HTMLElement,
+    input: HTMLInputElement,
+    label: HTMLElement,
+    underline: HTMLElement,
+  };
 }
 
 export {CrInputElement};

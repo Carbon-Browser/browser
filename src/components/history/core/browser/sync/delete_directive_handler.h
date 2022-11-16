@@ -5,13 +5,9 @@
 #ifndef COMPONENTS_HISTORY_CORE_BROWSER_SYNC_DELETE_DIRECTIVE_HANDLER_H_
 #define COMPONENTS_HISTORY_CORE_BROWSER_SYNC_DELETE_DIRECTIVE_HANDLER_H_
 
-#include <stdint.h>
-
 #include <memory>
-#include <set>
 
 #include "base/callback_forward.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/cancelable_task_tracker.h"
 #include "base/threading/thread_checker.h"
@@ -20,6 +16,10 @@
 #include "components/sync/model/syncable_service.h"
 
 class GURL;
+
+namespace base {
+class Time;
+}
 
 namespace sync_pb {
 class HistoryDeleteDirectiveSpecifics;
@@ -41,18 +41,20 @@ class DeleteDirectiveHandler : public syncer::SyncableService {
                                    base::CancelableTaskTracker* tracker)>;
 
   explicit DeleteDirectiveHandler(BackendTaskScheduler backend_task_scheduler);
+
+  DeleteDirectiveHandler(const DeleteDirectiveHandler&) = delete;
+  DeleteDirectiveHandler& operator=(const DeleteDirectiveHandler&) = delete;
+
   ~DeleteDirectiveHandler() override;
 
   // Notifies that HistoryBackend has been fully loaded and hence is ready to
   // handle sync events.
   void OnBackendLoaded();
 
-  // Create delete directives for the deletion of visits identified by
-  // `global_ids` (which may be empty), in the time range specified by
-  // `begin_time` and `end_time`.
-  bool CreateDeleteDirectives(const std::set<int64_t>& global_ids,
-                              base::Time begin_time,
-                              base::Time end_time);
+  // Create delete directives for the deletion of visits in the time range
+  // specified by `begin_time` and `end_time`.
+  bool CreateTimeRangeDeleteDirective(base::Time begin_time,
+                                      base::Time end_time);
 
   bool CreateUrlDeleteDirective(const GURL& url);
 
@@ -96,8 +98,6 @@ class DeleteDirectiveHandler : public syncer::SyncableService {
   std::unique_ptr<syncer::SyncChangeProcessor> sync_processor_;
   base::ThreadChecker thread_checker_;
   base::WeakPtrFactory<DeleteDirectiveHandler> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(DeleteDirectiveHandler);
 };
 
 }  // namespace history

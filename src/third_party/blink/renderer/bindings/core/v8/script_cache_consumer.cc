@@ -6,7 +6,7 @@
 
 #include <atomic>
 #include "base/bind.h"
-#include "base/sequenced_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/trace_event/common/trace_event_common.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_cache_consumer_client.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_code_cache.h"
@@ -86,9 +86,9 @@ void ScriptCacheConsumer::RunTaskOffThread() {
       "v8.deserializeOnBackground", TRACE_ID_LOCAL(this),
       TRACE_EVENT_FLAG_FLOW_IN | TRACE_EVENT_FLAG_FLOW_OUT, "data",
       [&](perfetto::TracedValue context) {
-        inspector_deserialize_script_event::Data(
-            std::move(context), script_resource_identifier_,
-            script_url_string_.IsolatedCopy());
+        inspector_deserialize_script_event::Data(std::move(context),
+                                                 script_resource_identifier_,
+                                                 script_url_string_);
       });
 
   // Run the cache consumption task.

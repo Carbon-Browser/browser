@@ -25,6 +25,7 @@
 
 #include "third_party/blink/renderer/core/editing/visible_selection.h"
 
+#include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/element.h"
 #include "third_party/blink/renderer/core/dom/range.h"
@@ -401,20 +402,20 @@ std::ostream& operator<<(std::ostream& ostream,
 
 #if DCHECK_IS_ON()
 
-void showTree(const blink::VisibleSelection& sel) {
+void ShowTree(const blink::VisibleSelection& sel) {
   sel.ShowTreeForThis();
 }
 
-void showTree(const blink::VisibleSelection* sel) {
+void ShowTree(const blink::VisibleSelection* sel) {
   if (sel)
     sel->ShowTreeForThis();
 }
 
-void showTree(const blink::VisibleSelectionInFlatTree& sel) {
+void ShowTree(const blink::VisibleSelectionInFlatTree& sel) {
   sel.ShowTreeForThis();
 }
 
-void showTree(const blink::VisibleSelectionInFlatTree* sel) {
+void ShowTree(const blink::VisibleSelectionInFlatTree* sel) {
   if (sel)
     sel->ShowTreeForThis();
 }

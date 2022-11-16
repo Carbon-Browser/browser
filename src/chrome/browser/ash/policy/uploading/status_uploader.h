@@ -8,8 +8,8 @@
 #include <memory>
 
 #include "base/bind.h"
+#include "base/callback_list.h"
 #include "base/cancelable_callback.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
@@ -24,6 +24,7 @@ class SequencedTaskRunner;
 namespace policy {
 
 class CloudPolicyClient;
+class ManagedSessionService;
 class StatusCollector;
 struct StatusCollectorParams;
 
@@ -38,6 +39,9 @@ class StatusUploader : public MediaCaptureDevicesDispatcher::Observer {
                  std::unique_ptr<StatusCollector> collector,
                  const scoped_refptr<base::SequencedTaskRunner>& task_runner,
                  base::TimeDelta default_upload_frequency);
+
+  StatusUploader(const StatusUploader&) = delete;
+  StatusUploader& operator=(const StatusUploader&) = delete;
 
   ~StatusUploader() override;
 
@@ -82,8 +86,16 @@ class StatusUploader : public MediaCaptureDevicesDispatcher::Observer {
   // if appropriate.
   void RefreshUploadFrequency();
 
+  // Updates the status collector being used.
+  void UpdateStatusCollector();
+
   // CloudPolicyClient used to issue requests to the server.
   CloudPolicyClient* client_;
+
+  // Used to initialize a |ManagedSessionService| instance and pass the
+  // underlying raw ptr to |DeviceStatusCollector| whenever constructed in
+  // |UpdateStatusCollector|.
+  std::unique_ptr<ManagedSessionService> managed_session_service_;
 
   // StatusCollector that provides status for uploading.
   std::unique_ptr<StatusCollector> collector_;
@@ -100,6 +112,9 @@ class StatusUploader : public MediaCaptureDevicesDispatcher::Observer {
   // The time the last upload was performed.
   base::Time last_upload_;
 
+  // Subscription for whether or not to user granular reporting.
+  base::CallbackListSubscription granular_reporting_subscription_;
+
   // Callback invoked via a delay to upload device status.
   base::CancelableOnceClosure upload_callback_;
 
@@ -113,8 +128,6 @@ class StatusUploader : public MediaCaptureDevicesDispatcher::Observer {
   // Note: This should remain the last member so it'll be destroyed and
   // invalidate the weak pointers before any other members are destroyed.
   base::WeakPtrFactory<StatusUploader> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(StatusUploader);
 };
 
 }  // namespace policy

@@ -12,7 +12,7 @@
 #include "base/compiler_specific.h"
 #include "base/component_export.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "net/base/host_port_pair.h"
@@ -61,6 +61,11 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) ProxyResolvingClientSocket
       const net::NetworkIsolationKey& network_isolation_key,
       bool use_tls,
       const net::ConnectJobFactory* connect_job_factory);
+
+  ProxyResolvingClientSocket(const ProxyResolvingClientSocket&) = delete;
+  ProxyResolvingClientSocket& operator=(const ProxyResolvingClientSocket&) =
+      delete;
+
   ~ProxyResolvingClientSocket() override;
 
   // net::StreamSocket implementation.
@@ -89,10 +94,6 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) ProxyResolvingClientSocket
   bool WasAlpnNegotiated() const override;
   net::NextProto GetNegotiatedProtocol() const override;
   bool GetSSLInfo(net::SSLInfo* ssl_info) override;
-  void GetConnectionAttempts(net::ConnectionAttempts* out) const override;
-  void ClearConnectionAttempts() override {}
-  void AddConnectionAttempts(const net::ConnectionAttempts& attempts) override {
-  }
   int64_t GetTotalReceivedBytes() const override;
   void ApplySocketTag(const net::SocketTag& tag) override;
 
@@ -128,10 +129,10 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) ProxyResolvingClientSocket
 
   int ReconsiderProxyAfterError(int error);
 
-  net::HttpNetworkSession* network_session_;
+  raw_ptr<net::HttpNetworkSession> network_session_;
 
-  const net::CommonConnectJobParams* common_connect_job_params_;
-  const net::ConnectJobFactory* connect_job_factory_;
+  raw_ptr<const net::CommonConnectJobParams> common_connect_job_params_;
+  raw_ptr<const net::ConnectJobFactory> connect_job_factory_;
   std::unique_ptr<net::ConnectJob> connect_job_;
   std::unique_ptr<net::StreamSocket> socket_;
 
@@ -149,8 +150,6 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) ProxyResolvingClientSocket
   State next_state_;
 
   base::WeakPtrFactory<ProxyResolvingClientSocket> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ProxyResolvingClientSocket);
 };
 
 }  // namespace network

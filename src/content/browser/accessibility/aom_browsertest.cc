@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "base/check.h"
+#include "base/command_line.h"
 #include "content/browser/accessibility/browser_accessibility.h"
 #include "content/browser/accessibility/browser_accessibility_manager.h"
 #include "content/browser/web_contents/web_contents_impl.h"
@@ -79,7 +80,7 @@ IN_PROC_BROWSER_TEST_F(AccessibilityObjectModelBrowserTest,
   GURL url(embedded_test_server()->GetURL(
       "/accessibility/aom/event-listener-on-virtual-node.html"));
   EXPECT_TRUE(NavigateToURL(shell(), url));
-  waiter.WaitForNotification();
+  ASSERT_TRUE(waiter.WaitForNotification());
 
   BrowserAccessibility* button = FindNode(ax::mojom::Role::kButton, "FocusMe");
   ASSERT_NE(nullptr, button);
@@ -90,7 +91,7 @@ IN_PROC_BROWSER_TEST_F(AccessibilityObjectModelBrowserTest,
   AccessibilityNotificationWaiter waiter2(
       shell()->web_contents(), ui::kAXModeComplete, ax::mojom::Event::kFocus);
   GetManager()->DoDefaultAction(*link);
-  waiter2.WaitForNotification();
+  ASSERT_TRUE(waiter2.WaitForNotification());
 
   BrowserAccessibility* focus = GetManager()->GetFocus();
   ASSERT_NE(nullptr, focus);

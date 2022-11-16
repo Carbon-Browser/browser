@@ -20,8 +20,10 @@ class ASH_EXPORT ShelfTooltipBubble : public ShelfBubble {
  public:
   ShelfTooltipBubble(views::View* anchor,
                      ShelfAlignment alignment,
-                     SkColor background_color,
                      const std::u16string& text);
+
+  ShelfTooltipBubble(const ShelfTooltipBubble&) = delete;
+  ShelfTooltipBubble& operator=(const ShelfTooltipBubble&) = delete;
 
  protected:
   // ShelfBubble:
@@ -31,8 +33,6 @@ class ASH_EXPORT ShelfTooltipBubble : public ShelfBubble {
  private:
   // BubbleDialogDelegateView overrides:
   gfx::Size CalculatePreferredSize() const override;
-
-  DISALLOW_COPY_AND_ASSIGN(ShelfTooltipBubble);
 };
 
 }  // namespace ash

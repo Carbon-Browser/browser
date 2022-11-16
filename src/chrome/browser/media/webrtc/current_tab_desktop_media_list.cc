@@ -5,10 +5,9 @@
 #include "chrome/browser/media/webrtc/current_tab_desktop_media_list.h"
 
 #include "base/bind.h"
-#include "base/bind_post_task.h"
 #include "base/hash/hash.h"
-#include "base/single_thread_task_runner.h"
-#include "base/task/post_task.h"
+#include "base/task/bind_post_task.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "build/build_config.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -24,14 +23,15 @@
 
 namespace {
 
-constexpr base::TimeDelta kUpdatePeriodMs =
-    base::TimeDelta::FromMilliseconds(1000);
+constexpr base::TimeDelta kUpdatePeriodMs = base::Milliseconds(1000);
 
 gfx::ImageSkia ScaleBitmap(const SkBitmap& bitmap, gfx::Size size) {
   const gfx::Rect scaled_rect = media::ComputeLetterboxRegion(
       gfx::Rect(0, 0, size.width(), size.height()),
       gfx::Size(bitmap.info().width(), bitmap.info().height()));
 
+  // TODO(crbug.com/1246835): Consider changing to ResizeMethod::BEST after
+  // evaluating the CPU impact.
   const gfx::ImageSkia resized = gfx::ImageSkiaOperations::CreateResizedImage(
       gfx::ImageSkia::CreateFromBitmap(bitmap, 1.f),
       skia::ImageOperations::ResizeMethod::RESIZE_GOOD, scaled_rect.size());
@@ -88,8 +88,8 @@ CurrentTabDesktopMediaList::CurrentTabDesktopMediaList(
       media_id_(content::DesktopMediaID::TYPE_WEB_CONTENTS,
                 content::DesktopMediaID::kNullId,
                 content::WebContentsMediaCaptureId(
-                    web_contents->GetMainFrame()->GetProcess()->GetID(),
-                    web_contents->GetMainFrame()->GetRoutingID())),
+                    web_contents->GetPrimaryMainFrame()->GetProcess()->GetID(),
+                    web_contents->GetPrimaryMainFrame()->GetRoutingID())),
       thumbnail_task_runner_(base::ThreadPool::CreateSequencedTaskRunner(
           {base::MayBlock(), base::TaskPriority::USER_VISIBLE})) {
   DCHECK(web_contents);

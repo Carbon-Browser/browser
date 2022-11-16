@@ -18,16 +18,16 @@
 #include "build/build_config.h"
 #include "chrome/browser/navigation_predictor/navigation_predictor_keyed_service.h"
 #include "chrome/browser/navigation_predictor/navigation_predictor_keyed_service_factory.h"
-#include "chrome/browser/net/prediction_options.h"
+#include "chrome/browser/prefetch/prefetch_prefs.h"
 #include "chrome/browser/prefetch/prefetch_proxy/prefetch_proxy_features.h"
 #include "chrome/browser/prefetch/prefetch_proxy/prefetch_proxy_service.h"
 #include "chrome/browser/prefetch/prefetch_proxy/prefetch_proxy_service_factory.h"
 #include "chrome/browser/prefetch/prefetch_proxy/prefetched_mainframe_response_container.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/chrome_render_view_host_test_harness.h"
-#include "components/data_reduction_proxy/core/browser/data_reduction_proxy_settings.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/browser_context.h"
+#include "content/public/browser/frame_accept_header.h"
 #include "content/public/browser/service_worker_context.h"
 #include "content/public/browser/storage_partition.h"
 #include "content/public/browser/web_contents.h"
@@ -51,6 +51,7 @@
 #include "services/network/test/test_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "url/gurl.h"
 #include "url/origin.h"
 
@@ -83,7 +84,8 @@ class TestPrefetchProxyTabHelper : public PrefetchProxyTabHelper {
     url_loader_factory_ = url_loader_factory;
   }
 
-  network::mojom::URLLoaderFactory* GetURLLoaderFactory() override {
+  network::mojom::URLLoaderFactory* GetURLLoaderFactory(
+      const GURL& url) override {
     return url_loader_factory_.get();
   }
 
@@ -136,18 +138,11 @@ class PrefetchProxyTabHelperTestBase : public ChromeRenderViewHostTestHarness {
     tab_helper_ = std::make_unique<TestPrefetchProxyTabHelper>(web_contents());
     tab_helper_->SetURLLoaderFactory(test_shared_loader_factory_);
     tab_helper_->SetServiceWorkerContextForTest(&service_worker_context_);
-
-    SetDataSaverEnabled(true);
   }
 
   void TearDown() override {
     tab_helper_.reset();
     ChromeRenderViewHostTestHarness::TearDown();
-  }
-
-  void SetDataSaverEnabled(bool enabled) {
-    data_reduction_proxy::DataReductionProxySettings::
-        SetDataSaverEnabledForTesting(profile()->GetPrefs(), enabled);
   }
 
   void MakeNavigationPrediction(content::WebContents* web_contents,
@@ -162,6 +157,18 @@ class PrefetchProxyTabHelperTestBase : public ChromeRenderViewHostTestHarness {
     task_environment()->RunUntilIdle();
   }
 
+  void MakeSpeculationCandidates(const GURL& doc_url,
+                                 const std::vector<GURL>& predicted_urls) {
+    std::vector<std::pair<GURL, PrefetchType>> prefetches;
+    for (const GURL& url : predicted_urls) {
+      prefetches.emplace_back(
+          url, PrefetchType(/*use_isolated_network_context=*/true,
+                            /*use_prefetch_proxy=*/true,
+                            /*can_prefetch_subresources=*/false));
+    }
+    tab_helper_->PrefetchSpeculationCandidates(prefetches, doc_url, nullptr);
+  }
+
   void TriggerRedirectHistogramRecording() {
     NiceMock<content::MockNavigationHandle> handle(web_contents());
     tab_helper_->DidStartNavigation(&handle);
@@ -170,10 +177,6 @@ class PrefetchProxyTabHelperTestBase : public ChromeRenderViewHostTestHarness {
   int RequestCount() { return test_url_loader_factory_.NumPending(); }
 
   PrefetchProxyTabHelper* tab_helper() const { return tab_helper_.get(); }
-
-  int64_t ordered_eligible_pages_bitmask() const {
-    return tab_helper_->srp_metrics().ordered_eligible_pages_bitmask_;
-  }
 
   size_t prefetch_eligible_count() const {
     return tab_helper_->srp_metrics().prefetch_eligible_count_;
@@ -303,14 +306,14 @@ class PrefetchProxyTabHelperTestBase : public ChromeRenderViewHostTestHarness {
     auto head = network::CreateURLResponseHead(http_status);
 
     head->response_time = base::Time::Now();
-    head->request_time = head->response_time -
-                         base::TimeDelta::FromMilliseconds(kTotalTimeDuration);
+    head->request_time =
+        head->response_time - base::Milliseconds(kTotalTimeDuration);
 
     head->load_timing.connect_timing.connect_end =
-        base::TimeTicks::Now() - base::TimeDelta::FromMinutes(2);
+        base::TimeTicks::Now() - base::Minutes(2);
     head->load_timing.connect_timing.connect_start =
         head->load_timing.connect_timing.connect_end -
-        base::TimeDelta::FromMilliseconds(kConnectTimeDuration);
+        base::Milliseconds(kConnectTimeDuration);
 
     head->mime_type = mime_type;
     for (const auto& header : headers) {
@@ -410,90 +413,13 @@ TEST_F(PrefetchProxyTabHelperIsolateDisabledTest, FeatureDisabled) {
   EXPECT_FALSE(HasAfterSRPMetrics());
 }
 
-class PrefetchProxyTabHelperDataSaverDisabledTest
-    : public PrefetchProxyTabHelperTestBase {
- public:
-  PrefetchProxyTabHelperDataSaverDisabledTest() {
-    scoped_feature_list_.InitAndEnableFeatureWithParameters(
-        features::kIsolatePrerenders,
-        {{"lite_mode_only", "true"},
-         {"ineligible_decoy_request_probability", "0"}});
-  }
-};
-
-TEST_F(PrefetchProxyTabHelperDataSaverDisabledTest,
-       DataSaverDisabled_Required) {
-  base::HistogramTester histogram_tester;
-
-  SetDataSaverEnabled(false);
-
-  NavigateSomewhere();
-  GURL doc_url("https://www.google.com/search?q=cats");
-  GURL prediction_url("https://www.cat-food.com/");
-  MakeNavigationPrediction(web_contents(), doc_url, {prediction_url});
-
-  EXPECT_EQ(RequestCount(), 0);
-  EXPECT_EQ(predicted_urls_count(), 0U);
-  EXPECT_EQ(prefetch_eligible_count(), 0U);
-  EXPECT_EQ(prefetch_attempted_count(), 0U);
-  EXPECT_EQ(prefetch_successful_count(), 0U);
-  EXPECT_EQ(prefetch_total_redirect_count(), 0U);
-  EXPECT_FALSE(navigation_to_prefetch_start().has_value());
-
-  histogram_tester.ExpectTotalCount("PrefetchProxy.Prefetch.Mainframe.RespCode",
-                                    0);
-  histogram_tester.ExpectTotalCount(
-      "PrefetchProxy.Prefetch.Mainframe.BodyLength", 0);
-  histogram_tester.ExpectTotalCount(
-      "PrefetchProxy.Prefetch.Mainframe.TotalTime", 0);
-  histogram_tester.ExpectTotalCount(
-      "PrefetchProxy.Prefetch.Mainframe.ConnectTime", 0);
-
-  Navigate(prediction_url);
-
-  histogram_tester.ExpectTotalCount(
-      "PrefetchProxy.Prefetch.Mainframe.TotalRedirects", 0);
-
-  EXPECT_FALSE(HasAfterSRPMetrics());
-}
-
-class PrefetchProxyTabHelperDataSaverDisabledNotRequiredTest
-    : public PrefetchProxyTabHelperTestBase {
- public:
-  PrefetchProxyTabHelperDataSaverDisabledNotRequiredTest() {
-    scoped_feature_list_.InitAndEnableFeatureWithParameters(
-        features::kIsolatePrerenders,
-        {{"lite_mode_only", "false"},
-         {"ineligible_decoy_request_probability", "0"}});
-  }
-};
-
-TEST_F(PrefetchProxyTabHelperDataSaverDisabledNotRequiredTest,
-       DataSaverDisabled_NotRequired) {
-  base::HistogramTester histogram_tester;
-
-  SetDataSaverEnabled(false);
-
-  NavigateSomewhere();
-  GURL doc_url("https://www.google.com/search?q=cats");
-  GURL prediction_url("https://www.cat-food.com/");
-  MakeNavigationPrediction(web_contents(), doc_url, {prediction_url});
-
-  EXPECT_EQ(RequestCount(), 1);
-  EXPECT_EQ(predicted_urls_count(), 1U);
-  EXPECT_EQ(prefetch_eligible_count(), 1U);
-  EXPECT_EQ(prefetch_attempted_count(), 1U);
-  EXPECT_EQ(prefetch_successful_count(), 0U);
-  EXPECT_EQ(prefetch_total_redirect_count(), 0U);
-  EXPECT_TRUE(navigation_to_prefetch_start().has_value());
-}
-
 class PrefetchProxyTabHelperTest : public PrefetchProxyTabHelperTestBase {
  public:
   PrefetchProxyTabHelperTest() {
     scoped_feature_list_.InitAndEnableFeatureWithParameters(
         features::kIsolatePrerenders,
-        {{"ineligible_decoy_request_probability", "0"}});
+        {{"use_speculation_rules", "false"},
+         {"ineligible_decoy_request_probability", "0"}});
   }
 };
 
@@ -633,12 +559,12 @@ TEST_F(PrefetchProxyTabHelperTest, DontFetchGoogleLinks) {
       "PrefetchProxy.Prefetch.Mainframe.TotalRedirects", 0);
 }
 
-TEST_F(PrefetchProxyTabHelperTest, DontFetchIPAddresses) {
+TEST_F(PrefetchProxyTabHelperTest, DontFetchPrivateIPAddresses) {
   base::HistogramTester histogram_tester;
 
   NavigateSomewhere();
   GURL doc_url("https://www.google.com/search?q=cats");
-  GURL prediction_url("https://123.234.123.234/meow");
+  GURL prediction_url("https://172.27.123.234/meow");
   MakeNavigationPrediction(web_contents(), doc_url, {prediction_url});
 
   EXPECT_EQ(RequestCount(), 0);
@@ -660,7 +586,77 @@ TEST_F(PrefetchProxyTabHelperTest, DontFetchIPAddresses) {
 
   NavigateAndVerifyPrefetchStatus(
       prediction_url,
-      PrefetchProxyPrefetchStatus::kPrefetchNotEligibleHostIsIPAddress);
+      PrefetchProxyPrefetchStatus::kPrefetchNotEligibleHostIsNonUnique);
+  EXPECT_EQ(after_srp_prefetch_eligible_count(), 0U);
+  EXPECT_EQ(absl::optional<size_t>(0), after_srp_clicked_link_srp_position());
+
+  histogram_tester.ExpectTotalCount(
+      "PrefetchProxy.Prefetch.Mainframe.TotalRedirects", 0);
+}
+
+TEST_F(PrefetchProxyTabHelperTest, DontFetchPrivateHostnames) {
+  base::HistogramTester histogram_tester;
+
+  NavigateSomewhere();
+  GURL doc_url("https://www.google.com/search?q=cats");
+  GURL prediction_url("https://bananas.contoso/meow");
+  MakeNavigationPrediction(web_contents(), doc_url, {prediction_url});
+
+  EXPECT_EQ(RequestCount(), 0);
+  EXPECT_EQ(predicted_urls_count(), 1U);
+  EXPECT_EQ(prefetch_eligible_count(), 0U);
+  EXPECT_EQ(prefetch_attempted_count(), 0U);
+  EXPECT_EQ(prefetch_successful_count(), 0U);
+  EXPECT_EQ(prefetch_total_redirect_count(), 0U);
+  EXPECT_FALSE(navigation_to_prefetch_start().has_value());
+
+  histogram_tester.ExpectTotalCount("PrefetchProxy.Prefetch.Mainframe.RespCode",
+                                    0);
+  histogram_tester.ExpectTotalCount(
+      "PrefetchProxy.Prefetch.Mainframe.BodyLength", 0);
+  histogram_tester.ExpectTotalCount(
+      "PrefetchProxy.Prefetch.Mainframe.TotalTime", 0);
+  histogram_tester.ExpectTotalCount(
+      "PrefetchProxy.Prefetch.Mainframe.ConnectTime", 0);
+
+  NavigateAndVerifyPrefetchStatus(
+      prediction_url,
+      PrefetchProxyPrefetchStatus::kPrefetchNotEligibleHostIsNonUnique);
+  EXPECT_EQ(after_srp_prefetch_eligible_count(), 0U);
+  EXPECT_EQ(absl::optional<size_t>(0), after_srp_clicked_link_srp_position());
+
+  histogram_tester.ExpectTotalCount(
+      "PrefetchProxy.Prefetch.Mainframe.TotalRedirects", 0);
+}
+
+TEST_F(PrefetchProxyTabHelperTest, DontFetchLocalhost) {
+  base::HistogramTester histogram_tester;
+
+  NavigateSomewhere();
+  GURL doc_url("https://www.google.com/search?q=cats");
+  GURL prediction_url("https://localhost/meow");
+  MakeNavigationPrediction(web_contents(), doc_url, {prediction_url});
+
+  EXPECT_EQ(RequestCount(), 0);
+  EXPECT_EQ(predicted_urls_count(), 1U);
+  EXPECT_EQ(prefetch_eligible_count(), 0U);
+  EXPECT_EQ(prefetch_attempted_count(), 0U);
+  EXPECT_EQ(prefetch_successful_count(), 0U);
+  EXPECT_EQ(prefetch_total_redirect_count(), 0U);
+  EXPECT_FALSE(navigation_to_prefetch_start().has_value());
+
+  histogram_tester.ExpectTotalCount("PrefetchProxy.Prefetch.Mainframe.RespCode",
+                                    0);
+  histogram_tester.ExpectTotalCount(
+      "PrefetchProxy.Prefetch.Mainframe.BodyLength", 0);
+  histogram_tester.ExpectTotalCount(
+      "PrefetchProxy.Prefetch.Mainframe.TotalTime", 0);
+  histogram_tester.ExpectTotalCount(
+      "PrefetchProxy.Prefetch.Mainframe.ConnectTime", 0);
+
+  NavigateAndVerifyPrefetchStatus(
+      prediction_url,
+      PrefetchProxyPrefetchStatus::kPrefetchNotEligibleHostIsNonUnique);
   EXPECT_EQ(after_srp_prefetch_eligible_count(), 0U);
   EXPECT_EQ(absl::optional<size_t>(0), after_srp_clicked_link_srp_position());
 
@@ -701,7 +697,7 @@ TEST_F(PrefetchProxyTabHelperTest, WrongWebContents) {
       "PrefetchProxy.Prefetch.Mainframe.TotalRedirects", 0);
 }
 
-TEST_F(PrefetchProxyTabHelperTest, HasPurposePrefetchHeader) {
+TEST_F(PrefetchProxyTabHelperTest, HasExplicitHeaders) {
   base::HistogramTester histogram_tester;
 
   NavigateSomewhere();
@@ -710,7 +706,15 @@ TEST_F(PrefetchProxyTabHelperTest, HasPurposePrefetchHeader) {
   MakeNavigationPrediction(web_contents(), doc_url, {prediction_url});
 
   VerifyCommonRequestState(prediction_url);
+
+  // Checks that headers added explicitly by |PrefetchProxyTabHelper| were
+  // included.
   EXPECT_EQ(RequestHeader("Purpose"), "prefetch");
+  EXPECT_EQ(RequestHeader("Sec-Purpose"), "prefetch;anonymous-client-ip");
+  EXPECT_EQ(
+      RequestHeader("Accept"),
+      content::FrameAcceptHeaderValue(/*allow_sxg_responses=*/true, profile()));
+  EXPECT_EQ(RequestHeader("Upgrade-Insecure-Requests"), "1");
 
   EXPECT_EQ(predicted_urls_count(), 1U);
   EXPECT_EQ(prefetch_eligible_count(), 1U);
@@ -759,6 +763,58 @@ TEST_F(PrefetchProxyTabHelperTest, NoCookies) {
       "PrefetchProxy.Prefetch.Mainframe.TotalRedirects", 0);
 }
 
+TEST_F(PrefetchProxyTabHelperTest, CookiesChangedAfterInitialCheck) {
+  base::HistogramTester histogram_tester;
+
+  NavigateSomewhere();
+  GURL doc_url("https://www.google.com/search?q=cats");
+  GURL prediction_url("https://www.cat-food.com/");
+  MakeNavigationPrediction(web_contents(), doc_url, {prediction_url});
+
+  network::ResourceRequest request = VerifyCommonRequestState(prediction_url);
+  MakeResponseAndWait(net::HTTP_OK, net::OK, kHTMLMimeType,
+                      {{"X-Testing", "Hello World"}}, kHTMLBody);
+
+  std::unique_ptr<PrefetchedMainframeResponseContainer> resp =
+      tab_helper()->TakePrefetchResponse(prediction_url);
+  ASSERT_TRUE(resp);
+  EXPECT_EQ(*resp->TakeBody(), kHTMLBody);
+
+  network::mojom::URLResponseHeadPtr head = resp->TakeHead();
+  EXPECT_TRUE(head->headers->HasHeaderValue("X-Testing", "Hello World"));
+
+  EXPECT_TRUE(resp->isolation_info().IsEqualForTesting(
+      request.trusted_params->isolation_info));
+  VerifyIsolationInfo(resp->isolation_info());
+
+  EXPECT_EQ(predicted_urls_count(), 1U);
+  EXPECT_EQ(prefetch_eligible_count(), 1U);
+  EXPECT_EQ(prefetch_attempted_count(), 1U);
+  EXPECT_EQ(prefetch_successful_count(), 1U);
+  EXPECT_EQ(prefetch_total_redirect_count(), 0U);
+  EXPECT_TRUE(navigation_to_prefetch_start().has_value());
+
+  histogram_tester.ExpectUniqueSample(
+      "PrefetchProxy.Prefetch.Mainframe.NetError", net::OK, 1);
+  histogram_tester.ExpectUniqueSample(
+      "PrefetchProxy.Prefetch.Mainframe.RespCode", net::HTTP_OK, 1);
+  histogram_tester.ExpectUniqueSample(
+      "PrefetchProxy.Prefetch.Mainframe.BodyLength", std::size(kHTMLBody), 1);
+  histogram_tester.ExpectUniqueSample(
+      "PrefetchProxy.Prefetch.Mainframe.TotalTime", kTotalTimeDuration, 1);
+  histogram_tester.ExpectUniqueSample(
+      "PrefetchProxy.Prefetch.Mainframe.ConnectTime", kConnectTimeDuration, 1);
+
+  ASSERT_TRUE(SetCookie(profile(), prediction_url, "testing"));
+  base::RunLoop().RunUntilIdle();
+
+  NavigateAndVerifyPrefetchStatus(
+      prediction_url,
+      PrefetchProxyPrefetchStatus::kPrefetchNotUsedCookiesChanged);
+  EXPECT_EQ(after_srp_prefetch_eligible_count(), 1U);
+  EXPECT_EQ(absl::optional<size_t>(0), after_srp_clicked_link_srp_position());
+}
+
 TEST_F(PrefetchProxyTabHelperTest, 2XXOnly) {
   base::HistogramTester histogram_tester;
 
@@ -783,7 +839,7 @@ TEST_F(PrefetchProxyTabHelperTest, 2XXOnly) {
   histogram_tester.ExpectUniqueSample(
       "PrefetchProxy.Prefetch.Mainframe.RespCode", net::HTTP_NOT_FOUND, 1);
   histogram_tester.ExpectUniqueSample(
-      "PrefetchProxy.Prefetch.Mainframe.BodyLength", base::size(kHTMLBody), 1);
+      "PrefetchProxy.Prefetch.Mainframe.BodyLength", std::size(kHTMLBody), 1);
   histogram_tester.ExpectUniqueSample(
       "PrefetchProxy.Prefetch.Mainframe.TotalTime", kTotalTimeDuration, 1);
   histogram_tester.ExpectUniqueSample(
@@ -838,7 +894,7 @@ TEST_F(PrefetchProxyTabHelperTest, NetErrorOKOnly) {
       "PrefetchProxy.Prefetch.Mainframe.TotalRedirects", 0, 1);
 }
 
-TEST_F(PrefetchProxyTabHelperTest, NonHTML) {
+TEST_F(PrefetchProxyTabHelperTest, PDF) {
   base::HistogramTester histogram_tester;
 
   NavigateSomewhere();
@@ -846,7 +902,57 @@ TEST_F(PrefetchProxyTabHelperTest, NonHTML) {
   GURL prediction_url("https://www.cat-food.com/");
   MakeNavigationPrediction(web_contents(), doc_url, {prediction_url});
 
-  std::string body = "console.log('Hello world');";
+  std::string body = "fake PDF";
+  VerifyCommonRequestState(prediction_url);
+  MakeResponseAndWait(net::HTTP_OK, net::OK, "application/pdf",
+                      /*headers=*/{}, body);
+
+  EXPECT_EQ(predicted_urls_count(), 1U);
+  EXPECT_EQ(prefetch_eligible_count(), 1U);
+  EXPECT_EQ(prefetch_attempted_count(), 1U);
+  EXPECT_EQ(prefetch_successful_count(), 1U);
+  EXPECT_EQ(prefetch_total_redirect_count(), 0U);
+  EXPECT_TRUE(navigation_to_prefetch_start().has_value());
+
+  histogram_tester.ExpectUniqueSample(
+      "PrefetchProxy.Prefetch.Mainframe.NetError", net::OK, 1);
+  histogram_tester.ExpectUniqueSample(
+      "PrefetchProxy.Prefetch.Mainframe.RespCode", net::HTTP_OK, 1);
+  histogram_tester.ExpectUniqueSample(
+      "PrefetchProxy.Prefetch.Mainframe.BodyLength", body.size(), 1);
+  histogram_tester.ExpectUniqueSample(
+      "PrefetchProxy.Prefetch.Mainframe.TotalTime", kTotalTimeDuration, 1);
+  histogram_tester.ExpectUniqueSample(
+      "PrefetchProxy.Prefetch.Mainframe.ConnectTime", kConnectTimeDuration, 1);
+
+  NavigateAndVerifyPrefetchStatus(
+      prediction_url, PrefetchProxyPrefetchStatus::kPrefetchSuccessful);
+  EXPECT_EQ(after_srp_prefetch_eligible_count(), 1U);
+  EXPECT_EQ(absl::optional<size_t>(0), after_srp_clicked_link_srp_position());
+
+  histogram_tester.ExpectUniqueSample(
+      "PrefetchProxy.Prefetch.Mainframe.TotalRedirects", 0, 1);
+}
+
+class PrefetchProxyTabHelperWithHTMLOnly
+    : public PrefetchProxyTabHelperTestBase {
+ public:
+  PrefetchProxyTabHelperWithHTMLOnly() {
+    scoped_feature_list_.InitAndEnableFeatureWithParameters(
+        features::kIsolatePrerenders,
+        {{"use_speculation_rules", "false"}, {"html_only", "true"}});
+  }
+};
+
+TEST_F(PrefetchProxyTabHelperWithHTMLOnly, NonHTMLUnsupported) {
+  base::HistogramTester histogram_tester;
+
+  NavigateSomewhere();
+  GURL doc_url("https://www.google.com/search?q=cats");
+  GURL prediction_url("https://www.cat-food.com/");
+  MakeNavigationPrediction(web_contents(), doc_url, {prediction_url});
+
+  std::string body = "console.log('Hello world')";
   VerifyCommonRequestState(prediction_url);
   MakeResponseAndWait(net::HTTP_OK, net::OK, "application/javascript",
                       /*headers=*/{}, body);
@@ -881,9 +987,8 @@ TEST_F(PrefetchProxyTabHelperTest, NonHTML) {
 TEST_F(PrefetchProxyTabHelperTest, UserSettingDisabled) {
   base::HistogramTester histogram_tester;
 
-  profile()->GetPrefs()->SetInteger(
-      prefs::kNetworkPredictionOptions,
-      chrome_browser_net::NETWORK_PREDICTION_NEVER);
+  prefetch::SetPreloadPagesState(profile()->GetPrefs(),
+                                 prefetch::PreloadPagesState::kNoPreloading);
 
   NavigateSomewhere();
   GURL doc_url("https://www.google.com/search?q=cats");
@@ -942,7 +1047,7 @@ TEST_F(PrefetchProxyTabHelperTest, IgnoreSameDocNavigations) {
   histogram_tester.ExpectUniqueSample(
       "PrefetchProxy.Prefetch.Mainframe.RespCode", net::HTTP_OK, 1);
   histogram_tester.ExpectUniqueSample(
-      "PrefetchProxy.Prefetch.Mainframe.BodyLength", base::size(kHTMLBody), 1);
+      "PrefetchProxy.Prefetch.Mainframe.BodyLength", std::size(kHTMLBody), 1);
   histogram_tester.ExpectUniqueSample(
       "PrefetchProxy.Prefetch.Mainframe.TotalTime", kTotalTimeDuration, 1);
   histogram_tester.ExpectUniqueSample(
@@ -993,7 +1098,7 @@ TEST_F(PrefetchProxyTabHelperTest, SuccessCase) {
   histogram_tester.ExpectUniqueSample(
       "PrefetchProxy.Prefetch.Mainframe.RespCode", net::HTTP_OK, 1);
   histogram_tester.ExpectUniqueSample(
-      "PrefetchProxy.Prefetch.Mainframe.BodyLength", base::size(kHTMLBody), 1);
+      "PrefetchProxy.Prefetch.Mainframe.BodyLength", std::size(kHTMLBody), 1);
   histogram_tester.ExpectUniqueSample(
       "PrefetchProxy.Prefetch.Mainframe.TotalTime", kTotalTimeDuration, 1);
   histogram_tester.ExpectUniqueSample(
@@ -1032,7 +1137,7 @@ TEST_F(PrefetchProxyTabHelperTest, AfterSRPLinkNotOnSRP) {
   histogram_tester.ExpectUniqueSample(
       "PrefetchProxy.Prefetch.Mainframe.RespCode", net::HTTP_OK, 1);
   histogram_tester.ExpectUniqueSample(
-      "PrefetchProxy.Prefetch.Mainframe.BodyLength", base::size(kHTMLBody), 1);
+      "PrefetchProxy.Prefetch.Mainframe.BodyLength", std::size(kHTMLBody), 1);
   histogram_tester.ExpectUniqueSample(
       "PrefetchProxy.Prefetch.Mainframe.TotalTime", kTotalTimeDuration, 1);
   histogram_tester.ExpectUniqueSample(
@@ -1046,27 +1151,6 @@ TEST_F(PrefetchProxyTabHelperTest, AfterSRPLinkNotOnSRP) {
 
   histogram_tester.ExpectUniqueSample(
       "PrefetchProxy.Prefetch.Mainframe.TotalRedirects", 0, 1);
-}
-
-TEST_F(PrefetchProxyTabHelperTest, OrderedBitMask) {
-  base::CommandLine::ForCurrentProcess()->AppendSwitch(
-      "isolated-prerender-unlimited-prefetches");
-
-  NavigateSomewhere();
-  MakeNavigationPrediction(web_contents(),
-                           GURL("https://www.google.com/search?q=cats"),
-                           {
-                               GURL("http://not-eligible-1.com"),
-                               GURL("http://not-eligible-2.com"),
-                               GURL("https://eligible-1.com"),
-                               GURL("https://eligible-2.com"),
-                               GURL("https://eligible-3.com"),
-                               GURL("http://not-eligible-3.com"),
-                           });
-
-  EXPECT_EQ(predicted_urls_count(), 6U);
-  EXPECT_EQ(prefetch_eligible_count(), 3U);
-  EXPECT_EQ(ordered_eligible_pages_bitmask(), 0b011100);
 }
 
 TEST_F(PrefetchProxyTabHelperTest, NumberOfPrefetches_UnlimitedByCmdLine) {
@@ -1113,7 +1197,7 @@ TEST_F(PrefetchProxyTabHelperTest, NumberOfPrefetches_UnlimitedByCmdLine) {
       "PrefetchProxy.Prefetch.Mainframe.RespCode", net::HTTP_OK, 2);
 
   histogram_tester.ExpectUniqueSample(
-      "PrefetchProxy.Prefetch.Mainframe.BodyLength", base::size(kHTMLBody), 2);
+      "PrefetchProxy.Prefetch.Mainframe.BodyLength", std::size(kHTMLBody), 2);
 
   histogram_tester.ExpectUniqueSample(
       "PrefetchProxy.Prefetch.Mainframe.TotalTime", kTotalTimeDuration, 2);
@@ -1178,7 +1262,7 @@ TEST_F(PrefetchProxyTabHelperTest, PrefetchingPausedWhenInvisible) {
   histogram_tester.ExpectUniqueSample(
       "PrefetchProxy.Prefetch.Mainframe.RespCode", net::HTTP_OK, 1);
   histogram_tester.ExpectUniqueSample(
-      "PrefetchProxy.Prefetch.Mainframe.BodyLength", base::size(kHTMLBody), 1);
+      "PrefetchProxy.Prefetch.Mainframe.BodyLength", std::size(kHTMLBody), 1);
   histogram_tester.ExpectUniqueSample(
       "PrefetchProxy.Prefetch.Mainframe.TotalTime", kTotalTimeDuration, 1);
   histogram_tester.ExpectUniqueSample(
@@ -1225,8 +1309,8 @@ TEST_F(PrefetchProxyTabHelperTest, ServiceWorkerRegistered) {
   GURL doc_url("https://www.google.com/search?q=cats");
   GURL prediction_url("https://www.cat-food.com/");
 
-  service_worker_context_.AddRegistrationToRegisteredOrigins(
-      url::Origin::Create(prediction_url));
+  service_worker_context_.AddRegistrationToRegisteredStorageKeys(
+      blink::StorageKey(url::Origin::Create(prediction_url)));
 
   MakeNavigationPrediction(web_contents(), doc_url, {prediction_url});
 
@@ -1251,8 +1335,8 @@ TEST_F(PrefetchProxyTabHelperTest, ServiceWorkerNotRegistered) {
   GURL prediction_url("https://www.cat-food.com/");
   GURL service_worker_registration("https://www.service-worker.com/");
 
-  service_worker_context_.AddRegistrationToRegisteredOrigins(
-      url::Origin::Create(service_worker_registration));
+  service_worker_context_.AddRegistrationToRegisteredStorageKeys(
+      blink::StorageKey(url::Origin::Create(service_worker_registration)));
 
   MakeNavigationPrediction(web_contents(), doc_url, {prediction_url});
 
@@ -1272,7 +1356,9 @@ class PrefetchProxyTabHelperWithDecoyTest
   PrefetchProxyTabHelperWithDecoyTest() {
     scoped_feature_list_.InitAndEnableFeatureWithParameters(
         features::kIsolatePrerenders,
-        {{"ineligible_decoy_request_probability", "1"}});
+        {{"use_speculation_rules", "false"},
+         {"ineligible_decoy_request_probability", "1"},
+         {"max_srp_prefetches", "2"}});
   }
 };
 
@@ -1325,8 +1411,8 @@ TEST_F(PrefetchProxyTabHelperWithDecoyTest, ServiceWorkerRegistered) {
   GURL doc_url("https://www.google.com/search?q=cats");
   GURL prediction_url("https://www.cat-food.com/");
 
-  service_worker_context_.AddRegistrationToRegisteredOrigins(
-      url::Origin::Create(prediction_url));
+  service_worker_context_.AddRegistrationToRegisteredStorageKeys(
+      blink::StorageKey(url::Origin::Create(prediction_url)));
 
   MakeNavigationPrediction(web_contents(), doc_url, {prediction_url});
 
@@ -1360,13 +1446,62 @@ TEST_F(PrefetchProxyTabHelperWithDecoyTest, ServiceWorkerRegistered) {
       "PrefetchProxy.Prefetch.Mainframe.TotalRedirects", 0);
 }
 
+TEST_F(PrefetchProxyTabHelperWithDecoyTest, DecoyFollowedByNonDecoy) {
+  base::HistogramTester histogram_tester;
+
+  NavigateSomewhere();
+  GURL doc_url("https://www.google.com/search?q=cats");
+  GURL prediction_url_with_cookies("https://www.cat-food.com/");
+  GURL prediction_url_no_cookies("https://www.no-cookies.com/");
+
+  ASSERT_TRUE(SetCookie(profile(), prediction_url_with_cookies, "testing"));
+
+  MakeNavigationPrediction(
+      web_contents(), doc_url,
+      {prediction_url_with_cookies, prediction_url_no_cookies});
+  base::RunLoop().RunUntilIdle();
+
+  // Expect a request to be put on the network, but not be used.
+  EXPECT_EQ(RequestCount(), 1);
+  VerifyCommonRequestState(prediction_url_with_cookies);
+  MakeResponseAndWait(net::HTTP_OK, net::OK, kHTMLMimeType, {}, kHTMLBody);
+  VerifyCommonRequestState(prediction_url_no_cookies);
+  MakeResponseAndWait(net::HTTP_OK, net::OK, kHTMLMimeType, {}, kHTMLBody);
+
+  EXPECT_EQ(predicted_urls_count(), 2U);
+  EXPECT_EQ(prefetch_eligible_count(), 1U);
+  EXPECT_EQ(prefetch_attempted_count(), 1U);
+  EXPECT_EQ(prefetch_successful_count(), 1U);
+  EXPECT_EQ(prefetch_total_redirect_count(), 0U);
+  EXPECT_TRUE(navigation_to_prefetch_start().has_value());
+
+  histogram_tester.ExpectTotalCount("PrefetchProxy.Prefetch.Mainframe.RespCode",
+                                    1);
+  histogram_tester.ExpectTotalCount(
+      "PrefetchProxy.Prefetch.Mainframe.BodyLength", 1);
+  histogram_tester.ExpectTotalCount(
+      "PrefetchProxy.Prefetch.Mainframe.TotalTime", 1);
+  histogram_tester.ExpectTotalCount(
+      "PrefetchProxy.Prefetch.Mainframe.ConnectTime", 1);
+
+  NavigateAndVerifyPrefetchStatus(
+      prediction_url_no_cookies,
+      PrefetchProxyPrefetchStatus::kPrefetchSuccessful);
+  EXPECT_EQ(after_srp_prefetch_eligible_count(), 1U);
+  EXPECT_EQ(absl::optional<size_t>(1), after_srp_clicked_link_srp_position());
+
+  histogram_tester.ExpectTotalCount(
+      "PrefetchProxy.Prefetch.Mainframe.TotalRedirects", 1);
+}
+
 class PrefetchProxyTabHelperBodyLimitTest
     : public PrefetchProxyTabHelperTestBase {
  public:
   PrefetchProxyTabHelperBodyLimitTest() {
     scoped_feature_list_.InitAndEnableFeatureWithParameters(
         features::kIsolatePrerenders,
-        {{"max_mainframe_body_length_kb", "0"},
+        {{"use_speculation_rules", "false"},
+         {"max_mainframe_body_length_kb", "0"},
          {"ineligible_decoy_request_probability", "0"}});
   }
 };
@@ -1417,7 +1552,8 @@ class PrefetchProxyTabHelperPredictionPositionsTest
   PrefetchProxyTabHelperPredictionPositionsTest() {
     scoped_feature_list_.InitAndEnableFeatureWithParameters(
         features::kIsolatePrerenders,
-        {{"prefetch_positions", "0"},
+        {{"use_speculation_rules", "false"},
+         {"prefetch_positions", "0"},
          {"ineligible_decoy_request_probability", "0"}});
   }
 };
@@ -1453,7 +1589,8 @@ class PrefetchProxyTabHelperNoPrefetchesTest
   PrefetchProxyTabHelperNoPrefetchesTest() {
     scoped_feature_list_.InitAndEnableFeatureWithParameters(
         features::kIsolatePrerenders,
-        {{"max_srp_prefetches", "0"},
+        {{"use_speculation_rules", "false"},
+         {"max_srp_prefetches", "0"},
          {"ineligible_decoy_request_probability", "0"}});
   }
 };
@@ -1499,7 +1636,8 @@ class PrefetchProxyTabHelperUnlimitedPrefetchesTest
   PrefetchProxyTabHelperUnlimitedPrefetchesTest() {
     scoped_feature_list_.InitAndEnableFeatureWithParameters(
         features::kIsolatePrerenders,
-        {{"max_srp_prefetches", "-1"},
+        {{"use_speculation_rules", "false"},
+         {"max_srp_prefetches", "-1"},
          {"ineligible_decoy_request_probability", "0"}});
   }
 };
@@ -1546,7 +1684,7 @@ TEST_F(PrefetchProxyTabHelperUnlimitedPrefetchesTest,
       "PrefetchProxy.Prefetch.Mainframe.RespCode", net::HTTP_OK, 2);
 
   histogram_tester.ExpectUniqueSample(
-      "PrefetchProxy.Prefetch.Mainframe.BodyLength", base::size(kHTMLBody), 2);
+      "PrefetchProxy.Prefetch.Mainframe.BodyLength", std::size(kHTMLBody), 2);
 
   histogram_tester.ExpectUniqueSample(
       "PrefetchProxy.Prefetch.Mainframe.TotalTime", kTotalTimeDuration, 2);
@@ -1568,7 +1706,8 @@ class PrefetchProxyTabHelperConcurrentPrefetchesTest
   PrefetchProxyTabHelperConcurrentPrefetchesTest() {
     scoped_feature_list_.InitAndEnableFeatureWithParameters(
         features::kIsolatePrerenders,
-        {{"max_concurrent_prefetches", "2"},
+        {{"use_speculation_rules", "false"},
+         {"max_concurrent_prefetches", "2"},
          {"max_srp_prefetches", "-1"},
          {"ineligible_decoy_request_probability", "0"}});
   }
@@ -1607,7 +1746,7 @@ TEST_F(PrefetchProxyTabHelperConcurrentPrefetchesTest, ConcurrentPrefetches) {
   histogram_tester.ExpectUniqueSample(
       "PrefetchProxy.Prefetch.Mainframe.RespCode", net::HTTP_OK, 2);
   histogram_tester.ExpectUniqueSample(
-      "PrefetchProxy.Prefetch.Mainframe.BodyLength", base::size(kHTMLBody), 2);
+      "PrefetchProxy.Prefetch.Mainframe.BodyLength", std::size(kHTMLBody), 2);
   histogram_tester.ExpectUniqueSample(
       "PrefetchProxy.Prefetch.Mainframe.TotalTime", kTotalTimeDuration, 2);
   histogram_tester.ExpectUniqueSample(
@@ -1628,7 +1767,8 @@ class PrefetchProxyTabHelperLimitedPrefetchesTest
   PrefetchProxyTabHelperLimitedPrefetchesTest() {
     scoped_feature_list_.InitAndEnableFeatureWithParameters(
         features::kIsolatePrerenders,
-        {{"max_srp_prefetches", "2"},
+        {{"use_speculation_rules", "false"},
+         {"max_srp_prefetches", "2"},
          {"ineligible_decoy_request_probability", "0"}});
   }
 };
@@ -1672,7 +1812,7 @@ TEST_F(PrefetchProxyTabHelperLimitedPrefetchesTest, LimitedNumberOfPrefetches) {
       "PrefetchProxy.Prefetch.Mainframe.RespCode", net::HTTP_OK, 1);
 
   histogram_tester.ExpectUniqueSample(
-      "PrefetchProxy.Prefetch.Mainframe.BodyLength", base::size(kHTMLBody), 1);
+      "PrefetchProxy.Prefetch.Mainframe.BodyLength", std::size(kHTMLBody), 1);
 
   histogram_tester.ExpectUniqueSample(
       "PrefetchProxy.Prefetch.Mainframe.TotalTime", kTotalTimeDuration, 1);
@@ -1732,14 +1872,13 @@ class PrefetchProxyTabHelperRedirectTestBase
 
     final_head->response_time = base::Time::Now();
     final_head->request_time =
-        final_head->response_time -
-        base::TimeDelta::FromMilliseconds(kTotalTimeDuration);
+        final_head->response_time - base::Milliseconds(kTotalTimeDuration);
 
     final_head->load_timing.connect_timing.connect_end =
-        base::TimeTicks::Now() - base::TimeDelta::FromMinutes(2);
+        base::TimeTicks::Now() - base::Minutes(2);
     final_head->load_timing.connect_timing.connect_start =
         final_head->load_timing.connect_timing.connect_end -
-        base::TimeDelta::FromMilliseconds(kConnectTimeDuration);
+        base::Milliseconds(kConnectTimeDuration);
 
     final_head->mime_type = kHTMLMimeType;
 
@@ -1760,9 +1899,8 @@ class PrefetchProxyTabHelperRedirectTestBase
     ClearResponses();
   }
 
-  void RunNoRedirectTest(const GURL& redirect_url) {
+  void RunNoRedirectTest(const GURL& prediction_url, const GURL& redirect_url) {
     GURL doc_url("https://www.google.com/search?q=cats");
-    GURL prediction_url("https://www.cat-food.com/");
 
     MakeNavigationPrediction(web_contents(), doc_url, {prediction_url});
 
@@ -1779,7 +1917,8 @@ class PrefetchProxyTabHelperRedirectWithDecoyTest
   PrefetchProxyTabHelperRedirectWithDecoyTest() {
     scoped_feature_list_.InitAndEnableFeatureWithParameters(
         features::kIsolatePrerenders,
-        {{"ineligible_decoy_request_probability", "1"},
+        {{"use_speculation_rules", "false"},
+         {"ineligible_decoy_request_probability", "1"},
          {"max_srp_prefetches", "2"}});
   }
 };
@@ -1792,13 +1931,16 @@ TEST_F(PrefetchProxyTabHelperRedirectWithDecoyTest, ServiceWorkerRegistered) {
   GURL prediction_url("https://www.cat-food.com/");
   GURL redirect_url("https://www.kitty-krunch.com/");
 
-  service_worker_context_.AddRegistrationToRegisteredOrigins(
-      url::Origin::Create(prediction_url));
+  service_worker_context_.AddRegistrationToRegisteredStorageKeys(
+      blink::StorageKey(url::Origin::Create(prediction_url)));
 
   MakeNavigationPrediction(web_contents(), doc_url, {prediction_url});
 
   WalkRedirectChainUntilFinalRequest({prediction_url, redirect_url});
-  MakeFinalResponse(redirect_url, net::HTTP_OK, {}, kHTMLBody);
+
+  // Redirects are currently completely disabled so there shouldn't be any
+  // pending requests.
+  EXPECT_EQ(RequestCount(), 0);
 
   EXPECT_EQ(predicted_urls_count(), 1U);
   EXPECT_EQ(prefetch_eligible_count(), 0U);
@@ -1817,7 +1959,8 @@ TEST_F(PrefetchProxyTabHelperRedirectWithDecoyTest, ServiceWorkerRegistered) {
       "PrefetchProxy.Prefetch.Mainframe.ConnectTime", 0);
 
   NavigateAndVerifyPrefetchStatus(
-      prediction_url, PrefetchProxyPrefetchStatus::kPrefetchIsPrivacyDecoy);
+      prediction_url,
+      PrefetchProxyPrefetchStatus::kPrefetchFailedRedirectsDisabled);
   EXPECT_EQ(after_srp_prefetch_eligible_count(), 0U);
   EXPECT_EQ(absl::optional<size_t>(0), after_srp_clicked_link_srp_position());
 
@@ -1833,12 +1976,12 @@ TEST_F(PrefetchProxyTabHelperRedirectWithDecoyTest,
   GURL doc_url("https://www.google.com/search?q=cats");
   GURL prediction_url("https://www.cat-food.com/");
 
-  service_worker_context_.AddRegistrationToRegisteredOrigins(
-      url::Origin::Create(prediction_url));
+  service_worker_context_.AddRegistrationToRegisteredStorageKeys(
+      blink::StorageKey(url::Origin::Create(prediction_url)));
 
   MakeNavigationPrediction(web_contents(), doc_url, {prediction_url});
 
-  RunNoRedirectTest(GURL("https://www.google.com/"));
+  RunNoRedirectTest(prediction_url, GURL("https://www.google.com/"));
 
   // The navigation prediction in |RunNoRedirectTest()| should be de-duped.
   EXPECT_EQ(predicted_urls_count(), 1U);
@@ -1858,7 +2001,8 @@ TEST_F(PrefetchProxyTabHelperRedirectWithDecoyTest,
       "PrefetchProxy.Prefetch.Mainframe.ConnectTime", 0);
 
   NavigateAndVerifyPrefetchStatus(
-      prediction_url, PrefetchProxyPrefetchStatus::kPrefetchIsPrivacyDecoy);
+      prediction_url,
+      PrefetchProxyPrefetchStatus::kPrefetchFailedRedirectsDisabled);
   EXPECT_EQ(after_srp_prefetch_eligible_count(), 0U);
   EXPECT_EQ(absl::optional<size_t>(0), after_srp_clicked_link_srp_position());
 
@@ -1872,27 +2016,29 @@ class PrefetchProxyTabHelperRedirectTest
   PrefetchProxyTabHelperRedirectTest() {
     scoped_feature_list_.InitAndEnableFeatureWithParameters(
         features::kIsolatePrerenders,
-        {{"ineligible_decoy_request_probability", "0"}});
+        {{"use_speculation_rules", "false"},
+         {"ineligible_decoy_request_probability", "0"}});
   }
 };
 
 TEST_F(PrefetchProxyTabHelperRedirectTest, NoRedirect_Cookies) {
   NavigateSomewhere();
 
+  GURL prediction_url("https://www.cat-food.com/");
   GURL site_with_cookies("https://cookies.com");
   ASSERT_TRUE(SetCookie(profile(), site_with_cookies, "testing"));
-  RunNoRedirectTest(site_with_cookies);
+  RunNoRedirectTest(prediction_url, site_with_cookies);
 
   EXPECT_EQ(predicted_urls_count(), 1U);
   EXPECT_EQ(prefetch_eligible_count(), 1U);
   EXPECT_EQ(prefetch_attempted_count(), 1U);
   EXPECT_EQ(prefetch_successful_count(), 0U);
-  EXPECT_EQ(prefetch_total_redirect_count(), 1U);
+  EXPECT_EQ(prefetch_total_redirect_count(), 0U);
   EXPECT_TRUE(navigation_to_prefetch_start().has_value());
 
   NavigateAndVerifyPrefetchStatus(
-      site_with_cookies,
-      PrefetchProxyPrefetchStatus::kPrefetchNotEligibleUserHasCookies);
+      prediction_url,
+      PrefetchProxyPrefetchStatus::kPrefetchFailedRedirectsDisabled);
   EXPECT_EQ(after_srp_prefetch_eligible_count(), 1U);
   EXPECT_EQ(absl::optional<size_t>(0), after_srp_clicked_link_srp_position());
 }
@@ -1900,55 +2046,21 @@ TEST_F(PrefetchProxyTabHelperRedirectTest, NoRedirect_Cookies) {
 TEST_F(PrefetchProxyTabHelperRedirectTest, NoRedirect_Insecure) {
   NavigateSomewhere();
 
+  GURL prediction_url("https://www.cat-food.com/");
   GURL url("http://insecure.com");
 
-  RunNoRedirectTest(url);
+  RunNoRedirectTest(prediction_url, url);
 
   EXPECT_EQ(predicted_urls_count(), 1U);
   EXPECT_EQ(prefetch_eligible_count(), 1U);
   EXPECT_EQ(prefetch_attempted_count(), 1U);
   EXPECT_EQ(prefetch_successful_count(), 0U);
-  EXPECT_EQ(prefetch_total_redirect_count(), 1U);
+  EXPECT_EQ(prefetch_total_redirect_count(), 0U);
   EXPECT_TRUE(navigation_to_prefetch_start().has_value());
 
   NavigateAndVerifyPrefetchStatus(
-      url, PrefetchProxyPrefetchStatus::kPrefetchNotEligibleSchemeIsNotHttps);
-  EXPECT_EQ(after_srp_prefetch_eligible_count(), 1U);
-  EXPECT_EQ(absl::optional<size_t>(0), after_srp_clicked_link_srp_position());
-}
-
-TEST_F(PrefetchProxyTabHelperRedirectTest, NoRedirect_Insecure_Continued) {
-  NavigateSomewhere();
-
-  GURL url("http://insecure.com");
-
-  RunNoRedirectTest(url);
-
-  EXPECT_EQ(predicted_urls_count(), 1U);
-  EXPECT_EQ(prefetch_eligible_count(), 1U);
-  EXPECT_EQ(prefetch_attempted_count(), 1U);
-  EXPECT_EQ(prefetch_successful_count(), 0U);
-  EXPECT_EQ(prefetch_total_redirect_count(), 1U);
-  EXPECT_TRUE(navigation_to_prefetch_start().has_value());
-
-  GURL final_url("http://final.com/");
-
-  NiceMock<content::MockNavigationHandle> handle(web_contents());
-  handle.set_url(url);
-  tab_helper()->DidStartNavigation(&handle);
-  handle.set_has_committed(true);
-  handle.set_redirect_chain({
-      url,
-      final_url,
-  });
-  handle.set_url(final_url);
-  tab_helper()->DidFinishNavigation(&handle);
-
-  ASSERT_TRUE(tab_helper()->after_srp_metrics().has_value());
-  ASSERT_TRUE(tab_helper()->after_srp_metrics()->prefetch_status_.has_value());
-  EXPECT_EQ(PrefetchProxyPrefetchStatus::kPrefetchNotEligibleSchemeIsNotHttps,
-            tab_helper()->after_srp_metrics()->prefetch_status_.value());
-
+      prediction_url,
+      PrefetchProxyPrefetchStatus::kPrefetchFailedRedirectsDisabled);
   EXPECT_EQ(after_srp_prefetch_eligible_count(), 1U);
   EXPECT_EQ(absl::optional<size_t>(0), after_srp_clicked_link_srp_position());
 }
@@ -1956,19 +2068,21 @@ TEST_F(PrefetchProxyTabHelperRedirectTest, NoRedirect_Insecure_Continued) {
 TEST_F(PrefetchProxyTabHelperRedirectTest, NoRedirect_Google) {
   NavigateSomewhere();
 
+  GURL prediction_url("https://www.cat-food.com/");
   GURL url("https://www.google.com");
 
-  RunNoRedirectTest(url);
+  RunNoRedirectTest(prediction_url, url);
 
   EXPECT_EQ(predicted_urls_count(), 1U);
   EXPECT_EQ(prefetch_eligible_count(), 1U);
   EXPECT_EQ(prefetch_attempted_count(), 1U);
   EXPECT_EQ(prefetch_successful_count(), 0U);
-  EXPECT_EQ(prefetch_total_redirect_count(), 1U);
+  EXPECT_EQ(prefetch_total_redirect_count(), 0U);
   EXPECT_TRUE(navigation_to_prefetch_start().has_value());
 
   NavigateAndVerifyPrefetchStatus(
-      url, PrefetchProxyPrefetchStatus::kPrefetchNotEligibleGoogleDomain);
+      prediction_url,
+      PrefetchProxyPrefetchStatus::kPrefetchFailedRedirectsDisabled);
   EXPECT_EQ(after_srp_prefetch_eligible_count(), 1U);
   EXPECT_EQ(absl::optional<size_t>(0), after_srp_clicked_link_srp_position());
 }
@@ -1976,23 +2090,24 @@ TEST_F(PrefetchProxyTabHelperRedirectTest, NoRedirect_Google) {
 TEST_F(PrefetchProxyTabHelperRedirectTest, NoRedirect_ServiceWorker) {
   NavigateSomewhere();
 
+  GURL prediction_url("https://www.cat-food.com/");
   GURL site_with_worker("https://service-worker.com");
 
-  service_worker_context_.AddRegistrationToRegisteredOrigins(
-      url::Origin::Create(site_with_worker));
+  service_worker_context_.AddRegistrationToRegisteredStorageKeys(
+      blink::StorageKey(url::Origin::Create(site_with_worker)));
 
-  RunNoRedirectTest(site_with_worker);
+  RunNoRedirectTest(prediction_url, site_with_worker);
 
   EXPECT_EQ(predicted_urls_count(), 1U);
   EXPECT_EQ(prefetch_eligible_count(), 1U);
   EXPECT_EQ(prefetch_attempted_count(), 1U);
   EXPECT_EQ(prefetch_successful_count(), 0U);
-  EXPECT_EQ(prefetch_total_redirect_count(), 1U);
+  EXPECT_EQ(prefetch_total_redirect_count(), 0U);
   EXPECT_TRUE(navigation_to_prefetch_start().has_value());
 
   NavigateAndVerifyPrefetchStatus(
-      site_with_worker,
-      PrefetchProxyPrefetchStatus::kPrefetchNotEligibleUserHasServiceWorker);
+      prediction_url,
+      PrefetchProxyPrefetchStatus::kPrefetchFailedRedirectsDisabled);
   EXPECT_EQ(after_srp_prefetch_eligible_count(), 1U);
   EXPECT_EQ(absl::optional<size_t>(0), after_srp_clicked_link_srp_position());
 }
@@ -2005,13 +2120,14 @@ class PrefetchProxyTabHelperRedirectUnlimitedPrefetchesTest
     // way.
     scoped_feature_list_.InitAndEnableFeatureWithParameters(
         features::kIsolatePrerenders,
-        {{"max_srp_prefetches", "-1"},
+        {{"use_speculation_rules", "false"},
+         {"max_srp_prefetches", "-1"},
          {"ineligible_decoy_request_probability", "0"}});
   }
 };
 
 TEST_F(PrefetchProxyTabHelperRedirectUnlimitedPrefetchesTest,
-       SuccessfulRedirect) {
+       RedirectsDisabled) {
   base::HistogramTester histogram_tester;
   NavigateSomewhere();
   GURL doc_url("https://www.google.com/search?q=cats");
@@ -2022,40 +2138,244 @@ TEST_F(PrefetchProxyTabHelperRedirectUnlimitedPrefetchesTest,
   VerifyCommonRequestState(prediction_url);
 
   WalkRedirectChainUntilFinalRequest({prediction_url, redirect_url});
-  MakeFinalResponse(redirect_url, net::HTTP_OK, {{"X-Testing", "Hello World"}},
-                    kHTMLBody);
-
-  std::unique_ptr<PrefetchedMainframeResponseContainer> resp =
-      tab_helper()->TakePrefetchResponse(redirect_url);
-  ASSERT_TRUE(resp);
-  EXPECT_EQ(*resp->TakeBody(), kHTMLBody);
-
-  network::mojom::URLResponseHeadPtr head = resp->TakeHead();
-  EXPECT_TRUE(head->headers->HasHeaderValue("X-Testing", "Hello World"));
 
   EXPECT_EQ(predicted_urls_count(), 1U);
-  EXPECT_EQ(prefetch_eligible_count(), 2U);
-  EXPECT_EQ(prefetch_attempted_count(), 2U);
-  EXPECT_EQ(prefetch_successful_count(), 1U);
-  EXPECT_EQ(prefetch_total_redirect_count(), 1U);
+  EXPECT_EQ(prefetch_eligible_count(), 1U);
+  EXPECT_EQ(prefetch_attempted_count(), 1U);
+  EXPECT_EQ(prefetch_successful_count(), 0U);
+  EXPECT_EQ(prefetch_total_redirect_count(), 0U);
   EXPECT_TRUE(navigation_to_prefetch_start().has_value());
 
-  histogram_tester.ExpectUniqueSample(
-      "PrefetchProxy.Prefetch.Mainframe.NetError", net::OK, 1);
-  histogram_tester.ExpectUniqueSample(
-      "PrefetchProxy.Prefetch.Mainframe.RespCode", net::HTTP_OK, 1);
-  histogram_tester.ExpectUniqueSample(
-      "PrefetchProxy.Prefetch.Mainframe.BodyLength", base::size(kHTMLBody), 1);
-  histogram_tester.ExpectUniqueSample(
-      "PrefetchProxy.Prefetch.Mainframe.TotalTime", kTotalTimeDuration, 1);
-  histogram_tester.ExpectUniqueSample(
-      "PrefetchProxy.Prefetch.Mainframe.ConnectTime", kConnectTimeDuration, 1);
+  histogram_tester.ExpectTotalCount("PrefetchProxy.Prefetch.Mainframe.NetError",
+                                    0);
+  histogram_tester.ExpectTotalCount("PrefetchProxy.Prefetch.Mainframe.RespCode",
+                                    0);
+  histogram_tester.ExpectTotalCount(
+      "PrefetchProxy.Prefetch.Mainframe.BodyLength", 0);
+  histogram_tester.ExpectTotalCount(
+      "PrefetchProxy.Prefetch.Mainframe.TotalTime", 0);
+  histogram_tester.ExpectTotalCount(
+      "PrefetchProxy.Prefetch.Mainframe.ConnectTime", 0);
 
   NavigateAndVerifyPrefetchStatus(
-      redirect_url, PrefetchProxyPrefetchStatus::kPrefetchSuccessful);
-  EXPECT_EQ(after_srp_prefetch_eligible_count(), 2U);
+      prediction_url,
+      PrefetchProxyPrefetchStatus::kPrefetchFailedRedirectsDisabled);
+  EXPECT_EQ(after_srp_prefetch_eligible_count(), 1U);
   EXPECT_EQ(absl::optional<size_t>(0), after_srp_clicked_link_srp_position());
 
   histogram_tester.ExpectUniqueSample(
-      "PrefetchProxy.Prefetch.Mainframe.TotalRedirects", 1, 1);
+      "PrefetchProxy.Prefetch.Mainframe.TotalRedirects", 0, 1);
+}
+
+class PrefetchProxyTabHelperSpeculationRulesTest
+    : public PrefetchProxyTabHelperTestBase {
+ public:
+  PrefetchProxyTabHelperSpeculationRulesTest() {
+    scoped_feature_list_.InitAndEnableFeatureWithParameters(
+        features::kIsolatePrerenders,
+        {{"use_speculation_rules", "true"},
+         {"allow_all_domains_for_extended_preloading", "true"}});
+  }
+};
+
+TEST_F(PrefetchProxyTabHelperSpeculationRulesTest, GoogleSpecRule) {
+  base::HistogramTester histogram_tester;
+
+  prefetch::SetPreloadPagesState(
+      profile()->GetPrefs(), prefetch::PreloadPagesState::kStandardPreloading);
+
+  NavigateSomewhere();
+  GURL doc_url("https://www.google.com/foo?q=cats");
+  GURL prediction_url("https://www.cat-food.com/");
+  MakeSpeculationCandidates(doc_url, {prediction_url});
+
+  network::ResourceRequest request = VerifyCommonRequestState(prediction_url);
+  MakeResponseAndWait(net::HTTP_OK, net::OK, kHTMLMimeType, {}, kHTMLBody);
+
+  EXPECT_EQ(RequestCount(), 0);
+  EXPECT_EQ(predicted_urls_count(), 1U);
+  EXPECT_EQ(prefetch_eligible_count(), 1U);
+  EXPECT_EQ(prefetch_attempted_count(), 1U);
+  EXPECT_EQ(prefetch_successful_count(), 1U);
+  EXPECT_EQ(prefetch_total_redirect_count(), 0U);
+  EXPECT_TRUE(navigation_to_prefetch_start().has_value());
+
+  histogram_tester.ExpectTotalCount("PrefetchProxy.Prefetch.Mainframe.RespCode",
+                                    1);
+  histogram_tester.ExpectTotalCount(
+      "PrefetchProxy.Prefetch.Mainframe.BodyLength", 1);
+  histogram_tester.ExpectTotalCount(
+      "PrefetchProxy.Prefetch.Mainframe.TotalTime", 1);
+  histogram_tester.ExpectTotalCount(
+      "PrefetchProxy.Prefetch.Mainframe.ConnectTime", 1);
+
+  Navigate(prediction_url);
+
+  histogram_tester.ExpectTotalCount(
+      "PrefetchProxy.Prefetch.Mainframe.TotalRedirects", 1);
+
+  EXPECT_TRUE(HasAfterSRPMetrics());
+}
+
+TEST_F(PrefetchProxyTabHelperSpeculationRulesTest, YoutubeSpecRule) {
+  base::HistogramTester histogram_tester;
+
+  prefetch::SetPreloadPagesState(
+      profile()->GetPrefs(), prefetch::PreloadPagesState::kStandardPreloading);
+
+  NavigateSomewhere();
+  GURL doc_url("https://www.youtube.com/foo?q=cats");
+  GURL prediction_url("https://www.cat-food.com/");
+  MakeSpeculationCandidates(doc_url, {prediction_url});
+
+  network::ResourceRequest request = VerifyCommonRequestState(prediction_url);
+  MakeResponseAndWait(net::HTTP_OK, net::OK, kHTMLMimeType, {}, kHTMLBody);
+
+  EXPECT_EQ(RequestCount(), 0);
+  EXPECT_EQ(predicted_urls_count(), 1U);
+  EXPECT_EQ(prefetch_eligible_count(), 1U);
+  EXPECT_EQ(prefetch_attempted_count(), 1U);
+  EXPECT_EQ(prefetch_successful_count(), 1U);
+  EXPECT_EQ(prefetch_total_redirect_count(), 0U);
+  EXPECT_TRUE(navigation_to_prefetch_start().has_value());
+
+  histogram_tester.ExpectTotalCount("PrefetchProxy.Prefetch.Mainframe.RespCode",
+                                    1);
+  histogram_tester.ExpectTotalCount(
+      "PrefetchProxy.Prefetch.Mainframe.BodyLength", 1);
+  histogram_tester.ExpectTotalCount(
+      "PrefetchProxy.Prefetch.Mainframe.TotalTime", 1);
+  histogram_tester.ExpectTotalCount(
+      "PrefetchProxy.Prefetch.Mainframe.ConnectTime", 1);
+
+  Navigate(prediction_url);
+
+  histogram_tester.ExpectTotalCount(
+      "PrefetchProxy.Prefetch.Mainframe.TotalRedirects", 1);
+
+  EXPECT_TRUE(HasAfterSRPMetrics());
+}
+
+TEST_F(PrefetchProxyTabHelperSpeculationRulesTest, NonGoogleSpecRule) {
+  base::HistogramTester histogram_tester;
+
+  prefetch::SetPreloadPagesState(
+      profile()->GetPrefs(), prefetch::PreloadPagesState::kStandardPreloading);
+
+  NavigateSomewhere();
+  GURL doc_url("https://www.not-google.com/search?q=cats");
+  GURL prediction_url("https://www.cat-food.com/");
+  MakeSpeculationCandidates(doc_url, {prediction_url});
+
+  EXPECT_EQ(RequestCount(), 0);
+  EXPECT_EQ(predicted_urls_count(), 0U);
+  EXPECT_EQ(prefetch_eligible_count(), 0U);
+  EXPECT_EQ(prefetch_attempted_count(), 0U);
+  EXPECT_EQ(prefetch_successful_count(), 0U);
+  EXPECT_EQ(prefetch_total_redirect_count(), 0U);
+  EXPECT_FALSE(navigation_to_prefetch_start().has_value());
+
+  histogram_tester.ExpectTotalCount("PrefetchProxy.Prefetch.Mainframe.RespCode",
+                                    0);
+  histogram_tester.ExpectTotalCount(
+      "PrefetchProxy.Prefetch.Mainframe.BodyLength", 0);
+  histogram_tester.ExpectTotalCount(
+      "PrefetchProxy.Prefetch.Mainframe.TotalTime", 0);
+  histogram_tester.ExpectTotalCount(
+      "PrefetchProxy.Prefetch.Mainframe.ConnectTime", 0);
+
+  Navigate(prediction_url);
+
+  histogram_tester.ExpectTotalCount(
+      "PrefetchProxy.Prefetch.Mainframe.TotalRedirects", 0);
+
+  EXPECT_FALSE(HasAfterSRPMetrics());
+}
+
+TEST_F(PrefetchProxyTabHelperSpeculationRulesTest,
+       NonGoogleExtendedPreloadingSpecRule) {
+  base::HistogramTester histogram_tester;
+
+  prefetch::SetPreloadPagesState(
+      profile()->GetPrefs(), prefetch::PreloadPagesState::kExtendedPreloading);
+
+  NavigateSomewhere();
+  GURL doc_url("https://www.not-google.com/search?q=cats");
+  GURL prediction_url("https://www.cat-food.com/");
+  MakeSpeculationCandidates(doc_url, {prediction_url});
+
+  network::ResourceRequest request = VerifyCommonRequestState(prediction_url);
+  MakeResponseAndWait(net::HTTP_OK, net::OK, kHTMLMimeType, {}, kHTMLBody);
+
+  EXPECT_EQ(RequestCount(), 0);
+  EXPECT_EQ(predicted_urls_count(), 1U);
+  EXPECT_EQ(prefetch_eligible_count(), 1U);
+  EXPECT_EQ(prefetch_attempted_count(), 1U);
+  EXPECT_EQ(prefetch_successful_count(), 1U);
+  EXPECT_EQ(prefetch_total_redirect_count(), 0U);
+  EXPECT_TRUE(navigation_to_prefetch_start().has_value());
+
+  histogram_tester.ExpectTotalCount("PrefetchProxy.Prefetch.Mainframe.RespCode",
+                                    1);
+  histogram_tester.ExpectTotalCount(
+      "PrefetchProxy.Prefetch.Mainframe.BodyLength", 1);
+  histogram_tester.ExpectTotalCount(
+      "PrefetchProxy.Prefetch.Mainframe.TotalTime", 1);
+  histogram_tester.ExpectTotalCount(
+      "PrefetchProxy.Prefetch.Mainframe.ConnectTime", 1);
+
+  Navigate(prediction_url);
+
+  histogram_tester.ExpectTotalCount(
+      "PrefetchProxy.Prefetch.Mainframe.TotalRedirects", 1);
+
+  EXPECT_TRUE(HasAfterSRPMetrics());
+}
+
+class PrefetchProxyTabHelperNonGoogleDisallowedTest
+    : public PrefetchProxyTabHelperTestBase {
+ public:
+  PrefetchProxyTabHelperNonGoogleDisallowedTest() {
+    scoped_feature_list_.InitAndEnableFeatureWithParameters(
+        features::kIsolatePrerenders,
+        {{"use_speculation_rules", "true"},
+         {"allow_all_domains_for_extended_preloading", "false"}});
+  }
+};
+
+TEST_F(PrefetchProxyTabHelperNonGoogleDisallowedTest,
+       NonGoogleExtendedPreloadingSpecRule) {
+  base::HistogramTester histogram_tester;
+
+  prefetch::SetPreloadPagesState(
+      profile()->GetPrefs(), prefetch::PreloadPagesState::kExtendedPreloading);
+
+  NavigateSomewhere();
+  GURL doc_url("https://www.not-google.com/search?q=cats");
+  GURL prediction_url("https://www.cat-food.com/");
+  MakeSpeculationCandidates(doc_url, {prediction_url});
+
+  EXPECT_EQ(RequestCount(), 0);
+  EXPECT_EQ(predicted_urls_count(), 0U);
+  EXPECT_EQ(prefetch_eligible_count(), 0U);
+  EXPECT_EQ(prefetch_attempted_count(), 0U);
+  EXPECT_EQ(prefetch_successful_count(), 0U);
+  EXPECT_EQ(prefetch_total_redirect_count(), 0U);
+  EXPECT_FALSE(navigation_to_prefetch_start().has_value());
+
+  histogram_tester.ExpectTotalCount("PrefetchProxy.Prefetch.Mainframe.RespCode",
+                                    0);
+  histogram_tester.ExpectTotalCount(
+      "PrefetchProxy.Prefetch.Mainframe.BodyLength", 0);
+  histogram_tester.ExpectTotalCount(
+      "PrefetchProxy.Prefetch.Mainframe.TotalTime", 0);
+  histogram_tester.ExpectTotalCount(
+      "PrefetchProxy.Prefetch.Mainframe.ConnectTime", 0);
+
+  Navigate(prediction_url);
+
+  histogram_tester.ExpectTotalCount(
+      "PrefetchProxy.Prefetch.Mainframe.TotalRedirects", 0);
+
+  EXPECT_FALSE(HasAfterSRPMetrics());
 }

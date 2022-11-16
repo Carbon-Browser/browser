@@ -18,8 +18,8 @@
 #include "base/metrics/histogram_macros.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/task_runner_util.h"
 #include "base/task/thread_pool.h"
-#include "base/task_runner_util.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "build/build_config.h"
 #include "third_party/leveldatabase/env_chromium.h"
@@ -143,6 +143,10 @@ class LevelDBSiteDataStore::AsyncHelper {
     // the process crashes).
     write_options_.sync = false;
   }
+
+  AsyncHelper(const AsyncHelper&) = delete;
+  AsyncHelper& operator=(const AsyncHelper&) = delete;
+
   ~AsyncHelper() = default;
 
   // Open the database from |db_path_| after creating it if it didn't exist,
@@ -206,7 +210,6 @@ class LevelDBSiteDataStore::AsyncHelper {
       GUARDED_BY_CONTEXT(sequence_checker_);
 
   SEQUENCE_CHECKER(sequence_checker_);
-  DISALLOW_COPY_AND_ASSIGN(AsyncHelper);
 };
 
 void LevelDBSiteDataStore::AsyncHelper::OpenOrCreateDatabase() {
@@ -348,7 +351,7 @@ DatabaseSizeResult LevelDBSiteDataStore::AsyncHelper::GetDatabaseSize() {
   base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
                                                 base::BlockingType::MAY_BLOCK);
   DatabaseSizeResult ret;
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   // Windows has an annoying mis-feature that the size of an open file is not
   // written to the parent directory until the file is closed. Since this is a
   // diagnostic interface that should be rarely called, go to the trouble of
@@ -357,7 +360,7 @@ DatabaseSizeResult LevelDBSiteDataStore::AsyncHelper::GetDatabaseSize() {
   db_.reset();
 #endif
   ret.on_disk_size_kb = base::ComputeDirectorySize(db_path_) / 1024;
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   OpenOrCreateDatabase();
   if (!db_)
     return DatabaseSizeResult();
@@ -456,7 +459,7 @@ void LevelDBSiteDataStore::ReadSiteDataFromStore(
       blocking_task_runner_.get(), FROM_HERE,
       base::BindOnce(&LevelDBSiteDataStore::AsyncHelper::ReadSiteDataFromDB,
                      base::Unretained(async_helper_.get()), origin),
-      base::BindOnce(std::move(callback)));
+      std::move(callback));
 }
 
 void LevelDBSiteDataStore::WriteSiteDataIntoStore(

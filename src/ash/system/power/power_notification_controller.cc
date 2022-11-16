@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "ash/constants/ash_switches.h"
+#include "ash/constants/notifier_catalogs.h"
 #include "ash/public/cpp/notification_utils.h"
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/strings/grit/ash_strings.h"
@@ -37,6 +38,9 @@ class UsbNotificationDelegate : public message_center::NotificationDelegate {
   explicit UsbNotificationDelegate(PowerNotificationController* controller)
       : controller_(controller) {}
 
+  UsbNotificationDelegate(const UsbNotificationDelegate&) = delete;
+  UsbNotificationDelegate& operator=(const UsbNotificationDelegate&) = delete;
+
   // Overridden from message_center::NotificationDelegate.
   void Close(bool by_user) override {
     if (by_user)
@@ -47,8 +51,6 @@ class UsbNotificationDelegate : public message_center::NotificationDelegate {
   ~UsbNotificationDelegate() override = default;
 
   PowerNotificationController* const controller_;
-
-  DISALLOW_COPY_AND_ASSIGN(UsbNotificationDelegate);
 };
 
 std::string GetNotificationStateString(
@@ -152,7 +154,9 @@ bool PowerNotificationController::MaybeShowUsbChargerNotification() {
                       PowerStatus::Get()->GetPreferredMinimumPower(), 0)),
         std::u16string(), GURL(),
         message_center::NotifierId(
-            message_center::NotifierType::SYSTEM_COMPONENT, kNotifierPower),
+            message_center::NotifierType::SYSTEM_COMPONENT, kNotifierPower,
+            on_battery ? NotificationCatalogName::kLowPowerCharger
+                       : NotificationCatalogName::kLowPowerAdapter),
         message_center::RichNotificationData(),
         new UsbNotificationDelegate(this), kNotificationLowPowerChargerIcon,
         message_center::SystemNotificationWarningLevel::WARNING);
@@ -214,7 +218,7 @@ bool PowerNotificationController::UpdateNotificationStateForRemainingTime() {
   // The notification includes a rounded minutes value, so round the estimate
   // received from the power manager to match.
   const int remaining_minutes =
-      base::ClampRound(*remaining_time / base::TimeDelta::FromMinutes(1));
+      base::ClampRound(*remaining_time / base::Minutes(1));
 
   if (remaining_minutes >= kNoWarningMinutes ||
       PowerStatus::Get()->IsBatteryFull()) {

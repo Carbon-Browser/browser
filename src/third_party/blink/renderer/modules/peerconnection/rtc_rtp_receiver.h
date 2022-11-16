@@ -5,6 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_PEERCONNECTION_RTC_RTP_RECEIVER_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_PEERCONNECTION_RTC_RTP_RECEIVER_H_
 
+#include "base/synchronization/lock.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/platform/web_vector.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_rtc_rtp_contributing_source.h"
@@ -21,6 +22,7 @@
 #include "third_party/blink/renderer/platform/peerconnection/rtc_encoded_audio_stream_transformer.h"
 #include "third_party/blink/renderer/platform/peerconnection/rtc_rtp_receiver_platform.h"
 #include "third_party/blink/renderer/platform/peerconnection/rtc_rtp_source.h"
+#include "third_party/webrtc/api/media_types.h"
 
 namespace blink {
 class RTCDtlsTransport;
@@ -39,6 +41,8 @@ class RTCRtpReceiver final : public ScriptWrappable,
   DEFINE_WRAPPERTYPEINFO();
 
  public:
+  enum class MediaKind { kAudio, kVideo };
+
   // Takes ownership of the receiver.
   RTCRtpReceiver(RTCPeerConnection*,
                  std::unique_ptr<RTCRtpReceiverPlatform>,
@@ -71,11 +75,11 @@ class RTCRtpReceiver final : public ScriptWrappable,
                                                   ExceptionState&);
 
   RTCRtpReceiverPlatform* platform_receiver();
+  MediaKind kind() const;
   MediaStreamVector streams() const;
   void set_streams(MediaStreamVector streams);
   void set_transceiver(RTCRtpTransceiver*);
   void set_transport(RTCDtlsTransport*);
-  void UpdateSourcesIfNeeded();
 
   // ExecutionContextLifecycleObserver
   void ContextDestroyed() override;
@@ -83,7 +87,6 @@ class RTCRtpReceiver final : public ScriptWrappable,
   void Trace(Visitor*) const override;
 
  private:
-  void SetContributingSourcesNeedsUpdating();
   void RegisterEncodedAudioStreamCallback();
   void UnregisterEncodedAudioStreamCallback();
   void InitializeEncodedAudioStreams(ScriptState*);
@@ -110,7 +113,6 @@ class RTCRtpReceiver final : public ScriptWrappable,
   // The current SSRCs and CSRCs. getSynchronizationSources() returns the SSRCs
   // and getContributingSources() returns the CSRCs.
   Vector<std::unique_ptr<RTCRtpSource>> web_sources_;
-  bool web_sources_needs_updating_ = true;
   Member<RTCRtpTransceiver> transceiver_;
 
   // Hint to the WebRTC Jitter Buffer about desired playout delay. Actual
@@ -120,14 +122,13 @@ class RTCRtpReceiver final : public ScriptWrappable,
 
   // Insertable Streams support for audio
   bool force_encoded_audio_insertable_streams_;
-  WTF::Mutex audio_underlying_source_mutex_;
+  base::Lock audio_underlying_source_lock_;
   CrossThreadPersistent<RTCEncodedAudioUnderlyingSource>
       audio_from_depacketizer_underlying_source_
-          GUARDED_BY(audio_underlying_source_mutex_);
-  WTF::Mutex audio_underlying_sink_mutex_;
+          GUARDED_BY(audio_underlying_source_lock_);
+  base::Lock audio_underlying_sink_lock_;
   CrossThreadPersistent<RTCEncodedAudioUnderlyingSink>
-      audio_to_decoder_underlying_sink_
-          GUARDED_BY(audio_underlying_sink_mutex_);
+      audio_to_decoder_underlying_sink_ GUARDED_BY(audio_underlying_sink_lock_);
   Member<RTCInsertableStreams> encoded_audio_streams_;
   scoped_refptr<blink::RTCEncodedAudioStreamTransformer::Broker>
       encoded_audio_transformer_;

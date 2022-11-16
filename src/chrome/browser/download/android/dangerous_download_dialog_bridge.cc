@@ -41,10 +41,15 @@ void DangerousDownloadDialogBridge::Show(download::DownloadItem* download_item,
                 download_item) != download_items_.end()) {
     return;
   }
+  if (!window_android) {
+    download_item->Remove();
+    return;
+  }
   download_item->AddObserver(this);
   download_items_.push_back(download_item);
 
   JNIEnv* env = base::android::AttachCurrentThread();
+
   Java_DangerousDownloadDialogBridge_showDialog(
       env, java_object_, window_android->GetJavaObject(),
       base::android::ConvertUTF8ToJavaString(env, download_item->GetGuid()),

@@ -7,7 +7,7 @@
 
 #include <wayland-server-protocol.h>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/ozone/platform/wayland/test/server_object.h"
 
 struct wl_resource;
@@ -16,13 +16,24 @@ namespace wl {
 
 extern const struct wl_pointer_interface kTestTouchImpl;
 
+class MockZcrTouchStylus;
+
 class TestTouch : public ServerObject {
  public:
   explicit TestTouch(wl_resource* resource);
+
+  TestTouch(const TestTouch&) = delete;
+  TestTouch& operator=(const TestTouch&) = delete;
+
   ~TestTouch() override;
 
+  void set_touch_stylus(MockZcrTouchStylus* touch_stylus) {
+    touch_stylus_ = touch_stylus;
+  }
+  MockZcrTouchStylus* touch_stylus() const { return touch_stylus_; }
+
  private:
-  DISALLOW_COPY_AND_ASSIGN(TestTouch);
+  raw_ptr<MockZcrTouchStylus> touch_stylus_ = nullptr;
 };
 
 }  // namespace wl

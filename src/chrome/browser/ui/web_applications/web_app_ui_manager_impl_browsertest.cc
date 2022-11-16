@@ -5,6 +5,7 @@
 #include "chrome/browser/ui/web_applications/web_app_ui_manager_impl.h"
 
 #include "base/barrier_closure.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/bind.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
@@ -13,17 +14,18 @@
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/web_applications/test/web_app_browsertest_util.h"
-#include "chrome/browser/web_applications/system_web_apps/system_web_app_manager.h"
-#include "chrome/browser/web_applications/test/test_os_integration_manager.h"
-#include "chrome/browser/web_applications/test/test_web_app_provider.h"
+#include "chrome/browser/web_applications/test/fake_os_integration_manager.h"
+#include "chrome/browser/web_applications/test/fake_web_app_provider.h"
 #include "chrome/browser/web_applications/test/web_app_install_test_utils.h"
 #include "chrome/browser/web_applications/test/web_app_test_observers.h"
+#include "chrome/browser/web_applications/user_display_mode.h"
 #include "chrome/browser/web_applications/web_app_id.h"
 #include "chrome/browser/web_applications/web_app_install_finalizer.h"
+#include "chrome/browser/web_applications/web_app_install_info.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
-#include "chrome/browser/web_applications/web_application_info.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "components/webapps/browser/installable/installable_metrics.h"
+#include "components/webapps/browser/uninstall_result_code.h"
 #include "content/public/test/browser_test.h"
 #include "url/gurl.h"
 
@@ -40,17 +42,24 @@ namespace web_app {
 class WebAppUiManagerImplBrowserTest : public InProcessBrowserTest {
  public:
   WebAppUiManagerImplBrowserTest()
-      : test_web_app_provider_creator_(base::BindRepeating(
-            &WebAppUiManagerImplBrowserTest::CreateTestWebAppProvider,
+      : fake_web_app_provider_creator_(base::BindRepeating(
+            &WebAppUiManagerImplBrowserTest::CreateFakeWebAppProvider,
             base::Unretained(this))) {}
 
  protected:
+  // InProcessBrowserTest:
+  void SetUpOnMainThread() override {
+    InProcessBrowserTest::SetUpOnMainThread();
+    web_app::test::WaitUntilReady(
+        web_app::WebAppProvider::GetForTest(browser()->profile()));
+  }
+
   Profile* profile() { return browser()->profile(); }
 
-  const AppId InstallWebApp(const GURL& start_url) {
-    auto web_app_info = std::make_unique<WebApplicationInfo>();
+  AppId InstallWebApp(const GURL& start_url) {
+    auto web_app_info = std::make_unique<WebAppInstallInfo>();
     web_app_info->start_url = start_url;
-    web_app_info->user_display_mode = DisplayMode::kStandalone;
+    web_app_info->user_display_mode = UserDisplayMode::kStandalone;
     return web_app::test::InstallWebApp(profile(), std::move(web_app_info));
   }
 
@@ -67,15 +76,15 @@ class WebAppUiManagerImplBrowserTest : public InProcessBrowserTest {
     return WebAppProvider::GetForTest(profile())->ui_manager();
   }
 
-  TestShortcutManager* shortcut_manager_;
-  TestOsIntegrationManager* os_integration_manager_;
+  raw_ptr<TestShortcutManager> shortcut_manager_;
+  raw_ptr<FakeOsIntegrationManager> os_integration_manager_;
 
  private:
-  std::unique_ptr<KeyedService> CreateTestWebAppProvider(Profile* profile) {
-    auto provider = std::make_unique<TestWebAppProvider>(profile);
+  std::unique_ptr<KeyedService> CreateFakeWebAppProvider(Profile* profile) {
+    auto provider = std::make_unique<FakeWebAppProvider>(profile);
     auto shortcut_manager = std::make_unique<TestShortcutManager>(profile);
     shortcut_manager_ = shortcut_manager.get();
-    auto os_integration_manager = std::make_unique<TestOsIntegrationManager>(
+    auto os_integration_manager = std::make_unique<FakeOsIntegrationManager>(
         profile, std::move(shortcut_manager), nullptr, nullptr, nullptr);
     os_integration_manager_ = os_integration_manager.get();
     provider->SetOsIntegrationManager(std::move(os_integration_manager));
@@ -84,7 +93,7 @@ class WebAppUiManagerImplBrowserTest : public InProcessBrowserTest {
     return provider;
   }
 
-  TestWebAppProviderCreator test_web_app_provider_creator_;
+  FakeWebAppProviderCreator fake_web_app_provider_creator_;
 };
 
 IN_PROC_BROWSER_TEST_F(WebAppUiManagerImplBrowserTest,
@@ -114,18 +123,19 @@ IN_PROC_BROWSER_TEST_F(WebAppUiManagerImplBrowserTest,
   web_app::CloseAndWait(browser());
   EXPECT_EQ(1u, BrowserList::GetInstance()->size());
   Browser* app_browser = BrowserList::GetInstance()->GetLastActive();
+  BrowserWaiter waiter(app_browser);
   // Uninstalling should close the |app_browser|, but keep the browser
   // object alive long enough to complete the uninstall.
   base::RunLoop run_loop;
   DCHECK(provider->install_finalizer().CanUserUninstallWebApp(foo_app_id));
   provider->install_finalizer().UninstallWebApp(
       foo_app_id, webapps::WebappUninstallSource::kAppMenu,
-      base::BindLambdaForTesting([&](bool success) {
-        EXPECT_TRUE(success);
+      base::BindLambdaForTesting([&](webapps::UninstallResultCode code) {
+        EXPECT_EQ(code, webapps::UninstallResultCode::kSuccess);
         run_loop.Quit();
       }));
   run_loop.Run();
-  web_app::WaitForBrowserToBeClosed(app_browser);
+  waiter.AwaitRemoved();
 
   EXPECT_EQ(0u, BrowserList::GetInstance()->size());
 }

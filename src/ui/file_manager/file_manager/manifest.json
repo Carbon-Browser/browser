@@ -48,28 +48,45 @@
     "partitions": [{
       "name": "trusted",
       "accessible_resources": [
-        "foreground/elements/sandboxed/files_audio_content.*",
-        "foreground/elements/sandboxed/files_img_content.*",
-        "foreground/elements/sandboxed/files_media_content.js",
-        "foreground/elements/sandboxed/files_text_content.*",
-        "foreground/elements/sandboxed/files_video_content.*"
+        "untrusted_resources/files_audio_content.*",
+        "untrusted_resources/files_img_content.*",
+        "untrusted_resources/files_media_content.js",
+        "untrusted_resources/files_text_content.*",
+        "untrusted_resources/files_video_content.*",
+        "untrusted_resources/url_constants.js"
       ]
     }]
   },
   "file_handlers": {
     "mount-archive": {
+      // NOTE: when adding new formats to the extension list below, don't
+      // forget to also update web_applications/file_manager_web_app_info.cc.
       "extensions": [
         "7z",
+        "bz",
         "bz2",
         "crx",
         "gz",
         "iso",
+        "lz",
+        "lzma",
         "rar",
         "tar",
+        "taz",
+        "tb2",
         "tbz",
         "tbz2",
         "tgz",
-        "zip"
+        "tlz",
+        "tlzma",
+        "txz",
+        "tz",
+        "tz2",
+        "tzst",
+        "xz",
+        "z",
+        "zip",
+        "zst"
       ]
     },
     "view-pdf": {
@@ -78,11 +95,6 @@
       ],
       "types": [
         "application/pdf"
-      ]
-    },
-    "view-swf": {
-      "extensions": [
-        "swf"
       ]
     },
     "view-in-browser": {
@@ -126,6 +138,16 @@
         "gslides"
       ]
     },
+    "handle-office": {
+      "extensions": [
+        "doc",
+        "docx",
+        "xls",
+        "xlsx",
+        "ppt",
+        "pptx"
+      ]
+    },
     "install-linux-package": {
       "extensions": [
         "deb"
@@ -154,12 +176,14 @@
     "common/js/dialog_type.js",
     "common/js/file_operation_common.js",
     "common/js/file_type.js",
+    "common/js/file_types_data.js",
     "common/js/files_app_entry_types.js",
     "common/js/files_app_state.js",
     "common/js/filtered_volume_manager.js",
     "common/js/lru_cache.js",
-    "common/js/metrics.js",
+    "common/js/icon_util.js",
     "common/js/importer_common.js",
+    "common/js/metrics.js",
     "common/js/metrics_base.js",
     "common/js/mock_chrome.js",
     "common/js/notifications_browser_proxy.js",

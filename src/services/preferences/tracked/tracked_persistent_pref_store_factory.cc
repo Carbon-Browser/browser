@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "base/bind.h"
+#include "build/build_config.h"
 #include "components/prefs/json_pref_store.h"
 #include "components/prefs/pref_filter.h"
 #include "components/prefs/segregated_pref_store.h"
@@ -21,7 +22,7 @@
 #include "services/preferences/tracked/temp_scoped_dir_cleaner.h"
 #include "services/preferences/tracked/tracked_preferences_migration.h"
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include "base/files/scoped_temp_dir.h"
 #include "base/strings/string_util.h"
 #include "services/preferences/tracked/registry_hash_store_contents_win.h"
@@ -48,7 +49,7 @@ std::pair<std::unique_ptr<PrefHashStore>, std::unique_ptr<HashStoreContents>>
 GetExternalVerificationPrefHashStorePair(
     const prefs::mojom::TrackedPersistentPrefStoreConfiguration& config,
     scoped_refptr<TempScopedDirCleaner> temp_dir_cleaner) {
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   return std::make_pair(
       std::make_unique<PrefHashStoreImpl>(config.registry_seed,
                                           config.legacy_device_id,
@@ -86,7 +87,7 @@ PersistentPrefStore* CreateTrackedPersistentPrefStore(
   config->tracking_configuration.clear();
 
   scoped_refptr<TempScopedDirCleaner> temp_scoped_dir_cleaner;
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   // For tests that create a profile in a ScopedTempDir, share a ref_counted
   // object between the unprotected and protected hash filter's
   // RegistryHashStoreContentsWin which will clear the registry keys when

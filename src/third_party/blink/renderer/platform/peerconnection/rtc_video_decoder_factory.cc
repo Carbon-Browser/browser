@@ -11,7 +11,7 @@
 #include "base/feature_list.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
-#include "base/sequenced_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/trace_event/base_tracing.h"
 #include "build/build_config.h"
 #include "media/base/decoder_factory.h"
@@ -44,7 +44,7 @@ struct CodecConfig {
   media::VideoCodecProfile profile;
 };
 
-constexpr std::array<CodecConfig, 8> kCodecConfigs = {{
+constexpr std::array<CodecConfig, 9> kCodecConfigs = {{
     {media::VideoCodec::kVP8, media::VP8PROFILE_ANY},
     {media::VideoCodec::kVP9, media::VP9PROFILE_PROFILE0},
     {media::VideoCodec::kVP9, media::VP9PROFILE_PROFILE1},
@@ -52,6 +52,7 @@ constexpr std::array<CodecConfig, 8> kCodecConfigs = {{
     {media::VideoCodec::kH264, media::H264PROFILE_BASELINE},
     {media::VideoCodec::kH264, media::H264PROFILE_MAIN},
     {media::VideoCodec::kH264, media::H264PROFILE_HIGH},
+    {media::VideoCodec::kH264, media::H264PROFILE_HIGH444PREDICTIVEPROFILE},
     {media::VideoCodec::kAV1, media::AV1PROFILE_PROFILE_MAIN},
 }};
 
@@ -61,9 +62,9 @@ absl::optional<webrtc::SdpVideoFormat> VdcToWebRtcFormat(
     const media::VideoDecoderConfig& config) {
   switch (config.codec()) {
     case media::VideoCodec::kAV1:
-      return webrtc::SdpVideoFormat("AV1X");
+      return webrtc::SdpVideoFormat(cricket::kAv1CodecName);
     case media::VideoCodec::kVP8:
-      return webrtc::SdpVideoFormat("VP8");
+      return webrtc::SdpVideoFormat(cricket::kVp8CodecName);
     case media::VideoCodec::kVP9: {
       webrtc::VP9Profile vp9_profile;
       switch (config.profile()) {
@@ -81,8 +82,8 @@ absl::optional<webrtc::SdpVideoFormat> VdcToWebRtcFormat(
           return absl::nullopt;
       }
       return webrtc::SdpVideoFormat(
-          "VP9", {{webrtc::kVP9FmtpProfileId,
-                   webrtc::VP9ProfileToString(vp9_profile)}});
+          cricket::kVp9CodecName, {{webrtc::kVP9FmtpProfileId,
+                                    webrtc::VP9ProfileToString(vp9_profile)}});
     }
     case media::VideoCodec::kH264: {
       webrtc::H264Profile h264_profile;
@@ -95,6 +96,9 @@ absl::optional<webrtc::SdpVideoFormat> VdcToWebRtcFormat(
           break;
         case media::H264PROFILE_HIGH:
           h264_profile = webrtc::H264Profile::kProfileHigh;
+          break;
+        case media::H264PROFILE_HIGH444PREDICTIVEPROFILE:
+          h264_profile = webrtc::H264Profile::kProfilePredictiveHigh444;
           break;
         default:
           // Unsupported H264 profile in WebRTC.
@@ -109,7 +113,7 @@ absl::optional<webrtc::SdpVideoFormat> VdcToWebRtcFormat(
       const webrtc::H264ProfileLevelId profile_level_id(
           h264_profile, h264_level.value_or(webrtc::H264Level::kLevel1));
 
-      webrtc::SdpVideoFormat format("H264");
+      webrtc::SdpVideoFormat format(cricket::kH264CodecName);
       format.parameters = {
           {cricket::kH264FmtpProfileLevelId,
            *webrtc::H264ProfileLevelIdToString(profile_level_id)},
@@ -187,7 +191,7 @@ class ScopedVideoDecoder : public webrtc::VideoDecoder {
 
 RTCVideoDecoderFactory::RTCVideoDecoderFactory(
     media::GpuVideoAcceleratorFactories* gpu_factories,
-    media::DecoderFactory* decoder_factory,
+    base::WeakPtr<media::DecoderFactory> decoder_factory,
     scoped_refptr<base::SequencedTaskRunner> media_task_runner,
     const gfx::ColorSpace& render_color_space)
     : gpu_factories_(gpu_factories),
@@ -218,9 +222,6 @@ std::vector<webrtc::SdpVideoFormat>
 RTCVideoDecoderFactory::GetSupportedFormats() const {
   CheckAndWaitDecoderSupportStatusIfNeeded();
 
-  media::SupportedVideoDecoderConfigs supported_decoder_factory_configs =
-      decoder_factory_->GetSupportedVideoDecoderConfigsForWebRTC();
-
   // For now, ignore `kUseDecoderStreamForWebRTC`, and advertise support only
   // for hardware-accelerated formats.  For some codecs, like AV1, which don't
   // have an equivalent in rtc, we might want to include them anyway.
@@ -242,15 +243,11 @@ RTCVideoDecoderFactory::GetSupportedFormats() const {
       format = VdcToWebRtcFormat(config);
     }
 
-    if (base::FeatureList::IsEnabled(media::kUseDecoderStreamForWebRTC) &&
-        !format.has_value()) {
-      for (auto& supported_config : supported_decoder_factory_configs) {
-        if (supported_config.Matches(config)) {
-          format = VdcToWebRtcFormat(config);
-          break;
-        }
-      }
-    }
+    // TODO(https://crbug.com/1274904): Temporarily do not add configs from
+    // `decoder_factory_`, so that supported configs are identical.
+    // See:
+    // https://chromium-review.googlesource.com/c/chromium/src/+/3305493
+    // For the exact diff.
 
     if (format)
       supported_formats.push_back(*format);
@@ -275,6 +272,9 @@ RTCVideoDecoderFactory::QueryCodecSupport(const webrtc::SdpVideoFormat& format,
     // Most HW decoders cannot handle reference scaling/spatial layers, so
     // return false if the configuration requires reference scaling unless we
     // explicitly know that the HW decoder can handle this.
+    // D3D11 supports VP9 kSVC HW Decoding. But currently the MFT doesn't
+    // support DXVA decode the VP9 kSVC stream. Keep returning the false until
+    // MFT support it.
     if (codec == media::VideoCodec::kVP9 &&
         !RTCVideoDecoderAdapter::Vp9HwSupportForSpatialLayers()) {
       return {false, false};
@@ -303,19 +303,12 @@ RTCVideoDecoderFactory::QueryCodecSupport(const webrtc::SdpVideoFormat& format,
   // The codec must be supported if it's power efficient.
   codec_support.is_supported = codec_support.is_power_efficient;
 
-  // RtcDecoderStreamAdapter supports all codecs with HW support and potentially
-  // a few codecs in SW.
-  if (!codec_support.is_supported &&
-      base::FeatureList::IsEnabled(media::kUseDecoderStreamForWebRTC)) {
-    media::SupportedVideoDecoderConfigs supported_decoder_factory_configs =
-        decoder_factory_->GetSupportedVideoDecoderConfigsForWebRTC();
-    for (auto& supported_config : supported_decoder_factory_configs) {
-      if (supported_config.Matches(config)) {
-        codec_support.is_supported = true;
-        break;
-      }
-    }
-  }
+  // TODO(https://crbug.com/1274904): Temporarily do not check
+  // `decoder_factory_` for additional support, to make codec
+  // DecoderAdapter and DecoderStreamAdapter the same.
+  // See:
+  // https://chromium-review.googlesource.com/c/chromium/src/+/3305493
+  // For the exact diff.
 
   return codec_support;
 }

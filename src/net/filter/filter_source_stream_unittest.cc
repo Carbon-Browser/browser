@@ -7,7 +7,6 @@
 
 #include "base/bind.h"
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/numerics/safe_conversions.h"
 #include "net/base/io_buffer.h"
 #include "net/base/net_errors.h"
@@ -25,8 +24,13 @@ const size_t kSmallBufferSize = 1;
 
 class TestFilterSourceStreamBase : public FilterSourceStream {
  public:
-  TestFilterSourceStreamBase(std::unique_ptr<SourceStream> upstream)
+  explicit TestFilterSourceStreamBase(std::unique_ptr<SourceStream> upstream)
       : FilterSourceStream(SourceStream::TYPE_NONE, std::move(upstream)) {}
+
+  TestFilterSourceStreamBase(const TestFilterSourceStreamBase&) = delete;
+  TestFilterSourceStreamBase& operator=(const TestFilterSourceStreamBase&) =
+      delete;
+
   ~TestFilterSourceStreamBase() override { DCHECK(buffer_.empty()); }
   std::string GetTypeAsString() const override { return type_string_; }
 
@@ -52,8 +56,6 @@ class TestFilterSourceStreamBase : public FilterSourceStream {
 
  private:
   std::string type_string_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestFilterSourceStreamBase);
 };
 
 // A FilterSourceStream that needs all input data before it can return non-zero
@@ -64,6 +66,12 @@ class NeedsAllInputFilterSourceStream : public TestFilterSourceStreamBase {
                                   size_t expected_input_bytes)
       : TestFilterSourceStreamBase(std::move(upstream)),
         expected_input_bytes_(expected_input_bytes) {}
+
+  NeedsAllInputFilterSourceStream(const NeedsAllInputFilterSourceStream&) =
+      delete;
+  NeedsAllInputFilterSourceStream& operator=(
+      const NeedsAllInputFilterSourceStream&) = delete;
+
   int FilterData(IOBuffer* output_buffer,
                  int output_buffer_size,
                  IOBuffer* input_buffer,
@@ -85,8 +93,6 @@ class NeedsAllInputFilterSourceStream : public TestFilterSourceStreamBase {
  private:
   // Expected remaining bytes to be received from |upstream|.
   int expected_input_bytes_;
-
-  DISALLOW_COPY_AND_ASSIGN(NeedsAllInputFilterSourceStream);
 };
 
 // A FilterSourceStream that repeat every input byte by |multiplier| amount of
@@ -96,6 +102,10 @@ class MultiplySourceStream : public TestFilterSourceStreamBase {
   MultiplySourceStream(std::unique_ptr<SourceStream> upstream, int multiplier)
       : TestFilterSourceStreamBase(std::move(upstream)),
         multiplier_(multiplier) {}
+
+  MultiplySourceStream(const MultiplySourceStream&) = delete;
+  MultiplySourceStream& operator=(const MultiplySourceStream&) = delete;
+
   int FilterData(IOBuffer* output_buffer,
                  int output_buffer_size,
                  IOBuffer* input_buffer,
@@ -112,8 +122,6 @@ class MultiplySourceStream : public TestFilterSourceStreamBase {
 
  private:
   int multiplier_;
-
-  DISALLOW_COPY_AND_ASSIGN(MultiplySourceStream);
 };
 
 // A FilterSourceStream passes through data unchanged to consumer.
@@ -121,6 +129,11 @@ class PassThroughFilterSourceStream : public TestFilterSourceStreamBase {
  public:
   explicit PassThroughFilterSourceStream(std::unique_ptr<SourceStream> upstream)
       : TestFilterSourceStreamBase(std::move(upstream)) {}
+
+  PassThroughFilterSourceStream(const PassThroughFilterSourceStream&) = delete;
+  PassThroughFilterSourceStream& operator=(
+      const PassThroughFilterSourceStream&) = delete;
+
   int FilterData(IOBuffer* output_buffer,
                  int output_buffer_size,
                  IOBuffer* input_buffer,
@@ -131,9 +144,6 @@ class PassThroughFilterSourceStream : public TestFilterSourceStreamBase {
     *consumed_bytes = input_buffer_size;
     return WriteBufferToOutput(output_buffer, output_buffer_size);
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(PassThroughFilterSourceStream);
 };
 
 // A FilterSourceStream passes throttle input data such that it returns them to
@@ -142,6 +152,10 @@ class ThrottleSourceStream : public TestFilterSourceStreamBase {
  public:
   explicit ThrottleSourceStream(std::unique_ptr<SourceStream> upstream)
       : TestFilterSourceStreamBase(std::move(upstream)) {}
+
+  ThrottleSourceStream(const ThrottleSourceStream&) = delete;
+  ThrottleSourceStream& operator=(const ThrottleSourceStream&) = delete;
+
   int FilterData(IOBuffer* output_buffer,
                  int output_buffer_size,
                  IOBuffer* input_buffer,
@@ -155,9 +169,6 @@ class ThrottleSourceStream : public TestFilterSourceStreamBase {
     buffer_.erase(0, bytes_to_read);
     return bytes_to_read;
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ThrottleSourceStream);
 };
 
 // A FilterSourceStream that consumes all input data but return no output.
@@ -166,8 +177,11 @@ class NoOutputSourceStream : public TestFilterSourceStreamBase {
   NoOutputSourceStream(std::unique_ptr<SourceStream> upstream,
                        size_t expected_input_size)
       : TestFilterSourceStreamBase(std::move(upstream)),
-        expected_input_size_(expected_input_size),
-        consumed_all_input_(false) {}
+        expected_input_size_(expected_input_size) {}
+
+  NoOutputSourceStream(const NoOutputSourceStream&) = delete;
+  NoOutputSourceStream& operator=(const NoOutputSourceStream&) = delete;
+
   int FilterData(IOBuffer* output_buffer,
                  int output_buffer_size,
                  IOBuffer* input_buffer,
@@ -186,9 +200,7 @@ class NoOutputSourceStream : public TestFilterSourceStreamBase {
  private:
   // Expected remaining bytes to be received from |upstream|.
   int expected_input_size_;
-  bool consumed_all_input_;
-
-  DISALLOW_COPY_AND_ASSIGN(NoOutputSourceStream);
+  bool consumed_all_input_ = false;
 };
 
 // A FilterSourceStream return an error code in FilterData().
@@ -196,6 +208,9 @@ class ErrorFilterSourceStream : public FilterSourceStream {
  public:
   explicit ErrorFilterSourceStream(std::unique_ptr<SourceStream> upstream)
       : FilterSourceStream(SourceStream::TYPE_NONE, std::move(upstream)) {}
+
+  ErrorFilterSourceStream(const ErrorFilterSourceStream&) = delete;
+  ErrorFilterSourceStream& operator=(const ErrorFilterSourceStream&) = delete;
 
   int FilterData(IOBuffer* output_buffer,
                  int output_buffer_size,
@@ -206,9 +221,6 @@ class ErrorFilterSourceStream : public FilterSourceStream {
     return ERR_CONTENT_DECODING_FAILED;
   }
   std::string GetTypeAsString() const override { return ""; }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ErrorFilterSourceStream);
 };
 
 }  // namespace
@@ -245,7 +257,7 @@ INSTANTIATE_TEST_SUITE_P(FilterSourceStreamTests,
 // upstream. In this case, FilterSourceStream should continue reading from
 // upstream to complete filtering.
 TEST_P(FilterSourceStreamTest, FilterDataReturnNoBytesExceptLast) {
-  std::unique_ptr<MockSourceStream> source(new MockSourceStream);
+  auto source = std::make_unique<MockSourceStream>();
   std::string input("hello, world!");
   size_t read_size = 2;
   size_t num_reads = 0;
@@ -281,7 +293,7 @@ TEST_P(FilterSourceStreamTest, FilterDataReturnNoBytesExceptLast) {
 // Tests that FilterData() returns 0 byte read because the upstream gives an
 // EOF.
 TEST_P(FilterSourceStreamTest, FilterDataReturnNoByte) {
-  std::unique_ptr<MockSourceStream> source(new MockSourceStream);
+  auto source = std::make_unique<MockSourceStream>();
   std::string input;
   source->AddReadResult(input.data(), 0, OK, GetParam());
   MockSourceStream* mock_stream = source.get();
@@ -298,7 +310,7 @@ TEST_P(FilterSourceStreamTest, FilterDataReturnNoByte) {
 // Tests that FilterData() returns 0 byte filtered even though the upstream
 // produces data.
 TEST_P(FilterSourceStreamTest, FilterDataOutputNoData) {
-  std::unique_ptr<MockSourceStream> source(new MockSourceStream);
+  auto source = std::make_unique<MockSourceStream>();
   std::string input = "hello, world!";
   size_t read_size = 2;
   size_t num_reads = 0;
@@ -327,7 +339,7 @@ TEST_P(FilterSourceStreamTest, FilterDataOutputNoData) {
 // Tests that FilterData() returns non-zero bytes because the upstream
 // returns data.
 TEST_P(FilterSourceStreamTest, FilterDataReturnData) {
-  std::unique_ptr<MockSourceStream> source(new MockSourceStream);
+  auto source = std::make_unique<MockSourceStream>();
   std::string input = "hello, world!";
   size_t read_size = 2;
   // Add a sequence of small reads.
@@ -359,7 +371,7 @@ TEST_P(FilterSourceStreamTest, FilterDataReturnData) {
 
 // Tests that FilterData() returns more data than what it consumed.
 TEST_P(FilterSourceStreamTest, FilterDataReturnMoreData) {
-  std::unique_ptr<MockSourceStream> source(new MockSourceStream);
+  auto source = std::make_unique<MockSourceStream>();
   std::string input = "hello, world!";
   size_t read_size = 2;
   // Add a sequence of small reads.
@@ -393,7 +405,7 @@ TEST_P(FilterSourceStreamTest, FilterDataReturnMoreData) {
 // Tests that FilterData() returns non-zero bytes and output buffer size is
 // smaller than the number of bytes read from the upstream.
 TEST_P(FilterSourceStreamTest, FilterDataOutputSpace) {
-  std::unique_ptr<MockSourceStream> source(new MockSourceStream);
+  auto source = std::make_unique<MockSourceStream>();
   std::string input = "hello, world!";
   size_t read_size = 2;
   // Add a sequence of small reads.
@@ -429,7 +441,7 @@ TEST_P(FilterSourceStreamTest, FilterDataOutputSpace) {
 // Tests that FilterData() returns an error code, which is then surfaced as
 // the result of calling Read().
 TEST_P(FilterSourceStreamTest, FilterDataReturnError) {
-  std::unique_ptr<MockSourceStream> source(new MockSourceStream);
+  auto source = std::make_unique<MockSourceStream>();
   std::string input;
   source->AddReadResult(input.data(), 0, OK, GetParam());
   scoped_refptr<IOBufferWithSize> output_buffer =
@@ -448,21 +460,22 @@ TEST_P(FilterSourceStreamTest, FilterDataReturnError) {
 }
 
 TEST_P(FilterSourceStreamTest, FilterChaining) {
-  std::unique_ptr<MockSourceStream> source(new MockSourceStream);
+  auto source = std::make_unique<MockSourceStream>();
   std::string input = "hello, world!";
   source->AddReadResult(input.data(), input.length(), OK, GetParam());
   source->AddReadResult(input.data(), 0, OK, GetParam());  // EOF
 
   MockSourceStream* mock_stream = source.get();
-  std::unique_ptr<PassThroughFilterSourceStream> pass_through_source(
-      new PassThroughFilterSourceStream(std::move(source)));
+  auto pass_through_source =
+      std::make_unique<PassThroughFilterSourceStream>(std::move(source));
   pass_through_source->set_type_string("FIRST_PASS_THROUGH");
-  std::unique_ptr<NeedsAllInputFilterSourceStream> needs_all_input_source(
-      new NeedsAllInputFilterSourceStream(std::move(pass_through_source),
-                                          input.length()));
+  auto needs_all_input_source =
+      std::make_unique<NeedsAllInputFilterSourceStream>(
+          std::move(pass_through_source), input.length());
   needs_all_input_source->set_type_string("NEEDS_ALL");
-  std::unique_ptr<PassThroughFilterSourceStream> second_pass_through_source(
-      new PassThroughFilterSourceStream(std::move(needs_all_input_source)));
+  auto second_pass_through_source =
+      std::make_unique<PassThroughFilterSourceStream>(
+          std::move(needs_all_input_source));
   second_pass_through_source->set_type_string("SECOND_PASS_THROUGH");
   scoped_refptr<IOBufferWithSize> output_buffer =
       base::MakeRefCounted<IOBufferWithSize>(kDefaultBufferSize);
@@ -488,7 +501,7 @@ TEST_P(FilterSourceStreamTest, FilterChaining) {
 // Tests that FilterData() returns multiple times for a single MockStream
 // read, because there is not enough output space.
 TEST_P(FilterSourceStreamTest, OutputSpaceForOneRead) {
-  std::unique_ptr<MockSourceStream> source(new MockSourceStream);
+  auto source = std::make_unique<MockSourceStream>();
   std::string input = "hello, world!";
   source->AddReadResult(input.data(), input.length(), OK, GetParam());
   // Add a 0 byte read to signal EOF.
@@ -518,7 +531,7 @@ TEST_P(FilterSourceStreamTest, OutputSpaceForOneRead) {
 // Tests that FilterData() returns multiple times for a single MockStream
 // read, because the filter returns one byte at a time.
 TEST_P(FilterSourceStreamTest, ThrottleSourceStream) {
-  std::unique_ptr<MockSourceStream> source(new MockSourceStream);
+  auto source = std::make_unique<MockSourceStream>();
   std::string input = "hello, world!";
   source->AddReadResult(input.data(), input.length(), OK, GetParam());
   // Add a 0 byte read to signal EOF.

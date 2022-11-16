@@ -39,10 +39,10 @@
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/version.h"
 #include "components/subresource_filter/content/browser/ruleset_publisher.h"
 #include "components/subresource_filter/content/browser/ruleset_version.h"
@@ -162,6 +162,10 @@ class RulesetService : public base::SupportsWeakPtr<RulesetService> {
       scoped_refptr<base::SequencedTaskRunner> blocking_task_runner,
       // Note: Optional publisher parameter used exclusively for testing.
       std::unique_ptr<RulesetPublisher> publisher = nullptr);
+
+  RulesetService(const RulesetService&) = delete;
+  RulesetService& operator=(const RulesetService&) = delete;
+
   virtual ~RulesetService();
 
   // Pass-through function to set the callback on publishing.
@@ -258,7 +262,7 @@ class RulesetService : public base::SupportsWeakPtr<RulesetService> {
   void OpenAndPublishRuleset(const IndexedRulesetVersion& version);
   void OnRulesetSet(RulesetFilePtr file);
 
-  PrefService* const local_state_;
+  const raw_ptr<PrefService> local_state_;
 
   // Obsolete files deletion and indexing should be done on this runner.
   scoped_refptr<base::SequencedTaskRunner> background_task_runner_;
@@ -269,8 +273,6 @@ class RulesetService : public base::SupportsWeakPtr<RulesetService> {
   bool is_initialized_;
 
   const base::FilePath indexed_ruleset_base_dir_;
-
-  DISALLOW_COPY_AND_ASSIGN(RulesetService);
 };
 
 }  // namespace subresource_filter

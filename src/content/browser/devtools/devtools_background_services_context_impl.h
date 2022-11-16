@@ -13,12 +13,12 @@
 #include <vector>
 
 #include "base/callback_forward.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
+#include "base/time/time.h"
 #include "content/browser/devtools/devtools_background_services.pb.h"
 #include "content/browser/service_worker/service_worker_context_wrapper.h"
 #include "content/common/content_export.h"
@@ -58,6 +58,11 @@ class CONTENT_EXPORT DevToolsBackgroundServicesContextImpl
       BrowserContext* browser_context,
       scoped_refptr<ServiceWorkerContextWrapper> service_worker_context);
 
+  DevToolsBackgroundServicesContextImpl(
+      const DevToolsBackgroundServicesContextImpl&) = delete;
+  DevToolsBackgroundServicesContextImpl& operator=(
+      const DevToolsBackgroundServicesContextImpl&) = delete;
+
   void AddObserver(EventObserver* observer);
   void RemoveObserver(const EventObserver* observer);
 
@@ -83,13 +88,12 @@ class CONTENT_EXPORT DevToolsBackgroundServicesContextImpl
 
   // Queries all logged events for |service| and returns them in sorted order
   // (by timestamp). |callback| is called with an empty vector if there was an
-  // error. Must be called from the UI thread.
+  // error.
   void GetLoggedBackgroundServiceEvents(
       devtools::proto::BackgroundService service,
       GetLoggedBackgroundServiceEventsCallback callback);
 
   // Clears all logged events related to |service|.
-  // Must be called from the UI thread.
   void ClearLoggedBackgroundServiceEvents(
       devtools::proto::BackgroundService service);
 
@@ -117,8 +121,6 @@ class CONTENT_EXPORT DevToolsBackgroundServicesContextImpl
 
   // Maps from the background service to the time up until the events can be
   // recorded. The BackgroundService enum is used as the index.
-  // This should only be updated on the UI thread, but is also
-  // accessed from the service worker core thread.
   std::array<base::Time, devtools::proto::BackgroundService::COUNT>
       expiration_times_;
 
@@ -126,8 +128,6 @@ class CONTENT_EXPORT DevToolsBackgroundServicesContextImpl
 
   base::WeakPtrFactory<DevToolsBackgroundServicesContextImpl> weak_ptr_factory_{
       this};
-
-  DISALLOW_COPY_AND_ASSIGN(DevToolsBackgroundServicesContextImpl);
 };
 
 }  // namespace content

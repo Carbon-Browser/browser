@@ -4,6 +4,10 @@
 
 #include "ui/ozone/platform/scenic/sysmem_buffer_collection.h"
 
+#include <fuchsia/sysmem/cpp/fidl.h>
+
+#include <tuple>
+
 #include "base/bits.h"
 #include "base/fuchsia/fuchsia_logging.h"
 #include "build/build_config.h"
@@ -69,6 +73,131 @@ size_t GetBytesPerPixel(gfx::BufferFormat buffer_format) {
       NOTREACHED();
       return 1;
   }
+}
+
+bool IsYuvVkFormat(VkFormat format) {
+  switch (format) {
+    case VK_FORMAT_G8_B8_R8_3PLANE_420_UNORM:
+    case VK_FORMAT_G8_B8R8_2PLANE_420_UNORM:
+      return true;
+    case VK_FORMAT_R8_UNORM:
+    case VK_FORMAT_R8G8_UNORM:
+    case VK_FORMAT_B8G8R8A8_UNORM:
+    case VK_FORMAT_R8G8B8A8_UNORM:
+      return false;
+    default:
+      NOTREACHED();
+      return false;
+  }
+}
+
+VkFormatFeatureFlags GetFormatFeatureFlagsFromUsage(VkImageUsageFlags usage) {
+  VkFormatFeatureFlags result = {};
+  if (usage & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) {
+    result |= VK_FORMAT_FEATURE_TRANSFER_SRC_BIT;
+  }
+  if (usage & VK_IMAGE_USAGE_TRANSFER_DST_BIT) {
+    result |= VK_FORMAT_FEATURE_TRANSFER_DST_BIT;
+  }
+  if (usage & VK_IMAGE_USAGE_SAMPLED_BIT) {
+    result |= VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
+  }
+  if (usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) {
+    result |= VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT;
+  }
+  if (usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) {
+    result |= VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT;
+  }
+  if (usage & VK_IMAGE_USAGE_STORAGE_BIT) {
+    result |= VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT;
+  }
+  return result;
+}
+
+VkImageFormatConstraintsInfoFUCHSIA GetDefaultImageFormatConstraintsInfo(
+    const VkImageCreateInfo& create_info) {
+  DCHECK(create_info.format != VK_FORMAT_UNDEFINED);
+  DCHECK(create_info.usage != 0);
+
+  static const VkSysmemColorSpaceFUCHSIA kSrgbColorSpace = {
+      .sType = VK_STRUCTURE_TYPE_SYSMEM_COLOR_SPACE_FUCHSIA,
+      .pNext = nullptr,
+      .colorSpace =
+          static_cast<uint32_t>(fuchsia::sysmem::ColorSpaceType::SRGB),
+  };
+
+  static const VkSysmemColorSpaceFUCHSIA kYuvDefaultColorSpace = {
+      .sType = VK_STRUCTURE_TYPE_SYSMEM_COLOR_SPACE_FUCHSIA,
+      .pNext = nullptr,
+      .colorSpace =
+          static_cast<uint32_t>(fuchsia::sysmem::ColorSpaceType::REC709),
+  };
+
+  VkImageFormatConstraintsInfoFUCHSIA format_info = {
+      .sType = VK_STRUCTURE_TYPE_IMAGE_FORMAT_CONSTRAINTS_INFO_FUCHSIA,
+      .pNext = nullptr,
+      .imageCreateInfo = create_info,
+      .requiredFormatFeatures =
+          GetFormatFeatureFlagsFromUsage(create_info.usage),
+      .sysmemPixelFormat = 0u,
+      .colorSpaceCount = 1u,
+      .pColorSpaces = IsYuvVkFormat(create_info.format) ? &kYuvDefaultColorSpace
+                                                        : &kSrgbColorSpace,
+  };
+  return format_info;
+}
+
+struct ImageConstraintsInfo {
+  VkImageConstraintsInfoFUCHSIA image_constraints;
+  VkImageFormatConstraintsInfoFUCHSIA format_constraints;
+
+  ImageConstraintsInfo(
+      const VkImageConstraintsInfoFUCHSIA& image_constraints_in,
+      const VkImageFormatConstraintsInfoFUCHSIA& format_constraints_in)
+      : image_constraints(image_constraints_in),
+        format_constraints(format_constraints_in) {
+    image_constraints.pFormatConstraints = &format_constraints;
+    image_constraints.formatConstraintsCount = 1u;
+  }
+
+  ImageConstraintsInfo(ImageConstraintsInfo&& from) = delete;
+  ImageConstraintsInfo(const ImageConstraintsInfo&) = delete;
+  ImageConstraintsInfo& operator=(const ImageConstraintsInfo&) = delete;
+};
+
+std::unique_ptr<ImageConstraintsInfo> InitializeImageConstraintsInfo(
+    const VkImageCreateInfo& vk_image_info,
+    bool allow_protected_memory) {
+  VkImageFormatConstraintsInfoFUCHSIA format_constraints =
+      GetDefaultImageFormatConstraintsInfo(vk_image_info);
+  VkImageConstraintsInfoFUCHSIA image_constraints = {
+      .sType = VK_STRUCTURE_TYPE_IMAGE_CONSTRAINTS_INFO_FUCHSIA,
+      .pNext = nullptr,
+      .bufferCollectionConstraints =
+          VkBufferCollectionConstraintsInfoFUCHSIA{
+              .sType =
+                  VK_STRUCTURE_TYPE_BUFFER_COLLECTION_CONSTRAINTS_INFO_FUCHSIA,
+              .pNext = nullptr,
+              .minBufferCount = 1u,
+              // Using the default value (0) for the fields below means that
+              // there is no other constraints except for the minimum buffer
+              // count.
+              .maxBufferCount = 0u,
+              .minBufferCountForCamping = 0u,
+              .minBufferCountForDedicatedSlack = 0u,
+              .minBufferCountForSharedSlack = 0u,
+          },
+      // TODO(crbug.com/1289315): Instead of always allowing protected
+      // memory, Chrome should query if the Vulkan physical device
+      // supports protected memory and only set the flag if it is
+      // supported.
+      .flags = allow_protected_memory
+                   ? VK_IMAGE_CONSTRAINTS_INFO_PROTECTED_OPTIONAL_FUCHSIA
+                   : 0u,
+  };
+
+  return std::make_unique<ImageConstraintsInfo>(image_constraints,
+                                                format_constraints);
 }
 
 }  // namespace
@@ -153,8 +282,7 @@ bool SysmemBufferCollection::Initialize(
   if (register_with_image_pipe) {
     overlay_view_task_runner_ = base::ThreadTaskRunnerHandle::Get();
     scenic_overlay_view_ = std::make_unique<ScenicOverlayView>(
-        scenic_surface_factory->CreateScenicSession(), scenic_surface_factory);
-    surface_factory_ = scenic_surface_factory;
+        scenic_surface_factory->CreateScenicSession());
   }
 
   fuchsia::sysmem::BufferCollectionTokenSyncPtr collection_token;
@@ -313,8 +441,8 @@ bool SysmemBufferCollection::CreateVkImage(
 
     case fuchsia::sysmem::ColorSpaceType::REC709: {
       // Currently sysmem doesn't specify location of chroma samples relative to
-      // luma (see fxb/13677). Assume they are cosited with luma. YCbCr info
-      // here must match the values passed for the same buffer in
+      // luma (see fxbug.dev/13677). Assume they are cosited with luma. YCbCr
+      // info here must match the values passed for the same buffer in
       // FuchsiaVideoDecoder. |format_features| are resolved later in the GPU
       // process before the ycbcr info is passed to Skia.
       *ycbcr_info = gpu::VulkanYCbCrInfo(
@@ -334,10 +462,9 @@ bool SysmemBufferCollection::CreateVkImage(
   return true;
 }
 
-void SysmemBufferCollection::SetOnDeletedCallback(
+void SysmemBufferCollection::AddOnDeletedCallback(
     base::OnceClosure on_deleted) {
-  DCHECK(!on_deleted_);
-  on_deleted_ = std::move(on_deleted);
+  on_deleted_.push_back(std::move(on_deleted));
 }
 
 SysmemBufferCollection::~SysmemBufferCollection() {
@@ -349,8 +476,8 @@ SysmemBufferCollection::~SysmemBufferCollection() {
   if (collection_)
     collection_->Close();
 
-  if (on_deleted_)
-    std::move(on_deleted_).Run();
+  for (auto& callback : on_deleted_)
+    std::move(callback).Run();
 
   if (scenic_overlay_view_ &&
       !overlay_view_task_runner_->BelongsToCurrentThread()) {
@@ -430,14 +557,20 @@ bool SysmemBufferCollection::InitializeInternal(
   }
 
   // vkCreateBufferCollectionFUCHSIA() takes ownership of the token on success.
-  ignore_result(token_channel.release());
+  std::ignore = token_channel.release();
 
   VkImageCreateInfo image_create_info;
   InitializeImageCreateInfo(&image_create_info, min_size_);
 
-  if (vkSetBufferCollectionConstraintsFUCHSIA(vk_device_, vk_buffer_collection_,
-                                              &image_create_info) !=
-      VK_SUCCESS) {
+  // TODO(crbug.com/1289315): Instead of always allowing protected memory,
+  // Chrome should query if the Vulkan physical device supports protected
+  // memory and only set the flag if it is supported.
+  auto image_constraints_info = InitializeImageConstraintsInfo(
+      image_create_info, /* allow_protected_memory */ true);
+
+  if (vkSetBufferCollectionImageConstraintsFUCHSIA(
+          vk_device_, vk_buffer_collection_,
+          &image_constraints_info->image_constraints) != VK_SUCCESS) {
     DLOG(ERROR) << "vkSetBufferCollectionConstraintsFUCHSIA() failed";
     return false;
   }
@@ -501,8 +634,7 @@ void SysmemBufferCollection::InitializeImageCreateInfo(
   vk_image_info->usage = VK_IMAGE_USAGE_SAMPLED_BIT |
                          VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
                          VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-  if (usage_ == gfx::BufferUsage::SCANOUT ||
-      usage_ == gfx::BufferUsage::SCANOUT_CPU_READ_WRITE) {
+  if (usage_ == gfx::BufferUsage::SCANOUT) {
     vk_image_info->usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
   }
 

@@ -7,7 +7,7 @@
 
 #include <wayland-server-protocol.h>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/ozone/platform/wayland/test/global_object.h"
 
 namespace wl {
@@ -21,6 +21,10 @@ class TestDataSource;
 class TestDataDeviceManager : public GlobalObject {
  public:
   TestDataDeviceManager();
+
+  TestDataDeviceManager(const TestDataDeviceManager&) = delete;
+  TestDataDeviceManager& operator=(const TestDataDeviceManager&) = delete;
+
   ~TestDataDeviceManager() override;
 
   TestDataDevice* data_device() const { return data_device_; }
@@ -34,10 +38,8 @@ class TestDataDeviceManager : public GlobalObject {
   }
 
  private:
-  TestDataDevice* data_device_ = nullptr;
-  TestDataSource* data_source_ = nullptr;
-
-  DISALLOW_COPY_AND_ASSIGN(TestDataDeviceManager);
+  raw_ptr<TestDataDevice> data_device_ = nullptr;
+  raw_ptr<TestDataSource> data_source_ = nullptr;
 };
 
 }  // namespace wl

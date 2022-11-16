@@ -6,7 +6,7 @@
 
 #include "base/mac/foundation_util.h"
 #include "components/keyed_service/core/service_access_type.h"
-#include "components/password_manager/core/browser/password_store.h"
+#include "components/password_manager/core/browser/password_store_interface.h"
 #import "ios/chrome/browser/favicon/favicon_loader.h"
 #include "ios/chrome/browser/favicon/ios_chrome_favicon_loader_factory.h"
 #import "ios/chrome/browser/main/browser.h"
@@ -104,20 +104,26 @@
 #pragma mark - PasswordListNavigator
 
 - (void)openAllPasswordsList {
-  __weak id<PasswordCoordinatorDelegate> delegate = self.delegate;
+  __weak id<PasswordCoordinatorDelegate> weakDelegate = self.delegate;
+
   [self dismissIfNecessaryThenDoCompletion:^{
-    [delegate openAllPasswordsPicker];
+    [weakDelegate openAllPasswordsPicker];
   }];
 }
 
 - (void)openPasswordSettings {
-  __weak id<PasswordCoordinatorDelegate> delegate = self.delegate;
+  __weak id<PasswordCoordinatorDelegate> weakDelegate = self.delegate;
+
   [self dismissIfNecessaryThenDoCompletion:^{
-    [delegate openPasswordSettings];
-    if (ui::GetDeviceFormFactor() == ui::DEVICE_FORM_FACTOR_TABLET) {
-      // Settings close the popover but don't send a message to reopen it.
-      [delegate fallbackCoordinatorDidDismissPopover:self];
-    }
+    [weakDelegate openPasswordSettings];
+  }];
+}
+
+- (void)openPasswordSuggestion {
+  __weak id<PasswordCoordinatorDelegate> weakDelegate = self.delegate;
+
+  [self dismissIfNecessaryThenDoCompletion:^{
+    [weakDelegate openPasswordSuggestion];
   }];
 }
 

@@ -10,13 +10,16 @@
 #include "base/callback.h"
 #include "base/check.h"
 #include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/strings/string_util.h"
 #include "build/build_config.h"
+#include "chrome/updater/external_constants.h"
 
 #include "chrome/updater/policy/dm_policy_manager.h"
-#if defined(OS_WIN)
+#include "chrome/updater/policy/policy_manager.h"
+#if BUILDFLAG(IS_WIN)
 #include "chrome/updater/policy/win/group_policy_manager.h"
-#elif defined(OS_MAC)
+#elif BUILDFLAG(IS_MAC)
 #include "chrome/updater/policy/mac/managed_preference_policy_manager.h"
 #endif
 
@@ -176,7 +179,8 @@ bool PolicyService::QueryPolicy(
   if (!status.effective_policy())
     return false;
 
-  *result = status.effective_policy().value().policy;
+  if (result)
+    *result = status.effective_policy().value().policy;
   if (policy_status)
     *policy_status = status;
   return true;
@@ -202,25 +206,31 @@ bool PolicyService::QueryAppPolicy(
   if (!status.effective_policy())
     return false;
 
-  *result = status.effective_policy().value().policy;
+  if (result)
+    *result = status.effective_policy().value().policy;
   if (policy_status)
     *policy_status = status;
   return true;
 }
 
-scoped_refptr<PolicyService> PolicyService::Create() {
+scoped_refptr<PolicyService> PolicyService::Create(
+    scoped_refptr<ExternalConstants> external_constants) {
   PolicyManagerVector managers;
-#if defined(OS_WIN)
+  managers.push_back(
+      std::make_unique<PolicyManager>(external_constants->GroupPolicies()));
+#if BUILDFLAG(IS_WIN)
   managers.push_back(std::make_unique<GroupPolicyManager>());
 #endif
   std::unique_ptr<PolicyManagerInterface> dm_policy_manager =
       CreateDMPolicyManager();
   if (dm_policy_manager)
     managers.push_back(std::move(dm_policy_manager));
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
+  // Managed preference policy manager is being deprecated and thus has a lower
+  // priority than DM policy manager.
   managers.push_back(CreateManagedPreferencePolicyManager());
 #endif
-  managers.push_back(GetPolicyManager());  // For default values.
+  managers.push_back(GetDefaultValuesPolicyManager());
 
   return base::MakeRefCounted<PolicyService>(std::move(managers));
 }

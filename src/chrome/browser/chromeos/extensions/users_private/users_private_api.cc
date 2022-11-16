@@ -9,6 +9,7 @@
 #include <memory>
 #include <utility>
 
+#include "ash/components/settings/cros_settings_names.h"
 #include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/strings/utf_string_conversions.h"
@@ -24,7 +25,6 @@
 #include "chrome/browser/chromeos/extensions/users_private/users_private_delegate_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/extensions/api/users_private.h"
-#include "chromeos/settings/cros_settings_names.h"
 #include "components/session_manager/core/session_manager.h"
 #include "components/user_manager/user.h"
 #include "components/user_manager/user_manager.h"
@@ -44,7 +44,7 @@ bool IsDeviceEnterpriseManaged() {
 
 bool IsChild(Profile* profile) {
   const user_manager::User* user =
-      chromeos::ProfileHelper::Get()->GetUserByProfile(profile);
+      ash::ProfileHelper::Get()->GetUserByProfile(profile);
   if (!user)
     return false;
 
@@ -65,7 +65,7 @@ bool CanModifyUserList(content::BrowserContext* browser_context) {
 
 bool IsExistingUser(const std::string& username) {
   return ash::CrosSettings::Get()->FindEmailInList(
-      chromeos::kAccountsPrefUsers, username, /*wildcard_match=*/nullptr);
+      ash::kAccountsPrefUsers, username, /*wildcard_match=*/nullptr);
 }
 
 // Creates User object for the exising user_manager::User .
@@ -110,7 +110,7 @@ std::unique_ptr<base::ListValue> GetUsersList(
   PrefsUtil* prefs_util = delegate->GetPrefsUtil();
 
   std::unique_ptr<api::settings_private::PrefObject> users_pref_object =
-      prefs_util->GetPref(chromeos::kAccountsPrefUsers);
+      prefs_util->GetPref(ash::kAccountsPrefUsers);
   if (users_pref_object->value && users_pref_object->value->is_list()) {
     email_list = users_pref_object->value->Clone();
   }
@@ -121,7 +121,7 @@ std::unique_ptr<base::ListValue> GetUsersList(
   // Remove all supervised users. On the next step only supervised users
   // present on the device will be added back. Thus not present SU are
   // removed. No need to remove usual users as they can simply login back.
-  base::Value::ListView email_list_view = email_list.GetList();
+  base::Value::ListView email_list_view = email_list.GetListDeprecated();
   for (size_t i = 0; i < email_list_view.size(); ++i) {
     const std::string* email = email_list_view[i].GetIfString();
     if (email && user_manager->IsDeprecatedSupervisedAccountId(
@@ -141,7 +141,7 @@ std::unique_ptr<base::ListValue> GetUsersList(
   if (ash::OwnerSettingsServiceAsh* service =
           ash::OwnerSettingsServiceAshFactory::GetForBrowserContext(
               browser_context)) {
-    service->Set(chromeos::kAccountsPrefUsers, email_list);
+    service->Set(ash::kAccountsPrefUsers, email_list);
   }
 
   // Now populate the list of User objects for returning to the JS.
@@ -150,9 +150,9 @@ std::unique_ptr<base::ListValue> GetUsersList(
     std::string email = maybe_email ? *maybe_email : std::string();
     AccountId account_id = AccountId::FromUserEmail(email);
     const user_manager::User* user = user_manager->FindUser(account_id);
-    user_list->Append(
+    user_list->Append(base::Value::FromUniquePtrValue(
         (user ? CreateApiUser(email, *user) : CreateUnknownApiUser(email))
-            .ToValue());
+            .ToValue()));
   }
 
   return user_list;
@@ -218,7 +218,7 @@ ExtensionFunction::ResponseAction UsersPrivateAddUserFunction::Run() {
   UsersPrivateDelegate* delegate =
       UsersPrivateDelegateFactory::GetForBrowserContext(browser_context());
   PrefsUtil* prefs_util = delegate->GetPrefsUtil();
-  bool added = prefs_util->AppendToListCrosSetting(chromeos::kAccountsPrefUsers,
+  bool added = prefs_util->AppendToListCrosSetting(ash::kAccountsPrefUsers,
                                                    username_value);
   return RespondNow(OneArgument(base::Value(added)));
 }
@@ -245,8 +245,8 @@ ExtensionFunction::ResponseAction UsersPrivateRemoveUserFunction::Run() {
   UsersPrivateDelegate* delegate =
       UsersPrivateDelegateFactory::GetForBrowserContext(browser_context());
   PrefsUtil* prefs_util = delegate->GetPrefsUtil();
-  bool removed = prefs_util->RemoveFromListCrosSetting(
-      chromeos::kAccountsPrefUsers, canonical_email);
+  bool removed = prefs_util->RemoveFromListCrosSetting(ash::kAccountsPrefUsers,
+                                                       canonical_email);
   user_manager::UserManager::Get()->RemoveUser(
       AccountId::FromUserEmail(parameters->email),
       user_manager::UserRemovalReason::LOCAL_USER_INITIATED,
@@ -277,9 +277,8 @@ UsersPrivateGetCurrentUserFunction::~UsersPrivateGetCurrentUserFunction() =
     default;
 
 ExtensionFunction::ResponseAction UsersPrivateGetCurrentUserFunction::Run() {
-  const user_manager::User* user =
-      chromeos::ProfileHelper::Get()->GetUserByProfile(
-          Profile::FromBrowserContext(browser_context()));
+  const user_manager::User* user = ash::ProfileHelper::Get()->GetUserByProfile(
+      Profile::FromBrowserContext(browser_context()));
   return user ? RespondNow(OneArgument(base::Value::FromUniquePtrValue(
                     CreateApiUser(user->GetAccountId().GetUserEmail(), *user)
                         .ToValue())))

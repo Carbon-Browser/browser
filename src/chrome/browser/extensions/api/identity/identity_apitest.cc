@@ -12,6 +12,7 @@
 #include "base/command_line.h"
 #include "base/containers/contains.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
 #include "base/strings/string_util.h"
@@ -83,12 +84,12 @@
 #include "url/gurl.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "ash/components/tpm/stub_install_attributes.h"
 #include "chrome/browser/ash/login/users/mock_user_manager.h"
-#include "chrome/browser/chromeos/net/network_portal_detector_test_impl.h"
-#include "chromeos/network/network_handler.h"
-#include "chromeos/network/network_state.h"
-#include "chromeos/network/network_state_handler.h"
-#include "chromeos/tpm/stub_install_attributes.h"
+#include "chrome/browser/ash/net/network_portal_detector_test_impl.h"
+#include "chromeos/ash/components/network/network_handler.h"
+#include "chromeos/ash/components/network/network_state.h"
+#include "chromeos/ash/components/network/network_state_handler.h"
 #include "components/user_manager/scoped_user_manager.h"
 #endif
 
@@ -120,14 +121,14 @@ void InitNetwork() {
           ->network_state_handler()
           ->DefaultNetwork();
 
-  auto* portal_detector = new chromeos::NetworkPortalDetectorTestImpl();
+  auto* portal_detector = new ash::NetworkPortalDetectorTestImpl();
   portal_detector->SetDefaultNetworkForTesting(default_network->guid());
 
   portal_detector->SetDetectionResultsForTesting(
       default_network->guid(),
-      chromeos::NetworkPortalDetector::CAPTIVE_PORTAL_STATUS_ONLINE, 204);
+      ash::NetworkPortalDetector::CAPTIVE_PORTAL_STATUS_ONLINE, 204);
 
-  chromeos::network_portal_detector::InitializeForTesting(portal_detector);
+  ash::network_portal_detector::InitializeForTesting(portal_detector);
 }
 #endif
 
@@ -140,6 +141,7 @@ class AsyncFunctionRunner {
                         content::BrowserContext* browser_context) {
     response_delegate_ =
         std::make_unique<api_test_utils::SendResponseHelper>(function);
+    function->preserve_results_for_testing();
     absl::optional<base::Value> parsed_args(utils::ParseList(args));
     ASSERT_TRUE(parsed_args)
         << "Could not parse extension function arguments: " << args;
@@ -166,19 +168,16 @@ class AsyncFunctionRunner {
     return function->GetError();
   }
 
-  void WaitForTwoResults(ExtensionFunction* function,
-                         base::Value* first_result,
-                         base::Value* second_result) {
+  void WaitForOneResult(ExtensionFunction* function, base::Value* result) {
     RunMessageLoopUntilResponse();
     EXPECT_TRUE(function->GetError().empty())
         << "Unexpected error: " << function->GetError();
     EXPECT_NE(nullptr, function->GetResultList());
 
-    const auto& result_list = function->GetResultList()->GetList();
-    EXPECT_EQ(2ul, result_list.size());
+    const auto& result_list = *function->GetResultList();
+    EXPECT_EQ(1ul, result_list.size());
 
-    *first_result = result_list[0].Clone();
-    *second_result = result_list[1].Clone();
+    *result = result_list[0].Clone();
   }
 
  private:
@@ -204,11 +203,8 @@ class AsyncExtensionBrowserTest : public ExtensionBrowserTest {
     return async_function_runner_->WaitForError(function);
   }
 
-  void WaitForTwoResults(ExtensionFunction* function,
-                         base::Value* first_result,
-                         base::Value* second_result) {
-    return async_function_runner_->WaitForTwoResults(function, first_result,
-                                                     second_result);
+  void WaitForOneResult(ExtensionFunction* function, base::Value* result) {
+    return async_function_runner_->WaitForOneResult(function, result);
   }
 
  private:
@@ -283,9 +279,9 @@ class TestOAuth2MintTokenFlow : public OAuth2MintTokenFlow {
 
  private:
   ResultType result_;
-  const std::set<std::string>* requested_scopes_;
+  raw_ptr<const std::set<std::string>> requested_scopes_;
   std::set<std::string> granted_scopes_;
-  OAuth2MintTokenFlow::Delegate* delegate_;
+  raw_ptr<OAuth2MintTokenFlow::Delegate> delegate_;
 };
 
 // Waits for a specific GURL to generate a NOTIFICATION_LOAD_STOP event and
@@ -331,7 +327,7 @@ class WaitForGURLAndCloseWindow : public content::WindowedNotificationObserver {
 
  private:
   GURL url_;
-  content::WebContents* embedder_web_contents_;
+  raw_ptr<content::WebContents> embedder_web_contents_;
 };
 
 }  // namespace
@@ -409,9 +405,8 @@ class FakeGetAuthTokenFunction : public IdentityGetAuthTokenFunction {
         error = GoogleServiceAuthError(
             GoogleServiceAuthError::INVALID_GAIA_CREDENTIALS);
       }
-      OnGetAccessTokenComplete(
-          access_token, base::Time::Now() + base::TimeDelta::FromHours(1LL),
-          error);
+      OnGetAccessTokenComplete(access_token,
+                               base::Time::Now() + base::Hours(1LL), error);
     } else {
       // Make a request to the IdentityManager. The test now must tell the
       // service to issue an access token (or an error).
@@ -628,22 +623,21 @@ class IdentityGetAccountsFunctionTest : public IdentityTestWithSignin {
       return GenerateFailureResult(gaia_ids, absl::nullopt)
              << "getAccounts did not return a result.";
     }
-    const base::ListValue* callback_arguments = func->GetResultList();
-    if (!callback_arguments)
+    const base::Value::List* callback_arguments_list = func->GetResultList();
+    if (!callback_arguments_list)
       return GenerateFailureResult(gaia_ids, absl::nullopt) << "NULL result";
-    base::Value::ConstListView callback_arguments_list =
-        callback_arguments->GetList();
 
-    if (callback_arguments_list.size() != 1u) {
+    if (callback_arguments_list->size() != 1u) {
       return GenerateFailureResult(gaia_ids, absl::nullopt)
              << "Expected 1 argument but got "
-             << callback_arguments_list.size();
+             << callback_arguments_list->size();
     }
 
-    if (!callback_arguments_list[0].is_list())
+    if (!(*callback_arguments_list)[0].is_list())
       GenerateFailureResult(gaia_ids, absl::nullopt)
           << "Result was not an array";
-    base::Value::ConstListView results = callback_arguments_list[0].GetList();
+    base::Value::ConstListView results =
+        (*callback_arguments_list)[0].GetListDeprecated();
 
     std::set<std::string> result_ids;
     for (const base::Value& item : results) {
@@ -864,8 +858,7 @@ class GetAuthTokenFunctionTest
     std::string access_token = "access_token-" + account_id.ToString();
     identity_test_env()
         ->WaitForAccessTokenRequestIfNecessaryAndRespondWithToken(
-            account_id, access_token,
-            base::Time::Now() + base::TimeDelta::FromSeconds(3600));
+            account_id, access_token, base::Time::Now() + base::Seconds(3600));
     return access_token;
   }
 
@@ -991,29 +984,19 @@ class GetAuthTokenFunctionTest
                                Browser* browser,
                                std::string* access_token,
                                std::set<std::string>* granted_scopes) {
-    EXPECT_TRUE(
-        utils::RunFunction(function, args, browser, api_test_utils::NONE));
+    std::unique_ptr<base::Value> result_value =
+        utils::RunFunctionAndReturnSingleResult(function, args, browser);
+    ASSERT_TRUE(result_value);
+    std::unique_ptr<api::identity::GetAuthTokenResult> result =
+        api::identity::GetAuthTokenResult::FromValue(*result_value);
+    ASSERT_TRUE(result);
 
-    EXPECT_TRUE(function->GetError().empty())
-        << "Unexpected error: " << function->GetError();
-    EXPECT_NE(nullptr, function->GetResultList());
-
-    const auto& result_list = function->GetResultList()->GetList();
-    EXPECT_EQ(2ul, result_list.size());
-
-    const auto& access_token_value = result_list[0];
-    const auto& granted_scopes_value = result_list[1];
-    EXPECT_TRUE(access_token_value.is_string());
-    EXPECT_TRUE(granted_scopes_value.is_list());
-
-    std::set<std::string> scopes;
-    for (const auto& scope : granted_scopes_value.GetList()) {
-      EXPECT_TRUE(scope.is_string());
-      scopes.insert(scope.GetString());
-    }
-
-    *access_token = access_token_value.GetString();
-    *granted_scopes = std::move(scopes);
+    EXPECT_NE(nullptr, result->token);
+    *access_token = *result->token;
+    EXPECT_NE(nullptr, result->granted_scopes);
+    std::set<std::string> granted_scopes_map(result->granted_scopes->begin(),
+                                             result->granted_scopes->end());
+    *granted_scopes = std::move(granted_scopes_map);
   }
 
   void WaitForGetAuthTokenResults(
@@ -1021,25 +1004,22 @@ class GetAuthTokenFunctionTest
       std::string* access_token,
       std::set<std::string>* granted_scopes,
       AsyncFunctionRunner* function_runner = nullptr) {
-    base::Value access_token_value;
-    base::Value granted_scopes_value;
+    base::Value result_value;
     if (function_runner == nullptr) {
-      WaitForTwoResults(function, &access_token_value, &granted_scopes_value);
+      WaitForOneResult(function, &result_value);
     } else {
-      function_runner->WaitForTwoResults(function, &access_token_value,
-                                         &granted_scopes_value);
+      function_runner->WaitForOneResult(function, &result_value);
     }
-    EXPECT_TRUE(access_token_value.is_string());
-    EXPECT_TRUE(granted_scopes_value.is_list());
+    std::unique_ptr<api::identity::GetAuthTokenResult> result =
+        api::identity::GetAuthTokenResult::FromValue(result_value);
+    ASSERT_TRUE(result);
 
-    std::set<std::string> scopes;
-    for (const auto& scope : granted_scopes_value.GetList()) {
-      EXPECT_TRUE(scope.is_string());
-      scopes.insert(scope.GetString());
-    }
-
-    *access_token = access_token_value.GetString();
-    *granted_scopes = std::move(scopes);
+    ASSERT_NE(nullptr, result->token);
+    *access_token = *result->token;
+    ASSERT_NE(nullptr, result->granted_scopes);
+    std::set<std::string> granted_scopes_map(result->granted_scopes->begin(),
+                                             result->granted_scopes->end());
+    *granted_scopes = std::move(granted_scopes_map);
   }
 
  private:
@@ -1593,7 +1573,7 @@ IN_PROC_BROWSER_TEST_F(GetAuthTokenFunctionTest, InteractiveApprovalSuccess) {
       1);
 }
 
-#if !defined(OS_MAC)
+#if !BUILDFLAG(IS_MAC)
 // Test was originally written for http://crbug.com/753014 and subsequently
 // modified to use the remote consent flow.
 //
@@ -1625,7 +1605,7 @@ IN_PROC_BROWSER_TEST_F(GetAuthTokenFunctionTest,
       kGetAuthTokenResultHistogramName,
       IdentityGetAuthTokenError::State::kRemoteConsentPageLoadFailure, 1);
 }
-#endif  // !defined(OS_MAC)
+#endif  // !BUILDFLAG(IS_MAC)
 
 IN_PROC_BROWSER_TEST_F(GetAuthTokenFunctionTest, NoninteractiveQueue) {
   SignIn("primary@example.com");
@@ -1795,7 +1775,7 @@ IN_PROC_BROWSER_TEST_F(GetAuthTokenFunctionTest, NonInteractiveCacheHit) {
 
   // Pre-populate the cache with a token.
   IdentityTokenCacheValue token =
-      CreateToken(kAccessToken, base::TimeDelta::FromSeconds(3600));
+      CreateToken(kAccessToken, base::Seconds(3600));
   SetCachedToken(token);
 
   // Get a token. Should not require a GAIA request.
@@ -1835,7 +1815,7 @@ IN_PROC_BROWSER_TEST_F(GetAuthTokenFunctionTest,
 
   // Pre-populate the cache with a token.
   IdentityTokenCacheValue token =
-      CreateToken(kAccessToken, base::TimeDelta::FromSeconds(3600));
+      CreateToken(kAccessToken, base::Seconds(3600));
   SetCachedTokenForAccount(account_info, token);
 
   if (id_api()->AreExtensionsRestrictedToPrimaryAccount()) {
@@ -1936,7 +1916,7 @@ IN_PROC_BROWSER_TEST_F(GetAuthTokenFunctionTest, InteractiveCacheHit) {
 
   // Populate the cache with a token while the request is blocked.
   IdentityTokenCacheValue token =
-      CreateToken(kAccessToken, base::TimeDelta::FromSeconds(3600));
+      CreateToken(kAccessToken, base::Seconds(3600));
   SetCachedToken(token);
 
   // When we wake up the request, it returns the cached token without
@@ -1966,7 +1946,7 @@ IN_PROC_BROWSER_TEST_F(GetAuthTokenFunctionTest, LoginInvalidatesTokenCache) {
 
   // Pre-populate the cache with a token.
   IdentityTokenCacheValue token =
-      CreateToken(kAccessToken, base::TimeDelta::FromSeconds(3600));
+      CreateToken(kAccessToken, base::Seconds(3600));
   SetCachedToken(token);
 
   // Because the user is not signed in, the token will be removed,
@@ -2733,7 +2713,7 @@ IN_PROC_BROWSER_TEST_F(GetAuthTokenFunctionTest, SubsetMatchCacheHit) {
 
   std::set<std::string> scopes = {"email", "foo", "bar"};
   IdentityTokenCacheValue token = IdentityTokenCacheValue::CreateToken(
-      kAccessToken, scopes, base::TimeDelta::FromSeconds(3600));
+      kAccessToken, scopes, base::Seconds(3600));
   SetCachedToken(token);
 
   std::string access_token;
@@ -2857,9 +2837,8 @@ class GetAuthTokenFunctionDeviceLocalAccountTest
 
   // Set up fake install attributes to make the device appeared as
   // enterprise-managed.
-  chromeos::ScopedStubInstallAttributes test_install_attributes_{
-      chromeos::StubInstallAttributes::CreateCloudManaged("example.com",
-                                                          "fake-id")};
+  ash::ScopedStubInstallAttributes test_install_attributes_{
+      ash::StubInstallAttributes::CreateCloudManaged("example.com", "fake-id")};
 
   // Owned by |user_manager_enabler|.
   ash::MockUserManager* user_manager_;
@@ -3228,7 +3207,7 @@ IN_PROC_BROWSER_TEST_F(RemoveCachedAuthTokenFunctionTest, RemoteConsent) {
 
 IN_PROC_BROWSER_TEST_F(RemoveCachedAuthTokenFunctionTest, NonMatchingToken) {
   IdentityTokenCacheValue token =
-      CreateToken("non_matching_token", base::TimeDelta::FromSeconds(3600));
+      CreateToken("non_matching_token", base::Seconds(3600));
   SetCachedToken(token);
   EXPECT_TRUE(InvalidateDefaultToken());
   EXPECT_EQ(IdentityTokenCacheValue::CACHE_STATUS_TOKEN,
@@ -3238,7 +3217,7 @@ IN_PROC_BROWSER_TEST_F(RemoveCachedAuthTokenFunctionTest, NonMatchingToken) {
 
 IN_PROC_BROWSER_TEST_F(RemoveCachedAuthTokenFunctionTest, MatchingToken) {
   IdentityTokenCacheValue token =
-      CreateToken(kAccessToken, base::TimeDelta::FromSeconds(3600));
+      CreateToken(kAccessToken, base::Seconds(3600));
   SetCachedToken(token);
   EXPECT_EQ(IdentityTokenCacheValue::CACHE_STATUS_TOKEN,
             GetCachedToken().status());
@@ -3256,14 +3235,7 @@ class LaunchWebAuthFlowFunctionTest : public AsyncExtensionBrowserTest {
   }
 };
 
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
-// This test times out on Linux MSan Tests.
-// See https://crbug.com/831848 .
-#define MAYBE_UserCloseWindow DISABLED_UserCloseWindow
-#else
-#define MAYBE_UserCloseWindow UserCloseWindow
-#endif
-IN_PROC_BROWSER_TEST_F(LaunchWebAuthFlowFunctionTest, MAYBE_UserCloseWindow) {
+IN_PROC_BROWSER_TEST_F(LaunchWebAuthFlowFunctionTest, UserCloseWindow) {
   net::EmbeddedTestServer https_server(net::EmbeddedTestServer::TYPE_HTTPS);
   https_server.ServeFilesFromSourceDirectory(
       "chrome/test/data/extensions/api_test/identity");
@@ -3408,7 +3380,7 @@ class ClearAllCachedAuthTokensFunctionTest : public AsyncExtensionBrowserTest {
   bool RunClearAllCachedAuthTokensFunction() {
     auto function =
         base::MakeRefCounted<IdentityClearAllCachedAuthTokensFunction>();
-    function->set_extension(extension_);
+    function->set_extension(extension_.get());
     return utils::RunFunction(function.get(), "[]", browser(),
                               api_test_utils::NONE);
   }
@@ -3419,7 +3391,7 @@ class ClearAllCachedAuthTokensFunctionTest : public AsyncExtensionBrowserTest {
 
  private:
   base::test::ScopedFeatureList feature_list_;
-  const Extension* extension_ = nullptr;
+  raw_ptr<const Extension> extension_ = nullptr;
 };
 
 IN_PROC_BROWSER_TEST_F(ClearAllCachedAuthTokensFunctionTest,
@@ -3434,9 +3406,8 @@ IN_PROC_BROWSER_TEST_F(ClearAllCachedAuthTokensFunctionTest,
                        EraseCachedTokens) {
   ExtensionTokenKey token_key(extension()->id(), CoreAccountInfo(), {"foo"});
   id_api()->token_cache()->SetToken(
-      token_key,
-      IdentityTokenCacheValue::CreateToken("access_token", {"foo"},
-                                           base::TimeDelta::FromSeconds(3600)));
+      token_key, IdentityTokenCacheValue::CreateToken("access_token", {"foo"},
+                                                      base::Seconds(3600)));
   EXPECT_NE(IdentityTokenCacheValue::CACHE_STATUS_NOTFOUND,
             id_api()->token_cache()->GetToken(token_key).status());
   ASSERT_TRUE(RunClearAllCachedAuthTokensFunction());
@@ -3474,8 +3445,8 @@ IN_PROC_BROWSER_TEST_P(ClearAllCachedAuthTokensFunctionTestWithPartitionParam,
                        CleanWebAuthFlowCookies) {
   auto test_cookie = net::CanonicalCookie::CreateUnsafeCookieForTesting(
       "test_name", "test_value", "test.com", "/", base::Time(), base::Time(),
-      base::Time(), true, false, net::CookieSameSite::NO_RESTRICTION,
-      net::COOKIE_PRIORITY_DEFAULT, false);
+      base::Time(), base::Time(), true, false,
+      net::CookieSameSite::NO_RESTRICTION, net::COOKIE_PRIORITY_DEFAULT, false);
   base::RunLoop set_cookie_loop;
   GetCookieManager()->SetCanonicalCookie(
       *test_cookie,
@@ -3521,7 +3492,7 @@ class OnSignInChangedEventTest : public IdentityTestWithSignin {
   // been added. This is because the order of multiple events firing due to the
   // same underlying state change is undefined in the
   // chrome.identity.onSignInEventChanged() API.
-  void AddExpectedEvent(std::vector<base::Value> args) {
+  void AddExpectedEvent(base::Value::List args) {
     expected_events_.insert(
         std::make_unique<Event>(events::IDENTITY_ON_SIGN_IN_CHANGED,
                                 api::identity::OnSignInChanged::kEventName,
@@ -3536,13 +3507,13 @@ class OnSignInChangedEventTest : public IdentityTestWithSignin {
 
     // Search for |event| in the set of expected events.
     bool found_event = false;
-    const auto* event_args = event->event_args.get();
+    const auto& event_args = event->event_args;
     for (const auto& expected_event : expected_events_) {
       EXPECT_EQ(expected_event->histogram_value, event->histogram_value);
       EXPECT_EQ(expected_event->event_name, event->event_name);
 
-      const auto* expected_event_args = expected_event->event_args.get();
-      if (*event_args != *expected_event_args)
+      const auto& expected_event_args = expected_event->event_args;
+      if (event_args != expected_event_args)
         continue;
 
       expected_events_.erase(expected_event);
@@ -3556,11 +3527,11 @@ class OnSignInChangedEventTest : public IdentityTestWithSignin {
       LOG(INFO) << "Was expecting events with these args:";
 
       for (const auto& expected_event : expected_events_) {
-        LOG(INFO) << *(expected_event->event_args.get());
+        LOG(INFO) << expected_event->event_args;
       }
 
       LOG(INFO) << "But received event with different args:";
-      LOG(INFO) << *event_args;
+      LOG(INFO) << event_args;
     }
   }
 

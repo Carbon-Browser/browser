@@ -10,7 +10,6 @@
 #include "base/metrics/user_metrics.h"
 #include "base/metrics/user_metrics_action.h"
 #include "chrome/browser/ui/browser.h"
-#include "chrome/browser/ui/browser_dialogs.h"
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
@@ -60,12 +59,37 @@ void RelaunchRequiredDialogView::SetDeadline(base::Time deadline) {
 }
 
 std::u16string RelaunchRequiredDialogView::GetWindowTitle() const {
-  return relaunch_required_timer_.GetWindowTitle();
+  // Round the time-to-relaunch to the nearest "boundary", which may be a day,
+  // hour, minute, or second. For example, two days and eighteen hours will be
+  // rounded up to three days, while two days and one hour will be rounded down
+  // to two days. This rounding is significant for only the initial showing of
+  // the dialog. Each refresh of the title thereafter will take place at the
+  // moment when the boundary value changes. For example, the title will be
+  // refreshed from three days to two days when there are exactly two days
+  // remaining. This scales nicely to the final seconds, when one would expect a
+  // "3..2..1.." countdown to change precisely on the per-second boundaries.
+  const base::TimeDelta rounded_offset =
+      relaunch_required_timer_.GetRoundedDeadlineDelta();
+
+  int amount = rounded_offset.InSeconds();
+  int message_id = IDS_RELAUNCH_REQUIRED_TITLE_SECONDS;
+  if (rounded_offset.InDays() >= 2) {
+    amount = rounded_offset.InDays();
+    message_id = IDS_RELAUNCH_REQUIRED_TITLE_DAYS;
+  } else if (rounded_offset.InHours() >= 1) {
+    amount = rounded_offset.InHours();
+    message_id = IDS_RELAUNCH_REQUIRED_TITLE_HOURS;
+  } else if (rounded_offset.InMinutes() >= 1) {
+    amount = rounded_offset.InMinutes();
+    message_id = IDS_RELAUNCH_REQUIRED_TITLE_MINUTES;
+  }
+
+  return l10n_util::GetPluralStringFUTF16(message_id, amount);
 }
 
 ui::ImageModel RelaunchRequiredDialogView::GetWindowIcon() {
   return ui::ImageModel::FromVectorIcon(
-      vector_icons::kBusinessIcon, gfx::kChromeIconGrey,
+      vector_icons::kBusinessIcon, ui::kColorIcon,
       ChromeLayoutProvider::Get()->GetDistanceMetric(
           DISTANCE_BUBBLE_HEADER_VECTOR_ICON_SIZE));
 }
@@ -101,7 +125,6 @@ RelaunchRequiredDialogView::RelaunchRequiredDialogView(
   set_fixed_width(views::LayoutProvider::Get()->GetDistanceMetric(
       views::DISTANCE_MODAL_DIALOG_PREFERRED_WIDTH));
 
-  chrome::RecordDialogCreation(chrome::DialogIdentifier::RELAUNCH_REQUIRED);
   const ChromeLayoutProvider* provider = ChromeLayoutProvider::Get();
   set_margins(provider->GetDialogInsetsForContentType(
       views::DialogContentType::kText, views::DialogContentType::kText));
@@ -119,7 +142,7 @@ RelaunchRequiredDialogView::RelaunchRequiredDialogView(
       2 * provider->GetInsetsMetric(views::INSETS_DIALOG_TITLE).left() +
       provider->GetDistanceMetric(DISTANCE_BUBBLE_HEADER_VECTOR_ICON_SIZE);
   label->SetBorder(views::CreateEmptyBorder(
-      gfx::Insets(0, title_offset - margins().left(), 0, 0)));
+      gfx::Insets::TLBR(0, title_offset - margins().left(), 0, 0)));
 
   AddChildView(std::move(label));
 

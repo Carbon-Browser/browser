@@ -8,11 +8,11 @@
 #include <memory>
 #include <string>
 
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
+#include "base/time/time.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_license_checker.h"
-#include "chromeos/dbus/concierge/concierge_client.h"
-#include "chromeos/dbus/concierge/concierge_service.pb.h"
+#include "chromeos/ash/components/dbus/concierge/concierge_client.h"
+#include "chromeos/ash/components/dbus/concierge/concierge_service.pb.h"
 #include "chromeos/dbus/dlcservice/dlcservice_client.h"
 #include "components/download/public/background_service/download_params.h"
 #include "components/keyed_service/core/keyed_service.h"
@@ -43,7 +43,7 @@ class PluginVmDriveImageDownloadService;
 // depending on whether an .iso (new VM) or archive (prepared VM) is
 // downloaded.
 class PluginVmInstaller : public KeyedService,
-                          public chromeos::ConciergeClient::DiskImageObserver {
+                          public ash::ConciergeClient::DiskImageObserver {
  public:
   // FailureReasons values are logged to UMA and shown to users. Do not change
   // or re-use enum values.
@@ -122,6 +122,9 @@ class PluginVmInstaller : public KeyedService,
   };
 
   explicit PluginVmInstaller(Profile* profile);
+
+  PluginVmInstaller(const PluginVmInstaller&) = delete;
+  PluginVmInstaller& operator=(const PluginVmInstaller&) = delete;
 
   // Start the installation. Progress updates will be sent to the observer.
   // Returns a FailureReason if the installation couldn't be started.
@@ -295,8 +298,6 @@ class PluginVmInstaller : public KeyedService,
   mojo::Remote<device::mojom::WakeLock> wake_lock_;
 
   base::WeakPtrFactory<PluginVmInstaller> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(PluginVmInstaller);
 };
 
 }  // namespace plugin_vm

@@ -33,9 +33,10 @@
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/models/image_model.h"
 #include "ui/base/ui_base_types.h"
+#include "ui/color/color_id.h"
+#include "ui/color/color_provider.h"
 #include "ui/gfx/color_palette.h"
 #include "ui/gfx/paint_vector_icon.h"
-#include "ui/native_theme/native_theme.h"
 #include "ui/views/animation/ink_drop.h"
 #include "ui/views/animation/ink_drop_impl.h"
 #include "ui/views/border.h"
@@ -52,18 +53,19 @@ namespace media_router {
 
 namespace {
 
-gfx::ImageSkia CreateSinkIcon(SinkIconType icon_type, bool enabled = true) {
-  SkColor icon_color = enabled ? gfx::kChromeIconGrey : gfx::kGoogleGrey500;
-  return gfx::CreateVectorIcon(*CastDialogSinkButton::GetVectorIcon(icon_type),
-                               kPrimaryIconSize, icon_color);
+ui::ImageModel CreateSinkIcon(SinkIconType icon_type, bool enabled = true) {
+  ui::ColorId icon_color = enabled ? ui::kColorIcon : ui::kColorIconDisabled;
+  return ui::ImageModel::FromVectorIcon(
+      *CastDialogSinkButton::GetVectorIcon(icon_type), icon_color,
+      kPrimaryIconSize);
 }
 
-gfx::ImageSkia CreateDisabledSinkIcon(SinkIconType icon_type) {
+ui::ImageModel CreateDisabledSinkIcon(SinkIconType icon_type) {
   return CreateSinkIcon(icon_type, false);
 }
 
 std::unique_ptr<views::ImageView> CreatePrimaryIconView(
-    const gfx::ImageSkia& image) {
+    const ui::ImageModel& image) {
   auto icon_view = std::make_unique<views::ImageView>();
   icon_view->SetImage(image);
   icon_view->SetBorder(views::CreateEmptyBorder(kPrimaryIconBorder));
@@ -73,13 +75,12 @@ std::unique_ptr<views::ImageView> CreatePrimaryIconView(
 std::unique_ptr<views::View> CreatePrimaryIconForSink(const UIMediaSink& sink) {
   // The stop button has the highest priority, and the issue icon comes second.
   if (sink.state == UIMediaSinkState::CONNECTED) {
-    return CreatePrimaryIconView(gfx::CreateVectorIcon(
-        kGenericStopIcon, kPrimaryIconSize, gfx::kGoogleBlue500));
+    return CreatePrimaryIconView(ui::ImageModel::FromVectorIcon(
+        kGenericStopIcon, ui::kColorAccent, kPrimaryIconSize));
   } else if (sink.issue) {
-    auto icon =
-        std::make_unique<views::ImageView>(ui::ImageModel::FromVectorIcon(
-            ::vector_icons::kInfoOutlineIcon,
-            ui::NativeTheme::kColorId_DefaultIconColor, kPrimaryIconSize));
+    auto icon = std::make_unique<views::ImageView>(
+        ui::ImageModel::FromVectorIcon(::vector_icons::kInfoOutlineIcon,
+                                       ui::kColorIcon, kPrimaryIconSize));
     icon->SetBorder(views::CreateEmptyBorder(kPrimaryIconBorder));
     return icon;
   } else if (sink.state == UIMediaSinkState::CONNECTING ||
@@ -136,6 +137,7 @@ void CastDialogSinkButton::OverrideStatusText(
       saved_status_text_ = subtitle()->GetText();
     subtitle()->SetText(status_text);
   }
+  SetTooltipAndAccessibleName();
 }
 
 void CastDialogSinkButton::RestoreStatusText() {
@@ -144,6 +146,7 @@ void CastDialogSinkButton::RestoreStatusText() {
       subtitle()->SetText(*saved_status_text_);
     saved_status_text_.reset();
   }
+  SetTooltipAndAccessibleName();
 }
 
 bool CastDialogSinkButton::OnMousePressed(const ui::MouseEvent& event) {
@@ -191,8 +194,8 @@ void CastDialogSinkButton::OnEnabledChanged() {
 }
 
 void CastDialogSinkButton::UpdateTitleTextStyle() {
-  SkColor background_color = GetNativeTheme()->GetSystemColor(
-      ui::NativeTheme::kColorId_DialogBackground);
+  SkColor background_color =
+      GetColorProvider()->GetColor(ui::kColorDialogBackground);
   SetTitleTextStyle(
       GetEnabled() ? views::style::STYLE_PRIMARY : views::style::STYLE_DISABLED,
       background_color);
@@ -202,7 +205,7 @@ void CastDialogSinkButton::RequestFocus() {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   static bool requesting_focus = false;
   if (requesting_focus) {
-    // TODO(jrw): Figure out why this happens.
+    // TODO(crbug.com/1291739): Figure out why this happens.
     DLOG(ERROR) << "Recursive call to RequestFocus\n"
                 << base::debug::StackTrace();
     return;
@@ -219,11 +222,13 @@ void CastDialogSinkButton::RequestFocus() {
 }
 
 void CastDialogSinkButton::OnFocus() {
-  HoverButton::OnFocus();
+  // Update the status text before calling |OnFocus()| so that the screen reader
+  // can use the updated text.
   if (sink_.state == UIMediaSinkState::CONNECTED) {
     OverrideStatusText(
         l10n_util::GetStringUTF16(IDS_MEDIA_ROUTER_STOP_CASTING));
   }
+  HoverButton::OnFocus();
 }
 
 void CastDialogSinkButton::OnBlur() {

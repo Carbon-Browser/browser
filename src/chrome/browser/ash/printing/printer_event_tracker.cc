@@ -6,7 +6,7 @@
 
 #include "chromeos/printing/printer_configuration.h"
 
-namespace chromeos {
+namespace ash {
 namespace {
 
 // Set the event_type on |event| based on |mode|.
@@ -27,7 +27,7 @@ void SetEventType(metrics::PrinterEventProto* event,
 
 // Populate PPD information in |event| based on |ppd|.
 void SetPpdInfo(metrics::PrinterEventProto* event,
-                const Printer::PpdReference& ppd) {
+                const chromeos::Printer::PpdReference& ppd) {
   if (!ppd.user_supplied_ppd_url.empty()) {
     event->set_user_ppd(true);
   } else if (!ppd.effective_make_and_model.empty()) {
@@ -48,7 +48,7 @@ void SetUsbInfo(metrics::PrinterEventProto* event,
 
 // Add information to the |event| that only network printers have.
 void SetNetworkPrinterInfo(metrics::PrinterEventProto* event,
-                           const Printer& printer) {
+                           const chromeos::Printer& printer) {
   if (!printer.make_and_model().empty()) {
     event->set_ipp_make_and_model(printer.make_and_model());
   }
@@ -79,8 +79,9 @@ void PrinterEventTracker::RecordUsbPrinterInstalled(
   events_.push_back(event);
 }
 
-void PrinterEventTracker::RecordIppPrinterInstalled(const Printer& printer,
-                                                    SetupMode mode) {
+void PrinterEventTracker::RecordIppPrinterInstalled(
+    const chromeos::Printer& printer,
+    SetupMode mode) {
   base::AutoLock l(lock_);
   if (!logging_) {
     return;
@@ -106,7 +107,8 @@ void PrinterEventTracker::RecordUsbSetupAbandoned(
   events_.push_back(event);
 }
 
-void PrinterEventTracker::RecordSetupAbandoned(const Printer& printer) {
+void PrinterEventTracker::RecordSetupAbandoned(
+    const chromeos::Printer& printer) {
   base::AutoLock l(lock_);
   if (!logging_) {
     return;
@@ -118,7 +120,8 @@ void PrinterEventTracker::RecordSetupAbandoned(const Printer& printer) {
   events_.push_back(event);
 }
 
-void PrinterEventTracker::RecordPrinterRemoved(const Printer& printer) {
+void PrinterEventTracker::RecordPrinterRemoved(
+    const chromeos::Printer& printer) {
   base::AutoLock l(lock_);
   if (!logging_) {
     return;
@@ -138,4 +141,4 @@ void PrinterEventTracker::FlushPrinterEvents(
   events_.clear();
 }
 
-}  // namespace chromeos
+}  // namespace ash

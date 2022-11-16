@@ -45,7 +45,7 @@
 #include "third_party/blink/renderer/modules/webmidi/midi_output.h"
 #include "third_party/blink/renderer/modules/webmidi/midi_output_map.h"
 #include "third_party/blink/renderer/modules/webmidi/midi_port.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/privacy_budget/identifiability_digest_helpers.h"
 
 namespace blink {
@@ -88,7 +88,7 @@ MIDIAccess::MIDIAccess(
   constexpr IdentifiableSurface surface = IdentifiableSurface::FromTypeAndToken(
       IdentifiableSurface::Type::kWebFeature,
       WebFeature::kRequestMIDIAccess_ObscuredByFootprinting);
-  if (IdentifiabilityStudySettings::Get()->ShouldSample(surface)) {
+  if (IdentifiabilityStudySettings::Get()->ShouldSampleSurface(surface)) {
     IdentifiableTokenBuilder builder;
     for (const auto& port : ports) {
       builder.AddToken(IdentifiabilityBenignStringToken(port.id));
@@ -98,7 +98,7 @@ MIDIAccess::MIDIAccess(
       builder.AddToken(port.type);
     }
     IdentifiabilityMetricBuilder(execution_context->UkmSourceID())
-        .Set(surface, builder.GetToken())
+        .Add(surface, builder.GetToken())
         .Record(execution_context->UkmRecorder());
   }
 }

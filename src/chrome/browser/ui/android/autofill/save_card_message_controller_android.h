@@ -5,10 +5,12 @@
 #ifndef CHROME_BROWSER_UI_ANDROID_AUTOFILL_SAVE_CARD_MESSAGE_CONTROLLER_ANDROID_H_
 #define CHROME_BROWSER_UI_ANDROID_AUTOFILL_SAVE_CARD_MESSAGE_CONTROLLER_ANDROID_H_
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/android/autofill/save_card_controller_metrics_android.h"
 #include "chrome/browser/ui/android/autofill/save_card_message_confirm_controller.h"
 #include "chrome/browser/ui/android/autofill/save_card_message_confirm_delegate.h"
 #include "components/autofill/core/browser/autofill_client.h"
+#include "components/autofill/core/browser/metrics/payments/save_credit_card_prompt_metrics.h"
 #include "components/messages/android/message_enums.h"
 #include "components/messages/android/message_wrapper.h"
 #include "content/public/browser/web_contents.h"
@@ -40,6 +42,7 @@ class SaveCardMessageControllerAndroid : public SaveCardMessageConfirmDelegate {
             const CreditCard& card,
             const LegalMessageLines& legal_message_lines,
             std::u16string inferred_name,
+            std::u16string cardholder_account,
             AutofillClient::UploadSaveCardPromptCallback
                 upload_save_card_prompt_callback,
             AutofillClient::LocalSaveCardPromptCallback
@@ -52,13 +55,14 @@ class SaveCardMessageControllerAndroid : public SaveCardMessageConfirmDelegate {
 
   void HandleMessageDismiss(messages::DismissReason dismiss_reason);
   void HandleMessageAction();
+  void HandleMessageSecondaryButtonClicked();
   void DismissMessage();
 
   void MaybeShowDialog();
 
-  void ConfirmDate(const int month, const int year);
-  void ConfirmDate();
-  void ConfirmName(const std::u16string& inferred_cardholder_name);
+  void FixName(const std::u16string& inferred_cardholder_name);
+  void FixDate();
+  void ConfirmSaveCard();
 
   // SaveCardMessageConfirmDelegate
   void OnNameConfirmed(
@@ -68,21 +72,22 @@ class SaveCardMessageControllerAndroid : public SaveCardMessageConfirmDelegate {
       JNIEnv* env,
       const base::android::JavaParamRef<jstring>& month,
       const base::android::JavaParamRef<jstring>& year) override;
+  void OnSaveCardConfirmed(JNIEnv* env) override;
+  void OnUserDismiss(JNIEnv* env) override;
   void DialogDismissed(JNIEnv* env) override;
-  void OnLegalMessageLinkClicked(
-      JNIEnv* env,
-      const base::android::JavaParamRef<jstring>& url) override;
+  void OnLinkClicked(JNIEnv* env,
+                     const base::android::JavaParamRef<jstring>& url) override;
 
   bool IsGooglePayBrandingEnabled() const;
 
   // Runs the appropriate local or upload save callback with the given
-  // |user_decision|, using the |user_provided_details|. If
+  // |save_result|, using the |user_provided_details|. If
   // |user_provided_details| is empty then the current Card values will be used.
   // The cardholder name and expiration date portions of
   // |user_provided_details| are handled separately, so if either of them are
   // empty the current Card values will be used in their place.
   void OnPromptCompleted(
-      AutofillClient::SaveCardOfferUserDecision user_decision,
+      SaveCreditCardPromptResult save_result,
       AutofillClient::UserProvidedCardDetails user_provided_details);
 
   // Did the user ever explicitly accept or dismiss this message?
@@ -109,7 +114,7 @@ class SaveCardMessageControllerAndroid : public SaveCardMessageConfirmDelegate {
   // data from the user before saving the card.
   AutofillClient::SaveCreditCardOptions options_;
 
-  content::WebContents* web_contents_;
+  raw_ptr<content::WebContents> web_contents_;
 
   // Delegate of a toast style popup showing in the top of the screen.
   std::unique_ptr<messages::MessageWrapper> message_;
@@ -118,18 +123,25 @@ class SaveCardMessageControllerAndroid : public SaveCardMessageConfirmDelegate {
       save_card_message_confirm_controller_;
 
   std::u16string inferred_name_;
+  std::u16string cardholder_account_;
   std::u16string card_label_;
 
   // Whether we need to request users to fill in more info.
   bool request_more_info_ = false;
-  int expiration_date_year_;
-  int expiration_date_month_;
 
   // Whether we should re-show the dialog to users when users return to the tab.
   bool reprompt_required_ = false;
 
+  // True if user clicked links.
+  bool is_link_clicked_ = false;
+
+  // True if dialog is shown. The dialog is triggered when primary action button
+  // of message is clicked and the card should be uploaded.
+  bool is_dialog_shown_ = false;
+
   bool is_name_confirmed_for_testing_ = false;
   bool is_date_confirmed_for_testing_ = false;
+  bool is_save_card_confirmed_for_testing_ = false;
 };
 
 }  // namespace autofill

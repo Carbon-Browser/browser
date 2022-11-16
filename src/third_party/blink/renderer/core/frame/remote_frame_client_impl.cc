@@ -22,7 +22,7 @@
 #include "third_party/blink/renderer/core/frame/web_remote_frame_impl.h"
 #include "third_party/blink/renderer/core/layout/layout_embedded_content.h"
 #include "third_party/blink/renderer/platform/exported/wrapped_resource_request.h"
-#include "third_party/blink/renderer/platform/geometry/int_rect.h"
+#include "ui/gfx/geometry/rect.h"
 
 namespace blink {
 
@@ -54,10 +54,15 @@ void RemoteFrameClientImpl::Detached(FrameDetachType type) {
   if (web_frame_->Parent()) {
     if (type == FrameDetachType::kRemove)
       WebFrame::ToCoreFrame(*web_frame_)->DetachFromParent();
-  } else if (web_frame_->View()) {
-    // If the RemoteFrame being detached is also the main frame in the renderer
-    // process, we need to notify the webview to allow it to clean things up.
-    web_frame_->View()->DidDetachRemoteMainFrame();
+  } else if (auto* view = web_frame_->View()) {
+    // This could be a RemoteFrame that doesn't have a parent (portals
+    // or fenced frames) but not actually the `view`'s main frame.
+    if (view->MainFrame() == web_frame_) {
+      // If the RemoteFrame being detached is also the main frame in the
+      // renderer process, we need to notify the webview to allow it to clean
+      // things up.
+      view->DidDetachRemoteMainFrame();
+    }
   }
 
   // Clear our reference to RemoteFrame at the very end, in case the client
@@ -67,11 +72,6 @@ void RemoteFrameClientImpl::Detached(FrameDetachType type) {
 
 unsigned RemoteFrameClientImpl::BackForwardLength() {
   return To<WebViewImpl>(web_frame_->View())->HistoryListLength();
-}
-
-AssociatedInterfaceProvider*
-RemoteFrameClientImpl::GetRemoteAssociatedInterfaces() {
-  return web_frame_->Client()->GetRemoteAssociatedInterfaces();
 }
 
 }  // namespace blink

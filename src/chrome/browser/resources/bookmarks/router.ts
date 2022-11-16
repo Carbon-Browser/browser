@@ -5,19 +5,14 @@
 import 'chrome://resources/polymer/v3_0/iron-location/iron-location.js';
 import 'chrome://resources/polymer/v3_0/iron-location/iron-query-params.js';
 
-import {StoreObserver} from 'chrome://resources/js/cr/ui/store.m.js';
-import {Debouncer, html, microTask, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {Debouncer, microTask, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {selectFolder, setSearchTerm} from './actions.js';
 import {BOOKMARKS_BAR_ID} from './constants.js';
-import {BookmarksStoreClientInterface, StoreClient} from './store_client.js';
-import {BookmarksPageState} from './types.js';
+import {getTemplate} from './router.html.js';
+import {StoreClientMixin} from './store_client_mixin.js';
 
-const BookmarksRouterElementBase =
-    mixinBehaviors(StoreClient, PolymerElement) as {
-  new (): PolymerElement & BookmarksStoreClientInterface &
-      StoreObserver<BookmarksPageState>
-}
+const BookmarksRouterElementBase = StoreClientMixin(PolymerElement);
 
 /**
  * This element is a one way bound interface that routes the page URL to
@@ -30,7 +25,7 @@ export class BookmarksRouterElement extends BookmarksRouterElementBase {
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
   }
 
   static get properties() {
@@ -70,14 +65,10 @@ export class BookmarksRouterElement extends BookmarksRouterElementBase {
     ];
   }
 
-  connectedCallback() {
+  override connectedCallback() {
     super.connectedCallback();
-    this.watch('selectedId_', function(state: BookmarksPageState) {
-      return state.selectedFolder;
-    });
-    this.watch('searchTerm_', function(state: BookmarksPageState) {
-      return state.search.term;
-    });
+    this.watch('selectedId_', state => state.selectedFolder);
+    this.watch('searchTerm_', state => state.search.term);
     this.updateFromStore();
   }
 
@@ -103,7 +94,7 @@ export class BookmarksRouterElement extends BookmarksRouterElementBase {
     }
   }
 
-  private onQueryChanged_(current: (string|null), previous: (string|null)) {
+  private onQueryChanged_(_current: (string|null), previous: (string|null)) {
     if (previous !== undefined) {
       this.urlQuery_ = this.query_;
     }

@@ -19,10 +19,12 @@
 #include "third_party/blink/renderer/modules/breakout_box/pushable_media_stream_audio_source.h"
 #include "third_party/blink/renderer/modules/breakout_box/stream_test_utils.h"
 #include "third_party/blink/renderer/modules/mediastream/media_stream_track.h"
+#include "third_party/blink/renderer/modules/mediastream/media_stream_track_impl.h"
 #include "third_party/blink/renderer/modules/mediastream/mock_media_stream_audio_sink.h"
 #include "third_party/blink/renderer/modules/webcodecs/audio_data.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_audio_track.h"
+#include "third_party/blink/renderer/platform/mediastream/media_stream_component_impl.h"
 #include "third_party/blink/renderer/platform/testing/io_task_runner_testing_platform_support.h"
 #include "third_party/blink/renderer/platform/testing/testing_platform_support.h"
 
@@ -39,22 +41,25 @@ class MediaStreamAudioTrackUnderlyingSourceTest : public testing::Test {
   }
 
   MediaStreamTrack* CreateTrack(ExecutionContext* execution_context) {
+    auto pushable_audio_source =
+        std::make_unique<PushableMediaStreamAudioSource>(
+            Thread::MainThread()->GetTaskRunner(),
+            Platform::Current()->GetIOTaskRunner());
+    PushableMediaStreamAudioSource* pushable_audio_source_ptr =
+        pushable_audio_source.get();
     MediaStreamSource* media_stream_source =
         MakeGarbageCollected<MediaStreamSource>(
             "dummy_source_id", MediaStreamSource::kTypeAudio,
-            "dummy_source_name", false /* remote */);
-    PushableMediaStreamAudioSource* pushable_audio_source =
-        new PushableMediaStreamAudioSource(
-            Thread::MainThread()->GetTaskRunner(),
-            Platform::Current()->GetIOTaskRunner());
-    media_stream_source->SetPlatformSource(
-        base::WrapUnique(pushable_audio_source));
+            "dummy_source_name", false /* remote */,
+            std::move(pushable_audio_source));
     MediaStreamComponent* component =
-        MakeGarbageCollected<MediaStreamComponent>(
-            String::FromUTF8("audio_track"), media_stream_source);
-    pushable_audio_source->ConnectToTrack(component);
+        MakeGarbageCollected<MediaStreamComponentImpl>(
+            String::FromUTF8("audio_track"), media_stream_source,
+            std::make_unique<MediaStreamAudioTrack>(true /* is_local_track */));
+    pushable_audio_source_ptr->ConnectToInitializedTrack(component);
 
-    return MakeGarbageCollected<MediaStreamTrack>(execution_context, component);
+    return MakeGarbageCollected<MediaStreamTrackImpl>(execution_context,
+                                                      component);
   }
 
   MediaStreamAudioTrackUnderlyingSource* CreateSource(ScriptState* script_state,
@@ -80,8 +85,7 @@ class MediaStreamAudioTrackUnderlyingSourceTest : public testing::Test {
       const absl::optional<base::TimeDelta>& timestamp = absl::nullopt) {
     auto data = media::AudioBuffer::CreateEmptyBuffer(
         media::ChannelLayout::CHANNEL_LAYOUT_STEREO, /*channel_count=*/2,
-        kSampleRate, kNumFrames,
-        timestamp.value_or(base::TimeDelta::FromSeconds(1)));
+        kSampleRate, kNumFrames, timestamp.value_or(base::Seconds(1)));
     PushableMediaStreamAudioSource* pushable_audio_source =
         static_cast<PushableMediaStreamAudioSource*>(
             MediaStreamAudioSource::From(track->Component()->Source()));
@@ -163,12 +167,12 @@ TEST_F(MediaStreamAudioTrackUnderlyingSourceTest,
   };
 
   for (wtf_size_t i = 0; i < buffer_size; ++i) {
-    base::TimeDelta timestamp = base::TimeDelta::FromSeconds(i);
+    base::TimeDelta timestamp = base::Seconds(i);
     push_frame_sync(timestamp);
   }
 
   // Push another frame while the queue is full.
-  push_frame_sync(base::TimeDelta::FromSeconds(buffer_size));
+  push_frame_sync(base::Seconds(buffer_size));
 
   // Since the queue was full, the oldest frame from the queue (timestamp 0)
   // should have been dropped.
@@ -177,8 +181,7 @@ TEST_F(MediaStreamAudioTrackUnderlyingSourceTest,
       stream->GetDefaultReaderForTesting(script_state, exception_state);
   for (wtf_size_t i = 1; i <= buffer_size; ++i) {
     AudioData* audio_data = ReadObjectFromStream<AudioData>(v8_scope, reader);
-    EXPECT_EQ(base::TimeDelta::FromMicroseconds(audio_data->timestamp()),
-              base::TimeDelta::FromSeconds(i));
+    EXPECT_EQ(base::Microseconds(audio_data->timestamp()), base::Seconds(i));
   }
 
   // Pulling causes a pending pull since there are no frames available for

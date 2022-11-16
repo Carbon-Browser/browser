@@ -9,16 +9,20 @@
 
 #include "base/containers/contains.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/threading/thread_task_runner_handle.h"
 #include "base/trace_event/trace_event.h"
+#include "components/services/storage/public/cpp/buckets/bucket_info.h"
+#include "components/services/storage/public/cpp/buckets/constants.h"
+#include "components/services/storage/public/cpp/quota_error_or.h"
 #include "components/services/storage/public/mojom/storage_policy_update.mojom.h"
 #include "content/browser/service_worker/service_worker_context_core.h"
 #include "content/browser/service_worker/service_worker_context_wrapper.h"
 #include "content/browser/service_worker/service_worker_info.h"
 #include "content/browser/service_worker/service_worker_registration.h"
 #include "content/browser/service_worker/service_worker_version.h"
-#include "content/common/service_worker/service_worker_utils.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "mojo/public/cpp/bindings/callback_helpers.h"
@@ -33,6 +37,13 @@
 namespace content {
 
 namespace {
+
+// When this is enabled, the browser will schedule
+// ServiceWorkerStorageControl's response in a kHighest priority
+// queue during startup. After startup, it has a normal priority.
+const base::Feature kServiceWorkerStorageControlResponseQueue{
+    "ServiceWorkerStorageControlResponseQueue",
+    base::FEATURE_DISABLED_BY_DEFAULT};
 
 blink::ServiceWorkerStatusCode DatabaseStatusToStatusCode(
     storage::mojom::ServiceWorkerDatabaseStatus status) {
@@ -76,9 +87,15 @@ void CompleteFindSoon(
                                     status, std::move(callback)));
 }
 
-void RecordRetryCount(size_t retries) {
+void RecordRetryCount(size_t retries, size_t queue_size) {
   base::UmaHistogramCounts100("ServiceWorker.Storage.RetryCountForRecovery",
                               retries);
+
+  // We've seen traces with 14,000 ServiceWorkerStorageControl tasks
+  // (https://crbug.com/1302111), so ensure more than that can fit in the
+  // histogram buckets in case those were queued retries.
+  base::UmaHistogramCounts100000(
+      "ServiceWorker.Storage.RetryQueueSizeForRecovery", queue_size);
 }
 
 // Notifies quota manager that a disk write operation failed so that it can
@@ -137,7 +154,7 @@ class InflightCallWithInvoker final
   }
 
   // `registry_` owns `this`
-  ServiceWorkerRegistry* const registry_;
+  const raw_ptr<ServiceWorkerRegistry> registry_;
   const base::RepeatingCallback<void(InflightCallWithInvoker*, ReplyCallback)>
       invoker_;
   base::OnceCallback<void(ReplyArgs...)> reply_callback_;
@@ -167,13 +184,44 @@ ServiceWorkerRegistry::~ServiceWorkerRegistry() = default;
 void ServiceWorkerRegistry::CreateNewRegistration(
     blink::mojom::ServiceWorkerRegistrationOptions options,
     const blink::StorageKey& key,
+    blink::mojom::AncestorFrameType ancestor_frame_type,
     NewRegistrationCallback callback) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
+
+  if (quota_manager_proxy_) {
+    // Can be nullptr in tests.
+    quota_manager_proxy_->UpdateOrCreateBucket(
+        storage::BucketInitParams::ForDefaultBucket(key),
+        base::ThreadTaskRunnerHandle::Get(),
+        base::BindOnce(
+            &ServiceWorkerRegistry::CreateNewRegistrationWithBucketInfo,
+            weak_factory_.GetWeakPtr(), std::move(options), key,
+            ancestor_frame_type, std::move(callback)));
+  } else {
+    CreateInvokerAndStartRemoteCall(
+        &storage::mojom::ServiceWorkerStorageControl::GetNewRegistrationId,
+        base::BindOnce(&ServiceWorkerRegistry::DidGetNewRegistrationId,
+                       weak_factory_.GetWeakPtr(), std::move(options), key,
+                       ancestor_frame_type, std::move(callback)));
+  }
+}
+
+void ServiceWorkerRegistry::CreateNewRegistrationWithBucketInfo(
+    blink::mojom::ServiceWorkerRegistrationOptions options,
+    const blink::StorageKey& key,
+    blink::mojom::AncestorFrameType ancestor_frame_type,
+    NewRegistrationCallback callback,
+    storage::QuotaErrorOr<storage::BucketInfo> result) {
+  // Return nullptr if `UpdateOrCreateBucket` fails.
+  if (!result.ok()) {
+    std::move(callback).Run(nullptr);
+    return;
+  }
   CreateInvokerAndStartRemoteCall(
       &storage::mojom::ServiceWorkerStorageControl::GetNewRegistrationId,
       base::BindOnce(&ServiceWorkerRegistry::DidGetNewRegistrationId,
                      weak_factory_.GetWeakPtr(), std::move(options), key,
-                     std::move(callback)));
+                     ancestor_frame_type, std::move(callback)));
 }
 
 void ServiceWorkerRegistry::CreateNewVersion(
@@ -360,12 +408,13 @@ void ServiceWorkerRegistry::StoreRegistration(
   data->script_response_time = version->GetInfo().script_response_time;
   for (const blink::mojom::WebFeature feature : version->used_features())
     data->used_features.push_back(feature);
+  data->ancestor_frame_type = registration->ancestor_frame_type();
 
   // The ServiceWorkerVersion's COEP might be null if it is stored before
   // loading the main script. This happens in many unittests.
   if (version->cross_origin_embedder_policy()) {
     data->cross_origin_embedder_policy =
-        version->cross_origin_embedder_policy().value();
+        *version->cross_origin_embedder_policy();
   }
 
   ResourceList resources;
@@ -822,7 +871,8 @@ ServiceWorkerRegistry::GetOrCreateRegistration(
   blink::mojom::ServiceWorkerRegistrationOptions options(
       data.scope, data.script_type, data.update_via_cache);
   registration = base::MakeRefCounted<ServiceWorkerRegistration>(
-      options, data.key, data.registration_id, context_->AsWeakPtr());
+      options, data.key, data.registration_id, context_->AsWeakPtr(),
+      data.ancestor_frame_type);
   registration->SetStored();
   registration->set_resources_total_size_bytes(data.resources_total_size_bytes);
   registration->set_last_update_check(data.last_update_check);
@@ -1216,7 +1266,8 @@ void ServiceWorkerRegistry::DidStoreRegistration(
         storage::QuotaClientType::kServiceWorker, key,
         blink::mojom::StorageType::kTemporary,
         stored_resources_total_size_bytes - deleted_resources_size,
-        base::Time::Now());
+        base::Time::Now(), base::SequencedTaskRunnerHandle::Get(),
+        base::DoNothing());
   }
 
   scoped_refptr<ServiceWorkerRegistration> registration =
@@ -1256,7 +1307,8 @@ void ServiceWorkerRegistry::DidDeleteRegistration(
     quota_manager_proxy_->NotifyStorageModified(
         storage::QuotaClientType::kServiceWorker, key,
         blink::mojom::StorageType::kTemporary, -deleted_resources_size,
-        base::Time::Now());
+        base::Time::Now(), base::SequencedTaskRunnerHandle::Get(),
+        base::DoNothing());
   }
 
   scoped_refptr<ServiceWorkerRegistration> registration =
@@ -1378,6 +1430,7 @@ void ServiceWorkerRegistry::DidGetUserDataForAllRegistrations(
 void ServiceWorkerRegistry::DidGetNewRegistrationId(
     blink::mojom::ServiceWorkerRegistrationOptions options,
     const blink::StorageKey& key,
+    blink::mojom::AncestorFrameType ancestor_frame_type,
     NewRegistrationCallback callback,
     int64_t registration_id) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
@@ -1386,7 +1439,8 @@ void ServiceWorkerRegistry::DidGetNewRegistrationId(
     return;
   }
   std::move(callback).Run(base::MakeRefCounted<ServiceWorkerRegistration>(
-      std::move(options), key, registration_id, context_->AsWeakPtr()));
+      std::move(options), key, registration_id, context_->AsWeakPtr(),
+      ancestor_frame_type));
 }
 
 void ServiceWorkerRegistry::DidGetNewVersionId(
@@ -1492,13 +1546,22 @@ bool ServiceWorkerRegistry::ShouldPurgeOnShutdownForTesting(
 
 mojo::Remote<storage::mojom::ServiceWorkerStorageControl>&
 ServiceWorkerRegistry::GetRemoteStorageControl() {
+  // TODO(https://crbug.com/1282869): Replace CHECK with DCHECK_CURRENTLY_ON
+  // once the cause is identified.
+  CHECK(BrowserThread::CurrentlyOn(BrowserThread::UI));
+
   DCHECK(!(remote_storage_control_.is_bound() &&
            !remote_storage_control_.is_connected()))
       << "Rebinding is not supported yet.";
 
   if (!remote_storage_control_.is_bound()) {
     context_->wrapper()->BindStorageControl(
-        remote_storage_control_.BindNewPipeAndPassReceiver());
+        remote_storage_control_.BindNewPipeAndPassReceiver(
+            base::FeatureList::IsEnabled(
+                kServiceWorkerStorageControlResponseQueue)
+                ? GetUIThreadTaskRunner(
+                      {BrowserTaskType::kServiceWorkerStorageControlResponse})
+                : base::SequencedTaskRunnerHandle::Get()));
     DCHECK(remote_storage_control_.is_bound());
     remote_storage_control_.set_disconnect_handler(
         base::BindOnce(&ServiceWorkerRegistry::OnRemoteStorageDisconnected,
@@ -1511,17 +1574,28 @@ ServiceWorkerRegistry::GetRemoteStorageControl() {
 void ServiceWorkerRegistry::OnRemoteStorageDisconnected() {
   const size_t kMaxRetryCounts = 100;
 
-  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  // TODO(https://crbug.com/1282869): Replace CHECK with DCHECK_CURRENTLY_ON
+  // once the cause is identified.
+  CHECK(BrowserThread::CurrentlyOn(BrowserThread::UI));
 
   remote_storage_control_.reset();
 
   if (!context_)
     return;
 
+  if (is_storage_disabled_) {
+    // When the storage is disabled a storage error recovery process is ongoing
+    // and the storage control will be destroyed soon. Don't try to reconnect
+    // storage control remote but flush inflight calls. These calls will check
+    // `is_storage_disabled_` and return errors.
+    DidRecover();
+    return;
+  }
+
   if (connection_state_ == ConnectionState::kRecovering) {
     ++recovery_retry_counts_;
     if (recovery_retry_counts_ > kMaxRetryCounts) {
-      RecordRetryCount(kMaxRetryCounts);
+      RecordRetryCount(kMaxRetryCounts, inflight_calls_.size());
       CHECK(false) << "The Storage Service consistently crashes.";
       return;
     }
@@ -1544,7 +1618,7 @@ void ServiceWorkerRegistry::OnRemoteStorageDisconnected() {
 void ServiceWorkerRegistry::DidRecover() {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
-  RecordRetryCount(recovery_retry_counts_);
+  RecordRetryCount(recovery_retry_counts_, inflight_calls_.size());
 
   recovery_retry_counts_ = 0;
   connection_state_ = ConnectionState::kNormal;

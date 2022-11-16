@@ -5,7 +5,7 @@
 import("//third_party/closure_compiler/compile_js.gni")
 import("//third_party/closure_compiler/js_unit_tests.gni")
 import("//tools/polymer/html_to_js.gni")
-import("//ui/file_manager/base/gn/js_test_gen_html.gni")
+import("//ui/file_manager/base/gn/js_test_type_check.gni")
 
 visibility = [ "//ui/file_manager/file_manager/foreground/*" ]
 
@@ -14,19 +14,22 @@ group("closure_compile") {
   visibility += [ "//ui/file_manager:closure_compile" ]
   deps = [
     ":closure_compile_jsmodules",
-    ":js_test_gen_html_modules_type_check_auto",
+    ":js_test_type_check",
   ]
 }
 
 html_to_js("web_components") {
   visibility += [ "//ui/file_manager/*" ]
   js_files = [
+    "drive_low_space_banner.js",
     "drive_offline_pinning_banner.js",
     "drive_welcome_banner.js",
     "educational_banner.js",
     "holding_space_welcome_banner.js",
+    "invalid_usb_filesystem_banner.js",
     "local_disk_low_space_banner.js",
     "photos_welcome_banner.js",
+    "shared_with_crostini_pluginvm_banner.js",
     "state_banner.js",
     "trash_banner.js",
     "warning_banner.js",
@@ -43,12 +46,15 @@ js_type_check("closure_compile_jsmodules") {
                   ]
 
   deps = [
+    ":drive_low_space_banner",
     ":drive_offline_pinning_banner",
     ":drive_welcome_banner",
     ":educational_banner",
     ":holding_space_welcome_banner",
+    ":invalid_usb_filesystem_banner",
     ":local_disk_low_space_banner",
     ":photos_welcome_banner",
+    ":shared_with_crostini_pluginvm_banner",
     ":state_banner",
     ":trash_banner",
     ":warning_banner",
@@ -64,9 +70,27 @@ js_library("holding_space_welcome_banner") {
   ]
 }
 
+js_library("invalid_usb_filesystem_banner") {
+  deps = [
+    ":state_banner",
+    "//ui/file_manager/file_manager/common/js:util",
+    "//ui/file_manager/file_manager/common/js:volume_manager_types",
+    "//ui/file_manager/file_manager/externs:banner",
+  ]
+}
+
 js_library("local_disk_low_space_banner") {
   deps = [
     ":warning_banner",
+    "//ui/file_manager/file_manager/common/js:volume_manager_types",
+    "//ui/file_manager/file_manager/externs:banner",
+  ]
+}
+
+js_library("drive_low_space_banner") {
+  deps = [
+    ":warning_banner",
+    "//ui/file_manager/file_manager/common/js:util",
     "//ui/file_manager/file_manager/common/js:volume_manager_types",
     "//ui/file_manager/file_manager/externs:banner",
   ]
@@ -97,7 +121,7 @@ js_library("educational_banner") {
   ]
 }
 
-js_unittest("educational_banner_unittest.m") {
+js_unittest("educational_banner_unittest") {
   deps = [
     ":educational_banner",
     "//chrome/test/data/webui:chai_assert",
@@ -115,6 +139,16 @@ js_library("photos_welcome_banner") {
   ]
 }
 
+js_library("shared_with_crostini_pluginvm_banner") {
+  deps = [
+    ":state_banner",
+    "//ui/file_manager/file_manager/common/js:util",
+    "//ui/file_manager/file_manager/common/js:volume_manager_types",
+    "//ui/file_manager/file_manager/externs:banner",
+    "//ui/file_manager/file_manager/foreground/js:constants",
+  ]
+}
+
 js_library("state_banner") {
   deps = [
     "//ui/file_manager/file_manager/common/js:util",
@@ -122,7 +156,7 @@ js_library("state_banner") {
   ]
 }
 
-js_unittest("state_banner_unittest.m") {
+js_unittest("state_banner_unittest") {
   deps = [
     ":state_banner",
     "//chrome/test/data/webui:chai_assert",
@@ -146,7 +180,7 @@ js_library("warning_banner") {
   ]
 }
 
-js_unittest("warning_banner_unittest.m") {
+js_unittest("warning_banner_unittest") {
   deps = [
     ":warning_banner",
     "//chrome/test/data/webui:chai_assert",
@@ -155,11 +189,11 @@ js_unittest("warning_banner_unittest.m") {
   ]
 }
 
-js_test_gen_html("js_test_gen_html_modules") {
+js_test_type_check("js_test_type_check") {
   deps = [
-    ":educational_banner_unittest.m",
-    ":state_banner_unittest.m",
-    ":warning_banner_unittest.m",
+    ":educational_banner_unittest",
+    ":state_banner_unittest",
+    ":warning_banner_unittest",
   ]
   is_polymer3 = true
 
@@ -169,7 +203,7 @@ js_test_gen_html("js_test_gen_html_modules") {
                     "js_module_root=../../ui/file_manager/",
                     "js_module_root=./gen/ui/file_manager/",
                     "jscomp_off=duplicate",
-                    "browser_resolver_prefix_replacements=\"chrome://test/=./\"",
+                    "browser_resolver_prefix_replacements=\"chrome://webui-test/=./\"",
                     "browser_resolver_prefix_replacements=\"chrome-extension://hhaomjibdihmijegdhdafkllkbggdgoj/=./file_manager/\"",
                     "browser_resolver_prefix_replacements=\"chrome-extension://pmfjbimdmchhbnneeidfognadeopoehp/=./image_loader/\"",
                     "hide_warnings_for=third_party/",

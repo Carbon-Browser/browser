@@ -8,9 +8,8 @@ let ProcessingRoot;
 /**
  * @fileoverview
  *
- * This file (and related i18n_template_process.js) are deprecated and
- * existing usages should be removed (see https://crbug.com/1128151).
- * Do not add any additional usages of this file.
+ * This file is deprecated and existing usages should be removed (see
+ * https://crbug.com/1128151). Do not add any additional usages of this file.
  *
  * This is a simple template engine inspired by JsTemplates
  * optimized for i18n.
@@ -34,8 +33,10 @@ let ProcessingRoot;
  * load_time_data.js. It should replace i18n_template.js eventually.
  */
 
+// #import {loadTimeData} from './load_time_data.m.js';
+
 // eslint-disable-next-line no-var
-var i18nTemplate = (function() {
+/* #export */ var i18nTemplate = (function() {
   /**
    * This provides the handlers for the templating engine. The key is used as
    * the attribute name and the value is the function that gets called for every
@@ -105,7 +106,7 @@ var i18nTemplate = (function() {
           element.setAttribute(propName, /** @type {string} */ (value));
         }
       });
-    }
+    },
   };
 
   const prefixes = [''];

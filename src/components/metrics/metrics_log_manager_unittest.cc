@@ -20,7 +20,6 @@
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace metrics {
-
 namespace {
 
 class MetricsLogManagerTest : public testing::Test {
@@ -30,6 +29,10 @@ class MetricsLogManagerTest : public testing::Test {
     MetricsLogStore::RegisterPrefs(pref_service_.registry());
     log_store()->LoadPersistedUnsentLogs();
   }
+
+  MetricsLogManagerTest(const MetricsLogManagerTest&) = delete;
+  MetricsLogManagerTest& operator=(const MetricsLogManagerTest&) = delete;
+
   ~MetricsLogManagerTest() override {}
 
   MetricsLogStore* log_store() { return &log_store_; }
@@ -46,8 +49,6 @@ class MetricsLogManagerTest : public testing::Test {
   TestMetricsServiceClient client_;
   TestingPrefServiceSimple pref_service_;
   MetricsLogStore log_store_;
-
-  DISALLOW_COPY_AND_ASSIGN(MetricsLogManagerTest);
 };
 
 }  // namespace
@@ -71,17 +72,6 @@ TEST_F(MetricsLogManagerTest, StandardFlow) {
   MetricsLog* second_log = CreateLog(MetricsLog::ONGOING_LOG);
   log_manager.BeginLoggingWithLog(base::WrapUnique(second_log));
   EXPECT_EQ(second_log, log_manager.current_log());
-}
-
-TEST_F(MetricsLogManagerTest, AbandonedLog) {
-  MetricsLogManager log_manager;
-
-  MetricsLog* dummy_log = CreateLog(MetricsLog::INITIAL_STABILITY_LOG);
-  log_manager.BeginLoggingWithLog(base::WrapUnique(dummy_log));
-  EXPECT_EQ(dummy_log, log_manager.current_log());
-
-  log_manager.DiscardCurrentLog();
-  EXPECT_EQ(nullptr, log_manager.current_log());
 }
 
 // Make sure that interjecting logs updates the "current" log correctly.

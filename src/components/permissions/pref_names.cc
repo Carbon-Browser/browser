@@ -4,10 +4,16 @@
 
 #include "components/permissions/pref_names.h"
 
+#include "build/build_config.h"
+
 namespace permissions {
 namespace prefs {
 
-#if defined(OS_ANDROID)
+// List containing a history of past permission actions, for all permission
+// types.
+const char kPermissionActions[] = "profile.content_settings.permission_actions";
+
+#if BUILDFLAG(IS_ANDROID)
 // The current level of backoff for showing the location settings dialog for the
 // default search engine.
 const char kLocationSettingsBackoffLevelDSE[] =

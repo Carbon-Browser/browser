@@ -5,7 +5,7 @@
 #ifndef GPU_COMMAND_BUFFER_SERVICE_RASTER_DECODER_H_
 #define GPU_COMMAND_BUFFER_SERVICE_RASTER_DECODER_H_
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "gpu/command_buffer/service/common_decoder.h"
 #include "gpu/command_buffer/service/decoder_context.h"
 #include "gpu/gpu_gles2_export.h"
@@ -15,6 +15,7 @@ namespace gpu {
 class DecoderClient;
 struct GpuFeatureInfo;
 struct GpuPreferences;
+class ImageFactory;
 class MemoryTracker;
 class ServiceTransferCache;
 class SharedContextState;
@@ -23,7 +24,6 @@ class SharedImageManager;
 namespace gles2 {
 class CopyTextureCHROMIUMResourceManager;
 class GLES2Util;
-class ImageManager;
 class Logger;
 class Outputter;
 }  // namespace gles2
@@ -43,8 +43,12 @@ class GPU_GLES2_EXPORT RasterDecoder : public DecoderContext,
       const GpuPreferences& gpu_preferences,
       MemoryTracker* memory_tracker,
       SharedImageManager* shared_image_manager,
+      ImageFactory* image_factory,
       scoped_refptr<SharedContextState> shared_context_state,
       bool is_priviliged);
+
+  RasterDecoder(const RasterDecoder&) = delete;
+  RasterDecoder& operator=(const RasterDecoder&) = delete;
 
   ~RasterDecoder() override;
 
@@ -67,9 +71,6 @@ class GPU_GLES2_EXPORT RasterDecoder : public DecoderContext,
   virtual gles2::GLES2Util* GetGLES2Util() = 0;
   virtual gles2::Logger* GetLogger() = 0;
   virtual void SetIgnoreCachedStateForTest(bool ignore) = 0;
-
-  // Gets the ImageManager for this context.
-  virtual gles2::ImageManager* GetImageManagerForTest() = 0;
 
   void set_initialized() { initialized_ = true; }
 
@@ -102,9 +103,7 @@ class GPU_GLES2_EXPORT RasterDecoder : public DecoderContext,
   bool initialized_ = false;
   bool debug_ = false;
   bool log_commands_ = false;
-  gles2::Outputter* outputter_ = nullptr;
-
-  DISALLOW_COPY_AND_ASSIGN(RasterDecoder);
+  raw_ptr<gles2::Outputter> outputter_ = nullptr;
 };
 
 }  // namespace raster

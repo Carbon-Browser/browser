@@ -4,9 +4,10 @@
 
 package org.chromium.device.bluetooth;
 
-import android.annotation.TargetApi;
 import android.bluetooth.BluetoothDevice;
 import android.os.Build;
+
+import androidx.annotation.RequiresApi;
 
 import org.chromium.base.ContextUtils;
 import org.chromium.base.Log;
@@ -25,7 +26,7 @@ import java.util.HashMap;
  */
 @JNINamespace("device")
 @JNIAdditionalImport(Wrappers.class)
-@TargetApi(Build.VERSION_CODES.M)
+@RequiresApi(Build.VERSION_CODES.M)
 final class ChromeBluetoothDevice {
     private static final String TAG = "Bluetooth";
 
@@ -131,7 +132,11 @@ final class ChromeBluetoothDevice {
                 @Override
                 public void run() {
                     if (newState == android.bluetooth.BluetoothProfile.STATE_CONNECTED) {
-                        mBluetoothGatt.discoverServices();
+                        // Try requesting for a larger ATT MTU so that more information can be
+                        // exchanged per transmission.
+                        if (!mBluetoothGatt.requestMtu(517)) {
+                            mBluetoothGatt.discoverServices();
+                        }
                     } else if (newState == android.bluetooth.BluetoothProfile.STATE_DISCONNECTED) {
                         if (mBluetoothGatt != null) {
                             mBluetoothGatt.close();
@@ -143,6 +148,21 @@ final class ChromeBluetoothDevice {
                                 mNativeBluetoothDeviceAndroid, ChromeBluetoothDevice.this, status,
                                 newState == android.bluetooth.BluetoothProfile.STATE_CONNECTED);
                     }
+                }
+            });
+        }
+
+        @Override
+        public void onMtuChanged(final int mtu, final int status) {
+            Log.i(TAG, "onMtuChanged mtu:%d status:%d==%s", mtu, status,
+                    status == android.bluetooth.BluetoothGatt.GATT_SUCCESS ? "OK" : "Error");
+            Wrappers.ThreadUtilsWrapper.getInstance().runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    if (mNativeBluetoothDeviceAndroid == 0 || mBluetoothGatt == null) {
+                        return;
+                    }
+                    mBluetoothGatt.discoverServices();
                 }
             });
         }

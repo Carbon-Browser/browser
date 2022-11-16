@@ -1,4 +1,4 @@
-#!/usr/bin/env vpython
+#!/usr/bin/env vpython3
 # Copyright 2018 The Chromium Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -119,7 +119,9 @@ def _AddBuilderPlatformSelectionArgs(parser):
 
 
 def _DumpJson(data, output_path):
-  with open(output_path, 'w') as output_file:
+  with open(output_path, 'w',
+            newline='') if sys.version_info.major == 3 else open(
+                output_path, 'wb') as output_file:
     json.dump(data, output_file, indent=4, separators=(',', ': '))
 
 
@@ -226,12 +228,11 @@ def _GetBuilderPlatforms(builders, waterfall):
   if builders:
     return {b for b in bot_platforms.ALL_PLATFORMS if b.name in
                 builders}
-  elif waterfall == 'perf':
+  if waterfall == 'perf':
     return bot_platforms.OFFICIAL_PLATFORMS
-  elif waterfall == 'perf-fyi':
+  if waterfall == 'perf-fyi':
     return bot_platforms.FYI_PLATFORMS
-  else:
-    return bot_platforms.ALL_PLATFORMS
+  return bot_platforms.ALL_PLATFORMS
 
 
 def _UpdateShardsForBuilders(args):
@@ -260,7 +261,7 @@ def _DescheduleBenchmark(args):
         if shard == 'extra_infos':
           break
         benchmarks = shard_map.get('benchmarks', dict())
-        for benchmark in benchmarks.keys():
+        for benchmark in list(benchmarks.keys()):
           if benchmark not in benchmarks_to_keep:
             del benchmarks[benchmark]
         executables = shard_map.get('executables', dict())

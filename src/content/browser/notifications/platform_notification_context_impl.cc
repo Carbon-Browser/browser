@@ -24,11 +24,11 @@
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/notification_database_data.h"
 #include "content/public/browser/permission_controller.h"
-#include "content/public/browser/permission_type.h"
 #include "content/public/browser/platform_notification_service.h"
 #include "content/public/common/content_client.h"
 #include "content/public/common/content_features.h"
 #include "third_party/blink/public/common/notifications/notification_resources.h"
+#include "third_party/blink/public/common/permissions/permission_utils.h"
 
 namespace content {
 namespace {
@@ -40,8 +40,7 @@ const base::FilePath::CharType kPlatformNotificationsDirectory[] =
 
 // Max age of a displayed notification before we consider it stale and remove it
 // from the database and ask the platform to close it.
-constexpr base::TimeDelta kMaxDisplayedNotificationAge =
-    base::TimeDelta::FromDays(7);
+constexpr base::TimeDelta kMaxDisplayedNotificationAge = base::Days(7);
 
 // Checks if this notification can trigger in the future.
 bool CanTrigger(const NotificationDatabaseData& data) {
@@ -70,7 +69,7 @@ void RecordOldestNotificationTimeUMA(base::Time oldest_notification_time) {
 
   base::UmaHistogramCustomCounts(
       "Notifications.Database.OldestNotificationTimeInMinutes",
-      delta.InMinutes(), 0, base::TimeDelta::FromDays(150).InMinutes(), 50);
+      delta.InMinutes(), 0, base::Days(150).InMinutes(), 50);
 }
 
 // Returns if the notification described by |data| is currently visible.
@@ -282,13 +281,15 @@ void PlatformNotificationContextImpl::Shutdown() {
 }
 
 void PlatformNotificationContextImpl::CreateService(
+    RenderProcessHost* render_process_host,
     const url::Origin& origin,
     const GURL& document_url,
+    const WeakDocumentPtr& weak_document_ptr,
     mojo::PendingReceiver<blink::mojom::NotificationService> receiver) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   services_.push_back(std::make_unique<BlinkNotificationServiceImpl>(
-      this, browser_context_, service_worker_context_, origin, document_url,
-      std::move(receiver)));
+      this, browser_context_, service_worker_context_, render_process_host,
+      origin, document_url, weak_document_ptr, std::move(receiver)));
 }
 
 void PlatformNotificationContextImpl::RemoveService(
@@ -364,8 +365,8 @@ void PlatformNotificationContextImpl::CheckPermissionsAndDeleteBlocked(
 
   // Erase all valid origins so we're left with invalid ones.
   base::EraseIf(origins, [controller](const GURL& origin) {
-    auto permission = controller->GetPermissionStatus(
-        PermissionType::NOTIFICATIONS, origin, origin);
+    auto permission = controller->GetPermissionStatusForOriginWithoutContext(
+        blink::PermissionType::NOTIFICATIONS, url::Origin::Create(origin));
     return permission == blink::mojom::PermissionStatus::GRANTED;
   });
 
@@ -1094,10 +1095,10 @@ void PlatformNotificationContextImpl::OnRegistrationDeleted(
     const GURL& pattern,
     const blink::StorageKey& key) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
-  InitializeDatabase(
-      base::BindOnce(&PlatformNotificationContextImpl::
-                         DoDeleteNotificationsForServiceWorkerRegistration,
-                     this, pattern.GetOrigin(), registration_id));
+  InitializeDatabase(base::BindOnce(
+      &PlatformNotificationContextImpl::
+          DoDeleteNotificationsForServiceWorkerRegistration,
+      this, pattern.DeprecatedGetOriginAsURL(), registration_id));
 }
 
 void PlatformNotificationContextImpl::

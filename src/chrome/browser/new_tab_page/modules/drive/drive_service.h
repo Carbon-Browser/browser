@@ -8,6 +8,7 @@
 #include <memory>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/time/time.h"
 #include "chrome/browser/new_tab_page/modules/drive/drive.mojom.h"
@@ -44,7 +45,7 @@ class DriveService : public KeyedService {
 
   using GetFilesCallback = drive::mojom::DriveHandler::GetFilesCallback;
   // Retrieves Google Drive document suggestions from ItemSuggest API.
-  void GetDriveFiles(GetFilesCallback callback);
+  void GetDriveFiles(GetFilesCallback get_files_callback);
   // Makes the service not return data for a specified amount of time.
   void DismissModule();
   // Makes the service return data again even if dimiss time is not yet over.
@@ -63,9 +64,9 @@ class DriveService : public KeyedService {
   std::unique_ptr<network::SimpleURLLoader> url_loader_;
   scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory_;
   std::vector<GetFilesCallback> callbacks_;
-  signin::IdentityManager* identity_manager_;
+  raw_ptr<signin::IdentityManager> identity_manager_;
   std::string application_locale_;
-  PrefService* pref_service_;
+  raw_ptr<PrefService> pref_service_;
   std::unique_ptr<std::string> cached_json_;
   base::Time cached_json_time_;
   std::string cached_json_token_;

@@ -8,7 +8,6 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
 #include "ui/gfx/range/range.h"
 
 namespace chromeos {
@@ -18,7 +17,8 @@ namespace string_matching {
 class TokenizedString {
  public:
   enum class Mode {
-    // Break words into tokens at camel case and alpha/num boundaries.
+    // Break words into tokens at camel case, alpha/num, and white space
+    // boundaries.
     kCamelCase,
     // Break words into tokens at white space.
     kWords,
@@ -29,6 +29,10 @@ class TokenizedString {
 
   explicit TokenizedString(const std::u16string& text,
                            Mode mode = Mode::kCamelCase);
+
+  TokenizedString(const TokenizedString&) = delete;
+  TokenizedString& operator=(const TokenizedString&) = delete;
+
   ~TokenizedString();
 
   const std::u16string& text() const { return text_; }
@@ -45,8 +49,6 @@ class TokenizedString {
   // Broken down tokens and the index mapping of tokens in original string.
   Tokens tokens_;
   Mappings mappings_;
-
-  DISALLOW_COPY_AND_ASSIGN(TokenizedString);
 };
 
 }  // namespace string_matching

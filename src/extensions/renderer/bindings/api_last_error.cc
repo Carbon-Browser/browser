@@ -4,6 +4,8 @@
 
 #include "extensions/renderer/bindings/api_last_error.h"
 
+#include <tuple>
+
 #include "gin/converter.h"
 #include "gin/data_object_builder.h"
 #include "gin/handle.h"
@@ -25,6 +27,9 @@ constexpr char kUncheckedErrorPrefix[] = "Unchecked runtime.lastError: ";
 class LastErrorObject final : public gin::Wrappable<LastErrorObject> {
  public:
   explicit LastErrorObject(const std::string& error) : error_(error) {}
+
+  LastErrorObject(const LastErrorObject&) = delete;
+  LastErrorObject& operator=(const LastErrorObject&) = delete;
 
   static gin::WrapperInfo kWrapperInfo;
 
@@ -48,8 +53,6 @@ class LastErrorObject final : public gin::Wrappable<LastErrorObject> {
  private:
   std::string error_;
   bool accessed_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(LastErrorObject);
 };
 
 gin::WrapperInfo LastErrorObject::kWrapperInfo = {gin::kEmbedderNativeGin};
@@ -61,7 +64,7 @@ void LastErrorGetter(v8::Local<v8::Name> property,
   v8::Isolate* isolate = info.GetIsolate();
   v8::HandleScope handle_scope(isolate);
   v8::Local<v8::Object> holder = info.Holder();
-  v8::Local<v8::Context> context = holder->CreationContext();
+  v8::Local<v8::Context> context = holder->GetCreationContextChecked();
 
   v8::Local<v8::Value> last_error;
   v8::Local<v8::Private> last_error_key = v8::Private::ForApi(
@@ -101,7 +104,7 @@ void LastErrorSetter(v8::Local<v8::Name> property,
   v8::Isolate* isolate = info.GetIsolate();
   v8::HandleScope handle_scope(isolate);
   v8::Local<v8::Object> holder = info.Holder();
-  v8::Local<v8::Context> context = holder->CreationContext();
+  v8::Local<v8::Context> context = holder->GetCreationContextChecked();
 
   v8::Local<v8::Private> script_value_key = v8::Private::ForApi(
       isolate, gin::StringToSymbol(isolate, kScriptSuppliedValueKey));
@@ -185,9 +188,9 @@ void APILastError::ClearError(v8::Local<v8::Context> context,
   }
   // These Delete()s can fail, but there's nothing to do if it does (the
   // exception will be caught by the TryCatch above).
-  ignore_result(parent->Delete(context, key));
+  std::ignore = parent->Delete(context, key);
   if (!secondary_parent.IsEmpty())
-    ignore_result(secondary_parent->Delete(context, key));
+    std::ignore = secondary_parent->Delete(context, key);
 }
 
 bool APILastError::HasError(v8::Local<v8::Context> context) {
@@ -259,8 +262,8 @@ void APILastError::SetErrorOnPrimaryParent(v8::Local<v8::Context> context,
     DCHECK(!last_error.IsEmpty());
     // This SetAccessor() can fail, but there's nothing to do if it does (the
     // exception will be caught by the TryCatch in SetError()).
-    ignore_result(parent->SetAccessor(context, key, &LastErrorGetter,
-                                      &LastErrorSetter, last_error));
+    std::ignore = parent->SetAccessor(context, key, &LastErrorGetter,
+                                      &LastErrorSetter, last_error);
   }
 }
 
@@ -279,9 +282,9 @@ void APILastError::SetErrorOnSecondaryParent(
   v8::Local<v8::String> key = gin::StringToSymbol(isolate, kLastErrorProperty);
   // This CreateDataProperty() can fail, but there's nothing to do if it does
   // (the exception will be caught by the TryCatch in SetError()).
-  ignore_result(secondary_parent->CreateDataProperty(
+  std::ignore = secondary_parent->CreateDataProperty(
       context, key,
-      gin::DataObjectBuilder(isolate).Set("message", error).Build()));
+      gin::DataObjectBuilder(isolate).Set("message", error).Build());
 }
 
 }  // namespace extensions

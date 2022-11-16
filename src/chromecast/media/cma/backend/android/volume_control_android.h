@@ -9,7 +9,6 @@
 #include <vector>
 
 #include "base/android/jni_android.h"
-#include "base/macros.h"
 #include "base/synchronization/lock.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/threading/thread.h"
@@ -22,6 +21,10 @@ namespace media {
 class VolumeControlAndroid : SystemVolumeTableAccessApi {
  public:
   VolumeControlAndroid();
+
+  VolumeControlAndroid(const VolumeControlAndroid&) = delete;
+  VolumeControlAndroid& operator=(const VolumeControlAndroid&) = delete;
+
   ~VolumeControlAndroid() override;
 
   void AddVolumeObserver(VolumeObserver* observer);
@@ -70,6 +73,7 @@ class VolumeControlAndroid : SystemVolumeTableAccessApi {
                                           AudioContentType to_type,
                                           float level);
 
+  const bool is_single_volume_;
   base::android::ScopedJavaGlobalRef<jobject> j_volume_control_;
 
   std::map<AudioContentType, std::unique_ptr<VolumeCache>> volume_cache_;
@@ -83,8 +87,6 @@ class VolumeControlAndroid : SystemVolumeTableAccessApi {
 
   base::Thread thread_;
   base::WaitableEvent initialize_complete_event_;
-
-  DISALLOW_COPY_AND_ASSIGN(VolumeControlAndroid);
 };
 
 }  // namespace media

@@ -9,8 +9,8 @@
 #include "base/memory/ptr_util.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/string_number_conversions.h"
-#include "net/cert/internal/cert_errors.h"
-#include "net/cert/internal/parsed_certificate.h"
+#include "net/cert/pki/cert_errors.h"
+#include "net/cert/pki/parsed_certificate.h"
 #include "net/cert/x509_util.h"
 #include "net/third_party/mozilla_win/cert/win_util.h"
 
@@ -43,7 +43,7 @@ namespace {
 bool IsCertTrustedForServerAuth(PCCERT_CONTEXT cert) {
   DWORD usage_size = 0;
 
-  if (!CertGetEnhancedKeyUsage(cert, 0, NULL, &usage_size)) {
+  if (!CertGetEnhancedKeyUsage(cert, 0, nullptr, &usage_size)) {
     return false;
   }
 
@@ -154,6 +154,18 @@ std::unique_ptr<TrustStoreWin> TrustStoreWin::Create() {
                                    CERT_SYSTEM_STORE_CURRENT_USER_GROUP_POLICY,
                                    L"Disallowed");
 
+  // Auto-sync all of the cert stores to get updates to the cert store.
+  // Auto-syncing on all_certs_store seems to work to resync the nested stores,
+  // although the docs at
+  // https://docs.microsoft.com/en-us/windows/win32/api/wincrypt/nf-wincrypt-certcontrolstore
+  // are somewhat unclear. If and when root store changes are linked to clearing
+  // various caches, this should be replaced with CERT_STORE_CTRL_NOTIFY_CHANGE
+  // and CERT_STORE_CTRL_RESYNC.
+  if (!CertControlStore(all_certs_store.get(), 0, CERT_STORE_CTRL_AUTO_RESYNC,
+                        0)) {
+    PLOG(ERROR) << "Error enabling CERT_STORE_CTRL_AUTO_RESYNC";
+  }
+
   return base::WrapUnique(new TrustStoreWin(
       std::move(root_cert_store), std::move(intermediate_cert_store),
       std::move(disallowed_cert_store), std::move(all_certs_store)));
@@ -213,8 +225,9 @@ void TrustStoreWin::SyncGetIssuersOf(const ParsedCertificate* cert,
   while ((cert_from_store = CertFindCertificateInStore(
               all_certs_store_.get(), X509_ASN_ENCODING, 0,
               CERT_FIND_SUBJECT_NAME, &cert_issuer_blob, cert_from_store))) {
-    bssl::UniquePtr<CRYPTO_BUFFER> der_crypto = x509_util::CreateCryptoBuffer(
-        cert_from_store->pbCertEncoded, cert_from_store->cbCertEncoded);
+    bssl::UniquePtr<CRYPTO_BUFFER> der_crypto =
+        x509_util::CreateCryptoBuffer(base::make_span(
+            cert_from_store->pbCertEncoded, cert_from_store->cbCertEncoded));
     CertErrors errors;
     ParsedCertificate::CreateAndAddToVector(
         std::move(der_crypto), x509_util::DefaultParseCertificateOptions(),
@@ -301,7 +314,7 @@ CertificateTrust TrustStoreWin::GetTrust(
   // Found at least one instance of the cert in the root store, and all
   // instances found are trusted for TLS server auth.
   if (root_found && root_is_trusted) {
-    return CertificateTrust::ForTrustAnchor();
+    return CertificateTrust::ForTrustAnchorEnforcingExpiration();
   }
 
   cert_from_store = nullptr;

@@ -10,36 +10,51 @@ import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.chrome.browser.tab.CurrentTabObserver;
 import org.chromium.chrome.browser.tab.EmptyTabObserver;
 import org.chromium.chrome.browser.tab.Tab;
+import org.chromium.chrome.browser.tab.TabHidingType;
 import org.chromium.content_public.browser.NavigationHandle;
 
-/** Responsible for detecting candidate events for publishing the merchant trust message. */
+/**
+ * Responsible for detecting candidate events for fetching the merchant trust signal and publishing
+ * the merchant trust message.
+ */
 class MerchantTrustSignalsMediator {
     /** Callback interface to communicate with the owning object. */
     interface MerchantTrustSignalsCallback {
         /**
-         * Called when the mediator has detected a candidate event for displaying the merchant
-         * trust message.
+         * Called when the mediator has detected a candidate event for fetching the merchant
+         * trust signal and scheduling the merchant trust message.
          */
-        void maybeDisplayMessage(MerchantTrustMessageContext item);
+        void onFinishEligibleNavigation(MerchantTrustMessageContext item);
     }
 
     private final CurrentTabObserver mCurrentTabObserver;
 
-    MerchantTrustSignalsMediator(
-            ObservableSupplier<Tab> tabSupplier, MerchantTrustSignalsCallback delegate) {
+    MerchantTrustSignalsMediator(ObservableSupplier<Tab> tabSupplier,
+            MerchantTrustSignalsCallback delegate, MerchantTrustMetrics metrics) {
         mCurrentTabObserver = new CurrentTabObserver(tabSupplier, new EmptyTabObserver() {
             @Override
             public void onDidFinishNavigation(Tab tab, NavigationHandle navigation) {
                 if ((tab.isIncognito()) || (!navigation.hasCommitted())
                         || (!navigation.isInPrimaryMainFrame())
-                        || (navigation.isFragmentNavigation()) || (navigation.isErrorPage())
-                        || (navigation.getUrl() == null)
+                        || (navigation.isPrimaryMainFrameFragmentNavigation())
+                        || (navigation.isErrorPage()) || (navigation.getUrl() == null)
                         || (TextUtils.isEmpty(navigation.getUrl().getHost()))) {
                     return;
                 }
 
-                delegate.maybeDisplayMessage(
+                metrics.updateRecordingMessageImpact(navigation.getUrl().getHost());
+                delegate.onFinishEligibleNavigation(
                         new MerchantTrustMessageContext(navigation, tab.getWebContents()));
+            }
+
+            @Override
+            public void onHidden(Tab tab, @TabHidingType int type) {
+                metrics.finishRecordingMessageImpact();
+            }
+
+            @Override
+            public void onDestroyed(Tab tab) {
+                metrics.finishRecordingMessageImpact();
             }
         });
     }

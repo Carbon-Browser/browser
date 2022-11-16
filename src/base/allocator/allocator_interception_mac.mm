@@ -34,17 +34,17 @@
 #include "base/mac/mach_logging.h"
 #include "base/process/memory.h"
 #include "base/threading/sequenced_task_runner_handle.h"
+#include "base/time/time.h"
 #include "build/build_config.h"
 #include "third_party/apple_apsl/CFBase.h"
 
-#if defined(OS_IOS)
+#if BUILDFLAG(IS_IOS)
 #include "base/ios/ios_util.h"
 #else
 #include "base/mac/mac_util.h"
 #endif
 
-namespace base {
-namespace allocator {
+namespace base::allocator {
 
 bool g_replaced_default_zone = false;
 
@@ -235,10 +235,10 @@ void* oom_killer_memalign_purgeable(struct _malloc_zone_t* zone,
 // === Core Foundation CFAllocators ===
 
 bool CanGetContextForCFAllocator() {
-#if defined(OS_IOS)
-  return !base::ios::IsRunningOnOrLater(14, 0, 0);
+#if BUILDFLAG(IS_IOS)
+  return !base::ios::IsRunningOnOrLater(17, 0, 0);
 #else
-  return !base::mac::IsOSLaterThan12_DontCallThis();
+  return !base::mac::IsOSLaterThan13_DontCallThis();
 #endif
 }
 
@@ -257,7 +257,7 @@ void* oom_killer_cfallocator_system_default(CFIndex alloc_size,
                                             void* info) {
   void* result = g_old_cfallocator_system_default(alloc_size, hint, info);
   if (!result)
-    TerminateBecauseOutOfMemory(alloc_size);
+    TerminateBecauseOutOfMemory(static_cast<size_t>(alloc_size));
   return result;
 }
 
@@ -266,7 +266,7 @@ void* oom_killer_cfallocator_malloc(CFIndex alloc_size,
                                     void* info) {
   void* result = g_old_cfallocator_malloc(alloc_size, hint, info);
   if (!result)
-    TerminateBecauseOutOfMemory(alloc_size);
+    TerminateBecauseOutOfMemory(static_cast<size_t>(alloc_size));
   return result;
 }
 
@@ -275,7 +275,7 @@ void* oom_killer_cfallocator_malloc_zone(CFIndex alloc_size,
                                          void* info) {
   void* result = g_old_cfallocator_malloc_zone(alloc_size, hint, info);
   if (!result)
-    TerminateBecauseOutOfMemory(alloc_size);
+    TerminateBecauseOutOfMemory(static_cast<size_t>(alloc_size));
   return result;
 }
 
@@ -547,8 +547,8 @@ void ShimNewMallocZonesAndReschedule(base::Time end_time,
 }  // namespace
 
 void PeriodicallyShimNewMallocZones() {
-  base::Time end_time = base::Time::Now() + base::TimeDelta::FromMinutes(1);
-  base::TimeDelta initial_delay = base::TimeDelta::FromSeconds(1);
+  base::Time end_time = base::Time::Now() + base::Minutes(1);
+  base::TimeDelta initial_delay = base::Seconds(1);
   ShimNewMallocZonesAndReschedule(end_time, initial_delay);
 }
 
@@ -608,5 +608,4 @@ void ReplaceZoneFunctions(ChromeMallocZone* zone,
   }
 }
 
-}  // namespace allocator
-}  // namespace base
+}  // namespace base::allocator

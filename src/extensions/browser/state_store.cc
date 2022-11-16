@@ -10,11 +10,12 @@
 
 #include "base/bind.h"
 #include "base/location.h"
+#include "base/observer_list.h"
+#include "components/value_store/value_store_factory.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "extensions/browser/extension_file_task_runner.h"
-#include "extensions/browser/value_store/value_store_factory.h"
 #include "extensions/common/constants.h"
 #include "extensions/common/extension.h"
 
@@ -76,12 +77,20 @@ StateStore::StateStore(
     case BackendType::RULES:
       store_ = std::make_unique<value_store::ValueStoreFrontend>(
           store_factory, base::FilePath(kRulesStoreName),
-          kRulesDatabaseUMAClientName, GetExtensionFileTaskRunner());
+          kRulesDatabaseUMAClientName, content::GetUIThreadTaskRunner({}),
+          GetExtensionFileTaskRunner());
       break;
     case BackendType::STATE:
       store_ = std::make_unique<value_store::ValueStoreFrontend>(
           store_factory, base::FilePath(kStateStoreName),
-          kStateDatabaseUMAClientName, GetExtensionFileTaskRunner());
+          kStateDatabaseUMAClientName, content::GetUIThreadTaskRunner({}),
+          GetExtensionFileTaskRunner());
+      break;
+    case BackendType::SCRIPTS:
+      store_ = std::make_unique<value_store::ValueStoreFrontend>(
+          store_factory, base::FilePath(kScriptsStoreName),
+          kScriptsDatabaseUMAClientName, content::GetUIThreadTaskRunner({}),
+          GetExtensionFileTaskRunner());
       break;
   }
 

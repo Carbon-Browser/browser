@@ -5,9 +5,8 @@
 #ifndef UI_WM_CORE_EASY_RESIZE_WINDOW_TARGETER_H_
 #define UI_WM_CORE_EASY_RESIZE_WINDOW_TARGETER_H_
 
-#include "base/macros.h"
+#include "base/component_export.h"
 #include "ui/aura/window_targeter.h"
-#include "ui/wm/core/wm_core_export.h"
 
 namespace gfx {
 class Insets;
@@ -20,11 +19,15 @@ namespace wm {
 // windows (top level Widgets that are resizable) to outside their bounds. For
 // Ash, this correlates to ash::kResizeOutsideBoundsSize. For the interior
 // resize area, see ash::InstallResizeHandleWindowTargeterForWindow().
-class WM_CORE_EXPORT EasyResizeWindowTargeter : public aura::WindowTargeter {
+class COMPONENT_EXPORT(UI_WM) EasyResizeWindowTargeter
+    : public aura::WindowTargeter {
  public:
   // NOTE: the insets must be negative.
   EasyResizeWindowTargeter(const gfx::Insets& mouse_extend,
                            const gfx::Insets& touch_extend);
+
+  EasyResizeWindowTargeter(const EasyResizeWindowTargeter&) = delete;
+  EasyResizeWindowTargeter& operator=(const EasyResizeWindowTargeter&) = delete;
 
   ~EasyResizeWindowTargeter() override;
 
@@ -37,8 +40,6 @@ class WM_CORE_EXPORT EasyResizeWindowTargeter : public aura::WindowTargeter {
   // Returns true if the hit testing (GetHitTestRects()) should use the
   // extended bounds.
   bool ShouldUseExtendedBounds(const aura::Window* w) const override;
-
-  DISALLOW_COPY_AND_ASSIGN(EasyResizeWindowTargeter);
 };
 
 }  // namespace wm

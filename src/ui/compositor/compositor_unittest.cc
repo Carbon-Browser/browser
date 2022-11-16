@@ -4,10 +4,12 @@
 
 #include <stdint.h>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
+#include "base/test/power_monitor_test.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_mock_time_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
@@ -17,6 +19,7 @@
 #include "components/viz/common/surfaces/parent_local_surface_id_allocator.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/compositor/compositor.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_delegate.h"
@@ -33,16 +36,23 @@ namespace {
 class CompositorTest : public testing::Test {
  public:
   CompositorTest() = default;
+
+  CompositorTest(const CompositorTest&) = delete;
+  CompositorTest& operator=(const CompositorTest&) = delete;
+
   ~CompositorTest() override = default;
 
-  void SetUp() override {
-    context_factories_ = std::make_unique<TestContextFactories>(false);
-
+  void CreateCompositor() {
     compositor_ = std::make_unique<Compositor>(
         context_factories_->GetContextFactory()->AllocateFrameSinkId(),
         context_factories_->GetContextFactory(), CreateTaskRunner(),
         false /* enable_pixel_canvas */);
     compositor_->SetAcceleratedWidget(gfx::kNullAcceleratedWidget);
+  }
+
+  void SetUp() override {
+    context_factories_ = std::make_unique<TestContextFactories>(false);
+    CreateCompositor();
   }
 
   void TearDown() override {
@@ -60,8 +70,6 @@ class CompositorTest : public testing::Test {
  private:
   std::unique_ptr<TestContextFactories> context_factories_;
   std::unique_ptr<Compositor> compositor_;
-
-  DISALLOW_COPY_AND_ASSIGN(CompositorTest);
 };
 
 // For tests that control time.
@@ -75,7 +83,17 @@ class CompositorTestWithMockedTime : public CompositorTest {
   base::TestMockTimeTaskRunner* task_runner() { return task_runner_.get(); }
 
  protected:
+  void AdvanceBy(base::TimeDelta delta) {
+    task_environment_.AdvanceClock(delta);
+  }
+
   scoped_refptr<base::TestMockTimeTaskRunner> task_runner_;
+  base::test::ScopedPowerMonitorTestSource test_power_monitor_source_;
+
+ private:
+  base::test::TaskEnvironment task_environment_{
+      base::test::TaskEnvironment::MainThreadType::UI,
+      base::test::TaskEnvironment::TimeSource::MOCK_TIME};
 };
 
 // For tests that run on a real MessageLoop with real time.
@@ -98,7 +116,81 @@ class CompositorTestWithMessageLoop : public CompositorTest {
   scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
 };
 
+class TestCompositorAnimationObserver : public CompositorAnimationObserver {
+ public:
+  TestCompositorAnimationObserver() = default;
+  TestCompositorAnimationObserver(const TestCompositorAnimationObserver&) =
+      delete;
+  TestCompositorAnimationObserver& operator=(
+      const TestCompositorAnimationObserver&) = delete;
+  ~TestCompositorAnimationObserver() override = default;
+
+  // CompositorAnimationObserver:
+  void OnAnimationStep(base::TimeTicks timestamp) override {}
+  void OnCompositingShuttingDown(Compositor* compositor) override {}
+
+  void NotifyFailure() override { failed_ = true; }
+
+  bool failed() const { return failed_; }
+
+ private:
+  bool failed_ = false;
+};
+
 }  // namespace
+
+TEST_F(CompositorTestWithMockedTime, AnimationObserverBasic) {
+  TestCompositorAnimationObserver test;
+  compositor()->AddAnimationObserver(&test);
+
+  test.Start();
+  test.Check();
+  AdvanceBy(base::Seconds(59));
+  EXPECT_FALSE(test.failed());
+
+  AdvanceBy(base::Seconds(2));
+  test.Check();
+  EXPECT_TRUE(test.failed());
+
+  compositor()->RemoveAnimationObserver(&test);
+}
+
+TEST_F(CompositorTestWithMockedTime, AnimationObserverResetAfterResume) {
+  TestCompositorAnimationObserver test;
+  compositor()->AddAnimationObserver(&test);
+  test.Start();
+  test.Check();
+  AdvanceBy(base::Seconds(59));
+  EXPECT_TRUE(test.is_active_for_test());
+  EXPECT_FALSE(test.failed());
+
+  test_power_monitor_source_.Suspend();
+  base::RunLoop().RunUntilIdle();
+  AdvanceBy(base::Seconds(32));
+  test_power_monitor_source_.Resume();
+  base::RunLoop().RunUntilIdle();
+  test.Check();
+  EXPECT_TRUE(test.is_active_for_test());
+  EXPECT_FALSE(test.failed());
+  AdvanceBy(base::Seconds(29));
+  test.Check();
+  EXPECT_TRUE(test.is_active_for_test());
+  EXPECT_FALSE(test.failed());
+
+  AdvanceBy(base::Seconds(32));
+  test.Check();
+  EXPECT_FALSE(test.is_active_for_test());
+  EXPECT_TRUE(test.failed());
+
+  // Make sure another suspend/resume will not reactivate it.
+  test_power_monitor_source_.Suspend();
+  base::RunLoop().RunUntilIdle();
+  test_power_monitor_source_.Resume();
+  EXPECT_FALSE(test.is_active_for_test());
+  EXPECT_TRUE(test.failed());
+
+  compositor()->RemoveAnimationObserver(&test);
+}
 
 TEST_F(CompositorTestWithMessageLoop, ShouldUpdateDisplayProperties) {
   auto root_layer = std::make_unique<Layer>(ui::LAYER_SOLID_COLOR);
@@ -113,14 +205,14 @@ TEST_F(CompositorTestWithMessageLoop, ShouldUpdateDisplayProperties) {
   // Set a non-identity color matrix, color space, sdr white level, vsync
   // timebase and vsync interval, and expect it to be set on the context
   // factory.
-  skia::Matrix44 color_matrix(skia::Matrix44::kIdentity_Constructor);
-  color_matrix.set(1, 1, 0.7f);
-  color_matrix.set(2, 2, 0.4f);
+  SkM44 color_matrix;
+  color_matrix.setRC(1, 1, 0.7f);
+  color_matrix.setRC(2, 2, 0.4f);
   gfx::DisplayColorSpaces display_color_spaces(
       gfx::ColorSpace::CreateDisplayP3D65());
-  display_color_spaces.SetSDRWhiteLevel(1.f);
+  display_color_spaces.SetSDRMaxLuminanceNits(1.f);
   base::TimeTicks vsync_timebase(base::TimeTicks::Now());
-  base::TimeDelta vsync_interval(base::TimeDelta::FromMilliseconds(250));
+  base::TimeDelta vsync_interval(base::Milliseconds(250));
   compositor()->SetDisplayColorMatrix(color_matrix);
   compositor()->SetDisplayColorSpaces(display_color_spaces);
   compositor()->SetDisplayVSyncParameters(vsync_timebase, vsync_interval);
@@ -362,7 +454,7 @@ TEST_F(CompositorTestWithMessageLoop, ThroughputTrackerInvoluntaryReport) {
   EXPECT_FALSE(tracker.Stop());
 }
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 // TODO(crbug.com/608436): Flaky on windows trybots
 #define MAYBE_CreateAndReleaseOutputSurface \
   DISABLED_CreateAndReleaseOutputSurface
@@ -410,7 +502,7 @@ class LayerDelegateThatAddsDuringUpdateVisualState : public LayerDelegate {
                                   float new_device_scale_factor) override {}
 
  private:
-  Layer* parent_;
+  raw_ptr<Layer> parent_;
   std::vector<std::unique_ptr<Layer>> added_layers_;
   bool update_visual_state_called_ = false;
 };
@@ -442,6 +534,36 @@ TEST_F(CompositorTestWithMessageLoop, AddLayerDuringUpdateVisualState) {
   child_layer2.reset();
   child_layer.reset();
   root_layer.reset();
+}
+
+TEST_F(CompositorTestWithMessageLoop, PriorityCutoffWhenVisible) {
+  EXPECT_EQ(gpu::MemoryAllocation::CUTOFF_ALLOW_NICE_TO_HAVE,
+            compositor()
+                ->GetLayerTreeSettings()
+                .memory_policy.priority_cutoff_when_visible);
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeature(
+      features::kUiCompositorRequiredTilesOnly);
+  DestroyCompositor();
+  CreateCompositor();
+  EXPECT_EQ(gpu::MemoryAllocation::CUTOFF_ALLOW_REQUIRED_ONLY,
+            compositor()
+                ->GetLayerTreeSettings()
+                .memory_policy.priority_cutoff_when_visible);
+}
+
+TEST_F(CompositorTestWithMessageLoop, ReleaseTileResourcesForHiddenLayers) {
+  EXPECT_FALSE(compositor()
+                   ->GetLayerTreeSettings()
+                   .release_tile_resources_for_hidden_layers);
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeature(
+      features::kUiCompositorReleaseTileResourcesForHiddenLayers);
+  DestroyCompositor();
+  CreateCompositor();
+  EXPECT_TRUE(compositor()
+                  ->GetLayerTreeSettings()
+                  .release_tile_resources_for_hidden_layers);
 }
 
 }  // namespace ui

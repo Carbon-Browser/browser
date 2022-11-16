@@ -13,7 +13,6 @@
 #include <vector>
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/strings/string_piece.h"
 #include "base/time/time.h"
@@ -64,6 +63,8 @@ class NET_EXPORT HttpResponseHeaders
   };
 
   static const char kContentRange[];
+  static const char kLastModified[];
+  static const char kVary[];
 
   HttpResponseHeaders() = delete;
 
@@ -88,6 +89,9 @@ class NET_EXPORT HttpResponseHeaders
   // not be called on |headers| before calling this method.
   static scoped_refptr<HttpResponseHeaders> TryToCreate(
       base::StringPiece headers);
+
+  HttpResponseHeaders(const HttpResponseHeaders&) = delete;
+  HttpResponseHeaders& operator=(const HttpResponseHeaders&) = delete;
 
   // Appends a representation of this object to the given pickle.
   // The options argument can be a combination of PersistOptions.
@@ -437,8 +441,6 @@ class NET_EXPORT HttpResponseHeaders
 
   // The normalized http version (consistent with what GetStatusLine() returns).
   HttpVersion http_version_;
-
-  DISALLOW_COPY_AND_ASSIGN(HttpResponseHeaders);
 };
 
 using ResponseHeadersCallback =

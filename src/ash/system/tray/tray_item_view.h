@@ -8,7 +8,8 @@
 #include <memory>
 
 #include "ash/ash_export.h"
-#include "base/macros.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/compositor/throughput_tracker.h"
 #include "ui/views/animation/animation_delegate_views.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/view.h"
@@ -52,6 +53,10 @@ class ASH_EXPORT TrayItemView : public views::View,
                                 public views::AnimationDelegateViews {
  public:
   explicit TrayItemView(Shelf* shelf);
+
+  TrayItemView(const TrayItemView&) = delete;
+  TrayItemView& operator=(const TrayItemView&) = delete;
+
   ~TrayItemView() override;
 
   // Convenience function for creating a child Label or ImageView.
@@ -122,7 +127,8 @@ class ASH_EXPORT TrayItemView : public views::View,
   IconizedLabel* label_;
   views::ImageView* image_view_;
 
-  DISALLOW_COPY_AND_ASSIGN(TrayItemView);
+  // Measure animation smoothness metrics for `animation_`.
+  absl::optional<ui::ThroughputTracker> throughput_tracker_;
 };
 
 }  // namespace ash

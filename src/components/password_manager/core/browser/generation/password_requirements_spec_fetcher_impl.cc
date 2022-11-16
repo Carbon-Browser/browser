@@ -104,18 +104,6 @@ void PasswordRequirementsSpecFetcherImpl::Fetch(GURL origin,
     return;
   }
 
-  if (!url_loader_factory_) {
-    TriggerCallback(std::move(callback), ResultCode::kErrorNoUrlLoader,
-                    PasswordRequirementsSpec());
-    return;
-  }
-
-  if (!url_loader_factory_) {
-    TriggerCallback(std::move(callback), ResultCode::kErrorNoUrlLoader,
-                    PasswordRequirementsSpec());
-    return;
-  }
-
   if (!origin.is_valid() || origin.HostIsIPAddress() ||
       !origin.SchemeIsHTTPOrHTTPS()) {
     VLOG(1) << "No valid origin";
@@ -125,11 +113,11 @@ void PasswordRequirementsSpecFetcherImpl::Fetch(GURL origin,
   }
 
   // Canonicalize away trailing periods in hostname.
-  while (!origin.host().empty() && origin.host().back() == '.') {
-    std::string new_host = origin.host().substr(0, origin.host().length() - 1);
-    url::Replacements<char> replacements;
-    replacements.SetHost(new_host.c_str(),
-                         url::Component(0, new_host.length()));
+  while (!origin.host_piece().empty() && origin.host_piece().back() == '.') {
+    base::StringPiece new_host =
+        origin.host_piece().substr(0, origin.host_piece().length() - 1);
+    GURL::Replacements replacements;
+    replacements.SetHostStr(new_host);
     origin = origin.ReplaceComponents(replacements);
   }
 
@@ -181,7 +169,7 @@ void PasswordRequirementsSpecFetcherImpl::Fetch(GURL origin,
                      base::Unretained(this), hash_prefix));
 
   lookup->download_timer.Start(
-      FROM_HERE, base::TimeDelta::FromMilliseconds(timeout_),
+      FROM_HERE, base::Milliseconds(timeout_),
       base::BindOnce(&PasswordRequirementsSpecFetcherImpl::OnFetchTimeout,
                      base::Unretained(this), hash_prefix));
 

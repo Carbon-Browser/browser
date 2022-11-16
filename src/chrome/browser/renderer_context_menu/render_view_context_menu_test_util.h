@@ -10,9 +10,9 @@
 #include <memory>
 
 #include "base/files/file_path.h"
-#include "base/macros.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/renderer_context_menu/render_view_context_menu.h"
+#include "components/custom_handlers/protocol_handler_registry.h"
 #include "extensions/buildflags/buildflags.h"
 #include "url/gurl.h"
 
@@ -34,8 +34,13 @@ class DlpRulesManager;
 
 class TestRenderViewContextMenu : public RenderViewContextMenu {
  public:
-  TestRenderViewContextMenu(content::RenderFrameHost* render_frame_host,
+  TestRenderViewContextMenu(content::RenderFrameHost& render_frame_host,
                             content::ContextMenuParams params);
+
+  TestRenderViewContextMenu(const TestRenderViewContextMenu&) = delete;
+  TestRenderViewContextMenu& operator=(const TestRenderViewContextMenu&) =
+      delete;
+
   ~TestRenderViewContextMenu() override;
 
   // Factory.
@@ -67,7 +72,7 @@ class TestRenderViewContextMenu : public RenderViewContextMenu {
   // returned in |found_model| and |found_index|. Otherwise returns false.
   bool GetMenuModelAndItemIndex(int command_id,
                                 ui::MenuModel** found_model,
-                                int* found_index);
+                                size_t* found_index);
 
   // Returns the command id of the menu item with the specified |path|.
   int GetCommandIDByProfilePath(const base::FilePath& path) const;
@@ -76,7 +81,8 @@ class TestRenderViewContextMenu : public RenderViewContextMenu {
   extensions::ContextMenuMatcher& extension_items() { return extension_items_; }
 #endif
 
-  void set_protocol_handler_registry(ProtocolHandlerRegistry* registry) {
+  void set_protocol_handler_registry(
+      custom_handlers::ProtocolHandlerRegistry* registry) {
     protocol_handler_registry_ = registry;
   }
 
@@ -98,8 +104,6 @@ class TestRenderViewContextMenu : public RenderViewContextMenu {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   policy::DlpRulesManager* dlp_rules_manager_ = nullptr;
 #endif
-
-  DISALLOW_COPY_AND_ASSIGN(TestRenderViewContextMenu);
 };
 
 #endif  // CHROME_BROWSER_RENDERER_CONTEXT_MENU_RENDER_VIEW_CONTEXT_MENU_TEST_UTIL_H_

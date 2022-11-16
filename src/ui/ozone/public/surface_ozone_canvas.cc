@@ -6,11 +6,17 @@
 
 #include "base/notreached.h"
 
+#include <ostream>
+
 namespace ui {
 
 SurfaceOzoneCanvas::~SurfaceOzoneCanvas() = default;
 
 bool SurfaceOzoneCanvas::SupportsAsyncBufferSwap() const {
+  return false;
+}
+
+bool SurfaceOzoneCanvas::SupportsOverridePlatformSize() const {
   return false;
 }
 

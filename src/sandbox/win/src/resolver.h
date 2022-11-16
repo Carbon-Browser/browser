@@ -11,7 +11,7 @@
 
 #include <stddef.h>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "sandbox/win/src/nt_internals.h"
 
 namespace sandbox {
@@ -22,6 +22,10 @@ namespace sandbox {
 class ResolverThunk {
  public:
   ResolverThunk() {}
+
+  ResolverThunk(const ResolverThunk&) = delete;
+  ResolverThunk& operator=(const ResolverThunk&) = delete;
+
   virtual ~ResolverThunk() {}
 
   // Performs the actual interception of a function.
@@ -95,11 +99,13 @@ class ResolverThunk {
                         const void* original_function, const void* interceptor);
 
   // Holds the resolved interception target.
-  void* target_;
+  // The field is accessed too early during the process startup to support
+  // raw_ptr<T>.
+  RAW_PTR_EXCLUSION void* target_;
   // Holds the resolved interception interceptor.
-  const void* interceptor_;
-
-  DISALLOW_COPY_AND_ASSIGN(ResolverThunk);
+  // The field is accessed too early during the process startup to support
+  // raw_ptr<T>.
+  RAW_PTR_EXCLUSION const void* interceptor_;
 };
 
 }  // namespace sandbox

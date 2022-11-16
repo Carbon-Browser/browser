@@ -5,15 +5,27 @@
 #include "ui/aura/window_tree_host.h"
 
 #include "base/command_line.h"
+#include "base/containers/contains.h"
 #include "base/feature_list.h"
+#include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/scoped_refptr.h"
+#include "base/metrics/field_trial_params.h"
+#include "base/no_destructor.h"
+#include "base/observer_list.h"
 #include "base/threading/thread_task_runner_handle.h"
+#include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
+#include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "components/viz/common/features.h"
 #include "components/viz/common/surfaces/frame_sink_id.h"
+#include "components/viz/host/host_frame_sink_manager.h"
 #include "ui/aura/client/capture_client.h"
 #include "ui/aura/client/cursor_client.h"
 #include "ui/aura/env.h"
+#include "ui/aura/host_frame_rate_throttler.h"
+#include "ui/aura/native_window_occlusion_tracker.h"
 #include "ui/aura/scoped_keyboard_hook.h"
 #include "ui/aura/scoped_simple_keyboard_hook.h"
 #include "ui/aura/window.h"
@@ -26,6 +38,7 @@
 #include "ui/base/layout.h"
 #include "ui/base/ui_base_features.h"
 #include "ui/base/view_prop.h"
+#include "ui/compositor/compositor.h"
 #include "ui/compositor/compositor_switches.h"
 #include "ui/compositor/layer.h"
 #include "ui/display/display.h"
@@ -48,6 +61,12 @@ namespace {
 const char kWindowTreeHostForAcceleratedWidget[] =
     "__AURA_WINDOW_TREE_HOST_ACCELERATED_WIDGET__";
 
+// Returns the cc::Layer used by a ui::Layer. This is a bit ugly, and is done to
+// avoid exposing cc::Layer outside of ui::Layer.
+cc::Layer* ccLayerFromUiLayer(ui::Layer* layer) {
+  return static_cast<ui::LayerAnimationDelegate*>(layer)->GetCcLayer();
+}
+
 #if DCHECK_IS_ON()
 class ScopedLocalSurfaceIdValidator {
  public:
@@ -55,6 +74,11 @@ class ScopedLocalSurfaceIdValidator {
       : window_(window),
         local_surface_id_(window ? window->GetLocalSurfaceId()
                                  : viz::LocalSurfaceId()) {}
+
+  ScopedLocalSurfaceIdValidator(const ScopedLocalSurfaceIdValidator&) = delete;
+  ScopedLocalSurfaceIdValidator& operator=(
+      const ScopedLocalSurfaceIdValidator&) = delete;
+
   ~ScopedLocalSurfaceIdValidator() {
     if (window_) {
       DCHECK_EQ(local_surface_id_, window_->GetLocalSurfaceId());
@@ -62,9 +86,8 @@ class ScopedLocalSurfaceIdValidator {
   }
 
  private:
-  Window* const window_;
+  const raw_ptr<Window> window_;
   const viz::LocalSurfaceId local_surface_id_;
-  DISALLOW_COPY_AND_ASSIGN(ScopedLocalSurfaceIdValidator);
 };
 #else
 class ScopedLocalSurfaceIdValidator {
@@ -76,11 +99,81 @@ class ScopedLocalSurfaceIdValidator {
 
 }  // namespace
 
+// In order for viz to drop all references to resources used by the browser
+// (and renderers) a CompositorFrame with *no* references to other surfaces
+// must be generated. To do this a solid color layer is inserted into the
+// layer tree, and the existing root layer is removed. Adding a layer at the top
+// (keeping existing layer tree) is not enough, as the CompositorFrame still
+// contains information about the surfaces/resources that are obscured. Once the
+// frame is generated, the root layer (from `window_`) is inserted back in the
+// Compositor's root layer and then the Compositor is hidden.
+class WindowTreeHost::HideHelper {
+ public:
+  explicit HideHelper(WindowTreeHost* host)
+      : host_(host),
+        compositor_root_layer_(
+            ccLayerFromUiLayer(host->window()->layer())->mutable_parent()),
+        layer_for_transition_(
+            std::make_unique<ui::Layer>(ui::LAYER_SOLID_COLOR)) {
+    layer_for_transition_->SetColor(SK_ColorWHITE);
+    aura::Window* host_window = host_->window();
+    ui::Layer* host_window_layer = host_window->layer();
+    ui::Compositor* compositor = host_->compositor();
+    // SetRootLayer() resets the `compositor_` member in Layer. If
+    // SetRootLayer() were used, it would mean the existing layer hierarchy
+    // would no longer think it is in a compositor. As this state is temporary,
+    // and purely to release resources, SetRootLayer() is not used.
+
+    // We do need to disable ticking of animations since the animation code
+    // expects that its callers ensure that any ticking animations reference
+    // element IDs for layers that are currently in the layer tree.
+    DCHECK_EQ(host_window_layer, compositor->root_layer());
+    compositor->DisableAnimations();
+    ccLayerFromUiLayer(host_window_layer)->RemoveFromParent();
+    layer_for_transition_->SetBounds(host_window->bounds());
+    compositor_root_layer_->AddChild(
+        ccLayerFromUiLayer(layer_for_transition_.get()));
+    layer_for_transition_->OnDeviceScaleFactorChanged(
+        host_window->layer()->device_scale_factor());
+    // Request a presentation frame. Once the frame is generated the real root
+    // layer is added back (from the destructor).
+    compositor->RequestPresentationTimeForNextFrame(base::BindOnce(
+        &HideHelper::OnFramePresented, weak_ptr_factory_.GetWeakPtr()));
+  }
+
+  ~HideHelper() {
+    ui::Layer* host_window_layer = host_->window()->layer();
+    compositor_root_layer_->AddChild(ccLayerFromUiLayer(host_window_layer));
+    host_window_layer->OnDeviceScaleFactorChanged(
+        layer_for_transition_->device_scale_factor());
+    DCHECK_EQ(host_window_layer, host_->compositor()->root_layer());
+    host_->compositor()->EnableAnimations();
+  }
+
+ private:
+  void OnFramePresented(const gfx::PresentationFeedback& feedback) {
+    host_->FinishHideTransition();
+    // WARNING: this has been deleted.
+  }
+
+  raw_ptr<WindowTreeHost, DanglingUntriaged> host_;
+  scoped_refptr<cc::Layer> compositor_root_layer_;
+  std::unique_ptr<ui::Layer> layer_for_transition_;
+  base::WeakPtrFactory<HideHelper> weak_ptr_factory_{this};
+};
+
+WindowTreeHost::VideoCaptureLock::~VideoCaptureLock() {
+  if (host_)
+    host_->DecrementVideoCaptureCount();
+}
+
+WindowTreeHost::VideoCaptureLock::VideoCaptureLock(WindowTreeHost* host)
+    : host_(host->GetWeakPtr()) {}
+
 ////////////////////////////////////////////////////////////////////////////////
 // WindowTreeHost, public:
 
 WindowTreeHost::~WindowTreeHost() {
-  if (display::Screen::GetScreen())
   DCHECK(!compositor_) << "compositor must be destroyed before root window";
   if (owned_input_method_) {
     delete input_method_;
@@ -100,7 +193,7 @@ void WindowTreeHost::InitHost() {
       display::Screen::GetScreen()->GetDisplayNearestWindow(window());
   device_scale_factor_ = display.device_scale_factor();
 
-  UpdateRootWindowSizeInPixels();
+  UpdateRootWindowSize();
   InitCompositor();
   Env::GetInstance()->NotifyHostInitialized(this);
 }
@@ -130,7 +223,7 @@ gfx::Transform WindowTreeHost::GetRootTransform() const {
 
 void WindowTreeHost::SetRootTransform(const gfx::Transform& transform) {
   window()->SetTransform(transform);
-  UpdateRootWindowSizeInPixels();
+  UpdateRootWindowSize();
 }
 
 gfx::Transform WindowTreeHost::GetInverseRootTransform() const {
@@ -163,16 +256,6 @@ gfx::Transform WindowTreeHost::GetInverseRootTransformForLocalEventCoordinates()
   return invert;
 }
 
-void WindowTreeHost::UpdateRootWindowSizeInPixels() {
-  // Validate that the LocalSurfaceId does not change.
-  bool compositor_inited = !!compositor()->root_layer();
-  ScopedLocalSurfaceIdValidator lsi_validator(compositor_inited ? window()
-                                                                : nullptr);
-  gfx::Rect transformed_bounds_in_pixels =
-      GetTransformedRootWindowBoundsInPixels(GetBoundsInPixels().size());
-  window()->SetBounds(transformed_bounds_in_pixels);
-}
-
 void WindowTreeHost::UpdateCompositorScaleAndSize(
     const gfx::Size& new_size_in_pixels) {
   gfx::Rect new_bounds(new_size_in_pixels);
@@ -203,15 +286,23 @@ void WindowTreeHost::ConvertScreenInPixelsToDIP(gfx::Point* point) const {
 }
 
 void WindowTreeHost::ConvertDIPToPixels(gfx::Point* point) const {
-  auto point_3f = gfx::Point3F(gfx::PointF(*point));
-  GetRootTransform().TransformPoint(&point_3f);
-  *point = gfx::ToFlooredPoint(point_3f.AsPointF());
+  gfx::PointF point_f{*point};
+  ConvertDIPToPixels(&point_f);
+  *point = gfx::ToFlooredPoint(point_f);
+}
+
+void WindowTreeHost::ConvertDIPToPixels(gfx::PointF* point) const {
+  GetRootTransform().TransformPoint(point);
 }
 
 void WindowTreeHost::ConvertPixelsToDIP(gfx::Point* point) const {
-  auto point_3f = gfx::Point3F(gfx::PointF(*point));
-  GetInverseRootTransform().TransformPoint(&point_3f);
-  *point = gfx::ToFlooredPoint(point_3f.AsPointF());
+  gfx::PointF point_f{*point};
+  ConvertPixelsToDIP(&point_f);
+  *point = gfx::ToFlooredPoint(point_f);
+}
+
+void WindowTreeHost::ConvertPixelsToDIP(gfx::PointF* point) const {
+  GetInverseRootTransform().TransformPoint(point);
 }
 
 void WindowTreeHost::SetCursor(gfx::NativeCursor cursor) {
@@ -298,15 +389,25 @@ void WindowTreeHost::Show() {
   // and InitHost().
   DCHECK(compositor());
   DCHECK_EQ(compositor()->root_layer(), window()->layer());
-  compositor()->SetVisible(true);
+  OnAcceleratedWidgetMadeVisible(true);
   ShowImpl();
   window()->Show();
 }
 
 void WindowTreeHost::Hide() {
   HideImpl();
-  if (compositor())
-    compositor()->SetVisible(false);
+  OnAcceleratedWidgetMadeVisible(false);
+}
+
+gfx::Rect WindowTreeHost::GetBoundsInDIP() const {
+  aura::Window* root_window = const_cast<aura::Window*>(window());
+  display::Screen* screen = display::Screen::GetScreen();
+  gfx::Rect screen_bounds = GetBoundsInPixels();
+  return screen->ScreenToDIPRectInWindow(root_window, screen_bounds);
+}
+
+gfx::Rect WindowTreeHost::GetBoundsInAcceleratedWidgetPixelCoordinates() {
+  return gfx::Rect(GetBoundsInPixels().size());
 }
 
 std::unique_ptr<ScopedKeyboardHook> WindowTreeHost::CaptureSystemKeyEvents(
@@ -324,17 +425,52 @@ bool WindowTreeHost::ShouldSendKeyEventToIme() {
   return true;
 }
 
-bool WindowTreeHost::IsNativeWindowOcclusionEnabled() {
+bool WindowTreeHost::IsNativeWindowOcclusionEnabled() const {
   return native_window_occlusion_enabled_;
 }
 
 void WindowTreeHost::SetNativeWindowOcclusionState(
-    Window::OcclusionState state) {
-  if (occlusion_state_ != state) {
-    occlusion_state_ = state;
-    for (WindowTreeHostObserver& observer : observers_)
-      observer.OnOcclusionStateChanged(this, state);
+    Window::OcclusionState state,
+    const SkRegion& occluded_region) {
+  if (occlusion_state_ == state && occluded_region_ == occluded_region)
+    return;
+
+  occlusion_state_ = state;
+
+  if (compositor() && accelerated_widget_made_visible_ &&
+      NativeWindowOcclusionTracker::
+          IsNativeWindowOcclusionTrackingAlwaysEnabled(this)) {
+    if (ShouldThrottleWhenOccluded()) {
+      // Throttling doesn't update the visibility.
+      if (occlusion_state_ == Window::OcclusionState::OCCLUDED)
+        HostFrameRateThrottler::GetInstance().AddHost(this);
+      else
+        HostFrameRateThrottler::GetInstance().RemoveHost(this);
+    } else {
+      const bool visible = CalculateCompositorVisibilityFromOcclusionState();
+      // Transitioning to hidden means the compositor state hasn't been updated
+      // yet, but will. In this case, always route through
+      // UpdateCompositorVisibility() to ensure state is correctly cleaned up.
+      if (visible != compositor()->IsVisible() || is_transitioning_to_hidden())
+        UpdateCompositorVisibility(visible);
+    }
   }
+
+  for (WindowTreeHostObserver& observer : observers_)
+    observer.OnOcclusionStateChanged(this, state, occluded_region);
+}
+
+void WindowTreeHost::UpdateRootWindowSize() {
+  // Validate that the LocalSurfaceId does not change.
+  bool compositor_inited = !!compositor()->root_layer();
+  ScopedLocalSurfaceIdValidator lsi_validator(compositor_inited ? window()
+                                                                : nullptr);
+  window()->SetBounds(CalculateRootWindowBounds());
+}
+
+gfx::Rect WindowTreeHost::CalculateRootWindowBounds() const {
+  return GetTransformedRootWindowBoundsFromPixelSize(
+      GetBoundsInPixels().size());
 }
 
 std::unique_ptr<ScopedEnableUnadjustedMouseEvents>
@@ -372,21 +508,33 @@ void WindowTreeHost::UnlockMouse(Window* window) {
   }
 }
 
+std::unique_ptr<WindowTreeHost::VideoCaptureLock>
+WindowTreeHost::CreateVideoCaptureLock() {
+  if (!NativeWindowOcclusionTracker::
+          IsNativeWindowOcclusionTrackingAlwaysEnabled(this)) {
+    return nullptr;
+  }
+  // Throtting doesn't actually change the visibility, so no need for the lock.
+  if (ShouldThrottleWhenOccluded())
+    return nullptr;
+
+  ++video_capture_count_;
+  MaybeUpdateComposibleVisibilityForVideoLockCountChange();
+  // WrapUnique() is used as constructor is private.
+  return base::WrapUnique(new VideoCaptureLock(this));
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // WindowTreeHost, protected:
 
 WindowTreeHost::WindowTreeHost(std::unique_ptr<Window> window)
-    : window_(window.release()),  // See header for details on ownership.
-      occlusion_state_(Window::OcclusionState::UNKNOWN),
-      last_cursor_(ui::mojom::CursorType::kNull),
-      input_method_(nullptr),
-      owned_input_method_(false) {
+    : window_(window.release()) {  // See header for details on ownership.
   if (!window_)
     window_ = new Window(nullptr);
   auto display = display::Screen::GetScreen()->GetDisplayNearestWindow(window_);
   device_scale_factor_ = display.device_scale_factor();
-#if defined(OS_WIN)
-  // The feature state is neccessary but not sufficient for checking if
+#if BUILDFLAG(IS_WIN)
+  // The feature state is necessary but not sufficient for checking if
   // occlusion is enabled. It may be disabled by other means (e.g., policy).
   native_window_occlusion_enabled_ =
       !base::CommandLine::ForCurrentProcess()->HasSwitch(switches::kHeadless) &&
@@ -394,15 +542,50 @@ WindowTreeHost::WindowTreeHost(std::unique_ptr<Window> window)
 #endif
 }
 
-void WindowTreeHost::IntializeDeviceScaleFactor(float device_scale_factor) {
-  DCHECK(!compositor_->root_layer()) << "Only call this before InitHost()";
-  device_scale_factor_ = device_scale_factor;
+void WindowTreeHost::UpdateCompositorVisibility(bool visible) {
+  if (!compositor())
+    return;
+
+  if (ShouldThrottleWhenOccluded()) {
+    // If ShouldThrottleWhenOccluded() is true, then this function should only
+    // be called if visibility is changed externally. In this case, assume
+    // `occlusion_state_` is being ignored, and that throtting should be
+    // disabled. For the most part, if ShouldThrottleWhenOccluded() is true,
+    // the handling of occlusion changing is done in
+    // SetNativeWindowOcclusionState().
+    HostFrameRateThrottler::GetInstance().RemoveHost(this);
+  }
+
+  if (visible) {
+    if (is_transitioning_to_hidden())
+      RestoreHideTransitionState();
+  } else {
+    if (is_transitioning_to_hidden())
+      return;
+    if (ShouldReleaseResourcesWhenHidden()) {
+      StartReleasingResourcesForHide();
+      // Compositor visibility is changed once transition completes.
+      return;
+    }
+  }
+  compositor()->SetVisible(visible);
 }
 
 void WindowTreeHost::DestroyCompositor() {
-  if (compositor_) {
-    compositor_->RemoveObserver(this);
-    compositor_.reset();
+  if (!compositor_)
+    return;
+
+  HostFrameRateThrottler::GetInstance().RemoveHost(this);
+
+  // Explicitly delete the HideHelper early as it makes use of `compositor_`
+  // and `window_`.
+  hide_helper_.reset();
+
+  compositor_->RemoveObserver(this);
+  compositor_.reset();
+  if (NativeWindowOcclusionTracker::
+          IsNativeWindowOcclusionTrackingAlwaysEnabled(this)) {
+    NativeWindowOcclusionTracker::DisableNativeWindowOcclusionTracking(this);
   }
 }
 
@@ -419,13 +602,24 @@ void WindowTreeHost::DestroyDispatcher() {
   // ~Window, but by that time any calls to virtual methods overriden here (such
   // as GetRootWindow()) result in Window's implementation. By destroying here
   // we ensure GetRootWindow() still returns this.
-  //window()->RemoveOrDestroyChildren();
+  // window()->RemoveOrDestroyChildren();
 }
 
-void WindowTreeHost::CreateCompositor(
-    bool force_software_compositor,
-    bool use_external_begin_frame_control,
-    bool enable_compositing_based_throttling) {
+void WindowTreeHost::OnAcceleratedWidgetMadeVisible(bool value) {
+  if (accelerated_widget_made_visible_ == value)
+    return;
+
+  accelerated_widget_made_visible_ = value;
+  // Always update the compositor (ignoring occlusion-state) as it is entirely
+  // possible the occlusion-state is out of date at this point. It is expected
+  // that the proper occlusion state is provided soon after this.
+  UpdateCompositorVisibility(value);
+}
+
+void WindowTreeHost::CreateCompositor(bool force_software_compositor,
+                                      bool use_external_begin_frame_control,
+                                      bool enable_compositing_based_throttling,
+                                      size_t memory_limit_when_visible_mb) {
   Env* env = Env::GetInstance();
   ui::ContextFactory* context_factory = env->context_factory();
   DCHECK(context_factory);
@@ -433,7 +627,7 @@ void WindowTreeHost::CreateCompositor(
       context_factory->AllocateFrameSinkId(), context_factory,
       base::ThreadTaskRunnerHandle::Get(), ui::IsPixelCanvasRecordingEnabled(),
       use_external_begin_frame_control, force_software_compositor,
-      enable_compositing_based_throttling);
+      enable_compositing_based_throttling, memory_limit_when_visible_mb);
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   compositor_->AddObserver(this);
 #endif
@@ -460,6 +654,10 @@ void WindowTreeHost::OnAcceleratedWidgetAvailable() {
   compositor_->SetAcceleratedWidget(GetAcceleratedWidget());
   prop_ = std::make_unique<ui::ViewProp>(
       GetAcceleratedWidget(), kWindowTreeHostForAcceleratedWidget, this);
+  if (NativeWindowOcclusionTracker::
+          IsNativeWindowOcclusionTrackingAlwaysEnabled(this)) {
+    NativeWindowOcclusionTracker::EnableNativeWindowOcclusionTracking(this);
+  }
 }
 
 void WindowTreeHost::OnHostMovedInPixels(
@@ -481,8 +679,12 @@ void WindowTreeHost::OnHostResizedInPixels(
 
   display::Display display =
       display::Screen::GetScreen()->GetDisplayNearestWindow(window());
-  device_scale_factor_ = display.device_scale_factor();
-  UpdateRootWindowSizeInPixels();
+  // If we don't have the actual display, don't overwrite the scale factor with
+  // the default value. See https://crbug.com/1285476 for details.
+  if (display.is_valid())
+    device_scale_factor_ = display.device_scale_factor();
+
+  UpdateRootWindowSize();
 
   // Passing |new_size_in_pixels| to set compositor size. It could be different
   // from GetBoundsInPixels() on Windows to contain extra space for window
@@ -540,7 +742,7 @@ void WindowTreeHost::OnDisplayMetricsChanged(const display::Display& display,
 #endif
 }
 
-gfx::Rect WindowTreeHost::GetTransformedRootWindowBoundsInPixels(
+gfx::Rect WindowTreeHost::GetTransformedRootWindowBoundsFromPixelSize(
     const gfx::Size& size_in_pixels) const {
   gfx::RectF new_bounds = gfx::RectF(gfx::Rect(size_in_pixels));
   GetInverseRootTransform().TransformRect(&new_bounds);
@@ -556,6 +758,106 @@ void WindowTreeHost::SetNativeWindowOcclusionEnabled(bool enable) {
 
 ////////////////////////////////////////////////////////////////////////////////
 // WindowTreeHost, private:
+
+void WindowTreeHost::DecrementVideoCaptureCount() {
+  DCHECK_GT(video_capture_count_, 0);
+  --video_capture_count_;
+  MaybeUpdateComposibleVisibilityForVideoLockCountChange();
+}
+
+void WindowTreeHost::MaybeUpdateComposibleVisibilityForVideoLockCountChange() {
+  // Should only be called if the occlusion is applied to the compositor.
+  DCHECK(!ShouldThrottleWhenOccluded());
+
+  // Only need to check for changes when transitioning between lock and no lock.
+  if (video_capture_count_ > 1 || !compositor() ||
+      !accelerated_widget_made_visible_) {
+    return;
+  }
+  const bool visible = CalculateCompositorVisibilityFromOcclusionState();
+  if (visible != compositor()->IsVisible() || is_transitioning_to_hidden())
+    UpdateCompositorVisibility(visible);
+}
+
+bool WindowTreeHost::CalculateCompositorVisibilityFromOcclusionState() const {
+  switch (occlusion_state_) {
+    case Window::OcclusionState::UNKNOWN:
+      return true;
+    case Window::OcclusionState::VISIBLE:
+      return true;
+    case Window::OcclusionState::OCCLUDED: {
+      // The compositor needs to be visible when capturing video.
+      return video_capture_count_ != 0;
+    }
+    case Window::OcclusionState::HIDDEN:
+      // TODO: this should really return true if `video_capture_count_` is
+      // not zero, but this likely needs other changes to really work (such
+      // as on windows when an HWND is iconified it is sized to 0x0).
+      return false;
+  }
+}
+
+bool WindowTreeHost::ShouldReleaseResourcesWhenHidden() const {
+#if BUILDFLAG(IS_WIN)
+  if (!base::FeatureList::IsEnabled(
+          features::kApplyNativeOcclusionToCompositor) ||
+      !IsNativeWindowOcclusionEnabled()) {
+    return false;
+  }
+
+  const std::string type = base::GetFieldTrialParamValueByFeature(
+      features::kApplyNativeOcclusionToCompositor,
+      features::kApplyNativeOcclusionToCompositorType);
+  return type == features::kApplyNativeOcclusionToCompositorTypeRelease;
+#else
+  return false;
+#endif
+}
+
+bool WindowTreeHost::ShouldThrottleWhenOccluded() const {
+#if BUILDFLAG(IS_WIN)
+  if (!base::FeatureList::IsEnabled(
+          features::kApplyNativeOcclusionToCompositor) ||
+      !IsNativeWindowOcclusionEnabled()) {
+    return false;
+  }
+
+  const std::string type = base::GetFieldTrialParamValueByFeature(
+      features::kApplyNativeOcclusionToCompositor,
+      features::kApplyNativeOcclusionToCompositorType);
+  return type == features::kApplyNativeOcclusionToCompositorTypeThrottle;
+#else
+  return false;
+#endif
+}
+
+void WindowTreeHost::RestoreHideTransitionState() {
+  DCHECK(is_transitioning_to_hidden());
+  hide_helper_.reset();
+}
+
+void WindowTreeHost::FinishHideTransition() {
+  DCHECK(is_transitioning_to_hidden());
+  compositor_->SetVisible(false);
+  RestoreHideTransitionState();
+}
+
+// static
+const base::flat_set<WindowTreeHost*>&
+WindowTreeHost::GetThrottledHostsForTesting() {
+  return HostFrameRateThrottler::GetInstance().hosts();
+}
+
+void WindowTreeHost::StartReleasingResourcesForHide() {
+  DCHECK(!is_transitioning_to_hidden());
+  if (compositor_->size().IsEmpty()) {
+    // This should generally only happen during startup as Compositor silently
+    // ignores changing the size to empty.
+    compositor_->SetVisible(false);
+    return;
+  }
+  hide_helper_ = std::make_unique<HideHelper>(this);
+}
 
 void WindowTreeHost::MoveCursorToInternal(const gfx::Point& root_location,
                                           const gfx::Point& host_location) {

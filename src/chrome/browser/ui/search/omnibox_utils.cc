@@ -9,11 +9,9 @@
 #include "chrome/browser/ui/location_bar/location_bar.h"
 #include "chrome/browser/ui/omnibox/clipboard_utils.h"
 #include "components/omnibox/browser/omnibox_edit_model.h"
-#include "components/omnibox/browser/omnibox_popup_model.h"
-#include "components/omnibox/browser/omnibox_view.h"
 #include "content/public/browser/web_contents.h"
 
-namespace {
+namespace search {
 
 OmniboxView* GetOmniboxView(content::WebContents* web_contents) {
   Browser* browser = chrome::FindBrowserWithWebContents(web_contents);
@@ -21,10 +19,6 @@ OmniboxView* GetOmniboxView(content::WebContents* web_contents) {
     return nullptr;
   return browser->window()->GetLocationBar()->GetOmniboxView();
 }
-
-}  // namespace
-
-namespace search {
 
 void FocusOmnibox(bool focus, content::WebContents* web_contents) {
   OmniboxView* omnibox_view = GetOmniboxView(web_contents);
@@ -48,8 +42,9 @@ void FocusOmnibox(bool focus, content::WebContents* web_contents) {
     // Remove focus only if the popup is closed. This will prevent someone
     // from changing the omnibox value and closing the popup without user
     // interaction.
-    if (!omnibox_view->model()->popup_model()->IsOpen())
+    if (!omnibox_view->model()->PopupIsOpen()) {
       web_contents->Focus();
+    }
   }
 }
 

@@ -34,6 +34,7 @@ enum AssistantViewID {
   kUiElementContainer,
   kZeroStateView,
   kOnboardingView,
+  kHorizontalSeparator,
 
   // UIs in OptInView
   kOptInViewStyledLabel,
@@ -44,9 +45,13 @@ enum AssistantViewID {
 
   // UIs in UiElementContainer
   kOverflowIndicator,
+  kAshWebView,
 
   // UIs in AssistantOnboardingSuggestionView
-  kAssistantOnboardingSuggestionViewLabel
+  kAssistantOnboardingSuggestionViewLabel,
+
+  // UIs in SuggestionChipView
+  kSuggestionChipViewLabel
 };
 
 }  // namespace ash

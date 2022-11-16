@@ -9,7 +9,6 @@
 #include <string>
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/types/strong_alias.h"
 #include "components/autofill/core/common/unique_ids.h"
@@ -35,10 +34,16 @@ class PasswordManager;
 class PasswordManagerDriver
     : public base::SupportsWeakPtr<PasswordManagerDriver> {
  public:
+#if BUILDFLAG(IS_ANDROID)
   using ShowVirtualKeyboard =
       base::StrongAlias<class ShowVirtualKeyboardTag, bool>;
+#endif
 
   PasswordManagerDriver() = default;
+
+  PasswordManagerDriver(const PasswordManagerDriver&) = delete;
+  PasswordManagerDriver& operator=(const PasswordManagerDriver&) = delete;
+
   virtual ~PasswordManagerDriver() = default;
 
   // Returns driver id which is unique in the current tab.
@@ -75,8 +80,6 @@ class PasswordManagerDriver
       autofill::FieldRendererId generation_element_id,
       const std::u16string& password) {}
 
-  virtual void TouchToFillClosed(ShowVirtualKeyboard show_virtual_keyboard) {}
-
   // Tells the driver to fill the form with the |username| and |password|.
   virtual void FillSuggestion(const std::u16string& username,
                               const std::u16string& password) = 0;
@@ -86,6 +89,15 @@ class PasswordManagerDriver
   virtual void FillIntoFocusedField(
       bool is_password,
       const std::u16string& user_provided_credential) {}
+
+#if BUILDFLAG(IS_ANDROID)
+  // Informs the renderer that the Touch To Fill sheet has been closed.
+  // Indicates whether the virtual keyboard should be shown instead.
+  virtual void TouchToFillClosed(ShowVirtualKeyboard show_virtual_keyboard) {}
+
+  // Triggers form submission on the last interacted web input element.
+  virtual void TriggerFormSubmission() {}
+#endif
 
   // Tells the driver to preview filling form with the |username| and
   // |password|.
@@ -125,9 +137,6 @@ class PasswordManagerDriver
   // corresponding HTML attributes. It is used only for debugging.
   virtual void AnnotateFieldsWithParsingResult(
       const autofill::ParsingResult& parsing_result) {}
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(PasswordManagerDriver);
 };
 
 }  // namespace password_manager

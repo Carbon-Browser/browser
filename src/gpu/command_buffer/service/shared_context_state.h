@@ -8,12 +8,13 @@
 #include <memory>
 #include <vector>
 
-#include "base/containers/mru_cache.h"
+#include "base/containers/lru_cache.h"
 #include "base/memory/memory_pressure_listener.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "base/trace_event/memory_dump_provider.h"
 #include "build/build_config.h"
@@ -81,8 +82,11 @@ class GPU_GLES2_EXPORT SharedContextState
       viz::VulkanContextProvider* vulkan_context_provider = nullptr,
       viz::MetalContextProvider* metal_context_provider = nullptr,
       viz::DawnContextProvider* dawn_context_provider = nullptr,
-      base::WeakPtr<gpu::MemoryTracker::Observer> peak_memory_monitor =
-          nullptr);
+      base::WeakPtr<gpu::MemoryTracker::Observer> peak_memory_monitor = nullptr,
+      bool created_on_compositor_gpu_thread = false);
+
+  SharedContextState(const SharedContextState&) = delete;
+  SharedContextState& operator=(const SharedContextState&) = delete;
 
   bool InitializeGrContext(const GpuPreferences& gpu_preferences,
                            const GpuDriverBugWorkarounds& workarounds,
@@ -274,7 +278,7 @@ class GPU_GLES2_EXPORT SharedContextState
    private:
     gpu::CommandBufferId command_buffer_id_;
     const uint64_t client_tracing_id_;
-    gpu::MemoryTracker::Observer* const observer_;
+    const raw_ptr<gpu::MemoryTracker::Observer> observer_;
     uint64_t size_ = 0;
   };
 
@@ -310,10 +314,11 @@ class GPU_GLES2_EXPORT SharedContextState
   MemoryTrackerObserver memory_tracker_observer_;
   MemoryTracker memory_tracker_;
   gpu::MemoryTypeTracker memory_type_tracker_;
-  viz::VulkanContextProvider* const vk_context_provider_;
-  viz::MetalContextProvider* const metal_context_provider_;
-  viz::DawnContextProvider* const dawn_context_provider_;
-  GrDirectContext* gr_context_ = nullptr;
+  const raw_ptr<viz::VulkanContextProvider> vk_context_provider_;
+  const raw_ptr<viz::MetalContextProvider> metal_context_provider_;
+  const raw_ptr<viz::DawnContextProvider> dawn_context_provider_;
+  bool created_on_compositor_gpu_thread_ = false;
+  raw_ptr<GrDirectContext> gr_context_ = nullptr;
 
   scoped_refptr<gl::GLShareGroup> share_group_;
   scoped_refptr<gl::GLContext> context_;
@@ -323,19 +328,19 @@ class GPU_GLES2_EXPORT SharedContextState
   // Most recent surface that this ShareContextState was made current with.
   // Avoids a call to MakeCurrent with a different surface, if we don't
   // care which surface is current.
-  gl::GLSurface* last_current_surface_ = nullptr;
+  raw_ptr<gl::GLSurface> last_current_surface_ = nullptr;
 
   scoped_refptr<gles2::FeatureInfo> feature_info_;
 
   // raster decoders and display compositor share this context_state_.
   std::unique_ptr<gles2::ContextState> context_state_;
 
-  gl::ProgressReporter* progress_reporter_ = nullptr;
+  raw_ptr<gl::ProgressReporter> progress_reporter_ = nullptr;
   sk_sp<GrDirectContext> owned_gr_context_;
   std::unique_ptr<ServiceTransferCache> transfer_cache_;
   uint64_t skia_gr_cache_size_ = 0;
   std::vector<uint8_t> scratch_deserialization_buffer_;
-  gpu::raster::GrShaderCache* gr_shader_cache_ = nullptr;
+  raw_ptr<gpu::raster::GrShaderCache> gr_shader_cache_ = nullptr;
 
   // |need_context_state_reset| is set whenever Skia may have altered the
   // driver's GL state.
@@ -344,7 +349,7 @@ class GPU_GLES2_EXPORT SharedContextState
   absl::optional<error::ContextLostReason> context_lost_reason_;
   base::ObserverList<ContextLostObserver>::Unchecked context_lost_observers_;
 
-  base::MRUCache<void*, sk_sp<SkSurface>> sk_surface_cache_;
+  base::LRUCache<void*, sk_sp<SkSurface>> sk_surface_cache_;
 
   bool device_needs_reset_ = false;
   base::Time last_gl_check_graphics_reset_status_;
@@ -357,8 +362,6 @@ class GPU_GLES2_EXPORT SharedContextState
   absl::optional<raster::GrCacheController> gr_cache_controller_;
 
   base::WeakPtrFactory<SharedContextState> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(SharedContextState);
 };
 
 }  // namespace gpu

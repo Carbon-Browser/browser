@@ -10,7 +10,11 @@ def CheckChangeOnCommit(input_api, output_api):
   results = []
 
   # Run the unit tests.
-  results.extend(input_api.canned_checks.RunUnitTestsInDirectory(
-      input_api, output_api, '.', [ r'^.+_test\.py$']))
+  results.extend(
+      input_api.canned_checks.RunUnitTestsInDirectory(input_api,
+                                                      output_api,
+                                                      '.', [r'^.+_test\.py$'],
+                                                      run_on_python2=False,
+                                                      skip_shebang_check=True))
 
   return results

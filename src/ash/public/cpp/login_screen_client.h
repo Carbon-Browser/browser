@@ -12,6 +12,7 @@
 #include "base/callback_forward.h"
 #include "base/time/time.h"
 #include "ui/gfx/native_widget_types.h"
+#include "ui/views/widget/widget.h"
 
 class AccountId;
 
@@ -92,6 +93,9 @@ class ASH_PUBLIC_EXPORT LoginScreenClient {
   // Launches guest mode.
   virtual void LoginAsGuest() = 0;
 
+  // Show guest terms of service screen.
+  virtual void ShowGuestTosScreen() = 0;
+
   // User with |account_id| has reached maximum incorrect password attempts.
   virtual void OnMaxIncorrectPasswordAttempted(const AccountId& account_id) = 0;
 
@@ -164,6 +168,10 @@ class ASH_PUBLIC_EXPORT LoginScreenClient {
 
   // Used by Ash to signal that user activity occurred on the login screen.
   virtual void OnUserActivity() = 0;
+
+  // Get login screen widget. Currently used to set proper accessibility
+  // navigation.
+  virtual views::Widget* GetLoginWindowWidget() = 0;
 
  protected:
   virtual ~LoginScreenClient() = default;

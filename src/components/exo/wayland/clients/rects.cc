@@ -20,7 +20,6 @@
 #include "base/at_exit.h"
 #include "base/command_line.h"
 #include "base/containers/circular_deque.h"
-#include "base/cxx17_backports.h"
 #include "base/logging.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/scoped_generic.h"
@@ -221,8 +220,7 @@ void InputTimestamp(void* data,
   int64_t microseconds = seconds * base::Time::kMicrosecondsPerSecond +
                          tv_nsec / base::Time::kNanosecondsPerMicrosecond;
 
-  *timestamp =
-      base::TimeTicks() + base::TimeDelta::FromMicroseconds(microseconds);
+  *timestamp = base::TimeTicks() + base::Microseconds(microseconds);
 }
 
 }  // namespace
@@ -234,6 +232,9 @@ class RectsClient : public ClientBase {
  public:
   RectsClient() {}
 
+  RectsClient(const RectsClient&) = delete;
+  RectsClient& operator=(const RectsClient&) = delete;
+
   // Initialize and run client main loop.
   int Run(const ClientBase::InitParams& params,
           size_t max_frames_pending,
@@ -241,9 +242,6 @@ class RectsClient : public ClientBase {
           size_t num_benchmark_runs,
           base::TimeDelta benchmark_interval,
           bool show_fps_counter);
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(RectsClient);
 };
 
 int RectsClient::Run(const ClientBase::InitParams& params,
@@ -424,7 +422,7 @@ int RectsClient::Run(const ClientBase::InitParams& params,
                                    SK_ColorRED,  SK_ColorYELLOW,
                                    SK_ColorCYAN, SK_ColorMAGENTA};
         SkPaint paint;
-        paint.setColor(SkColorSetA(kColors[i % base::size(kColors)], 0xA0));
+        paint.setColor(SkColorSetA(kColors[i % std::size(kColors)], 0xA0));
         canvas->rotate(rotation / num_rects);
         canvas->drawIRect(rect, paint);
       }
@@ -575,6 +573,6 @@ int main(int argc, char* argv[]) {
   base::SingleThreadTaskExecutor main_task_executor(base::MessagePumpType::UI);
   exo::wayland::clients::RectsClient client;
   return client.Run(params, max_frames_pending, num_rects, num_benchmark_runs,
-                    base::TimeDelta::FromMilliseconds(benchmark_interval_ms),
+                    base::Milliseconds(benchmark_interval_ms),
                     command_line->HasSwitch(switches::kShowFpsCounter));
 }

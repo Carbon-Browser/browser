@@ -7,11 +7,14 @@
  * information.
  */
 
-import '../icons.js';
+import '../icons.html.js';
 import '../prefs/prefs.js';
+// <if expr="not chromeos_ash">
+import '../relaunch_confirmation_dialog.js';
+// </if>
 import '../settings_page/settings_section.js';
-import '../settings_page_css.js';
-import '../settings_shared_css.js';
+import '../settings_page_styles.css.js';
+import '../settings_shared.css.js';
 import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
 import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.m.js';
 import 'chrome://resources/cr_elements/cr_link_row/cr_link_row.js';
@@ -20,48 +23,49 @@ import 'chrome://resources/cr_elements/shared_style_css.m.js';
 import 'chrome://resources/polymer/v3_0/iron-flex-layout/iron-flex-layout-classes.js';
 import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
 
-import {assert} from 'chrome://resources/js/assert.m.js';
-import {I18nBehavior} from 'chrome://resources/js/i18n_behavior.m.js';
+import {assert} from 'chrome://resources/js/assert_ts.js';
+import {I18nMixin} from 'chrome://resources/js/i18n_mixin.js';
 import {parseHtmlSubset} from 'chrome://resources/js/parse_html_subset.m.js';
-import {WebUIListenerBehavior} from 'chrome://resources/js/web_ui_listener_behavior.m.js';
-import {html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {WebUIListenerMixin} from 'chrome://resources/js/web_ui_listener_mixin.js';
+import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {loadTimeData} from '../i18n_setup.js';
-import {LifetimeBrowserProxyImpl} from '../lifetime_browser_proxy.js';
+import {RelaunchMixin, RestartType} from '../relaunch_mixin.js';
 
-import {AboutPageBrowserProxy, AboutPageBrowserProxyImpl, PromoteUpdaterStatus, UpdateStatus, UpdateStatusChangedEvent} from './about_page_browser_proxy.js';
+import {getTemplate} from './about_page.html.js';
+import {AboutPageBrowserProxy, AboutPageBrowserProxyImpl, UpdateStatus, UpdateStatusChangedEvent} from './about_page_browser_proxy.js';
+// <if expr="_google_chrome and is_macosx">
+import {PromoteUpdaterStatus} from './about_page_browser_proxy.js';
+
+// </if>
 
 const SettingsAboutPageElementBase =
-    mixinBehaviors([WebUIListenerBehavior, I18nBehavior], PolymerElement) as
-    {new (): PolymerElement & WebUIListenerBehavior & I18nBehavior};
+    RelaunchMixin(WebUIListenerMixin(I18nMixin(PolymerElement)));
 
-/** @polymer */
 export class SettingsAboutPageElement extends SettingsAboutPageElementBase {
   static get is() {
     return 'settings-about-page';
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
   }
 
   static get properties() {
     return {
-      /** @private {?UpdateStatusChangedEvent} */
       currentUpdateStatusEvent_: {
         type: Object,
         value: {
           message: '',
           progress: 0,
           rollback: false,
-          status: UpdateStatus.DISABLED
+          status: UpdateStatus.DISABLED,
         },
       },
 
       /**
        * Whether the browser/ChromeOS is managed by their organization
        * through enterprise policies.
-       * @private
        */
       isManaged_: {
         type: Boolean,
@@ -71,12 +75,10 @@ export class SettingsAboutPageElement extends SettingsAboutPageElementBase {
       },
 
       // <if expr="_google_chrome and is_macosx">
-      /** @private {!PromoteUpdaterStatus} */
       promoteUpdaterStatus_: Object,
       // </if>
 
-      // <if expr="not chromeos">
-      /** @private {!{obsolete: boolean, endOfLine: boolean}} */
+      // <if expr="not chromeos_ash">
       obsoleteSystemInfo_: {
         type: Object,
         value() {
@@ -87,16 +89,13 @@ export class SettingsAboutPageElement extends SettingsAboutPageElementBase {
         },
       },
 
-      /** @private */
       showUpdateStatus_: {
         type: Boolean,
         value: false,
       },
 
-      /** @private */
       showButtonContainer_: Boolean,
 
-      /** @private */
       showRelaunch_: {
         type: Boolean,
         value: false,
@@ -105,7 +104,7 @@ export class SettingsAboutPageElement extends SettingsAboutPageElementBase {
     };
   }
 
-  // <if expr="not chromeos">
+  // <if expr="not chromeos_ash">
   static get observers() {
     return [
       'updateShowUpdateStatus_(' +
@@ -123,7 +122,7 @@ export class SettingsAboutPageElement extends SettingsAboutPageElementBase {
   private promoteUpdaterStatus_: PromoteUpdaterStatus;
   // </if>
 
-  // <if expr="not chromeos">
+  // <if expr="not chromeos_ash">
   private obsoleteSystemInfo_: {obsolete: boolean, endOfLine: boolean};
   private showUpdateStatus_: boolean;
   private showButtonContainer_: boolean;
@@ -133,22 +132,17 @@ export class SettingsAboutPageElement extends SettingsAboutPageElementBase {
   private aboutBrowserProxy_: AboutPageBrowserProxy =
       AboutPageBrowserProxyImpl.getInstance();
 
-  /** @override */
-  connectedCallback() {
+  override connectedCallback() {
     super.connectedCallback();
 
     this.aboutBrowserProxy_.pageReady();
 
-    // <if expr="not chromeos">
+    // <if expr="not chromeos_ash">
     this.startListening_();
     // </if>
   }
 
-  /**
-   * @return {string}
-   * @private
-   */
-  getPromoteUpdaterClass_() {
+  private getPromoteUpdaterClass_(): string {
     // <if expr="_google_chrome and is_macosx">
     if (this.promoteUpdaterStatus_.disabled) {
       return 'cr-secondary-text';
@@ -158,9 +152,8 @@ export class SettingsAboutPageElement extends SettingsAboutPageElementBase {
     return '';
   }
 
-  // <if expr="not chromeos">
-  /** @private */
-  startListening_() {
+  // <if expr="not chromeos_ash">
+  private startListening_() {
     this.addWebUIListener(
         'update-status-changed', this.onUpdateStatusChanged_.bind(this));
     // <if expr="_google_chrome and is_macosx">
@@ -205,10 +198,10 @@ export class SettingsAboutPageElement extends SettingsAboutPageElementBase {
   }
 
   private onRelaunchTap_() {
-    LifetimeBrowserProxyImpl.getInstance().relaunch();
+    this.performRestart(RestartType.RELAUNCH);
   }
 
-  // <if expr="not chromeos">
+  // <if expr="not chromeos_ash">
   private updateShowUpdateStatus_() {
     if (this.obsoleteSystemInfo_.endOfLine) {
       this.showUpdateStatus_ = false;
@@ -320,12 +313,8 @@ export class SettingsAboutPageElement extends SettingsAboutPageElementBase {
     window.location.href = 'chrome://management';
   }
 
-  // <if expr="chromeos">
-  /**
-   * @return {string}
-   * @private
-   */
-  getUpdateOsSettingsLink_() {
+  // <if expr="chromeos_ash">
+  private getUpdateOsSettingsLink_(): string {
     // Note: This string contains raw HTML and thus requires i18nAdvanced().
     // Since the i18n template syntax (e.g., $i18n{}) does not include an
     // "advanced" version, it's not possible to inline this link directly in the
@@ -334,8 +323,7 @@ export class SettingsAboutPageElement extends SettingsAboutPageElementBase {
   }
   // </if>
 
-  /** @private */
-  onProductLogoTap_() {
+  private onProductLogoTap_() {
     this.$['product-logo'].animate(
         {
           transform: ['none', 'rotate(-10turn)'],
@@ -347,13 +335,12 @@ export class SettingsAboutPageElement extends SettingsAboutPageElementBase {
   }
 
   // <if expr="_google_chrome">
-  /** @private */
-  onReportIssueTap_() {
+  private onReportIssueTap_() {
     this.aboutBrowserProxy_.openFeedbackDialog();
   }
   // </if>
 
-  // <if expr="not chromeos">
+  // <if expr="not chromeos_ash">
   private shouldShowIcons_(): boolean {
     if (this.obsoleteSystemInfo_.endOfLine) {
       return true;
@@ -361,6 +348,12 @@ export class SettingsAboutPageElement extends SettingsAboutPageElementBase {
     return this.showUpdateStatus_;
   }
   // </if>
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'settings-about-page': SettingsAboutPageElement;
+  }
 }
 
 customElements.define(SettingsAboutPageElement.is, SettingsAboutPageElement);

@@ -32,7 +32,7 @@
 #include "ui/compositor/layer.h"
 #include "ui/compositor/scoped_layer_animation_settings.h"
 #include "ui/gfx/geometry/point_conversions.h"
-#include "ui/gfx/transform_util.h"
+#include "ui/gfx/geometry/transform_util.h"
 #include "ui/wm/core/coordinate_conversion.h"
 
 namespace ash {
@@ -55,8 +55,7 @@ constexpr float kMinimumDragToSnapDistanceDp = 96.f;
 // least the duration of the split view divider snap animation, or else issues
 // like crbug.com/946601, crbug.com/997764, and https://crbug.com/997765, which
 // all refer to dragging from overview, will apply to dragging from the top.
-constexpr base::TimeDelta kIsWindowMovedTimeoutMs =
-    base::TimeDelta::FromMilliseconds(300);
+constexpr base::TimeDelta kIsWindowMovedTimeoutMs = base::Milliseconds(300);
 
 constexpr char kSwipeDownDragWindowHistogram[] =
     "Ash.SwipeDownDrag.Window.PresentationTime.TabletMode";
@@ -123,7 +122,7 @@ TabletModeWindowDragDelegate::~TabletModeWindowDragDelegate() {
   }
 
   split_view_controller_->OnWindowDragCanceled();
-  Shell::Get()->UpdateShelfVisibility();
+  Shelf::UpdateShelfVisibility();
 }
 
 void TabletModeWindowDragDelegate::StartWindowDrag(
@@ -287,6 +286,9 @@ void TabletModeWindowDragDelegate::EndWindowDrag(
         ShouldDropWindowIntoOverview(snap_position, location_in_screen),
         snap_position != SplitViewController::NONE);
   }
+
+  WindowState::Get(dragged_window_)
+      ->set_snap_action_source(WindowSnapActionSource::kDragDownFromTopToSnap);
   split_view_controller_->OnWindowDragEnded(
       dragged_window_, snap_position, gfx::ToRoundedPoint(location_in_screen));
   split_view_drag_indicators_->SetWindowDraggingState(
@@ -326,7 +328,8 @@ void TabletModeWindowDragDelegate::FlingOrSwipe(ui::GestureEvent* event) {
           ->overview_controller()
           ->overview_session()
           ->AddItemInMruOrder(dragged_window_, /*reposition=*/true,
-                              /*animate=*/false, /*restack=*/true);
+                              /*animate=*/false, /*restack=*/true,
+                              /*use_spawn_animation=*/false);
     }
     StartFling(event);
   }

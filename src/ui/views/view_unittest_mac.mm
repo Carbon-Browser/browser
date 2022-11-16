@@ -4,6 +4,8 @@
 
 #include "ui/views/view.h"
 
+#include "base/memory/raw_ptr.h"
+
 #import <Cocoa/Cocoa.h>
 
 #import "base/mac/scoped_nsobject.h"
@@ -51,6 +53,9 @@ class ThreeFingerSwipeView : public View {
  public:
   ThreeFingerSwipeView() = default;
 
+  ThreeFingerSwipeView(const ThreeFingerSwipeView&) = delete;
+  ThreeFingerSwipeView& operator=(const ThreeFingerSwipeView&) = delete;
+
   // View:
   void OnGestureEvent(ui::GestureEvent* event) override {
     EXPECT_EQ(ui::ET_GESTURE_SWIPE, event->details().type());
@@ -81,8 +86,6 @@ class ThreeFingerSwipeView : public View {
 
  private:
   absl::optional<gfx::Point> last_swipe_gesture_;
-
-  DISALLOW_COPY_AND_ASSIGN(ThreeFingerSwipeView);
 };
 
 }  // namespace
@@ -90,6 +93,9 @@ class ThreeFingerSwipeView : public View {
 class ViewMacTest : public test::WidgetTest {
  public:
   ViewMacTest() = default;
+
+  ViewMacTest(const ViewMacTest&) = delete;
+  ViewMacTest& operator=(const ViewMacTest&) = delete;
 
   absl::optional<gfx::Point> SwipeGestureVector(int dx, int dy) {
     base::scoped_nsobject<FakeSwipeEvent> swipe_event(
@@ -117,7 +123,7 @@ class ViewMacTest : public test::WidgetTest {
 
     view_ = new ThreeFingerSwipeView;
     view_->SetSize(widget_->GetClientAreaBoundsInScreen().size());
-    widget_->non_client_view()->frame_view()->AddChildView(view_);
+    widget_->non_client_view()->frame_view()->AddChildView(view_.get());
   }
 
   void TearDown() override {
@@ -126,10 +132,8 @@ class ViewMacTest : public test::WidgetTest {
   }
 
  private:
-  Widget* widget_ = nullptr;
-  ThreeFingerSwipeView* view_ = nullptr;
-
-  DISALLOW_COPY_AND_ASSIGN(ViewMacTest);
+  raw_ptr<Widget> widget_ = nullptr;
+  raw_ptr<ThreeFingerSwipeView> view_ = nullptr;
 };
 
 // Three-finger swipes send immediate events and they cannot be tracked.

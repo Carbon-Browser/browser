@@ -6,10 +6,8 @@
 #define MEDIA_GPU_VAAPI_H264_VAAPI_VIDEO_ENCODER_DELEGATE_H_
 
 #include <stddef.h>
-#include <list>
 
 #include "base/containers/circular_deque.h"
-#include "base/macros.h"
 #include "media/filters/h264_bitstream_buffer.h"
 #include "media/gpu/h264_dpb.h"
 #include "media/gpu/vaapi/vaapi_video_encoder_delegate.h"
@@ -56,6 +54,11 @@ class H264VaapiVideoEncoderDelegate : public VaapiVideoEncoderDelegate {
 
   H264VaapiVideoEncoderDelegate(scoped_refptr<VaapiWrapper> vaapi_wrapper,
                                 base::RepeatingClosure error_cb);
+
+  H264VaapiVideoEncoderDelegate(const H264VaapiVideoEncoderDelegate&) = delete;
+  H264VaapiVideoEncoderDelegate& operator=(
+      const H264VaapiVideoEncoderDelegate&) = delete;
+
   ~H264VaapiVideoEncoderDelegate() override;
 
   // VaapiVideoEncoderDelegate implementation.
@@ -66,14 +69,15 @@ class H264VaapiVideoEncoderDelegate : public VaapiVideoEncoderDelegate {
   gfx::Size GetCodedSize() const override;
   size_t GetMaxNumOfRefFrames() const override;
   std::vector<gfx::Size> GetSVCLayerResolutions() override;
-  bool PrepareEncodeJob(EncodeJob* encode_job) override;
-  BitstreamBufferMetadata GetMetadata(EncodeJob* encode_job,
-                                      size_t payload_size) override;
 
  private:
   class TemporalLayers;
 
   friend class H264VaapiVideoEncoderDelegateTest;
+
+  bool PrepareEncodeJob(EncodeJob& encode_job) override;
+  BitstreamBufferMetadata GetMetadata(const EncodeJob& encode_job,
+                                      size_t payload_size) override;
 
   // Fill current_sps_ and current_pps_ with current encoding state parameters.
   void UpdateSPS();
@@ -94,17 +98,11 @@ class H264VaapiVideoEncoderDelegate : public VaapiVideoEncoderDelegate {
   // current profile and level.
   bool CheckConfigValidity(uint32_t bitrate, uint32_t framerate);
 
-  // Submits a H264BitstreamBuffer |buffer| to the driver.
-  void SubmitH264BitstreamBuffer(scoped_refptr<H264BitstreamBuffer> buffer);
-
-  scoped_refptr<H264Picture> GetPicture(EncodeJob* job);
-
-  bool SubmitPackedHeaders(EncodeJob* job,
-                           scoped_refptr<H264BitstreamBuffer> packed_sps,
-                           scoped_refptr<H264BitstreamBuffer> packed_pps);
+  bool SubmitPackedHeaders(const H264BitstreamBuffer& packed_sps,
+                           const H264BitstreamBuffer& packed_pps);
 
   bool SubmitFrameParameters(
-      EncodeJob* job,
+      EncodeJob& job,
       const H264VaapiVideoEncoderDelegate::EncodeParams& encode_params,
       const H264SPS& sps,
       const H264PPS& pps,
@@ -119,6 +117,7 @@ class H264VaapiVideoEncoderDelegate : public VaapiVideoEncoderDelegate {
   scoped_refptr<H264BitstreamBuffer> packed_sps_;
   H264PPS current_pps_;
   scoped_refptr<H264BitstreamBuffer> packed_pps_;
+  bool submit_packed_headers_;
 
   // Current encoding parameters being used.
   EncodeParams curr_params_;
@@ -154,8 +153,6 @@ class H264VaapiVideoEncoderDelegate : public VaapiVideoEncoderDelegate {
   base::circular_deque<scoped_refptr<H264Picture>> ref_pic_list0_;
 
   uint8_t num_temporal_layers_ = 1;
-
-  DISALLOW_COPY_AND_ASSIGN(H264VaapiVideoEncoderDelegate);
 };
 
 }  // namespace media

@@ -6,7 +6,6 @@
 #define CHROME_BROWSER_UI_APP_LIST_SEARCH_FILES_ITEM_SUGGEST_CACHE_H_
 
 #include "base/feature_list.h"
-#include "base/macros.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/field_trial_params.h"
@@ -29,12 +28,15 @@ class ItemSuggestCache {
  public:
   // Information on a single file suggestion result.
   struct Result {
-    Result(const std::string& id, const std::string& title);
+    Result(const std::string& id,
+           const std::string& title,
+           const absl::optional<std::string>& prediction_reason);
     Result(const Result& other);
     ~Result();
 
     std::string id;
     std::string title;
+    absl::optional<std::string> prediction_reason;
   };
 
   // Information on all file suggestion results returned from an ItemSuggest
@@ -54,13 +56,15 @@ class ItemSuggestCache {
 
   ItemSuggestCache(
       Profile* profile,
-      scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory);
+      scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
+      base::RepeatingCallback<void()> on_results_updated);
   ~ItemSuggestCache();
 
   ItemSuggestCache(const ItemSuggestCache&) = delete;
   ItemSuggestCache& operator=(const ItemSuggestCache&) = delete;
 
-  // Returns the results currently in the cache.
+  // Returns the results currently in the cache. A null result indicates that
+  // the cache has not been successfully updated.
   absl::optional<ItemSuggestCache::Results> GetResults();
 
   // Updates the cache by calling ItemSuggest.
@@ -91,7 +95,8 @@ class ItemSuggestCache {
     kNoResultsInResponse = 12,
     kJsonParseFailure = 13,
     kJsonConversionFailure = 14,
-    kMaxValue = kJsonConversionFailure,
+    kPostLaunchUpdateIgnored = 15,
+    kMaxValue = kPostLaunchUpdateIgnored,
   };
 
  private:
@@ -108,11 +113,25 @@ class ItemSuggestCache {
   static constexpr base::FeatureParam<std::string> kModelName{
       &kExperiment, "model_name", "quick_access"};
 
-  static constexpr base::FeatureParam<int> kMinMinutesBetweenUpdates{
-      &kExperiment, "min_minutes_between_updates", 15};
+  // Whether ItemSuggest should be queried more than once per session. Multiple
+  // queries are issued if either this param is true or the suggested files
+  // experiment is enabled.
+  static constexpr base::FeatureParam<bool> kMultipleQueriesPerSession{
+      &kExperiment, "multiple_queries_per_session", true};
+
+  // The minimum time between queries if a short delay is being used.
+  static constexpr int kShortDelayMinutes = 10;
+  // The minimum time between queries if a long delay is being used. If not set,
+  // the short delay value is used as a default instead.
+  static constexpr base::FeatureParam<int> kLongDelayMinutes{
+      &kExperiment, "long_delay_minutes", kShortDelayMinutes};
 
   // Returns the body for the itemsuggest request. Affected by |kExperiment|.
   std::string GetRequestBody();
+
+  // Calculates the minimum time required to wait after the previous request.
+  // Affected by |kExperiment|.
+  base::TimeDelta GetDelay();
 
   void OnTokenReceived(GoogleServiceAuthError error,
                        signin::AccessTokenInfo token_info);
@@ -123,13 +142,19 @@ class ItemSuggestCache {
 
   absl::optional<Results> results_;
 
-  // Records the time of the last call to UpdateResults(), used to limit the
-  // number of queries to the ItemSuggest backend.
-  base::Time time_of_last_update_;
+  // Start time for latency metrics.
+  base::TimeTicks update_start_time_;
+
+  // Whether the cache has made at least one request to ItemSuggest this
+  // session. Used to prevent further updates in some cases.
+  bool made_request_;
 
   const bool enabled_;
   const GURL server_url_;
-  const base::TimeDelta min_time_between_updates_;
+  // Whether we should query item suggest more than once per session.
+  const bool multiple_queries_per_session_;
+
+  base::RepeatingCallback<void()> on_results_updated_;
 
   Profile* profile_;
   std::unique_ptr<signin::PrimaryAccountAccessTokenFetcher> token_fetcher_;

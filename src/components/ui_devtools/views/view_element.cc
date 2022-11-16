@@ -9,13 +9,15 @@
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
-#include "components/ui_devtools/Protocol.h"
+#include "components/ui_devtools/protocol.h"
 #include "components/ui_devtools/ui_element_delegate.h"
 #include "components/ui_devtools/views/devtools_event_util.h"
 #include "components/ui_devtools/views/element_utility.h"
+#include "ui/base/interaction/element_tracker.h"
 #include "ui/base/metadata/metadata_types.h"
 #include "ui/gfx/color_utils.h"
 #include "ui/views/controls/textfield/textfield.h"
+#include "ui/views/interaction/element_tracker_views.h"
 #include "ui/views/view_utils.h"
 #include "ui/views/widget/widget.h"
 
@@ -94,7 +96,10 @@ void ViewElement::OnChildViewRemoved(views::View* parent, views::View* view) {
         return view ==
                UIElement::GetBackingElement<views::View, ViewElement>(child);
       });
-  DCHECK(iter != children().end());
+  if (iter == children().end()) {
+    RebuildTree();
+    return;
+  }
   UIElement* child_element = *iter;
   RemoveChild(child_element);
   delete child_element;
@@ -102,6 +107,15 @@ void ViewElement::OnChildViewRemoved(views::View* parent, views::View* view) {
 
 void ViewElement::OnChildViewAdded(views::View* parent, views::View* view) {
   DCHECK_EQ(parent, view_);
+  auto iter = std::find_if(
+      children().begin(), children().end(), [view](UIElement* child) {
+        return view ==
+               UIElement::GetBackingElement<views::View, ViewElement>(child);
+      });
+  if (iter != children().end()) {
+    RebuildTree();
+    return;
+  }
   AddChild(new ViewElement(view, delegate(), this));
 }
 
@@ -112,7 +126,11 @@ void ViewElement::OnChildViewReordered(views::View* parent, views::View* view) {
         return view ==
                UIElement::GetBackingElement<views::View, ViewElement>(child);
       });
-  DCHECK(iter != children().end());
+  if (iter == children().end() ||
+      children().size() != view_->children().size()) {
+    RebuildTree();
+    return;
+  }
   UIElement* child_element = *iter;
   ReorderChild(child_element, parent->GetIndexOf(view));
 }
@@ -166,6 +184,13 @@ void ViewElement::PaintRect() const {
   view()->SchedulePaint();
 }
 
+bool ViewElement::FindMatchByElementID(
+    const ui::ElementIdentifier& identifier) {
+  auto result = views::ElementTrackerViews::GetInstance()
+                    ->GetAllMatchingViewsInAnyContext(identifier);
+  return std::find(result.begin(), result.end(), view_) != result.end();
+}
+
 bool ViewElement::DispatchMouseEvent(protocol::DOM::MouseEvent* event) {
   ui::EventType event_type = GetMouseEventType(event->getType());
   int button_flags = GetButtonFlags(event->getButton());
@@ -217,6 +242,13 @@ void* ViewElement::GetClassInstance() const {
 
 ui::Layer* ViewElement::GetLayer() const {
   return view_->layer();
+}
+
+void ViewElement::RebuildTree() {
+  ClearChildren();
+  for (auto* child : view_->children()) {
+    AddChild(new ViewElement(child, delegate(), this));
+  }
 }
 
 }  // namespace ui_devtools

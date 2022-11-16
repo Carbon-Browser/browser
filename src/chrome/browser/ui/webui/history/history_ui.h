@@ -8,11 +8,11 @@
 #include <memory>
 
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
-#include "chrome/browser/ui/webui/history_clusters/history_clusters.mojom-forward.h"
+#include "components/prefs/pref_change_registrar.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "ui/base/layout.h"
 #include "ui/webui/mojo_web_ui_controller.h"
+#include "ui/webui/resources/cr_components/history_clusters/history_clusters.mojom-forward.h"
 
 namespace base {
 class RefCountedMemory;
@@ -47,6 +47,7 @@ class HistoryUI : public ui::MojoWebUIController {
  private:
   std::unique_ptr<history_clusters::HistoryClustersHandler>
       history_clusters_handler_;
+  PrefChangeRegistrar pref_change_registrar_;
 
   void UpdateDataSource();
 

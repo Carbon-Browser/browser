@@ -2,9 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
-// This source code is a part of ABP Chromium.
-// Use of this source code is governed by the GPLv3 that can be found in the docs_abp/LICENSE file.
-
+// This source code is a part of eyeo Chromium SDK.
+// Use of this source code is governed by the GPLv3 that can be found in the
+// components/adblock/LICENSE file.
 
 #include "chrome/common/extensions/permissions/chrome_api_permissions.h"
 
@@ -12,7 +12,6 @@
 
 #include <memory>
 
-#include "base/macros.h"
 #include "base/memory/ptr_util.h"
 #include "extensions/common/permissions/api_permission.h"
 #include "extensions/common/permissions/api_permission_set.h"
@@ -48,6 +47,7 @@ constexpr APIPermissionInfo::InitInfo permissions_to_register[] = {
     {APIPermissionID::kDownloads, "downloads"},
     {APIPermissionID::kDownloadsOpen, "downloads.open"},
     {APIPermissionID::kDownloadsShelf, "downloads.shelf"},
+    {APIPermissionID::kDownloadsUi, "downloads.ui"},
     {APIPermissionID::kIdentity, "identity"},
     {APIPermissionID::kIdentityEmail, "identity.email"},
     {APIPermissionID::kExperimental, "experimental",
@@ -112,10 +112,11 @@ constexpr APIPermissionInfo::InitInfo permissions_to_register[] = {
      APIPermissionInfo::kFlagRequiresManagementUIWarning},
     {APIPermissionID::kSearch, "search",
      APIPermissionInfo::kFlagDoesNotRequireManagedSessionFullLoginWarning},
+    {APIPermissionID::kFavicon, "favicon"},
     {APIPermissionID::kScripting, "scripting",
      APIPermissionInfo::kFlagRequiresManagementUIWarning},
     {APIPermissionID::kSessions, "sessions"},
-    {APIPermissionID::kSignedInDevices, "signedInDevices"},
+    {APIPermissionID::kSidePanel, "sidePanel"},
     {APIPermissionID::kTabGroups, "tabGroups",
      APIPermissionInfo::kFlagRequiresManagementUIWarning},
     {APIPermissionID::kTab, "tabs",
@@ -176,8 +177,6 @@ constexpr APIPermissionInfo::InitInfo permissions_to_register[] = {
     {APIPermissionID::kTerminalPrivate, "terminalPrivate",
      APIPermissionInfo::kFlagCannotBeOptional},
     {APIPermissionID::kVirtualKeyboardPrivate, "virtualKeyboardPrivate",
-     APIPermissionInfo::kFlagCannotBeOptional},
-    {APIPermissionID::kWallpaperPrivate, "wallpaperPrivate",
      APIPermissionInfo::kFlagCannotBeOptional},
     {APIPermissionID::kWebstorePrivate, "webstorePrivate",
      APIPermissionInfo::kFlagCannotBeOptional},

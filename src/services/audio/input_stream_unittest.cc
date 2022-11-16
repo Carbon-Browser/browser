@@ -25,11 +25,11 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
+using testing::_;
 using testing::NiceMock;
 using testing::NotNull;
 using testing::Return;
 using testing::StrictMock;
-using testing::_;
 
 namespace audio {
 
@@ -48,6 +48,9 @@ class MockStreamClient : public media::mojom::AudioInputStreamClient {
  public:
   MockStreamClient() = default;
 
+  MockStreamClient(const MockStreamClient&) = delete;
+  MockStreamClient& operator=(const MockStreamClient&) = delete;
+
   mojo::PendingRemote<media::mojom::AudioInputStreamClient> MakeRemote() {
     DCHECK(!receiver_.is_bound());
     mojo::PendingRemote<media::mojom::AudioInputStreamClient> remote;
@@ -65,13 +68,14 @@ class MockStreamClient : public media::mojom::AudioInputStreamClient {
 
  private:
   mojo::Receiver<media::mojom::AudioInputStreamClient> receiver_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(MockStreamClient);
 };
 
 class MockStreamObserver : public media::mojom::AudioInputStreamObserver {
  public:
   MockStreamObserver() = default;
+
+  MockStreamObserver(const MockStreamObserver&) = delete;
+  MockStreamObserver& operator=(const MockStreamObserver&) = delete;
 
   mojo::PendingRemote<media::mojom::AudioInputStreamObserver> MakeRemote() {
     DCHECK(!receiver_.is_bound());
@@ -90,13 +94,14 @@ class MockStreamObserver : public media::mojom::AudioInputStreamObserver {
 
  private:
   mojo::Receiver<media::mojom::AudioInputStreamObserver> receiver_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(MockStreamObserver);
 };
 
 class MockStream : public media::AudioInputStream {
  public:
   MockStream() {}
+
+  MockStream(const MockStream&) = delete;
+  MockStream& operator=(const MockStream&) = delete;
 
   double GetMaxVolume() override { return 1; }
 
@@ -110,9 +115,6 @@ class MockStream : public media::AudioInputStream {
   MOCK_METHOD0(GetAutomaticGainControl, bool());
   MOCK_METHOD0(IsMuted, bool());
   MOCK_METHOD1(SetOutputDeviceForAec, void(const std::string&));
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(MockStream);
 };
 
 }  // namespace
@@ -121,10 +123,14 @@ class AudioServiceInputStreamTest : public testing::Test {
  public:
   AudioServiceInputStreamTest()
       : audio_manager_(std::make_unique<media::TestAudioThread>(false)),
-        stream_factory_(&audio_manager_),
+        stream_factory_(&audio_manager_, /*aecdump_recording_manager=*/nullptr),
         stream_factory_receiver_(
             &stream_factory_,
             remote_stream_factory_.BindNewPipeAndPassReceiver()) {}
+
+  AudioServiceInputStreamTest(const AudioServiceInputStreamTest&) = delete;
+  AudioServiceInputStreamTest& operator=(const AudioServiceInputStreamTest&) =
+      delete;
 
   ~AudioServiceInputStreamTest() override { audio_manager_.Shutdown(); }
 
@@ -146,7 +152,7 @@ class AudioServiceInputStreamTest : public testing::Test {
         observer_.MakeRemote(), log_.MakeRemote(), kDefaultDeviceId,
         media::AudioParameters::UnavailableDeviceParams(),
         kDefaultSharedMemoryCount, enable_agc,
-        base::ReadOnlySharedMemoryRegion(),
+        base::ReadOnlySharedMemoryRegion(), nullptr,
         base::BindOnce(&AudioServiceInputStreamTest::OnCreated,
                        base::Unretained(this)));
     return remote_stream;
@@ -160,6 +166,7 @@ class AudioServiceInputStreamTest : public testing::Test {
         observer_.MakeRemote(), mojo::NullRemote(), kDefaultDeviceId,
         media::AudioParameters::UnavailableDeviceParams(),
         kDefaultSharedMemoryCount, false, base::ReadOnlySharedMemoryRegion(),
+        nullptr,
         base::BindOnce(&AudioServiceInputStreamTest::OnCreated,
                        base::Unretained(this)));
     return remote_stream;
@@ -173,6 +180,7 @@ class AudioServiceInputStreamTest : public testing::Test {
         mojo::NullRemote(), log_.MakeRemote(), kDefaultDeviceId,
         media::AudioParameters::UnavailableDeviceParams(),
         kDefaultSharedMemoryCount, false, base::ReadOnlySharedMemoryRegion(),
+        nullptr,
         base::BindOnce(&AudioServiceInputStreamTest::OnCreated,
                        base::Unretained(this)));
     return remote_stream;
@@ -205,8 +213,6 @@ class AudioServiceInputStreamTest : public testing::Test {
   StrictMock<MockStreamClient> client_;
   StrictMock<MockStreamObserver> observer_;
   NiceMock<MockLog> log_;
-
-  DISALLOW_COPY_AND_ASSIGN(AudioServiceInputStreamTest);
 };
 
 TEST_F(AudioServiceInputStreamTest, ConstructDestruct) {

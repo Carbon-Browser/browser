@@ -27,6 +27,10 @@ struct SpellCheckResult;
 class SpellCheckHostChromeImpl : public SpellCheckHostImpl {
  public:
   explicit SpellCheckHostChromeImpl(int render_process_id);
+
+  SpellCheckHostChromeImpl(const SpellCheckHostChromeImpl&) = delete;
+  SpellCheckHostChromeImpl& operator=(const SpellCheckHostChromeImpl&) = delete;
+
   ~SpellCheckHostChromeImpl() override;
 
   static void Create(
@@ -80,9 +84,9 @@ class SpellCheckHostChromeImpl : public SpellCheckHostImpl {
                         int route_id,
                         RequestTextCheckCallback callback) override;
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   void InitializeDictionaries(InitializeDictionariesCallback callback) override;
-#endif  // defined(OS_WIN)
+#endif  // BUILDFLAG(IS_WIN)
 
   // Clears a finished request from |requests_|. Exposed to SpellingRequest.
   void OnRequestFinished(SpellingRequest* request);
@@ -92,13 +96,13 @@ class SpellCheckHostChromeImpl : public SpellCheckHostImpl {
       std::vector<SpellCheckResult>* remote_results,
       const std::vector<SpellCheckResult>& local_results);
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   void OnDictionariesInitialized();
 
   // Callback passed as argument to InitializeDictionaries, and invoked when
   // the dictionaries are loaded for the first time.
   InitializeDictionariesCallback dictionaries_loaded_callback_;
-#endif  // defined(OS_WIN)
+#endif  // BUILDFLAG(IS_WIN)
 
   // All pending requests.
   std::set<std::unique_ptr<SpellingRequest>, base::UniquePtrComparator>
@@ -106,11 +110,11 @@ class SpellCheckHostChromeImpl : public SpellCheckHostImpl {
 #endif  //  BUILDFLAG(USE_BROWSER_SPELLCHECKER) &&
         //  BUILDFLAG(ENABLE_SPELLING_SERVICE)
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   int ToDocumentTag(int route_id);
   void RetireDocumentTag(int route_id);
   std::map<int, int> tag_map_;
-#endif  // defined(OS_MAC)
+#endif  // BUILDFLAG(IS_MAC)
 
   // Returns the SpellcheckService of our |render_process_id_|. The return
   // is null if the render process is being shut down.
@@ -127,8 +131,6 @@ class SpellCheckHostChromeImpl : public SpellCheckHostImpl {
 #if BUILDFLAG(USE_RENDERER_SPELLCHECKER)
   base::WeakPtrFactory<SpellCheckHostChromeImpl> weak_factory_{this};
 #endif
-
-  DISALLOW_COPY_AND_ASSIGN(SpellCheckHostChromeImpl);
 };
 
 #endif  // CHROME_BROWSER_SPELLCHECKER_SPELL_CHECK_HOST_CHROME_IMPL_H_

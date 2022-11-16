@@ -14,10 +14,10 @@ class GPUBindGroupLayout;
 class GPUComputePipelineDescriptor;
 
 WGPUComputePipelineDescriptor AsDawnType(
+    GPUDevice* device,
     const GPUComputePipelineDescriptor* webgpu_desc,
     std::string* label,
-    OwnedProgrammableStageDescriptor* computeStageDescriptor,
-    GPUDevice* device);
+    OwnedProgrammableStageDescriptor* computeStageDescriptor);
 
 class GPUComputePipeline : public DawnObject<WGPUComputePipeline> {
   DEFINE_WRAPPERTYPEINFO();
@@ -29,10 +29,15 @@ class GPUComputePipeline : public DawnObject<WGPUComputePipeline> {
   explicit GPUComputePipeline(GPUDevice* device,
                               WGPUComputePipeline compute_pipeline);
 
+  GPUComputePipeline(const GPUComputePipeline&) = delete;
+  GPUComputePipeline& operator=(const GPUComputePipeline&) = delete;
+
   GPUBindGroupLayout* getBindGroupLayout(uint32_t index);
 
- private:
-  DISALLOW_COPY_AND_ASSIGN(GPUComputePipeline);
+  void setLabelImpl(const String& value) override {
+    std::string utf8_label = value.Utf8();
+    GetProcs().computePipelineSetLabel(GetHandle(), utf8_label.c_str());
+  }
 };
 
 }  // namespace blink

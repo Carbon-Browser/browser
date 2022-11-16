@@ -8,7 +8,6 @@
 #include <string>
 
 #include "base/bind.h"
-#include "base/macros.h"
 #include "base/win/message_window.h"
 #include "services/device/battery/battery_status_manager.h"
 
@@ -27,6 +26,9 @@ class BatteryStatusObserver {
       : power_handle_(nullptr),
         battery_change_handle_(nullptr),
         callback_(callback) {}
+
+  BatteryStatusObserver(const BatteryStatusObserver&) = delete;
+  BatteryStatusObserver& operator=(const BatteryStatusObserver&) = delete;
 
   ~BatteryStatusObserver() { DCHECK(!window_); }
 
@@ -113,14 +115,16 @@ class BatteryStatusObserver {
   HPOWERNOTIFY battery_change_handle_;
   BatteryCallback callback_;
   std::unique_ptr<base::win::MessageWindow> window_;
-
-  DISALLOW_COPY_AND_ASSIGN(BatteryStatusObserver);
 };
 
 class BatteryStatusManagerWin : public BatteryStatusManager {
  public:
   explicit BatteryStatusManagerWin(const BatteryCallback& callback)
       : battery_observer_(std::make_unique<BatteryStatusObserver>(callback)) {}
+
+  BatteryStatusManagerWin(const BatteryStatusManagerWin&) = delete;
+  BatteryStatusManagerWin& operator=(const BatteryStatusManagerWin&) = delete;
+
   ~BatteryStatusManagerWin() override { battery_observer_->Stop(); }
 
  public:
@@ -134,8 +138,6 @@ class BatteryStatusManagerWin : public BatteryStatusManager {
 
  private:
   std::unique_ptr<BatteryStatusObserver> battery_observer_;
-
-  DISALLOW_COPY_AND_ASSIGN(BatteryStatusManagerWin);
 };
 
 }  // namespace

@@ -12,6 +12,9 @@ const base::Feature kEnableHeuristicPalmDetectionFilter{
 const base::Feature kEnableNeuralPalmDetectionFilter{
     "EnableNeuralPalmDetectionFilter", base::FEATURE_DISABLED_BY_DEFAULT};
 
+const base::Feature kEnableNeuralPalmAdaptiveHold{
+    "EnableNeuralPalmAdaptiveHold", base::FEATURE_ENABLED_BY_DEFAULT};
+
 const base::Feature kEnableNeuralStylusReportFilter{
     "EnableNeuralStylusReportFilter", base::FEATURE_DISABLED_BY_DEFAULT};
 
@@ -28,8 +31,18 @@ const base::Feature kEnablePalmOnToolTypePalm{"EnablePalmOnToolTypePalm",
 const base::Feature kEnablePalmSuppression{"EnablePalmSuppression",
                                            base::FEATURE_ENABLED_BY_DEFAULT};
 
+// Controls whether libinput is used to handle touchpad.
+const base::Feature kLibinputHandleTouchpad{"LibinputHandleTouchpad",
+                                            base::FEATURE_DISABLED_BY_DEFAULT};
+
+const base::Feature kEnableFakeKeyboardHeuristic{
+    "EnableFakeKeyboardHeuristic", base::FEATURE_DISABLED_BY_DEFAULT};
+
 extern const base::FeatureParam<std::string> kNeuralPalmRadiusPolynomial{
     &kEnableNeuralPalmDetectionFilter, "neural_palm_radius_polynomial", ""};
+
+extern const base::FeatureParam<std::string> kNeuralPalmModelVersion{
+    &kEnableNeuralPalmDetectionFilter, "neural_palm_model_version", ""};
 
 const base::FeatureParam<double> kHeuristicCancelThresholdSeconds{
     &kEnableHeuristicPalmDetectionFilter,
@@ -48,6 +61,7 @@ const base::Feature kEnableInputEventLogging{"EnableInputEventLogging",
 constexpr char kOzoneNNPalmSwitchName[] = "ozone-nnpalm-properties";
 
 constexpr char kOzoneNNPalmTouchCompatibleProperty[] = "touch-compatible";
+constexpr char kOzoneNNPalmModelVersionProperty[] = "model";
 constexpr char kOzoneNNPalmRadiusPolynomialProperty[] = "radius-polynomial";
 
 }  // namespace ui

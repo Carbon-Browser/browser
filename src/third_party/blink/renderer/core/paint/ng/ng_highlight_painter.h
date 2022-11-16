@@ -11,8 +11,11 @@
 #include "third_party/blink/renderer/core/editing/markers/document_marker.h"
 #include "third_party/blink/renderer/core/layout/api/selection_state.h"
 #include "third_party/blink/renderer/core/layout/geometry/physical_rect.h"
+#include "third_party/blink/renderer/core/paint/ng/ng_highlight_overlay.h"
+#include "third_party/blink/renderer/core/paint/text_decoration_info.h"
 #include "third_party/blink/renderer/core/paint/text_paint_style.h"
 #include "third_party/blink/renderer/platform/graphics/dom_node_id.h"
+#include "third_party/blink/renderer/platform/graphics/graphics_context.h"
 #include "third_party/blink/renderer/platform/transforms/affine_transform.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 
@@ -23,9 +26,11 @@ class FrameSelection;
 class LayoutObject;
 class NGFragmentItem;
 class NGTextPainter;
+class NGTextDecorationPainter;
 class NGInlineCursor;
 class Node;
 struct LayoutSelectionStatus;
+struct NGTextFragmentPaintInfo;
 struct PaintInfo;
 struct PhysicalOffset;
 
@@ -82,7 +87,8 @@ class CORE_EXPORT NGHighlightPainter {
     void PaintSelectedText(NGTextPainter& text_painter,
                            unsigned length,
                            const TextPaintStyle& text_style,
-                           DOMNodeId node_id);
+                           DOMNodeId node_id,
+                           const AutoDarkMode& auto_dark_mode);
 
     void PaintSuppressingTextProperWhereSelected(
         NGTextPainter& text_painter,
@@ -90,7 +96,8 @@ class CORE_EXPORT NGHighlightPainter {
         unsigned end_offset,
         unsigned length,
         const TextPaintStyle& text_style,
-        DOMNodeId node_id);
+        DOMNodeId node_id,
+        const AutoDarkMode& auto_dark_mode);
 
    private:
     struct SelectionRect {
@@ -113,32 +120,138 @@ class CORE_EXPORT NGHighlightPainter {
     bool paint_selected_text_only_;
   };
 
-  explicit NGHighlightPainter(NGTextPainter& text_painter,
-                              const PaintInfo& paint_info,
-                              const NGInlineCursor& cursor,
-                              const NGFragmentItem& fragment_item,
-                              const PhysicalOffset& box_origin,
-                              const ComputedStyle& style,
-                              SelectionPaintState*,
-                              bool is_printing);
+  NGHighlightPainter(
+      const NGTextFragmentPaintInfo& fragment_paint_info,
+      NGTextPainter& text_painter,
+      NGTextDecorationPainter& decoration_painter,
+      const PaintInfo& paint_info,
+      const NGInlineCursor& cursor,
+      const NGFragmentItem& fragment_item,
+      const absl::optional<AffineTransform> writing_mode_rotation,
+      const PhysicalRect& decoration_rect,
+      const PhysicalOffset& box_origin,
+      const ComputedStyle& style,
+      const TextPaintStyle& text_style,
+      SelectionPaintState*,
+      bool is_printing);
 
   enum Phase { kBackground, kForeground };
+
+  // Paints backgrounds or foregrounds for markers that are not exposed as CSS
+  // highlight pseudos, or all markers if HighlightOverlayPainting is off.
   void Paint(Phase phase);
+
+  // Indicates the way this painter should be used by the caller, aside from
+  // the Paint method, which should always be used.
+  //
+  // The full overlay painting algorithm (kOverlay) is not needed when there
+  // are no highlights that change the text color, add backgrounds, or add
+  // decorations that are required to paint under decorations from earlier
+  // layers (e.g. ::target-text underline with originating overline).
+  enum Case {
+    // Caller should not use this painter.
+    // This happens if nothing is highlighted, or HighlightOverlayPainting is
+    // off and nothing is selected.
+    kNoHighlights,
+    // Caller should use PaintOriginatingText and PaintHighlightOverlays.
+    // This happens if HighlightOverlayPainting is on and there are highlights
+    // that may involve the text fragment, except in some situations with only
+    // spelling and/or grammar errors (see kFastSpellingGrammar).
+    kOverlay,
+    // Caller should use PaintSelectedText only.
+    // This happens if ShouldPaintSelectedTextOnly is true, such as when
+    // painting the ::selection drag image.
+    kSelectionOnly,
+    // Caller should use PaintSuppressingTextProperWhereSelected,
+    // PaintSelectionBackground, and PaintSelectedText.
+    // This happens if HighlightOverlayPainting is off and the text fragment
+    // is selected.
+    kOldSelection,
+    // Caller should use FastPaintSpellingGrammarDecorations.
+    // This happens if the only highlights that may involve the text fragment
+    // are spelling and/or grammar errors, and they are completely unstyled.
+    // The default style only adds spelling/grammar decorations, which have no
+    // specified painting order in css-text-decor-4.
+    kFastSpellingGrammar
+  };
+  Case PaintCase() const;
+
+  // PaintCase() == kFastSpellingGrammar only
+  void FastPaintSpellingGrammarDecorations() const;
+
+  // PaintCase() == kOverlay only
+  void PaintOriginatingText(const TextPaintStyle&, DOMNodeId);
+  void PaintHighlightOverlays(const TextPaintStyle&,
+                              DOMNodeId,
+                              bool paint_marker_backgrounds,
+                              absl::optional<AffineTransform> rotation);
 
   SelectionPaintState* Selection() { return selection_; }
 
  private:
+  struct LayerPaintState {
+    LayerPaintState(NGHighlightOverlay::HighlightLayer id,
+                    scoped_refptr<const ComputedStyle> style,
+                    TextPaintStyle text_style)
+        : id(id), style(std::move(style)), text_style(text_style) {}
+
+    // Equality on HighlightLayer id only, for Vector::Find.
+    bool operator==(const LayerPaintState&) const = delete;
+    bool operator!=(const LayerPaintState&) const = delete;
+    bool operator==(const NGHighlightOverlay::HighlightLayer&) const;
+    bool operator!=(const NGHighlightOverlay::HighlightLayer&) const;
+
+    const NGHighlightOverlay::HighlightLayer id;
+    const scoped_refptr<const ComputedStyle> style;
+    const TextPaintStyle text_style;
+    absl::optional<TextDecorationInfo> decoration_info{};
+  };
+
+  Case ComputePaintCase() const;
+  void FastPaintSpellingGrammarDecorations(
+      const Text& text_node,
+      const StringView& text,
+      const DocumentMarkerVector& markers) const;
+  void PaintOneSpellingGrammarDecoration(const DocumentMarker::MarkerType&,
+                                         const StringView& text,
+                                         unsigned paint_start_offset,
+                                         unsigned paint_end_offset) const;
+  void ClipToPartDecorations(const NGHighlightOverlay::HighlightPart&);
+  void PaintDecorationsExceptLineThrough(
+      const NGHighlightOverlay::HighlightPart&);
+  void PaintDecorationsExceptLineThrough(
+      const NGHighlightOverlay::HighlightPart&,
+      TextDecorationLine lines_to_paint);
+  void PaintDecorationsOnlyLineThrough(
+      const NGHighlightOverlay::HighlightPart&);
+  void PaintSpellingGrammarDecorations(
+      const NGHighlightOverlay::HighlightPart&);
+
+  const NGTextFragmentPaintInfo& fragment_paint_info_;
   NGTextPainter& text_painter_;
+  NGTextDecorationPainter& decoration_painter_;
   const PaintInfo& paint_info_;
   const NGInlineCursor& cursor_;
   const NGFragmentItem& fragment_item_;
+  const absl::optional<AffineTransform> writing_mode_rotation_;
+  const PhysicalRect& decoration_rect_;
   const PhysicalOffset& box_origin_;
   const ComputedStyle& style_;
+  const TextPaintStyle& originating_text_style_;
   SelectionPaintState* selection_;
   const LayoutObject* layout_object_;
   Node* node_;
-  const DocumentMarkerVector markers_;
+  const AutoDarkMode foreground_auto_dark_mode_;
+  const AutoDarkMode background_auto_dark_mode_;
+  DocumentMarkerVector markers_;
+  DocumentMarkerVector target_;
+  DocumentMarkerVector spelling_;
+  DocumentMarkerVector grammar_;
+  DocumentMarkerVector custom_;
+  Vector<LayerPaintState> layers_;
+  Vector<NGHighlightOverlay::HighlightPart> parts_;
   const bool skip_backgrounds_;
+  Case paint_case_;
 };
 
 }  // namespace blink

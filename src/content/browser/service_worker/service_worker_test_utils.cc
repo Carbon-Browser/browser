@@ -23,6 +23,7 @@
 #include "content/browser/service_worker/service_worker_registration.h"
 #include "content/common/frame.mojom.h"
 #include "content/common/frame_messages.mojom.h"
+#include "content/public/common/alternative_error_page_override_info.mojom.h"
 #include "content/public/common/child_process_host.h"
 #include "content/public/test/policy_container_utils.h"
 #include "mojo/public/cpp/bindings/pending_associated_remote.h"
@@ -36,6 +37,7 @@
 #include "net/base/io_buffer.h"
 #include "net/base/test_completion_callback.h"
 #include "net/http/http_response_info.h"
+#include "net/http/http_util.h"
 #include "third_party/blink/public/common/loader/throttling_url_loader.h"
 #include "third_party/blink/public/common/navigation/navigation_params.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
@@ -65,6 +67,10 @@ class FakeNavigationClient : public mojom::NavigationClient {
   explicit FakeNavigationClient(
       ReceivedProviderInfoCallback on_received_callback)
       : on_received_callback_(std::move(on_received_callback)) {}
+
+  FakeNavigationClient(const FakeNavigationClient&) = delete;
+  FakeNavigationClient& operator=(const FakeNavigationClient&) = delete;
+
   ~FakeNavigationClient() override = default;
 
  private:
@@ -85,6 +91,7 @@ class FakeNavigationClient : public mojom::NavigationClient {
       mojo::PendingRemote<network::mojom::URLLoaderFactory>
           prefetch_loader_factory,
       const base::UnguessableToken& devtools_navigation_token,
+      const blink::ParsedPermissionsPolicy& permissions_policy,
       blink::mojom::PolicyContainerPtr policy_container,
       mojo::PendingRemote<blink::mojom::CodeCacheHost> code_cache_host,
       mojom::CookieManagerInfoPtr cookie_manager_info,
@@ -103,13 +110,12 @@ class FakeNavigationClient : public mojom::NavigationClient {
       const absl::optional<std::string>& error_page_content,
       std::unique_ptr<blink::PendingURLLoaderFactoryBundle> subresource_loaders,
       blink::mojom::PolicyContainerPtr policy_container,
+      mojom::AlternativeErrorPageOverrideInfoPtr alternative_error_page_info,
       CommitFailedNavigationCallback callback) override {
     std::move(callback).Run(MinimalDidCommitNavigationLoadParams(), nullptr);
   }
 
   ReceivedProviderInfoCallback on_received_callback_;
-
-  DISALLOW_COPY_AND_ASSIGN(FakeNavigationClient);
 };
 
 class ResourceWriter {
@@ -248,8 +254,9 @@ void ServiceWorkerRemoteContainerEndpoint::BindForWindow(
       network::mojom::URLResponseHead::New(),
       mojo::ScopedDataPipeConsumerHandle(), nullptr, nullptr, absl::nullopt,
       nullptr, std::move(info), mojo::NullRemote(),
-      base::UnguessableToken::Create(), CreateStubPolicyContainer(),
-      mojo::NullRemote(), nullptr, nullptr,
+      base::UnguessableToken::Create(),
+      std::vector<blink::ParsedPermissionsPolicyDeclaration>(),
+      CreateStubPolicyContainer(), mojo::NullRemote(), nullptr, nullptr,
       base::BindOnce(
           [](mojom::DidCommitProvisionalLoadParamsPtr validated_params,
              mojom::DidCommitProvisionalLoadInterfaceParamsPtr
@@ -360,9 +367,13 @@ std::unique_ptr<ServiceWorkerHost> CreateServiceWorkerHost(
       provider_info->host_remote.InitWithNewEndpointAndPassReceiver(),
       hosted_version, std::move(context));
 
+  mojo::PendingReceiver<service_manager::mojom::InterfaceProvider>
+      pending_interface_provider;
+
   host->CompleteStartWorkerPreparation(
       process_id,
-      provider_info->browser_interface_broker.InitWithNewPipeAndPassReceiver());
+      provider_info->browser_interface_broker.InitWithNewPipeAndPassReceiver(),
+      pending_interface_provider.InitWithNewPipeAndPassRemote());
   output_endpoint->BindForServiceWorker(std::move(provider_info));
   return host;
 }
@@ -383,7 +394,7 @@ scoped_refptr<ServiceWorkerRegistration> CreateNewServiceWorkerRegistration(
   // problematic.
   base::RunLoop run_loop(base::RunLoop::Type::kNestableTasksAllowed);
   registry->CreateNewRegistration(
-      options, key,
+      options, key, blink::mojom::AncestorFrameType::kNormalFrame,
       base::BindLambdaForTesting(
           [&](scoped_refptr<ServiceWorkerRegistration> new_registration) {
             registration = std::move(new_registration);

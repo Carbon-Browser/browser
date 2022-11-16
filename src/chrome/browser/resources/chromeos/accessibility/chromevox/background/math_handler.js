@@ -5,13 +5,13 @@
 /**
  * @fileoverview Handles math output and exploration.
  */
-
-goog.provide('MathHandler');
+import {CursorRange} from '../../common/cursors/range.js';
+import {Msgs} from '../common/msgs.js';
 
 /**
  * Initializes math for output and exploration.
  */
-MathHandler = class {
+export class MathHandler {
   /**
    * @param {!chrome.automation.AutomationNode} node
    */
@@ -59,7 +59,7 @@ MathHandler = class {
 
   /**
    * Initializes the global instance.
-   * @param {cursors.Range} range
+   * @param {CursorRange} range
    * @return {boolean} True if an instance was created.
    */
   static init(range) {
@@ -69,7 +69,7 @@ MathHandler = class {
     } else {
       MathHandler.instance = undefined;
     }
-    return !!MathHandler.instance;
+    return Boolean(MathHandler.instance);
   }
 
   /**
@@ -93,7 +93,7 @@ MathHandler = class {
     }
     return false;
   }
-};
+}
 
 
 /**

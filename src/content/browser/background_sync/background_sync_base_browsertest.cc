@@ -9,7 +9,6 @@
 #include <vector>
 #include "base/metrics/field_trial_param_associator.h"
 #include "base/strings/stringprintf.h"
-#include "base/task/post_task.h"
 #include "content/browser/background_sync/background_sync_manager.h"
 #include "content/browser/storage_partition_impl.h"
 #include "content/public/browser/browser_context.h"
@@ -55,14 +54,10 @@ bool BackgroundSyncBaseBrowserTest::RegistrationPending(
       base::Unretained(this), run_loop.QuitClosure(),
       base::ThreadTaskRunnerHandle::Get(), &is_pending);
 
-  RunOrPostTaskOnThread(
-      FROM_HERE, ServiceWorkerContext::GetCoreThreadId(),
-      base::BindOnce(
-          &BackgroundSyncBaseBrowserTest::RegistrationPendingOnCoreThread,
-          base::Unretained(this), base::WrapRefCounted(sync_context),
-          base::WrapRefCounted(service_worker_context), tag,
-          https_server_->GetURL(kDefaultTestURL), std::move(callback)));
-
+  RegistrationPendingOnCoreThread(base::WrapRefCounted(sync_context),
+                                  base::WrapRefCounted(service_worker_context),
+                                  tag, https_server_->GetURL(kDefaultTestURL),
+                                  std::move(callback));
   run_loop.Run();
 
   return is_pending;
@@ -213,14 +208,15 @@ void BackgroundSyncBaseBrowserTest::ClearStoragePartitionData() {
       StoragePartition::REMOVE_DATA_MASK_SERVICE_WORKERS;
   uint32_t quota_storage_mask =
       StoragePartition::QUOTA_MANAGED_STORAGE_MASK_ALL;
-  GURL delete_origin = GURL();
+  blink::StorageKey delete_storage_key = blink::StorageKey();
   const base::Time delete_begin = base::Time();
   base::Time delete_end = base::Time::Max();
 
   base::RunLoop run_loop;
 
-  storage->ClearData(storage_partition_mask, quota_storage_mask, delete_origin,
-                     delete_begin, delete_end, run_loop.QuitClosure());
+  storage->ClearData(storage_partition_mask, quota_storage_mask,
+                     delete_storage_key, delete_begin, delete_end,
+                     run_loop.QuitClosure());
 
   run_loop.Run();
 }

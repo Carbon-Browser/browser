@@ -18,7 +18,6 @@
 #include "base/callback_helpers.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/guid.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/string_util.h"
@@ -37,11 +36,13 @@
 #include "components/download/public/common/mock_download_file.h"
 #include "components/download/public/common/mock_download_item_impl.h"
 #include "components/download/public/common/mock_input_stream.h"
+#include "content/browser/download/embedder_download_data.pb.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/download_manager_delegate.h"
 #include "content/public/browser/storage_partition.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/test_browser_context.h"
+#include "content/test/storage_partition_test_helpers.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -112,6 +113,10 @@ class MockDownloadItemFactory
       public base::SupportsWeakPtr<MockDownloadItemFactory> {
  public:
   MockDownloadItemFactory();
+
+  MockDownloadItemFactory(const MockDownloadItemFactory&) = delete;
+  MockDownloadItemFactory& operator=(const MockDownloadItemFactory&) = delete;
+
   ~MockDownloadItemFactory() override;
 
   // Access to map of created items.
@@ -138,7 +143,7 @@ class MockDownloadItemFactory
       const base::FilePath& target_path,
       const std::vector<GURL>& url_chain,
       const GURL& referrer_url,
-      const GURL& site_url,
+      const std::string& serialized_embedder_download_data,
       const GURL& tab_url,
       const GURL& tab_referrer_url,
       const absl::optional<url::Origin>& request_initiator,
@@ -180,8 +185,6 @@ class MockDownloadItemFactory
   std::map<uint32_t, download::MockDownloadItemImpl*> items_;
   download::DownloadItemImplDelegate item_delegate_;
   bool is_download_persistent_;
-
-  DISALLOW_COPY_AND_ASSIGN(MockDownloadItemFactory);
 };
 
 MockDownloadItemFactory::MockDownloadItemFactory()
@@ -218,7 +221,7 @@ download::DownloadItemImpl* MockDownloadItemFactory::CreatePersistedItem(
     const base::FilePath& target_path,
     const std::vector<GURL>& url_chain,
     const GURL& referrer_url,
-    const GURL& site_url,
+    const std::string& serialized_embedder_download_data,
     const GURL& tab_url,
     const GURL& tab_referrer_url,
     const absl::optional<url::Origin>& request_initiator,
@@ -410,6 +413,9 @@ class DownloadManagerTest : public testing::Test {
         interrupt_reason_(download::DOWNLOAD_INTERRUPT_REASON_NONE),
         next_download_id_(0) {}
 
+  DownloadManagerTest(const DownloadManagerTest&) = delete;
+  DownloadManagerTest& operator=(const DownloadManagerTest&) = delete;
+
   // We tear down everything in TearDown().
   ~DownloadManagerTest() override {}
 
@@ -491,7 +497,8 @@ class DownloadManagerTest : public testing::Test {
     download::DownloadItem* download_item =
         download_manager_->CreateDownloadItem(
             kGuid, 10, base::FilePath(), base::FilePath(), url_chain,
-            GURL("http://example.com/a"), GURL("http://example.com/a"),
+            GURL("http://example.com/a"),
+            StoragePartitionConfig::CreateDefault(browser_context_.get()),
             GURL("http://example.com/a"), GURL("http://example.com/a"),
             url::Origin::Create(GURL("http://example.com/")),
             "application/octet-stream", "application/octet-stream", start_time,
@@ -532,14 +539,15 @@ class DownloadManagerTest : public testing::Test {
       download::DownloadDangerType danger_type,
       download::DownloadItem::MixedContentStatus mixed_content_status,
       const base::FilePath& intermediate_path,
-      absl::optional<download::DownloadSchedule> download_schedule,
+      const base::FilePath& display_name,
+      const std::string& mime_type,
       download::DownloadInterruptReason interrupt_reason) {
     callback_called_ = true;
     target_path_ = target_path;
     target_disposition_ = disposition;
     danger_type_ = danger_type;
     intermediate_path_ = intermediate_path;
-    download_schedule_ = std::move(download_schedule);
+    mime_type_ = mime_type;
     interrupt_reason_ = interrupt_reason;
   }
 
@@ -575,8 +583,8 @@ class DownloadManagerTest : public testing::Test {
   base::FilePath target_path_;
   download::DownloadItem::TargetDisposition target_disposition_;
   download::DownloadDangerType danger_type_;
+  std::string mime_type_;
   base::FilePath intermediate_path_;
-  absl::optional<download::DownloadSchedule> download_schedule_;
   download::DownloadInterruptReason interrupt_reason_;
 
   std::vector<GURL> download_urls_;
@@ -587,8 +595,6 @@ class DownloadManagerTest : public testing::Test {
   std::unique_ptr<MockDownloadManagerObserver> observer_;
   std::unique_ptr<TestBrowserContext> browser_context_;
   uint32_t next_download_id_;
-
-  DISALLOW_COPY_AND_ASSIGN(DownloadManagerTest);
 };
 
 // Confirm the appropriate invocations occur when you start a download.
@@ -612,7 +618,7 @@ TEST_F(DownloadManagerTest, StartDownload) {
   // distros with versions of GTK lower than 3.14.7 are no longer
   // supported.  This should happen when support for Ubuntu Trusty and
   // Debian Jessie are removed.
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   // Doing nothing will set the default download directory to null.
   EXPECT_CALL(GetMockDownloadManagerDelegate(), GetSaveDir(_, _, _)).Times(0);
 #else
@@ -655,7 +661,7 @@ TEST_F(DownloadManagerTest, StartDownloadWithoutHistoryDB) {
   // distros with versions of GTK lower than 3.14.7 are no longer
   // supported.  This should happen when support for Ubuntu Trusty and
   // Debian Jessie are removed.
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   // Doing nothing will set the default download directory to null.
   EXPECT_CALL(GetMockDownloadManagerDelegate(), GetSaveDir(_, _, _)).Times(0);
 #else
@@ -772,9 +778,13 @@ TEST_F(DownloadManagerTest, OnInProgressDownloadsLoaded) {
   auto in_progress_manager = std::make_unique<TestInProgressManager>();
   std::vector<GURL> url_chain;
   url_chain.emplace_back("http://example.com/1.zip");
+  auto storage_partition_config = StoragePartitionConfig::CreateDefault(
+      download_manager_->GetBrowserContext());
   auto in_progress_item = std::make_unique<download::DownloadItemImpl>(
       in_progress_manager.get(), kGuid, 10, base::FilePath(), base::FilePath(),
-      url_chain, GURL("http://example.com/a"), GURL("http://example.com/a"),
+      url_chain, GURL("http://example.com/a"),
+      download_manager_->StoragePartitionConfigToSerializedEmbedderDownloadData(
+          storage_partition_config),
       GURL("http://example.com/a"), GURL("http://example.com/a"),
       url::Origin::Create(GURL("http://example.com")),
       "application/octet-stream", "application/octet-stream", base::Time::Now(),
@@ -784,8 +794,8 @@ TEST_F(DownloadManagerTest, OnInProgressDownloadsLoaded) {
       download::DOWNLOAD_INTERRUPT_REASON_SERVER_FAILED, false, false, false,
       base::Time::Now(), true,
       std::vector<download::DownloadItem::ReceivedSlice>(),
-      download::DownloadItemRerouteInfo(), absl::nullopt /*download_schedule*/,
-      nullptr /* download_entry */);
+      download::DownloadItemRerouteInfo(), download::kInvalidRange,
+      download::kInvalidRange, nullptr /* download_entry */);
   in_progress_manager->AddDownloadItem(std::move(in_progress_item));
   SetInProgressDownloadManager(std::move(in_progress_manager));
   EXPECT_CALL(GetMockObserver(), OnDownloadCreated(download_manager_.get(), _))
@@ -808,6 +818,98 @@ TEST_F(DownloadManagerTest, OnInProgressDownloadsLoaded) {
   ASSERT_FALSE(download_manager_->GetDownloadByGuid(kGuid));
 }
 
+TEST_F(DownloadManagerTest,
+       StoragePartitionConfigAndEmbedderDownloadDataConversions) {
+  // Check that serializing then deserializing produces the same
+  // StoragePartitionConfig.
+  auto default_spc = StoragePartitionConfig::CreateDefault(
+      download_manager_->GetBrowserContext());
+  std::string serialized_default_spc =
+      download_manager_->StoragePartitionConfigToSerializedEmbedderDownloadData(
+          default_spc);
+  ASSERT_TRUE(!serialized_default_spc.empty());
+  auto deserialized_default_spc =
+      download_manager_->SerializedEmbedderDownloadDataToStoragePartitionConfig(
+          serialized_default_spc);
+  EXPECT_EQ(default_spc, deserialized_default_spc);
+
+  // Check that a given proto::EmbedderDownloadData produces the expected
+  // StoragePartitionConfig.
+  const char* kTestPartitionDomain = "test partition domain";
+  const char* kTestPartitionName = "test partition name";
+  const bool kTestInMemory = false;
+  proto::EmbedderDownloadData embedder_download_data;
+  proto::StoragePartitionConfig* config_proto =
+      embedder_download_data.mutable_storage_partition_config();
+  config_proto->set_partition_domain(kTestPartitionDomain);
+  config_proto->set_partition_name(kTestPartitionName);
+  config_proto->set_in_memory(kTestInMemory);
+  config_proto->set_fallback_mode(
+      proto::StoragePartitionConfig_FallbackMode_kPartitionOnDisk);
+  auto deserialized_embedder_download_data_spc =
+      download_manager_->SerializedEmbedderDownloadDataToStoragePartitionConfig(
+          embedder_download_data.SerializeAsString());
+  EXPECT_EQ(deserialized_embedder_download_data_spc.partition_domain(),
+            kTestPartitionDomain);
+  EXPECT_EQ(deserialized_embedder_download_data_spc.partition_name(),
+            kTestPartitionName);
+  EXPECT_EQ(deserialized_embedder_download_data_spc.in_memory(), kTestInMemory);
+  EXPECT_EQ(deserialized_embedder_download_data_spc
+                .fallback_to_partition_domain_for_blob_urls(),
+            StoragePartitionConfig::FallbackMode::kFallbackPartitionOnDisk);
+
+  // Check that the fallback modes values are properly serialized and
+  // deserialized.
+  const std::map<StoragePartitionConfig::FallbackMode,
+                 proto::StoragePartitionConfig_FallbackMode>
+      fallback_mode_mapping = {
+          {StoragePartitionConfig::FallbackMode::kNone,
+           proto::StoragePartitionConfig_FallbackMode_kNone},
+          {StoragePartitionConfig::FallbackMode::kFallbackPartitionInMemory,
+           proto::StoragePartitionConfig_FallbackMode_kPartitionInMemory},
+          {StoragePartitionConfig::FallbackMode::kFallbackPartitionOnDisk,
+           proto::StoragePartitionConfig_FallbackMode_kPartitionOnDisk},
+      };
+  for (auto fallback_pair : fallback_mode_mapping) {
+    // Check fallback mode equality going from StoragePartitionConfig to
+    // proto::EmbedderDownloadData.
+    auto fallback_spc = CreateStoragePartitionConfigForTesting(
+        /*in_memory=*/false, "test domain", "test name");
+    fallback_spc.set_fallback_to_partition_domain_for_blob_urls(
+        fallback_pair.first);
+    std::string serialized_fallback_spc =
+        download_manager_
+            ->StoragePartitionConfigToSerializedEmbedderDownloadData(
+                fallback_spc);
+    proto::EmbedderDownloadData deserialized_fallback_embedder_download_data;
+    ASSERT_TRUE(deserialized_fallback_embedder_download_data.ParseFromString(
+        serialized_fallback_spc));
+    ASSERT_TRUE(deserialized_fallback_embedder_download_data
+                    .has_storage_partition_config());
+    EXPECT_EQ(
+        deserialized_fallback_embedder_download_data.storage_partition_config()
+            .fallback_mode(),
+        fallback_pair.second);
+
+    // Check fallback mode equality going from proto::EmbedderDownloadData to
+    // StoragePartitionConfig.
+    proto::EmbedderDownloadData fallback_embedder_download_data;
+    proto::StoragePartitionConfig* fallback_proto_spc =
+        fallback_embedder_download_data.mutable_storage_partition_config();
+    fallback_proto_spc->set_partition_domain("test domain");
+    fallback_proto_spc->set_partition_name("test name");
+    fallback_proto_spc->set_in_memory(false);
+    fallback_proto_spc->set_fallback_mode(fallback_pair.second);
+    StoragePartitionConfig deserialized_fallback_spc =
+        download_manager_
+            ->SerializedEmbedderDownloadDataToStoragePartitionConfig(
+                fallback_embedder_download_data.SerializeAsString());
+    EXPECT_EQ(
+        deserialized_fallback_spc.fallback_to_partition_domain_for_blob_urls(),
+        fallback_pair.first);
+  }
+}
+
 class DownloadManagerWithExpirationTest : public DownloadManagerTest {
  public:
   DownloadManagerWithExpirationTest() {
@@ -828,7 +930,7 @@ class DownloadManagerWithExpirationTest : public DownloadManagerTest {
 TEST_F(DownloadManagerWithExpirationTest, DeleteExpiredDownload) {
   std::vector<GURL> url_chain;
   url_chain.emplace_back("http://example.com/1.zip");
-  auto expired_start_time = base::Time::Now() - base::TimeDelta::FromDays(10);
+  auto expired_start_time = base::Time::Now() - base::Days(10);
   download::DownloadItem* download_item = CreateDownloadItem(
       expired_start_time, url_chain, download::DownloadItem::INTERRUPTED);
   EXPECT_FALSE(download_item)

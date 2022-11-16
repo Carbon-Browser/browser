@@ -5,7 +5,6 @@
 #ifndef CHROME_BROWSER_ASH_LOGIN_UI_MOCK_LOGIN_DISPLAY_H_
 #define CHROME_BROWSER_ASH_LOGIN_UI_MOCK_LOGIN_DISPLAY_H_
 
-#include "base/macros.h"
 #include "chrome/browser/ash/login/ui/login_display.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
@@ -14,18 +13,14 @@ namespace ash {
 class MockLoginDisplay : public LoginDisplay {
  public:
   MockLoginDisplay();
-  ~MockLoginDisplay();
 
-  MOCK_METHOD0(ClearAndEnablePassword, void(void));
-  MOCK_METHOD4(Init, void(const user_manager::UserList&, bool, bool, bool));
-  MOCK_METHOD0(OnPreferencesChanged, void(void));
-  MOCK_METHOD1(OnUserImageChanged, void(const user_manager::User&));
-  MOCK_METHOD1(SetUIEnabled, void(bool));
-  MOCK_METHOD1(ShowSigninUI, void(const std::string&));
-  MOCK_METHOD0(ShowAllowlistCheckFailedError, void(void));
+  MockLoginDisplay(const MockLoginDisplay&) = delete;
+  MockLoginDisplay& operator=(const MockLoginDisplay&) = delete;
 
- private:
-  DISALLOW_COPY_AND_ASSIGN(MockLoginDisplay);
+  ~MockLoginDisplay() override;
+
+  MOCK_METHOD(void, Init, (const user_manager::UserList&, bool), (override));
+  MOCK_METHOD(void, SetUIEnabled, (bool), (override));
 };
 
 }  // namespace ash

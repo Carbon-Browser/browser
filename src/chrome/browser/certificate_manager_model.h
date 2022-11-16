@@ -11,10 +11,10 @@
 
 #include "base/callback.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "build/chromeos_buildflags.h"
-#include "chrome/browser/net/nss_context.h"
+#include "chrome/browser/net/nss_service.h"
 #include "net/cert/nss_cert_database.h"
 #include "net/cert/scoped_nss_types.h"
 #include "net/ssl/client_cert_identity.h"
@@ -23,12 +23,9 @@ namespace content {
 class BrowserContext;
 }  // namespace content
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-namespace ash {
-class CertificateProvider;
-}  // namespace ash
-
+#if BUILDFLAG(IS_CHROMEOS)
 namespace chromeos {
+class CertificateProvider;
 class PolicyCertificateProvider;
 }
 #endif
@@ -58,6 +55,10 @@ class CertificateManagerModel {
              bool web_trust_anchor,
              bool hardware_backed,
              bool device_wide);
+
+    CertInfo(const CertInfo&) = delete;
+    CertInfo& operator=(const CertInfo&) = delete;
+
     ~CertInfo();
 
     CERTCertificate* cert() const { return cert_.get(); }
@@ -106,8 +107,6 @@ class CertificateManagerModel {
     // Note: can be true only on Chrome OS.
     bool device_wide_;
 
-    DISALLOW_COPY_AND_ASSIGN(CertInfo);
-
     FRIEND_TEST_ALL_PREFIXES(CertificateHandlerTest,
                              CanDeleteCertificateCommonTest);
     FRIEND_TEST_ALL_PREFIXES(CertificateHandlerTest,
@@ -125,19 +124,23 @@ class CertificateManagerModel {
 
   // Holds parameters during construction.
   struct Params {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
     // May be nullptr.
-    chromeos::PolicyCertificateProvider* policy_certs_provider = nullptr;
+    raw_ptr<chromeos::PolicyCertificateProvider> policy_certs_provider =
+        nullptr;
     // May be nullptr.
-    std::unique_ptr<ash::CertificateProvider> extension_certificate_provider;
+    std::unique_ptr<chromeos::CertificateProvider>
+        extension_certificate_provider;
 #endif
 
     Params();
-    Params(Params&& other);
-    ~Params();
 
-   private:
-    DISALLOW_COPY_AND_ASSIGN(Params);
+    Params(const Params&) = delete;
+    Params& operator=(const Params&) = delete;
+
+    Params(Params&& other);
+
+    ~Params();
   };
 
   // Map from the subject organization name to the list of certs from that
@@ -172,6 +175,10 @@ class CertificateManagerModel {
   CertificateManagerModel(std::unique_ptr<Params> params,
                           Observer* observer,
                           net::NSSCertDatabase* nss_cert_database);
+
+  CertificateManagerModel(const CertificateManagerModel&) = delete;
+  CertificateManagerModel& operator=(const CertificateManagerModel&) = delete;
+
   ~CertificateManagerModel();
 
   // Accessor for read-only access to the underlying NSSCertDatabase.
@@ -264,7 +271,7 @@ class CertificateManagerModel {
                                   CertificateManagerModel::Observer* observer,
                                   CreationCallback callback);
 
-  net::NSSCertDatabase* cert_db_;
+  raw_ptr<net::NSSCertDatabase> cert_db_;
 
   // CertsSource instances providing certificates. The order matters - if a
   // certificate is provided by more than one CertsSource, only the first one is
@@ -274,9 +281,7 @@ class CertificateManagerModel {
   bool hold_back_updates_ = false;
 
   // The observer to notify when certificate list is refreshed.
-  Observer* observer_;
-
-  DISALLOW_COPY_AND_ASSIGN(CertificateManagerModel);
+  raw_ptr<Observer> observer_;
 };
 
 #endif  // CHROME_BROWSER_CERTIFICATE_MANAGER_MODEL_H_

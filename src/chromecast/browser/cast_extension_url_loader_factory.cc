@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "base/logging.h"
+#include "base/no_destructor.h"
 #include "base/strings/strcat.h"
 #include "chromecast/browser/extensions/cast_extension_system_factory.h"
 #include "chromecast/common/cast_redirect_manifest_handler.h"
@@ -49,6 +50,9 @@ class CastExtensionURLLoader : public network::mojom::URLLoader,
     cast_extension_url_loader->Start(request_id, options, std::move(request),
                                      traffic_annotation, network_factory);
   }
+
+  CastExtensionURLLoader(const CastExtensionURLLoader&) = delete;
+  CastExtensionURLLoader& operator=(const CastExtensionURLLoader&) = delete;
 
  private:
   CastExtensionURLLoader(
@@ -117,8 +121,9 @@ class CastExtensionURLLoader : public network::mojom::URLLoader,
     original_client_->OnReceiveEarlyHints(std::move(early_hints));
   }
 
-  void OnReceiveResponse(network::mojom::URLResponseHeadPtr head) override {
-    original_client_->OnReceiveResponse(std::move(head));
+  void OnReceiveResponse(network::mojom::URLResponseHeadPtr head,
+                         mojo::ScopedDataPipeConsumerHandle body) override {
+    original_client_->OnReceiveResponse(std::move(head), std::move(body));
   }
 
   void OnReceiveRedirect(const net::RedirectInfo& redirect_info,
@@ -145,11 +150,6 @@ class CastExtensionURLLoader : public network::mojom::URLLoader,
     original_client_->OnTransferSizeUpdated(transfer_size_diff);
   }
 
-  void OnStartLoadingResponseBody(
-      mojo::ScopedDataPipeConsumerHandle body) override {
-    original_client_->OnStartLoadingResponseBody(std::move(body));
-  }
-
   void OnComplete(const network::URLLoaderCompletionStatus& status) override {
     original_client_->OnComplete(status);
     delete this;
@@ -171,8 +171,6 @@ class CastExtensionURLLoader : public network::mojom::URLLoader,
 
   // This is the URLLoader from the network URLLoaderFactory.
   mojo::Remote<network::mojom::URLLoader> network_loader_;
-
-  DISALLOW_COPY_AND_ASSIGN(CastExtensionURLLoader);
 };
 
 }  // namespace

@@ -15,11 +15,13 @@ bool PermissionUiSelector::ShouldSuppressAnimation(
 
   switch (*reason) {
     case QuietUiReason::kEnabledInPrefs:
-    case QuietUiReason::kPredictedVeryUnlikelyGrant:
+    case QuietUiReason::kServicePredictedVeryUnlikelyGrant:
+    case QuietUiReason::kOnDevicePredictedVeryUnlikelyGrant:
       return false;
     case QuietUiReason::kTriggeredByCrowdDeny:
     case QuietUiReason::kTriggeredDueToAbusiveRequests:
     case QuietUiReason::kTriggeredDueToAbusiveContent:
+    case QuietUiReason::kTriggeredDueToDisruptiveBehavior:
       return true;
   }
 }
@@ -42,6 +44,10 @@ PermissionUiSelector::Decision::UseNormalUiAndShowNoWarning() {
 
 absl::optional<PermissionUmaUtil::PredictionGrantLikelihood>
 PermissionUiSelector::PredictedGrantLikelihoodForUKM() {
+  return absl::nullopt;
+}
+
+absl::optional<bool> PermissionUiSelector::WasSelectorDecisionHeldback() {
   return absl::nullopt;
 }
 

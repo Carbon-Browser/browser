@@ -49,7 +49,7 @@ public class GlobalAppLocaleController {
     }
 
     // Set the original system language before Locale.getDefault() is overridden.
-    private final Locale mOriginalSystemLocale = Locale.getDefault();
+    private Locale mOriginalSystemLocale = Locale.getDefault();
     private String mOverrideLanguage;
     private boolean mIsOverridden;
 
@@ -62,11 +62,25 @@ public class GlobalAppLocaleController {
      * @return boolean Whether or not an override language is set.
      */
     public boolean init(Context base) {
-        mOverrideLanguage = AppLocaleUtils.getAppLanguagePrefStartUp(base);
-
-        mIsOverridden = shouldOverrideAppLocale(
-                mOverrideLanguage, LocaleUtils.toLanguageTag(mOriginalSystemLocale));
+        if (AppLocaleUtils.shouldUseSystemManagedLocale()) {
+            mIsOverridden = false;
+        } else {
+            mOverrideLanguage = AppLocaleUtils.getAppLanguagePrefStartUp(base);
+            mIsOverridden = shouldOverrideAppLocale(
+                    mOverrideLanguage, LocaleUtils.toLanguageTag(mOriginalSystemLocale));
+        }
         return mIsOverridden;
+    }
+
+    /**
+     * Preform setup actions when using {@link LocaleManager} that need to be done after the
+     * Application has started.
+     */
+    public void maybeSetupLocaleManager() {
+        if (AppLocaleUtils.shouldUseSystemManagedLocale()) {
+            mOverrideLanguage = AppLocaleUtils.getSystemManagedAppLanguage();
+            mOriginalSystemLocale = AppLocaleUtils.getSystemManagedOriginalLocale();
+        }
     }
 
     /**
@@ -103,6 +117,8 @@ public class GlobalAppLocaleController {
         // method {@link Resources#updateConfiguration} is used. (crbug.com/1075390#c20).
         // TODO(crbug.com/1136096): Use #createConfigurationContext once that method is fixed.
         resources.updateConfiguration(config, resources.getDisplayMetrics());
+        // Update default locales so {@links LocaleList#getDefault} returns the correct value.
+        LocaleUtils.setDefaultLocalesFromConfiguration(config);
     }
 
     /**
@@ -127,10 +143,9 @@ public class GlobalAppLocaleController {
      * language is set report it as the empty string.
      */
     public void recordOverrideLanguageMetrics() {
-        // The Default System Language value means no override language is set and the app UI
-        // language tracks the system UI language.
+        // When following the system language there is no override so Chrome tracks the System UI.
         String histogramLanguage =
-                AppLocaleUtils.isDefaultSystemLanguage(mOverrideLanguage) ? "" : mOverrideLanguage;
+                AppLocaleUtils.isFollowSystemLanguage(mOverrideLanguage) ? "" : mOverrideLanguage;
         AndroidLanguageMetricsBridge.reportAppOverrideLanguage(histogramLanguage);
 
         int status = getOverrideVsSystemLanguageStatus(
@@ -147,9 +162,8 @@ public class GlobalAppLocaleController {
     @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
     static @OverrideLanguageStatus int getOverrideVsSystemLanguageStatus(
             String overrideLanguage, String systemLanguage) {
-        // The Default System Language value means no override language is set and the app UI
-        // language tracks the system UI language.
-        if (AppLocaleUtils.isDefaultSystemLanguage(overrideLanguage)) {
+        // When following the system language there is no override so Chrome tracks the System UI.
+        if (AppLocaleUtils.isFollowSystemLanguage(overrideLanguage)) {
             return OverrideLanguageStatus.NO_OVERRIDE;
         }
         if (TextUtils.equals(overrideLanguage, systemLanguage)) {

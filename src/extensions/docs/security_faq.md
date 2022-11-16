@@ -72,10 +72,10 @@ systems.
 ### I've found / written an extension that can access site data without any host patterns specified in the "permissions" or "host\_permissions" manifest keys. Is this a security bug?
 
 In most cases, this is _not_ a security bug. Extensions can also access certain
-sites with content scripts (specified in the `content\_scripts` key) or with the
-`activeTab` permission. Hosts specified in `content\_scripts` (under the
+sites with content scripts (specified in the `content_scripts` key) or with the
+`activeTab` permission. Hosts specified in `content_scripts` (under the
 `matches` key) are displayed to the user in permission requests in the same way
-as host permissions requested under `permissions` or `host\_permissions` - that
+as host permissions requested under `permissions` or `host_permissions` - that
 is, it indicates the extension can "Read and change your data on <site>".
 ActiveTab requires a user to explicitly invoke the extension on a page before
 the extension can access data on the page, which is a form of runtime permission
@@ -141,6 +141,51 @@ could be installed (without user consent) when the user visits a malicious site,
 this would be considered a security bug. Please report any such bugs
 [here][new-security-bug].
 
+### What is our stance on unpacked extensions?
+
+Attacks that involve loading an unpacked extension are _typically_ not security
+bugs. Two common approaches are:
+* Loading the extension with the `--load-extension` commandline switch, and
+* Persuading the user to load an unpacked extension by enabling developer
+  mode in chrome://extensions and drag-and-dropping a file or click on
+  "Load unpacked extension".
+
+Loading an unpacked extension in these ways is not considered a security bug.
+The former requires local access, which is
+[not in our threat model][physically-local-attacks]. The latter is very
+similar to persuading the user to open devtools and paste code, which is also
+[not considered a security bug][devtools-execution] (in both these cases, the
+user is allowing arbitrary untrusted JavaScript code to run via tools intended
+for developers).
+
+If you identify another way to load an unpacked extension, it may be considered
+a security bug.
+
+### Is accessing private APIs via unpacked extensions a security bug?
+
+Some extension APIs are restricted to extensions with a specified ID. Developers
+can give an unpacked extension a given ID by setting the "key" entry in the
+manifest, as described [here][setting-unpacked-id]. This allows unpacked
+extensions to access powerful APIs.
+
+This is not considered a security bug ([example](https://crbug.com/1301966)).
+See above for [our stance on unpacked extensions][unpacked-extensions-stance].
+The addition of access to private APIs does not change this stance, as it is
+still most similar to a phyiscally-local attack or devtools execution in a
+trusted context (for instance, inspecting a component extension allows access
+to trusted APIs).
+
+### Is spoofing an extension with its ID in an unpacked extension a security bug?
+
+Developers can give an unpacked extension a given ID by setting the "key" entry
+in the manifest, as described [here][setting-unpacked-id]. This would allow a
+developer to imitate a legitimate extension and have access to its ID.
+
+This is not considered a security bug. See above for
+[our stance on unpacked extensions][unpacked-extensions-stance].  If the
+extension is instead treated as being from the webstore (as opposed to an
+unpacked extension), Chromium will validate the content of the extension.
+
 ### Chrome silently syncs extensions across devices. Is this a security vulnerability?
 
 If an attacker has access to one of a victim‘s devices, the attacker can install
@@ -203,7 +248,7 @@ the `topSites` API. You can read more
 
 ### Why do optional permissions not display a permission warning at install time?
 
-Permissions listed in the `optional\_permissions` key in the manifest are not
+Permissions listed in the `optional_permissions` key in the manifest are not
 granted to the extension at install-time. Instead, they are granted through the
 use of the
 [Permissions API](https://developer.chrome.com/docs/extensions/reference/permissions/).
@@ -251,6 +296,16 @@ line flag). However, extensions _are_ allowed to open and close these pages
 through APIs like the tabs and windows APIs. This is critical for certain types
 of extensions, such as tab and session managers, bookmark managers, and history
 managers.
+
+### Why do we not allow extensions to open or close chrome-untrusted:-scheme pages?
+
+The chrome-untrusted:-scheme (such as chrome-untrusted://terminal) is generally
+used for Chrome OS System Web Apps. Some of these apps such as Terminal which
+starts the Linux VM can perform operations on startup, or start other systems
+which may have security vulnerabilities. We
+[intentionally](../../security/chromeos_security_whitepaper.md#principles-of-chrome-os-security)
+disallow auto-start to avoid
+[persistent attacks](https://chromium.googlesource.com/chromiumos/docs/+/HEAD/containers_and_vms.md#security-persistence).
 
 ### Why are extensions allowed to bypass a web page's Content Security Policy?
 
@@ -341,7 +396,7 @@ Additionally, extensions are allowed to read any files that were explicitly
 shared with them, such as through the HTML5 Filesystem API. Additionally,
 extensions (with appropriate API permissions) can read the URLs of tabs and
 history entries, including file:-scheme URLs; however, this should not allow
-access to the _contents _of the file.
+access to the _contents_ of the file.
 
 If an extension is able to read file contents from the local machine in another
 way, this may be a security bug; please report any such bugs
@@ -358,6 +413,19 @@ websites. Chrome does not limit what an extension does with this data.
 If an extension is able to access incognito contexts without this setting
 enabled, this may be a security bug; please report any such bugs
 [here][new-security-bug].
+
+### What privileges does the Debugger permission grant an extension? What privileges should it lack?
+
+The debugger permission should grant an extension the power to automate any
+website. This may extend to driving interactions with that site which are not
+possible using JavaScript on the site itself, but instead normally require
+user interaction with Chrome features.
+
+The debugger permission does not allow automating parts of the Chromium
+browser unrelated to websites. Automating WebUI or settings, installing
+extensions, downloading and executing a native binary, or executing custom
+code outside the sandbox should not be possible for an extension with the
+debugger permission.
 
 ### I've found a security bug in an extension. Is this a security bug in Chromium?
 
@@ -389,3 +457,6 @@ information.
 
 [new-security-bug]: https://bugs.chromium.org/p/chromium/issues/entry?template=Security+Bug
 [physically-local-attacks]: https://chromium.googlesource.com/chromium/src/+/main/docs/security/faq.md#why-arent-physically_local-attacks-in-chromes-threat-model
+[devtools-execution]: https://chromium.googlesource.com/chromium/src/+/main/docs/security/faq.md#Does-entering-JavaScript_URLs-in-the-URL-bar-or-running-script-in-the-developer-tools-mean-there_s-an-XSS-vulnerability
+[setting-unpacked-id]: https://developer.chrome.com/docs/extensions/mv3/manifest/key/
+[unpacked-extensions-stance]: https://chromium.googlesource.com/chromium/src/+/main/extensions/docs/security_faq.md#what-is-our-stance-on-unpacked-extensions

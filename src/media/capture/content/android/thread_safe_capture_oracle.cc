@@ -46,7 +46,7 @@ ThreadSafeCaptureOracle::ThreadSafeCaptureOracle(
     const VideoCaptureParams& params)
     : client_(std::move(client)), oracle_(false), params_(params) {
   DCHECK_GE(params.requested_format.frame_rate, 1e-6f);
-  oracle_.SetMinCapturePeriod(base::TimeDelta::FromMicroseconds(
+  oracle_.SetMinCapturePeriod(base::Microseconds(
       static_cast<int64_t>(1000000.0 / params.requested_format.frame_rate +
                            0.5 /* to round to nearest int */)));
   const auto constraints = params.SuggestConstraints();
@@ -90,9 +90,6 @@ bool ThreadSafeCaptureOracle::ObserveEventAndDecideCapture(
 
     frame_number = oracle_.next_frame_number();
     visible_size = oracle_.capture_size();
-    // TODO(miu): Clients should request exact padding, instead of this
-    // memory-wasting hack to make frames that are compatible with all HW
-    // encoders.  http://crbug.com/555911
     coded_size.SetSize(base::bits::AlignUp(visible_size.width(), 16),
                        base::bits::AlignUp(visible_size.height(), 16));
 

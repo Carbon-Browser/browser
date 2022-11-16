@@ -4,40 +4,45 @@
 
 #include "ui/ozone/platform/wayland/host/wayland_output.h"
 
+#include <aura-shell-client-protocol.h>
+#include <chrome-color-management-client-protocol.h>
 #include <xdg-output-unstable-v1-client-protocol.h>
 
 #include "base/logging.h"
+#include "base/strings/string_util.h"
 #include "ui/display/display.h"
 #include "ui/gfx/color_space.h"
+#include "ui/ozone/platform/wayland/common/wayland_object.h"
 #include "ui/ozone/platform/wayland/host/wayland_connection.h"
 #include "ui/ozone/platform/wayland/host/wayland_output_manager.h"
+#include "ui/ozone/platform/wayland/host/wayland_zaura_output.h"
+#include "ui/ozone/platform/wayland/host/wayland_zcr_color_management_output.h"
+#include "ui/ozone/platform/wayland/host/wayland_zcr_color_manager.h"
 #include "ui/ozone/platform/wayland/host/xdg_output.h"
 
 namespace ui {
 
 namespace {
-constexpr uint32_t kMinWlOutputVersion = 2;
+// TODO(crbug.com/1279681): support newer versions.
+constexpr uint32_t kMinVersion = 2;
 }
 
 // static
-void WaylandOutput::Register(WaylandConnection* connection) {
-  connection->RegisterGlobalObjectFactory("wl_output",
-                                          &WaylandOutput::Instantiate);
-}
+constexpr char WaylandOutput::kInterfaceName[];
 
 // static
 void WaylandOutput::Instantiate(WaylandConnection* connection,
                                 wl_registry* registry,
                                 uint32_t name,
+                                const std::string& interface,
                                 uint32_t version) {
-  if (version < kMinWlOutputVersion) {
-    LOG(ERROR)
-        << "Unable to bind to the unsupported wl_output object with version= "
-        << version << ". Minimum supported version is " << kMinWlOutputVersion;
+  DCHECK_EQ(interface, kInterfaceName);
+
+  if (!wl::CanBind(interface, version, kMinVersion, kMinVersion)) {
     return;
   }
 
-  auto output = wl::Bind<wl_output>(registry, name, version);
+  auto output = wl::Bind<wl_output>(registry, name, kMinVersion);
   if (!output) {
     LOG(ERROR) << "Failed to bind to wl_output global";
     return;
@@ -50,8 +55,10 @@ void WaylandOutput::Instantiate(WaylandConnection* connection,
   connection->wayland_output_manager_->AddWaylandOutput(name, output.release());
 }
 
-WaylandOutput::WaylandOutput(uint32_t output_id, wl_output* output)
-    : output_id_(output_id), output_(output) {
+WaylandOutput::WaylandOutput(uint32_t output_id,
+                             wl_output* output,
+                             WaylandConnection* connection)
+    : output_id_(output_id), output_(output), connection_(connection) {
   wl_output_set_user_data(output_.get(), this);
 }
 
@@ -64,6 +71,19 @@ void WaylandOutput::InitializeXdgOutput(
   DCHECK(!xdg_output_);
   xdg_output_ = std::make_unique<XDGOutput>(
       zxdg_output_manager_v1_get_xdg_output(xdg_output_manager, output_.get()));
+}
+
+void WaylandOutput::InitializeZAuraOutput(zaura_shell* aura_shell) {
+  DCHECK(!aura_output_);
+  aura_output_ = std::make_unique<WaylandZAuraOutput>(
+      zaura_shell_get_aura_output(aura_shell, output_.get()));
+}
+
+void WaylandOutput::InitializeColorManagementOutput(
+    WaylandZcrColorManager* zcr_color_manager) {
+  DCHECK(!color_management_output_);
+  color_management_output_ = std::make_unique<WaylandZcrColorManagementOutput>(
+      zcr_color_manager->CreateColorManagementOutput(output_.get()).release());
 }
 
 void WaylandOutput::Initialize(Delegate* delegate) {
@@ -84,24 +104,52 @@ float WaylandOutput::GetUIScaleFactor() const {
              : scale_factor();
 }
 
+int32_t WaylandOutput::logical_transform() const {
+  if (aura_output_ && aura_output_->logical_transform()) {
+    return *aura_output_->logical_transform();
+  }
+  return panel_transform();
+}
+
+gfx::Point WaylandOutput::origin() const {
+  if (xdg_output_ && xdg_output_->logical_position()) {
+    return *xdg_output_->logical_position();
+  }
+  return origin_;
+}
+
+gfx::Size WaylandOutput::logical_size() const {
+  return xdg_output_ ? xdg_output_->logical_size() : gfx::Size();
+}
+
+gfx::Insets WaylandOutput::insets() const {
+  return aura_output_ ? aura_output_->insets() : gfx::Insets();
+}
+const std::string& WaylandOutput::label() const {
+  return xdg_output_ ? xdg_output_->description() : base::EmptyString();
+}
+
+zaura_output* WaylandOutput::get_zaura_output() {
+  return aura_output_ ? aura_output_->wl_object() : nullptr;
+}
+
 void WaylandOutput::TriggerDelegateNotifications() {
-  DCHECK(!rect_in_physical_pixels_.IsEmpty());
-  // If zxdg_output protocol is used, calculate scale factor using logical
-  // size.
-  if (xdg_output_) {
+  if (xdg_output_ && connection_->surface_submission_in_pixel_coordinates()) {
+    DCHECK(!physical_size_.IsEmpty());
     const gfx::Size logical_size = xdg_output_->logical_size();
     if (!logical_size.IsEmpty()) {
-      if (logical_size.width() >= logical_size.height()) {
-        scale_factor_ = ceil(rect_in_physical_pixels_.width() /
-                             static_cast<float>(logical_size.width()));
-      } else {
-        scale_factor_ = ceil(rect_in_physical_pixels_.height() /
-                             static_cast<float>(logical_size.height()));
-      }
+      // We calculate the fractional scale factor from the long sides of the
+      // physical and logical sizes, since their orientations may be different.
+      const float max_physical_side =
+          std::max(physical_size_.width(), physical_size_.height());
+      const float max_logical_side =
+          std::max(logical_size.width(), logical_size.height());
+      scale_factor_ = max_physical_side / max_logical_side;
     }
   }
-  delegate_->OnOutputHandleMetrics(output_id_, rect_in_physical_pixels_,
-                                   scale_factor_, transform_);
+  delegate_->OnOutputHandleMetrics(
+      output_id_, origin(), logical_size(), physical_size_, insets(),
+      scale_factor_, panel_transform_, logical_transform(), label());
 }
 
 // static
@@ -117,8 +165,8 @@ void WaylandOutput::OutputHandleGeometry(void* data,
                                          int32_t output_transform) {
   WaylandOutput* wayland_output = static_cast<WaylandOutput*>(data);
   if (wayland_output) {
-    wayland_output->rect_in_physical_pixels_.set_origin(gfx::Point(x, y));
-    wayland_output->transform_ = output_transform;
+    wayland_output->origin_ = gfx::Point(x, y);
+    wayland_output->panel_transform_ = output_transform;
   }
 }
 
@@ -131,7 +179,7 @@ void WaylandOutput::OutputHandleMode(void* data,
                                      int32_t refresh) {
   WaylandOutput* wayland_output = static_cast<WaylandOutput*>(data);
   if (wayland_output && (flags & WL_OUTPUT_MODE_CURRENT))
-    wayland_output->rect_in_physical_pixels_.set_size(gfx::Size(width, height));
+    wayland_output->physical_size_ = gfx::Size(width, height);
 }
 
 // static

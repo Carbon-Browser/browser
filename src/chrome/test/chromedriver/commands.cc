@@ -17,10 +17,10 @@
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/run_loop.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/stringprintf.h"
 #include "base/system/sys_info.h"
 #include "base/task/current_thread.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
 #include "chrome/test/chromedriver/capabilities.h"
@@ -42,19 +42,20 @@ void ExecuteGetStatus(
   // ChromeDriver doesn't have a preset limit on number of active sessions,
   // so we are always ready.
   base::DictionaryValue info;
-  info.SetBoolean("ready", true);
-  info.SetString("message", base::StringPrintf("%s ready for new sessions.",
-                                               kChromeDriverProductShortName));
+  info.GetDict().Set("ready", true);
+  info.GetDict().Set("message",
+                     base::StringPrintf("%s ready for new sessions.",
+                                        kChromeDriverProductShortName));
 
   // ChromeDriver specific data:
   base::DictionaryValue build;
-  build.SetString("version", kChromeDriverVersion);
+  build.GetDict().Set("version", kChromeDriverVersion);
   info.SetKey("build", std::move(build));
 
   base::DictionaryValue os;
-  os.SetString("name", base::SysInfo::OperatingSystemName());
-  os.SetString("version", base::SysInfo::OperatingSystemVersion());
-  os.SetString("arch", base::SysInfo::OperatingSystemArchitecture());
+  os.GetDict().Set("name", base::SysInfo::OperatingSystemName());
+  os.GetDict().Set("version", base::SysInfo::OperatingSystemVersion());
+  os.GetDict().Set("arch", base::SysInfo::OperatingSystemArchitecture());
   info.SetKey("os", std::move(os));
 
   callback.Run(Status(kOk), base::Value::ToUniquePtrValue(std::move(info)),
@@ -99,11 +100,11 @@ void OnGetSession(const base::WeakPtr<size_t>& session_remaining_count,
   (*session_remaining_count)--;
 
   if (value) {
-    std::unique_ptr<base::DictionaryValue> session(new base::DictionaryValue());
-    session->SetString("id", session_id);
-    session->SetKey("capabilities",
-                    base::Value::FromUniquePtrValue(std::move(value)));
-    session_list->Append(std::move(session));
+    base::Value::Dict session;
+    session.Set("id", session_id);
+    session.Set("capabilities",
+                base::Value::FromUniquePtrValue(std::move(value)));
+    session_list->GetList().Append(std::move(session));
   }
 
   if (!*session_remaining_count) {
@@ -137,7 +138,7 @@ void ExecuteGetSessions(const Command& session_capabilities_command,
                             run_loop.QuitClosure(), session_list.get()));
   }
   base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
-      FROM_HERE, run_loop.QuitClosure(), base::TimeDelta::FromSeconds(10));
+      FROM_HERE, run_loop.QuitClosure(), base::Seconds(10));
   run_loop.Run();
 
   callback.Run(Status(kOk), std::move(session_list), session_id, false);
@@ -184,7 +185,7 @@ void ExecuteQuitAll(
                             run_loop.QuitClosure()));
   }
   base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
-      FROM_HERE, run_loop.QuitClosure(), base::TimeDelta::FromSeconds(10));
+      FROM_HERE, run_loop.QuitClosure(), base::Seconds(10));
   // Uses a nested run loop to block this thread until all the quit
   // commands have executed, or the timeout expires.
   run_loop.Run();
@@ -307,7 +308,6 @@ void ExecuteSessionCommandOnSessionThread(
                   << (result.length() ? " " + result : "");
         }
       }
-
     }
   }
 

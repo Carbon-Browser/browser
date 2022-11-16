@@ -9,6 +9,7 @@
 #include "chrome/browser/ui/browser.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/test/base/ui_test_utils.h"
+#include "content/public/browser/render_widget_host_view.h"
 #include "content/public/browser/tracing_controller.h"
 #include "content/public/common/content_switches.h"
 #include "net/dns/mock_host_resolver.h"
@@ -20,7 +21,6 @@ using base::CommandLine;
 using base::OnceClosure;
 using base::RunLoop;
 using base::StringPiece;
-using base::TimeDelta;
 using base::trace_event::TraceConfig;
 using content::TracingController;
 using content::WebContents;
@@ -49,14 +49,14 @@ void MetricIntegrationTest::SetUpOnMainThread() {
 
 void MetricIntegrationTest::ServeDelayed(const std::string& url,
                                          const std::string& content,
-                                         TimeDelta delay) {
+                                         base::TimeDelta delay) {
   embedded_test_server()->RegisterRequestHandler(
       base::BindRepeating(&HandleRequest, url, content, delay));
 }
 
 void MetricIntegrationTest::Serve(const std::string& url,
                                   const std::string& content) {
-  ServeDelayed(url, content, TimeDelta());
+  ServeDelayed(url, content, base::TimeDelta());
 }
 
 void MetricIntegrationTest::Start() {
@@ -72,6 +72,11 @@ void MetricIntegrationTest::LoadHTML(const std::string& content) {
   Serve("/test.html", content);
   Start();
   Load("/test.html");
+}
+
+content::RenderWidgetHost* MetricIntegrationTest::GetRenderWidgetHost() {
+  EXPECT_TRUE(web_contents());
+  return web_contents()->GetRenderWidgetHostView()->GetRenderWidgetHost();
 }
 
 void MetricIntegrationTest::StartTracing(
@@ -119,7 +124,7 @@ void MetricIntegrationTest::SetUpCommandLine(CommandLine* command_line) {
 std::unique_ptr<HttpResponse> MetricIntegrationTest::HandleRequest(
     const std::string& relative_url,
     const std::string& content,
-    TimeDelta delay,
+    base::TimeDelta delay,
     const HttpRequest& request) {
   if (request.relative_url != relative_url)
     return nullptr;
@@ -140,6 +145,24 @@ void MetricIntegrationTest::ExpectUKMPageLoadMetric(StringPiece metric_name,
   const auto& kv = merged_entries.begin();
   TestUkmRecorder::ExpectEntryMetric(kv->second.get(), metric_name,
                                      expected_value);
+}
+
+void MetricIntegrationTest::ExpectUKMPageLoadMetricFlagSet(
+    base::StringPiece metric_name,
+    uint32_t flag_set,
+    bool expected) {
+  std::map<ukm::SourceId, ukm::mojom::UkmEntryPtr> merged_entries =
+      ukm_recorder().GetMergedEntriesByName(PageLoad::kEntryName);
+  EXPECT_EQ(1ul, merged_entries.size());
+  const auto& kv = merged_entries.begin();
+  const int64_t* metric =
+      TestUkmRecorder::GetEntryMetric(kv->second.get(), metric_name);
+  EXPECT_TRUE(metric != nullptr);
+  if (expected) {
+    EXPECT_TRUE(*metric & static_cast<int64_t>(flag_set));
+  } else {
+    EXPECT_FALSE(*metric & static_cast<int64_t>(flag_set));
+  }
 }
 
 void MetricIntegrationTest::ExpectUKMPageLoadMetricNear(StringPiece metric_name,

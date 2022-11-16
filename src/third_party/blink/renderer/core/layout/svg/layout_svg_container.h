@@ -23,6 +23,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_LAYOUT_SVG_LAYOUT_SVG_CONTAINER_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_LAYOUT_SVG_LAYOUT_SVG_CONTAINER_H_
 
+#include "base/check_op.h"
 #include "third_party/blink/renderer/core/layout/svg/layout_svg_model_object.h"
 #include "third_party/blink/renderer/core/layout/svg/svg_content_container.h"
 #include "third_party/blink/renderer/platform/wtf/casting.h"
@@ -75,7 +76,7 @@ class LayoutSVGContainer : public LayoutSVGModelObject {
     return "LayoutSVGContainer";
   }
 
-  FloatRect ObjectBoundingBox() const final {
+  gfx::RectF ObjectBoundingBox() const final {
     NOT_DESTROYED();
     return content_.ObjectBoundingBox();
   }
@@ -89,7 +90,10 @@ class LayoutSVGContainer : public LayoutSVGModelObject {
     NOT_DESTROYED();
     return &content_.Children();
   }
-  SVGContentContainer& Content() { return content_; }
+  SVGContentContainer& Content() {
+    NOT_DESTROYED();
+    return content_;
+  }
 
   bool IsOfType(LayoutObjectType type) const override {
     NOT_DESTROYED();
@@ -102,7 +106,7 @@ class LayoutSVGContainer : public LayoutSVGModelObject {
                 LayoutObject* before_child = nullptr) final;
   void RemoveChild(LayoutObject*) final;
 
-  FloatRect StrokeBoundingBox() const final {
+  gfx::RectF StrokeBoundingBox() const final {
     NOT_DESTROYED();
     return content_.StrokeBoundingBox();
   }
@@ -110,7 +114,7 @@ class LayoutSVGContainer : public LayoutSVGModelObject {
   bool NodeAtPoint(HitTestResult&,
                    const HitTestLocation&,
                    const PhysicalOffset& accumulated_offset,
-                   HitTestAction) override;
+                   HitTestPhase) override;
 
   // Called during layout to update the local transform.
   virtual SVGTransformChange CalculateLocalTransform(bool bounds_changed);

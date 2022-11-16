@@ -14,7 +14,6 @@
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/webui/version/version_handler.h"
-#include "chrome/browser/ui/webui/version/version_util_win.h"
 #include "chrome/browser/ui/webui/webui_util.h"
 #include "chrome/common/channel_info.h"
 #include "chrome/common/url_constants.h"
@@ -35,23 +34,28 @@
 #include "ui/base/webui/web_ui_util.h"
 #include "v8/include/v8-version-string.h"
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/ui/android/android_about_app_info.h"
-#else  // !defined(OS_ANDROID)
+#else
 #include "chrome/browser/ui/webui/theme_source.h"
 #endif
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 #include "chrome/browser/ui/webui/version/version_handler_chromeos.h"
 #endif
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 #include "base/mac/mac_util.h"
 #endif
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include "chrome/browser/ui/webui/version/version_handler_win.h"
+#include "chrome/browser/ui/webui/version/version_util_win.h"
 #endif
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+#include "chromeos/startup/browser_params_proxy.h"
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 
 using content::WebUIDataSource;
 
@@ -66,6 +70,7 @@ WebUIDataSource* CreateVersionUIDataSource() {
     {version_ui::kLogoAltText, IDS_SHORT_PRODUCT_LOGO_ALT_TEXT},
     {version_ui::kApplicationLabel, IDS_PRODUCT_NAME},
     {version_ui::kCompany, IDS_ABOUT_VERSION_COMPANY_NAME},
+    {version_ui::kCopyLabel, IDS_VERSION_UI_COPY_LABEL},
     {version_ui::kRevision, IDS_VERSION_UI_REVISION},
     {version_ui::kUserAgentName, IDS_VERSION_UI_USER_AGENT},
     {version_ui::kCommandLineName, IDS_VERSION_UI_COMMAND_LINE},
@@ -81,9 +86,14 @@ WebUIDataSource* CreateVersionUIDataSource() {
 #else
     {version_ui::kOSName, IDS_VERSION_UI_OS},
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_CHROMEOS)
+    {version_ui::kOsVersionHeaderText1, IDS_VERSION_UI_OS_TEXT1_LABEL},
+    {version_ui::kOsVersionHeaderText2, IDS_VERSION_UI_OS_TEXT2_LABEL},
+    {version_ui::kOsVersionHeaderLink, IDS_VERSION_UI_OS_LINK},
+#endif  // BUILDFLAG(IS_CHROMEOS)
+#if BUILDFLAG(IS_ANDROID)
     {version_ui::kGmsName, IDS_VERSION_UI_GMS},
-#endif  // OS_ANDROID
+#endif  // BUILDFLAG(IS_ANDROID)
   };
   html_source->AddLocalizedStrings(kStrings);
 
@@ -93,13 +103,14 @@ WebUIDataSource* CreateVersionUIDataSource() {
   html_source->AddResourcePath(version_ui::kVersionJS, IDR_VERSION_UI_JS);
   html_source->AddResourcePath(version_ui::kAboutVersionCSS,
                                IDR_VERSION_UI_CSS);
-#if defined(OS_ANDROID)
+
+#if BUILDFLAG(IS_ANDROID)
   html_source->AddResourcePath(version_ui::kAboutVersionMobileCSS,
                                IDR_VERSION_UI_MOBILE_CSS);
   html_source->AddResourcePath("images/product_logo.png", IDR_PRODUCT_LOGO);
   html_source->AddResourcePath("images/product_logo_white.png",
                                IDR_PRODUCT_LOGO_WHITE);
-#endif  // defined(OS_ANDROID)
+#endif  // BUILDFLAG(IS_ANDROID)
   html_source->SetDefaultResource(IDR_VERSION_UI_HTML);
   return html_source;
 }
@@ -110,15 +121,15 @@ VersionUI::VersionUI(content::WebUI* web_ui)
     : content::WebUIController(web_ui) {
   Profile* profile = Profile::FromWebUI(web_ui);
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   web_ui->AddMessageHandler(std::make_unique<VersionHandlerChromeOS>());
-#elif defined(OS_WIN)
+#elif BUILDFLAG(IS_WIN)
   web_ui->AddMessageHandler(std::make_unique<VersionHandlerWindows>());
 #else
   web_ui->AddMessageHandler(std::make_unique<VersionHandler>());
 #endif
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
   // Set up the chrome://theme/ source.
   content::URLDataSource::Add(profile, std::make_unique<ThemeSource>(profile));
 #endif
@@ -130,7 +141,7 @@ VersionUI::~VersionUI() {}
 
 // static
 int VersionUI::VersionProcessorVariation() {
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   // When building for Android, "unused" strings are removed. However, binaries
   // of both bitnesses are stripped of strings based on string analysis of one
   // bitness. Search the code for "generate_resource_allowlist" for more
@@ -139,8 +150,8 @@ int VersionUI::VersionProcessorVariation() {
   // never stripped. https://crbug.com/1119479
   IDS_VERSION_UI_32BIT;
   IDS_VERSION_UI_64BIT;
-#endif  // OS_ANDROID
-#if defined(OS_MAC)
+#endif  // BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(IS_MAC)
   switch (base::mac::GetCPUType()) {
     case base::mac::CPUType::kIntel:
       return IDS_VERSION_UI_64BIT_INTEL;
@@ -171,14 +182,20 @@ void VersionUI::AddVersionDetailStrings(content::WebUIDataSource* html_source) {
   html_source->AddString(version_ui::kVersion,
                          version_info::GetVersionNumber());
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
-  // On Lacros, we don't have the concept of channels, in their usual semantics.
-  // Replace the channel string with "Lacros". https://crbug.com/1215734.
-  html_source->AddString(version_ui::kVersionModifier, "Lacros");
+  // On Lacros, add channel string with "Lacros".
+  html_source->AddString(
+      version_ui::kVersionModifier,
+      "Lacros/" + chrome::GetChannelName(chrome::WithExtendedStable(true)));
 #else
   html_source->AddString(
       version_ui::kVersionModifier,
       chrome::GetChannelName(chrome::WithExtendedStable(true)));
 #endif
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  auto* init_params = chromeos::BrowserParamsProxy::Get();
+  html_source->AddString(version_ui::kAshChromeVersion,
+                         init_params->AshChromeVersion().value_or("0.0.0.0"));
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
   html_source->AddString(version_ui::kJSEngine, "V8");
   html_source->AddString(version_ui::kJSVersion, V8_VERSION_STRING);
   html_source->AddString(
@@ -195,25 +212,25 @@ void VersionUI::AddVersionDetailStrings(content::WebUIDataSource* html_source) {
   html_source->AddString(version_ui::kExecutablePath, std::string());
   html_source->AddString(version_ui::kProfilePath, std::string());
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   html_source->AddString(version_ui::kOSType, base::mac::GetOSDisplayName());
 #elif !BUILDFLAG(IS_CHROMEOS_ASH)
   html_source->AddString(version_ui::kOSType, version_info::GetOSType());
-#endif  // OS_MAC
+#endif  // BUILDFLAG(IS_MAC)
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   html_source->AddString(version_ui::kOSVersion,
                          AndroidAboutAppInfo::GetOsInfo());
   html_source->AddString(version_ui::kGmsVersion,
                          AndroidAboutAppInfo::GetGmsInfo());
-#endif  // OS_ANDROID
+#endif  // BUILDFLAG(IS_ANDROID)
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   html_source->AddString(
       version_ui::kCommandLine,
       base::AsString16(
           base::CommandLine::ForCurrentProcess()->GetCommandLineString()));
-#elif defined(OS_POSIX)
+#else
   std::string command_line;
   typedef std::vector<std::string> ArgvList;
   const ArgvList& argv = base::CommandLine::ForCurrentProcess()->argv();
@@ -224,14 +241,14 @@ void VersionUI::AddVersionDetailStrings(content::WebUIDataSource* html_source) {
   html_source->AddString(version_ui::kCommandLine, command_line);
 #endif
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   html_source->AddString("linker", CHROMIUM_LINKER_NAME);
-#endif  // defined(OS_MAC)
+#endif  // BUILDFLAG(IS_MAC)
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   html_source->AddString(version_ui::kUpdateCohortName,
                          version_utils::win::GetCohortVersionInfo());
-#endif  // defined(OS_WIN)
+#endif  // BUILDFLAG(IS_WIN)
 
   html_source->AddString(version_ui::kSanitizer,
                          version_info::GetSanitizerList());

@@ -23,6 +23,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_LAYOUT_LINE_INLINE_BOX_H_
 
 #include "base/dcheck_is_on.h"
+#include "base/notreached.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/layout/api/line_layout_box_model.h"
 #include "third_party/blink/renderer/core/layout/api/line_layout_item.h"
@@ -45,19 +46,6 @@ enum MarkLineBoxes { kMarkLineBoxesDirty, kDontMarkLineBoxes };
 class CORE_EXPORT InlineBox : public GarbageCollected<InlineBox>,
                               public DisplayItemClient {
  public:
-#if !BUILDFLAG(USE_V8_OILPAN)
-  // Use a type specific arena
-  template <typename T>
-  static void* AllocateObject(size_t size) {
-    ThreadState* state =
-        ThreadStateFor<ThreadingTrait<InlineBox>::kAffinity>::GetState();
-    const char* type_name = "blink::InlineBox";
-    return state->Heap().AllocateOnArenaIndex(
-        state, size, BlinkGC::kLayoutObjectArenaIndex,
-        GCInfoTrait<GCInfoFoldedType<InlineBox>>::Index(), type_name);
-  }
-#endif  // !BUILDFLAG(USE_V8_OILPAN)
-
   explicit InlineBox(LineLayoutItem obj)
       : next_(nullptr),
         prev_(nullptr),
@@ -85,7 +73,7 @@ class CORE_EXPORT InlineBox : public GarbageCollected<InlineBox>,
 
   InlineBox(const InlineBox&) = delete;
   InlineBox& operator=(const InlineBox&) = delete;
-  virtual void Trace(Visitor*) const;
+  void Trace(Visitor*) const override;
 
   virtual void Destroy();
 
@@ -527,11 +515,10 @@ bool CanUseInlineBox(const LayoutObject&);
 
 #if DCHECK_IS_ON()
 // Outside the blink namespace for ease of invocation from gdb.
-void showTree(const blink::InlineBox*);
-void showLineTree(const blink::InlineBox*);
+void ShowTree(const blink::InlineBox*);
+void ShowLineTree(const blink::InlineBox*);
 #endif
 
-#if BUILDFLAG(USE_V8_OILPAN)
 namespace cppgc {
 // Assign InlineBox to be allocated on custom LayoutObjectSpace.
 template <typename T>
@@ -541,6 +528,5 @@ struct SpaceTrait<
   using Space = blink::LayoutObjectSpace;
 };
 }  // namespace cppgc
-#endif  // USE_V8_OILPAN
 
 #endif  // THIRD_PARTY_BLINK_RENDERER_CORE_LAYOUT_LINE_INLINE_BOX_H_

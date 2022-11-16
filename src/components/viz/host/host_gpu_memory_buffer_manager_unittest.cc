@@ -18,19 +18,16 @@
 #include "build/chromeos_buildflags.h"
 #include "gpu/ipc/common/gpu_memory_buffer_support.h"
 #include "gpu/ipc/host/gpu_memory_buffer_support.h"
+#include "media/media_buildflags.h"
 #include "services/viz/privileged/mojom/gl/gpu_service.mojom.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/gfx/client_native_pixmap_factory.h"
-
-#if defined(USE_OZONE) || defined(USE_X11)
-#include "ui/base/ui_base_features.h"  // nogncheck
-#endif
 
 #if defined(USE_OZONE)
 #include "ui/ozone/public/ozone_platform.h"
 #endif
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #include "base/android/android_hardware_buffer_compat.h"
 #endif
 
@@ -40,18 +37,11 @@ namespace {
 
 bool MustSignalGmbConfigReadyForTest() {
 #if defined(USE_OZONE)
-  if (features::IsUsingOzonePlatform()) {
     // Some Ozone platforms (Ozone/X11) require GPU process initialization to
     // determine GMB support.
     return ui::OzonePlatform::GetInstance()
         ->GetPlatformProperties()
         .fetch_buffer_formats_for_gmb_on_gpu;
-  }
-#endif
-#if defined(USE_X11)
-  // X11 requires GPU process initialization to determine GMB support.
-  DCHECK(!features::IsUsingOzonePlatform());
-  return true;
 #else
   return false;
 #endif
@@ -60,6 +50,10 @@ bool MustSignalGmbConfigReadyForTest() {
 class TestGpuService : public mojom::GpuService {
  public:
   TestGpuService() = default;
+
+  TestGpuService(const TestGpuService&) = delete;
+  TestGpuService& operator=(const TestGpuService&) = delete;
+
   ~TestGpuService() override = default;
 
   mojom::GpuService* GetGpuService(base::OnceClosure connection_error_handler) {
@@ -120,9 +114,13 @@ class TestGpuService : public mojom::GpuService {
 
   void CloseChannel(int32_t client_id) override {}
 #if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(USE_CHROMEOS_MEDIA_ACCELERATION)
   void CreateArcVideoDecodeAccelerator(
       mojo::PendingReceiver<arc::mojom::VideoDecodeAccelerator> vda_receiver)
       override {}
+
+  void CreateArcVideoDecoder(
+      mojo::PendingReceiver<arc::mojom::VideoDecoder> vd_receiver) override {}
 
   void CreateArcVideoEncodeAccelerator(
       mojo::PendingReceiver<arc::mojom::VideoEncodeAccelerator> vea_receiver)
@@ -135,6 +133,7 @@ class TestGpuService : public mojom::GpuService {
   void CreateArcProtectedBufferManager(
       mojo::PendingReceiver<arc::mojom::ProtectedBufferManager> pbm_receiver)
       override {}
+#endif  // BUILDFLAG(USE_CHROMEOS_MEDIA_ACCELERATION)
 
   void CreateJpegDecodeAccelerator(
       mojo::PendingReceiver<chromeos_camera::mojom::MjpegDecodeAccelerator>
@@ -145,7 +144,7 @@ class TestGpuService : public mojom::GpuService {
           jea_receiver) override {}
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   void RegisterDCOMPSurfaceHandle(
       mojo::PlatformHandle surface_handle,
       RegisterDCOMPSurfaceHandleCallback callback) override {}
@@ -187,7 +186,9 @@ class TestGpuService : public mojom::GpuService {
   void GetPeakMemoryUsage(uint32_t sequence_num,
                           GetPeakMemoryUsageCallback callback) override {}
 
-  void RequestHDRStatus(RequestHDRStatusCallback callback) override {}
+#if BUILDFLAG(IS_WIN)
+  void RequestDXGIInfo(RequestDXGIInfoCallback callback) override {}
+#endif
 
   void LoadedShader(int32_t client_id,
                     const std::string& key,
@@ -211,12 +212,12 @@ class TestGpuService : public mojom::GpuService {
 
   void OnForegrounded() override {}
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
   void OnMemoryPressure(
       base::MemoryPressureListener::MemoryPressureLevel level) override {}
 #endif
 
-#if defined(OS_APPLE)
+#if BUILDFLAG(IS_APPLE)
   void BeginCATransaction() override {}
 
   void CommitCATransaction(CommitCATransactionCallback callback) override {}
@@ -250,8 +251,6 @@ class TestGpuService : public mojom::GpuService {
     const int client_id;
   };
   std::vector<DestructionRequest> destruction_requests_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestGpuService);
 };
 
 }  // namespace
@@ -259,6 +258,12 @@ class TestGpuService : public mojom::GpuService {
 class HostGpuMemoryBufferManagerTest : public ::testing::Test {
  public:
   HostGpuMemoryBufferManagerTest() = default;
+
+  HostGpuMemoryBufferManagerTest(const HostGpuMemoryBufferManagerTest&) =
+      delete;
+  HostGpuMemoryBufferManagerTest& operator=(
+      const HostGpuMemoryBufferManagerTest&) = delete;
+
   ~HostGpuMemoryBufferManagerTest() override = default;
 
   void SetUp() override {
@@ -280,15 +285,13 @@ class HostGpuMemoryBufferManagerTest : public ::testing::Test {
   bool IsNativePixmapConfigSupported() {
     bool native_pixmap_supported = false;
 #if defined(USE_OZONE)
-    if (features::IsUsingOzonePlatform()) {
       native_pixmap_supported =
           ui::OzonePlatform::GetInstance()->IsNativePixmapConfigSupported(
               gfx::BufferFormat::RGBA_8888, gfx::BufferUsage::GPU_READ);
-    }
-#elif defined(OS_ANDROID)
+#elif BUILDFLAG(IS_ANDROID)
     native_pixmap_supported =
         base::AndroidHardwareBufferCompat::IsSupportAvailable();
-#elif defined(OS_APPLE) || defined(OS_WIN)
+#elif BUILDFLAG(IS_APPLE) || BUILDFLAG(IS_WIN)
     native_pixmap_supported = true;
 #endif
 
@@ -330,8 +333,6 @@ class HostGpuMemoryBufferManagerTest : public ::testing::Test {
  private:
   std::unique_ptr<TestGpuService> gpu_service_;
   std::unique_ptr<HostGpuMemoryBufferManager> gpu_memory_buffer_manager_;
-
-  DISALLOW_COPY_AND_ASSIGN(HostGpuMemoryBufferManagerTest);
 };
 
 // Tests that allocation requests from a client that goes away before allocation

@@ -13,8 +13,8 @@
 
 #include "base/bind.h"
 #include "base/files/file_util.h"
-#include "base/macros.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_samples.h"
 #include "base/metrics/statistics_recorder.h"
 #include "base/strings/string_number_conversions.h"
@@ -148,6 +148,10 @@ class SyncErrorFactoryStub : public syncer::SyncErrorFactory {
  public:
   explicit SyncErrorFactoryStub(int* error_counter)
       : error_counter_(error_counter) {}
+
+  SyncErrorFactoryStub(const SyncErrorFactoryStub&) = delete;
+  SyncErrorFactoryStub& operator=(const SyncErrorFactoryStub&) = delete;
+
   ~SyncErrorFactoryStub() override {}
 
   // Overridden from syncer::SyncErrorFactory:
@@ -161,14 +165,18 @@ class SyncErrorFactoryStub : public syncer::SyncErrorFactory {
   }
 
  private:
-  int* error_counter_;
-  DISALLOW_COPY_AND_ASSIGN(SyncErrorFactoryStub);
+  raw_ptr<int> error_counter_;
 };
 
 // Counts the number of notifications for dictionary load and change.
 class DictionaryObserverCounter : public SpellcheckCustomDictionary::Observer {
  public:
   DictionaryObserverCounter() : loads_(0), changes_(0) {}
+
+  DictionaryObserverCounter(const DictionaryObserverCounter&) = delete;
+  DictionaryObserverCounter& operator=(const DictionaryObserverCounter&) =
+      delete;
+
   virtual ~DictionaryObserverCounter() {}
 
   int loads() const { return loads_; }
@@ -184,7 +192,6 @@ class DictionaryObserverCounter : public SpellcheckCustomDictionary::Observer {
  private:
   int loads_;
   int changes_;
-  DISALLOW_COPY_AND_ASSIGN(DictionaryObserverCounter);
 };
 
 TEST_F(SpellcheckCustomDictionaryTest, SaveAndLoad) {
@@ -1110,7 +1117,7 @@ TEST_F(SpellcheckCustomDictionaryTest, DictionarySyncLimit) {
             server_custom_dictionary->GetWords().size());
 }
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 // Failing consistently on Win7+. See crbug.com/230534.
 #define MAYBE_RecordSizeStatsCorrectly DISABLED_RecordSizeStatsCorrectly
 #else

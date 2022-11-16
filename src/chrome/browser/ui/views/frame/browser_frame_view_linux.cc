@@ -6,11 +6,14 @@
 
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/browser/ui/views/frame/desktop_browser_frame_aura_linux.h"
+#include "ui/color/color_id.h"
+#include "ui/color/color_provider.h"
+#include "ui/gfx/geometry/skia_conversions.h"
 #include "ui/gfx/scoped_canvas.h"
 #include "ui/gfx/skia_paint_util.h"
-#include "ui/gfx/skia_util.h"
 #include "ui/views/layout/layout_provider.h"
 #include "ui/views/window/frame_background.h"
+#include "ui/views/window/window_button_order_provider.h"
 
 BrowserFrameViewLinux::BrowserFrameViewLinux(
     BrowserFrame* frame,
@@ -18,19 +21,21 @@ BrowserFrameViewLinux::BrowserFrameViewLinux(
     BrowserFrameViewLayoutLinux* layout)
     : OpaqueBrowserFrameView(frame, browser_view, layout), layout_(layout) {
   layout->set_view(this);
-  if (views::LinuxUI* ui = views::LinuxUI::instance())
+  if (ui::LinuxUi* ui = ui::LinuxUi::instance()) {
     ui->AddWindowButtonOrderObserver(this);
+    OnWindowButtonOrderingChange();
+  }
 }
 
 BrowserFrameViewLinux::~BrowserFrameViewLinux() {
-  if (views::LinuxUI* ui = views::LinuxUI::instance())
+  if (ui::LinuxUi* ui = ui::LinuxUi::instance())
     ui->RemoveWindowButtonOrderObserver(this);
 }
 
 SkRRect BrowserFrameViewLinux::GetRestoredClipRegion() const {
   gfx::RectF bounds_dip(GetLocalBounds());
   if (ShouldDrawRestoredFrameShadow()) {
-    auto border = layout_->MirroredFrameBorderInsets();
+    gfx::InsetsF border(layout_->MirroredFrameBorderInsets());
     bounds_dip.Inset(border);
   }
   float radius_dip = GetRestoredCornerRadiusDip();
@@ -40,16 +45,17 @@ SkRRect BrowserFrameViewLinux::GetRestoredClipRegion() const {
   return clip;
 }
 
-gfx::ShadowValues BrowserFrameViewLinux::GetShadowValues() const {
+// static
+gfx::ShadowValues BrowserFrameViewLinux::GetShadowValues() {
   int elevation = ChromeLayoutProvider::Get()->GetShadowElevationMetric(
       views::Emphasis::kMaximum);
   return gfx::ShadowValue::MakeMdShadowValues(elevation);
 }
 
-void BrowserFrameViewLinux::OnWindowButtonOrderingChange(
-    const std::vector<views::FrameButton>& leading_buttons,
-    const std::vector<views::FrameButton>& trailing_buttons) {
-  layout_->SetButtonOrdering(leading_buttons, trailing_buttons);
+void BrowserFrameViewLinux::OnWindowButtonOrderingChange() {
+  auto* provider = views::WindowButtonOrderProvider::GetInstance();
+  layout_->SetButtonOrdering(provider->leading_buttons(),
+                             provider->trailing_buttons());
 
   // We can receive OnWindowButtonOrderingChange events before we've been added
   // to a Widget. We need a Widget because layout crashes due to dependencies
@@ -74,8 +80,8 @@ void BrowserFrameViewLinux::PaintRestoredFrameBorder(
     canvas->sk_canvas()->clipRRect(clip, SkClipOp::kIntersect, true);
     auto border = layout_->MirroredFrameBorderInsets();
     auto shadow_inset = showing_shadow ? border : gfx::Insets();
-    frame_bg->PaintMaximized(canvas, GetNativeTheme(), shadow_inset.left(),
-                             shadow_inset.top(),
+    frame_bg->PaintMaximized(canvas, GetNativeTheme(), GetColorProvider(),
+                             shadow_inset.left(), shadow_inset.top(),
                              width() - shadow_inset.width());
     if (!showing_shadow)
       frame_bg->FillFrameBorders(canvas, this, border.left(), border.right(),
@@ -92,9 +98,9 @@ void BrowserFrameViewLinux::PaintRestoredFrameBorder(
     clip.inset(one_pixel, one_pixel);
 
   cc::PaintFlags flags;
-  flags.setColor(GetNativeTheme()->GetSystemColor(
-      showing_shadow ? ui::NativeTheme::kColorId_BubbleBorderWhenShadowPresent
-                     : ui::NativeTheme::kColorId_BubbleBorder));
+  flags.setColor(GetColorProvider()->GetColor(
+      showing_shadow ? ui::kColorBubbleBorderWhenShadowPresent
+                     : ui::kColorBubbleBorder));
   flags.setAntiAlias(true);
   if (showing_shadow)
     flags.setLooper(gfx::CreateShadowDrawLooper(GetShadowValues()));

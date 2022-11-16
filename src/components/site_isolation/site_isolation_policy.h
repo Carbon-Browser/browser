@@ -7,12 +7,12 @@
 
 #include <vector>
 
-#include "base/macros.h"
 #include "content/public/browser/child_process_security_policy.h"
 
 class GURL;
 
 namespace content {
+enum class SiteIsolationMode;
 class BrowserContext;
 }
 
@@ -29,6 +29,10 @@ namespace site_isolation {
 // These methods can be called from any thread.
 class SiteIsolationPolicy {
  public:
+  SiteIsolationPolicy() = delete;
+  SiteIsolationPolicy(const SiteIsolationPolicy&) = delete;
+  SiteIsolationPolicy& operator=(const SiteIsolationPolicy&) = delete;
+
   // Returns true if the site isolation mode for isolating sites where users
   // enter passwords is enabled.
   static bool IsIsolationForPasswordSitesEnabled();
@@ -74,17 +78,22 @@ class SiteIsolationPolicy {
                                  const GURL& signed_in_url);
 
   // Determines whether Site Isolation should be disabled because the device
-  // does not have the minimum required amount of memory.
-  //
-  // TODO(alexmos): Currently, the memory threshold is shared for all site
-  // isolation modes, including strict site isolation and password site
-  // isolation.  In the future, some site isolation modes may require their own
-  // memory threshold.
-  static bool ShouldDisableSiteIsolationDueToMemoryThreshold();
+  // does not have the minimum required amount of memory. `site_isolation_mode`
+  // determines the type of memory threshold to apply; for example, strict site
+  // isolation on Android might require a higher memory threshold than partial
+  // site isolation.
+  static bool ShouldDisableSiteIsolationDueToMemoryThreshold(
+      content::SiteIsolationMode site_isolation_mode);
 
   // Returns true if the PDF compositor should be enabled to allow out-of-
   // process iframes (OOPIF's) to print properly.
   static bool ShouldPdfCompositorBeEnabledForOopifs();
+
+  // When set to true bypasses the caching of the results of
+  // ShouldDisableSiteIsolationDueToMemoryThreshold(). Setting to false reverts
+  // to the default behavior (caching is controlled by a base::Feature).
+  static void SetDisallowMemoryThresholdCachingForTesting(
+      bool disallow_caching);
 
  private:
   // Helpers for implementing PersistIsolatedOrigin().
@@ -94,8 +103,6 @@ class SiteIsolationPolicy {
   static void PersistWebTriggeredIsolatedOrigin(
       content::BrowserContext* context,
       const url::Origin& origin);
-
-  DISALLOW_IMPLICIT_CONSTRUCTORS(SiteIsolationPolicy);
 };
 
 }  // namespace site_isolation

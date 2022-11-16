@@ -10,11 +10,13 @@
 #include "ash/shell_delegate.h"
 #include "ash/wm/container_finder.h"
 #include "ash/wm/desks/desks_util.h"
-#include "ash/wm/full_restore/full_restore_controller.h"
 #include "ash/wm/mru_window_tracker.h"
+#include "ash/wm/overview/overview_controller.h"
+#include "ash/wm/window_restore/window_restore_controller.h"
 #include "ash/wm/window_state.h"
+#include "base/containers/adapters.h"
 #include "base/containers/contains.h"
-#include "components/full_restore/full_restore_utils.h"
+#include "components/app_restore/full_restore_utils.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/aura/window.h"
 #include "ui/events/event.h"
@@ -102,13 +104,13 @@ bool AshFocusRules::CanActivateWindow(const aura::Window* window) const {
   if (!window)
     return true;
 
-  if (!FullRestoreController::CanActivateFullRestoredWindow(window))
+  if (!WindowRestoreController::CanActivateRestoredWindow(window))
     return false;
 
   // Special case during Full Restore that prevents the app list from being
   // activated during tablet mode if the topmost window of any root window is a
   // Full Restore'd window. See http://crbug/1202923.
-  if (!FullRestoreController::CanActivateAppList(window))
+  if (!WindowRestoreController::CanActivateAppList(window))
     return false;
 
   if (!BaseFocusRules::CanActivateWindow(window))
@@ -153,7 +155,16 @@ aura::Window* AshFocusRules::GetNextActivatableWindow(
   // start from the container of |ignore|.
   aura::Window* starting_window = nullptr;
   aura::Window* transient_parent = ::wm::GetTransientParent(ignore);
-  if (transient_parent) {
+  OverviewController* overview_controller = Shell::Get()->overview_controller();
+  // It's possible for this to be called either on shutdown or when a session is
+  // not yet active, so we need to check for the existence of the overview
+  // controller.
+  if (overview_controller && overview_controller->InOverviewSession() &&
+      overview_controller->overview_session()->IsTemplatesUiLosingActivation(
+          ignore)) {
+    starting_window =
+        overview_controller->overview_session()->GetOverviewFocusWindow();
+  } else if (transient_parent) {
     starting_window = transient_parent;
   } else {
     MruWindowTracker* mru = Shell::Get()->mru_window_tracker();
@@ -215,13 +226,11 @@ aura::Window* AshFocusRules::GetTopmostWindowToActivateForContainerIndex(
 aura::Window* AshFocusRules::GetTopmostWindowToActivateInContainer(
     aura::Window* container,
     aura::Window* ignore) const {
-  for (aura::Window::Windows::const_reverse_iterator i =
-           container->children().rbegin();
-       i != container->children().rend(); ++i) {
-    WindowState* window_state = WindowState::Get(*i);
-    if (*i != ignore && window_state->CanActivate() &&
+  for (aura::Window* child : base::Reversed(container->children())) {
+    WindowState* window_state = WindowState::Get(child);
+    if (child != ignore && window_state->CanActivate() &&
         !window_state->IsMinimized())
-      return *i;
+      return child;
   }
   return nullptr;
 }

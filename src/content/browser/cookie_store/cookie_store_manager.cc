@@ -189,8 +189,7 @@ void CookieStoreManager::AddSubscriptions(
     return;
   }
 
-  if (!origin.IsSameOriginWith(
-          url::Origin::Create(service_worker_registration->scope()))) {
+  if (!origin.IsSameOriginWith(service_worker_registration->key().origin())) {
     std::move(bad_message_callback).Run("Invalid service worker");
     std::move(callback).Run(false);
     return;
@@ -204,6 +203,8 @@ void CookieStoreManager::AddSubscriptions(
   }
 
   for (const auto& mojo_subscription : mojo_subscriptions) {
+    // TODO(crbug.com/1246549): This validation step should consider the storage
+    // key.
     if (!blink::ServiceWorkerScopeMatches(service_worker_registration->scope(),
                                           mojo_subscription->url)) {
       // Blink should have validated subscription URLs against the service
@@ -285,8 +286,7 @@ void CookieStoreManager::RemoveSubscriptions(
     return;
   }
 
-  if (!origin.IsSameOriginWith(
-          url::Origin::Create(service_worker_registration->scope()))) {
+  if (!origin.IsSameOriginWith(service_worker_registration->key().origin())) {
     std::move(bad_message_callback).Run("Invalid service worker");
     std::move(callback).Run(false);
     return;
@@ -385,16 +385,15 @@ void CookieStoreManager::GetSubscriptions(
     return;
   }
 
-  const url::Origin first_origin = url::Origin::Create(it->second[0]->url());
+  const GURL& first_url = it->second[0]->url();
 #if DCHECK_IS_ON()
   for (const auto& subscription : it->second) {
-    DCHECK(
-        first_origin.IsSameOriginWith(url::Origin::Create(subscription->url())))
+    DCHECK(url::IsSameOriginWith(first_url, subscription->url()))
         << "Service worker's change subscriptions don't have the same origin";
   }
 #endif  // DCHECK_IS_ON()
 
-  if (!origin.IsSameOriginWith(first_origin)) {
+  if (!origin.IsSameOriginWith(first_url)) {
     std::move(bad_message_callback).Run("Invalid service worker");
     std::move(callback).Run(
         std::vector<blink::mojom::CookieChangeSubscriptionPtr>(), false);

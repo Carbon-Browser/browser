@@ -9,12 +9,13 @@
 #include <set>
 #include <vector>
 
-#include "base/containers/flat_set.h"
-#include "base/metrics/histogram_macros.h"
-#include "base/no_destructor.h"
+#include "base/containers/contains.h"
+#include "base/containers/fixed_flat_set.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "net/base/mime_util.h"
+#include "net/http/http_byte_range.h"
 #include "net/http/http_request_headers.h"
 #include "net/http/http_util.h"
 #include "services/network/public/cpp/is_potentially_trustworthy.h"
@@ -128,18 +129,18 @@ namespace cors {
 
 namespace header_names {
 
-constexpr char kAccessControlAllowCredentials[] =
+const char kAccessControlAllowCredentials[] =
     "Access-Control-Allow-Credentials";
-constexpr char kAccessControlAllowExternal[] = "Access-Control-Allow-External";
-constexpr char kAccessControlAllowHeaders[] = "Access-Control-Allow-Headers";
-constexpr char kAccessControlAllowMethods[] = "Access-Control-Allow-Methods";
-constexpr char kAccessControlAllowOrigin[] = "Access-Control-Allow-Origin";
-constexpr char kAccessControlMaxAge[] = "Access-Control-Max-Age";
-constexpr char kAccessControlRequestExternal[] =
-    "Access-Control-Request-External";
-constexpr char kAccessControlRequestHeaders[] =
-    "Access-Control-Request-Headers";
-constexpr char kAccessControlRequestMethod[] = "Access-Control-Request-Method";
+const char kAccessControlAllowHeaders[] = "Access-Control-Allow-Headers";
+const char kAccessControlAllowMethods[] = "Access-Control-Allow-Methods";
+const char kAccessControlAllowOrigin[] = "Access-Control-Allow-Origin";
+const char kAccessControlAllowPrivateNetwork[] =
+    "Access-Control-Allow-Private-Network";
+const char kAccessControlMaxAge[] = "Access-Control-Max-Age";
+const char kAccessControlRequestHeaders[] = "Access-Control-Request-Headers";
+const char kAccessControlRequestMethod[] = "Access-Control-Request-Method";
+const char kAccessControlRequestPrivateNetwork[] =
+    "Access-Control-Request-Private-Network";
 
 }  // namespace header_names
 
@@ -231,14 +232,10 @@ absl::optional<CorsErrorStatus> CheckAccessAndReportMetrics(
   cors::AccessCheckResult result = error_status
                                        ? cors::AccessCheckResult::kNotPermitted
                                        : cors::AccessCheckResult::kPermitted;
-  UMA_HISTOGRAM_ENUMERATION("Net.Cors.AccessCheckResult", result);
+  base::UmaHistogramEnumeration("Net.Cors.AccessCheckResult", result);
   if (!IsOriginPotentiallyTrustworthy(origin)) {
-    UMA_HISTOGRAM_ENUMERATION("Net.Cors.AccessCheckResult.NotSecureRequestor",
-                              result);
-  }
-  if (error_status) {
-    UMA_HISTOGRAM_ENUMERATION("Net.Cors.AccessCheckError",
-                              error_status->cors_error);
+    base::UmaHistogramEnumeration(
+        "Net.Cors.AccessCheckResult.NotSecureRequestor", result);
   }
   return error_status;
 }
@@ -259,51 +256,9 @@ bool ShouldCheckCors(const GURL& request_url,
   // DCHECK for a while, just in case.
   DCHECK(!request_url.SchemeIs(url::kDataScheme));
 
-  if (request_initiator->IsSameOriginWith(url::Origin::Create(request_url)))
+  if (request_initiator->IsSameOriginWith(request_url))
     return false;
   return true;
-}
-
-absl::optional<CorsErrorStatus> CheckRedirectLocation(
-    const GURL& url,
-    mojom::RequestMode request_mode,
-    const absl::optional<url::Origin>& origin,
-    bool cors_flag,
-    bool tainted) {
-  // If |actualResponse|’s location URL’s scheme is not an HTTP(S) scheme,
-  // then return a network error.
-  // This should be addressed in //net.
-
-  // Note: The redirect count check is done elsewhere.
-
-  const bool url_has_credentials = url.has_username() || url.has_password();
-  // If |request|’s mode is "cors", |actualResponse|’s location URL includes
-  // credentials, and either |request|’s tainted origin flag is set or
-  // |request|’s origin is not same origin with |actualResponse|’s location
-  // URL’s origin, then return a network error.
-  DCHECK(!IsCorsEnabledRequestMode(request_mode) || origin);
-  if (IsCorsEnabledRequestMode(request_mode) && url_has_credentials &&
-      (tainted || !origin->IsSameOriginWith(url::Origin::Create(url)))) {
-    return CorsErrorStatus(mojom::CorsError::kRedirectContainsCredentials);
-  }
-
-  // If CORS flag is set and |actualResponse|’s location URL includes
-  // credentials, then return a network error.
-  if (cors_flag && url_has_credentials)
-    return CorsErrorStatus(mojom::CorsError::kRedirectContainsCredentials);
-
-  return absl::nullopt;
-}
-
-// https://wicg.github.io/cors-rfc1918/#http-headerdef-access-control-allow-external
-absl::optional<CorsErrorStatus> CheckExternalPreflight(
-    const absl::optional<std::string>& allow_external) {
-  if (!allow_external)
-    return CorsErrorStatus(mojom::CorsError::kPreflightMissingAllowExternal);
-  if (*allow_external == kLowerCaseTrue)
-    return absl::nullopt;
-  return CorsErrorStatus(mojom::CorsError::kPreflightInvalidAllowExternal,
-                         *allow_external);
 }
 
 bool IsCorsEnabledRequestMode(mojom::RequestMode mode) {
@@ -346,19 +301,17 @@ bool IsCorsSafelistedHeader(const std::string& name, const std::string& value) {
   //
   // Treat 'Intervention' as a CORS-safelisted header, since it is added by
   // Chrome when an intervention is (or may be) applied.
-  static const char* const safe_names[] = {
+  static constexpr auto safe_names = base::MakeFixedFlatSet<base::StringPiece>({
       "accept",
       "accept-language",
       "content-language",
       "intervention",
       "content-type",
       "save-data",
-      // The Device Memory header field is a number that indicates the client’s
-      // device memory i.e. approximate amount of ram in GiB. The header value
-      // must satisfy ABNF  1*DIGIT [ "." 1*DIGIT ]
-      // See
-      // https://w3c.github.io/device-memory/#sec-device-memory-client-hint-header
-      // for more details.
+
+      // These four were deprecated and replaced by variants with a `sec-ch-`
+      // prefix to conform with the proposal:
+      // https://wicg.github.io/client-hints-infrastructure/
       "device-memory",
       "dpr",
       "width",
@@ -369,12 +322,6 @@ bool IsCorsSafelistedHeader(const std::string& name, const std::string& value) {
       //
       // https://wicg.github.io/responsive-image-client-hints/#sec-ch-viewport-height
       "sec-ch-viewport-height",
-
-      // The `Lang` header field is a proposed replacement for
-      // `Accept-Language`, using the Client Hints infrastructure.
-      //
-      // https://tools.ietf.org/html/draft-west-lang-client-hint
-      "lang",
 
       // The `Sec-CH-UA-*` header fields are proposed replacements for
       // `User-Agent`, using the Client Hints infrastructure.
@@ -402,9 +349,38 @@ bool IsCorsSafelistedHeader(const std::string& name, const std::string& value) {
       //
       // https://wicg.github.io/user-preference-media-features-headers/#sec-ch-prefers-color-scheme
       "sec-ch-prefers-color-scheme",
-  };
-  if (std::find(std::begin(safe_names), std::end(safe_names), lower_name) ==
-      std::end(safe_names))
+
+      // The Device Memory header field is a number that indicates the client’s
+      // device memory i.e. approximate amount of ram in GiB. The header value
+      // must satisfy ABNF  1*DIGIT [ "." 1*DIGIT ]
+      // See
+      // https://w3c.github.io/device-memory/#sec-device-memory-client-hint-header
+      // for more details.
+      "sec-ch-device-memory",
+      "sec-ch-dpr",
+      "sec-ch-width",
+      "sec-ch-viewport-width",
+
+      // Simple range values are safelisted.
+      // https://fetch.spec.whatwg.org/#simple-range-header-value
+      "range",
+
+      // The `Sec-CH-UA-Full-Version-List` provide server information about the
+      // full version for each brand in its brands list.
+      // https://wicg.github.io/ua-client-hints/#sec-ch-ua-full-version-list
+      "sec-ch-ua-full-version-list",
+
+      // The `Sec-CH-UA-Full` header field is a temporary client hint, which
+      // will only be sent in the presence of a valid Origin Trial token.  It
+      // was introduced to enable sites to register for the deprecation UA
+      // reduction origin trial and continue to receive the full UA string for
+      // some period, once UA reduction rolls out.
+      "sec-ch-ua-full",
+
+      "sec-ch-ua-wow64",
+  });
+
+  if (!base::Contains(safe_names, lower_name))
     return false;
 
   // Client hints are device specific, and not origin specific. As such all
@@ -435,6 +411,27 @@ bool IsCorsSafelistedHeader(const std::string& name, const std::string& value) {
 
   if (lower_name == "content-type")
     return IsCorsSafelistedLowerCaseContentType(lower_value);
+
+  if (lower_name == "range") {
+    // A 'simple' range value is of the following form: 'bytes=\d+-(\d+)?'.
+    // We can use the regular range header parser with the following caveats:
+    // - No space characters or trailing commas
+    // - Only one range is provided
+    // - No suffix (bytes=-x) ranges
+
+    if (std::any_of(lower_value.begin(), lower_value.end(), [](char c) {
+          return net::HttpUtil::IsLWS(c) || c == ',';
+        })) {
+      return false;
+    }
+
+    std::vector<net::HttpByteRange> ranges;
+    if (!net::HttpUtil::ParseRangeHeader(lower_value, &ranges))
+      return false;
+    if (ranges.size() != 1 || ranges[0].IsSuffixByteRange())
+      return false;
+    return true;
+  }
 
   return true;
 }

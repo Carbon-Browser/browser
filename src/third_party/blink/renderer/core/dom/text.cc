@@ -125,7 +125,7 @@ Text* Text::splitText(unsigned offset, ExceptionState& exception_state) {
 
   if (GetLayoutObject()) {
     GetLayoutObject()->SetTextWithOffset(DataImpl(), 0, old_str.length());
-    if (data().IsEmpty()) {
+    if (ContainsOnlyWhitespaceOrEmpty()) {
       // To avoid |LayoutText| has empty text, we rebuild layout tree.
       SetForceReattachLayoutTree();
     }
@@ -195,7 +195,7 @@ String Text::wholeText() const {
   }
   DCHECK_EQ(result.length(), result_length);
 
-  return result.ToString();
+  return result.ReleaseString();
 }
 
 Text* Text::ReplaceWholeText(const String& new_text) {
@@ -343,7 +343,13 @@ void Text::AttachLayoutTree(AttachContext& context) {
   if (context.parent) {
     ContainerNode* style_parent = LayoutTreeBuilderTraversal::Parent(*this);
     if (style_parent) {
-      const ComputedStyle* style = style_parent->GetComputedStyle();
+      // To handle <body> to <html> writing-mode propagation, we should use
+      // style in layout object instead of |Node::GetComputedStyle()|.
+      // See http://crbug.com/988585
+      const ComputedStyle* const style =
+          IsA<HTMLHtmlElement>(style_parent) && style_parent->GetLayoutObject()
+              ? style_parent->GetLayoutObject()->Style()
+              : style_parent->GetComputedStyle();
       DCHECK(style);
       if (TextLayoutObjectIsNeeded(context, *style)) {
         LayoutTreeBuilderForText(*this, context, style).CreateLayoutObject();

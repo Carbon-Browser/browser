@@ -13,7 +13,6 @@
 
 #include "base/bind.h"
 #include "base/callback_forward.h"
-#include "base/macros.h"
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/memory/singleton.h"
 #include "base/sequence_checker.h"
@@ -112,6 +111,9 @@ class DEVICE_GAMEPAD_EXPORT GamepadService : public GamepadChangeClient {
   // provider, bypassing the default platform one.
   GamepadService(std::unique_ptr<GamepadDataFetcher> fetcher);
 
+  GamepadService(const GamepadService&) = delete;
+  GamepadService& operator=(const GamepadService&) = delete;
+
   virtual ~GamepadService();
 
  private:
@@ -158,8 +160,6 @@ class DEVICE_GAMEPAD_EXPORT GamepadService : public GamepadChangeClient {
   int num_active_consumers_ = 0;
 
   bool gesture_callback_pending_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(GamepadService);
 };
 
 }  // namespace device

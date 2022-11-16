@@ -10,7 +10,6 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "components/feature_engagement/internal/event_model.h"
 #include "components/feature_engagement/internal/proto/feature_event.pb.h"
@@ -24,6 +23,10 @@ class EventModelImpl : public EventModel {
  public:
   EventModelImpl(std::unique_ptr<EventStore> store,
                  std::unique_ptr<EventStorageValidator> storage_validator);
+
+  EventModelImpl(const EventModelImpl&) = delete;
+  EventModelImpl& operator=(const EventModelImpl&) = delete;
+
   ~EventModelImpl() override;
 
   // EventModel implementation.
@@ -77,8 +80,6 @@ class EventModelImpl : public EventModel {
   bool ready_;
 
   base::WeakPtrFactory<EventModelImpl> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(EventModelImpl);
 };
 
 }  // namespace feature_engagement

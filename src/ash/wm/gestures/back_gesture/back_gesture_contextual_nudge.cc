@@ -4,14 +4,15 @@
 
 #include "ash/wm/gestures/back_gesture/back_gesture_contextual_nudge.h"
 
+#include "ash/controls/contextual_tooltip.h"
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/session/session_controller_impl.h"
-#include "ash/shelf/contextual_tooltip.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/style/ash_color_provider.h"
 #include "ash/style/default_color_constants.h"
 #include "ash/style/default_colors.h"
+#include "ash/wm/gestures/back_gesture/back_gesture_util.h"
 #include "base/callback.h"
 #include "base/i18n/rtl.h"
 #include "base/timer/timer.h"
@@ -52,6 +53,8 @@ constexpr int kLabelCornerRadius = 16;
 constexpr int kLabelTopBottomInset = 6;
 
 // Shadow values for the back nudge circle.
+// TODO (michelefan@): remove the shadow for the back gesture nudge after D/L
+// flag is enabled by default.
 constexpr int kBackNudgeShadowOffsetY1 = 1;
 constexpr int kBackNudgeShadowBlurRadius1 = 2;
 constexpr SkColor kBackNudgeShadowColor1 = SkColorSetA(SK_ColorBLACK, 0x4D);
@@ -60,25 +63,21 @@ constexpr int kBackNudgeShadowBlurRadius2 = 6;
 constexpr SkColor kBackNudgeShadowColor2 = SkColorSetA(SK_ColorBLACK, 0x26);
 
 // Duration of the pause before sliding in to show the nudge.
-constexpr base::TimeDelta kPauseBeforeShowAnimationDuration =
-    base::TimeDelta::FromSeconds(10);
+constexpr base::TimeDelta kPauseBeforeShowAnimationDuration = base::Seconds(10);
 
 // Duration for the animation to show the nudge.
-constexpr base::TimeDelta kNudgeShowAnimationDuration =
-    base::TimeDelta::FromMilliseconds(600);
+constexpr base::TimeDelta kNudgeShowAnimationDuration = base::Milliseconds(600);
 
 // Duration for the animation to hide the nudge.
-constexpr base::TimeDelta kNudgeHideAnimationDuration =
-    base::TimeDelta::FromMilliseconds(400);
+constexpr base::TimeDelta kNudgeHideAnimationDuration = base::Milliseconds(400);
 
 // Duration for the animation to fade out the suggestion label and circle when
 // the back nudge showing animation is interrupted and should be dismissed.
-constexpr base::TimeDelta kSuggestionDismissDuration =
-    base::TimeDelta::FromMilliseconds(100);
+constexpr base::TimeDelta kSuggestionDismissDuration = base::Milliseconds(100);
 
 // Duration for the animation of the suggestion part of the nudge.
 constexpr base::TimeDelta kSuggestionBounceAnimationDuration =
-    base::TimeDelta::FromMilliseconds(600);
+    base::Milliseconds(600);
 
 // Repeat bouncing times of the suggestion animation.
 constexpr int kSuggestionAnimationRepeatTimes = 4;
@@ -253,24 +252,33 @@ class BackGestureContextualNudge::ContextualNudgeView
       circle_flags.setStyle(cc::PaintFlags::kFill_Style);
       circle_flags.setColor(DeprecatedGetBaseLayerColor(
           AshColorProvider::BaseLayerType::kOpaque, kCircleColor));
-      gfx::ShadowValues shadows;
-      shadows.push_back(gfx::ShadowValue(
-          gfx::Vector2d(0, kBackNudgeShadowOffsetY1),
-          kBackNudgeShadowBlurRadius1, kBackNudgeShadowColor1));
-      shadows.push_back(gfx::ShadowValue(
-          gfx::Vector2d(0, kBackNudgeShadowOffsetY2),
-          kBackNudgeShadowBlurRadius2, kBackNudgeShadowColor2));
-      circle_flags.setLooper(gfx::CreateShadowDrawLooper(shadows));
+
+      if (!chromeos::features::IsDarkLightModeEnabled()) {
+        gfx::ShadowValues shadows;
+        shadows.push_back(gfx::ShadowValue(
+            gfx::Vector2d(0, kBackNudgeShadowOffsetY1),
+            kBackNudgeShadowBlurRadius1, kBackNudgeShadowColor1));
+        shadows.push_back(gfx::ShadowValue(
+            gfx::Vector2d(0, kBackNudgeShadowOffsetY2),
+            kBackNudgeShadowBlurRadius2, kBackNudgeShadowColor2));
+        circle_flags.setLooper(gfx::CreateShadowDrawLooper(shadows));
+      }
+
+      gfx::PointF center_point;
       if (base::i18n::IsRTL()) {
         const gfx::Point right_center = GetLocalBounds().right_center();
-        canvas->DrawCircle(
-            gfx::Point(right_center.x() - kCircleRadius, right_center.y()),
-            kCircleRadius, circle_flags);
+        center_point =
+            gfx::PointF(right_center.x() - kCircleRadius, right_center.y());
       } else {
         const gfx::Point left_center = GetLocalBounds().left_center();
-        canvas->DrawCircle(
-            gfx::Point(left_center.x() + kCircleRadius, left_center.y()),
-            kCircleRadius, circle_flags);
+        center_point =
+            gfx::PointF(left_center.x() + kCircleRadius, left_center.y());
+      }
+      canvas->DrawCircle(center_point, kCircleRadius, circle_flags);
+
+      if (chromeos::features::IsDarkLightModeEnabled()) {
+        // Draw highlight border circles for the affordance.
+        DrawCircleHighlightBorder(canvas, center_point, kCircleRadius);
       }
 
       // Draw the black round rectangle around the text.
@@ -280,9 +288,14 @@ class BackGestureContextualNudge::ContextualNudgeView
       round_rect_flags.setColor(DeprecatedGetBaseLayerColor(
           AshColorProvider::BaseLayerType::kOpaque, kLabelBackgroundColor));
       gfx::Rect label_bounds(label_->GetMirroredBounds());
-      label_bounds.Inset(/*horizontal=*/-kLabelCornerRadius,
-                         /*vertical=*/-kLabelTopBottomInset);
+      label_bounds.Inset(
+          gfx::Insets::VH(-kLabelTopBottomInset, -kLabelCornerRadius));
       canvas->DrawRoundRect(label_bounds, kLabelCornerRadius, round_rect_flags);
+
+      if (chromeos::features::IsDarkLightModeEnabled()) {
+        // Draw highlight border for the black round rectangle around the text.
+        DrawRoundRectHighlightBorder(canvas, label_bounds, kLabelCornerRadius);
+      }
     }
 
     // ui::ImplicitAnimationObserver:

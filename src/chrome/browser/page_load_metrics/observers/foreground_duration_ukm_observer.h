@@ -17,14 +17,20 @@ class ForegroundDurationUKMObserver
     : public page_load_metrics::PageLoadMetricsObserver {
  public:
   ForegroundDurationUKMObserver();
+
+  ForegroundDurationUKMObserver(const ForegroundDurationUKMObserver&) = delete;
+  ForegroundDurationUKMObserver& operator=(
+      const ForegroundDurationUKMObserver&) = delete;
+
   ~ForegroundDurationUKMObserver() override;
 
   // page_load_metrics::PageLoadMetricsObserver:
   ObservePolicy OnStart(content::NavigationHandle* navigation_handle,
                         const GURL& currently_committed_url,
                         bool started_in_foreground) override;
-  ObservePolicy OnCommit(content::NavigationHandle* navigation_handle,
-                         ukm::SourceId source_id) override;
+  ObservePolicy OnFencedFramesStart(
+      content::NavigationHandle* navigation_handle,
+      const GURL& currently_committed_url) override;
   ObservePolicy FlushMetricsOnAppEnterBackground(
       const page_load_metrics::mojom::PageLoadTiming& timing) override;
   ObservePolicy OnHidden(
@@ -36,13 +42,10 @@ class ForegroundDurationUKMObserver
  private:
   bool currently_in_foreground_ = false;
   base::TimeTicks last_time_shown_;
-  ukm::SourceId source_id_ = ukm::kInvalidSourceId;
-  page_load_metrics::mojom::InputTiming last_page_input_timing_;
+  page_load_metrics::mojom::InputTimingPtr last_page_input_timing_;
   void RecordUkmIfInForeground(base::TimeTicks end_time);
   void RecordInputTimingMetrics(
       ukm::builders::PageForegroundSession* ukm_builder);
-
-  DISALLOW_COPY_AND_ASSIGN(ForegroundDurationUKMObserver);
 };
 
 #endif  // CHROME_BROWSER_PAGE_LOAD_METRICS_OBSERVERS_FOREGROUND_DURATION_UKM_OBSERVER_H_

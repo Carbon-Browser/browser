@@ -8,7 +8,6 @@
 #include <queue>
 #include <unordered_map>
 
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/printing/history/print_job_database.h"
 #include "components/leveldb_proto/public/proto_database.h"
@@ -21,12 +20,16 @@ namespace leveldb_proto {
 class ProtoDatabaseProvider;
 }  // namespace leveldb_proto
 
-namespace chromeos {
+namespace ash {
 
 class PrintJobDatabaseImpl : public PrintJobDatabase {
  public:
   PrintJobDatabaseImpl(leveldb_proto::ProtoDatabaseProvider* database_provider,
                        base::FilePath profile_path);
+
+  PrintJobDatabaseImpl(const PrintJobDatabaseImpl&) = delete;
+  PrintJobDatabaseImpl& operator=(const PrintJobDatabaseImpl&) = delete;
+
   ~PrintJobDatabaseImpl() override;
 
   // PrintJobDatabase:
@@ -92,10 +95,8 @@ class PrintJobDatabaseImpl : public PrintJobDatabase {
   std::queue<base::OnceClosure> deferred_callbacks_;
 
   base::WeakPtrFactory<PrintJobDatabaseImpl> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(PrintJobDatabaseImpl);
 };
 
-}  // namespace chromeos
+}  // namespace ash
 
 #endif  // CHROME_BROWSER_ASH_PRINTING_HISTORY_PRINT_JOB_DATABASE_IMPL_H_

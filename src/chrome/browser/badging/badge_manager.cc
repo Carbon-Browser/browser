@@ -30,9 +30,9 @@
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/strings/grit/ui_strings.h"
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 #include "chrome/browser/badging/badge_manager_delegate_mac.h"
-#elif defined(OS_WIN)
+#elif BUILDFLAG(IS_WIN)
 #include "chrome/browser/badging/badge_manager_delegate_win.h"
 #endif
 
@@ -51,14 +51,18 @@ bool IsLastBadgingTimeWithin(base::TimeDelta time_frame,
   return clock->Now() < last_badging_time + time_frame;
 }
 
+// When web apps are disabled, there is no WebAppProvider.
+web_app::WebAppSyncBridge* GetWebAppSyncBridgeForProfile(Profile* profile) {
+  auto* provider = WebAppProvider::GetForLocalAppsUnchecked(profile);
+  return provider ? &provider->sync_bridge() : nullptr;
+}
+
 }  // namespace
 
 namespace badging {
 
 BadgeManager::BadgeManager(Profile* profile)
-    : BadgeManager(
-          profile,
-          &WebAppProvider::GetForLocalAppsUnchecked(profile)->sync_bridge()) {}
+    : BadgeManager(profile, GetWebAppSyncBridgeForProfile(profile)) {}
 
 BadgeManager::BadgeManager(Profile* profile,
                            web_app::WebAppSyncBridge* sync_bridge)
@@ -67,9 +71,9 @@ BadgeManager::BadgeManager(Profile* profile,
       sync_bridge_(sync_bridge) {
   // The delegate is also set for Chrome OS but is set from the constructor of
   // web_apps_chromeos.cc.
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   SetDelegate(std::make_unique<BadgeManagerDelegateMac>(profile, this));
-#elif defined(OS_WIN)
+#elif BUILDFLAG(IS_WIN)
   SetDelegate(std::make_unique<BadgeManagerDelegateWin>(profile, this));
 #endif
 }
@@ -80,13 +84,18 @@ void BadgeManager::SetDelegate(std::unique_ptr<BadgeManagerDelegate> delegate) {
   delegate_ = std::move(delegate);
 }
 
-void BadgeManager::BindFrameReceiver(
+void BadgeManager::BindFrameReceiverIfAllowed(
     content::RenderFrameHost* frame,
     mojo::PendingReceiver<blink::mojom::BadgeService> receiver) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
-  auto* profile = Profile::FromBrowserContext(
-      content::WebContents::FromRenderFrameHost(frame)->GetBrowserContext());
+  // The Badging API is not allowed for the fenced frames.
+  if (frame->IsNestedWithinFencedFrame()) {
+    mojo::ReportBadMessage("The Badging API is not allowed in a fenced frame");
+    return;
+  }
+
+  auto* profile = Profile::FromBrowserContext(frame->GetBrowserContext());
 
   auto* badge_manager =
       badging::BadgeManagerFactory::GetInstance()->GetForProfile(profile);
@@ -99,11 +108,18 @@ void BadgeManager::BindFrameReceiver(
                                 std::move(context));
 }
 
-void BadgeManager::BindServiceWorkerReceiver(
+void BadgeManager::BindServiceWorkerReceiverIfAllowed(
     content::RenderProcessHost* service_worker_process_host,
-    const GURL& service_worker_scope,
+    const content::ServiceWorkerVersionBaseInfo& info,
     mojo::PendingReceiver<blink::mojom::BadgeService> receiver) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+
+  // The Badging API is not allowed for the fenced frames.
+  if (info.ancestor_frame_type ==
+      blink::mojom::AncestorFrameType::kFencedFrame) {
+    mojo::ReportBadMessage("The Badging API is not allowed in a fenced frame");
+    return;
+  }
 
   auto* profile = Profile::FromBrowserContext(
       service_worker_process_host->GetBrowserContext());
@@ -114,7 +130,7 @@ void BadgeManager::BindServiceWorkerReceiver(
     return;
 
   auto context = std::make_unique<BadgeManager::ServiceWorkerBindingContext>(
-      service_worker_process_host->GetID(), service_worker_scope);
+      service_worker_process_host->GetID(), info.scope);
 
   badge_manager->receivers_.Add(badge_manager, std::move(receiver),
                                 std::move(context));
@@ -165,9 +181,15 @@ const base::Clock* BadgeManager::SetClockForTesting(const base::Clock* clock) {
   return previous;
 }
 
+void BadgeManager::SetSyncBridgeForTesting(
+    web_app::WebAppSyncBridge* sync_bridge) {
+  sync_bridge_ = sync_bridge;
+}
+
 void BadgeManager::UpdateBadge(const web_app::AppId& app_id,
                                absl::optional<BadgeValue> value) {
-  if (!IsLastBadgingTimeWithin(badging::kBadgingMinimumUpdateInterval, app_id,
+  if (sync_bridge_ &&
+      !IsLastBadgingTimeWithin(badging::kBadgingMinimumUpdateInterval, app_id,
                                clock_, profile_)) {
     sync_bridge_->SetAppLastBadgingTime(app_id, clock_->Now());
   }
@@ -247,13 +269,8 @@ BadgeManager::FrameBindingContext::GetAppIdsAndUrlsForBadging() const {
   if (!frame)
     return std::vector<std::tuple<web_app::AppId, GURL>>{};
 
-  content::WebContents* contents =
-      content::WebContents::FromRenderFrameHost(frame);
-  if (!contents)
-    return std::vector<std::tuple<web_app::AppId, GURL>>{};
-
-  auto* provider = WebAppProvider::GetForLocalAppsUnchecked(
-      Profile::FromBrowserContext(contents->GetBrowserContext()));
+  const WebAppProvider* provider = WebAppProvider::GetForLocalAppsUnchecked(
+      Profile::FromBrowserContext(frame->GetBrowserContext()));
   if (!provider)
     return std::vector<std::tuple<web_app::AppId, GURL>>{};
 
@@ -275,7 +292,7 @@ BadgeManager::ServiceWorkerBindingContext::GetAppIdsAndUrlsForBadging() const {
   if (!render_process_host)
     return std::vector<std::tuple<web_app::AppId, GURL>>{};
 
-  auto* provider = WebAppProvider::GetForLocalAppsUnchecked(
+  const WebAppProvider* provider = WebAppProvider::GetForLocalAppsUnchecked(
       Profile::FromBrowserContext(render_process_host->GetBrowserContext()));
   if (!provider)
     return std::vector<std::tuple<web_app::AppId, GURL>>{};

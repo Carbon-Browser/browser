@@ -11,19 +11,16 @@
 #include <utility>
 #include <vector>
 
-#include "base/macros.h"
+#include "ash/components/disks/disk_mount_manager.h"
 #include "base/memory/weak_ptr.h"
-#include "chromeos/dbus/concierge/concierge_client.h"
-#include "chromeos/dbus/vm_plugin_dispatcher/vm_plugin_dispatcher_client.h"
-#include "chromeos/disks/disk_mount_manager.h"
+#include "chromeos/ash/components/dbus/concierge/concierge_client.h"
+#include "chromeos/ash/components/dbus/vm_plugin_dispatcher/vm_plugin_dispatcher_client.h"
 #include "mojo/public/cpp/bindings/associated_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/device/public/mojom/usb_enumeration_options.mojom-forward.h"
 #include "services/device/public/mojom/usb_manager.mojom.h"
 #include "services/device/public/mojom/usb_manager_client.mojom.h"
-
-class CrosUsbDetectorTest;
 
 namespace ash {
 
@@ -74,8 +71,8 @@ class CrosUsbDeviceObserver : public base::CheckedObserver {
 // Detects USB Devices for Chrome OS and manages UI for controlling their use
 // with CrOS, Web or GuestOSs.
 class CrosUsbDetector : public device::mojom::UsbDeviceManagerClient,
-                        public chromeos::ConciergeClient::VmObserver,
-                        public chromeos::VmPluginDispatcherClient::Observer,
+                        public ConciergeClient::VmObserver,
+                        public VmPluginDispatcherClient::Observer,
                         public disks::DiskMountManager::Observer {
  public:
   // Used to namespace USB notifications to avoid clashes with WebUsbDetector.
@@ -85,6 +82,10 @@ class CrosUsbDetector : public device::mojom::UsbDeviceManagerClient,
   static CrosUsbDetector* Get();
 
   CrosUsbDetector();
+
+  CrosUsbDetector(const CrosUsbDetector&) = delete;
+  CrosUsbDetector& operator=(const CrosUsbDetector&) = delete;
+
   ~CrosUsbDetector() override;
 
   void SetDeviceManagerForTesting(
@@ -97,6 +98,8 @@ class CrosUsbDetector : public device::mojom::UsbDeviceManagerClient,
 
   // Called when a VM starts, to attach USB devices marked as shared to the VM.
   void ConnectSharedDevicesOnVmStartup(const std::string& vm_name);
+
+  void DisconnectSharedDevicesOnVmShutdown(const std::string& vm_name);
 
   // device::mojom::UsbDeviceManagerClient
   void OnDeviceAdded(device::mojom::UsbDeviceInfoPtr device) override;
@@ -123,7 +126,7 @@ class CrosUsbDetector : public device::mojom::UsbDeviceManagerClient,
   std::vector<CrosUsbDeviceInfo> GetShareableDevices() const;
 
  private:
-  friend class ::CrosUsbDetectorTest;
+  friend class CrosUsbDetectorTest;
 
   // Internal representation of a USB device.
   struct UsbDevice {
@@ -153,11 +156,11 @@ class CrosUsbDetector : public device::mojom::UsbDeviceManagerClient,
     // TODO(nverne): Add current state and errors etc.
   };
 
-  // chromeos::ConciergeClient::VmObserver:
+  // ConciergeClient::VmObserver:
   void OnVmStarted(const vm_tools::concierge::VmStartedSignal& signal) override;
   void OnVmStopped(const vm_tools::concierge::VmStoppedSignal& signal) override;
 
-  // chromeos::VmPluginDispatcherClient::Observer:
+  // VmPluginDispatcherClient::Observer:
   void OnVmToolsStateChanged(
       const vm_tools::plugin_dispatcher::VmToolsStateChangedSignal& signal)
       override;
@@ -259,8 +262,10 @@ class CrosUsbDetector : public device::mojom::UsbDeviceManagerClient,
   // is shared successfully with the VM. When an file is closed (here or by the
   // VM,  PermissionBroker will reattach the previous host drivers (if any).
   struct DeviceClaim {
-    base::File device_file;
-    base::File lifeline_file;
+    DeviceClaim();
+    ~DeviceClaim();
+    base::ScopedFD device_file;
+    base::ScopedFD lifeline_file;
   };
   std::map<std::string, DeviceClaim> devices_claimed_;
 
@@ -269,8 +274,6 @@ class CrosUsbDetector : public device::mojom::UsbDeviceManagerClient,
   // Note: This should remain the last member so it'll be destroyed and
   // invalidate its weak pointers before any other members are destroyed.
   base::WeakPtrFactory<CrosUsbDetector> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(CrosUsbDetector);
 };
 
 }  // namespace ash

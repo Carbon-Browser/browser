@@ -139,6 +139,27 @@ export class NearbyUiTriggerBrowserProxy {
   notifyFastPairPairing() {
     chrome.send('notifyFastPairPairing');
   }
+
+  /**
+   * Tells C++ side to trigger a Fast Pair application available notification.
+   */
+  notifyFastPairApplicationAvailable() {
+    chrome.send('notifyFastPairApplicationAvailable');
+  }
+
+  /**
+   * Tells C++ side to trigger a Fast Pair application installed notification.
+   */
+  notifyFastPairApplicationInstalled() {
+    chrome.send('notifyFastPairApplicationInstalled');
+  }
+
+  /**
+   * Tells C++ side to trigger a Fast Pair associate account notification.
+   */
+  notifyFastPairAssociateAccount() {
+    chrome.send('notifyFastPairAssociateAccount');
+  }
 }
 
 addSingletonGetter(NearbyUiTriggerBrowserProxy);

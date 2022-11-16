@@ -9,10 +9,9 @@
 #include <vector>
 
 #include "base/callback_forward.h"
-#include "base/macros.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
-#include "base/sequenced_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 #include "media/base/color_plane_layout.h"
 #include "media/base/video_frame.h"
 #include "media/gpu/chromeos/fourcc.h"
@@ -112,6 +111,10 @@ class MEDIA_GPU_EXPORT ImageProcessorBackend {
   const PortConfig& input_config() const { return input_config_; }
   const PortConfig& output_config() const { return output_config_; }
   OutputMode output_mode() const { return output_mode_; }
+
+  virtual bool needs_linear_output_buffers() const;
+
+  virtual bool supports_incoherent_buffers() const;
 
  protected:
   friend struct std::default_delete<ImageProcessorBackend>;

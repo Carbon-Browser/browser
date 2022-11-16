@@ -10,6 +10,8 @@
 
 NSString* const kPopupMenuToolsMenuTableViewId =
     @"kPopupMenuToolsMenuTableViewId";
+NSString* const kPopupMenuToolsMenuActionListId =
+    @"kPopupMenuToolsMenuActionListId";
 NSString* const kPopupMenuNavigationTableViewId =
     @"kPopupMenuNavigationTableViewId";
 NSString* const kPopupMenuTabGridMenuTableViewId =
@@ -25,15 +27,18 @@ NSString* const kToolsMenuCloseAllTabsId = @"kToolsMenuCloseAllTabsId";
 NSString* const kToolsMenuCloseAllIncognitoTabsId =
     @"kToolsMenuCloseAllIncognitoTabsId";
 NSString* const kToolsMenuCloseTabId = @"kToolsMenuCloseTabId";
+NSString* const kToolsMenuFollowId = @"kToolsMenuFollowId";
 NSString* const kToolsMenuBookmarksId = @"kToolsMenuBookmarksId";
 NSString* const kToolsMenuReadingListId = @"kToolsMenuReadingListId";
 NSString* const kToolsMenuOtherDevicesId = @"kToolsMenuOtherDevicesId";
 NSString* const kToolsMenuHistoryId = @"kToolsMenuHistoryId";
+NSString* const kToolsMenuPasswordsId = @"kToolsMenuPasswordsId";
 NSString* const kToolsMenuReportAnIssueId = @"kToolsMenuReportAnIssueId";
 NSString* const kToolsMenuTranslateId = @"kToolsMenuTranslateId";
 NSString* const kToolsMenuFindInPageId = @"kToolsMenuFindInPageId";
 NSString* const kToolsMenuRequestDesktopId = @"kToolsMenuRequestDesktopId";
 NSString* const kToolsMenuSettingsId = @"kToolsMenuSettingsId";
+NSString* const kToolsMenuSettingsActionId = @"kToolsMenuSettingsActionId";
 NSString* const kToolsMenuHelpId = @"kToolsMenuHelpId";
 NSString* const kToolsMenuRequestMobileId = @"kToolsMenuRequestMobileId";
 NSString* const kToolsMenuReadLater = @"kToolsMenuReadLater";
@@ -48,3 +53,6 @@ NSString* const kToolsMenuQRCodeSearch = @"kToolsMenuQRCodeSearch";
 NSString* const kToolsMenuCopiedImageSearch = @"kToolsMenuCopiedImageSearch";
 NSString* const kToolsMenuTextZoom = @"kToolsMenuTextZoom";
 NSString* const kTextMenuEnterpriseInfo = @"kTextMenuEnterpriseInfo";
+NSString* const kToolsMenuFollow = @"kToolsMenuFollow";
+NSString* const kToolsMenuUnfollow = @"kToolsMenuUnfollow";
+NSString* const kToolsMenuClearBrowsingData = @"kToolsMenuClearBrowsingData";

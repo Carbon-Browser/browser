@@ -6,8 +6,9 @@
 #define CHROME_BROWSER_ASH_CROSTINI_CROSTINI_INSTALLER_H_
 
 #include "base/callback_forward.h"
-#include "base/macros.h"
 #include "base/scoped_observation.h"
+#include "base/time/time.h"
+#include "base/timer/timer.h"
 #include "chrome/browser/ash/crostini/ansible/ansible_management_service.h"
 #include "chrome/browser/ash/crostini/crostini_installer_ui_delegate.h"
 #include "chrome/browser/ash/crostini/crostini_manager.h"
@@ -15,10 +16,6 @@
 #include "components/keyed_service/core/keyed_service.h"
 
 class Profile;
-
-namespace base {
-class RepeatingTimer;
-}  // namespace base
 
 namespace crostini {
 
@@ -78,6 +75,10 @@ class CrostiniInstaller : public KeyedService,
   static CrostiniInstaller* GetForProfile(Profile* profile);
 
   explicit CrostiniInstaller(Profile* profile);
+
+  CrostiniInstaller(const CrostiniInstaller&) = delete;
+  CrostiniInstaller& operator=(const CrostiniInstaller&) = delete;
+
   ~CrostiniInstaller() override;
   void Shutdown() override;
 
@@ -94,7 +95,7 @@ class CrostiniInstaller : public KeyedService,
   void OnStageStarted(crostini::mojom::InstallerState stage) override;
   void OnComponentLoaded(crostini::CrostiniResult result) override;
   void OnDiskImageCreated(bool success,
-                          vm_tools::concierge::DiskImageStatus status,
+                          CrostiniResult result,
                           int64_t disk_size_available) override;
   void OnVmStarted(bool success) override;
   void OnLxdStarted(CrostiniResult result) override;
@@ -104,8 +105,11 @@ class CrostiniInstaller : public KeyedService,
   void OnContainerStarted(crostini::CrostiniResult result) override;
 
   // AnsibleManagementService::Observer:
-  void OnAnsibleSoftwareConfigurationStarted() override;
-  void OnAnsibleSoftwareConfigurationFinished(bool success) override;
+  void OnAnsibleSoftwareConfigurationStarted(
+      const guest_os::GuestId& container_id) override;
+  void OnAnsibleSoftwareConfigurationFinished(
+      const guest_os::GuestId& container_id,
+      bool success) override;
 
   // Return true if internal state allows starting installation.
   bool CanInstall();
@@ -166,8 +170,6 @@ class CrostiniInstaller : public KeyedService,
       ansible_management_service_observation_{this};
 
   base::WeakPtrFactory<CrostiniInstaller> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(CrostiniInstaller);
 };
 
 }  // namespace crostini

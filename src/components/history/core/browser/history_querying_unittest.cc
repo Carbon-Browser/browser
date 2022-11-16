@@ -8,7 +8,6 @@
 
 #include "base/bind.h"
 #include "base/callback_helpers.h"
-#include "base/cxx17_backports.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
@@ -17,6 +16,7 @@
 #include "base/task/cancelable_task_tracker.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
+#include "base/time/time.h"
 #include "components/history/core/browser/history_database_params.h"
 #include "components/history/core/browser/history_service.h"
 #include "components/history/core/test/test_history_database.h"
@@ -91,6 +91,9 @@ bool NthResultIs(const QueryResults& results,
 class HistoryQueryTest : public testing::Test {
  public:
   HistoryQueryTest() : nav_entry_id_(0) {}
+
+  HistoryQueryTest(const HistoryQueryTest&) = delete;
+  HistoryQueryTest& operator=(const HistoryQueryTest&) = delete;
 
   // Acts like a synchronous call to history's QueryHistory.
   void QueryHistory(const std::string& text_query,
@@ -194,14 +197,14 @@ class HistoryQueryTest : public testing::Test {
 
     // Fill the test data.
     base_ = base::Time::Now().LocalMidnight();
-    for (size_t i = 0; i < base::size(test_entries); i++) {
+    for (size_t i = 0; i < std::size(test_entries); i++) {
       test_entries[i].time = GetTimeFromDaysAgo(test_entries[i].days_ago);
       AddEntryToHistory(test_entries[i]);
     }
   }
 
   base::Time GetTimeFromDaysAgo(int days_ago) {
-    return base_ - (days_ago * base::TimeDelta::FromDays(1));
+    return base_ - (days_ago * base::Days(1));
   }
 
   void TearDown() override {
@@ -221,8 +224,6 @@ class HistoryQueryTest : public testing::Test {
   base::FilePath history_dir_;
 
   base::CancelableTaskTracker tracker_;
-
-  DISALLOW_COPY_AND_ASSIGN(HistoryQueryTest);
 };
 
 TEST_F(HistoryQueryTest, Basic) {
@@ -294,8 +295,7 @@ TEST_F(HistoryQueryTest, ReachedBeginning) {
   EXPECT_FALSE(results.reached_beginning());
 
   // Try `begin_time` just later than the oldest visit.
-  options.begin_time =
-      test_entries[0].time + base::TimeDelta::FromMicroseconds(1);
+  options.begin_time = test_entries[0].time + base::Microseconds(1);
   QueryHistory(std::string(), options, &results);
   EXPECT_FALSE(results.reached_beginning());
   QueryHistory("some", options, &results);
@@ -309,8 +309,7 @@ TEST_F(HistoryQueryTest, ReachedBeginning) {
   EXPECT_TRUE(results.reached_beginning());
 
   // Try `begin_time` just earlier than the oldest visit.
-  options.begin_time =
-      test_entries[0].time - base::TimeDelta::FromMicroseconds(1);
+  options.begin_time = test_entries[0].time - base::Microseconds(1);
   QueryHistory(std::string(), options, &results);
   EXPECT_TRUE(results.reached_beginning());
   QueryHistory("some", options, &results);
@@ -459,7 +458,7 @@ TEST_F(HistoryQueryTest, TextSearchIDN) {
                        L"\u0438\u0434\u0435\u043d\u0442.\u0440\u0444"), 1, },
   };
 
-  for (size_t i = 0; i < base::size(queries); ++i) {
+  for (size_t i = 0; i < std::size(queries); ++i) {
     QueryHistory(queries[i].query, options, &results);
     EXPECT_EQ(queries[i].results_size, results.size());
   }
@@ -470,7 +469,7 @@ TEST_F(HistoryQueryTest, Paging) {
   // Since results are fetched 1 and 2 at a time, entry #0 and #6 will not
   // be de-duplicated.
   int expected_results[] = {4, 2, 3, 1, 7, 6, 5, 8, 9, 10, 11, 12, 13, 14, 0};
-  TestPaging(std::string(), expected_results, base::size(expected_results));
+  TestPaging(std::string(), expected_results, std::size(expected_results));
 }
 
 TEST_F(HistoryQueryTest, TextSearchPaging) {
@@ -478,7 +477,7 @@ TEST_F(HistoryQueryTest, TextSearchPaging) {
   // be de-duplicated. Entry #4 does not contain the text "title", so it
   // shouldn't appear.
   int expected_results[] = { 2, 3, 1, 7, 6, 5 };
-  TestPaging("title", expected_results, base::size(expected_results));
+  TestPaging("title", expected_results, std::size(expected_results));
 }
 
 }  // namespace history

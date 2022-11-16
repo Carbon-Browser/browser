@@ -13,6 +13,7 @@
 #include "third_party/blink/public/mojom/input/focus_type.mojom-blink.h"
 #include "third_party/blink/public/platform/modules/remoteplayback/web_remote_playback_client.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_gc_controller.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_pointer_event_init.h"
 #include "third_party/blink/renderer/core/css/css_property_value_set.h"
 #include "third_party/blink/renderer/core/css/document_style_environment_variables.h"
 #include "third_party/blink/renderer/core/css/style_engine.h"
@@ -48,8 +49,8 @@
 #include "third_party/blink/renderer/modules/media_controls/elements/media_control_timeline_element.h"
 #include "third_party/blink/renderer/modules/media_controls/elements/media_control_volume_slider_element.h"
 #include "third_party/blink/renderer/modules/remoteplayback/remote_playback.h"
-#include "third_party/blink/renderer/platform/heap/handle.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/heap/thread_state.h"
 #include "third_party/blink/renderer/platform/testing/empty_web_media_player.h"
 #include "third_party/blink/renderer/platform/testing/histogram_tester.h"
 #include "third_party/blink/renderer/platform/testing/runtime_enabled_features_test_helpers.h"
@@ -88,9 +89,6 @@ class MockWebMediaPlayerForImpl : public EmptyWebMediaPlayer {
   WebTimeRanges Seekable() const override { return seekable_; }
   bool HasVideo() const override { return true; }
   bool HasAudio() const override { return has_audio_; }
-  SurfaceLayerMode GetVideoSurfaceLayerMode() const override {
-    return SurfaceLayerMode::kAlways;
-  }
 
   bool has_audio_ = false;
   WebTimeRanges seekable_;
@@ -332,6 +330,11 @@ class MediaControlsImplTest : public PageTestBase,
       return false;
 
     return true;
+  }
+
+  PointerEvent* CreatePointerEvent(const AtomicString& name) {
+    PointerEventInit* init = PointerEventInit::Create();
+    return PointerEvent::Create(name, init);
   }
 
  private:
@@ -970,7 +973,7 @@ TEST_F(MediaControlsImplTestWithMockScheduler,
   MediaControls().DispatchEvent(*Event::Create("focusin"));
   MediaControls().MediaElement().SetFocused(true,
                                             mojom::blink::FocusType::kNone);
-  MediaControls().DispatchEvent(*Event::Create("pointermove"));
+  MediaControls().DispatchEvent(*CreatePointerEvent("pointermove"));
 
   // Controls should remain visible
   platform()->RunForPeriodSeconds(2);
@@ -1021,7 +1024,7 @@ TEST_F(MediaControlsImplTestWithMockScheduler, CursorHidesWhenControlsHide) {
 
   // If the mouse moves, the controls are shown and the cursor is no longer
   // hidden.
-  MediaControls().DispatchEvent(*Event::Create("pointermove"));
+  MediaControls().DispatchEvent(*CreatePointerEvent("pointermove"));
   EXPECT_FALSE(IsCursorHidden());
 
   // Once the controls hide again, the cursor is hidden again.
@@ -1282,9 +1285,11 @@ TEST_F(MediaControlsImplTest, CastOverlayShowsOnSomeEvents) {
   SimulateHideMediaControlsTimerFired();
   EXPECT_FALSE(IsElementVisible(*cast_overlay_button));
 
-  for (auto* const event_name :
+  for (const AtomicString event_name :
        {"gesturetap", "click", "pointerover", "pointermove"}) {
-    overlay_enclosure->DispatchEvent(*Event::Create(event_name));
+    overlay_enclosure->DispatchEvent(event_name == "gesturetap"
+                                         ? *Event::Create(event_name)
+                                         : *CreatePointerEvent(event_name));
     EXPECT_TRUE(IsElementVisible(*cast_overlay_button));
 
     SimulateHideMediaControlsTimerFired();
@@ -1309,13 +1314,13 @@ TEST_F(MediaControlsImplTest, ControlsShouldUseSafeAreaInsets) {
   }
 
   GetStyleEngine().EnsureEnvironmentVariables().SetVariable(
-      "safe-area-inset-top", "1px");
+      UADefinedVariable::kSafeAreaInsetTop, "1px");
   GetStyleEngine().EnsureEnvironmentVariables().SetVariable(
-      "safe-area-inset-left", "2px");
+      UADefinedVariable::kSafeAreaInsetLeft, "2px");
   GetStyleEngine().EnsureEnvironmentVariables().SetVariable(
-      "safe-area-inset-bottom", "3px");
+      UADefinedVariable::kSafeAreaInsetBottom, "3px");
   GetStyleEngine().EnsureEnvironmentVariables().SetVariable(
-      "safe-area-inset-right", "4px");
+      UADefinedVariable::kSafeAreaInsetRight, "4px");
 
   EXPECT_TRUE(GetDocument().NeedsLayoutTreeUpdate());
   UpdateAllLifecyclePhasesForTest();

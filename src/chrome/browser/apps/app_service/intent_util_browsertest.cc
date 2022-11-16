@@ -86,7 +86,7 @@ void CheckShareFileFilter(const IntentFilterPtr& intent_filter,
 
   if (!filter_types.empty()) {
     const Condition& condition = *intent_filter->conditions[1];
-    EXPECT_EQ(condition.condition_type, ConditionType::kMimeType);
+    EXPECT_EQ(condition.condition_type, ConditionType::kFile);
     ASSERT_EQ(condition.condition_values.size(), filter_types.size());
 
     for (unsigned i = 0; i < filter_types.size(); ++i) {
@@ -125,11 +125,7 @@ void CheckShareFileFilter(const IntentFilterPtr& intent_filter,
 
 }  // namespace
 
-class WebAppsUtilsBrowserTest : public InProcessBrowserTest {
- public:
-  WebAppsUtilsBrowserTest() {}
-  ~WebAppsUtilsBrowserTest() override = default;
-};
+using WebAppsUtilsBrowserTest = InProcessBrowserTest;
 
 IN_PROC_BROWSER_TEST_F(WebAppsUtilsBrowserTest, CreateIntentFilters) {
   ASSERT_TRUE(embedded_test_server()->Start());
@@ -138,13 +134,13 @@ IN_PROC_BROWSER_TEST_F(WebAppsUtilsBrowserTest, CreateIntentFilters) {
 
   std::vector<IntentFilterPtr> filters;
   {
-    const web_app::WebAppRegistrar& registrar =
-        web_app::WebAppProvider::GetForTest(browser()->profile())->registrar();
+    auto& provider = *web_app::WebAppProvider::GetForTest(browser()->profile());
     const web_app::AppId app_id =
         web_app::InstallWebAppFromManifest(browser(), app_url);
-    const web_app::WebApp* web_app = registrar.GetAppById(app_id);
-    ASSERT_TRUE(web_app);
-    filters = CreateWebAppIntentFilters(*web_app);
+    filters = CreateWebAppIntentFilters(
+        app_id, provider.registrar().GetAppScope(app_id),
+        provider.registrar().GetAppShareTarget(app_id),
+        provider.os_integration_manager().GetEnabledFileHandlers(app_id));
   }
 
   ASSERT_EQ(filters.size(), 3U);
@@ -171,13 +167,13 @@ IN_PROC_BROWSER_TEST_F(WebAppsUtilsBrowserTest, PartialWild) {
 
   std::vector<IntentFilterPtr> filters;
   {
-    const web_app::WebAppRegistrar& registrar =
-        web_app::WebAppProvider::GetForTest(browser()->profile())->registrar();
+    auto& provider = *web_app::WebAppProvider::GetForTest(browser()->profile());
     const web_app::AppId app_id =
         web_app::InstallWebAppFromManifest(browser(), app_url);
-    const web_app::WebApp* web_app = registrar.GetAppById(app_id);
-    ASSERT_TRUE(web_app);
-    filters = CreateWebAppIntentFilters(*web_app);
+    filters = CreateWebAppIntentFilters(
+        app_id, provider.registrar().GetAppScope(app_id),
+        provider.registrar().GetAppShareTarget(app_id),
+        provider.os_integration_manager().GetEnabledFileHandlers(app_id));
   }
 
   ASSERT_EQ(filters.size(), 2U);
@@ -201,13 +197,13 @@ IN_PROC_BROWSER_TEST_F(WebAppsUtilsBrowserTest, ShareTargetWithoutFiles) {
 
   std::vector<IntentFilterPtr> filters;
   {
-    const web_app::WebAppRegistrar& registrar =
-        web_app::WebAppProvider::GetForTest(browser()->profile())->registrar();
+    auto& provider = *web_app::WebAppProvider::GetForTest(browser()->profile());
     const web_app::AppId app_id =
         web_app::InstallWebAppFromManifest(browser(), app_url);
-    const web_app::WebApp* web_app = registrar.GetAppById(app_id);
-    ASSERT_TRUE(web_app);
-    filters = CreateWebAppIntentFilters(*web_app);
+    filters = CreateWebAppIntentFilters(
+        app_id, provider.registrar().GetAppScope(app_id),
+        provider.registrar().GetAppShareTarget(app_id),
+        provider.os_integration_manager().GetEnabledFileHandlers(app_id));
   }
 
   ASSERT_EQ(filters.size(), 2U);

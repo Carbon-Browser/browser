@@ -12,11 +12,12 @@
 #include "base/json/json_reader.h"
 #include "base/location.h"
 #include "base/logging.h"
-#include "base/macros.h"
 #include "base/values.h"
 #include "media/base/video_frame_pool.h"
 #include "media/base/video_util.h"
 #include "media/cast/cast_environment.h"
+#include "media/cast/common/encoded_frame.h"
+#include "media/cast/common/openscreen_conversion_helpers.h"
 #include "third_party/libvpx/source/libvpx/vpx/vp8dx.h"
 #include "third_party/libvpx/source/libvpx/vpx/vpx_decoder.h"
 #include "third_party/libyuv/include/libyuv/convert.h"
@@ -35,6 +36,9 @@ class VideoDecoder::ImplBase
       : cast_environment_(cast_environment),
         codec_(codec),
         operational_status_(STATUS_UNINITIALIZED) {}
+
+  ImplBase(const ImplBase&) = delete;
+  ImplBase& operator=(const ImplBase&) = delete;
 
   OperationalStatus InitializationResult() const { return operational_status_; }
 
@@ -63,7 +67,7 @@ class VideoDecoder::ImplBase
       return;
     }
     decoded_frame->set_timestamp(
-        encoded_frame->rtp_timestamp.ToTimeDelta(kVideoFrequency));
+        ToTimeDelta(encoded_frame->rtp_timestamp, kVideoFrequency));
 
     std::unique_ptr<FrameEvent> decode_event(new FrameEvent());
     decode_event->timestamp = cast_environment_->Clock()->NowTicks();
@@ -98,8 +102,6 @@ class VideoDecoder::ImplBase
 
  private:
   FrameId last_frame_id_;
-
-  DISALLOW_COPY_AND_ASSIGN(ImplBase);
 };
 
 class VideoDecoder::Vp8Impl final : public VideoDecoder::ImplBase {
@@ -110,8 +112,6 @@ class VideoDecoder::Vp8Impl final : public VideoDecoder::ImplBase {
       return;
 
     vpx_codec_dec_cfg_t cfg = {0};
-    // TODO(miu): Revisit this for typical multi-core desktop use case.  This
-    // feels like it should be 4 or 8.
     cfg.threads = 1;
 
     DCHECK(vpx_codec_get_caps(vpx_codec_vp8_dx()) & VPX_CODEC_CAP_POSTPROC);
@@ -122,6 +122,9 @@ class VideoDecoder::Vp8Impl final : public VideoDecoder::ImplBase {
     }
     ImplBase::operational_status_ = STATUS_INITIALIZED;
   }
+
+  Vp8Impl(const Vp8Impl&) = delete;
+  Vp8Impl& operator=(const Vp8Impl&) = delete;
 
  private:
   ~Vp8Impl() final {
@@ -170,11 +173,8 @@ class VideoDecoder::Vp8Impl final : public VideoDecoder::ImplBase {
 
   // VPX decoder context (i.e., an instantiation).
   vpx_codec_ctx_t context_;
-
-  DISALLOW_COPY_AND_ASSIGN(Vp8Impl);
 };
 
-#ifndef OFFICIAL_BUILD
 // A fake video decoder that always output 2x2 black frames.
 class VideoDecoder::FakeImpl final : public VideoDecoder::ImplBase {
  public:
@@ -184,6 +184,9 @@ class VideoDecoder::FakeImpl final : public VideoDecoder::ImplBase {
       return;
     ImplBase::operational_status_ = STATUS_INITIALIZED;
   }
+
+  FakeImpl(const FakeImpl&) = delete;
+  FakeImpl& operator=(const FakeImpl&) = delete;
 
  private:
   ~FakeImpl() final = default;
@@ -204,26 +207,20 @@ class VideoDecoder::FakeImpl final : public VideoDecoder::ImplBase {
   }
 
   int last_decoded_id_;
-
-  DISALLOW_COPY_AND_ASSIGN(FakeImpl);
 };
-#endif
 
 VideoDecoder::VideoDecoder(
     const scoped_refptr<CastEnvironment>& cast_environment,
     Codec codec)
     : cast_environment_(cast_environment) {
   switch (codec) {
-#ifndef OFFICIAL_BUILD
     case CODEC_VIDEO_FAKE:
       impl_ = new FakeImpl(cast_environment);
       break;
-#endif
     case CODEC_VIDEO_VP8:
       impl_ = new Vp8Impl(cast_environment);
       break;
     case CODEC_VIDEO_H264:
-      // TODO(miu): Need implementation.
       NOTIMPLEMENTED();
       break;
     default:

@@ -8,20 +8,14 @@
 
 #include "ash/constants/ash_features.h"
 #include "ash/public/cpp/app_list/app_list_config_provider.h"
+#include "ash/public/cpp/app_list/app_list_types.h"
 #include "base/check.h"
-#include "base/macros.h"
 #include "base/no_destructor.h"
+#include "ui/base/resource/resource_bundle.h"
 
 namespace ash {
 
 namespace {
-
-// The ratio of allowed bounds for apps grid view to its maximum margin.
-constexpr int kAppsGridMarginRatio = 16;
-constexpr int kAppsGridMarginRatioForSmallWidth = 12;
-
-// The expected page switcher width.
-constexpr int kPageSwitcherWidth = 32;
 
 // Scales |value| using the smaller one of |scale_1| and |scale_2|.
 int MinScale(int value, float scale_1, float scale_2) {
@@ -34,8 +28,10 @@ int MinScale(int value, float scale_1, float scale_2) {
 int MinYScaleHeightAdjustmentForType(ash::AppListConfigType type) {
   switch (type) {
     case ash::AppListConfigType::kLarge:
+    case ash::AppListConfigType::kRegular:
       return 16;
     case ash::AppListConfigType::kMedium:
+    case ash::AppListConfigType::kDense:
       return 8;
     case ash::AppListConfigType::kSmall:
       return 4;
@@ -50,14 +46,20 @@ int GridTileWidthForType(ash::AppListConfigType type) {
       return 88;
     case ash::AppListConfigType::kSmall:
       return 80;
+    case ash::AppListConfigType::kRegular:
+      return 96;
+    case ash::AppListConfigType::kDense:
+      return 80;
   }
 }
 
 int GridTileHeightForType(ash::AppListConfigType type) {
   switch (type) {
     case ash::AppListConfigType::kLarge:
+    case ash::AppListConfigType::kRegular:
       return 120;
     case ash::AppListConfigType::kMedium:
+    case ash::AppListConfigType::kDense:
       return 88;
     case ash::AppListConfigType::kSmall:
       return 80;
@@ -67,8 +69,10 @@ int GridTileHeightForType(ash::AppListConfigType type) {
 int GridIconDimensionForType(ash::AppListConfigType type) {
   switch (type) {
     case ash::AppListConfigType::kLarge:
+    case ash::AppListConfigType::kRegular:
       return 64;
     case ash::AppListConfigType::kMedium:
+    case ash::AppListConfigType::kDense:
       return 48;
     case ash::AppListConfigType::kSmall:
       return 40;
@@ -83,6 +87,10 @@ int GridTitleTopPaddingForType(ash::AppListConfigType type) {
       return 64;
     case ash::AppListConfigType::kSmall:
       return 56;
+    case ash::AppListConfigType::kRegular:
+      return 88;
+    case ash::AppListConfigType::kDense:
+      return 60;
   }
 }
 
@@ -93,14 +101,20 @@ int GridTitleBottomPaddingForType(ash::AppListConfigType type) {
     case ash::AppListConfigType::kMedium:
     case ash::AppListConfigType::kSmall:
       return 6;
+    case ash::AppListConfigType::kRegular:
+      return 12;
+    case ash::AppListConfigType::kDense:
+      return 8;
   }
 }
 
 int GridTitleHorizontalPaddingForType(ash::AppListConfigType type) {
   switch (type) {
     case ash::AppListConfigType::kLarge:
+    case ash::AppListConfigType::kRegular:
       return 8;
     case ash::AppListConfigType::kMedium:
+    case ash::AppListConfigType::kDense:
       return 4;
     case ash::AppListConfigType::kSmall:
       return 0;
@@ -115,6 +129,10 @@ int GridFocusDimensionForType(ash::AppListConfigType type) {
       return 64;
     case ash::AppListConfigType::kSmall:
       return 56;
+    // Unused for ProductivityLauncher.
+    case ash::AppListConfigType::kRegular:
+    case ash::AppListConfigType::kDense:
+      return -1;
   }
 }
 
@@ -124,54 +142,43 @@ int GridFocusCornerRadiusForType(ash::AppListConfigType type) {
       return 12;
     case ash::AppListConfigType::kMedium:
     case ash::AppListConfigType::kSmall:
+    case ash::AppListConfigType::kRegular:
+    case ash::AppListConfigType::kDense:
       return 8;
-  }
-}
-
-int GridFadeoutMaskHeightForType(ash::AppListConfigType type) {
-  // The fadeout mask layer is shown only if background blur is enabled - if
-  // fadeout mask is not shown, return 0 here so the apps grid respects is not
-  // shown in the fadeout zone during drag.
-  if (!ash::features::IsBackgroundBlurEnabled())
-    return 0;
-
-  switch (type) {
-    case ash::AppListConfigType::kLarge:
-    case ash::AppListConfigType::kMedium:
-    case ash::AppListConfigType::kSmall:
-      return 16;
-  }
-}
-
-int PageSwitcherEndMarginForType(AppListConfigType type) {
-  switch (type) {
-    case ash::AppListConfigType::kLarge:
-    case ash::AppListConfigType::kMedium:
-    case ash::AppListConfigType::kSmall:
-      return 16;
   }
 }
 
 int AppTitleMaxLineHeightForType(ash::AppListConfigType type) {
   switch (type) {
     case ash::AppListConfigType::kLarge:
+    case ash::AppListConfigType::kRegular:
       return 20;
     case ash::AppListConfigType::kMedium:
     case ash::AppListConfigType::kSmall:
+    case ash::AppListConfigType::kDense:
       return 18;
   }
 }
 
 gfx::FontList AppTitleFontForType(ash::AppListConfigType type) {
+  ui::ResourceBundle::FontDetails details;
+  // TODO(https://crbug.com/1197600): Use Google Sans Text (medium weight) for
+  // ProductivityLauncher (kRegular, kDense) when that font is available.
   switch (type) {
     case ash::AppListConfigType::kLarge:
-      return ui::ResourceBundle::GetSharedInstance().GetFontListWithDelta(1);
+    case ash::AppListConfigType::kRegular:
+      details.size_delta = 1;
+      break;
     case ash::AppListConfigType::kMedium:
     case ash::AppListConfigType::kSmall:
-      return ui::ResourceBundle::GetSharedInstance().GetFontListWithDelta(0);
+    case ash::AppListConfigType::kDense:
+      details.size_delta = 0;
+      break;
   }
+  return ui::ResourceBundle::GetSharedInstance().GetFontListForDetails(details);
 }
 
+// See "App drag over folder" in go/cros-launcher-spec.
 int FolderUnclippedIconDimensionForType(ash::AppListConfigType type) {
   switch (type) {
     case ash::AppListConfigType::kLarge:
@@ -179,6 +186,10 @@ int FolderUnclippedIconDimensionForType(ash::AppListConfigType type) {
     case ash::AppListConfigType::kMedium:
       return 64;
     case ash::AppListConfigType::kSmall:
+      return 56;
+    case ash::AppListConfigType::kRegular:
+      return 76;
+    case ash::AppListConfigType::kDense:
       return 56;
   }
 }
@@ -191,16 +202,22 @@ int FolderClippedIconDimensionForType(ash::AppListConfigType type) {
       return 56;
     case ash::AppListConfigType::kSmall:
       return 48;
+    case ash::AppListConfigType::kRegular:
+      return 60;
+    case ash::AppListConfigType::kDense:
+      return 44;
   }
 }
 
 int ItemIconInFolderIconDimensionForType(ash::AppListConfigType type) {
   switch (type) {
     case ash::AppListConfigType::kLarge:
+    case ash::AppListConfigType::kRegular:
       return 32;
     case ash::AppListConfigType::kMedium:
       return 28;
     case ash::AppListConfigType::kSmall:
+    case ash::AppListConfigType::kDense:
       return 24;
   }
 }
@@ -208,19 +225,12 @@ int ItemIconInFolderIconDimensionForType(ash::AppListConfigType type) {
 int ItemIconInFolderIconMarginForType(ash::AppListConfigType type) {
   switch (type) {
     case ash::AppListConfigType::kLarge:
+    case ash::AppListConfigType::kRegular:
     case ash::AppListConfigType::kMedium:
+    case ash::AppListConfigType::kDense:
       return 4;
     case ash::AppListConfigType::kSmall:
       return 2;
-  }
-}
-
-int SuggestionChipContainerTopMarginForType(ash::AppListConfigType type) {
-  switch (type) {
-    case ash::AppListConfigType::kSmall:
-    case ash::AppListConfigType::kMedium:
-    case ash::AppListConfigType::kLarge:
-      return 16;
   }
 }
 
@@ -243,15 +253,17 @@ int SharedAppListConfig::GetMaxNumOfItemsPerPage() const {
 int SharedAppListConfig::GetPreferredIconDimension(
     SearchResultDisplayType display_type) const {
   switch (display_type) {
+    case SearchResultDisplayType::kList:
+      return search_list_icon_dimension_;
     case SearchResultDisplayType::kTile:
       return search_tile_icon_dimension_;
     case SearchResultDisplayType::kChip:
       return suggestion_chip_icon_dimension_;
-    case SearchResultDisplayType::kList:
-      return search_list_icon_dimension_;
-    case SearchResultDisplayType::kNone:  // Falls through.
-    case SearchResultDisplayType::kCard:
-      return 0;
+    case SearchResultDisplayType::kContinue:
+      return suggestion_chip_icon_dimension_;
+    case SearchResultDisplayType::kNone:
+    case SearchResultDisplayType::kAnswerCard:
+    case SearchResultDisplayType::kRecentApps:
     case SearchResultDisplayType::kLast:
       return 0;
   }
@@ -271,25 +283,8 @@ AppListConfig::AppListConfig(AppListConfigType type)
       grid_title_width_(grid_tile_width_),
       grid_focus_dimension_(GridFocusDimensionForType(type)),
       grid_focus_corner_radius_(GridFocusCornerRadiusForType(type)),
-      grid_fadeout_zone_height_(24),
-      grid_fadeout_mask_height_(GridFadeoutMaskHeightForType(type)),
-      grid_to_page_switcher_margin_(8),
-      page_switcher_end_margin_(PageSwitcherEndMarginForType(type)),
-      suggestion_chip_container_top_margin_(
-          SuggestionChipContainerTopMarginForType(type)),
-      suggestion_chip_container_height_(32),
       app_title_max_line_height_(AppTitleMaxLineHeightForType(type)),
       app_title_font_(AppTitleFontForType(type)),
-      peeking_app_list_height_(284),
-      search_box_closed_top_padding_(0),
-      search_box_peeking_top_padding_(84),
-      search_box_fullscreen_top_padding_(24),
-      search_box_height_(48),
-      search_box_height_for_dense_layout_(40),
-      preferred_cols_(5),
-      preferred_rows_(4),
-      page_spacing_(48),
-      expand_arrow_tile_height_(72),
       folder_bubble_radius_(FolderUnclippedIconDimensionForType(type) / 2),
       folder_icon_dimension_(FolderClippedIconDimensionForType(type)),
       folder_unclipped_icon_dimension_(
@@ -299,13 +294,7 @@ AppListConfig::AppListConfig(AppListConfigType type)
       item_icon_in_folder_icon_dimension_(
           ItemIconInFolderIconDimensionForType(type)),
       item_icon_in_folder_icon_margin_(ItemIconInFolderIconMarginForType(type)),
-      folder_dropping_circle_radius_(folder_bubble_radius_),
-      page_flip_zone_size_(20),
-      max_folder_pages_(3),
-      max_folder_items_per_page_(16) {
-  DCHECK_EQ(SharedAppListConfig::instance().GetMaxNumOfItemsPerPage(),
-            preferred_cols_ * preferred_rows_);
-}
+      folder_dropping_circle_radius_(folder_bubble_radius_) {}
 
 AppListConfig::AppListConfig(const AppListConfig& base_config,
                              float scale_x,
@@ -347,37 +336,9 @@ AppListConfig::AppListConfig(const AppListConfig& base_config,
       grid_focus_corner_radius_(MinScale(base_config.grid_focus_corner_radius_,
                                          scale_x,
                                          inner_tile_scale_y)),
-      grid_fadeout_zone_height_(
-          min_y_scale
-              ? 8
-              : MinScale(base_config.grid_fadeout_zone_height_, scale_y, 1)),
-      grid_fadeout_mask_height_(
-          min_y_scale
-              ? 8
-              : MinScale(base_config.grid_fadeout_mask_height_, scale_y, 1)),
-      grid_to_page_switcher_margin_(base_config.grid_to_page_switcher_margin_),
-      page_switcher_end_margin_(base_config.page_switcher_end_margin_),
-      suggestion_chip_container_top_margin_(
-          base_config.suggestion_chip_container_top_margin_),
-      suggestion_chip_container_height_(
-          base_config.suggestion_chip_container_height_),
       app_title_max_line_height_(base_config.app_title_max_line_height_),
       app_title_font_(base_config.app_title_font_.DeriveWithSizeDelta(
           min_y_scale ? -2 : (scale_y < 0.66 ? -1 : 0))),
-      peeking_app_list_height_(base_config.peeking_app_list_height_),
-      search_box_closed_top_padding_(
-          base_config.search_box_closed_top_padding_),
-      search_box_peeking_top_padding_(
-          base_config.search_box_peeking_top_padding_),
-      search_box_fullscreen_top_padding_(
-          base_config.search_box_fullscreen_top_padding_),
-      search_box_height_(base_config.search_box_height_),
-      search_box_height_for_dense_layout_(
-          base_config.search_box_height_for_dense_layout_),
-      preferred_cols_(base_config.preferred_cols_),
-      preferred_rows_(base_config.preferred_rows_),
-      page_spacing_(base_config.page_spacing_),
-      expand_arrow_tile_height_(base_config.expand_arrow_tile_height_),
       folder_bubble_radius_(MinScale(base_config.folder_bubble_radius_,
                                      scale_x,
                                      inner_tile_scale_y)),
@@ -404,32 +365,8 @@ AppListConfig::AppListConfig(const AppListConfig& base_config,
       folder_dropping_circle_radius_(
           MinScale(base_config.folder_dropping_circle_radius_,
                    scale_x,
-                   inner_tile_scale_y)),
-      page_flip_zone_size_(base_config.page_flip_zone_size_),
-      max_folder_pages_(base_config.max_folder_pages_),
-      max_folder_items_per_page_(base_config.max_folder_items_per_page_) {
-  DCHECK_EQ(SharedAppListConfig::instance().GetMaxNumOfItemsPerPage(),
-            preferred_cols_ * preferred_rows_);
-}
+                   inner_tile_scale_y)) {}
 
 AppListConfig::~AppListConfig() = default;
-
-int AppListConfig::GetMinGridHorizontalPadding() const {
-  return page_switcher_end_margin_ + grid_to_page_switcher_margin_ +
-         kPageSwitcherWidth;
-}
-
-int AppListConfig::GetIdealHorizontalMargin(
-    const gfx::Rect& available_bounds) const {
-  const int available_width = available_bounds.width();
-  if (available_width >= kAppsGridMarginRatio * GetMinGridHorizontalPadding())
-    return available_width / kAppsGridMarginRatio;
-  return available_width / kAppsGridMarginRatioForSmallWidth;
-}
-
-int AppListConfig::GetIdealVerticalMargin(
-    const gfx::Rect& available_bounds) const {
-  return available_bounds.height() / kAppsGridMarginRatio;
-}
 
 }  // namespace ash

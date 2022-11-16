@@ -43,11 +43,11 @@ type ThreatProtectionPermission = {
 };
 
 export type ThreatProtectionInfo = {
-  info: Array<ThreatProtectionPermission>,
+  info: ThreatProtectionPermission[],
   description: string,
 };
 
-// <if expr="chromeos">
+// <if expr="chromeos_ash">
 /**
  * @enum {string} Look at ToJSDeviceReportingType usage in
  *    management_ui_handler.cc for more details.
@@ -68,6 +68,8 @@ export enum DeviceReportingType {
   EXTENSION = 'extension',
   ANDROID_APPLICATION = 'android application',
   LOGIN_LOGOUT = 'login-logout',
+  CRD_SESSIONS = 'crd sessions',
+  PERIPHERALS = 'peripherals',
 }
 
 
@@ -79,11 +81,11 @@ export type DeviceReportingResponse = {
 
 /** @interface */
 export interface ManagementBrowserProxy {
-  getExtensions(): Promise<Array<Extension>>;
+  getExtensions(): Promise<Extension[]>;
 
-  getManagedWebsites(): Promise<Array<string>>;
+  getManagedWebsites(): Promise<string[]>;
 
-  // <if expr="chromeos">
+  // <if expr="chromeos_ash">
   /**
    * @return Whether trust root configured or not.
    */
@@ -92,7 +94,7 @@ export interface ManagementBrowserProxy {
   /**
    * @return List of items to display in device reporting section.
    */
-  getDeviceReportingInfo(): Promise<Array<DeviceReportingResponse>>;
+  getDeviceReportingInfo(): Promise<DeviceReportingResponse[]>;
 
   /**
    * @return Whether the Plugin VM data collection is enabled or not.
@@ -107,7 +109,7 @@ export interface ManagementBrowserProxy {
   /**
    * @return The list of browser reporting info messages.
    */
-  initBrowserReportingInfo(): Promise<Array<BrowserReportingResponse>>;
+  initBrowserReportingInfo(): Promise<BrowserReportingResponse[]>;
 }
 
 export class ManagementBrowserProxyImpl implements ManagementBrowserProxy {
@@ -119,7 +121,7 @@ export class ManagementBrowserProxyImpl implements ManagementBrowserProxy {
     return sendWithPromise('getManagedWebsites');
   }
 
-  // <if expr="chromeos">
+  // <if expr="chromeos_ash">
   getLocalTrustRootsInfo() {
     return sendWithPromise('getLocalTrustRootsInfo');
   }

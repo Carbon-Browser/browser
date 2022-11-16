@@ -25,7 +25,6 @@
 #include "net/base/url_util.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/resources/grit/webui_generated_resources.h"
-#include "ui/resources/grit/webui_resources.h"
 #include "ui/strings/grit/ui_strings.h"
 #include "ui/web_dialogs/web_dialog_delegate.h"
 
@@ -37,46 +36,48 @@ class MigrationMessageHandler : public content::WebUIMessageHandler {
  public:
   explicit MigrationMessageHandler(base::RepeatingClosure close_dialog_closure)
       : close_dialog_closure_(close_dialog_closure) {}
+
+  MigrationMessageHandler(const MigrationMessageHandler&) = delete;
+  MigrationMessageHandler& operator=(const MigrationMessageHandler&) = delete;
+
   ~MigrationMessageHandler() override = default;
 
  private:
   void RegisterMessages() override {
-    web_ui()->RegisterDeprecatedMessageCallback(
+    web_ui()->RegisterMessageCallback(
         "reauthenticateAccount",
         base::BindRepeating(
             &MigrationMessageHandler::HandleReauthenticateAccount,
             base::Unretained(this)));
-    web_ui()->RegisterDeprecatedMessageCallback(
+    web_ui()->RegisterMessageCallback(
         "closeDialog",
         base::BindRepeating(&MigrationMessageHandler::HandleCloseDialog,
                             base::Unretained(this)));
   }
 
   // WebUI "reauthenticateAccount" message callback.
-  void HandleReauthenticateAccount(const base::ListValue* args) {
+  void HandleReauthenticateAccount(const base::Value::List& args) {
     AllowJavascript();
 
-    CHECK(!args->GetList().empty());
-    const std::string& account_email = args->GetList()[0].GetString();
+    CHECK(!args.empty());
+    const std::string& account_email = args[0].GetString();
 
     Profile* profile = Profile::FromWebUI(web_ui());
     ::GetAccountManagerFacade(profile->GetPath().value())
         ->ShowReauthAccountDialog(
             account_manager::AccountManagerFacade::AccountAdditionSource::
                 kAccountManagerMigrationWelcomeScreen,
-            account_email);
+            account_email, base::OnceClosure());
     HandleCloseDialog(args);
   }
 
-  void HandleCloseDialog(const base::ListValue* args) {
+  void HandleCloseDialog(const base::Value::List& args) {
     AllowJavascript();
 
     close_dialog_closure_.Run();
   }
 
   base::RepeatingClosure close_dialog_closure_;
-
-  DISALLOW_COPY_AND_ASSIGN(MigrationMessageHandler);
 };
 
 }  // namespace
@@ -119,7 +120,7 @@ AccountMigrationWelcomeUI::AccountMigrationWelcomeUI(content::WebUI* web_ui)
 
   web_ui->AddMessageHandler(std::make_unique<MigrationMessageHandler>(
       base::BindRepeating(&WebDialogUI::CloseDialog, weak_factory_.GetWeakPtr(),
-                          nullptr /* args */)));
+                          base::Value::List() /* args */)));
 
   Profile* profile = Profile::FromWebUI(web_ui);
   content::WebUIDataSource::Add(profile, html_source);

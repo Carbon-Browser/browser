@@ -4,9 +4,9 @@
 
 #include "content/public/test/fake_render_widget_host.h"
 
+#include "third_party/blink/public/mojom/drag/drag.mojom.h"
 #include "third_party/blink/public/mojom/frame/intrinsic_sizing_info.mojom.h"
 #include "third_party/blink/public/mojom/input/touch_event.mojom.h"
-#include "third_party/blink/public/mojom/page/drag.mojom.h"
 
 namespace content {
 
@@ -93,6 +93,8 @@ void FakeRenderWidgetHost::ShowPopup(const gfx::Rect& initial_rect,
 
 void FakeRenderWidgetHost::SetTouchActionFromMain(
     cc::TouchAction touch_action) {}
+
+void FakeRenderWidgetHost::SetPanAction(blink::mojom::PanAction pan_action) {}
 
 void FakeRenderWidgetHost::DidOverscroll(
     blink::mojom::DidOverscrollParamsPtr params) {}

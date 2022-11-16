@@ -6,7 +6,6 @@
 #define CHROME_BROWSER_UI_WEBUI_FAMILY_LINK_USER_INTERNALS_FAMILY_LINK_USER_INTERNALS_MESSAGE_HANDLER_H_
 
 #include "base/callback_list.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "chrome/browser/supervised_user/supervised_user_error_page/supervised_user_error_page.h"
@@ -15,10 +14,6 @@
 #include "chrome/browser/supervised_user/supervised_user_url_filter.h"
 #include "content/public/browser/web_ui_message_handler.h"
 
-namespace base {
-class ListValue;
-}  // namespace base
-
 // The implementation for the chrome://family-link-user-internals page.
 class FamilyLinkUserInternalsMessageHandler
     : public content::WebUIMessageHandler,
@@ -26,6 +21,12 @@ class FamilyLinkUserInternalsMessageHandler
       public SupervisedUserURLFilter::Observer {
  public:
   FamilyLinkUserInternalsMessageHandler();
+
+  FamilyLinkUserInternalsMessageHandler(
+      const FamilyLinkUserInternalsMessageHandler&) = delete;
+  FamilyLinkUserInternalsMessageHandler& operator=(
+      const FamilyLinkUserInternalsMessageHandler&) = delete;
+
   ~FamilyLinkUserInternalsMessageHandler() override;
 
  private:
@@ -38,9 +39,9 @@ class FamilyLinkUserInternalsMessageHandler
 
   SupervisedUserService* GetSupervisedUserService();
 
-  void HandleRegisterForEvents(const base::ListValue* args);
-  void HandleGetBasicInfo(const base::ListValue* args);
-  void HandleTryURL(const base::ListValue* args);
+  void HandleRegisterForEvents(const base::Value::List& args);
+  void HandleGetBasicInfo(const base::Value::List& args);
+  void HandleTryURL(const base::Value::List& args);
 
   void SendBasicInfo();
   void SendFamilyLinkUserSettings(const base::DictionaryValue* settings);
@@ -66,8 +67,6 @@ class FamilyLinkUserInternalsMessageHandler
 
   base::WeakPtrFactory<FamilyLinkUserInternalsMessageHandler> weak_factory_{
       this};
-
-  DISALLOW_COPY_AND_ASSIGN(FamilyLinkUserInternalsMessageHandler);
 };
 
 #endif  // CHROME_BROWSER_UI_WEBUI_FAMILY_LINK_USER_INTERNALS_FAMILY_LINK_USER_INTERNALS_MESSAGE_HANDLER_H_

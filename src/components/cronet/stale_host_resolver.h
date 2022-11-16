@@ -8,6 +8,7 @@
 #include <memory>
 #include <unordered_map>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/default_tick_clock.h"
 #include "net/base/completion_once_callback.h"
@@ -70,6 +71,9 @@ class StaleHostResolver : public net::HostResolver {
   StaleHostResolver(std::unique_ptr<net::ContextHostResolver> inner_resolver,
                     const StaleOptions& stale_options);
 
+  StaleHostResolver(const StaleHostResolver&) = delete;
+  StaleHostResolver& operator=(const StaleHostResolver&) = delete;
+
   ~StaleHostResolver() override;
 
   // HostResolver implementation:
@@ -123,7 +127,8 @@ class StaleHostResolver : public net::HostResolver {
   std::unique_ptr<net::ContextHostResolver> inner_resolver_;
 
   // Shared instance of tick clock, overridden for testing.
-  const base::TickClock* tick_clock_ = base::DefaultTickClock::GetInstance();
+  raw_ptr<const base::TickClock> tick_clock_ =
+      base::DefaultTickClock::GetInstance();
 
   // Options that govern when a stale response can or can't be returned.
   const StaleOptions options_;
@@ -134,8 +139,6 @@ class StaleHostResolver : public net::HostResolver {
       detached_requests_;
 
   base::WeakPtrFactory<StaleHostResolver> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(StaleHostResolver);
 };
 
 }  // namespace cronet

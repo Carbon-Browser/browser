@@ -8,9 +8,7 @@
 #include <memory>
 
 #include "base/callback.h"
-#include "base/compiler_specific.h"
 #include "base/files/file_path.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/timer/timer.h"
 #include "chrome/browser/ash/login/screens/base_screen.h"
@@ -38,8 +36,12 @@ class TermsOfServiceScreen : public BaseScreen {
   enum class ScreenState : int { LOADING = 0, LOADED = 1, ERROR = 2 };
 
   using ScreenExitCallback = base::RepeatingCallback<void(Result result)>;
-  TermsOfServiceScreen(TermsOfServiceScreenView* view,
+  TermsOfServiceScreen(base::WeakPtr<TermsOfServiceScreenView> view,
                        const ScreenExitCallback& exit_callback);
+
+  TermsOfServiceScreen(const TermsOfServiceScreen&) = delete;
+  TermsOfServiceScreen& operator=(const TermsOfServiceScreen&) = delete;
+
   ~TermsOfServiceScreen() override;
 
   // Called when the user declines the Terms of Service.
@@ -50,9 +52,6 @@ class TermsOfServiceScreen : public BaseScreen {
 
   // Called when the user retries to obtain the Terms of Service.
   void OnRetry();
-
-  // Called when view is destroyed so there is no dead reference to it.
-  void OnViewDestroyed(TermsOfServiceScreenView* view);
 
   // Set callback to wait for file saving in tests.
   static void SetTosSavedCallbackForTesting(base::OnceClosure callback);
@@ -72,7 +71,7 @@ class TermsOfServiceScreen : public BaseScreen {
   bool MaybeSkip(WizardContext* context) override;
   void ShowImpl() override;
   void HideImpl() override;
-  void OnUserAction(const std::string& action_id) override;
+  void OnUserAction(const base::Value::List& args) override;
 
   // Start downloading the Terms of Service.
   void StartDownload();
@@ -92,7 +91,7 @@ class TermsOfServiceScreen : public BaseScreen {
   // Runs callback for tests.
   void OnTosSavedForTesting();
 
-  TermsOfServiceScreenView* view_;
+  base::WeakPtr<TermsOfServiceScreenView> view_;
   ScreenExitCallback exit_callback_;
 
   std::unique_ptr<network::SimpleURLLoader> terms_of_service_loader_;
@@ -102,8 +101,6 @@ class TermsOfServiceScreen : public BaseScreen {
   base::OneShotTimer download_timer_;
 
   base::WeakPtrFactory<TermsOfServiceScreen> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(TermsOfServiceScreen);
 };
 
 }  // namespace ash

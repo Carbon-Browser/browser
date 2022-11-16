@@ -10,13 +10,14 @@
 
 #include "base/callback_forward.h"
 #include "base/files/file_path.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
+#include "components/enterprise/browser/device_trust/device_trust_key_manager.h"
 #include "components/enterprise/browser/reporting/reporting_delegate_factory.h"
+#include "components/policy/core/common/cloud/chrome_browser_cloud_management_metrics.h"
 #include "components/policy/core/common/cloud/cloud_policy_client.h"
 #include "components/policy/core/common/policy_service.h"
 
@@ -134,6 +135,10 @@ class ChromeBrowserCloudManagementController
     virtual std::unique_ptr<enterprise_reporting::ReportingDelegateFactory>
     GetReportingDelegateFactory() = 0;
 
+    // Creates a platform-specific DeviceTrustKeyManager instance.
+    virtual std::unique_ptr<enterprise_connectors::DeviceTrustKeyManager>
+    CreateDeviceTrustKeyManager();
+
     // Sets the SharedURLLoaderFactory that this object will use to make
     // requests to GAIA.
     virtual void SetGaiaURLLoaderFactory(
@@ -170,7 +175,11 @@ class ChromeBrowserCloudManagementController
     virtual void OnBrowserUnenrolled(bool succeeded) {}
 
     // Called when the cloud reporting is launched.
-    virtual void OnCloudReportingLaunched() {}
+    virtual void OnCloudReportingLaunched(
+        enterprise_reporting::ReportScheduler* report_scheduler) {}
+
+    // Called when enrollment result is recorded.
+    virtual void OnEnrollmentResultRecorded() {}
   };
 
   // Directory name under the user-data-dir where the policy data is stored.
@@ -179,6 +188,12 @@ class ChromeBrowserCloudManagementController
   explicit ChromeBrowserCloudManagementController(
       std::unique_ptr<ChromeBrowserCloudManagementController::Delegate>
           delegate);
+
+  ChromeBrowserCloudManagementController(
+      const ChromeBrowserCloudManagementController&) = delete;
+  ChromeBrowserCloudManagementController& operator=(
+      const ChromeBrowserCloudManagementController&) = delete;
+
   ~ChromeBrowserCloudManagementController() override;
 
   // The Chrome browser cloud management is only enabled on Chrome by default.
@@ -217,7 +232,9 @@ class ChromeBrowserCloudManagementController
   // Returns whether the enterprise startup dialog is being diaplayed.
   bool IsEnterpriseStartupDialogShowing();
 
-  void UnenrollBrowser();
+  // Unenrolls the browser from cloud management by either invalidating or
+  // deleting the stored DMToken.
+  void UnenrollBrowser(bool delete_dm_token);
 
   // CloudPolicyClient::Observer implementation:
   void OnPolicyFetched(CloudPolicyClient* client) override;
@@ -228,6 +245,10 @@ class ChromeBrowserCloudManagementController
 
   // Early cleanup during browser shutdown process
   void ShutDown();
+
+  // Returns the device trust key manager. Returns nullptr if the Device Trust
+  // feature flag isn't enabled.
+  enterprise_connectors::DeviceTrustKeyManager* GetDeviceTrustKeyManager();
 
   // Sets the SharedURLLoaderFactory that this will be used to make requests to
   // GAIA.
@@ -247,7 +268,7 @@ class ChromeBrowserCloudManagementController
       const std::string& client_id);
 
   void InvalidatePolicies();
-  void InvalidateDMTokenCallback(bool success);
+  void UnenrollCallback(const std::string& metric_name, bool success);
 
   void CreateReportScheduler();
 
@@ -257,6 +278,11 @@ class ChromeBrowserCloudManagementController
       ConfigurationPolicyProvider* platform_provider,
       base::OnceCallback<
           void(std::unique_ptr<MachineLevelUserCloudPolicyManager>)> callback);
+
+  // Logs enrollment result to histogram
+  // `Enterprise.MachineLevelUserCloudPolicyEnrollment.Result`.
+  void RecordEnrollmentResult(
+      ChromeBrowserCloudManagementEnrollmentResult result);
 
   base::ObserverList<Observer, true>::Unchecked observers_;
 
@@ -281,10 +307,11 @@ class ChromeBrowserCloudManagementController
   // token may not be immediately available (e.g. Android).
   base::OnceClosure create_cloud_policy_manager_callback_;
 
+  std::unique_ptr<enterprise_connectors::DeviceTrustKeyManager>
+      device_trust_key_manager_;
+
   base::WeakPtrFactory<ChromeBrowserCloudManagementController> weak_factory_{
       this};
-
-  DISALLOW_COPY_AND_ASSIGN(ChromeBrowserCloudManagementController);
 };
 
 }  // namespace policy

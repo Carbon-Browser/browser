@@ -19,7 +19,7 @@
 #include "base/json/json_reader.h"
 #include "base/json/json_string_value_serializer.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/sequenced_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/thread_annotations.h"
 #include "net/base/features.h"
@@ -80,6 +80,12 @@ const char kNumberOfLoadedReportingEndpointsHistogramName[] =
     "ReportingAndNEL.NumberOfLoadedReportingEndpoints";
 const char kNumberOfLoadedReportingEndpointGroupsHistogramName[] =
     "ReportingAndNEL.NumberOfLoadedReportingEndpointGroups";
+const char kNumberOfLoadedNelPolicies2HistogramName[] =
+    "ReportingAndNEL.NumberOfLoadedNELPolicies2";
+const char kNumberOfLoadedReportingEndpoints2HistogramName[] =
+    "ReportingAndNEL.NumberOfLoadedReportingEndpoints2";
+const char kNumberOfLoadedReportingEndpointGroups2HistogramName[] =
+    "ReportingAndNEL.NumberOfLoadedReportingEndpointGroups2";
 }  // namespace
 
 base::TaskPriority GetReportingAndNelStoreBackgroundSequencePriority() {
@@ -89,9 +95,9 @@ base::TaskPriority GetReportingAndNelStoreBackgroundSequencePriority() {
 // Converts a NetworkIsolationKey to a string for serializing to disk. Returns
 // false on failure, which happens for transient keys that should not be
 // serialized to disk.
-bool WARN_UNUSED_RESULT
-NetworkIsolationKeyToString(const NetworkIsolationKey& network_isolation_key,
-                            std::string* out_string) {
+[[nodiscard]] bool NetworkIsolationKeyToString(
+    const NetworkIsolationKey& network_isolation_key,
+    std::string* out_string) {
   base::Value value;
   if (!network_isolation_key.ToValue(&value))
     return false;
@@ -100,9 +106,9 @@ NetworkIsolationKeyToString(const NetworkIsolationKey& network_isolation_key,
 
 // Attempts to convert a string returned by NetworkIsolationKeyToString() to
 // a NetworkIsolationKey. Returns false on failure.
-bool WARN_UNUSED_RESULT
-NetworkIsolationKeyFromString(const std::string& string,
-                              NetworkIsolationKey* out_network_isolation_key) {
+[[nodiscard]] bool NetworkIsolationKeyFromString(
+    const std::string& string,
+    NetworkIsolationKey* out_network_isolation_key) {
   absl::optional<base::Value> value = base::JSONReader::Read(string);
   if (!value)
     return false;
@@ -138,8 +144,10 @@ class SQLitePersistentReportingAndNelStore::Backend
             kCurrentVersionNumber,
             kCompatibleVersionNumber,
             background_task_runner,
-            client_task_runner),
-        num_pending_(0) {}
+            client_task_runner) {}
+
+  Backend(const Backend&) = delete;
+  Backend& operator=(const Backend&) = delete;
 
   void LoadNelPolicies(NelPoliciesLoadedCallback loaded_callback);
   void AddNelPolicy(const NetworkErrorLoggingService::NelPolicy& policy);
@@ -293,7 +301,7 @@ class SQLitePersistentReportingAndNelStore::Backend
 
   // Total number of pending operations (may not match the sum of the number of
   // elements in the pending operations queues, due to operation coalescing).
-  size_t num_pending_ GUARDED_BY(lock_);
+  size_t num_pending_ GUARDED_BY(lock_) = 0;
 
   // Queue of pending operations pertaining to NEL policies, keyed on origin.
   QueueType<NetworkErrorLoggingService::NelPolicyKey, NelPolicyInfo>
@@ -311,8 +319,6 @@ class SQLitePersistentReportingAndNelStore::Backend
 
   // Protects |num_pending_|, and all the pending operations queues.
   mutable base::Lock lock_;
-
-  DISALLOW_COPY_AND_ASSIGN(Backend);
 };
 
 namespace {
@@ -1283,7 +1289,7 @@ void SQLitePersistentReportingAndNelStore::Backend::OnOperationBatched(
     // We've gotten our first entry for this batch, fire off the timer.
     if (!background_task_runner()->PostDelayedTask(
             FROM_HERE, base::BindOnce(&Backend::Commit, this),
-            base::TimeDelta::FromMilliseconds(kCommitIntervalMs))) {
+            base::Milliseconds(kCommitIntervalMs))) {
       NOTREACHED() << "background_task_runner_ is not running.";
     }
   } else if (num_pending >= kCommitAfterBatchSize) {
@@ -1341,12 +1347,12 @@ void SQLitePersistentReportingAndNelStore::Backend::
       policy.received_ip_address = IPAddress();
     policy.report_to = smt.ColumnString(5);
     policy.expires = base::Time::FromDeltaSinceWindowsEpoch(
-        base::TimeDelta::FromMicroseconds(smt.ColumnInt64(6)));
+        base::Microseconds(smt.ColumnInt64(6)));
     policy.success_fraction = smt.ColumnDouble(7);
     policy.failure_fraction = smt.ColumnDouble(8);
     policy.include_subdomains = smt.ColumnBool(9);
     policy.last_used = base::Time::FromDeltaSinceWindowsEpoch(
-        base::TimeDelta::FromMicroseconds(smt.ColumnInt64(10)));
+        base::Microseconds(smt.ColumnInt64(10)));
 
     loaded_policies.push_back(std::move(policy));
   }
@@ -1453,11 +1459,9 @@ void SQLitePersistentReportingAndNelStore::Backend::
         endpoint_groups_statement.ColumnBool(5) ? OriginSubdomains::INCLUDE
                                                 : OriginSubdomains::EXCLUDE;
     base::Time expires = base::Time::FromDeltaSinceWindowsEpoch(
-        base::TimeDelta::FromMicroseconds(
-            endpoint_groups_statement.ColumnInt64(6)));
+        base::Microseconds(endpoint_groups_statement.ColumnInt64(6)));
     base::Time last_used = base::Time::FromDeltaSinceWindowsEpoch(
-        base::TimeDelta::FromMicroseconds(
-            endpoint_groups_statement.ColumnInt64(7)));
+        base::Microseconds(endpoint_groups_statement.ColumnInt64(7)));
 
     loaded_endpoint_groups.emplace_back(std::move(group_key),
                                         include_subdomains, expires, last_used);
@@ -1527,6 +1531,8 @@ void SQLitePersistentReportingAndNelStore::Backend::
     RecordNumberOfLoadedNelPolicies(size_t count) {
   // The NetworkErrorLoggingService stores up to 1000 policies.
   UMA_HISTOGRAM_COUNTS_1000(kNumberOfLoadedNelPoliciesHistogramName, count);
+  // TODO(crbug.com/1165308): Remove this metric once the investigation is done.
+  UMA_HISTOGRAM_COUNTS_10000(kNumberOfLoadedNelPolicies2HistogramName, count);
 }
 
 void SQLitePersistentReportingAndNelStore::Backend::
@@ -1534,6 +1540,9 @@ void SQLitePersistentReportingAndNelStore::Backend::
   // The ReportingCache stores up to 1000 endpoints.
   UMA_HISTOGRAM_COUNTS_1000(kNumberOfLoadedReportingEndpointsHistogramName,
                             count);
+  // TODO(crbug.com/1165308): Remove this metric once the investigation is done.
+  UMA_HISTOGRAM_COUNTS_10000(kNumberOfLoadedReportingEndpoints2HistogramName,
+                             count);
 }
 
 void SQLitePersistentReportingAndNelStore::Backend::
@@ -1542,13 +1551,18 @@ void SQLitePersistentReportingAndNelStore::Backend::
   // endpoint per group.
   UMA_HISTOGRAM_COUNTS_1000(kNumberOfLoadedReportingEndpointGroupsHistogramName,
                             count);
+  // TODO(crbug.com/1165308): Remove this metric once the investigation is done.
+  UMA_HISTOGRAM_COUNTS_10000(
+      kNumberOfLoadedReportingEndpointGroups2HistogramName, count);
 }
 
 SQLitePersistentReportingAndNelStore::SQLitePersistentReportingAndNelStore(
     const base::FilePath& path,
     const scoped_refptr<base::SequencedTaskRunner>& client_task_runner,
     const scoped_refptr<base::SequencedTaskRunner>& background_task_runner)
-    : backend_(new Backend(path, client_task_runner, background_task_runner)) {}
+    : backend_(base::MakeRefCounted<Backend>(path,
+                                             client_task_runner,
+                                             background_task_runner)) {}
 
 SQLitePersistentReportingAndNelStore::~SQLitePersistentReportingAndNelStore() {
   backend_->Close();

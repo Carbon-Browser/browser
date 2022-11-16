@@ -11,13 +11,13 @@
 #include <string>
 #include <vector>
 
+#include "ash/components/cryptohome/cryptohome_parameters.h"
 #include "ash/constants/ash_switches.h"
 #include "base/command_line.h"
 #include "base/compiler_specific.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/json/json_writer.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/path_service.h"
@@ -47,11 +47,10 @@
 #include "chrome/common/chrome_paths.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/testing_browser_process.h"
-#include "chromeos/cryptohome/cryptohome_parameters.h"
+#include "chromeos/ash/components/dbus/session_manager/fake_session_manager_client.h"
+#include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
+#include "chromeos/ash/components/dbus/userdataauth/userdataauth_client.h"
 #include "chromeos/dbus/constants/dbus_paths.h"
-#include "chromeos/dbus/session_manager/fake_session_manager_client.h"
-#include "chromeos/dbus/session_manager/session_manager_client.h"
-#include "chromeos/dbus/userdataauth/userdataauth_client.h"
 #include "components/ownership/mock_owner_key_util.h"
 #include "components/policy/core/common/cloud/cloud_policy_core.h"
 #include "components/policy/core/common/cloud/cloud_policy_store.h"
@@ -60,8 +59,8 @@
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/scoped_user_pref_update.h"
+#include "components/signin/public/base/consent_level.h"
 #include "components/signin/public/identity_manager/account_info.h"
-#include "components/signin/public/identity_manager/consent_level.h"
 #include "components/signin/public/identity_manager/identity_test_utils.h"
 #include "components/user_manager/scoped_user_manager.h"
 #include "components/user_manager/user.h"
@@ -75,6 +74,7 @@
 #include "net/test/embedded_test_server/http_request.h"
 #include "net/test/embedded_test_server/http_response.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/base/layout.h"
 #include "ui/base/resource/resource_bundle.h"
@@ -87,7 +87,7 @@ namespace {
 constexpr char kRandomTokenStrForTesting[] = "random-token-str-for-testing";
 
 policy::CloudPolicyStore* GetStoreForUser(const user_manager::User* user) {
-  Profile* profile = ProfileHelper::Get()->GetProfileByUserUnsafe(user);
+  Profile* profile = ProfileHelper::Get()->GetProfileByUser(user);
   if (!profile) {
     ADD_FAILURE();
     return NULL;
@@ -104,6 +104,10 @@ policy::CloudPolicyStore* GetStoreForUser(const user_manager::User* user) {
 class UserImageChangeWaiter : public user_manager::UserManager::Observer {
  public:
   UserImageChangeWaiter() {}
+
+  UserImageChangeWaiter(const UserImageChangeWaiter&) = delete;
+  UserImageChangeWaiter& operator=(const UserImageChangeWaiter&) = delete;
+
   ~UserImageChangeWaiter() override {}
 
   void Wait() {
@@ -121,8 +125,6 @@ class UserImageChangeWaiter : public user_manager::UserManager::Observer {
 
  private:
   std::unique_ptr<base::RunLoop> run_loop_;
-
-  DISALLOW_COPY_AND_ASSIGN(UserImageChangeWaiter);
 };
 
 }  // namespace
@@ -130,6 +132,9 @@ class UserImageChangeWaiter : public user_manager::UserManager::Observer {
 class UserImageManagerTestBase : public LoginManagerTest,
                                  public user_manager::UserManager::Observer {
  public:
+  UserImageManagerTestBase(const UserImageManagerTestBase&) = delete;
+  UserImageManagerTestBase& operator=(const UserImageManagerTestBase&) = delete;
+
   std::unique_ptr<net::test_server::BasicHttpResponse> HandleRequest(
       const net::test_server::HttpRequest& request) {
     if (request.relative_url.find("/avatar.jpg") == std::string::npos)
@@ -179,8 +184,7 @@ class UserImageManagerTestBase : public LoginManagerTest,
     // to avoid having to set up a mock policy server. UserCloudPolicyManager
     // will shut down the profile if there's an error loading the initial
     // policy, so disable this behavior so we can inject policy directly.
-    command_line->AppendSwitch(
-        chromeos::switches::kAllowFailedPolicyFetchForTest);
+    command_line->AppendSwitch(switches::kAllowFailedPolicyFetchForTest);
   }
 
   void SetUpOnMainThread() override {
@@ -218,22 +222,19 @@ class UserImageManagerTestBase : public LoginManagerTest,
   void ExpectUserImageInfo(const AccountId& account_id,
                            int image_index,
                            const base::FilePath& image_path) {
-    const base::DictionaryValue* images_pref =
+    const base::Value* images_pref =
         local_state_->GetDictionary(UserImageManagerImpl::kUserImageProperties);
     ASSERT_TRUE(images_pref);
-    const base::DictionaryValue* image_properties = NULL;
-    images_pref->GetDictionaryWithoutPathExpansion(account_id.GetUserEmail(),
-                                                   &image_properties);
+    const base::Value* image_properties =
+        images_pref->FindDictKey(account_id.GetUserEmail());
     ASSERT_TRUE(image_properties);
-    int actual_image_index;
-    std::string actual_image_path;
-    ASSERT_TRUE(
-        image_properties->GetInteger(UserImageManagerImpl::kImageIndexNodeName,
-                                     &actual_image_index) &&
-        image_properties->GetString(UserImageManagerImpl::kImagePathNodeName,
-                                    &actual_image_path));
-    EXPECT_EQ(image_index, actual_image_index);
-    EXPECT_EQ(image_path.value(), actual_image_path);
+    absl::optional<int> actual_image_index =
+        image_properties->FindIntKey(UserImageManagerImpl::kImageIndexNodeName);
+    const std::string* actual_image_path = image_properties->FindStringKey(
+        UserImageManagerImpl::kImagePathNodeName);
+    ASSERT_TRUE(actual_image_index.has_value() && actual_image_path);
+    EXPECT_EQ(image_index, actual_image_index.value());
+    EXPECT_EQ(image_path.value(), *actual_image_path);
   }
 
   // Verifies that there is no image info for `account_id` in dictionary
@@ -315,10 +316,7 @@ class UserImageManagerTestBase : public LoginManagerTest,
   std::unique_ptr<net::test_server::ControllableHttpResponse>
       controllable_http_response_;
 
-  FakeGaiaMixin fake_gaia_{&mixin_host_, embedded_test_server()};
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(UserImageManagerTestBase);
+  FakeGaiaMixin fake_gaia_{&mixin_host_};
 };
 
 class UserImageManagerTest : public UserImageManagerTestBase {
@@ -509,7 +507,7 @@ IN_PROC_BROWSER_TEST_F(UserImageManagerTest, SaveUserImageFromProfileImage) {
 
   UserImageManagerImpl::IgnoreProfileDataDownloadDelayForTesting();
   LoginUser(test_account_id1_);
-  UpdatePrimaryAccountInfo(ProfileHelper::Get()->GetProfileByUserUnsafe(user));
+  UpdatePrimaryAccountInfo(ProfileHelper::Get()->GetProfileByUser(user));
 
   run_loop_ = std::make_unique<base::RunLoop>();
   UserImageManager* user_image_manager =
@@ -539,6 +537,11 @@ IN_PROC_BROWSER_TEST_F(UserImageManagerTest, SaveUserImageFromProfileImage) {
 
 class UserImageManagerPolicyTest : public UserImageManagerTestBase,
                                    public policy::CloudPolicyStore::Observer {
+ public:
+  UserImageManagerPolicyTest(const UserImageManagerPolicyTest&) = delete;
+  UserImageManagerPolicyTest& operator=(const UserImageManagerPolicyTest&) =
+      delete;
+
  protected:
   UserImageManagerPolicyTest()
       : owner_key_util_(new ownership::MockOwnerKeyUtil()) {
@@ -556,7 +559,7 @@ class UserImageManagerPolicyTest : public UserImageManagerTestBase,
     owner_key_util_->SetPublicKeyFromPrivateKey(
         *device_policy_.GetSigningKey());
     // Override FakeSessionManagerClient. This will be shut down by the browser.
-    chromeos::SessionManagerClient::InitializeFakeInMemory();
+    SessionManagerClient::InitializeFakeInMemory();
     FakeSessionManagerClient::Get()->set_device_policy(
         device_policy_.GetBlob());
 
@@ -570,7 +573,7 @@ class UserImageManagerPolicyTest : public UserImageManagerTestBase,
     ASSERT_TRUE(base::PathService::Get(
         chromeos::dbus_paths::DIR_USER_POLICY_KEYS, &user_keys_dir));
     const std::string sanitized_username =
-        chromeos::UserDataAuthClient::GetStubSanitizedUsername(cryptohome_id_);
+        UserDataAuthClient::GetStubSanitizedUsername(cryptohome_id_);
     const base::FilePath user_key_file =
         user_keys_dir.AppendASCII(sanitized_username).AppendASCII("policy.pub");
     std::vector<uint8_t> user_key_bits;
@@ -627,9 +630,6 @@ class UserImageManagerPolicyTest : public UserImageManagerTestBase,
   cryptohome::AccountIdentifier cryptohome_id_ =
       cryptohome::CreateAccountIdentifierFromAccountId(enterprise_account_id_);
   LoginManagerMixin login_manager_{&mixin_host_};
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(UserImageManagerPolicyTest);
 };
 
 // Verifies that the user image can be set through policy. Also verifies that

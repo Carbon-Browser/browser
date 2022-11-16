@@ -4,6 +4,8 @@
 
 #include "ash/accessibility/autoclick/autoclick_controller.h"
 
+#include <tuple>
+
 #include "ash/accessibility/accessibility_controller_impl.h"
 #include "ash/accessibility/autoclick/autoclick_drag_event_rewriter.h"
 #include "ash/accessibility/autoclick/autoclick_ring_handler.h"
@@ -69,7 +71,7 @@ views::Widget::InitParams CreateAutoclickOverlayWidgetParams(
 
 // static.
 base::TimeDelta AutoclickController::GetDefaultAutoclickDelay() {
-  return base::TimeDelta::FromMilliseconds(int64_t{kDefaultAutoclickDelayMs});
+  return base::Milliseconds(int64_t{kDefaultAutoclickDelayMs});
 }
 
 AutoclickController::AutoclickController()
@@ -251,7 +253,7 @@ void AutoclickController::DoScrollAction(ScrollPadAction action) {
                          0 /* x_offset_ordinal */, 0 /* y_offset_ordinal */,
                          2 /* finger_count */);
   ui::MouseWheelEvent wheel(scroll);
-  ignore_result(host->GetEventSink()->OnEventFromSource(&wheel));
+  std::ignore = host->GetEventSink()->OnEventFromSource(&wheel);
 }
 
 void AutoclickController::OnEnteredScrollButton() {

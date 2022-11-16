@@ -18,12 +18,10 @@
 #include "base/test/scoped_feature_list.h"
 #include "base/threading/sequenced_task_runner_handle.h"
 #include "chrome/browser/ash/crosapi/test_local_printer_ash.h"
+#include "chrome/browser/ash/printing/cups_printers_manager_factory.h"
+#include "chrome/browser/ash/printing/test_cups_printers_manager.h"
+#include "chrome/browser/ash/printing/test_printer_configurer.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
-#include "chrome/browser/chromeos/printing/cups_printers_manager_factory.h"
-#include "chrome/browser/chromeos/printing/test_cups_printers_manager.h"
-#include "chrome/browser/chromeos/printing/test_printer_configurer.h"
-#include "chrome/browser/printing/print_backend_service_manager.h"
-#include "chrome/browser/printing/print_backend_service_test_impl.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/common/printing/printer_capabilities.h"
@@ -42,18 +40,23 @@
 #include "printing/backend/print_backend.h"
 #include "printing/backend/printing_restrictions.h"
 #include "printing/backend/test_print_backend.h"
+#include "printing/buildflags/buildflags.h"
 #include "printing/printing_features.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/geometry/size.h"
 #include "url/gurl.h"
 
-using chromeos::CupsPrintersManager;
-using chromeos::Printer;
-using chromeos::PrinterClass;
-using chromeos::PrinterConfigurer;
-using chromeos::PrinterSetupCallback;
-using chromeos::PrinterSetupResult;
+#if BUILDFLAG(ENABLE_OOP_PRINTING)
+#include "chrome/browser/printing/print_backend_service_manager.h"
+#include "chrome/browser/printing/print_backend_service_test_impl.h"
+#else
+#include "base/notreached.h"
+#endif
+
+using ::chromeos::Printer;
+using ::chromeos::PrinterClass;
+using ::chromeos::PrinterConfigurer;
 
 namespace printing {
 
@@ -167,7 +170,7 @@ class TestLocalPrinterAshWithPrinterConfigurer : public TestLocalPrinterAsh {
   TestLocalPrinterAshWithPrinterConfigurer(
       Profile* profile,
       scoped_refptr<chromeos::PpdProvider> ppd_provider,
-      chromeos::TestCupsPrintersManager* manager)
+      ash::TestCupsPrintersManager* manager)
       : TestLocalPrinterAsh(profile, ppd_provider), manager_(manager) {}
   TestLocalPrinterAshWithPrinterConfigurer(
       const TestLocalPrinterAshWithPrinterConfigurer&) = delete;
@@ -176,12 +179,12 @@ class TestLocalPrinterAshWithPrinterConfigurer : public TestLocalPrinterAsh {
   ~TestLocalPrinterAshWithPrinterConfigurer() override = default;
 
  private:
-  std::unique_ptr<chromeos::PrinterConfigurer> CreatePrinterConfigurer(
+  std::unique_ptr<ash::PrinterConfigurer> CreatePrinterConfigurer(
       Profile* profile) override {
-    return std::make_unique<chromeos::TestPrinterConfigurer>(manager_);
+    return std::make_unique<ash::TestPrinterConfigurer>(manager_);
   }
 
-  chromeos::TestCupsPrintersManager* manager_;
+  ash::TestCupsPrintersManager* const manager_;
 };
 
 // Base testing class for `LocalPrinterAsh`.  Contains the base
@@ -223,29 +226,38 @@ class LocalPrinterAshTestBase : public testing::Test {
   }
 
   void SetUp() override {
-    chromeos::ProfileHelper::Get()->SetProfileToUserMappingForTesting(&user_);
+    ash::ProfileHelper::Get()->SetProfileToUserMappingForTesting(&user_);
 
+#if BUILDFLAG(ENABLE_OOP_PRINTING)
     // Choose between running with local test runner or via a service.
-    feature_list_.InitWithFeatureState(features::kEnableOopPrintDrivers,
-                                       UseService());
+    if (UseService()) {
+      feature_list_.InitAndEnableFeatureWithParameters(
+          features::kEnableOopPrintDrivers,
+          {{ features::kEnableOopPrintDriversSandbox.name,
+             "true" }});
+    } else {
+      feature_list_.InitWithFeatureState(features::kEnableOopPrintDrivers,
+                                         false);
+    }
+#endif
 
     sandboxed_test_backend_ = base::MakeRefCounted<TestPrintBackend>();
     ppd_provider_ = base::MakeRefCounted<FakePpdProvider>();
-    chromeos::CupsPrintersManagerFactory::GetInstance()
-        ->SetTestingFactoryAndUse(
-            &profile_,
-            base::BindLambdaForTesting([this](content::BrowserContext* context)
-                                           -> std::unique_ptr<KeyedService> {
-              auto printers_manager =
-                  std::make_unique<chromeos::TestCupsPrintersManager>();
-              printers_manager_ = printers_manager.get();
-              return printers_manager;
-            }));
+    ash::CupsPrintersManagerFactory::GetInstance()->SetTestingFactoryAndUse(
+        &profile_,
+        base::BindLambdaForTesting([this](content::BrowserContext* context)
+                                       -> std::unique_ptr<KeyedService> {
+          auto printers_manager =
+              std::make_unique<ash::TestCupsPrintersManager>();
+          printers_manager_ = printers_manager.get();
+          return printers_manager;
+        }));
     local_printer_ash_ =
         std::make_unique<TestLocalPrinterAshWithPrinterConfigurer>(
             &profile_, ppd_provider_, printers_manager_);
 
     if (UseService()) {
+#if BUILDFLAG(ENABLE_OOP_PRINTING)
       sandboxed_print_backend_service_ =
           PrintBackendServiceTestImpl::LaunchForTesting(sandboxed_test_remote_,
                                                         sandboxed_test_backend_,
@@ -259,6 +271,9 @@ class LocalPrinterAshTestBase : public testing::Test {
                 unsandboxed_test_remote_, unsandboxed_test_backend_,
                 /*sandboxed=*/false);
       }
+#else
+      NOTREACHED();
+#endif  // BUILDFLAG(ENABLE_OOP_PRINTING)
     } else {
       // Use of task runners will call `PrintBackend::CreateInstance()`, which
       // needs a test backend registered for it to use.
@@ -267,8 +282,10 @@ class LocalPrinterAshTestBase : public testing::Test {
   }
 
   void TearDown() override {
+#if BUILDFLAG(ENABLE_OOP_PRINTING)
     PrintBackendServiceManager::ResetForTesting();
-    chromeos::ProfileHelper::Get()->RemoveUserFromListForTesting(
+#endif
+    ash::ProfileHelper::Get()->RemoveUserFromListForTesting(
         user_.GetAccountId());
   }
 
@@ -284,6 +301,7 @@ class LocalPrinterAshTestBase : public testing::Test {
         id, display_name, description, /*printer_status=*/0, is_default,
         PrinterBasicInfoOptions{});
 
+#if BUILDFLAG(ENABLE_OOP_PRINTING)
     if (SupportFallback()) {
       // Need to populate same values into a second print backend.
       // For fallback they will always be treated as valid.
@@ -294,6 +312,7 @@ class LocalPrinterAshTestBase : public testing::Test {
       unsandboxed_print_backend()->AddValidPrinter(
           id, std::move(caps_unsandboxed), std::move(basic_info_unsandboxed));
     }
+#endif  // BUILDFLAG(ENABLE_OOP_PRINTING)
 
     if (requires_elevated_permissions) {
       sandboxed_print_backend()->AddAccessDeniedPrinter(id);
@@ -303,6 +322,7 @@ class LocalPrinterAshTestBase : public testing::Test {
     }
   }
 
+#if BUILDFLAG(ENABLE_OOP_PRINTING)
   void SetTerminateServiceOnNextInteraction() {
     if (SupportFallback()) {
       unsandboxed_print_backend_service_
@@ -311,10 +331,11 @@ class LocalPrinterAshTestBase : public testing::Test {
 
     sandboxed_print_backend_service_->SetTerminateReceiverOnNextInteraction();
   }
+#endif  // BUILDFLAG(ENABLE_OOP_PRINTING)
 
   void RunUntilIdle() { task_environment_.RunUntilIdle(); }
 
-  chromeos::TestCupsPrintersManager& printers_manager() {
+  ash::TestCupsPrintersManager& printers_manager() {
     DCHECK(printers_manager_);
     return *printers_manager_;
   }
@@ -331,10 +352,11 @@ class LocalPrinterAshTestBase : public testing::Test {
   TestingProfile profile_;
   scoped_refptr<TestPrintBackend> sandboxed_test_backend_;
   scoped_refptr<TestPrintBackend> unsandboxed_test_backend_;
-  chromeos::TestCupsPrintersManager* printers_manager_;
+  ash::TestCupsPrintersManager* printers_manager_ = nullptr;
   scoped_refptr<FakePpdProvider> ppd_provider_;
   std::unique_ptr<crosapi::LocalPrinterAsh> local_printer_ash_;
 
+#if BUILDFLAG(ENABLE_OOP_PRINTING)
   // Support for testing via a service instead of with a local task runner.
   base::test::ScopedFeatureList feature_list_;
   mojo::Remote<mojom::PrintBackendService> sandboxed_test_remote_;
@@ -342,6 +364,7 @@ class LocalPrinterAshTestBase : public testing::Test {
   std::unique_ptr<PrintBackendServiceTestImpl> sandboxed_print_backend_service_;
   std::unique_ptr<PrintBackendServiceTestImpl>
       unsandboxed_print_backend_service_;
+#endif  // BUILDFLAG(ENABLE_OOP_PRINTING)
 
   FakeUser user_;
 };
@@ -378,6 +401,8 @@ class LocalPrinterAshProcessScopeTest
   bool SupportFallback() override { return false; }
 };
 
+#if BUILDFLAG(ENABLE_OOP_PRINTING)
+
 // Testing class to cover `LocalPrinterAsh` handling using only a
 // service.  This can check different behavior for whether fallback is enabled,
 // Mojom data validation conditions, or service termination.
@@ -394,6 +419,15 @@ class LocalPrinterAshServiceTest : public LocalPrinterAshTestBase {
 };
 
 INSTANTIATE_TEST_SUITE_P(All, LocalPrinterAshProcessScopeTest, testing::Bool());
+
+#else
+
+// Without OOP printing we only test local test runner configuration.
+INSTANTIATE_TEST_SUITE_P(/*no prefix */,
+                         LocalPrinterAshProcessScopeTest,
+                         testing::Values(false));
+
+#endif  // BUILDFLAG(ENABLE_OOP_PRINTING)
 
 TEST_F(LocalPrinterAshTest, GetStatus) {
   chromeos::CupsPrinterStatus printer1("printer1");
@@ -553,6 +587,8 @@ TEST_P(LocalPrinterAshProcessScopeTest, GetCapabilityUnreachablePrinter) {
   EXPECT_FALSE(fetched_caps->capabilities);
 }
 
+#if BUILDFLAG(ENABLE_OOP_PRINTING)
+
 // Tests that fetching capabilities fails if the print backend service
 // terminates early, such as it would from a crash.
 TEST_F(LocalPrinterAshServiceTest, GetCapabilityTerminatedService) {
@@ -581,6 +617,8 @@ TEST_F(LocalPrinterAshServiceTest, GetCapabilityTerminatedService) {
   EXPECT_FALSE(fetched_caps->capabilities);
 }
 
+#endif  // BUILDFLAG(ENABLE_OOP_PRINTING)
+
 // Test that installed printers to which the user does not have permission to
 // access will receive a dictionary for the capabilities but will not have any
 // settings in that.
@@ -606,6 +644,8 @@ TEST_P(LocalPrinterAshProcessScopeTest, GetCapabilityAccessDenied) {
   EXPECT_FALSE(fetched_caps->capabilities);
 }
 
+#if BUILDFLAG(ENABLE_OOP_PRINTING)
+
 TEST_F(LocalPrinterAshServiceTest, GetCapabilityElevatedPermissionsSucceeds) {
   Printer saved_printer =
       CreateTestPrinter("printer1", "saved", "description1");
@@ -618,7 +658,7 @@ TEST_F(LocalPrinterAshServiceTest, GetCapabilityElevatedPermissionsSucceeds) {
 
   // Note that printer does not initially show as requiring elevated privileges.
   EXPECT_FALSE(PrintBackendServiceManager::GetInstance()
-                   .PrinterDriverRequiresElevatedPrivilege("printer1"));
+                   .PrinterDriverFoundToRequireElevatedPrivilege("printer1"));
 
   crosapi::mojom::CapabilitiesResponsePtr fetched_caps;
   local_printer_ash()->GetCapability(
@@ -628,7 +668,7 @@ TEST_F(LocalPrinterAshServiceTest, GetCapabilityElevatedPermissionsSucceeds) {
 
   // Verify that this printer now shows up as requiring elevated privileges.
   EXPECT_TRUE(PrintBackendServiceManager::GetInstance()
-                  .PrinterDriverRequiresElevatedPrivilege("printer1"));
+                  .PrinterDriverFoundToRequireElevatedPrivilege("printer1"));
 
   // Getting capabilities should succeed when fallback is supported.
   ASSERT_TRUE(fetched_caps);
@@ -637,6 +677,8 @@ TEST_F(LocalPrinterAshServiceTest, GetCapabilityElevatedPermissionsSucceeds) {
   ASSERT_TRUE(fetched_caps->capabilities);
   EXPECT_EQ(kPapers, fetched_caps->capabilities->papers);
 }
+
+#endif  // BUILDFLAG(ENABLE_OOP_PRINTING)
 
 // Test that fetching a PPD license will return a license if the printer has one
 // available.
@@ -744,7 +786,7 @@ TEST_F(LocalPrinterAshTest, GetPolicies_MaxSheetsAllowed) {
       [&](crosapi::mojom::PoliciesPtr data) { policies = std::move(data); })));
 
   EXPECT_TRUE(policies->max_sheets_allowed_has_value);
-  EXPECT_EQ(5, policies->max_sheets_allowed);
+  EXPECT_EQ(5u, policies->max_sheets_allowed);
 }
 
 // Zero sheets allowed is a valid policy.
@@ -758,7 +800,7 @@ TEST_F(LocalPrinterAshTest, GetPolicies_ZeroSheetsAllowed) {
 
   ASSERT_TRUE(policies);
   EXPECT_TRUE(policies->max_sheets_allowed_has_value);
-  EXPECT_EQ(0, policies->max_sheets_allowed);
+  EXPECT_EQ(0u, policies->max_sheets_allowed);
 }
 
 // Negative sheets allowed is not a valid policy.
@@ -901,11 +943,10 @@ TEST_F(LocalPrinterAshTest, GetUsernamePerPolicy_Denied) {
 }
 
 TEST(LocalPrinterAsh, ConfigToMojom) {
-  chromeos::PrintServersConfig config;
+  ash::PrintServersConfig config;
   config.fetching_mode = crosapi::mojom::PrintServersConfig::
       ServerPrintersFetchingMode::kSingleServerOnly;
-  config.print_servers.push_back(
-      chromeos::PrintServer("id", GURL("http://localhost"), "name"));
+  config.print_servers.emplace_back("id", GURL("http://localhost"), "name");
   crosapi::mojom::PrintServersConfigPtr mojom =
       crosapi::LocalPrinterAsh::ConfigToMojom(config);
   ASSERT_TRUE(mojom);

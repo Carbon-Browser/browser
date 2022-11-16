@@ -6,6 +6,8 @@
 
 #include "base/files/file_path.h"
 #include "base/test/metrics/histogram_tester.h"
+#include "base/test/metrics/user_action_tester.h"
+#include "components/download/public/common/download_stats.h"
 #include "components/safe_browsing/content/common/file_type_policies.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -22,6 +24,7 @@ namespace safe_browsing {
 
 TEST(SafeBrowsingDownloadStatsTest, RecordDangerousDownloadWarningShown) {
   base::HistogramTester histogram_tester;
+  base::UserActionTester user_action_tester;
 
   RecordDangerousDownloadWarningShown(
       download::DownloadDangerType::DOWNLOAD_DANGER_TYPE_DANGEROUS_CONTENT,
@@ -36,6 +39,8 @@ TEST(SafeBrowsingDownloadStatsTest, RecordDangerousDownloadWarningShown) {
   histogram_tester.ExpectUniqueSample(
       "SBClientDownload.Warning.DownloadHasUserGesture.Malicious.Shown",
       /*sample=*/1, /*expected_bucket_count=*/1);
+  EXPECT_EQ(1, user_action_tester.GetActionCount(
+                   "SafeBrowsing.Download.WarningShown"));
 
   RecordDangerousDownloadWarningShown(
       download::DownloadDangerType::DOWNLOAD_DANGER_TYPE_UNCOMMON_CONTENT,
@@ -53,10 +58,13 @@ TEST(SafeBrowsingDownloadStatsTest, RecordDangerousDownloadWarningShown) {
       "SBClientDownload.Warning.DownloadHasUserGesture.Uncommon.Shown",
       /*sample=*/0,
       /*expected_count=*/1);
+  EXPECT_EQ(2, user_action_tester.GetActionCount(
+                   "SafeBrowsing.Download.WarningShown"));
 }
 
 TEST(SafeBrowsingDownloadStatsTest, RecordDangerousDownloadWarningBypassed) {
   base::HistogramTester histogram_tester;
+  base::UserActionTester user_action_tester;
 
   RecordDangerousDownloadWarningBypassed(
       download::DownloadDangerType::DOWNLOAD_DANGER_TYPE_DANGEROUS_FILE,
@@ -72,36 +80,70 @@ TEST(SafeBrowsingDownloadStatsTest, RecordDangerousDownloadWarningBypassed) {
       "SBClientDownload.Warning.DownloadHasUserGesture.DangerousFileType."
       "Bypassed",
       /*sample=*/0, /*expected_bucket_count=*/1);
+  EXPECT_EQ(1, user_action_tester.GetActionCount(
+                   "SafeBrowsing.Download.WarningBypassed"));
 }
 
 TEST(SafeBrowsingDownloadStatsTest, RecordDownloadOpened) {
   base::HistogramTester histogram_tester;
 
   base::Time download_end_time = base::Time::Now();
+  download::DownloadContent fake_content =
+      download::DownloadContent::SPREADSHEET;
   // Not logged for dangerous downloads.
   RecordDownloadOpened(
       download::DownloadDangerType::DOWNLOAD_DANGER_TYPE_DANGEROUS_CONTENT,
-      download_end_time + base::TimeDelta::FromDays(1), download_end_time,
+      fake_content, download_end_time + base::Days(1), download_end_time,
       /*show_download_in_folder=*/false);
   histogram_tester.ExpectTotalCount(
-      "SBClientDownload.SafeDownloadOpenedLatency.OpenDirectly", 0);
+      "SBClientDownload.SafeDownloadOpenedLatency2.OpenDirectly", 0);
 
   RecordDownloadOpened(
       download::DownloadDangerType::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS,
-      download_end_time + base::TimeDelta::FromDays(1), download_end_time,
+      fake_content, download_end_time + base::Days(1), download_end_time,
       /*show_download_in_folder=*/false);
   histogram_tester.ExpectTimeBucketCount(
-      "SBClientDownload.SafeDownloadOpenedLatency.OpenDirectly",
-      /*sample=*/base::TimeDelta::FromDays(1),
+      "SBClientDownload.SafeDownloadOpenedLatency2.OpenDirectly",
+      /*sample=*/base::Days(1),
       /*count=*/1);
 
   RecordDownloadOpened(
       download::DownloadDangerType::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS,
-      download_end_time + base::TimeDelta::FromHours(5), download_end_time,
+      fake_content, download_end_time + base::Hours(5), download_end_time,
       /*show_download_in_folder=*/true);
   histogram_tester.ExpectTimeBucketCount(
-      "SBClientDownload.SafeDownloadOpenedLatency.ShowInFolder",
-      /*sample=*/base::TimeDelta::FromHours(5),
+      "SBClientDownload.SafeDownloadOpenedLatency2.ShowInFolder",
+      /*sample=*/base::Hours(5),
+      /*count=*/1);
+}
+
+TEST(SafeBrowsingDownloadStatsTest, RecordDownloadOpenedFileType) {
+  base::HistogramTester histogram_tester;
+
+  base::Time download_end_time = base::Time::Now();
+
+  RecordDownloadOpenedFileType(download::DownloadContent::SPREADSHEET,
+                               download_end_time + base::Days(1),
+                               download_end_time);
+  histogram_tester.ExpectTimeBucketCount(
+      "SBClientDownload.SafeDownloadOpenedLatencyByContentType.SPREADSHEET",
+      /*sample=*/base::Days(1),
+      /*count=*/1);
+
+  RecordDownloadOpenedFileType(download::DownloadContent::PRESENTATION,
+                               download_end_time + base::Hours(5),
+                               download_end_time);
+  histogram_tester.ExpectTimeBucketCount(
+      "SBClientDownload.SafeDownloadOpenedLatencyByContentType.PRESENTATION",
+      /*sample=*/base::Hours(5),
+      /*count=*/1);
+
+  RecordDownloadOpenedFileType(download::DownloadContent::ARCHIVE,
+                               download_end_time + base::Days(1),
+                               download_end_time);
+  histogram_tester.ExpectTimeBucketCount(
+      "SBClientDownload.SafeDownloadOpenedLatencyByContentType.ARCHIVE",
+      /*sample=*/base::Days(1),
       /*count=*/1);
 }
 
@@ -122,11 +164,11 @@ TEST(SafeBrowsingDownloadStatsTest, RecordDownloadFileTypeAttributes) {
   }
   {
     base::HistogramTester histogram_tester;
-    RecordDownloadFileTypeAttributes(DownloadFileType::ALLOW_ON_USER_GESTURE,
-                                     /*has_user_gesture=*/true,
-                                     /*visited_referrer_before=*/true,
-                                     /*latest_bypass_time=*/base::Time::Now() -
-                                         base::TimeDelta::FromHours(1));
+    RecordDownloadFileTypeAttributes(
+        DownloadFileType::ALLOW_ON_USER_GESTURE,
+        /*has_user_gesture=*/true,
+        /*visited_referrer_before=*/true,
+        /*latest_bypass_time=*/base::Time::Now() - base::Hours(1));
     histogram_tester.ExpectBucketCount(
         "SBClientDownload.UserGestureFileType.Attributes",
         /*sample=*/UserGestureFileTypeAttributes::TOTAL_TYPE_CHECKED,
@@ -146,7 +188,7 @@ TEST(SafeBrowsingDownloadStatsTest, RecordDownloadFileTypeAttributes) {
         /*expected_count=*/1);
     histogram_tester.ExpectUniqueTimeSample(
         "SBClientDownload.UserGestureFileType.LastBypassDownloadInterval",
-        /*sample=*/base::TimeDelta::FromHours(1),
+        /*sample=*/base::Hours(1),
         /*expected_bucket_count=*/1);
   }
 }

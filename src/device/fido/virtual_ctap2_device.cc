@@ -433,6 +433,9 @@ std::vector<uint8_t> EncodeGetAssertionResponse(
   if (response.num_credentials) {
     response_map.emplace(5, response.num_credentials.value());
   }
+  if (response.user_selected) {
+    response_map.emplace(6, true);
+  }
   if (response.large_blob_key) {
     response_map.emplace(0x07, cbor::Value(*response.large_blob_key));
   }
@@ -446,6 +449,20 @@ std::vector<uint8_t> GenerateAndEncryptToken(
     base::span<uint8_t, 32> pin_token) {
   RAND_bytes(pin_token.data(), pin_token.size());
   return pin::ProtocolVersion(pin_protocol).Encrypt(shared_key, pin_token);
+}
+
+bool CheckCredentialListForExtraKeys(
+    base::span<const PublicKeyCredentialDescriptor> creds) {
+  if (std::any_of(creds.begin(), creds.end(), [](const auto& cred) -> bool {
+        return cred.had_other_keys;
+      })) {
+    LOG(ERROR) << "A PublicKeyCredentialDescriptor contained unexpected CBOR "
+                  "keys. This is believed to trigger bugs in some security "
+                  "keys. See crbug.com/1270757.";
+    return false;
+  }
+
+  return true;
 }
 
 }  // namespace
@@ -602,6 +619,10 @@ VirtualCtap2Device::VirtualCtap2Device(scoped_refptr<State> state,
     extensions.emplace_back(device::kExtensionLargeBlobKey);
   }
 
+  if (config.min_pin_length_extension_support) {
+    extensions.emplace_back(device::kExtensionMinPINLength);
+  }
+
   if (!extensions.empty()) {
     device_info_->extensions.emplace(std::move(extensions));
   }
@@ -640,6 +661,10 @@ VirtualCtap2Device::VirtualCtap2Device(scoped_refptr<State> state,
     device_info_->min_pin_length = mutable_state()->min_pin_length;
     device_info_->force_pin_change = mutable_state()->force_pin_change;
   }
+
+  if (!config.transports_in_get_info.empty()) {
+    device_info_->transports = config.transports_in_get_info;
+  }
 }
 
 VirtualCtap2Device::~VirtualCtap2Device() = default;
@@ -667,9 +692,14 @@ void VirtualCtap2Device::SetMinPinLength(uint32_t min_pin_length) {
   device_info_->min_pin_length = min_pin_length;
 }
 
-// As all operations for VirtualCtap2Device are synchronous and we do not wait
-// for user touch, Cancel command is no-op.
-void VirtualCtap2Device::Cancel(CancelToken) {}
+// If there is a pending operation, resolve it with a cancel status. Operations
+// can be left pending if |SimulatePress()| returns false.
+void VirtualCtap2Device::Cancel(CancelToken) {
+  if (mutable_state()->transact_callback) {
+    ReturnCtap2Response(std::move(mutable_state()->transact_callback),
+                        mutable_state()->cancel_response_code);
+  }
+}
 
 FidoDevice::CancelToken VirtualCtap2Device::DeviceTransact(
     std::vector<uint8_t> command,
@@ -1004,6 +1034,8 @@ absl::optional<CtapDeviceResponseCode> VirtualCtap2Device::OnMakeCredential(
   }
   CtapMakeCredentialRequest request = std::move(*opt_request);
 
+  mutable_state()->exclude_list_history.push_back(request.exclude_list);
+
   bool user_verified = false;
   const CheckUserVerificationMode check_uv_mode =
       (!request.resident_key_required && !request.pin_auth &&
@@ -1028,13 +1060,17 @@ absl::optional<CtapDeviceResponseCode> VirtualCtap2Device::OnMakeCredential(
     return CtapDeviceResponseCode::kCtap2ErrLimitExceeded;
   }
 
+  if (!CheckCredentialListForExtraKeys(request.exclude_list)) {
+    return CtapDeviceResponseCode::kCtap2ErrInvalidCBOR;
+  }
+
   for (const auto& excluded_credential : request.exclude_list) {
     if (0 < config_.max_credential_id_length &&
-        config_.max_credential_id_length < excluded_credential.id().size()) {
+        config_.max_credential_id_length < excluded_credential.id.size()) {
       return CtapDeviceResponseCode::kCtap2ErrLimitExceeded;
     }
     const RegistrationData* found =
-        FindRegistrationData(excluded_credential.id(), rp_id_hash);
+        FindRegistrationData(excluded_credential.id, rp_id_hash);
     if (found) {
       if (found->protection == device::CredProtect::kUVRequired &&
           !user_verified) {
@@ -1170,6 +1206,16 @@ absl::optional<CtapDeviceResponseCode> VirtualCtap2Device::OnMakeCredential(
     extensions_map.emplace(kExtensionCredBlob, true);
   }
 
+  if (request.min_pin_length_requested) {
+    if (!config_.min_pin_length_extension_support) {
+      DLOG(ERROR) << "Rejecting makeCredential due to unexpected minPinLength "
+                     "extension";
+      return CtapDeviceResponseCode::kCtap2ErrUnsupportedExtension;
+    }
+    extensions_map.emplace(kExtensionMinPINLength,
+                           static_cast<int>(mutable_state()->min_pin_length));
+  }
+
   if (config_.add_extra_extension) {
     extensions_map.emplace(cbor::Value("unsolicited"), cbor::Value(42));
   }
@@ -1218,8 +1264,9 @@ absl::optional<CtapDeviceResponseCode> VirtualCtap2Device::OnMakeCredential(
     if (config_.always_return_enterprise_attestation) {
       enterprise_attestation_requested = true;
     }
-    attestation_cert =
-        GenerateAttestationCertificate(enterprise_attestation_requested);
+    attestation_cert = GenerateAttestationCertificate(
+        enterprise_attestation_requested,
+        config_.include_transports_in_attestation_certificate);
     if (!attestation_cert) {
       DLOG(ERROR) << "Failed to generate attestation certificate.";
       return CtapDeviceResponseCode::kCtap2ErrOther;
@@ -1298,7 +1345,7 @@ absl::optional<CtapDeviceResponseCode> VirtualCtap2Device::OnGetAssertion(
   }
   CtapGetAssertionRequest request = std::move(*opt_request);
 
-  mutable_state()->allow_list_sizes.push_back(request.allow_list.size());
+  mutable_state()->allow_list_history.push_back(request.allow_list);
 
   bool user_verified;
   const absl::optional<CtapDeviceResponseCode> uv_error = CheckUserVerification(
@@ -1331,16 +1378,20 @@ absl::optional<CtapDeviceResponseCode> VirtualCtap2Device::OnGetAssertion(
     return CtapDeviceResponseCode::kCtap2ErrLimitExceeded;
   }
 
+  if (!CheckCredentialListForExtraKeys(request.allow_list)) {
+    return CtapDeviceResponseCode::kCtap2ErrInvalidCBOR;
+  }
+
   for (const auto& allowed_credential : request.allow_list) {
     if (0 < config_.max_credential_id_length &&
-        config_.max_credential_id_length < allowed_credential.id().size()) {
+        config_.max_credential_id_length < allowed_credential.id.size()) {
       return CtapDeviceResponseCode::kCtap2ErrLimitExceeded;
     }
     RegistrationData* registration =
-        FindRegistrationData(allowed_credential.id(), rp_id_hash);
+        FindRegistrationData(allowed_credential.id, rp_id_hash);
     if (registration &&
         !(registration->is_u2f && config_.ignore_u2f_credentials)) {
-      found_registrations.emplace_back(allowed_credential.id(), registration);
+      found_registrations.emplace_back(allowed_credential.id, registration);
       break;
     }
   }
@@ -1461,6 +1512,13 @@ absl::optional<CtapDeviceResponseCode> VirtualCtap2Device::OnGetAssertion(
     memcpy(hmac_shared_key->data(), shared_key.data(), shared_key.size());
   }
 
+  if (request.allow_list.empty() && found_registrations.size() > 1 &&
+      config_.internal_account_chooser) {
+    // Simulate a local account chooser by erasing all but the first result.
+    found_registrations.erase(found_registrations.begin() + 1,
+                              found_registrations.end());
+  }
+
   // This implementation does not sort credentials by creation time as the spec
   // requires.
   bool done_first = false;
@@ -1566,6 +1624,10 @@ absl::optional<CtapDeviceResponseCode> VirtualCtap2Device::OnGetAssertion(
 
     if (registration.second->is_resident) {
       assertion.user_entity = registration.second->user.value();
+    }
+
+    if (request.allow_list.empty() && config_.internal_account_chooser) {
+      assertion.user_selected = true;
     }
 
     if (request.large_blob_key) {
@@ -2100,11 +2162,65 @@ CtapDeviceResponseCode VirtualCtap2Device::OnCredentialManagement(
       if (!credential_id) {
         return CtapDeviceResponseCode::kCtap2ErrCBORUnexpectedType;
       }
-      if (!base::Contains(mutable_state()->registrations,
-                          credential_id->id())) {
+      if (!base::Contains(mutable_state()->registrations, credential_id->id)) {
         return CtapDeviceResponseCode::kCtap2ErrNoCredentials;
       }
-      mutable_state()->registrations.erase(credential_id->id());
+      mutable_state()->registrations.erase(credential_id->id);
+      *response = {};
+      return CtapDeviceResponseCode::kSuccess;
+    }
+    case CredentialManagementSubCommand::kUpdateUserInformation: {
+      request_state_.Reset();
+
+      const auto params_it = request_map.find(cbor::Value(
+          static_cast<int>(CredentialManagementRequestKey::kSubCommandParams)));
+      if (params_it == request_map.end() && !params_it->second.is_map()) {
+        return CtapDeviceResponseCode::kCtap2ErrCBORUnexpectedType;
+      }
+      const cbor::Value::MapValue& params = params_it->second.GetMap();
+      std::vector<uint8_t> pinauth_bytes =
+          cbor::Writer::Write(cbor::Value(params)).value();
+      pinauth_bytes.insert(pinauth_bytes.begin(),
+                           static_cast<uint8_t>(subcommand));
+      CtapDeviceResponseCode pin_status = VerifyPINUVAuthToken(
+          *device_info_, mutable_state()->pin_token, request_map,
+          cbor::Value(
+              static_cast<int>(CredentialManagementRequestKey::kPinProtocol)),
+          cbor::Value(
+              static_cast<int>(CredentialManagementRequestKey::kPinAuth)),
+          pinauth_bytes);
+      if (pin_status != CtapDeviceResponseCode::kSuccess) {
+        return pin_status;
+      }
+
+      const auto credential_id_it = params.find(cbor::Value(static_cast<int>(
+          CredentialManagementRequestParamKey::kCredentialID)));
+      if (credential_id_it == params.end() ||
+          !credential_id_it->second.is_map()) {
+        return CtapDeviceResponseCode::kCtap2ErrCBORUnexpectedType;
+      }
+      auto credential_id = PublicKeyCredentialDescriptor::CreateFromCBORValue(
+          cbor::Value(credential_id_it->second.GetMap()));
+      if (!credential_id) {
+        return CtapDeviceResponseCode::kCtap2ErrMissingParameter;
+      }
+      if (!base::Contains(mutable_state()->registrations, credential_id->id)) {
+        return CtapDeviceResponseCode::kCtap2ErrNoCredentials;
+      }
+
+      const auto new_user_it = params.find(cbor::Value(
+          static_cast<int>(CredentialManagementRequestParamKey::kUser)));
+      if (new_user_it == params.end() || !new_user_it->second.is_map()) {
+        return CtapDeviceResponseCode::kCtap2ErrCBORUnexpectedType;
+      }
+      absl::optional<PublicKeyCredentialUserEntity> new_user =
+          PublicKeyCredentialUserEntity::CreateFromCBORValue(
+              cbor::Value(new_user_it->second.GetMap()));
+      if (!new_user) {
+        return CtapDeviceResponseCode::kCtap2ErrCBORUnexpectedType;
+      }
+
+      mutable_state()->registrations[credential_id->id].user = new_user;
       *response = {};
       return CtapDeviceResponseCode::kSuccess;
     }

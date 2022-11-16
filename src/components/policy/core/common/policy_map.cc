@@ -12,6 +12,7 @@
 #include "base/strings/strcat.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/values.h"
+#include "build/build_config.h"
 #include "components/policy/core/common/cloud/affiliation.h"
 #include "components/policy/core/common/policy_merger.h"
 #include "components/policy/policy_constants.h"
@@ -53,13 +54,16 @@ base::flat_set<std::string> CombineIds(
   return combined_ids;
 }
 
-#if !defined(OS_CHROMEOS)
+#if !BUILDFLAG(IS_CHROMEOS)
 // Returns the calculated priority of the policy entry based on the policy's
 // scope and source, in addition to external factors such as precedence
 // metapolicy values. Used for browser policies.
-PolicyPriorityBrowser GetPriority(PolicySource source,
-                                  PolicyScope scope,
-                                  bool cloud_policy_overrides_platform_policy) {
+PolicyPriorityBrowser GetPriority(
+    PolicySource source,
+    PolicyScope scope,
+    bool cloud_policy_overrides_platform_policy,
+    bool cloud_user_policy_overrides_cloud_machine_policy,
+    bool is_user_affiliated) {
   switch (source) {
     case POLICY_SOURCE_ENTERPRISE_DEFAULT:
       return POLICY_PRIORITY_BROWSER_ENTERPRISE_DEFAULT;
@@ -67,14 +71,24 @@ PolicyPriorityBrowser GetPriority(PolicySource source,
       return POLICY_PRIORITY_BROWSER_COMMAND_LINE;
     case POLICY_SOURCE_CLOUD:
       if (scope == POLICY_SCOPE_MACHINE) {
-        // Raise the priority for cloud machine policies when the metapolicy
+        // Raise the priority of cloud machine policies only when the metapolicy
         // CloudPolicyOverridesPlatformPolicy is set to true.
         return cloud_policy_overrides_platform_policy
                    ? POLICY_PRIORITY_BROWSER_CLOUD_MACHINE_RAISED
                    : POLICY_PRIORITY_BROWSER_CLOUD_MACHINE;
       }
+      if (cloud_user_policy_overrides_cloud_machine_policy &&
+          is_user_affiliated) {
+        // Raise the priority of cloud user policies only when the metapolicy
+        // CloudUserPolicyOverridesCloudMachinePolicy is set to true and the
+        // user is affiliated. Its priority relative to cloud machine policies
+        // also depends on the value of CloudPolicyOverridesPlatformPolicy.
+        return cloud_policy_overrides_platform_policy
+                   ? POLICY_PRIORITY_BROWSER_CLOUD_USER_DOUBLE_RAISED
+                   : POLICY_PRIORITY_BROWSER_CLOUD_USER_RAISED;
+      }
       return POLICY_PRIORITY_BROWSER_CLOUD_USER;
-    case POLICY_SOURCE_PRIORITY_CLOUD:
+    case POLICY_SOURCE_PRIORITY_CLOUD_DEPRECATED:
       return POLICY_PRIORITY_BROWSER_CLOUD_MACHINE_RAISED;
     case POLICY_SOURCE_PLATFORM:
       return scope == POLICY_SCOPE_MACHINE
@@ -87,7 +101,7 @@ PolicyPriorityBrowser GetPriority(PolicySource source,
       return POLICY_PRIORITY_BROWSER_ENTERPRISE_DEFAULT;
   }
 }
-#endif  // defined(OS_CHROMEOS)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 }  // namespace
 
@@ -126,11 +140,21 @@ PolicyMap::Entry PolicyMap::Entry::DeepCopy() const {
   return copy;
 }
 
-base::Value* PolicyMap::Entry::value() {
+const base::Value* PolicyMap::Entry::value(base::Value::Type value_type) const {
+  const base::Value* value = value_unsafe();
+  return value && value->type() == value_type ? value : nullptr;
+}
+
+base::Value* PolicyMap::Entry::value(base::Value::Type value_type) {
+  base::Value* value = value_unsafe();
+  return value && value->type() == value_type ? value : nullptr;
+}
+
+const base::Value* PolicyMap::Entry::value_unsafe() const {
   return base::OptionalOrNullptr(value_);
 }
 
-const base::Value* PolicyMap::Entry::value() const {
+base::Value* PolicyMap::Entry::value_unsafe() {
   return base::OptionalOrNullptr(value_);
 }
 
@@ -150,8 +174,8 @@ bool PolicyMap::Entry::Equals(const PolicyMap::Entry& other) const {
                                  // They have to update when sources change.
       message_ids_ == other.message_ids_ &&
       is_default_value_ == other.is_default_value_ &&
-      ((!value_ && !other.value()) ||
-       (value_ && other.value() && *value_ == *other.value())) &&
+      ((!value_ && !other.value_unsafe()) ||
+       (value_ && other.value_unsafe() && *value_ == *other.value_unsafe())) &&
       ExternalDataFetcher::Equals(external_data_fetcher.get(),
                                   other.external_data_fetcher.get());
   return equals;
@@ -182,9 +206,9 @@ void PolicyMap::Entry::AddConflictingPolicy(Entry&& conflict) {
   std::move(conflict.conflicts.begin(), conflict.conflicts.end(),
             std::back_inserter(conflicts));
 
-  bool is_value_equal = (!this->value() && !conflict.value()) ||
-                        (this->value() && conflict.value() &&
-                         *this->value() == *conflict.value());
+  bool is_value_equal = (!this->value_unsafe() && !conflict.value_unsafe()) ||
+                        (this->value_unsafe() && conflict.value_unsafe() &&
+                         *this->value_unsafe() == *conflict.value_unsafe());
 
   ConflictType type =
       is_value_equal ? ConflictType::Supersede : ConflictType::Override;
@@ -295,16 +319,26 @@ PolicyMap::Entry* PolicyMap::GetMutable(const std::string& policy) {
                                                          : nullptr;
 }
 
-const base::Value* PolicyMap::GetValue(const std::string& policy) const {
-  auto entry = map_.find(policy);
-  return entry != map_.end() && !entry->second.ignored() ? entry->second.value()
-                                                         : nullptr;
+const base::Value* PolicyMap::GetValue(const std::string& policy,
+                                       base::Value::Type value_type) const {
+  auto* entry = Get(policy);
+  return entry ? entry->value(value_type) : nullptr;
 }
 
-base::Value* PolicyMap::GetMutableValue(const std::string& policy) {
-  auto entry = map_.find(policy);
-  return entry != map_.end() && !entry->second.ignored() ? entry->second.value()
-                                                         : nullptr;
+base::Value* PolicyMap::GetMutableValue(const std::string& policy,
+                                        base::Value::Type value_type) {
+  auto* entry = GetMutable(policy);
+  return entry ? entry->value(value_type) : nullptr;
+}
+
+const base::Value* PolicyMap::GetValueUnsafe(const std::string& policy) const {
+  auto* entry = Get(policy);
+  return entry ? entry->value_unsafe() : nullptr;
+}
+
+base::Value* PolicyMap::GetMutableValueUnsafe(const std::string& policy) {
+  auto* entry = GetMutable(policy);
+  return entry ? entry->value_unsafe() : nullptr;
 }
 
 const PolicyMap::Entry* PolicyMap::GetUntrusted(
@@ -316,6 +350,10 @@ const PolicyMap::Entry* PolicyMap::GetUntrusted(
 PolicyMap::Entry* PolicyMap::GetMutableUntrusted(const std::string& policy) {
   auto entry = map_.find(policy);
   return entry != map_.end() ? &entry->second : nullptr;
+}
+
+bool PolicyMap::IsPolicySet(const std::string& policy) const {
+  return GetValueUnsafe(policy) != nullptr;
 }
 
 void PolicyMap::Set(
@@ -391,58 +429,91 @@ PolicyMap PolicyMap::Clone() const {
   for (const auto& it : map_)
     clone.Set(it.first, it.second.DeepCopy());
 
+  clone.cloud_policy_overrides_platform_policy_ =
+      cloud_policy_overrides_platform_policy_;
+  clone.cloud_user_policy_overrides_cloud_machine_policy_ =
+      cloud_user_policy_overrides_cloud_machine_policy_;
   clone.SetUserAffiliationIds(user_affiliation_ids_);
   clone.SetDeviceAffiliationIds(device_affiliation_ids_);
 
   return clone;
 }
 
-void PolicyMap::MergeFrom(const PolicyMap& other) {
-  DCHECK_NE(this, &other);
-  // TODO(crbug.com/1234801): Extract the precedence and merging metapolicy
-  // values from both |PolicyMap|s here to enable setting them through CBCM.
-  UpdateCloudPolicyOverridesPlatformPolicy();
+void PolicyMap::MergePolicy(const std::string& policy_name,
+                            const PolicyMap& other,
+                            bool using_default_precedence) {
+  const Entry* other_policy = other.GetUntrusted(policy_name);
+  if (!other_policy)
+    return;
 
-  for (const auto& policy_and_entry : other) {
-    Entry* current_policy = GetMutableUntrusted(policy_and_entry.first);
-    Entry other_policy = policy_and_entry.second.DeepCopy();
+  Entry* policy = GetMutableUntrusted(policy_name);
+  Entry other_policy_copy = other_policy->DeepCopy();
 
-    // TODO(crbug.com/1234801): Once metapolicies are extracted above, skip them
-    // if they are encountered again in this loop.
-    if (!current_policy) {
-      Set(policy_and_entry.first, std::move(other_policy));
-      continue;
-    }
-
-    const bool other_is_higher_priority =
-        EntryHasHigherPriority(other_policy, *current_policy);
-
-    Entry& higher_policy =
-        other_is_higher_priority ? other_policy : *current_policy;
-    Entry& conflicting_policy =
-        other_is_higher_priority ? *current_policy : other_policy;
-
-    const bool overwriting_default_policy =
-        higher_policy.source != conflicting_policy.source &&
-        conflicting_policy.source == POLICY_SOURCE_ENTERPRISE_DEFAULT;
-    if (!overwriting_default_policy) {
-      current_policy->value() &&
-              *other_policy.value() == *current_policy->value()
-          ? higher_policy.AddMessage(MessageType::kInfo,
-                                     IDS_POLICY_CONFLICT_SAME_VALUE)
-          : higher_policy.AddMessage(MessageType::kWarning,
-                                     IDS_POLICY_CONFLICT_DIFF_VALUE);
-      higher_policy.AddConflictingPolicy(std::move(conflicting_policy));
-    }
-
-    if (other_is_higher_priority)
-      *current_policy = std::move(other_policy);
+  if (!policy) {
+    Set(policy_name, std::move(other_policy_copy));
+    return;
   }
 
+#if BUILDFLAG(IS_CHROMEOS)
+  const bool other_is_higher_priority =
+      EntryHasHigherPriority(other_policy_copy, *policy);
+#else   // BUILDFLAG(IS_CHROMEOS)
+  const bool other_is_higher_priority = EntryHasHigherPriority(
+      other_policy_copy, *policy, using_default_precedence);
+#endif  // BUILDFLAG(IS_CHROMEOS)
+
+  Entry& higher_policy = other_is_higher_priority ? other_policy_copy : *policy;
+  Entry& conflicting_policy =
+      other_is_higher_priority ? *policy : other_policy_copy;
+
+  const bool overwriting_default_policy =
+      higher_policy.source != conflicting_policy.source &&
+      conflicting_policy.source == POLICY_SOURCE_ENTERPRISE_DEFAULT;
+  if (!overwriting_default_policy) {
+    policy->value_unsafe() &&
+            *other_policy_copy.value_unsafe() == *policy->value_unsafe()
+        ? higher_policy.AddMessage(MessageType::kInfo,
+                                   IDS_POLICY_CONFLICT_SAME_VALUE)
+        : higher_policy.AddMessage(MessageType::kWarning,
+                                   IDS_POLICY_CONFLICT_DIFF_VALUE);
+    higher_policy.AddConflictingPolicy(std::move(conflicting_policy));
+  }
+
+  if (other_is_higher_priority)
+    *policy = std::move(other_policy_copy);
+}
+
+void PolicyMap::MergeFrom(const PolicyMap& other) {
+  DCHECK_NE(this, &other);
+  // Set affiliation IDs before merging policy values because user affiliation
+  // affects the policy precedence check.
   SetUserAffiliationIds(
       CombineIds(GetUserAffiliationIds(), other.GetUserAffiliationIds()));
   SetDeviceAffiliationIds(
       CombineIds(GetDeviceAffiliationIds(), other.GetDeviceAffiliationIds()));
+
+  // Precedence metapolicies are merged before all other policies, including
+  // merging metapolicies, because their value affects policy overriding.
+  for (auto* policy : metapolicy::kPrecedence) {
+    // Default precedence is used during merging of precedence metapolicies to
+    // prevent circular dependencies.
+    MergePolicy(policy, other, true);
+  }
+
+  UpdateStoredComputedMetapolicies();
+
+  for (const auto& policy_and_entry : other) {
+    // Skip precedence metapolicies since they have already been merged into the
+    // current PolicyMap.
+    if (std::find(std::begin(metapolicy::kPrecedence),
+                  std::end(metapolicy::kPrecedence), policy_and_entry.first) !=
+        std::end(metapolicy::kPrecedence)) {
+      continue;
+    }
+
+    // External factors, such as the values of metapolicies, are considered.
+    MergePolicy(policy_and_entry.first, other, false);
+  }
 }
 
 void PolicyMap::MergeValues(const std::vector<PolicyMerger*>& mergers) {
@@ -515,25 +586,42 @@ void PolicyMap::FilterErase(
 
 bool PolicyMap::EntryHasHigherPriority(const PolicyMap::Entry& lhs,
                                        const PolicyMap::Entry& rhs) const {
-#if defined(OS_CHROMEOS)
+  return EntryHasHigherPriority(lhs, rhs, false);
+}
+
+bool PolicyMap::EntryHasHigherPriority(const PolicyMap::Entry& lhs,
+                                       const PolicyMap::Entry& rhs,
+                                       bool using_default_precedence) const {
+#if BUILDFLAG(IS_CHROMEOS)
   return std::tie(lhs.level, lhs.scope, lhs.source) >
          std::tie(rhs.level, rhs.scope, rhs.source);
-#else   // defined(OS_CHROMEOS)
-  PolicyPriorityBrowser lhs_priority = GetPriority(
-      lhs.source, lhs.scope, cloud_policy_overrides_platform_policy_);
-  PolicyPriorityBrowser rhs_priority = GetPriority(
-      rhs.source, rhs.scope, cloud_policy_overrides_platform_policy_);
+#else   // BUILDFLAG(IS_CHROMEOS)
+  PolicyPriorityBrowser lhs_priority =
+      using_default_precedence
+          ? GetPriority(lhs.source, lhs.scope, false, false, false)
+          : GetPriority(lhs.source, lhs.scope,
+                        cloud_policy_overrides_platform_policy_,
+                        cloud_user_policy_overrides_cloud_machine_policy_,
+                        is_user_affiliated_);
+  PolicyPriorityBrowser rhs_priority =
+      using_default_precedence
+          ? GetPriority(rhs.source, rhs.scope, false, false, false)
+          : GetPriority(rhs.source, rhs.scope,
+                        cloud_policy_overrides_platform_policy_,
+                        cloud_user_policy_overrides_cloud_machine_policy_,
+                        is_user_affiliated_);
   return std::tie(lhs.level, lhs_priority) > std::tie(rhs.level, rhs_priority);
-#endif  // defined(OS_CHROMEOS)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 }
 
 bool PolicyMap::IsUserAffiliated() const {
-  return IsAffiliated(user_affiliation_ids_, device_affiliation_ids_);
+  return is_user_affiliated_;
 }
 
 void PolicyMap::SetUserAffiliationIds(
     const base::flat_set<std::string>& user_ids) {
   user_affiliation_ids_ = {user_ids.begin(), user_ids.end()};
+  UpdateStoredUserAffiliation();
 }
 
 const base::flat_set<std::string>& PolicyMap::GetUserAffiliationIds() const {
@@ -543,21 +631,32 @@ const base::flat_set<std::string>& PolicyMap::GetUserAffiliationIds() const {
 void PolicyMap::SetDeviceAffiliationIds(
     const base::flat_set<std::string>& device_ids) {
   device_affiliation_ids_ = {device_ids.begin(), device_ids.end()};
+  UpdateStoredUserAffiliation();
 }
 
 const base::flat_set<std::string>& PolicyMap::GetDeviceAffiliationIds() const {
   return device_affiliation_ids_;
 }
 
-void PolicyMap::UpdateCloudPolicyOverridesPlatformPolicy() {
-  // Ensure the set precedence metapolicy is a platform machine policy.
+void PolicyMap::UpdateStoredComputedMetapolicies() {
   cloud_policy_overrides_platform_policy_ =
-      GetValue(key::kCloudPolicyOverridesPlatformPolicy) &&
-      GetValue(key::kCloudPolicyOverridesPlatformPolicy)->GetBool() &&
-      Get(key::kCloudPolicyOverridesPlatformPolicy)->source ==
-          POLICY_SOURCE_PLATFORM &&
-      Get(key::kCloudPolicyOverridesPlatformPolicy)->scope ==
-          POLICY_SCOPE_MACHINE;
+      GetValue(key::kCloudPolicyOverridesPlatformPolicy,
+               base::Value::Type::BOOLEAN) &&
+      GetValue(key::kCloudPolicyOverridesPlatformPolicy,
+               base::Value::Type::BOOLEAN)
+          ->GetBool();
+
+  cloud_user_policy_overrides_cloud_machine_policy_ =
+      GetValue(key::kCloudUserPolicyOverridesCloudMachinePolicy,
+               base::Value::Type::BOOLEAN) &&
+      GetValue(key::kCloudUserPolicyOverridesCloudMachinePolicy,
+               base::Value::Type::BOOLEAN)
+          ->GetBool();
+}
+
+void PolicyMap::UpdateStoredUserAffiliation() {
+  is_user_affiliated_ =
+      IsAffiliated(user_affiliation_ids_, device_affiliation_ids_);
 }
 
 }  // namespace policy

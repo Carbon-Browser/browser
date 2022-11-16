@@ -23,12 +23,6 @@ using WorkerNodeSet = base::flat_set<WorkerNodeImpl*>;
 
 namespace {
 
-// Emits a boolean value that indicates if the client frame's node was found
-// when trying to connect the worker to a client frame.
-void RecordWorkerClientFound(bool found) {
-  UMA_HISTOGRAM_BOOLEAN("PerformanceManager.WorkerClientFound", found);
-}
-
 // Helper function to add |client_frame_node| as a client of |worker_node| on
 // the PM sequence.
 void ConnectClientFrameOnGraph(WorkerNodeImpl* worker_node,
@@ -254,6 +248,26 @@ void WorkerWatcher::OnBeforeWorkerDestroyed(
 
   // First disconnect the ancestor's frame node from this worker node.
   RemoveFrameClientConnection(worker_node.get(), ancestor_render_frame_host_id);
+
+  // Disconnect all child workers before destroying the node.
+  auto child_it = dedicated_worker_child_workers_.find(dedicated_worker_token);
+  if (child_it != dedicated_worker_child_workers_.end()) {
+    const WorkerNodeSet& child_workers = child_it->second;
+    DisconnectClientsOnGraph(child_workers, worker_node.get());
+
+#if DCHECK_IS_ON()
+    for (WorkerNodeImpl* worker : child_workers) {
+      // If this is a service worker client, mark it as a missing client.
+      if (IsServiceWorkerNode(worker)) {
+        DCHECK(missing_service_worker_clients_[worker]
+                   .insert(ServiceWorkerClient(dedicated_worker_token))
+                   .second);
+      }
+    }
+#endif
+
+    dedicated_worker_child_workers_.erase(child_it);
+  }
 
 #if DCHECK_IS_ON()
   DCHECK(!base::Contains(detached_frame_count_per_worker_, worker_node.get()));
@@ -524,7 +538,6 @@ void WorkerWatcher::AddFrameClientConnection(
   // accessible. If it isn't, this means there is a missing
   // CreatePageNodeForWebContents() somewhere.
   if (!frame_node) {
-    RecordWorkerClientFound(false);
 #if DCHECK_IS_ON()
     // A call to RemoveFrameClientConnection() is still expected to be received
     // for this worker and frame pair.
@@ -532,8 +545,6 @@ void WorkerWatcher::AddFrameClientConnection(
 #endif  // DCHECK_IS_ON()
     return;
   }
-
-  RecordWorkerClientFound(true);
 
   // Keep track of the workers that this frame is a client to.
   bool is_first_child_worker = false;

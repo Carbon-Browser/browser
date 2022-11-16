@@ -6,12 +6,13 @@
 #include <memory>
 #include <utility>
 
+#include "ui/color/color_id.h"
+#include "ui/color/color_provider.h"
 #include "ui/gfx/color_palette.h"
 #include "ui/gfx/color_utils.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/gfx/vector_icon_types.h"
 #include "ui/gfx/vector_icon_utils.h"
-#include "ui/native_theme/native_theme.h"
 #include "ui/views/animation/ink_drop.h"
 #include "ui/views/border.h"
 #include "ui/views/controls/button/image_button.h"
@@ -32,9 +33,11 @@ class ColorTrackingVectorImageButton : public ImageButton {
   // ImageButton:
   void OnThemeChanged() override {
     ImageButton::OnThemeChanged();
-    const SkColor color = GetNativeTheme()->GetSystemColor(
-        ui::NativeTheme::kColorId_DefaultIconColor);
-    SetImageFromVectorIconWithColor(this, icon_, dip_size_, color);
+    const ui::ColorProvider* cp = GetColorProvider();
+    const SkColor color = cp->GetColor(ui::kColorIcon);
+    const SkColor disabled_color = cp->GetColor(ui::kColorIconDisabled);
+    SetImageFromVectorIconWithColor(this, icon_, dip_size_, color,
+                                    disabled_color);
   }
 
  private:
@@ -78,39 +81,24 @@ void ConfigureVectorImageButton(ImageButton* button) {
       LayoutProvider::Get()->GetInsetsMetric(INSETS_VECTOR_IMAGE_BUTTON)));
 }
 
-void SetImageFromVectorIcon(ImageButton* button,
-                            const gfx::VectorIcon& icon,
-                            SkColor related_text_color) {
-  SetImageFromVectorIcon(button, icon, GetDefaultSizeOfVectorIcon(icon),
-                         related_text_color);
-}
-
-void SetImageFromVectorIcon(ImageButton* button,
-                            const gfx::VectorIcon& icon,
-                            int dip_size,
-                            SkColor related_text_color) {
-  const SkColor icon_color =
-      color_utils::DeriveDefaultIconColor(related_text_color);
-  SetImageFromVectorIconWithColor(button, icon, dip_size, icon_color);
-}
-
 void SetImageFromVectorIconWithColor(ImageButton* button,
                                      const gfx::VectorIcon& icon,
-                                     SkColor icon_color) {
+                                     SkColor icon_color,
+                                     SkColor icon_disabled_color) {
   SetImageFromVectorIconWithColor(button, icon,
-                                  GetDefaultSizeOfVectorIcon(icon), icon_color);
+                                  GetDefaultSizeOfVectorIcon(icon), icon_color,
+                                  icon_disabled_color);
 }
 
 void SetImageFromVectorIconWithColor(ImageButton* button,
                                      const gfx::VectorIcon& icon,
                                      int dip_size,
-                                     SkColor icon_color) {
-  const SkColor disabled_color =
-      SkColorSetA(icon_color, gfx::kDisabledControlAlpha);
+                                     SkColor icon_color,
+                                     SkColor icon_disabled_color) {
   const gfx::ImageSkia& normal_image =
       gfx::CreateVectorIcon(icon, dip_size, icon_color);
   const gfx::ImageSkia& disabled_image =
-      gfx::CreateVectorIcon(icon, dip_size, disabled_color);
+      gfx::CreateVectorIcon(icon, dip_size, icon_disabled_color);
 
   button->SetImage(Button::STATE_NORMAL, normal_image);
   button->SetImage(Button::STATE_DISABLED, disabled_image);

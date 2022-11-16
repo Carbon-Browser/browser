@@ -7,8 +7,9 @@
 
 #include "base/task/sequence_manager/task_time_observer.h"
 #include "base/time/default_tick_clock.h"
+#include "base/time/time.h"
 #include "third_party/blink/renderer/core/core_export.h"
-#include "third_party/blink/renderer/platform/heap/handle.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/timer.h"
 
 namespace blink {
@@ -51,9 +52,8 @@ class CORE_EXPORT IdlenessDetector
   // The page is quiet if there are no more than 2 active network requests for
   // this duration of time.
   static constexpr base::TimeDelta kNetworkQuietWindow =
-      base::TimeDelta::FromMilliseconds(500);
-  static constexpr base::TimeDelta kNetworkQuietWatchdog =
-      base::TimeDelta::FromSeconds(2);
+      base::Milliseconds(500);
+  static constexpr base::TimeDelta kNetworkQuietWatchdog = base::Seconds(2);
   static constexpr int kNetworkQuietMaximumConnections = 2;
 
   // TaskTimeObserver implementation.

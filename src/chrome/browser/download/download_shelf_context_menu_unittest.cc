@@ -3,7 +3,9 @@
 // found in the LICENSE file.
 #include "chrome/browser/download/download_shelf_context_menu.h"
 
+#include "base/test/metrics/histogram_tester.h"
 #include "chrome/browser/download/download_item_model.h"
+#include "chrome/browser/download/download_stats.h"
 #include "components/download/public/common/mock_download_item.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -37,8 +39,8 @@ TEST_F(DownloadShelfContextMenuTest, InvalidDownloadWontCrashContextMenu) {
   auto download_weak_ptr = download_ui_model->GetWeakPtr();
   EXPECT_CALL(*item, IsMixedContent()).WillRepeatedly(Return(true));
   EXPECT_CALL(*item, IsPaused()).WillRepeatedly(Return(true));
-  // 2 out of 3 commands should be executed.
-  EXPECT_CALL(*item, OpenDownload()).Times(2);
+  // 1 out of 2 commands should be executed.
+  EXPECT_CALL(*item, OpenDownload()).Times(1);
 
   MakeContextMenu(download_ui_model.get());
   EXPECT_NE(menu()->GetMenuModel(), nullptr);
@@ -47,18 +49,34 @@ TEST_F(DownloadShelfContextMenuTest, InvalidDownloadWontCrashContextMenu) {
   EXPECT_TRUE(menu()->IsCommandIdVisible(DownloadCommands::PAUSE));
   menu()->ExecuteCommand(DownloadCommands::OPEN_WHEN_COMPLETE, 0);
 
+  // Weakptr should be invalidated when `download_ui_model` is released.
   download_ui_model.reset();
-  EXPECT_NE(menu()->GetMenuModel(), nullptr);
-  EXPECT_TRUE(menu()->IsCommandIdEnabled(DownloadCommands::KEEP));
-  EXPECT_TRUE(menu()->IsCommandIdChecked(DownloadCommands::PAUSE));
-  EXPECT_TRUE(menu()->IsCommandIdVisible(DownloadCommands::PAUSE));
-  menu()->ExecuteCommand(DownloadCommands::OPEN_WHEN_COMPLETE, 0);
-
-  // |download_ui_model| is released by the task runner.
-  RunUntilIdle();
   EXPECT_EQ(menu()->GetMenuModel(), nullptr);
   EXPECT_FALSE(menu()->IsCommandIdEnabled(DownloadCommands::KEEP));
   EXPECT_FALSE(menu()->IsCommandIdChecked(DownloadCommands::PAUSE));
   EXPECT_FALSE(menu()->IsCommandIdVisible(DownloadCommands::PAUSE));
   menu()->ExecuteCommand(DownloadCommands::OPEN_WHEN_COMPLETE, 0);
+}
+
+TEST_F(DownloadShelfContextMenuTest, RecordCommandsEnabled) {
+  base::HistogramTester histogram_tester;
+  std::unique_ptr<download::MockDownloadItem> item =
+      std::make_unique<NiceMock<download::MockDownloadItem>>();
+  auto download_ui_model = DownloadItemModel::Wrap(item.get());
+  auto download_weak_ptr = download_ui_model->GetWeakPtr();
+  EXPECT_CALL(*item, IsMixedContent()).WillRepeatedly(Return(true));
+  EXPECT_CALL(*item, IsPaused()).WillRepeatedly(Return(true));
+
+  MakeContextMenu(download_ui_model.get());
+  EXPECT_NE(menu()->GetMenuModel(), nullptr);
+  EXPECT_TRUE(menu()->IsCommandIdEnabled(DownloadCommands::KEEP));
+
+  menu()->RecordCommandsEnabled(menu()->GetMenuModel());
+  histogram_tester.ExpectBucketCount(
+      "Download.ShelfContextMenuAction",
+      DownloadShelfContextMenuAction::kKeepEnabled, 1);
+  histogram_tester.ExpectBucketCount(
+      "Download.ShelfContextMenuAction",
+      DownloadShelfContextMenuAction::kLearnMoreMixedContentEnabled, 1);
+  histogram_tester.ExpectTotalCount("Download.ShelfContextMenuAction", 2);
 }

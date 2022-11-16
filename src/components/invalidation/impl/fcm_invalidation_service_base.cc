@@ -30,7 +30,7 @@ void MigratePrefs(PrefService* prefs, const std::string& sender_id) {
     return;
   }
   DictionaryPrefUpdate update(prefs, prefs::kInvalidationClientIDCache);
-  update->SetString(
+  update->SetStringKey(
       sender_id,
       prefs->GetString(prefs::kFCMInvalidationClientIDCacheDeprecated));
   prefs->ClearPref(prefs::kFCMInvalidationClientIDCacheDeprecated);
@@ -102,6 +102,15 @@ bool FCMInvalidationServiceBase::UpdateInterestedTopics(
   return true;
 }
 
+void FCMInvalidationServiceBase::UnsubscribeFromUnregisteredTopics(
+    InvalidationHandler* handler) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  DVLOG(2) << "Unsubscribing from unregistered topics";
+  invalidator_registrar_.RemoveUnregisteredTopics(handler);
+  DoUpdateSubscribedTopicsIfNeeded();
+  logger_.OnUpdatedTopics(invalidator_registrar_.GetHandlerNameToTopicsMap());
+}
+
 void FCMInvalidationServiceBase::UnregisterInvalidationHandler(
     InvalidationHandler* handler) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -130,8 +139,7 @@ InvalidationLogger* FCMInvalidationServiceBase::GetInvalidationLogger() {
 }
 
 void FCMInvalidationServiceBase::RequestDetailedStatus(
-    base::RepeatingCallback<void(const base::DictionaryValue&)> return_callback)
-    const {
+    base::RepeatingCallback<void(base::Value::Dict)> return_callback) const {
   return_callback.Run(CollectDebugData());
   invalidator_registrar_.RequestDetailedStatus(return_callback);
 
@@ -167,22 +175,22 @@ void FCMInvalidationServiceBase::InitForTest(
   DoUpdateSubscribedTopicsIfNeeded();
 }
 
-base::DictionaryValue FCMInvalidationServiceBase::CollectDebugData() const {
-  base::DictionaryValue status;
+base::Value::Dict FCMInvalidationServiceBase::CollectDebugData() const {
+  base::Value::Dict status;
 
-  status.SetString(
+  status.SetByDottedPath(
       "InvalidationService.IID-requested",
       base::TimeFormatShortDateAndTime(diagnostic_info_.instance_id_requested));
-  status.SetString(
+  status.SetByDottedPath(
       "InvalidationService.IID-received",
       base::TimeFormatShortDateAndTime(diagnostic_info_.instance_id_received));
-  status.SetString(
+  status.SetByDottedPath(
       "InvalidationService.IID-cleared",
       base::TimeFormatShortDateAndTime(diagnostic_info_.instance_id_cleared));
-  status.SetString(
+  status.SetByDottedPath(
       "InvalidationService.Service-stopped",
       base::TimeFormatShortDateAndTime(diagnostic_info_.service_was_stopped));
-  status.SetString(
+  status.SetByDottedPath(
       "InvalidationService.Service-started",
       base::TimeFormatShortDateAndTime(diagnostic_info_.service_was_started));
   return status;

@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/ozone/platform/wayland/host/shell_popup_wrapper.h"
 
 namespace ui {
@@ -22,6 +22,10 @@ class ZXDGPopupV6WrapperImpl : public ShellPopupWrapper {
   ZXDGPopupV6WrapperImpl(std::unique_ptr<ZXDGSurfaceV6WrapperImpl> surface,
                          WaylandWindow* wayland_window,
                          WaylandConnection* connection);
+
+  ZXDGPopupV6WrapperImpl(const ZXDGPopupV6WrapperImpl&) = delete;
+  ZXDGPopupV6WrapperImpl& operator=(const ZXDGPopupV6WrapperImpl&) = delete;
+
   ~ZXDGPopupV6WrapperImpl() override;
 
   // XDGPopupWrapper:
@@ -31,9 +35,11 @@ class ZXDGPopupV6WrapperImpl : public ShellPopupWrapper {
   bool SetBounds(const gfx::Rect& new_bounds) override;
   void SetWindowGeometry(const gfx::Rect& bounds) override;
   void Grab(uint32_t serial) override;
+  bool SupportsDecoration() override;
+  void Decorate() override;
 
  private:
-  struct zxdg_positioner_v6* CreatePositioner(WaylandWindow* parent_window);
+  wl::Object<zxdg_positioner_v6> CreatePositioner();
 
   // zxdg_popup_v6_listener
   static void Configure(void* data,
@@ -47,9 +53,9 @@ class ZXDGPopupV6WrapperImpl : public ShellPopupWrapper {
   ZXDGSurfaceV6WrapperImpl* zxdg_surface_v6_wrapper() const;
 
   // Non-owned WaylandWindow that uses this popup.
-  WaylandWindow* const wayland_window_;
+  const raw_ptr<WaylandWindow> wayland_window_;
   // Non-owned WaylandConnection.
-  WaylandConnection* const connection_;
+  const raw_ptr<WaylandConnection> connection_;
 
   // Ground surface for this popup.
   std::unique_ptr<ZXDGSurfaceV6WrapperImpl> zxdg_surface_v6_wrapper_;
@@ -59,8 +65,6 @@ class ZXDGPopupV6WrapperImpl : public ShellPopupWrapper {
 
   // Parameters of this popup.
   ShellPopupParams params_;
-
-  DISALLOW_COPY_AND_ASSIGN(ZXDGPopupV6WrapperImpl);
 };
 
 }  // namespace ui

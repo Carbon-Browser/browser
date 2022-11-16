@@ -22,20 +22,19 @@ namespace {
 void SetupDone(base::OnceCallback<void(int)> callback,
                UpdaterScope scope,
                int result) {
-  if (result != setup_exit_codes::kSuccess) {
+  if (result != kErrorOk) {
     std::move(callback).Run(result);
     return;
   }
   PollLaunchctlList(
-      scope, GetUpdateServiceInternalLaunchdName(), LaunchctlPresence::kPresent,
-      base::TimeDelta::FromSeconds(kWaitForLaunchctlUpdateSec),
+      scope, GetUpdateServiceInternalLaunchdName(scope),
+      LaunchctlPresence::kPresent, base::Seconds(kWaitForLaunchctlUpdateSec),
       base::BindOnce(
           [](base::OnceCallback<void(int)> callback, bool service_exists) {
             std::move(callback).Run(
                 service_exists
-                    ? setup_exit_codes::kSuccess
-                    : setup_exit_codes::
-                          kFailedAwaitingLaunchdUpdateServiceInternalJob);
+                    ? kErrorOk
+                    : kErrorFailedAwaitingLaunchdUpdateServiceInternalJob);
           },
           std::move(callback)));
 }

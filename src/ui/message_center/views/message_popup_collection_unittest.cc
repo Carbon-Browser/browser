@@ -5,6 +5,7 @@
 #include "ui/message_center/views/message_popup_collection.h"
 
 #include "base/containers/cxx20_erase.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
@@ -30,6 +31,10 @@ class MockMessagePopupCollection : public DesktopMessagePopupCollection {
  public:
   explicit MockMessagePopupCollection(gfx::NativeWindow context)
       : DesktopMessagePopupCollection(), context_(context) {}
+
+  MockMessagePopupCollection(const MockMessagePopupCollection&) = delete;
+  MockMessagePopupCollection& operator=(const MockMessagePopupCollection&) =
+      delete;
 
   ~MockMessagePopupCollection() override = default;
 
@@ -99,8 +104,6 @@ class MockMessagePopupCollection : public DesktopMessagePopupCollection {
   bool is_primary_display_ = true;
   bool is_fullscreen_ = false;
   int new_popup_height_ = 84;
-
-  DISALLOW_COPY_AND_ASSIGN(MockMessagePopupCollection);
 };
 
 class MockMessagePopupView : public MessagePopupView {
@@ -173,7 +176,7 @@ class MockMessagePopupView : public MessagePopupView {
   }
 
  private:
-  MockMessagePopupCollection* const popup_collection_;
+  const raw_ptr<MockMessagePopupCollection> popup_collection_;
 
   std::string id_;
   bool updated_ = false;
@@ -197,6 +200,11 @@ class MessagePopupCollectionTest : public views::ViewsTestBase,
                                    public MessageCenterObserver {
  public:
   MessagePopupCollectionTest() = default;
+
+  MessagePopupCollectionTest(const MessagePopupCollectionTest&) = delete;
+  MessagePopupCollectionTest& operator=(const MessagePopupCollectionTest&) =
+      delete;
+
   ~MessagePopupCollectionTest() override = default;
 
   // views::ViewTestBase:
@@ -242,9 +250,9 @@ class MessagePopupCollectionTest : public views::ViewsTestBase,
                                                    const std::string& title) {
     return std::make_unique<Notification>(
         NOTIFICATION_TYPE_BASE_FORMAT, id, base::UTF8ToUTF16(title),
-        u"test message", gfx::Image(), std::u16string() /* display_source */,
-        GURL(), NotifierId(), RichNotificationData(),
-        new NotificationDelegate());
+        u"test message", ui::ImageModel(),
+        std::u16string() /* display_source */, GURL(), NotifierId(),
+        RichNotificationData(), new NotificationDelegate());
   }
 
   std::string AddNotification() {
@@ -318,8 +326,6 @@ class MessagePopupCollectionTest : public views::ViewsTestBase,
 
   gfx::Rect work_area_;
   std::string last_displayed_id_;
-
-  DISALLOW_COPY_AND_ASSIGN(MessagePopupCollectionTest);
 };
 
 TEST_F(MessagePopupCollectionTest, Nothing) {

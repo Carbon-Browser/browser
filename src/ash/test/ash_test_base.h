@@ -17,7 +17,6 @@
 #include "ash/wm/desks/desks_util.h"
 #include "ash/wm/overview/overview_types.h"
 #include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "base/test/task_environment.h"
 #include "base/threading/thread.h"
 #include "base/traits_bag.h"
@@ -70,12 +69,18 @@ namespace ash {
 class AmbientAshTestHelper;
 class AppListTestHelper;
 class AshTestHelper;
+class AshTestUiStabilizer;
 class Shelf;
+class TestAppListClient;
 class TestShellDelegate;
 class TestSystemTrayClient;
 class UnifiedSystemTray;
 class WorkAreaInsets;
 
+// Base class for most tests in //ash. Constructs ash::Shell and all its
+// dependencies. Provides a user login session (use NoSessionAshTestBase for
+// tests that start at the login screen or need unusual user types). Sets
+// animation durations to zero via AshTestHelper/AuraTestHelper.
 class AshTestBase : public testing::Test {
  public:
   // Constructs an AshTestBase with |traits| being forwarded to its
@@ -90,6 +95,9 @@ class AshTestBase : public testing::Test {
   // Alternatively a subclass may pass a TaskEnvironment directly.
   explicit AshTestBase(
       std::unique_ptr<base::test::TaskEnvironment> task_environment);
+
+  AshTestBase(const AshTestBase&) = delete;
+  AshTestBase& operator=(const AshTestBase&) = delete;
 
   ~AshTestBase() override;
 
@@ -134,10 +142,13 @@ class AshTestBase : public testing::Test {
   // window, otherwise the window is added to the display matching
   // |bounds_in_screen|. |shell_window_id| is the shell window id to give to
   // the new window.
+  // If |delegate| is empty, a new |TestWidgetDelegate| instance will be set as
+  // this widget's delegate.
   std::unique_ptr<aura::Window> CreateAppWindow(
       const gfx::Rect& bounds_in_screen = gfx::Rect(),
       AppType app_type = AppType::SYSTEM_APP,
-      int shell_window_id = kShellWindowId_Invalid);
+      int shell_window_id = kShellWindowId_Invalid,
+      views::WidgetDelegate* delegate = nullptr);
 
   // Creates a visible window in the appropriate container. If
   // |bounds_in_screen| is empty the window is added to the primary root
@@ -173,6 +184,10 @@ class AshTestBase : public testing::Test {
   // Attach |window| to the current shell's root window.
   void ParentWindowInPrimaryRootWindow(aura::Window* window);
 
+  // Prepares for the pixel diff test. NOTE: this function should be called
+  // before `SetUp()`.
+  void PrepareForPixelDiffTest();
+
   // Returns the EventGenerator that uses screen coordinates and works
   // across multiple displays. It creates a new generator if it
   // hasn't been created yet.
@@ -192,10 +207,16 @@ class AshTestBase : public testing::Test {
   // Presses and releases a key to simulate typing one character.
   void PressAndReleaseKey(ui::KeyboardCode key_code, int flags = ui::EF_NONE);
 
-  // Moves the mouse to the center of the view and generates a left button click
-  // event.
-  void SimulateMouseClickAt(ui::test::EventGenerator* event_generator,
-                            const views::View* target_view);
+  // Moves the mouse to the center of the view and generates a left mouse button
+  // click event.
+  void LeftClickOn(const views::View* view);
+
+  // Moves the mouse to the center of the view and generates a right mouse
+  // button click event.
+  void RightClickOn(const views::View* view);
+
+  // Generates a tap event on the center of `view`.
+  void GestureTapOn(const views::View* view);
 
   // Enters/Exits overview mode with the given animation type `type`.
   bool EnterOverview(
@@ -235,6 +256,8 @@ class AshTestBase : public testing::Test {
   TestSystemTrayClient* GetSystemTrayClient();
 
   AppListTestHelper* GetAppListTestHelper();
+
+  TestAppListClient* GetTestAppListClient();
 
   AmbientAshTestHelper* GetAmbientAshTestHelper();
 
@@ -322,7 +345,8 @@ class AshTestBase : public testing::Test {
 
   std::unique_ptr<ui::test::EventGenerator> event_generator_;
 
-  DISALLOW_COPY_AND_ASSIGN(AshTestBase);
+  // Used only for pixel tests. Set by `PrepareForPixelDiffTest()`.
+  std::unique_ptr<AshTestUiStabilizer> ui_stabilizer_;
 };
 
 class NoSessionAshTestBase : public AshTestBase {
@@ -330,10 +354,11 @@ class NoSessionAshTestBase : public AshTestBase {
   NoSessionAshTestBase();
   explicit NoSessionAshTestBase(
       base::test::TaskEnvironment::TimeSource time_source);
-  ~NoSessionAshTestBase() override;
 
- private:
-  DISALLOW_COPY_AND_ASSIGN(NoSessionAshTestBase);
+  NoSessionAshTestBase(const NoSessionAshTestBase&) = delete;
+  NoSessionAshTestBase& operator=(const NoSessionAshTestBase&) = delete;
+
+  ~NoSessionAshTestBase() override;
 };
 
 }  // namespace ash

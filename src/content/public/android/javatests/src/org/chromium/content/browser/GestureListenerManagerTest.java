@@ -43,7 +43,7 @@ public class GestureListenerManagerTest {
             "<html><body style='height: 10000px'><script>"
             + "window.addEventListener('load', () => { document.title = 'loaded'; });</script>");
 
-    private static final class GestureStateListenerImpl implements GestureStateListenerWithScroll {
+    private static final class GestureStateListenerImpl extends GestureStateListenerWithScroll {
         private int mNumOnScrollOffsetOrExtentChangedCalls;
         public CallbackHelper mCallbackHelper = new CallbackHelper();
         private boolean mGotStarted;
@@ -51,7 +51,7 @@ public class GestureListenerManagerTest {
         private Integer mLastScrollOffsetY;
 
         @Override
-        public void onScrollStarted(int scrollOffsetY, int scrollExtentY) {
+        public void onScrollStarted(int scrollOffsetY, int scrollExtentY, boolean isDirectionUp) {
             org.chromium.base.Log.e("chrome", "!!!onScrollStarted " + scrollOffsetY);
             mGotStarted = true;
             mLastScrollOffsetY = null;

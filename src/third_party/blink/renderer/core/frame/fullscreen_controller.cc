@@ -43,10 +43,12 @@
 #include "third_party/blink/renderer/core/frame/screen.h"
 #include "third_party/blink/renderer/core/frame/web_local_frame_impl.h"
 #include "third_party/blink/renderer/core/fullscreen/fullscreen.h"
+#include "third_party/blink/renderer/core/fullscreen/fullscreen_request_type.h"
 #include "third_party/blink/renderer/core/html/media/html_video_element.h"
 #include "third_party/blink/renderer/core/page/page.h"
 #include "third_party/blink/renderer/core/page/spatial_navigation.h"
 #include "third_party/blink/renderer/core/page/spatial_navigation_controller.h"
+#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 
 namespace blink {
 
@@ -58,7 +60,7 @@ mojom::blink::FullscreenOptionsPtr ToMojoOptions(
     FullscreenRequestType request_type) {
   auto fullscreen_options = mojom::blink::FullscreenOptions::New();
   fullscreen_options->prefers_navigation_bar =
-      options->navigationUI() != "hide";
+      options->navigationUI() == "show";
   if (options->hasScreen()) {
     DCHECK(RuntimeEnabledFeatures::WindowPlacementEnabled(frame->DomWindow()));
     if (options->screen()->DisplayId() != Screen::kInvalidDisplayId)
@@ -72,6 +74,8 @@ mojom::blink::FullscreenOptionsPtr ToMojoOptions(
       request_type & FullscreenRequestType::kPrefixed;
   fullscreen_options->is_xr_overlay =
       request_type & FullscreenRequestType::kForXrOverlay;
+  fullscreen_options->prefers_status_bar =
+      request_type & FullscreenRequestType::kForXrArWithCamera;
 
   return fullscreen_options;
 }
@@ -96,7 +100,7 @@ void FullscreenController::DidEnterFullscreen() {
   // Only reset the scale for the local main frame.
   if (web_view_base_->MainFrameImpl()) {
     web_view_base_->SetPageScaleFactor(1.0f);
-    web_view_base_->SetVisualViewportOffset(FloatPoint());
+    web_view_base_->SetVisualViewportOffset(gfx::PointF());
   }
 
   state_ = State::kFullscreen;
@@ -146,17 +150,20 @@ void FullscreenController::EnterFullscreen(LocalFrame& frame,
                                            FullscreenRequestType request_type) {
   const auto& screen_info = frame.GetChromeClient().GetScreenInfo(frame);
 
-  bool requesting_other_screen =
+  const bool requesting_other_screen =
       options->hasScreen() &&
       options->screen()->DisplayId() != Screen::kInvalidDisplayId &&
       options->screen()->DisplayId() != screen_info.display_id;
+  bool requesting_fullscreen_screen_change =
+      state_ == State::kFullscreen && requesting_other_screen;
+
   // TODO(dtapuska): If we are already in fullscreen. If the options are
   // different than the currently requested one we may wish to request
   // fullscreen mode again.
   // If already fullscreen or exiting fullscreen, synchronously call
   // |DidEnterFullscreen()|. When exiting, the coming |DidExitFullscreen()| call
   // will again notify all frames.
-  if ((state_ == State::kFullscreen && !requesting_other_screen) ||
+  if ((state_ == State::kFullscreen && !requesting_fullscreen_screen_change) ||
       state_ == State::kExitingFullscreen) {
     State old_state = state_;
     state_ = State::kEnteringFullscreen;
@@ -179,15 +186,21 @@ void FullscreenController::EnterFullscreen(LocalFrame& frame,
     return;
   }
 
-  DCHECK(state_ == State::kInitial ||
-         state_ == State::kFullscreen && requesting_other_screen);
+  DCHECK(state_ == State::kInitial || requesting_fullscreen_screen_change);
   auto fullscreen_options = ToMojoOptions(&frame, options, request_type);
+
+  // We want to disallow entering fullscreen with status and navigation bars
+  // both visible, as this would translate into "no fullscreen at all".
+  DCHECK(!(fullscreen_options->prefers_status_bar &&
+           fullscreen_options->prefers_navigation_bar));
 
 #if DCHECK_IS_ON()
   DVLOG(2) << __func__ << ": request_type="
            << FullscreenRequestTypeToDebugString(request_type)
            << " fullscreen_options={display_id="
-           << fullscreen_options->display_id
+           << fullscreen_options->display_id << ", prefers_navigation_bar="
+           << fullscreen_options->prefers_navigation_bar
+           << ", prefers_status_bar=" << fullscreen_options->prefers_status_bar
            << ", is_prefixed=" << fullscreen_options->is_prefixed
            << ", is_xr_overlay=" << fullscreen_options->is_xr_overlay << "}";
 #endif
@@ -238,13 +251,6 @@ void FullscreenController::FullscreenElementChanged(
 
     if (auto* video_element = DynamicTo<HTMLVideoElement>(*new_element)) {
       video_element->DidEnterFullscreen();
-
-      // If the video uses overlay fullscreen mode, make the background
-      // transparent.
-      if (video_element->UsesOverlayFullscreenVideo()) {
-        web_view_base_->SetBackgroundColorOverrideForFullscreenController(
-            Color::kTransparent);
-      }
     }
   }
 
@@ -336,7 +342,7 @@ void FullscreenController::UpdatePageScaleConstraints(bool reset_constraints) {
     web_view_base_->GetPageScaleConstraintsSet().SetNeedsReset(true);
   } else {
     fullscreen_constraints = PageScaleConstraints(1.0, 1.0, 1.0);
-    fullscreen_constraints.layout_size = FloatSize(web_view_base_->Size());
+    fullscreen_constraints.layout_size = gfx::SizeF(web_view_base_->Size());
   }
   web_view_base_->GetPageScaleConstraintsSet().SetFullscreenConstraints(
       fullscreen_constraints);

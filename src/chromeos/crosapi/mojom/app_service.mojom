@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
-// Next MinVersion: 13
+// Next MinVersion: 18
 
 module crosapi.mojom;
 
@@ -118,6 +118,16 @@ interface AppController {
   ExecuteContextMenuCommand@9(
       string app_id,
       string id) => (LaunchResult launch_result);
+
+  // Close all instances of the given |app_id|.
+  [MinVersion=13]
+  StopApp@10(string app_id);
+
+  // Change permission setting for the app with |app_id|.
+  [MinVersion=14]
+  SetPermission@11(
+      string app_id,
+      Permission permission);
 };
 
 // Interacts with the app service. Implemented in ash-chrome and called in
@@ -154,6 +164,25 @@ interface AppServiceProxy {
     IconKey icon_key,
     IconType icon_type,
     int32 size_hint_in_dip) => (IconValue icon_value);
+
+  // Lacros informs Ash of the preferred app that should be used to handle a
+  // given |intent|. This allows Ash to build an in-memory representation of
+  // the user's preferred apps for a given intent.
+  [MinVersion=15]
+  AddPreferredApp@3(
+      string app_id,
+      Intent intent);
+
+  // In the Settings SWA, show the app management page for |app_id|.
+  [MinVersion=16]
+  ShowAppManagementPage@4(string app_id);
+
+  // Sets |app_id| as the preferred app for all of its supported links ('view'
+  // intent filters with a scheme, host, and port) in ash-chrome. All changes to
+  // the user's preferences as a result of this call will be synchronized back
+  // to lacros-chrome through AppServiceSubscriber::OnPreferredAppsChanged.
+  [MinVersion=17]
+  SetSupportedLinksPreference@5(string app_id);
 };
 
 // Interacts with the app service. Implemented in lacros-chrome and called in
@@ -168,4 +197,16 @@ interface AppServiceSubscriber {
   // has finished initiating apps.
   [MinVersion=9]
   OnApps@0(array<App> deltas, AppType app_type, bool should_notify_initialized);
+
+  // Indicates that a changes have been made by App Service to the preferred
+  // apps list. All of the changes should be applied to the subscriber's copy of
+  // the list using PreferredAppsList::ApplyBulkUpdate.
+  [MinVersion=15]
+  OnPreferredAppsChanged@1(PreferredAppChanges changes);
+
+  // On startup, Ash informs Lacros of the user's historically preferred apps
+  // for given intents. This allows Lacros to initialize its in-memory
+  // representation of the user's preferred apps.
+  [MinVersion=15]
+  InitializePreferredApps@2(array<PreferredApp> preferred_apps);
 };

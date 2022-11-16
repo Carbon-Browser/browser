@@ -17,11 +17,9 @@
 namespace {
 
 // Delay of the reconnection to Sensor Hal Dispatcher.
-constexpr base::TimeDelta kDelayReconnect =
-    base::TimeDelta::FromMilliseconds(1000);
+constexpr base::TimeDelta kDelayReconnect = base::Milliseconds(1000);
 
-constexpr base::TimeDelta kNewDevicesTimeout =
-    base::TimeDelta::FromMilliseconds(10000);
+constexpr base::TimeDelta kNewDevicesTimeout = base::Milliseconds(10000);
 
 constexpr char kCrosECLightName[] = "cros-ec-light";
 constexpr char kAcpiAlsName[] = "acpi-als";
@@ -32,10 +30,8 @@ namespace ash {
 namespace power {
 namespace auto_screen_brightness {
 
-LightProviderMojo::LightProviderMojo(AlsReader* als_reader,
-                                     bool has_several_light_sensors)
-    : LightProviderInterface(als_reader),
-      has_several_light_sensors_(has_several_light_sensors) {
+LightProviderMojo::LightProviderMojo(AlsReader* als_reader)
+    : LightProviderInterface(als_reader) {
   RegisterSensorClient();
 }
 
@@ -65,15 +61,10 @@ void LightProviderMojo::SetUpChannel(
     DCHECK(!light.ignored);
     DCHECK(light.name.has_value());
 
-    if (has_several_light_sensors_) {
-      // The used sensor is cros-ec-light on the lid.
-      DCHECK(light.name.value().compare(kCrosECLightName) == 0);
-      DCHECK(light.on_lid);
+    if (light.name.value().compare(kCrosECLightName) == 0 &&
+        light.on_lid.value_or(false)) {
       return;
     }
-
-    if (light.name.value().compare(kCrosECLightName) == 0)
-      return;
   }
 
   sensor_service_remote_->RegisterNewDevicesObserver(
@@ -88,10 +79,7 @@ void LightProviderMojo::SetUpChannel(
                      weak_ptr_factory_.GetWeakPtr()),
       kNewDevicesTimeout);
 
-  sensor_service_remote_->GetDeviceIds(
-      chromeos::sensors::mojom::DeviceType::LIGHT,
-      base::BindOnce(&LightProviderMojo::GetLightIdsCallback,
-                     weak_ptr_factory_.GetWeakPtr()));
+  QueryDevices();
 }
 
 void LightProviderMojo::OnNewDeviceAdded(
@@ -127,9 +115,10 @@ void LightProviderMojo::OnNewDevicesTimeout() {
 
   new_devices_observer_.reset();
 
-  if (light_device_id_.has_value())
+  if (als_init_status_set_)
     return;
 
+  als_init_status_set_ = true;
   LOG(ERROR) << "Target light sensor isn't available after timeout. "
                 "Initialization failed.";
 
@@ -187,6 +176,27 @@ void LightProviderMojo::ResetSensorService() {
   sensor_service_remote_.reset();
 }
 
+void LightProviderMojo::ResetStates() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  observer_.reset();
+  light_device_id_.reset();
+  lights_.clear();
+
+  if (sensor_service_remote_.is_bound())
+    QueryDevices();
+}
+
+void LightProviderMojo::QueryDevices() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  DCHECK(sensor_service_remote_.is_bound());
+
+  sensor_service_remote_->GetDeviceIds(
+      chromeos::sensors::mojom::DeviceType::LIGHT,
+      base::BindOnce(&LightProviderMojo::GetLightIdsCallback,
+                     weak_ptr_factory_.GetWeakPtr()));
+}
+
 void LightProviderMojo::GetLightIdsCallback(
     const std::vector<int32_t>& light_ids) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -211,18 +221,11 @@ void LightProviderMojo::RegisterLightWithId(int32_t id) {
 
   light.remote = GetSensorDeviceRemote(id);
 
-  if (has_several_light_sensors_) {
-    light.remote->GetAttributes(
-        std::vector<std::string>{chromeos::sensors::mojom::kDeviceName,
-                                 chromeos::sensors::mojom::kLocation},
-        base::BindOnce(&LightProviderMojo::GetNameLocationCallback,
-                       weak_ptr_factory_.GetWeakPtr(), id));
-  } else {
-    light.remote->GetAttributes(
-        std::vector<std::string>{chromeos::sensors::mojom::kDeviceName},
-        base::BindOnce(&LightProviderMojo::GetNameCallback,
-                       weak_ptr_factory_.GetWeakPtr(), id));
-  }
+  light.remote->GetAttributes(
+      std::vector<std::string>{chromeos::sensors::mojom::kDeviceName,
+                               chromeos::sensors::mojom::kLocation},
+      base::BindOnce(&LightProviderMojo::GetNameLocationCallback,
+                     weak_ptr_factory_.GetWeakPtr(), id));
 }
 
 void LightProviderMojo::GetNameLocationCallback(
@@ -232,9 +235,14 @@ void LightProviderMojo::GetNameLocationCallback(
   DCHECK_NE(light_device_id_.value_or(-1), id);
 
   if (light_device_id_.has_value()) {
-    // Already has the cros-ec-light on the lid. Ignoring other light sensors.
-    IgnoreLight(id);
-    return;
+    auto& orig_light = lights_[light_device_id_.value()];
+    if (orig_light.name.has_value() &&
+        orig_light.name.value().compare(kCrosECLightName) == 0 &&
+        orig_light.on_lid.value_or(false)) {
+      // Already has the cros-ec-light on the lid. Ignoring other light sensors.
+      IgnoreLight(id);
+      return;
+    }
   }
 
   if (values.size() < 2) {
@@ -253,63 +261,37 @@ void LightProviderMojo::GetNameLocationCallback(
   DCHECK(light.remote.is_bound());
 
   light.name = values[0];
-  if (!light.name.has_value() ||
-      light.name.value().compare(kCrosECLightName) != 0) {
-    LOG(ERROR) << "Not " << kCrosECLightName
-               << ", sensor name: " << light.name.value_or("");
-    IgnoreLight(id);
-    return;
-  }
-
   light.on_lid =
       values[1].has_value() &&
       (values[1].value().compare(chromeos::sensors::mojom::kLocationLid) == 0);
 
-  if (!light.on_lid.value()) {
-    IgnoreLight(id);
-    return;
-  }
-
-  DetermineLightSensor(id);
-  new_devices_observer_.reset();  // Don't need new light sensors anymore.
-}
-
-void LightProviderMojo::GetNameCallback(
-    int32_t id,
-    const std::vector<absl::optional<std::string>>& values) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK_NE(light_device_id_.value_or(-1), id);
-
-  if (light_device_id_.has_value()) {
-    auto& orig_light = lights_[light_device_id_.value()];
-    if (orig_light.name.has_value() &&
-        orig_light.name.value().compare(kCrosECLightName) == 0) {
-      // Already has the cros-ec-light. Ignoring other light sensors.
-      IgnoreLight(id);
-      return;
-    }
-  }
-
-  if (values.empty()) {
-    LOG(ERROR) << "Sensor values doesn't contain the name attribute";
-    IgnoreLight(id);
-    return;
-  }
-
-  if (values.size() != 1) {
-    LOG(WARNING) << "Sensor values contain more than the name attribute. Size: "
-                 << values.size();
-  }
-
-  auto& light = lights_[id];
-  DCHECK(light.remote.is_bound());
-
-  light.name = values[0];
   if (light.name.has_value() &&
       light.name.value().compare(kCrosECLightName) == 0) {
-    // If an acpi-als was chosen, migrate to this cros-ec-light light sensor.
+    if (light.on_lid.value_or(false)) {
+      // If a light sensor was chosen, migrate to this cros-ec-light light
+      // sensor.
+      DetermineLightSensor(id);
+      new_devices_observer_.reset();  // Don't need new light sensors anymore.
+      return;
+    }
+
+    if (light_device_id_.has_value()) {
+      auto& orig_light = lights_[light_device_id_.value()];
+      if (orig_light.name.has_value() &&
+          orig_light.name.value().compare(kCrosECLightName) == 0) {
+        // Already has the cros-ec-light. Ignoring other non-lid cros-ec-light.
+        IgnoreLight(id);
+        return;
+      }
+    }
+
+    // Choose the current non-lid cros-ec-light.
     DetermineLightSensor(id);
-    new_devices_observer_.reset();  // Don't need new light sensors anymore.
+  }
+
+  if (light_device_id_.has_value()) {
+    // Use the current light sensor over the current non cros-ec-light.
+    IgnoreLight(id);
     return;
   }
 
@@ -318,13 +300,7 @@ void LightProviderMojo::GetNameCallback(
     LOG(WARNING) << "Unexpected light name: " << light.name.value_or("");
   }
 
-  if (light_device_id_.has_value()) {
-    LOG(WARNING) << "Already have another light sensor with name: "
-                 << lights_[light_device_id_.value()].name.value_or("");
-    IgnoreLight(id);
-    return;
-  }
-
+  // Choose the current acpi-als.
   DetermineLightSensor(id);
 }
 
@@ -350,29 +326,51 @@ LightProviderMojo::GetSensorDeviceRemote(int32_t id) {
   mojo::Remote<chromeos::sensors::mojom::SensorDevice> sensor_device_remote;
   sensor_service_remote_->GetDevice(
       id, sensor_device_remote.BindNewPipeAndPassReceiver());
-  sensor_device_remote.set_disconnect_handler(
+  sensor_device_remote.set_disconnect_with_reason_handler(
       base::BindOnce(&LightProviderMojo::OnLightRemoteDisconnect,
                      weak_ptr_factory_.GetWeakPtr(), id));
 
   return sensor_device_remote;
 }
 
-void LightProviderMojo::OnLightRemoteDisconnect(int32_t id) {
+void LightProviderMojo::OnLightRemoteDisconnect(
+    int32_t id,
+    uint32_t custom_reason_code,
+    const std::string& description) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  LOG(ERROR) << "OnLightRemoteDisconnect: " << id
-             << ". Mojo connection to IIO Service is lost. Resetting the "
-                "SensorService Mojo channel as well";
+  const auto reason =
+      static_cast<chromeos::sensors::mojom::SensorDeviceDisconnectReason>(
+          custom_reason_code);
+  LOG(WARNING) << "OnLightRemoteDisconnect: " << id << ", reason: " << reason
+               << ", description: " << description;
 
   // Assumes IIO Service has crashed and waits for its relaunch.
-  ResetSensorService();
+  switch (reason) {
+    case chromeos::sensors::mojom::SensorDeviceDisconnectReason::
+        IIOSERVICE_CRASHED:
+      ResetSensorService();
+      break;
+
+    case chromeos::sensors::mojom::SensorDeviceDisconnectReason::DEVICE_REMOVED:
+      if (light_device_id_ != id) {
+        // This light sensor is not in use.
+        lights_.erase(id);
+      } else {
+        // Reset usages & states, and restart the mojo devices initialization.
+        ResetStates();
+      }
+      break;
+  }
 }
 
 void LightProviderMojo::DetermineLightSensor(int32_t id) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  if (!light_device_id_.has_value())
+  if (!als_init_status_set_) {
+    als_init_status_set_ = true;
     als_reader_->SetAlsInitStatus(AlsReader::AlsInitStatus::kSuccess);
+  }
 
   light_device_id_ = id;
   SetupLightSamplesObserver();

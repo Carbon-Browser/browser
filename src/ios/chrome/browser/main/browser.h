@@ -7,7 +7,6 @@
 
 #include <memory>
 
-#include "base/macros.h"
 #include "base/supports_user_data.h"
 
 class BrowserObserver;
@@ -25,16 +24,19 @@ class Browser : public base::SupportsUserData {
   // Creates a new Browser attached to |browser_state|.
   static std::unique_ptr<Browser> Create(ChromeBrowserState* browser_state);
 
+  Browser(const Browser&) = delete;
+  Browser& operator=(const Browser&) = delete;
+
   ~Browser() override {}
 
   // Accessor for the owning ChromeBrowserState.
-  virtual ChromeBrowserState* GetBrowserState() const = 0;
+  virtual ChromeBrowserState* GetBrowserState() = 0;
 
   // Accessor for the WebStateList.
-  virtual WebStateList* GetWebStateList() const = 0;
+  virtual WebStateList* GetWebStateList() = 0;
 
   // Accessor for the CommandDispatcher.
-  virtual CommandDispatcher* GetCommandDispatcher() const = 0;
+  virtual CommandDispatcher* GetCommandDispatcher() = 0;
 
   // Adds and removes observers.
   virtual void AddObserver(BrowserObserver* observer) = 0;
@@ -42,9 +44,6 @@ class Browser : public base::SupportsUserData {
 
  protected:
   Browser() {}
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(Browser);
 };
 
 #endif  // IOS_CHROME_BROWSER_MAIN_BROWSER_H_

@@ -10,6 +10,9 @@
 #include "base/callback_list.h"
 #include "base/containers/flat_map.h"
 #include "base/files/file_path.h"
+#include "base/memory/raw_ptr.h"
+#include "base/observer_list.h"
+#include "base/time/time.h"
 #include "chrome/browser/enterprise/connectors/common.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/safe_browsing/cloud_content_scanning/binary_upload_service.h"
@@ -49,6 +52,19 @@ class DeepScanningRequest : public download::DownloadItem::Observer {
     kMaxValue = TRIGGER_POLICY,
   };
 
+  // Enum representing the type of constructor that initiated scanning.
+  // These values are persisted to logs. Entries should not be renumbered and
+  // numeric values should never be reused.
+  enum class DeepScanType {
+    // Scanning was initiated by a normal download from a web page.
+    NORMAL = 0,
+
+    // Scanning was initiated by a save package being saved on disk.
+    SAVE_PACKAGE = 1,
+
+    kMaxValue = SAVE_PACKAGE,
+  };
+
   class Observer : public base::CheckedObserver {
    public:
     ~Observer() override = default;
@@ -71,6 +87,7 @@ class DeepScanningRequest : public download::DownloadItem::Observer {
   // `download_service`.
   DeepScanningRequest(download::DownloadItem* item,
                       DeepScanTrigger trigger,
+                      DownloadCheckResult pre_scan_download_check_result,
                       CheckDownloadRepeatingCallback callback,
                       DownloadProtectionService* download_service,
                       enterprise_connectors::AnalysisSettings settings);
@@ -83,6 +100,7 @@ class DeepScanningRequest : public download::DownloadItem::Observer {
   // `download_service`.
   DeepScanningRequest(
       download::DownloadItem* item,
+      DownloadCheckResult pre_scan_download_check_result,
       CheckDownloadRepeatingCallback callback,
       DownloadProtectionService* download_service,
       enterprise_connectors::AnalysisSettings settings,
@@ -95,6 +113,10 @@ class DeepScanningRequest : public download::DownloadItem::Observer {
 
   void AddObserver(Observer* observer);
   void RemoveObserver(Observer* observer);
+
+  // download::DownloadItem::Observer:
+  void OnDownloadUpdated(download::DownloadItem* download) override;
+  void OnDownloadDestroyed(download::DownloadItem* download) override;
 
  private:
   // Starts the deep scanning request when there is a one-to-one mapping from
@@ -126,9 +148,6 @@ class DeepScanningRequest : public download::DownloadItem::Observer {
   // notifying |download_service_|.
   void FinishRequest(DownloadCheckResult result);
 
-  // Callback when |item_| is destroyed.
-  void OnDownloadDestroyed(download::DownloadItem* download) override;
-
   // Called to attempt to show the modal dialog for scan failure. Returns
   // whether the dialog was successfully shown.
   bool MaybeShowDeepScanFailureModalDialog(base::OnceClosure accept_callback,
@@ -157,11 +176,15 @@ class DeepScanningRequest : public download::DownloadItem::Observer {
                         const base::FilePath& current_path,
                         std::unique_ptr<FileAnalysisRequest> request,
                         BinaryUploadService::Result result,
-                        const BinaryUploadService::Request::Data& data);
+                        BinaryUploadService::Request::Data data);
+
+  // Helper function to simplify checking if the report-only feature is set in
+  // conjunction with the corresponding policy value.
+  bool ReportOnlyScan();
 
   // The download item to scan. This is unowned, and could become nullptr if the
   // download is destroyed.
-  download::DownloadItem* item_;
+  raw_ptr<download::DownloadItem> item_;
 
   // The reason for deep scanning.
   DeepScanTrigger trigger_;
@@ -171,7 +194,7 @@ class DeepScanningRequest : public download::DownloadItem::Observer {
 
   // The download protection service that initiated this upload. The
   // |download_service_| owns this class.
-  DownloadProtectionService* download_service_;
+  raw_ptr<DownloadProtectionService> download_service_;
 
   // The time when uploading starts. Keyed with the file's current path.
   base::flat_map<base::FilePath, base::TimeTicks> upload_start_times_;
@@ -185,7 +208,7 @@ class DeepScanningRequest : public download::DownloadItem::Observer {
   // This list of observers of this request.
   base::ObserverList<Observer> observers_;
 
-  // Stores a mapping of final paths to temporary paths for save package files.
+  // Stores a mapping of temporary paths to final paths for save package files.
   // This is empty on non-page save scanning requests.
   base::flat_map<base::FilePath, base::FilePath> save_package_files_;
 
@@ -209,9 +232,17 @@ class DeepScanningRequest : public download::DownloadItem::Observer {
   DownloadCheckResult download_check_result_ =
       DownloadCheckResult::DEEP_SCANNED_SAFE;
 
+  // Cached SB result for the download to be used if deep scanning fails.
+  DownloadCheckResult pre_scan_download_check_result_;
+
   // Cached danger type for the download to be used by reporting in case
   // scanning is skipped for any reason.
   download::DownloadDangerType pre_scan_danger_type_;
+
+  // Set to true when StartSingleFileScan or StartSavePackageScan is called and
+  // that scanning has started. This is used so that calls to OnDownloadUpdated
+  // only ever start the scanning process once.
+  bool scanning_started_ = false;
 
   // Cached callbacks to report scanning results until the final `event_result_`
   // is known. The callbacks in this list should be called in FinishRequest.

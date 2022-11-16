@@ -10,12 +10,12 @@
 
 #include "base/files/file_path.h"
 #include "base/memory/ptr_util.h"
+#include "build/build_config.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/devtools_agent_host.h"
 #include "content/public/browser/devtools_socket_factory.h"
 #include "content/public/browser/navigation_entry.h"
-#include "headless/grit/headless_lib_resources.h"
 #include "headless/public/headless_browser.h"
 #include "net/base/ip_address.h"
 #include "net/base/net_errors.h"
@@ -41,6 +41,11 @@ class TCPEndpointServerSocketFactory : public content::DevToolsSocketFactory {
       DCHECK(ip.AssignFromIPLiteral(endpoint.host()));
     }
   }
+
+  TCPEndpointServerSocketFactory(const TCPEndpointServerSocketFactory&) =
+      delete;
+  TCPEndpointServerSocketFactory& operator=(
+      const TCPEndpointServerSocketFactory&) = delete;
 
  private:
   // This function, and the logic below that uses it, is copied from
@@ -74,16 +79,18 @@ class TCPEndpointServerSocketFactory : public content::DevToolsSocketFactory {
   }
 
   net::HostPortPair endpoint_;
-
-  DISALLOW_COPY_AND_ASSIGN(TCPEndpointServerSocketFactory);
 };
 
-#if defined(OS_POSIX)
+#if BUILDFLAG(IS_POSIX)
 class TCPAdoptServerSocketFactory : public content::DevToolsSocketFactory {
  public:
   // Construct a factory to use an already-open, already-listening socket.
   explicit TCPAdoptServerSocketFactory(const size_t socket_fd)
       : socket_fd_(socket_fd) {}
+
+  TCPAdoptServerSocketFactory(const TCPAdoptServerSocketFactory&) = delete;
+  TCPAdoptServerSocketFactory& operator=(const TCPAdoptServerSocketFactory&) =
+      delete;
 
  private:
   std::unique_ptr<net::ServerSocket> CreateForHttpServer() override {
@@ -104,15 +111,17 @@ class TCPAdoptServerSocketFactory : public content::DevToolsSocketFactory {
   }
 
   size_t socket_fd_;
-
-  DISALLOW_COPY_AND_ASSIGN(TCPAdoptServerSocketFactory);
 };
-#else   // defined(OS_POSIX)
+#else   // BUILDFLAG(IS_POSIX)
 
 // Placeholder class to use when a socket_fd is passed in on non-Posix.
 class DummyTCPServerSocketFactory : public content::DevToolsSocketFactory {
  public:
   explicit DummyTCPServerSocketFactory() {}
+
+  DummyTCPServerSocketFactory(const DummyTCPServerSocketFactory&) = delete;
+  DummyTCPServerSocketFactory& operator=(const DummyTCPServerSocketFactory&) =
+      delete;
 
  private:
   std::unique_ptr<net::ServerSocket> CreateForHttpServer() override {
@@ -123,10 +132,8 @@ class DummyTCPServerSocketFactory : public content::DevToolsSocketFactory {
       std::string* out_name) override {
     return nullptr;
   }
-
-  DISALLOW_COPY_AND_ASSIGN(DummyTCPServerSocketFactory);
 };
-#endif  // defined(OS_POSIX)
+#endif  // BUILDFLAG(IS_POSIX)
 
 void PostTaskToCloseBrowser(base::WeakPtr<HeadlessBrowserImpl> browser) {
   content::GetUIThreadTaskRunner({})->PostTask(

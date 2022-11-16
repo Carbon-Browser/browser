@@ -15,7 +15,7 @@
 #include "base/callback.h"
 #include "base/files/file_path.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
@@ -65,6 +65,10 @@ class ProfileResetter : public content::BrowsingDataRemover::Observer {
                 "ResettableFlags should be the same size as Resettable");
 
   explicit ProfileResetter(Profile* profile);
+
+  ProfileResetter(const ProfileResetter&) = delete;
+  ProfileResetter& operator=(const ProfileResetter&) = delete;
+
   ~ProfileResetter() override;
 
   // Resets |resettable_flags| and calls |callback| on the UI thread on
@@ -100,9 +104,9 @@ class ProfileResetter : public content::BrowsingDataRemover::Observer {
   // Callback for when TemplateURLService has loaded.
   void OnTemplateURLServiceLoaded();
 
-  Profile* const profile_;
+  const raw_ptr<Profile> profile_;
   std::unique_ptr<BrandcodedDefaultSettings> master_settings_;
-  TemplateURLService* template_url_service_;
+  raw_ptr<TemplateURLService> template_url_service_;
 
   // Flags of a Resetable indicating which reset operations we are still waiting
   // for.
@@ -113,15 +117,13 @@ class ProfileResetter : public content::BrowsingDataRemover::Observer {
 
   // If non-null it means removal is in progress. BrowsingDataRemover takes care
   // of deleting itself when done.
-  content::BrowsingDataRemover* cookies_remover_;
+  raw_ptr<content::BrowsingDataRemover> cookies_remover_;
 
   base::CallbackListSubscription template_url_service_subscription_;
 
   SEQUENCE_CHECKER(sequence_checker_);
 
   base::WeakPtrFactory<ProfileResetter> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ProfileResetter);
 };
 
 // Path to shortcut and command line arguments.
@@ -129,7 +131,7 @@ typedef std::pair<base::FilePath, std::wstring> ShortcutCommand;
 
 typedef base::RefCountedData<base::AtomicFlag> SharedCancellationFlag;
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 // On Windows returns all the shortcuts which launch Chrome and corresponding
 // arguments. |cancel| can be passed to abort the operation earlier.
 // Call on COM task runner that may block.

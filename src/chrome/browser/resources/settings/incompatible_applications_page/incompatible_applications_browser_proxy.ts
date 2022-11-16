@@ -20,16 +20,15 @@ export enum ActionTypes {
 
 export type IncompatibleApplication = {
   name: string,
-  actionType: ActionTypes,
-  actionUrl: string,
+  type: ActionTypes,
+  url: string,
 };
 
 export interface IncompatibleApplicationsBrowserProxy {
   /**
    * Get the list of incompatible applications.
    */
-  requestIncompatibleApplicationsList():
-      Promise<Array<IncompatibleApplication>>;
+  requestIncompatibleApplicationsList(): Promise<IncompatibleApplication[]>;
 
   /**
    * Launches the Apps & Features page that allows uninstalling

@@ -11,7 +11,6 @@
 #include <memory>
 #include <set>
 
-#include "base/macros.h"
 #include "extensions/common/url_pattern.h"
 
 class GURL;
@@ -19,6 +18,10 @@ class GURL;
 namespace base {
 class ListValue;
 class Value;
+}
+
+namespace url {
+class Origin;
 }
 
 namespace extensions {
@@ -80,12 +83,13 @@ class URLPatternSet {
   static URLPatternSet CreateUnion(const URLPatternSet& set1,
                                    const URLPatternSet& set2);
 
-  // Returns the union of all sets in |sets|.
-  static URLPatternSet CreateUnion(const std::vector<URLPatternSet>& sets);
-
   URLPatternSet();
   URLPatternSet(URLPatternSet&& rhs);
   explicit URLPatternSet(const std::set<URLPattern>& patterns);
+
+  URLPatternSet(const URLPatternSet&) = delete;
+  URLPatternSet& operator=(const URLPatternSet&) = delete;
+
   ~URLPatternSet();
 
   URLPatternSet& operator=(URLPatternSet&& rhs);
@@ -113,6 +117,7 @@ class URLPatternSet {
 
   // Adds a pattern based on |origin| to the set.
   bool AddOrigin(int valid_schemes, const GURL& origin);
+  bool AddOrigin(int valid_schemes, const url::Origin& origin);
 
   // Returns true if every URL that matches |set| is matched by this. In other
   // words, if every pattern in |set| is encompassed by a pattern in this.
@@ -149,8 +154,6 @@ class URLPatternSet {
  private:
   // The list of URL patterns that comprise the extent.
   std::set<URLPattern> patterns_;
-
-  DISALLOW_COPY_AND_ASSIGN(URLPatternSet);
 };
 
 std::ostream& operator<<(std::ostream& out,

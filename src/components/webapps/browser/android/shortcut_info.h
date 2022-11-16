@@ -111,7 +111,11 @@ struct ShortcutInfo {
     // events.
     SOURCE_WEBAPK_SHARE_TARGET_FILE = 15,
 
-    SOURCE_COUNT = 16
+    // Used for WebAPKs added by the Chrome Android service after the
+    // install was requested by another app.
+    SOURCE_CHROME_SERVICE = 16,
+
+    SOURCE_COUNT = 17
   };
 
   explicit ShortcutInfo(const GURL& shortcut_url);
@@ -121,8 +125,19 @@ struct ShortcutInfo {
   // Updates the info based on the given |manifest|.
   void UpdateFromManifest(const blink::mojom::Manifest& manifest);
 
+  // Update the splash screen icon URL based on the given |manifest| for the
+  // later download.
+  void UpdateBestSplashIcon(const blink::mojom::Manifest& manifest);
+
   // Updates the source of the shortcut.
   void UpdateSource(const Source source);
+
+  // Returns a set of icons including |best_primary_icon_url|,
+  // |splash_image_url| and |best_shortcut_icon_urls| if they are not empty
+  std::set<GURL> GetWebApkIcons();
+
+  // Generate the formatted id field from web manifest.
+  static GURL GetManifestId(const blink::mojom::Manifest& manifest);
 
   GURL manifest_url;
   GURL url;
@@ -146,6 +161,9 @@ struct ShortcutInfo {
   std::vector<std::string> icon_urls;
   std::vector<GURL> screenshot_urls;
   absl::optional<ShareTarget> share_target;
+
+  // Id specified in the manifest.
+  GURL manifest_id;
 
   // Both shortcut item related vectors have the same size.
   std::vector<blink::Manifest::ShortcutItem> shortcut_items;

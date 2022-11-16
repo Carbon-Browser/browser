@@ -7,7 +7,6 @@
 
 #include <memory>
 
-#include "base/macros.h"
 #include "components/safe_browsing/core/browser/db/v4_protocol_manager_util.h"
 #include "components/security_interstitials/core/unsafe_resource.h"
 #include "ios/components/security_interstitials/ios_blocking_page_controller_client.h"
@@ -43,11 +42,13 @@ class SafeBrowsingBlockingPage
     void Proceed() override;
     void GoBack() override;
     void GoBackAfterNavigationCommitted() override;
+    void OpenEnhancedProtectionSettings() override;
 
     // The URL of the resource causing the insterstitial.
     GURL url_;
     // The threat type encountered for |url_|.
     safe_browsing::SBThreatType threat_type_;
+    safe_browsing::ThreatSource threat_source_;
   };
 
   // Constructor used by Create().
@@ -66,7 +67,8 @@ class SafeBrowsingBlockingPage
       bool user_is_interacting,
       web::WebFrame* sender_frame) override;
   bool ShouldCreateNewNavigation() const override;
-  void PopulateInterstitialStrings(base::Value* load_time_data) const override;
+  void PopulateInterstitialStrings(
+      base::Value::Dict& load_time_data) const override;
 
   // The unsafe resource triggering the blocking page.
   security_interstitials::UnsafeResource resource_;

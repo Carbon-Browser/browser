@@ -15,6 +15,7 @@
 #include "base/android/scoped_java_ref.h"
 #include "base/bind.h"
 #include "base/lazy_instance.h"
+#include "base/time/time.h"
 #include "cc/layers/layer.h"
 #include "cc/layers/picture_layer.h"
 #include "content/public/browser/android/compositor.h"
@@ -45,13 +46,13 @@ ContentViewRenderView::ContentViewRenderView(JNIEnv* env,
 }
 
 ContentViewRenderView::~ContentViewRenderView() {
-  DCHECK(height_changed_listener_.is_null());
+  DCHECK(content_height_changed_listener_.is_null());
 }
 
-void ContentViewRenderView::SetHeightChangedListener(
+void ContentViewRenderView::SetContentHeightChangedListener(
     base::RepeatingClosure callback) {
-  DCHECK(height_changed_listener_.is_null() || callback.is_null());
-  height_changed_listener_ = std::move(callback);
+  DCHECK(content_height_changed_listener_.is_null() || callback.is_null());
+  content_height_changed_listener_ = std::move(callback);
 }
 
 // static
@@ -90,14 +91,21 @@ void ContentViewRenderView::SetCurrentWebContents(
     root_container_layer_->AddChild(web_contents_layer_);
 }
 
+void ContentViewRenderView::OnViewportSizeChanged(JNIEnv* env,
+                                                  jint width,
+                                                  jint height) {
+  bool content_height_changed = content_height_ != height;
+  content_height_ = height;
+  if (content_height_changed && !content_height_changed_listener_.is_null())
+    content_height_changed_listener_.Run();
+}
+
 void ContentViewRenderView::OnPhysicalBackingSizeChanged(
     JNIEnv* env,
     const JavaParamRef<jobject>& jweb_contents,
     jint width,
     jint height,
     jboolean for_config_change) {
-  bool height_changed = height_ != height;
-  height_ = height;
   content::WebContents* web_contents =
       content::WebContents::FromJavaWebContents(jweb_contents);
   gfx::Size size(width, height);
@@ -114,9 +122,6 @@ void ContentViewRenderView::OnPhysicalBackingSizeChanged(
     override_deadline = base::TimeDelta();
   web_contents->GetNativeView()->OnPhysicalBackingSizeChanged(
       size, override_deadline);
-
-  if (height_changed && !height_changed_listener_.is_null())
-    height_changed_listener_.Run();
 }
 
 void ContentViewRenderView::SurfaceCreated(JNIEnv* env) {
@@ -155,7 +160,9 @@ void ContentViewRenderView::SurfaceChanged(
 }
 
 void ContentViewRenderView::SetNeedsRedraw(JNIEnv* env) {
-  compositor_->SetNeedsRedraw();
+  if (compositor_) {
+    compositor_->SetNeedsRedraw();
+  }
 }
 
 base::android::ScopedJavaLocalRef<jobject>
@@ -177,6 +184,12 @@ void ContentViewRenderView::SetRequiresAlphaChannel(
     jboolean requires_alpha_channel) {
   requires_alpha_channel_ = requires_alpha_channel;
   UpdateBackgroundColor(env);
+}
+
+void ContentViewRenderView::SetDidSwapBuffersCallbackEnabled(JNIEnv* env,
+                                                             jboolean enable) {
+  InitCompositor();
+  compositor_->SetDidSwapBuffersCallbackEnabled(enable);
 }
 
 void ContentViewRenderView::UpdateLayerTreeHost() {

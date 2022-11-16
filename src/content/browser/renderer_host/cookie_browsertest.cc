@@ -8,7 +8,6 @@
 #include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
-#include "base/task/post_task.h"
 #include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "content/browser/bad_message.h"
@@ -33,6 +32,7 @@
 #include "net/cookies/cookie_access_result.h"
 #include "net/cookies/cookie_util.h"
 #include "net/dns/mock_host_resolver.h"
+#include "net/http/alternative_service.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "services/network/public/mojom/restricted_cookie_manager.mojom-test-utils.h"
 #include "services/network/public/mojom/restricted_cookie_manager.mojom.h"
@@ -89,7 +89,7 @@ std::string GetCookiesDirect(WebContentsImpl* tab, const GURL& url) {
       ->GetDefaultStoragePartition()
       ->GetCookieManagerForBrowserProcess()
       ->GetCookieList(
-          url, options,
+          url, options, net::CookiePartitionKeyCollection(),
           base::BindLambdaForTesting(
               [&](const net::CookieAccessResultList& cookie_list,
                   const net::CookieAccessResultList& excluded_cookies) {
@@ -162,33 +162,35 @@ IN_PROC_BROWSER_TEST_F(CookieBrowserTest, Cookies) {
   EXPECT_NE(web_contents_http->GetSiteInstance()->GetProcess(),
             web_contents_https->GetSiteInstance()->GetProcess());
 
-  EXPECT_EQ("", GetCookieFromJS(web_contents_https->GetMainFrame()));
-  EXPECT_EQ("", GetCookieFromJS(web_contents_http->GetMainFrame()));
+  EXPECT_EQ("", GetCookieFromJS(web_contents_https->GetPrimaryMainFrame()));
+  EXPECT_EQ("", GetCookieFromJS(web_contents_http->GetPrimaryMainFrame()));
 
   // Non-TLS page writes secure cookie.
-  EXPECT_TRUE(ExecJs(web_contents_http->GetMainFrame(),
+  EXPECT_TRUE(ExecJs(web_contents_http->GetPrimaryMainFrame(),
                      "document.cookie = 'A=1; secure;';"));
-  EXPECT_EQ("", GetCookieFromJS(web_contents_https->GetMainFrame()));
-  EXPECT_EQ("", GetCookieFromJS(web_contents_http->GetMainFrame()));
+  EXPECT_EQ("", GetCookieFromJS(web_contents_https->GetPrimaryMainFrame()));
+  EXPECT_EQ("", GetCookieFromJS(web_contents_http->GetPrimaryMainFrame()));
 
-  // TLS page writes not-secure cookie.
-  EXPECT_TRUE(
-      ExecJs(web_contents_http->GetMainFrame(), "document.cookie = 'B=2';"));
-  EXPECT_EQ("B=2", GetCookieFromJS(web_contents_https->GetMainFrame()));
-  EXPECT_EQ("B=2", GetCookieFromJS(web_contents_http->GetMainFrame()));
+  // Non-TLS page writes not-secure cookie.
+  EXPECT_TRUE(ExecJs(web_contents_http->GetPrimaryMainFrame(),
+                     "document.cookie = 'B=2';"));
+  EXPECT_EQ("B=2", GetCookieFromJS(web_contents_https->GetPrimaryMainFrame()));
+  EXPECT_EQ("B=2", GetCookieFromJS(web_contents_http->GetPrimaryMainFrame()));
 
   // TLS page writes secure cookie.
-  EXPECT_TRUE(ExecJs(web_contents_https->GetMainFrame(),
+  EXPECT_TRUE(ExecJs(web_contents_https->GetPrimaryMainFrame(),
                      "document.cookie = 'C=3;secure;';"));
-  EXPECT_EQ("B=2; C=3", GetCookieFromJS(web_contents_https->GetMainFrame()));
-  EXPECT_EQ("B=2", GetCookieFromJS(web_contents_http->GetMainFrame()));
+  EXPECT_EQ("B=2; C=3",
+            GetCookieFromJS(web_contents_https->GetPrimaryMainFrame()));
+  EXPECT_EQ("B=2", GetCookieFromJS(web_contents_http->GetPrimaryMainFrame()));
 
   // TLS page writes not-secure cookie.
-  EXPECT_TRUE(
-      ExecJs(web_contents_https->GetMainFrame(), "document.cookie = 'D=4';"));
+  EXPECT_TRUE(ExecJs(web_contents_https->GetPrimaryMainFrame(),
+                     "document.cookie = 'D=4';"));
   EXPECT_EQ("B=2; C=3; D=4",
-            GetCookieFromJS(web_contents_https->GetMainFrame()));
-  EXPECT_EQ("B=2; D=4", GetCookieFromJS(web_contents_http->GetMainFrame()));
+            GetCookieFromJS(web_contents_https->GetPrimaryMainFrame()));
+  EXPECT_EQ("B=2; D=4",
+            GetCookieFromJS(web_contents_http->GetPrimaryMainFrame()));
 }
 
 // Ensure "priority" cookie option is settable via document.cookie.
@@ -251,11 +253,15 @@ IN_PROC_BROWSER_TEST_F(CookieBrowserTest, SameSiteCookies) {
 
   WebContentsImpl* web_contents =
       static_cast<WebContentsImpl*>(shell()->web_contents());
-  RenderFrameHost* main_frame = web_contents->GetMainFrame();
-  RenderFrameHost* a_iframe =
-      web_contents->GetFrameTree()->root()->child_at(0)->current_frame_host();
-  RenderFrameHost* b_iframe =
-      web_contents->GetFrameTree()->root()->child_at(1)->current_frame_host();
+  RenderFrameHost* main_frame = web_contents->GetPrimaryMainFrame();
+  RenderFrameHost* a_iframe = web_contents->GetPrimaryFrameTree()
+                                  .root()
+                                  ->child_at(0)
+                                  ->current_frame_host();
+  RenderFrameHost* b_iframe = web_contents->GetPrimaryFrameTree()
+                                  .root()
+                                  ->child_at(1)
+                                  ->current_frame_host();
 
   // The top-level frame should get all same-site cookies.
   EXPECT_EQ("none=1; strict=1; unspecified=1; lax=1",
@@ -270,6 +276,58 @@ IN_PROC_BROWSER_TEST_F(CookieBrowserTest, SameSiteCookies) {
   // isn't same-site with its ancestors. The SameSite=None but insecure cookie
   // is rejected.
   EXPECT_EQ("none=1", GetCookieFromJS(b_iframe));
+}
+
+IN_PROC_BROWSER_TEST_F(CookieBrowserTest, CookieTruncatingChar) {
+  using std::string_literals::operator""s;
+
+  std::string cookie_string;
+  embedded_test_server()->RegisterRequestHandler(base::BindLambdaForTesting(
+      [&](const net::test_server::HttpRequest& request)
+          -> std::unique_ptr<net::test_server::HttpResponse> {
+        auto response = std::make_unique<net::test_server::BasicHttpResponse>();
+        response->AddCustomHeader("Set-Cookie", cookie_string);
+        return std::move(response);
+      }));
+
+  ASSERT_TRUE(embedded_test_server()->Start());
+
+  GURL http_url = embedded_test_server()->GetURL("/");
+  base::HistogramTester histogram;
+
+  // Test scenarios where a control char may appear at start, middle and end of
+  // a cookie line. Control char array with NULL (\x0), CR (\xD), and LF (xA)
+  char kTestChars[] = {'\x0', '\xD', '\xA'};
+
+  for (const auto& test : kTestChars) {
+    std::string ctl_string(1, test);
+
+    // ctrl char at start of string
+    cookie_string = ctl_string + "foo=bar"s;
+    EXPECT_TRUE(NavigateToURL(shell(), http_url));
+
+    // ctrl char at middle of string
+    cookie_string = "foo=bar;"s + ctl_string + "httponly"s;
+    EXPECT_TRUE(NavigateToURL(shell(), http_url));
+
+    // ctrl char at end of string
+    cookie_string = "foo=bar;"s + "httponly;"s + ctl_string;
+    EXPECT_TRUE(NavigateToURL(shell(), http_url));
+  }
+  // Test if there are multiple control characters that terminate.
+  cookie_string = "foo=bar;\xA\xDhttponly"s;
+  EXPECT_TRUE(NavigateToURL(shell(), http_url));
+
+  FetchHistogramsFromChildProcesses();
+  histogram.ExpectBucketCount(
+      "Cookie.TruncatingCharacterInCookieString",
+      net::TruncatingCharacterInCookieStringType::kTruncatingCharNull, 0);
+  histogram.ExpectBucketCount(
+      "Cookie.TruncatingCharacterInCookieString",
+      net::TruncatingCharacterInCookieStringType::kTruncatingCharNewline, 0);
+  histogram.ExpectBucketCount(
+      "Cookie.TruncatingCharacterInCookieString",
+      net::TruncatingCharacterInCookieStringType::kTruncatingCharLineFeed, 0);
 }
 
 class RestrictedCookieManagerInterceptor
@@ -288,18 +346,23 @@ class RestrictedCookieManagerInterceptor
                            const net::SiteForCookies& site_for_cookies,
                            const url::Origin& top_frame_origin,
                            const std::string& cookie,
+                           bool partitioned_cookies_runtime_feature_enabled,
                            SetCookieFromStringCallback callback) override {
     GetForwardingInterface()->SetCookieFromString(
         URLToUse(url), site_for_cookies, top_frame_origin, std::move(cookie),
+        /*partitioned_cookies_runtime_feature_enabled=*/false,
         std::move(callback));
   }
 
   void GetCookiesString(const GURL& url,
                         const net::SiteForCookies& site_for_cookies,
                         const url::Origin& top_frame_origin,
+                        bool partitioned_cookies_runtime_feature_enabled,
                         GetCookiesStringCallback callback) override {
     GetForwardingInterface()->GetCookiesString(
-        URLToUse(url), site_for_cookies, top_frame_origin, std::move(callback));
+        URLToUse(url), site_for_cookies, top_frame_origin,
+        /*partitioned_cookies_runtime_feature_enabled=*/false,
+        std::move(callback));
   }
 
  private:
@@ -379,11 +442,11 @@ IN_PROC_BROWSER_TEST_F(CookieBrowserTest, CrossSiteCookieSecurityEnforcement) {
       "   +--Site B ------- proxies for A\n"
       "Where A = http://127.0.0.1/\n"
       "      B = http://baz.com/",
-      v.DepictFrameTree(tab->GetFrameTree()->root()));
+      v.DepictFrameTree(tab->GetPrimaryFrameTree().root()));
 
-  RenderFrameHost* main_frame = tab->GetMainFrame();
+  RenderFrameHost* main_frame = tab->GetPrimaryMainFrame();
   RenderFrameHost* iframe =
-      tab->GetFrameTree()->root()->child_at(0)->current_frame_host();
+      tab->GetPrimaryFrameTree().root()->child_at(0)->current_frame_host();
 
   EXPECT_NE(iframe->GetProcess(), main_frame->GetProcess());
 
@@ -410,7 +473,7 @@ IN_PROC_BROWSER_TEST_F(CookieBrowserTest, CrossSiteCookieSecurityEnforcement) {
       "   +--Site B ------- proxies for A\n"
       "Where A = http://127.0.0.1/\n"
       "      B = http://baz.com/",
-      v.DepictFrameTree(tab->GetFrameTree()->root()));
+      v.DepictFrameTree(tab->GetPrimaryFrameTree().root()));
 
   // Now set a cross-site cookie from the main frame's process.
   {
@@ -431,7 +494,7 @@ IN_PROC_BROWSER_TEST_F(CookieBrowserTest, CrossSiteCookieSecurityEnforcement) {
       "   +--Site B ------- proxies for A\n"
       "Where A = http://127.0.0.1/\n"
       "      B = http://baz.com/",
-      v.DepictFrameTree(tab->GetFrameTree()->root()));
+      v.DepictFrameTree(tab->GetPrimaryFrameTree().root()));
 }
 
 class SamePartyEnabledCookieBrowserTest : public CookieBrowserTest {
@@ -483,7 +546,7 @@ IN_PROC_BROWSER_TEST_F(SamePartyEnabledCookieBrowserTest, SamePartyCookies) {
 
   WebContentsImpl* web_contents =
       static_cast<WebContentsImpl*>(shell()->web_contents());
-  RenderFrameHostImpl* main_frame = web_contents->GetMainFrame();
+  RenderFrameHostImpl* main_frame = web_contents->GetPrimaryMainFrame();
   ASSERT_EQ(3u, main_frame->child_count());
 
   RenderFrameHostImpl* a_iframe = main_frame->child_at(0)->current_frame_host();

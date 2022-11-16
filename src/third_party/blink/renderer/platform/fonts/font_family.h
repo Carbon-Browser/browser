@@ -28,8 +28,8 @@
 
 #include "base/memory/scoped_refptr.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
-#include "third_party/blink/renderer/platform/wtf/ref_counted.h"
 #include "third_party/blink/renderer/platform/wtf/text/atomic_string.h"
+#include "third_party/blink/renderer/platform/wtf/thread_safe_ref_counted.h"
 
 namespace blink {
 
@@ -57,11 +57,17 @@ class PLATFORM_EXPORT FontFamily {
   const AtomicString& FamilyName() const { return family_name_; }
   bool FamilyIsGeneric() const { return family_type_ == Type::kGenericFamily; }
 
+  // Returns number of linked `FontFamily` including `this`, so return value is
+  // greater than or equal to 1. When `Next()` is `nullptr`, return value is 1.
+  wtf_size_t CountNames() const;
   const FontFamily* Next() const;
 
   void AppendFamily(scoped_refptr<SharedFontFamily>);
   void AppendFamily(AtomicString family_name, Type family_type);
   scoped_refptr<SharedFontFamily> ReleaseNext();
+
+  bool IsPrewarmed() const { return is_prewarmed_; }
+  void SetIsPrewarmed() const { is_prewarmed_ = true; }
 
   // Returns this font family's name followed by all subsequent linked
   // families separated ", " (comma and space). Font family names are never
@@ -80,10 +86,13 @@ class PLATFORM_EXPORT FontFamily {
   AtomicString family_name_;
   scoped_refptr<SharedFontFamily> next_;
   Type family_type_ = Type::kFamilyName;
+  mutable bool is_prewarmed_ = false;
 };
 
-class PLATFORM_EXPORT SharedFontFamily : public FontFamily,
-                                         public RefCounted<SharedFontFamily> {
+class PLATFORM_EXPORT SharedFontFamily
+    : public FontFamily,
+      public RefCountedWillBeThreadSafeForParallelTextShaping<
+          SharedFontFamily> {
   USING_FAST_MALLOC(SharedFontFamily);
  public:
   SharedFontFamily(const SharedFontFamily&) = delete;

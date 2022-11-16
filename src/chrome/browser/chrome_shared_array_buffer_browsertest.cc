@@ -117,7 +117,8 @@ IN_PROC_BROWSER_TEST_F(ChromeSharedArrayBufferBrowserTest,
   GURL sub_url = embedded_test_server()->GetURL("a.com", "/empty.html");
 
   EXPECT_TRUE(content::NavigateToURL(web_contents(), main_url));
-  content::RenderFrameHost* main_document = web_contents()->GetMainFrame();
+  content::RenderFrameHost* main_document =
+      web_contents()->GetPrimaryMainFrame();
 
   EXPECT_TRUE(content::ExecJs(main_document, content::JsReplace(R"(
     g_sab_size = new Promise(resolve => {
@@ -130,7 +131,7 @@ IN_PROC_BROWSER_TEST_F(ChromeSharedArrayBufferBrowserTest,
   )",
                                                                 sub_url)));
   WaitForLoadStop(web_contents());
-  content::RenderFrameHost* sub_document = web_contents()->GetAllFrames()[1];
+  content::RenderFrameHost* sub_document = ChildFrameAt(main_document, 0);
 
   EXPECT_EQ(false, EvalJs(main_document, "self.crossOriginIsolated"));
   EXPECT_EQ(false, EvalJs(sub_document, "self.crossOriginIsolated"));
@@ -148,7 +149,8 @@ IN_PROC_BROWSER_TEST_F(ChromeSharedArrayBufferBrowserTest, NoPolicyNoSharing) {
   GURL sub_url = embedded_test_server()->GetURL("a.com", "/empty.html");
 
   EXPECT_TRUE(content::NavigateToURL(web_contents(), main_url));
-  content::RenderFrameHost* main_document = web_contents()->GetMainFrame();
+  content::RenderFrameHost* main_document =
+      web_contents()->GetPrimaryMainFrame();
 
   EXPECT_TRUE(content::ExecJs(web_contents(), content::JsReplace(R"(
     g_sab_size = new Promise(resolve => {
@@ -161,7 +163,7 @@ IN_PROC_BROWSER_TEST_F(ChromeSharedArrayBufferBrowserTest, NoPolicyNoSharing) {
   )",
                                                                  sub_url)));
   WaitForLoadStop(web_contents());
-  content::RenderFrameHost* sub_document = web_contents()->GetAllFrames()[1];
+  content::RenderFrameHost* sub_document = ChildFrameAt(main_document, 0);
 
   EXPECT_EQ(false, EvalJs(main_document, "self.crossOriginIsolated"));
   EXPECT_EQ(false, EvalJs(sub_document, "self.crossOriginIsolated"));

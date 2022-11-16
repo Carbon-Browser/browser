@@ -12,6 +12,7 @@
 #include "base/containers/cxx20_erase.h"
 #include "base/debug/crash_logging.h"
 #include "base/debug/dump_without_crashing.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/stringprintf.h"
 #include "base/trace_event/trace_event.h"
@@ -91,8 +92,8 @@ class TouchEventAckQueue {
   enum class TouchEventSource { SystemTouchEvent, EmulatedTouchEvent };
   struct AckData {
     TouchEventWithLatencyInfo touch_event;
-    RenderWidgetHostViewBase* target_view;
-    RenderWidgetHostViewBase* root_view;
+    raw_ptr<RenderWidgetHostViewBase> target_view;
+    raw_ptr<RenderWidgetHostViewBase> root_view;
     TouchEventSource touch_event_source;
     TouchEventAckStatus touch_event_ack_status;
     blink::mojom::InputEventResultState ack_result;
@@ -127,7 +128,7 @@ class TouchEventAckQueue {
   void ProcessAckedTouchEvents();
 
   std::deque<AckData> ack_queue_;
-  RenderWidgetHostInputEventRouter* client_;
+  raw_ptr<RenderWidgetHostInputEventRouter> client_;
 };
 
 void TouchEventAckQueue::Add(const TouchEventWithLatencyInfo& touch_event,
@@ -410,6 +411,9 @@ void RenderWidgetHostInputEventRouter::OnRenderWidgetHostViewBaseDestroyed(
 
   if (view == last_mouse_down_target_)
     last_mouse_down_target_ = nullptr;
+
+  if (view == last_emulated_event_root_view_)
+    last_emulated_event_root_view_ = nullptr;
 
   event_targeter_->ViewWillBeDestroyed(view);
 }
@@ -1947,7 +1951,7 @@ void RenderWidgetHostInputEventRouter::ForwardEmulatedTouchEvent(
   // TODO(wjmaclean): Why doesn't this class just track its root view?
   DCHECK(IsViewInMap(static_cast<RenderWidgetHostViewBase*>(target)));
   last_emulated_event_root_view_ =
-      last_mouse_move_root_view_ ? last_mouse_move_root_view_ : target;
+      last_mouse_move_root_view_ ? last_mouse_move_root_view_.get() : target;
 
   if (event.GetType() == blink::WebInputEvent::Type::kTouchStart)
     active_touches_ += CountChangedTouchPoints(event);
@@ -1962,7 +1966,7 @@ void RenderWidgetHostInputEventRouter::SetCursor(const WebCursor& cursor) {
     return;
 
   last_device_scale_factor_ =
-      last_mouse_move_root_view_->GetCurrentDeviceScaleFactor();
+      last_mouse_move_root_view_->GetDeviceScaleFactor();
   if (touch_emulator_)
     touch_emulator_->SetDeviceScaleFactor(last_device_scale_factor_);
   if (auto* cursor_manager = last_mouse_move_root_view_->GetCursorManager()) {
@@ -2041,7 +2045,7 @@ void RenderWidgetHostInputEventRouter::ForwardDelegatedInkPoint(
       if (!compositor)
         return;
 
-      TRACE_EVENT_INSTANT0("input",
+      TRACE_EVENT_INSTANT0("delegated_ink_trails",
                            "Binding mojo interface for delegated ink points.",
                            TRACE_EVENT_SCOPE_THREAD);
       compositor->SetDelegatedInkPointRenderer(
@@ -2055,10 +2059,11 @@ void RenderWidgetHostInputEventRouter::ForwardDelegatedInkPoint(
 
     gfx::DelegatedInkPoint delegated_ink_point(
         position, input_event.TimeStamp(), pointer_properties.id);
-    TRACE_EVENT_INSTANT1("input",
-                         "Forwarding delegated ink point from browser.",
-                         TRACE_EVENT_SCOPE_THREAD, "delegated point",
-                         delegated_ink_point.ToString());
+    TRACE_EVENT_WITH_FLOW1("delegated_ink_trails",
+                           "Forwarding delegated ink point from browser.",
+                           TRACE_ID_GLOBAL(delegated_ink_point.trace_id()),
+                           TRACE_EVENT_FLAG_FLOW_OUT, "delegated point",
+                           delegated_ink_point.ToString());
 
     // Calling this will result in IPC calls to get |delegated_ink_point| to
     // viz. The decision to do this here was made with the understanding that
@@ -2074,7 +2079,7 @@ void RenderWidgetHostInputEventRouter::ForwardDelegatedInkPoint(
     // Let viz know that the most recent point it received from us is probably
     // the last point the user is inking, so it shouldn't predict anything
     // beyond it.
-    TRACE_EVENT_INSTANT0("input", "Delegated ink trail ended",
+    TRACE_EVENT_INSTANT0("delegated_ink_trails", "Delegated ink trail ended",
                          TRACE_EVENT_SCOPE_THREAD);
     delegated_ink_point_renderer_->ResetPrediction();
     ended_delegated_ink_trail_ = true;

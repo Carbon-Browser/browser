@@ -9,25 +9,21 @@
 #include "base/bind.h"
 #include "base/command_line.h"
 #include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "chrome/browser/ash/login/oobe_screen.h"
 #include "chrome/browser/ash/login/screens/hid_detection_screen.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/ui/webui/chromeos/login/oobe_ui.h"
-#include "chrome/common/pref_names.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/login/localized_values_builder.h"
-#include "components/prefs/pref_service.h"
 #include "services/device/public/mojom/input_service.mojom.h"
 
 namespace chromeos {
 
 constexpr StaticOobeScreenId HIDDetectionView::kScreenId;
 
-HIDDetectionScreenHandler::HIDDetectionScreenHandler(
-    JSCallsContainer* js_calls_container)
-    : BaseScreenHandler(kScreenId, js_calls_container) {
-  set_user_acted_method_path("login.HIDDetectionScreen.userActed");
+HIDDetectionScreenHandler::HIDDetectionScreenHandler()
+    : BaseScreenHandler(kScreenId) {
+  set_user_acted_method_path_deprecated("login.HIDDetectionScreen.userActed");
 }
 
 HIDDetectionScreenHandler::~HIDDetectionScreenHandler() {
@@ -36,18 +32,12 @@ HIDDetectionScreenHandler::~HIDDetectionScreenHandler() {
 }
 
 void HIDDetectionScreenHandler::Show() {
-  if (!page_is_ready()) {
+  if (!IsJavascriptAllowed()) {
     show_on_init_ = true;
     return;
   }
 
-  PrefService* local_state = g_browser_process->local_state();
-  int num_of_times_dialog_was_shown = local_state->GetInteger(
-      prefs::kTimesHIDDialogShown);
-  local_state->SetInteger(prefs::kTimesHIDDialogShown,
-                          num_of_times_dialog_was_shown + 1);
-
-  ShowScreen(kScreenId);
+  ShowInWebUI();
 }
 
 void HIDDetectionScreenHandler::Hide() {
@@ -55,14 +45,14 @@ void HIDDetectionScreenHandler::Hide() {
 
 void HIDDetectionScreenHandler::Bind(HIDDetectionScreen* screen) {
   screen_ = screen;
-  BaseScreenHandler::SetBaseScreen(screen_);
-  if (page_is_ready())
-    Initialize();
+  BaseScreenHandler::SetBaseScreenDeprecated(screen_);
+  if (IsJavascriptAllowed())
+    InitializeDeprecated();
 }
 
 void HIDDetectionScreenHandler::Unbind() {
   screen_ = nullptr;
-  BaseScreenHandler::SetBaseScreen(nullptr);
+  BaseScreenHandler::SetBaseScreenDeprecated(nullptr);
 }
 
 void HIDDetectionScreenHandler::SetKeyboardState(const std::string& value) {
@@ -153,31 +143,33 @@ void HIDDetectionScreenHandler::DeclareJSCallbacks() {
 }
 
 void HIDDetectionScreenHandler::HandleEmulateDevicesConnectedForTesting() {
+  auto touchscreen = device::mojom::InputDeviceInfo::New();
+  touchscreen->id = "fake_touchscreen";
+  touchscreen->subsystem = device::mojom::InputDeviceSubsystem::SUBSYSTEM_INPUT;
+  touchscreen->type = device::mojom::InputDeviceType::TYPE_UNKNOWN;
+  touchscreen->is_touchscreen = true;
+  screen_->InputDeviceAddedForTesting(std::move(touchscreen));  // IN-TEST
+
   auto mouse = device::mojom::InputDeviceInfo::New();
   mouse->id = "fake_mouse";
   mouse->subsystem = device::mojom::InputDeviceSubsystem::SUBSYSTEM_INPUT;
   mouse->type = device::mojom::InputDeviceType::TYPE_USB;
   mouse->is_mouse = true;
-  screen_->InputDeviceAddedForTesting(std::move(mouse));
+  screen_->InputDeviceAddedForTesting(std::move(mouse));  // IN-TEST
 
   auto keyboard = device::mojom::InputDeviceInfo::New();
   keyboard->id = "fake_keyboard";
   keyboard->subsystem = device::mojom::InputDeviceSubsystem::SUBSYSTEM_INPUT;
   keyboard->type = device::mojom::InputDeviceType::TYPE_USB;
   keyboard->is_keyboard = true;
-  screen_->InputDeviceAddedForTesting(std::move(keyboard));
+  screen_->InputDeviceAddedForTesting(std::move(keyboard));  // IN-TEST
 }
 
-void HIDDetectionScreenHandler::Initialize() {
+void HIDDetectionScreenHandler::InitializeDeprecated() {
   if (show_on_init_) {
     Show();
     show_on_init_ = false;
   }
-}
-
-// static
-void HIDDetectionScreenHandler::RegisterPrefs(PrefRegistrySimple* registry) {
-  registry->RegisterIntegerPref(prefs::kTimesHIDDialogShown, 0);
 }
 
 }  // namespace chromeos

@@ -6,14 +6,9 @@
 #define CHROME_BROWSER_UI_WEBUI_INTERNALS_LENS_LENS_INTERNALS_UI_MESSAGE_HANDLER_H_
 
 #include "base/android/scoped_java_ref.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "content/public/browser/web_ui_message_handler.h"
-
-namespace base {
-class ListValue;
-}  // namespace base
 
 class Profile;
 
@@ -27,9 +22,9 @@ class LensInternalsUIMessageHandler : public content::WebUIMessageHandler {
 
  private:
   // Logger::Observer implementation.
-  void HandleStartDebugMode(const base::ListValue* args);
-  void HandleRefreshDebugData(const base::ListValue* args);
-  void HandleStopDebugMode(const base::ListValue* args);
+  void HandleStartDebugMode(const base::Value::List& args);
+  void HandleRefreshDebugData(const base::Value::List& args);
+  void HandleStopDebugMode(const base::Value::List& args);
 
   base::android::ScopedJavaGlobalRef<jobject> java_ref_;
 };

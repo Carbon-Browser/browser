@@ -19,7 +19,7 @@
 namespace credential_provider {
 
 const base::TimeDelta kDefaultUploadAppInventoryRequestTimeout =
-    base::TimeDelta::FromMilliseconds(12000);
+    base::Milliseconds(12000);
 
 namespace {
 
@@ -52,8 +52,7 @@ const wchar_t kUploadAppInventoryFromEsaEnabledRegKey[] =
     L"upload_app_inventory_from_esa";
 
 // The period of uploading app inventory to the backend.
-const base::TimeDelta kUploadAppInventoryExecutionPeriod =
-    base::TimeDelta::FromHours(3);
+const base::TimeDelta kUploadAppInventoryExecutionPeriod = base::Hours(3);
 
 // True when upload device details from ESA feature is enabled.
 bool g_upload_app_inventory_from_esa_enabled = false;
@@ -229,7 +228,7 @@ base::Value AppInventoryManager::GetInstalledWin32Apps() {
         std::make_unique<base::Value>(base::Value::Type::DICTIONARY);
 
     wchar_t display_name[256];
-    ULONG display_length = base::size(display_name);
+    ULONG display_length = std::size(display_name);
     HRESULT hr =
         GetMachineRegString(regPath, std::wstring(kAppDisplayNameRegistryKey),
                             display_name, &display_length);
@@ -238,7 +237,7 @@ base::Value AppInventoryManager::GetInstalledWin32Apps() {
                                  base::WideToUTF8(display_name));
 
       wchar_t display_version[256];
-      ULONG version_length = base::size(display_version);
+      ULONG version_length = std::size(display_version);
       hr = GetMachineRegString(regPath,
                                std::wstring(kAppDisplayVersionRegistryKey),
                                display_version, &version_length);
@@ -248,7 +247,7 @@ base::Value AppInventoryManager::GetInstalledWin32Apps() {
       }
 
       wchar_t publisher[256];
-      ULONG publisher_length = base::size(publisher);
+      ULONG publisher_length = std::size(publisher);
       hr = GetMachineRegString(regPath, std::wstring(kAppPublisherRegistryKey),
                                publisher, &publisher_length);
       if (hr == S_OK) {

@@ -4,8 +4,7 @@
 
 #include "components/history/metrics/domain_diversity_reporter.h"
 
-#include "base/metrics/histogram_macros.h"
-#include "base/task/post_task.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/task/task_traits.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "components/pref_registry/pref_registry_syncable.h"
@@ -13,8 +12,7 @@
 
 namespace {
 // The interval between two successive domain metrics reports.
-constexpr base::TimeDelta kDomainDiversityReportingInterval =
-    base::TimeDelta::FromDays(1);
+constexpr base::TimeDelta kDomainDiversityReportingInterval = base::Days(1);
 
 // Pref name for the persistent timestamp of the last report. This pref is
 // per local profile but not synced.
@@ -59,8 +57,8 @@ void DomainDiversityReporter::MaybeComputeDomainMetrics() {
   }
   // Observe history service and start reporting as soon as
   // the former is ready.
-  DCHECK(!history_service_observer_.IsObservingSource(history_service_));
-  history_service_observer_.Observe(history_service_);
+  DCHECK(!history_service_observer_.IsObservingSource(history_service_.get()));
+  history_service_observer_.Observe(history_service_.get());
 }
 
 void DomainDiversityReporter::ComputeDomainMetrics() {
@@ -91,7 +89,7 @@ void DomainDiversityReporter::ComputeDomainMetrics() {
     // The beginning and the end of a 7-day period may differ by at most
     // 24 * 8 + 1(DST offset) hours; round up to FromDays(9) here.
     if (time_current_report_triggered - time_last_report_triggered <
-        base::TimeDelta::FromDays(number_of_days_to_report + 2)) {
+        base::Days(number_of_days_to_report + 2)) {
       // Compute the number of days that needs to be reported for based on
       // the last report time and current time.
       base::TimeDelta report_time_range =
@@ -103,9 +101,9 @@ void DomainDiversityReporter::ComputeDomainMetrics() {
       // `report_time_range` so that the resulting time range is guaranteed to
       // be at least the correct number of days times 24. The number of days to
       // report is capped at 7 days.
-      number_of_days_to_report = std::min(
-          (report_time_range + base::TimeDelta::FromHours(4)).InDaysFloored(),
-          number_of_days_to_report);
+      number_of_days_to_report =
+          std::min((report_time_range + base::Hours(4)).InDaysFloored(),
+                   number_of_days_to_report);
     }
 
     if (number_of_days_to_report >= 1) {
@@ -140,12 +138,12 @@ void DomainDiversityReporter::ReportDomainMetrics(
     return;
 
   for (auto& result_one_day : result) {
-    UMA_HISTOGRAM_COUNTS_1000("History.DomainCount1Day",
-                              result_one_day.one_day_metric.value().count);
-    UMA_HISTOGRAM_COUNTS_1000("History.DomainCount7Day",
-                              result_one_day.seven_day_metric.value().count);
-    UMA_HISTOGRAM_COUNTS_1000(
-        "History.DomainCount28Day",
+    base::UmaHistogramCounts1000("History.DomainCount1Day_V2",
+                                 result_one_day.one_day_metric.value().count);
+    base::UmaHistogramCounts1000("History.DomainCount7Day_V2",
+                                 result_one_day.seven_day_metric.value().count);
+    base::UmaHistogramCounts1000(
+        "History.DomainCount28Day_V2",
         result_one_day.twenty_eight_day_metric.value().count);
   }
 

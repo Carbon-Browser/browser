@@ -13,7 +13,7 @@
 #include "base/location.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/task/post_task.h"
+#include "base/synchronization/waitable_event.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/thread_restrictions.h"
 #include "components/variations/net/variations_http_headers.h"
@@ -27,6 +27,7 @@
 #include "net/url_request/static_http_user_agent_settings.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/simple_url_loader.h"
+#include "services/network/public/cpp/simple_url_loader_throttle.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
 #include "third_party/zlib/google/compression_utils.h"
 
@@ -37,7 +38,7 @@ namespace {
 // It's possible for an http request to be silently stalled. We set a time
 // limit for all http requests, beyond which the request is cancelled and
 // treated as a transient failure.
-constexpr base::TimeDelta kMaxHttpRequestTime = base::TimeDelta::FromMinutes(5);
+constexpr base::TimeDelta kMaxHttpRequestTime = base::Minutes(5);
 
 // Helper method for logging timeouts via UMA.
 void LogTimeout(bool timed_out) {
@@ -63,10 +64,10 @@ HttpBridgeFactory::HttpBridgeFactory(
 
 HttpBridgeFactory::~HttpBridgeFactory() = default;
 
-scoped_refptr<HttpPostProviderInterface> HttpBridgeFactory::Create() {
+scoped_refptr<HttpPostProvider> HttpBridgeFactory::Create() {
   DCHECK(url_loader_factory_);
 
-  scoped_refptr<HttpPostProviderInterface> http =
+  scoped_refptr<HttpPostProvider> http =
       new HttpBridge(user_agent_, url_loader_factory_->Clone());
   return http;
 }
@@ -77,7 +78,7 @@ HttpBridge::URLFetchState::URLFetchState()
       request_succeeded(false),
       http_status_code(-1),
       net_error_code(-1) {}
-HttpBridge::URLFetchState::~URLFetchState() {}
+HttpBridge::URLFetchState::~URLFetchState() = default;
 
 HttpBridge::HttpBridge(const std::string& user_agent,
                        std::unique_ptr<network::PendingSharedURLLoaderFactory>
@@ -97,6 +98,11 @@ void HttpBridge::SetExtraRequestHeaders(const char* headers) {
   DCHECK(extra_headers_.empty())
       << "HttpBridge::SetExtraRequestHeaders called twice.";
   extra_headers_.assign(headers);
+}
+
+void HttpBridge::SetAllowBatching(bool allow_batching) {
+  DCHECK(!fetch_state_.url_loader);
+  allow_batching_ = allow_batching;
 }
 
 void HttpBridge::SetURL(const GURL& url) {
@@ -243,6 +249,11 @@ void HttpBridge::MakeAsynchronousPost() {
   fetch_state_.url_loader = network::SimpleURLLoader::Create(
       std::move(resource_request), traffic_annotation);
   network::SimpleURLLoader* url_loader = fetch_state_.url_loader.get();
+
+  if (allow_batching_ &&
+      network::SimpleURLLoaderThrottle::IsBatchingEnabled(traffic_annotation)) {
+    url_loader->SetAllowBatching();
+  }
 
   std::string request_to_send;
   compression::GzipCompress(request_content_, &request_to_send);

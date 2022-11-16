@@ -4,7 +4,10 @@
 
 #include "components/sync/driver/sync_session_durations_metrics_recorder.h"
 
+#include <string>
+
 #include "base/metrics/histogram_functions.h"
+#include "base/time/time.h"
 #include "components/signin/public/identity_manager/accounts_in_cookie_jar_info.h"
 #include "components/sync/engine/cycle/sync_cycle_snapshot.h"
 
@@ -18,7 +21,7 @@ base::TimeDelta SubtractInactiveTime(base::TimeDelta total_length,
   // ends up giving the session negative length, which can happen if the feature
   // state changed after the user became inactive, log the length as 0.
   base::TimeDelta session_length = total_length - inactive_time;
-  if (session_length < base::TimeDelta()) {
+  if (session_length.is_negative()) {
     session_length = base::TimeDelta();
   }
   return session_length;
@@ -37,9 +40,9 @@ SyncSessionDurationsMetricsRecorder::SyncSessionDurationsMetricsRecorder(
     : sync_service_(sync_service), identity_manager_(identity_manager) {
   // |sync_service| can be null if sync is disabled by a command line flag.
   if (sync_service_) {
-    sync_observation_.Observe(sync_service_);
+    sync_observation_.Observe(sync_service_.get());
   }
-  identity_manager_observation_.Observe(identity_manager_);
+  identity_manager_observation_.Observe(identity_manager_.get());
 
   // Since this is created after the profile itself is created, we need to
   // handle the initial state.
@@ -64,6 +67,15 @@ SyncSessionDurationsMetricsRecorder::~SyncSessionDurationsMetricsRecorder() {
   sync_observation_.Reset();
   DCHECK(identity_manager_observation_.IsObserving());
   identity_manager_observation_.Reset();
+}
+
+bool SyncSessionDurationsMetricsRecorder::IsSignedIn() const {
+  return identity_manager_->HasPrimaryAccount(signin::ConsentLevel::kSignin);
+}
+
+bool SyncSessionDurationsMetricsRecorder::IsSyncing() const {
+  return account_status_ == FeatureState::ON &&
+         sync_status_ == FeatureState::ON;
 }
 
 void SyncSessionDurationsMetricsRecorder::OnSessionStarted(
@@ -222,7 +234,7 @@ void SyncSessionDurationsMetricsRecorder::LogSigninDuration(
     case FeatureState::UNKNOWN:
       // Since the feature wasn't working for the user if we didn't know its
       // state, log the status as off.
-      FALLTHROUGH;
+      [[fallthrough]];
     case FeatureState::OFF:
       LogDuration("Session.TotalDuration.WithoutAccount", session_length);
       break;
@@ -244,7 +256,7 @@ void SyncSessionDurationsMetricsRecorder::LogSyncAndAccountDuration(
       break;
     case GetFeatureStates(FeatureState::ON, FeatureState::UNKNOWN):
       // Sync engine not initialized yet, default to it being off.
-      FALLTHROUGH;
+      [[fallthrough]];
     case GetFeatureStates(FeatureState::ON, FeatureState::OFF):
       LogDuration("Session.TotalDuration.NotOptedInToSyncWithAccount",
                   session_length);
@@ -255,7 +267,7 @@ void SyncSessionDurationsMetricsRecorder::LogSyncAndAccountDuration(
       break;
     case GetFeatureStates(FeatureState::OFF, FeatureState::UNKNOWN):
       // Sync engine not initialized yet, default to it being off.
-      FALLTHROUGH;
+      [[fallthrough]];
     case GetFeatureStates(FeatureState::OFF, FeatureState::OFF):
       LogDuration("Session.TotalDuration.NotOptedInToSyncWithoutAccount",
                   session_length);

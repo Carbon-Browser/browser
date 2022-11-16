@@ -11,7 +11,7 @@
 
 #include "base/auto_reset.h"
 #include "base/callback.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/events/events_export.h"
 #include "ui/events/platform/platform_event_source.h"
@@ -35,6 +35,10 @@ class X11HotplugEventHandler;
 class X11EventWatcher {
  public:
   X11EventWatcher() = default;
+
+  X11EventWatcher(const X11EventWatcher&) = delete;
+  X11EventWatcher& operator=(const X11EventWatcher&) = delete;
+
   virtual ~X11EventWatcher() = default;
 
   // Starts watching for X Events and feeding them into X11EventSource to be
@@ -43,9 +47,6 @@ class X11EventWatcher {
 
   // Stops watching for X Events.
   virtual void StopWatching() = 0;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(X11EventWatcher);
 };
 
 // PlatformEventSource implementation for X11, both Ozone and non-Ozone.
@@ -56,6 +57,10 @@ class EVENTS_EXPORT X11EventSource : public PlatformEventSource,
                                      x11::EventObserver {
  public:
   explicit X11EventSource(x11::Connection* connection);
+
+  X11EventSource(const X11EventSource&) = delete;
+  X11EventSource& operator=(const X11EventSource&) = delete;
+
   ~X11EventSource() override;
 
   static bool HasInstance();
@@ -86,7 +91,7 @@ class EVENTS_EXPORT X11EventSource : public PlatformEventSource,
   std::unique_ptr<X11EventWatcher> watcher_;
 
   // The connection to the X11 server used to receive the events.
-  x11::Connection* connection_;
+  raw_ptr<x11::Connection> connection_;
 
   // State necessary for UpdateLastSeenServerTime
   bool dummy_initialized_;
@@ -95,8 +100,6 @@ class EVENTS_EXPORT X11EventSource : public PlatformEventSource,
   std::unique_ptr<x11::XScopedEventSelector> dummy_window_events_;
 
   std::unique_ptr<X11HotplugEventHandler> hotplug_event_handler_;
-
-  DISALLOW_COPY_AND_ASSIGN(X11EventSource);
 };
 
 }  // namespace ui

@@ -5,42 +5,45 @@
 #include "content/browser/webauth/authenticator_impl.h"
 
 #include <memory>
-#include <string>
 #include <utility>
 
-#include "base/timer/timer.h"
 #include "content/browser/webauth/authenticator_common.h"
-#include "content/public/browser/document_service_base.h"
-#include "content/public/browser/navigation_handle.h"
+#include "content/public/browser/document_service.h"
 #include "content/public/browser/render_frame_host.h"
-#include "content/public/browser/web_contents.h"
-#include "url/origin.h"
 
 namespace content {
 
 void AuthenticatorImpl::Create(
     RenderFrameHost* render_frame_host,
     mojo::PendingReceiver<blink::mojom::Authenticator> receiver) {
+  CHECK(render_frame_host);
   // Avoid creating the service if the RenderFrameHost isn't active, e.g. if a
   // request arrives during a navigation.
   if (!render_frame_host->IsActive()) {
     return;
   }
-
   // AuthenticatorImpl owns itself. It self-destructs when the RenderFrameHost
-  // navigates or is deleted. See DocumentServiceBase for details.
-  DCHECK(render_frame_host);
+  // navigates or is deleted. See DocumentService for details.
   new AuthenticatorImpl(
-      render_frame_host, std::move(receiver),
+      *render_frame_host, std::move(receiver),
       std::make_unique<AuthenticatorCommon>(render_frame_host));
 }
 
+void AuthenticatorImpl::CreateForTesting(
+    RenderFrameHost& render_frame_host,
+    mojo::PendingReceiver<blink::mojom::Authenticator> receiver,
+    std::unique_ptr<AuthenticatorCommon> authenticator_common) {
+  new AuthenticatorImpl(render_frame_host, std::move(receiver),
+                        std::move(authenticator_common));
+}
+
 AuthenticatorImpl::AuthenticatorImpl(
-    RenderFrameHost* render_frame_host,
+    RenderFrameHost& render_frame_host,
     mojo::PendingReceiver<blink::mojom::Authenticator> receiver,
     std::unique_ptr<AuthenticatorCommon> authenticator_common)
-    : DocumentServiceBase(render_frame_host, std::move(receiver)),
+    : DocumentService(render_frame_host, std::move(receiver)),
       authenticator_common_(std::move(authenticator_common)) {
+  authenticator_common_->EnableRequestProxyExtensionsAPISupport();
   DCHECK(authenticator_common_);
 }
 

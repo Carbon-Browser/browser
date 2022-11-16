@@ -14,6 +14,8 @@
 #include "components/password_manager/core/browser/password_form.h"
 #include "components/password_manager/core/browser/password_manager_client.h"
 #include "components/password_manager/core/browser/password_manager_util.h"
+#include "components/password_manager/core/browser/password_ui_utils.h"
+#include "components/password_manager/core/browser/ui/credential_ui_entry.h"
 #include "components/password_manager/core/browser/ui/insecure_credentials_manager.h"
 #include "components/password_manager/core/browser/well_known_change_password_util.h"
 #include "components/password_manager/core/common/password_manager_features.h"
@@ -21,10 +23,11 @@
 #include "components/prefs/pref_service.h"
 #include "components/strings/grit/components_strings.h"
 #include "components/url_formatter/url_formatter.h"
-#include "components/version_info/version_info.h"
 #include "ui/base/l10n/l10n_util.h"
 
 namespace {
+
+using password_manager::PasswordForm;
 
 std::u16string GetDisplayUsername(const std::u16string& username) {
   return username.empty()
@@ -34,20 +37,18 @@ std::u16string GetDisplayUsername(const std::u16string& username) {
 
 }  // namespace
 
-using password_manager::PasswordForm;
-
 using CredentialsView =
     password_manager::InsecureCredentialsManager::CredentialsView;
 using PasswordCheckUIStatus = password_manager::PasswordCheckUIStatus;
 using State = password_manager::BulkLeakCheckService::State;
 using SyncState = password_manager::SyncState;
-using CredentialWithPassword = password_manager::CredentialWithPassword;
+using CredentialUIEntry = password_manager::CredentialUIEntry;
 using CompromisedCredentialForUI =
     PasswordCheckManager::CompromisedCredentialForUI;
 
 CompromisedCredentialForUI::CompromisedCredentialForUI(
-    const CredentialWithPassword& credential)
-    : CredentialWithPassword(credential) {}
+    const CredentialUIEntry& credential)
+    : CredentialUIEntry(credential) {}
 
 CompromisedCredentialForUI::CompromisedCredentialForUI(
     const CompromisedCredentialForUI& other) = default;
@@ -109,7 +110,7 @@ base::Time PasswordCheckManager::GetLastCheckTimestamp() {
 }
 
 int PasswordCheckManager::GetCompromisedCredentialsCount() const {
-  return insecure_credentials_manager_.GetInsecureCredentials().size();
+  return insecure_credentials_manager_.GetInsecureCredentialEntries().size();
 }
 
 int PasswordCheckManager::GetSavedPasswordsCount() const {
@@ -118,8 +119,8 @@ int PasswordCheckManager::GetSavedPasswordsCount() const {
 
 std::vector<CompromisedCredentialForUI>
 PasswordCheckManager::GetCompromisedCredentials() const {
-  std::vector<CredentialWithPassword> credentials =
-      insecure_credentials_manager_.GetInsecureCredentials();
+  std::vector<CredentialUIEntry> credentials =
+      insecure_credentials_manager_.GetInsecureCredentialEntries();
   std::vector<CompromisedCredentialForUI> ui_credentials;
   ui_credentials.reserve(credentials.size());
   for (const auto& credential : credentials) {
@@ -145,14 +146,16 @@ void PasswordCheckManager::OnEditCredential(
 
   const PasswordForm form =
       insecure_credentials_manager_.GetSavedPasswordsFor(credential)[0];
+  bool is_using_account_store = form.IsUsingAccountStore();
 
   credential_edit_bridge_ = CredentialEditBridge::MaybeCreate(
-      std::move(form), CredentialEditBridge::IsInsecureCredential(true),
-      saved_passwords_presenter_.GetUsernamesForRealm(
-          credential.signon_realm, form.IsUsingAccountStore()),
-      &saved_passwords_presenter_, nullptr,
+      password_manager::CredentialUIEntry(form),
+      CredentialEditBridge::IsInsecureCredential(true),
+      GetUsernamesForRealm(saved_passwords_presenter_.GetSavedCredentials(),
+                           credential.signon_realm, is_using_account_store),
+      &saved_passwords_presenter_,
       base::BindOnce(&PasswordCheckManager::OnEditUIDismissed,
-                     base::Unretained(this)),
+                     weak_ptr_factory_.GetWeakPtr()),
       context, settings_launcher);
 }
 
@@ -246,7 +249,7 @@ void PasswordCheckManager::OnCredentialDone(
 }
 
 CompromisedCredentialForUI PasswordCheckManager::MakeUICredential(
-    const CredentialWithPassword& credential) const {
+    const CredentialUIEntry& credential) const {
   CompromisedCredentialForUI ui_credential(credential);
   // UI is only be created after the list of available password check
   // scripts has been refreshed.
@@ -255,12 +258,9 @@ CompromisedCredentialForUI PasswordCheckManager::MakeUICredential(
       credential.signon_realm);
 
   if (facet.IsValidAndroidFacetURI()) {
-    const PasswordForm& android_form =
-        insecure_credentials_manager_.GetSavedPasswordsFor(credential)[0];
-
     ui_credential.package_name = facet.android_package_name();
 
-    if (android_form.app_display_name.empty()) {
+    if (credential.app_display_name.empty()) {
       // In case no affiliation information could be obtained show the
       // formatted package name to the user.
       ui_credential.display_origin = l10n_util::GetStringFUTF16(
@@ -268,22 +268,22 @@ CompromisedCredentialForUI PasswordCheckManager::MakeUICredential(
           base::UTF8ToUTF16(facet.android_package_name()));
     } else {
       ui_credential.display_origin =
-          base::UTF8ToUTF16(android_form.app_display_name);
+          base::UTF8ToUTF16(credential.app_display_name);
     }
     // In case no affiliated_web_realm could be obtained we should not have an
     // associated url for android credential.
-    ui_credential.url = android_form.affiliated_web_realm.empty()
+    ui_credential.url = credential.affiliated_web_realm.empty()
                             ? GURL::EmptyGURL()
-                            : GURL(android_form.affiliated_web_realm);
+                            : GURL(credential.affiliated_web_realm);
 
   } else {
     ui_credential.display_origin = url_formatter::FormatUrl(
-        credential.url.GetOrigin(),
+        credential.url.DeprecatedGetOriginAsURL(),
         url_formatter::kFormatUrlOmitDefaults |
             url_formatter::kFormatUrlOmitHTTPS |
             url_formatter::kFormatUrlOmitTrivialSubdomains |
             url_formatter::kFormatUrlTrimAfterHost,
-        net::UnescapeRule::SPACES, nullptr, nullptr, nullptr);
+        base::UnescapeRule::SPACES, nullptr, nullptr, nullptr);
     ui_credential.change_password_url =
         password_manager::CreateChangePasswordUrl(ui_credential.url).spec();
   }
@@ -292,8 +292,7 @@ CompromisedCredentialForUI PasswordCheckManager::MakeUICredential(
   ui_credential.has_startable_script =
       !credential.username.empty() && ShouldFetchPasswordScripts() &&
       password_script_fetcher_->IsScriptAvailable(
-          url::Origin::Create(ui_credential.url.GetOrigin()),
-          version_info::GetVersion());
+          url::Origin::Create(ui_credential.url.DeprecatedGetOriginAsURL()));
   ui_credential.has_auto_change_button =
       ui_credential.has_startable_script &&
       base::FeatureList::IsEnabled(
@@ -360,7 +359,7 @@ void PasswordCheckManager::RefreshScripts() {
   }
   ResetPrecondition(kScriptsCachePrewarmed);
   password_script_fetcher_->RefreshScriptsIfNecessary(base::BindOnce(
-      &PasswordCheckManager::OnScriptsFetched, base::Unretained(this)));
+      &PasswordCheckManager::OnScriptsFetched, weak_ptr_factory_.GetWeakPtr()));
 }
 
 void PasswordCheckManager::OnScriptsFetched() {
@@ -391,8 +390,7 @@ bool PasswordCheckManager::ShouldFetchPasswordScripts() const {
     case SyncState::kSyncingNormalEncryption:
       ABSL_FALLTHROUGH_INTENDED;
     case SyncState::kAccountPasswordsActiveNormalEncryption:
-      return base::FeatureList::IsEnabled(
-          password_manager::features::kPasswordScriptsFetching);
+      return password_manager::features::IsPasswordScriptsFetchingEnabled();
   }
 }
 

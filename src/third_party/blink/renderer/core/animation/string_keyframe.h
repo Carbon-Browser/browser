@@ -6,8 +6,10 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_ANIMATION_STRING_KEYFRAME_H_
 
 #include "third_party/blink/renderer/core/animation/keyframe.h"
+#include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/css/css_property_value_set.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_map.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/wtf/hash_map.h"
 
 namespace blink {
@@ -120,6 +122,7 @@ class CORE_EXPORT StringKeyframe : public Keyframe {
 
     bool IsNeutral() const final { return !value_; }
     bool IsRevert() const final;
+    bool IsRevertLayer() const final;
     Keyframe::PropertySpecificKeyframe* NeutralKeyframe(
         double offset,
         scoped_refptr<TimingFunction> easing) const final;
@@ -157,6 +160,7 @@ class CORE_EXPORT StringKeyframe : public Keyframe {
 
     bool IsNeutral() const final { return value_.IsNull(); }
     bool IsRevert() const final { return false; }
+    bool IsRevertLayer() const final { return false; }
     PropertySpecificKeyframe* NeutralKeyframe(
         double offset,
         scoped_refptr<TimingFunction> easing) const final;
@@ -236,7 +240,7 @@ class CORE_EXPORT StringKeyframe : public Keyframe {
   // resolving longhand name collisions.  The resolver also knows how to
   // create serialized text for a shorthand, which is required for getKeyframes
   // calls.
-  // See: https://drafts.csswg.org/web-animations/#keyframes-section
+  // See: https://w3.org/TR/web-animations-1/#keyframes-section
   HeapHashMap<PropertyHandle, Member<PropertyResolver>> input_properties_;
 
   // The resolved properties are computed from unresolved ones applying these

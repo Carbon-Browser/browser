@@ -10,6 +10,7 @@
 #include "base/containers/flat_map.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
+#include "base/time/time.h"
 #include "content/browser/devtools/devtools_background_services.pb.h"
 #include "content/browser/service_worker/embedded_worker_test_helper.h"
 #include "content/public/browser/content_browser_client.h"
@@ -96,6 +97,11 @@ class DevToolsBackgroundServicesContextTest
       : task_environment_(BrowserTaskEnvironment::IO_MAINLOOP),
         embedded_worker_test_helper_(base::FilePath() /* in memory */) {}
 
+  DevToolsBackgroundServicesContextTest(
+      const DevToolsBackgroundServicesContextTest&) = delete;
+  DevToolsBackgroundServicesContextTest& operator=(
+      const DevToolsBackgroundServicesContextTest&) = delete;
+
   ~DevToolsBackgroundServicesContextTest() override = default;
 
   void SetUp() override {
@@ -136,7 +142,7 @@ class DevToolsBackgroundServicesContextTest
   }
 
   void SimulateOneWeekPassing() {
-    base::Time one_week_ago = base::Time::Now() - base::TimeDelta::FromDays(7);
+    base::Time one_week_ago = base::Time::Now() - base::Days(7);
     context_->expiration_times_
         [devtools::proto::BackgroundService::BACKGROUND_FETCH] = one_week_ago;
   }
@@ -261,8 +267,6 @@ class DevToolsBackgroundServicesContextTest
   scoped_refptr<DevToolsBackgroundServicesContextImpl> context_;
   scoped_refptr<ServiceWorkerRegistration> service_worker_registration_;
   std::unique_ptr<ContentBrowserClient> browser_client_;
-
-  DISALLOW_COPY_AND_ASSIGN(DevToolsBackgroundServicesContextTest);
 };
 
 TEST_F(DevToolsBackgroundServicesContextTest,

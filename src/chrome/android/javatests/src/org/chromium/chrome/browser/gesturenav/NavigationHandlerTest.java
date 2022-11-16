@@ -4,7 +4,9 @@
 
 package org.chromium.chrome.browser.gesturenav;
 
+import android.os.SystemClock;
 import android.support.test.InstrumentationRegistry;
+import android.view.MotionEvent;
 
 import androidx.test.filters.SmallTest;
 
@@ -23,6 +25,7 @@ import org.chromium.base.test.util.Criteria;
 import org.chromium.base.test.util.CriteriaHelper;
 import org.chromium.base.test.util.Restriction;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
+import org.chromium.chrome.browser.layouts.LayoutManager;
 import org.chromium.chrome.browser.layouts.LayoutTestUtils;
 import org.chromium.chrome.browser.layouts.LayoutType;
 import org.chromium.chrome.browser.layouts.animation.CompositorAnimationHandler;
@@ -226,6 +229,27 @@ public class NavigationHandlerTest {
 
     @Test
     @SmallTest
+    public void testSwipeAfterDestroyActivity_NativePage() {
+        mTestServer = EmbeddedTestServer.createAndStartServer(
+                InstrumentationRegistry.getInstrumentation().getContext());
+        mActivityTestRule.loadUrl(UrlConstants.NTP_URL);
+        TestThreadUtils.runOnUiThreadBlocking(mActivityTestRule.getActivity()::finish);
+
+        // CompositorViewHolder dispatches motion events and invoke the handler's
+        // |handleTouchEvent| on native pages. Make sure this won't crash the app after
+        // the handler is destroyed.
+        long eventTime = SystemClock.uptimeMillis();
+        MotionEvent e = MotionEvent.obtain(
+                eventTime, eventTime, MotionEvent.ACTION_DOWN, /*x=*/10, /*y=*/100, 0);
+        TestThreadUtils.runOnUiThreadBlockingNoException(
+                ()
+                        -> mActivityTestRule.getActivity()
+                                   .getCompositorViewHolderForTesting()
+                                   .dispatchTouchEvent(e));
+    }
+
+    @Test
+    @SmallTest
     @Restriction(UiRestriction.RESTRICTION_TYPE_PHONE)
     public void testEdgeSwipeIsNoopInTabSwitcher() throws TimeoutException {
         mActivityTestRule.loadUrl(UrlConstants.NTP_URL);
@@ -239,19 +263,26 @@ public class NavigationHandlerTest {
                 ChromeTabUtils.getUrlStringOnUiThread(currentTab()));
     }
 
+    @Test
+    @SmallTest
+    @Restriction(UiRestriction.RESTRICTION_TYPE_PHONE)
+    public void testSwipeAndHoldOnNtp_EnterTabSwitcher() throws TimeoutException {
+        // Clicking tab switcher button while swiping and holding the gesture navigation
+        // bubble should reset the state and dismiss the UI.
+        mActivityTestRule.loadUrl(UrlConstants.NTP_URL);
+        mNavUtils.swipeFromEdgeAndHold(/*leftEdge=*/true);
+        setTabSwitcherModeAndWait(true);
+        Assert.assertFalse("Navigation UI should be reset.", mNavigationHandler.isActive());
+    }
+
     /**
      * Enter or exit the tab switcher with animations and wait for the scene to change.
      * @param inSwitcher Whether to enter or exit the tab switcher.
      */
-    private void setTabSwitcherModeAndWait(boolean inSwitcher) throws TimeoutException {
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            if (inSwitcher) {
-                mActivityTestRule.getActivity().getLayoutManager().showOverview(false);
-            } else {
-                mActivityTestRule.getActivity().getLayoutManager().hideOverview(false);
-            }
-        });
-        LayoutTestUtils.waitForLayout(mActivityTestRule.getActivity().getLayoutManager(),
-                inSwitcher ? LayoutType.TAB_SWITCHER : LayoutType.BROWSING);
+    private void setTabSwitcherModeAndWait(boolean inSwitcher) {
+        LayoutManager layoutManager = mActivityTestRule.getActivity().getLayoutManager();
+        @LayoutType
+        int layout = inSwitcher ? LayoutType.TAB_SWITCHER : LayoutType.BROWSING;
+        LayoutTestUtils.startShowingAndWaitForLayout(layoutManager, layout, false);
     }
 }

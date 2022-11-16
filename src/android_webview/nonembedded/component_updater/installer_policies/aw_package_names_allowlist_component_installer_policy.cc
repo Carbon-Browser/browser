@@ -39,14 +39,14 @@ AwPackageNamesAllowlistComponentInstallerPolicy::
 
 update_client::CrxInstaller::Result
 AwPackageNamesAllowlistComponentInstallerPolicy::OnCustomInstall(
-    const base::DictionaryValue& manifest,
+    const base::Value& manifest,
     const base::FilePath& install_dir) {
   // Nothing custom here.
   return update_client::CrxInstaller::Result(/* error = */ 0);
 }
 
 void RegisterWebViewAppsPackageNamesAllowlistComponent(
-    base::OnceCallback<bool(const update_client::CrxComponent&)>
+    base::OnceCallback<bool(const component_updater::ComponentRegistration&)>
         register_callback,
     base::OnceClosure registration_finished) {
   base::MakeRefCounted<component_updater::ComponentInstaller>(
@@ -57,7 +57,7 @@ void RegisterWebViewAppsPackageNamesAllowlistComponent(
 
 bool AwPackageNamesAllowlistComponentInstallerPolicy::
     SupportsGroupPolicyEnabledComponentUpdates() const {
-  return false;
+  return true;
 }
 
 bool AwPackageNamesAllowlistComponentInstallerPolicy::
@@ -66,7 +66,7 @@ bool AwPackageNamesAllowlistComponentInstallerPolicy::
 }
 
 bool AwPackageNamesAllowlistComponentInstallerPolicy::VerifyInstallation(
-    const base::DictionaryValue& manifest,
+    const base::Value& manifest,
     const base::FilePath& install_dir) const {
   return true;
 }

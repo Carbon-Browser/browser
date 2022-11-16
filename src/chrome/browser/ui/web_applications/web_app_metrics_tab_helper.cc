@@ -28,7 +28,8 @@ bool WebAppMetricsTabHelper::IsEnabled(content::WebContents* contents) {
 }
 
 WebAppMetricsTabHelper::WebAppMetricsTabHelper(content::WebContents* contents)
-    : content::WebContentsObserver(contents) {
+    : content::WebContentsUserData<WebAppMetricsTabHelper>(*contents),
+      content::WebContentsObserver(contents) {
   DCHECK(IsEnabled(contents));
   DCHECK(web_app::WebAppMetrics::Get(
       Profile::FromBrowserContext(contents->GetBrowserContext())));
@@ -58,6 +59,6 @@ void WebAppMetricsTabHelper::OnInstallableWebAppStatusUpdated() {
   metrics->NotifyInstallableWebAppStatusUpdated(contents);
 }
 
-WEB_CONTENTS_USER_DATA_KEY_IMPL(WebAppMetricsTabHelper)
+WEB_CONTENTS_USER_DATA_KEY_IMPL(WebAppMetricsTabHelper);
 
 }  // namespace web_app

@@ -13,10 +13,10 @@
 
 #include "base/containers/span.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/strings/string_piece.h"
 #include "base/time/time.h"
+#include "net/base/hash_value.h"
 #include "net/base/net_export.h"
 #include "net/cert/x509_cert_types.h"
 #include "third_party/boringssl/src/include/openssl/base.h"
@@ -140,6 +140,9 @@ class NET_EXPORT X509Certificate
   static CertificateList CreateCertificateListFromBytes(
       base::span<const uint8_t> data,
       int format);
+
+  X509Certificate(const X509Certificate&) = delete;
+  X509Certificate& operator=(const X509Certificate&) = delete;
 
   // Appends a representation of this object to the given pickle.
   // The Pickle contains the certificate and any certificates that were
@@ -317,8 +320,6 @@ class NET_EXPORT X509Certificate
   // Untrusted intermediate certificates associated with this certificate
   // that may be needed for chain building.
   std::vector<bssl::UniquePtr<CRYPTO_BUFFER>> intermediate_ca_certs_;
-
-  DISALLOW_COPY_AND_ASSIGN(X509Certificate);
 };
 
 }  // namespace net

@@ -4,23 +4,34 @@
 
 #include "ui/views/test/test_desktop_screen_ozone.h"
 
-#include <memory>
+namespace views::test {
+namespace {
+TestDesktopScreenOzone* g_instance = nullptr;
+}
 
-#include "base/memory/singleton.h"
-
-namespace views {
-namespace test {
+// static
+std::unique_ptr<display::Screen> TestDesktopScreenOzone::Create() {
+  auto screen = std::make_unique<TestDesktopScreenOzone>();
+  screen->Initialize();
+  return screen;
+}
 
 TestDesktopScreenOzone* TestDesktopScreenOzone::GetInstance() {
-  return base::Singleton<TestDesktopScreenOzone>::get();
+  DCHECK_EQ(display::Screen::GetScreen(), g_instance);
+  return g_instance;
 }
 
 gfx::Point TestDesktopScreenOzone::GetCursorScreenPoint() {
   return cursor_screen_point_;
 }
 
-TestDesktopScreenOzone::TestDesktopScreenOzone() = default;
-TestDesktopScreenOzone::~TestDesktopScreenOzone() = default;
+TestDesktopScreenOzone::TestDesktopScreenOzone() {
+  DCHECK(!g_instance);
+  g_instance = this;
+}
 
-}  // namespace test
-}  // namespace views
+TestDesktopScreenOzone::~TestDesktopScreenOzone() {
+  g_instance = nullptr;
+}
+
+}  // namespace views::test

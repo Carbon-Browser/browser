@@ -10,7 +10,6 @@
 #include <vector>
 
 #include "base/files/file.h"
-#include "base/macros.h"
 #include "base/values.h"
 #include "chrome/browser/ash/file_system_provider/provided_file_system_info.h"
 #include "chrome/browser/ash/file_system_provider/request_manager.h"
@@ -34,6 +33,10 @@ class Operation : public RequestManager::HandlerInterface {
 
   Operation(extensions::EventRouter* event_router,
             const ProvidedFileSystemInfo& file_system_info);
+
+  Operation(const Operation&) = delete;
+  Operation& operator=(const Operation&) = delete;
+
   ~Operation() override;
 
   // RequestManager::HandlerInterface overrides.
@@ -55,13 +58,19 @@ class Operation : public RequestManager::HandlerInterface {
   bool SendEvent(int request_id,
                  extensions::events::HistogramValue histogram_value,
                  const std::string& event_name,
-                 std::vector<base::Value> event_args);
+                 base::Value::List event_args);
 
   ProvidedFileSystemInfo file_system_info_;
 
  private:
-  DispatchEventImplCallback dispatch_event_impl_;
-  DISALLOW_COPY_AND_ASSIGN(Operation);
+  using DispatchEventInternalCallback =
+      base::RepeatingCallback<bool(ProviderId provider_id,
+                                   const std::string& file_system_id,
+                                   int request_id,
+                                   extensions::events::HistogramValue,
+                                   const std::string&,
+                                   base::Value::List)>;
+  DispatchEventInternalCallback dispatch_event_impl_;
 };
 
 }  // namespace operations

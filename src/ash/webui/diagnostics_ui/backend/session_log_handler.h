@@ -41,7 +41,8 @@ class SessionLogHandler : public content::WebUIMessageHandler,
       base::RepeatingCallback<std::unique_ptr<ui::SelectFilePolicy>(
           content::WebContents*)>;
   SessionLogHandler(const SelectFilePolicyCreator& select_file_policy_creator,
-                    ash::HoldingSpaceClient* holding_space_client);
+                    ash::HoldingSpaceClient* holding_space_client,
+                    const base::FilePath& log_directory_path);
 
   // Constructor for testing. Should not be called outside of tests.
   SessionLogHandler(const SelectFilePolicyCreator& select_file_policy_creator,
@@ -71,6 +72,9 @@ class SessionLogHandler : public content::WebUIMessageHandler,
   RoutineLog* GetRoutineLog() const;
   NetworkingLog* GetNetworkingLog() const;
 
+  // Sets the task runner to use for testing.
+  void SetTaskRunnerForTesting(
+      const scoped_refptr<base::SequencedTaskRunner>& task_runner);
   void SetWebUIForTest(content::WebUI* web_ui);
   void SetLogCreatedClosureForTest(base::OnceClosure closure);
 
@@ -81,10 +85,10 @@ class SessionLogHandler : public content::WebUIMessageHandler,
   bool CreateSessionLog(const base::FilePath& file_path);
 
   // Opens the select dialog.
-  void HandleSaveSessionLogRequest(const base::ListValue* args);
+  void HandleSaveSessionLogRequest(const base::Value::List& args);
 
   // Initializes Javascript.
-  void HandleInitialize(const base::ListValue* args);
+  void HandleInitialize(const base::Value::List& args);
 
   SelectFilePolicyCreator select_file_policy_creator_;
   std::unique_ptr<TelemetryLog> telemetry_log_;
@@ -94,7 +98,12 @@ class SessionLogHandler : public content::WebUIMessageHandler,
   std::string save_session_log_callback_id_;
   scoped_refptr<ui::SelectFileDialog> select_file_dialog_;
   base::OnceClosure log_created_closure_;
+  // Task runner for tasks posted by save session log handler. Used to ensure
+  // posted tasks are handled while SessionLogHandler is in scope to stop
+  // heap-use-after-free error.
+  scoped_refptr<base::SequencedTaskRunner> task_runner_;
 
+  base::WeakPtr<SessionLogHandler> weak_ptr_;
   base::WeakPtrFactory<SessionLogHandler> weak_factory_{this};
 };
 

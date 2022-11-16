@@ -11,9 +11,11 @@ GEN('#include "chrome/browser/browser_features.h"');
 GEN('#include "chrome/browser/ui/ui_features.h"');
 GEN('#include "content/public/test/browser_test.h"');
 GEN('#include "build/chromeos_buildflags.h"');
+GEN('#include "crypto/crypto_buildflags.h"');
+
+/* eslint-disable no-var */
 
 /** Test fixture for shared Polymer 3 components. */
-// eslint-disable-next-line no-var
 var CrComponentsBrowserTest = class extends PolymerTest {
   /** @override */
   get browsePreload() {
@@ -26,7 +28,18 @@ var CrComponentsBrowserTest = class extends PolymerTest {
   }
 };
 
-// eslint-disable-next-line no-var
+var CrComponentsColorChangeListenerTest =
+    class extends CrComponentsBrowserTest {
+  /** @override */
+  get browsePreload() {
+    return 'chrome://test/test_loader.html?module=cr_components/color_change_listener_test.js';
+  }
+};
+
+TEST_F('CrComponentsColorChangeListenerTest', 'All', function() {
+  mocha.run();
+});
+
 var CrComponentsManagedFootnoteTest = class extends CrComponentsBrowserTest {
   /** @override */
   get browsePreload() {
@@ -38,13 +51,12 @@ TEST_F('CrComponentsManagedFootnoteTest', 'All', function() {
   mocha.run();
 });
 
-GEN('#if defined(USE_NSS_CERTS)');
+GEN('#if BUILDFLAG(USE_NSS_CERTS)');
 
 /**
  * Test fixture for chrome://settings/certificates. This tests the
  * certificate-manager component in the context of the Settings privacy page.
  */
-// eslint-disable-next-line no-var
 var CrComponentsCertificateManagerTest = class extends CrComponentsBrowserTest {
   /** @override */
   get browsePreload() {
@@ -56,17 +68,16 @@ TEST_F('CrComponentsCertificateManagerTest', 'All', function() {
   mocha.run();
 });
 
-GEN('#endif  // defined(USE_NSS_CERTS)');
+GEN('#endif  // BUILDFLAG(USE_NSS_CERTS)');
 
 
-GEN('#if defined(USE_NSS_CERTS) && BUILDFLAG(IS_CHROMEOS_ASH)');
+GEN('#if BUILDFLAG(USE_NSS_CERTS) && BUILDFLAG(IS_CHROMEOS)');
 
 /**
  * ChromeOS specific test fixture for chrome://settings/certificates, testing
  * the certificate provisioning UI. This tests the certificate-manager component
  * in the context of the Settings privacy page.
  */
-// eslint-disable-next-line no-var
 var CrComponentsCertificateManagerProvisioningTest =
     class extends CrComponentsCertificateManagerTest {
   /** @override */
@@ -79,9 +90,8 @@ TEST_F('CrComponentsCertificateManagerProvisioningTest', 'All', function() {
   mocha.run();
 });
 
-GEN('#endif  // defined(USE_NSS_CERTS) && BUILDFLAG(IS_CHROMEOS_ASH)');
+GEN('#endif  // BUILDFLAG(USE_NSS_CERTS) && BUILDFLAG(IS_CHROMEOS)');
 
-// eslint-disable-next-line no-var
 var CrComponentsManagedDialogTest = class extends CrComponentsBrowserTest {
   /** @override */
   get browsePreload() {
@@ -90,5 +100,52 @@ var CrComponentsManagedDialogTest = class extends CrComponentsBrowserTest {
 };
 
 TEST_F('CrComponentsManagedDialogTest', 'All', function() {
+  mocha.run();
+});
+
+var CrComponentsLocalizedLinkTest = class extends CrComponentsBrowserTest {
+  /** @override */
+  get browsePreload() {
+    return 'chrome://test/test_loader.html?module=cr_components/localized_link_test.js';
+  }
+};
+
+TEST_F('CrComponentsLocalizedLinkTest', 'All', function() {
+  mocha.run();
+});
+
+var CrComponentsAppManagementPermissionItemTest =
+    class extends CrComponentsBrowserTest {
+  /** @override */
+  get browsePreload() {
+    return 'chrome://test/test_loader.html?module=cr_components/app_management/permission_item_test.js';
+  }
+};
+
+TEST_F('CrComponentsAppManagementPermissionItemTest', 'All', function() {
+  mocha.run();
+});
+
+var CrComponentsAppManagementFileHandlingItemTest =
+    class extends CrComponentsBrowserTest {
+  /** @override */
+  get browsePreload() {
+    return 'chrome://test/test_loader.html?module=cr_components/app_management/file_handling_item_test.js';
+  }
+};
+
+TEST_F('CrComponentsAppManagementFileHandlingItemTest', 'All', function() {
+  mocha.run();
+});
+
+var CrComponentsAppManagementWindowModeTest =
+    class extends CrComponentsBrowserTest {
+  /** @override */
+  get browsePreload() {
+    return 'chrome://test/test_loader.html?module=cr_components/app_management/window_mode_item_test.js';
+  }
+};
+
+TEST_F('CrComponentsAppManagementWindowModeTest', 'All', function() {
   mocha.run();
 });

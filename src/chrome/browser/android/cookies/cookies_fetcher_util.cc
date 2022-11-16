@@ -53,6 +53,7 @@ void OnCookiesFetchFinished(const net::CookieList& cookies) {
         i->CreationDate().ToDeltaSinceWindowsEpoch().InMicroseconds(),
         i->ExpiryDate().ToDeltaSinceWindowsEpoch().InMicroseconds(),
         i->LastAccessDate().ToDeltaSinceWindowsEpoch().InMicroseconds(),
+        i->LastUpdateDate().ToDeltaSinceWindowsEpoch().InMicroseconds(),
         i->IsSecure(), i->IsHttpOnly(), static_cast<int>(i->SameSite()),
         i->Priority(), i->IsSameParty(),
         base::android::ConvertUTF8ToJavaString(env, pk),
@@ -91,6 +92,7 @@ static void JNI_CookiesFetcher_RestoreCookies(
     jlong creation,
     jlong expiration,
     jlong last_access,
+    jlong last_update,
     jboolean secure,
     jboolean httponly,
     jint same_site,
@@ -116,16 +118,21 @@ static void JNI_CookiesFetcher_RestoreCookies(
           base::android::ConvertJavaStringToUTF8(env, name),
           base::android::ConvertJavaStringToUTF8(env, value), domain_str,
           path_str,
+          base::Time::FromDeltaSinceWindowsEpoch(base::Microseconds(creation)),
           base::Time::FromDeltaSinceWindowsEpoch(
-              base::TimeDelta::FromMicroseconds(creation)),
+              base::Microseconds(expiration)),
           base::Time::FromDeltaSinceWindowsEpoch(
-              base::TimeDelta::FromMicroseconds(expiration)),
+              base::Microseconds(last_access)),
           base::Time::FromDeltaSinceWindowsEpoch(
-              base::TimeDelta::FromMicroseconds(last_access)),
+              base::Microseconds(last_update)),
           secure, httponly, static_cast<net::CookieSameSite>(same_site),
           static_cast<net::CookiePriority>(priority), same_party, pk,
           static_cast<net::CookieSourceScheme>(source_scheme), source_port);
-  if (!cookie)
+  // FromStorage() uses a less strict version of IsCanonical(), we need to check
+  // the stricter version as well here. This is safe because this function is
+  // only used for incognito cookies which don't survive Chrome updates and
+  // therefore should never be the "older" less strict variety.
+  if (!cookie || !cookie->IsCanonical())
     return;
 
   // Assume HTTPS - since the cookies are being restored from another store,

@@ -17,7 +17,6 @@
 
 #include "base/atomicops.h"
 #include "base/check.h"
-#include "base/cxx17_backports.h"
 #include "base/file_version_info.h"
 #include "base/lazy_instance.h"
 #include "base/notreached.h"
@@ -59,6 +58,10 @@ using base::subtle::NoBarrier_CompareAndSwap;
 class BreakpadWin {
  public:
   BreakpadWin();
+
+  BreakpadWin(const BreakpadWin&) = delete;
+  BreakpadWin& operator=(const BreakpadWin&) = delete;
+
   ~BreakpadWin();
 
   static BreakpadWin* GetInstance();
@@ -90,8 +93,6 @@ class BreakpadWin {
   static const wchar_t* pipe_name_;
 
   friend void ::remoting::InitializeCrashReportingForTest(const wchar_t*);
-
-  DISALLOW_COPY_AND_ASSIGN(BreakpadWin);
 };
 
 // |LazyInstance| is used to guarantee that the exception handler will be
@@ -167,7 +168,7 @@ google_breakpad::CustomClientInfo* BreakpadWin::GetCustomInfo() {
   static google_breakpad::CustomInfoEntry entries[] = {
       ver_entry, prod_entry, plat_entry  };
   static google_breakpad::CustomClientInfo custom_info = {entries,
-                                                          base::size(entries)};
+                                                          std::size(entries)};
   return &custom_info;
 }
 

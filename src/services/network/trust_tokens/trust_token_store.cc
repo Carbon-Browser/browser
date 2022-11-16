@@ -30,6 +30,7 @@ class NeverExpiringExpiryDelegate
     : public TrustTokenStore::RecordExpiryDelegate {
  public:
   bool IsRecordExpired(const TrustTokenRedemptionRecord& record,
+                       const base::TimeDelta& time_since_last_redemption,
                        const SuitableTrustTokenOrigin& issuer) override {
     return false;
   }
@@ -82,7 +83,7 @@ absl::optional<base::TimeDelta> TrustTokenStore::TimeSinceLastIssuance(
     return absl::nullopt;
 
   base::TimeDelta ret = base::Time::Now() - *maybe_last_issuance;
-  if (ret < base::TimeDelta())
+  if (ret.is_negative())
     return absl::nullopt;
 
   return ret;
@@ -115,7 +116,7 @@ absl::optional<base::TimeDelta> TrustTokenStore::TimeSinceLastRedemption(
     return absl::nullopt;
 
   base::TimeDelta ret = base::Time::Now() - *maybe_last_redemption;
-  if (ret < base::TimeDelta())
+  if (ret.is_negative())
     return absl::nullopt;
   return ret;
 }
@@ -264,8 +265,14 @@ TrustTokenStore::RetrieveNonstaleRedemptionRecord(
   if (!config->has_redemption_record())
     return absl::nullopt;
 
-  if (record_expiry_delegate_->IsRecordExpired(config->redemption_record(),
-                                               issuer))
+  absl::optional<base::TimeDelta> maybe_time_since_last_redemption =
+      TimeSinceLastRedemption(issuer, top_level);
+  base::TimeDelta time_since_last_redemption = base::Seconds(0);
+  if (maybe_time_since_last_redemption)
+    time_since_last_redemption = *maybe_time_since_last_redemption;
+
+  if (record_expiry_delegate_->IsRecordExpired(
+          config->redemption_record(), time_since_last_redemption, issuer))
     return absl::nullopt;
 
   return config->redemption_record();

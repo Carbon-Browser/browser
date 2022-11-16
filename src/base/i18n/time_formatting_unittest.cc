@@ -215,9 +215,9 @@ TEST(TimeFormattingTest, TimeMonthYearInUTC) {
 
   Time time;
   EXPECT_TRUE(Time::FromUTCExploded(kTestDateTimeExploded, &time));
-  EXPECT_EQ(u"April 2011", TimeFormatMonthAndYear(
-                               time, /*time_zone=*/icu::TimeZone::getGMT()));
-  EXPECT_EQ(u"April 2011", TimeFormatMonthAndYear(time, /*time_zone=*/nullptr));
+  EXPECT_EQ(u"April 2011",
+            TimeFormatMonthAndYearForTimeZone(time, icu::TimeZone::getGMT()));
+  EXPECT_EQ(u"April 2011", TimeFormatMonthAndYear(time));
 
   const Time::Exploded kDiffMonthsForDiffTzTime = {
       2011, 4, 5, 1,  // Fri, Apr 1, 2011 UTC = Thurs, March 31, 2011 US PDT.
@@ -225,9 +225,9 @@ TEST(TimeFormattingTest, TimeMonthYearInUTC) {
   };
 
   EXPECT_TRUE(Time::FromUTCExploded(kDiffMonthsForDiffTzTime, &time));
-  EXPECT_EQ(u"April 2011", TimeFormatMonthAndYear(
-                               time, /*time_zone=*/icu::TimeZone::getGMT()));
-  EXPECT_EQ(u"March 2011", TimeFormatMonthAndYear(time, /*time_zone=*/nullptr));
+  EXPECT_EQ(u"April 2011",
+            TimeFormatMonthAndYearForTimeZone(time, icu::TimeZone::getGMT()));
+  EXPECT_EQ(u"March 2011", TimeFormatMonthAndYear(time));
 }
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
@@ -286,11 +286,12 @@ TEST(TimeFormattingTest, TimeFormatWithPattern) {
 
   i18n::SetICUDefaultLocale("en_US");
   EXPECT_EQ(u"Apr 30, 2011", TimeFormatWithPattern(time, "yMMMd"));
-  EXPECT_EQ(u"April 30, 3:42:07 PM", TimeFormatWithPattern(time, "MMMMdjmmss"));
+  EXPECT_EQ(u"April 30 at 3:42:07 PM",
+            TimeFormatWithPattern(time, "MMMMdjmmss"));
 
   i18n::SetICUDefaultLocale("en_GB");
   EXPECT_EQ(u"30 Apr 2011", TimeFormatWithPattern(time, "yMMMd"));
-  EXPECT_EQ(u"30 April, 15:42:07", TimeFormatWithPattern(time, "MMMMdjmmss"));
+  EXPECT_EQ(u"30 April at 15:42:07", TimeFormatWithPattern(time, "MMMMdjmmss"));
 
   i18n::SetICUDefaultLocale("ja_JP");
   EXPECT_EQ(u"2011年4月30日", TimeFormatWithPattern(time, "yMMMd"));
@@ -299,7 +300,7 @@ TEST(TimeFormattingTest, TimeFormatWithPattern) {
 
 TEST(TimeFormattingTest, TimeDurationFormat) {
   test::ScopedRestoreICUDefaultLocale restore_locale;
-  TimeDelta delta = TimeDelta::FromMinutes(15 * 60 + 42);
+  TimeDelta delta = Minutes(15 * 60 + 42);
 
   // US English.
   i18n::SetICUDefaultLocale("en_US");
@@ -344,7 +345,7 @@ TEST(TimeFormattingTest, TimeDurationFormatWithSeconds) {
   i18n::SetICUDefaultLocale("en_US");
 
   // Test different formats.
-  TimeDelta delta = TimeDelta::FromSeconds(15 * 3600 + 42 * 60 + 30);
+  TimeDelta delta = Seconds(15 * 3600 + 42 * 60 + 30);
   EXPECT_EQ(u"15 hours, 42 minutes, 30 seconds",
             TimeDurationFormatWithSecondsString(delta, DURATION_WIDTH_WIDE));
   EXPECT_EQ(u"15 hr, 42 min, 30 sec",
@@ -355,7 +356,7 @@ TEST(TimeFormattingTest, TimeDurationFormatWithSeconds) {
             TimeDurationFormatWithSecondsString(delta, DURATION_WIDTH_NUMERIC));
 
   // Test edge case when hour >= 100.
-  delta = TimeDelta::FromSeconds(125 * 3600 + 42 * 60 + 30);
+  delta = Seconds(125 * 3600 + 42 * 60 + 30);
   EXPECT_EQ(u"125 hours, 42 minutes, 30 seconds",
             TimeDurationFormatWithSecondsString(delta, DURATION_WIDTH_WIDE));
   EXPECT_EQ(u"125 hr, 42 min, 30 sec",
@@ -366,7 +367,7 @@ TEST(TimeFormattingTest, TimeDurationFormatWithSeconds) {
             TimeDurationFormatWithSecondsString(delta, DURATION_WIDTH_NUMERIC));
 
   // Test edge case when minute = 0.
-  delta = TimeDelta::FromSeconds(15 * 3600 + 0 * 60 + 30);
+  delta = Seconds(15 * 3600 + 0 * 60 + 30);
   EXPECT_EQ(u"15 hours, 0 minutes, 30 seconds",
             TimeDurationFormatWithSecondsString(delta, DURATION_WIDTH_WIDE));
   EXPECT_EQ(u"15 hr, 0 min, 30 sec",
@@ -377,7 +378,7 @@ TEST(TimeFormattingTest, TimeDurationFormatWithSeconds) {
             TimeDurationFormatWithSecondsString(delta, DURATION_WIDTH_NUMERIC));
 
   // Test edge case when second = 0.
-  delta = TimeDelta::FromSeconds(15 * 3600 + 42 * 60 + 0);
+  delta = Seconds(15 * 3600 + 42 * 60 + 0);
   EXPECT_EQ(u"15 hours, 42 minutes, 0 seconds",
             TimeDurationFormatWithSecondsString(delta, DURATION_WIDTH_WIDE));
   EXPECT_EQ(u"15 hr, 42 min, 0 sec",

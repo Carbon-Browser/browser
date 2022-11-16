@@ -2,52 +2,30 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-/**
- * @const {boolean}
- */
-window.isSWA = true;
-
-import './crt0.js';
-
-/**
- * Load modules.
- */
-import {BrowserProxy} from './browser_proxy.js'
-import {ScriptLoader} from './script_loader.js'
-import {promisify} from 'chrome-extension://hhaomjibdihmijegdhdafkllkbggdgoj/common/js/api.js';
-import {VolumeManagerImpl} from 'chrome-extension://hhaomjibdihmijegdhdafkllkbggdgoj/background/js/volume_manager_impl.js';
-import 'chrome-extension://hhaomjibdihmijegdhdafkllkbggdgoj/background/js/metrics_start.js';
-import {background} from 'chrome-extension://hhaomjibdihmijegdhdafkllkbggdgoj/background/js/background.js';
+// init_globals.js must be the first loaded module.
+import './init_globals.js';
+import './strings.m.js';
+import 'chrome://file-manager/background/js/metrics_start.js';
 import './test_util_swa.js';
+
+import {background} from 'chrome://file-manager/background/js/background.js';
+import {VolumeManagerImpl} from 'chrome://file-manager/background/js/volume_manager_impl.js';
+import {GlitchType, reportGlitch} from 'chrome://file-manager/common/js/glitch.js';
+
+import {ScriptLoader} from './script_loader.js';
 
 /**
  * Represents file manager application. Starting point for the application
  * interaction.
  */
 class FileManagerApp {
-  constructor() {
-    /**
-     * Creates a Mojo pipe to the C++ SWA container.
-     * @private @const {!BrowserProxy}
-     */
-    this.browserProxy_ = new BrowserProxy();
-  }
-
-  /** @return {!BrowserProxy} */
-  get browserProxy() {
-    return this.browserProxy_;
-  }
-
-  /**
-   * Start-up: load the page scripts in order: fakes first (to provide chrome.*
-   * API that the files app foreground scripts expect for initial render), then
-   * the files app foreground scripts.
-   */
   async run() {
-    const win = await promisify(chrome.windows.getCurrent);
-    window.appID = win.id;
-
-    await new ScriptLoader('file_manager_fakes.js', {type: 'module'}).load();
+    try {
+      window.appID = loadTimeData.getInteger('WINDOW_NUMBER');
+    } catch (e) {
+      reportGlitch(GlitchType.CAUGHT_EXCEPTION);
+      console.warn('Failed to get the app ID', e);
+    }
 
     // Temporarily remove window.cr.webUI* while the foreground script loads.
     const origWebUIResponse = window.webUIResponse;
@@ -61,7 +39,9 @@ class FileManagerApp {
     window.cr.webUIResponse = origWebUIResponse;
     window.cr.webUIListenerCallback = origWebUIListenerCallback;
 
-    console.debug('Files app UI loaded');
+    console.warn(
+        '%cYou are running Files System Web App',
+        'font-size: 2em; background-color: #ff0; color: #000;');
   }
 }
 

@@ -13,7 +13,8 @@
 
 #include "base/at_exit.h"
 #include "base/check.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
+#include "base/strings/string_piece.h"
 #include "base/tracing_buildflags.h"
 #include "build/build_config.h"
 
@@ -42,9 +43,13 @@ class TestSuite {
   typedef bool (*TestMatch)(const testing::TestInfo&);
 
   TestSuite(int argc, char** argv);
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   TestSuite(int argc, wchar_t** argv);
-#endif  // defined(OS_WIN)
+#endif  // BUILDFLAG(IS_WIN)
+
+  TestSuite(const TestSuite&) = delete;
+  TestSuite& operator=(const TestSuite&) = delete;
+
   virtual ~TestSuite();
 
   int Run();
@@ -82,9 +87,9 @@ class TestSuite {
   void AddTestLauncherResultPrinter();
 
   void InitializeFromCommandLine(int argc, char** argv);
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   void InitializeFromCommandLine(int argc, wchar_t** argv);
-#endif  // defined(OS_WIN)
+#endif  // BUILDFLAG(IS_WIN)
 
   // Basic initialization for the test suite happens here.
   void PreInitialize();
@@ -95,15 +100,13 @@ class TestSuite {
 
   bool initialized_command_line_ = false;
 
-  XmlUnitTestResultPrinter* printer_ = nullptr;
+  raw_ptr<XmlUnitTestResultPrinter> printer_ = nullptr;
 
   std::unique_ptr<logging::ScopedLogAssertHandler> assert_handler_;
 
   bool check_for_leaked_globals_ = true;
   bool check_for_thread_and_process_priority_ = true;
   bool is_initialized_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(TestSuite);
 };
 
 }  // namespace base

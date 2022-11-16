@@ -10,7 +10,7 @@
 #include <memory>
 
 #include "base/gtest_prod_util.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
 #include "mojo/public/cpp/bindings/pending_associated_receiver.h"
 #include "third_party/blink/public/common/indexeddb/web_idb_types.h"
@@ -37,13 +37,8 @@ class MODULES_EXPORT WebIDBTransaction final {
            mojom::blink::IDBPutMode,
            std::unique_ptr<WebIDBCallbacks> callbacks,
            Vector<IDBIndexKeys>);
-  void PutAll(int64_t object_store_id,
-              Vector<mojom::blink::IDBPutParamsPtr> puts,
-              std::unique_ptr<WebIDBCallbacks> callbacks);
   void PutCallback(std::unique_ptr<WebIDBCallbacks> callbacks,
                    mojom::blink::IDBTransactionPutResultPtr result);
-  void PutAllCallback(std::unique_ptr<WebIDBCallbacks> callbacks,
-                      mojom::blink::IDBTransactionPutAllResultPtr result);
   void Commit(int64_t num_errors_handled);
 
   mojo::PendingAssociatedReceiver<mojom::blink::IDBTransaction>

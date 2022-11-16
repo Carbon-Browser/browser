@@ -9,6 +9,7 @@
 #include "base/android/jni_android.h"
 #include "base/android/jni_string.h"
 #include "base/android/scoped_java_ref.h"
+#include "base/feature_list.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/trace_event/trace_event.h"
 #include "content/browser/android/navigation_handle_proxy.h"
@@ -28,6 +29,13 @@ using base::android::JavaParamRef;
 using base::android::ScopedJavaLocalRef;
 using base::android::ConvertUTF8ToJavaString;
 using base::android::ConvertUTF16ToJavaString;
+
+namespace features {
+
+const base::Feature kNotifyJavaSpuriouslyToMeasurePerf{
+    "NotifyJavaSpuriouslyToMeasurePerf", base::FEATURE_DISABLED_BY_DEFAULT};
+
+}  // namespace features
 
 namespace content {
 
@@ -85,18 +93,10 @@ void WebContentsObserverProxy::RenderFrameDeleted(
       render_frame_host->GetRoutingID());
 }
 
-void WebContentsObserverProxy::RenderViewReady() {
-  JNIEnv* env = AttachCurrentThread();
-  Java_WebContentsObserverProxy_renderViewReady(env, java_observer_);
-}
-
-void WebContentsObserverProxy::RenderProcessGone(
+void WebContentsObserverProxy::PrimaryMainFrameRenderProcessGone(
     base::TerminationStatus termination_status) {
   JNIEnv* env = AttachCurrentThread();
-  jboolean was_oom_protected =
-      termination_status == base::TERMINATION_STATUS_OOM_PROTECTED;
-  Java_WebContentsObserverProxy_renderProcessGone(env, java_observer_,
-                                                  was_oom_protected);
+  Java_WebContentsObserverProxy_renderProcessGone(env, java_observer_);
 }
 
 void WebContentsObserverProxy::DidStartLoading() {
@@ -130,8 +130,8 @@ void WebContentsObserverProxy::DidFailLoad(RenderFrameHost* render_frame_host,
                                            int error_code) {
   JNIEnv* env = AttachCurrentThread();
   Java_WebContentsObserverProxy_didFailLoad(
-      env, java_observer_, !render_frame_host->GetParent(), error_code,
-      url::GURLAndroid::FromNativeGURL(env, validated_url),
+      env, java_observer_, render_frame_host->IsInPrimaryMainFrame(),
+      error_code, url::GURLAndroid::FromNativeGURL(env, validated_url),
       static_cast<jint>(render_frame_host->GetLifecycleState()));
 }
 
@@ -140,25 +140,35 @@ void WebContentsObserverProxy::DidChangeVisibleSecurityState() {
       AttachCurrentThread(), java_observer_);
 }
 
-void WebContentsObserverProxy::DocumentAvailableInMainFrame(
-    RenderFrameHost* render_frame_host) {
+void WebContentsObserverProxy::PrimaryMainDocumentElementAvailable() {
   JNIEnv* env = AttachCurrentThread();
-  Java_WebContentsObserverProxy_documentAvailableInMainFrame(env,
-                                                             java_observer_);
+  Java_WebContentsObserverProxy_primaryMainDocumentElementAvailable(
+      env, java_observer_);
 }
 
 void WebContentsObserverProxy::DidStartNavigation(
     NavigationHandle* navigation_handle) {
-  Java_WebContentsObserverProxy_didStartNavigation(
-      AttachCurrentThread(), java_observer_,
-      NavigationRequest::From(navigation_handle)->java_navigation_handle());
+  // TODO(crbug.com/1337446) Remove when NotifyJavaSupriouslyToMeasurePerf
+  // experiment is finished.
+  TRACE_EVENT0("browser", "Java_WebContentsObserverProxy_didStartNavigation");
+
+  if (navigation_handle->IsInPrimaryMainFrame()) {
+    Java_WebContentsObserverProxy_didStartNavigationInPrimaryMainFrame(
+        AttachCurrentThread(), java_observer_,
+        navigation_handle->GetJavaNavigationHandle());
+  } else if (base::FeatureList::IsEnabled(
+                 features::kNotifyJavaSpuriouslyToMeasurePerf)) {
+    Java_WebContentsObserverProxy_didStartNavigationNoop(
+        AttachCurrentThread(), java_observer_,
+        navigation_handle->GetJavaNavigationHandle());
+  }
 }
 
 void WebContentsObserverProxy::DidRedirectNavigation(
     NavigationHandle* navigation_handle) {
   Java_WebContentsObserverProxy_didRedirectNavigation(
       AttachCurrentThread(), java_observer_,
-      NavigationRequest::From(navigation_handle)->java_navigation_handle());
+      navigation_handle->GetJavaNavigationHandle());
 }
 
 void WebContentsObserverProxy::DidFinishNavigation(
@@ -168,7 +178,7 @@ void WebContentsObserverProxy::DidFinishNavigation(
 
   Java_WebContentsObserverProxy_didFinishNavigation(
       AttachCurrentThread(), java_observer_,
-      NavigationRequest::From(navigation_handle)->java_navigation_handle());
+      navigation_handle->GetJavaNavigationHandle());
 }
 
 void WebContentsObserverProxy::DidFinishLoad(RenderFrameHost* render_frame_host,
@@ -182,7 +192,7 @@ void WebContentsObserverProxy::DidFinishLoad(RenderFrameHost* render_frame_host,
       env, java_observer_, render_frame_host->GetProcess()->GetID(),
       render_frame_host->GetRoutingID(),
       url::GURLAndroid::FromNativeGURL(env, url), assume_valid,
-      !render_frame_host->GetParent(),
+      render_frame_host->IsInPrimaryMainFrame(),
       static_cast<jint>(render_frame_host->GetLifecycleState()));
 }
 
@@ -191,7 +201,8 @@ void WebContentsObserverProxy::DOMContentLoaded(
   JNIEnv* env = AttachCurrentThread();
   Java_WebContentsObserverProxy_documentLoadedInFrame(
       env, java_observer_, render_frame_host->GetProcess()->GetID(),
-      render_frame_host->GetRoutingID(), !render_frame_host->GetParent(),
+      render_frame_host->GetRoutingID(),
+      render_frame_host->IsInPrimaryMainFrame(),
       static_cast<jint>(render_frame_host->GetLifecycleState()));
 }
 
@@ -218,6 +229,12 @@ void WebContentsObserverProxy::NavigationEntryChanged(
   JNIEnv* env = AttachCurrentThread();
   // TODO(jinsukkim): Convert |change_details| to Java object when needed.
   Java_WebContentsObserverProxy_navigationEntriesChanged(env, java_observer_);
+}
+
+void WebContentsObserverProxy::FrameReceivedUserActivation(RenderFrameHost*) {
+  JNIEnv* env = AttachCurrentThread();
+  Java_WebContentsObserverProxy_frameReceivedUserActivation(env,
+                                                            java_observer_);
 }
 
 void WebContentsObserverProxy::DidChangeThemeColor() {

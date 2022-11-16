@@ -21,20 +21,23 @@ class StubAutofillProvider : public autofill::TestAutofillProvider {
       content::WebContents* web_contents,
       const base::RepeatingCallback<void(const autofill::FormData&)>&
           on_received_form_data);
+
+  StubAutofillProvider(const StubAutofillProvider&) = delete;
+  StubAutofillProvider& operator=(const StubAutofillProvider&) = delete;
+
   ~StubAutofillProvider() override;
 
   // AutofillProvider:
   void OnAskForValuesToFill(
       autofill::AndroidAutofillManager* manager,
-      int32_t id,
       const autofill::FormData& form,
       const autofill::FormFieldData& field,
       const gfx::RectF& bounding_box,
-      bool /*unused_autoselect_first_suggestion*/) override;
+      int32_t query_id,
+      bool /*unused_autoselect_first_suggestion*/,
+      autofill::TouchToFillEligible /*unused_touch_to_fill_eligible*/) override;
 
  private:
-  DISALLOW_COPY_AND_ASSIGN(StubAutofillProvider);
-
   base::RepeatingCallback<void(const autofill::FormData&)>
       on_received_form_data_;
 };

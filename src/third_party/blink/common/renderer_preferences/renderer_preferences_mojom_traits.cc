@@ -64,11 +64,11 @@ bool StructTraits<blink::mojom::RendererPreferencesDataView,
   if (!data.ReadAcceptLanguages(&out->accept_languages))
     return false;
 
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   if (!data.ReadSystemFontFamilyName(&out->system_font_family_name))
     return false;
 #endif
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   if (!data.ReadCaptionFontFamilyName(&out->caption_font_family_name))
     return false;
   out->caption_font_height = data.caption_font_height();
@@ -99,7 +99,7 @@ bool StructTraits<blink::mojom::RendererPreferencesDataView,
   out->arrow_bitmap_width_horizontal_scroll_bar_in_dips =
       data.arrow_bitmap_width_horizontal_scroll_bar_in_dips();
 #endif
-#if defined(USE_X11) || defined(USE_OZONE)
+#if defined(USE_OZONE)
   out->selection_clipboard_buffer_available =
       data.selection_clipboard_buffer_available();
 #endif

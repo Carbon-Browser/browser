@@ -8,10 +8,10 @@
 #include <memory>
 #include <vector>
 
+#include "ash/services/ime/public/cpp/suggestions.h"
+#include "ash/services/ime/public/mojom/input_method_host.mojom.h"
 #include "base/callback.h"
 #include "chrome/browser/ash/input_method/suggestions_source.h"
-#include "chromeos/services/ime/public/cpp/suggestions.h"
-#include "chromeos/services/ime/public/mojom/input_method_host.mojom.h"
 
 namespace ash {
 namespace input_method {
@@ -27,10 +27,10 @@ class SuggestionsCollector {
   ~SuggestionsCollector();
 
   using GatherSuggestionsCallback =
-      base::OnceCallback<void(chromeos::ime::mojom::SuggestionsResponsePtr)>;
+      base::OnceCallback<void(ime::mojom::SuggestionsResponsePtr)>;
 
   // Collects all suggestions from the system.
-  void GatherSuggestions(chromeos::ime::mojom::SuggestionsRequestPtr request,
+  void GatherSuggestions(ime::mojom::SuggestionsRequestPtr request,
                          GatherSuggestionsCallback callback);
 
  private:

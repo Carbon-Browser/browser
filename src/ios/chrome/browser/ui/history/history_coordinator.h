@@ -19,10 +19,12 @@ enum class UrlLoadStrategy;
 
 // Opaque instructions on how to open urls.
 @property(nonatomic) UrlLoadStrategy loadStrategy;
+// Optional: If provided, search terms to filter the displayed history items.
+@property(nonatomic, copy) NSString* searchTerms;
 // Delegate used to make the Tab UI visible.
 @property(nonatomic, weak) id<HistoryPresentationDelegate> presentationDelegate;
 
-// Stops this Coordinator then calls |completionHandler|.
+// Stops this Coordinator then calls `completionHandler`.
 - (void)stopWithCompletion:(ProceduralBlock)completionHandler;
 
 @end

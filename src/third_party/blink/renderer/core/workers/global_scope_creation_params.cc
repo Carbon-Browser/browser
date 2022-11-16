@@ -22,14 +22,15 @@ GlobalScopeCreationParams::GlobalScopeCreationParams(
     scoped_refptr<WebWorkerFetchContext> web_worker_fetch_context,
     Vector<network::mojom::blink::ContentSecurityPolicyPtr>
         outside_content_security_policies,
+    Vector<network::mojom::blink::ContentSecurityPolicyPtr>
+        response_content_security_policies,
     network::mojom::ReferrerPolicy referrer_policy,
     const SecurityOrigin* starter_origin,
     bool starter_secure_context,
     HttpsState starter_https_state,
     WorkerClients* worker_clients,
     std::unique_ptr<WebContentSettingsClient> content_settings_client,
-    absl::optional<network::mojom::IPAddressSpace> response_address_space,
-    const Vector<String>* origin_trial_tokens,
+    const Vector<OriginTrialFeature>* inherited_trial_features,
     const base::UnguessableToken& parent_devtools_token,
     std::unique_ptr<WorkerSettings> worker_settings,
     mojom::blink::V8CacheOptions v8_cache_options,
@@ -43,22 +44,24 @@ GlobalScopeCreationParams::GlobalScopeCreationParams(
     ukm::SourceId ukm_source_id,
     const absl::optional<ExecutionContextToken>& parent_context_token,
     bool parent_cross_origin_isolated_capability,
-    bool parent_direct_socket_capability)
-    : script_url(script_url.Copy()),
+    bool parent_direct_socket_capability,
+    InterfaceRegistry* interface_registry)
+    : script_url(script_url),
       script_type(script_type),
-      global_scope_name(global_scope_name.IsolatedCopy()),
-      user_agent(user_agent.IsolatedCopy()),
+      global_scope_name(global_scope_name),
+      user_agent(user_agent),
       ua_metadata(ua_metadata.value_or(blink::UserAgentMetadata())),
       web_worker_fetch_context(std::move(web_worker_fetch_context)),
       outside_content_security_policies(
           std::move(outside_content_security_policies)),
+      response_content_security_policies(
+          std::move(response_content_security_policies)),
       referrer_policy(referrer_policy),
       starter_origin(starter_origin ? starter_origin->IsolatedCopy() : nullptr),
       starter_secure_context(starter_secure_context),
       starter_https_state(starter_https_state),
       worker_clients(worker_clients),
       content_settings_client(std::move(content_settings_client)),
-      response_address_space(response_address_space),
       parent_devtools_token(parent_devtools_token),
       worker_settings(std::move(worker_settings)),
       v8_cache_options(v8_cache_options),
@@ -77,11 +80,13 @@ GlobalScopeCreationParams::GlobalScopeCreationParams(
       parent_context_token(parent_context_token),
       parent_cross_origin_isolated_capability(
           parent_cross_origin_isolated_capability),
-      parent_direct_socket_capability(parent_direct_socket_capability) {
-  this->origin_trial_tokens = std::make_unique<Vector<String>>();
-  if (origin_trial_tokens) {
-    for (const String& token : *origin_trial_tokens)
-      this->origin_trial_tokens->push_back(token.IsolatedCopy());
+      parent_direct_socket_capability(parent_direct_socket_capability),
+      interface_registry(interface_registry) {
+  this->inherited_trial_features =
+      std::make_unique<Vector<OriginTrialFeature>>();
+  if (inherited_trial_features) {
+    for (OriginTrialFeature feature : *inherited_trial_features)
+      this->inherited_trial_features->push_back(feature);
   }
 }
 

@@ -7,15 +7,20 @@
 
 #include <string>
 
+#include "ash/ash_export.h"
 #include "ui/views/view.h"
 
 namespace ash {
 
 // A views::View instance that is not shown in the accessibility hierarchy.
-class NonAccessibleView : public views::View {
+class ASH_EXPORT NonAccessibleView : public views::View {
  public:
   NonAccessibleView();
   explicit NonAccessibleView(const std::string& name);
+
+  NonAccessibleView(const NonAccessibleView&) = delete;
+  NonAccessibleView& operator=(const NonAccessibleView&) = delete;
+
   ~NonAccessibleView() override;
 
   // views::View:
@@ -24,8 +29,6 @@ class NonAccessibleView : public views::View {
 
  private:
   const std::string name_;
-
-  DISALLOW_COPY_AND_ASSIGN(NonAccessibleView);
 };
 
 }  // namespace ash

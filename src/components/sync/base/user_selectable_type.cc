@@ -48,9 +48,17 @@ UserSelectableTypeInfo GetUserSelectableTypeInfo(UserSelectableType type) {
       ModelTypeSet model_types = {PREFERENCES, DICTIONARY, PRIORITY_PREFERENCES,
                                   SEARCH_ENGINES};
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-      // SplitSettingsSync makes Printers a separate OS setting.
-      if (!chromeos::features::IsSplitSettingsSyncEnabled())
+      if (!chromeos::features::IsSyncSettingsCategorizationEnabled()) {
+        // SyncSettingsCategorization makes Printers a separate OS setting.
         model_types.Put(PRINTERS);
+        model_types.Put(PRINTERS_AUTHORIZATION_SERVERS);
+
+        // Workspace desk template is an OS-only feature. When
+        // SyncSettingsCategorization is disabled, WORKSPACE_DESK should be
+        // enabled with user preferences. Otherwise, WORKSPACE_DESK should be
+        // enabled with OS preferences below.
+        model_types.Put(WORKSPACE_DESK);
+      }
 #endif
       return {kPreferencesTypeName, PREFERENCES, model_types};
     }
@@ -66,15 +74,15 @@ UserSelectableTypeInfo GetUserSelectableTypeInfo(UserSelectableType type) {
     case UserSelectableType::kHistory:
       return {kTypedUrlsTypeName,
               TYPED_URLS,
-              {TYPED_URLS, HISTORY_DELETE_DIRECTIVES, SESSIONS,
+              {TYPED_URLS, HISTORY, HISTORY_DELETE_DIRECTIVES, SESSIONS,
                USER_EVENTS}};
     case UserSelectableType::kExtensions:
       return {
           kExtensionsTypeName, EXTENSIONS, {EXTENSIONS, EXTENSION_SETTINGS}};
     case UserSelectableType::kApps: {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-      // SplitSettingsSync moves apps to Chrome OS settings.
-      if (chromeos::features::IsSplitSettingsSyncEnabled()) {
+      // SyncSettingsCategorization moves apps to Chrome OS settings.
+      if (chromeos::features::IsSyncSettingsCategorizationEnabled()) {
         return {kAppsTypeName, UNSPECIFIED};
       } else {
         return {kAppsTypeName,
@@ -87,13 +95,14 @@ UserSelectableTypeInfo GetUserSelectableTypeInfo(UserSelectableType type) {
     }
     case UserSelectableType::kReadingList:
       return {kReadingListTypeName, READING_LIST, {READING_LIST}};
-    case UserSelectableType::kTabs:
-      return {
-          kTabsTypeName, PROXY_TABS, {PROXY_TABS, SESSIONS, SEND_TAB_TO_SELF}};
+    case UserSelectableType::kTabs: {
+      return {kTabsTypeName, PROXY_TABS, {PROXY_TABS, SESSIONS}};
+    }
     case UserSelectableType::kWifiConfigurations: {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-      // SplitSettingsSync moves Wi-Fi configurations to Chrome OS settings.
-      if (chromeos::features::IsSplitSettingsSyncEnabled())
+      // SyncSettingsCategorization moves Wi-Fi configurations to Chrome OS
+      // settings.
+      if (chromeos::features::IsSyncSettingsCategorizationEnabled())
         return {kWifiConfigurationsTypeName, UNSPECIFIED};
 #endif
       return {kWifiConfigurationsTypeName,
@@ -102,7 +111,7 @@ UserSelectableTypeInfo GetUserSelectableTypeInfo(UserSelectableType type) {
     }
   }
   NOTREACHED();
-  return {nullptr, UNSPECIFIED};
+  return {nullptr, UNSPECIFIED, {}};
 }
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -119,10 +128,10 @@ UserSelectableTypeInfo GetUserSelectableOsTypeInfo(UserSelectableOsType type) {
               APPS,
               {APP_LIST, APPS, APP_SETTINGS, ARC_PACKAGE, WEB_APPS}};
     case UserSelectableOsType::kOsPreferences:
-      return {
-          kOsPreferencesTypeName,
-          OS_PREFERENCES,
-          {OS_PREFERENCES, OS_PRIORITY_PREFERENCES, PRINTERS, WORKSPACE_DESK}};
+      return {kOsPreferencesTypeName,
+              OS_PREFERENCES,
+              {OS_PREFERENCES, OS_PRIORITY_PREFERENCES, PRINTERS,
+               PRINTERS_AUTHORIZATION_SERVERS, WORKSPACE_DESK}};
     case UserSelectableOsType::kOsWifiConfigurations:
       return {kOsWifiConfigurationsTypeName,
               WIFI_CONFIGURATIONS,
@@ -199,6 +208,17 @@ const char* GetUserSelectableOsTypeName(UserSelectableOsType type) {
   return GetUserSelectableOsTypeInfo(type).type_name;
 }
 
+std::string UserSelectableOsTypeSetToString(UserSelectableOsTypeSet types) {
+  std::string result;
+  for (UserSelectableOsType type : types) {
+    if (!result.empty()) {
+      result += ", ";
+    }
+    result += GetUserSelectableOsTypeName(type);
+  }
+  return result;
+}
+
 absl::optional<UserSelectableOsType> GetUserSelectableOsTypeFromString(
     const std::string& type) {
   if (type == kOsAppsTypeName) {
@@ -213,10 +233,12 @@ absl::optional<UserSelectableOsType> GetUserSelectableOsTypeFromString(
 
   // Some pref types migrated from browser prefs to OS prefs. Map the browser
   // type name to the OS type so that enterprise policy SyncTypesListDisabled
-  // still applies to the migrated names during SplitSettingsSync roll-out.
+  // still applies to the migrated names during SyncSettingsCategorization
+  // roll-out.
   // TODO(https://crbug.com/1059309): Rename "osApps" to "apps" and
-  // "osWifiConfigurations" to "wifiConfigurations" after SplitSettingsSync is
-  // the default, and remove the mapping for "preferences".
+  // "osWifiConfigurations" to "wifiConfigurations" after
+  // SyncSettingsCategorization is the default, and remove the mapping for
+  // "preferences".
   if (type == kAppsTypeName) {
     return UserSelectableOsType::kOsApps;
   }

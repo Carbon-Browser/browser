@@ -6,9 +6,9 @@
 #define CONTENT_BROWSER_LOADER_CROSS_ORIGIN_READ_BLOCKING_CHECKER_H_
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "net/base/net_errors.h"
+#include "services/network/public/cpp/corb/corb_api.h"
 #include "services/network/public/mojom/url_response_head.mojom-forward.h"
 
 namespace net {
@@ -17,9 +17,6 @@ class IOBufferWithSize;
 
 namespace network {
 struct ResourceRequest;
-namespace corb {
-class ResponseAnalyzer;
-}  // namespace corb
 }  // namespace network
 
 namespace storage {
@@ -42,7 +39,14 @@ class CrossOriginReadBlockingChecker {
       const network::ResourceRequest& request,
       const network::mojom::URLResponseHead& response,
       const storage::BlobDataHandle& blob_data_handle,
+      network::corb::PerFactoryState& corb_state,
       base::OnceCallback<void(Result)> callback);
+
+  CrossOriginReadBlockingChecker(const CrossOriginReadBlockingChecker&) =
+      delete;
+  CrossOriginReadBlockingChecker& operator=(
+      const CrossOriginReadBlockingChecker&) = delete;
+
   ~CrossOriginReadBlockingChecker();
 
   int GetNetError();
@@ -64,8 +68,6 @@ class CrossOriginReadBlockingChecker {
   int net_error_ = net::OK;
 
   base::WeakPtrFactory<CrossOriginReadBlockingChecker> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(CrossOriginReadBlockingChecker);
 };
 
 }  // namespace content

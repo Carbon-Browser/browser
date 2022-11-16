@@ -7,10 +7,8 @@
 #include <string>
 
 #include "base/files/scoped_temp_dir.h"
-#include "base/macros.h"
 #include "base/metrics/field_trial.h"
 #include "base/run_loop.h"
-#include "base/task/post_task.h"
 #include "base/task/task_traits.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
@@ -29,8 +27,7 @@ namespace feedback {
 
 namespace {
 
-constexpr base::TimeDelta kTestRetryDelay =
-    base::TimeDelta::FromMilliseconds(1);
+constexpr base::TimeDelta kTestRetryDelay = base::Milliseconds(1);
 
 constexpr char kFeedbackPostUrl[] =
     "https://www.google.com/tools/feedback/chrome/__submit";
@@ -69,6 +66,10 @@ class FeedbackUploaderDispatchTest : public ::testing::Test {
     EXPECT_TRUE(scoped_temp_dir_.CreateUniqueTempDir());
   }
 
+  FeedbackUploaderDispatchTest(const FeedbackUploaderDispatchTest&) = delete;
+  FeedbackUploaderDispatchTest& operator=(const FeedbackUploaderDispatchTest&) =
+      delete;
+
   ~FeedbackUploaderDispatchTest() override {
     // Clean up registered ids.
     variations::testing::ClearAllVariationIDs();
@@ -102,8 +103,6 @@ class FeedbackUploaderDispatchTest : public ::testing::Test {
       variations::VariationsIdsProvider::Mode::kUseSignedInState};
   network::TestURLLoaderFactory test_url_loader_factory_;
   scoped_refptr<network::SharedURLLoaderFactory> shared_url_loader_factory_;
-
-  DISALLOW_COPY_AND_ASSIGN(FeedbackUploaderDispatchTest);
 };
 
 TEST_F(FeedbackUploaderDispatchTest, VariationHeaders) {

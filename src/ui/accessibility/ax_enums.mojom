@@ -25,6 +25,8 @@ module ax.mojom;
 // If unspecified, the attribute is used across web and native on multiple
 // platforms.
 
+// Keep these values in sync with AXEventType in
+// tools/metrics/histograms/enums.xml.
 // Next version: 1
 // Next value: 59
 [Extensible, Stable, Uuid="686e661e-f8c7-4214-8713-1f66d95d3ffa"]
@@ -106,8 +108,8 @@ enum Event {
 // Web: this attribute is only used in web content.
 //
 // Native: this attribute is only used in native UI.
-// Next version: 2
-// Next value: 187
+// Next version: 4
+// Next value: 209
 [Extensible, Stable, Uuid="d258eb73-e0cc-490c-b881-80ee11d3fec2"]
 enum Role {
   // Used for role="none"/"presentation" -- ignored in platform tree.
@@ -207,7 +209,7 @@ enum Role {
   kGenericContainer = 88,
   // --------------------------------------------------------------
   // ARIA Graphics module roles:
-  // https://rawgit.com/w3c/graphics-aam/master/#mapping_role_table
+  // https://rawgit.com/w3c/graphics-aam/main/#mapping_role_table
   kGraphicsDocument = 89,
   kGraphicsObject = 90,
   kGraphicsSymbol = 91,
@@ -246,6 +248,30 @@ enum Role {
   kMark = 119,
   kMarquee = 120,
   kMath = 121,
+  // MathML roles
+  // https://w3c.github.io/mathml-aam
+  [MinVersion=3] kMathMLFraction = 188,
+  [MinVersion=3] kMathMLIdentifier = 189,
+  [MinVersion=2] kMathMLMath = 187,
+  [MinVersion=3] kMathMLMultiscripts = 190,
+  [MinVersion=3] kMathMLNoneScript = 191,
+  [MinVersion=3] kMathMLNumber = 192,
+  [MinVersion=3] kMathMLOperator = 193,
+  [MinVersion=3] kMathMLOver = 194,
+  [MinVersion=3] kMathMLPrescriptDelimiter = 195,
+  [MinVersion=3] kMathMLRoot = 196,
+  [MinVersion=3] kMathMLRow = 197,
+  [MinVersion=3] kMathMLSquareRoot = 198,
+  [MinVersion=3] kMathMLStringLiteral = 199,
+  [MinVersion=3] kMathMLSub = 200,
+  [MinVersion=3] kMathMLSubSup = 201,
+  [MinVersion=3] kMathMLSup = 202,
+  [MinVersion=3] kMathMLTable = 203,
+  [MinVersion=3] kMathMLTableCell = 204,
+  [MinVersion=3] kMathMLTableRow = 205,
+  [MinVersion=3] kMathMLText = 206,
+  [MinVersion=3] kMathMLUnder = 207,
+  [MinVersion=3] kMathMLUnderOver = 208,
   kMenu = 122,
   kMenuBar = 123,
   kMenuItem = 124,
@@ -523,7 +549,8 @@ enum StringAttribute {
   [Default]kNone = 0,
   kAccessKey = 1,
   kAppId = 2,
-  // Only used when invalid_state == invalid_state_other.
+  // AriaInvalidValue is deprecated. Spelling and Grammar errors are stored
+  // using markers and invalid state in general is stored using invalidState.
   kAriaInvalidValue = 3,
   kAutoComplete = 4,
   kCheckedStateDescription = 5,
@@ -813,8 +840,8 @@ enum BoolAttribute {
   kTouchPassthrough = 20,
 };
 
-// Next version: 3
-// Next value: 20
+// Next version: 4
+// Next value: 21
 [Extensible, Stable, Uuid="6d1f823f-28a9-4263-bc4a-69fb19a4ef46"]
 enum IntListAttribute {
   [Default]kNone = 0,
@@ -835,10 +862,12 @@ enum IntListAttribute {
 
   // For static text. These int lists must be the same size; they represent
   // the start and end character offset of each marker. Examples of markers
-  // include spelling and grammar errors, and find-in-page matches.
+  // include spelling and grammar errors, highlights, and find-in-page matches.
   kMarkerTypes = 8,
   kMarkerStarts = 9,
   kMarkerEnds = 10,
+  // Types of the custom highlights (if any) (see |HighlightType|).
+  [MinVersion=3] kHighlightTypes = 20,
 
   // Caret bounds in screen coordinates - [left, top, width, height].
   [MinVersion=1] kCaretBounds = 16,
@@ -901,6 +930,14 @@ enum MarkerType {
   // purposes
   kActiveSuggestion = 16,
   kSuggestion = 32,
+  kHighlight = 64,
+};
+
+enum HighlightType {
+  kNone = 0,
+  kHighlight = 1,
+  kSpellingError = 2,
+  kGrammarError = 3,
 };
 
 // Describes a move direction in the accessibility tree that is independent of
@@ -951,7 +988,7 @@ enum InputEventType {
   kInsertText = 1,
   kInsertLineBreak = 2,
   kInsertParagraph = 3,
-  kInsertOrderedList= 4,
+  kInsertOrderedList = 4,
   kInsertUnorderedList = 5,
   kInsertHorizontalRule = 6,
   kInsertFromPaste = 7,
@@ -1106,7 +1143,6 @@ enum InvalidState {
   kNone,
   kFalse,
   kTrue,
-  kOther,
 };
 
 // Input restriction associated with an object.
@@ -1136,7 +1172,6 @@ enum SortDirection {
 
 enum NameFrom {
   kNone,
-  kUninitialized,
   kAttribute,  // E.g. aria-label.
   kAttributeExplicitlyEmpty,
   kCaption,  // E.g. in the case of a table, from a caption element.
@@ -1147,15 +1182,55 @@ enum NameFrom {
   kValue,  // E.g. <input type="button" value="Button's name">.
 };
 
+// The source of the accessible description. Used by some screen readers
+// to determine if and how the description should be presented to the user.
 enum DescriptionFrom {
+  // No description has been provided. (See also kAttributeExplicitlyEmpty)
   kNone,
+
+  // The description comes from a flat string, such as aria-description (in the
+  // case of web content) or provided by the View.
   kAriaDescription,
-  kButtonLabel,  // HTML-AAM 5.2.2
+
+  // The description has been removed to improve accessibility. Example: The
+  // description normally provided by this View's tooltip contains text which
+  // is also present in this View's name. This could cause screen readers to
+  // speak the information twice, which is not desired. Therefore the
+  // description has been deliberately set to the empty string to prevent
+  // double presentation.
+  kAttributeExplicitlyEmpty,
+
+  // The description comes from the label/text of a button.
+  // See HTML-AAM's Accessible Name and Description Computation.
+  kButtonLabel,
+
+  // The description comes from some other object such as an element referenced
+  // by aria-describedby (in the case of web content), or another View present
+  // in the UI.
   kRelatedElement,
+
+  // The description comes from a Ruby annotation.
   kRubyAnnotation,
-  kSummary,  // HTML-AAM 5.8.2
-  kTableCaption,  // HTML-AAM 5.9.2
-  kTitle
+
+  // The description comes from the contents of a summary element.
+  // See HTML-AAM's Accessible Name and Description Computation.
+  kSummary,
+
+  // The description comes from the text of an SVG desc element.
+  // See SVG-AAM's Accessible Name and Description Computation.
+  kSvgDescElement,
+
+  // The description comes from a table's caption element.
+  // See HTML-AAM's Accessible Name and Description Computation.
+  kTableCaption,
+
+  // The description comes from the title attribute (HTML), the title element
+  // (SVG), or a View's tooltip.
+  kTitle,
+
+  // The description comes from a non-tooltip popup, e.g. the |triggerpopup|
+  // attribute pointing to `popup=hint`.
+  kPopupElement,
 };
 
 // Next value: 4

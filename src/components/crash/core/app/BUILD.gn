@@ -56,6 +56,7 @@ static_library("app") {
     sources += [
       "breakpad_linux.cc",
       "breakpad_linux.h",
+      "breakpad_linux_impl.cc",
       "breakpad_linux_impl.h",
       "crashpad_linux.cc",
     ]
@@ -127,6 +128,7 @@ static_library("app") {
 
   if (is_ios) {
     sources += [ "crashpad_ios.mm" ]
+    deps += [ "//third_party/crashpad/crashpad/minidump" ]
   }
 }
 
@@ -221,13 +223,13 @@ if (is_mac || is_android || is_linux || is_chromeos) {
       "//third_party/crashpad/crashpad/handler",
     ]
 
-    if (is_mac && is_component_build) {
+    if (is_mac && (is_component_build || is_asan)) {
       ldflags = [
         # The handler is in
         # Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/A/Helpers/
         # or
         # Content Shell.app/Contents/Frameworks/Content Shell Framework.framework/Versions/C/Helpers/
-        # so set rpath up to the base.
+        # so set rpath up to the base. This is the only case needed for is_asan.
         "-Wl,-rpath,@loader_path/../../../../../../..",
 
         # The handler can also be executed in an unbundled framework at
@@ -286,10 +288,22 @@ source_set("unit_tests") {
     ]
     deps += [
       ":run_as_crashpad_handler",
+      "//components/crash/win:unit_tests",
       "//third_party/breakpad:client",
       "//third_party/crashpad/crashpad/client:client",
       "//third_party/crashpad/crashpad/snapshot:snapshot",
       "//third_party/crashpad/crashpad/util",
+    ]
+  }
+  if (is_ios) {
+    configs += [ "//build/config/compiler:enable_arc" ]
+
+    sources += [ "crashpad_ios_unittest.mm" ]
+    deps += [
+      ":app",
+      "//components/crash/core/common:reporter_running_ios",
+      "//third_party/crashpad/crashpad/client:common",
+      "//third_party/crashpad/crashpad/test",
     ]
   }
 }

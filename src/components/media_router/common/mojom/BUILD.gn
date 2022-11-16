@@ -33,6 +33,7 @@ mojom("media_router") {
     ":logger",
     ":media_controller",
     ":media_route_provider_id",
+    ":route_request_result_code",
     "//components/mirroring/mojom:host",
     "//media/mojo/mojom:remoting",
     "//mojo/public/mojom/base",
@@ -76,10 +77,6 @@ mojom("media_router") {
           mojom = "media_router.mojom.MediaSink"
           cpp = "::media_router::MediaSinkInternal"
         },
-        {
-          mojom = "media_router.mojom.RouteRequestResultCode"
-          cpp = "::media_router::RouteRequestResult::ResultCode"
-        },
       ]
       traits_headers = [ "media_router_mojom_traits.h" ]
       traits_sources = [ "media_router_mojom_traits.cc" ]
@@ -102,4 +99,10 @@ mojom("media_router_test_interfaces") {
   public_deps = [ ":media_router" ]
 
   disable_variants = true
+}
+
+mojom("route_request_result_code") {
+  sources = [ "route_request_result_code.mojom" ]
+
+  webui_module_path = "/"
 }

@@ -27,8 +27,6 @@ CONTENT_EXPORT extern const base::FilePath::CharType kPepperDataDirname[];
 // The MIME type used for the browser plugin.
 CONTENT_EXPORT extern const char kBrowserPluginMimeType[];
 
-CONTENT_EXPORT extern const char kFlashPluginName[];
-
 // The maximum number of characters in the URL that we're willing to accept
 // in the browser process. It is set low enough to avoid damage to the browser
 // but high enough that a web site can abuse location.hash for a little storage.
@@ -61,7 +59,7 @@ CONTENT_EXPORT extern const char kCorsExemptPurposeHeaderName[];
 // it at run time.
 CONTENT_EXPORT std::string GetCorsExemptRequestedWithHeaderName();
 
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 // The OOM score adj constants
 // The highest and lowest assigned OOM score adjustment (oom_score_adj) for
 // renderers and extensions used by the OomPriority Manager.

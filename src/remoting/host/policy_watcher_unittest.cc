@@ -6,11 +6,11 @@
 
 #include "base/bind.h"
 #include "base/json/json_writer.h"
-#include "base/macros.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
-#include "base/single_thread_task_runner.h"
 #include "base/synchronization/waitable_event.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/mock_log.h"
 #include "base/test/task_environment.h"
 #include "base/threading/thread_task_runner_handle.h"
@@ -25,8 +25,10 @@ namespace remoting {
 
 namespace key = ::policy::key;
 
+using testing::_;
+
 MATCHER_P(IsPolicies, dict, "") {
-  bool equal = arg->Equals(dict);
+  bool equal = (*arg == *dict);
   if (!equal) {
     std::string actual_value;
     base::JSONWriter::WriteWithOptions(
@@ -43,9 +45,17 @@ MATCHER_P(IsPolicies, dict, "") {
   return equal;
 }
 
+MATCHER_P(ContainsSubstring, substring, "") {
+  const std::string& log_message = ::testing::get<0>(arg);
+  return log_message.find(substring) != std::string::npos;
+}
+
 class MockPolicyCallback {
  public:
   MockPolicyCallback() = default;
+
+  MockPolicyCallback(const MockPolicyCallback&) = delete;
+  MockPolicyCallback& operator=(const MockPolicyCallback&) = delete;
 
   // TODO(lukasza): gmock cannot mock a method taking std::unique_ptr<T>...
   MOCK_METHOD1(OnPolicyUpdatePtr, void(const base::DictionaryValue* policies));
@@ -54,9 +64,6 @@ class MockPolicyCallback {
   }
 
   MOCK_METHOD0(OnPolicyError, void());
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(MockPolicyCallback);
 };
 
 class PolicyWatcherTest : public testing::Test {
@@ -74,7 +81,7 @@ class PolicyWatcherTest : public testing::Test {
     policy_loader_ =
         new policy::FakeAsyncPolicyLoader(base::ThreadTaskRunnerHandle::Get());
     policy_watcher_ = PolicyWatcher::CreateFromPolicyLoaderForTesting(
-        base::WrapUnique(policy_loader_));
+        base::WrapUnique(policy_loader_.get()));
 
     policy_watcher_default_values_ = PolicyWatcher::GetDefaultPolicies();
 
@@ -155,8 +162,10 @@ class PolicyWatcherTest : public testing::Test {
 
     curtain_true_.SetBoolKey(key::kRemoteAccessHostRequireCurtain, true);
     curtain_false_.SetBoolKey(key::kRemoteAccessHostRequireCurtain, false);
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC)
     username_true_.SetBoolKey(key::kRemoteAccessHostMatchUsername, true);
     username_false_.SetBoolKey(key::kRemoteAccessHostMatchUsername, false);
+#endif
     third_party_auth_partial_.SetStringKey(key::kRemoteAccessHostTokenUrl,
                                            "https://token.com");
     third_party_auth_partial_.SetStringKey(
@@ -168,10 +177,13 @@ class PolicyWatcherTest : public testing::Test {
     third_party_auth_cert_empty_.MergeDictionary(&third_party_auth_partial_);
     third_party_auth_cert_empty_.SetStringKey(
         key::kRemoteAccessHostTokenValidationCertificateIssuer, "");
+
+#if BUILDFLAG(IS_WIN)
     remote_assistance_uiaccess_true_.SetBoolKey(
         key::kRemoteAccessHostAllowUiAccessForRemoteAssistance, true);
     remote_assistance_uiaccess_false_.SetBoolKey(
         key::kRemoteAccessHostAllowUiAccessForRemoteAssistance, false);
+#endif
 
     deprecated_policies_.SetStringKey(key::kRemoteAccessHostDomain,
                                       kHostDomain);
@@ -257,7 +269,7 @@ class PolicyWatcherTest : public testing::Test {
   // |policy_loader_| is owned by |policy_watcher_|. PolicyWatcherTest retains
   // a raw pointer to |policy_loader_| in order to control the simulated / faked
   // policy contents.
-  policy::FakeAsyncPolicyLoader* policy_loader_;
+  raw_ptr<policy::FakeAsyncPolicyLoader> policy_loader_;
   std::unique_ptr<PolicyWatcher> policy_watcher_;
 
   base::DictionaryValue empty_;
@@ -309,7 +321,9 @@ class PolicyWatcherTest : public testing::Test {
     dict.SetStringKey(key::kRemoteAccessHostUdpPortRange, "");
     dict.SetKey(key::kRemoteAccessHostClientDomainList, base::ListValue());
     dict.SetKey(key::kRemoteAccessHostDomainList, base::ListValue());
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC)
     dict.SetBoolKey(key::kRemoteAccessHostMatchUsername, false);
+#endif
     dict.SetBoolKey(key::kRemoteAccessHostRequireCurtain, false);
     dict.SetStringKey(key::kRemoteAccessHostTokenUrl, "");
     dict.SetStringKey(key::kRemoteAccessHostTokenValidationUrl, "");
@@ -317,8 +331,12 @@ class PolicyWatcherTest : public testing::Test {
                       "");
     dict.SetBoolKey(key::kRemoteAccessHostAllowClientPairing, true);
     dict.SetBoolKey(key::kRemoteAccessHostAllowGnubbyAuth, true);
+#if BUILDFLAG(IS_WIN)
     dict.SetBoolKey(key::kRemoteAccessHostAllowUiAccessForRemoteAssistance,
                     false);
+#endif
+    dict.SetInteger(key::kRemoteAccessHostClipboardSizeBytes, -1);
+    dict.SetBoolKey(key::kRemoteAccessHostAllowRemoteSupportConnections, true);
 #if !BUILDFLAG(IS_CHROMEOS_ASH)
     dict.SetBoolKey(key::kRemoteAccessHostAllowFileTransfer, true);
     dict.SetBoolKey(key::kRemoteAccessHostEnableUserInterface, true);
@@ -506,13 +524,21 @@ TEST_P(MisspelledPolicyTest, WarningLogged) {
   const char* misspelled_policy_name = GetParam();
   base::test::MockLog mock_log;
 
-  ON_CALL(mock_log,
-          Log(testing::_, testing::_, testing::_, testing::_, testing::_))
-      .WillByDefault(testing::Return(true));
+  ON_CALL(mock_log, Log(_, _, _, _, _)).WillByDefault(testing::Return(true));
 
-  EXPECT_CALL(mock_log,
-              Log(logging::LOG_WARNING, testing::_, testing::_, testing::_,
-                  testing::HasSubstr(misspelled_policy_name)))
+#if BUILDFLAG(IS_WIN)
+  // The PolicyWatcher on Windows tries to open a handle to the Chrome policy
+  // registry key on Windows which fails on the Chromium bots. The warning that
+  // gets logged cases the subsequent log assertion to fail so this check was
+  // added so the test runs locally and in the bot environment.
+  EXPECT_CALL(mock_log, Log(logging::LOG_WARNING, _, _, _, _))
+      .With(testing::Args<4>(
+          ContainsSubstring("Failed to open Chrome policy registry key")))
+      .Times(testing::AtMost(1));
+#endif
+
+  EXPECT_CALL(mock_log, Log(logging::LOG_WARNING, _, _, _, _))
+      .With(testing::Args<4>(ContainsSubstring(misspelled_policy_name)))
       .Times(1);
 
   EXPECT_CALL(mock_policy_callback_,
@@ -572,7 +598,7 @@ TEST_F(PolicyWatcherTest, RemoteAssistanceUiAccess) {
   testing::InSequence sequence;
   EXPECT_CALL(mock_policy_callback_,
               OnPolicyUpdatePtr(IsPolicies(&nat_true_others_default_)));
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   // This setting only affects Windows, it is ignored on other platforms so the
   // 2 SetPolicies calls won't result in any calls to OnPolicyUpdate.
   EXPECT_CALL(mock_policy_callback_,
@@ -580,7 +606,7 @@ TEST_F(PolicyWatcherTest, RemoteAssistanceUiAccess) {
   EXPECT_CALL(
       mock_policy_callback_,
       OnPolicyUpdatePtr(IsPolicies(&remote_assistance_uiaccess_false_)));
-#endif  // defined(OS_WIN)
+#endif  // BUILDFLAG(IS_WIN)
 
   SetPolicies(empty_);
   StartWatching();
@@ -619,25 +645,22 @@ TEST_F(PolicyWatcherTest, Curtain) {
   SetPolicies(curtain_false_);
 }
 
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC)
 TEST_F(PolicyWatcherTest, MatchUsername) {
   testing::InSequence sequence;
   EXPECT_CALL(mock_policy_callback_,
               OnPolicyUpdatePtr(IsPolicies(&nat_true_others_default_)));
-#if !defined(OS_WIN)
   EXPECT_CALL(mock_policy_callback_,
               OnPolicyUpdatePtr(IsPolicies(&username_true_)));
   EXPECT_CALL(mock_policy_callback_,
               OnPolicyUpdatePtr(IsPolicies(&username_false_)));
-#else
-// On Windows the MatchUsername policy is ignored and therefore the 2
-// SetPolicies calls won't result in any calls to OnPolicyUpdate.
-#endif
 
   SetPolicies(empty_);
   StartWatching();
   SetPolicies(username_true_);
   SetPolicies(username_false_);
 }
+#endif
 
 TEST_F(PolicyWatcherTest, ThirdPartyAuthFull) {
   testing::InSequence sequence;
@@ -699,23 +722,14 @@ TEST_F(PolicyWatcherTest, PolicySchemaAndPolicyWatcherShouldBeInSync) {
        i.Advance()) {
     expected_schema[i.key()] = i.value().type();
   }
-#if defined(OS_WIN)
-  // RemoteAccessHostMatchUsername is marked in policy_templates.json as not
-  // supported on Windows and therefore is (by design) excluded from the schema.
-  expected_schema.erase(key::kRemoteAccessHostMatchUsername);
-#elif BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS_ASH)
   // Me2Me Policies are not supported on ChromeOS.
   expected_schema.erase(key::kRemoteAccessHostAllowGnubbyAuth);
   expected_schema.erase(key::kRemoteAccessHostAllowClientPairing);
-  expected_schema.erase(key::kRemoteAccessHostMatchUsername);
   expected_schema.erase(key::kRemoteAccessHostRequireCurtain);
   expected_schema.erase(key::kRemoteAccessHostTokenUrl);
   expected_schema.erase(key::kRemoteAccessHostTokenValidationUrl);
   expected_schema.erase(key::kRemoteAccessHostTokenValidationCertificateIssuer);
-  expected_schema.erase(key::kRemoteAccessHostAllowUiAccessForRemoteAssistance);
-#else  // !defined(OS_WIN)
-  // RemoteAssistanceHostAllowUiAccess does not exist on non-Windows platforms.
-  expected_schema.erase(key::kRemoteAccessHostAllowUiAccessForRemoteAssistance);
 #endif
 
   std::map<std::string, base::Value::Type> actual_schema;
@@ -749,6 +763,13 @@ TEST_F(PolicyWatcherTest, SchemaTypeCheck) {
       schema->GetKnownProperty("RemoteAccessHostUdpPortRange");
   EXPECT_TRUE(string_schema.valid());
   EXPECT_EQ(string_schema.type(), base::Value::Type::STRING);
+
+  // Check one, random "integer" policy to see if the type propagated correctly
+  // from policy_templates.json file.
+  const policy::Schema int_schema =
+      schema->GetKnownProperty("RemoteAccessHostClipboardSizeBytes");
+  EXPECT_TRUE(int_schema.valid());
+  EXPECT_EQ(int_schema.type(), base::Value::Type::INTEGER);
 
   // And check one, random "boolean" policy to see if the type propagated
   // correctly from policy_templates.json file.

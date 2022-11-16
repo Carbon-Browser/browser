@@ -9,27 +9,7 @@
 #ifndef COMPONENTS_SIGNIN_PUBLIC_BASE_ACCOUNT_CONSISTENCY_METHOD_H_
 #define COMPONENTS_SIGNIN_PUBLIC_BASE_ACCOUNT_CONSISTENCY_METHOD_H_
 
-#include "base/feature_list.h"
-#include "build/build_config.h"
-
 namespace signin {
-
-#if defined(OS_ANDROID) || defined(OS_IOS)
-// Feature flag for FRE related changes as part of MICE.
-extern const base::Feature kMobileIdentityConsistencyFRE;
-
-// Feature flag for promo-related changes of `kMobileIdentityConsistency`.
-extern const base::Feature kMobileIdentityConsistencyPromos;
-#endif  // defined(OS_ANDROID) || defined(OS_IOS)
-
-#if defined(OS_IOS)
-// Feature flag for promo-related changes of `kMobileIdentityConsistency`.
-extern const base::Feature kMICEWebSignIn;
-
-// Returns true if the flags |kMICEWebSignInEnabled| and
-// |kMobileIdentityConsistency| are enabled for the platform.
-bool IsMICEWebSignInEnabled();
-#endif  // defined(OS_IOS)
 
 enum class AccountConsistencyMethod : int {
   // No account consistency.

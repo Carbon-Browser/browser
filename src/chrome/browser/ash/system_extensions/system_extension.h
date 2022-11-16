@@ -12,6 +12,8 @@
 #include "url/gurl.h"
 #include "url/origin.h"
 
+namespace ash {
+
 // TODO(ortuno): This should be longer.
 using SystemExtensionId = std::array<uint8_t, 4>;
 
@@ -20,6 +22,8 @@ enum class SystemExtensionType {
 };
 
 struct SystemExtension {
+  static bool IsSystemExtensionOrigin(const url::Origin& origin);
+
   SystemExtension();
   ~SystemExtension();
   SystemExtension(const SystemExtension&) = delete;
@@ -54,5 +58,7 @@ struct SystemExtension {
   // `chrome-untrusted://system-extension-echo-1234/`
   GURL base_url;
 };
+
+}  // namespace ash
 
 #endif  // CHROME_BROWSER_ASH_SYSTEM_EXTENSIONS_SYSTEM_EXTENSION_H_

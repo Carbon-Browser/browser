@@ -73,6 +73,10 @@ void PowerButtonTestBase::SetTabletModeSwitchState(
   screenshot_controller_ = power_button_test_api_->GetScreenshotController();
 }
 
+void PowerButtonTestBase::LaunchArcPowerButtonEvent() {
+  power_button_controller_->OnArcPowerButtonMenuEvent();
+}
+
 void PowerButtonTestBase::PressPowerButton() {
   power_button_controller_->PowerButtonEventReceived(true,
                                                      tick_clock_.NowTicks());
@@ -124,7 +128,7 @@ void PowerButtonTestBase::EnableTabletMode(bool enable) {
 
 void PowerButtonTestBase::AdvanceClockToAvoidIgnoring() {
   tick_clock_.Advance(PowerButtonController::kIgnoreRepeatedButtonUpDelay +
-                      base::TimeDelta::FromMilliseconds(1));
+                      base::Milliseconds(1));
 }
 
 }  // namespace ash

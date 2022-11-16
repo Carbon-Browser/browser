@@ -11,7 +11,8 @@
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/web_applications/test/web_app_test.h"
-#include "chrome/browser/web_applications/web_application_info.h"
+#include "chrome/browser/web_applications/user_display_mode.h"
+#include "chrome/browser/web_applications/web_app_install_info.h"
 #include "chrome/common/chrome_constants.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile_manager.h"
@@ -48,7 +49,150 @@ TEST(WebAppTest, SortedSizesPxIsAscending) {
   ASSERT_THAT(base_reversed, ElementsAre(512, 256, 64, 32, 16));
 }
 
+TEST(WebAppTest, ResolveEffectiveDisplayMode) {
+  // When user_display_mode indicates a user preference for opening in
+  // a browser tab, we open in a browser tab.
+  EXPECT_EQ(DisplayMode::kBrowser,
+            ResolveEffectiveDisplayMode(
+                DisplayMode::kBrowser, std::vector<DisplayMode>(),
+                UserDisplayMode::kBrowser, /*is_isolated=*/false));
+  EXPECT_EQ(DisplayMode::kBrowser,
+            ResolveEffectiveDisplayMode(
+                DisplayMode::kMinimalUi, std::vector<DisplayMode>(),
+                UserDisplayMode::kBrowser, /*is_isolated=*/false));
+  EXPECT_EQ(DisplayMode::kBrowser,
+            ResolveEffectiveDisplayMode(
+                DisplayMode::kStandalone, std::vector<DisplayMode>(),
+                UserDisplayMode::kBrowser, /*is_isolated=*/false));
+  EXPECT_EQ(DisplayMode::kBrowser,
+            ResolveEffectiveDisplayMode(
+                DisplayMode::kFullscreen, std::vector<DisplayMode>(),
+                UserDisplayMode::kBrowser, /*is_isolated=*/false));
+
+  // When user_display_mode indicates a user preference for opening in
+  // a standalone window, we open in a minimal-ui window (for app_display_mode
+  // 'browser' or 'minimal-ui') or a standalone window (for app_display_mode
+  // 'standalone' or 'fullscreen').
+  EXPECT_EQ(DisplayMode::kMinimalUi,
+            ResolveEffectiveDisplayMode(
+                DisplayMode::kBrowser, std::vector<DisplayMode>(),
+                UserDisplayMode::kStandalone, /*is_isolated=*/false));
+  EXPECT_EQ(DisplayMode::kMinimalUi,
+            ResolveEffectiveDisplayMode(
+                DisplayMode::kMinimalUi, std::vector<DisplayMode>(),
+                UserDisplayMode::kStandalone, /*is_isolated=*/false));
+  EXPECT_EQ(DisplayMode::kStandalone,
+            ResolveEffectiveDisplayMode(
+                DisplayMode::kStandalone, std::vector<DisplayMode>(),
+                UserDisplayMode::kStandalone, /*is_isolated=*/false));
+  EXPECT_EQ(DisplayMode::kStandalone,
+            ResolveEffectiveDisplayMode(
+                DisplayMode::kFullscreen, std::vector<DisplayMode>(),
+                UserDisplayMode::kStandalone, /*is_isolated=*/false));
+}
+
+TEST(WebAppTest,
+     ResolveEffectiveDisplayModeWithDisplayOverridesPreferUserMode) {
+  // When user_display_mode indicates a user preference for opening in
+  // a browser tab, we open in a browser tab even if display_overrides
+  // are specified
+  std::vector<DisplayMode> app_display_mode_overrides;
+  app_display_mode_overrides.push_back(DisplayMode::kStandalone);
+
+  EXPECT_EQ(DisplayMode::kBrowser,
+            ResolveEffectiveDisplayMode(
+                DisplayMode::kBrowser, app_display_mode_overrides,
+                UserDisplayMode::kBrowser, /*is_isolated=*/false));
+  EXPECT_EQ(DisplayMode::kBrowser,
+            ResolveEffectiveDisplayMode(
+                DisplayMode::kMinimalUi, app_display_mode_overrides,
+                UserDisplayMode::kBrowser, /*is_isolated=*/false));
+  EXPECT_EQ(DisplayMode::kBrowser,
+            ResolveEffectiveDisplayMode(
+                DisplayMode::kStandalone, app_display_mode_overrides,
+                UserDisplayMode::kBrowser, /*is_isolated=*/false));
+  EXPECT_EQ(DisplayMode::kBrowser,
+            ResolveEffectiveDisplayMode(
+                DisplayMode::kFullscreen, app_display_mode_overrides,
+                UserDisplayMode::kBrowser, /*is_isolated=*/false));
+}
+
+TEST(WebAppTest,
+     ResolveEffectiveDisplayModeWithDisplayOverridesFallbackToDisplayMode) {
+  // When user_display_mode indicates a user preference for opening in
+  // a standalone window, and the only display modes provided for
+  // display_overrides contain only 'fullscreen' or 'browser',  open in a
+  // minimal-ui window (for app_display_mode 'browser' or 'minimal-ui') or a
+  // standalone window (for app_display_mode 'standalone' or 'fullscreen').
+  std::vector<DisplayMode> app_display_mode_overrides;
+  app_display_mode_overrides.push_back(DisplayMode::kFullscreen);
+
+  EXPECT_EQ(DisplayMode::kMinimalUi,
+            ResolveEffectiveDisplayMode(
+                DisplayMode::kBrowser, app_display_mode_overrides,
+                UserDisplayMode::kStandalone, /*is_isolated=*/false));
+  EXPECT_EQ(DisplayMode::kMinimalUi,
+            ResolveEffectiveDisplayMode(
+                DisplayMode::kMinimalUi, app_display_mode_overrides,
+                UserDisplayMode::kStandalone, /*is_isolated=*/false));
+  EXPECT_EQ(DisplayMode::kStandalone,
+            ResolveEffectiveDisplayMode(
+                DisplayMode::kStandalone, app_display_mode_overrides,
+                UserDisplayMode::kStandalone, /*is_isolated=*/false));
+  EXPECT_EQ(DisplayMode::kStandalone,
+            ResolveEffectiveDisplayMode(
+                DisplayMode::kFullscreen, app_display_mode_overrides,
+                UserDisplayMode::kStandalone, /*is_isolated=*/false));
+}
+
+TEST(WebAppTest, ResolveEffectiveDisplayModeWithDisplayOverrides) {
+  // When user_display_mode indicates a user preference for opening in
+  // a standalone window, and return the first entry that is either
+  // 'standalone' or 'minimal-ui' in display_override
+  std::vector<DisplayMode> app_display_mode_overrides;
+  app_display_mode_overrides.push_back(DisplayMode::kFullscreen);
+  app_display_mode_overrides.push_back(DisplayMode::kBrowser);
+  app_display_mode_overrides.push_back(DisplayMode::kStandalone);
+
+  EXPECT_EQ(DisplayMode::kStandalone,
+            ResolveEffectiveDisplayMode(
+                DisplayMode::kBrowser, app_display_mode_overrides,
+                UserDisplayMode::kStandalone, /*is_isolated=*/false));
+  EXPECT_EQ(DisplayMode::kStandalone,
+            ResolveEffectiveDisplayMode(
+                DisplayMode::kMinimalUi, app_display_mode_overrides,
+                UserDisplayMode::kStandalone, /*is_isolated=*/false));
+  EXPECT_EQ(DisplayMode::kStandalone,
+            ResolveEffectiveDisplayMode(
+                DisplayMode::kStandalone, app_display_mode_overrides,
+                UserDisplayMode::kStandalone, /*is_isolated=*/false));
+  EXPECT_EQ(DisplayMode::kStandalone,
+            ResolveEffectiveDisplayMode(
+                DisplayMode::kFullscreen, app_display_mode_overrides,
+                UserDisplayMode::kStandalone, /*is_isolated=*/false));
+}
+
+TEST(WebAppTest, ResolveEffectiveDisplayModeWithIsolatedApp) {
+  EXPECT_EQ(DisplayMode::kStandalone,
+            ResolveEffectiveDisplayMode(
+                /*app_display_mode=*/DisplayMode::kBrowser,
+                /*app_display_mode_overrides=*/{DisplayMode::kBrowser},
+                /*user_display_mode=*/UserDisplayMode::kBrowser,
+                /*is_isolated=*/true));
+
+  EXPECT_EQ(DisplayMode::kStandalone,
+            ResolveEffectiveDisplayMode(
+                /*app_display_mode=*/DisplayMode::kMinimalUi,
+                /*app_display_mode_overrides=*/{},
+                /*user_display_mode=*/UserDisplayMode::kBrowser,
+                /*is_isolated=*/true));
+}
+
 TEST_F(WebAppUtilsTest, AreWebAppsEnabled) {
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  SkipMainProfileCheckForTesting();
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+
   Profile* regular_profile = profile();
 
   EXPECT_FALSE(AreWebAppsEnabled(nullptr));
@@ -67,10 +211,12 @@ TEST_F(WebAppUtilsTest, AreWebAppsEnabled) {
   EXPECT_TRUE(AreWebAppsEnabled(
       guest_profile->GetPrimaryOTRProfile(/*create_if_needed=*/true)));
 
+#if !BUILDFLAG(IS_CHROMEOS_ASH)
   Profile* system_profile = profile_manager.CreateSystemProfile();
   EXPECT_FALSE(AreWebAppsEnabled(system_profile));
   EXPECT_FALSE(AreWebAppsEnabled(
       system_profile->GetPrimaryOTRProfile(/*create_if_needed=*/true)));
+#endif
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   Profile* signin_profile =
@@ -80,7 +226,7 @@ TEST_F(WebAppUtilsTest, AreWebAppsEnabled) {
       signin_profile->GetPrimaryOTRProfile(/*create_if_needed=*/true)));
 
   Profile* lock_screen_profile = profile_manager.CreateTestingProfile(
-      chromeos::ProfileHelper::GetLockScreenAppProfileName());
+      ash::ProfileHelper::GetLockScreenAppProfileName());
   EXPECT_FALSE(AreWebAppsEnabled(lock_screen_profile));
   EXPECT_FALSE(AreWebAppsEnabled(
       lock_screen_profile->GetPrimaryOTRProfile(/*create_if_needed=*/true)));
@@ -109,6 +255,10 @@ TEST_F(WebAppUtilsTest, AreWebAppsEnabled) {
 }
 
 TEST_F(WebAppUtilsTest, AreWebAppsUserInstallable) {
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  SkipMainProfileCheckForTesting();
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+
   Profile* regular_profile = profile();
 
   EXPECT_FALSE(AreWebAppsEnabled(nullptr));
@@ -128,10 +278,12 @@ TEST_F(WebAppUtilsTest, AreWebAppsUserInstallable) {
   EXPECT_FALSE(AreWebAppsUserInstallable(
       guest_profile->GetPrimaryOTRProfile(/*create_if_needed=*/true)));
 
+#if !BUILDFLAG(IS_CHROMEOS_ASH)
   Profile* system_profile = profile_manager.CreateSystemProfile();
   EXPECT_FALSE(AreWebAppsUserInstallable(system_profile));
   EXPECT_FALSE(AreWebAppsUserInstallable(
       system_profile->GetPrimaryOTRProfile(/*create_if_needed=*/true)));
+#endif
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   Profile* signin_profile =
@@ -141,7 +293,7 @@ TEST_F(WebAppUtilsTest, AreWebAppsUserInstallable) {
       signin_profile->GetPrimaryOTRProfile(/*create_if_needed=*/true)));
 
   Profile* lock_screen_profile = profile_manager.CreateTestingProfile(
-      chromeos::ProfileHelper::GetLockScreenAppProfileName());
+      ash::ProfileHelper::GetLockScreenAppProfileName());
   EXPECT_FALSE(AreWebAppsUserInstallable(lock_screen_profile));
   EXPECT_FALSE(AreWebAppsUserInstallable(
       lock_screen_profile->GetPrimaryOTRProfile(/*create_if_needed=*/true)));
@@ -149,6 +301,10 @@ TEST_F(WebAppUtilsTest, AreWebAppsUserInstallable) {
 }
 
 TEST_F(WebAppUtilsTest, GetBrowserContextForWebApps) {
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  SkipMainProfileCheckForTesting();
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+
   Profile* regular_profile = profile();
 
   EXPECT_EQ(regular_profile, GetBrowserContextForWebApps(regular_profile));
@@ -164,19 +320,28 @@ TEST_F(WebAppUtilsTest, GetBrowserContextForWebApps) {
   ASSERT_TRUE(profile_manager.SetUp());
 
   Profile* guest_profile = profile_manager.CreateGuestProfile();
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  guest_profile =
+      guest_profile->GetPrimaryOTRProfile(/*create_if_needed=*/true);
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
   EXPECT_EQ(guest_profile, GetBrowserContextForWebApps(guest_profile));
   EXPECT_EQ(guest_profile,
             GetBrowserContextForWebApps(guest_profile->GetPrimaryOTRProfile(
                 /*create_if_needed=*/true)));
-
+#if !BUILDFLAG(IS_CHROMEOS_ASH)
   Profile* system_profile = profile_manager.CreateSystemProfile();
   EXPECT_EQ(nullptr, GetBrowserContextForWebApps(system_profile));
   EXPECT_EQ(nullptr,
             GetBrowserContextForWebApps(system_profile->GetPrimaryOTRProfile(
                 /*create_if_needed=*/true)));
+#endif
 }
 
 TEST_F(WebAppUtilsTest, GetBrowserContextForWebAppMetrics) {
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  SkipMainProfileCheckForTesting();
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+
   Profile* regular_profile = profile();
 
   EXPECT_EQ(regular_profile,
@@ -201,12 +366,14 @@ TEST_F(WebAppUtilsTest, GetBrowserContextForWebAppMetrics) {
       GetBrowserContextForWebAppMetrics(
           guest_profile->GetPrimaryOTRProfile(/*create_if_needed=*/true)));
 
+#if !BUILDFLAG(IS_CHROMEOS_ASH)
   Profile* system_profile = profile_manager.CreateSystemProfile();
   EXPECT_EQ(nullptr, GetBrowserContextForWebAppMetrics(system_profile));
   EXPECT_EQ(
       nullptr,
       GetBrowserContextForWebAppMetrics(
           system_profile->GetPrimaryOTRProfile(/*create_if_needed=*/true)));
+#endif
 }
 
 }  // namespace web_app

@@ -12,20 +12,32 @@
 #error "This file requires ARC support."
 #endif
 
-BOOL IsPasswordCreationEnabled() {
+BOOL IsPasswordCreationUserEnabled() {
+  return [[app_group::GetGroupUserDefaults()
+      objectForKey:
+          AppGroupUserDefaulsCredentialProviderSavingPasswordsEnabled()]
+      boolValue];
+}
+
+BOOL IsPasswordManagerBrandingUpdateEnable() {
   NSDictionary* allFeatures = [app_group::GetGroupUserDefaults()
       objectForKey:app_group::kChromeExtensionFieldTrialPreference];
-  NSDictionary* featureData = allFeatures[@"PasswordCreationEnabled"];
-  if (!featureData || kPasswordCreationFeatureVersion !=
+  NSDictionary* featureData =
+      allFeatures[@"IOSEnablePasswordManagerBrandingUpdate"];
+  if (!featureData || kPasswordManagerBrandingUpdateFeatureVersion !=
                           [featureData[kFieldTrialVersionKey] intValue]) {
     return NO;
   }
   return [featureData[kFieldTrialValueKey] boolValue];
 }
 
-BOOL IsPasswordCreationUserRestricted() {
-  return [[app_group::GetGroupUserDefaults()
-      objectForKey:
-          AppGroupUserDefaulsCredentialProviderSavingPasswordsEnabled()]
-      boolValue];
+BOOL IsFaviconEnabled() {
+  NSDictionary* allFeatures = [app_group::GetGroupUserDefaults()
+      objectForKey:app_group::kChromeExtensionFieldTrialPreference];
+  NSDictionary* featureData = allFeatures[@"EnableFaviconForPasswords"];
+  if (!featureData || kCredentialProviderExtensionFaviconsFeatureVersion !=
+                          [featureData[kFieldTrialVersionKey] intValue]) {
+    return NO;
+  }
+  return [featureData[kFieldTrialValueKey] boolValue];
 }

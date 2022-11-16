@@ -4,7 +4,6 @@
 
 import {assert, assertInstanceof} from 'chrome://resources/js/assert.m.js';
 import {Command} from 'chrome://resources/js/cr/ui/command.m.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
 import {queryRequiredElement} from 'chrome://resources/js/util.m.js';
 
 import {str, strf, util} from '../../common/js/util.js';
@@ -17,7 +16,6 @@ import {FileSelectionHandler} from './file_selection.js';
 import {A11yAnnounce} from './ui/a11y_announce.js';
 import {FileListSelectionModel} from './ui/file_list_selection_model.js';
 import {ListContainer} from './ui/list_container.js';
-import {LocationLine} from './ui/location_line.js';
 
 /**
  * This class controls wires toolbar UI and selection model. When selection
@@ -30,8 +28,6 @@ export class ToolbarController {
    * @param {!HTMLElement} navigationList Navigation list on the left pane. The
    *     position of silesSelectedLabel depends on the navitaion list's width.
    * @param {!ListContainer} listContainer List container.
-   * @param {!LocationLine} locationLine Location line shown on the left side of
-   *     the toolbar.
    * @param {!FileSelectionHandler} selectionHandler
    * @param {!DirectoryModel} directoryModel
    * @param {!VolumeManager} volumeManager
@@ -39,8 +35,8 @@ export class ToolbarController {
    * @param {!A11yAnnounce} a11y
    */
   constructor(
-      toolbar, navigationList, listContainer, locationLine, selectionHandler,
-      directoryModel, volumeManager, fileOperationManager, a11y) {
+      toolbar, navigationList, listContainer, selectionHandler, directoryModel,
+      volumeManager, fileOperationManager, a11y) {
     /**
      * @private {!HTMLElement}
      * @const
@@ -94,6 +90,13 @@ export class ToolbarController {
      */
     this.emptyTrashButton_ =
         queryRequiredElement('#empty-trash-button', this.toolbar_);
+
+    /**
+     * @private {!HTMLElement}
+     * @const
+     */
+    this.sharesheetButton_ =
+        queryRequiredElement('#sharesheet-button', this.toolbar_);
 
     /**
      * @private {!HTMLElement}
@@ -200,12 +203,6 @@ export class ToolbarController {
     this.listContainer_ = listContainer;
 
     /**
-     * @private {!LocationLine}
-     * @const
-     */
-    this.locationLine_ = locationLine;
-
-    /**
      * @private {!FileSelectionHandler}
      * @const
      */
@@ -264,6 +261,9 @@ export class ToolbarController {
     this.emptyTrashButton_.addEventListener(
         'click', this.onEmptyTrashButtonClicked_.bind(this));
 
+    this.sharesheetButton_.addEventListener(
+        'click', this.onSharesheetButtonClicked_.bind(this));
+
     this.togglePinnedCommand_.addEventListener(
         'checkedChange', this.updatePinnedToggle_.bind(this));
 
@@ -278,17 +278,6 @@ export class ToolbarController {
 
     this.directoryModel_.addEventListener(
         'directory-changed', this.updateCurrentDirectoryButtons_.bind(this));
-
-    // Watch visibility of toolbar buttons to update the width of location line.
-    const observer =
-        new MutationObserver(this.onToolbarButtonsMutated_.bind(this));
-    const toolbarButtons =
-        this.toolbar_.querySelectorAll('.icon-button, .combobutton');
-    for (let i = 0; i < toolbarButtons.length; i++) {
-      observer.observe(
-          toolbarButtons[i],
-          /** @type MutationObserverInit */ ({attributes: true}));
-    }
   }
 
   /**
@@ -359,8 +348,7 @@ export class ToolbarController {
              entry => util.isNonModifiable(this.volumeManager_, entry)));
     // Show 'Move to Trash' rather than 'Delete' if possible.
     this.moveToTrashButton_.hidden = true;
-    if (!this.deleteButton_.hidden &&
-        loadTimeData.getBoolean('FILES_TRASH_ENABLED') &&
+    if (!this.deleteButton_.hidden && util.isTrashEnabled() &&
         this.fileOperationManager_.willUseTrash(
             this.volumeManager_, selection.entries)) {
       this.deleteButton_.hidden = true;
@@ -447,13 +435,14 @@ export class ToolbarController {
   }
 
   /**
-   * Handles the mutation event occurred on attributes of toolbar buttons.
-   * Toolbar buttons visibility can affect the available width for location
-   * line.
+   * Handles click event for sharesheet button to set button background color.
    * @private
    */
-  onToolbarButtonsMutated_() {
-    this.locationLine_.truncate();
+  onSharesheetButtonClicked_() {
+    this.sharesheetButton_.setAttribute('menu-shown', '');
+    this.toolbar_.ownerDocument.body.addEventListener('focusin', (e) => {
+      this.sharesheetButton_.removeAttribute('menu-shown');
+    }, {once: true});
   }
 
   /** @private */

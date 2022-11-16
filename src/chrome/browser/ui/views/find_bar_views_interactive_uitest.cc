@@ -2,9 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/macros.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/chrome_notification_types.h"
@@ -23,6 +23,7 @@
 #include "components/find_in_page/find_notification_details.h"
 #include "components/find_in_page/find_tab_helper.h"
 #include "components/find_in_page/find_types.h"
+#include "components/omnibox/common/omnibox_features.h"
 #include "content/public/browser/notification_service.h"
 #include "content/public/browser/render_widget_host_view.h"
 #include "content/public/browser/web_contents.h"
@@ -49,6 +50,9 @@ class FindInPageTest : public InProcessBrowserTest {
   FindInPageTest() {
     FindBarHost::disable_animations_during_testing_ = true;
   }
+
+  FindInPageTest(const FindInPageTest&) = delete;
+  FindInPageTest& operator=(const FindInPageTest&) = delete;
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
     // Some bots are flaky due to slower loading interacting with
@@ -105,9 +109,6 @@ class FindInPageTest : public InProcessBrowserTest {
         return details;
     }
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(FindInPageTest);
 };
 
 // Flaky because the test server fails to start? See: http://crbug.com/96594.
@@ -128,7 +129,8 @@ IN_PROC_BROWSER_TEST_F(FindInPageTest, CrashEscHandlers) {
 
   // Select tab A.
   browser()->tab_strip_model()->ActivateTabAt(
-      0, {TabStripModel::GestureType::kOther});
+      0, TabStripUserGestureDetails(
+             TabStripUserGestureDetails::GestureType::kOther));
 
   // Close tab B.
   browser()->tab_strip_model()->CloseWebContentsAt(1,
@@ -300,13 +302,13 @@ IN_PROC_BROWSER_TEST_F(FindInPageTest, FocusRestore) {
 }
 
 // Flaky on Windows. https://crbug.com/792313
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #define MAYBE_SelectionRestoreOnTabSwitch DISABLED_SelectionRestoreOnTabSwitch
 #else
 #define MAYBE_SelectionRestoreOnTabSwitch SelectionRestoreOnTabSwitch
 #endif
 IN_PROC_BROWSER_TEST_F(FindInPageTest, MAYBE_SelectionRestoreOnTabSwitch) {
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   // Mac intentionally changes selection on focus.
   GTEST_SKIP() << "Mac intentionally has different behavior";
 #endif
@@ -369,13 +371,15 @@ IN_PROC_BROWSER_TEST_F(FindInPageTest, MAYBE_SelectionRestoreOnTabSwitch) {
 
   // Select tab A. Find bar should select "bc".
   browser()->tab_strip_model()->ActivateTabAt(
-      0, {TabStripModel::GestureType::kOther});
+      0, TabStripUserGestureDetails(
+             TabStripUserGestureDetails::GestureType::kOther));
   EXPECT_TRUE(IsViewFocused(browser(), VIEW_ID_FIND_IN_PAGE_TEXT_FIELD));
   EXPECT_EQ(u"bc", GetFindBarSelectedText());
 
   // Select tab B. Find bar should select "de".
   browser()->tab_strip_model()->ActivateTabAt(
-      1, {TabStripModel::GestureType::kOther});
+      1, TabStripUserGestureDetails(
+             TabStripUserGestureDetails::GestureType::kOther));
   EXPECT_TRUE(IsViewFocused(browser(), VIEW_ID_FIND_IN_PAGE_TEXT_FIELD));
   EXPECT_EQ(u"de", GetFindBarSelectedText());
 }
@@ -420,13 +424,15 @@ IN_PROC_BROWSER_TEST_F(FindInPageTest, FocusRestoreOnTabSwitch) {
 
   // Select tab A. Find bar should get focus.
   browser()->tab_strip_model()->ActivateTabAt(
-      0, {TabStripModel::GestureType::kOther});
+      0, TabStripUserGestureDetails(
+             TabStripUserGestureDetails::GestureType::kOther));
   EXPECT_TRUE(IsViewFocused(browser(), VIEW_ID_FIND_IN_PAGE_TEXT_FIELD));
   EXPECT_EQ(u"a", GetFindBarSelectedText());
 
   // Select tab B. Location bar should get focus.
   browser()->tab_strip_model()->ActivateTabAt(
-      1, {TabStripModel::GestureType::kOther});
+      1, TabStripUserGestureDetails(
+             TabStripUserGestureDetails::GestureType::kOther));
   EXPECT_TRUE(IsViewFocused(browser(), VIEW_ID_OMNIBOX));
 }
 
@@ -452,7 +458,8 @@ IN_PROC_BROWSER_TEST_F(FindInPageTest, FocusRestoreOnTabSwitchDismiss) {
 
   // Select tab A. Find bar should get focus.
   browser()->tab_strip_model()->ActivateTabAt(
-      0, {TabStripModel::GestureType::kOther});
+      0, TabStripUserGestureDetails(
+             TabStripUserGestureDetails::GestureType::kOther));
   EXPECT_TRUE(IsViewFocused(browser(), VIEW_ID_FIND_IN_PAGE_TEXT_FIELD));
 
   // Dismiss the Find box. Focus should go to the content view.
@@ -470,7 +477,7 @@ IN_PROC_BROWSER_TEST_F(FindInPageTest, FocusRestoreOnTabSwitchDismiss) {
 }
 
 // FindInPage on Mac doesn't use prepopulated values. Search there is global.
-#if !defined(OS_MAC) && !defined(USE_AURA)
+#if !BUILDFLAG(IS_MAC) && !defined(USE_AURA)
 // Flaky because the test server fails to start? See: http://crbug.com/96594.
 // This tests that whenever you clear values from the Find box and close it that
 // it respects that and doesn't show you the last search, as reported in bug:
@@ -585,7 +592,7 @@ IN_PROC_BROWSER_TEST_F(FindInPageTest, DISABLED_PasteWithoutTextChange) {
 }
 
 // Slow flakiness on Linux. crbug.com/803743
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 #define MAYBE_CtrlEnter DISABLED_CtrlEnter
 #else
 #define MAYBE_CtrlEnter CtrlEnter
@@ -761,19 +768,53 @@ IN_PROC_BROWSER_TEST_F(FindInPageTest, GlobalEscapeClosesFind) {
   ASSERT_TRUE(ui_test_utils::NavigateToURL(
       browser(), embedded_test_server()->GetURL(kSimplePage)));
 
-  // Open find
+  // Open find.
   browser()->GetFindBarController()->Show(false, true);
   EXPECT_TRUE(IsViewFocused(browser(), VIEW_ID_FIND_IN_PAGE_TEXT_FIELD));
 
-  // Put focus into location bar
-  chrome::FocusLocationBar(browser());
+  // Put focus to the bookmarks' toolbar, which won't consume the escape key.
+  chrome::FocusBookmarksToolbar(browser());
 
-  // Close find with escape
+  // Close find with escape.
   ASSERT_TRUE(ui_test_utils::SendKeyPressSync(browser(), ui::VKEY_ESCAPE, false,
                                               false, false, false));
 
-  // Find should be closed
-  ASSERT_FALSE(IsFindBarVisible());
+  // Find should be closed.
+  EXPECT_FALSE(IsFindBarVisible());
+}
+
+class FindInPageTestEnabledBlurWithEscape : public FindInPageTest {
+  void SetUp() override {
+    scoped_feature_list_.InitAndEnableFeature(omnibox::kBlurWithEscape);
+    FindInPageTest::SetUp();
+  }
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
+IN_PROC_BROWSER_TEST_F(FindInPageTestEnabledBlurWithEscape,
+                       ConsumedGlobalEscapeDoesNotCloseFind) {
+  ASSERT_TRUE(embedded_test_server()->Start());
+  // Make sure Chrome is in the foreground, otherwise sending input
+  // won't do anything and the test will hang.
+  ASSERT_TRUE(ui_test_utils::BringBrowserWindowToFront(browser()));
+
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(
+      browser(), embedded_test_server()->GetURL(kSimplePage)));
+
+  // Open find.
+  browser()->GetFindBarController()->Show(false, true);
+  EXPECT_TRUE(IsViewFocused(browser(), VIEW_ID_FIND_IN_PAGE_TEXT_FIELD));
+
+  // Put focus into location bar, which will consume escape presses.
+  chrome::FocusLocationBar(browser());
+
+  // Press escape.
+  ASSERT_TRUE(ui_test_utils::SendKeyPressSync(browser(), ui::VKEY_ESCAPE, false,
+                                              false, false, false));
+
+  // Find should not be closed; the escape should have been consumed by the
+  // location bar.
+  EXPECT_TRUE(IsFindBarVisible());
 }
 
 // See http://crbug.com/1142027

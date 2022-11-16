@@ -71,13 +71,13 @@ public class SigninBridgeTest {
 
     @After
     public void tearDown() {
-        SigninPreferencesManager.getInstance().clearAccountPickerBottomSheetActiveDismissalCount();
+        SigninPreferencesManager.getInstance().clearWebSigninAccountPickerActiveDismissalCount();
     }
 
     @Test
     @SmallTest
     public void testAccountPickerSuppressedWhenSigninNotAllowed() {
-        when(mSigninManagerMock.isSignInAllowed()).thenReturn(false);
+        when(mSigninManagerMock.isSyncOptInAllowed()).thenReturn(false);
         SigninBridge.openAccountPickerBottomSheet(mWindowAndroidMock, CONTINUE_URL);
         checkHistogramRecording(AccountConsistencyPromoAction.SUPPRESSED_SIGNIN_NOT_ALLOWED);
     }
@@ -85,7 +85,7 @@ public class SigninBridgeTest {
     @Test
     @SmallTest
     public void testAccountPickerSuppressedWhenNoAccountsOnDevice() {
-        when(mSigninManagerMock.isSignInAllowed()).thenReturn(true);
+        when(mSigninManagerMock.isSyncOptInAllowed()).thenReturn(true);
         SigninBridge.openAccountPickerBottomSheet(mWindowAndroidMock, CONTINUE_URL);
         checkHistogramRecording(AccountConsistencyPromoAction.SUPPRESSED_NO_ACCOUNTS);
     }
@@ -93,10 +93,10 @@ public class SigninBridgeTest {
     @Test
     @SmallTest
     public void testAccountPickerSuppressedIfDismissLimitReached() {
-        when(mSigninManagerMock.isSignInAllowed()).thenReturn(true);
+        when(mSigninManagerMock.isSyncOptInAllowed()).thenReturn(true);
         mAccountManagerTestRule.addAccount("account@test.com");
         SharedPreferencesManager.getInstance().writeInt(
-                ChromePreferenceKeys.ACCOUNT_PICKER_BOTTOM_SHEET_ACTIVE_DISMISSAL_COUNT,
+                ChromePreferenceKeys.WEB_SIGNIN_ACCOUNT_PICKER_ACTIVE_DISMISSAL_COUNT,
                 SigninBridge.ACCOUNT_PICKER_BOTTOM_SHEET_DISMISS_LIMIT);
         SigninBridge.openAccountPickerBottomSheet(mWindowAndroidMock, CONTINUE_URL);
         checkHistogramRecording(AccountConsistencyPromoAction.SUPPRESSED_CONSECUTIVE_DISMISSALS);

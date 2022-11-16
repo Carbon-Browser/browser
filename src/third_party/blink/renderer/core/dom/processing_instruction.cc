@@ -28,12 +28,13 @@
 #include "third_party/blink/renderer/core/css/style_sheet_contents.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/increment_load_event_delay_count.h"
+#include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/loader/resource/css_style_sheet_resource.h"
 #include "third_party/blink/renderer/core/loader/resource/xsl_style_sheet_resource.h"
 #include "third_party/blink/renderer/core/xml/document_xslt.h"
 #include "third_party/blink/renderer/core/xml/parser/xml_document_parser.h"  // for parseAttributes()
 #include "third_party/blink/renderer/core/xml/xsl_style_sheet.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/loader/fetch/fetch_initiator_type_names.h"
 #include "third_party/blink/renderer/platform/loader/fetch/fetch_parameters.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_fetcher.h"
@@ -169,7 +170,8 @@ void ProcessingInstruction::Process(const String& href, const String& charset) {
   } else {
     params.SetCharset(charset.IsEmpty() ? GetDocument().Encoding()
                                         : WTF::TextEncoding(charset));
-    GetDocument().GetStyleEngine().AddPendingSheet(style_engine_context_);
+    GetDocument().GetStyleEngine().AddPendingBlockingSheet(
+        *this, PendingSheetType::kBlocking);
     CSSStyleSheetResource::Fetch(params, GetDocument().Fetcher(), this);
   }
 }
@@ -295,8 +297,8 @@ void ProcessingInstruction::ClearSheet() {
 void ProcessingInstruction::RemovePendingSheet() {
   if (is_xsl_)
     return;
-  GetDocument().GetStyleEngine().RemovePendingSheet(*this,
-                                                    style_engine_context_);
+  GetDocument().GetStyleEngine().RemovePendingBlockingSheet(
+      *this, PendingSheetType::kBlocking);
 }
 
 void ProcessingInstruction::Trace(Visitor* visitor) const {

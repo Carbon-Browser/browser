@@ -8,7 +8,6 @@
 #include <string>
 
 #include "base/auto_reset.h"
-#include "base/macros.h"
 
 namespace extensions {
 
@@ -34,6 +33,10 @@ class ScopedTestDialogAutoConfirm {
   // |override_option_to_select|.
   ScopedTestDialogAutoConfirm(AutoConfirm override_confirm_value,
                               int override_option_to_select);
+
+  ScopedTestDialogAutoConfirm(const ScopedTestDialogAutoConfirm&) = delete;
+  ScopedTestDialogAutoConfirm& operator=(const ScopedTestDialogAutoConfirm&) =
+      delete;
 
   ~ScopedTestDialogAutoConfirm();
 
@@ -61,8 +64,6 @@ class ScopedTestDialogAutoConfirm {
   // Preserve the old justification so it can be reset when the dialog goes out
   // of scope.
   std::string old_justification_;
-
-  DISALLOW_COPY_AND_ASSIGN(ScopedTestDialogAutoConfirm);
 };
 
 }  // namespace extensions

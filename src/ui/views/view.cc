@@ -17,8 +17,8 @@
 #include "base/feature_list.h"
 #include "base/i18n/rtl.h"
 #include "base/logging.h"
-#include "base/macros.h"
 #include "base/notreached.h"
+#include "base/observer_list.h"
 #include "base/scoped_observation.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/trace_event/trace_event.h"
@@ -46,9 +46,9 @@
 #include "ui/gfx/geometry/angle_conversions.h"
 #include "ui/gfx/geometry/point3_f.h"
 #include "ui/gfx/geometry/point_conversions.h"
+#include "ui/gfx/geometry/transform.h"
 #include "ui/gfx/interpolated_transform.h"
 #include "ui/gfx/scoped_canvas.h"
-#include "ui/gfx/transform.h"
 #include "ui/native_theme/native_theme.h"
 #include "ui/views/accessibility/accessibility_paint_checks.h"
 #include "ui/views/accessibility/ax_event_manager.h"
@@ -64,6 +64,7 @@
 #include "ui/views/view_class_properties.h"
 #include "ui/views/view_observer.h"
 #include "ui/views/view_tracker.h"
+#include "ui/views/view_utils.h"
 #include "ui/views/views_features.h"
 #include "ui/views/views_switches.h"
 #include "ui/views/widget/native_widget_private.h"
@@ -71,7 +72,7 @@
 #include "ui/views/widget/tooltip_manager.h"
 #include "ui/views/widget/widget.h"
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include "base/win/scoped_gdi_object.h"
 #include "ui/native_theme/native_theme_win.h"
 #endif
@@ -80,7 +81,7 @@ namespace views {
 
 namespace {
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 constexpr bool kContextMenuOnMousePress = false;
 #else
 constexpr bool kContextMenuOnMousePress = true;
@@ -125,11 +126,14 @@ class ScopedChildrenLock {
  public:
   explicit ScopedChildrenLock(const View* view)
       : reset_(&view->iterating_, true) {}
+
+  ScopedChildrenLock(const ScopedChildrenLock&) = delete;
+  ScopedChildrenLock& operator=(const ScopedChildrenLock&) = delete;
+
   ~ScopedChildrenLock() = default;
 
  private:
   base::AutoReset<bool> reset_;
-  DISALLOW_COPY_AND_ASSIGN(ScopedChildrenLock);
 };
 #else
 class ScopedChildrenLock {
@@ -210,6 +214,14 @@ View::View() {
   SetTargetHandler(this);
   if (kUseDefaultFillLayout)
     default_fill_layout_.emplace(DefaultFillLayout());
+
+  static bool capture_stack_trace =
+      base::CommandLine::ForCurrentProcess()->HasSwitch(
+          switches::kViewStackTraces);
+  if (capture_stack_trace) {
+    SetProperty(kViewStackTraceKey,
+                std::make_unique<base::debug::StackTrace>());
+  }
 }
 
 View::~View() {
@@ -518,11 +530,11 @@ int View::GetBaseline() const {
   return -1;
 }
 
-void View::SetPreferredSize(const gfx::Size& size) {
-  if (preferred_size_ && *preferred_size_ == size)
+void View::SetPreferredSize(absl::optional<gfx::Size> size) {
+  if (preferred_size_ == size)
     return;
 
-  preferred_size_ = size;
+  preferred_size_ = std::move(size);
   PreferredSizeChanged();
 }
 
@@ -640,7 +652,7 @@ gfx::Transform View::GetTransform() const {
     return gfx::Transform();
 
   gfx::Transform transform = layer()->transform();
-  gfx::ScrollOffset scroll_offset = layer()->CurrentScrollOffset();
+  gfx::PointF scroll_offset = layer()->CurrentScrollOffset();
   // Offsets for layer-based scrolling are never negative, but the horizontal
   // scroll direction is reversed in RTL via canvas flipping.
   transform.Translate((GetMirrored() ? 1 : -1) * scroll_offset.x(),
@@ -1082,12 +1094,10 @@ void View::Paint(const PaintInfo& parent_paint_info) {
   if (!ShouldPaint())
     return;
 
-#if DCHECK_IS_ON()
   if (!has_run_accessibility_paint_checks_) {
     RunAccessibilityPaintChecks(this);
     has_run_accessibility_paint_checks_ = true;
   }
-#endif  // DCHECK_IS_ON()
 
   const gfx::Rect& parent_bounds =
       !parent() ? GetMirroredBounds() : parent()->GetMirroredBounds();
@@ -1157,8 +1167,7 @@ void View::Paint(const PaintInfo& parent_paint_info) {
           SkFloatToScalar(paint_info.paint_recording_scale_x()),
           SkFloatToScalar(paint_info.paint_recording_scale_y()));
 
-      clip_path_in_parent.transform(
-          SkMatrix(to_parent_recording_space.matrix()));
+      clip_path_in_parent.transform(to_parent_recording_space.matrix().asM33());
       clip_recorder.ClipPathWithAntiAliasing(clip_path_in_parent);
     }
   }
@@ -1193,6 +1202,8 @@ void View::Paint(const PaintInfo& parent_paint_info) {
 
 void View::SetBackground(std::unique_ptr<Background> b) {
   background_ = std::move(b);
+  if (background_ && GetWidget())
+    background_->OnViewThemeChanged(this);
   SchedulePaint();
 }
 
@@ -1203,6 +1214,8 @@ Background* View::GetBackground() const {
 void View::SetBorder(std::unique_ptr<Border> b) {
   const gfx::Rect old_contents_bounds = GetContentsBounds();
   border_ = std::move(b);
+  if (border_ && GetWidget())
+    border_->OnViewThemeChanged(this);
 
   // Conceptually, this should be PreferredSizeChanged(), but for some view
   // hierarchies that triggers synchronous add/remove operations that are unsafe
@@ -1249,9 +1262,15 @@ const ui::NativeTheme* View::GetNativeTheme() const {
   if (widget)
     return widget->GetNativeTheme();
 
-  // Crash dump here to ensure we catch fallthrough to the global NativeTheme
-  // instance on all Chromium builds (crbug.com/1056756).
-  base::debug::DumpWithoutCrashing();
+  static bool has_crashed_reported = false;
+  // Crash on debug builds and dump without crashing on release builds to ensure
+  // we catch fallthrough to the global NativeTheme instance on all Chromium
+  // builds (crbug.com/1056756).
+  if (!has_crashed_reported) {
+    DCHECK(false);
+    base::debug::DumpWithoutCrashing();
+    has_crashed_reported = true;
+  }
 
   return ui::NativeTheme::GetInstanceForNativeUi();
 }
@@ -1339,8 +1358,8 @@ View* View::GetTooltipHandlerForPoint(const gfx::Point& point) {
   return this;
 }
 
-gfx::NativeCursor View::GetCursor(const ui::MouseEvent& event) {
-  return gfx::kNullCursor;
+ui::Cursor View::GetCursor(const ui::MouseEvent& event) {
+  return ui::Cursor();
 }
 
 bool View::HitTestPoint(const gfx::Point& point) const {
@@ -1429,7 +1448,7 @@ void View::OnMouseEvent(ui::MouseEvent* event) {
         OnMouseMoved(*event);
         return;
       }
-      FALLTHROUGH;
+      [[fallthrough]];
     case ui::ET_MOUSE_DRAGGED:
       ProcessMouseDragged(event);
       return;
@@ -1556,7 +1575,7 @@ void View::RemoveAccelerator(const ui::Accelerator& accelerator) {
     return;
   }
 
-  size_t index = i - accelerators_->begin();
+  auto index = static_cast<size_t>(i - accelerators_->begin());
   accelerators_->erase(i);
   if (index >= registered_accelerator_count_) {
     // The accelerator is not registered to FocusManager.
@@ -1669,6 +1688,43 @@ void View::InsertAfterInFocusList(View* view) {
   previous_focusable_view_ = view;
 }
 
+View::Views View::GetChildrenFocusList() {
+  View* starting_focus_view = nullptr;
+
+  Views children_views = children();
+  for (View* child : children_views) {
+    if (child->GetPreviousFocusableView() == nullptr) {
+      starting_focus_view = child;
+      break;
+    }
+  }
+
+  if (starting_focus_view == nullptr)
+    return {};
+
+  Views result;
+
+  // Tracks the views traversed so far. Used to check for cycles.
+  base::flat_set<View*> seen_views;
+
+  View* cur = starting_focus_view;
+  while (cur != nullptr) {
+    // Views are not supposed to have focus cycles, but just in case, fail
+    // gracefully to avoid a crash.
+    if (seen_views.contains(cur)) {
+      LOG(ERROR) << "View focus cycle detected.";
+      return {};
+    }
+
+    seen_views.insert(cur);
+    result.push_back(cur);
+
+    cur = cur->GetNextFocusableView();
+  }
+
+  return result;
+}
+
 View::FocusBehavior View::GetFocusBehavior() const {
   return focus_behavior_;
 }
@@ -1772,10 +1828,6 @@ int View::OnDragUpdated(const ui::DropTargetEvent& event) {
 }
 
 void View::OnDragExited() {}
-
-ui::mojom::DragOperation View::OnPerformDrop(const ui::DropTargetEvent& event) {
-  return ui::mojom::DragOperation::kNone;
-}
 
 void View::OnDragDone() {}
 
@@ -2106,6 +2158,12 @@ void View::OnLayerTransformed(const gfx::Transform& old_transform,
 
   for (ViewObserver& observer : observers_)
     observer.OnViewLayerTransformed(this);
+}
+
+void View::OnLayerClipRectChanged(const gfx::Rect& old_rect,
+                                  ui::PropertyChangeReason reason) {
+  for (ViewObserver& observer : observers_)
+    observer.OnViewLayerClipRectChanged(this);
 }
 
 void View::OnDeviceScaleFactorChanged(float old_device_scale_factor,
@@ -2485,22 +2543,22 @@ void View::PaintDebugRects(const PaintInfo& parent_paint_info) {
   gfx::RectF outline_rect(ScaleToEnclosedRect(GetLocalBounds(), scale));
   gfx::RectF content_outline_rect(
       ScaleToEnclosedRect(GetContentsBounds(), scale));
+  const auto* color_provider = GetColorProvider();
   if (content_outline_rect != outline_rect) {
-    content_outline_rect.Inset(0.5f, 0.5f);
-    const SkColor content_color = SkColorSetARGB(0x30, 0, 0, 0xff);
-    canvas->DrawRect(content_outline_rect, content_color);
+    content_outline_rect.Inset(0.5f);
+    canvas->DrawRect(content_outline_rect,
+                     color_provider->GetColor(ui::kColorDebugContentOutline));
   }
-  outline_rect.Inset(0.5f, 0.5f);
-  const SkColor color = SkColorSetARGB(0x30, 0xff, 0, 0);
-  canvas->DrawRect(outline_rect, color);
+  outline_rect.Inset(0.5f);
+  canvas->DrawRect(outline_rect,
+                   color_provider->GetColor(ui::kColorDebugBoundsOutline));
 }
 
 // Tree operations -------------------------------------------------------------
 
-void View::AddChildViewAtImpl(View* view, int index) {
+void View::AddChildViewAtImpl(View* view, size_t index) {
   CHECK_NE(view, this) << "You cannot add a view as its own child";
-  DCHECK_GE(index, 0);
-  DCHECK_LE(static_cast<size_t>(index), children_.size());
+  DCHECK_LE(index, children_.size());
 
   // TODO(https://crbug.com/942298): Should just DCHECK(!view->parent_);.
   View* parent = view->parent_;
@@ -2519,7 +2577,8 @@ void View::AddChildViewAtImpl(View* view, int index) {
 #if DCHECK_IS_ON()
   DCHECK(!iterating_);
 #endif
-  const auto pos = children_.insert(std::next(children_.cbegin(), index), view);
+  const auto pos = children_.insert(
+      std::next(children_.cbegin(), static_cast<ptrdiff_t>(index)), view);
 
   view->RemoveFromFocusList();
   SetFocusSiblings(view, pos);
@@ -2988,7 +3047,7 @@ bool View::ProcessMousePressed(const ui::MouseEvent& event) {
                             ? GetDragOperations(event.location())
                             : 0;
   ContextMenuController* context_menu_controller =
-      event.IsRightMouseButton() ? context_menu_controller_ : nullptr;
+      event.IsRightMouseButton() ? context_menu_controller_.get() : nullptr;
   View::DragInfo* drag_info = GetDragInfo();
 
   const bool was_enabled = GetEnabled();
@@ -3083,8 +3142,9 @@ void View::RegisterPendingAccelerators() {
     NOTREACHED();
     return;
   }
-  for (std::vector<ui::Accelerator>::const_iterator i(
-           accelerators_->begin() + registered_accelerator_count_);
+  for (std::vector<ui::Accelerator>::const_iterator i =
+           accelerators_->begin() +
+           static_cast<ptrdiff_t>(registered_accelerator_count_);
        i != accelerators_->end(); ++i) {
     accelerator_focus_manager_->RegisterAccelerator(
         *i, ui::AcceleratorManager::kNormalPriority, this);
@@ -3157,6 +3217,10 @@ void View::PropagateThemeChanged() {
       child->PropagateThemeChanged();
   }
   OnThemeChanged();
+  if (border_)
+    border_->OnViewThemeChanged(this);
+  if (background_)
+    background_->OnViewThemeChanged(this);
 #if DCHECK_IS_ON()
   DCHECK(on_theme_changed_called_)
       << "views::View::OnThemeChanged() has not been called. This means that "

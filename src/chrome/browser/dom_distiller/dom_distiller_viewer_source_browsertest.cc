@@ -10,6 +10,7 @@
 #include "base/bind.h"
 #include "base/command_line.h"
 #include "base/guid.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
@@ -169,7 +170,7 @@ class DomDistillerViewerSourceBrowserTest : public InProcessBrowserTest {
   // Database entries.
   bool expect_distillation_ = false;
   bool expect_distiller_page_ = false;
-  MockDistillerFactory* distiller_factory_ = nullptr;
+  raw_ptr<MockDistillerFactory> distiller_factory_ = nullptr;
 };
 
 // The DomDistillerViewerSource renders untrusted content, so ensure no bindings
@@ -216,7 +217,7 @@ void DomDistillerViewerSourceBrowserTest::ViewSingleDistilledPage(
   ASSERT_TRUE(contents_after_nav != NULL);
   EXPECT_EQ(url, contents_after_nav->GetLastCommittedURL());
   content::RenderFrameHost* render_frame_host =
-      contents_after_nav->GetMainFrame();
+      contents_after_nav->GetPrimaryMainFrame();
   EXPECT_EQ(0, render_frame_host->GetEnabledBindings());
   EXPECT_EQ(expected_mime_type, contents_after_nav->GetContentsMimeType());
 }

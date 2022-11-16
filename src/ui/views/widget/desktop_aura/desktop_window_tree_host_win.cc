@@ -12,7 +12,6 @@
 #include "base/containers/flat_set.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/scoped_refptr.h"
-#include "base/metrics/histogram_macros.h"
 #include "base/trace_event/trace_event.h"
 #include "base/win/win_util.h"
 #include "base/win/windows_version.h"
@@ -25,11 +24,12 @@
 #include "ui/base/class_property.h"
 #include "ui/base/cursor/cursor.h"
 #include "ui/base/cursor/platform_cursor.h"
-#include "ui/base/cursor/win/win_cursor.h"
 #include "ui/base/ime/input_method.h"
 #include "ui/base/ui_base_features.h"
 #include "ui/base/win/event_creation_utils.h"
 #include "ui/base/win/shell.h"
+#include "ui/base/win/win_cursor.h"
+#include "ui/compositor/compositor.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/paint_context.h"
 #include "ui/display/win/dpi.h"
@@ -48,6 +48,7 @@
 #include "ui/views/views_switches.h"
 #include "ui/views/widget/desktop_aura/desktop_drag_drop_client_win.h"
 #include "ui/views/widget/desktop_aura/desktop_native_cursor_manager.h"
+#include "ui/views/widget/desktop_aura/desktop_native_cursor_manager_win.h"
 #include "ui/views/widget/desktop_aura/desktop_native_widget_aura.h"
 #include "ui/views/widget/root_view.h"
 #include "ui/views/widget/widget_delegate.h"
@@ -85,7 +86,7 @@ gfx::Size GetExpandedWindowSize(bool is_translucent, gfx::Size size) {
 }
 
 void InsetBottomRight(gfx::Rect* rect, const gfx::Vector2d& vector) {
-  rect->Inset(0, 0, vector.x(), vector.y());
+  rect->Inset(gfx::Insets::TLBR(0, 0, vector.y(), vector.x()));
 }
 
 // Updates the cursor clip region. Used for mouse locking.
@@ -190,7 +191,7 @@ void DesktopWindowTreeHostWin::Init(const Widget::InitParams& params) {
   // We don't have an HWND yet, so scale relative to the nearest screen.
   gfx::Rect pixel_bounds =
       display::win::ScreenWin::DIPToScreenRect(nullptr, params.bounds);
-  message_handler_->Init(parent_hwnd, pixel_bounds);
+  message_handler_->Init(parent_hwnd, pixel_bounds, params.headless_mode);
   CreateCompositor(params.force_software_compositing);
   OnAcceleratedWidgetAvailable();
   InitHost();
@@ -225,13 +226,13 @@ std::unique_ptr<corewm::Tooltip> DesktopWindowTreeHostWin::CreateTooltip() {
 
   DCHECK(!tooltip_);
   tooltip_ = new corewm::TooltipWin(GetAcceleratedWidget());
-  return base::WrapUnique(tooltip_);
+  return base::WrapUnique(tooltip_.get());
 }
 
 std::unique_ptr<aura::client::DragDropClient>
 DesktopWindowTreeHostWin::CreateDragDropClient() {
   drag_drop_client_ = new DesktopDragDropClientWin(window(), GetHWND(), this);
-  return base::WrapUnique(drag_drop_client_);
+  return base::WrapUnique(drag_drop_client_.get());
 }
 
 void DesktopWindowTreeHostWin::Close() {
@@ -262,13 +263,16 @@ aura::WindowTreeHost* DesktopWindowTreeHostWin::AsWindowTreeHost() {
 
 void DesktopWindowTreeHostWin::Show(ui::WindowShowState show_state,
                                     const gfx::Rect& restore_bounds) {
-  if (compositor())
-    compositor()->SetVisible(true);
+  OnAcceleratedWidgetMadeVisible(true);
 
   gfx::Rect pixel_restore_bounds;
   if (show_state == ui::SHOW_STATE_MAXIMIZED) {
+    // The window parameter is intentionally passed as nullptr because a
+    // non-null window parameter causes errors when restoring windows to saved
+    // positions in variable-DPI situations. See https://crbug.com/1252564 for
+    // details.
     pixel_restore_bounds =
-        display::win::ScreenWin::DIPToScreenRect(GetHWND(), restore_bounds);
+        display::win::ScreenWin::DIPToScreenRect(nullptr, restore_bounds);
   }
   message_handler_->Show(show_state, pixel_restore_bounds);
 
@@ -511,15 +515,14 @@ void DesktopWindowTreeHostWin::SetFullscreen(bool fullscreen) {
   // directly. Instead of this should listen for visibility changes and then
   // update window.
   if (message_handler_->IsVisible() && !content_window()->TargetVisibility()) {
-    if (compositor())
-      compositor()->SetVisible(true);
+    OnAcceleratedWidgetMadeVisible(true);
     content_window()->Show();
   }
   desktop_native_widget_aura_->UpdateWindowTransparency();
 }
 
 bool DesktopWindowTreeHostWin::IsFullscreen() const {
-  return message_handler_->fullscreen_handler()->fullscreen();
+  return message_handler_->IsFullscreen();
 }
 
 void DesktopWindowTreeHostWin::SetOpacity(float opacity) {
@@ -631,6 +634,20 @@ void DesktopWindowTreeHostWin::SetBoundsInPixels(const gfx::Rect& bounds) {
   // different DSF, HWNDMessageHandler::OnDpiChanged() will be called and the
   // window size will be scaled automatically.
   message_handler_->SetBounds(new_expanded, old_content_size != bounds.size());
+}
+
+gfx::Rect
+DesktopWindowTreeHostWin::GetBoundsInAcceleratedWidgetPixelCoordinates() {
+  if (message_handler_->IsMinimized())
+    return gfx::Rect();
+  const gfx::Rect client_bounds =
+      message_handler_->GetClientAreaBoundsInScreen();
+  const gfx::Rect window_bounds = message_handler_->GetWindowBoundsInScreen();
+  if (window_bounds == client_bounds)
+    return gfx::Rect(window_bounds.size());
+  const gfx::Vector2d offset = client_bounds.origin() - window_bounds.origin();
+  DCHECK(offset.x() >= 0 && offset.y() >= 0);
+  return gfx::Rect(gfx::Point() + offset, client_bounds.size());
 }
 
 gfx::Point DesktopWindowTreeHostWin::GetLocationOnScreenInPixels() const {
@@ -983,25 +1000,6 @@ bool DesktopWindowTreeHostWin::HandleMouseEvent(ui::MouseEvent* event) {
   // Ignore native platform events for test purposes
   if (ui::PlatformEventSource::ShouldIgnoreNativePlatformEvents())
     return true;
-  // Mouse events in occluded windows should be very rare. If this stat isn't
-  // very close to 0, that would indicate that windows are incorrectly getting
-  // marked occluded, or getting stuck in the occluded state. Event can cause
-  // this object to be deleted so check occlusion state before we do anything
-  // with the event.
-  // This stat tries to detect the user moving the mouse over a window falsely
-  // determined to be occluded, so ignore mouse events that have the same
-  // location as the first event, and exit events.
-  if (GetNativeWindowOcclusionState() ==
-      aura::Window::OcclusionState::OCCLUDED) {
-    if (occluded_window_mouse_event_loc_ != gfx::Point() &&
-        event->location() != occluded_window_mouse_event_loc_ &&
-        event->type() != ui::ET_MOUSE_EXITED) {
-      UMA_HISTOGRAM_BOOLEAN("OccludedWindowMouseEvents", true);
-    }
-    occluded_window_mouse_event_loc_ = event->location();
-  } else {
-    occluded_window_mouse_event_loc_ = gfx::Point();
-  }
 
   SendEventToSink(event);
   return event->handled();
@@ -1169,6 +1167,22 @@ void DesktopWindowTreeHostWin::HandleWindowScaleFactorChanged(
         window_scale_factor, message_handler_->GetClientAreaBounds().size(),
         window()->GetLocalSurfaceId());
   }
+}
+
+DesktopNativeCursorManager*
+DesktopWindowTreeHostWin::GetSingletonDesktopNativeCursorManager() {
+  return new DesktopNativeCursorManagerWin();
+}
+
+void DesktopWindowTreeHostWin::SetBoundsInDIP(const gfx::Rect& bounds) {
+  // The window parameter is intentionally passed as nullptr on Windows because
+  // a non-null window parameter causes errors when restoring windows to saved
+  // positions in variable-DPI situations. See https://crbug.com/1224715 for
+  // details.
+  aura::Window* root = nullptr;
+  const gfx::Rect bounds_in_pixels =
+      display::Screen::GetScreen()->DIPToScreenRectInWindow(root, bounds);
+  AsWindowTreeHost()->SetBoundsInPixels(bounds_in_pixels);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

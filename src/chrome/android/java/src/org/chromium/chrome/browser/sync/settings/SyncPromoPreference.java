@@ -13,15 +13,14 @@ import androidx.preference.Preference;
 import androidx.preference.PreferenceViewHolder;
 
 import org.chromium.chrome.R;
-import org.chromium.chrome.browser.firstrun.FirstRunSignInProcessor;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.signin.SyncConsentActivityLauncherImpl;
 import org.chromium.chrome.browser.signin.services.IdentityServicesProvider;
 import org.chromium.chrome.browser.signin.services.ProfileDataCache;
 import org.chromium.chrome.browser.signin.services.SigninManager;
 import org.chromium.chrome.browser.signin.services.SigninManager.SignInStateObserver;
-import org.chromium.chrome.browser.signin.ui.PersonalizedSigninPromoView;
-import org.chromium.chrome.browser.signin.ui.SigninPromoController;
+import org.chromium.chrome.browser.ui.signin.PersonalizedSigninPromoView;
+import org.chromium.chrome.browser.ui.signin.SigninPromoController;
 import org.chromium.components.signin.AccountManagerFacade;
 import org.chromium.components.signin.AccountManagerFacadeProvider;
 import org.chromium.components.signin.AccountsChangeObserver;
@@ -75,7 +74,8 @@ public class SyncPromoPreference extends Preference
         mAccountManagerFacade.addObserver(this);
         signinManager.addSignInStateObserver(this);
         mProfileDataCache.addObserver(this);
-        FirstRunSignInProcessor.updateSigninManagerFirstRunCheckDone();
+        mSigninPromoController = new SigninPromoController(
+                SigninAccessPoint.SETTINGS, SyncConsentActivityLauncherImpl.get());
 
         update();
     }
@@ -89,16 +89,7 @@ public class SyncPromoPreference extends Preference
         mAccountManagerFacade.removeObserver(this);
         signinManager.removeSignInStateObserver(this);
         mProfileDataCache.removeObserver(this);
-    }
-
-    /**
-     * Should be called when the {@link PreferenceFragmentCompat} which used {@link
-     * SyncPromoPreference} gets destroyed. Used to record "ImpressionsTilDismiss" histogram.
-     */
-    public void onPreferenceFragmentDestroyed() {
-        if (mSigninPromoController != null) {
-            mSigninPromoController.onPromoDestroyed();
-        }
+        mSigninPromoController = null;
     }
 
     /** Returns the state of the preference. Not valid until registerForUpdates is called. */
@@ -114,6 +105,14 @@ public class SyncPromoPreference extends Preference
 
     private void setState(@State int state) {
         if (mState == state) return;
+
+        final boolean hasStateChangedFromHiddenToShown = mState == State.PROMO_HIDDEN
+                && (state == State.PERSONALIZED_SIGNIN_PROMO
+                        || state == State.PERSONALIZED_SYNC_PROMO);
+        if (hasStateChangedFromHiddenToShown) {
+            mSigninPromoController.increasePromoShowCount();
+        }
+
         mState = state;
         assert mStateChangedCallback != null;
         mStateChangedCallback.run();
@@ -149,18 +148,11 @@ public class SyncPromoPreference extends Preference
         setState(state);
         setSelectable(false);
         setVisible(true);
-
-        if (mSigninPromoController == null) {
-            mSigninPromoController = new SigninPromoController(
-                    SigninAccessPoint.SETTINGS, SyncConsentActivityLauncherImpl.get());
-        }
-
         notifyChanged();
     }
 
     private void setupPromoHidden() {
         setState(State.PROMO_HIDDEN);
-        mSigninPromoController = null;
         setVisible(false);
     }
 
@@ -168,9 +160,8 @@ public class SyncPromoPreference extends Preference
     public void onBindViewHolder(PreferenceViewHolder holder) {
         super.onBindViewHolder(holder);
 
-        if (mSigninPromoController == null) {
-            return;
-        }
+        if (mState == State.PROMO_HIDDEN) return;
+
         PersonalizedSigninPromoView syncPromoView =
                 (PersonalizedSigninPromoView) holder.findViewById(R.id.signin_promo_view_container);
         mSigninPromoController.setUpSyncPromoView(

@@ -9,7 +9,6 @@
 #include "base/bind.h"
 #include "base/check_op.h"
 #include "base/command_line.h"
-#include "base/macros.h"
 #include "base/notreached.h"
 #include "base/strings/string_number_conversions.h"
 #include "components/cdm/renderer/external_clear_key_key_system_properties.h"
@@ -52,6 +51,9 @@ class TestRendererServiceImpl : public mojom::TestService {
     receiver_.set_disconnect_handler(base::BindOnce(
         &TestRendererServiceImpl::OnConnectionError, base::Unretained(this)));
   }
+
+  TestRendererServiceImpl(const TestRendererServiceImpl&) = delete;
+  TestRendererServiceImpl& operator=(const TestRendererServiceImpl&) = delete;
 
   ~TestRendererServiceImpl() override {}
 
@@ -110,8 +112,6 @@ class TestRendererServiceImpl : public mojom::TestService {
   }
 
   mojo::Receiver<mojom::TestService> receiver_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestRendererServiceImpl);
 };
 
 void CreateRendererTestService(
@@ -133,14 +133,16 @@ void ShellContentRendererClient::RenderThreadStarted() {
 
 void ShellContentRendererClient::ExposeInterfacesToBrowser(
     mojo::BinderMap* binders) {
-  binders->Add(base::BindRepeating(&CreateRendererTestService),
-               base::ThreadTaskRunnerHandle::Get());
-  binders->Add(
+  binders->Add<mojom::TestService>(
+      base::BindRepeating(&CreateRendererTestService),
+      base::ThreadTaskRunnerHandle::Get());
+  binders->Add<mojom::PowerMonitorTest>(
       base::BindRepeating(&PowerMonitorTestImpl::MakeSelfOwnedReceiver),
       base::ThreadTaskRunnerHandle::Get());
-  binders->Add(base::BindRepeating(&web_cache::WebCacheImpl::BindReceiver,
-                                   base::Unretained(web_cache_impl_.get())),
-               base::ThreadTaskRunnerHandle::Get());
+  binders->Add<web_cache::mojom::WebCache>(
+      base::BindRepeating(&web_cache::WebCacheImpl::BindReceiver,
+                          base::Unretained(web_cache_impl_.get())),
+      base::ThreadTaskRunnerHandle::Get());
 }
 
 void ShellContentRendererClient::RenderFrameCreated(RenderFrame* render_frame) {
@@ -154,6 +156,8 @@ void ShellContentRendererClient::PrepareErrorPage(
     RenderFrame* render_frame,
     const blink::WebURLError& error,
     const std::string& http_method,
+    content::mojom::AlternativeErrorPageOverrideInfoPtr
+        alternative_error_page_info,
     std::string* error_html) {
   if (error_html && error_html->empty()) {
     *error_html =
@@ -171,6 +175,8 @@ void ShellContentRendererClient::PrepareErrorPageForHttpStatusError(
     const blink::WebURLError& error,
     const std::string& http_method,
     int http_status,
+    content::mojom::AlternativeErrorPageOverrideInfoPtr
+        alternative_error_page_info,
     std::string* error_html) {
   if (error_html) {
     *error_html =
@@ -188,15 +194,12 @@ void ShellContentRendererClient::DidInitializeWorkerContextOnWorkerThread(
 }
 
 #if BUILDFLAG(ENABLE_MOJO_CDM)
-void ShellContentRendererClient::AddSupportedKeySystems(
-    std::vector<std::unique_ptr<media::KeySystemProperties>>* key_systems) {
-  if (!base::FeatureList::IsEnabled(media::kExternalClearKeyForTesting))
-    return;
-
-  static const char kExternalClearKeyKeySystem[] =
-      "org.chromium.externalclearkey";
-  key_systems->emplace_back(
-      new cdm::ExternalClearKeyProperties(kExternalClearKeyKeySystem));
+void ShellContentRendererClient::GetSupportedKeySystems(
+    media::GetSupportedKeySystemsCB cb) {
+  media::KeySystemPropertiesVector key_systems;
+  if (base::FeatureList::IsEnabled(media::kExternalClearKeyForTesting))
+    key_systems.push_back(std::make_unique<cdm::ExternalClearKeyProperties>());
+  std::move(cb).Run(std::move(key_systems));
 }
 #endif
 

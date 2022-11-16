@@ -4,6 +4,7 @@
 
 #include "services/media_session/public/cpp/media_position.h"
 
+#include "base/check.h"
 #include "base/strings/stringprintf.h"
 
 namespace media_session {
@@ -19,8 +20,8 @@ MediaPosition::MediaPosition(double playback_rate,
       position_(position),
       last_updated_time_(base::TimeTicks::Now()),
       end_of_media_(end_of_media) {
-  DCHECK(duration_ >= base::TimeDelta::FromSeconds(0));
-  DCHECK(position_ >= base::TimeDelta::FromSeconds(0));
+  DCHECK(duration_ >= base::Seconds(0));
+  DCHECK(position_ >= base::Seconds(0));
   DCHECK(position_ <= duration_);
 }
 
@@ -43,12 +44,21 @@ base::TimeDelta MediaPosition::GetPosition() const {
 }
 
 base::TimeDelta MediaPosition::GetPositionAtTime(base::TimeTicks time) const {
-  DCHECK(time >= last_updated_time_);
+  base::TimeDelta delta = time - last_updated_time_;
 
-  base::TimeDelta elapsed_time = playback_rate_ * (time - last_updated_time_);
+  // It's possible to get a time query that is *before* the last updated time
+  // since |time| and |last_updated_time| generally come from different
+  // processes. When we get a negative value, just assume effectively no time
+  // has passed.
+  if (delta.is_negative()) {
+    DCHECK(!base::TimeTicks::IsConsistentAcrossProcesses());
+    delta = base::Microseconds(0);
+  }
+
+  base::TimeDelta elapsed_time = playback_rate_ * delta;
   base::TimeDelta updated_position = position_ + elapsed_time;
 
-  base::TimeDelta start = base::TimeDelta::FromSeconds(0);
+  base::TimeDelta start = base::Seconds(0);
 
   if (updated_position <= start)
     return start;

@@ -10,9 +10,11 @@
 #include <vector>
 
 #include "base/bind.h"
+#include "base/command_line.h"
 #include "base/containers/contains.h"
 #include "base/files/file_util.h"
 #include "base/lazy_instance.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/path_service.h"
 #include "base/strings/strcat.h"
@@ -48,13 +50,9 @@
 #include "content/public/test/test_launcher.h"
 #include "content/public/test/test_navigation_observer.h"
 #include "net/base/filename_util.h"
-#include "printing/buildflags/buildflags.h"
 #include "services/network/public/mojom/content_security_policy.mojom.h"
+#include "ui/base/resource/resource_bundle.h"
 #include "ui/base/resource/resource_handle.h"
-
-#if BUILDFLAG(ENABLE_PRINT_PREVIEW)
-#include "chrome/browser/printing/print_preview_dialog_controller.h"
-#endif
 
 using content::RenderFrameHost;
 using content::WebContents;
@@ -100,7 +98,7 @@ class WebUIJsInjectionReadyObserver : public content::WebContentsObserver {
   }
 
  private:
-  BaseWebUIBrowserTest* const browser_test_;
+  const raw_ptr<BaseWebUIBrowserTest> browser_test_;
   std::string preload_test_fixture_;
   std::string preload_test_name_;
 };
@@ -115,22 +113,24 @@ class WebUITestMessageHandler : public content::WebUIMessageHandler,
   ~WebUITestMessageHandler() override = default;
 
   // Receives testResult messages.
-  void HandleTestResult(const base::ListValue* test_result) {
+  void HandleTestResult(const base::Value::List& list) {
     // To ensure this gets done, do this before ASSERT* calls.
     RunQuitClosure();
 
-    bool test_succeeded = false;
+    ASSERT_FALSE(list.empty());
+    const bool test_succeeded = list[0].is_bool() && list[0].GetBool();
     std::string message;
-    ASSERT_TRUE(test_result->GetBoolean(0, &test_succeeded));
-    if (!test_succeeded)
-      ASSERT_TRUE(test_result->GetString(1, &message));
+    if (!test_succeeded) {
+      ASSERT_EQ(2U, list.size());
+      message = list[1].GetString();
+    }
 
     TestComplete(test_succeeded ? absl::optional<std::string>() : message);
   }
 
   // content::WebUIMessageHandler:
   void RegisterMessages() override {
-    web_ui()->RegisterDeprecatedMessageCallback(
+    web_ui()->RegisterMessageCallback(
         "testResult",
         base::BindRepeating(&WebUITestMessageHandler::HandleTestResult,
                             base::Unretained(this)));
@@ -386,7 +386,7 @@ class PrintContentBrowserClient : public ChromeContentBrowserClient {
 
  private:
   // ChromeContentBrowserClient implementation:
-  content::WebContentsViewDelegate* GetWebContentsViewDelegate(
+  std::unique_ptr<content::WebContentsViewDelegate> GetWebContentsViewDelegate(
       content::WebContents* web_contents) override {
     preview_dialog_ = web_contents;
     observer_ = std::make_unique<WebUIJsInjectionReadyObserver>(
@@ -396,40 +396,14 @@ class PrintContentBrowserClient : public ChromeContentBrowserClient {
     return nullptr;
   }
 
-  BaseWebUIBrowserTest* const browser_test_;
+  const raw_ptr<BaseWebUIBrowserTest> browser_test_;
   std::unique_ptr<WebUIJsInjectionReadyObserver> observer_;
   std::string preload_test_fixture_;
   std::string preload_test_name_;
-  content::WebContents* preview_dialog_ = nullptr;
+  raw_ptr<content::WebContents> preview_dialog_ = nullptr;
   scoped_refptr<content::MessageLoopRunner> message_loop_runner_;
 };
 #endif
-
-void BaseWebUIBrowserTest::BrowsePrintPreload(const GURL& browse_to) {
-#if BUILDFLAG(ENABLE_PRINT_PREVIEW)
-  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), browse_to));
-
-  PrintContentBrowserClient new_client(
-      this, preload_test_fixture_, preload_test_name_);
-  content::ContentBrowserClient* old_client =
-      SetBrowserClientForTesting(&new_client);
-
-  chrome::Print(browser());
-  new_client.Wait();
-
-  SetBrowserClientForTesting(old_client);
-
-  printing::PrintPreviewDialogController* tab_controller =
-      printing::PrintPreviewDialogController::GetInstance();
-  ASSERT_TRUE(tab_controller);
-  WebContents* preview_dialog = tab_controller->GetPrintPreviewForContents(
-      browser()->tab_strip_model()->GetActiveWebContents());
-  ASSERT_TRUE(preview_dialog);
-  SetWebUIInstance(preview_dialog->GetWebUI());
-#else
-  NOTREACHED();
-#endif
-}
 
 BaseWebUIBrowserTest::BaseWebUIBrowserTest() = default;
 
@@ -530,6 +504,12 @@ void BaseWebUIBrowserTest::SetUpCommandLine(base::CommandLine* command_line) {
 
 void BaseWebUIBrowserTest::SetUpOnMainThread() {
   JavaScriptBrowserTest::SetUpOnMainThread();
+
+  base::FilePath pak_path;
+  ASSERT_TRUE(base::PathService::Get(base::DIR_ASSETS, &pak_path));
+  pak_path = pak_path.AppendASCII("browser_tests.pak");
+  ui::ResourceBundle::GetSharedInstance().AddDataPackFromPath(
+      pak_path, ui::kScaleFactorNone);
 
   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
   if (command_line->HasSwitch(switches::kDevtoolsCodeCoverage)) {

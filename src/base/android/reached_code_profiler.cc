@@ -26,12 +26,13 @@
 #include "base/no_destructor.h"
 #include "base/path_service.h"
 #include "base/scoped_generic.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/stringprintf.h"
 #include "base/synchronization/lock.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread.h"
+#include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "build/build_config.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -45,7 +46,7 @@ namespace android {
 
 namespace {
 
-#if !defined(NDEBUG) || defined(COMPONENT_BUILD)
+#if !defined(NDEBUG) || defined(COMPONENT_BUILD) || defined(OFFICIAL_BUILD)
 // Always disabled for debug builds to avoid hitting a limit of signal
 // interrupts that can get delivered into a single HANDLE_EINTR. Also
 // debugging experience would be bad if there are a lot of signals flying
@@ -53,6 +54,8 @@ namespace {
 // Always disabled for component builds because in this case the code is not
 // organized in one contiguous region which is required for the reached code
 // profiler.
+// Disabled for official builds because `g_text_bitfield` isn't included in
+// official builds.
 constexpr const bool kConfigurationSupported = false;
 #else
 constexpr const bool kConfigurationSupported = true;
@@ -64,9 +67,8 @@ constexpr uint64_t kIterationsBeforeSkipping = 50;
 constexpr uint64_t kIterationsBetweenUpdates = 100;
 constexpr int kProfilerSignal = SIGWINCH;
 
-constexpr base::TimeDelta kSamplingInterval =
-    base::TimeDelta::FromMilliseconds(10);
-constexpr base::TimeDelta kDumpInterval = base::TimeDelta::FromSeconds(30);
+constexpr base::TimeDelta kSamplingInterval = base::Milliseconds(10);
+constexpr base::TimeDelta kDumpInterval = base::Seconds(30);
 
 void HandleSignal(int signal, siginfo_t* info, void* context) {
   if (signal != kProfilerSignal)
@@ -122,6 +124,9 @@ class ReachedCodeProfiler {
     return instance.get();
   }
 
+  ReachedCodeProfiler(const ReachedCodeProfiler&) = delete;
+  ReachedCodeProfiler& operator=(const ReachedCodeProfiler&) = delete;
+
   // Starts to periodically send |kProfilerSignal| to all threads.
   void Start(LibraryProcessType library_process_type,
              base::TimeDelta sampling_interval) {
@@ -161,7 +166,8 @@ class ReachedCodeProfiler {
     // Start the interval timer.
     struct itimerspec its;
     memset(&its, 0, sizeof(its));
-    its.it_interval.tv_nsec = sampling_interval.InNanoseconds();
+    its.it_interval.tv_nsec =
+        checked_cast<long>(sampling_interval.InNanoseconds());
     its.it_value = its.it_interval;
     ret = timer_settime(timerid, 0, &its, nullptr);
     if (ret) {
@@ -234,9 +240,8 @@ class ReachedCodeProfiler {
 
     dumping_thread_ =
         std::make_unique<base::Thread>("ReachedCodeProfilerDumpingThread");
-    base::Thread::Options options;
-    options.priority = base::ThreadPriority::BACKGROUND;
-    dumping_thread_->StartWithOptions(std::move(options));
+    dumping_thread_->StartWithOptions(
+        base::Thread::Options(base::ThreadType::kBackground));
     dumping_thread_->task_runner()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&DumpToFile, file_path, dumping_thread_->task_runner()),
@@ -253,8 +258,6 @@ class ReachedCodeProfiler {
   bool is_enabled_;
 
   friend class NoDestructor<ReachedCodeProfiler>;
-
-  DISALLOW_COPY_AND_ASSIGN(ReachedCodeProfiler);
 };
 
 bool ShouldEnableReachedCodeProfiler() {
@@ -282,7 +285,7 @@ void InitReachedCodeProfilerAtStartup(LibraryProcessType library_process_type) {
               switches::kReachedCodeSamplingIntervalUs),
           &interval_us) &&
       interval_us > 0) {
-    sampling_interval = base::TimeDelta::FromMicroseconds(interval_us);
+    sampling_interval = base::Microseconds(interval_us);
   }
   ReachedCodeProfiler::GetInstance()->Start(library_process_type,
                                             sampling_interval);

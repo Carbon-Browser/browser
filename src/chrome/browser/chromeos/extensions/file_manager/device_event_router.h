@@ -8,9 +8,9 @@
 #include <map>
 #include <string>
 
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/threading/thread_checker.h"
+#include "base/time/time.h"
 #include "chrome/browser/ash/file_manager/volume_manager_observer.h"
 #include "chrome/browser/chromeos/extensions/file_manager/system_notification_manager.h"
 #include "chrome/common/extensions/api/file_manager_private.h"
@@ -38,14 +38,17 @@ class DeviceEventRouter : public VolumeManagerObserver,
   DeviceEventRouter(SystemNotificationManager* notificaton_manager,
                     base::TimeDelta overriding_time_delta);
 
+  DeviceEventRouter(const DeviceEventRouter&) = delete;
+  DeviceEventRouter& operator=(const DeviceEventRouter&) = delete;
+
   ~DeviceEventRouter() override;
 
   // Turns the startup flag on, and then turns it off after few seconds.
   void Startup();
 
   // VolumeManagerObserver overrides.
-  void OnDiskAdded(const chromeos::disks::Disk& disk, bool mounting) override;
-  void OnDiskRemoved(const chromeos::disks::Disk& disk) override;
+  void OnDiskAdded(const ash::disks::Disk& disk, bool mounting) override;
+  void OnDiskRemoved(const ash::disks::Disk& disk) override;
   void OnDeviceAdded(const std::string& device_path) override;
   void OnDeviceRemoved(const std::string& device_path) override;
   void OnVolumeMounted(chromeos::MountError error_code,
@@ -122,7 +125,6 @@ class DeviceEventRouter : public VolumeManagerObserver,
   // Note: This should remain the last member so it'll be destroyed and
   // invalidate the weak pointers before any other members are destroyed.
   base::WeakPtrFactory<DeviceEventRouter> weak_factory_{this};
-  DISALLOW_COPY_AND_ASSIGN(DeviceEventRouter);
 };
 }  // namespace file_manager
 

@@ -11,7 +11,6 @@
 
 #include "base/bind.h"
 #include "base/cxx17_backports.h"
-#include "base/macros.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "content/browser/browser_main_loop.h"
@@ -26,7 +25,7 @@
 #include "media/mojo/mojom/audio_logging.mojom.h"
 #include "services/audio/public/cpp/device_factory.h"
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include "media/audio/win/core_audio_util_win.h"
 #endif
 
@@ -45,6 +44,10 @@ class SpeechRecognizerImpl::OnDataConverter
  public:
   OnDataConverter(const AudioParameters& input_params,
                   const AudioParameters& output_params);
+
+  OnDataConverter(const OnDataConverter&) = delete;
+  OnDataConverter& operator=(const OnDataConverter&) = delete;
+
   ~OnDataConverter() override;
 
   // Converts input audio |data| bus into an AudioChunk where the input format
@@ -67,8 +70,6 @@ class SpeechRecognizerImpl::OnDataConverter
   const AudioParameters input_parameters_;
   const AudioParameters output_parameters_;
   bool data_was_converted_;
-
-  DISALLOW_COPY_AND_ASSIGN(OnDataConverter);
 };
 
 namespace {
@@ -595,7 +596,7 @@ SpeechRecognizerImpl::StartRecording(const FSMEventArgs&) {
   // TODO(henrika): this code should be moved to platform dependent audio
   // managers.
   bool use_native_audio_params = true;
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   use_native_audio_params = media::CoreAudioUtil::IsSupported();
   DVLOG_IF(1, !use_native_audio_params) << "Reverting to WaveIn for WebSpeech";
 #endif
@@ -872,7 +873,8 @@ void SpeechRecognizerImpl::SetAudioEnvironmentForTesting(
 }
 
 media::AudioSystem* SpeechRecognizerImpl::GetAudioSystem() {
-  return audio_system_for_tests_ ? audio_system_for_tests_ : audio_system_;
+  return audio_system_for_tests_ ? audio_system_for_tests_
+                                 : audio_system_.get();
 }
 
 void SpeechRecognizerImpl::CreateAudioCapturerSource() {

@@ -12,7 +12,6 @@
 #include "ash/app_list/model/search/search_model.h"
 #include "ash/app_list/views/search_result_base_view.h"
 #include "ash/ash_export.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_multi_source_observation.h"
 #include "ui/views/view.h"
@@ -40,6 +39,11 @@ class ASH_EXPORT SearchResultContainerView : public views::View,
     virtual void OnSearchResultContainerResultsChanged() = 0;
   };
   explicit SearchResultContainerView(AppListViewDelegate* view_delegate);
+
+  SearchResultContainerView(const SearchResultContainerView&) = delete;
+  SearchResultContainerView& operator=(const SearchResultContainerView&) =
+      delete;
+
   ~SearchResultContainerView() override;
 
   void set_delegate(Delegate* delegate) { delegate_ = delegate; }
@@ -52,12 +56,40 @@ class ASH_EXPORT SearchResultContainerView : public views::View,
 
   virtual SearchResultBaseView* GetResultViewAt(size_t index) = 0;
 
+  // Information needed to configure search result visibility animations when
+  // result updates are animated.
+  struct ResultsAnimationInfo {
+    // Total number of visible views (either title or result views).
+    int total_views = 0;
+
+    // The number of views that are animating (either title or result views).
+    int animating_views = 0;
+
+    // Whether fast search result update animations should be used.
+    bool use_short_animations = false;
+  };
+
+  // Schedules animations for result list updates. Expected to be implemented
+  // for search result containers that animate result updates.
+  // `aggregate_animation_info` The aggregated animation information for all
+  // search result containers that appear in the search results UI before this
+  // container.
+  // Returns the animation info for this container.
+  virtual absl::optional<ResultsAnimationInfo> ScheduleResultAnimations(
+      const ResultsAnimationInfo& aggregate_animation_info);
+
+  // Returns whether the container view has any animating child views.
+  virtual bool HasAnimatingChildView();
+
   bool horizontally_traversable() const { return horizontally_traversable_; }
 
   // Allows a container to define its traversal behavior
   void set_horizontally_traversable(bool horizontally_traversable) {
     horizontally_traversable_ = horizontally_traversable;
   }
+
+  // Called when the result selection controller updates its selected result.
+  virtual void OnSelectedResultChanged();
 
   // Batching method that actually performs the update and updates layout.
   void Update();
@@ -116,8 +148,6 @@ class ASH_EXPORT SearchResultContainerView : public views::View,
 
   // The factory that consolidates multiple Update calls into one.
   base::WeakPtrFactory<SearchResultContainerView> update_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(SearchResultContainerView);
 };
 
 }  // namespace ash

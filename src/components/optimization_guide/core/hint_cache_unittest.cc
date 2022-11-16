@@ -8,7 +8,7 @@
 
 #include "base/bind.h"
 #include "base/files/scoped_temp_dir.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/test/metrics/histogram_tester.h"
@@ -35,6 +35,9 @@ class HintCacheTest : public ProtoDatabaseProviderTestBase,
  public:
   HintCacheTest() : loaded_hint_(nullptr) {}
 
+  HintCacheTest(const HintCacheTest&) = delete;
+  HintCacheTest& operator=(const HintCacheTest&) = delete;
+
   ~HintCacheTest() override {}
 
   void SetUp() override { ProtoDatabaseProviderTestBase::SetUp(); }
@@ -54,10 +57,13 @@ class HintCacheTest : public ProtoDatabaseProviderTestBase,
     optimization_guide_store_ =
         IsBackedByPersistentStore()
             ? std::make_unique<OptimizationGuideStore>(
-                  db_provider_.get(), database_path, database_task_runner)
+                  db_provider_.get(), database_path, database_task_runner,
+                  /*pref_service_=*/nullptr)
             : nullptr;
-    hint_cache_ = std::make_unique<HintCache>(optimization_guide_store_.get(),
-                                              memory_cache_size);
+    hint_cache_ = std::make_unique<HintCache>(
+        optimization_guide_store_ ? optimization_guide_store_->AsWeakPtr()
+                                  : nullptr,
+        memory_cache_size);
     is_store_initialized_ = false;
     hint_cache_->Initialize(purge_existing_data,
                             base::BindOnce(&HintCacheTest::OnStoreInitialized,
@@ -168,14 +174,12 @@ class HintCacheTest : public ProtoDatabaseProviderTestBase,
 
   std::unique_ptr<OptimizationGuideStore> optimization_guide_store_;
   std::unique_ptr<HintCache> hint_cache_;
-  const proto::Hint* loaded_hint_;
+  raw_ptr<const proto::Hint> loaded_hint_;
 
   bool is_store_initialized_;
   bool are_component_hints_updated_;
   bool on_load_hint_callback_called_;
   bool are_fetched_hints_updated_;
-
-  DISALLOW_COPY_AND_ASSIGN(HintCacheTest);
 };
 
 INSTANTIATE_TEST_SUITE_P(WithPersistentStore,
@@ -600,7 +604,7 @@ TEST_P(HintCacheTest, ParseEmptyFetchedHints) {
   const int kMemoryCacheSize = 5;
   CreateAndInitializeHintCache(kMemoryCacheSize);
 
-  base::Time stored_time = base::Time().Now() + base::TimeDelta().FromDays(1);
+  base::Time stored_time = base::Time().Now() + base::Days(1);
   std::unique_ptr<proto::GetHintsResponse> get_hints_response =
       std::make_unique<proto::GetHintsResponse>();
 
@@ -656,8 +660,7 @@ TEST_P(HintCacheTest, StoreValidFetchedHintsWithServerProvidedExpiryTime) {
   EXPECT_TRUE(hint_cache()->GetHostKeyedHintIfLoaded("host.domain.org"));
 
   // Set time so hint should be expired.
-  MoveClockForwardBy(
-      base::TimeDelta::FromSeconds(kFetchedHintExpirationSecs + 1));
+  MoveClockForwardBy(base::Seconds(kFetchedHintExpirationSecs + 1));
   EXPECT_FALSE(hint_cache()->GetHostKeyedHintIfLoaded("host.domain.org"));
 }
 
@@ -695,7 +698,7 @@ TEST_P(HintCacheTest, StoreValidFetchedHintsWithDefaultExpiryTime) {
   // Set time so hint should be expired.
   MoveClockForwardBy(
       optimization_guide::features::StoredFetchedHintsFreshnessDuration() +
-      base::TimeDelta::FromSeconds(1));
+      base::Seconds(1));
   EXPECT_FALSE(hint_cache()->GetHostKeyedHintIfLoaded("host.domain.org"));
 }
 
@@ -741,7 +744,7 @@ TEST_P(HintCacheTest, URLKeyedHintExpired) {
 
   EXPECT_TRUE(hint_cache()->GetURLKeyedHint(url));
 
-  MoveClockForwardBy(base::TimeDelta().FromSeconds(cache_duration_in_secs + 1));
+  MoveClockForwardBy(base::Seconds(cache_duration_in_secs + 1));
   EXPECT_FALSE(hint_cache()->GetURLKeyedHint(url));
 }
 
@@ -786,7 +789,7 @@ TEST_P(HintCacheTest, PurgeExpiredFetchedHints) {
   EXPECT_TRUE(hint_cache()->HasHint("shouldpurge.com"));
   EXPECT_TRUE(hint_cache()->HasHint("notpurged.com"));
 
-  MoveClockForwardBy(base::TimeDelta().FromSeconds(cache_duration_in_secs + 1));
+  MoveClockForwardBy(base::Seconds(cache_duration_in_secs + 1));
 
   hint_cache()->PurgeExpiredFetchedHints();
   RunUntilIdle();

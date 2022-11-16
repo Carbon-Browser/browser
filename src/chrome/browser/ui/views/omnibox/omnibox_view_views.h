@@ -12,10 +12,11 @@
 #include <string>
 
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
+#include "base/time/time.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
-#include "chrome/browser/ui/send_tab_to_self/send_tab_to_self_sub_menu_model.h"
 #include "components/omnibox/browser/omnibox_view.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/search_engines/template_url_service.h"
@@ -33,7 +34,7 @@
 #include "ui/views/view.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "ui/base/ime/chromeos/input_method_manager.h"
+#include "ui/base/ime/ash/input_method_manager.h"
 #endif
 
 class LocationBarView;
@@ -53,15 +54,15 @@ class OSExchangeData;
 }  // namespace ui
 
 // Views-implementation of OmniboxView.
-class OmniboxViewViews : public OmniboxView,
-                         public views::Textfield,
+class OmniboxViewViews
+    : public OmniboxView,
+      public views::Textfield,
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-                         public chromeos::input_method::InputMethodManager::
-                             CandidateWindowObserver,
+      public ash::input_method::InputMethodManager::CandidateWindowObserver,
 #endif
-                         public views::TextfieldController,
-                         public ui::CompositorObserver,
-                         public TemplateURLServiceObserver {
+      public views::TextfieldController,
+      public ui::CompositorObserver,
+      public TemplateURLServiceObserver {
  public:
   METADATA_HEADER(OmniboxViewViews);
 
@@ -221,7 +222,7 @@ class OmniboxViewViews : public OmniboxView,
   // steady-state elisions).  |gesture| is the user gesture causing unelision.
   bool UnapplySteadyStateElisions(UnelisionGesture gesture);
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   void AnnounceFriendlySuggestionText();
 #endif
 
@@ -270,12 +271,12 @@ class OmniboxViewViews : public OmniboxView,
   void ExecuteTextEditCommand(ui::TextEditCommand command) override;
   bool ShouldShowPlaceholderText() const override;
 
-  // chromeos::input_method::InputMethodManager::CandidateWindowObserver:
+  // ash::input_method::InputMethodManager::CandidateWindowObserver:
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   void CandidateWindowOpened(
-      chromeos::input_method::InputMethodManager* manager) override;
+      ash::input_method::InputMethodManager* manager) override;
   void CandidateWindowClosed(
-      chromeos::input_method::InputMethodManager* manager) override;
+      ash::input_method::InputMethodManager* manager) override;
 #endif
 
   // views::TextfieldController:
@@ -318,6 +319,9 @@ class OmniboxViewViews : public OmniboxView,
   void PerformDrop(const ui::DropTargetEvent& event,
                    ui::mojom::DragOperation& output_drag_op);
 
+  // Helper method to construct part of the context menu.
+  void MaybeAddSendTabToSelfItem(ui::SimpleMenuModel* menu_contents);
+
   // When true, the location bar view is read only and also is has a slightly
   // different presentation (smaller font size). This is used for popups.
   bool popup_window_mode_;
@@ -336,7 +340,7 @@ class OmniboxViewViews : public OmniboxView,
   bool ime_composing_before_change_ = false;
 
   // |location_bar_view_| can be NULL in tests.
-  LocationBarView* location_bar_view_;
+  raw_ptr<LocationBarView> location_bar_view_;
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   // True if the IME candidate window is open. When this is true, we want to
@@ -406,10 +410,6 @@ class OmniboxViewViews : public OmniboxView,
       scoped_compositor_observation_{this};
   base::ScopedObservation<TemplateURLService, TemplateURLServiceObserver>
       scoped_template_url_service_observation_{this};
-
-  // Send tab to self submenu.
-  std::unique_ptr<send_tab_to_self::SendTabToSelfSubMenuModel>
-      send_tab_to_self_sub_menu_model_;
 
   PrefChangeRegistrar pref_change_registrar_;
 

@@ -7,13 +7,18 @@
 #include <memory>
 #include <utility>
 
+#include "ash/constants/notifier_catalogs.h"
 #include "ash/public/cpp/nearby_share_delegate.h"
 #include "ash/public/cpp/notification_utils.h"
+#include "ash/public/cpp/system/toast_data.h"
 #include "ash/public/cpp/system_tray_client.h"
 #include "ash/resources/vector_icons/vector_icons.h"
+#include "ash/services/nearby/public/cpp/nearby_client_uuids.h"
+#include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/system/model/system_tray_model.h"
+#include "ash/system/toast/toast_manager_impl.h"
 #include "ash/system/tray/tray_popup_utils.h"
 #include "base/bind.h"
 #include "base/callback.h"
@@ -21,9 +26,9 @@
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
-#include "chromeos/services/nearby/public/cpp/nearby_client_uuids.h"
 #include "device/bluetooth/bluetooth_adapter_factory.h"
 #include "device/bluetooth/bluetooth_device.h"
+#include "device/bluetooth/chromeos/bluetooth_utils.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/message_center/message_center.h"
 #include "ui/message_center/public/cpp/notification.h"
@@ -52,6 +57,11 @@ class BluetoothPairingNotificationDelegate
                                        const std::string& address,
                                        const std::string& notification_id);
 
+  BluetoothPairingNotificationDelegate(
+      const BluetoothPairingNotificationDelegate&) = delete;
+  BluetoothPairingNotificationDelegate& operator=(
+      const BluetoothPairingNotificationDelegate&) = delete;
+
  protected:
   ~BluetoothPairingNotificationDelegate() override;
 
@@ -72,8 +82,6 @@ class BluetoothPairingNotificationDelegate
   // Address of the device being paired.
   const std::string address_;
   const std::string notification_id_;
-
-  DISALLOW_COPY_AND_ASSIGN(BluetoothPairingNotificationDelegate);
 };
 
 BluetoothPairingNotificationDelegate::BluetoothPairingNotificationDelegate(
@@ -123,11 +131,17 @@ void BluetoothPairingNotificationDelegate::Click(
                                            false /* by_user */);
 }
 
+void ShowToast(const std::string& id,
+               ToastCatalogName catalog_name,
+               const std::u16string& text) {
+  ash::ToastManager::Get()->Show(ash::ToastData(id, catalog_name, text));
+}
+
 }  // namespace
 
-const char BluetoothNotificationController::
-    kBluetoothDeviceDiscoverableNotificationId[] =
-        "cros_bluetooth_device_discoverable_notification_id";
+const char
+    BluetoothNotificationController::kBluetoothDeviceDiscoverableToastId[] =
+        "cros_bluetooth_device_discoverable_toast_id";
 
 const char
     BluetoothNotificationController::kBluetoothDevicePairingNotificationId[] =
@@ -140,6 +154,11 @@ class BluetoothNotificationController::BluetoothPairedNotificationDelegate
  public:
   BluetoothPairedNotificationDelegate() = default;
 
+  BluetoothPairedNotificationDelegate(
+      const BluetoothPairedNotificationDelegate&) = delete;
+  BluetoothPairedNotificationDelegate& operator=(
+      const BluetoothPairedNotificationDelegate&) = delete;
+
  protected:
   ~BluetoothPairedNotificationDelegate() override = default;
 
@@ -149,9 +168,6 @@ class BluetoothNotificationController::BluetoothPairedNotificationDelegate
     if (TrayPopupUtils::CanOpenWebUISettings())
       Shell::Get()->system_tray_model()->client()->ShowBluetoothSettings();
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(BluetoothPairedNotificationDelegate);
 };
 
 BluetoothNotificationController::BluetoothNotificationController(
@@ -173,13 +189,8 @@ BluetoothNotificationController::~BluetoothNotificationController() {
 void BluetoothNotificationController::AdapterDiscoverableChanged(
     BluetoothAdapter* adapter,
     bool discoverable) {
-  if (discoverable) {
+  if (discoverable)
     NotifyAdapterDiscoverable();
-  } else {
-    // Clear any previous discoverable notification.
-    message_center_->RemoveNotification(
-        kBluetoothDeviceDiscoverableNotificationId, false /* by_user */);
-  }
 }
 
 void BluetoothNotificationController::DeviceAdded(BluetoothAdapter* adapter,
@@ -298,8 +309,12 @@ void BluetoothNotificationController::OnGetAdapter(
 }
 
 void BluetoothNotificationController::NotifyAdapterDiscoverable() {
+  // Do not show toast in kiosk app mode.
+  if (Shell::Get()->session_controller()->IsRunningInAppMode())
+    return;
+
   // If Nearby Share has made the local device discoverable, do not
-  // unnecessarily display this notification.
+  // unnecessarily display this toast.
   // TODO(crbug.com/1155669): Generalize this logic to prevent leaking Nearby
   // implementation details.
   auto* nearby_share_delegate = Shell::Get()->nearby_share_delegate();
@@ -309,19 +324,11 @@ void BluetoothNotificationController::NotifyAdapterDiscoverable() {
     return;
   }
 
-  message_center::RichNotificationData optional;
-  std::unique_ptr<Notification> notification = CreateSystemNotification(
-      message_center::NOTIFICATION_TYPE_SIMPLE,
-      kBluetoothDeviceDiscoverableNotificationId, std::u16string() /* title */,
+  ShowToast(
+      kBluetoothDeviceDiscoverableToastId,
+      ToastCatalogName::kBluetoothAdapterDiscoverable,
       l10n_util::GetStringFUTF16(IDS_ASH_STATUS_TRAY_BLUETOOTH_DISCOVERABLE,
-                                 base::UTF8ToUTF16(adapter_->GetName()),
-                                 base::UTF8ToUTF16(adapter_->GetAddress())),
-      std::u16string() /* display source */, GURL(),
-      message_center::NotifierId(message_center::NotifierType::SYSTEM_COMPONENT,
-                                 kNotifierBluetooth),
-      optional, nullptr, kNotificationBluetoothIcon,
-      message_center::SystemNotificationWarningLevel::NORMAL);
-  message_center_->AddNotification(std::move(notification));
+                                 base::UTF8ToUTF16(adapter_->GetName())));
 }
 
 void BluetoothNotificationController::NotifyPairing(
@@ -340,8 +347,9 @@ void BluetoothNotificationController::NotifyPairing(
       message_center::NOTIFICATION_TYPE_SIMPLE,
       kBluetoothDevicePairingNotificationId, std::u16string() /* title */,
       message, std::u16string() /* display source */, GURL(),
-      message_center::NotifierId(message_center::NotifierType::SYSTEM_COMPONENT,
-                                 kNotifierBluetooth),
+      message_center::NotifierId(
+          message_center::NotifierType::SYSTEM_COMPONENT, kNotifierBluetooth,
+          NotificationCatalogName::kBluetoothPairingRequest),
       optional,
       base::MakeRefCounted<BluetoothPairingNotificationDelegate>(
           adapter_, device->GetAddress(),
@@ -367,9 +375,16 @@ void BluetoothNotificationController::NotifyPairedDevice(
   // TODO(crbug.com/1155669): Generalize this logic to prevent leaking Nearby
   // implementation details.
   for (const auto& uuid : device->GetUUIDs()) {
-    if (chromeos::nearby::IsNearbyClientUuid(uuid)) {
+    if (nearby::IsNearbyClientUuid(uuid)) {
       return;
     }
+  }
+
+  // If bluetooth revamp flag is on, do not show a notification, this is
+  // because notifications will be handled by BluetoothDeviceStatusUiHandler
+  // when flag is on.
+  if (ash::features::IsBluetoothRevampEnabled()) {
+    return;
   }
 
   std::unique_ptr<Notification> notification = CreateSystemNotification(
@@ -378,13 +393,16 @@ void BluetoothNotificationController::NotifyPairedDevice(
       l10n_util::GetStringFUTF16(IDS_ASH_STATUS_TRAY_BLUETOOTH_PAIRED,
                                  device->GetNameForDisplay()),
       std::u16string() /* display source */, GURL(),
-      message_center::NotifierId(message_center::NotifierType::SYSTEM_COMPONENT,
-                                 kNotifierBluetooth),
+      message_center::NotifierId(
+          message_center::NotifierType::SYSTEM_COMPONENT, kNotifierBluetooth,
+          NotificationCatalogName::kBluetoothPairedDevice),
       message_center::RichNotificationData(),
       base::MakeRefCounted<BluetoothPairedNotificationDelegate>(),
       kNotificationBluetoothIcon,
       message_center::SystemNotificationWarningLevel::NORMAL);
   message_center_->AddNotification(std::move(notification));
+  device::RecordUiSurfaceDisplayed(
+      device::BluetoothUiSurface::kPairedNotification);
 }
 
 }  // namespace ash

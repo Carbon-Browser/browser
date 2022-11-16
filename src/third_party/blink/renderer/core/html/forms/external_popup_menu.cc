@@ -30,6 +30,7 @@
 
 #include "third_party/blink/renderer/core/html/forms/external_popup_menu.h"
 
+#include "base/numerics/safe_conversions.h"
 #include "build/build_config.h"
 #include "third_party/blink/public/common/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/common/input/web_coalesced_input_event.h"
@@ -38,6 +39,7 @@
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/renderer/core/dom/node_computed_style.h"
 #include "third_party/blink/renderer/core/events/current_input_event.h"
+#include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/exported/web_view_impl.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/frame/local_frame_view.h"
@@ -49,9 +51,9 @@
 #include "third_party/blink/renderer/core/page/chrome_client.h"
 #include "third_party/blink/renderer/core/page/page.h"
 #include "third_party/blink/renderer/core/style/computed_style.h"
-#include "third_party/blink/renderer/platform/geometry/float_quad.h"
-#include "third_party/blink/renderer/platform/geometry/int_point.h"
 #include "third_party/blink/renderer/platform/text/text_direction.h"
+#include "ui/gfx/geometry/point.h"
+#include "ui/gfx/geometry/quad_f.h"
 
 namespace blink {
 
@@ -63,9 +65,7 @@ float GetDprForSizeAdjustment(const Element& owner_element) {
 #ifndef OS_ANDROID
   LocalFrame* frame = owner_element.GetDocument().GetFrame();
   const Page* page = frame ? frame->GetPage() : nullptr;
-  if (Platform::Current()->IsUseZoomForDSFEnabled() && page) {
-    dpr = page->GetChromeClient().GetScreenInfo(*frame).device_scale_factor;
-  }
+  dpr = page->GetChromeClient().GetScreenInfo(*frame).device_scale_factor;
 #endif
   return dpr;
 }
@@ -117,22 +117,23 @@ bool ExternalPopupMenu::ShowInternal() {
     if (!layout_object || !layout_object->IsBox())
       return false;
     auto* box = To<LayoutBox>(layout_object);
-    IntRect rect = EnclosingIntRect(
-        box->LocalToAbsoluteRect(box->PhysicalBorderBoxRect()));
-    IntRect rect_in_viewport = local_frame_->View()->FrameToViewport(rect);
+    gfx::Rect rect =
+        ToEnclosingRect(box->LocalToAbsoluteRect(box->PhysicalBorderBoxRect()));
+    gfx::Rect rect_in_viewport = local_frame_->View()->FrameToViewport(rect);
     float scale_for_emulation = WebLocalFrameImpl::FromFrame(local_frame_)
                                     ->LocalRootFrameWidget()
                                     ->GetEmulatorScale();
 
     // rect_in_viewport needs to be in CSS pixels.
     float dpr = GetDprForSizeAdjustment(*owner_element_);
-    if (dpr != 1.0)
-      rect_in_viewport.Scale(1 / dpr);
+    if (dpr != 1.0) {
+      rect_in_viewport = gfx::ScaleToRoundedRect(rect_in_viewport, 1 / dpr);
+    }
 
     gfx::Rect bounds =
-        gfx::Rect(rect_in_viewport.X() * scale_for_emulation,
-                  rect_in_viewport.Y() * scale_for_emulation,
-                  rect_in_viewport.Width(), rect_in_viewport.Height());
+        gfx::Rect(rect_in_viewport.x() * scale_for_emulation,
+                  rect_in_viewport.y() * scale_for_emulation,
+                  rect_in_viewport.width(), rect_in_viewport.height());
     local_frame_->GetLocalFrameHostRemote().ShowPopupMenu(
         receiver_.BindNewPipeAndPassRemote(execution_context->GetTaskRunner(
             TaskType::kInternalUserInteraction)),
@@ -147,10 +148,10 @@ bool ExternalPopupMenu::ShowInternal() {
   return false;
 }
 
-void ExternalPopupMenu::Show() {
+void ExternalPopupMenu::Show(PopupMenu::ShowEventType) {
   if (!ShowInternal())
     return;
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   const WebInputEvent* current_event = CurrentInputEvent::Get();
   if (current_event &&
       current_event->GetType() == WebInputEvent::Type::kMouseDown) {
@@ -245,7 +246,7 @@ void ExternalPopupMenu::DidAcceptIndices(const Vector<int32_t>& indices) {
         ToPopupMenuItemIndex(indices[indices.size() - 1], *owner_element));
   } else {
     Vector<int> list_indices;
-    wtf_size_t list_count = SafeCast<wtf_size_t>(indices.size());
+    wtf_size_t list_count = base::checked_cast<wtf_size_t>(indices.size());
     list_indices.ReserveCapacity(list_count);
     for (wtf_size_t i = 0; i < list_count; ++i)
       list_indices.push_back(ToPopupMenuItemIndex(indices[i], *owner_element));

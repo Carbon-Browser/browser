@@ -25,9 +25,7 @@ import androidx.annotation.IdRes;
 import androidx.annotation.StringRes;
 import androidx.appcompat.widget.SwitchCompat;
 
-import org.chromium.base.ApiCompatibilityUtils;
 import org.chromium.chrome.R;
-import org.chromium.chrome.browser.flags.CachedFeatureFlags;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.components.content_settings.CookieControlsEnforcement;
 import org.chromium.ui.text.NoUnderlineClickableSpan;
@@ -46,7 +44,7 @@ public class LegacyIncognitoDescriptionView
     private TextView mHeader;
     private TextView mSubtitle;
     private LinearLayout mBulletpointsContainer;
-    // private TextView mLearnMore;
+    private TextView mLearnMore;
     private TextView[] mParagraphs;
     private RelativeLayout mCookieControlsCard;
     private SwitchCompat mCookieControlsToggle;
@@ -67,7 +65,7 @@ public class LegacyIncognitoDescriptionView
 
     @Override
     public void setLearnMoreOnclickListener(OnClickListener listener) {
-        // mLearnMore.setOnClickListener(listener);
+        mLearnMore.setOnClickListener(listener);
     }
 
     @Override
@@ -98,7 +96,7 @@ public class LegacyIncognitoDescriptionView
         mContainer = findViewById(R.id.new_tab_incognito_container);
         mHeader = findViewById(R.id.new_tab_incognito_title);
         mSubtitle = findViewById(R.id.new_tab_incognito_subtitle);
-        //mLearnMore = findViewById(R.id.learn_more);
+        mLearnMore = findViewById(R.id.learn_more);
         mParagraphs = new TextView[] {mSubtitle, findViewById(R.id.new_tab_incognito_features),
                 findViewById(R.id.new_tab_incognito_warning)};
         mBulletpointsContainer = findViewById(R.id.new_tab_incognito_bulletpoints_container);
@@ -164,8 +162,7 @@ public class LegacyIncognitoDescriptionView
 
         view.setText(SpanApplier.applySpans(text,
                 new SpanApplier.SpanInfo("<em>", "</em>",
-                        new ForegroundColorSpan(ApiCompatibilityUtils.getColor(
-                                getContext().getResources(), R.color.incognito_emphasis))),
+                        new ForegroundColorSpan(getContext().getColor(R.color.incognito_emphasis))),
                 new SpanApplier.SpanInfo("<li1>", "</li1>", new ChromeBulletSpan(getContext())),
                 new SpanApplier.SpanInfo("<li2>", "</li2>", new ChromeBulletSpan(getContext())),
                 new SpanApplier.SpanInfo("<li3>", "</li3>", new ChromeBulletSpan(getContext()))));
@@ -250,7 +247,7 @@ public class LegacyIncognitoDescriptionView
         // is not that tall, and already has some space. We want to have a
         // totalSpaceBetweenViews tall gap between the learn more text and the adjacent
         // elements. So add the difference as an additional margin.
-        /*int innerSpacing = (int) ((getContext().getResources().getDimensionPixelSize(
+        int innerSpacing = (int) ((getContext().getResources().getDimensionPixelSize(
                                            R.dimen.min_touch_target_size)
                                           - mLearnMore.getTextSize())
                 / 2);
@@ -261,7 +258,7 @@ public class LegacyIncognitoDescriptionView
 
         LinearLayout.LayoutParams params = (LayoutParams) mLearnMore.getLayoutParams();
         params.setMargins(0, learnMoreSpacingTop, 0, learnMoreSpacingBottom);
-        mLearnMore.requestLayout();*/
+        mLearnMore.requestLayout();
 
         ((LinearLayout.LayoutParams) mHeader.getLayoutParams())
                 .setMargins(0, totalSpaceBetweenViews, 0, 0);
@@ -287,13 +284,13 @@ public class LegacyIncognitoDescriptionView
 
     /** Adjust the "Learn More" link. */
     private void adjustLearnMore() {
-        boolean readLaterEnabled = CachedFeatureFlags.isEnabled(ChromeFeatureList.READ_LATER);
+        boolean readLaterEnabled = ChromeFeatureList.sReadLater.isEnabled();
         final String subtitleText = getContext().getResources().getString(readLaterEnabled
                         ? R.string.new_tab_otr_subtitle_with_reading_list
                         : R.string.new_tab_otr_subtitle);
         boolean learnMoreInSubtitle = mWidthDp > WIDE_LAYOUT_THRESHOLD_DP;
 
-        // mLearnMore.setVisibility(learnMoreInSubtitle ? View.GONE : View.VISIBLE);
+        mLearnMore.setVisibility(learnMoreInSubtitle ? View.GONE : View.VISIBLE);
 
         if (!learnMoreInSubtitle) {
             // Revert to the original text.
@@ -309,12 +306,12 @@ public class LegacyIncognitoDescriptionView
         concatenatedText.append(getContext().getResources().getString(R.string.learn_more));
         SpannableString textWithLearnMoreLink = new SpannableString(concatenatedText.toString());
 
-        // NoUnderlineClickableSpan span = new NoUnderlineClickableSpan(
-        //         getResources(), R.color.modern_blue_300, (view) -> mLearnMore.callOnClick());
-        // textWithLearnMoreLink.setSpan(
-        //         span, subtitleText.length() + 1, textWithLearnMoreLink.length(), 0 /* flags */);
-        // mSubtitle.setText(textWithLearnMoreLink);
-        // mSubtitle.setMovementMethod(LinkMovementMethod.getInstance());
+        NoUnderlineClickableSpan span = new NoUnderlineClickableSpan(
+                getContext(), R.color.modern_blue_300, (view) -> mLearnMore.callOnClick());
+        textWithLearnMoreLink.setSpan(
+                span, subtitleText.length() + 1, textWithLearnMoreLink.length(), 0 /* flags */);
+        mSubtitle.setText(textWithLearnMoreLink);
+        mSubtitle.setMovementMethod(LinkMovementMethod.getInstance());
     }
 
     /** Adjust the Cookie Controls Card. */

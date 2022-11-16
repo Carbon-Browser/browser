@@ -15,16 +15,17 @@ import org.chromium.base.jank_tracker.JankTracker;
 import org.chromium.base.supplier.BooleanSupplier;
 import org.chromium.base.supplier.DestroyableObservableSupplier;
 import org.chromium.base.supplier.Supplier;
+import org.chromium.chrome.browser.app.download.home.DownloadPage;
 import org.chromium.chrome.browser.bookmarks.BookmarkPage;
 import org.chromium.chrome.browser.browser_controls.BrowserControlsMarginSupplier;
 import org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider;
-import org.chromium.chrome.browser.download.DownloadPage;
 import org.chromium.chrome.browser.explore_sites.ExploreSitesPage;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.fullscreen.BrowserControlsManager;
 import org.chromium.chrome.browser.history.HistoryManagerUtils;
 import org.chromium.chrome.browser.history.HistoryPage;
 import org.chromium.chrome.browser.lifecycle.ActivityLifecycleDispatcher;
+import org.chromium.chrome.browser.management.ManagementPage;
 import org.chromium.chrome.browser.ntp.IncognitoNewTabPage;
 import org.chromium.chrome.browser.ntp.NewTabPage;
 import org.chromium.chrome.browser.ntp.NewTabPageUma;
@@ -33,10 +34,10 @@ import org.chromium.chrome.browser.ntp.RecentTabsPage;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.settings.SettingsLauncherImpl;
 import org.chromium.chrome.browser.share.ShareDelegate;
+import org.chromium.chrome.browser.share.crow.CrowButtonDelegate;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab.TabLaunchType;
 import org.chromium.chrome.browser.tab.state.CriticalPersistedTabData;
-import org.chromium.chrome.browser.tabmodel.TabCreatorManager;
 import org.chromium.chrome.browser.tabmodel.TabModelSelector;
 import org.chromium.chrome.browser.toolbar.top.Toolbar;
 import org.chromium.chrome.browser.ui.messages.snackbar.SnackbarManager;
@@ -65,9 +66,9 @@ public class NativePageFactory {
     private final WindowAndroid mWindowAndroid;
     private final Supplier<Long> mLastUserInteractionTimeSupplier;
     private final BooleanSupplier mHadWarmStartSupplier;
-    private final TabCreatorManager mTabCreatorManager;
     private final JankTracker mJankTracker;
     private final Supplier<Toolbar> mToolbarSupplier;
+    private final CrowButtonDelegate mCrowButtonDelegate;
     private NewTabPageUma mNewTabPageUma;
 
     private NativePageBuilder mNativePageBuilder;
@@ -82,9 +83,9 @@ public class NativePageFactory {
             @NonNull Supplier<ShareDelegate> shareDelegateSupplier,
             @NonNull WindowAndroid windowAndroid,
             @NonNull Supplier<Long> lastUserInteractionTimeSupplier,
-            @NonNull BooleanSupplier hadWarmStartSupplier,
-            @NonNull TabCreatorManager tabCreatorManager, @NonNull JankTracker jankTracker,
-            @NonNull Supplier<Toolbar> toolbarSupplier) {
+            @NonNull BooleanSupplier hadWarmStartSupplier, @NonNull JankTracker jankTracker,
+            @NonNull Supplier<Toolbar> toolbarSupplier,
+            @NonNull CrowButtonDelegate crowButtonDelegate) {
         mActivity = activity;
         mBottomSheetController = sheetController;
         mBrowserControlsManager = browserControlsManager;
@@ -96,9 +97,9 @@ public class NativePageFactory {
         mWindowAndroid = windowAndroid;
         mLastUserInteractionTimeSupplier = lastUserInteractionTimeSupplier;
         mHadWarmStartSupplier = hadWarmStartSupplier;
-        mTabCreatorManager = tabCreatorManager;
         mJankTracker = jankTracker;
         mToolbarSupplier = toolbarSupplier;
+        mCrowButtonDelegate = crowButtonDelegate;
     }
 
     private NativePageBuilder getBuilder() {
@@ -107,7 +108,7 @@ public class NativePageFactory {
                     new NativePageBuilder(mActivity, this::getNewTabPageUma, mBottomSheetController,
                             mBrowserControlsManager, mCurrentTabSupplier, mSnackbarManagerSupplier,
                             mLifecycleDispatcher, mTabModelSelector, mShareDelegateSupplier,
-                            mWindowAndroid, mTabCreatorManager, mJankTracker, mToolbarSupplier);
+                            mWindowAndroid, mJankTracker, mToolbarSupplier, mCrowButtonDelegate);
         }
         return mNativePageBuilder;
     }
@@ -133,9 +134,9 @@ public class NativePageFactory {
         private final TabModelSelector mTabModelSelector;
         private final Supplier<ShareDelegate> mShareDelegateSupplier;
         private final WindowAndroid mWindowAndroid;
-        private final TabCreatorManager mTabCreatorManager;
         private final JankTracker mJankTracker;
         private final Supplier<Toolbar> mToolbarSupplier;
+        private final CrowButtonDelegate mCrowButtonDelegate;
 
         public NativePageBuilder(Activity activity, Supplier<NewTabPageUma> uma,
                 BottomSheetController sheetController,
@@ -143,8 +144,8 @@ public class NativePageFactory {
                 Supplier<SnackbarManager> snackbarManagerSupplier,
                 ActivityLifecycleDispatcher lifecycleDispatcher, TabModelSelector tabModelSelector,
                 Supplier<ShareDelegate> shareDelegateSupplier, WindowAndroid windowAndroid,
-                TabCreatorManager tabCreatorManager, JankTracker jankTracker,
-                Supplier<Toolbar> toolbarSupplier) {
+                JankTracker jankTracker, Supplier<Toolbar> toolbarSupplier,
+                CrowButtonDelegate crowButtonDelegate) {
             mActivity = activity;
             mUma = uma;
             mBottomSheetController = sheetController;
@@ -155,9 +156,9 @@ public class NativePageFactory {
             mTabModelSelector = tabModelSelector;
             mShareDelegateSupplier = shareDelegateSupplier;
             mWindowAndroid = windowAndroid;
-            mTabCreatorManager = tabCreatorManager;
             mJankTracker = jankTracker;
             mToolbarSupplier = toolbarSupplier;
+            mCrowButtonDelegate = crowButtonDelegate;
         }
 
         protected NativePage buildNewTabPage(Tab tab, String url) {
@@ -170,7 +171,7 @@ public class NativePageFactory {
                     DeviceFormFactor.isWindowOnTablet(mWindowAndroid), mUma.get(),
                     ColorUtils.inNightMode(mActivity), nativePageHost, tab, url,
                     mBottomSheetController, mShareDelegateSupplier, mWindowAndroid, mJankTracker,
-                    mToolbarSupplier);
+                    mToolbarSupplier, new SettingsLauncherImpl(), mCrowButtonDelegate);
         }
 
         protected NativePage buildBookmarksPage(Tab tab) {
@@ -195,15 +196,15 @@ public class NativePageFactory {
                     mTabModelSelector);
         }
 
-        protected NativePage buildHistoryPage(Tab tab) {
+        protected NativePage buildHistoryPage(Tab tab, String url) {
             return new HistoryPage(mActivity,
                     new TabShim(tab, mBrowserControlsManager, mTabModelSelector),
                     mSnackbarManagerSupplier.get(), mTabModelSelector.isIncognitoSelected(),
-                    mTabCreatorManager, mCurrentTabSupplier);
+                    mCurrentTabSupplier, url);
         }
 
         protected NativePage buildRecentTabsPage(Tab tab) {
-            RecentTabsManager recentTabsManager = new RecentTabsManager(tab,
+            RecentTabsManager recentTabsManager = new RecentTabsManager(tab, mTabModelSelector,
                     Profile.fromWebContents(tab.getWebContents()), mActivity,
                     ()
                             -> HistoryManagerUtils.showHistoryManager(
@@ -222,6 +223,11 @@ public class NativePageFactory {
             } else {
                 return null;
             }
+        }
+
+        protected NativePage buildManagementPage(Tab tab) {
+            return new ManagementPage(new TabShim(tab, mBrowserControlsManager, mTabModelSelector),
+                    Profile.fromWebContents(tab.getWebContents()));
         }
     }
 
@@ -260,7 +266,7 @@ public class NativePageFactory {
                 page = getBuilder().buildDownloadsPage(tab);
                 break;
             case NativePageType.HISTORY:
-                page = getBuilder().buildHistoryPage(tab);
+                page = getBuilder().buildHistoryPage(tab, url);
                 break;
             case NativePageType.RECENT_TABS:
                 page = getBuilder().buildRecentTabsPage(tab);
@@ -270,6 +276,9 @@ public class NativePageFactory {
                 break;
             case NativePageType.LAUNCHPAD:
                 page = getBuilder().buildLaunchpadPage(tab);
+                break;
+            case NativePageType.MANAGEMENT:
+                page = getBuilder().buildManagementPage(tab);
                 break;
             default:
                 assert false;

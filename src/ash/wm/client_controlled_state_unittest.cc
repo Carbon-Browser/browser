@@ -16,7 +16,6 @@
 #include "ash/wm/window_state.h"
 #include "ash/wm/window_util.h"
 #include "ash/wm/wm_event.h"
-#include "base/macros.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/widget/widget_delegate.h"
@@ -33,6 +32,12 @@ class TestClientControlledStateDelegate
     : public ClientControlledState::Delegate {
  public:
   TestClientControlledStateDelegate() = default;
+
+  TestClientControlledStateDelegate(const TestClientControlledStateDelegate&) =
+      delete;
+  TestClientControlledStateDelegate& operator=(
+      const TestClientControlledStateDelegate&) = delete;
+
   ~TestClientControlledStateDelegate() override = default;
 
   void HandleWindowStateRequest(WindowState* window_state,
@@ -79,13 +84,15 @@ class TestClientControlledStateDelegate
   int64_t display_id_ = display::kInvalidDisplayId;
   gfx::Rect requested_bounds_;
   bool deleted_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(TestClientControlledStateDelegate);
 };
 
 class TestWidgetDelegate : public views::WidgetDelegateView {
  public:
   TestWidgetDelegate() = default;
+
+  TestWidgetDelegate(const TestWidgetDelegate&) = delete;
+  TestWidgetDelegate& operator=(const TestWidgetDelegate&) = delete;
+
   ~TestWidgetDelegate() override = default;
 
   void EnableSnap() {
@@ -93,9 +100,6 @@ class TestWidgetDelegate : public views::WidgetDelegateView {
     SetCanResize(true);
     GetWidget()->OnSizeConstraintsChanged();
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(TestWidgetDelegate);
 };
 
 }  // namespace
@@ -103,6 +107,11 @@ class TestWidgetDelegate : public views::WidgetDelegateView {
 class ClientControlledStateTest : public AshTestBase {
  public:
   ClientControlledStateTest() = default;
+
+  ClientControlledStateTest(const ClientControlledStateTest&) = delete;
+  ClientControlledStateTest& operator=(const ClientControlledStateTest&) =
+      delete;
+
   ~ClientControlledStateTest() override = default;
 
   void SetUp() override {
@@ -151,8 +160,6 @@ class ClientControlledStateTest : public AshTestBase {
   TestClientControlledStateDelegate* state_delegate_ = nullptr;
   TestWidgetDelegate* widget_delegate_ = nullptr;  // owned by itself.
   std::unique_ptr<views::Widget> widget_;
-
-  DISALLOW_COPY_AND_ASSIGN(ClientControlledStateTest);
 };
 
 // Make sure that calling Maximize()/Minimize()/Fullscreen() result in
@@ -218,9 +225,8 @@ TEST_F(ClientControlledStateTest, Minimize) {
 
   ::wm::Unminimize(widget()->GetNativeWindow());
   EXPECT_TRUE(widget()->IsMinimized());
-  EXPECT_EQ(ui::SHOW_STATE_NORMAL,
-            widget()->GetNativeWindow()->GetProperty(
-                aura::client::kPreMinimizedShowStateKey));
+  EXPECT_EQ(ui::SHOW_STATE_NORMAL, widget()->GetNativeWindow()->GetProperty(
+                                       aura::client::kRestoreShowStateKey));
   EXPECT_EQ(kInitialBounds, widget()->GetWindowBoundsInScreen());
   EXPECT_EQ(WindowStateType::kMinimized, delegate()->old_state());
   EXPECT_EQ(WindowStateType::kNormal, delegate()->new_state());
@@ -333,12 +339,12 @@ TEST_F(ClientControlledStateTest, SnapWindow) {
   ASSERT_FALSE(window_state()->CanSnap());
 
   // The event should be ignored.
-  const WMEvent snap_left_event(WM_EVENT_CYCLE_SNAP_PRIMARY);
+  const WindowSnapWMEvent snap_left_event(WM_EVENT_CYCLE_SNAP_PRIMARY);
   window_state()->OnWMEvent(&snap_left_event);
   EXPECT_FALSE(window_state()->IsSnapped());
   EXPECT_TRUE(delegate()->requested_bounds().IsEmpty());
 
-  const WMEvent snap_right_event(WM_EVENT_CYCLE_SNAP_SECONDARY);
+  const WindowSnapWMEvent snap_right_event(WM_EVENT_CYCLE_SNAP_SECONDARY);
   window_state()->OnWMEvent(&snap_right_event);
   EXPECT_FALSE(window_state()->IsSnapped());
   EXPECT_TRUE(delegate()->requested_bounds().IsEmpty());
@@ -380,7 +386,7 @@ TEST_F(ClientControlledStateTest, SnapInSecondaryDisplay) {
   widget_delegate()->EnableSnap();
 
   // Make sure the requested bounds for snapped window is local to display.
-  const WMEvent snap_left_event(WM_EVENT_CYCLE_SNAP_PRIMARY);
+  const WindowSnapWMEvent snap_left_event(WM_EVENT_CYCLE_SNAP_PRIMARY);
   window_state()->OnWMEvent(&snap_left_event);
 
   EXPECT_EQ(second_display_id, delegate()->display_id());
@@ -521,7 +527,7 @@ TEST_F(ClientControlledStateTest, ClosePinned) {
 }
 
 TEST_F(ClientControlledStateTest, MoveWindowToDisplay) {
-  UpdateDisplay("500x500, 500x500");
+  UpdateDisplay("600x500, 600x500");
 
   display::Screen* screen = display::Screen::GetScreen();
 
@@ -538,12 +544,12 @@ TEST_F(ClientControlledStateTest, MoveWindowToDisplay) {
 }
 
 TEST_F(ClientControlledStateTest, MoveWindowToDisplayOutOfBounds) {
-  UpdateDisplay("1000x500, 500x500");
+  UpdateDisplay("1000x500, 600x500");
 
   state()->set_bounds_locally(true);
-  widget()->SetBounds(gfx::Rect(600, 0, 100, 200));
+  widget()->SetBounds(gfx::Rect(700, 0, 100, 200));
   state()->set_bounds_locally(false);
-  EXPECT_EQ(gfx::Rect(600, 0, 100, 200), widget()->GetWindowBoundsInScreen());
+  EXPECT_EQ(gfx::Rect(700, 0, 100, 200), widget()->GetWindowBoundsInScreen());
 
   display::Screen* screen = display::Screen::GetScreen();
 
@@ -559,19 +565,19 @@ TEST_F(ClientControlledStateTest, MoveWindowToDisplayOutOfBounds) {
   // The bounds is constrained by
   // |AdjustBoundsToEnsureMinimumWindowVisibility| in the secondary
   // display.
-  EXPECT_EQ(gfx::Rect(475, 0, 100, 200), delegate()->requested_bounds());
+  EXPECT_EQ(gfx::Rect(575, 0, 100, 200), delegate()->requested_bounds());
 }
 
 // Make sure disconnecting primary notifies the display id change.
 TEST_F(ClientControlledStateTest, DisconnectPrimary) {
-  UpdateDisplay("500x500,500x500");
+  UpdateDisplay("600x500,600x500");
   SwapPrimaryDisplay();
   auto* screen = display::Screen::GetScreen();
   auto old_primary_id = screen->GetPrimaryDisplay().id();
   EXPECT_EQ(old_primary_id, window_state()->GetDisplay().id());
   gfx::Rect bounds = window()->bounds();
 
-  UpdateDisplay("500x500");
+  UpdateDisplay("600x500");
   ASSERT_NE(old_primary_id, screen->GetPrimaryDisplay().id());
   EXPECT_EQ(delegate()->display_id(), screen->GetPrimaryDisplay().id());
   EXPECT_EQ(bounds, delegate()->requested_bounds());

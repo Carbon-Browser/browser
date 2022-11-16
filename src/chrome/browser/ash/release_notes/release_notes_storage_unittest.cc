@@ -11,7 +11,6 @@
 #include "base/version.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/browser/policy/profile_policy_connector.h"
-#include "chrome/browser/supervised_user/supervised_user_constants.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chromeos/login/login_state/login_state.h"
@@ -34,6 +33,10 @@ namespace ash {
 
 class ReleaseNotesStorageTest : public testing::Test,
                                 public testing::WithParamInterface<bool> {
+ public:
+  ReleaseNotesStorageTest(const ReleaseNotesStorageTest&) = delete;
+  ReleaseNotesStorageTest& operator=(const ReleaseNotesStorageTest&) = delete;
+
  protected:
   ReleaseNotesStorageTest()
       : user_manager_(new FakeChromeUserManager()),
@@ -56,7 +59,7 @@ class ReleaseNotesStorageTest : public testing::Test,
         user_manager_->set_ephemeral_users_enabled(true);
       } else if (is_unicorn_) {
         user_manager_->set_current_user_child(true);
-        builder.SetSupervisedUserId(supervised_users::kChildAccountSUID);
+        builder.SetIsSupervisedProfile();
       }
     }
     profile_ = builder.Build();
@@ -84,8 +87,6 @@ class ReleaseNotesStorageTest : public testing::Test,
   bool is_managed_ = false;
   bool is_ephemeral_ = false;
   bool is_unicorn_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(ReleaseNotesStorageTest);
 };
 
 // Release notes are not shown for profiles that have been created in this

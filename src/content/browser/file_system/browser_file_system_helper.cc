@@ -13,10 +13,9 @@
 #include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
-#include "base/sequenced_task_runner.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/lazy_thread_pool_task_runner.h"
-#include "base/task/post_task.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "build/chromeos_buildflags.h"
 #include "content/browser/child_process_security_policy_impl.h"
@@ -84,13 +83,13 @@ void GrantReadAccessOnUIThread(int process_id,
   }
 }
 
-// Helper function that used by SyncGetPlatformPath() to get the platform
+// Helper function that used by GetPlatformPath() to get the platform
 // path, grant read access, and send return the path via a callback.
 void GetPlatformPathOnFileThread(
     scoped_refptr<storage::FileSystemContext> context,
     int process_id,
     const storage::FileSystemURL& url,
-    SyncGetPlatformPathCB callback,
+    DoGetPlatformPathCB callback,
     bool can_read_filesystem_file) {
   DCHECK(context->default_file_task_runner()->RunsTasksInCurrentSequence());
 
@@ -156,16 +155,16 @@ bool FileSystemURLIsValid(storage::FileSystemContext* context,
   return context->GetFileSystemBackend(url.type()) != nullptr;
 }
 
-void SyncGetPlatformPath(storage::FileSystemContext* context,
-                         int process_id,
-                         const GURL& path,
-                         SyncGetPlatformPathCB callback) {
+void DoGetPlatformPath(scoped_refptr<storage::FileSystemContext> context,
+                       int process_id,
+                       const GURL& path,
+                       const blink::StorageKey& storage_key,
+                       DoGetPlatformPathCB callback) {
   DCHECK(context->default_file_task_runner()->RunsTasksInCurrentSequence());
-  // TODO(https://crbug.com/1221308): determine whether StorageKey should be
-  // replaced with a more meaningful value
-  storage::FileSystemURL url(
-      context->CrackURL(path, blink::StorageKey(url::Origin::Create(path))));
-  if (!FileSystemURLIsValid(context, url)) {
+  DCHECK(callback);
+
+  storage::FileSystemURL url(context->CrackURL(path, storage_key));
+  if (!FileSystemURLIsValid(context.get(), url)) {
     // Note: Posting a task here so this function always returns
     // before the callback is called no matter which path is taken.
     base::ThreadPool::PostTask(
@@ -179,8 +178,7 @@ void SyncGetPlatformPath(storage::FileSystemContext* context,
   GetUIThreadTaskRunner({})->PostTaskAndReplyWithResult(
       FROM_HERE,
       base::BindOnce(&CheckCanReadFileSystemFileOnUIThread, process_id, url),
-      base::BindOnce(&GetPlatformPathOnFileThread,
-                     scoped_refptr<storage::FileSystemContext>(context),
+      base::BindOnce(&GetPlatformPathOnFileThread, std::move(context),
                      process_id, url, std::move(callback)));
 }
 
@@ -209,11 +207,14 @@ void PrepareDropDataForChildProcess(
   DCHECK(isolated_context);
 
   for (auto& file_system_file : drop_data->file_system_files) {
-    // TODO(https://crbug.com/1221308): determine whether StorageKey should be
-    // replaced with a more meaningful value
-    storage::FileSystemURL file_system_url = file_system_context->CrackURL(
-        file_system_file.url,
-        blink::StorageKey(url::Origin::Create(file_system_file.url)));
+    storage::FileSystemURL file_system_url =
+        file_system_context->CrackURLInFirstPartyContext(file_system_file.url);
+
+    // Sandboxed filesystem files should never be handled via this path, so
+    // assert that none are sent from the renderer (wrapping these won't work
+    // anyway).
+    DCHECK(file_system_url.type() != storage::kFileSystemTypePersistent);
+    DCHECK(file_system_url.type() != storage::kFileSystemTypeTemporary);
 
     std::string register_name;
     storage::IsolatedContext::ScopedFSHandle filesystem =

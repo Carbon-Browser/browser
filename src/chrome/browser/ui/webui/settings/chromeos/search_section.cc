@@ -15,14 +15,15 @@
 #include "chrome/browser/ash/assistant/assistant_util.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/webui/chromeos/assistant_optin/assistant_optin_utils.h"
+#include "chrome/browser/ui/webui/settings/ash/search/search_tag_registry.h"
 #include "chrome/browser/ui/webui/settings/chromeos/google_assistant_handler.h"
-#include "chrome/browser/ui/webui/settings/chromeos/search/search_tag_registry.h"
 #include "chrome/browser/ui/webui/settings/search_engines_handler.h"
 #include "chrome/browser/ui/webui/webui_util.h"
 #include "chrome/common/url_constants.h"
 #include "chrome/grit/generated_resources.h"
-#include "chromeos/services/assistant/public/cpp/assistant_prefs.h"
-#include "chromeos/services/assistant/public/cpp/features.h"
+#include "chromeos/ash/services/assistant/public/cpp/assistant_prefs.h"
+#include "chromeos/ash/services/assistant/public/cpp/features.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "components/language/core/browser/pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/web_ui_data_source.h"
@@ -36,22 +37,31 @@ namespace settings {
 namespace {
 
 bool ShouldShowQuickAnswersSettings() {
-  return ash::features::IsQuickAnswersV2Enabled() &&
-         ash::QuickAnswersState::Get() &&
-         ash::QuickAnswersState::Get()->is_eligible();
+  return QuickAnswersState::Get() && QuickAnswersState::Get()->is_eligible();
 }
 
 const std::vector<SearchConcept>& GetSearchPageSearchConcepts() {
-  static const base::NoDestructor<std::vector<SearchConcept>> tags({
-      {IDS_OS_SETTINGS_TAG_PREFERRED_SEARCH_ENGINE,
-       ShouldShowQuickAnswersSettings() ? mojom::kSearchSubpagePath
-                                        : mojom::kSearchAndAssistantSectionPath,
-       mojom::SearchResultIcon::kMagnifyingGlass,
-       mojom::SearchResultDefaultRank::kMedium,
-       mojom::SearchResultType::kSetting,
-       {.setting = mojom::Setting::kPreferredSearchEngine}},
-  });
-  return *tags;
+  if (ShouldShowQuickAnswersSettings()) {
+    static const base::NoDestructor<std::vector<SearchConcept>> tags({
+        {IDS_OS_SETTINGS_TAG_PREFERRED_SEARCH_ENGINE,
+         mojom::kSearchSubpagePath,
+         mojom::SearchResultIcon::kMagnifyingGlass,
+         mojom::SearchResultDefaultRank::kMedium,
+         mojom::SearchResultType::kSetting,
+         {.setting = mojom::Setting::kPreferredSearchEngine}},
+    });
+    return *tags;
+  } else {
+    static const base::NoDestructor<std::vector<SearchConcept>> tags({
+        {IDS_OS_SETTINGS_TAG_PREFERRED_SEARCH_ENGINE,
+         mojom::kSearchAndAssistantSectionPath,
+         mojom::SearchResultIcon::kMagnifyingGlass,
+         mojom::SearchResultDefaultRank::kMedium,
+         mojom::SearchResultType::kSetting,
+         {.setting = mojom::Setting::kPreferredSearchEngine}},
+    });
+    return *tags;
+  }
 }
 
 const std::vector<SearchConcept>& GetQuickAnswersSearchConcepts() {
@@ -195,11 +205,12 @@ void AddQuickAnswersStrings(content::WebUIDataSource* html_source) {
 
   html_source->AddLocalizedStrings(kLocalizedStrings);
 
-  html_source->AddBoolean("quickAnswersTranslationDisabled",
-                          ash::features::IsQuickAnswersV2TranslationDisabled());
+  html_source->AddBoolean(
+      "quickAnswersTranslationDisabled",
+      chromeos::features::IsQuickAnswersV2TranslationDisabled());
   html_source->AddBoolean(
       "quickAnswersSubToggleEnabled",
-      ash::features::IsQuickAnswersV2SettingsSubToggleEnabled());
+      chromeos::features::IsQuickAnswersV2SettingsSubToggleEnabled());
 }
 
 void AddGoogleAssistantStrings(content::WebUIDataSource* html_source) {
@@ -242,25 +253,6 @@ void AddGoogleAssistantStrings(content::WebUIDataSource* html_source) {
   html_source->AddBoolean("voiceMatchDisabled", !IsVoiceMatchAllowed());
 }
 
-const std::vector<mojom::Setting>& GetSearchSettings() {
-  static const base::NoDestructor<std::vector<mojom::Setting>> settings([] {
-    std::vector<mojom::Setting> base_settings{
-        mojom::Setting::kQuickAnswersOnOff,
-        mojom::Setting::kQuickAnswersDefinition,
-        mojom::Setting::kQuickAnswersTranslation,
-        mojom::Setting::kQuickAnswersUnitConversion,
-    };
-
-    if (ShouldShowQuickAnswersSettings()) {
-      base_settings.insert(base_settings.end(),
-                           mojom::Setting::kPreferredSearchEngine);
-    }
-
-    return base_settings;
-  }());
-  return *settings;
-}
-
 }  // namespace
 
 SearchSection::SearchSection(Profile* profile,
@@ -268,9 +260,6 @@ SearchSection::SearchSection(Profile* profile,
     : OsSettingsSection(profile, search_tag_registry) {
   SearchTagRegistry::ScopedTagUpdater updater = registry()->StartUpdate();
   updater.AddSearchTags(GetSearchPageSearchConcepts());
-
-  if (ShouldShowQuickAnswersSettings())
-    updater.AddSearchTags(GetQuickAnswersSearchConcepts());
 
   ash::AssistantState* assistant_state = ash::AssistantState::Get();
   if (IsAssistantAllowed() && assistant_state) {
@@ -280,8 +269,8 @@ SearchSection::SearchSection(Profile* profile,
     UpdateAssistantSearchTags();
   }
 
-  if (ShouldShowQuickAnswersSettings()) {
-    ash::QuickAnswersState::Get()->AddObserver(this);
+  if (QuickAnswersState::Get()) {
+    QuickAnswersState::Get()->AddObserver(this);
     UpdateQuickAnswersSearchTags();
   }
 }
@@ -309,6 +298,9 @@ void SearchSection::AddLoadTimeData(content::WebUIDataSource* html_source) {
 
   html_source->AddBoolean("shouldShowQuickAnswersSettings",
                           ShouldShowQuickAnswersSettings());
+  html_source->AddBoolean(
+      "syncSettingsCategorizationEnabled",
+      chromeos::features::IsSyncSettingsCategorizationEnabled());
   const bool is_assistant_allowed = IsAssistantAllowed();
   html_source->AddBoolean("isAssistantAllowed", is_assistant_allowed);
   html_source->AddLocalizedString("osSearchPageTitle",
@@ -354,6 +346,8 @@ bool SearchSection::LogMetric(mojom::Setting setting,
 }
 
 void SearchSection::RegisterHierarchy(HierarchyGenerator* generator) const {
+  // Register Preferred search engine as top level settings if Quick answers is
+  // not available.
   if (!ShouldShowQuickAnswersSettings())
     generator->RegisterTopLevelSetting(mojom::Setting::kPreferredSearchEngine);
 
@@ -362,8 +356,32 @@ void SearchSection::RegisterHierarchy(HierarchyGenerator* generator) const {
       IDS_SETTINGS_SEARCH_SUBPAGE_TITLE, mojom::Subpage::kSearch,
       mojom::SearchResultIcon::kMagnifyingGlass,
       mojom::SearchResultDefaultRank::kMedium, mojom::kSearchSubpagePath);
-  RegisterNestedSettingBulk(mojom::Subpage::kSearch, GetSearchSettings(),
-                            generator);
+  // Register Preferred search engine under Search subpage if Quick answers is
+  // available.
+  if (ShouldShowQuickAnswersSettings()) {
+    static constexpr mojom::Setting kSearchSettingsWithPreferredSearchEngine[] =
+        {
+            mojom::Setting::kQuickAnswersOnOff,
+            mojom::Setting::kQuickAnswersDefinition,
+            mojom::Setting::kQuickAnswersTranslation,
+            mojom::Setting::kQuickAnswersUnitConversion,
+            mojom::Setting::kPreferredSearchEngine,
+        };
+    RegisterNestedSettingBulk(mojom::Subpage::kSearch,
+                              kSearchSettingsWithPreferredSearchEngine,
+                              generator);
+  } else {
+    static constexpr mojom::Setting
+        kSearchSettingsWithoutPreferredSearchEngine[] = {
+            mojom::Setting::kQuickAnswersOnOff,
+            mojom::Setting::kQuickAnswersDefinition,
+            mojom::Setting::kQuickAnswersTranslation,
+            mojom::Setting::kQuickAnswersUnitConversion,
+        };
+    RegisterNestedSettingBulk(mojom::Subpage::kSearch,
+                              kSearchSettingsWithoutPreferredSearchEngine,
+                              generator);
+  }
 
   // Assistant.
   generator->RegisterTopLevelSubpage(
@@ -399,6 +417,10 @@ void SearchSection::OnAssistantHotwordEnabled(bool enabled) {
 }
 
 void SearchSection::OnSettingsEnabled(bool enabled) {
+  UpdateQuickAnswersSearchTags();
+}
+
+void SearchSection::OnEligibilityChanged(bool eligible) {
   UpdateQuickAnswersSearchTags();
 }
 
@@ -438,13 +460,20 @@ void SearchSection::UpdateAssistantSearchTags() {
 }
 
 void SearchSection::UpdateQuickAnswersSearchTags() {
-  DCHECK(ash::QuickAnswersState::Get());
+  DCHECK(QuickAnswersState::Get());
 
   SearchTagRegistry::ScopedTagUpdater updater = registry()->StartUpdate();
+
+  updater.RemoveSearchTags(GetQuickAnswersSearchConcepts());
   updater.RemoveSearchTags(GetQuickAnswersOnSearchConcepts());
 
-  if (ash::features::IsQuickAnswersV2SettingsSubToggleEnabled() &&
-      ash::QuickAnswersState::Get()->settings_enabled()) {
+  if (!ShouldShowQuickAnswersSettings())
+    return;
+
+  updater.AddSearchTags(GetQuickAnswersSearchConcepts());
+
+  if (chromeos::features::IsQuickAnswersV2SettingsSubToggleEnabled() &&
+      QuickAnswersState::Get()->settings_enabled()) {
     updater.AddSearchTags(GetQuickAnswersOnSearchConcepts());
   }
 }

@@ -114,9 +114,6 @@ PATH_SPECIFIC_ALLOWLISTED_LICENSES = {
     'base/third_party/icu': [  # http://crbug.com/98087
         'UNKNOWN',
     ],
-    'base/third_party/libevent': [  # http://crbug.com/98309
-        'UNKNOWN',
-    ],
     'buildtools/third_party/libc++/trunk/test': [
         # http://llvm.org/bugs/show_bug.cgi?id=25980
         'UNKNOWN',
@@ -402,6 +399,9 @@ PATH_SPECIFIC_ALLOWLISTED_LICENSES = {
     'third_party/lcov/contrib/galaxy/genflat.pl': [
         'GPL (v2 or later)',
     ],
+    'third_party/libevent': [  # http://crbug.com/98309
+        'UNKNOWN',
+    ],
     'third_party/libjpeg_turbo': [  # http://crbug.com/98314
         'UNKNOWN',
     ],
@@ -496,16 +496,6 @@ PATH_SPECIFIC_ALLOWLISTED_LICENSES = {
         'UNKNOWN',
     ],
     'third_party/pdfium/third_party/libtiff/uvcode.h': [
-        'UNKNOWN',
-    ],
-    'third_party/talloc': [
-        'GPL (v3 or later)',
-        'UNKNOWN',  # http://crbug.com/98588
-    ],
-    'third_party/tcmalloc': [
-        'UNKNOWN',  # http://crbug.com/98589
-    ],
-    'third_party/tlslite': [
         'UNKNOWN',
     ],
     # MIT license but some files contain no licensing info. e.g. autogen.sh.
@@ -645,6 +635,7 @@ def check_licenses(options, args):
   errors = []
 
   for line in stdout.splitlines():
+    line = line.decode('utf-8')
     filename, license = line.split(':', 1)
     filename = os.path.relpath(filename.strip(), options.base_directory)
 

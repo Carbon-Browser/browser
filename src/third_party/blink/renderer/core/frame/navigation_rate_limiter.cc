@@ -7,7 +7,7 @@
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/frame/settings.h"
 #include "third_party/blink/renderer/core/inspector/console_message.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 
 namespace blink {
 
@@ -31,7 +31,7 @@ bool NavigationRateLimiter::CanProceed() {
   // can increase this threshold somewhat.
   static constexpr int kStateUpdateLimit = 200;
   static constexpr base::TimeDelta kStateUpdateLimitResetInterval =
-      base::TimeDelta::FromSeconds(10);
+      base::Seconds(10);
 
   if (++count_ <= kStateUpdateLimit)
     return true;

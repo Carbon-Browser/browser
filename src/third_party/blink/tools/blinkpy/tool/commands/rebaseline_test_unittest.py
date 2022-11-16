@@ -27,6 +27,7 @@ class TestRebaselineTest(BaseTestCase):
                     'build_number': None,
                     'step_name': None,
                     'flag_specific': None,
+                    'resultDB': None,
                 }, **kwargs))
 
     def test_rebaseline_test_internal_with_port_that_lacks_buildbot(self):
@@ -40,7 +41,7 @@ class TestRebaselineTest(BaseTestCase):
         actual_result_url = (
             'https://test-results.appspot.com/data/layout_results/MOCK_Win10/'
             + 'results/layout-test-results/failures/expected/image-actual.txt')
-        self.tool.web.urls[actual_result_url] = 'new win10 result'
+        self.tool.web.urls[actual_result_url] = b'new win10 result'
 
         oc = OutputCapture()
         try:
@@ -55,6 +56,7 @@ class TestRebaselineTest(BaseTestCase):
                 'build_number': None,
                 'step_name': None,
                 'flag_specific': None,
+                'resultDB': None,
             })
             oc.capture_output()
             self.command.execute(options, [], self.tool)
@@ -119,7 +121,7 @@ class TestRebaselineTest(BaseTestCase):
     def test_rebaseline_test(self):
         # pylint: disable=protected-access
         actual_result_url = self.WEB_PREFIX + '/userscripts/another-test-actual.txt'
-        self.tool.web.urls[actual_result_url] = 'new result'
+        self.tool.web.urls[actual_result_url] = b'new result'
         self.command._rebaseline_test('test-linux-trusty',
                                       'userscripts/another-test.html', 'txt',
                                       self.WEB_PREFIX)
@@ -136,7 +138,7 @@ class TestRebaselineTest(BaseTestCase):
     def test_rebaseline_test_empty_result(self):
         # pylint: disable=protected-access
         actual_result_url = self.WEB_PREFIX + '/userscripts/another-test-actual.txt'
-        self.tool.web.urls[actual_result_url] = ''
+        self.tool.web.urls[actual_result_url] = b''
         self.command._rebaseline_test('test-linux-trusty',
                                       'userscripts/another-test.html', 'txt',
                                       self.WEB_PREFIX)

@@ -5,8 +5,12 @@
 #ifndef CHROME_BROWSER_UI_ASH_CAPTURE_MODE_CHROME_CAPTURE_MODE_DELEGATE_H_
 #define CHROME_BROWSER_UI_ASH_CAPTURE_MODE_CHROME_CAPTURE_MODE_DELEGATE_H_
 
+#include "ash/components/drivefs/mojom/drivefs.mojom-forward.h"
 #include "ash/public/cpp/capture_mode/capture_mode_delegate.h"
 #include "base/callback.h"
+#include "base/files/file_path.h"
+#include "base/memory/weak_ptr.h"
+#include "components/drive/file_errors.h"
 
 // Implements the interface needed for the delegate of the Capture Mode feature
 // in Chrome.
@@ -28,23 +32,29 @@ class ChromeCaptureModeDelegate : public ash::CaptureModeDelegate {
 
   // Interrupts an on going video recording if any, due to some restricted
   // content showing up on the screen, or if screen capture becomes locked.
-  void InterruptVideoRecordingIfAny();
+  // Returns true if a video recording was interrupted, and false otherwise.
+  bool InterruptVideoRecordingIfAny();
 
   // ash::CaptureModeDelegate:
-  base::FilePath GetScreenCaptureDir() const override;
+  base::FilePath GetUserDefaultDownloadsFolder() const override;
   void ShowScreenCaptureItemInFolder(const base::FilePath& file_path) override;
   void OpenScreenshotInImageEditor(const base::FilePath& file_path) override;
   bool Uses24HourFormat() const override;
-  bool IsCaptureModeInitRestrictedByDlp() const override;
-  bool IsCaptureAllowedByDlp(const aura::Window* window,
-                             const gfx::Rect& bounds,
-                             bool for_video) const override;
+  void CheckCaptureModeInitRestrictionByDlp(
+      ash::OnCaptureModeDlpRestrictionChecked callback) override;
+  void CheckCaptureOperationRestrictionByDlp(
+      const aura::Window* window,
+      const gfx::Rect& bounds,
+      ash::OnCaptureModeDlpRestrictionChecked callback) override;
   bool IsCaptureAllowedByPolicy() const override;
   void StartObservingRestrictedContent(
       const aura::Window* window,
       const gfx::Rect& bounds,
       base::OnceClosure stop_callback) override;
-  void StopObservingRestrictedContent() override;
+  void StopObservingRestrictedContent(
+      ash::OnCaptureModeDlpRestrictionChecked callback) override;
+  void OnCaptureImageAttempted(const aura::Window* window,
+                               const gfx::Rect& bounds) override;
   mojo::Remote<recording::mojom::RecordingService> LaunchRecordingService()
       override;
   void BindAudioStreamFactory(
@@ -52,8 +62,24 @@ class ChromeCaptureModeDelegate : public ash::CaptureModeDelegate {
       override;
   void OnSessionStateChanged(bool started) override;
   void OnServiceRemoteReset() override;
+  bool GetDriveFsMountPointPath(base::FilePath* path) const override;
+  base::FilePath GetAndroidFilesPath() const override;
+  base::FilePath GetLinuxFilesPath() const override;
+  std::unique_ptr<ash::RecordingOverlayView> CreateRecordingOverlayView()
+      const override;
+  void ConnectToVideoSourceProvider(
+      mojo::PendingReceiver<video_capture::mojom::VideoSourceProvider> receiver)
+      override;
+  void GetDriveFsFreeSpaceBytes(ash::OnGotDriveFsFreeSpace callback) override;
+  bool IsCameraDisabledByPolicy() const override;
 
  private:
+  // Called back by the Drive integration service when the quota usage is
+  // retrieved.
+  void OnGetDriveQuotaUsage(ash::OnGotDriveFsFreeSpace callback,
+                            drive::FileError error,
+                            drivefs::mojom::QuotaUsagePtr usage);
+
   // Used to temporarily disable capture mode in certain cases for which neither
   // a device policy, nor DLP will be triggered. For example, Some extension
   // APIs can request that a tab operate in a locked fullscreen mode, and in
@@ -68,6 +94,8 @@ class ChromeCaptureModeDelegate : public ash::CaptureModeDelegate {
 
   // True when a capture mode session is currently active.
   bool is_session_active_ = false;
+
+  base::WeakPtrFactory<ChromeCaptureModeDelegate> weak_ptr_factory_{this};
 };
 
 #endif  // CHROME_BROWSER_UI_ASH_CAPTURE_MODE_CHROME_CAPTURE_MODE_DELEGATE_H_

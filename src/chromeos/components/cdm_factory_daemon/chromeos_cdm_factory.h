@@ -9,11 +9,14 @@
 
 #include "base/callback.h"
 #include "base/component_export.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
+#include "build/chromeos_buildflags.h"
 #include "chromeos/components/cdm_factory_daemon/mojom/browser_cdm_factory.mojom.h"
 #include "chromeos/components/cdm_factory_daemon/mojom/cdm_factory_daemon.mojom.h"
 #include "media/base/cdm_config.h"
+#include "media/base/cdm_context.h"
 #include "media/base/cdm_factory.h"
 #include "media/mojo/mojom/cdm_document_service.mojom.h"
 #include "media/mojo/mojom/frame_interface_factory.mojom.h"
@@ -45,7 +48,6 @@ class COMPONENT_EXPORT(CDM_FACTORY_DAEMON) ChromeOsCdmFactory
 
   // media::CdmFactory implementation.
   void Create(
-      const std::string& key_system,
       const media::CdmConfig& cdm_config,
       const media::SessionMessageCB& session_message_cb,
       const media::SessionClosedCB& session_closed_cb,
@@ -66,9 +68,24 @@ class COMPONENT_EXPORT(CDM_FACTORY_DAEMON) ChromeOsCdmFactory
   // our decode target size.
   static void GetScreenResolutions(GetScreenResolutionsCB callback);
 
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  // Invoked in the OOP Video Decoder utility process to set the Mojo connection
+  // back to the browser process. Normally the GPU process has a Mojo connection
+  // to the browser process for this purpose. When we launch an OOP Video
+  // Decoder Process from the browser process, we pass a mojo::Remote to it so
+  // the OOP Video Decoder process can then invoke cdm::mojom::BrowserCdmFactory
+  // calls that are received by the browser process just like they would if it
+  // was being handled in the GPU process.
+  static void SetBrowserCdmFactoryRemote(
+      mojo::Remote<cdm::mojom::BrowserCdmFactory> remote);
+
+  // Returns a singleton pointer that can be used as the media::CdmContext for
+  // ARC video decode operations.
+  static media::CdmContext* GetArcCdmContext();
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
  private:
   void OnVerifiedAccessEnabled(
-      const std::string& key_system,
       const media::CdmConfig& cdm_config,
       const media::SessionMessageCB& session_message_cb,
       const media::SessionClosedCB& session_closed_cb,
@@ -94,7 +111,7 @@ class COMPONENT_EXPORT(CDM_FACTORY_DAEMON) ChromeOsCdmFactory
   void OnFactoryMojoConnectionError();
   void OnVerificationMojoConnectionError();
 
-  media::mojom::FrameInterfaceFactory* frame_interfaces_;
+  raw_ptr<media::mojom::FrameInterfaceFactory> frame_interfaces_;
   mojo::Remote<cdm::mojom::CdmFactory> remote_factory_;
   mojo::Remote<media::mojom::CdmDocumentService> cdm_document_service_;
 

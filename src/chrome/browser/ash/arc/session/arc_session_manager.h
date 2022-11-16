@@ -10,32 +10,36 @@
 #include <string>
 #include <utility>
 
-#include "base/macros.h"
+#include "ash/components/arc/session/arc_session_runner.h"
+#include "ash/components/arc/session/arc_stop_reason.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
+#include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "chrome/browser/ash/arc/arc_support_host.h"
 #include "chrome/browser/ash/arc/session/adb_sideloading_availability_delegate_impl.h"
 #include "chrome/browser/ash/arc/session/arc_app_id_provider_impl.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager_observer.h"
+#include "chrome/browser/ash/guest_os/public/guest_os_mount_provider_registry.h"
 #include "chrome/browser/ash/policy/arc/android_management_client.h"
-#include "chromeos/dbus/concierge/concierge_client.h"
-#include "chromeos/dbus/session_manager/session_manager_client.h"
-#include "components/arc/session/arc_session_runner.h"
-#include "components/arc/session/arc_stop_reason.h"
+#include "chromeos/ash/components/dbus/concierge/concierge_client.h"
+#include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
 #include "components/policy/core/common/policy_service.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/abseil-cpp/absl/types/variant.h"
 
 class ArcAppLauncher;
-class PrefService;
 class Profile;
 
 namespace arc {
 
-constexpr const char kGeneratedPropertyFilesPath[] = "/run/arc/host_generated";
-constexpr const char kGeneratedPropertyFilesPathVm[] =
-    "/run/arcvm/host_generated";
+// The file exists only when ARC container is in use.
+constexpr const char kGeneratedBuildPropertyFilePath[] =
+    "/run/arc/host_generated/build.prop";
+
+// The file exists only when ARCVM is in use.
+constexpr const char kGeneratedCombinedPropertyFilePathVm[] =
+    "/run/arcvm/host_generated/combined.prop";
 
 class ArcAndroidManagementChecker;
 class ArcDataRemover;
@@ -52,8 +56,8 @@ enum class ArcStopReason;
 // This class is responsible for handing stages of ARC life-cycle.
 class ArcSessionManager : public ArcSessionRunner::Observer,
                           public ArcSupportHost::ErrorDelegate,
-                          public chromeos::SessionManagerClient::Observer,
-                          public chromeos::ConciergeClient::VmObserver,
+                          public ash::SessionManagerClient::Observer,
+                          public ash::ConciergeClient::VmObserver,
                           public policy::PolicyService::Observer {
  public:
   // Represents each State of ARC session.
@@ -123,6 +127,10 @@ class ArcSessionManager : public ArcSessionRunner::Observer,
   ArcSessionManager(std::unique_ptr<ArcSessionRunner> arc_session_runner,
                     std::unique_ptr<AdbSideloadingAvailabilityDelegateImpl>
                         adb_sideloading_availability_delegate);
+
+  ArcSessionManager(const ArcSessionManager&) = delete;
+  ArcSessionManager& operator=(const ArcSessionManager&) = delete;
+
   ~ArcSessionManager() override;
 
   static ArcSessionManager* Get();
@@ -130,15 +138,6 @@ class ArcSessionManager : public ArcSessionRunner::Observer,
   static void SetUiEnabledForTesting(bool enabled);
   static void SetArcTermsOfServiceOobeNegotiatorEnabledForTesting(bool enabled);
   static void EnableCheckAndroidManagementForTesting(bool enable);
-  static std::string GenerateFakeSerialNumberForTesting(
-      const std::string& chromeos_user,
-      const std::string& salt);
-  static std::string GetOrCreateSerialNumberForTesting(
-      PrefService* local_state,
-      const std::string& chromeos_user,
-      const std::string& arc_salt_on_disk);
-  static bool ReadSaltOnDiskForTesting(const base::FilePath& salt_path,
-                                       std::string* out_salt);
 
   // Returns true if ARC is allowed to run for the current session.
   // TODO(hidehiko): The name is very close to IsArcAllowedForProfile(), but
@@ -197,12 +196,26 @@ class ArcSessionManager : public ArcSessionRunner::Observer,
   // If it is already requested to disable, no-op.
   void RequestDisable();
 
+  // Requests to disable ARC session and remove ARC data.
+  // If it is already requested to disable, no-op.
+  void RequestDisableWithArcDataRemoval();
+
   // Requests to remove the ARC data.
   // If ARC is stopped, triggers to remove the data. Otherwise, queues to
   // remove the data after ARC stops.
   // A log statement with the removal reason must be added prior to calling
   // this.
   void RequestArcDataRemoval();
+
+  // Stops ARC instance without removing user ARC data.
+  // Unlike RequestDisable(), this doesn't clear user ARC prefs, and ARC is not
+  // supposed to restart within the same user session.
+  // NOTE: This method should be used only for the purpose of stopping ARC
+  //       under low disk space.
+  // TODO(b/236325019): Remove this once ArcSessionManager officially supports
+  //       a method to stop ARC without clearing user ARC prefs, or when we
+  //       remove ArcDiskSpaceMonitor after Storage Balloon is ready.
+  void RequestStopOnLowDiskSpace();
 
   // ArcSupportHost:::ErrorDelegate:
   void OnWindowClosed() override;
@@ -229,10 +242,11 @@ class ArcSessionManager : public ArcSessionRunner::Observer,
   // A helper function that calls ArcSessionRunner's SetUserInfo.
   void SetUserInfo();
 
-  // Trims VM's memory by moving it to zram. |callback| is called when the
-  // operation is done.
+  // Trims VM's memory by moving it to zram.
+  // When the operation is done |callback| is called.
+  // If nonzero, |page_limit| defines the max number of pages to reclaim.
   using TrimVmMemoryCallback = ArcSessionRunner::TrimVmMemoryCallback;
-  void TrimVmMemory(TrimVmMemoryCallback callback);
+  void TrimVmMemory(TrimVmMemoryCallback callback, int page_limit);
 
   // Returns the time when ARC was pre-started (mini-ARC start), or a null time
   // if ARC has not been pre-started yet.
@@ -281,7 +295,7 @@ class ArcSessionManager : public ArcSessionRunner::Observer,
 
   // Invoking StartArc() only for testing, e.g., to emulate accepting Terms of
   // Service then passing Android management check successfully.
-  void StartArcForTesting() { StartArc(); }
+  void StartArcForTesting();
 
   // Invokes OnTermsOfServiceNegotiated as if negotiation is done for testing.
   void OnTermsOfServiceNegotiatedForTesting(bool accepted) {
@@ -301,7 +315,7 @@ class ArcSessionManager : public ArcSessionRunner::Observer,
     property_files_expansion_result_.reset();
   }
 
-  // chromeos::ConciergeClient::VmObserver overrides.
+  // ash::ConciergeClient::VmObserver overrides.
   void OnVmStarted(
       const vm_tools::concierge::VmStartedSignal& vm_signal) override;
   void OnVmStopped(
@@ -323,6 +337,10 @@ class ArcSessionManager : public ArcSessionRunner::Observer,
  private:
   // Reports statuses of OptIn flow to UMA.
   class ScopedOptInFlowTracker;
+
+  // Requests to disable ARC session and allows to optionally remove ARC data.
+  // If ARC is already disabled, no-op.
+  void RequestDisable(bool remove_arc_data);
 
   // RequestEnable() has a check in order not to trigger starting procedure
   // twice. This method can be called to bypass that check when restarting.
@@ -404,7 +422,7 @@ class ArcSessionManager : public ArcSessionRunner::Observer,
                                bool should_show_send_feedback,
                                bool should_show_run_network_tests);
 
-  // chromeos::SessionManagerClient::Observer:
+  // ash::SessionManagerClient::Observer:
   void EmitLoginPromptVisibleCalled() override;
 
   // Called when the first part of ExpandPropertyFilesAndReadSalt is done.
@@ -477,10 +495,11 @@ class ArcSessionManager : public ArcSessionRunner::Observer,
 
   std::unique_ptr<ArcDlcInstaller> arc_dlc_installer_;
 
+  absl::optional<guest_os::GuestOsMountProviderRegistry::Id>
+      arcvm_mount_provider_id_;
+
   // Must be the last member.
   base::WeakPtrFactory<ArcSessionManager> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ArcSessionManager);
 };
 
 // Outputs the stringified |state| to |os|. This is only for logging purposes.

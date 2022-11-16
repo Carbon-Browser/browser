@@ -7,8 +7,9 @@
 
 #include <memory>
 
-#include "base/macros.h"
-#include "base/sequenced_task_runner.h"
+#include "base/memory/raw_ptr.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/time/time.h"
 #include "ui/events/gesture_detection/gesture_detection_export.h"
 #include "ui/events/gesture_detection/velocity_tracker_state.h"
 
@@ -29,6 +30,7 @@ class GESTURE_DETECTION_EXPORT GestureDetector {
     Config(const Config& other);
     ~Config();
 
+    base::TimeDelta shortpress_timeout;
     base::TimeDelta longpress_timeout;
     base::TimeDelta showpress_timeout;
     base::TimeDelta double_tap_timeout;
@@ -96,6 +98,10 @@ class GESTURE_DETECTION_EXPORT GestureDetector {
   GestureDetector(const Config& config,
                   GestureListener* listener,
                   DoubleTapListener* optional_double_tap_listener);
+
+  GestureDetector(const GestureDetector&) = delete;
+  GestureDetector& operator=(const GestureDetector&) = delete;
+
   ~GestureDetector();
 
   bool OnTouchEvent(const MotionEvent& ev, bool should_process_double_tap);
@@ -109,7 +115,11 @@ class GESTURE_DETECTION_EXPORT GestureDetector {
 
   bool is_double_tapping() const { return is_double_tapping_; }
 
-  void set_longpress_enabled(bool enabled) { longpress_enabled_ = enabled; }
+  // Enables or disables gestures that require holding the finger steady for a
+  // while (i.e. both short-press and long-press).
+  void set_press_and_hold_enabled(bool enabled) {
+    press_and_hold_enabled_ = enabled;
+  }
   void set_showpress_enabled(bool enabled) { showpress_enabled_ = enabled; }
 
   // Returns the event storing the initial position of the pointer with given
@@ -123,8 +133,10 @@ class GESTURE_DETECTION_EXPORT GestureDetector {
  private:
   void Init(const Config& config);
   void OnShowPressTimeout();
+  void OnShortPressTimeout();
   void OnLongPressTimeout();
   void OnTapTimeout();
+  void ActivateShortPressGesture(const MotionEvent& ev);
   void ActivateLongPressGesture(const MotionEvent& ev);
   void Cancel();
   void CancelTaps();
@@ -137,8 +149,8 @@ class GESTURE_DETECTION_EXPORT GestureDetector {
 
   class TimeoutGestureHandler;
   std::unique_ptr<TimeoutGestureHandler> timeout_handler_;
-  GestureListener* const listener_;
-  DoubleTapListener* double_tap_listener_;
+  const raw_ptr<GestureListener> listener_;
+  raw_ptr<DoubleTapListener> double_tap_listener_;
 
   float touch_slop_square_;
   float double_tap_touch_slop_square_;
@@ -186,17 +198,15 @@ class GESTURE_DETECTION_EXPORT GestureDetector {
   float down_focus_x_;
   float down_focus_y_;
 
-  bool stylus_button_accelerated_longpress_enabled_;
-  bool deep_press_accelerated_longpress_enabled_;
-  bool longpress_enabled_;
-  bool showpress_enabled_;
-  bool swipe_enabled_;
-  bool two_finger_tap_enabled_;
+  bool stylus_button_accelerated_longpress_enabled_ = false;
+  bool deep_press_accelerated_longpress_enabled_ = false;
+  bool press_and_hold_enabled_ = true;
+  bool showpress_enabled_ = true;
+  bool swipe_enabled_ = false;
+  bool two_finger_tap_enabled_ = false;
 
   // Determines speed during touch scrolling.
   VelocityTrackerState velocity_tracker_;
-
-  DISALLOW_COPY_AND_ASSIGN(GestureDetector);
 };
 
 }  // namespace ui

@@ -13,7 +13,6 @@
 #include <vector>
 
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
 #include "base/threading/platform_thread.h"
 #include "components/history/core/browser/download_types.h"
 
@@ -32,6 +31,10 @@ class DownloadDatabase {
   // Must call InitDownloadTable before using any other functions.
   DownloadDatabase(DownloadInterruptReason download_interrupt_reason_none,
                    DownloadInterruptReason download_interrupt_reason_crash);
+
+  DownloadDatabase(const DownloadDatabase&) = delete;
+  DownloadDatabase& operator=(const DownloadDatabase&) = delete;
+
   virtual ~DownloadDatabase();
 
   uint32_t GetNextDownloadId();
@@ -92,6 +95,10 @@ class DownloadDatabase {
   // Returns true if able to add the site_url column to the download
   // table.
   bool MigrateDownloadSiteInstanceUrl();
+
+  // Returns true if able to add the embedder_download_data column to the
+  // download table.
+  bool MigrateEmbedderDownloadData();
 
   // Returns true if able to add last_access_time column to the download table.
   bool MigrateDownloadLastAccessTime();
@@ -167,8 +174,6 @@ class DownloadDatabase {
   // to use for respectively an undefined value and in case of a crash.
   DownloadInterruptReason download_interrupt_reason_none_;
   DownloadInterruptReason download_interrupt_reason_crash_;
-
-  DISALLOW_COPY_AND_ASSIGN(DownloadDatabase);
 };
 
 }  // namespace history

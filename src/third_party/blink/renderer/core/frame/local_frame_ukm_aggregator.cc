@@ -6,6 +6,7 @@
 
 #include <memory>
 
+#include "base/cpu_reduction_experiment.h"
 #include "base/format_macros.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/rand_util.h"
@@ -108,10 +109,10 @@ LocalFrameUkmAggregator::LocalFrameUkmAggregator(int64_t source_id,
       clock_(base::DefaultTickClock::GetInstance()),
       event_name_("Blink.UpdateTime") {
   // All of these are assumed to have one entry per sub-metric.
-  DCHECK_EQ(base::size(absolute_metric_records_), metrics_data().size());
-  DCHECK_EQ(base::size(current_sample_.sub_metrics_counts),
+  DCHECK_EQ(std::size(absolute_metric_records_), metrics_data().size());
+  DCHECK_EQ(std::size(current_sample_.sub_metrics_counts),
             metrics_data().size());
-  DCHECK_EQ(base::size(current_sample_.sub_main_frame_counts),
+  DCHECK_EQ(std::size(current_sample_.sub_main_frame_counts),
             metrics_data().size());
 
   // Record average and worst case for the primary metric.
@@ -196,34 +197,33 @@ LocalFrameUkmAggregator::GetBeginMainFrameMetrics() {
   // metrics and would result in double counting.
   std::unique_ptr<cc::BeginMainFrameMetrics> metrics_data =
       std::make_unique<cc::BeginMainFrameMetrics>();
-  metrics_data->handle_input_events = base::TimeDelta::FromMicroseconds(
+  metrics_data->handle_input_events = base::Microseconds(
       absolute_metric_records_[static_cast<unsigned>(
                                    MetricId::kHandleInputEvents)]
           .main_frame_count);
-  metrics_data->animate = base::TimeDelta::FromMicroseconds(
+  metrics_data->animate = base::Microseconds(
       absolute_metric_records_[static_cast<unsigned>(MetricId::kAnimate)]
           .main_frame_count);
-  metrics_data->style_update = base::TimeDelta::FromMicroseconds(
+  metrics_data->style_update = base::Microseconds(
       absolute_metric_records_[static_cast<unsigned>(MetricId::kStyle)]
           .main_frame_count);
-  metrics_data->layout_update = base::TimeDelta::FromMicroseconds(
+  metrics_data->layout_update = base::Microseconds(
       absolute_metric_records_[static_cast<unsigned>(MetricId::kLayout)]
           .main_frame_count);
-  metrics_data->prepaint = base::TimeDelta::FromMicroseconds(
+  metrics_data->accessibility = base::Microseconds(
+      absolute_metric_records_[static_cast<unsigned>(MetricId::kAccessibility)]
+          .main_frame_count);
+  metrics_data->prepaint = base::Microseconds(
       absolute_metric_records_[static_cast<unsigned>(MetricId::kPrePaint)]
           .main_frame_count);
-  metrics_data->compositing_assignments = base::TimeDelta::FromMicroseconds(
-      absolute_metric_records_[static_cast<unsigned>(
-                                   MetricId::kCompositingAssignments)]
-          .main_frame_count);
-  metrics_data->compositing_inputs = base::TimeDelta::FromMicroseconds(
+  metrics_data->compositing_inputs = base::Microseconds(
       absolute_metric_records_[static_cast<unsigned>(
                                    MetricId::kCompositingInputs)]
           .main_frame_count);
-  metrics_data->paint = base::TimeDelta::FromMicroseconds(
+  metrics_data->paint = base::Microseconds(
       absolute_metric_records_[static_cast<unsigned>(MetricId::kPaint)]
           .main_frame_count);
-  metrics_data->composite_commit = base::TimeDelta::FromMicroseconds(
+  metrics_data->composite_commit = base::Microseconds(
       absolute_metric_records_[static_cast<unsigned>(
                                    MetricId::kCompositingCommit)]
           .main_frame_count);
@@ -237,15 +237,8 @@ void LocalFrameUkmAggregator::SetTickClockForTesting(
   clock_ = clock;
 }
 
-void LocalFrameUkmAggregator::DidReachFirstContentfulPaint(
-    bool are_painting_main_frame) {
-  DCHECK(fcp_state_ != kHavePassedFCP);
-
-  if (!are_painting_main_frame) {
-    DCHECK(AllMetricsAreZero());
-    return;
-  }
-
+void LocalFrameUkmAggregator::DidReachFirstContentfulPaint() {
+  DCHECK_NE(fcp_state_, kHavePassedFCP);
   fcp_state_ = kThisFrameReachedFCP;
 }
 
@@ -257,6 +250,10 @@ void LocalFrameUkmAggregator::RecordTimerSample(size_t metric_index,
 
 void LocalFrameUkmAggregator::RecordCountSample(size_t metric_index,
                                                 int64_t count) {
+  static base::CpuReductionExperimentFilter filter;
+  if (!filter.ShouldLogHistograms())
+    return;
+
   // Always use RecordForcedLayoutSample for the kForcedStyleAndLayout
   // metric id.
   DCHECK_NE(metric_index, static_cast<size_t>(kForcedStyleAndLayout));
@@ -264,7 +261,7 @@ void LocalFrameUkmAggregator::RecordCountSample(size_t metric_index,
   bool is_pre_fcp = (fcp_state_ != kHavePassedFCP);
 
   // Accumulate for UKM and record the UMA
-  DCHECK_LT(metric_index, base::size(absolute_metric_records_));
+  DCHECK_LT(metric_index, std::size(absolute_metric_records_));
   auto& record = absolute_metric_records_[metric_index];
   record.interval_count += count;
   if (in_main_frame_update_)
@@ -325,6 +322,7 @@ void LocalFrameUkmAggregator::RecordForcedLayoutSample(
     case DocumentUpdateReason::kEditing:
     case DocumentUpdateReason::kFindInPage:
     case DocumentUpdateReason::kFocus:
+    case DocumentUpdateReason::kFocusgroup:
     case DocumentUpdateReason::kForm:
     case DocumentUpdateReason::kInput:
     case DocumentUpdateReason::kInspector:
@@ -338,6 +336,7 @@ void LocalFrameUkmAggregator::RecordForcedLayoutSample(
     case DocumentUpdateReason::kAccessibility:
     case DocumentUpdateReason::kBaseColor:
     case DocumentUpdateReason::kDisplayLock:
+    case DocumentUpdateReason::kDocumentTransition:
     case DocumentUpdateReason::kIntersectionObservation:
     case DocumentUpdateReason::kOverlay:
     case DocumentUpdateReason::kPagePopup:
@@ -522,7 +521,6 @@ void LocalFrameUkmAggregator::ReportPreFCPEvent() {
       ToSample(primary_metric_.pre_fcp_aggregate));
   builder.SetMainFrame(ToSample(primary_metric_.pre_fcp_aggregate));
 
-  RECORD_METRIC(CompositingAssignments);
   RECORD_METRIC(CompositingCommit);
   RECORD_METRIC(CompositingInputs);
   RECORD_METRIC(ImplCompositorCommit);
@@ -550,6 +548,8 @@ void LocalFrameUkmAggregator::ReportPreFCPEvent() {
   RECORD_METRIC(ScrollDocumentUpdate);
   RECORD_METRIC(HitTestDocumentUpdate);
   RECORD_METRIC(JavascriptDocumentUpdate);
+  RECORD_METRIC(ParseStyleSheet);
+  RECORD_METRIC(Accessibility);
 
   builder.Record(recorder_);
 #undef RECORD_METRIC
@@ -575,7 +575,6 @@ void LocalFrameUkmAggregator::ReportUpdateTimeEvent() {
   builder.SetMainFrame(current_sample_.primary_metric_count);
   builder.SetMainFrameIsBeforeFCP(fcp_state_ != kHavePassedFCP);
   builder.SetMainFrameReasons(current_sample_.trackers);
-  RECORD_METRIC(CompositingAssignments);
   RECORD_METRIC(CompositingCommit);
   RECORD_METRIC(CompositingInputs);
   RECORD_METRIC(ImplCompositorCommit);
@@ -603,6 +602,8 @@ void LocalFrameUkmAggregator::ReportUpdateTimeEvent() {
   RECORD_METRIC(ScrollDocumentUpdate);
   RECORD_METRIC(HitTestDocumentUpdate);
   RECORD_METRIC(JavascriptDocumentUpdate);
+  RECORD_METRIC(ParseStyleSheet);
+  RECORD_METRIC(Accessibility);
 
   builder.Record(recorder_);
 #undef RECORD_METRIC
@@ -618,26 +619,16 @@ void LocalFrameUkmAggregator::ResetAllMetrics() {
     record.reset();
 }
 
-bool LocalFrameUkmAggregator::AllMetricsAreZero() {
-  if (primary_metric_.interval_count != 0)
-    return false;
-  for (auto& record : absolute_metric_records_) {
-    if (record.interval_count != 0) {
-      return false;
-    }
-    if (record.main_frame_count != 0) {
-      return false;
-    }
-  }
-  return true;
-}
-
 void LocalFrameUkmAggregator::ChooseNextFrameForTest() {
   next_frame_sample_control_for_test_ = kMustChooseNextFrame;
 }
 
 void LocalFrameUkmAggregator::DoNotChooseNextFrameForTest() {
   next_frame_sample_control_for_test_ = kMustNotChooseNextFrame;
+}
+
+bool LocalFrameUkmAggregator::IsBeforeFCPForTesting() const {
+  return fcp_state_ == kBeforeFCPSignal;
 }
 
 }  // namespace blink

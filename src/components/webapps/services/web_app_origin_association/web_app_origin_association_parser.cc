@@ -29,16 +29,16 @@ mojom::WebAppOriginAssociationPtr WebAppOriginAssociationParser::Parse(
     const std::string& data) {
   auto parsed_data = base::JSONReader::ReadAndReturnValueWithError(data);
 
-  if (parsed_data.value == absl::nullopt) {
-    AddErrorInfo(parsed_data.error_message, parsed_data.error_line,
-                 parsed_data.error_column);
+  if (!parsed_data.has_value()) {
+    AddErrorInfo(parsed_data.error().message, parsed_data.error().line,
+                 parsed_data.error().column);
     failed_ = true;
     webapps::WebAppOriginAssociationMetrics::RecordParseResult(
         webapps::WebAppOriginAssociationMetrics::ParseResult::
             kParseFailedInvalidJson);
     return nullptr;
   }
-  if (!parsed_data.value->is_dict()) {
+  if (!parsed_data->is_dict()) {
     AddErrorInfo("No valid JSON object found.");
     failed_ = true;
     webapps::WebAppOriginAssociationMetrics::RecordParseResult(
@@ -49,7 +49,7 @@ mojom::WebAppOriginAssociationPtr WebAppOriginAssociationParser::Parse(
 
   mojom::WebAppOriginAssociationPtr association =
       mojom::WebAppOriginAssociation::New();
-  association->apps = ParseAssociatedWebApps(*parsed_data.value);
+  association->apps = ParseAssociatedWebApps(*parsed_data);
   webapps::WebAppOriginAssociationMetrics::RecordParseResult(
       webapps::WebAppOriginAssociationMetrics::ParseResult::kParseSucceeded);
   return association;
@@ -83,7 +83,7 @@ WebAppOriginAssociationParser::ParseAssociatedWebApps(
     return result;
   }
 
-  for (const auto& app_item : apps_value->GetList()) {
+  for (const auto& app_item : apps_value->GetListDeprecated()) {
     if (!app_item.is_dict()) {
       AddErrorInfo("Associated app ignored, type object expected.");
       continue;
@@ -169,7 +169,7 @@ WebAppOriginAssociationParser::ParsePaths(const base::Value& app_details_dict,
   }
 
   std::vector<std::string> paths;
-  for (const auto& path_item : paths_value->GetList()) {
+  for (const auto& path_item : paths_value->GetListDeprecated()) {
     if (!path_item.is_string()) {
       AddErrorInfo(key + " entry ignored, type string expected.");
       continue;

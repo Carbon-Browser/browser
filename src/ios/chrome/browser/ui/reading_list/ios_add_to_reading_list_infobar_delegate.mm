@@ -86,7 +86,7 @@ void IOSAddToReadingListInfobarDelegate::InfoBarDismissed() {
 bool IOSAddToReadingListInfobarDelegate::Accept() {
   model_->AddEntry(url_, base::UTF16ToUTF8(title_),
                    reading_list::ADDED_VIA_CURRENT_APP,
-                   base::TimeDelta::FromMinutes(estimated_read_time_));
+                   base::Minutes(estimated_read_time_));
   ukm::SourceId sourceID = ukm::GetSourceIdForWebStateDocument(web_state_);
   if (sourceID != ukm::kInvalidSourceId) {
     ukm::builders::IOS_PageAddedToReadingList(sourceID)
@@ -115,9 +115,4 @@ bool IOSAddToReadingListInfobarDelegate::Accept() {
   return true;
 }
 
-void IOSAddToReadingListInfobarDelegate::NeverShow() {
-  ChromeBrowserState* browser_state =
-      ChromeBrowserState::FromBrowserState(web_state_->GetBrowserState());
-  PrefService* user_prefs = browser_state->GetPrefs();
-  user_prefs->SetBoolean(kPrefReadingListMessagesNeverShow, true);
-}
+void IOSAddToReadingListInfobarDelegate::NeverShow() {}

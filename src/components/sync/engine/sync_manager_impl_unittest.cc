@@ -13,6 +13,7 @@
 #include "base/files/scoped_temp_dir.h"
 #include "base/format_macros.h"
 #include "base/location.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
@@ -28,8 +29,8 @@
 #include "components/sync/engine/cancelation_signal.h"
 #include "components/sync/engine/cycle/sync_cycle.h"
 #include "components/sync/engine/events/protocol_event.h"
+#include "components/sync/engine/net/http_post_provider.h"
 #include "components/sync/engine/net/http_post_provider_factory.h"
-#include "components/sync/engine/net/http_post_provider_interface.h"
 #include "components/sync/engine/nigori/key_derivation_params.h"
 #include "components/sync/engine/polling_constants.h"
 #include "components/sync/engine/sync_scheduler.h"
@@ -53,13 +54,14 @@ namespace syncer {
 
 namespace {
 
-class TestHttpPostProviderInterface : public HttpPostProviderInterface {
+class TestHttpPostProvider : public HttpPostProvider {
  public:
   void SetExtraRequestHeaders(const char* headers) override {}
   void SetURL(const GURL& url) override {}
   void SetPostPayload(const char* content_type,
                       int content_length,
                       const char* content) override {}
+  void SetAllowBatching(bool allow_batching) override {}
   bool MakeSynchronousPost(int* net_error_code,
                            int* http_status_code) override {
     return false;
@@ -73,14 +75,14 @@ class TestHttpPostProviderInterface : public HttpPostProviderInterface {
   void Abort() override {}
 
  private:
-  ~TestHttpPostProviderInterface() override = default;
+  ~TestHttpPostProvider() override = default;
 };
 
 class TestHttpPostProviderFactory : public HttpPostProviderFactory {
  public:
   ~TestHttpPostProviderFactory() override = default;
-  scoped_refptr<HttpPostProviderInterface> Create() override {
-    return new TestHttpPostProviderInterface();
+  scoped_refptr<HttpPostProvider> Create() override {
+    return new TestHttpPostProvider();
   }
 };
 
@@ -107,10 +109,6 @@ class SyncEncryptionHandlerObserverMock
   MOCK_METHOD(void, OnPassphraseAccepted, (), (override));
   MOCK_METHOD(void, OnTrustedVaultKeyRequired, (), (override));
   MOCK_METHOD(void, OnTrustedVaultKeyAccepted, (), (override));
-  MOCK_METHOD(void,
-              OnBootstrapTokenUpdated,
-              (const std::string&, BootstrapTokenType type),
-              (override));
   MOCK_METHOD(void, OnEncryptedTypesChanged, (ModelTypeSet, bool), (override));
   MOCK_METHOD(void,
               OnCryptographerStateChanged,
@@ -162,7 +160,7 @@ class SyncManagerImplTest : public testing::Test {
 
   ~SyncManagerImplTest() override = default;
 
-  void SetUp() {
+  void SetUp() override {
     ASSERT_TRUE(temp_dir_.CreateUniqueTempDir());
 
     extensions_activity_ = new ExtensionsActivity();
@@ -192,7 +190,7 @@ class SyncManagerImplTest : public testing::Test {
         std::make_unique<ComponentsFactory>(std::move(scheduler));
     args.encryption_handler = &encryption_handler_;
     args.cancelation_signal = &cancelation_signal_;
-    args.poll_interval = base::TimeDelta::FromMinutes(60);
+    args.poll_interval = base::Minutes(60);
     sync_manager_.Init(&args);
 
     base::RunLoop().RunUntilIdle();
@@ -217,8 +215,9 @@ class SyncManagerImplTest : public testing::Test {
   CancelationSignal cancelation_signal_;
   StrictMock<SyncManagerObserverMock> manager_observer_;
   // Owned by |sync_manager_|.
-  StrictMock<SyncEncryptionHandlerObserverMock>* encryption_observer_ = nullptr;
-  MockSyncScheduler* scheduler_ = nullptr;
+  raw_ptr<StrictMock<SyncEncryptionHandlerObserverMock>> encryption_observer_ =
+      nullptr;
+  raw_ptr<MockSyncScheduler> scheduler_ = nullptr;
 };
 
 // Test that the configuration params are properly created and sent to

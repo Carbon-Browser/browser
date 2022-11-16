@@ -8,7 +8,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="?attr/default_bg_color">
+    android:background="@macro/default_bg_color">
 
     <com.google.android.material.appbar.AppBarLayout
         android:id="@+id/app_bar_layout"

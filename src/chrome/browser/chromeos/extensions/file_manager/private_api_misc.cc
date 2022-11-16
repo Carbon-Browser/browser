@@ -11,7 +11,13 @@
 #include <utility>
 #include <vector>
 
+#include "ash/components/arc/arc_prefs.h"
+#include "ash/components/settings/timezone_settings.h"
+#include "ash/constants/ash_pref_names.h"
 #include "ash/public/cpp/multi_user_window_manager.h"
+#include "ash/public/cpp/new_window_delegate.h"
+#include "ash/public/cpp/style/dark_light_mode_controller.h"
+#include "ash/public/cpp/style/scoped_light_mode_as_default.h"
 #include "ash/public/cpp/tablet_mode.h"
 #include "base/bind.h"
 #include "base/command_line.h"
@@ -36,6 +42,7 @@
 #include "chrome/browser/ash/file_system_provider/mount_path_util.h"
 #include "chrome/browser/ash/file_system_provider/service.h"
 #include "chrome/browser/ash/guest_os/guest_os_share_path.h"
+#include "chrome/browser/ash/guest_os/public/guest_os_service.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/chromeos/extensions/file_manager/private_api_util.h"
@@ -52,17 +59,15 @@
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "chrome/browser/ui/ash/multi_user/multi_user_util.h"
 #include "chrome/browser/ui/ash/multi_user/multi_user_window_manager_helper.h"
+#include "chrome/browser/ui/ash/system_web_apps/system_web_app_ui_utils.h"
 #include "chrome/browser/ui/chrome_pages.h"
 #include "chrome/browser/ui/settings_window_manager_chromeos.h"
-#include "chrome/browser/ui/web_applications/system_web_app_ui_utils.h"
 #include "chrome/browser/ui/webui/settings/chromeos/constants/routes_util.h"
 #include "chrome/common/extensions/api/file_manager_private_internal.h"
 #include "chrome/common/extensions/api/manifest_types.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/common/webui_url_constants.h"
-#include "chromeos/settings/timezone_settings.h"
 #include "components/account_id/account_id.h"
-#include "components/arc/arc_prefs.h"
 #include "components/drive/drive_pref_names.h"
 #include "components/drive/event_logger.h"
 #include "components/prefs/pref_service.h"
@@ -79,6 +84,7 @@
 #include "storage/common/file_system/file_system_types.h"
 #include "storage/common/file_system/file_system_util.h"
 #include "ui/base/webui/web_ui_util.h"
+#include "ui/chromeos/styles/cros_styles.h"
 #include "ui/shell_dialogs/select_file_dialog.h"
 #include "url/gurl.h"
 
@@ -91,9 +97,9 @@ const char kCWSScope[] = "https://www.googleapis.com/auth/chromewebstore";
 
 // Thresholds for mountCrostini() API.
 constexpr base::TimeDelta kMountCrostiniSlowOperationThreshold =
-    base::TimeDelta::FromSeconds(10);
+    base::Seconds(10);
 constexpr base::TimeDelta kMountCrostiniVerySlowOperationThreshold =
-    base::TimeDelta::FromSeconds(30);
+    base::Seconds(30);
 
 // Obtains the current app window.
 AppWindow* GetCurrentAppWindow(ExtensionFunction* function) {
@@ -117,7 +123,7 @@ std::vector<ProfileInfo> GetLoggedInProfileInfoList() {
       continue;
     original_profiles.insert(profile);
     const user_manager::User* const user =
-        chromeos::ProfileHelper::Get()->GetUserByProfile(profile);
+        ash::ProfileHelper::Get()->GetUserByProfile(profile);
     if (!user || !user->is_logged_in())
       continue;
 
@@ -205,13 +211,17 @@ std::string Redact(const base::FilePath& path) {
   return Redact(path.value());
 }
 
+std::string SkColorToHexString(const SkColor color) {
+  return base::StringPrintf("#%02x%02x%02x", SkColorGetR(color),
+                            SkColorGetG(color), SkColorGetB(color));
+}
+
 }  // namespace
 
 ExtensionFunction::ResponseAction
 FileManagerPrivateLogoutUserForReauthenticationFunction::Run() {
-  const user_manager::User* user =
-      chromeos::ProfileHelper::Get()->GetUserByProfile(
-          Profile::FromBrowserContext(browser_context()));
+  const user_manager::User* user = ash::ProfileHelper::Get()->GetUserByProfile(
+      Profile::FromBrowserContext(browser_context()));
   if (user) {
     user_manager::UserManager::Get()->SaveUserOAuthStatus(
         user->GetAccountId(), user_manager::User::OAUTH2_TOKEN_STATUS_INVALID);
@@ -237,12 +247,19 @@ FileManagerPrivateGetPreferencesFunction::Run() {
   result.search_suggest_enabled =
       service->GetBoolean(prefs::kSearchSuggestEnabled);
   result.use24hour_clock = service->GetBoolean(prefs::kUse24HourClock);
-  result.timezone =
-      base::UTF16ToUTF8(chromeos::system::TimezoneSettings::GetInstance()
-                            ->GetCurrentTimezoneID());
+  result.timezone = base::UTF16ToUTF8(
+      ash::system::TimezoneSettings::GetInstance()->GetCurrentTimezoneID());
   result.arc_enabled = service->GetBoolean(arc::prefs::kArcEnabled);
   result.arc_removable_media_access_enabled =
       service->GetBoolean(arc::prefs::kArcHasAccessToRemovableMedia);
+  std::vector<std::string> folder_shortcuts;
+  const auto& value_list =
+      service->GetList(ash::prefs::kFilesAppFolderShortcuts)
+          ->GetListDeprecated();
+  for (const base::Value& value : value_list) {
+    folder_shortcuts.push_back(value.is_string() ? value.GetString() : "");
+  }
+  result.folder_shortcuts = folder_shortcuts;
 
   return RespondNow(
       OneArgument(base::Value::FromUniquePtrValue(result.ToValue())));
@@ -269,6 +286,14 @@ FileManagerPrivateSetPreferencesFunction::Run() {
     service->SetBoolean(
         arc::prefs::kArcHasAccessToRemovableMedia,
         *params->change_info.arc_removable_media_access_enabled);
+  }
+  if (params->change_info.folder_shortcuts) {
+    base::Value::List folder_shortcuts;
+    for (auto& shortcut : *params->change_info.folder_shortcuts) {
+      folder_shortcuts.Append(shortcut);
+    }
+    service->SetList(ash::prefs::kFilesAppFolderShortcuts,
+                     std::move(folder_shortcuts));
   }
 
   return RespondNow(NoArguments());
@@ -425,7 +450,7 @@ FileManagerPrivateGetZipProgressFunction::ZipProgressValue(
 
     // Remove the matching ZipFileCreator from the list of active ones.
     const size_t n = zip_creators->erase(zip_id_);
-    DCHECK_LT(0, n);
+    DCHECK_GT(n, 0u);
   }
 
   return TwoArguments(base::Value(static_cast<int>(progress.result)),
@@ -595,9 +620,17 @@ FileManagerPrivateOpenInspectorFunction::Run() {
                                          DevToolsToggleAction::Inspect());
       break;
     case extensions::api::file_manager_private::INSPECTION_TYPE_BACKGROUND:
-      // Open inspector for background page.
-      extensions::devtools_util::InspectBackgroundPage(
-          extension(), Profile::FromBrowserContext(browser_context()));
+      // Open inspector for background page if extension pointer is not null.
+      // Files app SWA is not an extension and thus has no associated background
+      // page.
+      if (extension()) {
+        extensions::devtools_util::InspectBackgroundPage(
+            extension(), Profile::FromBrowserContext(browser_context()));
+      } else {
+        return RespondNow(
+            Error(base::StringPrintf("Inspection type(%d) not supported.",
+                                     static_cast<int>(params->type))));
+      }
       break;
     default:
       NOTREACHED();
@@ -737,10 +770,18 @@ FileManagerPrivateConfigureVolumeFunction::Run() {
   using file_manager::VolumeManager;
   VolumeManager* const volume_manager =
       VolumeManager::Get(Profile::FromBrowserContext(browser_context()));
-  base::WeakPtr<Volume> volume =
-      volume_manager->FindVolumeById(params->volume_id);
-  if (!volume.get())
-    return RespondNow(Error("Volume not found."));
+  DCHECK(volume_manager);
+
+  std::string volume_id = params->volume_id;
+  volume_manager->ConvertFuseBoxFSPVolumeIdToFSPIfNeeded(&volume_id);
+
+  const base::WeakPtr<Volume> volume =
+      volume_manager->FindVolumeById(volume_id);
+  if (!volume) {
+    return RespondNow(
+        Error("ConfigureVolume: volume with ID * not found.", volume_id));
+  }
+
   if (!volume->configurable())
     return RespondNow(Error("Volume not configurable."));
 
@@ -794,7 +835,7 @@ FileManagerPrivateMountCrostiniFunction::Run() {
       Profile::FromBrowserContext(browser_context())->GetOriginalProfile();
   DCHECK(crostini::CrostiniFeatures::Get()->IsEnabled(profile));
   crostini::CrostiniManager::GetForProfile(profile)->RestartCrostini(
-      crostini::ContainerId::GetDefault(),
+      crostini::DefaultContainerId(),
       base::BindOnce(&FileManagerPrivateMountCrostiniFunction::RestartCallback,
                      this));
   return RespondLater();
@@ -813,7 +854,7 @@ void FileManagerPrivateMountCrostiniFunction::RestartCallback(
       Profile::FromBrowserContext(browser_context())->GetOriginalProfile();
   DCHECK(crostini::CrostiniFeatures::Get()->IsEnabled(profile));
   crostini::CrostiniManager::GetForProfile(profile)->MountCrostiniFiles(
-      crostini::ContainerId::GetDefault(),
+      crostini::DefaultContainerId(),
       base::BindOnce(&FileManagerPrivateMountCrostiniFunction::MountCallback,
                      this),
       false);
@@ -853,7 +894,7 @@ FileManagerPrivateInternalImportCrostiniImageFunction::Run() {
           .path();
 
   crostini::CrostiniExportImport::GetForProfile(profile)->ImportContainer(
-      crostini::ContainerId::GetDefault(), path,
+      crostini::DefaultContainerId(), path,
       base::BindOnce(
           [](base::FilePath path, crostini::CrostiniResult result) {
             if (result != crostini::CrostiniResult::SUCCESS) {
@@ -931,20 +972,17 @@ FileManagerPrivateInternalGetCrostiniSharedPathsFunction::Run() {
       Params;
   const std::unique_ptr<Params> params(Params::Create(args()));
   EXTENSION_FUNCTION_VALIDATE(params);
-  // TODO(crbug.com/1057591): Unexpected crashes in
-  // GuestOsSharePath::GetPersistedSharedPaths with null profile_.
-  CHECK(browser_context());
-  Profile* profile = Profile::FromBrowserContext(browser_context());
-  CHECK(profile);
-
+  // Use OriginalProfile since using crostini in incognito such as saving
+  // files into Linux files should still work.
+  Profile* profile =
+      Profile::FromBrowserContext(browser_context())->GetOriginalProfile();
   auto* guest_os_share_path =
       guest_os::GuestOsSharePath::GetForProfile(profile);
-  CHECK(guest_os_share_path);
   bool first_for_session = params->observe_first_for_session &&
                            guest_os_share_path->GetAndSetFirstForSession();
   auto shared_paths =
       guest_os_share_path->GetPersistedSharedPaths(params->vm_name);
-  auto entries = std::make_unique<base::ListValue>();
+  base::Value::List entries;
   for (const base::FilePath& path : shared_paths) {
     std::string mount_name;
     std::string file_system_name;
@@ -955,22 +993,20 @@ FileManagerPrivateInternalGetCrostiniSharedPathsFunction::Run() {
                  << Redact(path);
       continue;
     }
-    auto entry = std::make_unique<base::DictionaryValue>();
-    entry->SetString(
-        "fileSystemRoot",
-        storage::GetExternalFileSystemRootURIString(source_url(), mount_name));
-    entry->SetString("fileSystemName", file_system_name);
-    entry->SetString("fileFullPath", full_path);
+    base::Value::Dict entry;
+    entry.Set("fileSystemRoot", storage::GetExternalFileSystemRootURIString(
+                                    source_url(), mount_name));
+    entry.Set("fileSystemName", file_system_name);
+    entry.Set("fileFullPath", full_path);
     // All shared paths should be directories.  Even if this is not true,
     // it is fine for foreground/js/crostini.js class to think so. We
     // verify that the paths are in fact valid directories before calling
     // seneschal/9p in GuestOsSharePath::CallSeneschalSharePath().
-    entry->SetBoolean("fileIsDirectory", true);
-    entries->Append(std::move(entry));
+    entry.Set("fileIsDirectory", true);
+    entries.Append(std::move(entry));
   }
-  return RespondNow(
-      TwoArguments(base::Value::FromUniquePtrValue(std::move(entries)),
-                   base::Value(first_for_session)));
+  return RespondNow(TwoArguments(base::Value(std::move(entries)),
+                                 base::Value(first_for_session)));
 }
 
 ExtensionFunction::ResponseAction
@@ -985,7 +1021,7 @@ FileManagerPrivateInternalGetLinuxPackageInfoFunction::Run() {
           profile, render_frame_host());
 
   crostini::CrostiniPackageService::GetForProfile(profile)->GetLinuxPackageInfo(
-      crostini::ContainerId::GetDefault(),
+      crostini::DefaultContainerId(),
       file_system_context->CrackURLInFirstPartyContext(GURL(params->url)),
       base::BindOnce(&FileManagerPrivateInternalGetLinuxPackageInfoFunction::
                          OnGetLinuxPackageInfo,
@@ -1026,7 +1062,7 @@ FileManagerPrivateInternalInstallLinuxPackageFunction::Run() {
 
   crostini::CrostiniPackageService::GetForProfile(profile)
       ->QueueInstallLinuxPackage(
-          crostini::ContainerId::GetDefault(),
+          crostini::DefaultContainerId(),
           file_system_context->CrackURLInFirstPartyContext(GURL(params->url)),
           base::BindOnce(
               &FileManagerPrivateInternalInstallLinuxPackageFunction::
@@ -1184,6 +1220,9 @@ FileManagerPrivateInternalGetRecentFilesFunction::Run() {
     case api::file_manager_private::RECENT_FILE_TYPE_VIDEO:
       file_type = chromeos::RecentModel::FileType::kVideo;
       break;
+    case api::file_manager_private::RECENT_FILE_TYPE_DOCUMENT:
+      file_type = chromeos::RecentModel::FileType::kDocument;
+      break;
     default:
       NOTREACHED();
       return RespondNow(Error("Unknown recent file type is specified."));
@@ -1191,6 +1230,7 @@ FileManagerPrivateInternalGetRecentFilesFunction::Run() {
 
   model->GetRecentFiles(
       file_system_context.get(), source_url(), file_type,
+      params->invalidate_cache,
       base::BindOnce(
           &FileManagerPrivateInternalGetRecentFilesFunction::OnGetRecentFiles,
           this, params->restriction));
@@ -1224,7 +1264,7 @@ void FileManagerPrivateInternalGetRecentFilesFunction::OnGetRecentFiles(
   file_manager::util::ConvertFileDefinitionListToEntryDefinitionList(
       file_manager::util::GetFileSystemContextForSourceURL(profile,
                                                            source_url()),
-      url::Origin::Create(source_url().GetOrigin()),
+      url::Origin::Create(source_url().DeprecatedGetOriginAsURL()),
       file_definition_list,  // Safe, since copied internally.
       base::BindOnce(&FileManagerPrivateInternalGetRecentFilesFunction::
                          OnConvertFileDefinitionListToEntryDefinitionList,
@@ -1242,11 +1282,41 @@ void FileManagerPrivateInternalGetRecentFilesFunction::
           *entry_definition_list))));
 }
 
+// TODO(crbug.com/1212768): Remove this once Files app SWA has fully launched.
+ExtensionFunction::ResponseAction
+FileManagerPrivateGetFrameColorFunction::Run() {
+  ash::ScopedLightModeAsDefault scoped_light_mode_as_default;
+  std::string frame_color = SkColorToHexString(SK_ColorWHITE);
+  if (auto* dark_light_mode_controller = ash::DarkLightModeController::Get()) {
+    frame_color = SkColorToHexString(cros_styles::ResolveColor(
+        cros_styles::ColorName::kBgColor,
+        dark_light_mode_controller->IsDarkModeEnabled(),
+        /*use_debug_colors=*/false));
+  }
+  return RespondNow(OneArgument(base::Value(frame_color)));
+}
+
 ExtensionFunction::ResponseAction
 FileManagerPrivateIsTabletModeEnabledFunction::Run() {
   ash::TabletMode* tablet_mode = ash::TabletMode::Get();
   return RespondNow(OneArgument(
       base::Value(tablet_mode ? tablet_mode->InTabletMode() : false)));
+}
+
+ExtensionFunction::ResponseAction FileManagerPrivateOpenURLFunction::Run() {
+  using extensions::api::file_manager_private::OpenURL::Params;
+  const std::unique_ptr<Params> params(Params::Create(args()));
+  EXTENSION_FUNCTION_VALIDATE(params);
+  const GURL url(params->url);
+
+  if (!ash::NewWindowDelegate::GetPrimary()) {
+    return RespondNow(
+        Error("Could not get NewWindowDelegate's primary browser"));
+  }
+  ash::NewWindowDelegate::GetPrimary()->OpenUrl(
+      url, ash::NewWindowDelegate::OpenUrlFrom::kUserInteraction);
+
+  return RespondNow(NoArguments());
 }
 
 ExtensionFunction::ResponseAction FileManagerPrivateOpenWindowFunction::Run() {
@@ -1260,25 +1330,44 @@ ExtensionFunction::ResponseAction FileManagerPrivateOpenWindowFunction::Run() {
   const GURL selection_url(
       params->params.selection_url ? (*params->params.selection_url) : "");
 
+  ui::SelectFileDialog::FileTypeInfo file_type_info;
+  file_type_info.allowed_paths =
+      ui::SelectFileDialog::FileTypeInfo::ANY_PATH_OR_URL;
   GURL files_swa_url =
       ::file_manager::util::GetFileManagerMainPageUrlWithParams(
           ui::SelectFileDialog::SELECT_NONE, /*title=*/{}, destination_folder,
           selection_url,
-          /*target_name=*/{},
-          /*file_types=*/nullptr,
+          /*target_name=*/{}, &file_type_info,
           /*file_type_index=*/0,
           /*search_query=*/{},
-          /*show_android_picker_apps=*/false);
+          /*show_android_picker_apps=*/false,
+          /*volume_filter=*/{});
 
-  web_app::SystemAppLaunchParams launch_params;
+  ash::SystemAppLaunchParams launch_params;
   launch_params.url = files_swa_url;
 
   Profile* profile = Profile::FromBrowserContext(browser_context());
 
-  web_app::LaunchSystemWebAppAsync(
-      profile, web_app::SystemAppType::FILE_MANAGER, launch_params);
+  ash::LaunchSystemWebAppAsync(profile, ash::SystemWebAppType::FILE_MANAGER,
+                               launch_params);
 
   return RespondNow(OneArgument(base::Value(true)));
+}
+
+ExtensionFunction::ResponseAction
+FileManagerPrivateSendFeedbackFunction::Run() {
+  GURL url;
+  if (GetSenderWebContents()) {
+    url = GetSenderWebContents()->GetVisibleURL();
+  }
+
+  Profile* profile = Profile::FromBrowserContext(browser_context());
+  chrome::ShowFeedbackPage(url, profile, chrome::kFeedbackSourceFilesApp,
+                           /*description_template=*/std::string(),
+                           /*description_placeholder_text=*/std::string(),
+                           /*category_tag=*/"chromeos-files-app",
+                           /*extra_diagnostics=*/std::string());
+  return RespondNow(NoArguments());
 }
 
 }  // namespace extensions

@@ -29,14 +29,14 @@
 #include "third_party/blink/renderer/modules/media_controls/elements/media_control_remaining_time_display_element.h"
 #include "third_party/blink/renderer/modules/media_controls/media_controls_impl.h"
 #include "third_party/blink/renderer/modules/media_controls/media_controls_shared_helper.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/text/platform_locale.h"
 #include "ui/display/screen_info.h"
 
 namespace {
 
 const int kThumbRadius = 6;
-const base::TimeDelta kRenderTimelineInterval = base::TimeDelta::FromSeconds(1);
+const base::TimeDelta kRenderTimelineInterval = base::Seconds(1);
 
 // Only respond to main button of primary pointer(s).
 bool IsValidPointerEvent(const blink::Event& event) {
@@ -94,7 +94,7 @@ void MediaControlTimelineElement::SetPosition(double current_time,
   }
 
   MaybeUpdateTimelineInterval();
-  setValue(String::Number(current_time));
+  SetValue(String::Number(current_time));
 
   if (!suppress_aria)
     UpdateAria();
@@ -157,7 +157,7 @@ void MediaControlTimelineElement::DefaultEventHandler(Event& event) {
     return;
   }
 
-  double time = value().ToDouble();
+  double time = Value().ToDouble();
   double duration = MediaElement().duration();
   // Workaround for floating point error - it's possible for this element's max
   // attribute to be rounded to a value slightly higher than the duration. If
@@ -244,7 +244,7 @@ void MediaControlTimelineElement::RenderBarSegments() {
   // value since timeline's minimum value is not necessarily zero.
   if (is_live_) {
     current_time =
-        value().ToDouble() - GetFloatingPointAttribute(html_names::kMinAttr);
+        Value().ToDouble() - GetFloatingPointAttribute(html_names::kMinAttr);
     duration = GetFloatingPointAttribute(html_names::kMaxAttr) -
                GetFloatingPointAttribute(html_names::kMinAttr);
   }

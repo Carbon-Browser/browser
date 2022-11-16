@@ -9,6 +9,7 @@
 #include "ash/public/cpp/holding_space/holding_space_item.h"
 #include "ash/public/cpp/rounded_image_view.h"
 #include "ash/style/ash_color_provider.h"
+#include "ash/style/dark_light_mode_controller_impl.h"
 #include "ash/system/holding_space/holding_space_util.h"
 #include "ash/system/tray/tray_constants.h"
 #include "base/bind.h"
@@ -17,6 +18,7 @@
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/background.h"
+#include "ui/views/border.h"
 #include "ui/views/controls/button/image_button.h"
 #include "ui/views/controls/image_view.h"
 #include "ui/views/layout/box_layout.h"
@@ -25,11 +27,15 @@
 #include "ui/views/layout/flex_layout_view.h"
 
 namespace ash {
+namespace {
 
 // Appearance.
+constexpr int kBorderThickness = 1;
 constexpr gfx::Insets kCheckmarkAndPrimaryActionContainerPadding(4);
 constexpr gfx::Size kPlayIconSize(32, 32);
 constexpr gfx::Size kPrimaryActionSize(24, 24);
+
+}  // namespace
 
 HoldingSpaceItemScreenCaptureView::HoldingSpaceItemScreenCaptureView(
     HoldingSpaceViewDelegate* delegate,
@@ -74,6 +80,9 @@ HoldingSpaceItemScreenCaptureView::HoldingSpaceItemScreenCaptureView(
                       views::MinimumFlexSizeRule::kScaleToZero,
                       views::MaximumFlexSizeRule::kUnbounded)))
               .AddChild(CreatePrimaryActionBuilder(kPrimaryActionSize)))
+      .AddChild(views::Builder<views::View>()
+                    .CopyAddressTo(&border_)
+                    .SetCanProcessEventsWithinSubtree(false))
       .BuildChildren();
 
   // Subscribe to be notified of changes to `item`'s image.
@@ -109,6 +118,12 @@ void HoldingSpaceItemScreenCaptureView::OnHoldingSpaceItemUpdated(
 void HoldingSpaceItemScreenCaptureView::OnThemeChanged() {
   HoldingSpaceItemView::OnThemeChanged();
 
+  // Border.
+  border_->SetBorder(views::CreateRoundedRectBorder(
+      kBorderThickness, kHoldingSpaceCornerRadius,
+      AshColorProvider::Get()->GetContentLayerColor(
+          AshColorProvider::ContentLayerType::kSeparatorColor)));
+
   // Image.
   UpdateImage();
 
@@ -139,7 +154,8 @@ void HoldingSpaceItemScreenCaptureView::UpdateImage() {
 
   image_->SetImage(item()->image().GetImageSkia(
       kHoldingSpaceScreenCaptureSize,
-      /*dark_background=*/AshColorProvider::Get()->IsDarkModeEnabled()));
+      /*dark_background=*/DarkLightModeControllerImpl::Get()
+          ->IsDarkModeEnabled()));
   SchedulePaint();
 }
 

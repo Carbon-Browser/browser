@@ -107,10 +107,9 @@ ExtensionFunction::ResponseAction AlarmsCreateFunction::Run() {
 
   const int kSecondsPerMinute = 60;
   base::TimeDelta granularity =
-      base::TimeDelta::FromSecondsD(
-          (Manifest::IsUnpackedLocation(extension()->location())
-               ? alarms_api_constants::kDevDelayMinimum
-               : alarms_api_constants::kReleaseDelayMinimum)) *
+      base::Seconds((Manifest::IsUnpackedLocation(extension()->location())
+                         ? alarms_api_constants::kDevDelayMinimum
+                         : alarms_api_constants::kReleaseDelayMinimum)) *
       kSecondsPerMinute;
 
   std::unique_ptr<Alarm> alarm(
@@ -158,13 +157,13 @@ ExtensionFunction::ResponseAction AlarmsGetAllFunction::Run() {
 }
 
 void AlarmsGetAllFunction::Callback(const AlarmList* alarms) {
-  auto alarms_value = std::make_unique<base::ListValue>();
+  base::Value::List alarms_value;
   if (alarms) {
     for (const std::unique_ptr<Alarm>& alarm : *alarms)
-      alarms_value->Append(alarm->js_alarm->ToValue());
+      alarms_value.Append(
+          base::Value::FromUniquePtrValue(alarm->js_alarm->ToValue()));
   }
-  Respond(
-      OneArgument(base::Value::FromUniquePtrValue(std::move(alarms_value))));
+  Respond(OneArgument(base::Value(std::move(alarms_value))));
 }
 
 ExtensionFunction::ResponseAction AlarmsClearFunction::Run() {

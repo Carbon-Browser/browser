@@ -27,6 +27,7 @@
 #include "extensions/browser/api/management/management_api_constants.h"
 #include "extensions/browser/extension_dialog_auto_confirm.h"
 #include "extensions/browser/extension_host.h"
+#include "extensions/browser/extension_host_test_helper.h"
 #include "extensions/browser/extension_prefs.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/notification_types.h"
@@ -95,22 +96,25 @@ INSTANTIATE_TEST_SUITE_P(ServiceWorker,
 // are not allowed to call the install function.
 IN_PROC_BROWSER_TEST_P(ExtensionManagementApiTestWithBackgroundType,
                        InstallEvent) {
-  ExtensionTestMessageListener listener1("ready", false);
+  ExtensionTestMessageListener listener1("ready");
   ASSERT_TRUE(
       LoadExtension(test_data_dir_.AppendASCII("management/install_event")));
   ASSERT_TRUE(listener1.WaitUntilSatisfied());
 
-  ExtensionTestMessageListener listener2("got_event", false);
+  ExtensionTestMessageListener listener2("got_event");
   ASSERT_TRUE(LoadExtension(
       test_data_dir_.AppendASCII("api_test/management/enabled_extension"),
       {.context_type = ContextType::kFromManifest}));
   ASSERT_TRUE(listener2.WaitUntilSatisfied());
 }
 
+#if !BUILDFLAG(IS_CHROMEOS_LACROS)
+// TODO(crbug.com/1288199): Run these tests on Chrome OS with both Ash and
+// Lacros processes active.
 IN_PROC_BROWSER_TEST_P(ExtensionManagementApiTestWithBackgroundType,
                        LaunchApp) {
-  ExtensionTestMessageListener listener1("app_launched", false);
-  ExtensionTestMessageListener listener2("got_expected_error", false);
+  ExtensionTestMessageListener listener1("app_launched");
+  ExtensionTestMessageListener listener2("got_expected_error");
   ASSERT_TRUE(
       LoadExtension(test_data_dir_.AppendASCII("management/simple_extension"),
                     {.context_type = ContextType::kFromManifest}));
@@ -122,6 +126,7 @@ IN_PROC_BROWSER_TEST_P(ExtensionManagementApiTestWithBackgroundType,
   ASSERT_TRUE(listener1.WaitUntilSatisfied());
   ASSERT_TRUE(listener2.WaitUntilSatisfied());
 }
+#endif
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 
@@ -133,7 +138,7 @@ IN_PROC_BROWSER_TEST_P(ExtensionManagementApiTestWithBackgroundType,
   // Should see 0 apps launched from the API in the histogram at first.
   histogram_tester.ExpectTotalCount("DemoMode.AppLaunchSource", 0);
 
-  ExtensionTestMessageListener app_launched_listener("app_launched", false);
+  ExtensionTestMessageListener app_launched_listener("app_launched");
   ASSERT_TRUE(
       LoadExtension(test_data_dir_.AppendASCII("management/packaged_app"),
                     {.context_type = ContextType::kFromManifest}));
@@ -155,7 +160,7 @@ IN_PROC_BROWSER_TEST_P(ExtensionManagementApiTestWithBackgroundType,
   // Should see 0 apps launched from the Launcher in the histogram at first.
   histogram_tester.ExpectTotalCount("DemoMode.AppLaunchSource", 0);
 
-  ExtensionTestMessageListener app_launched_listener("app_launched", false);
+  ExtensionTestMessageListener app_launched_listener("app_launched");
   ASSERT_TRUE(
       LoadExtension(test_data_dir_.AppendASCII("management/packaged_app"),
                     {.context_type = ContextType::kFromManifest}));
@@ -171,9 +176,12 @@ IN_PROC_BROWSER_TEST_P(ExtensionManagementApiTestWithBackgroundType,
 
 #endif
 
+#if !BUILDFLAG(IS_CHROMEOS_LACROS)
+// TODO(crbug.com/1288199): Run these tests on Chrome OS with both Ash and
+// Lacros processes active.
 IN_PROC_BROWSER_TEST_P(ExtensionManagementApiTestWithBackgroundType,
                        LaunchAppFromBackground) {
-  ExtensionTestMessageListener listener1("success", false);
+  ExtensionTestMessageListener listener1("success");
   ASSERT_TRUE(
       LoadExtension(test_data_dir_.AppendASCII("management/packaged_app"),
                     {.context_type = ContextType::kFromManifest}));
@@ -181,17 +189,18 @@ IN_PROC_BROWSER_TEST_P(ExtensionManagementApiTestWithBackgroundType,
       test_data_dir_.AppendASCII("management/launch_app_from_background")));
   ASSERT_TRUE(listener1.WaitUntilSatisfied());
 }
+#endif
 
 IN_PROC_BROWSER_TEST_P(ExtensionManagementApiTestWithBackgroundType,
                        SelfUninstall) {
   // Wait for the helper script to finish before loading the primary
   // extension. This ensures that the onUninstall event listener is
   // added before we proceed to the uninstall step.
-  ExtensionTestMessageListener listener1("ready", false);
+  ExtensionTestMessageListener listener1("ready");
   ASSERT_TRUE(LoadExtension(
       test_data_dir_.AppendASCII("management/self_uninstall_helper")));
   ASSERT_TRUE(listener1.WaitUntilSatisfied());
-  ExtensionTestMessageListener listener2("success", false);
+  ExtensionTestMessageListener listener2("success");
   ASSERT_TRUE(
       LoadExtension(test_data_dir_.AppendASCII("management/self_uninstall")));
   ASSERT_TRUE(listener2.WaitUntilSatisfied());
@@ -202,18 +211,18 @@ IN_PROC_BROWSER_TEST_P(ExtensionManagementApiTestWithBackgroundType,
   // Wait for the helper script to finish before loading the primary
   // extension. This ensures that the onUninstall event listener is
   // added before we proceed to the uninstall step.
-  ExtensionTestMessageListener listener1("ready", false);
+  ExtensionTestMessageListener listener1("ready");
   ASSERT_TRUE(LoadExtension(
       test_data_dir_.AppendASCII("management/self_uninstall_helper")));
   ASSERT_TRUE(listener1.WaitUntilSatisfied());
-  ExtensionTestMessageListener listener2("success", false);
+  ExtensionTestMessageListener listener2("success");
   ASSERT_TRUE(LoadExtension(
       test_data_dir_.AppendASCII("management/self_uninstall_noperm")));
   ASSERT_TRUE(listener2.WaitUntilSatisfied());
 }
 
 IN_PROC_BROWSER_TEST_P(ExtensionManagementApiTestWithBackgroundType, Get) {
-  ExtensionTestMessageListener listener("success", false);
+  ExtensionTestMessageListener listener("success");
   ASSERT_TRUE(
       LoadExtension(test_data_dir_.AppendASCII("management/simple_extension"),
                     {.context_type = ContextType::kFromManifest}));
@@ -223,7 +232,7 @@ IN_PROC_BROWSER_TEST_P(ExtensionManagementApiTestWithBackgroundType, Get) {
 
 IN_PROC_BROWSER_TEST_P(ExtensionManagementApiTestWithBackgroundType,
                        GetSelfNoPermissions) {
-  ExtensionTestMessageListener listener1("success", false);
+  ExtensionTestMessageListener listener1("success");
   ASSERT_TRUE(LoadExtension(test_data_dir_.AppendASCII("management/get_self")));
   ASSERT_TRUE(listener1.WaitUntilSatisfied());
 }
@@ -258,7 +267,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionManagementApiBrowserTest,
                        GetAllIncludesTerminated) {
   // Load an extension with a background page, so that we know it has a process
   // running.
-  ExtensionTestMessageListener listener("ready", false);
+  ExtensionTestMessageListener listener("ready");
   const Extension* extension = LoadExtension(
       test_data_dir_.AppendASCII("management/install_event"));
   ASSERT_TRUE(extension);
@@ -266,21 +275,21 @@ IN_PROC_BROWSER_TEST_F(ExtensionManagementApiBrowserTest,
 
   // The management API should list this extension.
   scoped_refptr<ManagementGetAllFunction> function =
-      new ManagementGetAllFunction();
+      base::MakeRefCounted<ManagementGetAllFunction>();
   std::unique_ptr<base::Value> result(
       test_utils::RunFunctionAndReturnSingleResult(function.get(), "[]",
                                                    browser()));
   ASSERT_TRUE(result->is_list());
-  EXPECT_EQ(1U, result->GetList().size());
+  EXPECT_EQ(1U, result->GetListDeprecated().size());
 
   // And it should continue to do so even after it crashes.
   ASSERT_TRUE(CrashEnabledExtension(extension->id()));
 
-  function = new ManagementGetAllFunction();
-  result.reset(test_utils::RunFunctionAndReturnSingleResult(function.get(),
-                                                            "[]", browser()));
+  function = base::MakeRefCounted<ManagementGetAllFunction>();
+  result = test_utils::RunFunctionAndReturnSingleResult(function.get(), "[]",
+                                                        browser());
   ASSERT_TRUE(result->is_list());
-  EXPECT_EQ(1U, result->GetList().size());
+  EXPECT_EQ(1U, result->GetListDeprecated().size());
 }
 
 class ExtensionManagementApiEscalationTest :
@@ -325,8 +334,10 @@ class ExtensionManagementApiEscalationTest :
     const char* const enabled_string = enabled ? "true" : "false";
     if (user_gesture)
       function->set_user_gesture(true);
-    function->SetRenderFrameHost(browser()->tab_strip_model()->
-        GetActiveWebContents()->GetMainFrame());
+    function->SetRenderFrameHost(browser()
+                                     ->tab_strip_model()
+                                     ->GetActiveWebContents()
+                                     ->GetPrimaryMainFrame());
     bool response = test_utils::RunFunction(
         function.get(), base::StringPrintf("[\"%s\", %s]", kId, enabled_string),
         browser(), api_test_utils::NONE);
@@ -350,15 +361,12 @@ IN_PROC_BROWSER_TEST_F(ExtensionManagementApiEscalationTest,
                        DisabledReason) {
   scoped_refptr<ManagementGetFunction> function =
       new ManagementGetFunction();
-  std::unique_ptr<base::Value> result(
-      test_utils::RunFunctionAndReturnSingleResult(
+  base::Value::Dict dict =
+      test_utils::ToDictionary(test_utils::RunFunctionAndReturnSingleResult(
           function.get(), base::StringPrintf("[\"%s\"]", kId), browser()));
-  ASSERT_TRUE(result.get() != NULL);
-  ASSERT_TRUE(result->is_dict());
-  base::DictionaryValue* dict =
-      static_cast<base::DictionaryValue*>(result.get());
-  std::string reason;
-  EXPECT_TRUE(dict->GetStringASCII(keys::kDisabledReasonKey, &reason));
+  std::string reason =
+      api_test_utils::GetString(dict, keys::kDisabledReasonKey);
+  EXPECT_TRUE(base::IsStringASCII(reason));
   EXPECT_EQ(reason, std::string(keys::kDisabledReasonPermissionsIncrease));
 }
 
@@ -379,17 +387,13 @@ IN_PROC_BROWSER_TEST_F(ExtensionManagementApiEscalationTest,
   }
 
   {
-    // This should succeed when user accepts dialog. We must wait for the
-    // process to connect *and* for the channel to finish initializing before
-    // trying to crash it. (NOTIFICATION_RENDERER_PROCESS_CREATED does not wait
-    // for the latter and can cause KillProcess to fail on Windows.)
-    content::WindowedNotificationObserver observer(
-        extensions::NOTIFICATION_EXTENSION_HOST_CREATED,
-        content::NotificationService::AllSources());
+    // The extension should load when the user accepts the dialog, triggering
+    // a new ExtensionHost creation.
+    ExtensionHostTestHelper host_helper(profile(), kId);
     ScopedTestDialogAutoConfirm auto_confirm(
         ScopedTestDialogAutoConfirm::ACCEPT);
     SetEnabled(true, true, std::string(), source_extension);
-    observer.Wait();
+    host_helper.WaitForRenderProcessReady();
   }
 
   {

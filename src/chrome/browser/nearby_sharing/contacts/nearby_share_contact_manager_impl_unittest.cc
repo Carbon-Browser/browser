@@ -10,7 +10,6 @@
 
 #include "base/containers/contains.h"
 #include "base/containers/flat_set.h"
-#include "base/no_destructor.h"
 #include "base/strings/string_number_conversions.h"
 #include "chrome/browser/nearby_sharing/client/fake_nearby_share_client.h"
 #include "chrome/browser/nearby_sharing/common/fake_nearby_share_profile_info_provider.h"
@@ -44,11 +43,9 @@ const char kTestProfileUserName[] = "test@google.com";
 const char* kTestPersonNames[] = {"BBB BBB", "CCC CCC", "AAA AAA"};
 
 // From nearby_share_contact_manager_impl.cc.
-constexpr base::TimeDelta kContactUploadPeriod = base::TimeDelta::FromHours(24);
-constexpr base::TimeDelta kContactDownloadPeriod =
-    base::TimeDelta::FromHours(12);
-constexpr base::TimeDelta kContactDownloadRpcTimeout =
-    base::TimeDelta::FromSeconds(60);
+constexpr base::TimeDelta kContactUploadPeriod = base::Hours(24);
+constexpr base::TimeDelta kContactDownloadPeriod = base::Hours(12);
+constexpr base::TimeDelta kContactDownloadRpcTimeout = base::Seconds(60);
 
 std::string GetTestContactId(size_t index) {
   return kTestContactIdPrefix + base::NumberToString(index);

@@ -5,6 +5,7 @@
 #ifndef COMPONENTS_PASSWORD_MANAGER_CORE_BROWSER_PASSWORD_SAVE_MANAGER_IMPL_H_
 #define COMPONENTS_PASSWORD_MANAGER_CORE_BROWSER_PASSWORD_SAVE_MANAGER_IMPL_H_
 
+#include "base/memory/raw_ptr.h"
 #include "components/password_manager/core/browser/password_save_manager.h"
 
 namespace password_manager {
@@ -21,16 +22,12 @@ enum class PendingCredentialsState {
 
 class PasswordSaveManagerImpl : public PasswordSaveManager {
  public:
-  explicit PasswordSaveManagerImpl(
-      std::unique_ptr<FormSaver> profile_form_saver,
-      std::unique_ptr<FormSaver> account_form_saver);
+  PasswordSaveManagerImpl(std::unique_ptr<FormSaver> profile_form_saver,
+                          std::unique_ptr<FormSaver> account_form_saver);
+  // Convenience constructor that builds FormSavers corresponding to the
+  // profile and (if it exists) account store grabbed from |client|.
+  explicit PasswordSaveManagerImpl(const PasswordManagerClient* client);
   ~PasswordSaveManagerImpl() override;
-
-  // Creates a PasswordSaveManagerImpl instance.
-  // TODO(crbug.com/1108738): Remove this factory method and update call sites
-  // to use the constructor directly.
-  static std::unique_ptr<PasswordSaveManagerImpl> CreatePasswordSaveManagerImpl(
-      const PasswordManagerClient* client);
 
   const PasswordForm& GetPendingCredentials() const override;
   const std::u16string& GetGeneratedPassword() const override;
@@ -79,9 +76,15 @@ class PasswordSaveManagerImpl : public PasswordSaveManager {
   void BlockMovingToAccountStoreFor(
       const autofill::GaiaIdHash& gaia_id_hash) override;
 
+  void UpdateSubmissionIndicatorEvent(
+      autofill::mojom::SubmissionIndicatorEvent event) override;
+
   bool IsNewLogin() const override;
   bool IsPasswordUpdate() const override;
+  bool IsSamePassword() const override;
   bool HasGeneratedPassword() const override;
+
+  void UsernameUpdatedInBubble() override;
 
   std::unique_ptr<PasswordSaveManager> Clone() override;
 
@@ -125,7 +128,7 @@ class PasswordSaveManagerImpl : public PasswordSaveManager {
   const std::unique_ptr<FormSaver> account_store_form_saver_;
 
   // The client which implements embedder-specific PasswordManager operations.
-  PasswordManagerClient* client_;
+  raw_ptr<PasswordManagerClient> client_;
 
   // Stores updated credentials when the form was submitted but success is still
   // unknown. This variable contains credentials that are ready to be written
@@ -137,7 +140,7 @@ class PasswordSaveManagerImpl : public PasswordSaveManager {
       PendingCredentialsState::NONE;
 
   // FormFetcher instance which owns the login data from PasswordStore.
-  const FormFetcher* form_fetcher_;
+  raw_ptr<const FormFetcher> form_fetcher_;
 
  private:
   struct PendingCredentialsStates {
@@ -149,7 +152,8 @@ class PasswordSaveManagerImpl : public PasswordSaveManager {
   };
   static PendingCredentialsStates ComputePendingCredentialsStates(
       const PasswordForm& parsed_submitted_form,
-      const std::vector<const PasswordForm*>& matches);
+      const std::vector<const PasswordForm*>& matches,
+      bool username_updated_in_bubble = false);
 
   std::u16string GetOldPassword(
       const PasswordForm& parsed_submitted_form) const;
@@ -168,6 +172,7 @@ class PasswordSaveManagerImpl : public PasswordSaveManager {
 
   bool IsOptedInForAccountStorage() const;
   bool AccountStoreIsDefault() const;
+  bool ShouldStoreGeneratedPasswordsInAccountStore() const;
 
   // Handles the user flows related to the generation.
   std::unique_ptr<PasswordGenerationManager> generation_manager_;
@@ -176,7 +181,10 @@ class PasswordSaveManagerImpl : public PasswordSaveManager {
   scoped_refptr<PasswordFormMetricsRecorder> metrics_recorder_;
 
   // Can be nullptr.
-  VotesUploader* votes_uploader_;
+  raw_ptr<VotesUploader> votes_uploader_;
+
+  // True if the user edited the username field during the save prompt.
+  bool username_updated_in_bubble_ = false;
 };
 
 }  // namespace password_manager

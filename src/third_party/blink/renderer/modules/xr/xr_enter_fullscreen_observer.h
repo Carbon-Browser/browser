@@ -18,6 +18,11 @@ namespace blink {
 class XrEnterFullscreenObserver : public NativeEventListener {
  public:
   XrEnterFullscreenObserver();
+
+  XrEnterFullscreenObserver(const XrEnterFullscreenObserver&) = delete;
+  XrEnterFullscreenObserver& operator=(const XrEnterFullscreenObserver&) =
+      delete;
+
   ~XrEnterFullscreenObserver() override;
 
   // NativeEventListener
@@ -25,8 +30,12 @@ class XrEnterFullscreenObserver : public NativeEventListener {
 
   // Attempt to enter fullscreen with |element| as the root. |on_completed| will
   // be notified with whether or not fullscreen was successfully entered.
+  // Set |may_have_camera_access| if entering fullscreen for a session that may
+  // have camera access available to it - this would ensure that there is space
+  // reserved for status bar.
   void RequestFullscreen(Element* element,
                          bool setup_for_dom_overlay,
+                         bool may_have_camera_access,
                          base::OnceCallback<void(bool)> on_completed);
 
   void Trace(Visitor*) const override;
@@ -34,7 +43,6 @@ class XrEnterFullscreenObserver : public NativeEventListener {
  private:
   Member<Element> fullscreen_element_;
   base::OnceCallback<void(bool)> on_completed_;
-  DISALLOW_COPY_AND_ASSIGN(XrEnterFullscreenObserver);
 };
 
 }  // namespace blink

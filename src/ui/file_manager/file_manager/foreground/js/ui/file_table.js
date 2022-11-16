@@ -210,7 +210,7 @@ export class FileTableColumnModel extends TableColumnModel {
     const config = {};
     for (let i = 0; i < this.columns_.length; i++) {
       config[this.columns_[i].id] = {
-        width: snapshot.newPos[i + 1] - snapshot.newPos[i]
+        width: snapshot.newPos[i + 1] - snapshot.newPos[i],
       };
     }
     return config;
@@ -595,6 +595,21 @@ export class FileTable extends Table {
   }
 
   /**
+   * @override
+   */
+  onDataModelSorted() {
+    const fileListModel = /** @type {FileListModel} */ (this.dataModel);
+    const hasGroupHeadingAfterSort = fileListModel.shouldShowGroupHeading();
+    // Sort doesn't trigger redraw sometimes, e.g. if we sort by Name for now,
+    // then we sort by time, if the list order doesn't change, no permuted event
+    // is triggered, thus no redraw is triggered. In this scenario, we need to
+    // manually trigger a redraw to remove/add the group heading.
+    if (hasGroupHeadingAfterSort !== fileListModel.hasGroupHeadingBeforeSort) {
+      this.list.redraw();
+    }
+  }
+
+  /**
    * Updates high priority range of list thumbnail loader based on current
    * viewport.
    *
@@ -668,6 +683,8 @@ export class FileTable extends Table {
         } else {
           this.clearThumbnailImage_(assertInstanceof(box, HTMLDivElement));
         }
+        const icon = listItem.querySelector('.detail-icon');
+        icon.classList.toggle('has-thumbnail', !!event.dataUrl);
       }
     }
   }
@@ -841,16 +858,16 @@ export class FileTable extends Table {
     const label = /** @type {!HTMLDivElement} */
         (this.ownerDocument.createElement('div'));
 
-    const mimeType =
-        this.metadataModel_.getCache([entry], ['contentMimeType'])[0]
-            .contentMimeType;
+    const metadata = this.metadataModel_.getCache(
+        [entry], ['contentMimeType', 'isDlpRestricted'])[0];
+    const mimeType = metadata.contentMimeType;
     const locationInfo = this.volumeManager_.getLocationInfo(entry);
     const icon = filelist.renderFileTypeIcon(
         this.ownerDocument, entry, locationInfo, mimeType);
     if (FileType.isImage(entry, mimeType) ||
         FileType.isVideo(entry, mimeType) ||
         FileType.isAudio(entry, mimeType) || FileType.isRaw(entry, mimeType)) {
-      icon.appendChild(this.renderThumbnail_(entry));
+      icon.appendChild(this.renderThumbnail_(entry, icon));
     }
     icon.appendChild(this.renderCheckmark_());
     label.appendChild(icon);
@@ -861,6 +878,10 @@ export class FileTable extends Table {
         filelist.renderFileNameLabel(this.ownerDocument, entry, locationInfo));
     if (locationInfo.isDriveBased) {
       label.appendChild(filelist.renderPinned(this.ownerDocument));
+    }
+    const isDlpRestricted = !!metadata.isDlpRestricted;
+    if (isDlpRestricted) {
+      label.appendChild(this.renderDlpManagedIcon_());
     }
     return label;
   }
@@ -962,7 +983,7 @@ export class FileTable extends Table {
             history => {
               return Promise.all([
                 history.wasImported(fileEntry, destination),
-                history.wasCopied(fileEntry, destination)
+                history.wasCopied(fileEntry, destination),
               ]);
             })
         .then(
@@ -1045,8 +1066,8 @@ export class FileTable extends Table {
     const item = this.metadataModel_.getCache(
         [entry], ['modificationTime', 'modificationByMeTime'])[0];
     const modTime = this.useModificationByMeTime_ ?
-        item.modificationByMeTime || item.modificationTime || null :
-        item.modificationTime || null;
+        item.modificationByMeTime || item.modificationTime :
+        item.modificationTime;
 
     div.textContent = this.formatter_.formatModDate(modTime);
   }
@@ -1099,8 +1120,13 @@ export class FileTable extends Table {
             this.metadataModel_.getCache(
                 [entry],
                 [
-                  'availableOffline', 'customIconUrl', 'shared',
-                  'isMachineRoot', 'isExternalMedia', 'hosted', 'pinned'
+                  'availableOffline',
+                  'customIconUrl',
+                  'shared',
+                  'isMachineRoot',
+                  'isExternalMedia',
+                  'hosted',
+                  'pinned',
                 ])[0],
             util.isTeamDriveRoot(entry));
       });
@@ -1135,10 +1161,11 @@ export class FileTable extends Table {
   /**
    * Renders the file thumbnail in the detail table.
    * @param {Entry} entry The Entry object to render.
+   * @param {HTMLDivElement} parent The parent DOM element.
    * @return {!HTMLDivElement} Created element.
    * @private
    */
-  renderThumbnail_(entry) {
+  renderThumbnail_(entry, parent) {
     const box = /** @type {!HTMLDivElement} */
         (this.ownerDocument.createElement('div'));
     box.className = 'detail-thumbnail';
@@ -1149,6 +1176,7 @@ export class FileTable extends Table {
         null;
     if (thumbnailData && thumbnailData.dataUrl) {
       this.setThumbnailImage_(box, thumbnailData.dataUrl);
+      parent.classList.add('has-thumbnail');
     }
 
     return box;
@@ -1196,6 +1224,18 @@ export class FileTable extends Table {
         (this.ownerDocument.createElement('div'));
     checkmark.className = 'detail-checkmark';
     return checkmark;
+  }
+
+  /**
+   * Renders the DLP managed icon in the detail table.
+   * @return {!HTMLDivElement} Created element.
+   * @private
+   */
+  renderDlpManagedIcon_() {
+    const icon = /** @type {!HTMLDivElement} */
+        (this.ownerDocument.createElement('div'));
+    icon.className = 'dlp-managed-icon';
+    return icon;
   }
 
   /**

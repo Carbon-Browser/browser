@@ -18,23 +18,21 @@ constexpr size_t maxParams = 2;
 
 // This fills policies with rules based on the current
 // renderer sandbox in Chrome.
-scoped_refptr<sandbox::PolicyBase> InitPolicy() {
-  scoped_refptr<sandbox::PolicyBase> policy(new sandbox::PolicyBase);
-  policy->Release();
+std::unique_ptr<sandbox::PolicyBase> InitPolicy() {
+  auto policy = std::make_unique<sandbox::PolicyBase>();
 
-  policy->AddRule(sandbox::TargetPolicy::SUBSYS_WIN32K_LOCKDOWN,
-                  sandbox::TargetPolicy::FAKE_USER_GDI_INIT, nullptr);
+  policy->AddRule(sandbox::SubSystem::kWin32kLockdown,
+                  sandbox::Semantics::kFakeGdiInit, nullptr);
 
-  policy->AddRule(sandbox::TargetPolicy::SUBSYS_FILES,
-                  sandbox::TargetPolicy::FILES_ALLOW_ANY,
-                  L"\\??\\pipe\\chrome.*");
+  policy->AddRule(sandbox::SubSystem::kFiles,
+                  sandbox::Semantics::kFilesAllowAny, L"\\??\\pipe\\chrome.*");
 
-  policy->AddRule(sandbox::TargetPolicy::SUBSYS_NAMED_PIPES,
-                  sandbox::TargetPolicy::NAMEDPIPES_ALLOW_ANY,
+  policy->AddRule(sandbox::SubSystem::kNamedPipes,
+                  sandbox::Semantics::kNamedPipesAllowAny,
                   L"\\\\.\\pipe\\chrome.nacl.*");
 
-  policy->AddRule(sandbox::TargetPolicy::SUBSYS_NAMED_PIPES,
-                  sandbox::TargetPolicy::NAMEDPIPES_ALLOW_ANY,
+  policy->AddRule(sandbox::SubSystem::kNamedPipes,
+                  sandbox::Semantics::kNamedPipesAllowAny,
                   L"\\\\.\\pipe\\chrome.sync.*");
 
   return policy;
@@ -53,7 +51,7 @@ struct FakeCountedParameterSetBase {
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
   FakeCountedParameterSetBase params;
 
-  static scoped_refptr<sandbox::PolicyBase> policy = InitPolicy();
+  static std::unique_ptr<sandbox::PolicyBase> policy = InitPolicy();
 
   if (size < 20)
     return 0;

@@ -15,8 +15,8 @@
 #include "content/public/browser/child_process_data.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/web_ui.h"
-#include "content/public/common/content_features.h"
 #include "content/public/common/process_type.h"
+#include "sandbox/policy/features.h"
 #include "sandbox/policy/win/sandbox_win.h"
 
 using content::BrowserChildProcessHostIterator;
@@ -27,10 +27,7 @@ namespace sandbox_handler {
 namespace {
 
 base::Value FetchBrowserChildProcesses() {
-  // The |BrowserChildProcessHostIterator| must only be used on the IO thread.
-  DCHECK_CURRENTLY_ON(base::FeatureList::IsEnabled(features::kProcessHostOnUI)
-                          ? content::BrowserThread::UI
-                          : content::BrowserThread::IO);
+  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   base::Value browser_processes(base::Value::Type::LIST);
 
   for (BrowserChildProcessHostIterator itr; !itr.Done(); ++itr) {
@@ -77,6 +74,30 @@ base::Value FetchRenderHostProcesses() {
   return renderer_processes;
 }
 
+base::Value FeatureToValue(const base::Feature& feature) {
+  base::Value feature_info(base::Value::Type::DICTIONARY);
+  feature_info.SetPath("name", base::Value(feature.name));
+  feature_info.SetPath("enabled",
+                       base::Value(base::FeatureList::IsEnabled(feature)));
+  return feature_info;
+}
+
+base::Value FetchSandboxFeatures() {
+  base::Value features(base::Value::Type::LIST);
+  features.Append(FeatureToValue(sandbox::policy::features::kGpuAppContainer));
+  features.Append(FeatureToValue(sandbox::policy::features::kGpuLPAC));
+  features.Append(
+      FeatureToValue(sandbox::policy::features::kNetworkServiceSandbox));
+  features.Append(
+      FeatureToValue(sandbox::policy::features::kRendererAppContainer));
+  features.Append(FeatureToValue(
+      sandbox::policy::features::kWinSboxDisableExtensionPoints));
+  features.Append(
+      FeatureToValue(sandbox::policy::features::kWinSboxDisableKtmComponent));
+  features.Append(FeatureToValue(sandbox::policy::features::kXRSandbox));
+  return features;
+}
+
 }  // namespace
 
 SandboxHandler::SandboxHandler() = default;
@@ -85,34 +106,22 @@ SandboxHandler::~SandboxHandler() = default;
 void SandboxHandler::RegisterMessages() {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
-  web_ui()->RegisterDeprecatedMessageCallback(
+  web_ui()->RegisterMessageCallback(
       "requestSandboxDiagnostics",
       base::BindRepeating(&SandboxHandler::HandleRequestSandboxDiagnostics,
                           base::Unretained(this)));
 }
 
 void SandboxHandler::HandleRequestSandboxDiagnostics(
-    const base::ListValue* args) {
+    const base::Value::List& args) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
-  CHECK_EQ(1U, args->GetList().size());
-  sandbox_diagnostics_callback_id_ = args->GetList()[0].Clone();
+  CHECK_EQ(1U, args.size());
+  sandbox_diagnostics_callback_id_ = args[0].Clone();
 
   AllowJavascript();
 
-  auto task_runner = base::FeatureList::IsEnabled(features::kProcessHostOnUI)
-                         ? content::GetUIThreadTaskRunner({})
-                         : content::GetIOThreadTaskRunner({});
-  task_runner->PostTaskAndReplyWithResult(
-      FROM_HERE, base::BindOnce(&FetchBrowserChildProcesses),
-      base::BindOnce(&SandboxHandler::FetchBrowserChildProcessesCompleted,
-                     weak_ptr_factory_.GetWeakPtr()));
-}
-
-void SandboxHandler::FetchBrowserChildProcessesCompleted(
-    base::Value browser_processes) {
-  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  browser_processes_ = std::move(browser_processes);
+  browser_processes_ = FetchBrowserChildProcesses();
 
   sandbox::policy::SandboxWin::GetPolicyDiagnostics(
       base::BindOnce(&SandboxHandler::FetchSandboxDiagnosticsCompleted,
@@ -136,6 +145,7 @@ void SandboxHandler::GetRendererProcessesAndFinish() {
   results.SetPath("browser", std::move(browser_processes_));
   results.SetPath("policies", std::move(sandbox_policies_));
   results.SetPath("renderer", std::move(renderer_processes));
+  results.SetPath("features", FetchSandboxFeatures());
   ResolveJavascriptCallback(sandbox_diagnostics_callback_id_,
                             std::move(results));
 }

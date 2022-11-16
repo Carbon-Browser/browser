@@ -31,9 +31,11 @@
 
 #include <v8-inspector.h>
 #include <memory>
+
 #include "base/memory/scoped_refptr.h"
 #include "third_party/blink/public/common/input/web_input_event.h"
 #include "third_party/blink/public/platform/web_input_event_result.h"
+#include "third_party/blink/renderer/bindings/core/v8/script_value.h"
 #include "third_party/blink/renderer/core/accessibility/ax_context.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/dom/document.h"
@@ -42,13 +44,14 @@
 #include "third_party/blink/renderer/core/inspector/inspector_dom_agent.h"
 #include "third_party/blink/renderer/core/inspector/inspector_highlight.h"
 #include "third_party/blink/renderer/core/inspector/inspector_overlay_host.h"
-#include "third_party/blink/renderer/core/inspector/protocol/Overlay.h"
-#include "third_party/blink/renderer/platform/geometry/float_quad.h"
+#include "third_party/blink/renderer/core/inspector/protocol/overlay.h"
 #include "third_party/blink/renderer/platform/geometry/layout_rect.h"
 #include "third_party/blink/renderer/platform/graphics/color.h"
-#include "third_party/blink/renderer/platform/heap/handle.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_map.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/timer.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
+#include "ui/gfx/geometry/quad_f.h"
 
 namespace cc {
 class Layer;
@@ -110,7 +113,8 @@ class CORE_EXPORT InspectTool : public GarbageCollected<InspectTool> {
   virtual bool ForwardEventsToOverlay();
   virtual bool SupportsPersistentOverlays();
   virtual void Draw(float scale) {}
-  virtual void Dispatch(const String& message) {}
+  virtual void Dispatch(const ScriptValue& message,
+                        ExceptionState& exception_state) {}
   virtual void Trace(Visitor* visitor) const;
   virtual bool HideOnHideHighlight();
   virtual bool HideOnMouseMove();
@@ -122,7 +126,7 @@ class CORE_EXPORT InspectTool : public GarbageCollected<InspectTool> {
 
 class CORE_EXPORT Hinge final : public GarbageCollected<Hinge> {
  public:
-  Hinge(FloatQuad quad,
+  Hinge(gfx::QuadF quad,
         Color color,
         Color outline_color,
         InspectorOverlayAgent* overlay);
@@ -134,7 +138,7 @@ class CORE_EXPORT Hinge final : public GarbageCollected<Hinge> {
   void Trace(Visitor* visitor) const;
 
  private:
-  FloatQuad quad_;
+  gfx::QuadF quad_;
   Color content_color_;
   Color outline_color_;
   Member<InspectorOverlayAgent> overlay_;
@@ -157,6 +161,10 @@ class CORE_EXPORT InspectorOverlayAgent final
       protocol::Overlay::ContainerQueryContainerHighlightConfig*);
   static std::unique_ptr<InspectorFlexItemHighlightConfig>
   ToFlexItemHighlightConfig(protocol::Overlay::FlexItemHighlightConfig*);
+  static std::unique_ptr<InspectorIsolationModeHighlightConfig>
+  ToIsolationModeHighlightConfig(
+      protocol::Overlay::IsolationModeHighlightConfig*,
+      int highlight_index);
   static absl::optional<LineStyle> ToLineStyle(protocol::Overlay::LineStyle*);
   static absl::optional<BoxStyle> ToBoxStyle(protocol::Overlay::BoxStyle*);
   static std::unique_ptr<InspectorHighlightConfig> ToHighlightConfig(
@@ -245,6 +253,10 @@ class CORE_EXPORT InspectorOverlayAgent final
       std::unique_ptr<
           protocol::Array<protocol::Overlay::ContainerQueryHighlightConfig>>
           container_query_highlight_configs) override;
+  protocol::Response setShowIsolatedElements(
+      std::unique_ptr<
+          protocol::Array<protocol::Overlay::IsolatedElementHighlightConfig>>
+          isolated_element_highlight_configs) override;
 
   // InspectorBaseAgent overrides.
   void Restore() override;
@@ -263,7 +275,6 @@ class CORE_EXPORT InspectorOverlayAgent final
   String EvaluateInOverlayForTest(const String&);
 
   void UpdatePrePaint();
-  // For CompositeAfterPaint.
   void PaintOverlay(GraphicsContext&);
 
   bool IsInspectorLayer(const cc::Layer*) const;
@@ -272,18 +283,21 @@ class CORE_EXPORT InspectorOverlayAgent final
   float WindowToViewportScale() const;
   void ScheduleUpdate();
 
+  float EmulationScaleFactor() const;
+
  private:
   class InspectorOverlayChromeClient;
   class InspectorPageOverlayDelegate;
 
   // InspectorOverlayHost::Delegate implementation.
-  void Dispatch(const String& message) override;
+  void Dispatch(const ScriptValue& message,
+                ExceptionState& exception_state) override;
 
   bool IsEmpty();
 
   LocalFrame* OverlayMainFrame();
-  void Reset(const IntSize& viewport_size,
-             const DoubleSize& visual_viewport_size);
+  void Reset(const gfx::Size& viewport_size,
+             const gfx::SizeF& visual_viewport_size);
   void OnResizeTimer(TimerBase*);
   void PaintOverlayPage();
 
@@ -316,7 +330,7 @@ class CORE_EXPORT InspectorOverlayAgent final
   bool disposed_;
   v8_inspector::V8InspectorSession* v8_session_;
   Member<InspectorDOMAgent> dom_agent_;
-  std::unique_ptr<FrameOverlay> frame_overlay_;
+  Member<FrameOverlay> frame_overlay_;
   Member<InspectTool> inspect_tool_;
   Member<PersistentTool> persistent_tool_;
   Member<Hinge> hinge_;

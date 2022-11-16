@@ -28,12 +28,15 @@ class StubLayerTreeViewDelegate : public LayerTreeViewDelegate {
       const cc::CompositorCommitData& commit_data) override {}
   void BeginMainFrame(base::TimeTicks frame_time) override {}
   void OnDeferMainFrameUpdatesChanged(bool) override {}
-  void OnDeferCommitsChanged(bool defer_status,
-                             cc::PaintHoldingReason reason) override {}
+  void OnDeferCommitsChanged(
+      bool defer_status,
+      cc::PaintHoldingReason reason,
+      absl::optional<cc::PaintHoldingCommitTrigger> trigger) override {}
   void DidBeginMainFrame() override {}
   void DidCommitAndDrawCompositorFrame() override {}
   void WillCommitCompositorFrame() override {}
-  void DidCommitCompositorFrame(base::TimeTicks commit_start_time) override {}
+  void DidCommitCompositorFrame(base::TimeTicks commit_start_time,
+                                base::TimeTicks commit_finish_time) override {}
   void DidCompletePageScaleAnimation() override {}
   void DidObserveFirstScrollDelay(
       base::TimeDelta first_scroll_delay,

@@ -4,24 +4,26 @@
 
 #include "weblayer/browser/navigation_impl.h"
 
+#include "build/build_config.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/web_contents.h"
 #include "net/base/net_errors.h"
+#include "net/http/http_response_headers.h"
 #include "net/http/http_util.h"
 #include "third_party/blink/public/common/user_agent/user_agent_metadata.h"
 #include "third_party/blink/public/mojom/loader/referrer.mojom.h"
 #include "weblayer/browser/navigation_ui_data_impl.h"
 #include "weblayer/browser/page_impl.h"
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
 #include "components/embedder_support/android/util/web_resource_response.h"
 #include "weblayer/browser/java/jni/NavigationImpl_jni.h"
 #endif
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 using base::android::AttachCurrentThread;
 using base::android::ScopedJavaLocalRef;
 #endif
@@ -38,7 +40,7 @@ NavigationImpl::NavigationImpl(content::NavigationHandle* navigation_handle)
 }
 
 NavigationImpl::~NavigationImpl() {
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   if (java_navigation_) {
     Java_NavigationImpl_onNativeDestroyed(AttachCurrentThread(),
                                           java_navigation_);
@@ -46,7 +48,7 @@ NavigationImpl::~NavigationImpl() {
 #endif
 }
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 ScopedJavaLocalRef<jstring> NavigationImpl::GetUri(JNIEnv* env) {
   return ScopedJavaLocalRef<jstring>(
       base::android::ConvertUTF8ToJavaString(env, GetURL().spec()));
@@ -104,6 +106,13 @@ jboolean NavigationImpl::DisableNetworkErrorAutoReload(JNIEnv* env) {
   return true;
 }
 
+jboolean NavigationImpl::DisableIntentProcessing(JNIEnv* env) {
+  if (!safe_to_disable_intent_processing_)
+    return false;
+  disable_intent_processing_ = true;
+  return true;
+}
+
 jboolean NavigationImpl::AreIntentLaunchesAllowedInBackground(JNIEnv* env) {
   NavigationUIDataImpl* navigation_ui_data = static_cast<NavigationUIDataImpl*>(
       navigation_handle_->GetNavigationUIData());
@@ -128,6 +137,10 @@ jlong NavigationImpl::GetPage(JNIEnv* env) {
 
 jint NavigationImpl::GetNavigationEntryOffset(JNIEnv* env) {
   return GetNavigationEntryOffset();
+}
+
+jboolean NavigationImpl::WasFetchedFromCache(JNIEnv* env) {
+  return WasFetchedFromCache();
 }
 
 void NavigationImpl::SetResponse(
@@ -173,6 +186,10 @@ int NavigationImpl::GetNavigationEntryOffset() {
   return navigation_handle_->GetNavigationEntryOffset();
 }
 
+bool NavigationImpl::WasFetchedFromCache() {
+  return navigation_handle_->WasResponseCached();
+}
+
 GURL NavigationImpl::GetURL() {
   return navigation_handle_->GetURL();
 }
@@ -182,7 +199,8 @@ const std::vector<GURL>& NavigationImpl::GetRedirectChain() {
 }
 
 NavigationState NavigationImpl::GetState() {
-  if (navigation_handle_->IsErrorPage() || navigation_handle_->IsDownload())
+  if (navigation_handle_->IsErrorPage() || navigation_handle_->IsDownload() ||
+      (finished_ && !navigation_handle_->HasCommitted()))
     return NavigationState::kFailed;
   if (navigation_handle_->HasCommitted())
     return NavigationState::kComplete;
@@ -290,7 +308,7 @@ GURL NavigationImpl::GetReferrer() {
   return navigation_handle_->GetReferrer().url;
 }
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 static jboolean JNI_NavigationImpl_IsValidRequestHeaderName(
     JNIEnv* env,
     const base::android::JavaParamRef<jstring>& name) {

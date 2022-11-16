@@ -17,6 +17,7 @@
 #include "base/rand_util.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
+#include "base/strings/utf_string_conversions.h"
 #include "base/third_party/icu/icu_utf.h"
 #include "base/values.h"
 #include "chrome/test/chromedriver/chrome/browser_info.h"
@@ -43,18 +44,21 @@ const double kCentimetersPerInch = 2.54;
 
 Status FlattenStringArray(const base::ListValue* src, std::u16string* dest) {
   std::u16string keys;
-  for (size_t i = 0; i < src->GetList().size(); ++i) {
-    std::u16string keys_list_part;
-    if (!src->GetString(i, &keys_list_part))
+  for (const base::Value& i : src->GetList()) {
+    if (!i.is_string())
       return Status(kUnknownError, "keys should be a string");
-    for (size_t j = 0; j < keys_list_part.size(); ++j) {
-      if (CBU16_IS_SURROGATE(keys_list_part[j])) {
+
+    std::u16string keys_list_part = base::UTF8ToUTF16(i.GetString());
+
+    for (char16_t ch : keys_list_part) {
+      if (CBU16_IS_SURROGATE(ch)) {
         return Status(
             kUnknownError,
             base::StringPrintf("%s only supports characters in the BMP",
-                               kChromeDriverProductShortName));
+                              kChromeDriverProductShortName));
       }
     }
+
     keys.append(keys_list_part);
   }
   *dest = keys;
@@ -454,8 +458,8 @@ bool GetOptionalValueDeprecated(const base::DictionaryValue* dict,
                                 bool (base::Value::*getter)(T*) const) {
   if (has_value != nullptr)
     *has_value = false;
-  const base::Value* value;
-  if (!dict->Get(path, &value))
+  const base::Value* value = dict->FindPath(path);
+  if (value == nullptr)
     return true;
   if ((value->*getter)(out_value)) {
     if (has_value != nullptr)
@@ -496,8 +500,8 @@ bool GetOptionalBool(const base::DictionaryValue* dict,
                      base::StringPiece path,
                      bool* out_value,
                      bool* has_value) {
-  return GetOptionalValueDeprecated(dict, path, out_value, has_value,
-                                    &base::Value::GetAsBoolean);
+  return GetOptionalValue(dict, path, out_value, has_value,
+                          &base::Value::GetIfBool);
 }
 
 bool GetOptionalInt(const base::DictionaryValue* dict,
@@ -535,8 +539,23 @@ bool GetOptionalString(const base::DictionaryValue* dict,
                        base::StringPiece path,
                        std::string* out_value,
                        bool* has_value) {
-  return GetOptionalValueDeprecated(dict, path, out_value, has_value,
-                                    &base::Value::GetAsString);
+  if (has_value != nullptr)
+    *has_value = false;
+
+  if (!dict->is_dict())
+    return false;
+
+  const base::Value* value = dict->FindPath(path);
+  if (!value)
+    return true;
+
+  if (value->is_string()) {
+    *out_value = value->GetString();
+    if (has_value != nullptr)
+      *has_value = true;
+    return true;
+  }
+  return false;
 }
 
 bool GetOptionalDictionary(const base::DictionaryValue* dict,
@@ -549,10 +568,26 @@ bool GetOptionalDictionary(const base::DictionaryValue* dict,
 
 bool GetOptionalList(const base::DictionaryValue* dict,
                      base::StringPiece path,
-                     const base::ListValue** out_value,
+                     const base::Value::List** out_value,
                      bool* has_value) {
-  return GetOptionalValueDeprecated(dict, path, out_value, has_value,
-                                    &base::Value::GetAsList);
+  if (has_value != nullptr)
+    *has_value = false;
+
+  if (!dict->is_dict())
+    return false;
+
+  const base::Value* value = dict->FindPath(path);
+  if (!value)
+    return true;
+
+  if (value->is_list()) {
+    *out_value = &value->GetList();
+    if (has_value != nullptr)
+      *has_value = true;
+    return true;
+  }
+
+  return false;
 }
 
 bool GetOptionalSafeInt(const base::DictionaryValue* dict,

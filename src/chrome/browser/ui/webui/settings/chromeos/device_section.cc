@@ -16,13 +16,13 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ash/login/demo_mode/demo_session.h"
+#include "chrome/browser/ui/webui/settings/ash/search/search_tag_registry.h"
 #include "chrome/browser/ui/webui/settings/chromeos/device_display_handler.h"
 #include "chrome/browser/ui/webui/settings/chromeos/device_keyboard_handler.h"
 #include "chrome/browser/ui/webui/settings/chromeos/device_pointer_handler.h"
 #include "chrome/browser/ui/webui/settings/chromeos/device_power_handler.h"
 #include "chrome/browser/ui/webui/settings/chromeos/device_stylus_handler.h"
 #include "chrome/browser/ui/webui/settings/chromeos/os_settings_features_util.h"
-#include "chrome/browser/ui/webui/settings/chromeos/search/search_tag_registry.h"
 #include "chrome/browser/ui/webui/webui_util.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/common/url_constants.h"
@@ -192,6 +192,30 @@ GetTouchpadScrollAccelerationSearchConcepts() {
        mojom::SearchResultDefaultRank::kMedium,
        mojom::SearchResultType::kSetting,
        {.setting = mojom::Setting::kTouchpadScrollAcceleration}},
+  });
+  return *tags;
+}
+
+const std::vector<SearchConcept>& GetTouchpadHapticFeedback() {
+  static const base::NoDestructor<std::vector<SearchConcept>> tags({
+      {IDS_OS_SETTINGS_TAG_TOUCHPAD_HAPTIC_FEEDBACK,
+       mojom::kPointersSubpagePath,
+       mojom::SearchResultIcon::kLaptop,
+       mojom::SearchResultDefaultRank::kMedium,
+       mojom::SearchResultType::kSetting,
+       {.setting = mojom::Setting::kTouchpadHapticFeedback}},
+  });
+  return *tags;
+}
+
+const std::vector<SearchConcept>& GetTouchpadHapticClickSensitivity() {
+  static const base::NoDestructor<std::vector<SearchConcept>> tags({
+      {IDS_OS_SETTINGS_TAG_TOUCHPAD_HAPTIC_CLICK_SENSITIVITY,
+       mojom::kPointersSubpagePath,
+       mojom::SearchResultIcon::kLaptop,
+       mojom::SearchResultDefaultRank::kMedium,
+       mojom::SearchResultType::kSetting,
+       {.setting = mojom::Setting::kTouchpadHapticClickSensitivity}},
   });
   return *tags;
 }
@@ -476,6 +500,19 @@ const std::vector<SearchConcept>& GetPowerWithLaptopLidSearchConcepts() {
   return *tags;
 }
 
+const std::vector<SearchConcept>& GetPowerWithAdaptiveChargingSearchConcepts() {
+  static const base::NoDestructor<std::vector<SearchConcept>> tags({
+      {IDS_OS_SETTINGS_TAG_POWER_ADAPTIVE_CHARGING,
+       mojom::kPowerSubpagePath,
+       mojom::SearchResultIcon::kPower,
+       mojom::SearchResultDefaultRank::kMedium,
+       mojom::SearchResultType::kSetting,
+       {.setting = mojom::Setting::kAdaptiveCharging},
+       {}},
+  });
+  return *tags;
+}
+
 bool AreScrollSettingsAllowed() {
   return base::FeatureList::IsEnabled(
       ::chromeos::features::kAllowScrollSettings);
@@ -653,10 +690,7 @@ void AddDeviceDisplayStrings(content::WebUIDataSource* html_source) {
 
   html_source->AddLocalizedString(
       "displayArrangementText",
-      base::FeatureList::IsEnabled(
-          ash::features::kKeyboardBasedDisplayArrangementInSettings)
-          ? IDS_SETTINGS_DISPLAY_ARRANGEMENT_WITH_KEYBOARD_TEXT
-          : IDS_SETTINGS_DISPLAY_ARRANGEMENT_TEXT);
+      IDS_SETTINGS_DISPLAY_ARRANGEMENT_WITH_KEYBOARD_TEXT);
 
   html_source->AddBoolean("unifiedDesktopAvailable",
                           IsUnifiedDesktopAvailable());
@@ -676,11 +710,6 @@ void AddDeviceDisplayStrings(content::WebUIDataSource* html_source) {
   html_source->AddBoolean(
       "allowDisplayAlignmentApi",
       base::FeatureList::IsEnabled(ash::features::kDisplayAlignAssist));
-
-  html_source->AddBoolean(
-      "allowKeyboardBasedDisplayArrangementInSettings",
-      base::FeatureList::IsEnabled(
-          ash::features::kKeyboardBasedDisplayArrangementInSettings));
 }
 
 void AddDeviceStorageStrings(content::WebUIDataSource* html_source,
@@ -726,6 +755,16 @@ void AddDeviceStorageStrings(content::WebUIDataSource* html_source,
           base::ASCIIToUTF16(chrome::kArcExternalStorageLearnMoreURL)));
 }
 
+void AddDeviceAudioStrings(content::WebUIDataSource* html_source) {
+  static constexpr webui::LocalizedString kAudioStrings[] = {
+      {"audioTitle", IDS_SETTINGS_AUDIO_TITLE},
+      {"audioOutputTitle", IDS_SETTINGS_AUDIO_OUTPUT_TITLE},
+      {"audioVolumeTitle", IDS_SETTINGS_AUDIO_VOLUME_TITLE},
+  };
+
+  html_source->AddLocalizedStrings(kAudioStrings);
+}
+
 void AddDevicePowerStrings(content::WebUIDataSource* html_source) {
   static constexpr webui::LocalizedString kPowerStrings[] = {
       {"powerTitle", IDS_SETTINGS_POWER_TITLE},
@@ -749,11 +788,19 @@ void AddDevicePowerStrings(content::WebUIDataSource* html_source) {
       {"powerIdleDisplayOn", IDS_SETTINGS_POWER_IDLE_DISPLAY_ON},
       {"powerIdleDisplayShutDown", IDS_SETTINGS_POWER_IDLE_SHUT_DOWN},
       {"powerIdleDisplayStopSession", IDS_SETTINGS_POWER_IDLE_STOP_SESSION},
+      {"powerAdaptiveChargingLabel",
+       IDS_SETTINGS_POWER_ADAPTIVE_CHARGING_LABEL},
+      {"powerAdaptiveChargingSubtext",
+       IDS_SETTINGS_POWER_ADAPTIVE_CHARGING_SUBTEXT},
+      {"powerIdleDisplayShutDown", IDS_SETTINGS_POWER_IDLE_SHUT_DOWN},
       {"powerLidSleepLabel", IDS_SETTINGS_POWER_LID_CLOSED_SLEEP_LABEL},
       {"powerLidSignOutLabel", IDS_SETTINGS_POWER_LID_CLOSED_SIGN_OUT_LABEL},
       {"powerLidShutDownLabel", IDS_SETTINGS_POWER_LID_CLOSED_SHUT_DOWN_LABEL},
   };
   html_source->AddLocalizedStrings(kPowerStrings);
+
+  // TODO(b:216035280): create and link to real "learn more" webpage.
+  html_source->AddString("powerAdaptiveChargingLearnMoreUrl", u"about://blank");
 }
 
 // Mirrors enum of the same name in enums.xml.
@@ -792,6 +839,10 @@ DeviceSection::DeviceSection(Profile* profile,
     // Determine whether to show laptop lid power settings.
     power_manager_client->GetSwitchStates(base::BindOnce(
         &DeviceSection::OnGotSwitchStates, weak_ptr_factory_.GetWeakPtr()));
+
+    // Surface adaptive charging setting in search if the feature is enabled.
+    if (ash::features::IsAdaptiveChargingEnabled())
+      updater.AddSearchTags(GetPowerWithAdaptiveChargingSearchConcepts());
   }
 
   // Keyboard/mouse search tags are added/removed dynamically.
@@ -849,9 +900,13 @@ void DeviceSection::AddLoadTimeData(content::WebUIDataSource* html_source) {
   AddDeviceKeyboardStrings(html_source);
   AddDeviceStylusStrings(html_source);
   AddDeviceDisplayStrings(html_source);
+  AddDeviceAudioStrings(html_source);
   AddDeviceStorageStrings(
       html_source, features::ShouldShowExternalStorageSettings(profile()));
   AddDevicePowerStrings(html_source);
+
+  html_source->AddBoolean("isAdaptiveChargingEnabled",
+                          ash::features::IsAdaptiveChargingEnabled());
 }
 
 void DeviceSection::AddHandlers(content::WebUI* web_ui) {
@@ -915,6 +970,8 @@ void DeviceSection::RegisterHierarchy(HierarchyGenerator* generator) const {
       mojom::Setting::kTouchpadAcceleration,
       mojom::Setting::kTouchpadScrollAcceleration,
       mojom::Setting::kTouchpadSpeed,
+      mojom::Setting::kTouchpadHapticFeedback,
+      mojom::Setting::kTouchpadHapticClickSensitivity,
       mojom::Setting::kPointingStickSwapPrimaryButtons,
       mojom::Setting::kPointingStickSpeed,
       mojom::Setting::kPointingStickAcceleration,
@@ -987,6 +1044,12 @@ void DeviceSection::RegisterHierarchy(HierarchyGenerator* generator) const {
       mojom::SearchResultDefaultRank::kMedium,
       mojom::kExternalStorageSubpagePath);
 
+  // Audio.
+  generator->RegisterTopLevelSubpage(
+      IDS_SETTINGS_AUDIO_TITLE, mojom::Subpage::kAudio,
+      mojom::SearchResultIcon::kAudio, mojom::SearchResultDefaultRank::kMedium,
+      mojom::kAudioSubpagePath);
+
   // Power.
   generator->RegisterTopLevelSubpage(
       IDS_SETTINGS_POWER_TITLE, mojom::Subpage::kPower,
@@ -997,6 +1060,7 @@ void DeviceSection::RegisterHierarchy(HierarchyGenerator* generator) const {
       mojom::Setting::kPowerIdleBehaviorWhileOnBattery,
       mojom::Setting::kPowerSource,
       mojom::Setting::kSleepWhenLaptopLidClosed,
+      mojom::Setting::kAdaptiveCharging,
   };
   RegisterNestedSettingBulk(mojom::Subpage::kPower, kPowerSettings, generator);
 }
@@ -1010,6 +1074,25 @@ void DeviceSection::TouchpadExists(bool exists) {
     updater.AddSearchTags(GetTouchpadSearchConcepts());
     if (base::FeatureList::IsEnabled(chromeos::features::kAllowScrollSettings))
       updater.AddSearchTags(GetTouchpadScrollAccelerationSearchConcepts());
+  }
+}
+
+void DeviceSection::HapticTouchpadExists(bool exists) {
+  SearchTagRegistry::ScopedTagUpdater updater = registry()->StartUpdate();
+  updater.RemoveSearchTags(GetTouchpadHapticFeedback());
+  updater.RemoveSearchTags(GetTouchpadHapticClickSensitivity());
+
+  if (!exists) {
+    return;
+  }
+
+  if (base::FeatureList::IsEnabled(
+          ::features::kAllowDisableTouchpadHapticFeedback)) {
+    updater.AddSearchTags(GetTouchpadHapticFeedback());
+  }
+  if (base::FeatureList::IsEnabled(
+          ::features::kAllowTouchpadHapticClickSettings)) {
+    updater.AddSearchTags(GetTouchpadHapticClickSensitivity());
   }
 }
 
@@ -1199,6 +1282,16 @@ void DeviceSection::AddDevicePointersStrings(
       {"pointingStickAccelerationLabel",
        IDS_SETTINGS_POINTING_STICK_ACCELERATION_LABEL},
       {"touchpadAccelerationLabel", IDS_SETTINGS_TOUCHPAD_ACCELERATION_LABEL},
+      {"touchpadHapticClickSensitivityLabel",
+       IDS_SETTINGS_TOUCHPAD_HAPTIC_CLICK_SENSITIVITY_LABEL},
+      {"touchpadHapticFeedbackTitle",
+       IDS_SETTINGS_TOUCHPAD_HAPTIC_FEEDBACK_TITLE},
+      {"touchpadHapticFeedbackSecondaryText",
+       IDS_SETTINGS_TOUCHPAD_HAPTIC_FEEDBACK_SECONDARY_TEXT},
+      {"touchpadHapticFirmClickLabel",
+       IDS_SETTINGS_TOUCHPAD_HAPTIC_FIRM_CLICK_LABEL},
+      {"touchpadHapticLightClickLabel",
+       IDS_SETTINGS_TOUCHPAD_HAPTIC_LIGHT_CLICK_LABEL},
       {"touchpadScrollAccelerationLabel",
        IDS_SETTINGS_TOUCHPAD_SCROLL_ACCELERATION_LABEL},
       {"touchpadScrollSpeed", IDS_SETTINGS_TOUCHPAD_SCROLL_SPEED_LABEL},
@@ -1207,11 +1300,19 @@ void DeviceSection::AddDevicePointersStrings(
 
   html_source->AddString("naturalScrollLearnMoreLink",
                          GetHelpUrlWithBoard(chrome::kNaturalScrollHelpURL));
+  html_source->AddString("hapticFeedbackLearnMoreLink",
+                         GetHelpUrlWithBoard(chrome::kHapticFeedbackHelpURL));
 
-  html_source->AddBoolean(
-      "allowDisableMouseAcceleration",
-      base::FeatureList::IsEnabled(::features::kAllowDisableMouseAcceleration));
   html_source->AddBoolean("allowScrollSettings", AreScrollSettingsAllowed());
+  html_source->AddBoolean("allowTouchpadHapticFeedback",
+                          base::FeatureList::IsEnabled(
+                              ::features::kAllowDisableTouchpadHapticFeedback));
+  html_source->AddBoolean("allowTouchpadHapticClickSettings",
+                          base::FeatureList::IsEnabled(
+                              ::features::kAllowTouchpadHapticClickSettings));
+  html_source->AddBoolean(
+      "enableAudioSettingsPage",
+      base::FeatureList::IsEnabled(ash::features::kAudioSettingsPage));
 }
 
 }  // namespace settings

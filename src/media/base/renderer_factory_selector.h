@@ -27,10 +27,11 @@ enum class RendererType {
   kFlinging = 4,         // FlingingRendererClientFactory
   kCast = 5,             // CastRendererClientFactory
   kMediaFoundation = 6,  // MediaFoundationRendererClientFactory
-  kFuchsia = 7,          // FuchsiaRendererFactory
-  kRemoting = 8,         // RemotingRendererFactory for remoting::Receiver
-  kCastStreaming = 9,    // CastStreamingRendererFactory
-  kMaxValue = kCastStreaming,
+  // kFuchsia = 7,       // Deprecated
+  kRemoting = 8,       // RemotingRendererFactory for remoting::Receiver
+  kCastStreaming = 9,  // PlaybackCommandForwardingRendererFactory
+  kContentEmbedderDefined = 10,  // Defined by the content embedder
+  kMaxValue = kContentEmbedderDefined,
 };
 
 // Get the name of the Renderer for `renderer_type`. The returned name could be
@@ -61,7 +62,11 @@ class MEDIA_EXPORT RendererFactorySelector {
   using ConditionalFactoryCB = base::RepeatingCallback<bool()>;
 
   RendererFactorySelector();
-  ~RendererFactorySelector();
+
+  RendererFactorySelector(const RendererFactorySelector&) = delete;
+  RendererFactorySelector& operator=(const RendererFactorySelector&) = delete;
+
+  virtual ~RendererFactorySelector();
 
   // See file level comments above.
   void AddBaseFactory(RendererType type,
@@ -80,13 +85,13 @@ class MEDIA_EXPORT RendererFactorySelector {
 
   // Returns the type of the Renderer for what GetCurrentFactory() would return.
   // NOTE: SetBaseRendererType() must be called before calling this method.
-  RendererType GetCurrentRendererType();
+  virtual RendererType GetCurrentRendererType();
 
   // Updates |current_factory_| if necessary, and returns its value.
   // NOTE: SetBaseRendererType() must be called before calling this method.
-  RendererFactory* GetCurrentFactory();
+  virtual RendererFactory* GetCurrentFactory();
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   // Starts a request to receive a RemotePlayStateChangeCB, to be fulfilled
   // later by passing a request via SetRemotePlayStateChangeCB().
   // NOTE: There should be no pending request (this new one would overwrite it).
@@ -107,8 +112,6 @@ class MEDIA_EXPORT RendererFactorySelector {
   RequestRemotePlayStateChangeCB remote_play_state_change_cb_request_;
 
   std::map<RendererType, std::unique_ptr<RendererFactory>> factories_;
-
-  DISALLOW_COPY_AND_ASSIGN(RendererFactorySelector);
 };
 
 }  // namespace media

@@ -39,7 +39,12 @@ class WaylandDisplayHandler : public display::DisplayObserver,
  public:
   WaylandDisplayHandler(WaylandDisplayOutput* output,
                         wl_resource* output_resource);
+
+  WaylandDisplayHandler(const WaylandDisplayHandler&) = delete;
+  WaylandDisplayHandler& operator=(const WaylandDisplayHandler&) = delete;
+
   ~WaylandDisplayHandler() override;
+  void Initialize();
   void AddObserver(WaylandDisplayObserver* observer);
   int64_t id() const;
 
@@ -53,14 +58,18 @@ class WaylandDisplayHandler : public display::DisplayObserver,
   // Unset the xdg output object.
   void UnsetXdgOutputResource();
 
+ protected:
+  wl_resource* output_resource() const { return output_resource_; }
+
+  // Overridable for testing.
+  virtual void XdgOutputSendLogicalPosition(const gfx::Point& position);
+  virtual void XdgOutputSendLogicalSize(const gfx::Size& size);
+  virtual void XdgOutputSendDescription(const std::string& desc);
+
  private:
   // Overridden from WaylandDisplayObserver:
   bool SendDisplayMetrics(const display::Display& display,
                           uint32_t changed_metrics) override;
-
-  // Returns the transform that a compositor will apply to a surface to
-  // compensate for the rotation of an output device.
-  wl_output_transform OutputTransform(display::Display::Rotation rotation);
 
   // Output.
   WaylandDisplayOutput* output_;
@@ -74,8 +83,6 @@ class WaylandDisplayHandler : public display::DisplayObserver,
   base::ObserverList<WaylandDisplayObserver> observers_;
 
   display::ScopedDisplayObserver display_observer_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(WaylandDisplayHandler);
 };
 
 }  // namespace wayland

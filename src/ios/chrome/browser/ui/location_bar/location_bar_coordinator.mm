@@ -10,8 +10,10 @@
 #import "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/sys_string_conversions.h"
+#import "components/omnibox/browser/location_bar_model_impl.h"
 #include "components/omnibox/browser/omnibox_edit_model.h"
 #include "components/omnibox/browser/omnibox_view.h"
+#include "components/open_from_clipboard/clipboard_recent_content.h"
 #include "components/profile_metrics/browser_profile_type.h"
 #include "components/search_engines/util.h"
 #include "components/strings/grit/components_strings.h"
@@ -21,7 +23,6 @@
 #include "ios/chrome/browser/browser_state_metrics/browser_state_metrics.h"
 #import "ios/chrome/browser/drag_and_drop/drag_item_util.h"
 #import "ios/chrome/browser/drag_and_drop/url_drag_drop_handler.h"
-#import "ios/chrome/browser/geolocation/omnibox_geolocation_controller.h"
 #include "ios/chrome/browser/infobars/infobar_metrics_recorder.h"
 #import "ios/chrome/browser/main/browser.h"
 #import "ios/chrome/browser/ntp/new_tab_page_tab_helper.h"
@@ -38,10 +39,10 @@
 #import "ios/chrome/browser/ui/fullscreen/fullscreen_controller.h"
 #import "ios/chrome/browser/ui/fullscreen/fullscreen_features.h"
 #import "ios/chrome/browser/ui/fullscreen/fullscreen_ui_updater.h"
-#import "ios/chrome/browser/ui/infobars/infobar_feature.h"
 #import "ios/chrome/browser/ui/location_bar/location_bar_constants.h"
 #import "ios/chrome/browser/ui/location_bar/location_bar_consumer.h"
 #import "ios/chrome/browser/ui/location_bar/location_bar_mediator.h"
+#import "ios/chrome/browser/ui/location_bar/location_bar_model_delegate_ios.h"
 #import "ios/chrome/browser/ui/location_bar/location_bar_steady_view_consumer.h"
 #import "ios/chrome/browser/ui/location_bar/location_bar_steady_view_mediator.h"
 #import "ios/chrome/browser/ui/location_bar/location_bar_url_loader.h"
@@ -56,6 +57,7 @@
 #include "ios/chrome/browser/ui/omnibox/web_omnibox_edit_controller_impl.h"
 #import "ios/chrome/browser/ui/toolbar/toolbar_coordinator_delegate.h"
 #import "ios/chrome/browser/ui/util/pasteboard_util.h"
+#import "ios/chrome/browser/url_loading/image_search_param_generator.h"
 #import "ios/chrome/browser/url_loading/url_loading_browser_agent.h"
 #import "ios/chrome/browser/url_loading/url_loading_params.h"
 #import "ios/chrome/browser/url_loading/url_loading_util.h"
@@ -73,6 +75,10 @@
 #error "This file requires ARC support."
 #endif
 
+namespace {
+const size_t kMaxURLDisplayChars = 32 * 1024;
+}  // namespace
+
 @interface LocationBarCoordinator () <LoadQueryCommands,
                                       LocationBarDelegate,
                                       LocationBarViewControllerDelegate,
@@ -81,10 +87,15 @@
                                       URLDragDataSource> {
   // API endpoint for omnibox.
   std::unique_ptr<WebOmniboxEditControllerImpl> _editController;
-  // Observer that updates |viewController| for fullscreen events.
+  // Observer that updates `viewController` for fullscreen events.
   std::unique_ptr<FullscreenUIUpdater> _omniboxFullscreenUIUpdater;
   // Observer that updates BadgeViewController for fullscreen events.
   std::unique_ptr<FullscreenUIUpdater> _badgeFullscreenUIUpdater;
+
+  // Facade objects used by `_toolbarCoordinator`.
+  // Must outlive `_toolbarCoordinator`.
+  std::unique_ptr<LocationBarModelDelegateIOS> _locationBarModelDelegate;
+  std::unique_ptr<LocationBarModel> _locationBarModel;
 }
 // Whether the coordinator is started.
 @property(nonatomic, assign, getter=isStarted) BOOL started;
@@ -192,9 +203,8 @@
   self.badgeMediator.consumer = self.badgeViewController;
   // TODO(crbug.com/1045047): Use HandlerForProtocol after commands protocol
   // clean up.
-  self.badgeMediator.dispatcher =
-      static_cast<id<InfobarCommands, BrowserCoordinatorCommands>>(
-          self.browser->GetCommandDispatcher());
+  self.badgeMediator.dispatcher = static_cast<id<BrowserCoordinatorCommands>>(
+      self.browser->GetCommandDispatcher());
   buttonFactory.delegate = self.badgeMediator;
   FullscreenController* fullscreenController =
       FullscreenController::FromBrowser(self.browser);
@@ -206,6 +216,11 @@
       ios::TemplateURLServiceFactory::GetForBrowserState(self.browserState);
   self.mediator.consumer = self;
   self.mediator.webStateList = self.webStateList;
+
+  _locationBarModelDelegate.reset(
+      new LocationBarModelDelegateIOS(self.browser->GetWebStateList()));
+  _locationBarModel = std::make_unique<LocationBarModelImpl>(
+      _locationBarModelDelegate.get(), kMaxURLDisplayChars);
 
   self.steadyViewMediator = [[LocationBarSteadyViewMediator alloc]
       initWithLocationBarModel:[self locationBarModel]];
@@ -239,6 +254,9 @@
   self.mediator = nil;
   [self.steadyViewMediator disconnect];
   self.steadyViewMediator = nil;
+
+  _locationBarModel = nullptr;
+  _locationBarModelDelegate = nullptr;
 
   _badgeFullscreenUIUpdater = nullptr;
   _omniboxFullscreenUIUpdater = nullptr;
@@ -288,19 +306,25 @@
 #pragma mark - LocationBarURLLoader
 
 - (void)loadGURLFromLocationBar:(const GURL&)url
-                    postContent:(TemplateURLRef::PostContent*)postContent
-                     transition:(ui::PageTransition)transition
-                    disposition:(WindowOpenDisposition)disposition {
+                               postContent:
+                                   (TemplateURLRef::PostContent*)postContent
+                                transition:(ui::PageTransition)transition
+                               disposition:(WindowOpenDisposition)disposition
+    destination_url_entered_without_scheme:
+        (bool)destination_url_entered_without_scheme {
   if (url.SchemeIs(url::kJavaScriptScheme)) {
     LoadJavaScriptURL(url, self.browserState,
                       self.webStateList->GetActiveWebState());
   } else {
-    // TODO(crbug.com/785244): Is it ok to call |cancelOmniboxEdit| after
-    // |loadURL|?  It doesn't seem to be causing major problems.  If we call
+    // TODO(crbug.com/785244): Is it ok to call `cancelOmniboxEdit` after
+    // `loadURL|?  It doesn't seem to be causing major problems.  If we call
     // cancel before load, then any prerendered pages get destroyed before the
     // call to load.
     web::NavigationManager::WebLoadParams web_params =
         web_navigation_util::CreateWebLoadParams(url, transition, postContent);
+    if (destination_url_entered_without_scheme) {
+      web_params.https_upgrade_type = web::HttpsUpgradeType::kOmnibox;
+    }
     NSMutableDictionary* combinedExtraHeaders =
         [[self variationHeadersForURL:url] mutableCopy];
     [combinedExtraHeaders addEntriesFromDictionary:web_params.extra_headers];
@@ -329,11 +353,7 @@
     }
   }
   // Dismiss the edit menu.
-#if !defined(__IPHONE_13_0) || __IPHONE_OS_VERSION_MIN_REQUIRED < __IPHONE_13_0
-  [[UIMenuController sharedMenuController] setMenuVisible:NO animated:NO];
-#else
   [[UIMenuController sharedMenuController] hideMenu];
-#endif
 
   // When the NTP and fakebox are visible, make the fakebox animates into place
   // before focusing the omnibox.
@@ -369,7 +389,7 @@
 }
 
 - (LocationBarModel*)locationBarModel {
-  return [self.delegate locationBarModel];
+  return _locationBarModel.get();
 }
 
 - (void)locationBarRequestScribbleTargetFocus {
@@ -407,6 +427,25 @@
   DefaultBrowserSceneAgent* agent =
       [DefaultBrowserSceneAgent agentFromScene:sceneState];
   [agent.nonModalScheduler logUserPastedInOmnibox];
+}
+
+- (void)searchCopiedImage {
+  ClipboardRecentContent::GetInstance()->GetRecentImageFromClipboard(
+      base::BindOnce(^(absl::optional<gfx::Image> optionalImage) {
+        if (!optionalImage) {
+          return;
+        }
+        UIImage* image = optionalImage.value().ToUIImage();
+        web::NavigationManager::WebLoadParams webParams =
+            ImageSearchParamGenerator::LoadParamsForImage(
+                image, ios::TemplateURLServiceFactory::GetForBrowserState(
+                           self.browser->GetBrowserState()));
+        UrlLoadParams params = UrlLoadParams::InCurrentTab(webParams);
+
+        UrlLoadingBrowserAgent::FromBrowser(self.browser)->Load(params);
+
+        [self cancelOmniboxEdit];
+      }));
 }
 
 #pragma mark - LocationBarConsumer
@@ -476,7 +515,7 @@
   return [result copy];
 }
 
-// Navigate to |query| from omnibox.
+// Navigate to `query` from omnibox.
 - (void)loadURLForQuery:(const std::u16string&)query {
   GURL searchURL;
   metrics::OmniboxInputType type = AutocompleteInput::Parse(

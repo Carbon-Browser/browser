@@ -5,6 +5,7 @@
 #include "components/signin/internal/identity_manager/accounts_mutator_impl.h"
 
 #include "base/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/gtest_util.h"
 #include "base/test/task_environment.h"
 #include "build/chromeos_buildflags.h"
@@ -75,7 +76,7 @@ class TestIdentityManagerDiagnosticsObserver
     token_remover_source_ = source;
   }
 
-  signin::IdentityManager* identity_manager_;
+  raw_ptr<signin::IdentityManager> identity_manager_;
   CoreAccountId token_updator_account_id_;
   std::string token_updator_source_;
   CoreAccountId token_remover_account_id_;
@@ -91,6 +92,9 @@ class AccountsMutatorTest : public testing::Test {
   AccountsMutatorTest()
       : identity_test_env_(&test_url_loader_factory_, &prefs_),
         identity_manager_diagnostics_observer_(identity_manager()) {}
+
+  AccountsMutatorTest(const AccountsMutatorTest&) = delete;
+  AccountsMutatorTest& operator=(const AccountsMutatorTest&) = delete;
 
   ~AccountsMutatorTest() override {}
 
@@ -121,8 +125,6 @@ class AccountsMutatorTest : public testing::Test {
   network::TestURLLoaderFactory test_url_loader_factory_;
   IdentityTestEnvironment identity_test_env_;
   TestIdentityManagerDiagnosticsObserver identity_manager_diagnostics_observer_;
-
-  DISALLOW_COPY_AND_ASSIGN(AccountsMutatorTest);
 };
 
 TEST_F(AccountsMutatorTest, Basic) {

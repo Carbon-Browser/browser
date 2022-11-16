@@ -14,19 +14,21 @@ class CastWindowTreeHostAura : public aura::WindowTreeHostPlatform {
  public:
   CastWindowTreeHostAura(bool enable_input,
                          ui::PlatformWindowInitProperties properties);
+
+  CastWindowTreeHostAura(const CastWindowTreeHostAura&) = delete;
+  CastWindowTreeHostAura& operator=(const CastWindowTreeHostAura&) = delete;
+
   ~CastWindowTreeHostAura() override;
 
   // aura::WindowTreeHostPlatform implementation:
   void DispatchEvent(ui::Event* event) override;
 
   // aura::WindowTreeHost implementation
-  gfx::Rect GetTransformedRootWindowBoundsInPixels(
+  gfx::Rect GetTransformedRootWindowBoundsFromPixelSize(
       const gfx::Size& size_in_pixels) const override;
 
  private:
   const bool enable_input_;
-
-  DISALLOW_COPY_AND_ASSIGN(CastWindowTreeHostAura);
 };
 
 }  // namespace chromecast

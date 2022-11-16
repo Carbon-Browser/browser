@@ -10,9 +10,8 @@
 #include <memory>
 
 #include "base/callback.h"
-#include "base/compiler_specific.h"
 #include "base/component_export.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "ui/base/x/x11_move_loop.h"
 #include "ui/base/x/x11_move_loop_delegate.h"
@@ -37,6 +36,10 @@ class COMPONENT_EXPORT(UI_BASE_X) X11WholeScreenMoveLoop
       public ui::PlatformEventDispatcher {
  public:
   explicit X11WholeScreenMoveLoop(X11MoveLoopDelegate* delegate);
+
+  X11WholeScreenMoveLoop(const X11WholeScreenMoveLoop&) = delete;
+  X11WholeScreenMoveLoop& operator=(const X11WholeScreenMoveLoop&) = delete;
+
   ~X11WholeScreenMoveLoop() override;
 
   // ui:::PlatformEventDispatcher:
@@ -62,7 +65,7 @@ class COMPONENT_EXPORT(UI_BASE_X) X11WholeScreenMoveLoop
 
   void PostDispatchIfNeeded(const ui::MouseEvent& event);
 
-  X11MoveLoopDelegate* delegate_;
+  raw_ptr<X11MoveLoopDelegate> delegate_;
 
   // Are we running a nested run loop from RunMoveLoop()?
   bool in_move_loop_;
@@ -89,8 +92,6 @@ class COMPONENT_EXPORT(UI_BASE_X) X11WholeScreenMoveLoop
   bool canceled_;
 
   base::WeakPtrFactory<X11WholeScreenMoveLoop> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(X11WholeScreenMoveLoop);
 };
 
 }  // namespace ui

@@ -7,8 +7,12 @@
 #include <array>
 #include <sstream>
 
+#include "base/containers/flat_map.h"
 #include "base/logging.h"
+#include "base/ranges/algorithm.h"
+#include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
+#include "components/autofill_assistant/browser/public/public_script_parameters.h"
 #include "components/autofill_assistant/browser/user_data.h"
 #include "components/autofill_assistant/browser/value_util.h"
 
@@ -22,7 +26,7 @@ const char kParameterMemoryPrefix[] = "param:";
 // non-existent values. Expects bool parameters as 'false' and 'true'.
 template <typename T>
 absl::optional<T> GetTypedParameter(
-    const std::map<std::string, ValueProto> parameters,
+    const base::flat_map<std::string, ValueProto> parameters,
     const std::string& key) {
   auto iter = parameters.find(key);
   if (iter == parameters.end())
@@ -45,56 +49,44 @@ absl::optional<T> GetTypedParameter(
 // Parameter that allows setting the color of the overlay.
 const char kOverlayColorParameterName[] = "OVERLAY_COLORS";
 
-// Parameter that contains the current session username. Should be synced with
-// |SESSION_USERNAME_PARAMETER| from
-// .../password_manager/PasswordChangeLauncher.java
-// TODO(b/151401974): Eliminate duplicate parameter definitions.
-const char kPasswordChangeUsernameParameterName[] = "PASSWORD_CHANGE_USERNAME";
-
-// Parameter that contains a base64-encoded GetTriggerScriptsResponseProto
-// message. Instructs the client to decode and run this trigger script prior to
-// starting the regular flow. Takes precedence over REQUEST_TRIGGER_SCRIPT if
-// both are specified.
-const char kBase64TriggerScriptsResponseProtoParameterName[] =
-    "TRIGGER_SCRIPTS_BASE64";
-
 // Special parameter for instructing the client to request and run a trigger
 // script from a remote RPC prior to starting the regular flow.
 const char kRequestTriggerScriptParameterName[] = "REQUEST_TRIGGER_SCRIPT";
 
-// Special bool parameter that MUST be present in all intents. It allows the
-// caller to either request immediate start of autofill assistant (if set to
-// true), or a delayed start using trigger scripts (if set to false). If this is
-// set to false, REQUEST_TRIGGER_SCRIPT or TRIGGER_SCRIPTS_BASE_64 must be set.
-const char kStartImmediatelyParameterName[] = "START_IMMEDIATELY";
-
-// Mandatory parameter that MUST be present and set to true in all intents.
-// Note: this parameter is automatically removed from |ToProto|.
-const char kEnabledParameterName[] = "ENABLED";
-
 // The parameter key for the user's email, as indicated by the caller.
 const char kCallerEmailParameterName[] = "USER_EMAIL";
-
-// The original deeplink as indicated by the caller. Use this parameter instead
-// of the initial URL when available to avoid issues where the initial URL
-// points to a redirect rather than the actual deeplink.
-const char kOriginalDeeplinkParameterName[] = "ORIGINAL_DEEPLINK";
 
 // Special parameter for declaring a user to be in a trigger script experiment.
 const char kTriggerScriptExperimentParameterName[] =
     "TRIGGER_SCRIPT_EXPERIMENT";
 
-// The intent parameter.
-const char kIntent[] = "INTENT";
-
 // Parameter that allows enabling Text-to-Speech functionality.
 const char kEnableTtsParameterName[] = "ENABLE_TTS";
 
-// The list of script parameters that trigger scripts are allowed to send to
-// the backend.
-constexpr std::array<const char*, 6> kAllowlistedTriggerScriptParameters = {
-    "DEBUG_BUNDLE_ID",    "DEBUG_BUNDLE_VERSION",    "DEBUG_SOCKET_ID",
-    "FALLBACK_BUNDLE_ID", "FALLBACK_BUNDLE_VERSION", kIntent};
+// Allows enabling observer-based WaitForDOM.
+const char kEnableObserversParameter[] = "ENABLE_OBSERVER_WAIT_FOR_DOM";
+
+// Parameter to specify experiments.
+const char kExperimentsParameterName[] = "EXPERIMENT_IDS";
+
+// Parameter to disable CUP RPC signing. Intended for internal use only.
+const char kDisableRpcSigningParamaterName[] = "DISABLE_RPC_SIGNING";
+
+// Parameter to send the annotate DOM model version. Should only be used if we
+// expect the model to be used.
+const char kSendAnnotateDomModelVersion[] = "SEND_ANNOTATE_DOM_MODEL_VERSION";
+
+// The list of non sensitive script parameters that client requests are allowed
+// to send to the backend i.e., they do not require explicit approval in the
+// autofill-assistant onboarding. Even so, please always reach out to Chrome
+// privacy when you plan to make use of this list, and/or adjust it.
+constexpr std::array<const char*, 6> kNonSensitiveScriptParameters = {
+    public_script_parameters::kDebugBundleIdParameterName,
+    "DEBUG_BUNDLE_VERSION",
+    public_script_parameters::kDebugSocketIdParameterName,
+    "FALLBACK_BUNDLE_ID",
+    "FALLBACK_BUNDLE_VERSION",
+    public_script_parameters::kIntentParameterName};
 
 // Parameters to specify details before the first backend roundtrip.
 const char kDetailsShowInitialParameterName[] = "DETAILS_SHOW_INITIAL";
@@ -111,9 +103,10 @@ const char kDetailsImageAccessibilityHint[] =
 const char kDetailsImageClickthroughUrl[] = "DETAILS_IMAGE_CLICKTHROUGH_URL";
 const char kDetailsTotalPriceLabel[] = "DETAILS_TOTAL_PRICE_LABEL";
 const char kDetailsTotalPrice[] = "DETAILS_TOTAL_PRICE";
+const char kRunHeadless[] = "RUN_HEADLESS";
 
 ScriptParameters::ScriptParameters(
-    const std::map<std::string, std::string>& parameters) {
+    const base::flat_map<std::string, std::string>& parameters) {
   for (const auto& it : parameters) {
     parameters_.emplace(
         it.first, SimpleValue(it.second, /* is_client_side_only= */ false));
@@ -122,6 +115,7 @@ ScriptParameters::ScriptParameters(
 
 ScriptParameters::ScriptParameters() = default;
 ScriptParameters::~ScriptParameters() = default;
+ScriptParameters& ScriptParameters::operator=(ScriptParameters&&) = default;
 
 void ScriptParameters::MergeWith(const ScriptParameters& another) {
   for (const auto& param : another.parameters_) {
@@ -143,10 +137,10 @@ bool ScriptParameters::Matches(const ScriptParameterMatchProto& proto) const {
 }
 
 google::protobuf::RepeatedPtrField<ScriptParameterProto>
-ScriptParameters::ToProto(bool only_trigger_script_allowlisted) const {
+ScriptParameters::ToProto(bool only_non_sensitive_allowlisted) const {
   google::protobuf::RepeatedPtrField<ScriptParameterProto> out;
-  if (only_trigger_script_allowlisted) {
-    for (const char* key : kAllowlistedTriggerScriptParameters) {
+  if (only_non_sensitive_allowlisted) {
+    for (const char* key : kNonSensitiveScriptParameters) {
       auto iter = parameters_.find(key);
       if (iter == parameters_.end()) {
         continue;
@@ -160,7 +154,7 @@ ScriptParameters::ToProto(bool only_trigger_script_allowlisted) const {
 
   // TODO(arbesser): Send properly typed parameters to backend.
   for (const auto& parameter : parameters_) {
-    if (parameter.first == kEnabledParameterName) {
+    if (parameter.first == public_script_parameters::kEnabledParameterName) {
       continue;
     }
     if (parameter.second.is_client_side_only()) {
@@ -182,18 +176,18 @@ absl::optional<std::string> ScriptParameters::GetParameter(
   return iter->second.strings().values(0);
 }
 
+bool ScriptParameters::HasExperimentId(const std::string& experiment_id) const {
+  return base::ranges::count(GetExperiments(), experiment_id) > 0;
+}
+
 absl::optional<std::string> ScriptParameters::GetOverlayColors() const {
   return GetParameter(kOverlayColorParameterName);
 }
 
 absl::optional<std::string> ScriptParameters::GetPasswordChangeUsername()
     const {
-  return GetParameter(kPasswordChangeUsernameParameterName);
-}
-
-absl::optional<std::string>
-ScriptParameters::GetBase64TriggerScriptsResponseProto() const {
-  return GetParameter(kBase64TriggerScriptsResponseProtoParameterName);
+  return GetParameter(
+      public_script_parameters::kPasswordChangeUsernameParameterName);
 }
 
 absl::optional<bool> ScriptParameters::GetRequestsTriggerScript() const {
@@ -202,15 +196,17 @@ absl::optional<bool> ScriptParameters::GetRequestsTriggerScript() const {
 }
 
 absl::optional<bool> ScriptParameters::GetStartImmediately() const {
-  return GetTypedParameter<bool>(parameters_, kStartImmediatelyParameterName);
+  return GetTypedParameter<bool>(
+      parameters_, public_script_parameters::kStartImmediatelyParameterName);
 }
 
 absl::optional<bool> ScriptParameters::GetEnabled() const {
-  return GetTypedParameter<bool>(parameters_, kEnabledParameterName);
+  return GetTypedParameter<bool>(
+      parameters_, public_script_parameters::kEnabledParameterName);
 }
 
 absl::optional<std::string> ScriptParameters::GetOriginalDeeplink() const {
-  return GetParameter(kOriginalDeeplinkParameterName);
+  return GetParameter(public_script_parameters::kOriginalDeeplinkParameterName);
 }
 
 absl::optional<bool> ScriptParameters::GetTriggerScriptExperiment() const {
@@ -219,7 +215,7 @@ absl::optional<bool> ScriptParameters::GetTriggerScriptExperiment() const {
 }
 
 absl::optional<std::string> ScriptParameters::GetIntent() const {
-  return GetParameter(kIntent);
+  return GetParameter(public_script_parameters::kIntentParameterName);
 }
 
 absl::optional<std::string> ScriptParameters::GetCallerEmail() const {
@@ -228,6 +224,44 @@ absl::optional<std::string> ScriptParameters::GetCallerEmail() const {
 
 absl::optional<bool> ScriptParameters::GetEnableTts() const {
   return GetTypedParameter<bool>(parameters_, kEnableTtsParameterName);
+}
+
+absl::optional<bool> ScriptParameters::GetEnableObserverWaitForDom() const {
+  return GetTypedParameter<bool>(parameters_, kEnableObserversParameter);
+}
+
+absl::optional<int> ScriptParameters::GetCaller() const {
+  return GetTypedParameter<int>(parameters_,
+                                public_script_parameters::kCallerParameterName);
+}
+
+absl::optional<int> ScriptParameters::GetSource() const {
+  return GetTypedParameter<int>(parameters_,
+                                public_script_parameters::kSourceParameterName);
+}
+
+std::vector<std::string> ScriptParameters::GetExperiments() const {
+  absl::optional<std::string> experiments_str =
+      GetParameter(kExperimentsParameterName);
+  if (!experiments_str) {
+    return std::vector<std::string>();
+  }
+
+  return base::SplitString(*experiments_str, ",",
+                           base::WhitespaceHandling::TRIM_WHITESPACE,
+                           base::SplitResult::SPLIT_WANT_NONEMPTY);
+}
+
+absl::optional<bool> ScriptParameters::GetDisableRpcSigning() const {
+  return GetTypedParameter<bool>(parameters_, kDisableRpcSigningParamaterName);
+}
+
+absl::optional<bool> ScriptParameters::GetSendAnnotateDomModelVersion() const {
+  return GetTypedParameter<bool>(parameters_, kSendAnnotateDomModelVersion);
+}
+
+absl::optional<bool> ScriptParameters::GetRunHeadless() const {
+  return GetTypedParameter<bool>(parameters_, kRunHeadless);
 }
 
 absl::optional<bool> ScriptParameters::GetDetailsShowInitial() const {
@@ -277,7 +311,7 @@ absl::optional<std::string> ScriptParameters::GetDetailsTotalPrice() const {
 }
 
 void ScriptParameters::UpdateDeviceOnlyParameters(
-    const std::map<std::string, std::string>& parameters) {
+    const base::flat_map<std::string, std::string>& parameters) {
   for (const auto& parameter : parameters) {
     parameters_[parameter.first] =
         SimpleValue(parameter.second, /* is_client_side_only= */ true);

@@ -64,11 +64,12 @@ class MockDownloadItem : public DownloadItem {
   MOCK_CONST_METHOD0(IsDone, bool());
   MOCK_CONST_METHOD0(GetBytesWasted, int64_t());
   MOCK_CONST_METHOD0(GetAutoResumeCount, int32_t());
+  MOCK_CONST_METHOD0(IsOffTheRecord, bool());
   MOCK_CONST_METHOD0(GetURL, const GURL&());
   MOCK_CONST_METHOD0(GetUrlChain, const std::vector<GURL>&());
   MOCK_CONST_METHOD0(GetOriginalUrl, const GURL&());
   MOCK_CONST_METHOD0(GetReferrerUrl, const GURL&());
-  MOCK_CONST_METHOD0(GetSiteUrl, const GURL&());
+  MOCK_CONST_METHOD0(GetSerializedEmbedderDownloadData, const std::string&());
   MOCK_CONST_METHOD0(GetTabUrl, const GURL&());
   MOCK_CONST_METHOD0(GetTabReferrerUrl, const GURL&());
   MOCK_CONST_METHOD0(GetRequestInitiator, const absl::optional<url::Origin>&());
@@ -128,11 +129,16 @@ class MockDownloadItem : public DownloadItem {
   MOCK_CONST_METHOD0(GetOpened, bool());
   MOCK_CONST_METHOD0(GetLastAccessTime, base::Time());
   MOCK_CONST_METHOD0(IsTransient, bool());
+  MOCK_CONST_METHOD0(RequireSafetyChecks, bool());
   MOCK_CONST_METHOD0(IsParallelDownload, bool());
   MOCK_CONST_METHOD0(GetDownloadCreationType, DownloadCreationType());
   MOCK_CONST_METHOD0(GetDownloadSchedule,
                      const absl::optional<DownloadSchedule>&());
   MOCK_CONST_METHOD0(GetCredentialsMode, ::network::mojom::CredentialsMode());
+  MOCK_METHOD((const absl::optional<net::IsolationInfo>&),
+              GetIsolationInfo,
+              (),
+              (const override));
   MOCK_METHOD2(OnContentCheckCompleted,
                void(DownloadDangerType, DownloadInterruptReason));
   MOCK_METHOD1(SetOpenWhenComplete, void(bool));

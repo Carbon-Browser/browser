@@ -4,7 +4,7 @@
 
 #include "chrome/browser/ash/printing/history/mock_print_job_history_service.h"
 
-namespace chromeos {
+namespace ash {
 
 MockPrintJobHistoryService::MockPrintJobHistoryService() = default;
 
@@ -17,4 +17,4 @@ void MockPrintJobHistoryService::SavePrintJobProto(
   }
 }
 
-}  // namespace chromeos
+}  // namespace ash

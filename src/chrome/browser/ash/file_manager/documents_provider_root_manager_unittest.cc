@@ -6,15 +6,14 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
+#include "ash/components/arc/arc_features.h"
+#include "ash/components/arc/session/arc_bridge_service.h"
+#include "ash/components/arc/session/arc_service_manager.h"
+#include "ash/components/arc/test/connection_holder_util.h"
+#include "ash/components/arc/test/fake_file_system_instance.h"
 #include "chrome/browser/ash/arc/fileapi/arc_file_system_operation_runner.h"
 #include "chrome/browser/ash/file_manager/documents_provider_root_manager.h"
 #include "chrome/test/base/testing_profile.h"
-#include "components/arc/arc_features.h"
-#include "components/arc/arc_service_manager.h"
-#include "components/arc/session/arc_bridge_service.h"
-#include "components/arc/test/connection_holder_util.h"
-#include "components/arc/test/fake_file_system_instance.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -61,6 +60,12 @@ class TestObserver : public DocumentsProviderRootManager::Observer {
 class DocumentsProviderRootManagerTest : public testing::Test {
  public:
   DocumentsProviderRootManagerTest() = default;
+
+  DocumentsProviderRootManagerTest(const DocumentsProviderRootManagerTest&) =
+      delete;
+  DocumentsProviderRootManagerTest& operator=(
+      const DocumentsProviderRootManagerTest&) = delete;
+
   ~DocumentsProviderRootManagerTest() override = default;
 
   void SetUp() override {
@@ -111,8 +116,6 @@ class DocumentsProviderRootManagerTest : public testing::Test {
   std::unique_ptr<TestingProfile> profile_;
   std::unique_ptr<arc::ArcFileSystemOperationRunner> runner_;
   TestObserver observer_;
-
-  DISALLOW_COPY_AND_ASSIGN(DocumentsProviderRootManagerTest);
 };
 
 TEST_F(DocumentsProviderRootManagerTest, AddMultipleRoots) {

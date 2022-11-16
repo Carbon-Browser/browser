@@ -9,18 +9,25 @@ import android.graphics.Canvas;
 import android.graphics.PorterDuff;
 import android.graphics.Rect;
 import android.graphics.Region;
+import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewStub;
 
+import androidx.annotation.VisibleForTesting;
+import androidx.appcompat.content.res.AppCompatResources;
+
 import org.chromium.base.TraceEvent;
-import org.chromium.chrome.browser.flags.CachedFeatureFlags;
+import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.toolbar.ControlContainer;
 import org.chromium.chrome.browser.toolbar.R;
+import org.chromium.chrome.browser.toolbar.ToolbarCaptureType;
 import org.chromium.chrome.browser.toolbar.ToolbarProgressBar;
+import org.chromium.chrome.browser.toolbar.top.CaptureReadinessResult.TopToolbarBlockCaptureReason;
+import org.chromium.components.browser_ui.styles.ChromeColors;
 import org.chromium.components.browser_ui.widget.ClipDrawableProgressBar.DrawingInfo;
 import org.chromium.components.browser_ui.widget.ViewResourceFrameLayout;
 import org.chromium.components.browser_ui.widget.gesture.SwipeGestureListener;
@@ -97,8 +104,9 @@ public class ToolbarControlContainer extends OptimizedFrameLayout implements Con
     /**
      * @param toolbar The toolbar contained inside this control container. Should be called
      *                after inflation is complete.
+     * @param isIncognito Whether the toolbar should be initialized with incognito colors.
      */
-    public void setToolbar(Toolbar toolbar) {
+    public void setToolbar(Toolbar toolbar, boolean isIncognito) {
         mToolbar = toolbar;
         mToolbarContainer.setToolbar(mToolbar);
 
@@ -109,7 +117,13 @@ public class ToolbarControlContainer extends OptimizedFrameLayout implements Con
             // On tablet, draw a fake tab strip and toolbar until the compositor is
             // ready to draw the real tab strip. (On phone, the toolbar is made entirely
             // of Android views, which are already initialized.)
-            setBackgroundResource(R.drawable.toolbar_background);
+            final Drawable backgroundDrawable =
+                    AppCompatResources.getDrawable(getContext(), R.drawable.toolbar_background)
+                            .mutate();
+            backgroundDrawable.setTint(
+                    ChromeColors.getDefaultThemeColor(getContext(), isIncognito));
+            backgroundDrawable.setTintMode(PorterDuff.Mode.MULTIPLY);
+            setBackground(backgroundDrawable);
         }
     }
 
@@ -159,8 +173,7 @@ public class ToolbarControlContainer extends OptimizedFrameLayout implements Con
         protected ViewResourceAdapter createResourceAdapter() {
             boolean useHardwareBitmapDraw = false;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                useHardwareBitmapDraw = CachedFeatureFlags.isEnabled(
-                        ChromeFeatureList.TOOLBAR_USE_HARDWARE_BITMAP_DRAW);
+                useHardwareBitmapDraw = ChromeFeatureList.sToolbarUseHardwareBitmapDraw.isEnabled();
             }
             return new ToolbarViewResourceAdapter(this, useHardwareBitmapDraw);
         }
@@ -175,7 +188,8 @@ public class ToolbarControlContainer extends OptimizedFrameLayout implements Con
         }
     }
 
-    private static class ToolbarViewResourceAdapter extends ViewResourceAdapter {
+    @VisibleForTesting
+    protected static class ToolbarViewResourceAdapter extends ViewResourceAdapter {
         private final int[] mTempPosition = new int[2];
         private final Rect mLocationBarRect = new Rect();
         private final Rect mToolbarRect = new Rect();
@@ -209,11 +223,23 @@ public class ToolbarControlContainer extends OptimizedFrameLayout implements Con
 
         @Override
         public boolean isDirty() {
-            return mToolbar != null && mToolbar.isReadyForTextureCapture() && super.isDirty();
+            if (!super.isDirty()) {
+                CaptureReadinessResult.logBlockCaptureReason(
+                        TopToolbarBlockCaptureReason.VIEW_NOT_DIRTY);
+                return false;
+            }
+
+            CaptureReadinessResult isReadyResult =
+                    mToolbar == null ? null : mToolbar.isReadyForTextureCapture();
+            CaptureReadinessResult.logCaptureReasonFromResult(isReadyResult);
+            return isReadyResult == null ? false : isReadyResult.isReady;
         }
 
         @Override
-        protected void onCaptureStart(Canvas canvas, Rect dirtyRect) {
+        public void onCaptureStart(Canvas canvas, Rect dirtyRect) {
+            RecordHistogram.recordEnumeratedHistogram("Android.Toolbar.BitmapCapture",
+                    ToolbarCaptureType.TOP, ToolbarCaptureType.NUM_ENTRIES);
+
             // Erase the canvas because assets drawn are not fully opaque and therefore painting
             // twice would be bad.
             canvas.save();
@@ -228,7 +254,7 @@ public class ToolbarControlContainer extends OptimizedFrameLayout implements Con
         }
 
         @Override
-        protected void onCaptureEnd() {
+        public void onCaptureEnd() {
             mToolbar.setTextureCaptureMode(false);
             // Forcing a texture capture should only be done for one draw. Turn off forced
             // texture capture.

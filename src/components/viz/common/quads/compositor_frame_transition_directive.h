@@ -5,10 +5,12 @@
 #ifndef COMPONENTS_VIZ_COMMON_QUADS_COMPOSITOR_FRAME_TRANSITION_DIRECTIVE_H_
 #define COMPONENTS_VIZ_COMMON_QUADS_COMPOSITOR_FRAME_TRANSITION_DIRECTIVE_H_
 
+#include <string>
 #include <vector>
 
 #include "base/time/time.h"
 #include "components/viz/common/quads/compositor_render_pass.h"
+#include "components/viz/common/shared_element_resource_id.h"
 #include "components/viz/common/viz_common_export.h"
 
 namespace viz {
@@ -23,10 +25,22 @@ class VIZ_COMMON_EXPORT CompositorFrameTransitionDirective {
  public:
   // What is the directive?
   // - Save means that the currently submitted frame will be used in the future
-  //   as the source frame of the animation.
+  //   as the source frame of the animation. The animation could be driven by
+  //   the renderer or Viz process. This directive must be followed by the
+  //   Animate or AnimateRenderer directive.
+  //
   // - Animate means that this frame should be used as a (new) destination frame
   //   of the animation, using the previously saved frame as the source.
-  enum class Type { kSave, kAnimate };
+  //
+  // - AnimateRenderer means that content in the current and subsequent frames
+  //   will use cached resources from the frame with the Save directive. This is
+  //   used when the content animation is driven by the renderer process.
+  //   Ownership of the cached resources is passed to the renderer process. This
+  //   directive must be followed by Release to delete the cached resources.
+  //
+  // - Release means that cached textures in the Viz process can be deleted.
+  //   This is used in the mode where the renderer is driving this animation.
+  enum class Type { kSave, kAnimate, kAnimateRenderer, kRelease };
 
   // The type of an effect that should be used in the animation.
   enum class Effect {
@@ -76,6 +90,11 @@ class VIZ_COMMON_EXPORT CompositorFrameTransitionDirective {
     // The render pass corresponding to a DOM element. The id is scoped to the
     // same frame that the directive corresponds to.
     CompositorRenderPassId render_pass_id;
+
+    // An identifier to tag the cached texture for this shared element in the
+    // Viz process.
+    SharedElementResourceId shared_element_resource_id;
+
     TransitionConfig config;
   };
 
@@ -87,6 +106,7 @@ class VIZ_COMMON_EXPORT CompositorFrameTransitionDirective {
   CompositorFrameTransitionDirective(
       uint32_t sequence_id,
       Type type,
+      bool is_renderer_driven_animation = false,
       Effect effect = Effect::kNone,
       const TransitionConfig& root_config = TransitionConfig(),
       std::vector<SharedElement> shared_elements = {});
@@ -115,10 +135,17 @@ class VIZ_COMMON_EXPORT CompositorFrameTransitionDirective {
     return shared_elements_;
   }
 
+  // Returns true if this is a directive for a renderer driven animation.
+  bool is_renderer_driven_animation() const {
+    return is_renderer_driven_animation_;
+  }
+
  private:
   uint32_t sequence_id_ = 0;
 
   Type type_ = Type::kSave;
+
+  bool is_renderer_driven_animation_ = false;
 
   Effect effect_ = Effect::kNone;
 

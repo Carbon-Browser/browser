@@ -10,6 +10,7 @@
 
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/time/time.h"
 #include "chrome/credential_provider/extension/extension_utils.h"
 #include "chrome/credential_provider/extension/user_context_enumerator.h"
 #include "chrome/credential_provider/gaiacp/logging.h"
@@ -53,7 +54,7 @@ const net::BackoffEntry::Policy kRetryLaterPolicy = {
 base::TimeDelta GetTimeDeltaSinceLastPeriodicSync(
     const std::wstring& task_reg_name) {
   wchar_t last_sync_millis[512];
-  ULONG last_sync_size = base::size(last_sync_millis);
+  ULONG last_sync_size = std::size(last_sync_millis);
   HRESULT hr = GetGlobalFlag(task_reg_name, last_sync_millis, &last_sync_size);
 
   if (FAILED(hr)) {
@@ -64,7 +65,7 @@ base::TimeDelta GetTimeDeltaSinceLastPeriodicSync(
   int64_t last_sync_millis_int64;
   base::StringToInt64(last_sync_millis, &last_sync_millis_int64);
   const auto last_sync = base::Time::FromDeltaSinceWindowsEpoch(
-      base::TimeDelta::FromMilliseconds(last_sync_millis_int64));
+      base::Milliseconds(last_sync_millis_int64));
   return base::Time::Now() - last_sync;
 }
 
@@ -170,7 +171,7 @@ void TaskManager::RunTasks(
     // Calculate the next run so that periodic polling  happens within
     // proper time intervals. When the tasks are scheduled, we don't want to
     // immediately start executing to allow some warm-up.
-    base::TimeDelta next_run = base::TimeDelta::FromSeconds(10);
+    base::TimeDelta next_run = base::Seconds(10);
     const base::TimeDelta time_since_last_run =
         GetTimeDeltaSinceLastPeriodicSync(
             GetLastSyncRegNameForTask(base::UTF8ToWide(it->first)));

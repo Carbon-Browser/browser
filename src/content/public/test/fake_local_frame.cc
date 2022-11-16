@@ -2,19 +2,20 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
-// This source code is a part of ABP Chromium.
-// Use of this source code is governed by the GPLv3 that can be found in the docs_abp/LICENSE file.
-
+// This source code is a part of eyeo Chromium SDK.
+// Use of this source code is governed by the GPLv3 that can be found in the
+// components/adblock/LICENSE file.
 
 #include "content/public/test/fake_local_frame.h"
 
+#include "build/build_config.h"
 #include "services/network/public/mojom/content_security_policy.mojom.h"
 #include "third_party/blink/public/mojom/devtools/inspector_issue.mojom.h"
 #include "third_party/blink/public/mojom/frame/media_player_action.mojom.h"
 #include "third_party/blink/public/mojom/push_messaging/push_messaging.mojom.h"
 #include "third_party/blink/public/mojom/timing/resource_timing.mojom.h"
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 #include "ui/base/mojom/attributed_string.mojom.h"
 #endif
 
@@ -29,6 +30,10 @@ void FakeLocalFrame::Init(blink::AssociatedInterfaceProvider* provider) {
       blink::mojom::LocalFrame::Name_,
       base::BindRepeating(&FakeLocalFrame::BindFrameHostReceiver,
                           base::Unretained(this)));
+}
+
+void FakeLocalFrame::FlushMessages() {
+  receiver_.FlushForTesting();
 }
 
 void FakeLocalFrame::GetTextSurroundingSelection(
@@ -97,21 +102,23 @@ void FakeLocalFrame::MediaPlayerActionAt(
     const gfx::Point& location,
     blink::mojom::MediaPlayerActionPtr action) {}
 
-void FakeLocalFrame::InsertUserStylesheet(const std::string& style_sheet) {}
+void FakeLocalFrame::PluginActionAt(const gfx::Point& location,
+                                    blink::mojom::PluginActionType action) {}
+
+void FakeLocalFrame::InsertAbpElemhideStylesheet(
+    const std::string& stylesheet) {}
 
 void FakeLocalFrame::AdvanceFocusInFrame(
     blink::mojom::FocusType focus_type,
     const absl::optional<blink::RemoteFrameToken>& source_frame_token) {}
 
-void FakeLocalFrame::AdvanceFocusInForm(blink::mojom::FocusType focus_type) {}
+void FakeLocalFrame::AdvanceFocusForIME(blink::mojom::FocusType focus_type) {}
 
 void FakeLocalFrame::ReportContentSecurityPolicyViolation(
     network::mojom::CSPViolationPtr violation) {}
 
 void FakeLocalFrame::DidUpdateFramePolicy(
     const blink::FramePolicy& frame_policy) {}
-
-void FakeLocalFrame::OnScreensChange() {}
 
 void FakeLocalFrame::PostMessageEvent(
     const absl::optional<blink::RemoteFrameToken>& source_frame_token,
@@ -122,7 +129,7 @@ void FakeLocalFrame::PostMessageEvent(
 void FakeLocalFrame::JavaScriptMethodExecuteRequest(
     const std::u16string& object_name,
     const std::u16string& method_name,
-    base::Value arguments,
+    base::Value::List arguments,
     bool wants_result,
     JavaScriptMethodExecuteRequestCallback callback) {}
 
@@ -147,7 +154,7 @@ void FakeLocalFrame::JavaScriptExecuteRequestInIsolatedWorld(
 void FakeLocalFrame::GetSavableResourceLinks(
     GetSavableResourceLinksCallback callback) {}
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 void FakeLocalFrame::GetCharacterIndexAtPoint(const gfx::Point& point) {}
 void FakeLocalFrame::GetFirstRectForRange(const gfx::Range& range) {}
 void FakeLocalFrame::GetStringForRange(const gfx::Range& range,
@@ -175,7 +182,7 @@ void FakeLocalFrame::BindDevToolsAgent(
     mojo::PendingAssociatedRemote<blink::mojom::DevToolsAgentHost> host,
     mojo::PendingAssociatedReceiver<blink::mojom::DevToolsAgent> receiver) {}
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 void FakeLocalFrame::ExtractSmartClipData(
     const gfx::Rect& rect,
     ExtractSmartClipDataCallback callback) {
@@ -187,6 +194,12 @@ void FakeLocalFrame::HandleRendererDebugURL(const GURL& url) {}
 
 void FakeLocalFrame::GetCanonicalUrlForSharing(
     base::OnceCallback<void(const absl::optional<GURL>&)> callback) {}
+
+void FakeLocalFrame::GetOpenGraphMetadata(
+    base::OnceCallback<void(blink::mojom::OpenGraphMetadataPtr)>) {}
+
+void FakeLocalFrame::SetNavigationApiHistoryEntriesForRestore(
+    blink::mojom::NavigationApiHistoryEntryArraysPtr entry_arrays) {}
 
 void FakeLocalFrame::BindFrameHostReceiver(
     mojo::ScopedInterfaceEndpointHandle handle) {

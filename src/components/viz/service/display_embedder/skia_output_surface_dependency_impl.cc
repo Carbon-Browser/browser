@@ -7,8 +7,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind_post_task.h"
 #include "base/callback_helpers.h"
+#include "base/task/bind_post_task.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "components/viz/service/gl/gpu_service_impl.h"
@@ -54,7 +54,7 @@ SkiaOutputSurfaceDependencyImpl::GetGpuDriverBugWorkarounds() {
 scoped_refptr<gpu::SharedContextState>
 SkiaOutputSurfaceDependencyImpl::GetSharedContextState() {
   if (gpu_service_impl_->compositor_gpu_thread()) {
-    return gpu_service_impl_->compositor_gpu_thread()->shared_context_state();
+    return gpu_service_impl_->compositor_gpu_thread()->GetSharedContextState();
   }
   return gpu_service_impl_->GetContextState();
 }
@@ -66,6 +66,10 @@ SkiaOutputSurfaceDependencyImpl::GetGrShaderCache() {
 
 VulkanContextProvider*
 SkiaOutputSurfaceDependencyImpl::GetVulkanContextProvider() {
+  if (gpu_service_impl_->compositor_gpu_thread()) {
+    return gpu_service_impl_->compositor_gpu_thread()
+        ->vulkan_context_provider();
+  }
   return gpu_service_impl_->vulkan_context_provider();
 }
 
@@ -123,9 +127,9 @@ base::ScopedClosureRunner SkiaOutputSurfaceDependencyImpl::CacheGLSurface(
   return base::ScopedClosureRunner(std::move(release_callback));
 }
 
-void SkiaOutputSurfaceDependencyImpl::PostTaskToClientThread(
-    base::OnceClosure closure) {
-  client_thread_task_runner_->PostTask(FROM_HERE, std::move(closure));
+scoped_refptr<base::TaskRunner>
+SkiaOutputSurfaceDependencyImpl::GetClientTaskRunner() {
+  return client_thread_task_runner_;
 }
 
 void SkiaOutputSurfaceDependencyImpl::ScheduleGrContextCleanup() {
@@ -134,13 +138,12 @@ void SkiaOutputSurfaceDependencyImpl::ScheduleGrContextCleanup() {
 
 void SkiaOutputSurfaceDependencyImpl::ScheduleDelayedGPUTaskFromGPUThread(
     base::OnceClosure task) {
-  constexpr base::TimeDelta kDelayForDelayedWork =
-      base::TimeDelta::FromMilliseconds(2);
+  constexpr base::TimeDelta kDelayForDelayedWork = base::Milliseconds(2);
   gpu_service_impl_->gpu_task_runner()->PostDelayedTask(
       FROM_HERE, std::move(task), kDelayForDelayedWork);
 }
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 void SkiaOutputSurfaceDependencyImpl::DidCreateAcceleratedSurfaceChildWindow(
     gpu::SurfaceHandle parent_window,
     gpu::SurfaceHandle child_window) {

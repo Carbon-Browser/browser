@@ -6,8 +6,8 @@
 
 #include "base/bind.h"
 #include "components/account_id/account_id.h"
+#include "components/signin/public/base/consent_level.h"
 #include "components/signin/public/identity_manager/access_token_info.h"
-#include "components/signin/public/identity_manager/consent_level.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/signin/public/identity_manager/primary_account_access_token_fetcher.h"
 #include "google_apis/gaia/google_service_auth_error.h"
@@ -61,7 +61,7 @@ void DriveFsAuth::GetAccessToken(
   get_access_token_callback_ = std::move(callback);
   // Timer is cancelled when it is destroyed, so use base::Unretained().
   timer_->Start(
-      FROM_HERE, base::TimeDelta::FromSeconds(30),
+      FROM_HERE, base::Seconds(30),
       base::BindOnce(&DriveFsAuth::AuthTimeout, base::Unretained(this)));
   std::set<std::string> scopes({"https://www.googleapis.com/auth/drive"});
   access_token_fetcher_ =
@@ -108,7 +108,7 @@ void DriveFsAuth::AuthTimeout() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   access_token_fetcher_.reset();
   std::move(get_access_token_callback_)
-      .Run(mojom::AccessTokenStatus::kAuthError, "");
+      .Run(mojom::AccessTokenStatus::kTransientError, "");
 }
 
 }  // namespace drivefs

@@ -13,13 +13,15 @@
 #include <utility>
 #include <vector>
 
+#include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
 #include "base/containers/unique_ptr_adapters.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/time/time.h"
 #include "base/unguessable_token.h"
 #include "base/values.h"
+#include "net/base/isolation_info.h"
 #include "net/reporting/reporting_cache.h"
 #include "net/reporting/reporting_context.h"
 #include "net/reporting/reporting_endpoint.h"
@@ -33,7 +35,10 @@ namespace net {
 
 class ReportingCacheImpl : public ReportingCache {
  public:
-  ReportingCacheImpl(ReportingContext* context);
+  explicit ReportingCacheImpl(ReportingContext* context);
+
+  ReportingCacheImpl(const ReportingCacheImpl&) = delete;
+  ReportingCacheImpl& operator=(const ReportingCacheImpl&) = delete;
 
   ~ReportingCacheImpl() override;
 
@@ -44,7 +49,7 @@ class ReportingCacheImpl : public ReportingCache {
                  const std::string& user_agent,
                  const std::string& group_name,
                  const std::string& type,
-                 std::unique_ptr<const base::Value> body,
+                 base::Value::Dict body,
                  int depth,
                  base::TimeTicks queued,
                  int attempts) override;
@@ -58,6 +63,8 @@ class ReportingCacheImpl : public ReportingCache {
       const std::vector<const ReportingReport*>& reports) override;
   void IncrementReportsAttempts(
       const std::vector<const ReportingReport*>& reports) override;
+  base::flat_map<url::Origin, std::vector<ReportingEndpoint>>
+  GetV1ReportingEndpointsByOrigin() const override;
   void IncrementEndpointDeliveries(const ReportingEndpointGroupKey& group_key,
                                    const GURL& url,
                                    int reports_delivered,
@@ -82,6 +89,7 @@ class ReportingCacheImpl : public ReportingCache {
       std::vector<ReportingEndpointGroup> parsed_header) override;
   void OnParsedReportingEndpointsHeader(
       const base::UnguessableToken& reporting_source,
+      const IsolationInfo& isolation_info,
       std::vector<ReportingEndpoint> parsed_header) override;
   std::set<url::Origin> GetAllOrigins() const override;
   void RemoveClient(const NetworkIsolationKey& network_isolation_key,
@@ -123,7 +131,10 @@ class ReportingCacheImpl : public ReportingCache {
                              int weight) override;
   void SetV1EndpointForTesting(const ReportingEndpointGroupKey& group_key,
                                const base::UnguessableToken& reporting_source,
+                               const IsolationInfo& isolation_info,
                                const GURL& url) override;
+  IsolationInfo GetIsolationInfoForEndpoint(
+      const ReportingEndpoint& endpoint) const override;
 
  private:
   // Represents the entire Report-To configuration for a (NIK, origin) pair.
@@ -318,6 +329,11 @@ class ReportingCacheImpl : public ReportingCache {
   void AddEndpointItToIndex(EndpointMap::iterator endpoint_it);
   void RemoveEndpointItFromIndex(EndpointMap::iterator endpoint_it);
 
+  // Helper method for IncrementEndpointDeliveries
+  ReportingEndpoint::Statistics* GetEndpointStats(
+      const ReportingEndpointGroupKey& group_key,
+      const GURL& url);
+
   // Helper methods for GetClientsAsValue().
   base::Value GetClientAsValue(const Client& client) const;
   base::Value GetEndpointGroupAsValue(
@@ -329,7 +345,7 @@ class ReportingCacheImpl : public ReportingCache {
   const base::TickClock& tick_clock() const { return context_->tick_clock(); }
   PersistentReportingStore* store() { return context_->store(); }
 
-  ReportingContext* context_;
+  raw_ptr<ReportingContext> context_;
 
   // Reports that have not yet been successfully uploaded.
   ReportSet reports_;
@@ -358,24 +374,27 @@ class ReportingCacheImpl : public ReportingCache {
   std::multimap<GURL, EndpointMap::iterator> endpoint_its_by_url_;
 
   // Reporting API V1 Cache:
-  // The |document_endpoints_| member holds endpoint configuration for the V1
+  // The `document_endpoints_` member holds endpoint configuration for the V1
   // API, configured through the Reporting-Endpoints HTTP header. These
   // endpoints are strongly associated with the resource which configured them,
   // and are only used for document reports.
 
   // Map of endpoints for each reporting source, keyed on the reporting source
   // token. This contains only V1 document endpoints.
-  std::map<base::UnguessableToken, const std::vector<ReportingEndpoint>>
+  std::map<base::UnguessableToken, std::vector<ReportingEndpoint>>
       document_endpoints_;
 
+  // Isolation info for each reporting source. Used for determining credentials
+  // to send when delivering reports. This contains only V1 document endpoints.
+  std::map<base::UnguessableToken, IsolationInfo> isolation_info_;
+
   // Reporting source tokens representing sources which have been destroyed.
-  // The configuration in `document_endpoints_` for these sources can be
-  // removed once all outstanding reports are delivered (or expired).
+  // The configuration in `document_endpoints_` and `isolation_info_` for these
+  // sources can be removed once all outstanding reports are delivered (or
+  // expired).
   base::flat_set<base::UnguessableToken> expired_sources_;
 
   SEQUENCE_CHECKER(sequence_checker_);
-
-  DISALLOW_COPY_AND_ASSIGN(ReportingCacheImpl);
 };
 
 }  // namespace net

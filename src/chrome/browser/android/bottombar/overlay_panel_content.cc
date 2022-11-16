@@ -11,6 +11,7 @@
 #include "base/bind.h"
 #include "base/callback.h"
 #include "base/memory/weak_ptr.h"
+#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "cc/input/browser_controls_state.h"
 #include "chrome/android/chrome_jni_headers/OverlayPanelContent_jni.h"
@@ -75,8 +76,8 @@ void OverlayPanelContent::RemoveLastHistoryEntry(
   // The deletion window is from the time a search URL was put in history, up
   // to a short amount of time later.
   base::Time begin_time = base::Time::FromJsTime(search_start_time_ms);
-  base::Time end_time = begin_time +
-      base::TimeDelta::FromSeconds(kHistoryDeletionWindowSeconds);
+  base::Time end_time =
+      begin_time + base::Seconds(kHistoryDeletionWindowSeconds);
 
   history::HistoryService* service = HistoryServiceFactory::GetForProfile(
       ProfileManager::GetActiveUserProfile(),
@@ -125,7 +126,12 @@ void OverlayPanelContent::DestroyWebContents(
     JNIEnv* env,
     const JavaParamRef<jobject>& jobj) {
   DCHECK(web_contents_.get());
-  web_contents_.reset();
+  // At the time this is called we may be deeply nested in a callback from
+  // WebContents. WebContents does not support being deleted from a callback
+  // (crashes). To avoid this problem DeleteSoon() is used. See
+  // https://crbug.com/1262098.
+  base::ThreadTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE,
+                                                  web_contents_.release());
   // |web_contents_delegate_| may already be NULL at this point.
   web_contents_delegate_.reset();
 }
@@ -155,7 +161,7 @@ void OverlayPanelContent::UpdateBrowserControlsState(
   if (are_controls_hidden)
     state = cc::BrowserControlsState::kHidden;
 
-  web_contents_->GetMainFrame()->UpdateBrowserControlsState(
+  web_contents_->UpdateBrowserControlsState(
       state, cc::BrowserControlsState::kBoth, false);
 }
 

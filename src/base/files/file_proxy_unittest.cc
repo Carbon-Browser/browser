@@ -10,7 +10,6 @@
 #include <utility>
 
 #include "base/bind.h"
-#include "base/cxx17_backports.h"
 #include "base/files/file.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
@@ -181,7 +180,7 @@ TEST_F(FileProxyTest, Close) {
   FileProxy proxy(file_task_runner());
   CreateProxy(File::FLAG_CREATE | File::FLAG_WRITE, &proxy);
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   // This fails on Windows if the file is not closed.
   EXPECT_FALSE(base::Move(TestPath(), TestDirPath().AppendASCII("new")));
 #endif
@@ -238,7 +237,7 @@ TEST_F(FileProxyTest, CreateTemporary) {
       deleted_temp_file = true;
     else
       // Wait one second and then try again
-      PlatformThread::Sleep(TimeDelta::FromSeconds(1));
+      PlatformThread::Sleep(Seconds(1));
   }
   EXPECT_TRUE(deleted_temp_file);
 }
@@ -301,7 +300,7 @@ TEST_F(FileProxyTest, GetInfo) {
 TEST_F(FileProxyTest, Read) {
   // Setup.
   const char expected_data[] = "bleh";
-  int expected_bytes = base::size(expected_data);
+  int expected_bytes = std::size(expected_data);
   ASSERT_EQ(expected_bytes,
             base::WriteFile(TestPath(), expected_data, expected_bytes));
 
@@ -328,7 +327,7 @@ TEST_F(FileProxyTest, WriteAndFlush) {
   CreateProxy(File::FLAG_CREATE | File::FLAG_WRITE, &proxy);
 
   const char data[] = "foo!";
-  int data_bytes = base::size(data);
+  int data_bytes = std::size(data);
   {
     RunLoop run_loop;
     proxy.Write(0, data, data_bytes,
@@ -357,10 +356,8 @@ TEST_F(FileProxyTest, WriteAndFlush) {
   }
 }
 
-#if defined(OS_ANDROID) || defined(OS_FUCHSIA)
+#if BUILDFLAG(IS_ANDROID)
 // Flaky on Android, see http://crbug.com/489602
-// TODO(crbug.com/851734): Implementation depends on stat, which is not
-// implemented on Fuchsia
 #define MAYBE_SetTimes DISABLED_SetTimes
 #else
 #define MAYBE_SetTimes SetTimes
@@ -371,8 +368,8 @@ TEST_F(FileProxyTest, MAYBE_SetTimes) {
       File::FLAG_CREATE | File::FLAG_WRITE | File::FLAG_WRITE_ATTRIBUTES,
       &proxy);
 
-  Time last_accessed_time = Time::Now() - TimeDelta::FromDays(12345);
-  Time last_modified_time = Time::Now() - TimeDelta::FromHours(98765);
+  Time last_accessed_time = Time::Now() - Days(12345);
+  Time last_modified_time = Time::Now() - Hours(98765);
 
   RunLoop run_loop;
   proxy.SetTimes(last_accessed_time, last_modified_time,
@@ -388,8 +385,12 @@ TEST_F(FileProxyTest, MAYBE_SetTimes) {
   // the double values to int here.
   EXPECT_EQ(static_cast<int>(last_modified_time.ToDoubleT()),
             static_cast<int>(info.last_modified.ToDoubleT()));
+
+#if !BUILDFLAG(IS_FUCHSIA)
+  // On Fuchsia, /tmp is noatime
   EXPECT_EQ(static_cast<int>(last_accessed_time.ToDoubleT()),
             static_cast<int>(info.last_accessed.ToDoubleT()));
+#endif  // BUILDFLAG(IS_FUCHSIA)
 }
 
 TEST_F(FileProxyTest, SetLength_Shrink) {

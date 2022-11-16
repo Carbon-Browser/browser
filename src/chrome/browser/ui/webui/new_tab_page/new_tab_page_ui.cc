@@ -5,24 +5,33 @@
 #include "chrome/browser/ui/webui/new_tab_page/new_tab_page_ui.h"
 
 #include <memory>
+#include <string>
 #include <utility>
+#include <vector>
 
+#include "base/command_line.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/strcat.h"
+#include "base/strings/string_split.h"
 #include "base/strings/stringprintf.h"
 #include "base/time/time.h"
+#include "base/values.h"
 #include "chrome/browser/buildflags.h"
 #include "chrome/browser/cart/cart_handler.h"
 #include "chrome/browser/new_tab_page/modules/drive/drive_handler.h"
+#include "chrome/browser/new_tab_page/modules/feed/feed_handler.h"
 #include "chrome/browser/new_tab_page/modules/photos/photos_handler.h"
 #include "chrome/browser/new_tab_page/modules/task_module/task_module_handler.h"
+#include "chrome/browser/new_tab_page/new_tab_page_util.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/search/background/ntp_custom_background_service_factory.h"
 #include "chrome/browser/search_engines/template_url_service_factory.h"
 #include "chrome/browser/search_provider_logos/logo_service_factory.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
-#include "chrome/browser/themes/theme_properties.h"
+#include "chrome/browser/sync/sync_service_factory.h"
 #include "chrome/browser/themes/theme_service_factory.h"
+#include "chrome/browser/ui/browser_window.h"
+#include "chrome/browser/ui/color/chrome_color_id.h"
 #include "chrome/browser/ui/webui/browser_command/browser_command_handler.h"
 #include "chrome/browser/ui/webui/cr_components/most_visited/most_visited_handler.h"
 #include "chrome/browser/ui/webui/customize_themes/chrome_customize_themes_handler.h"
@@ -43,25 +52,31 @@
 #include "chrome/grit/new_tab_page_resources.h"
 #include "chrome/grit/new_tab_page_resources_map.h"
 #include "chrome/grit/theme_resources.h"
+#include "components/commerce/core/commerce_feature_list.h"
 #include "components/favicon_base/favicon_url_parser.h"
+#include "components/feed/feed_feature_list.h"
 #include "components/google/core/common/google_util.h"
 #include "components/grit/components_scaled_resources.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 #include "components/search/ntp_features.h"
 #include "components/search_engines/template_url_service.h"
+#include "components/signin/public/identity_manager/accounts_in_cookie_jar_info.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/strings/grit/components_strings.h"
+#include "components/sync/driver/sync_service.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/url_data_source.h"
 #include "content/public/browser/web_ui_data_source.h"
 #include "google_apis/gaia/core_account_id.h"
 #include "media/base/media_switches.h"
 #include "services/network/public/mojom/content_security_policy.mojom.h"
+#include "skia/ext/skia_utils_base.h"
 #include "ui/base/accelerators/accelerator.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/base/webui/web_ui_util.h"
+#include "ui/color/color_provider.h"
 #include "ui/native_theme/native_theme.h"
 #include "ui/resources/grit/webui_generated_resources.h"
 #include "url/url_util.h"
@@ -76,10 +91,85 @@ using content::WebContents;
 namespace {
 
 constexpr char kPrevNavigationTimePrefName[] = "NewTabPage.PrevNavigationTime";
+constexpr char kSignedOutNtpModulesSwitch[] = "signed-out-ntp-modules";
 
-content::WebUIDataSource* CreateNewTabPageUiHtmlSource(
-    Profile* profile,
-    const base::Time& navigation_start_time) {
+const std::pair<const char*, const base::Feature&> kModuleFeatures[] = {
+#if !defined(OFFICIAL_BUILD)
+    {"dummyModulesEnabled", ntp_features::kNtpDummyModules},
+#endif
+    {"photosModuleEnabled", ntp_features::kNtpPhotosModule},
+    {"feedModuleEnabled", ntp_features::kNtpFeedModule},
+};
+
+void AddRawStringOrDefault(content::WebUIDataSource* source,
+                           const char key[],
+                           const std::string str,
+                           int default_string_id) {
+  if (str.empty()) {
+    source->AddLocalizedString(key, default_string_id);
+  } else {
+    source->AddString(key, str);
+  }
+}
+
+// The Discount Consent V2 is gated by Chrome Cart, and that is enabled for
+// en-us local only. So using plain en strings here is fine.
+void AddResourcesForCartDiscountConsentV2(content::WebUIDataSource* source) {
+  AddRawStringOrDefault(
+      source, "modulesCartDiscountConsentContent",
+      commerce::kNtpChromeCartModuleDiscountConsentStringChangeContent.Get(),
+      IDS_NTP_MODULES_CART_DISCOUNT_CONSENT_CONTENT_V2);
+
+  source->AddBoolean(
+      "modulesCartConsentStepTwoDifferentColor",
+      commerce::kNtpChromeCartModuleDiscountConsentInlineStepTwoDifferentColor
+          .Get());
+
+  AddRawStringOrDefault(
+      source, "modulesCartDiscountConentTitle",
+      commerce::kNtpChromeCartModuleDiscountConsentNtpDialogContentTitle.Get(),
+      IDS_NTP_MODULES_CART_DISCOUNT_CONSENT_TITLE);
+
+  source->AddBoolean(
+      "modulesCartStepOneUseStaticContent",
+      commerce::kNtpChromeCartModuleDiscountConsentNtpStepOneUseStaticContent
+          .Get());
+  // This does not have a raw string resource.
+  source->AddString(
+      "modulesCartStepOneStaticContent",
+      commerce::kNtpChromeCartModuleDiscountConsentNtpStepOneStaticContent
+          .Get());
+
+  AddRawStringOrDefault(
+      source, "modulesCartConsentStepOneOneMerchantContent",
+      commerce::kNtpChromeCartModuleDiscountConsentNtpStepOneContentOneCart
+          .Get(),
+      IDS_NTP_MODULES_CART_DISCOUNT_CONSENT_STEP_1_WITH_MERCHANT_NAME);
+  AddRawStringOrDefault(
+      source, "modulesCartConsentStepOneTwoMerchantsContent",
+      commerce::kNtpChromeCartModuleDiscountConsentNtpStepOneContentTwoCarts
+          .Get(),
+      IDS_NTP_MODULES_CART_DISCOUNT_CONSENT_STEP_1_WITH_TWO_MERCHANT_NAMES);
+  AddRawStringOrDefault(
+      source, "modulesCartConsentStepOneThreeMerchantsContent",
+      commerce::kNtpChromeCartModuleDiscountConsentNtpStepOneContentThreeCarts
+          .Get(),
+      IDS_NTP_MODULES_CART_DISCOUNT_CONSENT_STEP_1_WITH_THREE_MERCHANT_NAMES);
+  AddRawStringOrDefault(
+      source, "modulesCartConsentStepTwoContent",
+      commerce::kNtpChromeCartModuleDiscountConsentNtpStepTwoContent.Get(),
+      IDS_NTP_MODULES_CART_DISCOUNT_CONSENT_CONTENT_V3);
+
+  source->AddLocalizedString(
+      "modulesCartConsentStepOneButton",
+      IDS_NTP_MODULES_CART_DISCOUNT_CONSENT_STEP_1_CONTINUE);
+
+  source->AddBoolean(
+      "modulesCartDiscountInlineCardShowCloseButton",
+      commerce::kNtpChromeCartModuleDiscountConsentInlineShowCloseButton.Get());
+}
+
+content::WebUIDataSource* CreateNewTabPageUiHtmlSource(Profile* profile) {
   content::WebUIDataSource* source =
       content::WebUIDataSource::Create(chrome::kChromeUINewTabPageHost);
 
@@ -92,7 +182,6 @@ content::WebUIDataSource* CreateNewTabPageUiHtmlSource(
                              ->search_terms_data()
                              .GoogleBaseURLValue())
                         .spec());
-  source->AddDouble("navigationStartTime", navigation_start_time.ToJsTime());
 
   source->AddBoolean(
       "handleMostVisitedNavigationExplicitly",
@@ -108,12 +197,17 @@ content::WebUIDataSource* CreateNewTabPageUiHtmlSource(
                      base::FeatureList::IsEnabled(ntp_features::kNtpLogo));
   source->AddBoolean(
       "middleSlotPromoEnabled",
-      base::FeatureList::IsEnabled(ntp_features::kNtpMiddleSlotPromo));
-  source->AddBoolean("modulesEnabled",
-                     base::FeatureList::IsEnabled(ntp_features::kModules));
+      base::FeatureList::IsEnabled(ntp_features::kNtpMiddleSlotPromo) &&
+          profile->GetPrefs()->GetBoolean(prefs::kNtpPromoVisible));
+  source->AddBoolean(
+      "middleSlotPromoDismissalEnabled",
+      base::FeatureList::IsEnabled(ntp_features::kNtpMiddleSlotPromoDismissal));
   source->AddBoolean(
       "modulesDragAndDropEnabled",
       base::FeatureList::IsEnabled(ntp_features::kNtpModulesDragAndDrop));
+  source->AddBoolean("modulesFirstRunExperienceEnabled",
+                     base::FeatureList::IsEnabled(
+                         ntp_features::kNtpModulesFirstRunExperience));
   source->AddBoolean("modulesLoadEnabled", base::FeatureList::IsEnabled(
                                                ntp_features::kNtpModulesLoad));
   source->AddInteger("modulesLoadTimeout",
@@ -210,13 +304,20 @@ content::WebUIDataSource* CreateNewTabPageUiHtmlSource(
       {"modulesDismissButtonText", IDS_NTP_MODULES_DISMISS_BUTTON_TEXT},
       {"modulesDisableButtonText", IDS_NTP_MODULES_DISABLE_BUTTON_TEXT},
       {"modulesCustomizeButtonText", IDS_NTP_MODULES_CUSTOMIZE_BUTTON_TEXT},
-      {"modulesShoppingTasksSentence", IDS_NTP_MODULES_SHOPPING_TASKS_SENTENCE},
-      {"modulesShoppingTasksLower", IDS_NTP_MODULES_SHOPPING_TASKS_LOWER},
+      {"modulesRecipeInfo", IDS_NTP_MODULES_RECIPE_INFO},
+      {"modulesRecipeExtendedInfo", IDS_NTP_MODULES_RECIPE_EXTENDED_INFO},
       {"modulesRecipeTasksSentence", IDS_NTP_MODULES_RECIPE_TASKS_SENTENCE},
       {"modulesRecipeTasksLower", IDS_NTP_MODULES_RECIPE_TASKS_LOWER},
       {"modulesRecipeTasksLowerThese",
        IDS_NTP_MODULES_RECIPE_TASKS_LOWER_THESE},
+      {"modulesRecipeViewedTasksSentence",
+       IDS_NTP_MODULES_RECIPE_VIEWED_TASKS_SENTENCE},
+      {"modulesRecipeViewedTasksLower",
+       IDS_NTP_MODULES_RECIPE_VIEWED_TASKS_LOWER},
+      {"modulesRecipeViewedTasksLowerThese",
+       IDS_NTP_MODULES_RECIPE_VIEWED_TASKS_LOWER_THESE},
       {"modulesTasksInfo", IDS_NTP_MODULES_TASKS_INFO},
+      {"modulesCartInfo", IDS_NTP_MODULES_CART_INFO},
       {"modulesCartSentence", IDS_NTP_MODULES_CART_SENTENCE},
       {"modulesCartSentenceV2", IDS_NTP_MODULES_CART_SENTENCE_V2},
       {"modulesCartLower", IDS_NTP_MODULES_CART_LOWER},
@@ -228,15 +329,50 @@ content::WebUIDataSource* CreateNewTabPageUiHtmlSource(
       {"modulesDriveFilesLower", IDS_NTP_MODULES_DRIVE_FILES_LOWER},
       {"modulesDummyLower", IDS_NTP_MODULES_DUMMY_LOWER},
       {"modulesDriveTitle", IDS_NTP_MODULES_DRIVE_TITLE},
-      {"modulesPhotosTitle", IDS_NTP_MODULES_PHOTOS_TITLE},
       {"modulesDriveInfo", IDS_NTP_MODULES_DRIVE_INFO},
       {"modulesDummyTitle", IDS_NTP_MODULES_DUMMY_TITLE},
       {"modulesDummy2Title", IDS_NTP_MODULES_DUMMY2_TITLE},
+      {"modulesDummy3Title", IDS_NTP_MODULES_DUMMY2_TITLE},
+      {"modulesDummy4Title", IDS_NTP_MODULES_DUMMY2_TITLE},
+      {"modulesDummy5Title", IDS_NTP_MODULES_DUMMY2_TITLE},
+      {"modulesDummy6Title", IDS_NTP_MODULES_DUMMY2_TITLE},
+      {"modulesDummy7Title", IDS_NTP_MODULES_DUMMY2_TITLE},
+      {"modulesDummy8Title", IDS_NTP_MODULES_DUMMY2_TITLE},
+      {"modulesDummy9Title", IDS_NTP_MODULES_DUMMY2_TITLE},
+      {"modulesDummy10Title", IDS_NTP_MODULES_DUMMY2_TITLE},
+      {"modulesDummy11Title", IDS_NTP_MODULES_DUMMY2_TITLE},
+      {"modulesDummy12Title", IDS_NTP_MODULES_DUMMY2_TITLE},
+      {"modulesFeedTitle", IDS_NTP_MODULES_FEED_TITLE},
       {"modulesKaleidoscopeTitle", IDS_NTP_MODULES_KALEIDOSCOPE_TITLE},
-      {"modulesPhotosSentence", IDS_NTP_MODULES_PHOTOS_TITLE},
+      {"modulesPhotosInfo", IDS_NTP_MODULES_PHOTOS_INFO},
+      {"modulesPhotosSentence", IDS_NTP_MODULES_PHOTOS_MEMORIES_TITLE},
+      {"modulesPhotosTitle", IDS_NTP_MODULES_PHOTOS_TITLE},
+      {"modulesPhotosMemoriesDisable", IDS_NTP_MODULES_PHOTOS_MEMORIES_DISABLE},
+      {"modulesPhotosMemoriesDisabled",
+       IDS_NTP_MODULES_PHOTOS_MEMORIES_DISABLED},
+      {"modulesPhotosMemoriesHideToday",
+       IDS_NTP_MODULES_PHOTOS_MEMORIES_HIDE_TODAY},
+      {"modulesPhotosMemoriesHiddenToday",
+       IDS_NTP_MODULES_PHOTOS_MEMORIES_HIDDEN_TODAY},
+      {"modulesPhotosMemoriesExplore", IDS_NTP_MODULES_PHOTOS_MEMORIES_EXPLORE},
+      {"modulesPhotosMemoriesWelcomeTitle",
+       IDS_NTP_MODULES_PHOTOS_MEMORIES_WELCOME_TITLE},
+      {"modulesPhotosMemoriesWelcomeText",
+       IDS_NTP_MODULES_PHOTOS_MEMORIES_WELCOME_TEXT},
+      {"modulesPhotosMemoriesWelcomeButtonOptIn",
+       IDS_NTP_MODULES_PHOTOS_MEMORIES_WELCOME_BUTTON_OPT_IN},
+      {"modulesPhotosMemoriesWelcomeButtonOptOut",
+       IDS_NTP_MODULES_PHOTOS_MEMORIES_WELCOME_BUTTON_OPT_OUT},
+      {"modulesPhotosMemoriesWelcomeButtonSoftOptOut",
+       IDS_NTP_MODULES_PHOTOS_MEMORIES_WELCOME_BUTTON_SOFT_OPT_OUT},
+      {"modulesPhotosMemoriesSoftOptOut", IDS_NTP_MODULES_PHOTOS_SOFT_OPT_OUT},
+      {"modulesPhotosMemoriesWelcomeExample",
+       IDS_NTP_MODULES_PHOTOS_MEMORIES_WELCOME_EXAMPLE},
+      {"modulesPhotosMemoriesBaloonIllustrationTitle",
+       IDS_NTP_MODULES_PHOTOS_BALOON_ILLUSTRATION_TITLE},
+      {"modulesPhotosNew", IDS_NTP_MODULES_PHOTOS_NEW},
       {"modulesTasksInfoTitle", IDS_NTP_MODULES_SHOPPING_TASKS_INFO_TITLE},
       {"modulesTasksInfoClose", IDS_NTP_MODULES_SHOPPING_TASKS_INFO_CLOSE},
-      {"modulesCartHeaderNew", IDS_NTP_MODULES_CART_HEADER_CHIP_NEW},
       {"modulesCartWarmWelcome", IDS_NTP_MODULES_CART_WARM_WELCOME},
       {"modulesCartModuleMenuHideToastMessage",
        IDS_NTP_MODULES_CART_MODULE_MENU_HIDE_TOAST_MESSAGE},
@@ -252,8 +388,6 @@ content::WebUIDataSource* CreateNewTabPageUiHtmlSource(
        IDS_NTP_MODULES_CART_DISCOUNT_CHIP_AMOUNT},
       {"modulesCartDiscountChipUpToAmount",
        IDS_NTP_MODULES_CART_DISCOUNT_CHIP_UP_TO_AMOUNT},
-      {"modulesCartDiscountConsentContent",
-       IDS_NTP_MODULES_CART_DISCOUNT_CONSENT_CONTENT},
       {"modulesCartDiscountConsentAccept",
        IDS_NTP_MODULES_CART_DISCOUNT_CONSENT_ACCEPT},
       {"modulesCartDiscountConsentAcceptConfirmation",
@@ -268,23 +402,50 @@ content::WebUIDataSource* CreateNewTabPageUiHtmlSource(
        IDS_NTP_MODULES_CART_ITEM_COUNT_SINGULAR},
       {"modulesCartItemCountMultiple",
        IDS_NTP_MODULES_CART_ITEM_COUNT_MULTIPLE},
+      {"modulesCartDiscountConsentContentV3",
+       IDS_NTP_MODULES_CART_DISCOUNT_CONSENT_CONTENT_V3},
+      {"modulesCartDiscountConentTitle",
+       IDS_NTP_MODULES_CART_DISCOUNT_CONSENT_TITLE},
+      {"modulesNewTagLabel", IDS_NTP_MODULES_NEW_TAG_LABEL},
+      {"modulesFirstRunExperienceTitle",
+       IDS_NTP_MODULES_FIRST_RUN_EXPERIENCE_TITLE},
+      {"modulesFirstRunExperienceBodyLine1",
+       IDS_NTP_MODULES_FIRST_RUN_EXPERIENCE_BODY_LINE_1},
+      {"modulesFirstRunExperienceBodyLine2",
+       IDS_NTP_MODULES_FIRST_RUN_EXPERIENCE_BODY_LINE_2},
+      {"modulesFirstRunExperienceOptIn",
+       IDS_NTP_MODULES_FIRST_RUN_EXPERIENCE_OPT_IN},
+      {"modulesFirstRunExperienceOptOut",
+       IDS_NTP_MODULES_FIRST_RUN_EXPERIENCE_OPT_OUT},
+      {"modulesFirstRunExperienceOptOutToast",
+       IDS_NTP_MODULES_FIRST_RUN_EXPERIENCE_OPT_OUT_TOAST},
   };
   source->AddLocalizedStrings(kStrings);
 
-  source->AddBoolean(
-      "recipeTasksModuleEnabled",
-      base::FeatureList::IsEnabled(ntp_features::kNtpRecipeTasksModule));
-  source->AddBoolean(
-      "shoppingTasksModuleEnabled",
-      base::FeatureList::IsEnabled(ntp_features::kNtpShoppingTasksModule));
-  source->AddBoolean(
-      "chromeCartModuleEnabled",
-      base::FeatureList::IsEnabled(ntp_features::kNtpChromeCartModule));
-  source->AddBoolean("driveModuleEnabled",
-                     NewTabPageUI::IsDriveModuleEnabled(profile));
-  source->AddBoolean(
-      "photosModuleEnabled",
-      base::FeatureList::IsEnabled(ntp_features::kNtpPhotosModule));
+  source->AddInteger(
+      "modulesCartDiscountConsentVariation",
+      commerce::kNtpChromeCartModuleDiscountConsentNtpVariation.Get());
+
+  if (base::FeatureList::IsEnabled(commerce::kDiscountConsentV2)) {
+    AddResourcesForCartDiscountConsentV2(source);
+  } else {
+    source->AddLocalizedString("modulesCartDiscountConsentContent",
+                               IDS_NTP_MODULES_CART_DISCOUNT_CONSENT_CONTENT);
+  }
+
+  for (const auto& nameFeature : kModuleFeatures) {
+    source->AddBoolean(nameFeature.first,
+                       base::FeatureList::IsEnabled(nameFeature.second));
+  }
+  source->AddBoolean("recipeTasksModuleEnabled", IsRecipeTasksModuleEnabled());
+  source->AddBoolean("chromeCartModuleEnabled", IsCartModuleEnabled());
+  source->AddString("photosModuleCustomArtWork",
+                    base::GetFieldTrialParamValueByFeature(
+                        ntp_features::kNtpPhotosModuleCustomizedOptInArtWork,
+                        ntp_features::kNtpPhotosModuleOptInArtWorkParam));
+  source->AddBoolean("photosModuleSplitSvgCustomArtWork",
+                     base::FeatureList::IsEnabled(
+                         ntp_features::kNtpPhotosModuleSplitSvgOptInArtWork));
   source->AddBoolean(
       "ruleBasedDiscountEnabled",
       base::GetFieldTrialParamValueByFeature(
@@ -294,6 +455,21 @@ content::WebUIDataSource* CreateNewTabPageUiHtmlSource(
   source->AddBoolean(
       "modulesRedesignedEnabled",
       base::FeatureList::IsEnabled(ntp_features::kNtpModulesRedesigned));
+  source->AddBoolean(
+      "modulesRedesignedLayoutEnabled",
+      base::FeatureList::IsEnabled(ntp_features::kNtpModulesRedesignedLayout));
+
+  std::vector<std::string> splitExperimentGroup = base::SplitString(
+      base::GetFieldTrialParamValueByFeature(
+          ntp_features::kNtpRecipeTasksModule,
+          ntp_features::kNtpRecipeTasksModuleExperimentGroupParam),
+      "-", base::KEEP_WHITESPACE, base::SPLIT_WANT_ALL);
+  source->AddBoolean(
+      "modulesRecipeHistoricalExperimentEnabled",
+      !splitExperimentGroup.empty() && splitExperimentGroup[0] == "historical");
+  source->AddBoolean(
+      "moduleRecipeExtendedExperimentEnabled",
+      !splitExperimentGroup.empty() && (splitExperimentGroup[0] == "historical" || splitExperimentGroup[0] == "mix"));
 
   RealboxHandler::SetupWebUIDataSource(source);
 
@@ -301,17 +477,10 @@ content::WebUIDataSource* CreateNewTabPageUiHtmlSource(
       source, base::make_span(kNewTabPageResources, kNewTabPageResourcesSize),
       IDR_NEW_TAB_PAGE_NEW_TAB_PAGE_HTML);
 
-  // Allows creating <script> and inlining as well as network requests to
-  // support inlining the OneGoogleBar.
-  // TODO(crbug.com/1076506): remove when changing to iframed OneGoogleBar.
-  // Needs to happen after |webui::SetupWebUIDataSource()| since also overrides
-  // script-src.
-  source->OverrideContentSecurityPolicy(
-      network::mojom::CSPDirectiveName::ScriptSrc,
-      "script-src chrome://resources chrome://test "
-      "'self' 'unsafe-inline' https:;");
-  // Allow embedding of iframes from the One Google Bar and
+  // Allow embedding of iframes for the doodle and
   // chrome-untrusted://new-tab-page for other external content and resources.
+  // NOTE: Use caution when overriding content security policies as that cean
+  // lead to subtle security bugs such as https://crbug.com/1251541.
   source->OverrideContentSecurityPolicy(
       network::mojom::CSPDirectiveName::ChildSrc,
       base::StringPrintf("child-src https: %s %s;",
@@ -319,6 +488,13 @@ content::WebUIDataSource* CreateNewTabPageUiHtmlSource(
                          chrome::kChromeUIUntrustedNewTabPageUrl));
 
   return source;
+}
+
+bool HasCredentials(Profile* profile) {
+  auto* identity_manager = IdentityManagerFactory::GetForProfile(profile);
+  return
+      /* Can be null if Chrome signin is disabled. */ identity_manager &&
+      identity_manager->GetAccountsInCookieJar().signed_in_accounts.size() > 0;
 }
 
 }  // namespace
@@ -339,7 +515,7 @@ NewTabPageUI::NewTabPageUI(content::WebUI* web_ui)
       // for the unlikely case where the NewTabPageHandler is created before we
       // received the DidStartNavigation event.
       navigation_start_time_(base::Time::Now()) {
-  auto* source = CreateNewTabPageUiHtmlSource(profile_, navigation_start_time_);
+  auto* source = CreateNewTabPageUiHtmlSource(profile_);
   source->AddBoolean(
       "customBackgroundDisabledByPolicy",
       ntp_custom_background_service_->IsCustomBackgroundDisabledByPolicy());
@@ -378,13 +554,14 @@ NewTabPageUI::NewTabPageUI(content::WebUI* web_ui)
   // Load time data is cached across page reloads. Listen for theme changes so
   // that theme info is up-to-date when reloading.
   native_theme_observation_.Observe(ui::NativeTheme::GetInstanceForNativeUi());
-  theme_service_observation_.Observe(theme_service_);
+  theme_service_observation_.Observe(theme_service_.get());
   ntp_custom_background_service_observation_.Observe(
-      ntp_custom_background_service_);
+      ntp_custom_background_service_.get());
 
-  // Populates the load time data with basic theme info.
+  // Populates the load time data with basic info.
   OnThemeChanged();
   OnCustomBackgroundImageUpdated();
+  OnLoad();
 }
 
 WEB_UI_CONTROLLER_TYPE_IMPL(NewTabPageUI)
@@ -393,7 +570,8 @@ NewTabPageUI::~NewTabPageUI() = default;
 
 // static
 bool NewTabPageUI::IsNewTabPageOrigin(const GURL& url) {
-  return url.GetOrigin() == GURL(chrome::kChromeUINewTabPageURL).GetOrigin();
+  return url.DeprecatedGetOriginAsURL() ==
+         GURL(chrome::kChromeUINewTabPageURL).DeprecatedGetOriginAsURL();
 }
 
 // static
@@ -401,6 +579,7 @@ void NewTabPageUI::RegisterProfilePrefs(PrefRegistrySimple* registry) {
   registry->RegisterTimePref(kPrevNavigationTimePrefName, base::Time());
   registry->RegisterBooleanPref(ntp_prefs::kNtpUseMostVisitedTiles, false);
   registry->RegisterBooleanPref(ntp_prefs::kNtpShortcutsVisible, true);
+  registry->RegisterBooleanPref(prefs::kNtpPromoVisible, true);
 }
 
 // static
@@ -412,7 +591,11 @@ void NewTabPageUI::ResetProfilePrefs(PrefService* prefs) {
 
 // static
 bool NewTabPageUI::IsDriveModuleEnabled(Profile* profile) {
-  if (!base::FeatureList::IsEnabled(ntp_features::kNtpDriveModule)) {
+  // TODO(crbug.com/1321896): Explore not requiring sync for the drive
+  // module to be enabled.
+  auto* sync_service = SyncServiceFactory::GetForProfile(profile);
+  if (!base::FeatureList::IsEnabled(ntp_features::kNtpDriveModule) ||
+      !sync_service || !sync_service->IsSyncFeatureEnabled()) {
     return false;
   }
   if (base::GetFieldTrialParamValueByFeature(
@@ -420,12 +603,13 @@ bool NewTabPageUI::IsDriveModuleEnabled(Profile* profile) {
           ntp_features::kNtpDriveModuleManagedUsersOnlyParam) != "true") {
     return true;
   }
-  // TODO(https://crbug.com/1213351): Stop calling the private method
+  // TODO(crbug.com/1213351): Stop calling the private method
   // FindExtendedPrimaryAccountInfo().
   auto* identity_manager = IdentityManagerFactory::GetForProfile(profile);
-  return identity_manager
-      ->FindExtendedPrimaryAccountInfo(signin::ConsentLevel::kSync)
-      .IsManaged();
+  return /* Can be null if Chrome signin is disabled. */ identity_manager &&
+         identity_manager
+             ->FindExtendedPrimaryAccountInfo(signin::ConsentLevel::kSync)
+             .IsManaged();
 }
 
 void NewTabPageUI::BindInterface(
@@ -486,8 +670,14 @@ void NewTabPageUI::BindInterface(
 
 void NewTabPageUI::BindInterface(
     mojo::PendingReceiver<photos::mojom::PhotosHandler> pending_receiver) {
-  photos_handler_ =
-      std::make_unique<PhotosHandler>(std::move(pending_receiver), profile_);
+  photos_handler_ = std::make_unique<PhotosHandler>(std::move(pending_receiver),
+                                                    profile_, web_contents_);
+}
+
+void NewTabPageUI::BindInterface(
+    mojo::PendingReceiver<ntp::feed::mojom::FeedHandler> pending_receiver) {
+  feed_handler_ =
+      ntp::FeedHandler::Create(std::move(pending_receiver), profile_);
 }
 
 #if !defined(OFFICIAL_BUILD)
@@ -500,8 +690,8 @@ void NewTabPageUI::BindInterface(
 void NewTabPageUI::BindInterface(
     mojo::PendingReceiver<chrome_cart::mojom::CartHandler>
         pending_page_handler) {
-  cart_handler_ =
-      std::make_unique<CartHandler>(std::move(pending_page_handler), profile_);
+  cart_handler_ = std::make_unique<CartHandler>(std::move(pending_page_handler),
+                                                profile_, web_contents_);
 }
 
 void NewTabPageUI::CreatePageHandler(
@@ -512,8 +702,7 @@ void NewTabPageUI::CreatePageHandler(
   page_handler_ = std::make_unique<NewTabPageHandler>(
       std::move(pending_page_handler), std::move(pending_page), profile_,
       ntp_custom_background_service_, theme_service_,
-      LogoServiceFactory::GetForProfile(profile_),
-      &ThemeService::GetThemeProviderForProfile(profile_), web_contents_,
+      LogoServiceFactory::GetForProfile(profile_), web_contents_,
       navigation_start_time_);
 }
 
@@ -557,21 +746,16 @@ void NewTabPageUI::OnNativeThemeUpdated(ui::NativeTheme* observed_theme) {
 }
 
 void NewTabPageUI::OnThemeChanged() {
-  std::unique_ptr<base::DictionaryValue> update(new base::DictionaryValue);
-  auto background_color =
-      ThemeService::GetThemeProviderForProfile(profile_).GetColor(
-          ThemeProperties::COLOR_NTP_BACKGROUND);
-  update->SetString(
-      "backgroundColor",
-      base::StringPrintf("#%02X%02X%02X", SkColorGetR(background_color),
-                         SkColorGetG(background_color),
-                         SkColorGetB(background_color)));
+  base::Value::Dict update;
+  const ui::ColorProvider& color_provider = web_contents_->GetColorProvider();
+  auto background_color = color_provider.GetColor(kColorNewTabPageBackground);
+  update.Set("backgroundColor", skia::SkColorToHexString(background_color));
   content::WebUIDataSource::Update(profile_, chrome::kChromeUINewTabPageHost,
                                    std::move(update));
 }
 
 void NewTabPageUI::OnCustomBackgroundImageUpdated() {
-  std::unique_ptr<base::DictionaryValue> update(new base::DictionaryValue);
+  base::Value::Dict update;
   url::RawCanonOutputT<char> encoded_url;
   auto custom_background_url =
       (ntp_custom_background_service_
@@ -581,7 +765,7 @@ void NewTabPageUI::OnCustomBackgroundImageUpdated() {
           .custom_background_url;
   url::EncodeURIComponent(custom_background_url.spec().c_str(),
                           custom_background_url.spec().size(), &encoded_url);
-  update->SetString(
+  update.Set(
       "backgroundImageUrl",
       encoded_url.length() > 0
           ? base::StrCat(
@@ -599,27 +783,22 @@ void NewTabPageUI::OnNtpCustomBackgroundServiceShuttingDown() {
 
 void NewTabPageUI::DidStartNavigation(
     content::NavigationHandle* navigation_handle) {
-  // TODO(https://crbug.com/1218946): With MPArch there may be multiple main
-  // frames. This caller was converted automatically to the primary main frame
-  // to preserve its semantics. Follow up to confirm correctness.
   if (navigation_handle->IsInPrimaryMainFrame() &&
       navigation_handle->GetURL() == GURL(chrome::kChromeUINewTabPageURL)) {
     navigation_start_time_ = base::Time::Now();
-    std::unique_ptr<base::DictionaryValue> update(new base::DictionaryValue);
-    update->SetDoubleKey("navigationStartTime",
-                         navigation_start_time_.ToJsTime());
-    content::WebUIDataSource::Update(profile_, chrome::kChromeUINewTabPageHost,
-                                     std::move(update));
+    OnLoad();
     auto prev_navigation_time =
         profile_->GetPrefs()->GetTime(kPrevNavigationTimePrefName);
     if (!prev_navigation_time.is_null()) {
       base::UmaHistogramCustomTimes(
           "NewTabPage.TimeSinceLastNTP",
-          navigation_start_time_ - prev_navigation_time,
-          base::TimeDelta::FromSeconds(1), base::TimeDelta::FromDays(1), 100);
+          navigation_start_time_ - prev_navigation_time, base::Seconds(1),
+          base::Days(1), 100);
     }
     profile_->GetPrefs()->SetTime(kPrevNavigationTimePrefName,
                                   navigation_start_time_);
+    base::UmaHistogramBoolean("NewTabPage.HasCredentials",
+                              HasCredentials(profile_));
   }
 }
 
@@ -641,6 +820,31 @@ void NewTabPageUI::OnTilesVisibilityPrefChanged() {
   if (most_visited_page_handler_) {
     most_visited_page_handler_->SetShortcutsVisible(IsShortcutsVisible());
   }
+}
+
+void NewTabPageUI::OnLoad() {
+  base::Value::Dict update;
+  update.Set("navigationStartTime", navigation_start_time_.ToJsTime());
+  bool driveModuleEnabled = NewTabPageUI::IsDriveModuleEnabled(profile_);
+  bool anyModuleEnabled = driveModuleEnabled;
+  for (const auto& nameFeature : kModuleFeatures) {
+    anyModuleEnabled |= base::FeatureList::IsEnabled(nameFeature.second);
+  }
+  anyModuleEnabled |= IsRecipeTasksModuleEnabled();
+  anyModuleEnabled |= IsCartModuleEnabled();
+  // Only enable modules if account credentials are available as most modules
+  // won't have data to render otherwise. We can override this behavior with the
+  // "--signed-out-ntp-modules" command line switch, e.g. to allow modules in
+  // perf tests, which do not support sign-in.
+  update.Set("modulesEnabled",
+             anyModuleEnabled &&
+                 !base::FeatureList::IsEnabled(ntp_features::kNtpModulesLoad) &&
+                 (base::CommandLine::ForCurrentProcess()->HasSwitch(
+                      kSignedOutNtpModulesSwitch) ||
+                  HasCredentials(profile_)));
+  update.Set("driveModuleEnabled", driveModuleEnabled);
+  content::WebUIDataSource::Update(profile_, chrome::kChromeUINewTabPageHost,
+                                   std::move(update));
 }
 
 // static

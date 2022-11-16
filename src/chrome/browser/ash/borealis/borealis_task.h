@@ -5,11 +5,16 @@
 #ifndef CHROME_BROWSER_ASH_BOREALIS_BOREALIS_TASK_H_
 #define CHROME_BROWSER_ASH_BOREALIS_BOREALIS_TASK_H_
 
+#include "base/files/file.h"
 #include "base/memory/weak_ptr.h"
+#include "base/time/time.h"
 #include "chrome/browser/ash/borealis/borealis_context_manager.h"
+#include "chrome/browser/ash/borealis/borealis_features.h"
+#include "chrome/browser/ash/borealis/borealis_launch_options.h"
 #include "chrome/browser/ash/borealis/borealis_launch_watcher.h"
 #include "chrome/browser/ash/borealis/borealis_metrics.h"
-#include "chromeos/dbus/concierge/concierge_client.h"
+#include "chrome/browser/ash/guest_os/public/guest_os_wayland_server.h"
+#include "chromeos/ash/components/dbus/concierge/concierge_client.h"
 #include "chromeos/dbus/dlcservice/dlcservice_client.h"
 
 namespace borealis {
@@ -25,7 +30,7 @@ class BorealisTask {
   // different result should be used, and an error string provided.
   using CompletionResultCallback =
       base::OnceCallback<void(BorealisStartupResult, std::string)>;
-  BorealisTask();
+  explicit BorealisTask(std::string name);
   BorealisTask(const BorealisTask&) = delete;
   BorealisTask& operator=(const BorealisTask&) = delete;
   virtual ~BorealisTask();
@@ -38,7 +43,36 @@ class BorealisTask {
   void Complete(BorealisStartupResult result, std::string message);
 
  private:
+  std::string name_;
+  base::Time start_time_;
   CompletionResultCallback callback_;
+};
+
+// Double-checks that borealis is allowed.
+class CheckAllowed : public BorealisTask {
+ public:
+  CheckAllowed();
+  ~CheckAllowed() override;
+  void RunInternal(BorealisContext* context) override;
+
+ private:
+  void OnAllowednessChecked(BorealisContext* context,
+                            BorealisFeatures::AllowStatus allow_status);
+  base::WeakPtrFactory<CheckAllowed> weak_factory_{this};
+};
+
+// Finds the options used for the current borealis launch.
+class GetLaunchOptions : public BorealisTask {
+ public:
+  GetLaunchOptions();
+  ~GetLaunchOptions() override;
+  void RunInternal(BorealisContext* context) override;
+
+ private:
+  void HandleOptions(BorealisContext* context,
+                     BorealisLaunchOptions::Options options);
+
+  base::WeakPtrFactory<GetLaunchOptions> weak_factory_{this};
 };
 
 // Mounts the Borealis DLC.
@@ -69,6 +103,21 @@ class CreateDiskImage : public BorealisTask {
   base::WeakPtrFactory<CreateDiskImage> weak_factory_{this};
 };
 
+// Requests a wayland server from Exo for use by the borealis VM.
+class RequestWaylandServer : public BorealisTask {
+ public:
+  RequestWaylandServer();
+  ~RequestWaylandServer() override;
+
+  // BorealisTask overrides:
+  void RunInternal(BorealisContext* context) override;
+
+ private:
+  void OnServerRequested(BorealisContext* context,
+                         guest_os::GuestOsWaylandServer::Result result);
+  base::WeakPtrFactory<RequestWaylandServer> weak_factory_{this};
+};
+
 // Instructs Concierge to start the Borealis VM.
 class StartBorealisVm : public BorealisTask {
  public:
@@ -77,6 +126,8 @@ class StartBorealisVm : public BorealisTask {
   void RunInternal(BorealisContext* context) override;
 
  private:
+  void StartBorealisWithExternalDisk(BorealisContext* context,
+                                     absl::optional<base::File> external_disk);
   void OnStartBorealisVm(
       BorealisContext* context,
       absl::optional<vm_tools::concierge::StartVmResponse> response);
@@ -98,6 +149,20 @@ class AwaitBorealisStartup : public BorealisTask {
   base::WeakPtrFactory<AwaitBorealisStartup> weak_factory_{this};
 };
 
+// Updates the value of some chrome://flags in the VM.
+class UpdateChromeFlags : public BorealisTask {
+ public:
+  explicit UpdateChromeFlags(Profile* profile);
+  ~UpdateChromeFlags() override;
+  void RunInternal(BorealisContext* context) override;
+
+ private:
+  void OnFlagsUpdated(BorealisContext* context, std::string error);
+
+  Profile* const profile_;
+  base::WeakPtrFactory<UpdateChromeFlags> weak_factory_{this};
+};
+
 // Checks the size of the disk and adjusts it if necessary.
 class SyncBorealisDisk : public BorealisTask {
  public:
@@ -112,6 +177,7 @@ class SyncBorealisDisk : public BorealisTask {
                Described<BorealisSyncDiskSizeResult>> result);
   base::WeakPtrFactory<SyncBorealisDisk> weak_factory_{this};
 };
+
 }  // namespace borealis
 
 #endif  // CHROME_BROWSER_ASH_BOREALIS_BOREALIS_TASK_H_

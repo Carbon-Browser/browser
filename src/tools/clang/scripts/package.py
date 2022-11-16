@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # Copyright (c) 2015 The Chromium Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -53,7 +53,7 @@ def TeeCmd(cmd, logfile, fail_hard=True):
                           stdin=open(os.devnull), stdout=subprocess.PIPE,
                           stderr=subprocess.STDOUT)
   for line in iter(proc.stdout.readline,''):
-    Tee(line, logfile)
+    Tee(str(line.decode()), logfile)
     if proc.poll() is not None:
       break
   exit_code = proc.wait()
@@ -70,7 +70,7 @@ def PrintTarProgress(tarinfo):
 def GetExpectedStamp():
   rev_cmd = [sys.executable, os.path.join(THIS_DIR, 'update.py'),
              '--print-revision']
-  return subprocess.check_output(rev_cmd).rstrip()
+  return str(subprocess.check_output(rev_cmd).decode()).rstrip()
 
 
 def GetGsutilPath():
@@ -93,9 +93,23 @@ def RunGsutil(args):
   return subprocess.call([sys.executable, GetGsutilPath()] + args)
 
 
+def PackageInArchive(directory_path, archive_path):
+  bin_dir_path = os.path.join(directory_path, 'bin')
+  if sys.platform != 'win32' and os.path.exists(bin_dir_path):
+    for f in os.listdir(bin_dir_path):
+      file_path = os.path.join(bin_dir_path, f)
+      if not os.path.islink(file_path):
+        subprocess.call(['strip', file_path])
+
+  with tarfile.open(archive_path, 'w:gz') as tar:
+    for f in os.listdir(directory_path):
+      tar.add(os.path.join(directory_path, f),
+              arcname=f, filter=PrintTarProgress)
+
+
 def MaybeUpload(do_upload, filename, gcs_platform, extra_gsutil_args=[]):
   gsutil_args = ['cp'] + extra_gsutil_args + [
-      '-a', 'public-read', filename,
+      '-n', '-a', 'public-read', filename,
       'gs://chromium-browser-clang-staging/%s/%s' % (gcs_platform, filename)
   ]
   if do_upload:
@@ -221,7 +235,7 @@ def main():
 
   shutil.rmtree(pdir, ignore_errors=True)
 
-  # Copy a whitelist of files to the directory we're going to tar up.
+  # Copy a list of files to the directory we're going to tar up.
   # This supports the same patterns that the fnmatch module understands.
   # '$V' is replaced by RELEASE_VERSION further down.
   exe_ext = '.exe' if sys.platform == 'win32' else ''
@@ -236,30 +250,42 @@ def main():
   ]
   if sys.platform == 'win32':
     want.extend([
-      'bin/clang-cl.exe',
-      'bin/lld-link.exe',
+        'bin/clang-cl.exe',
+        'bin/lld-link.exe',
+        'bin/llvm-ml.exe',
     ])
   else:
     want.extend([
-      'bin/clang',
+        'bin/clang',
 
-      # Add LLD.
-      'bin/lld',
+        # Add LLD.
+        'bin/lld',
 
-      # Add llvm-ar for LTO.
-      'bin/llvm-ar',
+        # Add llvm-ar for LTO.
+        'bin/llvm-ar',
 
-      # Include libclang_rt.builtins.a for Fuchsia targets.
-      'lib/clang/$V/lib/aarch64-unknown-fuchsia/libclang_rt.builtins.a',
-      'lib/clang/$V/lib/x86_64-unknown-fuchsia/libclang_rt.builtins.a',
+        # llvm-ml for Windows cross builds.
+        'bin/llvm-ml',
+
+        # Include libclang_rt.builtins.a for Fuchsia targets.
+        'lib/clang/$V/lib/aarch64-unknown-fuchsia/libclang_rt.builtins.a',
+        'lib/clang/$V/lib/x86_64-unknown-fuchsia/libclang_rt.builtins.a',
+
+        # Add llvm-readobj (symlinked from llvm-readelf) for extracting SONAMEs.
+        'bin/llvm-readobj',
     ])
     if not args.build_mac_arm:
       # TODO(thakis): Figure out why this doesn't build in --build-mac-arm
       # builds.
-      want.append('lib/clang/$V/lib/x86_64-unknown-fuchsia/libclang_rt.profile.a')
+      want.append(
+          'lib/clang/$V/lib/x86_64-unknown-fuchsia/libclang_rt.profile.a')
     if sys.platform != 'darwin':
       # The Fuchsia asan runtime is only built on non-Mac platforms.
       want.append('lib/clang/$V/lib/x86_64-unknown-fuchsia/libclang_rt.asan.so')
+      want.append(
+          'lib/clang/$V/lib/x86_64-unknown-fuchsia/libclang_rt.asan-preinit.a')
+      want.append(
+          'lib/clang/$V/lib/x86_64-unknown-fuchsia/libclang_rt.asan_static.a')
   if sys.platform == 'darwin':
     want.extend([
       # AddressSanitizer runtime.
@@ -282,6 +308,8 @@ def main():
     ])
   elif sys.platform.startswith('linux'):
     want.extend([
+        # pylint: disable=line-too-long
+
         # Copy the stdlibc++.so.6 we linked the binaries against.
         'lib/libstdc++.so.6',
 
@@ -292,54 +320,81 @@ def main():
         'bin/llvm-nm',
 
         # AddressSanitizer C runtime (pure C won't link with *_cxx).
-        'lib/clang/$V/lib/linux/libclang_rt.asan-i386.a',
-        'lib/clang/$V/lib/linux/libclang_rt.asan-x86_64.a',
-        'lib/clang/$V/lib/linux/libclang_rt.asan-x86_64.a.syms',
+        'lib/clang/$V/lib/i386-unknown-linux-gnu/libclang_rt.asan.a',
+        'lib/clang/$V/lib/x86_64-unknown-linux-gnu/libclang_rt.asan.a',
+        'lib/clang/$V/lib/x86_64-unknown-linux-gnu/libclang_rt.asan.a.syms',
+        'lib/clang/$V/lib/i386-unknown-linux-gnu/libclang_rt.asan_static.a',
+        'lib/clang/$V/lib/x86_64-unknown-linux-gnu/libclang_rt.asan_static.a',
 
         # AddressSanitizer C++ runtime.
-        'lib/clang/$V/lib/linux/libclang_rt.asan_cxx-i386.a',
-        'lib/clang/$V/lib/linux/libclang_rt.asan_cxx-x86_64.a',
-        'lib/clang/$V/lib/linux/libclang_rt.asan_cxx-x86_64.a.syms',
+        'lib/clang/$V/lib/i386-unknown-linux-gnu/libclang_rt.asan_cxx.a',
+        'lib/clang/$V/lib/x86_64-unknown-linux-gnu/libclang_rt.asan_cxx.a',
+        'lib/clang/$V/lib/x86_64-unknown-linux-gnu/libclang_rt.asan_cxx.a.syms',
 
         # AddressSanitizer Android runtime.
         'lib/clang/$V/lib/linux/libclang_rt.asan-aarch64-android.so',
         'lib/clang/$V/lib/linux/libclang_rt.asan-arm-android.so',
         'lib/clang/$V/lib/linux/libclang_rt.asan-i686-android.so',
+        'lib/clang/$V/lib/linux/libclang_rt.asan_static-aarch64-android.a',
+        'lib/clang/$V/lib/linux/libclang_rt.asan_static-arm-android.a',
+        'lib/clang/$V/lib/linux/libclang_rt.asan_static-i686-android.a',
+
+        # Builtins for Android.
+        'lib/clang/$V/lib/linux/libclang_rt.builtins-aarch64-android.a',
+        'lib/clang/$V/lib/linux/libclang_rt.builtins-arm-android.a',
+        'lib/clang/$V/lib/linux/libclang_rt.builtins-i686-android.a',
+        'lib/clang/$V/lib/linux/libclang_rt.builtins-x86_64-android.a',
+
+        # Builtins for Lacros (and potentially Linux, but not used there atm).
+        'lib/clang/$V/lib/aarch64-unknown-linux-gnu/libclang_rt.builtins.a',
+        'lib/clang/$V/lib/armv7-unknown-linux-gnueabihf/libclang_rt.builtins.a',
+        'lib/clang/$V/lib/x86_64-unknown-linux-gnu/libclang_rt.builtins.a',
+
+        # crtstart/crtend for Linux and Lacros.
+        'lib/clang/$V/lib/aarch64-unknown-linux-gnu/clang_rt.crtbegin.o',
+        'lib/clang/$V/lib/aarch64-unknown-linux-gnu/clang_rt.crtend.o',
+        'lib/clang/$V/lib/armv7-unknown-linux-gnueabihf/clang_rt.crtbegin.o',
+        'lib/clang/$V/lib/armv7-unknown-linux-gnueabihf/clang_rt.crtend.o',
+        'lib/clang/$V/lib/x86_64-unknown-linux-gnu/clang_rt.crtbegin.o',
+        'lib/clang/$V/lib/x86_64-unknown-linux-gnu/clang_rt.crtend.o',
 
         # HWASAN Android runtime.
         'lib/clang/$V/lib/linux/libclang_rt.hwasan-aarch64-android.so',
 
         # MemorySanitizer C runtime (pure C won't link with *_cxx).
-        'lib/clang/$V/lib/linux/libclang_rt.msan-x86_64.a',
-        'lib/clang/$V/lib/linux/libclang_rt.msan-x86_64.a.syms',
+        'lib/clang/$V/lib/x86_64-unknown-linux-gnu/libclang_rt.msan.a',
+        'lib/clang/$V/lib/x86_64-unknown-linux-gnu/libclang_rt.msan.a.syms',
 
         # MemorySanitizer C++ runtime.
-        'lib/clang/$V/lib/linux/libclang_rt.msan_cxx-x86_64.a',
-        'lib/clang/$V/lib/linux/libclang_rt.msan_cxx-x86_64.a.syms',
+        'lib/clang/$V/lib/x86_64-unknown-linux-gnu/libclang_rt.msan_cxx.a',
+        'lib/clang/$V/lib/x86_64-unknown-linux-gnu/libclang_rt.msan_cxx.a.syms',
 
         # Profile runtime (used by profiler and code coverage).
-        'lib/clang/$V/lib/linux/libclang_rt.profile-i386.a',
-        'lib/clang/$V/lib/linux/libclang_rt.profile-x86_64.a',
+        'lib/clang/$V/lib/aarch64-unknown-linux-gnu/libclang_rt.profile.a',
+        'lib/clang/$V/lib/armv7-unknown-linux-gnueabihf/libclang_rt.profile.a',
+        'lib/clang/$V/lib/i386-unknown-linux-gnu/libclang_rt.profile.a',
+        'lib/clang/$V/lib/x86_64-unknown-linux-gnu/libclang_rt.profile.a',
+        'lib/clang/$V/lib/linux/libclang_rt.profile-i686-android.a',
         'lib/clang/$V/lib/linux/libclang_rt.profile-aarch64-android.a',
         'lib/clang/$V/lib/linux/libclang_rt.profile-arm-android.a',
 
         # ThreadSanitizer C runtime (pure C won't link with *_cxx).
-        'lib/clang/$V/lib/linux/libclang_rt.tsan-x86_64.a',
-        'lib/clang/$V/lib/linux/libclang_rt.tsan-x86_64.a.syms',
+        'lib/clang/$V/lib/x86_64-unknown-linux-gnu/libclang_rt.tsan.a',
+        'lib/clang/$V/lib/x86_64-unknown-linux-gnu/libclang_rt.tsan.a.syms',
 
         # ThreadSanitizer C++ runtime.
-        'lib/clang/$V/lib/linux/libclang_rt.tsan_cxx-x86_64.a',
-        'lib/clang/$V/lib/linux/libclang_rt.tsan_cxx-x86_64.a.syms',
+        'lib/clang/$V/lib/x86_64-unknown-linux-gnu/libclang_rt.tsan_cxx.a',
+        'lib/clang/$V/lib/x86_64-unknown-linux-gnu/libclang_rt.tsan_cxx.a.syms',
 
         # UndefinedBehaviorSanitizer C runtime (pure C won't link with *_cxx).
-        'lib/clang/$V/lib/linux/libclang_rt.ubsan_standalone-i386.a',
-        'lib/clang/$V/lib/linux/libclang_rt.ubsan_standalone-x86_64.a',
-        'lib/clang/$V/lib/linux/libclang_rt.ubsan_standalone-x86_64.a.syms',
+        'lib/clang/$V/lib/i386-unknown-linux-gnu/libclang_rt.ubsan_standalone.a',
+        'lib/clang/$V/lib/x86_64-unknown-linux-gnu/libclang_rt.ubsan_standalone.a',
+        'lib/clang/$V/lib/x86_64-unknown-linux-gnu/libclang_rt.ubsan_standalone.a.syms',
 
         # UndefinedBehaviorSanitizer C++ runtime.
-        'lib/clang/$V/lib/linux/libclang_rt.ubsan_standalone_cxx-i386.a',
-        'lib/clang/$V/lib/linux/libclang_rt.ubsan_standalone_cxx-x86_64.a',
-        'lib/clang/$V/lib/linux/libclang_rt.ubsan_standalone_cxx-x86_64.a.syms',
+        'lib/clang/$V/lib/i386-unknown-linux-gnu/libclang_rt.ubsan_standalone_cxx.a',
+        'lib/clang/$V/lib/x86_64-unknown-linux-gnu/libclang_rt.ubsan_standalone_cxx.a',
+        'lib/clang/$V/lib/x86_64-unknown-linux-gnu/libclang_rt.ubsan_standalone_cxx.a.syms',
 
         # UndefinedBehaviorSanitizer Android runtime, needed for CFI.
         'lib/clang/$V/lib/linux/libclang_rt.ubsan_standalone-aarch64-android.so',
@@ -347,6 +402,8 @@ def main():
 
         # Ignorelist for MemorySanitizer (used on Linux only).
         'lib/clang/$V/share/msan_*list.txt',
+
+        # pylint: enable=line-too-long
     ])
   elif sys.platform == 'win32':
     want.extend([
@@ -377,17 +434,45 @@ def main():
       'lib/clang/$V/lib/windows/clang_rt.ubsan_standalone_cxx-x86_64.lib',
     ])
 
-  # Check all non-glob wanted files exist on disk.
+  # reclient is a tool for executing programs remotely. When uploading the
+  # binary to be executed, it needs to know which other files the binary depends
+  # on. This can include shared libraries, as well as other dependencies not
+  # explicitly mentioned in the source code (those would be found by reclient's
+  # include scanner) such as sanitizer ignore lists.
+  reclient_inputs = {
+      'clang': [
+        'lib/clang/$V/share/asan_*list.txt',
+        'lib/clang/$V/share/cfi_*list.txt',
+      ],
+  }
+
+  # Check that all non-glob wanted files exist on disk.
   want = [w.replace('$V', RELEASE_VERSION) for w in want]
+  found_all_wanted_files = True
   for w in want:
     if '*' in w: continue
     if os.path.exists(os.path.join(LLVM_RELEASE_DIR, w)): continue
     print('wanted file "%s" but it did not exist' % w, file=sys.stderr)
+    found_all_wanted_files = False
+
+  if not found_all_wanted_files:
     return 1
+
+  # Check that all reclient inputs are in the package.
+  for tool in reclient_inputs:
+    reclient_inputs[tool] = [i.replace('$V', RELEASE_VERSION)
+                             for i in reclient_inputs[tool]]
+    missing = set(reclient_inputs[tool]) - set(want)
+    if missing:
+      print('reclient inputs not part of package: ', missing, file=sys.stderr)
+      return 1
+
+  reclient_input_strings = {t: '' for t in reclient_inputs}
 
   # TODO(thakis): Try walking over want and copying the files in there instead
   # of walking the directory and doing fnmatch() against want.
   for root, dirs, files in os.walk(LLVM_RELEASE_DIR):
+    dirs.sort()  # Walk dirs in sorted order.
     # root: third_party/llvm-build/Release+Asserts/lib/..., rel_root: lib/...
     rel_root = root[len(LLVM_RELEASE_DIR)+1:]
     rel_files = [os.path.join(rel_root, f) for f in files]
@@ -396,36 +481,36 @@ def main():
     if wanted_files:
       # Guaranteed to not yet exist at this point:
       os.makedirs(os.path.join(pdir, rel_root))
-    for f in wanted_files:
+    for f in sorted(wanted_files):
       src = os.path.join(LLVM_RELEASE_DIR, f)
       dest = os.path.join(pdir, f)
       shutil.copy(src, dest)
       # Strip libraries.
-      if sys.platform == 'darwin' and f.endswith('.dylib'):
+      if 'libclang_rt.builtins' in f and 'android' in f:
+        # Keep the builtins' DWARF info for unwinding.
+        pass
+      elif sys.platform == 'darwin' and f.endswith('.dylib'):
         subprocess.call(['strip', '-x', dest])
       elif (sys.platform.startswith('linux') and
             os.path.splitext(f)[1] in ['.so', '.a']):
         subprocess.call([EU_STRIP, '-g', dest])
+      # If this is an reclient input, add it to the inputs file(s).
+      for tool, inputs in reclient_inputs.items():
+        if any(fnmatch.fnmatch(f, i) for i in inputs):
+          rel_input = os.path.relpath(dest, os.path.join(pdir, 'bin'))
+          reclient_input_strings[tool] += ('%s\n' % rel_input)
 
-  stripped_binaries = ['clang',
-                       'clang-tidy',
-                       'lld',
-                       'llvm-ar',
-                       'llvm-bcanalyzer',
-                       'llvm-cov',
-                       'llvm-cxxfilt',
-                       'llvm-nm',
-                       'llvm-objcopy',
-                       'llvm-objdump',
-                       'llvm-pdbutil',
-                       'llvm-profdata',
-                       'llvm-readobj',
-                       'llvm-symbolizer',
-                       'llvm-undname',
-                       ]
-  for f in stripped_binaries:
-    if sys.platform != 'win32':
-      subprocess.call(['strip', os.path.join(pdir, 'bin', f)])
+  # Write the reclient inputs files.
+  if sys.platform != 'win32':
+    reclient_input_strings['clang++'] = reclient_input_strings['clang']
+    reclient_input_strings['clang-cl'] = reclient_input_strings['clang']
+  else:
+    reclient_input_strings['clang-cl.exe'] = reclient_input_strings.pop('clang')
+  for tool, string in reclient_input_strings.items():
+    filename = os.path.join(pdir, 'bin', '%s_remote_toolchain_inputs' % tool)
+    print('%s:\n%s' % (filename, string))
+    with open(filename, 'w') as f:
+      f.write(string)
 
   # Set up symlinks.
   if sys.platform != 'win32':
@@ -435,9 +520,19 @@ def main():
     os.symlink('lld', os.path.join(pdir, 'bin', 'ld64.lld'))
     os.symlink('lld', os.path.join(pdir, 'bin', 'lld-link'))
     os.symlink('lld', os.path.join(pdir, 'bin', 'wasm-ld'))
+    os.symlink('llvm-readobj', os.path.join(pdir, 'bin', 'llvm-readelf'))
 
   if sys.platform.startswith('linux'):
     os.symlink('llvm-objcopy', os.path.join(pdir, 'bin', 'llvm-strip'))
+
+    # Make `--target=*-cros-linux-gnu` work with
+    # LLVM_ENABLE_PER_TARGET_RUNTIME_DIR=ON.
+    for arch, abi in [('armv7', 'gnueabihf'), ('aarch64', 'gnu'),
+                      ('x86_64', 'gnu')]:
+      old = '%s-unknown-linux-%s' % (arch, abi)
+      new = old.replace('unknown', 'cros').replace('armv7', 'armv7a')
+      os.symlink(
+          old, os.path.join(pdir, 'lib', 'clang', RELEASE_VERSION, 'lib', new))
 
   # Copy libc++ headers.
   if sys.platform == 'darwin':
@@ -445,12 +540,7 @@ def main():
                     os.path.join(pdir, 'include', 'c++'))
 
   # Create main archive.
-  tar_entries = ['bin', 'lib' ]
-  if sys.platform == 'darwin':
-    tar_entries += ['include']
-  with tarfile.open(pdir + '.tgz', 'w:gz') as tar:
-    for entry in tar_entries:
-      tar.add(os.path.join(pdir, entry), arcname=entry, filter=PrintTarProgress)
+  PackageInArchive(pdir, pdir + '.tgz')
   MaybeUpload(args.upload, pdir + '.tgz', gcs_platform)
 
   # Upload build log next to it.
@@ -468,17 +558,17 @@ def main():
   for filename in ['llvm-cov', 'llvm-profdata']:
     shutil.copy(os.path.join(LLVM_RELEASE_DIR, 'bin', filename + exe_ext),
                 os.path.join(code_coverage_dir, 'bin'))
-  with tarfile.open(code_coverage_dir + '.tgz', 'w:gz') as tar:
-    tar.add(os.path.join(code_coverage_dir, 'bin'), arcname='bin',
-            filter=PrintTarProgress)
+  PackageInArchive(code_coverage_dir, code_coverage_dir + '.tgz')
   MaybeUpload(args.upload, code_coverage_dir + '.tgz', gcs_platform)
 
   # Zip up llvm-objdump and related tools for sanitizer coverage and Supersize.
   objdumpdir = 'llvmobjdump-' + stamp
   shutil.rmtree(objdumpdir, ignore_errors=True)
   os.makedirs(os.path.join(objdumpdir, 'bin'))
-  for filename in ['llvm-bcanalyzer', 'llvm-cxxfilt', 'llvm-nm', 'llvm-objdump',
-                   'llvm-readobj']:
+  for filename in [
+      'llvm-bcanalyzer', 'llvm-cxxfilt', 'llvm-dwarfdump', 'llvm-nm',
+      'llvm-objdump'
+  ]:
     shutil.copy(os.path.join(LLVM_RELEASE_DIR, 'bin', filename + exe_ext),
                 os.path.join(objdumpdir, 'bin'))
   llvmobjdump_stamp_file_base = 'llvmobjdump_build_revision'
@@ -488,12 +578,7 @@ def main():
     f.write('\n')
   if sys.platform != 'win32':
     os.symlink('llvm-objdump', os.path.join(objdumpdir, 'bin', 'llvm-otool'))
-    os.symlink('llvm-readobj', os.path.join(objdumpdir, 'bin', 'llvm-readelf'))
-  with tarfile.open(objdumpdir + '.tgz', 'w:gz') as tar:
-    tar.add(os.path.join(objdumpdir, 'bin'), arcname='bin',
-            filter=PrintTarProgress)
-    tar.add(llvmobjdump_stamp_file, arcname=llvmobjdump_stamp_file_base,
-            filter=PrintTarProgress)
+  PackageInArchive(objdumpdir, objdumpdir + '.tgz')
   MaybeUpload(args.upload, objdumpdir + '.tgz', gcs_platform)
 
   # Zip up clang-tidy for users who opt into it, and Tricium.
@@ -502,10 +587,69 @@ def main():
   os.makedirs(os.path.join(clang_tidy_dir, 'bin'))
   shutil.copy(os.path.join(LLVM_RELEASE_DIR, 'bin', 'clang-tidy' + exe_ext),
               os.path.join(clang_tidy_dir, 'bin'))
-  with tarfile.open(clang_tidy_dir + '.tgz', 'w:gz') as tar:
-    tar.add(os.path.join(clang_tidy_dir, 'bin'), arcname='bin',
-            filter=PrintTarProgress)
+  PackageInArchive(clang_tidy_dir, clang_tidy_dir + '.tgz')
   MaybeUpload(args.upload, clang_tidy_dir + '.tgz', gcs_platform)
+
+  # Zip up clang-format so we can update it (separately from the clang roll).
+  clang_format_dir = 'clang-format-' + stamp
+  shutil.rmtree(clang_format_dir, ignore_errors=True)
+  os.makedirs(os.path.join(clang_format_dir, 'bin'))
+  shutil.copy(os.path.join(LLVM_RELEASE_DIR, 'bin', 'clang-format' + exe_ext),
+              os.path.join(clang_format_dir, 'bin'))
+  PackageInArchive(clang_format_dir, clang_format_dir + '.tgz')
+  MaybeUpload(args.upload, clang_format_dir + '.tgz', gcs_platform)
+
+  # Zip up clang-libs for users who opt into it. We want Clang and LLVM headers
+  # and libs, as well as a couple binaries. The LLVM parts are needed by the
+  # Rust build.
+  clang_libs_dir = 'clang-libs-' + stamp
+  shutil.rmtree(clang_libs_dir, ignore_errors=True)
+  os.makedirs(os.path.join(clang_libs_dir, 'include'))
+  # TODO(danakj): It's possible we need to also include headers from
+  # LLVM_DIR/clang/lib/AST/ and other subdirs of lib, but we won't include them
+  # unless we see it's needed, and we can document why.
+  shutil.copytree(os.path.join(LLVM_DIR, 'clang', 'include', 'clang'),
+                  os.path.join(clang_libs_dir, 'include', 'clang'))
+
+  # Copy LLVM includes. The llvm source and build directory includes must be
+  # merged. llvm-c for C bindings is also included.
+  #
+  # Headers and libs are copied from LLVM_BOOTSTRAP_DIR, not LLVM_RELEASE_DIR,
+  # because the release libs have LTO so they contain LLVM bitcode while the
+  # bootstrap libs do not. The Rust build consumes these,the first stage of
+  # which cannot handle newer LLVM bitcode. The stage 0 rustc is linked against
+  # an older LLVM.
+  shutil.copytree(os.path.join(LLVM_DIR, 'llvm', 'include', 'llvm'),
+                  os.path.join(clang_libs_dir, 'include', 'llvm'))
+  shutil.copytree(os.path.join(LLVM_DIR, 'llvm', 'include', 'llvm-c'),
+                  os.path.join(clang_libs_dir, 'include', 'llvm-c'))
+  shutil.copytree(os.path.join(LLVM_BOOTSTRAP_DIR, 'include', 'llvm'),
+                  os.path.join(clang_libs_dir, 'include', 'llvm'),
+                  dirs_exist_ok=True)
+
+  # Copy llvm-config and FileCheck which the Rust build needs
+  os.makedirs(os.path.join(clang_libs_dir, 'bin'))
+  shutil.copy(os.path.join(LLVM_BOOTSTRAP_DIR, 'bin', 'llvm-config' + exe_ext),
+              os.path.join(clang_libs_dir, 'bin'))
+  shutil.copy(os.path.join(LLVM_BOOTSTRAP_DIR, 'bin', 'FileCheck' + exe_ext),
+              os.path.join(clang_libs_dir, 'bin'))
+
+  os.makedirs(os.path.join(clang_libs_dir, 'lib'))
+  if sys.platform == 'win32':
+    clang_libs_want = [
+        '*.lib',
+    ]
+  else:
+    clang_libs_want = [
+        '*.a',
+    ]
+  for lib_path in os.listdir(os.path.join(LLVM_BOOTSTRAP_DIR, 'lib')):
+    for lib_want in clang_libs_want:
+      if fnmatch.fnmatch(lib_path, lib_want):
+        shutil.copy(os.path.join(LLVM_BOOTSTRAP_DIR, 'lib', lib_path),
+                    os.path.join(clang_libs_dir, 'lib'))
+  PackageInArchive(clang_libs_dir, clang_libs_dir + '.tgz')
+  MaybeUpload(args.upload, clang_libs_dir + '.tgz', gcs_platform)
 
   if sys.platform == 'darwin':
     # dsymutil isn't part of the main zip, and it gets periodically
@@ -516,9 +660,7 @@ def main():
     os.makedirs(os.path.join(dsymdir, 'bin'))
     shutil.copy(os.path.join(LLVM_RELEASE_DIR, 'bin', 'dsymutil'),
                 os.path.join(dsymdir, 'bin'))
-    with tarfile.open(dsymdir + '.tgz', 'w:gz') as tar:
-      tar.add(os.path.join(dsymdir, 'bin'), arcname='bin',
-              filter=PrintTarProgress)
+    PackageInArchive(dsymdir, dsymdir + '.tgz')
     MaybeUpload(args.upload, dsymdir + '.tgz', gcs_platform)
 
   # Zip up the translation_unit tool.
@@ -528,9 +670,7 @@ def main():
   shutil.copy(os.path.join(LLVM_RELEASE_DIR, 'bin', 'translation_unit' +
                            exe_ext),
               os.path.join(translation_unit_dir, 'bin'))
-  with tarfile.open(translation_unit_dir + '.tgz', 'w:gz') as tar:
-    tar.add(os.path.join(translation_unit_dir, 'bin'), arcname='bin',
-            filter=PrintTarProgress)
+  PackageInArchive(translation_unit_dir, translation_unit_dir + '.tgz')
   MaybeUpload(args.upload, translation_unit_dir + '.tgz', gcs_platform)
 
   # Zip up the libclang binaries.
@@ -545,11 +685,7 @@ def main():
     shutil.copy(os.path.join(LLVM_DIR, 'clang', 'bindings', 'python', 'clang',
                              filename),
                 os.path.join(libclang_dir, 'bindings', 'python', 'clang'))
-  tar_entries = ['bin', 'bindings' ]
-  with tarfile.open(libclang_dir + '.tgz', 'w:gz') as tar:
-    for entry in tar_entries:
-      tar.add(os.path.join(libclang_dir, entry), arcname=entry,
-              filter=PrintTarProgress)
+  PackageInArchive(libclang_dir, libclang_dir + '.tgz')
   MaybeUpload(args.upload, libclang_dir + '.tgz', gcs_platform)
 
   if sys.platform == 'win32' and args.upload:

@@ -9,10 +9,12 @@
 #include <string>
 #include <vector>
 
+#include "base/time/time.h"
 #include "content/public/browser/site_instance.h"
 #include "content/public/browser/web_contents.h"
 #include "third_party/blink/public/common/input/web_input_event.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
+#include "third_party/blink/public/mojom/favicon/favicon_url.mojom-forward.h"
 #include "ui/base/page_transition_types.h"
 
 class GURL;
@@ -25,6 +27,7 @@ class Size;
 namespace content {
 
 class BrowserContext;
+class NavigationSimulator;
 
 // This interface allows embedders of content/ to write tests that depend on a
 // test version of WebContents.  This interface can be retrieved from any
@@ -117,6 +120,14 @@ class WebContentsTester {
       const std::vector<SkBitmap>& bitmaps,
       const std::vector<gfx::Size>& original_bitmap_sizes) = 0;
 
+  // Simulates initial favicon urls set.
+  virtual void TestSetFaviconURL(
+      const std::vector<blink::mojom::FaviconURLPtr>& favicon_urls) = 0;
+
+  // Simulates favicon urls update.
+  virtual void TestUpdateFaviconURL(
+      const std::vector<blink::mojom::FaviconURLPtr>& favicon_urls) = 0;
+
   // Sets the return value of GetLastCommittedUrl() of TestWebContents.
   virtual void SetLastCommittedURL(const GURL& url) = 0;
 
@@ -171,6 +182,16 @@ class WebContentsTester {
   // frame and returns the main frame of the page after the navigation is
   // complete.
   virtual RenderFrameHost* AddPrerenderAndCommitNavigation(const GURL& url) = 0;
+  // Starts prerendering a page, simulates a navigation to |url| in the main
+  // frame and returns the simulator after the navigation is started.
+  virtual std::unique_ptr<NavigationSimulator> AddPrerenderAndStartNavigation(
+      const GURL& url) = 0;
+  // Activates a prerendered page.
+  virtual void ActivatePrerenderedPage(const GURL& url) = 0;
+
+  // Returns the time that was set with SetTabSwitchStartTime, or a null
+  // TimeTicks if it was never called.
+  virtual base::TimeTicks GetTabSwitchStartTime() = 0;
 };
 
 }  // namespace content

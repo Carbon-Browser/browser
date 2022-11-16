@@ -18,7 +18,6 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/logging_chrome.h"
 #include "chrome/grit/generated_resources.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
 #include "chromeos/dbus/debug_daemon/debug_daemon_client.h"
 #include "components/policy/core/browser/policy_conversions.h"
 #include "content/public/browser/web_contents.h"
@@ -53,8 +52,8 @@ bool WriteTimestampedFile(const base::FilePath& file_path,
   return bytes_written > 0;
 }
 
-bool GetBoolOrFalse(const base::Value* dict, const char* keyname) {
-  const base::Value* key = dict->FindKey(keyname);
+bool GetBoolOrFalse(const base::Value& dict, const char* keyname) {
+  const base::Value* key = dict.FindKey(keyname);
   return key && key->GetBool();
 }
 
@@ -66,10 +65,10 @@ NetworkLogsMessageHandler::~NetworkLogsMessageHandler() = default;
 
 void NetworkLogsMessageHandler::RegisterMessages() {
   out_dir_ = GetDownloadsDirectory(web_ui());
-  web_ui()->RegisterDeprecatedMessageCallback(
+  web_ui()->RegisterMessageCallback(
       "storeLogs", base::BindRepeating(&NetworkLogsMessageHandler::OnStoreLogs,
                                        base::Unretained(this)));
-  web_ui()->RegisterDeprecatedMessageCallback(
+  web_ui()->RegisterMessageCallback(
       "setShillDebugging",
       base::BindRepeating(&NetworkLogsMessageHandler::OnSetShillDebugging,
                           base::Unretained(this)));
@@ -84,12 +83,10 @@ void NetworkLogsMessageHandler::Respond(const std::string& callback_id,
   ResolveJavascriptCallback(base::Value(callback_id), response);
 }
 
-void NetworkLogsMessageHandler::OnStoreLogs(const base::ListValue* list) {
-  CHECK_EQ(2u, list->GetList().size());
-  std::string callback_id;
-  CHECK(list->GetString(0, &callback_id));
-  const base::Value* options;
-  CHECK(list->Get(1, &options));
+void NetworkLogsMessageHandler::OnStoreLogs(const base::Value::List& list) {
+  CHECK_EQ(2u, list.size());
+  std::string callback_id = list[0].GetString();
+  const base::Value& options = list[1];
   AllowJavascript();
 
   if (GetBoolOrFalse(options, "systemLogs")) {
@@ -98,9 +95,9 @@ void NetworkLogsMessageHandler::OnStoreLogs(const base::ListValue* list) {
         out_dir_, scrub_data,
         base::BindOnce(&NetworkLogsMessageHandler::OnWriteSystemLogs,
                        weak_factory_.GetWeakPtr(), callback_id,
-                       options->Clone()));
+                       options.Clone()));
   } else {
-    MaybeWriteDebugLogs(callback_id, options->Clone());
+    MaybeWriteDebugLogs(callback_id, options.Clone());
   }
 }
 
@@ -118,13 +115,13 @@ void NetworkLogsMessageHandler::OnWriteSystemLogs(
 void NetworkLogsMessageHandler::MaybeWriteDebugLogs(
     const std::string& callback_id,
     base::Value&& options) {
-  if (GetBoolOrFalse(&options, "debugLogs")) {
+  if (GetBoolOrFalse(options, "debugLogs")) {
     if (!base::SysInfo::IsRunningOnChromeOS()) {
       Respond(callback_id, "Debug logs unavailable on Linux build.",
               /*is_error=*/true);
       return;
     }
-    bool include_chrome = GetBoolOrFalse(&options, "chromeLogs");
+    bool include_chrome = GetBoolOrFalse(options, "chromeLogs");
     chromeos::debug_log_writer::StoreLogs(
         out_dir_, include_chrome,
         base::BindOnce(&NetworkLogsMessageHandler::OnWriteDebugLogs,
@@ -149,7 +146,7 @@ void NetworkLogsMessageHandler::OnWriteDebugLogs(
 void NetworkLogsMessageHandler::MaybeWritePolicies(
     const std::string& callback_id,
     base::Value&& options) {
-  if (GetBoolOrFalse(&options, "policies")) {
+  if (GetBoolOrFalse(options, "policies")) {
     std::string json_policies = GetJsonPolicies(web_ui());
     base::ThreadPool::PostTaskAndReplyWithResult(
         FROM_HERE,
@@ -181,13 +178,12 @@ void NetworkLogsMessageHandler::OnWriteSystemLogsCompleted(
 }
 
 void NetworkLogsMessageHandler::OnSetShillDebugging(
-    const base::ListValue* list) {
-  CHECK_EQ(2u, list->GetList().size());
-  std::string callback_id, subsystem;
-  CHECK(list->GetString(0, &callback_id));
-  CHECK(list->GetString(1, &subsystem));
+    const base::Value::List& list) {
+  CHECK_EQ(2u, list.size());
+  std::string callback_id = list[0].GetString();
+  std::string subsystem = list[1].GetString();
   AllowJavascript();
-  chromeos::DBusThreadManager::Get()->GetDebugDaemonClient()->SetDebugMode(
+  chromeos::DebugDaemonClient::Get()->SetDebugMode(
       subsystem,
       base::BindOnce(&NetworkLogsMessageHandler::OnSetShillDebuggingCompleted,
                      weak_factory_.GetWeakPtr(), callback_id));

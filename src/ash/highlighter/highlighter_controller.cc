@@ -128,7 +128,7 @@ void HighlighterController::UpdatePointerView(ui::TouchEvent* event) {
 
   gfx::Rect bounds =
       highlighter_view_widget_->GetNativeWindow()->GetRootWindow()->bounds();
-  bounds.Inset(kScreenEdgeMargin, kScreenEdgeMargin);
+  bounds.Inset(kScreenEdgeMargin);
 
   const gfx::PointF pos = GetHighlighterView()->points().GetNewest().location;
   if (bounds.Contains(
@@ -145,7 +145,7 @@ void HighlighterController::UpdatePointerView(ui::TouchEvent* event) {
 
   interrupted_stroke_timer_ = std::make_unique<base::OneShotTimer>();
   interrupted_stroke_timer_->Start(
-      FROM_HERE, base::TimeDelta::FromMilliseconds(kInterruptedStrokeTimeoutMs),
+      FROM_HERE, base::Milliseconds(kInterruptedStrokeTimeoutMs),
       base::BindOnce(&HighlighterController::RecognizeGesture,
                      base::Unretained(this)));
 }

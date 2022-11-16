@@ -7,7 +7,6 @@
 
 #include <memory>
 
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/policy/remote_commands/device_command_screenshot_job.h"
@@ -24,24 +23,26 @@ namespace policy {
 class ScreenshotDelegate : public DeviceCommandScreenshotJob::Delegate {
  public:
   ScreenshotDelegate();
+
+  ScreenshotDelegate(const ScreenshotDelegate&) = delete;
+  ScreenshotDelegate& operator=(const ScreenshotDelegate&) = delete;
+
   ~ScreenshotDelegate() override;
 
   // DeviceCommandScreenshotJob::Delegate:
   bool IsScreenshotAllowed() override;
   void TakeSnapshot(gfx::NativeWindow window,
                     const gfx::Rect& source_rect,
-                    ui::GrabWindowSnapshotAsyncPNGCallback callback) override;
+                    OnScreenshotTakenCallback upload) override;
   std::unique_ptr<UploadJob> CreateUploadJob(
       const GURL& upload_url,
       UploadJob::Delegate* delegate) override;
 
  private:
-  void StoreScreenshot(ui::GrabWindowSnapshotAsyncPNGCallback callback,
-                       scoped_refptr<base::RefCountedMemory> png_data);
+  void OnScreenshotTaken(OnScreenshotTakenCallback callback,
+                         scoped_refptr<base::RefCountedMemory> png_data);
 
   base::WeakPtrFactory<ScreenshotDelegate> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ScreenshotDelegate);
 };
 
 }  // namespace policy

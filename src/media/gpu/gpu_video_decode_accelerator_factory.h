@@ -9,6 +9,7 @@
 
 #include "base/callback.h"
 #include "base/threading/thread_checker.h"
+#include "build/build_config.h"
 #include "gpu/config/gpu_driver_bug_workarounds.h"
 #include "gpu/config/gpu_info.h"
 #include "gpu/config/gpu_preferences.h"
@@ -37,6 +38,12 @@ class MediaLog;
 
 class MEDIA_GPU_EXPORT GpuVideoDecodeAcceleratorFactory {
  public:
+  GpuVideoDecodeAcceleratorFactory() = delete;
+  GpuVideoDecodeAcceleratorFactory(const GpuVideoDecodeAcceleratorFactory&) =
+      delete;
+  GpuVideoDecodeAcceleratorFactory& operator=(
+      const GpuVideoDecodeAcceleratorFactory&) = delete;
+
   ~GpuVideoDecodeAcceleratorFactory();
 
   // Return current GLContext.
@@ -77,7 +84,7 @@ class MEDIA_GPU_EXPORT GpuVideoDecodeAcceleratorFactory {
  private:
   GpuVideoDecodeAcceleratorFactory(const GpuVideoDecodeGLClient& gl_client);
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   std::unique_ptr<VideoDecodeAccelerator> CreateD3D11VDA(
       const gpu::GpuDriverBugWorkarounds& workarounds,
       const gpu::GpuPreferences& gpu_preferences,
@@ -102,13 +109,13 @@ class MEDIA_GPU_EXPORT GpuVideoDecodeAcceleratorFactory {
       const gpu::GpuPreferences& gpu_preferences,
       MediaLog* media_log) const;
 #endif
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   std::unique_ptr<VideoDecodeAccelerator> CreateVTVDA(
       const gpu::GpuDriverBugWorkarounds& workarounds,
       const gpu::GpuPreferences& gpu_preferences,
       MediaLog* media_log) const;
 #endif
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   std::unique_ptr<VideoDecodeAccelerator> CreateAndroidVDA(
       const gpu::GpuDriverBugWorkarounds& workarounds,
       const gpu::GpuPreferences& gpu_preferences,
@@ -118,8 +125,6 @@ class MEDIA_GPU_EXPORT GpuVideoDecodeAcceleratorFactory {
   const GpuVideoDecodeGLClient gl_client_;
   const AndroidOverlayMojoFactoryCB overlay_factory_cb_;
   base::ThreadChecker thread_checker_;
-
-  DISALLOW_IMPLICIT_CONSTRUCTORS(GpuVideoDecodeAcceleratorFactory);
 };
 
 }  // namespace media

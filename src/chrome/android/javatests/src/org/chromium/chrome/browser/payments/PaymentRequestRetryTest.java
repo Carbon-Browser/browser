@@ -7,7 +7,6 @@ package org.chromium.chrome.browser.payments;
 import androidx.test.filters.MediumTest;
 
 import org.junit.Assert;
-import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -25,8 +24,8 @@ import org.chromium.chrome.browser.payments.PaymentRequestTestRule.FactorySpeed;
 import org.chromium.chrome.browser.payments.PaymentRequestTestRule.MainActivityStartCallback;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.util.ChromeRenderTestRule;
+import org.chromium.components.payments.PaymentFeatureList;
 import org.chromium.ui.modaldialog.ModalDialogProperties;
-import org.chromium.ui.test.util.DisableAnimationsTestRule;
 import org.chromium.ui.test.util.RenderTestRule;
 
 import java.util.concurrent.TimeoutException;
@@ -38,17 +37,16 @@ import java.util.concurrent.TimeoutException;
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE,
         PaymentRequestTestRule.ENABLE_EXPERIMENTAL_WEB_PLATFORM_FEATURES})
 public class PaymentRequestRetryTest implements MainActivityStartCallback {
-    // Disable animations to reduce flakiness.
-    @ClassRule
-    public static DisableAnimationsTestRule sNoAnimationsRule = new DisableAnimationsTestRule();
-
     @Rule
     public PaymentRequestTestRule mPaymentRequestTestRule =
             new PaymentRequestTestRule("payment_request_retry.html", this);
 
     @Rule
     public RenderTestRule mRenderTestRule =
-            RenderTestRule.Builder.withPublicCorpus().setRevision(1).build();
+            RenderTestRule.Builder.withPublicCorpus()
+                    .setRevision(1)
+                    .setBugComponent(RenderTestRule.Component.BLINK_PAYMENTS)
+                    .build();
 
     @Override
     public void onMainActivityStarted() throws TimeoutException {
@@ -73,7 +71,8 @@ public class PaymentRequestRetryTest implements MainActivityStartCallback {
     @Test
     @MediumTest
     @Feature({"Payments"})
-    public void testDoNotAllowPaymentAppChange() throws TimeoutException {
+    @CommandLineFlags.Add({"enable-features=" + PaymentFeatureList.PAYMENT_REQUEST_BASIC_CARD})
+    public void testDoNotAllowPaymentAppChange_WithBasicCardEnabled() throws TimeoutException {
         mPaymentRequestTestRule.triggerUIAndWait(mPaymentRequestTestRule.getReadyForInput());
         mPaymentRequestTestRule.clickAndWait(
                 R.id.button_primary, mPaymentRequestTestRule.getReadyForUnmaskInput());
@@ -92,34 +91,28 @@ public class PaymentRequestRetryTest implements MainActivityStartCallback {
         Assert.assertEquals(1, mPaymentRequestTestRule.getNumberOfPaymentApps());
     }
 
-    /**
-     * Tests that adding new cards is disabled during retry().
-     */
+    /** Tests that only the initially selected payment app is available during retry(). */
     @Test
     @MediumTest
-    @FlakyTest(message = "crbug.com/1182234")
     @Feature({"Payments"})
-    public void testDoNotAllowAddingCards() throws TimeoutException {
-        mPaymentRequestTestRule.triggerUIAndWait(mPaymentRequestTestRule.getReadyForInput());
+    @CommandLineFlags.Add({"disable-features=" + PaymentFeatureList.PAYMENT_REQUEST_BASIC_CARD})
+    public void testDoNotAllowPaymentAppChange() throws TimeoutException {
+        // Note that the bobpay app has been added in onMainActivityStarted(), so we will have two
+        // payment apps in total.
+        mPaymentRequestTestRule.addPaymentAppFactory(
+                "https://kylepay.com/webpay", AppPresence.HAVE_APPS, FactorySpeed.FAST_FACTORY);
+
+        mPaymentRequestTestRule.triggerUIAndWait(
+                "buyWithUrlMethod", mPaymentRequestTestRule.getReadyToPay());
+        Assert.assertEquals(2, mPaymentRequestTestRule.getNumberOfPaymentApps());
+        mPaymentRequestTestRule.clickInPaymentMethodAndWait(
+                R.id.payments_section, mPaymentRequestTestRule.getReadyForInput());
         mPaymentRequestTestRule.clickAndWait(
-                R.id.button_primary, mPaymentRequestTestRule.getReadyForUnmaskInput());
+                R.id.button_primary, mPaymentRequestTestRule.getPaymentResponseReady());
 
-        // Confirm that "Add Card" option is available.
-        Assert.assertNotNull(mPaymentRequestTestRule.getPaymentRequestUI()
-                                     .getPaymentMethodSectionForTest()
-                                     .findViewById(R.id.payments_add_option_button));
-
-        mPaymentRequestTestRule.setTextInCardUnmaskDialogAndWait(
-                R.id.card_unmask_input, "123", mPaymentRequestTestRule.getReadyToUnmask());
-        mPaymentRequestTestRule.clickCardUnmaskButtonAndWait(
-                ModalDialogProperties.ButtonType.POSITIVE,
-                mPaymentRequestTestRule.getPaymentResponseReady());
-
-        // Confirm that "Add Card" option does not exist during retry.
+        // Confirm that only one payment app is available for retry().
         mPaymentRequestTestRule.retryPaymentRequest("{}", mPaymentRequestTestRule.getReadyToPay());
-        Assert.assertNull(mPaymentRequestTestRule.getPaymentRequestUI()
-                                  .getPaymentMethodSectionForTest()
-                                  .findViewById(R.id.payments_add_option_button));
+        Assert.assertEquals(1, mPaymentRequestTestRule.getNumberOfPaymentApps());
     }
 
     /**

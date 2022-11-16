@@ -15,7 +15,7 @@
 #include "third_party/skia/include/core/SkColorFilter.h"
 #include "third_party/skia/include/core/SkRegion.h"
 #include "ui/gfx/geometry/size_f.h"
-#include "ui/gfx/skia_util.h"
+#include "ui/gfx/geometry/skia_conversions.h"
 
 namespace cc {
 
@@ -263,7 +263,7 @@ sk_sp<PaintFilter> RenderSurfaceFilters::BuildImageFilter(
         sk_sp<SkColorFilter> cf;
         bool has_input = false;
         if (op.image_filter()->type() == PaintFilter::Type::kColorFilter &&
-            !op.image_filter()->crop_rect()) {
+            !op.image_filter()->GetCropRect()) {
           auto* color_paint_filter =
               static_cast<ColorFilterPaintFilter*>(op.image_filter().get());
           cf = color_paint_filter->color_filter();

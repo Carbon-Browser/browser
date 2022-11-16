@@ -6,8 +6,8 @@
 
 #include "base/notreached.h"
 #include "base/unguessable_token.h"
+#include "services/network/public/cpp/cookie_manager_shared_mojom_traits.h"
 #include "services/network/public/cpp/crash_keys.h"
-#include "services/network/public/cpp/site_for_cookies_mojom_traits.h"
 
 namespace mojo {
 
@@ -80,7 +80,7 @@ bool StructTraits<network::mojom::IsolationInfoDataView, net::IsolationInfo>::
   absl::optional<net::IsolationInfo> isolation_info =
       net::IsolationInfo::CreateIfConsistent(
           request_type, top_frame_origin, frame_origin, site_for_cookies,
-          data.opaque_and_non_transient(), std::move(party_context),
+          std::move(party_context),
           nonce.has_value() ? &nonce.value() : nullptr);
   if (!isolation_info) {
     network::debug::SetDeserializationCrashKeyString("isolation_inconsistent");

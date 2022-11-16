@@ -11,7 +11,6 @@
 #include <vector>
 
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "content/common/content_export.h"
@@ -31,8 +30,7 @@
 #include "third_party/blink/public/mojom/service_worker/service_worker_provider.mojom.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_registration.mojom-forward.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_worker_client_registry.mojom.h"
-#include "third_party/blink/public/mojom/timing/worker_timing_container.mojom-forward.h"
-#include "third_party/blink/public/mojom/web_feature/web_feature.mojom-forward.h"
+#include "third_party/blink/public/mojom/use_counter/metrics/web_feature.mojom-forward.h"
 #include "third_party/blink/public/platform/modules/service_worker/web_service_worker_provider_client.h"
 #include "third_party/blink/public/platform/modules/service_worker/web_service_worker_provider_context.h"
 
@@ -101,6 +99,10 @@ class CONTENT_EXPORT ServiceWorkerProviderContext
           host_remote,
       blink::mojom::ControllerServiceWorkerInfoPtr controller_info,
       scoped_refptr<network::SharedURLLoaderFactory> fallback_loader_factory);
+
+  ServiceWorkerProviderContext(const ServiceWorkerProviderContext&) = delete;
+  ServiceWorkerProviderContext& operator=(const ServiceWorkerProviderContext&) =
+      delete;
 
   blink::mojom::ServiceWorkerContainerType container_type() const {
     return container_type_;
@@ -172,16 +174,6 @@ class CONTENT_EXPORT ServiceWorkerProviderContext
   // https://html.spec.whatwg.org/multipage/webappapis.html#concept-environment-execution-ready-flag
   void NotifyExecutionReady();
 
-  // Sets up |receiver| to receive resource performance timings for the given
-  // |request_id|. This receiver will be taken later by
-  // TakePendingWorkerTimingReceiver().
-  void AddPendingWorkerTimingReceiver(
-      int request_id,
-      mojo::PendingReceiver<blink::mojom::WorkerTimingContainer> receiver);
-
-  mojo::PendingReceiver<blink::mojom::WorkerTimingContainer>
-  TakePendingWorkerTimingReceiver(int request_id);
-
   // WebServiceWorkerProviderContext implementation.
   void BindServiceWorkerWorkerClientRemote(
       blink::CrossVariantMojoRemote<
@@ -198,11 +190,6 @@ class CONTENT_EXPORT ServiceWorkerProviderContext
       const override;
   const blink::WebString client_id() const override;
 
-  std::string subresource_filter() const { return subresource_filter_; }
-  void SetSubresourceFilter(const std::string& filter) {
-    subresource_filter_ = filter;
-  }
-
  private:
   friend class base::DeleteHelper<ServiceWorkerProviderContext>;
   friend class base::RefCountedThreadSafe<ServiceWorkerProviderContext,
@@ -216,9 +203,6 @@ class CONTENT_EXPORT ServiceWorkerProviderContext
   FRIEND_TEST_ALL_PREFIXES(service_worker_provider_context_unittest::
                                ServiceWorkerProviderContextTest,
                            ControllerWithoutFetchHandler);
-  using WorkerTimingContainerReceiverMap =
-      std::map<int /* request_id */,
-               mojo::PendingReceiver<blink::mojom::WorkerTimingContainer>>;
 
   ~ServiceWorkerProviderContext() override;
 
@@ -332,17 +316,6 @@ class CONTENT_EXPORT ServiceWorkerProviderContext
       controller_connector_;
 
   bool sent_execution_ready_ = false;
-
-  std::string subresource_filter_;
-
-  // Contains pending receivers whose corresponding requests are still
-  // in-flight. The pending receivers are taken by
-  // TakePendingWorkerTimingReceiver() when the request is completed.
-  WorkerTimingContainerReceiverMap worker_timing_container_receivers_;
-
-  base::WeakPtrFactory<ServiceWorkerProviderContext> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ServiceWorkerProviderContext);
 };
 
 struct ServiceWorkerProviderContextDeleter {

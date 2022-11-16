@@ -13,7 +13,6 @@
 
 #include "base/callback_helpers.h"
 #include "base/files/file_path.h"
-#include "base/macros.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
@@ -30,9 +29,12 @@
 #include "components/metrics/metrics_service.h"
 #include "content/public/browser/notification_service.h"
 #include "content/public/browser/render_process_host.h"
+#include "content/public/common/content_features.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
+#include "content/public/test/fenced_frame_test_util.h"
+#include "content/public/test/prerender_test_util.h"
 #include "content/public/test/test_utils.h"
 #include "extensions/common/switches.h"
 #include "extensions/common/value_builder.h"
@@ -41,6 +43,7 @@
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/blink/public/common/features.h"
 
 using base::Bucket;
 using content::WebContents;
@@ -57,6 +60,9 @@ class TestMemoryDetails : public MetricsMemoryDetails {
  public:
   TestMemoryDetails() : MetricsMemoryDetails(base::DoNothing()) {}
 
+  TestMemoryDetails(const TestMemoryDetails&) = delete;
+  TestMemoryDetails& operator=(const TestMemoryDetails&) = delete;
+
   void StartFetchAndWait() {
     uma_ = std::make_unique<base::HistogramTester>();
     StartFetch();
@@ -70,6 +76,13 @@ class TestMemoryDetails : public MetricsMemoryDetails {
   int GetOutOfProcessIframeCount() {
     std::vector<Bucket> buckets =
         uma_->GetAllSamples("SiteIsolation.OutOfProcessIframes");
+    CHECK_EQ(1U, buckets.size());
+    return buckets[0].min;
+  }
+
+  int GetOutOfProcessInnerFrameTreesCount() {
+    std::vector<Bucket> buckets =
+        uma_->GetAllSamples("SiteIsolation.OutOfProcessInnerFrameTrees");
     CHECK_EQ(1U, buckets.size());
     return buckets[0].min;
   }
@@ -94,8 +107,6 @@ class TestMemoryDetails : public MetricsMemoryDetails {
   }
 
   std::unique_ptr<base::HistogramTester> uma_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestMemoryDetails);
 };
 
 // This matcher takes three other matchers as arguments, and applies one of them
@@ -106,7 +117,7 @@ MATCHER_P3(DependingOnPolicy,
            isolate_nothing,
            isolate_extensions,
            isolate_all_sites,
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
            std::string("(with oopifs disabled) ") +
                PrintToString(isolate_nothing)
 #else
@@ -117,7 +128,7 @@ MATCHER_P3(DependingOnPolicy,
                      PrintToString(isolate_extensions)
 #endif
 ) {
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   return ExplainMatchResult(isolate_nothing, arg, result_listener);
 #else
   return content::AreAllSitesIsolatedForTesting()
@@ -161,6 +172,10 @@ void PrintTo(const SampleMatcherP2<P1, P2>& matcher, std::ostream* os) {
 class SiteDetailsBrowserTest : public extensions::ExtensionBrowserTest {
  public:
   SiteDetailsBrowserTest() {}
+
+  SiteDetailsBrowserTest(const SiteDetailsBrowserTest&) = delete;
+  SiteDetailsBrowserTest& operator=(const SiteDetailsBrowserTest&) = delete;
+
   ~SiteDetailsBrowserTest() override {}
 
   void SetUpOnMainThread() override {
@@ -278,7 +293,6 @@ class SiteDetailsBrowserTest : public extensions::ExtensionBrowserTest {
 
  private:
   std::vector<std::unique_ptr<TestExtensionDir>> temp_dirs_;
-  DISALLOW_COPY_AND_ASSIGN(SiteDetailsBrowserTest);
 };
 
 // Test the accuracy of SiteDetails process estimation, in the presence of
@@ -340,7 +354,7 @@ IN_PROC_BROWSER_TEST_F(SiteDetailsBrowserTest, DISABLED_ManyIframes) {
   // Open a second tab (different BrowsingInstance) with 4 sites (a through d).
   GURL abcd_url = embedded_test_server()->GetURL(
       "a.com", "/cross_site_iframe_factory.html?a(b(c(d())))");
-  AddTabAtIndex(1, abcd_url, ui::PAGE_TRANSITION_TYPED);
+  ASSERT_TRUE(AddTabAtIndex(1, abcd_url, ui::PAGE_TRANSITION_TYPED));
 
   details = new TestMemoryDetails();
   details->StartFetchAndWait();
@@ -363,7 +377,7 @@ IN_PROC_BROWSER_TEST_F(SiteDetailsBrowserTest, DISABLED_ManyIframes) {
                         ElementsAre(Bucket(12, 1), Bucket(68, 1))));
 
   // Open a third tab (different BrowsingInstance) with the same 4 sites.
-  AddTabAtIndex(2, abcd_url, ui::PAGE_TRANSITION_TYPED);
+  ASSERT_TRUE(AddTabAtIndex(2, abcd_url, ui::PAGE_TRANSITION_TYPED));
 
   details = new TestMemoryDetails();
   details->StartFetchAndWait();
@@ -453,7 +467,7 @@ IN_PROC_BROWSER_TEST_F(SiteDetailsBrowserTest, DISABLED_IsolateExtensions) {
   WebContents* tab1 = browser()->tab_strip_model()->GetWebContentsAt(0);
   GURL tab2_url = embedded_test_server()->GetURL(
       "a.com", "/cross_site_iframe_factory.html?a(d,e)");
-  AddTabAtIndex(1, tab2_url, ui::PAGE_TRANSITION_TYPED);
+  ASSERT_TRUE(AddTabAtIndex(1, tab2_url, ui::PAGE_TRANSITION_TYPED));
   WebContents* tab2 = browser()->tab_strip_model()->GetWebContentsAt(1);
 
   details = new TestMemoryDetails();
@@ -551,7 +565,8 @@ IN_PROC_BROWSER_TEST_F(SiteDetailsBrowserTest, DISABLED_IsolateExtensions) {
   // be three processes estimated by IsolateExtensions: one for extension3, one
   // for extension1's background page, and one for the web iframe in tab2.
   browser()->tab_strip_model()->ActivateTabAt(
-      0, {TabStripModel::GestureType::kOther});
+      0, TabStripUserGestureDetails(
+             TabStripUserGestureDetails::GestureType::kOther));
   ASSERT_TRUE(ui_test_utils::NavigateToURL(
       browser(), extension3->GetResourceURL("blank_iframe.html")));
   details = new TestMemoryDetails();
@@ -719,7 +734,7 @@ IN_PROC_BROWSER_TEST_F(SiteDetailsBrowserTest,
   // Open a tab, which will be in a different BrowsingInstance.
   GURL abcd_url = embedded_test_server()->GetURL(
       "a.com", "/cross_site_iframe_factory.html?a(b(c(d())))");
-  AddTabAtIndex(1, abcd_url, ui::PAGE_TRANSITION_TYPED);
+  ASSERT_TRUE(AddTabAtIndex(1, abcd_url, ui::PAGE_TRANSITION_TYPED));
 
   details = new TestMemoryDetails();
   details->StartFetchAndWait();
@@ -797,4 +812,155 @@ IN_PROC_BROWSER_TEST_F(
               DependingOnPolicy(ElementsAre(Bucket(1, 2)),
                                 ElementsAre(Bucket(1, 1), Bucket(3, 1)),
                                 ElementsAre(Bucket(1, 1), Bucket(5, 1))));
+}
+
+class PrerenderSiteDetailsBrowserTest : public InProcessBrowserTest {
+ public:
+  PrerenderSiteDetailsBrowserTest()
+      : prerender_helper_(
+            base::BindRepeating(&PrerenderSiteDetailsBrowserTest::web_contents,
+                                base::Unretained(this))) {
+    feature_list_.InitAndEnableFeature(blink::features::kPrerender2);
+  }
+  ~PrerenderSiteDetailsBrowserTest() override = default;
+
+  PrerenderSiteDetailsBrowserTest(const PrerenderSiteDetailsBrowserTest&) =
+      delete;
+  PrerenderSiteDetailsBrowserTest& operator=(
+      const PrerenderSiteDetailsBrowserTest&) = delete;
+
+  void SetUp() override {
+    prerender_helper_.SetUp(embedded_test_server());
+    InProcessBrowserTest::SetUp();
+  }
+  void SetUpOnMainThread() override {
+    ASSERT_TRUE(embedded_test_server()->Start());
+  }
+
+ protected:
+  content::WebContents* web_contents() const {
+    return browser()->tab_strip_model()->GetActiveWebContents();
+  }
+  content::test::PrerenderTestHelper prerender_helper_;
+
+ private:
+  base::test::ScopedFeatureList feature_list_;
+};
+
+IN_PROC_BROWSER_TEST_F(PrerenderSiteDetailsBrowserTest,
+                       MemoryDetailsForPrerender) {
+  // Navigate to an initial page.
+  auto initial_url = embedded_test_server()->GetURL("/empty.html");
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), initial_url));
+
+  // Load a page in the prerender.
+  GURL prerender_url = embedded_test_server()->GetURL("/title2.html");
+  int host_id = prerender_helper_.AddPrerender(prerender_url);
+  content::test::PrerenderHostObserver host_observer(*web_contents(), host_id);
+  EXPECT_FALSE(host_observer.was_activated());
+
+  scoped_refptr<TestMemoryDetails> details = new TestMemoryDetails();
+  details->StartFetchAndWait();
+  // Currently we don't collect the title of the prerendering page.
+  EXPECT_EQ(1U, details->CountPageTitles());
+}
+
+class FencedFrameSiteDetailsBrowserTest : public InProcessBrowserTest {
+ public:
+  FencedFrameSiteDetailsBrowserTest() = default;
+  ~FencedFrameSiteDetailsBrowserTest() override = default;
+
+  FencedFrameSiteDetailsBrowserTest(const FencedFrameSiteDetailsBrowserTest&) =
+      delete;
+  FencedFrameSiteDetailsBrowserTest& operator=(
+      const FencedFrameSiteDetailsBrowserTest&) = delete;
+
+  void SetUpOnMainThread() override {
+    host_resolver()->AddRule("*", "127.0.0.1");
+    ASSERT_TRUE(embedded_test_server()->Start());
+  }
+
+ protected:
+  content::test::FencedFrameTestHelper& fenced_frame_test_helper() {
+    return fenced_frame_helper_;
+  }
+  content::WebContents* web_contents() const {
+    return browser()->tab_strip_model()->GetActiveWebContents();
+  }
+
+ private:
+  content::test::FencedFrameTestHelper fenced_frame_helper_;
+};
+
+IN_PROC_BROWSER_TEST_F(FencedFrameSiteDetailsBrowserTest,
+                       MemoryDetailsForFencedFrame) {
+  content::IsolateAllSitesForTesting(base::CommandLine::ForCurrentProcess());
+  auto initial_url = embedded_test_server()->GetURL("a.com", "/empty.html");
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), initial_url));
+
+  // Load a fenced frame.
+  GURL fenced_frame_url =
+      embedded_test_server()->GetURL("b.com", "/fenced_frames/iframe.html");
+  content::RenderFrameHost* fenced_frame_host =
+      fenced_frame_test_helper().CreateFencedFrame(
+          web_contents()->GetPrimaryMainFrame(), fenced_frame_url);
+  ASSERT_TRUE(fenced_frame_host);
+
+  scoped_refptr<TestMemoryDetails> details = new TestMemoryDetails();
+  details->StartFetchAndWait();
+  // Currently we don't collect the title of the fenced frame.
+  EXPECT_EQ(1U, details->CountPageTitles());
+
+  // Expect we encountered one fenced frame.
+  EXPECT_EQ(1, details->GetOutOfProcessInnerFrameTreesCount());
+}
+
+class BackForwardCacheSiteDetailsBrowserTest : public InProcessBrowserTest {
+ public:
+  BackForwardCacheSiteDetailsBrowserTest() {
+    // Enable BackForwardCache.
+    feature_list_.InitWithFeaturesAndParameters(
+        {{features::kBackForwardCache,
+          {{"TimeToLiveInBackForwardCacheInSeconds", "3600"}}}},
+        // Allow BackForwardCache for all devices regardless of their memory.
+        {features::kBackForwardCacheMemoryControls});
+  }
+  ~BackForwardCacheSiteDetailsBrowserTest() override = default;
+
+  BackForwardCacheSiteDetailsBrowserTest(
+      const BackForwardCacheSiteDetailsBrowserTest&) = delete;
+  BackForwardCacheSiteDetailsBrowserTest& operator=(
+      const BackForwardCacheSiteDetailsBrowserTest&) = delete;
+
+  void SetUpOnMainThread() override {
+    host_resolver()->AddRule("*", "127.0.0.1");
+    ASSERT_TRUE(embedded_test_server()->Start());
+  }
+
+ protected:
+  content::WebContents* web_contents() const {
+    return browser()->tab_strip_model()->GetActiveWebContents();
+  }
+
+ private:
+  base::test::ScopedFeatureList feature_list_;
+};
+
+IN_PROC_BROWSER_TEST_F(BackForwardCacheSiteDetailsBrowserTest,
+                       MemoryDetailsForBackForwardCache) {
+  const GURL url_a(embedded_test_server()->GetURL("a.com", "/title1.html"));
+  const GURL url_b(embedded_test_server()->GetURL("b.com", "/title1.html"));
+
+  EXPECT_EQ(web_contents()->GetVisibility(), content::Visibility::VISIBLE);
+
+  // Navigate to A.
+  EXPECT_TRUE(ui_test_utils::NavigateToURL(browser(), url_a));
+
+  // Navigate to B.
+  EXPECT_TRUE(ui_test_utils::NavigateToURL(browser(), url_b));
+
+  scoped_refptr<TestMemoryDetails> details = new TestMemoryDetails();
+  details->StartFetchAndWait();
+  // Currently we don't collect the title of the back forward cache.
+  EXPECT_EQ(1U, details->CountPageTitles());
 }

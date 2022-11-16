@@ -13,12 +13,23 @@ namespace web_app {
 // Please maintain the alphabetical order when adding new app IDs.
 
 // Generated as: web_app::GenerateAppId(/*manifest_id=*/absl::nullopt, GURL(
+//     "https://calculator.apps.chrome/"))
+const char kCalculatorAppId[] = "oabkinaljpjeilageghcdlnekhphhphl";
+
+// Generated as: web_app::GenerateAppId(/*manifest_id=*/absl::nullopt, GURL(
 //     "chrome://camera-app/views/main.html"))
 const char kCameraAppId[] = "njfbnohfdkmbmnjapinfcopialeghnmh";
 
 // Generated as: web_app::GenerateAppId(/*manifest_id=*/absl::nullopt, GURL(
 //     "https://canvas.apps.chrome/"))
 const char kCanvasAppId[] = "ieailfmhaghpphfffooibmlghaeopach";
+
+// TODO(crbug.com/1334053)
+const char kCloudGamingPartnerPlatform[] = "egmafekfmcnknbdlbfbhafbllplmjlhn";
+
+// Generated as: web_app::GenerateAppId(/*manifest_id=*/absl::nullopt, GURL(
+//     "chrome-untrusted://crosh/"))
+const char kCroshAppId[] = "cgfnfgkafmcdkdgilmojlnaadileaach";
 
 // Generated as: web_app::GenerateAppId(/*manifest_id=*/absl::nullopt, GURL(
 //     "https://cursive.apps.chrome/"))
@@ -27,6 +38,10 @@ const char kCursiveAppId[] = "apignacaigpffemhdbhmnajajaccbckh";
 // Generated as: web_app::GenerateAppId(/*manifest_id=*/absl::nullopt,
 // GURL("chrome://diagnostics/"))
 const char kDiagnosticsAppId[] = "keejpcfcpecjhmepmpcfgjemkmlicpam";
+
+// Generated as: web_app::GenerateAppId(/*manifest_id=*/absl::nullopt,
+// GURL("chrome://accessory-update/"))
+const char kFirmwareUpdateAppId[] = "nedcdcceagjbkiaecmdbpafcmlhkiifa";
 
 // Generated as: web_app::GenerateAppId(/*manifest_id=*/absl::nullopt, GURL(
 //     "https://mail.google.com/mail/?usp=installed_webapp"))
@@ -61,6 +76,10 @@ const char kGoogleMapsAppId[] = "mnhkaebcjjhencmpkapnbdaogjamfbcj";
 const char kGoogleMeetAppId[] = "kjgfgldnnfoeklkmfkjfagphfepbbdan";
 
 // Generated as: web_app::GenerateAppId(/*manifest_id=*/absl::nullopt, GURL(
+//     "https://play.google.com/store/movies?usp=installed_webapp"))
+const char kGoogleMoviesAppId[] = "aiihaadhfoadjgjcegeomiajkajbjlcn";
+
+// Generated as: web_app::GenerateAppId(/*manifest_id=*/absl::nullopt, GURL(
 //     "https://news.google.com/?lfhs=2"))
 const char kGoogleNewsAppId[] = "kfgapjallbhpciobgmlhlhokknljkgho";
 
@@ -81,12 +100,13 @@ const char kHelpAppId[] = "nbljnnecbjbmifnoehiemkgefbnpoeak";
 const char kMediaAppId[] = "jhdjimmaggjajfjphpljagpgkidjilnj";
 
 // Generated as: web_app::GenerateAppId(/*manifest_id=*/absl::nullopt, GURL(
-//     "chrome://media-app/audio/"))
-const char kMediaAppAudioId[] = "ehpdnehdmjhimljbjinkfmgechlofodn";
-
-// Generated as: web_app::GenerateAppId(/*manifest_id=*/absl::nullopt, GURL(
 //     "https://messages.google.com/web/"))
 const char kMessagesAppId[] = "hpfldicfbfomlpcikngkocigghgafkph";
+
+// Generated as: web_app::GenerateAppId(/*manifest_id=*/absl::nullopt, GURL(
+//     "https://messages-web.sandbox.google.com/web/"))
+const char kMessagesDogfoodDeprecatedAppId[] =
+    "gkgiochgbaoelfjibmnaomdepldjceib";
 
 // Generated as: web_app::GenerateAppId(/*manifest_id=*/absl::nullopt, GURL(
 //     "chrome://test-system-app/pwa.html"))
@@ -99,6 +119,10 @@ const char kOsFeedbackAppId[] = "iffgohomcomlpmkfikfffagkkoojjffm";
 // Generated as: web_app::GenerateAppId(/*manifest_id=*/absl::nullopt, GURL(
 //     "chrome://os-settings/"))
 const char kOsSettingsAppId[] = "odknhmnlageboeamepcngndbggdpaobj";
+
+// Generated as: web_app::GenerateAppId(/*manifest_id=*/absl::nullopt, GURL(
+//     "chrome://personalization/"))
+const char kPersonalizationAppId[] = "glenkcidjgckcomnliblmkokolehpckn";
 
 // Generated as: web_app::GenerateAppId(/*manifest_id=*/absl::nullopt, GURL(
 //     "https://books.google.com/ebooks/app"))
@@ -144,8 +168,14 @@ const char kYoutubeMusicAppId[] = "cinhimbnkkaeohfgghhklpknlkffjgod";
 //     "https://tv.youtube.com/"))
 const char kYoutubeTVAppId[] = "kiemjbkkegajmpbobdfngbmjccjhnofh";
 
+#if !defined(OFFICIAL_BUILD)
+// Generated as: web_app::GenerateAppId(/*manifest_id=*/absl::nullopt, GURL(
+//     "chrome://sample-system-web-app"))
+const char kSampleSystemWebAppId[] = "jalmdcokfklmaoadompgacjlcomfckcf";
+#endif  // !defined(OFFICIAL_BUILD)
+
 bool IsSystemAppIdWithFileHandlers(base::StringPiece id) {
-  return id == kMediaAppId || id == kMediaAppAudioId;
+  return id == kMediaAppId;
 }
 
 }  // namespace web_app

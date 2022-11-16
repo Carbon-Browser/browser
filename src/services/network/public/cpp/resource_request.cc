@@ -8,6 +8,7 @@
 #include "base/strings/string_number_conversions.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "net/base/load_flags.h"
+#include "net/log/net_log_source.h"
 #include "services/network/public/mojom/cookie_access_observer.mojom.h"
 #include "services/network/public/mojom/devtools_observer.mojom.h"
 #include "services/network/public/mojom/url_request.mojom.h"
@@ -77,6 +78,13 @@ bool OptionalWebBundleTokenParamsEqualsForTesting(  // IN-TEST
     const absl::optional<ResourceRequest::WebBundleTokenParams>& rhs) {
   return (!lhs && !rhs) ||
          (lhs && rhs && lhs->EqualsForTesting(*rhs));  // IN-TEST
+}
+
+bool OptionalNetLogInfoEqualsForTesting(
+    const absl::optional<net::NetLogSource>& lhs,
+    const absl::optional<net::NetLogSource>& rhs) {
+  bool equal_members = lhs && rhs && lhs.value() == rhs.value();
+  return (!lhs && !rhs) || equal_members;
 }
 
 base::debug::CrashKeyString* GetRequestUrlCrashKey() {
@@ -188,9 +196,9 @@ ResourceRequest::WebBundleTokenParams::CloneHandle() const {
   return new_remote;
 }
 
-ResourceRequest::ResourceRequest() {}
+ResourceRequest::ResourceRequest() = default;
 ResourceRequest::ResourceRequest(const ResourceRequest& request) = default;
-ResourceRequest::~ResourceRequest() {}
+ResourceRequest::~ResourceRequest() = default;
 
 bool ResourceRequest::EqualsForTesting(const ResourceRequest& request) const {
   return method == request.method && url == request.url &&
@@ -208,13 +216,12 @@ bool ResourceRequest::EqualsForTesting(const ResourceRequest& request) const {
          resource_type == request.resource_type &&
          priority == request.priority &&
          devtools_stack_id == request.devtools_stack_id &&
-         should_reset_appcache == request.should_reset_appcache &&
-         is_external_request == request.is_external_request &&
          cors_preflight_policy == request.cors_preflight_policy &&
          originated_from_service_worker ==
              request.originated_from_service_worker &&
          skip_service_worker == request.skip_service_worker &&
          corb_detachable == request.corb_detachable && mode == request.mode &&
+         target_address_space == request.target_address_space &&
          credentials_mode == request.credentials_mode &&
          redirect_mode == request.redirect_mode &&
          fetch_integrity == request.fetch_integrity &&
@@ -225,7 +232,7 @@ bool ResourceRequest::EqualsForTesting(const ResourceRequest& request) const {
          enable_load_timing == request.enable_load_timing &&
          enable_upload_progress == request.enable_upload_progress &&
          do_not_prompt_for_login == request.do_not_prompt_for_login &&
-         is_main_frame == request.is_main_frame &&
+         is_outermost_main_frame == request.is_outermost_main_frame &&
          transition_type == request.transition_type &&
          previews_state == request.previews_state &&
          upgrade_if_insecure == request.upgrade_if_insecure &&
@@ -241,7 +248,6 @@ bool ResourceRequest::EqualsForTesting(const ResourceRequest& request) const {
              request.is_signed_exchange_prefetch_cache_enabled &&
          is_fetch_like_api == request.is_fetch_like_api &&
          is_favicon == request.is_favicon &&
-         obey_origin_policy == request.obey_origin_policy &&
          recursive_prefetch_token == request.recursive_prefetch_token &&
          OptionalTrustedParamsEqualsForTesting(trusted_params,
                                                request.trusted_params) &&
@@ -249,7 +255,12 @@ bool ResourceRequest::EqualsForTesting(const ResourceRequest& request) const {
              request.devtools_accepted_stream_types &&
          trust_token_params == request.trust_token_params &&
          OptionalWebBundleTokenParamsEqualsForTesting(  // IN-TEST
-             web_bundle_token_params, request.web_bundle_token_params);
+             web_bundle_token_params, request.web_bundle_token_params) &&
+         OptionalNetLogInfoEqualsForTesting(net_log_create_info,
+                                            request.net_log_create_info) &&
+         OptionalNetLogInfoEqualsForTesting(net_log_reference_info,
+                                            request.net_log_reference_info) &&
+         target_ip_address_space == request.target_ip_address_space;
 }
 
 bool ResourceRequest::SendsCookies() const {

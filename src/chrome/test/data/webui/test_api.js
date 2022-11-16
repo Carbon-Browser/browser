@@ -6,6 +6,8 @@
  * @fileoverview Library providing basic test framework functionality.
  */
 
+/* eslint-disable no-console */
+
 /**
  * See assert.js for where this is used.
  * @suppress {globalThis}
@@ -67,10 +69,10 @@ function Test() {}
  * will break. animationend events should still work.
  */
 Test.disableAnimationsAndTransitions = function() {
-  let all = document.body.querySelectorAll('*');
+  const all = document.body.querySelectorAll('*');
   const ZERO_MS_IMPORTANT = '0ms !important';
   for (let i = 0, l = all.length; i < l; ++i) {
-    let style = all[i].style;
+    const style = all[i].style;
     style.animationDelay = ZERO_MS_IMPORTANT;
     style.animationDuration = ZERO_MS_IMPORTANT;
     style.transitionDelay = ZERO_MS_IMPORTANT;
@@ -111,15 +113,6 @@ Test.prototype = {
 
   /** @type {?string} */
   webuiHost: null,
-
-  /**
-   * When set to a string value representing an html page in the test
-   * directory, generate BrowsePrintPreload call, which will browse to a url
-   * representing the file, cause print, and call fixture.preLoad of the
-   * currentTestCase.
-   * @type {?string}
-   */
-  browsePrintPreload: null,
 
   /**
    * When set to a function, will be called in the context of the test
@@ -862,7 +855,7 @@ function TEST_F(testFixture, testName, testBody, opt_preamble) {
   if (!fixtureConstructor.prototype.name) {
     fixtureConstructor.prototype.name = testFixture;
   }
-  if (fixtureConstructor['testCaseBodies'] === undefined) {
+  if (!fixtureConstructor.hasOwnProperty('testCaseBodies')) {
     fixtureConstructor.testCaseBodies = {};
   }
   fixtureConstructor.testCaseBodies[testName] = testBody;
@@ -1048,7 +1041,7 @@ CallFunctionAction.prototype = {
    */
   describe: function() {
     return 'calls the given function with saved arguments and ' + this.args_;
-  }
+  },
 };
 
 /**
@@ -1216,24 +1209,6 @@ function exportChaiAsserts() {
 }
 
 /**
- * Exports expect methods. 'expect*' methods allow tests to run until the end
- * even in the presence of failures.
- */
-function exportExpects() {
-  exports.expectTrue = createExpect(assertTrue);
-  exports.expectFalse = createExpect(assertFalse);
-  exports.expectGE = createExpect(assertGE);
-  exports.expectGT = createExpect(assertGT);
-  exports.expectEquals = createExpect(assertEquals);
-  exports.expectDeepEquals = createExpect(assertDeepEquals);
-  exports.expectLE = createExpect(assertLE);
-  exports.expectLT = createExpect(assertLT);
-  exports.expectNotEquals = createExpect(assertNotEquals);
-  exports.expectNotReached = createExpect(assertNotReached);
-  exports.expectThrows = createExpect(assertThrows);
-}
-
-/**
  * Exports methods related to Mock4JS mocking.
  */
 function exportMock4JsHelpers() {
@@ -1245,7 +1220,6 @@ function exportMock4JsHelpers() {
 testing.Test = Test;
 exports.testDone = testDone;
 exportChaiAsserts();
-exportExpects();
 exportMock4JsHelpers();
 exports.preloadJavascriptLibraries = preloadJavascriptLibraries;
 exports.setWaitUser = setWaitUser;

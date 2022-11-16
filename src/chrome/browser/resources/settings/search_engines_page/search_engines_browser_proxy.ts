@@ -12,12 +12,14 @@ import {sendWithPromise} from 'chrome://resources/js/cr.m.js';
  */
 
 /**
- * @see chrome/browser/ui/webui/settings/search_engine_manager_handler.cc
+ * @see chrome/browser/ui/webui/settings/search_engines_handler.cc
  */
 export type SearchEngine = {
   canBeDefault: boolean,
   canBeEdited: boolean,
   canBeRemoved: boolean,
+  canBeActivated: boolean,
+  canBeDeactivated: boolean,
   default: boolean,
   displayName: string,
   extension?: {id: string, name: string, canBeDisabled: boolean, icon: string},
@@ -27,17 +29,37 @@ export type SearchEngine = {
   keyword: string,
   modelIndex: number,
   name: string,
+  shouldConfirmDeletion: boolean,
   url: string,
   urlLocked: boolean,
 };
 
 export type SearchEnginesInfo = {
-  defaults: Array<SearchEngine>,
-  actives: Array<SearchEngine>,
-  others: Array<SearchEngine>,
-  extensions: Array<SearchEngine>,
-  [key: string]: Array<SearchEngine>,
+  defaults: SearchEngine[],
+  actives: SearchEngine[],
+  others: SearchEngine[],
+  extensions: SearchEngine[],
+  [key: string]: SearchEngine[],
 };
+
+/**
+ * Contains all recorded interactions on the search engines settings page.
+ *
+ * These values are persisted to logs. Entries should not be renumbered and
+ * numeric values should never be reused.
+ *
+ * Must be kept in sync with the SettingsSearchEnginesInteractions enum in
+ * histograms/enums.xml
+ */
+export enum SearchEnginesInteractions {
+  ACTIVATE = 0,
+  DEACTIVATE = 1,
+  KEYBOARD_SHORTCUT_TAB = 2,
+  KEYBOARD_SHORTCUT_SPACE_OR_TAB = 3,
+
+  // Leave this at the end.
+  COUNT = 4,
+}
 
 export interface SearchEnginesBrowserProxy {
   setDefaultSearchEngine(modelIndex: number): void;
@@ -56,7 +78,14 @@ export interface SearchEnginesBrowserProxy {
   getSearchEnginesList(): Promise<SearchEnginesInfo>;
 
   validateSearchEngineInput(fieldName: string, fieldValue: string):
-      Promise<boolean>
+      Promise<boolean>;
+
+  /**
+   * Helper function that calls recordHistogram for the
+   * Settings.SearchEngines.Interactions histogram
+   */
+  recordSearchEnginesPageHistogram(interaction: SearchEnginesInteractions):
+      void;
 }
 
 export class SearchEnginesBrowserProxyImpl implements
@@ -67,6 +96,9 @@ export class SearchEnginesBrowserProxyImpl implements
 
   setIsActiveSearchEngine(modelIndex: number, isActive: boolean) {
     chrome.send('setIsActiveSearchEngine', [modelIndex, isActive]);
+    this.recordSearchEnginesPageHistogram(
+        isActive ? SearchEnginesInteractions.ACTIVATE :
+                   SearchEnginesInteractions.DEACTIVATE);
   }
 
   removeSearchEngine(modelIndex: number) {
@@ -96,6 +128,12 @@ export class SearchEnginesBrowserProxyImpl implements
 
   validateSearchEngineInput(fieldName: string, fieldValue: string) {
     return sendWithPromise('validateSearchEngineInput', fieldName, fieldValue);
+  }
+
+  recordSearchEnginesPageHistogram(interaction: SearchEnginesInteractions) {
+    chrome.metricsPrivate.recordEnumerationValue(
+        'Settings.SearchEngines.Interactions', interaction,
+        SearchEnginesInteractions.COUNT);
   }
 
   static getInstance(): SearchEnginesBrowserProxy {

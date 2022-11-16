@@ -11,16 +11,16 @@
 
 #include "base/bind.h"
 #include "base/cxx17_backports.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/no_destructor.h"
-#include "base/sequenced_task_runner.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/synchronization/lock.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
-#include "base/task_runner.h"
 #include "base/thread_annotations.h"
 #include "base/threading/sequence_bound.h"
 #include "base/values.h"
@@ -79,7 +79,7 @@ class TtsEventSink
  private:
   // |worker_| is leaky and must never deleted because TtsEventSink posts
   // asynchronous tasks to it.
-  TtsPlatformImplBackgroundWorker* worker_;
+  raw_ptr<TtsPlatformImplBackgroundWorker> worker_;
   scoped_refptr<base::TaskRunner> worker_task_runner_;
 
   base::Lock lock_;
@@ -310,8 +310,7 @@ void TtsPlatformImplWin::FinishCurrentUtterance() {
   if (paused_)
     Resume();
 
-  DCHECK(is_speaking_);
-  DCHECK_NE(utterance_id_, kInvalidUtteranceId);
+  DCHECK(is_speaking_ || (utterance_id_ == kInvalidUtteranceId));
   is_speaking_ = false;
   utterance_id_ = kInvalidUtteranceId;
 }
@@ -616,7 +615,13 @@ void TtsPlatformImplWin::OnSpeakScheduled(
     base::OnceCallback<void(bool)> on_speak_finished,
     bool success) {
   DCHECK(BrowserThread::CurrentlyOn(content::BrowserThread::UI));
-  DCHECK(is_speaking_);
+  DCHECK(is_speaking_ || (utterance_id_ == kInvalidUtteranceId));
+  // If speech was stopped while we were processing the utterance (For example,
+  // in the case of a page navigation), then there is nothing left to do. Do not
+  // emit an asynchronous TTS event to confirm the end of speech.
+  if (!is_speaking_) {
+    return;
+  }
 
   // If the utterance was not able to be emitted, stop the speaking. There
   // won't be any asynchronous TTS event to confirm the end of the speech.

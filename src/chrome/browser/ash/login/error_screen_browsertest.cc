@@ -7,12 +7,13 @@
 #include "base/run_loop.h"
 #include "base/strings/strcat.h"
 #include "base/test/bind.h"
+#include "base/time/time.h"
 #include "chrome/browser/ash/login/app_mode/kiosk_launch_controller.h"
 #include "chrome/browser/ash/login/login_wizard.h"
 #include "chrome/browser/ash/login/screens/error_screen.h"
 #include "chrome/browser/ash/login/test/device_state_mixin.h"
 #include "chrome/browser/ash/login/test/dialog_window_waiter.h"
-#include "chrome/browser/ash/login/test/embedded_test_server_mixin.h"
+#include "chrome/browser/ash/login/test/embedded_test_server_setup_mixin.h"
 #include "chrome/browser/ash/login/test/js_checker.h"
 #include "chrome/browser/ash/login/test/kiosk_apps_mixin.h"
 #include "chrome/browser/ash/login/test/login_manager_mixin.h"
@@ -26,19 +27,19 @@
 #include "chrome/grit/generated_resources.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/mixin_based_in_process_browser_test.h"
-#include "chromeos/dbus/session_manager/fake_session_manager_client.h"
-#include "chromeos/dbus/session_manager/session_manager_client.h"
+#include "chromeos/ash/components/dbus/session_manager/fake_session_manager_client.h"
+#include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
+#include "chromeos/ash/components/network/network_state_test_helper.h"
 #include "chromeos/dbus/shill/shill_profile_client.h"
-#include "chromeos/network/network_state_test_helper.h"
 #include "components/policy/proto/chrome_device_policy.pb.h"
 #include "components/user_manager/user_manager.h"
 #include "content/public/test/browser_test.h"
 #include "net/dns/mock_host_resolver.h"
+#include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/cros_system_api/dbus/shill/dbus-constants.h"
 #include "ui/base/l10n/l10n_util.h"
 
-namespace chromeos {
-
+namespace ash {
 namespace {
 
 constexpr char kWifiServiceName[] = "stub_wifi";
@@ -58,6 +59,10 @@ ErrorScreen* GetScreen() {
 class NetworkErrorScreenTest : public InProcessBrowserTest {
  public:
   NetworkErrorScreenTest() = default;
+
+  NetworkErrorScreenTest(const NetworkErrorScreenTest&) = delete;
+  NetworkErrorScreenTest& operator=(const NetworkErrorScreenTest&) = delete;
+
   ~NetworkErrorScreenTest() override = default;
 
   void SetUpOnMainThread() override {
@@ -72,7 +77,8 @@ class NetworkErrorScreenTest : public InProcessBrowserTest {
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
     command_line->AppendSwitch(
-        chromeos::switches::kDisableOOBEChromeVoxHintTimerForTesting);
+        switches::kDisableOOBEChromeVoxHintTimerForTesting);
+    command_line->AppendSwitch(switches::kLoginManager);
   }
 
   void ShowErrorScreenWithNetworkList() {
@@ -133,8 +139,6 @@ class NetworkErrorScreenTest : public InProcessBrowserTest {
 
  private:
   std::unique_ptr<NetworkStateTestHelper> network_helper_;
-
-  DISALLOW_COPY_AND_ASSIGN(NetworkErrorScreenTest);
 };
 
 // Test that the network list contains the fake wifi network.
@@ -206,9 +210,15 @@ IN_PROC_BROWSER_TEST_F(NetworkErrorScreenTest, HideCallback) {
   EXPECT_TRUE(callback_called);
 }
 
-class GuestErrorScreenTest : public MixinBasedInProcessBrowserTest {
+class GuestErrorScreenTest
+    : public MixinBasedInProcessBrowserTest,
+      public testing::WithParamInterface<DeviceStateMixin::State> {
  public:
   GuestErrorScreenTest() { login_manager_.set_session_restore_enabled(); }
+
+  GuestErrorScreenTest(const GuestErrorScreenTest&) = delete;
+  GuestErrorScreenTest& operator=(const GuestErrorScreenTest&) = delete;
+
   ~GuestErrorScreenTest() override = default;
 
   void SetUpInProcessBrowserTestFixture() override {
@@ -221,14 +231,12 @@ class GuestErrorScreenTest : public MixinBasedInProcessBrowserTest {
  protected:
   std::unique_ptr<WizardContext> wizard_context_;
   LoginManagerMixin login_manager_{&mixin_host_};
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(GuestErrorScreenTest);
+  DeviceStateMixin device_state_{&mixin_host_, GetParam()};
 };
 
 // Test that guest signin option is shown when enabled and that clicking on it
 // starts a guest session.
-IN_PROC_BROWSER_TEST_F(GuestErrorScreenTest, PRE_GuestLogin) {
+IN_PROC_BROWSER_TEST_P(GuestErrorScreenTest, PRE_GuestLogin) {
   GetScreen()->AllowGuestSignin(true);
   GetScreen()->SetUIState(NetworkError::UI_STATE_UPDATE);
   GetScreen()->Show(wizard_context_.get());
@@ -244,15 +252,27 @@ IN_PROC_BROWSER_TEST_F(GuestErrorScreenTest, PRE_GuestLogin) {
   restart_job_waiter.Run();
 }
 
-IN_PROC_BROWSER_TEST_F(GuestErrorScreenTest, GuestLogin) {
+IN_PROC_BROWSER_TEST_P(GuestErrorScreenTest, GuestLogin) {
   login_manager_.WaitForActiveSession();
   user_manager::UserManager* user_manager = user_manager::UserManager::Get();
   EXPECT_TRUE(user_manager->IsLoggedInAsGuest());
 }
 
+INSTANTIATE_TEST_SUITE_P(
+    All,
+    GuestErrorScreenTest,
+    testing::Values(DeviceStateMixin::State::BEFORE_OOBE,
+                    // We use OOBE completed and cloud enrolled to trigger the
+                    // Gaia dialog right away.
+                    DeviceStateMixin::State::OOBE_COMPLETED_CLOUD_ENROLLED));
+
 class KioskErrorScreenTest : public MixinBasedInProcessBrowserTest {
  public:
   KioskErrorScreenTest() = default;
+
+  KioskErrorScreenTest(const KioskErrorScreenTest&) = delete;
+  KioskErrorScreenTest& operator=(const KioskErrorScreenTest&) = delete;
+
   ~KioskErrorScreenTest() override = default;
 
   void SetUpInProcessBrowserTestFixture() override {
@@ -260,8 +280,8 @@ class KioskErrorScreenTest : public MixinBasedInProcessBrowserTest {
 
     skip_splash_wait_override_ =
         KioskLaunchController::SkipSplashScreenWaitForTesting();
-    network_wait_override_ = KioskLaunchController::SetNetworkWaitForTesting(
-        base::TimeDelta::FromSeconds(0));
+    network_wait_override_ =
+        KioskLaunchController::SetNetworkWaitForTesting(base::Seconds(0));
 
     AddKioskAppToDevicePolicy();
 
@@ -308,18 +328,16 @@ class KioskErrorScreenTest : public MixinBasedInProcessBrowserTest {
   KioskAppsMixin kiosk_apps_{&mixin_host_, embedded_test_server()};
 
   LoginManagerMixin login_manager_{&mixin_host_, {}};
-
-  DISALLOW_COPY_AND_ASSIGN(KioskErrorScreenTest);
 };
 
 // Verify that certificate manager dialog opens.
 IN_PROC_BROWSER_TEST_F(KioskErrorScreenTest, OpenCertificateConfig) {
   KioskAppsMixin::WaitForAppsButton();
-  EXPECT_TRUE(ash::LoginScreenTestApi::IsAppsButtonShown());
-  ASSERT_TRUE(ash::LoginScreenTestApi::LaunchApp(KioskAppsMixin::kKioskAppId));
+  EXPECT_TRUE(LoginScreenTestApi::IsAppsButtonShown());
+  ASSERT_TRUE(LoginScreenTestApi::LaunchApp(KioskAppsMixin::kKioskAppId));
 
   OobeScreenWaiter(ErrorScreenView::kScreenId).Wait();
-  EXPECT_TRUE(ash::LoginScreenTestApi::IsOobeDialogVisible());
+  EXPECT_TRUE(LoginScreenTestApi::IsOobeDialogVisible());
 
   DialogWindowWaiter waiter(
       l10n_util::GetStringUTF16(IDS_CERTIFICATE_MANAGER_TITLE));
@@ -331,4 +349,4 @@ IN_PROC_BROWSER_TEST_F(KioskErrorScreenTest, OpenCertificateConfig) {
   waiter.Wait();
 }
 
-}  // namespace chromeos
+}  // namespace ash

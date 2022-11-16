@@ -23,22 +23,23 @@
 #include "components/performance_manager/public/graph/node_data_describer_registry.h"
 #include "components/performance_manager/public/graph/page_node.h"
 #include "components/performance_manager/public/graph/process_node.h"
+#include "components/url_matcher/url_matcher.h"
+#include "components/url_matcher/url_util.h"
 #include "url/gurl.h"
 
 namespace performance_manager {
 namespace policies {
 namespace {
 
-#if !defined(OS_CHROMEOS)
+#if !BUILDFLAG(IS_CHROMEOS)
 // Time during which non visible pages are protected from urgent discarding
 // (not on ChromeOS).
 constexpr base::TimeDelta kNonVisiblePagesUrgentProtectionTime =
-    base::TimeDelta::FromMinutes(10);
+    base::Minutes(10);
 #endif
 
 // Time during which a tab cannot be discarded after having played audio.
-constexpr base::TimeDelta kTabAudioProtectionTime =
-    base::TimeDelta::FromMinutes(1);
+constexpr base::TimeDelta kTabAudioProtectionTime = base::Minutes(1);
 
 // NodeAttachedData used to indicate that there's already been an attempt to
 // discard a PageNode.
@@ -151,6 +152,9 @@ void PageDiscardingHelper::UrgentlyDiscardMultiplePages(
     base::OnceCallback<void(bool)> post_discard_cb) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
+  LOG(WARNING) << "Urgently discarding multiple pages with target (kb): "
+               << (reclaim_target_kb ? *reclaim_target_kb : 0);
+
   // Ensures running post_discard_cb on early return.
   auto split_callback = base::SplitOnceCallback(std::move(post_discard_cb));
   base::ScopedClosureRunner run_post_discard_cb_on_return(
@@ -255,12 +259,23 @@ void PageDiscardingHelper::UrgentlyDiscardMultiplePages(
   // Got to the end successfully, don't call the early return callback.
   run_post_discard_cb_on_return.ReplaceClosure(base::DoNothing());
 
+  LOG(WARNING) << "Discarding " << discard_attempts.size() << " pages";
+
   page_discarder_->DiscardPageNodes(
       discard_attempts,
       base::BindOnce(&PageDiscardingHelper::PostDiscardAttemptCallback,
                      weak_factory_.GetWeakPtr(), reclaim_target_kb,
                      discard_strategy, discard_protected_tabs,
                      std::move(split_callback.second)));
+}
+
+void PageDiscardingHelper::ImmediatelyDiscardSpecificPage(
+    const PageNode* page_node) {
+  if (CanUrgentlyDiscard(page_node,
+                         /* consider_minimum_protection_time */ false) ==
+      CanUrgentlyDiscardResult::kEligible) {
+    page_discarder_->DiscardPageNodes({page_node}, base::DoNothing());
+  }
 }
 
 void PageDiscardingHelper::OnBeforePageNodeRemoved(const PageNode* page_node) {
@@ -272,6 +287,20 @@ void PageDiscardingHelper::OnIsAudibleChanged(const PageNode* page_node) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (!page_node->IsAudible())
     last_change_to_non_audible_time_[page_node] = base::TimeTicks::Now();
+}
+
+void PageDiscardingHelper::SetNoDiscardPatternsForProfile(
+    const std::string& browser_context_id,
+    const std::vector<std::string>& patterns) {
+  std::unique_ptr<url_matcher::URLMatcher>& entry =
+      profiles_no_discard_patterns_[browser_context_id];
+  entry = std::make_unique<url_matcher::URLMatcher>();
+  url_matcher::util::AddAllowFilters(entry.get(), patterns);
+}
+
+void PageDiscardingHelper::ClearNoDiscardPatternsForProfile(
+    const std::string& browser_context_id) {
+  profiles_no_discard_patterns_.erase(browser_context_id);
 }
 
 void PageDiscardingHelper::SetMockDiscarderForTesting(
@@ -315,7 +344,9 @@ PageDiscardingHelper::GetPageNodeLiveStateData(
 }
 
 PageDiscardingHelper::CanUrgentlyDiscardResult
-PageDiscardingHelper::CanUrgentlyDiscard(const PageNode* page_node) const {
+PageDiscardingHelper::CanUrgentlyDiscard(
+    const PageNode* page_node,
+    bool consider_minimum_protection_time) const {
   if (DiscardAttemptMarker::Get(PageNodeImpl::FromNode(page_node)))
     return CanUrgentlyDiscardResult::kMarked;
 
@@ -331,9 +362,10 @@ PageDiscardingHelper::CanUrgentlyDiscard(const PageNode* page_node) const {
       return CanUrgentlyDiscardResult::kProtected;
   }
 
-#if !defined(OS_CHROMEOS)
-  if (page_node->GetTimeSinceLastVisibilityChange() <
-      kNonVisiblePagesUrgentProtectionTime) {
+#if !BUILDFLAG(IS_CHROMEOS)
+  if (consider_minimum_protection_time &&
+      page_node->GetTimeSinceLastVisibilityChange() <
+          kNonVisiblePagesUrgentProtectionTime) {
     return CanUrgentlyDiscardResult::kProtected;
   }
 #endif
@@ -360,6 +392,11 @@ PageDiscardingHelper::CanUrgentlyDiscard(const PageNode* page_node) const {
   if (!main_frame->GetURL().is_valid() || main_frame->GetURL().is_empty())
     return CanUrgentlyDiscardResult::kProtected;
 
+  if (IsPageOptedOutOfDiscarding(page_node->GetBrowserContextID(),
+                                 main_frame->GetURL())) {
+    return CanUrgentlyDiscardResult::kProtected;
+  }
+
   const auto* live_state_data = GetPageNodeLiveStateData(page_node);
 
   // The live state data won't be available if none of these events ever
@@ -381,7 +418,7 @@ PageDiscardingHelper::CanUrgentlyDiscard(const PageNode* page_node) const {
       return CanUrgentlyDiscardResult::kProtected;
     if (live_state_data->IsConnectedToUSBDevice())
       return CanUrgentlyDiscardResult::kProtected;
-#if !defined(OS_CHROMEOS)
+#if !BUILDFLAG(IS_CHROMEOS)
     // TODO(sebmarchand): Skip this check if the Entreprise memory limit is set.
     if (live_state_data->WasDiscarded())
       return CanUrgentlyDiscardResult::kProtected;
@@ -405,6 +442,25 @@ PageDiscardingHelper::CanUrgentlyDiscard(const PageNode* page_node) const {
   // strip.
 
   return CanUrgentlyDiscardResult::kEligible;
+}
+
+bool PageDiscardingHelper::IsPageOptedOutOfDiscarding(
+    const std::string& browser_context_id,
+    const GURL& url) const {
+  if (!base::FeatureList::IsEnabled(features::kHighEfficiencyModeAvailable) &&
+      !base::FeatureList::IsEnabled(features::kBatterySaverModeAvailable)) {
+    // This list takes effect regardless of which mode the user is operating
+    // under, but its launch is gated on these finch experiments for launch
+    // considerations.
+    return false;
+  }
+
+  auto it = profiles_no_discard_patterns_.find(browser_context_id);
+  // TODO(crbug.com/1308741): Change the CHECK to a DCHECK in Sept 2022, after
+  // verifying that there are no crash reports.
+  CHECK(it != profiles_no_discard_patterns_.end());
+
+  return !it->second->MatchURL(url).empty();
 }
 
 base::Value PageDiscardingHelper::DescribePageNodeData(

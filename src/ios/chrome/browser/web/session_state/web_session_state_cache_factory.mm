@@ -7,6 +7,7 @@
 #include "base/bind.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
+#include "base/no_destructor.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/keyed_service/ios/browser_state_dependency_manager.h"
 #include "ios/chrome/browser/browser_state/browser_state_otr_helper.h"
@@ -27,6 +28,11 @@ class WebSessionStateCacheWrapper : public KeyedService {
   explicit WebSessionStateCacheWrapper(
       ChromeBrowserState* browser_state,
       WebSessionStateCache* web_session_state_cache);
+
+  WebSessionStateCacheWrapper(const WebSessionStateCacheWrapper&) = delete;
+  WebSessionStateCacheWrapper& operator=(const WebSessionStateCacheWrapper&) =
+      delete;
+
   ~WebSessionStateCacheWrapper() override;
 
   WebSessionStateCache* web_session_state_cache() {
@@ -39,8 +45,6 @@ class WebSessionStateCacheWrapper : public KeyedService {
  private:
   __strong WebSessionStateCache* web_session_state_cache_;
   std::unique_ptr<AllWebStateListObservationRegistrar> registrar_;
-
-  DISALLOW_COPY_AND_ASSIGN(WebSessionStateCacheWrapper);
 };
 
 WebSessionStateCacheWrapper::WebSessionStateCacheWrapper(

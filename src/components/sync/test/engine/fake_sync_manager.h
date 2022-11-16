@@ -11,7 +11,6 @@
 #include <vector>
 
 #include "base/callback_forward.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/observer_list.h"
 #include "components/sync/base/model_type.h"
@@ -44,6 +43,10 @@ class FakeSyncManager : public SyncManager {
   FakeSyncManager(ModelTypeSet initial_sync_ended_types,
                   ModelTypeSet progress_marker_types,
                   ModelTypeSet configure_fail_types);
+
+  FakeSyncManager(const FakeSyncManager&) = delete;
+  FakeSyncManager& operator=(const FakeSyncManager&) = delete;
+
   ~FakeSyncManager() override;
 
   // Returns those types that have been downloaded since the last call to
@@ -63,6 +66,8 @@ class FakeSyncManager : public SyncManager {
   // Block until the sync thread has finished processing any pending messages.
   void WaitForSyncThread();
 
+  bool IsInvalidatorEnabled() const { return invalidator_enabled_; }
+
   // SyncManager implementation.
   // Note: we treat whatever message loop this is called from as the sync
   // loop for purposes of callbacks.
@@ -79,14 +84,13 @@ class FakeSyncManager : public SyncManager {
                        base::OnceClosure ready_task) override;
   void OnIncomingInvalidation(
       ModelType type,
-      std::unique_ptr<InvalidationInterface> interface) override;
+      std::unique_ptr<SyncInvalidation> interface) override;
   void SetInvalidatorEnabled(bool invalidator_enabled) override;
   void AddObserver(Observer* observer) override;
   void RemoveObserver(Observer* observer) override;
   void ShutdownOnSyncThread() override;
   ModelTypeConnector* GetModelTypeConnector() override;
   std::unique_ptr<ModelTypeConnector> GetModelTypeConnectorProxy() override;
-  WeakHandle<DataTypeDebugInfoListener> GetDebugInfoListener() override;
   std::string cache_guid() override;
   std::string birthday() override;
   std::string bag_of_chips() override;
@@ -108,6 +112,7 @@ class FakeSyncManager : public SyncManager {
   std::string cache_guid_;
   std::string birthday_;
   std::string bag_of_chips_;
+  bool invalidator_enabled_ = false;
 
   // Faked data state.
   ModelTypeSet initial_sync_ended_types_;
@@ -133,8 +138,6 @@ class FakeSyncManager : public SyncManager {
 
   // Number of invalidations received per type since startup.
   std::map<ModelType, int> num_invalidations_received_;
-
-  DISALLOW_COPY_AND_ASSIGN(FakeSyncManager);
 };
 
 }  // namespace syncer

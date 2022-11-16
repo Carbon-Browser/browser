@@ -7,6 +7,8 @@
 
 #include <memory>
 #include "base/callback.h"
+#include "base/memory/raw_ptr.h"
+#include "components/autofill_assistant/browser/fake_common_dependencies.h"
 #include "components/autofill_assistant/browser/starter_platform_delegate.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
@@ -22,7 +24,7 @@ class FakeStarterPlatformDelegate : public StarterPlatformDelegate {
   CreateTriggerScriptUiDelegate() override;
   std::unique_ptr<ServiceRequestSender> GetTriggerScriptRequestSenderToInject()
       override;
-  void StartRegularScript(
+  void StartScriptDefaultUi(
       GURL url,
       std::unique_ptr<TriggerContext> trigger_context,
       const absl::optional<TriggerScriptProto>& trigger_script) override;
@@ -48,13 +50,23 @@ class FakeStarterPlatformDelegate : public StarterPlatformDelegate {
   bool GetProactiveHelpSettingEnabled() const override;
   void SetProactiveHelpSettingEnabled(bool enabled) override;
   bool GetMakeSearchesAndBrowsingBetterEnabled() const override;
+  bool GetIsLoggedIn() override;
+  bool GetIsSupervisedUser() override;
   bool GetIsCustomTab() const override;
+  bool GetIsWebLayer() const override;
+  bool GetIsTabCreatedByGSA() const override;
+  std::unique_ptr<AssistantFieldTrialUtil> CreateFieldTrialUtil() override;
+  bool IsAttached() override;
+  const FakeCommonDependencies* GetCommonDependencies() const override;
+  const PlatformDependencies* GetPlatformDependencies() const override;
+  base::WeakPtr<StarterPlatformDelegate> GetWeakPtr() override;
 
   // Intentionally public to give tests direct access.
+  FakeCommonDependencies fake_common_dependencies_;
   std::unique_ptr<TriggerScriptCoordinator::UiDelegate>
       trigger_script_ui_delegate_;
   std::unique_ptr<ServiceRequestSender> trigger_script_request_sender_for_test_;
-  WebsiteLoginManager* website_login_manager_ = nullptr;
+  raw_ptr<WebsiteLoginManager> website_login_manager_ = nullptr;
   version_info::Channel channel_ = version_info::Channel::UNKNOWN;
   bool feature_module_installed_ = true;
   Metrics::FeatureModuleInstallation feature_module_installation_result_ =
@@ -68,7 +80,14 @@ class FakeStarterPlatformDelegate : public StarterPlatformDelegate {
       on_show_onboarding_callback_;
   bool proactive_help_enabled_ = true;
   bool msbb_enabled_ = true;
+  bool is_logged_in_ = true;
+  bool is_supervised_user_ = false;
   bool is_custom_tab_ = true;
+  bool is_web_layer_ = true;
+  bool is_tab_created_by_gsa_ = true;
+  std::unique_ptr<AssistantFieldTrialUtil> field_trial_util_;
+  bool is_attached_ = true;
+
   base::OnceCallback<void(
       GURL url,
       std::unique_ptr<TriggerContext> trigger_context,
@@ -79,6 +98,7 @@ class FakeStarterPlatformDelegate : public StarterPlatformDelegate {
 
   int num_install_feature_module_called_ = 0;
   int num_show_onboarding_called_ = 0;
+  base::WeakPtrFactory<FakeStarterPlatformDelegate> weak_ptr_factory_{this};
 };
 
 }  // namespace autofill_assistant

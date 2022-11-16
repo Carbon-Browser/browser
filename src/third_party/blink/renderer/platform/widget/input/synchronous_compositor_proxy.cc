@@ -13,12 +13,12 @@
 #include "third_party/skia/include/core/SkCanvas.h"
 #include "third_party/skia/include/core/SkImageInfo.h"
 #include "third_party/skia/include/core/SkRegion.h"
-#include "ui/gfx/skia_util.h"
+#include "ui/gfx/geometry/skia_conversions.h"
 
 namespace blink {
 
 SynchronousCompositorProxy::SynchronousCompositorProxy(
-    blink::SynchronousInputHandlerProxy* input_handler_proxy)
+    InputHandlerProxy* input_handler_proxy)
     : input_handler_proxy_(input_handler_proxy),
       animation_power_mode_voter_(
           power_scheduler::PowerModeArbiter::GetInstance()->NewVoter(
@@ -62,8 +62,8 @@ void SynchronousCompositorProxy::SetLayerTreeFrameSink(
 }
 
 void SynchronousCompositorProxy::UpdateRootLayerState(
-    const gfx::ScrollOffset& total_scroll_offset,
-    const gfx::ScrollOffset& max_scroll_offset,
+    const gfx::PointF& total_scroll_offset,
+    const gfx::PointF& max_scroll_offset,
     const gfx::SizeF& scrollable_size,
     float page_scale_factor,
     float min_page_scale_factor,
@@ -127,10 +127,6 @@ void SynchronousCompositorProxy::DemandDrawHw(
   invalidate_needs_draw_ = false;
   hardware_draw_reply_ = std::move(callback);
 
-  animation_power_mode_voter_->VoteFor(power_scheduler::PowerMode::kAnimation);
-  animation_power_mode_voter_->ResetVoteAfterTimeout(
-      power_scheduler::PowerModeVoter::kAnimationTimeout);
-
   if (layer_tree_frame_sink_) {
     layer_tree_frame_sink_->DemandDrawHw(
         params->viewport_size, params->viewport_rect_for_tile_priority,
@@ -182,10 +178,6 @@ void SynchronousCompositorProxy::DemandDrawSw(
     DemandDrawSwCallback callback) {
   invalidate_needs_draw_ = false;
 
-  animation_power_mode_voter_->VoteFor(power_scheduler::PowerMode::kAnimation);
-  animation_power_mode_voter_->ResetVoteAfterTimeout(
-      power_scheduler::PowerModeVoter::kSoftwareDrawTimeout);
-
   software_draw_reply_ = std::move(callback);
   if (layer_tree_frame_sink_) {
     if (use_in_process_zero_copy_software_draw_) {
@@ -223,7 +215,7 @@ void SynchronousCompositorProxy::DoDemandDrawSw(
   }
   SkCanvas canvas(bitmap);
   canvas.clipRect(gfx::RectToSkRect(params->clip));
-  canvas.concat(SkMatrix(params->transform.matrix()));
+  canvas.concat(params->transform.matrix().asM33());
 
   layer_tree_frame_sink_->DemandDrawSw(&canvas);
 }
@@ -301,7 +293,7 @@ void SynchronousCompositorProxy::BeginFrame(
 }
 
 void SynchronousCompositorProxy::SetScroll(
-    const gfx::ScrollOffset& new_total_scroll_offset) {
+    const gfx::PointF& new_total_scroll_offset) {
   if (total_scroll_offset_ == new_total_scroll_offset)
     return;
   total_scroll_offset_ = new_total_scroll_offset;
@@ -321,6 +313,15 @@ void SynchronousCompositorProxy::ReclaimResources(
     return;
   layer_tree_frame_sink_->ReclaimResources(layer_tree_frame_sink_id,
                                            std::move(resources));
+}
+
+void SynchronousCompositorProxy::OnCompositorFrameTransitionDirectiveProcessed(
+    uint32_t layer_tree_frame_sink_id,
+    uint32_t sequence_id) {
+  if (!layer_tree_frame_sink_)
+    return;
+  layer_tree_frame_sink_->OnCompositorFrameTransitionDirectiveProcessed(
+      layer_tree_frame_sink_id, sequence_id);
 }
 
 void SynchronousCompositorProxy::SetSharedMemory(

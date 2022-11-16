@@ -28,16 +28,12 @@ void PostAnnouncementNotification(NSString* announcement,
       notification_info);
 }
 void NotifyMacEvent(AXPlatformNodeCocoa* target, ax::mojom::Event event_type) {
-  // When this is fired and VoiceOver is running, a blocking AppKit call will
-  // attempt to ascend the hierarchy. Don't fire AXMenuOpened if we don't yet
-  // have a window.
-  if (event_type == ax::mojom::Event::kMenuPopupStart) {
-    if (auto* node = ui::AXPlatformNode::FromNativeViewAccessible(target)) {
-      if (!node->GetDelegate()->GetNSWindow())
-        return;
-    }
+  if (![target AXWindow]) {
+    // A child tree is not attached to the window. Return early, otherwise
+    // AppKit will hang trying to reach the root, resulting in a bug where
+    // VoiceOver keeps repeating "[appname] is not responding".
+    return;
   }
-
   NSString* notification =
       [AXPlatformNodeCocoa nativeNotificationFromAXEvent:event_type];
   if (notification)
@@ -50,7 +46,7 @@ namespace ui {
 
 // static
 AXPlatformNode* AXPlatformNode::Create(AXPlatformNodeDelegate* delegate) {
-  AXPlatformNodeBase* node = new AXPlatformNodeMac();
+  AXPlatformNode* node = new AXPlatformNodeMac();
   node->Init(delegate);
   return node;
 }
@@ -63,15 +59,16 @@ AXPlatformNode* AXPlatformNode::FromNativeViewAccessible(
   return nullptr;
 }
 
-AXPlatformNodeMac::AXPlatformNodeMac() {
-}
+AXPlatformNodeMac::AXPlatformNodeMac() = default;
 
-AXPlatformNodeMac::~AXPlatformNodeMac() {
-}
+AXPlatformNodeMac::~AXPlatformNodeMac() = default;
 
 void AXPlatformNodeMac::Destroy() {
-  if (native_node_)
+  if (native_node_) {
     [native_node_ detach];
+    // Also, nullify smart pointer to make accidental use-after-free impossible.
+    native_node_.reset();
+  }
   AXPlatformNodeBase::Destroy();
 }
 
@@ -113,7 +110,7 @@ void AXPlatformNodeMac::NotifyAccessibilityEvent(ax::mojom::Event event_type) {
       NotifyMacEvent(native_node_, ax::mojom::Event::kFocus);
       return;
     } else if (ui::IsListItem(role)) {
-      if (AXPlatformNodeBase* container = GetSelectionContainer()) {
+      if (const AXPlatformNodeBase* container = GetSelectionContainer()) {
         if (container->GetRole() == ax::mojom::Role::kListBox &&
             !container->HasState(ax::mojom::State::kMultiselectable) &&
             GetDelegate()->GetFocus() == GetNativeViewAccessible()) {

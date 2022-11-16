@@ -6,19 +6,20 @@
 
 #include <memory>
 
-#include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
-#include "base/macros.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/metrics/field_trial.h"
 #include "base/metrics/persistent_histogram_allocator.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/test_simple_task_runner.h"
+#include "components/metrics/clean_exit_beacon.h"
 #include "components/metrics/metrics_pref_names.h"
 #include "components/metrics/metrics_service.h"
+#include "components/metrics/metrics_state_manager.h"
 #include "components/metrics/metrics_switches.h"
 #include "components/metrics/persistent_histograms.h"
 #include "components/prefs/testing_pref_service.h"
@@ -40,11 +41,10 @@ class TestClient : public AndroidMetricsServiceClient {
         package_name_rate_per_mille_(1000),
         record_package_name_for_app_type_(true) {}
 
-  ~TestClient() override = default;
+  TestClient(const TestClient&) = delete;
+  TestClient& operator=(const TestClient&) = delete;
 
-  void Initialize(PrefService* pref_service) {
-    AndroidMetricsServiceClient::Initialize(base::FilePath(), pref_service);
-  }
+  ~TestClient() override = default;
 
   bool IsRecordingActive() {
     auto* service = GetMetricsService();
@@ -110,7 +110,6 @@ class TestClient : public AndroidMetricsServiceClient {
   int sampled_in_rate_per_mille_;
   int package_name_rate_per_mille_;
   bool record_package_name_for_app_type_;
-  DISALLOW_COPY_AND_ASSIGN(TestClient);
 };
 
 std::unique_ptr<TestingPrefServiceSimple> CreateTestPrefs() {
@@ -136,6 +135,11 @@ class AndroidMetricsServiceClientTest : public testing::Test {
     base::SetRecordActionTaskRunner(task_runner_);
   }
 
+  AndroidMetricsServiceClientTest(const AndroidMetricsServiceClientTest&) =
+      delete;
+  AndroidMetricsServiceClientTest& operator=(
+      const AndroidMetricsServiceClientTest&) = delete;
+
   const int64_t test_begin_time_;
 
   content::BrowserTaskEnvironment* task_environment() {
@@ -148,9 +152,30 @@ class AndroidMetricsServiceClientTest : public testing::Test {
  private:
   content::BrowserTaskEnvironment task_environment_;
   scoped_refptr<base::TestSimpleTaskRunner> task_runner_;
-
-  DISALLOW_COPY_AND_ASSIGN(AndroidMetricsServiceClientTest);
 };
+
+// Verify that Chrome does not start watching for browser crashes before setting
+// up field trials. For Android embedders, Chrome should not watch for crashes
+// then because, at the time of field trial set-up, it is not possible to know
+// whether the embedder will come to foreground. The embedder may remain in the
+// background for the browser process lifetime, and in this case, Chrome should
+// not watch for crashes so that exiting is not considered a crash. Embedders
+// start watching for crashes when foregrounding via
+// MetricsService::OnAppEnterForeground().
+TEST_F(AndroidMetricsServiceClientTest,
+       DoNotWatchForCrashesBeforeFieldTrialSetUp) {
+  auto prefs = CreateTestPrefs();
+  auto client = std::make_unique<TestClient>();
+  client->Initialize(prefs.get());
+  EXPECT_TRUE(client->metrics_state_manager()
+                  ->clean_exit_beacon()
+                  ->GetUserDataDirForTesting()
+                  .empty());
+  EXPECT_TRUE(client->metrics_state_manager()
+                  ->clean_exit_beacon()
+                  ->GetBeaconFilePathForTesting()
+                  .empty());
+}
 
 TEST_F(AndroidMetricsServiceClientTest, TestSetConsentTrueBeforeInit) {
   auto prefs = CreateTestPrefs();
@@ -330,8 +355,7 @@ TEST_F(AndroidMetricsServiceClientTest,
 }
 
 TEST_F(AndroidMetricsServiceClientTest, TestCanForceEnableMetrics) {
-  base::CommandLine::ForCurrentProcess()->AppendSwitch(
-      metrics::switches::kForceEnableMetricsReporting);
+  ForceEnableMetricsReportingForTesting();
 
   auto prefs = CreateTestPrefs();
   auto client = std::make_unique<TestClient>();
@@ -348,8 +372,7 @@ TEST_F(AndroidMetricsServiceClientTest, TestCanForceEnableMetrics) {
 
 TEST_F(AndroidMetricsServiceClientTest,
        TestCanForceEnableMetricsIfAlreadyEnabled) {
-  base::CommandLine::ForCurrentProcess()->AppendSwitch(
-      metrics::switches::kForceEnableMetricsReporting);
+  ForceEnableMetricsReportingForTesting();
 
   auto prefs = CreateTestPrefs();
   auto client = std::make_unique<TestClient>();
@@ -366,8 +389,7 @@ TEST_F(AndroidMetricsServiceClientTest,
 
 TEST_F(AndroidMetricsServiceClientTest,
        TestCannotForceEnableMetricsIfAppOptsOut) {
-  base::CommandLine::ForCurrentProcess()->AppendSwitch(
-      metrics::switches::kForceEnableMetricsReporting);
+  ForceEnableMetricsReportingForTesting();
 
   auto prefs = CreateTestPrefs();
   auto client = std::make_unique<TestClient>();

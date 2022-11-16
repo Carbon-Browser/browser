@@ -7,12 +7,11 @@
 #include "base/bind.h"
 #include "base/location.h"
 #include "base/metrics/user_metrics.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "chrome/browser/importer/importer_lock_dialog.h"
-#include "chrome/browser/ui/browser_dialogs.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/grit/chromium_strings.h"
 #include "chrome/grit/generated_resources.h"
@@ -79,7 +78,6 @@ ImportLockDialogView::ImportLockDialogView(
   description_label->SetMultiLine(true);
   description_label->SetHorizontalAlignment(gfx::ALIGN_LEFT);
   AddChildView(description_label);
-  chrome::RecordDialogCreation(chrome::DialogIdentifier::IMPORT_LOCK);
 }
 
 ImportLockDialogView::~ImportLockDialogView() = default;

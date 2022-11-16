@@ -5,7 +5,7 @@
 #ifndef ASH_SYSTEM_TRAY_TRAY_CONTAINER_H_
 #define ASH_SYSTEM_TRAY_TRAY_CONTAINER_H_
 
-#include "base/macros.h"
+#include "ash/system/tray/tray_constants.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/views/layout/box_layout.h"
 #include "ui/views/view.h"
@@ -16,12 +16,17 @@ class Border;
 
 namespace ash {
 class Shelf;
+class TrayBackgroundView;
 
 // Base class for tray containers. Sets the border and layout. The container
 // auto-resizes the widget when necessary.
 class TrayContainer : public views::View {
  public:
-  explicit TrayContainer(Shelf* shelf);
+  TrayContainer(Shelf* shelf, TrayBackgroundView* tray_background_view);
+
+  TrayContainer(const TrayContainer&) = delete;
+  TrayContainer& operator=(const TrayContainer&) = delete;
+
   ~TrayContainer() override;
 
   // Calculates the ideal bounds that this view should have depending on the
@@ -32,9 +37,11 @@ class TrayContainer : public views::View {
   void UpdateLayout();
 
   void SetMargin(int main_axis_margin, int cross_axis_margin);
+  void SetSpacingBetweenChildren(int space_dip);
 
  protected:
   // views::View:
+  void OnPaint(gfx::Canvas* canvas) override;
   void ChildPreferredSizeChanged(views::View* child) override;
   void ChildVisibilityChanged(View* child) override;
   void ViewHierarchyChanged(
@@ -49,6 +56,7 @@ class TrayContainer : public views::View {
     gfx::Rect anchor_bounds_in_screen;
     int main_axis_margin = 0;
     int cross_axis_margin = 0;
+    int spacing_between_children = 0;
 
     bool operator==(const LayoutInputs& other) const {
       return shelf_alignment_is_horizontal ==
@@ -57,7 +65,8 @@ class TrayContainer : public views::View {
                  other.status_area_hit_region_padding &&
              anchor_bounds_in_screen == other.anchor_bounds_in_screen &&
              main_axis_margin == other.main_axis_margin &&
-             cross_axis_margin == other.cross_axis_margin;
+             cross_axis_margin == other.cross_axis_margin &&
+             spacing_between_children == other.spacing_between_children;
     }
   };
 
@@ -78,11 +87,11 @@ class TrayContainer : public views::View {
   std::unique_ptr<views::BoxLayout> layout_manager_;
 
   Shelf* const shelf_;
+  TrayBackgroundView* const tray_background_view_;
 
   int main_axis_margin_ = 0;
   int cross_axis_margin_ = 0;
-
-  DISALLOW_COPY_AND_ASSIGN(TrayContainer);
+  int spacing_between_children_ = kUnifiedTraySpacingBetweenIcons;
 };
 
 }  // namespace ash

@@ -4,13 +4,17 @@
 
 #include "base/allocator/partition_allocator/starscan/pcscan.h"
 
+#include "base/allocator/partition_allocator/partition_alloc_base/compiler_specific.h"
 #include "base/allocator/partition_allocator/starscan/pcscan_internal.h"
 
-namespace base {
-namespace internal {
+namespace partition_alloc::internal {
 
-void PCScan::Initialize(WantedWriteProtectionMode wpmode) {
-  PCScanInternal::Instance().Initialize(wpmode);
+void PCScan::Initialize(InitConfig config) {
+  PCScanInternal::Instance().Initialize(config);
+}
+
+bool PCScan::IsInitialized() {
+  return PCScanInternal::Instance().is_initialized();
 }
 
 void PCScan::Disable() {
@@ -48,8 +52,9 @@ void PCScan::PerformScanIfNeeded(InvocationMode invocation_mode) {
   PCScanInternal::Instance().PerformScanIfNeeded(invocation_mode);
 }
 
-void PCScan::PerformDelayedScan(TimeDelta delay) {
-  PCScanInternal::Instance().PerformDelayedScan(delay);
+void PCScan::PerformDelayedScan(int64_t delay_in_microseconds) {
+  PCScanInternal::Instance().PerformDelayedScan(
+      base::Microseconds(delay_in_microseconds));
 }
 
 void PCScan::JoinScan() {
@@ -91,15 +96,18 @@ void PCScan::UninitForTesting() {
   ReinitPCScanMetadataAllocatorForTesting();          // IN-TEST
 }
 
-void PCScan::ReinitForTesting(WantedWriteProtectionMode wpmode) {
-  PCScanInternal::Instance().ReinitForTesting(wpmode);  // IN-TEST
+void PCScan::ReinitForTesting(InitConfig config) {
+  PCScanInternal::Instance().ReinitForTesting(config);  // IN-TEST
 }
 
 void PCScan::FinishScanForTesting() {
   PCScanInternal::Instance().FinishScanForTesting();  // IN-TEST
 }
 
-PCScan PCScan::instance_ CONSTINIT;
+void PCScan::RegisterStatsReporter(partition_alloc::StatsReporter* reporter) {
+  PCScanInternal::Instance().RegisterStatsReporter(reporter);
+}
 
-}  // namespace internal
-}  // namespace base
+PCScan PCScan::instance_ PA_CONSTINIT;
+
+}  // namespace partition_alloc::internal

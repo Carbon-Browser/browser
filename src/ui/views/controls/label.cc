@@ -25,19 +25,19 @@
 #include "ui/base/cursor/cursor.h"
 #include "ui/base/default_style.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/color/color_id.h"
+#include "ui/color/color_provider.h"
 #include "ui/compositor/layer.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/color_utils.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/text_elider.h"
 #include "ui/gfx/text_utils.h"
-#include "ui/native_theme/native_theme.h"
 #include "ui/strings/grit/ui_strings.h"
 #include "ui/views/background.h"
 #include "ui/views/cascading_property.h"
 #include "ui/views/controls/menu/menu_runner.h"
 #include "ui/views/focus/focus_manager.h"
-#include "ui/views/native_cursor.h"
 #include "ui/views/selection_controller.h"
 
 namespace {
@@ -156,6 +156,10 @@ void Label::SetTextStyle(int style) {
     return;
 
   text_style_ = style;
+  ApplyBaselineTextStyle();
+}
+
+void Label::ApplyBaselineTextStyle() {
   full_text_->SetFontList(style::GetFont(text_context_, text_style_));
   full_text_->SetMinLineHeight(GetLineHeight());
   ClearDisplayText();
@@ -346,11 +350,11 @@ void Label::SetMultiLine(bool multi_line) {
   OnPropertyChanged(&multi_line_, kPropertyEffectsPreferredSizeChanged);
 }
 
-int Label::GetMaxLines() const {
+size_t Label::GetMaxLines() const {
   return max_lines_;
 }
 
-void Label::SetMaxLines(int max_lines) {
+void Label::SetMaxLines(size_t max_lines) {
   if (max_lines_ == max_lines)
     return;
   max_lines_ = max_lines;
@@ -634,7 +638,8 @@ int Label::GetHeightForWidth(int w) const {
   if (!GetMultiLine() || GetText().empty() || w < 0) {
     height = base_line_height;
   } else if (w == 0) {
-    height = std::max(GetMaxLines(), 1) * base_line_height;
+    height =
+        std::max(base::checked_cast<int>(GetMaxLines()), 1) * base_line_height;
   } else {
     // SetDisplayRect() has a side effect for later calls of GetStringSize().
     // Be careful to invoke full_text_->SetDisplayRect(gfx::Rect()) to
@@ -646,7 +651,9 @@ int Label::GetHeightForWidth(int w) const {
     int string_height = full_text_->GetStringSize().height();
     // Cap the number of lines to GetMaxLines() if that's set.
     height = GetMaxLines() > 0
-                 ? std::min(GetMaxLines() * base_line_height, string_height)
+                 ? std::min(base::checked_cast<int>(GetMaxLines()) *
+                                base_line_height,
+                            string_height)
                  : string_height;
   }
   height -= gfx::ShadowValue::GetMargin(full_text_->shadows()).height();
@@ -707,7 +714,7 @@ std::unique_ptr<gfx::RenderText> Label::CreateRenderText() const {
   render_text->set_shadows(GetShadows());
   const bool multiline = GetMultiLine();
   render_text->SetMultiline(multiline);
-  render_text->SetMaxLines(multiline ? GetMaxLines() : 0);
+  render_text->SetMaxLines(multiline ? GetMaxLines() : size_t{0});
   render_text->SetWordWrapBehavior(full_text_->word_wrap_behavior());
 
   // Setup render text for selection controller.
@@ -728,6 +735,16 @@ gfx::Rect Label::GetTextBounds() const {
 
   return gfx::Rect(gfx::Point() + display_text_->GetLineOffset(0),
                    display_text_->GetStringSize());
+}
+
+int Label::GetFontListY() const {
+  MaybeBuildDisplayText();
+
+  if (!display_text_)
+    return 0;
+
+  return GetInsets().top() + display_text_->GetBaseline() -
+         font_list().GetBaseline();
 }
 
 void Label::PaintText(gfx::Canvas* canvas) {
@@ -785,9 +802,9 @@ void Label::OnThemeChanged() {
   UpdateColorsFromTheme();
 }
 
-gfx::NativeCursor Label::GetCursor(const ui::MouseEvent& event) {
-  return GetRenderTextForSelectionController() ? GetNativeIBeamCursor()
-                                               : gfx::kNullCursor;
+ui::Cursor Label::GetCursor(const ui::MouseEvent& event) {
+  return GetRenderTextForSelectionController() ? ui::mojom::CursorType::kIBeam
+                                               : ui::Cursor();
 }
 
 void Label::OnFocus() {
@@ -1180,7 +1197,7 @@ void Label::ApplyTextColors() const {
 }
 
 void Label::UpdateColorsFromTheme() {
-  ui::NativeTheme* theme = GetNativeTheme();
+  ui::ColorProvider* color_provider = GetColorProvider();
   if (!enabled_color_set_) {
     const absl::optional<SkColor> cascading_color =
         GetCascadingProperty(this, kCascadingLabelEnabledColor);
@@ -1188,16 +1205,15 @@ void Label::UpdateColorsFromTheme() {
         style::GetColor(*this, text_context_, text_style_));
   }
   if (!background_color_set_) {
-    background_color_ =
-        theme->GetSystemColor(ui::NativeTheme::kColorId_DialogBackground);
+    background_color_ = color_provider->GetColor(ui::kColorDialogBackground);
   }
   if (!selection_text_color_set_) {
-    requested_selection_text_color_ = theme->GetSystemColor(
-        ui::NativeTheme::kColorId_LabelTextSelectionColor);
+    requested_selection_text_color_ =
+        color_provider->GetColor(ui::kColorLabelSelectionForeground);
   }
   if (!selection_background_color_set_) {
-    selection_background_color_ = theme->GetSystemColor(
-        ui::NativeTheme::kColorId_LabelTextSelectionBackgroundFocused);
+    selection_background_color_ =
+        color_provider->GetColor(ui::kColorLabelSelectionBackground);
   }
   RecalculateColors();
 }
@@ -1273,7 +1289,7 @@ ADD_PROPERTY_METADATA(gfx::HorizontalAlignment, HorizontalAlignment)
 ADD_PROPERTY_METADATA(gfx::VerticalAlignment, VerticalAlignment)
 ADD_PROPERTY_METADATA(int, LineHeight)
 ADD_PROPERTY_METADATA(bool, MultiLine)
-ADD_PROPERTY_METADATA(int, MaxLines)
+ADD_PROPERTY_METADATA(size_t, MaxLines)
 ADD_PROPERTY_METADATA(bool, Obscured)
 ADD_PROPERTY_METADATA(bool, AllowCharacterBreak)
 ADD_PROPERTY_METADATA(std::u16string, TooltipText)

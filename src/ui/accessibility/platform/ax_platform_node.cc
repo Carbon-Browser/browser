@@ -6,6 +6,7 @@
 
 #include "base/debug/crash_logging.h"
 #include "base/lazy_instance.h"
+#include "base/observer_list.h"
 #include "build/build_config.h"
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/accessibility/platform/ax_platform_node_delegate.h"
@@ -49,10 +50,9 @@ void AXPlatformNode::RegisterNativeWindowHandler(
   native_window_handler_.Get() = handler;
 }
 
-AXPlatformNode::AXPlatformNode() {}
+AXPlatformNode::AXPlatformNode() = default;
 
-AXPlatformNode::~AXPlatformNode() {
-}
+AXPlatformNode::~AXPlatformNode() = default;
 
 void AXPlatformNode::Destroy() {
 }
@@ -94,7 +94,6 @@ void AXPlatformNode::RemoveAXModeObserver(AXModeObserver* observer) {
 
 // static
 void AXPlatformNode::NotifyAddAXModeFlags(AXMode mode_flags) {
-  // Note: this is only called on Windows, and in tests.
   AXMode new_ax_mode(ax_mode_);
   new_ax_mode |= mode_flags;
 
@@ -108,7 +107,6 @@ void AXPlatformNode::NotifyAddAXModeFlags(AXMode mode_flags) {
 
 // static
 void AXPlatformNode::SetAXMode(AXMode new_mode) {
-  // Note: this is only called on Windows.
   ax_mode_ = new_mode;
 }
 

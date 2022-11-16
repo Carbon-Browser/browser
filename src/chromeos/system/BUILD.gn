@@ -4,6 +4,11 @@
 
 import("//build/config/chromeos/ui_mode.gni")
 
+if (is_chromeos_ash) {
+  # Used to build and run fuzzer in ash-only code.
+  import("//testing/libfuzzer/fuzzer_test.gni")
+}
+
 assert(is_chromeos,
        "Non-Chrome-OS or Lacros builds must not depend on //chromeos")
 
@@ -16,16 +21,21 @@ component("system") {
     "cpu_temperature_reader.h",
   ]
 
+  if (is_chromeos) {
+    deps += [ "//chromeos:chromeos_export" ]
+    sources += [
+      "core_scheduling.cc",
+      "core_scheduling.h",
+    ]
+  }
+
   if (is_chromeos_ash) {
     deps += [
       "//ash/constants",
       "//base",
-      "//chromeos:chromeos_export",
       "//ui/ozone:ozone_base",
     ]
     sources += [
-      "core_scheduling.cc",
-      "core_scheduling.h",
       "devicemode.cc",
       "devicemode.h",
       "factory_ping_embargo_check.cc",
@@ -65,5 +75,12 @@ source_set("unit_tests") {
       "kiosk_oem_manifest_parser_unittest.cc",
       "name_value_pairs_parser_unittest.cc",
     ]
+  }
+}
+
+if (is_chromeos_ash) {
+  fuzzer_test("name_value_pairs_parser_fuzzer") {
+    sources = [ "name_value_pairs_parser_fuzzer.cc" ]
+    deps = [ ":system" ]
   }
 }

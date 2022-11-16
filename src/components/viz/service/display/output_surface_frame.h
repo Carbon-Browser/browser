@@ -8,9 +8,9 @@
 #include <memory>
 #include <vector>
 
-#include "base/macros.h"
 #include "components/viz/service/viz_service_export.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/gfx/ca_layer_result.h"
 #include "ui/gfx/delegated_ink_metadata.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
@@ -24,6 +24,10 @@ class VIZ_SERVICE_EXPORT OutputSurfaceFrame {
  public:
   OutputSurfaceFrame();
   OutputSurfaceFrame(OutputSurfaceFrame&& other);
+
+  OutputSurfaceFrame(const OutputSurfaceFrame&) = delete;
+  OutputSurfaceFrame& operator=(const OutputSurfaceFrame&) = delete;
+
   ~OutputSurfaceFrame();
 
   OutputSurfaceFrame& operator=(OutputSurfaceFrame&& other);
@@ -36,13 +40,14 @@ class VIZ_SERVICE_EXPORT OutputSurfaceFrame {
   // Optional content area for SwapWithBounds. Rectangles may overlap.
   std::vector<gfx::Rect> content_bounds;
   std::vector<ui::LatencyInfo> latency_info;
+  absl::optional<int64_t> choreographer_vsync_id;
   bool top_controls_visible_height_changed = false;
   // Metadata containing information to draw a delegated ink trail using
   // platform APIs.
   std::unique_ptr<gfx::DelegatedInkMetadata> delegated_ink_metadata;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(OutputSurfaceFrame);
+#if BUILDFLAG(IS_MAC)
+  gfx::CALayerResult ca_layer_error_code = gfx::kCALayerSuccess;
+#endif
 };
 
 }  // namespace viz

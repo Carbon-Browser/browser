@@ -22,38 +22,37 @@ namespace permissions {
 enum class RequestType {
   kAccessibilityEvents,
   kArSession,
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
   kCameraPanTiltZoom,
 #endif
   kCameraStream,
   kClipboard,
   kDiskQuota,
-#if !defined(OS_ANDROID)
-  kFileHandling,
-  kFontAccess,
+#if !BUILDFLAG(IS_ANDROID)
+  kLocalFonts,
 #endif
   kGeolocation,
   kIdleDetection,
   kMicStream,
   kMidiSysex,
   kMultipleDownloads,
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   kNfcDevice,
 #endif
   kNotifications,
-#if defined(OS_ANDROID) || defined(OS_CHROMEOS) || defined(OS_WIN)
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_WIN)
   kProtectedMediaIdentifier,
 #endif
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
   kRegisterProtocolHandler,
   kSecurityAttestation,
 #endif
   kStorageAccess,
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
   kU2fApiRequest,
 #endif
   kVrSession,
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
   kWindowPlacement,
   kMaxValue = kWindowPlacement
 #else
@@ -61,13 +60,15 @@ enum class RequestType {
 #endif
 };
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 // On Android, icons are represented with an IDR_ identifier.
 using IconId = int;
 #else
 // On desktop, we use a vector icon.
 typedef const gfx::VectorIcon& IconId;
 #endif
+
+bool IsRequestablePermissionType(ContentSettingsType content_settings_type);
 
 RequestType ContentSettingsTypeToRequestType(
     ContentSettingsType content_settings_type);
@@ -77,6 +78,11 @@ absl::optional<ContentSettingsType> RequestTypeToContentSettingsType(
 
 // Returns the icon to display.
 IconId GetIconId(RequestType type);
+
+#if !BUILDFLAG(IS_ANDROID)
+// Returns the blocked icon to display.
+IconId GetBlockedIconId(RequestType type);
+#endif
 
 // Returns a unique human-readable string that can be used in dictionaries that
 // are keyed by the RequestType.

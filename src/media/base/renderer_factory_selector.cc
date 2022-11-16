@@ -5,6 +5,7 @@
 #include "media/base/renderer_factory_selector.h"
 
 #include "base/logging.h"
+#include "build/build_config.h"
 
 namespace media {
 
@@ -26,12 +27,12 @@ std::string GetRendererName(RendererType renderer_type) {
       return "CastRenderer";
     case RendererType::kMediaFoundation:
       return "MediaFoundationRenderer";
-    case RendererType::kFuchsia:
-      return "FuchsiaRenderer";  // RendererImpl by FuchsiaRendererFactory.
     case RendererType::kRemoting:
       return "RemotingRenderer";  // media::remoting::Receiver
     case RendererType::kCastStreaming:
       return "CastStreamingRenderer";
+    case RendererType::kContentEmbedderDefined:
+      return "EmbedderDefined";
     default:
       NOTREACHED();
       return "RendererType created through invalid static_cast";
@@ -99,7 +100,7 @@ RendererFactory* RendererFactorySelector::GetCurrentFactory() {
   return current_factory;
 }
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 void RendererFactorySelector::StartRequestRemotePlayStateCB(
     RequestRemotePlayStateChangeCB callback_request) {
   DCHECK(!remote_play_state_change_cb_request_);

@@ -5,7 +5,7 @@
 #ifndef EXTENSIONS_BROWSER_API_TEST_TEST_API_H_
 #define EXTENSIONS_BROWSER_API_TEST_TEST_API_H_
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/values.h"
 #include "extensions/browser/extension_function.h"
 
@@ -85,6 +85,18 @@ class TestSendMessageFunction : public ExtensionFunction {
   ResponseValue response_;
 };
 
+class TestSendScriptResultFunction : public TestExtensionFunction {
+ public:
+  TestSendScriptResultFunction();
+  DECLARE_EXTENSION_FUNCTION("test.sendScriptResult", UNKNOWN)
+
+ private:
+  ~TestSendScriptResultFunction() override;
+
+  // ExtensionFunction:
+  ResponseAction Run() override;
+};
+
 class TestGetConfigFunction : public TestExtensionFunction {
  public:
   DECLARE_EXTENSION_FUNCTION("test.getConfig", UNKNOWN)
@@ -100,6 +112,9 @@ class TestGetConfigFunction : public TestExtensionFunction {
   // state, owned by the test code.
   class TestConfigState {
    public:
+    TestConfigState(const TestConfigState&) = delete;
+    TestConfigState& operator=(const TestConfigState&) = delete;
+
     static TestConfigState* GetInstance();
 
     void set_config_state(base::DictionaryValue* config_state) {
@@ -112,9 +127,7 @@ class TestGetConfigFunction : public TestExtensionFunction {
     friend struct base::DefaultSingletonTraits<TestConfigState>;
     TestConfigState();
 
-    base::DictionaryValue* config_state_;
-
-    DISALLOW_COPY_AND_ASSIGN(TestConfigState);
+    raw_ptr<base::DictionaryValue> config_state_;
   };
 
   ~TestGetConfigFunction() override;

@@ -4,28 +4,40 @@
 
 #include "chrome/browser/ui/webui/settings/chromeos/multidevice_handler.h"
 
+#include "ash/components/multidevice/logging/logging.h"
+#include "ash/components/phonehub/pref_names.h"
+#include "ash/components/phonehub/screen_lock_manager.h"
+#include "ash/components/phonehub/util/histogram_util.h"
+#include "ash/components/proximity_auth/proximity_auth_pref_names.h"
 #include "ash/constants/ash_features.h"
+#include "ash/constants/ash_pref_names.h"
+#include "ash/services/multidevice_setup/public/cpp/prefs.h"
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/logging.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/values.h"
+#include "chrome/browser/ash/android_sms/android_sms_pairing_state_tracker_impl.h"
+#include "chrome/browser/ash/android_sms/android_sms_urls.h"
 #include "chrome/browser/ash/login/quick_unlock/auth_token.h"
 #include "chrome/browser/ash/login/quick_unlock/quick_unlock_factory.h"
 #include "chrome/browser/ash/login/quick_unlock/quick_unlock_storage.h"
-#include "chrome/browser/chromeos/android_sms/android_sms_pairing_state_tracker_impl.h"
-#include "chrome/browser/chromeos/android_sms/android_sms_urls.h"
 #include "chrome/browser/nearby_sharing/common/nearby_share_prefs.h"
+#include "chrome/browser/nearby_sharing/nearby_share_feature_status.h"
 #include "chrome/browser/nearby_sharing/nearby_sharing_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/ui/ash/session_controller_client_impl.h"
 #include "chrome/browser/ui/webui/chromeos/multidevice_setup/multidevice_setup_dialog.h"
-#include "chromeos/components/multidevice/logging/logging.h"
-#include "chromeos/components/phonehub/util/histogram_util.h"
-#include "chromeos/components/proximity_auth/proximity_auth_pref_names.h"
-#include "chromeos/services/multidevice_setup/public/cpp/prefs.h"
 #include "components/content_settings/core/common/content_settings_pattern.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/web_ui.h"
 #include "content/public/browser/web_ui_message_handler.h"
+
+using ash::phonehub::util::LogPermissionOnboardingDialogAction;
+using ash::phonehub::util::LogPermissionOnboardingSettingsClicked;
+using ash::phonehub::util::PermissionsOnboardingScreenEvent;
+using ash::phonehub::util::PermissionsOnboardingSetUpMode;
+using ash::phonehub::util::PermissionsOnboardingStep;
 
 namespace chromeos {
 
@@ -33,12 +45,19 @@ namespace settings {
 
 namespace {
 
+const char kCameraRollAccessStatus[] = "cameraRollAccessStatus";
+
+// TODO(https://crbug.com/1164001): remove after migrating to ash.
+namespace multidevice_setup = ::ash::multidevice_setup;
+
 const char kPageContentDataModeKey[] = "mode";
 const char kPageContentDataHostDeviceNameKey[] = "hostDeviceName";
 const char kPageContentDataBetterTogetherStateKey[] = "betterTogetherState";
 const char kPageContentDataInstantTetheringStateKey[] = "instantTetheringState";
 const char kPageContentDataMessagesStateKey[] = "messagesState";
 const char kPageContentDataPhoneHubStateKey[] = "phoneHubState";
+const char kPageContentDataPhoneHubCameraRollStateKey[] =
+    "phoneHubCameraRollState";
 const char kPageContentDataPhoneHubNotificationsStateKey[] =
     "phoneHubNotificationsState";
 const char kPageContentDataPhoneHubTaskContinuationStateKey[] =
@@ -47,9 +66,18 @@ const char kPageContentDataPhoneHubAppsStateKey[] = "phoneHubAppsState";
 const char kPageContentDataWifiSyncStateKey[] = "wifiSyncState";
 const char kPageContentDataSmartLockStateKey[] = "smartLockState";
 const char kNotificationAccessStatus[] = "notificationAccessStatus";
+const char kNotificationAccessProhibitedReason[] =
+    "notificationAccessProhibitedReason";
 const char kIsAndroidSmsPairingComplete[] = "isAndroidSmsPairingComplete";
 const char kIsNearbyShareDisallowedByPolicy[] =
     "isNearbyShareDisallowedByPolicy";
+const char kAppsAccessStatus[] = "appsAccessStatus";
+const char kIsPhoneHubPermissionsDialogSupported[] =
+    "isPhoneHubPermissionsDialogSupported";
+const char kIsCameraRollFilePermissionGranted[] =
+    "isCameraRollFilePermissionGranted";
+const char kIsPhoneHubFeatureCombinedSetupSupported[] =
+    "isPhoneHubFeatureCombinedSetupSupported";
 
 constexpr char kAndroidSmsInfoOriginKey[] = "origin";
 constexpr char kAndroidSmsInfoEnabledKey[] = "enabled";
@@ -67,78 +95,112 @@ void OnRetrySetHostNowResult(bool success) {
 MultideviceHandler::MultideviceHandler(
     PrefService* prefs,
     multidevice_setup::MultiDeviceSetupClient* multidevice_setup_client,
-    phonehub::NotificationAccessManager* notification_access_manager,
+    phonehub::MultideviceFeatureAccessManager*
+        multidevice_feature_access_manager,
     multidevice_setup::AndroidSmsPairingStateTracker*
         android_sms_pairing_state_tracker,
-    android_sms::AndroidSmsAppManager* android_sms_app_manager)
+    android_sms::AndroidSmsAppManager* android_sms_app_manager,
+    ash::eche_app::AppsAccessManager* apps_access_manager,
+    ash::phonehub::CameraRollManager* camera_roll_manager)
     : prefs_(prefs),
       multidevice_setup_client_(multidevice_setup_client),
-      notification_access_manager_(notification_access_manager),
+      multidevice_feature_access_manager_(multidevice_feature_access_manager),
       android_sms_pairing_state_tracker_(android_sms_pairing_state_tracker),
-      android_sms_app_manager_(android_sms_app_manager) {
+      android_sms_app_manager_(android_sms_app_manager),
+      apps_access_manager_(apps_access_manager),
+      camera_roll_manager_(camera_roll_manager) {
+  CHECK((multidevice_setup_client_ != nullptr) ==
+        multidevice_setup::AreAnyMultiDeviceFeaturesAllowed(prefs_));
   pref_change_registrar_.Init(prefs_);
 }
 
 MultideviceHandler::~MultideviceHandler() {}
 
 void MultideviceHandler::RegisterMessages() {
-  web_ui()->RegisterDeprecatedMessageCallback(
+  web_ui()->RegisterMessageCallback(
       "showMultiDeviceSetupDialog",
       base::BindRepeating(&MultideviceHandler::HandleShowMultiDeviceSetupDialog,
                           base::Unretained(this)));
-  web_ui()->RegisterDeprecatedMessageCallback(
+  web_ui()->RegisterMessageCallback(
       "getPageContentData",
       base::BindRepeating(&MultideviceHandler::HandleGetPageContent,
                           base::Unretained(this)));
-  web_ui()->RegisterDeprecatedMessageCallback(
+  web_ui()->RegisterMessageCallback(
       "setFeatureEnabledState",
       base::BindRepeating(&MultideviceHandler::HandleSetFeatureEnabledState,
                           base::Unretained(this)));
-  web_ui()->RegisterDeprecatedMessageCallback(
+  web_ui()->RegisterMessageCallback(
       "removeHostDevice",
       base::BindRepeating(&MultideviceHandler::HandleRemoveHostDevice,
                           base::Unretained(this)));
-  web_ui()->RegisterDeprecatedMessageCallback(
+  web_ui()->RegisterMessageCallback(
       "retryPendingHostSetup",
       base::BindRepeating(&MultideviceHandler::HandleRetryPendingHostSetup,
                           base::Unretained(this)));
-  web_ui()->RegisterDeprecatedMessageCallback(
+  web_ui()->RegisterMessageCallback(
       "setUpAndroidSms",
       base::BindRepeating(&MultideviceHandler::HandleSetUpAndroidSms,
                           base::Unretained(this)));
-  web_ui()->RegisterDeprecatedMessageCallback(
+  web_ui()->RegisterMessageCallback(
       "getSmartLockSignInEnabled",
       base::BindRepeating(&MultideviceHandler::HandleGetSmartLockSignInEnabled,
                           base::Unretained(this)));
-  web_ui()->RegisterDeprecatedMessageCallback(
+  web_ui()->RegisterMessageCallback(
       "setSmartLockSignInEnabled",
       base::BindRepeating(&MultideviceHandler::HandleSetSmartLockSignInEnabled,
                           base::Unretained(this)));
-  web_ui()->RegisterDeprecatedMessageCallback(
+  web_ui()->RegisterMessageCallback(
       "getSmartLockSignInAllowed",
       base::BindRepeating(&MultideviceHandler::HandleGetSmartLockSignInAllowed,
                           base::Unretained(this)));
-  web_ui()->RegisterDeprecatedMessageCallback(
+  web_ui()->RegisterMessageCallback(
       "getAndroidSmsInfo",
       base::BindRepeating(&MultideviceHandler::HandleGetAndroidSmsInfo,
                           base::Unretained(this)));
-  web_ui()->RegisterDeprecatedMessageCallback(
+  web_ui()->RegisterMessageCallback(
       "attemptNotificationSetup",
       base::BindRepeating(&MultideviceHandler::HandleAttemptNotificationSetup,
                           base::Unretained(this)));
-  web_ui()->RegisterDeprecatedMessageCallback(
+  web_ui()->RegisterMessageCallback(
       "cancelNotificationSetup",
       base::BindRepeating(&MultideviceHandler::HandleCancelNotificationSetup,
                           base::Unretained(this)));
+  web_ui()->RegisterMessageCallback(
+      "attemptAppsSetup",
+      base::BindRepeating(&MultideviceHandler::HandleAttemptAppsSetup,
+                          base::Unretained(this)));
+  web_ui()->RegisterMessageCallback(
+      "cancelAppsSetup",
+      base::BindRepeating(&MultideviceHandler::HandleCancelAppsSetup,
+                          base::Unretained(this)));
+  web_ui()->RegisterMessageCallback(
+      "attemptCombinedFeatureSetup",
+      base::BindRepeating(
+          &MultideviceHandler::HandleAttemptCombinedFeatureSetup,
+          base::Unretained(this)));
+  web_ui()->RegisterMessageCallback(
+      "cancelCombinedFeatureSetup",
+      base::BindRepeating(&MultideviceHandler::HandleCancelCombinedFeatureSetup,
+                          base::Unretained(this)));
+  web_ui()->RegisterMessageCallback(
+      "logPhoneHubPermissionSetUpScreenAction",
+      base::BindRepeating(
+          &MultideviceHandler::LogPhoneHubPermissionSetUpScreenAction,
+          base::Unretained(this)));
+  web_ui()->RegisterMessageCallback(
+      "logPhoneHubPermissionSetUpButtonClicked",
+      base::BindRepeating(
+          &MultideviceHandler::LogPhoneHubPermissionSetUpButtonClicked,
+          base::Unretained(this)));
 }
 
 void MultideviceHandler::OnJavascriptAllowed() {
   if (multidevice_setup_client_)
     multidevice_setup_observation_.Observe(multidevice_setup_client_);
 
-  if (notification_access_manager_)
-    notification_access_manager_observation_.Observe(
-        notification_access_manager_);
+  if (multidevice_feature_access_manager_)
+    multidevice_feature_access_manager_observation_.Observe(
+        multidevice_feature_access_manager_);
 
   if (android_sms_pairing_state_tracker_) {
     android_sms_pairing_state_tracker_observation_.Observe(
@@ -147,6 +209,12 @@ void MultideviceHandler::OnJavascriptAllowed() {
 
   if (android_sms_app_manager_)
     android_sms_app_manager_observation_.Observe(android_sms_app_manager_);
+
+  if (apps_access_manager_)
+    apps_access_manager_observation_.Observe(apps_access_manager_);
+
+  if (camera_roll_manager_)
+    camera_roll_manager_observation_.Observe(camera_roll_manager_);
 
   pref_change_registrar_.Add(
       proximity_auth::prefs::kProximityAuthIsChromeOSLoginEnabled,
@@ -165,6 +233,16 @@ void MultideviceHandler::OnJavascriptAllowed() {
         base::BindRepeating(&MultideviceHandler::OnNearbySharingEnabledChanged,
                             base::Unretained(this)));
   }
+  if (features::IsEcheSWAEnabled()) {
+    pref_change_registrar_.Add(
+        ash::prefs::kEnableAutoScreenLock,
+        base::BindRepeating(&MultideviceHandler::OnEnableScreenLockChanged,
+                            base::Unretained(this)));
+    pref_change_registrar_.Add(
+        phonehub::prefs::kScreenLockStatus,
+        base::BindRepeating(&MultideviceHandler::OnScreenLockStatusChanged,
+                            base::Unretained(this)));
+  }
 }
 
 void MultideviceHandler::OnJavascriptDisallowed() {
@@ -176,10 +254,10 @@ void MultideviceHandler::OnJavascriptDisallowed() {
     multidevice_setup_observation_.Reset();
   }
 
-  if (notification_access_manager_) {
-    DCHECK(notification_access_manager_observation_.IsObservingSource(
-        notification_access_manager_));
-    notification_access_manager_observation_.Reset();
+  if (multidevice_feature_access_manager_) {
+    DCHECK(multidevice_feature_access_manager_observation_.IsObservingSource(
+        multidevice_feature_access_manager_));
+    multidevice_feature_access_manager_observation_.Reset();
     notification_access_operation_.reset();
   }
 
@@ -193,6 +271,19 @@ void MultideviceHandler::OnJavascriptDisallowed() {
     DCHECK(android_sms_app_manager_observation_.IsObservingSource(
         android_sms_app_manager_));
     android_sms_app_manager_observation_.Reset();
+  }
+
+  if (apps_access_manager_) {
+    DCHECK(apps_access_manager_observation_.IsObservingSource(
+        apps_access_manager_));
+    apps_access_manager_observation_.Reset();
+    apps_access_operation_.reset();
+  }
+
+  if (camera_roll_manager_) {
+    DCHECK(camera_roll_manager_observation_.IsObservingSource(
+        camera_roll_manager_));
+    camera_roll_manager_observation_.Reset();
   }
 
   // Ensure that pending callbacks do not complete and cause JS to be evaluated.
@@ -209,11 +300,22 @@ void MultideviceHandler::OnHostStatusChanged(
 void MultideviceHandler::OnFeatureStatesChanged(
     const multidevice_setup::MultiDeviceSetupClient::FeatureStatesMap&
         feature_states_map) {
+  PA_LOG(INFO) << "Feature states have changed: "
+               << multidevice_setup::FeatureStatesMapToString(
+                      feature_states_map);
   UpdatePageContent();
   NotifyAndroidSmsInfoChange();
 }
 
 void MultideviceHandler::OnNotificationAccessChanged() {
+  UpdatePageContent();
+}
+
+void MultideviceHandler::OnCameraRollAccessChanged() {
+  UpdatePageContent();
+}
+
+void MultideviceHandler::OnFeatureSetupRequestSupportedChanged() {
   UpdatePageContent();
 }
 
@@ -227,6 +329,14 @@ void MultideviceHandler::OnInstalledAppUrlChanged() {
   NotifyAndroidSmsInfoChange();
 }
 
+void MultideviceHandler::OnAppsAccessChanged() {
+  UpdatePageContent();
+}
+
+void MultideviceHandler::OnCameraRollViewUiStateUpdated() {
+  UpdatePageContent();
+}
+
 void MultideviceHandler::OnNearbySharingEnabledChanged() {
   UpdatePageContent();
 }
@@ -235,8 +345,8 @@ void MultideviceHandler::UpdatePageContent() {
   std::unique_ptr<base::DictionaryValue> page_content_dictionary =
       GeneratePageContentDataDictionary();
   DCHECK(page_content_dictionary);
-  PA_LOG(VERBOSE) << "Updating MultiDevice settings page content with: "
-                  << *page_content_dictionary << ".";
+  PA_LOG(INFO) << "Updating MultiDevice settings page content with: "
+               << *page_content_dictionary << ".";
   FireWebUIListener("settings.updateMultidevicePageContentData",
                     *page_content_dictionary);
 }
@@ -247,32 +357,31 @@ void MultideviceHandler::NotifyAndroidSmsInfoChange() {
 }
 
 void MultideviceHandler::HandleShowMultiDeviceSetupDialog(
-    const base::ListValue* args) {
-  DCHECK(args->GetList().empty());
+    const base::Value::List& args) {
+  DCHECK(args.empty());
   multidevice_setup::MultiDeviceSetupDialog::Show();
 }
 
-void MultideviceHandler::HandleGetPageContent(const base::ListValue* args) {
+void MultideviceHandler::HandleGetPageContent(const base::Value::List& args) {
   // This callback is expected to be the first one executed when the page is
   // loaded, so it should be the one to allow JS calls.
   AllowJavascript();
 
-  std::string callback_id;
-  bool result = args->GetString(0, &callback_id);
-  DCHECK(result);
+  const base::Value& callback_id = args[0];
+  DCHECK(callback_id.is_string());
 
   std::unique_ptr<base::DictionaryValue> page_content_dictionary =
       GeneratePageContentDataDictionary();
   DCHECK(page_content_dictionary);
-  PA_LOG(VERBOSE) << "Responding to getPageContentData() request with: "
-                  << *page_content_dictionary << ".";
+  PA_LOG(INFO) << "Responding to getPageContentData() request with: "
+               << *page_content_dictionary << ".";
 
-  ResolveJavascriptCallback(base::Value(callback_id), *page_content_dictionary);
+  ResolveJavascriptCallback(callback_id, *page_content_dictionary);
 }
 
 void MultideviceHandler::HandleSetFeatureEnabledState(
-    const base::ListValue* args) {
-  const auto& list = args->GetList();
+    const base::Value::List& args) {
+  const auto& list = args;
   DCHECK_GE(list.size(), 3u);
   std::string callback_id = list[0].GetString();
 
@@ -296,43 +405,49 @@ void MultideviceHandler::HandleSetFeatureEnabledState(
     phonehub::util::LogFeatureOptInEntryPoint(
         phonehub::util::OptInEntryPoint::kSettings);
   }
+
+  if (enabled &&
+      feature == multidevice_setup::mojom::Feature::kPhoneHubCameraRoll) {
+    phonehub::util::LogCameraRollFeatureOptInEntryPoint(
+        phonehub::util::CameraRollOptInEntryPoint::kSettings);
+  }
 }
 
-void MultideviceHandler::HandleRemoveHostDevice(const base::ListValue* args) {
-  DCHECK(args->GetList().empty());
+void MultideviceHandler::HandleRemoveHostDevice(const base::Value::List& args) {
+  DCHECK(args.empty());
   multidevice_setup_client_->RemoveHostDevice();
 }
 
 void MultideviceHandler::HandleRetryPendingHostSetup(
-    const base::ListValue* args) {
-  DCHECK(args->GetList().empty());
+    const base::Value::List& args) {
+  DCHECK(args.empty());
   multidevice_setup_client_->RetrySetHostNow(
       base::BindOnce(&OnRetrySetHostNowResult));
 }
 
-void MultideviceHandler::HandleSetUpAndroidSms(const base::ListValue* args) {
-  DCHECK(args->GetList().empty());
+void MultideviceHandler::HandleSetUpAndroidSms(const base::Value::List& args) {
+  DCHECK(args.empty());
   android_sms_app_manager_->SetUpAndLaunchAndroidSmsApp();
 }
 
 void MultideviceHandler::HandleGetSmartLockSignInEnabled(
-    const base::ListValue* args) {
-  std::string callback_id;
-  CHECK(args->GetString(0, &callback_id));
+    const base::Value::List& args) {
+  const base::Value& callback_id = args[0];
+  CHECK(callback_id.is_string());
 
   bool signInEnabled = prefs_->GetBoolean(
       proximity_auth::prefs::kProximityAuthIsChromeOSLoginEnabled);
-  ResolveJavascriptCallback(base::Value(callback_id),
-                            base::Value(signInEnabled));
+  ResolveJavascriptCallback(callback_id, base::Value(signInEnabled));
 }
 
 void MultideviceHandler::HandleSetSmartLockSignInEnabled(
-    const base::ListValue* args) {
+    const base::Value::List& args) {
   bool enabled = false;
-  CHECK(args->GetBoolean(0, &enabled));
+  if (args[0].is_bool())
+    enabled = args[0].GetBool();
 
-  std::string auth_token;
-  bool auth_token_present = args->GetString(1, &auth_token);
+  const bool auth_token_present = args.size() >= 2 && args[1].is_string();
+  const std::string& auth_token = auth_token_present ? args[1].GetString() : "";
 
   // Either the user is disabling sign-in, or they are enabling it and the auth
   // token must be present.
@@ -347,14 +462,13 @@ void MultideviceHandler::HandleSetSmartLockSignInEnabled(
 }
 
 void MultideviceHandler::HandleGetSmartLockSignInAllowed(
-    const base::ListValue* args) {
-  std::string callback_id;
-  CHECK(args->GetString(0, &callback_id));
+    const base::Value::List& args) {
+  const base::Value& callback_id = args[0];
+  CHECK(callback_id.is_string());
 
   bool sign_in_allowed =
       prefs_->GetBoolean(multidevice_setup::kSmartLockSigninAllowedPrefName);
-  ResolveJavascriptCallback(base::Value(callback_id),
-                            base::Value(sign_in_allowed));
+  ResolveJavascriptCallback(callback_id, base::Value(sign_in_allowed));
 }
 
 std::unique_ptr<base::DictionaryValue>
@@ -366,65 +480,180 @@ MultideviceHandler::GenerateAndroidSmsInfo() {
     app_url = android_sms::GetAndroidMessagesURL();
 
   auto android_sms_info = std::make_unique<base::DictionaryValue>();
-  android_sms_info->SetString(
+  android_sms_info->SetStringKey(
       kAndroidSmsInfoOriginKey,
       ContentSettingsPattern::FromURLNoWildcard(*app_url).ToString());
 
-  chromeos::multidevice_setup::mojom::FeatureState messages_state =
+  multidevice_setup::mojom::FeatureState messages_state =
       multidevice_setup_client_->GetFeatureState(
-          chromeos::multidevice_setup::mojom::Feature::kMessages);
+          multidevice_setup::mojom::Feature::kMessages);
   bool enabled_state =
       messages_state ==
-          chromeos::multidevice_setup::mojom::FeatureState::kEnabledByUser ||
-      messages_state == chromeos::multidevice_setup::mojom::FeatureState::
-                            kFurtherSetupRequired;
-  android_sms_info->SetBoolean(kAndroidSmsInfoEnabledKey, enabled_state);
+          multidevice_setup::mojom::FeatureState::kEnabledByUser ||
+      messages_state ==
+          multidevice_setup::mojom::FeatureState::kFurtherSetupRequired;
+  android_sms_info->SetBoolKey(kAndroidSmsInfoEnabledKey, enabled_state);
 
   return android_sms_info;
 }
 
-void MultideviceHandler::HandleGetAndroidSmsInfo(const base::ListValue* args) {
-  CHECK_EQ(1U, args->GetList().size());
-  const base::Value* callback_id;
-  CHECK(args->Get(0, &callback_id));
+void MultideviceHandler::HandleGetAndroidSmsInfo(
+    const base::Value::List& args) {
+  const base::Value& callback_id = args[0];
 
-  ResolveJavascriptCallback(*callback_id, *GenerateAndroidSmsInfo());
+  ResolveJavascriptCallback(callback_id, *GenerateAndroidSmsInfo());
 }
 
 void MultideviceHandler::HandleAttemptNotificationSetup(
-    const base::ListValue* args) {
+    const base::Value::List& args) {
   DCHECK(features::IsPhoneHubEnabled());
   DCHECK(!notification_access_operation_);
 
-  phonehub::NotificationAccessManager::AccessStatus access_status =
-      notification_access_manager_->GetAccessStatus();
-  if (access_status != phonehub::NotificationAccessManager::AccessStatus::
-                           kAvailableButNotGranted) {
+  phonehub::MultideviceFeatureAccessManager::AccessStatus
+      notification_access_status =
+          multidevice_feature_access_manager_->GetNotificationAccessStatus();
+  if (notification_access_status != phonehub::MultideviceFeatureAccessManager::
+                                        AccessStatus::kAvailableButNotGranted) {
     PA_LOG(WARNING) << "Cannot request notification access setup flow; current "
-                    << "status: " << access_status;
+                    << "status: " << notification_access_status;
     return;
   }
 
   notification_access_operation_ =
-      notification_access_manager_->AttemptNotificationSetup(/*delegate=*/this);
+      multidevice_feature_access_manager_->AttemptNotificationSetup(
+          /*delegate=*/this);
   DCHECK(notification_access_operation_);
 }
 
 void MultideviceHandler::HandleCancelNotificationSetup(
-    const base::ListValue* args) {
+    const base::Value::List& args) {
   DCHECK(features::IsPhoneHubEnabled());
   DCHECK(notification_access_operation_);
 
   notification_access_operation_.reset();
 }
 
-void MultideviceHandler::OnStatusChange(
+void MultideviceHandler::HandleAttemptAppsSetup(const base::Value::List& args) {
+  DCHECK(features::IsEcheSWAEnabled());
+  DCHECK(!apps_access_operation_);
+
+  phonehub::MultideviceFeatureAccessManager::AccessStatus apps_access_status =
+      apps_access_manager_->GetAccessStatus();
+
+  if (apps_access_status != phonehub::MultideviceFeatureAccessManager::
+                                AccessStatus::kAvailableButNotGranted) {
+    PA_LOG(WARNING) << "Cannot request apps access setup flow; current "
+                    << "status: " << apps_access_status;
+    return;
+  }
+
+  apps_access_operation_ =
+      apps_access_manager_->AttemptAppsAccessSetup(/*delegate=*/this);
+  DCHECK(apps_access_operation_);
+}
+
+void MultideviceHandler::HandleCancelAppsSetup(const base::Value::List& args) {
+  DCHECK(features::IsEcheSWAEnabled());
+  DCHECK(apps_access_operation_);
+
+  apps_access_manager_->NotifyAppsAccessCanceled();
+  apps_access_operation_.reset();
+}
+
+void MultideviceHandler::HandleAttemptCombinedFeatureSetup(
+    const base::Value::List& args) {
+  bool camera_roll = false;
+  if (args[0].is_bool())
+    camera_roll = args[0].GetBool();
+  bool notifications = false;
+  if (args[1].is_bool())
+    notifications = args[1].GetBool();
+
+  DCHECK(features::IsPhoneHubEnabled());
+  DCHECK(!combined_access_operation_);
+
+  if (!multidevice_feature_access_manager_->GetFeatureSetupRequestSupported()) {
+    PA_LOG(WARNING) << "Cannot request combined access setup flow; "
+                    << "FeatureSetupRequest is not supported by the phone.";
+    return;
+  }
+
+  phonehub::MultideviceFeatureAccessManager::AccessStatus
+      notification_access_status =
+          multidevice_feature_access_manager_->GetNotificationAccessStatus();
+  phonehub::MultideviceFeatureAccessManager::AccessStatus
+      camera_roll_access_status =
+          multidevice_feature_access_manager_->GetCameraRollAccessStatus();
+  if (camera_roll_access_status != phonehub::MultideviceFeatureAccessManager::
+                                       AccessStatus::kAvailableButNotGranted &&
+      camera_roll) {
+    PA_LOG(WARNING) << "Cannot request combined access setup flow; current "
+                    << "Camera Roll status: " << camera_roll_access_status;
+    return;
+  }
+  if (notification_access_status != phonehub::MultideviceFeatureAccessManager::
+                                        AccessStatus::kAvailableButNotGranted &&
+      notifications) {
+    PA_LOG(WARNING) << "Cannot request combined access setup flow; current "
+                    << "Notification status: " << notification_access_status;
+    return;
+  }
+
+  combined_access_operation_ =
+      multidevice_feature_access_manager_->AttemptCombinedFeatureSetup(
+          camera_roll, notifications, /*delegate=*/this);
+  DCHECK(combined_access_operation_);
+}
+
+void MultideviceHandler::HandleCancelCombinedFeatureSetup(
+    const base::Value::List& args) {
+  DCHECK(features::IsPhoneHubEnabled());
+  DCHECK(combined_access_operation_);
+
+  combined_access_operation_.reset();
+}
+
+void MultideviceHandler::LogPhoneHubPermissionSetUpScreenAction(
+    const base::Value::List& args) {
+  int setup_screen_int = args[0].GetInt();
+  int setup_action_int = args[1].GetInt();
+  LogPermissionOnboardingDialogAction(
+      static_cast<PermissionsOnboardingStep>(setup_screen_int),
+      static_cast<PermissionsOnboardingScreenEvent>(setup_action_int));
+}
+
+void MultideviceHandler::LogPhoneHubPermissionSetUpButtonClicked(
+    const base::Value::List& args) {
+  int setup_mode = args[0].GetInt();
+  LogPermissionOnboardingSettingsClicked(
+      static_cast<PermissionsOnboardingSetUpMode>(setup_mode));
+}
+
+void MultideviceHandler::OnNotificationStatusChange(
     phonehub::NotificationAccessSetupOperation::Status new_status) {
   FireWebUIListener("settings.onNotificationAccessSetupStatusChanged",
                     base::Value(static_cast<int32_t>(new_status)));
 
   if (phonehub::NotificationAccessSetupOperation::IsFinalStatus(new_status))
     notification_access_operation_.reset();
+}
+
+void MultideviceHandler::OnAppsStatusChange(
+    ash::eche_app::AppsAccessSetupOperation::Status new_status) {
+  FireWebUIListener("settings.onAppsAccessSetupStatusChanged",
+                    base::Value(static_cast<int32_t>(new_status)));
+
+  if (ash::eche_app::AppsAccessSetupOperation::IsFinalStatus(new_status))
+    apps_access_operation_.reset();
+}
+
+void MultideviceHandler::OnCombinedStatusChange(
+    phonehub::CombinedAccessSetupOperation::Status new_status) {
+  FireWebUIListener("settings.onCombinedAccessSetupStatusChanged",
+                    base::Value(static_cast<int32_t>(new_status)));
+
+  if (phonehub::CombinedAccessSetupOperation::IsFinalStatus(new_status))
+    combined_access_operation_.reset();
 }
 
 void MultideviceHandler::OnSetFeatureStateEnabledResult(
@@ -442,84 +671,140 @@ MultideviceHandler::GeneratePageContentDataDictionary() {
   multidevice_setup::MultiDeviceSetupClient::FeatureStatesMap feature_states =
       GetFeatureStatesMap();
 
-  page_content_dictionary->SetInteger(
+  page_content_dictionary->SetIntKey(
       kPageContentDataModeKey,
       static_cast<int32_t>(host_status_with_device.first));
-  page_content_dictionary->SetInteger(
+  page_content_dictionary->SetIntKey(
       kPageContentDataBetterTogetherStateKey,
       static_cast<int32_t>(
           feature_states
               [multidevice_setup::mojom::Feature::kBetterTogetherSuite]));
-  page_content_dictionary->SetInteger(
+  page_content_dictionary->SetIntKey(
       kPageContentDataInstantTetheringStateKey,
       static_cast<int32_t>(
           feature_states
               [multidevice_setup::mojom::Feature::kInstantTethering]));
-  page_content_dictionary->SetInteger(
+  page_content_dictionary->SetIntKey(
       kPageContentDataMessagesStateKey,
       static_cast<int32_t>(
           feature_states[multidevice_setup::mojom::Feature::kMessages]));
-  page_content_dictionary->SetInteger(
+  page_content_dictionary->SetIntKey(
       kPageContentDataSmartLockStateKey,
       static_cast<int32_t>(
           feature_states[multidevice_setup::mojom::Feature::kSmartLock]));
-  page_content_dictionary->SetInteger(
+  page_content_dictionary->SetIntKey(
       kPageContentDataPhoneHubStateKey,
       static_cast<int32_t>(
           feature_states[multidevice_setup::mojom::Feature::kPhoneHub]));
-  page_content_dictionary->SetInteger(
+  auto cameraRoll_feature_state =
+      base::FeatureList::IsEnabled(chromeos::features::kPhoneHubCameraRoll)
+          ? feature_states
+                [multidevice_setup::mojom::Feature::kPhoneHubCameraRoll]
+          : multidevice_setup::mojom::FeatureState::kNotSupportedByChromebook;
+  page_content_dictionary->SetIntKey(
+      kPageContentDataPhoneHubCameraRollStateKey,
+      static_cast<int32_t>(cameraRoll_feature_state));
+  page_content_dictionary->SetIntKey(
       kPageContentDataPhoneHubNotificationsStateKey,
       static_cast<int32_t>(
           feature_states
               [multidevice_setup::mojom::Feature::kPhoneHubNotifications]));
-  page_content_dictionary->SetInteger(
+  page_content_dictionary->SetIntKey(
       kPageContentDataPhoneHubTaskContinuationStateKey,
       static_cast<int32_t>(
           feature_states
               [multidevice_setup::mojom::Feature::kPhoneHubTaskContinuation]));
-  page_content_dictionary->SetInteger(
-      kPageContentDataPhoneHubAppsStateKey,
-      static_cast<int32_t>(
-          feature_states[multidevice_setup::mojom::Feature::kEche]));
+  auto eche_feature_state =
+      base::FeatureList::IsEnabled(chromeos::features::kEcheSWA)
+          ? feature_states[multidevice_setup::mojom::Feature::kEche]
+          : multidevice_setup::mojom::FeatureState::kNotSupportedByChromebook;
+  page_content_dictionary->SetIntKey(kPageContentDataPhoneHubAppsStateKey,
+                                     static_cast<int32_t>(eche_feature_state));
 
-  page_content_dictionary->SetInteger(
+  page_content_dictionary->SetIntKey(
       kPageContentDataWifiSyncStateKey,
       static_cast<int32_t>(
           feature_states[multidevice_setup::mojom::Feature::kWifiSync]));
 
   if (host_status_with_device.second) {
-    page_content_dictionary->SetString(kPageContentDataHostDeviceNameKey,
-                                       host_status_with_device.second->name());
+    page_content_dictionary->SetStringKey(
+        kPageContentDataHostDeviceNameKey,
+        host_status_with_device.second->name());
   }
 
-  page_content_dictionary->SetBoolean(
+  page_content_dictionary->SetBoolKey(
       kIsAndroidSmsPairingComplete,
       android_sms_pairing_state_tracker_
           ? android_sms_pairing_state_tracker_->IsAndroidSmsPairingComplete()
           : false);
 
-  phonehub::NotificationAccessManager::AccessStatus access_status = phonehub::
-      NotificationAccessManager::AccessStatus::kAvailableButNotGranted;
-  if (notification_access_manager_)
-    access_status = notification_access_manager_->GetAccessStatus();
-  page_content_dictionary->SetInteger(kNotificationAccessStatus,
-                                      static_cast<int32_t>(access_status));
+  phonehub::MultideviceFeatureAccessManager::AccessStatus
+      notification_access_status = phonehub::MultideviceFeatureAccessManager::
+          AccessStatus::kAvailableButNotGranted;
+  phonehub::MultideviceFeatureAccessManager::AccessProhibitedReason reason =
+      phonehub::MultideviceFeatureAccessManager::AccessProhibitedReason::
+          kUnknown;
+  if (multidevice_feature_access_manager_) {
+    notification_access_status =
+        multidevice_feature_access_manager_->GetNotificationAccessStatus();
+    reason = multidevice_feature_access_manager_
+                 ->GetNotificationAccessProhibitedReason();
+  }
 
-  // A managed pref is set by an admin policy, and because managed prefs
-  // have the highest priority, this also indicates whether the pref is
-  // actually being controlled by the policy setting. We only care when
-  // Nearby Share is disallowed by policy because the feature needs to be
-  // off and unchangeable by the user. If the Nearby Share is allowed by
-  // policy, the user can choose whether to enable or disable.
+  page_content_dictionary->SetInteger(
+      kNotificationAccessStatus,
+      static_cast<int32_t>(notification_access_status));
+  page_content_dictionary->SetIntKey(kNotificationAccessProhibitedReason,
+                                     static_cast<int32_t>(reason));
+
+  phonehub::MultideviceFeatureAccessManager::AccessStatus
+      camera_roll_access_status = phonehub::MultideviceFeatureAccessManager::
+          AccessStatus::kAvailableButNotGranted;
+  if (multidevice_feature_access_manager_)
+    camera_roll_access_status =
+        multidevice_feature_access_manager_->GetCameraRollAccessStatus();
+  page_content_dictionary->SetInteger(
+      kCameraRollAccessStatus, static_cast<int32_t>(camera_roll_access_status));
+
+  phonehub::MultideviceFeatureAccessManager::AccessStatus apps_access_status =
+      phonehub::MultideviceFeatureAccessManager::AccessStatus::
+          kAvailableButNotGranted;
+  if (apps_access_manager_)
+    apps_access_status = apps_access_manager_->GetAccessStatus();
+
+  page_content_dictionary->SetInteger(kAppsAccessStatus,
+                                      static_cast<int32_t>(apps_access_status));
+
+  bool is_camera_roll_file_permission_granted = false;
+  if (camera_roll_manager_) {
+    is_camera_roll_file_permission_granted =
+        camera_roll_manager_->ui_state() !=
+        ash::phonehub::CameraRollManager::CameraRollUiState::
+            NO_STORAGE_PERMISSION;
+  }
+  page_content_dictionary->SetBoolKey(kIsCameraRollFilePermissionGranted,
+                                      is_camera_roll_file_permission_granted);
+
   bool is_nearby_share_disallowed_by_policy =
       NearbySharingServiceFactory::IsNearbyShareSupportedForBrowserContext(
-          Profile::FromWebUI(web_ui()))
-          ? !prefs_->GetBoolean(::prefs::kNearbySharingEnabledPrefName) &&
-                prefs_->IsManagedPreference(
-                    ::prefs::kNearbySharingEnabledPrefName)
-          : false;
-  page_content_dictionary->SetBoolean(kIsNearbyShareDisallowedByPolicy,
+          Profile::FromWebUI(web_ui())) &&
+      (GetNearbyShareEnabledState(prefs_) ==
+       NearbyShareEnabledState::kDisallowedByPolicy);
+  page_content_dictionary->SetBoolKey(kIsNearbyShareDisallowedByPolicy,
                                       is_nearby_share_disallowed_by_policy);
+
+  bool is_phone_hub_permissions_dialog_supported =
+      features::IsEcheSWAEnabled() || features::IsPhoneHubCameraRollEnabled();
+  page_content_dictionary->SetBoolean(
+      kIsPhoneHubPermissionsDialogSupported,
+      is_phone_hub_permissions_dialog_supported);
+
+  page_content_dictionary->SetBoolKey(
+      kIsPhoneHubFeatureCombinedSetupSupported,
+      multidevice_feature_access_manager_
+          ? multidevice_feature_access_manager_
+                ->GetFeatureSetupRequestSupported()
+          : false);
 
   return page_content_dictionary;
 }
@@ -560,8 +845,33 @@ MultideviceHandler::GetFeatureStatesMap() {
   if (multidevice_setup_client_)
     return multidevice_setup_client_->GetFeatureStates();
 
+  PA_LOG(WARNING)
+      << "MultiDevice setup client missing. Responding to "
+         "GetFeatureStatesMap() request by generating default feature map.";
   return multidevice_setup::MultiDeviceSetupClient::
-      GenerateDefaultFeatureStatesMap();
+      GenerateDefaultFeatureStatesMap(
+          multidevice_setup::mojom::FeatureState::kProhibitedByPolicy);
+}
+
+void MultideviceHandler::OnEnableScreenLockChanged() {
+  // We need to use FireWebUIListener to update value dynamically because
+  // loadTimeData is not recreated on refresh.
+  const bool is_screen_lock_enabled =
+      SessionControllerClientImpl::CanLockScreen() &&
+      SessionControllerClientImpl::ShouldLockScreenAutomatically();
+  FireWebUIListener("settings.OnEnableScreenLockChanged",
+                    base::Value(is_screen_lock_enabled));
+}
+
+void MultideviceHandler::OnScreenLockStatusChanged() {
+  // We need to use FireWebUIListener to update value dynamically because
+  // loadTimeData is not recreated on refresh.
+  const bool is_phone_screen_lock_enabled =
+      static_cast<ash::phonehub::ScreenLockManager::LockStatus>(
+          prefs_->GetInteger(phonehub::prefs::kScreenLockStatus)) ==
+      ash::phonehub::ScreenLockManager::LockStatus::kLockedOn;
+  FireWebUIListener("settings.OnScreenLockStatusChanged",
+                    base::Value(is_phone_screen_lock_enabled));
 }
 
 }  // namespace settings

@@ -10,8 +10,7 @@
 #include "base/bind.h"
 #include "base/callback.h"
 #include "base/files/file_path.h"
-#include "base/sequenced_task_runner.h"
-#include "base/task/post_task.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/time/default_clock.h"
 #include "build/build_config.h"
@@ -28,7 +27,7 @@
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/storage_partition.h"
 
-#ifdef OS_ANDROID
+#if BUILDFLAG(IS_ANDROID)
 #include "components/image_fetcher/image_fetcher_service_provider.h"
 #endif
 
@@ -45,7 +44,7 @@ base::FilePath GetCachePath(SimpleFactoryKey* key) {
   return cache_path.Append(kImageCacheSubdir);
 }
 
-#ifdef OS_ANDROID
+#if BUILDFLAG(IS_ANDROID)
 image_fetcher::ImageFetcherService* GetImageFetcherService(
     SimpleFactoryKey* key) {
   return ImageFetcherServiceFactory::GetForKey(key);
@@ -77,7 +76,7 @@ ImageFetcherServiceFactory::ImageFetcherServiceFactory()
                                 SimpleDependencyManager::GetInstance()) {
 // In order to move the android code to components, we need to push
 // |GetImageFetcherService| to image_fetcher_bridge.
-#ifdef OS_ANDROID
+#if BUILDFLAG(IS_ANDROID)
   image_fetcher::SetImageFetcherServiceProvider(
       base::BindRepeating(&GetImageFetcherService));
 

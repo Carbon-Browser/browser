@@ -11,7 +11,6 @@
 
 #include "ash/public/cpp/app_list/app_list_types.h"
 #include "base/callback.h"
-#include "base/macros.h"
 
 class ChromeSearchResult;
 
@@ -26,10 +25,16 @@ class SearchProvider {
   using ResultChangedCallback = base::RepeatingClosure;
 
   SearchProvider();
+
+  SearchProvider(const SearchProvider&) = delete;
+  SearchProvider& operator=(const SearchProvider&) = delete;
+
   virtual ~SearchProvider();
 
-  // Invoked to start a query.
-  virtual void Start(const std::u16string& query) = 0;
+  // Invoked to start a query search. |query| is guaranteed to be non-empty.
+  virtual void Start(const std::u16string& query) {}
+  // Invoked to start a zero-state search.
+  virtual void StartZeroState() {}
   // Invoked when the UI view closes. In response, the |SearchProvider| may
   // clear its caches.
   virtual void ViewClosing() {}
@@ -37,11 +42,13 @@ class SearchProvider {
   // training signals for results of any |RankingItemType|, so it is the
   // |SearchProvider|'s responsibility to check |type| and ignore if necessary.
   virtual void Train(const std::string& id, RankingItemType type) {}
-  // Invoked when the app list is shown. This can optionally be used by a
-  // provider to eg. warm up a cache of results.
-  virtual void AppListShown() {}
   // Returns the main result type created by this provider.
-  virtual ash::AppListSearchResultType ResultType() = 0;
+  virtual ash::AppListSearchResultType ResultType() const = 0;
+
+  // Returns true if this provider should prevent zero-state results from being
+  // published until it has returned. If this is true, a provider should only
+  // return results once per call to StartZeroState.
+  virtual bool ShouldBlockZeroState() const;
 
   void set_controller(SearchController* controller) {
     search_controller_ = controller;
@@ -62,20 +69,22 @@ class SearchProvider {
   // desired to be done only once when all results are added.
   void SwapResults(Results* new_results);
 
-  // Clear results and call the |result_changed_callback_|.
+  // Clear results and call the |result_changed_callback_|. This is a no-op if
+  // categorical search is enabled, since clearing results is handled by the
+  // search controller.
   void ClearResults();
 
-  // Clear the results without calling the |result_changed_callback_|.
+  // Clear the results without calling the |result_changed_callback_|. this is a
+  // no-op if categorical search is enabled, since clearing results is handled
+  // by the search controller.
   void ClearResultsSilently();
 
  private:
   void FireResultChanged();
 
   ResultChangedCallback result_changed_callback_;
-  SearchController* search_controller_;
+  SearchController* search_controller_ = nullptr;
   Results results_;
-
-  DISALLOW_COPY_AND_ASSIGN(SearchProvider);
 };
 
 }  // namespace app_list

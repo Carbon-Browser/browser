@@ -30,7 +30,7 @@ namespace credential_provider {
 
 const base::TimeDelta
     GemDeviceDetailsManager::kDefaultUploadDeviceDetailsRequestTimeout =
-        base::TimeDelta::FromMilliseconds(12000);
+        base::Milliseconds(12000);
 
 namespace {
 
@@ -62,8 +62,7 @@ const wchar_t kUploadDeviceDetailsFromEsaEnabledRegKey[] =
     L"upload_device_details_from_esa";
 
 // The period of uploading device details to the backend.
-const base::TimeDelta kUploadDeviceDetailsExecutionPeriod =
-    base::TimeDelta::FromHours(3);
+const base::TimeDelta kUploadDeviceDetailsExecutionPeriod = base::Hours(3);
 
 // True when upload device details from ESA feature  is enabled.
 bool g_upload_device_details_from_esa_enabled = false;
@@ -168,8 +167,8 @@ HRESULT GemDeviceDetailsManager::UploadDeviceDetails(
   wchar_t found_domain[kWindowsDomainBufferLength] = {};
 
   status = OSUserManager::Get()->FindUserBySidWithFallback(
-      context.user_sid.c_str(), found_username, base::size(found_username),
-      found_domain, base::size(found_domain));
+      context.user_sid.c_str(), found_username, std::size(found_username),
+      found_domain, std::size(found_domain));
   if (FAILED(status)) {
     LOGFN(ERROR) << "Could not get username and domain from sid "
                  << context.user_sid;

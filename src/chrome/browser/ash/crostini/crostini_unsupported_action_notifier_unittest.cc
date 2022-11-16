@@ -13,14 +13,13 @@
 
 namespace crostini {
 
+using ::ash::input_method::InputMethodDescriptor;
 using ::testing::_;
 using ::testing::Bool;
 using ::testing::Combine;
 using ::testing::NiceMock;
 using ::testing::Return;
 using ::testing::Truly;
-
-using chromeos::input_method::InputMethodDescriptor;
 
 class MockDelegate : public CrostiniUnsupportedActionNotifier::Delegate {
  public:
@@ -33,7 +32,7 @@ class MockDelegate : public CrostiniUnsupportedActionNotifier::Delegate {
               (const InputMethodDescriptor& descriptor),
               (override));
   MOCK_METHOD(InputMethodDescriptor, GetCurrentInputMethod, (), (override));
-  MOCK_METHOD(int, ToastTimeoutMs, (), (override));
+  MOCK_METHOD(base::TimeDelta, ToastTimeout, (), (override));
   MOCK_METHOD(void,
               AddFocusObserver,
               (aura::client::FocusChangeObserver * observer),
@@ -52,11 +51,11 @@ class MockDelegate : public CrostiniUnsupportedActionNotifier::Delegate {
               (override));
   MOCK_METHOD(void,
               AddInputMethodObserver,
-              (chromeos::input_method::InputMethodManager::Observer * observer),
+              (ash::input_method::InputMethodManager::Observer * observer),
               (override));
   MOCK_METHOD(void,
               RemoveInputMethodObserver,
-              (chromeos::input_method::InputMethodManager::Observer * observer),
+              (ash::input_method::InputMethodManager::Observer * observer),
               (override));
   MOCK_METHOD(void,
               AddKeyboardControllerObserver,
@@ -84,7 +83,7 @@ class CrostiniUnsupportedActionNotifierTest
  public:
   CrostiniUnsupportedActionNotifierTest()
       : notifier(std::make_unique<NiceMock<MockDelegate>>()) {}
-  virtual ~CrostiniUnsupportedActionNotifierTest() = default;
+  ~CrostiniUnsupportedActionNotifierTest() override = default;
 
   MockDelegate& get_delegate() {
     auto* ptr = notifier.get_delegate_for_testing();
@@ -190,8 +189,8 @@ TEST_P(CrostiniUnsupportedActionNotifierTest,
   notifier.OnWindowFocused({}, {});
 }
 
-INSTANTIATE_TEST_CASE_P(CrostiniUnsupportedActionNotifierTestCombination,
-                        CrostiniUnsupportedActionNotifierTest,
-                        Combine(Bool(), Bool(), Bool(), Bool()));
+INSTANTIATE_TEST_SUITE_P(CrostiniUnsupportedActionNotifierTestCombination,
+                         CrostiniUnsupportedActionNotifierTest,
+                         Combine(Bool(), Bool(), Bool(), Bool()));
 
 }  // namespace crostini

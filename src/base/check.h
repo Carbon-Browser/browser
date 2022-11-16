@@ -82,20 +82,20 @@ class BASE_EXPORT CheckError {
                                    int line,
                                    const char* function);
 
+  static CheckError NotReached(const char* file, int line);
+
   // Stream for adding optional details to the error message.
   std::ostream& stream();
 
   NOMERGE ~CheckError();
 
-  CheckError(const CheckError& other) = delete;
-  CheckError& operator=(const CheckError& other) = delete;
-  CheckError(CheckError&& other) = default;
-  CheckError& operator=(CheckError&& other) = default;
+  CheckError(const CheckError&) = delete;
+  CheckError& operator=(const CheckError&) = delete;
 
  private:
   explicit CheckError(LogMessage* log_message);
 
-  LogMessage* log_message_;
+  LogMessage* const log_message_;
 };
 
 #if defined(OFFICIAL_BUILD) && defined(NDEBUG)
@@ -108,6 +108,8 @@ class BASE_EXPORT CheckError {
 #define CHECK(condition) \
   UNLIKELY(!(condition)) ? IMMEDIATE_CRASH() : EAT_CHECK_STREAM_PARAMS()
 
+#define CHECK_WILL_STREAM() false
+
 #define PCHECK(condition)                                         \
   LAZY_CHECK_STREAM(                                              \
       ::logging::CheckError::PCheck(__FILE__, __LINE__).stream(), \
@@ -119,6 +121,8 @@ class BASE_EXPORT CheckError {
   LAZY_CHECK_STREAM(                                                         \
       ::logging::CheckError::Check(__FILE__, __LINE__, #condition).stream(), \
       !ANALYZER_ASSUME_TRUE(condition))
+
+#define CHECK_WILL_STREAM() true
 
 #define PCHECK(condition)                                                     \
   LAZY_CHECK_STREAM(                                                          \

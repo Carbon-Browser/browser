@@ -20,6 +20,8 @@ import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.settings.SettingsLauncherImpl;
 import org.chromium.chrome.browser.signin.services.UnifiedConsentServiceBridge;
 import org.chromium.chrome.browser.sync.settings.GoogleServicesSettings;
+import org.chromium.components.autofill_assistant.AssistantFeatures;
+import org.chromium.components.autofill_assistant.AutofillAssistantPreferencesUtil;
 import org.chromium.components.browser_ui.settings.ChromeSwitchPreference;
 import org.chromium.components.browser_ui.settings.SettingsLauncher;
 import org.chromium.components.browser_ui.settings.SettingsUtils;
@@ -67,8 +69,7 @@ public class AutofillAssistantPreferenceFragment extends PreferenceFragmentCompa
                 (ChromeSwitchPreference) findPreference(PREF_AUTOFILL_ASSISTANT);
         if (shouldShowAutofillAssistantPreference()) {
             mAutofillAssistantPreference.setOnPreferenceChangeListener((preference, newValue) -> {
-                mSharedPreferencesManager.writeBoolean(
-                        ChromePreferenceKeys.AUTOFILL_ASSISTANT_ENABLED, (boolean) newValue);
+                AutofillAssistantPreferencesUtil.setAssistantEnabledPreference((boolean) newValue);
                 updatePreferencesState();
                 return true;
             });
@@ -80,8 +81,7 @@ public class AutofillAssistantPreferenceFragment extends PreferenceFragmentCompa
                 (ChromeSwitchPreference) findPreference(PREF_ASSISTANT_PROACTIVE_HELP_SWITCH);
         if (shouldShowAutofillAssistantProactiveHelpPreference()) {
             mProactiveHelpPreference.setOnPreferenceChangeListener((preference, newValue) -> {
-                mSharedPreferencesManager.writeBoolean(
-                        ChromePreferenceKeys.AUTOFILL_ASSISTANT_PROACTIVE_HELP, (boolean) newValue);
+                AutofillAssistantPreferencesUtil.setProactiveHelpPreference((boolean) newValue);
                 updatePreferencesState();
                 return true;
             });
@@ -90,7 +90,7 @@ public class AutofillAssistantPreferenceFragment extends PreferenceFragmentCompa
         }
 
         mGoogleServicesSettingsLink = findPreference(PREF_GOOGLE_SERVICES_SETTINGS_LINK);
-        NoUnderlineClickableSpan linkSpan = new NoUnderlineClickableSpan(getResources(), view -> {
+        NoUnderlineClickableSpan linkSpan = new NoUnderlineClickableSpan(getContext(), view -> {
             SettingsLauncher settingsLauncher = new SettingsLauncherImpl();
             settingsLauncher.launchSettingsActivity(requireContext(), GoogleServicesSettings.class);
         });
@@ -102,7 +102,8 @@ public class AutofillAssistantPreferenceFragment extends PreferenceFragmentCompa
                 findPreference(PREF_ASSISTANT_VOICE_SEARCH_CATEGORY);
         mAssistantVoiceSearchEnabledPref =
                 (ChromeSwitchPreference) findPreference(PREF_ASSISTANT_VOICE_SEARCH_ENABLED_SWTICH);
-        if (ChromeFeatureList.isEnabled(ChromeFeatureList.OMNIBOX_ASSISTANT_VOICE_SEARCH)) {
+        if (!ChromeFeatureList.isEnabled(ChromeFeatureList.ASSISTANT_NON_PERSONALIZED_VOICE_SEARCH)
+                && ChromeFeatureList.isEnabled(ChromeFeatureList.OMNIBOX_ASSISTANT_VOICE_SEARCH)) {
             mAssistantVoiceSearchEnabledPref.setOnPreferenceChangeListener((preference,
                                                                                    newValue) -> {
                 SharedPreferencesManager.getInstance().writeBoolean(
@@ -125,13 +126,12 @@ public class AutofillAssistantPreferenceFragment extends PreferenceFragmentCompa
     }
 
     private boolean shouldShowAutofillAssistantPreference() {
-        return ChromeFeatureList.isEnabled(ChromeFeatureList.AUTOFILL_ASSISTANT)
-                && mSharedPreferencesManager.contains(
-                        ChromePreferenceKeys.AUTOFILL_ASSISTANT_ENABLED);
+        return AssistantFeatures.AUTOFILL_ASSISTANT.isEnabled()
+                && AutofillAssistantPreferencesUtil.containsAssistantEnabledPreference();
     }
 
     private boolean shouldShowAutofillAssistantProactiveHelpPreference() {
-        return ChromeFeatureList.isEnabled(ChromeFeatureList.AUTOFILL_ASSISTANT_PROACTIVE_HELP);
+        return AssistantFeatures.AUTOFILL_ASSISTANT_PROACTIVE_HELP.isEnabled();
     }
 
     private boolean shouldShowWebAssistanceCategory() {
@@ -140,8 +140,8 @@ public class AutofillAssistantPreferenceFragment extends PreferenceFragmentCompa
     }
 
     private void updatePreferencesState() {
-        boolean autofill_assistant_enabled = SharedPreferencesManager.getInstance().readBoolean(
-                ChromePreferenceKeys.AUTOFILL_ASSISTANT_ENABLED, true);
+        boolean autofill_assistant_enabled =
+                AutofillAssistantPreferencesUtil.getAssistantEnabledPreference(true);
         mAutofillAssistantPreference.setChecked(autofill_assistant_enabled);
 
         boolean assistant_switch_on_or_missing =
@@ -150,12 +150,11 @@ public class AutofillAssistantPreferenceFragment extends PreferenceFragmentCompa
                 UnifiedConsentServiceBridge.isUrlKeyedAnonymizedDataCollectionEnabled(
                         Profile.getLastUsedRegularProfile());
 
-        boolean proactive_help_on = SharedPreferencesManager.getInstance().readBoolean(
-                ChromePreferenceKeys.AUTOFILL_ASSISTANT_PROACTIVE_HELP, true);
+        boolean proactive_help_on =
+                AutofillAssistantPreferencesUtil.getProactiveHelpPreference(true);
         boolean proactive_toggle_enabled;
         boolean show_disclaimer;
-        if (ChromeFeatureList.isEnabled(
-                    ChromeFeatureList.AUTOFILL_ASSISTANT_DISABLE_PROACTIVE_HELP_TIED_TO_MSBB)) {
+        if (AssistantFeatures.AUTOFILL_ASSISTANT_DISABLE_PROACTIVE_HELP_TIED_TO_MSBB.isEnabled()) {
             proactive_toggle_enabled = assistant_switch_on_or_missing;
             show_disclaimer = false;
         } else {

@@ -34,7 +34,7 @@
       Jika dasar ini dibiarkan tidak ditetapkan, tetapan yang dipilih oleh pengguna semasa pemasangan/jalanan pertama akan digunakan.
 
       Dasar ini hanya tersedia pada tika Windows yang dihubungkan ke domain <ph name="MS_AD_NAME" /> atau tika Windows 10 Pro atau Enterprise yang didaftarkan untuk pengurusan peranti.
-      (Untuk OS Carbon Browser Browser Browser, lihat DeviceMetricsReportingEnabled.)</translation>
+      (Untuk OS Carbon Browser, lihat DeviceMetricsReportingEnabled.)</translation>
 <translation id="1035385378988781231">Dasar ini mengawal sama ada ciri Perkongsian Fail Rangkaian bagi <ph name="PRODUCT_NAME" /> akan menggunakan NTLM untuk pengesahan.
 
       Apabila dasar ini ditetapkan kepada Benar, NTLM akan digunakan untuk pengesahan kepada perkongsian SMB jika perlu.
@@ -124,13 +124,13 @@
       Menentukan tempoh sebelum penyelamat skrin dipaparkan pada skrin log masuk untuk peranti dalam mod runcit.
 
       Nilai dasar perlu dinyatakan dalam milisaat.</translation>
-<translation id="1141767714195601945">Dasar ini mengawal parameter baris perintah untuk Carbon Browser Browser Browser daripada Internet Explorer.
+<translation id="1141767714195601945">Dasar ini mengawal parameter baris perintah untuk Carbon Browser daripada Internet Explorer.
 
       Jika alat tambah 'Sokongan Penyemak Imbas Lama' untuk Internet Explorer tidak dipasang, dasar ini tidak dikuatkuasakan.
 
-      Apabila dasar ini dibiarkan tidak ditetapkan, Internet Explorer hanya menyampaikan URL kepada Carbon Browser Browser Browser sebagai parameter baris perintah.
+      Apabila dasar ini dibiarkan tidak ditetapkan, Internet Explorer hanya menyampaikan URL kepada Carbon Browser sebagai parameter baris perintah.
 
-      Apabila dasar ini ditetapkan kepada satu senarai rentetan, rentetan tersebut akan disertai ruang dan disampaikan kepada Carbon Browser Browser Browser sebagai parameter baris perintah.
+      Apabila dasar ini ditetapkan kepada satu senarai rentetan, rentetan tersebut akan disertai ruang dan disampaikan kepada Carbon Browser sebagai parameter baris perintah.
 
       Jika elemen mengandungi ${url}, elemen itu akan digantikan dengan URL bagi halaman yang akan dibuka.
 
@@ -269,7 +269,7 @@
 
       Setiap item senarai dasar ini ialah rentetan yang mengandungi ID sambungan dan URL "kemas kini" yang dipisahkan oleh koma bertitik (<ph name="SEMICOLON" />). ID sambungan ialah rentetan 32 huruf yang ditemui misalnya pada <ph name="CHROME_EXTENSIONS_LINK" /> semasa dalam mod pembangun. URL "kemas kini" hendaklah menunjukkan ke arah dokumen XML Manifes Kemas Kini seperti yang diterangkan di <ph name="LINK_TO_EXTENSION_DOC1" />. Ambil perhatian bahawa URL "kemas kini" yang ditetapkan dalam dasar ini hanya digunakan untuk pemasangan awal; kemas kini sambungan yang berikutnya menggunakan URL kemas kini yang dinyatakan dalam manifes sambungan.
 
-      Contohnya, <ph name="EXTENSION_POLICY_EXAMPLE" /> memasang apl <ph name="EXTENSION_POLICY_EXAMPLE_EXTENSION_NAME" /> daripada URL "kemas kini" Gedung Web Carbon Browser Browser Browser yang standard. Untuk mendapatkan maklumat lanjut tentang mengehoskan sambungan, lihat: <ph name="LINK_TO_EXTENSION_DOC2" />.</translation>
+      Contohnya, <ph name="EXTENSION_POLICY_EXAMPLE" /> memasang apl <ph name="EXTENSION_POLICY_EXAMPLE_EXTENSION_NAME" /> daripada URL "kemas kini" Gedung Web Carbon Browser yang standard. Untuk mendapatkan maklumat lanjut tentang mengehoskan sambungan, lihat: <ph name="LINK_TO_EXTENSION_DOC2" />.</translation>
 <translation id="1435659902881071157">Konfigurasi rangkaian tahap peranti</translation>
 <translation id="1438739959477268107">Tetapan penghasilan kunci lalai</translation>
 <translation id="1454846751303307294">Membolehkan anda menetapkan senarai pola url yang menentukan tapak yang tidak dibenarkan untuk menjalankan JavaScript.
@@ -430,11 +430,11 @@
 
       Jika dasar ini tidak ditetapkan, kefungsian kemas kini perisian tegar <ph name="TPM_FIRMWARE_UPDATE_TPM" /> tidak akan tersedia.</translation>
 <translation id="1708496595873025510">Tetapkan sekatan terhadap pengambilan benih Variasi</translation>
-<translation id="1717817358640580294">Jika tidak ditetapkan, sekiranya Pembersih Carbon Browser Browser Browser mengesan perisian yang tidak diingini, Pembersih Carbon Browser Browser Browser boleh melaporkan metadata tentang pengimbasan tersebut kepada Google mengikut dasar yang ditetapkan oleh SafeBrowsingExtendedReportingEnabled. Kemudian Pembersih Carbon Browser Browser Browser akan bertanya kepada pengguna sama ada mereka ingin memadamkan perisian yang tidak diingini. Pengguna boleh memilih untuk berkongsi keputusan pembersihan dengan Google untuk membantu pengesanan perisian yang tidak diingini pada masa akan datang. Keputusan ini mengandungi metadata fail, sambungan yang dipasang secara automatik dan kunci pendaftaran seperti yang diterangkan oleh Kertas Putih Privasi Carbon Browser Browser Browser.
+<translation id="1717817358640580294">Jika tidak ditetapkan, sekiranya Pembersih Carbon Browser mengesan perisian yang tidak diingini, Pembersih Carbon Browser boleh melaporkan metadata tentang pengimbasan tersebut kepada Google mengikut dasar yang ditetapkan oleh SafeBrowsingExtendedReportingEnabled. Kemudian Pembersih Carbon Browser akan bertanya kepada pengguna sama ada mereka ingin memadamkan perisian yang tidak diingini. Pengguna boleh memilih untuk berkongsi keputusan pembersihan dengan Google untuk membantu pengesanan perisian yang tidak diingini pada masa akan datang. Keputusan ini mengandungi metadata fail, sambungan yang dipasang secara automatik dan kunci pendaftaran seperti yang diterangkan oleh Kertas Putih Privasi Carbon Browser.
 
-      Jika dilumpuhkan, sekiranya Pembersih Carbon Browser Browser Browser mengesan perisian yang tidak diingini, Pembersih Carbon Browser Browser Browser tidak akan melaporkan metadata tentang pengimbasan kepada Google dan mengatasi sebarang dasar yang ditetapkan oleh SafeBrowsingExtendedReportingEnabled. Pembersih Carbon Browser Browser Browser akan bertanya kepada pengguna sama ada mereka ingin memadamkan perisian yang tidak diingini.  Keputusan pembersihan tidak akan dilaporkan kepada Google dan pengguna tidak akan mempunyai pilihan untuk melakukannya.
+      Jika dilumpuhkan, sekiranya Pembersih Carbon Browser mengesan perisian yang tidak diingini, Pembersih Carbon Browser tidak akan melaporkan metadata tentang pengimbasan kepada Google dan mengatasi sebarang dasar yang ditetapkan oleh SafeBrowsingExtendedReportingEnabled. Pembersih Carbon Browser akan bertanya kepada pengguna sama ada mereka ingin memadamkan perisian yang tidak diingini.  Keputusan pembersihan tidak akan dilaporkan kepada Google dan pengguna tidak akan mempunyai pilihan untuk melakukannya.
 
-      Jika didayakan, sekiranya Pembersih Carbon Browser Browser Browser mengesan perisian yang tidak diingini, Pembersih Carbon Browser Browser Browser boleh melaporkan metadata tentang pengimbasan tersebut kepada Google mengikut dasar yang ditetapkan oleh SafeBrowsingExtendedReportingEnabled. Pembersih Carbon Browser Browser Browser akan bertanya kepada pengguna sama ada mereka ingin memadamkan perisian yang tidak diingini.  Keputusan pembersihan akan dilaporkan kepada Google dan pengguna tidak akan mempunyai pilihan untuk menghalangnya.
+      Jika didayakan, sekiranya Pembersih Carbon Browser mengesan perisian yang tidak diingini, Pembersih Carbon Browser boleh melaporkan metadata tentang pengimbasan tersebut kepada Google mengikut dasar yang ditetapkan oleh SafeBrowsingExtendedReportingEnabled. Pembersih Carbon Browser akan bertanya kepada pengguna sama ada mereka ingin memadamkan perisian yang tidak diingini.  Keputusan pembersihan akan dilaporkan kepada Google dan pengguna tidak akan mempunyai pilihan untuk menghalangnya.
 
       Dasar ini hanya tersedia pada tika Windows yang dihubungkan ke domain <ph name="MS_AD_NAME" /> atau tika Windows 10 Pro atau Enterprise yang didaftarkan untuk pengurusan peranti.</translation>
 <translation id="172374442286684480">Benarkan semua tapak menetapkan data setempat</translation>
@@ -630,7 +630,7 @@
 <translation id="2073552873076775140">Benarkan log masuk ke <ph name="PRODUCT_NAME" /></translation>
 <translation id="2077129598763517140">Gunakan pecutan perkakasan apabila tersedia</translation>
 <translation id="2077273864382355561">Kelewatan pemadaman skrin apabila dijalankan dengan kuasa bateri</translation>
-<translation id="2082205219176343977">Konfigurasikan versi Carbon Browser Browser Browser minimum yang dibenarkan untuk peranti ini.</translation>
+<translation id="2082205219176343977">Konfigurasikan versi Carbon Browser minimum yang dibenarkan untuk peranti ini.</translation>
 <translation id="209586405398070749">Saluran stabil</translation>
 <translation id="2098658257603918882">Dayakan laporan penggunaan dan data berkaitan nahas</translation>
 <translation id="2104418465060359056">Laporkan maklumat Sambungan dan Pemalam</translation>
@@ -675,7 +675,7 @@
       Jika anda melumpuhkan tetapan ini atau membiarkannya tanpa ditetapkan, mana-mana halaman pengesahan portal terbolot akan dipaparkan dalam tab penyemak imbas baharu (biasa), menggunakan tetapan proksi pengguna semasa.</translation>
 <translation id="21394354835637379">Membolehkan anda menentukan URL yang dibenarkan untuk memasang sambungan, apl dan tema.
 
-          Bermula pada <ph name="PRODUCT_NAME" /> 21, pemasangan sambungan, apl dan skrip pengguna dari luar Gedung Web Carbon Browser Browser Browser akan menjadi lebih sukar. Sebelum ini pengguna boleh mengklik pada pautan ke fail *.crx dan <ph name="PRODUCT_NAME" /> akan menawarkan pemasangan fail selepas beberapa amaran. Selepas <ph name="PRODUCT_NAME" /> 21, fail tersebut mesti dimuat turun dan diseret ke halaman tetapan <ph name="PRODUCT_NAME" />. Tetapan ini membolehkan URL tertentu mempunyai aliran pemasangan lama yang lebih mudah.
+          Bermula pada <ph name="PRODUCT_NAME" /> 21, pemasangan sambungan, apl dan skrip pengguna dari luar Gedung Web Carbon Browser akan menjadi lebih sukar. Sebelum ini pengguna boleh mengklik pada pautan ke fail *.crx dan <ph name="PRODUCT_NAME" /> akan menawarkan pemasangan fail selepas beberapa amaran. Selepas <ph name="PRODUCT_NAME" /> 21, fail tersebut mesti dimuat turun dan diseret ke halaman tetapan <ph name="PRODUCT_NAME" />. Tetapan ini membolehkan URL tertentu mempunyai aliran pemasangan lama yang lebih mudah.
 
           Setiap item dalam senarai ini ialah pola padanan gaya sambungan (lihat https://developer.chrome.com/extensions/match_patterns). Pengguna akan dapat memasang item dengan mudah daripada mana-mana URL yang sepadan dengan item dalam senarai ini. Lokasi fail *.crx dan halaman tempat muat turun bermula (iaitu perujuk) mesti dibenarkan oleh pola ini.
 
@@ -751,11 +751,11 @@
 
       Apabila dasar ditetapkan kepada dilumpuhkan atau tidak ditetapkan, halaman tidak dibenarkan untuk memaparkan tetingkap timbul semasa dinyahmuat, seperti yang dinyatakan dalam spesifikasi (https://html.spec.whatwg.org/#apis-for-creating-and-navigating-browsing-contexts-by-name).
 
-      Dasar ini akan dialih keluar dalam Carbon Browser Browser Browser 82.
+      Dasar ini akan dialih keluar dalam Carbon Browser 82.
 
       Lihat https://www.chromestatus.com/feature/5989473649164288 .</translation>
 <translation id="2269319728625047531">Dayakan pemaparan Persetujuan Penyegerakan semasa log masuk</translation>
-<translation id="2274864612594831715">Dasar ini mengkonfigurasi mendayakan papan kekunci maya sebagai peranti input pada Carbon Browser Browser BrowserOS. Pengguna tidak boleh mengatasi dasar ini.
+<translation id="2274864612594831715">Dasar ini mengkonfigurasi mendayakan papan kekunci maya sebagai peranti input pada Carbon BrowserOS. Pengguna tidak boleh mengatasi dasar ini.
 
       Jika dasar ditetapkan kepada benar, papan kekunci maya pada skrin akan sentiasa didayakan.
 
@@ -825,9 +825,9 @@
 <translation id="2463034609187171371">Mendayakan suit sifer DHE dalam TLS</translation>
 <translation id="2463365186486772703">Kawasan lingkung aplikasi</translation>
 <translation id="2466131534462628618">Pengesahan portal tawanan mengabaikan proksi</translation>
-<translation id="2471748297300970300">Jika dilumpuhkan, dasar ini menghalang amaran keselamatan daripada dipaparkan apabila Carbon Browser Browser Browser dilancarkan dengan beberapa bendera baris perintah yang mungkin berbahaya.
+<translation id="2471748297300970300">Jika dilumpuhkan, dasar ini menghalang amaran keselamatan daripada dipaparkan apabila Carbon Browser dilancarkan dengan beberapa bendera baris perintah yang mungkin berbahaya.
 
-          Jika didayakan atau tidak ditetapkan amaran keselamatan akan dipaparkan apabila beberapa bendera baris perintah digunakan untuk melancarkan Carbon Browser Browser Browser.
+          Jika didayakan atau tidak ditetapkan amaran keselamatan akan dipaparkan apabila beberapa bendera baris perintah digunakan untuk melancarkan Carbon Browser.
 
           Pada Windows, dasar ini hanya tersedia pada tika yang dihubungkan ke domain <ph name="MS_AD_NAME" /> atau tika Windows 10 Pro atau Enterprise yang didaftarkan untuk pengurusan peranti.</translation>
 <translation id="2482676533225429905">Pemesejan Natif</translation>
@@ -946,7 +946,7 @@
           URL carian Google boleh ditentukan sebagai: <ph name="GOOGLE_SEARCH_URL" />.
 
           Pilihan ini hendaklah ditetapkan apabila dasar 'DefaultSearchProviderEnabled' didayakan dan hanya akan diambil kira dalam keadaan ini.</translation>
-<translation id="2659019163577049044">Jika tetapan ini didayakan, pengguna akan dibenarkan untuk menyediakan peranti mereka bagi menyegerakkan mesej SMS antara telefon mereka dengan Carbon Browser Browser Browserbook. Sila ambil perhatian bahawa jika dasar ini dibenarkan, pengguna mesti mengikut serta ciri ini secara eksplisit dengan melengkapkan aliran penyediaan. Setelah aliran penyediaan lengkap, pengguna akan dapat menghantar dan menerima mesej SMS pada Carbon Browser Browser Browserbook mereka.
+<translation id="2659019163577049044">Jika tetapan ini didayakan, pengguna akan dibenarkan untuk menyediakan peranti mereka bagi menyegerakkan mesej SMS antara telefon mereka dengan Carbon Browserbook. Sila ambil perhatian bahawa jika dasar ini dibenarkan, pengguna mesti mengikut serta ciri ini secara eksplisit dengan melengkapkan aliran penyediaan. Setelah aliran penyediaan lengkap, pengguna akan dapat menghantar dan menerima mesej SMS pada Carbon Browserbook mereka.
 
       Jika tetapan ini dilumpuhkan, pengguna tidak akan dibenarkan untuk menyediakan penyegerakan SMS.
 
@@ -964,7 +964,7 @@
 <translation id="2706708761587205154">Benarkan pencetakan dengan PIN sahaja</translation>
 <translation id="2710534340210290498">Jika dasar ini ditetapkan kepada palsu, pengguna tidak akan dapat mengunci skrin (hanya log keluar daripada sesi pengguna boleh dilakukan). Jika tetapan ini ditetapkan kepada benar atau tidak ditetapkan, pengguna yang membuat pengesahan dengan kata laluan boleh mengunci skrin.</translation>
 <translation id="2731627323327011390">Lumpuhkan penggunaan sijil <ph name="PRODUCT_OS_NAME" /> pada apl ARC</translation>
-<translation id="2742843273354638707">Sembunyikan apl Gedung Web Carbon Browser Browser Browser dan pautan pembawah daripada Halaman Tab Baharu dan pelancar apl <ph name="PRODUCT_OS_NAME" />.
+<translation id="2742843273354638707">Sembunyikan apl Gedung Web Carbon Browser dan pautan pembawah daripada Halaman Tab Baharu dan pelancar apl <ph name="PRODUCT_OS_NAME" />.
 
       Apabila dasar ini ditetapkan kepada benar, ikon akan disembunyikan.
 
@@ -1008,7 +1008,7 @@
 <translation id="2801155097555584385">Menetapkan permulaan pengecasan tersuai dalam peratus bagi pengecasan bateri</translation>
 <translation id="2801230735743888564">Membolehkan pengguna bermain permainan telur easter dinosaur apabila peranti di luar talian.
 
-      Jika dasar ini ditetapkan kepada Palsu, pengguna tidak akan dapat bermain permainan telur easter dinosaur apabila peranti di luar talian. Jika tetapan ini ditetapkan kepada Benar, pengguna dibenarkan bermain permainan dinosaur. Jika dasar ini tidak ditetapkan, pengguna tidak dibenarkan bermain permainan telur easter dinosaur pada OS Carbon Browser Browser Browser berdaftar, tetapi dibenarkan bermain menurut keadaan lain.</translation>
+      Jika dasar ini ditetapkan kepada Palsu, pengguna tidak akan dapat bermain permainan telur easter dinosaur apabila peranti di luar talian. Jika tetapan ini ditetapkan kepada Benar, pengguna dibenarkan bermain permainan dinosaur. Jika dasar ini tidak ditetapkan, pengguna tidak dibenarkan bermain permainan telur easter dinosaur pada OS Carbon Browser berdaftar, tetapi dibenarkan bermain menurut keadaan lain.</translation>
 <translation id="2802085784857530815">Membolehkan anda mengawal sama ada pengguna boleh mengakses pencetak bukan perusahaan
 
       Jika dasar ini ditetapkan kepada Benar atau tidak ditetapkan sama sekali, pengguna boleh menambah, mengkonfigurasi dan mencetak menggunakan pencetak asli mereka sendiri.
@@ -1027,12 +1027,12 @@
       Apabila dasar ini ditetapkan kepada senarai selang masa yang tidak kosong:
       Peranti tidak akan dapat menyemak kemas kini secara automatik semasa selang waktu yang ditentukan. Peranti yang memerlukan pengunduran atau berada bawah versi minimum <ph name="PRODUCT_OS_NAME" /> tidak akan terjejas oleh dasar ini disebabkan isu keselamatan yang mungkin berlaku. Di samping itu, dasar ini tidak akan menyekat semakan kemas kini yang diminta oleh pengguna atau pentadbir.
       Apabila dasar ini tidak ditetapkan atau tidak mengandungi selang masa:
-      Semakan kemas kini automatik tidak akan disekat oleh dasar ini, tetapi mungkin disekat oleh dasar lain. Ciri ini hanya didayakan pada peranti Carbon Browser Browser Browser yang dikonfigurasikan sebagai kios autolancar. Peranti lain tidak akan disekat oleh dasar ini.</translation>
+      Semakan kemas kini automatik tidak akan disekat oleh dasar ini, tetapi mungkin disekat oleh dasar lain. Ciri ini hanya didayakan pada peranti Carbon Browser yang dikonfigurasikan sebagai kios autolancar. Peranti lain tidak akan disekat oleh dasar ini.</translation>
 <translation id="2823870601012066791">Lokasi pendaftaran Windows untuk pelanggan <ph name="PRODUCT_OS_NAME" />:</translation>
 <translation id="2824715612115726353">Dayakan mod Inkognito</translation>
 <translation id="2836621397261130126">Mengawal sama ada kelulusan oleh dasar KDC dipatuhi untuk memutuskan sama ada untuk menetapkan tiket <ph name="KERBEROS" />.
 
-          Jika dasar ini ditetapkan kepada benar, pengesahan HTTP mematuhi kelulusan oleh dasar KDC, iaitu Carbon Browser Browser Browser hanya menetapkan bukti kelayakan jika KDC menetapkan <ph name="OK_AS_DELEGATE" /> pada tiket perkhidmatan. Sila lihat https://tools.ietf.org/html/rfc5896.html untuk mendapatkan maklumat lanjut. Perkhidmatan juga harus sepadan dengan dasar 'AuthNegotiateDelegateWhitelist'.
+          Jika dasar ini ditetapkan kepada benar, pengesahan HTTP mematuhi kelulusan oleh dasar KDC, iaitu Carbon Browser hanya menetapkan bukti kelayakan jika KDC menetapkan <ph name="OK_AS_DELEGATE" /> pada tiket perkhidmatan. Sila lihat https://tools.ietf.org/html/rfc5896.html untuk mendapatkan maklumat lanjut. Perkhidmatan juga harus sepadan dengan dasar 'AuthNegotiateDelegateWhitelist'.
 
           Jika dasar ini tidak ditetapkan atau ditetapkan kepada palsu, dasar KDC diabaikan pada platform yang disokong dan hanya dasar 'AuthNegotiateDelegateWhitelist' dipatuhi.
 
@@ -1180,7 +1180,7 @@
           Jika dasar ini dibiarkan tanpa ditetapkan, 'AllowJavaScript' akan digunakan dan pengguna akan boleh mengubahnya.</translation>
 <translation id="3038323923255997294">Terus jalankan apl latar belakang apabila <ph name="PRODUCT_NAME" /> ditutup</translation>
 <translation id="3046192273793919231">Hantar bingkisan rangkaian ke pelayan pengurusan untuk memantau status dalam talian</translation>
-<translation id="3047732214002457234">Kawal cara Pembersih Carbon Browser Browser Browser melaporkan data kepada Google</translation>
+<translation id="3047732214002457234">Kawal cara Pembersih Carbon Browser melaporkan data kepada Google</translation>
 <translation id="304775240152542058">Dasar ini mengawal parameter baris perintah yang hendak dilancarkan pada penyemak imbas aternatif.
 
       Apabila dasar ini dibiarkan tanpa ditetapkan, hanya URL akan dihantar sebagai parameter baris perintah.
@@ -1252,9 +1252,9 @@
       Jika dasar ini tidak ditetapkan atau ditetapkan kepada palsu, maka suit sifer DHE dalam TLS tidak akan didayakan. Jika tidak, dasar mungkin ditetapkan kepada benar untuk mendayakan suit sifer DHE dan mengekalkan keserasian dengan pelayan yang sudah lapuk. Ini merupakan langkah sementara dan pelayan harus dikonfigurasikan semula.
 
       Pelayan digalakkan supaya berhijrah kepada suit sifer ECDHE. Jika tidak boleh, pastikan suit sifer yang menggunakan pertukaran kunci RSA didayakan.</translation>
-<translation id="3117706142826400449">Jika dilumpuhkan, dasar ini menghalang Pembersih Carbon Browser Browser Browser daripada mengimbas sistem untuk mencari perisian yang tidak diingini dan melakukan pembersihan. Pencetusan Pembersih Carbon Browser Browser Browser secara manual daripada chrome://settings/cleanup dilumpuhkan.
+<translation id="3117706142826400449">Jika dilumpuhkan, dasar ini menghalang Pembersih Carbon Browser daripada mengimbas sistem untuk mencari perisian yang tidak diingini dan melakukan pembersihan. Pencetusan Pembersih Carbon Browser secara manual daripada chrome://settings/cleanup dilumpuhkan.
 
-      Jika didayakan atau tidak ditetapkan, Pembersih Carbon Browser Browser Browser akan mengimbas sistem untuk mencari perisian yang tidak diingini secara berkala dan jika perisian yang tidak diingini ditemui, akan bertanya kepada pengguna sama ada mereka mahu perisian tersebut dialih keluar. Pencetusan Pembersih Carbon Browser Browser Browser secara manual daripada chrome://settings/cleanup didayakan.
+      Jika didayakan atau tidak ditetapkan, Pembersih Carbon Browser akan mengimbas sistem untuk mencari perisian yang tidak diingini secara berkala dan jika perisian yang tidak diingini ditemui, akan bertanya kepada pengguna sama ada mereka mahu perisian tersebut dialih keluar. Pencetusan Pembersih Carbon Browser secara manual daripada chrome://settings/cleanup didayakan.
 
       Dasar ini hanya tersedia pada tika Windows yang dihubungkan ke domain <ph name="MS_AD_NAME" /> atau tika Windows 10 Pro atau Enterprise yang didaftarkan untuk pengurusan peranti.</translation>
 <translation id="3152425128389603870">Jadikan Unified Desktop tersedia dan dihidupkan secara lalai</translation>
@@ -1369,7 +1369,7 @@
       Jika tetapan ini ditetapkan pada Mati atau tiada nilai ditetapkan, Mod Sekatan di YouTube tidak dikuatkuasakan oleh <ph name="PRODUCT_NAME" />. Walau bagaimanapun, dasar luar seperti dasar YouTube, mungkin masih menguatkuasakan Mod Sekatan.</translation>
 <translation id="3428247105888806363">Dayakan ramalan rangkaian</translation>
 <translation id="3432863169147125747">Mengawal tetapan pencetakan.</translation>
-<translation id="3434932177006334880">Tetapan ini dinamakan EnableWebBasedSignin sebelum Carbon Browser Browser Browser 42 dan sokongan untuknya akan dialih keluar sepenuhnya dalam Carbon Browser Browser Browser 43.
+<translation id="3434932177006334880">Tetapan ini dinamakan EnableWebBasedSignin sebelum Carbon Browser 42 dan sokongan untuknya akan dialih keluar sepenuhnya dalam Carbon Browser 43.
 
       Tetapan ini berguna untuk pelanggan perusahaan yang menggunakan penyelesaian SSO yang belum serasi dengan aliran log masuk sebaris lagi.
       Jika anda mendayakan tetapan ini, aliran log masuk lama yang berasaskan web akan digunakan.
@@ -1449,7 +1449,7 @@
       Jika bahasa disertakan dalam kedua-dua dasar ini dan dasar <ph name="SPELLCHECK_LANGUAGE_BLACKLIST_POLICY_NAME" />, dasar ini diutamakan dan bahasa semak ejaan akan didayakan.
 
       Bahasa yang disokong pada masa ini ialah: af, bg, ca, cs, da, de, el, en-AU, en-CA, en-GB, en-US, es, es-419, es-AR, es-ES, es-MX, es-US, et, fa, fo, fr, he, hi, hr, hu, id, it, ko, lt, lv, nb, nl, pl, pt-BR, pt-PT, ro, ru, sh, sk, sl, sq, sr, sv, ta, tg, tr, uk, vi.</translation>
-<translation id="356579196325389849">Pengguna boleh mengkonfigurasi saluran keluaran OS Carbon Browser Browser Browser</translation>
+<translation id="356579196325389849">Pengguna boleh mengkonfigurasi saluran keluaran OS Carbon Browser</translation>
 <translation id="3575011234198230041">Pengesahan HTTP</translation>
 <translation id="3577251398714997599">Tetapan iklan untuk tapak yang mengandungi iklan yang mengganggu</translation>
 <translation id="357917253161699596">Benarkan pengguna mengurus sijil pengguna</translation>
@@ -1467,9 +1467,9 @@
 <translation id="3646859102161347133">Tetapkan jenis penggadang skrin</translation>
 <translation id="3653237928288822292">Ikon pembekal carian lalai</translation>
 <translation id="3660510274595679517">
-        Jika dasar ini ditetapkan kepada Benar, pendaftaran pengurusan awan adalah mandatori dan menyekat proses pelancaran Carbon Browser Browser Browser jika gagal.
+        Jika dasar ini ditetapkan kepada Benar, pendaftaran pengurusan awan adalah mandatori dan menyekat proses pelancaran Carbon Browser jika gagal.
 
-        Jika dasar ini dibiarkan tanpa ditetapkan atau ditetapkan kepada Palsu, pendaftaran pengurusan awan tidak diwajibkan dan tidak menyekat proses pelancaran Carbon Browser Browser Browser jika gagal.
+        Jika dasar ini dibiarkan tanpa ditetapkan atau ditetapkan kepada Palsu, pendaftaran pengurusan awan tidak diwajibkan dan tidak menyekat proses pelancaran Carbon Browser jika gagal.
 
         Dasar ini digunakan oleh pendaftaran dasar awan skop mesin pada desktop dan boleh ditetapkan oleh Daftaran atau GPO pada Windows, plist pada Mac dan fail dasar JSON pada Linux.</translation>
 <translation id="3660562134618097814">Pindahkan kuki IdP SAML semasa log masuk</translation>
@@ -1653,9 +1653,9 @@
 <translation id="3963602271515417124">Jika benar, pembuktian jauh dibenarkan untuk peranti dan sijil akan dihasilkan secara automatik serta dimuat naik ke Pelayan Pengurusan Peranti.
 
           Jika ditetapkan kepada palsu atau jika tidak ditetapkan, sijil tidak akan dihasilkan dan panggilan kepada API sambungan enterprise.platformKeys akan gagal.</translation>
-<translation id="3964262920683972987">Mengkonfigurasikan imej kertas dinding tahap peranti yang dipaparkan pada skrin log masuk jika masih belum ada pengguna log masuk ke peranti. Dasar ini ditetapkan dengan menentukan URL tempat peranti OS Carbon Browser Browser Browser boleh memuat turun imej kertas dinding itu dan cincangan kriptografi yang digunakan untuk mengesahkan integriti muat turun itu. Imej mestilah dalam format JPEG dan saiznya tidak boleh melebihi 16MB. URL mestilah boleh diakses tanpa sebarang pengesahan. Imej kertas dinding dimuat turun dan dicache. Imej akan dimuat turun semula setiap kali URL atau cincangan berubah.
+<translation id="3964262920683972987">Mengkonfigurasikan imej kertas dinding tahap peranti yang dipaparkan pada skrin log masuk jika masih belum ada pengguna log masuk ke peranti. Dasar ini ditetapkan dengan menentukan URL tempat peranti OS Carbon Browser boleh memuat turun imej kertas dinding itu dan cincangan kriptografi yang digunakan untuk mengesahkan integriti muat turun itu. Imej mestilah dalam format JPEG dan saiznya tidak boleh melebihi 16MB. URL mestilah boleh diakses tanpa sebarang pengesahan. Imej kertas dinding dimuat turun dan dicache. Imej akan dimuat turun semula setiap kali URL atau cincangan berubah.
 
-      Jika dasar kertas dinding peranti ditetapkan, peranti OS Carbon Browser Browser Browser akan memuat turun dan menggunakan imej kertas dinding pada skrin log masuk jika masih belum ada pengguna log masuk ke peranti. Sebaik sahaja pengguna log masuk, dasar kertas dinding pengguna akan berkuat kuasa.
+      Jika dasar kertas dinding peranti ditetapkan, peranti OS Carbon Browser akan memuat turun dan menggunakan imej kertas dinding pada skrin log masuk jika masih belum ada pengguna log masuk ke peranti. Sebaik sahaja pengguna log masuk, dasar kertas dinding pengguna akan berkuat kuasa.
 
       Jika dasar kertas dinding peranti dibiarkan tidak ditetapkan dan jika dasar kertas dinding pengguna ditetapkan, dasar kertas dinding pengguna akan menentukan item yang akan dipaparkan.</translation>
 <translation id="3965339130942650562">Tamat masa sehingga log keluar pengguna melahu dilaksanakan</translation>
@@ -1663,15 +1663,15 @@
 <translation id="3984028218719007910">Memastikan sama ada <ph name="PRODUCT_OS_NAME" /> menyimpan data akaun setempat selepas log keluar. Jika ditetapkan kepada benar, tiada akaun berulang akan disimpan oleh <ph name="PRODUCT_OS_NAME" /> dan semua data dari sesi pengguna akan dibuang selepas log keluar. Jika dasar ini ditetapkan kepada palsu atau tidak dikonfigurasi, peranti boleh menyimpan data pengguna setempat (disulitkan).</translation>
 <translation id="398475542699441679">Dasar ini mengawal sama ada anda mahu mendayakan Sokongan Penyemak Imbas Lama atau tidak.
 
-      Apabila dasar ini dibiarkan tidak ditetapkan atau ditetapkan kepada palsu, Carbon Browser Browser Browser tidak akan cuba melancarkan URL yang ditetapkan dalam penyemak imbas alternatif.
+      Apabila dasar ini dibiarkan tidak ditetapkan atau ditetapkan kepada palsu, Carbon Browser tidak akan cuba melancarkan URL yang ditetapkan dalam penyemak imbas alternatif.
 
-      Apabila dasar ini ditetapkan kepada benar, Carbon Browser Browser Browser akan cuba melancarkan sesetengah URL dalam penyemak imbas alternatif (seperti Internet Explorer). Ciri ini dikonfigurasikan menggunakan dasar dalam kumpulan <ph name="LEGACY_BROWSER_SUPPORT_POLICY_GROUP" />.
+      Apabila dasar ini ditetapkan kepada benar, Carbon Browser akan cuba melancarkan sesetengah URL dalam penyemak imbas alternatif (seperti Internet Explorer). Ciri ini dikonfigurasikan menggunakan dasar dalam kumpulan <ph name="LEGACY_BROWSER_SUPPORT_POLICY_GROUP" />.
 
-      Ciri ini merupakan pengganti bagi sambungan <ph name="LEGACY_BROWSER_SUPPORT_EXTENSION_NAME" />. Konfigurasi daripada sambungan itu akan dibawa ke ciri ini, tetapi sebaik-baiknya gunakan dasar Carbon Browser Browser Browser. Perkara ini akan memastikan keserasian yang lebih baik pada masa hadapan.</translation>
+      Ciri ini merupakan pengganti bagi sambungan <ph name="LEGACY_BROWSER_SUPPORT_EXTENSION_NAME" />. Konfigurasi daripada sambungan itu akan dibawa ke ciri ini, tetapi sebaik-baiknya gunakan dasar Carbon Browser. Perkara ini akan memastikan keserasian yang lebih baik pada masa hadapan.</translation>
 <translation id="3997519162482760140">URL yang akan diberikan akses kepada peranti tangkapan video pada halaman log masuk SAML</translation>
-<translation id="4001275826058808087">Pentadbir IT untuk peranti perusahaan boleh menggunakan bendera ini untuk mengawal sama ada membenarkan pengguna menebus tawaran melalui Pendaftaran OS Carbon Browser Browser Browser.
+<translation id="4001275826058808087">Pentadbir IT untuk peranti perusahaan boleh menggunakan bendera ini untuk mengawal sama ada membenarkan pengguna menebus tawaran melalui Pendaftaran OS Carbon Browser.
 
-      Jika dasar ini ditetapkan kepada benar atau dibiarkan tanpa ditetapkan, pengguna dapat menebus tawaran melalui Pendaftaran OS Carbon Browser Browser Browser.
+      Jika dasar ini ditetapkan kepada benar atau dibiarkan tanpa ditetapkan, pengguna dapat menebus tawaran melalui Pendaftaran OS Carbon Browser.
 
       Jika dasar ini ditetapkan kepada palsu, pengguna tidak akan dapat menebus tawaran.</translation>
 <translation id="4008233182078913897">Menyatakan senarai apl dan sambungan yang dipasang secara senyap,
@@ -1686,13 +1686,13 @@
 
           Dasar ini diutamakan sekiranya berlaku percanggahan dasar <ph name="EXTENSION_INSTALL_BLACKLIST_POLICY_NAME" />. Jika apl atau sambungan yang dipasang secara paksa sebelum ini dialih keluar daripada senarai ini, maka apl atau sambungan tersebut akan dinyahpasang oleh <ph name="PRODUCT_NAME" /> secara automatik.
 
-          Untuk tika Windows yang tidak dihubungkan ke domain <ph name="MS_AD_NAME" />, pemasangan paksa adalah terhad kepada apl dan sambungan yang disenaraikan di Gedung Web Carbon Browser Browser Browser.
+          Untuk tika Windows yang tidak dihubungkan ke domain <ph name="MS_AD_NAME" />, pemasangan paksa adalah terhad kepada apl dan sambungan yang disenaraikan di Gedung Web Carbon Browser.
 
           Sila ambil perhatian bahawa kod sumber mana-mana sambungan mungkin diubah oleh pengguna melalui Alatan Pembangun (berkemungkinan menyebabkan disfungsi pada sambungan). Jika perkara ini menimbulkan kebimbangan, maka dasar <ph name="DEVELOPER_TOOLS_POLICY_NAME" /> harus ditetapkan.
 
-          Setiap item senarai dasar ini ialah rentetan yang mengandungi ID sambungan dan, sebagai pilihan, URL "kemas kini" yang dipisahkan oleh koma bertitik (<ph name="SEMICOLON" />). ID sambungan ialah rentetan 32 huruf yang didapati, contohnya, pada <ph name="CHROME_EXTENSIONS_LINK" /> apabila dalam mod pembangun. URL "kemas kini", jika dinyatakan, harus menunjuk kepada dokumen XML Manifes Kemas Kini seperti yang dihuraikan di <ph name="LINK_TO_EXTENSION_DOC1" />. Secara lalai, URL kemas kini Gedung Web Carbon Browser Browser Browser digunakan (pada masa ini ialah "https://clients2.google.com/service/update2/crx"). Sila ambil perhatian bahawa URL "kemas kini" yang ditetapkan dalam dasar ini hanya digunakan untuk pemasangan awal; kemas kini sambungan yang berikutnya menggunakan URL kemas kini yang ditunjukkan dalam manifes sambungan tersebut. Sila ambil perhatian juga bahawa menyatakan URL "kemas kini" secara jelas adalah mandatori dalam <ph name="PRODUCT_NAME" /> sehingga dan merangkumi versi 67.
+          Setiap item senarai dasar ini ialah rentetan yang mengandungi ID sambungan dan, sebagai pilihan, URL "kemas kini" yang dipisahkan oleh koma bertitik (<ph name="SEMICOLON" />). ID sambungan ialah rentetan 32 huruf yang didapati, contohnya, pada <ph name="CHROME_EXTENSIONS_LINK" /> apabila dalam mod pembangun. URL "kemas kini", jika dinyatakan, harus menunjuk kepada dokumen XML Manifes Kemas Kini seperti yang dihuraikan di <ph name="LINK_TO_EXTENSION_DOC1" />. Secara lalai, URL kemas kini Gedung Web Carbon Browser digunakan (pada masa ini ialah "https://clients2.google.com/service/update2/crx"). Sila ambil perhatian bahawa URL "kemas kini" yang ditetapkan dalam dasar ini hanya digunakan untuk pemasangan awal; kemas kini sambungan yang berikutnya menggunakan URL kemas kini yang ditunjukkan dalam manifes sambungan tersebut. Sila ambil perhatian juga bahawa menyatakan URL "kemas kini" secara jelas adalah mandatori dalam <ph name="PRODUCT_NAME" /> sehingga dan merangkumi versi 67.
 
-          Contohnya, <ph name="EXTENSION_POLICY_EXAMPLE" /> memasang sambungan dengan id <ph name="EXTENSION_ID_SAMPLE" /> daripada URL "kemas kini" standard Gedung Web Carbon Browser Browser Browser. Untuk mendapatkan maklumat lanjut tentang mengehoskan sambungan, lihat: <ph name="LINK_TO_EXTENSION_DOC2" />.
+          Contohnya, <ph name="EXTENSION_POLICY_EXAMPLE" /> memasang sambungan dengan id <ph name="EXTENSION_ID_SAMPLE" /> daripada URL "kemas kini" standard Gedung Web Carbon Browser. Untuk mendapatkan maklumat lanjut tentang mengehoskan sambungan, lihat: <ph name="LINK_TO_EXTENSION_DOC2" />.
 
           Jika dasar ini dibiarkan tanpa ditetapkan, tiada apl mahupun sambungan dipasang secara automatik dan pengguna boleh menyahpasang sebarang apl dan sambungan dalam <ph name="PRODUCT_NAME" />.
 
@@ -1799,7 +1799,7 @@ Apabila |IdleAction| tidak ditetapkan, tindakan lalai akan diambil, iaitu gantun
           Jika anda menetapkan dasar ini, pengguna tidak boleh menukar atau membatalkannya.
 
           Jika dasar ini dibiarkan tanpa ditetapkan, kekunci lekit dilumpuhkan pada mulanya tetapi boleh didayakan oleh pengguna pada bila-bila masa.</translation>
-<translation id="4171331498167688968">Jika dasar ditetapkan kepada palsu, maka perisian pihak ketiga akan dibenarkan untuk menyuntik kod boleh laksana ke dalam proses Carbon Browser Browser Browser. Jika dasar tidak ditetapkan atau ditetapkan kepada benar, maka perisian pihak ketiga akan dihalang daripada menyuntik kod boleh laksana ke dalam proses Carbon Browser Browser Browser.
+<translation id="4171331498167688968">Jika dasar ditetapkan kepada palsu, maka perisian pihak ketiga akan dibenarkan untuk menyuntik kod boleh laksana ke dalam proses Carbon Browser. Jika dasar tidak ditetapkan atau ditetapkan kepada benar, maka perisian pihak ketiga akan dihalang daripada menyuntik kod boleh laksana ke dalam proses Carbon Browser.
 
       Tanpa mengira nilai dasar ini, buat masa ini penyemak imbas tidak akan menyekat perisian pihak ketiga daripada menyuntik kod boleh laksana ke dalam prosesnya pada mesin yang disambungkan ke domain <ph name="MS_AD_NAME" />.</translation>
 <translation id="4183229833636799228">Tetapan <ph name="FLASH_PLUGIN_NAME" /> lalai</translation>
@@ -1868,11 +1868,11 @@ Apabila |IdleAction| tidak ditetapkan, tindakan lalai akan diambil, iaitu gantun
 <translation id="4298509794364745131">Menentukan senarai apl yang boleh didayakan sebagai apl pencatatan nota pada skrin kunci <ph name="PRODUCT_OS_NAME" />.
 
       Jika apl pencatatan nota pilihan didayakan pada skrin kunci, skrin kunci akan mengandungi unsur UI untuk melancarkan apl pencatatan nota pilihan.
-      Apabila dilancarkan, apl ini akan dapat membuat tetingkap apl di atas skrin kunci dan membuat item data (nota) dalam konteks skrin kunci. Apl ini akan dapat mengimport nota yang dibuat ke sesi pengguna utama, semasa sesi dibuka kunci. Hanya apl pencatatan nota Carbon Browser Browser Browser yang disokong pada skrin kunci pada masa ini.
+      Apabila dilancarkan, apl ini akan dapat membuat tetingkap apl di atas skrin kunci dan membuat item data (nota) dalam konteks skrin kunci. Apl ini akan dapat mengimport nota yang dibuat ke sesi pengguna utama, semasa sesi dibuka kunci. Hanya apl pencatatan nota Carbon Browser yang disokong pada skrin kunci pada masa ini.
 
       Jika dasar ini ditetapkan, pengguna akan dibenarkan untuk mendayakan apl pada skrin kunci hanya jika ID sambungan apl terkandung dalam nilai senarai dasar.
       Akibatnya, tindakan menetapkan dasar ini kepada senarai kosong akan melumpuhkan pencatatan nota pada keseluruhan skrin kunci.
-      Sila ambil perhatian bahawa dasar yang mengandungi ID apl tidak semestinya bermaksud pengguna akan dapat mendayakan apl sebagai apl pencatatan nota pada skrin kunci - contohnya, pada Carbon Browser Browser Browser 61, set apl yang tersedia dihadkan secara tambahan oleh platform.
+      Sila ambil perhatian bahawa dasar yang mengandungi ID apl tidak semestinya bermaksud pengguna akan dapat mendayakan apl sebagai apl pencatatan nota pada skrin kunci - contohnya, pada Carbon Browser 61, set apl yang tersedia dihadkan secara tambahan oleh platform.
 
       Jika dasar dibiarkan tanpa ditetapkan, tiada sekatan pada set apl yang boleh didayakan oleh pengguna pada skrin kunci yang dikenakan oleh dasar.</translation>
 <translation id="4313767483634435271">Alamat MAC dok peranti yang ditetapkan</translation>
@@ -2029,7 +2029,7 @@ Apabila |IdleAction| tidak ditetapkan, tindakan lalai akan diambil, iaitu gantun
 <translation id="467236746355332046">Ciri yang disokong:</translation>
 <translation id="4674167212832291997">Sesuaikan senarai pola URL yang sentiasa harus dipaparkan oleh <ph name="PRODUCT_FRAME_NAME" />.
 
-          Jika dasar ini tidak ditetapkan, pemapar lalai akan digunakan untuk semua tapak seperti yang dinyatakan oleh dasar 'Carbon Browser Browser BrowserFrameRendererSettings'.
+          Jika dasar ini tidak ditetapkan, pemapar lalai akan digunakan untuk semua tapak seperti yang dinyatakan oleh dasar 'Carbon BrowserFrameRendererSettings'.
 
           Untuk melihat contoh pola, lawati http://www.chromium.org/developers/how-tos/chrome-frame-getting-started.</translation>
 <translation id="467449052039111439">Buka senarai URL</translation>
@@ -2127,10 +2127,10 @@ Apabila |IdleAction| tidak ditetapkan, tindakan lalai akan diambil, iaitu gantun
 
       Jika dasar ini ditetapkan kepada palsu, <ph name="PRODUCT_NAME" /> tidak akan membenarkan profil baharu dibuat daripada pengurus pengguna.</translation>
 <translation id="4970855112942626932">Lumpuhkan log masuk penyemak imbas</translation>
-<translation id="4978405676361550165">Jika dasar "OffHours" ditetapkan, maka dasar peranti yang ditetapkan akan diabaikan (gunakan tetapan lalai dasar ini) semasa selang masa yang ditakrifkan. Dasar peranti akan diterapkan semula oleh Carbon Browser Browser Browser pada setiap peristiwa apabila tempoh "OffHours" bermula atau berakhir. Pengguna akan diberitahu dan dipaksa log keluar apabila masa "OffHours" berakhir dan tetapan dasar peranti diubah (mis., apabila pengguna log masuk menggunakan akaun yang tidak dibenarkan).</translation>
+<translation id="4978405676361550165">Jika dasar "OffHours" ditetapkan, maka dasar peranti yang ditetapkan akan diabaikan (gunakan tetapan lalai dasar ini) semasa selang masa yang ditakrifkan. Dasar peranti akan diterapkan semula oleh Carbon Browser pada setiap peristiwa apabila tempoh "OffHours" bermula atau berakhir. Pengguna akan diberitahu dan dipaksa log keluar apabila masa "OffHours" berakhir dan tetapan dasar peranti diubah (mis., apabila pengguna log masuk menggunakan akaun yang tidak dibenarkan).</translation>
 <translation id="4980635395568992380">Jenis data:</translation>
 <translation id="4983201894483989687">Benarkan pemalam yang lapuk dijalankan</translation>
-<translation id="4986560318567565414">Laluan ke Carbon Browser Browser Browser untuk bertukar daripada penyemak imbas alternatif.</translation>
+<translation id="4986560318567565414">Laluan ke Carbon Browser untuk bertukar daripada penyemak imbas alternatif.</translation>
 <translation id="4988291787868618635">Tindakan yang perlu diambil apabila kelewatan melahu dicapai</translation>
 <translation id="5034604678285451405">Tetapkan nilai ambang bateri pertukaran kuasa puncak dalam peratus.
 
@@ -2204,11 +2204,11 @@ Apabila |IdleAction| tidak ditetapkan, tindakan lalai akan diambil, iaitu gantun
       Jika dasar ini ditetapkan kepada 0, kata laluan akaun mesin akan dilumpuhkan.
 
       Sila ambil perhatian bahawa kata laluan mungkin akan berusia lebih lama daripada bilangan hari yang ditetapkan jika pelanggan berada di luar talian untuk tempoh yang lebih panjang.</translation>
-<translation id="510196893779239086">Dasar ini mengawal sama ada Carbon Browser Browser Browser akan ditutup sepenuhnya apabila tab terakhir akan bertukar kepada penyemak imbas lain.
+<translation id="510196893779239086">Dasar ini mengawal sama ada Carbon Browser akan ditutup sepenuhnya apabila tab terakhir akan bertukar kepada penyemak imbas lain.
 
-      Apabila dasar ini dibiarkan tidak ditetapkan, atau ditetapkan kepada benar, Carbon Browser Browser Browser akan membiarkan sekurang-kurangnya satu tab terbuka, selepas bertukar kepada penyemak imbas alternatif.
+      Apabila dasar ini dibiarkan tidak ditetapkan, atau ditetapkan kepada benar, Carbon Browser akan membiarkan sekurang-kurangnya satu tab terbuka, selepas bertukar kepada penyemak imbas alternatif.
 
-      Apabila dasar ini ditetapkan kepada palsu, Carbon Browser Browser Browser akan menutup tab selepas bertukar kepada penyemak imbas alternatif, walaupun tab itu ialah tab yang terakhir. Ini akan menyebabkan Carbon Browser Browser Browser keluar sepenuhnya.</translation>
+      Apabila dasar ini ditetapkan kepada palsu, Carbon Browser akan menutup tab selepas bertukar kepada penyemak imbas alternatif, walaupun tab itu ialah tab yang terakhir. Ini akan menyebabkan Carbon Browser keluar sepenuhnya.</translation>
 <translation id="5102203758995933166">Membenarkan penolakan konfigurasi rangkaian digunakan untuk setiap pengguna peranti <ph name="PRODUCT_OS_NAME" />. Konfigurasi rangkaian ialah rentetan berformat JSON seperti yang ditakrifkan oleh format Konfigurasi Rangkaian Terbuka.</translation>
 <translation id="5105313908130842249">Kelewatan kunci skrin apabila dijalankan dengan kuasa bateri</translation>
 <translation id="5108031557082757679">Pencetak peranti perusahaan dilumpuhkan</translation>
@@ -2223,7 +2223,7 @@ Apabila |IdleAction| tidak ditetapkan, tindakan lalai akan diambil, iaitu gantun
 <translation id="5148753489738115745">Membolehkan anda menentukan parameter tambahan yang digunakan apabila  <ph name="PRODUCT_FRAME_NAME" /> melancarkan <ph name="PRODUCT_NAME" />.
 
           Jika dasar ini tidak ditetapkan, baris perintah lalai akan digunakan.</translation>
-<translation id="5152787786897382519">Carbon Browser Browser Browser dan Carbon Browser Browser Browser mempunyai beberapa kumpulan dasar yang bergantung pada satu sama lain untuk memberikan kawalan terhadap ciri. Set ini diwakili oleh kumpulan dasar berikut. Memandangkan dasar boleh mempunyai pelbagai sumber, hanya nilai yang berasal daripada sumber berkeutamaan tertinggi akan digunakan. Nilai yang berasal daripada sumber berkeutamaan lebih rendah dalam kumpulan yang sama akan diabaikan. Urutan keutamaan ditakrifkan dalam <ph name="POLICY_PRIORITY_DOC_URL" />.</translation>
+<translation id="5152787786897382519">Carbon Browser dan Carbon Browser mempunyai beberapa kumpulan dasar yang bergantung pada satu sama lain untuk memberikan kawalan terhadap ciri. Set ini diwakili oleh kumpulan dasar berikut. Memandangkan dasar boleh mempunyai pelbagai sumber, hanya nilai yang berasal daripada sumber berkeutamaan tertinggi akan digunakan. Nilai yang berasal daripada sumber berkeutamaan lebih rendah dalam kumpulan yang sama akan diabaikan. Urutan keutamaan ditakrifkan dalam <ph name="POLICY_PRIORITY_DOC_URL" />.</translation>
 <translation id="5159469559091666409">Kekerapan bingkisan rangkaian pemantauan dihantar dalam milisaat.
 
       Jika dasar ini tidak ditetapkan, selang masa lalai ialah 3 minit.. Selang masa      minimum ialah 30 saat dan selang masa maksimum ialah 24 jam - nilai
@@ -2333,7 +2333,7 @@ Apabila |IdleAction| tidak ditetapkan, tindakan lalai akan diambil, iaitu gantun
           Nilai senarai hitam '*' bermaksud semua hos pemesejan natif disenaraihitamkan melainkan hos ini disenaraikan dengan jelas dalam senarai putih.
 
           Jika dasar ini dibiarkan tanpa ditetapkan, <ph name="PRODUCT_NAME" /> akan memuatkan semua hos pemesejan natif yang telah dipasang.</translation>
-<translation id="5272684451155669299">Jika benar, pengguna boleh menggunakan perkakasan pada peranti Carbon Browser Browser Browser untuk membuktikan identitinya dari jauh pada CA privasi melalui <ph name="ENTERPRISE_PLATFORM_KEYS_API" /> menggunakan <ph name="CHALLENGE_USER_KEY_FUNCTION" />.
+<translation id="5272684451155669299">Jika benar, pengguna boleh menggunakan perkakasan pada peranti Carbon Browser untuk membuktikan identitinya dari jauh pada CA privasi melalui <ph name="ENTERPRISE_PLATFORM_KEYS_API" /> menggunakan <ph name="CHALLENGE_USER_KEY_FUNCTION" />.
 
           Jika ditetapkan kepada palsu atau tidak ditetapkan, panggilan kepada API ini akan gagal dengan kod ralat.</translation>
 <translation id="5277806246014825877">Benarkan pengguna ini menjalankan Crostini.
@@ -2352,7 +2352,7 @@ Apabila |IdleAction| tidak ditetapkan, tindakan lalai akan diambil, iaitu gantun
 <translation id="5318185076587284965">Dayakan penggunaan pelayan ganti oleh hos akses jauh.</translation>
 <translation id="5323128137188992869">Benarkan kandungan dihantar ke peranti menggunakan <ph name="PRODUCT_NAME" />.
 
-          Jika dasar ini ditetapkan kepada Palsu, pengguna tidak akan dapat menghantar kandungan ke peranti mereka. Jika dasar ini ditetapkan kepada Benar, pengguna dibenarkan menghantar kandungan. Jika dasar ini tidak ditetapkan, pengguna tidak dibenarkan menghantar kandungan ke peranti OS Carbon Browser Browser Browser berdaftar, tetapi dibenarkan berbuat demikian ke peranti OS Carbon Browser Browser Browser tidak berdaftar.</translation>
+          Jika dasar ini ditetapkan kepada Palsu, pengguna tidak akan dapat menghantar kandungan ke peranti mereka. Jika dasar ini ditetapkan kepada Benar, pengguna dibenarkan menghantar kandungan. Jika dasar ini tidak ditetapkan, pengguna tidak dibenarkan menghantar kandungan ke peranti OS Carbon Browser berdaftar, tetapi dibenarkan berbuat demikian ke peranti OS Carbon Browser tidak berdaftar.</translation>
 <translation id="5329007337159326804">Amaran: Dasar versi TLS maksimum akan dialih keluar sepenuhnya daripada <ph name="PRODUCT_NAME" /> sekitar versi 75 (sekitar Jun 2019).
 
       Jika dasar ini tidak dikonfigurasikan, maka <ph name="PRODUCT_NAME" /> akan menggunakan versi maksimum lalai.
@@ -2550,7 +2550,7 @@ Apabila |IdleAction| tidak ditetapkan, tindakan lalai akan diambil, iaitu gantun
         Jika dasar ini ditetapkan kepada palsu, pengguna tidak dapat menghantar maklum balas kepada Google.
 
         Jika dasar ini tidak ditetapkan atau ditetapkan kepada benar, pengguna boleh menghantar maklum balas kepada Google melalui Menu-&gt;Bantuan-&gt;Laporkan Isu atau melalui gabungan kekunci.</translation>
-<translation id="5581292529942108810">Konfigurasikan dasar yang berkaitan dengan Sambungan Pelaporan Carbon Browser Browser Browser.
+<translation id="5581292529942108810">Konfigurasikan dasar yang berkaitan dengan Sambungan Pelaporan Carbon Browser.
 
       Dasar ini hanya dikuatkuasakan apabila <ph name="CHROME_REPORTING_EXTENSION_NAME" /> didayakan dan peranti didaftarkan dengan <ph name="MACHINE_LEVEL_USER_CLOUD_POLICY_ENROLLMENT_TOKEN_POLICY_NAME" />.</translation>
 <translation id="5583806683960333345">Jika tetapan ini didayakan, pengguna dibenarkan untuk menggunakan Penambatan Segera yang membolehkan telefon Google mereka berkongsi data mudah alih dengan peranti mereka.
@@ -2581,7 +2581,7 @@ Apabila |IdleAction| tidak ditetapkan, tindakan lalai akan diambil, iaitu gantun
 
       NOTA: Pada Android, Pengasingan Tapak bersifat percubaan. Sokongan akan dipertingkatkan dari semasa ke semasa, tetapi pada masa ini ciri ini mungkin menyebabkan masalah prestasi.
 
-      NOTA: Dasar ini digunakan hanya terhadap Carbon Browser Browser Browser pada Android yang dijalankan pada peranti yang mempunyai sekurang-kurangnya 1GB RAM sahaja. Untuk menggunakan dasar pada platform bukan Android, gunakan IsolateOrigins.
+      NOTA: Dasar ini digunakan hanya terhadap Carbon Browser pada Android yang dijalankan pada peranti yang mempunyai sekurang-kurangnya 1GB RAM sahaja. Untuk menggunakan dasar pada platform bukan Android, gunakan IsolateOrigins.
       </translation>
 <translation id="5599461642204007579">Tetapan pengurusan <ph name="MS_AD_NAME" /></translation>
 <translation id="5610104657949692379">Apabila dasar ini ditetapkan, dasar ini menyatakan tindakan yang <ph name="PRODUCT_OS_NAME" /> ambil apabila pengguna berterusan melahu untuk tempoh masa yang dinyatakan oleh kelewatan melahu, yang boleh dikonfigurasi secara berasingan.
@@ -2589,7 +2589,7 @@ Apabila |IdleAction| tidak ditetapkan, tindakan lalai akan diambil, iaitu gantun
           Apabila dasar ini tidak ditetapkan, tindakan lalai akan diambil, iaitu penggantungan.
 
           Jika tindakan ialah penggantungan, <ph name="PRODUCT_OS_NAME" /> boleh dikonfigurasikan secara berasingan sama ada untuk mengunci atau tidak mengunci skrin sebelum penggantungan.</translation>
-<translation id="5618398258385745432">Tetapan yang dikaitkan telah digunakan sebelum pengesahan semula semasa melihat kata laluan diperkenalkan. Sejak itu, tetapan ini dan dasar ini tidak memberi kesan pada gelagat Carbon Browser Browser Browser. Gelagat semasa Carbon Browser Browser Browser kini sama seolah-olah dasar ini telah ditetapkan kepada lumpuhkan pemaparan kata laluan dalam teks jelas di halaman tetapan pengurus kata laluan. Ini bermakna halaman tetapan mengandungi pemegang tempat sahaja dan hanya apabila pengguna mengklik "Tunjukkan" (dan mengesahkan semula, jika berkenaan), Carbon Browser Browser Browser akan menunjukkan kata laluan. Perihalan asal dasar adalah seperti berikut.
+<translation id="5618398258385745432">Tetapan yang dikaitkan telah digunakan sebelum pengesahan semula semasa melihat kata laluan diperkenalkan. Sejak itu, tetapan ini dan dasar ini tidak memberi kesan pada gelagat Carbon Browser. Gelagat semasa Carbon Browser kini sama seolah-olah dasar ini telah ditetapkan kepada lumpuhkan pemaparan kata laluan dalam teks jelas di halaman tetapan pengurus kata laluan. Ini bermakna halaman tetapan mengandungi pemegang tempat sahaja dan hanya apabila pengguna mengklik "Tunjukkan" (dan mengesahkan semula, jika berkenaan), Carbon Browser akan menunjukkan kata laluan. Perihalan asal dasar adalah seperti berikut.
 
           Mengawal sama ada pengguna boleh menunjukkan kata laluan dalam teks jelas dalam pengurus kata laluan.
 
@@ -2696,7 +2696,7 @@ Apabila |IdleAction| tidak ditetapkan, tindakan lalai akan diambil, iaitu gantun
       Jika dasar ini tidak dikonfigurasi, pengguna dapat menukar tetapan ini.
       </translation>
 <translation id="5832274826894536455">Dasar yang telah ditamatkan</translation>
-<translation id="5835124959204887277">Menentukan URL dan domain yang mana gesaan tidak akan ditunjukkan apabila sijil pembuktian daripada Kunci Keselamatan diminta. Selain itu, isyarat akan dihantar kepada Kunci Keselamatan yang menunjukkan bahawa pembuktian individu boleh digunakan. Tanpa ini, pengguna akan digesa dalam Carbon Browser Browser Browser 65+ apabila tapak meminta pembuktian Kunci Keselamatan.
+<translation id="5835124959204887277">Menentukan URL dan domain yang mana gesaan tidak akan ditunjukkan apabila sijil pembuktian daripada Kunci Keselamatan diminta. Selain itu, isyarat akan dihantar kepada Kunci Keselamatan yang menunjukkan bahawa pembuktian individu boleh digunakan. Tanpa ini, pengguna akan digesa dalam Carbon Browser 65+ apabila tapak meminta pembuktian Kunci Keselamatan.
 
       URL (seperti https://example.com/some/path) hanya akan sepadan sebagai appID U2F. Domain (seperti example.com) hanya sepadan sebagai ID RP webauthn. Oleh sebab itu, untuk meliputi kedua-dua API U2F dan webauthn bagi tapak tertentu, kedua-dua URL dan domain appID perlu disenaraikan.</translation>
 <translation id="5836064773277134605">Hadkan julat port UDP yang digunakan oleh hos akses jauh</translation>
@@ -2753,7 +2753,7 @@ Apabila |IdleAction| tidak ditetapkan, tindakan lalai akan diambil, iaitu gantun
           Jika anda menetapkan dasar ini, pengguna boleh mengatasinya secara sementara dengan mendayakan atau melumpuhkan kursor besar. Walau bagaimanapun, pilihan pengguna ini tidak berterusan dan lalai dipulihkan apabila skrin log masuk dipaparkan semula atau pengguna kekal melahu pada skrin log masuk selama satu minit.
 
           Jika dasar ini dibiarkan tanpa ditetapkan, kursor besar dilumpuhkan apabila skrin log masuk mula-mula dipaparkan. Pengguna boleh mendayakan atau melumpuhkan kursor besar pada bila-bila masa dan statusnya pada skrin log masuk yang berterusan antara pengguna.</translation>
-<translation id="5929855945144989709">Benarkan peranti untuk menjalankan mesin maya pada OS Carbon Browser Browser Browser</translation>
+<translation id="5929855945144989709">Benarkan peranti untuk menjalankan mesin maya pada OS Carbon Browser</translation>
 <translation id="5932767795525445337">Dasar ini juga boleh digunakan untuk menyemat apl Android.</translation>
 <translation id="5936622343001856595">Memaksa pertanyaan dalam Carian Web Google dilakukan dengan SafeSearch ditetapkan kepada aktif dan menghalang pengguna daripada menukar tetapan ini.
 
@@ -2807,7 +2807,7 @@ Apabila |IdleAction| tidak ditetapkan, tindakan lalai akan diambil, iaitu gantun
           Nilai dasar mesti dinyatakan dalam milisaat. Nilai diketatkan menjadi kurang daripada kelewatan melahu.</translation>
 <translation id="6097601282776163274">Dayakan pengumpulan data awanama termasuk URL</translation>
 <translation id="6099853574908182288">Mod warna pencetakan lalai</translation>
-<translation id="6107642964266628393">Mengawal cara dan masa kemas kini OS Carbon Browser Browser Browser diterapkan.</translation>
+<translation id="6107642964266628393">Mengawal cara dan masa kemas kini OS Carbon Browser diterapkan.</translation>
 <translation id="6111936128861357925">Benarkan Permainan Telur Easter Dinosaur</translation>
 <translation id="6114416803310251055">dikecam</translation>
 <translation id="6133088669883929098">Benarkan semua tapak untuk menggunakan penghasilan kunci</translation>
@@ -2831,7 +2831,7 @@ Apabila |IdleAction| tidak ditetapkan, tindakan lalai akan diambil, iaitu gantun
 
       Apabila dasar ini dibiarkan tanpa ditetapkan atau ditetapkan kepada Palsu, tiada data dikumpulkan atau dimuat naik.
       Apabila dasar ini ditetapkan kepada Benar, data dikumpulkan dan dimuat naik ke konsol Pentadbir Google.
-      Untuk mengawal jenis data yang dimuat naik, sila gunakan dasar dalam Sambungan Pelaporan Carbon Browser Browser Browser kumpulan.
+      Untuk mengawal jenis data yang dimuat naik, sila gunakan dasar dalam Sambungan Pelaporan Carbon Browser kumpulan.
 
       Dasar ini hanya berkuat kuasa apabila mesin didaftarkan dengan <ph name="MACHINE_LEVEL_USER_CLOUD_POLICY_ENROLLMENT_TOKEN_POLICY_NAME" />.
 
@@ -2918,7 +2918,7 @@ Apabila |IdleAction| tidak ditetapkan, tindakan lalai akan diambil, iaitu gantun
 <translation id="6282799760374509080">Benarkan atau nafikan rakaman audio</translation>
 <translation id="6284362063448764300">TLS 1.1</translation>
 <translation id="6310223829319187614">Dayakan autolengkap nama domain semasa log masuk pengguna</translation>
-<translation id="6315673513957120120">Carbon Browser Browser Browser memaparkan halaman amaran apabila pengguna menavigasi ke tapak yang mempunyai ralat SSL. Secara lalai atau apabila dasar ini ditetapkan kepada benar, pengguna dibenarkan mengklik lalu halaman amaran ini.
+<translation id="6315673513957120120">Carbon Browser memaparkan halaman amaran apabila pengguna menavigasi ke tapak yang mempunyai ralat SSL. Secara lalai atau apabila dasar ini ditetapkan kepada benar, pengguna dibenarkan mengklik lalu halaman amaran ini.
       Pengguna tidak dibenarkan mengklik lalu sebarang halaman amaran apabila dasar ini ditetapkan kepada palsu.</translation>
 <translation id="6319198883324703402">Tetapkan masa pemberitahuan pelancaran semula pengguna pertama</translation>
 <translation id="6352543686437322588">Akaun setempat peranti untuk log masuk automatik selepas tertangguh.
@@ -2960,7 +2960,7 @@ Apabila |IdleAction| tidak ditetapkan, tindakan lalai akan diambil, iaitu gantun
           Jika anda memilih untuk mengesan pelayan proksi secara automatik, URL skrip "http://wpad/wpad.dat" akan diberikan kepada apl Android. Tiada bahagian protokol autokesan proksi yang lain akan digunakan.
 
           Jika anda memilih untuk menggunakan skrip proksi .pac, URL skrip akan diberikan kepada apl Android.</translation>
-<translation id="6430366557948788869">Sambungan Pelaporan Carbon Browser Browser Browser</translation>
+<translation id="6430366557948788869">Sambungan Pelaporan Carbon Browser</translation>
 <translation id="6440051664870270040">Benarkan tapak menavigasi dan membuka tetingkap timbul secara serentak</translation>
 <translation id="6447948611083700881">Sandaran dan pemulihan dilumpuhkan</translation>
 <translation id="6449476513004303784">Jangan benarkan pengguna mengurus sijil</translation>
@@ -3018,9 +3018,9 @@ Apabila |IdleAction| tidak ditetapkan, tindakan lalai akan diambil, iaitu gantun
 <translation id="6536600139108165863">But semula automatik semasa penutupan peranti</translation>
 <translation id="6539246272469751178">Dasar ini tidak berkesan terhadap apl Android. Apl Android sentiasa menggunakan direktori muat turun lalai dan tidak boleh mengakses mana-mana fail yang dimuat turun oleh <ph name="PRODUCT_OS_NAME" /> ke dalam direktori muat turun bukan lalai.</translation>
 <translation id="654303922206238013">Strategi penghijrahan untuk ecryptfs</translation>
-<translation id="6544897973797372144">Jika dasar ini ditetapkan kepada Benar dan dasar Carbon Browser Browser BrowserOsReleaseChannel tidak ditentukan, maka pengguna domain yang mendaftar akan dibenarkan untuk mengubah saluran pelepasan peranti tersebut. Jika dasar ini ditetapkan kepada palsu, peranti akan dikunci dalam apa jua saluran terakhir yang ditetapkan.
+<translation id="6544897973797372144">Jika dasar ini ditetapkan kepada Benar dan dasar Carbon BrowserOsReleaseChannel tidak ditentukan, maka pengguna domain yang mendaftar akan dibenarkan untuk mengubah saluran pelepasan peranti tersebut. Jika dasar ini ditetapkan kepada palsu, peranti akan dikunci dalam apa jua saluran terakhir yang ditetapkan.
 
-      Saluran pilihan pengguna akan diatasi oleh dasar Carbon Browser Browser BrowserOsReleaseChannel, tetapi jika saluran dasar lebih stabil daripada yang dipasang pada peranti, maka saluran hanya akan ditukar selepas versi saluran yang lebih stabil mencapai nombor versi yang lebih tinggi daripada versi yang dipasang pada peranti.</translation>
+      Saluran pilihan pengguna akan diatasi oleh dasar Carbon BrowserOsReleaseChannel, tetapi jika saluran dasar lebih stabil daripada yang dipasang pada peranti, maka saluran hanya akan ditukar selepas versi saluran yang lebih stabil mencapai nombor versi yang lebih tinggi daripada versi yang dipasang pada peranti.</translation>
 <translation id="6553143066970470539">Peratus kecerahan skrin</translation>
 <translation id="6559057113164934677">Jangan benarkan mana-mana tapak mengakses kamera dan mikrofon</translation>
 <translation id="6561396069801924653">Tunjukkan pilihan kebolehcapaian dalam menu dulang sistem</translation>
@@ -3100,7 +3100,7 @@ Jika dasar ini dibiarkan tidak ditetapkan, papan kekunci pada skrin dilumpuhkan 
 <translation id="6698632841807204978">Dayakan pencetakan monokrom</translation>
 <translation id="6699880231565102694">Dayakan pengesahan dua faktor untuk hos akses jauh</translation>
 <translation id="6731757988219967594">Tapis tapak peringkat atas (tetapi bukan iframe yang dibenamkan) untuk kandungan dewasa</translation>
-<translation id="6734521799274931721">Mengawal Perkongsian Fail Rangkaian untuk ketersediaan OS Carbon Browser Browser Browser</translation>
+<translation id="6734521799274931721">Mengawal Perkongsian Fail Rangkaian untuk ketersediaan OS Carbon Browser</translation>
 <translation id="6735701345096330595">Paksa dayakan semakan ejaan bahasa</translation>
 <translation id="673699536430961464">Tetapan ini membenarkan pengguna beralih antara akaun Google dalam kawasan kandungan tetingkap penyemak imbas selepas mereka mengelog masuk ke peranti <ph name="PRODUCT_OS_NAME" /> mereka.
 
@@ -3108,7 +3108,7 @@ Jika dasar ini dibiarkan tidak ditetapkan, papan kekunci pada skrin dilumpuhkan 
 
       Jika dasar ini tidak ditetapkan atau ditetapkan kepada benar, gelagat lalai akan digunakan: tindakan mengelog masuk ke akaun lain daripada kawasan kandungan penyemak imbas akan dibenarkan, kecuali untuk akaun anak kerana akaun ini akan disekat untuk kawasan kandungan bukan Inkognito.
 
-      Sekiranya mengelog masuk ke akaun lain tidak seharusnya dibenarkan melalui mod Inkognito, pertimbangkan untuk menyekat mod itu menggunakan dasar PrivateModeAvailability.
+      Sekiranya mengelog masuk ke akaun lain tidak seharusnya dibenarkan melalui mod Inkognito, pertimbangkan untuk menyekat mod itu menggunakan dasar privateModeAvailability.
 
       Sila ambil perhatian bahawa pengguna akan dapat mengakses perkhidmatan Google dalam keadaan yang tidak disahkan dengan menyekat kukinya.</translation>
 <translation id="6757438632136860443">Membolehkan anda menetapkan senarai corak url bagi menentukan tapak yang dibenarkan menjalankan pemalam <ph name="FLASH_PLUGIN_NAME" />.
@@ -3145,7 +3145,7 @@ Jika dasar ini dibiarkan tidak ditetapkan, papan kekunci pada skrin dilumpuhkan 
 
       Jika dasar ini ditetapkan kepada palsu, pelanggan DNS terbina dalam tidak akan digunakan.
 
-      Jika dasar ini dibiarkan tanpa ditetapkan, pelanggan DNS terbina dalam akan didayakan secara lalai pada OS Mac, Android (apabila DNS Peribadi dan VPN dilumpuhkan) dan OS Carbon Browser Browser Browser, dan pengguna akan dapat menukar sama ada pelanggan DNS terbina dalam digunakan dengan mengedit chrome://flags atau menetapkan bendera baris perintah.</translation>
+      Jika dasar ini dibiarkan tanpa ditetapkan, pelanggan DNS terbina dalam akan didayakan secara lalai pada OS Mac, Android (apabila DNS Peribadi dan VPN dilumpuhkan) dan OS Carbon Browser, dan pengguna akan dapat menukar sama ada pelanggan DNS terbina dalam digunakan dengan mengedit chrome://flags atau menetapkan bendera baris perintah.</translation>
 <translation id="6843296367238757293">Dasar ini telah ditamatkan. Penggunaannya tidak digalakkan. Baca lebih lanjut di https://support.google.com/chrome/a/answer/7643500</translation>
 <translation id="684856667300805181">Dasar ini telah dialih keluar dalam <ph name="PRODUCT_NAME" /> 68 dan digantikan oleh <ph name="ARC_GLS_POLICY_NAME" />.</translation>
 <translation id="6856743875250214792">Dasar ini ditamatkan dan dialih keluar dalam M66, kerana digunakan untuk ujian dalaman sahaja dan merupakan liabiliti keselamatan.
@@ -3186,7 +3186,7 @@ Jika dasar ini dibiarkan tidak ditetapkan, papan kekunci pada skrin dilumpuhkan 
 
       NOTA: Pengasingan Tapak bersifat percubaan pada Android. Sokongan akan dipertingkatkan dari semasa ke semasa tetapi masalah prestasi mungkin berlaku pada masa ini.
 
-      NOTA: Dasar ini hanya digunakan pada Carbon Browser Browser Browser di Android yang dijalankan pada peranti dengan 1GB RAM ke atas sahaja. Untuk menggunakan dasar ini pada platform bukan Android, gunakan SitePerProcess.
+      NOTA: Dasar ini hanya digunakan pada Carbon Browser di Android yang dijalankan pada peranti dengan 1GB RAM ke atas sahaja. Untuk menggunakan dasar ini pada platform bukan Android, gunakan SitePerProcess.
       </translation>
 <translation id="6922884955650325312">Sekat pemalam <ph name="FLASH_PLUGIN_NAME" /></translation>
 <translation id="6923366716660828830">Menentukan nama penyedia carian lalai. Jika dibiarkan kosong atau tidak ditetapkan, nama hos yang ditentukan oleh URL carian akan digunakan.
@@ -3284,9 +3284,9 @@ Jika dasar ini dibiarkan tidak ditetapkan, papan kekunci pada skrin dilumpuhkan 
 
       Jika dasar ini ditetapkan kepada palsu atau tidak ditetapkan, <ph name="PRODUCT_NAME" /> tidak boleh mengumpul mahupun memuat naik log tersebut.
 
-      Log ini mengandungi maklumat diagnostik yang berguna apabila menyahpepijat isu berkaitan panggilan audio atau video dalam Carbon Browser Browser Browser, seperti masa dan saiz paket RTP yang diterima dan dihantar, maklum balas tentang kesesakan di rangkaian dan metadata tentang masa dan mutu bingkai audio dan video. Log ini tidak mengandungi kandungan audio atau video daripada panggilan.
+      Log ini mengandungi maklumat diagnostik yang berguna apabila menyahpepijat isu berkaitan panggilan audio atau video dalam Carbon Browser, seperti masa dan saiz paket RTP yang diterima dan dihantar, maklum balas tentang kesesakan di rangkaian dan metadata tentang masa dan mutu bingkai audio dan video. Log ini tidak mengandungi kandungan audio atau video daripada panggilan.
 
-      Pengumpulan data oleh Carbon Browser Browser Browser ini hanya boleh dicetuskan oleh perkhidmatan web Google, seperti Google Hangouts atau Google Meet.
+      Pengumpulan data oleh Carbon Browser ini hanya boleh dicetuskan oleh perkhidmatan web Google, seperti Google Hangouts atau Google Meet.
 
       Google boleh mengaitkan log ini, melalui penggunaan ID sesi, dengan log lain yang dikumpul oleh perkhidmatan Google itu sendiri, yang bertujuan untuk lebih memudahkan penyahpepijatan.
       </translation>
@@ -3382,12 +3382,12 @@ Jika dasar ini dibiarkan tidak ditetapkan, papan kekunci pada skrin dilumpuhkan 
 <translation id="7185078796915954712">TLS 1.3</translation>
 <translation id="718956142899066210">Jenis sambungan yang dibenarkan untuk kemas kini</translation>
 <translation id="7194407337890404814">Nama pembekal carian lalai</translation>
-<translation id="7199304109870655950">Konfigurasikan pilihan akses jauh dalam hos Desktop Jauh Carbon Browser Browser Browser.
+<translation id="7199304109870655950">Konfigurasikan pilihan akses jauh dalam hos Desktop Jauh Carbon Browser.
 
-      Hos Desktop Jauh Carbon Browser Browser Browser ialah perkhidmatan asli yang dijalankan pada peranti sasaran yang boleh menyambung dengan pengguna menggunakan aplikasi Desktop Jauh Carbon Browser Browser Browser.  Perkhidmatan asli ini dihimpunkan dan dilaksanakan secara berasingan daripada penyemak imbas <ph name="PRODUCT_NAME" />.
+      Hos Desktop Jauh Carbon Browser ialah perkhidmatan asli yang dijalankan pada peranti sasaran yang boleh menyambung dengan pengguna menggunakan aplikasi Desktop Jauh Carbon Browser.  Perkhidmatan asli ini dihimpunkan dan dilaksanakan secara berasingan daripada penyemak imbas <ph name="PRODUCT_NAME" />.
 
       Dasar ini diabaikan melainkan
-      Hos Desktop Jauh Carbon Browser Browser Browser dipasang.</translation>
+      Hos Desktop Jauh Carbon Browser dipasang.</translation>
 <translation id="7202925763179776247">Benarkan sekatan muat turun</translation>
 <translation id="7207095846245296855">Paksa Google SafeSearch</translation>
 <translation id="7211368186050418507">Jangan sekali-kali mengesan zon waktu secara automatik</translation>
@@ -3489,9 +3489,9 @@ Jika dasar ini dibiarkan tidak ditetapkan, papan kekunci pada skrin dilumpuhkan 
 <translation id="7329968046053403405">Menentukan jenis akaun bagi akaun yang diberikan oleh apl pengesahan Android yang menyokong pengesahan <ph name="HTTP_NEGOTIATE" /> (contohnya, pengesahan Kerberos). Maklumat ini seharusnya boleh didapati daripada pembekal apl pengesahan. Untuk mendapatkan butiran lanjut, lihat https://goo.gl/hajyfN.
 
           Jika tiada tetapan diberikan, maka pengesahan <ph name="HTTP_NEGOTIATE" /> akan dilumpuhkan pada Android.</translation>
-<translation id="7331962793961469250">Apabila ditetapkan kepada Benar, promosi apl Kedai Web Carbon Browser Browser Browser tidak akan dipaparkan pada halaman tab baharu.
+<translation id="7331962793961469250">Apabila ditetapkan kepada Benar, promosi apl Kedai Web Carbon Browser tidak akan dipaparkan pada halaman tab baharu.
 
-      Tindakan menetapkan pilihan ini kepada Tidak Benar atau membiarkannya tanpa ditetapkan akan memaparkan promosi apl Kedai Web Carbon Browser Browser Browser pada halaman tab baharu</translation>
+      Tindakan menetapkan pilihan ini kepada Tidak Benar atau membiarkannya tanpa ditetapkan akan memaparkan promosi apl Kedai Web Carbon Browser pada halaman tab baharu</translation>
 <translation id="7332963785317884918">Dasar ini telah dikecam. <ph name="PRODUCT_OS_NAME" /> akan sentiasa menggunakan strategi pembersihan 'RemoveLRU'.
 
       Mengawal kelakuan pembersihan automatik pada peranti <ph name="PRODUCT_OS_NAME" />. Pembersihan automatik dicetuskan apabila jumlah ruang cakera kosong mencapai tahap kritikal untuk memulihkan beberapa ruang cakera.
@@ -3551,7 +3551,7 @@ Jika dasar ini dibiarkan tidak ditetapkan, papan kekunci pada skrin dilumpuhkan 
       </translation>
 <translation id="7506269062143646163">Dayakan sokongan untuk Pertukaran HTTP Bertandatangan (SXG).
 
-          Jika dasar ini tidak ditetapkan atau ditetapkan kepada Didayakan, Carbon Browser Browser Browser akan menerima kandungan web yang berfungsi sebagai Pertukaran HTTP Bertandatangan.
+          Jika dasar ini tidak ditetapkan atau ditetapkan kepada Didayakan, Carbon Browser akan menerima kandungan web yang berfungsi sebagai Pertukaran HTTP Bertandatangan.
 
           Jika dasar ini ditetapkan kepada Dilumpuhkan, Pertukaran HTTP Bertandatangan tidak dapat dimuatkan.</translation>
 <translation id="7511361072385293666">Jika dasar ini ditetapkan kepada benar atau tidak ditetapkan, penggunaan protokol QUIC dalam <ph name="PRODUCT_NAME" /> dibenarkan.
@@ -3592,7 +3592,7 @@ Jika dasar ini dibiarkan tidak ditetapkan, papan kekunci pada skrin dilumpuhkan 
 
       Apabila dasar ini dibiarkan tidak ditetapkan atau ditetapkan kepada 0, tindakan menavigasi ke URL yang ditetapkan akan terus membuka URL tersebut dalam penyemak imbas alternatif.
 
-      Apabila dasar ini ditetapkan kepada suatu nombor, Carbon Browser Browser Browser akan menunjukkan mesej selama tempoh yang ditetapkan itu, kemudian membuka penyemak imbas alternatif.</translation>
+      Apabila dasar ini ditetapkan kepada suatu nombor, Carbon Browser akan menunjukkan mesej selama tempoh yang ditetapkan itu, kemudian membuka penyemak imbas alternatif.</translation>
 <translation id="7593523670408385997">Mengkonfigurasikan saiz cache yang <ph name="PRODUCT_NAME" /> akan gunakan untuk menyimpan fail cache pada cakera.
 
       Jika anda menetapkan dasar ini, <ph name="PRODUCT_NAME" /> akan menggunakan saiz cache yang diberikan tidak kira sama ada pengguna telah menyatakan bendera '--saiz-cache-cakera' atau tidak. Nilai yang dinyatakan dalam dasar ini bukan sempadan keras tetapi lebih kepada cadangan kepada sistem cache, sebarang nilai di bawah beberapa megabait adalah terlalu kecil dan akan dibulatkan kepada jumlah minimum yang munasabah.
@@ -3777,7 +3777,7 @@ Jika dasar ini dibiarkan tidak ditetapkan, papan kekunci pada skrin dilumpuhkan 
 
       NOTA: Dasar ini hanya disokong dalam mod Kios sehingga versi 45.</translation>
 <translation id="7912255076272890813">Konfigurasi jenis apl/sambungan yang dibenarkan</translation>
-<translation id="7922358664346625612">Biarkan tab terakhir dibuka dalam Carbon Browser Browser Browser.</translation>
+<translation id="7922358664346625612">Biarkan tab terakhir dibuka dalam Carbon Browser.</translation>
 <translation id="793134539373873765">Menentukan sama ada p2p akan digunakan untuk beban bayar kemas kini OS. Jika ditetapkan kepada Benar, peranti akan berkongsi dan cuba menggunakan beban bayar kemas kini pada LAN, berkemungkinan mengurangkan penggunaan dan kesesakan lebar jalur Internet. Jika beban bayar kemas kini tidak tersedia pada LAN, peranti ini akan kembali kepada memuat turun dari pelayan kemas kini. Jika ditetapkan kepada Palsu atau tidak dikonfigurasi, p2p tidak akan digunakan.</translation>
 <translation id="7933141401888114454">Dayakan penghasilan pengguna di bawah seliaan</translation>
 <translation id="793473937901685727">Tetapkan ketersediaan sijil untuk apl ARC</translation>
@@ -3813,7 +3813,7 @@ Jika dasar ini dibiarkan tidak ditetapkan, papan kekunci pada skrin dilumpuhkan 
 <translation id="798856998567564266">Jika anda mendayakan tetapan ini, penanda halaman boleh ditambahkan, dialih keluar atau diubah suai. Ini merupakan tetapan lalai juga apabila dasar ini tidak ditetapkan.
 
       Jika anda melumpuhkan tetapan ini, penanda halaman tidak boleh ditambahkan, dialih keluar atau diubah suai. Penanda halaman yang sedia ada masih tersedia.</translation>
-<translation id="7992136759457836904">Membolehkan anda mengawal sama ada peranti maya dibenarkan untuk dijalankan pada OS Carbon Browser Browser Browser.
+<translation id="7992136759457836904">Membolehkan anda mengawal sama ada peranti maya dibenarkan untuk dijalankan pada OS Carbon Browser.
 
       Jika dasar ditetapkan kepada Benar, peranti dibenarkan untuk menjalankan peranti maya.
       Jika dasar ditetapkan kepada Palsu, peranti tidak akan dibenarkan untuk menjalankan peranti maya.
@@ -3893,7 +3893,7 @@ Jika dasar ini dibiarkan tidak ditetapkan, papan kekunci pada skrin dilumpuhkan 
       Jika dasar ditetapkan sebagai tidak benar, senarai antara muka tidak akan dilaporkan.</translation>
 <translation id="8141795997560411818">Dasar ini tidak menghalang pengguna daripada menggunakan apl Google Drive Android. Jika anda mahu menghalang akses kepada Google Drive, anda tidak harus membenarkan pemasangan apl Google Drive Android juga.</translation>
 <translation id="8142894094385450823">Tetapkan penyetempatan yang disyorkan untuk sesi terurus</translation>
-<translation id="8146727383888924340">Benarkan pengguna menebus tawaran melalui Pendaftaran OS Carbon Browser Browser Browser</translation>
+<translation id="8146727383888924340">Benarkan pengguna menebus tawaran melalui Pendaftaran OS Carbon Browser</translation>
 <translation id="8148785525797916822">Menyekat amaran yang dipaparkan semasa <ph name="PRODUCT_NAME" /> dijalankan pada komputer atau sistem pengendalian yang tidak disokong lagi.</translation>
 <translation id="8148901634826284024">Dayakan ciri kebolehcapaian mod kontras tinggi.
 
@@ -3940,7 +3940,7 @@ Jika dasar ini dibiarkan tidak ditetapkan, papan kekunci pada skrin dilumpuhkan 
       Jika dasar ini dibiarkan tanpa ditetapkan, <ph name="PRODUCT_OS_NAME" /> akan menggunakan ID akaun e-mel akaun setempat peranti sebagai nama paparan pada skrin log masuk.
 
       Dasar ini diabaikan untuk akaun pengguna biasa.</translation>
-<translation id="8259375588339409826">Carbon Browser Browser Browser dan Carbon Browser Browser Browser menyokong set dasar yang sama. Harap maklum bahawa dokumen ini mungkin menyertakan dasar yang belum dikeluarkan (contohnya masukan 'Disokong pada' ciri ini merujuk pada versi <ph name="PRODUCT_NAME" /> yang belum dikeluarkan) yang tertakluk pada perubahan atau pengalihan keluar tanpa notis dan tidak memberikan sebarang jenis jaminan, termasuk tiada jaminan berhubung sifat keselamatan dan privasi ciri ini.
+<translation id="8259375588339409826">Carbon Browser dan Carbon Browser menyokong set dasar yang sama. Harap maklum bahawa dokumen ini mungkin menyertakan dasar yang belum dikeluarkan (contohnya masukan 'Disokong pada' ciri ini merujuk pada versi <ph name="PRODUCT_NAME" /> yang belum dikeluarkan) yang tertakluk pada perubahan atau pengalihan keluar tanpa notis dan tidak memberikan sebarang jenis jaminan, termasuk tiada jaminan berhubung sifat keselamatan dan privasi ciri ini.
 
 Tujuan dasar ini adalah semata-mata untuk digunakan dalam mengkonfigurasi tika <ph name="PRODUCT_NAME" /> dalaman untuk organisasi anda. Penggunaan dasar ini di luar organisasi anda (contohnya, dalam atur cara yang diedarkan secara terbuka) dianggap perisian hasad dan akan dilabelkan sebagai perisian hasad oleh Google dan vendor antivirus.
 
@@ -3957,7 +3957,7 @@ Cara yang disyorkan untuk mengkonfigurasikan dasar pada Windows adalah melalui G
 
       Jika dasar ditetapkan kepada palsu, statistik tidak akan dilaporkan.
       Jika ditetapkan kepada benar atau dibiarkan tanpa ditetapkan, statistik akan dilaporkan.</translation>
-<translation id="8294750666104911727">Biasanya, halaman dengan X-UA-Compatible ditetapkan kepada chrome=1 akan dipaparkan dalam <ph name="PRODUCT_FRAME_NAME" /> tanpa mengambil kira dasar 'Carbon Browser Browser BrowserFrameRendererSettings'.
+<translation id="8294750666104911727">Biasanya, halaman dengan X-UA-Compatible ditetapkan kepada chrome=1 akan dipaparkan dalam <ph name="PRODUCT_FRAME_NAME" /> tanpa mengambil kira dasar 'Carbon BrowserFrameRendererSettings'.
 
           Jika anda mendayakan tetapan ini, halaman tidak akan diimbas untuk mengesan teg meta.
 
@@ -3983,7 +3983,7 @@ Cara yang disyorkan untuk mengkonfigurasikan dasar pada Windows adalah melalui G
 <translation id="8344454543174932833">Import penanda halaman daripada penyemak imbas lalai pada kali pertama menjalankannya</translation>
 <translation id="8357681633047935212">Hadkan tempoh sesi pengguna</translation>
 <translation id="8359734107661430198">Dayakan API ExampleDeprecatedFeature sehingga 2008/09/02</translation>
-<translation id="8367209241899435947">Dayakan Pembersih Carbon Browser Browser Browser pada Windows</translation>
+<translation id="8367209241899435947">Dayakan Pembersih Carbon Browser pada Windows</translation>
 <translation id="8369602308428138533">Kelewatan pemadaman skrin apabila dijalankan dengan kuasa AC</translation>
 <translation id="8371178326720637170">Mendayakan sambungan terurus untuk menggunakan Enterprise Hardware Platform API</translation>
 <translation id="8374747520743832795">Melaporkan statistik dan pengecam perkakasan berkaitan kuasa.
@@ -4055,13 +4055,13 @@ Cara yang disyorkan untuk mengkonfigurasikan dasar pada Windows adalah melalui G
       Dasar ini akan dialih keluar dalam M75.</translation>
 <translation id="8484458986062090479">Sesuaikan senarai pola URL yang sentiasa harus dipaparkan oleh penyemak imbas hos.
 
-          Jika dasar ini tidak ditetapkan, pemapar lalai akan digunakan untuk semua tapak seperti yang dinyatakan oleh dasar 'Carbon Browser Browser BrowserFrameRendererSettings'.
+          Jika dasar ini tidak ditetapkan, pemapar lalai akan digunakan untuk semua tapak seperti yang dinyatakan oleh dasar 'Carbon BrowserFrameRendererSettings'.
 
           Untuk melihat contoh pola, lihat http://www.chromium.org/developers/how-tos/chrome-frame-getting-started.</translation>
 <translation id="8489964335640955763">PluginVm</translation>
 <translation id="8493645415242333585">Lumpuhkan penyimpanan sejarah penyemakan imbas</translation>
 <translation id="8499172469244085141">Tetapan lalai (pengguna boleh mengatasi)</translation>
-<translation id="849962487677588458">Dasar ini telah ditamatkan dan akan dialih keluar dalam Carbon Browser Browser Browser 78, tanpa pengganti.
+<translation id="849962487677588458">Dasar ini telah ditamatkan dan akan dialih keluar dalam Carbon Browser 78, tanpa pengganti.
 
       Dasar ini mendayakan HTTP/0.9 pada port selain 80 untuk HTTP dan 443 untuk HTTPS.
 
@@ -4089,7 +4089,7 @@ Cara yang disyorkan untuk mengkonfigurasikan dasar pada Windows adalah melalui G
 
       "Versi" di sini bermaksud versi tepat seperti '61.0.3163.120' atau awalan versi, contohnya '61.0'  </translation>
 <translation id="8544375438507658205">Pemapar HTML lalai untuk <ph name="PRODUCT_FRAME_NAME" /></translation>
-<translation id="8544465954173828789">Benarkan Mesej SMS disegerakkan dari telefon ke Carbon Browser Browser Browserbook.</translation>
+<translation id="8544465954173828789">Benarkan Mesej SMS disegerakkan dari telefon ke Carbon Browserbook.</translation>
 <translation id="8548832052135586762">Menetapkan pencetakan kepada berwarna sahaja, monokrom sahaja atau tiada sekatan mod warna. Dasar yang tidak ditetapkan akan dianggap sebagai tiada sekatan.</translation>
 <translation id="8549772397068118889">Beri amaran apabila melawat tapak web di luar pek kandungan</translation>
 <translation id="8566729013138025202">Menentukan set dasar yang akan diserahkan kepada waktu jalan ARC. Nilainya mestilah JSON sah.
@@ -4117,7 +4117,7 @@ Cara yang disyorkan untuk mengkonfigurasikan dasar pada Windows adalah melalui G
 
       Jika dasar tidak ditetapkan atau ditetapkan kepada benar, semua pengguna dibenarkan menggunakan ARC (melainkan ARC dilumpuhkan melalui cara lain).
 
-      Perubahan kepada dasar hanya akan diterapkan semasa ARC tidak dijalankan, misalnya semasa OS Carbon Browser Browser Browser bermula.</translation>
+      Perubahan kepada dasar hanya akan diterapkan semasa ARC tidak dijalankan, misalnya semasa OS Carbon Browser bermula.</translation>
 <translation id="8615400197788843468">Mendayakan ciri log masuk terhad <ph name="PRODUCT_NAME" /> dalam G Suite dan menghalang pengguna daripada menukar tetapan ini.
 
       Jika anda mentakrifkan tetapan ini, pengguna hanya dapat mengakses
@@ -4138,7 +4138,7 @@ Cara yang disyorkan untuk mengkonfigurasikan dasar pada Windows adalah melalui G
 
       Pengguna tidak boleh menukar atau membatalkan tetapan ini.</translation>
 <translation id="8631434304112909927">sehingga versi <ph name="UNTIL_VERSION" /></translation>
-<translation id="8649763579836720255">Peranti OS Carbon Browser Browser Browser boleh menggunakan pembuktian jauh (Akses Disahkan) untuk mendapatkan perakuan yang dikeluarkan oleh CA OS Carbon Browser Browser Browser yang menyatakan peranti layak memainkan kandungan yang dilindungi.  Proses ini melibatkan penghantaran maklumat sokongan kepada CA OS Carbon Browser Browser Browser yang mengenal pasti peranti tersebut secara unik.
+<translation id="8649763579836720255">Peranti OS Carbon Browser boleh menggunakan pembuktian jauh (Akses Disahkan) untuk mendapatkan perakuan yang dikeluarkan oleh CA OS Carbon Browser yang menyatakan peranti layak memainkan kandungan yang dilindungi.  Proses ini melibatkan penghantaran maklumat sokongan kepada CA OS Carbon Browser yang mengenal pasti peranti tersebut secara unik.
 
           Jika tetapan ini palsu, peranti tidak akan menggunakan pembuktian jauh untuk perlindungan kandungan dan peranti mungkin tidak dapat memainkan kandungan yang dilindungi.
 
@@ -4307,7 +4307,7 @@ Cara yang disyorkan untuk mengkonfigurasikan dasar pada Windows adalah melalui G
 
           Dasar ini memetakan ID sambungan atau URL kemas kini pada konfigurasi dasar. Dengan ID sambungan, konfigurasi akan digunakan pada sambungan yang ditentukan sahaja. Konfigurasi lalai boleh ditetapkan untuk ID khas <ph name="DEFAULT_SCOPE" />, yang akan digunakan pada semua sambungan yang tidak ditetapkan konfigurasi tersuai dalam dasar ini. Dengan URL kemas kini, konfigurasi akan digunakan pada semua sambungan dengan URL kemas kini tepat seperti yang dinyatakan dalam manifes sambungan ini, sebagaimana yang diterangkan di <ph name="LINK_TO_EXTENSION_DOC1" />.
 
-          Untuk tika Windows yang tidak dihubungkan ke domain <ph name="MS_AD_NAME" />, pemasangan paksa adalah terhad kepada apl dan sambungan yang disenaraikan dalam Gedung Web Carbon Browser Browser Browser.
+          Untuk tika Windows yang tidak dihubungkan ke domain <ph name="MS_AD_NAME" />, pemasangan paksa adalah terhad kepada apl dan sambungan yang disenaraikan dalam Gedung Web Carbon Browser.
           </translation>
 <translation id="8947415621777543415">Laporkan lokasi peranti</translation>
 <translation id="8951350807133946005">Tetapkan direktori cache cakera</translation>
@@ -4354,13 +4354,13 @@ Cara yang disyorkan untuk mengkonfigurasikan dasar pada Windows adalah melalui G
       Jika nilai dasar ditetapkan kepada token yang dipetakan kepada Quick Fix Build, peranti akan dikemas kini kepada Quick Fix Build yang sepadan jika kemas kini tidak disekat oleh dasar lain.
 
       Jika dasar ini tidak ditetapkan, atau jika nilainya tidak dipetakan kepada Quick Fix Build, maka peranti tidak akan dikemas kini kepada Quick Fix Build. Jika peranti telah pun menjalankan Quick Fix Build dan dasar tidak ditetapkan lagi atau nilainya tidak dipetakan kepada Quick Fix Build lagi, maka peranti akan dikemas kini kepada binaan biasa jika kemas kini tidak disekat oleh dasar lain.</translation>
-<translation id="9054012305936267950">Dasar ini mengawal gelagat log masuk penyemak imbas. Dasar ini membolehkan anda menentukan sama ada pengguna boleh log masuk ke <ph name="PRODUCT_NAME" /> dengan akaun mereka dan menggunakan perkhidmatan yang berkaitan dengan akaun, seperti penyegerakan Carbon Browser Browser Browser.
+<translation id="9054012305936267950">Dasar ini mengawal gelagat log masuk penyemak imbas. Dasar ini membolehkan anda menentukan sama ada pengguna boleh log masuk ke <ph name="PRODUCT_NAME" /> dengan akaun mereka dan menggunakan perkhidmatan yang berkaitan dengan akaun, seperti penyegerakan Carbon Browser.
 
-      Jika dasar ini ditetapkan kepada "Lumpuhkan log masuk penyemak imbas", maka pengguna tidak boleh log masuk ke penyemak imbas dan menggunakan perkhidmatan yang berkaitan dengan akaun. Dalam keadaan ini, ciri tahap penyemak imbas, seperti penyegerakan Carbon Browser Browser Browser, tidak boleh digunakan dan tidak akan tersedia. Jika pengguna telah log masuk dan dasar ini ditetapkan kepada "Dilumpuhkan", mereka akan dilog keluar apabila mereka menjalankan Carbon Browser Browser Browser selepas ini tetapi data profil setempat mereka, seperti penanda halaman, kata laluan dan sebagainya, tidak akan berubah. Pengguna masih boleh log masuk dan menggunakan perkhidmatan web Google, seperti Gmail.
+      Jika dasar ini ditetapkan kepada "Lumpuhkan log masuk penyemak imbas", maka pengguna tidak boleh log masuk ke penyemak imbas dan menggunakan perkhidmatan yang berkaitan dengan akaun. Dalam keadaan ini, ciri tahap penyemak imbas, seperti penyegerakan Carbon Browser, tidak boleh digunakan dan tidak akan tersedia. Jika pengguna telah log masuk dan dasar ini ditetapkan kepada "Dilumpuhkan", mereka akan dilog keluar apabila mereka menjalankan Carbon Browser selepas ini tetapi data profil setempat mereka, seperti penanda halaman, kata laluan dan sebagainya, tidak akan berubah. Pengguna masih boleh log masuk dan menggunakan perkhidmatan web Google, seperti Gmail.
 
-      Jika dasar ini ditetapkan kepada "Dayakan log masuk penyemak imbas", maka pengguna dibenarkan untuk log masuk ke penyemak imbas dan dilog masuk ke penyemak imbas secara automatik apabila mengelog masuk ke perkhidmatan web Google, seperti Gmail. Tindakan log masuk ke penyemak imbas bermakna maklumat akaun pengguna akan disimpan oleh penyemak imbas. Walau bagaimanapun, ini tidak bermakna penyegerakan Carbon Browser Browser Browser akan dihidupkan secara lalai; pengguna mesti ikut serta menggunakan ciri ini secara berasingan. Tindakan mendayakan dasar ini akan menghalang pengguna daripada mematikan tetapan yang membenarkan log masuk penyemak imbas. Untuk mengawal ketersediaan penyegerakan Carbon Browser Browser Browser, gunakan dasar "SyncDisabled".
+      Jika dasar ini ditetapkan kepada "Dayakan log masuk penyemak imbas", maka pengguna dibenarkan untuk log masuk ke penyemak imbas dan dilog masuk ke penyemak imbas secara automatik apabila mengelog masuk ke perkhidmatan web Google, seperti Gmail. Tindakan log masuk ke penyemak imbas bermakna maklumat akaun pengguna akan disimpan oleh penyemak imbas. Walau bagaimanapun, ini tidak bermakna penyegerakan Carbon Browser akan dihidupkan secara lalai; pengguna mesti ikut serta menggunakan ciri ini secara berasingan. Tindakan mendayakan dasar ini akan menghalang pengguna daripada mematikan tetapan yang membenarkan log masuk penyemak imbas. Untuk mengawal ketersediaan penyegerakan Carbon Browser, gunakan dasar "SyncDisabled".
 
-      Jika dasar ini ditetapkan kepada "Paksa log masuk penyemak imbas", pengguna akan melihat dialog pemilihan akaun dan perlu memilih serta log masuk ke akaun untuk menggunakan penyemak imbas. Langkah ini memastikan bahawa bagi akaun terurus, dasar yang dikaitkan dengan akaun tersebut akan diterapkan dan dikuatkuasakan. Secara lalai, dasar ini menghidupkan penyegerakan Carbon Browser Browser Browser untuk akaun tersebut, kecuali dalam keadaan apabila penyegerakan dilumpuhkan oleh pentadbir domain atau melalui dasar "SyncDisabled". Nilai lalai BrowserGuestModeEnabled akan ditetapkan kepada palsu. Sila ambil perhatian bahawa profil tidak bertandatangan yang sedia ada akan dikunci dan tidak boleh diakses selepas dasar ini didayakan. Untuk mendapatkan maklumat lanjut, lihat artikel pusat bantuan: https://support.google.com/chrome/a/answer/7572556. Pilihan ini tidak menyokong Linux dan akan berbalik kepada "Dayakan log masuk penyemak imbas" jika digunakan.
+      Jika dasar ini ditetapkan kepada "Paksa log masuk penyemak imbas", pengguna akan melihat dialog pemilihan akaun dan perlu memilih serta log masuk ke akaun untuk menggunakan penyemak imbas. Langkah ini memastikan bahawa bagi akaun terurus, dasar yang dikaitkan dengan akaun tersebut akan diterapkan dan dikuatkuasakan. Secara lalai, dasar ini menghidupkan penyegerakan Carbon Browser untuk akaun tersebut, kecuali dalam keadaan apabila penyegerakan dilumpuhkan oleh pentadbir domain atau melalui dasar "SyncDisabled". Nilai lalai BrowserGuestModeEnabled akan ditetapkan kepada palsu. Sila ambil perhatian bahawa profil tidak bertandatangan yang sedia ada akan dikunci dan tidak boleh diakses selepas dasar ini didayakan. Untuk mendapatkan maklumat lanjut, lihat artikel pusat bantuan: https://support.google.com/chrome/a/answer/7572556. Pilihan ini tidak menyokong Linux dan akan berbalik kepada "Dayakan log masuk penyemak imbas" jika digunakan.
 
       Jika dasar ini tidak ditetapkan, maka pengguna boleh menentukan sama ada mereka mahu mendayakan pilihan log masuk penyemak imbas dan menggunakannya mengikut kesesuaian mereka.</translation>
 <translation id="9072600218500597787">Mengkonfigurasikan nama domain hos yang diperlukan, yang akan dikenakan pada hos akses jauh dan menghalang pengguna daripada menukarnya.
@@ -4407,7 +4407,7 @@ Cara yang disyorkan untuk mengkonfigurasikan dasar pada Windows adalah melalui G
 
       Jika dasar ini ditetapkan kepada benar, log sistem akan dihantar. Jika ditetapkan
       kepada palsu atau tidak ditetapkan, maka tiada log sistem akan dihantar.</translation>
-<translation id="9150416707757015439">Dasar ini tidak diterima. Sebaliknya, sila gunaka PrivateModeAvailability.
+<translation id="9150416707757015439">Dasar ini tidak diterima. Sebaliknya, sila gunaka privateModeAvailability.
       Dayakan mod Inkognito dalam <ph name="PRODUCT_NAME" />.
 
       Jika tetapan ini didayakan atau tidak dikonfigurasi, pengguna boleh membuka halaman web dalam mod inkognito.
@@ -4454,7 +4454,7 @@ Cara yang disyorkan untuk mengkonfigurasikan dasar pada Windows adalah melalui G
 
       Apabila dasar ini ditetapkan, dasar ini akan digunakan untuk melancarkan <ph name="PRODUCT_NAME" /> apabila melancarkan <ph name="PRODUCT_NAME" /> daripada Internet Explorer.
 
-      Dasar ini boleh ditetapkan kepada laluan fail boleh laku, atau ${chrome} untuk mengesan lokasi pemasangan Carbon Browser Browser Browser secara automatik.</translation>
+      Dasar ini boleh ditetapkan kepada laluan fail boleh laku, atau ${chrome} untuk mengesan lokasi pemasangan Carbon Browser secara automatik.</translation>
 <translation id="930930237275114205">Tetapkan direktori data pengguna <ph name="PRODUCT_FRAME_NAME" /></translation>
 <translation id="943865157632139008">Membenarkan anda untuk mengkonfigurasi pemapar HTML lalai apabila <ph name="PRODUCT_FRAME_NAME" /> dipasang.
       Tetapan lalai adalah untuk membenarkan hos penyemak imbas melakukan paparan, tetapi anda boleh memilih untuk membatalkan tetapan ini dan mengaturkan supaya <ph name="PRODUCT_FRAME_NAME" /> memaparkan halaman HTML secara lalai.</translation>

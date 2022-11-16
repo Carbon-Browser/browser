@@ -6,7 +6,9 @@
 
 #include <memory>
 
+#include "base/test/scoped_feature_list.h"
 #include "testing/gmock/include/gmock/gmock.h"
+#include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/mojom/scroll/scrollbar_mode.mojom-blink.h"
 #include "third_party/blink/renderer/core/css/css_style_declaration.h"
 #include "third_party/blink/renderer/core/html/html_anchor_element.h"
@@ -20,13 +22,12 @@
 #include "third_party/blink/renderer/core/testing/core_unit_test_helper.h"
 #include "third_party/blink/renderer/core/testing/sim/sim_request.h"
 #include "third_party/blink/renderer/core/testing/sim/sim_test.h"
-#include "third_party/blink/renderer/platform/geometry/int_size.h"
 #include "third_party/blink/renderer/platform/graphics/paint/paint_artifact.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
+#include "ui/gfx/geometry/size.h"
 
 using blink::test::RunPendingTasks;
 using testing::_;
-using testing::AnyNumber;
 
 namespace blink {
 namespace {
@@ -36,8 +37,6 @@ class AnimationMockChromeClient : public RenderingTestChromeClient {
   AnimationMockChromeClient() : has_scheduled_animation_(false) {}
 
   // ChromeClient
-  MOCK_METHOD2(AttachRootGraphicsLayer,
-               void(GraphicsLayer*, LocalFrame* localRoot));
   MOCK_METHOD3(MockUpdateTooltipUnderCursor,
                void(LocalFrame*, const String&, TextDirection));
   void UpdateTooltipUnderCursor(LocalFrame& frame,
@@ -57,10 +56,7 @@ class LocalFrameViewTest : public RenderingTest {
  protected:
   LocalFrameViewTest()
       : RenderingTest(MakeGarbageCollected<SingleChildLocalFrameClient>()),
-        chrome_client_(MakeGarbageCollected<AnimationMockChromeClient>()) {
-    EXPECT_CALL(GetAnimationMockChromeClient(), AttachRootGraphicsLayer(_, _))
-        .Times(AnyNumber());
-  }
+        chrome_client_(MakeGarbageCollected<AnimationMockChromeClient>()) {}
 
   ~LocalFrameViewTest() override {
     testing::Mock::VerifyAndClearExpectations(&GetAnimationMockChromeClient());
@@ -82,6 +78,8 @@ class LocalFrameViewTest : public RenderingTest {
  private:
   Persistent<AnimationMockChromeClient> chrome_client_;
 };
+
+using LocalFrameViewSimTest = SimTest;
 
 TEST_F(LocalFrameViewTest, SetPaintInvalidationDuringUpdateAllLifecyclePhases) {
   SetBodyInnerHTML("<div id='a' style='color: blue'>A</div>");
@@ -150,45 +148,21 @@ TEST_F(LocalFrameViewTest, HideTooltipWhenScrollPositionChanges) {
 TEST_F(LocalFrameViewTest, NoOverflowInIncrementVisuallyNonEmptyPixelCount) {
   EXPECT_FALSE(GetDocument().View()->IsVisuallyNonEmpty());
   GetDocument().View()->IncrementVisuallyNonEmptyPixelCount(
-      IntSize(65536, 65536));
+      gfx::Size(65536, 65536));
   EXPECT_TRUE(GetDocument().View()->IsVisuallyNonEmpty());
-}
-
-// This test addresses http://crbug.com/696173, in which a call to
-// LocalFrameView::UpdateLayersAndCompositingAfterScrollIfNeeded during layout
-// caused a crash as the code was incorrectly assuming that the ancestor
-// overflow layer would always be valid.
-TEST_F(LocalFrameViewTest,
-       ViewportConstrainedObjectsHandledCorrectlyDuringLayout) {
-  SetBodyInnerHTML(R"HTML(
-    <style>.container { height: 200%; }
-    #sticky { position: sticky; top: 0; height: 50px; }</style>
-    <div class='container'><div id='sticky'></div></div>
-  )HTML");
-
-  auto* sticky = To<LayoutBoxModelObject>(GetLayoutObjectByElementId("sticky"));
-
-  // Deliberately invalidate the ancestor overflow layer. This approximates
-  // http://crbug.com/696173, in which the ancestor overflow layer can be null
-  // during layout.
-  sticky->Layer()->UpdateAncestorScrollContainerLayer(nullptr);
-
-  // This call should not crash.
-  GetDocument().View()->LayoutViewport()->SetScrollOffset(
-      ScrollOffset(0, 100), mojom::blink::ScrollType::kProgrammatic);
 }
 
 TEST_F(LocalFrameViewTest, UpdateLifecyclePhasesForPrintingDetachedFrame) {
   SetBodyInnerHTML("<iframe style='display: none'></iframe>");
   SetChildFrameHTML("A");
 
-  ChildFrame().StartPrinting(FloatSize(200, 200), FloatSize(200, 200), 1);
+  ChildFrame().StartPrinting(gfx::SizeF(200, 200), gfx::SizeF(200, 200), 1);
   ChildDocument().View()->UpdateLifecyclePhasesForPrinting();
 
   // The following checks that the detached frame has been walked for PrePaint.
-  EXPECT_EQ(DocumentLifecycle::kCompositingAssignmentsClean,
+  EXPECT_EQ(DocumentLifecycle::kPrePaintClean,
             GetDocument().Lifecycle().GetState());
-  EXPECT_EQ(DocumentLifecycle::kCompositingAssignmentsClean,
+  EXPECT_EQ(DocumentLifecycle::kPrePaintClean,
             ChildDocument().Lifecycle().GetState());
   auto* child_layout_view = ChildDocument().GetLayoutView();
   EXPECT_TRUE(child_layout_view->FirstFragment().PaintProperties());
@@ -198,20 +172,20 @@ TEST_F(LocalFrameViewTest, PrintFrameUpdateAllLifecyclePhases) {
   SetBodyInnerHTML("<iframe></iframe>");
   SetChildFrameHTML("A");
 
-  ChildFrame().StartPrinting(FloatSize(200, 200), FloatSize(200, 200), 1);
+  ChildFrame().StartPrinting(gfx::SizeF(200, 200), gfx::SizeF(200, 200), 1);
   ChildDocument().View()->UpdateLifecyclePhasesForPrinting();
 
-  EXPECT_EQ(DocumentLifecycle::kCompositingAssignmentsClean,
+  EXPECT_EQ(DocumentLifecycle::kPrePaintClean,
             GetDocument().Lifecycle().GetState());
-  EXPECT_EQ(DocumentLifecycle::kCompositingAssignmentsClean,
+  EXPECT_EQ(DocumentLifecycle::kPrePaintClean,
             ChildDocument().Lifecycle().GetState());
 
   // In case UpdateAllLifecyclePhases is called during child frame printing for
   // any reason, we should not paint.
   UpdateAllLifecyclePhasesForTest();
-  EXPECT_EQ(DocumentLifecycle::kCompositingAssignmentsClean,
+  EXPECT_EQ(DocumentLifecycle::kPrePaintClean,
             GetDocument().Lifecycle().GetState());
-  EXPECT_EQ(DocumentLifecycle::kCompositingAssignmentsClean,
+  EXPECT_EQ(DocumentLifecycle::kPrePaintClean,
             ChildDocument().Lifecycle().GetState());
 
   ChildFrame().EndPrinting();
@@ -349,7 +323,7 @@ TEST_F(LocalFrameViewTest,
 // Ensure the fragment navigation "scroll into view and focus" behavior doesn't
 // activate synchronously while rendering is blocked waiting on a stylesheet.
 // See https://crbug.com/851338.
-TEST_F(SimTest, FragmentNavChangesFocusWhileRenderingBlocked) {
+TEST_F(LocalFrameViewSimTest, FragmentNavChangesFocusWhileRenderingBlocked) {
   SimRequest main_resource("https://example.com/test.html", "text/html");
   SimSubresourceRequest css_resource("https://example.com/sheet.css",
                                      "text/css");
@@ -407,7 +381,7 @@ TEST_F(SimTest, FragmentNavChangesFocusWhileRenderingBlocked) {
       << "Scroll offset wasn't changed after load completed.";
 }
 
-TEST_F(SimTest, ForcedLayoutWithIncompleteSVGChildFrame) {
+TEST_F(LocalFrameViewSimTest, ForcedLayoutWithIncompleteSVGChildFrame) {
   SimRequest main_resource("https://example.com/test.html", "text/html");
   SimRequest svg_resource("https://example.com/file.svg", "image/svg+xml");
 
@@ -445,9 +419,6 @@ TEST_F(LocalFrameViewTest, TogglePaintEligibility) {
   GetDocument().View()->MarkFirstEligibleToPaint();
   EXPECT_FALSE(parent_timing.FirstEligibleToPaint().is_null());
 
-  // Subframes are throttled when first loaded.
-  EXPECT_TRUE(ChildDocument().View()->ShouldThrottleRenderingForTest());
-
   // Toggle paint elgibility to true.
   ChildDocument().OverrideIsInitialEmptyDocument();
   ChildDocument().View()->BeginLifecycleUpdates();
@@ -472,7 +443,7 @@ TEST_F(LocalFrameViewTest, IsUpdatingLifecycle) {
   GetFrame().View()->SetTargetStateForTest(DocumentLifecycle::kUninitialized);
 }
 
-TEST_F(SimTest, PaintEligibilityNoSubframe) {
+TEST_F(LocalFrameViewSimTest, PaintEligibilityNoSubframe) {
   SimRequest resource("https://example.com/", "text/html");
 
   LoadURL("https://example.com/");
@@ -489,12 +460,12 @@ TEST_F(SimTest, PaintEligibilityNoSubframe) {
   EXPECT_FALSE(timing.FirstEligibleToPaint().is_null());
 }
 
-TEST_F(SimTest, SameOriginPaintEligibility) {
+TEST_F(LocalFrameViewSimTest, SameOriginPaintEligibility) {
   SimRequest resource("https://example.com/", "text/html");
 
   LoadURL("https://example.com/");
   resource.Complete(R"HTML(
-      <iframe id=frame top=4000px left=4000px>
+      <iframe id=frame style="position:absolute;top:4000px;left:4000px">
         <p>Hello</p>
       </iframe>
     )HTML");
@@ -506,7 +477,8 @@ TEST_F(SimTest, SameOriginPaintEligibility) {
 
   EXPECT_FALSE(GetDocument().View()->ShouldThrottleRenderingForTest());
 
-  // Same origin frames are not throttled.
+  // Same origin frames are not throttled, but initially empty frame
+  // are not eligible to paint.
   EXPECT_FALSE(frame_document->View()->ShouldThrottleRenderingForTest());
   EXPECT_TRUE(frame_timing.FirstEligibleToPaint().is_null());
 
@@ -517,12 +489,13 @@ TEST_F(SimTest, SameOriginPaintEligibility) {
   EXPECT_FALSE(frame_timing.FirstEligibleToPaint().is_null());
 }
 
-TEST_F(SimTest, CrossOriginPaintEligibility) {
+TEST_F(LocalFrameViewSimTest, CrossOriginPaintEligibility) {
   SimRequest resource("https://example.com/", "text/html");
 
   LoadURL("https://example.com/");
   resource.Complete(R"HTML(
-      <iframe id=frame srcdoc ="<p>Hello</p>" sandbox top=4000px left=4000px>
+      <iframe id=frame srcdoc ="<p>Hello</p>" sandbox
+        style="position:absolute;top:4000px;left:4000px">
       </iframe>
     )HTML");
 
@@ -530,6 +503,11 @@ TEST_F(SimTest, CrossOriginPaintEligibility) {
       To<HTMLIFrameElement>(GetDocument().getElementById("frame"));
   auto* frame_document = frame_element->contentDocument();
   PaintTiming& frame_timing = PaintTiming::From(*frame_document);
+
+  // We do one lifecycle update before throttling initially empty documents.
+  GetDocument().View()->UpdateAllLifecyclePhasesForTest();
+  // And another to mark ineligible for paint.
+  GetDocument().View()->UpdateAllLifecyclePhasesForTest();
 
   EXPECT_FALSE(GetDocument().View()->ShouldThrottleRenderingForTest());
 
@@ -544,7 +522,7 @@ TEST_F(SimTest, CrossOriginPaintEligibility) {
   EXPECT_TRUE(frame_timing.FirstEligibleToPaint().is_null());
 }
 
-TEST_F(SimTest, NestedCrossOriginPaintEligibility) {
+TEST_F(LocalFrameViewSimTest, NestedCrossOriginPaintEligibility) {
   // Create a document with doubly nested iframes.
   SimRequest main_resource("https://example.com/", "text/html");
   SimRequest frame_resource("https://example.com/iframe.html", "text/html");
@@ -552,7 +530,8 @@ TEST_F(SimTest, NestedCrossOriginPaintEligibility) {
   LoadURL("https://example.com/");
   main_resource.Complete("<iframe id=outer src=iframe.html></iframe>");
   frame_resource.Complete(R"HTML(
-      <iframe id=inner srcdoc ="<p>Hello</p>" sandbox top=4000px left=4000px>
+      <iframe id=inner srcdoc ="<p>Hello</p>" sandbox
+        style="position:absolute;top:4000px;left:4000px">
       </iframe>
     )HTML");
 
@@ -566,9 +545,14 @@ TEST_F(SimTest, NestedCrossOriginPaintEligibility) {
   auto* inner_frame_document = inner_frame_element->contentDocument();
   PaintTiming& inner_frame_timing = PaintTiming::From(*inner_frame_document);
 
+  // We do one lifecycle update before throttling initially empty documents.
+  GetDocument().View()->UpdateAllLifecyclePhasesForTest();
+  // And another to mark ineligible for paint.
+  GetDocument().View()->UpdateAllLifecyclePhasesForTest();
+
   EXPECT_FALSE(GetDocument().View()->ShouldThrottleRenderingForTest());
   EXPECT_FALSE(outer_frame_document->View()->ShouldThrottleRenderingForTest());
-  EXPECT_TRUE(outer_frame_timing.FirstEligibleToPaint().is_null());
+  EXPECT_FALSE(outer_frame_timing.FirstEligibleToPaint().is_null());
   EXPECT_TRUE(inner_frame_document->View()->ShouldThrottleRenderingForTest());
   EXPECT_TRUE(inner_frame_timing.FirstEligibleToPaint().is_null());
 

@@ -4,6 +4,7 @@
 
 #include "chrome/browser/speech/cros_speech_recognition_service.h"
 
+#include "base/files/file_path.h"
 #include "base/stl_util.h"
 #include "chrome/services/speech/audio_source_fetcher_impl.h"
 #include "chrome/services/speech/cros_speech_recognition_recognizer_impl.h"
@@ -12,6 +13,8 @@
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "media/base/media_switches.h"
+#include "media/mojo/mojom/speech_recognition.mojom.h"
+#include "media/mojo/mojom/speech_recognition_service.mojom.h"
 
 namespace speech {
 
@@ -47,14 +50,15 @@ CrosSpeechRecognitionService::CrosSpeechRecognitionService(
 
 CrosSpeechRecognitionService::~CrosSpeechRecognitionService() {}
 
-void CrosSpeechRecognitionService::Create(
+void CrosSpeechRecognitionService::BindSpeechRecognitionContext(
     mojo::PendingReceiver<media::mojom::SpeechRecognitionContext> receiver) {
-  if (enable_soda_) {
-    speech_recognition_contexts_.Add(this, std::move(receiver));
-  } else {
-    // If soda is not enabled, do the same thing as chrome.
-    ChromeSpeechRecognitionService::Create(std::move(receiver));
-  }
+  speech_recognition_contexts_.Add(this, std::move(receiver));
+}
+
+void CrosSpeechRecognitionService::BindAudioSourceSpeechRecognitionContext(
+    mojo::PendingReceiver<media::mojom::AudioSourceSpeechRecognitionContext>
+        receiver) {
+  audio_source_speech_recognition_contexts_.Add(this, std::move(receiver));
 }
 
 void CrosSpeechRecognitionService::BindRecognizer(
@@ -85,18 +89,32 @@ void CrosSpeechRecognitionService::BindAudioSourceFetcher(
 
   // CrosSpeechRecognitionService runs on browser UI thread.
   // Create AudioSourceFetcher on browser IO thread to avoid UI jank.
-  // Note that SpeechRecognitionRecognizer (used for network speech) also runs
+  // Note that its CrosSpeechRecognitionRecognizer must also run
   // on the IO thread. If CrosSpeechRecognitionService is moved away from
   // browser UI thread, we can call AudioSourceFetcherImpl::Create directly.
   content::GetIOThreadTaskRunner({})->PostTask(
       FROM_HERE,
       base::BindOnce(
-          &AudioSourceFetcherImpl::Create, std::move(fetcher_receiver),
-          std::make_unique<CrosSpeechRecognitionRecognizerImpl>(
-              std::move(client), nullptr /* =SpeechRecognitionService WeakPtr*/,
-              std::move(options), binary_path, languagepack_path)));
+          &CrosSpeechRecognitionService::CreateAudioSourceFetcherOnIOThread,
+          weak_factory_.GetWeakPtr(), std::move(fetcher_receiver),
+          std::move(client), std::move(options), binary_path,
+          languagepack_path));
   std::move(callback).Run(
       CrosSpeechRecognitionRecognizerImpl::IsMultichannelSupported());
+}
+
+void CrosSpeechRecognitionService::CreateAudioSourceFetcherOnIOThread(
+    mojo::PendingReceiver<media::mojom::AudioSourceFetcher> fetcher_receiver,
+    mojo::PendingRemote<media::mojom::SpeechRecognitionRecognizerClient> client,
+    media::mojom::SpeechRecognitionOptionsPtr options,
+    const base::FilePath& binary_path,
+    const base::FilePath& languagepack_path) {
+  DCHECK_CURRENTLY_ON(content::BrowserThread::IO);
+  AudioSourceFetcherImpl::Create(
+      std::move(fetcher_receiver),
+      std::make_unique<CrosSpeechRecognitionRecognizerImpl>(
+          std::move(client), nullptr /* =SpeechRecognitionService WeakPtr*/,
+          std::move(options), binary_path, languagepack_path));
 }
 
 }  // namespace speech

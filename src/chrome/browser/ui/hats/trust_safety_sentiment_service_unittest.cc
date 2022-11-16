@@ -4,21 +4,28 @@
 
 #include "chrome/browser/ui/hats/trust_safety_sentiment_service.h"
 
+#include "base/memory/raw_ptr.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
+#include "chrome/browser/extensions/api/settings_private/generated_pref.h"
+#include "chrome/browser/extensions/api/settings_private/generated_pref_test_base.h"
 #include "chrome/browser/ui/hats/hats_service_factory.h"
 #include "chrome/browser/ui/hats/mock_hats_service.h"
 #include "chrome/browser/ui/hats/trust_safety_sentiment_service_factory.h"
+#include "chrome/common/channel_info.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/common/webui_url_constants.h"
 #include "chrome/test/base/testing_profile.h"
+#include "components/content_settings/core/browser/cookie_settings.h"
 #include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "components/content_settings/core/test/content_settings_mock_provider.h"
 #include "components/content_settings/core/test/content_settings_test_utils.h"
+#include "components/privacy_sandbox/privacy_sandbox_prefs.h"
 #include "components/signin/public/base/signin_pref_names.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
 #include "components/unified_consent/pref_names.h"
+#include "components/version_info/channel.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/test_renderer_host.h"
 #include "content/public/test/web_contents_tester.h"
@@ -47,9 +54,24 @@ class TrustSafetySentimentServiceTest : public testing::Test {
     std::string privacy_settings_probability = "0.6";
     std::string trusted_surface_probability = "0.4";
     std::string transactions_probability = "0.05";
+    std::string privacy_sandbox_3_consent_accept_probability = "0.08";
+    std::string privacy_sandbox_3_consent_decline_probability = "0.1";
+    std::string privacy_sandbox_3_notice_dismiss_probability = "0.1";
+    std::string privacy_sandbox_3_notice_ok_probability = "0.4";
+    std::string privacy_sandbox_3_notice_settings_probability = "0.7";
     std::string privacy_settings_trigger_id = "privacy-settings-test";
     std::string trusted_surface_trigger_id = "trusted-surface-test";
     std::string transactions_trigger_id = "transactions-test";
+    std::string privacy_sandbox_3_consent_accept_trigger_id =
+        "privacy-sandbox-3-consent-accept";
+    std::string privacy_sandbox_3_consent_decline_trigger_id =
+        "privacy-sandbox-3-consent-decline";
+    std::string privacy_sandbox_3_notice_dismiss_trigger_id =
+        "privacy-sandbox-3-notice-dismiss";
+    std::string privacy_sandbox_3_notice_ok_trigger_id =
+        "privacy-sandbox-3-ok-dismiss";
+    std::string privacy_sandbox_3_notice_settings_trigger_id =
+        "privacy-sandbox-3-settings-dismiss";
     std::string transactions_password_manager_time = "20s";
   };
 
@@ -66,9 +88,29 @@ class TrustSafetySentimentServiceTest : public testing::Test {
              params.privacy_settings_probability},
             {"trusted-surface-probability", params.trusted_surface_probability},
             {"transactions-probability", params.transactions_probability},
+            {"privacy-sandbox-3-consent-accept-probability",
+             params.privacy_sandbox_3_consent_accept_probability},
+            {"privacy-sandbox-3-consent-decline-probability",
+             params.privacy_sandbox_3_consent_decline_probability},
+            {"privacy-sandbox-3-notice-dismiss-probability",
+             params.privacy_sandbox_3_notice_dismiss_probability},
+            {"privacy-sandbox-3-notice-ok-probability",
+             params.privacy_sandbox_3_notice_ok_probability},
+            {"privacy-sandbox-3-notice-settings-probability",
+             params.privacy_sandbox_3_notice_settings_probability},
             {"privacy-settings-trigger-id", params.privacy_settings_trigger_id},
             {"trusted-surface-trigger-id", params.trusted_surface_trigger_id},
             {"transactions-trigger-id", params.transactions_trigger_id},
+            {"privacy-sandbox-3-consent-accept-trigger-id",
+             params.privacy_sandbox_3_consent_accept_trigger_id},
+            {"privacy-sandbox-3-consent-decline-trigger-id",
+             params.privacy_sandbox_3_consent_decline_trigger_id},
+            {"privacy-sandbox-3-notice-dismiss-trigger-id",
+             params.privacy_sandbox_3_notice_dismiss_trigger_id},
+            {"privacy-sandbox-3-notice-ok-trigger-id",
+             params.privacy_sandbox_3_notice_ok_trigger_id},
+            {"privacy-sandbox-3-notice-settings-trigger-id",
+             params.privacy_sandbox_3_notice_settings_trigger_id},
             {"transactions-password-manager-time",
              params.transactions_password_manager_time},
         });
@@ -107,10 +149,11 @@ class TrustSafetySentimentServiceTest : public testing::Test {
  private:
   content::BrowserTaskEnvironment task_environment_{
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
+  content::RenderViewHostTestEnabler render_view_host_test_enabler_;
   TestingProfile profile_;
   base::test::ScopedFeatureList feature_list_;
   base::HistogramTester histogram_tester_;
-  MockHatsService* mock_hats_service_;
+  raw_ptr<MockHatsService> mock_hats_service_;
 };
 
 TEST_F(TrustSafetySentimentServiceTest, Eligibility_NtpOpens) {
@@ -163,7 +206,7 @@ TEST_F(TrustSafetySentimentServiceTest, Eligibility_Time) {
       TrustSafetySentimentService::FeatureArea::kPrivacySettings, {});
   service()->OpenedNewTabPage();
 
-  task_environment()->AdvanceClock(base::TimeDelta::FromMinutes(2));
+  task_environment()->AdvanceClock(base::Minutes(2));
   service()->TriggerOccurred(
       TrustSafetySentimentService::FeatureArea::kTrustedSurface, {});
   service()->OpenedNewTabPage();
@@ -171,7 +214,7 @@ TEST_F(TrustSafetySentimentServiceTest, Eligibility_Time) {
 
   // Moving the clock forward such that only the trusted surface trigger is
   // within the window should guarantee it is the survey shown.
-  task_environment()->AdvanceClock(base::TimeDelta::FromMinutes(9));
+  task_environment()->AdvanceClock(base::Minutes(9));
   EXPECT_CALL(
       *mock_hats_service(),
       LaunchSurvey(kHatsSurveyTriggerTrustSafetyTrustedSurface, _, _, _, _));
@@ -259,7 +302,6 @@ TEST_F(TrustSafetySentimentServiceTest, SettingsWatcher_PrivacySettings) {
   SetupFeatureParameters(params);
 
   // Create and navigate a test web contents to settings.
-  content::RenderViewHostTestEnabler rvh_test_enabler;
   auto web_contents =
       content::WebContentsTester::CreateTestWebContents(profile(), nullptr);
   content::WebContentsTester::For(web_contents.get())
@@ -277,7 +319,7 @@ TEST_F(TrustSafetySentimentServiceTest, SettingsWatcher_PrivacySettings) {
   EXPECT_CALL(
       *mock_hats_service(),
       LaunchSurvey(kHatsSurveyTriggerTrustSafetyPrivacySettings, _, _, _, _));
-  task_environment()->AdvanceClock(base::TimeDelta::FromSeconds(20));
+  task_environment()->AdvanceClock(base::Seconds(20));
   task_environment()->RunUntilIdle();
   service()->OpenedNewTabPage();
   testing::Mock::VerifyAndClearExpectations(mock_hats_service());
@@ -286,13 +328,13 @@ TEST_F(TrustSafetySentimentServiceTest, SettingsWatcher_PrivacySettings) {
   // receiving a survey.
   EXPECT_CALL(*mock_hats_service(), LaunchSurvey(_, _, _, _, _)).Times(0);
   service()->InteractedWithPrivacySettings(web_contents.get());
-  task_environment()->AdvanceClock(base::TimeDelta::FromSeconds(5));
+  task_environment()->AdvanceClock(base::Seconds(5));
   task_environment()->RunUntilIdle();
   service()->OpenedNewTabPage();
 
   content::WebContentsTester::For(web_contents.get())
       ->SetLastCommittedURL(GURL("http://unrelated.com"));
-  task_environment()->AdvanceClock(base::TimeDelta::FromSeconds(15));
+  task_environment()->AdvanceClock(base::Seconds(15));
   task_environment()->RunUntilIdle();
   service()->OpenedNewTabPage();
 }
@@ -309,7 +351,6 @@ TEST_F(TrustSafetySentimentServiceTest, SettingsWatcher_PasswordManager) {
   // Check that after being informed of a visit to the password manager page,
   // the service correctly watches the provided WebContents to check if the
   // user stays on settings.
-  content::RenderViewHostTestEnabler rvh_test_enabler;
   auto web_contents =
       content::WebContentsTester::CreateTestWebContents(profile(), nullptr);
   content::WebContentsTester::For(web_contents.get())
@@ -330,7 +371,7 @@ TEST_F(TrustSafetySentimentServiceTest, SettingsWatcher_PasswordManager) {
               LaunchSurvey(kHatsSurveyTriggerTrustSafetyTransactions, _, _,
                            expected_psd, _));
 
-  task_environment()->AdvanceClock(base::TimeDelta::FromSeconds(20));
+  task_environment()->AdvanceClock(base::Seconds(20));
   task_environment()->RunUntilIdle();
   service()->OpenedNewTabPage();
   testing::Mock::VerifyAndClearExpectations(mock_hats_service());
@@ -339,13 +380,13 @@ TEST_F(TrustSafetySentimentServiceTest, SettingsWatcher_PasswordManager) {
   // eligible.
   EXPECT_CALL(*mock_hats_service(), LaunchSurvey(_, _, _, _, _)).Times(0);
   service()->OpenedPasswordManager(web_contents.get());
-  task_environment()->AdvanceClock(base::TimeDelta::FromSeconds(5));
+  task_environment()->AdvanceClock(base::Seconds(5));
   task_environment()->RunUntilIdle();
   service()->OpenedNewTabPage();
 
   content::WebContentsTester::For(web_contents.get())
       ->SetLastCommittedURL(GURL("http://unrelated.com"));
-  task_environment()->AdvanceClock(base::TimeDelta::FromSeconds(15));
+  task_environment()->AdvanceClock(base::Seconds(15));
   task_environment()->RunUntilIdle();
   service()->OpenedNewTabPage();
 }
@@ -402,6 +443,136 @@ TEST_F(TrustSafetySentimentServiceTest, SavedCard) {
               LaunchSurvey(kHatsSurveyTriggerTrustSafetyTransactions, _, _,
                            expected_psd, _));
   service()->SavedCard();
+  service()->OpenedNewTabPage();
+}
+
+TEST_F(TrustSafetySentimentServiceTest,
+       InteractedWithPrivacySandbox3ConsentAccept) {
+  // Accepting Privacy Sandbox 3 consent is considered a trigger, and should
+  // make a user eligible to receive a survey.
+  FeatureParams params;
+  params.privacy_sandbox_3_consent_accept_probability = "1.0";
+  params.min_time_to_prompt = "0s";
+  params.ntp_visits_min_range = "0";
+  params.ntp_visits_max_range = "0";
+  SetupFeatureParameters(params);
+
+  auto* content_settings =
+      HostContentSettingsMapFactory::GetForProfile(profile());
+  content_settings->SetDefaultContentSetting(
+      ContentSettingsType::COOKIES, ContentSetting::CONTENT_SETTING_BLOCK);
+  profile()->GetTestingPrefService()->SetUserPref(
+      prefs::kPrivacySandboxApisEnabledV2, std::make_unique<base::Value>(true));
+
+  SurveyBitsData expected_psd = {
+      {"Stable channel", chrome::GetChannel() == version_info::Channel::STABLE},
+      {"3P cookies blocked", true},
+      {"Privacy Sandbox enabled", true}};
+
+  EXPECT_CALL(
+      *mock_hats_service(),
+      LaunchSurvey(kHatsSurveyTriggerTrustSafetyPrivacySandbox3ConsentAccept, _,
+                   _, expected_psd, _));
+  service()->InteractedWithPrivacySandbox3(
+      TrustSafetySentimentService::FeatureArea::kPrivacySandbox3ConsentAccept);
+  service()->OpenedNewTabPage();
+}
+
+TEST_F(TrustSafetySentimentServiceTest,
+       InteractedWithPrivacySandbox3ConsentDecline) {
+  // Declining Privacy Sandbox 3 consent is considered a trigger, and should
+  // make a user eligible to receive a survey.
+  FeatureParams params;
+  params.privacy_sandbox_3_consent_decline_probability = "1.0";
+  params.min_time_to_prompt = "0s";
+  params.ntp_visits_min_range = "0";
+  params.ntp_visits_max_range = "0";
+  SetupFeatureParameters(params);
+
+  SurveyBitsData expected_psd = {
+      {"Stable channel", chrome::GetChannel() == version_info::Channel::STABLE},
+      {"3P cookies blocked", false},
+      {"Privacy Sandbox enabled", false}};
+
+  EXPECT_CALL(
+      *mock_hats_service(),
+      LaunchSurvey(kHatsSurveyTriggerTrustSafetyPrivacySandbox3ConsentDecline,
+                   _, _, expected_psd, _));
+  service()->InteractedWithPrivacySandbox3(
+      TrustSafetySentimentService::FeatureArea::kPrivacySandbox3ConsentDecline);
+  service()->OpenedNewTabPage();
+}
+
+TEST_F(TrustSafetySentimentServiceTest,
+       InteractedWithPrivacySandbox3NoticeDismiss) {
+  // Dismissing Privacy Sandbox 3 notice is considered a trigger, and should
+  // make a user eligible to receive a survey.
+  FeatureParams params;
+  params.privacy_sandbox_3_notice_dismiss_probability = "1.0";
+  params.min_time_to_prompt = "0s";
+  params.ntp_visits_min_range = "0";
+  params.ntp_visits_max_range = "0";
+  SetupFeatureParameters(params);
+
+  SurveyBitsData expected_psd = {
+      {"Stable channel", chrome::GetChannel() == version_info::Channel::STABLE},
+      {"3P cookies blocked", false},
+      {"Privacy Sandbox enabled", false}};
+
+  EXPECT_CALL(
+      *mock_hats_service(),
+      LaunchSurvey(kHatsSurveyTriggerTrustSafetyPrivacySandbox3NoticeDismiss, _,
+                   _, expected_psd, _));
+  service()->InteractedWithPrivacySandbox3(
+      TrustSafetySentimentService::FeatureArea::kPrivacySandbox3NoticeDismiss);
+  service()->OpenedNewTabPage();
+}
+
+TEST_F(TrustSafetySentimentServiceTest, InteractedWithPrivacySandbox3NoticeOk) {
+  // Okaying the Privacy Sandbox 3 notice is considered a trigger, and should
+  // make a user eligible to receive a survey.
+  FeatureParams params;
+  params.privacy_sandbox_3_notice_ok_probability = "1.0";
+  params.min_time_to_prompt = "0s";
+  params.ntp_visits_min_range = "0";
+  params.ntp_visits_max_range = "0";
+  SetupFeatureParameters(params);
+
+  SurveyBitsData expected_psd = {
+      {"Stable channel", chrome::GetChannel() == version_info::Channel::STABLE},
+      {"3P cookies blocked", false},
+      {"Privacy Sandbox enabled", false}};
+
+  EXPECT_CALL(*mock_hats_service(),
+              LaunchSurvey(kHatsSurveyTriggerTrustSafetyPrivacySandbox3NoticeOk,
+                           _, _, expected_psd, _));
+  service()->InteractedWithPrivacySandbox3(
+      TrustSafetySentimentService::FeatureArea::kPrivacySandbox3NoticeOk);
+  service()->OpenedNewTabPage();
+}
+
+TEST_F(TrustSafetySentimentServiceTest,
+       InteractedWithPrivacySandbox3NoticeSettings) {
+  // Going to settings from the Privacy Sandbox 3 notice is considered a
+  // trigger, and should make a user eligible to receive a survey.
+  FeatureParams params;
+  params.privacy_sandbox_3_notice_settings_probability = "1.0";
+  params.min_time_to_prompt = "0s";
+  params.ntp_visits_min_range = "0";
+  params.ntp_visits_max_range = "0";
+  SetupFeatureParameters(params);
+
+  SurveyBitsData expected_psd = {
+      {"Stable channel", chrome::GetChannel() == version_info::Channel::STABLE},
+      {"3P cookies blocked", false},
+      {"Privacy Sandbox enabled", false}};
+
+  EXPECT_CALL(
+      *mock_hats_service(),
+      LaunchSurvey(kHatsSurveyTriggerTrustSafetyPrivacySandbox3NoticeSettings,
+                   _, _, expected_psd, _));
+  service()->InteractedWithPrivacySandbox3(
+      TrustSafetySentimentService::FeatureArea::kPrivacySandbox3NoticeSettings);
   service()->OpenedNewTabPage();
 }
 
@@ -502,7 +673,7 @@ TEST_F(TrustSafetySentimentServiceTest, PrivacySettingsProductSpecificData) {
   managed_provider->SetWebsiteSetting(
       ContentSettingsPattern::Wildcard(), ContentSettingsPattern::Wildcard(),
       ContentSettingsType::COOKIES,
-      std::make_unique<base::Value>(ContentSetting::CONTENT_SETTING_BLOCK));
+      base::Value(ContentSetting::CONTENT_SETTING_BLOCK));
   content_settings::TestUtils::OverrideProvider(
       content_settings, std::move(managed_provider),
       HostContentSettingsMap::POLICY_PROVIDER);
@@ -574,7 +745,7 @@ TEST_F(TrustSafetySentimentServiceTest, ClosingIncognitoDelaysSurvey) {
 
   // The second visit to the NTP should not trigger a survey if it takes place
   // less than the minimum time to prompt after closing an incognito session.
-  task_environment()->AdvanceClock(base::TimeDelta::FromSeconds(30));
+  task_environment()->AdvanceClock(base::Seconds(30));
   service()->OpenedNewTabPage();
 
   // Up to this point no attempt to show any survey should have been made.
@@ -586,7 +757,7 @@ TEST_F(TrustSafetySentimentServiceTest, ClosingIncognitoDelaysSurvey) {
 
   // The next tab open which occurs after the required number of opens, and the
   // minimum time has passed, should trigger a survey.
-  task_environment()->AdvanceClock(base::TimeDelta::FromMinutes(1));
+  task_environment()->AdvanceClock(base::Minutes(1));
   service()->OpenedNewTabPage();
 
   CheckHistograms({TrustSafetySentimentService::FeatureArea::kPrivacySettings,

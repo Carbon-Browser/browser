@@ -19,6 +19,7 @@
 #include "chrome/browser/ui/apps/chrome_app_delegate.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/extensions/app_launch_params.h"
+#include "components/services/app_service/public/cpp/app_launch_util.h"
 #include "content/public/browser/notification_service.h"
 #include "content/public/browser/notification_types.h"
 #include "content/public/test/browser_test_utils.h"
@@ -119,7 +120,7 @@ const Extension* PlatformAppBrowserTest::LoadAndLaunchPlatformApp(
 const Extension* PlatformAppBrowserTest::LoadAndLaunchPlatformApp(
     const char* name,
     const std::string& message) {
-  ExtensionTestMessageListener launched_listener(message, false);
+  ExtensionTestMessageListener launched_listener(message);
   const Extension* extension =
       LoadAndLaunchPlatformApp(name, &launched_listener);
 
@@ -160,19 +161,18 @@ const Extension* PlatformAppBrowserTest::InstallAndLaunchPlatformApp(
 void PlatformAppBrowserTest::LaunchPlatformApp(const Extension* extension) {
   apps::AppServiceProxyFactory::GetForProfile(profile())
       ->BrowserAppLauncher()
-      ->LaunchAppWithParams(apps::AppLaunchParams(
-          extension->id(), LaunchContainer::kLaunchContainerNone,
-          WindowOpenDisposition::NEW_WINDOW,
-          apps::mojom::AppLaunchSource::kSourceTest));
+      ->LaunchAppWithParamsForTesting(apps::AppLaunchParams(
+          extension->id(), apps::LaunchContainer::kLaunchContainerNone,
+          WindowOpenDisposition::NEW_WINDOW, apps::LaunchSource::kFromTest));
 }
 
 void PlatformAppBrowserTest::LaunchHostedApp(const Extension* extension) {
   apps::AppServiceProxyFactory::GetForProfile(profile())
       ->BrowserAppLauncher()
-      ->LaunchAppWithParams(CreateAppLaunchParamsUserContainer(
+      ->LaunchAppWithParamsForTesting(CreateAppLaunchParamsUserContainer(
           browser()->profile(), extension,
           WindowOpenDisposition::NEW_FOREGROUND_TAB,
-          apps::mojom::AppLaunchSource::kSourceCommandLine));
+          apps::LaunchSource::kFromCommandLine));
 }
 
 WebContents* PlatformAppBrowserTest::GetFirstAppWindowWebContents() {
@@ -205,10 +205,10 @@ size_t PlatformAppBrowserTest::RunGetWindowsFunctionForExtension(
     const Extension* extension) {
   scoped_refptr<WindowsGetAllFunction> function = new WindowsGetAllFunction();
   function->set_extension(extension);
-  std::unique_ptr<base::ListValue> result(
+  base::Value::List result(
       utils::ToList(utils::RunFunctionAndReturnSingleResult(function.get(),
                                                             "[]", browser())));
-  return result->GetList().size();
+  return result.size();
 }
 
 bool PlatformAppBrowserTest::RunGetWindowFunctionForExtension(
@@ -250,7 +250,7 @@ AppWindow* PlatformAppBrowserTest::CreateAppWindowFromParams(
   ExtensionHost* background_host =
       process_manager->GetBackgroundHostForExtension(extension->id());
   window->Init(GURL(std::string()), new AppWindowContentsImpl(window),
-               background_host->host_contents()->GetMainFrame(), params);
+               background_host->host_contents()->GetPrimaryMainFrame(), params);
   return window;
 }
 
@@ -275,8 +275,9 @@ void PlatformAppBrowserTest::CallAdjustBoundsToBeVisibleOnScreenForAppWindow(
 
 AppWindow* PlatformAppBrowserTest::CreateTestAppWindow(
     const std::string& window_create_options) {
-  ExtensionTestMessageListener launched_listener("launched", true);
-  ExtensionTestMessageListener loaded_listener("window_loaded", false);
+  ExtensionTestMessageListener launched_listener("launched",
+                                                 ReplyBehavior::kWillReply);
+  ExtensionTestMessageListener loaded_listener("window_loaded");
 
   // Load and launch the test app.
   const Extension* extension =

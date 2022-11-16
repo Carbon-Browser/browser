@@ -8,7 +8,6 @@
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/layout/ng/grid/layout_ng_grid_interface.h"
 #include "third_party/blink/renderer/core/layout/ng/grid/ng_grid_data.h"
-#include "third_party/blink/renderer/core/layout/ng/grid/ng_grid_properties.h"
 #include "third_party/blink/renderer/core/layout/ng/layout_ng_block.h"
 #include "third_party/blink/renderer/core/layout/ng/layout_ng_mixin.h"
 
@@ -21,54 +20,55 @@ class CORE_EXPORT LayoutNGGrid : public LayoutNGBlock,
 
   void UpdateBlockLayout(bool relayout_children) override;
 
-  const char* GetName() const override { return "LayoutNGGrid"; }
+  const char* GetName() const override {
+    NOT_DESTROYED();
+    return "LayoutNGGrid";
+  }
 
   const LayoutNGGridInterface* ToLayoutNGGridInterface() const final;
 
-  bool HasCachedPlacements(wtf_size_t column_auto_repititions,
-                           wtf_size_t row_auto_reptitions) const;
-  const NGGridPlacementProperties& GetCachedPlacementProperties();
-  void SetCachedPlacementProperties(NGGridPlacementProperties&& properties,
-                                    wtf_size_t column_auto_repititions,
-                                    wtf_size_t row_auto_reptitions);
+  const NGGridPlacementData& CachedPlacementData() const;
+  void SetCachedPlacementData(NGGridPlacementData&& placement_data);
 
-  wtf_size_t ExplicitGridStartForDirection(
-      GridTrackSizingDirection direction) const final;
-  wtf_size_t ExplicitGridEndForDirection(
-      GridTrackSizingDirection direction) const final;
   wtf_size_t AutoRepeatCountForDirection(
-      GridTrackSizingDirection direction) const final;
-  LayoutUnit GridGap(GridTrackSizingDirection) const final;
-  LayoutUnit GridItemOffset(GridTrackSizingDirection) const final;
+      const GridTrackSizingDirection track_direction) const final;
+  wtf_size_t ExplicitGridStartForDirection(
+      const GridTrackSizingDirection track_direction) const final;
+  wtf_size_t ExplicitGridEndForDirection(
+      const GridTrackSizingDirection track_direction) const final;
+  LayoutUnit GridGap(
+      const GridTrackSizingDirection track_direction) const final;
+  LayoutUnit GridItemOffset(
+      const GridTrackSizingDirection track_direction) const final;
   Vector<LayoutUnit, 1> TrackSizesForComputedStyle(
-      GridTrackSizingDirection direction) const final;
+      const GridTrackSizingDirection track_direction) const final;
+
   Vector<LayoutUnit> RowPositions() const final;
   Vector<LayoutUnit> ColumnPositions() const final;
 
-  absl::optional<wtf_size_t> GetPreviousGridItemsSizeForReserveCapacity();
+  const NGGridLayoutData* GridLayoutData() const;
 
  protected:
   bool IsOfType(LayoutObjectType type) const override {
+    NOT_DESTROYED();
     return type == kLayoutObjectNGGrid ||
            LayoutNGMixin<LayoutBlock>::IsOfType(type);
   }
 
  private:
-  const NGGridData* GetGridData() const;
-  Vector<LayoutUnit> ComputeTrackSizesInRange(
-      const NGGridLayoutAlgorithmTrackCollection::Range& range,
-      GridTrackSizingDirection direction) const;
+  Vector<LayoutUnit> ComputeTrackSizeRepeaterForRange(
+      const NGGridLayoutTrackCollection& track_collection,
+      wtf_size_t range_index) const;
   Vector<LayoutUnit> ComputeExpandedPositions(
-      GridTrackSizingDirection direction) const;
+      const GridTrackSizingDirection track_direction) const;
 
   void AddChild(LayoutObject* new_child,
                 LayoutObject* before_child = nullptr) override;
-  void RemoveChild(LayoutObject*) override;
-  void StyleDidChange(StyleDifference, const ComputedStyle*) override;
+  void RemoveChild(LayoutObject* child) override;
+  void StyleDidChange(StyleDifference diff,
+                      const ComputedStyle* old_style) override;
 
-  NGGridPlacementProperties cached_placement_properties_;
-  wtf_size_t cached_row_auto_repititions_;
-  wtf_size_t cached_column_auto_repititions_;
+  NGGridPlacementData cached_placement_data_;
 };
 
 // wtf/casting.h helper.

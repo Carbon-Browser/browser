@@ -125,16 +125,19 @@ public class Features {
     }
 
     /** Resets Features-related state that might persist in between tests. */
-    private static void reset() {
+    private static void reset(boolean forInstrumentation) {
         sInstance = null;
         FeatureList.setTestFeatures(null);
         ChromeFeatureList.resetTestCanUseDefaultsForTesting();
         CachedFeatureFlags.resetFlagsForTesting();
+        if (forInstrumentation) {
+            CachedFeatureFlags.resetDiskForTesting();
+        }
         FieldTrials.getInstance().reset();
     }
 
     /**
-     * Feature processor intended to be used in Robolectric and {@link DummyUiActivityTestCase}
+     * Feature processor intended to be used in Robolectric and {@link BlankUiTestActivityTestCase}
      * tests. The collected feature states would be applied to {@link ChromeFeatureList}'s
      * internal test-only feature map.
      */
@@ -142,6 +145,11 @@ public class Features {
         @Override
         protected void applyFeatures() {
             getInstance().applyForJUnit();
+        }
+
+        @Override
+        protected void after() {
+            reset(/*forInstrumentation=*/false);
         }
     }
 
@@ -154,6 +162,11 @@ public class Features {
         @Override
         protected void applyFeatures() {
             getInstance().applyForInstrumentation();
+        }
+
+        @Override
+        protected void after() {
+            reset(/*forInstrumentation=*/true);
         }
     }
 
@@ -171,11 +184,6 @@ public class Features {
         protected void before() {
             collectFeatures();
             applyFeatures();
-        }
-
-        @Override
-        protected void after() {
-            reset();
         }
 
         protected abstract void applyFeatures();

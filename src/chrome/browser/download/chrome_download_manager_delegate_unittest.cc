@@ -12,15 +12,17 @@
 #include <utility>
 
 #include "base/bind.h"
+#include "base/callback.h"
 #include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/guid.h"
 #include "base/location.h"
+#include "base/memory/raw_ptr.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/threading/thread_task_runner_handle.h"
@@ -43,11 +45,13 @@
 #include "chrome/test/base/testing_profile_manager.h"
 #include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "components/content_settings/core/common/content_settings.h"
+#include "components/download/public/common/download_danger_type.h"
 #include "components/download/public/common/download_features.h"
 #include "components/download/public/common/download_interrupt_reasons.h"
 #include "components/download/public/common/mock_download_item.h"
 #include "components/prefs/pref_service.h"
 #include "components/safe_browsing/buildflags.h"
+#include "components/safe_browsing/core/common/features.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
 #include "content/public/browser/download_item_utils.h"
 #include "content/public/browser/web_contents.h"
@@ -55,6 +59,7 @@
 #include "content/public/test/mock_download_manager.h"
 #include "content/public/test/test_renderer_host.h"
 #include "content/public/test/web_contents_tester.h"
+#include "net/base/network_change_notifier.h"
 #include "net/traffic_annotation/network_traffic_annotation_test_helper.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -69,7 +74,7 @@
 #include "content/public/browser/plugin_service.h"
 #endif
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/download/download_prompt_status.h"
 #include "components/infobars/content/content_infobar_manager.h"
 #include "components/infobars/core/infobar.h"
@@ -111,22 +116,19 @@ ACTION_P3(ScheduleCallback3, result0, result1, result2) {
 
 // Struct for holding the result of calling DetermineDownloadTarget.
 struct DetermineDownloadTargetResult {
-  DetermineDownloadTargetResult();
-
   base::FilePath target_path;
-  download::DownloadItem::TargetDisposition disposition;
-  download::DownloadDangerType danger_type;
-  download::DownloadItem::MixedContentStatus mixed_content_status;
+  download::DownloadItem::TargetDisposition disposition =
+      download::DownloadItem::TARGET_DISPOSITION_OVERWRITE;
+  download::DownloadDangerType danger_type =
+      download::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS;
+  download::DownloadItem::MixedContentStatus mixed_content_status =
+      download::DownloadItem::MixedContentStatus::UNKNOWN;
   base::FilePath intermediate_path;
-  download::DownloadInterruptReason interrupt_reason;
-  absl::optional<download::DownloadSchedule> download_schedule;
+  base::FilePath display_name;
+  download::DownloadInterruptReason interrupt_reason =
+      download::DOWNLOAD_INTERRUPT_REASON_NONE;
+  std::string mime_type;
 };
-
-DetermineDownloadTargetResult::DetermineDownloadTargetResult()
-    : disposition(download::DownloadItem::TARGET_DISPOSITION_OVERWRITE),
-      danger_type(download::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS),
-      mixed_content_status(download::DownloadItem::MixedContentStatus::UNKNOWN),
-      interrupt_reason(download::DOWNLOAD_INTERRUPT_REASON_NONE) {}
 
 // Subclass of the ChromeDownloadManagerDelegate that replaces a few interaction
 // points for ease of testing.
@@ -174,7 +176,7 @@ class TestChromeDownloadManagerDelegate : public ChromeDownloadManagerDelegate {
         FROM_HERE, base::BindOnce(std::move(callback), result, path_to_return));
   }
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   void OnDownloadCanceled(download::DownloadItem* download,
                           bool has_no_external_storage) override {}
 #endif
@@ -235,6 +237,12 @@ class TestChromeDownloadManagerDelegate : public ChromeDownloadManagerDelegate {
       const base::FilePath& path,
       DownloadTargetDeterminerDelegate::ConfirmationCallback) override {}
 
+  void DetermineLocalPath(download::DownloadItem* download,
+                          const base::FilePath& virtual_path,
+                          download::LocalPathCallback callback) override {
+    std::move(callback).Run(virtual_path, virtual_path.BaseName());
+  }
+
  private:
   friend class ChromeDownloadManagerDelegateTest;
 };
@@ -294,7 +302,7 @@ class ChromeDownloadManagerDelegateTest
 
  private:
   base::FilePath test_download_dir_;
-  sync_preferences::TestingPrefServiceSyncable* pref_service_;
+  raw_ptr<sync_preferences::TestingPrefServiceSyncable> pref_service_;
   std::unique_ptr<content::MockDownloadManager> download_manager_;
   std::unique_ptr<TestChromeDownloadManagerDelegate> delegate_;
   MockWebContentsDelegate web_contents_delegate_;
@@ -303,7 +311,9 @@ class ChromeDownloadManagerDelegateTest
 };
 
 ChromeDownloadManagerDelegateTest::ChromeDownloadManagerDelegateTest()
-    : download_manager_(new ::testing::NiceMock<content::MockDownloadManager>),
+    : ChromeRenderViewHostTestHarness(
+          base::test::TaskEnvironment::TimeSource::MOCK_TIME),
+      download_manager_(new ::testing::NiceMock<content::MockDownloadManager>),
       testing_profile_manager_(TestingBrowserProcess::GetGlobal()) {}
 
 void ChromeDownloadManagerDelegateTest::SetUp() {
@@ -323,15 +333,9 @@ void ChromeDownloadManagerDelegateTest::SetUp() {
   pref_service_ = profile()->GetTestingPrefService();
   web_contents()->SetDelegate(&web_contents_delegate_);
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   pref_service_->SetInteger(prefs::kPromptForDownloadAndroid,
                             static_cast<int>(DownloadPromptStatus::DONT_SHOW));
-
-  if (base::FeatureList::IsEnabled(download::features::kDownloadLater)) {
-    pref_service_->SetInteger(
-        prefs::kDownloadLaterPromptStatus,
-        static_cast<int>(DownloadLaterPromptStatus::kDontShow));
-  }
 #endif
 }
 
@@ -383,7 +387,8 @@ ChromeDownloadManagerDelegateTest::CreateActiveDownloadItem(int32_t id) {
       .WillByDefault(Return(false));
   std::string guid = base::GenerateGUID();
   ON_CALL(*item, GetGuid()).WillByDefault(ReturnRefOfCopy(guid));
-  content::DownloadItemUtils::AttachInfo(item.get(), profile(), web_contents());
+  content::DownloadItemUtils::AttachInfoForTesting(item.get(), profile(),
+                                                   web_contents());
   EXPECT_CALL(*download_manager_, GetDownload(id))
       .WillRepeatedly(Return(item.get()));
   EXPECT_CALL(*download_manager_, GetDownloadByGuid(guid))
@@ -405,15 +410,17 @@ void StoreDownloadTargetInfo(
     download::DownloadDangerType danger_type,
     download::DownloadItem::MixedContentStatus mixed_content_status,
     const base::FilePath& intermediate_path,
-    absl::optional<download::DownloadSchedule> download_schedule,
+    const base::FilePath& display_name,
+    const std::string& mime_type,
     download::DownloadInterruptReason interrupt_reason) {
   result->target_path = target_path;
   result->disposition = target_disposition;
   result->danger_type = danger_type;
   result->mixed_content_status = mixed_content_status;
   result->intermediate_path = intermediate_path;
+  result->display_name = display_name;
   result->interrupt_reason = interrupt_reason;
-  result->download_schedule = std::move(download_schedule);
+  result->mime_type = mime_type;
   quit_runloop.Run();
 }
 
@@ -491,10 +498,11 @@ void ExpectExtensionOnlyIn(const InsecureDownloadExtensions& ext,
       kInsecureDownloadHistogramTargetSecure,
       kInsecureDownloadHistogramTargetInsecure};
 
-  std::vector<const std::string> histograms;
-  for (auto* initiator : initiator_types) {
-    for (auto* download : download_types) {
-      histograms.push_back(GetDLBlockingHistogramName(initiator, download));
+  std::vector<std::string> histograms;
+  for (auto* initiator_init : initiator_types) {
+    for (auto* download_init : download_types) {
+      histograms.push_back(
+          GetDLBlockingHistogramName(initiator_init, download_init));
     }
   }
 
@@ -670,7 +678,7 @@ TEST_F(ChromeDownloadManagerDelegateTest, MaybeDangerousContent) {
     DetermineDownloadTargetResult result;
     DetermineDownloadTarget(download_item.get(), &result);
 
-    EXPECT_EQ(DownloadFileType::DANGEROUS,
+    EXPECT_EQ(DownloadFileType::ALLOW_ON_USER_GESTURE,
               DownloadItemModel(download_item.get()).GetDangerLevel());
     EXPECT_EQ(download::DOWNLOAD_DANGER_TYPE_MAYBE_DANGEROUS_CONTENT,
               result.danger_type);
@@ -852,7 +860,7 @@ TEST_F(ChromeDownloadManagerDelegateTest,
                         kInsecureDownloadHistogramTargetInsecure, histograms);
 }
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 TEST_F(ChromeDownloadManagerDelegateTest, InterceptDownloadByOfflinePages) {
   const GURL kUrl("http://example.com/foo");
   std::string mime_type = "text/html";
@@ -1157,7 +1165,7 @@ TEST_F(ChromeDownloadManagerDelegateTest, BlockedAsActiveContent_Block) {
 }
 
 // MIXEDSCRIPT content setting only applies to Desktop.
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
 TEST_F(ChromeDownloadManagerDelegateTest,
        BlockedAsActiveContent_PolicyOverride) {
   // Verifies that active mixed content download blocking is overridden by the
@@ -1204,7 +1212,7 @@ TEST_F(ChromeDownloadManagerDelegateTest,
       download::DOWNLOAD_INTERRUPT_REASON_NONE,
       download::DownloadItem::MixedContentStatus::SAFE);
 }
-#endif  // !OS_ANDROID
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 TEST_F(ChromeDownloadManagerDelegateTest, WithoutHistoryDbNextId) {
   delegate()->GetNextId(base::BindOnce(
@@ -1248,7 +1256,7 @@ TEST_F(ChromeDownloadManagerDelegateTest, SanitizeGoogleSearchLink) {
   }
 }
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
 namespace {
 // Verify the file picker confirmation result matches |expected_result|. Run
 // |completion_closure| on completion.
@@ -1259,8 +1267,6 @@ void VerifyFilePickerConfirmation(
     const base::FilePath& virtual_path,
     absl::optional<download::DownloadSchedule> download_schedule) {
   ASSERT_EQ(result, expected_result);
-  ASSERT_FALSE(download_schedule)
-      << "DownloadSchedule is only used on Android.";
   std::move(completion_closure).Run();
 }
 }  // namespace
@@ -1320,7 +1326,86 @@ TEST_F(ChromeDownloadManagerDelegateTest,
 
   run_loop.Run();
 }
-#endif  // OS_ANDROID
+#endif  // BUILDFLAG(IS_ANDROID)
+
+#if !BUILDFLAG(IS_ANDROID)
+#if !BUILDFLAG(IS_CHROMEOS_ASH)
+TEST_F(ChromeDownloadManagerDelegateTest, ScheduleCancelForEphemeralWarning) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitWithFeatures(
+      {safe_browsing::kDownloadBubble, safe_browsing::kDownloadBubbleV2}, {});
+
+  std::unique_ptr<download::MockDownloadItem> download_item =
+      CreateActiveDownloadItem(0);
+  EXPECT_CALL(*download_item, GetDangerType())
+      .WillRepeatedly(Return(download::DOWNLOAD_DANGER_TYPE_DANGEROUS_FILE));
+
+  delegate()->ScheduleCancelForEphemeralWarning(download_item->GetGuid());
+
+  // Cancel should not be called until threshold is reached
+  EXPECT_CALL(*download_item, Cancel(false)).Times(0);
+  task_environment()->AdvanceClock(base::Minutes(59));
+  base::RunLoop().RunUntilIdle();
+  EXPECT_CALL(*download_item, Cancel(false)).Times(1);
+  task_environment()->AdvanceClock(base::Hours(1));
+  task_environment()->RunUntilIdle();
+}
+
+TEST_F(ChromeDownloadManagerDelegateTest,
+       ScheduleCancelForEphemeralWarning_DownloadKept) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitWithFeatures(
+      {safe_browsing::kDownloadBubble, safe_browsing::kDownloadBubbleV2}, {});
+  std::unique_ptr<download::MockDownloadItem> download_item =
+      CreateActiveDownloadItem(0);
+  EXPECT_CALL(*download_item, GetDangerType())
+      .WillRepeatedly(Return(download::DOWNLOAD_DANGER_TYPE_USER_VALIDATED));
+
+  delegate()->ScheduleCancelForEphemeralWarning(download_item->GetGuid());
+
+  // Cancel should not be called until threshold is reached
+  EXPECT_CALL(*download_item, Cancel(false)).Times(0);
+  task_environment()->AdvanceClock(base::Hours(1));
+  base::RunLoop().RunUntilIdle();
+}
+#endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
+
+TEST_F(ChromeDownloadManagerDelegateTest, CancelAllEphemeralWarnings) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitWithFeatures(
+      {safe_browsing::kDownloadBubble, safe_browsing::kDownloadBubbleV2}, {});
+  std::vector<download::DownloadItem*> items;
+  auto safe_item = CreateActiveDownloadItem(0);
+  EXPECT_CALL(*safe_item, GetDangerType())
+      .WillRepeatedly(Return(download::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS));
+  auto dangerous_item = CreateActiveDownloadItem(0);
+  EXPECT_CALL(*dangerous_item, GetDangerType())
+      .WillRepeatedly(Return(download::DOWNLOAD_DANGER_TYPE_DANGEROUS_FILE));
+  auto canceled_item = CreateActiveDownloadItem(0);
+  EXPECT_CALL(*canceled_item, GetDangerType())
+      .WillRepeatedly(Return(download::DOWNLOAD_DANGER_TYPE_DANGEROUS_FILE));
+  EXPECT_CALL(*canceled_item, GetState())
+      .WillRepeatedly(Return(DownloadItem::CANCELLED));
+  items.push_back(safe_item.get());
+  items.push_back(dangerous_item.get());
+  items.push_back(canceled_item.get());
+  EXPECT_CALL(*download_manager(), GetAllDownloads(_))
+      .WillRepeatedly(SetArgPointee<0>(items));
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  // No cancels should go through for Ash.
+  EXPECT_CALL(*safe_item, Cancel(false)).Times(0);
+  EXPECT_CALL(*dangerous_item, Cancel(false)).Times(0);
+  EXPECT_CALL(*canceled_item, Cancel(false)).Times(0);
+#else
+  EXPECT_CALL(*safe_item, Cancel(false)).Times(0);
+  EXPECT_CALL(*dangerous_item, Cancel(false)).Times(1);
+  EXPECT_CALL(*canceled_item, Cancel(false)).Times(0);
+#endif
+
+  delegate()->CancelAllEphemeralWarnings();
+}
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 #if BUILDFLAG(FULL_SAFE_BROWSING)
 namespace {
@@ -1436,7 +1521,7 @@ const SafeBrowsingTestParameters kSafeBrowsingTestCases[] = {
      safe_browsing::DownloadCheckResult::UNKNOWN,
      DownloadPrefs::DownloadRestriction::NONE,
 
-     download::DOWNLOAD_DANGER_TYPE_DANGEROUS_FILE,
+     download::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS,
      /*blocked=*/false},
 
     // UNKNOWN verdict for a potentially dangerous file blocked by policy.
@@ -1454,7 +1539,7 @@ const SafeBrowsingTestParameters kSafeBrowsingTestCases[] = {
      safe_browsing::DownloadCheckResult::UNKNOWN,
      DownloadPrefs::DownloadRestriction::MALICIOUS_FILES,
 
-     download::DOWNLOAD_DANGER_TYPE_DANGEROUS_FILE,
+     download::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS,
      /*blocked=*/false},
 
     // DANGEROUS verdict for a potentially dangerous file.
@@ -1599,6 +1684,8 @@ TEST_P(ChromeDownloadManagerDelegateTestWithSafeBrowsing, CheckClientDownload) {
       .WillOnce(Return(kParameters.verdict));
   EXPECT_CALL(*download_item, GetDangerType())
       .WillRepeatedly(Return(kParameters.initial_danger_type));
+  EXPECT_CALL(*download_item, RequireSafetyChecks())
+      .WillRepeatedly(Return(true));
 
   if (kParameters.initial_danger_level != DownloadFileType::NOT_DANGEROUS) {
     DownloadItemModel(download_item.get())
@@ -1628,6 +1715,22 @@ TEST_P(ChromeDownloadManagerDelegateTestWithSafeBrowsing, CheckClientDownload) {
   run_loop.Run();
 }
 
+TEST_P(ChromeDownloadManagerDelegateTestWithSafeBrowsing,
+       SkipCheckClientDownload) {
+  const SafeBrowsingTestParameters& kParameters = GetParam();
+
+  std::unique_ptr<download::MockDownloadItem> download_item =
+      CreateActiveDownloadItem(0);
+  EXPECT_CALL(*download_item, GetDangerType())
+      .WillRepeatedly(Return(kParameters.initial_danger_type));
+  EXPECT_CALL(*download_item, RequireSafetyChecks())
+      .WillRepeatedly(Return(false));
+
+  base::RunLoop run_loop;
+  ASSERT_TRUE(delegate()->ShouldCompleteDownload(download_item.get(),
+                                                 run_loop.QuitClosure()));
+}
+
 TEST_F(ChromeDownloadManagerDelegateTestWithSafeBrowsing,
        TrustedSourcesPolicyNotTrusted) {
   GURL download_url("http://untrusted.com/best-download-ever.exe");
@@ -1636,7 +1739,8 @@ TEST_F(ChromeDownloadManagerDelegateTestWithSafeBrowsing,
   std::unique_ptr<download::MockDownloadItem> download_item =
       CreateActiveDownloadItem(0);
   EXPECT_CALL(*download_item, GetURL()).WillRepeatedly(ReturnRef(download_url));
-
+  EXPECT_CALL(*download_item, RequireSafetyChecks())
+      .WillRepeatedly(Return(true));
   EXPECT_CALL(*delegate(), GetDownloadProtectionService());
   EXPECT_CALL(*download_protection_service(), MockCheckClientDownload())
       .WillOnce(Return(safe_browsing::DownloadCheckResult::SAFE));
@@ -1649,7 +1753,7 @@ TEST_F(ChromeDownloadManagerDelegateTestWithSafeBrowsing,
   run_loop.Run();
 }
 
-#if !defined(OS_WIN)
+#if !BUILDFLAG(IS_WIN)
 // TODO(crbug.com/739204) Add a Windows version of this test.
 TEST_F(ChromeDownloadManagerDelegateTestWithSafeBrowsing,
        TrustedSourcesPolicyTrusted) {
@@ -1663,14 +1767,16 @@ TEST_F(ChromeDownloadManagerDelegateTestWithSafeBrowsing,
   std::unique_ptr<download::MockDownloadItem> download_item =
       CreateActiveDownloadItem(0);
   EXPECT_CALL(*download_item, GetURL()).WillRepeatedly(ReturnRef(download_url));
+  EXPECT_CALL(*download_item, RequireSafetyChecks())
+      .WillRepeatedly(Return(true));
   EXPECT_CALL(*delegate(), GetDownloadProtectionService()).Times(0);
   EXPECT_TRUE(delegate()->ShouldCompleteDownload(download_item.get(),
                                                  base::OnceClosure()));
 }
-#endif  // OS_WIN
+#endif  // !BUILDFLAG(IS_WIN)
 #endif  // FULL_SAFE_BROWSING
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 
 namespace {
 
@@ -1702,7 +1808,7 @@ class AndroidDownloadInfobarCounter
     infobar->RemoveSelf();
   }
 
-  infobars::ContentInfoBarManager* infobar_manager_;
+  raw_ptr<infobars::ContentInfoBarManager> infobar_manager_;
   int infobar_count_ = 0;
 };
 
@@ -1710,14 +1816,16 @@ class TestDownloadDialogBridge : public DownloadDialogBridge {
  public:
   TestDownloadDialogBridge() = default;
 
+  TestDownloadDialogBridge(const TestDownloadDialogBridge&) = delete;
+  TestDownloadDialogBridge& operator=(const TestDownloadDialogBridge&) = delete;
+
   // DownloadDialogBridge implementation.
   void ShowDialog(gfx::NativeWindow native_window,
                   int64_t total_bytes,
                   ConnectionType connection_type,
                   DownloadLocationDialogType dialog_type,
                   const base::FilePath& suggested_path,
-                  bool supports_later_dialog,
-                  bool show_date_time_picker,
+                  bool is_incognito,
                   DownloadDialogBridge::DialogCallback callback) override {
     dialog_shown_count_++;
     dialog_type_ = dialog_type;
@@ -1745,8 +1853,6 @@ class TestDownloadDialogBridge : public DownloadDialogBridge {
   DownloadLocationDialogType dialog_type_;
   DownloadTargetDeterminerDelegate::ConfirmationCallback
       dialog_complete_callback_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestDownloadDialogBridge);
 };
 
 }  // namespace
@@ -1836,7 +1942,7 @@ TEST_F(ChromeDownloadManagerDelegateTest, RequestConfirmation_Android) {
   for (const auto& test_case : kTestCases) {
     std::unique_ptr<download::MockDownloadItem> download_item =
         CreateActiveDownloadItem(1);
-    content::DownloadItemUtils::AttachInfo(
+    content::DownloadItemUtils::AttachInfoForTesting(
         download_item.get(), profile(),
         test_case.web_contents == WebContents::AVAILABLE ? web_contents()
                                                          : nullptr);
@@ -1874,73 +1980,4 @@ TEST_F(ChromeDownloadManagerDelegateTest, RequestConfirmation_Android) {
     download_item->NotifyObserversDownloadUpdated();
   }
 }
-
-class MockNetworkChangeNotifier : public net::NetworkChangeNotifier {
- public:
-  explicit MockNetworkChangeNotifier(ConnectionType type)
-      : connection_type_(type) {}
-
-  // net::NetworkChangeNotifier implementation.
-  ConnectionType GetCurrentConnectionType() const override {
-    return connection_type_;
-  }
-
- private:
-  ConnectionType connection_type_;
-};
-
-class DownloadLaterTriggerTest : public ChromeDownloadManagerDelegateTest {
- public:
-  void SetUp() override {
-    // Enable the download later feature first to ensure download pref loads
-    // correctly.
-    scoped_feature_list_.InitAndEnableFeatureWithParameters(
-        download::features::kDownloadLater,
-        {{download::features::kDownloadLaterMinFileSizeKb, "204800"}});
-    ChromeDownloadManagerDelegateTest::SetUp();
-  }
-
- private:
-  base::test::ScopedFeatureList scoped_feature_list_;
-};
-
-TEST_F(DownloadLaterTriggerTest, DownloadLaterTrigger) {
-  net::NetworkChangeNotifier::DisableForTest disable_for_test;
-  std::unique_ptr<net::NetworkChangeNotifier> mock_network_notifier =
-      std::make_unique<MockNetworkChangeNotifier>(
-          ConnectionType::CONNECTION_2G);
-
-  std::unique_ptr<download::MockDownloadItem> download_item =
-      CreateActiveDownloadItem(1);
-  ON_CALL(*download_item, GetTotalBytes()).WillByDefault(Return(0));
-
-  // Slow connection.
-  pref_service()->SetInteger(
-      prefs::kDownloadLaterPromptStatus,
-      static_cast<int>(DownloadLaterPromptStatus::kShowInitial));
-  EXPECT_EQ(ConnectionType::CONNECTION_2G,
-            net::NetworkChangeNotifier::GetConnectionType());
-  EXPECT_TRUE(delegate()->ShouldShowDownloadLaterDialog(download_item.get()));
-
-  mock_network_notifier.reset();
-  mock_network_notifier = std::make_unique<MockNetworkChangeNotifier>(
-      ConnectionType::CONNECTION_4G);
-  EXPECT_FALSE(delegate()->ShouldShowDownloadLaterDialog(download_item.get()));
-
-  // Large file.
-  ON_CALL(*download_item, GetTotalBytes())
-      .WillByDefault(Return(400 * 1024 * 1024));
-  EXPECT_TRUE(delegate()->ShouldShowDownloadLaterDialog(download_item.get()));
-
-  // Small file.
-  ON_CALL(*download_item, GetTotalBytes())
-      .WillByDefault(Return(190 * 1024 * 1024));
-  EXPECT_FALSE(delegate()->ShouldShowDownloadLaterDialog(download_item.get()));
-
-  // Pref turn off.
-  pref_service()->SetInteger(
-      prefs::kDownloadLaterPromptStatus,
-      static_cast<int>(DownloadLaterPromptStatus::kDontShow));
-  EXPECT_FALSE(delegate()->ShouldShowDownloadLaterDialog(download_item.get()));
-}
-#endif  // OS_ANDROID
+#endif  // BUILDFLAG(IS_ANDROID)

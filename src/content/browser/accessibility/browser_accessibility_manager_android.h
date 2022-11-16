@@ -5,11 +5,11 @@
 #ifndef CONTENT_BROWSER_ACCESSIBILITY_BROWSER_ACCESSIBILITY_MANAGER_ANDROID_H_
 #define CONTENT_BROWSER_ACCESSIBILITY_BROWSER_ACCESSIBILITY_MANAGER_ANDROID_H_
 
-#include <unordered_set>
 #include <utility>
 
 #include "content/browser/accessibility/browser_accessibility_manager.h"
-#include "content/common/render_accessibility.mojom-forward.h"
+#include "content/common/content_export.h"
+#include "third_party/blink/public/mojom/render_accessibility.mojom-forward.h"
 
 namespace ui {
 class MotionEventAndroid;
@@ -46,15 +46,21 @@ class CONTENT_EXPORT BrowserAccessibilityManagerAndroid
       base::WeakPtr<WebContentsAccessibilityAndroid> web_contents_accessibility,
       BrowserAccessibilityDelegate* delegate);
 
+  BrowserAccessibilityManagerAndroid(
+      const BrowserAccessibilityManagerAndroid&) = delete;
+  BrowserAccessibilityManagerAndroid& operator=(
+      const BrowserAccessibilityManagerAndroid&) = delete;
+
   ~BrowserAccessibilityManagerAndroid() override;
 
   static ui::AXTreeUpdate GetEmptyDocument();
 
-  // Helper methods to set/check if image descriptions are allowed.
-  void set_allow_image_descriptions(bool allow_image_descriptions) {
-    allow_image_descriptions_ = allow_image_descriptions;
+  void set_allow_image_descriptions_for_testing(bool is_allowed) {
+    allow_image_descriptions_ = is_allowed;
   }
-  bool AllowImageDescriptions() { return allow_image_descriptions_; }
+  bool should_allow_image_descriptions() const {
+    return allow_image_descriptions_;
+  }
 
   // By default, the tree is pruned for a better screen reading experience,
   // including:
@@ -82,16 +88,16 @@ class CONTENT_EXPORT BrowserAccessibilityManagerAndroid
   // BrowserAccessibilityManager overrides.
   BrowserAccessibility* GetFocus() const override;
   void SendLocationChangeEvents(
-      const std::vector<mojom::LocationChangesPtr>& changes) override;
+      const std::vector<blink::mojom::LocationChangesPtr>& changes) override;
   BrowserAccessibility* RetargetForEvents(
       BrowserAccessibility* node,
       RetargetEventType type) const override;
   void FireFocusEvent(BrowserAccessibility* node) override;
   void FireBlinkEvent(ax::mojom::Event event_type,
-                      BrowserAccessibility* node) override;
+                      BrowserAccessibility* node,
+                      int action_request_id) override;
   void FireGeneratedEvent(ui::AXEventGenerator::Event event_type,
                           BrowserAccessibility* node) override;
-  gfx::Rect GetViewBoundsInScreenCoordinates() const override;
 
   void FireLocationChanged(BrowserAccessibility* node);
 
@@ -125,6 +131,8 @@ class CONTENT_EXPORT BrowserAccessibilityManagerAndroid
   void EnableTouchPassthrough() { touch_passthrough_enabled_ = true; }
   bool touch_passthrough_enabled() const { return touch_passthrough_enabled_; }
 
+  std::u16string GenerateAccessibilityNodeInfoString(int32_t unique_id);
+
  private:
   // AXTreeObserver overrides.
   void OnAtomicUpdateFinished(
@@ -155,7 +163,8 @@ class CONTENT_EXPORT BrowserAccessibilityManagerAndroid
   // See docs for set_prune_tree_for_screen_reader, above.
   bool prune_tree_for_screen_reader_;
 
-  // Whether this manager allows image descriptions.
+  // Whether or not image descriptions are allowed for this instance, set
+  // during construction with the value from WebContentsAccessibilityAndroid.
   bool allow_image_descriptions_ = false;
 
   // Only set on the root BrowserAccessibilityManager. Keeps track of if
@@ -163,12 +172,9 @@ class CONTENT_EXPORT BrowserAccessibilityManagerAndroid
   // any_node_uses_touch_passthrough(), above, for details.
   bool touch_passthrough_enabled_ = false;
 
-  // An unordered_set of |unique_id| values for nodes cleared from the cache
+  // An set of |unique_id| values for nodes cleared from the cache
   // with each atomic update to prevent superfluous cache clear calls.
-  std::unordered_set<int32_t> nodes_already_cleared_ =
-      std::unordered_set<int32_t>();
-
-  DISALLOW_COPY_AND_ASSIGN(BrowserAccessibilityManagerAndroid);
+  std::set<int32_t> nodes_already_cleared_ = std::set<int32_t>();
 };
 
 }  // namespace content

@@ -29,15 +29,16 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_INSPECTOR_NETWORK_RESOURCES_DATA_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_INSPECTOR_NETWORK_RESOURCES_DATA_H_
 
+#include "net/cert/x509_certificate.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/html/parser/text_resource_decoder.h"
 #include "third_party/blink/renderer/core/inspector/inspector_page_agent.h"
 #include "third_party/blink/renderer/core/loader/resource/font_resource.h"
 #include "third_party/blink/renderer/platform/blob/blob_data.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_map.h"
 #include "third_party/blink/renderer/platform/network/http_header_map.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 #include "third_party/blink/renderer/platform/wtf/deque.h"
-#include "third_party/blink/renderer/platform/wtf/hash_map.h"
 #include "third_party/blink/renderer/platform/wtf/text/atomic_string.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
@@ -110,7 +111,7 @@ class NetworkResourcesData final
 
     bool IsContentEvicted() const { return is_content_evicted_; }
     // Evicts the post data and the respone content.
-    WARN_UNUSED_RESULT size_t EvictContent();
+    [[nodiscard]] size_t EvictContent();
 
     InspectorPageAgent::ResourceType GetType() const { return type_; }
     void SetType(InspectorPageAgent::ResourceType type) { type_ = type; }
@@ -151,9 +152,9 @@ class NetworkResourcesData final
     int64_t RawHeaderSize() const { return raw_header_size_; }
     void SetRawHeaderSize(int64_t size) { raw_header_size_ = size; }
 
-    Vector<AtomicString> Certificate() { return certificate_; }
-    void SetCertificate(const Vector<AtomicString>& certificate) {
-      certificate_ = certificate;
+    net::X509Certificate* Certificate() { return certificate_.get(); }
+    void SetCertificate(scoped_refptr<net::X509Certificate> certificate) {
+      certificate_ = std::move(certificate);
     }
     int64_t PendingEncodedDataLength() const {
       return pending_encoded_data_length_;
@@ -163,7 +164,7 @@ class NetworkResourcesData final
       pending_encoded_data_length_ += encoded_data_length;
     }
     void SetPostData(scoped_refptr<EncodedFormData> post_data) {
-      post_data_ = post_data;
+      post_data_ = std::move(post_data);
     }
     EncodedFormData* PostData() const { return post_data_.get(); }
 
@@ -176,7 +177,7 @@ class NetworkResourcesData final
     bool HasData() const { return data_buffer_.get(); }
     void AppendData(const char* data, size_t data_length);
     // Removes just the response content.
-    WARN_UNUSED_RESULT size_t RemoveResponseContent();
+    [[nodiscard]] size_t RemoveResponseContent();
     size_t DecodeDataToContent();
     void ProcessCustomWeakness(const LivenessBroker&);
 
@@ -204,7 +205,7 @@ class NetworkResourcesData final
     UntracedMember<const Resource> cached_resource_;
 
     scoped_refptr<BlobDataHandle> downloaded_file_blob_;
-    Vector<AtomicString> certificate_;
+    scoped_refptr<net::X509Certificate> certificate_;
     scoped_refptr<EncodedFormData> post_data_;
   };
 
@@ -238,7 +239,7 @@ class NetworkResourcesData final
   void SetXHRReplayData(const String& request_id, XHRReplayData*);
   XHRReplayData* XhrReplayData(const String& request_id);
   void SetCertificate(const String& request_id,
-                      const Vector<AtomicString>& certificate);
+                      scoped_refptr<net::X509Certificate>);
   HeapVector<Member<ResourceData>> Resources();
 
   int64_t GetAndClearPendingEncodedDataLength(const String& request_id);

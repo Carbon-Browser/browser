@@ -13,7 +13,6 @@
 #include "ash/public/cpp/session/session_observer.h"
 #include "ash/public/cpp/tablet_mode_observer.h"
 #include "base/callback_forward.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/time/time.h"
@@ -44,6 +43,7 @@ class AccessibilityConfirmationDialog;
 class AccessibilityEventRewriter;
 class AccessibilityHighlightController;
 class AccessibilityObserver;
+class DictationBubbleController;
 class DictationNudgeController;
 class FloatingAccessibilityController;
 class PointScanController;
@@ -88,21 +88,22 @@ class ASH_EXPORT AccessibilityControllerImpl : public AccessibilityController,
   enum FeatureType {
     kAutoclick = 0,
     kCaretHighlight,
-    KCursorHighlight,
+    kCursorColor,
+    kCursorHighlight,
     kDictation,
+    kDockedMagnifier,
     kFloatingMenu,
     kFocusHighlight,
     kFullscreenMagnifier,
-    kDockedMagnifier,
     kHighContrast,
     kLargeCursor,
+    kLiveCaption,
     kMonoAudio,
-    kSpokenFeedback,
     kSelectToSpeak,
+    kSpokenFeedback,
     kStickyKeys,
     kSwitchAccess,
     kVirtualKeyboard,
-    kCursorColor,
 
     kFeatureCount,
     kNoConflictingFeature
@@ -195,6 +196,11 @@ class ASH_EXPORT AccessibilityControllerImpl : public AccessibilityController,
   };
 
   AccessibilityControllerImpl();
+
+  AccessibilityControllerImpl(const AccessibilityControllerImpl&) = delete;
+  AccessibilityControllerImpl& operator=(const AccessibilityControllerImpl&) =
+      delete;
+
   ~AccessibilityControllerImpl() override;
 
   // See Shell::RegisterProfilePrefs().
@@ -207,6 +213,8 @@ class ASH_EXPORT AccessibilityControllerImpl : public AccessibilityController,
 
   Feature& GetFeature(FeatureType feature) const;
 
+  base::WeakPtr<AccessibilityControllerImpl> GetWeakPtr();
+
   // Getters for the corresponding features.
   Feature& autoclick() const;
   Feature& caret_highlight() const;
@@ -218,6 +226,7 @@ class ASH_EXPORT AccessibilityControllerImpl : public AccessibilityController,
   FeatureWithDialog& docked_magnifier() const;
   FeatureWithDialog& high_contrast() const;
   Feature& large_cursor() const;
+  Feature& live_caption() const;
   Feature& mono_audio() const;
   Feature& spoken_feedback() const;
   Feature& select_to_speak() const;
@@ -245,8 +254,13 @@ class ASH_EXPORT AccessibilityControllerImpl : public AccessibilityController,
 
   PointScanController* GetPointScanController();
 
+  // Update the autoclick menu bounds and sticky keys overlay bounds if
+  // necessary. This may need to happen when the display work area changes, or
+  // if system UI regions change (like the virtual keyboard position).
+  void UpdateFloatingPanelBoundsIfNeeded();
+
   // Update the autoclick menu bounds if necessary. This may need to happen when
-  // the display work area changes, or if system ui regions change (like the
+  // the display work area changes, or if system UI regions change (like the
   // virtual keyboard position).
   void UpdateAutoclickMenuBoundsIfNeeded();
 
@@ -273,6 +287,9 @@ class ASH_EXPORT AccessibilityControllerImpl : public AccessibilityController,
 
   bool IsLargeCursorSettingVisibleInTray();
   bool IsEnterpriseIconVisibleForLargeCursor();
+
+  bool IsLiveCaptionSettingVisibleInTray();
+  bool IsEnterpriseIconVisibleForLiveCaption();
 
   bool IsMonoAudioSettingVisibleInTray();
   bool IsEnterpriseIconVisibleForMonoAudio();
@@ -435,10 +452,16 @@ class ASH_EXPORT AccessibilityControllerImpl : public AccessibilityController,
                               base::OnceClosure on_cancel_callback,
                               base::OnceClosure on_close_callback) override;
   void UpdateDictationButtonOnSpeechRecognitionDownloadChanged(
-      bool download_in_progress) override;
+      int download_progress) override;
   void ShowSpeechRecognitionDownloadNotificationForDictation(
       bool succeeded,
       const std::u16string& display_language) override;
+  void UpdateDictationBubble(
+      bool visible,
+      DictationBubbleIconType icon,
+      const absl::optional<std::u16string>& text,
+      const absl::optional<std::vector<DictationBubbleHintType>>& hints)
+      override;
 
   // SessionObserver:
   void OnSigninScreenPrefServiceInitialized(PrefService* prefs) override;
@@ -466,6 +489,12 @@ class ASH_EXPORT AccessibilityControllerImpl : public AccessibilityController,
     return dictation_nudge_controller_.get();
   }
 
+  int dictation_soda_download_progress() {
+    return dictation_soda_download_progress_;
+  }
+
+  DictationBubbleController* GetDictationBubbleControllerForTest();
+
  private:
   // Populate |features_| with the feature of the correct type.
   void CreateAccessibilityFeatures();
@@ -492,6 +521,7 @@ class ASH_EXPORT AccessibilityControllerImpl : public AccessibilityController,
   void UpdateAutoclickMenuPositionFromPref();
   void UpdateFloatingMenuPositionFromPref();
   void UpdateLargeCursorFromPref();
+  void UpdateLiveCaptionFromPref();
   void UpdateCursorColorFromPrefs();
   void UpdateSwitchAccessKeyCodesFromPref(SwitchAccessCommand command);
   void UpdateSwitchAccessAutoScanEnabledFromPref();
@@ -508,6 +538,10 @@ class ASH_EXPORT AccessibilityControllerImpl : public AccessibilityController,
   void DeactivateSwitchAccess();
   void SyncSwitchAccessPrefsToSignInProfile();
   void UpdateKeyCodesAfterSwitchAccessEnabled();
+
+  // Dictation's SODA download progress. Values are between 0 and 100. Tracked
+  // for testing purposes only.
+  int dictation_soda_download_progress_ = 0;
 
   // Client interface in chrome browser.
   AccessibilityControllerClient* client_ = nullptr;
@@ -562,6 +596,9 @@ class ASH_EXPORT AccessibilityControllerImpl : public AccessibilityController,
   // the Dictation feature is disabled.
   std::unique_ptr<DictationNudgeController> dictation_nudge_controller_;
 
+  // Used to control the Dictation bubble UI.
+  std::unique_ptr<DictationBubbleController> dictation_bubble_controller_;
+
   // True if ChromeVox should enable its volume slide gesture.
   bool enable_chromevox_volume_slide_gesture_ = false;
 
@@ -579,8 +616,6 @@ class ASH_EXPORT AccessibilityControllerImpl : public AccessibilityController,
   base::WeakPtr<AccessibilityConfirmationDialog> confirmation_dialog_;
 
   base::WeakPtrFactory<AccessibilityControllerImpl> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(AccessibilityControllerImpl);
 };
 
 }  // namespace ash

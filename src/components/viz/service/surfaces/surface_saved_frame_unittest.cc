@@ -24,8 +24,8 @@
 #include "third_party/skia/include/core/SkBlendMode.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/gfx/geometry/rect.h"
-#include "ui/gfx/rrect_f.h"
-#include "ui/gfx/transform.h"
+#include "ui/gfx/geometry/rrect_f.h"
+#include "ui/gfx/geometry/transform.h"
 
 namespace viz {
 namespace {
@@ -104,13 +104,14 @@ class SurfaceSavedFrameTest : public testing::Test {
         render_pass.CreateAndAppendDrawQuad<SolidColorDrawQuad>();
     solid_color_quad->SetAll(render_pass.shared_quad_state_list.front(),
                              kQuadLayerRect, kVisibleLayerRect, true,
-                             SK_ColorBLACK, true);
+                             SkColors::kBlack, true);
     return solid_color_quad;
   }
 
  protected:
   ServerSharedBitmapManager shared_bitmap_manager_;
-  FrameSinkManagerImpl frame_sink_manager_{&shared_bitmap_manager_};
+  FrameSinkManagerImpl frame_sink_manager_{
+      FrameSinkManagerImpl::InitParams(&shared_bitmap_manager_)};
   std::unique_ptr<CompositorFrameSinkSupport> support_;
   SurfaceId surface_id_;
 
@@ -129,7 +130,7 @@ TEST_F(SurfaceSavedFrameTest, OnlyRootSnapshotNoSharedPass) {
 
   const uint32_t sequence_id = 2u;
   CompositorFrameTransitionDirective directive(
-      sequence_id, CompositorFrameTransitionDirective::Type::kSave,
+      sequence_id, CompositorFrameTransitionDirective::Type::kSave, false,
       CompositorFrameTransitionDirective::Effect::kCoverDown);
   auto saved_frame = CreateSavedFrame(directive);
   saved_frame->RequestCopyOfOutput(GetSurface());
@@ -151,7 +152,7 @@ TEST_F(SurfaceSavedFrameTest, OnlyRootSnapshotNullSharedPass) {
 
   const uint32_t sequence_id = 2u;
   CompositorFrameTransitionDirective directive(
-      sequence_id, CompositorFrameTransitionDirective::Type::kSave,
+      sequence_id, CompositorFrameTransitionDirective::Type::kSave, false,
       CompositorFrameTransitionDirective::Effect::kCoverDown,
       CompositorFrameTransitionDirective::TransitionConfig(),
       CreateSharedElements({CompositorRenderPassId(0u)}));
@@ -191,7 +192,7 @@ TEST_F(SurfaceSavedFrameTest, RemoveSharedElementQuadOnly) {
 
   const uint32_t sequence_id = 2u;
   CompositorFrameTransitionDirective directive(
-      sequence_id, CompositorFrameTransitionDirective::Type::kSave,
+      sequence_id, CompositorFrameTransitionDirective::Type::kSave, false,
       CompositorFrameTransitionDirective::Effect::kCoverDown,
       CompositorFrameTransitionDirective::TransitionConfig(),
       CreateSharedElements({shared_pass_id}));
@@ -264,7 +265,7 @@ TEST_F(SurfaceSavedFrameTest, SharedElementNestedInNonSharedElementPass) {
 
   const uint32_t sequence_id = 2u;
   CompositorFrameTransitionDirective directive(
-      sequence_id, CompositorFrameTransitionDirective::Type::kSave,
+      sequence_id, CompositorFrameTransitionDirective::Type::kSave, false,
       CompositorFrameTransitionDirective::Effect::kCoverDown,
       CompositorFrameTransitionDirective::TransitionConfig(),
       CreateSharedElements({shared_pass_id}));
@@ -344,7 +345,7 @@ TEST_F(SurfaceSavedFrameTest, SharedElementNestedInSharedElementPass) {
 
   const uint32_t sequence_id = 2u;
   CompositorFrameTransitionDirective directive(
-      sequence_id, CompositorFrameTransitionDirective::Type::kSave,
+      sequence_id, CompositorFrameTransitionDirective::Type::kSave, false,
       CompositorFrameTransitionDirective::Effect::kCoverDown,
       CompositorFrameTransitionDirective::TransitionConfig(),
       CreateSharedElements({child_shared_pass_id, parent_shared_pass->id}));

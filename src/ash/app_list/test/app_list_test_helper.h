@@ -6,9 +6,21 @@
 #define ASH_APP_LIST_TEST_APP_LIST_TEST_HELPER_H_
 
 #include <memory>
+#include <vector>
 
 #include "ash/app_list/app_list_metrics.h"
+#include "ash/app_list/model/app_list_test_model.h"
+#include "ash/app_list/model/search/search_model.h"
 #include "ash/app_list/test_app_list_client.h"
+#include "ui/gfx/animation/tween.h"
+
+namespace base {
+class TimeDelta;
+}
+
+namespace views {
+class View;
+}
 
 namespace ash {
 
@@ -19,16 +31,24 @@ class AppListBubbleView;
 class AppListControllerImpl;
 class AppListFolderView;
 class AppListView;
+class AppsContainerView;
 class ContinueSectionView;
 class PagedAppsGridView;
+class ProductivityLauncherSearchView;
 class RecentAppsView;
 class ScrollableAppsGridView;
 class SearchBoxView;
+class SearchResultPageView;
+class SearchResultPageAnchoredDialog;
 enum class AppListViewState;
 
 class AppListTestHelper {
  public:
   AppListTestHelper();
+
+  AppListTestHelper(const AppListTestHelper&) = delete;
+  AppListTestHelper& operator=(const AppListTestHelper&) = delete;
+
   ~AppListTestHelper();
 
   // Shows the app list on the default display.
@@ -59,6 +79,12 @@ class AppListTestHelper {
   // until animation finishes.
   void ToggleAndRunLoop(uint64_t display_id, AppListShowSource show_source);
 
+  // Slides a bubble apps page's component using a layer animation.
+  void StartSlideAnimationOnBubbleAppsPage(views::View* view,
+                                           int vertical_offset,
+                                           base::TimeDelta duration,
+                                           gfx::Tween::Type tween_type);
+
   // Check the visibility value of the app list and its target.
   // Fails in tests if either one doesn't match |visible|.
   // DEPRECATED: Prefer to EXPECT_TRUE or EXPECT_FALSE the visibility directly,
@@ -72,18 +98,41 @@ class AppListTestHelper {
   // Run all pending in message loop to wait for animation to finish.
   void WaitUntilIdle();
 
+  // If a folder view is shown, waits until the folder animations complete.
+  void WaitForFolderAnimation();
+
   // Adds `num_apps` to the app list model.
   void AddAppItems(int num_apps);
 
   // Adds a page break item to the app list model.
   void AddPageBreakItem();
 
+  // Adds `num_results` to continue section in the app list.
+  void AddContinueSuggestionResults(int num_results);
+
+  // Adds `num_apps` recent apps to the recent apps view.
+  void AddRecentApps(int num_apps);
+
   // Whether the app list is showing a folder.
   bool IsInFolderView();
 
+  // Enables/Disables the app list nudge for testing.
+  void DisableAppListNudge(bool disable);
+
   // Fullscreen/peeking launcher helpers.
   AppListView* GetAppListView();
+  SearchBoxView* GetSearchBoxView();
+  AppsContainerView* GetAppsContainerView();
   AppListFolderView* GetFullscreenFolderView();
+  RecentAppsView* GetFullscreenRecentAppsView();
+  ContinueSectionView* GetFullscreenContinueSectionView();
+  SearchResultPageView* GetFullscreenSearchResultPageView();
+  SearchResultPageAnchoredDialog* GetFullscreenSearchPageDialog();
+  ProductivityLauncherSearchView* GetProductivityLauncherSearchView();
+  views::View* GetFullscreenLauncherAppsSeparatorView();
+
+  // Whether the fullscreen/peeking launcher is showing the search results view.
+  bool IsShowingFullscreenSearchResults();
 
   // Paged launcher helpers.
   PagedAppsGridView* GetRootPagedAppsGridView();
@@ -93,19 +142,27 @@ class AppListTestHelper {
   SearchBoxView* GetBubbleSearchBoxView();
   AppListFolderView* GetBubbleFolderView();
   AppListBubbleAppsPage* GetBubbleAppsPage();
-  ContinueSectionView* GetContinueSectionView();
+  ContinueSectionView* GetBubbleContinueSectionView();
   RecentAppsView* GetBubbleRecentAppsView();
   ScrollableAppsGridView* GetScrollableAppsGridView();
   AppListBubbleSearchPage* GetBubbleSearchPage();
+  SearchResultPageAnchoredDialog* GetBubbleSearchPageDialog();
   AppListBubbleAssistantPage* GetBubbleAssistantPage();
+  SearchModel::SearchResults* GetSearchResults();
+  views::View* GetBubbleLauncherAppsSeparatorView();
+  std::vector<ash::AppListSearchResultCategory>* GetOrderedResultCategories();
 
+  test::AppListTestModel* model() { return &model_; }
   TestAppListClient* app_list_client() { return app_list_client_.get(); }
 
  private:
+  // Helper function to set user prefs relative to the app_list in tests.
+  void ConfigureDefaultUserPrefs();
+
+  test::AppListTestModel model_;
+  SearchModel search_model_;
   AppListControllerImpl* app_list_controller_ = nullptr;
   std::unique_ptr<TestAppListClient> app_list_client_;
-
-  DISALLOW_COPY_AND_ASSIGN(AppListTestHelper);
 };
 
 }  // namespace ash

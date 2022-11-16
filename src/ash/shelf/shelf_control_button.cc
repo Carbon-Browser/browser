@@ -8,8 +8,10 @@
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/shelf/shelf_button_delegate.h"
 #include "ash/shell.h"
+#include "ash/style/ash_color_provider.h"
 #include "ash/wm/tablet_mode/tablet_mode_controller.h"
 #include "ui/accessibility/ax_node_data.h"
+#include "ui/color/color_id.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/views/animation/flood_fill_ink_drop_ripple.h"
@@ -41,8 +43,8 @@ class ShelfControlButtonHighlightPathGenerator
     visual_bounds.ClampToCenteredSize(
         gfx::SizeF(shelf_config->control_size(), shelf_config->control_size()));
     if (Shell::Get()->IsInTabletMode() && shelf_config->is_in_app()) {
-      visual_bounds.Inset(0,
-                          shelf_config->in_app_control_button_height_inset());
+      visual_bounds.Inset(gfx::InsetsF::VH(
+          shelf_config->in_app_control_button_height_inset(), 0));
     }
     return gfx::RRectF(visual_bounds, shelf_config->control_border_radius());
   }
@@ -56,11 +58,9 @@ ShelfControlButton::ShelfControlButton(
     : ShelfButton(shelf, shelf_button_delegate) {
   SetHasInkDropActionOnClick(true);
   SetInstallFocusRingOnFocus(true);
+  views::FocusRing::Get(this)->SetColorId(ui::kColorAshFocusRing);
   views::HighlightPathGenerator::Install(
       this, std::make_unique<ShelfControlButtonHighlightPathGenerator>());
-  views::FocusRing::Get(this)->SetColor(
-      ShelfConfig::Get()->shelf_focus_border_color());
-  SetFocusPainter(nullptr);
   SetPaintToLayer();
   layer()->SetFillsBoundsOpaquely(false);
 }

@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "components/password_manager/core/browser/form_saver.h"
 
 namespace password_manager {
@@ -20,6 +20,9 @@ class FormSaverImpl : public FormSaver {
   // |store| needs to outlive |this| and will be used for all
   // PasswordStoreInterface operations.
   explicit FormSaverImpl(PasswordStoreInterface* store);
+
+  FormSaverImpl(const FormSaverImpl&) = delete;
+  FormSaverImpl& operator=(const FormSaverImpl&) = delete;
 
   ~FormSaverImpl() override;
 
@@ -45,9 +48,7 @@ class FormSaverImpl : public FormSaver {
   // form handler or origin handler which could embed FormSaver.
 
   // Cached pointer to the PasswordStoreInterface.
-  PasswordStoreInterface* const store_;
-
-  DISALLOW_COPY_AND_ASSIGN(FormSaverImpl);
+  const raw_ptr<PasswordStoreInterface> store_;
 };
 
 }  // namespace password_manager

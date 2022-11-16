@@ -14,7 +14,6 @@
 
 #include "base/bind.h"
 #include "base/component_export.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/string_piece.h"
 #include "device/fido/fido_discovery_base.h"
@@ -67,6 +66,9 @@ class COMPONENT_EXPORT(DEVICE_FIDO) FidoDeviceDiscovery
     kStopped,
   };
 
+  FidoDeviceDiscovery(const FidoDeviceDiscovery&) = delete;
+  FidoDeviceDiscovery& operator=(const FidoDeviceDiscovery&) = delete;
+
   ~FidoDeviceDiscovery() override;
 
   bool is_start_requested() const { return state_ != State::kIdle; }
@@ -83,11 +85,14 @@ class COMPONENT_EXPORT(DEVICE_FIDO) FidoDeviceDiscovery
   bool MaybeStop() override;
 
  protected:
-  FidoDeviceDiscovery(FidoTransportProtocol transport);
+  explicit FidoDeviceDiscovery(FidoTransportProtocol transport);
 
   void NotifyDiscoveryStarted(bool success);
 
+  // Convenience method that adds a FidoDeviceAuthenticator with the given
+  // |device|.
   bool AddDevice(std::unique_ptr<FidoDevice> device);
+  bool AddAuthenticator(std::unique_ptr<FidoDeviceAuthenticator> authenticator);
   bool RemoveDevice(base::StringPiece device_id);
 
   FidoDeviceAuthenticator* GetAuthenticator(base::StringPiece authenticator_id);
@@ -110,8 +115,6 @@ class COMPONENT_EXPORT(DEVICE_FIDO) FidoDeviceDiscovery
 
   State state_ = State::kIdle;
   base::WeakPtrFactory<FidoDeviceDiscovery> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(FidoDeviceDiscovery);
 };
 
 }  // namespace device

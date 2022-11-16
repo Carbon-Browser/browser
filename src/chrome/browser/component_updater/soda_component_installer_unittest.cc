@@ -4,6 +4,7 @@
 
 #include "chrome/browser/component_updater/soda_component_installer.h"
 
+#include "base/callback.h"
 #include "base/files/file_path.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
@@ -25,10 +26,13 @@ class SodaComponentMockComponentUpdateService
     : public component_updater::MockComponentUpdateService {
  public:
   SodaComponentMockComponentUpdateService() = default;
-  ~SodaComponentMockComponentUpdateService() override = default;
 
- private:
-  DISALLOW_COPY_AND_ASSIGN(SodaComponentMockComponentUpdateService);
+  SodaComponentMockComponentUpdateService(
+      const SodaComponentMockComponentUpdateService&) = delete;
+  SodaComponentMockComponentUpdateService& operator=(
+      const SodaComponentMockComponentUpdateService&) = delete;
+
+  ~SodaComponentMockComponentUpdateService() override = default;
 };
 
 }  // namespace
@@ -47,7 +51,7 @@ class SodaComponentInstallerTest : public ::testing::Test {
     local_state_.registry()->RegisterTimePref(prefs::kSodaScheduledDeletionTime,
                                               base::Time());
     profile_prefs_.registry()->RegisterStringPref(
-        prefs::kLiveCaptionLanguageCode, "en-US");
+        prefs::kLiveCaptionLanguageCode, speech::kUsEnglishLocale);
   }
 
  protected:
@@ -62,19 +66,6 @@ TEST_F(SodaComponentInstallerTest,
        TestComponentRegistrationWhenLiveCaptionFeatureDisabled) {
   base::test::ScopedFeatureList scoped_disable;
   scoped_disable.InitAndDisableFeature(media::kLiveCaption);
-  std::unique_ptr<SodaComponentMockComponentUpdateService> component_updater(
-      new SodaComponentMockComponentUpdateService());
-  EXPECT_CALL(*component_updater, RegisterComponent(testing::_)).Times(0);
-  RegisterSodaComponent(component_updater.get(), &local_state_,
-                        base::OnceClosure(), base::OnceClosure());
-  task_environment_.RunUntilIdle();
-}
-
-TEST_F(SodaComponentInstallerTest,
-       TestComponentRegistrationWhenUseSodaForLiveCaptionFeatureDisabled) {
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitWithFeatures({media::kLiveCaption},
-                                       {media::kUseSodaForLiveCaption});
   std::unique_ptr<SodaComponentMockComponentUpdateService> component_updater(
       new SodaComponentMockComponentUpdateService());
   EXPECT_CALL(*component_updater, RegisterComponent(testing::_)).Times(0);

@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "base/files/file_util.h"
+#include "base/observer_list.h"
 #include "chrome/browser/enterprise/connectors/file_system/access_token_fetcher.h"
 #include "chrome/browser/enterprise/connectors/file_system/account_info_utils.h"
 #include "chrome/browser/enterprise/connectors/file_system/box_uploader.h"
@@ -221,8 +222,7 @@ void FileSystemRenameHandler::StartInternal(std::string access_token) {
 
 scoped_refptr<network::SharedURLLoaderFactory>
 FileSystemRenameHandler::GetURLLoaderFactory(content::BrowserContext* context) {
-  content::StoragePartition* partition =
-      context->GetStoragePartitionForUrl(settings_.home);
+  content::StoragePartition* partition = context->GetDefaultStoragePartition();
   return partition->GetURLLoaderFactoryForBrowserProcess();
 }
 

@@ -5,10 +5,10 @@
 #include <string>
 #include <vector>
 
+#include "ash/components/tpm/install_attributes.h"
 #include "ash/constants/ash_switches.h"
 #include "base/bind.h"
 #include "base/command_line.h"
-#include "base/macros.h"
 #include "base/run_loop.h"
 #include "base/strings/string_util.h"
 #include "chrome/browser/ash/login/test/oobe_base_test.h"
@@ -21,7 +21,6 @@
 #include "chrome/browser/ui/webui/chromeos/login/signin_screen_handler.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/test/base/in_process_browser_test.h"
-#include "chromeos/tpm/install_attributes.h"
 #include "components/policy/core/common/cloud/device_management_service.h"
 #include "components/policy/core/common/policy_switches.h"
 #include "components/policy/proto/device_management_backend.pb.h"
@@ -87,14 +86,17 @@ struct BlockingLoginTestParam {
 // to see if the profile finishes loading which is not at all what it is
 // intended to test. We need to fix this test or remove it (crbug.com/580537).
 class BlockingLoginTest
-    : public OobeBaseTest,
+    : public ash::OobeBaseTest,
       public content::NotificationObserver,
       public testing::WithParamInterface<BlockingLoginTestParam> {
  public:
   BlockingLoginTest() : profile_added_(NULL) {}
 
+  BlockingLoginTest(const BlockingLoginTest&) = delete;
+  BlockingLoginTest& operator=(const BlockingLoginTest&) = delete;
+
   void SetUpCommandLine(base::CommandLine* command_line) override {
-    OobeBaseTest::SetUpCommandLine(command_line);
+    ash::OobeBaseTest::SetUpCommandLine(command_line);
 
     command_line->AppendSwitchASCII(
         switches::kDeviceManagementUrl,
@@ -105,20 +107,20 @@ class BlockingLoginTest
     registrar_.Add(this, chrome::NOTIFICATION_PROFILE_ADDED,
                    content::NotificationService::AllSources());
 
-    OobeBaseTest::SetUpOnMainThread();
+    ash::OobeBaseTest::SetUpOnMainThread();
   }
 
   void TearDownOnMainThread() override {
     RunUntilIdle();
     EXPECT_TRUE(responses_.empty());
-    OobeBaseTest::TearDownOnMainThread();
+    ash::OobeBaseTest::TearDownOnMainThread();
   }
 
   void Observe(int type,
                const content::NotificationSource& source,
                const content::NotificationDetails& details) override {
     ASSERT_EQ(chrome::NOTIFICATION_PROFILE_ADDED, type);
-    if (chromeos::ProfileHelper::IsLockScreenAppProfile(
+    if (ash::ProfileHelper::IsLockScreenAppProfile(
             content::Source<Profile>(source).ptr())) {
       return;
     }
@@ -217,8 +219,6 @@ class BlockingLoginTest
  private:
   std::vector<std::unique_ptr<net::test_server::HttpResponse>> responses_;
   content::NotificationRegistrar registrar_;
-
-  DISALLOW_COPY_AND_ASSIGN(BlockingLoginTest);
 };
 
 IN_PROC_BROWSER_TEST_P(BlockingLoginTest, LoginBlocksForUser) {
@@ -265,19 +265,19 @@ IN_PROC_BROWSER_TEST_P(BlockingLoginTest, LoginBlocksForUser) {
 
     case 5:
       PushResponse(net::HTTP_OK).set_content(GetPolicyResponse());
-      FALLTHROUGH;
+      [[fallthrough]];
 
     case 4:
       PushResponse(net::HTTP_OK).set_content(GetRegisterResponse());
-      FALLTHROUGH;
+      [[fallthrough]];
 
     case 3:
       PushResponse(net::HTTP_OK).set_content(kOAuth2AccessTokenData);
-      FALLTHROUGH;
+      [[fallthrough]];
 
     case 2:
       PushResponse(net::HTTP_OK).set_content(kOAuth2TokenPairData);
-      FALLTHROUGH;
+      [[fallthrough]];
 
     case 1:
       PushResponse(net::HTTP_OK)

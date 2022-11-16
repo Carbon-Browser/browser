@@ -11,20 +11,16 @@
 #include <vector>
 
 #include "base/bind.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/values.h"
 #include "content/public/browser/browser_plugin_guest_manager.h"
 #include "content/public/browser/web_contents.h"
-
-class GURL;
-
-namespace base {
-class DictionaryValue;
-}
 
 namespace content {
 class BrowserContext;
 class SiteInstance;
+class StoragePartitionConfig;
 }
 
 namespace guest_view {
@@ -38,6 +34,10 @@ class GuestViewManager : public content::BrowserPluginGuestManager,
  public:
   GuestViewManager(content::BrowserContext* context,
                    std::unique_ptr<GuestViewManagerDelegate> delegate);
+
+  GuestViewManager(const GuestViewManager&) = delete;
+  GuestViewManager& operator=(const GuestViewManager&) = delete;
+
   ~GuestViewManager() override;
 
   // Returns the GuestViewManager associated with |context|. If one isn't
@@ -69,7 +69,7 @@ class GuestViewManager : public content::BrowserPluginGuestManager,
   virtual void AttachGuest(int embedder_process_id,
                            int element_instance_id,
                            int guest_instance_id,
-                           const base::DictionaryValue& attach_params);
+                           const base::Value::Dict& attach_params);
 
   // Removes the association between |element_instance_id| and a guest instance
   // ID if one exists.
@@ -110,7 +110,7 @@ class GuestViewManager : public content::BrowserPluginGuestManager,
       base::OnceCallback<void(content::WebContents*)>;
   void CreateGuest(const std::string& view_type,
                    content::WebContents* owner_web_contents,
-                   const base::DictionaryValue& create_params,
+                   const base::Value::Dict& create_params,
                    WebContentsCreatedCallback callback);
 
   content::WebContents* CreateGuestWithWebContentsParams(
@@ -119,7 +119,7 @@ class GuestViewManager : public content::BrowserPluginGuestManager,
       const content::WebContents::CreateParams& create_params);
 
   content::SiteInstance* GetGuestSiteInstance(
-      const GURL& guest_site);
+      const content::StoragePartitionConfig& storage_partition_config);
 
   content::WebContents* GetGuestByInstanceID(int owner_process_id,
                                              int element_instance_id);
@@ -136,7 +136,7 @@ class GuestViewManager : public content::BrowserPluginGuestManager,
  protected:
   friend class GuestViewBase;
   friend class GuestViewEvent;
-  friend class GuestViewMessageFilter;
+  friend class GuestViewMessageHandler;
 
   class EmbedderRenderProcessHostObserver;
 
@@ -253,7 +253,7 @@ class GuestViewManager : public content::BrowserPluginGuestManager,
   // |last_instance_id_removed_| are kept here.
   std::set<int> removed_instance_ids_;
 
-  content::BrowserContext* const context_;
+  const raw_ptr<content::BrowserContext> context_;
 
   std::unique_ptr<GuestViewManagerDelegate> delegate_;
 
@@ -270,9 +270,6 @@ class GuestViewManager : public content::BrowserPluginGuestManager,
   // This is used to ensure that an EmbedderRenderProcessHostObserver will not
   // call into this GuestViewManager after it has been destroyed.
   base::WeakPtrFactory<GuestViewManager> weak_ptr_factory_{this};
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(GuestViewManager);
 };
 
 }  // namespace guest_view

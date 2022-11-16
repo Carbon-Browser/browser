@@ -10,7 +10,6 @@
 #include "ash/public/cpp/session/session_observer.h"
 #include "ash/shell_observer.h"
 #include "ash/system/tray/tray_background_view.h"
-#include "base/macros.h"
 
 namespace views {
 class ImageView;
@@ -26,6 +25,10 @@ class VirtualKeyboardTray : public TrayBackgroundView,
                             public SessionObserver {
  public:
   explicit VirtualKeyboardTray(Shelf* shelf);
+
+  VirtualKeyboardTray(const VirtualKeyboardTray&) = delete;
+  VirtualKeyboardTray& operator=(const VirtualKeyboardTray&) = delete;
+
   ~VirtualKeyboardTray() override;
 
   // TrayBackgroundView:
@@ -50,15 +53,12 @@ class VirtualKeyboardTray : public TrayBackgroundView,
   const char* GetClassName() const override;
 
  private:
-
   // Weak pointer, will be parented by TrayContainer for its lifetime.
   views::ImageView* icon_;
 
   Shelf* shelf_;
 
   ScopedSessionObserver session_observer_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(VirtualKeyboardTray);
 };
 
 }  // namespace ash

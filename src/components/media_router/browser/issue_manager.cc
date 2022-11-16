@@ -7,6 +7,8 @@
 #include <algorithm>
 
 #include "base/bind.h"
+#include "base/observer_list.h"
+#include "base/time/time.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 
@@ -32,9 +34,9 @@ base::TimeDelta IssueManager::GetAutoDismissTimeout(
 
   switch (issue_info.severity) {
     case IssueInfo::Severity::NOTIFICATION:
-      return base::TimeDelta::FromMinutes(kNotificationAutoDismissMins);
+      return base::Minutes(kNotificationAutoDismissMins);
     case IssueInfo::Severity::WARNING:
-      return base::TimeDelta::FromMinutes(kWarningAutoDismissMins);
+      return base::Minutes(kWarningAutoDismissMins);
     case IssueInfo::Severity::FATAL:
       NOTREACHED() << "FATAL issues should be blocking";
       return base::TimeDelta();

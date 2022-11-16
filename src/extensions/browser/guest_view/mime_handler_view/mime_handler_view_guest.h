@@ -8,7 +8,6 @@
 #include <memory>
 #include <string>
 
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "components/guest_view/browser/guest_view.h"
 #include "content/public/browser/global_routing_id.h"
@@ -35,6 +34,10 @@ class StreamContainer {
                   const std::string& extension_id,
                   blink::mojom::TransferrableURLLoaderPtr transferrable_loader,
                   const GURL& original_url);
+
+  StreamContainer(const StreamContainer&) = delete;
+  StreamContainer& operator=(const StreamContainer&) = delete;
+
   ~StreamContainer();
 
   base::WeakPtr<StreamContainer> GetWeakPtr();
@@ -75,20 +78,21 @@ class StreamContainer {
   mime_handler::PdfPluginAttributesPtr pdf_plugin_attributes_;
 
   base::WeakPtrFactory<StreamContainer> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(StreamContainer);
 };
 
 class MimeHandlerViewGuest
     : public guest_view::GuestView<MimeHandlerViewGuest> {
  public:
+  MimeHandlerViewGuest(const MimeHandlerViewGuest&) = delete;
+  MimeHandlerViewGuest& operator=(const MimeHandlerViewGuest&) = delete;
+
   static guest_view::GuestViewBase* Create(
       content::WebContents* owner_web_contents);
 
   static const char Type[];
 
   // GuestViewBase overrides.
-  bool CanBeEmbeddedInsideCrossProcessFrames() override;
+  bool CanBeEmbeddedInsideCrossProcessFrames() const override;
   content::RenderWidgetHost* GetOwnerRenderWidgetHost() override;
   content::SiteInstance* GetOwnerSiteInstance() override;
 
@@ -132,10 +136,10 @@ class MimeHandlerViewGuest
   // GuestViewBase implementation.
   const char* GetAPINamespace() const final;
   int GetTaskPrefix() const final;
-  void CreateWebContents(const base::DictionaryValue& create_params,
+  void CreateWebContents(const base::Value::Dict& create_params,
                          WebContentsCreatedCallback callback) override;
   void DidAttachToEmbedder() override;
-  void DidInitialize(const base::DictionaryValue& create_params) final;
+  void DidInitialize(const base::Value::Dict& create_params) final;
   void EmbedderFullscreenToggled(bool entered_fullscreen) final;
   bool ZoomPropagatesFromEmbedderToGuest() const final;
   bool ShouldDestroyOnDetach() const final;
@@ -146,7 +150,7 @@ class MimeHandlerViewGuest
       const content::OpenURLParams& params) final;
   void NavigationStateChanged(content::WebContents* source,
                               content::InvalidateTypes changed_flags) final;
-  bool HandleContextMenu(content::RenderFrameHost* render_frame_host,
+  bool HandleContextMenu(content::RenderFrameHost& render_frame_host,
                          const content::ContextMenuParams& params) final;
   bool PreHandleGestureEvent(content::WebContents* source,
                              const blink::WebGestureEvent& event) final;
@@ -176,7 +180,7 @@ class MimeHandlerViewGuest
       const GURL& opener_url,
       const std::string& frame_name,
       const GURL& target_url,
-      const content::StoragePartitionId& partition_id,
+      const content::StoragePartitionConfig& partition_config,
       content::SessionStorageNamespace* session_storage_namespace) override;
 
   // Updates the fullscreen state for the guest. Returns whether the change
@@ -184,8 +188,7 @@ class MimeHandlerViewGuest
   bool SetFullscreenState(bool is_fullscreen);
 
   // content::WebContentsObserver implementation.
-  void DocumentOnLoadCompletedInMainFrame(
-      content::RenderFrameHost* render_frame_host) final;
+  void DocumentOnLoadCompletedInPrimaryMainFrame() final;
   void ReadyToCommitNavigation(
       content::NavigationHandle* navigation_handle) final;
   void DidFinishNavigation(content::NavigationHandle* navigation_handle) final;
@@ -210,8 +213,6 @@ class MimeHandlerViewGuest
       pending_before_unload_control_;
 
   base::WeakPtrFactory<MimeHandlerViewGuest> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(MimeHandlerViewGuest);
 };
 
 }  // namespace extensions

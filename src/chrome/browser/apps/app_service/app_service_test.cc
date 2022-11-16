@@ -7,6 +7,8 @@
 #include "base/run_loop.h"
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
+#include "components/services/app_service/public/cpp/app_types.h"
+#include "components/services/app_service/public/cpp/icon_types.h"
 #include "ui/gfx/image/image_unittest_util.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -21,7 +23,6 @@ AppServiceTest::AppServiceTest() = default;
 AppServiceTest::~AppServiceTest() = default;
 
 void AppServiceTest::SetUp(Profile* profile) {
-  profile_ = profile;
   app_service_proxy_ = apps::AppServiceProxyFactory::GetForProfile(profile);
   app_service_proxy_->ReInitializeForTesting(profile);
 
@@ -36,7 +37,7 @@ void AppServiceTest::UninstallAllApps(Profile* profile) {
   app_service_proxy->AppRegistryCache().ForEachApp(
       [&apps](const apps::AppUpdate& update) {
         apps::mojom::AppPtr app = apps::mojom::App::New();
-        app->app_type = update.AppType();
+        app->app_type = ConvertAppTypeToMojomAppType(update.AppType());
         app->app_id = update.AppId();
         app->readiness = apps::mojom::Readiness::kUninstalledByUser;
         apps.push_back(app.Clone());
@@ -64,20 +65,18 @@ gfx::ImageSkia AppServiceTest::LoadAppIconBlocking(
     int32_t size_hint_in_dip) {
   gfx::ImageSkia image_skia;
   base::RunLoop run_loop;
-  base::OnceClosure load_app_icon_callback = run_loop.QuitClosure();
 
   app_service_proxy_->LoadIcon(
-      app_type, app_id, apps::mojom::IconType::kStandard, size_hint_in_dip,
-      false /* allow_placeholder_icon */,
+      ConvertMojomAppTypToAppType(app_type), app_id, IconType::kStandard,
+      size_hint_in_dip, false /* allow_placeholder_icon */,
       base::BindOnce(
           [](gfx::ImageSkia* icon, base::OnceClosure load_app_icon_callback,
-             apps::mojom::IconValuePtr icon_value) {
-            DCHECK_EQ(apps::mojom::IconType::kStandard, icon_value->icon_type);
+             IconValuePtr icon_value) {
+            DCHECK_EQ(IconType::kStandard, icon_value->icon_type);
             *icon = icon_value->uncompressed;
             std::move(load_app_icon_callback).Run();
           },
-          &image_skia, std::move(load_app_icon_callback)));
-
+          &image_skia, run_loop.QuitClosure()));
   run_loop.Run();
   return image_skia;
 }

@@ -6,8 +6,8 @@
 #define ASH_SYSTEM_PHONEHUB_PHONE_HUB_RECENT_APPS_VIEW_H_
 
 #include "ash/ash_export.h"
+#include "ash/components/phonehub/recent_apps_interaction_handler.h"
 #include "base/gtest_prod_util.h"
-#include "chromeos/components/phonehub/recent_apps_interaction_handler.h"
 #include "ui/views/view.h"
 #include "ui/views/view_model.h"
 
@@ -15,14 +15,18 @@ namespace ash {
 
 // A view in Phone Hub bubble that allows user to relaunch a streamed app from
 // the recent apps list.
-class ASH_EXPORT PhoneHubRecentAppsView : public views::View {
+class ASH_EXPORT PhoneHubRecentAppsView
+    : public views::View,
+      public phonehub::RecentAppsInteractionHandler::Observer {
  public:
   explicit PhoneHubRecentAppsView(
-      chromeos::phonehub::RecentAppsInteractionHandler*
-          recent_apps_interaction_handler);
+      phonehub::RecentAppsInteractionHandler* recent_apps_interaction_handler);
   ~PhoneHubRecentAppsView() override;
   PhoneHubRecentAppsView(PhoneHubRecentAppsView&) = delete;
   PhoneHubRecentAppsView operator=(PhoneHubRecentAppsView&) = delete;
+
+  // phonehub::RecentAppsInteractionHandler::Observer:
+  void OnRecentAppsUiStateUpdated() override;
 
   // views::View:
   const char* GetClassName() const override;
@@ -33,6 +37,8 @@ class ASH_EXPORT PhoneHubRecentAppsView : public views::View {
                            SingleRecentAppButtonsView);
   FRIEND_TEST_ALL_PREFIXES(RecentAppButtonsViewTest,
                            MultipleRecentAppButtonsView);
+
+  class PlaceholderView;
 
   class RecentAppButtonsView : public views::View {
    public:
@@ -46,7 +52,8 @@ class ASH_EXPORT PhoneHubRecentAppsView : public views::View {
     void Layout() override;
     const char* GetClassName() const override;
 
-    void AddRecentAppButton(views::View* recent_app_button);
+    views::View* AddRecentAppButton(
+        std::unique_ptr<views::View> recent_app_button);
     void Reset();
   };
 
@@ -54,9 +61,10 @@ class ASH_EXPORT PhoneHubRecentAppsView : public views::View {
   void Update();
 
   RecentAppButtonsView* recent_app_buttons_view_ = nullptr;
-  std::vector<std::unique_ptr<views::View>> recent_app_button_list_;
-  chromeos::phonehub::RecentAppsInteractionHandler*
-      recent_apps_interaction_handler_ = nullptr;
+  std::vector<views::View*> recent_app_button_list_;
+  phonehub::RecentAppsInteractionHandler* recent_apps_interaction_handler_ =
+      nullptr;
+  PlaceholderView* placeholder_view_ = nullptr;
 };
 
 }  // namespace ash

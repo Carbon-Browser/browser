@@ -43,7 +43,9 @@ void Sequence::Transaction::PushTask(Task task) {
   bool should_be_queued = WillPushTask();
   task.task = sequence()->traits_.shutdown_behavior() ==
                       TaskShutdownBehavior::BLOCK_SHUTDOWN
-                  ? MakeCriticalClosure(task.posted_from, std::move(task.task))
+                  ? MakeCriticalClosure(
+                        task.posted_from, std::move(task.task),
+                        /*is_immediate=*/task.delayed_run_time.is_null())
                   : std::move(task.task);
 
   if (sequence()->queue_.empty()) {
@@ -131,10 +133,6 @@ Task Sequence::Clear(TaskSource::Transaction* transaction) {
 void Sequence::ReleaseTaskRunner() {
   if (!task_runner())
     return;
-  if (execution_mode() == TaskSourceExecutionMode::kParallel) {
-    static_cast<PooledParallelTaskRunner*>(task_runner())
-        ->UnregisterSequence(this);
-  }
   // No member access after this point, releasing |task_runner()| might delete
   // |this|.
   task_runner()->Release();

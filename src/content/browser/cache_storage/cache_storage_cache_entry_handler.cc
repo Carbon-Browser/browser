@@ -8,8 +8,8 @@
 #include "base/guid.h"
 #include "components/services/storage/public/mojom/blob_storage_context.mojom.h"
 #include "content/browser/cache_storage/background_fetch_cache_entry_handler_impl.h"
+#include "content/browser/cache_storage/cache_storage.h"
 #include "content/browser/cache_storage/cache_storage_manager.h"
-#include "content/browser/cache_storage/legacy/legacy_cache_storage.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
 #include "net/filter/source_stream.h"
@@ -104,6 +104,9 @@ class EntryReaderImpl : public storage::mojom::BlobDataItemReader {
         disk_cache_index_(disk_cache_index),
         side_data_disk_cache_index_(side_data_disk_cache_index) {}
 
+  EntryReaderImpl(const EntryReaderImpl&) = delete;
+  EntryReaderImpl& operator=(const EntryReaderImpl&) = delete;
+
   void Read(uint64_t offset,
             uint64_t length,
             mojo::ScopedDataPipeProducerHandle pipe,
@@ -164,7 +167,6 @@ class EntryReaderImpl : public storage::mojom::BlobDataItemReader {
   const CacheStorageCache::EntryIndex side_data_disk_cache_index_;
 
   SEQUENCE_CHECKER(sequence_checker_);
-  DISALLOW_COPY_AND_ASSIGN(EntryReaderImpl);
 };
 
 }  // namespace

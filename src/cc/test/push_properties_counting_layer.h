@@ -24,8 +24,11 @@ class PushPropertiesCountingLayer : public Layer {
       delete;
 
   // Layer implementation.
-  void PushPropertiesTo(LayerImpl* layer) override;
-  std::unique_ptr<LayerImpl> CreateLayerImpl(LayerTreeImpl* tree_impl) override;
+  void PushPropertiesTo(LayerImpl* layer,
+                        const CommitState& commit_state,
+                        const ThreadUnsafeCommitState& unsafe_state) override;
+  std::unique_ptr<LayerImpl> CreateLayerImpl(
+      LayerTreeImpl* tree_impl) const override;
 
   // Something to make this layer push properties, but no other layer.
   void MakePushProperties();

@@ -8,7 +8,6 @@
 #include <limits>
 
 #include "base/logging.h"
-#include "base/notreached.h"
 #include "base/rand_util.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/trace_event/memory_usage_estimator.h"
@@ -57,7 +56,7 @@ UniquePosition UniquePosition::FromProto(const sync_pb::UniquePosition& proto) {
 
     un_gzipped.resize(uncompressed_len);
     int result = uncompress(
-        reinterpret_cast<Bytef*>(base::data(un_gzipped)), &uncompressed_len,
+        reinterpret_cast<Bytef*>(std::data(un_gzipped)), &uncompressed_len,
         reinterpret_cast<const Bytef*>(proto.compressed_value().data()),
         proto.compressed_value().size());
     if (result != Z_OK) {
@@ -159,24 +158,6 @@ sync_pb::UniquePosition UniquePosition::ToProto() const {
 void UniquePosition::SerializeToString(std::string* blob) const {
   DCHECK(blob);
   ToProto().SerializeToString(blob);
-}
-
-int64_t UniquePosition::ToInt64() const {
-  uint64_t y = 0;
-  const std::string& s = Uncompress(compressed_);
-  size_t l = sizeof(int64_t);
-  if (s.length() < l) {
-    NOTREACHED();
-    l = s.length();
-  }
-  for (size_t i = 0; i < l; ++i) {
-    const uint8_t byte = s[l - i - 1];
-    y |= static_cast<uint64_t>(byte) << (i * 8);
-  }
-  y ^= 0x8000000000000000ULL;
-  // This is technically implementation-defined if y > INT64_MAX, so
-  // we're assuming that we're on a twos-complement machine.
-  return static_cast<int64_t>(y);
 }
 
 bool UniquePosition::IsValid() const {
@@ -475,9 +456,10 @@ static uint32_t ReadEncodedRunLength(const std::string& str, size_t i) {
   DCHECK_LE(i + 4, str.length());
 
   // Step 1: Extract the big-endian count.
-  uint32_t encoded_length =
-      ((uint8_t)(str[i + 3]) << 0) | ((uint8_t)(str[i + 2]) << 8) |
-      ((uint8_t)(str[i + 1]) << 16) | ((uint8_t)(str[i + 0]) << 24);
+  uint32_t encoded_length = (static_cast<uint8_t>(str[i + 3]) << 0) |
+                            (static_cast<uint8_t>(str[i + 2]) << 8) |
+                            (static_cast<uint8_t>(str[i + 1]) << 16) |
+                            (static_cast<uint8_t>(str[i + 0]) << 24);
 
   // Step 2: If this was an inverted count, un-invert it.
   uint32_t length;

@@ -10,8 +10,8 @@
 #include "base/callback.h"
 #include "base/containers/contains.h"
 #include "base/feature_list.h"
+#include "base/hash/sha1.h"
 #include "base/i18n/char_iterator.h"
-#include "base/macros.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/singleton.h"
 #include "base/metrics/field_trial_params.h"
@@ -20,8 +20,8 @@
 #include "base/strings/string_piece.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
+#include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/task/post_task.h"
 #include "base/task/thread_pool.h"
 #include "base/time/default_clock.h"
 #include "base/trace_event/trace_event.h"
@@ -30,7 +30,6 @@
 #include "components/lookalikes/core/features.h"
 #include "components/reputation/core/safety_tips_config.h"
 #include "components/security_interstitials/core/pref_names.h"
-#include "components/security_state/core/features.h"
 #include "components/url_formatter/spoof_checks/common_words/common_words_util.h"
 #include "components/url_formatter/spoof_checks/top_domains/top500_domains.h"
 #include "components/url_formatter/spoof_checks/top_domains/top_domain_util.h"
@@ -46,6 +45,19 @@ void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry) {
   registry->RegisterListPref(prefs::kLookalikeWarningAllowlistDomains);
 }
 
+std::string GetConsoleMessage(const GURL& lookalike_url,
+                              bool is_new_heuristic) {
+  const char* const kNewHeuristicMessage =
+      "Future Chrome versions will show a warning on this domain name.\n";
+  return base::StringPrintf(
+      "Chrome has determined that %s could be fake or fraudulent.\n\n"
+      "%s"
+      "If you believe this is shown in error please visit "
+      "https://g.co/chrome/lookalike-warnings",
+      lookalike_url.host().c_str(),
+      is_new_heuristic ? kNewHeuristicMessage : "");
+}
+
 }  // namespace lookalikes
 
 namespace {
@@ -58,12 +70,6 @@ const char kDigitChars[] = "0123456789";
 // foo.bar.baz.com-evil.com embeds foo.bar.baz.com, but we don't flag it since
 // "baz" is shorter than kMinTargetE2LDLength.
 const size_t kMinE2LDLengthForTargetEmbedding = 4;
-
-// This list will be added to the static list of common words so common words
-// could be added to the list using a flag if needed.
-const base::FeatureParam<std::string> kRemoveAdditionalCommonWords{
-    &lookalikes::features::kDetectTargetEmbeddingLookalikes,
-    "additional_common_words", ""};
 
 // We might not protect a domain whose e2LD is a common word in target embedding
 // based on the TLD that is paired with it. This list supplements words from
@@ -85,6 +91,54 @@ const char kTargetEmbeddingSeparators[] = "-.";
 // registries AND are a common source of false positives in lookalike checks. We
 // treat them as public for the purposes of lookalike checks.
 const char* kPrivateRegistriesTreatedAsPublic[] = {"com.de", "com.se"};
+
+Top500DomainsParams* GetTopDomainParams() {
+  static Top500DomainsParams params{
+      top500_domains::kTop500EditDistanceSkeletons,
+      top500_domains::kNumTop500EditDistanceSkeletons};
+  return &params;
+}
+
+// Minimum length of the eTLD+1 without registry needed to show the punycode
+// interstitial. IDN whose eTLD+1 without registry is shorter than this are
+// still displayed in punycode, but don't show an interstitial.
+const size_t kMinimumE2LDLengthToShowPunycodeInterstitial = 2;
+
+// Default launch percentage of a new heuristic on Canary/Dev and Beta. These
+// are used if there is a launch config for the heuristic in the proto.
+const int kDefaultLaunchPercentageOnCanaryDev = 90;
+const int kDefaultLaunchPercentageOnBeta = 50;
+
+// Define brand names and popular keywords for using in Combo Squatting
+// heuristic. These lists are manually curated using Chrome metrics.
+// We will check combinations of brand names and popular keywords.
+// e. g. google-login.com or youtubesecure.com.
+const char* kBrandNamesforCSQ[] = {
+    "adobe",     "airbnb",    "alibaba",     "aliexpress",    "amazon",
+    "baidu",     "bestbuy",   "blogspot",    "costco",        "craigslist",
+    "dropbox",   "expedia",   "facebook",    "fedex",         "flickr",
+    "github",    "glassdoor", "gofundme",    "google",        "homedepot",
+    "icloud",    "indeed",    "instagram",   "intuit",        "microsoft",
+    "nbcnews",   "netflix",   "norton",      "nytimes",       "office365",
+    "paypal",    "pinterest", "playstation", "quora",         "reddit",
+    "reuters",   "samsung",   "spotify",     "stackexchange", "stackoverflow",
+    "trello",    "twitch",    "twitter",     "udemy",         "wikipedia",
+    "wordpress", "xfinity",   "yahoo",       "youtube",       "zillow"};
+
+const char* kPopularKeywordsforCSQ[] = {
+    // Security
+    "account", "activate", "active", "admin",    "login",  "logout",
+    "online",  "password", "secure", "security", "signin", "signout"};
+
+// Minimum length of brand to be checked for Combo Squatting.
+const size_t kMinBrandNameLengthForComboSquatting = 4;
+
+ComboSquattingParams* GetComboSquattingParams() {
+  static ComboSquattingParams params{
+      kBrandNamesforCSQ, std::size(kBrandNamesforCSQ), kPopularKeywordsforCSQ,
+      std::size(kPopularKeywordsforCSQ)};
+  return &params;
+}
 
 bool SkeletonsMatch(const url_formatter::Skeletons& skeletons1,
                     const url_formatter::Skeletons& skeletons2) {
@@ -124,13 +178,13 @@ bool GetSimilarDomainFromTop500(
     const LookalikeTargetAllowlistChecker& target_allowlisted,
     std::string* matched_domain,
     LookalikeUrlMatchType* match_type) {
+  Top500DomainsParams* top_500_domain_params = GetTopDomainParams();
   for (const std::string& navigated_skeleton : navigated_domain.skeletons) {
-    for (const char* const top_domain_skeleton :
-         top500_domains::kTop500EditDistanceSkeletons) {
-      // kTop500EditDistanceSkeletons may include blank entries.
-      if (strlen(top_domain_skeleton) == 0) {
-        continue;
-      }
+    for (size_t i = 0; i < top_500_domain_params->num_edit_distance_skeletons;
+         i++) {
+      const char* const top_domain_skeleton =
+          top_500_domain_params->edit_distance_skeletons[i];
+      DCHECK(strlen(top_domain_skeleton));
       // Check edit distance on skeletons.
       if (IsEditDistanceAtMostOne(base::UTF8ToUTF16(navigated_skeleton),
                                   base::UTF8ToUTF16(top_domain_skeleton))) {
@@ -367,12 +421,6 @@ bool UsesCommonWord(const reputation::SafetyTipsConfig* config_proto,
     if (domain.domain_without_registry == common_word) {
       return true;
     }
-  }
-  std::vector<std::string> additional_common_words =
-      base::SplitString(kRemoveAdditionalCommonWords.Get(), ",",
-                        base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
-  if (base::Contains(additional_common_words, domain.domain_without_registry)) {
-    return true;
   }
 
   return false;
@@ -708,18 +756,15 @@ bool ShouldBlockLookalikeUrlNavigation(LookalikeUrlMatchType match_type) {
     return true;
   }
   if (match_type == LookalikeUrlMatchType::kTargetEmbedding) {
-#if defined(OS_IOS)
+#if BUILDFLAG(IS_IOS)
     // TODO(crbug.com/1104384): Only enable target embedding on iOS once we can
     //    check engaged sites. Otherwise, false positives are too high.
     return false;
 #else
-    return base::FeatureList::IsEnabled(
-        lookalikes::features::kDetectTargetEmbeddingLookalikes);
+    return true;
 #endif
   }
-  if (match_type == LookalikeUrlMatchType::kFailedSpoofChecks &&
-      base::FeatureList::IsEnabled(
-          lookalikes::features::kLookalikeInterstitialForPunycode)) {
+  if (match_type == LookalikeUrlMatchType::kFailedSpoofChecks) {
     return true;
   }
   return match_type == LookalikeUrlMatchType::kSkeletonMatchTop500;
@@ -796,6 +841,13 @@ bool GetMatchingDomain(
     return true;
   }
 
+  // If none of the previous heuristics work, check it for Combo Squatting.
+  if (IsComboSquatting(navigated_domain, matched_domain)) {
+    *match_type = LookalikeUrlMatchType::kComboSquatting;
+    DCHECK(!matched_domain->empty());
+    return true;
+  }
+
   DCHECK(embedding_type == TargetEmbeddingType::kNone);
   return false;
 }
@@ -832,6 +884,9 @@ void RecordUMAFromMatchType(LookalikeUrlMatchType match_type) {
       break;
     case LookalikeUrlMatchType::kCharacterSwapTop500:
       RecordEvent(NavigationSuggestionEvent::kMatchCharacterSwapTop500);
+      break;
+    case LookalikeUrlMatchType::kComboSquatting:
+      RecordEvent(NavigationSuggestionEvent::kComboSquatting);
       break;
     case LookalikeUrlMatchType::kNone:
       break;
@@ -1014,6 +1069,16 @@ bool IsASCIIAndEmojiOnly(const base::StringPiece16& text) {
   return true;
 }
 
+// Returns true if the e2LD of domain is long enough to display a punycode
+// interstitial.
+bool IsPunycodeInterstitialCandidate(const DomainInfo& domain) {
+  const url_formatter::IDNConversionResult idn_result =
+      url_formatter::UnsafeIDNToUnicodeWithDetails(
+          domain.domain_without_registry);
+  return idn_result.result.size() >=
+         kMinimumE2LDLengthToShowPunycodeInterstitial;
+}
+
 bool ShouldBlockBySpoofCheckResult(const DomainInfo& navigated_domain) {
   // Here, only a subset of spoof checks that cause an IDN to fallback to
   // punycode are configured to show an interstitial.
@@ -1024,7 +1089,8 @@ bool ShouldBlockBySpoofCheckResult(const DomainInfo& navigated_domain) {
 
     case url_formatter::IDNSpoofChecker::Result::kICUSpoofChecks:
       // If the eTLD+1 contains only a mix of ASCII + Emoji, allow.
-      return !IsASCIIAndEmojiOnly(navigated_domain.idn_result.result);
+      return !IsASCIIAndEmojiOnly(navigated_domain.idn_result.result) &&
+             IsPunycodeInterstitialCandidate(navigated_domain);
 
     case url_formatter::IDNSpoofChecker::Result::kDeviationCharacters:
       // Failures because of deviation characters, especially ß, is common.
@@ -1037,7 +1103,7 @@ bool ShouldBlockBySpoofCheckResult(const DomainInfo& navigated_domain) {
     case url_formatter::IDNSpoofChecker::Result::
         kNonAsciiLatinCharMixedWithNonLatin:
     case url_formatter::IDNSpoofChecker::Result::kDangerousPattern:
-      return true;
+      return IsPunycodeInterstitialCandidate(navigated_domain);
   }
 }
 
@@ -1045,7 +1111,7 @@ bool IsAllowedByEnterprisePolicy(const PrefService* pref_service,
                                  const GURL& url) {
   const auto* list =
       pref_service->GetList(prefs::kLookalikeWarningAllowlistDomains);
-  for (const auto& domain_val : list->GetList()) {
+  for (const auto& domain_val : list->GetListDeprecated()) {
     auto domain = domain_val.GetString();
     if (url.DomainIs(domain)) {
       return true;
@@ -1096,4 +1162,96 @@ bool HasOneCharacterSwap(const std::u16string& str1,
     return false;
   }
   return has_swap;
+}
+
+void SetTop500DomainsParamsForTesting(const Top500DomainsParams& params) {
+  *GetTopDomainParams() = params;
+}
+
+void ResetTop500DomainsParamsForTesting() {
+  Top500DomainsParams* params = GetTopDomainParams();
+  *params = {top500_domains::kTop500EditDistanceSkeletons,
+             top500_domains::kNumTop500EditDistanceSkeletons};
+}
+
+bool IsHeuristicEnabledForHostname(
+    const reputation::SafetyTipsConfig* config_proto,
+    const reputation::HeuristicLaunchConfig::Heuristic heuristic,
+    const std::string& lookalike_etld_plus_one,
+    version_info::Channel channel) {
+  DCHECK(!lookalike_etld_plus_one.empty());
+  if (!config_proto) {
+    return false;
+  }
+  const unsigned char* bytes =
+      reinterpret_cast<const unsigned char*>(lookalike_etld_plus_one.c_str());
+  unsigned char data[base::kSHA1Length];
+  base::SHA1HashBytes(bytes, lookalike_etld_plus_one.length(), data);
+
+  float cohort = data[0] / 2.56;
+  for (const reputation::HeuristicLaunchConfig& config :
+       config_proto->launch_config()) {
+    if (heuristic == config.heuristic()) {
+      switch (channel) {
+        // Enable by default on local builds.
+        case version_info::Channel::UNKNOWN:
+          return true;
+
+        // Use pre-defined launch percentages for Canary/Dev and Beta. Use the
+        // launch percentage from config for Stable.
+        case version_info::Channel::CANARY:
+        case version_info::Channel::DEV:
+          return kDefaultLaunchPercentageOnCanaryDev > cohort;
+
+        case version_info::Channel::BETA:
+          return kDefaultLaunchPercentageOnBeta > cohort;
+
+        case version_info::Channel::STABLE:
+          return config.launch_percentage() > cohort;
+      }
+    }
+  }
+  return false;
+}
+
+void SetComboSquattingParamsForTesting(const ComboSquattingParams& params) {
+  *GetComboSquattingParams() = params;
+}
+
+void ResetComboSquattingParamsForTesting() {
+  ComboSquattingParams* params = GetComboSquattingParams();
+  *params = {kBrandNamesforCSQ, std::size(kBrandNamesforCSQ),
+             kPopularKeywordsforCSQ, std::size(kPopularKeywordsforCSQ)};
+}
+
+bool IsComboSquatting(const DomainInfo& navigated_domain,
+                      std::string* matched_domain) {
+  // TODO(crbug.com/1341023): We should check the domain in allowlist once we
+  // start getting metrics in future iterations.
+  ComboSquattingParams* combo_squatting_params = GetComboSquattingParams();
+  // Check if the domain has any brand name and any popular keyword.
+  for (size_t i = 0; i < combo_squatting_params->num_brand_names; i++) {
+    auto* const brand = combo_squatting_params->brand_names[i];
+    DCHECK(std::string(brand).size() > kMinBrandNameLengthForComboSquatting);
+
+    if (!(navigated_domain.domain_without_registry.find(brand) !=
+              std::string::npos &&
+          navigated_domain.domain_without_registry.size() != strlen(brand))) {
+      continue;
+    }
+
+    for (size_t j = 0; j < combo_squatting_params->num_popular_keywords; j++) {
+      auto* const keyword = combo_squatting_params->popular_keywords[j];
+      if (navigated_domain.domain_without_registry.find(keyword) !=
+              std::string::npos &&
+          std::string(brand).find(keyword) == std::string::npos &&
+          std::string(keyword).find(brand) == std::string::npos) {
+        // TODO(crbug.com/1341320): In future cls we will compute a better
+        // suggestion for each domain.
+        *matched_domain = std::string(brand) + ".com";
+        return true;
+      }
+    }
+  }
+  return false;
 }

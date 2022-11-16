@@ -26,23 +26,23 @@
 #include <memory>
 
 #include "base/gtest_prod_util.h"
+#include "base/time/time.h"
 #include "cc/input/event_listener_properties.h"
-#include "cc/input/layer_selection_bound.h"
 #include "cc/input/overscroll_behavior.h"
 #include "cc/paint/paint_image.h"
 #include "cc/trees/paint_holding_commit_trigger.h"
 #include "cc/trees/paint_holding_reason.h"
 #include "components/viz/common/surfaces/frame_sink_id.h"
 #include "third_party/blink/public/common/dom_storage/session_storage_namespace_id.h"
+#include "third_party/blink/public/common/input/web_gesture_event.h"
+#include "third_party/blink/public/common/input/web_input_event.h"
 #include "third_party/blink/public/common/page/drag_operation.h"
 #include "third_party/blink/public/common/permissions_policy/permissions_policy_features.h"
 #include "third_party/blink/public/mojom/devtools/console_message.mojom-blink-forward.h"
 #include "third_party/blink/public/mojom/input/focus_type.mojom-blink-forward.h"
-#include "third_party/blink/public/platform/blame_context.h"
-#include "third_party/blink/public/web/web_swap_result.h"
-#include "third_party/blink/renderer/core/accessibility/ax_object_cache.h"
+#include "third_party/blink/public/mojom/input/input_handler.mojom-blink.h"
+#include "third_party/blink/public/mojom/scroll/scroll_into_view_params.mojom-blink.h"
 #include "third_party/blink/renderer/core/core_export.h"
-#include "third_party/blink/renderer/core/html/battery_savings.h"
 #include "third_party/blink/renderer/core/html/forms/external_date_time_chooser.h"
 #include "third_party/blink/renderer/core/html/forms/popup_menu.h"
 #include "third_party/blink/renderer/core/layout/geometry/physical_offset.h"
@@ -51,17 +51,20 @@
 #include "third_party/blink/renderer/core/scroll/scroll_types.h"
 #include "third_party/blink/renderer/core/style/computed_style_constants.h"
 #include "third_party/blink/renderer/platform/graphics/touch_action.h"
-#include "third_party/blink/renderer/platform/heap/handle.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/text/text_direction.h"
 #include "third_party/blink/renderer/platform/transforms/transformation_matrix.h"
 #include "third_party/blink/renderer/platform/wtf/forward.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "ui/gfx/delegated_ink_metadata.h"
+#include "ui/gfx/geometry/vector2d_f.h"
 
 // To avoid conflicts with the CreateWindow macro from the Windows SDK...
 #undef CreateWindow
 
 namespace cc {
+class AnimationHost;
+class AnimationTimeline;
 struct ElementId;
 class Layer;
 struct OverscrollBehavior;
@@ -80,7 +83,6 @@ namespace blink {
 
 class ColorChooser;
 class ColorChooserClient;
-class CompositorAnimationTimeline;
 class DateTimeChooser;
 class DateTimeChooserClient;
 class Element;
@@ -93,7 +95,6 @@ class HTMLInputElement;
 class HTMLSelectElement;
 class HitTestLocation;
 class HitTestResult;
-class IntRect;
 class KeyboardEvent;
 class LocalFrame;
 class LocalFrameView;
@@ -136,13 +137,15 @@ class CORE_EXPORT ChromeClient : public GarbageCollected<ChromeClient> {
 
   virtual void ChromeDestroyed() = 0;
 
+  virtual void SetWindowRect(const gfx::Rect&, LocalFrame&) = 0;
+
   // For non-composited WebViews that exist to contribute to a "parent" WebView
   // painting. This informs the client of the area that needs to be redrawn.
   virtual void InvalidateContainer() = 0;
 
   // Converts the rect from the viewport coordinates to screen coordinates.
-  virtual IntRect ViewportToScreen(const IntRect&,
-                                   const LocalFrameView*) const = 0;
+  virtual gfx::Rect ViewportToScreen(const gfx::Rect&,
+                                     const LocalFrameView*) const = 0;
 
   void ScheduleAnimation(const LocalFrameView* view) {
     ScheduleAnimation(view, base::TimeDelta());
@@ -150,23 +153,13 @@ class CORE_EXPORT ChromeClient : public GarbageCollected<ChromeClient> {
   virtual void ScheduleAnimation(const LocalFrameView*,
                                  base::TimeDelta delay) = 0;
 
-  // Adjusts |pending_rect| for the minimum window size and |frame|'s screen
-  // and returns the adjusted value.
-  // Cross-screen window placements are passed on without same-screen clamping
-  // if the |requesting_frame| (i.e. the opener or |frame| itself) has
-  // experimental window placement features enabled. The browser will check
-  // permissions before actually supporting cross-screen placement requests.
-  IntRect CalculateWindowRectWithAdjustment(const IntRect& pending_rect,
-                                            LocalFrame& frame,
-                                            LocalFrame& requesting_frame);
-
-  // Calls CalculateWindowRectWithAdjustment, then SetWindowRect.
-  void SetWindowRectWithAdjustment(const IntRect& pending_rect,
-                                   LocalFrame& frame);
+  // Tells the browser that another page has accessed the DOM of the initial
+  // empty document of a main frame.
+  virtual void DidAccessInitialMainDocument() = 0;
 
   // This gives the rect of the top level window that the given LocalFrame is a
   // part of.
-  virtual IntRect RootWindowRect(LocalFrame&) = 0;
+  virtual gfx::Rect RootWindowRect(LocalFrame&) = 0;
 
   virtual void FocusPage() = 0;
   virtual void DidFocusPage() = 0;
@@ -201,6 +194,24 @@ class CORE_EXPORT ChromeClient : public GarbageCollected<ChromeClient> {
   //
   // Returns false if commits were already deferred, indicating that the call
   // was a no-op.
+  struct DeferredCommitObserver : public GarbageCollectedMixin {
+    virtual void WillStartDeferringCommits(cc::PaintHoldingReason) {}
+    virtual void WillStopDeferringCommits(cc::PaintHoldingCommitTrigger) {}
+
+   protected:
+    virtual ~DeferredCommitObserver() = default;
+  };
+
+  virtual void RegisterForDeferredCommitObservation(
+      DeferredCommitObserver*) = 0;
+  virtual void UnregisterFromDeferredCommitObservation(
+      DeferredCommitObserver*) = 0;
+
+  virtual void OnDeferCommitsChanged(
+      bool defer_status,
+      cc::PaintHoldingReason reason,
+      absl::optional<cc::PaintHoldingCommitTrigger> trigger) = 0;
+
   virtual bool StartDeferringCommits(LocalFrame& main_frame,
                                      base::TimeDelta timeout,
                                      cc::PaintHoldingReason reason) = 0;
@@ -234,9 +245,10 @@ class CORE_EXPORT ChromeClient : public GarbageCollected<ChromeClient> {
   // shown. Under some circumstances CreateWindow's implementation may return a
   // previously shown page. Calling this method should still work and the
   // browser will discard the unnecessary show request.
-  virtual void Show(const blink::LocalFrameToken& opener_frame_token,
+  virtual void Show(LocalFrame& frame,
+                    LocalFrame& opener_frame,
                     NavigationPolicy navigation_policy,
-                    const IntRect& initial_rect,
+                    const gfx::Rect& initial_rect,
                     bool consumed_user_gesture) = 0;
 
   // All the parameters should be in viewport space. That is, if an event
@@ -261,9 +273,21 @@ class CORE_EXPORT ChromeClient : public GarbageCollected<ChromeClient> {
       LocalFrame& local_frame,
       WebGestureDevice device,
       const gfx::Vector2dF& delta,
-      ScrollGranularity granularity,
+      ui::ScrollGranularity granularity,
       CompositorElementId scrollable_area_element_id,
       WebInputEvent::Type injected_type) {}
+
+  // Finishes a ScrollIntoView for a focused editable element by performing a
+  // view-level reveal. That is, when an embedder requests to reveal a focused
+  // editable, the editable is first ScrollIntoView'ed in the layout tree to
+  // ensure it's visible in the outermost document but stops short of scrolling
+  // the outermost frame. This method will then perform a platform-specific
+  // reveal of the editable, e.g. by animating a scroll and zoom in to a
+  // legible scale. This should only be called in a WebView where the main
+  // frame is local and outermost.
+  virtual void FinishScrollFocusedEditableIntoView(
+      const gfx::RectF& caret_rect_in_root_frame,
+      mojom::blink::ScrollIntoViewParamsPtr params) {}
 
   // Set the browser's behavior when overscroll happens, e.g. whether to glow
   // or navigate. This may only be called for the main frame, and takes it as
@@ -318,11 +342,6 @@ class CORE_EXPORT ChromeClient : public GarbageCollected<ChromeClient> {
 
   virtual void SetCursorForPlugin(const ui::Cursor&, LocalFrame*) = 0;
 
-  // Returns a custom visible rect if a viewport override is active. Requires
-  // the |frame| being painted, but only supports being used for the main frame.
-  virtual void OverrideVisibleRectForMainFrame(LocalFrame& frame,
-                                               IntRect* paint_rect) const {}
-
   // Returns the scale used to convert incoming input events while emulating
   // device metics.
   virtual float InputEventsScaleForEmulation() const { return 1; }
@@ -336,13 +355,13 @@ class CORE_EXPORT ChromeClient : public GarbageCollected<ChromeClient> {
 
   virtual void ZoomToFindInPageRect(const gfx::Rect&) {}
 
-  virtual void ContentsSizeChanged(LocalFrame*, const IntSize&) const = 0;
+  virtual void ContentsSizeChanged(LocalFrame*, const gfx::Size&) const = 0;
   // Call during pinch gestures, or when page-scale changes on main-frame load.
   virtual void PageScaleFactorChanged() const {}
   virtual float ClampPageScaleFactorToLimits(float scale) const {
     return scale;
   }
-  virtual void MainFrameScrollOffsetChanged(LocalFrame& main_frame) const = 0;
+  virtual void OutermostMainFrameScrollOffsetChanged() const = 0;
   virtual void ResizeAfterLayout() const {}
   virtual void MainFrameLayoutUpdated() const {}
 
@@ -400,15 +419,10 @@ class CORE_EXPORT ChromeClient : public GarbageCollected<ChromeClient> {
   virtual void AttachRootLayer(scoped_refptr<cc::Layer>,
                                LocalFrame* local_root) = 0;
 
-  // Set the CompositorAnimationTimeline for a local root. Should later be unset
-  // by a call to DetachCompositorAnimationTimeline().
-  virtual void AttachCompositorAnimationTimeline(CompositorAnimationTimeline*,
-                                                 LocalFrame* local_root) {}
-  // Removes the CompositorAnimationTimeline for a local root. The timeline
-  // would have previously been given to AttachCompositorAnimationTimeline() but
-  // it's valid to call this even if the timeline was never attached.
-  virtual void DetachCompositorAnimationTimeline(CompositorAnimationTimeline*,
-                                                 LocalFrame* local_root) {}
+  virtual cc::AnimationHost* GetCompositorAnimationHost(LocalFrame&) const = 0;
+
+  virtual cc::AnimationTimeline* GetScrollAnimationTimeline(
+      LocalFrame&) const = 0;
 
   virtual void EnterFullscreen(LocalFrame&,
                                const FullscreenOptions*,
@@ -422,9 +436,6 @@ class CORE_EXPORT ChromeClient : public GarbageCollected<ChromeClient> {
   virtual void AnimateDoubleTapZoom(const gfx::Point& point,
                                     const gfx::Rect& rect) {}
 
-  virtual void ClearLayerSelection(LocalFrame*) {}
-  virtual void UpdateLayerSelection(LocalFrame*, const cc::LayerSelection&) {}
-
   // The client keeps track of which touch/mousewheel event types have handlers,
   // and if they do, whether the handlers are passive and/or blocking. This
   // allows the client to know which optimizations can be used for the
@@ -432,17 +443,16 @@ class CORE_EXPORT ChromeClient : public GarbageCollected<ChromeClient> {
   virtual void SetEventListenerProperties(LocalFrame*,
                                           cc::EventListenerClass,
                                           cc::EventListenerProperties) = 0;
-  virtual cc::EventListenerProperties EventListenerProperties(
-      LocalFrame*,
-      cc::EventListenerClass) const = 0;
 
   virtual void SetHasScrollEventHandlers(LocalFrame*, bool) = 0;
   virtual void SetNeedsLowLatencyInput(LocalFrame*, bool) = 0;
   virtual void SetNeedsUnbufferedInputForDebugger(LocalFrame*, bool) = 0;
   virtual void RequestUnbufferedInputEvents(LocalFrame*) = 0;
   virtual void SetTouchAction(LocalFrame*, TouchAction) = 0;
+  virtual void SetPanAction(LocalFrame*,
+                            mojom::blink::PanAction pan_action) = 0;
 
-  // Checks if there is an opened popup, called by LayoutMenuList::showPopup().
+  // Checks if there is an opened popup, called by LayoutMenuList::showPopUp().
   virtual bool HasOpenedPopup() const = 0;
   virtual PopupMenu* OpenPopupMenu(LocalFrame&, HTMLSelectElement&) = 0;
   virtual PagePopup* OpenPagePopup(PagePopupClient*) = 0;
@@ -474,7 +484,7 @@ class CORE_EXPORT ChromeClient : public GarbageCollected<ChromeClient> {
 
   virtual bool IsSVGImageChromeClient() const { return false; }
 
-  virtual IntSize MinimumWindowSize() const { return IntSize(100, 100); }
+  virtual gfx::Size MinimumWindowSize() const { return gfx::Size(100, 100); }
 
   virtual bool IsChromeClientImpl() const { return false; }
 
@@ -487,6 +497,10 @@ class CORE_EXPORT ChromeClient : public GarbageCollected<ChromeClient> {
   virtual void DidChangeSelectionInSelectControl(HTMLFormControlElement&) {}
   virtual void SelectFieldOptionsChanged(HTMLFormControlElement&) {}
   virtual void AjaxSucceeded(LocalFrame*) {}
+  // Called when |element| is in autofilled state and the value has been changed
+  // by JavaScript. |old_value| contains the value before being changed.
+  virtual void JavaScriptChangedAutofilledValue(HTMLFormControlElement&,
+                                                const String& old_value) {}
 
   // Input method editor related functions.
   virtual void ShowVirtualKeyboardOnElementFocus(LocalFrame&) {}
@@ -503,7 +517,7 @@ class CORE_EXPORT ChromeClient : public GarbageCollected<ChromeClient> {
   virtual void UnregisterPopupOpeningObserver(PopupOpeningObserver*) = 0;
   virtual void NotifyPopupOpeningObservers() const = 0;
 
-  virtual FloatSize ElasticOverscroll() const { return FloatSize(); }
+  virtual gfx::Vector2dF ElasticOverscroll() const { return gfx::Vector2dF(); }
 
   virtual void InstallSupplements(LocalFrame&);
 
@@ -517,12 +531,12 @@ class CORE_EXPORT ChromeClient : public GarbageCollected<ChromeClient> {
     std::move(callback).Run(false);
   }
 
-  // The |callback| will be fired when the corresponding renderer frame for the
-  // |frame| is presented in the display compositor. The reported time could
-  // sometimes be the swap time, as is the case when the swap is aborted. In
-  // this case, WebSwapResult will be DidNotSwap.
+  // The `callback` will be fired when the corresponding renderer frame for the
+  // `frame` is presented in the display compositor. If there is no update in
+  // the frame to be presented, the `callback` will run with the time of the
+  // failure.
   using ReportTimeCallback =
-      WTF::CrossThreadOnceFunction<void(WebSwapResult, base::TimeTicks)>;
+      WTF::CrossThreadOnceFunction<void(base::TimeTicks)>;
   virtual void NotifyPresentationTime(LocalFrame& frame,
                                       ReportTimeCallback callback) {}
 
@@ -553,9 +567,6 @@ class CORE_EXPORT ChromeClient : public GarbageCollected<ChromeClient> {
       LocalFrame* frame,
       std::unique_ptr<gfx::DelegatedInkMetadata> metadata) {}
 
-  virtual void BatterySavingsChanged(LocalFrame& main_frame,
-                                     BatterySavingsFlags savings) = 0;
-
   virtual void FormElementReset(HTMLFormElement& element) {}
 
   virtual void PasswordFieldReset(HTMLInputElement& element) {}
@@ -564,7 +575,6 @@ class CORE_EXPORT ChromeClient : public GarbageCollected<ChromeClient> {
   ChromeClient() = default;
 
   virtual void ShowMouseOverURL(const HitTestResult&) = 0;
-  virtual void SetWindowRect(const IntRect&, LocalFrame&) = 0;
   virtual bool OpenBeforeUnloadConfirmPanelDelegate(LocalFrame*,
                                                     bool is_reload) = 0;
   virtual bool OpenJavaScriptAlertDelegate(LocalFrame*, const String&) = 0;

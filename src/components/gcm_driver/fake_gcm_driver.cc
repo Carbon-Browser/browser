@@ -6,7 +6,7 @@
 
 #include "base/bind.h"
 #include "base/files/file_path.h"
-#include "base/sequenced_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 
 namespace gcm {
@@ -14,8 +14,9 @@ namespace gcm {
 FakeGCMDriver::FakeGCMDriver() : GCMDriver(base::FilePath(), nullptr) {}
 
 FakeGCMDriver::FakeGCMDriver(
+    const base::FilePath& store_path,
     const scoped_refptr<base::SequencedTaskRunner>& blocking_task_runner)
-    : GCMDriver(base::FilePath(), blocking_task_runner) {}
+    : GCMDriver(store_path, blocking_task_runner) {}
 
 FakeGCMDriver::~FakeGCMDriver() = default;
 

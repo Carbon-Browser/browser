@@ -8,7 +8,6 @@
 #include <memory>
 #include <string>
 
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/clock.h"
 #include "base/time/time.h"
@@ -19,9 +18,9 @@
 
 class PrefService;
 
-namespace chromeos {
+namespace ash {
 class CryptohomeMiscClient;
-}  // namespace chromeos
+}
 
 namespace policy {
 
@@ -37,6 +36,9 @@ class LookupKeyUploader : public CloudPolicyStore::Observer {
       DeviceCloudPolicyStoreAsh* policy_store,
       PrefService* pref_service,
       ash::attestation::EnrollmentCertificateUploader* certificate_uploader);
+
+  LookupKeyUploader(const LookupKeyUploader&) = delete;
+  LookupKeyUploader& operator=(const LookupKeyUploader&) = delete;
 
   ~LookupKeyUploader() override;
 
@@ -64,7 +66,7 @@ class LookupKeyUploader : public CloudPolicyStore::Observer {
   DeviceCloudPolicyStoreAsh* policy_store_;
   PrefService* prefs_;
   ash::attestation::EnrollmentCertificateUploader* certificate_uploader_;
-  chromeos::CryptohomeMiscClient* cryptohome_misc_client_;
+  ash::CryptohomeMiscClient* cryptohome_misc_client_;
 
   // Whether we need to upload the lookup key right now. By default, it is set
   // to true. Later, it is set to false after first successful upload or finding
@@ -79,8 +81,6 @@ class LookupKeyUploader : public CloudPolicyStore::Observer {
   // Note: This should remain the last member so it'll be destroyed and
   // invalidate the weak pointers before any other members are destroyed.
   base::WeakPtrFactory<LookupKeyUploader> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(LookupKeyUploader);
 };
 
 }  // namespace policy

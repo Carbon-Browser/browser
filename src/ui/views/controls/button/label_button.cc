@@ -15,6 +15,8 @@
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/color/color_id.h"
+#include "ui/color/color_provider.h"
 #include "ui/compositor/layer.h"
 #include "ui/gfx/animation/throb_animation.h"
 #include "ui/gfx/canvas.h"
@@ -22,11 +24,9 @@
 #include "ui/gfx/font_list.h"
 #include "ui/gfx/geometry/vector2d.h"
 #include "ui/native_theme/native_theme.h"
-#include "ui/native_theme/themed_vector_icon.h"
 #include "ui/views/animation/ink_drop.h"
 #include "ui/views/background.h"
 #include "ui/views/controls/button/label_button_border.h"
-#include "ui/views/image_model_utils.h"
 #include "ui/views/painter.h"
 #include "ui/views/style/platform_style.h"
 #include "ui/views/view_class_properties.h"
@@ -53,7 +53,7 @@ LabelButton::LabelButton(PressedCallback callback,
   label_->SetAutoColorReadabilityEnabled(false);
   label_->SetHorizontalAlignment(gfx::ALIGN_TO_HEAD);
 
-  SetAnimationDuration(base::TimeDelta::FromMilliseconds(170));
+  SetAnimationDuration(base::Milliseconds(170));
   SetTextInternal(text);
 }
 
@@ -66,8 +66,7 @@ LabelButton::~LabelButton() {
 
 gfx::ImageSkia LabelButton::GetImage(ButtonState for_state) const {
   for_state = ImageStateForState(for_state);
-  return GetImageSkiaFromImageModel(button_state_image_models_[for_state],
-                                    GetNativeTheme());
+  return button_state_image_models_[for_state].Rasterize(GetColorProvider());
 }
 
 void LabelButton::SetImage(ButtonState for_state, const gfx::ImageSkia& image) {
@@ -233,7 +232,7 @@ std::unique_ptr<LabelButtonBorder> LabelButton::CreateDefaultBorder() const {
 }
 
 void LabelButton::SetBorder(std::unique_ptr<Border> border) {
-  border_is_themed_border_ = false;
+  explicitly_set_border_ = true;
   View::SetBorder(std::move(border));
 }
 
@@ -316,7 +315,7 @@ void LabelButton::Layout() {
   // If the button have a limited space to fit in, the image and the label
   // may overlap with the border, which often times contains a lot of empty
   // padding.
-  image_area.Inset(insets.left(), 0, insets.right(), 0);
+  image_area.Inset(gfx::Insets::TLBR(0, insets.left(), 0, insets.right()));
   // The space that the label can use. Labels truncate horizontally, so there
   // is no need to allow the label to take up the complete horizontal space.
   gfx::Rect label_area = image_area;
@@ -328,9 +327,9 @@ void LabelButton::Layout() {
   if (!image_size.IsEmpty()) {
     int image_space = image_size.width() + GetImageLabelSpacing();
     if (horizontal_alignment == gfx::ALIGN_RIGHT)
-      label_area.Inset(0, 0, image_space, 0);
+      label_area.Inset(gfx::Insets::TLBR(0, 0, 0, image_space));
     else
-      label_area.Inset(image_space, 0, 0, 0);
+      label_area.Inset(gfx::Insets::TLBR(0, image_space, 0, 0));
   }
 
   gfx::Size label_size(
@@ -501,8 +500,8 @@ void LabelButton::OnThemeChanged() {
   Button::OnThemeChanged();
   ResetColorsFromNativeTheme();
   UpdateImage();
-  if (border_is_themed_border_)
-    View::SetBorder(PlatformStyle::CreateThemedLabelButtonBorder(this));
+  if (!explicitly_set_border_)
+    View::SetBorder(CreateDefaultBorder());
   ResetLabelEnabledColor();
   // The entire button has to be repainted here, since the native theme can
   // define the tint for the entire background/border/focus ring.
@@ -587,13 +586,13 @@ void LabelButton::ResetColorsFromNativeTheme() {
     return;
   }
 
-  const ui::NativeTheme* theme = GetNativeTheme();
+  const ui::ColorProvider* color_provider = GetColorProvider();
   // Since this is a LabelButton, use the label colors.
   SkColor colors[STATE_COUNT] = {
-      theme->GetSystemColor(ui::NativeTheme::kColorId_LabelEnabledColor),
-      theme->GetSystemColor(ui::NativeTheme::kColorId_LabelEnabledColor),
-      theme->GetSystemColor(ui::NativeTheme::kColorId_LabelEnabledColor),
-      theme->GetSystemColor(ui::NativeTheme::kColorId_LabelDisabledColor),
+      color_provider->GetColor(ui::kColorLabelForeground),
+      color_provider->GetColor(ui::kColorLabelForeground),
+      color_provider->GetColor(ui::kColorLabelForeground),
+      color_provider->GetColor(ui::kColorLabelForegroundDisabled),
   };
 
   label_->SetBackground(nullptr);

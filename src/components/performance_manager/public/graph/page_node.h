@@ -10,7 +10,6 @@
 
 #include "base/callback_forward.h"
 #include "base/containers/flat_set.h"
-#include "base/macros.h"
 #include "components/performance_manager/public/freezing/freezing.h"
 #include "components/performance_manager/public/graph/node.h"
 #include "components/performance_manager/public/mojom/coordination_unit.mojom.h"
@@ -25,6 +24,15 @@ namespace performance_manager {
 
 class FrameNode;
 class PageNodeObserver;
+
+enum class PageType {
+  // A browser tab.
+  kTab,
+  // An extension background page.
+  kExtension,
+  // Anything else.
+  kUnknown,
+};
 
 // A PageNode represents the root of a FrameTree, or equivalently a WebContents.
 // These may correspond to normal tabs, WebViews, Portals, Chrome Apps or
@@ -71,7 +79,8 @@ class PageNode : public Node {
     kLoadedIdle,
   };
 
-  // Returns a string for a PageNode::LoadingState enumeration.
+  // Returns a string for an enumeration value.
+  static const char* ToString(PageType type);
   static const char* ToString(PageNode::LoadingState loading_state);
 
   // State of a page. Pages can be born in "kActive" or "kPrerendering" state.
@@ -94,6 +103,10 @@ class PageNode : public Node {
   static const char* ToString(PageNode::PageState page_state);
 
   PageNode();
+
+  PageNode(const PageNode&) = delete;
+  PageNode& operator=(const PageNode&) = delete;
+
   ~PageNode() override;
 
   // Returns the unique ID of the browser context that this page belongs to.
@@ -110,6 +123,9 @@ class PageNode : public Node {
   // Returns the type of relationship this node has with its embedder, if it has
   // an embedder.
   virtual EmbeddingType GetEmbeddingType() const = 0;
+
+  // Returns the type of the page.
+  virtual PageType GetType() const = 0;
 
   // Returns true if this page is currently visible, false otherwise.
   // See PageNodeObserver::OnIsVisibleChanged.
@@ -200,9 +216,6 @@ class PageNode : public Node {
 
   // Returns the current page state. See "PageNodeObserver::OnPageStateChanged".
   virtual PageState GetPageState() const = 0;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(PageNode);
 };
 
 // Pure virtual observer interface. Derive from this if you want to be forced to
@@ -213,6 +226,10 @@ class PageNodeObserver {
   using EmbeddingType = PageNode::EmbeddingType;
 
   PageNodeObserver();
+
+  PageNodeObserver(const PageNodeObserver&) = delete;
+  PageNodeObserver& operator=(const PageNodeObserver&) = delete;
+
   virtual ~PageNodeObserver();
 
   // Node lifetime notifications.
@@ -245,6 +262,9 @@ class PageNodeObserver {
       const FrameNode* previous_embedder,
       EmbeddingType previous_embedder_type) = 0;
 
+  // Invoked when the GetType property changes.
+  virtual void OnTypeChanged(const PageNode* page_node) = 0;
+
   // Invoked when the IsVisible property changes.
   virtual void OnIsVisibleChanged(const PageNode* page_node) = 0;
 
@@ -252,7 +272,8 @@ class PageNodeObserver {
   virtual void OnIsAudibleChanged(const PageNode* page_node) = 0;
 
   // Invoked when the GetLoadingState property changes.
-  virtual void OnLoadingStateChanged(const PageNode* page_node) = 0;
+  virtual void OnLoadingStateChanged(const PageNode* page_node,
+                                     PageNode::LoadingState previous_state) = 0;
 
   // Invoked when the UkmSourceId property changes.
   virtual void OnUkmSourceIdChanged(const PageNode* page_node) = 0;
@@ -297,9 +318,6 @@ class PageNodeObserver {
   virtual void OnFreezingVoteChanged(
       const PageNode* page_node,
       absl::optional<freezing::FreezingVote> previous_vote) = 0;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(PageNodeObserver);
 };
 
 // Default implementation of observer that provides dummy versions of each
@@ -308,6 +326,10 @@ class PageNodeObserver {
 class PageNode::ObserverDefaultImpl : public PageNodeObserver {
  public:
   ObserverDefaultImpl();
+
+  ObserverDefaultImpl(const ObserverDefaultImpl&) = delete;
+  ObserverDefaultImpl& operator=(const ObserverDefaultImpl&) = delete;
+
   ~ObserverDefaultImpl() override;
 
   // PageNodeObserver implementation:
@@ -321,9 +343,11 @@ class PageNode::ObserverDefaultImpl : public PageNodeObserver {
       const PageNode* page_node,
       const FrameNode* previous_embedder,
       EmbeddingType previous_embedding_type) override {}
+  void OnTypeChanged(const PageNode* page_node) override {}
   void OnIsVisibleChanged(const PageNode* page_node) override {}
   void OnIsAudibleChanged(const PageNode* page_node) override {}
-  void OnLoadingStateChanged(const PageNode* page_node) override {}
+  void OnLoadingStateChanged(const PageNode* page_node,
+                             PageNode::LoadingState previous_state) override {}
   void OnUkmSourceIdChanged(const PageNode* page_node) override {}
   void OnPageLifecycleStateChanged(const PageNode* page_node) override {}
   void OnPageIsHoldingWebLockChanged(const PageNode* page_node) override {}
@@ -337,9 +361,6 @@ class PageNode::ObserverDefaultImpl : public PageNodeObserver {
   void OnFreezingVoteChanged(
       const PageNode* page_node,
       absl::optional<freezing::FreezingVote> previous_vote) override {}
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ObserverDefaultImpl);
 };
 
 // std::ostream support for PageNode::EmbeddingType.

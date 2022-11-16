@@ -6,6 +6,7 @@
 #define CHROME_BROWSER_UI_WEBUI_SIGNIN_PROFILE_CUSTOMIZATION_UI_H_
 
 #include "base/callback.h"
+#include "chrome/browser/ui/webui/signin/profile_customization_handler.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -23,6 +24,9 @@ class ProfileCustomizationUI
     : public ui::MojoWebUIController,
       public customize_themes::mojom::CustomizeThemesHandlerFactory {
  public:
+  static constexpr int kPreferredHeight = 560;
+  static constexpr int kPreferredWidth = 512;
+
   explicit ProfileCustomizationUI(content::WebUI* web_ui);
   ~ProfileCustomizationUI() override;
 
@@ -30,7 +34,9 @@ class ProfileCustomizationUI
   ProfileCustomizationUI& operator=(const ProfileCustomizationUI&) = delete;
 
   // Initializes the ProfileCustomizationUI.
-  void Initialize(base::OnceClosure done_closure);
+  void Initialize(
+      base::OnceCallback<void(ProfileCustomizationHandler::CustomizationResult)>
+          completion_callback);
 
   // Instantiates the implementor of the
   // customize_themes::mojom::CustomizeThemesHandlerFactory mojo interface

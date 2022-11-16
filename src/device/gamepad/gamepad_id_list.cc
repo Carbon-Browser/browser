@@ -7,8 +7,6 @@
 #include <algorithm>
 #include <iterator>
 
-#include "base/cxx17_backports.h"
-
 namespace device {
 
 namespace {
@@ -39,6 +37,7 @@ constexpr struct GamepadInfo {
     {0x0111, 0x1419, kXInputTypeNone},
     {0x0111, 0x1420, kXInputTypeNone},
     {0x0111, 0x1431, kXInputTypeNone},
+    {0x0111, 0x1434, kXInputTypeNone},
     {0x0113, 0xf900, kXInputTypeNone},
     // Creative Technology, Ltd
     {0x041e, 0x1003, kXInputTypeNone},
@@ -93,6 +92,9 @@ constexpr struct GamepadInfo {
     {0x045e, 0x0b0c, kXInputTypeNone},
     {0x045e, 0x0b12, kXInputTypeXboxOne},
     {0x045e, 0x0b13, kXInputTypeNone},
+    {0x045e, 0x0b20, kXInputTypeNone},
+    {0x045e, 0x0b21, kXInputTypeNone},
+    {0x045e, 0x0b22, kXInputTypeNone},
     // Logitech, Inc.
     {0x046d, 0xc208, kXInputTypeNone},
     {0x046d, 0xc209, kXInputTypeNone},
@@ -400,6 +402,7 @@ constexpr struct GamepadInfo {
     {0x1038, 0x1420, kXInputTypeNone},
     {0x1038, 0x1430, kXInputTypeXbox360},
     {0x1038, 0x1431, kXInputTypeXbox360},
+    {0x1038, 0x1434, kXInputTypeXbox360},
     {0x1080, 0x0009, kXInputTypeNone},
     // Betop
     {0x11c0, 0x5213, kXInputTypeNone},
@@ -587,7 +590,7 @@ constexpr struct GamepadInfo {
     {0x28de, 0x1106, kXInputTypeNone},
     {0x28de, 0x1142, kXInputTypeNone},
     {0x28de, 0x11fc, kXInputTypeNone},
-    {0x28de, 0x11ff, kXInputTypeNone},
+    {0x28de, 0x11ff, kXInputTypeXbox360},
     {0x28de, 0x1201, kXInputTypeNone},
     {0x28de, 0x1202, kXInputTypeNone},
     {0x2c22, 0x2000, kXInputTypeNone},
@@ -621,7 +624,7 @@ constexpr struct GamepadInfo {
     {0xf766, 0x0001, kXInputTypeNone},
     {0xf766, 0x0005, kXInputTypeNone},
 };
-constexpr size_t kGamepadInfoLength = base::size(kGamepadInfo);
+constexpr size_t kGamepadInfoLength = std::size(kGamepadInfo);
 
 bool CompareEntry(const GamepadInfo& a, const GamepadInfo& b) {
   return std::tie(a.vendor, a.product) < std::tie(b.vendor, b.product);

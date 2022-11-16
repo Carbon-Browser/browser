@@ -7,7 +7,6 @@
 
 #include <stdint.h>
 
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/time/time.h"
 #include "net/base/net_export.h"
@@ -20,7 +19,12 @@ class URLRequest;
 class NET_EXPORT URLRequestThrottlerEntryInterface
     : public base::RefCountedThreadSafe<URLRequestThrottlerEntryInterface> {
  public:
-  URLRequestThrottlerEntryInterface() {}
+  URLRequestThrottlerEntryInterface() = default;
+
+  URLRequestThrottlerEntryInterface(const URLRequestThrottlerEntryInterface&) =
+      delete;
+  URLRequestThrottlerEntryInterface& operator=(
+      const URLRequestThrottlerEntryInterface&) = delete;
 
   // Returns true when we have encountered server errors and are doing
   // exponential back-off, unless the request has load flags that mean
@@ -57,11 +61,10 @@ class NET_EXPORT URLRequestThrottlerEntryInterface
 
  protected:
   friend class base::RefCountedThreadSafe<URLRequestThrottlerEntryInterface>;
-  virtual ~URLRequestThrottlerEntryInterface() {}
+  virtual ~URLRequestThrottlerEntryInterface() = default;
 
  private:
   friend class base::RefCounted<URLRequestThrottlerEntryInterface>;
-  DISALLOW_COPY_AND_ASSIGN(URLRequestThrottlerEntryInterface);
 };
 
 }  // namespace net

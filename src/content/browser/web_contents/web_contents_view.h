@@ -8,23 +8,26 @@
 #include <string>
 
 #include "build/build_config.h"
-#include "content/common/content_export.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/native_widget_types.h"
 
 namespace content {
+
 class RenderViewHost;
+class RenderViewHostDelegateView;
 class RenderWidgetHost;
 class RenderWidgetHostViewBase;
+class WebContentsImpl;
+class WebContentsViewDelegate;
 struct DropData;
 
-// The WebContentsView is an interface that is implemented by the platform-
-// dependent web contents views. The WebContents uses this interface to talk to
-// them.
+// The `WebContentsView` is an interface that is implemented by the platform-
+// dependent web contents views. The `WebContents` uses this interface to talk
+// to them.
 class WebContentsView {
  public:
-  virtual ~WebContentsView() {}
+  virtual ~WebContentsView() = default;
 
   // Returns the native widget that contains the contents of the tab.
   virtual gfx::NativeView GetNativeView() const = 0;
@@ -97,7 +100,10 @@ class WebContentsView {
   // Invoked to enable/disable overscroll gesture navigation.
   virtual void SetOverscrollControllerEnabled(bool enabled) = 0;
 
-#if defined(OS_MAC)
+  // Called when the capturer-count of the WebContents changes.
+  virtual void OnCapturerCountChanged() = 0;
+
+#if BUILDFLAG(IS_MAC)
   // If we close the tab while a UI control is in an event-tracking loop, the
   // the control may message freed objects and crash. WebContents::Close will
   // call this. If it returns true, then WebContents::Close will early-out, and
@@ -106,6 +112,13 @@ class WebContentsView {
   virtual bool CloseTabAfterEventTrackingIfNeeded() = 0;
 #endif
 };
+
+// Factory function to create `WebContentsView`s. Implemented in the platform
+// files.
+std::unique_ptr<WebContentsView> CreateWebContentsView(
+    WebContentsImpl* web_contents,
+    std::unique_ptr<WebContentsViewDelegate> delegate,
+    RenderViewHostDelegateView** render_view_host_delegate_view);
 
 }  // namespace content
 

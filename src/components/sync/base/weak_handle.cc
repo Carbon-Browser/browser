@@ -10,9 +10,7 @@
 #include "base/logging.h"
 #include "base/threading/sequenced_task_runner_handle.h"
 
-namespace syncer {
-
-namespace internal {
+namespace syncer::internal {
 
 WeakHandleCoreBase::WeakHandleCoreBase()
     : owner_loop_task_runner_(base::SequencedTaskRunnerHandle::Get()) {}
@@ -21,7 +19,7 @@ bool WeakHandleCoreBase::IsOnOwnerThread() const {
   return owner_loop_task_runner_->RunsTasksInCurrentSequence();
 }
 
-WeakHandleCoreBase::~WeakHandleCoreBase() {}
+WeakHandleCoreBase::~WeakHandleCoreBase() = default;
 
 void WeakHandleCoreBase::PostToOwnerThread(const base::Location& from_here,
                                            base::OnceClosure fn) const {
@@ -30,6 +28,4 @@ void WeakHandleCoreBase::PostToOwnerThread(const base::Location& from_here,
   }
 }
 
-}  // namespace internal
-
-}  // namespace syncer
+}  // namespace syncer::internal

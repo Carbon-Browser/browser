@@ -7,25 +7,34 @@
 #include <string>
 #include <utility>
 
-#include "ash/constants/ash_features.h"
+#include "ash/components/arc/arc_features.h"
+#include "ash/components/arc/arc_prefs.h"
+#include "ash/components/arc/arc_util.h"
+#include "ash/components/arc/metrics/arc_metrics_constants.h"
+#include "ash/components/arc/metrics/arc_metrics_service.h"
+#include "ash/components/arc/metrics/stability_metrics_manager.h"
+#include "ash/components/arc/session/arc_data_remover.h"
+#include "ash/components/arc/session/arc_dlc_installer.h"
+#include "ash/components/arc/session/arc_instance_mode.h"
+#include "ash/components/arc/session/arc_management_transition.h"
+#include "ash/components/arc/session/arc_session.h"
+#include "ash/components/arc/session/arc_session_runner.h"
+#include "ash/components/arc/session/serial_number_util.h"
+#include "ash/components/cryptohome/cryptohome_parameters.h"
 #include "ash/constants/ash_switches.h"
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/command_line.h"
-#include "base/feature_list.h"
-#include "base/files/file_util.h"
 #include "base/logging.h"
-#include "base/rand_util.h"
-#include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
-#include "base/task/post_task.h"
+#include "base/task/task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
-#include "base/task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/arc/arc_demo_mode_delegate_impl.h"
 #include "chrome/browser/ash/arc/arc_migration_guide_notification.h"
+#include "chrome/browser/ash/arc/arc_mount_provider.h"
 #include "chrome/browser/ash/arc/arc_optin_uma.h"
 #include "chrome/browser/ash/arc/arc_support_host.h"
 #include "chrome/browser/ash/arc/arc_ui_availability_reporter.h"
@@ -36,6 +45,7 @@
 #include "chrome/browser/ash/arc/policy/arc_android_management_checker.h"
 #include "chrome/browser/ash/arc/policy/arc_policy_util.h"
 #include "chrome/browser/ash/arc/session/arc_provisioning_result.h"
+#include "chrome/browser/ash/guest_os/public/guest_os_service.h"
 #include "chrome/browser/ash/login/demo_mode/demo_resources.h"
 #include "chrome/browser/ash/login/demo_mode/demo_session.h"
 #include "chrome/browser/ash/policy/handlers/powerwash_requirements_checker.h"
@@ -49,25 +59,13 @@
 #include "chrome/browser/ui/app_list/arc/arc_app_utils.h"
 #include "chrome/browser/ui/app_list/arc/arc_fast_app_reinstall_starter.h"
 #include "chrome/browser/ui/app_list/arc/arc_pai_starter.h"
+#include "chrome/browser/ui/app_list/arc/intent.h"
 #include "chrome/browser/ui/ash/multi_user/multi_user_util.h"
 #include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/ui/webui/chromeos/diagnostics_dialog.h"
-#include "chromeos/cryptohome/cryptohome_parameters.h"
-#include "chromeos/dbus/session_manager/session_manager_client.h"
+#include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
 #include "chromeos/system/statistics_provider.h"
 #include "components/account_id/account_id.h"
-#include "components/arc/arc_features.h"
-#include "components/arc/arc_prefs.h"
-#include "components/arc/arc_util.h"
-#include "components/arc/metrics/arc_metrics_constants.h"
-#include "components/arc/metrics/arc_metrics_service.h"
-#include "components/arc/metrics/stability_metrics_manager.h"
-#include "components/arc/session/arc_data_remover.h"
-#include "components/arc/session/arc_dlc_installer.h"
-#include "components/arc/session/arc_instance_mode.h"
-#include "components/arc/session/arc_management_transition.h"
-#include "components/arc/session/arc_session.h"
-#include "components/arc/session/arc_session_runner.h"
 #include "components/exo/wm_helper_chromeos.h"
 #include "components/prefs/pref_service.h"
 #include "components/services/app_service/public/cpp/intent_util.h"
@@ -75,9 +73,11 @@
 #include "components/user_manager/user_manager.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/common/content_features.h"
-#include "crypto/random.h"
-#include "crypto/sha2.h"
 #include "ui/display/types/display_constants.h"
+
+// Enable VLOG level 1.
+#undef ENABLED_VLOG_LEVEL
+#define ENABLED_VLOG_LEVEL 1
 
 namespace arc {
 
@@ -96,48 +96,18 @@ bool g_enable_arc_terms_of_service_oobe_negotiator_in_tests = false;
 absl::optional<bool> g_enable_check_android_management_in_tests;
 
 constexpr const char kArcSaltPath[] = "/var/lib/misc/arc_salt";
-constexpr const size_t kArcSaltFileSize = 16;
 
 constexpr const char kArcPrepareHostGeneratedDirJobName[] =
     "arc_2dprepare_2dhost_2dgenerated_2ddir";
 
-constexpr base::TimeDelta kWaitForPoliciesTimeout =
-    base::TimeDelta::FromSeconds(20);
-
-// Generates a unique, 20-character hex string from |chromeos_user| and
-// |salt| which can be used as Android's ro.boot.serialno and ro.serialno
-// properties. Note that Android treats serialno in a case-insensitive manner.
-// |salt| cannot be the hex-encoded one.
-// Note: The function must be the exact copy of the one in platform2/arc/setup/.
-std::string GenerateFakeSerialNumber(const std::string& chromeos_user,
-                                     const std::string& salt) {
-  constexpr size_t kMaxHardwareIdLen = 20;
-  const std::string hash(crypto::SHA256HashString(chromeos_user + salt));
-  return base::HexEncode(hash.data(), hash.length())
-      .substr(0, kMaxHardwareIdLen);
-}
-
-// Returns true if the hex-encoded salt in Local State is valid.
-bool IsValidHexSalt(const std::string& hex_salt) {
-  std::string salt;
-  if (!base::HexStringToString(hex_salt, &salt)) {
-    LOG(WARNING) << "Not a hex string: " << hex_salt;
-    return false;
-  }
-  if (salt.size() != kArcSaltFileSize) {
-    LOG(WARNING) << "Salt size invalid: " << salt.size();
-    return false;
-  }
-  return true;
-}
+constexpr base::TimeDelta kWaitForPoliciesTimeout = base::Seconds(20);
 
 // Maximum amount of time we'll wait for ARC to finish booting up. Once this
 // timeout expires, keep ARC running in case the user wants to file feedback,
 // but present the UI to try again.
 base::TimeDelta GetArcSignInTimeout() {
-  constexpr base::TimeDelta kArcSignInTimeout = base::TimeDelta::FromMinutes(5);
-  constexpr base::TimeDelta kArcVmSignInTimeoutForVM =
-      base::TimeDelta::FromMinutes(20);
+  constexpr base::TimeDelta kArcSignInTimeout = base::Minutes(5);
+  constexpr base::TimeDelta kArcVmSignInTimeoutForVM = base::Minutes(20);
 
   if (chromeos::system::StatisticsProvider::GetInstance()->IsRunningOnVm() &&
       arc::IsArcVmEnabled()) {
@@ -239,67 +209,6 @@ void SetArcEnabledStateMetric(bool enabled) {
   if (!stability_metrics_manager)
     return;
   stability_metrics_manager->SetArcEnabledState(enabled);
-}
-
-// Generates and returns a serial number from the salt in |local_state| and
-// |chromeos_user|. When |local_state| does not have it (or has a corrupted
-// one), this function creates a new random salt. When creates it, the function
-// copies |arc_salt_on_disk| to |local_state| if |arc_salt_on_disk| is not
-// empty.
-std::string GetOrCreateSerialNumber(PrefService* local_state,
-                                    const std::string& chromeos_user,
-                                    const std::string& arc_salt_on_disk) {
-  DCHECK(local_state);
-  DCHECK(!chromeos_user.empty());
-
-  std::string hex_salt = local_state->GetString(prefs::kArcSerialNumberSalt);
-  if (hex_salt.empty() || !IsValidHexSalt(hex_salt)) {
-    // This path is taken 1) on the very first ARC boot, 2) on the first boot
-    // after powerwash, 3) on the first boot after upgrading to ARCVM, or 4)
-    // when the salt in local state is corrupted.
-    if (arc_salt_on_disk.empty()) {
-      // The device doesn't have the salt file for ARC container. Create it from
-      // scratch in the same way as ARC container.
-      char rand_value[kArcSaltFileSize];
-      crypto::RandBytes(rand_value, kArcSaltFileSize);
-      hex_salt = base::HexEncode(rand_value, kArcSaltFileSize);
-    } else {
-      // The device has the one for container. Reuse it for ARCVM.
-      DCHECK_EQ(kArcSaltFileSize, arc_salt_on_disk.size());
-      hex_salt =
-          base::HexEncode(arc_salt_on_disk.data(), arc_salt_on_disk.size());
-    }
-    local_state->SetString(prefs::kArcSerialNumberSalt, hex_salt);
-  }
-
-  // We store hex-encoded version of the salt in the local state, but to compute
-  // the serial number, we use the decoded version to be compatible with the
-  // arc-setup code for P.
-  std::string decoded_salt;
-  const bool result = base::HexStringToString(hex_salt, &decoded_salt);
-  DCHECK(result) << hex_salt;
-  return GenerateFakeSerialNumber(chromeos_user, decoded_salt);
-}
-
-// Reads a salt from |salt_path| and stores it in |out_salt|. Returns true
-// when the file read is successful or the file does not exist.
-bool ReadSaltOnDisk(const base::FilePath& salt_path, std::string* out_salt) {
-  DCHECK(out_salt);
-  if (!base::PathExists(salt_path)) {
-    VLOG(2) << "ARC salt file doesn't exist: " << salt_path;
-    return true;
-  }
-  if (!base::ReadFileToString(salt_path, out_salt)) {
-    PLOG(ERROR) << "Failed to read " << salt_path;
-    return false;
-  }
-  if (out_salt->size() != kArcSaltFileSize) {
-    LOG(WARNING) << "Ignoring invalid ARC salt on disk. size="
-                 << out_salt->size();
-    out_salt->clear();
-  }
-  VLOG(1) << "Successfully read ARC salt on disk: " << salt_path;
-  return true;
 }
 
 int GetSignInErrorCode(const arc::mojom::ArcSignInError* sign_in_error) {
@@ -423,26 +332,22 @@ ArcSupportHost::Error GetSupportHostError(const ArcProvisioningResult& result) {
 }
 
 bool ShouldShowNetworkTests(const ArcProvisioningResult& result) {
-  if (!base::FeatureList::IsEnabled(
-          ash::features::kButtonARCNetworkDiagnostics)) {
-    return false;
-  }
-
-  // For GMS signin errors
   if (result.gms_sign_in_error() ==
           mojom::GMSSignInError::GMS_SIGN_IN_TIMEOUT ||
       result.gms_sign_in_error() ==
-          mojom::GMSSignInError::GMS_SIGN_IN_SERVICE_UNAVAILABLE) {
+          mojom::GMSSignInError::GMS_SIGN_IN_SERVICE_UNAVAILABLE ||
+      result.gms_sign_in_error() ==
+          mojom::GMSSignInError::GMS_SIGN_IN_NETWORK_ERROR) {
     return true;
   }
 
-  // For GMS checkin errors
   if (result.gms_check_in_error() ==
-      mojom::GMSCheckInError::GMS_CHECK_IN_TIMEOUT) {
+          mojom::GMSCheckInError::GMS_CHECK_IN_FAILED ||
+      result.gms_check_in_error() ==
+          mojom::GMSCheckInError::GMS_CHECK_IN_TIMEOUT) {
     return true;
   }
 
-  // For Cloud Provision Flow errors
   if (result.cloud_provision_flow_error() ==
           mojom::CloudProvisionFlowError::ERROR_SERVER_TRANSIENT_ERROR ||
       result.cloud_provision_flow_error() ==
@@ -454,7 +359,6 @@ bool ShouldShowNetworkTests(const ArcProvisioningResult& result) {
     return true;
   }
 
-  // For General signin errors
   if (result.general_error() ==
           mojom::GeneralSignInError::GENERIC_PROVISIONING_TIMEOUT ||
       result.general_error() ==
@@ -470,10 +374,11 @@ ArcSessionManager::ExpansionResult ReadSaltInternal() {
   DCHECK(arc::IsArcVmEnabled());
 
   // For ARCVM, read |kArcSaltPath| if that exists.
-  std::string salt;
-  if (!ReadSaltOnDisk(base::FilePath(kArcSaltPath), &salt))
+  absl::optional<std::string> salt =
+      ReadSaltOnDisk(base::FilePath(kArcSaltPath));
+  if (!salt)
     return ArcSessionManager::ExpansionResult{{}, false};
-  return ArcSessionManager::ExpansionResult{salt, true};
+  return ArcSessionManager::ExpansionResult{std::move(*salt), true};
 }
 
 // Checks whether ARC DLCs needs to be installed/uninstalled. Currently,
@@ -481,7 +386,20 @@ ArcSessionManager::ExpansionResult ReadSaltInternal() {
 // for the presence of kEnableHoudiniDlc flag in the command line.
 bool IsDlcRequired() {
   return base::CommandLine::ForCurrentProcess()->HasSwitch(
-      chromeos::switches::kEnableHoudiniDlc);
+      ash::switches::kEnableHoudiniDlc);
+}
+
+// Inform ArcMetricsServices about the starting time of ARC provisioning.
+void ReportProvisioningStartTime(const base::TimeTicks& start_time,
+                                 Profile* profile) {
+  ArcMetricsService* metrics_service =
+      ArcMetricsService::GetForBrowserContext(profile);
+  // metrics_service might be null in unit tests.
+  if (metrics_service) {
+    auto account_type_suffix = GetHistogramNameByUserType("", profile);
+    metrics_service->ReportProvisioningStartTime(start_time,
+                                                 account_type_suffix);
+  }
 }
 
 }  // namespace
@@ -502,6 +420,9 @@ class ArcSessionManager::ScopedOptInFlowTracker {
   ScopedOptInFlowTracker() {
     UpdateOptInFlowResultUMA(OptInFlowResult::STARTED);
   }
+
+  ScopedOptInFlowTracker(const ScopedOptInFlowTracker&) = delete;
+  ScopedOptInFlowTracker& operator=(const ScopedOptInFlowTracker&) = delete;
 
   ~ScopedOptInFlowTracker() {
     if (shutdown_)
@@ -538,8 +459,6 @@ class ArcSessionManager::ScopedOptInFlowTracker {
   bool error_ = false;
   bool success_ = false;
   bool shutdown_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(ScopedOptInFlowTracker);
 };
 
 ArcSessionManager::ArcSessionManager(
@@ -557,19 +476,21 @@ ArcSessionManager::ArcSessionManager(
   arc_session_runner_->AddObserver(this);
   arc_session_runner_->SetDemoModeDelegate(
       std::make_unique<ArcDemoModeDelegateImpl>());
-  if (chromeos::SessionManagerClient::Get())
-    chromeos::SessionManagerClient::Get()->AddObserver(this);
+  if (ash::SessionManagerClient::Get())
+    ash::SessionManagerClient::Get()->AddObserver(this);
   ResetStabilityMetrics();
-  chromeos::ConciergeClient::Get()->AddVmObserver(this);
+  ash::ConciergeClient::Get()->AddVmObserver(this);
+  arc_dlc_installer_ = std::make_unique<ArcDlcInstaller>();
 }
 
 ArcSessionManager::~ArcSessionManager() {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+  arc_dlc_installer_.reset();
 
-  chromeos::ConciergeClient::Get()->RemoveVmObserver(this);
+  ash::ConciergeClient::Get()->RemoveVmObserver(this);
 
-  if (chromeos::SessionManagerClient::Get())
-    chromeos::SessionManagerClient::Get()->RemoveObserver(this);
+  if (ash::SessionManagerClient::Get())
+    ash::SessionManagerClient::Get()->RemoveObserver(this);
 
   Shutdown();
   arc_session_runner_->RemoveObserver(this);
@@ -598,28 +519,6 @@ void ArcSessionManager::SetArcTermsOfServiceOobeNegotiatorEnabledForTesting(
 // static
 void ArcSessionManager::EnableCheckAndroidManagementForTesting(bool enable) {
   g_enable_check_android_management_in_tests = enable;
-}
-
-// static
-std::string ArcSessionManager::GenerateFakeSerialNumberForTesting(
-    const std::string& chromeos_user,
-    const std::string& salt) {
-  return GenerateFakeSerialNumber(chromeos_user, salt);
-}
-
-// static
-std::string ArcSessionManager::GetOrCreateSerialNumberForTesting(
-    PrefService* local_state,
-    const std::string& chromeos_user,
-    const std::string& arc_salt_on_disk) {
-  return GetOrCreateSerialNumber(local_state, chromeos_user, arc_salt_on_disk);
-}
-
-// static
-bool ArcSessionManager::ReadSaltOnDiskForTesting(
-    const base::FilePath& salt_path,
-    std::string* out_salt) {
-  return ReadSaltOnDisk(salt_path, out_salt);
 }
 
 void ArcSessionManager::OnSessionStopped(ArcStopReason reason,
@@ -751,7 +650,7 @@ void ArcSessionManager::OnProvisioningFinished(
           apps_util::CreateIntentForActivity(
               kPlayStoreActivity, kInitialStartParam, kCategoryLauncher),
           false /* deferred_launch_allowed */, display::kInvalidDisplayId,
-          apps::mojom::LaunchSource::kFromChromeInternal);
+          apps::LaunchSource::kFromChromeInternal);
     }
 
     prefs->ClearPref(prefs::kArcProvisioningInitiatedFromOobe);
@@ -816,14 +715,15 @@ void ArcSessionManager::SetUserInfo() {
   const AccountId account(multi_user_util::GetAccountIdFromProfile(profile_));
   const cryptohome::Identification cryptohome_id(account);
   const std::string user_id_hash =
-      chromeos::ProfileHelper::GetUserIdHashFromProfile(profile_);
+      ash::ProfileHelper::GetUserIdHashFromProfile(profile_);
 
   std::string serialno = GetSerialNumber();
   arc_session_runner_->SetUserInfo(cryptohome_id, user_id_hash, serialno);
 }
 
-void ArcSessionManager::TrimVmMemory(TrimVmMemoryCallback callback) {
-  arc_session_runner_->TrimVmMemory(std::move(callback));
+void ArcSessionManager::TrimVmMemory(TrimVmMemoryCallback callback,
+                                     int page_limit) {
+  arc_session_runner_->TrimVmMemory(std::move(callback), page_limit);
 }
 
 std::string ArcSessionManager::GetSerialNumber() const {
@@ -832,7 +732,7 @@ std::string ArcSessionManager::GetSerialNumber() const {
 
   const AccountId account(multi_user_util::GetAccountIdFromProfile(profile_));
   const std::string user_id_hash =
-      chromeos::ProfileHelper::GetUserIdHashFromProfile(profile_);
+      ash::ProfileHelper::GetUserIdHashFromProfile(profile_);
 
   std::string serialno;
   // ARC container doesn't need the serial number.
@@ -880,13 +780,10 @@ void ArcSessionManager::Initialize() {
   // Chrome may be shut down before completing ARC data removal.
   // For such a case, start removing the data now, if necessary.
   MaybeStartArcDataRemoval();
-
-  arc_dlc_installer_ = std::make_unique<ArcDlcInstaller>();
 }
 
 void ArcSessionManager::Shutdown() {
   VLOG(1) << "Shutting down session manager";
-  arc_dlc_installer_.reset();
   enable_requested_ = false;
   ResetArcState();
   arc_session_runner_->OnShutdown();
@@ -1043,15 +940,33 @@ void ArcSessionManager::OnBackgroundAndroidManagementCheckedForTesting(
 void ArcSessionManager::OnVmStarted(
     const vm_tools::concierge::VmStartedSignal& vm_signal) {
   // When an ARCVM starts, store the vm info.
-  if (vm_signal.name() == kArcVmName)
+  if (vm_signal.name() == kArcVmName) {
     vm_info_ = vm_signal.vm_info();
+
+    if (base::FeatureList::IsEnabled(kEnableVirtioBlkForData)) {
+      arcvm_mount_provider_id_ =
+          absl::optional<guest_os::GuestOsMountProviderRegistry::Id>(
+              guest_os::GuestOsService::GetForProfile(profile())
+                  ->MountProviderRegistry()
+                  ->Register(std::make_unique<ArcMountProvider>(
+                      profile(), vm_info_->cid())));
+    }
+  }
 }
 
 void ArcSessionManager::OnVmStopped(
     const vm_tools::concierge::VmStoppedSignal& vm_signal) {
   // When an ARCVM stops, clear the stored vm info.
-  if (vm_signal.name() == kArcVmName)
+  if (vm_signal.name() == kArcVmName) {
     vm_info_ = absl::nullopt;
+
+    if (arcvm_mount_provider_id_.has_value()) {
+      guest_os::GuestOsService::GetForProfile(profile())
+          ->MountProviderRegistry()
+          ->Unregister(*arcvm_mount_provider_id_);
+      arcvm_mount_provider_id_.reset();
+    }
+  }
 }
 
 const absl::optional<vm_tools::concierge::VmInfo>&
@@ -1143,10 +1058,6 @@ bool ArcSessionManager::RequestEnableImpl() {
 
   if (start_arc_directly) {
     StartArc();
-    // When in ARC kiosk mode, there's no Chrome tabs to restore. Remove the
-    // cgroups now.
-    if (IsArcKioskMode())
-      SetArcCpuRestriction(CpuRestrictionState::CPU_RESTRICTION_FOREGROUND);
     // Check Android management in parallel.
     // Note: StartBackgroundAndroidManagementCheck() may call
     // OnBackgroundAndroidManagementChecked() synchronously (or
@@ -1163,7 +1074,7 @@ bool ArcSessionManager::RequestEnableImpl() {
   return false;
 }
 
-void ArcSessionManager::RequestDisable() {
+void ArcSessionManager::RequestDisable(bool remove_arc_data) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   DCHECK(profile_);
 
@@ -1187,6 +1098,17 @@ void ArcSessionManager::RequestDisable() {
   // Reset any pending request to re-enable ARC.
   reenable_arc_ = false;
   StopArc();
+
+  if (remove_arc_data)
+    RequestArcDataRemoval();
+}
+
+void ArcSessionManager::RequestDisable() {
+  RequestDisable(false);
+}
+
+void ArcSessionManager::RequestDisableWithArcDataRemoval() {
+  RequestDisable(true);
 }
 
 void ArcSessionManager::RequestArcDataRemoval() {
@@ -1268,8 +1190,14 @@ void ArcSessionManager::MaybeStartTermsOfServiceNegotiation() {
             profile_->GetPrefs(), support_host_.get());
   }
 
-  // Start the mini-container here to save time starting the container if the
-  // user decides to opt-in.
+  // Start the mini-container (or mini-VM) here to save time starting the OS if
+  // the user decides to opt-in. Unlike calling StartMiniArc() for ARCVM on
+  // login screen, doing so on ToS screen is safe and desirable. The user has
+  // already shown the intent to opt-in (or, if this is during OOBE, accepting
+  // the ToS is mandatory), and the user's cryptohome has already been mounted.
+  // vm_concierge is already running too. For those reasons, calling
+  // StartMiniArc() for ARCVM here will actually make its perceived boot time
+  // faster.
   StartMiniArc();
 
   if (!terms_of_service_negotiator_) {
@@ -1291,6 +1219,11 @@ void ArcSessionManager::MaybeStartTermsOfServiceNegotiation() {
   terms_of_service_negotiator_->StartNegotiation(
       base::BindOnce(&ArcSessionManager::OnTermsOfServiceNegotiated,
                      weak_ptr_factory_.GetWeakPtr()));
+}
+
+void ArcSessionManager::StartArcForTesting() {
+  enable_requested_ = true;
+  StartArc();
 }
 
 void ArcSessionManager::OnTermsOfServiceNegotiated(bool accepted) {
@@ -1362,9 +1295,6 @@ void ArcSessionManager::OnAndroidManagementChecked(
     case policy::AndroidManagementClient::Result::UNMANAGED:
       VLOG(1) << "Starting ARC for first sign in.";
       StartArc();
-      // Since opt-in is an explicit user (or admin) action, relax the
-      // cgroups restriction now.
-      SetArcCpuRestriction(CpuRestrictionState::CPU_RESTRICTION_FOREGROUND);
       break;
     case policy::AndroidManagementClient::Result::MANAGED:
       ShowArcSupportHostError(
@@ -1552,6 +1482,10 @@ void ArcSessionManager::StartArc() {
   arc_session_runner_->RequestUpgrade(std::move(params));
 }
 
+void ArcSessionManager::RequestStopOnLowDiskSpace() {
+  arc_session_runner_->RequestStop();
+}
+
 void ArcSessionManager::StopArc() {
   // TODO(hidehiko): This STOPPED guard should be unnecessary. Remove it later.
   // |reenable_arc_| may be set in |StopAndEnableArc| in case enterprise
@@ -1588,6 +1522,7 @@ void ArcSessionManager::OnArcDataRemoved(absl::optional<bool> result) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   DCHECK_EQ(state_, State::REMOVING_DATA_DIR);
   DCHECK(profile_);
+
   state_ = State::STOPPED;
 
   if (result.has_value()) {
@@ -1633,6 +1568,7 @@ void ArcSessionManager::MaybeStartTimer() {
 
   VLOG(1) << "Setup provisioning timer";
   sign_in_start_time_ = base::TimeTicks::Now();
+  ReportProvisioningStartTime(sign_in_start_time_, profile_);
   arc_sign_in_timer_.Start(
       FROM_HERE, GetArcSignInTimeout(),
       base::BindOnce(&ArcSessionManager::OnArcSignInTimeout,
@@ -1701,7 +1637,7 @@ void ArcSessionManager::OnSendFeedbackClicked() {
   DCHECK(support_host_);
   chrome::OpenFeedbackDialog(nullptr, chrome::kFeedbackSourceArcApp);
 
-  // If network-related error occured, collect UMA stats on user action.
+  // If network-related error occurred, collect UMA stats on user action.
   if (support_host_->GetShouldShowRunNetworkTests())
     UpdateOptInNetworkErrorActionUMA(
         arc::OptInNetworkErrorActionType::SEND_FEEDBACK);
@@ -1710,7 +1646,8 @@ void ArcSessionManager::OnSendFeedbackClicked() {
 void ArcSessionManager::OnRunNetworkTestsClicked() {
   DCHECK(support_host_);
   chromeos::DiagnosticsDialog::ShowDialog(
-      chromeos::DiagnosticsDialog::DiagnosticsPage::kConnectivity);
+      chromeos::DiagnosticsDialog::DiagnosticsPage::kConnectivity,
+      support_host_->GetNativeWindow());
 
   // Network-related error occured so collect UMA stats on user action.
   UpdateOptInNetworkErrorActionUMA(
@@ -1754,7 +1691,25 @@ void ArcSessionManager::EmitLoginPromptVisibleCalled() {
   if (!IsArcAvailable())
     return;
 
-  StartMiniArc();
+  if (IsArcVmEnabled()) {
+    // For ARCVM, don't try to start ARCVM on login screen.
+    // Calling StartMiniArc() on login screen for ARCVM does more harm than
+    // good. First, the ARCVM boot sequence started by StartMiniArc() stops
+    // relatively early in ArcVmClientAdapter which waits for vm_concierge to
+    // start (note that vm_concierge does not run on login screen these days.)
+    // Because of this, crosvm for ARCVM won't start until the user signs into
+    // their user session. Second, after the sign-in, the rest of the mini-ARCVM
+    // startup sequence is executed regardless of whether the user has opted
+    // into ARC. For opt-out users(*), ARCVM will eventually be stopped, but the
+    // stop request may be issued after mini-VM is started. This is a complete
+    // waste of resources and may also cause page caches evictions making Chrome
+    // UI less reponsive.
+    // (*) This includes non-ARC Kiosk mode. See b/197510998 for more info.
+    VLOG(1) << "Starting ARCVM on login screen is not supported.";
+    return;
+  }
+  if (!ShouldArcStartManually())
+    StartMiniArc();
 }
 
 void ArcSessionManager::ExpandPropertyFilesAndReadSalt() {
@@ -1763,30 +1718,11 @@ void ArcSessionManager::ExpandPropertyFilesAndReadSalt() {
   // For ARCVM, generate <dest_path>/{combined.prop,fstab}. For ARC, generate
   // <dest_path>/{default,build,vendor_build}.prop.
   const bool is_arcvm = arc::IsArcVmEnabled();
-  bool add_native_bridge_64bit_support = false;
-  if (base::CommandLine::ForCurrentProcess()->HasSwitch(
-          chromeos::switches::kArcEnableNativeBridge64BitSupportExperiment)) {
-    PrefService* local_pref_service = g_browser_process->local_state();
-    if (base::FeatureList::IsEnabled(
-            arc::kNativeBridge64BitSupportExperimentFeature)) {
-      // Note that we treat this experiment as a one-way off->on switch, across
-      // all users of the device, as the lifetime of ARC mini-container and user
-      // sessions are different in different scenarios, and removing the
-      // experiment after it has been in effect for a user's ARC instance can
-      // lead to unexpected, and unsupported, results.
-      local_pref_service->SetBoolean(
-          prefs::kNativeBridge64BitSupportExperimentEnabled, true);
-    }
-    add_native_bridge_64bit_support = local_pref_service->GetBoolean(
-        prefs::kNativeBridge64BitSupportExperimentEnabled);
-  }
 
   std::deque<JobDesc> jobs = {
       JobDesc{kArcPrepareHostGeneratedDirJobName,
               UpstartOperation::JOB_START,
-              {std::string("IS_ARCVM=") + (is_arcvm ? "1" : "0"),
-               std::string("ADD_NATIVE_BRIDGE_64BIT_SUPPORT=") +
-                   (add_native_bridge_64bit_support ? "1" : "0")}},
+              {std::string("IS_ARCVM=") + (is_arcvm ? "1" : "0")}},
   };
   ConfigureUpstartJobs(std::move(jobs),
                        base::BindOnce(&ArcSessionManager::OnExpandPropertyFiles,

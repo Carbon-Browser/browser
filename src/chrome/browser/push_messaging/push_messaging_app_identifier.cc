@@ -43,7 +43,7 @@ bool FromStringToTime(const std::string& time_string,
   int64_t milliseconds;
   if (base::StringToInt64(time_string, &milliseconds) && milliseconds > 0) {
     *time = absl::make_optional(base::Time::FromDeltaSinceWindowsEpoch(
-        base::TimeDelta::FromMilliseconds(milliseconds)));
+        base::Milliseconds(milliseconds)));
     return true;
   }
   return false;
@@ -289,7 +289,7 @@ void PushMessagingAppIdentifier::DCheckValid() const {
   DCHECK_GE(service_worker_registration_id_, 0);
 
   DCHECK(origin_.is_valid());
-  DCHECK_EQ(origin_.GetOrigin(), origin_);
+  DCHECK_EQ(origin_.DeprecatedGetOriginAsURL(), origin_);
 
   // "wp:"
   DCHECK_EQ(kPushMessagingAppIdentifierPrefix,

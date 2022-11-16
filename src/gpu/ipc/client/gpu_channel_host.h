@@ -15,8 +15,8 @@
 #include "base/atomic_sequence_num.h"
 #include "base/callback.h"
 #include "base/memory/ref_counted.h"
-#include "base/single_thread_task_runner.h"
 #include "base/synchronization/lock.h"
+#include "base/task/single_thread_task_runner.h"
 #include "gpu/config/gpu_feature_info.h"
 #include "gpu/config/gpu_info.h"
 #include "gpu/gpu_export.h"
@@ -126,7 +126,8 @@ class GPU_EXPORT GpuChannelHost
   // running tests and is otherwise ignored.
   void TerminateGpuProcessForTesting();
 
-  std::unique_ptr<ClientSharedImageInterface>
+  // Virtual for testing.
+  virtual std::unique_ptr<ClientSharedImageInterface>
   CreateClientSharedImageInterface();
 
   ImageDecodeAcceleratorProxy* image_decode_accelerator_proxy() {

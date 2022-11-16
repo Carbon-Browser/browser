@@ -6,6 +6,7 @@
 
 #include "base/big_endian.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/numerics/safe_conversions.h"
 #include "base/sys_byteorder.h"
 #include "build/build_config.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
@@ -23,11 +24,11 @@ namespace blink {
 
 namespace {
 
-// Sets up internal FontUniqueLookup metadata that will allow matching
-// unique names, on platforms that apply.
+// Sets up internal FontUniqueLookup data that will allow matching unique names,
+// on platforms that apply.
 void SetUpFontUniqueLookupIfNecessary() {
   FontUniqueNameLookup* unique_name_lookup =
-      FontGlobalContext::Get()->GetFontUniqueNameLookup();
+      FontGlobalContext::Get().GetFontUniqueNameLookup();
   if (!unique_name_lookup)
     return;
   // Contrary to what the method name might imply, this is not an idempotent
@@ -43,10 +44,7 @@ FontMetadata::FontMetadata(const FontEnumerationEntry& entry)
     : postscriptName_(entry.postscript_name),
       fullName_(entry.full_name),
       family_(entry.family),
-      style_(entry.style),
-      italic_(entry.italic),
-      stretch_(entry.stretch),
-      weight_(entry.weight) {}
+      style_(entry.style) {}
 
 FontMetadata* FontMetadata::Create(const FontEnumerationEntry& entry) {
   return MakeGarbageCollected<FontMetadata>(entry);
@@ -68,7 +66,6 @@ void FontMetadata::Trace(blink::Visitor* visitor) const {
   ScriptWrappable::Trace(visitor);
 }
 
-
 // static
 void FontMetadata::BlobImpl(ScriptPromiseResolver* resolver,
                             const String& postscriptName) {
@@ -79,9 +76,8 @@ void FontMetadata::BlobImpl(ScriptPromiseResolver* resolver,
 
   FontDescription description;
   scoped_refptr<SimpleFontData> font_data =
-      FontCache::GetFontCache()->GetFontData(
-          description, AtomicString(postscriptName),
-          AlternateFontName::kLocalUniqueFace);
+      FontCache::Get().GetFontData(description, AtomicString(postscriptName),
+                                   AlternateFontName::kLocalUniqueFace);
   if (!font_data) {
     auto message = String::Format("The font %s could not be accessed.",
                                   postscriptName.Latin1().c_str());
@@ -117,7 +113,8 @@ void FontMetadata::BlobImpl(ScriptPromiseResolver* resolver,
   }
 
   base::UmaHistogramBoolean("Blink.Fonts.DataAccess.StreamCreation", true);
-  wtf_size_t font_byte_size = SafeCast<wtf_size_t>(stream->getLength());
+  wtf_size_t font_byte_size =
+      base::checked_cast<wtf_size_t>(stream->getLength());
 
   // TODO(https://crbug.com/1069900): This copies the font bytes. Lazy load and
   // stream the data instead.

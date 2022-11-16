@@ -8,7 +8,6 @@
 #include <memory>
 #include <vector>
 
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/file_select_listener.h"
@@ -38,6 +37,9 @@ class FileSelectHelper : public base::RefCountedThreadSafe<
                              content::BrowserThread::DeleteOnUIThread>,
                          public ui::SelectFileDialog::Listener {
  public:
+  FileSelectHelper(const FileSelectHelper&) = delete;
+  FileSelectHelper& operator=(const FileSelectHelper&) = delete;
+
   // Show the file chooser dialog.
   static void RunFileChooser(
       content::RenderFrameHost* render_frame_host,
@@ -97,8 +99,6 @@ class FileSelectHelper : public base::RefCountedThreadSafe<
   // The mode of file dialog last shown.
   blink::mojom::FileChooserParams::Mode dialog_mode_ =
       blink::mojom::FileChooserParams::Mode::kOpen;
-
-  DISALLOW_COPY_AND_ASSIGN(FileSelectHelper);
 };
 
 }  // namespace weblayer

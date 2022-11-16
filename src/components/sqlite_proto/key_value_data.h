@@ -15,8 +15,10 @@
 
 #include "base/bind.h"
 #include "base/location.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/sequence_checker.h"
+#include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "components/sqlite_proto/key_value_table.h"
 #include "components/sqlite_proto/table_manager.h"
@@ -106,7 +108,7 @@ class KeyValueData {
   void FlushDataToDisk();
 
   scoped_refptr<TableManager> manager_;
-  KeyValueTable<T>* backend_table_;
+  raw_ptr<KeyValueTable<T>> backend_table_;
   std::unique_ptr<std::map<std::string, T>> data_cache_;
   std::unordered_map<std::string, DeferredOperation> deferred_updates_;
   base::RepeatingTimer flush_timer_;

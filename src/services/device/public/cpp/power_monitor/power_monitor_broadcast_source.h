@@ -8,7 +8,6 @@
 #include <memory>
 
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/power_monitor/power_monitor_source.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -27,6 +26,11 @@ class PowerMonitorBroadcastSource : public base::PowerMonitorSource {
  public:
   PowerMonitorBroadcastSource(
       scoped_refptr<base::SequencedTaskRunner> task_runner);
+
+  PowerMonitorBroadcastSource(const PowerMonitorBroadcastSource&) = delete;
+  PowerMonitorBroadcastSource& operator=(const PowerMonitorBroadcastSource&) =
+      delete;
+
   ~PowerMonitorBroadcastSource() override;
 
   // Completes initialization by setting up the connection with the Device
@@ -42,13 +46,19 @@ class PowerMonitorBroadcastSource : public base::PowerMonitorSource {
                            PowerMessageReceiveBroadcast);
   FRIEND_TEST_ALL_PREFIXES(PowerMonitorMessageBroadcasterTest,
                            PowerMessageBroadcast);
+  FRIEND_TEST_ALL_PREFIXES(PowerMonitorMessageBroadcasterTest,
+                           PowerClientUpdateWhenOnBattery);
 
   // Client holds the mojo connection. It is created on the main thread, and
   // destroyed on task runner's thread. Unless otherwise noted, all its methods
-  // all called on the task runner's thread.
+  // are called on the task runner's thread.
   class Client : public device::mojom::PowerMonitorClient {
    public:
     Client();
+
+    Client(const Client&) = delete;
+    Client& operator=(const Client&) = delete;
+
     ~Client() override;
 
     void Init(mojo::PendingRemote<mojom::PowerMonitor> remote_monitor);
@@ -66,8 +76,6 @@ class PowerMonitorBroadcastSource : public base::PowerMonitorSource {
     mojo::Receiver<device::mojom::PowerMonitorClient> receiver_{this};
 
     bool last_reported_on_battery_power_state_ = false;
-
-    DISALLOW_COPY_AND_ASSIGN(Client);
   };
 
   // This constructor is used by test code to mock the Client class.
@@ -81,8 +89,6 @@ class PowerMonitorBroadcastSource : public base::PowerMonitorSource {
 
   std::unique_ptr<Client> client_;
   scoped_refptr<base::SequencedTaskRunner> task_runner_;
-
-  DISALLOW_COPY_AND_ASSIGN(PowerMonitorBroadcastSource);
 };
 
 }  // namespace device

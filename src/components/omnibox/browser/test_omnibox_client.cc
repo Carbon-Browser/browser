@@ -8,6 +8,7 @@
 #include <utility>
 #include <vector>
 
+#include "base/callback.h"
 #include "components/omnibox/browser/autocomplete_controller.h"
 #include "components/omnibox/browser/autocomplete_scheme_classifier.h"
 #include "components/omnibox/browser/mock_autocomplete_provider_client.h"
@@ -54,15 +55,6 @@ TestOmniboxClient::CreateAutocompleteProviderClient() {
   return std::move(provider_client);
 }
 
-std::unique_ptr<OmniboxNavigationObserver>
-TestOmniboxClient::CreateOmniboxNavigationObserver(
-    const std::u16string& text,
-    const AutocompleteMatch& match,
-    const AutocompleteMatch& alternate_nav_match) {
-  alternate_nav_match_ = alternate_nav_match;
-  return nullptr;
-}
-
 bool TestOmniboxClient::IsPasteAndGoEnabled() const {
   return true;
 }
@@ -100,6 +92,10 @@ bool TestOmniboxClient::ShouldDefaultTypedNavigationsToHttps() const {
 
 int TestOmniboxClient::GetHttpsPortForTesting() const {
   return 0;
+}
+
+bool TestOmniboxClient::IsUsingFakeHttpsForHttpsUpgradeTesting() const {
+  return false;
 }
 
 gfx::Image TestOmniboxClient::GetSizedIcon(

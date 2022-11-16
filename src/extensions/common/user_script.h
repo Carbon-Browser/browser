@@ -11,6 +11,7 @@
 
 #include "base/files/file_path.h"
 #include "base/strings/string_piece.h"
+#include "extensions/common/mojom/execution_world.mojom-shared.h"
 #include "extensions/common/mojom/host_id.mojom.h"
 #include "extensions/common/mojom/run_location.mojom-shared.h"
 #include "extensions/common/script_constants.h"
@@ -110,6 +111,10 @@ class UserScript {
   // Constructor. Default the run location to document end, which is like
   // Greasemonkey and probably more useful for typical scripts.
   UserScript();
+
+  UserScript(const UserScript&) = delete;
+  UserScript& operator=(const UserScript&) = delete;
+
   ~UserScript();
 
   // Performs a copy of all fields except file contents.
@@ -207,6 +212,11 @@ class UserScript {
   // is used.
   bool is_incognito_enabled() const { return incognito_enabled_; }
   void set_incognito_enabled(bool enabled) { incognito_enabled_ = enabled; }
+
+  mojom::ExecutionWorld execution_world() const { return execution_world_; }
+  void set_execution_world(mojom::ExecutionWorld world) {
+    execution_world_ = world;
+  }
 
   // Returns true if the script should be applied to the specified URL, false
   // otherwise.
@@ -315,7 +325,7 @@ class UserScript {
   // True if the script should be injected into an incognito tab.
   bool incognito_enabled_ = false;
 
-  DISALLOW_COPY_AND_ASSIGN(UserScript);
+  mojom::ExecutionWorld execution_world_ = mojom::ExecutionWorld::kIsolated;
 };
 
 using UserScriptList = std::vector<std::unique_ptr<UserScript>>;

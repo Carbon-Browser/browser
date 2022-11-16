@@ -5,6 +5,7 @@
 #ifndef CHROME_BROWSER_BADGING_BADGE_MANAGER_DELEGATE_H_
 #define CHROME_BROWSER_BADGING_BADGE_MANAGER_DELEGATE_H_
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/badging/badge_manager.h"
 #include "chrome/browser/web_applications/web_app_id.h"
 #include "url/gurl.h"
@@ -20,6 +21,9 @@ class BadgeManagerDelegate {
   explicit BadgeManagerDelegate(Profile* profile, BadgeManager* badge_manager)
       : profile_(profile), badge_manager_(badge_manager) {}
 
+  BadgeManagerDelegate(const BadgeManagerDelegate&) = delete;
+  BadgeManagerDelegate& operator=(const BadgeManagerDelegate&) = delete;
+
   virtual ~BadgeManagerDelegate() = default;
 
   // Called when the badge for |app_id| has changed.
@@ -31,11 +35,9 @@ class BadgeManagerDelegate {
 
  private:
   // The profile the badge manager delegate is associated with.
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
   // The badge manager that owns this delegate.
-  BadgeManager* badge_manager_;
-
-  DISALLOW_COPY_AND_ASSIGN(BadgeManagerDelegate);
+  raw_ptr<BadgeManager> badge_manager_;
 };
 
 }  // namespace badging

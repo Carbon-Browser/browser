@@ -7,14 +7,14 @@
  * list of search engines.
  */
 import 'chrome://resources/cr_elements/shared_vars_css.m.js';
-import 'chrome://resources/polymer/v3_0/iron-list/iron-list.js';
-import '../settings_shared_css.js';
-import '../settings_vars_css.js';
+import '../settings_shared.css.js';
+import '../settings_vars.css.js';
 import './search_engine_entry.js';
 
-import {html, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {SearchEngine} from './search_engines_browser_proxy.js';
+import {getTemplate} from './search_engines_list.html.js';
 
 export class SettingsSearchEnginesListElement extends PolymerElement {
   static get is() {
@@ -22,7 +22,7 @@ export class SettingsSearchEnginesListElement extends PolymerElement {
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
   }
 
   static get properties() {
@@ -32,12 +32,57 @@ export class SettingsSearchEnginesListElement extends PolymerElement {
       /**
        * Whether the active search engines feature flag is enabled.
        */
-      showActiveSearchEngines: Boolean,
+      isActiveSearchEnginesFlagEnabled: Boolean,
+
+      showShortcut: {
+        type: Boolean,
+        value: false,
+        reflectToAttribute: true,
+      },
+
+      showQueryUrl: {
+        type: Boolean,
+        value: false,
+        reflectToAttribute: true,
+      },
+
+      collapseList: {
+        type: Boolean,
+        value: false,
+        reflectToAttribute: true,
+      },
+
+      nameColumnHeader: {
+        type: String,
+        reflectToAttribute: true,
+      },
 
       /**
-       * The scroll target that this list should use.
+       * The number of engines visible when the list is collapsed.
+       * This is currently gated behind the #omnibox-active-search-engines-flag.
        */
-      scrollTarget: Object,
+      visibleEnginesSize: {
+        type: Number,
+        value: 5,
+      },
+
+      /**
+       * An array of the first 'visibleEnginesSize' engines in the `engines`
+       * array.  These engines are visible even when 'collapsedEngines' is
+       * collapsed. This is currently gated behind the
+       * #omnibox-active-search-engines flag.
+       */
+      visibleEngines:
+          {type: Array, computed: 'computeVisibleEngines_(engines)'},
+
+      /**
+       * An array of all remaining engines not in the `visibleEngines` array.
+       * These engines' visibility can be toggled by expanding or collapsing the
+       * engines list. This is currently gated behind the
+       * #omnibox-active-search-engines flag.
+       */
+      collapsedEngines:
+          {type: Array, computed: 'computeCollapsedEngines_(engines)'},
 
       /** Used to fix scrolling glitch when list is not top most element. */
       scrollOffset: Number,
@@ -45,6 +90,11 @@ export class SettingsSearchEnginesListElement extends PolymerElement {
       lastFocused_: Object,
 
       listBlurred_: Boolean,
+
+      expandListText: {
+        type: String,
+        reflectToAttribute: true,
+      },
 
       fixedHeight: {
         type: Boolean,
@@ -54,12 +104,34 @@ export class SettingsSearchEnginesListElement extends PolymerElement {
     };
   }
 
-  engines: Array<SearchEngine>;
-  scrollTarget: HTMLElement|null;
-  scrollOffset: number;
+  engines: SearchEngine[];
+  visibleEngines: SearchEngine[];
+  collapsedEngines: SearchEngine[];
+  visibleEnginesSize: number;
   fixedHeight: boolean;
+  showShortcut: boolean;
+  showQueryUrl: boolean;
+  collapseList: boolean;
+  nameColumnHeader: string;
+  expandListText: string;
   private lastFocused_: HTMLElement;
   private listBlurred_: boolean;
+
+  private computeVisibleEngines_(engines: SearchEngine[]) {
+    if (!engines || !engines.length) {
+      return;
+    }
+
+    return engines.slice(0, this.visibleEnginesSize);
+  }
+
+  private computeCollapsedEngines_(engines: SearchEngine[]) {
+    if (!engines || !engines.length) {
+      return;
+    }
+
+    return engines.slice(this.visibleEnginesSize);
+  }
 }
 
 customElements.define(

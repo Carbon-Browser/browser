@@ -6,6 +6,8 @@
 
 #include "ash/constants/ash_features.h"
 #include "ash/constants/ash_switches.h"
+#include "base/command_line.h"
+#include "base/environment.h"
 #include "base/files/file_util.h"
 #include "base/task/thread_pool.h"
 #include "base/test/bind.h"
@@ -24,9 +26,9 @@ namespace test {
 AshBrowserTestStarter::AshBrowserTestStarter() = default;
 AshBrowserTestStarter::~AshBrowserTestStarter() = default;
 
-bool AshBrowserTestStarter::HasLacrosArgument() {
+bool AshBrowserTestStarter::HasLacrosArgument() const {
   return base::CommandLine::ForCurrentProcess()->HasSwitch(
-      chromeos::switches::kLacrosChromePath);
+      ash::switches::kLacrosChromePath);
 }
 
 bool AshBrowserTestStarter::PrepareEnvironmentForLacros() {
@@ -38,7 +40,9 @@ bool AshBrowserTestStarter::PrepareEnvironmentForLacros() {
   env->SetVar("XDG_RUNTIME_DIR", scoped_temp_dir_xdg_.GetPath().AsUTF8Unsafe());
 
   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
-  scoped_feature_list_.InitAndEnableFeature(chromeos::features::kLacrosSupport);
+  scoped_feature_list_.InitWithFeatures(
+      {chromeos::features::kLacrosSupport, chromeos::features::kLacrosPrimary},
+      {});
   command_line->AppendSwitch("enable-wayland-server");
   command_line->AppendSwitch("no-startup-window");
   return true;
@@ -46,27 +50,34 @@ bool AshBrowserTestStarter::PrepareEnvironmentForLacros() {
 
 class LacrosStartedObserver : public crosapi::BrowserManagerObserver {
  public:
-  explicit LacrosStartedObserver(base::OnceClosure quit_closure)
-      : quit_closure_(std::move(quit_closure)) {}
+  LacrosStartedObserver() = default;
   LacrosStartedObserver(const LacrosStartedObserver&) = delete;
   LacrosStartedObserver& operator=(const LacrosStartedObserver&) = delete;
   ~LacrosStartedObserver() override = default;
 
   void OnStateChanged() override {
     if (crosapi::BrowserManager::Get()->IsRunning()) {
-      std::move(quit_closure_).Run();
+      run_loop_.Quit();
     }
   }
 
+  void Wait(base::TimeDelta timeout) {
+    if (crosapi::BrowserManager::Get()->IsRunning()) {
+      return;
+    }
+    base::ThreadPool::PostDelayedTask(FROM_HERE, run_loop_.QuitClosure(),
+                                      timeout);
+    run_loop_.Run();
+  }
+
  private:
-  base::OnceClosure quit_closure_;
+  base::RunLoop run_loop_;
 };
 
 void WaitForExoStarted(const base::FilePath& xdg_path) {
   base::RepeatingTimer timer;
   base::RunLoop run_loop;
-  timer.Start(FROM_HERE, base::TimeDelta::FromSeconds(1),
-              base::BindLambdaForTesting([&]() {
+  timer.Start(FROM_HERE, base::Seconds(1), base::BindLambdaForTesting([&]() {
                 if (base::PathExists(xdg_path.Append("wayland-0")) &&
                     base::PathExists(xdg_path.Append("wayland-0.lock"))) {
                   run_loop.Quit();
@@ -84,14 +95,14 @@ void AshBrowserTestStarter::StartLacros(InProcessBrowserTest* test_class_obj) {
 
   WaitForExoStarted(scoped_temp_dir_xdg_.GetPath());
 
-  crosapi::BrowserManager::Get()->NewWindow(/*incongnito=*/false);
-  base::RunLoop run_loop;
-  LacrosStartedObserver observer(run_loop.QuitClosure());
+  crosapi::BrowserManager::Get()->NewWindow(
+      /*incongnito=*/false, /*should_trigger_session_restore=*/false);
+
+  LacrosStartedObserver observer;
   crosapi::BrowserManager::Get()->AddObserver(&observer);
-  base::ThreadPool::PostDelayedTask(FROM_HERE, run_loop.QuitClosure(),
-                                    TestTimeouts::action_max_timeout());
-  run_loop.Run();
+  observer.Wait(TestTimeouts::action_max_timeout());
   crosapi::BrowserManager::Get()->RemoveObserver(&observer);
+
   CHECK(crosapi::BrowserManager::Get()->IsRunning());
 
   // Create a new ash browser window so browser() can work.

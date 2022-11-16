@@ -33,6 +33,7 @@ class CursorManager;
 namespace ash {
 
 class CaptureModeController;
+class RecordingOverlayController;
 class RecordedWindowRootObserver;
 
 // An instance of this class is created while video recording is in progress to
@@ -68,6 +69,23 @@ class ASH_EXPORT VideoRecordingWatcher
   aura::Window* window_being_recorded() const { return window_being_recorded_; }
   bool is_in_projector_mode() const { return is_in_projector_mode_; }
   bool should_paint_layer() const { return should_paint_layer_; }
+  bool is_shutting_down() const { return is_shutting_down_; }
+
+  // Toggles the Projector mode's overlay widget on or off. Can only be called
+  // if |is_in_projector_mode()| is true.
+  void ToggleRecordingOverlayEnabled();
+
+  // Clean up prior to deletion.
+  void ShutDown();
+
+  // Returns the current parent window for
+  // `CaptureModeCameraController::camera_preview_widget_` when recording is in
+  // progress.
+  aura::Window* GetCameraPreviewParentWindow() const;
+
+  // Returns the confine bounds for the camera preview when recording is in
+  // progress.
+  gfx::Rect GetCameraPreviewConfineBounds() const;
 
   // aura::WindowObserver:
   void OnWindowParentChanged(aura::Window* window,
@@ -104,6 +122,7 @@ class ASH_EXPORT VideoRecordingWatcher
   void OnDimmedWindowParentChanged(aura::Window* dimmed_window) override;
 
   // ui::EventHandler:
+  void OnKeyEvent(ui::KeyEvent* event) override;
   void OnMouseEvent(ui::MouseEvent* event) override;
 
   // TabletModeObserver:
@@ -112,6 +131,11 @@ class ASH_EXPORT VideoRecordingWatcher
 
   // CursorWindowController::Observer:
   void OnCursorCompositingStateChanged(bool enabled) override;
+
+  // Returns the `partial_region_bounds_` clamped to the bounds of the
+  // `current_root_`. It should only be called if `recording_source_` is
+  // `kRegion`.
+  gfx::Rect GetEffectivePartialRegionBounds() const;
 
   bool IsWindowDimmedForTesting(aura::Window* window) const;
 
@@ -127,6 +151,7 @@ class ASH_EXPORT VideoRecordingWatcher
   void SetLayer(std::unique_ptr<ui::Layer> layer) override;
 
  private:
+  friend class CaptureModeTestApi;
   friend class RecordedWindowRootObserver;
 
   // Called by |RecordedWindowRootObserver| to notify us with a hierarchy change
@@ -179,6 +204,10 @@ class ASH_EXPORT VideoRecordingWatcher
   // push the current size of the window being recorded to the service.
   void OnWindowSizeChangeThrottleTimerFiring();
 
+  // Returns the bounds that should be used for the recording overlay widget
+  // relative to its parent |window_being_recorded_|.
+  gfx::Rect GetOverlayWidgetBounds() const;
+
   CaptureModeController* const controller_;
   wm::CursorManager* const cursor_manager_;
   aura::Window* const window_being_recorded_;
@@ -226,7 +255,7 @@ class ASH_EXPORT VideoRecordingWatcher
   // throttle such events.
   base::OneShotTimer window_size_change_throttle_timer_;
 
-  // True if the current in progress recording is for a projector mode session.
+  // True if the current in progress recording is for a Projector mode session.
   const bool is_in_projector_mode_;
 
   // True if we force hiding the cursor overlay. This happens when we record a
@@ -247,6 +276,10 @@ class ASH_EXPORT VideoRecordingWatcher
   // to take a partial screenshot.
   gfx::Rect partial_region_bounds_;
 
+  // Controls and owns the overlay widget, which is used to host Projector mode
+  // recording overlay contents such as annotations.
+  std::unique_ptr<RecordingOverlayController> recording_overlay_controller_;
+
   // Maintains window dimmers where each is mapped by the window it dims. These
   // are created for the windows that are above the |window_being_recorded_| in
   // z-order on the same display so as to clearly show they're not being
@@ -258,8 +291,8 @@ class ASH_EXPORT VideoRecordingWatcher
   // make it capturable by the |FrameSinkVideoCapturer|.
   aura::ScopedWindowCaptureRequest non_root_window_capture_request_;
 
-  // Register for DisplayObserver callbacks.
-  display::ScopedDisplayObserver display_observer_{this};
+  // True if the shutting down process has been triggered.
+  bool is_shutting_down_ = false;
 };
 
 }  // namespace ash

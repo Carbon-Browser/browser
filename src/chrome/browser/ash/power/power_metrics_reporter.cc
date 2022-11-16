@@ -4,7 +4,6 @@
 
 #include "chrome/browser/ash/power/power_metrics_reporter.h"
 
-#include "base/cxx17_backports.h"
 #include "base/metrics/histogram_functions.h"
 #include "chrome/common/pref_names.h"
 #include "chromeos/dbus/dbus_thread_manager.h"
@@ -16,8 +15,7 @@ namespace ash {
 namespace {
 
 // Interval for asking metrics::DailyEvent to check whether a day has passed.
-constexpr base::TimeDelta kCheckDailyEventInternal =
-    base::TimeDelta::FromSeconds(60);
+constexpr base::TimeDelta kCheckDailyEventInternal = base::Seconds(60);
 
 // Information about a daily count that should be tracked and reported.
 struct DailyCountInfo {
@@ -55,6 +53,10 @@ class PowerMetricsReporter::DailyEventObserver
  public:
   explicit DailyEventObserver(PowerMetricsReporter* reporter)
       : reporter_(reporter) {}
+
+  DailyEventObserver(const DailyEventObserver&) = delete;
+  DailyEventObserver& operator=(const DailyEventObserver&) = delete;
+
   ~DailyEventObserver() override = default;
 
   // metrics::DailyEvent::Observer:
@@ -64,8 +66,6 @@ class PowerMetricsReporter::DailyEventObserver
 
  private:
   PowerMetricsReporter* reporter_;  // Not owned.
-
-  DISALLOW_COPY_AND_ASSIGN(DailyEventObserver);
 };
 
 const char PowerMetricsReporter::kDailyEventIntervalName[] =
@@ -83,7 +83,7 @@ const char PowerMetricsReporter::kLidClosedSuspendCountName[] =
 void PowerMetricsReporter::RegisterLocalStatePrefs(
     PrefRegistrySimple* registry) {
   metrics::DailyEvent::RegisterPref(registry, prefs::kPowerMetricsDailySample);
-  for (size_t i = 0; i < base::size(kDailyCounts); ++i)
+  for (size_t i = 0; i < std::size(kDailyCounts); ++i)
     registry->RegisterIntegerPref(kDailyCounts[i].pref_name, 0);
 }
 
@@ -96,7 +96,7 @@ PowerMetricsReporter::PowerMetricsReporter(
           std::make_unique<metrics::DailyEvent>(pref_service_,
                                                 prefs::kPowerMetricsDailySample,
                                                 kDailyEventIntervalName)) {
-  for (size_t i = 0; i < base::size(kDailyCounts); ++i) {
+  for (size_t i = 0; i < std::size(kDailyCounts); ++i) {
     daily_counts_[kDailyCounts[i].pref_name] =
         pref_service_->GetInteger(kDailyCounts[i].pref_name);
   }
@@ -144,14 +144,14 @@ void PowerMetricsReporter::ReportDailyMetrics(
     metrics::DailyEvent::IntervalType type) {
   // Don't send metrics on first run or if the clock is changed.
   if (type == metrics::DailyEvent::IntervalType::DAY_ELAPSED) {
-    for (size_t i = 0; i < base::size(kDailyCounts); ++i) {
+    for (size_t i = 0; i < std::size(kDailyCounts); ++i) {
       base::UmaHistogramCounts100(kDailyCounts[i].metric_name,
                                   daily_counts_[kDailyCounts[i].pref_name]);
     }
   }
 
   // Reset all counts now that they've been reported.
-  for (size_t i = 0; i < base::size(kDailyCounts); ++i) {
+  for (size_t i = 0; i < std::size(kDailyCounts); ++i) {
     const char* pref_name = kDailyCounts[i].pref_name;
     AddToCount(pref_name, -1 * daily_counts_[pref_name]);
   }

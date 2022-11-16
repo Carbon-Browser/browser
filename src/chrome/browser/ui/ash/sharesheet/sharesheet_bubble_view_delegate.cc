@@ -8,7 +8,7 @@
 
 #include "base/bind.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/sharesheet/sharesheet_service_delegate.h"
+#include "chrome/browser/sharesheet/sharesheet_service_delegator.h"
 #include "chrome/browser/ui/ash/sharesheet/sharesheet_bubble_view.h"
 #include "ui/views/widget/widget.h"
 
@@ -17,14 +17,17 @@ namespace sharesheet {
 
 SharesheetBubbleViewDelegate::SharesheetBubbleViewDelegate(
     gfx::NativeWindow native_window,
-    ::sharesheet::SharesheetServiceDelegate* sharesheet_service_delegate)
-    : sharesheet_bubble_view_(
-          new SharesheetBubbleView(native_window,
-                                   sharesheet_service_delegate)) {}
+    ::sharesheet::SharesheetServiceDelegator* sharesheet_service_delegator)
+    : sharesheet_bubble_view_owned_(
+          std::make_unique<SharesheetBubbleView>(native_window,
+                                                 sharesheet_service_delegator)),
+      sharesheet_bubble_view_(sharesheet_bubble_view_owned_.get()) {}
+
+SharesheetBubbleViewDelegate::~SharesheetBubbleViewDelegate() = default;
 
 void SharesheetBubbleViewDelegate::ShowBubble(
     std::vector<::sharesheet::TargetInfo> targets,
-    apps::mojom::IntentPtr intent,
+    apps::IntentPtr intent,
     ::sharesheet::DeliveredCallback delivered_callback,
     ::sharesheet::CloseCallback close_callback) {
   if (IsBubbleVisible()) {
@@ -37,13 +40,16 @@ void SharesheetBubbleViewDelegate::ShowBubble(
     }
     return;
   }
-  sharesheet_bubble_view_->ShowBubble(std::move(targets), std::move(intent),
-                                      std::move(delivered_callback),
-                                      std::move(close_callback));
+  DCHECK(sharesheet_bubble_view_owned_);
+  // The BubbleView gives its own ownership to the widget in ShowBubble(), so we
+  // relinquish our ownership here.
+  sharesheet_bubble_view_owned_.release()->ShowBubble(
+      std::move(targets), std::move(intent), std::move(delivered_callback),
+      std::move(close_callback));
 }
 
 void SharesheetBubbleViewDelegate::ShowNearbyShareBubbleForArc(
-    apps::mojom::IntentPtr intent,
+    apps::IntentPtr intent,
     ::sharesheet::DeliveredCallback delivered_callback,
     ::sharesheet::CloseCallback close_callback) {
   if (IsBubbleVisible()) {
@@ -56,16 +62,23 @@ void SharesheetBubbleViewDelegate::ShowNearbyShareBubbleForArc(
     }
     return;
   }
-  sharesheet_bubble_view_->ShowNearbyShareBubbleForArc(
+  DCHECK(sharesheet_bubble_view_owned_);
+  // The BubbleView gives its own ownership to the widget in
+  // ShowNearbyShareBubbleForArc(), so we relinquish our ownership here.
+  sharesheet_bubble_view_owned_.release()->ShowNearbyShareBubbleForArc(
       std::move(intent), std::move(delivered_callback),
       std::move(close_callback));
 }
 
-void SharesheetBubbleViewDelegate::OnActionLaunched() {
-  sharesheet_bubble_view_->ShowActionView();
+void SharesheetBubbleViewDelegate::OnActionLaunched(bool has_action_view) {
+  DCHECK(sharesheet_bubble_view_);
+  if (has_action_view) {
+    sharesheet_bubble_view_->ShowActionView();
+  }
 }
 
 void SharesheetBubbleViewDelegate::SetBubbleSize(int width, int height) {
+  DCHECK(sharesheet_bubble_view_);
   DCHECK_GT(width, 0);
   DCHECK_GT(height, 0);
   sharesheet_bubble_view_->ResizeBubble(width, height);
@@ -82,10 +95,12 @@ void SharesheetBubbleViewDelegate::CloseBubble(
     reason = views::Widget::ClosedReason::kCancelButtonClicked;
   }
 
+  DCHECK(sharesheet_bubble_view_);
   sharesheet_bubble_view_->CloseBubble(reason);
 }
 
 bool SharesheetBubbleViewDelegate::IsBubbleVisible() const {
+  DCHECK(sharesheet_bubble_view_);
   return sharesheet_bubble_view_->GetWidget() &&
          sharesheet_bubble_view_->GetWidget()->IsVisible();
 }

@@ -17,7 +17,7 @@
 #include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/power_monitor/power_monitor.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/default_tick_clock.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
@@ -33,6 +33,7 @@
 #include "media/base/media_client.h"
 #include "media/base/media_log.h"
 #include "media/base/media_switches.h"
+#include "media/base/media_util.h"
 #include "media/base/renderer_client.h"
 #include "media/base/timestamp_constants.h"
 #include "media/filters/audio_clock.h"
@@ -68,7 +69,7 @@ AudioRendererImpl::AudioRendererImpl(
       received_end_of_stream_(false),
       rendered_end_of_stream_(false),
       is_suspending_(false),
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
       is_passthrough_(false) {
 #else
       is_passthrough_(false),
@@ -333,10 +334,6 @@ void AudioRendererImpl::ResetDecoderDone() {
       buffer_converter_->Reset();
     algorithm_->FlushBuffers();
   }
-
-  // Changes in buffering state are always posted. Flush callback must only be
-  // run after buffering state has been set back to nothing.
-  flush_cb_ = BindToCurrentLoop(std::move(flush_cb_));
   FinishFlush();
 }
 
@@ -391,7 +388,7 @@ void AudioRendererImpl::Initialize(DemuxerStream* stream,
       base::BindOnce(&AudioRendererImpl::OnDeviceInfoReceived,
                      weak_factory_.GetWeakPtr(), demuxer_stream_, cdm_context));
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
   if (speech_recognition_client_) {
     speech_recognition_client_->SetOnReadyCallback(BindToCurrentLoop(
         base::BindOnce(&AudioRendererImpl::EnableSpeechRecognition,
@@ -437,19 +434,16 @@ void AudioRendererImpl::OnDeviceInfoReceived(
   ChannelLayout hw_channel_layout =
       hw_params.IsValid() ? hw_params.channel_layout() : CHANNEL_LAYOUT_NONE;
 
-  audio_decoder_stream_ = std::make_unique<AudioDecoderStream>(
-      std::make_unique<AudioDecoderStream::StreamTraits>(media_log_,
-                                                         hw_channel_layout),
-      task_runner_, create_audio_decoders_cb_, media_log_);
-
-  audio_decoder_stream_->set_config_change_observer(base::BindRepeating(
-      &AudioRendererImpl::OnConfigChange, weak_factory_.GetWeakPtr()));
+  DVLOG(1) << __func__ << ": " << hw_params.AsHumanReadableString();
 
   AudioCodec codec = stream->audio_decoder_config().codec();
-  if (auto* mc = GetMediaClient())
-    is_passthrough_ = mc->IsSupportedBitstreamAudioCodec(codec);
-  else
+  if (auto* mc = GetMediaClient()) {
+    const auto format = ConvertAudioCodecToBitstreamFormat(codec);
+    is_passthrough_ = mc->IsSupportedBitstreamAudioCodec(codec) &&
+                      hw_params.IsFormatSupportedByHardware(format);
+  } else {
     is_passthrough_ = false;
+  }
   expecting_config_changes_ = stream->SupportsConfigChanges();
 
   bool use_stream_params = !expecting_config_changes_ || !hw_params.IsValid() ||
@@ -474,12 +468,24 @@ void AudioRendererImpl::OnDeviceInfoReceived(
       std::max(2 * stream->audio_decoder_config().samples_per_second() / 100,
                hw_params.IsValid() ? hw_params.frames_per_buffer() : 0);
 
+  SampleFormat target_output_sample_format = kUnknownSampleFormat;
   if (is_passthrough_) {
     AudioParameters::Format format = AudioParameters::AUDIO_FAKE;
+    // For DTS and Dolby formats, set target_output_sample_format to the
+    // respective bit-stream format so that passthrough decoder will be selected
+    // by MediaCodecAudioRenderer if this is running on Android.
     if (codec == AudioCodec::kAC3) {
       format = AudioParameters::AUDIO_BITSTREAM_AC3;
+      target_output_sample_format = kSampleFormatAc3;
     } else if (codec == AudioCodec::kEAC3) {
       format = AudioParameters::AUDIO_BITSTREAM_EAC3;
+      target_output_sample_format = kSampleFormatEac3;
+    } else if (codec == AudioCodec::kDTS) {
+      format = AudioParameters::AUDIO_BITSTREAM_DTS;
+      target_output_sample_format = kSampleFormatDts;
+    } else if (codec == AudioCodec::kDTSXP2) {
+      format = AudioParameters::AUDIO_BITSTREAM_DTSX_P2;
+      target_output_sample_format = kSampleFormatDtsxP2;
     } else {
       NOTREACHED();
     }
@@ -522,7 +528,7 @@ void AudioRendererImpl::OnDeviceInfoReceived(
     int stream_channel_count = stream->audio_decoder_config().channels();
 
     bool try_supported_channel_layouts = false;
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
     try_supported_channel_layouts =
         base::CommandLine::ForCurrentProcess()->HasSwitch(
             switches::kTrySupportedChannelLayouts);
@@ -573,6 +579,19 @@ void AudioRendererImpl::OnDeviceInfoReceived(
                                 AudioParameters::MULTIZONE);
 
   audio_parameters_.set_latency_tag(AudioLatency::LATENCY_PLAYBACK);
+
+  audio_decoder_stream_ = std::make_unique<AudioDecoderStream>(
+      std::make_unique<AudioDecoderStream::StreamTraits>(
+          media_log_, hw_channel_layout, target_output_sample_format),
+      task_runner_, create_audio_decoders_cb_, media_log_);
+
+  audio_decoder_stream_->set_config_change_observer(base::BindRepeating(
+      &AudioRendererImpl::OnConfigChange, weak_factory_.GetWeakPtr()));
+
+  DVLOG(1) << __func__ << ": is_passthrough_=" << is_passthrough_
+           << " codec=" << codec
+           << " stream->audio_decoder_config().sample_format="
+           << stream->audio_decoder_config().sample_format();
 
   if (!client_->IsVideoStreamAvailable()) {
     // When video is not available, audio prefetch can be enabled.  See
@@ -690,7 +709,11 @@ void AudioRendererImpl::FinishFlush() {
   DCHECK(flush_cb_);
   TRACE_EVENT_NESTABLE_ASYNC_END0("media", "AudioRendererImpl::Flush",
                                   TRACE_ID_LOCAL(this));
-  std::move(flush_cb_).Run();
+  // The |flush_cb_| must always post in order to avoid deadlocking, as some of
+  // the functions which may be bound here are re-entrant into lock-acquiring
+  // methods of AudioRendererImpl, and FinishFlush may be called while holding
+  // the lock. See crbug.com/c/1163459 for a detailed explanation of this.
+  task_runner_->PostTask(FROM_HERE, std::move(flush_cb_));
 }
 
 void AudioRendererImpl::OnPlaybackError(PipelineStatus error) {
@@ -809,10 +832,10 @@ void AudioRendererImpl::SetPreservesPitch(bool preserves_pitch) {
     algorithm_->SetPreservesPitch(preserves_pitch);
 }
 
-void AudioRendererImpl::SetAutoplayInitiated(bool autoplay_initiated) {
+void AudioRendererImpl::SetWasPlayedWithUserActivation(
+    bool was_played_with_user_activation) {
   base::AutoLock auto_lock(lock_);
-
-  autoplay_initiated_ = autoplay_initiated;
+  was_played_with_user_activation_ = was_played_with_user_activation;
 }
 
 void AudioRendererImpl::OnSuspend() {
@@ -832,7 +855,7 @@ void AudioRendererImpl::SetPlayDelayCBForTesting(PlayDelayCBForTesting cb) {
 
 void AudioRendererImpl::DecodedAudioReady(
     AudioDecoderStream::ReadResult result) {
-  DVLOG(2) << __func__ << "(" << result.code() << ")";
+  DVLOG(2) << __func__ << "(" << static_cast<int>(result.code()) << ")";
   DCHECK(task_runner_->BelongsToCurrentThread());
 
   base::AutoLock auto_lock(lock_);
@@ -842,9 +865,13 @@ void AudioRendererImpl::DecodedAudioReady(
   pending_read_ = false;
 
   if (result.has_error()) {
-    HandleAbortedReadOrDecodeError(result.code() == StatusCode::kAborted
-                                       ? PIPELINE_OK
-                                       : PIPELINE_ERROR_DECODE);
+    auto status = PIPELINE_ERROR_DECODE;
+    if (result.code() == DecoderStatus::Codes::kAborted)
+      status = PIPELINE_OK;
+    else if (result.code() == DecoderStatus::Codes::kDisconnected)
+      status = PIPELINE_ERROR_DISCONNECTED;
+
+    HandleAbortedReadOrDecodeError(status);
     return;
   }
 
@@ -859,7 +886,29 @@ void AudioRendererImpl::DecodedAudioReady(
 
   bool need_another_buffer = true;
 
-  if (expecting_config_changes_) {
+  // FFmpeg allows "channel pair element" and "single channel element" type
+  // AAC streams to masquerade as mono and stereo respectively. Allow these
+  // specific exceptions to avoid playback errors.
+  bool allow_config_changes = expecting_config_changes_;
+  if (!expecting_config_changes_ && !buffer->end_of_stream() &&
+      current_decoder_config_.codec() == AudioCodec::kAAC &&
+      buffer->sample_rate() == audio_parameters_.sample_rate()) {
+    const bool is_mono_to_stereo =
+        buffer->channel_layout() == CHANNEL_LAYOUT_MONO &&
+        audio_parameters_.channel_layout() == CHANNEL_LAYOUT_STEREO;
+    const bool is_stereo_to_mono =
+        buffer->channel_layout() == CHANNEL_LAYOUT_STEREO &&
+        audio_parameters_.channel_layout() == CHANNEL_LAYOUT_MONO;
+    if (is_mono_to_stereo || is_stereo_to_mono) {
+      if (!buffer_converter_) {
+        buffer_converter_ =
+            std::make_unique<AudioBufferConverter>(audio_parameters_);
+      }
+      allow_config_changes = true;
+    }
+  }
+
+  if (allow_config_changes) {
     if (!buffer->end_of_stream()) {
       if (last_decoded_sample_rate_ &&
           buffer->sample_rate() != last_decoded_sample_rate_) {
@@ -954,7 +1003,7 @@ bool AudioRendererImpl::HandleDecodedBuffer_Locked(
 
       // Trim off any additional time before the start timestamp.
       const base::TimeDelta trim_time = start_timestamp_ - buffer->timestamp();
-      if (trim_time > base::TimeDelta()) {
+      if (trim_time.is_positive()) {
         const int frames_to_trim = AudioTimestampHelper::TimeToFrames(
             trim_time, buffer->sample_rate());
         DVLOG(1) << __func__ << ": Trimming first audio buffer by "
@@ -974,10 +1023,11 @@ bool AudioRendererImpl::HandleDecodedBuffer_Locked(
     if (first_packet_timestamp_ == kNoTimestamp)
       first_packet_timestamp_ = buffer->timestamp();
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
     // Do not transcribe muted streams initiated by autoplay if the stream was
     // never unmuted.
-    if (transcribe_audio_callback_ && !(autoplay_initiated_ && !was_unmuted_)) {
+    if (transcribe_audio_callback_ &&
+        (was_played_with_user_activation_ || was_unmuted_)) {
       transcribe_audio_callback_.Run(buffer);
     }
 #endif
@@ -1116,7 +1166,7 @@ int AudioRendererImpl::Render(base::TimeDelta delay,
 
   // Since this information is coming from the OS or potentially a fake stream,
   // it may end up with spurious values.
-  if (delay < base::TimeDelta())
+  if (delay.is_negative())
     delay = base::TimeDelta();
 
   int frames_written = 0;
@@ -1159,7 +1209,7 @@ int AudioRendererImpl::Render(base::TimeDelta delay,
       // way to generate audio delay.
       const base::TimeDelta play_delay =
           first_packet_timestamp_ - audio_clock_->back_timestamp();
-      if (play_delay > base::TimeDelta()) {
+      if (play_delay.is_positive()) {
         MEDIA_LOG(ERROR, media_log_)
             << "Cannot add delay for compressed audio bitstream foramt."
             << " Requested delay: " << play_delay;
@@ -1179,7 +1229,7 @@ int AudioRendererImpl::Render(base::TimeDelta delay,
       CHECK_GE(first_packet_timestamp_, base::TimeDelta());
       const base::TimeDelta play_delay =
           first_packet_timestamp_ - audio_clock_->back_timestamp();
-      if (play_delay > base::TimeDelta()) {
+      if (play_delay.is_positive()) {
         DCHECK_EQ(frames_written, 0);
 
         if (!play_delay_cb_for_testing_.is_null())
@@ -1390,7 +1440,7 @@ void AudioRendererImpl::ConfigureChannelMask() {
 }
 
 void AudioRendererImpl::EnableSpeechRecognition() {
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
   DCHECK(task_runner_->BelongsToCurrentThread());
   transcribe_audio_callback_ = base::BindRepeating(
       &AudioRendererImpl::TranscribeAudio, weak_factory_.GetWeakPtr());
@@ -1399,10 +1449,11 @@ void AudioRendererImpl::EnableSpeechRecognition() {
 
 void AudioRendererImpl::TranscribeAudio(
     scoped_refptr<media::AudioBuffer> buffer) {
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
   DCHECK(task_runner_->BelongsToCurrentThread());
   if (speech_recognition_client_)
     speech_recognition_client_->AddAudio(std::move(buffer));
 #endif
 }
+
 }  // namespace media

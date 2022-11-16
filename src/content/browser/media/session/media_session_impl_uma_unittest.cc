@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/memory/raw_ptr.h"
 #include "content/browser/media/session/media_session_impl.h"
 
 #include <map>
@@ -28,8 +29,12 @@ static const int kPlayerId = 0;
 
 class MockMediaSessionPlayerObserver : public MediaSessionPlayerObserver {
  public:
-  explicit MockMediaSessionPlayerObserver(RenderFrameHost* rfh)
-      : render_frame_host_(rfh) {}
+  MockMediaSessionPlayerObserver(RenderFrameHost* rfh,
+                                 media::MediaContentType media_content_type)
+      : render_frame_host_(rfh), media_content_type_(media_content_type) {}
+  explicit MockMediaSessionPlayerObserver(
+      media::MediaContentType media_content_type)
+      : MockMediaSessionPlayerObserver(nullptr, media_content_type) {}
 
   ~MockMediaSessionPlayerObserver() override = default;
 
@@ -64,12 +69,21 @@ class MockMediaSessionPlayerObserver : public MediaSessionPlayerObserver {
     return false;
   }
 
+  media::MediaContentType GetMediaContentType() const override {
+    return media_content_type_;
+  }
+
+  void SetMediaContentType(media::MediaContentType media_content_type) {
+    media_content_type_ = media_content_type;
+  }
+
   RenderFrameHost* render_frame_host() const override {
     return render_frame_host_;
   }
 
  private:
-  RenderFrameHost* render_frame_host_;
+  raw_ptr<RenderFrameHost, DanglingUntriaged> render_frame_host_;
+  media::MediaContentType media_content_type_;
 };
 
 struct ActionMappingEntry {
@@ -98,12 +112,12 @@ class MediaSessionImplUmaTest : public RenderViewHostImplTestHarness {
   void SetUp() override {
     RenderViewHostImplTestHarness::SetUp();
 
-    contents()->GetMainFrame()->InitializeRenderFrameIfNeeded();
+    contents()->GetPrimaryMainFrame()->InitializeRenderFrameIfNeeded();
     StartPlayer();
 
     mock_media_session_service_ =
         std::make_unique<testing::NiceMock<MockMediaSessionServiceImpl>>(
-            contents()->GetMainFrame());
+            contents()->GetPrimaryMainFrame());
   }
 
   void TearDown() override {
@@ -116,9 +130,8 @@ class MediaSessionImplUmaTest : public RenderViewHostImplTestHarness {
 
   void StartPlayer() {
     player_ = std::make_unique<MockMediaSessionPlayerObserver>(
-        contents()->GetMainFrame());
-    GetSession()->AddPlayer(player_.get(), kPlayerId,
-                            media::MediaContentType::Persistent);
+        contents()->GetPrimaryMainFrame(), media::MediaContentType::Persistent);
+    GetSession()->AddPlayer(player_.get(), kPlayerId);
   }
 
   std::unique_ptr<base::HistogramSamples> GetHistogramSamplesSinceTestStart(

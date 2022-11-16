@@ -7,13 +7,14 @@
 #include <memory>
 #include <utility>
 
-#include "base/feature_list.h"
+#include "base/check.h"
+#include "base/command_line.h"
 #include "components/pdf/renderer/pdf_internal_plugin_delegate.h"
 #include "components/pdf/renderer/pdf_view_web_plugin_client.h"
+#include "content/public/common/content_switches.h"
 #include "content/public/renderer/render_frame.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
 #include "pdf/mojom/pdf.mojom.h"
-#include "pdf/pdf_features.h"
 #include "pdf/pdf_view_web_plugin.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_provider.h"
 #include "third_party/blink/public/platform/web_security_origin.h"
@@ -26,8 +27,13 @@
 
 namespace pdf {
 
+bool IsPdfRenderer() {
+  static const bool has_switch =
+      base::CommandLine::ForCurrentProcess()->HasSwitch(switches::kPdfRenderer);
+  return has_switch;
+}
+
 blink::WebPlugin* CreateInternalPlugin(
-    const content::WebPluginInfo& info,
     blink::WebPluginParams params,
     content::RenderFrame* render_frame,
     std::unique_ptr<PdfInternalPluginDelegate> delegate) {
@@ -41,20 +47,32 @@ blink::WebPlugin* CreateInternalPlugin(
     }
   }
 
-  if (!base::FeatureList::IsEnabled(chrome_pdf::features::kPdfUnseasoned)) {
-    // Delegate Pepper plugin creation to `content::RenderFrame`.
-    return render_frame->CreatePlugin(info, params);
+  // The in-process plugin should only be created if the parent frame's origin
+  // was allowed to (externally) embed the internal plugin.
+  blink::WebFrame* frame = render_frame->GetWebFrame();
+  blink::WebFrame* parent_frame = frame->Parent();
+  if (!parent_frame ||
+      !delegate->IsAllowedOrigin(parent_frame->GetSecurityOrigin())) {
+    return nullptr;
   }
 
-  if (!delegate->IsAllowedFrame(*render_frame->GetWebFrame()))
-    return nullptr;
+  // Only create the in-process plugin within a PDF renderer.
+  CHECK(IsPdfRenderer());
 
-  mojo::AssociatedRemote<pdf::mojom::PdfService> pdf_service_remote;
+  // Origins allowed to embed the internal plugin are trusted (the PDF viewer
+  // and Print Preview), and should never directly create the in-process plugin.
+  // Likewise, they should not share a process with this frame.
+  //
+  // See crbug.com/1259635 and crbug.com/1261758 for examples of previous bugs.
+  CHECK(!delegate->IsAllowedOrigin(frame->GetSecurityOrigin()));
+  CHECK(parent_frame->IsWebRemoteFrame());
+
+  mojo::AssociatedRemote<pdf::mojom::PdfService> pdf_service;
   render_frame->GetRemoteAssociatedInterfaces()->GetInterface(
-      pdf_service_remote.BindNewEndpointAndPassReceiver());
+      pdf_service.BindNewEndpointAndPassReceiver());
   return new chrome_pdf::PdfViewWebPlugin(
       std::make_unique<PdfViewWebPluginClient>(render_frame),
-      std::move(pdf_service_remote), params);
+      std::move(pdf_service), params);
 }
 
 }  // namespace pdf

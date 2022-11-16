@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "base/compiler_specific.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/one_shot_event.h"
@@ -37,6 +37,10 @@ class ShellExtensionSystem : public ExtensionSystem {
  public:
   using InstallUpdateCallback = ExtensionSystem::InstallUpdateCallback;
   explicit ShellExtensionSystem(content::BrowserContext* browser_context);
+
+  ShellExtensionSystem(const ShellExtensionSystem&) = delete;
+  ShellExtensionSystem& operator=(const ShellExtensionSystem&) = delete;
+
   ~ShellExtensionSystem() override;
 
   // Loads an unpacked extension from a directory. Returns the extension on
@@ -64,12 +68,12 @@ class ShellExtensionSystem : public ExtensionSystem {
   // ExtensionSystem implementation:
   void InitForRegularProfile(bool extensions_enabled) override;
   ExtensionService* extension_service() override;
-  RuntimeData* runtime_data() override;
   ManagementPolicy* management_policy() override;
   ServiceWorkerManager* service_worker_manager() override;
   UserScriptManager* user_script_manager() override;
   StateStore* state_store() override;
   StateStore* rules_store() override;
+  StateStore* dynamic_user_scripts_store() override;
   scoped_refptr<value_store::ValueStoreFactory> store_factory() override;
   InfoMap* info_map() override;
   QuotaService* quota_service() override;
@@ -78,8 +82,7 @@ class ShellExtensionSystem : public ExtensionSystem {
       const Extension* extension,
       base::OnceClosure callback) override;
   void UnregisterExtensionWithRequestContexts(
-      const std::string& extension_id,
-      const UnloadedExtensionReason reason) override;
+      const std::string& extension_id) override;
   const base::OneShotEvent& ready() const override;
   bool is_ready() const override;
   ContentVerifier* content_verifier() override;
@@ -99,13 +102,12 @@ class ShellExtensionSystem : public ExtensionSystem {
  private:
   void OnExtensionRegisteredWithRequestContexts(
       scoped_refptr<Extension> extension);
-  content::BrowserContext* browser_context_;  // Not owned.
+  raw_ptr<content::BrowserContext> browser_context_;  // Not owned.
 
   // Data to be accessed on the IO thread. Must outlive process_manager_.
   scoped_refptr<InfoMap> info_map_;
 
   std::unique_ptr<ServiceWorkerManager> service_worker_manager_;
-  std::unique_ptr<RuntimeData> runtime_data_;
   std::unique_ptr<QuotaService> quota_service_;
   std::unique_ptr<AppSorting> app_sorting_;
   std::unique_ptr<UserScriptManager> user_script_manager_;
@@ -118,8 +120,6 @@ class ShellExtensionSystem : public ExtensionSystem {
   base::OneShotEvent ready_;
 
   base::WeakPtrFactory<ShellExtensionSystem> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ShellExtensionSystem);
 };
 
 }  // namespace extensions

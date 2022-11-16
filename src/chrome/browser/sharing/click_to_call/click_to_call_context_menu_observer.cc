@@ -16,6 +16,7 @@
 #include "components/sync_device_info/device_info.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/models/image_model.h"
+#include "ui/color/color_id.h"
 #include "ui/gfx/color_palette.h"
 #include "ui/gfx/paint_vector_icon.h"
 
@@ -65,7 +66,7 @@ void ClickToCallContextMenuObserver::BuildMenu(
     return;
 
   if (devices_.size() == 1) {
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
     proxy_->AddMenuItem(
         IDC_CONTENT_CONTEXT_SHARING_CLICK_TO_CALL_SINGLE_DEVICE,
         l10n_util::GetStringFUTF16(
@@ -78,12 +79,12 @@ void ClickToCallContextMenuObserver::BuildMenu(
             IDS_CONTENT_CONTEXT_SHARING_CLICK_TO_CALL_SINGLE_DEVICE,
             base::UTF8ToUTF16(devices_[0]->client_name())),
         ui::ImageModel::FromVectorIcon(controller_->GetVectorIcon(),
-                                       /*color_id=*/-1,
+                                       ui::kColorMenuIcon,
                                        ui::SimpleMenuModel::kDefaultIconSize));
 #endif
   } else {
     BuildSubMenu();
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
     proxy_->AddSubMenu(
         IDC_CONTENT_CONTEXT_SHARING_CLICK_TO_CALL_MULTIPLE_DEVICES,
         l10n_util::GetStringUTF16(
@@ -95,7 +96,7 @@ void ClickToCallContextMenuObserver::BuildMenu(
         IDS_CONTENT_CONTEXT_SHARING_CLICK_TO_CALL_MULTIPLE_DEVICES,
         sub_menu_model_.get(),
         ui::ImageModel::FromVectorIcon(controller_->GetVectorIcon(),
-                                       /*color_id=*/-1,
+                                       ui::kColorMenuIcon,
                                        ui::SimpleMenuModel::kDefaultIconSize));
 #endif
   }

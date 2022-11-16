@@ -6,10 +6,8 @@
 #define CONTENT_RENDERER_ACCESSIBILITY_AX_IMAGE_ANNOTATOR_H_
 
 #include <string>
-#include <unordered_map>
 
 #include "base/bind.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list_types.h"
 #include "content/common/content_export.h"
@@ -41,6 +39,10 @@ class CONTENT_EXPORT AXImageAnnotator : public base::CheckedObserver {
   AXImageAnnotator(
       RenderAccessibilityImpl* const render_accessibility,
       mojo::PendingRemote<image_annotation::mojom::Annotator> annotator);
+
+  AXImageAnnotator(const AXImageAnnotator&) = delete;
+  AXImageAnnotator& operator=(const AXImageAnnotator&) = delete;
+
   ~AXImageAnnotator() override;
 
   void Destroy();
@@ -126,12 +128,10 @@ class CONTENT_EXPORT AXImageAnnotator : public base::CheckedObserver {
   // Keeps track of the image data and the automatic annotations for each image.
   //
   // The key is retrieved using WebAXObject::AxID().
-  std::unordered_map<int, ImageInfo> image_annotations_;
+  std::map<int, ImageInfo> image_annotations_;
 
   // This member needs to be last because it should destructed first.
   base::WeakPtrFactory<AXImageAnnotator> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(AXImageAnnotator);
 };
 
 }  // namespace content

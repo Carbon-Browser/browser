@@ -46,7 +46,7 @@ std::unique_ptr<char[]> ReadWavFile(const base::FilePath& wav_filename,
     return nullptr;
   }
 
-  std::unique_ptr<char[]> data(new char[wav_file_length]);
+  auto data = std::make_unique<char[]>(wav_file_length);
   int read_bytes = wav_file.Read(0, data.get(), wav_file_length);
   if (read_bytes != wav_file_length) {
     LOG(ERROR) << "Failed to read all bytes of " << wav_filename.value();
@@ -274,8 +274,8 @@ int BeepingSource::OnMoreData(base::TimeDelta /* delay */,
   BeepContext* beep_context = GetBeepContext();
   if (beep_context->automatic_beep()) {
     base::TimeDelta delta = interval_from_last_beep_ -
-        base::TimeDelta::FromMilliseconds(kAutomaticBeepIntervalInMs);
-    if (delta > base::TimeDelta()) {
+                            base::Milliseconds(kAutomaticBeepIntervalInMs);
+    if (delta.is_positive()) {
       should_beep = true;
       interval_from_last_beep_ = delta;
     }

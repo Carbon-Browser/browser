@@ -13,7 +13,10 @@
 #include "content/common/content_export.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/service_worker_external_request_result.h"
+#include "content/public/browser/service_worker_external_request_timeout_type.h"
 #include "content/public/browser/service_worker_running_info.h"
+#include "services/service_manager/public/cpp/interface_provider.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/messaging/transferable_message.h"
 #include "third_party/blink/public/common/service_worker/service_worker_status_code.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_registration.mojom-forward.h"
@@ -22,6 +25,10 @@
 namespace blink {
 class StorageKey;
 }  // namespace blink
+
+namespace service_manager {
+class InterfaceProvider;
+}
 
 namespace url {
 class Origin;
@@ -63,17 +70,19 @@ enum class StartServiceWorkerForNavigationHintResult {
   kMaxValue = FAILED,
 };
 
+// A callback invoked with the result of executing script in a service worker
+// context.
+using ServiceWorkerScriptExecutionCallback =
+    base::OnceCallback<void(base::Value value,
+                            const absl::optional<std::string>& error)>;
+
 // Represents the per-StoragePartition service worker data.
 //
 // See service_worker_context_wrapper.cc for the implementation
 // of ServiceWorkerContext and ServiceWorkerContextWrapper (the
 // primary implementation of this abstract class).
 //
-// All methods are basically expected to be called on the UI thread.
-// Currently, only two methods are allowed to be called on any threads but it's
-// discouraged.
-// TODO(https://crbug.com/1161153): Disallow methods to be called on any
-// threads.
+// All methods must be called on the UI thread.
 class CONTENT_EXPORT ServiceWorkerContext {
  public:
   using ResultCallback = base::OnceCallback<void(bool success)>;
@@ -99,10 +108,6 @@ class CONTENT_EXPORT ServiceWorkerContext {
 
   using StartWorkerCallback = base::OnceCallback<
       void(int64_t version_id, int process_id, int thread_id)>;
-
-  // Returns BrowserThread::UI always.
-  // TODO(https://crbug.com/1138155): Remove this.
-  static content::BrowserThread::ID GetCoreThreadId();
 
   // Returns true if |url| is within the service worker |scope|.
   static bool ScopeMatches(const GURL& scope, const GURL& url);
@@ -153,6 +158,7 @@ class CONTENT_EXPORT ServiceWorkerContext {
   // alive.
   virtual ServiceWorkerExternalRequestResult StartingExternalRequest(
       int64_t service_worker_version_id,
+      ServiceWorkerExternalRequestTimeoutType timeout_type,
       const std::string& request_uuid) = 0;
   virtual ServiceWorkerExternalRequestResult FinishedExternalRequest(
       int64_t service_worker_version_id,
@@ -162,14 +168,21 @@ class CONTENT_EXPORT ServiceWorkerContext {
   // specified `key`.
   virtual size_t CountExternalRequestsForTest(const blink::StorageKey& key) = 0;
 
-  // Whether `origin` has any registrations. Uninstalling and uninstalled
+  // Executes the given `script` in the context of the worker specified by the
+  // given `service_worker_version_id`. If non-empty, `callback` is invoked
+  // with the result of the script. See also service_worker.mojom.
+  virtual bool ExecuteScriptForTest(
+      const std::string& script,
+      int64_t service_worker_version_id,
+      ServiceWorkerScriptExecutionCallback callback) = 0;
+
+  // Whether `key` has any registrations. Uninstalling and uninstalled
   // registrations do not cause this to return true, that is, only registrations
   // with status ServiceWorkerRegistration::Status::kIntact are considered, such
   // as even if the corresponding live registrations may still exist. Also,
   // returns true if it doesn't know (registrations are not yet initialized).
-  // TODO(crbug.com/1199077): Refactor to use StorageKey once
-  // ServiceWorkerContextWrapper::registered_origins_ is refactored.
-  virtual bool MaybeHasRegistrationForOrigin(const url::Origin& origin) = 0;
+  virtual bool MaybeHasRegistrationForStorageKey(
+      const blink::StorageKey& key) = 0;
 
   // TODO(crbug.com/1199077): Update name when StorageUsageInfo uses StorageKey.
   virtual void GetAllOriginsInfo(GetUsageInfoCallback callback) = 0;
@@ -177,8 +190,6 @@ class CONTENT_EXPORT ServiceWorkerContext {
   // Deletes all registrations for `key` and clears all service workers
   // belonging to the registrations. All clients controlled by those service
   // workers will lose their controllers immediately after this operation.
-  // This function can be called from any thread, and the callback is called on
-  // that thread.
   virtual void DeleteForStorageKey(const blink::StorageKey& key,
                                    ResultCallback callback) = 0;
 
@@ -224,8 +235,6 @@ class CONTENT_EXPORT ServiceWorkerContext {
   // `key` and dispatches the given `message` to the service worker.
   // `result_callback` is passed a success boolean indicating whether the
   // message was dispatched successfully.
-  //
-  // May be called on any thread, and the callback is called on that thread.
   virtual void StartServiceWorkerAndDispatchMessage(
       const GURL& scope,
       const blink::StorageKey& key,
@@ -250,6 +259,18 @@ class CONTENT_EXPORT ServiceWorkerContext {
   virtual const base::flat_map<int64_t /* version_id */,
                                ServiceWorkerRunningInfo>&
   GetRunningServiceWorkerInfos() = 0;
+
+  // Returns true if the ServiceWorkerVersion for `service_worker_version_id` is
+  // live and running.
+  virtual bool IsLiveRunningServiceWorker(
+      int64_t service_worker_version_id) = 0;
+
+  // Returns the InterfaceProvider for the worker specified by
+  // `service_worker_version_id`. The caller can use InterfaceProvider to bind
+  // interfaces exposed by the Service Worker. CHECKs if
+  // `IsLiveRunningServiceWorker()` returns false.
+  virtual service_manager::InterfaceProvider& GetRemoteInterfaces(
+      int64_t service_worker_version_id) = 0;
 
  protected:
   ServiceWorkerContext() {}

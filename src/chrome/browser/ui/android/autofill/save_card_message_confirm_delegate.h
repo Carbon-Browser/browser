@@ -25,9 +25,13 @@ class SaveCardMessageConfirmDelegate {
       const base::android::JavaParamRef<jstring>& month,
       const base::android::JavaParamRef<jstring>& year) = 0;
 
+  virtual void OnSaveCardConfirmed(JNIEnv* env) = 0;
+
   virtual void DialogDismissed(JNIEnv* env) = 0;
 
-  virtual void OnLegalMessageLinkClicked(
+  virtual void OnUserDismiss(JNIEnv* env) = 0;
+
+  virtual void OnLinkClicked(
       JNIEnv* env,
       const base::android::JavaParamRef<jstring>& url) = 0;
 };

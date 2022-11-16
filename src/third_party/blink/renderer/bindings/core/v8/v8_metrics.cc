@@ -10,6 +10,7 @@
 #include "base/time/time.h"
 #include "services/metrics/public/cpp/metrics_utils.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
+#include "third_party/blink/renderer/bindings/core/v8/local_window_proxy.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/frame/frame.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
@@ -85,7 +86,6 @@ void V8MetricsRecorder::AddMainThreadEvent(
 
 namespace {
 
-#if BUILDFLAG(USE_V8_OILPAN)
 // Helper function to convert a byte count to a KB count, capping at
 // INT_MAX if the number is larger than that.
 constexpr int32_t CappedSizeInKB(int64_t size_in_bytes) {
@@ -98,205 +98,339 @@ constexpr int32_t CappedEfficacyInKBPerMs(double efficacy_in_bytes_per_us) {
   return base::saturated_cast<int32_t>(efficacy_in_bytes_per_us * 1000 / 1024);
 }
 
-void CheckCppEvents(const v8::metrics::GarbageCollectionFullCycle& event) {
+// Returns true if |event| contains valid cpp histogram values.
+bool CheckCppEvents(const v8::metrics::GarbageCollectionFullCycle& event) {
+  if (event.total_cpp.mark_wall_clock_duration_in_us == -1) {
+    // If a cpp field in |event| is uninitialized, all cpp fields should be
+    // uninitialized.
+    DCHECK_EQ(-1, event.total_cpp.mark_wall_clock_duration_in_us);
+    DCHECK_EQ(-1, event.total_cpp.weak_wall_clock_duration_in_us);
+    DCHECK_EQ(-1, event.total_cpp.compact_wall_clock_duration_in_us);
+    DCHECK_EQ(-1, event.total_cpp.sweep_wall_clock_duration_in_us);
+    DCHECK_EQ(-1, event.main_thread_cpp.mark_wall_clock_duration_in_us);
+    DCHECK_EQ(-1, event.main_thread_cpp.weak_wall_clock_duration_in_us);
+    DCHECK_EQ(-1, event.main_thread_cpp.compact_wall_clock_duration_in_us);
+    DCHECK_EQ(-1, event.main_thread_cpp.sweep_wall_clock_duration_in_us);
+    DCHECK_EQ(-1, event.main_thread_atomic_cpp.mark_wall_clock_duration_in_us);
+    DCHECK_EQ(-1, event.main_thread_atomic_cpp.weak_wall_clock_duration_in_us);
+    DCHECK_EQ(-1,
+              event.main_thread_atomic_cpp.compact_wall_clock_duration_in_us);
+    DCHECK_EQ(-1, event.main_thread_atomic_cpp.sweep_wall_clock_duration_in_us);
+    DCHECK_EQ(-1, event.objects_cpp.bytes_before);
+    DCHECK_EQ(-1, event.objects_cpp.bytes_after);
+    DCHECK_EQ(-1, event.objects_cpp.bytes_freed);
+    DCHECK_EQ(-1, event.memory_cpp.bytes_freed);
+    DCHECK_EQ(-1.0, event.efficiency_cpp_in_bytes_per_us);
+    DCHECK_EQ(-1.0, event.main_thread_efficiency_cpp_in_bytes_per_us);
+    DCHECK_EQ(-1.0, event.collection_rate_cpp_in_percent);
+    return false;
+  }
   // Check that all used values have been initialized.
-  DCHECK_NE(-1, event.total_cpp.mark_wall_clock_duration_in_us);
-  DCHECK_NE(-1, event.total_cpp.weak_wall_clock_duration_in_us);
-  DCHECK_NE(-1, event.total_cpp.compact_wall_clock_duration_in_us);
-  DCHECK_NE(-1, event.total_cpp.sweep_wall_clock_duration_in_us);
-  DCHECK_NE(-1, event.main_thread_cpp.mark_wall_clock_duration_in_us);
-  DCHECK_NE(-1, event.main_thread_cpp.weak_wall_clock_duration_in_us);
-  DCHECK_NE(-1, event.main_thread_cpp.compact_wall_clock_duration_in_us);
-  DCHECK_NE(-1, event.main_thread_cpp.sweep_wall_clock_duration_in_us);
-  DCHECK_NE(-1, event.main_thread_atomic_cpp.mark_wall_clock_duration_in_us);
-  DCHECK_NE(-1, event.main_thread_atomic_cpp.weak_wall_clock_duration_in_us);
-  DCHECK_NE(-1, event.main_thread_atomic_cpp.compact_wall_clock_duration_in_us);
-  DCHECK_NE(-1, event.main_thread_atomic_cpp.sweep_wall_clock_duration_in_us);
-  DCHECK_NE(-1, event.objects_cpp.bytes_before);
-  DCHECK_NE(-1, event.objects_cpp.bytes_after);
-  DCHECK_NE(-1, event.objects_cpp.bytes_freed);
-  DCHECK_NE(-1, event.memory_cpp.bytes_freed);
-  DCHECK_NE(-1, event.efficiency_cpp_in_bytes_per_us);
-  DCHECK_NE(-1, event.main_thread_efficiency_cpp_in_bytes_per_us);
-  DCHECK_NE(-1, event.collection_rate_cpp_in_percent);
+  DCHECK_LE(0, event.total_cpp.mark_wall_clock_duration_in_us);
+  DCHECK_LE(0, event.total_cpp.weak_wall_clock_duration_in_us);
+  DCHECK_LE(0, event.total_cpp.compact_wall_clock_duration_in_us);
+  DCHECK_LE(0, event.total_cpp.sweep_wall_clock_duration_in_us);
+  DCHECK_LE(0, event.main_thread_cpp.mark_wall_clock_duration_in_us);
+  DCHECK_LE(0, event.main_thread_cpp.weak_wall_clock_duration_in_us);
+  DCHECK_LE(0, event.main_thread_cpp.compact_wall_clock_duration_in_us);
+  DCHECK_LE(0, event.main_thread_cpp.sweep_wall_clock_duration_in_us);
+  DCHECK_LE(0, event.main_thread_atomic_cpp.mark_wall_clock_duration_in_us);
+  DCHECK_LE(0, event.main_thread_atomic_cpp.weak_wall_clock_duration_in_us);
+  DCHECK_LE(0, event.main_thread_atomic_cpp.compact_wall_clock_duration_in_us);
+  DCHECK_LE(0, event.main_thread_atomic_cpp.sweep_wall_clock_duration_in_us);
+  DCHECK_LE(0, event.objects_cpp.bytes_before);
+  DCHECK_LE(0, event.objects_cpp.bytes_after);
+  DCHECK_LE(0, event.objects_cpp.bytes_freed);
+  DCHECK_LE(0, event.memory_cpp.bytes_freed);
+  DCHECK_LE(0, event.efficiency_cpp_in_bytes_per_us);
+  DCHECK_LE(0, event.main_thread_efficiency_cpp_in_bytes_per_us);
+  DCHECK_LE(0, event.collection_rate_cpp_in_percent);
+  return true;
 }
-#endif  // USE_V8_OILPAN
+
+void CheckUnifiedEvents(const v8::metrics::GarbageCollectionFullCycle& event) {
+  // Check that all used values have been initialized.
+  DCHECK_LE(0, event.total.total_wall_clock_duration_in_us);
+  DCHECK_LE(0, event.total.mark_wall_clock_duration_in_us);
+  DCHECK_LE(0, event.total.weak_wall_clock_duration_in_us);
+  DCHECK_LE(0, event.total.compact_wall_clock_duration_in_us);
+  DCHECK_LE(0, event.total.sweep_wall_clock_duration_in_us);
+  DCHECK_LE(0, event.main_thread.total_wall_clock_duration_in_us);
+  DCHECK_LE(0, event.main_thread.mark_wall_clock_duration_in_us);
+  DCHECK_LE(0, event.main_thread.weak_wall_clock_duration_in_us);
+  DCHECK_LE(0, event.main_thread.compact_wall_clock_duration_in_us);
+  DCHECK_LE(0, event.main_thread.sweep_wall_clock_duration_in_us);
+  DCHECK_LE(0, event.main_thread_atomic.total_wall_clock_duration_in_us);
+  DCHECK_LE(0, event.main_thread_atomic.mark_wall_clock_duration_in_us);
+  DCHECK_LE(0, event.main_thread_atomic.weak_wall_clock_duration_in_us);
+  DCHECK_LE(0, event.main_thread_atomic.compact_wall_clock_duration_in_us);
+  DCHECK_LE(0, event.main_thread_atomic.sweep_wall_clock_duration_in_us);
+  // Incremental marking and sweeping may be uninitialized; the other values
+  // must be uninitialized.
+  DCHECK_EQ(-1, event.main_thread_incremental.total_wall_clock_duration_in_us);
+  DCHECK_LE(-1, event.main_thread_incremental.mark_wall_clock_duration_in_us);
+  DCHECK_EQ(-1, event.main_thread_incremental.weak_wall_clock_duration_in_us);
+  DCHECK_EQ(-1,
+            event.main_thread_incremental.compact_wall_clock_duration_in_us);
+  DCHECK_LE(-1, event.main_thread_incremental.sweep_wall_clock_duration_in_us);
+  // TODO(chromium:1154636): Also check for the following when they are
+  // populated:
+#if 0
+  DCHECK_LE(0, event.objects.bytes_before);
+  DCHECK_LE(0, event.objects.bytes_after);
+  DCHECK_LE(0, event.objects.bytes_freed);
+  DCHECK_LE(0, event.memory.bytes_freed);
+  DCHECK_LE(0, event.efficiency_in_bytes_per_us);
+  DCHECK_LE(0, event.main_thread_efficiency_in_bytes_per_us);
+  DCHECK_LE(0, event.collection_rate_in_percent);
+#endif
+}
 
 }  // namespace
 
 void V8MetricsRecorder::AddMainThreadEvent(
     const v8::metrics::GarbageCollectionFullCycle& event,
     ContextId context_id) {
-#if BUILDFLAG(USE_V8_OILPAN)
-  // Cpp events should always be populated when building with USE_V8_OILPAN.
-  CheckCppEvents(event);
-  // Report throughput metrics:
-  UMA_HISTOGRAM_TIMES("V8.GC.Cycle.Full.Cpp",
-                      base::TimeDelta::FromMicroseconds(
-                          event.total_cpp.mark_wall_clock_duration_in_us +
-                          event.total_cpp.weak_wall_clock_duration_in_us +
-                          event.total_cpp.compact_wall_clock_duration_in_us +
-                          event.total_cpp.sweep_wall_clock_duration_in_us));
-  UMA_HISTOGRAM_TIMES("V8.GC.Cycle.Full.Mark.Cpp",
-                      base::TimeDelta::FromMicroseconds(
-                          event.total_cpp.mark_wall_clock_duration_in_us));
-  UMA_HISTOGRAM_TIMES("V8.GC.Cycle.Full.Weak.Cpp",
-                      base::TimeDelta::FromMicroseconds(
-                          event.total_cpp.weak_wall_clock_duration_in_us));
-  UMA_HISTOGRAM_TIMES("V8.GC.Cycle.Full.Compact.Cpp",
-                      base::TimeDelta::FromMicroseconds(
-                          event.total_cpp.compact_wall_clock_duration_in_us));
-  UMA_HISTOGRAM_TIMES("V8.GC.Cycle.Full.Sweep.Cpp",
-                      base::TimeDelta::FromMicroseconds(
-                          event.total_cpp.sweep_wall_clock_duration_in_us));
+#define UMA_HISTOGRAM_TIMES_ALL_GC_PHASES(prefix, suffix, statistics)    \
+  UMA_HISTOGRAM_TIMES(                                                   \
+      prefix suffix,                                                     \
+      base::Microseconds(statistics.total_wall_clock_duration_in_us));   \
+  UMA_HISTOGRAM_TIMES(                                                   \
+      prefix ".Mark" suffix,                                             \
+      base::Microseconds(statistics.mark_wall_clock_duration_in_us));    \
+  UMA_HISTOGRAM_TIMES(                                                   \
+      prefix ".Compact" suffix,                                          \
+      base::Microseconds(statistics.compact_wall_clock_duration_in_us)); \
+  UMA_HISTOGRAM_TIMES(                                                   \
+      prefix ".Sweep" suffix,                                            \
+      base::Microseconds(statistics.sweep_wall_clock_duration_in_us));   \
+  UMA_HISTOGRAM_TIMES(                                                   \
+      prefix ".Weak" suffix,                                             \
+      base::Microseconds(statistics.weak_wall_clock_duration_in_us));
 
-  UMA_HISTOGRAM_TIMES(
-      "V8.GC.Cycle.MainThread.Full.Cpp",
-      base::TimeDelta::FromMicroseconds(
-          event.main_thread_cpp.mark_wall_clock_duration_in_us +
-          event.main_thread_cpp.weak_wall_clock_duration_in_us +
-          event.main_thread_cpp.compact_wall_clock_duration_in_us +
-          event.main_thread_cpp.sweep_wall_clock_duration_in_us));
-  UMA_HISTOGRAM_TIMES(
-      "V8.GC.Cycle.MainThread.Full.Mark.Cpp",
-      base::TimeDelta::FromMicroseconds(
-          event.main_thread_cpp.mark_wall_clock_duration_in_us));
-  UMA_HISTOGRAM_TIMES(
-      "V8.GC.Cycle.MainThread.Full.Weak.Cpp",
-      base::TimeDelta::FromMicroseconds(
-          event.main_thread_cpp.weak_wall_clock_duration_in_us));
-  UMA_HISTOGRAM_TIMES(
-      "V8.GC.Cycle.MainThread.Full.Compact.Cpp",
-      base::TimeDelta::FromMicroseconds(
-          event.main_thread_cpp.compact_wall_clock_duration_in_us));
-  UMA_HISTOGRAM_TIMES(
-      "V8.GC.Cycle.MainThread.Full.Sweep.Cpp",
-      base::TimeDelta::FromMicroseconds(
-          event.main_thread_cpp.sweep_wall_clock_duration_in_us));
+  DCHECK_LE(0, event.reason);
+  UMA_HISTOGRAM_ENUMERATION("V8.GC.Cycle.Reason.Full", event.reason,
+                            v8::internal::kGarbageCollectionReasonMaxValue);
 
-  // Report atomic pause metrics:
-  UMA_HISTOGRAM_TIMES(
-      "V8.GC.Cycle.MainThread.Full.Atomic.Mark.Cpp",
-      base::TimeDelta::FromMicroseconds(
-          event.main_thread_atomic_cpp.mark_wall_clock_duration_in_us));
-  UMA_HISTOGRAM_TIMES(
-      "V8.GC.Cycle.MainThread.Full.Atomic.Weak.Cpp",
-      base::TimeDelta::FromMicroseconds(
-          event.main_thread_atomic_cpp.weak_wall_clock_duration_in_us));
-  UMA_HISTOGRAM_TIMES(
-      "V8.GC.Cycle.MainThread.Full.Atomic.Compact.Cpp",
-      base::TimeDelta::FromMicroseconds(
-          event.main_thread_atomic_cpp.compact_wall_clock_duration_in_us));
-  UMA_HISTOGRAM_TIMES(
-      "V8.GC.Cycle.MainThread.Full.Atomic.Sweep.Cpp",
-      base::TimeDelta::FromMicroseconds(
-          event.main_thread_atomic_cpp.sweep_wall_clock_duration_in_us));
-  UMA_HISTOGRAM_TIMES(
-      "V8.GC.Cycle.MainThread.Full.Atomic.Cpp",
-      base::TimeDelta::FromMicroseconds(
-          event.main_thread_atomic_cpp.mark_wall_clock_duration_in_us +
-          event.main_thread_atomic_cpp.weak_wall_clock_duration_in_us +
-          event.main_thread_atomic_cpp.compact_wall_clock_duration_in_us +
-          event.main_thread_atomic_cpp.sweep_wall_clock_duration_in_us));
-
-  // Report size metrics:
   static constexpr size_t kMinSize = 1;
   static constexpr size_t kMaxSize = 4 * 1024 * 1024;
   static constexpr size_t kNumBuckets = 50;
 
-  DEFINE_STATIC_LOCAL(
-      CustomCountHistogram, object_size_before_histogram,
-      ("V8.GC.Cycle.Objects.Before.Full.Cpp", kMinSize, kMaxSize, kNumBuckets));
-  object_size_before_histogram.Count(
-      CappedSizeInKB(event.objects_cpp.bytes_before));
+  CheckUnifiedEvents(event);
 
-  DEFINE_STATIC_LOCAL(
-      CustomCountHistogram, object_size_after_histogram,
-      ("V8.GC.Cycle.Objects.After.Full.Cpp", kMinSize, kMaxSize, kNumBuckets));
-  object_size_after_histogram.Count(
-      CappedSizeInKB(event.objects_cpp.bytes_after));
+  // Report throughput metrics:
+  UMA_HISTOGRAM_TIMES_ALL_GC_PHASES("V8.GC.Cycle.Full", "", event.total);
+  UMA_HISTOGRAM_TIMES_ALL_GC_PHASES("V8.GC.Cycle.MainThread.Full", "",
+                                    event.main_thread);
 
-  DEFINE_STATIC_LOCAL(
-      CustomCountHistogram, object_size_freed_histogram,
-      ("V8.GC.Cycle.Objects.Freed.Full.Cpp", kMinSize, kMaxSize, kNumBuckets));
-  object_size_freed_histogram.Count(
-      CappedSizeInKB(event.objects_cpp.bytes_freed));
+  // Report atomic pause metrics:
+  UMA_HISTOGRAM_TIMES_ALL_GC_PHASES("V8.GC.Cycle.MainThread.Full.Atomic", "",
+                                    event.main_thread_atomic);
 
-  DEFINE_STATIC_LOCAL(
-      CustomCountHistogram, memory_size_freed_histogram,
-      ("V8.GC.Cycle.Memory.Freed.Full.Cpp", kMinSize, kMaxSize, kNumBuckets));
-  memory_size_freed_histogram.Count(
-      CappedSizeInKB(event.memory_cpp.bytes_freed));
+  // Report incremental marking/sweeping metrics:
+  if (event.main_thread_incremental.mark_wall_clock_duration_in_us >= 0) {
+    UMA_HISTOGRAM_TIMES(
+        "V8.GC.Cycle.MainThread.Full.Incremental.Mark",
+        base::Microseconds(
+            event.main_thread_incremental.mark_wall_clock_duration_in_us));
+  }
+  if (event.main_thread_incremental.sweep_wall_clock_duration_in_us >= 0) {
+    UMA_HISTOGRAM_TIMES(
+        "V8.GC.Cycle.MainThread.Full.Incremental.Sweep",
+        base::Microseconds(
+            event.main_thread_incremental.sweep_wall_clock_duration_in_us));
+  }
+
+  // TODO(chromium:1154636): emit the following when they are populated:
+  // - event.objects
+  // - event.memory
 
   // Report efficacy metrics:
-  DEFINE_STATIC_LOCAL(
+  DEFINE_THREAD_SAFE_STATIC_LOCAL(
       CustomCountHistogram, efficacy_histogram,
-      ("V8.GC.Cycle.Efficiency.Full.Cpp", kMinSize, kMaxSize, kNumBuckets));
+      ("V8.GC.Cycle.Efficiency.Full", kMinSize, kMaxSize, kNumBuckets));
   efficacy_histogram.Count(
-      CappedEfficacyInKBPerMs(event.efficiency_cpp_in_bytes_per_us));
+      CappedEfficacyInKBPerMs(event.efficiency_in_bytes_per_us));
 
-  DEFINE_STATIC_LOCAL(CustomCountHistogram, efficacy_main_thread_cpp_histogram,
-                      ("V8.GC.Cycle.Efficiency.MainThread.Full.Cpp", kMinSize,
-                       kMaxSize, kNumBuckets));
-  efficacy_main_thread_cpp_histogram.Count(CappedEfficacyInKBPerMs(
-      event.main_thread_efficiency_cpp_in_bytes_per_us));
+  DEFINE_THREAD_SAFE_STATIC_LOCAL(CustomCountHistogram,
+                                  efficacy_main_thread_histogram,
+                                  ("V8.GC.Cycle.Efficiency.MainThread.Full",
+                                   kMinSize, kMaxSize, kNumBuckets));
+  efficacy_main_thread_histogram.Count(
+      CappedEfficacyInKBPerMs(event.main_thread_efficiency_in_bytes_per_us));
 
-  DEFINE_STATIC_LOCAL(CustomCountHistogram, collection_rate_histogram,
-                      ("V8.GC.Cycle.CollectionRate.Full.Cpp", 0, 100, 20));
+  DEFINE_THREAD_SAFE_STATIC_LOCAL(
+      CustomCountHistogram, collection_rate_histogram,
+      ("V8.GC.Cycle.CollectionRate.Full", 1, 100, 20));
   collection_rate_histogram.Count(base::saturated_cast<base::Histogram::Sample>(
-      100 * event.collection_rate_cpp_in_percent));
-#endif  // USE_V8_OILPAN
+      100 * event.collection_rate_in_percent));
+
+  if (CheckCppEvents(event)) {
+    // Report throughput metrics:
+    UMA_HISTOGRAM_TIMES_ALL_GC_PHASES("V8.GC.Cycle.Full", ".Cpp",
+                                      event.total_cpp);
+    UMA_HISTOGRAM_TIMES_ALL_GC_PHASES("V8.GC.Cycle.MainThread.Full", ".Cpp",
+                                      event.main_thread_cpp);
+
+    // Report atomic pause metrics:
+    UMA_HISTOGRAM_TIMES_ALL_GC_PHASES("V8.GC.Cycle.MainThread.Full.Atomic",
+                                      ".Cpp", event.main_thread_atomic_cpp);
+
+    // Report incremental marking/sweeping metrics:
+    if (event.main_thread_incremental_cpp.mark_wall_clock_duration_in_us >= 0) {
+      UMA_HISTOGRAM_TIMES(
+          "V8.GC.Cycle.MainThread.Full.Incremental.Mark.Cpp",
+          base::Microseconds(event.main_thread_incremental_cpp
+                                 .mark_wall_clock_duration_in_us));
+    }
+    if (event.main_thread_incremental_cpp.sweep_wall_clock_duration_in_us >=
+        0) {
+      UMA_HISTOGRAM_TIMES(
+          "V8.GC.Cycle.MainThread.Full.Incremental.Sweep.Cpp",
+          base::Microseconds(event.main_thread_incremental_cpp
+                                 .sweep_wall_clock_duration_in_us));
+    }
+
+    // Report size metrics:
+    DEFINE_THREAD_SAFE_STATIC_LOCAL(CustomCountHistogram,
+                                    object_size_before_histogram,
+                                    ("V8.GC.Cycle.Objects.Before.Full.Cpp",
+                                     kMinSize, kMaxSize, kNumBuckets));
+    object_size_before_histogram.Count(
+        CappedSizeInKB(event.objects_cpp.bytes_before));
+
+    DEFINE_THREAD_SAFE_STATIC_LOCAL(CustomCountHistogram,
+                                    object_size_after_histogram,
+                                    ("V8.GC.Cycle.Objects.After.Full.Cpp",
+                                     kMinSize, kMaxSize, kNumBuckets));
+    object_size_after_histogram.Count(
+        CappedSizeInKB(event.objects_cpp.bytes_after));
+
+    DEFINE_THREAD_SAFE_STATIC_LOCAL(CustomCountHistogram,
+                                    object_size_freed_histogram,
+                                    ("V8.GC.Cycle.Objects.Freed.Full.Cpp",
+                                     kMinSize, kMaxSize, kNumBuckets));
+    object_size_freed_histogram.Count(
+        CappedSizeInKB(event.objects_cpp.bytes_freed));
+
+    DEFINE_THREAD_SAFE_STATIC_LOCAL(
+        CustomCountHistogram, memory_size_freed_histogram,
+        ("V8.GC.Cycle.Memory.Freed.Full.Cpp", kMinSize, kMaxSize, kNumBuckets));
+    memory_size_freed_histogram.Count(
+        CappedSizeInKB(event.memory_cpp.bytes_freed));
+
+    // Report efficacy metrics:
+    DEFINE_THREAD_SAFE_STATIC_LOCAL(
+        CustomCountHistogram, efficacy_histogram,
+        ("V8.GC.Cycle.Efficiency.Full.Cpp", kMinSize, kMaxSize, kNumBuckets));
+    efficacy_histogram.Count(
+        CappedEfficacyInKBPerMs(event.efficiency_cpp_in_bytes_per_us));
+
+    DEFINE_THREAD_SAFE_STATIC_LOCAL(
+        CustomCountHistogram, efficacy_main_thread_cpp_histogram,
+        ("V8.GC.Cycle.Efficiency.MainThread.Full.Cpp", kMinSize, kMaxSize,
+         kNumBuckets));
+    efficacy_main_thread_cpp_histogram.Count(CappedEfficacyInKBPerMs(
+        event.main_thread_efficiency_cpp_in_bytes_per_us));
+
+    DEFINE_THREAD_SAFE_STATIC_LOCAL(
+        CustomCountHistogram, collection_rate_histogram,
+        ("V8.GC.Cycle.CollectionRate.Full.Cpp", 1, 100, 20));
+    collection_rate_histogram.Count(
+        base::saturated_cast<base::Histogram::Sample>(
+            100 * event.collection_rate_cpp_in_percent));
+  }
+
+#undef UMA_HISTOGRAM_TIMES_ALL_GC_PHASES
 }
-
-namespace {
-
-void ReportCppIncrementalLatencyEvent(int64_t duration_us) {
-  UMA_HISTOGRAM_TIMES("V8.GC.Event.MainThread.Full.Incremental.Cpp",
-                      base::TimeDelta::FromMicroseconds(duration_us));
-}
-
-}  // namespace
 
 void V8MetricsRecorder::AddMainThreadEvent(
     const v8::metrics::GarbageCollectionFullMainThreadIncrementalMark& event,
     ContextId context_id) {
-  if (event.cpp_wall_clock_duration_in_us != -1) {
+  if (event.wall_clock_duration_in_us >= 0) {
+    UMA_HISTOGRAM_TIMES("V8.GC.Event.MainThread.Full.Incremental.Mark",
+                        base::Microseconds(event.wall_clock_duration_in_us));
+  }
+  if (event.cpp_wall_clock_duration_in_us >= 0) {
     // This is only a latency event.
     UMA_HISTOGRAM_TIMES(
         "V8.GC.Event.MainThread.Full.Incremental.Mark.Cpp",
-        base::TimeDelta::FromMicroseconds(event.cpp_wall_clock_duration_in_us));
-    ReportCppIncrementalLatencyEvent(event.cpp_wall_clock_duration_in_us);
-  }
-}
-
-void V8MetricsRecorder::AddMainThreadEvent(
-    const v8::metrics::GarbageCollectionFullMainThreadBatchedIncrementalMark&
-        batched_events,
-    ContextId context_id) {
-  for (auto event : batched_events.events) {
-    AddMainThreadEvent(event, context_id);
+        base::Microseconds(event.cpp_wall_clock_duration_in_us));
   }
 }
 
 void V8MetricsRecorder::AddMainThreadEvent(
     const v8::metrics::GarbageCollectionFullMainThreadIncrementalSweep& event,
     ContextId context_id) {
-  if (event.cpp_wall_clock_duration_in_us != -1) {
+  if (event.wall_clock_duration_in_us >= 0) {
+    UMA_HISTOGRAM_TIMES("V8.GC.Event.MainThread.Full.Incremental.Sweep",
+                        base::Microseconds(event.wall_clock_duration_in_us));
+  }
+  if (event.cpp_wall_clock_duration_in_us >= 0) {
     // This is only a latency event.
     UMA_HISTOGRAM_TIMES(
         "V8.GC.Event.MainThread.Full.Incremental.Sweep.Cpp",
-        base::TimeDelta::FromMicroseconds(event.cpp_wall_clock_duration_in_us));
-    ReportCppIncrementalLatencyEvent(event.cpp_wall_clock_duration_in_us);
+        base::Microseconds(event.cpp_wall_clock_duration_in_us));
   }
 }
 
 void V8MetricsRecorder::AddMainThreadEvent(
-    const v8::metrics::GarbageCollectionFullMainThreadBatchedIncrementalSweep&
-        batched_events,
+    const v8::metrics::GarbageCollectionFullMainThreadBatchedIncrementalMark&
+        event,
     ContextId context_id) {
-  for (auto event : batched_events.events) {
-    AddMainThreadEvent(event, context_id);
-  }
+  AddMainThreadBatchedEvents(event, context_id);
+}
+
+void V8MetricsRecorder::AddMainThreadEvent(
+    const v8::metrics::GarbageCollectionFullMainThreadBatchedIncrementalSweep&
+        event,
+    ContextId context_id) {
+  AddMainThreadBatchedEvents(event, context_id);
+}
+
+void V8MetricsRecorder::AddMainThreadEvent(
+    const v8::metrics::GarbageCollectionYoungCycle& event,
+    ContextId context_id) {
+  // Check that all used values have been initialized.
+  DCHECK_LE(0, event.reason);
+  DCHECK_LE(0, event.total_wall_clock_duration_in_us);
+  DCHECK_LE(0, event.main_thread_wall_clock_duration_in_us);
+  DCHECK_LE(0, event.collection_rate_in_percent);
+  DCHECK_LE(0, event.efficiency_in_bytes_per_us);
+  DCHECK_LE(0, event.main_thread_efficiency_in_bytes_per_us);
+
+  UMA_HISTOGRAM_ENUMERATION("V8.GC.Cycle.Reason.Young", event.reason,
+                            v8::internal::kGarbageCollectionReasonMaxValue);
+
+  UMA_HISTOGRAM_TIMES(
+      "V8.GC.Cycle.Young",
+      base::Microseconds(event.total_wall_clock_duration_in_us));
+  UMA_HISTOGRAM_TIMES(
+      "V8.GC.Cycle.MainThread.Young",
+      base::Microseconds(event.main_thread_wall_clock_duration_in_us));
+
+  static constexpr size_t kMinSize = 1;
+  static constexpr size_t kMaxSize = 4 * 1024 * 1024;
+  static constexpr size_t kNumBuckets = 50;
+
+  DEFINE_THREAD_SAFE_STATIC_LOCAL(
+      CustomCountHistogram, efficacy_histogram,
+      ("V8.GC.Cycle.Efficiency.Young", kMinSize, kMaxSize, kNumBuckets));
+  efficacy_histogram.Count(
+      CappedEfficacyInKBPerMs(event.efficiency_in_bytes_per_us));
+
+  DEFINE_THREAD_SAFE_STATIC_LOCAL(CustomCountHistogram,
+                                  efficacy_main_thread_histogram,
+                                  ("V8.GC.Cycle.Efficiency.MainThread.Young",
+                                   kMinSize, kMaxSize, kNumBuckets));
+  efficacy_main_thread_histogram.Count(
+      CappedEfficacyInKBPerMs(event.main_thread_efficiency_in_bytes_per_us));
+
+  DEFINE_THREAD_SAFE_STATIC_LOCAL(
+      CustomCountHistogram, collection_rate_histogram,
+      ("V8.GC.Cycle.CollectionRate.Young", 1, 100, 20));
+  collection_rate_histogram.Count(base::saturated_cast<base::Histogram::Sample>(
+      100 * event.collection_rate_in_percent));
 }
 
 void V8MetricsRecorder::NotifyIsolateDisposal() {
@@ -304,34 +438,25 @@ void V8MetricsRecorder::NotifyIsolateDisposal() {
   isolate_ = nullptr;
 }
 
-Document* V8MetricsRecorder::GetDocument(
+absl::optional<V8MetricsRecorder::UkmRecorderAndSourceId>
+V8MetricsRecorder::GetUkmRecorderAndSourceId(
     v8::metrics::Recorder::ContextId context_id) {
   if (!isolate_)
-    return nullptr;
+    return absl::optional<UkmRecorderAndSourceId>();
   v8::HandleScope handle_scope(isolate_);
   v8::MaybeLocal<v8::Context> maybe_context =
       v8::metrics::Recorder::GetContext(isolate_, context_id);
   if (maybe_context.IsEmpty())
-    return nullptr;
-  return To<LocalDOMWindow>(
-             ExecutionContext::From(maybe_context.ToLocalChecked()))
-      ->document();
-}
-
-absl::optional<V8MetricsRecorder::UkmRecorderAndSourceId>
-V8MetricsRecorder::GetUkmRecorderAndSourceId(
-    v8::metrics::Recorder::ContextId context_id) {
-  DCHECK(IsMainThread());
-  if (!isolate_)
     return absl::optional<UkmRecorderAndSourceId>();
-  Document* document = GetDocument(context_id);
-  if (!document)
+  ExecutionContext* context =
+      ExecutionContext::From(maybe_context.ToLocalChecked());
+  if (!context)
     return absl::optional<UkmRecorderAndSourceId>();
-  ukm::UkmRecorder* ukm_recorder = document->UkmRecorder();
+  ukm::UkmRecorder* ukm_recorder = context->UkmRecorder();
   if (!ukm_recorder)
     return absl::optional<UkmRecorderAndSourceId>();
   return absl::optional<UkmRecorderAndSourceId>(absl::in_place, ukm_recorder,
-                                                document->UkmSourceID());
+                                                context->UkmSourceID());
 }
 
 }  // namespace blink

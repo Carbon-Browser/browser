@@ -11,7 +11,7 @@
 #include "base/test/mock_callback.h"
 #include "components/autofill_assistant/browser/actions/mock_action_delegate.h"
 #include "components/autofill_assistant/browser/client_status.h"
-#include "components/autofill_assistant/browser/mock_website_login_manager.h"
+#include "components/autofill_assistant/browser/public/password_change/mock_website_login_manager.h"
 #include "components/autofill_assistant/browser/user_data.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
@@ -21,6 +21,7 @@ const char kFakeUsername[] = "user@example.com";
 }  // namespace
 
 namespace autofill_assistant {
+
 using ::base::test::RunOnceCallback;
 using ::testing::_;
 using ::testing::Pointee;

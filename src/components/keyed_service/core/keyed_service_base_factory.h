@@ -5,6 +5,7 @@
 #ifndef COMPONENTS_KEYED_SERVICE_CORE_KEYED_SERVICE_BASE_FACTORY_H_
 #define COMPONENTS_KEYED_SERVICE_CORE_KEYED_SERVICE_BASE_FACTORY_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/sequence_checker.h"
 #include "components/keyed_service/core/dependency_node.h"
 #include "components/keyed_service/core/keyed_service_export.h"
@@ -36,6 +37,9 @@ class KEYED_SERVICE_EXPORT KeyedServiceBaseFactory : public DependencyNode {
   // factories with different type of context, or dependencies are safe to have.
   enum Type { BROWSER_CONTEXT, BROWSER_STATE, SIMPLE };
 
+  KeyedServiceBaseFactory(const KeyedServiceBaseFactory&) = delete;
+  KeyedServiceBaseFactory& operator=(const KeyedServiceBaseFactory&) = delete;
+
   // Returns our name.
   const char* name() const { return service_name_; }
 
@@ -43,6 +47,9 @@ class KEYED_SERVICE_EXPORT KeyedServiceBaseFactory : public DependencyNode {
   // TODO(crbug.com/944906): Remove once there are no dependencies between
   // factories with different type of context, or dependencies are safe to have.
   Type type() { return type_; }
+
+  // Returns whether the service is created for the given context.
+  virtual bool IsServiceCreated(void* context) const = 0;
 
  protected:
   KeyedServiceBaseFactory(const char* service_name,
@@ -99,7 +106,7 @@ class KEYED_SERVICE_EXPORT KeyedServiceBaseFactory : public DependencyNode {
 
   // The DependencyManager used. In real code, this will be a singleton used
   // by all the factories of a given type. Unit tests will use their own copy.
-  DependencyManager* dependency_manager_;
+  raw_ptr<DependencyManager> dependency_manager_;
 
   // Registers any preferences used by this service. This should be overridden
   // by any services that want to register context-specific preferences.
@@ -123,8 +130,6 @@ class KEYED_SERVICE_EXPORT KeyedServiceBaseFactory : public DependencyNode {
   // TODO(crbug.com/944906): Remove once there are no dependencies between
   // factories with different type of context, or dependencies are safe to have.
   Type type_;
-
-  DISALLOW_COPY_AND_ASSIGN(KeyedServiceBaseFactory);
 };
 
 #endif  // COMPONENTS_KEYED_SERVICE_CORE_KEYED_SERVICE_BASE_FACTORY_H_

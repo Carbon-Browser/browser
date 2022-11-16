@@ -37,12 +37,14 @@ namespace blink {
 
 class LayoutObject;
 
-struct SameSizeAsInlineBox : DisplayItemClient {
+struct SameSizeAsInlineBox : GarbageCollected<SameSizeAsInlineBox>,
+                             DisplayItemClient {
   ~SameSizeAsInlineBox() override = default;
   Member<void*> members[4];
   LayoutPoint b;
   LayoutUnit c;
   uint32_t bitfields;
+  void Trace(Visitor* visitor) const override;
 };
 
 ASSERT_SIZE(InlineBox, SameSizeAsInlineBox);
@@ -52,6 +54,7 @@ void InlineBox::Trace(Visitor* visitor) const {
   visitor->Trace(prev_);
   visitor->Trace(parent_);
   visitor->Trace(line_layout_item_);
+  DisplayItemClient::Trace(visitor);
 }
 
 DISABLE_CFI_PERF
@@ -358,22 +361,21 @@ void InlineBox::SetLineLayoutItemShouldDoFullPaintInvalidationIfNeeded() {
 
 bool CanUseInlineBox(const LayoutObject& node) {
   DCHECK(node.IsText() || node.IsInline() || node.IsLayoutBlockFlow());
-  return !RuntimeEnabledFeatures::LayoutNGEnabled() ||
-         !node.ContainingNGBlockFlow();
+  return !node.IsInLayoutNGInlineFormattingContext();
 }
 
 }  // namespace blink
 
 #if DCHECK_IS_ON()
 
-void showTree(const blink::InlineBox* b) {
+void ShowTree(const blink::InlineBox* b) {
   if (b)
     b->ShowTreeForThis();
   else
     fprintf(stderr, "Cannot showTree for (nil) InlineBox.\n");
 }
 
-void showLineTree(const blink::InlineBox* b) {
+void ShowLineTree(const blink::InlineBox* b) {
   if (b)
     b->ShowLineTreeForThis();
   else

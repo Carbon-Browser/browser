@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # Copyright 2017 The Chromium Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -48,16 +48,13 @@ from __future__ import print_function
 
 import argparse
 import copy
-import json
 import os
-import subprocess
 import sys
-import tempfile
-import urllib
 import logging
 import random
 
 import base_test_triggerer
+import six
 
 SRC_DIR = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -67,7 +64,7 @@ import generate_perf_sharding
 from core import bot_platforms
 
 
-class Bot(object):
+class Bot(object):  # pylint: disable=useless-object-inheritance
     """Eligible bots to run the task."""
 
     def __init__(self, bot_id, is_alive):
@@ -86,7 +83,9 @@ class Bot(object):
 
 class PerfDeviceTriggerer(base_test_triggerer.BaseTestTriggerer):
     def __init__(self, args, swarming_args):
+        # pylint: disable=super-with-arguments
         super(PerfDeviceTriggerer, self).__init__()
+        # pylint: enable=super-with-arguments
         self._sharded_query_failed = False
 
         if not args.multiple_trigger_configs:
@@ -134,17 +133,18 @@ class PerfDeviceTriggerer(base_test_triggerer.BaseTestTriggerer):
         if '--' in args:
             dash_ind = args.index('--')
             return args[:dash_ind] + shard_tag + args[dash_ind:]
-        else:
-            return args + shard_tag
+        return args + shard_tag
 
     def parse_bot_configs(self, args):
         if args.multiple_trigger_configs:
+            # pylint: disable=super-with-arguments
             super(PerfDeviceTriggerer, self).parse_bot_configs(args)
+            # pylint: enable=super-with-arguments
         else:
             self._bot_configs = []
             # For each eligible bot, append the dimension
             # to the eligible bot_configs
-            for _, bot in self._eligible_bots_by_ids.iteritems():
+            for _, bot in self._eligible_bots_by_ids.items():
                 self._bot_configs.append(bot.as_json_config())
 
     def select_config_indices(self, args):
@@ -161,12 +161,12 @@ class PerfDeviceTriggerer(base_test_triggerer.BaseTestTriggerer):
 
     def _select_config_indices_with_dynamic_sharding(self):
         alive_bot_ids = [
-            bot_id for bot_id, b in self._eligible_bots_by_ids.iteritems()
+            bot_id for bot_id, b in self._eligible_bots_by_ids.items()
             if b.is_alive()
         ]
         trigger_count = len(alive_bot_ids)
 
-        indexes = range(trigger_count)
+        indexes = list(range(trigger_count))
         random.shuffle(indexes)
         selected_config = [(indexes[i],
                             self._find_bot_config_index(alive_bot_ids[i]))
@@ -218,7 +218,7 @@ class PerfDeviceTriggerer(base_test_triggerer.BaseTestTriggerer):
 
         # Try assigning healthy bots for new shards first.
         for shard_index, bot in sorted(
-                shard_to_bot_assignment_map.iteritems()):
+                shard_to_bot_assignment_map.items()):
             if not bot and unallocated_healthy_bots:
                 shard_to_bot_assignment_map[shard_index] = \
                     unallocated_healthy_bots.pop()
@@ -230,7 +230,7 @@ class PerfDeviceTriggerer(base_test_triggerer.BaseTestTriggerer):
 
         # Handle the rest of shards that were assigned dead bots:
         for shard_index, bot in sorted(
-                shard_to_bot_assignment_map.iteritems()):
+                shard_to_bot_assignment_map.items()):
             if not bot.is_alive() and unallocated_healthy_bots:
                 dead_bot = bot
                 healthy_bot = unallocated_healthy_bots.pop()
@@ -256,7 +256,7 @@ class PerfDeviceTriggerer(base_test_triggerer.BaseTestTriggerer):
     def _print_device_affinity_info(self, new_map, existing_map, health_map,
                                     num_shards):
         logging.info('')
-        for shard_index in xrange(num_shards):
+        for shard_index in range(num_shards):
             existing = existing_map.get(shard_index, None)
             new = new_map.get(shard_index, None)
             existing_id = ''
@@ -270,7 +270,7 @@ class PerfDeviceTriggerer(base_test_triggerer.BaseTestTriggerer):
 
         healthy_bots = []
         dead_bots = []
-        for _, b in health_map.iteritems():
+        for _, b in health_map.items():
             if b.is_alive():
                 healthy_bots.append(b.id())
             else:
@@ -318,7 +318,7 @@ class PerfDeviceTriggerer(base_test_triggerer.BaseTestTriggerer):
         Example: swarming.py query -S server-url.com --limit 1 \\
           'tasks/list?tags=os:Windows&tags=pool:chrome.tests.perf&tags=shard:12'
         """
-        values = ['%s:%s' % (k, v) for k, v in self._dimensions.iteritems()]
+        values = ['%s:%s' % (k, v) for k, v in self._dimensions.items()]
         values.sort()
 
         # Append the shard as a tag
@@ -361,18 +361,20 @@ class PerfDeviceTriggerer(base_test_triggerer.BaseTestTriggerer):
 
     def _get_swarming_dimensions(self, args):
         dimensions = {}
-        for i in xrange(len(args) - 2):
+        for i in range(len(args) - 2):
             if args[i] == '--dimension':
                 dimensions[args[i + 1]] = args[i + 2]
         return dimensions
 
+    # pylint: disable=inconsistent-return-statements
     def _get_swarming_server(self, args):
-        for i in xrange(len(args)):
+        for i in range(len(args)):
             if '--swarming' in args[i]:
                 server = args[i + 1]
                 slashes_index = server.index('//') + 2
                 # Strip out the protocol
                 return server[slashes_index:]
+    # pylint: enable=inconsistent-return-statements
 
 
 def main():

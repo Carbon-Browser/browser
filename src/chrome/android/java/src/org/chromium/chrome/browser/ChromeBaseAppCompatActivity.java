@@ -4,7 +4,7 @@
 
 package org.chromium.chrome.browser;
 
-import static org.chromium.chrome.browser.base.SplitCompatUtils.CHROME_SPLIT_NAME;
+import static org.chromium.chrome.browser.base.SplitCompatApplication.CHROME_SPLIT_NAME;
 
 import android.app.ActivityManager.TaskDescription;
 import android.content.Context;
@@ -20,22 +20,26 @@ import androidx.annotation.Nullable;
 import androidx.annotation.StyleRes;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.google.android.material.color.DynamicColors;
+
+import org.chromium.base.BundleUtils;
 import org.chromium.base.ContextUtils;
+import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.base.SplitChromeApplication;
-import org.chromium.chrome.browser.base.SplitCompatUtils;
-import org.chromium.chrome.browser.flags.CachedFeatureFlags;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.language.GlobalAppLocaleController;
+import org.chromium.chrome.browser.metrics.UmaSessionStats;
 import org.chromium.chrome.browser.night_mode.GlobalNightModeStateProviderHolder;
 import org.chromium.chrome.browser.night_mode.NightModeStateProvider;
 import org.chromium.chrome.browser.night_mode.NightModeUtils;
 import org.chromium.chrome.browser.theme.ThemeUtils;
-import org.chromium.chrome.browser.ui.theme.ColorDelegateImpl;
 import org.chromium.ui.modaldialog.ModalDialogManager;
 import org.chromium.ui.modaldialog.ModalDialogManagerHolder;
+
+import java.util.LinkedHashSet;
 
 /**
  * A subclass of {@link AppCompatActivity} that maintains states and objects applied to all
@@ -46,7 +50,7 @@ public class ChromeBaseAppCompatActivity extends AppCompatActivity
     private final ObservableSupplierImpl<ModalDialogManager> mModalDialogManagerSupplier =
             new ObservableSupplierImpl<>();
     private NightModeStateProvider mNightModeStateProvider;
-    private @StyleRes int mThemeResId;
+    private LinkedHashSet<Integer> mThemeResIds = new LinkedHashSet<>();
 
     @Override
     protected void attachBaseContext(Context newBase) {
@@ -54,10 +58,19 @@ public class ChromeBaseAppCompatActivity extends AppCompatActivity
 
         // Make sure the "chrome" split is loaded before checking if ClassLoaders are equal.
         SplitChromeApplication.finishPreload(CHROME_SPLIT_NAME);
-        if (!ChromeBaseAppCompatActivity.class.getClassLoader().equals(
-                    ContextUtils.getApplicationContext().getClassLoader())) {
+        ClassLoader chromeModuleClassLoader = ChromeBaseAppCompatActivity.class.getClassLoader();
+        Context appContext = ContextUtils.getApplicationContext();
+        if (!chromeModuleClassLoader.equals(appContext.getClassLoader())) {
             // This should only happen on Android O. See crbug.com/1146745 for more info.
-            throw new IllegalStateException("ClassLoader mismatch detected.");
+            throw new IllegalStateException("ClassLoader mismatch detected.\nA: "
+                    + chromeModuleClassLoader + "\nB: " + appContext.getClassLoader()
+                    + "\nC: " + chromeModuleClassLoader.getParent()
+                    + "\nD: " + appContext.getClassLoader().getParent() + "\nE: " + appContext);
+        }
+        // If ClassLoader was corrected by SplitCompatAppComponentFactory, also need to correct
+        // the reference in the associated Context.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            BundleUtils.checkContextClassLoader(newBase, this);
         }
 
         mNightModeStateProvider = createNightModeStateProvider();
@@ -74,7 +87,7 @@ public class ChromeBaseAppCompatActivity extends AppCompatActivity
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
-        getSupportFragmentManager().setFragmentFactory(SplitCompatUtils.createFragmentFactory());
+        BundleUtils.restoreLoadedSplits(savedInstanceState);
         mModalDialogManagerSupplier.set(createModalDialogManager());
 
         initializeNightModeStateProvider();
@@ -99,16 +112,31 @@ public class ChromeBaseAppCompatActivity extends AppCompatActivity
     }
 
     @Override
+    public ClassLoader getClassLoader() {
+        // Replace the default ClassLoader with a custom SplitAware one so that
+        // LayoutInflaters that use this ClassLoader can find view classes that
+        // live inside splits. Very useful when FragmentManger tries to inflate
+        // the UI automatically on restore.
+        return BundleUtils.getSplitCompatClassLoader();
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        BundleUtils.saveLoadedSplits(outState);
+    }
+
+    @Override
     public void setTheme(@StyleRes int resid) {
         super.setTheme(resid);
-        mThemeResId = resid;
+        mThemeResIds.add(resid);
     }
 
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
         NightModeUtils.updateConfigurationForNightMode(
-                this, mNightModeStateProvider.isInNightMode(), newConfig, mThemeResId);
+                this, mNightModeStateProvider.isInNightMode(), newConfig, mThemeResIds);
         // newConfig will have the default system locale so reapply the app locale override if
         // needed: https://crbug.com/1248944
         GlobalAppLocaleController.getInstance().maybeOverrideContextConfig(this);
@@ -186,8 +214,16 @@ public class ChromeBaseAppCompatActivity extends AppCompatActivity
         setTheme(R.style.ColorOverlay_ChromiumAndroid);
 
         if (supportsDynamicColors()) {
-            new ColorDelegateImpl().applyDynamicColorsIfAvailable(this);
+            DynamicColors.applyIfAvailable(this);
         }
+        DeferredStartupHandler.getInstance().addDeferredTask(() -> {
+            // #registerSyntheticFieldTrial requires native.
+            boolean isDynamicColorAvailable = DynamicColors.isDynamicColorAvailable();
+            RecordHistogram.recordBooleanHistogram(
+                    "Android.DynamicColors.IsAvailable", isDynamicColorAvailable);
+            UmaSessionStats.registerSyntheticFieldTrial(
+                    "IsDynamicColorAvailable", isDynamicColorAvailable ? "Enabled" : "Disabled");
+        });
 
         // Try to enable browser overscroll when content overscroll is enabled for consistency. This
         // needs to be in a cached feature because activity startup happens before native is
@@ -196,7 +232,7 @@ public class ChromeBaseAppCompatActivity extends AppCompatActivity
         // use the old value and then content will pick up the enabled value, causing one execution
         // of inconsistency.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-                && !CachedFeatureFlags.isEnabled(ChromeFeatureList.ELASTIC_OVERSCROLL)) {
+                && !ChromeFeatureList.sElasticOverscroll.isEnabled()) {
             setTheme(R.style.ThemeOverlay_DisableOverscroll);
         }
 
@@ -206,6 +242,10 @@ public class ChromeBaseAppCompatActivity extends AppCompatActivity
         // still use dynamic colors, as in the android:textColorHighlight example where we use a
         // color state list that depends on colorPrimary.
         setTheme(R.style.ThemeOverlay_DynamicColorOverrides);
+
+        if (ChromeFeatureList.sDynamicColorButtonsAndroid.isEnabled()) {
+            setTheme(R.style.ThemeOverlay_DynamicButtons);
+        }
     }
 
     /**

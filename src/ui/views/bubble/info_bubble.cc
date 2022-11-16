@@ -31,6 +31,10 @@ class InfoBubbleFrame : public BubbleFrameView {
  public:
   explicit InfoBubbleFrame(const gfx::Insets& content_margins)
       : BubbleFrameView(gfx::Insets(), content_margins) {}
+
+  InfoBubbleFrame(const InfoBubbleFrame&) = delete;
+  InfoBubbleFrame& operator=(const InfoBubbleFrame&) = delete;
+
   ~InfoBubbleFrame() override = default;
 
   gfx::Rect GetAvailableScreenBounds(const gfx::Rect& rect) const override {
@@ -44,8 +48,6 @@ class InfoBubbleFrame : public BubbleFrameView {
  private:
   // Bounds that this frame should try to keep bubbles within (screen coords).
   gfx::Rect available_bounds_;
-
-  DISALLOW_COPY_AND_ASSIGN(InfoBubbleFrame);
 };
 
 InfoBubble::InfoBubble(View* anchor,
@@ -88,8 +90,9 @@ std::unique_ptr<NonClientFrameView> InfoBubble::CreateNonClientFrameView(
   DCHECK(!frame_);
   auto frame = std::make_unique<InfoBubbleFrame>(margins());
   frame->set_available_bounds(anchor_widget()->GetWindowBoundsInScreen());
-  frame->SetBubbleBorder(
-      std::make_unique<BubbleBorder>(arrow(), GetShadow(), color()));
+  auto border = std::make_unique<BubbleBorder>(arrow(), GetShadow());
+  border->SetColor(color());
+  frame->SetBubbleBorder(std::move(border));
   frame_ = frame.get();
   return frame;
 }
@@ -116,10 +119,17 @@ void InfoBubble::UpdatePosition() {
   if (!widget)
     return;
 
-  if (!GetAnchorView()->GetVisibleBounds().IsEmpty()) {
+  if (anchor_widget()->IsVisible() &&
+      !GetAnchorView()->GetVisibleBounds().IsEmpty()) {
     SizeToContents();
     widget->SetVisibilityChangedAnimationsEnabled(true);
     widget->ShowInactive();
+#if BUILDFLAG(IS_MAC)
+    // In mac fullscreen for a info bubble on top of another bubble,
+    // explicitly request stacking above the anchored widget, otherwise
+    // the info bubble will be occluded (crbug.com/1348119).
+    widget->StackAboveWidget(anchor_widget());
+#endif
   } else {
     widget->SetVisibilityChangedAnimationsEnabled(false);
     widget->Hide();

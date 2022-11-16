@@ -78,7 +78,7 @@ class SuspiciousSiteTriggerTest : public content::RenderViewHostTestHarness {
 
   // Returns the final RenderFrameHost after navigation commits.
   RenderFrameHost* NavigateMainFrame(const std::string& url) {
-    return NavigateFrame(url, web_contents()->GetMainFrame());
+    return NavigateFrame(url, web_contents()->GetPrimaryMainFrame());
   }
 
   // Returns the final RenderFrameHost after navigation commits.
@@ -137,7 +137,7 @@ class SuspiciousSiteTriggerTest : public content::RenderViewHostTestHarness {
       const SuspiciousSiteTrigger::TriggerState state,
       int count) {
     histograms_.ExpectBucketCount(
-        kSuspiciousSiteTriggerReportDelayStateMetricName,
+        kSuspiciousSiteTriggerReportDelayStateTestMetricName,
         static_cast<int>(state), count);
   }
 
@@ -146,7 +146,7 @@ class SuspiciousSiteTriggerTest : public content::RenderViewHostTestHarness {
   void ExpectReportRejectionHistogramCount(const TriggerManagerReason reason,
                                            int count) {
     histograms_.ExpectBucketCount(
-        kSuspiciousSiteTriggerReportRejectionMetricName,
+        kSuspiciousSiteTriggerReportRejectionTestMetricName,
         static_cast<int>(reason), count);
   }
 
@@ -154,7 +154,7 @@ class SuspiciousSiteTriggerTest : public content::RenderViewHostTestHarness {
   // indicating no errors occurred.
   void ExpectNoReportRejection() {
     histograms_.ExpectTotalCount(
-        kSuspiciousSiteTriggerReportRejectionMetricName, 0);
+        kSuspiciousSiteTriggerReportRejectionTestMetricName, 0);
   }
 
   MockTriggerManager* get_trigger_manager() { return &trigger_manager_; }
@@ -193,7 +193,7 @@ TEST_F(SuspiciousSiteTriggerTest, RegularPageNonSuspicious) {
 }
 
 // crbug.com/1010037: fails on win.
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #define MAYBE_SuspiciousHitDuringLoad DISABLED_SuspiciousHitDuringLoad
 #else
 #define MAYBE_SuspiciousHitDuringLoad SuspiciousHitDuringLoad

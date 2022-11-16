@@ -6,14 +6,14 @@
 #define BASE_SYNCHRONIZATION_WAITABLE_EVENT_WATCHER_H_
 
 #include "base/base_export.h"
-#include "base/macros.h"
-#include "base/sequenced_task_runner.h"
+#include "base/memory/raw_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "build/build_config.h"
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include "base/win/object_watcher.h"
 #include "base/win/scoped_handle.h"
-#elif defined(OS_APPLE)
+#elif BUILDFLAG(IS_APPLE)
 #include <dispatch/dispatch.h>
 
 #include "base/mac/scoped_dispatch_object.h"
@@ -24,7 +24,7 @@
 #include "base/synchronization/waitable_event.h"
 #endif
 
-#if !defined(OS_WIN)
+#if !BUILDFLAG(IS_WIN)
 #include "base/callback.h"
 #endif
 
@@ -71,7 +71,7 @@ class WaitableEvent;
 // right after, the callback may be called with deleted WaitableEvent pointer.
 
 class BASE_EXPORT WaitableEventWatcher
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
     : public win::ObjectWatcher::Delegate
 #endif
 {
@@ -80,7 +80,10 @@ class BASE_EXPORT WaitableEventWatcher
 
   WaitableEventWatcher();
 
-#if defined(OS_WIN)
+  WaitableEventWatcher(const WaitableEventWatcher&) = delete;
+  WaitableEventWatcher& operator=(const WaitableEventWatcher&) = delete;
+
+#if BUILDFLAG(IS_WIN)
   ~WaitableEventWatcher() override;
 #else
   ~WaitableEventWatcher();
@@ -103,7 +106,7 @@ class BASE_EXPORT WaitableEventWatcher
   void StopWatching();
 
  private:
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   void OnObjectSignaled(HANDLE h) override;
 
   // Duplicated handle of the event passed to StartWatching().
@@ -114,8 +117,10 @@ class BASE_EXPORT WaitableEventWatcher
   win::ObjectWatcher watcher_;
 
   EventCallback callback_;
-  WaitableEvent* event_ = nullptr;
-#elif defined(OS_APPLE)
+  // TODO(crbug.com/1298696): base_unittests breaks with MTECheckedPtr
+  // enabled. Triage.
+  raw_ptr<WaitableEvent, DegradeToNoOpWhenMTE> event_ = nullptr;
+#elif BUILDFLAG(IS_APPLE)
   // Invokes the callback and resets the source. Must be called on the task
   // runner on which StartWatching() was called.
   void InvokeCallback();
@@ -142,7 +147,9 @@ class BASE_EXPORT WaitableEventWatcher
   scoped_refptr<Flag> cancel_flag_;
 
   // Enqueued in the wait list of the watched WaitableEvent.
-  AsyncWaiter* waiter_ = nullptr;
+  //
+  // TODO(crbug.com/1298696): Breaks base_unittests.
+  raw_ptr<AsyncWaiter, DanglingUntriagedDegradeToNoOpWhenMTE> waiter_ = nullptr;
 
   // Kernel of the watched WaitableEvent.
   scoped_refptr<WaitableEvent::WaitableEventKernel> kernel_;
@@ -151,8 +158,6 @@ class BASE_EXPORT WaitableEventWatcher
   // sequence.
   SequenceChecker sequence_checker_;
 #endif
-
-  DISALLOW_COPY_AND_ASSIGN(WaitableEventWatcher);
 };
 
 }  // namespace base

@@ -35,9 +35,6 @@ constexpr int kVerticalPaddingRemoveAccountDialogDp = 8;
 
 constexpr int kRemoveUserButtonIdForTest = 1;
 
-// Font name of the username headline.
-constexpr char kFontNameUsername[] = "Google Sans";
-
 // Font size of the username headline.
 constexpr int kFontSizeUsername = 15;
 
@@ -163,8 +160,9 @@ LoginRemoveAccountDialog::LoginRemoveAccountDialog(
     username_label_ =
         container->AddChildView(login_views_utils::CreateBubbleLabel(
             display_username, nullptr, SK_ColorGREEN,
-            gfx::FontList({kFontNameUsername}, gfx::Font::FontStyle::NORMAL,
-                          kFontSizeUsername, gfx::Font::Weight::MEDIUM),
+            gfx::FontList({login_views_utils::kGoogleSansFont},
+                          gfx::Font::FontStyle::NORMAL, kFontSizeUsername,
+                          gfx::Font::Weight::MEDIUM),
             kLineHeightUsername));
     email_label_ =
         container->AddChildView(login_views_utils::CreateBubbleLabel(email));
@@ -178,9 +176,8 @@ LoginRemoveAccountDialog::LoginRemoveAccountDialog(
     std::u16string managed_text = l10n_util::GetStringFUTF16(
         IDS_ASH_LOGIN_MANAGED_SESSION_MONITORING_USER_WARNING,
         base::UTF8ToUTF16(user.user_account_manager.value()));
-    management_disclosure_label_ =
-        login_views_utils::CreateBubbleLabel(managed_text, this);
-    managed_user_data_->AddChildView(management_disclosure_label_);
+    management_disclosure_label_ = managed_user_data_->AddChildView(
+        login_views_utils::CreateBubbleLabel(managed_text, this));
     AddChildView(managed_user_data_);
   }
 
@@ -241,7 +238,8 @@ void LoginRemoveAccountDialog::ResetState() {
     remove_user_button_->SetBackgroundAndFont(/*alert_mode=*/false);
     // Reset button's description to none.
     remove_user_button_->GetViewAccessibility().OverrideDescription(
-        std::u16string());
+        std::u16string(),
+        ax::mojom::DescriptionFrom::kAttributeExplicitlyEmpty);
   }
 }
 

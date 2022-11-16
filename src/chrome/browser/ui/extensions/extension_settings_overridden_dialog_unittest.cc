@@ -4,15 +4,12 @@
 
 #include "chrome/browser/ui/extensions/extension_settings_overridden_dialog.h"
 
-#include "base/strings/utf_string_conversions.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/extension_service_test_base.h"
-#include "content/public/browser/storage_partition.h"
 #include "extensions/browser/disable_reason.h"
 #include "extensions/browser/extension_prefs.h"
 #include "extensions/browser/extension_registry.h"
-#include "extensions/browser/extension_util.h"
 #include "extensions/browser/uninstall_reason.h"
 #include "extensions/common/extension_builder.h"
 #include "extensions/common/manifest.h"
@@ -53,13 +50,6 @@ class ExtensionSettingsOverriddenDialogUnitTest
     scoped_refptr<const extensions::Extension> extension =
         extensions::ExtensionBuilder(name).SetLocation(location).Build();
     service()->AddExtension(extension.get());
-
-    // Make sure RegisterClient calls for storage are finished to avoid flaky
-    // crashes in QuotaManagerImpl::RegisterClient.
-    // TODO(crbug.com/1182630) : Remove this when 1182630 is fixed.
-    extensions::util::GetStoragePartitionForExtensionId(extension->id(),
-                                                        profile());
-    task_environment()->RunUntilIdle();
     return extension.get();
   }
 
@@ -87,8 +77,8 @@ TEST_F(ExtensionSettingsOverriddenDialogUnitTest,
 
   ExtensionSettingsOverriddenDialog::ShowParams show_params =
       controller.GetShowParams();
-  EXPECT_EQ("Test Dialog Title", base::UTF16ToUTF8(show_params.dialog_title));
-  EXPECT_EQ("Test Dialog Body", base::UTF16ToUTF8(show_params.message));
+  EXPECT_EQ(u"Test Dialog Title", show_params.dialog_title);
+  EXPECT_EQ(u"Test Dialog Body", show_params.message);
 }
 
 TEST_F(ExtensionSettingsOverriddenDialogUnitTest,

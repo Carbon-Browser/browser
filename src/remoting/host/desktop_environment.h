@@ -12,8 +12,9 @@
 #include "base/callback_forward.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
+#include "remoting/host/base/desktop_environment_options.h"
 #include "remoting/host/desktop_and_cursor_conditional_composer.h"
-#include "remoting/host/desktop_environment_options.h"
+#include "remoting/protocol/desktop_capturer.h"
 
 namespace webrtc {
 class DesktopCapturer;
@@ -25,9 +26,12 @@ namespace remoting {
 class ActionExecutor;
 class AudioCapturer;
 class ClientSessionControl;
+class ClientSessionEvents;
+class DesktopDisplayInfoMonitor;
 class FileOperations;
 class InputInjector;
 class KeyboardLayoutMonitor;
+class RemoteWebAuthnStateChangeNotifier;
 class ScreenControls;
 class UrlForwarderConfigurator;
 
@@ -47,7 +51,13 @@ class DesktopEnvironment {
   virtual std::unique_ptr<AudioCapturer> CreateAudioCapturer() = 0;
   virtual std::unique_ptr<InputInjector> CreateInputInjector() = 0;
   virtual std::unique_ptr<ScreenControls> CreateScreenControls() = 0;
-  virtual std::unique_ptr<webrtc::DesktopCapturer> CreateVideoCapturer() = 0;
+  virtual std::unique_ptr<DesktopCapturer> CreateVideoCapturer() = 0;
+
+  // Returns a DisplayInfoMonitor that is owned by this object. Returns
+  // nullptr if the implementation does not support monitoring of displays
+  // (for example, in the Network process if multi-process is enabled).
+  virtual DesktopDisplayInfoMonitor* GetDisplayInfoMonitor() = 0;
+
   virtual std::unique_ptr<webrtc::MouseCursorMonitor>
   CreateMouseCursorMonitor() = 0;
   virtual std::unique_ptr<KeyboardLayoutMonitor> CreateKeyboardLayoutMonitor(
@@ -56,6 +66,8 @@ class DesktopEnvironment {
   virtual std::unique_ptr<FileOperations> CreateFileOperations() = 0;
   virtual std::unique_ptr<UrlForwarderConfigurator>
   CreateUrlForwarderConfigurator() = 0;
+  virtual std::unique_ptr<RemoteWebAuthnStateChangeNotifier>
+  CreateRemoteWebAuthnStateChangeNotifier() = 0;
 
   // For platforms that require the mouse cursor to be composited into the video
   // stream when it is not rendered by the client, returns a composing capturer.
@@ -79,7 +91,7 @@ class DesktopEnvironment {
 // Used to create |DesktopEnvironment| instances.
 class DesktopEnvironmentFactory {
  public:
-  virtual ~DesktopEnvironmentFactory() {}
+  virtual ~DesktopEnvironmentFactory() = default;
 
   // Creates an instance of |DesktopEnvironment|. Returns a nullptr pointer if
   // the desktop environment could not be created for any reason (if the curtain
@@ -87,6 +99,7 @@ class DesktopEnvironmentFactory {
   // the created desktop environment.
   virtual std::unique_ptr<DesktopEnvironment> Create(
       base::WeakPtr<ClientSessionControl> client_session_control,
+      base::WeakPtr<ClientSessionEvents> client_session_events,
       const DesktopEnvironmentOptions& options) = 0;
 
   // Returns |true| if created |DesktopEnvironment| instances support audio

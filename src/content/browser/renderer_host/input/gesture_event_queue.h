@@ -8,7 +8,8 @@
 #include <stddef.h>
 
 #include "base/containers/circular_deque.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
+#include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "content/browser/renderer_host/event_with_latency_info.h"
 #include "content/browser/renderer_host/input/fling_controller.h"
@@ -76,6 +77,10 @@ class CONTENT_EXPORT GestureEventQueue {
                     FlingControllerEventSenderClient* fling_event_sender_client,
                     FlingControllerSchedulerClient* fling_scheduler_client,
                     const Config& config);
+
+  GestureEventQueue(const GestureEventQueue&) = delete;
+  GestureEventQueue& operator=(const GestureEventQueue&) = delete;
+
   ~GestureEventQueue();
 
   // Allow the fling controller to observe the gesture event. Returns true if
@@ -119,7 +124,7 @@ class CONTENT_EXPORT GestureEventQueue {
   gfx::Vector2dF CurrentFlingVelocity() const;
 
   void set_debounce_interval_time_ms_for_testing(int interval_ms) {
-    debounce_interval_ = base::TimeDelta::FromMilliseconds(interval_ms);
+    debounce_interval_ = base::Milliseconds(interval_ms);
   }
 
   // TODO(nburris): Wheel event acks shouldn't really go through the gesture
@@ -175,7 +180,7 @@ class CONTENT_EXPORT GestureEventQueue {
   bool FlingInProgressForTest() const;
 
   // The receiver of all forwarded gesture events.
-  GestureEventQueueClient* client_;
+  raw_ptr<GestureEventQueueClient> client_;
 
   // True if a GestureScrollUpdate sequence is in progress.
   bool scrolling_in_progress_;
@@ -215,8 +220,6 @@ class CONTENT_EXPORT GestureEventQueue {
   // True when the last GSE event is either in the debouncing_deferral_queue_ or
   // pushed to the queue and dropped from it later on.
   bool scroll_end_filtered_by_deboucing_deferral_queue_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(GestureEventQueue);
 };
 
 }  // namespace content

@@ -10,9 +10,28 @@
 #include "ash/public/cpp/assistant/assistant_state.h"
 #include "ash/system/palette/common_palette_tool.h"
 #include "base/memory/weak_ptr.h"
+#include "base/time/time.h"
 #include "ui/events/event_handler.h"
 
 namespace ash {
+
+// This will be used for the UMA stats to note deprecation toast events
+// for Assistant stylus features.
+
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused. Also remember to update the
+// DeprecateStylusFeaturesToastEvent enum listing in
+// tools/metrics/histograms/enums.xml.
+enum DeprecateStylusFeaturesToastEvent {
+  // Features not deprecated, toast not shown.
+  kNotDeprecatedToastNotShown = 0,
+  // Features deprecated, toast shown (first time).
+  kDeprecatedToastShown = 1,
+  // Features deprecated, toast not shown (already shown).
+  kDeprecatedToastNotShown = 2,
+
+  kMaxValue = kDeprecatedToastNotShown
+};
 
 // A palette tool that lets the user select a screen region to be passed
 // to the Assistant framework.
@@ -25,6 +44,10 @@ class ASH_EXPORT MetalayerMode : public CommonPaletteTool,
                                  public HighlighterController::Observer {
  public:
   explicit MetalayerMode(Delegate* delegate);
+
+  MetalayerMode(const MetalayerMode&) = delete;
+  MetalayerMode& operator=(const MetalayerMode&) = delete;
+
   ~MetalayerMode() override;
 
  private:
@@ -101,8 +124,6 @@ class ASH_EXPORT MetalayerMode : public CommonPaletteTool,
   bool activated_via_button_ = false;
 
   base::WeakPtrFactory<MetalayerMode> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(MetalayerMode);
 };
 
 }  // namespace ash

@@ -4,16 +4,17 @@
 
 #include "content/browser/indexed_db/indexed_db_dispatcher_host.h"
 
+#include <tuple>
+
 #include "base/barrier_closure.h"
 #include "base/bind.h"
 #include "base/callback.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
-#include "base/sequenced_task_runner.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/task/post_task.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/gmock_callback_support.h"
 #include "base/test/mock_callback.h"
@@ -22,6 +23,7 @@
 #include "base/threading/thread.h"
 #include "base/time/default_clock.h"
 #include "build/build_config.h"
+#include "components/services/storage/public/cpp/buckets/bucket_locator.h"
 #include "content/browser/indexed_db/indexed_db_callbacks.h"
 #include "content/browser/indexed_db/indexed_db_context_impl.h"
 #include "content/browser/indexed_db/indexed_db_database_callbacks.h"
@@ -110,6 +112,9 @@ struct TestDatabaseConnection {
             std::make_unique<
                 StrictMock<MockMojoIndexedDBDatabaseCallbacks>>()) {}
 
+  TestDatabaseConnection(const TestDatabaseConnection&) = delete;
+  TestDatabaseConnection& operator=(const TestDatabaseConnection&) = delete;
+
   TestDatabaseConnection(TestDatabaseConnection&&) noexcept = default;
   TestDatabaseConnection& operator=(TestDatabaseConnection&&) noexcept =
       default;
@@ -122,6 +127,10 @@ struct TestDatabaseConnection {
         connection_callbacks->CreateInterfacePtrAndBind(), db_name, version,
         version_change_transaction.BindNewEndpointAndPassReceiver(task_runner),
         upgrade_txn_id);
+    // ForcedClose is called on shutdown and depending on ordering and timing
+    // may or may not happen, which is fine.
+    EXPECT_CALL(*connection_callbacks, ForcedClose())
+        .Times(testing::AnyNumber());
   }
 
   scoped_refptr<base::SequencedTaskRunner> task_runner;
@@ -136,9 +145,6 @@ struct TestDatabaseConnection {
 
   std::unique_ptr<MockMojoIndexedDBCallbacks> open_callbacks;
   std::unique_ptr<MockMojoIndexedDBDatabaseCallbacks> connection_callbacks;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(TestDatabaseConnection);
 };
 
 void TestStatusCallback(base::OnceClosure callback,
@@ -154,12 +160,13 @@ class TestIndexedDBObserver : public storage::mojom::IndexedDBObserver {
       mojo::PendingReceiver<storage::mojom::IndexedDBObserver> receiver)
       : receiver_(this, std::move(receiver)) {}
 
-  void OnIndexedDBListChanged(const blink::StorageKey& storage_key) override {
+  void OnIndexedDBListChanged(
+      const storage::BucketLocator& bucket_locator) override {
     ++notify_list_changed_count;
   }
 
   void OnIndexedDBContentChanged(
-      const blink::StorageKey& storage_key,
+      const storage::BucketLocator& bucket_locator,
       const std::u16string& database_name,
       const std::u16string& object_store_name) override {
     ++notify_content_changed_count;
@@ -192,6 +199,10 @@ class IndexedDBDispatcherHostTest : public testing::Test {
             mojo::NullRemote(),
             task_environment_.GetMainThreadTaskRunner(),
             nullptr)) {}
+
+  IndexedDBDispatcherHostTest(const IndexedDBDispatcherHostTest&) = delete;
+  IndexedDBDispatcherHostTest& operator=(const IndexedDBDispatcherHostTest&) =
+      delete;
 
   void SetUp() override {
     base::RunLoop loop;
@@ -240,8 +251,6 @@ class IndexedDBDispatcherHostTest : public testing::Test {
   scoped_refptr<storage::MockQuotaManager> quota_manager_;
   scoped_refptr<IndexedDBContextImpl> context_impl_;
   mojo::Remote<blink::mojom::IDBFactory> idb_mojo_factory_;
-
-  DISALLOW_COPY_AND_ASSIGN(IndexedDBDispatcherHostTest);
 };
 
 TEST_F(IndexedDBDispatcherHostTest, CloseConnectionBeforeUpgrade) {
@@ -283,8 +292,7 @@ TEST_F(IndexedDBDispatcherHostTest, CloseConnectionBeforeUpgrade) {
   loop2.Run();
 }
 
-// Flaky on multiple platforms.  http://crbug.com/1001265
-TEST_F(IndexedDBDispatcherHostTest, DISABLED_CloseAfterUpgrade) {
+TEST_F(IndexedDBDispatcherHostTest, CloseAfterUpgrade) {
   const int64_t kDBVersion = 1;
   const int64_t kTransactionId = 1;
   const int64_t kObjectStoreId = 10;
@@ -352,8 +360,14 @@ TEST_F(IndexedDBDispatcherHostTest, DISABLED_CloseAfterUpgrade) {
   loop3.Run();
 }
 
-// TODO(https://crbug.com/995716) Test is flaky on multiple platforms.
-TEST_F(IndexedDBDispatcherHostTest, DISABLED_OpenNewConnectionWhileUpgrading) {
+// TODO(crbug.com/1282613): Test is flaky on Mac in debug.
+#if BUILDFLAG(IS_MAC) && !defined(NDEBUG)
+#define MAYBE_OpenNewConnectionWhileUpgrading \
+  DISABLED_OpenNewConnectionWhileUpgrading
+#else
+#define MAYBE_OpenNewConnectionWhileUpgrading OpenNewConnectionWhileUpgrading
+#endif
+TEST_F(IndexedDBDispatcherHostTest, MAYBE_OpenNewConnectionWhileUpgrading) {
   const int64_t kDBVersion = 1;
   const int64_t kTransactionId = 1;
   const int64_t kObjectStoreId = 10;
@@ -523,7 +537,7 @@ TEST_F(IndexedDBDispatcherHostTest, DISABLED_PutWithInvalidBlob) {
         mojo::PendingRemote<blink::mojom::Blob> blob;
         // Ignore the result of InitWithNewPipeAndPassReceiver, to end up with
         // an invalid blob.
-        ignore_result(blob.InitWithNewPipeAndPassReceiver());
+        std::ignore = blob.InitWithNewPipeAndPassReceiver();
         external_objects.push_back(
             blink::mojom::IDBExternalObject::NewBlobOrFile(
                 blink::mojom::IDBBlobInfo::New(std::move(blob), "fakeUUID",
@@ -1406,13 +1420,7 @@ TEST_F(IndexedDBDispatcherHostTest, DISABLED_NotifyIndexedDBContentChanged) {
   loop6.Run();
 }
 
-// Flaky on Mac and Linux ASAN builds. See: crbug.com/1189512.
-#if defined(OS_MAC) || (defined(OS_LINUX) && defined(ADDRESS_SANITIZER))
-#define MAYBE_DatabaseOperationSequencing DISABLED_DatabaseOperationSequencing
-#else
-#define MAYBE_DatabaseOperationSequencing DatabaseOperationSequencing
-#endif
-TEST_F(IndexedDBDispatcherHostTest, MAYBE_DatabaseOperationSequencing) {
+TEST_F(IndexedDBDispatcherHostTest, DISABLED_DatabaseOperationSequencing) {
   const int64_t kDBVersion = 1;
   const int64_t kTransactionId = 1;
   const std::u16string kObjectStoreName1 = u"os1";

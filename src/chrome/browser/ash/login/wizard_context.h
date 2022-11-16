@@ -8,8 +8,9 @@
 #include <memory>
 
 #include "base/values.h"
+#include "chrome/browser/ash/login/oobe_screen.h"
 
-namespace chromeos {
+namespace ash {
 
 class UserContext;
 
@@ -22,6 +23,15 @@ class WizardContext {
 
   WizardContext(const WizardContext&) = delete;
   WizardContext& operator=(const WizardContext&) = delete;
+
+  // Should be tweaked by the tests only in case we need this early in the init
+  // process. Otherwise tweak context from `GetWizardContextForTesting`.
+  static bool g_is_branded_build;
+
+  enum class EnrollmentPreference {
+    kKiosk,
+    kEnterprise,
+  };
 
   // Configuration for automating OOBE screen actions, e.g. during device
   // version rollback.
@@ -54,6 +64,10 @@ class WizardContext {
   // flag will ignore hid detection results.
   bool skip_to_update_for_tests = false;
 
+  // Whether the post login screens should be skipped. Used in MaybeSkip by
+  // screens in tests. Is set by WizardController::SkipPostLoginScreensForTests.
+  bool skip_post_login_screens_for_tests = false;
+
   // Whether user creation screen is enabled (could be disabled due to disabled
   // feature or on managed device). It determines the behavior of back button
   // for GaiaScreen and OfflineLoginScreen. Value is set to true in
@@ -61,23 +75,51 @@ class WizardContext {
   // when screen is skipped or when cancel action is called.
   bool is_user_creation_enabled = false;
 
-  // Whether to exit WizardController right after accepting the terms of
-  // service. Set by WizardController::EndOnboardingAfterToS. Used for showing
-  // terms of service screen to managed users before entering the session.
-  bool end_onboarding_after_tos = false;
+  // When --tpm-is-dynamic switch is set taking TPM ownership is happening right
+  // before enrollment. If TakeOwnership returns STATUS_DEVICE_ERROR this
+  // flag helps to set the right error message.
+  bool tpm_owned_error = false;
+
+  // When --tpm-is-dynamic switch is set taking TPM ownership is happening right
+  // before enrollment. If TakeOwnership returns STATUS_DBUS_ERROR this
+  // flag helps to set the right error message.
+  bool tpm_dbus_error = false;
+
+  // True if this is a branded build (i.e. Google Chrome).
+  bool is_branded_build = g_is_branded_build;
+
+  // Force that OOBE Login display isn't destroyed right after login due to all
+  // screens being skipped.
+  bool defer_oobe_flow_finished_for_tests = false;
+
+  // Indicates which type of licenses should be used for primary button on
+  // enrollment screen.
+  EnrollmentPreference enrollment_preference_ =
+      WizardContext::EnrollmentPreference::kEnterprise;
 
   // Authorization data that is required by PinSetup screen to add PIN as
   // another possible auth factor. Can be empty (if PIN is not supported).
   // In future will be replaced by AuthSession.
   std::unique_ptr<UserContext> extra_factors_auth_session;
+
+  // If the onboarding flow wasn't completed by the user we will try to show
+  // TermsOfServiceScreen to them first and then continue the flow with this
+  // screen. If the user has already completed onboarding, but
+  // TermsOfServiceScreen should be shown on login this will be set to
+  // ash::OOBE_SCREEN_UNKNOWN.
+  OobeScreenId screen_after_managed_tos;
+
+  // If this is a first login after update from CloudReady to a new version.
+  // During such an update show users license agreement and data collection
+  // consent.
+  bool is_cloud_ready_update_flow = false;
+
+  // Determining ownership can take some time. Instead of finding out if the
+  // current user is an owner of the device we reuse this value. It is set
+  // during ConsolidatedConsentScreen.
+  absl::optional<bool> is_owner_flow;
 };
 
-}  // namespace chromeos
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace ash {
-using ::chromeos::WizardContext;
-}
+}  // namespace ash
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_WIZARD_CONTEXT_H_

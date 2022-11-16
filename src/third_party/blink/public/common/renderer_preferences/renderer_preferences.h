@@ -50,10 +50,10 @@ struct BLINK_COMMON_EXPORT RendererPreferences {
   bool webrtc_allow_legacy_tls_protocols{false};
   UserAgentOverride user_agent_override;
   std::string accept_languages;
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   std::string system_font_family_name;
 #endif
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   std::u16string caption_font_family_name;
   int32_t caption_font_height{0};
   std::u16string small_caption_font_family_name;
@@ -69,7 +69,7 @@ struct BLINK_COMMON_EXPORT RendererPreferences {
   int32_t arrow_bitmap_height_vertical_scroll_bar_in_dips{0};
   int32_t arrow_bitmap_width_horizontal_scroll_bar_in_dips{0};
 #endif
-#if defined(USE_X11) || defined(USE_OZONE)
+#if defined(USE_OZONE)
   bool selection_clipboard_buffer_available{false};
 #endif
   bool plugin_fullscreen_allowed{true};

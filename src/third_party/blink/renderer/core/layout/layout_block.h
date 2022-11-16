@@ -24,9 +24,11 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_LAYOUT_LAYOUT_BLOCK_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_LAYOUT_LAYOUT_BLOCK_H_
 
+#include "base/check_op.h"
 #include "base/dcheck_is_on.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/layout/layout_box.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_map.h"
 #include "third_party/blink/renderer/platform/wtf/casting.h"
 #include "third_party/blink/renderer/platform/wtf/linked_hash_set.h"
 
@@ -152,11 +154,6 @@ class CORE_EXPORT LayoutBlock : public LayoutBox {
 
   const char* GetName() const override;
 
-  virtual const NGPhysicalBoxFragment* CurrentFragment() const {
-    NOT_DESTROYED();
-    return nullptr;
-  }
-
  protected:
   // Insert a child correctly into the tree when |beforeDescendant| isn't a
   // direct child of |this|. This happens e.g. when there's an anonymous block
@@ -212,6 +209,9 @@ class CORE_EXPORT LayoutBlock : public LayoutBox {
     return has_percent_height_descendants_;
   }
 
+  void AddSvgTextDescendant(LayoutBox& svg_text);
+  void RemoveSvgTextDescendant(LayoutBox& svg_text);
+
   void NotifyScrollbarThicknessChanged() {
     NOT_DESTROYED();
     width_available_to_children_changed_ = true;
@@ -222,6 +222,13 @@ class CORE_EXPORT LayoutBlock : public LayoutBox {
   // rendered legend is laid out on the outside, although the layout object
   // itself for the legend is still a child of this object.
   bool IsAnonymousNGFieldsetContentWrapper() const;
+
+  // Return true if this block establishes a fragmentation context root (e.g. a
+  // multicol container).
+  virtual bool IsFragmentationContextRoot() const {
+    NOT_DESTROYED();
+    return false;
+  }
 
   void SetHasMarkupTruncation(bool b) {
     NOT_DESTROYED();
@@ -403,9 +410,10 @@ class CORE_EXPORT LayoutBlock : public LayoutBox {
   //   </div>
   // </div>
 
-  // Returns the nearest enclosing block (including this block) that contributes
-  // a first-line style to our first line.
-  const LayoutBlock* EnclosingFirstLineStyleBlock() const;
+  // Return the parent LayoutObject if it can contribute to our ::first-line
+  // style.
+  const LayoutBlock* FirstLineStyleParentBlock() const;
+
   // Returns this block or the nearest inner block containing the actual first
   // line.
   LayoutBlockFlow* NearestInnerBlockWithFirstLine();
@@ -454,7 +462,6 @@ class CORE_EXPORT LayoutBlock : public LayoutBox {
                            const PhysicalOffset& paint_offset) const;
   virtual void PaintChildren(const PaintInfo&,
                              const PhysicalOffset& paint_offset) const;
-  void UpdateAfterLayout() override;
   MinMaxSizes PreferredLogicalWidths() const override;
 
   virtual bool HasLineIfEmpty() const;
@@ -483,24 +490,15 @@ class CORE_EXPORT LayoutBlock : public LayoutBox {
   absl::optional<LayoutUnit> InlineBlockBaselineOverride(
       LineDirectionMode) const;
 
-  bool HitTestOverflowControl(
-      HitTestResult&,
-      const HitTestLocation&,
-      const PhysicalOffset& adjusted_location) const override;
   bool HitTestChildren(HitTestResult&,
                        const HitTestLocation&,
                        const PhysicalOffset& accumulated_offset,
-                       HitTestAction) override;
+                       HitTestPhase) override;
 
   void StyleWillChange(StyleDifference,
                        const ComputedStyle& new_style) override;
   void StyleDidChange(StyleDifference, const ComputedStyle* old_style) override;
-  void UpdateFromStyle() override;
-
-  // Returns true if non-visible overflow should be respected. Otherwise
-  // HasNonVisibleOverflow() will be false and we won't create scrollable area
-  // for this object even if overflow is non-visible.
-  virtual bool AllowsNonVisibleOverflow() const;
+  bool RespectsCSSOverflow() const override;
 
   bool SimplifiedLayout();
   virtual void SimplifiedNormalFlowLayout();
@@ -510,7 +508,6 @@ class CORE_EXPORT LayoutBlock : public LayoutBox {
   void AddLayoutOverflowFromBlockChildren();
 
  protected:
-  OverflowClipAxes ComputeOverflowClipAxes() const override;
   virtual void ComputeVisualOverflow(
       bool recompute_floats);
   virtual void ComputeLayoutOverflow(LayoutUnit old_client_after_edge,
@@ -521,6 +518,7 @@ class CORE_EXPORT LayoutBlock : public LayoutBox {
   virtual void AddVisualOverflowFromBlockChildren();
 
   void AddOutlineRects(Vector<PhysicalRect>&,
+                       OutlineInfo*,
                        const PhysicalOffset& additional_offset,
                        NGOutlineType) const override;
 
@@ -538,10 +536,9 @@ class CORE_EXPORT LayoutBlock : public LayoutBox {
 
   bool NeedsPreferredWidthsRecalculation() const override;
 
-  bool IsInSelfHitTestingPhase(HitTestAction hit_test_action) const final {
+  bool IsInSelfHitTestingPhase(HitTestPhase phase) const final {
     NOT_DESTROYED();
-    return hit_test_action == kHitTestBlockBackground ||
-           hit_test_action == kHitTestChildBlockBackground;
+    return phase == HitTestPhase::kSelfBlockBackground;
   }
 
   // Returns baseline offset of this block if is empty editable or having
@@ -571,10 +568,6 @@ class CORE_EXPORT LayoutBlock : public LayoutBox {
 
   // Returns true if the positioned movement-only layout succeeded.
   bool TryLayoutDoingPositionedMovementOnly();
-
-  bool IsPointInOverflowControl(HitTestResult&,
-                                const PhysicalOffset&,
-                                const PhysicalOffset& accumulated_offset) const;
 
   void ComputeBlockPreferredLogicalWidths(LayoutUnit& min_logical_width,
                                           LayoutUnit& max_logical_width) const;
@@ -633,6 +626,7 @@ class CORE_EXPORT LayoutBlock : public LayoutBox {
 
   unsigned has_positioned_objects_ : 1;
   unsigned has_percent_height_descendants_ : 1;
+  unsigned has_svg_text_descendants_ : 1;
 
   // When an object ceases to establish a fragmentation context (e.g. the
   // LayoutView when we're no longer printing), we need a deep layout

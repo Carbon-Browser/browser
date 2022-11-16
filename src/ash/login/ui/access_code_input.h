@@ -44,6 +44,7 @@ class AccessCodeInput : public views::View, public views::TextfieldController {
   // Makes the internal fields read only. In contrast to 'SetInputEnabled',
   // the focus remain on the element.
   virtual void SetReadOnly(bool read_only) = 0;
+  virtual bool IsReadOnly() const = 0;
 
   // Clears the input field(s).
   virtual void ClearInput() = 0;
@@ -88,6 +89,7 @@ class FlexCodeInput : public AccessCodeInput {
   void SetInputEnabled(bool input_enabled) override;
 
   void SetReadOnly(bool read_only) override;
+  bool IsReadOnly() const override;
 
   // Clears text in input text field.
   void ClearInput() override;
@@ -121,14 +123,17 @@ class FlexCodeInput : public AccessCodeInput {
 class AccessibleInputField : public views::Textfield {
  public:
   AccessibleInputField() = default;
+
+  AccessibleInputField(const AccessibleInputField&) = delete;
+  AccessibleInputField& operator=(const AccessibleInputField&) = delete;
+
   ~AccessibleInputField() override = default;
 
+  // views::Textfield:
   bool IsGroupFocusTraversable() const override;
   View* GetSelectedViewForGroup(int group) override;
   void OnGestureEvent(ui::GestureEvent* event) override;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(AccessibleInputField);
+  void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
 };
 
 // Digital access code input view for variable length of input codes.
@@ -218,6 +223,7 @@ class FixedLengthCodeInput : public AccessCodeInput {
   void SetInputEnabled(bool input_enabled) override;
 
   void SetReadOnly(bool read_only) override;
+  bool IsReadOnly() const override;
 
   // Clears the PIN fields.
   void ClearInput() override;

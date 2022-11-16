@@ -9,7 +9,6 @@
 #include <utility>
 
 #include "base/at_exit.h"
-#include "base/cxx17_backports.h"
 #include "base/mac/foundation_util.h"
 #include "base/mac/mach_logging.h"
 #include "base/strings/stringprintf.h"
@@ -161,7 +160,7 @@ TEST_F(MachPortRendezvousServerTest, CleanupIfNoRendezvous) {
       break;
     // Sleep is fine because dispatch will process the notification on one of
     // its workers.
-    PlatformThread::Sleep(TimeDelta::FromMilliseconds(10));
+    PlatformThread::Sleep(Milliseconds(10));
   } while ((TimeTicks::Now() - start) < TestTimeouts::action_timeout());
 
   EXPECT_EQ(0u, client_data().size());
@@ -189,7 +188,7 @@ TEST_F(MachPortRendezvousServerTest, DestroyRight) {
       // insert_right MAKE_SEND_ONCE.
   };
 
-  for (size_t i = 0; i < base::size(kCases); ++i) {
+  for (size_t i = 0; i < std::size(kCases); ++i) {
     SCOPED_TRACE(base::StringPrintf("case %zu", i).c_str());
     const auto& test = kCases[i];
 

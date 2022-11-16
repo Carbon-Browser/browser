@@ -5,7 +5,6 @@
 #ifndef COMPONENTS_SECURITY_INTERSTITIALS_CORE_COMMON_STRING_UTIL_H_
 #define COMPONENTS_SECURITY_INTERSTITIALS_CORE_COMMON_STRING_UTIL_H_
 
-#include "base/macros.h"
 #include "base/time/time.h"
 #include "base/values.h"
 #include "net/ssl/ssl_info.h"
@@ -21,12 +20,13 @@ namespace common_string_util {
 std::u16string GetFormattedHostName(const GURL& gurl);
 
 // For SSL-related errors that share a basic structure.
-void PopulateSSLLayoutStrings(int cert_error, base::Value* load_time_data);
+void PopulateSSLLayoutStrings(int cert_error,
+                              base::Value::Dict& load_time_data);
 
 // For SSL-related errors that provide debugging information.
 void PopulateSSLDebuggingStrings(const net::SSLInfo ssl_info,
                                  const base::Time time_triggered,
-                                 base::Value* load_time_data);
+                                 base::Value::Dict& load_time_data);
 
 // Fills in the details for a legacy TLS error. Abstracts the strings for
 // access from ios/.

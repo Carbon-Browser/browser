@@ -8,16 +8,11 @@
 #include <memory>
 
 #include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "content/public/renderer/content_renderer_client.h"
 
 namespace blink {
 class WebURL;
 }  // namespace blink
-
-namespace guest_view {
-class GuestViewContainerDispatcher;
-}
 
 namespace extensions {
 
@@ -28,6 +23,11 @@ class ShellExtensionsRendererClient;
 class ShellContentRendererClient : public content::ContentRendererClient {
  public:
   ShellContentRendererClient();
+
+  ShellContentRendererClient(const ShellContentRendererClient&) = delete;
+  ShellContentRendererClient& operator=(const ShellContentRendererClient&) =
+      delete;
+
   ~ShellContentRendererClient() override;
 
   // content::ContentRendererClient implementation:
@@ -49,6 +49,10 @@ class ShellContentRendererClient : public content::ContentRendererClient {
   void RunScriptsAtDocumentStart(content::RenderFrame* render_frame) override;
   void RunScriptsAtDocumentEnd(content::RenderFrame* render_frame) override;
 
+  void SetClientsForTesting(std::unique_ptr<ExtensionsClient> extensions_client,
+                            std::unique_ptr<ShellExtensionsRendererClient>
+                                extensions_renderer_client);
+
  protected:
   // app_shell embedders may need custom extensions client interfaces.
   // This class takes ownership of the returned object.
@@ -57,10 +61,6 @@ class ShellContentRendererClient : public content::ContentRendererClient {
  private:
   std::unique_ptr<ExtensionsClient> extensions_client_;
   std::unique_ptr<ShellExtensionsRendererClient> extensions_renderer_client_;
-  std::unique_ptr<guest_view::GuestViewContainerDispatcher>
-      guest_view_container_dispatcher_;
-
-  DISALLOW_COPY_AND_ASSIGN(ShellContentRendererClient);
 };
 
 }  // namespace extensions

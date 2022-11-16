@@ -17,7 +17,6 @@
 #include "base/cxx17_backports.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/task/post_task.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
@@ -36,8 +35,8 @@
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
 #include "ui/gfx/geometry/angle_conversions.h"
+#include "ui/gfx/geometry/transform_util.h"
 #include "ui/gfx/gpu_fence.h"
-#include "ui/gfx/transform_util.h"
 #include "ui/gl/android/scoped_java_surface.h"
 #include "ui/gl/android/surface_texture.h"
 #include "ui/gl/gl_bindings.h"
@@ -83,10 +82,10 @@ gfx::Transform GetContentTransform(const gfx::RectF& bounds) {
   // old WebVR convention with origin at top left, so the Y range needs to be
   // mirrored.
   gfx::Transform transform;
-  transform.matrix().set(0, 0, bounds.width());
-  transform.matrix().set(1, 1, bounds.height());
-  transform.matrix().set(0, 3, bounds.x());
-  transform.matrix().set(1, 3, 1.f - bounds.y() - bounds.height());
+  transform.matrix().setRC(0, 0, bounds.width());
+  transform.matrix().setRC(1, 1, bounds.height());
+  transform.matrix().setRC(0, 3, bounds.x());
+  transform.matrix().setRC(1, 3, 1.f - bounds.y() - bounds.height());
   return transform;
 }
 
@@ -98,9 +97,9 @@ gfx::Size GetCameraImageSize(const gfx::Size& in, const gfx::Transform& xform) {
   double x = in.width();
   double y = in.height();
   int width = std::round(
-      std::abs(x * xform.matrix().get(0, 0) + y * xform.matrix().get(1, 0)));
+      std::abs(x * xform.matrix().rc(0, 0) + y * xform.matrix().rc(1, 0)));
   int height = std::round(
-      std::abs(x * xform.matrix().get(0, 1) + y * xform.matrix().get(1, 1)));
+      std::abs(x * xform.matrix().rc(0, 1) + y * xform.matrix().rc(1, 1)));
 
   DVLOG(3) << __func__ << ": uncropped size=" << in.ToString()
            << " cropped/rotated size=" << gfx::Size(width, height).ToString()
@@ -114,11 +113,11 @@ namespace device {
 
 ArCoreGlCreateSessionResult::ArCoreGlCreateSessionResult(
     mojo::PendingRemote<mojom::XRFrameDataProvider> frame_data_provider,
-    mojom::VRDisplayInfoPtr display_info,
+    mojom::XRViewPtr view,
     mojo::PendingRemote<mojom::XRSessionController> session_controller,
     mojom::XRPresentationConnectionPtr presentation_connection)
     : frame_data_provider(std::move(frame_data_provider)),
-      display_info(std::move(display_info)),
+      view(std::move(view)),
       session_controller(std::move(session_controller)),
       presentation_connection(std::move(presentation_connection)) {}
 ArCoreGlCreateSessionResult::~ArCoreGlCreateSessionResult() = default;
@@ -201,6 +200,18 @@ void ArCoreGl::Initialize(
   camera_image_size_ = {0, 0};
   display_rotation_ = display_rotation;
   recalculate_uvs_and_projection_ = true;
+
+  // ARCore is monoscopic and does not have an associated eye.
+  view_.eye = mojom::XREye::kNone;
+  view_.viewport = gfx::Rect(0, 0, frame_size.width(), frame_size.height());
+  // We don't have the transform or field of view until the first frame, so set
+  // the transform to identity and field of view to zero. The XR Session
+  // creation callback only needs the viewport size for the framebuffer.
+  // mojo_from_view is set on every frame in ArCoreGl::GetFrameData and
+  // field_of_view is set in ArCoreGl::RecalculateUvsAndProjection, which is
+  // called one time on the first frame.
+  view_.mojo_from_view = gfx::Transform();
+  view_.field_of_view = mojom::VRFieldOfView::New(0.0f, 0.0f, 0.0f, 0.0f);
 
   // If we're using the ArCompositor, we need to initialize GL without the
   // drawing_widget. (Since the ArCompositor accesses the surface through a
@@ -372,8 +383,7 @@ void ArCoreGl::OnInitialized() {
                                     frame_sink_id));
 }
 
-void ArCoreGl::CreateSession(mojom::VRDisplayInfoPtr display_info,
-                             ArCoreGlCreateSessionCallback create_callback,
+void ArCoreGl::CreateSession(ArCoreGlCreateSessionCallback create_callback,
                              base::OnceClosure shutdown_callback) {
   DVLOG(3) << __func__;
 
@@ -410,11 +420,8 @@ void ArCoreGl::CreateSession(mojom::VRDisplayInfoPtr display_info,
       presentation_receiver_.BindNewPipeAndPassRemote();
   submit_frame_sink->transport_options = std::move(transport_options);
 
-  DCHECK_EQ(display_info->views.size(), 1u);
-  display_info_ = std::move(display_info);
-
   ArCoreGlCreateSessionResult result(
-      frame_data_receiver_.BindNewPipeAndPassRemote(), display_info_->Clone(),
+      frame_data_receiver_.BindNewPipeAndPassRemote(), view_.Clone(),
       session_controller_receiver_.BindNewPipeAndPassRemote(),
       std::move(submit_frame_sink));
 
@@ -438,7 +445,7 @@ bool ArCoreGl::InitializeGl(gfx::AcceleratedWidget drawing_widget) {
   gl::init::DisableANGLE();
 
   if (gl::GetGLImplementation() == gl::kGLImplementationNone &&
-      !gl::init::InitializeGLOneOff()) {
+      !gl::init::InitializeGLOneOff(/*system_device_id=*/0)) {
     DLOG(ERROR) << "gl::init::InitializeGLOneOff failed";
     return false;
   }
@@ -563,10 +570,10 @@ void ArCoreGl::RecalculateUvsAndProjection() {
   constexpr float depth_far = 1000.f;
   projection_ = arcore_->GetProjectionMatrix(depth_near, depth_far);
   auto m = projection_.matrix();
-  float left = depth_near * (m.get(2, 0) - 1.f) / m.get(0, 0);
-  float right = depth_near * (m.get(2, 0) + 1.f) / m.get(0, 0);
-  float bottom = depth_near * (m.get(2, 1) - 1.f) / m.get(1, 1);
-  float top = depth_near * (m.get(2, 1) + 1.f) / m.get(1, 1);
+  float left = depth_near * (m.rc(2, 0) - 1.f) / m.rc(0, 0);
+  float right = depth_near * (m.rc(2, 0) + 1.f) / m.rc(0, 0);
+  float bottom = depth_near * (m.rc(2, 1) - 1.f) / m.rc(1, 1);
+  float top = depth_near * (m.rc(2, 1) + 1.f) / m.rc(1, 1);
 
   // Also calculate the inverse projection which is needed for converting
   // screen touches to world rays.
@@ -584,9 +591,7 @@ void ArCoreGl::RecalculateUvsAndProjection() {
            << " left=" << field_of_view->left_degrees
            << " right=" << field_of_view->right_degrees;
 
-  DCHECK_EQ(display_info_->views.size(), 1u);
-  display_info_->views[0]->field_of_view = std::move(field_of_view);
-  display_info_changed_ = true;
+  view_.field_of_view = std::move(field_of_view);
 }
 
 void ArCoreGl::GetFrameData(
@@ -735,11 +740,6 @@ void ArCoreGl::GetFrameData(
     frame_data->stage_parameters = stage_parameters_.Clone();
   }
 
-  if (display_info_changed_) {
-    frame_data->views.emplace_back(display_info_->views[0].Clone());
-    display_info_changed_ = false;
-  }
-
   if (ArImageTransport::UseSharedBuffer()) {
     // Set up a shared buffer for the renderer to draw into, it'll be sent
     // alongside the frame pose.
@@ -760,14 +760,12 @@ void ArCoreGl::GetFrameData(
     DCHECK(pose->position);
 
     // The view properties besides the transform are calculated by
-    // ArCoreGl::RecalculateUvsAndProjection() as needed.
-    DCHECK_EQ(display_info_->views.size(), 1u);
-    mojom::XRViewPtr view = display_info_->views[0]->Clone();
-    view->mojo_from_view = vr_utils::VrPoseToTransform(pose.get());
-
-    frame_data->views.push_back(std::move(view));
+    // ArCoreGl::RecalculateUvsAndProjection() as needed. IF we don't have a
+    // pose, the transform from the previous frame is used.
+    view_.mojo_from_view = vr_utils::VrPoseToTransform(pose.get());
   }
 
+  frame_data->views.push_back(view_.Clone());
   frame_data->mojo_from_viewer = std::move(pose);
   frame_data->time_delta = now - base::TimeTicks();
   if (rendering_time_ratio_ > 0) {
@@ -807,7 +805,8 @@ bool ArCoreGl::IsSubmitFrameExpected(int16_t frame_index) {
   if (animating_frame->index != frame_index) {
     DVLOG(1) << __func__ << ": wrong frame index, got " << frame_index
              << ", expected " << animating_frame->index;
-    mojo::ReportBadMessage("SubmitFrame called with wrong frame index");
+    presentation_receiver_.ReportBadMessage(
+        "SubmitFrame called with wrong frame index");
     CloseBindingsIfOpen();
     pending_shutdown_ = true;
     return false;
@@ -854,10 +853,8 @@ base::TimeDelta ArCoreGl::EstimatedArCoreFrameTime() {
   DCHECK_GE(range.max, range.min);
 
   // The min frame time corresponds to the max frame rate and vice versa.
-  base::TimeDelta min_frametime =
-      base::TimeDelta::FromSecondsD(1.0f / range.max);
-  base::TimeDelta max_frametime =
-      base::TimeDelta::FromSecondsD(1.0f / range.min);
+  base::TimeDelta min_frametime = base::Seconds(1.0f / range.max);
+  base::TimeDelta max_frametime = base::Seconds(1.0f / range.min);
 
   base::TimeDelta frametime =
       average_camera_frametime_.GetAverageOrDefault(min_frametime);
@@ -1310,12 +1307,6 @@ void ArCoreGl::OnTransportFrameAvailable(const gfx::Transform& uv_transform) {
   }
 }
 
-void ArCoreGl::SubmitFrameWithTextureHandle(
-    int16_t frame_index,
-    mojo::PlatformHandle texture_handle) {
-  NOTIMPLEMENTED();
-}
-
 void ArCoreGl::SubmitFrameDrawnIntoTexture(int16_t frame_index,
                                            const gpu::SyncToken& sync_token,
                                            base::TimeDelta time_waited) {
@@ -1375,10 +1366,11 @@ void ArCoreGl::SubmitVizFrame(int16_t frame_index,
   TryRunPendingGetFrameData();
 }
 
-void ArCoreGl::UpdateLayerBounds(int16_t frame_index,
-                                 const gfx::RectF& left_bounds,
-                                 const gfx::RectF& right_bounds,
-                                 const gfx::Size& source_size) {
+void ArCoreGl::UpdateLayerBounds(
+    int16_t frame_index,
+    const gfx::RectF& left_bounds,
+    [[maybe_unused]] const gfx::RectF& right_bounds,
+    const gfx::Size& source_size) {
   DVLOG(2) << __func__ << " source_size=" << source_size.ToString()
            << " left_bounds=" << left_bounds.ToString();
 
@@ -1386,9 +1378,9 @@ void ArCoreGl::UpdateLayerBounds(int16_t frame_index,
   // no animating frame yet. In that case, just save it in viewport_bounds_
   // so that it's applied to the next animating frame.
   if (webxr_->HaveAnimatingFrame()) {
-    // Handheld AR mode is monoscopic and only uses the left bounds.
+    // Handheld AR mode is monoscopic and only uses the left bounds, thus the
+    // [[maybe_unused]] on `right_bounds`.
     webxr_->GetAnimatingFrame()->bounds_left = left_bounds;
-    (void)right_bounds;
   }
   viewport_bounds_ = left_bounds;
 
@@ -1422,7 +1414,7 @@ void ArCoreGl::SetInputSourceButtonListener(
     mojo::PendingAssociatedRemote<device::mojom::XRInputSourceButtonListener>) {
   // Input eventing is not supported. This call should not
   // be made on this device.
-  mojo::ReportBadMessage("Input eventing is not supported.");
+  frame_data_receiver_.ReportBadMessage("Input eventing is not supported.");
 }
 
 void ArCoreGl::SubscribeToHitTest(

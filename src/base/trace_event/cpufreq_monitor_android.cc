@@ -14,7 +14,6 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "base/strings/stringprintf.h"
-#include "base/task/post_task.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/trace_event/trace_event.h"
@@ -89,7 +88,7 @@ void CPUFreqMonitorDelegate::GetCPUIds(std::vector<unsigned int>* ids) const {
                            base::SplitResult::SPLIT_WANT_NONEMPTY)) {
       unsigned int cpu_id;
       if (base::StringToUint(str_piece, &cpu_id)) {
-        if (cpu_id != i && cpu_id >= 0 && cpu_id <= kernel_max_cpu)
+        if (cpu_id != i && cpu_id <= kernel_max_cpu)
           cpus_to_monitor[cpu_id] = 0;
       }
     }
@@ -195,10 +194,10 @@ void CPUFreqMonitor::Sample(
     lseek(fd, 0L, SEEK_SET);
     char data[kNumBytesToReadForSampling];
 
-    size_t bytes_read = read(fd, data, kNumBytesToReadForSampling);
+    ssize_t bytes_read = read(fd, data, kNumBytesToReadForSampling);
     if (bytes_read > 0) {
-      if (bytes_read < kNumBytesToReadForSampling)
-        data[bytes_read] = '\0';
+      if (static_cast<size_t>(bytes_read) < kNumBytesToReadForSampling)
+        data[static_cast<size_t>(bytes_read)] = '\0';
       int ret = sscanf(data, "%d", &freq);
       if (ret == 0 || ret == std::char_traits<char>::eof())
         freq = 0;
@@ -211,7 +210,7 @@ void CPUFreqMonitor::Sample(
       FROM_HERE,
       base::BindOnce(&CPUFreqMonitor::Sample, weak_ptr_factory_.GetWeakPtr(),
                      std::move(fds)),
-      base::TimeDelta::FromMilliseconds(kDefaultCPUFreqSampleIntervalMs));
+      base::Milliseconds(kDefaultCPUFreqSampleIntervalMs));
 }
 
 bool CPUFreqMonitor::IsEnabledForTesting() {

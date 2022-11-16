@@ -11,9 +11,15 @@
 #import "ios/web/web_state/ui/crw_touch_tracking_recognizer.h"
 #import "ios/web/web_state/ui/crw_web_view_navigation_proxy.h"
 
+namespace base {
+class Value;
+}  // namespace base
+
 namespace web {
 
 enum class NavigationInitiationType;
+enum Permission : NSUInteger;
+enum PermissionState : NSUInteger;
 enum class WKNavigationState;
 
 }  // namespace web
@@ -95,15 +101,6 @@ class WebStateImpl;
 // stored in navigation context.
 - (web::NavigationItemImpl*)lastPendingItemForNewNavigation;
 
-// Replaces the currently displayed content with |contentView|.  The content
-// view will be dismissed for the next navigation.
-- (void)showTransientContentView:(UIView<CRWScrollableContent>*)contentView;
-
-// Clear the transient content view, if one is shown. This is a delegate
-// method for WebStateImpl::ClearTransientContent(). Callers should use the
-// WebStateImpl API instead of calling this method directly.
-- (void)clearTransientContentView;
-
 // Removes the back WebView. DANGER: this method is exposed for the sole purpose
 // of allowing NavigationManagerImpl to reset the back-forward history. Please
 // reconsider before using this method.
@@ -120,7 +117,6 @@ class WebStateImpl;
 - (BOOL)isViewAlive;
 
 // Returns YES if the current live view is a web view with HTML.
-// TODO(crbug.com/949651): Remove once JSFindInPageManager is removed.
 - (BOOL)contentIsHTML;
 
 // Returns the CRWWebController's view of the current URL. Moreover, this method
@@ -147,6 +143,22 @@ class WebStateImpl;
 - (void)loadData:(NSData*)data
         MIMEType:(NSString*)MIMEType
           forURL:(const GURL&)URL;
+
+// Loads the web content from the HTML you provide as if the HTML were the
+// response to the request. This method does not create a new navigation entry
+// if |URL| matches the current page's URL. This method creates a new navigation
+// entry if |URL| differs from the current page's URL.
+- (void)loadSimulatedRequest:(const GURL&)URL
+          responseHTMLString:(NSString*)responseHTMLString
+    API_AVAILABLE(ios(15.0));
+
+// Loads the web content from the data you provide as if the data were the
+// response to the request. This method does not create a new navigation entry
+// if |URL| matches the current page's URL. This method creates a new navigation
+// entry if |URL| differs from the current page's URL.
+- (void)loadSimulatedRequest:(const GURL&)URL
+                responseData:(NSData*)responseData
+                    MIMEType:(NSString*)MIMEType API_AVAILABLE(ios(15.0));
 
 // Stops loading the page.
 - (void)stopLoading;
@@ -181,6 +193,10 @@ class WebStateImpl;
 - (void)createFullPagePDFWithCompletion:
     (void (^)(NSData* PDFDocumentData))completion;
 
+// Tries to dismiss the presented states of the media (fullscreen or Picture in
+// Picture).
+- (void)closeMediaPresentations;
+
 // Creates a web view if it's not yet created. Returns the web view.
 - (WKWebView*)ensureWebViewCreated;
 
@@ -199,9 +215,34 @@ class WebStateImpl;
 - (BOOL)setSessionStateData:(NSData*)data;
 - (NSData*)sessionStateData;
 
+// Gets and sets the web state's state of a permission; for example, the one to
+// use the camera on the device. Only works on iOS 15+.
+- (web::PermissionState)stateForPermission:(web::Permission)permission
+    API_AVAILABLE(ios(15.0));
+- (void)setState:(web::PermissionState)state
+    forPermission:(web::Permission)permission API_AVAILABLE(ios(15.0));
+
+// Gets a mapping of all permissions and their states. Only works on iOS 15+.
+- (NSDictionary<NSNumber*, NSNumber*>*)
+    statesForAllPermissions API_AVAILABLE(ios(15.0));
+
 // Injects the windowID into the main frame of the current webpage.
 // TODO(crbug.com/905939): Remove WindowID.
 - (void)injectWindowID;
+
+#pragma mark Navigation Message Handlers
+
+// Handles a navigation hash change message for the current webpage.
+- (void)handleNavigationHashChange;
+
+// Handles a navigation will change message for the current webpage.
+- (void)handleNavigationWillChangeState;
+
+// Handles a navigation did push state message for the current webpage.
+- (void)handleNavigationDidPushStateMessage:(base::Value*)message;
+
+// Handles a navigation did replace state message for the current webpage.
+- (void)handleNavigationDidReplaceStateMessage:(base::Value*)message;
 
 #pragma mark CRWJSInjectionEvaluator
 

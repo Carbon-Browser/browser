@@ -8,530 +8,62 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "base/observer_list.h"
+#include "base/check.h"
+#include "base/memory/scoped_refptr.h"
 #include "content/browser/isolation_context.h"
+#include "content/browser/site_info.h"
 #include "content/browser/web_exposed_isolation_info.h"
 #include "content/common/content_export.h"
-#include "content/public/browser/render_process_host_observer.h"
+#include "content/public/browser/browsing_instance_id.h"
 #include "content/public/browser/site_instance.h"
-#include "content/public/browser/storage_partition_config.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "content/public/browser/site_instance_process_assignment.h"
 #include "third_party/perfetto/include/perfetto/tracing/traced_proto.h"
 #include "third_party/perfetto/include/perfetto/tracing/traced_value_forward.h"
 #include "url/gurl.h"
-#include "url/origin.h"
 
-namespace perfetto {
-namespace protos {
-namespace pbzero {
-class SiteInstance;
+namespace url {
+class Origin;
 }
-}  // namespace protos
-}  // namespace perfetto
 
 namespace content {
+
 class AgentSchedulingGroupHost;
+class BrowserContext;
 class BrowsingInstance;
-class ProcessLock;
-class RenderProcessHostFactory;
+class SiteInstanceGroup;
+class StoragePartitionConfig;
 class StoragePartitionImpl;
+struct UrlInfo;
 
-// This struct is used to package a GURL together with extra state required to
-// make SiteInstance/process allocation decisions, e.g. whether the url's
-// origin or site is requesting isolation as determined by response headers in
-// the corresponding NavigationRequest. The extra state is generally most
-// relevant when navigation to the URL is in progress, since once placed into a
-// SiteInstance, the extra state will be available via SiteInfo. Otherwise,
-// most callsites requiring a UrlInfo can create with a GURL, specifying kNone
-// for |origin_isolation_request|. Some examples of where passing kNone for
-// |origin_isolation_request| is safe are:
-// * at DidCommitNavigation time, since at that point the SiteInstance has
-//   already been picked and the navigation can be considered finished,
-// * before a response is received (the only way to request isolation is via
-//   response headers), and
-// * outside of a navigation.
-//
-// If UrlInfo::origin_isolation_request is kNone, that does *not* imply that
-// the URL's origin will not be isolated, and vice versa.  The isolation
-// decision involves both response headers and consistency within a
-// BrowsingInstance, and once we decide on the isolation outcome for an origin,
-// it won't change for the lifetime of the BrowsingInstance.
-//
-// To check whether a frame ends up in a site-isolated process, use
-// SiteInfo::RequiresDedicatedProcess() on its SiteInstance's SiteInfo.  To
-// check whether a frame ends up being origin-isolated (e.g., due to the
-// Origin-Agent-Cluster header), use SiteInfo::is_origin_keyed().
-//
-// Note: it is not expected that this struct will be exposed in content/public.
-class UrlInfoInit;
-
-struct CONTENT_EXPORT UrlInfo {
+class CONTENT_EXPORT SiteInstanceImpl final : public SiteInstance {
  public:
-  // Bitmask representing one or more isolation requests.
-  enum OriginIsolationRequest {
-    // No isolated has been requested.
-    kNone = 0,
-    // The Origin-Agent-Cluster header is requesting origin-keyed isolation for
-    // `url`'s origin.
-    kOriginAgentCluster = (1 << 0),
-    // The Cross-Origin-Opener-Policy header has triggered a hint to turn on
-    // site isolation for `url`'s site.
-    kCOOP = (1 << 1)
-  };
+  SiteInstanceImpl(const SiteInstanceImpl&) = delete;
+  SiteInstanceImpl& operator=(const SiteInstanceImpl&) = delete;
 
-  UrlInfo();  // Needed for inclusion in SiteInstanceDescriptor.
-  UrlInfo(const UrlInfo& other);
-  explicit UrlInfo(const UrlInfoInit& init);
-  ~UrlInfo();
-
-  // Used to convert GURL to UrlInfo in tests where opt-in isolation is not
-  // being tested.
-  static UrlInfo CreateForTesting(const GURL& url_in,
-                                  absl::optional<StoragePartitionConfig>
-                                      storage_partition_config = absl::nullopt);
-
-  // Returns whether this UrlInfo is requesting origin-keyed isolation for
-  // `url`'s origin due to the OriginAgentCluster header.
-  bool requests_origin_agent_cluster_isolation() const {
-    return (origin_isolation_request &
-            OriginIsolationRequest::kOriginAgentCluster);
-  }
-
-  // Returns whether this UrlInfo is requesting isolation in response to the
-  // Cross-Origin-Opener-Policy header.
-  bool requests_coop_isolation() const {
-    return (origin_isolation_request & OriginIsolationRequest::kCOOP);
-  }
-
-  // Creates a copy of this UrlInfo that has its |storage_partition_config|
-  // field set to |storage_partition_config_in|.
-  UrlInfo CreateCopyWithStoragePartitionConfig(
-      absl::optional<StoragePartitionConfig> storage_partition_config_in) const;
-
-  GURL url;
-
-  // This field indicates whether the URL is requesting additional process
-  // isolation during the current navigation (e.g., via OriginAgentCluster or
-  // COOP response headers).  If URL did not request any isolation, this will
-  // be set to kNone. This field is only relevant (1) during a navigation
-  // request, (2) up to the point where the origin is placed into a
-  // SiteInstance.  Other than these cases, this should be set to kNone.
-  OriginIsolationRequest origin_isolation_request =
-      OriginIsolationRequest::kNone;
-
-  // If |url| represents a resource inside another resource (e.g. a resource
-  // with a urn: URL in WebBundle), origin of the original resource. Otherwise,
-  // this is just the origin of |url|.
-  url::Origin origin;
-
-  // The StoragePartitionConfig that should be used when loading content from
-  // |url|. If absent, ContentBrowserClient::GetStoragePartitionConfig will be
-  // used to determine which StoragePartitionConfig to use.
-  //
-  // If present, this value will be used as the StoragePartitionConfig in the
-  // SiteInfo, regardless of its validity. SiteInstances created from a UrlInfo
-  // containing a StoragePartitionConfig that isn't compatible with the
-  // BrowsingInstance that the SiteInstance should belong to will lead to a
-  // CHECK failure.
-  absl::optional<StoragePartitionConfig> storage_partition_config;
-
-  // Pages may choose to isolate themselves more strongly than the web's
-  // default, thus allowing access to APIs that would be difficult to
-  // safely expose otherwise. "Cross-origin isolation", for example, requires
-  // assertion of a Cross-Origin-Opener-Policy and
-  // Cross-Origin-Embedder-Policy, and unlocks SharedArrayBuffer.
-  WebExposedIsolationInfo web_exposed_isolation_info;
-
-  // Indicates that the URL directs to PDF content, which should be isolated
-  // from other types of content.
-  bool is_pdf = false;
-
-  // Any new UrlInfo fields should be added to UrlInfoInit as well, and the
-  // UrlInfo constructor that takes a UrlInfoInit should be updated as well.
-};
-
-class CONTENT_EXPORT UrlInfoInit {
- public:
-  UrlInfoInit() = delete;
-  explicit UrlInfoInit(const GURL& url);
-  ~UrlInfoInit();
-
-  UrlInfoInit& operator=(const UrlInfoInit&) = delete;
-
-  UrlInfoInit& WithOriginIsolationRequest(
-      UrlInfo::OriginIsolationRequest origin_isolation_request);
-  UrlInfoInit& WithOrigin(const url::Origin& origin);
-  UrlInfoInit& WithStoragePartitionConfig(
-      absl::optional<StoragePartitionConfig> storage_partition_config);
-  UrlInfoInit& WithWebExposedIsolationInfo(
-      const WebExposedIsolationInfo& web_exposed_isolation_info);
-  UrlInfoInit& WithIsPdf(bool is_pdf);
-
- private:
-  UrlInfoInit(UrlInfoInit&);
-
-  friend UrlInfo;
-
-  GURL url_;
-  UrlInfo::OriginIsolationRequest origin_isolation_request_ =
-      UrlInfo::OriginIsolationRequest::kNone;
-  url::Origin origin_;
-  absl::optional<StoragePartitionConfig> storage_partition_config_;
-  WebExposedIsolationInfo web_exposed_isolation_info_;
-  bool is_pdf_ = false;
-};  // class UrlInfoInit
-
-// SiteInfo represents the principal of a SiteInstance. All documents and
-// workers within a SiteInstance are considered part of this principal and will
-// share a renderer process. Any two documents within the same browsing context
-// group (i.e., BrowsingInstance) that are allowed to script each other *must*
-// have the same SiteInfo principal, so that they end up in the same renderer
-// process.
-//
-// As a result, SiteInfo is primarily defined in terms of "site URL," which is
-// often the scheme plus the eTLD+1 of a URL. This allows same-site URLs to
-// always share a process even when document.domain is modified. However, some
-// site URLs can be finer grained (e.g., origins) or coarser grained (e.g.,
-// file://). See |site_url()| for more considerations.
-//
-// In the future, we may add more information to SiteInfo for cases where the
-// site URL is not sufficient to identify which process a document belongs in.
-// For example, origin isolation (https://crbug.com/1067389) will introduce a
-// 'keying' bit ('site' or 'origin') to avoid an ambiguity between sites and
-// origins, and it will be possible for two SiteInstances with different keying
-// values to have the same site URL. It is important that any extra members of
-// SiteInfo do not cause two documents that can script each other to end up in
-// different SiteInfos and thus different processes.
-//
-// TODO(wjmaclean): This should eventually move to
-// content/public/browser/site_info.h.
-class CONTENT_EXPORT SiteInfo {
- public:
-  static SiteInfo CreateForErrorPage(
-      const StoragePartitionConfig storage_partition_config);
-  static SiteInfo CreateForDefaultSiteInstance(
-      BrowserContext* browser_context,
-      const StoragePartitionConfig storage_partition_config,
-      const WebExposedIsolationInfo& web_exposed_isolation_info);
-  static SiteInfo CreateForGuest(BrowserContext* browser_context,
-                                 const GURL& guest_site_url);
-
-  // This function returns a SiteInfo with the appropriate site_url and
-  // process_lock_url computed. This function can only be called on the UI
-  // thread because it must be able to compute an effective URL.
-  static SiteInfo Create(const IsolationContext& isolation_context,
-                         const UrlInfo& url_info);
-
-  // Similar to the function above, but this method can only be called on the
-  // IO thread. All fields except for the site_url should be the same as
-  // the other method. The site_url field will match the process_lock_url
-  // in the object returned by this function. This is because we cannot compute
-  // the effective URL from the IO thread.
-  //
-  // `url_info` MUST contain a StoragePartitionConfig because we can't ask the
-  // embedder which StoragePartitionConfig to use from the IO thread.
-  //
-  // NOTE: Do not use this method unless there is a very clear and good reason
-  // to do so. It primarily exists to facilitate the creation of ProcessLocks
-  // from any thread. ProcessLocks do not rely on the site_url field so the
-  // difference between this method and Create() does not cause problems for
-  // that usecase.
-  static SiteInfo CreateOnIOThread(const IsolationContext& isolation_context,
-                                   const UrlInfo& url_info);
-
-  // Method to make creating SiteInfo objects for tests easier. It is a thin
-  // wrapper around Create() that uses UrlInfo::CreateForTesting(),
-  // and WebExposedIsolationInfo::CreateNonIsolated() to generate the
-  // information that is not provided.
-  static SiteInfo CreateForTesting(const IsolationContext& isolation_context,
-                                   const GURL& url);
-
-  // Returns the site of a given |origin|.  Unlike Create(), this does
-  // not utilize effective URLs, isolated origins, or other special logic.  It
-  // only translates an origin into a site (i.e., scheme and eTLD+1) and is
-  // used internally by GetSiteForURLInternal().  For making process model
-  // decisions, Create() should be used instead.
-  static GURL GetSiteForOrigin(const url::Origin& origin);
-
-  // Returns a StoragePartitionConfig for the specified URL.
-  // If |is_site_url| is set to true, then |url| MUST be a site URL that
-  // was generated by a SiteInfo. Otherwise the URL is interpreted as a
-  // user-provided URL or origin.
-  //
-  // Note: New callers of this method should be discouraged. New code should
-  // have access to a SiteInfo object and call GetStoragePartitionConfig() on
-  // that. For cases where code just needs the StoragePartition for a user
-  // provided URL or origin, it should use
-  // BrowserContext::GetStoragePartitionForUrl() instead of directly calling
-  // this method.
-  static StoragePartitionConfig GetStoragePartitionConfigForUrl(
-      BrowserContext* browser_context,
-      const GURL& url,
-      bool is_site_url);
-
-  // Initializes |storage_partition_config_| with a value appropriate for
-  // |browser_context|.
-  explicit SiteInfo(BrowserContext* browser_context);
-  // The SiteInfo constructor should take in all values needed for comparing two
-  // SiteInfos, to help ensure all creation sites are updated accordingly when
-  // new values are added. The private function MakeTie() should be updated
-  // accordingly.
-  SiteInfo(const GURL& site_url,
-           const GURL& process_lock_url,
-           bool is_origin_keyed,
-           const StoragePartitionConfig storage_partition_config,
-           const WebExposedIsolationInfo& web_exposed_isolation_info,
-           bool is_guest,
-           bool does_site_request_dedicated_process_for_coop,
-           bool is_jit_disabled,
-           bool is_pdf);
-  SiteInfo() = delete;
-  SiteInfo(const SiteInfo& rhs);
-  ~SiteInfo();
-
-  // Returns the site URL associated with all of the documents and workers in
-  // this principal, as described above.
-  //
-  // NOTE: In most cases, code should be performing checks against the origin
-  // returned by |RenderFrameHost::GetLastCommittedOrigin()|. In contrast, the
-  // GURL returned by |site_url()| should not be considered authoritative
-  // because:
-  // - A SiteInstance can host pages from multiple sites if "site per process"
-  //   is not enabled and the SiteInstance isn't hosting pages that require
-  //   process isolation (e.g. WebUI or extensions).
-  // - Even with site per process, the site URL is not an origin: while often
-  //   derived from the origin, it only contains the scheme and the eTLD + 1,
-  //   i.e. an origin with the host "deeply.nested.subdomain.example.com"
-  //   corresponds to a site URL with the host "example.com".
-  // - When origin isolation is in use, there may be multiple SiteInstance with
-  //   the same site_url() but that differ in other properties.
-  const GURL& site_url() const { return site_url_; }
-
-  // Returns the URL which should be used in a SetProcessLock call for this
-  // SiteInfo's process.  This is the same as |site_url_| except for cases
-  // involving effective URLs, such as hosted apps.  In those cases, this URL is
-  // a site URL that is computed without the use of effective URLs.
-  //
-  // NOTE: This URL is currently set even in cases where this SiteInstance's
-  //       process is *not* going to be locked to it.  Callers should be careful
-  //       to consider this case when comparing lock URLs;
-  //       ShouldLockProcessToSite() may be used to determine whether the
-  //       process lock will actually be used.
-  //
-  // TODO(alexmos): See if we can clean this up and not set |process_lock_url_|
-  //                if the SiteInstance's process isn't going to be locked.
-  const GURL& process_lock_url() const { return process_lock_url_; }
-
-  // Returns whether this SiteInfo is specific to an origin rather than a site,
-  // such as due to opt-in origin isolation. This resolves an ambiguity of
-  // whether a process with a lock_url() like "https://foo.example" is allowed
-  // to include "https://sub.foo.example" or not. In opt-in isolation, it is
-  // possible for example.com to be isolated, and sub.example.com not be
-  // isolated. In contrast, if command-line isolation is used to isolate
-  // example.com, then sub.example.com is also (automatically) isolated.
-  // Also note that opt-in isolated origins will include ports (if non-default)
-  // in their site urls.
-  bool is_origin_keyed() const { return is_origin_keyed_; }
-
-  // Returns the web-exposed isolation status of pages hosted by the
-  // SiteInstance. The level of isolation which a page opts-into has
-  // implications for the set of other pages which can live in this
-  // SiteInstance, process allocation decisions, and API exposure in the page's
-  // JavaScript context.
-  const WebExposedIsolationInfo& web_exposed_isolation_info() const {
-    return web_exposed_isolation_info_;
-  }
-
-  bool is_guest() const { return is_guest_; }
-  bool is_error_page() const;
-  bool is_jit_disabled() const { return is_jit_disabled_; }
-  bool is_pdf() const { return is_pdf_; }
-
-  // See comments on `does_site_request_dedicated_process_for_coop_` for more
-  // details.
-  bool does_site_request_dedicated_process_for_coop() const {
-    return does_site_request_dedicated_process_for_coop_;
-  }
-
-  // Returns true if the site_url() is empty.
-  bool is_empty() const { return site_url().possibly_invalid_spec().empty(); }
-
-  SiteInfo& operator=(const SiteInfo& rhs);
-
-  // Determine whether one SiteInfo represents the same security principal as
-  // another SiteInfo.  Note that this does not necessarily translate to an
-  // equality comparison of all the fields in SiteInfo (see comments in the
-  // implementation).
-  bool IsSamePrincipalWith(const SiteInfo& other) const;
-
-  // Returns true if all fields in `other` match the corresponding fields in
-  // this object.
-  bool IsExactMatch(const SiteInfo& other) const;
-
-  // Note: equality operators are defined in terms of IsSamePrincipalWith().
-  bool operator==(const SiteInfo& other) const;
-  bool operator!=(const SiteInfo& other) const;
-
-  // Defined to allow this object to act as a key for std::map and std::set.
-  // Note that the key is determined based on what distinguishes one security
-  // principal from another (see IsSamePrincipalWith) and does not necessarily
-  // include all the fields in SiteInfo.
-  bool operator<(const SiteInfo& other) const;
-
-  // Returns a string representation of this SiteInfo principal.
-  std::string GetDebugString() const;
-
-  // Returns true if pages loaded with this SiteInfo ought to be handled only
-  // by a renderer process isolated from other sites. If --site-per-process is
-  // used, like it is on desktop platforms, then this is true for all sites. In
-  // other site isolation modes, only a subset of sites will require dedicated
-  // processes.
-  bool RequiresDedicatedProcess(
-      const IsolationContext& isolation_context) const;
-
-  // Returns true if a process for this SiteInfo should be locked to a
-  // ProcessLock whose is_locked_to_site() method returns true. Returning true
-  // here also implies that this SiteInfo requires a dedicated process. However,
-  // the converse does not hold: this might still return false for certain
-  // special cases where a site specific process lock can't be applied even when
-  // this SiteInfo requires a dedicated process (e.g., with
-  // --site-per-process). Examples of those cases include <webview> guests,
-  // single-process mode, or extensions where a process is currently allowed to
-  // be reused for different extensions.  Most of these special cases should
-  // eventually be removed, and this function should become equivalent to
-  // RequiresDedicatedProcess().
-  bool ShouldLockProcessToSite(const IsolationContext& isolation_context) const;
-
-  // Returns whether the process-per-site model is in use (globally or just for
-  // the current site), in which case we should ensure there is only one
-  // RenderProcessHost per site for the entire browser context.
-  bool ShouldUseProcessPerSite(BrowserContext* browser_context) const;
-
-  // Get the partition ID or StoragePartitionConfig for this object given a
-  // specific `browser_context`. The BrowserContext will affect whether the
-  // partition is forced to be in memory based on whether it is off-the-record
-  // or not.
-  StoragePartitionId GetStoragePartitionId(
-      BrowserContext* browser_context) const;
-  const StoragePartitionConfig& storage_partition_config() const {
-    return storage_partition_config_;
-  }
-
-  // Write a representation of this object into a trace.
-  void WriteIntoTrace(perfetto::TracedValue context) const;
-
- private:
-  // Helper that returns a tuple of all the fields that are relevant for
-  // comparing one SiteInfo to another, to tell whether they represent the same
-  // underlying security principal.   This determines the SiteInfo's key for
-  // containers; two SiteInfos that return the same value here will map to the
-  // same entry in std::map, etc.
-  static auto MakeSecurityPrincipalKey(const SiteInfo& site_info);
-
-  // Helper method containing common logic used by the public
-  // Create() and CreateOnIOThread() methods. Most of the parameters simply
-  // match the values passed into the caller. `compute_site_url` controls
-  // whether the site_url field is computed from an effective URL or simply
-  // copied from the `process_lock_url_`. `compute_site_url` is set to false in
-  // contexts where it may not be possible to get the effective URL (e.g. on the
-  // IO thread).
-  static SiteInfo CreateInternal(
-      const IsolationContext& isolation_context,
-      const UrlInfo& url_info,
-      bool compute_site_url);
-
-  // Returns the URL to which a process should be locked for the given UrlInfo.
-  // This is computed similarly to the site URL but without resolving effective
-  // URLs.
-  static GURL DetermineProcessLockURL(const IsolationContext& isolation_context,
-                                      const UrlInfo& url_info);
-
-  // Returns the site for the given UrlInfo, which includes only the scheme and
-  // registered domain.  Returns an empty GURL if the UrlInfo has no host.
-  // |should_use_effective_urls| specifies whether to resolve |url| to an
-  // effective URL (via ContentBrowserClient::GetEffectiveURL()) before
-  // determining the site.
-  static GURL GetSiteForURLInternal(const IsolationContext& isolation_context,
-                                    const UrlInfo& url,
-                                    bool should_use_effective_urls);
-
-  GURL site_url_;
-
-  // The URL to use when locking a process to this SiteInstance's site via
-  // SetProcessLock(). This is the same as |site_url_| except for cases
-  // involving effective URLs, such as hosted apps.  In those cases, this URL is
-  // a site URL that is computed without the use of effective URLs.
-  GURL process_lock_url_;
-
-  // Indicates whether this SiteInfo is specific to a single origin, rather than
-  // including all subdomains of that origin. Only used for opt-in origin
-  // isolation. In contrast, the site-level URLs that are typically used in
-  // SiteInfo include subdomains, as do command-line isolated origins.
-  bool is_origin_keyed_ = false;
-
-  // The StoragePartitionConfig to use when loading content belonging to this
-  // SiteInfo.
-  StoragePartitionConfig storage_partition_config_;
-
-  // Indicates the web-exposed isolation status of pages hosted by the
-  // SiteInstance. The level of isolation which a page opts-into has
-  // implications for the set of other pages which can live in this
-  // SiteInstance, process allocation decisions, and API exposure in the page's
-  // JavaScript context.
-  WebExposedIsolationInfo web_exposed_isolation_info_ =
-      WebExposedIsolationInfo::CreateNonIsolated();
-
-  // Indicates this SiteInfo is for a <webview> guest.
-  bool is_guest_ = false;
-
-  // Indicates that there is a request to require a dedicated process for this
-  // SiteInfo due to a hint from the Cross-Origin-Opener-Policy header.
-  bool does_site_request_dedicated_process_for_coop_ = false;
-
-  // Indicates that JIT is disabled for this SiteInfo.
-  bool is_jit_disabled_ = false;
-
-  // Indicates that this SiteInfo is for PDF content.
-  bool is_pdf_ = false;
-};
-
-CONTENT_EXPORT std::ostream& operator<<(std::ostream& out,
-                                        const SiteInfo& site_info);
-
-class CONTENT_EXPORT SiteInstanceImpl final : public SiteInstance,
-                                              public RenderProcessHostObserver {
- public:
-  class CONTENT_EXPORT Observer {
-   public:
-    // Called when this SiteInstance transitions to having no active frames,
-    // as measured by active_frame_count().
-    virtual void ActiveFrameCountIsZero(SiteInstanceImpl* site_instance) {}
-
-    // Called when the renderer process of this SiteInstance has exited. Note
-    // that GetProcess() still returns the same RenderProcessHost instance. You
-    // can reinitialize it by a call to GetProcess()->Init().
-    virtual void RenderProcessGone(SiteInstanceImpl* site_instance,
-                                   const ChildProcessTerminationInfo& info) {}
-
-    // Called when the RenderProcessHost for this SiteInstance has been
-    // destructed. After this, the underlying `process_` is cleared, and calling
-    // GetProcess() would assign a different RenderProcessHost to this
-    // SiteInstance.
-    virtual void RenderProcessHostDestroyed() {}
-  };
-
-  // Methods for creating new SiteInstances. The documentation for these methods
-  // are on the SiteInstance::Create* methods with the same name.
+  // Methods for creating a new SiteInstance in a new BrowsingInstance. The
+  // documentation for these methods are on the SiteInstance::Create* methods
+  // with the same name.
   static scoped_refptr<SiteInstanceImpl> Create(
       BrowserContext* browser_context);
-  // `url_info` contains the GURL for which we want to create a SiteInstance,
-  // along with other state relevant to making process allocation decisions.
-  static scoped_refptr<SiteInstanceImpl> CreateForUrlInfo(
-      BrowserContext* browser_context,
-      const UrlInfo& url_info);
   static scoped_refptr<SiteInstanceImpl> CreateForGuest(
       BrowserContext* browser_context,
-      const GURL& guest_site_url);
+      const StoragePartitionConfig& partition_config);
+  static scoped_refptr<SiteInstanceImpl> CreateForFencedFrame(
+      SiteInstanceImpl* embedder_site_instance);
+
+  // Similar to above, but creates an appropriate SiteInstance in a new
+  // BrowsingInstance for a particular `url_info`. This is a more generic
+  // version of SiteInstance::CreateForURL(). `url_info` contains the GURL for
+  // which we want to create a SiteInstance, along with other state relevant to
+  // making process allocation decisions. `is_guest` specifies whether the
+  // newly SiteInstance and BrowsingInstance is for a <webview> guest. This is
+  // used in site-isolated guests to support cross-BrowsingInstance navigations
+  // within a guest; when true, the guest's StoragePartition information must
+  // also be provided in `url_info`.
+  static scoped_refptr<SiteInstanceImpl> CreateForUrlInfo(
+      BrowserContext* browser_context,
+      const UrlInfo& url_info,
+      bool is_guest);
 
   // Creates a SiteInstance that will be use for a service worker.
   // `url_info` - The UrlInfo for the service worker. It contains the URL and
@@ -572,6 +104,11 @@ class CONTENT_EXPORT SiteInstanceImpl final : public SiteInstance,
 
   static bool ShouldAssignSiteForURL(const GURL& url);
 
+  // Returns the SiteInstanceGroup |this| belongs to.
+  // Currently, each SiteInstanceGroup has exactly one SiteInstance, but that
+  // will change as the migration continues. See crbug.com/1195535.
+  SiteInstanceGroup* group() { return site_instance_group_.get(); }
+
   // Use this to get a related SiteInstance during navigations, where UrlInfo
   // may be requesting opt-in isolation. Outside of navigations, callers just
   // looking up an existing SiteInstance based on a GURL can use
@@ -580,25 +117,33 @@ class CONTENT_EXPORT SiteInstanceImpl final : public SiteInstance,
       const UrlInfo& url_info);
   bool IsSameSiteWithURLInfo(const UrlInfo& url_info);
 
-  // SiteInstance interface overrides.
+  // Returns an AgentSchedulingGroupHost, or creates one if
+  // `site_instance_group_` doesn't have one.
+  AgentSchedulingGroupHost& GetOrCreateAgentSchedulingGroup();
+
+  // Resets the `site_instance_group_` refptr, and must be called when its
+  // RenderProcessHost goes away. `site_instance_group_` can be reassigned later
+  // as needed.
+  void ResetSiteInstanceGroup();
+
+  // SiteInstance implementation.
   SiteInstanceId GetId() override;
   BrowsingInstanceId GetBrowsingInstanceId() override;
   bool HasProcess() override;
   RenderProcessHost* GetProcess() override;
   BrowserContext* GetBrowserContext() override;
   const GURL& GetSiteURL() override;
+  const StoragePartitionConfig& GetStoragePartitionConfig() override;
   scoped_refptr<SiteInstance> GetRelatedSiteInstance(const GURL& url) override;
   bool IsRelatedSiteInstance(const SiteInstance* instance) override;
   size_t GetRelatedActiveContentsCount() override;
   bool RequiresDedicatedProcess() override;
+  bool RequiresOriginKeyedProcess() override;
   bool IsSameSiteWithURL(const GURL& url) override;
   bool IsGuest() override;
   SiteInstanceProcessAssignment GetLastProcessAssignmentOutcome() override;
-  void WriteIntoTrace(perfetto::TracedValue context) override;
-
-  // Write a representation of this object into a trace.
-  void WriteIntoTrace(
-      perfetto::TracedProto<perfetto::protos::pbzero::SiteInstance> proto);
+  void WriteIntoTrace(perfetto::TracedProto<TraceProto> context) override;
+  int EstimateOriginAgentClusterOverheadForMetrics() override;
 
   // This is called every time a renderer process is assigned to a SiteInstance
   // and is used by the content embedder for collecting metrics.
@@ -673,13 +218,14 @@ class CONTENT_EXPORT SiteInstanceImpl final : public SiteInstance,
   // SiteInstance to preserve scripting relationships. |dest_url_info| carries
   // additional state, e.g. if the destination url requests origin isolation.
   //
-  // |for_main_frame| is set to true if the caller is interested in an
-  // answer for a main frame. This is set to false for subframe navigations.
-  // Note: In some circumstances, like hosted apps, different answers can be
-  // returned if we are navigating a main frame instead of a subframe.
+  // |for_outermost_main_frame| is set to true if the caller is interested in an
+  // answer for a outermost main frame. This is set to false for subframe or
+  // embedded main frame (eg fenced frame) navigations.  Note: In some
+  // circumstances, like hosted apps, different answers can be returned if we
+  // are navigating an outermost main frame instead of an embedded frame.
   bool IsNavigationSameSite(const GURL& last_successful_url,
-                            const url::Origin last_committed_origin,
-                            bool for_main_frame,
+                            const url::Origin& last_committed_origin,
+                            bool for_outermost_main_frame,
                             const UrlInfo& dest_url_info);
 
   // Returns true if a navigation to |dest_url| should be allowed to stay in
@@ -702,18 +248,6 @@ class CONTENT_EXPORT SiteInstanceImpl final : public SiteInstance,
   // GetSiteURL().
   const SiteInfo& GetSiteInfo();
 
-  // Called when a RenderViewHost was created with this object. It returns the
-  // same information as GetSiteInfo(), but also enables extra checks to ensure
-  // that the StoragePartition info for this object does not change when
-  // |site_info_| is set. This is important to verify if the SiteInfo has not
-  // been explicitly set at the time of this call (e.g. first navigation in a
-  // new tab).
-  // TODO(acolwell) : Remove once RenderViewHost no longer needs to store a
-  // SiteInfo and can store a StoragePartitionConfig instead. Extra verification
-  // should be enabled when the config is fetched and |site_info_| has not been
-  // set yet.
-  const SiteInfo& GetSiteInfoForRenderViewHost();
-
   // Derives a new SiteInfo based on this SiteInstance's current state, and
   // the information provided in `url_info`. This function is slightly different
   // than SiteInfo::Create() because it takes into account information
@@ -730,17 +264,11 @@ class CONTENT_EXPORT SiteInstanceImpl final : public SiteInstance,
   // For guest SiteInstances, `site_info_` is returned because guests are not
   // allowed to derive new guest SiteInfos. All guest navigations must stay in
   // the same SiteInstance with the same SiteInfo.
-  // TODO(https://crbug.com/1243449): This function has become ambiguous with
-  // the inclusion of WebExposedIsolationInfo into UrlInfo, since the function
-  // overrides the value of WebExposedIsolationInfo in UrlInfo with that of the
-  // SiteInstance. It should be refactored and/or renamed to make its behavior
-  // more obvious.
+  //
+  // Note: Since we're deriving the state of the SiteInfo based on both UrlInfo
+  // and SiteInstance, we verify internally that their WebExposedIsolationInfos
+  // are compatible.
   SiteInfo DeriveSiteInfo(const UrlInfo& url_info, bool is_related = false);
-
-  // Returns a ProcessLock that can be used with SetProcessLock to lock a
-  // process to this SiteInstance's SiteInfo. The ProcessLock relies heavily on
-  // the SiteInfo's process_lock_url() for security decisions.
-  const ProcessLock GetProcessLock() const;
 
   // Helper function that returns the storage partition domain for this
   // object.
@@ -770,6 +298,11 @@ class CONTENT_EXPORT SiteInstanceImpl final : public SiteInstance,
   // SiteInstance.
   void SetSite(const UrlInfo& url_info);
 
+  // Same as above, but for SiteInfo. The above version should be used in most
+  // cases, unless the UrlInfo is unavailable, such as for sandboxed srcdoc
+  // frames.
+  void SetSite(const SiteInfo& site_info);
+
   // Similar to SetSite(), but first attempts to convert this object to a
   // default SiteInstance if |url_info| can be placed inside a default
   // SiteInstance. If conversion is not possible, then the normal SetSite()
@@ -789,20 +322,6 @@ class CONTENT_EXPORT SiteInstanceImpl final : public SiteInstance,
   // navigating to the URL in |url_info|.
   bool IsSuitableForUrlInfo(const UrlInfo& url_info);
 
-  // Increase the number of active frames in this SiteInstance. This is
-  // increased when a frame is created.
-  void IncrementActiveFrameCount();
-
-  // Decrease the number of active frames in this SiteInstance. This is
-  // decreased when a frame is destroyed. Decrementing this to zero will notify
-  // observers, and may trigger deletion of proxies.
-  void DecrementActiveFrameCount();
-
-  // Get the number of active frames which belong to this SiteInstance.  If
-  // there are no active frames left, all frames in this SiteInstance can be
-  // safely discarded.
-  size_t active_frame_count() { return active_frame_count_; }
-
   // Increase the number of active WebContentses using this SiteInstance. Note
   // that, unlike active_frame_count, this does not count pending RFHs.
   void IncrementRelatedActiveContentsCount();
@@ -810,9 +329,6 @@ class CONTENT_EXPORT SiteInstanceImpl final : public SiteInstance,
   // Decrease the number of active WebContentses using this SiteInstance. Note
   // that, unlike active_frame_count, this does not count pending RFHs.
   void DecrementRelatedActiveContentsCount();
-
-  void AddObserver(Observer* observer);
-  void RemoveObserver(Observer* observer);
 
   // Whether GetProcess() method (when it needs to find a new process to
   // associate with the current SiteInstanceImpl) can return a spare process.
@@ -877,13 +393,6 @@ class CONTENT_EXPORT SiteInstanceImpl final : public SiteInstance,
   void PreventOptInOriginIsolation(
       const url::Origin& previously_visited_origin);
 
-  // Returns the current AgentSchedulingGroupHost this SiteInstance is
-  // associated with. Since the AgentSchedulingGroupHost *must* be assigned (and
-  // cleared) together with the RenderProcessHost, calling this method when no
-  // AgentSchedulingGroupHost is set will trigger the creation of a new
-  // RenderProcessHost (with a new ID).
-  AgentSchedulingGroupHost& GetAgentSchedulingGroup();
-
   // Returns the web-exposed isolation status of the BrowsingInstance this
   // SiteInstance is part of.
   const WebExposedIsolationInfo& GetWebExposedIsolationInfo() const;
@@ -891,6 +400,13 @@ class CONTENT_EXPORT SiteInstanceImpl final : public SiteInstance,
   // Simple helper function that returns the is_isolated property of the
   // WebExposedIsolationInfo of this BrowsingInstance.
   bool IsCrossOriginIsolated() const;
+
+  // Finds an existing SiteInstance in this SiteInstance's BrowsingInstance that
+  // matches this SiteInstance's SiteInfo but with the `is_sandboxed_` flag
+  // true. If an existing SiteInstance isn't found, a new one is created in the
+  // same BrowsingInstance. Note that this SiteInstance must have had its
+  // SiteInfo already assigned via SetSite() before calling this function.
+  scoped_refptr<SiteInstanceImpl> GetCompatibleSandboxedSiteInstance();
 
  private:
   friend class BrowsingInstance;
@@ -905,10 +421,8 @@ class CONTENT_EXPORT SiteInstanceImpl final : public SiteInstance,
 
   ~SiteInstanceImpl() override;
 
-  // RenderProcessHostObserver implementation.
-  void RenderProcessHostDestroyed(RenderProcessHost* host) override;
-  void RenderProcessExited(RenderProcessHost* host,
-                           const ChildProcessTerminationInfo& info) override;
+  // Returns true when |this| has a SiteInstanceGroup.
+  bool has_group() { return group() != nullptr; }
 
   // Used to restrict a process' origin access rights. This method gets called
   // when a process gets assigned to this SiteInstance and when the
@@ -990,28 +504,21 @@ class CONTENT_EXPORT SiteInstanceImpl final : public SiteInstance,
       const GURL& url,
       const SiteInfo& site_info);
 
-  // An object used to construct RenderProcessHosts.
-  static const RenderProcessHostFactory* g_render_process_host_factory_;
-
   // A unique ID for this SiteInstance.
   SiteInstanceId id_;
 
-  // The number of active frames in this SiteInstance.
-  size_t active_frame_count_;
+  // Determines which RenderViewHosts, RenderWidgetHosts, and
+  // RenderFrameProxyHosts it uses.
+  // `site_instance_group_` is set when a RenderProcessHost is set for this
+  // SiteInstance, and will be how `this` gets its RenderProcessHost and
+  // AgentSchedulingGroup.
+  // If the RenderProcessHost goes away, `site_instance_group_` will get reset.
+  // It can be set to another group later on as needed.
+  // See the class-level comment of SiteInstanceGroup for more details.
+  scoped_refptr<SiteInstanceGroup> site_instance_group_;
 
   // BrowsingInstance to which this SiteInstance belongs.
   scoped_refptr<BrowsingInstance> browsing_instance_;
-
-  // Current RenderProcessHost that is rendering pages for this SiteInstance,
-  // and AgentSchedulingGroupHost (within the process) this SiteInstance belongs
-  // to. Since AgentSchedulingGroupHost is associated with a specific
-  // RenderProcessHost, these *must be* changed together to avoid UAF!
-  // The |process_| pointer (and hence the |agent_scheduling_group_| pointer as
-  // well) will only change once the RenderProcessHost is destructed. They will
-  // still remain the same even if the process crashes, since in that scenario
-  // the RenderProcessHost remains the same.
-  RenderProcessHost* process_;
-  AgentSchedulingGroupHost* agent_scheduling_group_;
 
   // Describes the desired behavior when GetProcess() method needs to find a new
   // process to associate with the current SiteInstanceImpl.  If |false|, then
@@ -1038,8 +545,6 @@ class CONTENT_EXPORT SiteInstanceImpl final : public SiteInstance,
   // How |this| was last assigned to a renderer process.
   SiteInstanceProcessAssignment process_assignment_;
 
-  base::ObserverList<Observer, true>::Unchecked observers_;
-
   // Contains the state that is only required for default SiteInstances.
   class DefaultSiteInstanceState;
   std::unique_ptr<DefaultSiteInstanceState> default_site_instance_state_;
@@ -1047,8 +552,6 @@ class CONTENT_EXPORT SiteInstanceImpl final : public SiteInstance,
   // Keeps track of whether we need to verify that the StoragePartition
   // information does not change when `site_info_` is set.
   bool verify_storage_partition_info_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(SiteInstanceImpl);
 };
 
 }  // namespace content

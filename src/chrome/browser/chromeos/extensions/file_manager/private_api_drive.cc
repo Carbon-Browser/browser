@@ -22,7 +22,6 @@
 #include "base/strings/string_piece.h"
 #include "base/strings/string_split.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/task/post_task.h"
 #include "base/task/thread_pool.h"
 #include "chrome/browser/ash/arc/fileapi/arc_documents_provider_root.h"
 #include "chrome/browser/ash/arc/fileapi/arc_documents_provider_root_map.h"
@@ -31,6 +30,7 @@
 #include "chrome/browser/ash/drive/file_system_util.h"
 #include "chrome/browser/ash/file_manager/file_tasks.h"
 #include "chrome/browser/ash/file_manager/fileapi_util.h"
+#include "chrome/browser/ash/file_manager/path_util.h"
 #include "chrome/browser/ash/file_manager/url_util.h"
 #include "chrome/browser/ash/file_system_provider/mount_path_util.h"
 #include "chrome/browser/ash/file_system_provider/provided_file_system_interface.h"
@@ -44,13 +44,14 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
+#include "chrome/browser/ui/webui/chromeos/manage_mirrorsync/manage_mirrorsync_dialog.h"
 #include "chrome/common/extensions/api/file_manager_private_internal.h"
 #include "chrome/common/extensions/extension_constants.h"
-#include "chromeos/network/network_handler.h"
-#include "chromeos/network/network_state_handler.h"
+#include "chromeos/ash/components/network/network_handler.h"
+#include "chromeos/ash/components/network/network_state_handler.h"
 #include "components/drive/chromeos/search_metadata.h"
 #include "components/drive/event_logger.h"
-#include "components/signin/public/identity_manager/consent_level.h"
+#include "components/signin/public/base/consent_level.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
@@ -88,10 +89,8 @@ namespace {
 constexpr char kAvailableOfflinePropertyName[] = "availableOffline";
 
 // Thresholds for logging slow operations.
-constexpr base::TimeDelta kDriveSlowOperationThreshold =
-    base::TimeDelta::FromSeconds(5);
-constexpr base::TimeDelta kDriveVerySlowOperationThreshold =
-    base::TimeDelta::FromMinutes(1);
+constexpr base::TimeDelta kDriveSlowOperationThreshold = base::Seconds(5);
+constexpr base::TimeDelta kDriveVerySlowOperationThreshold = base::Minutes(1);
 
 class SingleEntryPropertiesGetterForFileSystemProvider {
  public:
@@ -296,8 +295,10 @@ class SingleEntryPropertiesGetterForDocumentsProvider {
     properties_->can_rename = std::make_unique<bool>(metadata.supports_rename);
     properties_->can_add_children =
         std::make_unique<bool>(metadata.dir_supports_create);
-    properties_->modification_time =
-        std::make_unique<double>(metadata.last_modified.ToJsTimeIgnoringNull());
+    if (!metadata.last_modified.is_null()) {
+      properties_->modification_time = std::make_unique<double>(
+          metadata.last_modified.ToJsTimeIgnoringNull());
+    }
     properties_->size = std::make_unique<double>(metadata.size);
     CompleteGetEntryProperties(base::File::FILE_OK);
   }
@@ -452,6 +453,19 @@ FileManagerPrivateInternalGetEntryPropertiesFunction::Run() {
     const GURL url = GURL(params->urls[i]);
     const storage::FileSystemURL file_system_url =
         file_system_context->CrackURLInFirstPartyContext(url);
+
+    constexpr auto is_fusebox_fsp = [](const storage::FileSystemURL& url) {
+      if (url.type() != storage::kFileSystemTypeFuseBox)
+        return false;
+      if (!base::StartsWith(url.filesystem_id(), file_manager::util::kFuseBox))
+        return false;
+      static const base::FilePath::CharType kFuseBoxMediaPathFSPSuffix[] =
+          FILE_PATH_LITERAL("/media/fuse/fusebox/fsp:");
+      if (!base::StartsWith(url.path().value(), kFuseBoxMediaPathFSPSuffix))
+        return false;
+      return true;
+    };
+
     switch (file_system_url.type()) {
       case storage::kFileSystemTypeProvided:
         SingleEntryPropertiesGetterForFileSystemProvider::Start(
@@ -478,6 +492,17 @@ FileManagerPrivateInternalGetEntryPropertiesFunction::Run() {
                 this, i, file_system_url));
         break;
       default:
+        // Handle FuseBox provided storage::kFileSystemTypeProvided file system.
+        if (is_fusebox_fsp(file_system_url)) {
+          SingleEntryPropertiesGetterForFileSystemProvider::Start(
+              file_system_url, names_as_set,
+              base::BindOnce(
+                  &FileManagerPrivateInternalGetEntryPropertiesFunction::
+                      CompleteGetEntryProperties,
+                  this, i, file_system_url));
+          break;
+        }
+
         // TODO(yawano) Change this to support other voluems (e.g. local) ,and
         // integrate fileManagerPrivate.getMimeType to this method.
         LOG(ERROR) << "Not supported file system type.";
@@ -735,7 +760,7 @@ void FileManagerPrivateSearchDriveMetadataFunction::OnSearchDriveFs(
   }
 
   auto results_list = std::make_unique<base::ListValue>();
-  for (auto& entry : results->GetList()) {
+  for (auto& entry : results->GetListDeprecated()) {
     base::DictionaryValue dict;
     std::string highlight;
     base::Value* value = entry.FindKey("fileFullPath");
@@ -947,6 +972,29 @@ FileManagerPrivateNotifyDriveDialogResultFunction::Run() {
     event_router->OnDriveDialogResult(result);
   } else {
     return RespondNow(Error("Could not find event router"));
+  }
+  return RespondNow(NoArguments());
+}
+
+ExtensionFunction::ResponseAction
+FileManagerPrivatePollDriveHostedFilePinStatesFunction::Run() {
+  if (base::FeatureList::IsEnabled(
+          ash::features::kDriveFsBidirectionalNativeMessaging)) {
+    Profile* const profile = Profile::FromBrowserContext(browser_context());
+    drive::DriveIntegrationService* integration_service =
+        drive::util::GetIntegrationServiceByProfile(profile);
+    if (integration_service) {
+      integration_service->PollHostedFilePinStates();
+    }
+  }
+  return RespondNow(NoArguments());
+}
+
+ExtensionFunction::ResponseAction
+FileManagerPrivateOpenManageSyncSettingsFunction::Run() {
+  if (ash::features::IsDriveFsMirroringEnabled()) {
+    chromeos::ManageMirrorSyncDialog::Show(
+        Profile::FromBrowserContext(browser_context()));
   }
   return RespondNow(NoArguments());
 }

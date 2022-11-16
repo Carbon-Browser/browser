@@ -11,7 +11,6 @@
 #include <vector>
 
 #include "base/callback.h"
-#include "base/macros.h"
 #include "dbus/object_path.h"
 #include "dbus/property.h"
 #include "device/bluetooth/bluetooth_export.h"
@@ -53,6 +52,9 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothBatteryClient : public BluezDBusClient {
                                         const std::string& property_name) {}
   };
 
+  BluetoothBatteryClient(const BluetoothBatteryClient&) = delete;
+  BluetoothBatteryClient& operator=(const BluetoothBatteryClient&) = delete;
+
   ~BluetoothBatteryClient() override;
 
   // Adds and removes observers for events on all remote bluetooth
@@ -70,9 +72,6 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothBatteryClient : public BluezDBusClient {
 
  protected:
   BluetoothBatteryClient();
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(BluetoothBatteryClient);
 };
 
 }  // namespace bluez

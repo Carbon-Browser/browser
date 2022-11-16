@@ -35,7 +35,8 @@ class PaymentAppServiceBridge : public PaymentAppFactory::Delegate {
   using PaymentAppCreatedCallback =
       base::RepeatingCallback<void(std::unique_ptr<PaymentApp>)>;
   using PaymentAppCreationErrorCallback =
-      base::RepeatingCallback<void(const std::string&)>;
+      base::RepeatingCallback<void(const std::string&,
+                                   AppCreationFailureReason)>;
 
   // Creates a new PaymentAppServiceBridge. This object is self-deleting; its
   // memory is freed when OnDoneCreatingPaymentApps() is called
@@ -48,6 +49,7 @@ class PaymentAppServiceBridge : public PaymentAppFactory::Delegate {
       const std::string& twa_package_name,
       scoped_refptr<PaymentManifestWebDataService> web_data_service,
       bool may_crawl_for_installable_payment_apps,
+      bool is_off_the_record,
       CanMakePaymentCalculatedCallback can_make_payment_calculated_callback,
       PaymentAppCreatedCallback payment_app_created_callback,
       PaymentAppCreationErrorCallback payment_app_creation_error_callback,
@@ -86,7 +88,9 @@ class PaymentAppServiceBridge : public PaymentAppFactory::Delegate {
   base::WeakPtr<PaymentRequestSpec> GetSpec() const override;
   std::string GetTwaPackageName() const override;
   void OnPaymentAppCreated(std::unique_ptr<PaymentApp> app) override;
-  void OnPaymentAppCreationError(const std::string& error_message) override;
+  void OnPaymentAppCreationError(
+      const std::string& error_message,
+      AppCreationFailureReason error_reason) override;
   bool SkipCreatingNativePaymentApps() const override;
   void OnDoneCreatingPaymentApps() override;
   void SetCanMakePaymentEvenWithoutApps() override;
@@ -102,6 +106,7 @@ class PaymentAppServiceBridge : public PaymentAppFactory::Delegate {
       const std::string& twa_package_name,
       scoped_refptr<PaymentManifestWebDataService> web_data_service,
       bool may_crawl_for_installable_payment_apps,
+      bool is_off_the_record,
       CanMakePaymentCalculatedCallback can_make_payment_calculated_callback,
       PaymentAppCreatedCallback payment_app_created_callback,
       PaymentAppCreationErrorCallback payment_app_creation_error_callback,
@@ -118,6 +123,7 @@ class PaymentAppServiceBridge : public PaymentAppFactory::Delegate {
   scoped_refptr<PaymentManifestWebDataService>
       payment_manifest_web_data_service_;
   bool may_crawl_for_installable_payment_apps_;
+  bool is_off_the_record_;
   std::vector<autofill::AutofillProfile*> dummy_profiles_;
 
   CanMakePaymentCalculatedCallback can_make_payment_calculated_callback_;

@@ -11,6 +11,7 @@
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
 #include "base/bind.h"
+#include "components/omnibox/browser/actions/omnibox_action.h"
 #include "components/omnibox/browser/clipboard_provider.h"
 #include "components/omnibox/browser/jni_headers/AutocompleteMatch_jni.h"
 #include "components/omnibox/browser/search_suggestion_parser.h"
@@ -75,16 +76,27 @@ ScopedJavaLocalRef<jobject> AutocompleteMatch::GetOrCreateJavaObject(
   ScopedJavaLocalRef<jobject> j_query_tiles =
       query_tiles::TileConversionBridge::CreateJavaTiles(env, query_tiles);
 
-  std::vector<std::u16string> navsuggest_titles;
-  navsuggest_titles.reserve(navsuggest_tiles.size());
-  std::vector<base::android::ScopedJavaLocalRef<jobject>> navsuggest_urls;
-  navsuggest_urls.reserve(navsuggest_tiles.size());
-  for (const auto& tile : navsuggest_tiles) {
-    navsuggest_titles.push_back(tile.title);
-    navsuggest_urls.push_back(url::GURLAndroid::FromNativeGURL(env, tile.url));
+  std::vector<std::u16string> suggest_titles;
+  suggest_titles.reserve(suggest_tiles.size());
+  std::vector<base::android::ScopedJavaLocalRef<jobject>> suggest_urls;
+  suggest_urls.reserve(suggest_tiles.size());
+  // Note: vector<bool> is a specialized version of vector that behaves
+  // differently, storing values as individual bits. This makes it impossible
+  // for us to use it to represent tile.is_search on the Java side.
+  std::vector<int> suggest_types;
+  suggest_types.reserve(suggest_tiles.size());
+  for (const auto& tile : suggest_tiles) {
+    suggest_titles.push_back(tile.title);
+    suggest_urls.push_back(url::GURLAndroid::FromNativeGURL(env, tile.url));
+    suggest_types.push_back(tile.is_search);
   }
 
   std::vector<int> temp_subtypes(subtypes.begin(), subtypes.end());
+
+  ScopedJavaLocalRef<jobject> j_action_obj;
+  if (action) {
+    j_action_obj = action->GetJavaObject();
+  }
 
   java_match_ = std::make_unique<ScopedJavaGlobalRef<jobject>>(
       Java_AutocompleteMatch_build(
@@ -101,11 +113,13 @@ ScopedJavaLocalRef<jobject> AutocompleteMatch::GetOrCreateJavaObject(
           url::GURLAndroid::FromNativeGURL(env, image_url),
           j_image_dominant_color, SupportsDeletion(), j_post_content_type,
           j_post_content,
-          suggestion_group_id.value_or(
-              SearchSuggestionParser::kNoSuggestionGroupId),
+          static_cast<int>(
+              suggestion_group_id.value_or(SuggestionGroupId::kInvalid)),
           j_query_tiles, ToJavaByteArray(env, clipboard_image_data),
-          has_tab_match, ToJavaArrayOfStrings(env, navsuggest_titles),
-          url::GURLAndroid::ToJavaArrayOfGURLs(env, navsuggest_urls)));
+          has_tab_match.value_or(false),
+          ToJavaArrayOfStrings(env, suggest_titles),
+          url::GURLAndroid::ToJavaArrayOfGURLs(env, suggest_urls),
+          ToJavaIntArray(env, suggest_types), j_action_obj));
 
   return ScopedJavaLocalRef<jobject>(*java_match_);
 }
@@ -149,6 +163,26 @@ void AutocompleteMatch::OnClipboardSuggestionContentUpdated(
   JNIEnv* env = base::android::AttachCurrentThread();
   UpdateClipboardContent(env);
   RunRunnableAndroid(j_callback);
+}
+
+void AutocompleteMatch::UpdateMatchingJavaTab(
+    const JavaObjectWeakGlobalRef& tab) {
+  matching_java_tab_ = tab;
+
+  // Default state is: we don't have a matching tab. If that default state has
+  // changed, reflect it in the UI.
+  // TODO(crbug.com/1266558): when Tab.java is relocated to Components, pass the
+  // Tab object directly to Java. This is not possible right now due to
+  // //components being explicitly denied to depend on //chrome targets.
+  if (!java_match_ || !has_tab_match.value_or(false))
+    return;
+
+  JNIEnv* env = base::android::AttachCurrentThread();
+  Java_AutocompleteMatch_updateMatchingTab(env, *java_match_, true);
+}
+
+JavaObjectWeakGlobalRef AutocompleteMatch::GetMatchingJavaTab() const {
+  return matching_java_tab_;
 }
 
 void AutocompleteMatch::UpdateClipboardContent(JNIEnv* env) {

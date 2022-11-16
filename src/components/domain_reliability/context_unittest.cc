@@ -16,6 +16,7 @@
 #include "base/strings/string_piece.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/metrics/histogram_tester.h"
+#include "base/time/time.h"
 #include "components/domain_reliability/beacon.h"
 #include "components/domain_reliability/dispatcher.h"
 #include "components/domain_reliability/scheduler.h"
@@ -51,7 +52,7 @@ std::unique_ptr<DomainReliabilityBeacon> MakeCustomizedBeacon(
   beacon->details.quic_broken = true;
   beacon->details.quic_port_migration_detected = quic_port_migration_detected;
   beacon->http_response_code = -1;
-  beacon->elapsed = base::TimeDelta::FromMilliseconds(250);
+  beacon->elapsed = base::Milliseconds(250);
   beacon->start_time = time->NowTicks() - beacon->elapsed;
   beacon->upload_depth = 0;
   beacon->sample_rate = 1.0;
@@ -109,9 +110,9 @@ bool GetEntryFromReport(const Value* report,
   if (!report || !report->is_dict())
     return false;
   const Value* entries = report->FindListKey("entries");
-  if (!entries || index >= entries->GetList().size())
+  if (!entries || index >= entries->GetListDeprecated().size())
     return false;
-  const Value& entry = entries->GetList()[index];
+  const Value& entry = entries->GetListDeprecated()[index];
   if (!entry.is_dict())
     return false;
   *entry_out = &entry;
@@ -135,7 +136,7 @@ class DomainReliabilityContextTest : public testing::Test {
     // Make sure that the last network change does not overlap requests
     // made in test cases, which start 250ms in the past (see |MakeBeacon|).
     last_network_change_time_ = time_.NowTicks();
-    time_.Advance(base::TimeDelta::FromSeconds(1));
+    time_.Advance(base::Seconds(1));
   }
 
   void InitContext(std::unique_ptr<const DomainReliabilityConfig> config) {
@@ -151,9 +152,7 @@ class DomainReliabilityContextTest : public testing::Test {
   base::TimeDelta retry_interval() const {
     return params_.upload_retry_interval;
   }
-  base::TimeDelta zero_delta() const {
-    return base::TimeDelta::FromMicroseconds(0);
-  }
+  base::TimeDelta zero_delta() const { return base::Microseconds(0); }
 
   bool upload_allowed_callback_pending() const {
     return !upload_allowed_result_callback_.is_null();
@@ -930,7 +929,7 @@ TEST_F(DomainReliabilityContextTest, ExpiredBeaconDoesNotUpload) {
   base::HistogramTester histograms;
   InitContext(MakeTestConfig());
   std::unique_ptr<DomainReliabilityBeacon> beacon = MakeBeacon(&time_);
-  time_.Advance(base::TimeDelta::FromHours(2));
+  time_.Advance(base::Hours(2));
   context_->OnBeacon(std::move(beacon));
 
   time_.Advance(max_delay());
@@ -953,12 +952,12 @@ TEST_F(DomainReliabilityContextTest, EvictOldestBeacon) {
 
   std::unique_ptr<DomainReliabilityBeacon> oldest_beacon = MakeBeacon(&time_);
   const DomainReliabilityBeacon* oldest_beacon_ptr = oldest_beacon.get();
-  time_.Advance(base::TimeDelta::FromSeconds(1));
+  time_.Advance(base::Seconds(1));
   context_->OnBeacon(std::move(oldest_beacon));
 
   for (size_t i = 0; i < DomainReliabilityContext::kMaxQueuedBeacons; ++i) {
     std::unique_ptr<DomainReliabilityBeacon> beacon = MakeBeacon(&time_);
-    time_.Advance(base::TimeDelta::FromSeconds(1));
+    time_.Advance(base::Seconds(1));
     context_->OnBeacon(std::move(beacon));
   }
 

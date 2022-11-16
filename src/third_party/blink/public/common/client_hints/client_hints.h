@@ -6,8 +6,10 @@
 #define THIRD_PARTY_BLINK_PUBLIC_COMMON_CLIENT_HINTS_CLIENT_HINTS_H_
 
 #include <stddef.h>
+#include <set>
 #include <string>
 
+#include "base/containers/flat_map.h"
 #include "services/network/public/mojom/web_client_hints_types.mojom-shared.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/common_export.h"
@@ -19,11 +21,24 @@ namespace blink {
 
 class PermissionsPolicy;
 
+using ClientHintToPolicyFeatureMap =
+    base::flat_map<network::mojom::WebClientHintsType,
+                   mojom::PermissionsPolicyFeature>;
+
+using PolicyFeatureToClientHintMap =
+    base::flat_map<mojom::PermissionsPolicyFeature,
+                   std::set<network::mojom::WebClientHintsType>>;
+
 // Mapping from WebClientHintsType to the corresponding Permissions-Policy (e.g.
 // kDpr => kClientHintsDPR). The order matches the header mapping and the enum
 // order in services/network/public/mojom/web_client_hints_types.mojom
-BLINK_COMMON_EXPORT extern const mojom::PermissionsPolicyFeature
-    kClientHintsPermissionsPolicyMapping[];
+BLINK_COMMON_EXPORT const ClientHintToPolicyFeatureMap&
+GetClientHintToPolicyFeatureMap();
+
+// Mapping from Permissions-Policy to the corresponding WebClientHintsType(s)
+// (e.g. kClientHintsDPR => {kDpr, kDpr_DEPRECATED}).
+BLINK_COMMON_EXPORT const PolicyFeatureToClientHintMap&
+GetPolicyFeatureToClientHintMap();
 
 // Mapping from WebEffectiveConnectionType to the header value. This value is
 // sent to the origins and is returned by the JavaScript API. The ordering
@@ -35,12 +50,6 @@ BLINK_COMMON_EXPORT extern const char* const
     kWebEffectiveConnectionTypeMapping[];
 
 BLINK_COMMON_EXPORT extern const size_t kWebEffectiveConnectionTypeMappingCount;
-
-// Given a comma-separated, ordered list of language codes, return the list
-// formatted as a structured header, as described in
-// https://tools.ietf.org/html/draft-west-lang-client-hint-00#section-2.1
-std::string BLINK_COMMON_EXPORT
-SerializeLangClientHint(const std::string& raw_language_list);
 
 // Indicates that a hint is sent by default, regardless of an opt-in.
 BLINK_COMMON_EXPORT

@@ -32,6 +32,7 @@ import org.chromium.components.embedder_support.util.UrlUtilities;
 import org.chromium.components.omnibox.SecurityButtonAnimationDelegate;
 import org.chromium.components.omnibox.SecurityStatusIcon;
 import org.chromium.components.page_info.PageInfoController;
+import org.chromium.components.page_info.PageInfoHighlight;
 import org.chromium.components.security_state.ConnectionSecurityLevel;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.weblayer_private.interfaces.IObjectWrapper;
@@ -132,7 +133,7 @@ public class UrlBarControllerImpl extends IUrlBarController.Stub {
         PageInfoController.show(mBrowserImpl.getWindowAndroid().getActivity().get(), webContents,
                 publisherUrl, PageInfoController.OpenedFromSource.TOOLBAR,
                 PageInfoControllerDelegateImpl.create(webContents),
-                PageInfoController.NO_HIGHLIGHTED_PERMISSION);
+                PageInfoHighlight.noHighlight());
     }
 
     protected class UrlBarView
@@ -179,20 +180,26 @@ public class UrlBarControllerImpl extends IUrlBarController.Stub {
             mUrlBarLongClickListener =
                     ObjectWrapper.unwrap(longClickListener, OnLongClickListener.class);
 
-            updateView();
+            // NOTE: We don't animate the security button update here because this is not a change
+            // per se but rather an initial setting of the state. See crbug.com/1247666 for details.
+            updateView(/*animateSecurityButtonUpdate=*/false);
         }
 
         // BrowserImpl.VisibleSecurityStateObserver
         @Override
         public void onVisibleSecurityStateOfActiveTabChanged() {
-            updateView();
+            updateView(/*animateSecurityButtonUpdate=*/true);
         }
 
         @Override
         protected void onAttachedToWindow() {
             if (mBrowserImpl != null) {
                 mBrowserImpl.addVisibleSecurityStateObserver(this);
-                updateView();
+
+                // NOTE: We don't animate the security button update here because this is not a
+                // change per se but rather an initial setting of the state. See crbug.com/1247666
+                // for details.
+                updateView(/*animateSecurityButtonUpdate=*/false);
             }
 
             super.onAttachedToWindow();
@@ -206,7 +213,7 @@ public class UrlBarControllerImpl extends IUrlBarController.Stub {
             mController.removeActiveView();
         }
 
-        private void updateView() {
+        private void updateView(boolean animateSecurityButtonUpdate) {
             if (mBrowserImpl == null) return;
             int securityLevel = UrlBarControllerImplJni.get().getConnectionSecurityLevel(
                     mNativeUrlBarController);
@@ -234,7 +241,9 @@ public class UrlBarControllerImpl extends IUrlBarController.Stub {
                 mUrlTextView.setTextColor(ContextCompat.getColor(embedderContext, mUrlTextColor));
             }
 
-            mSecurityButtonAnimationDelegate.updateSecurityButton(securityIcon);
+            mSecurityButtonAnimationDelegate.updateSecurityButton(
+                    securityIcon, animateSecurityButtonUpdate);
+
             mSecurityButton.setContentDescription(getContext().getResources().getString(
                     SecurityStatusIcon.getSecurityIconContentDescriptionResourceId(securityLevel)));
 

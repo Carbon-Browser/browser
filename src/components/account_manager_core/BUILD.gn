@@ -6,12 +6,13 @@ import("//build/config/chromeos/ui_mode.gni")
 import("//build/config/ui.gni")
 import("//third_party/protobuf/proto_library.gni")
 
-assert(is_chromeos_ash || is_chromeos_lacros)
+assert(is_chromeos)
 
 component("account_manager_core") {
   sources = [
     "account.cc",
     "account.h",
+    "account_addition_options.h",
     "account_addition_result.cc",
     "account_addition_result.h",
     "account_manager_facade.cc",
@@ -48,7 +49,10 @@ component("account_manager_core") {
     deps += [ "//chromeos/lacros:lacros" ]
   }
 
-  public_deps = [ ":account_manager_proto" ]
+  public_deps = [
+    ":account_manager_proto",
+    "//third_party/abseil-cpp:absl",
+  ]
 
   defines = [ "IS_ACCOUNT_MANAGER_CORE_IMPL" ]
 }
@@ -59,6 +63,16 @@ source_set("test_support") {
   sources = [
     "account_manager_test_util.cc",
     "account_manager_test_util.h",
+    "chromeos/fake_account_manager_ui.cc",
+    "chromeos/fake_account_manager_ui.h",
+    "mock_account_manager_facade.cc",
+    "mock_account_manager_facade.h",
+  ]
+
+  public_deps = [
+    "//base",
+    "//google_apis",
+    "//testing/gmock",
   ]
 
   deps = [ ":account_manager_core" ]

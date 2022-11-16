@@ -7,6 +7,7 @@
 #include "third_party/blink/renderer/core/css/css_inherited_value.h"
 #include "third_party/blink/renderer/core/css/css_initial_value.h"
 #include "third_party/blink/renderer/core/css/css_pending_substitution_value.h"
+#include "third_party/blink/renderer/core/css/css_revert_layer_value.h"
 #include "third_party/blink/renderer/core/css/css_revert_value.h"
 #include "third_party/blink/renderer/core/css/css_unicode_range_value.h"
 #include "third_party/blink/renderer/core/css/css_unset_value.h"
@@ -48,6 +49,8 @@ const CSSValue* MaybeConsumeCSSWideKeyword(CSSParserTokenRange& range) {
     value = cssvalue::CSSUnsetValue::Create();
   if (id == CSSValueID::kRevert)
     value = cssvalue::CSSRevertValue::Create();
+  if (id == CSSValueID::kRevertLayer)
+    value = cssvalue::CSSRevertLayerValue::Create();
 
   if (value)
     range = local_range;
@@ -55,12 +58,30 @@ const CSSValue* MaybeConsumeCSSWideKeyword(CSSParserTokenRange& range) {
   return value;
 }
 
+bool IsPropertyAllowedInRule(const CSSProperty& property,
+                             StyleRule::RuleType rule_type) {
+  // This function should be called only when parsing a property. Shouldn't
+  // reach here with a descriptor.
+  DCHECK(property.IsProperty());
+  switch (rule_type) {
+    case StyleRule::kStyle:
+      return true;
+    case StyleRule::kKeyframe:
+      return property.IsValidForKeyframe();
+    case StyleRule::kTry:
+      return property.IsValidForPositionFallback();
+    default:
+      NOTREACHED();
+      return false;
+  }
+}
+
 }  // namespace
 
 CSSPropertyParser::CSSPropertyParser(
     const CSSParserTokenRange& range,
     const CSSParserContext* context,
-    HeapVector<CSSPropertyValue, 256>* parsed_properties)
+    HeapVector<CSSPropertyValue, 64>* parsed_properties)
     : range_(range), context_(context), parsed_properties_(parsed_properties) {
   range_.ConsumeWhitespace();
 }
@@ -70,7 +91,7 @@ bool CSSPropertyParser::ParseValue(
     bool important,
     const CSSParserTokenRange& range,
     const CSSParserContext* context,
-    HeapVector<CSSPropertyValue, 256>& parsed_properties,
+    HeapVector<CSSPropertyValue, 64>& parsed_properties,
     StyleRule::RuleType rule_type) {
   int parsed_properties_size = parsed_properties.size();
 
@@ -84,7 +105,8 @@ bool CSSPropertyParser::ParseValue(
   } else if (rule_type == StyleRule::kFontFace) {
     parse_success = parser.ParseFontFaceDescriptor(resolved_property);
   } else {
-    parse_success = parser.ParseValueStart(unresolved_property, important);
+    parse_success =
+        parser.ParseValueStart(unresolved_property, rule_type, important);
   }
 
   // This doesn't count UA style sheets
@@ -115,8 +137,9 @@ const CSSValue* CSSPropertyParser::ParseSingleValue(
 }
 
 bool CSSPropertyParser::ParseValueStart(CSSPropertyID unresolved_property,
+                                        StyleRule::RuleType rule_type,
                                         bool important) {
-  if (ConsumeCSSWideKeyword(unresolved_property, important))
+  if (ConsumeCSSWideKeyword(unresolved_property, important, rule_type))
     return true;
 
   CSSParserTokenRange original_range = range_;
@@ -125,6 +148,8 @@ bool CSSPropertyParser::ParseValueStart(CSSPropertyID unresolved_property,
   // If a CSSPropertyID is only a known descriptor (@fontface, @property), not a
   // style property, it will not be a valid declaration.
   if (!property.IsProperty())
+    return false;
+  if (!IsPropertyAllowedInRule(property, rule_type))
     return false;
   bool is_shorthand = property.IsShorthand();
   DCHECK(context_);
@@ -189,7 +214,7 @@ static CSSPropertyID UnresolvedCSSPropertyID(
     CSSParserMode mode) {
   if (length == 0)
     return CSSPropertyID::kInvalid;
-  if (length >= 2 && property_name[0] == '-' && property_name[1] == '-')
+  if (length >= 3 && property_name[0] == '-' && property_name[1] == '-')
     return CSSPropertyID::kVariable;
   if (length > kMaxCSSPropertyNameLength)
     return CSSPropertyID::kInvalid;
@@ -261,12 +286,19 @@ CSSValueID CssValueKeywordID(StringView string) {
 }
 
 bool CSSPropertyParser::ConsumeCSSWideKeyword(CSSPropertyID unresolved_property,
-                                              bool important) {
+                                              bool important,
+                                              StyleRule::RuleType rule_type) {
   CSSParserTokenRange range_copy = range_;
 
   const CSSValue* value = MaybeConsumeCSSWideKeyword(range_copy);
   if (!value)
     return false;
+
+  if (value->IsRevertValue() || value->IsRevertLayerValue()) {
+    // Declarations in @try are not cascaded and cannot be reverted.
+    if (rule_type == StyleRule::kTry)
+      return false;
+  }
 
   CSSPropertyID property = ResolveCSSPropertyID(unresolved_property);
   const StylePropertyShorthand& shorthand = shorthandForProperty(property);
@@ -295,19 +327,19 @@ static CSSValue* ConsumeSingleViewportDescriptor(
     case CSSPropertyID::kMaxHeight:
       if (id == CSSValueID::kAuto || id == CSSValueID::kInternalExtendToZoom)
         return ConsumeIdent(range);
-      return css_parsing_utils::ConsumeLengthOrPercent(range, context,
-                                                       kValueRangeNonNegative);
+      return css_parsing_utils::ConsumeLengthOrPercent(
+          range, context, CSSPrimitiveValue::ValueRange::kNonNegative);
     case CSSPropertyID::kMinZoom:
     case CSSPropertyID::kMaxZoom:
     case CSSPropertyID::kZoom: {
       if (id == CSSValueID::kAuto)
         return ConsumeIdent(range);
       CSSValue* parsed_value = css_parsing_utils::ConsumeNumber(
-          range, context, kValueRangeNonNegative);
+          range, context, CSSPrimitiveValue::ValueRange::kNonNegative);
       if (parsed_value)
         return parsed_value;
-      return css_parsing_utils::ConsumePercent(range, context,
-                                               kValueRangeNonNegative);
+      return css_parsing_utils::ConsumePercent(
+          range, context, CSSPrimitiveValue::ValueRange::kNonNegative);
     }
     case CSSPropertyID::kUserZoom:
       return ConsumeIdent<CSSValueID::kZoom, CSSValueID::kFixed>(range);

@@ -15,7 +15,6 @@
 #include <vector>
 
 #include "base/bind.h"
-#include "base/cxx17_backports.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_file.h"
 #include "base/posix/eintr_wrapper.h"
@@ -24,6 +23,7 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/events/base_event_utils.h"
+#include "ui/events/devices/device_util_linux.h"
 #include "ui/events/event.h"
 #include "ui/events/ozone/device/device_manager.h"
 #include "ui/events/ozone/evdev/event_converter_test_util.h"
@@ -91,6 +91,11 @@ class GamepadEventConverterEvdevTest : public testing::Test {
  public:
   GamepadEventConverterEvdevTest() {}
 
+  GamepadEventConverterEvdevTest(const GamepadEventConverterEvdevTest&) =
+      delete;
+  GamepadEventConverterEvdevTest& operator=(
+      const GamepadEventConverterEvdevTest&) = delete;
+
   // Overriden from testing::Test:
   void SetUp() override {
     device_manager_ = ui::CreateDeviceManagerForTest();
@@ -127,8 +132,6 @@ class GamepadEventConverterEvdevTest : public testing::Test {
   std::unique_ptr<ui::KeyboardLayoutEngine> keyboard_layout_engine_;
   std::unique_ptr<ui::EventFactoryEvdev> event_factory_;
   std::unique_ptr<ui::DeviceEventDispatcherEvdev> dispatcher_;
-
-  DISALLOW_COPY_AND_ASSIGN(GamepadEventConverterEvdevTest);
 };
 
 struct ExpectedEvent {
@@ -207,7 +210,7 @@ TEST_F(GamepadEventConverterEvdevTest, XboxGamepadEvents) {
       {GamepadEventType::BUTTON, 307, 1}, {GamepadEventType::FRAME, 0, 0},
   };
 
-  for (unsigned i = 0; i < base::size(mock_kernel_queue); ++i) {
+  for (unsigned i = 0; i < std::size(mock_kernel_queue); ++i) {
     dev->ProcessEvent(mock_kernel_queue[i]);
   }
 
@@ -247,6 +250,17 @@ TEST_F(GamepadEventConverterEvdevTest, XboxGamepadVibrationEvents) {
   input_event received_cancel_event = dev->written_input_events_[1];
   EXPECT_EQ(expected_events[1].code, received_cancel_event.code);
   EXPECT_EQ(expected_events[1].value, received_cancel_event.value);
+}
+
+TEST_F(GamepadEventConverterEvdevTest, XboxGamepadHasKeys) {
+  TestGamepadObserver observer;
+  std::unique_ptr<ui::TestGamepadEventConverterEvdev> dev =
+      CreateDevice(kXboxGamepad);
+
+  const std::vector<uint64_t> key_bits = dev->GetGamepadKeyBits();
+
+  // BTN_A should be supported.
+  EXPECT_TRUE(EvdevBitUint64IsSet(key_bits.data(), 305));
 }
 
 }  // namespace ui

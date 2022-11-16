@@ -8,6 +8,7 @@
 
 #include "base/bind.h"
 #include "base/check_op.h"
+#include "base/observer_list.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/resource_coordinator/discard_metrics_lifecycle_unit_observer.h"
@@ -37,6 +38,9 @@ class TabLifecycleUnitSource::TabLifecycleUnitHolder
     : public content::WebContentsUserData<
           TabLifecycleUnitSource::TabLifecycleUnitHolder> {
  public:
+  TabLifecycleUnitHolder(const TabLifecycleUnitHolder&) = delete;
+  TabLifecycleUnitHolder& operator=(const TabLifecycleUnitHolder&) = delete;
+
   ~TabLifecycleUnitHolder() override = default;
 
   TabLifecycleUnit* lifecycle_unit() const { return lifecycle_unit_.get(); }
@@ -50,15 +54,15 @@ class TabLifecycleUnitSource::TabLifecycleUnitHolder
  private:
   friend class content::WebContentsUserData<TabLifecycleUnitHolder>;
 
-  explicit TabLifecycleUnitHolder(content::WebContents*) {}
+  explicit TabLifecycleUnitHolder(content::WebContents* web_contents)
+      : content::WebContentsUserData<
+            TabLifecycleUnitSource::TabLifecycleUnitHolder>(*web_contents) {}
 
   std::unique_ptr<TabLifecycleUnit> lifecycle_unit_;
-
-  DISALLOW_COPY_AND_ASSIGN(TabLifecycleUnitHolder);
   WEB_CONTENTS_USER_DATA_KEY_DECL();
 };
 
-WEB_CONTENTS_USER_DATA_KEY_IMPL(TabLifecycleUnitSource::TabLifecycleUnitHolder)
+WEB_CONTENTS_USER_DATA_KEY_IMPL(TabLifecycleUnitSource::TabLifecycleUnitHolder);
 
 // A very simple graph observer that forwards events over to the
 // TabLifecycleUnitSource on the UI thread. This is created on the UI thread
@@ -72,6 +76,11 @@ class TabLifecycleStateObserver
   using WebContentsProxy = performance_manager::WebContentsProxy;
 
   TabLifecycleStateObserver() = default;
+
+  TabLifecycleStateObserver(const TabLifecycleStateObserver&) = delete;
+  TabLifecycleStateObserver& operator=(const TabLifecycleStateObserver&) =
+      delete;
+
   ~TabLifecycleStateObserver() override = default;
 
  private:
@@ -102,8 +111,6 @@ class TabLifecycleStateObserver
   void OnTakenFromGraph(Graph* graph) override {
     graph->RemovePageNodeObserver(this);
   }
-
-  DISALLOW_COPY_AND_ASSIGN(TabLifecycleStateObserver);
 };
 
 TabLifecycleUnitSource::TabLifecycleUnitSource(
@@ -224,7 +231,7 @@ void TabLifecycleUnitSource::OnTabInserted(TabStripModel* tab_strip_model,
     holder->set_lifecycle_unit(std::make_unique<TabLifecycleUnit>(
         this, &tab_lifecycle_observers_, usage_clock_, contents,
         tab_strip_model));
-    TabLifecycleUnit* lifecycle_unit = holder->lifecycle_unit();
+    lifecycle_unit = holder->lifecycle_unit();
     if (GetFocusedTabStripModel() == tab_strip_model && foreground)
       UpdateFocusedTabTo(lifecycle_unit);
 

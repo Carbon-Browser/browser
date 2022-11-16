@@ -9,7 +9,7 @@
 
 #include "base/callback.h"
 #include "base/component_export.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "device/fido/authenticator_get_assertion_response.h"
 #include "device/fido/ctap_get_assertion_request.h"
 #include "device/fido/mac/credential_store.h"
@@ -29,8 +29,7 @@ namespace mac {
 //
 // For documentation on the keychain item metadata, see
 // |MakeCredentialOperation|.
-class API_AVAILABLE(macosx(10.12.2))
-    COMPONENT_EXPORT(DEVICE_FIDO) GetAssertionOperation : public Operation {
+class COMPONENT_EXPORT(DEVICE_FIDO) GetAssertionOperation : public Operation {
  public:
   using Callback = base::OnceCallback<void(
       CtapDeviceResponseCode,
@@ -39,6 +38,10 @@ class API_AVAILABLE(macosx(10.12.2))
   GetAssertionOperation(CtapGetAssertionRequest request,
                         TouchIdCredentialStore* credential_store,
                         Callback callback);
+
+  GetAssertionOperation(const GetAssertionOperation&) = delete;
+  GetAssertionOperation& operator=(const GetAssertionOperation&) = delete;
+
   ~GetAssertionOperation() override;
 
   // Operation:
@@ -57,11 +60,9 @@ class API_AVAILABLE(macosx(10.12.2))
       TouchIdContext::Create();
 
   const CtapGetAssertionRequest request_;
-  TouchIdCredentialStore* const credential_store_;
+  const raw_ptr<TouchIdCredentialStore> credential_store_;
   Callback callback_;
   std::list<Credential> matching_credentials_;
-
-  DISALLOW_COPY_AND_ASSIGN(GetAssertionOperation);
 };
 
 }  // namespace mac

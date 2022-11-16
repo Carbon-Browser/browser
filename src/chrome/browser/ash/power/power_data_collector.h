@@ -5,9 +5,7 @@
 #ifndef CHROME_BROWSER_ASH_POWER_POWER_DATA_COLLECTOR_H_
 #define CHROME_BROWSER_ASH_POWER_POWER_DATA_COLLECTOR_H_
 
-#include "base/compiler_specific.h"
 #include "base/containers/circular_deque.h"
-#include "base/macros.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/power/cpu_data_collector.h"
 #include "chromeos/dbus/power/power_manager_client.h"
@@ -54,6 +52,9 @@ class PowerDataCollector : public PowerManagerClient::Observer {
     base::TimeDelta sleep_duration;
   };
 
+  PowerDataCollector(const PowerDataCollector&) = delete;
+  PowerDataCollector& operator=(const PowerDataCollector&) = delete;
+
   const base::circular_deque<PowerSupplySample>& power_supply_data() const {
     return power_supply_data_;
   }
@@ -95,8 +96,6 @@ class PowerDataCollector : public PowerManagerClient::Observer {
   base::circular_deque<PowerSupplySample> power_supply_data_;
   base::circular_deque<SystemResumedSample> system_resumed_data_;
   CpuDataCollector cpu_data_collector_;
-
-  DISALLOW_COPY_AND_ASSIGN(PowerDataCollector);
 };
 
 // Adds |sample| to |sample_deque|.
@@ -108,7 +107,7 @@ void AddSample(base::circular_deque<SampleType>* sample_queue,
   while (!sample_queue->empty()) {
     const SampleType& first = sample_queue->front();
     if (sample.time - first.time >
-        base::TimeDelta::FromSeconds(PowerDataCollector::kSampleTimeLimitSec)) {
+        base::Seconds(PowerDataCollector::kSampleTimeLimitSec)) {
       sample_queue->pop_front();
     } else {
       break;

@@ -42,7 +42,7 @@ export type CertificatesOrgGroup = {
   id: string,
   name: string,
   containsPolicyCerts: boolean,
-  subnodes: Array<CertificateSubnode>,
+  subnodes: CertificateSubnode[],
 };
 
 export type CaTrustInfo = {
@@ -79,7 +79,7 @@ export enum CertificateType {
 export type CertificatesImportError = {
   title: string,
   description: string,
-  certificateErrors: Array<{name: string, error: string}>
+  certificateErrors: Array<{name: string, error: string}>,
 };
 
 export interface CertificatesBrowserProxy {

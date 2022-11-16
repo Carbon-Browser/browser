@@ -24,11 +24,9 @@ template <class P>
 struct ParamTraits;
 }  // namespace IPC
 
-namespace network {
-namespace mojom {
+namespace network::mojom {
 class SchemefulSiteDataView;
-}  // namespace mojom
-}  // namespace network
+}  // namespace network::mojom
 
 namespace mojo {
 template <typename DataViewType, typename T>
@@ -214,9 +212,9 @@ class NET_EXPORT SchemefulSite {
 
 // Provided to allow gtest to create more helpful error messages, instead of
 // printing hex.
-inline void PrintTo(const SchemefulSite& ss, std::ostream* os) {
-  *os << ss.Serialize();
-}
+//
+// Also used so that SchemefulSites can be the arguments of DCHECK_EQ.
+NET_EXPORT std::ostream& operator<<(std::ostream& os, const SchemefulSite& ss);
 
 }  // namespace net
 

@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "third_party/blink/public/platform/media/web_media_player_impl.h"
+#include "third_party/blink/renderer/platform/media/web_media_player_impl.h"
 
 #include <stdint.h>
 
@@ -16,17 +16,18 @@
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/task_runner_util.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/task/task_runner_util.h"
 #include "base/test/bind.h"
 #include "base/test/gmock_callback_support.h"
 #include "base/test/mock_callback.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/simple_test_tick_clock.h"
 #include "base/threading/thread.h"
+#include "base/time/time.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "build/build_config.h"
 #include "cc/layers/layer.h"
@@ -52,8 +53,9 @@
 #include "mojo/public/cpp/bindings/remote.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/blink/public/common/thread_safe_browser_interface_broker_proxy.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
-#include "third_party/blink/public/platform/media/web_media_player_params.h"
+#include "third_party/blink/public/platform/media/web_media_player_builder.h"
 #include "third_party/blink/public/platform/media/webmediaplayer_delegate.h"
 #include "third_party/blink/public/platform/scheduler/web_thread_scheduler.h"
 #include "third_party/blink/public/platform/web_fullscreen_video_status.h"
@@ -70,6 +72,8 @@
 #include "third_party/blink/public/web/web_view.h"
 #include "third_party/blink/public/web/web_widget.h"
 #include "third_party/blink/renderer/core/frame/frame_test_helpers.h"
+#include "third_party/blink/renderer/platform/media/buffered_data_source_host_impl.h"
+#include "third_party/blink/renderer/platform/media/power_status_helper.h"
 #include "third_party/blink/renderer/platform/media/resource_multi_buffer_data_provider.h"
 #include "third_party/blink/renderer/platform/media/testing/mock_resource_fetch_context.h"
 #include "third_party/blink/renderer/platform/media/testing/mock_web_associated_url_loader.h"
@@ -77,6 +81,7 @@
 #include "third_party/blink/renderer/platform/media/web_content_decryption_module_impl.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
+#include "third_party/blink/renderer/platform/wtf/vector.h"
 #include "ui/gfx/geometry/size.h"
 
 namespace blink {
@@ -106,8 +111,7 @@ constexpr char kVideoOnlyTestFile[] = "bear-320x240-video-only.webm";
 constexpr char kVideoAudioTestFile[] = "bear-320x240-16x9-aspect.webm";
 constexpr char kEncryptedVideoOnlyTestFile[] = "bear-320x240-av_enc-v.webm";
 
-constexpr base::TimeDelta kAudioOnlyTestFileDuration =
-    base::TimeDelta::FromMilliseconds(296);
+constexpr base::TimeDelta kAudioOnlyTestFileDuration = base::Milliseconds(296);
 
 MATCHER(WmpiDestroyed, "") {
   return CONTAINS_STRING(arg, "{\"event\":\"kWebMediaPlayerDestroyed\"}");
@@ -122,6 +126,9 @@ MATCHER_P2(PlaybackRateChanged, old_rate_string, new_rate_string, "") {
 class MockWebMediaPlayerClient : public WebMediaPlayerClient {
  public:
   MockWebMediaPlayerClient() = default;
+
+  MockWebMediaPlayerClient(const MockWebMediaPlayerClient&) = delete;
+  MockWebMediaPlayerClient& operator=(const MockWebMediaPlayerClient&) = delete;
 
   MOCK_METHOD0(NetworkStateChanged, void());
   MOCK_METHOD0(ReadyStateChanged, void());
@@ -161,7 +168,7 @@ class MockWebMediaPlayerClient : public WebMediaPlayerClient {
   MOCK_METHOD0(OnPictureInPictureStateChange, void());
   MOCK_CONST_METHOD0(CouldPlayIfEnoughData, bool());
   MOCK_METHOD0(ResumePlayback, void());
-  MOCK_METHOD0(PausePlayback, void());
+  MOCK_METHOD1(PausePlayback, void(WebMediaPlayerClient::PauseReason));
   MOCK_METHOD0(DidPlayerStartPlaying, void());
   MOCK_METHOD1(DidPlayerPaused, void(bool));
   MOCK_METHOD1(DidPlayerMutedStatusChange, void(bool));
@@ -177,14 +184,10 @@ class MockWebMediaPlayerClient : public WebMediaPlayerClient {
   MOCK_METHOD1(DidPlayerSizeChange, void(const gfx::Size&));
   MOCK_METHOD0(DidBufferUnderflow, void());
   MOCK_METHOD0(DidSeek, void());
-  MOCK_METHOD0(GetFeatures, Features(void));
   MOCK_METHOD0(OnRequestVideoFrameCallback, void());
-  MOCK_METHOD0(GetTextTrackMetadata, std::vector<TextTrackMetadata>());
+  MOCK_METHOD0(GetTextTrackMetadata, Vector<TextTrackMetadata>());
 
   bool was_always_muted_ = false;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(MockWebMediaPlayerClient);
 };
 
 class MockWebMediaPlayerEncryptedMediaClient
@@ -192,13 +195,15 @@ class MockWebMediaPlayerEncryptedMediaClient
  public:
   MockWebMediaPlayerEncryptedMediaClient() = default;
 
+  MockWebMediaPlayerEncryptedMediaClient(
+      const MockWebMediaPlayerEncryptedMediaClient&) = delete;
+  MockWebMediaPlayerEncryptedMediaClient& operator=(
+      const MockWebMediaPlayerEncryptedMediaClient&) = delete;
+
   MOCK_METHOD3(Encrypted,
                void(media::EmeInitDataType, const unsigned char*, unsigned));
   MOCK_METHOD0(DidBlockPlaybackWaitingForKey, void());
   MOCK_METHOD0(DidResumePlaybackBlockedForKey, void());
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(MockWebMediaPlayerEncryptedMediaClient);
 };
 
 class MockWebMediaPlayerDelegate : public WebMediaPlayerDelegate {
@@ -290,6 +295,8 @@ class MockSurfaceLayerBridge : public WebSurfaceLayerBridge {
   MOCK_METHOD1(SetContentsOpaque, void(bool));
   MOCK_METHOD0(CreateSurfaceLayer, void());
   MOCK_METHOD0(ClearObserver, void());
+  MOCK_METHOD0(RegisterFrameSinkHierarchy, void());
+  MOCK_METHOD0(UnregisterFrameSinkHierarchy, void());
 };
 
 class MockVideoFrameCompositor : public VideoFrameCompositor {
@@ -342,6 +349,9 @@ class WebMediaPlayerImplTest
     InitializeWebMediaPlayerImplInternal(nullptr);
   }
 
+  WebMediaPlayerImplTest(const WebMediaPlayerImplTest&) = delete;
+  WebMediaPlayerImplTest& operator=(const WebMediaPlayerImplTest&) = delete;
+
   ~WebMediaPlayerImplTest() override {
     if (!wmpi_)
       return;
@@ -373,7 +383,7 @@ class WebMediaPlayerImplTest
     auto factory_selector = std::make_unique<media::RendererFactorySelector>();
     renderer_factory_selector_ = factory_selector.get();
     decoder_factory_ = std::make_unique<media::DefaultDecoderFactory>(nullptr);
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
     factory_selector->AddBaseFactory(
         media::RendererType::kDefault,
         std::make_unique<media::DefaultRendererFactory>(
@@ -398,6 +408,8 @@ class WebMediaPlayerImplTest
         base::BindRepeating(
             &WebMediaPlayerImplTest::GetRecordAggregateWatchTimeCallback,
             base::Unretained(this)),
+        base::BindRepeating(&WebMediaPlayerImplTest::IsShuttingDown,
+                            base::Unretained(this)),
         provider.BindNewPipeAndPassReceiver());
 
     // Initialize provider since none of the tests below actually go through the
@@ -412,8 +424,14 @@ class WebMediaPlayerImplTest
     url_index_ = std::make_unique<UrlIndex>(&mock_resource_fetch_context_,
                                             media_thread_.task_runner());
 
-    auto params = std::make_unique<WebMediaPlayerParams>(
-        std::move(media_log), WebMediaPlayerParams::DeferLoadCB(), audio_sink_,
+    auto compositor = std::make_unique<NiceMock<MockVideoFrameCompositor>>(
+        media_thread_.task_runner());
+    compositor_ = compositor.get();
+
+    wmpi_ = std::make_unique<WebMediaPlayerImpl>(
+        GetWebLocalFrame(), &client_, &encrypted_client_, &delegate_,
+        std::move(factory_selector), url_index_.get(), std::move(compositor),
+        std::move(media_log), WebMediaPlayerBuilder::DeferLoadCB(), audio_sink_,
         media_thread_.task_runner(), media_thread_.task_runner(),
         media_thread_.task_runner(), media_thread_.task_runner(),
         base::BindRepeating(&WebMediaPlayerImplTest::OnAdjustAllocatedMemory,
@@ -423,18 +441,9 @@ class WebMediaPlayerImplTest
         base::BindOnce(&WebMediaPlayerImplTest::CreateMockSurfaceLayerBridge,
                        base::Unretained(this)),
         viz::TestContextProvider::Create(),
-        WebMediaPlayer::SurfaceLayerMode::kAlways,
-        is_background_suspend_enabled_, is_background_video_playback_enabled_,
-        true, std::move(demuxer_override), nullptr);
-
-    auto compositor = std::make_unique<NiceMock<MockVideoFrameCompositor>>(
-        params->video_frame_compositor_task_runner());
-    compositor_ = compositor.get();
-
-    wmpi_ = std::make_unique<WebMediaPlayerImpl>(
-        GetWebLocalFrame(), &client_, &encrypted_client_, &delegate_,
-        std::move(factory_selector), url_index_.get(), std::move(compositor),
-        std::move(params));
+        /*use_surface_layer=*/true, is_background_suspend_enabled_,
+        is_background_video_playback_enabled_, true,
+        std::move(demuxer_override), nullptr);
   }
 
   std::unique_ptr<WebSurfaceLayerBridge> CreateMockSurfaceLayerBridge(
@@ -471,6 +480,8 @@ class WebMediaPlayerImplTest
   GetRecordAggregateWatchTimeCallback() {
     return base::NullCallback();
   }
+
+  MOCK_METHOD(bool, IsShuttingDown, ());
 
   base::TimeDelta GetCurrentTimeInternal() {
     return wmpi_->GetCurrentTimeInternal();
@@ -529,23 +540,33 @@ class WebMediaPlayerImplTest
   }
 
   WebMediaPlayerImpl::PlayState ComputePlayState() {
-    return wmpi_->UpdatePlayState_ComputePlayState(false, true, false, false);
+    return wmpi_->UpdatePlayState_ComputePlayState(false, true, false, false,
+                                                   false);
   }
 
   WebMediaPlayerImpl::PlayState ComputePlayState_FrameHidden() {
-    return wmpi_->UpdatePlayState_ComputePlayState(false, true, false, true);
+    return wmpi_->UpdatePlayState_ComputePlayState(false, true, false, true,
+                                                   false);
   }
 
   WebMediaPlayerImpl::PlayState ComputePlayState_Suspended() {
-    return wmpi_->UpdatePlayState_ComputePlayState(false, true, true, false);
+    return wmpi_->UpdatePlayState_ComputePlayState(false, true, true, false,
+                                                   false);
   }
 
   WebMediaPlayerImpl::PlayState ComputePlayState_Flinging() {
-    return wmpi_->UpdatePlayState_ComputePlayState(true, true, false, false);
+    return wmpi_->UpdatePlayState_ComputePlayState(true, true, false, false,
+                                                   false);
   }
 
   WebMediaPlayerImpl::PlayState ComputePlayState_BackgroundedStreaming() {
-    return wmpi_->UpdatePlayState_ComputePlayState(false, false, false, true);
+    return wmpi_->UpdatePlayState_ComputePlayState(false, false, false, true,
+                                                   false);
+  }
+
+  WebMediaPlayerImpl::PlayState ComputePlayState_FrameHiddenPictureInPicture() {
+    return wmpi_->UpdatePlayState_ComputePlayState(false, true, false, true,
+                                                   true);
   }
 
   bool IsSuspended() { return wmpi_->pipeline_controller_->IsSuspended(); }
@@ -784,13 +805,13 @@ class WebMediaPlayerImplTest
 
   void CreateCdm() {
     // Must use a supported key system on a secure context.
-    std::u16string key_system = u"org.w3.clearkey";
+    media::CdmConfig cdm_config = {"org.w3.clearkey", false, false, false};
     auto test_origin = WebSecurityOrigin::CreateFromString(
         WebString::FromUTF8("https://test.origin"));
 
     base::RunLoop run_loop;
     WebContentDecryptionModuleImpl::Create(
-        &mock_cdm_factory_, key_system, test_origin, media::CdmConfig(),
+        &mock_cdm_factory_, test_origin, cdm_config,
         base::BindOnce(&WebMediaPlayerImplTest::OnCdmCreated,
                        base::Unretained(this), run_loop.QuitClosure()));
     run_loop.Run();
@@ -873,9 +894,6 @@ class WebMediaPlayerImplTest
   std::unique_ptr<WebMediaPlayerImpl> wmpi_;
 
   std::unique_ptr<base::trace_event::MemoryDumpManager> memory_dump_manager_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(WebMediaPlayerImplTest);
 };
 
 TEST_F(WebMediaPlayerImplTest, ConstructAndDestroy) {
@@ -1128,12 +1146,12 @@ TEST_F(WebMediaPlayerImplTest,
        IdleSuspendIsDisabledIfLoadingProgressedRecently) {
   InitializeWebMediaPlayerImpl();
   base::SimpleTestTickClock clock;
-  clock.Advance(base::TimeDelta::FromSeconds(1));
+  clock.Advance(base::Seconds(1));
   SetTickClock(&clock);
   AddBufferedRanges();
   wmpi_->DidLoadingProgress();
   // Advance less than the loading timeout.
-  clock.Advance(base::TimeDelta::FromSeconds(1));
+  clock.Advance(base::Seconds(1));
   EXPECT_FALSE(delegate_.ExpireForTesting());
   base::RunLoop().RunUntilIdle();
   EXPECT_FALSE(IsSuspended());
@@ -1143,12 +1161,12 @@ TEST_F(WebMediaPlayerImplTest, IdleSuspendIsEnabledIfLoadingHasStalled) {
   InitializeWebMediaPlayerImpl();
   SetNetworkState(WebMediaPlayer::kNetworkStateLoading);
   base::SimpleTestTickClock clock;
-  clock.Advance(base::TimeDelta::FromSeconds(1));
+  clock.Advance(base::Seconds(1));
   SetTickClock(&clock);
   AddBufferedRanges();
   wmpi_->DidLoadingProgress();
   // Advance more than the loading timeout.
-  clock.Advance(base::TimeDelta::FromSeconds(4));
+  clock.Advance(base::Seconds(4));
   EXPECT_TRUE(delegate_.ExpireForTesting());
   base::RunLoop().RunUntilIdle();
   EXPECT_TRUE(IsSuspended());
@@ -1318,6 +1336,32 @@ TEST_F(WebMediaPlayerImplTest, ComputePlayState_FrameHiddenAudioOnly) {
   EXPECT_FALSE(state.is_idle);
   EXPECT_FALSE(state.is_suspended);
   EXPECT_TRUE(state.is_memory_reporting_enabled);
+}
+
+TEST_F(WebMediaPlayerImplTest, ComputePlayState_FrameHiddenVideoOnly) {
+  InitializeWebMediaPlayerImpl();
+  SetMetadata(false, true);
+  SetReadyState(WebMediaPlayer::kReadyStateHaveFutureData);
+  SetPaused(false);
+
+  WebMediaPlayerImpl::PlayState state = ComputePlayState_FrameHidden();
+  EXPECT_EQ(WebMediaPlayerImpl::DelegateState::PLAYING, state.delegate_state);
+  EXPECT_FALSE(state.is_idle);
+  EXPECT_FALSE(state.is_suspended);
+  EXPECT_TRUE(state.is_memory_reporting_enabled);
+
+  SetPaused(true);
+  state = ComputePlayState_FrameHidden();
+  EXPECT_EQ(WebMediaPlayerImpl::DelegateState::GONE, state.delegate_state);
+  EXPECT_TRUE(state.is_idle);
+  EXPECT_TRUE(state.is_suspended);
+  EXPECT_FALSE(state.is_memory_reporting_enabled);
+
+  state = ComputePlayState_FrameHiddenPictureInPicture();
+  EXPECT_EQ(WebMediaPlayerImpl::DelegateState::PAUSED, state.delegate_state);
+  EXPECT_TRUE(state.is_idle);
+  EXPECT_FALSE(state.is_suspended);
+  EXPECT_FALSE(state.is_memory_reporting_enabled);
 }
 
 TEST_F(WebMediaPlayerImplTest, ComputePlayState_FrameHiddenSuspendNoResume) {
@@ -1593,19 +1637,17 @@ TEST_F(WebMediaPlayerImplTest, MediaPositionState_PositionChange) {
   Play();
 
   testing::Sequence sequence;
-  EXPECT_CALL(client_,
-              DidPlayerMediaPositionStateChange(
-                  0.0, kAudioOnlyTestFileDuration,
-                  base::TimeDelta::FromSecondsD(0.1), /*end_of_media=*/false))
+  EXPECT_CALL(client_, DidPlayerMediaPositionStateChange(
+                           0.0, kAudioOnlyTestFileDuration, base::Seconds(0.1),
+                           /*end_of_media=*/false))
       .InSequence(sequence);
   wmpi_->Seek(0.1);
   wmpi_->OnTimeUpdate();
 
   // If we load enough data to resume playback the position should be updated.
-  EXPECT_CALL(client_,
-              DidPlayerMediaPositionStateChange(
-                  0.5, kAudioOnlyTestFileDuration,
-                  base::TimeDelta::FromSecondsD(0.1), /*end_of_media=*/false))
+  EXPECT_CALL(client_, DidPlayerMediaPositionStateChange(
+                           0.5, kAudioOnlyTestFileDuration, base::Seconds(0.1),
+                           /*end_of_media=*/false))
       .InSequence(sequence);
   SetReadyState(WebMediaPlayer::kReadyStateHaveFutureData);
   wmpi_->OnTimeUpdate();
@@ -1750,7 +1792,7 @@ ACTION(ReportHaveEnough) {
                                media::BUFFERING_CHANGE_REASON_UNKNOWN);
 }
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 TEST_F(WebMediaPlayerImplTest, FallbackToMediaFoundationRenderer) {
   InitializeWebMediaPlayerImpl();
   // To avoid PreloadMetadataLazyLoad.
@@ -1795,7 +1837,7 @@ TEST_F(WebMediaPlayerImplTest, FallbackToMediaFoundationRenderer) {
   Load(kEncryptedVideoOnlyTestFile);
   run_loop.Run();
 }
-#endif  // defined(OS_WIN)
+#endif  // BUILDFLAG(IS_WIN)
 
 TEST_F(WebMediaPlayerImplTest, VideoConfigChange) {
   InitializeWebMediaPlayerImpl();
@@ -1961,7 +2003,10 @@ TEST_F(WebMediaPlayerImplTest, BackgroundIdlePauseTimerDependsOnAudio) {
   ScheduleIdlePauseTimer();
   EXPECT_TRUE(IsIdlePauseTimerRunning());
 
-  EXPECT_CALL(client_, PausePlayback());
+  EXPECT_CALL(
+      client_,
+      PausePlayback(
+          WebMediaPlayerClient::PauseReason::kSuspendedPlayerIdleTimeout));
   FireIdlePauseTimer();
   base::RunLoop().RunUntilIdle();
 }
@@ -2067,6 +2112,19 @@ TEST_F(WebMediaPlayerImplTest, PictureInPictureStateChange) {
   EXPECT_CALL(*surface_layer_bridge_ptr_, ClearObserver());
 }
 
+TEST_F(WebMediaPlayerImplTest, RegisterFrameSinkHierarchy) {
+  InitializeWebMediaPlayerImpl();
+  media::PipelineMetadata metadata;
+  metadata.has_video = true;
+  OnMetadata(metadata);
+
+  EXPECT_CALL(*surface_layer_bridge_ptr_, RegisterFrameSinkHierarchy());
+  wmpi_->RegisterFrameSinkHierarchy();
+
+  EXPECT_CALL(*surface_layer_bridge_ptr_, UnregisterFrameSinkHierarchy());
+  wmpi_->UnregisterFrameSinkHierarchy();
+}
+
 TEST_F(WebMediaPlayerImplTest, OnProgressClearsStale) {
   InitializeWebMediaPlayerImpl();
   SetMetadata(true, true);
@@ -2082,13 +2140,7 @@ TEST_F(WebMediaPlayerImplTest, OnProgressClearsStale) {
   }
 }
 
-// Disabled due to flakiness: crbug.com/1223150
-#if defined(MEMORY_SANITIZER) || defined(ADDRESS_SANITIZER)
-#define MAYBE_MemDumpProvidersRegistration DISABLED_MemDumpProvidersRegistration
-#else
-#define MAYBE_MemDumpProvidersRegistration MemDumpProvidersRegistration
-#endif
-TEST_F(WebMediaPlayerImplTest, MAYBE_MemDumpProvidersRegistration) {
+TEST_F(WebMediaPlayerImplTest, MemDumpProvidersRegistration) {
   auto* dump_manager = base::trace_event::MemoryDumpManager::GetInstance();
   InitializeWebMediaPlayerImpl();
 
@@ -2260,8 +2312,8 @@ class WebMediaPlayerImplBackgroundBehaviorTest
     SetLoadType(is_media_source ? WebMediaPlayer::kLoadTypeMediaSource
                                 : WebMediaPlayer::kLoadTypeURL);
     SetVideoKeyframeDistanceAverage(
-        base::TimeDelta::FromSeconds(GetAverageKeyframeDistanceSec()));
-    SetDuration(base::TimeDelta::FromSeconds(GetDurationSec()));
+        base::Seconds(GetAverageKeyframeDistanceSec()));
+    SetDuration(base::Seconds(GetDurationSec()));
 
     if (IsPictureInPictureOn()) {
       EXPECT_CALL(client_, GetDisplayType())
@@ -2271,7 +2323,7 @@ class WebMediaPlayerImplBackgroundBehaviorTest
     }
 
     if (IsVideoBeingCaptured())
-      wmpi_->GetCurrentFrame();
+      wmpi_->GetCurrentFrameThenUpdate();
 
     BackgroundPlayer();
   }
@@ -2318,7 +2370,7 @@ class WebMediaPlayerImplBackgroundBehaviorTest
   }
 
   bool IsAndroid() {
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
     return true;
 #else
     return false;

@@ -3,41 +3,55 @@
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/css/container_query.h"
-#include "third_party/blink/renderer/core/css/media_query_exp.h"
+#include "third_party/blink/renderer/core/style/computed_style_constants.h"
 
 namespace blink {
 
-namespace {
+ContainerSelector::ContainerSelector(AtomicString name,
+                                     const MediaQueryExpNode& query)
+    : name_(std::move(name)) {
+  MediaQueryExpNode::FeatureFlags feature_flags = query.CollectFeatureFlags();
 
-PhysicalAxes ComputeQueriedAxes(const MediaQuerySet& media_queries) {
-  PhysicalAxes axes(kPhysicalAxisNone);
-
-  for (const auto& media_query : media_queries.QueryVector()) {
-    for (const auto& expression : media_query->Expressions()) {
-      if (expression.IsWidthDependent())
-        axes |= PhysicalAxes(kPhysicalAxisHorizontal);
-      if (expression.IsHeightDependent())
-        axes |= PhysicalAxes(kPhysicalAxisVertical);
-    }
-  }
-
-  return axes;
+  if (feature_flags & MediaQueryExpNode::kFeatureInlineSize)
+    logical_axes_ |= kLogicalAxisInline;
+  if (feature_flags & MediaQueryExpNode::kFeatureBlockSize)
+    logical_axes_ |= kLogicalAxisBlock;
+  if (feature_flags & MediaQueryExpNode::kFeatureWidth)
+    physical_axes_ |= kPhysicalAxisHorizontal;
+  if (feature_flags & MediaQueryExpNode::kFeatureHeight)
+    physical_axes_ |= kPhysicalAxisVertical;
 }
 
-}  // namespace
+unsigned ContainerSelector::Type(WritingMode writing_mode) const {
+  unsigned type = kContainerTypeNormal;
 
-ContainerQuery::ContainerQuery(const AtomicString& name,
-                               scoped_refptr<MediaQuerySet> media_queries)
-    : name_(name),
-      media_queries_(media_queries),
-      queried_axes_(ComputeQueriedAxes(*media_queries)) {}
+  LogicalAxes axes =
+      logical_axes_ | ToLogicalAxes(physical_axes_, writing_mode);
+
+  if ((axes & kLogicalAxisInline).value())
+    type |= kContainerTypeInlineSize;
+  if ((axes & kLogicalAxisBlock).value())
+    type |= kContainerTypeBlockSize;
+
+  return type;
+}
+
+ContainerQuery::ContainerQuery(ContainerSelector selector,
+                               const MediaQueryExpNode* query)
+    : selector_(std::move(selector)), query_(query) {}
 
 ContainerQuery::ContainerQuery(const ContainerQuery& other)
-    : media_queries_(other.media_queries_->Copy()),
-      queried_axes_(other.queried_axes_) {}
+    : selector_(other.selector_), query_(other.query_) {}
 
 String ContainerQuery::ToString() const {
-  return media_queries_->MediaText();
+  return query_->Serialize();
+}
+
+ContainerQuery* ContainerQuery::CopyWithParent(
+    const ContainerQuery* parent) const {
+  ContainerQuery* copy = MakeGarbageCollected<ContainerQuery>(*this);
+  copy->parent_ = parent;
+  return copy;
 }
 
 }  // namespace blink

@@ -11,17 +11,13 @@
 #include <vector>
 
 #include "base/bind.h"
-#include "base/macros.h"
+#include "base/containers/adapters.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
-#include "content/common/render_accessibility.mojom-test-utils.h"
-#include "content/common/render_accessibility.mojom.h"
-#include "content/public/common/content_features.h"
-#include "content/public/test/fake_pepper_plugin_instance.h"
 #include "content/public/test/render_view_test.h"
 #include "content/renderer/accessibility/ax_action_target_factory.h"
 #include "content/renderer/accessibility/ax_image_annotator.h"
@@ -33,13 +29,14 @@
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/remote.h"
-#include "ppapi/c/private/ppp_pdf.h"
 #include "services/image_annotation/public/cpp/image_processor.h"
 #include "services/image_annotation/public/mojom/image_annotation.mojom.h"
 #include "services/metrics/public/cpp/mojo_ukm_recorder.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_provider.h"
+#include "third_party/blink/public/mojom/render_accessibility.mojom-test-utils.h"
+#include "third_party/blink/public/mojom/render_accessibility.mojom.h"
 #include "third_party/blink/public/platform/web_runtime_features.h"
 #include "third_party/blink/public/web/web_ax_object.h"
 #include "third_party/blink/public/web/web_document.h"
@@ -65,13 +62,13 @@ using testing::ElementsAre;
 
 namespace {
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
 bool IsSelected(const WebAXObject& obj) {
   ui::AXNodeData node_data;
   obj.Serialize(&node_data, ui::kAXModeComplete);
   return node_data.GetBoolAttribute(ax::mojom::BoolAttribute::kSelected);
 }
-#endif  // !defined(OS_ANDROID)
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 }  // namespace
 
@@ -82,6 +79,10 @@ class TestAXImageAnnotator : public AXImageAnnotator {
       mojo::PendingRemote<image_annotation::mojom::Annotator> annotator)
       : AXImageAnnotator(render_accessibility,
                          std::move(annotator)) {}
+
+  TestAXImageAnnotator(const TestAXImageAnnotator&) = delete;
+  TestAXImageAnnotator& operator=(const TestAXImageAnnotator&) = delete;
+
   ~TestAXImageAnnotator() override = default;
 
  private:
@@ -98,13 +99,15 @@ class TestAXImageAnnotator : public AXImageAnnotator {
         image.GetNode().To<blink::WebElement>().GetAttribute("SRC").Utf8();
     return image_id;
   }
-
-  DISALLOW_COPY_AND_ASSIGN(TestAXImageAnnotator);
 };
 
 class MockAnnotationService : public image_annotation::mojom::Annotator {
  public:
   MockAnnotationService() = default;
+
+  MockAnnotationService(const MockAnnotationService&) = delete;
+  MockAnnotationService& operator=(const MockAnnotationService&) = delete;
+
   ~MockAnnotationService() override = default;
 
   mojo::PendingRemote<image_annotation::mojom::Annotator> GetRemote() {
@@ -141,42 +144,39 @@ class MockAnnotationService : public image_annotation::mojom::Annotator {
   }
 
   mojo::ReceiverSet<image_annotation::mojom::Annotator> receivers_;
-
-  DISALLOW_COPY_AND_ASSIGN(MockAnnotationService);
 };
 
 class RenderAccessibilityHostInterceptor
-    : public content::mojom::RenderAccessibilityHostInterceptorForTesting {
+    : public blink::mojom::RenderAccessibilityHostInterceptorForTesting {
  public:
   explicit RenderAccessibilityHostInterceptor(
       blink::BrowserInterfaceBrokerProxy* broker) {
     broker->GetInterface(local_frame_host_remote_.BindNewPipeAndPassReceiver());
     broker->SetBinderForTesting(
-        content::mojom::RenderAccessibilityHost::Name_,
+        blink::mojom::RenderAccessibilityHost::Name_,
         base::BindRepeating(&RenderAccessibilityHostInterceptor::
                                 BindRenderAccessibilityHostReceiver,
                             base::Unretained(this)));
   }
   ~RenderAccessibilityHostInterceptor() override = default;
 
-  content::mojom::RenderAccessibilityHost* GetForwardingInterface() override {
+  blink::mojom::RenderAccessibilityHost* GetForwardingInterface() override {
     return local_frame_host_remote_.get();
   }
 
   void BindRenderAccessibilityHostReceiver(
       mojo::ScopedMessagePipeHandle handle) {
-    receiver_.Bind(
-        mojo::PendingReceiver<content::mojom::RenderAccessibilityHost>(
-            std::move(handle)));
+    receiver_.Add(this,
+                  mojo::PendingReceiver<blink::mojom::RenderAccessibilityHost>(
+                      std::move(handle)));
 
-    receiver_.set_disconnect_handler(base::BindOnce(
-        [](mojo::Receiver<content::mojom::RenderAccessibilityHost>* receiver) {
-          receiver->reset();
+    receiver_.set_disconnect_handler(base::BindRepeating(
+        [](mojo::ReceiverSet<blink::mojom::RenderAccessibilityHost>* receiver) {
         },
         base::Unretained(&receiver_)));
   }
 
-  void HandleAXEvents(mojom::AXUpdatesAndEventsPtr updates_and_events,
+  void HandleAXEvents(blink::mojom::AXUpdatesAndEventsPtr updates_and_events,
                       int32_t reset_token,
                       HandleAXEventsCallback callback) override {
     handled_updates_.insert(handled_updates_.end(),
@@ -186,7 +186,7 @@ class RenderAccessibilityHostInterceptor
   }
 
   void HandleAXLocationChanges(
-      std::vector<mojom::LocationChangesPtr> changes) override {
+      std::vector<blink::mojom::LocationChangesPtr> changes) override {
     for (auto& change : changes)
       location_changes_.emplace_back(std::move(change));
   }
@@ -200,7 +200,7 @@ class RenderAccessibilityHostInterceptor
     return handled_updates_;
   }
 
-  std::vector<mojom::LocationChangesPtr>& location_changes() {
+  std::vector<blink::mojom::LocationChangesPtr>& location_changes() {
     return location_changes_;
   }
 
@@ -209,12 +209,11 @@ class RenderAccessibilityHostInterceptor
  private:
   void BindFrameHostReceiver(mojo::ScopedInterfaceEndpointHandle handle);
 
-  mojo::Receiver<content::mojom::RenderAccessibilityHost> receiver_{this};
-  mojo::Remote<content::mojom::RenderAccessibilityHost>
-      local_frame_host_remote_;
+  mojo::ReceiverSet<blink::mojom::RenderAccessibilityHost> receiver_;
+  mojo::Remote<blink::mojom::RenderAccessibilityHost> local_frame_host_remote_;
 
   std::vector<::ui::AXTreeUpdate> handled_updates_;
-  std::vector<mojom::LocationChangesPtr> location_changes_;
+  std::vector<blink::mojom::LocationChangesPtr> location_changes_;
 };
 
 class RenderAccessibilityTestRenderFrame : public TestRenderFrame {
@@ -238,7 +237,7 @@ class RenderAccessibilityTestRenderFrame : public TestRenderFrame {
     render_accessibility_host_->ClearHandledUpdates();
   }
 
-  std::vector<mojom::LocationChangesPtr>& LocationChanges() {
+  std::vector<blink::mojom::LocationChangesPtr>& LocationChanges() {
     return render_accessibility_host_->location_changes();
   }
 
@@ -261,6 +260,11 @@ class RenderAccessibilityImplTest : public RenderViewTest {
     RenderFrameImpl::InstallCreateHook(
         &RenderAccessibilityTestRenderFrame::CreateTestRenderFrame);
   }
+
+  RenderAccessibilityImplTest(const RenderAccessibilityImplTest&) = delete;
+  RenderAccessibilityImplTest& operator=(const RenderAccessibilityImplTest&) =
+      delete;
+
   ~RenderAccessibilityImplTest() override = default;
 
   void ScheduleSendPendingAccessibilityEvents() {
@@ -300,10 +304,6 @@ class RenderAccessibilityImplTest : public RenderViewTest {
   }
 
  protected:
-  RenderViewImpl* view() {
-    return static_cast<RenderViewImpl*>(view_);
-  }
-
   RenderFrameImpl* frame() {
     return static_cast<RenderFrameImpl*>(RenderViewTest::GetMainRenderFrame());
   }
@@ -376,7 +376,7 @@ class RenderAccessibilityImplTest : public RenderViewTest {
         ->ClearHandledUpdates();
   }
 
-  std::vector<mojom::LocationChangesPtr>& GetLocationChanges() {
+  std::vector<blink::mojom::LocationChangesPtr>& GetLocationChanges() {
     return static_cast<RenderAccessibilityTestRenderFrame*>(frame())
         ->LocationChanges();
   }
@@ -399,8 +399,6 @@ class RenderAccessibilityImplTest : public RenderViewTest {
 
  private:
   IPC::TestSink* sink_;
-
-  DISALLOW_COPY_AND_ASSIGN(RenderAccessibilityImplTest);
 };
 
 TEST_F(RenderAccessibilityImplTest, SendFullAccessibilityTreeOnReload) {
@@ -751,8 +749,7 @@ TEST_F(RenderAccessibilityImplTest, TestBoundsForFixedNodeAfterScroll) {
 
   // Prepare the expected information from the tree.
   const std::vector<ui::AXTreeUpdate>& updates = GetHandledAccUpdates();
-  for (auto iter = updates.rbegin(); iter != updates.rend(); ++iter) {
-    const ui::AXTreeUpdate& update = *iter;
+  for (const auto& update : base::Reversed(updates)) {
     for (const ui::AXNodeData& node : update.nodes) {
       std::string name;
       if (node.GetStringAttribute(ax::mojom::StringAttribute::kName, &name) &&
@@ -789,7 +786,7 @@ TEST_F(RenderAccessibilityImplTest, TestBoundsForFixedNodeAfterScroll) {
   EXPECT_EQ(root_obj.AxID(), update.nodes[0].id);
 
   // Make sure that a location change is sent for the fixed-positioned node.
-  std::vector<mojom::LocationChangesPtr>& changes = GetLocationChanges();
+  std::vector<blink::mojom::LocationChangesPtr>& changes = GetLocationChanges();
   EXPECT_EQ(changes.size(), 1u);
   EXPECT_EQ(changes[0]->id, expected_id);
   EXPECT_EQ(changes[0]->new_location, expected_bounds);
@@ -852,7 +849,7 @@ TEST_F(RenderAccessibilityImplTest, TestBoundsForMultipleFixedNodeAfterScroll) {
   EXPECT_EQ(root_obj.AxID(), update.nodes[0].id);
 
   // Make sure that a location change is sent for the fixed-positioned node.
-  std::vector<mojom::LocationChangesPtr>& changes = GetLocationChanges();
+  std::vector<blink::mojom::LocationChangesPtr>& changes = GetLocationChanges();
   EXPECT_EQ(changes.size(), 2u);
   for (auto& change : changes) {
     auto search = expected.find(change->id);
@@ -932,6 +929,12 @@ class MockPluginAccessibilityTreeSource : public content::PluginAXTreeSource {
     root_node_ =
         std::make_unique<ui::AXNode>(ax_tree_.get(), nullptr, root_node_id, 0);
   }
+
+  MockPluginAccessibilityTreeSource(const MockPluginAccessibilityTreeSource&) =
+      delete;
+  MockPluginAccessibilityTreeSource& operator=(
+      const MockPluginAccessibilityTreeSource&) = delete;
+
   ~MockPluginAccessibilityTreeSource() override {}
   bool GetTreeData(ui::AXTreeData* data) const override { return true; }
   ui::AXNode* GetRoot() const override { return root_node_.get(); }
@@ -977,7 +980,6 @@ class MockPluginAccessibilityTreeSource : public content::PluginAXTreeSource {
   std::unique_ptr<ui::AXTree> ax_tree_;
   std::unique_ptr<ui::AXNode> root_node_;
   bool action_target_called_ = false;
-  DISALLOW_COPY_AND_ASSIGN(MockPluginAccessibilityTreeSource);
 };
 
 TEST_F(RenderAccessibilityImplTest, TestAXActionTargetFromNodeId) {
@@ -1146,7 +1148,7 @@ TEST_F(BlinkAXActionTargetTest, TestMethods) {
 
   gfx::RectF expected_bounds;
   blink::WebAXObject offset_container;
-  skia::Matrix44 container_transform;
+  gfx::Transform container_transform;
   input_checkbox.GetRelativeBounds(offset_container, expected_bounds,
                                    container_transform);
   gfx::Rect actual_bounds = input_checkbox_action_target->GetRelativeBounds();
@@ -1162,7 +1164,7 @@ TEST_F(BlinkAXActionTargetTest, TestMethods) {
   EXPECT_GE(scroller_action_target->MaximumScrollOffset().y(), 900);
 
   // Android does not produce accessible items for option elements.
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
   EXPECT_FALSE(IsSelected(option));
   EXPECT_TRUE(option_action_target->SetSelected(true));
   // Seleting option requires layout to be clean.
@@ -1230,12 +1232,14 @@ TEST_F(BlinkAXActionTargetTest, TestMethods) {
 class AXImageAnnotatorTest : public RenderAccessibilityImplTest {
  public:
   AXImageAnnotatorTest() = default;
+
+  AXImageAnnotatorTest(const AXImageAnnotatorTest&) = delete;
+  AXImageAnnotatorTest& operator=(const AXImageAnnotatorTest&) = delete;
+
   ~AXImageAnnotatorTest() override = default;
 
  protected:
   void SetUp() override {
-    scoped_feature_list_.InitAndEnableFeature(
-        features::kExperimentalAccessibilityLabels);
     RenderAccessibilityImplTest::SetUp();
     // TODO(nektar): Add the ability to test the AX action that labels images
     // only once.
@@ -1245,8 +1249,8 @@ class AXImageAnnotatorTest : public RenderAccessibilityImplTest {
     GetRenderAccessibilityImpl()->ax_image_annotator_ =
         std::make_unique<TestAXImageAnnotator>(GetRenderAccessibilityImpl(),
                                                mock_annotator().GetRemote());
-    GetRenderAccessibilityImpl()->tree_source_->RemoveImageAnnotator();
-    GetRenderAccessibilityImpl()->tree_source_->AddImageAnnotator(
+    GetRenderAccessibilityImpl()->tree_source_->RemoveBlinkImageAnnotator();
+    GetRenderAccessibilityImpl()->tree_source_->AddBlinkImageAnnotator(
         GetRenderAccessibilityImpl()->ax_image_annotator_.get());
     BlinkAXTreeSource::IgnoreProtocolChecksForTesting();
   }
@@ -1261,8 +1265,6 @@ class AXImageAnnotatorTest : public RenderAccessibilityImplTest {
  private:
   base::test::ScopedFeatureList scoped_feature_list_;
   MockAnnotationService mock_annotator_;
-
-  DISALLOW_COPY_AND_ASSIGN(AXImageAnnotatorTest);
 };
 
 TEST_F(AXImageAnnotatorTest, OnImageAdded) {
@@ -1402,8 +1404,7 @@ class TimeDelayBlinkAXTreeSource : public BlinkAXTreeSource {
                      ui::AXNodeData* out_data) const override {
     BlinkAXTreeSource::SerializeNode(node, out_data);
     if (time_delay_ms_) {
-      task_environment_->FastForwardBy(
-          base::TimeDelta::FromMilliseconds(time_delay_ms_));
+      task_environment_->FastForwardBy(base::Milliseconds(time_delay_ms_));
       time_delay_ms_ = 0;
     }
   }
@@ -1480,7 +1481,7 @@ TEST_F(RenderAccessibilityImplUKMTest, TestFireUKMs) {
 
   // After 1000 seconds have passed, the next time we send an event we should
   // send URL-keyed metrics.
-  task_environment_.FastForwardBy(base::TimeDelta::FromSeconds(1000));
+  task_environment_.FastForwardBy(base::Seconds(1000));
   GetRenderAccessibilityImpl()->HandleAXEvent(
       ui::AXEvent(root_obj.AxID(), ax::mojom::Event::kChildrenChanged));
   SendPendingAccessibilityEvents();

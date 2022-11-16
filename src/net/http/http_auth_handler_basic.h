@@ -27,13 +27,15 @@ class NET_EXPORT_PRIVATE HttpAuthHandlerBasic : public HttpAuthHandler {
                           HttpAuth::Target target,
                           const SSLInfo& ssl_info,
                           const NetworkIsolationKey& network_isolation_key,
-                          const GURL& origin,
+                          const url::SchemeHostPort& scheme_host_port,
                           CreateReason reason,
                           int digest_nonce_count,
                           const NetLogWithSource& net_log,
                           HostResolver* host_resolver,
                           std::unique_ptr<HttpAuthHandler>* handler) override;
   };
+
+  ~HttpAuthHandlerBasic() override = default;
 
  private:
   // HttpAuthHandler
@@ -46,9 +48,6 @@ class NET_EXPORT_PRIVATE HttpAuthHandlerBasic : public HttpAuthHandler {
                             std::string* auth_token) override;
   HttpAuth::AuthorizationResult HandleAnotherChallengeImpl(
       HttpAuthChallengeTokenizer* challenge) override;
-
- private:
-  ~HttpAuthHandlerBasic() override = default;
 
   bool ParseChallenge(HttpAuthChallengeTokenizer* challenge);
 };

@@ -2,24 +2,27 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-
-import collections
 import json
 import logging
 import multiprocessing
 import os
-import select
+import queue
+import re
 import subprocess
 import sys
+import tempfile
+import threading
+import time
 import zipfile
 
 from six.moves import range  # pylint: disable=redefined-builtin
+from devil.utils import cmd_helper
+from py_utils import tempfile_ext
 from pylib import constants
 from pylib.base import base_test_result
 from pylib.base import test_run
 from pylib.constants import host_paths
 from pylib.results import json_results
-from py_utils import tempfile_ext
 
 
 # These Test classes are used for running tests and are excluded in the test
@@ -42,16 +45,19 @@ _EXCLUDED_SUITES = {
 # and 6 sec with 2 or more shards.
 _MIN_CLASSES_PER_SHARD = 8
 
+# Running the largest test suite with a single shard takes about 22 minutes.
+_SHARD_TIMEOUT = 30 * 60
+
+# RegExp to detect logcat lines, e.g., 'I/AssetManager: not found'.
+_LOGCAT_RE = re.compile(r'[A-Z]/[\w\d_-]+:')
+
 
 class LocalMachineJunitTestRun(test_run.TestRun):
-  def __init__(self, env, test_instance):
-    super(LocalMachineJunitTestRun, self).__init__(env, test_instance)
-
-  #override
+  # override
   def TestPackage(self):
     return self._test_instance.suite
 
-  #override
+  # override
   def SetUp(self):
     pass
 
@@ -82,9 +88,8 @@ class LocalMachineJunitTestRun(test_run.TestRun):
         self._test_instance.robolectric_runtime_deps_dir,
         '-Ddir.source.root=%s' % constants.DIR_SOURCE_ROOT,
         '-Drobolectric.resourcesMode=binary',
+        '-Drobolectric.logging=stdout',
     ]
-    if logging.getLogger().isEnabledFor(logging.INFO):
-      jvm_args += ['-Drobolectric.logging=stdout']
     if self._test_instance.debug_socket:
       jvm_args += [
           '-agentlib:jdwp=transport=dt_socket'
@@ -115,8 +120,8 @@ class LocalMachineJunitTestRun(test_run.TestRun):
 
     return jvm_args
 
-  #override
-  def RunTests(self, results):
+  # override
+  def RunTests(self, results, raw_logs_fh=None):
     wrapper_path = os.path.join(constants.GetOutDirectory(), 'bin', 'helper',
                                 self._test_instance.suite)
 
@@ -152,12 +157,21 @@ class LocalMachineJunitTestRun(test_run.TestRun):
 
       AddPropertiesJar(cmd_list, temp_dir, self._test_instance.resource_apk)
 
-      procs = [
-          subprocess.Popen(cmd,
-                           stdout=subprocess.PIPE,
-                           stderr=subprocess.STDOUT) for cmd in cmd_list
-      ]
-      PrintProcessesStdout(procs)
+      show_logcat = logging.getLogger().isEnabledFor(logging.INFO)
+      num_omitted_lines = 0
+      for line in _RunCommandsAndSerializeOutput(cmd_list):
+        if raw_logs_fh:
+          raw_logs_fh.write(line)
+        if show_logcat or not _LOGCAT_RE.match(line):
+          sys.stdout.write(line)
+        else:
+          num_omitted_lines += 1
+
+      if num_omitted_lines > 0:
+        logging.critical('%d log lines omitted.', num_omitted_lines)
+      sys.stdout.flush()
+      if raw_logs_fh:
+        raw_logs_fh.flush()
 
       results_list = []
       try:
@@ -169,15 +183,15 @@ class LocalMachineJunitTestRun(test_run.TestRun):
         # In the case of a failure in the JUnit or Robolectric test runner
         # the output json file may never be written.
         results_list = [
-          base_test_result.BaseTestResult(
-              'Test Runner Failure', base_test_result.ResultType.UNKNOWN)
+            base_test_result.BaseTestResult('Test Runner Failure',
+                                            base_test_result.ResultType.UNKNOWN)
         ]
 
       test_run_results = base_test_result.TestRunResults()
       test_run_results.AddResults(results_list)
       results.append(test_run_results)
 
-  #override
+  # override
   def TearDown(self):
     pass
 
@@ -189,6 +203,8 @@ def AddPropertiesJar(cmd_list, temp_dir, resource_apk):
   with zipfile.ZipFile(properties_jar_path, 'w') as z:
     z.writestr('com/android/tools/test_config.properties',
                'android_resource_apk=%s' % resource_apk)
+    z.writestr('robolectric.properties',
+               'application = android.app.Application')
 
   for cmd in cmd_list:
     cmd.extend(['--classpath', properties_jar_path])
@@ -236,40 +252,106 @@ def GroupTestsForShard(num_of_shards, test_classes):
   return test_dict
 
 
-def PrintProcessesStdout(procs):
-  """Prints the stdout of all the processes.
-
-  Buffers the stdout of the processes and prints it when finished.
+def _RunCommandsAndSerializeOutput(cmd_list):
+  """Runs multiple commands in parallel and yields serialized output lines.
 
   Args:
-    procs: A list of subprocesses.
+    cmd_list: List of commands.
 
   Returns: N/A
+
+  Raises:
+    TimeoutError: If timeout is exceeded.
   """
-  streams = [p.stdout for p in procs]
-  outputs = collections.defaultdict(list)
-  first_fd = streams[0].fileno()
+  num_shards = len(cmd_list)
+  assert num_shards > 0
+  procs = []
+  temp_files = []
+  for i, cmd in enumerate(cmd_list):
+    # Shard 0 yields results immediately, the rest write to files.
+    if i == 0:
+      temp_files.append(None)  # Placeholder.
+      procs.append(
+          cmd_helper.Popen(
+              cmd,
+              stdout=subprocess.PIPE,
+              stderr=subprocess.STDOUT,
+          ))
+    else:
+      temp_file = tempfile.TemporaryFile(mode='w+t', encoding='utf-8')
+      temp_files.append(temp_file)
+      procs.append(cmd_helper.Popen(
+          cmd,
+          stdout=temp_file,
+          stderr=temp_file,
+      ))
 
-  while streams:
-    rstreams, _, _ = select.select(streams, [], [])
-    for stream in rstreams:
-      line = stream.readline()
-      if line:
-        # Print out just one output so user can see work being done rather
-        # than waiting for it all at the end.
-        if stream.fileno() == first_fd:
-          sys.stdout.write(line)
-        else:
-          outputs[stream.fileno()].append(line)
-      else:
-        streams.remove(stream)  # End of stream.
+  timeout_time = time.time() + _SHARD_TIMEOUT
+  timed_out = False
 
-  for p in procs:
-    sys.stdout.write(''.join(outputs[p.stdout.fileno()]))
+  yield '\n'
+  yield 'Shard 0 output:\n'
+
+  # The following will be run from a thread to pump Shard 0 results, allowing
+  # live output while allowing timeout.
+  def pump_stream_to_queue(f, q):
+    try:
+      for line in iter(f.readline, ''):
+        q.put(line)
+    except ValueError:  # Triggered if |f.close()| gets called.
+      pass
+
+  shard_0_q = queue.Queue()
+  shard_0_pump = threading.Thread(target=pump_stream_to_queue,
+                                  args=(procs[0].stdout, shard_0_q))
+  shard_0_pump.start()
+
+  # Wait for processes to finish, while forwarding Shard 0 results.
+  shard_to_check = 0
+  while shard_to_check < num_shards:
+    if shard_0_pump.is_alive():
+      while not shard_0_q.empty():
+        yield shard_0_q.get_nowait()
+    if procs[shard_to_check].poll() is not None:
+      shard_to_check += 1
+    else:
+      time.sleep(.1)
+    if time.time() > timeout_time:
+      timed_out = True
+      break
+
+  # Handle Shard 0 timeout.
+  if shard_0_pump.is_alive():
+    procs[0].stdout.close()
+  shard_0_pump.join()
+
+  # Emit all output (possibly incomplete due to |time_out|) in shard order.
+  while not shard_0_q.empty():
+    yield shard_0_q.get_nowait()
+  for i in range(1, num_shards):
+    f = temp_files[i]
+    yield '\n'
+    yield 'Shard %d output:\n' % i
+    f.seek(0)
+    for line in f.readlines():
+      yield line
+    f.close()
+
+  # Handle Shard 1+ timeout.
+  if timed_out:
+    for i, p in enumerate(procs):
+      if p.poll() is None:
+        p.kill()
+        yield 'Index of timed out shard: %d\n' % i
+
+    yield 'Output in shards may be cutoff due to timeout.\n'
+    yield '\n'
+    raise cmd_helper.TimeoutError('Junit shards timed out.')
 
 
 def _GetTestClasses(file_path):
-  test_jar_paths = subprocess.check_output([file_path, '--print-classpath'])
+  test_jar_paths = subprocess.check_output([file_path,
+                                            '--print-classpath']).decode()
   test_jar_paths = test_jar_paths.split(':')
 
   test_classes = []

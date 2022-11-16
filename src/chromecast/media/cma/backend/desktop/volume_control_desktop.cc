@@ -14,7 +14,6 @@
 #include "base/check.h"
 #include "base/cxx17_backports.h"
 #include "base/location.h"
-#include "base/macros.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/no_destructor.h"
 #include "base/notreached.h"
@@ -43,6 +42,9 @@ class VolumeControlInternal {
     options.message_pump_type = base::MessagePumpType::IO;
     thread_.StartWithOptions(std::move(options));
   }
+
+  VolumeControlInternal(const VolumeControlInternal&) = delete;
+  VolumeControlInternal& operator=(const VolumeControlInternal&) = delete;
 
   ~VolumeControlInternal() = default;
 
@@ -148,8 +150,6 @@ class VolumeControlInternal {
   std::vector<VolumeObserver*> volume_observers_;
 
   base::Thread thread_;
-
-  DISALLOW_COPY_AND_ASSIGN(VolumeControlInternal);
 };
 
 VolumeControlInternal& GetVolumeControl() {

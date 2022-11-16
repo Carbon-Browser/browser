@@ -57,6 +57,8 @@
 
 using autofill::FormRendererId;
 using autofill::FieldRendererId;
+using UserDecision =
+    autofill::AutofillClient::SaveAddressProfileOfferUserDecision;
 
 @implementation CWVAutofillController {
   // Bridge to observe the |webState|.
@@ -133,7 +135,7 @@ using autofill::FieldRendererId;
 
     autofill::AutofillDriverIOS::PrepareForWebStateWebFrameAndDelegate(
         _webState, _autofillClient.get(), self, applicationLocale,
-        autofill::BrowserAutofillManager::ENABLE_AUTOFILL_DOWNLOAD_MANAGER);
+        autofill::AutofillManager::EnableDownloadManager(true));
 
     _passwordManagerClient = std::move(passwordManagerClient);
     _passwordManagerClient->set_bridge(self);
@@ -170,13 +172,13 @@ using autofill::FieldRendererId;
   web::WebFrame* frame =
       web::GetWebFrameWithId(_webState, base::SysNSStringToUTF8(frameID));
   autofill::AutofillJavaScriptFeature::GetInstance()
-      ->ClearAutofilledFieldsForFormName(
-          frame, formName, _lastFormActivityUniqueFormID, fieldIdentifier,
-          _lastFormActivityUniqueFieldID, base::BindOnce(^(NSString*) {
-            if (completionHandler) {
-              completionHandler();
-            }
-          }));
+      ->ClearAutofilledFieldsForForm(frame, _lastFormActivityUniqueFormID,
+                                     _lastFormActivityUniqueFieldID,
+                                     base::BindOnce(^(NSString*) {
+                                       if (completionHandler) {
+                                         completionHandler();
+                                       }
+                                     }));
 }
 
 - (void)fetchSuggestionsForFormWithName:(NSString*)formName
@@ -411,6 +413,48 @@ showUnmaskPromptForCard:(const autofill::CreditCard&)creditCard
                                                forms);
 }
 
+- (void)
+    confirmSaveAddressProfile:(const autofill::AutofillProfile&)profile
+              originalProfile:(const autofill::AutofillProfile*)originalProfile
+                     callback:(autofill::AutofillClient::
+                                   AddressProfileSavePromptCallback)callback {
+  if ([_delegate
+          respondsToSelector:@selector
+          (autofillController:
+              confirmSaveForNewAutofillProfile:oldProfile:decisionHandler:)]) {
+    CWVAutofillProfile* newProfile =
+        [[CWVAutofillProfile alloc] initWithProfile:profile];
+    CWVAutofillProfile* oldProfile = nil;
+    if (originalProfile) {
+      oldProfile =
+          [[CWVAutofillProfile alloc] initWithProfile:*originalProfile];
+    }
+    __block auto scopedCallback = std::move(callback);
+    [_delegate autofillController:self
+        confirmSaveForNewAutofillProfile:newProfile
+                              oldProfile:oldProfile
+                         decisionHandler:^(
+                             CWVAutofillProfileUserDecision decision) {
+                           UserDecision userDecision;
+                           switch (decision) {
+                             case CWVAutofillProfileUserDecisionAccepted:
+                               userDecision = UserDecision::kAccepted;
+                               break;
+                             case CWVAutofillProfileUserDecisionDeclined:
+                               userDecision = UserDecision::kDeclined;
+                               break;
+                             case CWVAutofillProfileUserDecisionIgnored:
+                               userDecision = UserDecision::kIgnored;
+                               break;
+                           }
+                           std::move(scopedCallback)
+                               .Run(userDecision, *newProfile.internalProfile);
+                         }];
+  } else {
+    std::move(callback).Run(UserDecision::kUserNotAsked, profile);
+  }
+}
+
 #pragma mark - AutofillDriverIOSBridge
 
 - (void)fillFormData:(const autofill::FormData&)form
@@ -476,7 +520,9 @@ showUnmaskPromptForCard:(const autofill::CreditCard&)creditCard
                                   value:nsValue
                           userInitiated:userInitiated];
     }
-  } else if (params.type == "input") {
+  } else if (params.type == "input" || params.type == "keyup") {
+    // Some fields only emit 'keyup' events and not 'input' events, which would
+    // result in the delegate not being notified when the field is updated.
     if ([_delegate respondsToSelector:@selector
                    (autofillController:
                        didInputInFieldWithIdentifier:fieldType:formName:frameID
@@ -619,23 +665,32 @@ showUnmaskPromptForCard:(const autofill::CreditCard&)creditCard
 }
 
 - (void)showPasswordBreachForLeakType:(CredentialLeakType)leakType
-                                  URL:(const GURL&)URL {
+                                  URL:(const GURL&)URL
+                             username:(const std::u16string&)username {
+  CWVPasswordLeakType cwvLeakType = 0;
+  if (password_manager::IsPasswordSaved(leakType)) {
+    cwvLeakType |= CWVPasswordLeakTypeSaved;
+  }
+  if (password_manager::IsPasswordUsedOnOtherSites(leakType)) {
+    cwvLeakType |= CWVPasswordLeakTypeUsedOnOtherSites;
+  }
+  if (password_manager::IsSyncingPasswordsNormally(leakType)) {
+    cwvLeakType |= CWVPasswordLeakTypeSyncingNormally;
+  }
   if ([self.delegate
           respondsToSelector:@selector(autofillController:
                                  notifyUserOfPasswordLeakOnURL:leakType:)]) {
-    CWVPasswordLeakType cwvLeakType = 0;
-    if (password_manager::IsPasswordSaved(leakType)) {
-      cwvLeakType |= CWVPasswordLeakTypeSaved;
-    }
-    if (password_manager::IsPasswordUsedOnOtherSites(leakType)) {
-      cwvLeakType |= CWVPasswordLeakTypeUsedOnOtherSites;
-    }
-    if (password_manager::IsSyncingPasswordsNormally(leakType)) {
-      cwvLeakType |= CWVPasswordLeakTypeSyncingNormally;
-    }
     [self.delegate autofillController:self
         notifyUserOfPasswordLeakOnURL:net::NSURLWithGURL(URL)
                              leakType:cwvLeakType];
+  }
+  if ([self.delegate respondsToSelector:@selector
+                     (autofillController:
+                         notifyUserOfPasswordLeakOnURL:leakType:username:)]) {
+    [self.delegate autofillController:self
+        notifyUserOfPasswordLeakOnURL:net::NSURLWithGURL(URL)
+                             leakType:cwvLeakType
+                             username:base::SysUTF16ToNSString(username)];
   }
 }
 

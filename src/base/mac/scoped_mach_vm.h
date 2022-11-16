@@ -13,7 +13,6 @@
 
 #include "base/base_export.h"
 #include "base/check_op.h"
-#include "base/macros.h"
 
 // Use ScopedMachVM to supervise ownership of pages in the current process
 // through the Mach VM subsystem. Pages allocated with vm_allocate can be
@@ -44,8 +43,7 @@
 //   }
 //   ScopedMachVM vm_owner(address, mach_vm_round_page(size));
 
-namespace base {
-namespace mac {
+namespace base::mac {
 
 class BASE_EXPORT ScopedMachVM {
  public:
@@ -54,6 +52,9 @@ class BASE_EXPORT ScopedMachVM {
     DCHECK_EQ(address % PAGE_SIZE, 0u);
     DCHECK_EQ(size % PAGE_SIZE, 0u);
   }
+
+  ScopedMachVM(const ScopedMachVM&) = delete;
+  ScopedMachVM& operator=(const ScopedMachVM&) = delete;
 
   ~ScopedMachVM() {
     if (size_) {
@@ -92,11 +93,8 @@ class BASE_EXPORT ScopedMachVM {
  private:
   vm_address_t address_;
   vm_size_t size_;
-
-  DISALLOW_COPY_AND_ASSIGN(ScopedMachVM);
 };
 
-}  // namespace mac
-}  // namespace base
+}  // namespace base::mac
 
 #endif  // BASE_MAC_SCOPED_MACH_VM_H_

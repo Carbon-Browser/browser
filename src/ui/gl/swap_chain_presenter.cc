@@ -10,9 +10,9 @@
 #include "base/debug/alias.h"
 #include "base/debug/dump_without_crashing.h"
 #include "base/feature_list.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/strings/stringprintf.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/trace_event/trace_event.h"
 #include "media/base/win/mf_helpers.h"
@@ -33,8 +33,7 @@ namespace {
 
 // When in BGRA888 overlay format, wait for this time delta before retrying
 // YUV format.
-constexpr base::TimeDelta kDelayForRetryingYUVFormat =
-    base::TimeDelta::FromMinutes(10);
+constexpr base::TimeDelta kDelayForRetryingYUVFormat = base::Minutes(10);
 
 // Some drivers fail to correctly handle BT.709 video in overlays. This flag
 // converts them to BT.601 in the video processor.
@@ -53,6 +52,9 @@ class ScopedReleaseKeyedMutex {
     DCHECK(keyed_mutex);
   }
 
+  ScopedReleaseKeyedMutex(const ScopedReleaseKeyedMutex&) = delete;
+  ScopedReleaseKeyedMutex& operator=(const ScopedReleaseKeyedMutex&) = delete;
+
   ~ScopedReleaseKeyedMutex() {
     HRESULT hr = keyed_mutex_->ReleaseSync(key_);
     DCHECK(SUCCEEDED(hr));
@@ -61,8 +63,6 @@ class ScopedReleaseKeyedMutex {
  private:
   Microsoft::WRL::ComPtr<IDXGIKeyedMutex> keyed_mutex_;
   UINT64 key_ = 0;
-
-  DISALLOW_COPY_AND_ASSIGN(ScopedReleaseKeyedMutex);
 };
 
 // These values are persisted to logs. Entries should not be renumbered and
@@ -176,29 +176,76 @@ void UpdateSwapChainTransform(const gfx::Size& quad_size,
   transform->Scale(swap_chain_scale_x, swap_chain_scale_y);
 }
 
-void LabelSwapChainBuffers(IDXGISwapChain* swap_chain) {
-  DXGI_SWAP_CHAIN_DESC desc;
-  HRESULT hr = swap_chain->GetDesc(&desc);
+const GUID GUID_INTEL_VPE_INTERFACE = {
+    0xedd1d4b9,
+    0x8659,
+    0x4cbc,
+    {0xa4, 0xd6, 0x98, 0x31, 0xa2, 0x16, 0x3a, 0xc3}};
+
+enum : UINT {
+  kIntelVpeFnVersion = 0x01,
+  kIntelVpeFnMode = 0x20,
+  kIntelVpeFnScaling = 0x37,
+};
+
+enum : UINT {
+  kIntelVpeVersion3 = 0x0003,
+};
+
+enum : UINT {
+  kIntelVpeModeNone = 0x0,
+  kIntelVpeModePreproc = 0x01,
+};
+
+enum : UINT {
+  kIntelVpeScalingDefault = 0x0,
+  kIntelVpeScalingSuperResolution = 0x2,
+};
+
+struct IntelVpeExt {
+  UINT function;
+  raw_ptr<void> param;
+};
+
+void ToggleIntelVpSuperResolution(ID3D11VideoContext* video_context,
+                                  ID3D11VideoProcessor* video_processor,
+                                  bool is_on_battery_power) {
+  TRACE_EVENT1("gpu", "ToggleIntelVpSuperResolution", "on",
+               !is_on_battery_power);
+
+  IntelVpeExt ext = {};
+  UINT param = 0;
+  ext.param = &param;
+
+  ext.function = kIntelVpeFnVersion;
+  param = kIntelVpeVersion3;
+  HRESULT hr = video_context->VideoProcessorSetOutputExtension(
+      video_processor, &GUID_INTEL_VPE_INTERFACE, sizeof(ext), &ext);
   if (FAILED(hr)) {
-    DLOG(ERROR) << "Failed to GetDesc from swap chain: "
-                << logging::SystemErrorCodeToString(hr);
+    DLOG(ERROR) << "VideoProcessorSetOutputExtension failed with error 0x"
+                << std::hex << hr;
     return;
   }
-  for (unsigned int i = 0; i < desc.BufferCount; i++) {
-    Microsoft::WRL::ComPtr<ID3D11Texture2D> swap_chain_buffer;
-    hr = swap_chain->GetBuffer(i, IID_PPV_ARGS(&swap_chain_buffer));
-    if (FAILED(hr)) {
-      DLOG(ERROR) << "GetBuffer on swap chain buffer " << i
-                  << "failed: " << logging::SystemErrorCodeToString(hr);
-      return;
-    }
-    hr = media::SetDebugName(
-        swap_chain_buffer.Get(),
-        base::StringPrintf("SwapChainPresenter_Buffer_%d", i).c_str());
-    if (FAILED(hr)) {
-      DLOG(ERROR) << "Failed to label swap chain buffer " << i << ": "
-                  << logging::SystemErrorCodeToString(hr);
-    }
+
+  ext.function = kIntelVpeFnMode;
+  param = is_on_battery_power ? kIntelVpeModeNone : kIntelVpeModePreproc;
+  hr = video_context->VideoProcessorSetOutputExtension(
+      video_processor, &GUID_INTEL_VPE_INTERFACE, sizeof(ext), &ext);
+  if (FAILED(hr)) {
+    DLOG(ERROR) << "VideoProcessorSetOutputExtension failed with error 0x"
+                << std::hex << hr;
+    return;
+  }
+
+  ext.function = kIntelVpeFnScaling;
+  param = is_on_battery_power ? kIntelVpeScalingDefault
+                              : kIntelVpeScalingSuperResolution;
+
+  hr = video_context->VideoProcessorSetStreamExtension(
+      video_processor, 0, &GUID_INTEL_VPE_INTERFACE, sizeof(ext), &ext);
+  if (FAILED(hr)) {
+    DLOG(ERROR) << "VideoProcessorSetStreamExtension failed with error 0x"
+                << std::hex << hr;
   }
 }
 
@@ -542,6 +589,8 @@ gfx::Size SwapChainPresenter::CalculateSwapChainSize(
   // to read the minimal amount of data. DWM is also less likely to promote a
   // surface to an overlay if it's much larger than its area on-screen.
   gfx::Size swap_chain_size = params.content_rect.size();
+  if (swap_chain_size.IsEmpty())
+    return gfx::Size();
   gfx::RectF bounds(params.quad_rect);
   params.transform.TransformRect(&bounds);
   gfx::Rect overlay_onscreen_rect = gfx::ToEnclosingRect(bounds);
@@ -551,16 +600,13 @@ gfx::Size SwapChainPresenter::CalculateSwapChainSize(
   // after the video rotation fix (crbug.com/904035), using rotated size for
   // swap chain size will cause stretching since there's no squashing factor in
   // the transform to counteract.
+  // Downscaling doesn't work on Intel display HW, and so DWM will perform an
+  // extra BLT to avoid HW downscaling. This prevents the use of hardware
+  // overlays especially for protected video. Use the onscreen size (scale==1)
+  // for overlay can avoid this problem.
   // TODO(sunnyps): Support 90/180/270 deg rotations using video context.
   if (params.transform.IsScaleOrTranslation()) {
     swap_chain_size = overlay_onscreen_rect.size();
-  }
-  if (DirectCompositionSurfaceWin::AreScaledOverlaysSupported() &&
-      !ShouldUseVideoProcessorScaling()) {
-    // Downscaling doesn't work on Intel display HW, and so DWM will perform an
-    // extra BLT to avoid HW downscaling. This prevents the use of hardware
-    // overlays especially for protected video.
-    swap_chain_size.SetToMin(params.content_rect.size());
   }
 
   // 4:2:2 subsampled formats like YUY2 must have an even width, and 4:2:0
@@ -614,11 +660,11 @@ void SwapChainPresenter::UpdateVisuals(const ui::DCRendererLayerParams& params,
     Microsoft::WRL::ComPtr<IDCompositionMatrixTransform> dcomp_transform;
     dcomp_device_->CreateMatrixTransform(&dcomp_transform);
     DCHECK(dcomp_transform);
-    // skia::Matrix44 is column-major, but D2D_MATRIX_3x2_F is row-major.
+    // D2D_MATRIX_3x2_F is row-major.
     D2D_MATRIX_3X2_F d2d_matrix = {
-        {{transform.matrix().get(0, 0), transform.matrix().get(1, 0),
-          transform.matrix().get(0, 1), transform.matrix().get(1, 1),
-          transform.matrix().get(0, 3), transform.matrix().get(1, 3)}}};
+        {{transform.matrix().rc(0, 0), transform.matrix().rc(1, 0),
+          transform.matrix().rc(0, 1), transform.matrix().rc(1, 1),
+          transform.matrix().rc(0, 3), transform.matrix().rc(1, 3)}}};
     dcomp_transform->SetMatrix(d2d_matrix);
     content_visual_->SetTransform(dcomp_transform.Get());
   }
@@ -691,7 +737,7 @@ bool SwapChainPresenter::TryPresentToDecodeSwapChain(
     // Rotated videos are not promoted to overlays.  We plan to implement
     // rotation using video processor instead of via direct composition.  Also
     // check for skew and any downscaling specified to direct composition.
-    bool is_overlay_supported_transform =
+    bool compatible_transform =
         visual_info_.transform.IsPositiveScaleOrTranslation();
 
     // Downscaled video isn't promoted to hardware overlays.  We prefer to
@@ -702,12 +748,19 @@ bool SwapChainPresenter::TryPresentToDecodeSwapChain(
     float swap_chain_scale_y =
         swap_chain_size.height() * 1.0f / content_rect.height();
 
-    is_overlay_supported_transform = is_overlay_supported_transform &&
-                                     (swap_chain_scale_x >= 1.0f) &&
-                                     (swap_chain_scale_y >= 1.0f);
+    if (layer_tree_->no_downscaled_overlay_promotion()) {
+      compatible_transform = compatible_transform &&
+                             (swap_chain_scale_x >= 1.0f) &&
+                             (swap_chain_scale_y >= 1.0f);
+    }
+    if (!DirectCompositionSurfaceWin::AreScaledOverlaysSupported()) {
+      compatible_transform = compatible_transform &&
+                             (swap_chain_scale_x == 1.0f) &&
+                             (swap_chain_scale_y == 1.0f);
+    }
 
     if (is_decoder_texture && !is_shared_texture && !is_unitary_texture_array &&
-        is_overlay_supported_transform) {
+        compatible_transform) {
       if (PresentToDecodeSwapChain(texture, array_slice, color_space,
                                    content_rect, swap_chain_size)) {
         return true;
@@ -723,7 +776,7 @@ bool SwapChainPresenter::TryPresentToDecodeSwapChain(
       not_used_reason = DecodeSwapChainNotUsedReason::kSharedTexture;
     } else if (is_unitary_texture_array) {
       not_used_reason = DecodeSwapChainNotUsedReason::kUnitaryTextureArray;
-    } else if (!is_overlay_supported_transform) {
+    } else if (!compatible_transform) {
       not_used_reason = DecodeSwapChainNotUsedReason::kIncompatibleTransform;
     }
   } else if (!texture) {
@@ -1147,9 +1200,9 @@ void SwapChainPresenter::RecordPresentationStatistics() {
           stats.CompositionMode);
       if (frame_rate_ != 0) {
         // [1ms, 10s] covers the fps between [0.1hz, 1000hz].
-        base::UmaHistogramTimes("GPU.DirectComposition.ApprovedPresentDuration",
-                                base::TimeDelta::FromMilliseconds(
-                                    stats.ApprovedPresentDuration / 10000));
+        base::UmaHistogramTimes(
+            "GPU.DirectComposition.ApprovedPresentDuration",
+            base::Milliseconds(stats.ApprovedPresentDuration / 10000));
       }
       presentation_history_.AddSample(stats.CompositionMode);
       mode = stats.CompositionMode;
@@ -1422,6 +1475,12 @@ bool SwapChainPresenter::VideoProcessorBlt(
       DCHECK(output_view_);
     }
 
+    if (!layer_tree_->disable_vp_super_resolution() &&
+        base::FeatureList::IsEnabled(features::kIntelVpSuperResolution)) {
+      ToggleIntelVpSuperResolution(video_context.Get(), video_processor.Get(),
+                                   is_on_battery_power_);
+    }
+
     hr = video_context->VideoProcessorBlt(video_processor.Get(),
                                           output_view_.Get(), 0, 1, &stream);
     if (FAILED(hr)) {
@@ -1569,7 +1628,8 @@ bool SwapChainPresenter::ReallocateSwapChain(
       return false;
     }
   }
-  LabelSwapChainBuffers(swap_chain_.Get());
+  gl::LabelSwapChainAndBuffers(swap_chain_.Get(), "SwapChainPresenter");
+
   swap_chain_format_ = swap_chain_format;
   SetSwapChainPresentDuration();
   return true;

@@ -10,7 +10,7 @@
 #include "ash/ash_export.h"
 #include "ash/wm/base_state.h"
 #include "ash/wm/wm_event.h"
-#include "base/macros.h"
+#include "base/time/time.h"
 #include "ui/display/display.h"
 #include "ui/gfx/geometry/rect.h"
 
@@ -49,6 +49,10 @@ class ASH_EXPORT ClientControlledState : public BaseState {
       gfx::Rect* bounds);
 
   explicit ClientControlledState(std::unique_ptr<Delegate> delegate);
+
+  ClientControlledState(const ClientControlledState&) = delete;
+  ClientControlledState& operator=(const ClientControlledState&) = delete;
+
   ~ClientControlledState() override;
 
   // Resets |delegate_|.
@@ -79,6 +83,10 @@ class ASH_EXPORT ClientControlledState : public BaseState {
   void AttachState(WindowState* window_state,
                    WindowState::State* previous_state) override;
   void DetachState(WindowState* window_state) override;
+#if DCHECK_IS_ON()
+  void CheckMaximizableCondition(
+      const WindowState* window_state) const override;
+#endif  // DCHECK_IS_ON()
 
   // BaseState:
   void HandleWorkspaceEvents(WindowState* window_state,
@@ -102,6 +110,11 @@ class ASH_EXPORT ClientControlledState : public BaseState {
       WindowState* window_state,
       const WMEvent* event);
 
+  void UpdateWindowForTransitionEvents(
+      WindowState* window_state,
+      chromeos::WindowStateType next_state_type,
+      WMEventType event_type);
+
   std::unique_ptr<Delegate> delegate_;
 
   bool set_bounds_locally_ = false;
@@ -109,8 +122,6 @@ class ASH_EXPORT ClientControlledState : public BaseState {
       WindowState::kBoundsChangeSlideDuration;
 
   BoundsChangeAnimationType next_bounds_change_animation_type_ = kAnimationNone;
-
-  DISALLOW_COPY_AND_ASSIGN(ClientControlledState);
 };
 
 }  // namespace ash

@@ -9,9 +9,7 @@
 #include <vector>
 
 #include "base/containers/cxx20_erase.h"
-#include "base/cxx17_backports.h"
 #include "base/feature_list.h"
-#include "base/macros.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
@@ -19,7 +17,9 @@
 #include "components/bookmarks/browser/bookmark_model.h"
 #include "components/omnibox/browser/autocomplete_provider_client.h"
 #include "components/omnibox/browser/autocomplete_result.h"
+#include "components/omnibox/browser/keyword_provider.h"
 #include "components/omnibox/browser/omnibox_field_trial.h"
+#include "components/omnibox/browser/omnibox_triggered_feature_service.h"
 #include "components/omnibox/browser/titled_url_match_utils.h"
 #include "components/omnibox/common/omnibox_features.h"
 #include "components/prefs/pref_service.h"
@@ -77,7 +77,13 @@ void BookmarkProvider::Start(const AutocompleteInput& input,
   if (input.focus_type() != OmniboxFocusType::DEFAULT || input.text().empty())
     return;
 
-  DoAutocomplete(input);
+  // Remove the keyword from input if we're in keyword mode for a starter pack
+  // engine.
+  const AutocompleteInput adjusted_input =
+      KeywordProvider::AdjustInputForStarterPackEngines(
+          input, client_->GetTemplateURLService());
+
+  DoAutocomplete(adjusted_input);
 }
 
 BookmarkProvider::~BookmarkProvider() {}
@@ -133,8 +139,15 @@ void BookmarkProvider::DoAutocomplete(const AutocompleteInput& input) {
     }
   }
 
+  // In keyword mode, it's possible we only provide results from one or two
+  // autocomplete provider(s), so it's sometimes necessary to show more results
+  // than provider_max_matches_.
+  size_t max_matches = InKeywordMode(input)
+                           ? provider_max_matches_in_keyword_mode_
+                           : provider_max_matches_;
+
   // Sort and clip the resulting matches.
-  size_t num_matches = std::min(matches_.size(), provider_max_matches_);
+  size_t num_matches = std::min(matches_.size(), max_matches);
   std::partial_sort(matches_.begin(), matches_.begin() + num_matches,
                     matches_.end(), AutocompleteMatch::MoreRelevant);
   matches_.resize(num_matches);
@@ -178,7 +191,7 @@ std::vector<TitledUrlMatch> BookmarkProvider::GetMatchesWithBookmarkPaths(
   // It's unnecessary to compare the matches themselves because all
   // |matches_without_paths| should be contained in |matches_with_paths|.
   if (matches_without_paths.size() != matches_with_paths.size()) {
-    client_->GetOmniboxTriggeredFeatureService()->TriggerFeature(
+    client_->GetOmniboxTriggeredFeatureService()->FeatureTriggered(
         OmniboxTriggeredFeatureService::Feature::kBookmarkPaths);
   }
 
@@ -187,15 +200,22 @@ std::vector<TitledUrlMatch> BookmarkProvider::GetMatchesWithBookmarkPaths(
 
 query_parser::MatchingAlgorithm BookmarkProvider::GetMatchingAlgorithm(
     AutocompleteInput input) {
-  if (OmniboxFieldTrial::IsShortBookmarkSuggestionsEnabled())
+  // TODO(yoangela): This might have to check whether we're in @bookmarks mode
+  // specifically, since we might still get bookmarks suggestions in
+  // non-bookmarks keyword mode.  This is enough of an edge case it makes sense
+  // to just stick with simplicity for now.
+  if (OmniboxFieldTrial::IsShortBookmarkSuggestionsEnabled() ||
+      (OmniboxFieldTrial::IsSiteSearchStarterPackEnabled() &&
+       InKeywordMode(input))) {
     return query_parser::MatchingAlgorithm::ALWAYS_PREFIX_SEARCH;
+  }
 
   if (OmniboxFieldTrial::
           IsShortBookmarkSuggestionsByTotalInputLengthEnabled() &&
       input.text().length() >=
           OmniboxFieldTrial::
               ShortBookmarkSuggestionsByTotalInputLengthThreshold()) {
-    client_->GetOmniboxTriggeredFeatureService()->TriggerFeature(
+    client_->GetOmniboxTriggeredFeatureService()->FeatureTriggered(
         OmniboxTriggeredFeatureService::Feature::
             kShortBookmarkSuggestionsByTotalInputLength);
     return OmniboxFieldTrial::
@@ -301,9 +321,9 @@ int BookmarkProvider::CalculateBookmarkMatchRelevance(
   const int kURLCountBoost[4] = { 0, 75, 125, 150 };
   std::vector<const BookmarkNode*> nodes;
   bookmark_model_->GetNodesByURL(url, &nodes);
-  DCHECK_GE(std::min(base::size(kURLCountBoost), nodes.size()), 1U);
+  DCHECK_GE(std::min(std::size(kURLCountBoost), nodes.size()), 1U);
   relevance +=
-      kURLCountBoost[std::min(base::size(kURLCountBoost), nodes.size()) - 1];
+      kURLCountBoost[std::min(std::size(kURLCountBoost), nodes.size()) - 1];
   relevance = std::min(kMaxBookmarkScore, relevance);
   return relevance;
 }

@@ -13,11 +13,12 @@
 
 #include "base/callback.h"
 #include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/process/process_handle.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/unguessable_token.h"
 #include "build/build_config.h"
 #include "gpu/command_buffer/common/capabilities.h"
@@ -29,6 +30,7 @@
 #include "gpu/ipc/service/shared_image_stub.h"
 #include "ipc/ipc_sync_channel.h"
 #include "mojo/public/cpp/bindings/generic_pending_associated_receiver.h"
+#include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/native_widget_types.h"
 #include "ui/gl/gl_share_group.h"
@@ -99,8 +101,6 @@ class GPU_IPC_SERVICE_EXPORT GpuChannel : public IPC::Listener {
 
   SyncPointManager* sync_point_manager() const { return sync_point_manager_; }
 
-  gles2::ImageManager* image_manager() const { return image_manager_.get(); }
-
   const scoped_refptr<base::SingleThreadTaskRunner>& task_runner() const {
     return task_runner_;
   }
@@ -168,9 +168,9 @@ class GPU_IPC_SERVICE_EXPORT GpuChannel : public IPC::Listener {
 
   mojom::GpuChannel& GetGpuChannelForTesting();
 
-  ImageDecodeAcceleratorStub* GetImageDecodeAcceleratorStub() const;
+  ImageDecodeAcceleratorStub* GetImageDecodeAcceleratorStubForTesting() const;
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   const CommandBufferStub* GetOneStub() const;
 
   bool CreateStreamTexture(
@@ -182,7 +182,7 @@ class GPU_IPC_SERVICE_EXPORT GpuChannel : public IPC::Listener {
   void DestroyStreamTexture(int32_t stream_id);
 #endif
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   bool CreateDCOMPTexture(
       int32_t route_id,
       mojo::PendingAssociatedReceiver<mojom::DCOMPTexture> receiver);
@@ -190,7 +190,12 @@ class GPU_IPC_SERVICE_EXPORT GpuChannel : public IPC::Listener {
   // Called by DCOMPTexture to remove the GpuChannel's reference to the
   // DCOMPTexture.
   void DestroyDCOMPTexture(int32_t route_id);
-#endif  // defined(OS_WIN)
+
+  bool RegisterOverlayStateObserver(
+      mojo::PendingRemote<gpu::mojom::OverlayStateObserver>
+          promotion_hint_observer,
+      const gpu::Mailbox& mailbox);
+#endif  // BUILDFLAG(IS_WIN)
 
   SharedImageStub* shared_image_stub() const {
     return shared_image_stub_.get();
@@ -205,14 +210,14 @@ class GPU_IPC_SERVICE_EXPORT GpuChannel : public IPC::Listener {
       mojom::GpuChannel::CreateCommandBufferCallback callback);
   void DestroyCommandBuffer(int32_t routing_id);
 
-#if defined(OS_FUCHSIA)
+#if BUILDFLAG(IS_FUCHSIA)
   void RegisterSysmemBufferCollection(const base::UnguessableToken& id,
                                       mojo::PlatformHandle token,
                                       gfx::BufferFormat format,
                                       gfx::BufferUsage usage,
                                       bool register_with_image_pipe);
   void ReleaseSysmemBufferCollection(const base::UnguessableToken& id);
-#endif  // defined(OS_FUCHSIA)
+#endif  // BUILDFLAG(IS_FUCHSIA)
 
  private:
   // Takes ownership of the renderer process handle.
@@ -234,7 +239,8 @@ class GPU_IPC_SERVICE_EXPORT GpuChannel : public IPC::Listener {
   bool CreateSharedImageStub();
 
   std::unique_ptr<IPC::SyncChannel> sync_channel_;  // nullptr in tests.
-  IPC::Sender* channel_;  // Same as sync_channel_.get() except in tests.
+  raw_ptr<IPC::Sender>
+      channel_;  // Same as sync_channel_.get() except in tests.
 
   base::ProcessId client_pid_ = base::kNullProcessId;
 
@@ -251,13 +257,13 @@ class GPU_IPC_SERVICE_EXPORT GpuChannel : public IPC::Listener {
   // The lifetime of objects of this class is managed by a GpuChannelManager.
   // The GpuChannelManager destroy all the GpuChannels that they own when they
   // are destroyed. So a raw pointer is safe.
-  GpuChannelManager* const gpu_channel_manager_;
+  const raw_ptr<GpuChannelManager> gpu_channel_manager_;
 
-  Scheduler* const scheduler_;
+  const raw_ptr<Scheduler> scheduler_;
 
   // Sync point manager. Outlives the channel and is guaranteed to outlive the
   // message loop.
-  SyncPointManager* const sync_point_manager_;
+  const raw_ptr<SyncPointManager> sync_point_manager_;
 
   // The id of the client who is on the other side of the channel.
   const int32_t client_id_;
@@ -273,17 +279,16 @@ class GPU_IPC_SERVICE_EXPORT GpuChannel : public IPC::Listener {
   // process use.
   scoped_refptr<gl::GLShareGroup> share_group_;
 
-  std::unique_ptr<gles2::ImageManager> image_manager_;
   std::unique_ptr<SharedImageStub> shared_image_stub_;
 
   const bool is_gpu_host_;
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   // Set of active StreamTextures.
   base::flat_map<int32_t, scoped_refptr<StreamTexture>> stream_textures_;
 #endif
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   // Set of active DCOMPTextures.
   base::flat_map<int32_t, scoped_refptr<DCOMPTexture>> dcomp_textures_;
 #endif

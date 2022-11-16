@@ -10,7 +10,7 @@
 
 #include "base/callback_forward.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
@@ -63,6 +63,9 @@ class SiteDataImpl : public base::RefCounted<SiteDataImpl> {
     // Called when this object is about to get destroyed.
     virtual void OnSiteDataImplDestroyed(SiteDataImpl* impl) = 0;
   };
+
+  SiteDataImpl(const SiteDataImpl&) = delete;
+  SiteDataImpl& operator=(const SiteDataImpl&) = delete;
 
   // Must be called when a load event is received for this site, this can be
   // invoked several times if instances of this class are shared between
@@ -182,7 +185,7 @@ class SiteDataImpl : public base::RefCounted<SiteDataImpl> {
   // used to store TimeDelta values in the |SiteDataProto| protobuf.
   static base::TimeDelta InternalRepresentationToTimeDelta(
       ::google::protobuf::int64 value) {
-    return base::TimeDelta::FromSeconds(value);
+    return base::Seconds(value);
   }
   static int64_t TimeDeltaToInternalRepresentation(base::TimeDelta delta) {
     return delta.InSeconds();
@@ -280,7 +283,7 @@ class SiteDataImpl : public base::RefCounted<SiteDataImpl> {
 
   // The data store used to store the site characteristics, it should outlive
   // this object.
-  SiteDataStore* const data_store_;
+  const raw_ptr<SiteDataStore> data_store_;
 
   // The delegate that should get notified when this object is about to get
   // destroyed, it should outlive this object.
@@ -310,8 +313,6 @@ class SiteDataImpl : public base::RefCounted<SiteDataImpl> {
 
   base::WeakPtrFactory<SiteDataImpl> weak_factory_
       GUARDED_BY_CONTEXT(sequence_checker_){this};
-
-  DISALLOW_COPY_AND_ASSIGN(SiteDataImpl);
 };
 
 }  // namespace internal

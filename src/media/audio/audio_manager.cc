@@ -13,16 +13,15 @@
 #include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/logging.h"
-#include "base/macros.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/power_monitor/power_monitor.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/thread_annotations.h"
 #include "build/build_config.h"
 #include "media/audio/fake_audio_log_factory.h"
 #include "media/base/media_switches.h"
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include "base/win/scoped_com_initializer.h"
 #endif
 
@@ -36,11 +35,15 @@ AudioManager* g_last_created = nullptr;
 class AudioManagerHelper {
  public:
   AudioManagerHelper() = default;
+
+  AudioManagerHelper(const AudioManagerHelper&) = delete;
+  AudioManagerHelper& operator=(const AudioManagerHelper&) = delete;
+
   ~AudioManagerHelper() = default;
 
   AudioLogFactory* fake_log_factory() { return &fake_log_factory_; }
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   // This should be called before creating an AudioManager in tests to ensure
   // that the creating thread is COM initialized.
   void InitializeCOMForTesting() {
@@ -54,13 +57,11 @@ class AudioManagerHelper {
 
   FakeAudioLogFactory fake_log_factory_;
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   std::unique_ptr<base::win::ScopedCOMInitializer> com_initializer_for_testing_;
 #endif
 
   std::string app_name_;
-
-  DISALLOW_COPY_AND_ASSIGN(AudioManagerHelper);
 };
 
 AudioManagerHelper* GetHelper() {
@@ -119,7 +120,7 @@ std::unique_ptr<AudioManager> AudioManager::Create(
 // static
 std::unique_ptr<AudioManager> AudioManager::CreateForTesting(
     std::unique_ptr<AudioThread> audio_thread) {
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   GetHelper()->InitializeCOMForTesting();
 #endif
   return Create(std::move(audio_thread), GetHelper()->fake_log_factory());
@@ -161,24 +162,6 @@ bool AudioManager::Shutdown() {
   audio_thread_->Stop();
   shutdown_ = true;
   return true;
-}
-
-void AudioManager::SetDiverterCallbacks(
-    AddDiverterCallback add_callback,
-    RemoveDiverterCallback remove_callback) {
-  add_diverter_callback_ = std::move(add_callback);
-  remove_diverter_callback_ = std::move(remove_callback);
-}
-
-void AudioManager::AddDiverter(const base::UnguessableToken& group_id,
-                               media::AudioSourceDiverter* diverter) {
-  if (!add_diverter_callback_.is_null())
-    add_diverter_callback_.Run(group_id, diverter);
-}
-
-void AudioManager::RemoveDiverter(media::AudioSourceDiverter* diverter) {
-  if (!remove_diverter_callback_.is_null())
-    remove_diverter_callback_.Run(diverter);
 }
 
 }  // namespace media

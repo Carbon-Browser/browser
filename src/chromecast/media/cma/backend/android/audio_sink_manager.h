@@ -8,7 +8,6 @@
 #include <map>
 #include <vector>
 
-#include "base/macros.h"
 #include "base/synchronization/lock.h"
 #include "chromecast/media/cma/backend/android/audio_sink_android.h"
 
@@ -20,13 +19,9 @@ namespace media {
 class AudioSinkManager {
  public:
   static AudioSinkManager* Get();
-  static AudioSinkAndroid::SinkType GetDefaultSinkType();
 
-  // Gets the Android audio session ids used for media and communication (TTS)
-  // tracks.
-  // Set a return value pointer to null if that id is not needed.
-  // Returns true if the ids populated are valid.
-  static bool GetSessionIds(int* media_id, int* communication_id);
+  AudioSinkManager(const AudioSinkManager&) = delete;
+  AudioSinkManager& operator=(const AudioSinkManager&) = delete;
 
   // Adds the given sink instance to the vector.
   void Add(AudioSinkAndroid* sink);
@@ -69,8 +64,6 @@ class AudioSinkManager {
   std::map<AudioContentType, VolumeInfo> volume_info_;
 
   std::vector<AudioSinkAndroid*> sinks_;
-
-  DISALLOW_COPY_AND_ASSIGN(AudioSinkManager);
 };
 
 }  // namespace media

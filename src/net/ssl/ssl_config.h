@@ -12,6 +12,7 @@
 #include "net/base/net_export.h"
 #include "net/base/network_isolation_key.h"
 #include "net/base/privacy_mode.h"
+#include "net/cert/cert_status_flags.h"
 #include "net/cert/x509_certificate.h"
 #include "net/socket/next_proto.h"
 #include "net/ssl/ssl_private_key.h"
@@ -35,9 +36,6 @@ enum {
 
 // Default minimum protocol version.
 NET_EXPORT extern const uint16_t kDefaultSSLVersionMin;
-
-// Default minimum protocol version to warn about.
-NET_EXPORT extern const uint16_t kDefaultSSLVersionMinWarn;
 
 // Default maximum protocol version.
 NET_EXPORT extern const uint16_t kDefaultSSLVersionMax;
@@ -84,8 +82,7 @@ struct NET_EXPORT SSLConfig {
   // If true, causes only ECDHE cipher suites to be enabled.
   bool require_ecdhe = false;
 
-  // If true, causes 3DES cipher suites and SHA-1 signature algorithms in
-  // TLS 1.2 to be disabled.
+  // If true, causes SHA-1 signature algorithms in TLS 1.2 to be disabled.
   bool disable_legacy_crypto = false;
 
   // TODO(wtc): move the following members to a new SSLParams structure.  They
@@ -124,7 +121,7 @@ struct NET_EXPORT SSLConfig {
   NextProtoVector alpn_protos;
 
   // True if renegotiation should be allowed for the default application-level
-  // protocol when the peer negotiates neither ALPN nor NPN.
+  // protocol when the peer does not negotiate ALPN.
   bool renego_allowed_default = false;
 
   // The list of application-level protocols to enable renegotiation for.
@@ -139,9 +136,9 @@ struct NET_EXPORT SSLConfig {
   NetworkIsolationKey network_isolation_key;
 
   // If non-empty, a serialized ECHConfigList to use to encrypt the ClientHello.
-  //
-  // TODO(crbug.com/1091403): Support is currently incomplete. Implement the
-  // recovery flow and document what this does to the socket behavior.
+  // If this field is non-empty, callers should handle |ERR_ECH_NOT_NEGOTIATED|
+  // errors from Connect() by calling GetECHRetryConfigs() to determine how to
+  // retry the connection.
   std::vector<uint8_t> ech_config_list;
 
   // An additional boolean to partition the session cache by.

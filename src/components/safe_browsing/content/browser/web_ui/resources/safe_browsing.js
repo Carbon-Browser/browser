@@ -2,12 +2,10 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file. */
 
-import {addWebUIListener, sendWithPromise} from 'chrome://resources/js/cr.m.js';
-import {decorate} from 'chrome://resources/js/cr/ui.m.js';
-import {TabBox} from 'chrome://resources/js/cr/ui/tabs.js';
-import {$} from 'chrome://resources/js/util.m.js';
+import 'chrome://resources/cr_elements/cr_tab_box/cr_tab_box.js';
 
-decorate('tabbox', TabBox);
+import {addWebUIListener, sendWithPromise} from 'chrome://resources/js/cr.m.js';
+import {$} from 'chrome://resources/js/util.m.js';
 
 /**
  * Asks the C++ SafeBrowsingUIHandler to get the lists of Safe Browsing
@@ -27,6 +25,15 @@ function initialize() {
     const fullHashCacheState = databaseState.splice(-1, 1);
     addDatabaseManagerInfo(databaseState);
     addFullHashCacheInfo(fullHashCacheState);
+  });
+
+  sendWithPromise('getDownloadUrlsChecked', []).then((urlsChecked) => {
+    urlsChecked.forEach(function(url_and_result) {
+      addDownloadUrlChecked(url_and_result);
+    });
+  });
+  addWebUIListener('download-url-checked-update', function(url_and_result) {
+    addDownloadUrlChecked(url_and_result);
   });
 
   sendWithPromise('getSentClientDownloadRequests', [])
@@ -78,6 +85,15 @@ function initialize() {
   });
   addWebUIListener('sent-csbrr-update', function(result) {
     addSentCSBRRsInfo(result);
+  });
+
+  sendWithPromise('getSentHitReports', []).then((sentHitReports) => {
+    sentHitReports.forEach(function(hitReports) {
+      addSentHitReportsInfo(hitReports);
+    });
+  });
+  addWebUIListener('sent-hit-report-list', function(result) {
+    addSentHitReportsInfo(result);
   });
 
   sendWithPromise('getPGEvents', []).then((pgEvents) => {
@@ -175,10 +191,9 @@ function initialize() {
   };
 
   // When the tab updates, update the anchor
-  $('tabbox').addEventListener('selectedChange', function() {
-    const tabbox = $('tabbox');
-    const tabs = tabbox.querySelector('tabs').children;
-    const selectedTab = tabs[tabbox.selectedIndex];
+  $('tabbox').addEventListener('selected-index-change', e => {
+    const tabs = document.querySelectorAll('div[slot=\'tab\']');
+    const selectedTab = tabs[e.detail];
     window.location.hash = 'tab-' + selectedTab.id;
   }, true);
 }
@@ -271,6 +286,11 @@ function addFullHashCacheInfo(result) {
   $('full-hash-cache-info').textContent = result;
 }
 
+function addDownloadUrlChecked(url_and_result) {
+  const logDiv = $('download-urls-checked-list');
+  appendChildWithInnerText(logDiv, url_and_result);
+}
+
 function addSentClientDownloadRequestsInfo(result) {
   const logDiv = $('sent-client-download-requests-list');
   appendChildWithInnerText(logDiv, result);
@@ -293,6 +313,11 @@ function addReceivedClientPhishingResponseInfo(result) {
 
 function addSentCSBRRsInfo(result) {
   const logDiv = $('sent-csbrrs-list');
+  appendChildWithInnerText(logDiv, result);
+}
+
+function addSentHitReportsInfo(result) {
+  const logDiv = $('sent-hit-report-list');
   appendChildWithInnerText(logDiv, result);
 }
 
@@ -407,8 +432,11 @@ function addReferringAppInfo(info) {
 }
 
 function showTab(tabId) {
-  if ($(tabId)) {
-    $(tabId).selected = 'selected';
+  const tabs = document.querySelectorAll('div[slot=\'tab\']');
+  const index = Array.from(tabs).findIndex(t => t.id === tabId);
+  if (index !== -1) {
+    document.querySelector('cr-tab-box')
+        .setAttribute('selected-index', index.toString());
   }
 }
 

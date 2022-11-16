@@ -4,6 +4,7 @@
 
 #include "chrome/browser/ash/guest_os/guest_os_share_path.h"
 
+#include "ash/components/arc/arc_util.h"
 #include "ash/components/drivefs/mojom/drivefs.mojom.h"
 #include "base/atomic_ref_count.h"
 #include "base/bind.h"
@@ -15,6 +16,7 @@
 #include "chrome/browser/ash/drive/drive_integration_service.h"
 #include "chrome/browser/ash/file_manager/path_util.h"
 #include "chrome/browser/ash/file_manager/volume_manager.h"
+#include "chrome/browser/ash/guest_os/guest_id.h"
 #include "chrome/browser/ash/guest_os/guest_os_pref_names.h"
 #include "chrome/browser/ash/guest_os/guest_os_share_path_factory.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_manager.h"
@@ -23,9 +25,8 @@
 #include "chrome/browser/ash/smb_client/smb_service.h"
 #include "chrome/browser/ash/smb_client/smb_service_factory.h"
 #include "chrome/browser/ash/smb_client/smbfs_share.h"
-#include "chromeos/dbus/concierge/concierge_service.pb.h"
-#include "chromeos/dbus/seneschal/seneschal_client.h"
-#include "components/arc/arc_util.h"
+#include "chromeos/ash/components/dbus/concierge/concierge_service.pb.h"
+#include "chromeos/ash/components/dbus/seneschal/seneschal_client.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/scoped_user_pref_update.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -68,7 +69,7 @@ void OnVmRestartedForSeneschal(
     return;
   }
   request.set_handle(vm_info->info.seneschal_server_handle());
-  chromeos::SeneschalClient::Get()->SharePath(
+  ash::SeneschalClient::Get()->SharePath(
       request,
       base::BindOnce(&OnSeneschalSharePathResponse, std::move(callback)));
 }
@@ -130,7 +131,7 @@ class ErrorCapture {
   std::string first_failure_reason_;
 };  // class
 
-void RemovePersistedPathFromPrefs(base::DictionaryValue* shared_paths,
+void RemovePersistedPathFromPrefs(base::Value* shared_paths,
                                   const std::string& vm_name,
                                   const base::FilePath& path) {
   // |shared_paths| format is {'path': ['vm1', vm2']}.
@@ -141,15 +142,15 @@ void RemovePersistedPathFromPrefs(base::DictionaryValue* shared_paths,
                  << " for VM " << vm_name;
     return;
   }
-  auto it = std::find(found->GetList().begin(), found->GetList().end(),
-                      base::Value(vm_name));
+  auto it = std::find(found->GetListDeprecated().begin(),
+                      found->GetListDeprecated().end(), base::Value(vm_name));
   if (!found->EraseListIter(it)) {
     LOG(WARNING) << "VM not in prefs to unshare path " << path.value()
                  << " for VM " << vm_name;
     return;
   }
   // If VM list is now empty, remove |path| from |shared_paths|.
-  if (found->GetList().empty()) {
+  if (found->GetListDeprecated().empty()) {
     shared_paths->RemoveKey(path.value());
   }
 }
@@ -290,8 +291,8 @@ void GuestOsSharePath::CallSeneschalSharePath(const std::string& vm_name,
 
       // TODO(crbug.com/917920): Do not allow Computers Grand Root, or single
       // Computer Root to be shared until DriveFS enforces allowed write paths.
-      std::vector<base::FilePath::StringType> components;
-      relative_path.GetComponents(&components);
+      std::vector<base::FilePath::StringType> components =
+          relative_path.GetComponents();
       if (components.size() < 2) {
         allowed_path = false;
       }
@@ -392,10 +393,15 @@ void GuestOsSharePath::CallSeneschalSharePath(const std::string& vm_name,
     auto* crostini_manager = crostini::CrostiniManager::GetForProfile(profile_);
     absl::optional<crostini::VmInfo> vm_info =
         crostini_manager->GetVmInfo(vm_name);
-    if (!vm_info || vm_info->state != crostini::VmState::STARTED) {
-      crostini_manager->RestartCrostini(
-          crostini::ContainerId(vm_name,
-                                crostini::kCrostiniDefaultContainerName),
+    if (!crostini_manager->IsVmRunning(vm_name)) {
+      crostini::CrostiniManager::RestartOptions options;
+      options.start_vm_only = true;
+      // kCrostiniDefaultContainerName is not used in the following function
+      // since we are only starting the VM.
+      crostini_manager->RestartCrostiniWithOptions(
+          GuestId(crostini::kCrostiniDefaultVmType, vm_name,
+                  crostini::kCrostiniDefaultContainerName),
+          std::move(options),
           base::BindOnce(&OnVmRestartedForSeneschal, profile_, vm_name,
                          std::move(callback), std::move(request)));
       return;
@@ -403,7 +409,7 @@ void GuestOsSharePath::CallSeneschalSharePath(const std::string& vm_name,
     request.set_handle(vm_info->info.seneschal_server_handle());
   }
 
-  chromeos::SeneschalClient::Get()->SharePath(
+  ash::SeneschalClient::Get()->SharePath(
       request,
       base::BindOnce(&OnSeneschalSharePathResponse, std::move(callback)));
 }
@@ -467,7 +473,7 @@ void GuestOsSharePath::CallSeneschalUnsharePath(const std::string& vm_name,
   }
 
   request.set_path(unshare_path.value());
-  chromeos::SeneschalClient::Get()->UnsharePath(
+  ash::SeneschalClient::Get()->UnsharePath(
       request,
       base::BindOnce(&OnSeneschalUnsharePathResponse, std::move(callback)));
 }
@@ -484,6 +490,10 @@ void GuestOsSharePath::SharePaths(const std::string& vm_name,
                                   std::vector<base::FilePath> paths,
                                   bool persist,
                                   SuccessCallback callback) {
+  if (paths.empty()) {
+    std::move(callback).Run(true, "");
+    return;
+  }
   base::RepeatingCallback<void(const base::FilePath&, const base::FilePath&,
                                bool, const std::string&)>
       barrier = base::BindRepeating(
@@ -509,7 +519,7 @@ void GuestOsSharePath::UnsharePath(const std::string& vm_name,
   if (unpersist) {
     PrefService* pref_service = profile_->GetPrefs();
     DictionaryPrefUpdate update(pref_service, prefs::kGuestOSPathsSharedToVms);
-    base::DictionaryValue* shared_paths = update.Get();
+    base::Value* shared_paths = update.Get();
     RemovePersistedPathFromPrefs(shared_paths, vm_name, path);
   }
 
@@ -532,12 +542,11 @@ std::vector<base::FilePath> GuestOsSharePath::GetPersistedSharedPaths(
   CHECK(profile_);
   CHECK(profile_->GetPrefs());
   // |shared_paths| format is {'path': ['vm1', vm2']}.
-  const base::DictionaryValue* shared_paths =
-      profile_->GetPrefs()->GetDictionary(prefs::kGuestOSPathsSharedToVms);
-  CHECK(shared_paths);
-  for (const auto it : shared_paths->DictItems()) {
+  const base::Value::Dict& shared_paths =
+      profile_->GetPrefs()->GetValueDict(prefs::kGuestOSPathsSharedToVms);
+  for (const auto it : shared_paths) {
     base::FilePath path(it.first);
-    for (const auto& vm : it.second.GetList()) {
+    for (const auto& vm : it.second.GetListDeprecated()) {
       // Register all shared paths for all VMs since we want FilePathWatchers
       // to start immediately.
       RegisterSharedPath(vm.GetString(), path);
@@ -560,7 +569,7 @@ void GuestOsSharePath::RegisterPersistedPath(const std::string& vm_name,
                                              const base::FilePath& path) {
   PrefService* pref_service = profile_->GetPrefs();
   DictionaryPrefUpdate update(pref_service, prefs::kGuestOSPathsSharedToVms);
-  base::DictionaryValue* shared_paths = update.Get();
+  base::Value* shared_paths = update.Get();
   // Check if path is already shared so we know whether we need to add it.
   bool already_shared = false;
   // Remove any paths that are children of this path.
@@ -570,7 +579,8 @@ void GuestOsSharePath::RegisterPersistedPath(const std::string& vm_name,
   for (const auto it : shared_paths->DictItems()) {
     base::FilePath shared(it.first);
     auto& vms = it.second;
-    auto vm_matches = base::Contains(vms.GetList(), base::Value(vm_name));
+    auto vm_matches =
+        base::Contains(vms.GetListDeprecated(), base::Value(vm_name));
     if (path == shared) {
       already_shared = true;
       if (!vm_matches) {
@@ -624,14 +634,14 @@ void GuestOsSharePath::OnVolumeMounted(chromeos::MountError error_code,
 
   // Check if any persisted paths match volume.mount_path() or are children
   // of it then share them with any running VMs.
-  const base::DictionaryValue* shared_paths =
-      profile_->GetPrefs()->GetDictionary(prefs::kGuestOSPathsSharedToVms);
-  for (const auto it : shared_paths->DictItems()) {
+  const base::Value::Dict& shared_paths =
+      profile_->GetPrefs()->GetValueDict(prefs::kGuestOSPathsSharedToVms);
+  for (const auto it : shared_paths) {
     base::FilePath path(it.first);
     if (path != volume.mount_path() && !volume.mount_path().IsParent(path)) {
       continue;
     }
-    const auto& vms = it.second.GetList();
+    const auto& vms = it.second.GetListDeprecated();
     for (const auto& vm : vms) {
       RegisterSharedPath(vm.GetString(), path);
       if (crostini::CrostiniManager::GetForProfile(profile_)->IsVmRunning(

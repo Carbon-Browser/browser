@@ -75,13 +75,6 @@ bool HostToLocalHostRewrite(GURL* url, web::BrowserState* browser_state) {
   chrome_test_util::WaitForBreakpadQueue();
 }
 
-+ (void)setCellularNetworkEnabled:(BOOL)cellularNetworkEnabled {
-  chrome_test_util::SetWWANStateTo(cellularNetworkEnabled);
-  // Breakpad uses dispatch_async to update its state. Wait to get to a
-  // consistent state.
-  chrome_test_util::WaitForBreakpadQueue();
-}
-
 + (BOOL)isBreakpadEnabled {
   return chrome_test_util::IsBreakpadEnabled();
 }
@@ -104,6 +97,20 @@ bool HostToLocalHostRewrite(GURL* url, web::BrowserState* browser_state) {
       chrome_test_util::GetMainController()
           .interfaceProvider.mainInterface.viewController;
   return viewController.presentedViewController.keyCommands != nil;
+}
+
++ (void)overrideSearchEngineURL:(NSString*)searchEngineURL {
+  TemplateURLData templateURLData;
+  templateURLData.SetURL(base::SysNSStringToUTF8(searchEngineURL));
+
+  auto defaultSearchProvider = std::make_unique<TemplateURL>(templateURLData);
+  TemplateURL* defaultSearchProviderPtr = defaultSearchProvider.get();
+
+  TemplateURLService* service =
+      ios::TemplateURLServiceFactory::GetForBrowserState(
+          chrome_test_util::GetOriginalBrowserState());
+  service->Add(std::move(defaultSearchProvider));
+  service->SetUserSelectedDefaultSearchProvider(defaultSearchProviderPtr);
 }
 
 + (void)resetSearchEngine {

@@ -77,10 +77,11 @@ AccessibilityNotificationWaiter::~AccessibilityNotificationWaiter() = default;
 
 void AccessibilityNotificationWaiter::ListenToAllFrames(
     WebContents* web_contents) {
+  if (event_to_wait_for_)
+    VLOG(1) << "Waiting for AccessibilityEvent " << *event_to_wait_for_;
   WebContentsImpl* web_contents_impl =
       static_cast<WebContentsImpl*>(web_contents);
-  FrameTree* frame_tree = web_contents_impl->GetFrameTree();
-  for (FrameTreeNode* node : frame_tree->Nodes())
+  for (FrameTreeNode* node : web_contents_impl->GetPrimaryFrameTree().Nodes())
     ListenToFrame(node->current_frame_host());
 
   BrowserPluginGuestManager* guest_manager =
@@ -113,21 +114,26 @@ void AccessibilityNotificationWaiter::ListenToFrame(
   }
 }
 
-void AccessibilityNotificationWaiter::WaitForNotification() {
+bool AccessibilityNotificationWaiter::WaitForNotification() {
   loop_runner_->Run();
 
+  bool notification_received = notification_received_;
+  // Reset everything to allow reuse.
   // Each loop runner can only be called once. Create a new one in case
   // the caller wants to call this again to wait for the next notification.
   loop_runner_ = std::make_unique<base::RunLoop>();
   loop_runner_quit_closure_ = loop_runner_->QuitClosure();
+  notification_received_ = false;
+
+  return notification_received;
 }
 
-void AccessibilityNotificationWaiter::WaitForNotificationWithTimeout(
+bool AccessibilityNotificationWaiter::WaitForNotificationWithTimeout(
     base::TimeDelta timeout) {
   base::OneShotTimer quit_timer;
   quit_timer.Start(FROM_HERE, timeout, loop_runner_->QuitWhenIdleClosure());
 
-  WaitForNotification();
+  return WaitForNotification();
 }
 
 const ui::AXTree& AccessibilityNotificationWaiter::GetAXTree() const {
@@ -153,12 +159,14 @@ void AccessibilityNotificationWaiter::OnAccessibilityEvent(
   if (IsAboutBlank())
     return;
 
-  LOG(INFO) << "OnAccessibilityEvent " << event_type;
+  VLOG(1) << "OnAccessibilityEvent " << event_type;
 
   if (event_to_wait_for_ == ax::mojom::Event::kNone ||
       event_to_wait_for_ == event_type) {
     event_target_id_ = event_target_id;
     event_render_frame_host_ = rfhi;
+    notification_received_ = true;
+
     loop_runner_quit_closure_.Run();
   }
 }
@@ -188,12 +196,15 @@ void AccessibilityNotificationWaiter::OnGeneratedEvent(
     BrowserAccessibilityDelegate* delegate,
     ui::AXEventGenerator::Event event,
     int event_target_id) {
+  DCHECK(event_target_id);
+
   if (IsAboutBlank())
     return;
 
   if (generated_event_to_wait_for_ == event) {
     event_target_id_ = event_target_id;
     event_render_frame_host_ = static_cast<RenderFrameHostImpl*>(delegate);
+    notification_received_ = true;
     loop_runner_quit_closure_.Run();
   }
 }
@@ -202,6 +213,7 @@ void AccessibilityNotificationWaiter::OnLocationsChanged() {
   if (IsAboutBlank())
     return;
 
+  notification_received_ = true;
   loop_runner_quit_closure_.Run();
 }
 

@@ -22,7 +22,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_HTML_HTML_FRAME_OWNER_ELEMENT_H_
 
 #include "services/network/public/mojom/trust_tokens.mojom-blink-forward.h"
-#include "third_party/blink/public/mojom/frame/frame_owner_element_type.mojom-blink.h"
+#include "third_party/blink/public/common/frame/frame_owner_element_type.h"
 #include "third_party/blink/public/mojom/scroll/scrollbar_mode.mojom-blink.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/dom/document.h"
@@ -32,7 +32,8 @@
 #include "third_party/blink/renderer/core/html/html_element.h"
 #include "third_party/blink/renderer/core/permissions_policy/permissions_policy_parser.h"
 #include "third_party/blink/renderer/core/scroll/scroll_types.h"
-#include "third_party/blink/renderer/platform/heap/handle.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/weborigin/security_policy.h"
 #include "third_party/blink/renderer/platform/wtf/casting.h"
 #include "third_party/blink/renderer/platform/wtf/hash_counted_set.h"
@@ -65,7 +66,7 @@ class CORE_EXPORT HTMLFrameOwnerElement : public HTMLElement,
   // is, to remove it from the layout as if it did not exist.
   virtual void SetCollapsed(bool) {}
 
-  virtual mojom::blink::FrameOwnerElementType OwnerType() const = 0;
+  virtual FrameOwnerElementType OwnerType() const = 0;
 
   Document* getSVGDocument(ExceptionState&) const;
 
@@ -130,6 +131,10 @@ class CORE_EXPORT HTMLFrameOwnerElement : public HTMLElement,
   // Element overrides:
   bool IsAdRelated() const override;
 
+  // If the iframe is lazy-loaded, initiate its load, and return true if such
+  // a load was initiated.
+  bool LoadImmediatelyIfLazy();
+
   void Trace(Visitor*) const override;
 
  protected:
@@ -181,7 +186,30 @@ class CORE_EXPORT HTMLFrameOwnerElement : public HTMLElement,
  protected:
   bool is_swapping_frames() const { return is_swapping_frames_; }
 
+  // Checks that the number of frames on the page are within the current limit.
+  bool IsCurrentlyWithinFrameLimit() const;
+
  private:
+  // These values are persisted to logs. Entries should not be renumbered and
+  // numeric values should never be reused.
+  // This enum represents which auto lazy-load mechanism is used.
+  enum class AutomaticLazyLoadReason {
+    // If the frame is neither embeds nor ads, or the flags are not enabled,
+    // mark it as not eligible.
+    kNotEligible = 0,
+    // For LazyEmbeds
+    kEmbeds = 1,
+    // For LazyAds
+    kAds = 2,
+    // It's possible that the frame is eligible for both LazyEmbeds and LazyAds.
+    // TOOD(crbug.com/1341892) Remove kBothEmbedsAndAds once we confirm that we
+    // can ignore
+    // this case because the impact on the analysis is minimal.
+    kBothEmbedsAndAds = 3,
+
+    kMaxValue = kBothEmbedsAndAds,
+  };
+
   // Intentionally private to prevent redundant checks when the type is
   // already HTMLFrameOwnerElement.
   bool IsLocal() const final { return true; }
@@ -190,6 +218,12 @@ class CORE_EXPORT HTMLFrameOwnerElement : public HTMLElement,
   void SetIsSwappingFrames(bool is_swapping) override {
     is_swapping_frames_ = is_swapping;
   }
+
+  bool IsEligibleForLazyAds(const KURL& url);
+  void MaybeSetTimeoutToStartFrameLoading(
+      const KURL& url,
+      bool is_loading_attr_lazy,
+      AutomaticLazyLoadReason auto_lazy_load_reason);
 
   // Check if the frame should be lazy-loaded and apply when conditions are
   // passed. Return true when lazy-load is applied.

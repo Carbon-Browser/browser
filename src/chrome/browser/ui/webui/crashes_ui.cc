@@ -12,7 +12,6 @@
 
 #include "base/bind.h"
 #include "base/callback_helpers.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/system/sys_info.h"
@@ -39,11 +38,10 @@
 #include "ui/base/resource/resource_bundle.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chromeos/dbus/dbus_thread_manager.h"  // nogncheck
 #include "chromeos/dbus/debug_daemon/debug_daemon_client.h"
 #endif
 
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 #include "components/crash/core/app/crashpad.h"
 #endif
 
@@ -85,6 +83,10 @@ content::WebUIDataSource* CreateCrashesUIHTMLSource() {
 class CrashesDOMHandler : public WebUIMessageHandler {
  public:
   CrashesDOMHandler();
+
+  CrashesDOMHandler(const CrashesDOMHandler&) = delete;
+  CrashesDOMHandler& operator=(const CrashesDOMHandler&) = delete;
+
   ~CrashesDOMHandler() override;
 
   // WebUIMessageHandler implementation.
@@ -94,24 +96,22 @@ class CrashesDOMHandler : public WebUIMessageHandler {
   void OnUploadListAvailable();
 
   // Asynchronously fetches the list of crashes. Called from JS.
-  void HandleRequestCrashes(base::Value::ConstListView args);
+  void HandleRequestCrashes(const base::Value::List& args);
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   // Asynchronously triggers crash uploading. Called from JS.
-  void HandleRequestUploads(base::Value::ConstListView args);
+  void HandleRequestUploads(const base::Value::List& args);
 #endif
 
   // Sends the recent crashes list JS.
   void UpdateUI();
 
   // Asynchronously requests a user triggered upload. Called from JS.
-  void HandleRequestSingleCrashUpload(base::Value::ConstListView args);
+  void HandleRequestSingleCrashUpload(const base::Value::List& args);
 
   scoped_refptr<UploadList> upload_list_;
   bool list_available_;
   bool first_load_;
-
-  DISALLOW_COPY_AND_ASSIGN(CrashesDOMHandler);
 };
 
 CrashesDOMHandler::CrashesDOMHandler()
@@ -144,7 +144,7 @@ void CrashesDOMHandler::RegisterMessages() {
                           base::Unretained(this)));
 }
 
-void CrashesDOMHandler::HandleRequestCrashes(base::Value::ConstListView args) {
+void CrashesDOMHandler::HandleRequestCrashes(const base::Value::List& args) {
   AllowJavascript();
   if (first_load_) {
     first_load_ = false;
@@ -158,9 +158,9 @@ void CrashesDOMHandler::HandleRequestCrashes(base::Value::ConstListView args) {
 }
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-void CrashesDOMHandler::HandleRequestUploads(base::Value::ConstListView args) {
+void CrashesDOMHandler::HandleRequestUploads(const base::Value::List& args) {
   chromeos::DebugDaemonClient* debugd_client =
-      chromeos::DBusThreadManager::Get()->GetDebugDaemonClient();
+      chromeos::DebugDaemonClient::Get();
   DCHECK(debugd_client);
 
   debugd_client->UploadCrashes(base::BindOnce([](bool success) {
@@ -182,17 +182,17 @@ void CrashesDOMHandler::UpdateUI() {
       ChromeMetricsServiceAccessor::IsMetricsAndCrashReportingEnabled();
 
   bool system_crash_reporter = false;
-#if BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_CHROMEOS_LACROS)
+#if BUILDFLAG(IS_CHROMEOS)
   // Chrome OS has a system crash reporter.
   system_crash_reporter = true;
 #endif
 
   bool using_crashpad = false;
-#if defined(OS_WIN) || defined(OS_MAC) || defined(OS_ANDROID)
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_ANDROID)
   using_crashpad = true;
 // TODO(crbug.com/1052397): Revisit the macro expression once build flag switch
 // of lacros-chrome is complete.
-#elif defined(OS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
+#elif BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
   // ChromeOS uses crash_sender instead of Crashpad for uploads even when
   // Crashpad is enabled for dump generation.
   using_crashpad = crash_reporter::IsCrashpadEnabled();
@@ -217,24 +217,25 @@ void CrashesDOMHandler::UpdateUI() {
   // Crashpad so that users can manually upload those reports.
   bool upload_list = using_crashpad || crash_reporting_enabled;
 
-  base::ListValue crash_list;
+  base::Value::List crash_list;
   if (upload_list)
     crash_reporter::UploadListToValue(upload_list_.get(), &crash_list);
 
-  base::Value result(base::Value::Type::DICTIONARY);
-  result.SetBoolPath("enabled", crash_reporting_enabled);
-  result.SetBoolPath("dynamicBackend", system_crash_reporter);
-  result.SetBoolPath("manualUploads", support_manual_uploads);
-  result.SetPath("crashes", std::move(crash_list));
-  result.SetStringPath("version", version_info::GetVersionNumber());
-  result.SetStringPath("os", base::SysInfo::OperatingSystemName() + " " +
-                                 base::SysInfo::OperatingSystemVersion());
-  result.SetBoolPath("isGoogleAccount", is_internal);
-  FireWebUIListener(crash_reporter::kCrashesUIUpdateCrashList, result);
+  base::Value::Dict result;
+  result.Set("enabled", crash_reporting_enabled);
+  result.Set("dynamicBackend", system_crash_reporter);
+  result.Set("manualUploads", support_manual_uploads);
+  result.Set("crashes", std::move(crash_list));
+  result.Set("version", version_info::GetVersionNumber());
+  result.Set("os", base::SysInfo::OperatingSystemName() + " " +
+                       base::SysInfo::OperatingSystemVersion());
+  result.Set("isGoogleAccount", is_internal);
+  FireWebUIListener(crash_reporter::kCrashesUIUpdateCrashList,
+                    base::Value(std::move(result)));
 }
 
 void CrashesDOMHandler::HandleRequestSingleCrashUpload(
-    base::Value::ConstListView args) {
+    const base::Value::List& args) {
   // Only allow manual uploads if crash uploads aren’t disabled by policy.
   if (!ChromeMetricsServiceAccessor::IsMetricsAndCrashReportingEnabled() &&
       IsMetricsReportingPolicyManaged()) {

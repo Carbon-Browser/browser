@@ -7,7 +7,6 @@
 
 #include <vector>
 
-#include "base/macros.h"
 #include "chromecast/common/mojom/media_caps.mojom.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
@@ -22,6 +21,10 @@ struct CodecProfileLevel;
 class MediaCapsImpl : public mojom::MediaCaps {
  public:
   MediaCapsImpl();
+
+  MediaCapsImpl(const MediaCapsImpl&) = delete;
+  MediaCapsImpl& operator=(const MediaCapsImpl&) = delete;
+
   ~MediaCapsImpl() override;
 
   void Initialize();
@@ -54,8 +57,6 @@ class MediaCapsImpl : public mojom::MediaCaps {
   std::vector<CodecProfileLevel> codec_profile_levels_;
   mojo::RemoteSet<mojom::MediaCapsObserver> observers_;
   mojo::ReceiverSet<mojom::MediaCaps> receivers_;
-
-  DISALLOW_COPY_AND_ASSIGN(MediaCapsImpl);
 };
 
 }  // namespace media

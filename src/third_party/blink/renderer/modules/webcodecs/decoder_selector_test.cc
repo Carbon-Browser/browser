@@ -69,8 +69,8 @@ class AudioDecoderSelectorTestParam {
                             const media::WaitingCB&) {
           EXPECT_TRUE(config.Matches(expected_config));
           std::move(init_cb).Run(capability == kSucceed
-                                     ? media::OkStatus()
-                                     : media::StatusCode::kCodeOnlyForTesting);
+                                     ? media::DecoderStatus::Codes::kOk
+                                     : media::DecoderStatus::Codes::kFailed);
         });
   }
 };
@@ -108,8 +108,8 @@ class VideoDecoderSelectorTestParam {
                             const media::WaitingCB&) {
           EXPECT_TRUE(config.Matches(expected_config));
           std::move(init_cb).Run(capability == kSucceed
-                                     ? media::OkStatus()
-                                     : media::StatusCode::kCodeOnlyForTesting);
+                                     ? media::DecoderStatus::Codes::kOk
+                                     : media::DecoderStatus::Codes::kFailed);
         });
   }
 };
@@ -136,6 +136,10 @@ class WebCodecsDecoderSelectorTest : public ::testing::Test {
   using DecoderType = typename TypeParam::DecoderType;
 
   WebCodecsDecoderSelectorTest() { CreateDecoderSelector(); }
+
+  WebCodecsDecoderSelectorTest(const WebCodecsDecoderSelectorTest&) = delete;
+  WebCodecsDecoderSelectorTest& operator=(const WebCodecsDecoderSelectorTest&) =
+      delete;
 
   void OnOutput(scoped_refptr<Output> output) { NOTREACHED(); }
 
@@ -199,9 +203,6 @@ class WebCodecsDecoderSelectorTest : public ::testing::Test {
   std::vector<std::pair<int, DecoderCapability>> mock_decoders_to_create_;
 
   bool low_delay_ = false;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(WebCodecsDecoderSelectorTest);
 };
 
 using WebCodecsDecoderSelectorTestParams =

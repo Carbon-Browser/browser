@@ -7,11 +7,10 @@
 
 #include <string>
 
+#include "ash/components/login/auth/public/user_context.h"
 #include "base/callback.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/login/easy_unlock/easy_unlock_types.h"
-#include "chromeos/login/auth/user_context.h"
 
 namespace ash {
 class EasyUnlockCreateKeysOperation;
@@ -27,6 +26,12 @@ class EasyUnlockRefreshKeysOperation {
                                  const std::string& tpm_public_key,
                                  const EasyUnlockDeviceKeyDataList& devices,
                                  RefreshKeysCallback callback);
+
+  EasyUnlockRefreshKeysOperation(const EasyUnlockRefreshKeysOperation&) =
+      delete;
+  EasyUnlockRefreshKeysOperation& operator=(
+      const EasyUnlockRefreshKeysOperation&) = delete;
+
   ~EasyUnlockRefreshKeysOperation();
 
   void Start();
@@ -45,8 +50,6 @@ class EasyUnlockRefreshKeysOperation {
   std::unique_ptr<EasyUnlockRemoveKeysOperation> remove_keys_operation_;
 
   base::WeakPtrFactory<EasyUnlockRefreshKeysOperation> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(EasyUnlockRefreshKeysOperation);
 };
 
 }  // namespace ash

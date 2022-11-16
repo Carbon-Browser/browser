@@ -13,10 +13,8 @@
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
 #include "base/values.h"
-#include "chromeos/dbus/cros_healthd/cros_healthd_client.h"
-#include "chromeos/dbus/cros_healthd/fake_cros_healthd_client.h"
-#include "chromeos/services/cros_healthd/public/cpp/service_connection.h"
-#include "chromeos/services/cros_healthd/public/mojom/cros_healthd_diagnostics.mojom.h"
+#include "chromeos/ash/services/cros_healthd/public/cpp/fake_cros_healthd.h"
+#include "chromeos/ash/services/cros_healthd/public/mojom/cros_healthd_diagnostics.mojom.h"
 #include "components/policy/proto/device_management_backend.pb.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -161,15 +159,12 @@ class DeviceCommandGetRoutineUpdateJobTest : public testing::Test {
 };
 
 DeviceCommandGetRoutineUpdateJobTest::DeviceCommandGetRoutineUpdateJobTest() {
-  chromeos::CrosHealthdClient::InitializeFake();
+  ash::cros_healthd::FakeCrosHealthd::Initialize();
   test_start_time_ = base::TimeTicks::Now();
 }
 
 DeviceCommandGetRoutineUpdateJobTest::~DeviceCommandGetRoutineUpdateJobTest() {
-  chromeos::CrosHealthdClient::Shutdown();
-
-  // Wait for ServiceConnection to observe the destruction of the client.
-  chromeos::cros_healthd::ServiceConnection::GetInstance()->FlushForTesting();
+  ash::cros_healthd::FakeCrosHealthd::Shutdown();
 }
 
 void DeviceCommandGetRoutineUpdateJobTest::InitializeJob(
@@ -186,7 +181,7 @@ void DeviceCommandGetRoutineUpdateJobTest::InitializeJob(
       GenerateCommandProto(unique_id, base::TimeTicks::Now() - issued_time,
                            idleness_cutoff, terminate_upon_input, id, command,
                            include_output),
-      nullptr));
+      em::SignedData()));
 
   EXPECT_EQ(unique_id, job->unique_id());
   EXPECT_EQ(RemoteCommandJob::NOT_STARTED, job->status());
@@ -200,7 +195,7 @@ TEST_F(DeviceCommandGetRoutineUpdateJobTest,
       base::TimeTicks::Now(),
       GenerateCommandProto(
           kUniqueID, base::TimeTicks::Now() - test_start_time_,
-          base::TimeDelta::FromSeconds(30),
+          base::Seconds(30),
           /*terminate_upon_input=*/false, /*id=*/7979,
           static_cast<
               chromeos::cros_healthd::mojom::DiagnosticRoutineCommandEnum>(
@@ -208,7 +203,7 @@ TEST_F(DeviceCommandGetRoutineUpdateJobTest,
                   chromeos::cros_healthd::mojom::DiagnosticRoutineCommandEnum>::
                                       type>::max()),
           /*include_output=*/false),
-      nullptr));
+      em::SignedData()));
 
   EXPECT_EQ(kUniqueID, job->unique_id());
   EXPECT_EQ(RemoteCommandJob::INVALID, job->status());
@@ -221,13 +216,13 @@ TEST_F(DeviceCommandGetRoutineUpdateJobTest, CommandPayloadMissingId) {
   EXPECT_FALSE(job->Init(
       base::TimeTicks::Now(),
       GenerateCommandProto(kUniqueID, base::TimeTicks::Now() - test_start_time_,
-                           base::TimeDelta::FromSeconds(30),
+                           base::Seconds(30),
                            /*terminate_upon_input=*/false,
                            /*id=*/absl::nullopt,
                            chromeos::cros_healthd::mojom::
                                DiagnosticRoutineCommandEnum::kGetStatus,
                            /*include_output=*/true),
-      nullptr));
+      em::SignedData()));
 
   EXPECT_EQ(kUniqueID, job->unique_id());
   EXPECT_EQ(RemoteCommandJob::INVALID, job->status());
@@ -241,11 +236,11 @@ TEST_F(DeviceCommandGetRoutineUpdateJobTest, CommandPayloadMissingCommand) {
   EXPECT_FALSE(job->Init(
       base::TimeTicks::Now(),
       GenerateCommandProto(kUniqueID, base::TimeTicks::Now() - test_start_time_,
-                           base::TimeDelta::FromSeconds(30),
+                           base::Seconds(30),
                            /*terminate_upon_input=*/false,
                            /*id=*/1293, /*command=*/absl::nullopt,
                            /*include_output=*/true),
-      nullptr));
+      em::SignedData()));
 
   EXPECT_EQ(kUniqueID, job->unique_id());
   EXPECT_EQ(RemoteCommandJob::INVALID, job->status());
@@ -261,12 +256,12 @@ TEST_F(DeviceCommandGetRoutineUpdateJobTest,
       base::TimeTicks::Now(),
       GenerateCommandProto(
           kUniqueID, base::TimeTicks::Now() - test_start_time_,
-          base::TimeDelta::FromSeconds(30),
+          base::Seconds(30),
           /*terminate_upon_input=*/false,
           /*id=*/457658,
           chromeos::cros_healthd::mojom::DiagnosticRoutineCommandEnum::kCancel,
           /*include_output=*/absl::nullopt),
-      nullptr));
+      em::SignedData()));
 
   EXPECT_EQ(kUniqueID, job->unique_id());
   EXPECT_EQ(RemoteCommandJob::INVALID, job->status());
@@ -283,12 +278,12 @@ TEST_F(DeviceCommandGetRoutineUpdateJobTest,
   auto response = chromeos::cros_healthd::mojom::RoutineUpdate::New(
       kProgressPercent,
       /*output=*/mojo::ScopedHandle(), update_union.Clone());
-  chromeos::cros_healthd::FakeCrosHealthdClient::Get()
+  ash::cros_healthd::FakeCrosHealthd::Get()
       ->SetGetRoutineUpdateResponseForTesting(response);
   std::unique_ptr<RemoteCommandJob> job =
       std::make_unique<DeviceCommandGetRoutineUpdateJob>();
   InitializeJob(
-      job.get(), kUniqueID, test_start_time_, base::TimeDelta::FromSeconds(30),
+      job.get(), kUniqueID, test_start_time_, base::Seconds(30),
       /*terminate_upon_input=*/false, /*id=*/56923,
       chromeos::cros_healthd::mojom::DiagnosticRoutineCommandEnum::kRemove,
       /*include_output=*/true);
@@ -321,12 +316,12 @@ TEST_F(DeviceCommandGetRoutineUpdateJobTest,
   auto response = chromeos::cros_healthd::mojom::RoutineUpdate::New(
       kProgressPercent,
       /*output=*/mojo::ScopedHandle(), update_union.Clone());
-  chromeos::cros_healthd::FakeCrosHealthdClient::Get()
+  ash::cros_healthd::FakeCrosHealthd::Get()
       ->SetGetRoutineUpdateResponseForTesting(response);
   std::unique_ptr<RemoteCommandJob> job =
       std::make_unique<DeviceCommandGetRoutineUpdateJob>();
   InitializeJob(
-      job.get(), kUniqueID, test_start_time_, base::TimeDelta::FromSeconds(30),
+      job.get(), kUniqueID, test_start_time_, base::Seconds(30),
       /*terminate_upon_input=*/false, /*id=*/9812,
       chromeos::cros_healthd::mojom::DiagnosticRoutineCommandEnum::kRemove,
       /*include_output=*/true);

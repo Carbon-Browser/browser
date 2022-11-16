@@ -2,132 +2,67 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-import("//third_party/closure_compiler/compile_js.gni")
+import("//build/config/chromeos/ui_mode.gni")
+import("//tools/typescript/ts_library.gni")
+import("//ui/webui/resources/tools/generate_grd.gni")
 
-js_type_check("closure_compile") {
-  is_polymer3 = true
-  closure_flags = default_closure_args + [
-                    "language_in=ECMASCRIPT_2020",
-                    "browser_resolver_prefix_replacements=\"chrome://personalization/=../../chromeos/components/personalization_app/resources/\"",
-                    "js_module_root=../../chrome/test/data/webui/",
-                    "js_module_root=./gen/chrome/test/data/webui/",
-                  ]
-  deps = [
-    ":local_images_element_test",
-    ":personalization_app_test_utils",
-    ":personalization_app_unified_test",
-    ":personalization_toast_element_test",
-    ":test_mojo_interface_provider",
-    ":test_personalization_store",
-    ":wallpaper_collections_element_test",
-    ":wallpaper_images_element_test",
-    ":wallpaper_selected_element_test",
+ts_library("build_ts") {
+  root_dir = "."
+  out_dir = "$target_gen_dir/tsc"
+  tsconfig_base = "tsconfig_base.json"
+  path_mappings = [
+    "chrome://personalization/*|" +
+        rebase_path(
+            "$root_gen_dir/ash/webui/personalization_app/resources/tsc/*",
+            target_gen_dir),
+    "chrome://webui-test/*|" +
+        rebase_path("$root_gen_dir/chrome/test/data/webui/tsc/*",
+                    target_gen_dir),
   ]
+  in_files = [
+    "ambient_preview_element_test.ts",
+    "ambient_subpage_element_test.ts",
+    "avatar_camera_element_test.ts",
+    "avatar_list_element_test.ts",
+    "google_photos_albums_element_test.ts",
+    "google_photos_collection_element_test.ts",
+    "google_photos_photos_by_album_id_element_test.ts",
+    "google_photos_photos_element_test.ts",
+    "keyboard_backlight_element_test.ts",
+    "local_images_element_test.ts",
+    "personalization_app_controller_test.ts",
+    "personalization_app_test_utils.ts",
+    "personalization_breadcrumb_element_test.ts",
+    "personalization_main_element_test.ts",
+    "personalization_router_element_test.ts",
+    "personalization_theme_element_test.ts",
+    "personalization_toast_element_test.ts",
+    "test_ambient_interface_provider.ts",
+    "test_keyboard_backlight_interface_provider.ts",
+    "test_personalization_store.ts",
+    "test_theme_interface_provider.ts",
+    "test_user_interface_provider.ts",
+    "test_wallpaper_interface_provider.ts",
+    "user_preview_element_test.ts",
+    "user_subpage_element_test.ts",
+    "wallpaper_collections_element_test.ts",
+    "wallpaper_fullscreen_element_test.ts",
+    "wallpaper_grid_item_element_test.ts",
+    "wallpaper_images_element_test.ts",
+    "wallpaper_observer_test.ts",
+    "wallpaper_preview_element_test.ts",
+    "wallpaper_selected_element_test.ts",
+  ]
+  deps = [ "//ash/webui/personalization_app/resources:build_ts" ]
+  extra_deps = [ "../..:generate_definitions" ]
 }
 
-js_library("local_images_element_test") {
-  deps = [
-    ":personalization_app_test_utils",
-    ":test_mojo_interface_provider",
-    ":test_personalization_store",
-    "../..:chai_assert",
-    "../..:test_util",
-    "//chromeos/components/personalization_app/resources/trusted:local_images_element",
-  ]
-  externs_list = [ "$externs_path/mocha-2.5.js" ]
-}
+generate_grd("build_grdp") {
+  grd_prefix = "webui_chromeos_personalization_app"
+  out_grd = "$target_gen_dir/resources.grdp"
 
-js_library("personalization_toast_element_test") {
-  deps = [
-    ":test_personalization_store",
-    "//chromeos/components/personalization_app/resources/trusted:personalization_toast_element",
-  ]
-  externs_list = [ "$externs_path/mocha-2.5.js" ]
-}
-
-js_library("personalization_app_test_utils") {
-  deps = [
-    ":test_mojo_interface_provider",
-    ":test_personalization_store",
-    "../..:chai_assert",
-    "//chromeos/components/personalization_app/resources/trusted:mojo_interface_provider",
-    "//chromeos/components/personalization_app/resources/trusted:personalization_actions",
-    "//third_party/polymer/v3_0/components-chromium/polymer:polymer_bundled",
-  ]
-}
-
-js_library("personalization_app_unified_test") {
-  deps = [
-    ":local_images_element_test",
-    ":wallpaper_collections_element_test",
-    ":wallpaper_images_element_test",
-    ":wallpaper_selected_element_test",
-  ]
-  externs_list = [ "$externs_path/mocha-2.5.js" ]
-}
-
-js_library("test_personalization_store") {
-  deps = [
-    "//chromeos/components/personalization_app/resources/trusted:personalization_reducers",
-    "//chromeos/components/personalization_app/resources/trusted:personalization_store",
-  ]
-}
-
-js_library("test_mojo_interface_provider") {
-  deps = [
-    "../..:chai_assert",
-    "../..:test_browser_proxy",
-    "//chromeos/components/personalization_app/mojom:mojom_js_library_for_compile",
-  ]
-}
-
-js_library("wallpaper_breadcrumb_element_test") {
-  deps = [
-    ":personalization_app_test_utils",
-    ":test_mojo_interface_provider",
-    ":test_personalization_store",
-    "../..:chai_assert",
-    "../..:test_util",
-    "//chromeos/components/personalization_app/resources/trusted:personalization_router_element",
-    "//chromeos/components/personalization_app/resources/trusted:wallpaper_breadcrumb_element",
-    "//third_party/polymer/v3_0/components-chromium/polymer:polymer_bundled",
-  ]
-}
-
-js_library("wallpaper_collections_element_test") {
-  deps = [
-    ":personalization_app_test_utils",
-    ":test_mojo_interface_provider",
-    "../..:chai_assert",
-    "../..:test_util",
-    "//chromeos/components/personalization_app/resources/common:iframe_api",
-    "//chromeos/components/personalization_app/resources/trusted:wallpaper_collections_element",
-    "//third_party/polymer/v3_0/components-chromium/polymer:polymer_bundled",
-  ]
-  externs_list = [ "$externs_path/mocha-2.5.js" ]
-}
-
-js_library("wallpaper_images_element_test") {
-  deps = [
-    ":personalization_app_test_utils",
-    ":test_mojo_interface_provider",
-    "../..:chai_assert",
-    "../..:test_util",
-    "//chromeos/components/personalization_app/resources/common:iframe_api",
-    "//chromeos/components/personalization_app/resources/trusted:wallpaper_images_element",
-    "//third_party/polymer/v3_0/components-chromium/polymer:polymer_bundled",
-  ]
-  externs_list = [ "$externs_path/mocha-2.5.js" ]
-}
-
-js_library("wallpaper_selected_element_test") {
-  deps = [
-    ":personalization_app_test_utils",
-    ":test_mojo_interface_provider",
-    ":test_personalization_store",
-    "../..:chai_assert",
-    "../..:test_util",
-    "//chromeos/components/personalization_app/resources/trusted:wallpaper_selected_element",
-    "//third_party/polymer/v3_0/components-chromium/polymer:polymer_bundled",
-  ]
+  deps = [ ":build_ts" ]
+  manifest_files =
+      filter_include(get_target_outputs(":build_ts"), [ "*.manifest" ])
+  resource_path_prefix = "chromeos/personalization_app"
 }

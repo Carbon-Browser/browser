@@ -3,6 +3,13 @@
 // found in the LICENSE file.
 
 import {assert} from 'chrome://resources/js/assert.m.js';
+import {assertTrue} from '../../chai_assert.js';
+
+export function assertCloseTo(actual, expected) {
+  assertTrue(
+      Math.abs(1 - actual / expected) <= 0.001,
+      `expected ${expected} to be close to ${actual}`);
+}
 
 /**
  * Queries for an element through a path of custom elements.
@@ -80,7 +87,8 @@ export function timeout(ms) {
 export function waitWithTimeout(promise, ms, message) {
   message = message || 'waiting for promise timed out after ' + ms + ' ms.';
   return Promise.race(
-      [promise, timeout(ms).then((resolve, reject) => reject(message))]);
+      [promise, timeout(ms).then(
+        () => Promise.reject(new Error(message)))]);
 }
 
 /**
@@ -112,6 +120,20 @@ export function dispatchMouseEvent(element, button, eventType = 'contextmenu') {
     button: button,
     buttons: 0,
     clientX: element.getBoundingClientRect().x,
-    clientY: element.getBoundingClientRect().y
+    clientY: element.getBoundingClientRect().y,
   }));
+}
+
+const ACTIVE_EMOJI_GROUP_CLASS = 'emoji-group-active';
+const ACTIVE_TEXT_GROUP_CLASS = 'text-group-active';
+/**
+ * Checks if the given emoji-group-button or text-group-button element is
+ * activated.
+ * @param {?Element} element element to check.
+ * @return {boolean} true if active, false otherwise.
+ */
+export function isGroupButtonActive(element) {
+  assert(element, 'group button element should not be null');
+  return element.classList.contains(ACTIVE_EMOJI_GROUP_CLASS) ||
+      element.classList.contains(ACTIVE_TEXT_GROUP_CLASS);
 }

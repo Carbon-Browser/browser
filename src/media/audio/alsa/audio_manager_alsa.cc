@@ -7,7 +7,6 @@
 #include <stddef.h>
 
 #include "base/command_line.h"
-#include "base/cxx17_backports.h"
 #include "base/logging.h"
 #include "base/memory/free_deleter.h"
 #include "base/metrics/histogram.h"
@@ -171,7 +170,7 @@ bool AudioManagerAlsa::IsAlsaDeviceAvailable(
   // it or not.
   if (type == kStreamCapture) {
     // Check if the device is in the list of invalid devices.
-    for (size_t i = 0; i < base::size(kInvalidAudioInputDevices); ++i) {
+    for (size_t i = 0; i < std::size(kInvalidAudioInputDevices); ++i) {
       if (strncmp(kInvalidAudioInputDevices[i], device_name,
                   strlen(kInvalidAudioInputDevices[i])) == 0)
         return false;
@@ -186,7 +185,7 @@ bool AudioManagerAlsa::IsAlsaDeviceAvailable(
   // TODO(joi): Should we prefer "hw" instead?
   static const char kDeviceTypeDesired[] = "plughw";
   return strncmp(kDeviceTypeDesired, device_name,
-                 base::size(kDeviceTypeDesired) - 1) == 0;
+                 std::size(kDeviceTypeDesired) - 1) == 0;
 }
 
 // static
@@ -204,7 +203,7 @@ bool AudioManagerAlsa::HasAnyAlsaAudioDevice(
   int card = -1;
 
   // Loop through the sound cards.
-  // Don't use snd_device_name_hint(-1,..) since there is a access violation
+  // Don't use snd_device_name_hint(-1,..) since there is an access violation
   // inside this ALSA API with libasound.so.2.0.0.
   while (!wrapper_->CardNext(&card) && (card >= 0) && !has_device) {
     int error = wrapper_->DeviceNameHint(card, kPcmInterfaceName, &hints);

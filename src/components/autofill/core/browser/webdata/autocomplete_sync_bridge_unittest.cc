@@ -13,7 +13,6 @@
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/files/scoped_temp_dir.h"
-#include "base/macros.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
@@ -42,7 +41,6 @@
 
 using base::ScopedTempDir;
 using base::Time;
-using base::TimeDelta;
 using base::UTF8ToUTF16;
 using sync_pb::AutofillSpecifics;
 using sync_pb::EntityMetadata;
@@ -115,10 +113,10 @@ MATCHER_P(HasSpecifics, expected, "") {
 void VerifyDataBatch(std::map<std::string, AutofillSpecifics> expected,
                      std::unique_ptr<DataBatch> batch) {
   while (batch->HasNext()) {
-    const KeyAndData& data_pair = batch->Next();
-    auto expected_iter = expected.find(data_pair.first);
+    auto [key, data] = batch->Next();
+    auto expected_iter = expected.find(key);
     ASSERT_NE(expected_iter, expected.end());
-    EXPECT_THAT(data_pair.second, HasSpecifics(expected_iter->second));
+    EXPECT_THAT(data, HasSpecifics(expected_iter->second));
     // Removing allows us to verify we don't see the same item multiple times,
     // and that we saw everything we expected.
     expected.erase(expected_iter);
@@ -144,6 +142,11 @@ AutofillEntry CreateAutofillEntry(const AutofillSpecifics& autofill_specifics) {
 class AutocompleteSyncBridgeTest : public testing::Test {
  public:
   AutocompleteSyncBridgeTest() {}
+
+  AutocompleteSyncBridgeTest(const AutocompleteSyncBridgeTest&) = delete;
+  AutocompleteSyncBridgeTest& operator=(const AutocompleteSyncBridgeTest&) =
+      delete;
+
   ~AutocompleteSyncBridgeTest() override {}
 
   void SetUp() override {
@@ -302,8 +305,6 @@ class AutocompleteSyncBridgeTest : public testing::Test {
   std::unique_ptr<AutocompleteSyncBridge> bridge_;
   testing::NiceMock<MockModelTypeChangeProcessor> mock_processor_;
   std::unique_ptr<syncer::ClientTagBasedModelTypeProcessor> real_processor_;
-
-  DISALLOW_COPY_AND_ASSIGN(AutocompleteSyncBridgeTest);
 };
 
 TEST_F(AutocompleteSyncBridgeTest, GetClientTag) {
@@ -679,13 +680,13 @@ TEST_F(AutocompleteSyncBridgeTest, LoadMetadataCalled) {
 
 TEST_F(AutocompleteSyncBridgeTest, LoadMetadataReportsErrorForMissingDB) {
   ON_CALL(*backend(), GetDatabase()).WillByDefault(Return(nullptr));
-  EXPECT_CALL(mock_processor(), ReportError(_));
+  EXPECT_CALL(mock_processor(), ReportError);
   ResetBridge();
 }
 
 TEST_F(AutocompleteSyncBridgeTest, MergeSyncDataEmpty) {
-  EXPECT_CALL(mock_processor(), Delete(_, _)).Times(0);
-  EXPECT_CALL(mock_processor(), Put(_, _, _)).Times(0);
+  EXPECT_CALL(mock_processor(), Delete).Times(0);
+  EXPECT_CALL(mock_processor(), Put).Times(0);
   EXPECT_CALL(*backend(), NotifyOfMultipleAutofillChanges()).Times(0);
   // The bridge should still commit the model type state change.
   EXPECT_CALL(*backend(), CommitChanges());
@@ -699,8 +700,8 @@ TEST_F(AutocompleteSyncBridgeTest, MergeSyncDataRemoteOnly) {
   const AutofillSpecifics specifics1 = CreateSpecifics(1, {2});
   const AutofillSpecifics specifics2 = CreateSpecifics(2, {3, 4});
 
-  EXPECT_CALL(mock_processor(), Delete(_, _)).Times(0);
-  EXPECT_CALL(mock_processor(), Put(_, _, _)).Times(0);
+  EXPECT_CALL(mock_processor(), Delete).Times(0);
+  EXPECT_CALL(mock_processor(), Put).Times(0);
   EXPECT_CALL(*backend(), CommitChanges());
   EXPECT_CALL(*backend(), NotifyOfMultipleAutofillChanges());
 
@@ -715,7 +716,7 @@ TEST_F(AutocompleteSyncBridgeTest, MergeSyncDataLocalOnly) {
 
   EXPECT_CALL(mock_processor(), Put(_, HasSpecifics(specifics1), _));
   EXPECT_CALL(mock_processor(), Put(_, HasSpecifics(specifics2), _));
-  EXPECT_CALL(mock_processor(), Delete(_, _)).Times(0);
+  EXPECT_CALL(mock_processor(), Delete).Times(0);
 
   ApplyAdds({specifics1, specifics2});
   VerifyAllData({specifics1, specifics2});
@@ -751,7 +752,7 @@ TEST_F(AutocompleteSyncBridgeTest, MergeSyncDataAllMerged) {
   EXPECT_CALL(mock_processor(), Put(_, HasSpecifics(merged4), _));
   EXPECT_CALL(mock_processor(), Put(_, HasSpecifics(merged5), _));
   EXPECT_CALL(mock_processor(), Put(_, HasSpecifics(merged6), _));
-  EXPECT_CALL(mock_processor(), Delete(_, _)).Times(0);
+  EXPECT_CALL(mock_processor(), Delete).Times(0);
 
   ApplyAdds({local1, local2, local3, local4, local5, local6});
 
@@ -773,7 +774,7 @@ TEST_F(AutocompleteSyncBridgeTest, MergeSyncDataMixed) {
 
   EXPECT_CALL(mock_processor(), Put(_, HasSpecifics(local1), _));
   EXPECT_CALL(mock_processor(), Put(_, HasSpecifics(merged4), _));
-  EXPECT_CALL(mock_processor(), Delete(_, _)).Times(0);
+  EXPECT_CALL(mock_processor(), Delete).Times(0);
 
   ApplyAdds({local1, specifics3, local4});
 

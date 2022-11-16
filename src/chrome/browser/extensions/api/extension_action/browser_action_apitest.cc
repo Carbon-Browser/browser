@@ -7,9 +7,6 @@
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
-#include "base/macros.h"
-#include "base/run_loop.h"
-#include "base/scoped_observation.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/metrics/histogram_tester.h"
@@ -40,8 +37,8 @@
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/notification_service.h"
 #include "content/public/browser/overlay_window.h"
-#include "content/public/browser/picture_in_picture_window_controller.h"
 #include "content/public/browser/render_frame_host.h"
+#include "content/public/browser/video_picture_in_picture_window_controller.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
@@ -52,7 +49,7 @@
 #include "extensions/browser/extension_action.h"
 #include "extensions/browser/extension_action_manager.h"
 #include "extensions/browser/extension_host.h"
-#include "extensions/browser/extension_host_observer.h"
+#include "extensions/browser/extension_host_test_helper.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/extension_system.h"
 #include "extensions/browser/process_manager.h"
@@ -62,14 +59,16 @@
 #include "extensions/test/result_catcher.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "testing/gmock/include/gmock/gmock.h"
+#include "ui/base/layout.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
+#include "ui/gfx/geometry/skia_conversions.h"
 #include "ui/gfx/image/canvas_image_source.h"
 #include "ui/gfx/image/image_skia.h"
 #include "ui/gfx/image/image_skia_operations.h"
+#include "ui/gfx/image/image_skia_rep.h"
 #include "ui/gfx/image/image_unittest_util.h"
-#include "ui/gfx/skia_util.h"
 
 using content::WebContents;
 
@@ -165,7 +164,8 @@ class BrowserActionApiTestWithContextType
 
  protected:
   void RunUpdateTest(base::StringPiece path, bool expect_failure) {
-    ExtensionTestMessageListener ready_listener("ready", true);
+    ExtensionTestMessageListener ready_listener("ready",
+                                                ReplyBehavior::kWillReply);
     ASSERT_TRUE(embedded_test_server()->Start());
     const Extension* extension =
         LoadExtension(test_data_dir_.AppendASCII(path));
@@ -189,7 +189,8 @@ class BrowserActionApiTestWithContextType
 
     if (expect_failure) {
       EXPECT_FALSE(catcher.GetNextResult());
-      EXPECT_EQ("The source image could not be decoded.", catcher.message());
+      EXPECT_THAT(catcher.message(),
+                  testing::EndsWith("The source image could not be decoded."));
       return;
     }
 
@@ -203,7 +204,8 @@ class BrowserActionApiTestWithContextType
   }
 
   void RunEnableTest(base::StringPiece path, bool start_enabled) {
-    ExtensionTestMessageListener ready_listener("ready", true);
+    ExtensionTestMessageListener ready_listener("ready",
+                                                ReplyBehavior::kWillReply);
     const Extension* extension =
         LoadExtension(test_data_dir_.AppendASCII(path));
     ASSERT_TRUE(extension) << message_;
@@ -235,7 +237,7 @@ class BrowserActionApiTestWithContextType
 };
 
 IN_PROC_BROWSER_TEST_P(BrowserActionApiTestWithContextType, Basic) {
-  ExtensionTestMessageListener ready_listener("ready", false);
+  ExtensionTestMessageListener ready_listener("ready");
   ASSERT_TRUE(embedded_test_server()->Start());
   const Extension* extension =
       LoadExtension(test_data_dir_.AppendASCII("browser_action/basics"));
@@ -290,7 +292,7 @@ IN_PROC_BROWSER_TEST_F(BrowserActionApiCanvasTest, DynamicBrowserAction) {
   const Extension* extension = GetSingleLoadedExtension();
   ASSERT_TRUE(extension) << message_;
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   // We need this on mac so we don't loose 2x representations from browser icon
   // in transformations gfx::ImageSkia -> NSImage -> gfx::ImageSkia.
   std::vector<ui::ResourceScaleFactor> supported_scale_factors;
@@ -493,8 +495,6 @@ IN_PROC_BROWSER_TEST_F(BrowserActionApiCanvasTest, InvisibleIconBrowserAction) {
 
   const std::string histogram_name =
       "Extensions.DynamicExtensionActionIconWasVisible";
-  const std::string new_histogram_name =
-      "Extensions.DynamicExtensionActionIconWasVisibleRendered";
   {
     base::HistogramTester histogram_tester;
     std::string result;
@@ -506,8 +506,6 @@ IN_PROC_BROWSER_TEST_F(BrowserActionApiCanvasTest, InvisibleIconBrowserAction) {
     EXPECT_TRUE(gfx::test::AreImagesEqual(
         initial_bar_icon, GetBrowserActionsBar()->GetIcon(extension->id())));
     EXPECT_THAT(histogram_tester.GetAllSamples(histogram_name),
-                testing::ElementsAre(base::Bucket(0, 1)));
-    EXPECT_THAT(histogram_tester.GetAllSamples(new_histogram_name),
                 testing::ElementsAre(base::Bucket(0, 1)));
   }
 
@@ -522,8 +520,6 @@ IN_PROC_BROWSER_TEST_F(BrowserActionApiCanvasTest, InvisibleIconBrowserAction) {
     EXPECT_FALSE(gfx::test::AreImagesEqual(
         initial_bar_icon, GetBrowserActionsBar()->GetIcon(extension->id())));
     EXPECT_THAT(histogram_tester.GetAllSamples(histogram_name),
-                testing::ElementsAre(base::Bucket(1, 1)));
-    EXPECT_THAT(histogram_tester.GetAllSamples(new_histogram_name),
                 testing::ElementsAre(base::Bucket(1, 1)));
   }
 }
@@ -552,7 +548,8 @@ IN_PROC_BROWSER_TEST_P(BrowserActionApiTestWithContextType,
 
   // Go back to first tab, changed title should reappear.
   browser()->tab_strip_model()->ActivateTabAt(
-      0, {TabStripModel::GestureType::kOther});
+      0, TabStripUserGestureDetails(
+             TabStripUserGestureDetails::GestureType::kOther));
   EXPECT_EQ("Showing icon 2",
             GetBrowserActionsBar()->GetTooltip(extension->id()));
 
@@ -685,7 +682,7 @@ IN_PROC_BROWSER_TEST_P(BrowserActionApiTestWithContextType, RemovePopup) {
 }
 
 IN_PROC_BROWSER_TEST_P(BrowserActionApiTestWithContextType, IncognitoBasic) {
-  ExtensionTestMessageListener ready_listener("ready", false);
+  ExtensionTestMessageListener ready_listener("ready");
   ASSERT_TRUE(embedded_test_server()->Start());
   scoped_refptr<const Extension> extension =
       LoadExtension(test_data_dir_.AppendASCII("browser_action/basics"));
@@ -707,7 +704,7 @@ IN_PROC_BROWSER_TEST_P(BrowserActionApiTestWithContextType, IncognitoBasic) {
   // action shows up.
   // SetIsIncognitoEnabled() requires a reload of the extension, so we have to
   // wait for it.
-  ExtensionTestMessageListener incognito_ready_listener("ready", false);
+  ExtensionTestMessageListener incognito_ready_listener("ready");
   TestExtensionRegistryObserver registry_observer(
       ExtensionRegistry::Get(profile()), extension->id());
   extensions::util::SetIsIncognitoEnabled(
@@ -735,7 +732,7 @@ IN_PROC_BROWSER_TEST_P(BrowserActionApiTestWithContextType, IncognitoBasic) {
 IN_PROC_BROWSER_TEST_P(BrowserActionApiTestWithContextType, IncognitoUpdate) {
   ASSERT_TRUE(embedded_test_server()->Start());
   ExtensionTestMessageListener incognito_not_allowed_listener(
-      "incognito not allowed", false);
+      "incognito not allowed");
   scoped_refptr<const Extension> extension =
       LoadExtension(test_data_dir_.AppendASCII("browser_action/update"));
   ASSERT_TRUE(extension) << message_;
@@ -757,8 +754,8 @@ IN_PROC_BROWSER_TEST_P(BrowserActionApiTestWithContextType, IncognitoUpdate) {
   // execution until the transition is completed, since the script will
   // start and stop multiple times during the initial load of the extension
   // and the enabling of incognito mode.
-  ExtensionTestMessageListener incognito_allowed_listener("incognito allowed",
-                                                          true);
+  ExtensionTestMessageListener incognito_allowed_listener(
+      "incognito allowed", ReplyBehavior::kWillReply);
   // Now enable the extension in incognito mode, and test that the browser
   // action shows up. SetIsIncognitoEnabled() requires a reload of the
   // extension, so we have to wait for it to finish.
@@ -796,8 +793,8 @@ IN_PROC_BROWSER_TEST_P(BrowserActionApiTestWithContextType, IncognitoUpdate) {
 // Tests that events are dispatched to the correct profile for split mode
 // extensions.
 IN_PROC_BROWSER_TEST_P(BrowserActionApiTestWithContextType, IncognitoSplit) {
-  ExtensionTestMessageListener listener_ready("regular ready", false);
-  ExtensionTestMessageListener incognito_ready("incognito ready", false);
+  ExtensionTestMessageListener listener_ready("regular ready");
+  ExtensionTestMessageListener incognito_ready("incognito ready");
 
   // Open an incognito browser.
   // Note: It is important that we create incognito profile before loading
@@ -830,7 +827,7 @@ IN_PROC_BROWSER_TEST_P(BrowserActionApiTestWithContextType, IncognitoSplit) {
 }
 
 IN_PROC_BROWSER_TEST_F(BrowserActionApiTest, CloseBackgroundPage) {
-  ExtensionTestMessageListener listener("ready", /*will_reply=*/false);
+  ExtensionTestMessageListener listener("ready");
   ASSERT_TRUE(LoadExtension(
       test_data_dir_.AppendASCII("browser_action/close_background")));
   const Extension* extension = GetSingleLoadedExtension();
@@ -848,40 +845,13 @@ IN_PROC_BROWSER_TEST_F(BrowserActionApiTest, CloseBackgroundPage) {
   ASSERT_EQ("",
             action->GetExplicitlySetBadgeText(ExtensionAction::kDefaultTabId));
 
-  // A helper class to wait for the ExtensionHost to shut down.
-  // TODO(devlin): Hoist this somewhere more common and track down other similar
-  // usages.
-  class ExtensionHostDestructionObserver : public ExtensionHostObserver {
-   public:
-    explicit ExtensionHostDestructionObserver(ExtensionHost* host) {
-      host_observation_.Observe(host);
-    }
-    ExtensionHostDestructionObserver(
-        const ExtensionHostDestructionObserver& other) = delete;
-    ExtensionHostDestructionObserver& operator=(
-        const ExtensionHostDestructionObserver& other) = delete;
-    ~ExtensionHostDestructionObserver() override = default;
-
-    void OnExtensionHostDestroyed(ExtensionHost* host) override {
-      ASSERT_TRUE(host_observation_.IsObservingSource(host));
-      host_observation_.Reset();
-      run_loop_.QuitWhenIdle();
-    }
-
-    void Wait() { run_loop_.Run(); }
-
-   private:
-    base::RunLoop run_loop_;
-    base::ScopedObservation<ExtensionHost, ExtensionHostObserver>
-        host_observation_{this};
-  };
-
-  ExtensionHostDestructionObserver host_destroyed_observer(extension_host);
+  ExtensionHostTestHelper host_destroyed_observer(profile());
+  host_destroyed_observer.RestrictToHost(extension_host);
 
   // Click the browser action.
   ExecuteExtensionAction(browser(), extension);
 
-  host_destroyed_observer.Wait();
+  host_destroyed_observer.WaitForHostDestroyed();
 
   EXPECT_FALSE(manager->GetBackgroundHostForExtension(extension->id()));
   EXPECT_EQ("X",
@@ -998,7 +968,8 @@ IN_PROC_BROWSER_TEST_P(BrowserActionApiTestWithContextType,
 
 IN_PROC_BROWSER_TEST_P(BrowserActionApiTestWithContextType,
                        WithRectangularIcon) {
-  ExtensionTestMessageListener ready_listener("ready", true);
+  ExtensionTestMessageListener ready_listener("ready",
+                                              ReplyBehavior::kWillReply);
 
   const Extension* extension = LoadExtension(
       test_data_dir_.AppendASCII("browser_action").AppendASCII("rect_icon"));
@@ -1049,21 +1020,22 @@ IN_PROC_BROWSER_TEST_F(BrowserActionApiTest,
       process_manager->GetBackgroundHostForExtension(extension->id())
           ->web_contents();
   ASSERT_TRUE(web_contents);
-  content::PictureInPictureWindowController* window_controller =
-      content::PictureInPictureWindowController::GetOrCreateForWebContents(
-          web_contents);
-  ASSERT_TRUE(window_controller->GetWindowForTesting());
-  EXPECT_FALSE(window_controller->GetWindowForTesting()->IsVisible());
+  content::VideoPictureInPictureWindowController* window_controller =
+      content::PictureInPictureWindowController::
+          GetOrCreateVideoPictureInPictureController(web_contents);
+  EXPECT_FALSE(window_controller->GetWindowForTesting());
 
   // Click on the browser action icon to enter Picture-in-Picture.
   ResultCatcher catcher;
   GetBrowserActionsBar()->Press(extension->id());
   EXPECT_TRUE(catcher.GetNextResult());
+  ASSERT_TRUE(window_controller->GetWindowForTesting());
   EXPECT_TRUE(window_controller->GetWindowForTesting()->IsVisible());
 
   // Click on the browser action icon to exit Picture-in-Picture.
   GetBrowserActionsBar()->Press(extension->id());
   EXPECT_TRUE(catcher.GetNextResult());
+  ASSERT_TRUE(window_controller->GetWindowForTesting());
   EXPECT_FALSE(window_controller->GetWindowForTesting()->IsVisible());
 }
 

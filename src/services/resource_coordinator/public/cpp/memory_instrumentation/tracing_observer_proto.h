@@ -5,8 +5,8 @@
 #ifndef SERVICES_RESOURCE_COORDINATOR_PUBLIC_CPP_MEMORY_INSTRUMENTATION_TRACING_OBSERVER_PROTO_H_
 #define SERVICES_RESOURCE_COORDINATOR_PUBLIC_CPP_MEMORY_INSTRUMENTATION_TRACING_OBSERVER_PROTO_H_
 
+#include "base/callback.h"
 #include "base/component_export.h"
-#include "base/macros.h"
 #include "base/thread_annotations.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "base/trace_event/trace_event.h"
@@ -33,6 +33,10 @@ class COMPONENT_EXPORT(RESOURCE_COORDINATOR_PUBLIC_MEMORY_INSTRUMENTATION)
  public:
   TracingObserverProto(base::trace_event::TraceLog*,
                        base::trace_event::MemoryDumpManager*);
+
+  TracingObserverProto(const TracingObserverProto&) = delete;
+  TracingObserverProto& operator=(const TracingObserverProto&) = delete;
+
   ~TracingObserverProto() override;
 
   static void RegisterForTesting();
@@ -79,8 +83,6 @@ class COMPONENT_EXPORT(RESOURCE_COORDINATOR_PUBLIC_MEMORY_INSTRUMENTATION)
 #endif  // !BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
 
   static tracing::PerfettoTracedProcess::DataSourceBase* instance_for_testing_;
-
-  DISALLOW_COPY_AND_ASSIGN(TracingObserverProto);
 };
 
 }  // namespace memory_instrumentation

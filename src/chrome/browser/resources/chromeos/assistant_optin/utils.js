@@ -3,20 +3,20 @@
 // found in the LICENSE file.
 
 /* Script used to strip anchor links from webview */
-const webviewStripLinksContentScript = {
+/* #export */ const webviewStripLinksContentScript = {
   name: 'stripLinks',
   matches: ['<all_urls>'],
   js: {
     code: 'document.querySelectorAll(\'a\').forEach(' +
-        'function(anchor){anchor.href=\'javascript:void(0)\';})'
+        'function(anchor){anchor.href=\'javascript:void(0)\';})',
   },
-  run_at: 'document_end'
+  run_at: 'document_end',
 };
 
 /**
  * Sanitizer which filters the html snippet with a set of whitelisted tags.
  */
-class HtmlSanitizer {
+/* #export */ class HtmlSanitizer {
   constructor() {
     // initialize set of whitelisted tags.
     this.allowedTags = new Set(['b', 'i', 'br', 'p', 'a', 'ul', 'li', 'div']);
@@ -70,3 +70,20 @@ class HtmlSanitizer {
     return copy;
   }
 }
+
+/**
+ * Possible native assistant icons
+ * Must be in sync with the corresponding c++ enum
+ * @enum {number}
+ */
+/* #export */ const AssistantNativeIconType = {
+  NONE: 0,
+
+  // Web & App Activity.
+  WAA: 1,
+
+  // Device Applications Information.
+  DA: 2,
+
+  INFO: 3,
+};

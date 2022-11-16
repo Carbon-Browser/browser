@@ -9,10 +9,12 @@
 #include <math.h>
 
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/posix/eintr_wrapper.h"
 #include "base/synchronization/lock.h"
+#include "base/threading/platform_thread.h"
 
 namespace base {
 
@@ -103,7 +105,7 @@ bool RunningOnMainThread() {
 // around event handling.
 
 struct WorkSource : public GSource {
-  MessagePumpGlib* pump;
+  raw_ptr<MessagePumpGlib> pump;
 };
 
 gboolean WorkSourcePrepare(GSource* source, gint* timeout_ms) {
@@ -132,8 +134,8 @@ GSourceFuncs WorkSourceFuncs = {WorkSourcePrepare, WorkSourceCheck,
                                 WorkSourceDispatch, nullptr};
 
 struct FdWatchSource : public GSource {
-  MessagePumpGlib* pump;
-  MessagePumpGlib::FdWatchController* controller;
+  raw_ptr<MessagePumpGlib> pump;
+  raw_ptr<MessagePumpGlib::FdWatchController> controller;
 };
 
 gboolean FdWatchSourcePrepare(GSource* source, gint* timeout_ms) {
@@ -160,7 +162,7 @@ GSourceFuncs g_fd_watch_source_funcs = {
 }  // namespace
 
 struct MessagePumpGlib::RunState {
-  Delegate* delegate;
+  raw_ptr<Delegate> delegate;
 
   // Used to flag that the current Run() invocation should return ASAP.
   bool should_quit;
@@ -187,9 +189,8 @@ MessagePumpGlib::MessagePumpGlib()
 
   // Create our wakeup pipe, which is used to flag when work was scheduled.
   int fds[2];
-  int ret = pipe(fds);
+  [[maybe_unused]] int ret = pipe(fds);
   DCHECK_EQ(ret, 0);
-  (void)ret;  // Prevent warning in release mode.
 
   wakeup_pipe_read_ = fds[0];
   wakeup_pipe_write_ = fds[1];
@@ -348,7 +349,7 @@ bool MessagePumpGlib::HandleCheck() {
   // shouldn't block.
   if (wakeup_gpollfd_->revents & G_IO_IN) {
     char msg[2];
-    const int num_bytes = HANDLE_EINTR(read(wakeup_pipe_read_, msg, 2));
+    const long num_bytes = HANDLE_EINTR(read(wakeup_pipe_read_, msg, 2));
     if (num_bytes < 1) {
       NOTREACHED() << "Error reading from the wakeup pipe.";
     }
@@ -436,7 +437,8 @@ void MessagePumpGlib::ScheduleWork() {
   }
 }
 
-void MessagePumpGlib::ScheduleDelayedWork(const TimeTicks& delayed_work_time) {
+void MessagePumpGlib::ScheduleDelayedWork(
+    const Delegate::NextWorkInfo& next_work_info) {
   // We need to wake up the loop in case the poll timeout needs to be
   // adjusted.  This will cause us to try to do work, but that's OK.
   ScheduleWork();

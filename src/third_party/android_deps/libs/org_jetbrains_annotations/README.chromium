@@ -2,8 +2,9 @@ Name: IntelliJ IDEA Annotations
 Short Name: annotations
 URL: http://www.jetbrains.org
 Version: 13.0
-License: 
+License: Apache Version 2.0
 License File: LICENSE
+CPEPrefix: unknown
 Security Critical: yes
 
 Description:

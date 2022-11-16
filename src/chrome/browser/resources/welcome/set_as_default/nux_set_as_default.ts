@@ -8,27 +8,37 @@ import 'chrome://resources/cr_elements/shared_vars_css.m.js';
 import 'chrome://resources/cr_elements/icons.m.js';
 import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
 // </if>
-import '../shared/animations_css.js';
+import '../shared/animations.css.js';
 import '../shared/step_indicator.js';
 import '../strings.m.js';
 
 import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
-import {WebUIListenerBehavior} from 'chrome://resources/js/web_ui_listener_behavior.m.js';
-import {html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {WebUIListenerMixin} from 'chrome://resources/js/web_ui_listener_mixin.js';
+import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {navigateToNextStep, NavigationMixin, NavigationMixinInterface} from '../navigation_mixin.js';
-import {DefaultBrowserInfo, stepIndicatorModel} from '../shared/nux_types.js';
+import {navigateToNextStep, NavigationMixin} from '../navigation_mixin.js';
+import {DefaultBrowserInfo, StepIndicatorModel} from '../shared/nux_types.js';
 
+import {getTemplate} from './nux_set_as_default.html.js';
 import {NuxSetAsDefaultProxy, NuxSetAsDefaultProxyImpl} from './nux_set_as_default_proxy.js';
 
+export interface NuxSetAsDefaultElement {
+  $: {
+    declineButton: HTMLElement,
+  };
+}
+
 const NuxSetAsDefaultElementBase =
-    mixinBehaviors([WebUIListenerBehavior], NavigationMixin(PolymerElement)) as
-    {new (): PolymerElement & WebUIListenerBehavior & NavigationMixinInterface};
+    WebUIListenerMixin(NavigationMixin(PolymerElement));
 
 /** @polymer */
 export class NuxSetAsDefaultElement extends NuxSetAsDefaultElementBase {
   static get is() {
     return 'nux-set-as-default';
+  }
+
+  static get template() {
+    return getTemplate();
   }
 
   static get properties() {
@@ -51,16 +61,16 @@ export class NuxSetAsDefaultElement extends NuxSetAsDefaultElementBase {
 
   private browserProxy_: NuxSetAsDefaultProxy;
   private finalized_: boolean = false;
-  private navigateToNextStep_: Function;
-  indicatorModel?: stepIndicatorModel;
+  navigateToNextStep: Function;
+  indicatorModel?: StepIndicatorModel;
 
   constructor() {
     super();
-    this.navigateToNextStep_ = navigateToNextStep;
+    this.navigateToNextStep = navigateToNextStep;
     this.browserProxy_ = NuxSetAsDefaultProxyImpl.getInstance();
   }
 
-  ready() {
+  override ready() {
     super.ready();
 
     this.addWebUIListener(
@@ -68,12 +78,12 @@ export class NuxSetAsDefaultElement extends NuxSetAsDefaultElementBase {
         this.onDefaultBrowserChange_.bind(this));
   }
 
-  onRouteEnter() {
+  override onRouteEnter() {
     this.finalized_ = false;
     this.browserProxy_.recordPageShown();
   }
 
-  onRouteExit() {
+  override onRouteExit() {
     if (this.finalized_) {
       return;
     }
@@ -81,7 +91,7 @@ export class NuxSetAsDefaultElement extends NuxSetAsDefaultElementBase {
     this.browserProxy_.recordNavigatedAwayThroughBrowserHistory();
   }
 
-  onRouteUnload() {
+  override onRouteUnload() {
     if (this.finalized_) {
       return;
     }
@@ -132,11 +142,14 @@ export class NuxSetAsDefaultElement extends NuxSetAsDefaultElementBase {
 
   private finished_() {
     this.finalized_ = true;
-    this.navigateToNextStep_();
-  }
-
-  static get template() {
-    return html`{__html_template__}`;
+    this.navigateToNextStep();
   }
 }
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'nux-set-as-default': NuxSetAsDefaultElement;
+  }
+}
+
 customElements.define(NuxSetAsDefaultElement.is, NuxSetAsDefaultElement);

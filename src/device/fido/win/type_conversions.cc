@@ -18,6 +18,7 @@
 #include "components/device_event_log/device_event_log.h"
 #include "device/fido/authenticator_get_assertion_response.h"
 #include "device/fido/authenticator_make_credential_response.h"
+#include "device/fido/discoverable_credential_metadata.h"
 #include "device/fido/fido_transport_protocol.h"
 #include "device/fido/get_assertion_request_handler.h"
 #include "device/fido/make_credential_request_handler.h"
@@ -83,6 +84,7 @@ ToAuthenticatorMakeCredentialResponse(
   if (credential_attestation.dwVersion >=
       WEBAUTHN_CREDENTIAL_ATTESTATION_VERSION_4) {
     ret.enterprise_attestation_returned = credential_attestation.bEpAtt;
+    ret.is_resident_key = credential_attestation.bResidentKey;
   }
 
   return ret;
@@ -175,13 +177,13 @@ std::vector<WEBAUTHN_CREDENTIAL> ToWinCredentialVector(
     const std::vector<PublicKeyCredentialDescriptor>* credentials) {
   std::vector<WEBAUTHN_CREDENTIAL> result;
   for (const auto& credential : *credentials) {
-    if (credential.credential_type() != CredentialType::kPublicKey) {
+    if (credential.credential_type != CredentialType::kPublicKey) {
       continue;
     }
     result.push_back(WEBAUTHN_CREDENTIAL{
         WEBAUTHN_CREDENTIAL_CURRENT_VERSION,
-        base::checked_cast<DWORD>(credential.id().size()),
-        const_cast<unsigned char*>(credential.id().data()),
+        base::checked_cast<DWORD>(credential.id.size()),
+        const_cast<unsigned char*>(credential.id.data()),
         WEBAUTHN_CREDENTIAL_TYPE_PUBLIC_KEY,
     });
   }
@@ -192,15 +194,15 @@ std::vector<WEBAUTHN_CREDENTIAL_EX> ToWinCredentialExVector(
     const std::vector<PublicKeyCredentialDescriptor>* credentials) {
   std::vector<WEBAUTHN_CREDENTIAL_EX> result;
   for (const auto& credential : *credentials) {
-    if (credential.credential_type() != CredentialType::kPublicKey) {
+    if (credential.credential_type != CredentialType::kPublicKey) {
       continue;
     }
-    result.push_back(WEBAUTHN_CREDENTIAL_EX{
-        WEBAUTHN_CREDENTIAL_EX_CURRENT_VERSION,
-        base::checked_cast<DWORD>(credential.id().size()),
-        const_cast<unsigned char*>(credential.id().data()),
-        WEBAUTHN_CREDENTIAL_TYPE_PUBLIC_KEY,
-        ToWinTransportsMask(credential.transports())});
+    result.push_back(
+        WEBAUTHN_CREDENTIAL_EX{WEBAUTHN_CREDENTIAL_EX_CURRENT_VERSION,
+                               base::checked_cast<DWORD>(credential.id.size()),
+                               const_cast<unsigned char*>(credential.id.data()),
+                               WEBAUTHN_CREDENTIAL_TYPE_PUBLIC_KEY,
+                               ToWinTransportsMask(credential.transports)});
   }
   return result;
 }
@@ -221,7 +223,7 @@ CtapDeviceResponseCode WinErrorNameToCtapDeviceResponseCode(
           {u"InvalidStateError",
            CtapDeviceResponseCode::kCtap2ErrCredentialExcluded},
           {u"ConstraintError",
-           CtapDeviceResponseCode::kCtap2ErrOperationDenied},
+           CtapDeviceResponseCode ::kCtap2ErrOperationDenied},
           {u"NotSupportedError",
            CtapDeviceResponseCode::kCtap2ErrOperationDenied},
           {u"NotAllowedError",
@@ -295,6 +297,37 @@ uint32_t ToWinAttestationConveyancePreference(
   }
   NOTREACHED();
   return WEBAUTHN_ATTESTATION_CONVEYANCE_PREFERENCE_NONE;
+}
+
+std::vector<DiscoverableCredentialMetadata>
+WinCredentialDetailsListToCredentialMetadata(
+    const WEBAUTHN_CREDENTIAL_DETAILS_LIST& credentials) {
+  std::vector<DiscoverableCredentialMetadata> result;
+  for (size_t i = 0; i < credentials.cCredentialDetails; ++i) {
+    WEBAUTHN_CREDENTIAL_DETAILS* credential =
+        credentials.ppCredentialDetails[i];
+    WEBAUTHN_USER_ENTITY_INFORMATION* user = credential->pUserInformation;
+    WEBAUTHN_RP_ENTITY_INFORMATION* rp = credential->pRpInformation;
+    DiscoverableCredentialMetadata metadata(
+        base::WideToUTF8(rp->pwszId),
+        std::vector<uint8_t>(
+            credential->pbCredentialID,
+            credential->pbCredentialID + credential->cbCredentialID),
+        PublicKeyCredentialUserEntity(
+            std::vector<uint8_t>(user->pbId, user->pbId + user->cbId),
+            user->pwszName
+                ? absl::make_optional(base::WideToUTF8(user->pwszName))
+                : absl::nullopt,
+            user->pwszDisplayName
+                ? absl::make_optional(base::WideToUTF8(user->pwszDisplayName))
+                : absl::nullopt,
+            user->pwszIcon
+                ? absl::make_optional(GURL(base::WideToUTF8(user->pwszIcon)))
+                : absl::nullopt));
+    metadata.system_created = !credential->bRemovable;
+    result.push_back(std::move(metadata));
+  }
+  return result;
 }
 
 }  // namespace device

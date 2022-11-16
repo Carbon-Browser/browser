@@ -9,6 +9,7 @@
 
 #include "base/bind.h"
 #include "base/callback.h"
+#include "base/containers/flat_set.h"
 #include "base/test/bind.h"
 #include "base/test/gmock_callback_support.h"
 #include "base/test/gtest_util.h"
@@ -42,7 +43,7 @@ class DynamicTriggerConditionsTest : public testing::Test {
 };
 
 TEST_F(DynamicTriggerConditionsTest, UpdateWithoutSelectorsDoesNothing) {
-  EXPECT_CALL(mock_web_controller_, OnFindElement).Times(0);
+  EXPECT_CALL(mock_web_controller_, FindElement).Times(0);
   EXPECT_CALL(mock_callback_, Run).Times(1);
   dynamic_trigger_conditions_.Update(&mock_web_controller_,
                                      mock_callback_.Get());
@@ -112,26 +113,26 @@ TEST_F(DynamicTriggerConditionsTest, Update) {
       DocumentReadyState::DOCUMENT_COMPLETE);
   *frame_dom_ready_state_condition->mutable_frame() = ToSelectorProto("frame");
 
-  std::unique_ptr<ElementFinder::Result> frame_fake_element =
-      std::make_unique<ElementFinder::Result>();
+  std::unique_ptr<ElementFinderResult> frame_fake_element =
+      std::make_unique<ElementFinderResult>();
   auto* frame_fake_element_ptr = frame_fake_element.get();
 
   EXPECT_CALL(mock_web_controller_,
-              OnFindElement(Selector(ToSelectorProto("a")), _))
-      .WillOnce(RunOnceCallback<1>(OkClientStatus(), nullptr));
+              FindElement(Selector(ToSelectorProto("a")), _, _))
+      .WillOnce(RunOnceCallback<2>(OkClientStatus(), nullptr));
   EXPECT_CALL(mock_web_controller_,
-              OnFindElement(Selector(ToSelectorProto("b")), _))
+              FindElement(Selector(ToSelectorProto("b")), _, _))
       .WillOnce(
-          RunOnceCallback<1>(ClientStatus(ELEMENT_RESOLUTION_FAILED), nullptr));
+          RunOnceCallback<2>(ClientStatus(ELEMENT_RESOLUTION_FAILED), nullptr));
   EXPECT_CALL(mock_web_controller_,
-              OnFindElement(Selector(ToSelectorProto("c")), _))
-      .WillOnce(RunOnceCallback<1>(OkClientStatus(), nullptr));
+              FindElement(Selector(ToSelectorProto("c")), _, _))
+      .WillOnce(RunOnceCallback<2>(OkClientStatus(), nullptr));
   // The empty selector is invalid and used as a stand-in for the main frame.
-  EXPECT_CALL(mock_web_controller_, OnFindElement(Selector(), _)).Times(0);
+  EXPECT_CALL(mock_web_controller_, FindElement(Selector(), _, _)).Times(0);
   EXPECT_CALL(mock_web_controller_,
-              OnFindElement(Selector(ToSelectorProto("frame")), _))
+              FindElement(Selector(ToSelectorProto("frame")), _, _))
       .WillOnce(
-          RunOnceCallback<1>(OkClientStatus(), std::move(frame_fake_element)));
+          RunOnceCallback<2>(OkClientStatus(), std::move(frame_fake_element)));
   EXPECT_CALL(
       mock_web_controller_,
       GetDocumentReadyState(testing::Address(frame_fake_element_ptr), _))
@@ -192,24 +193,24 @@ TEST_F(DynamicTriggerConditionsTest, HasResults) {
   EXPECT_FALSE(dynamic_trigger_conditions_.HasResults());
 
   EXPECT_CALL(mock_web_controller_,
-              OnFindElement(Selector(ToSelectorProto("a")), _))
-      .WillOnce(RunOnceCallback<1>(OkClientStatus(), nullptr));
+              FindElement(Selector(ToSelectorProto("a")), _, _))
+      .WillOnce(RunOnceCallback<2>(OkClientStatus(), nullptr));
   dynamic_trigger_conditions_.Update(&mock_web_controller_,
                                      mock_callback_.Get());
   EXPECT_TRUE(dynamic_trigger_conditions_.HasResults());
 
   EXPECT_CALL(mock_web_controller_,
-              OnFindElement(Selector(ToSelectorProto("a")), _))
-      .WillOnce(
-          [&](const Selector& selector, ElementFinder::Callback& callback) {
-            // While Update is running, GetSelectorMatches should return the
-            // previous results.
-            EXPECT_EQ(dynamic_trigger_conditions_.GetSelectorMatches(
-                          Selector(ToSelectorProto("a"))),
-                      absl::make_optional(true));
-            std::move(callback).Run(ClientStatus(ELEMENT_RESOLUTION_FAILED),
-                                    nullptr);
-          });
+              FindElement(Selector(ToSelectorProto("a")), _, _))
+      .WillOnce([&](const Selector& selector, bool strict,
+                    ElementFinder::Callback callback) {
+        // While Update is running, GetSelectorMatches should return the
+        // previous results.
+        EXPECT_EQ(dynamic_trigger_conditions_.GetSelectorMatches(
+                      Selector(ToSelectorProto("a"))),
+                  absl::make_optional(true));
+        std::move(callback).Run(ClientStatus(ELEMENT_RESOLUTION_FAILED),
+                                nullptr);
+      });
   dynamic_trigger_conditions_.Update(&mock_web_controller_,
                                      mock_callback_.Get());
 

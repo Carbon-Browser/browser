@@ -6,27 +6,25 @@
 //
 // WHAT ARE FILE TASKS?
 //
-// File tasks are representation of actions that can be performed over the
-// currently selected files from the Files app. A task can be either of:
+// File tasks are actions that can be performed over the currently selected
+// files from the Files app. A task can be one of:
 //
-// 1) Chrome extension or app, registered via "file_handlers" or
-// "file_browser_handlers" in manifest.json (ex. Text.app). This information
-// comes from FileBrowserHandler::GetHandlers()
+// 1) A Chrome Extension or App, registered via "file_handlers" or
+//    "file_browser_handlers" in manifest.json (ex. Text.app). This information
+//    comes from FileBrowserHandler::GetHandlers()
 //
-// See also:
-// https://developer.chrome.com/extensions/manifest.html#file_handlers
+// See also: https://developer.chrome.com/extensions/manifest.html#file_handlers
 // https://developer.chrome.com/extensions/fileBrowserHandler.html
 //
-// 2) Built-in handlers provided from the Files app. The Files app provides
-// lots of file_browser_handlers, such as "play", "mount-archive".  These
-// built-in handlers are often handled in special manners inside the Files
-// app. This information also comes from FileBrowserHandler::GetHandlers().
+// 2) Built-in handlers provided by the Files app. The Files app provides lots
+//    of file_browser_handlers, such as "play", "mount-archive". These built-in
+//    handlers are often handled specially inside the Files app. This
+//    information also comes from FileBrowserHandler::GetHandlers().
 //
-// See also:
-// ui/file_manager/file_manager/manifest.json
+// See also: ui/file_manager/file_manager/manifest.json
 //
-// For example, if the user is now selecting a JPEG file, the Files app will
-// receive file tasks represented as a JSON object via
+// For example, if the user selects a JPEG file, the Files app will receive file
+// tasks represented as a JSON object via
 // chrome.fileManagerPrivate.getFileTasks() API, which look like:
 //
 // [
@@ -58,7 +56,7 @@
 //
 // The "TaskId" format encoding is as follows:
 //
-//     <app-id>|<task-type>|<task-action-id>
+//     <app-id>|<task-type>|<action-id>
 //
 // <app-id> is a Chrome Extension/App ID.
 //
@@ -69,23 +67,27 @@
 // - "arc" - ARC App
 // - "crostini" - Crostini App
 //
-// <task-action-id> is an ID string used for identifying actions provided
-// from a single Chrome Extension/App. In other words, a single
-// Chrome/Extension can provide multiple file handlers hence each of them
-// needs to have a unique action ID. For Crostini apps, <task-action-id> is
-// always "open-with".
+// <action-id> is an ID string used for identifying actions provided from a
+// single Chrome Extension/App. In other words, a single Chrome/Extension can
+// provide multiple file handlers hence each of them needs to have a unique
+// action ID. For Crostini apps, <action-id> is always "open-with".
 //
-// HOW TASKS ARE EXECUTED?
+// HOW ARE TASKS EXECUTED?
 //
-// chrome.fileManagerPrivate.executeTask() is used to open a file with a
-// handler (Chrome Extension/App), and to open files directly in the browser
-// without any handler, e.g. PDF.
+// chrome.fileManagerPrivate.executeTask() is used to open a file with a handler
+// (Chrome Extension/App), and to open files directly in the browser without any
+// handler, e.g. PDF.
 //
-// Some built-in handlers such as "play" are handled internally in the Files
-// app. "mount-archive" is handled very differently.
+// Files app also has "internal tasks" which we can split into three categories:
+//  1. Tasks that open in the browser. The JS-side calls executeTask(), and we
+//     spawn a new browser tab here on the C++ side. e.g. "view-in-browser",
+//     "view-pdf" and "open-hosted-*".
+//  2. Tasks that are handled internally by Files app JS. e.g. "mount-archive",
+//     "install-linux-package" and "import-crostini-image".
+//  3. Tasks where the browser process opens Files app to a folder or file, e.g.
+//     "open" and "select", through file_manager::util::OpenItem().
 //
-// See also:
-// ui/file_manager/file_manager/foreground/js/file_tasks.js
+// See also: ui/file_manager/file_manager/foreground/js/file_tasks.js
 //
 
 #ifndef CHROME_BROWSER_ASH_FILE_MANAGER_FILE_TASKS_H_
@@ -104,11 +106,6 @@
 class PrefService;
 class Profile;
 
-namespace apps {
-struct FileHandler;
-struct FileHandlerInfo;
-}
-
 namespace extensions {
 struct EntryInfo;
 }
@@ -123,6 +120,11 @@ namespace file_tasks {
 extern const char kActionIdView[];
 extern const char kActionIdSend[];
 extern const char kActionIdSendMultiple[];
+extern const char kActionIdHandleOffice[];
+extern const char kActionIdWebDriveOfficeWord[];
+extern const char kActionIdWebDriveOfficeExcel[];
+extern const char kActionIdWebDriveOfficePowerPoint[];
+extern const char kActionIdUploadOfficeToDrive[];
 
 // Task types as explained in the comment above. Search for <task-type>.
 enum TaskType {
@@ -144,6 +146,27 @@ enum TaskType {
 TaskType StringToTaskType(const std::string& str);
 std::string TaskTypeToString(TaskType task_type);
 
+// UMA metric name that tracks the result of trying to enable the Web Drive
+// Office task.
+constexpr char kWebDriveOfficeMetricName[] =
+    "FileBrowser.OfficeFiles.WebDriveOffice";
+
+// List of UMA enum value for Web Drive Office task results. The enum values
+// must be kept in sync with WebDriveOfficeTaskResult in
+// tools/metrics/histograms/enums.xml.
+enum class WebDriveOfficeTaskResult {
+  AVAILABLE = 0,
+  FLAG_DISABLED = 1,
+  OFFLINE = 2,
+  NOT_ON_DRIVE = 3,
+  DRIVE_ERROR = 4,
+  DRIVE_METADATA_ERROR = 5,
+  INVALID_ALTERNATE_URL = 6,
+  DRIVE_ALTERNATE_URL = 7,
+  UNEXPECTED_ALTERNATE_URL = 8,
+  kMaxValue = UNEXPECTED_ALTERNATE_URL,
+};
+
 // Describes a task.
 // See the comment above for <app-id>, <task-type>, and <action-id>.
 struct TaskDescriptor {
@@ -153,13 +176,13 @@ struct TaskDescriptor {
       : app_id(in_app_id),
         task_type(in_task_type),
         action_id(in_action_id) {
+    // For web apps, the action_id must be a full valid URL if it exists.
+    DCHECK(task_type != TASK_TYPE_WEB_APP || action_id.empty() ||
+           GURL(action_id).is_valid());
   }
   TaskDescriptor() = default;
 
-  bool operator<(const TaskDescriptor& other) const {
-    return app_id < other.app_id || task_type < other.task_type ||
-           action_id < other.action_id;
-  }
+  bool operator<(const TaskDescriptor& other) const;
 
   std::string app_id;
   TaskType task_type;
@@ -202,6 +225,9 @@ struct FullTaskDescriptor {
   // file_handlers "extensions" instead.
   bool is_file_extension_match;
 };
+
+// Returns true if the `task` is the generic task for Office files handling.
+bool IsHandleOfficeTask(const FullTaskDescriptor& task);
 
 // Update the default file handler for the given sets of suffixes and MIME
 // types.
@@ -251,49 +277,15 @@ typedef base::OnceCallback<void(
 //
 // Parameters:
 // profile    - The profile used for making this function call.
-// source_url - The source URL which originates this function call.
 // task       - See the comment at TaskDescriptor struct.
 // file_urls  - URLs of the target files.
 // done       - The callback which will be called on completion.
 //              The callback won't be called if the function returns
 //              false.
 bool ExecuteFileTask(Profile* profile,
-                     const GURL& source_url,
                      const TaskDescriptor& task,
                      const std::vector<storage::FileSystemURL>& file_urls,
                      FileTaskFinishedCallback done);
-
-// Returns true if a file handler is enabled. Some handlers such as
-// import-crostini-image can be disabled at runtime by enterprise policy.
-bool IsFileHandlerEnabled(Profile* profile,
-                          const apps::FileHandlerInfo& file_handler_info);
-
-// Returns true if a file handler matches with entries as good match.
-//
-// TODO(crbug.com/1060026): This can be removed in favour of
-// IsGoodMatchAppsFileHandler once apps::FileHandlerInfo is completely
-// replaced by apps::FileHandler.
-bool IsGoodMatchFileHandler(const apps::FileHandlerInfo& file_handler_info,
-                            const std::vector<extensions::EntryInfo>& entries);
-
-// Returns true if an apps::FileHandler matches with all of |entries|; that is,
-// if it doesn't include a blanket wild-card MIME type or file extension, it
-// doesn't include text/* and match on an unsupported text MIME type, and if
-// |entries| doesn't include directories.
-//
-// TODO(crbug.com/1060026): For now, this is called only in web_file_tasks,
-// where the new apps::FileHandler representation is used. Once this replaces
-// apps::FileHandlerInfo, this can be used everywhere.
-bool IsGoodMatchAppsFileHandler(
-    const apps::FileHandler& file_Handler,
-    const std::vector<extensions::EntryInfo>& entries);
-
-// Finds the file handler tasks (apps declaring "file_handlers" in
-// manifest.json) that can be used with the given entries, appending them to
-// the |result_list|.
-void FindFileHandlerTasks(Profile* profile,
-                          const std::vector<extensions::EntryInfo>& entries,
-                          std::vector<FullTaskDescriptor>* result_list);
 
 // Finds the file browser handler tasks (app/extensions declaring
 // "file_browser_handlers" in manifest.json) that can be used with the

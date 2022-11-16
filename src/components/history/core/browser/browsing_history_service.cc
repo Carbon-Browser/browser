@@ -178,7 +178,7 @@ BrowsingHistoryService::BrowsingHistoryService(
 
   // Get notifications when history is cleared.
   if (local_history_)
-    history_service_observation_.Observe(local_history_);
+    history_service_observation_.Observe(local_history_.get());
 
   // Get notifications when web history is deleted.
   WebHistoryService* web_history = driver_->GetWebHistoryService();
@@ -192,9 +192,11 @@ BrowsingHistoryService::BrowsingHistoryService(
     // observing. This is okay because sync will never start for us, for example
     // it may be disabled by flag or we're part of an incognito/guest mode
     // window.
-    sync_service_observation_.Observe(sync_service_);
+    sync_service_observation_.Observe(sync_service_.get());
   }
 }
+
+BrowsingHistoryService::BrowsingHistoryService() = default;
 
 BrowsingHistoryService::~BrowsingHistoryService() {
   query_task_tracker_.TryCancelAll();
@@ -271,7 +273,7 @@ void BrowsingHistoryService::QueryHistoryInternal(
       // Start a timer with timeout before we make the actual query, otherwise
       // tests get confused when completion callback is run synchronously.
       web_history_timer_->Start(
-          FROM_HERE, base::TimeDelta::FromSeconds(kWebHistoryTimeoutSeconds),
+          FROM_HERE, base::Seconds(kWebHistoryTimeoutSeconds),
           base::BindOnce(&BrowsingHistoryService::WebHistoryTimeout,
                          weak_factory_.GetWeakPtr(), state));
 
@@ -357,9 +359,9 @@ void BrowsingHistoryService::OnLastVisitBeforeRecentNavigationsComplete(
   }
 
   base::Time end_time =
-      result.last_visit < (query_start_time - base::TimeDelta::FromMinutes(1))
+      result.last_visit < (query_start_time - base::Minutes(1))
           ? result.last_visit
-          : query_start_time - base::TimeDelta::FromMinutes(1);
+          : query_start_time - base::Minutes(1);
   local_history_->GetLastVisitToHost(
       host_name, base::Time() /* before_time */, end_time /* end_time */,
       base::BindOnce(
@@ -687,22 +689,22 @@ void BrowsingHistoryService::WebHistoryQueryComplete(
     has_synced_results_ = true;
     if (const base::Value* events = results_value->FindListKey("event")) {
       state->remote_results.reserve(state->remote_results.size() +
-                                    events->GetList().size());
+                                    events->GetListDeprecated().size());
       std::string host_name_utf8 = base::UTF16ToUTF8(state->search_text);
-      for (const base::Value& event : events->GetList()) {
+      for (const base::Value& event : events->GetListDeprecated()) {
         if (!event.is_dict())
           continue;
         const base::Value* results = event.FindListKey("result");
-        if (!results || results->GetList().empty())
+        if (!results || results->GetListDeprecated().empty())
           continue;
-        const base::Value& result = results->GetList()[0];
+        const base::Value& result = results->GetListDeprecated()[0];
         if (!result.is_dict())
           continue;
         const std::string* url = result.FindStringKey("url");
         if (!url)
           continue;
         const base::Value* ids = result.FindListKey("id");
-        if (!ids || ids->GetList().empty())
+        if (!ids || ids->GetListDeprecated().empty())
           continue;
 
         GURL gurl(*url);
@@ -729,7 +731,7 @@ void BrowsingHistoryService::WebHistoryQueryComplete(
 
         // Extract the timestamps of all the visits to this URL.
         // They are referred to as "IDs" by the server.
-        for (const base::Value& id : ids->GetList()) {
+        for (const base::Value& id : ids->GetListDeprecated()) {
           const std::string* timestamp_string;
           int64_t timestamp_usec = 0;
 
@@ -740,8 +742,8 @@ void BrowsingHistoryService::WebHistoryQueryComplete(
             continue;
           }
           // The timestamp on the server is a Unix time.
-          base::Time time = base::Time::UnixEpoch() +
-                            base::TimeDelta::FromMicroseconds(timestamp_usec);
+          base::Time time =
+              base::Time::UnixEpoch() + base::Microseconds(timestamp_usec);
 
           // Get the ID of the client that this visit came from.
           std::string client_id;

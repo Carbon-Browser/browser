@@ -41,6 +41,7 @@ import org.chromium.chrome.browser.browser_controls.BrowserStateBrowserControlsV
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.theme.ThemeColorProvider;
 import org.chromium.chrome.browser.toolbar.ButtonDataImpl;
+import org.chromium.chrome.browser.toolbar.adaptive.AdaptiveToolbarFeatures.AdaptiveToolbarButtonVariant;
 import org.chromium.chrome.browser.toolbar.menu_button.MenuButton;
 import org.chromium.chrome.browser.toolbar.menu_button.MenuButtonCoordinator;
 import org.chromium.chrome.browser.ui.appmenu.AppMenuCoordinator;
@@ -124,12 +125,13 @@ public class ToolbarPhoneTest {
         // When menu is hidden, optional button should have no padding.
         doReturn(false).when(mMenuButtonCoordinator).isVisible();
         TestThreadUtils.runOnUiThreadBlocking(() -> {
-            mToolbar.updateOptionalButton(
-                    new ButtonDataImpl(false, drawable, null, R.string.share, false, null, false));
+            mToolbar.updateOptionalButton(new ButtonDataImpl(false, drawable, null, R.string.share,
+                    false, null, false, AdaptiveToolbarButtonVariant.UNKNOWN));
             mToolbar.updateButtonVisibility();
         });
 
-        int padding = mToolbar.findViewById(R.id.optional_toolbar_button).getPaddingStart();
+        int padding =
+                mToolbar.findViewById(R.id.optional_toolbar_button_container).getPaddingStart();
         assertEquals("Optional button's padding should be 0 when menu button is not visible", 0,
                 padding);
 
@@ -137,7 +139,7 @@ public class ToolbarPhoneTest {
         // toolbar_phone_optional_button_padding padding.
         doReturn(true).when(mMenuButtonCoordinator).isVisible();
         TestThreadUtils.runOnUiThreadBlocking(() -> { mToolbar.updateButtonVisibility(); });
-        padding = mToolbar.findViewById(R.id.optional_toolbar_button).getPaddingStart();
+        padding = mToolbar.findViewById(R.id.optional_toolbar_button_container).getPaddingStart();
         int expectedPadding = mActivityTestRule.getActivity().getResources().getDimensionPixelSize(
                 R.dimen.toolbar_phone_optional_button_padding);
         assertEquals(
@@ -166,8 +168,8 @@ public class ToolbarPhoneTest {
                     () -> null, () -> {}, org.chromium.chrome.R.id.menu_button_wrapper);
             // clang-format on
             mToolbar.setMenuButtonCoordinatorForTesting(realMenuButtonCoordinator);
-            mToolbar.updateOptionalButton(
-                    new ButtonDataImpl(false, drawable, null, R.string.share, false, null, false));
+            mToolbar.updateOptionalButton(new ButtonDataImpl(false, drawable, null, R.string.share,
+                    false, null, false, AdaptiveToolbarButtonVariant.UNKNOWN));
             // Make sure the button is visible in the beginning of the test.
             assertEquals(realMenuButtonCoordinator.isVisible(), true);
 

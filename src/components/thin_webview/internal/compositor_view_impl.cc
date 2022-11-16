@@ -13,7 +13,7 @@
 #include "components/thin_webview/internal/jni_headers/CompositorViewImpl_jni.h"
 #include "content/public/browser/android/compositor.h"
 #include "third_party/skia/include/core/SkColor.h"
-#include "ui/android/color_helpers.h"
+#include "ui/android/color_utils_android.h"
 #include "ui/android/window_android.h"
 
 using base::android::JavaParamRef;
@@ -58,7 +58,9 @@ CompositorViewImpl::CompositorViewImpl(JNIEnv* env,
   root_layer_->SetIsDrawable(true);
   absl::optional<SkColor> background_color =
       ui::JavaColorToOptionalSkColor(java_background_color);
-  root_layer_->SetBackgroundColor(background_color.value());
+  // TODO(crbug/1308932): Remove FromColor and make all SkColor4f.
+  root_layer_->SetBackgroundColor(
+      SkColor4f::FromColor(background_color.value()));
 }
 
 CompositorViewImpl::~CompositorViewImpl() = default;

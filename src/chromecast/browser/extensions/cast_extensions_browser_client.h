@@ -8,7 +8,6 @@
 #include <memory>
 
 #include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "build/build_config.h"
 #include "extensions/browser/extensions_browser_client.h"
 #include "extensions/browser/kiosk/kiosk_delegate.h"
@@ -38,6 +37,11 @@ class CastExtensionsBrowserClient : public ExtensionsBrowserClient {
       content::BrowserContext* context,
       PrefService* pref_service,
       chromecast::shell::CastNetworkContexts* cast_network_contexts);
+
+  CastExtensionsBrowserClient(const CastExtensionsBrowserClient&) = delete;
+  CastExtensionsBrowserClient& operator=(const CastExtensionsBrowserClient&) =
+      delete;
+
   ~CastExtensionsBrowserClient() override;
 
   // ExtensionsBrowserClient overrides:
@@ -106,7 +110,7 @@ class CastExtensionsBrowserClient : public ExtensionsBrowserClient {
   void BroadcastEventToRenderers(
       events::HistogramValue histogram_value,
       const std::string& event_name,
-      std::unique_ptr<base::ListValue> args,
+      base::Value::List args,
       bool dispatch_to_off_the_record_profiles) override;
   ExtensionCache* GetExtensionCache() override;
   bool IsBackgroundUpdateAllowed() override;
@@ -134,8 +138,6 @@ class CastExtensionsBrowserClient : public ExtensionsBrowserClient {
   std::unique_ptr<ExtensionsAPIClient> api_client_;
 
   std::unique_ptr<KioskDelegate> kiosk_delegate_;
-
-  DISALLOW_COPY_AND_ASSIGN(CastExtensionsBrowserClient);
 };
 
 }  // namespace extensions

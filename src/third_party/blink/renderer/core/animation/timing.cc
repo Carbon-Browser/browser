@@ -7,7 +7,7 @@
 #include "third_party/blink/renderer/bindings/core/v8/v8_computed_effect_timing.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_effect_timing.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_cssnumericvalue_double.h"
-#include "third_party/blink/renderer/bindings/core/v8/v8_union_string_unrestricteddouble.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_union_cssnumericvalue_string_unrestricteddouble.h"
 #include "third_party/blink/renderer/core/animation/timing_calculations.h"
 #include "third_party/blink/renderer/core/css/cssom/css_unit_values.h"
 
@@ -62,7 +62,7 @@ Timing::FillMode Timing::ResolvedFillMode(bool is_keyframe_effect) const {
   if (fill_mode != Timing::FillMode::AUTO)
     return fill_mode;
 
-  // https://drafts.csswg.org/web-animations/#the-effecttiming-dictionaries
+  // https://w3.org/TR/web-animations-1/#the-effecttiming-dictionaries
   if (is_keyframe_effect)
     return Timing::FillMode::NONE;
   return Timing::FillMode::BOTH;
@@ -77,12 +77,14 @@ EffectTiming* Timing::ConvertToEffectTiming() const {
   effect_timing->setFill(FillModeString(fill_mode));
   effect_timing->setIterationStart(iteration_start);
   effect_timing->setIterations(iteration_count);
-  V8UnionStringOrUnrestrictedDouble* duration;
+  V8UnionCSSNumericValueOrStringOrUnrestrictedDouble* duration;
   if (iteration_duration) {
-    duration = MakeGarbageCollected<V8UnionStringOrUnrestrictedDouble>(
+    duration = MakeGarbageCollected<
+        V8UnionCSSNumericValueOrStringOrUnrestrictedDouble>(
         iteration_duration->InMillisecondsF());
   } else {
-    duration = MakeGarbageCollected<V8UnionStringOrUnrestrictedDouble>("auto");
+    duration = MakeGarbageCollected<
+        V8UnionCSSNumericValueOrStringOrUnrestrictedDouble>("auto");
   }
   effect_timing->setDuration(duration);
   effect_timing->setDirection(PlaybackDirectionString(direction));
@@ -138,7 +140,7 @@ ComputedEffectTiming* Timing::getComputedTiming(
   // For the EffectTiming members, getComputedTiming is equivalent to getTiming
   // except that the fill and duration must be resolved.
   //
-  // https://drafts.csswg.org/web-animations-1/#dom-animationeffect-getcomputedtiming
+  // https://w3.org/TR/web-animations-1/#dom-animationeffect-getcomputedtiming
 
   // TODO(crbug.com/1216527): Animation effect timing members start_delay and
   // end_delay should be CSSNumberish
@@ -149,20 +151,20 @@ ComputedEffectTiming* Timing::getComputedTiming(
   computed_timing->setIterationStart(iteration_start);
   computed_timing->setIterations(iteration_count);
 
-  // TODO(crbug.com/1219008): Animation effect computed iteration_duration
-  // should return CSSNumberish, which will simplify this logic.
   V8CSSNumberish* computed_duration =
       ToComputedValue(normalized_timing.iteration_duration,
                       normalized_timing.timeline_duration);
   if (computed_duration->IsCSSNumericValue()) {
-    computed_timing->setDuration(
-        MakeGarbageCollected<V8UnionStringOrUnrestrictedDouble>(
-            computed_duration->GetAsCSSNumericValue()
-                ->to(CSSPrimitiveValue::UnitType::kPercentage)
-                ->value()));
+    if (normalized_timing.timeline_duration) {
+      computed_timing->setDuration(
+          MakeGarbageCollected<
+              V8UnionCSSNumericValueOrStringOrUnrestrictedDouble>(
+              computed_duration->GetAsCSSNumericValue()));
+    }
   } else {
     computed_timing->setDuration(
-        MakeGarbageCollected<V8UnionStringOrUnrestrictedDouble>(
+        MakeGarbageCollected<
+            V8UnionCSSNumericValueOrStringOrUnrestrictedDouble>(
             computed_duration->GetAsDouble()));
   }
 
@@ -174,7 +176,7 @@ ComputedEffectTiming* Timing::getComputedTiming(
 
 Timing::CalculatedTiming Timing::CalculateTimings(
     absl::optional<AnimationTimeDelta> local_time,
-    absl::optional<Phase> timeline_phase,
+    bool at_progress_timeline_boundary,
     const NormalizedTiming& normalized_timing,
     AnimationDirection animation_direction,
     bool is_keyframe_effect,
@@ -182,8 +184,9 @@ Timing::CalculatedTiming Timing::CalculateTimings(
   const AnimationTimeDelta active_duration = normalized_timing.active_duration;
   const AnimationTimeDelta duration = normalized_timing.iteration_duration;
 
-  Timing::Phase current_phase = CalculatePhase(
-      normalized_timing, local_time, timeline_phase, animation_direction);
+  Timing::Phase current_phase =
+      CalculatePhase(normalized_timing, local_time,
+                     at_progress_timeline_boundary, animation_direction);
 
   const absl::optional<AnimationTimeDelta> active_time = CalculateActiveTime(
       normalized_timing, ResolvedFillMode(is_keyframe_effect), local_time,
@@ -240,7 +243,7 @@ Timing::CalculatedTiming Timing::CalculateTimings(
   DCHECK(!calculated.is_in_effect ||
          (current_iteration.has_value() && progress.has_value()));
   calculated.is_in_play = calculated.phase == Timing::kPhaseActive;
-  // https://drafts.csswg.org/web-animations-1/#current
+  // https://w3.org/TR/web-animations-1/#current
   calculated.is_current = calculated.is_in_play ||
                           (playback_rate.has_value() && playback_rate > 0 &&
                            calculated.phase == Timing::kPhaseBefore) ||

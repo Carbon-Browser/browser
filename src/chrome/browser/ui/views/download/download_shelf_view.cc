@@ -11,13 +11,13 @@
 
 #include "base/check.h"
 #include "base/containers/adapters.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/time/time.h"
 #include "chrome/browser/download/download_ui_model.h"
 #include "chrome/browser/themes/theme_properties.h"
-#include "chrome/browser/themes/theme_service.h"
-#include "chrome/browser/themes/theme_service_factory.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/chrome_pages.h"
+#include "chrome/browser/ui/color/chrome_color_id.h"
 #include "chrome/browser/ui/view_ids.h"
 #include "chrome/browser/ui/views/download/download_item_view.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
@@ -30,7 +30,6 @@
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
-#include "ui/base/theme_provider.h"
 #include "ui/compositor/compositor.h"
 #include "ui/gfx/animation/animation.h"
 #include "ui/gfx/animation/tween.h"
@@ -83,16 +82,14 @@ DownloadShelfView::DownloadShelfView(Browser* browser, BrowserView* parent)
 
   close_button_ = AddChildView(views::CreateVectorImageButton(
       base::BindRepeating(&DownloadShelf::Close, base::Unretained(this))));
-  close_button_->SetAccessibleName(
-      l10n_util::GetStringUTF16(IDS_ACCNAME_CLOSE));
+  close_button_->SetTooltipText(l10n_util::GetStringUTF16(IDS_ACCNAME_CLOSE));
   close_button_->SizeToPreferredSize();
 
   accessible_alert_ = AddChildView(std::make_unique<views::View>());
 
   if (gfx::Animation::ShouldRenderRichAnimation()) {
-    new_item_animation_.SetSlideDuration(
-        base::TimeDelta::FromMilliseconds(800));
-    shelf_animation_.SetSlideDuration(base::TimeDelta::FromMilliseconds(120));
+    new_item_animation_.SetSlideDuration(base::Milliseconds(800));
+    shelf_animation_.SetSlideDuration(base::Milliseconds(120));
   } else {
     new_item_animation_.SetSlideDuration(base::TimeDelta());
     shelf_animation_.SetSlideDuration(base::TimeDelta());
@@ -108,10 +105,10 @@ DownloadShelfView::DownloadShelfView(Browser* browser, BrowserView* parent)
   // most likely going to trigger a new window to appear over the button. Delay
   // a long time so that the user has a chance to quickly close the other app
   // and return to chrome with the download shelf still open.
-  mouse_watcher_.set_notify_on_exit_time(base::TimeDelta::FromSeconds(5));
+  mouse_watcher_.set_notify_on_exit_time(base::Seconds(5));
   SetID(VIEW_ID_DOWNLOAD_SHELF);
-  views::SetCascadingThemeProviderColor(this, views::kCascadingBackgroundColor,
-                                        ThemeProperties::COLOR_TOOLBAR);
+  views::SetCascadingColorProviderColor(this, views::kCascadingBackgroundColor,
+                                        kColorToolbar);
 }
 
 DownloadShelfView::~DownloadShelfView() = default;
@@ -272,24 +269,10 @@ void DownloadShelfView::RemoveDownloadView(View* view) {
 }
 
 void DownloadShelfView::ConfigureButtonForTheme(views::MdTextButton* button) {
-  const auto* const tp = GetThemeProvider();
-  DCHECK(tp);
-
-  // If COLOR_DOWNLOAD_SHELF is not customized, just use the default button bg
-  // and text colors.
-  absl::optional<SkColor> bg_color;
-  absl::optional<SkColor> text_color;
-  if (tp->HasCustomColor(ThemeProperties::COLOR_DOWNLOAD_SHELF)) {
-    // For custom themes, we have to make up a background color for the
-    // button. Use a slight tint of the shelf background.
-    bg_color = color_utils::BlendTowardMaxContrast(
-        tp->GetColor(ThemeProperties::COLOR_DOWNLOAD_SHELF), 0x10);
-    // Text color should be set to an appropriate button color over the button
-    // background, COLOR_BOOKMARK_TEXT is currently used as a convenient hack.
-    text_color = tp->GetColor(ThemeProperties::COLOR_BOOKMARK_TEXT);
-  }
-  button->SetBgColorOverride(bg_color);
-  button->SetEnabledTextColors(text_color);
+  const auto* const cp = GetColorProvider();
+  DCHECK(cp);
+  button->SetBgColorOverride(cp->GetColor(kColorDownloadShelfButtonBackground));
+  button->SetEnabledTextColors(cp->GetColor(kColorDownloadShelfButtonText));
 }
 
 void DownloadShelfView::DoShowDownload(
@@ -302,14 +285,14 @@ void DownloadShelfView::DoShowDownload(
   // Insert the new view as the first child, so the logical child order matches
   // the visual order.  This ensures that tabbing through downloads happens in
   // the order users would expect.
-  download::DownloadItem* download_item = download->download();
+  download::DownloadItem* download_item = download->GetDownloadItem();
   auto view = std::make_unique<DownloadItemView>(std::move(download), this,
                                                  accessible_alert_);
   DownloadItemView* download_item_view = AddChildViewAt(std::move(view), 0);
   download_views_.push_back(download_item_view);
 
   // Check download_item is not null, as it can be in some cases. See
-  // DownloadUIModel::download() description.
+  // DownloadUIModel::GetDownloadItem() description.
   if (download_item) {
     download_item_view->GetWidget()
         ->GetCompositor()
@@ -344,11 +327,13 @@ void DownloadShelfView::DoShowDownload(
 void DownloadShelfView::DoOpen() {
   SetVisible(true);
   shelf_animation_.Show();
+  SetLastOpened();
 }
 
 void DownloadShelfView::DoClose() {
   parent_->SetDownloadShelfVisible(false);
   shelf_animation_.Hide();
+  RecordShelfVisibleTime();
 }
 
 void DownloadShelfView::DoHide() {
@@ -364,9 +349,9 @@ void DownloadShelfView::DoUnhide() {
 }
 
 void DownloadShelfView::OnPaintBorder(gfx::Canvas* canvas) {
-  canvas->FillRect(gfx::Rect(0, 0, width(), 1),
-                   GetThemeProvider()->GetColor(
-                       ThemeProperties::COLOR_TOOLBAR_CONTENT_AREA_SEPARATOR));
+  canvas->FillRect(
+      gfx::Rect(0, 0, width(), 1),
+      GetColorProvider()->GetColor(kColorDownloadShelfContentAreaSeparator));
 }
 
 void DownloadShelfView::OnThemeChanged() {
@@ -375,11 +360,13 @@ void DownloadShelfView::OnThemeChanged() {
   ConfigureButtonForTheme(show_all_view_);
 
   SetBackground(views::CreateSolidBackground(
-      GetThemeProvider()->GetColor(ThemeProperties::COLOR_DOWNLOAD_SHELF)));
+      GetColorProvider()->GetColor(kColorDownloadShelfBackground)));
 
-  views::SetImageFromVectorIcon(
+  const ui::ColorProvider* cp = GetColorProvider();
+  views::SetImageFromVectorIconWithColor(
       close_button_, vector_icons::kCloseRoundedIcon,
-      GetThemeProvider()->GetColor(ThemeProperties::COLOR_BOOKMARK_TEXT));
+      cp->GetColor(kColorDownloadShelfButtonIcon),
+      cp->GetColor(kColorDownloadShelfButtonIconDisabled));
 }
 
 views::View* DownloadShelfView::GetDefaultFocusableChild() {
@@ -389,6 +376,19 @@ views::View* DownloadShelfView::GetDefaultFocusableChild() {
 
 DownloadItemView* DownloadShelfView::GetViewOfLastDownloadItemForTesting() {
   return download_views_.empty() ? nullptr : download_views_.back();
+}
+
+void DownloadShelfView::SetLastOpened() {
+  last_opened_ = base::Time::Now();
+}
+
+void DownloadShelfView::RecordShelfVisibleTime() {
+  if (!last_opened_.is_null()) {
+    base::UmaHistogramCustomTimes("Download.Shelf.VisibleTime",
+                                  base::Time::Now() - last_opened_,
+                                  base::Seconds(1), base::Days(1), 100);
+    last_opened_ = base::Time();
+  }
 }
 
 BEGIN_METADATA(DownloadShelfView, views::AccessiblePaneView)

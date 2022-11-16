@@ -19,6 +19,9 @@ void JavaScriptBrowserTest::AddLibrary(const base::FilePath& library_path) {
 }
 
 JavaScriptBrowserTest::JavaScriptBrowserTest() {
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+
+#endif
 }
 
 JavaScriptBrowserTest::~JavaScriptBrowserTest() {
@@ -26,17 +29,23 @@ JavaScriptBrowserTest::~JavaScriptBrowserTest() {
 
 void JavaScriptBrowserTest::SetUpInProcessBrowserTestFixture() {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  if (ash_starter_.HasLacrosArgument()) {
-    ASSERT_TRUE(ash_starter_.PrepareEnvironmentForLacros());
-  }
+  ash_starter_ = std::make_unique<test::AshBrowserTestStarter>();
+  if (ash_starter_->HasLacrosArgument())
+    ASSERT_TRUE(ash_starter_->PrepareEnvironmentForLacros());
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+}
+
+void JavaScriptBrowserTest::TearDownInProcessBrowserTestFixture() {
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  if (ash_starter_->HasLacrosArgument())
+    ash_starter_.reset();
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 }
 
 void JavaScriptBrowserTest::SetUpOnMainThread() {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  if (ash_starter_.HasLacrosArgument()) {
-    ash_starter_.StartLacros(this);
-  }
+  if (ash_starter_->HasLacrosArgument())
+    ash_starter_->StartLacros(this);
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
   JsTestApiConfig config;
@@ -77,8 +86,8 @@ void JavaScriptBrowserTest::BuildJavascriptLibraries(
        ++user_libraries_iterator) {
     std::string library_content;
     base::FilePath library_absolute_path;
-    std::vector<base::FilePath::StringType> components;
-    user_libraries_iterator->GetComponents(&components);
+    std::vector<base::FilePath::StringType> components =
+        user_libraries_iterator->GetComponents();
     if (components[0] == FILE_PATH_LITERAL("ROOT_GEN_DIR")) {
       base::FilePath exe_dir;
       base::PathService::Get(base::DIR_EXE, &exe_dir);
@@ -129,7 +138,7 @@ std::u16string JavaScriptBrowserTest::BuildRunTestJSCall(
   arguments.push_back(std::make_unique<base::Value>(function_name));
   auto baked_argument_list = std::make_unique<base::ListValue>();
   for (const auto& arg : test_func_args)
-    baked_argument_list->Append(arg.CreateDeepCopy());
+    baked_argument_list->Append(arg.Clone());
   arguments.push_back(std::move(baked_argument_list));
 
   std::vector<const base::Value*> ptr_vector;

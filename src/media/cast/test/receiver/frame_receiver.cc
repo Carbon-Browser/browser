@@ -14,6 +14,8 @@
 #include "base/numerics/safe_conversions.h"
 #include "media/cast/cast_config.h"
 #include "media/cast/cast_environment.h"
+#include "media/cast/common/encoded_frame.h"
+#include "media/cast/common/openscreen_conversion_helpers.h"
 #include "media/cast/constants.h"
 #include "media/cast/net/rtcp/rtcp_utility.h"
 
@@ -47,10 +49,8 @@ FrameReceiver::FrameReceiver(
       event_media_type_(event_media_type),
       event_subscriber_(kReceiverRtcpEventHistorySize, event_media_type),
       rtp_timebase_(config.rtp_timebase),
-      target_playout_delay_(
-          base::TimeDelta::FromMilliseconds(config.rtp_max_delay_ms)),
-      expected_frame_duration_(
-          base::TimeDelta::FromSecondsD(1.0 / config.target_frame_rate)),
+      target_playout_delay_(base::Milliseconds(config.rtp_max_delay_ms)),
+      expected_frame_duration_(base::Seconds(1.0 / config.target_frame_rate)),
       reports_are_scheduled_(false),
       framer_(cast_environment->Clock(),
               this,
@@ -166,7 +166,7 @@ void FrameReceiver::ProcessParsedPacket(const RtpCastHeader& rtp_header,
       // Note: It's okay for the conversion ToTimeDelta() to be approximate
       // because |lip_sync_drift_| will account for accumulated errors.
       lip_sync_reference_time_ +=
-          (fresh_sync_rtp - lip_sync_rtp_timestamp_).ToTimeDelta(rtp_timebase_);
+          ToTimeDelta(fresh_sync_rtp - lip_sync_rtp_timestamp_, rtp_timebase_);
     }
     lip_sync_rtp_timestamp_ = fresh_sync_rtp;
     lip_sync_drift_.Update(now,
@@ -206,8 +206,6 @@ void FrameReceiver::EmitAvailableEncodedFrames() {
 
   while (!frame_request_queue_.empty()) {
     // Attempt to peek at the next completed frame from the |framer_|.
-    // TODO(miu): We should only be peeking at the metadata, and not copying the
-    // payload yet!  Or, at least, peek using a StringPiece instead of a copy.
     std::unique_ptr<EncodedFrame> encoded_frame(new EncodedFrame());
     bool is_consecutively_next_frame = false;
     bool have_multiple_complete_frames = false;
@@ -273,8 +271,8 @@ void FrameReceiver::EmitAvailableEncodedFrames() {
     encoded_frame->reference_time = playout_time;
     framer_.ReleaseFrame(encoded_frame->frame_id);
     if (encoded_frame->new_playout_delay_ms) {
-      target_playout_delay_ = base::TimeDelta::FromMilliseconds(
-          encoded_frame->new_playout_delay_ms);
+      target_playout_delay_ =
+          base::Milliseconds(encoded_frame->new_playout_delay_ms);
     }
     cast_environment_->PostTask(
         CastEnvironment::MAIN, FROM_HERE,
@@ -303,12 +301,11 @@ void FrameReceiver::EmitOneFrame(
 base::TimeTicks FrameReceiver::GetPlayoutTime(const EncodedFrame& frame) const {
   base::TimeDelta target_playout_delay = target_playout_delay_;
   if (frame.new_playout_delay_ms) {
-    target_playout_delay =
-        base::TimeDelta::FromMilliseconds(frame.new_playout_delay_ms);
+    target_playout_delay = base::Milliseconds(frame.new_playout_delay_ms);
   }
   return lip_sync_reference_time_ + lip_sync_drift_.Current() +
-         (frame.rtp_timestamp - lip_sync_rtp_timestamp_)
-             .ToTimeDelta(rtp_timebase_) +
+         ToTimeDelta(frame.rtp_timestamp - lip_sync_rtp_timestamp_,
+                     rtp_timebase_) +
          target_playout_delay;
 }
 
@@ -318,8 +315,8 @@ void FrameReceiver::ScheduleNextCastMessage() {
   framer_.TimeToSendNextCastMessage(&send_time);
   base::TimeDelta time_to_send =
       send_time - cast_environment_->Clock()->NowTicks();
-  time_to_send = std::max(
-      time_to_send, base::TimeDelta::FromMilliseconds(kMinSchedulingDelayMs));
+  time_to_send =
+      std::max(time_to_send, base::Milliseconds(kMinSchedulingDelayMs));
   cast_environment_->PostDelayedTask(
       CastEnvironment::MAIN, FROM_HERE,
       base::BindOnce(&FrameReceiver::SendNextCastMessage, AsWeakPtr()),
@@ -338,7 +335,7 @@ void FrameReceiver::ScheduleNextRtcpReport() {
   cast_environment_->PostDelayedTask(
       CastEnvironment::MAIN, FROM_HERE,
       base::BindOnce(&FrameReceiver::SendNextRtcpReport, AsWeakPtr()),
-      base::TimeDelta::FromMilliseconds(kRtcpReportIntervalMs));
+      kRtcpReportInterval);
 }
 
 void FrameReceiver::SendNextRtcpReport() {

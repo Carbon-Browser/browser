@@ -18,7 +18,7 @@ import android.widget.TextView;
 import androidx.annotation.DrawableRes;
 import androidx.annotation.Nullable;
 
-import org.chromium.base.ApiCompatibilityUtils;
+import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.base.supplier.UnownedUserDataSupplier;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.share.ShareDelegate;
@@ -61,6 +61,8 @@ public class EphemeralTabSheetContent implements BottomSheetContent {
     private final int mToolbarHeightPx;
     private final UnownedUserDataSupplier<ShareDelegate> mShareDelegateSupplier =
             new ShareDelegateSupplier();
+    private final ObservableSupplierImpl<Boolean> mBackPressStateChangedSupplier =
+            new ObservableSupplierImpl<>();
 
     private ViewGroup mToolbarView;
     private ViewGroup mSheetContentView;
@@ -93,6 +95,8 @@ public class EphemeralTabSheetContent implements BottomSheetContent {
 
         createThinWebView((int) (maxViewHeight * FULL_HEIGHT_RATIO), intentRequestTracker);
         createToolbarView();
+
+        mBackPressStateChangedSupplier.set(true);
     }
 
     /**
@@ -138,9 +142,7 @@ public class EphemeralTabSheetContent implements BottomSheetContent {
         mToolbarView =
                 (ViewGroup) LayoutInflater.from(mContext).inflate(R.layout.sheet_tab_toolbar, null);
         mShadow = mToolbarView.findViewById(R.id.shadow);
-        mShadow.init(ApiCompatibilityUtils.getColor(
-                             mContext.getResources(), R.color.toolbar_shadow_color),
-                FadingShadow.POSITION_TOP);
+        mShadow.init(mContext.getColor(R.color.toolbar_shadow_color), FadingShadow.POSITION_TOP);
         ImageView openInNewTabButton = mToolbarView.findViewById(R.id.open_in_new_tab);
         openInNewTabButton.setOnClickListener(view -> mOpenNewTabCallback.run());
 
@@ -290,6 +292,16 @@ public class EphemeralTabSheetContent implements BottomSheetContent {
     public boolean handleBackPress() {
         mCloseButtonCallback.run();
         return true;
+    }
+
+    @Override
+    public ObservableSupplierImpl<Boolean> getBackPressStateChangedSupplier() {
+        return mBackPressStateChangedSupplier;
+    }
+
+    @Override
+    public void onBackPressed() {
+        mCloseButtonCallback.run();
     }
 
     @Override

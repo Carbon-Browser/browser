@@ -4,13 +4,13 @@
 
 #include <utility>
 
-#include "base/macros.h"
 #include "components/autofill/core/common/password_generation_util.h"
 #include "components/device_reauth/biometric_authenticator.h"
 #include "components/password_manager/core/browser/http_auth_manager.h"
 #include "components/password_manager/core/browser/password_form_manager_for_ui.h"
 #include "components/password_manager/core/browser/password_manager_client.h"
 #include "components/signin/public/base/signin_metrics.h"
+#include "components/version_info/channel.h"
 #include "url/origin.h"
 
 namespace password_manager {
@@ -27,9 +27,17 @@ bool PasswordManagerClient::IsFillingFallbackEnabled(const GURL& url) const {
   return true;
 }
 
-void PasswordManagerClient::ShowTouchToFill(PasswordManagerDriver* driver) {}
+bool PasswordManagerClient::IsAutoSignInEnabled() const {
+  return false;
+}
+
+#if BUILDFLAG(IS_ANDROID)
+void PasswordManagerClient::ShowTouchToFill(
+    PasswordManagerDriver* driver,
+    autofill::mojom::SubmissionReadinessState submission_readiness) {}
 
 void PasswordManagerClient::OnPasswordSelected(const std::u16string& text) {}
+#endif
 
 scoped_refptr<device_reauth::BiometricAuthenticator>
 PasswordManagerClient::GetBiometricAuthenticator() {
@@ -66,25 +74,11 @@ void PasswordManagerClient::TriggerReauthForPrimaryAccount(
 
 void PasswordManagerClient::TriggerSignIn(signin_metrics::AccessPoint) {}
 
-PasswordStoreInterface*
-PasswordManagerClient::GetProfilePasswordStoreInterface() const {
-  return GetProfilePasswordStore();
-}
-
-PasswordStoreInterface*
-PasswordManagerClient::GetAccountPasswordStoreInterface() const {
-  return GetAccountPasswordStore();
-}
-
 SyncState PasswordManagerClient::GetPasswordSyncState() const {
   return SyncState::kNotSyncing;
 }
 
 bool PasswordManagerClient::WasLastNavigationHTTPError() const {
-  return false;
-}
-
-bool PasswordManagerClient::WasCredentialLeakDialogShown() const {
   return false;
 }
 
@@ -164,8 +158,17 @@ network::mojom::NetworkContext* PasswordManagerClient::GetNetworkContext()
   return nullptr;
 }
 
-bool PasswordManagerClient::IsWebAuthnAutofillEnabled() const {
-  return false;
+WebAuthnCredentialsDelegate*
+PasswordManagerClient::GetWebAuthnCredentialsDelegate() {
+  return nullptr;
+}
+
+version_info::Channel PasswordManagerClient::GetChannel() const {
+  return version_info::Channel::UNKNOWN;
+}
+
+void PasswordManagerClient::RefreshPasswordManagerSettingsIfNeeded() const {
+  // For most implementations settings do not need to be refreshed.
 }
 
 }  // namespace password_manager

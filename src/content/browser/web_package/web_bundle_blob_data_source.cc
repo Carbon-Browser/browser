@@ -27,6 +27,10 @@ class MojoBlobReaderDelegate : public storage::MojoBlobReader::Delegate {
   using CompletionCallback = base::OnceCallback<void(net::Error net_error)>;
   explicit MojoBlobReaderDelegate(CompletionCallback completion_callback)
       : completion_callback_(std::move(completion_callback)) {}
+
+  MojoBlobReaderDelegate(const MojoBlobReaderDelegate&) = delete;
+  MojoBlobReaderDelegate& operator=(const MojoBlobReaderDelegate&) = delete;
+
   ~MojoBlobReaderDelegate() override = default;
   RequestSideData DidCalculateSize(uint64_t total_size,
                                    uint64_t content_size) override {
@@ -40,7 +44,6 @@ class MojoBlobReaderDelegate : public storage::MojoBlobReader::Delegate {
 
  private:
   CompletionCallback completion_callback_;
-  DISALLOW_COPY_AND_ASSIGN(MojoBlobReaderDelegate);
 };
 
 void OnReadComplete(web_package::mojom::BundleDataSource::ReadCallback callback,
@@ -53,8 +56,8 @@ void OnReadComplete(web_package::mojom::BundleDataSource::ReadCallback callback,
     return;
   }
   std::vector<uint8_t> vec;
-  vec.assign(bit_cast<uint8_t*>(io_buf->data()),
-             bit_cast<uint8_t*>(io_buf->data()) + bytes_read);
+  vec.assign(base::bit_cast<uint8_t*>(io_buf->data()),
+             base::bit_cast<uint8_t*>(io_buf->data()) + bytes_read);
   std::move(callback).Run(std::move(vec));
 }
 
@@ -303,6 +306,16 @@ void WebBundleBlobDataSource::BlobDataSourceCore::Read(uint64_t offset,
   WaitForBlob(base::BindOnce(
       &WebBundleBlobDataSource::BlobDataSourceCore::OnBlobReadyForRead,
       base::Unretained(this), offset, length, std::move(callback)));
+}
+
+void WebBundleBlobDataSource::BlobDataSourceCore::Length(
+    LengthCallback callback) {
+  std::move(callback).Run(-1);
+}
+
+void WebBundleBlobDataSource::BlobDataSourceCore::IsRandomAccessContext(
+    IsRandomAccessContextCallback callback) {
+  std::move(callback).Run(false);
 }
 
 void WebBundleBlobDataSource::BlobDataSourceCore::StreamingBlobDone(

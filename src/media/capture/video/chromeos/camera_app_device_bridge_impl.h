@@ -28,6 +28,10 @@ class CAPTURE_EXPORT CameraAppDeviceBridgeImpl
 
   CameraAppDeviceBridgeImpl();
 
+  CameraAppDeviceBridgeImpl(const CameraAppDeviceBridgeImpl&) = delete;
+  CameraAppDeviceBridgeImpl& operator=(const CameraAppDeviceBridgeImpl&) =
+      delete;
+
   ~CameraAppDeviceBridgeImpl() override;
 
   static CameraAppDeviceBridgeImpl* GetInstance();
@@ -69,10 +73,10 @@ class CAPTURE_EXPORT CameraAppDeviceBridgeImpl
 
   void IsSupported(IsSupportedCallback callback) override;
 
-  void SetMultipleStreamsEnabled(
+  void SetVirtualDeviceEnabled(
       const std::string& device_id,
       bool enabled,
-      SetMultipleStreamsEnabledCallback callback) override;
+      SetVirtualDeviceEnabledCallback callback) override;
 
  private:
   friend struct base::DefaultSingletonTraits<CameraAppDeviceBridgeImpl>;
@@ -97,8 +101,6 @@ class CAPTURE_EXPORT CameraAppDeviceBridgeImpl
   base::Lock task_runner_map_lock_;
   base::flat_map<std::string, scoped_refptr<base::SingleThreadTaskRunner>>
       ipc_task_runners_ GUARDED_BY(task_runner_map_lock_);
-
-  DISALLOW_COPY_AND_ASSIGN(CameraAppDeviceBridgeImpl);
 };
 
 }  // namespace media

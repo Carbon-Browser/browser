@@ -58,19 +58,23 @@ JavaScriptFeatureManager* JavaScriptFeatureManager::FromBrowserState(
   return feature_manager;
 }
 
+JavaScriptContentWorld*
+JavaScriptFeatureManager::GetPageContentWorldForBrowserState(
+    BrowserState* browser_state) {
+  DCHECK(browser_state);
+  JavaScriptFeatureManager* feature_manager = FromBrowserState(browser_state);
+  return feature_manager->page_content_world_.get();
+}
+
 void JavaScriptFeatureManager::ConfigureFeatures(
     std::vector<JavaScriptFeature*> features) {
-  page_content_world_ =
-      std::make_unique<JavaScriptContentWorld>(browser_state_);
+  page_content_world_ = std::make_unique<JavaScriptContentWorld>(
+      browser_state_, WKContentWorld.pageWorld);
   AddSharedCommonFeatures(page_content_world_.get());
 
-#if defined(__IPHONE_14_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_14_0
-  if (@available(iOS 14, *)) {
-    isolated_world_ = std::make_unique<JavaScriptContentWorld>(
-        browser_state_, WKContentWorld.defaultClientWorld);
-    AddSharedCommonFeatures(isolated_world_.get());
-  }
-#endif  // defined(__IPHONE14_0)
+  isolated_world_ = std::make_unique<JavaScriptContentWorld>(
+      browser_state_, WKContentWorld.defaultClientWorld);
+  AddSharedCommonFeatures(isolated_world_.get());
 
   for (JavaScriptFeature* feature : features) {
     if (isolated_world_ &&

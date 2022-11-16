@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/values.h"
 #include "components/policy/policy_export.h"
@@ -48,6 +49,11 @@ enum SchemaOnErrorStrategy {
   // is safe. For example, can't be used if an empty list has a special meaning,
   // like allowing everything.
   SCHEMA_ALLOW_UNKNOWN_AND_INVALID_LIST_ENTRY,
+  // Same as |SCHEMA_ALLOW_UNKNOWN|, but unknown properties won't cause errors
+  // messages to be added. Used to allow adding extra fields to the policy
+  // internally, without adding those fields to the schema. This option should
+  // be avoided, since it suppresses the errors.
+  SCHEMA_ALLOW_UNKNOWN_WITHOUT_WARNING,
 };
 
 // Schema validation options for Schema::ParseToDictAndValidate().
@@ -178,8 +184,8 @@ class POLICY_EXPORT Schema {
 
    private:
     scoped_refptr<const InternalStorage> storage_;
-    const internal::PropertyNode* it_;
-    const internal::PropertyNode* end_;
+    raw_ptr<const internal::PropertyNode> it_;
+    raw_ptr<const internal::PropertyNode> end_;
   };
 
   // These methods should be called only if type() == Type::DICTIONARY,

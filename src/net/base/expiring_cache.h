@@ -48,10 +48,10 @@ class NoopEvictionHandler {
 //                 std::less<base::TimeTicks> > cache(0);
 //   // Add a value that expires in 5 minutes
 //   cache.Put("key1", "value1", base::TimeTicks::Now(),
-//             base::TimeTicks::Now() + base::TimeDelta::FromMinutes(5));
+//             base::TimeTicks::Now() + base::Minutes(5));
 //   // Add another value that expires in 10 minutes.
 //   cache.Put("key2", "value2", base::TimeTicks::Now(),
-//             base::TimeTicks::Now() + base::TimeDelta::FromMinutes(10));
+//             base::TimeTicks::Now() + base::Minutes(10));
 //
 // Alternatively, there may be some more complex expiration criteria, at which
 // point a custom functor may be used:
@@ -120,7 +120,7 @@ class ExpiringCache {
 
   // Constructs an ExpiringCache that stores up to |max_entries|.
   explicit ExpiringCache(size_t max_entries) : max_entries_(max_entries) {}
-  ~ExpiringCache() {}
+  ~ExpiringCache() = default;
 
   // Returns the value matching |key|, which must be valid at the time |now|.
   // Returns NULL if the item is not found or has expired. If the item has

@@ -12,6 +12,7 @@
 #include "base/strings/stringprintf.h"
 #include "base/threading/sequenced_task_runner_handle.h"
 #include "base/trace_event/trace_event.h"
+#include "third_party/abseil-cpp/absl/utility/utility.h"
 
 namespace audio {
 
@@ -33,6 +34,8 @@ std::string GetCtorLogString(media::AudioManager* audio_manager,
 OutputStream::OutputStream(
     CreatedCallback created_callback,
     DeleteCallback delete_callback,
+    ManagedDeviceOutputStreamCreateCallback
+        managed_device_output_stream_create_callback,
     mojo::PendingReceiver<media::mojom::AudioOutputStream> stream_receiver,
     mojo::PendingAssociatedRemote<media::mojom::AudioOutputStreamObserver>
         observer,
@@ -60,7 +63,8 @@ OutputStream::OutputStream(
                   activity_monitor,
                   params,
                   output_device_id,
-                  &reader_),
+                  &reader_,
+                  std::move(managed_device_output_stream_create_callback)),
       loopback_group_id_(loopback_group_id) {
   DCHECK(receiver_.is_bound());
   DCHECK(created_callback);
@@ -180,7 +184,7 @@ void OutputStream::CreateAudioPipe(CreatedCallback created_callback) {
   }
 
   std::move(created_callback)
-      .Run({base::in_place, std::move(shared_memory_region),
+      .Run({absl::in_place, std::move(shared_memory_region),
             std::move(socket_handle)});
 }
 
@@ -197,11 +201,9 @@ void OutputStream::OnControllerPlaying() {
   if (OutputController::will_monitor_audio_levels()) {
     DCHECK(!poll_timer_.IsRunning());
     // base::Unretained is safe because |this| owns |poll_timer_|.
-    poll_timer_.Start(
-        FROM_HERE,
-        base::TimeDelta::FromSeconds(1) / kPowerMeasurementsPerSecond,
-        base::BindRepeating(&OutputStream::PollAudioLevel,
-                            base::Unretained(this)));
+    poll_timer_.Start(FROM_HERE, base::Seconds(1) / kPowerMeasurementsPerSecond,
+                      base::BindRepeating(&OutputStream::PollAudioLevel,
+                                          base::Unretained(this)));
     return;
   }
 

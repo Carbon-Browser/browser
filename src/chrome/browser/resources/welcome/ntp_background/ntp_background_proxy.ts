@@ -3,13 +3,14 @@
 // found in the LICENSE file.
 
 import {sendWithPromise} from 'chrome://resources/js/cr.m.js';
-import {NtpBackgroundMetricsProxyImpl} from './ntp_background_metrics_proxy.js';
+
+import {NuxNtpBackgroundInteractions} from '../shared/module_metrics_proxy.js';
 
 export type NtpBackgroundData = {
   id: number,
   imageUrl: string,
   thumbnailClass: string,
-  title: string
+  title: string,
 };
 
 export interface NtpBackgroundProxy {
@@ -41,12 +42,10 @@ export class NtpBackgroundProxyImpl implements NtpBackgroundProxy {
   }
 
   recordBackgroundImageFailedToLoad() {
-    const ntpInteractions =
-        NtpBackgroundMetricsProxyImpl.getInstance().getInteractions();
     chrome.metricsPrivate.recordEnumerationValue(
         'FirstRun.NewUserExperience.NtpBackgroundInteraction',
-        ntpInteractions.BackgroundImageFailedToLoad,
-        Object.keys(ntpInteractions).length);
+        NuxNtpBackgroundInteractions.BACKGROUND_IMAGE_FAILED_TO_LOAD,
+        Object.keys(NuxNtpBackgroundInteractions).length);
   }
 
   recordBackgroundImageLoadTime(loadTime: number) {
@@ -55,12 +54,10 @@ export class NtpBackgroundProxyImpl implements NtpBackgroundProxy {
   }
 
   recordBackgroundImageNeverLoaded() {
-    const ntpInteractions =
-        NtpBackgroundMetricsProxyImpl.getInstance().getInteractions();
     chrome.metricsPrivate.recordEnumerationValue(
         'FirstRun.NewUserExperience.NtpBackgroundInteraction',
-        ntpInteractions.BackgroundImageNeverLoaded,
-        Object.keys(ntpInteractions).length);
+        NuxNtpBackgroundInteractions.BACKGROUND_IMAGE_NEVER_LOADED,
+        Object.keys(NuxNtpBackgroundInteractions).length);
   }
 
   setBackground(id: number) {

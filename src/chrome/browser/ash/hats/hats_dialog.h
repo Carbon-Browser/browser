@@ -9,7 +9,6 @@
 
 #include "base/containers/flat_map.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
 #include "base/strings/string_piece.h"
 #include "ui/web_dialogs/web_dialog_delegate.h"
 
@@ -30,6 +29,9 @@ class HatsDialog : public ui::WebDialogDelegate {
       const HatsConfig& hats_config,
       const base::flat_map<std::string, std::string>& product_specific_data =
           base::flat_map<std::string, std::string>());
+
+  HatsDialog(const HatsDialog&) = delete;
+  HatsDialog& operator=(const HatsDialog&) = delete;
 
   ~HatsDialog() override;
 
@@ -74,7 +76,7 @@ class HatsDialog : public ui::WebDialogDelegate {
   void OnLoadingStateChanged(content::WebContents* source) override;
   bool ShouldShowDialogTitle() const override;
   bool ShouldShowCloseButton() const override;
-  bool HandleContextMenu(content::RenderFrameHost* render_frame_host,
+  bool HandleContextMenu(content::RenderFrameHost& render_frame_host,
                          const content::ContextMenuParams& params) override;
   ui::WebDialogDelegate::FrameKind GetWebDialogFrameKind() const override;
 
@@ -82,8 +84,6 @@ class HatsDialog : public ui::WebDialogDelegate {
   std::string url_;
   Profile* user_profile_;
   const std::string histogram_name_;
-
-  DISALLOW_COPY_AND_ASSIGN(HatsDialog);
 };
 
 }  // namespace ash

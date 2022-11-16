@@ -8,7 +8,6 @@
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
-#include "base/macros.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "storage/browser/blob/scoped_file.h"
@@ -27,6 +26,10 @@ namespace storage {
 class TransientFileUtilTest : public testing::Test {
  public:
   TransientFileUtilTest() = default;
+
+  TransientFileUtilTest(const TransientFileUtilTest&) = delete;
+  TransientFileUtilTest& operator=(const TransientFileUtilTest&) = delete;
+
   ~TransientFileUtilTest() override = default;
 
   void SetUp() override {
@@ -73,8 +76,6 @@ class TransientFileUtilTest : public testing::Test {
   base::ScopedTempDir data_dir_;
   scoped_refptr<FileSystemContext> file_system_context_;
   std::unique_ptr<TransientFileUtil> transient_file_util_;
-
-  DISALLOW_COPY_AND_ASSIGN(TransientFileUtilTest);
 };
 
 TEST_F(TransientFileUtilTest, TransientFile) {

@@ -24,8 +24,17 @@ const base::Feature kEnableGamepadButtonAxisEvents{
 const base::Feature kEnableWindowsGamingInputDataFetcher{
     "EnableWindowsGamingInputDataFetcher", base::FEATURE_DISABLED_BY_DEFAULT};
 
+// TODO(https://crbug.com/1011006): When we enable this feature and enable the
+// permission policy of the Gamepad API, remove the fenced frame specific code
+// introduced by crrev.com/c/3403761.
 const base::Feature kRestrictGamepadAccess{"RestrictGamepadAccess",
                                            base::FEATURE_DISABLED_BY_DEFAULT};
+
+#if BUILDFLAG(IS_ANDROID)
+// Enables gamepad vibration on Android 12+.
+const base::Feature kEnableAndroidGamepadVibration{
+    "EnableAndroidGamepadVibration", base::FEATURE_DISABLED_BY_DEFAULT};
+#endif  // BUILDFLAG(IS_ANDROID)
 
 bool AreGamepadButtonAxisEventsEnabled() {
   // Check if button and axis events are enabled by a field trial.

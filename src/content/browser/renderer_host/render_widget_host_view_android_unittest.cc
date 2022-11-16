@@ -6,14 +6,15 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/test/scoped_feature_list.h"
 #include "cc/layers/deadline_policy.h"
 #include "cc/layers/layer.h"
 #include "components/viz/common/features.h"
 #include "components/viz/common/surfaces/local_surface_id.h"
-#include "content/browser/renderer_host/agent_scheduling_group_host.h"
 #include "content/browser/renderer_host/frame_tree.h"
 #include "content/browser/renderer_host/mock_render_widget_host.h"
+#include "content/browser/site_instance_group.h"
 #include "content/browser/site_instance_impl.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/mock_render_process_host.h"
@@ -28,9 +29,59 @@
 
 namespace content {
 
+namespace {
+// Allows for RenderWidgetHostViewAndroidRotationTest to override the ScreenInfo
+// so that different configurations can be tests. The default path fallbacks on
+// an empty ScreenInfo in testing, assuming it has no effect.
+class CustomScreenInfoRenderWidgetHostViewAndroid
+    : public RenderWidgetHostViewAndroid {
+ public:
+  CustomScreenInfoRenderWidgetHostViewAndroid(
+      RenderWidgetHostImpl* widget,
+      gfx::NativeView parent_native_view);
+  ~CustomScreenInfoRenderWidgetHostViewAndroid() override {}
+
+  void SetScreenInfo(display::ScreenInfo screen_info);
+
+  // RenderWidgetHostViewAndroid:
+  display::ScreenInfos GetScreenInfos() const override;
+
+ private:
+  CustomScreenInfoRenderWidgetHostViewAndroid(
+      const CustomScreenInfoRenderWidgetHostViewAndroid&) = delete;
+  CustomScreenInfoRenderWidgetHostViewAndroid& operator=(
+      const CustomScreenInfoRenderWidgetHostViewAndroid&) = delete;
+
+  display::ScreenInfo screen_info_;
+};
+
+CustomScreenInfoRenderWidgetHostViewAndroid::
+    CustomScreenInfoRenderWidgetHostViewAndroid(
+        RenderWidgetHostImpl* widget,
+        gfx::NativeView parent_native_view)
+    : RenderWidgetHostViewAndroid(widget, parent_native_view) {}
+
+void CustomScreenInfoRenderWidgetHostViewAndroid::SetScreenInfo(
+    display::ScreenInfo screen_info) {
+  screen_info_ = screen_info;
+}
+
+display::ScreenInfos
+CustomScreenInfoRenderWidgetHostViewAndroid::GetScreenInfos() const {
+  return display::ScreenInfos(screen_info_);
+}
+
+}  // namespace
+
 class RenderWidgetHostViewAndroidTest : public testing::Test {
  public:
   RenderWidgetHostViewAndroidTest();
+
+  RenderWidgetHostViewAndroidTest(const RenderWidgetHostViewAndroidTest&) =
+      delete;
+  RenderWidgetHostViewAndroidTest& operator=(
+      const RenderWidgetHostViewAndroidTest&) = delete;
+
   ~RenderWidgetHostViewAndroidTest() override {}
 
   RenderWidgetHostViewAndroid* render_widget_host_view_android() {
@@ -50,6 +101,10 @@ class RenderWidgetHostViewAndroidTest : public testing::Test {
       base::TimeTicks activation_time);
 
  protected:
+  virtual RenderWidgetHostViewAndroid* CreateRenderWidgetHostViewAndroid(
+      RenderWidgetHostImpl* widget_host,
+      gfx::NativeView parent_native_view);
+
   // testing::Test:
   void SetUp() override;
   void TearDown() override;
@@ -64,7 +119,7 @@ class RenderWidgetHostViewAndroidTest : public testing::Test {
   std::unique_ptr<TestWebContents> web_contents_;
   std::unique_ptr<FrameTree> frame_tree_;
   std::unique_ptr<MockRenderProcessHost> process_;
-  std::unique_ptr<AgentSchedulingGroupHost> agent_scheduling_group_;
+  scoped_refptr<SiteInstanceGroup> site_instance_group_;
   std::unique_ptr<MockRenderWidgetHostDelegate> delegate_;
   scoped_refptr<cc::Layer> parent_layer_;
   scoped_refptr<cc::Layer> layer_;
@@ -73,12 +128,10 @@ class RenderWidgetHostViewAndroidTest : public testing::Test {
   // TestRenderViewHost
   scoped_refptr<RenderViewHostImpl> render_view_host_;
   // Owned by `render_view_host_`.
-  MockRenderWidgetHost* host_;
-  RenderWidgetHostViewAndroid* render_widget_host_view_android_;
+  raw_ptr<MockRenderWidgetHost> host_;
+  raw_ptr<RenderWidgetHostViewAndroid> render_widget_host_view_android_;
 
   BrowserTaskEnvironment task_environment_;
-
-  DISALLOW_COPY_AND_ASSIGN(RenderWidgetHostViewAndroidTest);
 };
 
 RenderWidgetHostViewAndroidTest::RenderWidgetHostViewAndroidTest()
@@ -106,6 +159,13 @@ void RenderWidgetHostViewAndroidTest::
       ->OnRenderFrameMetadataChangedAfterActivation(metadata, activation_time);
 }
 
+RenderWidgetHostViewAndroid*
+RenderWidgetHostViewAndroidTest::CreateRenderWidgetHostViewAndroid(
+    RenderWidgetHostImpl* widget_host,
+    gfx::NativeView parent_native_view) {
+  return new RenderWidgetHostViewAndroid(widget_host, parent_native_view);
+}
+
 void RenderWidgetHostViewAndroidTest::SetUp() {
   browser_context_ = std::make_unique<TestBrowserContext>();
   site_instance_ = SiteInstanceImpl::Create(browser_context_.get());
@@ -119,18 +179,19 @@ void RenderWidgetHostViewAndroidTest::SetUp() {
 
   delegate_ = std::make_unique<MockRenderWidgetHostDelegate>();
   process_ = std::make_unique<MockRenderProcessHost>(browser_context_.get());
-  agent_scheduling_group_ =
-      std::make_unique<AgentSchedulingGroupHost>(*process_);
+  site_instance_group_ = base::WrapRefCounted(new SiteInstanceGroup(
+      site_instance_->GetBrowsingInstanceId(), process_.get()));
   // Initialized before ownership is given to `render_view_host_`.
   std::unique_ptr<MockRenderWidgetHost> mock_host =
       MockRenderWidgetHost::Create(frame_tree_.get(), delegate_.get(),
-                                   *agent_scheduling_group_,
+                                   site_instance_group_->GetSafeRef(),
                                    process_->GetNextRoutingID());
   host_ = mock_host.get();
   render_view_host_ = new TestRenderViewHost(
-      frame_tree_.get(), site_instance_.get(), std::move(mock_host),
+      frame_tree_.get(), site_instance_group_.get(),
+      site_instance_->GetStoragePartitionConfig(), std::move(mock_host),
       web_contents_.get(), process_->GetNextRoutingID(),
-      process_->GetNextRoutingID(), false);
+      process_->GetNextRoutingID(), false, nullptr);
   parent_layer_ = cc::Layer::Create();
   parent_view_.SetLayer(parent_layer_);
   layer_ = cc::Layer::Create();
@@ -138,7 +199,7 @@ void RenderWidgetHostViewAndroidTest::SetUp() {
   parent_view_.AddChild(&native_view_);
   EXPECT_EQ(&parent_view_, native_view_.parent());
   render_widget_host_view_android_ =
-      new RenderWidgetHostViewAndroid(host_, &native_view_);
+      CreateRenderWidgetHostViewAndroid(host_, &native_view_);
   test_view_android_delegate_ = std::make_unique<TestViewAndroidDelegate>();
 }
 
@@ -152,7 +213,7 @@ void RenderWidgetHostViewAndroidTest::TearDown() {
 
   delegate_.reset();
   process_->Cleanup();
-  agent_scheduling_group_ = nullptr;
+  site_instance_group_.reset();
   process_ = nullptr;
   browser_context_.reset();
 }
@@ -216,9 +277,9 @@ TEST_F(RenderWidgetHostViewAndroidTest, InsetVisualViewport) {
 }
 
 TEST_F(RenderWidgetHostViewAndroidTest, HideWindowRemoveViewAddViewShowWindow) {
-  std::unique_ptr<ui::WindowAndroid> window(
-      ui::WindowAndroid::CreateForTesting());
-  window->AddChild(parent_view());
+  std::unique_ptr<ui::WindowAndroid::ScopedWindowAndroidForTesting> window =
+      ui::WindowAndroid::CreateForTesting();
+  window->get()->AddChild(parent_view());
   EXPECT_TRUE(render_widget_host_view_android()->IsShowing());
   // The layer should be visible once attached to a window.
   EXPECT_FALSE(render_widget_host_view_android()
@@ -227,7 +288,7 @@ TEST_F(RenderWidgetHostViewAndroidTest, HideWindowRemoveViewAddViewShowWindow) {
                    ->hide_layer_and_subtree());
 
   // Hiding the window should and removing the view should hide the layer.
-  window->OnVisibilityChanged(nullptr, nullptr, false);
+  window->get()->OnVisibilityChanged(nullptr, nullptr, false);
   parent_view()->RemoveFromParent();
   EXPECT_TRUE(render_widget_host_view_android()->IsShowing());
   EXPECT_TRUE(render_widget_host_view_android()
@@ -237,8 +298,8 @@ TEST_F(RenderWidgetHostViewAndroidTest, HideWindowRemoveViewAddViewShowWindow) {
 
   // Adding the view back to a window and notifying the window is visible should
   // make the layer visible again.
-  window->AddChild(parent_view());
-  window->OnVisibilityChanged(nullptr, nullptr, true);
+  window->get()->AddChild(parent_view());
+  window->get()->OnVisibilityChanged(nullptr, nullptr, true);
   EXPECT_TRUE(render_widget_host_view_android()->IsShowing());
   EXPECT_FALSE(render_widget_host_view_android()
                    ->GetNativeView()
@@ -336,6 +397,12 @@ class RenderWidgetHostViewAndroidRotationTest
 
   void OnDidUpdateVisualPropertiesComplete(
       const cc::RenderFrameMetadata& metadata);
+  void SetScreenInfo(display::ScreenInfo screen_info);
+
+ protected:
+  RenderWidgetHostViewAndroid* CreateRenderWidgetHostViewAndroid(
+      RenderWidgetHostImpl* widget_host,
+      gfx::NativeView parent_native_view) override;
 
  private:
   base::test::ScopedFeatureList scoped_feature_list_;
@@ -351,6 +418,21 @@ void RenderWidgetHostViewAndroidRotationTest::
         const cc::RenderFrameMetadata& metadata) {
   render_widget_host_view_android()->OnDidUpdateVisualPropertiesComplete(
       metadata);
+}
+
+void RenderWidgetHostViewAndroidRotationTest::SetScreenInfo(
+    display::ScreenInfo screen_info) {
+  static_cast<CustomScreenInfoRenderWidgetHostViewAndroid*>(
+      render_widget_host_view_android())
+      ->SetScreenInfo(screen_info);
+}
+
+RenderWidgetHostViewAndroid*
+RenderWidgetHostViewAndroidRotationTest::CreateRenderWidgetHostViewAndroid(
+    RenderWidgetHostImpl* widget_host,
+    gfx::NativeView parent_native_view) {
+  return new CustomScreenInfoRenderWidgetHostViewAndroid(widget_host,
+                                                         parent_native_view);
 }
 
 // Tests that when a rotation occurs, that we only advance the
@@ -551,12 +633,12 @@ TEST_F(RenderWidgetHostViewAndroidRotationTest, FullscreenRotation) {
   }
 
   // When exiting rotation the order of visual property updates can differ.
+  // Though we need to always allow Surface Sync to continue, as WebView will
+  // send two OnPhysicalBackingSizeChanged in a row to exit fullscreen. While
+  // non-WebView can alternate some combination of 1-2
+  // OnPhysicalBackingSizeChanged and OnSynchronizedDisplayPropertiesChanged.
   delegate()->set_is_fullscreen(false);
   rwhva->OnPhysicalBackingSizeChanged(/* deadline_override= */ absl::nullopt);
-  EXPECT_FALSE(rwhva->CanSynchronizeVisualProperties());
-  EXPECT_EQ(post_rotation_local_surface_id, rwhva->GetLocalSurfaceId());
-
-  rwhva->OnSynchronizedDisplayPropertiesChanged(/* rotation= */ true);
   EXPECT_TRUE(rwhva->CanSynchronizeVisualProperties());
   const viz::LocalSurfaceId post_fullscreen_local_surface_id =
       rwhva->GetLocalSurfaceId();
@@ -564,6 +646,21 @@ TEST_F(RenderWidgetHostViewAndroidRotationTest, FullscreenRotation) {
   EXPECT_TRUE(post_fullscreen_local_surface_id.is_valid());
   EXPECT_TRUE(post_fullscreen_local_surface_id.IsNewerThan(
       post_rotation_local_surface_id));
+
+  // When rotation begins again it should block Surface Sync again.
+  rwhva->OnSynchronizedDisplayPropertiesChanged(/* rotation= */ true);
+  EXPECT_FALSE(rwhva->CanSynchronizeVisualProperties());
+  EXPECT_EQ(post_fullscreen_local_surface_id, rwhva->GetLocalSurfaceId());
+
+  // When rotation has completed we should begin Surface Sync again.
+  rwhva->OnPhysicalBackingSizeChanged(/* deadline_override= */ absl::nullopt);
+  const viz::LocalSurfaceId post_fullscreen_rotation_local_surface_id =
+      rwhva->GetLocalSurfaceId();
+  EXPECT_NE(post_fullscreen_local_surface_id,
+            post_fullscreen_rotation_local_surface_id);
+  EXPECT_TRUE(post_fullscreen_rotation_local_surface_id.is_valid());
+  EXPECT_TRUE(post_fullscreen_rotation_local_surface_id.IsNewerThan(
+      post_fullscreen_local_surface_id));
   EXPECT_TRUE(rwhva->CanSynchronizeVisualProperties());
 
   {
@@ -572,6 +669,28 @@ TEST_F(RenderWidgetHostViewAndroidRotationTest, FullscreenRotation) {
     OnRenderFrameMetadataChangedAfterActivation(metadata,
                                                 base::TimeTicks::Now());
   }
+}
+
+// Tests that when a device's initial orientation is Landscape, that we do not
+// treat the initial UpdateScreenInfo as the start of a rotation.
+// https://crbug.com/1263723
+TEST_F(RenderWidgetHostViewAndroidRotationTest, LandscapeStartup) {
+  display::ScreenInfo screen_info;
+  screen_info.display_id = display::kDefaultDisplayId;
+  screen_info.orientation_type =
+      display::mojom::ScreenOrientation::kLandscapePrimary;
+  screen_info.orientation_angle = 90;
+
+  RenderWidgetHostViewAndroid* rwhva = render_widget_host_view_android();
+  EXPECT_TRUE(rwhva->CanSynchronizeVisualProperties());
+
+  SetScreenInfo(screen_info);
+  // This method is called when initializing the ScreenInfo, not just on
+  // subsequent updates. Ensure that initializing to a Landscape orientation
+  // does not trigger rotation.
+  rwhva->UpdateScreenInfo();
+  // We should not be blocking Surface Sync.
+  EXPECT_TRUE(rwhva->CanSynchronizeVisualProperties());
 }
 
 }  // namespace content

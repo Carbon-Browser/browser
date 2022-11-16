@@ -8,14 +8,15 @@
 
 #include "base/bind.h"
 #include "base/lazy_instance.h"
-#include "base/macros.h"
 #include "components/guest_view/common/guest_view_constants.h"
-#include "components/guest_view/common/guest_view_messages.h"
 #include "components/guest_view/renderer/guest_view_request.h"
 #include "content/public/renderer/render_frame.h"
 #include "content/public/renderer/render_frame_observer.h"
-#include "content/public/renderer/render_view.h"
 #include "ui/gfx/geometry/size.h"
+#include "v8/include/v8-context.h"
+#include "v8/include/v8-function.h"
+#include "v8/include/v8-microtask-queue.h"
+#include "v8/include/v8-primitive.h"
 
 namespace {
 
@@ -33,13 +34,15 @@ class GuestViewContainer::RenderFrameLifetimeObserver
   RenderFrameLifetimeObserver(GuestViewContainer* container,
                               content::RenderFrame* render_frame);
 
+  RenderFrameLifetimeObserver(const RenderFrameLifetimeObserver&) = delete;
+  RenderFrameLifetimeObserver& operator=(const RenderFrameLifetimeObserver&) =
+      delete;
+
   // content::RenderFrameObserver overrides.
   void OnDestruct() override;
 
  private:
   GuestViewContainer* container_;
-
-  DISALLOW_COPY_AND_ASSIGN(RenderFrameLifetimeObserver);
 };
 
 GuestViewContainer::RenderFrameLifetimeObserver::RenderFrameLifetimeObserver(
@@ -107,7 +110,7 @@ void GuestViewContainer::Destroy(bool embedder_frame_destroyed) {
       pending_response_->ExecuteCallbackIfAvailable(0 /* argc */, nullptr);
 
     while (pending_requests_.size() > 0) {
-      std::unique_ptr<GuestViewRequest> pending_request =
+      std::unique_ptr<GuestViewAttachRequest> pending_request =
           std::move(pending_requests_.front());
       pending_requests_.pop_front();
       // Call the JavaScript callbacks with no arguments which implies an error.
@@ -132,13 +135,13 @@ void GuestViewContainer::RenderFrameDestroyed() {
 }
 
 void GuestViewContainer::IssueRequest(
-    std::unique_ptr<GuestViewRequest> request) {
+    std::unique_ptr<GuestViewAttachRequest> request) {
   EnqueueRequest(std::move(request));
   PerformPendingRequest();
 }
 
 void GuestViewContainer::EnqueueRequest(
-    std::unique_ptr<GuestViewRequest> request) {
+    std::unique_ptr<GuestViewAttachRequest> request) {
   pending_requests_.push_back(std::move(request));
 }
 
@@ -146,19 +149,11 @@ void GuestViewContainer::PerformPendingRequest() {
   if (pending_requests_.empty() || pending_response_.get())
     return;
 
-  std::unique_ptr<GuestViewRequest> pending_request =
+  std::unique_ptr<GuestViewAttachRequest> pending_request =
       std::move(pending_requests_.front());
   pending_requests_.pop_front();
   pending_request->PerformRequest();
   pending_response_ = std::move(pending_request);
-}
-
-void GuestViewContainer::HandlePendingResponseCallback(
-    const IPC::Message& message) {
-  CHECK(pending_response_);
-  std::unique_ptr<GuestViewRequest> pending_response =
-      std::move(pending_response_);
-  pending_response->HandleResponse(message);
 }
 
 void GuestViewContainer::RunDestructionCallback(bool embedder_frame_destroyed) {
@@ -173,8 +168,8 @@ void GuestViewContainer::RunDestructionCallback(bool embedder_frame_destroyed) {
     v8::HandleScope handle_scope(destruction_isolate_);
     v8::Local<v8::Function> callback = v8::Local<v8::Function>::New(
         destruction_isolate_, destruction_callback_);
-    v8::Local<v8::Context> context = callback->CreationContext();
-    if (context.IsEmpty())
+    v8::Local<v8::Context> context;
+    if (!callback->GetCreationContext().ToLocal(&context))
       return;
 
     v8::Context::Scope context_scope(context);
@@ -186,11 +181,16 @@ void GuestViewContainer::RunDestructionCallback(bool embedder_frame_destroyed) {
   }
 }
 
-void GuestViewContainer::OnHandleCallback(const IPC::Message& message) {
+void GuestViewContainer::OnRequestAcknowledged(
+    GuestViewAttachRequest* request) {
   base::WeakPtr<GuestViewContainer> weak_ptr(weak_ptr_factory_.GetWeakPtr());
 
   // Handle the callback for the current request with a pending response.
-  HandlePendingResponseCallback(message);
+  CHECK(pending_response_);
+  DCHECK_EQ(pending_response_.get(), request);
+  std::unique_ptr<GuestViewAttachRequest> pending_response =
+      std::move(pending_response_);
+  pending_response->ExecuteCallbackIfAvailable(0, nullptr);
 
   // Check that this container has not been deleted (crbug.com/718292).
   if (!weak_ptr)
@@ -198,18 +198,6 @@ void GuestViewContainer::OnHandleCallback(const IPC::Message& message) {
 
   // Perform the subsequent request if one exists.
   PerformPendingRequest();
-}
-
-bool GuestViewContainer::OnMessage(const IPC::Message& message) {
-  return false;
-}
-
-bool GuestViewContainer::OnMessageReceived(const IPC::Message& message) {
-  if (OnMessage(message))
-    return true;
-
-  OnHandleCallback(message);
-  return true;
 }
 
 void GuestViewContainer::SetElementInstanceID(int element_instance_id) {
@@ -244,8 +232,8 @@ void GuestViewContainer::CallElementResizeCallback(
   v8::HandleScope handle_scope(element_resize_isolate_);
   v8::Local<v8::Function> callback = v8::Local<v8::Function>::New(
       element_resize_isolate_, element_resize_callback_);
-  v8::Local<v8::Context> context = callback->CreationContext();
-  if (context.IsEmpty())
+  v8::Local<v8::Context> context;
+  if (!callback->GetCreationContext().ToLocal(&context))
     return;
 
   const int argc = 2;

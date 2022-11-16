@@ -4,7 +4,6 @@
 
 #include "third_party/blink/renderer/platform/graphics/paint/paint_chunker.h"
 
-#include "cc/base/features.h"
 #include "third_party/blink/renderer/platform/graphics/paint/drawing_display_item.h"
 
 namespace blink {
@@ -35,7 +34,7 @@ bool PaintChunker::IsInInitialState() const {
 #endif
 
 void PaintChunker::StartMarkingClientsForValidation(
-    Vector<const DisplayItemClient*>& clients_to_validate) {
+    HeapVector<Member<const DisplayItemClient>>& clients_to_validate) {
 #if DCHECK_IS_ON()
   DCHECK(IsInInitialState());
 #endif
@@ -122,9 +121,9 @@ bool PaintChunker::IncrementDisplayItemIndex(const DisplayItemClient& client,
   bool created_new_chunk = EnsureCurrentChunk(item.GetId(), client);
   auto& chunk = chunks_->back();
 
-  chunk.bounds.Unite(item.VisualRect());
+  chunk.bounds.Union(item.VisualRect());
   if (item.DrawsContent())
-    chunk.drawable_bounds.Unite(item.VisualRect());
+    chunk.drawable_bounds.Union(item.VisualRect());
 
   // If this paints the background and it's larger than our current candidate,
   // set the candidate to be this item.
@@ -134,9 +133,9 @@ bool PaintChunker::IncrementDisplayItemIndex(const DisplayItemClient& client,
     ProcessBackgroundColorCandidate(chunk.id, client, item_color, item_area);
   }
 
-  if (should_compute_contents_opaque_ && item.IsDrawing()) {
+  if (item.IsDrawing()) {
     const DrawingDisplayItem& drawing = To<DrawingDisplayItem>(item);
-    chunk.rect_known_to_be_opaque = MaximumCoveredRect(
+    chunk.rect_known_to_be_opaque = gfx::MaximumCoveredRect(
         chunk.rect_known_to_be_opaque, drawing.RectKnownToBeOpaque());
     if (chunk.text_known_to_be_on_opaque_background) {
       if (const auto* paint_record = drawing.GetPaintRecord().get()) {
@@ -171,30 +170,33 @@ bool PaintChunker::IncrementDisplayItemIndex(const DisplayItemClient& client,
 
 bool PaintChunker::AddHitTestDataToCurrentChunk(const PaintChunk::Id& id,
                                                 const DisplayItemClient& client,
-                                                const IntRect& rect,
+                                                const gfx::Rect& rect,
                                                 TouchAction touch_action,
                                                 bool blocking_wheel) {
-  // In CompositeAfterPaint, we ensure a paint chunk for correct composited
-  // hit testing. In pre-CompositeAfterPaint, this is unnecessary, except that
-  // there is special touch action or blocking wheel event handler, and that we
-  // have a non-root effect so that PaintChunksToCcLayer will emit paint
-  // operations for filters.
-  if (!RuntimeEnabledFeatures::CompositeAfterPaintEnabled() &&
-      touch_action == TouchAction::kAuto && !blocking_wheel &&
-      &current_properties_.Effect() == &EffectPaintPropertyNode::Root())
-    return false;
-
   bool created_new_chunk = EnsureCurrentChunk(id, client);
   auto& chunk = chunks_->back();
-  chunk.bounds.Unite(rect);
+  chunk.bounds.Union(rect);
   if (touch_action != TouchAction::kAuto) {
     chunk.EnsureHitTestData().touch_action_rects.push_back(
         TouchActionRect{rect, touch_action});
   }
-  if (blocking_wheel) {
-    DCHECK(base::FeatureList::IsEnabled(::features::kWheelEventRegions));
+  if (blocking_wheel)
     chunk.EnsureHitTestData().wheel_event_rects.push_back(rect);
+  return created_new_chunk;
+}
+
+bool PaintChunker::AddRegionCaptureDataToCurrentChunk(
+    const PaintChunk::Id& id,
+    const DisplayItemClient& client,
+    const RegionCaptureCropId& crop_id,
+    const gfx::Rect& rect) {
+  DCHECK(!crop_id->is_zero());
+  bool created_new_chunk = EnsureCurrentChunk(id, client);
+  auto& chunk = chunks_->back();
+  if (!chunk.region_capture_data) {
+    chunk.region_capture_data = std::make_unique<RegionCaptureData>();
   }
+  chunk.region_capture_data->insert_or_assign(crop_id, std::move(rect));
   return created_new_chunk;
 }
 
@@ -209,12 +211,12 @@ void PaintChunker::AddSelectionToCurrentChunk(
 
 #if DCHECK_IS_ON()
   if (start) {
-    IntRect edge_rect(start->edge_start, start->edge_end - start->edge_start);
+    gfx::Rect edge_rect = gfx::BoundingRect(start->edge_start, start->edge_end);
     DCHECK(chunk.bounds.Contains(edge_rect));
   }
 
   if (end) {
-    IntRect edge_rect(end->edge_start, end->edge_end - end->edge_start);
+    gfx::Rect edge_rect = gfx::BoundingRect(end->edge_start, end->edge_end);
     DCHECK(chunk.bounds.Contains(edge_rect));
   }
 #endif
@@ -231,17 +233,26 @@ void PaintChunker::AddSelectionToCurrentChunk(
   }
 }
 
+void PaintChunker::RecordAnySelectionWasPainted() {
+  DCHECK(chunks_);
+  DCHECK(!chunks_->IsEmpty());
+
+  auto& chunk = chunks_->back();
+  LayerSelectionData& selection_data = chunk.EnsureLayerSelectionData();
+  selection_data.any_selection_was_painted = true;
+}
+
 void PaintChunker::CreateScrollHitTestChunk(
     const PaintChunk::Id& id,
     const DisplayItemClient& client,
     const TransformPaintPropertyNode* scroll_translation,
-    const IntRect& rect) {
+    const gfx::Rect& rect) {
 #if DCHECK_IS_ON()
   if (id.type == DisplayItem::Type::kResizerScrollHitTest ||
       id.type == DisplayItem::Type::kPluginScrollHitTest ||
-      id.type == DisplayItem::Type::kCustomScrollbarHitTest) {
-    // Resizer and plugin scroll hit tests are only used to prevent composited
-    // scrolling and should not have a scroll offset node.
+      id.type == DisplayItem::Type::kScrollbarHitTest) {
+    // Resizer, plugin, and scrollbar hit tests are only used to prevent
+    // composited scrolling and should not have a scroll offset node.
     DCHECK(!scroll_translation);
   } else if (id.type == DisplayItem::Type::kScrollHitTest) {
     DCHECK(scroll_translation);
@@ -257,25 +268,29 @@ void PaintChunker::CreateScrollHitTestChunk(
   DCHECK(created_new_chunk);
 
   auto& chunk = chunks_->back();
-  chunk.bounds.Unite(rect);
+  chunk.bounds.Union(rect);
   auto& hit_test_data = chunk.EnsureHitTestData();
   hit_test_data.scroll_translation = scroll_translation;
   hit_test_data.scroll_hit_test_rect = rect;
+  if (id.type == DisplayItem::Type::kScrollbarHitTest) {
+    hit_test_data.touch_action_rects.push_back(
+        TouchActionRect{rect, TouchAction::kNone});
+  }
   SetWillForceNewChunk(true);
 }
 
-bool PaintChunker::ProcessBackgroundColorCandidate(
+void PaintChunker::ProcessBackgroundColorCandidate(
     const PaintChunk::Id& id,
     const DisplayItemClient& client,
     Color color,
     float area) {
   if (color == Color::kTransparent)
-    return false;
+    return;
 
   bool created_new_chunk = EnsureCurrentChunk(id, client);
   float min_background_area = kMinBackgroundColorCoverageRatio *
-                              chunks_->back().bounds.Width() *
-                              chunks_->back().bounds.Height();
+                              chunks_->back().bounds.width() *
+                              chunks_->back().bounds.height();
   if (created_new_chunk || area >= candidate_background_area_ ||
       area >= min_background_area) {
     candidate_background_color_ =
@@ -284,7 +299,6 @@ bool PaintChunker::ProcessBackgroundColorCandidate(
             : color;
     candidate_background_area_ = area;
   }
-  return created_new_chunk;
 }
 
 void PaintChunker::FinalizeLastChunkProperties() {

@@ -12,6 +12,7 @@
 #include "base/callback.h"
 #include "base/callback_helpers.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/values.h"
@@ -195,6 +196,10 @@ class BluetoothAdapterClientImpl : public BluetoothAdapterClient,
                                    public dbus::ObjectManager::Interface {
  public:
   BluetoothAdapterClientImpl() = default;
+
+  BluetoothAdapterClientImpl(const BluetoothAdapterClientImpl&) = delete;
+  BluetoothAdapterClientImpl& operator=(const BluetoothAdapterClientImpl&) =
+      delete;
 
   ~BluetoothAdapterClientImpl() override {
     // There is an instance of this client that is created but not initialized
@@ -597,7 +602,7 @@ class BluetoothAdapterClientImpl : public BluetoothAdapterClient,
     OnError(std::move(error_callback), response);
   }
 
-  dbus::ObjectManager* object_manager_ = nullptr;
+  raw_ptr<dbus::ObjectManager> object_manager_ = nullptr;
 
   // List of observers interested in event notifications from us.
   base::ObserverList<BluetoothAdapterClient::Observer>::Unchecked observers_;
@@ -607,8 +612,6 @@ class BluetoothAdapterClientImpl : public BluetoothAdapterClient,
   // Note: This should remain the last member so it'll be destroyed and
   // invalidate its weak pointers before any other members are destroyed.
   base::WeakPtrFactory<BluetoothAdapterClientImpl> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(BluetoothAdapterClientImpl);
 };
 
 BluetoothAdapterClient::BluetoothAdapterClient() = default;

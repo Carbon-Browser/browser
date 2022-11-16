@@ -8,62 +8,23 @@ import android.view.View;
 import android.view.ViewGroup;
 
 import androidx.annotation.Nullable;
+import androidx.annotation.VisibleForTesting;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.recyclerview.widget.RecyclerView.LayoutManager;
 
 import org.chromium.base.TraceEvent;
+import org.chromium.base.metrics.TimingMetric;
 import org.chromium.ui.modelutil.MVCListAdapter.ModelList;
 import org.chromium.ui.modelutil.SimpleRecyclerViewAdapter;
 
-import android.content.SharedPreferences;
-import org.chromium.base.ContextUtils;
-import java.util.UUID;
-
-import android.widget.Filter;
-import android.widget.Filterable;
-import java.net.URL;
-import java.io.BufferedReader;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import org.chromium.chrome.browser.monetization.VeveSuggestionObj;
-import org.json.JSONObject;
-import org.json.JSONArray;
-
-import java.util.ArrayList;
-
 /** ModelListAdapter for OmniboxSuggestionsDropdown (RecyclerView version). */
-class OmniboxSuggestionsDropdownAdapter extends SimpleRecyclerViewAdapter implements Filterable {
-    public interface ResultsCommunicator {
-        void onNewSuggestionsReceived(ArrayList<VeveSuggestionObj> list);
-    }
-
+@VisibleForTesting(otherwise = VisibleForTesting.PACKAGE_PRIVATE)
+public class OmniboxSuggestionsDropdownAdapter extends SimpleRecyclerViewAdapter {
     private int mSelectedItem = RecyclerView.NO_POSITION;
     private LayoutManager mLayoutManager;
 
-    private String deviceID;
-    private SharedPreferences mPrefs;
-
-    private ResultsCommunicator mCommunicator;
-
-    private String globalResults;
-
-    public void setCommunicator(ResultsCommunicator communicator) {
-        mCommunicator = communicator;
-    }
-
     OmniboxSuggestionsDropdownAdapter(ModelList data) {
         super(data);
-
-        if (deviceID == null) {
-            if (mPrefs == null) mPrefs = ContextUtils.getAppSharedPreferences();
-
-            deviceID = mPrefs.getString("unique_id", null);
-            if (deviceID == null) {
-                deviceID = UUID.randomUUID().toString().replace("-", "").substring(0, 16);
-                mPrefs.edit().putString("unique_id", deviceID).apply();
-            }
-        }
     }
 
     @Override
@@ -113,7 +74,8 @@ class OmniboxSuggestionsDropdownAdapter extends SimpleRecyclerViewAdapter implem
      *
      * @param index end index.
      */
-    boolean setSelectedViewIndex(int index) {
+    @VisibleForTesting(otherwise = VisibleForTesting.PACKAGE_PRIVATE)
+    public boolean setSelectedViewIndex(int index) {
         if (mLayoutManager == null) return false;
         if (index != RecyclerView.NO_POSITION && (index < 0 || index >= getItemCount())) {
             return false;
@@ -141,79 +103,8 @@ class OmniboxSuggestionsDropdownAdapter extends SimpleRecyclerViewAdapter implem
         // the creation of a view holder.
         try (TraceEvent tracing =
                         TraceEvent.scoped("OmniboxSuggestionsList.CreateView", "type:" + viewType);
-                SuggestionsMetrics.TimingMetric metric =
-                        SuggestionsMetrics.recordSuggestionViewCreateTime()) {
+                TimingMetric metric = SuggestionsMetrics.recordSuggestionViewCreateTime()) {
             return super.createView(parent, viewType);
         }
-    }
-
-    @Override
-    public Filter getFilter() {
-        return new Filter() {
-            @Override
-            protected FilterResults performFiltering(CharSequence constraint) {
-                FilterResults results = new FilterResults();
-                if (constraint != null) {
-                    HttpURLConnection conn = null;
-                    InputStream input = null;
-                    String userText = constraint.toString();
-                    try {
-                        URL url = new URL("http://pocu60.siteplug.com/sssapi?o=pocu60&s=126380&kw=" + userText
-                        + "&itype=cs&f=json&i=0&n=2&af=0&di=" + deviceID);
-                        conn = (HttpURLConnection) url.openConnection();
-                        input = conn.getInputStream();
-                        InputStreamReader reader = new InputStreamReader(input, "UTF-8");
-                        BufferedReader buffer = new BufferedReader(reader, 8192);
-                        StringBuilder builder = new StringBuilder();
-                        String line;
-                        while ((line = buffer.readLine()) != null) {
-                            builder.append(line);
-                        }
-
-                        globalResults = builder.toString();
-                    } catch (Exception e) {
-
-                    } finally {
-                        if (input != null) {
-                            try {
-                                input.close();
-                            } catch (Exception e) {
-
-                            }
-                        }
-                        if (conn != null) conn.disconnect();
-                    }
-                }
-                return results;
-            }
-
-            @Override
-            protected void publishResults(CharSequence constraint, FilterResults results) {
-                if (results != null && mCommunicator != null && globalResults != null) {
-                    try {
-                        ArrayList<VeveSuggestionObj> tempArray = new ArrayList();
-
-                        JSONObject jsonObject = new JSONObject(globalResults);
-                        JSONObject jsonObjectTwo = jsonObject.getJSONObject("ads");
-
-                        JSONArray jsonArray = jsonObjectTwo.getJSONArray("ad");
-
-                        for (int i = 0; i != jsonArray.length(); i++) {
-                            JSONObject jsonInnerObj = (JSONObject)jsonArray.getJSONObject(i);
-                            String brand = jsonInnerObj.getString("brand");
-                            String url = jsonInnerObj.getString("rurl");
-                            String impurl = jsonInnerObj.getString("impurl");
-                            String durl = jsonInnerObj.getString("durl");
-
-                            VeveSuggestionObj veveSuggestionObj = new VeveSuggestionObj(brand, url, impurl, durl);
-
-                            tempArray.add(veveSuggestionObj);
-                        }
-
-                        mCommunicator.onNewSuggestionsReceived(tempArray);
-                    } catch (Exception ignore) { }
-                }
-            }
-        };
     }
 }

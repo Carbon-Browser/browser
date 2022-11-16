@@ -4,6 +4,8 @@
 
 #import "ios/chrome/browser/ui/first_run/first_run_screen_provider.h"
 
+#import "base/notreached.h"
+#include "ios/chrome/browser/ui/first_run/fre_field_trial.h"
 #import "ios/chrome/browser/ui/screen/screen_provider+protected.h"
 #import "ios/chrome/browser/ui/screen/screen_type.h"
 #include "ios/chrome/browser/ui/ui_feature_flags.h"
@@ -15,10 +17,27 @@
 @implementation FirstRunScreenProvider
 
 - (instancetype)init {
-  NSMutableArray* screens = [NSMutableArray
-      arrayWithArray:@[ @(kWelcomeAndConsent), @(kSignIn), @(kSync) ]];
+  NSMutableArray* screens = [NSMutableArray array];
 
-  if (base::FeatureList::IsEnabled(kEnableFREDefaultBrowserScreen)) {
+  switch (fre_field_trial::GetNewMobileIdentityConsistencyFRE()) {
+    case NewMobileIdentityConsistencyFRE::kTwoSteps:
+      [screens addObject:@(kSignIn)];
+      [screens addObject:@(kSync)];
+      break;
+    case NewMobileIdentityConsistencyFRE::kThreeSteps:
+      [screens addObject:@(kWelcomeAndConsent)];
+      [screens addObject:@(kLegacySignIn)];
+      [screens addObject:@(kSync)];
+      break;
+    case NewMobileIdentityConsistencyFRE::kUMADialog:
+    case NewMobileIdentityConsistencyFRE::kOld:
+      [screens addObject:@(kWelcomeAndConsent)];
+      [screens addObject:@(kSignInAndSync)];
+      break;
+  }
+
+  if (fre_field_trial::GetFREDefaultBrowserScreenPromoFRE() !=
+      NewDefaultBrowserPromoFRE::kDisabled) {
     [screens addObject:@(kDefaultBrowserPromo)];
   }
 

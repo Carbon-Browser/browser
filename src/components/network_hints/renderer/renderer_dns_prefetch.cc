@@ -15,6 +15,7 @@
 #include "base/check_op.h"
 #include "base/location.h"
 #include "base/threading/sequenced_task_runner_handle.h"
+#include "base/time/time.h"
 #include "components/network_hints/renderer/dns_prefetch_queue.h"
 
 namespace network_hints {
@@ -61,7 +62,7 @@ void RendererDnsPrefetch::Resolve(const char* name, size_t length) {
           FROM_HERE,
           base::BindOnce(&RendererDnsPrefetch::SubmitHostnames,
                          weak_factory_.GetWeakPtr()),
-          base::TimeDelta::FromMilliseconds(10));
+          base::Milliseconds(10));
     }
     return;
   }
@@ -100,7 +101,7 @@ void RendererDnsPrefetch::SubmitHostnames() {
         FROM_HERE,
         base::BindOnce(&RendererDnsPrefetch::SubmitHostnames,
                        weak_factory_.GetWeakPtr()),
-        base::TimeDelta::FromMilliseconds(10));
+        base::Milliseconds(10));
   } else {
     // TODO(JAR): Should we only clear the map when we navigate, or reload?
     domain_map_.clear();

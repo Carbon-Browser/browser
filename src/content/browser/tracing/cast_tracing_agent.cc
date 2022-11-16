@@ -13,7 +13,6 @@
 #include "base/no_destructor.h"
 #include "base/sequence_checker.h"
 #include "base/strings/string_util.h"
-#include "base/task/post_task.h"
 #include "base/task/thread_pool.h"
 #include "base/trace_event/trace_config.h"
 #include "chromecast/tracing/system_tracer.h"
@@ -55,6 +54,9 @@ class CastSystemTracingSession {
       : worker_task_runner_(worker_task_runner) {
     DETACH_FROM_SEQUENCE(worker_sequence_checker_);
   }
+
+  CastSystemTracingSession(const CastSystemTracingSession&) = delete;
+  CastSystemTracingSession& operator=(const CastSystemTracingSession&) = delete;
 
   ~CastSystemTracingSession() {
     worker_task_runner_->PostTask(FROM_HERE,
@@ -147,18 +149,19 @@ class CastSystemTracingSession {
 
   bool is_tracing_ = false;
   std::unique_ptr<chromecast::SystemTracer> system_tracer_;
-
-  DISALLOW_COPY_AND_ASSIGN(CastSystemTracingSession);
 };
 
 namespace {
 
 class CastDataSource : public tracing::PerfettoTracedProcess::DataSourceBase {
  public:
-  static CastDataSource* GetInstance() {
+  static CastDataSource& GetInstance() {
     static base::NoDestructor<CastDataSource> instance;
-    return instance.get();
+    return *instance;
   }
+
+  CastDataSource(const CastDataSource&) = delete;
+  CastDataSource& operator=(const CastDataSource&) = delete;
 
   // Called from the tracing::PerfettoProducer on its sequence.
   void StartTracingImpl(
@@ -187,9 +190,11 @@ class CastDataSource : public tracing::PerfettoTracedProcess::DataSourceBase {
       return;
     }
 
-    trace_writer_ = std::make_unique<tracing::SystemTraceWriter<std::string>>(
-        producer_, target_buffer_,
-        tracing::SystemTraceWriter<std::string>::TraceType::kFTrace);
+    trace_writer_ = std::make_unique<SystemTraceWriter>(
+#if !BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
+        producer_,
+#endif
+        target_buffer_, SystemTraceWriter::TraceType::kFTrace);
     stop_complete_callback_ = std::move(stop_complete_callback);
     session_->StopTracing(base::BindRepeating(&CastDataSource::OnTraceData,
                                               base::Unretained(this)));
@@ -202,6 +207,14 @@ class CastDataSource : public tracing::PerfettoTracedProcess::DataSourceBase {
 
  private:
   friend class base::NoDestructor<CastDataSource>;
+#if BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
+  using DataSourceProxy =
+      tracing::PerfettoTracedProcess::DataSourceProxy<CastDataSource>;
+  using SystemTraceWriter =
+      tracing::SystemTraceWriter<std::string, DataSourceProxy>;
+#else
+  using SystemTraceWriter = tracing::SystemTraceWriter<std::string>;
+#endif
 
   CastDataSource()
       : DataSourceBase(tracing::mojom::kSystemTraceDataSourceName),
@@ -209,6 +222,12 @@ class CastDataSource : public tracing::PerfettoTracedProcess::DataSourceBase {
             {base::MayBlock(), base::TaskPriority::BEST_EFFORT,
              base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN})) {
     DETACH_FROM_SEQUENCE(perfetto_sequence_checker_);
+    tracing::PerfettoTracedProcess::Get()->AddDataSource(this);
+#if BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
+    perfetto::DataSourceDescriptor dsd;
+    dsd.set_name(tracing::mojom::kSystemTraceDataSourceName);
+    DataSourceProxy::Register(dsd, this);
+#endif
   }
 
   void SystemTracerStarted(bool success) {
@@ -255,18 +274,16 @@ class CastDataSource : public tracing::PerfettoTracedProcess::DataSourceBase {
   std::unique_ptr<CastSystemTracingSession> session_;
   bool session_started_ = false;
   base::OnceClosure session_started_callback_;
-  std::unique_ptr<tracing::SystemTraceWriter<std::string>> trace_writer_;
+  std::unique_ptr<SystemTraceWriter> trace_writer_;
   base::OnceClosure stop_complete_callback_;
   uint32_t target_buffer_ = 0;
-
-  DISALLOW_COPY_AND_ASSIGN(CastDataSource);
 };
 
 }  // namespace
 
 CastTracingAgent::CastTracingAgent() {
   tracing::PerfettoTracedProcess::Get()->AddDataSource(
-      CastDataSource::GetInstance());
+      &CastDataSource::GetInstance());
 }
 
 CastTracingAgent::~CastTracingAgent() = default;

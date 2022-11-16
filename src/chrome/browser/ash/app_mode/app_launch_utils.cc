@@ -6,7 +6,6 @@
 
 #include "ash/constants/ash_switches.h"
 #include "base/command_line.h"
-#include "base/macros.h"
 #include "chrome/browser/ash/app_mode/arc/arc_kiosk_app_manager.h"
 #include "chrome/browser/ash/app_mode/kiosk_app_launch_error.h"
 #include "chrome/browser/ash/app_mode/kiosk_app_manager.h"
@@ -102,7 +101,7 @@ void ResetEphemeralKioskPreferences(PrefService* prefs) {
         user_manager::UserManager::Get()->IsLoggedInAsAnyKioskApp());
   for (size_t pref_id = 0;
        pref_id < (test_prefs_to_reset ? test_prefs_to_reset->size()
-                                      : base::size(kPrefsToReset));
+                                      : std::size(kPrefsToReset));
        pref_id++) {
     const std::string branch_path = test_prefs_to_reset
                                         ? (*test_prefs_to_reset)[pref_id]

@@ -5,8 +5,12 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_PAINT_PAINT_TIMING_DETECTOR_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_PAINT_PAINT_TIMING_DETECTOR_H_
 
+#include <queue>
+
+#include "base/auto_reset.h"
+#include "base/time/time.h"
 #include "third_party/blink/public/common/input/web_input_event.h"
-#include "third_party/blink/public/web/web_swap_result.h"
+#include "third_party/blink/public/common/performance/largest_contentful_paint_type.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/layout/layout_box_model_object.h"
 #include "third_party/blink/renderer/core/paint/paint_timing_visualizer.h"
@@ -15,16 +19,19 @@
 #include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/trace_event.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
+#include "ui/gfx/geometry/rect.h"
 
 namespace blink {
 
 class Image;
 class ImagePaintTimingDetector;
+class ImageRecord;
 class ImageResourceContent;
 class LargestContentfulPaintCalculator;
 class LayoutObject;
 class LocalFrameView;
 class PropertyTreeStateOrAlias;
+class MediaTiming;
 class StyleFetchedImage;
 class TextPaintTimingDetector;
 
@@ -57,7 +64,7 @@ class PaintTimingCallbackManager : public GarbageCollectedMixin {
 //
 // |GarbageCollected| inheritance is required by the swap-time callback
 // registration.
-class PaintTimingCallbackManagerImpl final
+class CORE_EXPORT PaintTimingCallbackManagerImpl final
     : public GarbageCollected<PaintTimingCallbackManagerImpl>,
       public PaintTimingCallbackManager {
  public:
@@ -85,7 +92,6 @@ class PaintTimingCallbackManagerImpl final
   void ReportPaintTime(
       std::unique_ptr<std::queue<
           PaintTimingCallbackManager::LocalThreadCallback>> frame_callbacks,
-      WebSwapResult,
       base::TimeTicks paint_time);
 
   void Trace(Visitor* visitor) const override;
@@ -107,8 +113,6 @@ class PaintTimingCallbackManagerImpl final
 // PaintTimingDetector contains some of paint metric detectors,
 // providing common infrastructure for these detectors.
 //
-// Users has to enable 'loading' trace category to enable the metrics.
-//
 // See also:
 // https://docs.google.com/document/d/1DRVd4a2VU8-yyWftgOparZF-sf16daf0vfbsHuz2rws/edit
 class CORE_EXPORT PaintTimingDetector
@@ -119,21 +123,27 @@ class CORE_EXPORT PaintTimingDetector
  public:
   PaintTimingDetector(LocalFrameView*);
 
-  static void NotifyBackgroundImagePaint(
+  // Returns true if the image might ultimately be a candidate for largest
+  // paint, otherwise false. When this method is called we do not know the
+  // largest status for certain, because we need to wait for presentation.
+  // Hence the "maybe" return value.
+  static bool NotifyBackgroundImagePaint(
       const Node&,
       const Image&,
       const StyleFetchedImage&,
       const PropertyTreeStateOrAlias& current_paint_chunk_properties,
-      const IntRect& image_border);
-  static void NotifyImagePaint(
+      const gfx::Rect& image_border);
+  // Returns true if the image is a candidate for largest paint, otherwise
+  // false. See the comment for NotifyBackgroundImagePaint(...).
+  static bool NotifyImagePaint(
       const LayoutObject&,
-      const IntSize& intrinsic_size,
-      const ImageResourceContent& cached_image,
+      const gfx::Size& intrinsic_size,
+      const MediaTiming& media_timing,
       const PropertyTreeStateOrAlias& current_paint_chunk_properties,
-      const IntRect& image_border);
-  inline static void NotifyTextPaint(const IntRect& text_visual_rect);
+      const gfx::Rect& image_border);
+  inline static void NotifyTextPaint(const gfx::Rect& text_visual_rect);
 
-  void NotifyImageFinished(const LayoutObject&, const ImageResourceContent*);
+  void NotifyImageFinished(const LayoutObject&, const MediaTiming*);
   void LayoutObjectWillBeDestroyed(const LayoutObject&);
   void NotifyImageRemoved(const LayoutObject&, const ImageResourceContent*);
   void NotifyPaintFinished();
@@ -142,17 +152,10 @@ class CORE_EXPORT PaintTimingDetector
   void NotifyScroll(mojom::blink::ScrollType);
 
   // The returned value indicates whether the candidates have changed.
-  // To compute experimental LCP (including removals) for images we need to know
-  // the time and size of removed images in order to account for cases where the
-  // largest image is removed while it is still loading: in this case, we would
-  // first update the experimental LCP size to be the image size, so we need to
-  // be able to decrease the size. To do this, the simplest way to achieve the
-  // correct results is to store the largest image removed which did receive a
-  // paint time.
   bool NotifyIfChangedLargestImagePaint(base::TimeTicks image_paint_time,
                                         uint64_t image_size,
-                                        base::TimeTicks removed_image_time,
-                                        uint64_t removed_image_size);
+                                        ImageRecord* image_record,
+                                        double image_bpp);
   bool NotifyIfChangedLargestTextPaint(base::TimeTicks, uint64_t size);
 
   void DidChangePerformanceTiming();
@@ -163,9 +166,9 @@ class CORE_EXPORT PaintTimingDetector
     return tracing_enabled;
   }
 
-  FloatRect BlinkSpaceToDIPs(const FloatRect& float_rect) const;
-  FloatRect CalculateVisualRect(const IntRect& visual_rect,
-                                const PropertyTreeStateOrAlias&) const;
+  gfx::RectF BlinkSpaceToDIPs(const gfx::RectF& float_rect) const;
+  gfx::RectF CalculateVisualRect(const gfx::Rect& visual_rect,
+                                 const PropertyTreeStateOrAlias&) const;
 
   TextPaintTimingDetector* GetTextPaintTimingDetector() const {
     DCHECK(text_paint_timing_detector_);
@@ -181,27 +184,17 @@ class CORE_EXPORT PaintTimingDetector
     return largest_image_paint_time_;
   }
   uint64_t LargestImagePaintSize() const { return largest_image_paint_size_; }
+  blink::LargestContentfulPaintType LargestContentfulPaintType() const {
+    return largest_contentful_paint_type_;
+  }
+  double LargestContentfulPaintImageBPP() const {
+    return largest_contentful_paint_image_bpp_;
+  }
   base::TimeTicks LargestTextPaint() const { return largest_text_paint_time_; }
   uint64_t LargestTextPaintSize() const { return largest_text_paint_size_; }
 
   base::TimeTicks LargestContentfulPaint() const {
     return largest_contentful_paint_time_;
-  }
-
-  // Experimental counterparts of the above methods. Currently these values are
-  // computed by looking at the largest content seen so far, but excluding
-  // content that is removed.
-  base::TimeTicks ExperimentalLargestImagePaint() const {
-    return experimental_largest_image_paint_time_;
-  }
-  uint64_t ExperimentalLargestImagePaintSize() const {
-    return experimental_largest_image_paint_size_;
-  }
-  base::TimeTicks ExperimentalLargestTextPaint() const {
-    return experimental_largest_text_paint_time_;
-  }
-  uint64_t ExperimentalLargestTextPaintSize() const {
-    return experimental_largest_text_paint_size_;
   }
 
   base::TimeTicks FirstInputOrScrollNotifiedTimestamp() const {
@@ -218,6 +211,9 @@ class CORE_EXPORT PaintTimingDetector
   void Trace(Visitor* visitor) const;
 
  private:
+  FRIEND_TEST_ALL_PREFIXES(ImagePaintTimingDetectorTest,
+                           LargestImagePaint_Detached_Frame);
+
   // Method called to stop recording the Largest Contentful Paint.
   void OnInputOrScroll();
   bool HasLargestImagePaintChanged(base::TimeTicks, uint64_t size) const;
@@ -245,16 +241,12 @@ class CORE_EXPORT PaintTimingDetector
 
   base::TimeTicks largest_image_paint_time_;
   uint64_t largest_image_paint_size_ = 0;
+  blink::LargestContentfulPaintType largest_contentful_paint_type_ =
+      blink::LargestContentfulPaintType::kNone;
+  double largest_contentful_paint_image_bpp_ = 0.0;
   base::TimeTicks largest_text_paint_time_;
   uint64_t largest_text_paint_size_ = 0;
   base::TimeTicks largest_contentful_paint_time_;
-
-  base::TimeTicks experimental_largest_image_paint_time_;
-  uint64_t experimental_largest_image_paint_size_ = 0;
-  base::TimeTicks experimental_largest_text_paint_time_;
-  uint64_t experimental_largest_text_paint_size_ = 0;
-
-  bool is_recording_largest_contentful_paint_ = true;
 };
 
 // Largest Text Paint and Text Element Timing aggregate text nodes by these
@@ -288,7 +280,7 @@ class ScopedPaintTimingDetectorBlockPaintHook {
 
  private:
   friend class PaintTimingDetector;
-  inline static void AggregateTextPaint(const IntRect& visual_rect) {
+  inline static void AggregateTextPaint(const gfx::Rect& visual_rect) {
     // Ideally we'd assert that |top_| exists, but there may be text nodes that
     // do not have an ancestor non-anonymous block layout objects in the layout
     // tree. An example of this is a multicol div, since the
@@ -296,7 +288,7 @@ class ScopedPaintTimingDetectorBlockPaintHook {
     // these cases, |top_| will be null. This is a known bug, see the related
     // crbug.com/933479.
     if (top_ && top_->data_)
-      top_->data_->aggregated_visual_rect_.Unite(visual_rect);
+      top_->data_->aggregated_visual_rect_.Union(visual_rect);
   }
 
   absl::optional<base::AutoReset<ScopedPaintTimingDetectorBlockPaintHook*>>
@@ -312,7 +304,7 @@ class ScopedPaintTimingDetectorBlockPaintHook {
     const LayoutBoxModelObject& aggregator_;
     const PropertyTreeStateOrAlias& property_tree_state_;
     TextPaintTimingDetector* detector_;
-    IntRect aggregated_visual_rect_;
+    gfx::Rect aggregated_visual_rect_;
   };
   absl::optional<Data> data_;
   static ScopedPaintTimingDetectorBlockPaintHook* top_;
@@ -320,7 +312,7 @@ class ScopedPaintTimingDetectorBlockPaintHook {
 
 // static
 inline void PaintTimingDetector::NotifyTextPaint(
-    const IntRect& text_visual_rect) {
+    const gfx::Rect& text_visual_rect) {
   if (IgnorePaintTimingScope::ShouldIgnore())
     return;
   ScopedPaintTimingDetectorBlockPaintHook::AggregateTextPaint(text_visual_rect);
@@ -328,23 +320,14 @@ inline void PaintTimingDetector::NotifyTextPaint(
 
 class LCPRectInfo {
  public:
-  LCPRectInfo(IntRect frame_rect_info, IntRect root_rect_info)
+  LCPRectInfo(const gfx::Rect& frame_rect_info, const gfx::Rect& root_rect_info)
       : frame_rect_info_(frame_rect_info), root_rect_info_(root_rect_info) {}
 
-  void OutputToTraceValue(TracedValue& value) {
-    value.SetInteger("frame_x", frame_rect_info_.X());
-    value.SetInteger("frame_y", frame_rect_info_.Y());
-    value.SetInteger("frame_width", frame_rect_info_.Width());
-    value.SetInteger("frame_height", frame_rect_info_.Height());
-    value.SetInteger("root_x", root_rect_info_.X());
-    value.SetInteger("root_y", root_rect_info_.Y());
-    value.SetInteger("root_width", root_rect_info_.Width());
-    value.SetInteger("root_height", root_rect_info_.Height());
-  }
+  void OutputToTraceValue(TracedValue&) const;
 
  private:
-  IntRect frame_rect_info_;
-  IntRect root_rect_info_;
+  gfx::Rect frame_rect_info_;
+  gfx::Rect root_rect_info_;
 };
 
 }  // namespace blink

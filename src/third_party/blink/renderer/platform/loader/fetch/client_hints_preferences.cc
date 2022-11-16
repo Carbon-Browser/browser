@@ -18,77 +18,97 @@
 namespace blink {
 
 ClientHintsPreferences::ClientHintsPreferences() {
-  DCHECK_EQ(
-      static_cast<size_t>(network::mojom::WebClientHintsType::kMaxValue) + 1,
-      network::kClientHintsNameMappingCount);
+  DCHECK_LE(
+      network::GetClientHintToNameMap().size(),
+      static_cast<size_t>(network::mojom::WebClientHintsType::kMaxValue) + 1);
 }
 
 void ClientHintsPreferences::UpdateFrom(
     const ClientHintsPreferences& preferences) {
-  for (size_t i = 0;
-       i < static_cast<int>(network::mojom::WebClientHintsType::kMaxValue) + 1;
-       ++i) {
-    network::mojom::WebClientHintsType type =
-        static_cast<network::mojom::WebClientHintsType>(i);
+  for (const auto& elem : network::GetClientHintToNameMap()) {
+    const auto& type = elem.first;
     enabled_hints_.SetIsEnabled(type, preferences.ShouldSend(type));
   }
 }
 
 void ClientHintsPreferences::CombineWith(
     const ClientHintsPreferences& preferences) {
-  for (size_t i = 0;
-       i < static_cast<int>(network::mojom::WebClientHintsType::kMaxValue) + 1;
-       ++i) {
-    network::mojom::WebClientHintsType type =
-        static_cast<network::mojom::WebClientHintsType>(i);
+  for (const auto& elem : network::GetClientHintToNameMap()) {
+    const auto& type = elem.first;
     if (preferences.ShouldSend(type))
       SetShouldSend(type);
   }
 }
 
-void ClientHintsPreferences::UpdateFromHttpEquivAcceptCH(
+bool ClientHintsPreferences::UpdateFromMetaCH(
     const String& header_value,
     const KURL& url,
-    Context* context) {
+    Context* context,
+    network::MetaCHType type,
+    bool is_doc_preloader_or_sync_parser) {
   // Client hints should be allowed only on secure URLs.
   if (!IsClientHintsAllowed(url))
-    return;
+    return false;
 
   // 8-bit conversions from String can turn non-ASCII characters into ?,
   // turning syntax errors into "correct" syntax, so reject those first.
   // (.Utf8() doesn't have this problem, but it does a lot of expensive
   //  work that would be wasted feeding to an ASCII-only syntax).
   if (!header_value.ContainsOnlyASCIIOrEmpty())
-    return;
+    return false;
 
-  // Note: .Ascii() would convert tab to ?, which is undesirable.
-  absl::optional<std::vector<network::mojom::WebClientHintsType>> parsed_ch =
-      network::ParseClientHintsHeader(header_value.Latin1());
+  switch (type) {
+    case network::MetaCHType::HttpEquivAcceptCH: {
+      // Note: .Ascii() would convert tab to ?, which is undesirable.
+      absl::optional<std::vector<network::mojom::WebClientHintsType>>
+          parsed_ch = network::ParseClientHintsHeader(header_value.Latin1());
 
-  if (!parsed_ch.has_value())
-    return;
+      if (!parsed_ch.has_value())
+        return false;
 
-  // The renderer only handles http-equiv, so this merges.
-  for (network::mojom::WebClientHintsType newly_enabled : parsed_ch.value())
-    enabled_hints_.SetIsEnabled(newly_enabled, true);
+      // Update first-party permissions for each client hint.
+      for (network::mojom::WebClientHintsType newly_enabled : parsed_ch.value())
+        enabled_hints_.SetIsEnabled(newly_enabled, true);
+      break;
+    }
+    case network::MetaCHType::NameAcceptCH:
+    case network::MetaCHType::HttpEquivDelegateCH: {
+      if (!is_doc_preloader_or_sync_parser)
+        break;
+
+      // Note: .Ascii() would convert tab to ?, which is undesirable.
+      network::ClientHintToDelegatedThirdPartiesHeader parsed_ch =
+          network::ParseClientHintToDelegatedThirdPartiesHeader(
+              header_value.Latin1(), type);
+
+      if (parsed_ch.map.empty())
+        return false;
+
+      // Update first-party permissions for each client hint.
+      for (const auto& pair : parsed_ch.map)
+        enabled_hints_.SetIsEnabled(pair.first, true);
+      break;
+    }
+  }
 
   if (context) {
-    for (size_t i = 0;
-         i <
-         static_cast<int>(network::mojom::WebClientHintsType::kMaxValue) + 1;
-         ++i) {
-      network::mojom::WebClientHintsType type =
-          static_cast<network::mojom::WebClientHintsType>(i);
+    for (const auto& elem : network::GetClientHintToNameMap()) {
+      const auto& type = elem.first;
       if (enabled_hints_.IsEnabled(type))
         context->CountClientHints(type);
     }
   }
+  return true;
 }
 
 // static
 bool ClientHintsPreferences::IsClientHintsAllowed(const KURL& url) {
+  // TODO(crbug.com/862940): This should probably be using
+  // network::IsUrlPotentiallyTrustworthy() instead of coercing the URL to an
+  // origin first.
   return (url.ProtocolIs("http") || url.ProtocolIs("https")) &&
-         network::IsOriginPotentiallyTrustworthy(url::Origin::Create(url));
+         network::IsOriginPotentiallyTrustworthy(
+             url::Origin::Create(GURL(url)));
 }
 
 EnabledClientHints ClientHintsPreferences::GetEnabledClientHints() const {

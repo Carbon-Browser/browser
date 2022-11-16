@@ -10,6 +10,9 @@
 #include "base/memory/weak_ptr.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chrome/test/views/chrome_views_test_base.h"
+#include "content/public/browser/native_web_keyboard_event.h"
+#include "content/public/browser/render_process_host.h"
+#include "content/public/browser/render_widget_host.h"
 #include "content/public/browser/render_widget_host_view.h"
 #include "content/public/browser/site_instance.h"
 #include "content/public/common/content_client.h"
@@ -62,7 +65,7 @@ class MockHost : public BubbleContentsWrapper::Host {
 class TestBubbleContentsWrapper : public BubbleContentsWrapper {
  public:
   explicit TestBubbleContentsWrapper(Profile* profile)
-      : BubbleContentsWrapper(profile, 0, false, true) {}
+      : BubbleContentsWrapper(GURL(""), profile, 0, true, true) {}
   ~TestBubbleContentsWrapper() override = default;
 
   // BubbleContentsWrapper:
@@ -175,7 +178,7 @@ TEST_F(BubbleContentsWrapperTest, ClosesHostOnWebContentsCrash) {
   contents_wrapper()->SetHost(host.GetWeakPtr());
   EXPECT_EQ(0, host.close_ui_called());
 
-  contents_wrapper()->RenderProcessGone(
+  contents_wrapper()->PrimaryMainFrameRenderProcessGone(
       base::TerminationStatus::TERMINATION_STATUS_PROCESS_CRASHED);
 
   EXPECT_EQ(1, host.close_ui_called());

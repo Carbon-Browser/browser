@@ -16,10 +16,9 @@
 #include "base/memory/ref_counted_memory.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/process/process_handle.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/task/post_task.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
@@ -34,9 +33,11 @@
 #include "content/browser/renderer_host/back_forward_cache_can_store_document_result.h"
 #include "content/browser/renderer_host/back_forward_cache_disable.h"
 #include "content/browser/renderer_host/back_forward_cache_metrics.h"
+#include "content/browser/renderer_host/frame_tree.h"
 #include "content/browser/renderer_host/navigation_entry_impl.h"
 #include "content/browser/renderer_host/navigation_request.h"
 #include "content/browser/renderer_host/navigator.h"
+#include "content/browser/renderer_host/render_frame_host_impl.h"
 #include "content/browser/renderer_host/render_widget_host_impl.h"
 #include "content/browser/renderer_host/render_widget_host_view_base.h"
 #include "content/browser/web_contents/web_contents_impl.h"
@@ -53,7 +54,6 @@
 #include "content/public/browser/web_contents_delegate.h"
 #include "content/public/common/referrer.h"
 #include "content/public/common/result_codes.h"
-#include "content/public/common/use_zoom_for_dsf_policy.h"
 #include "net/base/filename_util.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/manifest/manifest_util.h"
@@ -69,7 +69,7 @@
 #include "ui/gfx/skbitmap_operations.h"
 #include "ui/snapshot/snapshot.h"
 
-#ifdef OS_ANDROID
+#if BUILDFLAG(IS_ANDROID)
 #include "content/browser/renderer_host/compositor_impl_android.h"
 #endif
 
@@ -80,11 +80,11 @@ namespace {
 
 constexpr const char* kMhtml = "mhtml";
 constexpr int kDefaultScreenshotQuality = 80;
-constexpr int kFrameRetryDelayMs = 100;
-constexpr int kCaptureRetryLimit = 2;
 constexpr int kMaxScreencastFramesInFlight = 2;
 constexpr char kCommandIsOnlyAvailableAtTopTarget[] =
     "Command can only be executed on top-level targets";
+constexpr char kErrorNotAttached[] = "Not attached to a page";
+constexpr char kErrorInactivePage[] = "Not attached to an active page";
 
 Binary EncodeImage(const gfx::Image& image,
                    const std::string& format,
@@ -122,7 +122,7 @@ std::unique_ptr<Page::ScreencastFrameMetadata> BuildScreencastFrameMetadata(
     const gfx::Size& surface_size,
     float device_scale_factor,
     float page_scale_factor,
-    const gfx::Vector2dF& root_scroll_offset,
+    const gfx::PointF& root_scroll_offset,
     float top_controls_visible_height) {
   if (surface_size.IsEmpty() || device_scale_factor == 0)
     return nullptr;
@@ -130,11 +130,9 @@ std::unique_ptr<Page::ScreencastFrameMetadata> BuildScreencastFrameMetadata(
   const gfx::SizeF content_size_dip =
       gfx::ScaleSize(gfx::SizeF(surface_size), 1 / device_scale_factor);
   float top_offset_dip = top_controls_visible_height;
-  gfx::Vector2dF root_scroll_offset_dip = root_scroll_offset;
-  if (IsUseZoomForDSFEnabled()) {
-    top_offset_dip /= device_scale_factor;
-    root_scroll_offset_dip.Scale(1 / device_scale_factor);
-  }
+  gfx::PointF root_scroll_offset_dip = root_scroll_offset;
+  top_offset_dip /= device_scale_factor;
+  root_scroll_offset_dip.Scale(1 / device_scale_factor);
   std::unique_ptr<Page::ScreencastFrameMetadata> page_metadata =
       Page::ScreencastFrameMetadata::Create()
           .SetPageScaleFactor(page_scale_factor)
@@ -171,7 +169,7 @@ gfx::Size DetermineSnapshotSize(const gfx::Size& surface_size,
 void GetMetadataFromFrame(const media::VideoFrame& frame,
                           double* device_scale_factor,
                           double* page_scale_factor,
-                          gfx::Vector2dF* root_scroll_offset,
+                          gfx::PointF* root_scroll_offset,
                           double* top_controls_visible_height) {
   // Get metadata from |frame|. This will CHECK if metadata is missing.
   *device_scale_factor = *frame.metadata().device_scale_factor;
@@ -183,52 +181,50 @@ void GetMetadataFromFrame(const media::VideoFrame& frame,
 
 template <typename ProtocolCallback>
 bool CanExecuteGlobalCommands(
-    RenderFrameHost* host,
+    PageHandler* page_handler,
     const std::unique_ptr<ProtocolCallback>& callback) {
-  if (!host || !host->GetParent())
+  Response response = page_handler->AssureTopLevelActiveFrame();
+  if (!response.IsError())
     return true;
-  callback->sendFailure(
-      Response::ServerError(kCommandIsOnlyAvailableAtTopTarget));
+  callback->sendFailure(response);
   return false;
 }
 
 }  // namespace
 
-PageHandler::PageHandler(EmulationHandler* emulation_handler,
-                         BrowserHandler* browser_handler,
-                         bool allow_file_access)
+PageHandler::PageHandler(
+    EmulationHandler* emulation_handler,
+    BrowserHandler* browser_handler,
+    bool allow_unsafe_operations,
+    bool may_capture_screenshots_not_from_surface,
+    absl::optional<url::Origin> navigation_initiator_origin,
+    bool may_read_local_files)
     : DevToolsDomainHandler(Page::Metainfo::domainName),
+      allow_unsafe_operations_(allow_unsafe_operations),
+      may_capture_screenshots_not_from_surface_(
+          may_capture_screenshots_not_from_surface),
+      navigation_initiator_origin_(navigation_initiator_origin),
+      may_read_local_files_(may_read_local_files),
       enabled_(false),
       screencast_enabled_(false),
       screencast_quality_(kDefaultScreenshotQuality),
       screencast_max_width_(-1),
       screencast_max_height_(-1),
       capture_every_nth_frame_(1),
-      capture_retry_count_(0),
       session_id_(0),
       frame_counter_(0),
       frames_in_flight_(0),
-      video_consumer_(nullptr),
-      last_surface_size_(gfx::Size()),
       host_(nullptr),
       emulation_handler_(emulation_handler),
       browser_handler_(browser_handler) {
-  bool create_video_consumer = true;
-#ifdef OS_ANDROID
+#if BUILDFLAG(IS_ANDROID)
   constexpr auto kScreencastPixelFormat = media::PIXEL_FORMAT_I420;
-  // Video capture doesn't work on Android WebView. Use CopyFromSurface instead.
-  if (!CompositorImpl::IsInitialized())
-    create_video_consumer = false;
 #else
   constexpr auto kScreencastPixelFormat = media::PIXEL_FORMAT_ARGB;
 #endif
-  if (create_video_consumer) {
-    video_consumer_ = std::make_unique<DevToolsVideoConsumer>(
-        base::BindRepeating(&PageHandler::OnFrameFromVideoConsumer,
-                            weak_factory_.GetWeakPtr()));
-    video_consumer_->SetFormat(kScreencastPixelFormat,
-                               gfx::ColorSpace::CreateREC709());
-  }
+  video_consumer_ = std::make_unique<DevToolsVideoConsumer>(base::BindRepeating(
+      &PageHandler::OnFrameFromVideoConsumer, weak_factory_.GetWeakPtr()));
+  video_consumer_->SetFormat(kScreencastPixelFormat);
   DCHECK(emulation_handler_);
 }
 
@@ -271,7 +267,7 @@ void PageHandler::SetRenderer(int process_host_id,
   if (widget_host)
     observation_.Observe(widget_host);
 
-  if (video_consumer_ && frame_host) {
+  if (frame_host) {
     video_consumer_->SetFrameSinkId(
         frame_host->GetRenderWidgetHost()->GetFrameSinkId());
   }
@@ -280,15 +276,6 @@ void PageHandler::SetRenderer(int process_host_id,
 void PageHandler::Wire(UberDispatcher* dispatcher) {
   frontend_ = std::make_unique<Page::Frontend>(dispatcher->channel());
   Page::Dispatcher::wire(dispatcher, this);
-}
-
-void PageHandler::OnSynchronousSwapCompositorFrame(
-    const cc::RenderFrameMetadata& frame_metadata) {
-  // Cache |frame_metadata_| as InnerSwapCompositorFrame may also be called on
-  // screencast start.
-  frame_metadata_ = frame_metadata;
-  if (screencast_enabled_)
-    InnerSwapCompositorFrame();
 }
 
 void PageHandler::RenderWidgetHostVisibilityChanged(
@@ -366,11 +353,13 @@ Response PageHandler::Disable() {
   screencast_enabled_ = false;
   bypass_csp_ = false;
 
-  if (video_consumer_)
-    video_consumer_->StopCapture();
+  video_consumer_->StopCapture();
 
   if (!pending_dialog_.is_null()) {
-    WebContentsImpl* web_contents = GetWebContents();
+    ResponseOrWebContents result = GetWebContentsForTopLevelActiveFrame();
+    // Only a top level frame can have a dialog.
+    DCHECK(absl::holds_alternative<WebContentsImpl*>(result));
+    WebContentsImpl* web_contents = absl::get<WebContentsImpl*>(result);
     // Leave dialog hanging if there is a manager that can take care of it,
     // cancel and send ack otherwise.
     bool has_dialog_manager =
@@ -389,9 +378,10 @@ Response PageHandler::Disable() {
 }
 
 Response PageHandler::Crash() {
+  // Can be called in a subframe.
   WebContents* web_contents = WebContents::FromRenderFrameHost(host_);
   if (!web_contents)
-    return Response::ServerError("Not attached to a page");
+    return Response::ServerError(kErrorNotAttached);
   if (web_contents->IsCrashed())
     return Response::ServerError("The target has already crashed");
   if (host_->frame_tree_node()->navigation_request())
@@ -400,35 +390,37 @@ Response PageHandler::Crash() {
 }
 
 Response PageHandler::Close() {
-  WebContentsImpl* web_contents = GetWebContents();
-  if (!web_contents)
-    return Response::ServerError("Not attached to a page");
-  web_contents->DispatchBeforeUnload(false /* auto_cancel */);
+  Response response = AssureTopLevelActiveFrame();
+  if (response.IsError())
+    return response;
+
+  host_->DispatchBeforeUnload(RenderFrameHostImpl::BeforeUnloadType::TAB_CLOSE,
+                              false);
   return Response::Success();
 }
 
 void PageHandler::Reload(Maybe<bool> bypassCache,
                          Maybe<std::string> script_to_evaluate_on_load,
                          std::unique_ptr<ReloadCallback> callback) {
-  WebContentsImpl* web_contents = GetWebContents();
-  if (!web_contents) {
-    callback->sendFailure(Response::InternalError());
+  Response response = AssureTopLevelActiveFrame();
+  if (response.IsError()) {
+    callback->sendFailure(response);
     return;
   }
 
   // In the case of inspecting a GuestView (e.g. a PDF), we should reload
   // the outer web contents (embedder), since otherwise reloading the guest by
   // itself will fail.
-  if (web_contents->GetOuterWebContents())
-    web_contents = web_contents->GetOuterWebContents();
+  RenderFrameHostImpl* outermost_main_frame =
+      host_->GetOutermostMainFrameOrEmbedder();
 
   // It is important to fallback before triggering reload, so that
   // renderer could prepare beforehand.
   callback->fallThrough();
-  web_contents->GetController().Reload(bypassCache.fromMaybe(false)
-                                           ? ReloadType::BYPASSING_CACHE
-                                           : ReloadType::NORMAL,
-                                       false);
+  outermost_main_frame->frame_tree()->controller().Reload(
+      bypassCache.fromMaybe(false) ? ReloadType::BYPASSING_CACHE
+                                   : ReloadType::NORMAL,
+      false);
 }
 
 static network::mojom::ReferrerPolicy ParsePolicyFromString(
@@ -455,6 +447,33 @@ static network::mojom::ReferrerPolicy ParsePolicyFromString(
   return network::mojom::ReferrerPolicy::kDefault;
 }
 
+namespace {
+
+void DispatchNavigateCallback(
+    NavigationRequest* request,
+    std::unique_ptr<PageHandler::NavigateCallback> callback) {
+  std::string frame_id =
+      request->frame_tree_node()->devtools_frame_token().ToString();
+  // A new NavigationRequest may have been created before |request|
+  // started, in which case it is not marked as aborted. We report this as an
+  // abort to DevTools anyway.
+  if (!request->IsNavigationStarted()) {
+    callback->sendSuccess(frame_id, Maybe<std::string>(),
+                          net::ErrorToString(net::ERR_ABORTED));
+    return;
+  }
+  Maybe<std::string> opt_error;
+  if (request->GetNetErrorCode() != net::OK)
+    opt_error = net::ErrorToString(request->GetNetErrorCode());
+  Maybe<std::string> loader_id =
+      request->IsSameDocument()
+          ? Maybe<std::string>()
+          : request->devtools_navigation_token().ToString();
+  callback->sendSuccess(frame_id, std::move(loader_id), std::move(opt_error));
+}
+
+}  // namespace
+
 void PageHandler::Navigate(const std::string& url,
                            Maybe<std::string> referrer,
                            Maybe<std::string> maybe_transition_type,
@@ -465,6 +484,11 @@ void PageHandler::Navigate(const std::string& url,
   if (!gurl.is_valid()) {
     callback->sendFailure(
         Response::ServerError("Cannot navigate to invalid URL"));
+    return;
+  }
+  if (gurl.SchemeIsFile() && !may_read_local_files_) {
+    callback->sendFailure(
+        Response::ServerError("Navigating to local URL is not allowed"));
     return;
   }
 
@@ -520,47 +544,52 @@ void PageHandler::Navigate(const std::string& url,
   params.referrer = Referrer(GURL(referrer.fromMaybe("")), policy);
   params.transition_type = type;
   params.frame_tree_node_id = frame_tree_node->frame_tree_node_id();
+  if (navigation_initiator_origin_.has_value()) {
+    // When this agent has an initiator origin defined, ensure that its
+    // navigations are considered renderer-initiated by that origin, such that
+    // URL spoof defenses are in effect. (crbug.com/1192417)
+    params.is_renderer_initiated = true;
+    params.initiator_origin = *navigation_initiator_origin_;
+    params.source_site_instance = SiteInstance::CreateForURL(
+        host_->GetBrowserContext(), navigation_initiator_origin_->GetURL());
+  }
   // Handler may be destroyed while navigating if the session
   // gets disconnected as a result of access checks.
   base::WeakPtr<PageHandler> weak_self = weak_factory_.GetWeakPtr();
-  frame_tree_node->navigator().controller().LoadURLWithParams(params);
+  base::WeakPtr<NavigationHandle> navigation_handle =
+      frame_tree_node->navigator().controller().LoadURLWithParams(params);
+  // TODO(caseq): should we still dispatch callback here?
   if (!weak_self)
     return;
-  if (frame_tree_node->navigation_request()) {
-    navigate_callbacks_[frame_tree_node->navigation_request()
-                            ->devtools_navigation_token()] =
-        std::move(callback);
-  } else {
+  if (!navigation_handle) {
     callback->sendSuccess(out_frame_id, Maybe<std::string>(),
-                          Maybe<std::string>());
+                          net::ErrorToString(net::ERR_ABORTED));
+    return;
   }
+  auto* navigation_request =
+      static_cast<NavigationRequest*>(navigation_handle.get());
+  if (frame_tree_node->navigation_request() != navigation_request) {
+    // The ownership of the navigation request should have been transferred to
+    // RFH at this point, so we won't get `NavigationReset` for it any more --
+    // fire the callback now!
+    DispatchNavigateCallback(navigation_request, std::move(callback));
+    return;
+  }
+  // At this point, we expect the callback to get dispatched upon
+  // `NavigationReset()` is called when `NavigationRequest` is taken from
+  // `FrameTreeNode`.
+  const base::UnguessableToken& navigation_token =
+      navigation_request->devtools_navigation_token();
+  navigate_callbacks_[navigation_token] = std::move(callback);
 }
 
 void PageHandler::NavigationReset(NavigationRequest* navigation_request) {
-  auto navigate_callback =
+  auto it =
       navigate_callbacks_.find(navigation_request->devtools_navigation_token());
-  if (navigate_callback == navigate_callbacks_.end())
+  if (it == navigate_callbacks_.end())
     return;
-  std::string frame_id =
-      navigation_request->frame_tree_node()->devtools_frame_token().ToString();
-  // A new NavigationRequest may have been created before |navigation_request|
-  // started, in which case it is not marked as aborted. We report this as an
-  // abort to DevTools anyway.
-  if (!navigation_request->IsNavigationStarted()) {
-    navigate_callback->second->sendSuccess(
-        frame_id, Maybe<std::string>(),
-        Maybe<std::string>(net::ErrorToString(net::ERR_ABORTED)));
-  } else {
-    bool success = navigation_request->GetNetErrorCode() == net::OK;
-    std::string error_string =
-        net::ErrorToString(navigation_request->GetNetErrorCode());
-    navigate_callback->second->sendSuccess(
-        frame_id,
-        Maybe<std::string>(
-            navigation_request->devtools_navigation_token().ToString()),
-        success ? Maybe<std::string>() : Maybe<std::string>(error_string));
-  }
-  navigate_callbacks_.erase(navigate_callback);
+  DispatchNavigateCallback(navigation_request, std::move(it->second));
+  navigate_callbacks_.erase(it);
 }
 
 void PageHandler::DownloadWillBegin(FrameTreeNode* ftn,
@@ -649,11 +678,11 @@ static const char* TransitionTypeName(ui::PageTransition type) {
 Response PageHandler::GetNavigationHistory(
     int* current_index,
     std::unique_ptr<NavigationEntries>* entries) {
-  WebContentsImpl* web_contents = GetWebContents();
-  if (!web_contents)
-    return Response::InternalError();
+  Response response = AssureTopLevelActiveFrame();
+  if (response.IsError())
+    return response;
 
-  NavigationController& controller = web_contents->GetController();
+  NavigationController& controller = host_->frame_tree()->controller();
   *current_index = controller.GetCurrentEntryIndex();
   *entries = std::make_unique<NavigationEntries>();
   for (int i = 0; i != controller.GetEntryCount(); ++i) {
@@ -671,11 +700,11 @@ Response PageHandler::GetNavigationHistory(
 }
 
 Response PageHandler::NavigateToHistoryEntry(int entry_id) {
-  WebContentsImpl* web_contents = GetWebContents();
-  if (!web_contents)
-    return Response::InternalError();
+  Response response = AssureTopLevelActiveFrame();
+  if (response.IsError())
+    return response;
 
-  NavigationController& controller = web_contents->GetController();
+  NavigationController& controller = host_->frame_tree()->controller();
   for (int i = 0; i != controller.GetEntryCount(); ++i) {
     if (controller.GetEntryAtIndex(i)->GetUniqueID() == entry_id) {
       controller.GoToIndex(i);
@@ -691,11 +720,11 @@ static bool ReturnTrue(NavigationEntry* entry) {
 }
 
 Response PageHandler::ResetNavigationHistory() {
-  WebContentsImpl* web_contents = GetWebContents();
-  if (!web_contents)
-    return Response::InternalError();
+  Response response = AssureTopLevelActiveFrame();
+  if (response.IsError())
+    return response;
 
-  NavigationController& controller = web_contents->GetController();
+  NavigationController& controller = host_->frame_tree()->controller();
   controller.DeleteNavigationEntries(base::BindRepeating(&ReturnTrue));
   return Response::Success();
 }
@@ -703,14 +732,19 @@ Response PageHandler::ResetNavigationHistory() {
 void PageHandler::CaptureSnapshot(
     Maybe<std::string> format,
     std::unique_ptr<CaptureSnapshotCallback> callback) {
-  if (!CanExecuteGlobalCommands(host_, callback))
+  if (!CanExecuteGlobalCommands(this, callback))
     return;
   std::string snapshot_format = format.fromMaybe(kMhtml);
   if (snapshot_format != kMhtml) {
     callback->sendFailure(Response::ServerError("Unsupported snapshot format"));
     return;
   }
-  DevToolsMHTMLHelper::Capture(weak_factory_.GetWeakPtr(), std::move(callback));
+
+  DCHECK(host_);
+  DevToolsMHTMLHelper::Capture(
+      base::BindRepeating(&WebContents::FromFrameTreeNodeId,
+                          host_->frame_tree_node()->frame_tree_node_id()),
+      std::move(callback));
 }
 
 void PageHandler::CaptureScreenshot(
@@ -725,7 +759,7 @@ void PageHandler::CaptureScreenshot(
     callback->sendFailure(Response::InternalError());
     return;
   }
-  if (!CanExecuteGlobalCommands(host_, callback))
+  if (!CanExecuteGlobalCommands(this, callback))
     return;
   if (clip.isJust()) {
     if (clip.fromJust()->GetWidth() == 0) {
@@ -747,6 +781,11 @@ void PageHandler::CaptureScreenshot(
 
   // We don't support clip/emulation when capturing from window, bail out.
   if (!from_surface.fromMaybe(true)) {
+    if (!may_capture_screenshots_not_from_surface_) {
+      callback->sendFailure(
+          Response::ServerError("Only screenshots from surface are allowed."));
+      return;
+    }
     widget_host->GetSnapshotFromBrowser(
         base::BindOnce(&PageHandler::ScreenshotCaptured,
                        weak_factory_.GetWeakPtr(), std::move(callback),
@@ -810,15 +849,13 @@ void PageHandler::CaptureScreenshot(
     modified_params.viewport_offset.SetPoint(clip.fromJust()->GetX(),
                                              clip.fromJust()->GetY());
     modified_params.viewport_scale = clip.fromJust()->GetScale() * dpfactor;
-    if (IsUseZoomForDSFEnabled()) {
-      modified_params.viewport_offset.Scale(widget_host_device_scale_factor);
-    }
+    modified_params.viewport_offset.Scale(widget_host_device_scale_factor);
   }
 
   absl::optional<blink::web_pref::WebPreferences> maybe_original_web_prefs;
   if (capture_beyond_viewport.fromMaybe(false)) {
     blink::web_pref::WebPreferences original_web_prefs =
-        host_->GetRenderViewHost()->GetDelegate()->GetOrCreateWebPreferences();
+        host_->render_view_host()->GetDelegate()->GetOrCreateWebPreferences();
     maybe_original_web_prefs = original_web_prefs;
 
     blink::web_pref::WebPreferences modified_web_prefs = original_web_prefs;
@@ -826,7 +863,7 @@ void PageHandler::CaptureScreenshot(
     // screenshot. Details: https://crbug.com/1003629.
     modified_web_prefs.hide_scrollbars = true;
     modified_web_prefs.record_whole_document = true;
-    host_->GetRenderViewHost()->GetDelegate()->SetWebPreferences(
+    host_->render_view_host()->GetDelegate()->SetWebPreferences(
         modified_web_prefs);
 
     {
@@ -880,11 +917,10 @@ Response PageHandler::StartScreencast(Maybe<std::string> format,
                                       Maybe<int> max_width,
                                       Maybe<int> max_height,
                                       Maybe<int> every_nth_frame) {
-  WebContentsImpl* web_contents = GetWebContents();
-  if (!web_contents)
-    return Response::InternalError();
-  RenderWidgetHostImpl* widget_host =
-      host_ ? host_->GetRenderWidgetHost() : nullptr;
+  Response response = AssureTopLevelActiveFrame();
+  if (response.IsError())
+    return response;
+  RenderWidgetHostImpl* widget_host = host_->GetRenderWidgetHost();
   if (!widget_host)
     return Response::InternalError();
 
@@ -903,32 +939,21 @@ Response PageHandler::StartScreencast(Maybe<std::string> format,
   bool visible = !widget_host->is_hidden();
   NotifyScreencastVisibility(visible);
 
-  if (video_consumer_) {
-    gfx::Size surface_size = gfx::Size();
-    RenderWidgetHostViewBase* const view =
-        static_cast<RenderWidgetHostViewBase*>(host_->GetView());
-    if (view) {
-      surface_size = view->GetCompositorViewportPixelSize();
-      last_surface_size_ = surface_size;
-    }
-
-    gfx::Size snapshot_size = DetermineSnapshotSize(
-        surface_size, screencast_max_width_, screencast_max_height_);
-    if (!snapshot_size.IsEmpty())
-      video_consumer_->SetMinAndMaxFrameSize(snapshot_size, snapshot_size);
-
-    video_consumer_->StartCapture();
-    return Response::FallThrough();
+  gfx::Size surface_size = gfx::Size();
+  RenderWidgetHostViewBase* const view =
+      static_cast<RenderWidgetHostViewBase*>(host_->GetView());
+  if (view) {
+    surface_size = view->GetCompositorViewportPixelSize();
+    last_surface_size_ = surface_size;
   }
 
-  if (!visible)
-    return Response::FallThrough();
+  gfx::Size snapshot_size = DetermineSnapshotSize(
+      surface_size, screencast_max_width_, screencast_max_height_);
+  if (!snapshot_size.IsEmpty())
+    video_consumer_->SetMinAndMaxFrameSize(snapshot_size, snapshot_size);
 
-  if (frame_metadata_) {
-    InnerSwapCompositorFrame();
-  } else {
-    widget_host->RequestForceRedraw(0);
-  }
+  video_consumer_->StartCapture();
+
   return Response::FallThrough();
 }
 
@@ -947,9 +972,9 @@ Response PageHandler::ScreencastFrameAck(int session_id) {
 
 Response PageHandler::HandleJavaScriptDialog(bool accept,
                                              Maybe<std::string> prompt_text) {
-  WebContentsImpl* web_contents = GetWebContents();
-  if (!web_contents)
-    return Response::InternalError();
+  ResponseOrWebContents result = GetWebContentsForTopLevelActiveFrame();
+  if (absl::holds_alternative<Response>(result))
+    return absl::get<Response>(result);
 
   if (pending_dialog_.is_null())
     return Response::InvalidParams("No dialog is showing");
@@ -960,6 +985,7 @@ Response PageHandler::HandleJavaScriptDialog(bool accept,
   std::move(pending_dialog_).Run(accept, prompt_override);
 
   // Clean up the dialog UI if any.
+  WebContentsImpl* web_contents = absl::get<WebContentsImpl*>(result);
   if (web_contents->GetDelegate()) {
     JavaScriptDialogManager* manager =
         web_contents->GetDelegate()->GetJavaScriptDialogManager(web_contents);
@@ -974,13 +1000,14 @@ Response PageHandler::HandleJavaScriptDialog(bool accept,
 }
 
 Response PageHandler::BringToFront() {
-  WebContentsImpl* wc = GetWebContents();
-  if (wc) {
-    wc->Activate();
-    wc->Focus();
-    return Response::Success();
-  }
-  return Response::InternalError();
+  ResponseOrWebContents result = GetWebContentsForTopLevelActiveFrame();
+  if (absl::holds_alternative<Response>(result))
+    return absl::get<Response>(result);
+
+  WebContentsImpl* web_contents = absl::get<WebContentsImpl*>(result);
+  web_contents->Activate();
+  web_contents->Focus();
+  return Response::Success();
 }
 
 Response PageHandler::SetDownloadBehavior(const std::string& behavior,
@@ -989,84 +1016,42 @@ Response PageHandler::SetDownloadBehavior(const std::string& behavior,
       host_ ? host_->GetProcess()->GetBrowserContext() : nullptr;
   if (!browser_context)
     return Response::ServerError("Could not fetch browser context");
-  if (host_ && host_->GetParent())
-    return Response::ServerError(kCommandIsOnlyAvailableAtTopTarget);
+
+  Response response = AssureTopLevelActiveFrame();
+  if (response.IsError())
+    return response;
+  if (!browser_handler_)
+    return Response::ServerError("Cannot not access browser-level commands");
   return browser_handler_->DoSetDownloadBehavior(behavior, browser_context,
                                                  std::move(download_path));
 }
 
 void PageHandler::GetAppManifest(
     std::unique_ptr<GetAppManifestCallback> callback) {
-  if (!host_) {
-    callback->sendFailure(Response::ServerError("Cannot retrieve manifest"));
+  if (!CanExecuteGlobalCommands(this, callback))
     return;
-  }
-  if (!CanExecuteGlobalCommands(host_, callback))
-    return;
-  ManifestManagerHost::GetOrCreateForCurrentDocument(host_->GetMainFrame())
+  ManifestManagerHost::GetOrCreateForPage(host_->GetPage())
       ->RequestManifestDebugInfo(base::BindOnce(&PageHandler::GotManifest,
                                                 weak_factory_.GetWeakPtr(),
                                                 std::move(callback)));
 }
 
-WebContentsImpl* PageHandler::GetWebContents() {
-  return host_ && !host_->frame_tree_node()->parent()
-             ? static_cast<WebContentsImpl*>(
-                   WebContents::FromRenderFrameHost(host_))
-             : nullptr;
+PageHandler::ResponseOrWebContents
+PageHandler::GetWebContentsForTopLevelActiveFrame() {
+  Response response = AssureTopLevelActiveFrame();
+  if (response.IsError())
+    return response;
+
+  return static_cast<WebContentsImpl*>(WebContents::FromRenderFrameHost(host_));
 }
 
 void PageHandler::NotifyScreencastVisibility(bool visible) {
-  if (visible)
-    capture_retry_count_ = kCaptureRetryLimit;
   frontend_->ScreencastVisibilityChanged(visible);
 }
 
 bool PageHandler::ShouldCaptureNextScreencastFrame() {
   return frames_in_flight_ <= kMaxScreencastFramesInFlight &&
          !(++frame_counter_ % capture_every_nth_frame_);
-}
-
-void PageHandler::InnerSwapCompositorFrame() {
-  if (!host_)
-    return;
-
-  if (!ShouldCaptureNextScreencastFrame())
-    return;
-
-  RenderWidgetHostViewBase* const view =
-      static_cast<RenderWidgetHostViewBase*>(host_->GetView());
-  if (!view || !view->IsSurfaceAvailableForCopy())
-    return;
-
-  const gfx::Size surface_size = view->GetCompositorViewportPixelSize();
-  if (surface_size.IsEmpty())
-    return;
-
-  const gfx::Size snapshot_size = DetermineSnapshotSize(
-      surface_size, screencast_max_width_, screencast_max_height_);
-  if (snapshot_size.IsEmpty())
-    return;
-
-  double top_controls_visible_height =
-      frame_metadata_->top_controls_height *
-      frame_metadata_->top_controls_shown_ratio;
-
-  std::unique_ptr<Page::ScreencastFrameMetadata> page_metadata =
-      BuildScreencastFrameMetadata(
-          surface_size, frame_metadata_->device_scale_factor,
-          frame_metadata_->page_scale_factor,
-          frame_metadata_->root_scroll_offset.value_or(gfx::Vector2dF()),
-          top_controls_visible_height);
-  if (!page_metadata)
-    return;
-
-  // Request a copy of the surface as a scaled SkBitmap.
-  view->CopyFromSurface(
-      gfx::Rect(), snapshot_size,
-      base::BindOnce(&PageHandler::ScreencastFrameCaptured,
-                     weak_factory_.GetWeakPtr(), std::move(page_metadata)));
-  frames_in_flight_++;
 }
 
 void PageHandler::OnFrameFromVideoConsumer(
@@ -1098,7 +1083,7 @@ void PageHandler::OnFrameFromVideoConsumer(
 
   double device_scale_factor, page_scale_factor;
   double top_controls_visible_height;
-  gfx::Vector2dF root_scroll_offset;
+  gfx::PointF root_scroll_offset;
   GetMetadataFromFrame(*frame, &device_scale_factor, &page_scale_factor,
                        &root_scroll_offset, &top_controls_visible_height);
   std::unique_ptr<Page::ScreencastFrameMetadata> page_metadata =
@@ -1117,14 +1102,6 @@ void PageHandler::ScreencastFrameCaptured(
     std::unique_ptr<Page::ScreencastFrameMetadata> page_metadata,
     const SkBitmap& bitmap) {
   if (bitmap.drawsNothing()) {
-    if (capture_retry_count_) {
-      --capture_retry_count_;
-      base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
-          FROM_HERE,
-          base::BindOnce(&PageHandler::InnerSwapCompositorFrame,
-                         weak_factory_.GetWeakPtr()),
-          base::TimeDelta::FromMilliseconds(kFrameRetryDelayMs));
-    }
     --frames_in_flight_;
     return;
   }
@@ -1164,7 +1141,7 @@ void PageHandler::ScreenshotCaptured(
   }
 
   if (maybe_original_web_prefs) {
-    host_->GetRenderViewHost()->GetDelegate()->SetWebPreferences(
+    host_->render_view_host()->GetDelegate()->SetWebPreferences(
         maybe_original_web_prefs.value());
   }
 
@@ -1222,17 +1199,24 @@ void PageHandler::GotManifest(std::unique_ptr<GetAppManifestCallback> callback,
 }
 
 Response PageHandler::StopLoading() {
-  WebContentsImpl* web_contents = GetWebContents();
-  if (!web_contents)
-    return Response::InternalError();
+  ResponseOrWebContents result = GetWebContentsForTopLevelActiveFrame();
+
+  if (absl::holds_alternative<Response>(result))
+    return absl::get<Response>(result);
+
+  WebContentsImpl* web_contents = absl::get<WebContentsImpl*>(result);
   web_contents->Stop();
   return Response::Success();
 }
 
 Response PageHandler::SetWebLifecycleState(const std::string& state) {
-  WebContentsImpl* web_contents = GetWebContents();
-  if (!web_contents)
-    return Response::ServerError("Not attached to a page");
+  // Inactive pages(e.g., a prerendered or back-forward cached page) should not
+  // affect the state.
+  ResponseOrWebContents result = GetWebContentsForTopLevelActiveFrame();
+  if (absl::holds_alternative<Response>(result))
+    return absl::get<Response>(result);
+
+  WebContentsImpl* web_contents = absl::get<WebContentsImpl*>(result);
   if (state == Page::SetWebLifecycleState::StateEnum::Frozen) {
     // TODO(fmeawad): Instead of forcing a visibility change, only allow
     // freezing a page if it was already hidden.
@@ -1266,7 +1250,8 @@ void PageHandler::GetManifestIcons(
 void PageHandler::GetAppId(std::unique_ptr<GetAppIdCallback> callback) {
   // TODO: Use InstallableManager once it moves into content/.
   // Until then, this code is only used to return no image data in the tests.
-  callback->sendSuccess(protocol::Maybe<protocol::String>());
+  callback->sendSuccess(protocol::Maybe<protocol::String>(),
+                        protocol::Maybe<protocol::String>());
 }
 
 Response PageHandler::SetBypassCSP(bool enabled) {
@@ -1278,8 +1263,8 @@ Page::BackForwardCacheNotRestoredReason NotRestoredReasonToProtocol(
     BackForwardCacheMetrics::NotRestoredReason reason) {
   using Reason = BackForwardCacheMetrics::NotRestoredReason;
   switch (reason) {
-    case Reason::kNotMainFrame:
-      return Page::BackForwardCacheNotRestoredReasonEnum::NotMainFrame;
+    case Reason::kNotPrimaryMainFrame:
+      return Page::BackForwardCacheNotRestoredReasonEnum::NotPrimaryMainFrame;
     case Reason::kBackForwardCacheDisabled:
       return Page::BackForwardCacheNotRestoredReasonEnum::
           BackForwardCacheDisabled;
@@ -1314,9 +1299,6 @@ Page::BackForwardCacheNotRestoredReason NotRestoredReasonToProtocol(
     case Reason::kRendererProcessCrashed:
       return Page::BackForwardCacheNotRestoredReasonEnum::
           RendererProcessCrashed;
-    case Reason::kGrantedMediaStreamAccess:
-      return Page::BackForwardCacheNotRestoredReasonEnum::
-          GrantedMediaStreamAccess;
     case Reason::kSchedulerTrackedFeatureUsed:
       return Page::BackForwardCacheNotRestoredReasonEnum::
           SchedulerTrackedFeatureUsed;
@@ -1367,9 +1349,6 @@ Page::BackForwardCacheNotRestoredReason NotRestoredReasonToProtocol(
     case Reason::kNavigationCancelledWhileRestoring:
       return Page::BackForwardCacheNotRestoredReasonEnum::
           NavigationCancelledWhileRestoring;
-    case Reason::kBackForwardCacheDisabledForPrerender:
-      return Page::BackForwardCacheNotRestoredReasonEnum::
-          BackForwardCacheDisabledForPrerender;
     case Reason::kUserAgentOverrideDiffers:
       return Page::BackForwardCacheNotRestoredReasonEnum::
           UserAgentOverrideDiffers;
@@ -1381,9 +1360,6 @@ Page::BackForwardCacheNotRestoredReason NotRestoredReasonToProtocol(
     case Reason::kBackForwardCacheDisabledForDelegate:
       return Page::BackForwardCacheNotRestoredReasonEnum::
           BackForwardCacheDisabledForDelegate;
-    case Reason::kOptInUnloadHeaderNotPresent:
-      return Page::BackForwardCacheNotRestoredReasonEnum::
-          OptInUnloadHeaderNotPresent;
     case Reason::kUnloadHandlerExistsInMainFrame:
       return Page::BackForwardCacheNotRestoredReasonEnum::
           UnloadHandlerExistsInMainFrame;
@@ -1403,9 +1379,10 @@ Page::BackForwardCacheNotRestoredReason NotRestoredReasonToProtocol(
           CacheControlNoStoreHTTPOnlyCookieModified;
     case Reason::kNoResponseHead:
       return Page::BackForwardCacheNotRestoredReasonEnum::NoResponseHead;
-    case Reason::kActivationNavigationsDisallowedForBug1234857:
-      return Page::BackForwardCacheNotRestoredReasonEnum::
-          ActivationNavigationsDisallowedForBug1234857;
+    case Reason::kErrorDocument:
+      return Page::BackForwardCacheNotRestoredReasonEnum::ErrorDocument;
+    case Reason::kFencedFramesEmbedder:
+      return Page::BackForwardCacheNotRestoredReasonEnum::FencedFramesEmbedder;
     case Reason::kBlocklistedFeatures:
       // Blocklisted features should be handled separately and be broken down
       // into sub reasons.
@@ -1413,6 +1390,80 @@ Page::BackForwardCacheNotRestoredReason NotRestoredReasonToProtocol(
       return Page::BackForwardCacheNotRestoredReasonEnum::Unknown;
     case Reason::kUnknown:
       return Page::BackForwardCacheNotRestoredReasonEnum::Unknown;
+  }
+}
+
+Page::PrerenderFinalStatus PrerenderFinalStatusToProtocol(
+    PrerenderHost::FinalStatus feature) {
+  switch (feature) {
+    case PrerenderHost::FinalStatus::kActivated:
+      return Page::PrerenderFinalStatusEnum::Activated;
+    case PrerenderHost::FinalStatus::kAudioOutputDeviceRequested:
+      return Page::PrerenderFinalStatusEnum::AudioOutputDeviceRequested;
+    case PrerenderHost::FinalStatus::kBlockedByClient:
+      return Page::PrerenderFinalStatusEnum::BlockedByClient;
+    case PrerenderHost::FinalStatus::kCancelAllHostsForTesting:
+      return Page::PrerenderFinalStatusEnum::CancelAllHostsForTesting;
+    case PrerenderHost::FinalStatus::kClientCertRequested:
+      return Page::PrerenderFinalStatusEnum::ClientCertRequested;
+    case PrerenderHost::FinalStatus::kCrossOriginNavigation:
+      return Page::PrerenderFinalStatusEnum::CrossOriginNavigation;
+    case PrerenderHost::FinalStatus::kCrossOriginRedirect:
+      return Page::PrerenderFinalStatusEnum::CrossOriginRedirect;
+    case PrerenderHost::FinalStatus::kDestroyed:
+      return Page::PrerenderFinalStatusEnum::Destroyed;
+    case PrerenderHost::FinalStatus::kDidFailLoad:
+      return Page::PrerenderFinalStatusEnum::DidFailLoad;
+    case PrerenderHost::FinalStatus::kDownload:
+      return Page::PrerenderFinalStatusEnum::Download;
+    case PrerenderHost::FinalStatus::kEmbedderTriggeredAndCrossOriginRedirected:
+      return Page::PrerenderFinalStatusEnum::
+          EmbedderTriggeredAndCrossOriginRedirected;
+    case PrerenderHost::FinalStatus::kEmbedderTriggeredAndDestroyed:
+      return Page::PrerenderFinalStatusEnum::EmbedderTriggeredAndDestroyed;
+    case PrerenderHost::FinalStatus::kEmbedderTriggeredAndSameOriginRedirected:
+      return Page::PrerenderFinalStatusEnum::
+          EmbedderTriggeredAndSameOriginRedirected;
+    case PrerenderHost::FinalStatus::kInProgressNavigation:
+      return Page::PrerenderFinalStatusEnum::InProgressNavigation;
+    case PrerenderHost::FinalStatus::kInvalidSchemeNavigation:
+      return Page::PrerenderFinalStatusEnum::InvalidSchemeNavigation;
+    case PrerenderHost::FinalStatus::kInvalidSchemeRedirect:
+      return Page::PrerenderFinalStatusEnum::InvalidSchemeRedirect;
+    case PrerenderHost::FinalStatus::kLoginAuthRequested:
+      return Page::PrerenderFinalStatusEnum::LoginAuthRequested;
+    case PrerenderHost::FinalStatus::kLowEndDevice:
+      return Page::PrerenderFinalStatusEnum::LowEndDevice;
+    case PrerenderHost::FinalStatus::kMainFrameNavigation:
+      return Page::PrerenderFinalStatusEnum::MainFrameNavigation;
+    case PrerenderHost::FinalStatus::kMaxNumOfRunningPrerendersExceeded:
+      return Page::PrerenderFinalStatusEnum::MaxNumOfRunningPrerendersExceeded;
+    case PrerenderHost::FinalStatus::kMixedContent:
+      return Page::PrerenderFinalStatusEnum::MixedContent;
+    case PrerenderHost::FinalStatus::kMojoBinderPolicy:
+      return Page::PrerenderFinalStatusEnum::MojoBinderPolicy;
+    case PrerenderHost::FinalStatus::kNavigationBadHttpStatus:
+      return Page::PrerenderFinalStatusEnum::NavigationBadHttpStatus;
+    case PrerenderHost::FinalStatus::kNavigationNotCommitted:
+      return Page::PrerenderFinalStatusEnum::NavigationNotCommitted;
+    case PrerenderHost::FinalStatus::kNavigationRequestBlockedByCsp:
+      return Page::PrerenderFinalStatusEnum::NavigationRequestBlockedByCsp;
+    case PrerenderHost::FinalStatus::kNavigationRequestNetworkError:
+      return Page::PrerenderFinalStatusEnum::NavigationRequestNetworkError;
+    case PrerenderHost::FinalStatus::kRendererProcessCrashed:
+      return Page::PrerenderFinalStatusEnum::RendererProcessCrashed;
+    case PrerenderHost::FinalStatus::kRendererProcessKilled:
+      return Page::PrerenderFinalStatusEnum::RendererProcessKilled;
+    case PrerenderHost::FinalStatus::kSslCertificateError:
+      return Page::PrerenderFinalStatusEnum::SslCertificateError;
+    case PrerenderHost::FinalStatus::kStop:
+      return Page::PrerenderFinalStatusEnum::Stop;
+    case PrerenderHost::FinalStatus::kTriggerBackgrounded:
+      return Page::PrerenderFinalStatusEnum::TriggerBackgrounded;
+    case PrerenderHost::FinalStatus::kTriggerDestroyed:
+      return Page::PrerenderFinalStatusEnum::TriggerDestroyed;
+    case PrerenderHost::FinalStatus::kUaChangeRequiresReload:
+      return Page::PrerenderFinalStatusEnum::UaChangeRequiresReload;
   }
 }
 
@@ -1568,12 +1619,12 @@ DisableForRenderFrameHostReasonToProtocol(
               ContentWebBluetooth;
         case BackForwardCacheDisable::DisabledReasonId::kWebUSB:
           return Page::BackForwardCacheNotRestoredReasonEnum::ContentWebUSB;
-        case BackForwardCacheDisable::DisabledReasonId::kMediaSession:
-          return Page::BackForwardCacheNotRestoredReasonEnum::
-              ContentMediaSession;
         case BackForwardCacheDisable::DisabledReasonId::kMediaSessionService:
           return Page::BackForwardCacheNotRestoredReasonEnum::
               ContentMediaSessionService;
+        case BackForwardCacheDisable::DisabledReasonId::kScreenReader:
+          return Page::BackForwardCacheNotRestoredReasonEnum::
+              ContentScreenReader;
       }
     case BackForwardCache::DisabledSource::kEmbedder:
       switch (static_cast<back_forward_cache::DisabledReasonId>(reason.id)) {
@@ -1637,7 +1688,7 @@ Page::BackForwardCacheNotRestoredReasonType MapNotRestoredReasonToType(
     BackForwardCacheMetrics::NotRestoredReason reason) {
   using Reason = BackForwardCacheMetrics::NotRestoredReason;
   switch (reason) {
-    case Reason::kNotMainFrame:
+    case Reason::kNotPrimaryMainFrame:
     case Reason::kBackForwardCacheDisabled:
     case Reason::kRelatedActiveContentsExist:
     case Reason::kHTTPStatusNotOK:
@@ -1653,7 +1704,6 @@ Page::BackForwardCacheNotRestoredReasonType MapNotRestoredReasonToType(
     case Reason::kJavaScriptExecution:
     case Reason::kRendererProcessKilled:
     case Reason::kRendererProcessCrashed:
-    case Reason::kGrantedMediaStreamAccess:
     case Reason::kSchedulerTrackedFeatureUsed:
     case Reason::kConflictingBrowsingInstance:
     case Reason::kCacheFlushed:
@@ -1676,20 +1726,19 @@ Page::BackForwardCacheNotRestoredReasonType MapNotRestoredReasonToType(
     case Reason::kUserAgentOverrideDiffers:
     case Reason::kBrowsingInstanceNotSwapped:
     case Reason::kBackForwardCacheDisabledForDelegate:
-    case Reason::kBackForwardCacheDisabledForPrerender:
     case Reason::kServiceWorkerUnregistration:
     case Reason::kCacheControlNoStore:
     case Reason::kCacheControlNoStoreCookieModified:
     case Reason::kCacheControlNoStoreHTTPOnlyCookieModified:
     case Reason::kNoResponseHead:
+    case Reason::kErrorDocument:
+    case Reason::kFencedFramesEmbedder:
       return Page::BackForwardCacheNotRestoredReasonTypeEnum::Circumstantial;
-    case Reason::kOptInUnloadHeaderNotPresent:
     case Reason::kUnloadHandlerExistsInMainFrame:
     case Reason::kUnloadHandlerExistsInSubFrame:
       return Page::BackForwardCacheNotRestoredReasonTypeEnum::PageSupportNeeded;
     case Reason::kNetworkRequestDatapipeDrainedAsBytesConsumer:
     case Reason::kUnknown:
-    case Reason::kActivationNavigationsDisallowedForBug1234857:
       return Page::BackForwardCacheNotRestoredReasonTypeEnum::SupportPending;
     case Reason::kBlocklistedFeatures:
       NOTREACHED();
@@ -1701,49 +1750,49 @@ Page::BackForwardCacheNotRestoredReasonType MapBlocklistedFeatureToType(
     WebSchedulerTrackedFeature feature) {
   switch (feature) {
     case WebSchedulerTrackedFeature::kWebRTC:
-    case WebSchedulerTrackedFeature::kContainsPlugins:
     case WebSchedulerTrackedFeature::kOutstandingNetworkRequestOthers:
     case WebSchedulerTrackedFeature::kOutstandingIndexedDBTransaction:
+    case WebSchedulerTrackedFeature::kBroadcastChannel:
+    case WebSchedulerTrackedFeature::kIndexedDBConnection:
+    case WebSchedulerTrackedFeature::kWebXR:
+    case WebSchedulerTrackedFeature::kSharedWorker:
+    case WebSchedulerTrackedFeature::kWebHID:
+    case WebSchedulerTrackedFeature::kWebShare:
+    case WebSchedulerTrackedFeature::kWebDatabase:
+    case WebSchedulerTrackedFeature::kPaymentManager:
+    case WebSchedulerTrackedFeature::kKeyboardLock:
+    case WebSchedulerTrackedFeature::kWebOTPService:
+    case WebSchedulerTrackedFeature::kOutstandingNetworkRequestDirectSocket:
+    case WebSchedulerTrackedFeature::kOutstandingNetworkRequestFetch:
+    case WebSchedulerTrackedFeature::kOutstandingNetworkRequestXHR:
+    case WebSchedulerTrackedFeature::kWebTransport:
+      return Page::BackForwardCacheNotRestoredReasonTypeEnum::PageSupportNeeded;
+    case WebSchedulerTrackedFeature::kPortal:
+    case WebSchedulerTrackedFeature::kWebNfc:
+    case WebSchedulerTrackedFeature::kRequestedStorageAccessGrant:
     case WebSchedulerTrackedFeature::kRequestedNotificationsPermission:
     case WebSchedulerTrackedFeature::kRequestedMIDIPermission:
     case WebSchedulerTrackedFeature::kRequestedAudioCapturePermission:
     case WebSchedulerTrackedFeature::kRequestedVideoCapturePermission:
     case WebSchedulerTrackedFeature::kRequestedBackForwardCacheBlockedSensors:
     case WebSchedulerTrackedFeature::kRequestedBackgroundWorkPermission:
-    case WebSchedulerTrackedFeature::kBroadcastChannel:
-    case WebSchedulerTrackedFeature::kIndexedDBConnection:
-    case WebSchedulerTrackedFeature::kWebXR:
-    case WebSchedulerTrackedFeature::kSharedWorker:
-    case WebSchedulerTrackedFeature::kWebLocks:
-    case WebSchedulerTrackedFeature::kWebHID:
-    case WebSchedulerTrackedFeature::kWebShare:
-    case WebSchedulerTrackedFeature::kRequestedStorageAccessGrant:
-    case WebSchedulerTrackedFeature::kWebNfc:
-    case WebSchedulerTrackedFeature::kOutstandingNetworkRequestFetch:
-    case WebSchedulerTrackedFeature::kOutstandingNetworkRequestXHR:
-    case WebSchedulerTrackedFeature::kPrinting:
-    case WebSchedulerTrackedFeature::kWebDatabase:
-    case WebSchedulerTrackedFeature::kPictureInPicture:
-    case WebSchedulerTrackedFeature::kPortal:
-    case WebSchedulerTrackedFeature::kSpeechRecognizer:
+    case WebSchedulerTrackedFeature::kContainsPlugins:
     case WebSchedulerTrackedFeature::kIdleManager:
-    case WebSchedulerTrackedFeature::kPaymentManager:
-    case WebSchedulerTrackedFeature::kSpeechSynthesis:
-    case WebSchedulerTrackedFeature::kKeyboardLock:
-    case WebSchedulerTrackedFeature::kWebOTPService:
-    case WebSchedulerTrackedFeature::kOutstandingNetworkRequestDirectSocket:
-    case WebSchedulerTrackedFeature::kInjectedStyleSheet:
-    case WebSchedulerTrackedFeature::kWebTransport:
-      return Page::BackForwardCacheNotRestoredReasonTypeEnum::PageSupportNeeded;
+    case WebSchedulerTrackedFeature::kSpeechRecognizer:
+    case WebSchedulerTrackedFeature::kPrinting:
+    case WebSchedulerTrackedFeature::kPictureInPicture:
+    case WebSchedulerTrackedFeature::kWebLocks:
     case WebSchedulerTrackedFeature::kAppBanner:
     case WebSchedulerTrackedFeature::kWebSocket:
     case WebSchedulerTrackedFeature::kDedicatedWorkerOrWorklet:
+    case WebSchedulerTrackedFeature::kSpeechSynthesis:
       return Page::BackForwardCacheNotRestoredReasonTypeEnum::SupportPending;
     case WebSchedulerTrackedFeature::kMainResourceHasCacheControlNoStore:
     case WebSchedulerTrackedFeature::kMainResourceHasCacheControlNoCache:
-    case WebSchedulerTrackedFeature::kInjectedJavascript:
     case WebSchedulerTrackedFeature::kSubresourceHasCacheControlNoCache:
     case WebSchedulerTrackedFeature::kSubresourceHasCacheControlNoStore:
+    case WebSchedulerTrackedFeature::kInjectedStyleSheet:
+    case WebSchedulerTrackedFeature::kInjectedJavascript:
     case WebSchedulerTrackedFeature::kDocumentLoaded:
     case WebSchedulerTrackedFeature::kDummy:
       return Page::BackForwardCacheNotRestoredReasonTypeEnum::Circumstantial;
@@ -1753,20 +1802,21 @@ Page::BackForwardCacheNotRestoredReasonType MapBlocklistedFeatureToType(
 Page::BackForwardCacheNotRestoredReasonType
 MapDisableForRenderFrameHostReasonToType(
     BackForwardCache::DisabledReason reason) {
-  return Page::BackForwardCacheNotRestoredReasonTypeEnum::Circumstantial;
+  return Page::BackForwardCacheNotRestoredReasonTypeEnum::SupportPending;
 }
 
 std::unique_ptr<protocol::Array<Page::BackForwardCacheNotRestoredExplanation>>
 CreateNotRestoredExplanation(
-    const BackForwardCacheCanStoreDocumentResult::NotStoredReasons
-        not_stored_reasons,
+    const BackForwardCacheCanStoreDocumentResult::NotRestoredReasons
+        not_restored_reasons,
     const blink::scheduler::WebSchedulerTrackedFeatures blocklisted_features,
     const std::set<BackForwardCache::DisabledReason>& disabled_reasons) {
   auto reasons = std::make_unique<
       protocol::Array<Page::BackForwardCacheNotRestoredExplanation>>();
 
-  for (BackForwardCacheMetrics::NotRestoredReason reason : not_stored_reasons) {
-    if (reason ==
+  for (BackForwardCacheMetrics::NotRestoredReason not_restored_reason :
+       not_restored_reasons) {
+    if (not_restored_reason ==
         BackForwardCacheMetrics::NotRestoredReason::kBlocklistedFeatures) {
       DCHECK(!blocklisted_features.Empty());
       for (blink::scheduler::WebSchedulerTrackedFeature feature :
@@ -1777,31 +1827,79 @@ CreateNotRestoredExplanation(
                 .SetReason(BlocklistedFeatureToProtocol(feature))
                 .Build());
       }
-    } else if (reason == BackForwardCacheMetrics::NotRestoredReason::
-                             kDisableForRenderFrameHostCalled) {
+    } else if (not_restored_reason ==
+               BackForwardCacheMetrics::NotRestoredReason::
+                   kDisableForRenderFrameHostCalled) {
       for (auto disabled_reason : disabled_reasons) {
-        reasons->emplace_back(
+        auto reason =
             Page::BackForwardCacheNotRestoredExplanation::Create()
                 .SetType(
                     MapDisableForRenderFrameHostReasonToType(disabled_reason))
                 .SetReason(
                     DisableForRenderFrameHostReasonToProtocol(disabled_reason))
-                .Build());
+                .Build();
+        if (!disabled_reason.context.empty())
+          reason->SetContext(disabled_reason.context);
+        reasons->emplace_back(std::move(reason));
       }
     } else {
       reasons->emplace_back(
           Page::BackForwardCacheNotRestoredExplanation::Create()
-              .SetType(MapNotRestoredReasonToType(reason))
-              .SetReason(NotRestoredReasonToProtocol(reason))
+              .SetType(MapNotRestoredReasonToType(not_restored_reason))
+              .SetReason(NotRestoredReasonToProtocol(not_restored_reason))
               .Build());
     }
   }
   return reasons;
 }
 
+std::unique_ptr<Page::BackForwardCacheNotRestoredExplanationTree>
+CreateNotRestoredExplanationTree(
+    const BackForwardCacheCanStoreTreeResult& tree_result) {
+  auto explanation = CreateNotRestoredExplanation(
+      tree_result.GetDocumentResult().not_restored_reasons(),
+      tree_result.GetDocumentResult().blocklisted_features(),
+      tree_result.GetDocumentResult().disabled_reasons());
+
+  auto children_array = std::make_unique<
+      protocol::Array<Page::BackForwardCacheNotRestoredExplanationTree>>();
+  for (auto& child : tree_result.GetChildren()) {
+    children_array->emplace_back(
+        CreateNotRestoredExplanationTree(*(child.get())));
+  }
+  return Page::BackForwardCacheNotRestoredExplanationTree::Create()
+      .SetUrl(tree_result.GetUrl().spec())
+      .SetExplanations(std::move(explanation))
+      .SetChildren(std::move(children_array))
+      .Build();
+}
+
+Response PageHandler::AddCompilationCache(const std::string& url,
+                                          const Binary& data) {
+  // We're just checking a permission here, the real business happens
+  // in the renderer, if we fall through.
+  if (allow_unsafe_operations_)
+    return Response::FallThrough();
+  return Response::ServerError("Permission denied");
+}
+
+Response PageHandler::AssureTopLevelActiveFrame() {
+  if (!host_)
+    return Response::ServerError(kErrorNotAttached);
+
+  if (host_->GetParentOrOuterDocument())
+    return Response::ServerError(kCommandIsOnlyAvailableAtTopTarget);
+
+  if (!host_->IsActive())
+    return Response::ServerError(kErrorInactivePage);
+
+  return Response::Success();
+}
+
 void PageHandler::BackForwardCacheNotUsed(
     const NavigationRequest* navigation,
-    const BackForwardCacheCanStoreDocumentResult* result) {
+    const BackForwardCacheCanStoreDocumentResult* result,
+    const BackForwardCacheCanStoreTreeResult* tree_result) {
   if (!enabled_)
     return;
 
@@ -1811,11 +1909,40 @@ void PageHandler::BackForwardCacheNotUsed(
   std::string frame_id = ftn->devtools_frame_token().ToString();
 
   auto explanation = CreateNotRestoredExplanation(
-      result->not_stored_reasons(), result->blocklisted_features(),
+      result->not_restored_reasons(), result->blocklisted_features(),
       result->disabled_reasons());
 
+  // TODO(crbug.com/1281855): |tree_result| should not be nullptr when |result|
+  // has the reasons.
+  std::unique_ptr<Page::BackForwardCacheNotRestoredExplanationTree>
+      explanation_tree =
+          tree_result ? CreateNotRestoredExplanationTree(*tree_result)
+                      : nullptr;
   frontend_->BackForwardCacheNotUsed(devtools_navigation_token, frame_id,
-                                     std::move(explanation));
+                                     std::move(explanation),
+                                     std::move(explanation_tree));
+}
+
+void PageHandler::DidActivatePrerender(const NavigationRequest& nav_request) {
+  if (!enabled_)
+    return;
+  FrameTreeNode* ftn = nav_request.frame_tree_node();
+  std::string initiating_frame_id = ftn->devtools_frame_token().ToString();
+  const GURL& prerendering_url = nav_request.common_params().url;
+  frontend_->PrerenderAttemptCompleted(
+      initiating_frame_id, prerendering_url.spec(),
+      Page::PrerenderFinalStatusEnum::Activated);
+}
+
+void PageHandler::DidCancelPrerender(const GURL& prerendering_url,
+                                     const std::string& initiating_frame_id,
+                                     PrerenderHost::FinalStatus status) {
+  if (!enabled_)
+    return;
+  DCHECK_NE(status, PrerenderHost::FinalStatus::kActivated);
+  frontend_->PrerenderAttemptCompleted(initiating_frame_id,
+                                       prerendering_url.spec(),
+                                       PrerenderFinalStatusToProtocol(status));
 }
 
 bool PageHandler::ShouldBypassCSP() {

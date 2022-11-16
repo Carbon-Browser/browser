@@ -8,12 +8,13 @@
 #include "content/public/browser/navigation_details.h"
 #include "ui/aura/window.h"
 #include "ui/platform_window/extensions/wayland_extension.h"
-#include "ui/views/widget/desktop_aura/desktop_window_tree_host_linux.h"
+#include "ui/views/widget/desktop_aura/desktop_window_tree_host_lacros.h"
 #include "ui/views/widget/widget.h"
 
 WebContentsCanGoBackObserver::WebContentsCanGoBackObserver(
     content::WebContents* web_contents)
-    : content::WebContentsObserver(web_contents) {}
+    : content::WebContentsUserData<WebContentsCanGoBackObserver>(*web_contents),
+      content::WebContentsObserver(web_contents) {}
 
 WebContentsCanGoBackObserver::~WebContentsCanGoBackObserver() = default;
 
@@ -50,18 +51,19 @@ void WebContentsCanGoBackObserver::UpdateLatestFocusedWebContentsStatus() {
   if (!visible_)
     return;
 
-  // Lacros is based on Ozone/Wayland which uses DesktopWindowTreeHostLinux.
   aura::Window* window = web_contents()->GetNativeView();
   if (!window->GetHost())
     return;
 
-  auto* dwth_linux = views::DesktopWindowTreeHostLinux::From(window->GetHost());
-  if (!dwth_linux)
+  // Lacros is based on Ozone/Wayland which uses DesktopWindowTreeHostLacros.
+  auto* dwth_platform =
+      views::DesktopWindowTreeHostLacros::From(window->GetHost());
+  if (!dwth_platform)
     return;
 
   bool can_go_back = web_contents()->GetController().CanGoBack();
-  auto* wayland_extension = dwth_linux->GetWaylandExtension();
+  auto* wayland_extension = dwth_platform->GetWaylandExtension();
   wayland_extension->SetCanGoBack(can_go_back);
 }
 
-WEB_CONTENTS_USER_DATA_KEY_IMPL(WebContentsCanGoBackObserver)
+WEB_CONTENTS_USER_DATA_KEY_IMPL(WebContentsCanGoBackObserver);

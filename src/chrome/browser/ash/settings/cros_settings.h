@@ -10,15 +10,18 @@
 #include <string>
 #include <vector>
 
+#include "ash/components/settings/cros_settings_names.h"
+#include "ash/components/settings/cros_settings_provider.h"
 #include "base/callback_forward.h"
 #include "base/callback_list.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/values.h"
-#include "chromeos/settings/cros_settings_names.h"
-#include "chromeos/settings/cros_settings_provider.h"
+#include "build/chromeos_buildflags.h"
 #include "components/user_manager/user_type.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+
+static_assert(BUILDFLAG(IS_CHROMEOS_ASH), "For ChromeOS ash-chrome only");
 
 class PrefService;
 
@@ -50,6 +53,10 @@ class CrosSettings {
   // production code uses the singleton returned by Get() above.
   CrosSettings(DeviceSettingsService* device_settings_service,
                PrefService* local_state);
+
+  CrosSettings(const CrosSettings&) = delete;
+  CrosSettings& operator=(const CrosSettings&) = delete;
+
   virtual ~CrosSettings();
 
   // Helper function to test if the given |path| is a valid cros setting.
@@ -115,9 +122,9 @@ class CrosSettings {
       CrosSettingsProvider* provider);
 
   // Add an observer Callback for changes for the given |path|.
-  base::CallbackListSubscription AddSettingsObserver(
+  [[nodiscard]] base::CallbackListSubscription AddSettingsObserver(
       const std::string& path,
-      base::RepeatingClosure callback) WARN_UNUSED_RESULT;
+      base::RepeatingClosure callback);
 
   // Returns the provider that handles settings with the |path| or prefix.
   CrosSettingsProvider* GetProvider(const std::string& path) const;
@@ -137,7 +144,8 @@ class CrosSettings {
   std::vector<std::unique_ptr<CrosSettingsProvider>> providers_;
 
   // Owner unique pointer in |providers_|.
-  SupervisedUserCrosSettingsProvider* supervised_user_cros_settings_provider_;
+  raw_ptr<SupervisedUserCrosSettingsProvider>
+      supervised_user_cros_settings_provider_;
 
   // A map from settings names to a list of observers. Observers get fired in
   // the order they are added.
@@ -145,8 +153,6 @@ class CrosSettings {
       settings_observers_;
 
   SEQUENCE_CHECKER(sequence_checker_);
-
-  DISALLOW_COPY_AND_ASSIGN(CrosSettings);
 };
 
 // Helper class for tests. Initializes the CrosSettings singleton on
@@ -154,10 +160,11 @@ class CrosSettings {
 class ScopedTestCrosSettings {
  public:
   explicit ScopedTestCrosSettings(PrefService* local_state);
-  ~ScopedTestCrosSettings();
 
- private:
-  DISALLOW_COPY_AND_ASSIGN(ScopedTestCrosSettings);
+  ScopedTestCrosSettings(const ScopedTestCrosSettings&) = delete;
+  ScopedTestCrosSettings& operator=(const ScopedTestCrosSettings&) = delete;
+
+  ~ScopedTestCrosSettings();
 };
 
 }  // namespace ash

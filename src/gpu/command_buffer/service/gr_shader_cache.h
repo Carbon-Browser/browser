@@ -7,10 +7,11 @@
 
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
-#include "base/containers/mru_cache.h"
+#include "base/containers/lru_cache.h"
 #include "base/hash/hash.h"
 #include "base/memory/memory_pressure_listener.h"
 #include "base/synchronization/lock.h"
+#include "base/threading/platform_thread.h"
 #include "base/threading/thread_checker.h"
 #include "base/trace_event/memory_dump_provider.h"
 #include "gpu/raster_export.h"
@@ -43,6 +44,10 @@ class RASTER_EXPORT GrShaderCache
   };
 
   GrShaderCache(size_t max_cache_size_bytes, Client* client);
+
+  GrShaderCache(const GrShaderCache&) = delete;
+  GrShaderCache& operator=(const GrShaderCache&) = delete;
+
   ~GrShaderCache() override;
 
   // GrContextOptions::PersistentCache implementation.
@@ -103,7 +108,7 @@ class RASTER_EXPORT GrShaderCache
     size_t operator()(const CacheKey& key) const { return key.hash; }
   };
 
-  using Store = base::HashingMRUCache<CacheKey, CacheData, CacheKeyHash>;
+  using Store = base::HashingLRUCache<CacheKey, CacheData, CacheKeyHash>;
 
   void EnforceLimits(size_t size_needed);
 
@@ -134,8 +139,6 @@ class RASTER_EXPORT GrShaderCache
   // Bound to the thread on which GrShaderCache is created. Some methods can
   // only be called on this thread. GrShaderCache is created on gpu main thread.
   THREAD_CHECKER(gpu_main_thread_checker_);
-
-  DISALLOW_COPY_AND_ASSIGN(GrShaderCache);
 };
 
 }  // namespace raster

@@ -6,11 +6,10 @@
 
 #include "ash/constants/ash_features.h"
 #include "ash/public/cpp/keyboard_shortcut_item.h"
+#include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/shortcut_viewer/strings/grit/shortcut_viewer_strings.h"
-#include "ash/shortcut_viewer/vector_icons/vector_icons.h"
 #include "base/check.h"
 #include "base/feature_list.h"
-#include "base/macros.h"
 #include "base/no_destructor.h"
 #include "base/notreached.h"
 #include "base/strings/utf_string_conversions.h"
@@ -21,7 +20,7 @@
 #include "ui/events/devices/device_data_manager.h"
 #include "ui/events/event_constants.h"
 #include "ui/events/keycodes/dom/dom_code.h"
-#include "ui/events/keycodes/dom/dom_codes.h"
+#include "ui/events/keycodes/dom/dom_codes_array.h"
 #include "ui/events/keycodes/dom/dom_key.h"
 #include "ui/events/keycodes/dom/keycode_converter.h"
 #include "ui/events/keycodes/keyboard_code_conversion.h"
@@ -208,7 +207,7 @@ std::u16string GetStringForKeyboardCode(ui::KeyboardCode key_code,
     }
   }
 
-  for (const auto& dom_code : ui::dom_codes) {
+  for (const auto& dom_code : ui::kDomCodesArray) {
     if (!layout_engine->Lookup(dom_code, /*flags=*/ui::EF_NONE, &dom_key,
                                &key_code_to_compare)) {
       continue;
@@ -249,37 +248,37 @@ std::u16string GetAccessibleNameForKeyboardCode(ui::KeyboardCode key_code) {
 const gfx::VectorIcon* GetVectorIconForKeyboardCode(ui::KeyboardCode key_code) {
   switch (key_code) {
     case ui::VKEY_BROWSER_BACK:
-      return &kKsvBrowserBackIcon;
+      return &ash::kKsvBrowserBackIcon;
     case ui::VKEY_BROWSER_FORWARD:
-      return &kKsvBrowserForwardIcon;
+      return &ash::kKsvBrowserForwardIcon;
     case ui::VKEY_BROWSER_REFRESH:
-      return &kKsvReloadIcon;
+      return &ash::kKsvReloadIcon;
     case ui::VKEY_ZOOM:
-      return &kKsvFullscreenIcon;
+      return &ash::kKsvFullscreenIcon;
     case ui::VKEY_MEDIA_LAUNCH_APP1:
-      return &kKsvOverviewIcon;
+      return &ash::kKsvOverviewIcon;
     case ui::VKEY_BRIGHTNESS_DOWN:
-      return &kKsvBrightnessDownIcon;
+      return &ash::kKsvBrightnessDownIcon;
     case ui::VKEY_BRIGHTNESS_UP:
-      return &kKsvBrightnessUpIcon;
+      return &ash::kKsvBrightnessUpIcon;
     case ui::VKEY_VOLUME_MUTE:
-      return &kKsvMuteIcon;
+      return &ash::kKsvMuteIcon;
     case ui::VKEY_VOLUME_DOWN:
-      return &kKsvVolumeDownIcon;
+      return &ash::kKsvVolumeDownIcon;
     case ui::VKEY_VOLUME_UP:
-      return &kKsvVolumeUpIcon;
+      return &ash::kKsvVolumeUpIcon;
     case ui::VKEY_UP:
-      return &kKsvArrowUpIcon;
+      return &ash::kKsvArrowUpIcon;
     case ui::VKEY_DOWN:
-      return &kKsvArrowDownIcon;
+      return &ash::kKsvArrowDownIcon;
     case ui::VKEY_LEFT:
-      return &kKsvArrowLeftIcon;
+      return &ash::kKsvArrowLeftIcon;
     case ui::VKEY_RIGHT:
-      return &kKsvArrowRightIcon;
+      return &ash::kKsvArrowRightIcon;
     case ui::VKEY_PRIVACY_SCREEN_TOGGLE:
-      return &kKsvPrivacyScreenToggleIcon;
+      return &ash::kKsvPrivacyScreenToggleIcon;
     case ui::VKEY_SNAPSHOT:
-      return &kKsvSnapshotIcon;
+      return &ash::kKsvSnapshotIcon;
     default:
       return nullptr;
   }
@@ -366,6 +365,13 @@ const std::vector<ash::KeyboardShortcutItem>& GetKeyboardShortcutItemList() {
        {},
        // |accelerator_ids|
        {{ui::VKEY_L, ui::EF_SHIFT_DOWN | ui::EF_ALT_DOWN}}},
+
+      {// |categories|
+       {ShortcutCategory::kAccessibility},
+       IDS_KSV_DESCRIPTION_FOCUS_PIP,
+       {},
+       // |accelerator_ids|
+       {{ui::VKEY_V, ui::EF_SHIFT_DOWN | ui::EF_ALT_DOWN}}},
 
       {// |categories|
        {ShortcutCategory::kPageAndBrowser},
@@ -1542,11 +1548,11 @@ const std::vector<ash::KeyboardShortcutItem>& GetKeyboardShortcutItemList() {
        {{ui::VKEY_SPACE, ui::EF_SHIFT_DOWN | ui::EF_COMMAND_DOWN}}},
 
       {// |categories|
-       {ShortcutCategory::kAccessibility},
-       IDS_KSV_DESCRIPTION_FOCUS_HELP_BUBBLE,
+       {ShortcutCategory::kSystemAndDisplay},
+       IDS_KSV_DESCRIPTION_OPEN_DIAGNOSTICS,
        {},
        // |accelerator_ids|
-       {{ui::VKEY_H, ui::EF_ALT_DOWN | ui::EF_SHIFT_DOWN}}},
+       {{ui::VKEY_ESCAPE, ui::EF_CONTROL_DOWN | ui::EF_COMMAND_DOWN}}},
   });
 
   static bool is_initialized = false;
@@ -1556,16 +1562,45 @@ const std::vector<ash::KeyboardShortcutItem>& GetKeyboardShortcutItemList() {
   if (!is_initialized) {
     is_initialized = true;
 
-    // Include diagnostics shortcuts only when experiment flag is enabled.
-    if (base::FeatureList::IsEnabled(chromeos::features::kDiagnosticsApp)) {
-      const ash::KeyboardShortcutItem diagnostics_shortcut = {
+    // The improved desks keyboard shortcuts should only be enabled if the
+    // improved keyboard shortcuts flag is also enabled.
+    if (::features::IsImprovedKeyboardShortcutsEnabled() &&
+        ash::features::IsImprovedDesksKeyboardShortcutsEnabled()) {
+      const ash::KeyboardShortcutItem indexed_activation_shortcut = {
           // |categories|
-          {ShortcutCategory::kSystemAndDisplay},
-          IDS_KSV_DESCRIPTION_OPEN_DIAGNOSTICS,
+          {ShortcutCategory::kTabAndWindow},
+          IDS_KSV_DESCRIPTION_DESKS_ACTIVATE_INDEXED_DESK,
+          IDS_KSV_SHORTCUT_DESKS_ACTIVATE_INDEXED_DESK,
+          // |accelerator_ids|
+          {},
+          // |shortcut_key_codes|
+          {{ui::VKEY_SHIFT, ui::VKEY_UNKNOWN, ui::VKEY_COMMAND,
+            ui::VKEY_UNKNOWN}}};
+
+      const ash::KeyboardShortcutItem toggle_all_desks_shortcut = {
+          // |categories|
+          {ShortcutCategory::kTabAndWindow},
+          IDS_KSV_DESCRIPTION_DESKS_TOGGLE_WINDOW_ASSIGNED_TO_ALL_DESKS,
           {},
           // |accelerator_ids|
-          {{ui::VKEY_ESCAPE, ui::EF_CONTROL_DOWN | ui::EF_COMMAND_DOWN}}};
-      item_list->emplace_back(diagnostics_shortcut);
+          {{ui::VKEY_A, ui::EF_COMMAND_DOWN | ui::EF_SHIFT_DOWN}}};
+
+      item_list->emplace_back(indexed_activation_shortcut);
+      item_list->emplace_back(toggle_all_desks_shortcut);
+    }
+
+    if (ash::features::IsCalendarViewEnabled()) {
+      const ash::KeyboardShortcutItem toggle_calendar = {
+          // |categories|
+          {ShortcutCategory::kSystemAndDisplay},
+          IDS_KSV_DESCRIPTION_TOGGLE_CALENDAR,
+          {},
+          // |accelerator_ids|
+          {},
+          // |shortcut_key_codes|
+          {{ui::VKEY_COMMAND, ui::VKEY_UNKNOWN, ui::VKEY_C}}};
+
+      item_list->emplace_back(toggle_calendar);
     }
 
     for (auto& item : *item_list) {

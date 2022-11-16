@@ -126,7 +126,7 @@ TEST_F(SharedProtoDatabaseTest, CreateClient_SucceedsWithCreate) {
 }
 
 // TODO(912117): Fix flaky test!
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
 TEST_F(SharedProtoDatabaseTest, DISABLED_CreateClient_FailsWithoutCreate) {
 #else
 TEST_F(SharedProtoDatabaseTest, CreateClient_FailsWithoutCreate) {
@@ -164,7 +164,7 @@ TEST_F(SharedProtoDatabaseTest, GetClient_DifferentThreads) {
   run_loop.Run();
   base::RunLoop quit_cooldown;
   GetMainThreadTaskRunner()->PostDelayedTask(
-      FROM_HERE, quit_cooldown.QuitClosure(), base::TimeDelta::FromSeconds(3));
+      FROM_HERE, quit_cooldown.QuitClosure(), base::Seconds(3));
 }
 
 // If not attempt to create the db, kInvalidOperation will be returned in the

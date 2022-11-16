@@ -7,7 +7,9 @@
 
 #include "base/android/jni_weak_ref.h"
 #include "base/android/scoped_java_ref.h"
+#include "base/memory/raw_ptr.h"
 #include "content/public/browser/overlay_window.h"
+#include "third_party/blink/public/mojom/mediasession/media_session.mojom.h"
 #include "ui/android/window_android.h"
 #include "ui/android/window_android_observer.h"
 #include "ui/gfx/geometry/size.h"
@@ -22,11 +24,11 @@ class CompositorView;
 }  // namespace android
 }  // namespace thin_webview
 
-class OverlayWindowAndroid : public content::OverlayWindow,
+class OverlayWindowAndroid : public content::VideoOverlayWindow,
                              public ui::WindowAndroidObserver {
  public:
   explicit OverlayWindowAndroid(
-      content::PictureInPictureWindowController* controller);
+      content::VideoPictureInPictureWindowController* controller);
   ~OverlayWindowAndroid() override;
 
   void OnActivityStart(
@@ -34,11 +36,14 @@ class OverlayWindowAndroid : public content::OverlayWindow,
       const base::android::JavaParamRef<jobject>& obj,
       const base::android::JavaParamRef<jobject>& jwindow_android);
   void Destroy(JNIEnv* env);
-  void Play(JNIEnv* env);
+  void TogglePlayPause(JNIEnv* env);
+  void NextTrack(JNIEnv* env);
+  void PreviousTrack(JNIEnv* env);
   void CompositorViewCreated(
       JNIEnv* env,
       const base::android::JavaParamRef<jobject>& compositor_view);
   void OnViewSizeChanged(JNIEnv* env, jint width, jint height);
+  void OnBackToTab(JNIEnv* env);
 
   // ui::WindowAndroidObserver implementation.
   void OnCompositingDidCommit() override {}
@@ -57,12 +62,15 @@ class OverlayWindowAndroid : public content::OverlayWindow,
   bool IsVisible() override;
   bool IsAlwaysOnTop() override;
   gfx::Rect GetBounds() override;
-  void UpdateVideoSize(const gfx::Size& natural_size) override;
-  void SetPlaybackState(PlaybackState playback_state) override {}
+  void UpdateNaturalSize(const gfx::Size& natural_size) override;
+
+  // VideoOverlayWindow implementation
+  void SetPlaybackState(PlaybackState playback_state) override;
   void SetPlayPauseButtonVisibility(bool is_visible) override;
   void SetSkipAdButtonVisibility(bool is_visible) override {}
-  void SetNextTrackButtonVisibility(bool is_visible) override {}
-  void SetPreviousTrackButtonVisibility(bool is_visible) override {}
+  void SetNextTrackButtonVisibility(bool is_visible) override;
+  void SetPreviousTrackButtonVisibility(bool is_visible) override;
+  // TODO(crbug.com/1331269): Implement video conferencing actions.
   void SetMicrophoneMuted(bool muted) override {}
   void SetCameraState(bool turned_on) override {}
   void SetToggleMicrophoneButtonVisibility(bool is_visible) override {}
@@ -72,19 +80,27 @@ class OverlayWindowAndroid : public content::OverlayWindow,
   cc::Layer* GetLayerForTesting() override;
 
  private:
+  // Notify PictureInPictureActivity that visible actions have changed.
+  void MaybeNotifyVisibleActionsChanged();
+
+  // Maybe update visible actions. Returns true if update happened.
+  bool MaybeUpdateVisibleAction(
+      const media_session::mojom::MediaSessionAction& action,
+      bool is_visible);
   void CloseInternal();
 
   // A weak reference to Java PictureInPictureActivity object.
   JavaObjectWeakGlobalRef java_ref_;
-  ui::WindowAndroid* window_android_;
-  thin_webview::android::CompositorView* compositor_view_;
+  raw_ptr<ui::WindowAndroid> window_android_;
+  raw_ptr<thin_webview::android::CompositorView> compositor_view_;
   scoped_refptr<cc::SurfaceLayer> surface_layer_;
   gfx::Rect bounds_;
   gfx::Size video_size_;
 
-  bool is_play_pause_button_visible_ = false;
+  bool is_playing_ = false;
+  std::unordered_set<int> visible_actions_;
 
-  content::PictureInPictureWindowController* controller_;
+  raw_ptr<content::VideoPictureInPictureWindowController> controller_;
 };
 
 #endif  // CHROME_BROWSER_UI_ANDROID_OVERLAY_OVERLAY_WINDOW_ANDROID_H_

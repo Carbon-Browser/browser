@@ -10,8 +10,8 @@
 #include "base/android/memory_pressure_listener_android.h"
 #include "base/android/unguessable_token_android.h"
 #include "base/check.h"
+#include "base/command_line.h"
 #include "base/lazy_instance.h"
-#include "base/macros.h"
 #include "base/unguessable_token.h"
 #include "content/child/child_thread_impl.h"
 #include "content/common/android/surface_wrapper.h"
@@ -38,6 +38,11 @@ class ChildProcessSurfaceManager : public gpu::ScopedSurfaceRequestConduit,
                                    public gpu::GpuSurfaceLookup {
  public:
   ChildProcessSurfaceManager() {}
+
+  ChildProcessSurfaceManager(const ChildProcessSurfaceManager&) = delete;
+  ChildProcessSurfaceManager& operator=(const ChildProcessSurfaceManager&) =
+      delete;
+
   ~ChildProcessSurfaceManager() override {}
 
   // |service_impl| is the instance of
@@ -112,8 +117,6 @@ class ChildProcessSurfaceManager : public gpu::ScopedSurfaceRequestConduit,
   friend struct base::LazyInstanceTraitsBase<ChildProcessSurfaceManager>;
   // The instance of org.chromium.content.app.ChildProcessService.
   base::android::ScopedJavaGlobalRef<jobject> service_impl_;
-
-  DISALLOW_COPY_AND_ASSIGN(ChildProcessSurfaceManager);
 };
 
 base::LazyInstance<ChildProcessSurfaceManager>::Leaky

@@ -4,7 +4,7 @@
 
 (async function() {
   TestRunner.addResult(`Verify that CSS variables are resolved inside cascade`);
-  await TestRunner.loadModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
+  await TestRunner.loadLegacyModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
   await TestRunner.showPanel('elements');
   await TestRunner.loadHTML(`
     <style>
@@ -37,7 +37,7 @@
 
 
   const node = await ElementsTestRunner.selectNodeAndWaitForStylesPromise('inspected');
-  const matchedStyles = await TestRunner.cssModel.matchedStylesPromise(node.id);
+  const matchedStyles = await TestRunner.cssModel.getMatchedStyles(node.id);
   TestRunner.addResult('matchedStyles.computeCSSVariable()');
   dumpCSSVariable('--foo');
   dumpCSSVariable('--baz');

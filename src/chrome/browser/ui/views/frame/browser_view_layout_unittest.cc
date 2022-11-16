@@ -8,7 +8,8 @@
 
 #include "base/containers/contains.h"
 #include "base/containers/flat_set.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
+#include "base/no_destructor.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/frame/browser_view_layout_delegate.h"
 #include "chrome/browser/ui/views/frame/contents_layout_manager.h"
@@ -30,6 +31,11 @@ constexpr int kToolbarHeight = 30 - views::Separator::kThickness;
 class MockBrowserViewLayoutDelegate : public BrowserViewLayoutDelegate {
  public:
   MockBrowserViewLayoutDelegate() = default;
+
+  MockBrowserViewLayoutDelegate(const MockBrowserViewLayoutDelegate&) = delete;
+  MockBrowserViewLayoutDelegate& operator=(
+      const MockBrowserViewLayoutDelegate&) = delete;
+
   ~MockBrowserViewLayoutDelegate() override = default;
 
   void set_tab_strip_visible(bool visible) {
@@ -75,15 +81,18 @@ class MockBrowserViewLayoutDelegate : public BrowserViewLayoutDelegate {
   bool SupportsWindowFeature(
       const Browser::WindowFeature feature) const override {
     static const base::NoDestructor<base::flat_set<Browser::WindowFeature>>
-        supported_features({
+        supported_features{{
             Browser::FEATURE_TABSTRIP,
             Browser::FEATURE_TOOLBAR,
             Browser::FEATURE_LOCATIONBAR,
             Browser::FEATURE_BOOKMARKBAR,
-        });
+        }};
     return base::Contains(*supported_features, feature);
   }
   gfx::NativeView GetHostView() const override { return nullptr; }
+  bool BrowserIsSystemWebApp() const override { return false; }
+  bool BrowserIsWebApp() const override { return false; }
+  bool BrowserIsTypeApp() const override { return false; }
   bool BrowserIsTypeNormal() const override { return true; }
   bool HasFindBarController() const override { return false; }
   void MoveWindowForFindBarIfNecessary() const override {}
@@ -95,8 +104,6 @@ class MockBrowserViewLayoutDelegate : public BrowserViewLayoutDelegate {
   bool content_separator_enabled_ = true;
   bool top_controls_slide_enabled_ = false;
   float top_controls_shown_ratio_ = 1.f;
-
-  DISALLOW_COPY_AND_ASSIGN(MockBrowserViewLayoutDelegate);
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -122,8 +129,8 @@ class MockImmersiveModeController : public ImmersiveModeController {
       const gfx::Size& top_container_size) const override {
     return 0;
   }
-  ImmersiveRevealedLock* GetRevealedLock(AnimateReveal animate_reveal) override
-      WARN_UNUSED_RESULT {
+  std::unique_ptr<ImmersiveRevealedLock> GetRevealedLock(
+      AnimateReveal animate_reveal) override {
     return nullptr;
   }
   void OnFindBarVisibleBoundsChanged(
@@ -147,6 +154,10 @@ class BrowserViewLayoutTest : public ChromeViewsTestBase {
         contents_container_(nullptr),
         contents_web_view_(nullptr),
         devtools_web_view_(nullptr) {}
+
+  BrowserViewLayoutTest(const BrowserViewLayoutTest&) = delete;
+  BrowserViewLayoutTest& operator=(const BrowserViewLayoutTest&) = delete;
+
   ~BrowserViewLayoutTest() override {}
 
   BrowserViewLayout* layout() { return layout_.get(); }
@@ -216,23 +227,21 @@ class BrowserViewLayoutTest : public ChromeViewsTestBase {
 
  private:
   std::unique_ptr<BrowserViewLayout> layout_;
-  MockBrowserViewLayoutDelegate* delegate_;  // Owned by |layout_|.
+  raw_ptr<MockBrowserViewLayoutDelegate> delegate_;  // Owned by |layout_|.
   std::unique_ptr<views::View> root_view_;
 
   // Views owned by |root_view_|.
-  views::View* top_container_;
-  TabStrip* tab_strip_;
-  views::View* webui_tab_strip_;
-  views::View* toolbar_;
-  views::Separator* separator_;
-  InfoBarContainerView* infobar_container_;
-  views::View* contents_container_;
-  views::View* contents_web_view_;
-  views::View* devtools_web_view_;
+  raw_ptr<views::View> top_container_;
+  raw_ptr<TabStrip> tab_strip_;
+  raw_ptr<views::View> webui_tab_strip_;
+  raw_ptr<views::View> toolbar_;
+  raw_ptr<views::Separator> separator_;
+  raw_ptr<InfoBarContainerView> infobar_container_;
+  raw_ptr<views::View> contents_container_;
+  raw_ptr<views::View> contents_web_view_;
+  raw_ptr<views::View> devtools_web_view_;
 
   std::unique_ptr<MockImmersiveModeController> immersive_mode_controller_;
-
-  DISALLOW_COPY_AND_ASSIGN(BrowserViewLayoutTest);
 };
 
 // Test basic construction and initialization.

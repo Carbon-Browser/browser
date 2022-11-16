@@ -4,15 +4,41 @@
 
 #include "chrome/browser/ui/webui/image_editor/image_editor_ui.h"
 
+#include "base/strings/stringprintf.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/url_constants.h"
-#include "chrome/grit/browser_resources.h"
+#include "chrome/grit/image_editor_resources.h"
+#include "chrome/grit/image_editor_untrusted_resources.h"
+#include "components/content_settings/core/common/content_settings_types.h"
+#include "content/public/browser/web_contents.h"
+#include "content/public/browser/web_ui.h"
 #include "content/public/browser/web_ui_data_source.h"
+#include "content/public/common/url_constants.h"
 
-ImageEditorUI::ImageEditorUI(content::WebUI* web_ui) : WebUIController(web_ui) {
+namespace image_editor {
+
+ImageEditorUI::ImageEditorUI(content::WebUI* web_ui)
+    : content::WebUIController(web_ui), profile_(Profile::FromWebUI(web_ui)) {
   // Set up the chrome://image-editor source.
   content::WebUIDataSource* html_source =
       content::WebUIDataSource::Create(chrome::kChromeUIImageEditorHost);
-  html_source->SetDefaultResource(IDR_IMAGE_EDITOR_HTML);
-  content::WebUIDataSource::Add(Profile::FromWebUI(web_ui), html_source);
+  html_source->SetDefaultResource(IDR_IMAGE_EDITOR_IMAGE_EDITOR_HTML);
+  html_source->OverrideContentSecurityPolicy(
+      network::mojom::CSPDirectiveName::FrameSrc,
+      base::StringPrintf("frame-src %s;",
+                         chrome::kChromeUIUntrustedImageEditorURL));
+
+  // Allow use of SharedArrayBuffer (required by wasm code in the iframe guest).
+  html_source->OverrideCrossOriginOpenerPolicy("same-origin");
+  html_source->OverrideCrossOriginEmbedderPolicy("require-corp");
+
+  content::WebUIDataSource::Add(profile_, html_source);
+
+  web_ui->AddRequestableScheme(content::kChromeUIUntrustedScheme);
 }
+
+ImageEditorUI::~ImageEditorUI() = default;
+
+WEB_UI_CONTROLLER_TYPE_IMPL(ImageEditorUI)
+
+}  // namespace image_editor

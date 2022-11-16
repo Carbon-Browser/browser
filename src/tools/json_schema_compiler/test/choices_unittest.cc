@@ -79,31 +79,34 @@ TEST(JsonSchemaCompilerChoicesTest, ObjectWithChoicesParamsCreate) {
 
 TEST(JsonSchemaCompilerChoicesTest, ObjectWithChoicesParamsCreateFail) {
   {
-    auto object_param = std::make_unique<base::DictionaryValue>();
-    object_param->SetKey("strings", base::Value(5));
-    std::unique_ptr<base::ListValue> params_value(new base::ListValue());
-    params_value->Append(std::move(object_param));
+    base::Value::Dict object_param;
+    object_param.Set("strings", 5);
+    base::Value::List params_value;
+    params_value.Append(std::move(object_param));
     std::unique_ptr<choices::ObjectWithChoices::Params> params(
-        choices::ObjectWithChoices::Params::Create(params_value->GetList()));
+        choices::ObjectWithChoices::Params::Create(
+            base::Value(std::move(params_value)).GetList()));
     EXPECT_FALSE(params.get());
   }
   {
-    auto object_param = std::make_unique<base::DictionaryValue>();
-    object_param->SetKey("strings", base::Value("asdf"));
-    object_param->SetKey("integers", base::Value("asdf"));
-    std::unique_ptr<base::ListValue> params_value(new base::ListValue());
-    params_value->Append(std::move(object_param));
+    base::Value::Dict object_param;
+    object_param.Set("strings", "asdf");
+    object_param.Set("integers", "asdf");
+    base::Value::List params_value;
+    params_value.Append(std::move(object_param));
     std::unique_ptr<choices::ObjectWithChoices::Params> params(
-        choices::ObjectWithChoices::Params::Create(params_value->GetList()));
+        choices::ObjectWithChoices::Params::Create(
+            base::Value(std::move(params_value)).GetList()));
     EXPECT_FALSE(params.get());
   }
   {
-    auto object_param = std::make_unique<base::DictionaryValue>();
-    object_param->SetKey("integers", base::Value(6));
-    std::unique_ptr<base::ListValue> params_value(new base::ListValue());
-    params_value->Append(std::move(object_param));
+    base::Value::Dict object_param;
+    object_param.Set("integers", 6);
+    base::Value::List params_value;
+    params_value.Append(std::move(object_param));
     std::unique_ptr<choices::ObjectWithChoices::Params> params(
-        choices::ObjectWithChoices::Params::Create(params_value->GetList()));
+        choices::ObjectWithChoices::Params::Create(
+            base::Value(std::move(params_value)).GetList()));
     EXPECT_FALSE(params.get());
   }
 }
@@ -145,7 +148,7 @@ TEST(JsonSchemaCompilerChoicesTest, ChoiceTypeToValue) {
   choices::ChoiceType out;
   ASSERT_TRUE(choices::ChoiceType::Populate(value, &out));
 
-  EXPECT_TRUE(value.Equals(out.ToValue().get()));
+  EXPECT_EQ(value, *out.ToValue());
 }
 
 TEST(JsonSchemaCompilerChoicesTest, ReturnChoices) {
@@ -160,7 +163,7 @@ TEST(JsonSchemaCompilerChoicesTest, ReturnChoices) {
     expected.Append(1);
     expected.Append(2);
 
-    EXPECT_TRUE(expected.Equals(results_value.get()));
+    EXPECT_EQ(expected, *results_value);
   }
   {
     choices::ReturnChoices::Results::Result results;
@@ -171,7 +174,7 @@ TEST(JsonSchemaCompilerChoicesTest, ReturnChoices) {
 
     base::Value expected(5);
 
-    EXPECT_TRUE(expected.Equals(results_value.get()));
+    EXPECT_EQ(expected, *results_value);
   }
 }
 

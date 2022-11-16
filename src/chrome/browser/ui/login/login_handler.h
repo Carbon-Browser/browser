@@ -10,7 +10,7 @@
 
 #include "base/callback.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/synchronization/lock.h"
@@ -43,7 +43,7 @@ class LoginHandler : public content::LoginDelegate,
     LoginModelData(password_manager::HttpAuthManager* login_model,
                    const password_manager::PasswordForm& observed_form);
 
-    password_manager::HttpAuthManager* const model;
+    const raw_ptr<password_manager::HttpAuthManager> model;
     const password_manager::PasswordForm& form;
   };
 
@@ -225,14 +225,16 @@ class LoginNotificationDetails {
  public:
   explicit LoginNotificationDetails(LoginHandler* handler)
       : handler_(handler) {}
+
+  LoginNotificationDetails(const LoginNotificationDetails&) = delete;
+  LoginNotificationDetails& operator=(const LoginNotificationDetails&) = delete;
+
   LoginHandler* handler() const { return handler_; }
 
  private:
   LoginNotificationDetails() = default;
 
-  LoginHandler* handler_;  // Where to send the response.
-
-  DISALLOW_COPY_AND_ASSIGN(LoginNotificationDetails);
+  raw_ptr<LoginHandler> handler_;  // Where to send the response.
 };
 
 // Details to provide the NotificationObserver.  Used by the automation proxy
@@ -246,6 +248,12 @@ class AuthSuppliedLoginNotificationDetails : public LoginNotificationDetails {
       : LoginNotificationDetails(handler),
         username_(username),
         password_(password) {}
+
+  AuthSuppliedLoginNotificationDetails(
+      const AuthSuppliedLoginNotificationDetails&) = delete;
+  AuthSuppliedLoginNotificationDetails& operator=(
+      const AuthSuppliedLoginNotificationDetails&) = delete;
+
   const std::u16string& username() const { return username_; }
   const std::u16string& password() const { return password_; }
 
@@ -255,8 +263,6 @@ class AuthSuppliedLoginNotificationDetails : public LoginNotificationDetails {
 
   // The password that was used for the authentication.
   const std::u16string password_;
-
-  DISALLOW_COPY_AND_ASSIGN(AuthSuppliedLoginNotificationDetails);
 };
 
 #endif  // CHROME_BROWSER_UI_LOGIN_LOGIN_HANDLER_H_

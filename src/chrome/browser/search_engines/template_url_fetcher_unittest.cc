@@ -2,8 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "components/search_engines/template_url_fetcher.h"
-
 #include <stddef.h>
 
 #include <memory>
@@ -12,7 +10,6 @@
 
 #include "base/bind.h"
 #include "base/callback_helpers.h"
-#include "base/cxx17_backports.h"
 #include "base/files/file_util.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
@@ -20,6 +17,7 @@
 #include "chrome/browser/search_engines/template_url_service_test_util.h"
 #include "chrome/test/base/testing_profile.h"
 #include "components/search_engines/template_url.h"
+#include "components/search_engines/template_url_fetcher.h"
 #include "components/search_engines/template_url_service.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/storage_partition.h"
@@ -51,6 +49,10 @@ class TestTemplateUrlFetcher : public TemplateURLFetcher {
       const base::RepeatingClosure& request_completed_callback)
       : TemplateURLFetcher(template_url_service),
         callback_(request_completed_callback) {}
+
+  TestTemplateUrlFetcher(const TestTemplateUrlFetcher&) = delete;
+  TestTemplateUrlFetcher& operator=(const TestTemplateUrlFetcher&) = delete;
+
   ~TestTemplateUrlFetcher() override {}
 
  protected:
@@ -62,14 +64,15 @@ class TestTemplateUrlFetcher : public TemplateURLFetcher {
  private:
   // Callback to be run when a request completes.
   base::RepeatingClosure callback_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestTemplateUrlFetcher);
 };
 
 // Basic set-up for TemplateURLFetcher tests.
 class TemplateURLFetcherTest : public testing::Test {
  public:
   TemplateURLFetcherTest();
+
+  TemplateURLFetcherTest(const TemplateURLFetcherTest&) = delete;
+  TemplateURLFetcherTest& operator=(const TemplateURLFetcherTest&) = delete;
 
   void SetUp() override {
     template_url_fetcher_ = std::make_unique<TestTemplateUrlFetcher>(
@@ -117,9 +120,6 @@ class TemplateURLFetcherTest : public testing::Test {
   // Is the code in WaitForDownloadToFinish in a message loop waiting for a
   // callback to finish?
   bool waiting_for_download_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(TemplateURLFetcherTest);
 };
 
 TemplateURLFetcherTest::TemplateURLFetcherTest()
@@ -229,7 +229,7 @@ TEST_F(TemplateURLFetcherTest, DuplicatesThrownAway) {
        keyword},
   };
 
-  for (size_t i = 0; i < base::size(test_cases); ++i) {
+  for (size_t i = 0; i < std::size(test_cases); ++i) {
     StartDownload(test_cases[i].keyword, test_cases[i].osdd_file_name, false);
     EXPECT_EQ(1, template_url_fetcher()->requests_count())
         << test_cases[i].description;

@@ -8,6 +8,7 @@
 
 #include "media/base/audio_decoder_config.h"
 #include "media/base/demuxer_stream.h"
+#include "media/base/media_log.h"
 #include "media/base/video_decoder_config.h"
 #include "media/base/win/mf_helpers.h"
 
@@ -34,6 +35,7 @@ MediaFoundationSourceWrapper::~MediaFoundationSourceWrapper() {
 
 HRESULT MediaFoundationSourceWrapper::RuntimeClassInitialize(
     MediaResource* media_resource,
+    MediaLog* media_log,
     scoped_refptr<base::SequencedTaskRunner> task_runner) {
   DVLOG_FUNC(1);
 
@@ -50,7 +52,8 @@ HRESULT MediaFoundationSourceWrapper::RuntimeClassInitialize(
   for (DemuxerStream* demuxer_stream : demuxer_streams) {
     ComPtr<MediaFoundationStreamWrapper> mf_stream;
     RETURN_IF_FAILED(MediaFoundationStreamWrapper::Create(
-        stream_id++, this, demuxer_stream, task_runner, &mf_stream));
+        stream_id++, this, demuxer_stream, media_log->Clone(), task_runner,
+        &mf_stream));
     media_streams_.push_back(mf_stream);
   }
 
@@ -335,6 +338,9 @@ HRESULT MediaFoundationSourceWrapper::GetInputTrustAuthority(
     REFIID riid,
     IUnknown** object_out) {
   DVLOG_FUNC(1);
+
+  if (state_ == State::kShutdown)
+    return MF_E_SHUTDOWN;
 
   if (stream_id >= StreamCount())
     return E_INVALIDARG;

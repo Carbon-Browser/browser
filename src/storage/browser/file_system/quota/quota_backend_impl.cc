@@ -14,7 +14,7 @@
 #include "base/callback.h"
 #include "base/check_op.h"
 #include "base/numerics/safe_conversions.h"
-#include "base/sequenced_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 #include "storage/browser/file_system/file_system_usage_cache.h"
 #include "storage/browser/file_system/file_system_util.h"
 #include "storage/browser/quota/quota_client_type.h"
@@ -145,7 +145,8 @@ void QuotaBackendImpl::ReserveQuotaInternal(const QuotaReservationInfo& info) {
   quota_manager_proxy_->NotifyStorageModified(
       QuotaClientType::kFileSystem, blink::StorageKey(info.origin),
       FileSystemTypeToQuotaStorageType(info.type), info.delta,
-      base::Time::Now());
+      base::Time::Now(), base::SequencedTaskRunnerHandle::Get(),
+      base::DoNothing());
 }
 
 base::File::Error QuotaBackendImpl::GetUsageCachePath(
@@ -157,8 +158,8 @@ base::File::Error QuotaBackendImpl::GetUsageCachePath(
   DCHECK(usage_file_path);
   base::File::Error error = base::File::FILE_OK;
   *usage_file_path =
-      SandboxFileSystemBackendDelegate::GetUsageCachePathForOriginAndType(
-          obfuscated_file_util_, origin, type, &error);
+      SandboxFileSystemBackendDelegate::GetUsageCachePathForStorageKeyAndType(
+          obfuscated_file_util_, blink::StorageKey(origin), type, &error);
   return error;
 }
 

@@ -8,7 +8,6 @@
 
 #include "base/base64url.h"
 #include "base/bind.h"
-#include "base/no_destructor.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
 #include "chrome/browser/sharing/web_push/json_web_token_util.h"
@@ -30,7 +29,7 @@ const char kFCMServerAudience[] = "https://fcm.googleapis.com";
 const char kClaimsKeyExpirationTime[] = "exp";
 // It's 12 hours rather than 24 hours to avoid any issues with clock differences
 // between the sending application and the push service.
-constexpr base::TimeDelta kClaimsValidPeriod = base::TimeDelta::FromHours(12);
+constexpr base::TimeDelta kClaimsValidPeriod = base::Hours(12);
 
 const char kAuthorizationRequestHeaderFormat[] = "vapid t=%s, k=%s";
 

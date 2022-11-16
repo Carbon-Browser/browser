@@ -8,21 +8,23 @@
 
 #include "ash/constants/ash_paths.h"
 #include "ash/public/cpp/app_list/internal_app_id_constants.h"
+#include "ash/webui/projector_app/public/cpp/projector_app_constants.h"
 #include "base/bind.h"
 #include "base/callback_helpers.h"
-#include "base/cxx17_backports.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/json/json_file_value_serializer.h"
 #include "base/path_service.h"
-#include "base/task/post_task.h"
 #include "base/task/thread_pool.h"
-#include "base/time/time.h"
+#include "chrome/browser/ash/crostini/crostini_terminal.h"
+#include "chrome/browser/ash/file_manager/app_id.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/ui/app_list/arc/arc_app_utils.h"
 #include "chrome/browser/ui/app_list/page_break_constants.h"
 #include "chrome/browser/web_applications/web_app_id_constants.h"
 #include "chrome/common/extensions/extension_constants.h"
+#include "chromeos/constants/chromeos_features.h"
+#include "components/app_constants/constants.h"
 #include "extensions/common/constants.h"
 
 namespace chromeos {
@@ -39,91 +41,6 @@ const char kDefaultAttr[] = "default";
 const char kNameAttr[] = "name";
 const char kImportDefaultOrderAttr[] = "import_default_order";
 
-// Canonical ordering specified in: go/default-apps
-const char* const kDefaultAppOrder[] = {
-    extension_misc::kChromeAppId,
-    arc::kPlayStoreAppId,
-    extension_misc::kFilesManagerAppId,
-
-    arc::kGmailAppId,
-    extension_misc::kGmailAppId,
-    web_app::kGmailAppId,
-
-    web_app::kGoogleMeetAppId,
-
-    web_app::kGoogleChatAppId,
-
-    extension_misc::kGoogleDocAppId,
-    web_app::kGoogleDocsAppId,
-
-    extension_misc::kGoogleSlidesAppId,
-    web_app::kGoogleSlidesAppId,
-
-    extension_misc::kGoogleSheetsAppId,
-    web_app::kGoogleSheetsAppId,
-
-    extension_misc::kDriveHostedAppId,
-    web_app::kGoogleDriveAppId,
-
-    extension_misc::kGoogleKeepAppId,
-    web_app::kGoogleKeepAppId,
-
-    arc::kGoogleCalendarAppId,
-    extension_misc::kCalendarAppId,
-    web_app::kGoogleCalendarAppId,
-
-    arc::kYoutubeAppId,
-    extension_misc::kYoutubeAppId,
-    web_app::kYoutubeAppId,
-
-    arc::kYoutubeMusicAppId,
-    web_app::kYoutubeMusicAppId,
-    arc::kYoutubeMusicWebApkAppId,
-
-    arc::kPlayMoviesAppId,
-    extension_misc::kGooglePlayMoviesAppId,
-
-    arc::kPlayMusicAppId,
-    extension_misc::kGooglePlayMusicAppId,
-
-    arc::kPlayBooksAppId,
-    extension_misc::kGooglePlayBooksAppId,
-    web_app::kPlayBooksAppId,
-
-    extension_misc::kCameraAppId,
-    web_app::kCameraAppId,
-
-    arc::kGooglePhotosAppId,
-    extension_misc::kGooglePhotosAppId,
-
-    arc::kGoogleDuoAppId,
-    web_app::kStadiaAppId,
-
-    // First default page break
-    app_list::kDefaultPageBreak1,
-
-    arc::kGoogleMapsAppId,
-    extension_misc::kGoogleMapsAppId,  // TODO(crbug.com/976578): Remove.
-    web_app::kGoogleMapsAppId,
-
-    ash::kInternalAppIdSettings,
-    web_app::kSettingsAppId,
-    web_app::kOsSettingsAppId,
-
-    web_app::kHelpAppId,
-    extension_misc::kCalculatorAppId,
-    web_app::kCursiveAppId,
-    web_app::kCanvasAppId,
-    extension_misc::kTextEditorAppId,
-    web_app::kYoutubeTVAppId,
-    web_app::kGoogleNewsAppId,
-    extensions::kWebStoreAppId,
-    arc::kLightRoomAppId,
-    arc::kInfinitePainterAppId,
-    web_app::kShowtimeAppId,
-    extension_misc::kGooglePlusAppId,
-};
-
 // Reads external ordinal json file and returned the parsed value. Returns NULL
 // if the file does not exist or could not be parsed properly. Caller takes
 // ownership of the returned value.
@@ -138,7 +55,7 @@ std::unique_ptr<base::ListValue> ReadExternalOrdinalFile(
       deserializer.Deserialize(NULL, &error_msg);
   if (!value) {
     LOG(WARNING) << "Unable to deserialize default app ordinals json data:"
-        << error_msg << ", file=" << path.value();
+                 << error_msg << ", file=" << path.value();
     return NULL;
   }
 
@@ -150,11 +67,10 @@ std::unique_ptr<base::ListValue> ReadExternalOrdinalFile(
   return ordinal_list_value;
 }
 
-std::string GetLocaleSpecificStringImpl(
-    const base::DictionaryValue* root,
-    const std::string& locale,
-    const std::string& dictionary_name,
-    const std::string& entry_name) {
+std::string GetLocaleSpecificStringImpl(const base::DictionaryValue* root,
+                                        const std::string& locale,
+                                        const std::string& dictionary_name,
+                                        const std::string& entry_name) {
   const base::DictionaryValue* dictionary_content = NULL;
   if (!root || !root->GetDictionary(dictionary_name, &dictionary_content))
     return std::string();
@@ -178,13 +94,117 @@ std::string GetLocaleSpecificStringImpl(
 
 // Gets built-in default app order.
 void GetDefault(std::vector<std::string>* app_ids) {
-  for (size_t i = 0; i < base::size(kDefaultAppOrder); ++i)
-    app_ids->push_back(std::string(kDefaultAppOrder[i]));
+  // Canonical ordering specified in: go/default-apps
+  // clang-format off
+  app_ids->insert(app_ids->end(), {
+    app_constants::kChromeAppId,
+    arc::kPlayStoreAppId,
+
+    extension_misc::kFilesManagerAppId,
+    file_manager::kFileManagerSwaAppId,
+
+    arc::kGmailAppId,
+    extension_misc::kGmailAppId,
+    web_app::kGmailAppId,
+
+    web_app::kGoogleMeetAppId,
+
+    web_app::kGoogleChatAppId,
+
+    extension_misc::kGoogleDocsAppId,
+    web_app::kGoogleDocsAppId,
+
+    extension_misc::kGoogleSlidesAppId,
+    web_app::kGoogleSlidesAppId,
+
+    extension_misc::kGoogleSheetsAppId,
+    web_app::kGoogleSheetsAppId,
+
+    extension_misc::kGoogleDriveAppId,
+    web_app::kGoogleDriveAppId,
+
+    extension_misc::kGoogleKeepAppId,
+    web_app::kGoogleKeepAppId,
+
+    arc::kGoogleCalendarAppId,
+    extension_misc::kCalendarAppId,
+    web_app::kGoogleCalendarAppId,
+
+    web_app::kMessagesAppId,
+
+    arc::kYoutubeAppId,
+    extension_misc::kYoutubeAppId,
+    web_app::kYoutubeAppId,
+
+    arc::kYoutubeMusicAppId,
+    web_app::kYoutubeMusicAppId,
+    arc::kYoutubeMusicWebApkAppId,
+
+    arc::kPlayMoviesAppId,
+    extension_misc::kGooglePlayMoviesAppId,
+    arc::kGoogleTVAppId,
+
+    arc::kPlayMusicAppId,
+    extension_misc::kGooglePlayMusicAppId,
+
+    arc::kPlayBooksAppId,
+    extension_misc::kGooglePlayBooksAppId,
+    web_app::kPlayBooksAppId,
+
+    web_app::kCameraAppId,
+
+    arc::kGooglePhotosAppId,
+    extension_misc::kGooglePhotosAppId,
+
+    web_app::kStadiaAppId,
+
+    // First default page break
+    app_list::kDefaultPageBreak1,
+
+    arc::kGoogleMapsAppId,
+    web_app::kGoogleMapsAppId,
+
+    ash::kInternalAppIdSettings,
+    web_app::kSettingsAppId,
+    web_app::kOsSettingsAppId,
+
+    web_app::kHelpAppId,
+
+    web_app::kCalculatorAppId,
+    extension_misc::kCalculatorAppId,
+
+    web_app::kCursiveAppId,
+    web_app::kCanvasAppId,
+    extension_misc::kTextEditorAppId,
+    web_app::kYoutubeTVAppId,
+    web_app::kGoogleNewsAppId,
+    extensions::kWebStoreAppId,
+
+    crostini::kTerminalSystemAppId,
+    web_app::kMediaAppId,
+    ash::kChromeUITrustedProjectorSwaAppId,
+
+    arc::kLightRoomAppId,
+    arc::kInfinitePainterAppId,
+    web_app::kShowtimeAppId,
+    extension_misc::kGooglePlusAppId,
+  });
+  // clang-format on
+
+  if (chromeos::features::IsCloudGamingDeviceEnabled()) {
+    app_ids->push_back(web_app::kCloudGamingPartnerPlatform);
+  }
 }
 
 }  // namespace
 
-const size_t kDefaultAppOrderCount = base::size(kDefaultAppOrder);
+size_t DefaultAppCount() {
+  std::vector<std::string> apps;
+
+  GetDefault(&apps);
+
+  return apps.size();
+}
 
 ExternalLoader::ExternalLoader(bool async)
     : loaded_(base::WaitableEvent::ResetPolicy::MANUAL,
@@ -221,24 +241,23 @@ const std::string& ExternalLoader::GetOemAppsFolderName() {
 
 void ExternalLoader::Load() {
   base::FilePath ordinals_file;
-  CHECK(
-      base::PathService::Get(chromeos::FILE_DEFAULT_APP_ORDER, &ordinals_file));
+  CHECK(base::PathService::Get(FILE_DEFAULT_APP_ORDER, &ordinals_file));
 
   std::unique_ptr<base::ListValue> ordinals_value =
       ReadExternalOrdinalFile(ordinals_file);
   if (ordinals_value) {
     std::string locale = g_browser_process->GetApplicationLocale();
-    for (size_t i = 0; i < ordinals_value->GetList().size(); ++i) {
-      std::string app_id;
-      base::DictionaryValue* dict = NULL;
-      if (ordinals_value->GetString(i, &app_id)) {
+    for (const base::Value& i : ordinals_value->GetListDeprecated()) {
+      const base::DictionaryValue* dict = nullptr;
+      if (i.is_string()) {
+        std::string app_id = i.GetString();
         app_ids_.push_back(app_id);
-      } else if (ordinals_value->GetDictionary(i, &dict)) {
-        bool flag = false;
-        if (dict->GetBoolean(kOemAppsFolderAttr, &flag) && flag) {
+      } else if (i.GetAsDictionary(&dict)) {
+        if (dict->FindBoolPath(kOemAppsFolderAttr).value_or(false)) {
           oem_apps_folder_name_ = GetLocaleSpecificStringImpl(
               dict, locale, kLocalizedContentAttr, kNameAttr);
-        } else if (dict->GetBoolean(kImportDefaultOrderAttr, &flag) && flag) {
+        } else if (dict->FindBoolPath(kImportDefaultOrderAttr)
+                       .value_or(false)) {
           GetDefault(&app_ids_);
         } else {
           LOG(ERROR) << "Invalid syntax in default_app_order.json";

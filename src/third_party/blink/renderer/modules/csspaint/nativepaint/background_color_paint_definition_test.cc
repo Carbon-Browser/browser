@@ -15,6 +15,7 @@
 #include "third_party/blink/renderer/core/animation/timing.h"
 #include "third_party/blink/renderer/core/css/resolver/style_resolver.h"
 #include "third_party/blink/renderer/core/dom/element.h"
+#include "third_party/blink/renderer/core/execution_context/security_context.h"
 #include "third_party/blink/renderer/core/frame/local_frame_view.h"
 #include "third_party/blink/renderer/core/style/computed_style.h"
 #include "third_party/blink/renderer/core/testing/page_test_base.h"
@@ -48,7 +49,7 @@ TEST_F(BackgroundColorPaintDefinitionTest, SimpleBGColorAnimationNotFallback) {
   )HTML");
 
   Timing timing;
-  timing.iteration_duration = AnimationTimeDelta::FromSecondsD(30);
+  timing.iteration_duration = ANIMATION_TIME_DELTA_FROM_SECONDS(30);
 
   CSSPropertyID property_id = CSSPropertyID::kBackgroundColor;
   Persistent<StringKeyframe> start_keyframe =
@@ -84,6 +85,14 @@ TEST_F(BackgroundColorPaintDefinitionTest, SimpleBGColorAnimationNotFallback) {
   absl::optional<double> progress;
   EXPECT_TRUE(BackgroundColorPaintDefinition::GetBGColorPaintWorkletParams(
       element, &animated_colors, &offsets, &progress));
+  EXPECT_EQ(
+      element->GetElementAnimations()->CompositedBackgroundColorStatus(),
+      ElementAnimations::CompositedPaintStatus::kNeedsRepaintOrNoAnimation);
+
+  UpdateAllLifecyclePhasesForTest();
+  // Cannot composite without a compositor thread.
+  EXPECT_EQ(element->GetElementAnimations()->CompositedBackgroundColorStatus(),
+            ElementAnimations::CompositedPaintStatus::kNotComposited);
 }
 
 // Test the case when there is no animation attached to the element.
@@ -113,7 +122,7 @@ TEST_F(BackgroundColorPaintDefinitionTest, NoBGColorAnimationFallback) {
   )HTML");
 
   Timing timing;
-  timing.iteration_duration = AnimationTimeDelta::FromSecondsD(30);
+  timing.iteration_duration = ANIMATION_TIME_DELTA_FROM_SECONDS(30);
 
   CSSPropertyID property_id = CSSPropertyID::kColor;
   Persistent<StringKeyframe> start_keyframe =
@@ -162,7 +171,7 @@ TEST_F(BackgroundColorPaintDefinitionTest, FallbackToMainCompositeAccumulate) {
   )HTML");
 
   Timing timing;
-  timing.iteration_duration = AnimationTimeDelta::FromSecondsD(30);
+  timing.iteration_duration = ANIMATION_TIME_DELTA_FROM_SECONDS(30);
 
   CSSPropertyID property_id = CSSPropertyID::kBackgroundColor;
   Persistent<StringKeyframe> start_keyframe =
@@ -208,7 +217,7 @@ TEST_F(BackgroundColorPaintDefinitionTest, MultipleAnimationsFallback) {
   )HTML");
 
   Timing timing;
-  timing.iteration_duration = AnimationTimeDelta::FromSecondsD(30);
+  timing.iteration_duration = ANIMATION_TIME_DELTA_FROM_SECONDS(30);
 
   CSSPropertyID property_id = CSSPropertyID::kBackgroundColor;
   Persistent<StringKeyframe> start_keyframe =
@@ -270,7 +279,7 @@ TEST_F(BackgroundColorPaintDefinitionTest,
   )HTML");
 
   Timing timing;
-  timing.iteration_duration = AnimationTimeDelta::FromSecondsD(30);
+  timing.iteration_duration = ANIMATION_TIME_DELTA_FROM_SECONDS(30);
 
   CSSPropertyID property_id = CSSPropertyID::kBackgroundColor;
   Persistent<StringKeyframe> start_keyframe =
@@ -345,7 +354,7 @@ TEST_F(BackgroundColorPaintDefinitionTest, TriggerRepaintChangedKeyframe) {
   )HTML");
 
   Timing timing;
-  timing.iteration_duration = AnimationTimeDelta::FromSecondsD(30);
+  timing.iteration_duration = ANIMATION_TIME_DELTA_FROM_SECONDS(30);
 
   CSSPropertyID property_id = CSSPropertyID::kBackgroundColor;
   Persistent<StringKeyframe> start_keyframe =
@@ -413,7 +422,7 @@ TEST_F(BackgroundColorPaintDefinitionTest,
   ASSERT_TRUE(element);
 
   Timing timing;
-  timing.iteration_duration = AnimationTimeDelta::FromSecondsD(30);
+  timing.iteration_duration = ANIMATION_TIME_DELTA_FROM_SECONDS(30);
 
   CSSPropertyID property_id = CSSPropertyID::kBackgroundColor;
   Persistent<StringKeyframe> start_keyframe =

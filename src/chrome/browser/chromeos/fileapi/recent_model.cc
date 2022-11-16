@@ -30,12 +30,12 @@ namespace chromeos {
 namespace {
 
 // Cut-off time. Files older than this are filtered out.
-constexpr base::TimeDelta kCutoffTimeDelta = base::TimeDelta::FromDays(30);
+constexpr base::TimeDelta kCutoffTimeDelta = base::Days(30);
 
 // Recent file cache will be cleared this duration after it is built.
 // Note: Do not make this value large. When cache is used, cut-off criteria is
 // not strictly honored.
-constexpr base::TimeDelta kCacheExpiration = base::TimeDelta::FromSeconds(10);
+constexpr base::TimeDelta kCacheExpiration = base::Seconds(10);
 
 std::vector<std::unique_ptr<RecentSource>> CreateDefaultSources(
     Profile* profile) {
@@ -87,12 +87,19 @@ void RecentModel::GetRecentFiles(
     storage::FileSystemContext* file_system_context,
     const GURL& origin,
     FileType file_type,
+    bool invalidate_cache,
     GetRecentFilesCallback callback) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
-  // Use cache if available.
+  /**
+   * Use cache only if:
+   *  * cache has value.
+   *  * invalidate_cache = false.
+   *  * cached file type matches the query file type.
+   * Otherwise clear cache if it has values.
+   */
   if (cached_files_.has_value()) {
-    if (cached_files_type_ == file_type) {
+    if (!invalidate_cache && cached_files_type_ == file_type) {
       std::move(callback).Run(cached_files_.value());
       return;
     }

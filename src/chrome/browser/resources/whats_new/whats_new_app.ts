@@ -3,15 +3,15 @@
 // found in the LICENSE file.
 
 import 'chrome://resources/cr_elements/hidden_style_css.m.js';
-import './whats_new_error_page.js';
 import './strings.m.js';
 
 import {ClickInfo, Command} from 'chrome://resources/js/browser_command/browser_command.mojom-webui.js';
 import {BrowserCommandProxy} from 'chrome://resources/js/browser_command/browser_command_proxy.js';
+import {isChromeOS} from 'chrome://resources/js/cr.m.js';
 import {EventTracker} from 'chrome://resources/js/event_tracker.m.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
-import {html, microTask, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
+import {getTemplate} from './whats_new_app.html.js';
 import {WhatsNewProxyImpl} from './whats_new_proxy.js';
 
 type CommandData = {
@@ -30,41 +30,71 @@ export class WhatsNewAppElement extends PolymerElement {
     return 'whats-new-app';
   }
 
+  static get template() {
+    return getTemplate();
+  }
+
   static get properties() {
     return {
-      showErrorPage_: Boolean,
-      url_: String,
+      url_: {
+        type: String,
+        value: '',
+      },
     };
   }
 
-  private showErrorPage_: boolean = false;
-  private url_: string = '';
+  private url_: string;
+
+  private isAutoOpen_: boolean = false;
   private eventTracker_: EventTracker = new EventTracker();
 
-  connectedCallback() {
-    super.connectedCallback();
+  constructor() {
+    super();
 
     const queryParams = new URLSearchParams(window.location.search);
-    const isAutoOpen = queryParams.has('auto');
-    WhatsNewProxyImpl.getInstance().initialize(isAutoOpen).then(url => {
-      if (!url) {
-        this.showErrorPage_ = true;
-        return;
-      }
+    this.isAutoOpen_ = queryParams.has('auto');
 
-      this.url_ = isAutoOpen ? url.concat('?latest=true') : url;
-      this.eventTracker_.add(
-          window, 'message',
-          event => this.handleMessage_(event as MessageEvent));
-    });
+    // There are no subpages in What's New. Also remove the query param here
+    // since its value is recorded.
+    window.history.replaceState(undefined /* stateObject */, '', '/');
   }
 
-  disconnectedCallback() {
+  override connectedCallback() {
+    super.connectedCallback();
+
+    WhatsNewProxyImpl.getInstance().initialize().then(
+        url => this.handleUrlResult_(url));
+  }
+
+  override disconnectedCallback() {
     super.disconnectedCallback();
     this.eventTracker_.removeAll();
   }
 
+  /**
+   * Handles the URL result of sending the initialize WebUI message.
+   * @param url The What's New URL to use in the iframe.
+   */
+  private handleUrlResult_(url: string|null) {
+    if (!url) {
+      // This occurs in the special case of tests where we don't want to load
+      // remote content.
+      return;
+    }
+
+    const latest = this.isAutoOpen_ && !isChromeOS ? 'true' : 'false';
+    url += url.includes('?') ? '&' : '?';
+    this.url_ = url.concat(`latest=${latest}`);
+
+    this.eventTracker_.add(
+        window, 'message', event => this.handleMessage_(event as MessageEvent));
+  }
+
   private handleMessage_(event: MessageEvent) {
+    if (!this.url_) {
+      return;
+    }
+
     const {data, origin} = event;
     const iframeUrl = new URL(this.url_);
     if (!data || origin !== iframeUrl.origin) {
@@ -72,6 +102,9 @@ export class WhatsNewAppElement extends PolymerElement {
     }
 
     const commandData = (data as BrowserCommandMessageData).data;
+    if (!commandData) {
+      return;
+    }
 
     const commandId = Object.values(Command).includes(commandData.commandId) ?
         commandData.commandId :
@@ -85,10 +118,6 @@ export class WhatsNewAppElement extends PolymerElement {
         console.warn('Received invalid command: ' + commandId);
       }
     });
-  }
-
-  static get template() {
-    return html`{__html_template__}`;
   }
 }
 customElements.define(WhatsNewAppElement.is, WhatsNewAppElement);

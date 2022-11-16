@@ -1,6 +1,7 @@
 <link rel="import" href="../../../html/polymer.html">
 
 <link rel="import" href="chrome://resources/html/cr/ui/focus_without_ink.html">
+<link rel="import" href="chrome://resources/html/load_time_data.html">
 <link rel="import" href="chrome://resources/polymer/v1_0/iron-flex-layout/iron-flex-layout-classes.html">
 <link rel="import" href="chrome://resources/polymer/v1_0/iron-icon/iron-icon.html">
 <link rel="import" href="chrome://resources/polymer/v1_0/paper-spinner/paper-spinner-lite.html">
@@ -31,18 +32,14 @@
         transition-duration: 150ms;
       }
 
-      :host(:not([expanded_])) #esimQrCodeDetection:focus-within {
-        background-color: var(--google-grey-refresh-300);
-      }
-
       :host cr-button {
         --ripple-opacity: 0;
       }
 
       #esimQrCodeDetection {
-        background-color: var(--google-grey-refresh-100);
+        background-color: var(--cros-bg-color-dropped-elevation-1);
         border-radius: 4px;
-        margin: 20px 0 20px 0;
+        margin: 20px 0 15px 0;
         overflow: hidden;
         position: relative;
       }
@@ -68,7 +65,7 @@
       }
 
       cr-button[disabled] > iron-icon {
-        --iron-icon-fill-color: var(--google-grey-600);
+        --iron-icon-fill-color: var(--cros-icon-color-disabled);
       }
 
       .animate {
@@ -109,15 +106,15 @@
       }
 
       .scan-error-header {
-        --iron-icon-fill-color: #D93025;
+        --iron-icon-fill-color: var(--cros-icon-color-alert);
       }
 
       .scan-error-message {
-        color: var(--google-red-600);
+        color: var(--cros-text-color-alert);
       }
 
       .blue-icon {
-        --iron-icon-fill-color: #1A73E8;
+        --iron-icon-fill-color: var(--cros-icon-color-prominent);
       }
 
       .hidden {
@@ -135,18 +132,13 @@
       }
 
       #scanSucessHeader {
-        --iron-icon-fill-color: #1E8E3E;
+        --iron-icon-fill-color: var(--cros-icon-color-positive);
         margin-bottom: 8px;
       }
 
       #scanSuccessMessage {
-        color: green;
+        color: var(--cros-text-color-positive);
         font-size: medium;
-      }
-
-      #scanSuccessMessage::selection {
-        background-color: rgb(172, 206, 247);
-        color: green;
       }
 
       #scanFailureHeader {
@@ -165,9 +157,9 @@
       }
 
       #switchCameraButton {
-        background-color: rgba(0, 0, 0, 0.04);
-        border-radius: 4px;
-        color: var(--google-grey-refresh-300);
+        background-color: var(--cros-tooltip-background-color);
+        border-radius: 16px;
+        color: var(--cros-tooltip-label-color);
         margin: 8px;
         padding: 8px;
         position: absolute;
@@ -176,13 +168,13 @@
       }
 
       #switchCameraButton iron-icon {
+        --iron-icon-fill-color: var(--cros-tooltip-icon-color);
         filter: brightness(2.1);
-        --iron-icon-fill-color: #5F6368;
       }
 
-      #loadingMessage {
+      #inputSubtitle {
         bottom: 0;
-        color: var(--google-grey-600);
+        color: var(--cros-text-color-secondary);
         font-size: var(--cr-form-field-label-font-size);
         letter-spacing: .4px;
         line-height: var(--cr-form-field-label-line-height);
@@ -293,8 +285,10 @@
               value="{{activationCode}}"
               disabled="[[showBusy]]"
               on-keydown="onKeyDown_"
-              invalid="[[shouldActivationCodeInputBeInvalid_(state_)]]"
-              error-message="[[i18n('scanQrCodeInvalid')]]">
+              invalid="[[shouldActivationCodeInputBeInvalid_(state_,
+                  isActivationCodeInvalidFormat_)]]"
+              error-message="[[getInputErrorMessage_()]]"
+              aria-description="[[getInputSubtitle_(showBusy)]]">
             <template is="dom-if" if="[[showBusy]]">
               <div slot="suffix">
                 <paper-spinner-lite active>
@@ -302,8 +296,10 @@
               </div>
             </template>
           </cr-input>
-          <div id="loadingMessage" hidden$="[[!showBusy]]">
-              [[i18n('scanQrCodeLoading')]]
+          <div id="inputSubtitle"
+              hidden$="[[shouldActivationCodeInputBeInvalid_(state_,
+                  isActivationCodeInvalidFormat_)]]">
+            [[getInputSubtitle_(showBusy)]]
           </div>
         </div>
       </div>

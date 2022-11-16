@@ -13,11 +13,9 @@ import androidx.annotation.NonNull;
 import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.metrics.RecordUserAction;
-import org.chromium.base.supplier.Supplier;
-import org.chromium.chrome.browser.flags.CachedFeatureFlags;
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.omnibox.OmniboxSuggestionType;
 import org.chromium.chrome.browser.omnibox.R;
+import org.chromium.chrome.browser.omnibox.suggestions.FaviconFetcher;
 import org.chromium.chrome.browser.omnibox.suggestions.OmniboxSuggestionUiType;
 import org.chromium.chrome.browser.omnibox.suggestions.SuggestionHost;
 import org.chromium.chrome.browser.omnibox.suggestions.base.BaseSuggestionViewProcessor;
@@ -25,7 +23,6 @@ import org.chromium.chrome.browser.omnibox.suggestions.base.BaseSuggestionViewPr
 import org.chromium.chrome.browser.omnibox.suggestions.base.SuggestionDrawableState;
 import org.chromium.chrome.browser.omnibox.suggestions.base.SuggestionSpannable;
 import org.chromium.chrome.browser.omnibox.suggestions.basic.SuggestionViewProperties;
-import org.chromium.components.favicon.LargeIconBridge;
 import org.chromium.components.omnibox.AutocompleteMatch;
 import org.chromium.ui.modelutil.PropertyModel;
 
@@ -33,17 +30,14 @@ import java.util.Arrays;
 
 /** A class that handles model and view creation for the clipboard suggestions. */
 public class ClipboardSuggestionProcessor extends BaseSuggestionViewProcessor {
-    private final Supplier<LargeIconBridge> mIconBridgeSupplier;
-
     /**
      * @param context An Android context.
      * @param suggestionHost A handle to the object using the suggestions.
-     * @param iconBridgeSupplier A {@link LargeIconBridge} supplies site favicons.
+     * @param faviconFetcher Mechanism used to retrieve favicons.
      */
-    public ClipboardSuggestionProcessor(Context context, SuggestionHost suggestionHost,
-            Supplier<LargeIconBridge> iconBridgeSupplier) {
-        super(context, suggestionHost);
-        mIconBridgeSupplier = iconBridgeSupplier;
+    public ClipboardSuggestionProcessor(
+            Context context, SuggestionHost suggestionHost, FaviconFetcher faviconFetcher) {
+        super(context, suggestionHost, faviconFetcher);
     }
 
     @Override
@@ -73,7 +67,7 @@ public class ClipboardSuggestionProcessor extends BaseSuggestionViewProcessor {
         model.set(SuggestionViewProperties.TEXT_LINE_1_TEXT,
                 new SuggestionSpannable(suggestion.getDescription()));
 
-        setupContentField(suggestion, model, /* showContent = */ !contentHiddenEnabled());
+        setupContentField(suggestion, model, /* showContent = */ false);
     }
 
     /**
@@ -147,7 +141,7 @@ public class ClipboardSuggestionProcessor extends BaseSuggestionViewProcessor {
 
         if (isUrlSuggestion) {
             // Update favicon for URL if it is available.
-            fetchSuggestionFavicon(model, suggestion.getUrl(), mIconBridgeSupplier.get(), null);
+            fetchSuggestionFavicon(model, suggestion.getUrl());
         }
     }
 
@@ -159,10 +153,6 @@ public class ClipboardSuggestionProcessor extends BaseSuggestionViewProcessor {
      */
     private void updateActionButton(@NonNull AutocompleteMatch suggestion,
             @NonNull PropertyModel model, boolean showContent) {
-        if (!contentHiddenEnabled()) {
-            return;
-        }
-
         int icon =
                 showContent ? R.drawable.ic_visibility_off_black : R.drawable.ic_visibility_black;
         String iconString = getContext().getResources().getString(showContent
@@ -222,13 +212,5 @@ public class ClipboardSuggestionProcessor extends BaseSuggestionViewProcessor {
             @NonNull AutocompleteMatch suggestion, @NonNull PropertyModel model) {
         RecordUserAction.record("Omnibox.ClipboardSuggestion.Conceal");
         setupContentField(suggestion, model, /* showContent = */ false);
-    }
-
-    /**
-     * Check whether the content hidden feature is enabled.
-     * @return True if the feature is enabled.
-     */
-    private boolean contentHiddenEnabled() {
-        return CachedFeatureFlags.isEnabled(ChromeFeatureList.CLIPBOARD_SUGGESTION_CONTENT_HIDDEN);
     }
 }

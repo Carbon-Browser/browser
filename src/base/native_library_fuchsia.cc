@@ -14,7 +14,7 @@
 #include <zircon/status.h>
 #include <zircon/syscalls.h>
 
-#include "base/base_paths_fuchsia.h"
+#include "base/base_paths.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "base/fuchsia/fuchsia_logging.h"
@@ -36,8 +36,8 @@ std::string NativeLibraryLoadError::ToString() const {
 NativeLibrary LoadNativeLibraryWithOptions(const FilePath& library_path,
                                            const NativeLibraryOptions& options,
                                            NativeLibraryLoadError* error) {
-  std::vector<base::FilePath::StringType> components;
-  library_path.GetComponents(&components);
+  std::vector<base::FilePath::StringType> components =
+      library_path.GetComponents();
   if (components.size() != 1u) {
     NOTREACHED() << "library_path is a path, should be a filename: "
                  << library_path.MaybeAsASCII();
@@ -50,12 +50,13 @@ NativeLibrary LoadNativeLibraryWithOptions(const FilePath& library_path,
 
   // Use fdio_open_fd (a Fuchsia-specific API) here so we can pass the
   // appropriate FS rights flags to request executability.
-  // TODO(1018538): Teach base::File about FLAG_EXECUTE on Fuchsia, and then
+  // TODO(1018538): Teach base::File about FLAG_WIN_EXECUTE on Fuchsia, and then
   // use it here instead of using fdio_open_fd() directly.
   base::ScopedFD fd;
   zx_status_t status = fdio_open_fd(
       computed_path.value().c_str(),
-      fuchsia::io::OPEN_RIGHT_READABLE | fuchsia::io::OPEN_RIGHT_EXECUTABLE,
+      static_cast<uint32_t>(fuchsia::io::OpenFlags::RIGHT_READABLE |
+                            fuchsia::io::OpenFlags::RIGHT_EXECUTABLE),
       base::ScopedFD::Receiver(fd).get());
   if (status != ZX_OK) {
     if (error) {

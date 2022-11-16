@@ -8,11 +8,13 @@
 
 #include "ash/accessibility/default_accessibility_delegate.h"
 #include "ash/capture_mode/test_capture_mode_delegate.h"
+#include "ash/public/cpp/test/test_desks_templates_delegate.h"
 #include "ash/public/cpp/test/test_nearby_share_delegate.h"
+#include "ash/system/geolocation/test_geolocation_url_loader_factory.h"
 #include "ash/system/tray/system_tray_notifier.h"
 #include "ash/wm/gestures/back_gesture/test_back_gesture_contextual_nudge_delegate.h"
-#include "components/full_restore/app_launch_info.h"
 #include "ui/gfx/image/image.h"
+#include "url/gurl.h"
 
 namespace ash {
 
@@ -39,11 +41,28 @@ TestShellDelegate::CreateBackGestureContextualNudgeDelegate(
   return std::make_unique<TestBackGestureContextualNudgeDelegate>(controller);
 }
 
+std::unique_ptr<NearbyShareDelegate>
+TestShellDelegate::CreateNearbyShareDelegate(
+    NearbyShareController* controller) const {
+  return std::make_unique<TestNearbyShareDelegate>();
+}
+
+std::unique_ptr<DesksTemplatesDelegate>
+TestShellDelegate::CreateDesksTemplatesDelegate() const {
+  return std::make_unique<TestDesksTemplatesDelegate>();
+}
+
+scoped_refptr<network::SharedURLLoaderFactory>
+TestShellDelegate::GetGeolocationUrlLoaderFactory() const {
+  return static_cast<scoped_refptr<network::SharedURLLoaderFactory>>(
+      base::MakeRefCounted<TestGeolocationUrlLoaderFactory>());
+}
+
 bool TestShellDelegate::CanGoBack(gfx::NativeWindow window) const {
   return can_go_back_;
 }
 
-void TestShellDelegate::SetTabScrubberEnabled(bool enabled) {
+void TestShellDelegate::SetTabScrubberChromeOSEnabled(bool enabled) {
   tab_scrubber_enabled_ = enabled;
 }
 
@@ -56,7 +75,7 @@ int TestShellDelegate::GetBrowserWebUITabStripHeight() {
 }
 
 void TestShellDelegate::BindMultiDeviceSetup(
-    mojo::PendingReceiver<chromeos::multidevice_setup::mojom::MultiDeviceSetup>
+    mojo::PendingReceiver<multidevice_setup::mojom::MultiDeviceSetup>
         receiver) {
   if (multidevice_setup_binder_)
     multidevice_setup_binder_.Run(std::move(receiver));
@@ -69,12 +88,6 @@ void TestShellDelegate::SetCanGoBack(bool can_go_back) {
 void TestShellDelegate::SetShouldWaitForTouchAck(
     bool should_wait_for_touch_ack) {
   should_wait_for_touch_ack_ = should_wait_for_touch_ack;
-}
-
-std::unique_ptr<NearbyShareDelegate>
-TestShellDelegate::CreateNearbyShareDelegate(
-    NearbyShareController* controller) const {
-  return std::make_unique<TestNearbyShareDelegate>();
 }
 
 bool TestShellDelegate::IsSessionRestoreInProgress() const {
@@ -93,9 +106,17 @@ base::FilePath TestShellDelegate::GetPrimaryUserDownloadsFolder() const {
   return base::FilePath();
 }
 
-std::unique_ptr<::full_restore::AppLaunchInfo>
-TestShellDelegate::GetAppLaunchDataForDeskTemplate(aura::Window* window) const {
-  return nullptr;
+const GURL& TestShellDelegate::GetLastCommittedURLForWindowIfAny(
+    aura::Window* window) {
+  return last_committed_url_;
+}
+
+void TestShellDelegate::SetLastCommittedURLForWindow(const GURL& url) {
+  last_committed_url_ = url;
+}
+
+version_info::Channel TestShellDelegate::GetChannel() {
+  return channel_;
 }
 
 }  // namespace ash

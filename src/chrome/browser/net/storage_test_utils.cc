@@ -35,15 +35,8 @@ constexpr char kHasStorageAccess[] =
     "  () => { window.domAutomationController.send(false); },"
     ");";
 
-void ExpectFrameContent(content::RenderFrameHost* frame,
-                        const std::string& expected) {
-  EXPECT_EQ(expected, content::EvalJs(frame, "document.body.textContent"));
-}
-
-void ExpectCookiesOnHost(content::BrowserContext* context,
-                         const GURL& host_url,
-                         const std::string& expected) {
-  EXPECT_EQ(expected, content::GetCookies(context, host_url));
+std::string GetFrameContent(content::RenderFrameHost* frame) {
+  return content::EvalJs(frame, "document.body.textContent").ExtractString();
 }
 
 void SetStorageForFrame(content::RenderFrameHost* frame) {
@@ -51,7 +44,14 @@ void SetStorageForFrame(content::RenderFrameHost* frame) {
     bool data = content::EvalJs(frame, "set" + data_type + "()",
                                 content::EXECUTE_SCRIPT_USE_MANUAL_REPLY)
                     .ExtractBool();
-    EXPECT_TRUE(data) << "SetStorageForFrame for " << data_type;
+    if (frame->GetLastCommittedOrigin() !=
+            frame->GetMainFrame()->GetLastCommittedOrigin() &&
+        data_type == "WebSql") {
+      // Third-party context WebSQL is disabled as of M97.
+      EXPECT_FALSE(data) << "SetStorageForFrame for " << data_type;
+    } else {
+      EXPECT_TRUE(data) << "SetStorageForFrame for " << data_type;
+    }
   }
 }
 
@@ -69,7 +69,14 @@ void ExpectStorageForFrame(content::RenderFrameHost* frame, bool expected) {
     bool data = content::EvalJs(frame, "has" + data_type + "();",
                                 content::EXECUTE_SCRIPT_USE_MANUAL_REPLY)
                     .ExtractBool();
-    EXPECT_EQ(expected, data) << "ExpectStorageForFrame for " << data_type;
+    if (frame->GetLastCommittedOrigin() !=
+            frame->GetMainFrame()->GetLastCommittedOrigin() &&
+        data_type == "WebSql") {
+      // Third-party context WebSQL is disabled as of M97.
+      EXPECT_FALSE(data) << "ExpectStorageForFrame for " << data_type;
+    } else {
+      EXPECT_EQ(expected, data) << "ExpectStorageForFrame for " << data_type;
+    }
   }
 }
 
@@ -101,20 +108,16 @@ void ExpectCrossTabInfoForFrame(content::RenderFrameHost* frame,
   }
 }
 
-void RequestStorageAccessForFrame(content::RenderFrameHost* frame,
-                                  bool should_resolve) {
-  bool data = content::EvalJs(frame, kRequestStorageAccess,
-                              content::EXECUTE_SCRIPT_USE_MANUAL_REPLY)
-                  .ExtractBool();
-  EXPECT_EQ(should_resolve, data) << "document.requestStorageAccess()";
+bool RequestStorageAccessForFrame(content::RenderFrameHost* frame) {
+  return content::EvalJs(frame, kRequestStorageAccess,
+                         content::EXECUTE_SCRIPT_USE_MANUAL_REPLY)
+      .ExtractBool();
 }
 
-void CheckStorageAccessForFrame(content::RenderFrameHost* frame,
-                                bool access_expected) {
-  bool data = content::EvalJs(frame, kHasStorageAccess,
-                              content::EXECUTE_SCRIPT_USE_MANUAL_REPLY)
-                  .ExtractBool();
-  EXPECT_EQ(access_expected, data) << "document.hasStorageAccess()";
+bool HasStorageAccessForFrame(content::RenderFrameHost* frame) {
+  return content::EvalJs(frame, kHasStorageAccess,
+                         content::EXECUTE_SCRIPT_USE_MANUAL_REPLY)
+      .ExtractBool();
 }
 
 }  // namespace test

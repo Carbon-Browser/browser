@@ -9,7 +9,6 @@
 
 #include <memory>
 
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "media/cast/cast_environment.h"
 #include "media/cast/common/rtp_time.h"
@@ -21,6 +20,7 @@ namespace media {
 namespace cast {
 
 class AudioDecoder;
+struct EncodedFrame;
 class VideoDecoder;
 
 // This is a pure owner class that groups all required receiver-related objects
@@ -32,6 +32,9 @@ class CastReceiverImpl final : public CastReceiver {
                    const FrameReceiverConfig& audio_config,
                    const FrameReceiverConfig& video_config,
                    CastTransport* const transport);
+
+  CastReceiverImpl(const CastReceiverImpl&) = delete;
+  CastReceiverImpl& operator=(const CastReceiverImpl&) = delete;
 
   ~CastReceiverImpl() final;
 
@@ -105,8 +108,6 @@ class CastReceiverImpl final : public CastReceiver {
   // Created on-demand to decode frames from |video_receiver_| into VideoFrame
   // images for playback.
   std::unique_ptr<VideoDecoder> video_decoder_;
-
-  DISALLOW_COPY_AND_ASSIGN(CastReceiverImpl);
 };
 
 }  // namespace cast

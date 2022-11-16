@@ -4,37 +4,62 @@
 
 #include "content/browser/buckets/bucket_manager.h"
 
+#include "content/browser/buckets/bucket_context.h"
 #include "content/browser/buckets/bucket_manager_host.h"
+#include "content/browser/renderer_host/render_frame_host_impl.h"
 #include "services/network/public/cpp/is_potentially_trustworthy.h"
 
 namespace content {
 
-BucketManager::BucketManager() = default;
+BucketManager::BucketManager(
+    scoped_refptr<storage::QuotaManagerProxy> quota_manager_proxy)
+    : quota_manager_proxy_(std::move(quota_manager_proxy)) {}
+
 BucketManager::~BucketManager() = default;
 
-void BucketManager::BindReceiver(
+void BucketManager::BindReceiverForRenderFrame(
+    const GlobalRenderFrameHostId& render_frame_host_id,
+    mojo::PendingReceiver<blink::mojom::BucketManagerHost> receiver,
+    mojo::ReportBadMessageCallback bad_message_callback) {
+  RenderFrameHost* rfh = RenderFrameHost::FromID(render_frame_host_id);
+  DCHECK(rfh);
+  DoBindReceiver(
+      BucketContext(render_frame_host_id, rfh->GetLastCommittedOrigin()),
+      std::move(receiver), std::move(bad_message_callback));
+}
+
+void BucketManager::BindReceiverForWorker(
+    int render_process_id,
     const url::Origin& origin,
+    mojo::PendingReceiver<blink::mojom::BucketManagerHost> receiver,
+    mojo::ReportBadMessageCallback bad_message_callback) {
+  DoBindReceiver(BucketContext(render_process_id, origin), std::move(receiver),
+                 std::move(bad_message_callback));
+}
+
+void BucketManager::DoBindReceiver(
+    const BucketContext& context,
     mojo::PendingReceiver<blink::mojom::BucketManagerHost> receiver,
     mojo::ReportBadMessageCallback bad_message_callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  auto it = hosts_.find(origin);
+  auto it = hosts_.find(context.origin());
   if (it != hosts_.end()) {
-    it->second->BindReceiver(std::move(receiver));
+    it->second->BindReceiver(std::move(receiver), context);
     return;
   }
 
-  if (!network::IsOriginPotentiallyTrustworthy(origin)) {
+  if (!network::IsOriginPotentiallyTrustworthy(context.origin())) {
     std::move(bad_message_callback)
         .Run("Called Buckets from an insecure context");
     return;
   }
 
-  bool insert_succeeded;
-  std::tie(it, insert_succeeded) = hosts_.insert(
-      {origin, std::make_unique<BucketManagerHost>(this, origin)});
+  auto [insert_it, insert_succeeded] =
+      hosts_.insert({context.origin(), std::make_unique<BucketManagerHost>(
+                                           this, context.origin())});
   DCHECK(insert_succeeded);
-  it->second->BindReceiver(std::move(receiver));
+  insert_it->second->BindReceiver(std::move(receiver), context);
 }
 
 void BucketManager::OnHostReceiverDisconnect(BucketManagerHost* host,

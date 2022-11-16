@@ -23,36 +23,30 @@ GEN('#include "ash/constants/ash_features.h"');
 GEN('#include "content/public/test/browser_test.h"');
 
 const dxTestSuites = 'chromeos/diagnostics/diagnostics_app_unified_test.js';
+const diagnosticsUrl =
+    `chrome://diagnostics/test_loader.html?module=${dxTestSuites}&host=test`;
 
 this.DiagnosticsApp = class extends PolymerTest {
   /** @override */
   get browsePreload() {
-    return `chrome://diagnostics/test_loader.html?module=${dxTestSuites}`;
+    return diagnosticsUrl;
   }
 
   /** @override */
-  get featureList() {
-    return {
-      enabled: [
-        'chromeos::features::kDiagnosticsApp',
-      ],
-    };
-  }
+  get featureList() {}
 };
 
 this.DiagnosticsAppWithNetwork = class extends PolymerTest {
   /** @override */
   get browsePreload() {
-    return `chrome://diagnostics/test_loader.html?module=${dxTestSuites}`;
+    return diagnosticsUrl;
   }
 
   /** @override */
   get featureList() {
     return {
       enabled: [
-        'chromeos::features::kDiagnosticsApp',
         'chromeos::features::kEnableNetworkingInDiagnosticsApp',
-        'chromeos::features::kDiagnosticsAppNavigation',
       ],
     };
   }
@@ -61,15 +55,16 @@ this.DiagnosticsAppWithNetwork = class extends PolymerTest {
 this.DiagnosticsAppWithInput = class extends PolymerTest {
   /** @override */
   get browsePreload() {
-    return `chrome://diagnostics/test_loader.html?module=${dxTestSuites}`;
+    return diagnosticsUrl;
   }
 
   /** @override */
   get featureList() {
     return {
       enabled: [
-        'chromeos::features::kDiagnosticsApp',
         'chromeos::features::kEnableInputInDiagnosticsApp',
+        'chromeos::features::kEnableTouchpadsInDiagnosticsApp',
+        'chromeos::features::kEnableTouchscreensInDiagnosticsApp',
       ],
     };
   }
@@ -80,11 +75,14 @@ this.DiagnosticsAppWithInput = class extends PolymerTest {
 // although technically is not necessary.
 const debug_suites_list = [
   'App',
+  'AppForInputHiding',
   'BatteryStatusCard',
   'CellularInfo',
   'ConnectivityCard',
   'CpuCard',
   'DataPoint',
+  'DiagnosticsNetworkIcon',
+  'DiagnosticsStickyBanner',
   'DiagnosticsUtils',
   'EthernetInfo',
   'FakeMojoInterface',
@@ -92,8 +90,10 @@ const debug_suites_list = [
   'FakeSystemDataProvider',
   'FakeSystemRoutineContoller',
   'FrequencyChannelUtils',
+  'InputCard',
   'InputList',
   'IpConfigInfoDrawer',
+  'KeyboardTester',
   'MemoryCard',
   'NetworkCard',
   'NetworkInfo',
@@ -102,6 +102,7 @@ const debug_suites_list = [
   'OverviewCard',
   'PercentBarChart',
   'RealtimeCpuChart',
+  'RoutineGroup',
   'RoutineListExecutor',
   'RoutineResultEntry',
   'RoutineResultList',

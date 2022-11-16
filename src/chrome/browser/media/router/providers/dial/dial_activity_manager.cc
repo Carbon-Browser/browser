@@ -88,11 +88,11 @@ std::unique_ptr<DialActivity> DialActivity::From(
   // temporary object.
   for (net::QueryIterator query_it(url); !query_it.IsAtEnd();
        query_it.Advance()) {
-    std::string key = query_it.GetKey();
+    const base::StringPiece key = query_it.GetKey();
     if (key == "clientId") {
-      client_id = query_it.GetValue();
+      client_id = std::string(query_it.GetValue());
     } else if (key == "dialPostData") {
-      post_data = query_it.GetValue();
+      post_data = std::string(query_it.GetValue());
     }
   }
   if (client_id.empty())
@@ -106,7 +106,7 @@ std::unique_ptr<DialActivity> DialActivity::From(
   MediaRoute route(
       MediaRoute::GetMediaRouteId(presentation_id, sink_id, source), source,
       sink_id, app_name,
-      /* is_local */ true, /* for_display */ true);
+      /* is_local */ true);
   route.set_presentation_id(presentation_id);
   route.set_off_the_record(off_the_record);
   return std::make_unique<DialActivity>(launch_info, route, sink,
@@ -217,17 +217,18 @@ void DialActivityManager::LaunchApp(
           std::move(fetcher), std::move(callback));
 }
 
-std::pair<absl::optional<std::string>, RouteRequestResult::ResultCode>
+std::pair<absl::optional<std::string>, mojom::RouteRequestResultCode>
 DialActivityManager::CanStopApp(const MediaRoute::Id& route_id) const {
   auto record_it = records_.find(route_id);
   if (record_it == records_.end())
-    return {"Activity not found", RouteRequestResult::ROUTE_NOT_FOUND};
+    return {"Activity not found",
+            mojom::RouteRequestResultCode::ROUTE_NOT_FOUND};
 
   if (record_it->second->pending_stop_request) {
     return {"A pending request already exists",
-            RouteRequestResult::UNKNOWN_ERROR};
+            mojom::RouteRequestResultCode::UNKNOWN_ERROR};
   }
-  return {absl::nullopt, RouteRequestResult::OK};
+  return {absl::nullopt, mojom::RouteRequestResultCode::OK};
 }
 
 void DialActivityManager::StopApp(
@@ -244,7 +245,7 @@ void DialActivityManager::StopApp(
   // as if it never launched.
   if (record->state != DialActivityManager::Record::State::kLaunched) {
     records_.erase(record_it);
-    std::move(callback).Run(absl::nullopt, RouteRequestResult::OK);
+    std::move(callback).Run(absl::nullopt, mojom::RouteRequestResultCode::OK);
     return;
   }
 
@@ -326,7 +327,7 @@ void DialActivityManager::OnStopSuccess(const MediaRoute::Id& route_id,
   auto& record = record_it->second;
   auto cb = std::move(record->pending_stop_request->callback);
   records_.erase(record_it);
-  std::move(cb).Run(absl::nullopt, RouteRequestResult::OK);
+  std::move(cb).Run(absl::nullopt, mojom::RouteRequestResultCode::OK);
 }
 
 void DialActivityManager::OnStopError(const MediaRoute::Id& route_id,
@@ -363,11 +364,12 @@ void DialActivityManager::OnInfoFetchedAfterStopError(
     // The app is no longer running, so we remove the record and the MediaRoute
     // associated with it.
     records_.erase(record_it);
-    std::move(cb).Run(message, RouteRequestResult::ROUTE_ALREADY_TERMINATED);
+    std::move(cb).Run(message,
+                      mojom::RouteRequestResultCode::ROUTE_ALREADY_TERMINATED);
   } else {
     // The app might still be running, so we don't remove the record.
     record->pending_stop_request.reset();
-    std::move(cb).Run(message, RouteRequestResult::UNKNOWN_ERROR);
+    std::move(cb).Run(message, mojom::RouteRequestResultCode::UNKNOWN_ERROR);
   }
 }
 

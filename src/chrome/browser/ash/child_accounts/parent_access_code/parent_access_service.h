@@ -9,7 +9,6 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
 #include "base/no_destructor.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
@@ -48,7 +47,12 @@ class ParentAccessService {
   // Gets the service singleton.
   static ParentAccessService& Get();
 
+  ParentAccessService(const ParentAccessService&) = delete;
+  ParentAccessService& operator=(const ParentAccessService&) = delete;
+
   // Checks if the provided |action| requires parental approval to be performed.
+  // Requires owner_account_id to be available in the UserManager, so if calling
+  // close to startup, ensure owner account is set before calling.
   static bool IsApprovalRequired(SupervisedAction action);
 
   // Checks if |access_code| is valid for the user identified by |account_id|.
@@ -80,8 +84,6 @@ class ParentAccessService {
   ConfigSource config_source_;
 
   base::ObserverList<Observer> observers_;
-
-  DISALLOW_COPY_AND_ASSIGN(ParentAccessService);
 };
 
 }  // namespace parent_access

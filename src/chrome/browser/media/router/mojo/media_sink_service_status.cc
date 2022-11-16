@@ -79,7 +79,7 @@ base::Value ToValue(const MediaSinkInternal& sink_internal) {
     dict.SetKey("capabilities", base::Value(extra_data.capabilities));
     dict.SetKey("channel_id", base::Value(extra_data.cast_channel_id));
     dict.SetKey("discovered_by_dial",
-                base::Value(extra_data.discovered_by_dial));
+        base::Value(extra_data.discovery_type == CastDiscoveryType::kDial));
   }
   return dict;
 }
@@ -101,7 +101,7 @@ base::Value ConvertDiscoveredSinksToValues(
 // Helper function to convert |available_sinks| to a dictionary of availability
 // strings in JSON format represented by base::Value.
 base::Value ConvertAvailableSinksToValues(
-    const base::MRUCache<std::string, std::vector<MediaSinkInternal>>&
+    const base::LRUCache<std::string, std::vector<MediaSinkInternal>>&
         available_sinks) {
   base::Value dict(base::Value::Type::DICTIONARY);
   for (const auto& sinks_it : available_sinks) {

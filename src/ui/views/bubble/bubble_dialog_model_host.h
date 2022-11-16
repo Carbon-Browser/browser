@@ -9,9 +9,11 @@
 #include <vector>
 
 #include "base/callback.h"
+#include "base/memory/raw_ptr.h"
+#include "base/types/pass_key.h"
 #include "ui/base/models/dialog_model.h"
 #include "ui/views/bubble/bubble_dialog_delegate_view.h"
-#include "ui/views/controls/button/button.h"
+#include "ui/views/view.h"
 
 namespace views {
 
@@ -29,6 +31,25 @@ class StyledLabel;
 class VIEWS_EXPORT BubbleDialogModelHost : public BubbleDialogDelegate,
                                            public ui::DialogModelHost {
  public:
+  enum class FieldType { kText, kControl, kMenuItem };
+
+  class VIEWS_EXPORT CustomView : public ui::DialogModelCustomField::Field {
+   public:
+    CustomView(std::unique_ptr<View> view, FieldType field_type);
+    CustomView(const CustomView&) = delete;
+    CustomView& operator=(const CustomView&) = delete;
+    ~CustomView() override;
+
+    std::unique_ptr<View> TransferView();
+
+    FieldType field_type() const { return field_type_; }
+
+   private:
+    // `view` is intended to be moved into the View hierarchy.
+    std::unique_ptr<View> view_;
+    const FieldType field_type_;
+  };
+
   // Constructs a BubbleDialogModelHost, which for most purposes is to used as a
   // BubbleDialogDelegate. The BubbleDialogDelegate is nominally handed to
   // BubbleDialogDelegate::CreateBubble() which returns a Widget that has taken
@@ -36,6 +57,15 @@ class VIEWS_EXPORT BubbleDialogModelHost : public BubbleDialogDelegate,
   BubbleDialogModelHost(std::unique_ptr<ui::DialogModel> model,
                         View* anchor_view,
                         BubbleBorder::Arrow arrow);
+
+  // "Private" constructor (uses base::PassKey), use another constructor or
+  // ::CreateModal().
+  BubbleDialogModelHost(base::PassKey<BubbleDialogModelHost>,
+                        std::unique_ptr<ui::DialogModel> model,
+                        View* anchor_view,
+                        BubbleBorder::Arrow arrow,
+                        ui::ModalType modal_type);
+
   ~BubbleDialogModelHost() override;
 
   static std::unique_ptr<BubbleDialogModelHost> CreateModal(
@@ -98,6 +128,8 @@ class VIEWS_EXPORT BubbleDialogModelHost : public BubbleDialogDelegate,
   void AddOrUpdateBodyText(ui::DialogModelBodyText* model_field);
   void AddOrUpdateCheckbox(ui::DialogModelCheckbox* model_field);
   void AddOrUpdateCombobox(ui::DialogModelCombobox* model_field);
+  void AddOrUpdateMenuItem(ui::DialogModelMenuItem* model_field);
+  void AddOrUpdateSeparator(ui::DialogModelField* model_field);
   void AddOrUpdateTextfield(ui::DialogModelTextfield* model_field);
 
   void UpdateSpacingAndMargins();
@@ -130,7 +162,7 @@ class VIEWS_EXPORT BubbleDialogModelHost : public BubbleDialogDelegate,
   bool IsModalDialog() const;
 
   std::unique_ptr<ui::DialogModel> model_;
-  ContentsView* const contents_view_;
+  const raw_ptr<ContentsView> contents_view_;
 
   std::vector<DialogModelHostField> fields_;
   std::vector<base::CallbackListSubscription> property_changed_subscriptions_;

@@ -17,6 +17,7 @@
 #include "ash/style/default_color_constants.h"
 #include "ash/wallpaper/wallpaper_controller_impl.h"
 #include "base/bind.h"
+#include "base/callback.h"
 #include "cc/paint/paint_flags.h"
 #include "cc/paint/paint_shader.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -51,7 +52,7 @@ constexpr int kExtraSmallVerticalDistanceBetweenUsersDp = 32;
 constexpr int kExtraSmallGradientHeightDp = 112;
 
 // Inset the scroll bar from the edges of the screen.
-constexpr gfx::Insets kVerticalScrollInsets(2, 0, 2, 8);
+constexpr auto kVerticalScrollInsets = gfx::Insets::TLBR(2, 0, 2, 8);
 
 constexpr char kScrollableUsersListContentViewName[] =
     "ScrollableUsersListContent";
@@ -61,6 +62,10 @@ class EnsureMinHeightView : public NonAccessibleView {
  public:
   EnsureMinHeightView()
       : NonAccessibleView(kScrollableUsersListContentViewName) {}
+
+  EnsureMinHeightView(const EnsureMinHeightView&) = delete;
+  EnsureMinHeightView& operator=(const EnsureMinHeightView&) = delete;
+
   ~EnsureMinHeightView() override = default;
 
   // NonAccessibleView:
@@ -75,9 +80,6 @@ class EnsureMinHeightView : public NonAccessibleView {
     }
     NonAccessibleView::Layout();
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(EnsureMinHeightView);
 };
 
 struct LayoutParams {
@@ -98,18 +100,20 @@ LayoutParams BuildLayoutForStyle(LoginDisplayStyle style) {
       params.insets_landscape =
           gfx::Insets(kExtraSmallPaddingAroundUserListLandscapeDp);
       params.insets_portrait =
-          gfx::Insets(kExtraSmallPaddingTopBottomOfUserListPortraitDp,
-                      kExtraSmallPaddingLeftOfUserListPortraitDp,
-                      kExtraSmallPaddingTopBottomOfUserListPortraitDp,
-                      kExtraSmallPaddingRightOfUserListPortraitDp);
+          gfx::Insets::TLBR(kExtraSmallPaddingTopBottomOfUserListPortraitDp,
+                            kExtraSmallPaddingLeftOfUserListPortraitDp,
+                            kExtraSmallPaddingTopBottomOfUserListPortraitDp,
+                            kExtraSmallPaddingRightOfUserListPortraitDp);
       return params;
     }
     case LoginDisplayStyle::kSmall: {
       LayoutParams params;
-      params.insets_landscape = gfx::Insets(kSmallPaddingTopBottomOfUserListDp,
-                                            kSmallPaddingLeftRightOfUserListDp);
-      params.insets_portrait = gfx::Insets(kSmallPaddingTopBottomOfUserListDp,
-                                           kSmallPaddingLeftRightOfUserListDp);
+      params.insets_landscape =
+          gfx::Insets::VH(kSmallPaddingTopBottomOfUserListDp,
+                          kSmallPaddingLeftRightOfUserListDp);
+      params.insets_portrait =
+          gfx::Insets::VH(kSmallPaddingTopBottomOfUserListDp,
+                          kSmallPaddingLeftRightOfUserListDp);
       params.between_child_spacing = kSmallVerticalDistanceBetweenUsersDp;
       return params;
     }
@@ -293,9 +297,10 @@ void ScrollableUsersListView::OnPaintBackground(gfx::Canvas* canvas) {
       SkScalar bottom_gradient_start = 1.f - top_gradient_end;
       SkScalar color_positions[4] = {0.f, top_gradient_end,
                                      bottom_gradient_start, 1.f};
-      SkColor colors[4] = {gradient_params_.color_from,
-                           gradient_params_.color_to, gradient_params_.color_to,
-                           gradient_params_.color_from};
+      SkColor4f colors[4] = {SkColor4f::FromColor(gradient_params_.color_from),
+                             SkColor4f::FromColor(gradient_params_.color_to),
+                             SkColor4f::FromColor(gradient_params_.color_to),
+                             SkColor4f::FromColor(gradient_params_.color_from)};
 
       flags.setShader(cc::PaintShader::MakeLinearGradient(
           in_view_coordinates, colors, color_positions, 4, SkTileMode::kClamp));

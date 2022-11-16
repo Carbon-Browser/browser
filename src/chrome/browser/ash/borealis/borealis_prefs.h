@@ -14,6 +14,11 @@ namespace prefs {
 // on the device.
 extern const char kBorealisInstalledOnDevice[];
 
+// A string pref which records the user's current "insert_coin" guess. We record
+// the hash of that guess here, and the hash of this will be used to check the
+// token (i.e. we double-hash whatever the user typed in).
+extern const char kBorealisVmTokenHash[];
+
 // A boolean preference for managing whether borealis is allowed for the user
 // (mainly used by enterprises).
 extern const char kBorealisAllowedForUser[];
@@ -21,6 +26,11 @@ extern const char kBorealisAllowedForUser[];
 extern const char kEngagementPrefsPrefix[];
 
 extern const char kBorealisMicAllowed[];
+
+// A string pref which records the current value of the BorealisLaunchOptions.
+// The string is formatted as documented in
+// chrome/browser/ash/borealis/borealis_launch_options.h.
+extern const char kExtraLaunchOptions[];
 
 void RegisterProfilePrefs(PrefRegistrySimple* registry);
 

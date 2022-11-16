@@ -38,15 +38,15 @@ if (is_android) {
       "//base:base_java",
       "//base:base_java_test_support",
       "//base:jni_java",
+      "//build/android:build_java",
       "//components/embedder_support/android:application_java",
       "//components/safe_browsing/android:safe_browsing_java",
       "//components/translate/content/android:java",
       "//content/public/android:content_java",
       "//content/public/test/android:content_java_test_support",
       "//testing/android/native_test:native_test_java",
-      "//third_party/android_deps:android_support_v4_java",
       "//third_party/androidx:androidx_annotation_annotation_java",
-      "//third_party/androidx:androidx_core_core_java",
+      "//third_party/androidx:androidx_fragment_fragment_java",
       "//ui/android:ui_java",
       "//weblayer/browser/java",
       "//weblayer/browser/java:base_module_interfaces_java",
@@ -94,7 +94,6 @@ test("weblayer_browsertests") {
     "//components/test/data",
     "//net/tools/testserver/",
     "//third_party/pywebsocket3/src/mod_pywebsocket/",
-    "//third_party/tlslite/",
   ]
 
   data_deps = [
@@ -165,7 +164,6 @@ test("weblayer_browsertests") {
     "../browser/clipboard_browsertest.cc",
     "../browser/content_settings_browsertest.cc",
     "../browser/cookie_manager_browsertest.cc",
-    "../browser/default_search_engine_browsertest.cc",
     "../browser/download_browsertest.cc",
     "../browser/errorpage_browsertest.cc",
     "../browser/favicon/favicon_fetcher_browsertest.cc",
@@ -222,7 +220,9 @@ test("weblayer_browsertests") {
       "../browser/safe_browsing/client_side_detection_service_browsertest.cc",
       "../browser/safe_browsing/client_side_detection_service_factory_browsertest.cc",
       "../browser/safe_browsing/safe_browsing_browsertest.cc",
+      "../browser/safe_browsing/weblayer_ping_manager_browsertest.cc",
       "../browser/url_bar/page_info_browsertest.cc",
+      "../browser/webapps/webapk_install_scheduler_browsertest.cc",
       "../shell/android/browsertests_apk/translate_test_bridge.cc",
       "../shell/android/browsertests_apk/translate_test_bridge.h",
       "../shell/android/browsertests_apk/weblayer_browser_tests_jni_onload.cc",
@@ -233,7 +233,6 @@ test("weblayer_browsertests") {
       ":weblayer_browsertests_java",
       ":weblayer_browsertests_jni",
       ":weblayer_test_assets",
-      "//android_webview:generate_aw_strings_grit",
       "//android_webview:locale_pak_assets",
       "//android_webview:pak_file_assets",
       "//components/android_autofill/browser:test_support",
@@ -244,16 +243,19 @@ test("weblayer_browsertests") {
       "//components/safe_browsing/android:safe_browsing_api_handler",
       "//components/safe_browsing/content/browser",
       "//components/safe_browsing/content/browser:client_side_detection",
-      "//components/safe_browsing/content/browser:client_side_model_loader",
+      "//components/safe_browsing/content/browser/web_ui",
       "//components/safe_browsing/content/common:interfaces",
       "//components/safe_browsing/core/browser:token_fetcher",
+      "//components/safe_browsing/core/browser:token_fetcher_testing_helper",
       "//components/safe_browsing/core/common",
       "//components/safe_browsing/core/common/proto:client_model_proto",
       "//components/viz/service:service_java",
+      "//components/webapps/browser:browser",
       "//content/public/test/android:android_test_message_pump_support_java",
       "//content/test:android_test_message_pump_support",
       "//content/test:android_test_message_pump_support",
       "//services/metrics/public/cpp:ukm_builders",
+      "//services/network:test_support",
       "//services/tracing:test_utils",
       "//testing/android/native_test:native_test_support",
       "//third_party/metrics_proto",
@@ -314,7 +316,10 @@ test("weblayer_unittests") {
     "../browser/site_isolation_policy_unittest.cc",
   ]
   if (is_android) {
-    deps += [ ":weblayer_test_assets" ]
+    deps += [
+      ":weblayer_test_assets",
+      "//ui/android:ui_full_java",
+    ]
     sources += [
       "../browser/safe_browsing/safe_browsing_token_fetcher_impl_unittest.cc",
     ]

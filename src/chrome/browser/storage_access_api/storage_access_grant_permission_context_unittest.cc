@@ -12,6 +12,7 @@
 #include "components/permissions/permission_request_manager.h"
 #include "components/permissions/test/mock_permission_prompt_factory.h"
 #include "content/public/browser/web_contents.h"
+#include "net/base/features.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/features.h"
 
@@ -71,14 +72,16 @@ class StorageAccessGrantPermissionContextTest
     permissions::PermissionRequestManager* manager =
         permissions::PermissionRequestManager::FromWebContents(web_contents());
     DCHECK(manager);
-    for (int grant_id = 0; grant_id < kDefaultImplicitGrantLimit; grant_id++) {
+    for (int grant_id = 0;
+         grant_id < net::features::kStorageAccessAPIDefaultImplicitGrantLimit;
+         grant_id++) {
       const GURL embedding_origin(std::string(url::kHttpsScheme) +
                                   "://example_embedder_" +
                                   base::NumberToString(grant_id) + ".com");
 
       ContentSetting result = CONTENT_SETTING_DEFAULT;
       permission_context.DecidePermission(
-          web_contents(), fake_id, requesting_origin, embedding_origin,
+          fake_id, requesting_origin, embedding_origin,
           /*user_gesture=*/true, base::BindOnce(&SaveResult, &result));
       base::RunLoop().RunUntilIdle();
 
@@ -88,7 +91,8 @@ class StorageAccessGrantPermissionContextTest
 
   permissions::PermissionRequestID CreateFakeID() {
     return permissions::PermissionRequestID(
-        web_contents()->GetMainFrame(), request_id_generator_.GenerateNextId());
+        web_contents()->GetPrimaryMainFrame(),
+        request_id_generator_.GenerateNextId());
   }
 
  private:
@@ -107,30 +111,31 @@ TEST_F(StorageAccessGrantPermissionContextTest, InsecureOriginsAreAllowed) {
       insecure_url, GetRequesterURL()));
 }
 
-// When the Storage Access API feature is disabled we should block the
-// permission request.
+// When the Storage Access API feature is disabled (the default) we
+// should block the permission request.
 TEST_F(StorageAccessGrantPermissionContextTest,
        PermissionBlockedWhenFeatureDisabled) {
-  base::test::ScopedFeatureList scoped_disable;
-  scoped_disable.InitAndDisableFeature(blink::features::kStorageAccessAPI);
-
   StorageAccessGrantPermissionContext permission_context(profile());
   permissions::PermissionRequestID fake_id = CreateFakeID();
 
   ContentSetting result = CONTENT_SETTING_DEFAULT;
   permission_context.DecidePermission(
-      web_contents(), fake_id, GetRequesterURL(), GetTopLevelURL(),
+      fake_id, GetRequesterURL(), GetTopLevelURL(),
       /*user_gesture=*/true, base::BindOnce(&SaveResult, &result));
   EXPECT_EQ(CONTENT_SETTING_BLOCK, result);
 }
 
+class StorageAccessGrantPermissionContextAPIEnabledTest
+    : public StorageAccessGrantPermissionContextTest {
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_{
+      net::features::kStorageAccessAPI};
+};
+
 // When the Storage Access API feature is enabled and we have a user gesture we
 // should get a decision.
-TEST_F(StorageAccessGrantPermissionContextTest,
+TEST_F(StorageAccessGrantPermissionContextAPIEnabledTest,
        PermissionDecidedWhenFeatureEnabled) {
-  base::test::ScopedFeatureList scoped_enable;
-  scoped_enable.InitAndEnableFeature(blink::features::kStorageAccessAPI);
-
   StorageAccessGrantPermissionContext permission_context(profile());
   permissions::PermissionRequestID fake_id = CreateFakeID();
 
@@ -138,7 +143,7 @@ TEST_F(StorageAccessGrantPermissionContextTest,
 
   ContentSetting result = CONTENT_SETTING_DEFAULT;
   permission_context.DecidePermission(
-      web_contents(), fake_id, GetRequesterURL(), GetTopLevelURL(),
+      fake_id, GetRequesterURL(), GetTopLevelURL(),
       /*user_gesture=*/true, base::BindOnce(&SaveResult, &result));
   base::RunLoop().RunUntilIdle();
 
@@ -154,32 +159,26 @@ TEST_F(StorageAccessGrantPermissionContextTest,
   EXPECT_EQ(GetRequesterURL(), manager->GetRequestingOrigin());
   EXPECT_EQ(GetTopLevelURL(), manager->GetEmbeddingOrigin());
 
-  manager->Closing();
+  manager->Dismiss();
   base::RunLoop().RunUntilIdle();
   EXPECT_EQ(CONTENT_SETTING_ASK, result);
 }
 
 // No user gesture should force a permission rejection.
-TEST_F(StorageAccessGrantPermissionContextTest,
+TEST_F(StorageAccessGrantPermissionContextAPIEnabledTest,
        PermissionDeniedWithoutUserGesture) {
-  base::test::ScopedFeatureList scoped_enable;
-  scoped_enable.InitAndEnableFeature(blink::features::kStorageAccessAPI);
-
   StorageAccessGrantPermissionContext permission_context(profile());
   permissions::PermissionRequestID fake_id = CreateFakeID();
 
   ContentSetting result = CONTENT_SETTING_DEFAULT;
   permission_context.DecidePermission(
-      web_contents(), fake_id, GetRequesterURL(), GetTopLevelURL(),
+      fake_id, GetRequesterURL(), GetTopLevelURL(),
       /*user_gesture=*/false, base::BindOnce(&SaveResult, &result));
   EXPECT_EQ(CONTENT_SETTING_BLOCK, result);
 }
 
 TEST_F(StorageAccessGrantPermissionContextTest,
        PermissionStatusBlockedWhenFeatureDisabled) {
-  base::test::ScopedFeatureList scoped_disable;
-  scoped_disable.InitAndDisableFeature(blink::features::kStorageAccessAPI);
-
   StorageAccessGrantPermissionContext permission_context(profile());
 
   EXPECT_EQ(CONTENT_SETTING_BLOCK,
@@ -189,11 +188,8 @@ TEST_F(StorageAccessGrantPermissionContextTest,
                 .content_setting);
 }
 
-TEST_F(StorageAccessGrantPermissionContextTest,
+TEST_F(StorageAccessGrantPermissionContextAPIEnabledTest,
        PermissionStatusAsksWhenFeatureEnabled) {
-  base::test::ScopedFeatureList scoped_enable;
-  scoped_enable.InitAndEnableFeature(blink::features::kStorageAccessAPI);
-
   StorageAccessGrantPermissionContext permission_context(profile());
 
   EXPECT_EQ(CONTENT_SETTING_ASK,
@@ -205,11 +201,8 @@ TEST_F(StorageAccessGrantPermissionContextTest,
 
 // Validate that each requesting origin has its own implicit grant limit. If
 // the limit for one origin is exhausted it should not affect another.
-TEST_F(StorageAccessGrantPermissionContextTest,
+TEST_F(StorageAccessGrantPermissionContextAPIEnabledTest,
        ImplicitGrantLimitPerRequestingOrigin) {
-  base::test::ScopedFeatureList scoped_enable;
-  scoped_enable.InitAndEnableFeature(blink::features::kStorageAccessAPI);
-
   base::HistogramTester histogram_tester;
   histogram_tester.ExpectTotalCount(kGrantIsImplicitHistogram, 0);
 
@@ -223,7 +216,7 @@ TEST_F(StorageAccessGrantPermissionContextTest,
 
   ContentSetting result = CONTENT_SETTING_DEFAULT;
   permission_context.DecidePermission(
-      web_contents(), fake_id, GetRequesterURL(), GetTopLevelURL(),
+      fake_id, GetRequesterURL(), GetTopLevelURL(),
       /*user_gesture=*/true, base::BindOnce(&SaveResult, &result));
   base::RunLoop().RunUntilIdle();
 
@@ -234,7 +227,7 @@ TEST_F(StorageAccessGrantPermissionContextTest,
 
   // Close the prompt and validate we get the expected setting back in our
   // callback.
-  manager->Closing();
+  manager->Dismiss();
   base::RunLoop().RunUntilIdle();
   EXPECT_EQ(CONTENT_SETTING_ASK, result);
 
@@ -251,7 +244,7 @@ TEST_F(StorageAccessGrantPermissionContextTest,
   // it gets auto-granted as the limit has not been reached for it yet.
   result = CONTENT_SETTING_DEFAULT;
   permission_context.DecidePermission(
-      web_contents(), fake_id, alternate_requester_url, GetTopLevelURL(),
+      fake_id, alternate_requester_url, GetTopLevelURL(),
       /*user_gesture=*/true, base::BindOnce(&SaveResult, &result));
   base::RunLoop().RunUntilIdle();
 
@@ -266,10 +259,7 @@ TEST_F(StorageAccessGrantPermissionContextTest,
                                      /*DISMISSED=*/2, 1);
 }
 
-TEST_F(StorageAccessGrantPermissionContextTest, ExplicitGrantDenial) {
-  base::test::ScopedFeatureList scoped_enable;
-  scoped_enable.InitAndEnableFeature(blink::features::kStorageAccessAPI);
-
+TEST_F(StorageAccessGrantPermissionContextAPIEnabledTest, ExplicitGrantDenial) {
   base::HistogramTester histogram_tester;
   histogram_tester.ExpectTotalCount(kGrantIsImplicitHistogram, 0);
   histogram_tester.ExpectTotalCount(kPromptResultHistogram, 0);
@@ -284,7 +274,7 @@ TEST_F(StorageAccessGrantPermissionContextTest, ExplicitGrantDenial) {
 
   ContentSetting result = CONTENT_SETTING_DEFAULT;
   permission_context.DecidePermission(
-      web_contents(), fake_id, GetRequesterURL(), GetTopLevelURL(),
+      fake_id, GetRequesterURL(), GetTopLevelURL(),
       /*user_gesture=*/true, base::BindOnce(&SaveResult, &result));
   base::RunLoop().RunUntilIdle();
 
@@ -307,10 +297,7 @@ TEST_F(StorageAccessGrantPermissionContextTest, ExplicitGrantDenial) {
                                      /*DENIED=*/1, 1);
 }
 
-TEST_F(StorageAccessGrantPermissionContextTest, ExplicitGrantAccept) {
-  base::test::ScopedFeatureList scoped_enable;
-  scoped_enable.InitAndEnableFeature(blink::features::kStorageAccessAPI);
-
+TEST_F(StorageAccessGrantPermissionContextAPIEnabledTest, ExplicitGrantAccept) {
   base::HistogramTester histogram_tester;
   histogram_tester.ExpectTotalCount(kGrantIsImplicitHistogram, 0);
   histogram_tester.ExpectTotalCount(kPromptResultHistogram, 0);
@@ -325,7 +312,7 @@ TEST_F(StorageAccessGrantPermissionContextTest, ExplicitGrantAccept) {
 
   ContentSetting result = CONTENT_SETTING_DEFAULT;
   permission_context.DecidePermission(
-      web_contents(), fake_id, GetRequesterURL(), GetTopLevelURL(),
+      fake_id, GetRequesterURL(), GetTopLevelURL(),
       /*user_gesture=*/true, base::BindOnce(&SaveResult, &result));
   base::RunLoop().RunUntilIdle();
 

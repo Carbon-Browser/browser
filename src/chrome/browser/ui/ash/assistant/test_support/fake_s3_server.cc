@@ -16,8 +16,8 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
+#include "chromeos/ash/services/assistant/service.h"
 #include "chromeos/assistant/internal/internal_constants.h"
-#include "chromeos/services/assistant/service.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace chromeos {
@@ -133,8 +133,7 @@ class PortSelector {
   }
 
   static int GetFileFlags() {
-    return base::File::FLAG_CREATE | base::File::FLAG_EXCLUSIVE_WRITE |
-           base::File::FLAG_WRITE;
+    return base::File::FLAG_CREATE | base::File::FLAG_WRITE;
   }
 
   // File exclusively opened on the file-system, to ensure no other fake S3

@@ -10,13 +10,16 @@ GEN_INCLUDE(['//chrome/test/data/webui/polymer_browser_test_base.js']);
 GEN('#include "base/command_line.h"');
 GEN('#include "build/branding_buildflags.h"');
 GEN('#include "build/chromeos_buildflags.h"');
-GEN('#include "content/public/test/browser_test.h"');
 GEN('#include "chrome/browser/ui/ui_features.h"');
+GEN('#include "components/signin/public/base/signin_buildflags.h"');
+GEN('#include "content/public/test/browser_test.h"');
+
+/* eslint-disable no-var */
 
 class SigninBrowserTest extends PolymerTest {
   /** @override */
   get browsePreload() {
-    throw 'this is abstract and should be overriden by subclasses';
+    throw new Error('this is abstract and should be overriden by subclasses');
   }
 }
 
@@ -25,7 +28,6 @@ class SigninBrowserTest extends PolymerTest {
  * chrome/browser/resources/signin/sync_confirmation/sync_confirmation.html.
  * This has to be declared as a variable for TEST_F to find it correctly.
  */
-// eslint-disable-next-line no-var
 var SigninSyncConfirmationTest = class extends SigninBrowserTest {
   /** @override */
   get browsePreload() {
@@ -37,11 +39,11 @@ TEST_F('SigninSyncConfirmationTest', 'Dialog', function() {
   mocha.run();
 });
 
+GEN('#if BUILDFLAG(ENABLE_DICE_SUPPORT)');
 /**
  * Test fixture for
  * chrome/browser/resources/signin/signin_reauth/signin_reauth.html.
  */
-// eslint-disable-next-line no-var
 var SigninReauthTest = class extends SigninBrowserTest {
   /** @override */
   get browsePreload() {
@@ -60,7 +62,6 @@ TEST_F('SigninReauthTest', 'Dialog', function() {
  * chrome/browser/resources/signin/dice_web_signin_intercept/dice_web_signin_intercept.html.
  * This has to be declared as a variable for TEST_F to find it correctly.
  */
-// eslint-disable-next-line no-var
 var DiceWebSigninInterceptTest = class extends SigninBrowserTest {
   /** @override */
   get browsePreload() {
@@ -71,13 +72,13 @@ var DiceWebSigninInterceptTest = class extends SigninBrowserTest {
 TEST_F('DiceWebSigninInterceptTest', 'Bubble', function() {
   mocha.run();
 });
+GEN('#endif  // BUILDFLAG(ENABLE_DICE_SUPPORT)');
 
 /**
  * Test fixture for
  * chrome/browser/resources/signin/profile_picker/profile_creation_flow/profile_type_choice.html.
  * This has to be declared as a variable for TEST_F to find it correctly.
  */
-// eslint-disable-next-line no-var
 var ProfileTypeChoiceTest = class extends SigninBrowserTest {
   /** @override */
   get browsePreload() {
@@ -95,7 +96,6 @@ TEST_F('ProfileTypeChoiceTest', 'Buttons', function() {
  * chrome/browser/resources/signin/profile_picker/profile_creation_flow/local_profile_customization.html.
  * This has to be declared as a variable for TEST_F to find it correctly.
  */
-// eslint-disable-next-line no-var
 var LocalProfileCustomizationTest = class extends SigninBrowserTest {
   /** @override */
   get browsePreload() {
@@ -112,7 +112,6 @@ TEST_F('LocalProfileCustomizationTest', 'All', function() {
  * chrome/browser/resources/signin/profile_picker/profile_picker_app.html.
  * This has to be declared as a variable for TEST_F to find it correctly.
  */
-// eslint-disable-next-line no-var
 var ProfilePickerAppTest = class extends SigninBrowserTest {
   /** @override */
   get browsePreload() {
@@ -129,7 +128,6 @@ TEST_F('ProfilePickerAppTest', 'All', function() {
  * chrome/browser/resources/signin/profile_picker/profile_picker_main_view.html.
  * This has to be declared as a variable for TEST_F to find it correctly.
  */
-// eslint-disable-next-line no-var
 var ProfilePickerMainViewTest = class extends SigninBrowserTest {
   /** @override */
   get browsePreload() {
@@ -146,7 +144,6 @@ TEST_F('ProfilePickerMainViewTest', 'All', function() {
  * chrome/browser/resources/signin/profile_picker/profile_card_menu.html.
  * This has to be declared as a variable for TEST_F to find it correctly.
  */
-// eslint-disable-next-line no-var
 var ProfileCardMenuTest = class extends SigninBrowserTest {
   /** @override */
   get browsePreload() {
@@ -163,7 +160,6 @@ TEST_F('ProfileCardMenuTest', 'All', function() {
  * chrome/browser/resources/signin/profile_picker/profile_switch.html.
  * This has to be declared as a variable for TEST_F to find it correctly.
  */
-// eslint-disable-next-line no-var
 var ProfileSwitchTest = class extends SigninBrowserTest {
   /** @override */
   get browsePreload() {
@@ -180,7 +176,6 @@ TEST_F('ProfileSwitchTest', 'All', function() {
  * chrome/browser/resources/signin/profile_customization/profile_customization_app.html.
  * This has to be declared as a variable for TEST_F to find it correctly.
  */
-// eslint-disable-next-line no-var
 var ProfileCustomizationTest = class extends SigninBrowserTest {
   /** @override */
   get browsePreload() {
@@ -197,7 +192,6 @@ TEST_F('ProfileCustomizationTest', 'Bubble', function() {
  * chrome/browser/resources/signin/enterprise_profile_welcome/enterprise_profile_welcome.html.
  * This has to be declared as a variable for TEST_F to find it correctly.
  */
-// eslint-disable-next-line no-var
 var SigninEnterpriseProfileWelcomeTest = class extends SigninBrowserTest {
   /** @override */
   get browsePreload() {
@@ -215,7 +209,6 @@ GEN('#if BUILDFLAG(IS_CHROMEOS_LACROS)');
  * chrome/browser/resources/signin/profile_picker/profile_creation_flow/account_selection_lacros.html.
  * This has to be declared as a variable for TEST_F to find it correctly.
  */
-// eslint-disable-next-line no-var
 var AccountSelectionLacrosTest = class extends SigninBrowserTest {
   /** @override */
   get browsePreload() {

@@ -5,7 +5,6 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/subresource_filter/subresource_filter_browser_test_harness.h"
@@ -25,6 +24,12 @@ class SubresourceFilterWorkerFetchBrowserTest
     : public SubresourceFilterBrowserTest {
  public:
   SubresourceFilterWorkerFetchBrowserTest() = default;
+
+  SubresourceFilterWorkerFetchBrowserTest(
+      const SubresourceFilterWorkerFetchBrowserTest&) = delete;
+  SubresourceFilterWorkerFetchBrowserTest& operator=(
+      const SubresourceFilterWorkerFetchBrowserTest&) = delete;
+
   ~SubresourceFilterWorkerFetchBrowserTest() override = default;
 
  protected:
@@ -67,12 +72,9 @@ class SubresourceFilterWorkerFetchBrowserTest
   }
 
   void ClearTitle() {
-    ASSERT_TRUE(content::ExecJs(web_contents()->GetMainFrame(),
+    ASSERT_TRUE(content::ExecJs(web_contents()->GetPrimaryMainFrame(),
                                 "document.title = \"\";"));
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(SubresourceFilterWorkerFetchBrowserTest);
 };
 
 // TODO(https://crbug.com/1011208): Add more tests for workers like top-level

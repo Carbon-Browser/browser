@@ -11,7 +11,6 @@
 #include "base/metrics/histogram_macros.h"
 #include "base/time/default_tick_clock.h"
 #include "components/blocked_content/popup_opener_tab_helper.h"
-#include "components/ukm/content/source_url_recorder.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/web_contents.h"
 #include "services/metrics/public/cpp/metrics_utils.h"
@@ -47,10 +46,11 @@ PopupTracker::PopupTracker(content::WebContents* contents,
                            content::WebContents* opener,
                            WindowOpenDisposition disposition)
     : content::WebContentsObserver(contents),
+      content::WebContentsUserData<PopupTracker>(*contents),
       visibility_tracker_(
           base::DefaultTickClock::GetInstance(),
           contents->GetVisibility() != content::Visibility::HIDDEN),
-      opener_source_id_(ukm::GetSourceIdForWebContentsDocument(opener)),
+      opener_source_id_(opener->GetPrimaryMainFrame()->GetPageUkmSourceId()),
       window_open_disposition_(disposition) {
   if (auto* popup_opener = PopupOpenerTabHelper::FromWebContents(opener))
     popup_opener->OnOpenedPopup(this);
@@ -75,14 +75,13 @@ void PopupTracker::WebContentsDestroyed() {
         "ContentSettings.Popups.FirstDocumentEngagementTime2",
         first_load_visible_time);
   }
-  UMA_HISTOGRAM_CUSTOM_TIMES(
-      "ContentSettings.Popups.EngagementTime", total_foreground_duration,
-      base::TimeDelta::FromMilliseconds(1), base::TimeDelta::FromHours(6), 50);
+  UMA_HISTOGRAM_CUSTOM_TIMES("ContentSettings.Popups.EngagementTime",
+                             total_foreground_duration, base::Milliseconds(1),
+                             base::Hours(6), 50);
   if (web_contents()->GetClosedByUserGesture()) {
     UMA_HISTOGRAM_CUSTOM_TIMES(
         "ContentSettings.Popups.EngagementTime.GestureClose",
-        total_foreground_duration, base::TimeDelta::FromMilliseconds(1),
-        base::TimeDelta::FromHours(6), 50);
+        total_foreground_duration, base::Milliseconds(1), base::Hours(6), 50);
   }
 
   if (opener_source_id_ != ukm::kInvalidSourceId) {
@@ -180,6 +179,6 @@ void PopupTracker::OnSubresourceFilterGoingAway() {
   scoped_observation_.Reset();
 }
 
-WEB_CONTENTS_USER_DATA_KEY_IMPL(PopupTracker)
+WEB_CONTENTS_USER_DATA_KEY_IMPL(PopupTracker);
 
 }  // namespace blocked_content

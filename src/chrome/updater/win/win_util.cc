@@ -5,39 +5,57 @@
 #include "chrome/updater/win/win_util.h"
 
 #include <aclapi.h>
+#include <objidl.h>
+#include <shellapi.h>
 #include <shlobj.h>
 #include <windows.h>
+#include <wrl/client.h>
 #include <wtsapi32.h>
 
 #include <cstdlib>
 #include <memory>
 #include <string>
+#include <vector>
 
+#include "base/base_paths_win.h"
 #include "base/callback_helpers.h"
 #include "base/check.h"
 #include "base/command_line.h"
 #include "base/cxx17_backports.h"
 #include "base/files/file_path.h"
+#include "base/files/file_util.h"
 #include "base/guid.h"
 #include "base/logging.h"
 #include "base/memory/free_deleter.h"
+#include "base/path_service.h"
+#include "base/process/process.h"
 #include "base/process/process_iterator.h"
 #include "base/scoped_native_library.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/win/atl.h"
 #include "base/win/registry.h"
 #include "base/win/scoped_handle.h"
 #include "chrome/updater/constants.h"
 #include "chrome/updater/updater_branding.h"
 #include "chrome/updater/updater_scope.h"
 #include "chrome/updater/updater_version.h"
+#include "chrome/updater/win/scoped_handle.h"
 #include "chrome/updater/win/user_info.h"
 #include "chrome/updater/win/win_constants.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace updater {
+
+ProcessFilterName::ProcessFilterName(const std::wstring& process_name)
+    : process_name_(process_name) {}
+
+bool ProcessFilterName::Includes(const base::ProcessEntry& entry) const {
+  return base::EqualsCaseInsensitiveASCII(entry.exe_file(), process_name_);
+}
+
 namespace {
 
 // The number of iterations to poll if a process is stopped correctly.
@@ -45,16 +63,6 @@ const unsigned int kMaxProcessQueryIterations = 50;
 
 // The sleep time in ms between each poll.
 const unsigned int kProcessQueryWaitTimeMs = 100;
-
-class ProcessFilterExplorer : public base::ProcessFilter {
- public:
-  ~ProcessFilterExplorer() override = default;
-
-  // Overrides for base::ProcessFilter.
-  bool Includes(const base::ProcessEntry& entry) const override {
-    return base::EqualsCaseInsensitiveASCII(entry.exe_file(), L"EXPLORER.EXE");
-  }
-};
 
 HRESULT IsUserRunningSplitToken(bool& is_split_token) {
   HANDLE token = NULL;
@@ -80,7 +88,7 @@ HRESULT GetSidIntegrityLevel(PSID sid, MANDATORY_LEVEL* level) {
   SID_IDENTIFIER_AUTHORITY* authority = ::GetSidIdentifierAuthority(sid);
   if (!authority)
     return E_FAIL;
-  static const SID_IDENTIFIER_AUTHORITY kMandatoryLabelAuth =
+  constexpr SID_IDENTIFIER_AUTHORITY kMandatoryLabelAuth =
       SECURITY_MANDATORY_LABEL_AUTHORITY;
   if (std::memcmp(authority, &kMandatoryLabelAuth,
                   sizeof(SID_IDENTIFIER_AUTHORITY))) {
@@ -128,7 +136,7 @@ HRESULT GetProcessIntegrityLevel(DWORD process_id, MANDATORY_LEVEL* level) {
 }
 
 bool IsExplorerRunningAtMediumOrLower() {
-  ProcessFilterExplorer filter;
+  ProcessFilterName filter(L"EXPLORER.EXE");
   base::ProcessIterator iter(&filter);
   while (const base::ProcessEntry* process_entry = iter.NextProcessEntry()) {
     MANDATORY_LEVEL level = MandatoryLevelUntrusted;
@@ -138,6 +146,51 @@ bool IsExplorerRunningAtMediumOrLower() {
     }
   }
   return false;
+}
+
+// Creates a WS_POPUP | WS_VISIBLE with zero
+// size, of the STATIC WNDCLASS. It uses the default running EXE module
+// handle for creation.
+//
+// A visible centered foreground window is needed as the parent in Windows 7 and
+// above, to allow the UAC prompt to come up in the foreground, centered.
+// Otherwise, the elevation prompt will be minimized on the taskbar. A zero size
+// window works. A plain vanilla WS_POPUP allows the window to be free of
+// adornments. WS_EX_TOOLWINDOW prevents the task bar from showing the
+// zero-sized window.
+//
+// Returns NULL on failure. Call ::GetLastError() to get extended error
+// information on failure.
+HWND CreateForegroundParentWindowForUAC() {
+  CWindow foreground_parent;
+  if (foreground_parent.Create(L"STATIC", NULL, NULL, NULL,
+                               WS_POPUP | WS_VISIBLE, WS_EX_TOOLWINDOW)) {
+    foreground_parent.CenterWindow(NULL);
+    ::SetForegroundWindow(foreground_parent);
+  }
+  return foreground_parent.Detach();
+}
+
+// Compares the OS, service pack, and build numbers using `::VerifyVersionInfo`,
+// in accordance with `type_mask` and `oper`.
+bool CompareOSVersionsInternal(const OSVERSIONINFOEX& os,
+                               DWORD type_mask,
+                               BYTE oper) {
+  DCHECK(type_mask);
+  DCHECK(oper);
+
+  ULONGLONG cond_mask = 0;
+  cond_mask = ::VerSetConditionMask(cond_mask, VER_MAJORVERSION, oper);
+  cond_mask = ::VerSetConditionMask(cond_mask, VER_MINORVERSION, oper);
+  cond_mask = ::VerSetConditionMask(cond_mask, VER_SERVICEPACKMAJOR, oper);
+  cond_mask = ::VerSetConditionMask(cond_mask, VER_SERVICEPACKMINOR, oper);
+  cond_mask = ::VerSetConditionMask(cond_mask, VER_BUILDNUMBER, oper);
+
+  // `::VerifyVersionInfo` could return `FALSE` due to an error other than
+  // `ERROR_OLD_WIN_VERSION`. We do not handle that case here.
+  // https://msdn.microsoft.com/ms725492.
+  OSVERSIONINFOEX os_in = os;
+  return ::VerifyVersionInfo(&os_in, type_mask, cond_mask);
 }
 
 }  // namespace
@@ -207,8 +260,8 @@ bool InitializeCOMSecurity() {
                                       SECURITY_DESCRIPTOR_REVISION))
     return false;
 
-  DCHECK_EQ(kSidCount, base::size(sids));
-  DCHECK_EQ(kSidCount, base::size(sid_types));
+  DCHECK_EQ(kSidCount, std::size(sids));
+  DCHECK_EQ(kSidCount, std::size(sid_types));
   for (size_t i = 0; i < kSidCount; ++i) {
     DWORD sid_bytes = sizeof(sids[i]);
     if (!::CreateWellKnownSid(sid_types[i], nullptr, sids[i], &sid_bytes))
@@ -219,8 +272,8 @@ bool InitializeCOMSecurity() {
   // the access permissions for your application. COM_RIGHTS_EXECUTE and
   // COM_RIGHTS_EXECUTE_LOCAL are the minimum access rights required.
   EXPLICIT_ACCESS explicit_access[kSidCount] = {};
-  DCHECK_EQ(kSidCount, base::size(sids));
-  DCHECK_EQ(kSidCount, base::size(explicit_access));
+  DCHECK_EQ(kSidCount, std::size(sids));
+  DCHECK_EQ(kSidCount, std::size(explicit_access));
   for (size_t i = 0; i < kSidCount; ++i) {
     explicit_access[i].grfAccessPermissions =
         COM_RIGHTS_EXECUTE | COM_RIGHTS_EXECUTE_LOCAL;
@@ -236,7 +289,7 @@ bool InitializeCOMSecurity() {
   // Create an access control list (ACL) using this ACE list, if this succeeds
   // make sure to ::LocalFree(acl).
   ACL* acl = nullptr;
-  DWORD acl_result = ::SetEntriesInAcl(base::size(explicit_access),
+  DWORD acl_result = ::SetEntriesInAcl(std::size(explicit_access),
                                        explicit_access, nullptr, &acl);
   if (acl_result != ERROR_SUCCESS || acl == nullptr)
     return false;
@@ -301,7 +354,7 @@ HRESULT OpenUniqueEventFromEnvironment(const std::wstring& var_name,
 
   wchar_t event_name[MAX_PATH] = {0};
   if (!::GetEnvironmentVariable(var_name.c_str(), event_name,
-                                base::size(event_name))) {
+                                std::size(event_name))) {
     return HRESULTFromLastError();
   }
 
@@ -442,7 +495,7 @@ base::win::ScopedHandle GetUserTokenFromCurrentSessionId() {
   DCHECK_EQ(bytes_returned, sizeof(*session_id_ptr));
   DWORD session_id = *session_id_ptr;
   ::WTSFreeMemory(session_id_ptr);
-  DVLOG(1) << "::WTSQuerySessionInformation session id: " << session_id;
+  VLOG(1) << "::WTSQuerySessionInformation session id: " << session_id;
 
   HANDLE token_handle_raw = nullptr;
   if (!::WTSQueryUserToken(session_id, &token_handle_raw)) {
@@ -459,8 +512,7 @@ bool PathOwnedByUser(const base::FilePath& path) {
   return true;
 }
 
-// TODO(crbug.com/1212187): maybe handle filtered tokens.
-HRESULT IsUserAdmin(bool& is_user_admin) {
+HRESULT IsTokenAdmin(HANDLE token, bool& is_token_admin) {
   SID_IDENTIFIER_AUTHORITY nt_authority = SECURITY_NT_AUTHORITY;
   PSID administrators_group = nullptr;
   if (!::AllocateAndInitializeSid(&nt_authority, 2, SECURITY_BUILTIN_DOMAIN_RID,
@@ -471,10 +523,15 @@ HRESULT IsUserAdmin(bool& is_user_admin) {
   base::ScopedClosureRunner free_sid(
       base::BindOnce([](PSID sid) { ::FreeSid(sid); }, administrators_group));
   BOOL is_member = false;
-  if (!::CheckTokenMembership(NULL, administrators_group, &is_member))
+  if (!::CheckTokenMembership(token, administrators_group, &is_member))
     return HRESULTFromLastError();
-  is_user_admin = is_member;
+  is_token_admin = is_member;
   return S_OK;
+}
+
+// TODO(crbug.com/1212187): maybe handle filtered tokens.
+HRESULT IsUserAdmin(bool& is_user_admin) {
+  return IsTokenAdmin(NULL, is_user_admin);
 }
 
 HRESULT IsUserNonElevatedAdmin(bool& is_user_non_elevated_admin) {
@@ -492,6 +549,41 @@ HRESULT IsUserNonElevatedAdmin(bool& is_user_non_elevated_admin) {
       is_user_non_elevated_admin = true;
     }
   }
+  return S_OK;
+}
+
+HRESULT IsCOMCallerAdmin(bool& is_com_caller_admin) {
+  ScopedKernelHANDLE token;
+
+  {
+    HRESULT hr = ::CoImpersonateClient();
+    if (hr == RPC_E_CALL_COMPLETE) {
+      // RPC_E_CALL_COMPLETE indicates that the caller is in-proc.
+      is_com_caller_admin = ::IsUserAnAdmin();
+      return S_OK;
+    }
+
+    if (FAILED(hr)) {
+      return hr;
+    }
+
+    base::ScopedClosureRunner co_revert_to_self(
+        base::BindOnce([]() { ::CoRevertToSelf(); }));
+
+    if (!::OpenThreadToken(::GetCurrentThread(), TOKEN_QUERY, TRUE,
+                           ScopedKernelHANDLE::Receiver(token).get())) {
+      hr = HRESULTFromLastError();
+      LOG(ERROR) << __func__ << ": ::OpenThreadToken failed: " << std::hex
+                 << hr;
+      return hr;
+    }
+  }
+
+  if (HRESULT hr = IsTokenAdmin(token.get(), is_com_caller_admin); FAILED(hr)) {
+    LOG(ERROR) << __func__ << ": IsTokenAdmin failed: " << std::hex << hr;
+    return hr;
+  }
+
   return S_OK;
 }
 
@@ -557,21 +649,243 @@ std::wstring GetServiceDisplayName(bool is_internal_service) {
        L" ", kUpdaterVersionUtf16});
 }
 
-std::wstring GetTaskName(UpdaterScope scope) {
-  std::wstring task_name = GetTaskDisplayName(scope);
-  task_name.erase(std::remove_if(task_name.begin(), task_name.end(), isspace),
-                  task_name.end());
-  return task_name;
-}
-
-std::wstring GetTaskDisplayName(UpdaterScope scope) {
-  return base::StrCat({base::ASCIIToWide(PRODUCT_FULLNAME_STRING), L" Task ",
-                       scope == UpdaterScope::kSystem ? L" System " : L" User ",
-                       kUpdaterVersionUtf16});
-}
-
 REGSAM Wow6432(REGSAM access) {
+  CHECK(access);
+
   return KEY_WOW64_32KEY | access;
+}
+
+HRESULT ShellExecuteAndWait(const base::FilePath& file_path,
+                            const std::wstring& parameters,
+                            const std::wstring& verb,
+                            DWORD* exit_code) {
+  VLOG(1) << __func__ << ": path: " << file_path
+          << ", parameters:" << parameters << ", verb:" << verb;
+  DCHECK(!file_path.empty());
+  DCHECK(exit_code);
+
+  const HWND hwnd = CreateForegroundParentWindowForUAC();
+  const base::ScopedClosureRunner destroy_window(base::BindOnce(
+      [](HWND hwnd) {
+        if (hwnd)
+          ::DestroyWindow(hwnd);
+      },
+      hwnd));
+
+  SHELLEXECUTEINFO shell_execute_info = {};
+  shell_execute_info.cbSize = sizeof(SHELLEXECUTEINFO);
+  shell_execute_info.fMask = SEE_MASK_FLAG_NO_UI | SEE_MASK_NOCLOSEPROCESS |
+                             SEE_MASK_NOZONECHECKS | SEE_MASK_NOASYNC;
+  shell_execute_info.hProcess = NULL;
+  shell_execute_info.hwnd = hwnd;
+  shell_execute_info.lpVerb = verb.c_str();
+  shell_execute_info.lpFile = file_path.value().c_str();
+  shell_execute_info.lpParameters = parameters.c_str();
+  shell_execute_info.lpDirectory = NULL;
+  shell_execute_info.nShow = SW_SHOW;
+  shell_execute_info.hInstApp = NULL;
+
+  if (!::ShellExecuteEx(&shell_execute_info)) {
+    const HRESULT hr = HRESULTFromLastError();
+    VLOG(1) << __func__ << ": ::ShellExecuteEx failed: " << std::hex << hr;
+    return hr;
+  }
+
+  if (!shell_execute_info.hProcess) {
+    VLOG(1) << __func__ << ": Started process, PID unknown";
+    return S_OK;
+  }
+
+  const base::Process process(shell_execute_info.hProcess);
+  const DWORD pid = process.Pid();
+  VLOG(1) << __func__ << ": Started process, PID: " << pid;
+
+  // Allow the spawned process to show windows in the foreground.
+  if (!::AllowSetForegroundWindow(pid)) {
+    LOG(WARNING) << __func__
+                 << ": ::AllowSetForegroundWindow failed: " << ::GetLastError();
+  }
+
+  int ret_val = 0;
+  if (!process.WaitForExit(&ret_val))
+    return HRESULTFromLastError();
+
+  *exit_code = ret_val;
+  return S_OK;
+}
+
+HRESULT RunElevated(const base::FilePath& file_path,
+                    const std::wstring& parameters,
+                    DWORD* exit_code) {
+  return ShellExecuteAndWait(file_path, parameters, L"runas", exit_code);
+}
+
+absl::optional<base::FilePath> GetGoogleUpdateExePath(UpdaterScope scope) {
+  base::FilePath goopdate_base_dir;
+  if (!base::PathService::Get(scope == UpdaterScope::kSystem
+                                  ? base::DIR_PROGRAM_FILESX86
+                                  : base::DIR_LOCAL_APP_DATA,
+                              &goopdate_base_dir)) {
+    LOG(ERROR) << "Can't retrieve GoogleUpdate base directory.";
+    return absl::nullopt;
+  }
+
+  base::FilePath goopdate_dir =
+      goopdate_base_dir.AppendASCII(COMPANY_SHORTNAME_STRING)
+          .AppendASCII("Update");
+  if (!base::CreateDirectory(goopdate_dir)) {
+    LOG(ERROR) << "Can't create GoogleUpdate directory: " << goopdate_dir;
+    return absl::nullopt;
+  }
+
+  return goopdate_dir.AppendASCII("GoogleUpdate.exe");
+}
+
+HRESULT DisableCOMExceptionHandling() {
+  Microsoft::WRL::ComPtr<IGlobalOptions> options;
+  HRESULT hr = ::CoCreateInstance(CLSID_GlobalOptions, nullptr,
+                                  CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&options));
+  if (FAILED(hr))
+    return hr;
+  return hr = options->Set(COMGLB_EXCEPTION_HANDLING,
+                           COMGLB_EXCEPTION_DONOT_HANDLE);
+}
+
+std::wstring BuildMsiCommandLine(
+    const std::wstring& arguments,
+    const absl::optional<base::FilePath>& installer_data_file,
+    const base::FilePath& msi_installer) {
+  if (!msi_installer.MatchesExtension(L".msi")) {
+    return std::wstring();
+  }
+
+  return base::StrCat(
+      {L"msiexec ", arguments,
+       installer_data_file
+           ? base::StrCat(
+                 {L" ",
+                  base::UTF8ToWide(base::ToUpperASCII(kInstallerDataSwitch)),
+                  L"=\"", installer_data_file->value(), L"\""})
+           : L"",
+       L" REBOOT=ReallySuppress /qn /i \"", msi_installer.value(),
+       L"\" /log \"", msi_installer.value(), L".log\""});
+}
+
+std::wstring BuildExeCommandLine(
+    const std::wstring& arguments,
+    const absl::optional<base::FilePath>& installer_data_file,
+    const base::FilePath& exe_installer) {
+  if (!exe_installer.MatchesExtension(L".exe")) {
+    return std::wstring();
+  }
+
+  return base::StrCat({base::CommandLine(exe_installer).GetCommandLineString(),
+                       L" ", arguments, [&installer_data_file]() {
+                         if (!installer_data_file)
+                           return std::wstring();
+
+                         base::CommandLine installer_data_args(
+                             base::CommandLine::NO_PROGRAM);
+                         installer_data_args.AppendSwitchPath(
+                             kInstallerDataSwitch, *installer_data_file);
+                         return installer_data_args.GetCommandLineString();
+                       }()});
+}
+
+bool IsServiceRunning(const std::wstring& service_name) {
+  ScopedScHandle scm(::OpenSCManager(nullptr, nullptr, SC_MANAGER_CONNECT));
+  if (!scm.IsValid()) {
+    LOG(ERROR) << "::OpenSCManager failed. service_name: " << service_name
+               << ", error: " << std::hex << HRESULTFromLastError();
+    return false;
+  }
+
+  ScopedScHandle service(
+      ::OpenService(scm.Get(), service_name.c_str(), SERVICE_QUERY_STATUS));
+  if (!service.IsValid()) {
+    LOG(ERROR) << "::OpenService failed. service_name: " << service_name
+               << ", error: " << std::hex << HRESULTFromLastError();
+    return false;
+  }
+
+  SERVICE_STATUS status = {0};
+  if (!::QueryServiceStatus(service.Get(), &status)) {
+    LOG(ERROR) << "::QueryServiceStatus failed. service_name: " << service_name
+               << ", error: " << std::hex << HRESULTFromLastError();
+    return false;
+  }
+
+  VLOG(1) << "IsServiceRunning. service_name: " << service_name
+          << ", status: " << std::hex << status.dwCurrentState;
+  return status.dwCurrentState == SERVICE_RUNNING ||
+         status.dwCurrentState == SERVICE_START_PENDING;
+}
+
+HKEY UpdaterScopeToHKeyRoot(UpdaterScope scope) {
+  return scope == UpdaterScope::kSystem ? HKEY_LOCAL_MACHINE
+                                        : HKEY_CURRENT_USER;
+}
+
+absl::optional<OSVERSIONINFOEX> GetOSVersion() {
+  // `::RtlGetVersion` is being used here instead of `::GetVersionEx`, because
+  // the latter function can return the incorrect version if it is shimmed using
+  // an app compat shim.
+  using RtlGetVersion = LONG(WINAPI*)(OSVERSIONINFOEX*);
+  static const RtlGetVersion rtl_get_version = reinterpret_cast<RtlGetVersion>(
+      ::GetProcAddress(::GetModuleHandle(L"ntdll.dll"), "RtlGetVersion"));
+  if (!rtl_get_version)
+    return absl::nullopt;
+
+  OSVERSIONINFOEX os_out = {};
+  os_out.dwOSVersionInfoSize = sizeof(OSVERSIONINFOEX);
+
+  rtl_get_version(&os_out);
+  if (!os_out.dwMajorVersion)
+    return absl::nullopt;
+
+  return os_out;
+}
+
+bool CompareOSVersions(const OSVERSIONINFOEX& os_version, BYTE oper) {
+  DCHECK(oper);
+
+  constexpr DWORD kOSTypeMask = VER_MAJORVERSION | VER_MINORVERSION |
+                                VER_SERVICEPACKMAJOR | VER_SERVICEPACKMINOR;
+  constexpr DWORD kBuildTypeMask = VER_BUILDNUMBER;
+
+  // If the OS and the service pack match, return the build number comparison.
+  return CompareOSVersionsInternal(os_version, kOSTypeMask, VER_EQUAL)
+             ? CompareOSVersionsInternal(os_version, kBuildTypeMask, oper)
+             : CompareOSVersionsInternal(os_version, kOSTypeMask, oper);
+}
+
+bool EnableSecureDllLoading() {
+  static const auto set_default_dll_directories =
+      reinterpret_cast<decltype(&::SetDefaultDllDirectories)>(::GetProcAddress(
+          ::GetModuleHandle(L"kernel32.dll"), "SetDefaultDllDirectories"));
+
+  if (!set_default_dll_directories)
+    return true;
+
+#if defined(COMPONENT_BUILD)
+  const DWORD directory_flags = LOAD_LIBRARY_SEARCH_DEFAULT_DIRS;
+#else
+  const DWORD directory_flags = LOAD_LIBRARY_SEARCH_SYSTEM32;
+#endif
+
+  return set_default_dll_directories(directory_flags);
+}
+
+bool EnableProcessHeapMetadataProtection() {
+  if (!::HeapSetInformation(NULL, HeapEnableTerminationOnCorruption, nullptr,
+                            0)) {
+    LOG(ERROR) << __func__
+               << ": Failed to enable heap metadata protection: " << std::hex
+               << HRESULTFromLastError();
+    return false;
+  }
+
+  return true;
 }
 
 }  // namespace updater

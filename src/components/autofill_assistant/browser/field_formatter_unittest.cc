@@ -4,6 +4,10 @@
 
 #include "components/autofill_assistant/browser/field_formatter.h"
 
+#include <utility>
+#include <vector>
+
+#include "base/containers/flat_map.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
@@ -38,7 +42,6 @@ using ::testing::Eq;
 using ::testing::IsSupersetOf;
 using ::testing::Not;
 using ::testing::Pair;
-using ::testing::UnorderedElementsAre;
 
 void AddReplacement(ValueExpression::Chunk* chunk,
                     const std::string& match,
@@ -62,7 +65,6 @@ class FieldFormatterStateMapTest : public ::testing::Test {
                                 /*pref_service=*/autofill_client_.GetPrefs(),
                                 /*local_state=*/autofill_client_.GetPrefs(),
                                 /*identity_manager=*/nullptr,
-                                /*client_profile_validator=*/nullptr,
                                 /*history_service=*/nullptr,
                                 /*strike_database=*/nullptr,
                                 /*image_fetcher=*/nullptr,
@@ -142,6 +144,44 @@ TEST_F(FieldFormatterStateMapTest, AlternativeStateNameForNonUS) {
                     Contains(Pair(Key(-6), "Invalid"))));
 }
 
+TEST_F(FieldFormatterStateMapTest, AlternativeStateNameForNonASCII) {
+  autofill::test::ClearAlternativeStateNameMapForTesting();
+  WritePathToPref(GetPath());
+  autofill::test::TestStateEntry test_state_entry;
+  test_state_entry.canonical_name = "أبو ظبي'";
+  test_state_entry.abbreviations = {};
+  test_state_entry.alternative_names = {"Abu Dhabi"};
+  base::WriteFile(
+      GetPath().AppendASCII("AE"),
+      autofill::test::CreateStatesProtoAsString("AE", {test_state_entry}));
+
+  autofill::AutofillProfile alternative_state_map_profile;
+  alternative_state_map_profile.SetInfo(autofill::ADDRESS_HOME_STATE,
+                                        u"Abu Dhabi", "en-US");
+  alternative_state_map_profile.SetInfo(autofill::ADDRESS_HOME_COUNTRY, u"AE",
+                                        "en-US");
+
+  base::RunLoop run_loop;
+  autofill::MockAlternativeStateNameMapUpdater
+      mock_alternative_state_name_updater(run_loop.QuitClosure(),
+                                          autofill_client_.GetPrefs(),
+                                          &personal_data_manager_);
+  personal_data_manager_.AddObserver(&mock_alternative_state_name_updater);
+  personal_data_manager_.AddProfile(alternative_state_map_profile);
+  run_loop.Run();
+  personal_data_manager_.RemoveObserver(&mock_alternative_state_name_updater);
+
+  EXPECT_FALSE(autofill::AlternativeStateNameMap::GetInstance()
+                   ->IsLocalisedStateNamesMapEmpty());
+
+  // State handling from state name.
+  autofill::AutofillProfile state_name_profile(base::GenerateGUID(), kFakeUrl);
+  autofill::test::SetProfileInfo(&state_name_profile, "John", "", "Doe", "", "",
+                                 "", "", "", "Abu Dhabi", "", "AE", "");
+  EXPECT_THAT(CreateAutofillMappings(state_name_profile, "en-US"),
+              IsSupersetOf({Pair(Key(-6), "أبو ظبي'")}));
+}
+
 TEST_F(FieldFormatterStateMapTest,
        AlternativeStateNameDoesNotOverrideUSResult) {
   autofill::test::ClearAlternativeStateNameMapForTesting();
@@ -205,28 +245,29 @@ class FieldFormatterStringTest : public ::testing::Test {
     return std::string();
   }
 
-  // |FormatString| requires a std::map<std::string, std::string>, while
-  // |GetAutofillMappings| returns a std::map<Key, std::string>. This
+  // |FormatString| requires a base::flat_map<std::string, std::string>, while
+  // |GetAutofillMappings| returns a base::flat_map<Key, std::string>. This
   // transforms the mappings from Key to std::string.
   template <typename T>
-  std::map<std::string, std::string> CreateAutofillTestMappings(
+  base::flat_map<std::string, std::string> CreateAutofillTestMappings(
       const T& form_group) {
     auto autofill_mappings = CreateAutofillMappings(form_group, "en-US");
-    std::map<std::string, std::string> test_mappings;
+    std::vector<std::pair<std::string, std::string>> test_mappings;
     for (const auto& it : autofill_mappings) {
-      test_mappings[GetKeyAsString(it.first)] = it.second;
+      test_mappings.emplace_back(GetKeyAsString(it.first), it.second);
     }
-    return test_mappings;
+    return base::flat_map<std::string, std::string>(std::move(test_mappings));
   }
 };
 
 TEST_F(FieldFormatterStringTest, FormatString) {
-  std::map<std::string, std::string> mappings = {{"keyA", "valueA"},
-                                                 {"keyB", "valueB"},
-                                                 {"keyC", "valueC"},
-                                                 {"keyD", "$30.5"},
-                                                 {"keyE", "30.5$"}
-                                                 /* keyF does not exist */};
+  base::flat_map<std::string, std::string> mappings = {
+      {"keyA", "valueA"},
+      {"keyB", "valueB"},
+      {"keyC", "valueC"},
+      {"keyD", "$30.5"},
+      {"keyE", "30.5$"}
+      /* keyF does not exist */};
 
   EXPECT_EQ(*FormatString("", mappings), "");
   EXPECT_EQ(*FormatString("input", mappings), "input");
@@ -356,8 +397,8 @@ TEST_F(FieldFormatterStringTest, SpecialCases) {
 }
 
 TEST(FieldFormatterTest, FormatExpression) {
-  std::map<Key, std::string> mappings = {{Key(1), "valueA"},
-                                         {Key(2), "val.ueB"}};
+  base::flat_map<Key, std::string> mappings = {{Key(1), "valueA"},
+                                               {Key(2), "val.ueB"}};
   std::string result;
 
   ValueExpression value_expression_1;
@@ -397,7 +438,7 @@ TEST(FieldFormatterTest, FormatExpression) {
 }
 
 TEST(FieldFormatterTest, FormatExpressionWithReplacements) {
-  std::map<Key, std::string> mappings = {
+  base::flat_map<Key, std::string> mappings = {
       {Key(1), "A"}, {Key(2), "B"}, {Key(3), "+41"}};
   std::string result;
 
@@ -436,9 +477,99 @@ TEST(FieldFormatterTest, FormatExpressionWithReplacements) {
   EXPECT_EQ("\\+0041", result);
 }
 
+TEST(FieldFormatterTest, FormatExpressionWithRegexpReplacement) {
+  base::flat_map<Key, std::string> mappings = {
+      {Key(1), "AA"}, {Key(2), "Bb"}, {Key(3), "Cc"}, {Key(4), "DD"}};
+  std::string result;
+
+  ValueExpression value_expression;
+  auto* chunk = value_expression.add_chunk();
+  // AA -> rA
+  chunk->set_key(1);
+  auto* case_insensitive_local = chunk->add_regexp_replacements();
+  case_insensitive_local->mutable_text_filter()->set_re2("a");
+  case_insensitive_local->mutable_text_filter()->set_case_sensitive(false);
+  case_insensitive_local->set_global(false);
+  case_insensitive_local->set_replacement("r");
+  // Bb -> Br
+  chunk = value_expression.add_chunk();
+  chunk->set_key(2);
+  auto* case_sensitive_local = chunk->add_regexp_replacements();
+  case_sensitive_local->mutable_text_filter()->set_re2("b");
+  case_sensitive_local->mutable_text_filter()->set_case_sensitive(true);
+  case_sensitive_local->set_global(false);
+  case_sensitive_local->set_replacement("r");
+  // Cc -> rr
+  chunk = value_expression.add_chunk();
+  chunk->set_key(3);
+  auto* case_insensitive_global = chunk->add_regexp_replacements();
+  case_insensitive_global->mutable_text_filter()->set_re2("c");
+  case_insensitive_global->mutable_text_filter()->set_case_sensitive(false);
+  case_insensitive_global->set_global(true);
+  case_insensitive_global->set_replacement("r");
+  // DD -> rr
+  chunk = value_expression.add_chunk();
+  chunk->set_key(4);
+  auto* case_insensitive_local_first = chunk->add_regexp_replacements();
+  case_insensitive_local_first->mutable_text_filter()->set_re2("d");
+  case_insensitive_local_first->mutable_text_filter()->set_case_sensitive(
+      false);
+  case_insensitive_local_first->set_global(false);
+  case_insensitive_local_first->set_replacement("r");
+  auto* case_insensitive_local_second = chunk->add_regexp_replacements();
+  case_insensitive_local_second->mutable_text_filter()->set_re2("d");
+  case_insensitive_local_second->mutable_text_filter()->set_case_sensitive(
+      false);
+  case_insensitive_local_second->set_global(false);
+  case_insensitive_local_second->set_replacement("r");
+
+  EXPECT_EQ(ACTION_APPLIED, FormatExpression(value_expression, mappings,
+                                             /* quote_meta= */ false, &result)
+                                .proto_status());
+  EXPECT_EQ("rABrrrrr", result);
+}
+
+TEST(FieldFormatterTest, FormatExpressionWithRegexpReplacementCapturingGroups) {
+  std::string result;
+
+  ValueExpression value_expression;
+  auto* chunk = value_expression.add_chunk();
+  chunk->set_text("John Doe");
+  auto* group_replacement = chunk->add_regexp_replacements();
+  group_replacement->mutable_text_filter()->set_re2("(\\w+)\\s(\\w+)");
+  group_replacement->set_replacement("\\2 \\1");
+
+  EXPECT_EQ(ACTION_APPLIED,
+            FormatExpression(value_expression,
+                             /* mappings= */ base::flat_map<Key, std::string>(),
+                             /* quote_meta= */ false, &result)
+                .proto_status());
+  EXPECT_EQ("Doe John", result);
+}
+
+TEST(FieldFormatterTest, FormatExpressionWithInvalidRegexpReplacement) {
+  base::flat_map<Key, std::string> mappings = {{Key(1), "AA"}};
+  std::string result;
+
+  ValueExpression value_expression;
+  auto* chunk = value_expression.add_chunk();
+  // AA -> ?
+  chunk->set_key(1);
+  auto* invalid_replacement = chunk->add_regexp_replacements();
+  invalid_replacement->mutable_text_filter()->set_re2("^*");
+  invalid_replacement->mutable_text_filter()->set_case_sensitive(false);
+  invalid_replacement->set_global(false);
+  invalid_replacement->set_replacement("");
+
+  EXPECT_EQ(ACTION_APPLIED, FormatExpression(value_expression, mappings,
+                                             /* quote_meta= */ false, &result)
+                                .proto_status());
+  EXPECT_EQ("AA", result);
+}
+
 TEST(FieldFormatterTest, FormatExpressionWithMemoryKey) {
-  std::map<Key, std::string> mappings = {{Key("_var0"), "valueA"},
-                                         {Key("_var1"), "val.ueB"}};
+  base::flat_map<Key, std::string> mappings = {{Key("_var0"), "valueA"},
+                                               {Key("_var1"), "val.ueB"}};
   std::string result;
 
   ValueExpression value_expression;
@@ -468,7 +599,7 @@ TEST(FieldFormatterTest, FormatExpressionWithMemoryKey) {
 }
 
 TEST(FieldFormatterTest, NoKeyConflicts) {
-  std::map<Key, std::string> mappings = {{Key(1), "a"}, {Key("1"), "b"}};
+  base::flat_map<Key, std::string> mappings = {{Key(1), "a"}, {Key("1"), "b"}};
   std::string result;
 
   ValueExpression value_expression;
@@ -502,14 +633,21 @@ TEST(FieldFormatterTest, DifferentLocales) {
               Contains(Pair(Key(36), "Vereinigte Staaten")));
 
   // Invalid locales default to "en-US".
+  // Android and Desktop use a different default.
+#if BUILDFLAG(IS_ANDROID)
   EXPECT_THAT(CreateAutofillMappings(profile, ""),
               Contains(Pair(Key(36), "United States")));
+#elif BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_MAC) || \
+    BUILDFLAG(IS_WIN) || BUILDFLAG(IS_FUCHSIA)
+  EXPECT_THAT(CreateAutofillMappings(profile, ""),
+              Contains(Pair(Key(36), "US")));
+#endif
   EXPECT_THAT(CreateAutofillMappings(profile, "invalid"),
               Contains(Pair(Key(36), "United States")));
 }
 
 TEST(FieldFormatterTest, AddsAllProfileFieldsUsAddress) {
-  std::map<Key, std::string> expected_values = {
+  base::flat_map<Key, std::string> expected_values = {
       {Key(-8), "US"},
       {Key(-6), "California"},
       {Key(3), "Alpha"},
@@ -542,7 +680,7 @@ TEST(FieldFormatterTest, AddsAllProfileFieldsUsAddress) {
 }
 
 TEST(FieldFormatterTest, AddsAllProfileFieldsForNonUsAddress) {
-  std::map<Key, std::string> expected_values = {
+  base::flat_map<Key, std::string> expected_values = {
       {Key(-8), "CH"},
       {Key(-6), "Canton Zurich"},
       {Key(3), "Alpha"},
@@ -575,20 +713,21 @@ TEST(FieldFormatterTest, AddsAllProfileFieldsForNonUsAddress) {
 }
 
 TEST(FieldFormatterTest, AddsAllCreditCardFields) {
-  std::map<Key, std::string> expected_values = {{Key(-7), "8"},
-                                                {Key(-5), "Visa"},
-                                                {Key(-4), "1111"},
-                                                {Key(-2), "visa"},
-                                                {Key(51), "Alpha Beta Gamma"},
-                                                {Key(52), "4111111111111111"},
-                                                {Key(53), "08"},
-                                                {Key(54), "50"},
-                                                {Key(55), "2050"},
-                                                {Key(56), "08/50"},
-                                                {Key(57), "08/2050"},
-                                                {Key(58), "Visa"},
-                                                {Key(91), "Alpha"},
-                                                {Key(92), "Gamma"}};
+  base::flat_map<Key, std::string> expected_values = {
+      {Key(-7), "8"},
+      {Key(-5), "Visa"},
+      {Key(-4), "1111"},
+      {Key(-2), "visa"},
+      {Key(51), "Alpha Beta Gamma"},
+      {Key(52), "4111111111111111"},
+      {Key(53), "08"},
+      {Key(54), "50"},
+      {Key(55), "2050"},
+      {Key(56), "08/50"},
+      {Key(57), "08/2050"},
+      {Key(58), "Visa"},
+      {Key(91), "Alpha"},
+      {Key(92), "Gamma"}};
 
   autofill::CreditCard credit_card(base::GenerateGUID(), kFakeUrl);
   autofill::test::SetCreditCardInfo(&credit_card, "Alpha Beta Gamma",

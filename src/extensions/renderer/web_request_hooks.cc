@@ -4,7 +4,6 @@
 
 #include "extensions/renderer/web_request_hooks.h"
 
-#include "base/cxx17_backports.h"
 #include "base/values.h"
 #include "content/public/renderer/v8_value_converter.h"
 #include "extensions/common/api/web_request.h"
@@ -16,6 +15,10 @@
 #include "extensions/renderer/script_context.h"
 #include "extensions/renderer/script_context_set.h"
 #include "gin/converter.h"
+#include "v8/include/v8-context.h"
+#include "v8/include/v8-exception.h"
+#include "v8/include/v8-function.h"
+#include "v8/include/v8-object.h"
 
 namespace extensions {
 
@@ -66,7 +69,7 @@ bool WebRequestHooks::CreateCustomEvent(
   const base::ListValue* extra_params = nullptr;
   CHECK(event_spec->GetList("extraParameters", &extra_params));
   v8::Local<v8::Value> extra_parameters_spec =
-      content::V8ValueConverter::Create()->ToV8Value(extra_params, context);
+      content::V8ValueConverter::Create()->ToV8Value(*extra_params, context);
 
   v8::Local<v8::Function> get_event = get_event_value.As<v8::Function>();
   v8::Local<v8::Value> args[] = {
@@ -79,7 +82,7 @@ bool WebRequestHooks::CreateCustomEvent(
   v8::TryCatch try_catch(isolate);
   v8::Local<v8::Value> event;
   if (!JSRunner::Get(context)
-           ->RunJSFunctionSync(get_event, context, base::size(args), args)
+           ->RunJSFunctionSync(get_event, context, std::size(args), args)
            .ToLocal(&event)) {
     // TODO(devlin): Do we care about the error? In theory, this should never
     // happen, so probably not.

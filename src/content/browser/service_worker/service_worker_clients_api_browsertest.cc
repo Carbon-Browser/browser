@@ -7,10 +7,8 @@
 #include "base/bind.h"
 #include "base/callback.h"
 #include "base/callback_helpers.h"
-#include "base/macros.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/task/post_task.h"
 #include "base/task/task_traits.h"
 #include "content/browser/service_worker/service_worker_context_core.h"
 #include "content/browser/service_worker/service_worker_context_wrapper.h"
@@ -44,6 +42,11 @@ class ServiceWorkerClientsApiBrowserTest : public ContentBrowserTest {
  public:
   ServiceWorkerClientsApiBrowserTest() = default;
 
+  ServiceWorkerClientsApiBrowserTest(
+      const ServiceWorkerClientsApiBrowserTest&) = delete;
+  ServiceWorkerClientsApiBrowserTest& operator=(
+      const ServiceWorkerClientsApiBrowserTest&) = delete;
+
   void SetUp() override {
     ASSERT_TRUE(embedded_test_server()->InitializeAndListen());
     ContentBrowserTest::SetUp();
@@ -64,8 +67,6 @@ class ServiceWorkerClientsApiBrowserTest : public ContentBrowserTest {
 
  private:
   scoped_refptr<ServiceWorkerContextWrapper> wrapper_;
-
-  DISALLOW_COPY_AND_ASSIGN(ServiceWorkerClientsApiBrowserTest);
 };
 
 // Tests a successful WindowClient.navigate() call.

@@ -9,7 +9,6 @@
 #include <memory>
 #include <string>
 
-#include "base/macros.h"
 #include "net/base/proxy_server.h"
 #include "net/socket/client_socket_pool_manager.h"
 #include "net/socket/client_socket_pool_manager_impl.h"
@@ -21,6 +20,11 @@ class ClientSocketPool;
 class MockClientSocketPoolManager : public ClientSocketPoolManager {
  public:
   MockClientSocketPoolManager();
+
+  MockClientSocketPoolManager(const MockClientSocketPoolManager&) = delete;
+  MockClientSocketPoolManager& operator=(const MockClientSocketPoolManager&) =
+      delete;
+
   ~MockClientSocketPoolManager() override;
 
   // Sets socket pool that gets used for the specified ProxyServer.
@@ -32,15 +36,13 @@ class MockClientSocketPoolManager : public ClientSocketPoolManager {
                                  const char* net_log_reason_utf8) override;
   void CloseIdleSockets(const char* net_log_reason_utf8) override;
   ClientSocketPool* GetSocketPool(const ProxyServer& proxy_server) override;
-  std::unique_ptr<base::Value> SocketPoolInfoToValue() const override;
+  base::Value SocketPoolInfoToValue() const override;
 
  private:
   using ClientSocketPoolMap =
       std::map<ProxyServer, std::unique_ptr<ClientSocketPool>>;
 
   ClientSocketPoolMap socket_pools_;
-
-  DISALLOW_COPY_AND_ASSIGN(MockClientSocketPoolManager);
 };
 
 }  // namespace net

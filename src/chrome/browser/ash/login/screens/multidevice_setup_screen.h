@@ -9,14 +9,16 @@
 
 #include "base/bind.h"
 #include "base/callback.h"
-#include "base/macros.h"
+#include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/login/screens/base_screen.h"
 // TODO(https://crbug.com/1164001): move to forward declaration.
 #include "chrome/browser/ui/webui/chromeos/login/multidevice_setup_screen_handler.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
-#include "chromeos/services/multidevice_setup/public/cpp/multidevice_setup_client.h"
 
 namespace ash {
+
+namespace multidevice_setup {
+class MultiDeviceSetupClient;
+}
 
 class MultiDeviceSetupScreen : public BaseScreen {
  public:
@@ -25,8 +27,12 @@ class MultiDeviceSetupScreen : public BaseScreen {
   static std::string GetResultString(Result result);
 
   using ScreenExitCallback = base::RepeatingCallback<void(Result result)>;
-  MultiDeviceSetupScreen(MultiDeviceSetupScreenView* view,
+  MultiDeviceSetupScreen(base::WeakPtr<MultiDeviceSetupScreenView> view,
                          const ScreenExitCallback& exit_callback);
+
+  MultiDeviceSetupScreen(const MultiDeviceSetupScreen&) = delete;
+  MultiDeviceSetupScreen& operator=(const MultiDeviceSetupScreen&) = delete;
+
   ~MultiDeviceSetupScreen() override;
 
   void AddExitCallbackForTesting(const ScreenExitCallback& testing_callback) {
@@ -49,7 +55,7 @@ class MultiDeviceSetupScreen : public BaseScreen {
   bool MaybeSkip(WizardContext* context) override;
   void ShowImpl() override;
   void HideImpl() override;
-  void OnUserAction(const std::string& action_id) override;
+  void OnUserAction(const base::Value::List& args) override;
 
  private:
   friend class MultiDeviceSetupScreenTest;
@@ -72,10 +78,8 @@ class MultiDeviceSetupScreen : public BaseScreen {
 
   multidevice_setup::MultiDeviceSetupClient* setup_client_ = nullptr;
 
-  MultiDeviceSetupScreenView* view_;
+  base::WeakPtr<MultiDeviceSetupScreenView> view_;
   ScreenExitCallback exit_callback_;
-
-  DISALLOW_COPY_AND_ASSIGN(MultiDeviceSetupScreen);
 };
 
 }  // namespace ash

@@ -8,10 +8,9 @@
 #include <memory>
 
 #include "base/callback.h"
-#include "base/macros.h"
+#include "base/callback_list.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "content/public/browser/notification_observer.h"
-#include "content/public/browser/notification_registrar.h"
 #include "extensions/browser/app_window/app_delegate.h"
 #include "ui/base/window_open_disposition.h"
 #include "ui/gfx/geometry/rect.h"
@@ -20,12 +19,15 @@ class Profile;
 class ScopedKeepAlive;
 class ScopedProfileKeepAlive;
 
-class ChromeAppDelegate : public extensions::AppDelegate,
-                          public content::NotificationObserver {
+class ChromeAppDelegate : public extensions::AppDelegate {
  public:
   // Params:
   //   keep_alive: Whether this object should keep the browser alive.
   explicit ChromeAppDelegate(Profile* profile, bool keep_alive);
+
+  ChromeAppDelegate(const ChromeAppDelegate&) = delete;
+  ChromeAppDelegate& operator=(const ChromeAppDelegate&) = delete;
+
   ~ChromeAppDelegate() override;
 
   static void DisableExternalOpenForTesting();
@@ -77,28 +79,21 @@ class ChromeAppDelegate : public extensions::AppDelegate,
   void OnShow() override;
   bool TakeFocus(content::WebContents* web_contents, bool reverse) override;
   content::PictureInPictureResult EnterPictureInPicture(
-      content::WebContents* web_contents,
-      const viz::SurfaceId& surface_id,
-      const gfx::Size& natural_size) override;
+      content::WebContents* web_contents) override;
   void ExitPictureInPicture() override;
 
-  // content::NotificationObserver:
-  void Observe(int type,
-               const content::NotificationSource& source,
-               const content::NotificationDetails& details) override;
+  void OnAppTerminating();
 
   bool has_been_shown_;
   bool is_hidden_;
   bool for_lock_screen_app_;
-  Profile* const profile_;
+  const raw_ptr<Profile> profile_;
   std::unique_ptr<ScopedKeepAlive> keep_alive_;
   std::unique_ptr<ScopedProfileKeepAlive> profile_keep_alive_;
   std::unique_ptr<NewWindowContentsDelegate> new_window_contents_delegate_;
   base::OnceClosure terminating_callback_;
-  content::NotificationRegistrar registrar_;
+  base::CallbackListSubscription subscription_;
   base::WeakPtrFactory<ChromeAppDelegate> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ChromeAppDelegate);
 };
 
 #endif  // CHROME_BROWSER_UI_APPS_CHROME_APP_DELEGATE_H_

@@ -9,7 +9,6 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
 #include "build/build_config.h"
 #include "components/autofill/core/browser/address_normalizer.h"
 #include "components/autofill/core/browser/data_model/autofill_profile.h"
@@ -34,6 +33,10 @@ class AutofillPaymentApp
       const std::vector<autofill::AutofillProfile*>& billing_profiles,
       const std::string& app_locale,
       base::WeakPtr<PaymentRequestBaseDelegate> payment_request_delegate);
+
+  AutofillPaymentApp(const AutofillPaymentApp&) = delete;
+  AutofillPaymentApp& operator=(const AutofillPaymentApp&) = delete;
+
   ~AutofillPaymentApp() override;
 
   // PaymentApp:
@@ -111,8 +114,6 @@ class AutofillPaymentApp
   bool is_requested_autofill_data_available_ = false;
 
   base::WeakPtrFactory<AutofillPaymentApp> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(AutofillPaymentApp);
 };
 
 }  // namespace payments

@@ -2,7 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "storage/browser/file_system/file_writer_delegate.h"
+
 #include <stdint.h>
+
 #include <limits>
 #include <string>
 #include <utility>
@@ -10,13 +13,11 @@
 
 #include "base/bind.h"
 #include "base/callback_helpers.h"
-#include "base/cxx17_backports.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/location.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "net/base/io_buffer.h"
@@ -31,7 +32,6 @@
 #include "storage/browser/blob/blob_storage_context.h"
 #include "storage/browser/file_system/file_system_context.h"
 #include "storage/browser/file_system/file_system_quota_util.h"
-#include "storage/browser/file_system/file_writer_delegate.h"
 #include "storage/browser/file_system/sandbox_file_stream_writer.h"
 #include "storage/browser/quota/quota_manager_proxy.h"
 #include "storage/browser/test/async_file_test_helper.h"
@@ -50,7 +50,7 @@ const char kOrigin[] = "http://example.com";
 const FileSystemType kFileSystemType = kFileSystemTypeTest;
 
 const char kData[] = "The quick brown fox jumps over the lazy dog.\n";
-const int kDataSize = base::size(kData) - 1;
+const int kDataSize = std::size(kData) - 1;
 
 class Result {
  public:
@@ -100,9 +100,10 @@ class FileWriterDelegateTest : public PlatformTest {
 
   int64_t usage() {
     return file_system_context_->GetQuotaUtil(kFileSystemType)
-        ->GetOriginUsageOnFileTaskRunner(file_system_context_.get(),
-                                         url::Origin::Create(GURL(kOrigin)),
-                                         kFileSystemType);
+        ->GetStorageKeyUsageOnFileTaskRunner(
+            file_system_context_.get(),
+            blink::StorageKey::CreateFromStringForTesting(kOrigin),
+            kFileSystemType);
   }
 
   int64_t GetFileSizeOnDisk(const char* test_file_path) {

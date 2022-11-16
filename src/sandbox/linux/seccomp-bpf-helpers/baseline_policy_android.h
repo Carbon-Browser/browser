@@ -7,7 +7,6 @@
 
 #include <sys/types.h>
 
-#include "base/macros.h"
 #include "sandbox/linux/seccomp-bpf-helpers/baseline_policy.h"
 #include "sandbox/sandbox_export.h"
 
@@ -25,7 +24,17 @@ namespace sandbox {
 // features. This needs an audit. https://crbug.com/739879
 class SANDBOX_EXPORT BaselinePolicyAndroid : public BaselinePolicy {
  public:
+  struct RuntimeOptions {
+    // Allows a subset of the userfaultfd ioctls that are needed for ART GC.
+    bool allow_userfaultfd_ioctls = false;
+  };
+
   BaselinePolicyAndroid();
+  explicit BaselinePolicyAndroid(const RuntimeOptions& options);
+
+  BaselinePolicyAndroid(const BaselinePolicyAndroid&) = delete;
+  BaselinePolicyAndroid& operator=(const BaselinePolicyAndroid&) = delete;
+
   ~BaselinePolicyAndroid() override;
 
   // sandbox::BaselinePolicy:
@@ -33,7 +42,7 @@ class SANDBOX_EXPORT BaselinePolicyAndroid : public BaselinePolicy {
       int system_call_number) const override;
 
  private:
-  DISALLOW_COPY_AND_ASSIGN(BaselinePolicyAndroid);
+  const RuntimeOptions options_;
 };
 
 }  // namespace sandbox

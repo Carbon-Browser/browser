@@ -9,8 +9,10 @@
 #include <string>
 #include <vector>
 
+#include <text-input-extension-unstable-v1-client-protocol.h>
 #include <text-input-unstable-v1-client-protocol.h>
 
+#include "base/memory/raw_ptr.h"
 #include "ui/ozone/platform/wayland/common/wayland_object.h"
 #include "ui/ozone/platform/wayland/host/zwp_text_input_wrapper.h"
 
@@ -28,7 +30,8 @@ class ZWPTextInputWrapperV1 : public ZWPTextInputWrapper {
  public:
   ZWPTextInputWrapperV1(WaylandConnection* connection,
                         ZWPTextInputWrapperClient* client,
-                        zwp_text_input_manager_v1* text_input_manager);
+                        zwp_text_input_manager_v1* text_input_manager,
+                        zcr_text_input_extension_v1* text_input_extension);
   ZWPTextInputWrapperV1(const ZWPTextInputWrapperV1&) = delete;
   ZWPTextInputWrapperV1& operator=(const ZWPTextInputWrapperV1&) = delete;
   ~ZWPTextInputWrapperV1() override;
@@ -44,6 +47,13 @@ class ZWPTextInputWrapperV1 : public ZWPTextInputWrapper {
   void SetCursorRect(const gfx::Rect& rect) override;
   void SetSurroundingText(const std::string& text,
                           const gfx::Range& selection_range) override;
+  void SetContentType(TextInputType type,
+                      TextInputMode mode,
+                      uint32_t flags,
+                      bool should_do_learning) override;
+  void SetGrammarFragmentAtCursor(const ui::GrammarFragment& fragment) override;
+  void SetAutocorrectInfo(const gfx::Range& autocorrect_range,
+                          const gfx::Rect& autocorrect_bounds) override;
 
  private:
   void ResetInputEventState();
@@ -100,9 +110,36 @@ class ZWPTextInputWrapperV1 : public ZWPTextInputWrapper {
                               uint32_t serial,
                               uint32_t direction);
 
-  WaylandConnection* const connection_;
+  // zcr_extended_text_input_v1_listener
+  static void OnSetPreeditRegion(
+      void* data,
+      struct zcr_extended_text_input_v1* extended_text_input,
+      int32_t index,
+      uint32_t length);
+
+  static void OnClearGrammarFragments(
+      void* data,
+      struct zcr_extended_text_input_v1* extended_text_input,
+      uint32_t start,
+      uint32_t end);
+
+  static void OnAddGrammarFragment(
+      void* data,
+      struct zcr_extended_text_input_v1* extended_text_input,
+      uint32_t start,
+      uint32_t end,
+      const char* suggestion);
+
+  static void OnSetAutocorrectRange(
+      void* data,
+      struct zcr_extended_text_input_v1* extended_text_input,
+      uint32_t start,
+      uint32_t end);
+
+  const raw_ptr<WaylandConnection> connection_;
   wl::Object<zwp_text_input_v1> obj_;
-  ZWPTextInputWrapperClient* const client_;
+  wl::Object<zcr_extended_text_input_v1> extended_obj_;
+  const raw_ptr<ZWPTextInputWrapperClient> client_;
 
   std::vector<ZWPTextInputWrapperClient::SpanStyle> spans_;
   int32_t preedit_cursor_ = -1;

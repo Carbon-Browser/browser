@@ -14,6 +14,7 @@
 #include "base/files/file_util.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/string_tokenizer.h"
+#include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -40,6 +41,7 @@
 #include "chrome/browser/ui/webui/extensions/extension_icon_source.h"
 #include "chrome/browser/ui/webui/extensions/extensions_internals_source.h"
 #include "chrome/common/chrome_switches.h"
+#include "components/value_store/value_store_factory_impl.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/url_data_source.h"
@@ -52,12 +54,10 @@
 #include "extensions/browser/extension_util.h"
 #include "extensions/browser/info_map.h"
 #include "extensions/browser/quota_service.h"
-#include "extensions/browser/runtime_data.h"
 #include "extensions/browser/service_worker_manager.h"
 #include "extensions/browser/state_store.h"
 #include "extensions/browser/updater/uninstall_ping_sender.h"
 #include "extensions/browser/user_script_manager.h"
-#include "extensions/browser/value_store/value_store_factory_impl.h"
 #include "extensions/common/constants.h"
 #include "extensions/common/features/feature_channel.h"
 #include "extensions/common/manifest_url_handlers.h"
@@ -109,14 +109,17 @@ void ExtensionSystemImpl::Shared::InitPrefs() {
   store_factory_ = base::MakeRefCounted<value_store::ValueStoreFactoryImpl>(
       profile_->GetPath());
 
-  // Two state stores. The latter, which contains declarative rules, must be
-  // loaded immediately so that the rules are ready before we issue network
-  // requests.
+  // Three state stores. Two stores, which contain declarative rules and dynamic
+  // user scripts respectively, must be loaded immediately so that the
+  // rules/scripts are ready before we issue network requests.
   state_store_ = std::make_unique<StateStore>(
       profile_, store_factory_, StateStore::BackendType::STATE, true);
 
   rules_store_ = std::make_unique<StateStore>(
       profile_, store_factory_, StateStore::BackendType::RULES, false);
+
+  dynamic_user_scripts_store_ = std::make_unique<StateStore>(
+      profile_, store_factory_, StateStore::BackendType::SCRIPTS, false);
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   // We can not perform check for Signin Profile here, as it would result in
@@ -144,7 +147,7 @@ void ExtensionSystemImpl::Shared::RegisterManagementPolicyProviders() {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   // Lazy creation of SigninScreenPolicyProvider.
   if (!signin_screen_policy_provider_) {
-    if (chromeos::ProfileHelper::IsSigninProfile(profile_)) {
+    if (ash::ProfileHelper::IsSigninProfile(profile_)) {
       signin_screen_policy_provider_ =
           std::make_unique<chromeos::SigninScreenPolicyProvider>();
     }
@@ -200,15 +203,11 @@ void ExtensionSystemImpl::Shared::Init(bool extensions_enabled) {
 
   user_script_manager_ = std::make_unique<UserScriptManager>(profile_);
 
-  // ExtensionService depends on RuntimeData.
-  runtime_data_ =
-      std::make_unique<RuntimeData>(ExtensionRegistry::Get(profile_));
-
   bool autoupdate_enabled = !profile_->IsGuestSession() &&
                             !profile_->IsSystemProfile();
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   if (!extensions_enabled ||
-      chromeos::ProfileHelper::IsLockScreenAppProfile(profile_)) {
+      ash::ProfileHelper::IsLockScreenAppProfile(profile_)) {
     autoupdate_enabled = false;
   }
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
@@ -263,9 +262,8 @@ void ExtensionSystemImpl::Shared::Init(bool extensions_enabled) {
   // Skip loading session extensions if we are not in a user session or if the
   // profile is the sign-in or lock screen app profile, which don't correspond
   // to a user session.
-  skip_session_extensions =
-      !chromeos::LoginState::Get()->IsUserLoggedIn() ||
-      !chromeos::ProfileHelper::IsRegularProfile(profile_);
+  skip_session_extensions = !chromeos::LoginState::Get()->IsUserLoggedIn() ||
+                            !ash::ProfileHelper::IsRegularProfile(profile_);
   if (chrome::IsRunningInForcedAppMode()) {
     extension_service_->component_loader()->
         AddDefaultComponentExtensionsForKioskMode(skip_session_extensions);
@@ -315,6 +313,10 @@ StateStore* ExtensionSystemImpl::Shared::rules_store() {
   return rules_store_.get();
 }
 
+StateStore* ExtensionSystemImpl::Shared::dynamic_user_scripts_store() {
+  return dynamic_user_scripts_store_.get();
+}
+
 scoped_refptr<value_store::ValueStoreFactory>
 ExtensionSystemImpl::Shared::store_factory() const {
   return store_factory_;
@@ -322,10 +324,6 @@ ExtensionSystemImpl::Shared::store_factory() const {
 
 ExtensionService* ExtensionSystemImpl::Shared::extension_service() {
   return extension_service_.get();
-}
-
-RuntimeData* ExtensionSystemImpl::Shared::runtime_data() {
-  return runtime_data_.get();
 }
 
 ManagementPolicy* ExtensionSystemImpl::Shared::management_policy() {
@@ -388,10 +386,6 @@ ExtensionService* ExtensionSystemImpl::extension_service() {
   return shared_->extension_service();
 }
 
-RuntimeData* ExtensionSystemImpl::runtime_data() {
-  return shared_->runtime_data();
-}
-
 ManagementPolicy* ExtensionSystemImpl::management_policy() {
   return shared_->management_policy();
 }
@@ -410,6 +404,10 @@ StateStore* ExtensionSystemImpl::state_store() {
 
 StateStore* ExtensionSystemImpl::rules_store() {
   return shared_->rules_store();
+}
+
+StateStore* ExtensionSystemImpl::dynamic_user_scripts_store() {
+  return shared_->dynamic_user_scripts_store();
 }
 
 scoped_refptr<value_store::ValueStoreFactory>
@@ -509,11 +507,10 @@ void ExtensionSystemImpl::RegisterExtensionWithRequestContexts(
 }
 
 void ExtensionSystemImpl::UnregisterExtensionWithRequestContexts(
-    const std::string& extension_id,
-    const UnloadedExtensionReason reason) {
+    const std::string& extension_id) {
   content::GetIOThreadTaskRunner({})->PostTask(
-      FROM_HERE, base::BindOnce(&InfoMap::RemoveExtension, info_map(),
-                                extension_id, reason));
+      FROM_HERE,
+      base::BindOnce(&InfoMap::RemoveExtension, info_map(), extension_id));
 }
 
 }  // namespace extensions

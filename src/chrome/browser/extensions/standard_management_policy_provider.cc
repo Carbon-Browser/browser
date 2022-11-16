@@ -55,9 +55,8 @@ bool AdminPolicyIsModifiable(const Extension* source_extension,
 }  // namespace
 
 StandardManagementPolicyProvider::StandardManagementPolicyProvider(
-    const ExtensionManagement* settings)
-    : settings_(settings) {
-}
+    ExtensionManagement* settings)
+    : settings_(settings) {}
 
 StandardManagementPolicyProvider::~StandardManagementPolicyProvider() {
 }
@@ -74,13 +73,7 @@ std::string
 bool StandardManagementPolicyProvider::UserMayLoad(
     const Extension* extension,
     std::u16string* error) const {
-  // Component extensions are always allowed, besides the camera app that can be
-  // disabled by extension policy. This is a temporary solution until there's a
-  // dedicated policy to disable the camera, at which point the special check in
-  // the 'if' statement should be removed.
-  // TODO(http://crbug.com/1002935)
-  if (Manifest::IsComponentLocation(extension->location()) &&
-      extension->id() != extension_misc::kCameraAppId) {
+  if (Manifest::IsComponentLocation(extension->location())) {
     return true;
   }
 
@@ -88,14 +81,6 @@ bool StandardManagementPolicyProvider::UserMayLoad(
   // are used by other extensions. The extension that depends on the shared
   // module may be filtered by policy.
   if (extension->is_shared_module())
-    return true;
-
-  // Always allow bookmark apps. The fact that bookmark apps are an extension is
-  // an internal implementation detail and hence they should not be controlled
-  // by extension management policies. See crbug.com/786061.
-  // TODO(calamity): This special case should be removed by removing bookmark
-  // apps from external sources. See crbug.com/788245.
-  if (extension->from_bookmark())
     return true;
 
   // Check whether the extension type is allowed.

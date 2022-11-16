@@ -8,9 +8,9 @@
 #include <string>
 #include <utility>
 
-#include "base/macros.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/singleton.h"
+#include "base/metrics/histogram_macros.h"
 #include "chrome/browser/lookalikes/lookalike_url_blocking_page.h"
 #include "chrome/browser/lookalikes/lookalike_url_navigation_throttle.h"
 #include "chrome/browser/lookalikes/lookalike_url_service.h"
@@ -22,7 +22,6 @@
 #include "components/keyed_service/content/browser_context_keyed_service_factory.h"
 #include "components/lookalikes/core/lookalike_url_util.h"
 #include "components/reputation/core/safety_tips_config.h"
-#include "components/security_state/core/features.h"
 #include "components/security_state/core/security_state.h"
 #include "components/url_formatter/spoof_checks/top_domains/top500_domains.h"
 #include "net/base/registry_controlled_domains/registry_controlled_domain.h"
@@ -46,6 +45,9 @@ class ReputationServiceFactory : public BrowserContextKeyedServiceFactory {
     return base::Singleton<ReputationServiceFactory>::get();
   }
 
+  ReputationServiceFactory(const ReputationServiceFactory&) = delete;
+  ReputationServiceFactory& operator=(const ReputationServiceFactory&) = delete;
+
  private:
   friend struct base::DefaultSingletonTraits<ReputationServiceFactory>;
 
@@ -66,16 +68,15 @@ class ReputationServiceFactory : public BrowserContextKeyedServiceFactory {
       content::BrowserContext* context) const override {
     return chrome::GetBrowserContextOwnInstanceInIncognito(context);
   }
-
-  DISALLOW_COPY_AND_ASSIGN(ReputationServiceFactory);
 };
 
-// Returns whether or not the Safety Tip should be suppressed for the given URL.
-// Checks SafeBrowsing-style permutations of |url| against the component updater
-// allowlist, as well as any enterprise-set allowlisting of the hostname, and
-// returns whether the URL is explicitly allowed. Fails closed, so that warnings
-// are suppressed if the component is unavailable.
-bool ShouldSuppressWarning(Profile* profile, const GURL& url) {
+// Returns whether or not the Safety Tip should be suppressed on the given URL,
+// if it's accused of spoofing |victim_url|. Checks both against the component
+// updater allowlist, as well as any enterprise-set allowlist.  Fails closed, so
+// that warnings are suppressed if the component is unavailable.
+bool ShouldSuppressWarning(Profile* profile,
+                           const GURL& url,
+                           const GURL& victim_url) {
   // Check any policy-set allowlist.
   if (IsAllowedByEnterprisePolicy(profile->GetPrefs(), url)) {
     return true;
@@ -90,7 +91,8 @@ bool ShouldSuppressWarning(Profile* profile, const GURL& url) {
     // flag on any known false positives until the client received the update.
     return true;
   }
-  return reputation::IsUrlAllowlistedBySafetyTipsComponent(proto, url);
+  return reputation::IsUrlAllowlistedBySafetyTipsComponent(
+      proto, url.GetWithEmptyPath(), victim_url.GetWithEmptyPath());
 }
 
 // Gets the eTLD+1 of the provided hostname, including private registries (e.g.
@@ -160,12 +162,22 @@ void ReputationService::SetSensitiveKeywordsForTesting(
   num_sensitive_keywords_ = num_new_keywords;
 }
 
+void ReputationService::ResetSensitiveKeywordsForTesting() {
+  sensitive_keywords_ = top500_domains::kTopKeywords;
+  num_sensitive_keywords_ = top500_domains::kNumTopKeywords;
+}
+
 void ReputationService::GetReputationStatusWithEngagedSites(
     const GURL& url,
     bool has_delayed_warning,
     ReputationCheckCallback callback,
     const std::vector<DomainInfo>& engaged_sites) {
+  base::TimeTicks start = base::TimeTicks::Now();
+
   const DomainInfo navigated_domain = GetDomainInfo(url);
+
+  UMA_HISTOGRAM_TIMES("Security.SafetyTips.GetDomainInfoTime",
+                      base::TimeTicks::Now() - start);
 
   ReputationCheckResult result;
 
@@ -174,13 +186,6 @@ void ReputationService::GetReputationStatusWithEngagedSites(
   // settled on the safety tip to show in the UI, so as to not overwrite this
   // decision with other heuristics that may trigger later.
   bool done_checking_reputation_status = false;
-
-  // 0. Server-side warning suppression.
-  // If the URL is on the allowlist list, do nothing else. This is only used to
-  // mitigate false positives, so no further processing should be done.
-  if (ShouldSuppressWarning(profile_, url)) {
-    done_checking_reputation_status = true;
-  }
 
   // 1. Engagement check
   // Ensure that this URL is not already engaged. We can't use the synchronous
@@ -240,23 +245,14 @@ void ReputationService::GetReputationStatusWithEngagedSites(
     done_checking_reputation_status = true;
   }
 
-  // 6. This case is an experimental variation on Safe Browsing delayed warnings
-  // (https://crbug.com/1057157) to measure the effect of simplified domain
-  // display (https://crbug.com/1090393). In this experiment, Chrome delays Safe
-  // Browsing warnings until user interaction to see if the simplified domain
-  // display UI treatment affects how people interact with the page. In this
-  // variation, Chrome shows a Safety Tip on such pages, to try to isolate the
-  // effect of the UI treatment to when people's attention is drawn to the
-  // omnibox.
-  if (has_delayed_warning &&
-      base::FeatureList::IsEnabled(
-          security_state::features::kSafetyTipUIOnDelayedWarning)) {
-    // Intentionally don't check |done_checking_reputation_status| here, as we
-    // want this Safety Tip to take precedence. In this case, where there is a
-    // delayed Safe Browsing warning, we know the page is actually suspicious.
-    result.safety_tip_status = SafetyTipStatus::kBadReputation;
-    result.triggered_heuristics.blocklist_heuristic_triggered = true;
-    done_checking_reputation_status = true;
+  // If we found a SafetyTipStatus, possibly clear it if the URL is on the
+  // allowlist.
+  if (result.safety_tip_status != SafetyTipStatus::kUnknown &&
+      result.safety_tip_status != SafetyTipStatus::kNone &&
+      result.safety_tip_status != SafetyTipStatus::kBadKeyword &&
+      ShouldSuppressWarning(profile_, url, result.suggested_url)) {
+    result.safety_tip_status = SafetyTipStatus::kNone;
+    result.suggested_url = GURL();
   }
 
   if (IsIgnored(url)) {
@@ -276,4 +272,8 @@ void ReputationService::GetReputationStatusWithEngagedSites(
   DCHECK(done_checking_reputation_status ||
          !result.triggered_heuristics.triggered_any());
   std::move(callback).Run(result);
+
+  UMA_HISTOGRAM_TIMES(
+      "Security.SafetyTips.GetReputationStatusWithEngagedSitesTime",
+      base::TimeTicks::Now() - start);
 }

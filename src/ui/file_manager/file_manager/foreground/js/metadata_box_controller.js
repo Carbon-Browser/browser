@@ -241,12 +241,8 @@ export class MetadataBoxController {
   updateModificationTime_(entry, items) {
     const item = items[0];
 
-    if (item.modificationTime) {
-      this.metadataBox_.modificationTime =
-          this.fileMetadataFormatter_.formatModDate(item.modificationTime);
-    } else {
-      this.metadataBox_.modificationTime = '';
-    }
+    this.metadataBox_.modificationTime =
+        this.fileMetadataFormatter_.formatModDate(item.modificationTime);
   }
 
   /**
@@ -302,7 +298,7 @@ export class MetadataBoxController {
       }
 
       if (chrome.runtime.lastError) {
-        console.error(chrome.runtime.lastError);
+        console.warn(chrome.runtime.lastError);
         size = undefined;
       }
 

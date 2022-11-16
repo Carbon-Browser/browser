@@ -10,19 +10,22 @@ import './strings.m.js';
 
 import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
 import {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.m.js';
-import {assert} from 'chrome://resources/js/assert.m.js';
+import {assert} from 'chrome://resources/js/assert_ts.js';
 import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
-import {html, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {highlightUpdatedItems, trackUpdatedItems} from './api_listener.js';
 import {DialogFocusManager} from './dialog_focus_manager.js';
+import {getTemplate} from './edit_dialog.html.js';
 import {BookmarkNode} from './types.js';
 
 export interface BookmarksEditDialogElement {
   $: {
     dialog: CrDialogElement,
+    saveButton: HTMLElement,
     url: CrInputElement,
-  }
+    name: CrInputElement,
+  };
 }
 
 export class BookmarksEditDialogElement extends PolymerElement {
@@ -31,7 +34,7 @@ export class BookmarksEditDialogElement extends PolymerElement {
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
   }
 
   static get properties() {
@@ -82,7 +85,8 @@ export class BookmarksEditDialogElement extends PolymerElement {
 
     this.titleValue_ = editItem.title;
     if (!this.isFolder_) {
-      this.urlValue_ = assert(editItem.url!);
+      assert(editItem.url);
+      this.urlValue_ = editItem.url;
     }
 
     DialogFocusManager.getInstance().showDialog(this.$.dialog);
@@ -113,8 +117,9 @@ export class BookmarksEditDialogElement extends PolymerElement {
   /**
    * Validates the value of the URL field, returning true if it is a valid URL.
    * May modify the value by prepending 'http://' in order to make it valid.
+   * Note: Made public only for the purposes of testing.
    */
-  private validateUrl_(): boolean {
+  validateUrl(): boolean {
     const urlInput = this.$.url;
     const originalValue = this.urlValue_;
 
@@ -136,7 +141,7 @@ export class BookmarksEditDialogElement extends PolymerElement {
     const edit: { title: string, url?: string, parentId?: string|null } =
         { 'title': this.titleValue_ };
     if (!this.isFolder_) {
-      if (!this.validateUrl_()) {
+      if (!this.validateUrl()) {
         return;
       }
 
@@ -155,6 +160,12 @@ export class BookmarksEditDialogElement extends PolymerElement {
 
   private onCancelButtonTap_() {
     this.$.dialog.cancel();
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'bookmarks-edit-dialog': BookmarksEditDialogElement;
   }
 }
 

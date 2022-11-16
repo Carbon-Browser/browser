@@ -146,6 +146,7 @@ const char kTechnologyHspaPlus[] = "HSPAPlus";
 const char kTechnologyLte[] = "LTE";
 const char kTechnologyLteAdvanced[] = "LTEAdvanced";
 const char kTechnologyUmts[] = "UMTS";
+const char kTechnology5gNr[] = "5GNR";
 }  // namespace cellular
 
 namespace cellular_provider {
@@ -233,6 +234,7 @@ const char kSSID[] = "SSID";
 const char kSecurity[] = "Security";
 const char kSecurityNone[] = "None";
 const char kSignalStrength[] = "SignalStrength";
+const char kSignalStrengthRssi[] = "SignalStrengthRssi";
 const char kWEP_8021X[] = "WEP-8021X";
 const char kWEP_PSK[] = "WEP-PSK";
 const char kWPA_EAP[] = "WPA-EAP";
@@ -365,7 +367,9 @@ const char kCert[] = "Cert";
 const char kEAP[] = "EAP";
 const char kGroup[] = "Group";
 const char kIKEVersion[] = "IKEVersion";
+const char kLocalIdentity[] = "LocalIdentity";
 const char kPSK[] = "PSK";
+const char kRemoteIdentity[] = "RemoteIdentity";
 const char kServerCAPEMs[] = "ServerCAPEMs";
 const char kServerCARef[] = "ServerCARef";
 const char kServerCARefs[] = "ServerCARefs";
@@ -499,6 +503,7 @@ const char kPasswordPlaceholderVerbatim[] = "${PASSWORD}";
 }  // namespace substitutes
 
 namespace global_network_config {
+const char kAllowCellularSimLock[] = "AllowCellularSimLock";
 const char kAllowOnlyPolicyCellularNetworks[] =
     "AllowOnlyPolicyCellularNetworks";
 const char kAllowOnlyPolicyNetworksToAutoconnect[] =
@@ -511,8 +516,9 @@ const char kAllowOnlyPolicyNetworksToConnectIfAvailable[] =
 // AllowOnlyPolicyNetworksToConnectIfAvailable field are currently only applied
 // to WiFi networks. TODO(crbug.com/1234561): Fix this when ONC field is
 // updated.
-const char* kAllowOnlyPolicyWiFiToConnect = kAllowOnlyPolicyNetworksToConnect;
-const char* kAllowOnlyPolicyWiFiToConnectIfAvailable =
+const char* const kAllowOnlyPolicyWiFiToConnect =
+    kAllowOnlyPolicyNetworksToConnect;
+const char* const kAllowOnlyPolicyWiFiToConnectIfAvailable =
     kAllowOnlyPolicyNetworksToConnectIfAvailable;
 
 const char kBlacklistedHexSSIDs[] = "BlacklistedHexSSIDs";  // Deprecated

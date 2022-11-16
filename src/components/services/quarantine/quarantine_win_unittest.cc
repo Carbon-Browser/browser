@@ -10,7 +10,6 @@
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
-#include "base/macros.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
@@ -20,7 +19,6 @@
 #include "base/win/scoped_com_initializer.h"
 #include "base/win/win_util.h"
 #include "base/win/windows_version.h"
-#include "components/services/quarantine/public/cpp/quarantine_features_win.h"
 #include "components/services/quarantine/quarantine.h"
 #include "components/services/quarantine/test_support.h"
 #include "net/base/filename_util.h"
@@ -49,8 +47,8 @@ const char* const kUntrustedURLs[] = {
 bool CreateFile(const base::FilePath& file_path) {
   constexpr char kTestData[] = "Hello world!";
 
-  return base::WriteFile(file_path, kTestData, base::size(kTestData)) ==
-         static_cast<int>(base::size(kTestData));
+  return base::WriteFile(file_path, kTestData, std::size(kTestData)) ==
+         static_cast<int>(std::size(kTestData));
 }
 
 base::FilePath GetZoneIdentifierStreamPath(const base::FilePath& file_path) {
@@ -83,13 +81,15 @@ class ScopedZoneForSite {
   ScopedZoneForSite(const std::wstring& domain,
                     const std::wstring& protocol,
                     ZoneIdentifierType zone_identifier_type);
+
+  ScopedZoneForSite(const ScopedZoneForSite&) = delete;
+  ScopedZoneForSite& operator=(const ScopedZoneForSite&) = delete;
+
   ~ScopedZoneForSite();
 
  private:
   std::wstring domain_;
   std::wstring protocol_;
-
-  DISALLOW_COPY_AND_ASSIGN(ScopedZoneForSite);
 };
 
 ScopedZoneForSite::ScopedZoneForSite(const std::wstring& domain,
@@ -122,8 +122,8 @@ bool AddInternetZoneIdentifierDirectly(const base::FilePath& file_path) {
   static const char kMotwForInternetZone[] = "[ZoneTransfer]\r\nZoneId=3\r\n";
   return base::WriteFile(GetZoneIdentifierStreamPath(file_path),
                          kMotwForInternetZone,
-                         base::size(kMotwForInternetZone)) ==
-         static_cast<int>(base::size(kMotwForInternetZone));
+                         std::size(kMotwForInternetZone)) ==
+         static_cast<int>(std::size(kMotwForInternetZone));
 }
 
 void CheckQuarantineResult(QuarantineFileResult result,
@@ -136,6 +136,10 @@ void CheckQuarantineResult(QuarantineFileResult result,
 class QuarantineWinTest : public ::testing::Test {
  public:
   QuarantineWinTest() = default;
+
+  QuarantineWinTest(const QuarantineWinTest&) = delete;
+  QuarantineWinTest& operator=(const QuarantineWinTest&) = delete;
+
   ~QuarantineWinTest() override = default;
 
   void SetUp() override {
@@ -177,8 +181,6 @@ class QuarantineWinTest : public ::testing::Test {
   std::unique_ptr<ScopedZoneForSite> scoped_zone_for_trusted_site_;
   std::unique_ptr<ScopedZoneForSite> scoped_zone_for_internet_site_;
   std::unique_ptr<ScopedZoneForSite> scoped_zone_for_restricted_site_;
-
-  DISALLOW_COPY_AND_ASSIGN(QuarantineWinTest);
 };
 
 // If the file is missing, the QuarantineFile() call should return FILE_MISSING.

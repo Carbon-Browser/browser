@@ -76,8 +76,8 @@ class NearbySharingService : public KeyedService {
     virtual void OnStartAdvertisingFailure() {}
     virtual void OnStartDiscoveryResult(bool success) {}
 
-    virtual void OnFastInitiationDeviceFound() {}
-    virtual void OnFastInitiationDeviceLost() {}
+    virtual void OnFastInitiationDevicesDetected() {}
+    virtual void OnFastInitiationDevicesNotDetected() {}
     virtual void OnFastInitiationScanningStopped() {}
 
     // Called during the |KeyedService| shutdown, but before everything has been
@@ -173,15 +173,16 @@ class NearbySharingService : public KeyedService {
   virtual NearbyNotificationDelegate* GetNotificationDelegate(
       const std::string& notification_id) = 0;
 
+  // Records via Standard Feature Usage Logging whether or not advertising
+  // successfully starts when the user clicks the "Device nearby is sharing"
+  // notification.
+  virtual void RecordFastInitiationNotificationUsage(bool success) = 0;
+
   virtual NearbyShareSettings* GetSettings() = 0;
   virtual NearbyShareHttpNotifier* GetHttpNotifier() = 0;
   virtual NearbyShareLocalDeviceDataManager* GetLocalDeviceDataManager() = 0;
   virtual NearbyShareContactManager* GetContactManager() = 0;
   virtual NearbyShareCertificateManager* GetCertificateManager() = 0;
-
-  // Returns true if we currently detect any devices nearby that are attempting
-  // to share.
-  virtual bool AreFastInitiationDevicesDetected() const = 0;
 };
 
 #endif  // CHROME_BROWSER_NEARBY_SHARING_NEARBY_SHARING_SERVICE_H_

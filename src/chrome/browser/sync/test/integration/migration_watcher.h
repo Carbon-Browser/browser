@@ -5,7 +5,7 @@
 #ifndef CHROME_BROWSER_SYNC_TEST_INTEGRATION_MIGRATION_WATCHER_H_
 #define CHROME_BROWSER_SYNC_TEST_INTEGRATION_MIGRATION_WATCHER_H_
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "components/sync/base/model_type.h"
 #include "components/sync/driver/backend_migrator.h"
 
@@ -16,6 +16,10 @@ class MigrationWaiter;
 class MigrationWatcher : public syncer::MigrationObserver {
  public:
   explicit MigrationWatcher(SyncServiceImplHarness* harness);
+
+  MigrationWatcher(const MigrationWatcher&) = delete;
+  MigrationWatcher& operator=(const MigrationWatcher&) = delete;
+
   ~MigrationWatcher() override;
 
   // Returns true if the observed profile has a migration in progress.
@@ -35,7 +39,7 @@ class MigrationWatcher : public syncer::MigrationObserver {
 
  private:
   // The SyncServiceImplHarness to watch.
-  SyncServiceImplHarness* const harness_;
+  const raw_ptr<SyncServiceImplHarness> harness_;
 
   // The set of data types currently undergoing migration.
   syncer::ModelTypeSet pending_types_;
@@ -45,9 +49,7 @@ class MigrationWatcher : public syncer::MigrationObserver {
   syncer::ModelTypeSet migrated_types_;
 
   // The MigrationWatier that is waiting for this migration to complete.
-  MigrationWaiter* migration_waiter_;
-
-  DISALLOW_COPY_AND_ASSIGN(MigrationWatcher);
+  raw_ptr<MigrationWaiter> migration_waiter_;
 };
 
 #endif  // CHROME_BROWSER_SYNC_TEST_INTEGRATION_MIGRATION_WATCHER_H_

@@ -6,6 +6,7 @@
 #define UI_OZONE_PLATFORM_WAYLAND_HOST_WAYLAND_ZAURA_SHELL_H_
 
 #include "base/containers/flat_set.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/ozone/platform/wayland/common/wayland_object.h"
 
 namespace ui {
@@ -15,10 +16,12 @@ class WaylandConnection;
 // Wraps the zaura_shell object.
 class WaylandZAuraShell : public wl::GlobalObjectRegistrar<WaylandZAuraShell> {
  public:
-  static void Register(WaylandConnection* connection);
+  static constexpr char kInterfaceName[] = "zaura_shell";
+
   static void Instantiate(WaylandConnection* connection,
                           wl_registry* registry,
                           uint32_t name,
+                          const std::string& interface,
                           uint32_t version);
 
   WaylandZAuraShell(zaura_shell* aura_shell, WaylandConnection* connection);
@@ -50,9 +53,13 @@ class WaylandZAuraShell : public wl::GlobalObjectRegistrar<WaylandZAuraShell> {
   static void OnDeskActivationChanged(void* data,
                                       struct zaura_shell* zaura_shell,
                                       int active_desk_index);
+  static void OnActivated(void* data,
+                          struct zaura_shell* zaura_shell,
+                          struct wl_surface* gained_active,
+                          struct wl_surface* lost_active);
 
   wl::Object<zaura_shell> obj_;
-  WaylandConnection* const connection_;
+  const raw_ptr<WaylandConnection> connection_;
   base::flat_set<uint32_t> bug_fix_ids_;
   std::vector<std::string> desks_;
   int active_desk_index_ = 0;

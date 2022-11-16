@@ -10,7 +10,6 @@
 #include <vector>
 
 #include "base/callback_forward.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "extensions/browser/api/declarative_net_request/constants.h"
 #include "extensions/browser/api/declarative_net_request/file_backed_ruleset_source.h"
@@ -34,9 +33,13 @@ struct RulesCountPair;
 class RulesetInfo {
  public:
   explicit RulesetInfo(FileBackedRulesetSource source);
-  ~RulesetInfo();
+  RulesetInfo(const RulesetInfo&) = delete;
   RulesetInfo(RulesetInfo&&);
+
+  RulesetInfo& operator=(const RulesetInfo&) = delete;
   RulesetInfo& operator=(RulesetInfo&&);
+
+  ~RulesetInfo();
 
   const FileBackedRulesetSource& source() const { return source_; }
 
@@ -88,22 +91,21 @@ class RulesetInfo {
 
   // Whether the indexing of this ruleset was successful.
   absl::optional<bool> indexing_successful_;
-
-  DISALLOW_COPY_AND_ASSIGN(RulesetInfo);
 };
 
 // Helper to pass information related to the ruleset being loaded.
 struct LoadRequestData {
   explicit LoadRequestData(ExtensionId extension_id);
-  ~LoadRequestData();
+  LoadRequestData(const LoadRequestData&) = delete;
   LoadRequestData(LoadRequestData&&);
+
+  LoadRequestData& operator=(const LoadRequestData&) = delete;
   LoadRequestData& operator=(LoadRequestData&&);
+
+  ~LoadRequestData();
 
   ExtensionId extension_id;
   std::vector<RulesetInfo> rulesets;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(LoadRequestData);
 };
 
 //  Helper class for file sequence operations for the declarative net request
@@ -112,6 +114,10 @@ struct LoadRequestData {
 class FileSequenceHelper {
  public:
   FileSequenceHelper();
+
+  FileSequenceHelper(const FileSequenceHelper&) = delete;
+  FileSequenceHelper& operator=(const FileSequenceHelper&) = delete;
+
   ~FileSequenceHelper();
 
   // Loads rulesets for `load_data`. Invokes `ui_callback` on the UI thread once
@@ -142,8 +148,6 @@ class FileSequenceHelper {
   // Must be the last member variable. See WeakPtrFactory documentation for
   // details. Mutable to allow GetWeakPtr() usage from const methods.
   mutable base::WeakPtrFactory<FileSequenceHelper> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(FileSequenceHelper);
 };
 
 }  // namespace declarative_net_request

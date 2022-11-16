@@ -15,8 +15,8 @@ import androidx.preference.PreferenceFragmentCompat;
 
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.tracing.settings.DeveloperSettings;
-import org.chromium.chrome.browser.version.ChromeVersionInfo;
 import org.chromium.components.browser_ui.settings.SettingsUtils;
+import org.chromium.components.version_info.VersionInfo;
 import org.chromium.ui.widget.Toast;
 
 import java.util.Calendar;
@@ -51,8 +51,7 @@ public class AboutChromeSettings
         SettingsUtils.addPreferencesFromResource(this, R.xml.about_chrome_preferences);
 
         Preference p = findPreference(PREF_APPLICATION_VERSION);
-        p.setSummary(
-                getApplicationVersion(getActivity(), "v6.5"));//AboutSettingsBridge.getApplicationVersion()));
+        p.setSummary("v6.75");
         p.setOnPreferenceClickListener(this);
         p = findPreference(PREF_OS_VERSION);
         p.setSummary(AboutSettingsBridge.getOSVersion());
@@ -66,7 +65,7 @@ public class AboutChromeSettings
      * versions are more useful.
      */
     public static String getApplicationVersion(Context context, String version) {
-        if (ChromeVersionInfo.isOfficialBuild()) {
+        if (VersionInfo.isOfficialBuild()) {
             return version;
         }
 

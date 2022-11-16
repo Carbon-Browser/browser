@@ -35,7 +35,6 @@ public class EphemeralTabMediator {
 
     private final BottomSheetController mBottomSheetController;
     private final EphemeralTabCoordinator.FaviconLoader mFaviconLoader;
-    private final EphemeralTabMetrics mMetrics;
     private final int mTopControlsHeightDp;
 
     private WebContents mWebContents;
@@ -48,11 +47,9 @@ public class EphemeralTabMediator {
      * Constructor.
      */
     public EphemeralTabMediator(BottomSheetController bottomSheetController,
-            EphemeralTabCoordinator.FaviconLoader faviconLoader, EphemeralTabMetrics metrics,
-            int topControlsHeightDp) {
+            EphemeralTabCoordinator.FaviconLoader faviconLoader, int topControlsHeightDp) {
         mBottomSheetController = bottomSheetController;
         mFaviconLoader = faviconLoader;
-        mMetrics = metrics;
         mTopControlsHeightDp = topControlsHeightDp;
     }
 
@@ -99,9 +96,8 @@ public class EphemeralTabMediator {
             }
 
             @Override
-            public void didStartNavigation(NavigationHandle navigation) {
-                mMetrics.recordNavigateLink();
-                if (navigation.isInPrimaryMainFrame() && !navigation.isSameDocument()) {
+            public void didStartNavigationInPrimaryMainFrame(NavigationHandle navigation) {
+                if (!navigation.isSameDocument()) {
                     GURL url = navigation.getUrl();
                     if (url.equals(mCurrentUrl)) return;
 
@@ -118,6 +114,11 @@ public class EphemeralTabMediator {
                     mFaviconLoader.loadFavicon(
                             url, (drawable) -> onFaviconAvailable(drawable), mProfile);
                 }
+            }
+
+            @Override
+            public void didStartNavigationNoop(NavigationHandle navigation) {
+                if (!navigation.isInPrimaryMainFrame()) return;
             }
 
             @Override
@@ -172,7 +173,7 @@ public class EphemeralTabMediator {
             }
 
             @Override
-            public void loadingStateChanged(boolean toDifferentDocument) {
+            public void loadingStateChanged(boolean shouldShowLoadingUI) {
                 boolean isLoading = mWebContents != null && mWebContents.isLoading();
                 if (isLoading) {
                     if (mSheetContent == null) return;

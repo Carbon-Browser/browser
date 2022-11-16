@@ -5,6 +5,7 @@
 #include "components/performance_manager/graph/page_node_impl.h"
 
 #include "base/containers/contains.h"
+#include "base/memory/raw_ptr.h"
 #include "components/performance_manager/graph/frame_node_impl.h"
 #include "components/performance_manager/graph/graph_impl_operations.h"
 #include "components/performance_manager/graph/process_node_impl.h"
@@ -92,13 +93,13 @@ TEST_F(PageNodeImplTest, TimeSinceLastVisibilityChange) {
 
   mock_graph.page->SetIsVisible(true);
   EXPECT_TRUE(mock_graph.page->is_visible());
-  AdvanceClock(base::TimeDelta::FromSeconds(42));
-  EXPECT_EQ(base::TimeDelta::FromSeconds(42),
+  AdvanceClock(base::Seconds(42));
+  EXPECT_EQ(base::Seconds(42),
             mock_graph.page->TimeSinceLastVisibilityChange());
 
   mock_graph.page->SetIsVisible(false);
-  AdvanceClock(base::TimeDelta::FromSeconds(23));
-  EXPECT_EQ(base::TimeDelta::FromSeconds(23),
+  AdvanceClock(base::Seconds(23));
+  EXPECT_EQ(base::Seconds(23),
             mock_graph.page->TimeSinceLastVisibilityChange());
   EXPECT_FALSE(mock_graph.page->is_visible());
 }
@@ -115,9 +116,8 @@ TEST_F(PageNodeImplTest, TimeSinceLastNavigation) {
   EXPECT_EQ(url, mock_graph.page->main_frame_url());
   EXPECT_EQ(10u, mock_graph.page->navigation_id());
   EXPECT_EQ(kHtmlMimeType, mock_graph.page->contents_mime_type());
-  AdvanceClock(base::TimeDelta::FromSeconds(11));
-  EXPECT_EQ(base::TimeDelta::FromSeconds(11),
-            mock_graph.page->TimeSinceLastNavigation());
+  AdvanceClock(base::Seconds(11));
+  EXPECT_EQ(base::Seconds(11), mock_graph.page->TimeSinceLastNavigation());
 
   // 2nd navigation.
   url = GURL("http://www.example.org/bobcat");
@@ -126,9 +126,8 @@ TEST_F(PageNodeImplTest, TimeSinceLastNavigation) {
   EXPECT_EQ(url, mock_graph.page->main_frame_url());
   EXPECT_EQ(20u, mock_graph.page->navigation_id());
   EXPECT_EQ(kHtmlMimeType, mock_graph.page->contents_mime_type());
-  AdvanceClock(base::TimeDelta::FromSeconds(17));
-  EXPECT_EQ(base::TimeDelta::FromSeconds(17),
-            mock_graph.page->TimeSinceLastNavigation());
+  AdvanceClock(base::Seconds(17));
+  EXPECT_EQ(base::Seconds(17), mock_graph.page->TimeSinceLastNavigation());
 
   // Test a same-document navigation.
   url = GURL("http://www.example.org/bobcat#fun");
@@ -137,9 +136,8 @@ TEST_F(PageNodeImplTest, TimeSinceLastNavigation) {
   EXPECT_EQ(url, mock_graph.page->main_frame_url());
   EXPECT_EQ(30u, mock_graph.page->navigation_id());
   EXPECT_EQ(kHtmlMimeType, mock_graph.page->contents_mime_type());
-  AdvanceClock(base::TimeDelta::FromSeconds(17));
-  EXPECT_EQ(base::TimeDelta::FromSeconds(17),
-            mock_graph.page->TimeSinceLastNavigation());
+  AdvanceClock(base::Seconds(17));
+  EXPECT_EQ(base::Seconds(17), mock_graph.page->TimeSinceLastNavigation());
 
   // Test a navigation to a page with a different MIME type.
   url = GURL("http://www.example.org/document.pdf");
@@ -148,9 +146,8 @@ TEST_F(PageNodeImplTest, TimeSinceLastNavigation) {
   EXPECT_EQ(url, mock_graph.page->main_frame_url());
   EXPECT_EQ(40u, mock_graph.page->navigation_id());
   EXPECT_EQ(kPdfMimeType, mock_graph.page->contents_mime_type());
-  AdvanceClock(base::TimeDelta::FromSeconds(17));
-  EXPECT_EQ(base::TimeDelta::FromSeconds(17),
-            mock_graph.page->TimeSinceLastNavigation());
+  AdvanceClock(base::Seconds(17));
+  EXPECT_EQ(base::Seconds(17), mock_graph.page->TimeSinceLastNavigation());
 }
 
 TEST_F(PageNodeImplTest, BrowserContextID) {
@@ -230,9 +227,11 @@ class LenientMockObserver : public PageNodeImpl::Observer {
                void(const PageNode*, const FrameNode*));
   MOCK_METHOD3(OnEmbedderFrameNodeChanged,
                void(const PageNode*, const FrameNode*, EmbeddingType));
+  MOCK_METHOD1(OnTypeChanged, void(const PageNode*));
   MOCK_METHOD1(OnIsVisibleChanged, void(const PageNode*));
   MOCK_METHOD1(OnIsAudibleChanged, void(const PageNode*));
-  MOCK_METHOD1(OnLoadingStateChanged, void(const PageNode*));
+  MOCK_METHOD2(OnLoadingStateChanged,
+               void(const PageNode*, PageNode::LoadingState));
   MOCK_METHOD1(OnUkmSourceIdChanged, void(const PageNode*));
   MOCK_METHOD1(OnPageLifecycleStateChanged, void(const PageNode*));
   MOCK_METHOD1(OnPageIsHoldingWebLockChanged, void(const PageNode*));
@@ -257,7 +256,8 @@ class LenientMockObserver : public PageNodeImpl::Observer {
   }
 
  private:
-  const PageNode* notified_page_node_ = nullptr;
+  // TODO(crbug.com/1298696): Breaks components_unittests.
+  raw_ptr<const PageNode, DegradeToNoOpWhenMTE> notified_page_node_ = nullptr;
 };
 
 using MockObserver = ::testing::StrictMock<LenientMockObserver>;
@@ -290,8 +290,9 @@ TEST_F(PageNodeImplTest, ObserverWorks) {
   page_node->SetIsAudible(true);
   EXPECT_EQ(raw_page_node, obs.TakeNotifiedPageNode());
 
-  EXPECT_CALL(obs, OnLoadingStateChanged(_))
-      .WillOnce(Invoke(&obs, &MockObserver::SetNotifiedPageNode));
+  EXPECT_CALL(obs, OnLoadingStateChanged(_, _))
+      .WillOnce(testing::WithArg<0>(
+          Invoke(&obs, &MockObserver::SetNotifiedPageNode)));
   page_node->SetLoadingState(PageNode::LoadingState::kLoading);
   EXPECT_EQ(raw_page_node, obs.TakeNotifiedPageNode());
 

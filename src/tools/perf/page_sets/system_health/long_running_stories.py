@@ -10,7 +10,7 @@ from page_sets.system_health import system_health_story
 
 IDLE_TIME_IN_SECONDS = 100
 SAMPLING_INTERVAL_IN_SECONDS = 1
-STEPS = IDLE_TIME_IN_SECONDS / SAMPLING_INTERVAL_IN_SECONDS
+STEPS = IDLE_TIME_IN_SECONDS // SAMPLING_INTERVAL_IN_SECONDS
 
 
 class _LongRunningStory(system_health_story.SystemHealthStory):
@@ -34,9 +34,8 @@ class _LongRunningStory(system_health_story.SystemHealthStory):
     if cls.BACKGROUND:
       return ('Load %s then open a new blank tab and let the loaded page stay '
               'in background for %s seconds.' % (cls.URL, IDLE_TIME_IN_SECONDS))
-    else:
-      return ('Load %s then let it stay in foreground for %s seconds.' %
-              (cls.URL, IDLE_TIME_IN_SECONDS))
+    return ('Load %s then let it stay in foreground for %s seconds.' %
+            (cls.URL, IDLE_TIME_IN_SECONDS))
 
   def WillStartTracing(self, chrome_trace_config):
     # Long running stories generate large traces, so use a large tracing buffer

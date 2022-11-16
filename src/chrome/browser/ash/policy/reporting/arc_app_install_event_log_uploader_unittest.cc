@@ -37,8 +37,8 @@ namespace policy {
 
 namespace {
 
-constexpr base::TimeDelta kMinRetryBackoff = base::TimeDelta::FromSeconds(10);
-constexpr base::TimeDelta kMaxRetryBackoff = base::TimeDelta::FromDays(1);
+constexpr base::TimeDelta kMinRetryBackoff = base::Seconds(10);
+constexpr base::TimeDelta kMaxRetryBackoff = base::Days(1);
 
 static const char kDmToken[] = "token";
 static const char kPackageName[] = "package";
@@ -63,20 +63,28 @@ class MockArcAppInstallEventLogUploaderDelegate
  public:
   MockArcAppInstallEventLogUploaderDelegate() {}
 
+  MockArcAppInstallEventLogUploaderDelegate(
+      const MockArcAppInstallEventLogUploaderDelegate&) = delete;
+  MockArcAppInstallEventLogUploaderDelegate& operator=(
+      const MockArcAppInstallEventLogUploaderDelegate&) = delete;
+
   void SerializeForUpload(SerializationCallback callback) override {
     SerializeForUpload_(callback);
   }
 
   MOCK_METHOD1(SerializeForUpload_, void(SerializationCallback&));
   MOCK_METHOD0(OnUploadSuccess, void());
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(MockArcAppInstallEventLogUploaderDelegate);
 };
 
 }  // namespace
 
 class ArcAppInstallEventLogUploaderTest : public testing::Test {
+ public:
+  ArcAppInstallEventLogUploaderTest(const ArcAppInstallEventLogUploaderTest&) =
+      delete;
+  ArcAppInstallEventLogUploaderTest& operator=(
+      const ArcAppInstallEventLogUploaderTest&) = delete;
+
  protected:
   ArcAppInstallEventLogUploaderTest() = default;
 
@@ -116,18 +124,10 @@ class ArcAppInstallEventLogUploaderTest : public testing::Test {
         .WillOnce(MoveArg<0>(callback));
   }
 
-  void ClearReportDict() {
-    base::DictionaryValue* mutable_dict;
-    if (value_report_.GetAsDictionary(&mutable_dict))
-      mutable_dict->Clear();
-    else
-      NOTREACHED();
-  }
-
   void CompleteUpload(bool success) {
-    ClearReportDict();
-    base::Value context = reporting::GetContext(/*profile=*/nullptr);
-    base::Value events = ConvertArcAppProtoToValue(&log_, context);
+    value_report_.clear();
+    base::Value::Dict context = reporting::GetContext(/*profile=*/nullptr);
+    base::Value::List events = ConvertArcAppProtoToValue(&log_, context);
     value_report_ = RealtimeReportingJobConfiguration::BuildReport(
         std::move(events), std::move(context));
 
@@ -139,9 +139,9 @@ class ArcAppInstallEventLogUploaderTest : public testing::Test {
   }
 
   void CaptureUpload(CloudPolicyClient::StatusCallback* callback) {
-    ClearReportDict();
-    base::Value context = reporting::GetContext(/*profile=*/nullptr);
-    base::Value events = ConvertArcAppProtoToValue(&log_, context);
+    value_report_.clear();
+    base::Value::Dict context = reporting::GetContext(/*profile=*/nullptr);
+    base::Value::List events = ConvertArcAppProtoToValue(&log_, context);
     value_report_ = RealtimeReportingJobConfiguration::BuildReport(
         std::move(events), std::move(context));
 
@@ -164,7 +164,7 @@ class ArcAppInstallEventLogUploaderTest : public testing::Test {
   base::test::SingleThreadTaskEnvironment task_environment_{
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
   em::AppInstallReportRequest log_;
-  base::Value value_report_{base::Value::Type::DICTIONARY};
+  base::Value::Dict value_report_;
 
   MockCloudPolicyClient client_;
   MockArcAppInstallEventLogUploaderDelegate delegate_;
@@ -172,9 +172,6 @@ class ArcAppInstallEventLogUploaderTest : public testing::Test {
 
   chromeos::system::ScopedFakeStatisticsProvider
       scoped_fake_statistics_provider_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ArcAppInstallEventLogUploaderTest);
 };
 
 // Make a log upload request. Have serialization and log upload succeed. Verify
@@ -493,11 +490,9 @@ TEST_F(ArcAppInstallEventLogUploaderTest, DuplicateEvents) {
   EXPECT_CALL(delegate_, OnUploadSuccess());
   uploader_->RequestUpload();
 
-  EXPECT_EQ(2u,
-            value_report_
-                .FindListKey(RealtimeReportingJobConfiguration::kEventListKey)
-                ->GetList()
-                .size());
+  EXPECT_EQ(2u, value_report_
+                    .FindList(RealtimeReportingJobConfiguration::kEventListKey)
+                    ->size());
 }
 
 }  // namespace policy

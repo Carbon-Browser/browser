@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 
-# This file is part of Adblock Plus <https://adblockplus.org/>,
+# This file is part of eyeo Chromium SDK,
 # Copyright (C) 2006-present eyeo GmbH
 #
-# Adblock Plus is free software: you can redistribute it and/or modify
+# eyeo Chromium SDK is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License version 3 as
 # published by the Free Software Foundation.
 #
-# Adblock Plus is distributed in the hope that it will be useful,
+# eyeo Chromium SDK is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with Adblock Plus.  If not, see <http://www.gnu.org/licenses/>.
+# along with eyeo Chromium SDK.  If not, see <http://www.gnu.org/licenses/>.
 
 import subprocess, tempfile, argparse
 
@@ -70,9 +70,9 @@ class Interdiff:
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='Generates the difference between two git commit ranges.'
-        'For migrations between 2 ABPC versions, each range corresponds to '
-        'the difference between vanilla Chromium and the corresponding ABPC '
-        'integration.')
+        'For migrations between 2 eyeo Chromium versions, each range '
+        'corresponds to the difference between vanilla Chromium and the '
+        'corresponding eyeo Chromium integration.')
 
     parser.add_argument('source_from', help='source range start')
     parser.add_argument('source_to', help='source range end')

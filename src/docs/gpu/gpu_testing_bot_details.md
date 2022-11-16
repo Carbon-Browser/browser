@@ -54,7 +54,6 @@ queries of the bots and see, for example, which GPUs are available.
 
 The waterfall bots run tests on a single GPU type in order to make it easier to
 see regressions or flakiness that affect only a certain type of GPU.
-'Mac FYI GPU ASAN Release' is an exception, running both on Intel and AMD GPUs.
 
 The tryservers like `win10_chromium_x64_rel_ng` which include GPU tests, on the other
 hand, run tests on more than one GPU type. As of this writing, the Windows
@@ -120,8 +119,8 @@ If `cd`'d into `src/`:
 
 1.  `./tools/mb/mb.py isolate //out/Release [target name]`
     *   For example: `./tools/mb/mb.py isolate //out/Release angle_end2end_tests`
-1.  `./tools/luci-go/isolate batcharchive -I https://isolateserver.appspot.com out/Release/[target name].isolated.gen.json`
-    *   For example: `./tools/luci-go/isolate batcharchive -I https://isolateserver.appspot.com out/Release/angle_end2end_tests.isolated.gen.json`
+1.  `./tools/luci-go/isolate batcharchive -cas-instance chromium-swarm out/Release/[target name].isolated.gen.json`
+    *   For example: `./tools/luci-go/isolate batcharchive -cas-instance chromium-swarm out/Release/angle_end2end_tests.isolated.gen.json`
 See the section below on [isolate server credentials](#Isolate-server-credentials).
 
 ### Adding your new isolate to the tests that are run on the bots
@@ -413,10 +412,11 @@ Builder].
             don't run on certain Win bots because of missing OpenGL extensions.
         1.  Run [`generate_buildbot_json.py`][generate_buildbot_json.py] to
             regenerate `src/testing/buildbot/chromium.gpu.fyi.json`.
-    1. Updates [`ci.star`][ci.star] and its related generated files
-       [`cr-buildbucket.cfg`][cr-buildbucket.cfg],
+    1. Updates [`chromium.gpu.star`][chromium.gpu.star] or
+       [`chromium.gpu.fyi.star`][chromium.gpu.fyi.star] and its related
+       generated files [`cr-buildbucket.cfg`][cr-buildbucket.cfg],
        [`luci-scheduler.cfg`][luci-scheduler.cfg], and
-       ['luci-milo.cfg`][luci-milo.cfg]:
+       [`luci-milo.cfg`][luci-milo.cfg]:
         *   Use the appropriate definition for the type of the bot being added,
             for example, `ci.gpu_fyi_thin_tester()` should be used for all CI
             tester bots on GPU FYI waterfall.
@@ -485,14 +485,21 @@ breaking as seen in [this bug][misconfigured builder bug].
 
 [How to add a new manually-triggered trybot]: https://chromium.googlesource.com/chromium/src/+/main/docs/gpu/gpu_testing_bot_details.md#How-to-add-a-new-manually_triggered-trybot
 
-[ci.star]:               https://chromium.googlesource.com/chromium/src/+/main/infra/config/subprojects/ci.star
-[chromium.gpu.star]:     https://chromium.googlesource.com/chromium/src/+/main/infra/config/consoles/chromium.gpu.star
-[chromium.gpu.fyi.star]: https://chromium.googlesource.com/chromium/src/+/main/infra/config/consoles/chromium.gpu.fyi.star
+[chromium.gpu.star]:     https://chromium.googlesource.com/chromium/src/+/main/infra/config/subprojects/ci/chromium.gpu.star
+[chromium.gpu.fyi.star]: https://chromium.googlesource.com/chromium/src/+/main/infra/config/subprojects/ci/chromium.gpu.fyi.star
 [cr-buildbucket.cfg]:    https://chromium.googlesource.com/chromium/src/+/main/infra/config/generated/cr-buildbucket.cfg
 [luci-scheduler.cfg]:    https://chromium.googlesource.com/chromium/src/+/main/infra/config/generated/luci-scheduler.cfg
 [luci-milo.cfg]:         https://chromium.googlesource.com/chromium/src/+/main/infra/config/generated/luci-milo.cfg
 [GPU FYI Win Builder]:   https://ci.chromium.org/p/chromium/builders/luci.chromium.ci/GPU%20FYI%20Win%20Builder
 [misconfigured builder bug]: https://bugs.chromium.org/p/chromium/issues/detail?id=1163657
+
+### How to remove an existing bot from the chromium.gpu.fyi waterfall
+
+Basically, one needs to follow
+[How to add a new tester bot to the chromium.gpu.fyi waterfall](#how-to-add-a-new-tester-bot-to-the-chromium_gpu_fyi-waterfall)
+step in reverse.
+To prevent bot failures during deletion process, pause the bot on
+https://luci-scheduler.appspot.com/.
 
 ### How to start running tests on a new GPU type on an existing try bot
 
@@ -674,7 +681,14 @@ or OS update. To do this:
 1.  If an "experimental" version of this bot doesn't yet exist, follow the
     instructions above for [How to add a new tester bot to the chromium.gpu.fyi
     waterfall](#How-to-add-a-new-tester-bot-to-the-chromium_gpu_fyi-waterfall)
-    to deploy one.
+    to deploy one. However, you do not need to request additional GCE resources
+    since there should be enough spare capacity in the GPU builderless pool to
+    handle them. Additionally, ensure that the bot definition in
+    [`chromium.gpu.fyi.star`][chromium.gpu.fyi.star] includes a `list_view`
+    argument specifying `chromium.gpu.experimental`.
+1.  If an "experimental" version does already exist, re-add it to its default
+    console in [`chromium.gpu.fyi.star`][chromium.gpu.fyi.star] by uncommenting
+    its `console_view_entry` argument and unpause it in the [luci scheduler].
 1.  Have this experimental bot target the new version of the driver or the OS
     in [`waterfalls.pyl`][waterfalls.pyl] and [`mixins.pyl`][mixins.pyl].
     [Sample CL][sample driver cl].
@@ -711,13 +725,17 @@ or OS update. To do this:
     added above.
 1.  Remove the old driver or OS version from the `_stable` mixin, leaving just
     the new stable version.
+1.  Clean up the "experimental" version of the bot by pausing it in the
+    [luci scheduler] and commenting out its `console_view_entry` argument in
+    [`chromium.gpu.fyi.star`][chromium.gpu.fyi.star].
 
 Note that we leave the experimental bot in place. We could reclaim it, but it
 seems worthwhile to continuously test the "next" version of graphics drivers as
 well as the current stable ones.
 
 [sample driver cl]: https://chromium-review.googlesource.com/c/chromium/src/+/1726875
-[updating gold baselines]: https://chromium.googlesource.com/chromium/src/+/HEAD/docs/gpu/pixel_wrangling.md#how-to-keep-the-bots-green
+[updating gold baselines]: http://go/gpu-pixel-wrangler-info#how-to-keep-the-bots-green
+[luci scheduler]: https://luci-scheduler.appspot.com/
 
 ## Credentials for various servers
 

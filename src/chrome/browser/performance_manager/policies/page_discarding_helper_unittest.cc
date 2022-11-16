@@ -8,7 +8,9 @@
 
 #include "base/strings/string_number_conversions.h"
 #include "base/test/metrics/histogram_tester.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/time/time.h"
+#include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/performance_manager/policies/policy_features.h"
 #include "chrome/browser/performance_manager/test_support/page_discarding_utils.h"
@@ -78,13 +80,17 @@ TEST_F(PageDiscardingHelperTest, TestCannotDiscardRecentlyAudiblePage) {
           page_node()));
 }
 
-#if !defined(OS_CHROMEOS)
-TEST_F(PageDiscardingHelperTest, TestCannotDiscardRecentlyVisiblePage) {
+#if !BUILDFLAG(IS_CHROMEOS)
+TEST_F(PageDiscardingHelperTest,
+       TestCannotDiscardRecentlyVisiblePageUnlessExplicitlyRequested) {
   page_node()->SetIsVisible(true);
   page_node()->SetIsVisible(false);
   EXPECT_FALSE(
       PageDiscardingHelper::GetFromGraph(graph())->CanUrgentlyDiscardForTesting(
           page_node()));
+  EXPECT_TRUE(
+      PageDiscardingHelper::GetFromGraph(graph())->CanUrgentlyDiscardForTesting(
+          page_node(), /* consider_minimum_protection_time */ false));
 }
 #endif
 
@@ -183,7 +189,7 @@ TEST_F(PageDiscardingHelperTest, TestCannotDiscardIsConnectedToUSBDevice) {
           page_node()));
 }
 
-#if !defined(OS_CHROMEOS)
+#if !BUILDFLAG(IS_CHROMEOS)
 TEST_F(PageDiscardingHelperTest, TestCannotDiscardPageMultipleTimes) {
   PageLiveStateDecorator::Data::GetOrCreateForPageNode(page_node())
       ->SetWasDiscardedForTesting(true);
@@ -196,6 +202,48 @@ TEST_F(PageDiscardingHelperTest, TestCannotDiscardPageMultipleTimes) {
 TEST_F(PageDiscardingHelperTest, TestCannotDiscardPageWithFormInteractions) {
   frame_node()->SetHadFormInteraction();
   EXPECT_FALSE(
+      PageDiscardingHelper::GetFromGraph(graph())->CanUrgentlyDiscardForTesting(
+          page_node()));
+}
+
+TEST_F(PageDiscardingHelperTest, TestCannotDiscardPageOnNoDiscardList) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitWithFeatures({features::kHighEfficiencyModeAvailable,
+                                 features::kBatterySaverModeAvailable},
+                                {});
+  // static_cast page_node because it's declared as a PageNodeImpl which hides
+  // the members it overrides from PageNode.
+  PageDiscardingHelper::GetFromGraph(graph())->SetNoDiscardPatternsForProfile(
+      static_cast<PageNode*>(page_node())->GetBrowserContextID(),
+      {"youtube.com"});
+  frame_node()->OnNavigationCommitted(GURL("https://www.youtube.com"), false);
+  EXPECT_FALSE(
+      PageDiscardingHelper::GetFromGraph(graph())->CanUrgentlyDiscardForTesting(
+          page_node()));
+
+  frame_node()->OnNavigationCommitted(GURL("https://www.example.com"), false);
+  EXPECT_TRUE(
+      PageDiscardingHelper::GetFromGraph(graph())->CanUrgentlyDiscardForTesting(
+          page_node()));
+
+  // Changing the no discard list rebuilds the matcher
+  PageDiscardingHelper::GetFromGraph(graph())->SetNoDiscardPatternsForProfile(
+      static_cast<PageNode*>(page_node())->GetBrowserContextID(),
+      {"google.com"});
+  frame_node()->OnNavigationCommitted(GURL("https://www.youtube.com"), false);
+  EXPECT_TRUE(
+      PageDiscardingHelper::GetFromGraph(graph())->CanUrgentlyDiscardForTesting(
+          page_node()));
+  frame_node()->OnNavigationCommitted(GURL("https://www.google.com"), false);
+  EXPECT_FALSE(
+      PageDiscardingHelper::GetFromGraph(graph())->CanUrgentlyDiscardForTesting(
+          page_node()));
+
+  // Setting the no discard list to empty makes all URLs discardable again.
+  PageDiscardingHelper::GetFromGraph(graph())->SetNoDiscardPatternsForProfile(
+      static_cast<PageNode*>(page_node())->GetBrowserContextID(), {});
+  frame_node()->OnNavigationCommitted(GURL("https://www.google.com"), false);
+  EXPECT_TRUE(
       PageDiscardingHelper::GetFromGraph(graph())->CanUrgentlyDiscardForTesting(
           page_node()));
 }
@@ -302,15 +350,15 @@ TEST_F(PageDiscardingHelperTest, UrgentlyDiscardMultiplePagesThreeCandidates) {
   testing::MakePageNodeDiscardable(page_node3.get(), task_env());
 
   page_node2->SetIsVisible(true);
-  AdvanceClock(base::TimeDelta::FromMinutes(30));
+  AdvanceClock(base::Minutes(30));
   page_node2->SetIsVisible(false);
-  AdvanceClock(base::TimeDelta::FromMinutes(30));
+  AdvanceClock(base::Minutes(30));
 
   // |page_node3| is the most recently visible page.
   page_node3->SetIsVisible(true);
-  AdvanceClock(base::TimeDelta::FromMinutes(30));
+  AdvanceClock(base::Minutes(30));
   page_node3->SetIsVisible(false);
-  AdvanceClock(base::TimeDelta::FromMinutes(30));
+  AdvanceClock(base::Minutes(30));
 
   process_node()->set_resident_set_kb(1024);
   process_node2->set_resident_set_kb(1024);
@@ -351,15 +399,15 @@ TEST_F(PageDiscardingHelperTest,
   testing::MakePageNodeDiscardable(page_node3.get(), task_env());
 
   page_node2->SetIsVisible(true);
-  AdvanceClock(base::TimeDelta::FromMinutes(30));
+  AdvanceClock(base::Minutes(30));
   page_node2->SetIsVisible(false);
-  AdvanceClock(base::TimeDelta::FromMinutes(30));
+  AdvanceClock(base::Minutes(30));
 
   // |page_node3| is the most recently visible page.
   page_node3->SetIsVisible(true);
-  AdvanceClock(base::TimeDelta::FromMinutes(30));
+  AdvanceClock(base::Minutes(30));
   page_node3->SetIsVisible(false);
-  AdvanceClock(base::TimeDelta::FromMinutes(30));
+  AdvanceClock(base::Minutes(30));
 
   process_node()->set_resident_set_kb(1024);
   process_node2->set_resident_set_kb(1024);
@@ -463,9 +511,9 @@ TEST_P(ParameterizedPageDiscardingHelperTest,
 
   // Pretend that |page_node2| is the most recently visible page.
   page_node2->SetIsVisible(true);
-  AdvanceClock(base::TimeDelta::FromMinutes(30));
+  AdvanceClock(base::Minutes(30));
   page_node2->SetIsVisible(false);
-  AdvanceClock(base::TimeDelta::FromMinutes(30));
+  AdvanceClock(base::Minutes(30));
   EXPECT_TRUE(
       PageDiscardingHelper::GetFromGraph(graph())->CanUrgentlyDiscardForTesting(
           page_node2.get()));
@@ -572,9 +620,9 @@ TEST_P(ParameterizedPageDiscardingHelperTest,
 
   // Pretend that |page_node()| is the most recently visible page.
   page_node()->SetIsVisible(true);
-  AdvanceClock(base::TimeDelta::FromMinutes(30));
+  AdvanceClock(base::Minutes(30));
   page_node()->SetIsVisible(false);
-  AdvanceClock(base::TimeDelta::FromMinutes(30));
+  AdvanceClock(base::Minutes(30));
   EXPECT_TRUE(
       PageDiscardingHelper::GetFromGraph(graph())->CanUrgentlyDiscardForTesting(
           page_node()));
@@ -604,9 +652,9 @@ TEST_P(ParameterizedPageDiscardingHelperTest,
 
   // Pretend that |page_node()| is the most recently visible page.
   page_node()->SetIsVisible(true);
-  AdvanceClock(base::TimeDelta::FromMinutes(30));
+  AdvanceClock(base::Minutes(30));
   page_node()->SetIsVisible(false);
-  AdvanceClock(base::TimeDelta::FromMinutes(30));
+  AdvanceClock(base::Minutes(30));
   EXPECT_TRUE(
       PageDiscardingHelper::GetFromGraph(graph())->CanUrgentlyDiscardForTesting(
           page_node()));
@@ -625,7 +673,7 @@ TEST_P(ParameterizedPageDiscardingHelperTest,
   ::testing::Mock::VerifyAndClearExpectations(discarder());
 }
 
-INSTANTIATE_TEST_CASE_P(
+INSTANTIATE_TEST_SUITE_P(
     PageDiscardingHelperWithParamTest,
     ParameterizedPageDiscardingHelperTest,
     ::testing::Values(features::DiscardStrategy::LRU,

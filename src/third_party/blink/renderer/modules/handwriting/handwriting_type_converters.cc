@@ -6,8 +6,6 @@
 
 #include "third_party/blink/public/mojom/handwriting/handwriting.mojom-blink.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_handwriting_drawing_segment.h"
-#include "third_party/blink/renderer/bindings/modules/v8/v8_handwriting_feature_query.h"
-#include "third_party/blink/renderer/bindings/modules/v8/v8_handwriting_feature_query_result.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_handwriting_hints.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_handwriting_hints_query_result.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_handwriting_input_type.h"
@@ -18,14 +16,12 @@
 #include "third_party/blink/renderer/bindings/modules/v8/v8_handwriting_recognizer_query_result.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_handwriting_segment.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_handwriting_stroke.h"
+#include "third_party/blink/renderer/modules/handwriting/handwriting_stroke.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
 
 namespace mojo {
 
 using handwriting::mojom::blink::HandwritingDrawingSegmentPtr;
-using handwriting::mojom::blink::HandwritingFeatureQueryPtr;
-using handwriting::mojom::blink::HandwritingFeatureQueryResultPtr;
-using handwriting::mojom::blink::HandwritingFeatureStatus;
 using handwriting::mojom::blink::HandwritingHintsPtr;
 using handwriting::mojom::blink::HandwritingPointPtr;
 using handwriting::mojom::blink::HandwritingPredictionPtr;
@@ -44,7 +40,7 @@ TypeConverter<HandwritingPointPtr, blink::HandwritingPoint*>::Convert(
   auto output = handwriting::mojom::blink::HandwritingPoint::New();
   output->location = gfx::PointF(input->x(), input->y());
   if (input->hasT()) {
-    output->t = base::TimeDelta::FromMilliseconds(input->t());
+    output->t = base::Milliseconds(input->t());
   }
   return output;
 }
@@ -80,25 +76,6 @@ TypeConverter<HandwritingHintsPtr, blink::HandwritingHints*>::Convert(
   return output;
 }
 
-// static
-HandwritingFeatureQueryPtr
-TypeConverter<HandwritingFeatureQueryPtr, blink::HandwritingFeatureQuery*>::
-    Convert(const blink::HandwritingFeatureQuery* input) {
-  if (!input) {
-    return nullptr;
-  }
-  auto output = handwriting::mojom::blink::HandwritingFeatureQuery::New();
-  if (input->hasLanguages()) {
-    for (const auto& lang : input->languages()) {
-      output->languages.push_back(lang);
-    }
-  }
-  output->alternatives = input->hasAlternatives();
-  output->segmentation_result = input->hasSegmentationResult();
-
-  return output;
-}
-
 // Converters from Mojo to IDL.
 
 // static
@@ -128,34 +105,6 @@ TypeConverter<blink::HandwritingStroke*, HandwritingStrokePtr>::Convert(
   for (const auto& point : input->points) {
     output->addPoint(point.To<blink::HandwritingPoint*>());
   }
-  return output;
-}
-
-// static
-blink::HandwritingFeatureQueryResult*
-TypeConverter<blink::HandwritingFeatureQueryResult*,
-              HandwritingFeatureQueryResultPtr>::
-    Convert(const HandwritingFeatureQueryResultPtr& input) {
-  if (!input) {
-    return nullptr;
-  }
-  auto* output = blink::HandwritingFeatureQueryResult::Create();
-
-#define HANDWRITING_SET_FEATURE_QUERY_RESULT(feature, setter)        \
-  if (input->feature != HandwritingFeatureStatus::kNotQueried) {     \
-    if (input->feature == HandwritingFeatureStatus::kNotSupported) { \
-      output->setter(false);                                         \
-    } else {                                                         \
-      output->setter(true);                                          \
-    }                                                                \
-  }
-
-  HANDWRITING_SET_FEATURE_QUERY_RESULT(languages, setLanguages);
-  HANDWRITING_SET_FEATURE_QUERY_RESULT(alternatives, setAlternatives);
-  HANDWRITING_SET_FEATURE_QUERY_RESULT(segmentation_result,
-                                       setSegmentationResult);
-#undef HANDWRITING_SET_FEATURE_QUERY_RESULT
-
   return output;
 }
 

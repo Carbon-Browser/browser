@@ -12,7 +12,7 @@
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/inspector/identifiers_factory.h"
 #include "third_party/blink/renderer/core/workers/worker_thread.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
@@ -52,6 +52,7 @@ ConsoleMessage::ConsoleMessage(const WebConsoleMessage& message,
                      message.level,
                      message.text,
                      std::make_unique<SourceLocation>(message.url,
+                                                      String(),
                                                       message.line_number,
                                                       message.column_number,
                                                       nullptr)) {

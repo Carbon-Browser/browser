@@ -6,6 +6,7 @@
 #include "ash/public/cpp/accelerators.h"
 #include "ash/public/cpp/pagination/pagination_model.h"
 #include "ash/public/cpp/test/app_list_test_api.h"
+#include "ash/public/cpp/test/shell_test_api.h"
 #include "chrome/browser/extensions/extension_browsertest.h"
 #include "chrome/browser/ui/app_list/app_list_client_impl.h"
 #include "content/public/test/browser_test.h"
@@ -26,8 +27,9 @@ class AppListRemoveSpaceSyncCompatibilityTest
   void SetUp() override {
     // Enable the feature flag to remove extra spaces if the pre count is one.
     if (GetTestPreCount() == 1) {
-      feature_list_.InitAndEnableFeature(
-          ash::features::kLauncherRemoveEmptySpace);
+      feature_list_.InitAndEnableFeature(ash::features::kProductivityLauncher);
+    } else {
+      feature_list_.InitAndDisableFeature(ash::features::kProductivityLauncher);
     }
     extensions::ExtensionBrowserTest::SetUp();
   }
@@ -40,6 +42,10 @@ class AppListRemoveSpaceSyncCompatibilityTest
 
     // Ensure async callbacks are run.
     base::RunLoop().RunUntilIdle();
+
+    // Run the test in tablet mode, so app list shows paged apps grid view when
+    // the productivity launcher is enabled.
+    ash::ShellTestApi().SetTabletModeEnabledForTest(true);
 
     // Create the app list view by triggering the accelerator to show it.
     ash::AcceleratorController::Get()->PerformActionIfEnabled(
@@ -54,7 +60,7 @@ class AppListRemoveSpaceSyncCompatibilityTest
 IN_PROC_BROWSER_TEST_F(AppListRemoveSpaceSyncCompatibilityTest,
                        PRE_PRE_Basics) {
   // Assume that the feature flag is disabled.
-  ASSERT_FALSE(ash::features::IsLauncherRemoveEmptySpaceEnabled());
+  ASSERT_FALSE(ash::features::IsProductivityLauncherEnabled());
 
   // Assume that there are two default apps.
   ASSERT_EQ(2, app_list_test_api_.GetTopListItemCount());
@@ -77,29 +83,15 @@ IN_PROC_BROWSER_TEST_F(AppListRemoveSpaceSyncCompatibilityTest,
 
 // Restart Chrome with the feature enabled.
 IN_PROC_BROWSER_TEST_F(AppListRemoveSpaceSyncCompatibilityTest, PRE_Basics) {
-  ASSERT_TRUE(ash::features::IsLauncherRemoveEmptySpaceEnabled());
+  ASSERT_TRUE(ash::features::IsProductivityLauncherEnabled());
 
   // Because empty spaces are removed, there should be only one page.
-  EXPECT_EQ(1, app_list_test_api_.GetPaginationModel()->total_pages());
-  EXPECT_EQ(4, app_list_test_api_.GetTopListItemCount());
-
-  // Add one page break item manually. Then refresh the paged view structure.
-  const std::string app1_id =
-      GetExtensionByPath(extension_registry()->enabled_extensions(),
-                         test_data_dir_.AppendASCII("app1"))
-          ->id();
-  app_list_test_api_.AddPageBreakItemAfterId(app1_id);
-  app_list_test_api_.UpdatePagedViewStructure();
-
-  // Page break items should be ignored.
   EXPECT_EQ(1, app_list_test_api_.GetPaginationModel()->total_pages());
   EXPECT_EQ(4, app_list_test_api_.GetTopListItemCount());
 }
 
 // Restart Chrome with the feature disabled.
-// TODO(crbug.com/1243890): Fix and re-enable.
-IN_PROC_BROWSER_TEST_F(AppListRemoveSpaceSyncCompatibilityTest,
-                       DISABLED_Basics) {
+IN_PROC_BROWSER_TEST_F(AppListRemoveSpaceSyncCompatibilityTest, Basics) {
   // The flag to remove empty spaces is turned off so there should be two pages.
   EXPECT_EQ(2, app_list_test_api_.GetPaginationModel()->total_pages());
   EXPECT_EQ(5, app_list_test_api_.GetTopListItemCount());

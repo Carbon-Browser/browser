@@ -12,8 +12,10 @@
 #include <vector>
 
 #include "base/containers/id_map.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
+#include "base/time/time.h"
 #include "chrome/browser/predictors/proxy_lookup_client_impl.h"
 #include "chrome/browser/predictors/resolve_host_client_impl.h"
 #include "chrome/browser/predictors/resource_prefetch_predictor.h"
@@ -45,19 +47,25 @@ struct PreconnectedRequestStats {
 
 struct PreconnectStats {
   explicit PreconnectStats(const GURL& url);
+
+  // Stats must be moved only.
+  PreconnectStats(const PreconnectStats&) = delete;
+  PreconnectStats& operator=(const PreconnectStats&) = delete;
+
   ~PreconnectStats();
 
   GURL url;
   base::TimeTicks start_time;
   std::vector<PreconnectedRequestStats> requests_stats;
-
-  // Stats must be moved only.
-  DISALLOW_COPY_AND_ASSIGN(PreconnectStats);
 };
 
 // Stores the status of all preconnects associated with a given |url|.
 struct PreresolveInfo {
   PreresolveInfo(const GURL& url, size_t count);
+
+  PreresolveInfo(const PreresolveInfo&) = delete;
+  PreresolveInfo& operator=(const PreresolveInfo&) = delete;
+
   ~PreresolveInfo();
 
   bool is_done() const { return queued_count == 0 && inflight_count == 0; }
@@ -67,8 +75,6 @@ struct PreresolveInfo {
   size_t inflight_count = 0;
   bool was_canceled = false;
   std::unique_ptr<PreconnectStats> stats;
-
-  DISALLOW_COPY_AND_ASSIGN(PreresolveInfo);
 };
 
 // Stores all data need for running a preresolve and a subsequent optional
@@ -79,9 +85,15 @@ struct PreresolveJob {
                 bool allow_credentials,
                 net::NetworkIsolationKey network_isolation_key,
                 PreresolveInfo* info);
+
+  PreresolveJob(const PreresolveJob&) = delete;
+  PreresolveJob& operator=(const PreresolveJob&) = delete;
+
   PreresolveJob(PreconnectRequest preconnect_request, PreresolveInfo* info);
   PreresolveJob(PreresolveJob&& other);
+
   ~PreresolveJob();
+
   bool need_preconnect() const {
     return num_sockets > 0 && !(info && info->was_canceled);
   }
@@ -94,11 +106,10 @@ struct PreresolveJob {
   // outlive PreresolveInfo. It's only accessed on PreconnectManager class
   // context and PreresolveInfo lifetime is tied to PreconnectManager.
   // May be equal to nullptr in case of detached job.
-  PreresolveInfo* info;
+  raw_ptr<PreresolveInfo> info;
   std::unique_ptr<ResolveHostClientImpl> resolve_host_client;
   std::unique_ptr<ProxyLookupClientImpl> proxy_lookup_client;
-
-  DISALLOW_COPY_AND_ASSIGN(PreresolveJob);
+  base::TimeTicks creation_time;
 };
 
 // PreconnectManager is responsible for preresolving and preconnecting to
@@ -147,8 +158,14 @@ class PreconnectManager {
         bool success) {}
   };
 
+  static const size_t kMaxInflightPreresolves = 3;
+
   PreconnectManager(base::WeakPtr<Delegate> delegate,
                     content::BrowserContext* browser_context);
+
+  PreconnectManager(const PreconnectManager&) = delete;
+  PreconnectManager& operator=(const PreconnectManager&) = delete;
+
   virtual ~PreconnectManager();
 
   // Starts preconnect and preresolve jobs keyed by |url|.
@@ -210,22 +227,22 @@ class PreconnectManager {
   void OnProxyLookupFinished(PreresolveJobId job_id, bool success);
   void FinishPreresolveJob(PreresolveJobId job_id, bool success);
   void AllPreresolvesForUrlFinished(PreresolveInfo* info);
+
+  // NOTE: Returns a non-null pointer outside of unittesting contexts.
   network::mojom::NetworkContext* GetNetworkContext() const;
 
   base::WeakPtr<Delegate> delegate_;
-  content::BrowserContext* const browser_context_;
+  const raw_ptr<content::BrowserContext> browser_context_;
   std::list<PreresolveJobId> queued_jobs_;
   PreresolveJobMap preresolve_jobs_;
   std::map<GURL, std::unique_ptr<PreresolveInfo>> preresolve_info_;
   size_t inflight_preresolves_count_ = 0;
 
   // Only used in tests.
-  network::mojom::NetworkContext* network_context_ = nullptr;
-  Observer* observer_ = nullptr;
+  raw_ptr<network::mojom::NetworkContext> network_context_ = nullptr;
+  raw_ptr<Observer> observer_ = nullptr;
 
   base::WeakPtrFactory<PreconnectManager> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(PreconnectManager);
 };
 
 }  // namespace predictors

@@ -9,8 +9,8 @@
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "chromeos/ash/components/network/geolocation_handler.h"
 #include "chromeos/dbus/shill/shill_clients.h"
-#include "chromeos/network/geolocation_handler.h"
 #endif
 #include "mojo/public/cpp/bindings/remote.h"
 #include "net/base/network_change_notifier.h"
@@ -23,7 +23,7 @@
 #include "services/device/public/mojom/geolocation_context.mojom.h"
 #include "services/device/public/mojom/geolocation_control.mojom.h"
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 #include "services/device/public/cpp/test/fake_geolocation_manager.h"
 #endif
 
@@ -41,6 +41,11 @@ void CheckBoolReturnValue(base::OnceClosure quit_closure,
 class GeolocationServiceUnitTest : public DeviceServiceTestBase {
  public:
   GeolocationServiceUnitTest() = default;
+
+  GeolocationServiceUnitTest(const GeolocationServiceUnitTest&) = delete;
+  GeolocationServiceUnitTest& operator=(const GeolocationServiceUnitTest&) =
+      delete;
+
   ~GeolocationServiceUnitTest() override = default;
 
  protected:
@@ -91,18 +96,16 @@ class GeolocationServiceUnitTest : public DeviceServiceTestBase {
   mojo::Remote<mojom::GeolocationContext> geolocation_context_;
   mojo::Remote<mojom::Geolocation> geolocation_;
   mojo::Remote<mojom::GeolocationConfig> geolocation_config_;
-
-  DISALLOW_COPY_AND_ASSIGN(GeolocationServiceUnitTest);
 };
 
-#if BUILDFLAG(IS_CHROMEOS_ASH) || defined(OS_ANDROID)
+#if BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_ANDROID)
 // ChromeOS fails to perform network geolocation when zero wifi networks are
 // detected in a scan: https://crbug.com/767300.
 #else
 TEST_F(GeolocationServiceUnitTest, UrlWithApiKey) {
 // To align with user expectation we do not make Network Location Requests
 // on macOS unless the browser has Location Permission from the OS.
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   fake_geolocation_manager_->SetSystemPermission(
       LocationSystemPermissionStatus::kAllowed);
 #endif

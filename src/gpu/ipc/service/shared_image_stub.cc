@@ -14,10 +14,9 @@
 #include "base/trace_event/memory_dump_manager.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
-#include "components/viz/common/features.h"
 #include "gpu/command_buffer/service/mailbox_manager.h"
 #include "gpu/command_buffer/service/scheduler.h"
-#include "gpu/command_buffer/service/shared_image_factory.h"
+#include "gpu/command_buffer/service/shared_image/shared_image_factory.h"
 #include "gpu/ipc/common/command_buffer_id.h"
 #include "gpu/ipc/common/gpu_peak_memory.h"
 #include "gpu/ipc/service/gpu_channel.h"
@@ -91,16 +90,6 @@ void SharedImageStub::ExecuteDeferredRequest(
       OnCreateGMBSharedImage(std::move(request->get_create_gmb_shared_image()));
       break;
 
-#if defined(OS_ANDROID)
-    case mojom::DeferredSharedImageRequest::Tag::kCreateSharedImageWithAhb: {
-      auto& create_request = *request->get_create_shared_image_with_ahb();
-      OnCreateSharedImageWithAHB(
-          create_request.out_mailbox, create_request.in_mailbox,
-          create_request.usage, create_request.release_id);
-      break;
-    }
-#endif  // defined(OS_ANDROID)
-
     case mojom::DeferredSharedImageRequest::Tag::kRegisterUploadBuffer:
       OnRegisterSharedImageUploadBuffer(
           std::move(request->get_register_upload_buffer()));
@@ -117,11 +106,17 @@ void SharedImageStub::ExecuteDeferredRequest(
       OnDestroySharedImage(request->get_destroy_shared_image());
       break;
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
     case mojom::DeferredSharedImageRequest::Tag::kCreateSharedImageVideoPlanes:
       OnCreateSharedImageVideoPlanes(
           std::move(request->get_create_shared_image_video_planes()));
       break;
+
+    case mojom::DeferredSharedImageRequest::Tag::kCopyToGpuMemoryBuffer: {
+      auto& params = *request->get_copy_to_gpu_memory_buffer();
+      OnCopyToGpuMemoryBuffer(params.mailbox, params.release_id);
+      break;
+    }
 
     case mojom::DeferredSharedImageRequest::Tag::kCreateSwapChain:
       OnCreateSwapChain(std::move(request->get_create_swap_chain()));
@@ -131,7 +126,7 @@ void SharedImageStub::ExecuteDeferredRequest(
       OnPresentSwapChain(request->get_present_swap_chain()->mailbox,
                          request->get_present_swap_chain()->release_id);
       break;
-#endif  // defined(OS_WIN)
+#endif  // BUILDFLAG(IS_WIN)
   }
 }
 
@@ -192,29 +187,6 @@ bool SharedImageStub::UpdateSharedImage(const Mailbox& mailbox,
   return true;
 }
 
-#if defined(OS_ANDROID)
-bool SharedImageStub::CreateSharedImageWithAHB(const Mailbox& out_mailbox,
-                                               const Mailbox& in_mailbox,
-                                               uint32_t usage) {
-  TRACE_EVENT0("gpu", "SharedImageStub::CreateSharedImageWithAHB");
-  if (!out_mailbox.IsSharedImage() || !in_mailbox.IsSharedImage()) {
-    LOG(ERROR) << "SharedImageStub: Trying to access a SharedImage with a "
-                  "non-SharedImage mailbox.";
-    OnError();
-    return false;
-  }
-  if (!MakeContextCurrent()) {
-    OnError();
-    return false;
-  }
-  if (!factory_->CreateSharedImageWithAHB(out_mailbox, in_mailbox, usage)) {
-    LOG(ERROR) << "SharedImageStub: Unable to update shared image";
-    return false;
-  }
-  return true;
-}
-#endif
-
 void SharedImageStub::OnCreateSharedImage(
     mojom::CreateSharedImageParamsPtr params) {
   TRACE_EVENT2("gpu", "SharedImageStub::OnCreateSharedImage", "width",
@@ -242,9 +214,6 @@ void SharedImageStub::OnCreateSharedImage(
     return;
   }
 
-  SyncToken sync_token(sync_point_client_state_->namespace_id(),
-                       sync_point_client_state_->command_buffer_id(),
-                       params->release_id);
   sync_point_client_state_->ReleaseFenceSync(params->release_id);
 }
 
@@ -299,9 +268,6 @@ void SharedImageStub::OnCreateSharedImageWithData(
     upload_memory_ = base::ReadOnlySharedMemoryRegion();
   }
 
-  SyncToken sync_token(sync_point_client_state_->namespace_id(),
-                       sync_point_client_state_->command_buffer_id(),
-                       params->release_id);
   sync_point_client_state_->ReleaseFenceSync(params->release_id);
 }
 
@@ -319,9 +285,6 @@ void SharedImageStub::OnCreateGMBSharedImage(
     return;
   }
 
-  SyncToken sync_token(sync_point_client_state_->namespace_id(),
-                       sync_point_client_state_->command_buffer_id(),
-                       params->release_id);
   sync_point_client_state_->ReleaseFenceSync(params->release_id);
 }
 
@@ -333,28 +296,8 @@ void SharedImageStub::OnUpdateSharedImage(const Mailbox& mailbox,
   if (!UpdateSharedImage(mailbox, std::move(in_fence_handle)))
     return;
 
-  SyncToken sync_token(sync_point_client_state_->namespace_id(),
-                       sync_point_client_state_->command_buffer_id(),
-                       release_id);
   sync_point_client_state_->ReleaseFenceSync(release_id);
 }
-
-#if defined(OS_ANDROID)
-void SharedImageStub::OnCreateSharedImageWithAHB(const Mailbox& out_mailbox,
-                                                 const Mailbox& in_mailbox,
-                                                 uint32_t usage,
-                                                 uint32_t release_id) {
-  TRACE_EVENT0("gpu", "SharedImageStub::OnCreateSharedImageWithAHB");
-
-  if (!CreateSharedImageWithAHB(out_mailbox, in_mailbox, usage))
-    return;
-
-  SyncToken sync_token(sync_point_client_state_->namespace_id(),
-                       sync_point_client_state_->command_buffer_id(),
-                       release_id);
-  sync_point_client_state_->ReleaseFenceSync(release_id);
-}
-#endif
 
 void SharedImageStub::OnDestroySharedImage(const Mailbox& mailbox) {
   TRACE_EVENT0("gpu", "SharedImageStub::OnDestroySharedImage");
@@ -377,7 +320,7 @@ void SharedImageStub::OnDestroySharedImage(const Mailbox& mailbox) {
   }
 }
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 void SharedImageStub::OnCreateSharedImageVideoPlanes(
     mojom::CreateSharedImageVideoPlanesParamsPtr params) {
   TRACE_EVENT0("gpu", "SharedImageStub::CreateSharedImageVideoPlanes");
@@ -402,6 +345,26 @@ void SharedImageStub::OnCreateSharedImageVideoPlanes(
     return;
   }
   sync_point_client_state_->ReleaseFenceSync(params->release_id);
+}
+
+void SharedImageStub::OnCopyToGpuMemoryBuffer(const Mailbox& mailbox,
+                                              uint32_t release_id) {
+  if (!mailbox.IsSharedImage()) {
+    DLOG(ERROR) << "SharedImageStub: Trying to access a SharedImage with a "
+                   "non-SharedImage mailbox.";
+    OnError();
+    return;
+  }
+  if (!MakeContextCurrent()) {
+    OnError();
+    return;
+  }
+  if (!factory_->CopyToGpuMemoryBuffer(mailbox)) {
+    DLOG(ERROR) << "SharedImageStub: Unable to update shared GMB";
+    OnError();
+    return;
+  }
+  sync_point_client_state_->ReleaseFenceSync(release_id);
 }
 
 void SharedImageStub::OnCreateSwapChain(
@@ -457,9 +420,9 @@ void SharedImageStub::OnPresentSwapChain(const Mailbox& mailbox,
 
   sync_point_client_state_->ReleaseFenceSync(release_id);
 }
-#endif  // OS_WIN
+#endif  // BUILDFLAG(IS_WIN)
 
-#if defined(OS_FUCHSIA)
+#if BUILDFLAG(IS_FUCHSIA)
 void SharedImageStub::RegisterSysmemBufferCollection(
     gfx::SysmemBufferCollectionId id,
     zx::channel token,
@@ -486,7 +449,7 @@ void SharedImageStub::ReleaseSysmemBufferCollection(
     return;
   }
 }
-#endif  // defined(OS_FUCHSIA)
+#endif  // BUILDFLAG(IS_FUCHSIA)
 
 void SharedImageStub::OnRegisterSharedImageUploadBuffer(
     base::ReadOnlySharedMemoryRegion shm) {
@@ -545,7 +508,6 @@ ContextResult SharedImageStub::MakeContextCurrentAndCreateFactory() {
       channel_manager->mailbox_manager(),
       channel_manager->shared_image_manager(),
       gmb_factory ? gmb_factory->AsImageFactory() : nullptr, this,
-      features::IsUsingSkiaRenderer(),
       /*is_for_display_compositor=*/false);
   return ContextResult::kSuccess;
 }

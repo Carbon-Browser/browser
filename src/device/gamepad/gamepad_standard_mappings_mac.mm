@@ -7,7 +7,6 @@
 #include <algorithm>
 #include <iterator>
 
-#include "base/macros.h"
 #include "device/gamepad/gamepad_id_list.h"
 #include "device/gamepad/gamepad_standard_mappings.h"
 
@@ -102,7 +101,7 @@ void MapperXboxOneS2016Firmware(const Gamepad& input, Gamepad* mapped) {
   mapped->axes_length = AXIS_INDEX_COUNT;
 }
 
-void MapperXboxSeriesX(const Gamepad& input, Gamepad* mapped) {
+void MapperXboxBluetooth(const Gamepad& input, Gamepad* mapped) {
   *mapped = input;
   mapped->buttons[BUTTON_INDEX_PRIMARY] = input.buttons[0];
   mapped->buttons[BUTTON_INDEX_SECONDARY] = input.buttons[1];
@@ -117,11 +116,19 @@ void MapperXboxSeriesX(const Gamepad& input, Gamepad* mapped) {
   mapped->buttons[BUTTON_INDEX_LEFT_THUMBSTICK] = input.buttons[13];
   mapped->buttons[BUTTON_INDEX_RIGHT_THUMBSTICK] = input.buttons[14];
   mapped->buttons[BUTTON_INDEX_META] = input.buttons[12];
-  mapped->buttons[XBOX_SERIES_X_BUTTON_SHARE] = input.buttons[15];
   mapped->axes[AXIS_INDEX_RIGHT_STICK_X] = input.axes[2];
   mapped->axes[AXIS_INDEX_RIGHT_STICK_Y] = input.axes[5];
   DpadFromAxis(mapped, input.axes[9]);
 
+  mapped->buttons_length = BUTTON_INDEX_COUNT;
+  mapped->axes_length = AXIS_INDEX_COUNT;
+}
+
+void MapperXboxSeriesXBluetooth(const Gamepad& input, Gamepad* mapped) {
+  MapperXboxBluetooth(input, mapped);
+  // Xbox Wireless Controller Model 1914 has an extra Share button not present
+  // on other Xbox controllers. Map Share to the next button index after Meta.
+  mapped->buttons[XBOX_SERIES_X_BUTTON_SHARE] = input.buttons[15];
   mapped->buttons_length = XBOX_SERIES_X_BUTTON_COUNT;
   mapped->axes_length = AXIS_INDEX_COUNT;
 }
@@ -740,8 +747,6 @@ constexpr struct MappingData {
     {GamepadId::kMicrosoftProduct02ea, MapperXbox360Gamepad},
     // Xbox One S (Bluetooth)
     {GamepadId::kMicrosoftProduct02fd, MapperXboxOneS2016Firmware},
-    // Xbox Series X (Bluetooth)
-    {GamepadId::kMicrosoftProduct0b13, MapperXboxSeriesX},
     // Xbox 360 Wireless
     {GamepadId::kMicrosoftProduct0719, MapperXbox360Gamepad},
     // Xbox One Elite 2 (USB)
@@ -752,6 +757,14 @@ constexpr struct MappingData {
     {GamepadId::kMicrosoftProduct0b0a, MapperXbox360Gamepad},
     // Xbox Adaptive Controller (Bluetooth)
     {GamepadId::kMicrosoftProduct0b0c, MapperXboxOneBluetooth},
+    // Xbox Series X (Bluetooth)
+    {GamepadId::kMicrosoftProduct0b13, MapperXboxSeriesXBluetooth},
+    // Xbox One S (Bluetooth)
+    {GamepadId::kMicrosoftProduct0b20, MapperXboxBluetooth},
+    // Xbox Adaptive (Bluetooth)
+    {GamepadId::kMicrosoftProduct0b21, MapperXboxBluetooth},
+    // Xbox Elite Series 2 (Bluetooth)
+    {GamepadId::kMicrosoftProduct0b22, MapperXboxBluetooth},
     // Logitech F310, D mode
     {GamepadId::kLogitechProductc216, MapperDirectInputStyle},
     // Logitech F510, D mode
@@ -795,19 +808,19 @@ constexpr struct MappingData {
     // Stadia Controller
     {GamepadId::kGoogleProduct9400, MapperStadiaController},
     // Moga Pro Controller (HID mode)
-    {GamepadId::kVendor20d6Product6271, MapperMogaPro},
+    {GamepadId::kBdaProduct6271, MapperMogaPro},
     // Macally iShockX, analog mode
     {GamepadId::kMacAllyProduct0060, MapperDirectInputStyle},
     // Macally iShock
     {GamepadId::kMacAllyProduct4010, MapperMacallyIShock},
     // OnLive Controller (Bluetooth)
-    {GamepadId::kVendor2378Product1008, MapperOnLiveWireless},
+    {GamepadId::kOnLiveProduct1008, MapperOnLiveWireless},
     // OnLive Controller (Wired)
-    {GamepadId::kVendor2378Product100a, MapperOnLiveWireless},
+    {GamepadId::kOnLiveProduct100a, MapperOnLiveWireless},
     // OUYA Controller
-    {GamepadId::kVendor2836Product0001, MapperOUYA},
+    {GamepadId::kOuyaProduct0001, MapperOUYA},
     // SCUF Vantage, SCUF Vantage 2
-    {GamepadId::kVendor2e95Product7725, MapperDualshock4},
+    {GamepadId::kScufProduct7725, MapperDualshock4},
     // boom PSX+N64 USB Converter
     {GamepadId::kPrototypeVendorProduct0667, MapperBoomN64Psx},
     // Stadia Controller prototype

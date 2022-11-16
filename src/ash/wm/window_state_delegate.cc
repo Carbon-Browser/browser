@@ -14,4 +14,11 @@ bool WindowStateDelegate::ToggleFullscreen(WindowState* window_state) {
   return false;
 }
 
+void WindowStateDelegate::ToggleLockedFullscreen(WindowState* window_state) {}
+
+std::unique_ptr<PresentationTimeRecorder> WindowStateDelegate::OnDragStarted(
+    int component) {
+  return nullptr;
+}
+
 }  // namespace ash

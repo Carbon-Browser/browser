@@ -16,7 +16,6 @@
 #include "base/feature_list.h"
 #include "base/location.h"
 #include "base/logging.h"
-#include "base/macros.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/sys_byteorder.h"
 #include "base/trace_event/trace_event.h"
@@ -147,12 +146,13 @@ void VpxVideoDecoder::Initialize(const VideoDecoderConfig& config,
   InitCB bound_init_cb = bind_callbacks_ ? BindToCurrentLoop(std::move(init_cb))
                                          : std::move(init_cb);
   if (config.is_encrypted()) {
-    std::move(bound_init_cb).Run(StatusCode::kEncryptedContentUnsupported);
+    std::move(bound_init_cb)
+        .Run(DecoderStatus::Codes::kUnsupportedEncryptionMode);
     return;
   }
 
   if (!ConfigureDecoder(config)) {
-    std::move(bound_init_cb).Run(StatusCode::kDecoderFailedInitialization);
+    std::move(bound_init_cb).Run(DecoderStatus::Codes::kUnsupportedConfig);
     return;
   }
 
@@ -160,7 +160,7 @@ void VpxVideoDecoder::Initialize(const VideoDecoderConfig& config,
   config_ = config;
   state_ = DecoderState::kNormal;
   output_cb_ = output_cb;
-  std::move(bound_init_cb).Run(OkStatus());
+  std::move(bound_init_cb).Run(DecoderStatus::Codes::kOk);
 }
 
 void VpxVideoDecoder::Decode(scoped_refptr<DecoderBuffer> buffer,
@@ -177,25 +177,25 @@ void VpxVideoDecoder::Decode(scoped_refptr<DecoderBuffer> buffer,
                                  : std::move(decode_cb);
 
   if (state_ == DecoderState::kError) {
-    std::move(bound_decode_cb).Run(DecodeStatus::DECODE_ERROR);
+    std::move(bound_decode_cb).Run(DecoderStatus::Codes::kFailed);
     return;
   }
 
   if (state_ == DecoderState::kDecodeFinished) {
-    std::move(bound_decode_cb).Run(DecodeStatus::OK);
+    std::move(bound_decode_cb).Run(DecoderStatus::Codes::kOk);
     return;
   }
 
   if (state_ == DecoderState::kNormal && buffer->end_of_stream()) {
     state_ = DecoderState::kDecodeFinished;
-    std::move(bound_decode_cb).Run(DecodeStatus::OK);
+    std::move(bound_decode_cb).Run(DecoderStatus::Codes::kOk);
     return;
   }
 
   scoped_refptr<VideoFrame> video_frame;
   if (!VpxDecode(buffer.get(), &video_frame)) {
     state_ = DecoderState::kError;
-    std::move(bound_decode_cb).Run(DecodeStatus::DECODE_ERROR);
+    std::move(bound_decode_cb).Run(DecoderStatus::Codes::kFailed);
     return;
   }
 
@@ -207,7 +207,7 @@ void VpxVideoDecoder::Decode(scoped_refptr<DecoderBuffer> buffer,
   }
 
   // VideoDecoderShim expects |decode_cb| call after |output_cb_|.
-  std::move(bound_decode_cb).Run(DecodeStatus::OK);
+  std::move(bound_decode_cb).Run(DecoderStatus::Codes::kOk);
 }
 
 void VpxVideoDecoder::Reset(base::OnceClosure reset_cb) {
@@ -404,8 +404,8 @@ bool VpxVideoDecoder::VpxDecode(const DecoderBuffer* buffer,
       break;
     case VPX_CS_SRGB:
       primaries = gfx::ColorSpace::PrimaryID::BT709;
-      transfer = gfx::ColorSpace::TransferID::IEC61966_2_1;
-      matrix = gfx::ColorSpace::MatrixID::RGB;
+      transfer = gfx::ColorSpace::TransferID::SRGB;
+      matrix = gfx::ColorSpace::MatrixID::GBR;
       break;
     default:
       break;

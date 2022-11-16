@@ -15,6 +15,8 @@
 #include "ui/base/interaction/element_tracker_mac.h"
 #include "ui/base/l10n/l10n_util_mac.h"
 #include "ui/base/models/menu_model.h"
+#include "ui/color/color_id.h"
+#include "ui/color/color_provider.h"
 #include "ui/events/base_event_utils.h"
 #include "ui/events/event_utils.h"
 #include "ui/gfx/geometry/rect.h"
@@ -35,7 +37,7 @@ constexpr CGFloat kNativeCheckmarkWidth = 18;
 constexpr CGFloat kNativeMenuItemHeight = 18;
 constexpr CGFloat kIPHDotSize = 6;
 
-NSImage* NewTagImage() {
+NSImage* NewTagImage(const ui::ColorProvider* color_provider) {
   // 1. Make the attributed string.
 
   NSString* badge_text = l10n_util::GetNSString(IDS_NEW_BADGE);
@@ -50,9 +52,9 @@ NSImage* NewTagImage() {
   badge_font = badge_font.Derive(views::NewBadge::kNewBadgeFontSizeAdjustment,
                                  gfx::Font::NORMAL, gfx::Font::Weight::MEDIUM);
 
+  DCHECK(color_provider);
   NSColor* badge_text_color = skia::SkColorToSRGBNSColor(
-      ui::NativeTheme::GetInstanceForNativeUi()->GetSystemColor(
-          ui::NativeTheme::kColorId_TextOnProminentButtonColor));
+      color_provider->GetColor(ui::kColorButtonBackgroundProminent));
 
   NSDictionary* badge_attrs = @{
     NSFontAttributeName : badge_font.GetNativeFont(),
@@ -85,9 +87,9 @@ NSImage* NewTagImage() {
             bezierPathWithRoundedRect:badge_frame
                               xRadius:views::NewBadge::kNewBadgeCornerRadius
                               yRadius:views::NewBadge::kNewBadgeCornerRadius];
+        DCHECK(color_provider);
         NSColor* badge_color = skia::SkColorToSRGBNSColor(
-            ui::NativeTheme::GetInstanceForNativeUi()->GetSystemColor(
-                ui::NativeTheme::kColorId_ProminentButtonColor));
+            color_provider->GetColor(ui::kColorButtonBackgroundProminent));
         [badge_color set];
         [rounded_badge_rect fill];
 
@@ -101,7 +103,7 @@ NSImage* NewTagImage() {
       }];
 }
 
-NSImage* IPHDotImage() {
+NSImage* IPHDotImage(const ui::ColorProvider* color_provider) {
   // Embed horizontal centering space as NSMenuItem will otherwise left-align
   // it.
   return [NSImage
@@ -112,30 +114,12 @@ NSImage* IPHDotImage() {
             bezierPathWithOvalInRect:NSMakeRect(kIPHDotSize / 2, 0, kIPHDotSize,
                                                 kIPHDotSize)];
         NSColor* dot_color = skia::SkColorToSRGBNSColor(
-            ui::NativeTheme::GetInstanceForNativeUi()->GetSystemColor(
-                ui::NativeTheme::kColorId_ProminentButtonColor));
+            color_provider->GetColor(ui::kColorButtonBackgroundProminent));
         [dot_color set];
         [dot_path fill];
 
         return YES;
       }];
-}
-
-NSMutableAttributedString* MutableAttributedStringForMenuItemTitleString(
-    NSString* string) {
-  // Starting in 10.13, if an attributed string is set as a menu item title,
-  // and NSFontAttributeName is not specified for it, it is automatically
-  // rendered in a font matching other menu items. Prior to then, a menu item
-  // with no specified font is rendered in Helvetica. In addition, while the
-  // documentation says that -[NSFont menuFontOfSize:0] gives the standard
-  // menu font, that doesn't actually match up. Therefore, specify a font that
-  // visually matches.
-  NSDictionary* attrs = nil;
-  if (base::mac::IsAtMostOS10_12())
-    attrs = @{NSFontAttributeName : [NSFont menuFontOfSize:14]};
-
-  return [[[NSMutableAttributedString alloc] initWithString:string
-                                                 attributes:attrs] autorelease];
 }
 
 }  // namespace
@@ -169,9 +153,9 @@ NSMutableAttributedString* MutableAttributedStringForMenuItemTitleString(
 
 @implementation NewTagAttachmentCell
 
-- (instancetype)init {
+- (instancetype)initWithColorProvider:(const ui::ColorProvider*)colorProvider {
   if (self = [super init]) {
-    self.image = NewTagImage();
+    self.image = NewTagImage(colorProvider);
   }
   return self;
 }
@@ -228,18 +212,20 @@ NSMutableAttributedString* MutableAttributedStringForMenuItemTitleString(
 
 - (void)controllerWillAddItem:(NSMenuItem*)menuItem
                     fromModel:(ui::MenuModel*)model
-                      atIndex:(NSInteger)index {
+                      atIndex:(NSInteger)index
+            withColorProvider:(const ui::ColorProvider*)colorProvider {
   if (model->IsNewFeatureAt(index)) {
+    NSMutableAttributedString* attrTitle = [[[NSMutableAttributedString alloc]
+        initWithString:menuItem.title] autorelease];
+
     // /!\ WARNING /!\ Do not update this to use NSTextAttachment.image until
     // macOS 10.15 is the minimum required OS. See the details on the class
     // comment above.
     NSTextAttachment* attachment =
         [[[NSTextAttachment alloc] init] autorelease];
-    attachment.attachmentCell =
-        [[[NewTagAttachmentCell alloc] init] autorelease];
+    attachment.attachmentCell = [[[NewTagAttachmentCell alloc]
+        initWithColorProvider:colorProvider] autorelease];
 
-    NSMutableAttributedString* attrTitle =
-        MutableAttributedStringForMenuItemTitleString(menuItem.title);
     [attrTitle
         appendAttributedString:[NSAttributedString
                                    attributedStringWithAttachment:attachment]];
@@ -248,7 +234,7 @@ NSMutableAttributedString* MutableAttributedStringForMenuItemTitleString(
   }
 
   if (model->IsAlertedAt(index)) {
-    NSImage* iphDotImage = IPHDotImage();
+    NSImage* iphDotImage = IPHDotImage(colorProvider);
     menuItem.onStateImage = iphDotImage;
     menuItem.offStateImage = iphDotImage;
     menuItem.mixedStateImage = iphDotImage;
@@ -256,12 +242,12 @@ NSMutableAttributedString* MutableAttributedStringForMenuItemTitleString(
 }
 
 - (void)controllerWillAddMenu:(NSMenu*)menu fromModel:(ui::MenuModel*)model {
-  int alerted_index = -1;
+  absl::optional<size_t> alerted_index;
   IdentifierContainer* const element_ids =
       [[[IdentifierContainer alloc] init] autorelease];
-  for (int i = 0; i < model->GetItemCount(); ++i) {
+  for (size_t i = 0; i < model->GetItemCount(); ++i) {
     if (model->IsAlertedAt(i)) {
-      DCHECK_LT(alerted_index, 0);
+      DCHECK(!alerted_index.has_value());
       alerted_index = i;
     }
     const ui::ElementIdentifier identifier = model->GetElementIdentifierAt(i);
@@ -269,14 +255,14 @@ NSMutableAttributedString* MutableAttributedStringForMenuItemTitleString(
       [element_ids ids].push_back(identifier);
   }
 
-  if (alerted_index >= 0 || ![element_ids ids].empty()) {
+  if (alerted_index.has_value() || ![element_ids ids].empty()) {
     auto shown_callback = ^(NSNotification* note) {
       NSMenu* const menu_obj = note.object;
-      if (alerted_index >= 0) {
+      if (alerted_index.has_value()) {
         if ([menu respondsToSelector:@selector(_menuImpl)]) {
           NSCarbonMenuImpl* menuImpl = [menu_obj _menuImpl];
           if ([menuImpl respondsToSelector:@selector(highlightItemAtIndex:)]) {
-            [menuImpl highlightItemAtIndex:alerted_index];
+            [menuImpl highlightItemAtIndex:alerted_index.value()];
           }
         }
       }
@@ -298,21 +284,19 @@ NSMutableAttributedString* MutableAttributedStringForMenuItemTitleString(
       dispatch_after(
           dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_MSEC),
           dispatch_get_main_queue(), ^{
-            // Since we can't get bounds on all platforms, we should have a
-            // reasonable fallback. This is intentionally twice as wide as it
+            // Even though all supported macOS releases have `-_boundsIfOpen`,
+            // because it's not official API, retain the fallback code written
+            // for earlier versions of macOSes.
+            //
+            // The fallback bounds are intentionally twice as wide as they
             // should be because even though we could check the RTL bit and
             // guess whether the menu should appear to the left or right of the
             // anchor, if the anchor is near one side of the screen the menu
             // could end up on the other side.
-            //
-            // TODO(dfried): When 10.12 is the earliest version of MacOS we
-            // support, remove this code and always use the _boundsIfOpen call
-            // (assuming the call isn't deprecated in a future version of
-            // MacOS).
             gfx::Rect screen_rect = _anchorRect;
             CGSize menu_size = [menu_obj size];
-            screen_rect.Inset(gfx::Insets(0, -menu_size.width,
-                                          -menu_size.height, -menu_size.width));
+            screen_rect.Inset(gfx::Insets::TLBR(
+                0, -menu_size.width, -menu_size.height, -menu_size.width));
             if ([menu_obj respondsToSelector:@selector(_boundsIfOpen)]) {
               CGRect bounds = [menu_obj _boundsIfOpen];
               // A broken bounds for a menu that isn't
@@ -376,8 +360,7 @@ NSMutableAttributedString* MutableAttributedStringForMenuItemTitleString(
 
 @end
 
-namespace views {
-namespace internal {
+namespace views::internal {
 namespace {
 
 // Returns the first item in |menu_controller|'s menu that will be checked.
@@ -451,19 +434,19 @@ NSEvent* EventForPositioningContextMenu(const gfx::Rect& anchor,
                                         NSWindow* window) {
   NSEvent* event = [NSApp currentEvent];
   switch ([event type]) {
-    case NSLeftMouseDown:
-    case NSLeftMouseUp:
-    case NSRightMouseDown:
-    case NSRightMouseUp:
-    case NSOtherMouseDown:
-    case NSOtherMouseUp:
+    case NSEventTypeLeftMouseDown:
+    case NSEventTypeLeftMouseUp:
+    case NSEventTypeRightMouseDown:
+    case NSEventTypeRightMouseUp:
+    case NSEventTypeOtherMouseDown:
+    case NSEventTypeOtherMouseUp:
       return event;
     default:
       break;
   }
   NSPoint location_in_window = ui::ConvertPointFromScreenToWindow(
       window, gfx::ScreenPointToNSPoint(anchor.CenterPoint()));
-  return [NSEvent mouseEventWithType:NSRightMouseDown
+  return [NSEvent mouseEventWithType:NSEventTypeRightMouseDown
                             location:location_in_window
                        modifierFlags:0
                            timestamp:0
@@ -493,10 +476,7 @@ MenuRunnerImplInterface* MenuRunnerImplInterface::Create(
 MenuRunnerImplCocoa::MenuRunnerImplCocoa(
     ui::MenuModel* menu,
     base::RepeatingClosure on_menu_closed_callback)
-    : running_(false),
-      delete_after_run_(false),
-      closing_event_time_(base::TimeTicks()),
-      on_menu_closed_callback_(std::move(on_menu_closed_callback)) {
+    : on_menu_closed_callback_(std::move(on_menu_closed_callback)) {
   menu_delegate_.reset([[MenuControllerDelegate alloc] init]);
   menu_controller_.reset([[MenuControllerCocoa alloc]
                initWithModel:menu
@@ -543,6 +523,7 @@ void MenuRunnerImplCocoa::RunMenuAt(Widget* parent,
 
   NSWindow* window = parent->GetNativeWindow().GetNativeNSWindow();
   NSView* view = parent->GetNativeView().GetNativeNSView();
+  [menu_controller_ maybeBuildWithColorProvider:parent->GetColorProvider()];
   NSMenu* const menu = [menu_controller_ menu];
   if (run_types & MenuRunner::CONTEXT_MENU) {
     ui::ElementTrackerMac::GetInstance()->NotifyMenuWillShow(
@@ -590,7 +571,6 @@ base::TimeTicks MenuRunnerImplCocoa::GetClosingEventTime() const {
   return closing_event_time_;
 }
 
-MenuRunnerImplCocoa::~MenuRunnerImplCocoa() {}
+MenuRunnerImplCocoa::~MenuRunnerImplCocoa() = default;
 
-}  // namespace internal
-}  // namespace views
+}  // namespace views::internal

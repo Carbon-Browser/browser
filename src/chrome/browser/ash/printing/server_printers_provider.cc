@@ -9,14 +9,12 @@
 #include <vector>
 
 #include "base/containers/contains.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/histogram_functions.h"
-#include "base/sequenced_task_runner.h"
-#include "base/task/post_task.h"
+#include "base/task/sequenced_task_runner.h"
+#include "chrome/browser/ash/printing/print_servers_provider.h"
+#include "chrome/browser/ash/printing/print_servers_provider_factory.h"
 #include "chrome/browser/ash/printing/server_printers_fetcher.h"
-#include "chrome/browser/chromeos/printing/print_servers_provider.h"
-#include "chrome/browser/chromeos/printing/print_servers_provider_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/pref_names.h"
 #include "components/device_event_log/device_event_log.h"
@@ -25,7 +23,7 @@
 
 class PrefService;
 
-namespace chromeos {
+namespace ash {
 
 namespace {
 
@@ -44,6 +42,10 @@ class ServerPrintersProviderImpl
   explicit ServerPrintersProviderImpl(Profile* profile) : profile_(profile) {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   }
+
+  ServerPrintersProviderImpl(const ServerPrintersProviderImpl&) = delete;
+  ServerPrintersProviderImpl& operator=(const ServerPrintersProviderImpl&) =
+      delete;
 
   ~ServerPrintersProviderImpl() override = default;
 
@@ -164,7 +166,6 @@ class ServerPrintersProviderImpl
 
   SEQUENCE_CHECKER(sequence_checker_);
   base::WeakPtrFactory<ServerPrintersProviderImpl> weak_ptr_factory_{this};
-  DISALLOW_COPY_AND_ASSIGN(ServerPrintersProviderImpl);
 };
 
 }  // namespace
@@ -175,4 +176,4 @@ std::unique_ptr<ServerPrintersProvider> ServerPrintersProvider::Create(
   return std::make_unique<ServerPrintersProviderImpl>(profile);
 }
 
-}  // namespace chromeos
+}  // namespace ash

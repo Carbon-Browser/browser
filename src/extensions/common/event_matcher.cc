@@ -7,7 +7,7 @@
 #include <utility>
 
 #include "base/callback.h"
-#include "extensions/common/event_filtering_info.h"
+#include "extensions/common/mojom/event_dispatcher.mojom.h"
 
 namespace {
 const char kUrlFiltersKey[] = "url";
@@ -26,9 +26,9 @@ EventMatcher::~EventMatcher() {
 }
 
 bool EventMatcher::MatchNonURLCriteria(
-    const EventFilteringInfo& event_info) const {
-  if (event_info.instance_id) {
-    return *event_info.instance_id == GetInstanceID();
+    const mojom::EventFilteringInfo& event_info) const {
+  if (event_info.has_instance_id) {
+    return event_info.instance_id == GetInstanceID();
   }
 
   if (event_info.window_type) {
@@ -43,12 +43,12 @@ bool EventMatcher::MatchNonURLCriteria(
     return false;
   }
 
-  if (event_info.window_exposed_by_default) {
+  if (event_info.has_window_exposed_by_default) {
     // An event with a |window_exposed_by_default| set is only
     // relevant to the listener if no window type filter is set.
     if (HasWindowTypes())
       return false;
-    return *event_info.window_exposed_by_default;
+    return event_info.window_exposed_by_default;
   }
 
   const std::string& service_type_filter = GetServiceTypeFilter();
@@ -64,12 +64,13 @@ int EventMatcher::GetURLFilterCount() const {
   return 0;
 }
 
-bool EventMatcher::GetURLFilter(int i, base::DictionaryValue** url_filter_out) {
+const base::Value::Dict* EventMatcher::GetURLFilter(int i) {
   base::ListValue* url_filters = nullptr;
   if (filter_->GetList(kUrlFiltersKey, &url_filters)) {
-    return url_filters->GetDictionary(i, url_filter_out);
+    base::Value& dict = url_filters->GetList()[i];
+    return dict.GetIfDict();
   }
-  return false;
+  return nullptr;
 }
 
 bool EventMatcher::HasURLFilters() const {
@@ -78,14 +79,16 @@ bool EventMatcher::HasURLFilters() const {
 
 std::string EventMatcher::GetServiceTypeFilter() const {
   std::string service_type_filter;
-  filter_->GetStringASCII(kEventFilterServiceTypeKey, &service_type_filter);
+  if (const std::string* ptr =
+          filter_->FindStringKey(kEventFilterServiceTypeKey)) {
+    if (base::IsStringASCII(*ptr))
+      service_type_filter = *ptr;
+  }
   return service_type_filter;
 }
 
 int EventMatcher::GetInstanceID() const {
-  int instance_id = 0;
-  filter_->GetInteger("instanceId", &instance_id);
-  return instance_id;
+  return filter_->FindIntKey("instanceId").value_or(0);
 }
 
 int EventMatcher::GetWindowTypeCount() const {
@@ -98,7 +101,12 @@ int EventMatcher::GetWindowTypeCount() const {
 bool EventMatcher::GetWindowType(int i, std::string* window_type_out) const {
   base::ListValue* window_types = nullptr;
   if (filter_->GetList(kWindowTypesKey, &window_types)) {
-    return window_types->GetString(i, window_type_out);
+    const base::Value::List& types_list = window_types->GetList();
+    if (i >= 0 && static_cast<size_t>(i) < types_list.size() &&
+        types_list[i].is_string()) {
+      *window_type_out = types_list[i].GetString();
+      return true;
+    }
   }
   return false;
 }

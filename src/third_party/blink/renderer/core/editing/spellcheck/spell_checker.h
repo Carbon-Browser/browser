@@ -30,10 +30,11 @@
 #include "third_party/blink/renderer/core/editing/forward.h"
 #include "third_party/blink/renderer/core/editing/markers/document_marker.h"
 #include "third_party/blink/renderer/core/editing/spellcheck/text_checking.h"
-#include "third_party/blink/renderer/platform/heap/handle.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 
 namespace blink {
 
+class DocumentMarkerGroup;
 class Element;
 class IdleSpellCheckController;
 class LocalDOMWindow;
@@ -67,7 +68,7 @@ class CORE_EXPORT SpellChecker final : public GarbageCollected<SpellChecker> {
   void RespondToChangedContents();
   void RespondToChangedSelection();
   void RespondToChangedEnablement(const HTMLElement&, bool enabled);
-  std::pair<Node*, SpellCheckMarker*> GetSpellCheckMarkerUnderSelection() const;
+  DocumentMarkerGroup* GetSpellCheckMarkerGroupUnderSelection() const;
   // The first String returned in the pair is the selected text.
   // The second String is the marker's description.
   std::pair<String, String> SelectMisspellingAsync();

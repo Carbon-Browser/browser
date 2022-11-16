@@ -12,18 +12,19 @@ namespace welcome {
 class NtpBackgroundHandler : public content::WebUIMessageHandler {
  public:
   NtpBackgroundHandler();
+
+  NtpBackgroundHandler(const NtpBackgroundHandler&) = delete;
+  NtpBackgroundHandler& operator=(const NtpBackgroundHandler&) = delete;
+
   ~NtpBackgroundHandler() override;
 
   // WebUIMessageHandler:
   void RegisterMessages() override;
 
   // Callbacks for JS APIs.
-  void HandleClearBackground(const base::ListValue* args);
-  void HandleGetBackgrounds(const base::ListValue* args);
-  void HandleSetBackground(const base::ListValue* args);
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(NtpBackgroundHandler);
+  void HandleClearBackground(const base::Value::List& args);
+  void HandleGetBackgrounds(const base::Value::List& args);
+  void HandleSetBackground(const base::Value::List& args);
 };
 
 }  // namespace welcome

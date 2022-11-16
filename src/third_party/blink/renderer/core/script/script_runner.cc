@@ -37,7 +37,6 @@
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/loader/document_loader.h"
 #include "third_party/blink/renderer/core/script/script_loader.h"
-#include "third_party/blink/renderer/platform/heap/handle.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/scheduler/public/cooperative_scheduling_manager.h"
 #include "third_party/blink/renderer/platform/scheduler/public/thread.h"
@@ -52,12 +51,40 @@ ScriptRunner::ScriptRunner(Document* document)
   DCHECK(document);
 }
 
-void ScriptRunner::QueueScriptForExecution(PendingScript* pending_script) {
+ScriptRunner::DelayReasons ScriptRunner::DetermineDelayReasonsToWait(
+    PendingScript* pending_script) {
+  DelayReasons reasons = static_cast<DelayReasons>(DelayReason::kLoad);
+
+  if (base::FeatureList::IsEnabled(features::kDelayAsyncScriptExecution)) {
+    if (pending_script->IsEligibleForDelay() &&
+        !pending_script->GetElement()->IsPotentiallyRenderBlocking() &&
+        (active_delay_reasons_ &
+         static_cast<DelayReasons>(DelayReason::kMilestone))) {
+      reasons |= static_cast<DelayReasons>(DelayReason::kMilestone);
+    }
+  }
+
+  if (base::FeatureList::IsEnabled(features::kForceDeferScriptIntervention)) {
+    if (active_delay_reasons_ &
+        static_cast<DelayReasons>(DelayReason::kForceDefer)) {
+      reasons |= static_cast<DelayReasons>(DelayReason::kForceDefer);
+    }
+  }
+
+  return reasons;
+}
+
+void ScriptRunner::QueueScriptForExecution(
+    PendingScript* pending_script,
+    absl::optional<DelayReasons> delay_reasons_override_for_test) {
   DCHECK(pending_script);
   document_->IncrementLoadEventDelayCount();
   switch (pending_script->GetSchedulingType()) {
     case ScriptSchedulingType::kAsync:
-      pending_async_scripts_.insert(pending_script);
+      pending_async_scripts_.insert(
+          pending_script, delay_reasons_override_for_test
+                              ? *delay_reasons_override_for_test
+                              : DetermineDelayReasonsToWait(pending_script));
       break;
 
     case ScriptSchedulingType::kInOrder:
@@ -68,18 +95,54 @@ void ScriptRunner::QueueScriptForExecution(PendingScript* pending_script) {
       NOTREACHED();
       break;
   }
+
+  // Note that WatchForLoad() can immediately call PendingScriptFinished().
+  pending_script->WatchForLoad(this);
 }
 
-void ScriptRunner::NotifyScriptReady(PendingScript* pending_script) {
+void ScriptRunner::AddDelayReason(DelayReason delay_reason) {
+  DCHECK(!(active_delay_reasons_ & static_cast<DelayReasons>(delay_reason)));
+  active_delay_reasons_ |= static_cast<DelayReasons>(delay_reason);
+}
+
+void ScriptRunner::RemoveDelayReason(DelayReason delay_reason) {
+  DCHECK(active_delay_reasons_ & static_cast<DelayReasons>(delay_reason));
+  active_delay_reasons_ &= ~static_cast<DelayReasons>(delay_reason);
+
+  HeapVector<Member<PendingScript>> pending_async_scripts;
+  CopyKeysToVector(pending_async_scripts_, pending_async_scripts);
+  for (PendingScript* pending_script : pending_async_scripts) {
+    RemoveDelayReasonFromScript(pending_script, delay_reason);
+  }
+}
+
+void ScriptRunner::RemoveDelayReasonFromScript(PendingScript* pending_script,
+                                               DelayReason delay_reason) {
+  auto it = pending_async_scripts_.find(pending_script);
+
+  if (it == pending_async_scripts_.end())
+    return;
+
+  if (it->value &= ~static_cast<DelayReasons>(delay_reason)) {
+    // Still to be delayed.
+    return;
+  }
+
+  // Script is really ready to evaluate.
+  pending_async_scripts_.erase(it);
+  task_runner_->PostTask(
+      FROM_HERE,
+      WTF::Bind(&ScriptRunner::ExecutePendingScript, WrapWeakPersistent(this),
+                WrapPersistent(pending_script)));
+}
+
+void ScriptRunner::PendingScriptFinished(PendingScript* pending_script) {
+  pending_script->StopWatchingForLoad();
+
   switch (pending_script->GetSchedulingType()) {
     case ScriptSchedulingType::kAsync:
       CHECK(pending_async_scripts_.Contains(pending_script));
-      pending_async_scripts_.erase(pending_script);
-
-      task_runner_->PostTask(
-          FROM_HERE,
-          WTF::Bind(&ScriptRunner::ExecutePendingScript,
-                    WrapWeakPersistent(this), WrapPersistent(pending_script)));
+      RemoveDelayReasonFromScript(pending_script, DelayReason::kLoad);
       break;
 
     case ScriptSchedulingType::kInOrder:
@@ -99,58 +162,6 @@ void ScriptRunner::NotifyScriptReady(PendingScript* pending_script) {
   }
 }
 
-bool ScriptRunner::RemovePendingInOrderScript(PendingScript* pending_script) {
-  auto it = std::find(pending_in_order_scripts_.begin(),
-                      pending_in_order_scripts_.end(), pending_script);
-  if (it == pending_in_order_scripts_.end())
-    return false;
-  pending_in_order_scripts_.erase(it);
-  return true;
-}
-
-void ScriptRunner::MovePendingScript(Document& old_document,
-                                     Document& new_document,
-                                     ScriptLoader* script_loader) {
-  Document* new_context_document =
-      new_document.GetExecutionContext()
-          ? To<LocalDOMWindow>(new_document.GetExecutionContext())->document()
-          : &new_document;
-  Document* old_context_document =
-      old_document.GetExecutionContext()
-          ? To<LocalDOMWindow>(old_document.GetExecutionContext())->document()
-          : &old_document;
-  if (old_context_document == new_context_document)
-    return;
-
-  PendingScript* pending_script =
-      script_loader
-          ->GetPendingScriptIfControlledByScriptRunnerForCrossDocMove();
-  if (!pending_script) {
-    // The ScriptLoader is not controlled by ScriptRunner. This can happen
-    // because MovePendingScript() is called for all <script> elements
-    // moved between Documents, not only for those controlled by ScriptRunner.
-    return;
-  }
-
-  old_context_document->GetScriptRunner()->MovePendingScript(
-      new_context_document->GetScriptRunner(), pending_script);
-}
-
-void ScriptRunner::MovePendingScript(ScriptRunner* new_runner,
-                                     PendingScript* pending_script) {
-  auto it = pending_async_scripts_.find(pending_script);
-  if (it != pending_async_scripts_.end()) {
-    new_runner->QueueScriptForExecution(pending_script);
-    pending_async_scripts_.erase(it);
-    document_->DecrementLoadEventDelayCount();
-    return;
-  }
-  if (RemovePendingInOrderScript(pending_script)) {
-    new_runner->QueueScriptForExecution(pending_script);
-    document_->DecrementLoadEventDelayCount();
-  }
-}
-
 void ScriptRunner::ExecutePendingScript(PendingScript* pending_script) {
   TRACE_EVENT("blink", "ScriptRunner::ExecutePendingScript");
 
@@ -166,6 +177,31 @@ void ScriptRunner::Trace(Visitor* visitor) const {
   visitor->Trace(document_);
   visitor->Trace(pending_in_order_scripts_);
   visitor->Trace(pending_async_scripts_);
+  PendingScriptClient::Trace(visitor);
+}
+
+ScriptRunnerDelayer::ScriptRunnerDelayer(ScriptRunner* script_runner,
+                                         ScriptRunner::DelayReason delay_reason)
+    : script_runner_(script_runner), delay_reason_(delay_reason) {}
+
+void ScriptRunnerDelayer::Activate() {
+  if (activated_)
+    return;
+  activated_ = true;
+  if (script_runner_)
+    script_runner_->AddDelayReason(delay_reason_);
+}
+
+void ScriptRunnerDelayer::Deactivate() {
+  if (!activated_)
+    return;
+  activated_ = false;
+  if (script_runner_)
+    script_runner_->RemoveDelayReason(delay_reason_);
+}
+
+void ScriptRunnerDelayer::Trace(Visitor* visitor) const {
+  visitor->Trace(script_runner_);
 }
 
 }  // namespace blink

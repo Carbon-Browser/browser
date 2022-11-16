@@ -3,11 +3,11 @@
 // found in the LICENSE file.
 
 import {FileType} from 'chrome-extension://hhaomjibdihmijegdhdafkllkbggdgoj/common/js/file_type.js';
-import {ImageOrientation} from 'chrome-extension://hhaomjibdihmijegdhdafkllkbggdgoj/foreground/js/metadata/image_orientation.js';
 import {assert, assertInstanceof} from 'chrome://resources/js/assert.m.js';
 
 import {ImageCache} from './cache.js';
 import {ImageLoaderUtil} from './image_loader_util.js';
+import {ImageOrientation} from './image_orientation.js';
 import {LoadImageRequest, LoadImageResponse, LoadImageResponseStatus} from './load_image_request.js';
 import {PiexLoader} from './piex_loader.js';
 
@@ -165,7 +165,7 @@ ImageRequestTask.ExtensionContentTypeMap = {
   svg: 'image/svg',
   bmp: 'image/bmp',
   jpg: 'image/jpeg',
-  jpeg: 'image/jpeg'
+  jpeg: 'image/jpeg',
 };
 
 /**
@@ -347,14 +347,14 @@ ImageRequestTask.prototype.downloadThumbnail_ = function(onSuccess, onFailure) {
 
   const resolveLocalFileSystemUrl = (url, onResolveSuccess) => {
     window.webkitResolveLocalFileSystemURL(url, onResolveSuccess, error => {
-      console.error(error);
+      console.warn(error);
       onFailure();
     });
   };
 
   const onExternalThumbnail = (dataUrl) => {
     if (chrome.runtime.lastError) {
-      console.error(chrome.runtime.lastError.message);
+      console.warn(chrome.runtime.lastError.message);
       onFailure();
     } else if (dataUrl) {
       this.image_.src = dataUrl;
@@ -413,7 +413,7 @@ ImageRequestTask.prototype.downloadThumbnail_ = function(onSuccess, onFailure) {
               this.image_.src = URL.createObjectURL(blob);
             }.bind(this),
             function() {
-              // PiexLoader calls console.error on errors.
+              // PiexLoader calls console.warn on errors.
               onFailure();
             });
     return;
@@ -426,7 +426,7 @@ ImageRequestTask.prototype.downloadThumbnail_ = function(onSuccess, onFailure) {
           this.image_.src = url;
         }.bind(this))
         .catch(function(error) {
-          console.error('Video thumbnail error: ', error);
+          console.warn('Video thumbnail error: ', error);
           onFailure();
         });
     return;
@@ -472,7 +472,7 @@ ImageRequestTask.prototype.createVideoThumbnailUrl_ = function(url) {
           video.src =
               '';  // Make sure to stop loading remaining part of the video.
           throw new Error('Seeking video failed.');
-        })
+        }),
       ])
       .then(() => {
         const canvas = assertInstanceof(

@@ -1,11 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  This file is part of eyeo Carbon Browser SDK,
+  Copyright (C) 2006-present eyeo GmbH
+  eyeo Carbon Browser SDK is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License version 3 as
+  published by the Free Software Foundation.
+  eyeo Carbon Browser SDK is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+  You should have received a copy of the GNU General Public License
+  along with eyeo Carbon Browser SDK.  If not, see <http://www.gnu.org/licenses/>.
+-->
 <grit-part>
-    <if expr="enable_bundled_subscriptions">
-        <include name="IDR_ADBLOCK_BUNDLED_EASYLIST" file="adblocking\easylist.txt" type="BINDATA" compress="gzip" />
-        <include name="IDR_ADBLOCK_BUNDLED_EXCEPTIONRULES" file="adblocking\exceptionrules.txt" type="BINDATA" compress="gzip" />
-    </if>
-    <include name="IDR_ADBLOCK_ELEMHIDE_JS" file="../../third_party/libadblockplus/grit/resources/elemhide.js" type="BINDATA" />
-    <include name="IDR_ADBLOCK_ELEMHIDE_FOR_SELECTOR_JS" file="../../third_party/libadblockplus/grit/resources/elemhide_for_selector.jst" type="BINDATA" />
-    <include name="IDR_ADBLOCK_ELEMHIDE_EMU_JS" file="../../third_party/libadblockplus/grit/resources/elemhideemu.jst" type="BINDATA" />
-    <include name="IDR_ADBLOCK_SNIPPETS_JS" file="../../third_party/libadblockplus/grit/resources/snippets.js" type="BINDATA" />
+    <include name="IDR_ADBLOCK_ELEMHIDE_JS" file="adblocking/elemhide.js" type="BINDATA" />
+    <include name="IDR_ADBLOCK_ELEMHIDE_FOR_SELECTOR_JS" file="adblocking/elemhide_for_selector.jst" type="BINDATA" />
+    <include name="IDR_ADBLOCK_ELEMHIDE_EMU_JS" file="adblocking/elemhideemu.jst" type="BINDATA" />
+    <include name="IDR_ADBLOCK_SNIPPETS_JS" file="adblocking/snippets/dist/isolated-first.jst" type="BINDATA"  compress="gzip" />
+    <include name="IDR_ADBLOCK_FLATBUFFER_EASYLIST" file="${root_gen_dir}/components/resources/adblocking/easylist.fb" use_base_dir="false" type="BINDATA" compress="gzip" />
+    <include name="IDR_ADBLOCK_FLATBUFFER_EXCEPTIONRULES" file="${root_gen_dir}/components/resources/adblocking/exceptionrules.fb" use_base_dir="false" type="BINDATA" compress="gzip" />
+    <include name="IDR_ADBLOCK_FLATBUFFER_ANTICV" file="${root_gen_dir}/components/resources/adblocking/anticv.fb" use_base_dir="false" type="BINDATA" compress="gzip" />
 </grit-part>

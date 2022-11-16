@@ -11,7 +11,7 @@
 #include <map>
 #include <memory>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "components/bookmarks/browser/bookmark_client.h"
 
 namespace gfx {
@@ -25,6 +25,10 @@ class BookmarkModel;
 class TestBookmarkClient : public BookmarkClient {
  public:
   TestBookmarkClient();
+
+  TestBookmarkClient(const TestBookmarkClient&) = delete;
+  TestBookmarkClient& operator=(const TestBookmarkClient&) = delete;
+
   ~TestBookmarkClient() override;
 
   // Returns a new BookmarkModel using a TestBookmarkClient.
@@ -87,13 +91,11 @@ class TestBookmarkClient : public BookmarkClient {
   // managed_node_ exists only until GetLoadManagedNodeCallback gets called, but
   // unowned_managed_node_ stays around after that.
   std::unique_ptr<BookmarkPermanentNode> managed_node_;
-  BookmarkPermanentNode* unowned_managed_node_ = nullptr;
+  raw_ptr<BookmarkPermanentNode> unowned_managed_node_ = nullptr;
 
   base::CancelableTaskTracker::TaskId next_task_id_ = 1;
   std::map<GURL, std::list<favicon_base::FaviconImageCallback>>
       requests_per_page_url_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestBookmarkClient);
 };
 
 }  // namespace bookmarks

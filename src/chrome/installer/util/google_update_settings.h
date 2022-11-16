@@ -10,11 +10,9 @@
 #include <memory>
 #include <string>
 
-#include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
-#include "base/sequenced_task_runner.h"
 #include "base/strings/string_piece.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "base/version.h"
 #include "build/build_config.h"
@@ -71,6 +69,10 @@ class GoogleUpdateSettings {
     int last_extra_code;
   };
 
+  GoogleUpdateSettings() = delete;
+  GoogleUpdateSettings(const GoogleUpdateSettings&) = delete;
+  GoogleUpdateSettings& operator=(const GoogleUpdateSettings&) = delete;
+
   // Returns true if this install is system-wide, false if it is per-user.
   static bool IsSystemInstall();
 
@@ -92,14 +94,14 @@ class GoogleUpdateSettings {
   // false if the setting could not be recorded.
   static bool SetCollectStatsConsent(bool consented);
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   // Returns the default (original) state of the "send usage stats" checkbox
   // shown to the user when they downloaded Chrome. The value is returned via
   // the out parameter |stats_consent_default|. This function returns true if
   // the default state is known and false otherwise. If false the out param
   // will not be set.
-  static bool GetCollectStatsConsentDefault(bool* stats_consent_default)
-      WARN_UNUSED_RESULT;
+  [[nodiscard]] static bool GetCollectStatsConsentDefault(
+      bool* stats_consent_default);
 #endif
 
   // Returns the metrics client info backed up in the registry. nullptr
@@ -280,9 +282,6 @@ class GoogleUpdateSettings {
   // nothing to |experiment_labels|. This will return true if the label did not
   // exist, or was successfully read.
   static bool ReadExperimentLabels(std::wstring* experiment_labels);
-
- private:
-  DISALLOW_IMPLICIT_CONSTRUCTORS(GoogleUpdateSettings);
 };
 
 #endif  // CHROME_INSTALLER_UTIL_GOOGLE_UPDATE_SETTINGS_H_

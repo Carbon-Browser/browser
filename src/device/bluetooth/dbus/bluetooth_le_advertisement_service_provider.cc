@@ -9,8 +9,8 @@
 
 #include "base/bind.h"
 #include "base/logging.h"
-#include "base/macros.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/threading/platform_thread.h"
 #include "dbus/exported_object.h"
@@ -80,6 +80,11 @@ class BluetoothAdvertisementServiceProviderImpl
         base::BindOnce(&BluetoothAdvertisementServiceProviderImpl::OnExported,
                        weak_ptr_factory_.GetWeakPtr()));
   }
+
+  BluetoothAdvertisementServiceProviderImpl(
+      const BluetoothAdvertisementServiceProviderImpl&) = delete;
+  BluetoothAdvertisementServiceProviderImpl& operator=(
+      const BluetoothAdvertisementServiceProviderImpl&) = delete;
 
   ~BluetoothAdvertisementServiceProviderImpl() override {
     DVLOG(1) << "Cleaning up Bluetooth Advertisement: " << object_path_.value();
@@ -419,12 +424,12 @@ class BluetoothAdvertisementServiceProviderImpl
 
   // D-Bus bus object is exported on, not owned by this object and must
   // outlive it.
-  dbus::Bus* bus_;
+  raw_ptr<dbus::Bus> bus_;
 
   // All incoming method calls are passed on to the Delegate and a callback
   // passed to generate the reply. |delegate_| is generally the object that
   // owns this one, and must outlive it.
-  Delegate* delegate_;
+  raw_ptr<Delegate> delegate_;
 
   // Advertisement data that needs to be provided to BlueZ when requested.
   AdvertisementType type_;
@@ -443,8 +448,6 @@ class BluetoothAdvertisementServiceProviderImpl
   // invalidate its weak pointers before any other members are destroyed.
   base::WeakPtrFactory<BluetoothAdvertisementServiceProviderImpl>
       weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(BluetoothAdvertisementServiceProviderImpl);
 };
 
 BluetoothLEAdvertisementServiceProvider::

@@ -8,14 +8,13 @@
 #include <string>
 
 #include "ash/components/audio/cras_audio_handler.h"
-#include "base/macros.h"
 #include "base/run_loop.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/test/test_message_loop.h"
 #include "base/test/test_timeouts.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
-#include "chromeos/dbus/audio/fake_cras_audio_client.h"
+#include "chromeos/ash/components/dbus/audio/fake_cras_audio_client.h"
 #include "media/audio/audio_device_description.h"
 #include "media/audio/cras/audio_manager_chromeos.h"
 #include "media/audio/fake_audio_log_factory.h"
@@ -65,16 +64,19 @@ class MockAudioManagerCrasInput : public AudioManagerChromeOS {
 class CrasInputStreamTest : public testing::Test {
  protected:
   CrasInputStreamTest() {
-    chromeos::CrasAudioClient::InitializeFake();
+    ash::CrasAudioClient::InitializeFake();
     ash::CrasAudioHandler::InitializeForTesting();
     mock_manager_.reset(new StrictMock<MockAudioManagerCrasInput>());
     base::RunLoop().RunUntilIdle();
   }
 
+  CrasInputStreamTest(const CrasInputStreamTest&) = delete;
+  CrasInputStreamTest& operator=(const CrasInputStreamTest&) = delete;
+
   ~CrasInputStreamTest() override {
     mock_manager_->Shutdown();
     ash::CrasAudioHandler::Shutdown();
-    chromeos::CrasAudioClient::Shutdown();
+    ash::CrasAudioClient::Shutdown();
   }
 
   CrasInputStream* CreateStream(ChannelLayout layout) {
@@ -131,9 +133,6 @@ class CrasInputStreamTest : public testing::Test {
 
   base::TestMessageLoop message_loop_;
   std::unique_ptr<StrictMock<MockAudioManagerCrasInput>> mock_manager_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(CrasInputStreamTest);
 };
 
 const unsigned int CrasInputStreamTest::kTestCaptureDurationMs = 250;

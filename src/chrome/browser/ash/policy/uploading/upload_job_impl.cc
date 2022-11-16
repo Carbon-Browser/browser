@@ -12,11 +12,9 @@
 
 #include "base/bind.h"
 #include "base/location.h"
-#include "base/macros.h"
-#include "base/metrics/histogram_macros.h"
-#include "base/sequenced_task_runner.h"
 #include "base/strings/stringprintf.h"
 #include "base/syslog_logging.h"
+#include "base/task/sequenced_task_runner.h"
 #include "google_apis/gaia/gaia_constants.h"
 #include "google_apis/gaia/google_service_auth_error.h"
 #include "net/base/mime_util.h"
@@ -37,7 +35,7 @@ const char kAuthorizationHeaderFormat[] = "Bearer %s";
 // Value the "Content-Type" field will be set to in the POST request.
 const char kUploadContentType[] = "multipart/form-data";
 
-// Number of upload attempts. Should not exceed 10 because of the histogram.
+// Number of upload attempts.
 const int kMaxAttempts = 4;
 
 // Max size of MIME boundary according to RFC 1341, section 7.2.1.
@@ -45,9 +43,6 @@ const size_t kMaxMimeBoundarySize = 70;
 
 // Delay after each unsuccessful upload attempt.
 long g_retry_delay_ms = 25000;
-
-// Name of the UploadJobSuccess UMA histogram.
-const char kUploadJobSuccessHistogram[] = "Enterprise.UploadJobSuccess";
 
 }  // namespace
 
@@ -65,6 +60,9 @@ class DataSegment {
               const std::string& filename,
               std::unique_ptr<std::string> data,
               const std::map<std::string, std::string>& header_entries);
+
+  DataSegment(const DataSegment&) = delete;
+  DataSegment& operator=(const DataSegment&) = delete;
 
   // Returns the header entries for this DataSegment.
   const std::map<std::string, std::string>& GetHeaderEntries() const;
@@ -90,8 +88,6 @@ class DataSegment {
   const std::string filename_;
   std::unique_ptr<std::string> data_;
   std::map<std::string, std::string> header_entries_;
-
-  DISALLOW_COPY_AND_ASSIGN(DataSegment);
 };
 
 DataSegment::DataSegment(
@@ -127,22 +123,6 @@ size_t DataSegment::GetDataSize() const {
   DCHECK(data_);
   return data_->size();
 }
-
-// Used in the Enterprise.UploadJobSuccess histogram, shows how many retries
-// we had to do to execute the UploadJob.
-enum UploadJobSuccess {
-  // No retries happened, the upload succeeded for the first try.
-  REQUEST_NO_RETRY = 0,
-
-  // 1..kMaxAttempts-1: number of retries
-
-  // The request failed (too many retries).
-  REQUEST_FAILED = 10,
-  // The request was interrupted.
-  REQUEST_INTERRUPTED,
-
-  REQUEST_MAX
-};
 
 std::string UploadJobImpl::RandomMimeBoundaryGenerator::GenerateBoundary()
     const {
@@ -182,9 +162,6 @@ UploadJobImpl::UploadJobImpl(
 UploadJobImpl::~UploadJobImpl() {
   if (state_ != ERROR && state_ != SUCCESS) {
     SYSLOG(ERROR) << "Upload job interrupted.";
-    UMA_HISTOGRAM_ENUMERATION(kUploadJobSuccessHistogram,
-                              UploadJobSuccess::REQUEST_INTERRUPTED,
-                              UploadJobSuccess::REQUEST_MAX);
   }
 }
 
@@ -373,9 +350,6 @@ void UploadJobImpl::HandleError(ErrorCode error_code) {
     access_token_.clear();
     post_data_.reset();
     state_ = ERROR;
-    UMA_HISTOGRAM_ENUMERATION(kUploadJobSuccessHistogram,
-                              UploadJobSuccess::REQUEST_FAILED,
-                              UploadJobSuccess::REQUEST_MAX);
     delegate_->OnFailure(error_code);
   } else {
     if (error_code == AUTHENTICATION_ERROR) {
@@ -390,16 +364,15 @@ void UploadJobImpl::HandleError(ErrorCode error_code) {
           FROM_HERE,
           base::BindOnce(&UploadJobImpl::RequestAccessToken,
                          weak_factory_.GetWeakPtr()),
-          base::TimeDelta::FromMilliseconds(g_retry_delay_ms));
+          base::Milliseconds(g_retry_delay_ms));
     } else {
       // Retry without a new token.
       state_ = ACQUIRING_TOKEN;
       SYSLOG(WARNING) << "Retrying upload with the same token.";
-      task_runner_->PostDelayedTask(
-          FROM_HERE,
-          base::BindOnce(&UploadJobImpl::StartUpload,
-                         weak_factory_.GetWeakPtr()),
-          base::TimeDelta::FromMilliseconds(g_retry_delay_ms));
+      task_runner_->PostDelayedTask(FROM_HERE,
+                                    base::BindOnce(&UploadJobImpl::StartUpload,
+                                                   weak_factory_.GetWeakPtr()),
+                                    base::Milliseconds(g_retry_delay_ms));
     }
   }
 }
@@ -419,8 +392,6 @@ void UploadJobImpl::OnURLLoadComplete(
     access_token_.clear();
     post_data_.reset();
     state_ = SUCCESS;
-    UMA_HISTOGRAM_EXACT_LINEAR(kUploadJobSuccessHistogram, retry_,
-                               static_cast<int>(UploadJobSuccess::REQUEST_MAX));
     delegate_->OnSuccess();
   } else if (headers->response_code() == net::HTTP_UNAUTHORIZED) {
     SYSLOG(ERROR) << "Unauthorized request.";

@@ -7,7 +7,6 @@ package org.chromium.chrome.browser.payments;
 import androidx.test.filters.MediumTest;
 
 import org.junit.Assert;
-import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -27,7 +26,6 @@ import org.chromium.chrome.browser.payments.PaymentRequestTestRule.MainActivityS
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.components.payments.Event;
 import org.chromium.ui.modaldialog.ModalDialogProperties;
-import org.chromium.ui.test.util.DisableAnimationsTestRule;
 
 import java.util.concurrent.TimeoutException;
 
@@ -37,10 +35,6 @@ import java.util.concurrent.TimeoutException;
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
 public class PaymentRequestJourneyLoggerTest implements MainActivityStartCallback {
-    // Disable animations to reduce flakiness.
-    @ClassRule
-    public static DisableAnimationsTestRule sNoAnimationsRule = new DisableAnimationsTestRule();
-
     @Rule
     public PaymentRequestTestRule mPaymentRequestTestRule =
             new PaymentRequestTestRule("payment_request_metrics_test.html", this);
@@ -84,15 +78,6 @@ public class PaymentRequestJourneyLoggerTest implements MainActivityStartCallbac
                 R.id.card_unmask_input, "123", mPaymentRequestTestRule.getReadyToUnmask());
         mPaymentRequestTestRule.clickCardUnmaskButtonAndWait(
                 ModalDialogProperties.ButtonType.POSITIVE, mPaymentRequestTestRule.getDismissed());
-        Assert.assertEquals(1,
-                RecordHistogram.getHistogramTotalCountForTesting(
-                        "PaymentRequest.TimeToCheckout.Completed"));
-        Assert.assertEquals(1,
-                RecordHistogram.getHistogramTotalCountForTesting(
-                        "PaymentRequest.TimeToCheckout.Completed.Shown"));
-        Assert.assertEquals(1,
-                RecordHistogram.getHistogramTotalCountForTesting(
-                        "PaymentRequest.TimeToCheckout.Completed.Shown.BasicCard"));
 
         // Make sure the right number of suggestions were logged.
         Assert.assertEquals(1,
@@ -119,13 +104,6 @@ public class PaymentRequestJourneyLoggerTest implements MainActivityStartCallbac
         // Wait for the histograms to be logged.
         Thread.sleep(200);
 
-        Assert.assertEquals(1,
-                RecordHistogram.getHistogramTotalCountForTesting(
-                        "PaymentRequest.TimeToCheckout.UserAborted"));
-        Assert.assertEquals(1,
-                RecordHistogram.getHistogramTotalCountForTesting(
-                        "PaymentRequest.TimeToCheckout.UserAborted.Shown"));
-
         // Make sure the right number of suggestions were logged.
         Assert.assertEquals(1,
                 RecordHistogram.getHistogramValueCountForTesting(
@@ -138,7 +116,9 @@ public class PaymentRequestJourneyLoggerTest implements MainActivityStartCallbac
     @Test
     @MediumTest
     @Feature({"Payments"})
-    public void testNumberOfSuggestionsShown_PaymentMethod_Completed() throws TimeoutException {
+    @CommandLineFlags.Add({"enable-features=PaymentRequestBasicCard"})
+    public void testNumberOfSuggestionsShown_PaymentMethod_Completed_WithBasicCardEnabled()
+            throws TimeoutException {
         // Add two credit cards.
         createTestData();
 
@@ -166,7 +146,37 @@ public class PaymentRequestJourneyLoggerTest implements MainActivityStartCallbac
     @Test
     @MediumTest
     @Feature({"Payments"})
-    public void testNumberOfSuggestionsShown_PaymentMethod_AbortedByUser()
+    @CommandLineFlags.Add({"disable-features=PaymentRequestBasicCard"})
+    public void testNumberOfSuggestionsShown_PaymentMethod_Completed() throws TimeoutException {
+        mPaymentRequestTestRule.addPaymentAppFactory(
+                "https://bobpay.com", AppPresence.HAVE_APPS, FactorySpeed.FAST_FACTORY);
+        mPaymentRequestTestRule.addPaymentAppFactory(
+                "https://kylepay.com/webpay", AppPresence.HAVE_APPS, FactorySpeed.FAST_FACTORY);
+
+        createTestData();
+
+        // Complete a Payment Request with the payment app.
+        mPaymentRequestTestRule.triggerUIAndWait(
+                "buyWithUrlMethods", mPaymentRequestTestRule.getReadyForInput());
+        mPaymentRequestTestRule.clickAndWait(
+                R.id.button_primary, mPaymentRequestTestRule.getDismissed());
+        // Matches either "https://bobpay.com" or "https://kylepay.com/webpay"
+        mPaymentRequestTestRule.expectResultContains(
+                new String[] {"https://", "\"transaction\"", "1337"});
+
+        Assert.assertEquals(1,
+                RecordHistogram.getHistogramValueCountForTesting(
+                        "PaymentRequest.NumberOfSuggestionsShown.PaymentMethod.Completed", 2));
+    }
+
+    /**
+     * Expect that the number of payment method suggestions was logged properly.
+     */
+    @Test
+    @MediumTest
+    @Feature({"Payments"})
+    @CommandLineFlags.Add({"enable-features=PaymentRequestBasicCard"})
+    public void testNumberOfSuggestionsShown_PaymentMethod_AbortedByUser_WithBasicCardEnabled()
             throws InterruptedException, TimeoutException {
         // Add two credit cards.
         createTestData();
@@ -191,12 +201,45 @@ public class PaymentRequestJourneyLoggerTest implements MainActivityStartCallbac
     }
 
     /**
+     * Expect that the number of payment method suggestions was logged properly.
+     */
+    @Test
+    @MediumTest
+    @Feature({"Payments"})
+    @CommandLineFlags.Add({"disable-features=PaymentRequestBasicCard"})
+    public void testNumberOfSuggestionsShown_PaymentMethod_AbortedByUser()
+            throws InterruptedException, TimeoutException {
+        // Add two payment apps
+        mPaymentRequestTestRule.addPaymentAppFactory(
+                "https://bobpay.com", AppPresence.HAVE_APPS, FactorySpeed.FAST_FACTORY);
+        mPaymentRequestTestRule.addPaymentAppFactory(
+                "https://kylepay.com/webpay", AppPresence.HAVE_APPS, FactorySpeed.FAST_FACTORY);
+
+        createTestData();
+
+        // Cancel the payment request.
+        mPaymentRequestTestRule.triggerUIAndWait(
+                "buyWithUrlMethods", mPaymentRequestTestRule.getReadyForInput());
+        mPaymentRequestTestRule.clickAndWait(
+                R.id.close_button, mPaymentRequestTestRule.getDismissed());
+
+        // Wait for the histograms to be logged.
+        Thread.sleep(200);
+
+        // Make sure the right number of suggestions were logged.
+        Assert.assertEquals(1,
+                RecordHistogram.getHistogramValueCountForTesting(
+                        "PaymentRequest.NumberOfSuggestionsShown.PaymentMethod.UserAborted", 2));
+    }
+
+    /**
      * Expect that an incomplete payment app is not suggested to the user.
      */
     @Test
     @MediumTest
     @Feature({"Payments"})
-    public void testNumberOfSuggestionsShown_PaymentMethod_InvalidPaymentApp()
+    @CommandLineFlags.Add({"enable-features=PaymentRequestBasicCard"})
+    public void testNumberOfSuggestionsShown_PaymentMethod_InvalidPaymentApp_WithBasicCardEnabled()
             throws InterruptedException, TimeoutException {
         // Add two credit cards.
         createTestData();
@@ -217,6 +260,37 @@ public class PaymentRequestJourneyLoggerTest implements MainActivityStartCallbac
         Assert.assertEquals(1,
                 RecordHistogram.getHistogramValueCountForTesting(
                         "PaymentRequest.NumberOfSuggestionsShown.PaymentMethod.UserAborted", 2));
+    }
+
+    /**
+     * Expect that an incomplete payment app is not suggested to the user.
+     */
+    @Test
+    @MediumTest
+    @Feature({"Payments"})
+    @CommandLineFlags.Add({"disable-features=PaymentRequestBasicCard"})
+    public void testNumberOfSuggestionsShown_PaymentMethod_InvalidPaymentApp()
+            throws InterruptedException, TimeoutException {
+        // Add an incomplete payment app.
+        mPaymentRequestTestRule.addPaymentAppFactory(
+                "https://bobpay.com", AppPresence.NO_APPS, FactorySpeed.FAST_FACTORY);
+        mPaymentRequestTestRule.addPaymentAppFactory(
+                "https://kylepay.com/webpay", AppPresence.HAVE_APPS, FactorySpeed.FAST_FACTORY);
+
+        createTestData();
+
+        // Cancel the payment request.
+        mPaymentRequestTestRule.triggerUIAndWait(
+                "buyWithUrlMethods", mPaymentRequestTestRule.getReadyToPay());
+        mPaymentRequestTestRule.clickAndWait(
+                R.id.close_button, mPaymentRequestTestRule.getDismissed());
+
+        Thread.sleep(200);
+
+        // Make sure only the one payment app suggestions was logged.
+        Assert.assertEquals(1,
+                RecordHistogram.getHistogramValueCountForTesting(
+                        "PaymentRequest.NumberOfSuggestionsShown.PaymentMethod.UserAborted", 1));
     }
 
     /**
@@ -381,43 +455,6 @@ public class PaymentRequestJourneyLoggerTest implements MainActivityStartCallbac
     @MediumTest
     @FlakyTest(message = "crbug.com/1182234")
     @Feature({"Payments"})
-    @CommandLineFlags.Add("disable-features=StrictHasEnrolledAutofillInstrument")
-    public void testUserDidNotHaveCompleteSuggestions_ShippingAndPayment_UnsupportedCard()
-            throws TimeoutException {
-        // Add an unsupported card (mastercard) and an complete address.
-        AutofillTestHelper mHelper = new AutofillTestHelper();
-        String mBillingAddressId = mHelper.setProfile(new AutofillProfile("", "https://example.com",
-                true, "" /* honorific prefix */, "Jon Doe", "Google", "340 Main St", "CA",
-                "Los Angeles", "", "90291", "", "US", "650-253-0000", "", "en-US"));
-        mHelper.setCreditCard(new CreditCard("", "https://example.com", true, true, "Jon Doe",
-                "5187654321098765", "8765", "10", "2021", "mastercard", R.drawable.visa_card,
-                mBillingAddressId, "" /* serverId */));
-
-        // Cancel the payment request.
-        mPaymentRequestTestRule.triggerUIAndWait(
-                "ccBuy", mPaymentRequestTestRule.getReadyForInput());
-        mPaymentRequestTestRule.clickAndWait(
-                R.id.close_button, mPaymentRequestTestRule.getDismissed());
-        mPaymentRequestTestRule.expectResultContains(
-                new String[] {"User closed the Payment Request UI."});
-
-        // Make sure the events were logged correctly.
-        int expectedSample = Event.SHOWN | Event.USER_ABORTED | Event.REQUEST_SHIPPING
-                | Event.REQUEST_METHOD_BASIC_CARD | Event.NEEDS_COMPLETION_PAYMENT;
-        Assert.assertEquals(1,
-                RecordHistogram.getHistogramValueCountForTesting(
-                        "PaymentRequest.Events", expectedSample));
-    }
-
-    /**
-     * Expect that the metric that records whether the user had complete suggestions for the
-     * requested information is logged correctly.
-     */
-    @Test
-    @MediumTest
-    @FlakyTest(message = "crbug.com/1182234")
-    @Feature({"Payments"})
-    @CommandLineFlags.Add("disable-features=StrictHasEnrolledAutofillInstrument")
     public void testUserDidNotHaveCompleteSuggestions_ShippingAndPayment_OnlyPaymentApp()
             throws TimeoutException {
         // Add a complete address and a working payment app.
@@ -451,7 +488,7 @@ public class PaymentRequestJourneyLoggerTest implements MainActivityStartCallbac
     @Test
     @MediumTest
     @Feature({"Payments"})
-    @CommandLineFlags.Add("disable-features=StrictHasEnrolledAutofillInstrument")
+    @CommandLineFlags.Add({"enable-features=PaymentRequestBasicCard"})
     public void testUserDidNotHaveCompleteSuggestions_PaymentApp_NoApps() throws TimeoutException {
         // Add an address and a factory without apps.
         AutofillTestHelper mHelper = new AutofillTestHelper();
@@ -485,7 +522,8 @@ public class PaymentRequestJourneyLoggerTest implements MainActivityStartCallbac
     @Test
     @MediumTest
     @Feature({"Payments"})
-    public void testUserHadCompleteSuggestions_PaymentApp_HasValidPaymentApp()
+    @CommandLineFlags.Add({"enable-features=PaymentRequestBasicCard"})
+    public void testUserHadCompleteSuggestions_PaymentApp_HasValidPaymentApp_WithBasicCardEnabled()
             throws TimeoutException {
         // Add an address and a payment app on file.
         AutofillTestHelper mHelper = new AutofillTestHelper();
@@ -508,6 +546,40 @@ public class PaymentRequestJourneyLoggerTest implements MainActivityStartCallbac
                 | Event.HAD_NECESSARY_COMPLETE_SUGGESTIONS | Event.REQUEST_SHIPPING
                 | Event.REQUEST_METHOD_BASIC_CARD | Event.REQUEST_METHOD_OTHER
                 | Event.AVAILABLE_METHOD_OTHER;
+        Assert.assertEquals(1,
+                RecordHistogram.getHistogramValueCountForTesting(
+                        "PaymentRequest.Events", expectedSample));
+    }
+
+    /**
+     * Expect that the metric that records whether the user had complete suggestions for the
+     * requested information is logged correctly.
+     */
+    @Test
+    @MediumTest
+    @Feature({"Payments"})
+    @CommandLineFlags.Add({"disable-features=PaymentRequestBasicCard"})
+    public void testUserHadCompleteSuggestions_PaymentApp_HasValidPaymentApp()
+            throws TimeoutException {
+        mPaymentRequestTestRule.addPaymentAppFactory(
+                "https://bobpay.com", AppPresence.HAVE_APPS, FactorySpeed.FAST_FACTORY);
+        mPaymentRequestTestRule.addPaymentAppFactory(
+                "https://kylepay.com/webpay", AppPresence.HAVE_APPS, FactorySpeed.FAST_FACTORY);
+
+        createTestData();
+
+        // Cancel the payment request.
+        mPaymentRequestTestRule.triggerUIAndWait(
+                "buyWithUrlMethods", mPaymentRequestTestRule.getReadyForInput());
+        mPaymentRequestTestRule.clickAndWait(
+                R.id.close_button, mPaymentRequestTestRule.getDismissed());
+        mPaymentRequestTestRule.expectResultContains(
+                new String[] {"User closed the Payment Request UI."});
+
+        // Make sure the events were logged correctly.
+        int expectedSample = Event.SHOWN | Event.USER_ABORTED | Event.HAD_INITIAL_FORM_OF_PAYMENT
+                | Event.HAD_NECESSARY_COMPLETE_SUGGESTIONS | Event.REQUEST_SHIPPING
+                | Event.REQUEST_METHOD_OTHER | Event.AVAILABLE_METHOD_OTHER;
         Assert.assertEquals(1,
                 RecordHistogram.getHistogramValueCountForTesting(
                         "PaymentRequest.Events", expectedSample));
@@ -553,49 +625,12 @@ public class PaymentRequestJourneyLoggerTest implements MainActivityStartCallbac
 
     /**
      * Expect that the UserHadCompleteSuggestions histogram gets logged properly when the user has
-     * at least one credit card on file.
-     */
-    @Test
-    @MediumTest
-    @FlakyTest(message = "crbug.com/1182234")
-    @Feature({"Payments"})
-    public void testUserHadCompleteSuggestions_AcceptsCardsAndApps_UserHasOnlyCard()
-            throws TimeoutException {
-        // Add an address and a credit card on file.
-        AutofillTestHelper mHelper = new AutofillTestHelper();
-        String mBillingAddressId = mHelper.setProfile(new AutofillProfile("", "https://example.com",
-                true, "" /* honorific prefix */, "Jon Doe", "Google", "340 Main St", "CA",
-                "Los Angeles", "", "90291", "", "US", "650-253-0000", "", "en-US"));
-        mHelper.setCreditCard(new CreditCard("", "https://example.com", true, true, "Jon Doe",
-                "4111111111111111", "1111", "12", "2050", "visa", R.drawable.visa_card,
-                mBillingAddressId, "" /* serverId */));
-
-        mPaymentRequestTestRule.triggerUIAndWait(
-                "cardsAndBobPayBuy", mPaymentRequestTestRule.getReadyToPay());
-
-        // The user cancels the Payment Request (trigger the logs).
-        mPaymentRequestTestRule.clickAndWait(
-                R.id.close_button, mPaymentRequestTestRule.getDismissed());
-        mPaymentRequestTestRule.expectResultContains(
-                new String[] {"User closed the Payment Request UI."});
-
-        // Make sure the events were logged correctly.
-        int expectedSample = Event.SHOWN | Event.USER_ABORTED | Event.HAD_INITIAL_FORM_OF_PAYMENT
-                | Event.HAD_NECESSARY_COMPLETE_SUGGESTIONS | Event.REQUEST_SHIPPING
-                | Event.REQUEST_METHOD_BASIC_CARD | Event.REQUEST_METHOD_OTHER
-                | Event.AVAILABLE_METHOD_BASIC_CARD;
-        Assert.assertEquals(1,
-                RecordHistogram.getHistogramValueCountForTesting(
-                        "PaymentRequest.Events", expectedSample));
-    }
-
-    /**
-     * Expect that the UserHadCompleteSuggestions histogram gets logged properly when the user has
      * at least one payment app on file.
      */
     @Test
     @MediumTest
     @Feature({"Payments"})
+    @CommandLineFlags.Add({"enable-features=PaymentRequestBasicCard"})
     public void testUserHadCompleteSuggestions_AcceptsCardsAndApps_UserHasOnlyPaymentApp()
             throws TimeoutException {
         // Add an address and a payment app on file.
@@ -626,53 +661,13 @@ public class PaymentRequestJourneyLoggerTest implements MainActivityStartCallbac
     }
 
     /**
-     * Expect that the UserHadCompleteSuggestions histogram gets logged properly when the user has
-     * at both a card and a payment app on file.
-     */
-    @Test
-    @MediumTest
-    @FlakyTest(message = "crbug.com/1182234")
-    @Feature({"Payments"})
-    public void testUserHadCompleteSuggestions_AcceptsCardsAndApps_UserHasCardAndPaymentApp()
-            throws TimeoutException {
-        // Add an address, a credit card and a payment app on file.
-        AutofillTestHelper mHelper = new AutofillTestHelper();
-        String mBillingAddressId = mHelper.setProfile(new AutofillProfile("", "https://example.com",
-                true, "" /* honorific prefix */, "Jon Doe", "Google", "340 Main St", "CA",
-                "Los Angeles", "", "90291", "", "US", "650-253-0000", "", "en-US"));
-        mHelper.setCreditCard(new CreditCard("", "https://example.com", true, true, "Jon Doe",
-                "4111111111111111", "1111", "12", "2050", "visa", R.drawable.visa_card,
-                mBillingAddressId, "" /* serverId */));
-        mPaymentRequestTestRule.addPaymentAppFactory(
-                AppPresence.HAVE_APPS, FactorySpeed.FAST_FACTORY);
-
-        mPaymentRequestTestRule.triggerUIAndWait(
-                "cardsAndBobPayBuy", mPaymentRequestTestRule.getReadyToPay());
-
-        // The user cancels the Payment Request (trigger the logs).
-        mPaymentRequestTestRule.clickAndWait(
-                R.id.close_button, mPaymentRequestTestRule.getDismissed());
-        mPaymentRequestTestRule.expectResultContains(
-                new String[] {"User closed the Payment Request UI."});
-
-        // Make sure the events were logged correctly.
-        int expectedSample = Event.SHOWN | Event.USER_ABORTED | Event.HAD_INITIAL_FORM_OF_PAYMENT
-                | Event.HAD_NECESSARY_COMPLETE_SUGGESTIONS | Event.REQUEST_SHIPPING
-                | Event.REQUEST_METHOD_BASIC_CARD | Event.REQUEST_METHOD_OTHER
-                | Event.AVAILABLE_METHOD_BASIC_CARD | Event.AVAILABLE_METHOD_OTHER;
-        Assert.assertEquals(1,
-                RecordHistogram.getHistogramValueCountForTesting(
-                        "PaymentRequest.Events", expectedSample));
-    }
-
-    /**
      * Expect that the UserDidNotHaveInitialFormOfPayment histogram gets logged properly when the
      * user has no form of payment on file.
      */
     @Test
     @MediumTest
     @Feature({"Payments"})
-    @CommandLineFlags.Add("disable-features=StrictHasEnrolledAutofillInstrument")
+    @CommandLineFlags.Add({"enable-features=PaymentRequestBasicCard"})
     public void testUserDidNotHaveCompleteSuggestions_AcceptsCardsAndApps_NoCardOrPaymentApp()
             throws TimeoutException {
         // Add an address on file.
@@ -730,7 +725,8 @@ public class PaymentRequestJourneyLoggerTest implements MainActivityStartCallbac
     @Test
     @MediumTest
     @Feature({"Payments"})
-    public void testTwoTimes() throws TimeoutException {
+    @CommandLineFlags.Add({"enable-features=PaymentRequestBasicCard"})
+    public void testTwoTimes_WithBasicCardEnabled() throws TimeoutException {
         createTestData();
 
         // Complete a Payment Request with a credit card.
@@ -768,6 +764,54 @@ public class PaymentRequestJourneyLoggerTest implements MainActivityStartCallbac
                 | Event.HAD_NECESSARY_COMPLETE_SUGGESTIONS | Event.RECEIVED_INSTRUMENT_DETAILS
                 | Event.PAY_CLICKED | Event.AVAILABLE_METHOD_BASIC_CARD
                 | Event.SELECTED_CREDIT_CARD;
+        Assert.assertEquals(2,
+                RecordHistogram.getHistogramValueCountForTesting(
+                        "PaymentRequest.Events", expectedSample));
+    }
+
+    /**
+     * Expect that that the journey metrics are logged correctly on a second consecutive payment
+     * request.
+     */
+    @Test
+    @MediumTest
+    @Feature({"Payments"})
+    @CommandLineFlags.Add({"disable-features=PaymentRequestBasicCard"})
+    public void testTwoTimes() throws TimeoutException {
+        mPaymentRequestTestRule.addPaymentAppFactory(
+                "https://bobpay.com", AppPresence.HAVE_APPS, FactorySpeed.FAST_FACTORY);
+        mPaymentRequestTestRule.addPaymentAppFactory(
+                "https://kylepay.com/webpay", AppPresence.HAVE_APPS, FactorySpeed.FAST_FACTORY);
+
+        createTestData();
+
+        // Complete a Payment Request with payment apps.
+        mPaymentRequestTestRule.triggerUIAndWait(
+                "buyWithUrlMethods", mPaymentRequestTestRule.getReadyForInput());
+        mPaymentRequestTestRule.clickAndWait(
+                R.id.button_primary, mPaymentRequestTestRule.getDismissed());
+
+        // Make sure the right number of suggestions were logged.
+        Assert.assertEquals(1,
+                RecordHistogram.getHistogramValueCountForTesting(
+                        "PaymentRequest.NumberOfSuggestionsShown.PaymentMethod.Completed", 2));
+
+        // Complete a second Payment Request with payment apps.
+        mPaymentRequestTestRule.reTriggerUIAndWait(
+                "buyWithUrlMethods", mPaymentRequestTestRule.getReadyForInput());
+        mPaymentRequestTestRule.clickAndWait(
+                R.id.button_primary, mPaymentRequestTestRule.getDismissed());
+
+        // Make sure the right number of suggestions were logged.
+        Assert.assertEquals(2,
+                RecordHistogram.getHistogramValueCountForTesting(
+                        "PaymentRequest.NumberOfSuggestionsShown.PaymentMethod.Completed", 2));
+
+        // Make sure the events were logged correctly.
+        int expectedSample = Event.SHOWN | Event.COMPLETED | Event.REQUEST_SHIPPING
+                | Event.REQUEST_METHOD_OTHER | Event.HAD_INITIAL_FORM_OF_PAYMENT
+                | Event.HAD_NECESSARY_COMPLETE_SUGGESTIONS | Event.RECEIVED_INSTRUMENT_DETAILS
+                | Event.PAY_CLICKED | Event.AVAILABLE_METHOD_OTHER | Event.SELECTED_OTHER;
         Assert.assertEquals(2,
                 RecordHistogram.getHistogramValueCountForTesting(
                         "PaymentRequest.Events", expectedSample));

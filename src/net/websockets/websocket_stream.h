@@ -10,13 +10,13 @@
 #include <vector>
 
 #include "base/callback_forward.h"
-#include "base/macros.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/time/time.h"
 #include "net/base/completion_once_callback.h"
 #include "net/base/isolation_info.h"
 #include "net/base/net_export.h"
 #include "net/cookies/site_for_cookies.h"
+#include "net/log/net_log_with_source.h"
 #include "net/websockets/websocket_event_interface.h"
 #include "net/websockets/websocket_handshake_request_info.h"
 #include "net/websockets/websocket_handshake_response_info.h"
@@ -180,6 +180,9 @@ class NET_EXPORT_PRIVATE WebSocketStream {
       std::unique_ptr<base::OneShotTimer> timer,
       std::unique_ptr<WebSocketStreamRequestAPI> api_delegate);
 
+  WebSocketStream(const WebSocketStream&) = delete;
+  WebSocketStream& operator=(const WebSocketStream&) = delete;
+
   // Derived classes must make sure Close() is called when the stream is not
   // closed on destruction.
   virtual ~WebSocketStream();
@@ -268,11 +271,10 @@ class NET_EXPORT_PRIVATE WebSocketStream {
   // extensions were negotiated, the empty string is returned.
   virtual std::string GetExtensions() const = 0;
 
+  virtual const NetLogWithSource& GetNetLogWithSource() const = 0;
+
  protected:
   WebSocketStream();
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(WebSocketStream);
 };
 
 // A helper function used in the implementation of CreateAndConnectStream() and

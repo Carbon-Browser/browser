@@ -8,7 +8,9 @@
 #include <memory>
 
 #include "base/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/tick_clock.h"
+#include "base/time/time.h"
 #include "components/domain_reliability/config.h"
 #include "components/domain_reliability/scheduler.h"
 #include "components/domain_reliability/uploader.h"
@@ -81,7 +83,7 @@ class MockTickClock : public base::TickClock {
   base::TimeTicks NowTicks() const override;
 
  private:
-  MockTime* mock_time_;
+  raw_ptr<MockTime> mock_time_;
 };
 
 class MockTime : public MockableTime {

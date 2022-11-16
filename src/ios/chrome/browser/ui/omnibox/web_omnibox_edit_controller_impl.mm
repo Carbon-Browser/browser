@@ -42,14 +42,19 @@ void WebOmniboxEditControllerImpl::OnAutocompleteAccept(
     ui::PageTransition transition,
     AutocompleteMatchType::Type match_type,
     base::TimeTicks match_selection_timestamp,
-    bool destination_url_entered_without_scheme) {
+    bool destination_url_entered_without_scheme,
+    const std::u16string& text,
+    const AutocompleteMatch& match,
+    const AutocompleteMatch& alternative_nav_match) {
   if (destination_url.is_valid()) {
     transition = ui::PageTransitionFromInt(
         transition | ui::PAGE_TRANSITION_FROM_ADDRESS_BAR);
     [URLLoader_ loadGURLFromLocationBar:destination_url
-                            postContent:post_content
-                             transition:transition
-                            disposition:disposition];
+                                   postContent:post_content
+                                    transition:transition
+                                   disposition:disposition
+        destination_url_entered_without_scheme:
+            destination_url_entered_without_scheme];
   }
 }
 

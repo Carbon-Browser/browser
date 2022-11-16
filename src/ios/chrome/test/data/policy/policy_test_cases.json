@@ -7,11 +7,22 @@
     "can_be_recommended": true,
     "policy_pref_mapping_tests": [
       {
+        "note": "Default value (no policies set).",
+        "prefs": {
+          "autofill.profile_enabled": {
+            "default_value": true
+          }
+        }
+      },
+      {
+        "note": "Simple value.",
         "policies": {
           "AutofillAddressEnabled": false
         },
         "prefs": {
-          "autofill.profile_enabled": {}
+          "autofill.profile_enabled": {
+            "value": false
+          }
         }
       }
     ]
@@ -23,11 +34,48 @@
     "can_be_recommended": true,
     "policy_pref_mapping_tests": [
       {
+        "note": "Default value (no policies set).",
+        "prefs": {
+          "autofill.credit_card_enabled": {
+            "default_value": true
+          }
+        }
+      },
+      {
+        "note": "Simple value.",
         "policies": {
           "AutofillCreditCardEnabled": false
         },
         "prefs": {
-          "autofill.credit_card_enabled": {}
+          "autofill.credit_card_enabled": {
+            "value": false
+          }
+        }
+      }
+    ]
+  },
+  "AllowChromeDataInBackups": {
+    "os": [
+      "ios"
+    ],
+    "policy_pref_mapping_tests": [
+      {
+        "note": "Default value (no policies set).",
+        "prefs": {
+          "ios.allow_chrome_data_in_backups": {
+            "default_value": true
+          }
+        }
+      },
+      {
+        "note": "Simple value.",
+        "policies": {
+          "AllowChromeDataInBackups": false
+        },
+        "prefs": {
+          "ios.allow_chrome_data_in_backups": {
+            "value": false
+          }
         }
       }
     ]
@@ -92,25 +140,97 @@
       }
     ]
   },
-  "ChromeVariations": {
+  "CloudReportingUploadFrequency": {
     "os": [
       "ios"
     ],
     "policy_pref_mapping_tests": [
       {
         "policies": {
-          "ChromeVariations": 1
+          "CloudReportingUploadFrequency": 12
+        },
+        "policies_settings": {
+          "CloudReportingUploadFrequency": {
+            "scope": "machine",
+            "source": "cloud"
+          }
         },
         "prefs": {
-          "variations_restrictions_by_policy": {
+          "enterprise_reporting.upload_frequency": {
+            "value": "43200000000",
+            "location": "local_state"
+          }
+        }
+      },
+      {
+        "policies": {
+          "CloudReportingUploadFrequency": 1
+        },
+        "policies_settings": {
+          "CloudReportingUploadFrequency": {
+            "scope": "machine",
+            "source": "cloud"
+          }
+        },
+        "prefs": {
+          "enterprise_reporting.upload_frequency": {
+            "value": "10800000000",
             "location": "local_state"
           }
         }
       }
     ]
   },
+  "ChromeVariations": {
+    "os": [
+      "ios"
+    ],
+    "policy_pref_mapping_tests": [
+      {
+        "note": "Default value (no policies set).",
+        "prefs": {
+          "variations_restrictions_by_policy": {
+            "location": "local_state",
+            "default_value": 0
+          }
+        }
+      },
+      {
+        "note": "Simple value.",
+        "policies": {
+          "ChromeVariations": 1
+        },
+        "prefs": {
+          "variations_restrictions_by_policy": {
+            "location": "local_state",
+            "value": 1
+          }
+        }
+      }
+    ]
+  },
   "CloudPolicyOverridesPlatformPolicy": {
-    "reason_for_missing_test": "TODO(crbug.com/1213429) add test case"
+    "reason_for_missing_test": "This policy has no pref as it is only directly read by the policy system."
+  },
+  "CloudUserPolicyOverridesCloudMachinePolicy": {
+    "reason_for_missing_test": "This policy has no pref as it is only directly read by the policy system."
+  },
+  "ComponentUpdatesEnabled": {
+    "os": [
+      "ios"
+    ],
+    "policy_pref_mapping_tests": [
+      {
+        "policies": {
+          "ComponentUpdatesEnabled": true
+        },
+        "prefs": {
+          "component_updates.component_updates_enabled": {
+            "location": "local_state"
+          }
+        }
+      }
+    ]
   },
   "DefaultPopupsSetting": {
     "os": [
@@ -196,11 +316,22 @@
     ],
     "policy_pref_mapping_tests": [
       {
+        "note": "Default value (no policies set).",
+        "prefs": {
+          "bookmarks.editing_enabled": {
+            "default_value": true
+          }
+        }
+      },
+      {
+        "note": "Simple value.",
         "policies": {
           "EditBookmarksEnabled": false
         },
         "prefs": {
-          "bookmarks.editing_enabled": {}
+          "bookmarks.editing_enabled": {
+            "value": false
+          }
         }
       }
     ]
@@ -245,6 +376,41 @@
       }
     ]
   },
+  "NewTabPageLocation": {
+    "os": [ "ios" ],
+    "policy_pref_mapping_tests": [
+      {
+        "policies": {
+            "NewTabPageLocation": ""
+        },
+        "prefs": {
+          "ios.ntp.location_override": {
+              "default_value": ""
+          }
+        }
+      },
+      {
+        "policies": {
+            "NewTabPageLocation": "m.youtube.com"
+        },
+        "prefs": {
+          "ios.ntp.location_override": {
+              "value": "https://m.youtube.com"
+          }
+        }
+      },
+      {
+        "policies": {
+          "NewTabPageLocation": "https://store.google.com"
+        },
+        "prefs": {
+          "ios.ntp.location_override": {
+              "value": "https://store.google.com"
+          }
+        }
+      }
+    ]
+  },
   "NTPContentSuggestionsEnabled": {
     "os": [
       "ios"
@@ -259,6 +425,9 @@
         }
       }
     ]
+  },
+  "OptimizationGuideFetchingEnabled": {
+    "reason_for_missing_test": "Policy was removed"
   },
   "PasswordManagerEnabled": {
     "os": [
@@ -275,6 +444,15 @@
         }
       }
     ]
+  },
+  "PolicyAtomicGroupsEnabled": {
+    "reason_for_missing_test": "This policy has no pref as it is only directly read by the policy system."
+  },
+  "PolicyDictionaryMultipleSourceMergeList": {
+    "reason_for_missing_test": "This policy has no pref as it is only directly read by the policy system."
+  },
+  "PolicyListMultipleSourceMergeList": {
+    "reason_for_missing_test": "This policy has no pref as it is only directly read by the policy system."
   },
   "PolicyRefreshRate": {
     "os": [
@@ -604,7 +782,83 @@
     ]
   },
   "ManagedBookmarks": {
-    "reason_for_missing_test": "TODO(crbug.com/1213429) add test case"
+    "os": [
+      "ios"
+    ],
+    "policy_pref_mapping_tests": [
+      {
+        "note": "Check default values (no policies set).",
+        "prefs": {
+          "bookmarks.managed_bookmarks_folder_name": {
+            "default_value": ""
+          },
+          "bookmarks.managed_bookmarks": {
+            "default_value": []
+          }
+        }
+      },
+      {
+        "note": "Managed bookmarks together with folder name.",
+        "policies": {
+          "ManagedBookmarks": [
+            {
+              "toplevel_name": "My managed bookmarks folder"
+            },
+            {
+              "name": "Google",
+              "url": "google.com"
+            },
+            {
+              "name": "Youtube",
+              "url": "youtube.com"
+            },
+            {
+              "name": "Chrome links",
+              "children": [
+                {
+                  "name": "Chromium",
+                  "url": "chromium.org"
+                },
+                {
+                  "name": "Chromium Developers",
+                  "url": "dev.chromium.org"
+                }
+              ]
+            }
+          ]
+        },
+        "prefs": {
+          "bookmarks.managed_bookmarks_folder_name": {
+            "value": "My managed bookmarks folder"
+          },
+          "bookmarks.managed_bookmarks": {
+            "value": [
+              {
+                "name": "Google",
+                "url": "http://google.com/"
+              },
+              {
+                "name": "Youtube",
+                "url": "http://youtube.com/"
+              },
+              {
+                "name": "Chrome links",
+                "children": [
+                  {
+                    "name": "Chromium",
+                    "url": "http://chromium.org/"
+                  },
+                  {
+                    "name": "Chromium Developers",
+                    "url": "http://dev.chromium.org/"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ]
   },
   "EnableExperimentalPolicies": {
     "reason_for_missing_test": "This policy has no pref as it is only directly read by the policy system."

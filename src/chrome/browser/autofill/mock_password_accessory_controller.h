@@ -7,7 +7,6 @@
 
 #include <map>
 
-#include "base/macros.h"
 #include "chrome/browser/password_manager/android/password_accessory_controller.h"
 #include "components/autofill/core/browser/ui/accessory_sheet_data.h"
 #include "components/autofill/core/browser/ui/accessory_sheet_enums.h"
@@ -18,6 +17,12 @@
 class MockPasswordAccessoryController : public PasswordAccessoryController {
  public:
   MockPasswordAccessoryController();
+
+  MockPasswordAccessoryController(const MockPasswordAccessoryController&) =
+      delete;
+  MockPasswordAccessoryController& operator=(
+      const MockPasswordAccessoryController&) = delete;
+
   ~MockPasswordAccessoryController() override;
 
   MOCK_METHOD(
@@ -54,9 +59,6 @@ class MockPasswordAccessoryController : public PasswordAccessoryController {
               OnToggleChanged,
               (autofill::AccessoryAction toggled_action, bool enabled),
               (override));
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(MockPasswordAccessoryController);
 };
 
 #endif  // CHROME_BROWSER_AUTOFILL_MOCK_PASSWORD_ACCESSORY_CONTROLLER_H_

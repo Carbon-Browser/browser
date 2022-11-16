@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// This file defines a set of user experience metrics data recorded by
-// the MetricsService.  This is the unit of data that is sent to the server.
+// This file defines a set of user experience metrics data recorded by the
+// MetricsService. This is the unit of data that is sent to the server.
 
 #ifndef COMPONENTS_METRICS_METRICS_LOG_H_
 #define COMPONENTS_METRICS_METRICS_LOG_H_
@@ -14,10 +14,11 @@
 #include <string>
 
 #include "base/callback_forward.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_base.h"
 #include "base/strings/string_piece_forward.h"
 #include "base/time/time.h"
+#include "build/chromeos_buildflags.h"
 #include "components/metrics/metrics_reporting_default_state.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/metrics_proto/chrome_user_metrics_extension.pb.h"
@@ -26,10 +27,15 @@
 class PrefService;
 
 namespace base {
+class Clock;
 class HistogramFlattener;
 class HistogramSamples;
 class HistogramSnapshotManager;
 }  // namespace base
+
+namespace network_time {
+class NetworkTimeTracker;
+}  // namespace network_time
 
 namespace metrics {
 
@@ -79,6 +85,11 @@ class MetricsLog {
   class IndependentMetricsLoader {
    public:
     explicit IndependentMetricsLoader(std::unique_ptr<MetricsLog> log);
+
+    IndependentMetricsLoader(const IndependentMetricsLoader&) = delete;
+    IndependentMetricsLoader& operator=(const IndependentMetricsLoader&) =
+        delete;
+
     ~IndependentMetricsLoader();
 
     // Call ProvideIndependentMetrics (which may execute on a background thread)
@@ -96,8 +107,6 @@ class MetricsLog {
     std::unique_ptr<MetricsLog> log_;
     std::unique_ptr<base::HistogramFlattener> flattener_;
     std::unique_ptr<base::HistogramSnapshotManager> snapshot_manager_;
-
-    DISALLOW_COPY_AND_ASSIGN(IndependentMetricsLoader);
   };
 
   // Creates a new metrics log of the specified type.
@@ -112,6 +121,18 @@ class MetricsLog {
              int session_id,
              LogType log_type,
              MetricsServiceClient* client);
+  // As above, with a |clock| and |network_clock| to use to vend Now() calls. As
+  // with |client|, the caller must ensure both remain valid for the lifetime of
+  // this class.
+  MetricsLog(const std::string& client_id,
+             int session_id,
+             LogType log_type,
+             base::Clock* clock,
+             const network_time::NetworkTimeTracker* network_clock,
+             MetricsServiceClient* client);
+
+  MetricsLog(const MetricsLog&) = delete;
+  MetricsLog& operator=(const MetricsLog&) = delete;
   virtual ~MetricsLog();
 
   // Registers local state prefs used by this class.
@@ -161,23 +182,30 @@ class MetricsLog {
       DelegatingProvider* delegating_provider);
 
   // Loads the environment proto that was saved by the last RecordEnvironment()
-  // call from prefs. On success, returns true and |app_version| contains the
-  // recovered version. Otherwise (if there was no saved environment in prefs
-  // or it could not be decoded), returns false and |app_version| is empty.
-  bool LoadSavedEnvironmentFromPrefs(PrefService* local_state,
-                                     std::string* app_version);
+  // call from prefs. On success, returns true. Otherwise, (if there was no
+  // saved environment in prefs or it could not be decoded), returns false.
+  bool LoadSavedEnvironmentFromPrefs(PrefService* local_state);
 
   // Records the log_written_by_app_version system_profile field if the client's
   // version is different from the system_profile's app_version.
   void RecordLogWrittenByAppVersionIfNeeded();
 
-  // Record data from providers about the previous session into the log.
-  void RecordPreviousSessionData(DelegatingProvider* delegating_provider);
+  // Populates the log with data about the previous session.
+  // |delegating_provider| forwards the call to provide data to registered
+  // MetricsProviders. |local_state| is used to schedule a write because a side
+  // effect of providing some data is updating Local State prefs.
+  void RecordPreviousSessionData(DelegatingProvider* delegating_provider,
+                                 PrefService* local_state);
 
-  // Record data from providers about the current session into the log.
-  void RecordCurrentSessionData(DelegatingProvider* delegating_provider,
-                                base::TimeDelta incremental_uptime,
-                                base::TimeDelta uptime);
+  // Populates the log with data about the current session. The uptimes are used
+  // to populate the log with info about how long Chrome has been running.
+  // |delegating_provider| forwards the call to provide data to registered
+  // MetricsProviders. |local_state| is used to schedule a write because a side
+  // effect of providing some data is updating Local State prefs.
+  void RecordCurrentSessionData(base::TimeDelta incremental_uptime,
+                                base::TimeDelta uptime,
+                                DelegatingProvider* delegating_provider,
+                                PrefService* local_state);
 
   // Stop writing to this record and generate the encoded representation.
   // None of the Record* methods can be called after this is called.
@@ -190,6 +218,12 @@ class MetricsLog {
   // Fills |encoded_log| with the serialized protobuf representation of the
   // record.  Must only be called after CloseLog() has been called.
   void GetEncodedLog(std::string* encoded_log);
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  // Assigns a user ID to the log. This should be called immediately after
+  // consotruction if it should be applied.
+  void SetUserId(const std::string& user_id);
+#endif
 
   LogType log_type() const { return log_type_; }
 
@@ -231,7 +265,7 @@ class MetricsLog {
 
   // Used to interact with the embedder. Weak pointer; must outlive |this|
   // instance.
-  MetricsServiceClient* const client_;
+  const raw_ptr<MetricsServiceClient> client_;
 
   // The time when the current log was created.
   const base::TimeTicks creation_time_;
@@ -243,7 +277,13 @@ class MetricsLog {
   // Optional metadata associated with the log.
   LogMetadata log_metadata_;
 
-  DISALLOW_COPY_AND_ASSIGN(MetricsLog);
+  // The clock used to vend Time::Now().  Note that this is not used for the
+  // static function MetricsLog::GetCurrentTime(). Can be overridden for tests.
+  raw_ptr<base::Clock> clock_;
+
+  // The NetworkTimeTracker used to provide higher-quality wall clock times than
+  // |clock_| (when available). Can be overridden for tests.
+  raw_ptr<const network_time::NetworkTimeTracker> network_clock_;
 };
 
 }  // namespace metrics

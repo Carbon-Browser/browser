@@ -9,8 +9,9 @@
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/observer_list.h"
 #include "base/sequence_checker.h"
 #include "base/time/tick_clock.h"
 #include "base/timer/timer.h"
@@ -104,7 +105,7 @@ struct InternalMessage {
   ~InternalMessage();
 
   CastMessageType type;
-  // TODO(jrw): This field is only needed to communicate the namespace
+  // This field is only needed to communicate the namespace
   // information from CastMessageHandler::OnMessage to
   // MirroringActivityRecord::OnInternalMessage.  Maybe there's a better way?
   // One possibility is to derive namespace when it's needed based on the
@@ -114,7 +115,7 @@ struct InternalMessage {
 };
 
 // Default timeout amount for requests waiting for a response.
-constexpr base::TimeDelta kRequestTimeout = base::TimeDelta::FromSeconds(5);
+constexpr base::TimeDelta kRequestTimeout = base::Seconds(5);
 
 // Handles messages that are sent between this browser instance and the Cast
 // devices connected to it. This class also manages virtual connections (VCs)
@@ -142,6 +143,10 @@ class CastMessageHandler : public CastSocket::Observer {
                      const std::string& user_agent,
                      const std::string& browser_version,
                      const std::string& locale);
+
+  CastMessageHandler(const CastMessageHandler&) = delete;
+  CastMessageHandler& operator=(const CastMessageHandler&) = delete;
+
   ~CastMessageHandler() override;
 
   // Ensures a virtual connection exists for (|source_id|, |destination_id|) on
@@ -200,7 +205,8 @@ class CastMessageHandler : public CastSocket::Observer {
   // Sends |message| to the device given by |channel_id|. The caller may use
   // this method to forward app messages from the SDK client to the device.
   //
-  // TODO(jrw): Could this be merged with SendAppMessage()?  Note from mfoltz:
+  // TODO(crbug.com/1291734): Could this be merged with SendAppMessage()?  Note
+  // from mfoltz:
   //
   // The two differences between an app message and a protocol message:
   // - app message has a sender ID that comes from the clientId of the SDK
@@ -340,15 +346,13 @@ class CastMessageHandler : public CastSocket::Observer {
   // Set of virtual connections opened to receivers.
   base::flat_set<VirtualConnection> virtual_connections_;
 
-  CastSocketService* const socket_service_;
+  const raw_ptr<CastSocketService> socket_service_;
 
   // Non-owned pointer to TickClock used for request timeouts.
-  const base::TickClock* const clock_;
+  const raw_ptr<const base::TickClock> clock_;
 
   SEQUENCE_CHECKER(sequence_checker_);
   base::WeakPtrFactory<CastMessageHandler> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(CastMessageHandler);
 };
 
 }  // namespace cast_channel

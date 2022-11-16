@@ -11,13 +11,10 @@
 
 #include "base/callback_forward.h"
 
-namespace chromeos {
-
-namespace printing {
-namespace proto {
+namespace ash {
+namespace printing::proto {
 class PrintJobInfo;
-}  // namespace proto
-}  // namespace printing
+}  // namespace printing::proto
 
 class PrintJobDatabase {
  public:
@@ -67,6 +64,6 @@ class PrintJobDatabase {
   virtual void GetPrintJobs(GetPrintJobsCallback callback) = 0;
 };
 
-}  // namespace chromeos
+}  // namespace ash
 
 #endif  // CHROME_BROWSER_ASH_PRINTING_HISTORY_PRINT_JOB_DATABASE_H_

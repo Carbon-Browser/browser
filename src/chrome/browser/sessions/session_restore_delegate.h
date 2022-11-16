@@ -7,7 +7,7 @@
 
 #include <vector>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "base/token.h"
 #include "components/sessions/core/session_id.h"
@@ -32,6 +32,8 @@ class SessionRestoreDelegate {
     RestoredTab(const RestoredTab&);
     RestoredTab& operator=(const RestoredTab&);
 
+    ~RestoredTab();
+
     bool operator<(const RestoredTab& right) const;
 
     content::WebContents* contents() const { return contents_; }
@@ -44,7 +46,7 @@ class SessionRestoreDelegate {
     }
 
    private:
-    content::WebContents* contents_;
+    raw_ptr<content::WebContents> contents_;
     bool is_active_;
     bool is_app_;            // Browser window is an app.
     bool is_internal_page_;  // Internal web UI page, like NTP or Settings.
@@ -54,11 +56,12 @@ class SessionRestoreDelegate {
     absl::optional<tab_groups::TabGroupId> group_;
   };
 
+  SessionRestoreDelegate() = delete;
+  SessionRestoreDelegate(const SessionRestoreDelegate&) = delete;
+  SessionRestoreDelegate& operator=(const SessionRestoreDelegate&) = delete;
+
   static void RestoreTabs(const std::vector<RestoredTab>& tabs,
                           const base::TimeTicks& restore_started);
-
- private:
-  DISALLOW_IMPLICIT_CONSTRUCTORS(SessionRestoreDelegate);
 };
 
 #endif  // CHROME_BROWSER_SESSIONS_SESSION_RESTORE_DELEGATE_H_

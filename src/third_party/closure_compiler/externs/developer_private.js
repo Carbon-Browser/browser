@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 // NOTE: The format of types has changed. 'FooType' is now
 //   'chrome.developerPrivate.FooType'.
 // Please run the closure compiler before committing changes.
-// See https://chromium.googlesource.com/chromium/src/+/master/docs/closure_compilation.md
+// See https://chromium.googlesource.com/chromium/src/+/main/docs/closure_compilation.md
 
 /** @fileoverview Externs generated from namespace: developerPrivate */
 
@@ -88,6 +88,7 @@ chrome.developerPrivate.ViewType = {
   EXTENSION_POPUP: 'EXTENSION_POPUP',
   EXTENSION_SERVICE_WORKER_BACKGROUND: 'EXTENSION_SERVICE_WORKER_BACKGROUND',
   TAB_CONTENTS: 'TAB_CONTENTS',
+  OFFSCREEN_DOCUMENT: 'OFFSCREEN_DOCUMENT',
 };
 
 /**
@@ -333,7 +334,7 @@ chrome.developerPrivate.ExtensionInfo;
  *   inDeveloperMode: boolean,
  *   isDeveloperModeControlledByPolicy: boolean,
  *   isIncognitoAvailable: boolean,
- *   isSupervised: boolean
+ *   isChildAccount: boolean
  * }}
  */
 chrome.developerPrivate.ProfileInfo;
@@ -424,6 +425,46 @@ chrome.developerPrivate.ReloadOptions;
  * }}
  */
 chrome.developerPrivate.LoadUnpackedOptions;
+
+/**
+ * @enum {string}
+ */
+chrome.developerPrivate.UserSiteSet = {
+  PERMITTED: 'PERMITTED',
+  RESTRICTED: 'RESTRICTED',
+};
+
+/**
+ * @typedef {{
+ *   siteList: !chrome.developerPrivate.UserSiteSet,
+ *   hosts: !Array<string>
+ * }}
+ */
+chrome.developerPrivate.UserSiteSettingsOptions;
+
+/**
+ * @typedef {{
+ *   permittedSites: !Array<string>,
+ *   restrictedSites: !Array<string>
+ * }}
+ */
+chrome.developerPrivate.UserSiteSettings;
+
+/**
+ * @typedef {{
+ *   siteList: !chrome.developerPrivate.UserSiteSet,
+ *   site: string
+ * }}
+ */
+chrome.developerPrivate.SiteInfo;
+
+/**
+ * @typedef {{
+ *   etldPlusOne: string,
+ *   sites: !Array<!chrome.developerPrivate.SiteInfo>
+ * }}
+ */
+chrome.developerPrivate.SiteGroup;
 
 /**
  * @enum {string}
@@ -780,6 +821,36 @@ chrome.developerPrivate.addHostPermission = function(extensionId, host, callback
 chrome.developerPrivate.removeHostPermission = function(extensionId, host, callback) {};
 
 /**
+ * Returns the user specified site settings (which origins can extensions
+ * always/never run on) for the current profile.
+ * @param {function(!chrome.developerPrivate.UserSiteSettings): void=} callback
+ */
+chrome.developerPrivate.getUserSiteSettings = function(callback) {};
+
+/**
+ * Adds hosts to the set of user permitted or restricted sites. If any hosts are
+ * in the other set than what's specified in `options`, then they are removed
+ * from that set.
+ * @param {!chrome.developerPrivate.UserSiteSettingsOptions} options
+ * @param {function(): void=} callback
+ */
+chrome.developerPrivate.addUserSpecifiedSites = function(options, callback) {};
+
+/**
+ * Removes hosts from the specified set of user permitted or restricted sites.
+ * @param {!chrome.developerPrivate.UserSiteSettingsOptions} options
+ * @param {function(): void=} callback
+ */
+chrome.developerPrivate.removeUserSpecifiedSites = function(options, callback) {};
+
+/**
+ * Returns all hosts specified by user site settings, grouped by each host's
+ * eTLD+1. TODO(crbug.com/1331137): Get extension specified sites as well.
+ * @param {function(!Array<!chrome.developerPrivate.SiteGroup>): void=} callback
+ */
+chrome.developerPrivate.getUserAndExtensionSitesByEtld = function(callback) {};
+
+/**
  * @param {string} id
  * @param {boolean} enabled
  * @param {function(): void=} callback
@@ -821,3 +892,9 @@ chrome.developerPrivate.onItemStateChanged;
  * @type {!ChromeEvent}
  */
 chrome.developerPrivate.onProfileStateChanged;
+
+/**
+ * Fired when the lists of sites in the user's site settings have changed.
+ * @type {!ChromeEvent}
+ */
+chrome.developerPrivate.onUserSiteSettingsChanged;

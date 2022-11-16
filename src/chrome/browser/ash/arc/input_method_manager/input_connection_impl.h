@@ -8,12 +8,11 @@
 #include <memory>
 #include <string>
 
-#include "base/macros.h"
+#include "ash/components/arc/mojom/input_method_manager.mojom-forward.h"
 #include "base/memory/weak_ptr.h"
 #include "base/timer/timer.h"
 #include "chrome/browser/ash/arc/input_method_manager/arc_input_method_manager_bridge.h"
 #include "chrome/browser/ash/input_method/input_method_engine.h"
-#include "components/arc/mojom/input_method_manager.mojom-forward.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -27,6 +26,10 @@ class InputConnectionImpl : public mojom::InputConnection {
   InputConnectionImpl(ash::input_method::InputMethodEngine* ime_engine,
                       ArcInputMethodManagerBridge* imm_bridge,
                       int input_context_id);
+
+  InputConnectionImpl(const InputConnectionImpl&) = delete;
+  InputConnectionImpl& operator=(const InputConnectionImpl&) = delete;
+
   ~InputConnectionImpl() override;
 
   // Binds this class to a passed pending remote.
@@ -67,8 +70,6 @@ class InputConnectionImpl : public mojom::InputConnection {
   mojo::Receiver<mojom::InputConnection> receiver_{this};
 
   base::OneShotTimer state_update_timer_;
-
-  DISALLOW_COPY_AND_ASSIGN(InputConnectionImpl);
 };
 
 }  // namespace arc

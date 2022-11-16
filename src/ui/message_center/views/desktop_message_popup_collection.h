@@ -7,7 +7,7 @@
 
 #include <stdint.h>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/display/display.h"
 #include "ui/display/display_observer.h"
 #include "ui/gfx/geometry/rect.h"
@@ -28,6 +28,11 @@ class MESSAGE_CENTER_EXPORT DesktopMessagePopupCollection
       public display::DisplayObserver {
  public:
   DesktopMessagePopupCollection();
+
+  DesktopMessagePopupCollection(const DesktopMessagePopupCollection&) = delete;
+  DesktopMessagePopupCollection& operator=(
+      const DesktopMessagePopupCollection&) = delete;
+
   ~DesktopMessagePopupCollection() override;
 
   void StartObserving();
@@ -68,11 +73,9 @@ class MESSAGE_CENTER_EXPORT DesktopMessagePopupCollection
 
   int32_t alignment_ = POPUP_ALIGNMENT_BOTTOM | POPUP_ALIGNMENT_RIGHT;
   int64_t primary_display_id_ = display::kInvalidDisplayId;
-  display::Screen* screen_ = nullptr;
+  raw_ptr<display::Screen> screen_ = nullptr;
   absl::optional<display::ScopedDisplayObserver> display_observer_;
   gfx::Rect work_area_;
-
-  DISALLOW_COPY_AND_ASSIGN(DesktopMessagePopupCollection);
 };
 
 }  // namespace message_center

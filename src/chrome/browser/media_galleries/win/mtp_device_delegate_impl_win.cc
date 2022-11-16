@@ -18,12 +18,11 @@
 #include "base/files/file_path.h"
 #include "base/memory/ref_counted.h"
 #include "base/notreached.h"
-#include "base/sequenced_task_runner.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/task/post_task.h"
-#include "base/task_runner_util.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/task_runner_util.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "chrome/browser/media_galleries/fileapi/media_file_system_backend.h"
 #include "chrome/browser/media_galleries/win/mtp_device_object_entry.h"
@@ -86,8 +85,7 @@ std::wstring GetFileObjectIdFromPathOnBlockingPoolThread(
           file_path, &relative_path))
     return std::wstring();
 
-  std::vector<std::wstring> path_components;
-  relative_path.GetComponents(&path_components);
+  std::vector<std::wstring> path_components = relative_path.GetComponents();
   DCHECK(!path_components.empty());
   std::wstring parent_id(device_info.storage_object_id);
   std::wstring file_object_id;

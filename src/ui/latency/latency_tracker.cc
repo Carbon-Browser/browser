@@ -4,9 +4,9 @@
 
 #include "ui/latency/latency_tracker.h"
 
+#include <algorithm>
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/no_destructor.h"
 #include "base/rand_util.h"
 #include "base/strings/strcat.h"
 #include "base/trace_event/trace_event.h"
@@ -52,6 +52,25 @@ bool IsInertialScroll(const LatencyInfo& latency) {
   return latency.source_event_type() == ui::SourceEventType::INERTIAL;
 }
 
+enum Jank : int {
+  kNonJanky = 0,
+  kJanky,
+};
+
+void EmitScrollUpdateTime(base::TimeDelta dur, bool janky) {
+  int count = dur.InMilliseconds();
+  if (count <= 0) {
+    // Histograms aren't allowed to add zero counts, this could happen
+    // especially in tests when the clock hasn't advanced enough for a
+    // microsecond to have passed.
+    return;
+  }
+  auto* histogram = base::BooleanHistogram::FactoryGet(
+      "Event.Jank.ScrollUpdate.TotalJankyAndNonJankyDuration2",
+      base::HistogramBase::kUmaTargetedHistogramFlag);
+  histogram->AddCount(janky ? kJanky : kNonJanky, count);
+}
+
 }  // namespace
 
 LatencyTracker::LatencyTracker() = default;
@@ -60,6 +79,14 @@ LatencyTracker::~LatencyTracker() = default;
 void LatencyTracker::OnGpuSwapBuffersCompleted(
     std::vector<ui::LatencyInfo> latency_info,
     bool top_controls_visible_height_changed) {
+  // ReportJankyFrame has to process latency infos in increasing trace_id
+  // order, so it can compare the current frame to previous one. Therefore, the
+  // vector is sorted here before passing it down the call chain.
+  std::sort(latency_info.begin(), latency_info.end(),
+            [](const LatencyInfo& x, const LatencyInfo& y) {
+              return x.trace_id() < y.trace_id();
+            });
+
   for (const auto& latency : latency_info) {
     base::TimeTicks gpu_swap_end_timestamp;
     if (!latency.FindLatency(INPUT_EVENT_LATENCY_FRAME_SWAP_COMPONENT,
@@ -137,9 +164,9 @@ void LatencyTracker::ReportUkmScrollLatency(
   builder.Record(ukm_recorder);
 }
 
-// Checking whether one update event length (measured in frames) is janky
-// compared to another (either previous or next). Update is deemed janky when
-// it's half of a frame longer than a neighbouring update.
+// Checking whether the update event |tested_frames| length (measured in frames)
+// is janky compared to another |basis_frames| (either previous or next). Update
+// is deemed janky when it's half of a frame longer than a neighbouring update.
 //
 // A small number is added to 0.5 in order to make sure that the comparison does
 // not filter out ratios that are precisely 0.5, which can fall a little above
@@ -150,8 +177,8 @@ void LatencyTracker::ReportUkmScrollLatency(
 // interval less than a second), this ratio should increase with increments more
 // than minimal value in numerator (1ns) divided by maximum value in
 // denominator, giving 1e-9.
-static bool IsJankyComparison(double frames, double other_frames) {
-  return frames > other_frames + 0.5 + 1e-9;
+static bool IsJankyComparison(double tested_frames, double basis_frames) {
+  return tested_frames > basis_frames + 0.5 + 1e-9;
 }
 
 void LatencyTracker::ReportJankyFrame(base::TimeTicks original_timestamp,
@@ -160,21 +187,6 @@ void LatencyTracker::ReportJankyFrame(base::TimeTicks original_timestamp,
                                       bool first_frame) {
   CONFIRM_EVENT_TIMES_EXIST(original_timestamp, gpu_swap_end_timestamp);
   base::TimeDelta dur = gpu_swap_end_timestamp - original_timestamp;
-
-  uint64_t id = base::trace_event::GetNextGlobalTraceId();
-  uint64_t flow_id = base::trace_event::GetNextGlobalTraceId();
-
-  // Temporary tracing events used to log individual UMA jank metric values
-  // TODO(b/185991751): Delete after the discrepancy is fixed.
-  TRACE_EVENT_BEGIN(
-      "latencyInfo", "InputLatency::ReportJankyFrame", perfetto::Track(id),
-      original_timestamp, "trace_id", latency.trace_id(),
-      [flow_id](perfetto::EventContext ctx) {
-        tracing::FillFlowEvent(
-            ctx, perfetto::protos::pbzero::TrackEvent_LegacyEvent::FLOW_OUT,
-            flow_id);
-      });
-  TRACE_EVENT_END("latencyInfo", perfetto::Track(id), gpu_swap_end_timestamp);
 
   if (first_frame) {
     if (jank_state_.total_update_events_ > 0) {
@@ -223,34 +235,20 @@ void LatencyTracker::ReportJankyFrame(base::TimeTicks original_timestamp,
     if (!jank_state_.prev_scroll_update_reported_) {
       // The information about previous GestureScrollUpdate was not reported:
       // check whether it's janky by comparing to the current frame and report.
-
+      bool janky = false;
       if (IsJankyComparison(prev_frames_taken, frames_taken)) {
-        UMA_HISTOGRAM_BOOLEAN("Event.Latency.ScrollJank", true);
-        TRACE_EVENT(
-            "latencyInfo", "InputLatency::ConfirmJankyFrame",
-            [this](perfetto::EventContext ctx) {
-              tracing::FillFlowEvent(
-                  ctx,
-                  perfetto::protos::pbzero::TrackEvent_LegacyEvent::FLOW_IN,
-                  prev_flow_id_);
-            });
+        janky = true;
         jank_state_.janky_update_events_++;
         jank_state_.janky_update_duration_ += jank_state_.prev_duration_;
-      } else {
-        UMA_HISTOGRAM_BOOLEAN("Event.Latency.ScrollJank", false);
       }
+      UMA_HISTOGRAM_BOOLEAN("Event.Latency.ScrollJank", janky);
+      EmitScrollUpdateTime(jank_state_.prev_duration_, janky);
     }
 
     // The current GestureScrollUpdate is janky compared to the previous one.
     if (IsJankyComparison(frames_taken, prev_frames_taken)) {
       UMA_HISTOGRAM_BOOLEAN("Event.Latency.ScrollJank", true);
-      TRACE_EVENT(
-          "latencyInfo", "InputLatency::ConfirmJankyFrame",
-          [flow_id](perfetto::EventContext ctx) {
-            tracing::FillFlowEvent(
-                ctx, perfetto::protos::pbzero::TrackEvent_LegacyEvent::FLOW_IN,
-                flow_id);
-          });
+      EmitScrollUpdateTime(dur, true);
       jank_state_.janky_update_events_++;
       jank_state_.janky_update_duration_ += dur;
 
@@ -267,7 +265,6 @@ void LatencyTracker::ReportJankyFrame(base::TimeTicks original_timestamp,
   }
 
   jank_state_.prev_duration_ = dur;
-  prev_flow_id_ = flow_id;
 }
 
 void LatencyTracker::ComputeEndToEndLatencyHistograms(
@@ -309,11 +306,7 @@ void LatencyTracker::ComputeEndToEndLatencyHistograms(
     UMA_HISTOGRAM_INPUT_LATENCY_5_SECONDS_MAX_MICROSECONDS(
         metric_name, original_timestamp, gpu_swap_begin_timestamp);
 
-    // Report whether the top-controls visible height changed from this scroll
-    // event.
-    UMA_HISTOGRAM_BOOLEAN("Event.Latency.ScrollBegin.TopControlsMoved",
-                          top_controls_visible_height_changed);
-    // Also report the latency metric separately for the scrolls that caused the
+    // Report the latency metric separately for the scrolls that caused the
     // top-controls to scroll and the ones that didn't.
     if (top_controls_visible_height_changed)
       base::StrAppend(&metric_name, {".TopControlsMoved"});
@@ -348,11 +341,6 @@ void LatencyTracker::ComputeEndToEndLatencyHistograms(
                       ".TimeToScrollUpdateSwapBegin4"});
     UMA_HISTOGRAM_INPUT_LATENCY_5_SECONDS_MAX_MICROSECONDS(
         metric_name, original_timestamp, gpu_swap_begin_timestamp);
-
-    // Report whether the top-controls visible height changed from this scroll
-    // event.
-    UMA_HISTOGRAM_BOOLEAN("Event.Latency.ScrollUpdate.TopControlsMoved",
-                          top_controls_visible_height_changed);
 
     // Also report the latency metric separately for the scrolls that caused the
     // top-controls to scroll and the ones that didn't.

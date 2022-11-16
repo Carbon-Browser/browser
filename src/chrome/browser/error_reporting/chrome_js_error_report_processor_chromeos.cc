@@ -8,7 +8,6 @@
 
 #include <algorithm>
 
-#include "base/bind_post_task.h"
 #include "base/callback_helpers.h"
 #include "base/files/file.h"
 #include "base/files/file_util.h"
@@ -20,7 +19,7 @@
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
-#include "base/task/post_task.h"
+#include "base/task/bind_post_task.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "chrome/browser/error_reporting/constants.h"
@@ -80,8 +79,7 @@ base::File GetMemfdOrTempFile(base::ScopedClosureRunner& cleanup,
                 << output_path.value();
 
   // Need to actually delete the temp file once we're done.
-  cleanup.ReplaceClosure(
-      base::BindOnce(base::GetDeleteFileCallback(), std::move(output_path)));
+  cleanup.ReplaceClosure(base::GetDeleteFileCallback(std::move(output_path)));
   return base::FILEToFile(output_file.release());
 }
 
@@ -96,8 +94,8 @@ void ChromeJsErrorReportProcessor::WaitForCrashReporter(
     base::ScopedClosureRunner file_cleanup,
     base::ScopedClosureRunner external_callback_runner) {
   int return_code = 0;
-  bool process_done = process.WaitForExitWithTimeout(
-      base::TimeDelta::FromSeconds(0), &return_code);
+  bool process_done =
+      process.WaitForExitWithTimeout(base::Seconds(0), &return_code);
 
   if (process_done) {
     if (return_code != 0) {

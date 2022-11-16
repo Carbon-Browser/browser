@@ -10,7 +10,6 @@
 
 #include "cc/layers/picture_layer.h"
 #include "third_party/blink/public/mojom/loader/request_context_frame_type.mojom-blink.h"
-#include "third_party/blink/renderer/bindings/core/v8/script_source_code.h"
 #include "third_party/blink/renderer/bindings/core/v8/source_location.h"
 #include "third_party/blink/renderer/core/animation/animation.h"
 #include "third_party/blink/renderer/core/animation/keyframe_effect.h"
@@ -36,8 +35,8 @@
 #include "third_party/blink/renderer/core/workers/worker_global_scope.h"
 #include "third_party/blink/renderer/core/workers/worker_thread.h"
 #include "third_party/blink/renderer/core/xmlhttprequest/xml_http_request.h"
-#include "third_party/blink/renderer/platform/graphics/graphics_layer.h"
 #include "third_party/blink/renderer/platform/instrumentation/instance_counters.h"
+#include "third_party/blink/renderer/platform/instrumentation/tracing/trace_event.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/traced_value.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_load_priority.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_load_timing.h"
@@ -302,6 +301,7 @@ const char* PseudoTypeToString(CSSSelector::PseudoType pseudo_type) {
     DEFINE_STRING_MAPPING(PseudoWebkitAnyLink)
     DEFINE_STRING_MAPPING(PseudoAnyLink)
     DEFINE_STRING_MAPPING(PseudoAutofill)
+    DEFINE_STRING_MAPPING(PseudoWebKitAutofill)
     DEFINE_STRING_MAPPING(PseudoAutofillPreviewed)
     DEFINE_STRING_MAPPING(PseudoAutofillSelected)
     DEFINE_STRING_MAPPING(PseudoHover)
@@ -380,18 +380,25 @@ const char* PseudoTypeToString(CSSSelector::PseudoType pseudo_type) {
     DEFINE_STRING_MAPPING(PseudoIsHtml)
     DEFINE_STRING_MAPPING(PseudoListBox)
     DEFINE_STRING_MAPPING(PseudoMultiSelectFocus)
-    DEFINE_STRING_MAPPING(PseudoPopupOpen)
+    DEFINE_STRING_MAPPING(PseudoTopLayer)
+    DEFINE_STRING_MAPPING(PseudoPopupHidden)
     DEFINE_STRING_MAPPING(PseudoHostHasAppearance)
     DEFINE_STRING_MAPPING(PseudoVideoPersistent)
     DEFINE_STRING_MAPPING(PseudoVideoPersistentAncestor)
     DEFINE_STRING_MAPPING(PseudoXrOverlay)
     DEFINE_STRING_MAPPING(PseudoTargetText)
+    DEFINE_STRING_MAPPING(PseudoSelectorFragmentAnchor)
     DEFINE_STRING_MAPPING(PseudoModal)
     DEFINE_STRING_MAPPING(PseudoHighlight)
     DEFINE_STRING_MAPPING(PseudoSpellingError)
     DEFINE_STRING_MAPPING(PseudoGrammarError)
     DEFINE_STRING_MAPPING(PseudoHas)
-    DEFINE_STRING_MAPPING(PseudoRelativeLeftmost)
+    DEFINE_STRING_MAPPING(PseudoRelativeAnchor)
+    DEFINE_STRING_MAPPING(PseudoPageTransition)
+    DEFINE_STRING_MAPPING(PseudoPageTransitionContainer);
+    DEFINE_STRING_MAPPING(PseudoPageTransitionImageWrapper);
+    DEFINE_STRING_MAPPING(PseudoPageTransitionIncomingImage);
+    DEFINE_STRING_MAPPING(PseudoPageTransitionOutgoingImage);
 #undef DEFINE_STRING_MAPPING
   }
 
@@ -658,16 +665,16 @@ void inspector_layout_event::BeginData(perfetto::TracedValue context,
   SetCallStack(dict);
 }
 
-static void CreateQuad(perfetto::TracedValue context, const FloatQuad& quad) {
+static void CreateQuad(perfetto::TracedValue context, const gfx::QuadF& quad) {
   auto array = std::move(context).WriteArray();
-  array.Append(quad.P1().X());
-  array.Append(quad.P1().Y());
-  array.Append(quad.P2().X());
-  array.Append(quad.P2().Y());
-  array.Append(quad.P3().X());
-  array.Append(quad.P3().Y());
-  array.Append(quad.P4().X());
-  array.Append(quad.P4().Y());
+  array.Append(quad.p1().x());
+  array.Append(quad.p1().y());
+  array.Append(quad.p2().x());
+  array.Append(quad.p2().y());
+  array.Append(quad.p3().x());
+  array.Append(quad.p3().y());
+  array.Append(quad.p4().x());
+  array.Append(quad.p4().y());
 }
 
 static void SetGeneratingNodeInfo(
@@ -689,7 +696,7 @@ static void CreateLayoutRoot(perfetto::TracedValue context,
   auto dict = std::move(context).WriteDictionary();
   SetGeneratingNodeInfo(dict, layout_root.object, "nodeId");
   dict.Add("depth", static_cast<int>(layout_root.depth));
-  Vector<FloatQuad> quads;
+  Vector<gfx::QuadF> quads;
   layout_root.object->AbsoluteQuads(quads);
   if (quads.size() > kMaxQuads)
     quads.Shrink(kMaxQuads);
@@ -753,6 +760,7 @@ const char kSvgChanged[] = "SVG changed";
 const char kScrollbarChanged[] = "Scrollbar changed";
 const char kDisplayLock[] = "Display lock";
 const char kCanvasFormattedTextRunChange[] = "CanvasFormattedText runs changed";
+const char kDevtools[] = "Inspected by devtools";
 }  // namespace layout_invalidation_reason
 
 void inspector_layout_invalidation_tracking_event::Data(
@@ -909,7 +917,7 @@ void inspector_receive_response_event::Data(perfetto::TracedValue context,
   dict.Add("requestId", request_id);
   dict.Add("frame", IdentifiersFactory::FrameId(frame));
   dict.Add("statusCode", response.HttpStatusCode());
-  dict.Add("mimeType", response.MimeType().GetString().IsolatedCopy());
+  dict.Add("mimeType", response.MimeType().GetString());
   dict.Add("encodedDataLength", response.EncodedDataLength());
   dict.Add("fromCache", response.WasCached());
   dict.Add("fromServiceWorker", response.WasFetchedViaServiceWorker());
@@ -1105,47 +1113,30 @@ void inspector_xhr_load_event::Data(perfetto::TracedValue trace_context,
   SetCallStack(dict);
 }
 
-static FloatPoint LocalCoordToFloatPoint(LocalFrameView* view,
-                                         const FloatPoint& local) {
-  return FloatPoint(view->ConvertToRootFrame(RoundedIntPoint(local)));
-}
-
-static void LocalToPageQuad(const LayoutObject& layout_object,
-                            const PhysicalRect& rect,
-                            FloatQuad* quad) {
-  LocalFrame* frame = layout_object.GetFrame();
-  LocalFrameView* view = frame->View();
-  FloatQuad absolute = layout_object.LocalRectToAbsoluteQuad(rect);
-  quad->SetP1(LocalCoordToFloatPoint(view, absolute.P1()));
-  quad->SetP2(LocalCoordToFloatPoint(view, absolute.P2()));
-  quad->SetP3(LocalCoordToFloatPoint(view, absolute.P3()));
-  quad->SetP4(LocalCoordToFloatPoint(view, absolute.P4()));
-}
-
 void inspector_paint_event::Data(perfetto::TracedValue context,
-                                 LayoutObject* layout_object,
-                                 const PhysicalRect& clip_rect,
-                                 const GraphicsLayer* graphics_layer) {
+                                 Frame* frame,
+                                 const LayoutObject* layout_object,
+                                 const gfx::QuadF& quad,
+                                 int layer_id) {
   auto dict = std::move(context).WriteDictionary();
-  dict.Add("frame", IdentifiersFactory::FrameId(layout_object->GetFrame()));
-  FloatQuad quad;
-  LocalToPageQuad(*layout_object, clip_rect, &quad);
+  dict.Add("frame", IdentifiersFactory::FrameId(frame));
   CreateQuad(dict.AddItem("clip"), quad);
   SetGeneratingNodeInfo(dict, layout_object, "nodeId");
-  int graphics_layer_id = graphics_layer ? graphics_layer->CcLayer().id() : 0;
-  dict.Add("layerId", graphics_layer_id);
+  dict.Add("layerId", layer_id);
   SetCallStack(dict);
 }
 
 void FrameEventData(perfetto::TracedDictionary& dict, LocalFrame* frame) {
-  bool is_main_frame = frame && frame->IsMainFrame();
-  dict.Add("isMainFrame", is_main_frame);
+  DCHECK(frame);
+  dict.Add("isMainFrame", frame->IsMainFrame());
+  dict.Add("isOutermostMainFrame", frame->IsOutermostMainFrame());
   // TODO(dgozman): this does not work with OOPIF, so everyone who
   // uses it should migrate to frame instead.
   dict.Add("page", IdentifiersFactory::FrameId(&frame->LocalFrameRoot()));
 }
 
 void FillCommonFrameData(perfetto::TracedDictionary& dict, LocalFrame* frame) {
+  DCHECK(frame);
   dict.Add("frame", IdentifiersFactory::FrameId(frame));
   dict.Add("url", UrlForFrame(frame));
   dict.Add("name", frame->Tree().GetName());
@@ -1173,17 +1164,18 @@ void inspector_mark_load_event::Data(perfetto::TracedValue context,
   dict.Add("frame", IdentifiersFactory::FrameId(frame));
 }
 
+void inspector_pre_paint_event::Data(perfetto::TracedValue context,
+                                     LocalFrame* frame) {
+  auto dict = std::move(context).WriteDictionary();
+  FrameEventData(dict, frame);
+  dict.Add("frame", IdentifiersFactory::FrameId(frame));
+}
+
 void inspector_scroll_layer_event::Data(perfetto::TracedValue context,
                                         LayoutObject* layout_object) {
   auto dict = std::move(context).WriteDictionary();
   dict.Add("frame", IdentifiersFactory::FrameId(layout_object->GetFrame()));
   SetGeneratingNodeInfo(dict, layout_object, "nodeId");
-}
-
-void inspector_update_layer_tree_event::Data(perfetto::TracedValue context,
-                                             LocalFrame* frame) {
-  auto dict = std::move(context).WriteDictionary();
-  dict.Add("frame", IdentifiersFactory::FrameId(frame));
 }
 
 namespace {
@@ -1209,7 +1201,8 @@ void inspector_evaluate_script_event::Data(perfetto::TracedValue context,
 void inspector_parse_script_event::Data(perfetto::TracedValue context,
                                         uint64_t identifier,
                                         const String& url) {
-  String request_id = IdentifiersFactory::RequestId(nullptr, identifier);
+  String request_id = IdentifiersFactory::RequestId(
+      static_cast<ExecutionContext*>(nullptr), identifier);
   auto dict = std::move(context).WriteDictionary();
   dict.Add("requestId", request_id);
   dict.Add("url", url);
@@ -1218,7 +1211,8 @@ void inspector_parse_script_event::Data(perfetto::TracedValue context,
 void inspector_deserialize_script_event::Data(perfetto::TracedValue context,
                                               uint64_t identifier,
                                               const String& url) {
-  String request_id = IdentifiersFactory::RequestId(nullptr, identifier);
+  String request_id = IdentifiersFactory::RequestId(
+      static_cast<ExecutionContext*>(nullptr), identifier);
   auto dict = std::move(context).WriteDictionary();
   dict.Add("requestId", request_id);
   dict.Add("url", url);
@@ -1291,19 +1285,19 @@ void inspector_function_call_event::Data(
 
 void inspector_paint_image_event::Data(perfetto::TracedValue context,
                                        const LayoutImage& layout_image,
-                                       const FloatRect& src_rect,
-                                       const FloatRect& dest_rect) {
+                                       const gfx::RectF& src_rect,
+                                       const gfx::RectF& dest_rect) {
   auto dict = std::move(context).WriteDictionary();
   SetGeneratingNodeInfo(dict, &layout_image, "nodeId");
   if (const ImageResourceContent* content = layout_image.CachedImage())
-    dict.Add("url", content->Url().GetString());
+    dict.Add("url", content->Url().ElidedString());
 
-  dict.Add("x", dest_rect.X());
-  dict.Add("y", dest_rect.Y());
-  dict.Add("width", dest_rect.Width());
-  dict.Add("height", dest_rect.Height());
-  dict.Add("srcWidth", src_rect.Width());
-  dict.Add("srcHeight", src_rect.Height());
+  dict.Add("x", dest_rect.x());
+  dict.Add("y", dest_rect.y());
+  dict.Add("width", dest_rect.width());
+  dict.Add("height", dest_rect.height());
+  dict.Add("srcWidth", src_rect.width());
+  dict.Add("srcHeight", src_rect.height());
 }
 
 void inspector_paint_image_event::Data(perfetto::TracedValue context,
@@ -1312,26 +1306,26 @@ void inspector_paint_image_event::Data(perfetto::TracedValue context,
   auto dict = std::move(context).WriteDictionary();
   SetGeneratingNodeInfo(dict, &owning_layout_object, "nodeId");
   if (const ImageResourceContent* content = style_image.CachedImage())
-    dict.Add("url", content->Url().GetString());
+    dict.Add("url", content->Url().ElidedString());
 }
 
 void inspector_paint_image_event::Data(perfetto::TracedValue context,
                                        Node* node,
                                        const StyleImage& style_image,
-                                       const FloatRect& src_rect,
-                                       const FloatRect& dest_rect) {
+                                       const gfx::RectF& src_rect,
+                                       const gfx::RectF& dest_rect) {
   auto dict = std::move(context).WriteDictionary();
   if (node)
     SetNodeInfo(dict, node, "nodeId", nullptr);
   if (const ImageResourceContent* content = style_image.CachedImage())
-    dict.Add("url", content->Url().GetString());
+    dict.Add("url", content->Url().ElidedString());
 
-  dict.Add("x", dest_rect.X());
-  dict.Add("y", dest_rect.Y());
-  dict.Add("width", dest_rect.Width());
-  dict.Add("height", dest_rect.Height());
-  dict.Add("srcWidth", src_rect.Width());
-  dict.Add("srcHeight", src_rect.Height());
+  dict.Add("x", dest_rect.x());
+  dict.Add("y", dest_rect.y());
+  dict.Add("width", dest_rect.width());
+  dict.Add("height", dest_rect.height());
+  dict.Add("srcWidth", src_rect.width());
+  dict.Add("srcHeight", src_rect.height());
 }
 
 void inspector_paint_image_event::Data(
@@ -1340,7 +1334,7 @@ void inspector_paint_image_event::Data(
     const ImageResourceContent& image_content) {
   auto dict = std::move(context).WriteDictionary();
   SetGeneratingNodeInfo(dict, owning_layout_object, "nodeId");
-  dict.Add("url", image_content.Url().GetString());
+  dict.Add("url", image_content.Url().ElidedString());
 }
 
 static size_t UsedHeapSize() {
@@ -1364,9 +1358,11 @@ void inspector_update_counters_event::Data(perfetto::TracedValue context) {
 }
 
 void inspector_invalidate_layout_event::Data(perfetto::TracedValue context,
-                                             LocalFrame* frame) {
+                                             LocalFrame* frame,
+                                             DOMNodeId nodeId) {
   auto dict = std::move(context).WriteDictionary();
   dict.Add("frame", IdentifiersFactory::FrameId(frame));
+  dict.Add("nodeId", nodeId);
   SetCallStack(dict);
 }
 
@@ -1506,8 +1502,8 @@ void inspector_hit_test_event::EndData(perfetto::TracedValue context,
                                        const HitTestLocation& location,
                                        const HitTestResult& result) {
   auto dict = std::move(context).WriteDictionary();
-  dict.Add("x", location.RoundedPoint().X());
-  dict.Add("y", location.RoundedPoint().Y());
+  dict.Add("x", location.RoundedPoint().x());
+  dict.Add("y", location.RoundedPoint().y());
   if (location.IsRectBasedTest())
     dict.Add("rect", true);
   if (location.IsRectilinear())

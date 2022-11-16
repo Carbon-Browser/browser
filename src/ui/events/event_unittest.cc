@@ -12,7 +12,6 @@
 #include <string>
 
 #include "base/callback_helpers.h"
-#include "base/cxx17_backports.h"
 #include "base/strings/strcat.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/simple_test_tick_clock.h"
@@ -28,9 +27,9 @@
 #include "ui/events/test/events_test_utils.h"
 #include "ui/events/test/keyboard_layout.h"
 #include "ui/events/test/test_event_target.h"
-#include "ui/gfx/transform.h"
+#include "ui/gfx/geometry/transform.h"
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include "ui/events/win/events_win_utils.h"
 #endif
 
@@ -42,7 +41,7 @@ TEST(EventTest, NoNativeEvent) {
 }
 
 TEST(EventTest, NativeEvent) {
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   CHROME_MSG native_event = {nullptr, WM_KEYUP, VKEY_A, 0};
   KeyEvent keyev(native_event);
   EXPECT_TRUE(keyev.HasNativeEvent());
@@ -85,8 +84,8 @@ TEST(EventTest, RepeatedClick) {
   LocatedEventTestApi test_event2(&event2);
 
   base::TimeTicks start = base::TimeTicks::Now();
-  base::TimeTicks soon = start + base::TimeDelta::FromMilliseconds(1);
-  base::TimeTicks later = start + base::TimeDelta::FromMilliseconds(1000);
+  base::TimeTicks soon = start + base::Milliseconds(1);
+  base::TimeTicks later = start + base::Milliseconds(1000);
 
   // Same time stamp (likely the same native event).
   test_event1.set_location(gfx::Point(0, 0));
@@ -124,9 +123,9 @@ TEST(EventTest, RepeatedClick) {
 // and reliable.
 TEST(EventTest, RepeatedKeyEvent) {
   base::TimeTicks start = base::TimeTicks::Now();
-  base::TimeTicks time1 = start + base::TimeDelta::FromMilliseconds(1);
-  base::TimeTicks time2 = start + base::TimeDelta::FromMilliseconds(2);
-  base::TimeTicks time3 = start + base::TimeDelta::FromMilliseconds(3);
+  base::TimeTicks time1 = start + base::Milliseconds(1);
+  base::TimeTicks time2 = start + base::Milliseconds(2);
+  base::TimeTicks time3 = start + base::Milliseconds(3);
 
   KeyEvent event1(ET_KEY_PRESSED, VKEY_A, 0, start);
   KeyEvent event2(ET_KEY_PRESSED, VKEY_A, 0, time1);
@@ -155,9 +154,9 @@ TEST(EventTest, NoRepeatedKeyEvent) {
   KeyEvent::SetSynthesizeKeyRepeatEnabled(false);
 
   base::TimeTicks start = base::TimeTicks::Now();
-  base::TimeTicks time1 = start + base::TimeDelta::FromMilliseconds(1);
-  base::TimeTicks time2 = start + base::TimeDelta::FromMilliseconds(2);
-  base::TimeTicks time3 = start + base::TimeDelta::FromMilliseconds(3);
+  base::TimeTicks time1 = start + base::Milliseconds(1);
+  base::TimeTicks time2 = start + base::Milliseconds(2);
+  base::TimeTicks time3 = start + base::Milliseconds(3);
 
   KeyEvent event1(ET_KEY_PRESSED, VKEY_A, 0, start);
   KeyEvent event2(ET_KEY_PRESSED, VKEY_A, 0, time1);
@@ -181,7 +180,7 @@ TEST(EventTest, NoRepeatedKeyEvent) {
 TEST(EventTest, DoubleClickRequiresUniqueTimestamp) {
   const gfx::Point point(0, 0);
   base::TimeTicks time1 = base::TimeTicks::Now();
-  base::TimeTicks time2 = time1 + base::TimeDelta::FromMilliseconds(1);
+  base::TimeTicks time2 = time1 + base::Milliseconds(1);
 
   // Re-processing the same press doesn't yield a double-click.
   MouseEvent event(ET_MOUSE_PRESSED, point, point, time1, 0, 0);
@@ -222,8 +221,8 @@ TEST(EventTest, DoubleClickRequiresUniqueTimestamp) {
 TEST(EventTest, SingleClickRightLeft) {
   const gfx::Point point(0, 0);
   base::TimeTicks time1 = base::TimeTicks::Now();
-  base::TimeTicks time2 = time1 + base::TimeDelta::FromMilliseconds(1);
-  base::TimeTicks time3 = time1 + base::TimeDelta::FromMilliseconds(2);
+  base::TimeTicks time2 = time1 + base::Milliseconds(1);
+  base::TimeTicks time3 = time1 + base::Milliseconds(2);
 
   MouseEvent event(ET_MOUSE_PRESSED, point, point, time1,
                    ui::EF_RIGHT_MOUSE_BUTTON, ui::EF_RIGHT_MOUSE_BUTTON);
@@ -318,7 +317,7 @@ TEST(EventTest, KeyEvent) {
       {VKEY_OEM_3, EF_SHIFT_DOWN, '~'},
   };
 
-  for (size_t i = 0; i < base::size(kTestData); ++i) {
+  for (size_t i = 0; i < std::size(kTestData); ++i) {
     KeyEvent key(ET_KEY_PRESSED, kTestData[i].key_code, kTestData[i].flags);
     EXPECT_EQ(kTestData[i].character, key.GetCharacter())
         << " Index:" << i << " key_code:" << kTestData[i].key_code;
@@ -379,7 +378,7 @@ TEST(EventTest, KeyEventCode) {
   const char kCodeForSpace[] = "Space";
   ASSERT_EQ(kDomCodeForSpace,
             ui::KeycodeConverter::CodeStringToDomCode(kCodeForSpace));
-  const uint16_t kNativeCodeSpace =
+  const int kNativeCodeSpace =
       ui::KeycodeConverter::DomCodeToNativeKeycode(kDomCodeForSpace);
   ASSERT_NE(ui::KeycodeConverter::InvalidNativeKeycode(), kNativeCodeSpace);
   ASSERT_EQ(kNativeCodeSpace,
@@ -401,7 +400,7 @@ TEST(EventTest, KeyEventCode) {
     KeyEvent key(ET_KEY_PRESSED, VKEY_SPACE, EF_NONE);
     EXPECT_EQ(kCodeForSpace, key.GetCodeString());
   }
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   {
     // Test a non extended key.
     ASSERT_EQ((kNativeCodeSpace & 0xFF), kNativeCodeSpace);
@@ -427,7 +426,7 @@ TEST(EventTest, KeyEventCode) {
     // KeyEvent converts from the native keycode (scan code) to the code.
     EXPECT_EQ(kCodeForHome, key.GetCodeString());
   }
-#endif  // OS_WIN
+#endif  // BUILDFLAG(IS_WIN)
 }
 
 TEST(EventTest, TouchEventRadiusDefaultsToOtherAxis) {
@@ -693,11 +692,10 @@ TEST(EventTest, OrdinalMotionConversion) {
 
 // Checks that Event.Latency.OS2.MOUSE_WHEEL histogram is computed properly.
 TEST(EventTest, EventLatencyOSMouseWheelHistogram) {
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   base::HistogramTester histogram_tester;
   CHROME_MSG event = {nullptr, WM_MOUSEWHEEL, 0, 0};
   MouseWheelEvent mouseWheelEvent(event);
-  histogram_tester.ExpectTotalCount("Event.Latency.OS.MOUSE_WHEEL", 1);
   histogram_tester.ExpectTotalCount("Event.Latency.OS2.MOUSE_WHEEL", 1);
 #endif
 }
@@ -842,7 +840,7 @@ TEST(EventTest, ToStringNotEmpty) {
   EXPECT_FALSE(scroll_event.ToString().empty());
 }
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 namespace {
 
 const struct AltGraphEventTestCase {
@@ -955,8 +953,7 @@ class EventLatencyTest : public ::testing::Test {
 
  protected:
   void UpdateTickClock(DWORD timestamp) {
-    tick_clock_.SetNowTicks(base::TimeTicks() +
-                            base::TimeDelta::FromMilliseconds(timestamp));
+    tick_clock_.SetNowTicks(base::TimeTicks() + base::Milliseconds(timestamp));
   }
 
   base::test::TaskEnvironment task_environment_{
@@ -992,12 +989,8 @@ TEST_F(EventLatencyTest, ComputeEventLatencyOSFromTickCount) {
                                         base::TimeTicks::Now());
     ComputeEventLatencyOSFromPOINTER_INFO(ET_TOUCH_PRESSED, pointer_info,
                                           base::TimeTicks::Now());
-    histogram_tester.ExpectUniqueSample(
-        "Event.Latency.OS.TOUCH_PRESSED",
-        base::TimeDelta::FromMilliseconds(5).InMicroseconds(), 2);
-    histogram_tester.ExpectUniqueTimeSample(
-        "Event.Latency.OS2.TOUCH_PRESSED", base::TimeDelta::FromMilliseconds(5),
-        2);
+    histogram_tester.ExpectUniqueTimeSample("Event.Latency.OS2.TOUCH_PRESSED",
+                                            base::Milliseconds(5), 2);
   }
 
   // Simulate ::GetTickCount advancing 15 msec, which wraps around past 0.
@@ -1011,12 +1004,8 @@ TEST_F(EventLatencyTest, ComputeEventLatencyOSFromTickCount) {
                                         base::TimeTicks::Now());
     ComputeEventLatencyOSFromPOINTER_INFO(ET_TOUCH_PRESSED, pointer_info,
                                           base::TimeTicks::Now());
-    histogram_tester.ExpectUniqueSample(
-        "Event.Latency.OS.TOUCH_PRESSED",
-        base::TimeDelta::FromMilliseconds(15).InMicroseconds(), 2);
-    histogram_tester.ExpectUniqueTimeSample(
-        "Event.Latency.OS2.TOUCH_PRESSED",
-        base::TimeDelta::FromMilliseconds(15), 2);
+    histogram_tester.ExpectUniqueTimeSample("Event.Latency.OS2.TOUCH_PRESSED",
+                                            base::Milliseconds(15), 2);
   }
 
   // Simulate an event with a bogus timestamp. The delta should be recorded as
@@ -1028,7 +1017,6 @@ TEST_F(EventLatencyTest, ComputeEventLatencyOSFromTickCount) {
                                         base::TimeTicks::Now());
     ComputeEventLatencyOSFromPOINTER_INFO(ET_TOUCH_PRESSED, pointer_info,
                                           base::TimeTicks::Now());
-    histogram_tester.ExpectUniqueSample("Event.Latency.OS.TOUCH_PRESSED", 0, 2);
     histogram_tester.ExpectUniqueTimeSample("Event.Latency.OS2.TOUCH_PRESSED",
                                             base::TimeDelta(), 2);
   }
@@ -1037,7 +1025,7 @@ TEST_F(EventLatencyTest, ComputeEventLatencyOSFromTickCount) {
 TEST_F(EventLatencyTest, ComputeEventLatencyOSFromPerformanceCounter) {
   // Make sure there's enough time before Now() to create an event that's
   // several minutes old.
-  task_environment_.AdvanceClock(base::TimeDelta::FromMinutes(5));
+  task_environment_.AdvanceClock(base::Minutes(5));
 
   // Convert the current time to units directly compatible with the Performance
   // Counter.
@@ -1063,11 +1051,8 @@ TEST_F(EventLatencyTest, ComputeEventLatencyOSFromPerformanceCounter) {
     base::HistogramTester histogram_tester;
     ComputeEventLatencyOSFromPOINTER_INFO(ET_TOUCH_PRESSED, pointer_info,
                                           base::TimeTicks::Now());
-    histogram_tester.ExpectUniqueSample(
-        "Event.Latency.OS.TOUCH_PRESSED",
-        base::TimeDelta::FromSeconds(1).InMicroseconds(), 1);
     histogram_tester.ExpectUniqueTimeSample("Event.Latency.OS2.TOUCH_PRESSED",
-                                            base::TimeDelta::FromSeconds(1), 1);
+                                            base::Seconds(1), 1);
   }
 
   // Event created several minutes before now (IsValidTimebase should return
@@ -1080,7 +1065,6 @@ TEST_F(EventLatencyTest, ComputeEventLatencyOSFromPerformanceCounter) {
     base::HistogramTester histogram_tester;
     ComputeEventLatencyOSFromPOINTER_INFO(ET_TOUCH_PRESSED, pointer_info,
                                           base::TimeTicks::Now());
-    histogram_tester.ExpectUniqueSample("Event.Latency.OS.TOUCH_PRESSED", 0, 1);
     histogram_tester.ExpectUniqueTimeSample("Event.Latency.OS2.TOUCH_PRESSED",
                                             base::TimeDelta(), 1);
   }
@@ -1095,7 +1079,6 @@ TEST_F(EventLatencyTest, ComputeEventLatencyOSFromPerformanceCounter) {
     base::HistogramTester histogram_tester;
     ComputeEventLatencyOSFromPOINTER_INFO(ET_TOUCH_PRESSED, pointer_info,
                                           base::TimeTicks::Now());
-    histogram_tester.ExpectUniqueSample("Event.Latency.OS.TOUCH_PRESSED", 0, 1);
     histogram_tester.ExpectUniqueTimeSample("Event.Latency.OS2.TOUCH_PRESSED",
                                             base::TimeDelta(), 1);
   }
@@ -1109,7 +1092,6 @@ TEST_F(EventLatencyTest, ComputeEventLatencyOSFromPerformanceCounter) {
     base::HistogramTester histogram_tester;
     ComputeEventLatencyOSFromPOINTER_INFO(ET_TOUCH_PRESSED, pointer_info,
                                           base::TimeTicks::Now());
-    histogram_tester.ExpectTotalCount("Event.Latency.OS.TOUCH_PRESSED", 0);
     histogram_tester.ExpectTotalCount("Event.Latency.OS2.TOUCH_PRESSED", 0);
   }
 
@@ -1127,14 +1109,29 @@ TEST_F(EventLatencyTest, ComputeEventLatencyOSFromPerformanceCounter) {
     base::HistogramTester histogram_tester;
     ComputeEventLatencyOSFromPOINTER_INFO(ET_TOUCH_PRESSED, pointer_info,
                                           base::TimeTicks::Now());
-    histogram_tester.ExpectUniqueSample(
-        "Event.Latency.OS.TOUCH_PRESSED",
-        base::TimeDelta::FromSeconds(1).InMicroseconds(), 1);
     histogram_tester.ExpectUniqueTimeSample("Event.Latency.OS2.TOUCH_PRESSED",
-                                            base::TimeDelta::FromSeconds(1), 1);
+                                            base::Seconds(1), 1);
   }
 }
 
-#endif  // defined(OS_WIN)
+#endif  // BUILDFLAG(IS_WIN)
+
+// Verifies that copied events never copy target_.
+TEST(EventTest, NeverCopyTarget) {
+  const gfx::Point location(10, 10);
+  const gfx::Point root_location(20, 20);
+  ui::test::TestEventTarget target;
+
+  ui::MouseEvent targeted(ET_MOUSE_PRESSED, location, root_location,
+                          EventTimeForNow(), 0, 0);
+  Event::DispatcherApi(&targeted).set_target(&target);
+  ui::MouseEvent targeted_copy1(targeted);
+
+  EXPECT_EQ(nullptr, targeted_copy1.target());
+
+  ui::MouseEvent targeted_copy2 = targeted;
+
+  EXPECT_EQ(nullptr, targeted_copy2.target());
+}
 
 }  // namespace ui

@@ -4,8 +4,6 @@
 
 #include "ash/wm/overview/overview_grid.h"
 
-#include "ash/frame_throttler/frame_throttling_controller.h"
-#include "ash/frame_throttler/mock_frame_throttling_observer.h"
 #include "ash/screen_util.h"
 #include "ash/shell.h"
 #include "ash/test/ash_test_base.h"
@@ -24,6 +22,7 @@
 #include "ui/display/display.h"
 #include "ui/display/manager/display_manager.h"
 #include "ui/display/screen.h"
+#include "ui/gfx/geometry/rect.h"
 #include "ui/wm/core/window_util.h"
 
 namespace ash {
@@ -31,6 +30,10 @@ namespace ash {
 class OverviewGridTest : public AshTestBase {
  public:
   OverviewGridTest() = default;
+
+  OverviewGridTest(const OverviewGridTest&) = delete;
+  OverviewGridTest& operator=(const OverviewGridTest&) = delete;
+
   ~OverviewGridTest() override = default;
 
   void InitializeGrid(const std::vector<aura::Window*>& windows) {
@@ -89,8 +92,6 @@ class OverviewGridTest : public AshTestBase {
 
  private:
   std::unique_ptr<OverviewGrid> grid_;
-
-  DISALLOW_COPY_AND_ASSIGN(OverviewGridTest);
 };
 
 // Tests that with only one window, we always animate.
@@ -224,7 +225,7 @@ TEST_F(OverviewGridTest, WindowWithBackdrop) {
                        {true, false}, {true, true});
 }
 
-TEST_F(OverviewGridTest, PartiallyOffscreenWindow) {
+TEST_F(OverviewGridTest, DestinationPartiallyOffscreenWindow) {
   UpdateDisplay("500x400");
   auto window1 = CreateTestWindow(gfx::Rect(100, 100));
   auto window2 = CreateTestWindow(gfx::Rect(100, 100));
@@ -233,6 +234,26 @@ TEST_F(OverviewGridTest, PartiallyOffscreenWindow) {
   // still animates because the onscreen portion is not occluded by |window1|.
   std::vector<gfx::RectF> target_bounds = {
       gfx::RectF(100.f, 100.f), gfx::RectF(350.f, 100.f, 100.f, 100.f)};
+  CheckAnimationStates({window1.get(), window2.get()}, target_bounds,
+                       {true, true}, {true, true});
+
+  // Maximize |window1|. |window2| should no longer animate since the parts of
+  // it that are onscreen are fully occluded.
+  WindowState::Get(window1.get())->Maximize();
+  CheckAnimationStates({window1.get(), window2.get()}, target_bounds,
+                       {true, false}, {true, false});
+}
+
+TEST_F(OverviewGridTest, SourcePartiallyOffscreenWindow) {
+  UpdateDisplay("500x400");
+  auto window1 = CreateTestWindow(gfx::Rect(100, 100));
+  // Create |window2| to be partially offscreen.
+  auto window2 = CreateTestWindow(gfx::Rect(450, 100, 100, 100));
+
+  // Tests that it still animates because the onscreen portion is not occluded
+  // by |window1|.
+  std::vector<gfx::RectF> target_bounds = {gfx::RectF(100.f, 100.f),
+                                           gfx::RectF(200.f, 200.f)};
   CheckAnimationStates({window1.get(), window2.get()}, target_bounds,
                        {true, true}, {true, true});
 
@@ -290,86 +311,4 @@ TEST_F(OverviewGridTest, SnappedWindow) {
   EXPECT_FALSE(item3->should_animate_when_entering());
 }
 
-TEST_F(OverviewGridTest, FrameThrottling) {
-  FrameThrottlingController* frame_throttling_controller =
-      Shell::Get()->frame_throttling_controller();
-  const int window_count = 5;
-  std::vector<viz::FrameSinkId> ids{
-      {1u, 1u}, {2u, 2u}, {3u, 3u}, {4u, 4u}, {5u, 5u}};
-  std::unique_ptr<aura::Window> created_windows[window_count];
-  std::vector<aura::Window*> windows(window_count, nullptr);
-  for (int i = 0; i < window_count; ++i) {
-    created_windows[i] = CreateAppWindow(gfx::Rect(), AppType::BROWSER);
-    windows[i] = created_windows[i].get();
-    windows[i]->SetEmbedFrameSinkId(ids[i]);
-  }
-  InitializeGrid(windows);
-  frame_throttling_controller->StartThrottling(windows);
-  EXPECT_THAT(frame_throttling_controller->GetFrameSinkIdsToThrottle(),
-              testing::UnorderedElementsAreArray(ids));
-
-  // Add a new window to overview.
-  std::unique_ptr<aura::Window> new_window(
-      CreateAppWindow(gfx::Rect(), AppType::BROWSER));
-  constexpr viz::FrameSinkId new_window_id{6u, 6u};
-  new_window->SetEmbedFrameSinkId(new_window_id);
-  windows.push_back(new_window.get());
-
-  grid()->AppendItem(new_window.get(), /*reposition=*/false, /*animate=*/false,
-                     /*use_spawn_animation=*/false);
-  ids.push_back(new_window_id);
-  EXPECT_THAT(frame_throttling_controller->GetFrameSinkIdsToThrottle(),
-              testing::UnorderedElementsAreArray(ids));
-
-  // Remove windows one by one.
-  for (int i = 0; i < window_count + 1; ++i) {
-    aura::Window* window = windows[i];
-    ids.erase(ids.begin());
-    OverviewItem* item = grid()->GetOverviewItemContaining(window);
-    grid()->RemoveItem(item, /*item_destroying=*/false, /*reposition=*/false);
-    EXPECT_THAT(frame_throttling_controller->GetFrameSinkIdsToThrottle(),
-                testing::UnorderedElementsAreArray(ids));
-  }
-}
-
-TEST_F(OverviewGridTest, FrameThrottlingArc) {
-  testing::NiceMock<MockFrameThrottlingObserver> observer;
-  FrameThrottlingController* frame_throttling_controller =
-      Shell::Get()->frame_throttling_controller();
-  uint8_t throttled_fps = frame_throttling_controller->throttled_fps();
-  frame_throttling_controller->AddArcObserver(&observer);
-  const int window_count = 5;
-  std::unique_ptr<aura::Window> created_windows[window_count];
-  std::vector<aura::Window*> windows(window_count, nullptr);
-  for (int i = 0; i < window_count; ++i) {
-    created_windows[i] = CreateAppWindow(gfx::Rect(), AppType::ARC_APP);
-    windows[i] = created_windows[i].get();
-  }
-  InitializeGrid(windows);
-  frame_throttling_controller->StartThrottling(windows);
-
-  // Add a new window to overview.
-  std::unique_ptr<aura::Window> new_window(
-      CreateAppWindow(gfx::Rect(), AppType::ARC_APP));
-  windows.push_back(new_window.get());
-  EXPECT_CALL(observer, OnThrottlingEnded());
-  EXPECT_CALL(observer,
-              OnThrottlingStarted(testing::UnorderedElementsAreArray(windows),
-                                  throttled_fps));
-  grid()->AppendItem(new_window.get(), /*reposition=*/false, /*animate=*/false,
-                     /*use_spawn_animation=*/false);
-
-  // Remove windows one by one. Once one window is out of the overview grid, no
-  // more windows will be throttled.
-  for (int i = 0; i < window_count; ++i) {
-    aura::Window* window = windows[0];
-    windows.erase(windows.begin());
-    if (i == 0)
-      EXPECT_CALL(observer, OnThrottlingEnded());
-    EXPECT_CALL(observer, OnThrottlingStarted(testing::_, testing::_)).Times(0);
-    OverviewItem* item = grid()->GetOverviewItemContaining(window);
-    grid()->RemoveItem(item, /*item_destroying=*/false, /*reposition=*/false);
-  }
-  frame_throttling_controller->RemoveArcObserver(&observer);
-}
 }  // namespace ash

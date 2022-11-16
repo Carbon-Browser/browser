@@ -6,20 +6,20 @@
 #define CONTENT_PUBLIC_BROWSER_BROWSING_DATA_FILTER_BUILDER_H_
 
 #include <memory>
-#include <ostream>
-#include <set>
 #include <string>
-#include <vector>
 
 #include "base/callback_forward.h"
 #include "content/common/content_export.h"
+#include "content/public/browser/storage_partition.h"
+#include "net/cookies/cookie_partition_key_collection.h"
+#include "services/network/public/mojom/cookie_manager.mojom.h"
 #include "services/network/public/mojom/network_service.mojom.h"
 
 class GURL;
 
 namespace url {
 class Origin;
-}
+}  // namespace url
 
 namespace content {
 
@@ -59,6 +59,18 @@ class CONTENT_EXPORT BrowsingDataFilterBuilder {
   // to accept it.
   virtual void AddRegisterableDomain(const std::string& registrable_domain) = 0;
 
+  // Set the CookiePartitionKeyCollection for a CookieDeletionFilter.
+  // Partitioned cookies will be not be deleted if their partition key is not in
+  // the keychain. If this method is not invoked, then by default this clears
+  // all partitioned cookies that match the other criteria.
+  virtual void SetCookiePartitionKeyCollection(
+      const net::CookiePartitionKeyCollection&
+          cookie_partition_key_collection) = 0;
+
+  // Returns true if this filter is handling a Clear-Site-Data header sent in a
+  // cross-site context.
+  virtual bool IsCrossSiteClearSiteData() const = 0;
+
   // Returns true if we're an empty preserve list, where we delete everything.
   virtual bool MatchesAllOriginsAndDomains() = 0;
 
@@ -67,11 +79,11 @@ class CONTENT_EXPORT BrowsingDataFilterBuilder {
   // in the list to preserve.
   virtual base::RepeatingCallback<bool(const GURL&)> BuildUrlFilter() = 0;
 
-  // Builds a filter that matches origins that are in the list to delete, or
-  // aren't in the list to preserve. This is preferred to BuildUrlFilter() as
-  // it does not inherently perform GURL->Origin conversions.
-  virtual base::RepeatingCallback<bool(const url::Origin&)>
-  BuildOriginFilter() = 0;
+  // Builds a filter that matches storage keys that are in the list to delete,
+  // or aren't in the list to preserve. This is preferred to BuildUrlFilter() as
+  // it preserves storage partitioning information.
+  virtual content::StoragePartition::StorageKeyMatcherFunction
+  BuildStorageKeyFilter() = 0;
 
   // Builds a filter that can be used with the network service. This uses a Mojo
   // struct rather than a predicate function (as used by the rest of the filters
@@ -101,7 +113,12 @@ class CONTENT_EXPORT BrowsingDataFilterBuilder {
   virtual std::unique_ptr<BrowsingDataFilterBuilder> Copy() = 0;
 
   // Comparison.
-  virtual bool operator==(const BrowsingDataFilterBuilder& other) = 0;
+  bool operator==(const BrowsingDataFilterBuilder& other) const {
+    return IsEqual(other);
+  }
+
+ private:
+  virtual bool IsEqual(const BrowsingDataFilterBuilder& other) const = 0;
 };
 
 }  // namespace content

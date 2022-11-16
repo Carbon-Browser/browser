@@ -18,9 +18,11 @@ import "services/network/public/mojom/url_response_head.mojom";
 import "services/network/public/mojom/web_client_hints_types.mojom";
 import "services/network/public/mojom/web_sandbox_flags.mojom";
 import "third_party/blink/public/mojom/fetch/fetch_api_request.mojom";
+import "third_party/blink/public/mojom/fenced_frame/fenced_frame.mojom";
 import "third_party/blink/public/mojom/frame/frame_policy.mojom";
 import "third_party/blink/public/mojom/loader/mixed_content.mojom";
 import "third_party/blink/public/mojom/loader/referrer.mojom";
+import "third_party/blink/public/mojom/navigation/navigation_api_history_entry_arrays.mojom";
 import "third_party/blink/public/mojom/navigation/navigation_policy.mojom";
 import "third_party/blink/public/mojom/navigation/prefetched_signed_exchange_info.mojom";
 import "third_party/blink/public/mojom/navigation/was_activated_option.mojom";
@@ -88,10 +90,6 @@ struct BeginNavigationParams {
   // Indicates the request context type.
   blink.mojom.RequestContextType request_context_type =
       blink.mojom.RequestContextType.UNSPECIFIED;
-
-  // Indicates the request destination.
-  network.mojom.RequestDestination request_destination =
-      network.mojom.RequestDestination.kEmpty;
 
   // The mixed content context type for potential mixed content checks.
   blink.mojom.MixedContentContextType mixed_content_context_type =
@@ -174,15 +172,6 @@ struct CommonNavigationParams {
   // Is only used with data: URLs.
   url.mojom.Url base_url_for_data_url;
 
-  // History URL for use in Blink's SubstituteData.
-  // Is only used with data: URLs.
-  url.mojom.Url history_url_for_data_url;
-
-  // Bitmask that has whether or not to request a Preview version of the
-  // document for various preview types or let the browser decide.
-  // Defined in third_party/blink/public/common/loader/previews_state.h.
-  int32 previews_state = 0;  // 0 == PREVIEWS_UNSPECIFIED
-
   // The navigationStart time exposed through the Navigation Timing API to JS.
   mojo_base.mojom.TimeTicks navigation_start;
 
@@ -241,6 +230,10 @@ struct CommonNavigationParams {
   // not always be set; it depends on the creator of the CommonNavigationParams
   // setting it.
   mojo_base.mojom.TimeTicks input_start;
+
+  // Indicates the request destination.
+  network.mojom.RequestDestination request_destination =
+      network.mojom.RequestDestination.kEmpty;
 };
 
 // Provided by the browser -----------------------------------------------------
@@ -271,16 +264,6 @@ struct OldPageInfo {
   blink.mojom.PageLifecycleState new_lifecycle_state_for_old_page;
 };
 
-// AppHistoryEntry contains a subset of a session history item that is used by
-// the appHistory API to represent a non-current history entry. The browser
-// ensures that an AppHistoryEntry is only sent to the renderer if its |url| is
-// same-origin to the navigation being committed.
-struct AppHistoryEntry {
-  mojo_base.mojom.String16 key;
-  mojo_base.mojom.String16 id;
-  mojo_base.mojom.String16 url;
-};
-
 // Used by commit IPC messages. Holds the parameters needed by the renderer to
 // commit a navigation besides those in CommonNavigationParams.
 struct CommitNavigationParams {
@@ -299,15 +282,6 @@ struct CommitNavigationParams {
   // `storage_key`. The final storage key is computed by the document loader
   // taking into account the origin computed by the renderer.
   blink.mojom.StorageKey storage_key;
-
-  // The sandbox flags to apply to the new document. This is the union of:
-  // - the frame's current sandbox, taken when the navigation started.
-  // - the navigation response's CSP sandbox flags.
-  // - the result of CSP embedded enforcement required CSP sandbox flags.
-  // - Various edge cases: MHTML document, error pages, ...
-  // See content/browser/renderer_host/sandbox_flags.md
-  network.mojom.WebSandboxFlags sandbox_flags =
-    network.mojom.WebSandboxFlags.kAll;
 
   // Whether or not the user agent override string should be used.
   bool is_overriding_user_agent = false;
@@ -386,9 +360,6 @@ struct CommitNavigationParams {
   // Timing of navigation events.
   NavigationTiming navigation_timing;
 
-  // The AppCache host id to be used to identify this navigation.
-  mojo_base.mojom.UnguessableToken? appcache_host_id;
-
   // Set to |kYes| if a navigation is following the rules of user activation
   // propagation. This is different from |has_user_gesture|
   // (in CommonNavigationParams) as the activation may have happened before
@@ -458,6 +429,11 @@ struct CommitNavigationParams {
   // https://html.spec.whatwg.org/C/#origin-keyed-agent-clusters
   bool origin_agent_cluster = false;
 
+  // Whether the decision to use origin-keyed or site-keyed agent clustering
+  // (which itself is recorded in origin_agent_cluster, above) has been
+  // made based on absent Origin-Agent-Cluster http header.
+  bool origin_agent_cluster_left_as_default = true;
+
   // Client-hints enabled; this is based on the top-level frame and should be
   // further narrowed down by permissions policy.
   array<network.mojom.WebClientHintsType> enabled_client_hints;
@@ -474,10 +450,47 @@ struct CommitNavigationParams {
   // received response headers.
   int32 http_response_code = -1;
 
-  // A same-origin subset of the back/forward list exposed by the appHistory
-  // API.
-  array<AppHistoryEntry> app_history_back_entries;
-  array<AppHistoryEntry> app_history_forward_entries;
+  // A same-origin subset of the back/forward list exposed by the
+  // window.navigation API.
+  NavigationApiHistoryEntryArrays navigation_api_history_entry_arrays;
 
   array<url.mojom.Url> early_hints_preloaded_resources;
+
+  // If this is a navigation to the result of an InterestGroup auction, this
+  // is a list of URNs that map to auction component URLs. Null, otherwise.
+  // When non-null, always contains exactly kMaxAdAuctionAdComponents=20 URNs
+  // to avoid use as a data sidechannel between auction worklets and the
+  // fenced frames their results are loaded in.
+  //
+  // Mojo doesn't allow using symbolic constants as array lengths, so hard-code
+  // the length here directly.
+  array<url.mojom.Url, 20>? ad_auction_components;
+
+  // If this is an "opaque-ads" mode fenced frame, there might be an associated
+  // reporting metadata. This is a map from destination type to reporting
+  // metadata which in turn is a map from the event type to the reporting url.
+  // https://github.com/WICG/turtledove/blob/main/Fenced_Frames_Ads_Reporting.md
+  FencedFrameReporting? fenced_frame_reporting_metadata;
+
+  // The time the commit was sent from the browser.
+  mojo_base.mojom.TimeTicks commit_sent;
+
+  // When URL is about:srcdoc, this carries the srcdoc attribute's value.
+  string srcdoc_value;
+
+  // Whether the navigation should be treated as a "loadDataWithBaseURL"
+  // navigation, where the "document URL" is set to the supplied base URL
+  // instead of the data URL set in CommonNavigationParams' `url`. If this
+  // returns false, the data: URL will still be loaded, but we won't try to use
+  // the supplied base URL and history URL.
+  bool is_load_data_with_base_url = false;
+
+  // Whether a CSPEE policy exists in any of the frame's ancestors or on the
+  // frame itself. Used to determine if an opaque-ads fenced frame is allowed
+  // to be created in the current context. See
+  // `HTMLFencedFrameElement::canLoadOpaqueURL` for usage. At the moment, this
+  // is just sending CSPEE. But this can be expanded (and renamed) in the future
+  // if we need to send more information about whether a fenced frame can load
+  // from the browser.
+  bool ancestor_or_self_has_cspee = false;
 };

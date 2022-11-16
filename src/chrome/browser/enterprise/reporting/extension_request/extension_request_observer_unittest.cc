@@ -7,9 +7,9 @@
 #include "base/json/json_reader.h"
 #include "base/json/values_util.h"
 #include "base/test/metrics/histogram_tester.h"
+#include "base/test/mock_callback.h"
 #include "base/time/time.h"
 #include "base/values.h"
-#include "chrome/browser/enterprise/reporting/extension_request/extension_request_report_throttler_test.h"
 #include "chrome/browser/notifications/notification_display_service_tester.h"
 #include "chrome/common/extensions/extension_constants.h"
 #include "chrome/common/pref_names.h"
@@ -146,11 +146,11 @@ class ExtensionRequestObserverTest : public BrowserWithTestWindowTest {
     close_run_loop.Run();
 
     // Verify that only |expected_removed_requests| are removed from the pref.
-    const base::DictionaryValue* actual_pending_requests =
-        profile()->GetPrefs()->GetDictionary(prefs::kCloudExtensionRequestIds);
+    const base::Value::Dict& actual_pending_requests =
+        profile()->GetPrefs()->GetValueDict(prefs::kCloudExtensionRequestIds);
     EXPECT_EQ(number_of_existing_requests - expected_removed_requests.size(),
-              actual_pending_requests->DictSize());
-    for (auto it : actual_pending_requests->DictItems()) {
+              actual_pending_requests.size());
+    for (auto it : actual_pending_requests) {
       EXPECT_EQ(expected_removed_requests.end(),
                 std::find(expected_removed_requests.begin(),
                           expected_removed_requests.end(), it.first));
@@ -290,26 +290,18 @@ TEST_F(ExtensionRequestObserverTest, PendingRequestAddedAfterPolicyUpdated) {
                                          /*added*/ 0, 1);
 }
 
-TEST_F(ExtensionRequestObserverTest, UpdateWithReportThrottler) {
-  ScopedExtensionRequestReportThrottler throttler;
-  EXPECT_EQ(0u, throttler.Get()->GetProfiles().size());
-
+TEST_F(ExtensionRequestObserverTest, UpdateWithReportEnabledAndDisabled) {
   ExtensionRequestObserver observer(profile());
-  EXPECT_EQ(0u, throttler.Get()->GetProfiles().size());
 
+  base::MockCallback<ExtensionRequestObserver::ReportTrigger> callback;
+
+  observer.EnableReport(callback.Get());
+  EXPECT_CALL(callback, Run(profile())).Times(1);
   SetPendingList({kExtensionId1});
-  EXPECT_EQ(1u, throttler.Get()->GetProfiles().size());
-  EXPECT_TRUE(throttler.Get()->GetProfiles().contains(profile()->GetPath()));
-}
 
-TEST_F(ExtensionRequestObserverTest, UpdateWithoutReportThrottler) {
-  ScopedExtensionRequestReportThrottler throttler;
-  throttler.Get()->Disable();
-  ExtensionRequestObserver observer(profile());
-  EXPECT_EQ(0u, throttler.Get()->GetProfiles().size());
-
-  SetPendingList({kExtensionId1});
-  EXPECT_EQ(0u, throttler.Get()->GetProfiles().size());
+  observer.DisableReport();
+  EXPECT_CALL(callback, Run(::testing::_)).Times(0);
+  SetPendingList({kExtensionId1, kExtensionId2});
 }
 
 }  // namespace enterprise_reporting

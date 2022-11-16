@@ -91,6 +91,7 @@ bool BookmarkTabHelper::HasObserver(BookmarkTabHelperObserver* observer) const {
 
 BookmarkTabHelper::BookmarkTabHelper(content::WebContents* web_contents)
     : content::WebContentsObserver(web_contents),
+      content::WebContentsUserData<BookmarkTabHelper>(*web_contents),
       is_starred_(false),
       bookmark_model_(nullptr),
       bookmark_drag_(nullptr) {
@@ -156,10 +157,9 @@ void BookmarkTabHelper::DidStartNavigation(
 
 void BookmarkTabHelper::DidFinishNavigation(
     content::NavigationHandle* navigation_handle) {
-  if (!navigation_handle->IsInPrimaryMainFrame() ||
-      !navigation_handle->HasCommitted())
+  if (!navigation_handle->IsInPrimaryMainFrame())
     return;
   UpdateStarredStateForCurrentURL();
 }
 
-WEB_CONTENTS_USER_DATA_KEY_IMPL(BookmarkTabHelper)
+WEB_CONTENTS_USER_DATA_KEY_IMPL(BookmarkTabHelper);

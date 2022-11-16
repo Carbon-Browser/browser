@@ -8,8 +8,8 @@
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/check_op.h"
-#include "base/macros.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/notreached.h"
 #include "base/run_loop.h"
@@ -44,6 +44,9 @@ class ServiceImpl : public sample::Service {
   explicit ServiceImpl(base::OnceClosure destruction_callback)
       : destruction_callback_(std::move(destruction_callback)) {}
 
+  ServiceImpl(const ServiceImpl&) = delete;
+  ServiceImpl& operator=(const ServiceImpl&) = delete;
+
   ~ServiceImpl() override {
     if (destruction_callback_)
       std::move(destruction_callback_).Run();
@@ -60,8 +63,6 @@ class ServiceImpl : public sample::Service {
   void GetPort(PendingReceiver<sample::Port> port) override {}
 
   base::OnceClosure destruction_callback_;
-
-  DISALLOW_COPY_AND_ASSIGN(ServiceImpl);
 };
 
 using ReceiverTest = BindingsTestBase;
@@ -182,6 +183,9 @@ class ServiceImplWithReceiver : public ServiceImpl {
         &ServiceImplWithReceiver::OnDisconnect, base::Unretained(this)));
   }
 
+  ServiceImplWithReceiver(const ServiceImplWithReceiver&) = delete;
+  ServiceImplWithReceiver& operator=(const ServiceImplWithReceiver&) = delete;
+
  private:
   ~ServiceImplWithReceiver() override { std::move(closure_).Run(); }
 
@@ -189,8 +193,6 @@ class ServiceImplWithReceiver : public ServiceImpl {
 
   Receiver<sample::Service> receiver_;
   base::OnceClosure closure_;
-
-  DISALLOW_COPY_AND_ASSIGN(ServiceImplWithReceiver);
 };
 
 // Tests that the receiver may be deleted in its disconnect handler.
@@ -258,6 +260,10 @@ TEST_P(ReceiverTest, Unbind) {
 class IntegerAccessorImpl : public sample::IntegerAccessor {
  public:
   IntegerAccessorImpl() = default;
+
+  IntegerAccessorImpl(const IntegerAccessorImpl&) = delete;
+  IntegerAccessorImpl& operator=(const IntegerAccessorImpl&) = delete;
+
   ~IntegerAccessorImpl() override = default;
 
  private:
@@ -266,8 +272,6 @@ class IntegerAccessorImpl : public sample::IntegerAccessor {
     std::move(callback).Run(1, sample::Enum::VALUE);
   }
   void SetInteger(int64_t data, sample::Enum type) override {}
-
-  DISALLOW_COPY_AND_ASSIGN(IntegerAccessorImpl);
 };
 
 TEST_P(ReceiverTest, PauseResume) {
@@ -323,6 +327,10 @@ TEST_P(ReceiverTest, ErrorHandleNotRunWhilePaused) {
 class PingServiceImpl : public test::PingService {
  public:
   PingServiceImpl() = default;
+
+  PingServiceImpl(const PingServiceImpl&) = delete;
+  PingServiceImpl& operator=(const PingServiceImpl&) = delete;
+
   ~PingServiceImpl() override = default;
 
   // test::PingService:
@@ -338,8 +346,6 @@ class PingServiceImpl : public test::PingService {
 
  private:
   base::RepeatingClosure ping_handler_;
-
-  DISALLOW_COPY_AND_ASSIGN(PingServiceImpl);
 };
 
 class CallbackFilter : public MessageFilter {
@@ -459,6 +465,24 @@ TEST_P(ReceiverTest, DisconnectWithReason) {
       }));
 
   remote.ResetWithReason(1234u, "hello");
+  run_loop.Run();
+}
+
+TEST_P(ReceiverTest, PendingRemoteResetWithReason) {
+  ServiceImpl impl;
+  Receiver<sample::Service> receiver(&impl);
+  PendingRemote<sample::Service> pending_remote =
+      receiver.BindNewPipeAndPassRemote();
+
+  base::RunLoop run_loop;
+  receiver.set_disconnect_with_reason_handler(base::BindLambdaForTesting(
+      [&](uint32_t custom_reason, const std::string& description) {
+        EXPECT_EQ(1234u, custom_reason);
+        EXPECT_EQ("hello", description);
+        run_loop.Quit();
+      }));
+
+  pending_remote.ResetWithReason(1234u, "hello");
   run_loop.Run();
 }
 
@@ -620,7 +644,7 @@ class RebindTestImpl : public mojom::RebindTestInterface {
   }
 
  private:
-  base::WaitableEvent* event_;
+  raw_ptr<base::WaitableEvent> event_;
 };
 
 TEST_P(ReceiverTest, RebindWithScheduledSyncMessage) {
@@ -671,6 +695,10 @@ class TestGenericBinderImpl : public mojom::TestGenericBinder {
     receiver_.set_disconnect_handler(base::BindOnce(
         &TestGenericBinderImpl::OnDisconnect, base::Unretained(this)));
   }
+
+  TestGenericBinderImpl(const TestGenericBinderImpl&) = delete;
+  TestGenericBinderImpl& operator=(const TestGenericBinderImpl&) = delete;
+
   ~TestGenericBinderImpl() override = default;
 
   bool connected() const { return connected_; }
@@ -737,10 +765,9 @@ class TestGenericBinderImpl : public mojom::TestGenericBinder {
   Receiver<mojom::TestGenericBinder> receiver_;
   bool connected_ = true;
   absl::optional<base::RunLoop> wait_loop_;
-  GenericPendingReceiver* next_receiver_storage_ = nullptr;
-  GenericPendingAssociatedReceiver* next_associated_receiver_storage_ = nullptr;
-
-  DISALLOW_COPY_AND_ASSIGN(TestGenericBinderImpl);
+  raw_ptr<GenericPendingReceiver> next_receiver_storage_ = nullptr;
+  raw_ptr<GenericPendingAssociatedReceiver> next_associated_receiver_storage_ =
+      nullptr;
 };
 
 using ReceiverSerializationTest = ReceiverTest;

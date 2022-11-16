@@ -13,11 +13,10 @@
 #include "base/build_time.h"
 #include "base/check_op.h"
 #include "base/command_line.h"
-#include "base/cxx17_backports.h"
 #include "base/feature_list.h"
 #include "base/no_destructor.h"
 #include "base/notreached.h"
-#include "base/sequenced_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/clock.h"
 #include "base/time/default_clock.h"
@@ -41,37 +40,35 @@
 #include "content/public/browser/browser_thread.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include "base/enterprise_util.h"
 #include "chrome/installer/util/google_update_settings.h"
 #include "components/enterprise/browser/controller/browser_dm_token_storage.h"
-#elif defined(OS_MAC)
+#elif BUILDFLAG(IS_MAC)
 #include "chrome/browser/mac/keystone_glue.h"
 #endif
 
 namespace {
 
 // The default thresholds for reaching annoyance levels.
-constexpr auto kDefaultVeryLowThreshold = base::TimeDelta::FromHours(1);
-constexpr auto kDefaultLowThreshold = base::TimeDelta::FromDays(2);
-constexpr auto kDefaultElevatedThreshold = base::TimeDelta::FromDays(4);
-constexpr auto kDefaultHighThreshold = base::TimeDelta::FromDays(7);
-constexpr auto kDefaultGraceThreshold =
-    kDefaultHighThreshold - base::TimeDelta::FromHours(1);
+constexpr auto kDefaultVeryLowThreshold = base::Hours(1);
+constexpr auto kDefaultLowThreshold = base::Days(2);
+constexpr auto kDefaultElevatedThreshold = base::Days(4);
+constexpr auto kDefaultHighThreshold = base::Days(7);
+constexpr auto kDefaultGraceThreshold = kDefaultHighThreshold - base::Hours(1);
 
 // How long to wait (each cycle) before checking which severity level we should
 // be at. Once we reach the highest severity, the timer will stop.
-constexpr auto kNotifyCycleTime = base::TimeDelta::FromMinutes(20);
+constexpr auto kNotifyCycleTime = base::Minutes(20);
 
 // Same as kNotifyCycleTimeMs but only used during testing.
-constexpr auto kNotifyCycleTimeForTesting =
-    base::TimeDelta::FromMilliseconds(500);
+constexpr auto kNotifyCycleTimeForTesting = base::Milliseconds(500);
 
 // How often to check to see if the build has become outdated.
-constexpr auto kOutdatedBuildDetectorPeriod = base::TimeDelta::FromDays(1);
+constexpr auto kOutdatedBuildDetectorPeriod = base::Days(1);
 
 // The number of days after which we identify a build/install as outdated.
-constexpr auto kOutdatedBuildAge = base::TimeDelta::FromDays(7) * 12;
+constexpr auto kOutdatedBuildAge = base::Days(7) * 8;
 
 constexpr bool ShouldDetectOutdatedBuilds() {
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
@@ -112,11 +109,6 @@ UpgradeDetectorImpl::UpgradeDetectorImpl(const base::Clock* clock,
 
 UpgradeDetectorImpl::~UpgradeDetectorImpl() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-}
-
-// static
-base::Version UpgradeDetectorImpl::GetCurrentlyInstalledVersion() {
-  return GetInstalledVersion().installed_version;
 }
 
 void UpgradeDetectorImpl::StartUpgradeNotificationTimer() {
@@ -198,8 +190,7 @@ void UpgradeDetectorImpl::DoCalculateThresholds() {
 
   // When testing, scale everything back so that a day passes in ten seconds.
   if (is_testing_ && !relaunch_window) {
-    constexpr int64_t scale_factor =
-        base::TimeDelta::FromDays(1) / base::TimeDelta::FromSeconds(10);
+    constexpr int64_t scale_factor = base::Days(1) / base::Seconds(10);
     for (auto& stage : stages_)
       stage /= scale_factor;
   }
@@ -227,10 +218,10 @@ void UpgradeDetectorImpl::StartOutdatedBuildDetector() {
     if (google_brand::GetBrand(&brand) && !google_brand::IsOrganic(brand))
       return;
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
     // TODO(crbug/1027107): Replace with a more generic CBCM check.
     // Don't show the update bubbles to enterprise users.
-    if (base::IsMachineExternallyManaged() ||
+    if (base::IsEnterpriseDevice() ||
         policy::BrowserDMTokenStorage::Get()->RetrieveDMToken().is_valid()) {
       return;
     }
@@ -239,7 +230,7 @@ void UpgradeDetectorImpl::StartOutdatedBuildDetector() {
     if (!ShouldDetectOutdatedBuilds())
       return;
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
     // Only check to if autoupdates are enabled if the user has not already been
     // asked about re-enabling them.
     if (!g_browser_process->local_state() ||
@@ -403,8 +394,8 @@ UpgradeDetectorImpl::StageIndexToAnnoyanceLevel(size_t index) {
       UpgradeDetector::UPGRADE_ANNOYANCE_ELEVATED,
       UpgradeDetector::UPGRADE_ANNOYANCE_LOW,
       UpgradeDetector::UPGRADE_ANNOYANCE_VERY_LOW};
-  static_assert(base::size(kIndexToLevel) == kNumStages, "mismatch");
-  DCHECK_LT(index, base::size(kIndexToLevel));
+  static_assert(std::size(kIndexToLevel) == kNumStages, "mismatch");
+  DCHECK_LT(index, std::size(kIndexToLevel));
   return kIndexToLevel[index];
 }
 
@@ -487,12 +478,12 @@ void UpgradeDetectorImpl::Init() {
 
   // On Windows, only enable upgrade notifications for Google Chrome builds.
   // Chromium does not use an auto-updater.
-#if !defined(OS_WIN) || BUILDFLAG(GOOGLE_CHROME_BRANDING) || \
+#if !BUILDFLAG(IS_WIN) || BUILDFLAG(GOOGLE_CHROME_BRANDING) || \
     BUILDFLAG(ENABLE_CHROMIUM_UPDATER)
 
   // On macOS, only enable upgrade notifications if the updater (Keystone) is
   // present.
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   if (!keystone_glue::KeystoneEnabled())
     return;
 #endif
@@ -592,6 +583,5 @@ base::TimeDelta UpgradeDetector::GetDefaultElevatedAnnoyanceThreshold() {
 // static
 UpgradeDetector::RelaunchWindow UpgradeDetector::GetDefaultRelaunchWindow() {
   // Relaunch window is the whole day and any time is within the window.
-  return RelaunchWindow(/*start_hour=*/0, /*start_minute=*/0,
-                        base::TimeDelta::FromHours(24));
+  return RelaunchWindow(/*start_hour=*/0, /*start_minute=*/0, base::Hours(24));
 }

@@ -5,6 +5,7 @@
 #import "ios/chrome/browser/ui/first_run/sync/sync_screen_coordinator.h"
 
 #import "components/sync/driver/mock_sync_service.h"
+#import "ios/chrome/app/application_delegate/app_state.h"
 #import "ios/chrome/browser/browser_state/test_chrome_browser_state.h"
 #import "ios/chrome/browser/main/test_browser.h"
 #import "ios/chrome/browser/policy/policy_watcher_browser_agent.h"
@@ -15,6 +16,9 @@
 #import "ios/chrome/browser/sync/sync_setup_service_factory.h"
 #import "ios/chrome/browser/sync/sync_setup_service_mock.h"
 #import "ios/chrome/browser/ui/first_run/first_run_screen_delegate.h"
+#import "ios/chrome/browser/ui/main/scene_state.h"
+#import "ios/chrome/browser/ui/main/scene_state_browser_agent.h"
+#import "ios/chrome/test/ios_chrome_scoped_testing_local_state.h"
 #import "ios/public/provider/chrome/browser/signin/fake_chrome_identity.h"
 #import "ios/web/public/test/web_task_environment.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -52,9 +56,7 @@ class SyncScreenCoordinatorTest : public PlatformTest {
         SyncSetupServiceFactory::GetInstance(),
         base::BindRepeating(&SyncSetupServiceMock::CreateKeyedService));
     browser_state_ = builder.Build();
-    WebStateList* web_state_list = nullptr;
-    browser_ =
-        std::make_unique<TestBrowser>(browser_state_.get(), web_state_list);
+    browser_ = std::make_unique<TestBrowser>(browser_state_.get());
     PolicyWatcherBrowserAgent::CreateForBrowser(browser_.get());
 
     sync_setup_service_mock_ = static_cast<SyncSetupServiceMock*>(
@@ -64,6 +66,12 @@ class SyncScreenCoordinatorTest : public PlatformTest {
     auth_service_ = static_cast<AuthenticationServiceFake*>(
         AuthenticationServiceFactory::GetInstance()->GetForBrowserState(
             browser_state_.get()));
+
+    // Mock SceneStateBrowserAgent.
+    id appStateMock = [OCMockObject mockForClass:[AppState class]];
+    [[[appStateMock stub] andReturnValue:@(InitStageFinal)] initStage];
+    SceneStateBrowserAgent::CreateForBrowser(
+        browser_.get(), [[SceneState alloc] initWithAppState:appStateMock]);
 
     navigationController_ = [[UINavigationController alloc] init];
     delegate_ = OCMStrictProtocolMock(@protocol(FirstRunScreenDelegate));
@@ -82,6 +90,7 @@ class SyncScreenCoordinatorTest : public PlatformTest {
   }
 
   web::WebTaskEnvironment task_environment_;
+  IOSChromeScopedTestingLocalState scoped_testing_local_state_;
   std::unique_ptr<Browser> browser_;
   std::unique_ptr<TestChromeBrowserState> browser_state_;
   AuthenticationServiceFake* auth_service_ = nullptr;
@@ -98,7 +107,7 @@ TEST_F(SyncScreenCoordinatorTest, TestStart) {
                                                                 gaiaID:@"gaiaID"
                                                                   name:@"name"];
 
-  auth_service_->SignIn(identity);
+  auth_service_->SignIn(identity, nil);
 
   // The delegate is a strict mock, it will fail if it calls it.
   [coordinator_ start];
@@ -123,7 +132,7 @@ TEST_F(SyncScreenCoordinatorTest, TestStartWithSyncActivated) {
                                                                 gaiaID:@"gaiaID"
                                                                   name:@"name"];
 
-  auth_service_->SignIn(identity);
+  auth_service_->SignIn(identity, nil);
 
   OCMExpect([delegate_ willFinishPresenting]);
   [coordinator_ start];
@@ -142,7 +151,7 @@ TEST_F(SyncScreenCoordinatorTest, TestStartWithSyncPolicyDisabled) {
                                                                 gaiaID:@"gaiaID"
                                                                   name:@"name"];
 
-  auth_service_->SignIn(identity);
+  auth_service_->SignIn(identity, nil);
 
   OCMExpect([delegate_ willFinishPresenting]);
   [coordinator_ start];

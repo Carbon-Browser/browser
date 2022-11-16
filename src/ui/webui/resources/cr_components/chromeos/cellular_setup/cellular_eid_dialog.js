@@ -8,8 +8,6 @@
 
 // The size of each tile in pixels.
 const QR_CODE_TILE_SIZE = 5;
-// Styling for filled tiles in the QR code.
-const QR_CODE_FILL_STYLE = '#000000';
 
 Polymer({
   is: 'cellular-eid-dialog',
@@ -55,7 +53,7 @@ Polymer({
 
   /**
    * @private
-   * @param {{qrCode: chromeos.cellularSetup.mojom.QRCode} | null} response
+   * @param {{qrCode: ash.cellularSetup.mojom.QRCode} | null} response
    */
   updateQRCode_(response) {
     if (!response || !response.qrCode) {
@@ -65,7 +63,8 @@ Polymer({
     Polymer.dom.flush();
     const context = this.getCanvasContext_();
     context.clearRect(0, 0, this.canvasSize_, this.canvasSize_);
-    context.fillStyle = QR_CODE_FILL_STYLE;
+    context.fillStyle = getComputedStyle(this.$.qrCodeCanvas)
+                            .getPropertyValue('--cros-icon-color-primary-dark');
     let index = 0;
     for (let x = 0; x < response.qrCode.size; x++) {
       for (let y = 0; y < response.qrCode.size; y++) {
@@ -81,8 +80,7 @@ Polymer({
 
   /**
    * @private
-   * @param {{properties: chromeos.cellularSetup.mojom.EuiccProperties}}
-   *     response
+   * @param {{properties: ash.cellularSetup.mojom.EuiccProperties}} response
    */
   updateEid_(response) {
     if (!response || !response.properties) {

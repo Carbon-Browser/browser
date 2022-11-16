@@ -37,7 +37,7 @@
       instalēšanas / pirmās palaišanas laikā.
 
       Šī politika ir pieejama tikai Windows instancēs, kas ir savienotas ar <ph name="MS_AD_NAME" /> domēnu, vai Windows 10 Pro vai Enterprise instancēs, kas ir reģistrētas ierīču pārvaldībai.
-      (Operētājsistēmai Carbon Browser Browser Browser OS skatiet politiku DeviceMetricsReportingEnabled.)</translation>
+      (Operētājsistēmai Carbon Browser OS skatiet politiku DeviceMetricsReportingEnabled.)</translation>
 <translation id="1035385378988781231">Šī politika nosaka, vai tīkla failu kopīgošanas funkcija produkta <ph name="PRODUCT_NAME" /> autentifikācijai izmantos NTLM.
 
       Ja politikai ir iestatīta vērtība “True”, SMB failu kopīgošanas autentifikācijai tiks izmantots NTLM, ja nepieciešams.
@@ -114,13 +114,13 @@
       Nosaka ilgumu, pirms ekrānsaudzētājs tiek parādīts pierakstīšanās ekrānā ierīcēm mazumtirdzniecības režīmā.
 
       Politikas vērtība ir jānorāda milisekundēs.</translation>
-<translation id="1141767714195601945">Šī politika kontrolē komandrindas parametrus pārlūkam Carbon Browser Browser Browser no pārlūka Internet Explorer.
+<translation id="1141767714195601945">Šī politika kontrolē komandrindas parametrus pārlūkam Carbon Browser no pārlūka Internet Explorer.
 
       Ja pārlūka Internet Explorer papildinājums “Mantoto pārlūku atbalsts” nav instalēts, šai politikai nav nekādas ietekmes.
 
-      Kad šī politika nav iestatīta, pārlūks Internet Explorer pārsūta URL pārlūku Carbon Browser Browser Browser tikai kā komandrindas parametru.
+      Kad šī politika nav iestatīta, pārlūks Internet Explorer pārsūta URL pārlūku Carbon Browser tikai kā komandrindas parametru.
 
-      Kad šī politika ir iestatīta uz virkņu sarakstu, virknes tiek savienotas ar atstarpēm un nodotas pārlūkam Carbon Browser Browser Browser kā komandrindas parametri.
+      Kad šī politika ir iestatīta uz virkņu sarakstu, virknes tiek savienotas ar atstarpēm un nodotas pārlūkam Carbon Browser kā komandrindas parametri.
 
       Ja elements ietver ${url}, tas tiek aizvietots ar atvērtās lapas URL.
 
@@ -258,7 +258,7 @@
 
       Katrs politikas saraksta vienums ir virkne, kas ietver paplašinājuma ID un atjaunināšanas URL, kuri atdalīti ar semikolu (<ph name="SEMICOLON" />). Paplašinājuma ID ir 32 burtu virkne, kas, piemēram, ir redzama lapā <ph name="CHROME_EXTENSIONS_LINK" /> izstrādātāja režīmā. Atjaunināšanas URL ir jānovirza uz atjauninājuma manifesta XML dokumentu, kā norādīts šeit: <ph name="LINK_TO_EXTENSION_DOC1" />. Ņemiet vērā, ka šajā politikā iestatītais atjaunināšanas URL tiek izmantots tikai sākotnējai instalācijai; nākamajiem paplašinājuma atjauninājumiem tiek izmantots paplašinājuma manifestā norādītais atjaunināšanas URL.
 
-      Piemēram, <ph name="EXTENSION_POLICY_EXAMPLE" /> instalē lietotni <ph name="EXTENSION_POLICY_EXAMPLE_EXTENSION_NAME" />, izmantojot Carbon Browser Browser Browser interneta veikala standarta atjaunināšanas URL. Plašāku informāciju par paplašinājumu mitināšanu skatiet šeit: <ph name="LINK_TO_EXTENSION_DOC2" />.</translation>
+      Piemēram, <ph name="EXTENSION_POLICY_EXAMPLE" /> instalē lietotni <ph name="EXTENSION_POLICY_EXAMPLE_EXTENSION_NAME" />, izmantojot Carbon Browser interneta veikala standarta atjaunināšanas URL. Plašāku informāciju par paplašinājumu mitināšanu skatiet šeit: <ph name="LINK_TO_EXTENSION_DOC2" />.</translation>
 <translation id="1435659902881071157">Ierīces līmeņa tīkla konfigurācija</translation>
 <translation id="1438739959477268107">Atslēgu ģenerēšanas noklusējuma iestatījums</translation>
 <translation id="1454846751303307294">Ļauj iestatīt URL rakstu sarakstu, kurā ir norādītas vietnes, kurām nav atļauts izpildīt JavaScript.
@@ -419,11 +419,11 @@
 
       Ja politika nav iestatīta, <ph name="TPM_FIRMWARE_UPDATE_TPM" /> programmaparatūras atjauninājuma funkcionalitāte nebūs pieejama.</translation>
 <translation id="1708496595873025510">Iestatīt ierobežojumu attiecībā uz variantu sākotnējās vērtības iegūšanu</translation>
-<translation id="1717817358640580294">Ja nav iestatīts, lai Carbon Browser Browser Browser tīrīšanā tiktu meklēta nevēlama programmatūra, tā var nosūtīt pārmeklēšanas metadatus uzņēmumam Google saskaņā ar SafeBrowsingExtendedReportingEnabled iestatīto politiku. Šādā gadījumā Carbon Browser Browser Browser tīrīšana vaicās lietotājam, vai notīrīt nevēlamo programmatūru. Lietotājs var izvēlēties kopīgot tīrīšanas rezultātus ar uzņēmumu Google un tādējādi palīdzēt turpmāk konstatēt nevēlamu programmatūru. Šie rezultāti satur failu metadatus, automātiski instalētus paplašinājumus un reģistra atslēgas, kā aprakstīts Carbon Browser Browser Browser konfidencialitātes tehniskajā dokumentā.
+<translation id="1717817358640580294">Ja nav iestatīts, lai Carbon Browser tīrīšanā tiktu meklēta nevēlama programmatūra, tā var nosūtīt pārmeklēšanas metadatus uzņēmumam Google saskaņā ar SafeBrowsingExtendedReportingEnabled iestatīto politiku. Šādā gadījumā Carbon Browser tīrīšana vaicās lietotājam, vai notīrīt nevēlamo programmatūru. Lietotājs var izvēlēties kopīgot tīrīšanas rezultātus ar uzņēmumu Google un tādējādi palīdzēt turpmāk konstatēt nevēlamu programmatūru. Šie rezultāti satur failu metadatus, automātiski instalētus paplašinājumus un reģistra atslēgas, kā aprakstīts Carbon Browser konfidencialitātes tehniskajā dokumentā.
 
-      Ja nevēlamas programmatūras meklēšana Carbon Browser Browser Browser tīrīšanā ir atspējota, tā nesūtīs pārmeklēšanas metadatus uzņēmumam Google, ignorējot jebkādu SafeBrowsingExtendedReportingEnabled iestatīto politiku. Carbon Browser Browser Browser tīrīšana vaicās lietotājam, vai notīrīt nevēlamo programmatūru.  Tīrīšanas rezultāti netiks nosūtīti uzņēmumam Google, un lietotājam nebūs iespējas izvēlēties šādi rīkoties.
+      Ja nevēlamas programmatūras meklēšana Carbon Browser tīrīšanā ir atspējota, tā nesūtīs pārmeklēšanas metadatus uzņēmumam Google, ignorējot jebkādu SafeBrowsingExtendedReportingEnabled iestatīto politiku. Carbon Browser tīrīšana vaicās lietotājam, vai notīrīt nevēlamo programmatūru.  Tīrīšanas rezultāti netiks nosūtīti uzņēmumam Google, un lietotājam nebūs iespējas izvēlēties šādi rīkoties.
 
-      Ja nevēlamas programmatūras meklēšana Carbon Browser Browser Browser tīrīšanā ir iespējota, tā var nosūtīt pārmeklēšanas metadatus uzņēmumam Google saskaņā ar SafeBrowsingExtendedReportingEnabled iestatīto politiku. Carbon Browser Browser Browser tīrīšana vaicās lietotājam, vai notīrīt nevēlamo programmatūru.  Tīrīšanas rezultāti tiks nosūtīti uzņēmumam Google, un lietotājam nebūs iespējas to novērst.
+      Ja nevēlamas programmatūras meklēšana Carbon Browser tīrīšanā ir iespējota, tā var nosūtīt pārmeklēšanas metadatus uzņēmumam Google saskaņā ar SafeBrowsingExtendedReportingEnabled iestatīto politiku. Carbon Browser tīrīšana vaicās lietotājam, vai notīrīt nevēlamo programmatūru.  Tīrīšanas rezultāti tiks nosūtīti uzņēmumam Google, un lietotājam nebūs iespējas to novērst.
 
       Šī politika ir pieejama tikai Windows instancēs, kas ir savienotas ar <ph name="MS_AD_NAME" /> domēnu, vai Windows 10 Pro vai Enterprise instancēs, kas ir reģistrētas ierīču pārvaldībai.</translation>
 <translation id="172374442286684480">Atļauja visām vietnēm iestatīt lokālus datus</translation>
@@ -618,7 +618,7 @@
 <translation id="2073552873076775140">Atļauja pierakstīties pārlūkā <ph name="PRODUCT_NAME" /></translation>
 <translation id="2077129598763517140">Izmantot aparatūras paātrināšanas režīmu, kad tas ir pieejams</translation>
 <translation id="2077273864382355561">Aizkave līdz ekrāna izslēgšanai, ja ierīce darbojas ar akumulatora jaudu</translation>
-<translation id="2082205219176343977">Konfigurējiet ierīcē minimālo atļauto Carbon Browser Browser Browser versiju.</translation>
+<translation id="2082205219176343977">Konfigurējiet ierīcē minimālo atļauto Carbon Browser versiju.</translation>
 <translation id="209586405398070749">Stabila versija</translation>
 <translation id="2098658257603918882">Iespējo lietošanas un ar avārijām saistītu datu ziņošanu</translation>
 <translation id="2104418465060359056">Ziņot informāciju par paplašinājumiem un spraudņiem</translation>
@@ -665,7 +665,7 @@
       Ja atspējosiet šo iestatījumu vai atstāsiet to neiestatītu, visas caurlaides lapas autentifikācijas lapas tiks rādītās (parastā) jaunā pārlūka cilnē, izmantojot pašreizējos lietotāja starpniekservera iestatījumus.</translation>
 <translation id="21394354835637379">Ļauj norādīt, kuriem URL ir atļauts instalēt paplašinājumus, lietotnes un motīvus.
 
-          Sākot ar pārlūka <ph name="PRODUCT_NAME" /> 21. versiju, ir daudz grūtāk instalēt paplašinājumus, lietotnes un lietotāja skriptus no avota, kas nav ietverts Carbon Browser Browser Browser interneta veikalā. Iepriekš lietotāji varēja noklikšķināt uz saites, kas novirza uz *.crx failu, un pārlūkā <ph name="PRODUCT_NAME" /> pēc dažu brīdinājumu parādīšanas tika piedāvāts instalēt failu. Ieviešot pārlūka <ph name="PRODUCT_NAME" /> 21. versiju, šāda veida faili ir jālejupielādē un jāievelk <ph name="PRODUCT_NAME" /> iestatījumu lapā. Šis iestatījums ļauj noteiktiem URL saglabāt iepriekšējo vienkāršāko instalēšanas gaitu.
+          Sākot ar pārlūka <ph name="PRODUCT_NAME" /> 21. versiju, ir daudz grūtāk instalēt paplašinājumus, lietotnes un lietotāja skriptus no avota, kas nav ietverts Carbon Browser interneta veikalā. Iepriekš lietotāji varēja noklikšķināt uz saites, kas novirza uz *.crx failu, un pārlūkā <ph name="PRODUCT_NAME" /> pēc dažu brīdinājumu parādīšanas tika piedāvāts instalēt failu. Ieviešot pārlūka <ph name="PRODUCT_NAME" /> 21. versiju, šāda veida faili ir jālejupielādē un jāievelk <ph name="PRODUCT_NAME" /> iestatījumu lapā. Šis iestatījums ļauj noteiktiem URL saglabāt iepriekšējo vienkāršāko instalēšanas gaitu.
 
           Katrs šī saraksta vienums ir paplašinājuma veida atbilstības modelis (skatiet vietni https://developer.chrome.com/extensions/match_patterns). Lietotāji var ērti instalēt vienumus no jebkura URL, kas atbilst kādam saraksta vienumam. Šiem modeļiem ir jāatļauj gan *.crx faila atrašanās vieta, gan lapa, no kuras tiek sākta lejupielāde (t.i., novirzītājs).
 
@@ -741,11 +741,11 @@
 
       Ja šī politika ir iestatīta kā atspējota vai nav iestatīta, lapās nav atļauts rādīts uznirstošos elementus laikā, kad tās tiek aizvērtas, atbilstoši specifikācijai (https://html.spec.whatwg.org/#apis-for-creating-and-navigating-browsing-contexts-by-name).
 
-      Šī politika tiks noņemta pārlūka Carbon Browser Browser Browser versijā 82.
+      Šī politika tiks noņemta pārlūka Carbon Browser versijā 82.
 
       Skatiet vietni: https://www.chromestatus.com/feature/5989473649164288.</translation>
 <translation id="2269319728625047531">Sinhronizācijas atļaušanas dialoglodziņa iespējošana rādīšanai pierakstīšanās laikā</translation>
-<translation id="2274864612594831715">Ar šo politiku var konfigurēt virtuālās tastatūras kā ievades ierīces iespējošanu operētājsistēmā Carbon Browser Browser Browser OS. Lietotāji nevar ignorēt šo politiku.
+<translation id="2274864612594831715">Ar šo politiku var konfigurēt virtuālās tastatūras kā ievades ierīces iespējošanu operētājsistēmā Carbon Browser OS. Lietotāji nevar ignorēt šo politiku.
 
       Ja politikas iestatījums ir “True”, ekrāna virtuālā tastatūra vienmēr būs iespējota.
 
@@ -815,9 +815,9 @@
 <translation id="2463034609187171371">Iespējot DHE šifra komplektus standartā TLS</translation>
 <translation id="2463365186486772703">Lietojumprogrammas lokalizācija</translation>
 <translation id="2466131534462628618">Starpniekservera ignorēšana caurlaides lapas autentificēšanā</translation>
-<translation id="2471748297300970300">Ja šī politika ir atspējota, tā neļauj drošības brīdinājumiem parādīties, kad Carbon Browser Browser Browser tiek palaists ar dažām potenciāli bīstamām komandrindas atzīmēm.
+<translation id="2471748297300970300">Ja šī politika ir atspējota, tā neļauj drošības brīdinājumiem parādīties, kad Carbon Browser tiek palaists ar dažām potenciāli bīstamām komandrindas atzīmēm.
 
-          Ja šī politika ir iespējota vai nav iestatīta, drošības brīdinājumi tiek parādīti, kad tiek izmantotas dažas komandrindas atzīmes, lai palaistu Carbon Browser Browser Browser.
+          Ja šī politika ir iespējota vai nav iestatīta, drošības brīdinājumi tiek parādīti, kad tiek izmantotas dažas komandrindas atzīmes, lai palaistu Carbon Browser.
 
           Operētājsistēmā Windows šī politika ir pieejama tikai instancēs, kas ir savienotas ar <ph name="MS_AD_NAME" /> domēnu, vai Windows 10 Pro vai Enterprise instancēs, kas ir reģistrētas ierīču pārvaldībai.</translation>
 <translation id="2482676533225429905">Vietējā ziņojumapmaiņa</translation>
@@ -939,7 +939,7 @@
           Google meklēšanas vietrādi URL var norādīt šādi: <ph name="GOOGLE_SEARCH_URL" />.
 
           Šī opcija ir jāiestata tikai tad, kad ir iespējota politika DefaultSearchProviderEnabled (tikai tad tā tiks ievērota).</translation>
-<translation id="2659019163577049044">Ja šis iestatījums tiks iespējots, lietotāji varēs iestatīt, lai viņu ierīcēs tiktu sinhronizētas tālrunī un Carbon Browser Browser Browserbook ierīcēs glabātās īsziņas. Ņemiet vērā — ja šī politika tiek atļauta, lietotājiem ir tieši jāizvēlas šī funkcija, iestatot ierīci. Pēc iestatīšanas lietotāji varēs sūtīt īsziņas no savām Carbon Browser Browser Browserbook ierīcēm un saņemt īsziņas šajās ierīcēs.
+<translation id="2659019163577049044">Ja šis iestatījums tiks iespējots, lietotāji varēs iestatīt, lai viņu ierīcēs tiktu sinhronizētas tālrunī un Carbon Browserbook ierīcēs glabātās īsziņas. Ņemiet vērā — ja šī politika tiek atļauta, lietotājiem ir tieši jāizvēlas šī funkcija, iestatot ierīci. Pēc iestatīšanas lietotāji varēs sūtīt īsziņas no savām Carbon Browserbook ierīcēm un saņemt īsziņas šajās ierīcēs.
 
       Ja šis iestatījums tiks atspējots, lietotāji nevarēs iestatīt īsziņu sinhronizēšanu.
 
@@ -957,7 +957,7 @@
 <translation id="2706708761587205154">Atļaut drukāšanu tikai ar PIN kodu</translation>
 <translation id="2710534340210290498">Ja šai politikai ir iestatīta vērtība “False”, lietotāji nevarēs bloķēt ekrānu (varēs tikai izrakstīties no lietotāja sesijas). Ja šī iestatījuma vērtība “True” vai tā nav iestatīta, lietotāji, kuri būs autentificējušies ar paroli, varēs bloķēt ekrānu.</translation>
 <translation id="2731627323327011390">Atspējot <ph name="PRODUCT_OS_NAME" /> sertifikātu izmantošanu ARC lietotnēm</translation>
-<translation id="2742843273354638707">Paslēpt Carbon Browser Browser Browser interneta veikala lietotnes un kājenes saiti Jaunas cilnes lapā un <ph name="PRODUCT_OS_NAME" /> lietotņu palaidējā.
+<translation id="2742843273354638707">Paslēpt Carbon Browser interneta veikala lietotnes un kājenes saiti Jaunas cilnes lapā un <ph name="PRODUCT_OS_NAME" /> lietotņu palaidējā.
 
       Ja šai politikai ir iestatīta vērtība Patiesa, ikonas tiek paslēptas.
 
@@ -1001,7 +1001,7 @@
 <translation id="2801155097555584385">Iestatīt pielāgotu akumulatora uzlādes līmeni (procentos), kurā jāsāk uzlāde</translation>
 <translation id="2801230735743888564">Ļaujiet lietotājiem spēlēt dinozauru spēli, kad ierīce ir bezsaistē.
 
-      Ja šai politikai ir iestatīta vērtība Nepatiesa, lietotāji nevarēs spēlēt dinozauru spēli, kad ierīce būs bezsaistē. Ja iestatījums ir Patiesa, lietotāji varēs spēlēt dinozauru spēli. Ja politika nav iestatīta, lietotāji nevarēs spēlēt dinozauru spēli reģistrētās Carbon Browser Browser Browser OS ierīcēs, taču varēs spēlēt visos citos gadījumos.</translation>
+      Ja šai politikai ir iestatīta vērtība Nepatiesa, lietotāji nevarēs spēlēt dinozauru spēli, kad ierīce būs bezsaistē. Ja iestatījums ir Patiesa, lietotāji varēs spēlēt dinozauru spēli. Ja politika nav iestatīta, lietotāji nevarēs spēlēt dinozauru spēli reģistrētās Carbon Browser OS ierīcēs, taču varēs spēlēt visos citos gadījumos.</translation>
 <translation id="2802085784857530815">Ļauj kontrolēt, vai lietotāji var piekļūt printeriem, kas nepieder uzņēmumam.
 
       Ja politikai ir iestatīta vērtība “True” vai ja politikai vērtība nav iestatīta, lietotāji varēs pievienot, konfigurēt un drukāt, izmantojot savus vietējos printerus.
@@ -1020,12 +1020,12 @@
       Ja šī politika ir iestatīta, norādot laika intervālu sarakstu, kas nav tukšs, tad ir spēkā tālāk norādītie iestatījumi.
       Norādītajos laika intervālos ierīces nevar automātiski pārbaudīt, vai ir pieejami atjauninājumi. Potenciālu drošības problēmu dēļ šī politika neietekmē ierīces, kurām nepieciešama atrite vai kuru <ph name="PRODUCT_OS_NAME" /> versija ir vecāka nekā minimālā pieļaujamā versija. Turklāt ar šo politiku netiks bloķēta atjauninājumu meklēšana, ko pieprasīs lietotāji vai administratori.
       Ja šī politika nav iestatīta vai tajā nav norādīti laika intervāli, ir spēkā šādi iestatījumi.
-      Šī politika nebloķēs automātisku atjauninājumu meklēšanu, taču citas politikas var meklēšanu bloķēt. Šī funkcija ir pieejama tikai tādās Carbon Browser Browser Browser ierīcēs, kas ir konfigurētas kā automātiskas palaišanas kioski. Šī politika neierobežos citas ierīces.</translation>
+      Šī politika nebloķēs automātisku atjauninājumu meklēšanu, taču citas politikas var meklēšanu bloķēt. Šī funkcija ir pieejama tikai tādās Carbon Browser ierīcēs, kas ir konfigurētas kā automātiskas palaišanas kioski. Šī politika neierobežos citas ierīces.</translation>
 <translation id="2823870601012066791"><ph name="PRODUCT_OS_NAME" /> klientu Windows reģistra vieta:</translation>
 <translation id="2824715612115726353">Iespējo inkognito režīmu</translation>
 <translation id="2836621397261130126">Kontrolē, vai tiek ievērots KDC politikas apstiprinājums, lai nolemtu, vai deleģēt <ph name="KERBEROS" /> biļetes.
 
-          Ja šai politikai ir iestatīta vērtība “true”, HTTP autentifikācija ievēro KDC politikas apstiprinājumu. Pārlūks Carbon Browser Browser Browser deleģē akreditācijas datus tikai tad, ja KDS iestata <ph name="OK_AS_DELEGATE" /> pakalpojuma biļeti. Plašāku informāciju skatiet vietnē https://tools.ietf.org/html/rfc5896.html. Pakalpojumam ir jāatbilst arī “AuthNegotiateDelegateWhitelist” politikai.
+          Ja šai politikai ir iestatīta vērtība “true”, HTTP autentifikācija ievēro KDC politikas apstiprinājumu. Pārlūks Carbon Browser deleģē akreditācijas datus tikai tad, ja KDS iestata <ph name="OK_AS_DELEGATE" /> pakalpojuma biļeti. Plašāku informāciju skatiet vietnē https://tools.ietf.org/html/rfc5896.html. Pakalpojumam ir jāatbilst arī “AuthNegotiateDelegateWhitelist” politikai.
 
           Ja šīs politikas vērtība nav iestatīta vai ir iestatīta vērtība “false”, KDC politika atbalstītajās platformās tiek ignorēta un tiek ievērota tikai 'AuthNegotiateDelegateWhitelist” politika.
 
@@ -1173,7 +1173,7 @@
           Ja šī politika nav iestatīta, tiks lietota politika AllowJavaScript un lietotājs to varēs mainīt.</translation>
 <translation id="3038323923255997294">Turpināt lietotņu izpildi fonā, kad produkts <ph name="PRODUCT_NAME" /> ir aizvērts</translation>
 <translation id="3046192273793919231">Tīkla pakešu sūtīšana uz pārvaldības serveri, lai pārraudzītu tiešsaistes statusu</translation>
-<translation id="3047732214002457234">Kontrolējiet, kā Carbon Browser Browser Browser tīrīšanas rīks nosūta datus Google serveriem</translation>
+<translation id="3047732214002457234">Kontrolējiet, kā Carbon Browser tīrīšanas rīks nosūta datus Google serveriem</translation>
 <translation id="304775240152542058">Šī politika nosaka komandrindas parametrus, lai palaistu citu pārlūkprogrammu.
 
       Ja šī politika nav iestatīta, tiek izmantots tikai viens komandrindas parametrs — vietrādis URL.
@@ -1245,9 +1245,9 @@
       Ja politika nav iestatīta vai ir iestatīta vērtība Nepatiesa, DHE šifra komplekti standartā TLS netiks iespējoti. Politikai var iestatīt vērtību Patiesa, lai iespējotu DHE šifra komplektus un saglabātu saderību ar novecojušu serveri. Tas ir pagaidu risinājums, un serveris ir jākonfigurē atkārtoti.
 
       Ieteicams migrēt serveru datus uz ECDHE šifra komplektiem. Ja tie nav pieejami, ir jābūt iespējotam šifra komplektam, izmantojot RSA atslēgu apmaiņu.</translation>
-<translation id="3117706142826400449">Ja šī politika ir atspējota, tiek novērsta Carbon Browser Browser Browser tīrīšana (netiek pārmeklēta sistēma, lai atrastu nevēlamu programmatūru, un netiek veikta tīrīšana). Carbon Browser Browser Browser tīrīšanas manuāla aktivizēšana no lapas chrome://settings/cleanup ir atspējota.
+<translation id="3117706142826400449">Ja šī politika ir atspējota, tiek novērsta Carbon Browser tīrīšana (netiek pārmeklēta sistēma, lai atrastu nevēlamu programmatūru, un netiek veikta tīrīšana). Carbon Browser tīrīšanas manuāla aktivizēšana no lapas chrome://settings/cleanup ir atspējota.
 
-      Ja šī politika ir iespējota vai nav iestatīta, Carbon Browser Browser Browser tīrīšana periodiski pārmeklē sistēmu, lai atrastu nevēlamu programmatūru, un, ja tādu atrod, vaicā lietotājam, vai to noņemt. Carbon Browser Browser Browser tīrīšanas manuāla aktivizēšana no lapas chrome://settings ir iespējota.
+      Ja šī politika ir iespējota vai nav iestatīta, Carbon Browser tīrīšana periodiski pārmeklē sistēmu, lai atrastu nevēlamu programmatūru, un, ja tādu atrod, vaicā lietotājam, vai to noņemt. Carbon Browser tīrīšanas manuāla aktivizēšana no lapas chrome://settings ir iespējota.
 
       Šī politika ir pieejama tikai Windows instancēs, kas ir savienotas ar <ph name="MS_AD_NAME" /> domēnu, vai Windows 10 Pro vai Enterprise instancēs, kas ir reģistrētas ierīču pārvaldībai.</translation>
 <translation id="3152425128389603870">Atļaut vienoto darbvirsmu un ieslēgt to pēc noklusējuma</translation>
@@ -1359,7 +1359,7 @@ Ja šim iestatījumam ir izvēlēta vērtība “Vidēji”, lietotājs var izv�
 Ja šim iestatījumam ir izvēlēta vērtība “Izslēgts” vai vērtība nav iestatīta, ierobežotais režīms pakalpojumā YouTube nav ieslēgts pārlūkā <ph name="PRODUCT_NAME" />. Tomēr ar ārējām politikām, piemēram, YouTube politikām, joprojām var ieslēgt ierobežoto režīmu.</translation>
 <translation id="3428247105888806363">Iespējo tīkla paredzēšanu</translation>
 <translation id="3432863169147125747">Kontrolē drukāšanas iestatījumus.</translation>
-<translation id="3434932177006334880">Šī iestatījuma nosaukums pirms pārlūka versijas Carbon Browser Browser Browser 42 bija “EnableWebBasedSignin”, un versijā Carbon Browser Browser Browser 43 tas tiks pilnībā noņemts.
+<translation id="3434932177006334880">Šī iestatījuma nosaukums pirms pārlūka versijas Carbon Browser 42 bija “EnableWebBasedSignin”, un versijā Carbon Browser 43 tas tiks pilnībā noņemts.
 
       Šis iestatījums ir noderīgs uzņēmumu klientiem, kas izmanto vienotās pierakstīšanās risinājumus, kuri vēl nav saderīgi ar jauno iekļautās pierakstīšanās plūsmu.
       Ja iespējosiet šo iestatījumu, tiks izmantota iepriekšējā tīmekļa pierakstīšanās plūsma.
@@ -1440,7 +1440,7 @@ Ja šim iestatījumam ir izvēlēta vērtība “Izslēgts” vai vērtība nav 
       Ja valoda ir ietverta gan šajā politikā, gan politikā <ph name="SPELLCHECK_LANGUAGE_BLACKLIST_POLICY_NAME" />, prioritāte ir šai politikai un pareizrakstības pārbaudes valoda tiek iespējota.
 
       Pašreiz atbalstītās valodas: af, bg, ca, cs, da, de, el, en-AU, en-CA, en-GB, en-US, es, es-419, es-AR, es-ES, es-MX, es-US, et, fa, fo, fr, he, hi, hr, hu, id, it, ko, lt, lv, nb, nl, pl, pt-BR, pt-PT, ro, ru, sh, sk, sl, sq, sr, sv, ta, tg, tr, uk, vi.</translation>
-<translation id="356579196325389849">Lietotāji var konfigurēt Carbon Browser Browser Browser OS laidiena versiju</translation>
+<translation id="356579196325389849">Lietotāji var konfigurēt Carbon Browser OS laidiena versiju</translation>
 <translation id="3575011234198230041">HTTP autentificēšana</translation>
 <translation id="3577251398714997599">Reklāmu iestatījumi vietnēm, kurās tiek rādītas traucējošas reklāmas</translation>
 <translation id="357917253161699596">Ļauj lietotājiem pārvaldīt lietotāja sertifikātus</translation>
@@ -1458,9 +1458,9 @@ Ja šim iestatījumam ir izvēlēta vērtība “Izslēgts” vai vērtība nav 
 <translation id="3646859102161347133">Ekrāna lupas veida iestatīšana</translation>
 <translation id="3653237928288822292">Noklusējuma meklētājprogrammas ikona</translation>
 <translation id="3660510274595679517">
-        Ja šai politikai ir iestatīta vērtība True, reģistrācija mākoņa pārvaldības pakalpojumā ir obligāta. Ja reģistrācija nav veikta, pārlūka Carbon Browser Browser Browser palaišanas process tiek bloķēts.
+        Ja šai politikai ir iestatīta vērtība True, reģistrācija mākoņa pārvaldības pakalpojumā ir obligāta. Ja reģistrācija nav veikta, pārlūka Carbon Browser palaišanas process tiek bloķēts.
 
-        Ja šī politika nav iestatīta vai ir iestatīta vērtība False, reģistrācija mākoņa pārvaldības pakalpojumā nav obligāta. Ja reģistrācija nav veikta, pārlūka Carbon Browser Browser Browser palaišanas process netiek bloķēts.
+        Ja šī politika nav iestatīta vai ir iestatīta vērtība False, reģistrācija mākoņa pārvaldības pakalpojumā nav obligāta. Ja reģistrācija nav veikta, pārlūka Carbon Browser palaišanas process netiek bloķēts.
 
         Šo politiku izmanto ierīces tvēruma mākoņa politikas reģistrācijai galddatoros, un to var iestatīt, izmantojot reģistru vai GPO operētājsistēmā Windows, “plist” failu operētājsistēmā Mac un JSON politikas failu operētājsistēmā Linux.</translation>
 <translation id="3660562134618097814">SAML identitātes nodrošinātāja sīkfailu pārsūtīšana pieteikšanās laikā</translation>
@@ -1642,9 +1642,9 @@ Ja šai politikai ir iestatīta vērtība “Nepatiesa”, netiek sniegta inform
 <translation id="3963602271515417124">Ja politika ir iestatīta uz “true”, ierīcei ir atļauta attālā apstiprināšana un tiks automātiski izveidots sertifikāts, kas tiks augšupielādēts ierīču pārvaldības serverī.
 
           Ja ir iestatīta vērtība “false” vai ja politika nav iestatīta, netiks izveidots sertifikāts un neizdosies izsaukums enterprise.platformKeys API.</translation>
-<translation id="3964262920683972987">Konfigurējiet ierīces līmeņa fona tapetes attēlu, kas tiek rādīts pieteikšanās ekrānā, ja ierīcē vēl nav pierakstījies neviens lietotājs. Politika tiek iestatīta, norādot URL, no kura Carbon Browser Browser Browser OS ierīce var lejupielādēt fona tapetes attēlu, un kriptogrāfisku jaucējkodu, kas tiek izmantots lejupielādes integritātes verificēšanai. Attēlam ir jābūt JPEG formātā, un tā lielums nedrīkst pārsniegt 16 MB. URL ir jābūt pieejamam bez autentifikācijas. Fona tapetes attēls tiek lejupielādēts un saglabāts kešatmiņā. Tas tiks lejupielādēts atkārtoti, kad mainīsies URL vai jaucējkods.
+<translation id="3964262920683972987">Konfigurējiet ierīces līmeņa fona tapetes attēlu, kas tiek rādīts pieteikšanās ekrānā, ja ierīcē vēl nav pierakstījies neviens lietotājs. Politika tiek iestatīta, norādot URL, no kura Carbon Browser OS ierīce var lejupielādēt fona tapetes attēlu, un kriptogrāfisku jaucējkodu, kas tiek izmantots lejupielādes integritātes verificēšanai. Attēlam ir jābūt JPEG formātā, un tā lielums nedrīkst pārsniegt 16 MB. URL ir jābūt pieejamam bez autentifikācijas. Fona tapetes attēls tiek lejupielādēts un saglabāts kešatmiņā. Tas tiks lejupielādēts atkārtoti, kad mainīsies URL vai jaucējkods.
 
-      Ja ierīces fona tapetes politika būs iestatīta un neviens lietotājs vēl nebūs pierakstījies ierīcē, Carbon Browser Browser Browser OS ierīce lejupielādēs un pieteikšanās ekrānā izmantos fona tapetes attēlu. Tiklīdz kāds lietotājs pieteiksies, tiks aktivizēta lietotāja fona tapetes politika.
+      Ja ierīces fona tapetes politika būs iestatīta un neviens lietotājs vēl nebūs pierakstījies ierīcē, Carbon Browser OS ierīce lejupielādēs un pieteikšanās ekrānā izmantos fona tapetes attēlu. Tiklīdz kāds lietotājs pieteiksies, tiks aktivizēta lietotāja fona tapetes politika.
 
       Ja ierīces fona tapetes politika nebūs iestatīta, taču lietotāja fona tapetes politika būs iestatīta, lietotāja fona tapetes politika noteiks, kas tiks rādīts.</translation>
 <translation id="3965339130942650562">Noildze, līdz dīkstāves lietotāja atteikšanās tiek izpildīta</translation>
@@ -1652,15 +1652,15 @@ Ja šai politikai ir iestatīta vērtība “Nepatiesa”, netiek sniegta inform
 <translation id="3984028218719007910">Nosaka, vai produkts <ph name="PRODUCT_OS_NAME" /> saglabā lokālā konta datus pēc atteikšanās. Ja politika iestatīta uz Patiesa, produkts  <ph name="PRODUCT_OS_NAME" /> nesaglabā nevienu pastāvīgo kontu un visi dati no lietotāja sesijas tiek atmesti pēc atteikšanās. Ja politika ir iestatīta uz Aplama vai nav konfigurēta, ierīce, iespējams, saglabā (šifrētos) lokālos lietotāja datus.</translation>
 <translation id="398475542699441679">Šī politika nosaka, vai jāiespējo mantoto pārlūku atbalsts.
 
-      Ja šī politika nav iestatīta vai tai ir iestatīta vērtība "False", pārlūkā Carbon Browser Browser Browser netiek mēģināts atvērt attiecīgi apzīmētus URL citā pārlūkā.
+      Ja šī politika nav iestatīta vai tai ir iestatīta vērtība "False", pārlūkā Carbon Browser netiek mēģināts atvērt attiecīgi apzīmētus URL citā pārlūkā.
 
-      Ja šai politikai ir iestatīta vērtība "True", pārlūkā Carbon Browser Browser Browser tiek mēģināts atvērt dažus URL citā pārlūkā (piemēram, pārlūkā Internet Explorer). Šī funkcija tiek konfigurēta, izmantojot grupas “<ph name="LEGACY_BROWSER_SUPPORT_POLICY_GROUP" />” politikas.
+      Ja šai politikai ir iestatīta vērtība "True", pārlūkā Carbon Browser tiek mēģināts atvērt dažus URL citā pārlūkā (piemēram, pārlūkā Internet Explorer). Šī funkcija tiek konfigurēta, izmantojot grupas “<ph name="LEGACY_BROWSER_SUPPORT_POLICY_GROUP" />” politikas.
 
-      Šī funkcija aizstāj paplašinājumu <ph name="LEGACY_BROWSER_SUPPORT_EXTENSION_NAME" />. Paplašinājuma konfigurācija tiks pārnesta uz šo funkciju, taču ļoti ieteicams šīs konfigurācijas vietā izmantot Carbon Browser Browser Browser politikas. Tā turpmāk tiks nodrošināta labāka saderība.</translation>
+      Šī funkcija aizstāj paplašinājumu <ph name="LEGACY_BROWSER_SUPPORT_EXTENSION_NAME" />. Paplašinājuma konfigurācija tiks pārnesta uz šo funkciju, taču ļoti ieteicams šīs konfigurācijas vietā izmantot Carbon Browser politikas. Tā turpmāk tiks nodrošināta labāka saderība.</translation>
 <translation id="3997519162482760140">Vietrāži URL, kuriem tiks nodrošināta piekļuve video tveršanas ierīcēm SAML pieteikšanās lapās.</translation>
-<translation id="4001275826058808087">IT administratori var izmantot šo atzīmi uzņēmuma ierīcēs, lai noteiktu, vai ļaut lietotājiem izpirkt piedāvājumus, izmantojot operētājsistēmas Carbon Browser Browser Browser OS reģistrāciju.
+<translation id="4001275826058808087">IT administratori var izmantot šo atzīmi uzņēmuma ierīcēs, lai noteiktu, vai ļaut lietotājiem izpirkt piedāvājumus, izmantojot operētājsistēmas Carbon Browser OS reģistrāciju.
 
-      Ja šai politikai ir iestatīta vērtība Patiesa vai politika nav iestatīta, lietotāji var izpirkt piedāvājumus, izmantojot operētājsistēmas Carbon Browser Browser Browser OS reģistrāciju.
+      Ja šai politikai ir iestatīta vērtība Patiesa vai politika nav iestatīta, lietotāji var izpirkt piedāvājumus, izmantojot operētājsistēmas Carbon Browser OS reģistrāciju.
 
       Ja šai politikai ir iestatīta vērtība Nepatiesa, lietotāji nevar izpirkt piedāvājumus.</translation>
 <translation id="4008233182078913897">Norāda sarakstu ar lietotnēm un paplašinājumiem, kas tiek instalēti klusajā režīmā 
@@ -1674,13 +1674,13 @@ Ja šai politikai ir iestatīta vērtība “Nepatiesa”, netiek sniegta inform
 
           Šīs politikas prioritāte ir lielāka par iespējami konfliktējošās politikas <ph name="EXTENSION_INSTALL_BLACKLIST_POLICY_NAME" /> prioritāti. Ja lietotne vai paplašinājums, kas iepriekš tika instalēts piespiedu kārtā, tiek noņemts no šī saraksta, <ph name="PRODUCT_NAME" /> to automātiski atinstalē.
 
-          Windows instancēs, kas nav pievienotas <ph name="MS_AD_NAME" /> domēnam, piespiedu instalēšana attiecas tikai uz lietotnēm un paplašinājumiem, kas norādīti Carbon Browser Browser Browser interneta veikalā.
+          Windows instancēs, kas nav pievienotas <ph name="MS_AD_NAME" /> domēnam, piespiedu instalēšana attiecas tikai uz lietotnēm un paplašinājumiem, kas norādīti Carbon Browser interneta veikalā.
 
           Ņemiet vērā, ka lietotāji var mainīt jebkura paplašinājuma pirmkodu, izmantojot izstrādātāja rīkus (potenciāli padarot paplašinājuma darbību neiespējamu). Ja tas rada problēmas, ir jāiestata politika <ph name="DEVELOPER_TOOLS_POLICY_NAME" />.
 
-          Katrs politikas saraksta vienums ir virkne, kas ietver paplašinājuma ID un pēc vēlēšanās atjaunināšanas URL, kuri atdalīti ar semikolu (<ph name="SEMICOLON" />). Paplašinājuma ID ir 32 burtu virkne, kas ir redzama, piemēram, lapā <ph name="CHROME_EXTENSIONS_LINK" /> izstrādātāja režīmā. Atjaunināšanas vietrādim URL (ja tas ir norādīts) ir jānovirza uz atjauninājuma manifesta XML dokumentu, kā norādīts šeit: <ph name="LINK_TO_EXTENSION_DOC1" />. Pēc noklusējuma tiek izmantots Carbon Browser Browser Browser interneta veikala atjaunināšanas URL (šobrīd: "https://clients2.google.com/service/update2/crx"). Ņemiet vērā, ka šajā politikā iestatītais atjaunināšanas URL tiek izmantots tikai sākotnējai instalācijai; nākamajiem paplašinājuma atjauninājumiem tiek izmantots paplašinājuma manifestā norādītais atjaunināšanas URL. Turklāt ņemiet vērā, ka atjaunināšanas URL tieša norādīšana bija obligāta visās vecākajās <ph name="PRODUCT_NAME" /> versijās līdz pat versijai 67 (ieskaitot).
+          Katrs politikas saraksta vienums ir virkne, kas ietver paplašinājuma ID un pēc vēlēšanās atjaunināšanas URL, kuri atdalīti ar semikolu (<ph name="SEMICOLON" />). Paplašinājuma ID ir 32 burtu virkne, kas ir redzama, piemēram, lapā <ph name="CHROME_EXTENSIONS_LINK" /> izstrādātāja režīmā. Atjaunināšanas vietrādim URL (ja tas ir norādīts) ir jānovirza uz atjauninājuma manifesta XML dokumentu, kā norādīts šeit: <ph name="LINK_TO_EXTENSION_DOC1" />. Pēc noklusējuma tiek izmantots Carbon Browser interneta veikala atjaunināšanas URL (šobrīd: "https://clients2.google.com/service/update2/crx"). Ņemiet vērā, ka šajā politikā iestatītais atjaunināšanas URL tiek izmantots tikai sākotnējai instalācijai; nākamajiem paplašinājuma atjauninājumiem tiek izmantots paplašinājuma manifestā norādītais atjaunināšanas URL. Turklāt ņemiet vērā, ka atjaunināšanas URL tieša norādīšana bija obligāta visās vecākajās <ph name="PRODUCT_NAME" /> versijās līdz pat versijai 67 (ieskaitot).
 
-          Piemēram, <ph name="EXTENSION_POLICY_EXAMPLE" /> instalē paplašinājumu ar ID <ph name="EXTENSION_ID_SAMPLE" />, izmantojot Carbon Browser Browser Browser interneta veikala standarta atjaunināšanas URL. Plašāku informāciju par paplašinājumu mitināšanu skatiet šeit: <ph name="LINK_TO_EXTENSION_DOC2" />.
+          Piemēram, <ph name="EXTENSION_POLICY_EXAMPLE" /> instalē paplašinājumu ar ID <ph name="EXTENSION_ID_SAMPLE" />, izmantojot Carbon Browser interneta veikala standarta atjaunināšanas URL. Plašāku informāciju par paplašinājumu mitināšanu skatiet šeit: <ph name="LINK_TO_EXTENSION_DOC2" />.
 
           Ja šī politika nav iestatīta, neviena lietotne un paplašinājums netiek instalēts automātiski un lietotājs var atinstalēt jebkuru <ph name="PRODUCT_NAME" /> pārlūkā esošu lietotni vai paplašinājumu.
 
@@ -1787,7 +1787,7 @@ Ja šai politikai ir iestatīta vērtība “Nepatiesa”, netiek sniegta inform
           Ja iestatīsiet šo politiku, lietotāji nevarēs to mainīt un ignorēt.
 
           Ja šī politika nav iestatīta, taustiņu ķēde sākotnēji būs atspējota, taču lietotājs var jebkurā brīdī to iespējot.</translation>
-<translation id="4171331498167688968">Ja politikai ir iestatīta vērtība “False”, trešās puses programmatūra pārlūkprogrammas Carbon Browser Browser Browser procesos varēs ievietot izpildāmo kodu. Ja politikai nav iestatīta vērtība vai ir iestatīta vērtība “True”, trešās puses programmatūrai tiek liegts ievietot izpildāmo kodu pārlūkprogrammas Carbon Browser Browser Browser procesos.
+<translation id="4171331498167688968">Ja politikai ir iestatīta vērtība “False”, trešās puses programmatūra pārlūkprogrammas Carbon Browser procesos varēs ievietot izpildāmo kodu. Ja politikai nav iestatīta vērtība vai ir iestatīta vērtība “True”, trešās puses programmatūrai tiek liegts ievietot izpildāmo kodu pārlūkprogrammas Carbon Browser procesos.
 
       Neatkarīgi no šai politikai iestatītās vērtības šobrīd pārlūkprogrammā netiks bloķēta trešās puses programmatūras iespēja ievietot izpildāmu kodu tās procesos ierīcē, kas ir pievienota domēnam <ph name="MS_AD_NAME" />.</translation>
 <translation id="4183229833636799228">Spraudņa <ph name="FLASH_PLUGIN_NAME" /> noklusējuma iestatījums</translation>
@@ -1855,11 +1855,11 @@ Ja šai politikai ir iestatīta vērtība “Nepatiesa”, netiek sniegta inform
 <translation id="4298509794364745131">Nosaka lietotņu sarakstu, kuras var iespējot kā piezīmju lietotnes <ph name="PRODUCT_OS_NAME" /> bloķēšanas ekrānā.
 
       Ja bloķēšanas ekrānā ir iespējota vēlamā piezīmju lietotne, bloķēšanas ekrānā būs lietotāja saskarnes elements, ar ko varēs palaist vēlamo piezīmju lietotni.
-      Palaista lietotne varēs bloķēšanas ekrāna augšdaļā izveidot lietotnes logu un datu vienumus (piezīmes), kamēr bloķēšanas ekrāns ir iespējots. Lietotne varēs importēt izveidotās piezīmes galvenajā lietotāja sesijā, kad tā būs atbloķēta. Pašlaik bloķēšanas ekrānā tiek atbalstītas tikai Carbon Browser Browser Browser piezīmju lietotnes.
+      Palaista lietotne varēs bloķēšanas ekrāna augšdaļā izveidot lietotnes logu un datu vienumus (piezīmes), kamēr bloķēšanas ekrāns ir iespējots. Lietotne varēs importēt izveidotās piezīmes galvenajā lietotāja sesijā, kad tā būs atbloķēta. Pašlaik bloķēšanas ekrānā tiek atbalstītas tikai Carbon Browser piezīmju lietotnes.
 
       Kad politika ir iestatīta, lietotājam ir atļauts iespējot lietotni bloķēšanas ekrānā tikai tad, ja attiecīgās lietotnes paplašinājuma ID ir iekļauts politikas saraksta vērtībā.
       Tādējādi, iestatot šo politiku tukšā sarakstā, piezīmju izveidošana bloķēšanas ekrānā tiks pilnībā atspējota.
-      Ņemiet vērā: ja politika satur lietotnes ID, tas nenozīmē, ka lietotājs noteikti var iespējot bloķēšanas ekrānā šo lietotni kā piezīmju lietotni. Piemēram, pārlūkā Carbon Browser Browser Browser 61 ir papildu pieejamo lietotņu ierobežojumi.
+      Ņemiet vērā: ja politika satur lietotnes ID, tas nenozīmē, ka lietotājs noteikti var iespējot bloķēšanas ekrānā šo lietotni kā piezīmju lietotni. Piemēram, pārlūkā Carbon Browser 61 ir papildu pieejamo lietotņu ierobežojumi.
 
       Ja politika nav iestatīta, attiecībā uz lietotnēm, kuras lietotājs var iespējot bloķēšanas ekrānā, nav nekādu politikā noteiktu ierobežojumu.</translation>
 <translation id="4313767483634435271">Ierīcei paredzētā doka MAC adrese</translation>
@@ -2016,7 +2016,7 @@ Ja šai politikai ir iestatīta vērtība “Nepatiesa”, netiek sniegta inform
 <translation id="467236746355332046">Atbalstītās funkcijas</translation>
 <translation id="4674167212832291997">Tiek pielāgots URL šablonu saraksts, kas vienmēr jārenderē ar <ph name="PRODUCT_FRAME_NAME" />.
 
-          Ja šī politika nav iestatīta, visām vietnēm tiks izmantots politikā Carbon Browser Browser BrowserFrameRendererSettings norādītais noklusējuma renderētājs.
+          Ja šī politika nav iestatīta, visām vietnēm tiks izmantots politikā Carbon BrowserFrameRendererSettings norādītais noklusējuma renderētājs.
 
           Šablonu piemērus skatiet šeit: https://www.chromium.org/developers/how-tos/chrome-frame-getting-started.</translation>
 <translation id="467449052039111439">Atvērt vietrāžu URL sarakstu</translation>
@@ -2114,10 +2114,10 @@ Ja šai politikai ir iestatīta vērtība “Nepatiesa”, netiek sniegta inform
 
       Ja šai politikai ir iestatīta vērtība “False”, pārlūkā <ph name="PRODUCT_NAME" /> lietotāju pārvaldniekā nevar izveidot jaunus profilus.</translation>
 <translation id="4970855112942626932">Atspējot pierakstīšanos pārlūkprogrammā</translation>
-<translation id="4978405676361550165">Ja politika “OffHours” ir iestatīta, noteiktajos laika intervālos konkrētās ierīču politikas tiek ignorētas (tiek izmantoti šo politiku noklusējuma iestatījumi). Ierīču politikas tiek atkārtoti izmantotas pārlūkā Carbon Browser Browser Browser katru reizi, kad sākas vai beidzas “OffHours” periods. Lietotājam tiks parādīts paziņojums un viņam būs jāizrakstās piespiedu kārtā, kad tiks mainīti “OffHours” laika un ierīču politikas iestatījumi (t.i., ja lietotājs būs pieteicies, izmantojot neatļautu kontu).</translation>
+<translation id="4978405676361550165">Ja politika “OffHours” ir iestatīta, noteiktajos laika intervālos konkrētās ierīču politikas tiek ignorētas (tiek izmantoti šo politiku noklusējuma iestatījumi). Ierīču politikas tiek atkārtoti izmantotas pārlūkā Carbon Browser katru reizi, kad sākas vai beidzas “OffHours” periods. Lietotājam tiks parādīts paziņojums un viņam būs jāizrakstās piespiedu kārtā, kad tiks mainīti “OffHours” laika un ierīču politikas iestatījumi (t.i., ja lietotājs būs pieteicies, izmantojot neatļautu kontu).</translation>
 <translation id="4980635395568992380">Datu tips:</translation>
 <translation id="4983201894483989687">Atļauj palaist novecojušus spraudņus</translation>
-<translation id="4986560318567565414">Ceļš uz pārlūku Carbon Browser Browser Browser, lai pārslēgtos no cita pārlūka.</translation>
+<translation id="4986560318567565414">Ceļš uz pārlūku Carbon Browser, lai pārslēgtos no cita pārlūka.</translation>
 <translation id="4988291787868618635">Darbība, kas ir jāveic, kad ir aizritējis laiks līdz dīkstāvei</translation>
 <translation id="5034604678285451405">Iestatiet akumulatora sliekšņa procentuālo vērtību enerģijas maksimuma pārslēgšanai.
 
@@ -2191,11 +2191,11 @@ Ja šai politikai ir iestatīta vērtība “Nepatiesa”, netiek sniegta inform
       Ja politikai tiek iestatīta vērtība 0, datora konta paroles maiņa tiek atspējota.
 
       Ņemiet vērā, ka paroļu vecums var pārsniegt norādīto dienu skaitu, ja klientdators ilgstoši ir bijis bezsaistē.</translation>
-<translation id="510196893779239086">Šī politika kontrolē, vai Carbon Browser Browser Browser tiks pilnībā aizvērta, kad pēdējā cilne pārslēgsies uz citu pārlūkprogrammu.
+<translation id="510196893779239086">Šī politika kontrolē, vai Carbon Browser tiks pilnībā aizvērta, kad pēdējā cilne pārslēgsies uz citu pārlūkprogrammu.
 
-      Ja šī politika netiek iestatīta vai tai ir iestatīta vērtība “True”, pārlūks Carbon Browser Browser Browser pēc pārslēgšanās uz citu pārlūku saglabās vismaz vienu cilni.
+      Ja šī politika netiek iestatīta vai tai ir iestatīta vērtība “True”, pārlūks Carbon Browser pēc pārslēgšanās uz citu pārlūku saglabās vismaz vienu cilni.
 
-      Ja šai politikai ir iestatīta vērtība “False”, pārlūks Carbon Browser Browser Browser aizvērs cilni pēc pārslēgšanās uz citu pārlūku, pat ja tā ir pēdējā cilne. Tas pilnībā aizvērs pārlūku Carbon Browser Browser Browser.</translation>
+      Ja šai politikai ir iestatīta vērtība “False”, pārlūks Carbon Browser aizvērs cilni pēc pārslēgšanās uz citu pārlūku, pat ja tā ir pēdējā cilne. Tas pilnībā aizvērs pārlūku Carbon Browser.</translation>
 <translation id="5102203758995933166">Ļauj pārsūtīšanas tīkla konfigurāciju izmantot konkrētam <ph name="PRODUCT_OS_NAME" /> ierīces lietotājam. Tīkla konfigurācija ir JSON formatēta virkne, kā definējis atvērtā tīkla konfigurācijas formāts.</translation>
 <translation id="5105313908130842249">Aizkave līdz ekrāna bloķēšanai, ja ierīce darbojas ar akumulatora jaudu</translation>
 <translation id="5108031557082757679">Atspējoti uzņēmuma ierīču printeri</translation>
@@ -2210,7 +2210,7 @@ Ja šai politikai ir iestatīta vērtība “Nepatiesa”, netiek sniegta inform
 <translation id="5148753489738115745">Ļauj noteikt papildu parametrus, kas tiek lietoti, kad spraudnis <ph name="PRODUCT_FRAME_NAME" /> palaiž pārlūkprogrammu <ph name="PRODUCT_NAME" />.
 
           Ja šī politika nav iestatīta, tiks izmantota noklusējuma komandrinda.</translation>
-<translation id="5152787786897382519">Gan pārlūkam Carbon Browser Browser Browser, gan pārlūkam Google Carbon Browser Browser Browser ir dažas politiku grupas, kuras ir atkarīgas viena no otras, lai nodrošinātu kādas funkcijas kontroli. Šīs kopas ir tālāk norādītās politiku grupas. Ņemot vērā, ka politikām var būt vairāki avoti, tiek lietotas tikai vērtības no avota, kam ir visaugstākā prioritāte. Vērtības no zemākas prioritātes avota tajā pašā grupā tiks ignorētas. Prioritāšu secība pieejama vietnē <ph name="POLICY_PRIORITY_DOC_URL" />.</translation>
+<translation id="5152787786897382519">Gan pārlūkam Carbon Browser, gan pārlūkam Google Carbon Browser ir dažas politiku grupas, kuras ir atkarīgas viena no otras, lai nodrošinātu kādas funkcijas kontroli. Šīs kopas ir tālāk norādītās politiku grupas. Ņemot vērā, ka politikām var būt vairāki avoti, tiek lietotas tikai vērtības no avota, kam ir visaugstākā prioritāte. Vērtības no zemākas prioritātes avota tajā pašā grupā tiks ignorētas. Prioritāšu secība pieejama vietnē <ph name="POLICY_PRIORITY_DOC_URL" />.</translation>
 <translation id="5159469559091666409">Pārraudzības tīkla pakešu sūtīšanas biežums (milisekundēs).
 
       Ja šī politika netiek iestatīta, noklusējuma intervāls ir 3 minūtes. Minimālais
@@ -2325,7 +2325,7 @@ Ja šai politikai ir iestatīta vērtība “Nepatiesa”, netiek sniegta inform
           Ja melnā saraksta vērtība ir “*”, visi vietējās ziņojumapmaiņas saimniekdatori ir iekļauti melnajā sarakstā, izņemot gadījumus, kad tie ir atsevišķi norādīti baltajā sarakstā.
 
           Ja šī politika netiek iestatīta, pārlūkā <ph name="PRODUCT_NAME" /> tiks ielādēti visi vietējās ziņojumapmaiņas saimniekdatori.</translation>
-<translation id="5272684451155669299">Ja ir iestatīta vērtība “true”, lietotājs var izmantot aparatūru Carbon Browser Browser Browser ierīcēs, lai attālināti apstiprinātu tās identitāti konfidencialitātes sertificēšanas CA, platformā <ph name="ENTERPRISE_PLATFORM_KEYS_API" /> izmantojot funkciju <ph name="CHALLENGE_USER_KEY_FUNCTION" />.
+<translation id="5272684451155669299">Ja ir iestatīta vērtība “true”, lietotājs var izmantot aparatūru Carbon Browser ierīcēs, lai attālināti apstiprinātu tās identitāti konfidencialitātes sertificēšanas CA, platformā <ph name="ENTERPRISE_PLATFORM_KEYS_API" /> izmantojot funkciju <ph name="CHALLENGE_USER_KEY_FUNCTION" />.
 
           Ja ir iestatīta vērtība “false” vai tā nav iestatīta, API izsaukumi neizdosies un tiks rādīts kļūdas kods.</translation>
 <translation id="5277806246014825877">Lietotāja iespējošana rīka Crostini palaišanai.
@@ -2344,7 +2344,7 @@ Ja šai politikai ir iestatīta vērtība “Nepatiesa”, netiek sniegta inform
 <translation id="5318185076587284965">Pārraides serveru iespējošana attālās piekļuves saimniekdatoram</translation>
 <translation id="5323128137188992869">Atļaujiet ierīcē apraidīt saturu, izmantojot <ph name="PRODUCT_NAME" />.
 
-          Ja šai politikai tiks iestatīta vērtība “False”, lietotāji nevarēs apraidīt saturu savā ierīcē. Ja šai politikai tiks iestatīta vērtība “True”, lietotājiem būs atļauts apraidīt saturu. Ja šī politika nebūs iestatīta, lietotājiem nebūs atļauts apraidīt saturu reģistrētajās Carbon Browser Browser Browser OS ierīcēs, taču viņi varēs apraidīt saturu nereģistrētajās ierīcēs.</translation>
+          Ja šai politikai tiks iestatīta vērtība “False”, lietotāji nevarēs apraidīt saturu savā ierīcē. Ja šai politikai tiks iestatīta vērtība “True”, lietotājiem būs atļauts apraidīt saturu. Ja šī politika nebūs iestatīta, lietotājiem nebūs atļauts apraidīt saturu reģistrētajās Carbon Browser OS ierīcēs, taču viņi varēs apraidīt saturu nereģistrētajās ierīcēs.</translation>
 <translation id="5329007337159326804">Brīdinājums! Sākot ar <ph name="PRODUCT_NAME" /> versiju 75, maksimālā TLS versijas politika tiks pilnībā noņemta (aptuveni 2019. gada jūnijā).
 
       Ja šī politika nav konfigurēta, <ph name="PRODUCT_NAME" /> izmantos noklusējuma maksimālo versiju.
@@ -2543,7 +2543,7 @@ Ja šai politikai ir iestatīta vērtība “Nepatiesa”, netiek sniegta inform
         Ja politikai ir iestatīta vērtība “False”, lietotāji nevar sūtīt atsauksmes uzņēmumam Google.
 
         Ja politika nav iestatīta vai tai ir iestatīta vērtība “True”, lietotāji var sūtīt atsauksmes uzņēmumam Google, pārejot uz sadaļu Izvēlne &gt; Palīdzība &gt; Ziņot par problēmu vai izmantojot taustiņu kombināciju.</translation>
-<translation id="5581292529942108810">Ar pārlūkprogrammas Carbon Browser Browser Browser pārskatu paplašinājumu saistītu politiku konfigurēšana.
+<translation id="5581292529942108810">Ar pārlūkprogrammas Carbon Browser pārskatu paplašinājumu saistītu politiku konfigurēšana.
 
       Šī politika ir spēkā tikai tad, ja ir iespējots paplašinājums <ph name="CHROME_REPORTING_EXTENSION_NAME" /> un mašīna ir reģistrēta pakalpojumā <ph name="MACHINE_LEVEL_USER_CLOUD_POLICY_ENROLLMENT_TOKEN_POLICY_NAME" />.</translation>
 <translation id="5583806683960333345">Ja šis iestatījums ir iespējots, lietotājiem būs atļauts izmantot tūlītējo piesaisti, kas ļauj savam Google tālrunim koplietot savus mobilos datus ar lietotāja ierīci.
@@ -2573,7 +2573,7 @@ Ja šai politikai ir iestatīta vērtība “Nepatiesa”, netiek sniegta inform
 
       Piezīme. Operētājsistēmā Android vietnes izolēšana ir eksperimentāla. Ar laiku atbalsts tiks uzlabots, tomēr pašlaik var rasties veiktspējas problēmas.
 
-      Piezīme. Šī politika attiecas tikai uz pārlūkprogrammu Carbon Browser Browser Browser operētājsistēmā Android ierīcēs, kuru RAM atmiņas ietilpība pārsniedz 1 GB. Lai izmantotu politiku platformās, kas nav Android platformas, izmantojiet politikas iestatījumu “IsolateOrigins”.
+      Piezīme. Šī politika attiecas tikai uz pārlūkprogrammu Carbon Browser operētājsistēmā Android ierīcēs, kuru RAM atmiņas ietilpība pārsniedz 1 GB. Lai izmantotu politiku platformās, kas nav Android platformas, izmantojiet politikas iestatījumu “IsolateOrigins”.
       </translation>
 <translation id="5599461642204007579"><ph name="MS_AD_NAME" /> pārvaldības iestatījumi</translation>
 <translation id="5610104657949692379">Ja šī politika ir iestatīta, tā norāda darbību, kuru veic operētājsistēma <ph name="PRODUCT_OS_NAME" />, kad lietotājs nav aktīvs laika posmu, kas norādīts dīkstāves iestatījumā, ko var konfigurēt atsevišķi.
@@ -2581,7 +2581,7 @@ Ja šai politikai ir iestatīta vērtība “Nepatiesa”, netiek sniegta inform
           Ja šī politika nav iestatīta, tiek veikta noklusējuma darbība (darbība tiek apturēta).
 
           Ja tiek izvēlēta darbības apturēšana, <ph name="PRODUCT_OS_NAME" /> var atsevišķi konfigurēt, vai bloķēt vai nebloķēt ekrānu pirms darbības apturēšanas.</translation>
-<translation id="5618398258385745432">Šis saistītais iestatījums tika izmantots, pirms tika ieviesta atkārtotā autentifikācija paroļu skatīšanai. Tāpēc šis iestatījums un šī politika neietekmē Carbon Browser Browser Browser darbību. Pašlaik Carbon Browser Browser Browser darbojas tā, it kā politika būtu iestatīta nerādīt paroles nešifrētā tekstā paroļu pārvaldnieka iestatījumu lapā. Tas nozīmē, ka iestatījumu lapā ir redzams tikai vietturis, un Carbon Browser Browser Browser parāda paroli tikai tad, ja lietotājs noklikšķina uz “Rādīt” (un atkārtoti autentificējas, ja piemērojams). Tālāk redzams politikas sākotnējais apraksts.
+<translation id="5618398258385745432">Šis saistītais iestatījums tika izmantots, pirms tika ieviesta atkārtotā autentifikācija paroļu skatīšanai. Tāpēc šis iestatījums un šī politika neietekmē Carbon Browser darbību. Pašlaik Carbon Browser darbojas tā, it kā politika būtu iestatīta nerādīt paroles nešifrētā tekstā paroļu pārvaldnieka iestatījumu lapā. Tas nozīmē, ka iestatījumu lapā ir redzams tikai vietturis, un Carbon Browser parāda paroli tikai tad, ja lietotājs noklikšķina uz “Rādīt” (un atkārtoti autentificējas, ja piemērojams). Tālāk redzams politikas sākotnējais apraksts.
 
           Nosaka, vai paroles paroļu pārvaldniekā ir redzamas nešifrētā tekstā.
 
@@ -2688,7 +2688,7 @@ Ja šai politikai ir iestatīta vērtība “Nepatiesa”, netiek sniegta inform
       Ja šī politika nav konfigurēta, lietotājs varēs mainīt šo iestatījumu.
       </translation>
 <translation id="5832274826894536455">Novecojušas politikas</translation>
-<translation id="5835124959204887277">Tiek norādīti vietrāži URL un domēni, kuriem netiks rādīta uzvedne, kad tiks pieprasīti drošības atslēgu apstiprinājuma sertifikāti. Turklāt uz drošības atslēgu tiks nosūtīts signāls, norādot, ka var izmantot atsevišķu apstiprinājumu. Ja šī politika netiek izmantota, Carbon Browser Browser Browser 65. versijas vai jaunākas versijas lietotājiem tiks parādīta uzvedne, kad vietnēs tiks pieprasīts drošības atslēgu apstiprinājums.
+<translation id="5835124959204887277">Tiek norādīti vietrāži URL un domēni, kuriem netiks rādīta uzvedne, kad tiks pieprasīti drošības atslēgu apstiprinājuma sertifikāti. Turklāt uz drošības atslēgu tiks nosūtīts signāls, norādot, ka var izmantot atsevišķu apstiprinājumu. Ja šī politika netiek izmantota, Carbon Browser 65. versijas vai jaunākas versijas lietotājiem tiks parādīta uzvedne, kad vietnēs tiks pieprasīts drošības atslēgu apstiprinājums.
 
       Vietrāži URL (piemēram, https://example.com/kads/cels) atbildīs tikai kā U2F appID. Domēni (piemēram, example.com) atbildīs tikai kā tīmekļa autorizācijas RP ID. Tādējādi, lai nodrošinātu U2F un tīmekļa autorizācijas API konkrētai vietnei, ir jābūt norādītam gan appID vietrādim URL, gan domēnam.</translation>
 <translation id="5836064773277134605">Attālās piekļuves saimniekdatora izmantoto UDP portu diapazona ierobežošana</translation>
@@ -2745,7 +2745,7 @@ Ja šai politikai ir iestatīta vērtība “Nepatiesa”, netiek sniegta inform
           Ja iestatāt šo politiku, lietotāji var īslaicīgi to ignorēt, iespējojot vai atspējojot lielo kursoru. Tomēr lietotāja izvēle nav paliekoša, un noklusējuma vērtība tiek atjaunota, kad tiek atkārtoti parādīts pieteikšanās ekrāns vai kad lietotājs minūti nav aktīvs pieteikšanās ekrānā.
 
           Ja politika nav iestatīta, lielais kursors tiek atspējots, kad pirmo reizi tiek parādīts pieteikšanās ekrāns. Lietotāji var jebkurā brīdī iespējot vai atspējot lielo kursoru, un tā statuss pieteikšanās ekrānā tiek saglabāts visiem lietotājiem.</translation>
-<translation id="5929855945144989709">Atļaut ierīcēm darboties virtuālās mašīnās ar Carbon Browser Browser Browser OS</translation>
+<translation id="5929855945144989709">Atļaut ierīcēm darboties virtuālās mašīnās ar Carbon Browser OS</translation>
 <translation id="5932767795525445337">Šo politiku var izmantot arī Android lietotņu piespraušanai.</translation>
 <translation id="5936622343001856595">Pakalpojumā Google tīmekļa meklēšana ievadītajiem vaicājumiem vienmēr tiek aktivizēts filtrs Droša meklēšana, un lietotāji nevar mainīt šo iestatījumu.
 
@@ -2799,7 +2799,7 @@ Ja šai politikai ir iestatīta vērtība “Nepatiesa”, netiek sniegta inform
           Politikas vērtība ir jānorāda milisekundēs. Vērtības vienmēr būs mazākas nekā neaktivitātes atlikšana.</translation>
 <translation id="6097601282776163274">Iespējot uz vietrāžiem URL balstītu anonimizētu datu apkopošanu</translation>
 <translation id="6099853574908182288">Noklusējuma krāsainās drukāšanas režīms</translation>
-<translation id="6107642964266628393">Kontrolē, kā un kad tiek lietoti Carbon Browser Browser Browser OS atjauninājumi.</translation>
+<translation id="6107642964266628393">Kontrolē, kā un kad tiek lietoti Carbon Browser OS atjauninājumi.</translation>
 <translation id="6111936128861357925">Dinozauru spēles atļaušana</translation>
 <translation id="6114416803310251055">novecojis</translation>
 <translation id="6133088669883929098">Atļaut izmantot atslēgu ģenerēšanu visās vietnēs</translation>
@@ -2823,7 +2823,7 @@ Ja šai politikai ir iestatīta vērtība “Nepatiesa”, netiek sniegta inform
 
       Ja šī politika nav iestatīta vai tai ir iestatīta vērtība “False”, netiek apkopoti vai augšupielādēti nekādi dati.
       Ja šai politikai ir iestatīta vērtība “True”, dati tiek apkopoti un augšupielādēti Google Admin konsolē.
-      Lai kontrolētu, kādi dati tiek augšupielādēti, lūdzu, izmantojiet politikas grupā “Carbon Browser Browser Browser pārskatu paplašinājums”.
+      Lai kontrolētu, kādi dati tiek augšupielādēti, lūdzu, izmantojiet politikas grupā “Carbon Browser pārskatu paplašinājums”.
 
       Šī politika ir spēkā tikai tad, ja ierīce ir reģistrēta pakalpojumā <ph name="MACHINE_LEVEL_USER_CLOUD_POLICY_ENROLLMENT_TOKEN_POLICY_NAME" />.
 
@@ -2893,7 +2893,7 @@ Ja šai politikai ir iestatīta vērtība “Nepatiesa”, netiek sniegta inform
 <translation id="6282799760374509080">Audio tveršanas ļaušana vai noraidīšana</translation>
 <translation id="6284362063448764300">TLS 1.1</translation>
 <translation id="6310223829319187614">Domēna nosaukuma automātiskās pabeigšanas iespējošana lietotāja pierakstīšanās laikā</translation>
-<translation id="6315673513957120120">Ja lietotāji atver vietnes, kurās ir SSL kļūdas, pārlūkā Carbon Browser Browser Browser tiek parādīta brīdinājuma lapa. Pēc noklusējuma, kā arī tad, ja šai politikai ir iestatīta vērtība Patiesa, lietotājiem ir atļauts no brīdinājuma lapas pāriet uz vietni.
+<translation id="6315673513957120120">Ja lietotāji atver vietnes, kurās ir SSL kļūdas, pārlūkā Carbon Browser tiek parādīta brīdinājuma lapa. Pēc noklusējuma, kā arī tad, ja šai politikai ir iestatīta vērtība Patiesa, lietotājiem ir atļauts no brīdinājuma lapas pāriet uz vietni.
       Ja politikai ir iestatīta vērtība Nepatiesa, lietotājiem tiek liegts no brīdinājuma lapas pāriet uz vietni.</translation>
 <translation id="6319198883324703402">Iestatiet pirmā lietotāja atkārtotas palaišanas paziņojuma laiku</translation>
 <translation id="6352543686437322588">Ierīces lokālais konts, lai automātiski pieteiktos pēc kavēšanās.
@@ -2935,7 +2935,7 @@ Ja šai politikai ir iestatīta vērtība “Nepatiesa”, netiek sniegta inform
           Ja izvēlēsieties automātiski noteikt starpniekserveri, Android lietotnēm tiks nodrošināts skripta URL http://wpad/wpad.dat. Netiks izmantota neviena cita daļa no automātiskās noteikšanas protokola.
 
           Ja izvēlēsieties izmantot .pac starpniekservera skriptu, Android lietotnēm tiks nodrošināts skripta URL.</translation>
-<translation id="6430366557948788869">Carbon Browser Browser Browser pārskatu paplašinājums</translation>
+<translation id="6430366557948788869">Carbon Browser pārskatu paplašinājums</translation>
 <translation id="6440051664870270040">Atļauja vietnēs vienlaicīgi izmantot navigāciju un atvērt uznirstošos logus</translation>
 <translation id="6447948611083700881">Dublēšana un atjaunošana ir atspējota</translation>
 <translation id="6449476513004303784">Neļaut lietotājiem pārvaldīt sertifikātus</translation>
@@ -2993,9 +2993,9 @@ Ja šai politikai ir iestatīta vērtība “Nepatiesa”, netiek sniegta inform
 <translation id="6536600139108165863">Automātiska restartēšana, izslēdzot ierīci</translation>
 <translation id="6539246272469751178">Šī politika neietekmē Android lietotnes. Android lietotnes vienmēr izmanto lejupielāžu noklusējuma direktoriju un nevar piekļūt failiem, ko <ph name="PRODUCT_OS_NAME" /> lejupielādēja lejupielāžu direktorijā, kas nav noklusējuma direktorijs.</translation>
 <translation id="654303922206238013">eCryptfs migrēšanas stratēģija</translation>
-<translation id="6544897973797372144">Ja šai politikai ir iestatīta vērtība Patiesa un politika Carbon Browser Browser BrowserOsReleaseChannel nav norādīta, reģistrēšanas domēna lietotājiem ir atļauts mainīt ierīces izlaišanas kanālu. Ja šī politika ir iestatīta uz Aplama, ierīce tiek bloķēta neatkarīgi no kanāla, kurā tā tika iestatīta pēdējo reizi.
+<translation id="6544897973797372144">Ja šai politikai ir iestatīta vērtība Patiesa un politika Carbon BrowserOsReleaseChannel nav norādīta, reģistrēšanas domēna lietotājiem ir atļauts mainīt ierīces izlaišanas kanālu. Ja šī politika ir iestatīta uz Aplama, ierīce tiek bloķēta neatkarīgi no kanāla, kurā tā tika iestatīta pēdējo reizi.
 
-      Iestatot politiku Carbon Browser Browser BrowserOsReleaseChannel, tiks ignorēts lietotāja atlasītais kanāls, bet, ja politikas kanāls būs stabilāks par to, kas instalēts ierīcē, kanāla pārslēgšana notiks tikai pēc tam, kad stabilākais kanāls sasniegs skaitli, kas ir lielāks par ierīcē instalēto skaitli.</translation>
+      Iestatot politiku Carbon BrowserOsReleaseChannel, tiks ignorēts lietotāja atlasītais kanāls, bet, ja politikas kanāls būs stabilāks par to, kas instalēts ierīcē, kanāla pārslēgšana notiks tikai pēc tam, kad stabilākais kanāls sasniegs skaitli, kas ir lielāks par ierīcē instalēto skaitli.</translation>
 <translation id="6553143066970470539">Ekrāna spilgtuma procenti</translation>
 <translation id="6559057113164934677">Neļaut nevienai vietnei piekļūt kamerai un mikrofonam</translation>
 <translation id="6561396069801924653">Rādīt pieejamības opcijas sistēmas teknes izvēlnē</translation>
@@ -3075,7 +3075,7 @@ Ja šai politikai ir iestatīta vērtība “Nepatiesa”, netiek sniegta inform
 <translation id="6698632841807204978">Iespējot vienkrāsaino drukāšanu</translation>
 <translation id="6699880231565102694">Divu faktoru autentifikācijas iespējošana attālās piekļuves saimniekdatoriem</translation>
 <translation id="6731757988219967594">Filtrēt augšējā līmeņa vietnes ar pieaugušajiem paredzētu saturu (bet ne iegultos iFrame tagus)</translation>
-<translation id="6734521799274931721">Kontrolē tīkla failu kopīgošanas ierīces Carbon Browser Browser Browser OS pieejamībai</translation>
+<translation id="6734521799274931721">Kontrolē tīkla failu kopīgošanas ierīces Carbon Browser OS pieejamībai</translation>
 <translation id="6735701345096330595">Iespējo pareizrakstības pārbaudes valodas piespiedu kārtā</translation>
 <translation id="673699536430961464">Šis iestatījums ļauj lietotājiem pārlūka loga satura apgabalā pārslēgt Google kontu, kad lietotāji ir pierakstījušies <ph name="PRODUCT_OS_NAME" /> ierīcē.
 
@@ -3083,7 +3083,7 @@ Ja šai politikai ir iestatīta vērtība “Nepatiesa”, netiek sniegta inform
 
       Ja šī politika nav iestatīta vai tai ir iestatīta vērtība “True”, lietotājs pēc noklusējuma var pārlūka satura apgabalā pierakstīties citā kontā. To nevar izdarīt tikai pakārtotā konta lietotājs — šāda iespēja satura apgabalā (kad inkognito režīms nav iespējots) ir bloķēta.
 
-      Ja vēlaties liegt pierakstīšanos citā kontā inkognito režīmā, ieteicams bloķēt režīma lietošanu, izmantojot politiku PrivateModeAvailability.
+      Ja vēlaties liegt pierakstīšanos citā kontā inkognito režīmā, ieteicams bloķēt režīma lietošanu, izmantojot politiku privateModeAvailability.
 
       Ņemiet vērā, ka lietotāji var piekļūt Google pakalpojumiem neautentificētā statusā, bloķējot to sīkfailus.</translation>
 <translation id="6757438632136860443">Ļauj iestatīt to vietrāžu URL rakstu sarakstu, kas norāda vietnes, kurām atļauts izpildīt spraudni <ph name="FLASH_PLUGIN_NAME" />.
@@ -3120,7 +3120,7 @@ Ja šai politikai ir iestatīta vērtība “Nepatiesa”, netiek sniegta inform
 
       Ja šai politikai ir iestatīta vērtība “false”, iebūvētais DNS klients nekad netiek izmantots.
 
-      Ja šī politika nav iestatīta, iebūvētais DNS klients tiek iespējots pēc noklusējuma sistēmā Mac OS, Android (kad nav iespējots privātais DNS vai VPN) un Carbon Browser Browser Browser OS, un lietotāji var mainīt iebūvētā DNS klienta izmantošanas iestatījumu, veicot izmaiņas lapā chrome://flags vai norādot komandrindiņas karodziņu.</translation>
+      Ja šī politika nav iestatīta, iebūvētais DNS klients tiek iespējots pēc noklusējuma sistēmā Mac OS, Android (kad nav iespējots privātais DNS vai VPN) un Carbon Browser OS, un lietotāji var mainīt iebūvētā DNS klienta izmantošanas iestatījumu, veicot izmaiņas lapā chrome://flags vai norādot komandrindiņas karodziņu.</translation>
 <translation id="6843296367238757293">Šī politika ir novecojusi. Nav ieteicams to lietot. Uzziniet vairāk šeit: https://support.google.com/chrome/a/answer/7643500.</translation>
 <translation id="684856667300805181">Šī politika tika noņemta <ph name="PRODUCT_NAME" /> 68 versijā, un to aizstāj politika <ph name="ARC_GLS_POLICY_NAME" />.</translation>
 <translation id="6856743875250214792">Ar atjauninājumu M66 šai politikai tika pārtraukts atbalsts un tā tika noņemta, jo tā tika izmantota tikai iekšējai testēšanai un apdraud drošību.
@@ -3163,7 +3163,7 @@ Ja šai politikai ir iestatīta vērtība “Nepatiesa”, netiek sniegta inform
 
       PIEZĪME. Operētājsistēmā Android vietņu izolēšana ir eksperimentāla. Ar laiku atbalsts tiks uzlabots, tomēr pašlaik var rasties veiktspējas problēmas.
 
-      PIEZĪME. Šī politika attiecas tikai uz pārlūku Carbon Browser Browser Browser operētājsistēmā Android ierīcēs, kuru RAM atmiņas ietilpība pārsniedz 1 GB. Lai izmantotu politiku platformās, kas nav Android operētājsistēma, izmantojiet SitePerProcess.
+      PIEZĪME. Šī politika attiecas tikai uz pārlūku Carbon Browser operētājsistēmā Android ierīcēs, kuru RAM atmiņas ietilpība pārsniedz 1 GB. Lai izmantotu politiku platformās, kas nav Android operētājsistēma, izmantojiet SitePerProcess.
       </translation>
 <translation id="6922884955650325312">Spraudņa <ph name="FLASH_PLUGIN_NAME" /> bloķēšana</translation>
 <translation id="6923366716660828830">Norāda noklusējuma meklētājprogrammas nosaukumu. Ja nekas nav ievadīts vai šī politika nav iestatīta, tiks lietots ar meklēšanas URL norādītais saimniekdatora nosaukums.
@@ -3261,7 +3261,7 @@ Lietotāja fiziskās klātbūtnes noteikšanai tiek izmantota ierīces barošana
 
       Ja šai politikai tiks iestatīta vērtība “False” vai neviena vērtība netiks iestatīta, <ph name="PRODUCT_NAME" /> var netikt atļauts vākt un augšupielādēt šos žurnālus.
 
-      Šajos žurnālos tiek iekļauta diagnostikas informācija, kas var būt noderīga, pārlūkā Carbon Browser Browser Browser novēršot ar audio vai video zvaniem saistītas kļūdas. Žurnālos ir pieejami tādi dati kā nosūtīto un saņemto RTP pakotņu laiks un lielums, dati par pārslodzi tīklā un audio un video laika un kvalitātes metadati. Žurnālos netiek iekļauts zvanu audio vai video saturs.
+      Šajos žurnālos tiek iekļauta diagnostikas informācija, kas var būt noderīga, pārlūkā Carbon Browser novēršot ar audio vai video zvaniem saistītas kļūdas. Žurnālos ir pieejami tādi dati kā nosūtīto un saņemto RTP pakotņu laiks un lielums, dati par pārslodzi tīklā un audio un video laika un kvalitātes metadati. Žurnālos netiek iekļauts zvanu audio vai video saturs.
 
       Tikai Google tīmekļa pakalpojumi, piemēram, Google Hangouts vai Google Meet, var uzsākt datu vākšanu.
 
@@ -3359,12 +3359,12 @@ Lietotāja fiziskās klātbūtnes noteikšanai tiek izmantota ierīces barošana
 <translation id="7185078796915954712">TLS 1.3</translation>
 <translation id="718956142899066210">Savienojumu veidi, kuru laikā ir atļauts veikt atjaunināšanu</translation>
 <translation id="7194407337890404814">Noklusējuma meklētājprogrammas nosaukums</translation>
-<translation id="7199304109870655950">Konfigurējiet attālās piekļuves opcijas Carbon Browser Browser Browser attālās darbvirsmas saimniekdatorā.
+<translation id="7199304109870655950">Konfigurējiet attālās piekļuves opcijas Carbon Browser attālās darbvirsmas saimniekdatorā.
 
-      Carbon Browser Browser Browser attālās darbvirsmas saimniekdators ir vietējais pakalpojums, kas darbojas ierīcē, ar kuru lietotājs var izveidot savienojumu, izmantojot lietojumprogrammu Carbon Browser Browser Browser attālā darbvirsma.  Vietējais pakalpojums tiek pakots un izpildīts atsevišķi no pārlūka <ph name="PRODUCT_NAME" />.
+      Carbon Browser attālās darbvirsmas saimniekdators ir vietējais pakalpojums, kas darbojas ierīcē, ar kuru lietotājs var izveidot savienojumu, izmantojot lietojumprogrammu Carbon Browser attālā darbvirsma.  Vietējais pakalpojums tiek pakots un izpildīts atsevišķi no pārlūka <ph name="PRODUCT_NAME" />.
 
       Šīs politikas tiek ignorētas, ja
-      Carbon Browser Browser Browser attālās darbvirsmas saimniekdators nav instalēts.</translation>
+      Carbon Browser attālās darbvirsmas saimniekdators nav instalēts.</translation>
 <translation id="7202925763179776247">Lejupielādes ierobežojumu atļaušana</translation>
 <translation id="7207095846245296855">Filtra Google droša meklēšana piespiedu izmantošana</translation>
 <translation id="7211368186050418507">Nekad nenoteikt laika joslu automātiski</translation>
@@ -3466,9 +3466,9 @@ Lietotāja fiziskās klātbūtnes noteikšanai tiek izmantota ierīces barošana
 <translation id="7329968046053403405">Norāda Android autentifikācijas lietotnes nodrošināto kontu veidu, kuros tiek atbalstīta <ph name="HTTP_NEGOTIATE" /> autentifikācija (piemēram, Kerberos autentifikācija). Šai informācijai ir jābūt pieejamai no autentifikācijas lietotnes nodrošinātāja. Plašāku informāciju skatiet vietnē https://goo.gl/hajyfN.
 
           Ja iestatījums nav norādīts, <ph name="HTTP_NEGOTIATE" /> autentifikācija operētājsistēmā Android tiek atspējota.</translation>
-<translation id="7331962793961469250">Ja ir iestatīta vērtība Patiess, jaunas cilnes lapā netiek rādītas Carbon Browser Browser Browser interneta veikala lietotņu reklāmas.
+<translation id="7331962793961469250">Ja ir iestatīta vērtība Patiess, jaunas cilnes lapā netiek rādītas Carbon Browser interneta veikala lietotņu reklāmas.
 
-      Ja šai opcijai ir iestatīta vērtība Aplams vai tā vispār nav iestatīta, jaunas cilnes lapā tiek rādītas Carbon Browser Browser Browser interneta veikala lietotņu reklāmas.</translation>
+      Ja šai opcijai ir iestatīta vērtība Aplams vai tā vispār nav iestatīta, jaunas cilnes lapā tiek rādītas Carbon Browser interneta veikala lietotņu reklāmas.</translation>
 <translation id="7332963785317884918">Šī politika vairs netiek izmantota. <ph name="PRODUCT_OS_NAME" /> vienmēr izmantos tīrīšanas stratēģiju “RemoveLRU”.
 
       Kontrolē automātisko tīrīšanu <ph name="PRODUCT_OS_NAME" /> ierīcēs. Automātiskā tīrīšana tiek aktivizēta, kad tiek sasniegts kritisks brīvās diska vietas līmenis, lai iegūtu brīvu vietu diskā.
@@ -3527,7 +3527,7 @@ Lietotāja fiziskās klātbūtnes noteikšanai tiek izmantota ierīces barošana
       </translation>
 <translation id="7506269062143646163">Iespējojiet parakstītās HTTP apmaiņas (SXG) atbalstu.
 
-          Ja šī politika nav iestatīta vai ir iespējota, Carbon Browser Browser Browser pieņems tīmekļa saturu, kas tiek sniegts kā parakstītā HTTP apmaiņa.
+          Ja šī politika nav iestatīta vai ir iespējota, Carbon Browser pieņems tīmekļa saturu, kas tiek sniegts kā parakstītā HTTP apmaiņa.
 
           Ja šī politika ir atspējota, parakstītās HTTP apmaiņas saturu nevarēs ielādēt.</translation>
 <translation id="7511361072385293666">Ja politikai ir iestatīta vērtība Patiesa vai tā nav iestatīta, pārlūkā <ph name="PRODUCT_NAME" /> ir atļauts lietot protokolu QUIC.
@@ -3568,7 +3568,7 @@ Lietotāja fiziskās klātbūtnes noteikšanai tiek izmantota ierīces barošana
 
       Ja šī politika nav iestatīta vai tai ir iestatīta vērtība 0, pārejot uz norādīto URL, tas uzreiz tiek atvērts citā pārlūkprogrammā.
 
-      Ja šai politikai ir iestatīts skaitlis, pārlūkprogrammā Carbon Browser Browser Browser ziņojums tiek rādīts attiecīgo milisekunžu skaitu un pēc tam tiek atvērta cita pārlūkprogramma.</translation>
+      Ja šai politikai ir iestatīts skaitlis, pārlūkprogrammā Carbon Browser ziņojums tiek rādīts attiecīgo milisekunžu skaitu un pēc tam tiek atvērta cita pārlūkprogramma.</translation>
 <translation id="7593523670408385997">Konfigurē kešatmiņas lielumu, kas tiks izmantots pārlūkā <ph name="PRODUCT_NAME" />, lai kešatmiņā ievietotos failus uzglabātu diskā.
 
       Ja iestatīsiet šo politiku, pārlūkā <ph name="PRODUCT_NAME" /> tiks izmantots norādītais kešatmiņas lielums neatkarīgi no tā, vai lietotājs ir norādījis atzīmi “--disk-cache-size”. Šajā politikā norādītā vērtība nav stingri noteikts ierobežojums, bet drīzāk kā ieteikums kešdarbes sistēmai, turklāt jebkura vērtība, kas ir zemāka par dažiem megabaitiem, ir pārāk maza un tiks noapaļota uz saprātīgu minimālo vērtību.
@@ -3753,7 +3753,7 @@ Lietotāja fiziskās klātbūtnes noteikšanai tiek izmantota ierīces barošana
 
       PIEZĪME. Līdz 45. versijai šī politika tika atbalstīta tikai kioska režīmā.</translation>
 <translation id="7912255076272890813">Atļauto lietotņu/paplašinājumu veidu konfigurēšana</translation>
-<translation id="7922358664346625612">Saglabāt pēdējo cilni atvērtu pārlūkā Carbon Browser Browser Browser.</translation>
+<translation id="7922358664346625612">Saglabāt pēdējo cilni atvērtu pārlūkā Carbon Browser.</translation>
 <translation id="793134539373873765">Norāda, vai operētājsistēmas atjaunināšanas vērtumiem izmantot P2P. Ja ir iestatīta vērtība “True”, ierīces kopīgos un mēģinās izmantot atjaunināšanas vērtumus LAN tīklā, tādējādi, iespējams, samazinot interneta joslas platuma lietojumu un pārblīvi. Ja LAN tīklā nav pieejams atjaunināšanas vērtums, ierīce izmantos lejupielādi no atjaunināšanas servera. Ja ir iestatīta vērtība “False” vai šis iestatījums nav konfigurēts, P2P netiks lietots.</translation>
 <translation id="7933141401888114454">Iespējot uzraudzīto lietotāju kontu izveidi</translation>
 <translation id="793473937901685727">Iestatīt sertifikātu pieejamību ARC lietotnēm</translation>
@@ -3789,7 +3789,7 @@ Lietotāja fiziskās klātbūtnes noteikšanai tiek izmantota ierīces barošana
 <translation id="798856998567564266">Ja šis iestatījums ir iespējots, grāmatzīmes var pievienot, noņemt vai modificēt. Tas ir arī noklusējuma iestatījums tad, ja šī politika nav iestatīta.
 
       Ja šis iestatījums ir atspējots, grāmatzīmes nevar pievienot, noņemt vai modificēt. Esošās grāmatzīmes joprojām ir pieejamas.</translation>
-<translation id="7992136759457836904">Ļauj kontrolēt, vai virtuālajām ierīcēm ir atļauts darboties Carbon Browser Browser Browser operētājsistēmā.
+<translation id="7992136759457836904">Ļauj kontrolēt, vai virtuālajām ierīcēm ir atļauts darboties Carbon Browser operētājsistēmā.
 
       Ja politikai ir iestatīta vērtība “True”, ierīcei ir atļauts palaist virtuālās mašīnas.
       Ja politikai ir iestatīta vērtība “False”, ierīcei nebūs atļauts palaist virtuālās mašīnas.
@@ -3869,7 +3869,7 @@ Lietotāja fiziskās klātbūtnes noteikšanai tiek izmantota ierīces barošana
       Ja šīs politikas iestatījums ir “False”, saskarņu saraksts netiks nosūtīts.</translation>
 <translation id="8141795997560411818">Šī politika neliedz lietotājam izmantot Android lietotni Google disks. Ja nevēlaties atļaut piekļuvi lietotnei Google disks, neatļaujiet arī instalēt Android lietotni Google disks.</translation>
 <translation id="8142894094385450823">Pārvaldītās sesijas ieteikto lokalizāciju iestatīšana</translation>
-<translation id="8146727383888924340">Atļaut lietotājiem izpirkt piedāvājumus, izmantojot Carbon Browser Browser Browser OS reģistrāciju</translation>
+<translation id="8146727383888924340">Atļaut lietotājiem izpirkt piedāvājumus, izmantojot Carbon Browser OS reģistrāciju</translation>
 <translation id="8148785525797916822">Aptur brīdinājuma rādīšanu, kad <ph name="PRODUCT_NAME" /> darbojas datorā vai operētājsistēmā, kura vairs netiek atbalstīta.</translation>
 <translation id="8148901634826284024">Iespējojiet augsta kontrasta pieejamības funkciju.
 
@@ -3916,7 +3916,7 @@ Lietotāja fiziskās klātbūtnes noteikšanai tiek izmantota ierīces barošana
       Ja politika netiks iestatīta, <ph name="PRODUCT_OS_NAME" /> izmantos ierīces lokālā konta e-pasta konta ID kā parādāmo vārdu pieteikšanās ekrānā.
 
       Šī politika netiek ņemta vērā parastajiem lietotāju kontiem.</translation>
-<translation id="8259375588339409826">Pārlūkos Carbon Browser Browser Browser un Google Carbon Browser Browser Browser tiek atbalstīta viena un tā pati politiku kopa. Lūdzu, ņemiet vērā, ka šajā dokumentā var būt ietvertas neizlaistas politikas (t.i., to ieraksts “Atbalstītās ierīces” attiecas uz vēl neizlaistu <ph name="PRODUCT_NAME" /> versiju), kuras var tikt mainītas vai noņemtas bez brīdinājuma un par kurām netiek sniegtas nekāda veida garantijas, tostarp garantijas par drošību un konfidencialitāti.
+<translation id="8259375588339409826">Pārlūkos Carbon Browser un Google Carbon Browser tiek atbalstīta viena un tā pati politiku kopa. Lūdzu, ņemiet vērā, ka šajā dokumentā var būt ietvertas neizlaistas politikas (t.i., to ieraksts “Atbalstītās ierīces” attiecas uz vēl neizlaistu <ph name="PRODUCT_NAME" /> versiju), kuras var tikt mainītas vai noņemtas bez brīdinājuma un par kurām netiek sniegtas nekāda veida garantijas, tostarp garantijas par drošību un konfidencialitāti.
 
 Šīs politikas ir paredzētas tikai jūsu organizācijas iekšējo <ph name="PRODUCT_NAME" /> instanču konfigurācijas veikšanai. Šo politiku izmantojums ārpus jūsu organizācijas (piemēram, publiski izplatītā programmā) tiek uzskatīts par ļaunprātīgu programmatūru, un, visticamāk, uzņēmums Google un pretvīrusu programmu pakalpojumu sniedzēji to arī atzīmēs kā ļaunprātīgu programmatūru.
 
@@ -3933,7 +3933,7 @@ Operētājsistēmā Windows politikas konfigurēšanai ieteicams izmantot GPO, t
 
       Ja politikai ir iestatīta vērtība “false”, statistikas dati netiek nosūtīti.
       Ja politikai ir iestatīta vērtība “true” vai tā nav iestatīta, statistikas dati tiek nosūtīti.</translation>
-<translation id="8294750666104911727">Lapas, kurās X-UA-Compatible iestatījums ir chrome=1, parasti tiek renderētas spraudnī <ph name="PRODUCT_FRAME_NAME" /> neatkarīgi no politikas Carbon Browser Browser BrowserFrameRendererSettings iestatījuma.
+<translation id="8294750666104911727">Lapas, kurās X-UA-Compatible iestatījums ir chrome=1, parasti tiek renderētas spraudnī <ph name="PRODUCT_FRAME_NAME" /> neatkarīgi no politikas Carbon BrowserFrameRendererSettings iestatījuma.
 
           Ja iespējosiet šo iestatījumu, lapās netiks meklēti metatagi.
 
@@ -3959,7 +3959,7 @@ Operētājsistēmā Windows politikas konfigurēšanai ieteicams izmantot GPO, t
 <translation id="8344454543174932833">Grāmatzīmju importēšana no noklusējuma pārlūka pirmajā palaišanas reizē</translation>
 <translation id="8357681633047935212">Ierobežot lietotāja sesijas garumu</translation>
 <translation id="8359734107661430198">Iespējot ExampleDeprecatedFeature API, kas bija derīgs līdz 02.09.2008.</translation>
-<translation id="8367209241899435947">Iespējojiet Carbon Browser Browser Browser tīrīšanas rīku Windows datorā</translation>
+<translation id="8367209241899435947">Iespējojiet Carbon Browser tīrīšanas rīku Windows datorā</translation>
 <translation id="8369602308428138533">Aizkave līdz ekrāna izslēgšanai, ja ierīce darbojas ar maiņstrāvu</translation>
 <translation id="8371178326720637170">Ļauj pārvaldītajiem paplašinājumiem izmantot Enterprise Hardware Platform API</translation>
 <translation id="8374747520743832795">Nosūtīt aparatūras statistikas datus un identifikatorus, kas saistīti ar barošanu.
@@ -4031,13 +4031,13 @@ Operētājsistēmā Windows politikas konfigurēšanai ieteicams izmantot GPO, t
       Šī politika tiks noņemta M75.</translation>
 <translation id="8484458986062090479">Tiek pielāgots URL šablonu saraksts, kas vienmēr jārenderē saimniekdatora pārlūkam.
 
-          Ja šī politika nav iestatīta, visām vietnēm tiks izmantots politikā Carbon Browser Browser BrowserFrameRendererSettings norādītais noklusējuma renderētājs.
+          Ja šī politika nav iestatīta, visām vietnēm tiks izmantots politikā Carbon BrowserFrameRendererSettings norādītais noklusējuma renderētājs.
 
           Šablonu piemērus skatiet šeit: https://www.chromium.org/developers/how-tos/chrome-frame-getting-started.</translation>
 <translation id="8489964335640955763">PluginVm</translation>
 <translation id="8493645415242333585">Atspējo pārlūkošanas vēstures saglabāšanu</translation>
 <translation id="8499172469244085141">Noklusējuma iestatījumi (lietotāji var ignorēt)</translation>
-<translation id="849962487677588458">Šī politika ir novecojusi, un to ir paredzēts noņemt no pārlūka Carbon Browser Browser Browser 78 bez aizvietošanas.
+<translation id="849962487677588458">Šī politika ir novecojusi, un to ir paredzēts noņemt no pārlūka Carbon Browser 78 bez aizvietošanas.
 
       Šī politika iespējo protokolu HTTP/0.9 portos, kas nav 80 (HTTP) un 443 (HTTPS).
 
@@ -4065,7 +4065,7 @@ Operētājsistēmā Windows politikas konfigurēšanai ieteicams izmantot GPO, t
 
       Šeit “versija” var būt precīzs versijas nosaukums, piemēram, 61.0.3163.120, vai versijas prefikss, piemēram, 61.0.  </translation>
 <translation id="8544375438507658205"><ph name="PRODUCT_FRAME_NAME" /> noklusējuma HTML renderētājs</translation>
-<translation id="8544465954173828789">Atļaut, lai īsziņas tiktu sinhronizētas no tālruņa uz Carbon Browser Browser Browserbook.</translation>
+<translation id="8544465954173828789">Atļaut, lai īsziņas tiktu sinhronizētas no tālruņa uz Carbon Browserbook.</translation>
 <translation id="8548832052135586762">Iestata tikai krāsainas drukāšanas, tikai vienkrāsainas vai ierobežojumu bez režīma. Ja politika nav iestatīta, tiek uzskatīts, ka ierobežojuma nav.</translation>
 <translation id="8549772397068118889">Brīdināt, kad tiek apmeklētas satura pakotnēs neiekļautas vietnes.</translation>
 <translation id="8566729013138025202">Norāda politiku kopu, kura tiks pārsūtīta ARC izpildlaikam. Vērtībai jābūt derīgai JSON vērtībai.
@@ -4092,7 +4092,7 @@ Operētājsistēmā Windows politikas konfigurēšanai ieteicams izmantot GPO, t
 
       Ja šai politikai nav iestatīta vērtība vai ir iestatīta vērtība “True”, visi lietotāji varēs izmantot ARC (ja ARC nav atspējots citā veidā).
 
-      Izmaiņas šai politikai tiks lietotas tikai tad, kad nedarbosies ARC, t.i., kamēr notiks Carbon Browser Browser Browser OS palaišana.</translation>
+      Izmaiņas šai politikai tiks lietotas tikai tad, kad nedarbosies ARC, t.i., kamēr notiks Carbon Browser OS palaišana.</translation>
 <translation id="8615400197788843468">Iespējo produkta <ph name="PRODUCT_NAME" /> ierobežotās pieteikšanās funkciju pakalpojumā G Suite un liedz lietotājiem mainīt šo iestatījumu.
 
       Ja definēsiet šo iestatījumu, lietotājs varēs piekļūt pakalpojumam Google
@@ -4113,7 +4113,7 @@ Operētājsistēmā Windows politikas konfigurēšanai ieteicams izmantot GPO, t
 
       Lietotāji nevar mainīt vai ignorēt šo iestatījumu.</translation>
 <translation id="8631434304112909927">līdz <ph name="UNTIL_VERSION" /> versijai</translation>
-<translation id="8649763579836720255">Carbon Browser Browser Browser OS ierīcēs var izmantot attālo apstiprināšanu (verificēta piekļuve), lai saņemtu Carbon Browser Browser Browser OS sertifikāta izdevējiestādes izsniegtu sertifikātu, kas apstiprina, ka ierīcē ir atļauts atskaņot aizsargātu saturu. Šī procesa laikā aparatūras apstiprinājuma informācija tiek nosūtīta Carbon Browser Browser Browser OS sertifikāta izdevējiestādei, kas unikāli identificē ierīci.
+<translation id="8649763579836720255">Carbon Browser OS ierīcēs var izmantot attālo apstiprināšanu (verificēta piekļuve), lai saņemtu Carbon Browser OS sertifikāta izdevējiestādes izsniegtu sertifikātu, kas apstiprina, ka ierīcē ir atļauts atskaņot aizsargātu saturu. Šī procesa laikā aparatūras apstiprinājuma informācija tiek nosūtīta Carbon Browser OS sertifikāta izdevējiestādei, kas unikāli identificē ierīci.
 
           Ja šis iestatījums ir “False”, ierīcē satura aizsardzībai netiks izmantota attālā apstiprināšana un, iespējams, nevarēs atskaņot aizsargāto saturu.
 
@@ -4265,7 +4265,7 @@ Operētājsistēmā Windows politikas konfigurēšanai ieteicams izmantot GPO, t
 
           Izmantojot šo politiku, paplašinājuma ID vai atjauninājuma vietrādis URL tiek kartēts tā konfigurācijā. Izmantojot paplašinājuma ID, konfigurācija tiek piemērota tikai konkrētajam paplašinājumam. Īpašajam ID “<ph name="DEFAULT_SCOPE" />” var iestatīt noklusējuma konfigurāciju, kas tiks lietota visiem paplašinājumiem, kuriem šajā politikā nav iestatīta pielāgota konfigurācija. Izmantojot atjauninājuma vietrādi URL, konfigurācija tiek lietota visiem paplašinājumiem, kuru manifestā ir norādīts konkrētais atjauninājuma vietrādis URL (kā aprakstīts šeit: <ph name="LINK_TO_EXTENSION_DOC1" />).
 
-          Windows instancēs, kas nav pievienotas <ph name="MS_AD_NAME" /> domēnam, piespiedu instalēšana attiecas tikai uz lietotnēm un paplašinājumiem, kas norādīti Carbon Browser Browser Browser interneta veikalā.
+          Windows instancēs, kas nav pievienotas <ph name="MS_AD_NAME" /> domēnam, piespiedu instalēšana attiecas tikai uz lietotnēm un paplašinājumiem, kas norādīti Carbon Browser interneta veikalā.
           </translation>
 <translation id="8947415621777543415">Ziņot par ierīces atrašanās vietu</translation>
 <translation id="8951350807133946005">Iestatīt diska kešatmiņas direktoriju</translation>
@@ -4356,7 +4356,7 @@ Operētājsistēmā Windows politikas konfigurēšanai ieteicams izmantot GPO, t
 
       Ja šai politikai ir iestatīta vērtība Patiesa, sistēmas žurnāli tiek sūtīti. Ja tai
       ir iestatīta vērtība Nepatiesa vai nav iestatīta nekāda vērtība, sistēmas žurnāli netiek sūtīti.</translation>
-<translation id="9150416707757015439">Šī politika ir izbeigta. Tās vietā lietojiet PrivateModeAvailability.
+<translation id="9150416707757015439">Šī politika ir izbeigta. Tās vietā lietojiet privateModeAvailability.
       Iespējo produktā <ph name="PRODUCT_NAME" /> inkognito režīmu.
 
       Ja šis iestatījums ir iespējots vai nav konfigurēts, lietotāji var atvērt tīmekļa lapas inkognito režīmā.
@@ -4403,7 +4403,7 @@ Operētājsistēmā Windows politikas konfigurēšanai ieteicams izmantot GPO, t
 
       Kad šī politika ir iestatīta, tā tiks izmantota, lai uzsāktu pakalpojumu <ph name="PRODUCT_NAME" />, kad pakalpojuma <ph name="PRODUCT_NAME" /> uzsākšana tiek veikta no pārlūka Internet Explorer.
 
-      Šo politiku var iestatīt izpildāmajam faila ceļam vai ${chrome}, lai automātiski noteiktu Carbon Browser Browser Browser instalēšanas atrašanās vietu.</translation>
+      Šo politiku var iestatīt izpildāmajam faila ceļam vai ${chrome}, lai automātiski noteiktu Carbon Browser instalēšanas atrašanās vietu.</translation>
 <translation id="930930237275114205">Iestatīt <ph name="PRODUCT_FRAME_NAME" /> lietotāja datu direktoriju</translation>
 <translation id="943865157632139008">Ļauj konfigurēt noklusējuma HTML renderētāju, ja <ph name="PRODUCT_FRAME_NAME" /> ir instalēts.
       Atbilstoši noklusējuma iestatījumam renderēšanu izpilda saimniekdatora pārlūks, taču pēc izvēles šo iestatījumu var ignorēt un likt, lai HTML lappuses pēc noklusējuma tiktu renderētas produktā <ph name="PRODUCT_FRAME_NAME" />.</translation>

@@ -9,8 +9,8 @@
 #include "base/bind.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
+#include "chrome/browser/ash/net/network_portal_detector_test_impl.h"
 #include "chrome/browser/ash/settings/scoped_cros_settings_test_helper.h"
-#include "chrome/browser/chromeos/net/network_portal_detector_test_impl.h"
 #include "chrome/browser/extensions/external_provider_impl.h"
 #include "chrome/browser/prefs/browser_prefs.h"
 #include "chrome/browser/profiles/profile_manager.h"
@@ -18,10 +18,10 @@
 #include "chrome/browser/ui/app_list/app_list_syncable_service_factory.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
-#include "chromeos/network/network_handler.h"
-#include "chromeos/network/network_handler_test_helper.h"
-#include "chromeos/network/network_state.h"
-#include "chromeos/network/network_state_handler.h"
+#include "chromeos/ash/components/network/network_handler.h"
+#include "chromeos/ash/components/network/network_handler_test_helper.h"
+#include "chromeos/ash/components/network/network_state.h"
+#include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/system/fake_statistics_provider.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/prefs/testing_pref_service.h"
@@ -316,16 +316,20 @@ TEST_F(ServicesCustomizationDocumentTest, Basic) {
   ASSERT_TRUE(default_apps->GetDictionary("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                                           &app_entry));
   EXPECT_EQ(app_entry->DictSize(), 1u);
-  EXPECT_TRUE(
-      app_entry->HasKey(extensions::ExternalProviderImpl::kExternalUpdateUrl));
+  EXPECT_TRUE(app_entry->FindKey(
+                  extensions::ExternalProviderImpl::kExternalUpdateUrl) !=
+              nullptr);
 
   ASSERT_TRUE(default_apps->GetDictionary("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
                                           &app_entry));
   EXPECT_EQ(app_entry->DictSize(), 2u);
+  EXPECT_TRUE(app_entry->FindKey(
+                  extensions::ExternalProviderImpl::kExternalUpdateUrl) !=
+              nullptr);
   EXPECT_TRUE(
-      app_entry->HasKey(extensions::ExternalProviderImpl::kExternalUpdateUrl));
-  EXPECT_TRUE(app_entry->HasKey(
-      extensions::ExternalProviderImpl::kDoNotInstallForEnterprise));
+      app_entry->FindKey(
+          extensions::ExternalProviderImpl::kDoNotInstallForEnterprise) !=
+      nullptr);
 
   EXPECT_EQ("EN-US OEM Name", doc->GetOemAppsFolderName("en-US"));
   EXPECT_EQ("EN OEM Name", doc->GetOemAppsFolderName("en"));

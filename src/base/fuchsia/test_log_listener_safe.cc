@@ -4,6 +4,7 @@
 
 #include "base/fuchsia/test_log_listener_safe.h"
 
+#include "base/callback_helpers.h"
 #include "base/fuchsia/fuchsia_logging.h"
 #include "base/run_loop.h"
 #include "base/strings/string_piece.h"
@@ -51,6 +52,7 @@ SimpleTestLogListener::~SimpleTestLogListener() = default;
 void SimpleTestLogListener::ListenToLog(
     fuchsia::logger::Log* log,
     std::unique_ptr<fuchsia::logger::LogFilterOptions> options) {
+  ignore_before_ = zx::clock::get_monotonic();
   listener_.set_on_log_message(base::BindRepeating(
       &SimpleTestLogListener::PushLoggedMessage, base::Unretained(this)));
   log->ListenSafe(binding_.NewBinding(), std::move(options));
@@ -76,9 +78,12 @@ SimpleTestLogListener::RunUntilMessageReceived(
         quit_loop.Run();
       });
   on_log_message_ = base::BindLambdaForTesting(
-      [&logged_message, expected_string = std::string(expected_string),
+      [ignore_before = ignore_before_, &logged_message,
+       expected_string = std::string(expected_string),
        quit_loop =
            loop.QuitClosure()](const fuchsia::logger::LogMessage& message) {
+        if (zx::time(message.time) < ignore_before)
+          return;
         if (message.msg.find(expected_string) == std::string::npos)
           return;
         logged_message.emplace(message);
@@ -88,7 +93,7 @@ SimpleTestLogListener::RunUntilMessageReceived(
   loop.Run();
 
   binding_.set_error_handler({});
-  on_log_message_ = {};
+  on_log_message_ = NullCallback();
 
   return logged_message;
 }
@@ -96,6 +101,8 @@ SimpleTestLogListener::RunUntilMessageReceived(
 void SimpleTestLogListener::PushLoggedMessage(
     const fuchsia::logger::LogMessage& message) {
   DVLOG(1) << "TestLogListener received: " << message.msg;
+  if (zx::time(message.time) < ignore_before_)
+    return;
   if (on_log_message_) {
     DCHECK(logged_messages_.empty());
     on_log_message_.Run(message);

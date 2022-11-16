@@ -37,7 +37,7 @@
 #include "third_party/blink/renderer/core/animation/compositor_animations.h"
 #include "third_party/blink/renderer/core/animation/keyframe_effect_model.h"
 #include "third_party/blink/renderer/core/core_export.h"
-#include "third_party/blink/renderer/platform/geometry/float_size.h"
+#include "ui/gfx/geometry/size_f.h"
 
 namespace blink {
 
@@ -49,7 +49,7 @@ class SampledEffect;
 class V8UnionKeyframeEffectOptionsOrUnrestrictedDouble;
 
 // Represents the effect of an Animation on an Element's properties.
-// https://drafts.csswg.org/web-animations/#keyframe-effect
+// https://w3.org/TR/web-animations-1/#keyframe-effects
 class CORE_EXPORT KeyframeEffect final : public AnimationEffect {
   DEFINE_WRAPPERTYPEINFO();
 
@@ -135,7 +135,7 @@ class CORE_EXPORT KeyframeEffect final : public AnimationEffect {
 
   void Trace(Visitor*) const override;
 
-  bool UpdateBoxSizeAndCheckTransformAxisAlignment(const FloatSize& box_size);
+  bool UpdateBoxSizeAndCheckTransformAxisAlignment(const gfx::SizeF& box_size);
   bool IsIdentityOrTranslation() const;
 
   ActiveInterpolationsMap InterpolationsForCommitStyles();
@@ -160,12 +160,14 @@ class CORE_EXPORT KeyframeEffect final : public AnimationEffect {
   void DetachTarget(Animation*);
   void RefreshTarget();
   void CountAnimatedProperties() const;
+  AnimationTimeDelta IntrinsicIterationDuration() const override;
   AnimationTimeDelta CalculateTimeToEffectChange(
       bool forwards,
       absl::optional<AnimationTimeDelta> inherited_time,
       AnimationTimeDelta time_to_next_iteration) const override;
+  absl::optional<AnimationTimeDelta> TimelineDuration() const override;
   bool HasIncompatibleStyle() const;
-  bool HasMultipleTransformProperties() const;
+  bool AffectsImportantProperty() const;
   void RestartRunningAnimationOnCompositor();
 
   Member<Element> effect_target_;
@@ -180,7 +182,7 @@ class CORE_EXPORT KeyframeEffect final : public AnimationEffect {
 
   bool ignore_css_keyframes_;
 
-  absl::optional<FloatSize> effect_target_size_;
+  absl::optional<gfx::SizeF> effect_target_size_;
 };
 
 template <>

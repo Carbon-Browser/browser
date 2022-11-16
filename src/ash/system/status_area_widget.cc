@@ -8,6 +8,7 @@
 #include "ash/constants/ash_features.h"
 #include "ash/constants/ash_switches.h"
 #include "ash/keyboard/ui/keyboard_ui_controller.h"
+#include "ash/projector/projector_annotation_tray.h"
 #include "ash/public/cpp/shelf_config.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/shelf/shelf.h"
@@ -16,6 +17,7 @@
 #include "ash/shell.h"
 #include "ash/system/accessibility/dictation_button_tray.h"
 #include "ash/system/accessibility/select_to_speak/select_to_speak_tray.h"
+#include "ash/system/eche/eche_tray.h"
 #include "ash/system/holding_space/holding_space_tray.h"
 #include "ash/system/ime_menu/ime_menu_tray.h"
 #include "ash/system/media/media_tray.h"
@@ -27,8 +29,10 @@
 #include "ash/system/session/logout_button_tray.h"
 #include "ash/system/status_area_widget_delegate.h"
 #include "ash/system/tray/status_area_overflow_button_tray.h"
+#include "ash/system/tray/tray_background_view.h"
 #include "ash/system/tray/tray_constants.h"
 #include "ash/system/tray/tray_container.h"
+#include "ash/system/unified/date_tray.h"
 #include "ash/system/unified/unified_system_tray.h"
 #include "ash/system/virtual_keyboard/virtual_keyboard_tray.h"
 #include "ash/wm/tablet_mode/tablet_mode_controller.h"
@@ -36,7 +40,7 @@
 #include "base/containers/adapters.h"
 #include "base/i18n/time_formatting.h"
 #include "base/metrics/histogram_macros.h"
-#include "chromeos/services/assistant/public/cpp/features.h"
+#include "chromeos/ash/services/assistant/public/cpp/features.h"
 #include "media/base/media_switches.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/scoped_layer_animation_settings.h"
@@ -97,63 +101,51 @@ void StatusAreaWidget::Initialize() {
   DCHECK(!initialized_);
 
   // Create the child views, left to right.
-  auto overflow_button_tray =
-      std::make_unique<StatusAreaOverflowButtonTray>(shelf_);
-  overflow_button_tray_ = overflow_button_tray.get();
-  AddTrayButton(std::move(overflow_button_tray));
+  overflow_button_tray_ =
+      AddTrayButton(std::make_unique<StatusAreaOverflowButtonTray>(shelf_));
+  holding_space_tray_ =
+      AddTrayButton(std::make_unique<HoldingSpaceTray>(shelf_));
+  logout_button_tray_ =
+      AddTrayButton(std::make_unique<LogoutButtonTray>(shelf_));
+  dictation_button_tray_ =
+      AddTrayButton(std::make_unique<DictationButtonTray>(shelf_));
+  select_to_speak_tray_ =
+      AddTrayButton(std::make_unique<SelectToSpeakTray>(shelf_));
+  ime_menu_tray_ = AddTrayButton(std::make_unique<ImeMenuTray>(shelf_));
+  virtual_keyboard_tray_ =
+      AddTrayButton(std::make_unique<VirtualKeyboardTray>(shelf_));
+  stop_recording_button_tray_ =
+      AddTrayButton(std::make_unique<StopRecordingButtonTray>(shelf_));
 
-  auto holding_space_tray = std::make_unique<HoldingSpaceTray>(shelf_);
-  holding_space_tray_ = holding_space_tray.get();
-  AddTrayButton(std::move(holding_space_tray));
+  if (features::IsProjectorAnnotatorEnabled()) {
+    projector_annotation_tray_ =
+        AddTrayButton(std::make_unique<ProjectorAnnotationTray>(shelf_));
+  }
 
-  auto logout_button_tray = std::make_unique<LogoutButtonTray>(shelf_);
-  logout_button_tray_ = logout_button_tray.get();
-  AddTrayButton(std::move(logout_button_tray));
-
-  auto dictation_button_tray = std::make_unique<DictationButtonTray>(shelf_);
-  dictation_button_tray_ = dictation_button_tray.get();
-  AddTrayButton(std::move(dictation_button_tray));
-
-  auto select_to_speak_tray = std::make_unique<SelectToSpeakTray>(shelf_);
-  select_to_speak_tray_ = select_to_speak_tray.get();
-  AddTrayButton(std::move(select_to_speak_tray));
-
-  auto ime_menu_tray = std::make_unique<ImeMenuTray>(shelf_);
-  ime_menu_tray_ = ime_menu_tray.get();
-  AddTrayButton(std::move(ime_menu_tray));
-
-  auto virtual_keyboard_tray = std::make_unique<VirtualKeyboardTray>(shelf_);
-  virtual_keyboard_tray_ = virtual_keyboard_tray.get();
-  AddTrayButton(std::move(virtual_keyboard_tray));
-
-  auto stop_recording_button_tray =
-      std::make_unique<StopRecordingButtonTray>(shelf_);
-  stop_recording_button_tray_ = stop_recording_button_tray.get();
-  AddTrayButton(std::move(stop_recording_button_tray));
-
-  auto palette_tray = std::make_unique<PaletteTray>(shelf_);
-  palette_tray_ = palette_tray.get();
-  AddTrayButton(std::move(palette_tray));
+  palette_tray_ = AddTrayButton(std::make_unique<PaletteTray>(shelf_));
 
   if (base::FeatureList::IsEnabled(media::kGlobalMediaControlsForChromeOS)) {
-    auto media_tray = std::make_unique<MediaTray>(shelf_);
-    media_tray_ = media_tray.get();
-    AddTrayButton(std::move(media_tray));
+    media_tray_ = AddTrayButton(std::make_unique<MediaTray>(shelf_));
+  }
+
+  if (chromeos::features::IsEcheSWAEnabled()) {
+    eche_tray_ = AddTrayButton(std::make_unique<EcheTray>(shelf_));
   }
 
   if (chromeos::features::IsPhoneHubEnabled()) {
-    auto phone_hub_tray = std::make_unique<PhoneHubTray>(shelf_);
-    phone_hub_tray_ = phone_hub_tray.get();
-    AddTrayButton(std::move(phone_hub_tray));
+    phone_hub_tray_ = AddTrayButton(std::make_unique<PhoneHubTray>(shelf_));
   }
 
   auto unified_system_tray = std::make_unique<UnifiedSystemTray>(shelf_);
   unified_system_tray_ = unified_system_tray.get();
+  if (features::IsCalendarViewEnabled()) {
+    date_tray_ =
+        AddTrayButton(std::make_unique<DateTray>(shelf_, unified_system_tray_));
+  }
   AddTrayButton(std::move(unified_system_tray));
 
-  auto overview_button_tray = std::make_unique<OverviewButtonTray>(shelf_);
-  overview_button_tray_ = overview_button_tray.get();
-  AddTrayButton(std::move(overview_button_tray));
+  overview_button_tray_ =
+      AddTrayButton(std::make_unique<OverviewButtonTray>(shelf_));
 
   // Each tray_button's animation will be disabled for the life time of this
   // local `animation_disablers`, which means the closures to enable the
@@ -203,6 +195,8 @@ void StatusAreaWidget::UpdateAfterLoginStatusChange(LoginStatus login_status) {
 void StatusAreaWidget::SetSystemTrayVisibility(bool visible) {
   TrayBackgroundView* tray = unified_system_tray_;
   tray->SetVisiblePreferred(visible);
+  if (features::IsCalendarViewEnabled())
+    date_tray_->SetVisiblePreferred(visible);
   if (visible) {
     Show();
   } else {
@@ -243,8 +237,10 @@ void StatusAreaWidget::LogVisiblePodCountMetric() {
   for (auto* tray_button : tray_buttons_) {
     if (tray_button == overflow_button_tray_ ||
         tray_button == overview_button_tray_ ||
-        tray_button == unified_system_tray_ || !tray_button->GetVisible())
+        tray_button == unified_system_tray_ || tray_button == date_tray_ ||
+        !tray_button->GetVisible()) {
       continue;
+    }
 
     visible_pod_count += 1;
   }
@@ -312,7 +308,7 @@ void StatusAreaWidget::UpdateLayout(bool animate) {
   ui::ScopedLayerAnimationSettings animation_setter(layer->GetAnimator());
   animation_setter.SetTransitionDuration(
       animate ? ShelfConfig::Get()->shelf_animation_duration()
-              : base::TimeDelta::FromMilliseconds(0));
+              : base::Milliseconds(0));
   animation_setter.SetTweenType(gfx::Tween::EASE_OUT);
   animation_setter.SetPreemptionStrategy(
       ui::LayerAnimator::IMMEDIATELY_ANIMATE_TO_NEW_TARGET);
@@ -332,14 +328,19 @@ void StatusAreaWidget::HandleLocaleChange() {
   // needed).
   status_area_widget_delegate_->RemoveAllChildViewsWithoutDeleting();
 
-  // The layout manager will be updated when shelf layout gets updated, which is
-  // done by the shelf layout manager after `HandleLocaleChange()` gets called.
-  status_area_widget_delegate_->SetLayoutManager(nullptr);
   for (auto* tray_button : tray_buttons_) {
     tray_button->HandleLocaleChange();
     status_area_widget_delegate_->AddChildView(tray_button);
   }
   EnsureTrayOrder();
+}
+
+void StatusAreaWidget::NotifyAnyBubbleVisibilityChanged(
+    views::Widget* bubble_widget,
+    bool visible) {
+  for (auto* tray_button : tray_buttons_) {
+    tray_button->OnAnyBubbleVisibilityChanged(bubble_widget, visible);
+  }
 }
 
 void StatusAreaWidget::CalculateButtonVisibilityForCollapsedState() {
@@ -359,13 +360,8 @@ void StatusAreaWidget::CalculateButtonVisibilityForCollapsedState() {
           : 0;
 
   // We update visibility of each tray button based on the available width.
-  const int shelf_width =
-      shelf_->shelf_widget()->GetClientAreaBoundsInScreen().width();
-  const int available_width =
-      (force_collapsible
-           ? kStatusAreaForceCollapseAvailableWidth
-           : shelf_width / 2 - kStatusAreaLeftPaddingForOverflow) -
-      stop_recording_button_width;
+  const int available_width = GetCollapseAvailableWidth(force_collapsible) -
+                              stop_recording_button_width;
 
   // First, reset all tray button to be hidden.
   overflow_button_tray_->ResetStateToCollapsed();
@@ -390,7 +386,7 @@ void StatusAreaWidget::CalculateButtonVisibilityForCollapsedState() {
     if (used_width + tray_width > available_width) {
       show_overflow_button = true;
 
-      // Maybe remove the last tray button to make rooom for the overflow tray.
+      // Maybe remove the last tray button to make room for the overflow tray.
       int overflow_button_width =
           overflow_button_tray_->GetPreferredSize().width();
       if (previous_tray && used_width + overflow_button_width > available_width)
@@ -414,8 +410,12 @@ void StatusAreaWidget::CalculateButtonVisibilityForCollapsedState() {
 }
 
 void StatusAreaWidget::EnsureTrayOrder() {
-  status_area_widget_delegate_->ReorderChildView(stop_recording_button_tray_,
-                                                 1);
+  if (projector_annotation_tray_) {
+    status_area_widget_delegate_->ReorderChildView(projector_annotation_tray_,
+                                                   1);
+  }
+  status_area_widget_delegate_->ReorderChildView(
+      stop_recording_button_tray_, projector_annotation_tray_ ? 2 : 1);
 }
 
 StatusAreaWidget::CollapseState StatusAreaWidget::CalculateCollapseState()
@@ -451,11 +451,8 @@ StatusAreaWidget::CollapseState StatusAreaWidget::CalculateCollapseState()
   if (state == CollapseState::COLLAPSED) {
     // We might not need to be collapsed, if there is enough space for all the
     // buttons.
-    const int shelf_width =
-        shelf_->shelf_widget()->GetClientAreaBoundsInScreen().width();
-    const int available_width =
-        force_collapsible ? kStatusAreaForceCollapseAvailableWidth
-                          : shelf_width / 2 - kStatusAreaLeftPaddingForOverflow;
+    const int available_width = GetCollapseAvailableWidth(force_collapsible);
+
     int used_width = 0;
     for (TrayBackgroundView* tray : base::Reversed(tray_buttons_)) {
       // If we reach the final overflow tray button, then all the tray buttons
@@ -612,11 +609,15 @@ void StatusAreaWidget::OnScrollEvent(ui::ScrollEvent* event) {
     views::Widget::OnScrollEvent(event);
 }
 
-void StatusAreaWidget::AddTrayButton(
-    std::unique_ptr<TrayBackgroundView> tray_button) {
+template <typename TrayButtonT>
+TrayButtonT* StatusAreaWidget::AddTrayButton(
+    std::unique_ptr<TrayButtonT> tray_button) {
   tray_buttons_.push_back(tray_button.get());
-  status_area_widget_delegate_->AddChildView(std::move(tray_button));
+  return status_area_widget_delegate_->AddChildView(std::move(tray_button));
 }
+// Specialization declared here for use in tests.
+template TrayBackgroundView* StatusAreaWidget::AddTrayButton<
+    TrayBackgroundView>(std::unique_ptr<TrayBackgroundView> tray_button);
 
 StatusAreaWidget::LayoutInputs StatusAreaWidget::GetLayoutInputs() const {
   unsigned int child_visibility_bitmask = 0;
@@ -645,6 +646,23 @@ StatusAreaWidget::LayoutInputs StatusAreaWidget::GetLayoutInputs() const {
   return {target_bounds_, CalculateCollapseState(),
           shelf_->shelf_layout_manager()->GetOpacity(),
           child_visibility_bitmask, should_animate};
+}
+
+int StatusAreaWidget::GetCollapseAvailableWidth(bool force_collapsible) const {
+  const int shelf_width =
+      shelf_->shelf_widget()->GetClientAreaBoundsInScreen().width();
+
+  if (!force_collapsible)
+    return shelf_width / 2 - kStatusAreaLeftPaddingForOverflow;
+
+  int available_width = kStatusAreaForceCollapseAvailableWidth;
+  // If calendar view is enabled, add the date tray width to the collapse
+  // available width.
+  if (features::IsCalendarViewEnabled()) {
+    DCHECK(date_tray_);
+    available_width += date_tray_->tray_container()->GetPreferredSize().width();
+  }
+  return available_width;
 }
 
 }  // namespace ash

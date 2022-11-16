@@ -62,7 +62,7 @@ base::TimeDelta TimeClamper::ClampTimeResolution(
   // Flip the number back to being negative if it started that way.
   if (was_negative)
     clamped_time = -clamped_time;
-  return base::TimeDelta::FromMicroseconds(clamped_time);
+  return base::Microseconds(clamped_time);
 }
 
 inline double TimeClamper::ThresholdFor(int64_t clamped_time,
@@ -77,7 +77,7 @@ inline double TimeClamper::ToDouble(uint64_t value) {
   static const uint64_t kExponentBits = uint64_t{0x3FF0000000000000};
   static const uint64_t kMantissaMask = uint64_t{0x000FFFFFFFFFFFFF};
   uint64_t random = (value & kMantissaMask) | kExponentBits;
-  return bit_cast<double>(random) - 1;
+  return base::bit_cast<double>(random) - 1;
 }
 
 // static

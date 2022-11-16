@@ -11,7 +11,6 @@
 #include <memory>
 #include <utility>
 
-#include "base/macros.h"
 #include "components/autofill/content/common/mojom/autofill_agent.mojom.h"
 #include "components/autofill/content/common/mojom/autofill_driver.mojom.h"
 #include "components/autofill/content/renderer/renderer_save_password_progress_logger.h"
@@ -46,6 +45,10 @@ class PasswordGenerationAgent : public content::RenderFrameObserver,
   PasswordGenerationAgent(content::RenderFrame* render_frame,
                           PasswordAutofillAgent* password_agent,
                           blink::AssociatedInterfaceRegistry* registry);
+
+  PasswordGenerationAgent(const PasswordGenerationAgent&) = delete;
+  PasswordGenerationAgent& operator=(const PasswordGenerationAgent&) = delete;
+
   ~PasswordGenerationAgent() override;
 
   void BindPendingReceiver(
@@ -83,7 +86,7 @@ class PasswordGenerationAgent : public content::RenderFrameObserver,
   bool ShouldIgnoreBlur() const;
 
 #if defined(UNIT_TEST)
-  // This method requests the autofill::mojom::PasswordManagerClient which binds
+  // This method requests the mojom::PasswordManagerClient which binds
   // requests the binding if it wasn't bound yet.
   void RequestPasswordManagerClientForTesting() {
     GetPasswordGenerationDriver();
@@ -106,6 +109,7 @@ class PasswordGenerationAgent : public content::RenderFrameObserver,
 
   mojom::PasswordManagerDriver& GetPasswordManagerDriver();
 
+  // Callers should not store the returned value longer than a function scope.
   mojom::PasswordGenerationDriver& GetPasswordGenerationDriver();
 
   // Helper function which takes care of the form processing and collecting the
@@ -141,8 +145,8 @@ class PasswordGenerationAgent : public content::RenderFrameObserver,
       blink::WebInputElement element,
       FieldRendererId confirmation_password_renderer_id);
 
-  void LogMessage(autofill::SavePasswordProgressLogger::StringID message_id);
-  void LogBoolean(autofill::SavePasswordProgressLogger::StringID message_id,
+  void LogMessage(SavePasswordProgressLogger::StringID message_id);
+  void LogBoolean(SavePasswordProgressLogger::StringID message_id,
                   bool truth_value);
 
   // Creates a FormData to presave a generated password. It copies behavior
@@ -180,8 +184,6 @@ class PasswordGenerationAgent : public content::RenderFrameObserver,
       deferring_password_generation_driver_;
 
   mojo::AssociatedReceiver<mojom::PasswordGenerationAgent> receiver_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(PasswordGenerationAgent);
 };
 
 }  // namespace autofill

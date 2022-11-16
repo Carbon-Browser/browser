@@ -10,13 +10,13 @@
 #include "base/callback.h"
 #include "base/compiler_specific.h"
 #include "base/location.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/scoped_multi_source_observation.h"
 #include "base/scoped_observation.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "chrome/app/chrome_command_ids.h"
@@ -63,13 +63,13 @@
 #include "ui/views/widget/drop_helper.h"
 #include "ui/views/widget/widget.h"
 
-#if !defined(OS_MAC)
+#if !BUILDFLAG(IS_MAC)
 #include "ui/aura/env.h"
 #include "ui/aura/env_observer.h"
 #include "ui/aura/window.h"
 #endif
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include "base/win/windows_version.h"
 #include "ui/aura/window_tree_host.h"
 #endif
@@ -84,13 +84,16 @@ using content::WebContents;
 
 namespace {
 
-#if !defined(OS_MAC)
+#if !BUILDFLAG(IS_MAC)
 
 // Waits for a views::Widget dialog to show up.
 class DialogWaiter : public aura::EnvObserver,
                      public views::WidgetObserver {
  public:
   DialogWaiter() { aura::Env::GetInstance()->AddObserver(this); }
+
+  DialogWaiter(const DialogWaiter&) = delete;
+  DialogWaiter& operator=(const DialogWaiter&) = delete;
 
   ~DialogWaiter() override { aura::Env::GetInstance()->RemoveObserver(this); }
 
@@ -127,10 +130,8 @@ class DialogWaiter : public aura::EnvObserver,
   }
 
   bool dialog_created_ = false;
-  views::Widget* dialog_ = nullptr;
+  raw_ptr<views::Widget> dialog_ = nullptr;
   base::RepeatingClosure quit_closure_;
-
-  DISALLOW_COPY_AND_ASSIGN(DialogWaiter);
 };
 
 // Waits for a dialog to terminate.
@@ -140,6 +141,9 @@ class DialogCloseWaiter : public views::WidgetObserver {
       : dialog_closed_(false) {
     dialog->AddObserver(this);
   }
+
+  DialogCloseWaiter(const DialogCloseWaiter&) = delete;
+  DialogCloseWaiter& operator=(const DialogCloseWaiter&) = delete;
 
   ~DialogCloseWaiter() override {
     // It is not necessary to remove |this| from the dialog's observer, since
@@ -164,8 +168,6 @@ class DialogCloseWaiter : public views::WidgetObserver {
 
   bool dialog_closed_;
   base::RepeatingClosure quit_closure_;
-
-  DISALLOW_COPY_AND_ASSIGN(DialogCloseWaiter);
 };
 
 // Waits for a views::Widget to receive a Tab key.
@@ -176,6 +178,9 @@ class TabKeyWaiter : public ui::EventHandler {
         received_tab_(false) {
     widget_->GetNativeWindow()->AddPreTargetHandler(this);
   }
+
+  TabKeyWaiter(const TabKeyWaiter&) = delete;
+  TabKeyWaiter& operator=(const TabKeyWaiter&) = delete;
 
   ~TabKeyWaiter() override {
     widget_->GetNativeWindow()->RemovePreTargetHandler(this);
@@ -200,11 +205,9 @@ class TabKeyWaiter : public ui::EventHandler {
     }
   }
 
-  views::Widget* widget_;
+  raw_ptr<views::Widget> widget_;
   bool received_tab_;
   base::RepeatingClosure quit_closure_;
-
-  DISALLOW_COPY_AND_ASSIGN(TabKeyWaiter);
 };
 
 void MoveMouseAndPress(const gfx::Point& screen_pos,
@@ -216,12 +219,16 @@ void MoveMouseAndPress(const gfx::Point& screen_pos,
                                                          std::move(closure)));
 }
 
-#endif  // !defined(OS_MAC)
+#endif  // !BUILDFLAG(IS_MAC)
 
 // PageNavigator implementation that records the URL.
 class TestingPageNavigator : public PageNavigator {
  public:
   TestingPageNavigator() {}
+
+  TestingPageNavigator(const TestingPageNavigator&) = delete;
+  TestingPageNavigator& operator=(const TestingPageNavigator&) = delete;
+
   ~TestingPageNavigator() override {}
 
   WebContents* OpenURL(const OpenURLParams& params) override {
@@ -241,8 +248,6 @@ class TestingPageNavigator : public PageNavigator {
  private:
   std::vector<GURL> urls_;
   std::vector<ui::PageTransition> transitions_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestingPageNavigator);
 };
 
 }  // namespace
@@ -393,8 +398,8 @@ class BookmarkBarViewEventTestBase : public ViewEventTestBase {
   // See comment above class description for what this does.
   virtual bool CreateBigMenu() { return false; }
 
-  BookmarkModel* model_ = nullptr;
-  BookmarkBarView* bb_view_ = nullptr;
+  raw_ptr<BookmarkModel> model_ = nullptr;
+  raw_ptr<BookmarkBarView> bb_view_ = nullptr;
   TestingPageNavigator navigator_;
 
  private:
@@ -475,7 +480,7 @@ class BookmarkBarViewDragTestBase : public BookmarkBarViewEventTestBase,
   // BookmarkBarViewEventTestBase:
   void DoTestOnMessageLoop() override {
     widget_observations_.AddObservation(window());
-    bookmark_bar_observation_.Observe(bb_view_);
+    bookmark_bar_observation_.Observe(bb_view_.get());
 
     // Record the URL for node f1a.
     const auto& f1 = model_->bookmark_bar_node()->children().front();
@@ -547,7 +552,7 @@ class BookmarkBarViewDragTestBase : public BookmarkBarViewEventTestBase,
       widget_observations_{this};
 };
 
-#if !defined(OS_MAC)
+#if !BUILDFLAG(IS_MAC)
 // The following tests were not enabled on Mac before. Consider enabling those
 // that are able to run on Mac (https://crbug.com/845342).
 
@@ -742,6 +747,11 @@ class BookmarkContextMenuNotificationObserver {
         base::Unretained(this)));
   }
 
+  BookmarkContextMenuNotificationObserver(
+      const BookmarkContextMenuNotificationObserver&) = delete;
+  BookmarkContextMenuNotificationObserver& operator=(
+      const BookmarkContextMenuNotificationObserver&) = delete;
+
   void ScheduleCallback() {
     DCHECK(!task_.is_null());
     base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE, std::move(task_));
@@ -749,8 +759,6 @@ class BookmarkContextMenuNotificationObserver {
 
  private:
   base::OnceClosure task_;
-
-  DISALLOW_COPY_AND_ASSIGN(BookmarkContextMenuNotificationObserver);
 };
 
 // Tests context menus by way of opening a context menu for a bookmark,
@@ -1023,7 +1031,7 @@ class BookmarkBarViewTest9 : public BookmarkBarViewEventTestBase {
     base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&BookmarkBarViewTest9::Step4, base::Unretained(this)),
-        base::TimeDelta::FromMilliseconds(200));
+        base::Milliseconds(200));
   }
 
   void Step4() {
@@ -1039,10 +1047,10 @@ class BookmarkBarViewTest9 : public BookmarkBarViewEventTestBase {
   }
 
   int start_y_;
-  views::MenuItemView* first_menu_;
+  raw_ptr<views::MenuItemView> first_menu_;
 };
 
-#if defined(OS_LINUX)  // TODO(crbug.com/1216392): Flakily times out on Linux.
+#if BUILDFLAG(IS_LINUX)  // TODO(crbug.com/1216392): Flakily times out on Linux.
 #define MAYBE_ScrollButtonScrolls DISABLED_ScrollButtonScrolls
 #else
 #define MAYBE_ScrollButtonScrolls ScrollButtonScrolls
@@ -1165,8 +1173,8 @@ class BookmarkBarViewTest10 : public BookmarkBarViewEventTestBase {
   }
 };
 
-#if defined(OS_WIN)  // Fails on latest versions of Windows.
-                     // https://crbug.com/1108551.
+#if BUILDFLAG(IS_WIN)  // Fails on latest versions of Windows.
+                       // https://crbug.com/1108551.
 #define MAYBE_KeyEvents DISABLED_KeyEvents
 #else
 #define MAYBE_KeyEvents KeyEvents
@@ -1319,7 +1327,7 @@ class BookmarkBarViewTest12 : public BookmarkBarViewEventTestBase {
         FROM_HERE,
         base::BindOnce(&BookmarkBarViewTest12::Step5, base::Unretained(this),
                        base::Unretained(dialog)),
-        base::TimeDelta::FromSeconds(1));
+        base::Seconds(1));
   }
 
   void Step5(views::Widget* dialog) {
@@ -1581,7 +1589,7 @@ class BookmarkBarViewTest17 : public BookmarkBarViewEventTestBase {
 
  protected:
   void DoTestOnMessageLoop() override {
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
     // TODO(crbug.com/453796): Flaky on Windows7.
     if (base::win::GetVersion() <= base::win::Version::WIN7) {
       Done();
@@ -1809,8 +1817,8 @@ class BookmarkBarViewTest20 : public BookmarkBarViewEventTestBase {
         container_view->SetLayoutManager(std::make_unique<views::FlexLayout>());
     layout->SetIgnoreDefaultMainAxisMargins(true)
         .SetCollapseMargins(true)
-        .SetDefault(views::kMarginsKey, gfx::Insets(0, 2));
-    container_view->AddChildView(bb_view_);
+        .SetDefault(views::kMarginsKey, gfx::Insets::VH(0, 2));
+    container_view->AddChildView(bb_view_.get());
     bb_view_->SetProperty(
         views::kFlexBehaviorKey,
         views::FlexSpecification(views::MinimumFlexSizeRule::kScaleToZero,
@@ -1857,7 +1865,7 @@ class BookmarkBarViewTest20 : public BookmarkBarViewEventTestBase {
   }
 
   void Step3() {
-#if defined(OS_LINUX) || defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
     EXPECT_EQ(1, test_view_->press_count());
 #else
     EXPECT_EQ(2, test_view_->press_count());
@@ -1880,7 +1888,7 @@ class BookmarkBarViewTest20 : public BookmarkBarViewEventTestBase {
     int press_count_ = 0;
   };
 
-  TestViewForMenuExit* test_view_ = nullptr;
+  raw_ptr<TestViewForMenuExit> test_view_ = nullptr;
 };
 
 VIEW_TEST(BookmarkBarViewTest20, ContextMenuExitTest)
@@ -2069,8 +2077,8 @@ class BookmarkBarViewTest23 : public BookmarkBarViewEventTestBase {
   BookmarkContextMenuNotificationObserver observer_;
 };
 
-#if defined(OS_WIN)  // Fails on latest versions of Windows.
-                     // https://crbug.com/1108551.
+#if BUILDFLAG(IS_WIN)  // Fails on latest versions of Windows.
+                       // https://crbug.com/1108551.
 #define MAYBE_ContextMenusKeyboard DISABLED_ContextMenusKeyboard
 #else
 #define MAYBE_ContextMenusKeyboard ContextMenusKeyboard
@@ -2155,7 +2163,7 @@ class BookmarkBarViewTest24 : public BookmarkBarViewEventTestBase {
 // Flaky on Linux (https://crbug.com/1193137).
 VIEW_TEST(BookmarkBarViewTest24, DISABLED_ContextMenusKeyboardEscape)
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 // Tests that pressing the key KEYCODE closes the menu.
 template <ui::KeyboardCode KEYCODE>
 class BookmarkBarViewTest25 : public BookmarkBarViewEventTestBase {
@@ -2263,15 +2271,15 @@ class BookmarkBarViewTest27 : public BookmarkBarViewEventTestBase {
 
 VIEW_TEST(BookmarkBarViewTest27, MiddleClickOnFolderOpensAllBookmarks)
 
-#endif  // defined(OS_MAC)
+#endif  // BUILDFLAG(IS_MAC)
 
 class BookmarkBarViewTest28 : public BookmarkBarViewEventTestBase {
  protected:
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   const ui_controls::AcceleratorState kAccelatorState = ui_controls::kCommand;
 #else
   const ui_controls::AcceleratorState kAccelatorState = ui_controls::kControl;
-#endif  // defined(OS_MAC)
+#endif  // BUILDFLAG(IS_MAC)
 
   void DoTestOnMessageLoop() override {
     views::LabelButton* button = GetBookmarkButton(0);
@@ -2292,7 +2300,7 @@ class BookmarkBarViewTest28 : public BookmarkBarViewEventTestBase {
 };
 
 // Flaky on Windows, see crbug.com/1156666
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #define MAYBE_ClickWithModifierOnFolderOpensAllBookmarks \
   DISABLED_ClickWithModifierOnFolderOpensAllBookmarks
 #else

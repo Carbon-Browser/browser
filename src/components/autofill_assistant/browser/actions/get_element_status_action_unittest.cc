@@ -14,10 +14,11 @@
 #include "components/autofill/core/browser/field_types.h"
 #include "components/autofill_assistant/browser/actions/action_test_utils.h"
 #include "components/autofill_assistant/browser/actions/mock_action_delegate.h"
-#include "components/autofill_assistant/browser/mock_website_login_manager.h"
+#include "components/autofill_assistant/browser/public/password_change/mock_website_login_manager.h"
 #include "components/autofill_assistant/browser/selector.h"
 #include "components/autofill_assistant/browser/service.pb.h"
 #include "components/autofill_assistant/browser/user_model.h"
+#include "components/autofill_assistant/browser/web/element_finder_result.h"
 #include "components/autofill_assistant/browser/web/element_store.h"
 #include "components/autofill_assistant/browser/web/mock_web_controller.h"
 #include "content/public/test/browser_task_environment.h"
@@ -37,7 +38,6 @@ using ::testing::Pointee;
 using ::testing::Property;
 using ::testing::Return;
 using ::testing::SizeIs;
-using ::testing::UnorderedElementsAre;
 using ::testing::WithArgs;
 
 const char kValue[] = "Some Value";
@@ -52,13 +52,14 @@ class GetElementStatusActionTest : public testing::Test {
 
     ON_CALL(mock_action_delegate_, GetUserData)
         .WillByDefault(Return(&user_data_));
+    ON_CALL(mock_action_delegate_, GetUserModel)
+        .WillByDefault(Return(&user_model_));
     ON_CALL(mock_action_delegate_, GetWebController)
         .WillByDefault(Return(&mock_web_controller_));
     ON_CALL(mock_action_delegate_, GetWebsiteLoginManager)
         .WillByDefault(Return(&mock_website_login_manager_));
     ON_CALL(mock_action_delegate_, OnShortWaitForElement(_, _))
-        .WillByDefault(RunOnceCallback<1>(OkClientStatus(),
-                                          base::TimeDelta::FromSeconds(0)));
+        .WillByDefault(RunOnceCallback<1>(OkClientStatus(), base::Seconds(0)));
     test_util::MockFindAnyElement(mock_action_delegate_);
     ON_CALL(mock_web_controller_, GetStringAttribute(_, _, _))
         .WillByDefault(RunOnceCallback<2>(OkClientStatus(), kValue));
@@ -111,8 +112,7 @@ TEST_F(GetElementStatusActionTest, ActionFailsForSelectorNotFound) {
       ->set_text(kValue);
 
   EXPECT_CALL(mock_action_delegate_, OnShortWaitForElement(selector, _))
-      .WillOnce(RunOnceCallback<1>(ClientStatus(TIMED_OUT),
-                                   base::TimeDelta::FromSeconds(0)));
+      .WillOnce(RunOnceCallback<1>(ClientStatus(TIMED_OUT), base::Seconds(0)));
 
   EXPECT_CALL(callback_,
               Run(Pointee(Property(&ProcessedActionProto::status, TIMED_OUT))));
@@ -152,9 +152,9 @@ TEST_F(GetElementStatusActionTest, ActionReportsAllVariationsForSelector) {
 }
 
 TEST_F(GetElementStatusActionTest, ActionReportsAllVariationsForClientId) {
-  ElementFinder::Result element;
+  ElementFinderResult element;
   mock_action_delegate_.GetElementStore()->AddElement("element",
-                                                      element.dom_object);
+                                                      element.dom_object());
   proto_.mutable_client_id()->set_identifier("element");
   proto_.mutable_expected_value_match()
       ->mutable_text_match()
@@ -703,9 +703,10 @@ TEST_F(GetElementStatusActionTest, SucceedsWithPasswordManagerValue) {
 
   EXPECT_CALL(mock_action_delegate_, FindElement(_, _))
       .WillOnce(WithArgs<1>([this](auto&& callback) {
-        std::unique_ptr<ElementFinder::Result> element =
-            std::make_unique<ElementFinder::Result>();
-        element->container_frame_host = web_contents_->GetMainFrame();
+        std::unique_ptr<ElementFinderResult> element =
+            std::make_unique<ElementFinderResult>();
+        element->SetRenderFrameHostForTest(
+            web_contents_->GetPrimaryMainFrame());
         std::move(callback).Run(OkClientStatus(), std::move(element));
       }));
   EXPECT_CALL(mock_website_login_manager_, GetPasswordForLogin(_, _))
@@ -753,6 +754,50 @@ TEST_F(GetElementStatusActionTest, SucceedsWithClientMemoryValue) {
               AllOf(Property(&GetElementStatusProto::Result::not_empty, true),
                     Property(&GetElementStatusProto::Result::match_success,
                              true)))))));
+  Run();
+}
+
+TEST_F(GetElementStatusActionTest,
+       ActionSucceedsForFullMatchAfterFindAndRemove) {
+  // The website value added a leading + and contains spaces.
+  ON_CALL(mock_web_controller_, GetStringAttribute(_, _, _))
+      .WillByDefault(RunOnceCallback<2>(OkClientStatus(), "+1 111 222 333"));
+
+  Selector selector({"#phone"});
+  *proto_.mutable_selector() = selector.proto;
+  // The input value contains a - as separator.
+  proto_.mutable_expected_value_match()
+      ->mutable_text_match()
+      ->mutable_text_value()
+      ->set_text("1-111-222-333");
+  proto_.mutable_expected_value_match()
+      ->mutable_text_match()
+      ->mutable_match_expectation()
+      ->mutable_match_options()
+      ->set_case_sensitive(true);
+  // Remove all characters to end up with numbers only to compare.
+  proto_.mutable_expected_value_match()
+      ->mutable_text_match()
+      ->mutable_match_expectation()
+      ->mutable_match_options()
+      ->set_find_and_remove_re2("\\+|\\s|\\-");
+  proto_.mutable_expected_value_match()
+      ->mutable_text_match()
+      ->mutable_match_expectation()
+      ->set_full_match(true);
+  proto_.set_mismatch_should_fail(true);
+
+  EXPECT_CALL(
+      callback_,
+      Run(Pointee(AllOf(
+          Property(&ProcessedActionProto::status, ACTION_APPLIED),
+          Property(
+              &ProcessedActionProto::get_element_status_result,
+              AllOf(
+                  Property(&GetElementStatusProto::Result::not_empty, true),
+                  Property(&GetElementStatusProto::Result::match_success, true),
+                  Property(&GetElementStatusProto::Result::reports,
+                           SizeIs(8))))))));
   Run();
 }
 

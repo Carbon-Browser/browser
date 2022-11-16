@@ -58,7 +58,7 @@ const char kTraceStartupFile[] = "trace-startup-file";
 const char kEnableTracingOutput[] = "enable-tracing-output";
 
 // Sets the output format for the trace, valid values are "json" and "proto".
-// If not set, the current default is "json".
+// If not set, the current default is "proto".
 // "proto", unlike json, supports writing the trace into the output file
 // incrementally and is more likely to retain more data if the browser process
 // unexpectedly terminates.
@@ -97,9 +97,6 @@ const char kPerfettoDisableInterning[] = "perfetto-disable-interning";
 
 // Sends a pretty-printed version of tracing info to the console.
 const char kTraceToConsole[] = "trace-to-console";
-
-// Sets the target URL for uploading tracing data.
-const char kTraceUploadURL[] = "trace-upload-url";
 
 // Sets a local file destination for tracing data. This is only used if
 // kEnableBackgroundTracing is also specified.

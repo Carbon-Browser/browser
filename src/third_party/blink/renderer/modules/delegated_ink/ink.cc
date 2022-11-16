@@ -6,6 +6,7 @@
 
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_ink_presenter_param.h"
+#include "third_party/blink/renderer/core/dom/element.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/navigator.h"
 #include "third_party/blink/renderer/modules/delegated_ink/delegated_ink_trail_presenter.h"
@@ -36,6 +37,15 @@ ScriptPromise Ink::requestPresenter(ScriptState* state,
     exception_state.ThrowException(
         ToExceptionCode(ESErrorType::kError),
         "The object is no longer associated with a window.");
+    return ScriptPromise();
+  }
+
+  if (presenter_param->presentationArea() &&
+      (presenter_param->presentationArea()->GetDocument() !=
+       GetSupplementable()->DomWindow()->GetFrame()->GetDocument())) {
+    exception_state.ThrowDOMException(
+        DOMExceptionCode::kNotAllowedError,
+        "Presentation area element does not belong to the document.");
     return ScriptPromise();
   }
 

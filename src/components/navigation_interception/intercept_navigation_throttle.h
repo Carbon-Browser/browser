@@ -7,21 +7,16 @@
 
 #include "base/callback.h"
 #include "base/feature_list.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
-#include "base/single_thread_task_runner.h"
-#include "components/navigation_interception/navigation_params.h"
+#include "base/task/single_thread_task_runner.h"
 #include "content/public/browser/navigation_throttle.h"
 
 namespace content {
 class NavigationHandle;
-class WebContents;
 }
 
 namespace navigation_interception {
-
-class NavigationParams;
 
 enum class SynchronyMode {
   // Support async interception in some cases (See ShouldCheckAsynchronously).
@@ -35,8 +30,7 @@ enum class SynchronyMode {
 class InterceptNavigationThrottle : public content::NavigationThrottle {
  public:
   typedef base::RepeatingCallback<bool(
-      content::WebContents* /* source */,
-      const NavigationParams& /* navigation_params */)>
+      content::NavigationHandle* /* navigation_handle */)>
       CheckCallback;
 
   static const base::Feature kAsyncCheck;
@@ -44,6 +38,11 @@ class InterceptNavigationThrottle : public content::NavigationThrottle {
   InterceptNavigationThrottle(content::NavigationHandle* navigation_handle,
                               CheckCallback should_ignore_callback,
                               SynchronyMode async_mode);
+
+  InterceptNavigationThrottle(const InterceptNavigationThrottle&) = delete;
+  InterceptNavigationThrottle& operator=(const InterceptNavigationThrottle&) =
+      delete;
+
   ~InterceptNavigationThrottle() override;
 
   // content::NavigationThrottle implementation:
@@ -53,13 +52,10 @@ class InterceptNavigationThrottle : public content::NavigationThrottle {
   const char* GetNameForLogging() override;
 
  private:
-  ThrottleCheckResult CheckIfShouldIgnoreNavigation(bool is_redirect);
-  void RunCheckAsync(const NavigationParams& params);
+  ThrottleCheckResult CheckIfShouldIgnoreNavigation();
+  void RunCheckAsync();
 
   bool ShouldCheckAsynchronously() const;
-
-  // Constructs NavigationParams for this navigation.
-  NavigationParams GetNavigationParams(bool is_redirect) const;
 
   // This callback should be called at the start of navigation and every
   // redirect, until |should_ignore_| is true.
@@ -86,8 +82,6 @@ class InterceptNavigationThrottle : public content::NavigationThrottle {
   bool deferring_ = false;
 
   base::WeakPtrFactory<InterceptNavigationThrottle> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(InterceptNavigationThrottle);
 };
 
 }  // namespace navigation_interception

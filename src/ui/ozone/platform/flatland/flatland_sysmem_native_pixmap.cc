@@ -46,6 +46,13 @@ size_t FlatlandSysmemNativePixmap::GetNumberOfPlanes() const {
   return 0;
 }
 
+bool FlatlandSysmemNativePixmap::SupportsZeroCopyWebGPUImport() const {
+  NOTREACHED();
+  // TODO(crbug.com/1304490): Figure out how to import multi-planar pixmap into
+  // WebGPU without copy.
+  return false;
+}
+
 uint64_t FlatlandSysmemNativePixmap::GetBufferFormatModifier() const {
   NOTREACHED();
   return 0;
@@ -65,13 +72,7 @@ uint32_t FlatlandSysmemNativePixmap::GetUniqueId() const {
 
 bool FlatlandSysmemNativePixmap::ScheduleOverlayPlane(
     gfx::AcceleratedWidget widget,
-    int plane_z_order,
-    gfx::OverlayTransform plane_transform,
-    const gfx::Rect& display_bounds,
-    const gfx::RectF& crop_rect,
-    bool enable_blend,
-    const gfx::Rect& damage_rect,
-    float opacity,
+    const gfx::OverlayPlaneData& overlay_plane_data,
     std::vector<gfx::GpuFence> acquire_fences,
     std::vector<gfx::GpuFence> release_fences) {
   return false;
@@ -79,6 +80,10 @@ bool FlatlandSysmemNativePixmap::ScheduleOverlayPlane(
 
 gfx::NativePixmapHandle FlatlandSysmemNativePixmap::ExportHandle() {
   return gfx::CloneHandleForIPC(handle_);
+}
+
+const gfx::NativePixmapHandle& FlatlandSysmemNativePixmap::PeekHandle() const {
+  return handle_;
 }
 
 bool FlatlandSysmemNativePixmap::SupportsOverlayPlane(

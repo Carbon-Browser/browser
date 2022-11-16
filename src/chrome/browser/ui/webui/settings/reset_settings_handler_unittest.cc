@@ -4,7 +4,6 @@
 
 #include <stddef.h>
 
-#include "base/macros.h"
 #include "base/values.h"
 #include "chrome/browser/google/google_brand.h"
 #include "chrome/browser/profile_resetter/profile_resetter.h"
@@ -54,6 +53,10 @@ class TestingResetSettingsHandler : public ResetSettingsHandler {
     set_web_ui(web_ui);
   }
 
+  TestingResetSettingsHandler(const TestingResetSettingsHandler&) = delete;
+  TestingResetSettingsHandler& operator=(const TestingResetSettingsHandler&) =
+      delete;
+
   size_t resets() const { return resetter_.resets(); }
 
   using settings::ResetSettingsHandler::HandleResetProfileSettings;
@@ -65,8 +68,6 @@ class TestingResetSettingsHandler : public ResetSettingsHandler {
 
 private:
   MockProfileResetter resetter_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestingResetSettingsHandler);
 };
 
 class ResetSettingsHandlerTest : public testing::Test {
@@ -94,7 +95,7 @@ TEST_F(ResetSettingsHandlerTest, HandleResetProfileSettings) {
   list.Append(expected_callback_id);
   list.Append(false);
   list.Append("");
-  handler()->HandleResetProfileSettings(&base::Value::AsListValue(list));
+  handler()->HandleResetProfileSettings(list.GetList());
   // Check that the delegate ProfileResetter was called.
   EXPECT_EQ(1u, handler()->resets());
   // Check that Javascript side is notified after resetting is done.

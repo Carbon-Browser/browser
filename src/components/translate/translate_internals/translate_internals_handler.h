@@ -11,14 +11,12 @@
 
 #include "base/callback.h"
 #include "base/callback_list.h"
-#include "base/macros.h"
 #include "components/translate/core/browser/translate_client.h"
 #include "components/translate/core/browser/translate_language_list.h"
 #include "components/translate/core/browser/translate_manager.h"
 #include "components/variations/service/variations_service.h"
 
 namespace base {
-class ListValue;
 class Value;
 }  // namespace base
 
@@ -32,6 +30,11 @@ struct TranslateInitDetails;
 class TranslateInternalsHandler {
  public:
   TranslateInternalsHandler();
+
+  TranslateInternalsHandler(const TranslateInternalsHandler&) = delete;
+  TranslateInternalsHandler& operator=(const TranslateInternalsHandler&) =
+      delete;
+
   ~TranslateInternalsHandler();
 
   // Returns a dictionary of languages where each key is a language
@@ -42,22 +45,10 @@ class TranslateInternalsHandler {
   virtual variations::VariationsService* GetVariationsService() = 0;
   // Registers to handle |message| from JavaScript with |callback|.
   using MessageCallback =
-      base::RepeatingCallback<void(base::Value::ConstListView)>;
+      base::RepeatingCallback<void(const base::Value::List&)>;
   virtual void RegisterMessageCallback(const std::string& message,
                                        MessageCallback callback) = 0;
 
-  // Always use RegisterMessageCallback() above in new code.
-  //
-  // TODO(crbug.com/1243386): Existing callers of
-  // RegisterDeprecatedMessageCallback() should be migrated to
-  // RegisterMessageCallback() if possible.
-  //
-  // Registers to handle |message| from JavaScript with |callback|.
-  using DeprecatedMessageCallback =
-      base::RepeatingCallback<void(const base::ListValue*)>;
-  virtual void RegisterDeprecatedMessageCallback(
-      const std::string& message,
-      const DeprecatedMessageCallback& callback) = 0;
   // Calls a Javascript function with the given name and arguments.
   virtual void CallJavascriptFunction(
       const std::string& function_name,
@@ -81,22 +72,22 @@ class TranslateInternalsHandler {
 
   // Handles the Javascript message 'removePrefItem'. This message is sent
   // when UI requests to remove an item in the preference.
-  void OnRemovePrefItem(const base::ListValue* args);
+  void OnRemovePrefItem(const base::Value::List& args);
 
   // Handles the JavaScript message 'setRecentTargetLanguage'. This message is
   // sent when the UI requests to change the 'translate_recent_target'
   // preference.
-  void OnSetRecentTargetLanguage(const base::ListValue* args);
+  void OnSetRecentTargetLanguage(const base::Value::List& args);
 
   // Handles the Javascript message 'overrideCountry'. This message is sent
   // when UI requests to override the stored country.
-  void OnOverrideCountry(const base::ListValue* country);
+  void OnOverrideCountry(const base::Value::List& country);
 
   // Handles the Javascript message 'requestInfo'. This message is sent
   // when UI needs to show information concerned with the translation.
   // For now, this returns only prefs to Javascript.
   // |args| is not used.
-  void OnRequestInfo(const base::ListValue* args);
+  void OnRequestInfo(const base::Value::List& args);
 
   // Sends a message to Javascript.
   void SendMessageToJs(const std::string& message, const base::Value& value);
@@ -119,8 +110,6 @@ class TranslateInternalsHandler {
 
   // Subscription for translate initialization event.
   base::CallbackListSubscription init_subscription_;
-
-  DISALLOW_COPY_AND_ASSIGN(TranslateInternalsHandler);
 };
 
 }  // namespace translate

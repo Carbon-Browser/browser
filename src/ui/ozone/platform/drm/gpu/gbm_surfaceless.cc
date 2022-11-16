@@ -10,7 +10,6 @@
 #include "base/bind.h"
 #include "base/check_op.h"
 #include "base/notreached.h"
-#include "base/task/post_task.h"
 #include "base/task/thread_pool.h"
 #include "base/trace_event/trace_event.h"
 #include "ui/gfx/gpu_fence_handle.h"
@@ -41,14 +40,14 @@ void WaitForFence(EGLDisplay display, EGLSyncKHR fence) {
 GbmSurfaceless::GbmSurfaceless(GbmSurfaceFactory* surface_factory,
                                std::unique_ptr<DrmWindowProxy> window,
                                gfx::AcceleratedWidget widget)
-    : SurfacelessEGL(gfx::Size()),
+    : SurfacelessEGL(gl::GLSurfaceEGL::GetGLDisplayEGL(), gfx::Size()),
       surface_factory_(surface_factory),
       window_(std::move(window)),
       widget_(widget),
       has_implicit_external_sync_(
-          HasEGLExtension("EGL_ARM_implicit_external_sync")),
+          GetGLDisplayEGL()->ext->b_EGL_ARM_implicit_external_sync),
       has_image_flush_external_(
-          HasEGLExtension("EGL_EXT_image_flush_external")) {
+          GetGLDisplayEGL()->ext->b_EGL_EXT_image_flush_external) {
   surface_factory_->RegisterSurface(window_->widget(), this);
   supports_plane_gpu_fences_ = window_->SupportsGpuFences();
   unsubmitted_frames_.push_back(std::make_unique<PendingFrame>());
@@ -71,18 +70,11 @@ gfx::SwapResult GbmSurfaceless::SwapBuffers(PresentationCallback callback) {
 }
 
 bool GbmSurfaceless::ScheduleOverlayPlane(
-    int z_order,
-    gfx::OverlayTransform transform,
     gl::GLImage* image,
-    const gfx::Rect& bounds_rect,
-    const gfx::RectF& crop_rect,
-    bool enable_blend,
-    const gfx::Rect& damage_rect,
-    float opacity,
-    std::unique_ptr<gfx::GpuFence> gpu_fence) {
-  unsubmitted_frames_.back()->overlays.push_back(gl::GLSurfaceOverlay(
-      z_order, transform, image, bounds_rect, crop_rect, enable_blend,
-      damage_rect, opacity, std::move(gpu_fence)));
+    std::unique_ptr<gfx::GpuFence> gpu_fence,
+    const gfx::OverlayPlaneData& overlay_plane_data) {
+  unsubmitted_frames_.back()->overlays.push_back(
+      gl::GLSurfaceOverlay(image, std::move(gpu_fence), overlay_plane_data));
   return true;
 }
 
@@ -173,7 +165,7 @@ void GbmSurfaceless::SwapBuffersAsync(
   CHECK_NE(fence, EGL_NO_SYNC_KHR) << "eglCreateSyncKHR failed";
 
   base::OnceClosure fence_wait_task =
-      base::BindOnce(&WaitForFence, GetDisplay(), fence);
+      base::BindOnce(&WaitForFence, GetEGLDisplay(), fence);
 
   base::OnceClosure fence_retired_callback = base::BindOnce(
       &GbmSurfaceless::FenceRetired, weak_factory_.GetWeakPtr(), frame);
@@ -213,7 +205,7 @@ EGLConfig GbmSurfaceless::GetConfig() {
                                EGL_SURFACE_TYPE,
                                EGL_DONT_CARE,
                                EGL_NONE};
-    config_ = ChooseEGLConfig(GetDisplay(), config_attribs);
+    config_ = ChooseEGLConfig(GetEGLDisplay(), config_attribs);
   }
   return config_;
 }
@@ -289,7 +281,7 @@ EGLSyncKHR GbmSurfaceless::InsertFence(bool implicit) {
   const EGLint attrib_list[] = {EGL_SYNC_CONDITION_KHR,
                                 EGL_SYNC_PRIOR_COMMANDS_IMPLICIT_EXTERNAL_ARM,
                                 EGL_NONE};
-  return eglCreateSyncKHR(GetDisplay(), EGL_SYNC_FENCE_KHR,
+  return eglCreateSyncKHR(GetEGLDisplay(), EGL_SYNC_FENCE_KHR,
                           implicit ? attrib_list : NULL);
 }
 
@@ -301,8 +293,10 @@ void GbmSurfaceless::FenceRetired(PendingFrame* frame) {
 void GbmSurfaceless::OnSubmission(gfx::SwapResult result,
                                   gfx::GpuFenceHandle release_fence) {
   submitted_frame_->swap_result = result;
-  // TODO(edcourtney): Re-enable fences here after fixing performance
-  // regression.
+  if (!release_fence.is_null()) {
+    std::move(submitted_frame_->completion_callback)
+        .Run(gfx::SwapCompletionResult(result, std::move(release_fence)));
+  }
 }
 
 void GbmSurfaceless::OnPresentation(const gfx::PresentationFeedback& feedback) {

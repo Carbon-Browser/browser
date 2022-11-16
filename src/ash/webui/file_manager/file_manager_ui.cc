@@ -5,14 +5,19 @@
 #include "ash/webui/file_manager/file_manager_ui.h"
 
 #include "ash/webui/file_manager/file_manager_page_handler.h"
+#include "ash/webui/file_manager/resource_loader.h"
 #include "ash/webui/file_manager/resources/grit/file_manager_swa_resources.h"
 #include "ash/webui/file_manager/resources/grit/file_manager_swa_resources_map.h"
 #include "ash/webui/file_manager/url_constants.h"
-#include "base/memory/ptr_util.h"
+#include "base/check_op.h"
+#include "base/logging.h"
 #include "base/strings/string_util.h"
+#include "base/values.h"
+#include "content/public/browser/browser_thread.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_ui.h"
 #include "content/public/browser/web_ui_data_source.h"
+#include "content/public/common/url_constants.h"
 #include "services/network/public/mojom/content_security_policy.mojom.h"
 #include "ui/file_manager/grit/file_manager_gen_resources_map.h"
 #include "ui/file_manager/grit/file_manager_resources.h"
@@ -21,30 +26,30 @@
 namespace ash {
 namespace file_manager {
 
-void AddFilesAppResources(content::WebUIDataSource* source,
-                          const webui::ResourcePath* entries,
-                          size_t size) {
-  for (size_t i = 0; i < size; ++i) {
-    std::string path(entries[i].path);
-    // Only load resources for Files app.
-    if (base::StartsWith(path, "file_manager/")) {
-      // Files app UI has all paths relative to //ui/file_manager/file_manager/
-      // so we remove the leading file_manager/ to match the existing paths.
-      base::ReplaceFirstSubstringAfterOffset(&path, 0, "file_manager/", "");
-      source->AddResourcePath(path, entries[i].id);
-    }
-  }
-}
-
 FileManagerUI::FileManagerUI(content::WebUI* web_ui,
                              std::unique_ptr<FileManagerUIDelegate> delegate)
     : MojoWebDialogUI(web_ui), delegate_(std::move(delegate)) {
+  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+
+  // Count the number of active windows. This is done so that we can tell if
+  // there are any active Files SWA windows.
+  ++instance_count_;
+  DCHECK_GT(instance_count_, 0);
+  DLOG(WARNING) << "Starting FileManagerUI. Open windows: " << instance_count_;
+
+  // Increment the counter each time a window is opened. This is to give a
+  // unique ID to each window.
+  ++window_counter_;
+
   auto* browser_context = web_ui->GetWebContents()->GetBrowserContext();
-  auto* trusted_source = CreateTrustedAppDataSource();
+  auto* trusted_source = CreateTrustedAppDataSource(window_counter_);
   content::WebUIDataSource::Add(browser_context, trusted_source);
+  // Add ability to request chrome-untrusted: URLs
+  web_ui->AddRequestableScheme(content::kChromeUIUntrustedScheme);
 }
 
-content::WebUIDataSource* FileManagerUI::CreateTrustedAppDataSource() {
+content::WebUIDataSource* FileManagerUI::CreateTrustedAppDataSource(
+    int window_number) {
   content::WebUIDataSource* source =
       content::WebUIDataSource::Create(kChromeUIFileManagerHost);
 
@@ -62,22 +67,27 @@ content::WebUIDataSource* FileManagerUI::CreateTrustedAppDataSource() {
 
   // Load time data: add files app strings and feature flags.
   source->EnableReplaceI18nInJS();
-  delegate_->PopulateLoadTimeData(source);
+  base::Value::Dict dict = delegate_->GetLoadTimeData();
+  dict.Set("WINDOW_NUMBER", window_number);
+  source->AddLocalizedStrings(dict);
   source->UseStringsJs();
 
   // Script security policy.
   source->OverrideContentSecurityPolicy(
       network::mojom::CSPDirectiveName::ScriptSrc,
-      "script-src chrome-extension://hhaomjibdihmijegdhdafkllkbggdgoj "
-      "chrome-extension://pmfjbimdmchhbnneeidfognadeopoehp "
+      "script-src chrome-extension://pmfjbimdmchhbnneeidfognadeopoehp "
       "chrome://resources "
       "'self' ;");
 
   // Metadata Shared Worker security policy.
   source->OverrideContentSecurityPolicy(
-      network::mojom::CSPDirectiveName::WorkerSrc,
-      "worker-src chrome-extension://hhaomjibdihmijegdhdafkllkbggdgoj "
-      "'self' ;");
+      network::mojom::CSPDirectiveName::WorkerSrc, "worker-src 'self' ;");
+
+  // Allow using the chrome-untrusted:// scheme in the host.
+  source->OverrideContentSecurityPolicy(
+      network::mojom::CSPDirectiveName::FrameSrc,
+      "frame-src chrome-untrusted://file-manager "
+      "'self';");
 
   // TODO(crbug.com/1098685): Trusted Type remaining WebUI.
   source->DisableTrustedTypesCSP();
@@ -85,7 +95,19 @@ content::WebUIDataSource* FileManagerUI::CreateTrustedAppDataSource() {
   return source;
 }
 
-FileManagerUI::~FileManagerUI() = default;
+int FileManagerUI::GetNumInstances() {
+  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+  return instance_count_;
+}
+
+FileManagerUI::~FileManagerUI() {
+  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+
+  DCHECK_GT(instance_count_, 0);
+  --instance_count_;
+
+  DLOG(WARNING) << "Stopping FileManagerUI. Open windows: " << instance_count_;
+}
 
 void FileManagerUI::BindInterface(
     mojo::PendingReceiver<mojom::PageHandlerFactory> pending_receiver) {

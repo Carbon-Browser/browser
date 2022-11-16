@@ -5,7 +5,6 @@
 #ifndef COMPONENTS_SUBRESOURCE_FILTER_CONTENT_BROWSER_SUBRESOURCE_FILTER_OBSERVER_MANAGER_H_
 #define COMPONENTS_SUBRESOURCE_FILTER_CONTENT_BROWSER_SUBRESOURCE_FILTER_OBSERVER_MANAGER_H_
 
-#include "base/macros.h"
 #include "base/observer_list.h"
 #include "components/subresource_filter/content/browser/subresource_filter_observer.h"
 #include "components/subresource_filter/core/common/activation_decision.h"
@@ -36,6 +35,12 @@ class SubresourceFilterObserverManager
     : public content::WebContentsUserData<SubresourceFilterObserverManager> {
  public:
   explicit SubresourceFilterObserverManager(content::WebContents* web_contents);
+
+  SubresourceFilterObserverManager(const SubresourceFilterObserverManager&) =
+      delete;
+  SubresourceFilterObserverManager& operator=(
+      const SubresourceFilterObserverManager&) = delete;
+
   ~SubresourceFilterObserverManager() override;
 
   void AddObserver(SubresourceFilterObserver* observer);
@@ -73,8 +78,6 @@ class SubresourceFilterObserverManager
   friend class content::WebContentsUserData<SubresourceFilterObserverManager>;
   base::ObserverList<SubresourceFilterObserver>::Unchecked observers_;
   WEB_CONTENTS_USER_DATA_KEY_DECL();
-
-  DISALLOW_COPY_AND_ASSIGN(SubresourceFilterObserverManager);
 };
 
 }  // namespace subresource_filter

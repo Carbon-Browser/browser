@@ -5,7 +5,6 @@
 #ifndef CHROME_BROWSER_UI_WEBUI_CHROMEOS_LOGIN_FINGERPRINT_SETUP_SCREEN_HANDLER_H_
 #define CHROME_BROWSER_UI_WEBUI_CHROMEOS_LOGIN_FINGERPRINT_SETUP_SCREEN_HANDLER_H_
 
-#include "base/macros.h"
 #include "chrome/browser/ui/webui/chromeos/login/base_screen_handler.h"
 #include "services/device/public/mojom/fingerprint.mojom.h"
 
@@ -47,7 +46,12 @@ class FingerprintSetupScreenHandler : public BaseScreenHandler,
  public:
   using TView = FingerprintSetupScreenView;
 
-  explicit FingerprintSetupScreenHandler(JSCallsContainer* js_calls_container);
+  FingerprintSetupScreenHandler();
+
+  FingerprintSetupScreenHandler(const FingerprintSetupScreenHandler&) = delete;
+  FingerprintSetupScreenHandler& operator=(
+      const FingerprintSetupScreenHandler&) = delete;
+
   ~FingerprintSetupScreenHandler() override;
 
   // BaseScreenHandler:
@@ -65,12 +69,10 @@ class FingerprintSetupScreenHandler : public BaseScreenHandler,
                         int percent_complete) override;
 
   // BaseScreenHandler:
-  void Initialize() override;
+  void InitializeDeprecated() override;
 
  private:
   ash::FingerprintSetupScreen* screen_ = nullptr;
-
-  DISALLOW_COPY_AND_ASSIGN(FingerprintSetupScreenHandler);
 };
 
 }  // namespace chromeos

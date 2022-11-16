@@ -8,7 +8,6 @@
 #include <string>
 
 #include "ash/assistant/ui/assistant_view_delegate.h"
-#include "base/macros.h"
 
 namespace ash {
 
@@ -18,6 +17,11 @@ class AssistantViewDelegateImpl : public AssistantViewDelegate {
  public:
   explicit AssistantViewDelegateImpl(
       AssistantControllerImpl* assistant_controller);
+
+  AssistantViewDelegateImpl(const AssistantViewDelegateImpl&) = delete;
+  AssistantViewDelegateImpl& operator=(const AssistantViewDelegateImpl&) =
+      delete;
+
   ~AssistantViewDelegateImpl() override;
 
   // AssistantViewDelegate:
@@ -33,7 +37,6 @@ class AssistantViewDelegateImpl : public AssistantViewDelegate {
   bool IsTabletMode() const override;
   void OnDialogPlateButtonPressed(AssistantButtonId id) override;
   void OnDialogPlateContentsCommitted(const std::string& text) override;
-  void OnHostViewVisibilityChanged(bool visible) override;
   void OnNotificationButtonPressed(const std::string& notification_id,
                                    int notification_button_index) override;
   void OnOnboardingShown() override;
@@ -45,8 +48,6 @@ class AssistantViewDelegateImpl : public AssistantViewDelegate {
  private:
   AssistantControllerImpl* const assistant_controller_;
   base::ObserverList<AssistantViewDelegateObserver> view_delegate_observers_;
-
-  DISALLOW_COPY_AND_ASSIGN(AssistantViewDelegateImpl);
 };
 
 }  // namespace ash

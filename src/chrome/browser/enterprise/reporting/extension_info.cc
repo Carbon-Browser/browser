@@ -38,7 +38,7 @@ em::Extension_InstallType GetExtensionInstallType(
       return em::Extension_InstallType_TYPE_ADMIN;
     default:
       NOTREACHED();
-      FALLTHROUGH;
+      [[fallthrough]];
     case ManifestLocation::kInvalidLocation:
     case ManifestLocation::kComponent:
     case ManifestLocation::kExternalComponent:
@@ -85,6 +85,7 @@ void AddExtensions(const extensions::ExtensionSet& extensions,
     AddPermission(extension.get(), extension_info);
     AddHostPermission(extension.get(), extension_info);
     extension_info->set_from_webstore(extension->from_webstore());
+    extension_info->set_manifest_version(extension->manifest_version());
   }
 }
 

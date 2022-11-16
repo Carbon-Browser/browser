@@ -15,6 +15,7 @@
 #include "base/command_line.h"
 #include "base/format_macros.h"
 #include "base/strings/stringprintf.h"
+#include "base/time/time.h"
 #include "ui/aura/window.h"
 #include "ui/display/manager/display_manager.h"
 #include "ui/display/test/display_manager_test_api.h"
@@ -25,6 +26,10 @@ namespace ash {
 class TouchHudTestBase : public AshTestBase {
  public:
   TouchHudTestBase() = default;
+
+  TouchHudTestBase(const TouchHudTestBase&) = delete;
+  TouchHudTestBase& operator=(const TouchHudTestBase&) = delete;
+
   ~TouchHudTestBase() override = default;
 
   void SetUp() override {
@@ -39,11 +44,11 @@ class TouchHudTestBase : public AshTestBase {
     mirrored_display_id_ = 11;
 
     internal_display_info_ =
-        CreateDisplayInfo(internal_display_id_, gfx::Rect(0, 0, 500, 500));
+        CreateDisplayInfo(internal_display_id_, gfx::Rect(0, 0, 600, 500));
     external_display_info_ =
-        CreateDisplayInfo(external_display_id_, gfx::Rect(1, 1, 100, 100));
+        CreateDisplayInfo(external_display_id_, gfx::Rect(1, 1, 200, 100));
     mirrored_display_info_ =
-        CreateDisplayInfo(mirrored_display_id_, gfx::Rect(0, 0, 100, 100));
+        CreateDisplayInfo(mirrored_display_id_, gfx::Rect(0, 0, 200, 100));
   }
 
   display::Display GetPrimaryDisplay() {
@@ -193,13 +198,15 @@ class TouchHudTestBase : public AshTestBase {
   display::ManagedDisplayInfo mirrored_display_info_;
 
   std::vector<display::ManagedDisplayInfo> display_info_list_;
-
-  DISALLOW_COPY_AND_ASSIGN(TouchHudTestBase);
 };
 
 class TouchHudDebugTest : public TouchHudTestBase {
  public:
   TouchHudDebugTest() = default;
+
+  TouchHudDebugTest(const TouchHudDebugTest&) = delete;
+  TouchHudDebugTest& operator=(const TouchHudDebugTest&) = delete;
+
   ~TouchHudDebugTest() override = default;
 
   void SetUp() override {
@@ -257,13 +264,15 @@ class TouchHudDebugTest : public TouchHudTestBase {
   TouchHudDebug* GetSecondaryTouchHudDebug() {
     return GetSecondaryRootController()->touch_hud_debug();
   }
-
-  DISALLOW_COPY_AND_ASSIGN(TouchHudDebugTest);
 };
 
 class TouchHudProjectionTest : public TouchHudTestBase {
  public:
   TouchHudProjectionTest() = default;
+
+  TouchHudProjectionTest(const TouchHudProjectionTest&) = delete;
+  TouchHudProjectionTest& operator=(const TouchHudProjectionTest&) = delete;
+
   ~TouchHudProjectionTest() override = default;
 
   // testing::Test:
@@ -289,13 +298,11 @@ class TouchHudProjectionTest : public TouchHudTestBase {
     GetInternalTouchHudProjection()->OnTouchEvent(&event);
 
     // Advance time for next event.
-    event_time += base::TimeDelta::FromMilliseconds(100);
+    event_time += base::Milliseconds(100);
   }
 
  private:
   base::TimeTicks event_time;
-
-  DISALLOW_COPY_AND_ASSIGN(TouchHudProjectionTest);
 };
 
 // Checks if debug touch HUD is correctly initialized for a single display.

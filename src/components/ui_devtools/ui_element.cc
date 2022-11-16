@@ -8,7 +8,7 @@
 
 #include "base/check_op.h"
 #include "base/notreached.h"
-#include "components/ui_devtools/Protocol.h"
+#include "components/ui_devtools/protocol.h"
 #include "components/ui_devtools/ui_element_delegate.h"
 
 namespace ui_devtools {
@@ -37,11 +37,7 @@ void UIElement::ResetNodeId() {
 }
 
 UIElement::~UIElement() {
-  if (owns_children_) {
-    for (auto* child : children_)
-      delete child;
-  }
-  children_.clear();
+  ClearChildren();
 }
 
 std::string UIElement::GetTypeName() const {
@@ -85,6 +81,8 @@ void UIElement::AddOrderedChild(UIElement* child,
 }
 
 void UIElement::ClearChildren() {
+  for (auto* child : children_)
+    delete child;
   children_.clear();
 }
 
@@ -147,6 +145,10 @@ std::vector<UIElement::Source> UIElement::GetSources() {
     InitSources();
 
   return sources_;
+}
+
+bool UIElement::FindMatchByElementID(const ui::ElementIdentifier& identifier) {
+  return false;
 }
 
 bool UIElement::DispatchMouseEvent(protocol::DOM::MouseEvent* event) {

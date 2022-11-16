@@ -9,8 +9,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import android.graphics.Canvas;
 import android.graphics.Rect;
 import android.view.KeyEvent;
-import android.view.Menu;
-import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.accessibility.AccessibilityNodeInfo;
@@ -28,7 +26,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.Mockito;
-import org.mockito.MockitoAnnotations;
 
 import org.chromium.base.test.util.Batch;
 import org.chromium.base.test.util.CallbackHelper;
@@ -41,12 +38,12 @@ import org.chromium.chrome.browser.lifecycle.ActivityLifecycleDispatcher;
 import org.chromium.chrome.browser.lifecycle.LifecycleObserver;
 import org.chromium.chrome.browser.ui.appmenu.test.R;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
-import org.chromium.chrome.test.DummyUiChromeActivityTestCase;
+import org.chromium.components.browser_ui.widget.chips.ChipView;
 import org.chromium.components.browser_ui.widget.highlight.ViewHighlighterTestUtils;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
-import org.chromium.ui.test.util.DummyUiActivity;
+import org.chromium.ui.test.util.BlankUiTestActivity;
+import org.chromium.ui.test.util.BlankUiTestActivityTestCase;
 import org.chromium.ui.test.util.UiDisableIf;
-import org.chromium.ui.widget.ChipView;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -60,7 +57,7 @@ import java.util.concurrent.TimeoutException;
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
 @Batch(Batch.PER_CLASS)
-public class AppMenuTest extends DummyUiChromeActivityTestCase {
+public class AppMenuTest extends BlankUiTestActivityTestCase {
     private AppMenuCoordinatorImpl mAppMenuCoordinator;
     private AppMenuHandlerImpl mAppMenuHandler;
     private TestAppMenuPropertiesDelegate mPropertiesDelegate;
@@ -71,16 +68,19 @@ public class AppMenuTest extends DummyUiChromeActivityTestCase {
 
     @Mock
     private Canvas mCanvas;
+    // Tell R8 not to break the ability to mock the class.
+    @Mock
+    private AppMenu mUnused;
 
     @BeforeClass
     public static void setUpBeforeActivityLaunched() {
-        DummyUiActivity.setTestLayout(R.layout.test_app_menu_activity_layout);
+        BlankUiTestActivity.setTestLayout(R.layout.test_app_menu_activity_layout);
     }
 
     @Override
     public void setUpTest() throws Exception {
         super.setUpTest();
-        MockitoAnnotations.initMocks(this);
+        mCanvas = Mockito.mock(Canvas.class);
         TestThreadUtils.runOnUiThreadBlocking(this::setUpTestOnUiThread);
         mLifecycleDispatcher.observerRegisteredCallbackHelper.waitForCallback(0);
     }
@@ -96,12 +96,18 @@ public class AppMenuTest extends DummyUiChromeActivityTestCase {
         mTestMenuButtonDelegate = new TestMenuButtonDelegate();
         mAppMenuCoordinator = new AppMenuCoordinatorImpl(getActivity(), mLifecycleDispatcher,
                 mTestMenuButtonDelegate, mDelegate, getActivity().getWindow().getDecorView(),
-                getActivity().findViewById(R.id.menu_anchor_stub));
+                getActivity().findViewById(R.id.menu_anchor_stub), this::getAppRect);
         mAppMenuHandler = mAppMenuCoordinator.getAppMenuHandlerImplForTesting();
         mMenuObserver = new TestAppMenuObserver();
         mAppMenuCoordinator.getAppMenuHandler().addObserver(mMenuObserver);
         mPropertiesDelegate =
                 (TestAppMenuPropertiesDelegate) mAppMenuCoordinator.getAppMenuPropertiesDelegate();
+    }
+
+    private Rect getAppRect() {
+        Rect appRect = new Rect();
+        getActivity().getWindow().getDecorView().getWindowVisibleDisplayFrame(appRect);
+        return appRect;
     }
 
     @Test
@@ -239,7 +245,8 @@ public class AppMenuTest extends DummyUiChromeActivityTestCase {
         View dummyView = new View(getActivity());
         TestThreadUtils.runOnUiThreadBlocking(() -> {
             spiedMenu.onItemLongClick(
-                    mAppMenuHandler.getAppMenu().getMenu().findItem(R.id.icon_one), dummyView);
+                    mAppMenuHandler.getAppMenu().getMenuItemPropertyModel(R.id.icon_one),
+                    dummyView);
         });
 
         Mockito.verify(spiedMenu, Mockito.times(1)).showToastForItem("Icon One", dummyView);
@@ -255,7 +262,8 @@ public class AppMenuTest extends DummyUiChromeActivityTestCase {
         View dummyView = new View(getActivity());
         TestThreadUtils.runOnUiThreadBlocking(() -> {
             spiedMenu.onItemLongClick(
-                    mAppMenuHandler.getAppMenu().getMenu().findItem(R.id.icon_two), dummyView);
+                    mAppMenuHandler.getAppMenu().getMenuItemPropertyModel(R.id.icon_two),
+                    dummyView);
         });
 
         Mockito.verify(spiedMenu, Mockito.times(1)).showToastForItem("2", dummyView);
@@ -271,7 +279,8 @@ public class AppMenuTest extends DummyUiChromeActivityTestCase {
         View dummyView = new View(getActivity());
         TestThreadUtils.runOnUiThreadBlocking(() -> {
             spiedMenu.onItemLongClick(
-                    mAppMenuHandler.getAppMenu().getMenu().findItem(R.id.icon_three), dummyView);
+                    mAppMenuHandler.getAppMenu().getMenuItemPropertyModel(R.id.icon_three),
+                    dummyView);
         });
 
         Mockito.verify(spiedMenu, Mockito.times(0))
@@ -382,7 +391,9 @@ public class AppMenuTest extends DummyUiChromeActivityTestCase {
 
         String newText = "Test!";
         TestThreadUtils.runOnUiThreadBlocking(() -> {
-            mAppMenuHandler.getAppMenu().getMenu().findItem(R.id.menu_item_two).setTitle(newText);
+            mAppMenuHandler.getAppMenu()
+                    .getMenuItemPropertyModel(R.id.menu_item_two)
+                    .set(AppMenuItemProperties.TITLE, newText);
             mAppMenuHandler.menuItemContentChanged(R.id.menu_item_two);
         });
 
@@ -681,13 +692,13 @@ public class AppMenuTest extends DummyUiChromeActivityTestCase {
     public void testCalculateHeightForItems_enoughSpace() throws Exception {
         showMenuAndAssert();
 
-        List<MenuItem> menuItems = new ArrayList<MenuItem>();
+        List<Integer> menuItemIds = new ArrayList<Integer>();
         List<Integer> heightList = new ArrayList<Integer>();
-        createMenuItem(menuItems, heightList, 0 /* id */, 10 /* height */);
-        createMenuItem(menuItems, heightList, 1 /* id */, 10 /* height */);
-        createMenuItem(menuItems, heightList, 2 /* id */, 10 /* height */);
+        createMenuItem(menuItemIds, heightList, 0 /* id */, 10 /* height */);
+        createMenuItem(menuItemIds, heightList, 1 /* id */, 10 /* height */);
+        createMenuItem(menuItemIds, heightList, 2 /* id */, 10 /* height */);
 
-        int height = mAppMenuHandler.getAppMenu().calculateHeightForItems(menuItems, heightList,
+        int height = mAppMenuHandler.getAppMenu().calculateHeightForItems(menuItemIds, heightList,
                 -1 /* groupDividerResourceId */, 35 /* availableScreenSpace */);
         Assert.assertEquals(30, height);
     }
@@ -697,13 +708,13 @@ public class AppMenuTest extends DummyUiChromeActivityTestCase {
     public void testCalculateHeightForItems_notEnoughSpaceForOneItem() throws Exception {
         showMenuAndAssert();
 
-        List<MenuItem> menuItems = new ArrayList<MenuItem>();
+        List<Integer> menuItemIds = new ArrayList<Integer>();
         List<Integer> heightList = new ArrayList<Integer>();
-        createMenuItem(menuItems, heightList, 0 /* id */, 10 /* height */);
-        createMenuItem(menuItems, heightList, 1 /* id */, 10 /* height */);
-        createMenuItem(menuItems, heightList, 2 /* id */, 10 /* height */);
+        createMenuItem(menuItemIds, heightList, 0 /* id */, 10 /* height */);
+        createMenuItem(menuItemIds, heightList, 1 /* id */, 10 /* height */);
+        createMenuItem(menuItemIds, heightList, 2 /* id */, 10 /* height */);
 
-        int height = mAppMenuHandler.getAppMenu().calculateHeightForItems(menuItems, heightList,
+        int height = mAppMenuHandler.getAppMenu().calculateHeightForItems(menuItemIds, heightList,
                 -1 /* groupDividerResourceId */, 26 /* availableScreenSpace */);
         // The space only can fit the 1st and 2nd items and the partial 3rd item.
         Assert.assertEquals(25, height);
@@ -714,13 +725,13 @@ public class AppMenuTest extends DummyUiChromeActivityTestCase {
     public void testCalculateHeightForItems_notEnoughSpaceForTwoItem() throws Exception {
         showMenuAndAssert();
 
-        List<MenuItem> menuItems = new ArrayList<MenuItem>();
+        List<Integer> menuItemIds = new ArrayList<Integer>();
         List<Integer> heightList = new ArrayList<Integer>();
-        createMenuItem(menuItems, heightList, 0 /* id */, 10 /* height */);
-        createMenuItem(menuItems, heightList, 1 /* id */, 10 /* height */);
-        createMenuItem(menuItems, heightList, 2 /* id */, 10 /* height */);
+        createMenuItem(menuItemIds, heightList, 0 /* id */, 10 /* height */);
+        createMenuItem(menuItemIds, heightList, 1 /* id */, 10 /* height */);
+        createMenuItem(menuItemIds, heightList, 2 /* id */, 10 /* height */);
 
-        int height = mAppMenuHandler.getAppMenu().calculateHeightForItems(menuItems, heightList,
+        int height = mAppMenuHandler.getAppMenu().calculateHeightForItems(menuItemIds, heightList,
                 -1 /* groupDividerResourceId */, 24 /* availableScreenSpace */);
         // The space only can fit the full 1st item, the full 2nd items and the partial 3rd item.
         // But the space for 3rd item is 4, which is not enough to show partial 3rd item(5 =
@@ -733,14 +744,14 @@ public class AppMenuTest extends DummyUiChromeActivityTestCase {
     public void testCalculateHeightForItems_notEnoughSpaceForDivider() throws Exception {
         showMenuAndAssert();
 
-        List<MenuItem> menuItems = new ArrayList<MenuItem>();
+        List<Integer> menuItemIds = new ArrayList<Integer>();
         List<Integer> heightList = new ArrayList<Integer>();
-        createMenuItem(menuItems, heightList, 0 /* id */, 10 /* height */);
-        createMenuItem(menuItems, heightList, 1 /* id */, 10 /* height */);
-        createMenuItem(menuItems, heightList, 2 /* id */, 10 /* height */);
-        createMenuItem(menuItems, heightList, 3 /* id */, 10 /* height */);
+        createMenuItem(menuItemIds, heightList, 0 /* id */, 10 /* height */);
+        createMenuItem(menuItemIds, heightList, 1 /* id */, 10 /* height */);
+        createMenuItem(menuItemIds, heightList, 2 /* id */, 10 /* height */);
+        createMenuItem(menuItemIds, heightList, 3 /* id */, 10 /* height */);
 
-        int height = mAppMenuHandler.getAppMenu().calculateHeightForItems(menuItems, heightList,
+        int height = mAppMenuHandler.getAppMenu().calculateHeightForItems(menuItemIds, heightList,
                 2 /* groupDividerResourceId */, 26 /* availableScreenSpace */);
         // The space only can fit the 1st, 2nd and the partial 3rd item. But 3rd item is divider
         // line, so we only show the partial 2nd item.
@@ -752,14 +763,14 @@ public class AppMenuTest extends DummyUiChromeActivityTestCase {
     public void testCalculateHeightForItems_notEnoughSpaceForDividerAndItem() throws Exception {
         showMenuAndAssert();
 
-        List<MenuItem> menuItems = new ArrayList<MenuItem>();
+        List<Integer> menuItemIds = new ArrayList<Integer>();
         List<Integer> heightList = new ArrayList<Integer>();
-        createMenuItem(menuItems, heightList, 0 /* id */, 10 /* height */);
-        createMenuItem(menuItems, heightList, 1 /* id */, 10 /* height */);
-        createMenuItem(menuItems, heightList, 2 /* id */, 10 /* height */);
-        createMenuItem(menuItems, heightList, 3 /* id */, 10 /* height */);
+        createMenuItem(menuItemIds, heightList, 0 /* id */, 10 /* height */);
+        createMenuItem(menuItemIds, heightList, 1 /* id */, 10 /* height */);
+        createMenuItem(menuItemIds, heightList, 2 /* id */, 10 /* height */);
+        createMenuItem(menuItemIds, heightList, 3 /* id */, 10 /* height */);
 
-        int height = mAppMenuHandler.getAppMenu().calculateHeightForItems(menuItems, heightList,
+        int height = mAppMenuHandler.getAppMenu().calculateHeightForItems(menuItemIds, heightList,
                 2 /* groupDividerResourceId */, 34 /* availableScreenSpace */);
         // The space only can fit the full 1st, 2nd and 3rd item and the partial 4th item.
         // But the space for 4th item is 4, which is not enough to show partial 4th item(5 =
@@ -773,13 +784,13 @@ public class AppMenuTest extends DummyUiChromeActivityTestCase {
     public void testCalculateHeightForItems_minimalHight() throws Exception {
         showMenuAndAssert();
 
-        List<MenuItem> menuItems = new ArrayList<MenuItem>();
+        List<Integer> menuItemIds = new ArrayList<Integer>();
         List<Integer> heightList = new ArrayList<Integer>();
-        createMenuItem(menuItems, heightList, 0 /* id */, 10 /* height */);
-        createMenuItem(menuItems, heightList, 1 /* id */, 10 /* height */);
-        createMenuItem(menuItems, heightList, 2 /* id */, 10 /* height */);
+        createMenuItem(menuItemIds, heightList, 0 /* id */, 10 /* height */);
+        createMenuItem(menuItemIds, heightList, 1 /* id */, 10 /* height */);
+        createMenuItem(menuItemIds, heightList, 2 /* id */, 10 /* height */);
 
-        int height = mAppMenuHandler.getAppMenu().calculateHeightForItems(menuItems, heightList,
+        int height = mAppMenuHandler.getAppMenu().calculateHeightForItems(menuItemIds, heightList,
                 -1 /* groupDividerResourceId */, 4 /* availableScreenSpace */);
         // The space is not enough for any item, but we still show 1 and half items at least.
         Assert.assertEquals(15, height);
@@ -791,23 +802,35 @@ public class AppMenuTest extends DummyUiChromeActivityTestCase {
             throws Exception {
         showMenuAndAssert();
 
-        List<MenuItem> menuItems = new ArrayList<MenuItem>();
+        List<Integer> menuItemIds = new ArrayList<Integer>();
         List<Integer> heightList = new ArrayList<Integer>();
-        createMenuItem(menuItems, heightList, 0 /* id */, 10 /* height */);
-        createMenuItem(menuItems, heightList, 1 /* id */, 10 /* height */);
-        createMenuItem(menuItems, heightList, 2 /* id */, 10 /* height */);
+        createMenuItem(menuItemIds, heightList, 0 /* id */, 10 /* height */);
+        createMenuItem(menuItemIds, heightList, 1 /* id */, 10 /* height */);
+        createMenuItem(menuItemIds, heightList, 2 /* id */, 10 /* height */);
 
-        int height = mAppMenuHandler.getAppMenu().calculateHeightForItems(menuItems, heightList,
+        int height = mAppMenuHandler.getAppMenu().calculateHeightForItems(menuItemIds, heightList,
                 1 /* groupDividerResourceId */, 6 /* availableScreenSpace */);
         // The space is not enough for any item, but we still show 1 and half items at least.
         Assert.assertEquals(15, height);
     }
 
+    @Test
+    @SmallTest
+    public void testCalculateHeightForItems_nagativeSpaceForZeroItems() throws Exception {
+        showMenuAndAssert();
+
+        List<Integer> menuItemIds = new ArrayList<Integer>();
+        List<Integer> heightList = new ArrayList<Integer>();
+
+        int height = mAppMenuHandler.getAppMenu().calculateHeightForItems(menuItemIds, heightList,
+                1 /* groupDividerResourceId */, -1 /* availableScreenSpace */);
+        // Make sure there are no crashes.
+        Assert.assertEquals(0, height);
+    }
+
     private void createMenuItem(
-            List<MenuItem> menuItems, List<Integer> heightList, int id, int height) {
-        Menu menu = mAppMenuHandler.getAppMenu().getMenu();
-        MenuItem item = menu.add(0, id, 0, "test menu item");
-        menuItems.add(item);
+            List<Integer> menuItemIds, List<Integer> heightList, int id, int height) {
+        menuItemIds.add(id);
         heightList.add(height);
     }
 

@@ -130,8 +130,8 @@ class PLATFORM_EXPORT ResourceRequestHead {
 
   void RemoveUserAndPassFromURL();
 
-  mojom::FetchCacheMode GetCacheMode() const;
-  void SetCacheMode(mojom::FetchCacheMode);
+  mojom::blink::FetchCacheMode GetCacheMode() const;
+  void SetCacheMode(mojom::blink::FetchCacheMode);
 
   base::TimeDelta TimeoutInterval() const;
   void SetTimeoutInterval(base::TimeDelta);
@@ -158,6 +158,15 @@ class PLATFORM_EXPORT ResourceRequestHead {
     requestor_origin_ = std::move(origin);
   }
 
+  // The chain of URLs seen during navigation redirects.  This should only
+  // contain values if the mode is `RedirectMode::kNavigate`.
+  const WTF::Vector<KURL>& NavigationRedirectChain() const {
+    return navigation_redirect_chain_;
+  }
+  void SetNavigationRedirectChain(const WTF::Vector<KURL>& value) {
+    navigation_redirect_chain_ = value;
+  }
+
   // The origin of the isolated world - set if this is a fetch/XHR initiated by
   // an isolated world.
   const scoped_refptr<const SecurityOrigin>& IsolatedWorldOrigin() const {
@@ -182,6 +191,11 @@ class PLATFORM_EXPORT ResourceRequestHead {
   }
   void SetHTTPContentType(const AtomicString& http_content_type) {
     SetHttpHeaderField(http_names::kContentType, http_content_type);
+  }
+
+  bool IsFormSubmission() const { return is_form_submission_; }
+  void SetFormSubmission(bool is_form_submission) {
+    is_form_submission_ = is_form_submission;
   }
 
   void SetReferrerPolicy(network::mojom::ReferrerPolicy referrer_policy) {
@@ -216,8 +230,14 @@ class PLATFORM_EXPORT ResourceRequestHead {
   bool AllowStoredCredentials() const;
   void SetAllowStoredCredentials(bool allow_credentials);
 
-  // TODO(yhirano): Describe what Priority and IntraPriorityValue are.
+  // The initial priority for the request.
+  ResourceLoadPriority InitialPriority() const;
+
+  // The current priority for the request (in case it was changed).
   ResourceLoadPriority Priority() const;
+
+  // Sub-priority for ordering requests at the same priority level.
+  // Used for visible images to load larger images before small.
   int IntraPriorityValue() const;
   bool PriorityHasBeenSet() const;
   void SetPriority(ResourceLoadPriority, int intra_priority_value = 0);
@@ -261,12 +281,6 @@ class PLATFORM_EXPORT ResourceRequestHead {
     skip_service_worker_ = skip_service_worker;
   }
 
-  // True if corresponding AppCache group should be resetted.
-  bool ShouldResetAppCache() const { return should_reset_app_cache_; }
-  void SetShouldResetAppCache(bool should_reset_app_cache) {
-    should_reset_app_cache_ = should_reset_app_cache;
-  }
-
   // Extra data associated with this request.
   const scoped_refptr<WebURLRequestExtraData>& GetURLRequestExtraData() const {
     return url_request_extra_data_;
@@ -299,19 +313,29 @@ class PLATFORM_EXPORT ResourceRequestHead {
   network::mojom::RequestMode GetMode() const { return mode_; }
   void SetMode(network::mojom::RequestMode mode) { mode_ = mode; }
 
-  // A resource request's fetch_importance_mode_ is a developer-set priority
+  network::mojom::IPAddressSpace GetTargetAddressSpace() const {
+    return target_address_space_;
+  }
+  void SetTargetAddressSpace(
+      network::mojom::IPAddressSpace target_address_space) {
+    target_address_space_ = target_address_space;
+  }
+
+  // A resource request's fetch_priority_hint_ is a developer-set priority
   // hint that differs from priority_. It is used in
   // ResourceFetcher::ComputeLoadPriority to possibly influence the resolved
   // priority of a resource request.
   // This member exists both here and in FetchParameters, as opposed just in
   // the latter because the fetch() API creates a ResourceRequest object long
   // before its associaed FetchParameters, so this makes it easier to
-  // communicate an importance value down to the lower-level fetching code.
-  mojom::FetchImportanceMode GetFetchImportanceMode() const {
-    return fetch_importance_mode_;
+  // communicate a fetch_priority_hint value down to the lower-level fetching
+  // code.
+  mojom::blink::FetchPriorityHint GetFetchPriorityHint() const {
+    return fetch_priority_hint_;
   }
-  void SetFetchImportanceMode(mojom::FetchImportanceMode mode) {
-    fetch_importance_mode_ = mode;
+  void SetFetchPriorityHint(
+      mojom::blink::FetchPriorityHint fetch_priority_hint) {
+    fetch_priority_hint_ = fetch_priority_hint;
   }
 
   network::mojom::CredentialsMode GetCredentialsMode() const {
@@ -333,19 +357,9 @@ class PLATFORM_EXPORT ResourceRequestHead {
     fetch_integrity_ = integrity;
   }
 
-  PreviewsState GetPreviewsState() const { return previews_state_; }
-  void SetPreviewsState(PreviewsState previews_state) {
-    previews_state_ = previews_state;
-  }
-
   bool CacheControlContainsNoCache() const;
   bool CacheControlContainsNoStore() const;
   bool HasCacheValidatorFields() const;
-
-  // https://wicg.github.io/cors-rfc1918/#external-request
-  bool IsExternalRequest() const { return is_external_request_; }
-  void SetExternalRequestStateFromRequestorAddressSpace(
-      network::mojom::IPAddressSpace);
 
   network::mojom::CorsPreflightPolicy CorsPreflightPolicy() const {
     return cors_preflight_policy_;
@@ -506,11 +520,12 @@ class PLATFORM_EXPORT ResourceRequestHead {
   // |url|,
   bool CanDisplay(const KURL&) const;
 
-  void SetAllowHTTP1ForStreamingUpload(bool allow) {
-    allowHTTP1ForStreamingUpload_ = allow;
+  // The original destination of a request passed through by a service worker.
+  network::mojom::RequestDestination GetOriginalDestination() const {
+    return original_destination_;
   }
-  bool AllowHTTP1ForStreamingUpload() const {
-    return allowHTTP1ForStreamingUpload_;
+  void SetOriginalDestination(network::mojom::RequestDestination value) {
+    original_destination_ = value;
   }
 
   const absl::optional<ResourceRequestHead::WebBundleTokenParams>&
@@ -543,6 +558,7 @@ class PLATFORM_EXPORT ResourceRequestHead {
   scoped_refptr<const SecurityOrigin> top_frame_origin_;
 
   scoped_refptr<const SecurityOrigin> requestor_origin_;
+  WTF::Vector<KURL> navigation_redirect_chain_;
   scoped_refptr<const SecurityOrigin> isolated_world_origin_;
 
   AtomicString http_method_;
@@ -554,29 +570,29 @@ class PLATFORM_EXPORT ResourceRequestHead {
   bool download_to_blob_ : 1;
   bool use_stream_on_response_ : 1;
   bool keepalive_ : 1;
-  bool should_reset_app_cache_ : 1;
   bool allow_stale_response_ : 1;
-  mojom::FetchCacheMode cache_mode_;
+  mojom::blink::FetchCacheMode cache_mode_;
   bool skip_service_worker_ : 1;
   bool download_to_cache_only_ : 1;
   bool site_for_cookies_set_ : 1;
+  bool is_form_submission_ : 1;
+  ResourceLoadPriority initial_priority_;
   ResourceLoadPriority priority_;
   int intra_priority_value_;
-  PreviewsState previews_state_;
   scoped_refptr<WebURLRequestExtraData> url_request_extra_data_;
   mojom::blink::RequestContextType request_context_;
   network::mojom::RequestDestination destination_;
   network::mojom::RequestMode mode_;
-  mojom::FetchImportanceMode fetch_importance_mode_;
+  mojom::blink::FetchPriorityHint fetch_priority_hint_;
   network::mojom::CredentialsMode credentials_mode_;
   network::mojom::RedirectMode redirect_mode_;
   String fetch_integrity_;
   String referrer_string_;
   network::mojom::ReferrerPolicy referrer_policy_;
-  bool is_external_request_;
   network::mojom::CorsPreflightPolicy cors_preflight_policy_;
   absl::optional<RedirectInfo> redirect_info_;
   absl::optional<network::mojom::blink::TrustTokenParams> trust_token_params_;
+  network::mojom::IPAddressSpace target_address_space_;
 
   absl::optional<String> suggested_filename_;
 
@@ -603,6 +619,9 @@ class PLATFORM_EXPORT ResourceRequestHead {
 
   base::UnguessableToken fetch_window_id_;
 
+  network::mojom::RequestDestination original_destination_ =
+      network::mojom::RequestDestination::kEmpty;
+
   uint64_t inspector_id_ = 0;
 
   bool is_from_origin_dirty_style_sheet_ = false;
@@ -618,8 +637,6 @@ class PLATFORM_EXPORT ResourceRequestHead {
   // the request under the cross-origin's partition. Furthermore, its reuse from
   // the prefetch cache will be restricted to top-level-navigations.
   bool prefetch_maybe_for_top_level_navigation_ = false;
-
-  bool allowHTTP1ForStreamingUpload_ = false;
 
   // This is used when fetching preload header requests from cross-origin
   // prefetch responses. The browser process uses this token to ensure the

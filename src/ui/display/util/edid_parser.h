@@ -10,9 +10,7 @@
 #include <string>
 #include <vector>
 
-#include "base/compiler_specific.h"
 #include "base/containers/flat_set.h"
-#include "base/macros.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkColorSpace.h"
 #include "ui/display/types/display_constants.h"
@@ -30,6 +28,10 @@ class DISPLAY_UTIL_EXPORT EdidParser {
  public:
   explicit EdidParser(const std::vector<uint8_t>& edid_blob,
                       bool is_external = false);
+
+  EdidParser(const EdidParser&) = delete;
+  EdidParser& operator=(const EdidParser&) = delete;
+
   ~EdidParser();
 
   uint16_t manufacturer_id() const { return manufacturer_id_; }
@@ -65,6 +67,8 @@ class DISPLAY_UTIL_EXPORT EdidParser {
   const absl::optional<gfx::HDRStaticMetadata>& hdr_static_metadata() const {
     return hdr_static_metadata_;
   }
+  const absl::optional<uint16_t>& min_vfreq() const { return min_vfreq_; }
+  const absl::optional<uint16_t>& max_vfreq() const { return max_vfreq_; }
   // Returns a 32-bit identifier for this display |manufacturer_id_| and
   // |product_id_|.
   uint32_t GetProductCode() const;
@@ -126,8 +130,8 @@ class DISPLAY_UTIL_EXPORT EdidParser {
   base::flat_set<gfx::ColorSpace::PrimaryID> supported_color_primary_ids_;
   base::flat_set<gfx::ColorSpace::TransferID> supported_color_transfer_ids_;
   absl::optional<gfx::HDRStaticMetadata> hdr_static_metadata_;
-
-  DISALLOW_COPY_AND_ASSIGN(EdidParser);
+  absl::optional<uint16_t> min_vfreq_;
+  absl::optional<uint16_t> max_vfreq_;
 };
 
 }  // namespace display

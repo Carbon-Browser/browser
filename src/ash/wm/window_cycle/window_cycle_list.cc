@@ -10,8 +10,10 @@
 #include "ash/frame_throttler/frame_throttling_controller.h"
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/public/cpp/window_properties.h"
+#include "ash/root_window_controller.h"
 #include "ash/shell.h"
 #include "ash/shell_delegate.h"
+#include "ash/system/unified/unified_system_tray.h"
 #include "ash/wm/mru_window_tracker.h"
 #include "ash/wm/tablet_mode/tablet_mode_controller.h"
 #include "ash/wm/window_cycle/window_cycle_controller.h"
@@ -40,9 +42,7 @@ bool g_disable_initial_delay = false;
 
 // Delay before the UI fade in animation starts. This is so users can switch
 // quickly between windows without bringing up the UI.
-constexpr base::TimeDelta kShowDelayDuration =
-    base::TimeDelta::FromMilliseconds(150);
-
+constexpr base::TimeDelta kShowDelayDuration = base::Milliseconds(150);
 
 // The alt-tab cycler widget is not activatable (except when ChromeVox is on),
 // so we use WindowTargeter to send input events to the widget.
@@ -102,7 +102,7 @@ WindowCycleList::WindowCycleList(const WindowList& windows)
   if (ShouldShowUi()) {
     // Disable the tab scrubber so three finger scrolling doesn't scrub tabs as
     // well.
-    Shell::Get()->shell_delegate()->SetTabScrubberEnabled(false);
+    Shell::Get()->shell_delegate()->SetTabScrubberChromeOSEnabled(false);
 
     if (g_disable_initial_delay) {
       InitWindowCycleView();
@@ -117,7 +117,7 @@ WindowCycleList::~WindowCycleList() {
   if (!ShouldShowUi())
     Shell::Get()->mru_window_tracker()->SetIgnoreActivations(false);
 
-  Shell::Get()->shell_delegate()->SetTabScrubberEnabled(true);
+  Shell::Get()->shell_delegate()->SetTabScrubberChromeOSEnabled(true);
 
   for (auto* window : windows_)
     window->RemoveObserver(this);
@@ -240,6 +240,12 @@ aura::Window* WindowCycleList::GetWindowAtPoint(const ui::LocatedEvent* event) {
              : nullptr;
 }
 
+bool WindowCycleList::IsEventInTabSliderContainer(
+    const ui::LocatedEvent* event) {
+  return cycle_view_ &&
+         cycle_view_->IsEventInTabSliderContainer(ConvertEventToScreen(event));
+}
+
 bool WindowCycleList::ShouldShowUi() {
   // Show alt-tab when there are at least two windows to pick from alt-tab, or
   // when there is at least a window to switch to by switching to the different
@@ -262,8 +268,8 @@ void WindowCycleList::OnModePrefsChanged() {
 }
 
 // static
-void WindowCycleList::DisableInitialDelayForTesting() {
-  g_disable_initial_delay = true;
+void WindowCycleList::SetDisableInitialDelayForTesting(bool disabled) {
+  g_disable_initial_delay = disabled;
 }
 
 void WindowCycleList::OnWindowDestroying(aura::Window* window) {
@@ -327,6 +333,14 @@ void WindowCycleList::InitWindowCycleView() {
   if (cycle_view_)
     return;
   aura::Window* root_window = GetRootWindowForCycleView();
+
+  // Close the system quick settings tray before creating the cycle view.
+  UnifiedSystemTray* tray = RootWindowController::ForWindow(root_window)
+                                ->GetStatusAreaWidget()
+                                ->unified_system_tray();
+  if (tray->IsBubbleShown())
+    tray->CloseBubble();
+
   cycle_view_ = new WindowCycleView(root_window, windows_);
   const bool is_interactive_alt_tab_mode_allowed =
       Shell::Get()->window_cycle_controller()->IsInteractiveAltTabModeAllowed();
@@ -416,8 +430,12 @@ void WindowCycleList::Scroll(int offset) {
   if (current_index_ > 1)
     InitWindowCycleView();
 
-  if (cycle_view_)
+  // The windows should not shift position when selecting when there's enough
+  // room to display all windows.
+  if (cycle_view_ && cycle_view_->CalculatePreferredSize().width() ==
+                         cycle_view_->CalculateMaxWidth()) {
     cycle_view_->ScrollToWindow(windows_[current_index_]);
+  }
 }
 
 int WindowCycleList::GetOffsettedWindowIndex(int offset) const {

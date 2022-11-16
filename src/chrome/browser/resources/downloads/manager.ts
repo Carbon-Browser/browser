@@ -7,25 +7,27 @@ import './item.js';
 import './toolbar.js';
 import 'chrome://resources/cr_components/managed_footnote/managed_footnote.js';
 import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import 'chrome://resources/cr_elements/cr_page_host_style_css.js';
+import 'chrome://resources/cr_elements/cr_page_host_style.css.js';
 import 'chrome://resources/cr_elements/hidden_style_css.m.js';
 import 'chrome://resources/cr_elements/shared_style_css.m.js';
 import 'chrome://resources/cr_elements/shared_vars_css.m.js';
 import 'chrome://resources/polymer/v3_0/iron-list/iron-list.js';
 
+import {getInstance as getAnnouncerInstance} from 'chrome://resources/cr_elements/cr_a11y_announcer/cr_a11y_announcer.js';
 import {getToastManager} from 'chrome://resources/cr_elements/cr_toast/cr_toast_manager.js';
-import {FindShortcutBehavior} from 'chrome://resources/cr_elements/find_shortcut_behavior.js';
-import {assert} from 'chrome://resources/js/assert.m.js';
+import {FindShortcutMixin} from 'chrome://resources/cr_elements/find_shortcut_mixin.js';
+import {assert} from 'chrome://resources/js/assert_ts.js';
 import {EventTracker} from 'chrome://resources/js/event_tracker.m.js';
 import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
 import {PromiseResolver} from 'chrome://resources/js/promise_resolver.m.js';
 import {IronListElement} from 'chrome://resources/polymer/v3_0/iron-list/iron-list.js';
-import {html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {Debouncer, PolymerElement, timeOut} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {BrowserProxy} from './browser_proxy.js';
 import {States} from './constants.js';
 import {MojomData} from './data.js';
 import {PageCallbackRouter, PageHandlerInterface} from './downloads.mojom-webui.js';
+import {getTemplate} from './manager.html.js';
 import {SearchService} from './search_service.js';
 import {DownloadsToolbarElement} from './toolbar.js';
 
@@ -43,13 +45,15 @@ export interface DownloadsManagerElement {
   };
 }
 
-const DownloadsManagerElementBase =
-    mixinBehaviors([FindShortcutBehavior], PolymerElement) as
-    {new (): PolymerElement & FindShortcutBehavior};
+const DownloadsManagerElementBase = FindShortcutMixin(PolymerElement);
 
 export class DownloadsManagerElement extends DownloadsManagerElementBase {
   static get is() {
     return 'downloads-manager';
+  }
+
+  static get template() {
+    return getTemplate();
   }
 
   static get properties() {
@@ -92,17 +96,18 @@ export class DownloadsManagerElement extends DownloadsManagerElementBase {
     return ['itemsChanged_(items_.*)'];
   }
 
-  private items_: Array<MojomData>;
+  private items_: MojomData[];
   private hasDownloads_: boolean;
   private hasShadow_: boolean;
   private inSearchMode_: boolean;
   private spinnerActive_: boolean;
 
+  private announcerDebouncer_: Debouncer|null = null;
   private mojoHandler_: PageHandlerInterface;
   private mojoEventTarget_: PageCallbackRouter;
   private searchService_: SearchService = SearchService.getInstance();
   private loaded_: PromiseResolver<void> = new PromiseResolver();
-  private listenerIds_: Array<number>;
+  private listenerIds_: number[];
   private eventTracker_: EventTracker = new EventTracker();
 
   constructor() {
@@ -124,7 +129,7 @@ export class DownloadsManagerElement extends DownloadsManagerElementBase {
   }
 
   /** @override */
-  connectedCallback() {
+  override connectedCallback() {
     super.connectedCallback();
 
     // TODO(dbeam): this should use a class instead.
@@ -162,7 +167,7 @@ export class DownloadsManagerElement extends DownloadsManagerElementBase {
   }
 
   /** @override */
-  disconnectedCallback() {
+  override disconnectedCallback() {
     super.disconnectedCallback();
 
     this.listenerIds_.forEach(
@@ -181,7 +186,7 @@ export class DownloadsManagerElement extends DownloadsManagerElementBase {
     }
   }
 
-  private insertItems_(index: number, items: Array<MojomData>) {
+  private insertItems_(index: number, items: MojomData[]) {
     // Insert |items| at the given |index| via Array#splice().
     if (items.length > 0) {
       this.items_.splice(index, 0, ...items);
@@ -213,21 +218,19 @@ export class DownloadsManagerElement extends DownloadsManagerElementBase {
                 state !== States.IN_PROGRESS && state !== States.PAUSED);
 
     if (this.inSearchMode_) {
-      this.dispatchEvent(new CustomEvent('iron-announce', {
-        bubbles: true,
-        composed: true,
-        detail: {
-          text: this.items_.length === 0 ?
-              this.noDownloadsText_() :
-              (this.items_.length === 1 ?
-                   loadTimeData.getStringF(
-                       'searchResultsSingular',
-                       this.$.toolbar.getSearchText()) :
-                   loadTimeData.getStringF(
-                       'searchResultsPlural', this.items_.length,
-                       this.$.toolbar.getSearchText()))
-        }
-      }));
+      this.announcerDebouncer_ = Debouncer.debounce(
+          this.announcerDebouncer_, timeOut.after(500), () => {
+            const searchText = this.$.toolbar.getSearchText();
+            const announcement = this.items_.length === 0 ?
+                this.noDownloadsText_() :
+                (this.items_.length === 1 ?
+                     loadTimeData.getStringF(
+                         'searchResultsSingular', searchText) :
+                     loadTimeData.getStringF(
+                         'searchResultsPlural', this.items_.length,
+                         searchText));
+            getAnnouncerInstance().announce(announcement);
+          });
     }
   }
 
@@ -358,8 +361,8 @@ export class DownloadsManagerElement extends DownloadsManagerElementBase {
     }, 0);
   }
 
-  // Override FindShortcutBehavior methods.
-  handleFindShortcut(modalContextOpen: boolean): boolean {
+  // Override FindShortcutMixin methods.
+  override handleFindShortcut(modalContextOpen: boolean): boolean {
     if (modalContextOpen) {
       return false;
     }
@@ -367,13 +370,15 @@ export class DownloadsManagerElement extends DownloadsManagerElementBase {
     return true;
   }
 
-  // Override FindShortcutBehavior methods.
-  searchInputHasFocus() {
+  // Override FindShortcutMixin methods.
+  override searchInputHasFocus() {
     return this.$.toolbar.isSearchFocused();
   }
+}
 
-  static get template() {
-    return html`{__html_template__}`;
+declare global {
+  interface HTMLElementTagNameMap {
+    'downloads-manager': DownloadsManagerElement;
   }
 }
 

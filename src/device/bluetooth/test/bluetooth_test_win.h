@@ -7,10 +7,12 @@
 
 #include "device/bluetooth/test/bluetooth_test.h"
 
+#include <Windows.Devices.Enumeration.h>
+
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/test_pending_task.h"
@@ -90,7 +92,7 @@ class BluetoothTestWin : public BluetoothTestBase,
   scoped_refptr<base::TestSimpleTaskRunner> ui_task_runner_;
   scoped_refptr<base::TestSimpleTaskRunner> bluetooth_task_runner_;
 
-  win::BluetoothLowEnergyWrapperFake* fake_bt_le_wrapper_;
+  raw_ptr<win::BluetoothLowEnergyWrapperFake> fake_bt_le_wrapper_;
 
   // This is used for retaining access to a single deleted device.
   std::string remembered_device_address_;
@@ -163,6 +165,10 @@ class BluetoothTestWinrt
       public ::testing::WithParamInterface<BluetoothTestWinrtParam> {
  public:
   BluetoothTestWinrt();
+
+  BluetoothTestWinrt(const BluetoothTestWinrt&) = delete;
+  BluetoothTestWinrt& operator=(const BluetoothTestWinrt&) = delete;
+
   ~BluetoothTestWinrt() override;
 
   bool UsesNewBleImplementation() const;
@@ -187,6 +193,12 @@ class BluetoothTestWinrt
   void SimulateDevicePaired(BluetoothDevice* device, bool is_paired) override;
   void SimulatePairingPinCode(BluetoothDevice* device,
                               std::string pin_code) override;
+  // Currently only Win derived class has this function for create pairing_kind
+  // tests.  If in future we find that other platform need to test for
+  // pairing_kind we should promote this function as virtual
+  void SimulatePairingKind(
+      BluetoothDevice* device,
+      ABI::Windows::Devices::Enumeration::DevicePairingKinds pairing_kind);
   void SimulateAdvertisementStarted(
       BluetoothAdvertisement* advertisement) override;
   void SimulateAdvertisementStopped(
@@ -263,8 +275,6 @@ class BluetoothTestWinrt
  private:
   base::test::ScopedFeatureList scoped_feature_list_;
   absl::optional<base::win::ScopedWinrtInitializer> scoped_winrt_initializer_;
-
-  DISALLOW_COPY_AND_ASSIGN(BluetoothTestWinrt);
 };
 
 using BluetoothTestWinrtOnly = BluetoothTestWinrt;

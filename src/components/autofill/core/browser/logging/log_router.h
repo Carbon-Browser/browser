@@ -8,8 +8,6 @@
 #include <string>
 #include <vector>
 
-#include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "base/observer_list.h"
 #include "base/values.h"
 #include "components/keyed_service/core/keyed_service.h"
@@ -27,6 +25,10 @@ class LogReceiver;
 class LogRouter : public KeyedService {
  public:
   LogRouter();
+
+  LogRouter(const LogRouter&) = delete;
+  LogRouter& operator=(const LogRouter&) = delete;
+
   ~LogRouter() override;
 
   // Returns a JSON entry that can be fed into the logger.
@@ -34,7 +36,7 @@ class LogRouter : public KeyedService {
 
   // Passes logs to the router. Only call when there are receivers registered.
   void ProcessLog(const std::string& text);
-  void ProcessLog(base::Value&& node);
+  void ProcessLog(const base::Value& node);
 
   // All four (Unr|R)egister* methods below are safe to call from the
   // constructor of the registered object, because they do not call that object,
@@ -48,11 +50,7 @@ class LogRouter : public KeyedService {
   void UnregisterManager(LogManager* manager);
 
   // The receivers must register to get updates with new logs in the future.
-  // RegisterReceiver adds |receiver| to the right observer list, and returns
-  // the logs accumulated so far. (It returns by value, not const ref, to
-  // provide a snapshot as opposed to a link to |accumulated_logs_|.)
-  const std::vector<base::Value>& RegisterReceiver(LogReceiver* receiver)
-      WARN_UNUSED_RESULT;
+  void RegisterReceiver(LogReceiver* receiver);
   // Remove |receiver| from the observers list.
   void UnregisterReceiver(LogReceiver* receiver);
 
@@ -62,11 +60,6 @@ class LogRouter : public KeyedService {
   // on destruction.
   base::ObserverList<LogManager, true>::Unchecked managers_;
   base::ObserverList<LogReceiver, true>::Unchecked receivers_;
-
-  // Logs accumulated since the first receiver was registered.
-  std::vector<base::Value> accumulated_logs_;
-
-  DISALLOW_COPY_AND_ASSIGN(LogRouter);
 };
 
 }  // namespace autofill

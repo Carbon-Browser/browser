@@ -11,6 +11,7 @@
 
 #include "base/callback.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "chrome/browser/autofill/autofill_keyboard_accessory_adapter.h"
@@ -37,6 +38,10 @@ class MockAccessoryView
     : public AutofillKeyboardAccessoryAdapter::AccessoryView {
  public:
   MockAccessoryView() {}
+
+  MockAccessoryView(const MockAccessoryView&) = delete;
+  MockAccessoryView& operator=(const MockAccessoryView&) = delete;
+
   MOCK_METHOD0(Initialize, bool());
   MOCK_METHOD0(Hide, void());
   MOCK_METHOD0(Show, void());
@@ -45,8 +50,6 @@ class MockAccessoryView
                     const std::u16string&,
                     base::OnceClosure));
 
- private:
-  DISALLOW_COPY_AND_ASSIGN(MockAccessoryView);
 };
 
 Suggestion createPasswordEntry(std::string password,
@@ -80,8 +83,8 @@ MATCHER_P(equalsSuggestion, other, "") {
     *result_listener << "has frontend_id " << arg.frontend_id;
     return false;
   }
-  if (arg.value != other.value) {
-    *result_listener << "has value " << arg.value;
+  if (arg.main_text != other.main_text) {
+    *result_listener << "has main_text " << arg.main_text.value;
     return false;
   }
   if (arg.label != other.label) {
@@ -99,8 +102,8 @@ MATCHER_P(equalsSuggestion, other, "") {
 
 // Automagically used to pretty-print Suggestion. Must be in same namespace.
 void PrintTo(const Suggestion& suggestion, std::ostream* os) {
-  *os << "(value: \"" << suggestion.value << "\", label: \"" << suggestion.label
-      << "\", frontend_id: " << suggestion.frontend_id
+  *os << "(main_text: \"" << suggestion.main_text.value << "\", label: \""
+      << suggestion.label << "\", frontend_id: " << suggestion.frontend_id
       << ", additional_label: \"" << suggestion.additional_label << "\")";
 }
 
@@ -143,7 +146,7 @@ class AutofillKeyboardAccessoryAdapterTest : public testing::Test {
   MockAccessoryView* view() { return accessory_view_; }
 
  private:
-  StrictMock<MockAccessoryView>* accessory_view_;
+  raw_ptr<StrictMock<MockAccessoryView>> accessory_view_;
   std::unique_ptr<StrictMock<MockAutofillPopupController>> popup_controller_;
   std::unique_ptr<AutofillKeyboardAccessoryAdapter> autofill_accessory_adapter_;
 };

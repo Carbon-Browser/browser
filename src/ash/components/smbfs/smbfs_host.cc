@@ -6,13 +6,12 @@
 
 #include <utility>
 
+#include "ash/components/disks/disk_mount_manager.h"
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/files/file_util.h"
 #include "base/logging.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
-#include "chromeos/disks/disk_mount_manager.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 
 namespace smbfs {
@@ -27,6 +26,9 @@ class SmbFsDelegateImpl : public mojom::SmbFsDelegate {
       : receiver_(this, std::move(pending_receiver)), delegate_(delegate) {
     receiver_.set_disconnect_handler(std::move(disconnect_callback));
   }
+
+  SmbFsDelegateImpl(const SmbFsDelegateImpl&) = delete;
+  SmbFsDelegateImpl& operator=(const SmbFsDelegateImpl&) = delete;
 
   ~SmbFsDelegateImpl() override = default;
 
@@ -72,8 +74,6 @@ class SmbFsDelegateImpl : public mojom::SmbFsDelegate {
   SmbFsHost::Delegate* const delegate_;
 
   base::WeakPtrFactory<SmbFsDelegateImpl> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(SmbFsDelegateImpl);
 };
 
 }  // namespace
@@ -81,7 +81,7 @@ class SmbFsDelegateImpl : public mojom::SmbFsDelegate {
 SmbFsHost::Delegate::~Delegate() = default;
 
 SmbFsHost::SmbFsHost(
-    std::unique_ptr<chromeos::disks::MountPoint> mount_point,
+    std::unique_ptr<ash::disks::MountPoint> mount_point,
     Delegate* delegate,
     mojo::Remote<mojom::SmbFs> smbfs_remote,
     mojo::PendingReceiver<mojom::SmbFsDelegate> delegate_receiver)
@@ -109,7 +109,7 @@ void SmbFsHost::Unmount(SmbFsHost::UnmountCallback callback) {
 void SmbFsHost::OnUnmountDone(SmbFsHost::UnmountCallback callback,
                               chromeos::MountError result) {
   LOG_IF(ERROR, result != chromeos::MountError::MOUNT_ERROR_NONE)
-      << "Could not unmount smbfs share: " << static_cast<int>(result);
+      << "Could not unmount smbfs share: " << result;
   std::move(callback).Run(result);
 }
 

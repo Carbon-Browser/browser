@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/notifications/notification_handler.h"
 #include "chrome/browser/send_tab_to_self/receiving_ui_handler.h"
 
@@ -21,10 +21,18 @@ class SendTabToSelfEntry;
 // Handler for desktop notifications shown by SendTabToSelf.
 // Will only be used on desktop platform.
 // Will be created and owned by the NativeNotificationDisplayService.
+//
+// TODO(https://crbug.com/1280681): Remove this class, which is only used in
+// STTSv1.
 class DesktopNotificationHandler : public NotificationHandler,
                                    public ReceivingUiHandler {
  public:
   explicit DesktopNotificationHandler(Profile* profile);
+
+  DesktopNotificationHandler(const DesktopNotificationHandler&) = delete;
+  DesktopNotificationHandler& operator=(const DesktopNotificationHandler&) =
+      delete;
+
   ~DesktopNotificationHandler() override;
 
   // ReceivingUiHandler implementation.
@@ -54,11 +62,10 @@ class DesktopNotificationHandler : public NotificationHandler,
   void DisplayFailureMessage(const GURL& url);
 
   // Retrieves the Profile for which this Handler will manage notifications.
-  const Profile* GetProfile() const;
+  const Profile* profile() const override;
 
  protected:
-  Profile* const profile_;
-  DISALLOW_COPY_AND_ASSIGN(DesktopNotificationHandler);
+  const raw_ptr<Profile> profile_;
 };
 
 }  // namespace send_tab_to_self

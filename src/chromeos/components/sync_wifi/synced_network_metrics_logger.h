@@ -6,13 +6,12 @@
 #define CHROMEOS_COMPONENTS_SYNC_WIFI_SYNCED_NETWORK_METRICS_LOGGER_H_
 
 #include "base/containers/flat_set.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "base/values.h"
+#include "chromeos/ash/components/network/network_connection_observer.h"
+#include "chromeos/ash/components/network/network_state_handler_observer.h"
 #include "chromeos/components/sync_wifi/network_eligibility_checker.h"
-#include "chromeos/network/network_connection_observer.h"
-#include "chromeos/network/network_state_handler_observer.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace chromeos {

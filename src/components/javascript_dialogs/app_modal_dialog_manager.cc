@@ -9,7 +9,6 @@
 
 #include "base/bind.h"
 #include "base/i18n/rtl.h"
-#include "base/macros.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
@@ -31,6 +30,10 @@ namespace {
 class DefaultExtensionsClient : public ExtensionsClient {
  public:
   DefaultExtensionsClient() = default;
+
+  DefaultExtensionsClient(const DefaultExtensionsClient&) = delete;
+  DefaultExtensionsClient& operator=(const DefaultExtensionsClient&) = delete;
+
   ~DefaultExtensionsClient() override = default;
 
  private:
@@ -42,8 +45,6 @@ class DefaultExtensionsClient : public ExtensionsClient {
                         std::string* name_out) override {
     return false;
   }
-
-  DISALLOW_COPY_AND_ASSIGN(DefaultExtensionsClient);
 };
 
 bool ShouldDisplaySuppressCheckbox(
@@ -84,8 +85,9 @@ std::u16string AppModalDialogManager::GetTitle(
     return base::UTF8ToUTF16(name);
 
   // Otherwise, return the formatted URL.
-  return GetTitleImpl(web_contents->GetMainFrame()->GetLastCommittedOrigin(),
-                      alerting_frame_origin);
+  return GetTitleImpl(
+      web_contents->GetPrimaryMainFrame()->GetLastCommittedOrigin(),
+      alerting_frame_origin);
 }
 
 namespace {

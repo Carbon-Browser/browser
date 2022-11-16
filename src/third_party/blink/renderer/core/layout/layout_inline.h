@@ -24,6 +24,8 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_LAYOUT_LAYOUT_INLINE_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_LAYOUT_LAYOUT_INLINE_H_
 
+#include "base/check_op.h"
+#include "base/notreached.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/editing/forward.h"
 #include "third_party/blink/renderer/core/layout/api/line_layout_item.h"
@@ -148,7 +150,7 @@ class CORE_EXPORT LayoutInline : public LayoutBoxModelObject {
   LayoutUnit MarginTop() const final;
   LayoutUnit MarginBottom() const final;
 
-  FloatRect LocalBoundingBoxRectForAccessibility() const final;
+  gfx::RectF LocalBoundingBoxRectForAccessibility() const final;
 
   PhysicalRect PhysicalLinesBoundingBox() const;
   PhysicalRect PhysicalVisualOverflowRect() const final;
@@ -199,8 +201,9 @@ class CORE_EXPORT LayoutInline : public LayoutBoxModelObject {
   PhysicalOffset OffsetForInFlowPositionedInline(const LayoutBox& child) const;
 
   void AddOutlineRects(Vector<PhysicalRect>&,
+                       OutlineInfo*,
                        const PhysicalOffset& additional_offset,
-                       NGOutlineType) const final;
+                       NGOutlineType) const override;
   // The following methods are called from the container if it has already added
   // outline rects for line boxes and/or children of this LayoutInline.
   void AddOutlineRectsForChildrenAndContinuations(
@@ -258,10 +261,6 @@ class CORE_EXPORT LayoutInline : public LayoutBoxModelObject {
     return FirstLineBoxTopLeftInternal().value_or(PhysicalOffset());
   }
 
-  void MapLocalToAncestor(const LayoutBoxModelObject* ancestor,
-                          TransformState&,
-                          MapCoordinatesFlags mode) const override;
-
   PhysicalRect AbsoluteBoundingBoxRectHandlingEmptyInline(
       MapCoordinatesFlags = 0) const final;
 
@@ -286,8 +285,8 @@ class CORE_EXPORT LayoutInline : public LayoutBoxModelObject {
 
   void InvalidateDisplayItemClients(PaintInvalidationReason) const override;
 
-  void LocalQuadsForSelf(Vector<FloatQuad>& quads) const override;
-  void AbsoluteQuadsForSelf(Vector<FloatQuad>& quads,
+  void LocalQuadsForSelf(Vector<gfx::QuadF>& quads) const override;
+  void AbsoluteQuadsForSelf(Vector<gfx::QuadF>& quads,
                             MapCoordinatesFlags mode = 0) const override;
 
   PhysicalOffset OffsetFromContainerInternal(
@@ -296,7 +295,7 @@ class CORE_EXPORT LayoutInline : public LayoutBoxModelObject {
 
  private:
   bool AbsoluteTransformDependsOnPoint(const LayoutObject& object) const;
-  void QuadsForSelfInternal(Vector<FloatQuad>& quads,
+  void QuadsForSelfInternal(Vector<gfx::QuadF>& quads,
                             MapCoordinatesFlags mode,
                             bool map_to_absolute) const;
 
@@ -353,6 +352,8 @@ class CORE_EXPORT LayoutInline : public LayoutBoxModelObject {
                               LayoutObject* before_child);
   void AddChildIgnoringContinuation(LayoutObject* new_child,
                                     LayoutObject* before_child = nullptr) final;
+  void AddChildAsBlockInInline(LayoutObject* new_child,
+                               LayoutObject* before_child);
 
   void MoveChildrenToIgnoringContinuation(LayoutInline* to,
                                           LayoutObject* start_child);
@@ -368,7 +369,10 @@ class CORE_EXPORT LayoutInline : public LayoutBoxModelObject {
                  LayoutBoxModelObject* old_cont);
 
   // Create an anonymous block for block children of this inline.
-  LayoutBlockFlow* CreateAnonymousContainerForBlockChildren(bool split_flow);
+  LayoutBlockFlow* CreateAnonymousContainerForBlockChildren(
+      bool split_flow) const;
+  LayoutBox* CreateAnonymousBoxToSplit(
+      const LayoutBox* box_to_split) const final;
 
   void UpdateLayout() final {
     NOT_DESTROYED();
@@ -380,20 +384,14 @@ class CORE_EXPORT LayoutInline : public LayoutBoxModelObject {
   bool NodeAtPoint(HitTestResult&,
                    const HitTestLocation&,
                    const PhysicalOffset& accumulated_offset,
-                   HitTestAction) final;
+                   HitTestPhase) final;
 
   PaintLayerType LayerTypeRequired() const override;
 
   LayoutUnit OffsetLeft(const Element*) const final;
   LayoutUnit OffsetTop(const Element*) const final;
-  LayoutUnit OffsetWidth() const final {
-    NOT_DESTROYED();
-    return PhysicalLinesBoundingBox().Width();
-  }
-  LayoutUnit OffsetHeight() const final {
-    NOT_DESTROYED();
-    return PhysicalLinesBoundingBox().Height();
-  }
+  LayoutUnit OffsetWidth() const final;
+  LayoutUnit OffsetHeight() const final;
 
   // This method differs from VisualOverflowRect() in that
   // 1. it doesn't include the rects for culled inline boxes, which aren't
@@ -408,10 +406,10 @@ class CORE_EXPORT LayoutInline : public LayoutBoxModelObject {
 
   PositionWithAffinity PositionForPoint(const PhysicalOffset&) const override;
 
-  IntRect BorderBoundingBox() const final {
+  gfx::Rect BorderBoundingBox() const final {
     NOT_DESTROYED();
-    IntRect bounding_box = EnclosingIntRect(PhysicalLinesBoundingBox());
-    return IntRect(0, 0, bounding_box.Width(), bounding_box.Height());
+    gfx::Rect bounding_box = ToEnclosingRect(PhysicalLinesBoundingBox());
+    return gfx::Rect(bounding_box.size());
   }
 
   virtual InlineFlowBox* CreateInlineFlowBox();  // Subclassed by SVG and Ruby

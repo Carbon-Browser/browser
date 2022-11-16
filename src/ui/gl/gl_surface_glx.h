@@ -10,8 +10,7 @@
 #include <memory>
 #include <string>
 
-#include "base/compiler_specific.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/native_widget_types.h"
 #include "ui/gfx/x/event.h"
@@ -34,6 +33,9 @@ class GL_EXPORT GLSurfaceGLX : public GLSurface {
  public:
   GLSurfaceGLX();
 
+  GLSurfaceGLX(const GLSurfaceGLX&) = delete;
+  GLSurfaceGLX& operator=(const GLSurfaceGLX&) = delete;
+
   static bool InitializeOneOff();
   static bool InitializeExtensionSettingsOneOff();
   static void ShutdownOneOff();
@@ -54,7 +56,7 @@ class GL_EXPORT GLSurfaceGLX : public GLSurface {
   static bool IsEXTSwapControlSupported();
   static bool IsMESASwapControlSupported();
 
-  void* GetDisplay() override;
+  GLDisplay* GetGLDisplay() override;
 
   // Get the FB config that the surface was created with or NULL if it is not
   // a GLX drawable.
@@ -64,14 +66,17 @@ class GL_EXPORT GLSurfaceGLX : public GLSurface {
   ~GLSurfaceGLX() override;
 
  private:
-  DISALLOW_COPY_AND_ASSIGN(GLSurfaceGLX);
   static bool initialized_;
+  raw_ptr<GLDisplayX11> display_;
 };
 
 // A surface used to render to a view.
 class GL_EXPORT NativeViewGLSurfaceGLX : public GLSurfaceGLX {
  public:
   explicit NativeViewGLSurfaceGLX(gfx::AcceleratedWidget window);
+
+  NativeViewGLSurfaceGLX(const NativeViewGLSurfaceGLX&) = delete;
+  NativeViewGLSurfaceGLX& operator=(const NativeViewGLSurfaceGLX&) = delete;
 
   // Implement GLSurfaceGLX.
   bool Initialize(GLSurfaceFormat format) override;
@@ -134,14 +139,17 @@ class GL_EXPORT NativeViewGLSurfaceGLX : public GLSurfaceGLX {
   std::unique_ptr<gfx::VSyncProvider> vsync_provider_;
 
   std::unique_ptr<GLSurfacePresentationHelper> presentation_helper_;
-
-  DISALLOW_COPY_AND_ASSIGN(NativeViewGLSurfaceGLX);
 };
 
 // A surface used to render to an offscreen pbuffer.
 class GL_EXPORT UnmappedNativeViewGLSurfaceGLX : public GLSurfaceGLX {
  public:
   explicit UnmappedNativeViewGLSurfaceGLX(const gfx::Size& size);
+
+  UnmappedNativeViewGLSurfaceGLX(const UnmappedNativeViewGLSurfaceGLX&) =
+      delete;
+  UnmappedNativeViewGLSurfaceGLX& operator=(
+      const UnmappedNativeViewGLSurfaceGLX&) = delete;
 
   // Implement GLSurfaceGLX.
   bool Initialize(GLSurfaceFormat format) override;
@@ -164,8 +172,6 @@ class GL_EXPORT UnmappedNativeViewGLSurfaceGLX : public GLSurfaceGLX {
 
   // GLXDrawable for the window.
   x11::Glx::Window glx_window_;
-
-  DISALLOW_COPY_AND_ASSIGN(UnmappedNativeViewGLSurfaceGLX);
 };
 
 }  // namespace gl

@@ -16,12 +16,15 @@
 #include "base/strings/stringprintf.h"
 #include "chrome/browser/ash/arc/enterprise/cert_store/arc_cert_installer_utils.h"
 #include "chrome/browser/ash/policy/remote_commands/user_command_arc_job.h"
-#include "chrome/browser/net/nss_context.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/net/x509_certificate_model_nss.h"
 #include "chrome/services/keymaster/public/mojom/cert_store.mojom.h"
 #include "crypto/rsa_private_key.h"
 #include "net/cert/x509_util_nss.h"
+
+// Enable VLOG level 1.
+#undef ENABLED_VLOG_LEVEL
+#define ENABLED_VLOG_LEVEL 1
 
 namespace arc {
 
@@ -147,7 +150,7 @@ std::string ArcCertInstaller::InstallArcCert(
                          "}\"}",
                          pkcs12.c_str(), name.c_str(), der_cert64.c_str()));
   if (!job || !job->Init(queue_->GetNowTicks(), command_proto,
-                         nullptr /* signed_command */)) {
+                         enterprise_management::SignedData())) {
     LOG(ERROR) << "Initialization of remote command failed";
     known_cert_names_.erase(name);
     return "";

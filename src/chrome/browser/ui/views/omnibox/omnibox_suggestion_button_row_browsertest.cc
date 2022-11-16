@@ -14,15 +14,16 @@
 #include "chrome/browser/ui/views/location_bar/location_bar_view.h"
 #include "chrome/browser/ui/views/omnibox/omnibox_popup_contents_view.h"
 #include "chrome/browser/ui/views/omnibox/omnibox_result_view.h"
+#include "chrome/browser/ui/views/omnibox/omnibox_view_views.h"
 #include "chrome/browser/ui/views/theme_copying_widget.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_view.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "chrome/test/permissions/permission_request_manager_test_api.h"
 #include "components/omnibox/browser/actions/omnibox_pedal.h"
 #include "components/omnibox/browser/autocomplete_match_classification.h"
-#include "components/omnibox/browser/omnibox_popup_model.h"
+#include "components/omnibox/browser/omnibox_edit_model.h"
+#include "components/omnibox/browser/omnibox_popup_selection.h"
 #include "components/omnibox/browser/test_scheme_classifier.h"
-#include "components/omnibox/common/omnibox_features.h"
 #include "components/strings/grit/components_strings.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test.h"
@@ -33,9 +34,7 @@
 // screenshots.
 class OmniboxSuggestionButtonRowBrowserTest : public DialogBrowserTest {
  public:
-  OmniboxSuggestionButtonRowBrowserTest() {
-    feature_list_.InitWithFeatures({omnibox::kOmniboxKeywordSearchButton}, {});
-  }
+  OmniboxSuggestionButtonRowBrowserTest() = default;
 
   OmniboxSuggestionButtonRowBrowserTest(
       const OmniboxSuggestionButtonRowBrowserTest&) = delete;
@@ -49,7 +48,7 @@ class OmniboxSuggestionButtonRowBrowserTest : public DialogBrowserTest {
 
     // Populate suggestions for the omnibox popup.
     AutocompleteController* autocomplete_controller =
-        omnibox_view->model()->popup_model()->autocomplete_controller();
+        omnibox_view->model()->autocomplete_controller();
     AutocompleteResult& results = autocomplete_controller->result_;
     ACMatches matches;
     TermMatches termMatches = {{0, 0, 0}};
@@ -111,38 +110,39 @@ class OmniboxSuggestionButtonRowBrowserTest : public DialogBrowserTest {
     matches.push_back(switch_to_tab_match);
     matches.push_back(action_match);
     matches.push_back(multiple_actions_match);
-    results.AppendMatches(autocomplete_controller->input_, matches);
+    results.AppendMatches(matches);
 
     // The omnibox popup should open with suggestions displayed.
-    omnibox_view->model()->popup_model()->OnResultChanged();
-    EXPECT_TRUE(omnibox_view->model()->popup_model()->IsOpen());
+    omnibox_view->model()->OnPopupResultChanged();
+    EXPECT_TRUE(omnibox_view->model()->PopupIsOpen());
   }
 
   bool VerifyUi() override {
     OmniboxPopupContentsView* popup_view =
         GetOmniboxViewViews()->GetPopupContentsViewForTesting();
+    OmniboxEditModel* model = GetOmniboxViewViews()->model();
 
-    popup_view->model()->SetSelection(
+    model->SetPopupSelection(
         OmniboxPopupSelection(0, OmniboxPopupSelection::KEYWORD_MODE));
     if (!VerifyActiveButtonText(popup_view->result_view_at(0), "Search"))
       return false;
 
-    popup_view->model()->SetSelection(OmniboxPopupSelection(
+    model->SetPopupSelection(OmniboxPopupSelection(
         1, OmniboxPopupSelection::FOCUSED_BUTTON_TAB_SWITCH));
     if (!VerifyActiveButtonText(popup_view->result_view_at(1), "Switch"))
       return false;
 
-    popup_view->model()->SetSelection(
+    model->SetPopupSelection(
         OmniboxPopupSelection(2, OmniboxPopupSelection::FOCUSED_BUTTON_ACTION));
     if (!VerifyActiveButtonText(popup_view->result_view_at(2), "Clear"))
       return false;
 
-    popup_view->model()->SetSelection(
+    model->SetPopupSelection(
         OmniboxPopupSelection(3, OmniboxPopupSelection::KEYWORD_MODE));
     if (!VerifyActiveButtonText(popup_view->result_view_at(3), "Search"))
       return false;
 
-    popup_view->model()->SetSelection(OmniboxPopupSelection(
+    model->SetPopupSelection(OmniboxPopupSelection(
         3, OmniboxPopupSelection::FOCUSED_BUTTON_TAB_SWITCH));
     if (!VerifyActiveButtonText(popup_view->result_view_at(3), "Switch"))
       return false;
@@ -168,7 +168,6 @@ class OmniboxSuggestionButtonRowBrowserTest : public DialogBrowserTest {
   }
 
  private:
-  base::test::ScopedFeatureList feature_list_;
   scoped_refptr<OmniboxAction> action_;
 };
 

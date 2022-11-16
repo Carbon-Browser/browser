@@ -9,11 +9,9 @@
 #include <string>
 
 #include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/timer/timer.h"
-#include "base/values.h"
-#include "chromeos/network/network_state_handler_observer.h"
+#include "chromeos/ash/components/network/network_state_handler_observer.h"
 
 namespace extensions {
 
@@ -23,6 +21,10 @@ class ShellNetworkController : public chromeos::NetworkStateHandlerObserver {
   // This class must be instantiated after chromeos::DBusThreadManager and
   // destroyed before it.
   explicit ShellNetworkController(const std::string& preferred_network_name);
+
+  ShellNetworkController(const ShellNetworkController&) = delete;
+  ShellNetworkController& operator=(const ShellNetworkController&) = delete;
+
   ~ShellNetworkController() override;
 
   // chromeos::NetworkStateHandlerObserver overrides:
@@ -62,8 +64,7 @@ class ShellNetworkController : public chromeos::NetworkStateHandlerObserver {
 
   // Handles a successful or failed connection attempt.
   void HandleConnectionSuccess();
-  void HandleConnectionError(const std::string& error_name,
-                             std::unique_ptr<base::DictionaryValue> error_data);
+  void HandleConnectionError(const std::string& error_name);
 
   // Current status of communication with the chromeos::NetworkStateHandler.
   // This is tracked to avoid sending duplicate requests before the handler has
@@ -80,8 +81,6 @@ class ShellNetworkController : public chromeos::NetworkStateHandlerObserver {
   bool preferred_network_is_active_;
 
   base::WeakPtrFactory<ShellNetworkController> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(ShellNetworkController);
 };
 
 }  // namespace extensions

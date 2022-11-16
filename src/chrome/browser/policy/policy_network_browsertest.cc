@@ -5,10 +5,13 @@
 #include "base/bind.h"
 #include "base/command_line.h"
 #include "base/feature_list.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
+#include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/threading/thread_restrictions.h"
 #include "build/build_config.h"
@@ -46,12 +49,16 @@
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/content_mock_cert_verifier.h"
 #include "net/base/features.h"
+#include "net/dns/dns_test_util.h"
 #include "net/dns/mock_host_resolver.h"
+#include "net/dns/public/util.h"
 #include "net/ssl/ssl_config.h"
 #include "net/ssl/ssl_server_config.h"
 #include "net/test/cert_test_util.h"
 #include "net/test/quic_simple_test_server.h"
+#include "net/test/ssl_test_util.h"
 #include "net/test/test_data_directory.h"
+#include "net/test/test_doh_server.h"
 #include "services/network/public/cpp/features.h"
 #include "services/network/public/mojom/network_service_test.mojom.h"
 #include "third_party/boringssl/src/include/openssl/obj.h"
@@ -79,9 +86,9 @@ bool IsQuicEnabledForSystem() {
       g_browser_process->system_network_context_manager()->GetContext());
 }
 
-bool IsQuicEnabledForSafeBrowsing() {
+bool IsQuicEnabledForSafeBrowsing(Profile* profile) {
   return IsQuicEnabled(
-      g_browser_process->safe_browsing_service()->GetNetworkContext());
+      g_browser_process->safe_browsing_service()->GetNetworkContext(profile));
 }
 
 // Called when an additional profile has been created.
@@ -207,7 +214,7 @@ IN_PROC_BROWSER_TEST_F(QuicAllowedPolicyIsFalse, QuicDisallowedForSystem) {
 
 IN_PROC_BROWSER_TEST_F(QuicAllowedPolicyIsFalse,
                        QuicDisallowedForSafeBrowsing) {
-  EXPECT_FALSE(IsQuicEnabledForSafeBrowsing());
+  EXPECT_FALSE(IsQuicEnabledForSafeBrowsing(browser()->profile()));
 
   // If using the network service, crash the service, and make sure QUIC is
   // still disabled.
@@ -215,8 +222,8 @@ IN_PROC_BROWSER_TEST_F(QuicAllowedPolicyIsFalse,
     CrashNetworkService();
     // Make sure the NetworkContext has noticed the pipe was closed.
     g_browser_process->safe_browsing_service()
-        ->FlushNetworkInterfaceForTesting();
-    EXPECT_FALSE(IsQuicEnabledForSafeBrowsing());
+        ->FlushNetworkInterfaceForTesting(browser()->profile());
+    EXPECT_FALSE(IsQuicEnabledForSafeBrowsing(browser()->profile()));
   }
 }
 
@@ -276,7 +283,7 @@ IN_PROC_BROWSER_TEST_F(QuicAllowedPolicyIsTrue, MAYBE_QuicAllowedForSystem) {
 }
 
 IN_PROC_BROWSER_TEST_F(QuicAllowedPolicyIsTrue, QuicAllowedForSafeBrowsing) {
-  EXPECT_TRUE(IsQuicEnabledForSafeBrowsing());
+  EXPECT_TRUE(IsQuicEnabledForSafeBrowsing(browser()->profile()));
 
   // If using the network service, crash the service, and make sure QUIC is
   // still enabled.
@@ -284,8 +291,8 @@ IN_PROC_BROWSER_TEST_F(QuicAllowedPolicyIsTrue, QuicAllowedForSafeBrowsing) {
     CrashNetworkService();
     // Make sure the NetworkContext has noticed the pipe was closed.
     g_browser_process->safe_browsing_service()
-        ->FlushNetworkInterfaceForTesting();
-    EXPECT_TRUE(IsQuicEnabledForSafeBrowsing());
+        ->FlushNetworkInterfaceForTesting(browser()->profile());
+    EXPECT_TRUE(IsQuicEnabledForSafeBrowsing(browser()->profile()));
   }
 }
 
@@ -319,10 +326,9 @@ class QuicAllowedPolicyIsNotSet : public QuicAllowedPolicyTestBase {
   void GetQuicAllowedPolicy(PolicyMap* values) override {}
 };
 
-// Flaky test on Win7. https://crbug.com/961049
-IN_PROC_BROWSER_TEST_F(QuicAllowedPolicyIsNotSet, DISABLED_NoQuicRegulations) {
+IN_PROC_BROWSER_TEST_F(QuicAllowedPolicyIsNotSet, NoQuicRegulations) {
   EXPECT_TRUE(IsQuicEnabledForSystem());
-  EXPECT_TRUE(IsQuicEnabledForSafeBrowsing());
+  EXPECT_TRUE(IsQuicEnabledForSafeBrowsing(browser()->profile()));
   EXPECT_TRUE(IsQuicEnabled(browser()->profile()));
 }
 
@@ -339,7 +345,7 @@ class QuicAllowedPolicyDynamicTest : public QuicTestBase {
   void SetUpCommandLine(base::CommandLine* command_line) override {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
     command_line->AppendSwitch(
-        chromeos::switches::kIgnoreUserProfileMappingForTests);
+        ash::switches::kIgnoreUserProfileMappingForTests);
 #endif
     // Ensure that QUIC is enabled by default on browser startup.
     command_line->AppendSwitch(switches::kEnableQuic);
@@ -448,7 +454,7 @@ class QuicAllowedPolicyDynamicTest : public QuicTestBase {
 
  private:
   // The first profile.
-  Profile* profile_1_;
+  raw_ptr<Profile> profile_1_;
   // The second profile. Only valid after CreateSecondProfile() has been called.
   Profile* profile_2_;
 
@@ -463,7 +469,7 @@ IN_PROC_BROWSER_TEST_F(QuicAllowedPolicyDynamicTest, QuicAllowedFalseThenTrue) {
   // After browser start, QuicAllowed=false comes in dynamically
   SetQuicAllowedPolicy(policy_for_profile_1(), false);
   EXPECT_FALSE(IsQuicEnabledForSystem());
-  EXPECT_FALSE(IsQuicEnabledForSafeBrowsing());
+  EXPECT_FALSE(IsQuicEnabledForSafeBrowsing(browser()->profile()));
   EXPECT_FALSE(IsQuicEnabled(profile_1()));
 
   // Set the QuicAllowed policy to true again
@@ -471,7 +477,7 @@ IN_PROC_BROWSER_TEST_F(QuicAllowedPolicyDynamicTest, QuicAllowedFalseThenTrue) {
   // Effectively, QUIC is still disabled because QUIC re-enabling is not
   // supported.
   EXPECT_FALSE(IsQuicEnabledForSystem());
-  EXPECT_FALSE(IsQuicEnabledForSafeBrowsing());
+  EXPECT_FALSE(IsQuicEnabledForSafeBrowsing(browser()->profile()));
   EXPECT_FALSE(IsQuicEnabled(profile_1()));
 
   // Completely remove the QuicAllowed policy
@@ -479,42 +485,41 @@ IN_PROC_BROWSER_TEST_F(QuicAllowedPolicyDynamicTest, QuicAllowedFalseThenTrue) {
   // Effectively, QUIC is still disabled because QUIC re-enabling is not
   // supported.
   EXPECT_FALSE(IsQuicEnabledForSystem());
-  EXPECT_FALSE(IsQuicEnabledForSafeBrowsing());
+  EXPECT_FALSE(IsQuicEnabledForSafeBrowsing(browser()->profile()));
   EXPECT_FALSE(IsQuicEnabled(profile_1()));
 
   // QuicAllowed=false is set again
   SetQuicAllowedPolicy(policy_for_profile_1(), false);
   EXPECT_FALSE(IsQuicEnabledForSystem());
-  EXPECT_FALSE(IsQuicEnabledForSafeBrowsing());
+  EXPECT_FALSE(IsQuicEnabledForSafeBrowsing(browser()->profile()));
   EXPECT_FALSE(IsQuicEnabled(profile_1()));
 }
 
 // QUIC is allowed, then disallowed by policy after the profile has been
 // initialized.
-IN_PROC_BROWSER_TEST_F(QuicAllowedPolicyDynamicTest,
-                       DISABLED_QuicAllowedTrueThenFalse) {
+IN_PROC_BROWSER_TEST_F(QuicAllowedPolicyDynamicTest, QuicAllowedTrueThenFalse) {
   // After browser start, QuicAllowed=true comes in dynamically
   SetQuicAllowedPolicy(policy_for_profile_1(), true);
   EXPECT_TRUE(IsQuicEnabledForSystem());
-  EXPECT_TRUE(IsQuicEnabledForSafeBrowsing());
+  EXPECT_TRUE(IsQuicEnabledForSafeBrowsing(browser()->profile()));
   EXPECT_TRUE(IsQuicEnabled(profile_1()));
 
   // Completely remove the QuicAllowed policy
   RemoveAllPolicies(policy_for_profile_1());
   EXPECT_TRUE(IsQuicEnabledForSystem());
-  EXPECT_TRUE(IsQuicEnabledForSafeBrowsing());
+  EXPECT_TRUE(IsQuicEnabledForSafeBrowsing(browser()->profile()));
   EXPECT_TRUE(IsQuicEnabled(profile_1()));
 
   // Set the QuicAllowed policy to true again
   SetQuicAllowedPolicy(policy_for_profile_1(), true);
   EXPECT_TRUE(IsQuicEnabledForSystem());
-  EXPECT_TRUE(IsQuicEnabledForSafeBrowsing());
+  EXPECT_TRUE(IsQuicEnabledForSafeBrowsing(browser()->profile()));
   EXPECT_TRUE(IsQuicEnabled(profile_1()));
 
   // Now set QuicAllowed=false
   SetQuicAllowedPolicy(policy_for_profile_1(), false);
   EXPECT_FALSE(IsQuicEnabledForSystem());
-  EXPECT_FALSE(IsQuicEnabledForSafeBrowsing());
+  EXPECT_FALSE(IsQuicEnabledForSafeBrowsing(browser()->profile()));
   EXPECT_FALSE(IsQuicEnabled(profile_1()));
 }
 
@@ -528,14 +533,14 @@ IN_PROC_BROWSER_TEST_F(QuicAllowedPolicyDynamicTest,
 
   SetQuicAllowedPolicy(policy_for_profile_1(), false);
   EXPECT_FALSE(IsQuicEnabledForSystem());
-  EXPECT_FALSE(IsQuicEnabledForSafeBrowsing());
+  EXPECT_FALSE(IsQuicEnabledForSafeBrowsing(browser()->profile()));
   EXPECT_FALSE(IsQuicEnabled(profile_1()));
 
   CreateSecondProfile();
 
   // QUIC is disabled in both profiles
   EXPECT_FALSE(IsQuicEnabledForSystem());
-  EXPECT_FALSE(IsQuicEnabledForSafeBrowsing());
+  EXPECT_FALSE(IsQuicEnabledForSafeBrowsing(browser()->profile()));
   EXPECT_FALSE(IsQuicEnabled(profile_1()));
   EXPECT_FALSE(IsQuicEnabled(profile_2()));
 }
@@ -544,16 +549,8 @@ IN_PROC_BROWSER_TEST_F(QuicAllowedPolicyDynamicTest,
 // first profile.
 // Then QuicAllowed=false policy is dynamically set for both profiles.
 //
-// Disabled due to flakiness on windows: https://crbug.com/947931.
-#if defined(OS_WIN)
-#define MAYBE_QuicAllowedFalseAfterTwoProfilesCreated \
-  DISABLED_QuicAllowedFalseAfterTwoProfilesCreated
-#else
-#define MAYBE_QuicAllowedFalseAfterTwoProfilesCreated \
-  QuicAllowedFalseAfterTwoProfilesCreated
-#endif
 IN_PROC_BROWSER_TEST_F(QuicAllowedPolicyDynamicTest,
-                       MAYBE_QuicAllowedFalseAfterTwoProfilesCreated) {
+                       QuicAllowedFalseAfterTwoProfilesCreated) {
   // If multiprofile mode is not enabled, you can't switch between profiles.
   if (!profiles::IsMultipleProfilesEnabled())
     return;
@@ -562,21 +559,21 @@ IN_PROC_BROWSER_TEST_F(QuicAllowedPolicyDynamicTest,
 
   // QUIC is enabled in both profiles
   EXPECT_TRUE(IsQuicEnabledForSystem());
-  EXPECT_TRUE(IsQuicEnabledForSafeBrowsing());
+  EXPECT_TRUE(IsQuicEnabledForSafeBrowsing(browser()->profile()));
   EXPECT_TRUE(IsQuicEnabled(profile_1()));
   EXPECT_TRUE(IsQuicEnabled(profile_2()));
 
   // Disable QUIC in first profile
   SetQuicAllowedPolicy(policy_for_profile_1(), false);
   EXPECT_FALSE(IsQuicEnabledForSystem());
-  EXPECT_FALSE(IsQuicEnabledForSafeBrowsing());
+  EXPECT_FALSE(IsQuicEnabledForSafeBrowsing(browser()->profile()));
   EXPECT_FALSE(IsQuicEnabled(profile_1()));
   EXPECT_FALSE(IsQuicEnabled(profile_2()));
 
   // Disable QUIC in second profile
   SetQuicAllowedPolicy(policy_for_profile_2(), false);
   EXPECT_FALSE(IsQuicEnabledForSystem());
-  EXPECT_FALSE(IsQuicEnabledForSafeBrowsing());
+  EXPECT_FALSE(IsQuicEnabledForSafeBrowsing(browser()->profile()));
   EXPECT_FALSE(IsQuicEnabled(profile_1()));
   EXPECT_FALSE(IsQuicEnabled(profile_2()));
 }
@@ -601,9 +598,12 @@ class SSLPolicyTest : public PolicyTest {
     return g_browser_process->local_state()->GetBoolean(pref_name);
   }
 
-  LoadResult LoadPage(const std::string& path) {
-    EXPECT_TRUE(
-        ui_test_utils::NavigateToURL(browser(), https_server_.GetURL(path)));
+  LoadResult LoadPage(base::StringPiece path) {
+    return LoadPage(https_server_.GetURL(path));
+  }
+
+  LoadResult LoadPage(const GURL& url) {
+    EXPECT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
     content::WebContents* web_contents =
         browser()->tab_strip_model()->GetActiveWebContents();
     if (web_contents->GetController().GetLastCommittedEntry()->GetPageType() ==
@@ -631,16 +631,6 @@ class CECPQ2PolicyTest : public SSLPolicyTest {
   CECPQ2PolicyTest() {
     scoped_feature_list_.InitAndEnableFeature(
         net::features::kPostQuantumCECPQ2);
-  }
-
- private:
-  base::test::ScopedFeatureList scoped_feature_list_;
-};
-
-class SSLPolicyTest3DES : public SSLPolicyTest {
- public:
-  SSLPolicyTest3DES() {
-    scoped_feature_list_.InitAndEnableFeature(features::kSSLCipher3DES);
   }
 
  private:
@@ -705,75 +695,113 @@ IN_PROC_BROWSER_TEST_F(CECPQ2PolicyTest, ChromeVariations) {
 }
 #endif  // !BUILDFLAG(IS_CHROMEOS_LACROS)
 
-// Test the admin policy behaves correctly when 3DES is enabled by feature flag.
-IN_PROC_BROWSER_TEST_F(SSLPolicyTest3DES, TripleDESEnabledPolicy) {
-  // Start a server that only supports TLS_RSA_WITH_3DES_EDE_CBC_SHA.
-  net::SSLServerConfig ssl_config;
-  ssl_config.version_max = net::SSL_PROTOCOL_VERSION_TLS1_2;
-  ssl_config.cipher_suite_for_testing = 0x000a;
-  ASSERT_TRUE(StartTestServer(ssl_config));
+class ECHPolicyTest : public SSLPolicyTest {
+ public:
+  // a.test is covered by `CERT_TEST_NAMES`.
+  static constexpr base::StringPiece kHostname = "a.test";
+  static constexpr base::StringPiece kPublicName = "public-name.test";
+  static constexpr base::StringPiece kDohServerHostname = "doh.test";
 
-  // Without a policy, the feature flag takes predecence. title1.html has no
-  // title, so start with title2.html.
-  LoadResult result = LoadPage("/title2.html");
+  static constexpr base::StringPiece kECHSuccessTitle = "Negotiated ECH";
+  static constexpr base::StringPiece kECHFailureTitle = "Did not negotiate ECH";
+
+  ECHPolicyTest() : ech_server_{net::EmbeddedTestServer::TYPE_HTTPS} {
+    scoped_feature_list_.InitWithFeaturesAndParameters(
+        /*enabled_features=*/
+        {{net::features::kEncryptedClientHello, {}},
+         {net::features::kUseDnsHttpsSvcb,
+          {{"UseDnsHttpsSvcbEnforceSecureResponse", "true"}}}},
+        /*disabled_features=*/{});
+  }
+
+  void SetUpOnMainThread() override {
+    // Configure `ech_server_` to enable and require ECH.
+    net::SSLServerConfig server_config;
+    std::vector<uint8_t> ech_config_list;
+    server_config.ech_keys = net::MakeTestEchKeys(
+        kPublicName, /*max_name_len=*/64, &ech_config_list);
+    ASSERT_TRUE(server_config.ech_keys);
+    ech_server_.RegisterRequestHandler(
+        base::BindRepeating(&ECHPolicyTest::HandleRequest));
+    ech_server_.SetSSLConfig(net::EmbeddedTestServer::CERT_TEST_NAMES,
+                             server_config);
+
+    ASSERT_TRUE(ech_server_.Start());
+
+    // Start a DoH server, which ensures we use a resolver with HTTPS RR
+    // support. Configure it to serve records for `ech_server_`.
+    doh_server_.SetHostname(kDohServerHostname);
+    url::SchemeHostPort ech_host(GetURL("/"));
+    doh_server_.AddAddressRecord(ech_host.host(),
+                                 net::IPAddress::IPv4Localhost());
+    doh_server_.AddRecord(net::BuildTestHttpsServiceRecord(
+        net::dns_util::GetNameForHttpsQuery(ech_host),
+        /*priority=*/1, /*service_name=*/ech_host.host(),
+        {net::BuildTestHttpsServiceEchConfigParam(ech_config_list)}));
+    ASSERT_TRUE(doh_server_.Start());
+
+    // Add a single bootstrapping rule so we can resolve the DoH server.
+    host_resolver()->AddRule(kDohServerHostname, "127.0.0.1");
+
+    // The net stack doesn't enable DoH when it can't find a system DNS config
+    // (see https://crbug.com/1251715).
+    SetReplaceSystemDnsConfig();
+
+    // Via policy, configure the network service to use `doh_server_`.
+    UpdateProviderPolicy(PolicyMapWithDohServer());
+    content::FlushNetworkServiceInstanceForTesting();
+  }
+
+  PolicyMap PolicyMapWithDohServer() {
+    PolicyMap policies;
+    SetPolicy(&policies, key::kDnsOverHttpsMode, base::Value("secure"));
+    SetPolicy(&policies, key::kDnsOverHttpsTemplates,
+              base::Value(doh_server_.GetTemplate()));
+    return policies;
+  }
+
+  GURL GetURL(base::StringPiece path) {
+    return ech_server_.GetURL(kHostname, path);
+  }
+
+ private:
+  static std::unique_ptr<net::test_server::HttpResponse> HandleRequest(
+      const net::test_server::HttpRequest& request) {
+    auto response = std::make_unique<net::test_server::BasicHttpResponse>();
+    response->set_content_type("text/html; charset=utf-8");
+    if (request.ssl_info->encrypted_client_hello) {
+      response->set_content(
+          base::StrCat({"<title>", kECHSuccessTitle, "</title>"}));
+    } else {
+      response->set_content(
+          base::StrCat({"<title>", kECHFailureTitle, "</title>"}));
+    }
+    return response;
+  }
+
+  base::test::ScopedFeatureList scoped_feature_list_;
+  net::TestDohServer doh_server_;
+  net::EmbeddedTestServer ech_server_;
+};
+
+IN_PROC_BROWSER_TEST_F(ECHPolicyTest, ECHEnabledPolicy) {
+  // By default, the policy does not inhibit ECH.
+  EXPECT_TRUE(GetBooleanPref(prefs::kEncryptedClientHelloEnabled));
+  LoadResult result = LoadPage(GetURL("/a"));
   EXPECT_TRUE(result.success);
-  EXPECT_EQ(u"Title Of Awesomeness", result.title);
+  EXPECT_EQ(base::ASCIIToUTF16(kECHSuccessTitle), result.title);
 
-  // Enable 3DES by policy.
-  PolicyMap policies;
-  SetPolicy(&policies, key::kTripleDESEnabled, base::Value(true));
+  // Disable the policy.
+  PolicyMap policies = PolicyMapWithDohServer();
+  SetPolicy(&policies, key::kEncryptedClientHelloEnabled, base::Value(false));
   UpdateProviderPolicy(policies);
   content::FlushNetworkServiceInstanceForTesting();
 
-  // 3DES is still enabled.
-  result = LoadPage("/title3.html");
+  // ECH should no longer be enabled.
+  EXPECT_FALSE(GetBooleanPref(prefs::kEncryptedClientHelloEnabled));
+  result = LoadPage(GetURL("/b"));
   EXPECT_TRUE(result.success);
-  EXPECT_EQ(u"Title Of More Awesomeness", result.title);
-
-  // Disable 3DES by policy.
-  SetPolicy(&policies, key::kTripleDESEnabled, base::Value(false));
-  UpdateProviderPolicy(policies);
-  content::FlushNetworkServiceInstanceForTesting();
-
-  // 3DES is now disabled.
-  result = LoadPage("/title1.html");
-  EXPECT_FALSE(result.success);
-  ExpectVersionOrCipherMismatch();
-}
-
-// Test the admin policy behaves correctly when 3DES is disabled (default).
-IN_PROC_BROWSER_TEST_F(SSLPolicyTest, TripleDESEnabledPolicy) {
-  // Start a server that only supports TLS_RSA_WITH_3DES_EDE_CBC_SHA.
-  net::SSLServerConfig ssl_config;
-  ssl_config.version_max = net::SSL_PROTOCOL_VERSION_TLS1_2;
-  ssl_config.cipher_suite_for_testing = 0x000a;
-  ASSERT_TRUE(StartTestServer(ssl_config));
-
-  // Without a policy, 3DES is disabled.
-  LoadResult result = LoadPage("/title1.html");
-  EXPECT_FALSE(result.success);
-  ExpectVersionOrCipherMismatch();
-
-  // Enable 3DES by policy.
-  PolicyMap policies;
-  SetPolicy(&policies, key::kTripleDESEnabled, base::Value(true));
-  UpdateProviderPolicy(policies);
-  content::FlushNetworkServiceInstanceForTesting();
-
-  // 3DES is now enabled.
-  result = LoadPage("/title2.html");
-  EXPECT_TRUE(result.success);
-  EXPECT_EQ(u"Title Of Awesomeness", result.title);
-
-  // Disable 3DES by policy.
-  SetPolicy(&policies, key::kTripleDESEnabled, base::Value(false));
-  UpdateProviderPolicy(policies);
-  content::FlushNetworkServiceInstanceForTesting();
-
-  // 3DES is now disabled.
-  result = LoadPage("/title3.html");
-  EXPECT_FALSE(result.success);
-  ExpectVersionOrCipherMismatch();
+  EXPECT_EQ(base::ASCIIToUTF16(kECHFailureTitle), result.title);
 }
 
 }  // namespace policy

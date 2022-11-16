@@ -11,6 +11,7 @@
 #include "build/chromeos_buildflags.h"
 #include "components/infobars/core/infobar.h"
 #include "components/infobars/core/infobar_manager.h"
+#include "components/language/core/browser/accept_languages_service.h"
 #include "components/language/core/browser/language_model.h"
 #include "components/language/core/browser/language_prefs.h"
 #include "components/language/core/browser/pref_names.h"
@@ -19,7 +20,6 @@
 #include "components/translate/core/browser/mock_translate_client.h"
 #include "components/translate/core/browser/mock_translate_driver.h"
 #include "components/translate/core/browser/mock_translate_ranker.h"
-#include "components/translate/core/browser/translate_accept_languages.h"
 #include "components/translate/core/browser/translate_client.h"
 #include "components/translate/core/browser/translate_infobar_delegate.h"
 #include "components/translate/core/browser/translate_manager.h"
@@ -86,6 +86,7 @@ class TranslateInfoBarDelegateTest : public ::testing::Test {
 
  protected:
   void SetUp() override {
+    ::testing::Test::SetUp();
     pref_service_ =
         std::make_unique<sync_preferences::TestingPrefServiceSyncable>();
     language::LanguagePrefs::RegisterProfilePrefs(pref_service_->registry());
@@ -105,6 +106,11 @@ class TranslateInfoBarDelegateTest : public ::testing::Test {
                                                   language_model_.get());
     manager_->GetLanguageState()->set_translation_declined(false);
     infobar_manager_ = std::make_unique<TestInfoBarManager>();
+  }
+
+  void TearDown() override {
+    infobar_manager_->ShutDown();
+    ::testing::Test::TearDown();
   }
 
   std::unique_ptr<TranslateInfoBarDelegate> ConstructInfoBarDelegate() {
@@ -193,9 +199,9 @@ TEST_F(TranslateInfoBarDelegateTest, IsTranslatableLanguage) {
   // language.
   std::unique_ptr<TranslateInfoBarDelegate> delegate =
       ConstructInfoBarDelegate();
-  TranslateAcceptLanguages accept_languages(pref_service_.get(),
-                                            testing::accept_languages_prefs);
-  ON_CALL(*(client_.get()), GetTranslateAcceptLanguages())
+  language::AcceptLanguagesService accept_languages(
+      pref_service_.get(), testing::accept_languages_prefs);
+  ON_CALL(*(client_.get()), GetAcceptLanguagesService())
       .WillByDefault(Return(&accept_languages));
   ListPrefUpdate update(pref_service_.get(),
                         translate::prefs::kBlockedLanguages);
@@ -216,15 +222,14 @@ TEST_F(TranslateInfoBarDelegateTest, IsTranslatableLanguage) {
 TEST_F(TranslateInfoBarDelegateTest, ShouldAutoAlwaysTranslate) {
   DictionaryPrefUpdate update_translate_accepted_count(
       pref_service_.get(), TranslatePrefs::kPrefTranslateAcceptedCount);
-  base::Value* update_translate_accepted_dict =
-      update_translate_accepted_count.Get();
-  update_translate_accepted_dict->SetIntKey(kSourceLanguage,
-                                            kAutoAlwaysThreshold + 1);
+  base::Value::Dict& update_translate_accepted_dict =
+      update_translate_accepted_count->GetDict();
+  update_translate_accepted_dict.Set(kSourceLanguage, kAutoAlwaysThreshold + 1);
 
-  const base::Value* dict = pref_service_->GetDictionary(
+  const base::Value::Dict* dict = &pref_service_->GetValueDict(
       TranslatePrefs::kPrefTranslateAutoAlwaysCount);
   absl::optional<int> translate_auto_always_count =
-      dict->FindIntKey(kSourceLanguage);
+      dict->FindInt(kSourceLanguage);
   EXPECT_FALSE(translate_auto_always_count.has_value());
 
   TranslateInfoBarDelegate::Create(
@@ -238,28 +243,28 @@ TEST_F(TranslateInfoBarDelegateTest, ShouldAutoAlwaysTranslate) {
   EXPECT_TRUE(delegate->ShouldAutoAlwaysTranslate());
 
   absl::optional<int> count =
-      update_translate_accepted_dict->FindIntKey(kSourceLanguage);
+      update_translate_accepted_dict.FindInt(kSourceLanguage);
   EXPECT_EQ(absl::optional<int>(0), count);
   // Get the dictionary again in order to update it.
-  dict = pref_service_->GetDictionary(
+  dict = &pref_service_->GetValueDict(
       TranslatePrefs::kPrefTranslateAutoAlwaysCount);
-  translate_auto_always_count = dict->FindIntKey(kSourceLanguage);
+  translate_auto_always_count = dict->FindInt(kSourceLanguage);
   EXPECT_EQ(absl::optional<int>(1), translate_auto_always_count);
 }
 
 TEST_F(TranslateInfoBarDelegateTest, ShouldNotAutoAlwaysTranslateUnknown) {
   DictionaryPrefUpdate update_translate_accepted_count(
       pref_service_.get(), TranslatePrefs::kPrefTranslateAcceptedCount);
-  base::Value* update_translate_accepted_dict =
-      update_translate_accepted_count.Get();
+  base::Value::Dict& update_translate_accepted_dict =
+      update_translate_accepted_count->GetDict();
   // Should not trigger auto always translate for unknown source language.
-  update_translate_accepted_dict->SetIntKey(kUnknownLanguageCode,
-                                            kAutoAlwaysThreshold + 1);
+  update_translate_accepted_dict.Set(kUnknownLanguageCode,
+                                     kAutoAlwaysThreshold + 1);
 
-  const base::Value* dict = pref_service_->GetDictionary(
+  const base::Value::Dict* dict = &pref_service_->GetValueDict(
       TranslatePrefs::kPrefTranslateAutoAlwaysCount);
   absl::optional<int> translate_auto_always_count =
-      dict->FindIntKey(kUnknownLanguageCode);
+      dict->FindInt(kUnknownLanguageCode);
   EXPECT_FALSE(translate_auto_always_count.has_value());
 
   TranslateInfoBarDelegate::Create(
@@ -273,13 +278,13 @@ TEST_F(TranslateInfoBarDelegateTest, ShouldNotAutoAlwaysTranslateUnknown) {
   EXPECT_FALSE(delegate->ShouldAutoAlwaysTranslate());
 
   absl::optional<int> count =
-      update_translate_accepted_dict->FindIntKey(kSourceLanguage);
+      update_translate_accepted_dict.FindInt(kSourceLanguage);
   // Always translate not triggered, so count should be unchanged.
   EXPECT_FALSE(count.has_value());
   // Get the dictionary again in order to update it.
-  dict = pref_service_->GetDictionary(
+  dict = &pref_service_->GetValueDict(
       TranslatePrefs::kPrefTranslateAutoAlwaysCount);
-  translate_auto_always_count = dict->FindIntKey(kUnknownLanguageCode);
+  translate_auto_always_count = dict->FindInt(kUnknownLanguageCode);
   EXPECT_FALSE(translate_auto_always_count.has_value());
 }
 
@@ -299,22 +304,22 @@ TEST_F(TranslateInfoBarDelegateTest, ShouldNotAutoAlwaysTranslate) {
 }
 
 TEST_F(TranslateInfoBarDelegateTest, ShouldAutoNeverTranslate) {
-  TranslateAcceptLanguages accept_languages(pref_service_.get(),
-                                            testing::accept_languages_prefs);
-  ON_CALL(*(client_.get()), GetTranslateAcceptLanguages())
+  language::AcceptLanguagesService accept_languages(
+      pref_service_.get(), testing::accept_languages_prefs);
+  ON_CALL(*(client_.get()), GetAcceptLanguagesService())
       .WillByDefault(Return(&accept_languages));
 
   DictionaryPrefUpdate update_translate_denied_count(
       pref_service_.get(), TranslatePrefs::kPrefTranslateDeniedCount);
-  base::Value* update_translate_denied_dict =
-      update_translate_denied_count.Get();
+  base::Value::Dict& update_translate_denied_dict =
+      update_translate_denied_count->GetDict();
   // 21 = kAutoNeverThreshold + 1
-  update_translate_denied_dict->SetIntKey(kSourceLanguage, 21);
+  update_translate_denied_dict.Set(kSourceLanguage, 21);
 
-  const base::Value* dict = pref_service_->GetDictionary(
+  const base::Value::Dict* dict = &pref_service_->GetValueDict(
       TranslatePrefs::kPrefTranslateAutoNeverCount);
   absl::optional<int> translate_auto_never_count =
-      dict->FindIntKey(kSourceLanguage);
+      dict->FindInt(kSourceLanguage);
   ASSERT_FALSE(translate_auto_never_count.has_value());
 
   TranslateInfoBarDelegate::Create(
@@ -328,12 +333,12 @@ TEST_F(TranslateInfoBarDelegateTest, ShouldAutoNeverTranslate) {
   EXPECT_TRUE(delegate->ShouldAutoNeverTranslate());
 
   absl::optional<int> count =
-      update_translate_denied_dict->FindIntKey(kSourceLanguage);
+      update_translate_denied_dict.FindInt(kSourceLanguage);
   EXPECT_EQ(absl::optional<int>(0), count);
   // Get the dictionary again in order to update it.
-  dict = pref_service_->GetDictionary(
+  dict = &pref_service_->GetValueDict(
       TranslatePrefs::kPrefTranslateAutoNeverCount);
-  translate_auto_never_count = dict->FindIntKey(kSourceLanguage);
+  translate_auto_never_count = dict->FindInt(kSourceLanguage);
   ASSERT_EQ(absl::optional<int>(1), translate_auto_never_count);
 }
 

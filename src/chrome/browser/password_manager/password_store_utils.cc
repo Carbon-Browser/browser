@@ -5,6 +5,7 @@
 #include "chrome/browser/password_manager/password_store_utils.h"
 
 #include "base/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/password_manager/account_password_store_factory.h"
 #include "chrome/browser/password_manager/password_reuse_manager_factory.h"
 #include "chrome/browser/password_manager/password_store_factory.h"
@@ -50,18 +51,18 @@ class StoreMetricReporterHelper : public base::SupportsUserData::Data {
         FROM_HERE,
         base::BindOnce(&StoreMetricReporterHelper::StartMetricsReporting,
                        weak_ptr_factory_.GetWeakPtr()),
-        base::TimeDelta::FromSeconds(30));
+        base::Seconds(30));
   }
   ~StoreMetricReporterHelper() override = default;
 
  private:
   void StartMetricsReporting() {
     password_manager::PasswordStoreInterface* profile_store =
-        PasswordStoreFactory::GetInterfaceForProfile(
-            profile_, ServiceAccessType::EXPLICIT_ACCESS)
+        PasswordStoreFactory::GetForProfile(profile_,
+                                            ServiceAccessType::EXPLICIT_ACCESS)
             .get();
     password_manager::PasswordStoreInterface* account_store =
-        AccountPasswordStoreFactory::GetInterfaceForProfile(
+        AccountPasswordStoreFactory::GetForProfile(
             profile_, ServiceAccessType::EXPLICIT_ACCESS)
             .get();
     syncer::SyncService* sync_service =
@@ -88,7 +89,7 @@ class StoreMetricReporterHelper : public base::SupportsUserData::Data {
     profile_->RemoveUserData(kPasswordStoreMetricsReporterKey);
   }
 
-  Profile* const profile_;
+  const raw_ptr<Profile> profile_;
   // StoreMetricReporterHelper is owned by the profile. `metrics_reporter_` life
   // time is now bound to the profile.
   std::unique_ptr<password_manager::StoreMetricsReporter> metrics_reporter_;
@@ -101,12 +102,12 @@ password_manager::PasswordStoreInterface* GetPasswordStore(
     Profile* profile,
     bool use_account_store) {
   if (use_account_store) {
-    return AccountPasswordStoreFactory::GetInterfaceForProfile(
+    return AccountPasswordStoreFactory::GetForProfile(
                profile, ServiceAccessType::EXPLICIT_ACCESS)
         .get();
   }
-  return PasswordStoreFactory::GetInterfaceForProfile(
-             profile, ServiceAccessType::EXPLICIT_ACCESS)
+  return PasswordStoreFactory::GetForProfile(profile,
+                                             ServiceAccessType::EXPLICIT_ACCESS)
       .get();
 }
 

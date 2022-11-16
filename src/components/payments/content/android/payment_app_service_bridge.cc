@@ -59,11 +59,14 @@ void OnPaymentAppCreated(const JavaRef<jobject>& jcallback,
       payments::JniPaymentApp::Create(env, std::move(payment_app)));
 }
 
-void OnPaymentAppCreationError(const JavaRef<jobject>& jcallback,
-                               const std::string& error_message) {
+void OnPaymentAppCreationError(
+    const JavaRef<jobject>& jcallback,
+    const std::string& error_message,
+    payments::AppCreationFailureReason error_reason) {
   JNIEnv* env = AttachCurrentThread();
   Java_PaymentAppServiceCallback_onPaymentAppCreationError(
-      env, jcallback, ConvertUTF8ToJavaString(env, error_message));
+      env, jcallback, ConvertUTF8ToJavaString(env, error_message),
+      static_cast<jint>(error_reason));
 }
 
 void OnDoneCreatingPaymentApps(const JavaRef<jobject>& jcallback) {
@@ -89,6 +92,7 @@ void JNI_PaymentAppServiceBridge_Create(
     const JavaParamRef<jobject>& jpayment_request_spec,
     const JavaParamRef<jstring>& jtwa_package_name,
     jboolean jmay_crawl_for_installable_payment_apps,
+    jboolean jis_off_the_record,
     const JavaParamRef<jobject>& jcallback) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
@@ -114,6 +118,7 @@ void JNI_PaymentAppServiceBridge_Create(
           env, jpayment_request_spec),
       jtwa_package_name ? ConvertJavaStringToUTF8(env, jtwa_package_name) : "",
       web_data_service, jmay_crawl_for_installable_payment_apps,
+      jis_off_the_record,
       base::BindOnce(&OnCanMakePaymentCalculated,
                      ScopedJavaGlobalRef<jobject>(env, jcallback)),
       base::BindRepeating(&OnPaymentAppCreated,
@@ -171,6 +176,7 @@ PaymentAppServiceBridge* PaymentAppServiceBridge::Create(
     const std::string& twa_package_name,
     scoped_refptr<PaymentManifestWebDataService> web_data_service,
     bool may_crawl_for_installable_payment_apps,
+    bool is_off_the_record,
     CanMakePaymentCalculatedCallback can_make_payment_calculated_callback,
     PaymentAppCreatedCallback payment_app_created_callback,
     PaymentAppCreationErrorCallback payment_app_creation_error_callback,
@@ -181,7 +187,7 @@ PaymentAppServiceBridge* PaymentAppServiceBridge::Create(
   std::unique_ptr<PaymentAppServiceBridge> bridge(new PaymentAppServiceBridge(
       number_of_factories, render_frame_host, top_origin, spec,
       twa_package_name, std::move(web_data_service),
-      may_crawl_for_installable_payment_apps,
+      may_crawl_for_installable_payment_apps, is_off_the_record,
       std::move(can_make_payment_calculated_callback),
       std::move(payment_app_created_callback),
       std::move(payment_app_creation_error_callback),
@@ -198,15 +204,14 @@ PaymentAppServiceBridge::PaymentAppServiceBridge(
     const std::string& twa_package_name,
     scoped_refptr<PaymentManifestWebDataService> web_data_service,
     bool may_crawl_for_installable_payment_apps,
+    bool is_off_the_record,
     CanMakePaymentCalculatedCallback can_make_payment_calculated_callback,
     PaymentAppCreatedCallback payment_app_created_callback,
     PaymentAppCreationErrorCallback payment_app_creation_error_callback,
     base::OnceClosure done_creating_payment_apps_callback,
     base::RepeatingClosure set_can_make_payment_even_without_apps_callback)
     : number_of_pending_factories_(number_of_factories),
-      frame_routing_id_(content::GlobalRenderFrameHostId(
-          render_frame_host->GetProcess()->GetID(),
-          render_frame_host->GetRoutingID())),
+      frame_routing_id_(render_frame_host->GetGlobalId()),
       top_origin_(top_origin),
       frame_origin_(url_formatter::FormatUrlForSecurityDisplay(
           render_frame_host->GetLastCommittedURL())),
@@ -216,6 +221,7 @@ PaymentAppServiceBridge::PaymentAppServiceBridge(
       payment_manifest_web_data_service_(web_data_service),
       may_crawl_for_installable_payment_apps_(
           may_crawl_for_installable_payment_apps),
+      is_off_the_record_(is_off_the_record),
       can_make_payment_calculated_callback_(
           std::move(can_make_payment_calculated_callback)),
       payment_app_created_callback_(std::move(payment_app_created_callback)),
@@ -273,7 +279,12 @@ PaymentAppServiceBridge::CreateInternalAuthenticator() const {
   // displays the top-level origin in its UI before the user can click on the
   // [Verify] button to invoke this authenticator.
   auto* rfh = content::RenderFrameHost::FromID(frame_routing_id_);
-  return rfh && rfh->IsActive()
+  // Lifetime of the created authenticator is externally managed by the
+  // authenticator factory, but is generally tied to the RenderFrame by
+  // listening for `RenderFrameDeleted()`. Check `IsRenderFrameLive()` as a
+  // safety precaution to ensure that `RenderFrameDeleted()` will be called at
+  // some point.
+  return rfh && rfh->IsActive() && rfh->IsRenderFrameLive()
              ? std::make_unique<InternalAuthenticatorAndroid>(rfh)
              : nullptr;
 }
@@ -288,9 +299,7 @@ bool PaymentAppServiceBridge::MayCrawlForInstallablePaymentApps() {
 }
 
 bool PaymentAppServiceBridge::IsOffTheRecord() const {
-  auto* rfh = content::RenderFrameHost::FromID(frame_routing_id_);
-  return rfh && rfh->GetBrowserContext() &&
-         rfh->GetBrowserContext()->IsOffTheRecord();
+  return is_off_the_record_;
 }
 
 const std::vector<autofill::AutofillProfile*>&
@@ -338,8 +347,9 @@ bool PaymentAppServiceBridge::SkipCreatingNativePaymentApps() const {
 }
 
 void PaymentAppServiceBridge::OnPaymentAppCreationError(
-    const std::string& error_message) {
-  payment_app_creation_error_callback_.Run(error_message);
+    const std::string& error_message,
+    AppCreationFailureReason error_reason) {
+  payment_app_creation_error_callback_.Run(error_message, error_reason);
 }
 
 void PaymentAppServiceBridge::OnDoneCreatingPaymentApps() {

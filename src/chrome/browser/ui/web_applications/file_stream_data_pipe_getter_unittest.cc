@@ -20,19 +20,22 @@
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
 #include "mojo/public/cpp/system/data_pipe.h"
 #include "mojo/public/cpp/system/simple_watcher.h"
+#include "storage/browser/file_system/file_system_url.h"
 #include "storage/browser/file_system/open_file_system_mode.h"
 #include "storage/browser/quota/quota_manager_proxy.h"
 #include "storage/browser/test/async_file_test_helper.h"
+#include "storage/browser/test/mock_quota_manager.h"
+#include "storage/browser/test/mock_quota_manager_proxy.h"
+#include "storage/browser/test/mock_special_storage_policy.h"
 #include "storage/browser/test/test_file_system_context.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
-#include "url/gurl.h"
 #include "url/origin.h"
 
 namespace {
 
 const char kURLOrigin[] = "http://remote/";
-constexpr int kTestDataSize = 3 * 1024 * 1024;
+constexpr size_t kTestDataSize = 3 * 1024 * 1024;
 constexpr int kBufSize = 32 * 1024;
 
 // Reads the response until the channel is closed.
@@ -85,19 +88,25 @@ class FileStreamDataPipeGetterTest : public testing::Test {
 
   void SetUp() override {
     ASSERT_TRUE(temp_dir_.CreateUniqueTempDir());
+    base::FilePath temp_path = temp_dir_.GetPath();
+    quota_manager_ = base::MakeRefCounted<storage::MockQuotaManager>(
+        /*is_incognito=*/false, temp_path, base::ThreadTaskRunnerHandle::Get(),
+        base::MakeRefCounted<storage::MockSpecialStoragePolicy>());
+    quota_manager_proxy_ = base::MakeRefCounted<storage::MockQuotaManagerProxy>(
+        quota_manager_.get(), base::ThreadTaskRunnerHandle::Get());
     file_system_context_ = storage::CreateFileSystemContextForTesting(
-        /*quota_manager_proxy=*/nullptr, temp_dir_.GetPath());
+        quota_manager_proxy_.get(), temp_path);
     base::RunLoop run_loop;
     file_system_context_->OpenFileSystem(
         blink::StorageKey::CreateFromStringForTesting(kURLOrigin),
-        storage::kFileSystemTypeTemporary,
+        /*bucket=*/absl::nullopt, storage::kFileSystemTypeTemporary,
         storage::OPEN_FILE_SYSTEM_CREATE_IF_NONEXISTENT,
-        base::BindLambdaForTesting([&run_loop](const GURL& root_url,
-                                               const std::string& name,
-                                               base::File::Error result) {
-          ASSERT_EQ(base::File::FILE_OK, result);
-          run_loop.Quit();
-        }));
+        base::BindLambdaForTesting(
+            [&run_loop](const storage::FileSystemURL& root_url,
+                        const std::string& name, base::File::Error result) {
+              ASSERT_EQ(base::File::FILE_OK, result);
+              run_loop.Quit();
+            }));
     run_loop.Run();
   }
 
@@ -138,8 +147,8 @@ class FileStreamDataPipeGetterTest : public testing::Test {
 
  protected:
   storage::FileSystemURL CreateTestFile(const std::string& name,
-                                        int64_t offset,
-                                        int64_t file_size) {
+                                        size_t offset,
+                                        size_t file_size) {
     DCHECK(offset + file_size <= test_data_.size());
     // Setup a test file in the file system with random data.
     storage::FileSystemURL url =
@@ -159,6 +168,8 @@ class FileStreamDataPipeGetterTest : public testing::Test {
   const std::string test_data_;
 
   base::ScopedTempDir temp_dir_;
+  scoped_refptr<storage::MockQuotaManager> quota_manager_;
+  scoped_refptr<storage::MockQuotaManagerProxy> quota_manager_proxy_;
   scoped_refptr<storage::FileSystemContext> file_system_context_;
 };
 
@@ -167,13 +178,13 @@ TEST_F(FileStreamDataPipeGetterTest, SingleFile) {
       data_pipe_getter_remotes(1);
   {
     storage::FileSystemURL url = CreateTestFile("test.dat", 0, kTestDataSize);
-    mojo::MakeSelfOwnedReceiver(
-        std::make_unique<web_app::FileStreamDataPipeGetter>(
-            file_system_context_, url,
-            /*offset=*/0,
-            /*file_size=*/kTestDataSize,
-            /*buf_size=*/kBufSize),
-        data_pipe_getter_remotes[0].InitWithNewPipeAndPassReceiver());
+    web_app::FileStreamDataPipeGetter::Create(
+        /*receiver=*/data_pipe_getter_remotes[0]
+            .InitWithNewPipeAndPassReceiver(),
+        file_system_context_, url,
+        /*offset=*/0,
+        /*file_size=*/kTestDataSize,
+        /*buf_size=*/kBufSize);
   }
 
   std::string response_body =
@@ -186,19 +197,20 @@ TEST_F(FileStreamDataPipeGetterTest, MultipleFiles) {
   std::vector<mojo::PendingRemote<network::mojom::DataPipeGetter>>
       data_pipe_getter_remotes(kNumFiles);
   for (int index = 0; index < kNumFiles; ++index) {
-    const int64_t begin_offset = kTestDataSize * index / kNumFiles;
-    const int64_t end_offset = kTestDataSize * (index + 1) / kNumFiles;
-    const int64_t file_size = end_offset - begin_offset;
+    const size_t begin_offset = kTestDataSize * index / kNumFiles;
+    const size_t end_offset = kTestDataSize * (index + 1) / kNumFiles;
+    const size_t file_size = end_offset - begin_offset;
 
     storage::FileSystemURL url = CreateTestFile(
         base::StringPrintf("test%i.dat", index), begin_offset, file_size);
-    mojo::MakeSelfOwnedReceiver(
-        std::make_unique<web_app::FileStreamDataPipeGetter>(
-            file_system_context_, url,
-            /*offset=*/0,
-            /*file_size=*/file_size,
-            /*buf_size=*/kBufSize),
-        data_pipe_getter_remotes[index].InitWithNewPipeAndPassReceiver());
+
+    web_app::FileStreamDataPipeGetter::Create(
+        /*receiver=*/data_pipe_getter_remotes[index]
+            .InitWithNewPipeAndPassReceiver(),
+        file_system_context_, url,
+        /*offset=*/0,
+        /*file_size=*/file_size,
+        /*buf_size=*/kBufSize);
   }
 
   std::string response_body =

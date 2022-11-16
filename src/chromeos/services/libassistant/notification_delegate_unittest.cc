@@ -4,11 +4,11 @@
 
 #include "base/test/task_environment.h"
 #include "chromeos/assistant/internal/action/cros_action_module.h"
+#include "chromeos/assistant/internal/libassistant/shared_headers.h"
 #include "chromeos/assistant/internal/test_support/fake_assistant_manager_internal.h"
 #include "chromeos/services/libassistant/public/cpp/assistant_notification.h"
 #include "chromeos/services/libassistant/public/mojom/notification_delegate.mojom-forward.h"
 #include "chromeos/services/libassistant/test_support/libassistant_service_tester.h"
-#include "libassistant/shared/internal_api/assistant_manager_delegate.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
 namespace chromeos {
@@ -86,6 +86,10 @@ class NotificationDelegateTest : public ::testing::Test {
     action_module_helper_ = std::make_unique<CrosActionModuleHelper>(
         static_cast<assistant::action::CrosActionModule*>(
             service_tester_.assistant_manager_internal().action_module()));
+
+    service_tester_.service()
+        .conversation_controller()
+        .OnAssistantClientRunning(&service_tester_.assistant_client());
   }
 
   assistant_client::AssistantManagerDelegate& assistant_manager_delegate() {

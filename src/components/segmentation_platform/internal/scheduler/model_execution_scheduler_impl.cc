@@ -4,29 +4,39 @@
 
 #include "components/segmentation_platform/internal/scheduler/model_execution_scheduler_impl.h"
 
+#include "base/logging.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/time/clock.h"
 #include "base/time/time.h"
-#include "components/segmentation_platform/internal/database/metadata_utils.h"
 #include "components/segmentation_platform/internal/database/segment_info_database.h"
 #include "components/segmentation_platform/internal/database/signal_storage_config.h"
-#include "components/segmentation_platform/internal/execution/model_execution_manager.h"
+#include "components/segmentation_platform/internal/execution/execution_request.h"
+#include "components/segmentation_platform/internal/execution/model_execution_manager_impl.h"
+#include "components/segmentation_platform/internal/metadata/metadata_utils.h"
+#include "components/segmentation_platform/internal/platform_options.h"
 #include "components/segmentation_platform/internal/stats.h"
+#include "components/segmentation_platform/public/model_provider.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace segmentation_platform {
 
 ModelExecutionSchedulerImpl::ModelExecutionSchedulerImpl(
-    Observer* observer,
+    std::vector<Observer*>&& observers,
     SegmentInfoDatabase* segment_database,
     SignalStorageConfig* signal_storage_config,
     ModelExecutionManager* model_execution_manager,
-    base::Clock* clock)
-    : observer_(observer),
+    ModelExecutor* model_executor,
+    base::flat_set<proto::SegmentId> segment_ids,
+    base::Clock* clock,
+    const PlatformOptions& platform_options)
+    : observers_(observers),
       segment_database_(segment_database),
       signal_storage_config_(signal_storage_config),
       model_execution_manager_(model_execution_manager),
-      clock_(clock) {}
+      model_executor_(model_executor),
+      all_segment_ids_(segment_ids),
+      clock_(clock),
+      platform_options_(platform_options) {}
 
 ModelExecutionSchedulerImpl::~ModelExecutionSchedulerImpl() = default;
 
@@ -44,29 +54,39 @@ void ModelExecutionSchedulerImpl::OnNewModelInfoReady(
     return;
   }
 
-  RequestModelExecution(segment_info.segment_id());
+  RequestModelExecution(segment_info);
 }
 
 void ModelExecutionSchedulerImpl::RequestModelExecutionForEligibleSegments(
     bool expired_only) {
-  segment_database_->GetAllSegmentInfo(
+  std::vector<SegmentId> segment_ids(all_segment_ids_.begin(),
+                                     all_segment_ids_.end());
+  segment_database_->GetSegmentInfoForSegments(
+      segment_ids,
       base::BindOnce(&ModelExecutionSchedulerImpl::FilterEligibleSegments,
                      weak_ptr_factory_.GetWeakPtr(), expired_only));
 }
 
 void ModelExecutionSchedulerImpl::RequestModelExecution(
-    OptimizationTarget segment_id) {
+    const proto::SegmentInfo& segment_info) {
+  SegmentId segment_id = segment_info.segment_id();
   CancelOutstandingExecutionRequests(segment_id);
   outstanding_requests_.insert(std::make_pair(
       segment_id,
       base::BindOnce(&ModelExecutionSchedulerImpl::OnModelExecutionCompleted,
                      weak_ptr_factory_.GetWeakPtr(), segment_id)));
-  model_execution_manager_->ExecuteModel(
-      segment_id, outstanding_requests_[segment_id].callback());
+  auto request = std::make_unique<ExecutionRequest>();
+  request->model_provider =
+      model_execution_manager_->GetProvider(segment_info.segment_id());
+  DCHECK(request->model_provider);
+  request->segment_info = &segment_info;
+  request->callback = outstanding_requests_[segment_id].callback();
+  request->record_metrics_for_default = false;
+  model_executor_->ExecuteModel(std::move(request));
 }
 
 void ModelExecutionSchedulerImpl::OnModelExecutionCompleted(
-    OptimizationTarget segment_id,
+    SegmentId segment_id,
     const std::pair<float, ModelExecutionStatus>& result) {
   // TODO(shaktisahu): Check ModelExecutionStatus and handle failure cases.
   // Should we save it to DB?
@@ -87,38 +107,65 @@ void ModelExecutionSchedulerImpl::OnModelExecutionCompleted(
 
 void ModelExecutionSchedulerImpl::FilterEligibleSegments(
     bool expired_only,
-    std::vector<std::pair<OptimizationTarget, proto::SegmentInfo>>
-        all_segments) {
-  std::vector<OptimizationTarget> models_to_run;
-  for (const auto& pair : all_segments) {
-    OptimizationTarget segment_id = pair.first;
+    std::unique_ptr<SegmentInfoDatabase::SegmentInfoList> all_segments) {
+  std::vector<const proto::SegmentInfo*> models_to_run;
+  for (const auto& pair : *all_segments) {
+    SegmentId segment_id = pair.first;
     const proto::SegmentInfo& segment_info = pair.second;
-    if (!ShouldExecuteSegment(expired_only, segment_info))
+    if (!ShouldExecuteSegment(expired_only, segment_info)) {
+      VLOG(1) << "Segmentation scheduler: Skipped executed segment "
+              << proto::SegmentId_Name(segment_id);
       continue;
+    }
 
-    models_to_run.emplace_back(segment_id);
+    models_to_run.emplace_back(&segment_info);
   }
 
-  for (OptimizationTarget segment_id : models_to_run)
-    RequestModelExecution(segment_id);
+  for (const proto::SegmentInfo* segment_info : models_to_run)
+    RequestModelExecution(*segment_info);
 }
 
 bool ModelExecutionSchedulerImpl::ShouldExecuteSegment(
     bool expired_only,
     const proto::SegmentInfo& segment_info) {
+  if (platform_options_.force_refresh_results)
+    return true;
+
   // Filter out the segments computed recently.
-  if (metadata_utils::HasFreshResults(segment_info, clock_->Now()))
+  if (metadata_utils::HasFreshResults(segment_info, clock_->Now())) {
+    VLOG(1) << "Segmentation model not executed since it has fresh results, "
+               "segment:"
+            << proto::SegmentId_Name(segment_info.segment_id());
+    stats::RecordModelExecutionStatus(
+        segment_info.segment_id(),
+        /*default_provider=*/false,
+        ModelExecutionStatus::kSkippedHasFreshResults);
     return false;
+  }
 
   // Filter out the segments that aren't expired yet.
   if (expired_only && !metadata_utils::HasExpiredOrUnavailableResult(
                           segment_info, clock_->Now())) {
+    VLOG(1) << "Segmentation model not executed since results are not expired, "
+               "segment:"
+            << proto::SegmentId_Name(segment_info.segment_id());
+    stats::RecordModelExecutionStatus(
+        segment_info.segment_id(),
+        /*default_provider=*/false,
+        ModelExecutionStatus::kSkippedResultNotExpired);
     return false;
   }
 
   // Filter out segments that don't match signal collection min length.
   if (!signal_storage_config_->MeetsSignalCollectionRequirement(
           segment_info.model_metadata())) {
+    stats::RecordModelExecutionStatus(
+        segment_info.segment_id(),
+        /*default_provider=*/false,
+        ModelExecutionStatus::kSkippedNotEnoughSignals);
+    VLOG(1) << "Segmentation model not executed since metadata requirements "
+               "not met, segment:"
+            << proto::SegmentId_Name(segment_info.segment_id());
     return false;
   }
 
@@ -126,7 +173,7 @@ bool ModelExecutionSchedulerImpl::ShouldExecuteSegment(
 }
 
 void ModelExecutionSchedulerImpl::CancelOutstandingExecutionRequests(
-    OptimizationTarget segment_id) {
+    SegmentId segment_id) {
   const auto& iter = outstanding_requests_.find(segment_id);
   if (iter != outstanding_requests_.end()) {
     iter->second.Cancel();
@@ -134,13 +181,21 @@ void ModelExecutionSchedulerImpl::CancelOutstandingExecutionRequests(
   }
 }
 
-void ModelExecutionSchedulerImpl::OnResultSaved(OptimizationTarget segment_id,
+void ModelExecutionSchedulerImpl::OnResultSaved(SegmentId segment_id,
                                                 bool success) {
   stats::RecordModelExecutionSaveResult(segment_id, success);
-  if (!success)
+  if (!success) {
+    // TODO(ssid): Consider removing this enum, this is the only case where the
+    // execution status is recorded twice for the same execution request.
+    stats::RecordModelExecutionStatus(
+        segment_id,
+        /*default_provider=*/false,
+        ModelExecutionStatus::kFailedToSaveResultAfterSuccess);
     return;
+  }
 
-  observer_->OnModelExecutionCompleted(segment_id);
+  for (Observer* observer : observers_)
+    observer->OnModelExecutionCompleted(segment_id);
 }
 
 }  // namespace segmentation_platform

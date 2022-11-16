@@ -14,11 +14,13 @@
 #include "base/check_op.h"
 #include "base/feature_list.h"
 #include "base/lazy_instance.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
 #include "base/synchronization/lock.h"
 #include "chrome/android/chrome_jni_headers/DownloadController_jni.h"
+#include "chrome/browser/android/android_theme_resources.h"
 #include "chrome/browser/android/profile_key_startup_accessor.h"
 #include "chrome/browser/android/profile_key_util.h"
 #include "chrome/browser/android/tab_android.h"
@@ -31,6 +33,7 @@
 #include "chrome/browser/flags/android/chrome_feature_list.h"
 #include "chrome/browser/offline_pages/android/offline_page_bridge.h"
 #include "chrome/browser/permissions/permission_update_infobar_delegate_android.h"
+#include "chrome/browser/permissions/permission_update_message_controller_android.h"
 #include "chrome/browser/ui/android/tab_model/tab_model.h"
 #include "chrome/browser/ui/android/tab_model/tab_model_list.h"
 #include "chrome/browser/vr/vr_tab_helper.h"
@@ -39,6 +42,8 @@
 #include "components/download/public/common/auto_resumption_handler.h"
 #include "components/download/public/common/download_features.h"
 #include "components/infobars/content/content_infobar_manager.h"
+#include "components/messages/android/messages_feature.h"
+#include "components/strings/grit/components_strings.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
@@ -49,7 +54,9 @@
 #include "net/base/filename_util.h"
 #include "ui/android/view_android.h"
 #include "ui/android/window_android.h"
+#include "ui/base/device_form_factor.h"
 #include "ui/base/page_transition_types.h"
+#include "url/android/gurl_android.h"
 
 using base::android::ConvertUTF8ToJavaString;
 using base::android::JavaParamRef;
@@ -94,6 +101,9 @@ class DownloadManagerGetter : public DownloadManager::Observer {
     manager_->AddObserver(this);
   }
 
+  DownloadManagerGetter(const DownloadManagerGetter&) = delete;
+  DownloadManagerGetter& operator=(const DownloadManagerGetter&) = delete;
+
   ~DownloadManagerGetter() override {
     if (manager_)
       manager_->RemoveObserver(this);
@@ -106,8 +116,7 @@ class DownloadManagerGetter : public DownloadManager::Observer {
   DownloadManager* manager() { return manager_; }
 
  private:
-  DownloadManager* manager_;
-  DISALLOW_COPY_AND_ASSIGN(DownloadManagerGetter);
+  raw_ptr<DownloadManager> manager_;
 };
 
 void RemoveDownloadItem(std::unique_ptr<DownloadManagerGetter> getter,
@@ -131,9 +140,19 @@ void OnRequestFileAccessResult(
     std::vector<std::string> permissions;
     permissions.push_back(permission_to_update);
 
-    PermissionUpdateInfoBarDelegate::Create(
-        web_contents, permissions,
-        IDS_MISSING_STORAGE_PERMISSION_DOWNLOAD_EDUCATION_TEXT, std::move(cb));
+    if (messages::IsPermissionUpdateMessagesUiEnabled()) {
+      PermissionUpdateMessageController::CreateForWebContents(web_contents);
+      PermissionUpdateMessageController::FromWebContents(web_contents)
+          ->ShowMessage(permissions, IDR_ANDORID_MESSAGE_PERMISSION_STORAGE,
+                        IDS_MESSAGE_MISSING_STORAGE_ACCESS_PERMISSION_TITLE,
+                        IDS_MESSAGE_STORAGE_ACCESS_PERMISSION_TEXT,
+                        std::move(cb));
+    } else {
+      PermissionUpdateInfoBarDelegate::Create(
+          web_contents, permissions,
+          IDS_MISSING_STORAGE_PERMISSION_DOWNLOAD_EDUCATION_TEXT,
+          std::move(cb));
+    }
     return;
   }
 
@@ -165,6 +184,12 @@ static void JNI_DownloadController_OnAcquirePermissionResult(
     const JavaParamRef<jstring>& jpermission_to_update) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   DCHECK(callback_id);
+
+  if (!DownloadController::GetInstance()
+           ->validator()
+           ->ValidateAndClearJavaCallback(callback_id)) {
+    return;
+  }
 
   std::string permission_to_update;
   if (jpermission_to_update) {
@@ -227,6 +252,24 @@ void DownloadController::CloseTabIfEmpty(content::WebContents* web_contents,
   if (tab_index == -1)
     return;
 
+  // Closing an empty page on external app download leaves a bad user experience
+  // as user don't know whether a download is kicked off, or if Chrome just
+  // ignores the URL. Show the download page instead.
+  if (base::FeatureList::IsEnabled(
+          chrome::android::kDownloadHomeForExternalApp) &&
+      !base::FeatureList::IsEnabled(chrome::android::kChromeNewDownloadTab) &&
+      tab_model->GetTabAt(tab_index)->GetLaunchType() ==
+          static_cast<int>(TabModel::TabLaunchType::FROM_EXTERNAL_APP)) {
+    DownloadManagerService::GetInstance()->OpenDownloadsPage(
+        Profile::FromBrowserContext(web_contents->GetBrowserContext()),
+        DownloadOpenSource::kExternalApp);
+    // For tablet, download home is opened in the current tab, so don't close
+    // it.
+    if (ui::GetDeviceFormFactor() ==
+        ui::DeviceFormFactor::DEVICE_FORM_FACTOR_TABLET) {
+      return;
+    }
+  }
   tab_model->CloseTabAt(tab_index);
 }
 
@@ -279,7 +322,7 @@ void DownloadController::AcquireFileAccessPermission(
   // Make copy on the heap so we can pass the pointer through JNI.
   intptr_t callback_id = reinterpret_cast<intptr_t>(
       new AcquirePermissionCallback(std::move(callback)));
-
+  validator_.AddJavaCallback(callback_id);
   Java_DownloadController_requestFileAccess(env, callback_id, jwindow_android);
 }
 
@@ -337,8 +380,8 @@ void DownloadController::StartAndroidDownloadInternal(
                                 std::string(),  // referrer_charset
                                 std::string(),  // suggested_name
                                 info.original_mime_type, default_file_name_);
-  ScopedJavaLocalRef<jstring> jurl =
-      ConvertUTF8ToJavaString(env, info.url.spec());
+  ScopedJavaLocalRef<jobject> jurl =
+      url::GURLAndroid::FromNativeGURL(env, info.url);
   ScopedJavaLocalRef<jstring> juser_agent =
       ConvertUTF8ToJavaString(env, info.user_agent);
   ScopedJavaLocalRef<jstring> jmime_type =
@@ -440,22 +483,15 @@ void DownloadController::OnDangerousDownload(DownloadItem* item) {
     return;
   }
 
-  if (base::FeatureList::IsEnabled(
-          chrome::android::kEnableDangerousDownloadDialog)) {
-    ui::ViewAndroid* view_android =
-        web_contents ? web_contents->GetNativeView() : nullptr;
-    ui::WindowAndroid* window_android =
-        view_android ? view_android->GetWindowAndroid() : nullptr;
-    if (!dangerous_download_bridge_) {
-      dangerous_download_bridge_ =
-          std::make_unique<DangerousDownloadDialogBridge>();
-    }
-    dangerous_download_bridge_->Show(item, window_android);
-    return;
+  ui::ViewAndroid* view_android =
+      web_contents ? web_contents->GetNativeView() : nullptr;
+  ui::WindowAndroid* window_android =
+      view_android ? view_android->GetWindowAndroid() : nullptr;
+  if (!dangerous_download_bridge_) {
+    dangerous_download_bridge_ =
+        std::make_unique<DangerousDownloadDialogBridge>();
   }
-
-  DangerousDownloadInfoBarDelegate::Create(
-      infobars::ContentInfoBarManager::FromWebContents(web_contents), item);
+  dangerous_download_bridge_->Show(item, window_android);
 }
 
 void DownloadController::StartContextMenuDownload(

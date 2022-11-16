@@ -11,21 +11,32 @@ along with a detailed description for each histogram.
 For best practices on writing histogram descriptions, see
 https://chromium.googlesource.com/chromium/src.git/+/HEAD/tools/metrics/histograms/README.md
 
-Please send CLs to chromium-metrics-reviews@google.com rather than to specific
-individuals. These CLs will be automatically reassigned to a reviewer within
-about 5 minutes. This approach helps the metrics team to load-balance incoming
-reviews. Googlers can read more about this at go/gwsq-gerrit.
+Please follow the instructions in the OWNERS file in this directory to find a
+reviewer. If no OWNERS file exists, please consider signing up at
+go/reviewing-metrics (Googlers only), as all subdirectories are expected to
+have an OWNERS file. As a last resort you can send the CL to
+chromium-metrics-reviews@google.com.
 -->
 
 <histogram-configuration>
 
 <histograms>
 
+<!--
+The SoftwareReporterEngine variants used to be defined as suffixes with a _
+separator. The leading _ keeps the generated histogram names the same.
+-->
+
+<variants name="SoftwareReporterEngine">
+  <variant name=""/>
+  <variant name="_ESET" summary="the ESET engine"/>
+  <variant name="_URZA" summary="the discontinued legacy engine"/>
+</variants>
+
 <histogram name="SoftwareReporter.Cleaner.ChromePromptChannelError"
-    enum="SoftwareReporterChromePromptChannelError" expires_after="M95">
+    enum="SoftwareReporterChromePromptChannelError" expires_after="2022-10-30">
   <owner>drubery@chromium.org</owner>
-  <owner>bdea@chromium.org</owner>
-  <owner>chrome-safebrowsing-alerts@google.com</owner>
+  <owner>chrome-counter-abuse-alerts@google.com</owner>
   <summary>
     Keeps a tally of IPC related errors between chrome_cleaner and chrome. The
     first two bytes of the bucket represent the error category and the two last
@@ -35,10 +46,9 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="SoftwareReporter.Cleaner.CleaningTime" units="ms"
-    expires_after="M95">
+    expires_after="2022-08-25">
   <owner>drubery@chromium.org</owner>
-  <owner>bdea@chromium.org</owner>
-  <owner>chrome-safebrowsing-alerts@google.com</owner>
+  <owner>chrome-counter-abuse-alerts@google.com</owner>
   <summary>
     The time between sending the user's response to the Chrome Cleaner process
     and the Cleaner process terminating. This histogram is logged only for
@@ -47,35 +57,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
   </summary>
 </histogram>
 
-<histogram name="SoftwareReporter.Cleaner.CleanupResult"
-    enum="SoftwareReporterCleanupResult" expires_after="M95">
-  <owner>drubery@chromium.org</owner>
-  <owner>bdea@chromium.org</owner>
-  <owner>chrome-safebrowsing-alerts@google.com</owner>
-  <summary>
-    The final status of the Chrome Cleanup Tool run (e.g. succeeded, failed,
-    reboot required). Warning: this histogram was expired in M91 and extended in
-    M92; data may be missing in M91.
-  </summary>
-</histogram>
-
-<histogram name="SoftwareReporter.Cleaner.DownloadStatus"
-    enum="SoftwareReporterCleanerDownloadStatus" expires_after="M95">
-  <owner>drubery@chromium.org</owner>
-  <owner>bdea@chromium.org</owner>
-  <owner>chrome-safebrowsing-alerts@google.com</owner>
-  <summary>
-    An indication if an attempt to download the Chrome Cleanup Tool succeeded or
-    the reason why it failed. Warning: this histogram was expired in M91 and
-    extended in M92; data may be missing in M91.
-  </summary>
-</histogram>
-
 <histogram name="SoftwareReporter.Cleaner.DownloadStatusErrorCode"
-    enum="CombinedHttpResponseAndNetErrorCode" expires_after="M95">
+    enum="CombinedHttpResponseAndNetErrorCode" expires_after="2022-08-25">
   <owner>drubery@chromium.org</owner>
-  <owner>bdea@chromium.org</owner>
-  <owner>chrome-safebrowsing-alerts@google.com</owner>
+  <owner>chrome-counter-abuse-alerts@google.com</owner>
   <summary>
     The HTTP response or net error code when trying to download the Chrome
     Cleanup Tool. Warning: this histogram was expired in M91 and extended in
@@ -83,38 +68,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
   </summary>
 </histogram>
 
-<histogram name="SoftwareReporter.Cleaner.HasRebooted" enum="BooleanRebooted"
-    expires_after="M95">
-  <owner>drubery@chromium.org</owner>
-  <owner>bdea@chromium.org</owner>
-  <owner>chrome-safebrowsing-alerts@google.com</owner>
-  <summary>
-    Whether a reboot happened since the software reporter cleaner tool has
-    finished execution with a pre-reboot exit code. Warning: this histogram was
-    expired in M91 and extended in M92; data may be missing in M91.
-  </summary>
-</histogram>
-
-<histogram name="SoftwareReporter.Cleaner.RebootResponse" enum="Boolean"
-    expires_after="M95">
-  <owner>drubery@chromium.org</owner>
-  <owner>bdea@chromium.org</owner>
-  <owner>chrome-safebrowsing-alerts@google.com</owner>
-  <summary>
-    Indicates that the user accepted to initiate a reboot to complete a run of
-    the Chrome Cleanup Tool. This is logged the user starts a reboot from the
-    cleanup card in the Settings page. We can't track when the reboot is not
-    initiated, because it can happen at any moment in the future (there is no
-    prompt blocking the user). Warning: this histogram was expired in M91 and
-    extended in M92; data may be missing in M91.
-  </summary>
-</histogram>
-
 <histogram name="SoftwareReporter.Cleaner.RunningTime" units="ms"
-    expires_after="M95">
+    expires_after="2022-08-25">
   <owner>drubery@chromium.org</owner>
-  <owner>bdea@chromium.org</owner>
-  <owner>chrome-safebrowsing-alerts@google.com</owner>
+  <owner>chrome-counter-abuse-alerts@google.com</owner>
   <summary>
     How long it took to run the software reporter cleaner tool. Warning: this
     histogram was expired in M91 and extended in M92; data may be missing in
@@ -123,10 +80,9 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="SoftwareReporter.Cleaner.ScanningTime" units="ms"
-    expires_after="M95">
+    expires_after="2022-08-25">
   <owner>drubery@chromium.org</owner>
-  <owner>bdea@chromium.org</owner>
-  <owner>chrome-safebrowsing-alerts@google.com</owner>
+  <owner>chrome-counter-abuse-alerts@google.com</owner>
   <summary>
     The time between launching the Chrome Cleaner process and the cleaner having
     scanned the user's machine and Chrome receiving an IPC call with the
@@ -135,23 +91,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
   </summary>
 </histogram>
 
-<histogram name="SoftwareReporter.Cleaner.SettingsPageActiveOnRebootRequired"
-    enum="SoftwareReporterCleanerSettingsPageActiveOnRebootRequired"
-    expires_after="M95">
-  <owner>drubery@chromium.org</owner>
-  <owner>bdea@chromium.org</owner>
-  <owner>chrome-safebrowsing-alerts@google.com</owner>
-  <summary>
-    Indicates if the Settings page was the active tab once a cleanup finished
-    with reboot required. Warning: this histogram was expired in M91 and
-    extended in M92; data may be missing in M91.
-  </summary>
-</histogram>
-
 <histogram name="SoftwareReporter.Cleaner.TimeToCompleteDownload" units="ms"
-    expires_after="M100">
+    expires_after="2023-03-16">
   <owner>drubery@chromium.org</owner>
-  <owner>chrome-safebrowsing-alerts@google.com</owner>
+  <owner>chrome-counter-abuse-alerts@google.com</owner>
   <summary>
     Expired in 2021-07-21 so there may be some missing data. The time between
     the first attempt to download the Chrome Cleanup tool and a successful
@@ -160,10 +103,9 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="SoftwareReporter.CleanerLogsAcceptance" enum="BooleanAccepted"
-    expires_after="M95">
+    expires_after="2022-08-25">
   <owner>drubery@chromium.org</owner>
-  <owner>bdea@chromium.org</owner>
-  <owner>chrome-safebrowsing-alerts@google.com</owner>
+  <owner>chrome-counter-abuse-alerts@google.com</owner>
   <summary>
     Whether the user accepted to upload logs from Chrome Cleanup Tool. This is
     logged when the user accepts the Chrome prompt to start a cleanup either
@@ -173,23 +115,13 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
   </summary>
 </histogram>
 
-<histogram name="SoftwareReporter.CleanupCard" enum="Boolean"
-    expires_after="M95">
-  <owner>drubery@chromium.org</owner>
-  <owner>bdea@chromium.org</owner>
-  <owner>chrome-safebrowsing-alerts@google.com</owner>
-  <summary>
-    Whether the Chrome Cleanup Tool card in the Settings page has been shown.
-    Warning: this histogram was expired in M91 and extended in M92; data may be
-    missing in M91.
-  </summary>
-</histogram>
-
 <histogram name="SoftwareReporter.CleanupStarted"
-    enum="SoftwareReporterCleanupStarted" expires_after="M95">
+    enum="SoftwareReporterCleanupStarted" expires_after="2022-03-16">
+  <obsolete>
+    Removed 03-2022 due to lack of use
+  </obsolete>
   <owner>drubery@chromium.org</owner>
-  <owner>bdea@chromium.org</owner>
-  <owner>chrome-safebrowsing-alerts@google.com</owner>
+  <owner>chrome-counter-abuse-alerts@google.com</owner>
   <summary>
     Indicates where the user started a cleanup from (e.g. from the prompt dialog
     or the settings page). Warning: this histogram was expired in M91 and
@@ -199,29 +131,43 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 
 <histogram name="SoftwareReporter.ConfigurationErrors"
     enum="SoftwareReporterConfigurationError" expires_after="2022-10-01">
-  <owner>bdea@chromium.org</owner>
-  <owner>chrome-safebrowsing-alerts@google.com</owner>
+  <owner>drubery@chromium.org</owner>
+  <owner>chrome-counter-abuse-alerts@google.com</owner>
   <summary>
     Whether a configuration error prevented the experimental Software Reporter
     from running.
   </summary>
 </histogram>
 
-<histogram name="SoftwareReporter.FoundUwSReadError" enum="BooleanError"
-    expires_after="M100">
-  <owner>bdea@chromium.org</owner>
-  <owner>chrome-safebrowsing-alerts@google.com</owner>
+<histogram name="SoftwareReporter.CreateJobResult{Engine}"
+    enum="WinGetLastError" expires_after="2022-08-21">
+  <owner>joenotcharles@google.com</owner>
+  <owner>chrome-counter-abuse-alerts@google.com</owner>
+  <summary>
+    The Windows error code from CreateJobObject, which is called just before
+    launching the Software Reporter using {Engine}. If this is not
+    ERROR_SUCCESS, the reporter process is not attached to a job and may outlive
+    the browser. Not logged on Windows 7, where CreateJobObject is not called
+    because nested job objects aren't supported.
+  </summary>
+  <token key="Engine" variants="SoftwareReporterEngine"/>
+</histogram>
+
+<histogram name="SoftwareReporter.FoundUwSReadError{Engine}"
+    enum="BooleanError" expires_after="2023-05-25">
+  <owner>drubery@chromium.org</owner>
+  <owner>chrome-counter-abuse-alerts@google.com</owner>
   <summary>
     Whether there was an error reading the registry key containing UwS found by
-    the Software Removal Tool.
+    the Software Removal Tool when using {Engine}.
   </summary>
+  <token key="Engine" variants="SoftwareReporterEngine"/>
 </histogram>
 
 <histogram name="SoftwareReporter.IPCDisconnected"
-    enum="SoftwareReporterIPCDisconnected" expires_after="M95">
+    enum="SoftwareReporterIPCDisconnected" expires_after="2022-08-25">
   <owner>drubery@chromium.org</owner>
-  <owner>bdea@chromium.org</owner>
-  <owner>chrome-safebrowsing-alerts@google.com</owner>
+  <owner>chrome-counter-abuse-alerts@google.com</owner>
   <summary>
     Indicates when the IPC with the Chrome Cleanup Tool process is disconnected
     from Chrome. Success is logged when it's disconnected and no longer needed
@@ -235,88 +181,96 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="SoftwareReporter.LastUploadResult" enum="BooleanSuccess"
-    expires_after="M100">
-  <owner>bdea@chromium.org</owner>
-  <owner>chrome-safebrowsing-alerts@google.com</owner>
+    expires_after="2023-03-16">
+  <owner>drubery@chromium.org</owner>
+  <owner>chrome-counter-abuse-alerts@google.com</owner>
   <summary>The result of the most recent SRT log upload.</summary>
 </histogram>
 
-<histogram name="SoftwareReporter.LogsUploadEnabled"
-    enum="SoftwareReporterLogsUploadEnabled" expires_after="M95">
+<histogram name="SoftwareReporter.LogsUploadEnabled{Engine}"
+    enum="SoftwareReporterLogsUploadEnabled" expires_after="2022-08-25">
   <owner>drubery@chromium.org</owner>
-  <owner>bdea@chromium.org</owner>
-  <owner>chrome-safebrowsing-alerts@google.com</owner>
+  <owner>chrome-counter-abuse-alerts@google.com</owner>
   <summary>
     If logs uploads are enabled in the Software Reporter or the reason why it is
-    disabled. Recorded before each run of the Software Reporter. Warning: this
-    histogram was expired in M91 and extended in M92; data may be missing in
-    M91.
+    disabled. Recorded before each run of the Software Reporter using {Engine}.
+    Warning: this histogram was expired in M91 and extended in M92; data may be
+    missing in M91.
   </summary>
+  <token key="Engine" variants="SoftwareReporterEngine"/>
 </histogram>
 
-<histogram name="SoftwareReporter.LogsUploadResult"
-    enum="SoftwareReporterLogsUploadResult" expires_after="M95">
+<histogram name="SoftwareReporter.LogsUploadResultRegistryError{Engine}"
+    enum="SoftwareReporterLogsUploadResultRegistryError"
+    expires_after="2022-10-30">
   <owner>drubery@chromium.org</owner>
-  <owner>bdea@chromium.org</owner>
-  <owner>chrome-safebrowsing-alerts@google.com</owner>
+  <owner>chrome-counter-abuse-alerts@google.com</owner>
+  <summary>
+    Error encountered when reading the Software Reporter logs upload result from
+    the registry for. Recorded at the same time as
+    SoftwareReporter.LogsUploadResult after the SoftwareReporter finishes when
+    using {Engine}. Warning: this histogram was expired in M91 and extended in
+    M92; data may be missing in M91.
+  </summary>
+  <token key="Engine" variants="SoftwareReporterEngine"/>
+</histogram>
+
+<histogram name="SoftwareReporter.LogsUploadResult{Engine}"
+    enum="SoftwareReporterLogsUploadResult" expires_after="2022-10-30">
+  <owner>drubery@chromium.org</owner>
+  <owner>chrome-counter-abuse-alerts@google.com</owner>
   <summary>
     The result of the most recent Software Reporter logs upload. Written by the
     Software Reporter in the registry and sent by Chrome after the reporter
-    finishes. Warning: this histogram was expired in M91 and extended in M92;
-    data may be missing in M91.
+    finishes when using {Engine}. Warning: this histogram was expired in M91 and
+    extended in M92; data may be missing in M91.
   </summary>
+  <token key="Engine" variants="SoftwareReporterEngine"/>
 </histogram>
 
-<histogram name="SoftwareReporter.LogsUploadResultRegistryError"
-    enum="SoftwareReporterLogsUploadResultRegistryError" expires_after="M95">
+<histogram name="SoftwareReporter.MajorVersion{Engine}" units="units"
+    expires_after="2022-10-23">
   <owner>drubery@chromium.org</owner>
-  <owner>bdea@chromium.org</owner>
-  <owner>chrome-safebrowsing-alerts@google.com</owner>
-  <summary>
-    Error encountered when reading the software reporter logs upload result from
-    the registry. Warning: this histogram was expired in M91 and extended in
-    M92; data may be missing in M91.
-  </summary>
-</histogram>
-
-<histogram name="SoftwareReporter.MajorVersion" units="units"
-    expires_after="2021-12-12">
-  <owner>drubery@chromium.org</owner>
-  <owner>chrome-safebrowsing-alerts@google.com</owner>
+  <owner>chrome-counter-abuse-alerts@google.com</owner>
   <summary>
     As SoftwareReporter.MinorVersion, but a double word combination of the other
     components of the version of the software reporter. The high word is the
     first component when there are more than one, and the low word is either the
     second or third one, depending if there are at least 3, or 4 components.
+    Recorded after the reporter finishes when using {Engine}.
   </summary>
+  <token key="Engine" variants="SoftwareReporterEngine"/>
 </histogram>
 
-<histogram name="SoftwareReporter.MemoryUsed" units="KB"
-    expires_after="2022-01-23">
+<histogram name="SoftwareReporter.MemoryUsed{Engine}" units="KB"
+    expires_after="2022-12-04">
   <owner>drubery@chromium.org</owner>
-  <owner>chrome-safebrowsing-alerts@google.com</owner>
+  <owner>chrome-counter-abuse-alerts@google.com</owner>
   <summary>
     The memory used by the software reporter tool as reported by the tool itself
-    via the registry. Logged just after the software reporter tool has finished.
+    via the registry. Logged just after the software reporter tool has finished
+    when using {Engine}.
   </summary>
+  <token key="Engine" variants="SoftwareReporterEngine"/>
 </histogram>
 
-<histogram name="SoftwareReporter.MinorVersion" units="units"
-    expires_after="2021-09-19">
+<histogram name="SoftwareReporter.MinorVersion{Engine}" units="units"
+    expires_after="2022-08-25">
   <owner>drubery@chromium.org</owner>
-  <owner>chrome-safebrowsing-alerts@google.com</owner>
+  <owner>chrome-counter-abuse-alerts@google.com</owner>
   <summary>
     The last component of the version of the software reporter that was executed
     so we can identify when users are not getting their component updated as
-    quickly as we expect it.
+    quickly as we expect it. Recorded after the reporter finishes when using
+    {Engine}.
   </summary>
+  <token key="Engine" variants="SoftwareReporterEngine"/>
 </histogram>
 
 <histogram name="SoftwareReporter.NoPromptReason"
-    enum="SoftwareReporterNoPromptReason" expires_after="M95">
+    enum="SoftwareReporterNoPromptReason" expires_after="2023-01-01">
   <owner>drubery@chromium.org</owner>
-  <owner>bdea@chromium.org</owner>
-  <owner>chrome-safebrowsing-alerts@google.com</owner>
+  <owner>chrome-counter-abuse-alerts@google.com</owner>
   <summary>
     The reason why the user has not been prompted to run the Chrome Cleanup Tool
     (e.g. no unwanted software found, user recently prompted). Warning: this
@@ -325,35 +279,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
   </summary>
 </histogram>
 
-<histogram name="SoftwareReporter.NumberOfFilesToDelete" units="counts"
-    expires_after="M95">
-  <owner>drubery@chromium.org</owner>
-  <owner>bdea@chromium.org</owner>
-  <owner>chrome-safebrowsing-alerts@google.com</owner>
-  <summary>
-    The number of files to be deleted by the Chrome Cleanup Tool. Warning: this
-    histogram was expired in M91 and extended in M92; data may be missing in
-    M91.
-  </summary>
-</histogram>
-
-<histogram name="SoftwareReporter.OnDemandUpdateRequired"
-    enum="BooleanRequired" expires_after="M95">
-  <owner>drubery@chromium.org</owner>
-  <owner>bdea@chromium.org</owner>
-  <owner>chrome-safebrowsing-alerts@google.com</owner>
-  <summary>
-    Whether an on-demand update of the Software Reporter component was needed
-    for a user-initiated cleanup. Warning: this histogram was expired in M91 and
-    extended in M92; data may be missing in M91.
-  </summary>
-</histogram>
-
 <histogram name="SoftwareReporter.OnDemandUpdateSucceeded"
-    enum="BooleanSuccess" expires_after="M95">
+    enum="BooleanSuccess" expires_after="2022-08-25">
   <owner>drubery@chromium.org</owner>
-  <owner>bdea@chromium.org</owner>
-  <owner>chrome-safebrowsing-alerts@google.com</owner>
+  <owner>chrome-counter-abuse-alerts@google.com</owner>
   <summary>
     Whether an on-demand update of the Software Reporter component succeeded,
     when needed for a user-initiated cleanup. Warning: this histogram was
@@ -362,10 +291,9 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="SoftwareReporter.PostCleanupSettingsReset" units="counts"
-    expires_after="M95">
+    expires_after="2022-08-25">
   <owner>drubery@chromium.org</owner>
-  <owner>bdea@chromium.org</owner>
-  <owner>chrome-safebrowsing-alerts@google.com</owner>
+  <owner>chrome-counter-abuse-alerts@google.com</owner>
   <summary>
     The number of profiles whose settings will be reset once a successful
     cleanup completes. Warning: this histogram was expired in M91 and extended
@@ -374,10 +302,9 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="SoftwareReporter.PromptDialogResponse"
-    enum="SoftwareReporterPromptDialogResponse" expires_after="M95">
+    enum="SoftwareReporterPromptDialogResponse" expires_after="2023-01-01">
   <owner>drubery@chromium.org</owner>
-  <owner>bdea@chromium.org</owner>
-  <owner>chrome-safebrowsing-alerts@google.com</owner>
+  <owner>chrome-counter-abuse-alerts@google.com</owner>
   <summary>
     The user response on the modal Chrome Cleanup Tool prompt dialog (e.g.
     accepted, cancelled). Warning: this histogram was expired in M91 and
@@ -385,26 +312,10 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
   </summary>
 </histogram>
 
-<histogram name="SoftwareReporter.PromptShownWithType"
-    enum="SoftwareReporterPromptShownWithType" expires_after="M95">
-  <owner>drubery@chromium.org</owner>
-  <owner>bdea@chromium.org</owner>
-  <owner>chrome-safebrowsing-alerts@google.com</owner>
-  <summary>
-    Whether the user has been prompted to run the Chrome Cleanup Tool and which
-    type of prompt has been shown.
-
-    This is logged once a prompt is presented to the user. Warning: this
-    histogram was expired in M91 and extended in M92; data may be missing in
-    M91.
-  </summary>
-</histogram>
-
 <histogram name="SoftwareReporter.ReporterSequenceType"
-    enum="SoftwareReporterSequenceType" expires_after="M95">
+    enum="SoftwareReporterSequenceType" expires_after="2022-10-30">
   <owner>drubery@chromium.org</owner>
-  <owner>bdea@chromium.org</owner>
-  <owner>chrome-safebrowsing-alerts@google.com</owner>
+  <owner>chrome-counter-abuse-alerts@google.com</owner>
   <summary>
     Indicates the type of a reporter sequence run on the user system. Logged
     when the sequence is scheduled to start. Warning: this histogram was expired
@@ -412,53 +323,34 @@ reviews. Googlers can read more about this at go/gwsq-gerrit.
   </summary>
 </histogram>
 
-<histogram name="SoftwareReporter.RunningTimeAccordingToChrome" units="ms"
-    expires_after="2022-01-21">
+<histogram name="SoftwareReporter.RunningTimeAccordingToChrome2{Engine}"
+    units="ms" expires_after="2022-08-21">
   <owner>drubery@chromium.org</owner>
-  <owner>chrome-safebrowsing-alerts@google.com</owner>
+  <owner>chrome-counter-abuse-alerts@google.com</owner>
   <summary>
     The amount of time from the Software Reporter process launch to the time it
     exits, in milliseconds. This includes time the computer was asleep or
-    hibernating. SoftwareReporter.RunningTimeWithoutSleep excludes those
-    periods.
+    hibernating. SoftwareReporter.RunningTimeWithoutSleep2 excludes those
+    periods. This replaces SoftwareReporter.RunningTimeAccordingToChrome which
+    also included queuing time of tasks before and after launch. Recorded after
+    the reporter finishes when using {Engine}.
   </summary>
+  <token key="Engine" variants="SoftwareReporterEngine"/>
 </histogram>
 
-<histogram name="SoftwareReporter.RunningTimeWithoutSleep" units="ms"
-    expires_after="2022-01-21">
+<histogram name="SoftwareReporter.RunningTimeWithoutSleep2{Engine}" units="ms"
+    expires_after="2022-08-21">
   <owner>drubery@chromium.org</owner>
-  <owner>chrome-safebrowsing-alerts@google.com</owner>
+  <owner>chrome-counter-abuse-alerts@google.com</owner>
   <summary>
     The amount of time from the Software Reporter process launch to the time it
     exits, in milliseconds. This does not include time the computer was asleep
-    or hibernating. SoftwareReporter.RunningTimeAccordingToChrome includes those
-    periods.
+    or hibernating. SoftwareReporter.RunningTimeAccordingToChrome2 includes
+    those periods. This replaces SoftwareReporter.RunningTimeWithoutSleep which
+    also included queuing time of tasks before and after launch. Recorded after
+    the reporter finishes when using {Engine}.
   </summary>
-</histogram>
-
-<histogram name="SoftwareReporter.ScannerLogsAcceptance" enum="BooleanAccepted"
-    expires_after="M95">
-  <owner>drubery@chromium.org</owner>
-  <owner>bdea@chromium.org</owner>
-  <owner>chrome-safebrowsing-alerts@google.com</owner>
-  <summary>
-    Whether the user accepted to upload scanner logs from Chrome Cleanup Tool.
-    This is logged when the user starts a scan for the Settings page and is only
-    logged for user-initiated cleanups. Warning: this histogram was expired in
-    M91 and extended in M92; data may be missing in M91.
-  </summary>
-</histogram>
-
-<histogram name="SoftwareReporter.TaggedProfileForResetting" enum="Boolean"
-    expires_after="M95">
-  <owner>drubery@chromium.org</owner>
-  <owner>bdea@chromium.org</owner>
-  <owner>chrome-safebrowsing-alerts@google.com</owner>
-  <summary>
-    Registers when a profile is tagged for settings reset before a run of the
-    Chrome Cleanup Tool. Warning: this histogram was expired in M91 and extended
-    in M92; data may be missing in M91.
-  </summary>
+  <token key="Engine" variants="SoftwareReporterEngine"/>
 </histogram>
 
 </histograms>

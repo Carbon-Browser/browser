@@ -110,7 +110,7 @@ const char kTranslateScript[] = "Fake Translate Script";
 // Body text for /languagepath/.
 const char kLanguagePathText[] = "Some text here.";
 
-// Builds a HTML document with a French text and the given |html| and |meta|
+// Builds a HTML document with a French text and the given `html` and `meta`
 // tags.
 std::string GetFrenchPageHtml(const std::string& html_tag,
                               const std::string& meta_tags) {
@@ -136,7 +136,7 @@ class TestResponseProvider : public web::DataResponseProvider {
  private:
   // Generates a page with a HTTP "Content-Language" header and "httpEquiv" meta
   // tag.
-  // The URL in |request| has two parameters, "http" and "meta", that can be
+  // The URL in `request` has two parameters, "http" and "meta", that can be
   // used to set the values of the header and the meta tag. For example:
   // http://someurl?http=en&meta=fr generates a page with a "en" HTTP header and
   // a "fr" meta tag.
@@ -318,14 +318,14 @@ void TestResponseProvider::GetLanguageResponse(
   const GURL noTranslateValueURL = web::test::HttpServer::MakeUrl(
       base::StringPrintf("http://%s", kFrenchPageNoTranslateValue));
 
-  // Load some french page with |content="notranslate"| meta tag.
+  // Load some french page with `content="notranslate"| meta tag.
   [ChromeEarlGrey loadURL:noTranslateContentURL];
 
   // Check that the language has been detected.
   GREYAssertTrue([self waitForLanguageDetection],
                  @"A language has been detected");
 
-  // Load some french page with |value="notranslate"| meta tag.
+  // Load some french page with `value="notranslate"| meta tag.
   [ChromeEarlGrey loadURL:noTranslateValueURL];
 
   // Check that the language has been detected.
@@ -352,16 +352,13 @@ void TestResponseProvider::GetLanguageResponse(
   // Resets state before triggering a new round of language detection.
   [TranslateAppInterface resetLanguageDetectionTabHelperObserver];
   // Change the text of the page.
-  NSError* error = nil;
-  [ChromeEarlGreyAppInterface
-      executeJavaScript:[NSString stringWithFormat:@"document.write('%s');",
-                                                   kEnglishText]
-                  error:&error];
+  [ChromeEarlGrey
+      evaluateJavaScriptForSideEffect:
+          [NSString stringWithFormat:@"document.write('%s');", kEnglishText]];
+
   // Trigger a new detection with pushState.
-  error = nil;
-  [ChromeEarlGreyAppInterface
-      executeJavaScript:@"history.pushState(null, null, null);"
-                  error:&error];
+  [ChromeEarlGrey
+      evaluateJavaScriptForSideEffect:@"history.pushState(null, null, null);"];
   // Check that the new language has been detected.
   [self assertContentLanguage:@"" htmlRootLanguage:@"" adoptedLanguage:@"en"];
 }
@@ -402,7 +399,8 @@ void TestResponseProvider::GetLanguageResponse(
 }
 
 // Tests that language in http content is detected.
-- (void)testLanguageDetectionHttpContentLanguage {
+// TODO(crbug.com/1328970): Re-enable when translate works in HTTP
+- (void)DISABLED_testLanguageDetectionHttpContentLanguage {
   // Start the HTTP server.
   std::unique_ptr<web::DataResponseProvider> provider(new TestResponseProvider);
   web::test::SetUpHttpServer(std::move(provider));
@@ -439,7 +437,8 @@ void TestResponseProvider::GetLanguageResponse(
 }
 
 // Tests that language in http content is detected when navigating to a link.
-- (void)testLanguageDetectionHttpContentLanguageBehindLink {
+// TODO(crbug.com/1328970): Re-enable when translate works in HTTP
+- (void)DISABLED_testLanguageDetectionHttpContentLanguageBehindLink {
   // Start the HTTP server.
   std::unique_ptr<web::DataResponseProvider> provider(new TestResponseProvider);
   web::test::SetUpHttpServer(std::move(provider));
@@ -633,7 +632,8 @@ void TestResponseProvider::GetLanguageResponse(
 
 // Test that the Show Original banner dismisses with a longer delay since it is
 // a high priority banner.
-- (void)testInfobarAcceptedBannerDismissWithHighPriorityDelay {
+// TODO(crbug.com/1316562): Re-enable the test.
+- (void)DISABLED_testInfobarAcceptedBannerDismissWithHighPriorityDelay {
   // Start the HTTP server.
   std::unique_ptr<web::DataResponseProvider> provider(new TestResponseProvider);
   web::test::SetUpHttpServer(std::move(provider));
@@ -727,12 +727,8 @@ void TestResponseProvider::GetLanguageResponse(
 
 // Tests that the target language can be changed. TODO(crbug.com/1046629):
 // implement test for changing source language.
-- (void)testInfobarChangeTargetLanguage {
-  // TODO(crbug.com/1116012): This test is failing flaky on iOS14.
-  if (@available(iOS 14, *)) {
-    EARL_GREY_TEST_DISABLED(@"Test disabled on iOS14.");
-  }
-
+// TODO(crbug.com/1116012): This test is failing flaky on iOS14.
+- (void)DISABLED_testInfobarChangeTargetLanguage {
   // Start the HTTP server.
   std::unique_ptr<web::DataResponseProvider> provider(new TestResponseProvider);
   web::test::SetUpHttpServer(std::move(provider));

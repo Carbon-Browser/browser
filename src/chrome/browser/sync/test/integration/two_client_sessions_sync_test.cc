@@ -5,10 +5,10 @@
 #include <string>
 
 #include "base/guid.h"
-#include "base/macros.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/test_timeouts.h"
+#include "base/threading/thread_restrictions.h"
 #include "build/build_config.h"
 #include "chrome/browser/browser_features.h"
 #include "chrome/browser/sessions/session_service.h"
@@ -26,7 +26,6 @@
 
 namespace {
 
-using fake_server::SessionsHierarchy;
 using sessions_helper::CheckInitialState;
 using sessions_helper::CloseTab;
 using sessions_helper::DeleteForeignSession;
@@ -46,14 +45,16 @@ using testing::IsEmpty;
 class TwoClientSessionsSyncTest : public SyncTest {
  public:
   TwoClientSessionsSyncTest() : SyncTest(TWO_CLIENT) {}
-  ~TwoClientSessionsSyncTest() override {}
+
+  TwoClientSessionsSyncTest(const TwoClientSessionsSyncTest&) = delete;
+  TwoClientSessionsSyncTest& operator=(const TwoClientSessionsSyncTest&) =
+      delete;
+
+  ~TwoClientSessionsSyncTest() override = default;
 
   bool WaitForForeignSessionsToSync(int local_index, int non_local_index) {
     return ForeignSessionsMatchChecker(non_local_index, local_index).Wait();
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(TwoClientSessionsSyncTest);
 };
 
 static const char* kURL1 = "data:text/html,<html><title>Test</title></html>";
@@ -91,7 +92,7 @@ IN_PROC_BROWSER_TEST_F(TwoClientSessionsSyncTest, SingleClientClosed) {
 
   // Close one of the two tabs. We also issue another navigation to make sure
   // association logic kicks in.
-  CloseTab(/*index=*/0, /*tab_index=*/1);
+  CloseTab(/*browser_index=*/0, /*tab_index=*/1);
   NavigateTab(0, GURL(kURL3));
   EXPECT_TRUE(WaitForForeignSessionsToSync(0, 1));
 
@@ -162,7 +163,13 @@ IN_PROC_BROWSER_TEST_F(TwoClientSessionsSyncTest, DeleteIdleSession) {
   EXPECT_FALSE(GetSessionData(1, &sessions1));
 }
 
-IN_PROC_BROWSER_TEST_F(TwoClientSessionsSyncTest, DeleteActiveSession) {
+// TODO(crbug.com/1340790): Flaky on MSAN, deflake and re-enable the test.
+#if defined(MEMORY_SANITIZER)
+#define MAYBE_DeleteActiveSession DISABLED_DeleteActiveSession
+#else
+#define MAYBE_DeleteActiveSession DeleteActiveSession
+#endif
+IN_PROC_BROWSER_TEST_F(TwoClientSessionsSyncTest, MAYBE_DeleteActiveSession) {
   ASSERT_TRUE(SetupSync()) << "SetupSync() failed.";
 
   ASSERT_TRUE(CheckInitialState(0));
@@ -212,11 +219,13 @@ IN_PROC_BROWSER_TEST_F(TwoClientSessionsSyncTest,
   ASSERT_TRUE(CheckInitialState(1));
 
   GetSyncService(0)->GetUserSettings()->SetEncryptionPassphrase("passphrase");
-  ASSERT_TRUE(
-      PassphraseRequiredStateChecker(GetSyncService(1), /*desired_state=*/true)
-          .Wait());
+  ASSERT_TRUE(PassphraseRequiredChecker(GetSyncService(1)).Wait());
   ASSERT_TRUE(GetSyncService(1)->GetUserSettings()->SetDecryptionPassphrase(
       "passphrase"));
+  // Make sure that re-encryption happens before opening the tab (otherwise race
+  // condition may occur when second client attempts to re-encrypt data, while
+  // first client attempts to commit local changes).
+  ASSERT_TRUE(AwaitQuiescence());
 
   EXPECT_TRUE(OpenTab(0, GURL(kURL1)));
   EXPECT_TRUE(WaitForForeignSessionsToSync(0, 1));
@@ -257,7 +266,7 @@ IN_PROC_BROWSER_TEST_F(TwoClientSessionsWithoutDestroyProfileSyncTest,
       WaitForForeignSessionsToSync(/*local_index=*/0, /*non_local_index=*/1));
 }
 
-#if !defined(OS_CHROMEOS)
+#if !BUILDFLAG(IS_CHROMEOS)
 class TwoClientSessionsWithDestroyProfileSyncTest
     : public TwoClientSessionsSyncTest {
  public:
@@ -289,17 +298,24 @@ IN_PROC_BROWSER_TEST_F(TwoClientSessionsWithDestroyProfileSyncTest,
   ScopedWindowMap local_map_before_closing;
   ASSERT_TRUE(GetLocalWindows(/*browser_index=*/0, &local_map_before_closing));
 
-  CloseTab(/*browser_index=*/0, /*tab_index=*/0);
+  {
+    // Closing the last tab results in profile destruction and hence may require
+    // running blocking tasks which are normally disallowed during tests.
+    // TODO(crbug.com/1334091): remove once it's clear why it results in
+    // blocking tasks.
+    base::ScopedAllowUnresponsiveTasksForTesting scoped_allow_sync_primitives;
+    CloseTab(/*browser_index=*/0, /*tab_index=*/0);
 
-  // TODO(crbug.com/1039234): When DestroyProfileOnBrowserClose is enabled, the
-  // last CloseTab() triggers Profile deletion (and SyncService deletion).
-  // This means the last tab close never gets synced. We should fix this
-  // regression eventually. Once that's done, merge this test with the
-  // WithoutDestroyProfile version.
-  base::RunLoop run_loop;
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
-      FROM_HERE, run_loop.QuitClosure(), TestTimeouts::action_timeout());
-  run_loop.Run();
+    // TODO(crbug.com/1039234): When DestroyProfileOnBrowserClose is enabled,
+    // the last CloseTab() triggers Profile deletion (and SyncService deletion).
+    // This means the last tab close never gets synced. We should fix this
+    // regression eventually. Once that's done, merge this test with the
+    // WithoutDestroyProfile version.
+    base::RunLoop run_loop;
+    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+        FROM_HERE, run_loop.QuitClosure(), TestTimeouts::action_timeout());
+    run_loop.Run();
+  }
 
   SyncedSessionVector sessions;
   ASSERT_TRUE(GetSessionData(/*browser_index=*/1, &sessions));
@@ -307,6 +323,6 @@ IN_PROC_BROWSER_TEST_F(TwoClientSessionsWithDestroyProfileSyncTest,
   ASSERT_TRUE(
       WindowsMatch(local_map_before_closing, sessions.front()->windows));
 }
-#endif  // !defined(OS_CHROMEOS)
+#endif  // !BUILDFLAG(IS_CHROMEOS)
 
 }  // namespace

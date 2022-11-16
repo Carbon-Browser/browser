@@ -10,13 +10,12 @@
 #include <ostream>
 
 #include "base/check_op.h"
-#include "base/macros.h"
 #include "base/notreached.h"
 #include "base/strings/string_piece.h"
 #include "build/build_config.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
-// TODO(jrw): Move this file to a more appropriate directory.
+// TODO(crbug.com/1291730): Move this file to a more appropriate directory.
 //
 //
 // A bidirectional mapping between enum values and strings.
@@ -188,6 +187,9 @@ class
   inline constexpr GenericEnumTableEntry(int32_t value);
   inline constexpr GenericEnumTableEntry(int32_t value, base::StringPiece str);
 
+  GenericEnumTableEntry(const GenericEnumTableEntry&) = delete;
+  GenericEnumTableEntry& operator=(const GenericEnumTableEntry&) = delete;
+
  private:
   static const GenericEnumTableEntry* FindByString(
       const GenericEnumTableEntry data[],
@@ -213,7 +215,6 @@ class
 
   template <typename E>
   friend class EnumTable;
-  DISALLOW_COPY_AND_ASSIGN(GenericEnumTableEntry);
 };
 
 // Yes, these constructors really needs to be inlined.  Even though they look
@@ -252,7 +253,8 @@ class EnumTable {
     constexpr Entry(E value, base::StringPiece str)
         : GenericEnumTableEntry(static_cast<int32_t>(value), str) {}
 
-    DISALLOW_COPY_AND_ASSIGN(Entry);
+    Entry(const Entry&) = delete;
+    Entry& operator=(const Entry&) = delete;
   };
 
   static_assert(sizeof(E) <= sizeof(int32_t),
@@ -300,6 +302,9 @@ class EnumTable {
         << "Don't use this constructor for sorted entries.";
 #endif  // NDEBUG
   }
+
+  EnumTable(const EnumTable&) = delete;
+  EnumTable& operator=(const EnumTable&) = delete;
 
   // Gets the string associated with the given enum value.  When the argument
   // is a constant, prefer the zero-argument form below.
@@ -396,8 +401,6 @@ class EnumTable {
     return {};
   }
 #endif  // NDEBUG
-
-  DISALLOW_COPY_AND_ASSIGN(EnumTable);
 };
 
 // Converts an enum value to a string using the default table
@@ -410,8 +413,8 @@ inline absl::optional<base::StringPiece> EnumToString(E value) {
 // Converts a literal enum value to a string at compile time using the default
 // table (EnumTable<E>::GetInstance()) for the given enum type.
 //
-// TODO(jrw): Once C++17 features are allowed, change this function to have only
-// one template parameter:
+// TODO(crbug.com/1291730): Once C++17 features are allowed, change this
+// function to have only one template parameter:
 //
 //   template <auto Value>
 //   inline base::StringPiece EnumToString() {

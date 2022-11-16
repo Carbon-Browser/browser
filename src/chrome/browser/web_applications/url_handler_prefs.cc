@@ -105,7 +105,7 @@ bool FindBestMatchingIncludePathChoice(const std::string& url_path,
   base::Time most_recent_timestamp;
   bool found_match = false;
 
-  for (const auto& include_path_dict : include_paths.GetList()) {
+  for (const auto& include_path_dict : include_paths.GetListDeprecated()) {
     if (!include_path_dict.is_dict())
       continue;
     const std::string* include_path = include_path_dict.FindStringKey(kPath);
@@ -156,7 +156,7 @@ bool ExcludePathMatches(const std::string& url_path,
   if (!exclude_paths.is_list())
     return false;
 
-  for (const auto& exclude_path : exclude_paths.GetList()) {
+  for (const auto& exclude_path : exclude_paths.GetListDeprecated()) {
     if (!exclude_path.is_string())
       continue;
     if (PathMatchesPathPattern(url_path, exclude_path.GetString()))
@@ -175,7 +175,7 @@ void FilterAndAddMatches(const base::Value& all_handlers,
   if (!all_handlers.is_list())
     return;
 
-  for (const base::Value& handler : all_handlers.GetList()) {
+  for (const base::Value& handler : all_handlers.GetListDeprecated()) {
     absl::optional<const HandlerView> handler_view =
         GetConstHandlerView(handler);
     if (!handler_view)
@@ -188,7 +188,8 @@ void FilterAndAddMatches(const base::Value& all_handlers,
       continue;
 
     const std::string& url_path = url.path();
-    bool include_paths_exist = !handler_view->include_paths.GetList().empty();
+    bool include_paths_exist =
+        !handler_view->include_paths.GetListDeprecated().empty();
     UrlHandlerSavedChoice best_choice = UrlHandlerSavedChoice::kNone;
     base::Time latest_timestamp = base::Time::Min();
     if (include_paths_exist && !FindBestMatchingIncludePathChoice(
@@ -197,7 +198,8 @@ void FilterAndAddMatches(const base::Value& all_handlers,
       continue;
     }
 
-    bool exclude_paths_exist = !handler_view->exclude_paths.GetList().empty();
+    bool exclude_paths_exist =
+        !handler_view->exclude_paths.GetListDeprecated().empty();
     if (exclude_paths_exist &&
         ExcludePathMatches(url_path, handler_view->exclude_paths)) {
       continue;
@@ -375,16 +377,11 @@ void RemoveEntries(base::Value& pref_value,
 
   std::vector<std::string> origins_to_remove;
   for (auto origin_value : pref_value.DictItems()) {
-    base::Value::ListStorage handlers =
-        std::move(origin_value.second).TakeList();
-    handlers.erase(
-        std::remove_if(handlers.begin(), handlers.end(),
-                       [&app_id, &profile_path](const base::Value& handler) {
-                         return IsHandlerForApp(
-                             app_id, profile_path,
+    base::Value::List handlers = std::move(origin_value.second.GetList());
+    handlers.EraseIf([&app_id, &profile_path](const base::Value& handler) {
+      return IsHandlerForApp(app_id, profile_path,
                              /*match_app_id=*/!app_id.empty(), handler);
-                       }),
-        handlers.end());
+    });
     // Replace list if any entries remain.
     if (!handlers.empty()) {
       origin_value.second = base::Value(std::move(handlers));
@@ -411,20 +408,20 @@ void UpdateSavedChoiceInIncludePaths(const PathSet& updated_include_paths,
   //    "path": "/abc",
   //    "timestamp": "-9223372036854775808"
   // } ]
-  auto include_paths_list = std::move(all_include_paths).TakeList();
-  for (base::Value& include_path_dict : include_paths_list) {
-    if (!include_path_dict.is_dict())
+  auto& include_paths_list = all_include_paths.GetList();
+  for (base::Value& include_path_value : include_paths_list) {
+    if (!include_path_value.is_dict())
       continue;
-    const std::string* path = include_path_dict.FindStringKey(kPath);
+    base::Value::Dict& include_path_dict = include_path_value.GetDict();
+    const std::string* path = include_path_dict.FindString(kPath);
     if (!path)
       continue;
 
     if (updated_include_paths.contains(*path)) {
-      include_path_dict.SetIntKey(kChoice, static_cast<int>(choice));
-      include_path_dict.SetKey(kTimestamp, base::TimeToValue(time));
+      include_path_dict.Set(kChoice, static_cast<int>(choice));
+      include_path_dict.Set(kTimestamp, base::TimeToValue(time));
     }
   }
-  all_include_paths = base::Value(std::move(include_paths_list));
 }
 
 // Sets |choice| on every path in |include_paths| that matches |url|. Returns
@@ -439,24 +436,24 @@ PathSet UpdateSavedChoice(const GURL& url,
   //    "path": "/abc",
   //    "timestamp": "-9223372036854775808"
   // } ]
-  auto include_paths_list = std::move(include_paths).TakeList();
+  auto& include_paths_list = std::move(include_paths).GetList();
   std::vector<std::string> updated_include_paths;
-  for (base::Value& include_path_dict : include_paths_list) {
-    if (!include_path_dict.is_dict())
+  for (base::Value& include_path_value : include_paths_list) {
+    if (!include_path_value.is_dict())
       continue;
-    const std::string* path = include_path_dict.FindStringKey(kPath);
+    base::Value::Dict& include_path_dict = include_path_value.GetDict();
+    const std::string* path = include_path_dict.FindString(kPath);
     if (!path)
       continue;
 
     // Any matching path dict. will be updated with the input choice and
     // timestamp.
     if (PathMatchesPathPattern(url.path(), *path)) {
-      include_path_dict.SetIntKey(kChoice, static_cast<int>(choice));
-      include_path_dict.SetKey(kTimestamp, base::TimeToValue(time));
+      include_path_dict.Set(kChoice, static_cast<int>(choice));
+      include_path_dict.Set(kTimestamp, base::TimeToValue(time));
       updated_include_paths.push_back(*path);
     }
   }
-  include_paths = base::Value(std::move(include_paths_list));
   return std::move(updated_include_paths);
 }
 
@@ -464,7 +461,7 @@ PathSet UpdateSavedChoice(const GURL& url,
 void SaveChoiceToAllMatchingIncludePaths(const GURL& url,
                                          const UrlHandlerSavedChoice choice,
                                          const base::Time& time,
-                                         base::Value::ListStorage& handlers) {
+                                         base::Value::List& handlers) {
   for (auto& handler : handlers) {
     auto handler_view = GetHandlerView(handler);
     if (!handler_view)
@@ -488,7 +485,7 @@ PathSet SaveInAppChoiceToSelectedApp(const AppId* app_id,
                                      const base::FilePath* profile_path,
                                      const GURL& url,
                                      const base::Time& time,
-                                     base::Value::ListStorage& handlers) {
+                                     base::Value::List& handlers) {
   PathSet updated_include_paths;
   for (auto& handler : handlers) {
     auto handler_view = GetHandlerView(handler);
@@ -512,7 +509,7 @@ void ResetSavedChoiceInOtherApps(const AppId* app_id,
                                  const base::FilePath* profile_path,
                                  const base::Time& time,
                                  PathSet updated_include_paths,
-                                 base::Value::ListStorage& handlers) {
+                                 base::Value::List& handlers) {
   for (auto& handler : handlers) {
     auto handler_view = GetHandlerView(handler);
     if (!handler_view ||
@@ -531,7 +528,7 @@ void SaveAppChoice(const AppId* app_id,
                    const base::FilePath* profile_path,
                    const GURL& url,
                    const base::Time& time,
-                   base::Value::ListStorage& handlers) {
+                   base::Value::List& handlers) {
   PathSet updated_include_paths =
       SaveInAppChoiceToSelectedApp(app_id, profile_path, url, time, handlers);
 
@@ -550,20 +547,17 @@ void SaveChoiceImpl(const AppId* app_id,
                     base::Value& pref_value,
                     const std::string& origin_str,
                     const bool origin_trimmed) {
-  base::Value* const handlers_mutable = pref_value.FindListKey(origin_str);
-  if (!handlers_mutable)
+  base::Value::List* handlers = pref_value.GetDict().FindList(origin_str);
+  if (!handlers)
     return;
 
   DCHECK(UrlMatchesOrigin(url, origin_str, origin_trimmed));
-  base::Value::ListStorage handlers = std::move(*handlers_mutable).TakeList();
 
   if (choice == UrlHandlerSavedChoice::kInApp) {
-    SaveAppChoice(app_id, profile_path, url, time, handlers);
+    SaveAppChoice(app_id, profile_path, url, time, *handlers);
   } else {
-    SaveChoiceToAllMatchingIncludePaths(url, choice, time, handlers);
+    SaveChoiceToAllMatchingIncludePaths(url, choice, time, *handlers);
   }
-
-  *handlers_mutable = base::Value(std::move(handlers));
 }
 
 // Saves |choice| and |time| to all handler include_paths that match |app_id|,
@@ -613,9 +607,9 @@ bool ShouldUpdateIncludePaths(const base::Value& current_handler,
     return true;
 
   base::Value::ConstListView include_paths_list_lh =
-      include_paths_lh->GetList();
+      include_paths_lh->GetListDeprecated();
   base::Value::ConstListView include_paths_list_rh =
-      include_paths_rh->GetList();
+      include_paths_rh->GetListDeprecated();
   if (include_paths_list_lh.size() != include_paths_list_rh.size())
     return true;
 
@@ -725,30 +719,27 @@ void AddWebApp(PrefService* local_state,
 
     base::Value new_handler(
         NewHandler(app_id, profile_path, handler_info, time));
-    base::Value* const handlers_mutable =
-        pref_value->FindListKey(origin.Serialize());
+    base::Value::List* const handlers =
+        pref_value->GetDict().FindList(origin.Serialize());
     // One or more apps are already associated with this origin.
-    if (handlers_mutable) {
-      base::Value::ListStorage handlers =
-          std::move(*handlers_mutable).TakeList();
+    if (handlers) {
       auto it =
-          std::find_if(handlers.begin(), handlers.end(),
+          std::find_if(handlers->begin(), handlers->end(),
                        [&app_id, &profile_path](const base::Value& handler) {
                          return IsHandlerForApp(app_id, profile_path,
                                                 /*match_app_id=*/true, handler);
                        });
       // If there is already an entry with the same app_id and profile, replace
       // it. Otherwise, add new entry to the end.
-      if (it != handlers.end()) {
+      if (it != handlers->end()) {
         *it = std::move(new_handler);
       } else {
-        handlers.push_back(std::move(new_handler));
+        handlers->Append(std::move(new_handler));
       }
-      *handlers_mutable = base::Value(std::move(handlers));
     } else {
-      base::Value new_handlers(base::Value::Type::LIST);
+      base::Value::List new_handlers;
       new_handlers.Append(std::move(new_handler));
-      pref_value->SetKey(origin.Serialize(), std::move(new_handlers));
+      pref_value->GetDict().Set(origin.Serialize(), std::move(new_handlers));
     }
   }
 }
@@ -770,14 +761,13 @@ void UpdateWebApp(PrefService* local_state,
   std::vector<std::string> origins_to_remove;
   for (auto origin_value : pref_value->DictItems()) {
     const std::string& origin_str = origin_value.first;
-    base::Value::ListStorage curent_handlers =
-        std::move(origin_value.second).TakeList();
+    base::Value::List curent_handlers =
+        std::move(origin_value.second.GetList());
 
     // Remove any existing handler values that were written previously for the
     // same app_id and profile but are no longer found in 'new_url_handlers'.
-    curent_handlers.erase(
-        base::ranges::remove_if(
-            curent_handlers,
+    curent_handlers
+        .EraseIf(
             // Returns true if 'current_handler' should be removed because it
             // was previously added for 'app_id' and 'profile_path' but is no
             // longer found in 'new_url_handlers' from the update.
@@ -826,8 +816,7 @@ void UpdateWebApp(PrefService* local_state,
               new_url_handlers.erase(same_origin_it);
 
               return false;
-            }),
-        curent_handlers.end());
+            });
 
     // Replace list if it contains entries or remove its origin key from prefs.
     if (!curent_handlers.empty()) {
@@ -883,13 +872,13 @@ bool IsHandlerForProfile(const base::Value& handler,
 
 bool ProfileHasUrlHandlers(PrefService* local_state,
                            const base::FilePath& profile_path) {
-  const base::Value* const pref_value =
-      local_state->Get(prefs::kWebAppsUrlHandlerInfo);
-  if (!pref_value || !pref_value->is_dict())
+  const base::Value& pref_value =
+      local_state->GetValue(prefs::kWebAppsUrlHandlerInfo);
+  if (!pref_value.is_dict())
     return false;
 
-  for (const auto origin_value : pref_value->DictItems()) {
-    for (const auto& handler : origin_value.second.GetList()) {
+  for (const auto origin_value : pref_value.DictItems()) {
+    for (const auto& handler : origin_value.second.GetListDeprecated()) {
       if (IsHandlerForProfile(handler, profile_path))
         return true;
     }
@@ -909,12 +898,12 @@ std::vector<UrlHandlerLaunchParams> FindMatchingUrlHandlers(
   if (!url.is_valid())
     return {};
 
-  const base::Value* const pref_value =
-      local_state->Get(prefs::kWebAppsUrlHandlerInfo);
-  if (!pref_value || !pref_value->is_dict())
+  const base::Value& pref_value =
+      local_state->GetValue(prefs::kWebAppsUrlHandlerInfo);
+  if (!pref_value.is_dict())
     return {};
 
-  return FindMatches(*pref_value, url);
+  return FindMatches(pref_value, url);
 }
 
 void SaveOpenInApp(PrefService* local_state,
@@ -950,7 +939,7 @@ void ResetSavedChoice(PrefService* local_state,
   if (!handlers_mutable)
     return;
 
-  for (auto& handler : handlers_mutable->GetList()) {
+  for (auto& handler : handlers_mutable->GetListDeprecated()) {
     auto handler_view = GetHandlerView(handler);
     if (!handler_view)
       continue;

@@ -5,21 +5,22 @@
 #ifndef CONTENT_BROWSER_FILE_SYSTEM_ACCESS_FILE_SYSTEM_ACCESS_FILE_DELEGATE_HOST_IMPL_H_
 #define CONTENT_BROWSER_FILE_SYSTEM_ACCESS_FILE_SYSTEM_ACCESS_FILE_DELEGATE_HOST_IMPL_H_
 
-#include "base/bind_post_task.h"
+#include "base/memory/raw_ptr.h"
+#include "base/thread_annotations.h"
 #include "components/services/storage/public/cpp/big_io_buffer.h"
 #include "content/browser/file_system_access/file_system_access_manager_impl.h"
 #include "storage/browser/file_system/file_stream_reader.h"
-#include "storage/browser/file_system/file_system_operation_runner.h"
 #include "storage/browser/file_system/file_system_url.h"
 #include "third_party/blink/public/mojom/file_system_access/file_system_access_file_delegate_host.mojom.h"
 
 namespace content {
 
 // Browser side implementation of the FileSystemAccessFileDelegateHost mojom
-// interface. Instances of this class are owned by the
+// interface, which facilitates file operations for Access Handles in incognito
+// mode. Instances of this class are owned by the
 // FileSystemAccessAccessHandleHostImpl instance of the associated URL, which
 // constructs it.
-class CONTENT_EXPORT FileSystemAccessFileDelegateHostImpl
+class FileSystemAccessFileDelegateHostImpl
     : public blink::mojom::FileSystemAccessFileDelegateHost {
  public:
   FileSystemAccessFileDelegateHostImpl(
@@ -31,88 +32,17 @@ class CONTENT_EXPORT FileSystemAccessFileDelegateHostImpl
   ~FileSystemAccessFileDelegateHostImpl() override;
 
   // blink::mojom::FileSystemAccessFileDelegateHost:
-  void Read(uint64_t offset,
-            uint64_t bytes_to_read,
-            ReadCallback callback) override;
-  void Write(uint64_t offset,
+  void Read(int64_t offset, int bytes_to_read, ReadCallback callback) override;
+  void Write(int64_t offset,
              mojo::ScopedDataPipeConsumerHandle data,
              WriteCallback callback) override;
   void GetLength(GetLengthCallback callback) override;
-  void SetLength(uint64_t length, SetLengthCallback callback) override;
+  void SetLength(int64_t length, SetLengthCallback callback) override;
 
  private:
   // State that is kept for the duration of a write operation, to keep track of
   // progress until the write completes.
   struct WriteState;
-
-  // Copied from FileSystemAccessHandleBase.
-  template <typename... MethodArgs,
-            typename... ArgsMinusCallback,
-            typename... CallbackArgs>
-  void DoFileSystemOperation(
-      const base::Location& from_here,
-      storage::FileSystemOperationRunner::OperationID (
-          storage::FileSystemOperationRunner::*method)(MethodArgs...),
-      base::OnceCallback<void(CallbackArgs...)> callback,
-      ArgsMinusCallback&&... args) {
-    DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-    // Wrap the passed in callback in one that posts a task back to the current
-    // sequence.
-    auto wrapped_callback = base::BindPostTask(
-        base::SequencedTaskRunnerHandle::Get(), std::move(callback));
-
-    // And then post a task to the sequence bound operation runner to run the
-    // provided method with the provided arguments (and the wrapped callback).
-    //
-    // FileSystemOperationRunner assumes file_system_context() is kept alive, to
-    // make sure this happens it is bound to a DoNothing callback.
-    manager()
-        ->operation_runner()
-        .AsyncCall(base::IgnoreResult(method))
-        .WithArgs(std::forward<ArgsMinusCallback>(args)...,
-                  std::move(wrapped_callback))
-        .Then(base::BindOnce(
-            base::DoNothing::Once<scoped_refptr<storage::FileSystemContext>>(),
-            base::WrapRefCounted(file_system_context())));
-  }
-  // Same as the previous overload, but using RepeatingCallback and
-  // BindRepeating instead.
-  template <typename... MethodArgs,
-            typename... ArgsMinusCallback,
-            typename... CallbackArgs>
-  void DoFileSystemOperation(
-      const base::Location& from_here,
-      storage::FileSystemOperationRunner::OperationID (
-          storage::FileSystemOperationRunner::*method)(MethodArgs...),
-      base::RepeatingCallback<void(CallbackArgs...)> callback,
-      ArgsMinusCallback&&... args) {
-    DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-    // Wrap the passed in callback in one that posts a task back to the current
-    // sequence.
-    auto wrapped_callback = base::BindRepeating(
-        [](scoped_refptr<base::SequencedTaskRunner> runner,
-           const base::RepeatingCallback<void(CallbackArgs...)>& callback,
-           CallbackArgs... args) {
-          runner->PostTask(
-              FROM_HERE,
-              base::BindOnce(callback, std::forward<CallbackArgs>(args)...));
-        },
-        base::SequencedTaskRunnerHandle::Get(), std::move(callback));
-
-    // And then post a task to the sequence bound operation runner to run the
-    // provided method with the provided arguments (and the wrapped callback).
-    //
-    // FileSystemOperationRunner assumes file_system_context() is kept alive, to
-    // make sure this happens it is bound to a DoNothing callback.
-    manager()
-        ->operation_runner()
-        .AsyncCall(base::IgnoreResult(method))
-        .WithArgs(std::forward<ArgsMinusCallback>(args)...,
-                  std::move(wrapped_callback))
-        .Then(base::BindOnce(
-            base::DoNothing::Once<scoped_refptr<storage::FileSystemContext>>(),
-            base::WrapRefCounted(file_system_context())));
-  }
 
   void OnDisconnect();
 
@@ -132,15 +62,16 @@ class CONTENT_EXPORT FileSystemAccessFileDelegateHostImpl
 
   // This is safe, since the manager owns the
   // FileSystemAccessAccessHandleHostImpl which owns this class.
-  FileSystemAccessManagerImpl* const manager_;
+  const raw_ptr<FileSystemAccessManagerImpl> manager_;
   const storage::FileSystemURL url_;
 
-  mojo::Receiver<blink::mojom::FileSystemAccessFileDelegateHost> receiver_;
+  mojo::Receiver<blink::mojom::FileSystemAccessFileDelegateHost> receiver_
+      GUARDED_BY_CONTEXT(sequence_checker_);
 
   SEQUENCE_CHECKER(sequence_checker_);
 
-  base::WeakPtrFactory<FileSystemAccessFileDelegateHostImpl> weak_factory_{
-      this};
+  base::WeakPtrFactory<FileSystemAccessFileDelegateHostImpl> weak_factory_
+      GUARDED_BY_CONTEXT(sequence_checker_){this};
 };
 
 }  // namespace content

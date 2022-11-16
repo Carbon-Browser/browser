@@ -7,7 +7,6 @@
 
 #include <memory>
 
-#include "base/macros.h"
 #include "chrome/browser/ui/webui/discards/discards.mojom-forward.h"
 #include "chrome/browser/ui/webui/discards/site_data.mojom-forward.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -18,6 +17,10 @@
 class DiscardsUI : public ui::MojoWebUIController {
  public:
   explicit DiscardsUI(content::WebUI* web_ui);
+
+  DiscardsUI(const DiscardsUI&) = delete;
+  DiscardsUI& operator=(const DiscardsUI&) = delete;
+
   ~DiscardsUI() override;
 
   // Instantiates the implementor of the mojom::DetailsProvider mojo
@@ -40,8 +43,6 @@ class DiscardsUI : public ui::MojoWebUIController {
   std::string profile_id_;
 
   WEB_UI_CONTROLLER_TYPE_DECL();
-
-  DISALLOW_COPY_AND_ASSIGN(DiscardsUI);
 };
 
 #endif  // CHROME_BROWSER_UI_WEBUI_DISCARDS_DISCARDS_UI_H_

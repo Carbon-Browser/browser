@@ -14,12 +14,15 @@
 
 #include "base/files/file_path.h"
 #include "base/path_service.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/system/sys_info.h"
+#include "base/win/registry.h"
 #include "base/win/win_util.h"
 #include "base/win/windows_types.h"
+#include "base/win/windows_version.h"
 #include "base/win/wmi.h"
 #include "chrome/browser/enterprise/signals/signals_common.h"
 #include "net/base/network_interfaces.h"
@@ -34,6 +37,10 @@
 namespace enterprise_signals {
 
 namespace {
+
+constexpr wchar_t kSecureBootRegPath[] =
+    L"SYSTEM\\CurrentControlSet\\Control\\SecureBoot\\State";
+constexpr wchar_t kSecureBootRegKey[] = L"UEFISecureBootEnabled";
 
 // Possible results of the "System.Volume.BitLockerProtection" shell property.
 // These values are undocumented but were directly validated on a Windows 10
@@ -153,8 +160,7 @@ absl::optional<std::wstring> GetOsVolume() {
   base::FilePath windows_dir;
   if (base::PathService::Get(base::DIR_WINDOWS, &windows_dir) &&
       windows_dir.IsAbsolute()) {
-    std::vector<std::wstring> components;
-    windows_dir.GetComponents(&components);
+    std::vector<std::wstring> components = windows_dir.GetComponents();
     DCHECK(components.size());
     volume = components[0];
   }
@@ -304,6 +310,31 @@ absl::optional<std::string> GetWindowsUserDomain() {
              : absl::make_optional(domain);
 }
 
+std::string GetSecurityPatchLevel() {
+  base::win::OSInfo* gi = base::win::OSInfo::GetInstance();
+
+  return base::NumberToString(gi->version_number().patch);
+}
+
+SettingValue GetSecureBootEnabled() {
+  base::win::RegKey key;
+  auto result = key.Open(HKEY_LOCAL_MACHINE, kSecureBootRegPath,
+                         KEY_QUERY_VALUE | KEY_WOW64_64KEY);
+
+  if (result != ERROR_SUCCESS || !key.Valid()) {
+    return SettingValue::UNKNOWN;
+  }
+
+  DWORD secure_boot_dw;
+  result = key.ReadValueDW(kSecureBootRegKey, &secure_boot_dw);
+
+  if (result != ERROR_SUCCESS) {
+    return SettingValue::UNKNOWN;
+  }
+
+  return secure_boot_dw == 1 ? SettingValue::ENABLED : SettingValue::DISABLED;
+}
+
 }  // namespace
 
 DeviceInfoFetcherWin::DeviceInfoFetcherWin() = default;
@@ -314,6 +345,7 @@ DeviceInfo DeviceInfoFetcherWin::Fetch() {
   DeviceInfo device_info;
   device_info.os_name = "windows";
   device_info.os_version = base::SysInfo::OperatingSystemVersion();
+  device_info.security_patch_level = GetSecurityPatchLevel();
   device_info.device_host_name = GetComputerName();
   device_info.device_model = base::SysInfo::HardwareModelName();
   device_info.serial_number = GetSerialNumber();
@@ -322,6 +354,7 @@ DeviceInfo DeviceInfoFetcherWin::Fetch() {
   device_info.mac_addresses = GetMacAddresses();
   device_info.windows_machine_domain = GetWindowsMachineDomain();
   device_info.windows_user_domain = GetWindowsUserDomain();
+  device_info.secure_boot_enabled = GetSecureBootEnabled();
 
   return device_info;
 }

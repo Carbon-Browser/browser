@@ -7,9 +7,8 @@
 #include <memory>
 #include <utility>
 
+#include "base/files/file_path.h"
 #include "base/values.h"
-#include "chrome/browser/ash/crostini/crostini_simple_types.h"
-#include "chrome/browser/ash/crostini/crostini_util.h"
 #include "components/guest_os/guest_os_prefs.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/prefs/pref_registry_simple.h"
@@ -23,13 +22,6 @@ const char kCrostiniEnabled[] = "crostini.enabled";
 // List of USB devices with their system guid, a name/description and their
 // enabled state for use with Crostini.
 const char kCrostiniSharedUsbDevices[] = "crostini.shared_usb_devices";
-const char kCrostiniContainers[] = "crostini.containers";
-// Dictionary of terminal UI settings such as font style, colors, etc.
-const char kCrostiniTerminalSettings[] = "crostini.terminal_settings";
-const char kVmKey[] = "vm_name";
-const char kContainerKey[] = "container_name";
-const char kContainerOsVersionKey[] = "container_os_version";
-const char kContainerOsPrettyNameKey[] = "container_os_pretty_name";
 // Boolean preferences indicating whether Crostini is allowed to use mic.
 const char kCrostiniMicAllowed[] = "crostini.mic_allowed";
 
@@ -63,6 +55,10 @@ const char kCrostiniDefaultContainerConfigured[] =
 // port forwarding into Crostini.
 const char kCrostiniPortForwardingAllowedByPolicy[] =
     "crostini.port_forwarding_allowed_by_policy";
+// A boolean preference representing a user level enterprise policy to allow
+// SSH in Terminal System App.
+const char kTerminalSshAllowedByPolicy[] =
+    "crostini.terminal_ssh_allowed_by_policy";
 
 // A boolean preference controlling Crostini usage reporting.
 const char kReportCrostiniUsageEnabled[] = "crostini.usage_reporting_enabled";
@@ -96,21 +92,7 @@ void RegisterProfilePrefs(PrefRegistrySimple* registry) {
   registry->RegisterListPref(kCrostiniPortForwarding);
   registry->RegisterListPref(kCrostiniSharedUsbDevices);
   registry->RegisterBooleanPref(kCrostiniMicAllowed, false);
-
-  // Set a default value for crostini.containers to ensure that we track the
-  // default container even if its creation predates this preference. This
-  // preference should not be accessed unless crostini is installed
-  // (i.e. kCrostiniEnabled is true).
-  base::Value default_container(base::Value::Type::DICTIONARY);
-  default_container.SetKey(kVmKey, base::Value(kCrostiniDefaultVmName));
-  default_container.SetKey(kContainerKey,
-                           base::Value(kCrostiniDefaultContainerName));
-
-  base::Value::ListStorage default_containers_list;
-  default_containers_list.push_back(std::move(default_container));
-  registry->RegisterListPref(kCrostiniContainers,
-                             base::Value(std::move(default_containers_list)));
-
+  registry->RegisterBooleanPref(kTerminalSshAllowedByPolicy, true);
   registry->RegisterBooleanPref(crostini::prefs::kReportCrostiniUsageEnabled,
                                 false);
   registry->RegisterStringPref(kCrostiniLastLaunchTerminaComponentVersion,
@@ -128,9 +110,6 @@ void RegisterProfilePrefs(PrefRegistrySimple* registry) {
   registry->RegisterFilePathPref(kCrostiniAnsiblePlaybookFilePath,
                                  base::FilePath());
   registry->RegisterBooleanPref(kCrostiniDefaultContainerConfigured, false);
-  registry->RegisterDictionaryPref(
-      kCrostiniTerminalSettings, base::DictionaryValue(),
-      user_prefs::PrefRegistrySyncable::SYNCABLE_OS_PREF);
 
   registry->RegisterIntegerPref(
       kCrostiniArcAdbSideloadingUserPref,

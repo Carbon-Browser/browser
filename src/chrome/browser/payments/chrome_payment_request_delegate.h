@@ -8,7 +8,6 @@
 #include <memory>
 #include <string>
 
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "components/payments/content/content_payment_request_delegate.h"
 #include "components/payments/content/secure_payment_confirmation_controller.h"
@@ -28,6 +27,11 @@ class ChromePaymentRequestDelegate : public ContentPaymentRequestDelegate {
  public:
   explicit ChromePaymentRequestDelegate(
       content::RenderFrameHost* render_frame_host);
+
+  ChromePaymentRequestDelegate(const ChromePaymentRequestDelegate&) = delete;
+  ChromePaymentRequestDelegate& operator=(const ChromePaymentRequestDelegate&) =
+      delete;
+
   ~ChromePaymentRequestDelegate() override;
 
   // PaymentRequestDelegate:
@@ -52,7 +56,9 @@ class ChromePaymentRequestDelegate : public ContentPaymentRequestDelegate {
   bool IsBrowserWindowActive() const override;
   void ShowNoMatchingPaymentCredentialDialog(
       const std::u16string& merchant_name,
-      base::OnceClosure response_callback) override;
+      const std::string& rp_id,
+      base::OnceClosure response_callback,
+      base::OnceClosure opt_out_callback) override;
 
   // ContentPaymentRequestDelegate:
   std::unique_ptr<webauthn::InternalAuthenticator> CreateInternalAuthenticator()
@@ -89,8 +95,6 @@ class ChromePaymentRequestDelegate : public ContentPaymentRequestDelegate {
   std::unique_ptr<SecurePaymentConfirmationNoCreds> spc_no_creds_dialog_;
 
   content::GlobalRenderFrameHostId frame_routing_id_;
-
-  DISALLOW_COPY_AND_ASSIGN(ChromePaymentRequestDelegate);
 };
 
 }  // namespace payments

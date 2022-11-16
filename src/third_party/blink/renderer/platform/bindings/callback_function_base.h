@@ -9,7 +9,8 @@
 #include "third_party/blink/renderer/platform/bindings/name_client.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/bindings/trace_wrapper_v8_reference.h"
-#include "third_party/blink/renderer/platform/heap/handle.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/scheduler/public/task_id.h"
 
 namespace blink {
 
@@ -31,7 +32,7 @@ class PLATFORM_EXPORT CallbackFunctionBase
   virtual void Trace(Visitor* visitor) const;
 
   v8::Local<v8::Object> CallbackObject() {
-    return callback_function_.NewLocal(GetIsolate());
+    return callback_function_.Get(GetIsolate());
   }
 
   v8::Isolate* GetIsolate() const {
@@ -85,14 +86,22 @@ class PLATFORM_EXPORT CallbackFunctionBase
   // really need V8 *Scavenger* GC to collect the V8 function before V8 Full GC
   // runs.
   void DisposeV8FunctionImmediatelyToReduceMemoryFootprint() {
-    callback_function_.Clear();
+    callback_function_.Reset();
+  }
+
+  absl::optional<scheduler::TaskId> GetParentTaskId() const {
+    return parent_task_id_;
+  }
+
+  void SetParentTaskId(absl::optional<scheduler::TaskId> task_id) {
+    parent_task_id_ = task_id;
   }
 
  protected:
   explicit CallbackFunctionBase(v8::Local<v8::Object>);
 
   v8::Local<v8::Function> CallbackFunction() const {
-    return callback_function_.NewLocal(GetIsolate()).As<v8::Function>();
+    return callback_function_.Get(GetIsolate()).As<v8::Function>();
   }
 
  private:
@@ -105,8 +114,10 @@ class PLATFORM_EXPORT CallbackFunctionBase
   Member<ScriptState> callback_relevant_script_state_;
   // The callback context, i.e. the incumbent Realm when an ECMAScript value is
   // converted to an IDL value.
-  // https://heycam.github.io/webidl/#dfn-callback-context
+  // https://webidl.spec.whatwg.org/#dfn-callback-context
   Member<ScriptState> incumbent_script_state_;
+
+  absl::optional<scheduler::TaskId> parent_task_id_;
 };
 
 }  // namespace blink

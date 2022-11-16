@@ -47,7 +47,7 @@ public class RevampedIncognitoDescriptionView
     private LinearLayout mDescriptionTextContainer;
     private LinearLayout mDoesLayout;
     private LinearLayout mDoesNotLayout;
-    // private TextView mLearnMore;
+    private TextView mLearnMore;
     private RelativeLayout mCookieControlsCard;
     private SwitchCompat mCookieControlsToggle;
     private ImageView mCookieControlsManagedIcon;
@@ -103,7 +103,7 @@ public class RevampedIncognitoDescriptionView
                 findViewById(R.id.revamped_incognito_ntp_description_text_container);
         mDoesLayout = findViewById(R.id.revamped_incognito_ntp_does_layout);
         mDoesNotLayout = findViewById(R.id.revamped_incognito_ntp_does_not_layout);
-        //mLearnMore = findViewById(R.id.revamped_incognito_ntp_learn_more);
+        mLearnMore = findViewById(R.id.revamped_incognito_ntp_learn_more);
         mCookieControlsCard = findViewById(R.id.revamped_cookie_controls_card);
         mCookieControlsToggle = findViewById(R.id.revamped_cookie_controls_card_toggle);
         mCookieControlsManagedIcon = findViewById(R.id.revamped_cookie_controls_card_managed_icon);
@@ -235,7 +235,7 @@ public class RevampedIncognitoDescriptionView
         // We want to have a R.dimen.learn_more_vertical_spacing tall gap between the learn more
         // text and the adjacent elements. So adjust the margin to be the difference between
         // targeted spacing and effective padding.
-        /*int innerSpacing = (int) ((getContext().getResources().getDimensionPixelSize(
+        int innerSpacing = (int) ((getContext().getResources().getDimensionPixelSize(
                                            R.dimen.min_touch_target_size)
                                           - mLearnMore.getTextSize())
                 / 2);
@@ -244,7 +244,7 @@ public class RevampedIncognitoDescriptionView
                 - innerSpacing;
 
         LinearLayout.LayoutParams params = (LayoutParams) mLearnMore.getLayoutParams();
-        params.setMargins(0, learnMoreVerticalMargin, 0, learnMoreVerticalMargin);*/
+        params.setMargins(0, learnMoreVerticalMargin, 0, learnMoreVerticalMargin);
 
         mContainer.setPadding(
                 paddingHorizontalPx, paddingVerticalPx, paddingHorizontalPx, paddingVerticalPx);
@@ -257,13 +257,13 @@ public class RevampedIncognitoDescriptionView
 
         // Make the text between the <a> tags to be clickable, blue, without underline.
         SpanApplier.SpanInfo spanInfo = new SpanApplier.SpanInfo("<a>", "</a>",
-                new NoUnderlineClickableSpan(getResources(), R.color.default_text_color_link_light,
+                new NoUnderlineClickableSpan(getContext(), R.color.default_text_color_link_light,
                         onClickListener::onClick));
 
         SpannableString formattedText = SpanApplier.applySpans(text, spanInfo);
 
-        // mLearnMore.setText(formattedText);
-        // mLearnMore.setMovementMethod(LinkMovementMethod.getInstance());
+        mLearnMore.setText(formattedText);
+        mLearnMore.setMovementMethod(LinkMovementMethod.getInstance());
     }
 
     private boolean isNarrowScreen() {

@@ -8,13 +8,13 @@
 
 #include <memory>
 #include <string>
+#include <tuple>
 #include <utility>
 
 #include "base/base_switches.h"
 #include "base/bind.h"
 #include "base/clang_profiling_buildflags.h"
 #include "base/command_line.h"
-#include "base/compiler_specific.h"
 #include "base/debug/alias.h"
 #include "base/debug/leak_annotations.h"
 #include "base/debug/profiler.h"
@@ -22,22 +22,20 @@
 #include "base/lazy_instance.h"
 #include "base/location.h"
 #include "base/logging.h"
-#include "base/macros.h"
 #include "base/memory/memory_pressure_listener.h"
 #include "base/memory/ptr_util.h"
 #include "base/message_loop/timer_slack.h"
 #include "base/metrics/field_trial.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/no_destructor.h"
 #include "base/power_monitor/power_monitor.h"
 #include "base/process/process.h"
 #include "base/process/process_handle.h"
 #include "base/run_loop.h"
-#include "base/single_thread_task_runner.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/synchronization/condition_variable.h"
 #include "base/synchronization/lock.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_local.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/timer/elapsed_timer.h"
@@ -80,23 +78,24 @@
 #include "services/tracing/public/cpp/background_tracing/background_tracing_agent_impl.h"
 #include "services/tracing/public/cpp/background_tracing/background_tracing_agent_provider_impl.h"
 
-#if defined(OS_POSIX)
+#if BUILDFLAG(IS_POSIX)
 #include "base/posix/global_descriptors.h"
 #include "content/public/common/content_descriptors.h"
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
 #include "services/tracing/public/cpp/system_tracing_service.h"
 #include "services/tracing/public/cpp/traced_process.h"
-#endif  // !defined(OS_ANDROID)
-#endif  // defined(OS_POSIX)
+#endif  // !BUILDFLAG(IS_ANDROID)
+#endif  // BUILDFLAG(IS_POSIX)
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 #include "base/mac/mach_port_rendezvous.h"
 #endif
 
 #if BUILDFLAG(CLANG_PROFILING_INSIDE_SANDBOX)
 #include <stdio.h>
 #include "base/test/clang_profiling.h"
-#if defined(OS_WIN)
+#include "build/config/compiler/compiler_buildflags.h"
+#if BUILDFLAG(IS_WIN)
 #include <io.h>
 #endif
 // Function provided by libclang_rt.profile-*.a, declared and documented at:
@@ -116,7 +115,7 @@ base::LazyInstance<base::ThreadLocalPointer<ChildThreadImpl>>::DestructorAtExit
 // This isn't needed on Windows because there the sandbox's job object
 // terminates child processes automatically. For unsandboxed processes (i.e.
 // plugins), PluginThread has EnsureTerminateMessageFilter.
-#if defined(OS_POSIX)
+#if BUILDFLAG(IS_POSIX)
 
 #if defined(ADDRESS_SANITIZER) || defined(LEAK_SANITIZER) || \
     defined(MEMORY_SANITIZER) || defined(THREAD_SANITIZER) || \
@@ -128,6 +127,9 @@ class WaitAndExitDelegate : public base::PlatformThread::Delegate {
   explicit WaitAndExitDelegate(base::TimeDelta duration)
       : duration_(duration) {}
 
+  WaitAndExitDelegate(const WaitAndExitDelegate&) = delete;
+  WaitAndExitDelegate& operator=(const WaitAndExitDelegate&) = delete;
+
   void ThreadMain() override {
     base::PlatformThread::Sleep(duration_);
     base::Process::TerminateCurrentProcessImmediately(0);
@@ -135,7 +137,6 @@ class WaitAndExitDelegate : public base::PlatformThread::Delegate {
 
  private:
   const base::TimeDelta duration_;
-  DISALLOW_COPY_AND_ASSIGN(WaitAndExitDelegate);
 };
 
 bool CreateWaitAndExitThread(base::TimeDelta duration) {
@@ -152,7 +153,7 @@ bool CreateWaitAndExitThread(base::TimeDelta duration) {
   // delegate object alive for the lifetime of the process.
   WaitAndExitDelegate* leaking_delegate = delegate.release();
   ANNOTATE_LEAKING_OBJECT_PTR(leaking_delegate);
-  ignore_result(leaking_delegate);
+  std::ignore = leaking_delegate;
   return true;
 }
 #endif
@@ -180,7 +181,7 @@ void TerminateSelfOnDisconnect() {
   // Some sanitizer tools rely on exit handlers (e.g. to run leak detection,
   // or dump code coverage data to disk). Instead of exiting the process
   // immediately, we give it 60 seconds to run exit handlers.
-  CHECK(CreateWaitAndExitThread(base::TimeDelta::FromSeconds(60)));
+  CHECK(CreateWaitAndExitThread(base::Seconds(60)));
 #if defined(LEAK_SANITIZER)
   // Invoke LeakSanitizer early to avoid detecting shutdown-only leaks. If
   // leaks are found, the process will exit here.
@@ -205,7 +206,7 @@ class SuicideOnChannelErrorFilter : public IPC::MessageFilter {
 mojo::IncomingInvitation InitializeMojoIPCChannel() {
   TRACE_EVENT0("startup", "InitializeMojoIPCChannel");
   mojo::PlatformChannelEndpoint endpoint;
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   if (base::CommandLine::ForCurrentProcess()->HasSwitch(
           mojo::PlatformChannel::kHandleSwitch)) {
     endpoint = mojo::PlatformChannel::RecoverPassedEndpointFromCommandLine(
@@ -216,10 +217,10 @@ mojo::IncomingInvitation InitializeMojoIPCChannel() {
     endpoint = mojo::NamedPlatformChannel::ConnectToServer(
         *base::CommandLine::ForCurrentProcess());
   }
-#elif defined(OS_FUCHSIA)
+#elif BUILDFLAG(IS_FUCHSIA)
   endpoint = mojo::PlatformChannel::RecoverPassedEndpointFromCommandLine(
       *base::CommandLine::ForCurrentProcess());
-#elif defined(OS_MAC)
+#elif BUILDFLAG(IS_MAC)
   auto* client = base::MachPortRendezvousClient::GetInstance();
   if (!client) {
     LOG(ERROR) << "Mach rendezvous failed, terminating process (parent died?)";
@@ -232,7 +233,7 @@ mojo::IncomingInvitation InitializeMojoIPCChannel() {
   }
   endpoint =
       mojo::PlatformChannelEndpoint(mojo::PlatformHandle(std::move(receive)));
-#elif defined(OS_POSIX)
+#elif BUILDFLAG(IS_POSIX)
   endpoint = mojo::PlatformChannelEndpoint(mojo::PlatformHandle(base::ScopedFD(
       base::GlobalDescriptors::GetInstance()->Get(kMojoIPCChannel))));
 #endif
@@ -266,6 +267,9 @@ class ChildThreadImpl::IOThreadState
         quit_closure_(std::move(quit_closure)),
         service_binder_(std::move(service_binder)) {}
 
+  IOThreadState(const IOThreadState&) = delete;
+  IOThreadState& operator=(const IOThreadState&) = delete;
+
   // Used only in the deprecated Service Manager IPC mode.
   void BindChildProcessReceiver(
       mojo::PendingReceiver<mojom::ChildProcess> receiver) {
@@ -293,7 +297,7 @@ class ChildThreadImpl::IOThreadState
                                        base::BindOnce(quit_closure_));
   }
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   void GetTaskPort(GetTaskPortCallback callback) override {
     mojo::PlatformHandle task_port(
         (base::mac::ScopedMachSendRight(task_self_trap())));
@@ -324,7 +328,7 @@ class ChildThreadImpl::IOThreadState
                        weak_main_thread_, std::move(receiver)));
   }
 
-#if defined(OS_POSIX) && !defined(OS_ANDROID)
+#if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_ANDROID)
   void EnableSystemTracingService(
       mojo::PendingRemote<tracing::mojom::SystemTracingService> remote)
       override {
@@ -377,12 +381,12 @@ class ChildThreadImpl::IOThreadState
 #if BUILDFLAG(CLANG_PROFILING_INSIDE_SANDBOX)
   void SetProfilingFile(base::File file) override {
     // TODO(crbug.com/985574) Remove Android check when possible.
-#if defined(OS_POSIX) && !defined(OS_ANDROID)
+#if BUILDFLAG(IS_POSIX) && (!BUILDFLAG(IS_ANDROID) || defined(CLANG_PGO))
     // Take the file descriptor so that |file| does not close it.
     int fd = file.TakePlatformFile();
     FILE* f = fdopen(fd, "r+b");
     __llvm_profile_set_file_object(f, 1);
-#elif defined(OS_WIN)
+#elif BUILDFLAG(IS_WIN)
     HANDLE handle = file.TakePlatformFile();
     int fd = _open_osfhandle((intptr_t)handle, 0);
     FILE* f = _fdopen(fd, "r+b");
@@ -413,8 +417,6 @@ class ChildThreadImpl::IOThreadState
   // Binding requests which should be handled by |interface_binders|, but which
   // have been queued because |allow_interface_binders_| is still |false|.
   std::vector<mojo::GenericPendingReceiver> pending_binding_requests_;
-
-  DISALLOW_COPY_AND_ASSIGN(IOThreadState);
 };
 
 ChildThread* ChildThread::Get() {
@@ -492,7 +494,7 @@ bool ChildThreadImpl::ChildThreadMessageRouter::Send(IPC::Message* msg) {
 bool ChildThreadImpl::ChildThreadMessageRouter::RouteMessage(
     const IPC::Message& msg) {
   bool handled = IPC::MessageRouter::RouteMessage(msg);
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   if (!handled && msg.is_sync()) {
     IPC::Message* reply = IPC::SyncMessage::GenerateReply(&msg);
     reply->set_reply_error();
@@ -653,7 +655,7 @@ void ChildThreadImpl::Init(const Options& options) {
   // Requires base::PowerMonitor to be initialized first.
   power_scheduler::PowerModeArbiter::GetInstance()->OnThreadPoolAvailable();
 
-#if defined(OS_POSIX)
+#if BUILDFLAG(IS_POSIX)
   // Check that --process-type is specified so we don't do this in unit tests
   // and single-process mode.
   if (base::CommandLine::ForCurrentProcess()->HasSwitch(
@@ -711,7 +713,7 @@ void ChildThreadImpl::Init(const Options& options) {
       FROM_HERE,
       base::BindOnce(&ChildThreadImpl::EnsureConnected,
                      channel_connected_factory_->GetWeakPtr()),
-      base::TimeDelta::FromSeconds(connection_timeout));
+      base::Seconds(connection_timeout));
 
   // In single-process mode, there is no need to synchronize trials to the
   // browser process (because it's the same process).
@@ -753,8 +755,7 @@ ChildThreadImpl::~ChildThreadImpl() {
     auto leaked_remote =
         std::make_unique<mojo::SharedRemote<mojom::ChildProcessHost>>(
             std::move(child_process_host_));
-    auto* leaked_remote_ptr = leaked_remote.release();
-    ALLOW_UNUSED_LOCAL(leaked_remote_ptr);
+    [[maybe_unused]] auto* leaked_remote_ptr = leaked_remote.release();
     ANNOTATE_LEAKING_OBJECT_PTR(leaked_remote_ptr);
   }
 
@@ -794,7 +795,7 @@ bool ChildThreadImpl::Send(IPC::Message* msg) {
   return channel_->Send(msg);
 }
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 void ChildThreadImpl::PreCacheFont(const LOGFONT& log_font) {
   GetFontCacheWin()->PreCacheFont(log_font);
 }

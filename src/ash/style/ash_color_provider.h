@@ -6,26 +6,18 @@
 #define ASH_STYLE_ASH_COLOR_PROVIDER_H_
 
 #include "ash/ash_export.h"
-#include "ash/public/cpp/session/session_observer.h"
 #include "ash/public/cpp/style/color_provider.h"
-#include "base/observer_list.h"
+#include "base/callback_helpers.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/gfx/color_palette.h"
-#include "ui/gfx/vector_icon_types.h"
 
-class PrefChangeRegistrar;
-class PrefRegistrySimple;
-class PrefService;
-
-namespace views {
-class ImageButton;
-class InkDropHost;
-class LabelButton;
-}  // namespace views
+namespace ui {
+class ColorProvider;
+}
 
 namespace ash {
-class ColorModeObserver;
 
+// TODO(minch): AshColorProvider is not needed to be a class now.
 // The color provider for system UI. It provides colors for Shield layer, Base
 // layer, Controls layer and Content layer. Shield layer is a combination of
 // color, opacity and blur which may change depending on the context, it is
@@ -36,8 +28,7 @@ class ColorModeObserver;
 // state of an interactive element (active/inactive states). Content layer means
 // the UI elements, e.g., separator, text, icon. The color of an element in
 // system UI will be the combination of the colors of the four layers.
-class ASH_EXPORT AshColorProvider : public SessionObserver,
-                                    public ColorProvider {
+class ASH_EXPORT AshColorProvider : public ColorProvider {
  public:
   AshColorProvider();
   AshColorProvider(const AshColorProvider& other) = delete;
@@ -54,30 +45,22 @@ class ASH_EXPORT AshColorProvider : public SessionObserver,
   // power status icon inside status area is a dual tone icon.
   static SkColor GetSecondToneColor(SkColor color_of_first_tone);
 
-  static void RegisterProfilePrefs(PrefRegistrySimple* registry);
-
-  // SessionObserver:
-  void OnActiveUserPrefServiceChanged(PrefService* prefs) override;
-  void OnSessionStateChanged(session_manager::SessionState state) override;
-
   // ColorProvider:
   SkColor GetShieldLayerColor(ShieldLayerType type) const override;
   SkColor GetBaseLayerColor(BaseLayerType type) const override;
   SkColor GetControlsLayerColor(ControlsLayerType type) const override;
   SkColor GetContentLayerColor(ContentLayerType type) const override;
-  RippleAttributes GetRippleAttributes(
-      SkColor bg_color = gfx::kPlaceholderColor) const override;
-  void AddObserver(ColorModeObserver* observer) override;
-  void RemoveObserver(ColorModeObserver* observer) override;
-  bool IsDarkModeEnabled() const override;
+  SkColor GetActiveDialogTitleBarColor() const override;
+  SkColor GetInactiveDialogTitleBarColor() const override;
+  std::pair<SkColor, float> GetInkDropBaseColorAndOpacity(
+      SkColor background_color = gfx::kPlaceholderColor) const override;
+  std::pair<SkColor, float> GetInvertedInkDropBaseColorAndOpacity(
+      SkColor background_color = gfx::kPlaceholderColor) const override;
 
   // Gets the color of |type| of the corresponding layer based on the current
   // inverted color mode. For views that need LIGHT colors while DARK mode is
   // active, and vice versa.
-  SkColor GetInvertedShieldLayerColor(ShieldLayerType type) const;
   SkColor GetInvertedBaseLayerColor(BaseLayerType type) const;
-  SkColor GetInvertedControlsLayerColor(ControlsLayerType type) const;
-  SkColor GetInvertedContentLayerColor(ContentLayerType type) const;
 
   // Gets the background color that can be applied on any layer. The returned
   // color will be different based on color mode and color theme (see
@@ -86,55 +69,17 @@ class ASH_EXPORT AshColorProvider : public SessionObserver,
   // Same as above, but returns the color based on the current inverted color
   // mode and color theme.
   SkColor GetInvertedBackgroundColor() const;
-
-  // Helpers to style different types of buttons. Depending on the type may
-  // style text, icon and background colors for both enabled and disabled
-  // states. May overwrite an prior styles on |button|.
-  void DecoratePillButton(views::LabelButton* button,
-                          const gfx::VectorIcon* icon);
-  void DecorateCloseButton(views::ImageButton* button,
-                           int button_size,
-                           const gfx::VectorIcon& icon);
-  void DecorateIconButton(views::ImageButton* button,
-                          const gfx::VectorIcon& icon,
-                          bool toggled,
-                          int icon_size);
-  void DecorateFloatingIconButton(views::ImageButton* button,
-                                  const gfx::VectorIcon& icon);
-
-  // Decorates the ink drop managed by `host`. `ink_drop_config_flags` is a
-  // bitmask which specifies the ink drop attributes to modify. `bg_color` is
-  // the background color of the UI element that wants to show ink drop.
-  enum InkDropConfigParam {
-    kConfigBaseColor = 1,
-    kConfigVisibleOpacity = 1 << 1,
-    kConfigHighlightOpacity = 1 << 2
-  };
-  void DecorateInkDrop(views::InkDropHost* host,
-                       int ink_drop_config_flags,
-                       SkColor bg_color = gfx::kPlaceholderColor);
-
-  // Whether the system color mode is themed, by default is true. If true, the
-  // background color will be calculated based on extracted wallpaper color.
-  bool IsThemed() const;
-
-  // Toggles pref |kDarkModeEnabled|.
-  void ToggleColorMode();
-
-  // Updates pref |kColorModeThemed| to |is_themed|.
-  void UpdateColorModeThemed(bool is_themed);
+  // Gets the background color in the desired color mode dark/light.
+  SkColor GetBackgroundColorInMode(bool use_dark_color) const;
 
  private:
-  friend class ScopedLightModeAsDefault;
-
   // Gets the color of |type| of the corresponding layer. Returns color based on
   // the current inverted color mode if |inverted| is true.
   SkColor GetShieldLayerColorImpl(ShieldLayerType type, bool inverted) const;
   SkColor GetBaseLayerColorImpl(BaseLayerType type, bool inverted) const;
   // Gets the color of |type| of the corresponding layer. Returns the color on
   // dark mode if |use_dark_color| is true.
-  SkColor GetControlsLayerColorImpl(ControlsLayerType type,
-                                    bool use_dark_color) const;
+  SkColor GetControlsLayerColorImpl(ControlsLayerType type) const;
   SkColor GetContentLayerColorImpl(ContentLayerType type,
                                    bool use_dark_color) const;
 
@@ -143,10 +88,6 @@ class ASH_EXPORT AshColorProvider : public SessionObserver,
   // Gets the background default color based on the current inverted color mode.
   SkColor GetInvertedBackgroundDefaultColor() const;
 
-  // Gets the background themed color based on the current color mode.
-  SkColor GetBackgroundThemedColor() const;
-  // Gets the background themed color based on the current inverted color mode.
-  SkColor GetInvertedBackgroundThemedColor() const;
   // Gets the background themed color that's calculated based on the color
   // extracted from wallpaper. For dark mode, it will be dark muted wallpaper
   // prominent color + SK_ColorBLACK 50%. For light mode, it will be light
@@ -155,23 +96,9 @@ class ASH_EXPORT AshColorProvider : public SessionObserver,
   SkColor GetBackgroundThemedColorImpl(SkColor default_color,
                                        bool use_dark_color) const;
 
-  // Notifies all the observers on |kDarkModeEnabled|'s change.
-  void NotifyDarkModeEnabledPrefChange();
-
-  // Notifies all the observers on |kColorModeThemed|'s change.
-  void NotifyColorModeThemedPrefChange();
-
-  // The default color is DARK when the DarkLightMode feature is disabled. But
-  // we can also override it to LIGHT through ScopedLightModeAsDefault. This is
-  // done to help keeping some of the UI elements as LIGHT by default before
-  // launching the DarkLightMode feature. Overriding only if the DarkLightMode
-  // feature is disabled. This variable will be removed once fully launched the
-  // DarkLightMode feature.
-  bool override_light_mode_as_default_ = false;
-
-  base::ObserverList<ColorModeObserver> observers_;
-  std::unique_ptr<PrefChangeRegistrar> pref_change_registrar_;
-  PrefService* active_user_pref_service_ = nullptr;  // Not owned.
+  // Returns a ColorProvider for the current NativeTheme which will correctly
+  // reflect the current ColorMode.
+  ui::ColorProvider* GetColorProvider() const;
 };
 
 }  // namespace ash

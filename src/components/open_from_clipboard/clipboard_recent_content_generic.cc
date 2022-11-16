@@ -9,11 +9,11 @@
 #include "base/bind.h"
 #include "base/strings/string_util.h"
 #include "build/build_config.h"
-#include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/base/clipboard/clipboard.h"
 #include "ui/base/data_transfer_policy/data_transfer_endpoint.h"
+#include "url/url_util.h"
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #include "ui/base/clipboard/clipboard_android.h"
 #endif
 
@@ -72,12 +72,12 @@ ClipboardRecentContentGeneric::GetRecentURLFromClipboard() {
   ui::Clipboard* clipboard = ui::Clipboard::GetForCurrentThread();
   ui::DataTransferEndpoint data_dst = ui::DataTransferEndpoint(
       ui::EndpointType::kDefault, /*notify_if_restricted=*/false);
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
   clipboard->ReadBookmark(&data_dst, nullptr, &gurl_string);
 #else
   clipboard->ReadAsciiText(ui::ClipboardBuffer::kCopyPaste, &data_dst,
                            &gurl_string);
-#endif  // #if defined(OS_ANDROID)
+#endif  // BUILDFLAG(IS_ANDROID)
   base::TrimWhitespaceASCII(gurl_string, base::TrimPositions::TRIM_ALL,
                             &gurl_string);
 
@@ -142,6 +142,27 @@ void ClipboardRecentContentGeneric::GetRecentImageFromClipboard(
       base::BindOnce(&OnGetRecentImageFromClipboard, std::move(callback)));
 }
 
+absl::optional<std::set<ClipboardContentType>>
+ClipboardRecentContentGeneric::GetCachedClipboardContentTypes() {
+  if (GetClipboardContentAge() > MaximumAgeOfClipboard()) {
+    return absl::nullopt;
+  }
+
+  std::set<ClipboardContentType> clipboard_content_types;
+
+  if (HasRecentURLFromClipboard()) {
+    clipboard_content_types.insert(ClipboardContentType::URL);
+  }
+  if (HasRecentTextFromClipboard()) {
+    clipboard_content_types.insert(ClipboardContentType::Text);
+  }
+  if (HasRecentImageFromClipboard()) {
+    clipboard_content_types.insert(ClipboardContentType::Image);
+  }
+
+  return clipboard_content_types;
+}
+
 bool ClipboardRecentContentGeneric::HasRecentImageFromClipboard() {
   if (GetClipboardContentAge() > MaximumAgeOfClipboard())
     return false;
@@ -149,7 +170,7 @@ bool ClipboardRecentContentGeneric::HasRecentImageFromClipboard() {
   ui::DataTransferEndpoint data_dst = ui::DataTransferEndpoint(
       ui::EndpointType::kDefault, /*notify_if_restricted=*/false);
   return ui::Clipboard::GetForCurrentThread()->IsFormatAvailable(
-      ui::ClipboardFormatType::BitmapType(), ui::ClipboardBuffer::kCopyPaste,
+      ui::ClipboardFormatType::PngType(), ui::ClipboardBuffer::kCopyPaste,
       &data_dst);
 }
 
@@ -221,6 +242,13 @@ bool ClipboardRecentContentGeneric::IsAppropriateSuggestion(const GURL& url) {
   // Check to make sure it's a scheme we're willing to suggest.
   for (const auto* authorized_scheme : kAuthorizedSchemes) {
     if (url.SchemeIs(authorized_scheme))
+      return true;
+  }
+
+  // Check if the schemes is an application-defined scheme.
+  std::vector<std::string> standard_schemes = url::GetStandardSchemes();
+  for (const auto& standard_scheme : standard_schemes) {
+    if (url.SchemeIs(standard_scheme))
       return true;
   }
 

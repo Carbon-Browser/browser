@@ -1,13 +1,12 @@
 # Copyright 2014 The Chromium Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
-#
-# This source code is a part of ABP Chromium.
-# Use of this source code is governed by the GPLv3 that can be found in the docs_abp/LICENSE file.
 
+# This source code is a part of eyeo Chromium SDK.
+# Use of this source code is governed by the GPLv3 that can be found in the
+# components/adblock/LICENSE file.
 
 import("//build/config/android/config.gni")
-import("//components/adblock/features.gni")
 import("//components/safe_browsing/buildflags.gni")
 import("//printing/buildflags/buildflags.gni")
 import("//tools/grit/grit_rule.gni")
@@ -46,13 +45,15 @@ grit("components_resources") {
 
   defines = [
     "enable_basic_printing=$enable_basic_printing",
-    "enable_bundled_subscriptions=$enable_bundled_subscriptions",
     "enable_print_preview=$enable_print_preview",
     "safe_browsing_mode=$safe_browsing_mode",
     "is_fuchsia=$is_fuchsia",
   ]
 
-  deps = [ ":about_credits" ]
+  deps = [
+    ":about_credits",
+    "//components/flags_ui/resources:build_ts",
+  ]
 
   if (!is_ios) {
     deps += [ "//components/resources/ssl/ssl_error_assistant:make_ssl_error_assistant_protobuf" ]
@@ -63,6 +64,8 @@ grit("components_resources") {
       "//components/safe_browsing/content/resources:make_file_types_protobuf",
     ]
   }
+
+  deps += [ "//components/resources/adblocking:make_all_preloaded_subscriptions" ]
 }
 
 grit("dev_ui_components_resources") {
@@ -71,6 +74,11 @@ grit("dev_ui_components_resources") {
   outputs = [
     "grit/dev_ui_components_resources.h",
     "dev_ui_components_resources.pak",
+  ]
+
+  deps = [
+    "//components/local_state:build",
+    "//components/policy/resources/webui:html_wrapper_files",
   ]
   output_dir = "$root_gen_dir/components"
 }

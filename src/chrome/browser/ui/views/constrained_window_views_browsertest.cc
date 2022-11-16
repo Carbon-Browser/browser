@@ -4,7 +4,6 @@
 
 #include <memory>
 
-#include "base/macros.h"
 #include "build/build_config.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
@@ -35,12 +34,13 @@ class TestDialog : public views::DialogDelegateView {
     SetModalType(ui::MODAL_TYPE_CHILD);
     GetViewAccessibility().OverrideName("Test dialog");
   }
+
+  TestDialog(const TestDialog&) = delete;
+  TestDialog& operator=(const TestDialog&) = delete;
+
   ~TestDialog() override {}
 
   views::View* GetInitiallyFocusedView() override { return this; }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(TestDialog);
 };
 
 // A helper function to create and show a web contents modal dialog.
@@ -54,15 +54,17 @@ TestDialog* ShowModalDialog(content::WebContents* web_contents) {
 class ConstrainedWindowViewTest : public InProcessBrowserTest {
  public:
   ConstrainedWindowViewTest() = default;
-  ~ConstrainedWindowViewTest() override = default;
 
- private:
-  DISALLOW_COPY_AND_ASSIGN(ConstrainedWindowViewTest);
+  ConstrainedWindowViewTest(const ConstrainedWindowViewTest&) = delete;
+  ConstrainedWindowViewTest& operator=(const ConstrainedWindowViewTest&) =
+      delete;
+
+  ~ConstrainedWindowViewTest() override = default;
 };
 
 }  // namespace
 
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
 // Unexpected multiple focus managers on MacViews: http://crbug.com/824551
 #define MAYBE_FocusTest DISABLED_FocusTest
 #else
@@ -167,13 +169,18 @@ IN_PROC_BROWSER_TEST_F(ConstrainedWindowViewTest, MAYBE_TabSwitchTest) {
 }
 
 // Tests that tab-modal dialogs follow tabs dragged between browser windows.
-IN_PROC_BROWSER_TEST_F(ConstrainedWindowViewTest, TabMoveTest) {
+// TODO(crbug.com/1336418): On Mac, animations cause this test to be flaky.
+#if BUILDFLAG(IS_MAC)
+#define MAYBE_TabMoveTest DISABLED_TabMoveTest
+#else
+#define MAYBE_TabMoveTest TabMoveTest
+#endif
+IN_PROC_BROWSER_TEST_F(ConstrainedWindowViewTest, MAYBE_TabMoveTest) {
   content::WebContents* web_contents =
       browser()->tab_strip_model()->GetActiveWebContents();
   TestDialog* const dialog = ShowModalDialog(web_contents);
   views::ViewTracker tracker(dialog);
   EXPECT_EQ(dialog, tracker.view());
-  // On Mac, animations cause this test to be flaky.
   dialog->GetWidget()->SetVisibilityChangedAnimationsEnabled(false);
   EXPECT_TRUE(dialog->GetWidget()->IsVisible());
 

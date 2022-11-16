@@ -4,26 +4,38 @@
 
 #include "components/feature_engagement/public/feature_constants.h"
 
+#include "build/build_config.h"
+
 namespace feature_engagement {
 
+// Features used by the In-Product Help system.
+const base::Feature kEnableAutomaticSnooze{"EnableAutomaticSnooze",
+                                           base::FEATURE_DISABLED_BY_DEFAULT};
 const base::Feature kIPHDemoMode{"IPH_DemoMode",
                                  base::FEATURE_DISABLED_BY_DEFAULT};
 const base::Feature kIPHSnooze{"IPH_Snooze", base::FEATURE_DISABLED_BY_DEFAULT};
+const base::Feature kEnableIPH{"EnableIPH", base::FEATURE_ENABLED_BY_DEFAULT};
+const base::Feature kUseClientConfigIPH{"UseClientConfigIPH",
+                                        base::FEATURE_DISABLED_BY_DEFAULT};
+
+// Features used by various clients to show their In-Product Help messages.
 const base::Feature kIPHDummyFeature{"IPH_Dummy",
                                      base::FEATURE_DISABLED_BY_DEFAULT};
 
-#if defined(OS_WIN) || defined(OS_APPLE) || defined(OS_LINUX) || \
-    defined(OS_CHROMEOS) || defined(OS_FUCHSIA)
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_APPLE) || BUILDFLAG(IS_LINUX) || \
+    BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_FUCHSIA)
+const base::Feature kIPHDesktopSharedHighlightingFeature{
+    "IPH_DesktopSharedHighlighting", base::FEATURE_DISABLED_BY_DEFAULT};
 const base::Feature kIPHDesktopTabGroupsNewGroupFeature{
     "IPH_DesktopTabGroupsNewGroup", base::FEATURE_DISABLED_BY_DEFAULT};
-const base::Feature kIPHFocusModeFeature{"IPH_FocusMode",
-                                         base::FEATURE_DISABLED_BY_DEFAULT};
-const base::Feature kIPHGlobalMediaControlsFeature{
-    "IPH_GlobalMediaControls", base::FEATURE_DISABLED_BY_DEFAULT};
+const base::Feature kIPHFocusHelpBubbleScreenReaderPromoFeature{
+    "IPH_FocusHelpBubbleScreenReaderPromo", base::FEATURE_ENABLED_BY_DEFAULT};
 const base::Feature kIPHGMCCastStartStopFeature{
     "IPH_GMCCastStartStop", base::FEATURE_ENABLED_BY_DEFAULT};
 const base::Feature kIPHLiveCaptionFeature{"IPH_LiveCaption",
                                            base::FEATURE_ENABLED_BY_DEFAULT};
+const base::Feature kIPHTabAudioMutingFeature{"IPH_TabAudioMuting",
+                                              base::FEATURE_DISABLED_BY_DEFAULT};
 const base::Feature kIPHPasswordsAccountStorageFeature{
     "IPH_PasswordsAccountStorage", base::FEATURE_ENABLED_BY_DEFAULT};
 const base::Feature kIPHReadingListDiscoveryFeature{
@@ -34,6 +46,8 @@ const base::Feature kIPHReadingListInSidePanelFeature{
     "IPH_ReadingListInSidePanel", base::FEATURE_DISABLED_BY_DEFAULT};
 const base::Feature kIPHReopenTabFeature{"IPH_ReopenTab",
                                          base::FEATURE_DISABLED_BY_DEFAULT};
+const base::Feature kIPHSideSearchFeature{"IPH_SideSearch",
+                                          base::FEATURE_DISABLED_BY_DEFAULT};
 const base::Feature kIPHTabSearchFeature{"IPH_TabSearch",
                                          base::FEATURE_DISABLED_BY_DEFAULT};
 const base::Feature kIPHWebUITabStripFeature{"IPH_WebUITabStrip",
@@ -41,13 +55,15 @@ const base::Feature kIPHWebUITabStripFeature{"IPH_WebUITabStrip",
 const base::Feature kIPHDesktopSnoozeFeature{"IPH_DesktopSnoozeFeature",
                                              base::FEATURE_DISABLED_BY_DEFAULT};
 const base::Feature kIPHDesktopPwaInstallFeature{
-    "IPH_DesktopPwaInstall", base::FEATURE_DISABLED_BY_DEFAULT};
+    "IPH_DesktopPwaInstall", base::FEATURE_ENABLED_BY_DEFAULT};
 const base::Feature kIPHProfileSwitchFeature{"IPH_ProfileSwitch",
                                              base::FEATURE_ENABLED_BY_DEFAULT};
-#endif  // defined(OS_WIN) || defined(OS_APPLE) || defined(OS_LINUX) ||
-        // defined(OS_CHROMEOS) || defined(OS_FUCHSIA)
+const base::Feature kIPHIntentChipFeature{"IPH_IntentChip",
+                                          base::FEATURE_DISABLED_BY_DEFAULT};
+#endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_APPLE) || BUILDFLAG(IS_LINUX) ||
+        // BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_FUCHSIA)
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 const base::Feature kIPHAdaptiveButtonInTopToolbarCustomizationNewTabFeature{
     "IPH_AdaptiveButtonInTopToolbarCustomization_NewTab",
     base::FEATURE_DISABLED_BY_DEFAULT};
@@ -60,8 +76,20 @@ const base::Feature
         base::FEATURE_DISABLED_BY_DEFAULT};
 const base::Feature kIPHAddToHomescreenMessageFeature{
     "IPH_AddToHomescreenMessage", base::FEATURE_ENABLED_BY_DEFAULT};
-const base::Feature kIPHAddToHomescreenTextBubbleFeature{
-    "IPH_AddToHomescreenTextBubble", base::FEATURE_ENABLED_BY_DEFAULT};
+const base::Feature kIPHAutoDarkOptOutFeature{"IPH_AutoDarkOptOut",
+                                              base::FEATURE_ENABLED_BY_DEFAULT};
+const base::Feature kIPHAutoDarkUserEducationMessageFeature{
+    "IPH_AutoDarkUserEducationMessage", base::FEATURE_ENABLED_BY_DEFAULT};
+const base::Feature kIPHAutoDarkUserEducationMessageOptInFeature{
+    "IPH_AutoDarkUserEducationMessageOptIn", base::FEATURE_ENABLED_BY_DEFAULT};
+const base::Feature kIPHContextualPageActionsPriceTrackingFeature{
+    "IPH_ContextualPageActions_PriceTracking",
+    base::FEATURE_ENABLED_BY_DEFAULT};
+const base::Feature kIPHContextualPageActionsPriceTrackingActionChipFeature{
+    "IPH_ContextualPageActions_PriceTrackingActionChip",
+    base::FEATURE_ENABLED_BY_DEFAULT};
+const base::Feature kIPHCrowFeature{"IPH_Crow",
+                                    base::FEATURE_DISABLED_BY_DEFAULT};
 const base::Feature kIPHDataSaverDetailFeature{
     "IPH_DataSaverDetail", base::FEATURE_ENABLED_BY_DEFAULT};
 const base::Feature kIPHDataSaverMilestonePromoFeature{
@@ -104,21 +132,66 @@ const base::Feature kIPHDownloadInfoBarDownloadsAreFasterFeature{
 const base::Feature kIPHQuietNotificationPromptsFeature{
     "IPH_QuietNotificationPrompts", base::FEATURE_DISABLED_BY_DEFAULT};
 const base::Feature kIPHReadLaterContextMenuFeature{
-    "IPH_ReadLaterContextMenu", base::FEATURE_DISABLED_BY_DEFAULT};
+    "IPH_ReadLaterContextMenu", base::FEATURE_ENABLED_BY_DEFAULT};
 const base::Feature kIPHReadLaterAppMenuBookmarkThisPageFeature{
-    "IPH_ReadLaterAppMenuBookmarkThisPage", base::FEATURE_DISABLED_BY_DEFAULT};
+    "IPH_ReadLaterAppMenuBookmarkThisPage", base::FEATURE_ENABLED_BY_DEFAULT};
 const base::Feature kIPHReadLaterAppMenuBookmarksFeature{
-    "IPH_ReadLaterAppMenuBookmarks", base::FEATURE_DISABLED_BY_DEFAULT};
+    "IPH_ReadLaterAppMenuBookmarks", base::FEATURE_ENABLED_BY_DEFAULT};
 const base::Feature kIPHReadLaterBottomSheetFeature{
     "IPH_ReadLaterBottomSheet", base::FEATURE_ENABLED_BY_DEFAULT};
+const base::Feature kIPHShoppingListSaveFlowFeature{
+    "IPH_ShoppingListSaveFlow", base::FEATURE_ENABLED_BY_DEFAULT};
 const base::Feature kIPHEphemeralTabFeature{"IPH_EphemeralTab",
                                             base::FEATURE_DISABLED_BY_DEFAULT};
+const base::Feature
+    kIPHFeatureNotificationGuideDefaultBrowserNotificationShownFeature{
+        "IPH_FeatureNotificationGuideDefaultBrowserNotificationShown",
+        base::FEATURE_ENABLED_BY_DEFAULT};
+const base::Feature kIPHFeatureNotificationGuideSignInNotificationShownFeature{
+    "IPH_FeatureNotificationGuideSignInNotificationShown",
+    base::FEATURE_ENABLED_BY_DEFAULT};
+const base::Feature
+    kIPHFeatureNotificationGuideIncognitoTabNotificationShownFeature{
+        "IPH_FeatureNotificationGuideIncognitoTabNotificationShown",
+        base::FEATURE_ENABLED_BY_DEFAULT};
+const base::Feature
+    kIPHFeatureNotificationGuideNTPSuggestionCardNotificationShownFeature{
+        "IPH_FeatureNotificationGuideNTPSuggestionCardNotificationShown",
+        base::FEATURE_ENABLED_BY_DEFAULT};
+const base::Feature
+    kIPHFeatureNotificationGuideVoiceSearchNotificationShownFeature{
+        "IPH_FeatureNotificationGuideVoiceSearchNotificationShown",
+        base::FEATURE_ENABLED_BY_DEFAULT};
+const base::Feature kIPHFeatureNotificationGuideDefaultBrowserPromoFeature{
+    "IPH_FeatureNotificationGuideDefaultBrowserPromo",
+    base::FEATURE_ENABLED_BY_DEFAULT};
+const base::Feature kIPHFeatureNotificationGuideSignInHelpBubbleFeature{
+    "IPH_FeatureNotificationGuideSignInHelpBubble",
+    base::FEATURE_ENABLED_BY_DEFAULT};
+const base::Feature kIPHFeatureNotificationGuideIncognitoTabHelpBubbleFeature{
+    "IPH_FeatureNotificationGuideIncognitoTabHelpBubble",
+    base::FEATURE_ENABLED_BY_DEFAULT};
+const base::Feature
+    kIPHFeatureNotificationGuideNTPSuggestionCardHelpBubbleFeature{
+        "IPH_FeatureNotificationGuideNTPSuggestionCardHelpBubble",
+        base::FEATURE_ENABLED_BY_DEFAULT};
+const base::Feature kIPHFeatureNotificationGuideVoiceSearchHelpBubbleFeature{
+    "IPH_FeatureNotificationGuideVoiceSearchHelpBubble",
+    base::FEATURE_ENABLED_BY_DEFAULT};
+const base::Feature kIPHFeatureNotificationGuideIncognitoTabUsedFeature{
+    "IPH_FeatureNotificationGuideIncognitoTabUsed",
+    base::FEATURE_ENABLED_BY_DEFAULT};
+const base::Feature kIPHFeatureNotificationGuideVoiceSearchUsedFeature{
+    "IPH_FeatureNotificationGuideVoiceSearchUsed",
+    base::FEATURE_ENABLED_BY_DEFAULT};
 const base::Feature kIPHFeedCardMenuFeature{"IPH_FeedCardMenu",
                                             base::FEATURE_DISABLED_BY_DEFAULT};
-const base::Feature kIPHHomepagePromoCardFeature{
-    "IPH_HomepagePromoCard", base::FEATURE_DISABLED_BY_DEFAULT};
+const base::Feature kIPHGenericAlwaysTriggerHelpUiFeature{
+    "IPH_GenericAlwaysTriggerHelpUiFeature", base::FEATURE_ENABLED_BY_DEFAULT};
 const base::Feature kIPHIdentityDiscFeature{"IPH_IdentityDisc",
                                             base::FEATURE_DISABLED_BY_DEFAULT};
+const base::Feature kIPHInstanceSwitcherFeature{
+    "IPH_InstanceSwitcher", base::FEATURE_ENABLED_BY_DEFAULT};
 const base::Feature kIPHKeyboardAccessoryAddressFillingFeature{
     "IPH_KeyboardAccessoryAddressFilling", base::FEATURE_DISABLED_BY_DEFAULT};
 const base::Feature kIPHKeyboardAccessoryBarSwipingFeature{
@@ -129,17 +202,22 @@ const base::Feature kIPHKeyboardAccessoryPaymentFillingFeature{
     "IPH_KeyboardAccessoryPaymentFilling", base::FEATURE_DISABLED_BY_DEFAULT};
 const base::Feature kIPHKeyboardAccessoryPaymentOfferFeature{
     "IPH_KeyboardAccessoryPaymentOffer", base::FEATURE_DISABLED_BY_DEFAULT};
-const base::Feature kIPHKeyboardAccessoryPaymentVirtualCardFeature{
-    "IPH_KeyboardAccessoryPaymentVirtualCard",
-    base::FEATURE_DISABLED_BY_DEFAULT};
+const base::Feature kIPHLowUserEngagementDetectorFeature{
+    "IPH_LowUserEngagementDetector", base::FEATURE_ENABLED_BY_DEFAULT};
 const base::Feature kIPHNewTabPageHomeButtonFeature{
     "IPH_NewTabPageHomeButton", base::FEATURE_DISABLED_BY_DEFAULT};
 const base::Feature kIPHMicToolbarFeature{"IPH_MicToolbar",
                                           base::FEATURE_DISABLED_BY_DEFAULT};
 const base::Feature kIPHPageInfoFeature{"IPH_PageInfo",
                                         base::FEATURE_DISABLED_BY_DEFAULT};
+const base::Feature kIPHPageInfoStoreInfoFeature{
+    "IPH_PageInfoStoreInfo", base::FEATURE_DISABLED_BY_DEFAULT};
 const base::Feature kIPHPreviewsOmniboxUIFeature{
     "IPH_PreviewsOmniboxUI", base::FEATURE_ENABLED_BY_DEFAULT};
+const base::Feature kIPHPriceDropNTPFeature{"IPH_PriceDropNTP",
+                                            base::FEATURE_DISABLED_BY_DEFAULT};
+const base::Feature kIPHShoppingListMenuItemFeature{
+    "IPH_ShoppingListMenuItem", base::FEATURE_ENABLED_BY_DEFAULT};
 const base::Feature kIPHTabGroupsQuicklyComparePagesFeature{
     "IPH_TabGroupsQuicklyComparePages", base::FEATURE_DISABLED_BY_DEFAULT};
 const base::Feature kIPHTabGroupsTapToSeeAnotherTabFeature{
@@ -162,10 +240,14 @@ const base::Feature kIPHVideoTutorialNTPVoiceSearchFeature{
     "IPH_VideoTutorial_NTP_VoiceSearch", base::FEATURE_ENABLED_BY_DEFAULT};
 const base::Feature kIPHVideoTutorialNTPSummaryFeature{
     "IPH_VideoTutorial_NTP_Summary", base::FEATURE_ENABLED_BY_DEFAULT};
+const base::Feature kIPHVideoTutorialTryNowFeature{
+    "IPH_VideoTutorial_TryNow", base::FEATURE_ENABLED_BY_DEFAULT};
 const base::Feature kIPHExploreSitesTileFeature{
     "IPH_ExploreSitesTile", base::FEATURE_DISABLED_BY_DEFAULT};
 const base::Feature kIPHFeedHeaderMenuFeature{"IPH_FeedHeaderMenu",
                                               base::FEATURE_ENABLED_BY_DEFAULT};
+const base::Feature kIPHWebFeedAwarenessFeature{
+    "IPH_WebFeedAwareness", base::FEATURE_ENABLED_BY_DEFAULT};
 const base::Feature kIPHFeedSwipeRefresh{"IPH_FeedSwipeRefresh",
                                          base::FEATURE_ENABLED_BY_DEFAULT};
 const base::Feature kIPHChromeReengagementNotification1Feature{
@@ -188,11 +270,11 @@ const base::Feature kIPHSharedHighlightingBuilder{
     "IPH_SharedHighlightingBuilder", base::FEATURE_DISABLED_BY_DEFAULT};
 const base::Feature kIPHSharedHighlightingReceiverFeature{
     "IPH_SharedHighlightingReceiver", base::FEATURE_DISABLED_BY_DEFAULT};
-const base::Feature kIPHStartSurfaceTabSwitcherHomeButton{
-    "IPH_StartSurfaceTabSwitcherHomeButton", base::FEATURE_ENABLED_BY_DEFAULT};
-#endif  // defined(OS_ANDROID)
+const base::Feature kIPHSharingHubWebnotesStylizeFeature{
+    "IPH_SharingHubWebnotesStylize", base::FEATURE_ENABLED_BY_DEFAULT};
+#endif  // BUILDFLAG(IS_ANDROID)
 
-#if defined(OS_IOS)
+#if BUILDFLAG(IS_IOS)
 const base::Feature kIPHBottomToolbarTipFeature{
     "IPH_BottomToolbarTip", base::FEATURE_DISABLED_BY_DEFAULT};
 const base::Feature kIPHLongPressToolbarTipFeature{
@@ -209,14 +291,20 @@ const base::Feature kIPHBadgedTranslateManualTriggerFeature{
     "IPH_BadgedTranslateManualTrigger", base::FEATURE_DISABLED_BY_DEFAULT};
 const base::Feature kIPHDiscoverFeedHeaderFeature{
     "IPH_DiscoverFeedHeaderMenu", base::FEATURE_DISABLED_BY_DEFAULT};
-#endif  // defined(OS_IOS)
+const base::Feature kIPHDefaultSiteViewFeature{
+    "IPH_DefaultSiteView", base::FEATURE_DISABLED_BY_DEFAULT};
+const base::Feature kIPHPasswordSuggestionsFeature{
+    "IPH_PasswordSuggestions", base::FEATURE_DISABLED_BY_DEFAULT};
+const base::Feature kIPHFollowWhileBrowsingFeature{
+    "IPH_FollowWhileBrowsing", base::FEATURE_DISABLED_BY_DEFAULT};
+#endif  // BUILDFLAG(IS_IOS)
 
-#if defined(OS_WIN) || defined(OS_APPLE) || defined(OS_LINUX) || \
-    defined(OS_CHROMEOS) || defined(OS_ANDROID) || defined(OS_FUCHSIA)
-const base::Feature kIPHUpdatedConnectionSecurityIndicatorsFeature{
-    "IPH_UpdatedConnectionSecurityIndicators",
-    base::FEATURE_DISABLED_BY_DEFAULT};
-#endif  // defined(OS_WIN) || defined(OS_APPLE) || defined(OS_LINUX) ||
-        // defined(OS_CHROMEOS) || defined(OS_ANDROID) || defined(OS_FUCHSIA)
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_APPLE) || BUILDFLAG(IS_LINUX) || \
+    BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_FUCHSIA)
+const base::Feature kIPHAutofillVirtualCardSuggestionFeature{
+    "IPH_AutofillVirtualCardSuggestion", base::FEATURE_ENABLED_BY_DEFAULT};
+#endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_APPLE) || BUILDFLAG(IS_LINUX) ||
+        // BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_ANDROID) ||
+        // BUILDFLAG(IS_FUCHSIA)
 
 }  // namespace feature_engagement

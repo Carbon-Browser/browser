@@ -19,6 +19,7 @@ class ScrollView;
 namespace ash {
 
 class AppListViewDelegate;
+class AppsGridViewFocusDelegate;
 
 // An apps grid that shows all the apps in a long scrolling list. Used for
 // the clamshell mode bubble launcher. Implemented as a single "page" of apps.
@@ -33,34 +34,40 @@ class ASH_EXPORT ScrollableAppsGridView : public AppsGridView {
                          AppListViewDelegate* view_delegate,
                          AppsGridViewFolderDelegate* folder_delegate,
                          views::ScrollView* scroll_view,
-                         AppListFolderController* folder_controller);
+                         AppListFolderController* folder_controller,
+                         AppsGridViewFocusDelegate* focus_delegate);
   ScrollableAppsGridView(const ScrollableAppsGridView&) = delete;
   ScrollableAppsGridView& operator=(const ScrollableAppsGridView&) = delete;
   ~ScrollableAppsGridView() override;
+
+  // Sets the max number of columns the grid can have.
+  // See `AppsGridView::SetMaxColumnsInternal()` for details.
+  void SetMaxColumns(int max_cols);
 
   // views::View:
   void Layout() override;
 
   // AppsGridView:
-  void Init() override;
   gfx::Size GetTileViewSize() const override;
-  gfx::Insets GetTilePadding() const override;
+  gfx::Insets GetTilePadding(int page) const override;
   gfx::Size GetTileGridSize() const override;
-  int GetPaddingBetweenPages() const override;
   int GetTotalPages() const override;
   int GetSelectedPage() const override;
   bool IsScrollAxisVertical() const override;
-  void CalculateIdealBounds() override;
   bool MaybeAutoScroll() override;
   void StopAutoScroll() override;
-  void HandleScrollFromAppListView(const gfx::Vector2d& offset,
-                                   ui::EventType type) override;
-  void SetFocusAfterEndDrag() override;
+  void HandleScrollFromParentView(const gfx::Vector2d& offset,
+                                  ui::EventType type) override;
+  void SetFocusAfterEndDrag(AppListItem* drag_item) override;
   void RecordAppMovingTypeMetrics(AppListAppMovingType type) override;
-  int TilesPerPage(int page) const override;
+  int GetMaxRowsInPage(int page) const override;
+  gfx::Vector2d GetGridCenteringOffset(int page) const override;
   const gfx::Vector2d CalculateTransitionOffset(
       int page_of_view) const override;
   void EnsureViewVisible(const GridIndex& index) override;
+  absl::optional<VisibleItemIndexRange> GetVisibleItemIndexRange()
+      const override;
+  base::ScopedClosureRunner LockAppsGridOpacity() override;
 
   views::ScrollView* scroll_view_for_test() { return scroll_view_; }
   base::OneShotTimer* auto_scroll_timer_for_test() {

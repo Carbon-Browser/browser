@@ -17,34 +17,32 @@
 #include "components/account_id/account_id.h"
 #include "components/prefs/scoped_user_pref_update.h"
 #include "components/user_manager/known_user.h"
-#include "ui/base/ime/chromeos/ime_keyboard.h"
+#include "ui/base/ime/ash/ime_keyboard.h"
 
-namespace chromeos {
-namespace lock_screen_utils {
-
+namespace ash::lock_screen_utils {
 namespace {
 
 bool SetUserInputMethodImpl(
-    const std::string& user_input_method,
+    const std::string& user_input_method_id,
     input_method::InputMethodManager::State* ime_state) {
-  if (!chromeos::input_method::InputMethodManager::Get()->IsLoginKeyboard(
-          user_input_method)) {
+  if (!input_method::InputMethodManager::Get()->IsLoginKeyboard(
+          user_input_method_id)) {
     LOG(WARNING) << "SetUserInputMethod: stored user last input method '"
-                 << user_input_method
+                 << user_input_method_id
                  << "' is no longer Full Latin Keyboard Language"
                  << " (entry dropped). Use hardware default instead.";
     return false;
   }
-  if (!base::Contains(ime_state->GetActiveInputMethodIds(),
-                      user_input_method)) {
-    if (!ime_state->EnableInputMethod(user_input_method)) {
+  if (!base::Contains(ime_state->GetEnabledInputMethodIds(),
+                      user_input_method_id)) {
+    if (!ime_state->EnableInputMethod(user_input_method_id)) {
       DLOG(ERROR) << "SetUserInputMethod: user input method '"
-                  << user_input_method
+                  << user_input_method_id
                   << "' is not enabled and enabling failed (ignored!).";
       return false;
     }
   }
-  ime_state->ChangeInputMethod(user_input_method, false /* show_message */);
+  ime_state->ChangeInputMethod(user_input_method_id, false /* show_message */);
 
   return true;
 }
@@ -56,13 +54,13 @@ void SetUserInputMethod(const AccountId& account_id,
                         bool honor_device_policy) {
   bool succeed = false;
 
-  const std::string input_method = GetUserLastInputMethod(account_id);
+  const std::string input_method_id = GetUserLastInputMethodId(account_id);
 
   if (honor_device_policy)
-    EnforceDevicePolicyInputMethods(input_method);
+    EnforceDevicePolicyInputMethods(input_method_id);
 
-  if (!input_method.empty())
-    succeed = SetUserInputMethodImpl(input_method, ime_state);
+  if (!input_method_id.empty())
+    succeed = SetUserInputMethodImpl(input_method_id, ime_state);
 
   // This is also a case when last layout is set only for a few local users,
   // thus others need to be switched to default locale.
@@ -75,106 +73,107 @@ void SetUserInputMethod(const AccountId& account_id,
   }
 }
 
-std::string GetUserLastInputMethod(const AccountId& account_id) {
+std::string GetUserLastInputMethodId(const AccountId& account_id) {
   if (!account_id.is_valid())
     return std::string();
-  std::string input_method;
-  if (user_manager::known_user::GetUserLastInputMethod(account_id,
-                                                       &input_method)) {
-    return input_method;
+  user_manager::KnownUser known_user(g_browser_process->local_state());
+  if (const std::string* input_method_id =
+          known_user.GetUserLastInputMethodId(account_id)) {
+    return *input_method_id;
   }
 
   // Try profile prefs. For the ephemeral case known_user does not persist the
   // data.
-  Profile* profile =
-      chromeos::ProfileHelper::Get()->GetProfileByAccountId(account_id);
+  Profile* profile = ProfileHelper::Get()->GetProfileByAccountId(account_id);
   if (profile && profile->GetPrefs()) {
-    input_method = profile->GetPrefs()->GetString(prefs::kLastLoginInputMethod);
-    if (!input_method.empty())
-      return input_method;
+    std::string input_method_id =
+        profile->GetPrefs()->GetString(prefs::kLastLoginInputMethod);
+    if (!input_method_id.empty())
+      return input_method_id;
   }
 
   // Try to use old values.
   PrefService* const local_state = g_browser_process->local_state();
-  const base::DictionaryValue* users_last_input_methods =
-      local_state->GetDictionary(::prefs::kUsersLastInputMethod);
-
-  if (!users_last_input_methods) {
-    DLOG(WARNING) << "GetUserLastInputMethod: no kUsersLastInputMethod";
-    return std::string();
-  }
+  const base::Value::Dict& users_last_input_methods =
+      local_state->GetValueDict(::prefs::kUsersLastInputMethod);
 
   const std::string* input_method_str =
-      users_last_input_methods->FindStringKey(account_id.GetUserEmail());
+      users_last_input_methods.FindString(account_id.GetUserEmail());
   if (!input_method_str) {
-    DVLOG(0) << "GetUserLastInputMethod: no input method for this user";
+    DVLOG(0) << "GetUserLastInputMethodId: no input method for this user";
     return std::string();
   }
+  // Migrate into the known_user system.
+  known_user.SetUserLastLoginInputMethodId(account_id, *input_method_str);
 
   return *input_method_str;
 }
 
-void EnforceDevicePolicyInputMethods(std::string user_input_method) {
-  chromeos::CrosSettings* cros_settings = chromeos::CrosSettings::Get();
+void EnforceDevicePolicyInputMethods(std::string user_input_method_id) {
+  auto* cros_settings = CrosSettings::Get();
   const base::ListValue* login_screen_input_methods = nullptr;
-  if (!cros_settings->GetList(chromeos::kDeviceLoginScreenInputMethods,
+  if (!cros_settings->GetList(kDeviceLoginScreenInputMethods,
                               &login_screen_input_methods) ||
-      login_screen_input_methods->GetList().empty()) {
+      login_screen_input_methods->GetListDeprecated().empty()) {
     StopEnforcingPolicyInputMethods();
     return;
   }
 
-  std::vector<std::string> allowed_input_methods;
+  std::vector<std::string> allowed_input_method_ids;
 
   // Add user's input method first so it is pre-selected.
-  if (!user_input_method.empty()) {
-    allowed_input_methods.push_back(user_input_method);
+  if (!user_input_method_id.empty()) {
+    allowed_input_method_ids.push_back(user_input_method_id);
   }
 
-  for (const auto& input_method_entry : login_screen_input_methods->GetList()) {
+  for (const auto& input_method_entry :
+       login_screen_input_methods->GetListDeprecated()) {
     if (input_method_entry.is_string())
-      allowed_input_methods.push_back(input_method_entry.GetString());
+      allowed_input_method_ids.push_back(input_method_entry.GetString());
   }
-  chromeos::input_method::InputMethodManager* imm =
-      chromeos::input_method::InputMethodManager::Get();
-  imm->GetActiveIMEState()->SetAllowedInputMethods(allowed_input_methods, true);
+  auto imm_state = input_method::InputMethodManager::Get()->GetActiveIMEState();
+  bool managed_by_policy =
+      imm_state->SetAllowedInputMethods(allowed_input_method_ids);
+  if (managed_by_policy) {
+    imm_state->ReplaceEnabledInputMethods(
+        imm_state->GetAllowedInputMethodIds());
+  }
   if (ImeControllerClientImpl::Get())  // Can be null in tests.
     ImeControllerClientImpl::Get()->SetImesManagedByPolicy(true);
 }
 
 void StopEnforcingPolicyInputMethods() {
   // Empty means all input methods are allowed
-  std::vector<std::string> allowed_input_methods;
-  chromeos::input_method::InputMethodManager* imm =
-      chromeos::input_method::InputMethodManager::Get();
-  imm->GetActiveIMEState()->SetAllowedInputMethods(allowed_input_methods, true);
+  auto imm_state = input_method::InputMethodManager::Get()->GetActiveIMEState();
+  imm_state->SetAllowedInputMethods(std::vector<std::string>());
   if (ImeControllerClientImpl::Get())  // Can be null in tests.
     ImeControllerClientImpl::Get()->SetImesManagedByPolicy(false);
-  imm->GetActiveIMEState()->SetInputMethodLoginDefault();
+  imm_state->SetInputMethodLoginDefault();
 }
 
 void SetKeyboardSettings(const AccountId& account_id) {
-  bool auto_repeat_enabled = ash::kDefaultKeyAutoRepeatEnabled;
-  if (user_manager::known_user::GetBooleanPref(
-          account_id, ash::prefs::kXkbAutoRepeatEnabled,
-          &auto_repeat_enabled) &&
-      !auto_repeat_enabled) {
-    input_method::InputMethodManager::Get()
-        ->GetImeKeyboard()
-        ->SetAutoRepeatEnabled(false);
-    return;
+  user_manager::KnownUser known_user(g_browser_process->local_state());
+  if (absl::optional<bool> auto_repeat_enabled =
+          known_user.FindBoolPath(account_id, prefs::kXkbAutoRepeatEnabled);
+      auto_repeat_enabled.has_value()) {
+    if (!auto_repeat_enabled.value()) {
+      input_method::InputMethodManager::Get()
+          ->GetImeKeyboard()
+          ->SetAutoRepeatEnabled(false);
+      return;
+    }
   }
 
-  int auto_repeat_delay = ash::kDefaultKeyAutoRepeatDelay.InMilliseconds();
-  int auto_repeat_interval =
-      ash::kDefaultKeyAutoRepeatInterval.InMilliseconds();
-  user_manager::known_user::GetIntegerPref(
-      account_id, ash::prefs::kXkbAutoRepeatDelay, &auto_repeat_delay);
-  user_manager::known_user::GetIntegerPref(
-      account_id, ash::prefs::kXkbAutoRepeatInterval, &auto_repeat_interval);
   input_method::AutoRepeatRate rate;
-  rate.initial_delay_in_ms = auto_repeat_delay;
-  rate.repeat_interval_in_ms = auto_repeat_interval;
+
+  rate.initial_delay_in_ms =
+      known_user.FindIntPath(account_id, prefs::kXkbAutoRepeatDelay)
+          .value_or(kDefaultKeyAutoRepeatDelay.InMilliseconds());
+
+  rate.repeat_interval_in_ms =
+      known_user.FindIntPath(account_id, prefs::kXkbAutoRepeatInterval)
+          .value_or(kDefaultKeyAutoRepeatInterval.InMilliseconds());
+
   input_method::InputMethodManager::Get()
       ->GetImeKeyboard()
       ->SetAutoRepeatEnabled(true);
@@ -182,25 +181,28 @@ void SetKeyboardSettings(const AccountId& account_id) {
       rate);
 }
 
-std::vector<ash::LocaleItem> FromListValueToLocaleItem(
+std::vector<LocaleItem> FromListValueToLocaleItem(
     std::unique_ptr<base::ListValue> locales) {
-  std::vector<ash::LocaleItem> result;
-  for (const auto& locale : locales->GetList()) {
+  std::vector<LocaleItem> result;
+  for (const auto& locale : locales->GetListDeprecated()) {
     const base::DictionaryValue* dictionary;
     if (!locale.GetAsDictionary(&dictionary))
       continue;
 
-    ash::LocaleItem locale_item;
-    dictionary->GetString("value", &locale_item.language_code);
-    dictionary->GetString("title", &locale_item.title);
-    std::string group_name;
-    dictionary->GetString("optionGroupName", &group_name);
-    if (!group_name.empty())
-      locale_item.group_name = group_name;
+    LocaleItem locale_item;
+    const std::string* language_code = dictionary->FindStringKey("value");
+    if (language_code)
+      locale_item.language_code = *language_code;
+    const std::string* title = dictionary->FindStringKey("title");
+    if (title)
+      locale_item.title = *title;
+    const std::string* group_name =
+        dictionary->FindStringKey("optionGroupName");
+    if (group_name && !group_name->empty())
+      locale_item.group_name = *group_name;
     result.push_back(std::move(locale_item));
   }
   return result;
 }
 
-}  // namespace lock_screen_utils
-}  // namespace chromeos
+}  // namespace ash::lock_screen_utils

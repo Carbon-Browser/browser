@@ -9,16 +9,22 @@
 #include <string>
 #include <utility>
 
-#include "base/compiler_specific.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/scoped_observation.h"
 #include "base/test/bind.h"
 #include "build/build_config.h"
+#include "build/chromecast_buildflags.h"
 #include "ui/gfx/native_widget_types.h"
 #include "ui/views/test/views_test_base.h"
 #include "ui/views/widget/widget_delegate.h"
 #include "ui/views/widget/widget_observer.h"
+
+#if (BUILDFLAG(IS_LINUX) && !BUILDFLAG(IS_CASTOS)) || \
+    BUILDFLAG(IS_CHROMEOS_LACROS)
+
+#include "ui/display/screen.h"
+#endif
 
 namespace ui {
 namespace internal {
@@ -64,6 +70,10 @@ class WidgetTest : public ViewsTestBase {
   WidgetTest();
   explicit WidgetTest(
       std::unique_ptr<base::test::TaskEnvironment> task_environment);
+
+  WidgetTest(const WidgetTest&) = delete;
+  WidgetTest& operator=(const WidgetTest&) = delete;
+
   ~WidgetTest() override;
 
   // Create Widgets with |native_widget| in InitParams set to an instance of
@@ -126,33 +136,39 @@ class WidgetTest : public ViewsTestBase {
   // activate a window owned by the app shortly after app startup, if there is
   // one. See https://crbug.com/998868 for details.
   static void WaitForSystemAppActivation();
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(WidgetTest);
 };
 
 class DesktopWidgetTest : public WidgetTest {
  public:
   DesktopWidgetTest();
+
+  DesktopWidgetTest(const DesktopWidgetTest&) = delete;
+  DesktopWidgetTest& operator=(const DesktopWidgetTest&) = delete;
+
   ~DesktopWidgetTest() override;
 
   // WidgetTest:
   void SetUp() override;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(DesktopWidgetTest);
 };
 
 class DesktopWidgetTestInteractive : public DesktopWidgetTest {
  public:
   DesktopWidgetTestInteractive();
+
+  DesktopWidgetTestInteractive(const DesktopWidgetTestInteractive&) = delete;
+  DesktopWidgetTestInteractive& operator=(const DesktopWidgetTestInteractive&) =
+      delete;
+
   ~DesktopWidgetTestInteractive() override;
 
   // DesktopWidgetTest
   void SetUp() override;
 
- private:
-  DISALLOW_COPY_AND_ASSIGN(DesktopWidgetTestInteractive);
+#if (BUILDFLAG(IS_LINUX) && !BUILDFLAG(IS_CASTOS)) || \
+    BUILDFLAG(IS_CHROMEOS_LACROS)
+  void TearDown() override;
+  std::unique_ptr<display::Screen> screen_;
+#endif
 };
 
 // A helper WidgetDelegate for tests that require hooks into WidgetDelegate
@@ -162,6 +178,11 @@ class TestDesktopWidgetDelegate : public WidgetDelegate {
  public:
   TestDesktopWidgetDelegate();
   explicit TestDesktopWidgetDelegate(Widget* widget);
+
+  TestDesktopWidgetDelegate(const TestDesktopWidgetDelegate&) = delete;
+  TestDesktopWidgetDelegate& operator=(const TestDesktopWidgetDelegate&) =
+      delete;
+
   ~TestDesktopWidgetDelegate() override;
 
   // Initialize the Widget, adding some meaningful default InitParams.
@@ -193,14 +214,12 @@ class TestDesktopWidgetDelegate : public WidgetDelegate {
   bool OnCloseRequested(Widget::ClosedReason close_reason) override;
 
  private:
-  Widget* widget_;
-  View* contents_view_ = nullptr;
+  raw_ptr<Widget> widget_;
+  raw_ptr<View> contents_view_ = nullptr;
   int window_closing_count_ = 0;
   gfx::Rect initial_bounds_ = gfx::Rect(100, 100, 200, 200);
   bool can_close_ = true;
   Widget::ClosedReason last_closed_reason_ = Widget::ClosedReason::kUnspecified;
-
-  DISALLOW_COPY_AND_ASSIGN(TestDesktopWidgetDelegate);
 };
 
 // Testing widget delegate that creates a widget with a single view, which is
@@ -208,6 +227,12 @@ class TestDesktopWidgetDelegate : public WidgetDelegate {
 class TestInitialFocusWidgetDelegate : public TestDesktopWidgetDelegate {
  public:
   explicit TestInitialFocusWidgetDelegate(gfx::NativeWindow context);
+
+  TestInitialFocusWidgetDelegate(const TestInitialFocusWidgetDelegate&) =
+      delete;
+  TestInitialFocusWidgetDelegate& operator=(
+      const TestInitialFocusWidgetDelegate&) = delete;
+
   ~TestInitialFocusWidgetDelegate() override;
 
   View* view() { return view_; }
@@ -216,9 +241,7 @@ class TestInitialFocusWidgetDelegate : public TestDesktopWidgetDelegate {
   View* GetInitiallyFocusedView() override;
 
  private:
-  View* view_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestInitialFocusWidgetDelegate);
+  raw_ptr<View> view_;
 };
 
 // Use in tests to wait until a Widget's activation change to a particular
@@ -226,6 +249,10 @@ class TestInitialFocusWidgetDelegate : public TestDesktopWidgetDelegate {
 class WidgetActivationWaiter : public WidgetObserver {
  public:
   WidgetActivationWaiter(Widget* widget, bool active);
+
+  WidgetActivationWaiter(const WidgetActivationWaiter&) = delete;
+  WidgetActivationWaiter& operator=(const WidgetActivationWaiter&) = delete;
+
   ~WidgetActivationWaiter() override;
 
   // Returns when the active status matches that supplied to the constructor. If
@@ -237,17 +264,21 @@ class WidgetActivationWaiter : public WidgetObserver {
   // views::WidgetObserver override:
   void OnWidgetActivationChanged(Widget* widget, bool active) override;
 
-  base::RunLoop run_loop_;
   bool observed_;
   bool active_;
 
-  DISALLOW_COPY_AND_ASSIGN(WidgetActivationWaiter);
+  base::RunLoop run_loop_;
+  base::ScopedObservation<Widget, WidgetObserver> widget_observation_{this};
 };
 
 // Use in tests to wait for a widget to be destroyed.
 class WidgetDestroyedWaiter : public WidgetObserver {
  public:
   explicit WidgetDestroyedWaiter(Widget* widget);
+
+  WidgetDestroyedWaiter(const WidgetDestroyedWaiter&) = delete;
+  WidgetDestroyedWaiter& operator=(const WidgetDestroyedWaiter&) = delete;
+
   ~WidgetDestroyedWaiter() override;
 
   // Wait for the widget to be destroyed, or return immediately if it was
@@ -258,10 +289,8 @@ class WidgetDestroyedWaiter : public WidgetObserver {
   // views::WidgetObserver
   void OnWidgetDestroyed(Widget* widget) override;
 
-  Widget* widget_;
   base::RunLoop run_loop_;
-
-  DISALLOW_COPY_AND_ASSIGN(WidgetDestroyedWaiter);
+  base::ScopedObservation<Widget, WidgetObserver> widget_observation_{this};
 };
 
 // Helper class to wait for a Widget to become visible. This will add a failure
@@ -282,7 +311,7 @@ class WidgetVisibleWaiter : public WidgetObserver {
   void OnWidgetVisibilityChanged(Widget* widget, bool visible) override;
   void OnWidgetDestroying(Widget* widget) override;
 
-  Widget* const widget_;
+  const raw_ptr<Widget> widget_;
   base::RunLoop run_loop_;
   base::ScopedObservation<Widget, WidgetObserver> widget_observation_{this};
 };

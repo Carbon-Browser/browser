@@ -16,7 +16,7 @@
 
 #include "base/callback_list.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted_delete_on_sequence.h"
 #include "components/safe_browsing/core/browser/db/hit_report.h"
 #include "components/safe_browsing/core/browser/db/util.h"
@@ -206,12 +206,6 @@ class SafeBrowsingDatabaseManager
   // Match*(): Methods to synchronously check if various types are safe.
   //
 
-  // Check if SHA-256 hash of |str| matches any of the full-length hashes from
-  // the download allowlist.  Returns true if there was a match and false
-  // otherwise. To make sure we are conservative we will return true if an error
-  // occurs.  This method must be called on the IO thread.
-  virtual bool MatchDownloadAllowlistString(const std::string& str) = 0;
-
   // Check if the |url| matches any of the full-length hashes from the download
   // allowlist.  Returns true if there was a match and false otherwise. To make
   // sure we are conservative we will return true if an error occurs.  This
@@ -238,10 +232,6 @@ class SafeBrowsingDatabaseManager
 
   // Returns whether download protection is enabled.
   virtual bool IsDownloadProtectionEnabled() const = 0;
-
-  // Returns true if URL-checking is supported on this build+device.
-  // If false, calls to CheckBrowseUrl may dcheck-fail.
-  virtual bool IsSupported() const = 0;
 
   //
   // Methods to indicate when to start or suspend the SafeBrowsing operations.
@@ -273,11 +263,18 @@ class SafeBrowsingDatabaseManager
   // method at the bottom of it.
   virtual void StopOnIOThread(bool shutdown);
 
+  // Called to check if database is ready or not.
+  virtual bool IsDatabaseReady();
+
  protected:
   // Bundled client info for an API abuse hash prefix check.
   class SafeBrowsingApiCheck {
    public:
     SafeBrowsingApiCheck(const GURL& url, Client* client);
+
+    SafeBrowsingApiCheck(const SafeBrowsingApiCheck&) = delete;
+    SafeBrowsingApiCheck& operator=(const SafeBrowsingApiCheck&) = delete;
+
     ~SafeBrowsingApiCheck() = default;
 
     const GURL& url() const { return url_; }
@@ -287,9 +284,7 @@ class SafeBrowsingDatabaseManager
     GURL url_;
 
     // Not owned.
-    Client* client_;
-
-    DISALLOW_COPY_AND_ASSIGN(SafeBrowsingApiCheck);
+    raw_ptr<Client> client_;
   };
 
   SafeBrowsingDatabaseManager(

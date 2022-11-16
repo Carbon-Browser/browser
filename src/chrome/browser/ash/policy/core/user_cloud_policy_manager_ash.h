@@ -9,9 +9,8 @@
 #include <string>
 
 #include "base/bind.h"
-#include "base/compiler_specific.h"
 #include "base/files/file_path.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/scoped_observation.h"
 #include "base/time/time.h"
@@ -107,16 +106,21 @@ class UserCloudPolicyManagerAsh
       std::unique_ptr<CloudExternalDataManager> external_data_manager,
       const base::FilePath& component_policy_cache_path,
       PolicyEnforcement enforcement_type,
+      PrefService* local_state,
       base::TimeDelta policy_refresh_timeout,
       base::OnceClosure fatal_error_callback,
       const AccountId& account_id,
       const scoped_refptr<base::SequencedTaskRunner>& task_runner);
+
+  UserCloudPolicyManagerAsh(const UserCloudPolicyManagerAsh&) = delete;
+  UserCloudPolicyManagerAsh& operator=(const UserCloudPolicyManagerAsh&) =
+      delete;
+
   ~UserCloudPolicyManagerAsh() override;
 
   // Initializes the cloud connection. |local_state| and
   // |device_management_service| must stay valid until this object is deleted.
   void Connect(
-      PrefService* local_state,
       DeviceManagementService* device_management_service,
       scoped_refptr<network::SharedURLLoaderFactory> system_url_loader_factory);
 
@@ -252,7 +256,7 @@ class UserCloudPolicyManagerAsh
   void OnProfileAdded(Profile* profile) override;
 
   // Called on profile shutdown.
-  void ProfileShutdown();
+  void ShutdownRemoteCommands();
 
   // Profile associated with the current user.
   Profile* const profile_;
@@ -292,7 +296,7 @@ class UserCloudPolicyManagerAsh
   base::OneShotTimer policy_refresh_timeout_;
 
   // The pref service to pass to the refresh scheduler on initialization.
-  PrefService* local_state_;
+  base::raw_ptr<PrefService> local_state_ = nullptr;
 
   // Used to fetch the policy OAuth token, when necessary. This object holds
   // a callback with an unretained reference to the manager, when it exists.
@@ -342,8 +346,6 @@ class UserCloudPolicyManagerAsh
   // whether this class has triggered a re-registration after the client failed
   // to load policy with error |DM_STATUS_SERVICE_DEVICE_NOT_FOUND|.
   bool is_in_reregistration_state_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(UserCloudPolicyManagerAsh);
 };
 
 }  // namespace policy

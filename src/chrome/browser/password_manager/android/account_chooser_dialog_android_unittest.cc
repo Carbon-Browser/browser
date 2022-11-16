@@ -5,7 +5,6 @@
 #include "chrome/browser/password_manager/android/account_chooser_dialog_android.h"
 
 #include "base/bind.h"
-#include "base/macros.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/test/gmock_callback_support.h"
 #include "base/test/metrics/histogram_tester.h"
@@ -30,7 +29,6 @@ namespace {
 
 using base::test::RunOnceCallback;
 using device_reauth::BiometricAuthRequester;
-using device_reauth::BiometricsAvailability;
 using device_reauth::MockBiometricAuthenticator;
 using testing::_;
 using testing::Eq;
@@ -79,6 +77,12 @@ class MockPasswordManagerClient
 class AccountChooserDialogAndroidTest : public ChromeRenderViewHostTestHarness {
  public:
   AccountChooserDialogAndroidTest();
+
+  AccountChooserDialogAndroidTest(const AccountChooserDialogAndroidTest&) =
+      delete;
+  AccountChooserDialogAndroidTest& operator=(
+      const AccountChooserDialogAndroidTest&) = delete;
+
   ~AccountChooserDialogAndroidTest() override {}
 
   void SetUp() override;
@@ -100,7 +104,6 @@ class AccountChooserDialogAndroidTest : public ChromeRenderViewHostTestHarness {
 
  private:
   base::test::ScopedFeatureList scoped_feature_list_;
-  DISALLOW_COPY_AND_ASSIGN(AccountChooserDialogAndroidTest);
 };
 
 AccountChooserDialogAndroidTest::AccountChooserDialogAndroidTest() {
@@ -184,8 +187,9 @@ TEST_F(AccountChooserDialogAndroidTest, SendsCredentialIfAuthNotAvailable) {
 
   EXPECT_CALL(client_, GetBiometricAuthenticator)
       .WillOnce(Return(authenticator_));
-  EXPECT_CALL(*authenticator_.get(), CanAuthenticate())
-      .WillOnce(Return(BiometricsAvailability::kNotEnrolled));
+  EXPECT_CALL(*authenticator_.get(),
+              CanAuthenticate(BiometricAuthRequester::kAccountChooserDialog))
+      .WillOnce(Return(false));
   std::unique_ptr<password_manager::PasswordForm> form =
       FillPasswordFormWithData(kFormData2);
 
@@ -201,10 +205,12 @@ TEST_F(AccountChooserDialogAndroidTest, SendsCredentialIfAuthSuccessful) {
 
   EXPECT_CALL(client_, GetBiometricAuthenticator)
       .WillOnce(Return(authenticator_));
-  EXPECT_CALL(*authenticator_.get(), CanAuthenticate())
-      .WillOnce(Return(BiometricsAvailability::kAvailable));
   EXPECT_CALL(*authenticator_.get(),
-              Authenticate(BiometricAuthRequester::kAccountChooserDialog, _))
+              CanAuthenticate(BiometricAuthRequester::kAccountChooserDialog))
+      .WillOnce(Return(true));
+  EXPECT_CALL(*authenticator_.get(),
+              Authenticate(BiometricAuthRequester::kAccountChooserDialog, _,
+                           /*use_last_valid_auth=*/true))
       .WillOnce(RunOnceCallback<1>(true));
 
   std::unique_ptr<password_manager::PasswordForm> form =
@@ -221,10 +227,12 @@ TEST_F(AccountChooserDialogAndroidTest, DoesntSendCredentialIfAuthFailed) {
 
   EXPECT_CALL(client_, GetBiometricAuthenticator)
       .WillOnce(Return(authenticator_));
-  EXPECT_CALL(*authenticator_.get(), CanAuthenticate())
-      .WillOnce(Return(BiometricsAvailability::kAvailable));
   EXPECT_CALL(*authenticator_.get(),
-              Authenticate(BiometricAuthRequester::kAccountChooserDialog, _))
+              CanAuthenticate(BiometricAuthRequester::kAccountChooserDialog))
+      .WillOnce(Return(true));
+  EXPECT_CALL(*authenticator_.get(),
+              Authenticate(BiometricAuthRequester::kAccountChooserDialog, _,
+                           /*use_last_valid_auth=*/true))
       .WillOnce(RunOnceCallback<1>(false));
 
   std::unique_ptr<password_manager::PasswordForm> form =
@@ -241,10 +249,12 @@ TEST_F(AccountChooserDialogAndroidTest, CancelsAuthIfDestroyed) {
 
   EXPECT_CALL(client_, GetBiometricAuthenticator)
       .WillOnce(Return(authenticator_));
-  EXPECT_CALL(*authenticator_.get(), CanAuthenticate())
-      .WillOnce(Return(BiometricsAvailability::kAvailable));
   EXPECT_CALL(*authenticator_.get(),
-              Authenticate(BiometricAuthRequester::kAccountChooserDialog, _));
+              CanAuthenticate(BiometricAuthRequester::kAccountChooserDialog))
+      .WillOnce(Return(true));
+  EXPECT_CALL(*authenticator_.get(),
+              Authenticate(BiometricAuthRequester::kAccountChooserDialog, _,
+                           /*use_last_valid_auth=*/true));
 
   dialog->OnCredentialClicked(base::android::AttachCurrentThread(),
                               nullptr /* obj */, 1 /* credential_item */,

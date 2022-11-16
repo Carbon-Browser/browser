@@ -16,6 +16,7 @@
 #include "base/bind.h"
 #include "base/callback.h"
 #include "base/numerics/safe_conversions.h"
+#include "components/crash/core/common/crash_key.h"
 #include "third_party/harfbuzz-ng/utils/hb_scoped.h"
 #include "third_party/skia/include/core/SkStream.h"
 #include "third_party/skia/include/core/SkTypeface.h"
@@ -63,6 +64,12 @@ void AddGlyphs(hb_set_t* glyph_id_set, uint16_t glyph_id) {
 
 // Implementation based on SkPDFSubsetFont() using harfbuzz.
 sk_sp<SkData> SubsetFont(SkTypeface* typeface, const GlyphUsage& usage) {
+  static crash_reporter::CrashKeyString<128> crash_key(
+      "PaintPreview-SubsetFont");
+  SkString family_name;
+  typeface->getFamilyName(&family_name);
+  crash_reporter::ScopedCrashKeyString auto_clear(&crash_key,
+                                                  family_name.c_str());
   int ttc_index = 0;
   sk_sp<SkData> data = StreamToData(typeface->openStream(&ttc_index));
   HbScoped<hb_face_t> face(hb_face_create(MakeBlob(data).get(), ttc_index));
@@ -79,7 +86,7 @@ sk_sp<SkData> SubsetFont(SkTypeface* typeface, const GlyphUsage& usage) {
   // Retain all variation information for OpenType variation fonts. See:
   // https://docs.microsoft.com/en-us/typography/opentype/spec/otvaroverview
   hb_set_t* skip_subset =
-      hb_subset_input_no_subset_tables_set(input.get());  // Owned by |input|.
+      hb_subset_input_set(input.get(), HB_SUBSET_SETS_NO_SUBSET_TABLE_TAG);
   hb_set_add(skip_subset, HB_TAG('a', 'v', 'a', 'r'));
   hb_set_add(skip_subset, HB_TAG('c', 'v', 'a', 'r'));
   hb_set_add(skip_subset, HB_TAG('f', 'v', 'a', 'r'));

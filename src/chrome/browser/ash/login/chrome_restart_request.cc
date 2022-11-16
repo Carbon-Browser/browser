@@ -9,13 +9,13 @@
 #include <utility>
 #include <vector>
 
+#include "ash/components/cryptohome/cryptohome_parameters.h"
 #include "ash/constants/ash_features.h"
 #include "ash/constants/ash_switches.h"
 #include "ash/public/cpp/app_list/app_list_switches.h"
 #include "base/base_switches.h"
 #include "base/bind.h"
 #include "base/command_line.h"
-#include "base/cxx17_backports.h"
 #include "base/feature_list.h"
 #include "base/memory/weak_ptr.h"
 #include "base/process/launch.h"
@@ -25,18 +25,18 @@
 #include "base/timer/timer.h"
 #include "base/values.h"
 #include "cc/base/switches.h"
+#include "chrome/browser/ash/boot_times_recorder.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/chromeos/boot_times_recorder.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
 #include "chrome/common/chrome_constants.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/url_constants.h"
-#include "chromeos/cryptohome/cryptohome_parameters.h"
+#include "chromeos/ash/components/browser_context_helper/browser_context_helper.h"
+#include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
 #include "chromeos/dbus/constants/dbus_switches.h"
 #include "chromeos/dbus/dbus_thread_manager.h"
-#include "chromeos/dbus/session_manager/session_manager_client.h"
 #include "components/account_id/account_id.h"
 #include "components/policy/core/common/policy_switches.h"
 #include "components/prefs/json_pref_store.h"
@@ -63,11 +63,10 @@
 #include "ui/wm/core/wm_core_switches.h"
 #include "url/gurl.h"
 
-using content::BrowserThread;
-
-namespace chromeos {
-
+namespace ash {
 namespace {
+
+using ::content::BrowserThread;
 
 // Increase logging level for Guest mode to avoid INFO messages in logs.
 const char kGuestModeLoggingLevel[] = "1";
@@ -110,7 +109,6 @@ void DeriveCommandLine(const GURL& start_url,
     ::switches::kDisableGpuWatchdog,
     ::switches::kDisableGpuCompositing,
     ::switches::kDisableGpuRasterization,
-    ::switches::kDisableOopRasterization,
     ::switches::kDisablePepper3DImageChromium,
     ::switches::kDisableTouchDragDrop,
     ::switches::kDisableVideoCaptureUseGpuMemoryBuffer,
@@ -119,21 +117,18 @@ void DeriveCommandLine(const GURL& start_url,
     ::switches::kEnableGpuMemoryBufferVideoFrames,
     ::switches::kEnableGpuRasterization,
     ::switches::kEnableLogging,
+    ::switches::kEnableMicrophoneMuteSwitchDeviceSwitch,
     ::switches::kEnableNativeGpuMemoryBuffers,
-    ::switches::kEnableOopRasterization,
     ::switches::kEnableTouchDragDrop,
     ::switches::kEnableUnifiedDesktop,
-    ::switches::kEnableUseZoomForDSF,
     ::switches::kEnableViewport,
     ::switches::kEnableHardwareOverlays,
     ::switches::kEdgeTouchFiltering,
     ::switches::kHostWindowBounds,
-    ::switches::kMainFrameResizesAreOrientationChanges,
     ::switches::kForceDeviceScaleFactor,
     ::switches::kForceGpuMemAvailableMb,
     ::switches::kGpuStartupDialog,
     ::switches::kGpuSandboxStartEarly,
-    ::switches::kNumRasterThreads,
     ::switches::kPlatformDisallowsChromeOSDirectVideoDecoder,
     ::switches::kPpapiInProcess,
     ::switches::kRemoteDebuggingPort,
@@ -153,24 +148,26 @@ void DeriveCommandLine(const GURL& start_url,
     ::switches::kV,
     ::switches::kVModule,
     ::switches::kVideoCaptureUseGpuMemoryBuffer,
+    ::switches::kWebAuthRemoteDesktopSupport,
     ::switches::kEnableWebGLDeveloperExtensions,
     ::switches::kEnableWebGLDraftExtensions,
     ::switches::kDisableWebGLImageChromium,
     ::switches::kEnableWebGLImageChromium,
     ::switches::kEnableUnsafeWebGPU,
+    ::switches::kEnableWebGPUDeveloperFeatures,
     ::switches::kDisableWebRtcHWDecoding,
     ::switches::kDisableWebRtcHWEncoding,
     ::switches::kOzonePlatform,
-    ash::switches::kAshClearFastInkBuffer,
-    ash::switches::kAshEnablePaletteOnAllDisplays,
-    ash::switches::kAshEnableTabletMode,
-    ash::switches::kAshEnableWaylandServer,
-    ash::switches::kAshForceEnableStylusTools,
-    ash::switches::kAshTouchHud,
-    ash::switches::kAuraLegacyPowerButton,
-    ash::switches::kEnableDimShelf,
-    ash::switches::kSupportsClamshellAutoRotation,
-    ash::switches::kShowTaps,
+    switches::kAshClearFastInkBuffer,
+    switches::kAshEnablePaletteOnAllDisplays,
+    switches::kAshEnableTabletMode,
+    switches::kAshEnableWaylandServer,
+    switches::kAshForceEnableStylusTools,
+    switches::kAshTouchHud,
+    switches::kAuraLegacyPowerButton,
+    switches::kEnableDimShelf,
+    switches::kSupportsClamshellAutoRotation,
+    switches::kShowTaps,
     blink::switches::kBlinkSettings,
     blink::switches::kDarkModeSettings,
     blink::switches::kDisableLowResTiling,
@@ -185,10 +182,13 @@ void DeriveCommandLine(const GURL& start_url,
     blink::switches::kEnableRasterSideDarkModeForImages,
     blink::switches::kEnableZeroCopy,
     blink::switches::kGpuRasterizationMSAASampleCount,
-    chromeos::switches::kDefaultWallpaperLarge,
-    chromeos::switches::kDefaultWallpaperSmall,
-    chromeos::switches::kGuestWallpaperLarge,
-    chromeos::switches::kGuestWallpaperSmall,
+    blink::switches::kNumRasterThreads,
+    switches::kAshPowerButtonPosition,
+    switches::kAshSideVolumeButtonPosition,
+    switches::kDefaultWallpaperLarge,
+    switches::kDefaultWallpaperSmall,
+    switches::kGuestWallpaperLarge,
+    switches::kGuestWallpaperSmall,
     // Please keep these in alphabetical order. Non-UI Compositor switches
     // here should also be added to
     // content/browser/renderer_host/render_process_host_impl.cc.
@@ -208,37 +208,38 @@ void DeriveCommandLine(const GURL& start_url,
     cc::switches::kSlowDownRasterScaleFactor,
     cc::switches::kUIEnableLayerLists,
     cc::switches::kUIShowFPSCounter,
-    chromeos::switches::kArcAvailability,
-    chromeos::switches::kArcAvailable,
-    chromeos::switches::kArcScale,
+    switches::kArcAvailability,
+    switches::kArcAvailable,
+    switches::kArcScale,
     chromeos::switches::kDbusStub,
-    chromeos::switches::kDisableArcDataWipe,
-    chromeos::switches::kDisableArcOptInVerification,
-    chromeos::switches::kDisableLoginAnimations,
-    chromeos::switches::kEnableArc,
-    chromeos::switches::kEnterpriseDisableArc,
-    chromeos::switches::kEnterpriseEnableForcedReEnrollment,
-    chromeos::switches::kFormFactor,
-    chromeos::switches::kHasChromeOSKeyboard,
-    chromeos::switches::kLacrosChromeAdditionalArgs,
-    chromeos::switches::kLacrosChromeAdditionalEnv,
-    chromeos::switches::kLacrosChromePath,
-    chromeos::switches::kLoginProfile,
-    chromeos::switches::kNaturalScrollDefault,
-    chromeos::switches::kRlzPingDelay,
+    switches::kDisableArcDataWipe,
+    switches::kDisableArcOptInVerification,
+    switches::kDisableLoginAnimations,
+    switches::kEnableArc,
+    switches::kEnterpriseDisableArc,
+    switches::kEnterpriseEnableForcedReEnrollment,
+    switches::kFormFactor,
+    switches::kHasChromeOSKeyboard,
+    switches::kLacrosChromeAdditionalArgs,
+    switches::kLacrosChromeAdditionalEnv,
+    switches::kLacrosChromePath,
+    switches::kLoginProfile,
+    switches::kNaturalScrollDefault,
+    switches::kRlzPingDelay,
     chromeos::switches::kSystemInDevMode,
+    switches::kTouchscreenUsableWhileScreenOff,
     policy::switches::kDeviceManagementUrl,
     wm::switches::kWindowAnimationsDisabled,
   };
   command_line->CopySwitchesFrom(base_command_line, kForwardSwitches,
-                                 base::size(kForwardSwitches));
+                                 std::size(kForwardSwitches));
 
   if (start_url.is_valid())
     command_line->AppendArg(start_url.spec());
 
-  for (base::DictionaryValue::Iterator it(new_switches); !it.IsAtEnd();
-       it.Advance()) {
-    command_line->AppendSwitchASCII(it.key(), it.value().GetString());
+  for (auto new_switch : new_switches.DictItems()) {
+    command_line->AppendSwitchASCII(new_switch.first,
+                                    new_switch.second.GetString());
   }
 }
 
@@ -246,17 +247,10 @@ void DeriveCommandLine(const GURL& start_url,
 // current session.
 void DeriveEnabledFeatures(base::CommandLine* out_command_line) {
   std::vector<const base::Feature*> kForwardEnabledFeatures{
-      &ash::features::kAutoNightLight,
-      &chromeos::features::kLacrosPrimary,
-      &chromeos::features::kLacrosSupport,
+      &features::kAutoNightLight, &features::kLacrosOnly,
+      &features::kLacrosPrimary,  &features::kLacrosSupport,
       &::features::kPluginVm,
   };
-
-  if (!IsRunningTest()) {
-    // TODO(b/192007213): Remove once kCellularUseAttachApn defaults to true.
-    kForwardEnabledFeatures.push_back(
-        &chromeos::features::kCellularUseAttachApn);
-  }
 
   std::vector<std::string> enabled_features;
   for (const auto* feature : kForwardEnabledFeatures) {
@@ -286,6 +280,10 @@ class ChromeRestartRequest
  public:
   explicit ChromeRestartRequest(const std::vector<std::string>& argv,
                                 RestartChromeReason reson);
+
+  ChromeRestartRequest(const ChromeRestartRequest&) = delete;
+  ChromeRestartRequest& operator=(const ChromeRestartRequest&) = delete;
+
   ~ChromeRestartRequest();
 
   // Starts the request.
@@ -302,8 +300,6 @@ class ChromeRestartRequest
   const RestartChromeReason reason_;
 
   base::OneShotTimer timer_;
-
-  DISALLOW_COPY_AND_ASSIGN(ChromeRestartRequest);
 };
 
 ChromeRestartRequest::ChromeRestartRequest(const std::vector<std::string>& argv,
@@ -324,7 +320,7 @@ void ChromeRestartRequest::Start() {
   // just kills us so settings may be lost. See http://crosbug.com/13102
   g_browser_process->FlushLocalStateAndReply(
       base::BindOnce(&ChromeRestartRequest::RestartJob, AsWeakPtr()));
-  timer_.Start(FROM_HERE, base::TimeDelta::FromSeconds(3), this,
+  timer_.Start(FROM_HERE, base::Seconds(3), this,
                &ChromeRestartRequest::RestartJob);
 }
 
@@ -370,19 +366,21 @@ void GetOffTheRecordCommandLine(const GURL& start_url,
                                 const base::CommandLine& base_command_line,
                                 base::CommandLine* command_line) {
   base::DictionaryValue otr_switches;
-  otr_switches.SetString(switches::kGuestSession, std::string());
-  otr_switches.SetString(::switches::kIncognito, std::string());
-  otr_switches.SetString(::switches::kLoggingLevel, kGuestModeLoggingLevel);
-  otr_switches.SetString(
+  otr_switches.SetStringKey(switches::kGuestSession, std::string());
+  otr_switches.SetStringKey(::switches::kIncognito, std::string());
+  otr_switches.SetStringKey(::switches::kLoggingLevel, kGuestModeLoggingLevel);
+  otr_switches.SetStringKey(
       switches::kLoginUser,
       cryptohome::Identification(user_manager::GuestAccountId()).id());
   if (!base::SysInfo::IsRunningOnChromeOS()) {
-    otr_switches.SetString(switches::kLoginProfile, chrome::kLegacyProfileDir);
+    otr_switches.SetStringKey(
+        switches::kLoginProfile,
+        ash::BrowserContextHelper::kLegacyBrowserContextDirName);
   }
 
   // Override the home page.
-  otr_switches.SetString(::switches::kHomePage,
-                         GURL(chrome::kChromeUINewTabURL).spec());
+  otr_switches.SetStringKey(::switches::kHomePage,
+                            GURL(chrome::kChromeUINewTabURL).spec());
 
   DeriveCommandLine(start_url, base_command_line, otr_switches, command_line);
   DeriveEnabledFeatures(command_line);
@@ -415,4 +413,4 @@ void RestartChrome(const base::CommandLine& command_line,
   (new ChromeRestartRequest(command_line.argv(), reason))->Start();
 }
 
-}  // namespace chromeos
+}  // namespace ash

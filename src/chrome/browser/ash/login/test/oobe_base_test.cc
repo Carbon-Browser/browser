@@ -12,11 +12,10 @@
 #include "base/command_line.h"
 #include "base/location.h"
 #include "base/run_loop.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/ash/login/session/user_session_manager.h"
 #include "chrome/browser/ash/login/session/user_session_manager_test_api.h"
-#include "chrome/browser/ash/login/test/https_forwarder.h"
 #include "chrome/browser/ash/login/test/login_or_lock_screen_visible_waiter.h"
 #include "chrome/browser/ash/login/test/oobe_screen_waiter.h"
 #include "chrome/browser/ash/login/test/oobe_screens_utils.h"
@@ -27,16 +26,17 @@
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/browser_process_platform_part.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
-#include "chrome/browser/supervised_user/supervised_user_features/supervised_user_features.h"
+#include "chrome/browser/ui/webui/chromeos/login/eula_screen_handler.h"
 #include "chrome/browser/ui/webui/chromeos/login/gaia_screen_handler.h"
 #include "chrome/browser/ui/webui/chromeos/login/oobe_ui.h"
 #include "chrome/browser/ui/webui/chromeos/login/signin_screen_handler.h"
+#include "chrome/browser/ui/webui/chromeos/login/update_screen_handler.h"
 #include "chrome/browser/ui/webui/chromeos/login/user_creation_screen_handler.h"
 #include "chrome/browser/ui/webui/signin/signin_utils.h"
 #include "chrome/common/chrome_switches.h"
+#include "chromeos/ash/components/dbus/update_engine/fake_update_engine_client.h"
 #include "chromeos/dbus/dbus_thread_manager.h"
 #include "chromeos/dbus/shill/fake_shill_manager_client.h"
-#include "chromeos/dbus/update_engine/fake_update_engine_client.h"
 #include "components/policy/core/common/policy_switches.h"
 #include "components/user_manager/fake_user_manager.h"
 #include "content/public/common/content_switches.h"
@@ -45,8 +45,7 @@
 #include "google_apis/gaia/gaia_switches.h"
 #include "net/dns/mock_host_resolver.h"
 
-namespace chromeos {
-
+namespace ash {
 namespace {
 
 class GaiaPageEventWaiter : public test::TestConditionWaiter {
@@ -88,14 +87,6 @@ class GaiaPageEventWaiter : public test::TestConditionWaiter {
 }  // namespace
 
 OobeBaseTest::OobeBaseTest() {
-  // Skip the EDU Coexistence Screen, because many OOBE tests don't expect
-  // the EDU coexistence screen after signin and fail if it isn't disabled.
-  // TODO(https://crbug.com/1175215): Make those tests work with this feature
-  // enabled.
-  scoped_feature_list_.InitWithFeatures(
-      {} /** enabled */,
-      {supervised_users::kEduCoexistenceFlowV2} /** disabled */);
-
   set_exit_when_last_browser_closes(false);
 }
 
@@ -109,19 +100,17 @@ void OobeBaseTest::SetUp() {
 }
 
 void OobeBaseTest::SetUpCommandLine(base::CommandLine* command_line) {
-  command_line->AppendSwitch(chromeos::switches::kLoginManager);
-  command_line->AppendSwitch(chromeos::switches::kForceLoginManagerInTests);
+  command_line->AppendSwitch(switches::kLoginManager);
+  command_line->AppendSwitch(switches::kForceLoginManagerInTests);
   command_line->AppendSwitch(
-      chromeos::switches::kDisableOOBEChromeVoxHintTimerForTesting);
+      switches::kDisableOOBEChromeVoxHintTimerForTesting);
   if (!needs_background_networking_)
     command_line->AppendSwitch(::switches::kDisableBackgroundNetworking);
-  command_line->AppendSwitchASCII(chromeos::switches::kLoginProfile, "user");
-
-  // Blink features are controlled via a command line switch. Disable HTML
-  // imports which are deprecated. OOBE uses a polyfill for imports that will
-  // be replaced once the migration to JS modules is complete.
-  command_line->AppendSwitchASCII(::switches::kDisableBlinkFeatures,
-                                  "HTMLImports");
+  if (!needs_network_screen_skip_check_) {
+    command_line->AppendSwitch(
+        switches::kDisableOOBENetworkScreenSkippingForTesting);
+  }
+  command_line->AppendSwitchASCII(switches::kLoginProfile, "user");
 
   MixinBasedInProcessBrowserTest::SetUpCommandLine(command_line);
 }
@@ -139,13 +128,11 @@ void OobeBaseTest::CreatedBrowserMainParts(
 void OobeBaseTest::SetUpInProcessBrowserTestFixture() {
   MixinBasedInProcessBrowserTest::SetUpInProcessBrowserTestFixture();
 
-  // UpdateEngineClientStubImpl have logic that simulates state changes
+  // UpdateEngineClientDesktopFake has logic that simulates state changes
   // based on timer. It is nice simulation for chromeos-on-linux, but
   // may lead to flakiness in debug/*SAN tests.
   // Set up FakeUpdateEngineClient that does not have any timer-based logic.
-  update_engine_client_ = new FakeUpdateEngineClient;
-  chromeos::DBusThreadManager::GetSetterForTesting()->SetUpdateEngineClient(
-      std::unique_ptr<UpdateEngineClient>(update_engine_client_));
+  update_engine_client_ = UpdateEngineClient::InitializeFakeForTest();
 }
 
 void OobeBaseTest::SetUpOnMainThread() {
@@ -214,8 +201,6 @@ void OobeBaseTest::WaitForSigninScreen() {
   if (wizard_controller && wizard_controller->is_initialized())
     wizard_controller->SkipToLoginForTesting();
 
-  WizardController::SkipPostLoginScreensForTesting();
-
   MaybeWaitForLoginScreenLoad();
 }
 void OobeBaseTest::CheckJsExceptionErrors(int number) {
@@ -239,6 +224,12 @@ OobeScreenId OobeBaseTest::GetFirstSigninScreen() {
                              : GaiaView::kScreenId;
 }
 
+// static
+OobeScreenId OobeBaseTest::GetScreenAfterNetworkScreen() {
+  bool consolidated_enabled = features::IsOobeConsolidatedConsentEnabled();
+  return consolidated_enabled ? UpdateView::kScreenId : EulaView::kScreenId;
+}
+
 void OobeBaseTest::MaybeWaitForLoginScreenLoad() {
   if (!login_screen_load_observer_)
     return;
@@ -246,4 +237,4 @@ void OobeBaseTest::MaybeWaitForLoginScreenLoad() {
   login_screen_load_observer_.reset();
 }
 
-}  // namespace chromeos
+}  // namespace ash

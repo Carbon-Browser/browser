@@ -5,6 +5,8 @@
 #ifndef CONTENT_BROWSER_RENDERER_HOST_RENDER_WIDGET_HOST_VIEW_MAC_H_
 #define CONTENT_BROWSER_RENDERER_HOST_RENDER_WIDGET_HOST_VIEW_MAC_H_
 
+#include "base/memory/raw_ptr.h"
+
 #import <Cocoa/Cocoa.h>
 
 #include <string>
@@ -12,7 +14,6 @@
 
 #include "base/gtest_prod_util.h"
 #include "base/mac/scoped_nsobject.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "components/viz/common/surfaces/surface_id.h"
@@ -26,10 +27,12 @@
 #include "mojo/public/cpp/bindings/associated_receiver.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
 #include "third_party/blink/public/mojom/webshare/webshare.mojom.h"
+#include "third_party/blink/public/mojom/widget/record_content_to_visible_time_request.mojom-forward.h"
 #include "ui/accelerated_widget_mac/accelerated_widget_mac.h"
 #include "ui/base/cocoa/accessibility_focus_overrider.h"
 #include "ui/base/cocoa/remote_layer_api.h"
 #include "ui/base/mojom/attributed_string.mojom-forward.h"
+#include "ui/display/display_list.h"
 #include "ui/display/mac/display_link_mac.h"
 #include "ui/events/gesture_detection/filtered_gesture_provider.h"
 
@@ -91,6 +94,9 @@ class CONTENT_EXPORT RenderWidgetHostViewMac
   // deleted it will delete this out from under the caller.
   RenderWidgetHostViewMac(RenderWidgetHost* widget);
 
+  RenderWidgetHostViewMac(const RenderWidgetHostViewMac&) = delete;
+  RenderWidgetHostViewMac& operator=(const RenderWidgetHostViewMac&) = delete;
+
   RenderWidgetHostViewCocoa* GetInProcessNSView() const;
 
   // |delegate| is used to separate out the logic from the NSResponder delegate.
@@ -106,7 +112,6 @@ class CONTENT_EXPORT RenderWidgetHostViewMac
   gfx::NativeView GetNativeView() override;
   gfx::NativeViewAccessible GetNativeViewAccessible() override;
   bool HasFocus() override;
-  void Show() override;
   void Hide() override;
   bool IsShowing() override;
   void WasUnOccluded() override;
@@ -117,8 +122,8 @@ class CONTENT_EXPORT RenderWidgetHostViewMac
   void ShowDefinitionForSelection() override;
   void SpeakSelection() override;
   void SetWindowFrameInScreen(const gfx::Rect& rect) override;
-  void GetScreenInfo(display::ScreenInfo* screen_info) override;
   void TakeFallbackContentFrom(RenderWidgetHostView* view) override;
+  bool IsHTMLFormPopup() const override;
 
   // Implementation of RenderWidgetHostViewBase.
   void InitAsPopup(RenderWidgetHostView* parent_host_view,
@@ -131,6 +136,7 @@ class CONTENT_EXPORT RenderWidgetHostViewMac
   void OnDidNavigateMainFrameToNewPage() override;
   void SetIsLoading(bool is_loading) override;
   void RenderProcessGone() override;
+  void ShowWithVisibility(PageVisibilityState page_visibility) final;
   void Destroy() override;
   void UpdateTooltipUnderCursor(const std::u16string& tooltip_text) override;
   void UpdateTooltip(const std::u16string& tooltip_text) override;
@@ -144,6 +150,7 @@ class CONTENT_EXPORT RenderWidgetHostViewMac
   void EnsureSurfaceSynchronizedForWebTest() override;
   void FocusedNodeChanged(bool is_editable_node,
                           const gfx::Rect& node_bounds_in_screen) override;
+  void ClearFallbackSurfaceForCommitPending() override;
   void ResetFallbackToFirstNavigationSurface() override;
   bool RequestRepaintForTesting() override;
   gfx::NativeViewAccessible AccessibilityGetNativeViewAccessible() override;
@@ -153,7 +160,6 @@ class CONTENT_EXPORT RenderWidgetHostViewMac
 
   void TransformPointToRootSurface(gfx::PointF* point) override;
   gfx::Rect GetBoundsInRootWindow() override;
-  const std::vector<display::Display>& GetDisplays() const override;
   void UpdateScreenInfo() override;
   viz::ScopedSurfaceIdAllocator DidUpdateVisualProperties(
       const cc::RenderFrameMetadata& metadata) override;
@@ -162,6 +168,8 @@ class CONTENT_EXPORT RenderWidgetHostViewMac
   blink::mojom::PointerLockResult LockMouse(bool) override;
   blink::mojom::PointerLockResult ChangeMouseLock(bool) override;
   void UnlockMouse() override;
+  // Checks if the window is key, in addition to "focused".
+  bool CanBeMouseLocked() override;
   bool GetIsMouseLockedUnadjustedMovementForTesting() override;
   // Returns true when running on a recent enough OS for unaccelerated pointer
   // events.
@@ -256,8 +264,10 @@ class CONTENT_EXPORT RenderWidgetHostViewMac
   gfx::Rect GetFirstRectForCompositionRange(const gfx::Range& range,
                                             gfx::Range* actual_range);
 
-  // Converts from given whole character range to composition oriented range. If
-  // the conversion failed, return gfx::Range::InvalidRange.
+  // Converts from given whole character range to composition oriented range.
+  // If `request_range` is beyond the end of composition range, return an empty
+  // range at the composition end as a heuristic result.
+  // If the conversion failed, return gfx::Range::InvalidRange.
   gfx::Range ConvertCharacterRangeToCompositionRange(
       const gfx::Range& request_range);
 
@@ -332,7 +342,7 @@ class CONTENT_EXPORT RenderWidgetHostViewMac
                                bool attached_to_window) override;
   void OnWindowFrameInScreenChanged(
       const gfx::Rect& window_frame_in_screen_dip) override;
-  void OnDisplaysChanged(const display::DisplayList& display_list) override;
+  void OnScreenInfosChanged(const display::ScreenInfos& screen_infos) override;
   void BeginKeyboardEvent() override;
   void EndKeyboardEvent() override;
   void ForwardKeyboardEventWithCommands(
@@ -367,7 +377,8 @@ class CONTENT_EXPORT RenderWidgetHostViewMac
                      const gfx::Range& replacement_range) override;
   void ImeFinishComposingText() override;
   void ImeCancelCompositionFromCocoa() override;
-  void LookUpDictionaryOverlayAtPoint(const gfx::PointF& root_point) override;
+  void LookUpDictionaryOverlayAtPoint(
+      const gfx::PointF& root_point_in_dips) override;
   void LookUpDictionaryOverlayFromRange(const gfx::Range& range) override;
   void SyncGetCharacterIndexAtPoint(
       const gfx::PointF& root_point,
@@ -376,12 +387,8 @@ class CONTENT_EXPORT RenderWidgetHostViewMac
                                     uint32_t* index) override;
   void SyncGetFirstRectForRange(
       const gfx::Range& requested_range,
-      const gfx::Rect& rect,
-      const gfx::Range& actual_range,
       SyncGetFirstRectForRangeCallback callback) override;
   bool SyncGetFirstRectForRange(const gfx::Range& requested_range,
-                                const gfx::Rect& rect,
-                                const gfx::Range& actual_range,
                                 gfx::Rect* out_rect,
                                 gfx::Range* out_actual_range,
                                 bool* out_success) override;
@@ -408,6 +415,8 @@ class CONTENT_EXPORT RenderWidgetHostViewMac
   void DestroyCompositorForShutdown() override;
   bool OnBrowserCompositorSurfaceIdChanged() override;
   std::vector<viz::SurfaceId> CollectSurfaceIdsForEviction() override;
+  display::ScreenInfo GetCurrentScreenInfo() const override;
+  void SetCurrentDeviceScaleFactor(float device_scale_factor) override;
 
   // AcceleratedWidgetMacNSView implementation.
   void AcceleratedWidgetCALayerParamsUpdated() override;
@@ -512,7 +521,7 @@ class CONTENT_EXPORT RenderWidgetHostViewMac
       int32_t targetWidgetProcessId,
       int32_t targetWidgetRoutingId,
       ui::mojom::AttributedStringPtr attributed_string,
-      const gfx::Point& baselinePoint);
+      const gfx::Point& baseline_point_in_layout_space);
 
   // RenderWidgetHostViewBase:
   void UpdateBackgroundColor() override;
@@ -520,6 +529,13 @@ class CONTENT_EXPORT RenderWidgetHostViewMac
   absl::optional<DisplayFeature> GetDisplayFeature() override;
   void SetDisplayFeatureForTesting(
       const DisplayFeature* display_feature) override;
+  void NotifyHostAndDelegateOnWasShown(
+      blink::mojom::RecordContentToVisibleTimeRequestPtr visible_time_request)
+      final;
+  void RequestPresentationTimeFromHostOrDelegate(
+      blink::mojom::RecordContentToVisibleTimeRequestPtr visible_time_request)
+      final;
+  void CancelPresentationTimeRequestForHostAndDelegate() final;
 
   // Gets a textual view of the page's contents, and passes it to the callback
   // provided.
@@ -532,7 +548,7 @@ class CONTENT_EXPORT RenderWidgetHostViewMac
 
   // Interface through which the NSView is to be manipulated. This points either
   // to |in_process_ns_view_bridge_| or to |remote_ns_view_|.
-  remote_cocoa::mojom::RenderWidgetHostNSView* ns_view_ = nullptr;
+  raw_ptr<remote_cocoa::mojom::RenderWidgetHostNSView> ns_view_ = nullptr;
 
   // If |ns_view_| is hosted in this process, then this will be non-null,
   // and may be used to query the actual RenderWidgetHostViewCocoa that is being
@@ -551,10 +567,6 @@ class CONTENT_EXPORT RenderWidgetHostViewMac
 
   // State tracked by Show/Hide/IsShowing.
   bool is_visible_ = false;
-
-  // Set to true if |this| has ever been displayed via a parent ui::Layer (in
-  // which case its NSView will only ever be used for input, not display).
-  bool display_only_using_parent_ui_layer_ = false;
 
   // The bounds of the view in its NSWindow's coordinate system (with origin
   // in the upper-left).
@@ -577,10 +589,10 @@ class CONTENT_EXPORT RenderWidgetHostViewMac
   bool is_loading_;
 
   // Our parent host view, if this is a popup.  NULL otherwise.
-  RenderWidgetHostViewMac* popup_parent_host_view_;
+  raw_ptr<RenderWidgetHostViewMac> popup_parent_host_view_;
 
   // Our child popup host. NULL if we do not have a child popup.
-  RenderWidgetHostViewMac* popup_child_host_view_;
+  raw_ptr<RenderWidgetHostViewMac> popup_child_host_view_;
 
   // Display link for getting vsync info.
   scoped_refptr<ui::DisplayLinkMac> display_link_;
@@ -663,15 +675,24 @@ class CONTENT_EXPORT RenderWidgetHostViewMac
   // this is focused.
   ui::AccessibilityFocusOverrider accessibility_focus_overrider_;
 
+  // Holds the latest ScreenInfos sent from the remote process to be used
+  // in UpdateScreenInfo.  Other platforms check display::Screen for the current
+  // set of displays, but Mac has this info delivered explicitly and so can't do
+  // that.  This is therefore an out-of-band parameter to UpdateScreenInfo.
+  // This also allows the screen_infos_ to only be updated outside of resize by
+  // holding any updates temporarily in this variable.
+  absl::optional<display::ScreenInfos> new_screen_infos_from_shim_;
+  display::ScreenInfos original_screen_infos_;
+
   // Represents a feature of the physical display whose offset and mask_length
   // are expressed in DIPs relative to the view. See display_feature.h for more
   // details.
   absl::optional<DisplayFeature> display_feature_;
 
+  const uint64_t ns_view_id_;
+
   // Factory used to safely scope delayed calls to ShutdownHost().
   base::WeakPtrFactory<RenderWidgetHostViewMac> weak_factory_;
-
-  DISALLOW_COPY_AND_ASSIGN(RenderWidgetHostViewMac);
 };
 
 // RenderWidgetHostViewCocoa is not exported outside of content. This helper

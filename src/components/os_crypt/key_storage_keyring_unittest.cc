@@ -7,9 +7,9 @@
 #include <cstdarg>  // Needed to mock ellipsis
 #include <string>
 
-#include "base/macros.h"
 #include "base/test/test_simple_task_runner.h"
 #include "build/branding_buildflags.h"
+#include "build/build_config.h"
 #include "components/os_crypt/keyring_util_linux.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -119,18 +119,20 @@ void MockGnomeKeyringLoader::mock_gnome_keyring_free_password(gchar* password) {
 class GnomeKeyringTest : public testing::Test {
  public:
   GnomeKeyringTest();
+
+  GnomeKeyringTest(const GnomeKeyringTest&) = delete;
+  GnomeKeyringTest& operator=(const GnomeKeyringTest&) = delete;
+
   ~GnomeKeyringTest() override;
 
  protected:
   scoped_refptr<base::TestSimpleTaskRunner> task_runner_;
   KeyStorageKeyring keyring_;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(GnomeKeyringTest);
 };
 
 GnomeKeyringTest::GnomeKeyringTest()
-    : task_runner_(new base::TestSimpleTaskRunner()), keyring_(task_runner_, "chromium") {
+    : task_runner_(new base::TestSimpleTaskRunner()),
+      keyring_(task_runner_, kApplicationName) {
   MockGnomeKeyringLoader::ResetForOSCrypt();
 }
 

@@ -19,7 +19,7 @@ SingleTypeMockServer::SingleTypeMockServer(ModelType type)
       type_root_id_(ModelTypeToRootTag(type)),
       progress_marker_token_("non_null_progress_token") {}
 
-SingleTypeMockServer::~SingleTypeMockServer() {}
+SingleTypeMockServer::~SingleTypeMockServer() = default;
 
 sync_pb::SyncEntity SingleTypeMockServer::TypeRootUpdate() {
   sync_pb::SyncEntity entity;
@@ -56,8 +56,8 @@ sync_pb::SyncEntity SingleTypeMockServer::UpdateFromServer(
   entity.mutable_specifics()->CopyFrom(specifics);
 
   // Unimportant fields, set for completeness only.
-  base::Time ctime = base::Time::UnixEpoch() + base::TimeDelta::FromDays(1);
-  base::Time mtime = ctime + base::TimeDelta::FromSeconds(version);
+  base::Time ctime = base::Time::UnixEpoch() + base::Days(1);
+  base::Time mtime = ctime + base::Seconds(version);
   entity.set_ctime(TimeToProtoTime(ctime));
   entity.set_mtime(TimeToProtoTime(mtime));
   entity.set_name("Name: " + tag_hash.value());
@@ -80,12 +80,12 @@ sync_pb::SyncEntity SingleTypeMockServer::TombstoneFromServer(
   entity.set_parent_id_string(type_root_id_);
   entity.set_version(version);
   entity.set_client_defined_unique_tag(tag_hash.value());
-  entity.set_deleted(false);
+  entity.set_deleted(true);
   AddDefaultFieldValue(type_, entity.mutable_specifics());
 
   // Unimportant fields, set for completeness only.
-  base::Time ctime = base::Time::UnixEpoch() + base::TimeDelta::FromDays(1);
-  base::Time mtime = ctime + base::TimeDelta::FromSeconds(version);
+  base::Time ctime = base::Time::UnixEpoch() + base::Days(1);
+  base::Time mtime = ctime + base::Seconds(version);
   entity.set_ctime(TimeToProtoTime(ctime));
   entity.set_mtime(TimeToProtoTime(mtime));
   entity.set_name("Tombstone");
@@ -102,7 +102,7 @@ sync_pb::ClientToServerResponse SingleTypeMockServer::DoSuccessfulCommit(
 
   const RepeatedPtrField<sync_pb::SyncEntity>& entries =
       message.commit().entries();
-  for (const auto& entry : entries) {
+  for (const sync_pb::SyncEntity& entry : entries) {
     const ClientTagHash tag_hash =
         ClientTagHash::FromHashed(entry.client_defined_unique_tag());
 
@@ -170,9 +170,8 @@ int64_t SingleTypeMockServer::GetServerVersion(
   // Server versions do not necessarily start at 1 or 0.
   if (it == server_versions_.end()) {
     return 2048;
-  } else {
-    return it->second;
   }
+  return it->second;
 }
 
 void SingleTypeMockServer::SetServerVersion(const ClientTagHash& tag_hash,

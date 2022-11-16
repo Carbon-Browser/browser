@@ -6,7 +6,7 @@
 #define CONTENT_BROWSER_MEDIA_AUDIO_STREAM_MONITOR_H_
 
 #include "base/containers/flat_map.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/threading/thread_checker.h"
 #include "base/time/default_tick_clock.h"
 #include "base/time/time.h"
@@ -38,6 +38,10 @@ class WebContents;
 class CONTENT_EXPORT AudioStreamMonitor : public WebContentsObserver {
  public:
   explicit AudioStreamMonitor(WebContents* contents);
+
+  AudioStreamMonitor(const AudioStreamMonitor&) = delete;
+  AudioStreamMonitor& operator=(const AudioStreamMonitor&) = delete;
+
   ~AudioStreamMonitor() override;
 
   // Returns true if audio has recently been audible from the tab.  This is
@@ -73,7 +77,8 @@ class CONTENT_EXPORT AudioStreamMonitor : public WebContentsObserver {
   // WebContentsObserver implementation
   void RenderFrameDeleted(RenderFrameHost* render_frame_host) override;
   // Overloaded to avoid conflict with RenderProcessGone(int).
-  void RenderProcessGone(base::TerminationStatus status) override {}
+  void PrimaryMainFrameRenderProcessGone(
+      base::TerminationStatus status) override {}
 
   void set_was_recently_audible_for_testing(bool value) {
     indicator_is_on_ = value;
@@ -89,7 +94,7 @@ class CONTENT_EXPORT AudioStreamMonitor : public WebContentsObserver {
     ~AudibleClientRegistration();
 
    private:
-    AudioStreamMonitor* audio_stream_monitor_;
+    raw_ptr<AudioStreamMonitor> audio_stream_monitor_;
   };
 
   // Registers an audible client, which will be unregistered when the returned
@@ -135,7 +140,7 @@ class CONTENT_EXPORT AudioStreamMonitor : public WebContentsObserver {
 
   // The WebContents instance to receive indicator toggle notifications.  This
   // pointer should be valid for the lifetime of AudioStreamMonitor.
-  WebContents* const web_contents_;
+  const raw_ptr<WebContents> web_contents_;
 
   // Note: |clock_| is always a DefaultTickClock, except during unit
   // testing.
@@ -164,8 +169,6 @@ class CONTENT_EXPORT AudioStreamMonitor : public WebContentsObserver {
   // Started only when an indicator is toggled on, to turn it off again in the
   // future.
   base::OneShotTimer off_timer_;
-
-  DISALLOW_COPY_AND_ASSIGN(AudioStreamMonitor);
 };
 
 }  // namespace content

@@ -4,19 +4,27 @@
 
 import {NativeEventTarget as EventTarget} from 'chrome://resources/js/cr/event_target.m.js';
 
+import {getSizeStats} from '../../common/js/api.js';
+import {AsyncUtil} from '../../common/js/async_util.js';
+import {util} from '../../common/js/util.js';
 import {VolumeManagerCommon} from '../../common/js/volume_manager_types.js';
 import {xfm} from '../../common/js/xfm.js';
 import {Crostini} from '../../externs/background/crostini.js';
 import {Banner} from '../../externs/banner.js';
+import {FakeEntry, FilesAppDirEntry} from '../../externs/files_app_entry_interfaces.js';
 import {VolumeInfo} from '../../externs/volume_info.js';
 import {VolumeManager} from '../../externs/volume_manager.js';
 
+import {constants} from './constants.js';
 import {DirectoryModel} from './directory_model.js';
+import {TAG_NAME as DriveLowSpaceBanner} from './ui/banners/drive_low_space_banner.js';
 import {TAG_NAME as DriveOfflinePinningBannerTagName} from './ui/banners/drive_offline_pinning_banner.js';
 import {TAG_NAME as DriveWelcomeBannerTagName} from './ui/banners/drive_welcome_banner.js';
 import {TAG_NAME as HoldingSpaceWelcomeBannerTagName} from './ui/banners/holding_space_welcome_banner.js';
+import {TAG_NAME as InvalidUSBFileSystemBanner} from './ui/banners/invalid_usb_filesystem_banner.js';
 import {TAG_NAME as LocalDiskLowSpaceBannerTagName} from './ui/banners/local_disk_low_space_banner.js';
 import {TAG_NAME as PhotosWelcomeBannerTagName} from './ui/banners/photos_welcome_banner.js';
+import {TAG_NAME as SharedWithCrostiniPluginVmBanner} from './ui/banners/shared_with_crostini_pluginvm_banner.js';
 import {TAG_NAME as TrashBannerTagName} from './ui/banners/trash_banner.js';
 
 /**
@@ -56,6 +64,12 @@ const DISMISSED_FOREVER_SUFFIX = '_DISMISSED_FOREVER';
  * @private {string}
  */
 const _BANNER_FORCE_SHOW_ATTRIBUTE = 'force-show-for-testing';
+
+/**
+ * Allowed duration between onDirectorySizeChanged events in milliseconds.
+ * @type {number}
+ */
+const MIN_INTERVAL_BETWEEN_DIRECTORY_SIZE_CHANGED_EVENTS = 5000;
 
 /**
  * The central component to the Banners Framework. The controller maintains the
@@ -119,6 +133,13 @@ export class BannerController extends EventTarget {
     this.currentRootType_ = null;
 
     /**
+     * Maintains the currently navigated directory entry. This is updated when
+     * a reconcile event is called.
+     * @private {?DirectoryEntry|?FakeEntry|?FilesAppDirEntry}
+     */
+    this.currentEntry_ = null;
+
+    /**
      * Maintains a cache of the current size for all observed volumes. If a
      * banner requests to observe a volumeType on initialization, the volume
      * size is cached here, keyed by volumeId.
@@ -159,7 +180,21 @@ export class BannerController extends EventTarget {
      * Whether banners should be loaded or not during for unit tests.
      * @private {boolean}
      */
+    this.disableBannerLoading_ = false;
+
+    /**
+     * Whether banners should be completely disable, useful to remove banners
+     * during integration tests or tast tests.
+     * @private {boolean}
+     */
     this.disableBanners_ = false;
+
+    /**
+     * A single banner to isolate and test it's functionality. Denoted by it's
+     * tagName (in uppercase).
+     * @private {?string}
+     */
+    this.isolatedBannerForTesting_ = null;
 
     /**
      * setInterval handle that keeps track of the total time a banner has
@@ -175,16 +210,45 @@ export class BannerController extends EventTarget {
     this.timeLimitIntervalLastInvokedMs_ = null;
 
     /**
+     * An object keyed by a banners tagName (in upper case) that lists custom
+     * filters for the specified banner. Used to house banner specific logic
+     * that can decide whether to display a banner or not.
+     * @private {!Object<string, !Array<Banner.CustomFilter>>}
+     */
+    this.customBannerFilters_ = {};
+
+    /**
+     * The volumeId that is pending a volume size update, updateVolumeSizeStats_
+     * will remove the volumeId once updated. This is cleared when the debounced
+     * version of updateVolumeSizeStats_ executes.
+     * @private {!Set<string>}
+     */
+    this.pendingVolumeSizeUpdates_ = new Set();
+
+    /**
      * Bind the onDirectorySizeChanged_ method to this instance once.
      * @private {!function(!chrome.fileManagerPrivate.FileWatchEvent)}
      */
     this.onDirectorySizeChangedBound_ = async event =>
         this.onDirectorySizeChanged_(event);
 
-    xfm.storage.onChanged.addListener(
-        (changes, areaName) => this.onStorageChanged_(changes, areaName));
-    this.directoryModel_.addEventListener(
-        'directory-changed', event => this.onDirectoryChanged_(event));
+    /**
+     * Debounced version of updateVolumeSizeStats_ to stop overly aggressive
+     * calls coming from onDirectoryChanged_.
+     * @private {AsyncUtil.RateLimiter}
+     */
+    this.updateVolumeSizeStatsDebounced_ = new AsyncUtil.RateLimiter(
+        async () => this.updateVolumeSizeStats_(),
+        MIN_INTERVAL_BETWEEN_DIRECTORY_SIZE_CHANGED_EVENTS);
+
+    // Only attach event listeners if the controller is enabled. Used to disable
+    // all banners from being loaded.
+    if (!this.disableBanners_) {
+      xfm.storage.onChanged.addListener(
+          (changes, areaName) => this.onStorageChanged_(changes, areaName));
+      this.directoryModel_.addEventListener(
+          'directory-changed', event => this.onDirectoryChanged_(event));
+    }
   }
 
   /**
@@ -193,17 +257,63 @@ export class BannerController extends EventTarget {
    * @return {Promise<void>}
    */
   async initialize() {
-    if (!this.disableBanners_) {
+    if (!this.disableBannerLoading_) {
       // Banners are initialized in their priority order. The order of the array
       // denotes the priority of the banner, 0th index is highest priority.
-      this.setWarningBannersInOrder([LocalDiskLowSpaceBannerTagName]);
+      this.setWarningBannersInOrder([
+        LocalDiskLowSpaceBannerTagName,
+        DriveLowSpaceBanner,
+      ]);
       this.setEducationalBannersInOrder([
         DriveWelcomeBannerTagName,
         HoldingSpaceWelcomeBannerTagName,
         DriveOfflinePinningBannerTagName,
         PhotosWelcomeBannerTagName,
       ]);
-      this.setStateBannersInOrder([TrashBannerTagName]);
+      this.setStateBannersInOrder([
+        InvalidUSBFileSystemBanner,
+        SharedWithCrostiniPluginVmBanner,
+        TrashBannerTagName,
+      ]);
+
+      // Register custom filters that verify whether the currently navigated
+      // path is shared with Crostini, PluginVM or both.
+      this.registerCustomBannerFilter_(SharedWithCrostiniPluginVmBanner, {
+        shouldShow: () =>
+            isPathSharedWithVm(
+                this.crostini_, this.currentEntry_,
+                constants.DEFAULT_CROSTINI_VM) &&
+            isPathSharedWithVm(
+                this.crostini_, this.currentEntry_, constants.PLUGIN_VM),
+        context: () =>
+            ({type: constants.DEFAULT_CROSTINI_VM + constants.PLUGIN_VM}),
+      });
+      this.registerCustomBannerFilter_(SharedWithCrostiniPluginVmBanner, {
+        shouldShow: () => isPathSharedWithVm(
+            this.crostini_, this.currentEntry_, constants.DEFAULT_CROSTINI_VM),
+        context: () => ({type: constants.DEFAULT_CROSTINI_VM}),
+      });
+      this.registerCustomBannerFilter_(SharedWithCrostiniPluginVmBanner, {
+        shouldShow: () => isPathSharedWithVm(
+            this.crostini_, this.currentEntry_, constants.PLUGIN_VM),
+        context: () => ({type: constants.PLUGIN_VM}),
+      });
+
+      // Register a custom filter that passes the current size stats down to the
+      // the Drive banner only if the volume stats are available. The general
+      // volume available handler will run before this ensuring the minimum
+      // ratio has been met.
+      this.registerCustomBannerFilter_(DriveLowSpaceBanner, {
+        shouldShow: () => !!this.volumeSizeStats_[this.currentVolume_.volumeId],
+        context: () => this.volumeSizeStats_[this.currentVolume_.volumeId],
+      });
+
+      // Register a custom filter that checks if the removable device has an
+      // error and show the invalid USB file system banner.
+      this.registerCustomBannerFilter_(InvalidUSBFileSystemBanner, {
+        shouldShow: () => !!(this.currentVolume_ && this.currentVolume_.error),
+        context: () => ({error: this.currentVolume_.error}),
+      });
     }
 
     for (const banner of this.warningBanners_) {
@@ -251,14 +361,17 @@ export class BannerController extends EventTarget {
    */
   async reconcile() {
     const previousVolume = this.currentVolume_;
-    this.currentVolume_ = this.directoryModel_.getCurrentVolumeInfo();
+    this.currentEntry_ = this.directoryModel_.getCurrentDirEntry();
     this.currentRootType_ = this.directoryModel_.getCurrentRootType();
+    this.currentVolume_ = this.directoryModel_.getCurrentVolumeInfo();
 
     // When navigating to a different volume, refresh the volume size stats
     // when first navigating. A listener will keep this in sync.
-    if (previousVolume !== this.currentVolume_ && this.currentVolume_ &&
+    if (this.currentVolume_ && previousVolume &&
+        previousVolume.volumeId !== this.currentVolume_.volumeId &&
         this.volumeSizeObservers_[this.currentVolume_.volumeType]) {
-      await this.updateVolumeSizeStats_(this.currentVolume_);
+      this.pendingVolumeSizeUpdates_.add(this.currentVolume_.volumeId);
+      this.updateVolumeSizeStatsDebounced_.runImmediately();
     }
 
     /** @type {?Banner} */
@@ -298,6 +411,14 @@ export class BannerController extends EventTarget {
   shouldShowBanner_(banner) {
     if (banner.hasAttribute(_BANNER_FORCE_SHOW_ATTRIBUTE)) {
       return true;
+    }
+
+    // If a banner has been isolated to be shown for testing, all other banners
+    // should not show. The isolated baner should still ensure it should be
+    // displayed.
+    if (this.isolatedBannerForTesting_ &&
+        this.isolatedBannerForTesting_ !== banner.tagName) {
+      return false;
     }
 
     // Check if the banner should be shown on this particular volume type.
@@ -354,6 +475,23 @@ export class BannerController extends EventTarget {
         this.localStorageCache_[`${banner.tagName}_${MS_DISPLAYED_SUFFIX}`];
     if (timeLimitMs && timeLimitMs < totalTimeShownMs) {
       return false;
+    }
+
+    // See if the banner has any custom filters assigned, if the shouldShow
+    // method returns true, the banner should be shown and the context is passed
+    // to the banner in preparation.
+    if (this.customBannerFilters_[banner.tagName]) {
+      let shownFilter = false;
+      for (const bannerFilter of this.customBannerFilters_[banner.tagName]) {
+        if (bannerFilter.shouldShow()) {
+          banner.onFilteredContext(bannerFilter.context());
+          shownFilter = true;
+          break;
+        }
+      }
+      if (!shownFilter) {
+        return false;
+      }
     }
 
     return true;
@@ -475,11 +613,29 @@ export class BannerController extends EventTarget {
   }
 
   /**
-   * Disable the banners from being loaded for testing. This is used to override
-   * the loading of actual banners to load fake banners in unit tests.
+   * Disable the banners entirely from executing
    */
   disableBannersForTesting() {
     this.disableBanners_ = true;
+  }
+
+  /**
+   * Disable the banners from being loaded for testing. This is used to override
+   * the loading of actual banners to load fake banners in unit tests.
+   */
+  disableBannerLoadingForTesting() {
+    this.disableBannerLoading_ = true;
+  }
+
+  /**
+   * Isolates a banner from the priority list for testing. Used to test
+   * functionality of a specific banner in integration tests.
+   * @param {string} bannerTagName Banner tagName to isolate.
+   */
+  async isolateBannerForTesting(bannerTagName) {
+    const tagName = bannerTagName.toUpperCase();
+    this.isolatedBannerForTesting_ = tagName;
+    await this.reconcile();
   }
 
   /**
@@ -546,7 +702,7 @@ export class BannerController extends EventTarget {
    */
   async setLocalStorage_(key, value) {
     if (!this.localStorageCache_.hasOwnProperty(key)) {
-      console.error(`Key ${key} not found in localStorage cache`);
+      console.warn(`Key ${key} not found in localStorage cache`);
       return;
     }
     this.localStorageCache_[key] = value;
@@ -555,6 +711,23 @@ export class BannerController extends EventTarget {
     } catch (e) {
       console.warn(e.message);
     }
+  }
+
+  /**
+   * Registers a custom filter against the specified banner tagName.
+   * @param {string} bannerTagName
+   * @param {!Banner.CustomFilter} filter
+   * @private
+   */
+  registerCustomBannerFilter_(bannerTagName, filter) {
+    // Canonical tagNames are retrieved from the DOM element which transforms
+    // them into uppercase (they are supplied in lowercase, as required by the
+    // customElement registry).
+    const tagName = bannerTagName.toUpperCase();
+    if (!this.customBannerFilters_[tagName]) {
+      this.customBannerFilters_[tagName] = [];
+    }
+    this.customBannerFilters_[tagName].push(filter);
   }
 
   /**
@@ -602,8 +775,11 @@ export class BannerController extends EventTarget {
     }
     const eventVolumeInfo =
         this.volumeManager_.getVolumeInfo(/** @type{!Entry} */ (event.entry));
-    await this.updateVolumeSizeStats_(eventVolumeInfo);
-    await this.reconcile();
+    if (!eventVolumeInfo || !eventVolumeInfo.volumeId) {
+      return;
+    }
+    this.pendingVolumeSizeUpdates_.add(eventVolumeInfo.volumeId);
+    this.updateVolumeSizeStatsDebounced_.run();
   }
 
   /**
@@ -633,19 +809,27 @@ export class BannerController extends EventTarget {
   }
 
   /**
-   * Refresh the volume size stats for the specific volumeInfo.
-   * @param {?VolumeInfo} volumeInfo
+   * Refresh the volume size stats for all volumeIds in
+   * |pendingVolumeSizeUpdate_|.
    * @private
    */
-  async updateVolumeSizeStats_(volumeInfo) {
-    if (!volumeInfo || !volumeInfo.volumeId) {
+  async updateVolumeSizeStats_() {
+    if (this.pendingVolumeSizeUpdates_.size === 0) {
       return;
     }
-    const sizeStats = await getSizeStats(volumeInfo.volumeId);
-    if (!sizeStats || sizeStats.totalSize === 0) {
-      return;
+    for (const volumeId of this.pendingVolumeSizeUpdates_) {
+      try {
+        const sizeStats = await getSizeStats(volumeId);
+        if (!sizeStats || sizeStats.totalSize === 0) {
+          continue;
+        }
+        this.volumeSizeStats_[volumeId] = sizeStats;
+      } catch (e) {
+        console.warn('Error getting size stats', e);
+      }
     }
-    this.volumeSizeStats_[volumeInfo.volumeId] = sizeStats;
+    this.pendingVolumeSizeUpdates_.clear();
+    await this.reconcile();
   }
 
   /**
@@ -716,7 +900,8 @@ export function isBelowThreshold(threshold, sizeStats) {
   if (!threshold || !sizeStats) {
     return false;
   }
-  if (!sizeStats.remainingSize || !sizeStats.totalSize) {
+  if (util.isNullOrUndefined(sizeStats.remainingSize) ||
+      util.isNullOrUndefined(sizeStats.totalSize)) {
     return false;
   }
   if (threshold.minSize < sizeStats.remainingSize) {
@@ -730,13 +915,19 @@ export function isBelowThreshold(threshold, sizeStats) {
 }
 
 /**
- * Wrap the chrome.fileManagerPrivate.getSizeStats function in an async/await
- * compatible style.
- * @param {string} volumeId The volumeId to retrieve the size stats for.
- * @returns {!Promise<(!chrome.fileManagerPrivate.MountPointSizeStats|undefined)>}
+ * Identifies if a supplied Entry is shared with a particularly VM. Returns a
+ * curried function that takes the vm type.
+ * @param {!Crostini} crostini
+ * @param {?DirectoryEntry|?FakeEntry|?FilesAppDirEntry} entry
+ * @param {string} vmType
+ * @returns {boolean}
  */
-async function getSizeStats(volumeId) {
-  return new Promise((resolve) => {
-    chrome.fileManagerPrivate.getSizeStats(volumeId, resolve);
-  });
+function isPathSharedWithVm(crostini, entry, vmType) {
+  if (!crostini.isEnabled(vmType)) {
+    return false;
+  }
+  if (!entry) {
+    return false;
+  }
+  return crostini.isPathShared(vmType, /** @type {!Entry} */ (entry));
 }

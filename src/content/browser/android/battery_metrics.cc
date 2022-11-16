@@ -4,14 +4,21 @@
 
 #include "content/browser/android/battery_metrics.h"
 
+#include "base/android/application_status_listener.h"
 #include "base/android/radio_utils.h"
 #include "base/bind.h"
 #include "base/feature_list.h"
 #include "base/logging.h"
 #include "base/metrics/histogram.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/no_destructor.h"
 #include "base/power_monitor/power_monitor.h"
+#include "base/time/time.h"
+#include "base/trace_event/application_state_proto_android.h"
 #include "base/trace_event/trace_event.h"
+#include "base/trace_event/typed_macros.h"
+#include "base/tracing/protos/chrome_track_event.pbzero.h"
 #include "content/browser/web_contents/web_contents_impl.h"
 #include "net/android/network_library.h"
 #include "net/android/traffic_stats.h"
@@ -23,6 +30,22 @@ const base::Feature kForegroundRadioStateCountWakeups{
 
 namespace content {
 namespace {
+
+perfetto::protos::pbzero::DeviceThermalState ToTraceEnum(
+    base::PowerThermalObserver::DeviceThermalState state) {
+  switch (state) {
+    case base::PowerThermalObserver::DeviceThermalState::kUnknown:
+      return perfetto::protos::pbzero::DEVICE_THERMAL_STATE_UNKNOWN;
+    case base::PowerThermalObserver::DeviceThermalState::kNominal:
+      return perfetto::protos::pbzero::DEVICE_THERMAL_STATE_NOMINAL;
+    case base::PowerThermalObserver::DeviceThermalState::kFair:
+      return perfetto::protos::pbzero::DEVICE_THERMAL_STATE_FAIR;
+    case base::PowerThermalObserver::DeviceThermalState::kSerious:
+      return perfetto::protos::pbzero::DEVICE_THERMAL_STATE_SERIOUS;
+    case base::PowerThermalObserver::DeviceThermalState::kCritical:
+      return perfetto::protos::pbzero::DEVICE_THERMAL_STATE_CRITICAL;
+  }
+}
 
 void Report30SecondRadioUsage(int64_t tx_bytes, int64_t rx_bytes, int wakeups) {
   if (!base::android::RadioUtils::IsSupported())
@@ -102,7 +125,7 @@ void Report30SecondDrain(int capacity_consumed, bool is_exclusive_measurement) {
 
 base::HistogramBase* GetAvgBatteryDrainHistogram(const char* suffix) {
   static constexpr char kAvgDrainHistogramPrefix[] =
-      "Power.ForegroundBatteryDrain.30SecondsAvg";
+      "Power.ForegroundBatteryDrain.30SecondsAvg2";
   return base::Histogram::FactoryGet(
       std::string(kAvgDrainHistogramPrefix) + suffix, 1, 100000, 50,
       base::HistogramBase::kUmaTargetedHistogramFlag);
@@ -198,11 +221,13 @@ AndroidBatteryMetrics::AndroidBatteryMetrics()
     : app_visible_(false),
       on_battery_power_(base::PowerMonitor::IsOnBatteryPower()) {
   base::PowerMonitor::AddPowerStateObserver(this);
+  base::PowerMonitor::AddPowerThermalObserver(this);
   content::ProcessVisibilityTracker::GetInstance()->AddObserver(this);
   UpdateMetricsEnabled();
 }
 
 AndroidBatteryMetrics::~AndroidBatteryMetrics() {
+  base::PowerMonitor::RemovePowerThermalObserver(this);
   base::PowerMonitor::RemovePowerStateObserver(this);
 }
 
@@ -217,6 +242,26 @@ void AndroidBatteryMetrics::OnPowerStateChange(bool on_battery_power) {
   on_battery_power_ = on_battery_power;
   UpdateMetricsEnabled();
 }
+
+void AndroidBatteryMetrics::OnThermalStateChange(DeviceThermalState new_state) {
+  TRACE_EVENT_INSTANT(
+      "power", "OnThermalStateChange", perfetto::Track::Global(0),
+      [&](perfetto::EventContext ctx) {
+        auto* event = ctx.event<perfetto::protos::pbzero::ChromeTrackEvent>();
+        event->set_chrome_application_state_info()->set_application_state(
+            base::trace_event::ApplicationStateToTraceEnum(
+                base::android::ApplicationStatusListener::GetState()));
+        event->set_device_thermal_state(ToTraceEnum(new_state));
+      });
+
+  if (!app_visible_)
+    return;
+
+  base::UmaHistogramEnumeration(
+      "Power.ForegroundThermalState.ChangeEvent.Android", new_state);
+}
+
+void AndroidBatteryMetrics::OnSpeedLimitChange(int speed_limit) {}
 
 void AndroidBatteryMetrics::UpdateMetricsEnabled() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -237,15 +282,18 @@ void AndroidBatteryMetrics::UpdateMetricsEnabled() {
     skipped_timers_ = 0;
     observed_capacity_drops_ = 0;
 
-    metrics_timer_.Start(FROM_HERE, kMetricsInterval, this,
-                         &AndroidBatteryMetrics::CaptureAndReportMetrics);
+    metrics_timer_.Start(
+        FROM_HERE, kMetricsInterval,
+        base::BindRepeating(&AndroidBatteryMetrics::CaptureAndReportMetrics,
+                            base::Unretained(this),
+                            /*disabling=*/false));
     if (base::FeatureList::IsEnabled(kForegroundRadioStateCountWakeups)) {
       radio_state_timer_.Start(FROM_HERE, kRadioStateInterval, this,
                                &AndroidBatteryMetrics::MonitorRadioState);
     }
   } else if (!should_be_enabled && metrics_timer_.IsRunning()) {
     // Capture one last measurement before disabling the timer.
-    CaptureAndReportMetrics();
+    CaptureAndReportMetrics(/*disabling=*/true);
     metrics_timer_.Stop();
     if (base::FeatureList::IsEnabled(kForegroundRadioStateCountWakeups)) {
       radio_state_timer_.Stop();
@@ -288,7 +336,7 @@ void AndroidBatteryMetrics::UpdateAndReportRadio() {
   radio_wakeups_ = 0;
 }
 
-void AndroidBatteryMetrics::CaptureAndReportMetrics() {
+void AndroidBatteryMetrics::CaptureAndReportMetrics(bool disabling) {
   int remaining_capacity_uah =
       base::PowerMonitor::GetRemainingBatteryCapacity();
 
@@ -300,6 +348,17 @@ void AndroidBatteryMetrics::CaptureAndReportMetrics() {
     skipped_timers_++;
     Report30SecondDrain(0, IsMeasuringDrainExclusively());
     UpdateAndReportRadio();
+
+    if (disabling) {
+      // Disabling the timer, but without a change in capacity counter -- We
+      // should still emit values for the elapsed time intervals into the
+      // average histograms. We exclude exclusive metrics here, because these
+      // metrics exclude the measurements before the first capacity drop and
+      // after the last drop. Member fields will be reset when tracking
+      // is resumed after foregrounding again later.
+      ReportAveragedDrain(0, /*is_exclusive_measurement=*/false,
+                          skipped_timers_);
+    }
 
     return;
   }

@@ -19,7 +19,6 @@
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/values.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/browser_process.h"
@@ -44,17 +43,17 @@
 #include "components/translate/core/browser/translate_download_manager.h"
 #include "components/translate/core/browser/translate_prefs.h"
 #include "third_party/icu/source/i18n/unicode/coll.h"
-#include "ui/base/ime/chromeos/input_method_descriptor.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/l10n/l10n_util_collator.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "ash/constants/ash_features.h"
 #include "chrome/grit/generated_resources.h"
-#include "ui/base/ime/chromeos/component_extension_ime_manager.h"
-#include "ui/base/ime/chromeos/extension_ime_util.h"
-#include "ui/base/ime/chromeos/input_method_manager.h"
-#include "ui/base/ime/chromeos/input_method_util.h"
+#include "ui/base/ime/ash/component_extension_ime_manager.h"
+#include "ui/base/ime/ash/extension_ime_util.h"
+#include "ui/base/ime/ash/input_method_descriptor.h"
+#include "ui/base/ime/ash/input_method_manager.h"
+#include "ui/base/ime/ash/input_method_util.h"
 #endif
 
 namespace extensions {
@@ -64,25 +63,13 @@ namespace language_settings_private = api::language_settings_private;
 namespace {
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-using chromeos::input_method::InputMethodDescriptor;
-using chromeos::input_method::InputMethodDescriptors;
-using chromeos::input_method::InputMethodManager;
-using chromeos::input_method::InputMethodUtil;
+using ::ash::input_method::InputMethodDescriptor;
+using ::ash::input_method::InputMethodDescriptors;
+using ::ash::input_method::InputMethodManager;
+using ::ash::input_method::InputMethodUtil;
 
 // Number of IMEs that are needed to automatically enable the IME menu option.
 const size_t kNumImesToAutoEnableImeMenu = 2;
-
-// Returns the set of IDs of all enabled IMEs.
-base::flat_set<std::string> GetEnabledIMEs(
-    scoped_refptr<InputMethodManager::State> ime_state) {
-  return ime_state->GetAllowedInputMethods();
-}
-
-// Returns the set of IDs of all allowed IMEs.
-base::flat_set<std::string> GetAllowedIMEs(
-    scoped_refptr<InputMethodManager::State> ime_state) {
-  return ime_state->GetAllowedInputMethods();
-}
 
 // Returns the set of IDs of enabled IMEs for the given pref.
 base::flat_set<std::string> GetIMEsFromPref(PrefService* prefs,
@@ -94,18 +81,10 @@ base::flat_set<std::string> GetIMEsFromPref(PrefService* prefs,
 // Returns the set of allowed UI locales.
 base::flat_set<std::string> GetAllowedLanguages(PrefService* prefs) {
   const auto& allowed_languages_values =
-      prefs->GetList(prefs::kAllowedLanguages)->GetList();
-
-  // Uses the O(n log n) base::flat_set constructor by pushing back to a vector
-  // instead of inserting into a set.
-  std::vector<std::string> allowed_languages;
-  allowed_languages.reserve(allowed_languages_values.size());
-
-  for (const base::Value& locale_value : allowed_languages_values) {
-    allowed_languages.push_back(locale_value.GetString());
-  }
-
-  return allowed_languages;
+      prefs->GetList(prefs::kAllowedLanguages)->GetListDeprecated();
+  return base::MakeFlatSet<std::string>(
+      allowed_languages_values, {},
+      [](const auto& locale_value) { return locale_value.GetString(); });
 }
 
 // Sorts the input methods by the order of their associated languages. For
@@ -131,8 +110,7 @@ std::vector<std::string> GetSortedComponentIMEs(
     // Get all input methods for this language.
     std::vector<std::string> input_method_ids;
     manager->GetInputMethodUtil()->GetInputMethodIdsFromLanguageCode(
-        language_code, chromeos::input_method::kAllInputMethods,
-        &input_method_ids);
+        language_code, ash::input_method::kAllInputMethods, &input_method_ids);
     // Append the enabled ones to the new list. Also remove them from the set
     // so they aren't duplicated for other languages.
     for (const auto& input_method_id : input_method_ids) {
@@ -163,7 +141,7 @@ std::vector<std::string> GetSortedThirdPartyIMEs(
 
   // Add the fake language for ARC IMEs at the very last of the list. Unlike
   // Chrome OS IMEs, these ARC ones are not associated with any (real) language.
-  enabled_languages.push_back(chromeos::extension_ime_util::kArcImeLanguage);
+  enabled_languages.push_back(ash::extension_ime_util::kArcImeLanguage);
 
   InputMethodDescriptors descriptors;
   ime_state->GetInputMethodExtensions(&descriptors);
@@ -226,8 +204,7 @@ CreateTranslatePrefsForBrowserContext(
 }  // namespace
 
 LanguageSettingsPrivateGetLanguageListFunction::
-    LanguageSettingsPrivateGetLanguageListFunction()
-    : language_list_(std::make_unique<base::ListValue>()) {}
+    LanguageSettingsPrivateGetLanguageListFunction() = default;
 
 LanguageSettingsPrivateGetLanguageListFunction::
     ~LanguageSettingsPrivateGetLanguageListFunction() = default;
@@ -250,7 +227,7 @@ LanguageSettingsPrivateGetLanguageListFunction::Run() {
       std::move(spellcheck_languages));
 
   // Build the language list.
-  language_list_->ClearList();
+  language_list_.clear();
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   const base::flat_set<std::string> allowed_ui_locales(GetAllowedLanguages(
       Profile::FromBrowserContext(browser_context())->GetPrefs()));
@@ -280,7 +257,7 @@ LanguageSettingsPrivateGetLanguageListFunction::Run() {
     }
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
-    language_list_->Append(language.ToValue());
+    language_list_.Append(base::Value::FromUniquePtrValue(language.ToValue()));
   }
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -289,14 +266,14 @@ LanguageSettingsPrivateGetLanguageListFunction::Run() {
   // drop-down menu doesn't list the fake language.
   {
     language_settings_private::Language language;
-    language.code = chromeos::extension_ime_util::kArcImeLanguage;
+    language.code = ash::extension_ime_util::kArcImeLanguage;
     language.display_name =
         l10n_util::GetStringUTF8(IDS_SETTINGS_LANGUAGES_KEYBOARD_APPS);
-    language_list_->Append(language.ToValue());
+    language_list_.Append(base::Value::FromUniquePtrValue(language.ToValue()));
   }
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   if (spellcheck::UseBrowserSpellChecker()) {
     if (!base::FeatureList::IsEnabled(
             spellcheck::kWinDelaySpellcheckServiceInit)) {
@@ -314,18 +291,16 @@ LanguageSettingsPrivateGetLanguageListFunction::Run() {
       return RespondLater();
     }
   }
-#endif  // defined(OS_WIN)
+#endif  // BUILDFLAG(IS_WIN)
 
-  return RespondNow(
-      OneArgument(base::Value::FromUniquePtrValue(std::move(language_list_))));
+  return RespondNow(OneArgument(base::Value(std::move(language_list_))));
 }
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 void LanguageSettingsPrivateGetLanguageListFunction::
     OnDictionariesInitialized() {
   UpdateSupportedPlatformDictionaries();
-  Respond(
-      OneArgument(base::Value::FromUniquePtrValue(std::move(language_list_))));
+  Respond(OneArgument(base::Value(std::move(language_list_))));
   // Matches the AddRef in Run().
   Release();
 }
@@ -334,13 +309,13 @@ void LanguageSettingsPrivateGetLanguageListFunction::
     UpdateSupportedPlatformDictionaries() {
   SpellcheckService* service =
       SpellcheckServiceFactory::GetForContext(browser_context());
-  for (auto& language_val : language_list_->GetList()) {
+  for (auto& language_val : language_list_) {
     if (service->UsesWindowsDictionary(*language_val.FindStringKey("code"))) {
       language_val.SetBoolKey("supportsSpellcheck", new bool(true));
     }
   }
 }
-#endif  // defined(OS_WIN)
+#endif  // BUILDFLAG(IS_WIN)
 
 LanguageSettingsPrivateEnableLanguageFunction::
     LanguageSettingsPrivateEnableLanguageFunction() = default;
@@ -729,17 +704,15 @@ void PopulateInputMethodListFromDescriptors(
   if (!ime_state.get())
     return;
 
-  const base::flat_set<std::string> active_ids(GetEnabledIMEs(ime_state));
-  const base::flat_set<std::string> allowed_ids(GetAllowedIMEs(ime_state));
+  const base::flat_set<std::string> enabled_ids(
+      ime_state->GetEnabledInputMethodIds());
+  const base::flat_set<std::string> allowed_ids(
+      ime_state->GetAllowedInputMethodIds());
 
-  // Collator used to sort display names in the given locale.
   UErrorCode error = U_ZERO_ERROR;
-  const std::string app_locale = g_browser_process->GetApplicationLocale();
   std::unique_ptr<icu::Collator> collator(
-      icu::Collator::createInstance(icu::Locale(app_locale.c_str()), error));
-  if (U_FAILURE(error)) {
-    collator.reset();
-  }
+      icu::Collator::createInstance(error));  // use current ICU locale
+  DCHECK(U_SUCCESS(error));
 
   // Map of sorted [display name -> input methods].
   std::map<std::u16string, language_settings_private::InputMethod,
@@ -752,7 +725,7 @@ void PopulateInputMethodListFromDescriptors(
     input_method.display_name = util->GetLocalizedDisplayName(descriptor);
     input_method.language_codes = descriptor.language_codes();
     input_method.tags = GetInputMethodTags(&input_method);
-    if (base::Contains(active_ids, input_method.id))
+    if (base::Contains(enabled_ids, input_method.id))
       input_method.enabled = std::make_unique<bool>(true);
     if (descriptor.options_page_url().is_valid())
       input_method.has_options_page = std::make_unique<bool>(true);
@@ -784,7 +757,7 @@ LanguageSettingsPrivateGetInputMethodListsFunction::Run() {
   language_settings_private::InputMethodLists input_method_lists;
   InputMethodManager* manager = InputMethodManager::Get();
 
-  chromeos::ComponentExtensionIMEManager* component_extension_manager =
+  ash::ComponentExtensionIMEManager* component_extension_manager =
       manager->GetComponentExtensionIMEManager();
   PopulateInputMethodListFromDescriptors(
       component_extension_manager->GetAllIMEAsInputMethodDescriptor(),
@@ -827,8 +800,7 @@ LanguageSettingsPrivateAddInputMethodFunction::Run() {
 
   std::string new_input_method_id = params->input_method_id;
   bool is_component_extension_ime =
-      chromeos::extension_ime_util::IsComponentExtensionIME(
-          new_input_method_id);
+      ash::extension_ime_util::IsComponentExtensionIME(new_input_method_id);
 
   PrefService* prefs =
       Profile::FromBrowserContext(browser_context())->GetPrefs();
@@ -856,24 +828,22 @@ LanguageSettingsPrivateAddInputMethodFunction::Run() {
   std::string input_methods = base::JoinString(input_method_list, ",");
   prefs->SetString(pref_name, input_methods);
 
-  // In LSV2 Update 2, we want to automatically enable "Show input options in
-  // shelf" when the user has multiple input methods.
+  // We want to automatically enable "Show input options in shelf" when the user
+  // has multiple input methods.
   // We don't want to repeatedly enable it every time the user adds an input
   // method, as a user may want to intentionally turn it off - so we only enable
   // it once the user reaches two input methods.
-  if (base::FeatureList::IsEnabled(ash::features::kLanguageSettingsUpdate2)) {
-    // As pref_name and input_method_set only refer to the preference related to
-    // the list of IMEs for which this newly-added IME is in, we need the other
-    // IME list to calculate the total number of IMEs.
-    const char* other_ime_list_pref_name = is_component_extension_ime
-                                               ? prefs::kLanguageEnabledImes
-                                               : prefs::kLanguagePreloadEngines;
-    base::flat_set<std::string> other_input_method_set(
-        GetIMEsFromPref(prefs, other_ime_list_pref_name));
-    if (input_method_set.size() + other_input_method_set.size() ==
-        kNumImesToAutoEnableImeMenu) {
-      prefs->SetBoolean(prefs::kLanguageImeMenuActivated, true);
-    }
+  // As pref_name and input_method_set only refer to the preference related to
+  // the list of IMEs for which this newly-added IME is in, we need the other
+  // IME list to calculate the total number of IMEs.
+  const char* other_ime_list_pref_name = is_component_extension_ime
+                                             ? prefs::kLanguageEnabledImes
+                                             : prefs::kLanguagePreloadEngines;
+  base::flat_set<std::string> other_input_method_set(
+      GetIMEsFromPref(prefs, other_ime_list_pref_name));
+  if (input_method_set.size() + other_input_method_set.size() ==
+      kNumImesToAutoEnableImeMenu) {
+    prefs->SetBoolean(prefs::kLanguageImeMenuActivated, true);
   }
 #endif
   return RespondNow(NoArguments());
@@ -902,7 +872,7 @@ LanguageSettingsPrivateRemoveInputMethodFunction::Run() {
 
   std::string input_method_id = params->input_method_id;
   bool is_component_extension_ime =
-      chromeos::extension_ime_util::IsComponentExtensionIME(input_method_id);
+      ash::extension_ime_util::IsComponentExtensionIME(input_method_id);
 
   // Use the pref for the corresponding input method type.
   PrefService* prefs =

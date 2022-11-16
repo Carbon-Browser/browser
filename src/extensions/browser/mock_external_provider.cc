@@ -52,8 +52,16 @@ void MockExternalProvider::VisitRegisteredExtension() {
     visitor_->OnExternalExtensionFileFound(*extension_kv.second);
   for (const auto& extension_kv : url_extension_map_)
     visitor_->OnExternalExtensionUpdateUrlFound(*extension_kv.second,
-                                                true /* is_initial_load */);
+                                                true /* force_update */);
   visitor_->OnExternalProviderReady(this);
+}
+
+void MockExternalProvider::TriggerOnExternalExtensionFound() {
+  for (const auto& extension_kv : file_extension_map_)
+    visitor_->OnExternalExtensionFileFound(*extension_kv.second);
+  for (const auto& extension_kv : url_extension_map_)
+    visitor_->OnExternalExtensionUpdateUrlFound(*extension_kv.second,
+                                                false /* force_update */);
 }
 
 bool MockExternalProvider::HasExtension(const std::string& id) const {

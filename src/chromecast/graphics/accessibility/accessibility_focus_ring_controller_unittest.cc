@@ -22,6 +22,10 @@ namespace test {
 class CastTestWindowDelegate : public aura::test::TestWindowDelegate {
  public:
   CastTestWindowDelegate() : key_code_(ui::VKEY_UNKNOWN) {}
+
+  CastTestWindowDelegate(const CastTestWindowDelegate&) = delete;
+  CastTestWindowDelegate& operator=(const CastTestWindowDelegate&) = delete;
+
   ~CastTestWindowDelegate() override {}
 
   // Overridden from TestWindowDelegate:
@@ -33,8 +37,6 @@ class CastTestWindowDelegate : public aura::test::TestWindowDelegate {
 
  private:
   ui::KeyboardCode key_code_;
-
-  DISALLOW_COPY_AND_ASSIGN(CastTestWindowDelegate);
 };
 
 class TestableAccessibilityFocusRingController
@@ -79,7 +81,7 @@ class AccessibilityFocusRingControllerTest : public aura::test::AuraTestBase {
 
  protected:
   gfx::Rect AddMargin(gfx::Rect r) {
-    r.Inset(-controller_->GetMargin(), -controller_->GetMargin());
+    r.Inset(-controller_->GetMargin());
     return r;
   }
 

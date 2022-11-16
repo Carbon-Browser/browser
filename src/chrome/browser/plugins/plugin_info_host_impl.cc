@@ -14,8 +14,7 @@
 #include "base/containers/cxx20_erase.h"
 #include "base/memory/singleton.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/task/post_task.h"
-#include "base/task_runner_util.h"
+#include "base/task/task_runner_util.h"
 #include "build/branding_buildflags.h"
 #include "build/build_config.h"
 #include "chrome/browser/browser_process.h"
@@ -39,7 +38,6 @@
 #include "components/nacl/common/buildflags.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/prefs/pref_service.h"
-#include "components/ukm/content/source_url_recorder.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/plugin_service.h"
 #include "content/public/browser/plugin_service_filter.h"
@@ -78,6 +76,11 @@ class PluginInfoHostImplShutdownNotifierFactory
     return base::Singleton<PluginInfoHostImplShutdownNotifierFactory>::get();
   }
 
+  PluginInfoHostImplShutdownNotifierFactory(
+      const PluginInfoHostImplShutdownNotifierFactory&) = delete;
+  PluginInfoHostImplShutdownNotifierFactory& operator=(
+      const PluginInfoHostImplShutdownNotifierFactory&) = delete;
+
  private:
   friend struct base::DefaultSingletonTraits<
       PluginInfoHostImplShutdownNotifierFactory>;
@@ -87,8 +90,6 @@ class PluginInfoHostImplShutdownNotifierFactory
             "PluginInfoHostImpl") {}
 
   ~PluginInfoHostImplShutdownNotifierFactory() override {}
-
-  DISALLOW_COPY_AND_ASSIGN(PluginInfoHostImplShutdownNotifierFactory);
 };
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
@@ -168,19 +169,17 @@ void PluginInfoHostImpl::RegisterUserPrefs(
 PluginInfoHostImpl::~PluginInfoHostImpl() {}
 
 struct PluginInfoHostImpl::GetPluginInfo_Params {
-  int render_frame_id;
   GURL url;
   url::Origin main_frame_origin;
   std::string mime_type;
 };
 
-void PluginInfoHostImpl::GetPluginInfo(int32_t render_frame_id,
-                                       const GURL& url,
+void PluginInfoHostImpl::GetPluginInfo(const GURL& url,
                                        const url::Origin& origin,
                                        const std::string& mime_type,
                                        GetPluginInfoCallback callback) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  GetPluginInfo_Params params = {render_frame_id, url, origin, mime_type};
+  GetPluginInfo_Params params = {url, origin, mime_type};
   PluginService::GetInstance()->GetPlugins(
       base::BindOnce(&PluginInfoHostImpl::PluginsLoaded,
                      weak_factory_.GetWeakPtr(), params, std::move(callback)));
@@ -193,10 +192,10 @@ void PluginInfoHostImpl::PluginsLoaded(
   chrome::mojom::PluginInfoPtr output = chrome::mojom::PluginInfo::New();
   // This also fills in |actual_mime_type|.
   std::unique_ptr<PluginMetadata> plugin_metadata;
-  if (context_.FindEnabledPlugin(params.render_frame_id, params.url,
-                                 params.main_frame_origin, params.mime_type,
-                                 &output->status, &output->plugin,
-                                 &output->actual_mime_type, &plugin_metadata)) {
+  if (context_.FindEnabledPlugin(params.url, params.mime_type, &output->status,
+                                 &output->plugin, &output->actual_mime_type,
+                                 &plugin_metadata)) {
+    // TODO(crbug.com/1167278): Simplify this once PDF is the only "plugin."
     context_.DecidePluginStatus(
         params.url, params.main_frame_origin, output->plugin,
         plugin_metadata->GetSecurityStatus(output->plugin),
@@ -239,14 +238,6 @@ void PluginInfoHostImpl::Context::DecidePluginStatus(
       &is_managed);
 
   DCHECK(plugin_setting != CONTENT_SETTING_DEFAULT);
-
-  if (*status == chrome::mojom::PluginStatus::kFlashHiddenPreferHtml) {
-    if (plugin_setting == CONTENT_SETTING_BLOCK) {
-      *status = is_managed ? chrome::mojom::PluginStatus::kBlockedByPolicy
-                           : chrome::mojom::PluginStatus::kBlockedNoLoading;
-    }
-    return;
-  }
 
 #if BUILDFLAG(ENABLE_PLUGINS)
   // Check if the plugin is outdated.
@@ -304,9 +295,7 @@ void PluginInfoHostImpl::Context::DecidePluginStatus(
 }
 
 bool PluginInfoHostImpl::Context::FindEnabledPlugin(
-    int render_frame_id,
     const GURL& url,
-    const url::Origin& main_frame_origin,
     const std::string& mime_type,
     chrome::mojom::PluginStatus* status,
     WebPluginInfo* plugin,
@@ -334,8 +323,7 @@ bool PluginInfoHostImpl::Context::FindEnabledPlugin(
   size_t i = 0;
   for (; i < matching_plugins.size(); ++i) {
     if (!filter ||
-        filter->IsPluginAvailable(render_process_id_, render_frame_id, url,
-                                  main_frame_origin, &matching_plugins[i])) {
+        filter->IsPluginAvailable(render_process_id_, matching_plugins[i])) {
       break;
     }
   }

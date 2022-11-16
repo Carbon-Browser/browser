@@ -12,7 +12,7 @@
 #include "third_party/blink/renderer/core/svg/svg_path_byte_stream.h"
 #include "third_party/blink/renderer/core/svg/svg_path_utilities.h"
 #include "third_party/blink/renderer/platform/graphics/path.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/transforms/affine_transform.h"
 
 namespace blink {
@@ -62,16 +62,14 @@ CSSValue* StylePath::ComputedCSSValue() const {
       const_cast<StylePath*>(this), kTransformToAbsolute);
 }
 
-bool StylePath::operator==(const BasicShape& o) const {
-  if (!IsSameType(o))
-    return false;
+bool StylePath::IsEqualAssumingSameType(const BasicShape& o) const {
   const StylePath& other = To<StylePath>(o);
   return wind_rule_ == other.wind_rule_ && *byte_stream_ == *other.byte_stream_;
 }
 
-void StylePath::GetPath(Path& path, const FloatRect& offset_rect, float zoom) {
+void StylePath::GetPath(Path& path, const gfx::RectF& offset_rect, float zoom) {
   path = GetPath();
-  path.Transform(AffineTransform::Translation(offset_rect.X(), offset_rect.Y())
+  path.Transform(AffineTransform::Translation(offset_rect.x(), offset_rect.y())
                      .Scale(zoom));
 }
 

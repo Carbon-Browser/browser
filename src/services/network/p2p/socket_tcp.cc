@@ -11,7 +11,7 @@
 #include "base/sys_byteorder.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
-#include "jingle/glue/fake_ssl_client_socket.h"
+#include "components/webrtc/fake_ssl_client_socket.h"
 #include "net/base/io_buffer.h"
 #include "net/base/net_errors.h"
 #include "net/base/network_isolation_key.h"
@@ -112,8 +112,7 @@ void P2PSocketTcpBase::Init(
       IsTlsClientSocket(type_));
 
   if (IsPseudoTlsClientSocket(type_)) {
-    socket_ =
-        std::make_unique<jingle_glue::FakeSSLClientSocket>(std::move(socket_));
+    socket_ = std::make_unique<webrtc::FakeSSLClientSocket>(std::move(socket_));
   }
 
   int status = socket_->Connect(
@@ -248,7 +247,7 @@ bool P2PSocketTcpBase::OnPacket(std::vector<int8_t> data) {
 
   client_->DataReceived(
       remote_address_.ip_address, data,
-      base::TimeTicks() + base::TimeDelta::FromNanoseconds(rtc::TimeNanos()));
+      base::TimeTicks() + base::Nanoseconds(rtc::TimeNanos()));
 
   delegate_->DumpPacket(
       base::make_span(reinterpret_cast<const uint8_t*>(&data[0]), data.size()),

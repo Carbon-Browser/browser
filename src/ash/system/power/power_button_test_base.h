@@ -26,6 +26,9 @@ class PowerButtonTestBase : public AshTestBase {
   PowerButtonTestBase();
   explicit PowerButtonTestBase(base::test::TaskEnvironment::TimeSource time);
 
+  PowerButtonTestBase(const PowerButtonTestBase&) = delete;
+  PowerButtonTestBase& operator=(const PowerButtonTestBase&) = delete;
+
   ~PowerButtonTestBase() override;
 
   using ButtonType = PowerButtonController::ButtonType;
@@ -49,6 +52,9 @@ class PowerButtonTestBase : public AshTestBase {
   // |screenshot_controller_| if the switch state is not UNSUPPORTED.
   void SetTabletModeSwitchState(
       chromeos::PowerManagerClient::TabletMode tablet_mode_switch_state);
+
+  // Simulates ARC power button event.
+  void LaunchArcPowerButtonEvent();
 
   // Simulates a power button press.
   void PressPowerButton();
@@ -89,8 +95,6 @@ class PowerButtonTestBase : public AshTestBase {
   std::unique_ptr<LockStateControllerTestApi> lock_state_test_api_;
   std::unique_ptr<PowerButtonControllerTestApi> power_button_test_api_;
   base::SimpleTestTickClock tick_clock_;
-
-  DISALLOW_COPY_AND_ASSIGN(PowerButtonTestBase);
 };
 
 }  // namespace ash

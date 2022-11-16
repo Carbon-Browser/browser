@@ -7,6 +7,7 @@
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "services/network/public/cpp/request_destination.h"
 #include "services/network/public/cpp/request_mode.h"
+#include "services/network/public/mojom/ip_address_space.mojom-blink.h"
 #include "services/network/public/mojom/trust_tokens.mojom-blink.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/blob/blob_utils.h"
@@ -40,7 +41,7 @@
 #include "third_party/blink/renderer/core/url/url_search_params.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/blob/blob_data.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
 #include "third_party/blink/renderer/platform/loader/cors/cors.h"
 #include "third_party/blink/renderer/platform/loader/fetch/fetch_utils.h"
@@ -70,7 +71,9 @@ FetchRequestData* CreateCopyOfFetchRequestDataForFetch(
   request->SetURL(original->Url());
   request->SetMethod(original->Method());
   request->SetHeaderList(original->HeaderList()->Clone());
-  request->SetOrigin(context->GetSecurityOrigin());
+  request->SetOrigin(original->Origin() ? original->Origin()
+                                        : context->GetSecurityOrigin());
+  request->SetNavigationRedirectChain(original->NavigationRedirectChain());
   // FIXME: Set client.
   DOMWrapperWorld& world = script_state->World();
   if (world.IsIsolatedWorld()) {
@@ -81,11 +84,12 @@ FetchRequestData* CreateCopyOfFetchRequestDataForFetch(
   request->SetReferrerString(original->ReferrerString());
   request->SetReferrerPolicy(original->GetReferrerPolicy());
   request->SetMode(original->Mode());
+  request->SetTargetAddressSpace(original->TargetAddressSpace());
   request->SetCredentials(original->Credentials());
   request->SetCacheMode(original->CacheMode());
   request->SetRedirect(original->Redirect());
   request->SetIntegrity(original->Integrity());
-  request->SetImportance(original->Importance());
+  request->SetFetchPriorityHint(original->FetchPriorityHint());
   request->SetPriority(original->Priority());
   request->SetKeepalive(original->Keepalive());
   request->SetIsHistoryNavigation(original->IsHistoryNavigation());
@@ -97,15 +101,28 @@ FetchRequestData* CreateCopyOfFetchRequestDataForFetch(
   }
   request->SetWindowId(original->WindowId());
   request->SetTrustTokenParams(original->TrustTokenParams());
+
+  // When a new request is created from another the destination is always reset
+  // to be `kEmpty`.  In order to facilitate some later checks when a service
+  // worker forwards a navigation request we want to keep track of the
+  // destination of the original request.  Therefore record the original
+  // request's destination if its non-empty, otherwise just carry forward
+  // whatever "original destination" value was already set.
+  if (original->Destination() != network::mojom::RequestDestination::kEmpty)
+    request->SetOriginalDestination(original->Destination());
+  else
+    request->SetOriginalDestination(original->OriginalDestination());
+
   return request;
 }
 
 static bool AreAnyMembersPresent(const RequestInit* init) {
   return init->hasMethod() || init->hasHeaders() || init->hasBody() ||
          init->hasReferrer() || init->hasReferrerPolicy() || init->hasMode() ||
-         init->hasCredentials() || init->hasCache() || init->hasRedirect() ||
-         init->hasIntegrity() || init->hasKeepalive() ||
-         init->hasImportance() || init->hasSignal() || init->hasTrustToken();
+         init->hasTargetAddressSpace() || init->hasCredentials() ||
+         init->hasCache() || init->hasRedirect() || init->hasIntegrity() ||
+         init->hasKeepalive() || init->hasPriority() || init->hasSignal() ||
+         init->hasDuplex() || init->hasTrustToken();
 }
 
 static BodyStreamBuffer* ExtractBody(ScriptState* script_state,
@@ -319,6 +336,10 @@ Request* Request::CreateRequestWithRequestOrString(
 
   // "If any of |init|'s members are present, then:"
   if (AreAnyMembersPresent(init)) {
+    request->SetOrigin(execution_context->GetSecurityOrigin());
+    request->SetOriginalDestination(network::mojom::RequestDestination::kEmpty);
+    request->SetNavigationRedirectChain(Vector<KURL>());
+
     // "If |request|'s |mode| is "navigate", then set it to "same-origin".
     if (request->Mode() == network::mojom::RequestMode::kNavigate)
       request->SetMode(network::mojom::RequestMode::kSameOrigin);
@@ -423,17 +444,15 @@ Request* Request::CreateRequestWithRequestOrString(
       request->SetMode(network::mojom::RequestMode::kCors);
   }
 
-  // This is not yet standardized, but we can assume the following:
-  // "If |init|'s importance member is present, set |request|'s importance
-  // mode to it." For more information see Priority Hints at
-  // https://crbug.com/821464.
-  if (init->hasImportance()) {
+  // "If |init|'s priority member is present, set |request|'s priority
+  // to it." For more information see Priority Hints at
+  // https://wicg.github.io/priority-hints/#fetch-integration
+  if (init->hasPriority()) {
     UseCounter::Count(execution_context, WebFeature::kPriorityHints);
-    if (init->importance() == "low") {
-      request->SetImportance(mojom::blink::FetchImportanceMode::kImportanceLow);
-    } else if (init->importance() == "high") {
-      request->SetImportance(
-          mojom::blink::FetchImportanceMode::kImportanceHigh);
+    if (init->priority() == "low") {
+      request->SetFetchPriorityHint(mojom::blink::FetchPriorityHint::kLow);
+    } else if (init->priority() == "high") {
+      request->SetFetchPriorityHint(mojom::blink::FetchPriorityHint::kHigh);
     }
   }
 
@@ -445,6 +464,23 @@ Request* Request::CreateRequestWithRequestOrString(
     request->SetCredentials(ParseCredentialsMode(init->credentials()).value());
   } else if (!input_request) {
     request->SetCredentials(network::mojom::CredentialsMode::kSameOrigin);
+  }
+
+  // The following code performs the following steps:
+  // - "Let |targetAddressSpace| be |init|'s targetAddressSpace member if it is
+  // present, and |unknown| otherwise."
+  if (init->hasTargetAddressSpace()) {
+    if (init->targetAddressSpace() == "local") {
+      request->SetTargetAddressSpace(network::mojom::IPAddressSpace::kLocal);
+    } else if (init->targetAddressSpace() == "private") {
+      request->SetTargetAddressSpace(network::mojom::IPAddressSpace::kPrivate);
+    } else if (init->targetAddressSpace() == "public") {
+      request->SetTargetAddressSpace(network::mojom::IPAddressSpace::kPublic);
+    } else if (init->targetAddressSpace() == "unknown") {
+      request->SetTargetAddressSpace(network::mojom::IPAddressSpace::kUnknown);
+    }
+  } else {
+    request->SetTargetAddressSpace(network::mojom::IPAddressSpace::kUnknown);
   }
 
   // "If |init|'s cache member is present, set |request|'s cache mode to it."
@@ -562,10 +598,6 @@ Request* Request::CreateRequestWithRequestOrString(
 
     request->SetTrustTokenParams(std::move(params));
   }
-  if (init->hasAllowHTTP1ForStreamingUpload()) {
-    request->SetAllowHTTP1ForStreamingUpload(
-        init->allowHTTP1ForStreamingUpload());
-  }
 
   // "Let |r| be a new Request object associated with |request| and a new
   // Headers object whose guard is "request"."
@@ -573,7 +605,7 @@ Request* Request::CreateRequestWithRequestOrString(
 
   // "If |signal| is not null, then make |r|’s signal follow |signal|."
   if (signal)
-    r->signal_->Follow(signal);
+    r->signal_->Follow(script_state, signal);
 
   // "If |r|'s request's mode is "no-cors", run these substeps:
   if (r->GetRequest()->Mode() == network::mojom::RequestMode::kNoCors) {
@@ -605,10 +637,10 @@ Request* Request::CreateRequestWithRequestOrString(
 
     // "Fill |r|'s Headers object with |headers|. Rethrow any exceptions."
     if (init->hasHeaders()) {
-      r->getHeaders()->FillWith(init->headers(), exception_state);
+      r->getHeaders()->FillWith(script_state, init->headers(), exception_state);
     } else {
       DCHECK(headers);
-      r->getHeaders()->FillWith(headers, exception_state);
+      r->getHeaders()->FillWith(script_state, headers, exception_state);
     }
     if (exception_state.HadException())
       return nullptr;
@@ -658,19 +690,31 @@ Request* Request::CreateRequestWithRequestOrString(
     //   `Content-Type`/|Content-Type| to |this|'s headers object.
     if (!content_type.IsEmpty() &&
         !r->getHeaders()->has(http_names::kContentType, exception_state)) {
-      r->getHeaders()->append(http_names::kContentType, content_type,
-                              exception_state);
+      r->getHeaders()->append(script_state, http_names::kContentType,
+                              content_type, exception_state);
     }
     if (exception_state.HadException())
       return nullptr;
   }
 
-  // "If |body| is non-null and |body|’s source is null, then:"
+  // "If `inputOrInitBody` is non-null and `inputOrInitBody`’s source is null,
+  // then:"
   if (body && body->IsMadeFromReadableStream()) {
+    // "If `initBody` is non-null and `init["duplex"]` does not exist, then
+    // throw a TypeError."
+    if (!init_body.IsEmpty() && !init_body->IsNull() && !init->hasDuplex()) {
+      exception_state.ThrowTypeError(
+          "The `duplex` member must be specified for a request with a "
+          "streaming body");
+      return nullptr;
+    }
+
     // "If |this|’s request’s mode is neither "same-origin" nor "cors", then
     // throw a TypeError."
     if (request->Mode() != network::mojom::RequestMode::kSameOrigin &&
-        request->Mode() != network::mojom::RequestMode::kCors) {
+        request->Mode() != network::mojom::RequestMode::kCors &&
+        request->Mode() !=
+            network::mojom::RequestMode::kCorsWithForcedPreflight) {
       exception_state.ThrowTypeError(
           "If request is made from ReadableStream, mode should be"
           "\"same-origin\" or \"cors\"");
@@ -894,20 +938,20 @@ String Request::credentials() const {
 String Request::cache() const {
   // "The cache attribute's getter must return request's cache mode."
   switch (request_->CacheMode()) {
-    case mojom::FetchCacheMode::kDefault:
+    case mojom::blink::FetchCacheMode::kDefault:
       return "default";
-    case mojom::FetchCacheMode::kNoStore:
+    case mojom::blink::FetchCacheMode::kNoStore:
       return "no-store";
-    case mojom::FetchCacheMode::kBypassCache:
+    case mojom::blink::FetchCacheMode::kBypassCache:
       return "reload";
-    case mojom::FetchCacheMode::kValidateCache:
+    case mojom::blink::FetchCacheMode::kValidateCache:
       return "no-cache";
-    case mojom::FetchCacheMode::kForceCache:
+    case mojom::blink::FetchCacheMode::kForceCache:
       return "force-cache";
-    case mojom::FetchCacheMode::kOnlyIfCached:
+    case mojom::blink::FetchCacheMode::kOnlyIfCached:
       return "only-if-cached";
-    case mojom::FetchCacheMode::kUnspecifiedOnlyIfCachedStrict:
-    case mojom::FetchCacheMode::kUnspecifiedForceCacheMiss:
+    case mojom::blink::FetchCacheMode::kUnspecifiedOnlyIfCachedStrict:
+    case mojom::blink::FetchCacheMode::kUnspecifiedForceCacheMiss:
       NOTREACHED();
       break;
   }
@@ -936,6 +980,20 @@ String Request::integrity() const {
 bool Request::keepalive() const {
   return request_->Keepalive();
 }
+String Request::targetAddressSpace() const {
+  switch (request_->TargetAddressSpace()) {
+    case network::mojom::IPAddressSpace::kLocal:
+      return "local";
+    case network::mojom::IPAddressSpace::kPrivate:
+      return "private";
+    case network::mojom::IPAddressSpace::kPublic:
+      return "public";
+    case network::mojom::IPAddressSpace::kUnknown:
+      return "unknown";
+  }
+  NOTREACHED();
+  return "unknown";
+}
 
 bool Request::isHistoryNavigation() const {
   return request_->IsHistoryNavigation();
@@ -955,7 +1013,7 @@ Request* Request::clone(ScriptState* script_state,
   headers->SetGuard(headers_->GetGuard());
   auto* signal =
       MakeGarbageCollected<AbortSignal>(ExecutionContext::From(script_state));
-  signal->Follow(signal_);
+  signal->Follow(script_state, signal_);
   return MakeGarbageCollected<Request>(script_state, request, headers, signal);
 }
 
@@ -982,6 +1040,7 @@ mojom::blink::FetchAPIRequestPtr Request::CreateFetchAPIRequest() const {
   fetch_api_request->integrity = request_->Integrity();
   fetch_api_request->is_history_navigation = request_->IsHistoryNavigation();
   fetch_api_request->destination = request_->Destination();
+  fetch_api_request->request_initiator = request_->Origin();
 
   // Strip off the fragment part of URL. So far, all callers expect the fragment
   // to be excluded.

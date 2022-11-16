@@ -7,7 +7,6 @@
 #include <memory>
 #include <string>
 
-#include "base/cxx17_backports.h"
 #include "base/debug/crash_logging.h"
 #include "base/environment.h"
 #include "base/files/file_util.h"
@@ -16,6 +15,7 @@
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/win/windows_version.h"
 #include "build/branding_buildflags.h"
 #include "build/build_config.h"
 #include "components/crash/core/app/crash_export_thunks.h"
@@ -32,7 +32,7 @@ void GetPlatformCrashpadAnnotations(
     std::map<std::string, std::string>* annotations) {
   CrashReporterClient* crash_reporter_client = GetCrashReporterClient();
   wchar_t exe_file[MAX_PATH] = {};
-  CHECK(::GetModuleFileName(nullptr, exe_file, base::size(exe_file)));
+  CHECK(::GetModuleFileName(nullptr, exe_file, std::size(exe_file)));
   std::wstring product_name, version, special_build, channel_name;
   crash_reporter_client->GetProductNameAndVersion(
       exe_file, &product_name, &version, &special_build, &channel_name);
@@ -60,14 +60,14 @@ void GetPlatformCrashpadAnnotations(
 #endif
 }
 
-base::FilePath PlatformCrashpadInitialization(
+bool PlatformCrashpadInitialization(
     bool initial_client,
     bool browser_process,
     bool embedded_handler,
     const std::string& user_data_dir,
     const base::FilePath& exe_path,
-    const std::vector<std::string>& initial_arguments) {
-  base::FilePath database_path;  // Only valid in the browser process.
+    const std::vector<std::string>& initial_arguments,
+    base::FilePath* database_path) {
   base::FilePath metrics_path;  // Only valid in the browser process.
 
   const char kPipeNameVar[] = "CHROME_CRASHPAD_PIPE_NAME";
@@ -76,10 +76,12 @@ base::FilePath PlatformCrashpadInitialization(
 
   CrashReporterClient* crash_reporter_client = GetCrashReporterClient();
 
+  bool initialized = false;
+
   if (initial_client) {
     std::wstring database_path_str;
     if (crash_reporter_client->GetCrashDumpLocation(&database_path_str))
-      database_path = base::FilePath(database_path_str);
+      *database_path = base::FilePath(database_path_str);
 
     std::wstring metrics_path_str;
     if (crash_reporter_client->GetCrashMetricsLocation(&metrics_path_str)) {
@@ -100,7 +102,7 @@ base::FilePath PlatformCrashpadInitialization(
     if (exe_file.empty()) {
       wchar_t exe_file_path[MAX_PATH] = {};
       CHECK(::GetModuleFileName(nullptr, exe_file_path,
-                                base::size(exe_file_path)));
+                                std::size(exe_file_path)));
 
       exe_file = base::FilePath(exe_file_path);
     }
@@ -141,20 +143,34 @@ base::FilePath PlatformCrashpadInitialization(
     arguments.push_back(std::string("--monitor-self-annotation=ptype=") +
                         switches::kCrashpadHandler);
 
-    GetCrashpadClient().StartHandler(exe_file, database_path, metrics_path, url,
-                                     process_annotations, arguments, false,
-                                     false);
+    initialized = GetCrashpadClient().StartHandler(
+        exe_file, *database_path, metrics_path, url, process_annotations,
+        arguments, /*restartable=*/false, /*asynchronous_start=*/false);
 
-    // If we're the browser, push the pipe name into the environment so child
-    // processes can connect to it. If we inherited another crashpad_handler's
-    // pipe name, we'll overwrite it here.
-    env->SetVar(kPipeNameVar,
-                base::WideToUTF8(GetCrashpadClient().GetHandlerIPCPipe()));
+    if (initialized) {
+      // If we're the browser, push the pipe name into the environment so child
+      // processes can connect to it. If we inherited another crashpad_handler's
+      // pipe name, we'll overwrite it here.
+      env->SetVar(kPipeNameVar,
+                  base::WideToUTF8(GetCrashpadClient().GetHandlerIPCPipe()));
+    }
   } else {
     std::string pipe_name_utf8;
     if (env->GetVar(kPipeNameVar, &pipe_name_utf8)) {
-      GetCrashpadClient().SetHandlerIPCPipe(base::UTF8ToWide(pipe_name_utf8));
+      initialized = GetCrashpadClient().SetHandlerIPCPipe(
+          base::UTF8ToWide(pipe_name_utf8));
     }
+  }
+
+  if (!initialized)
+    return false;
+
+  // Regester WER helper only if it will produce useful information - prior to
+  // 20H1 the crashes it can help with did not make their way to the helper.
+  if (base::win::GetVersion() >= base::win::Version::WIN10_20H1) {
+    auto path = crash_reporter_client->GetWerRuntimeExceptionModule();
+    if (!path.empty())
+      GetCrashpadClient().RegisterWerModule(path);
   }
 
   if (crash_reporter_client->GetShouldDumpLargerDumps()) {
@@ -164,7 +180,7 @@ base::FilePath PlatformCrashpadInitialization(
                                                   kIndirectMemoryLimit);
   }
 
-  return database_path;
+  return true;
 }
 
 // We need to prevent ICF from folding DumpProcessForHungInputThread(),

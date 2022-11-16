@@ -5,10 +5,12 @@
 #include "third_party/blink/renderer/modules/buckets/storage_bucket.h"
 
 #include "third_party/blink/public/platform/task_type.h"
+#include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_storage_estimate.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_storage_usage_details.h"
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
 #include "third_party/blink/renderer/core/dom/dom_time_stamp.h"
+#include "third_party/blink/renderer/modules/indexeddb/idb_factory.h"
 
 namespace blink {
 
@@ -23,6 +25,15 @@ StorageBucket::StorageBucket(
 ScriptPromise StorageBucket::persist(ScriptState* script_state) {
   auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
   ScriptPromise promise = resolver->Promise();
+
+  // The context may be destroyed and the mojo connection unbound. However the
+  // object may live on, reject any requests after the context is destroyed.
+  if (!remote_.is_bound()) {
+    resolver->Reject(MakeGarbageCollected<DOMException>(
+        DOMExceptionCode::kInvalidStateError));
+    return promise;
+  }
+
   remote_->Persist(WTF::Bind(&StorageBucket::DidRequestPersist,
                              WrapPersistent(this), WrapPersistent(resolver)));
   return promise;
@@ -31,6 +42,15 @@ ScriptPromise StorageBucket::persist(ScriptState* script_state) {
 ScriptPromise StorageBucket::persisted(ScriptState* script_state) {
   auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
   ScriptPromise promise = resolver->Promise();
+
+  // The context may be destroyed and the mojo connection unbound. However the
+  // object may live on, reject any requests after the context is destroyed.
+  if (!remote_.is_bound()) {
+    resolver->Reject(MakeGarbageCollected<DOMException>(
+        DOMExceptionCode::kInvalidStateError));
+    return promise;
+  }
+
   remote_->Persisted(WTF::Bind(&StorageBucket::DidGetPersisted,
                                WrapPersistent(this), WrapPersistent(resolver)));
   return promise;
@@ -39,6 +59,15 @@ ScriptPromise StorageBucket::persisted(ScriptState* script_state) {
 ScriptPromise StorageBucket::estimate(ScriptState* script_state) {
   auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
   ScriptPromise promise = resolver->Promise();
+
+  // The context may be destroyed and the mojo connection unbound. However the
+  // object may live on, reject any requests after the context is destroyed.
+  if (!remote_.is_bound()) {
+    resolver->Reject(MakeGarbageCollected<DOMException>(
+        DOMExceptionCode::kInvalidStateError));
+    return promise;
+  }
+
   remote_->Estimate(WTF::Bind(&StorageBucket::DidGetEstimate,
                               WrapPersistent(this), WrapPersistent(resolver)));
   return promise;
@@ -47,6 +76,15 @@ ScriptPromise StorageBucket::estimate(ScriptState* script_state) {
 ScriptPromise StorageBucket::durability(ScriptState* script_state) {
   auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
   ScriptPromise promise = resolver->Promise();
+
+  // The context may be destroyed and the mojo connection unbound. However the
+  // object may live on, reject any requests after the context is destroyed.
+  if (!remote_.is_bound()) {
+    resolver->Reject(MakeGarbageCollected<DOMException>(
+        DOMExceptionCode::kInvalidStateError));
+    return promise;
+  }
+
   remote_->Durability(WTF::Bind(&StorageBucket::DidGetDurability,
                                 WrapPersistent(this),
                                 WrapPersistent(resolver)));
@@ -57,6 +95,15 @@ ScriptPromise StorageBucket::setExpires(ScriptState* script_state,
                                         const DOMTimeStamp& expires) {
   auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
   ScriptPromise promise = resolver->Promise();
+
+  // The context may be destroyed and the mojo connection unbound. However the
+  // object may live on, reject any requests after the context is destroyed.
+  if (!remote_.is_bound()) {
+    resolver->Reject(MakeGarbageCollected<DOMException>(
+        DOMExceptionCode::kInvalidStateError));
+    return promise;
+  }
+
   remote_->SetExpires(
       base::Time::FromJavaTime(expires),
       WTF::Bind(&StorageBucket::DidSetExpires, WrapPersistent(this),
@@ -67,9 +114,28 @@ ScriptPromise StorageBucket::setExpires(ScriptState* script_state,
 ScriptPromise StorageBucket::expires(ScriptState* script_state) {
   auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
   ScriptPromise promise = resolver->Promise();
+
+  // The context may be destroyed and the mojo connection unbound. However the
+  // object may live on, reject any requests after the context is destroyed.
+  if (!remote_.is_bound()) {
+    resolver->Reject(MakeGarbageCollected<DOMException>(
+        DOMExceptionCode::kInvalidStateError));
+    return promise;
+  }
+
   remote_->Expires(WTF::Bind(&StorageBucket::DidGetExpires,
                              WrapPersistent(this), WrapPersistent(resolver)));
   return promise;
+}
+
+IDBFactory* StorageBucket::indexedDB() {
+  if (!idb_factory_) {
+    idb_factory_ = MakeGarbageCollected<IDBFactory>();
+    mojo::PendingRemote<mojom::blink::IDBFactory> factory;
+    remote_->GetIdbFactory(factory.InitWithNewPipeAndPassReceiver());
+    idb_factory_->SetFactory(std::move(factory), GetExecutionContext());
+  }
+  return idb_factory_;
 }
 
 bool StorageBucket::HasPendingActivity() const {
@@ -77,6 +143,7 @@ bool StorageBucket::HasPendingActivity() const {
 }
 
 void StorageBucket::Trace(Visitor* visitor) const {
+  visitor->Trace(idb_factory_);
   ScriptWrappable::Trace(visitor);
   ExecutionContextLifecycleObserver::Trace(visitor);
 }

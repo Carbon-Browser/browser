@@ -18,7 +18,6 @@
 #include "content/browser/accessibility/browser_accessibility_win.h"
 #include "content/browser/renderer_host/legacy_render_widget_host_win.h"
 #include "content/public/common/content_switches.h"
-#include "content/public/common/use_zoom_for_dsf_policy.h"
 #include "ui/accessibility/accessibility_switches.h"
 #include "ui/accessibility/ax_role_properties.h"
 #include "ui/accessibility/platform/ax_fragment_root_win.h"
@@ -78,7 +77,7 @@ BrowserAccessibilityManager::ToBrowserAccessibilityManagerWin() {
 BrowserAccessibilityManagerWin::BrowserAccessibilityManagerWin(
     const ui::AXTreeUpdate& initial_tree,
     BrowserAccessibilityDelegate* delegate)
-    : BrowserAccessibilityManager(delegate), load_complete_pending_(false) {
+    : BrowserAccessibilityManager(delegate) {
   ui::win::CreateATLModuleIfNeeded();
   Initialize(initial_tree);
 }
@@ -122,10 +121,14 @@ void BrowserAccessibilityManagerWin::FireFocusEvent(
   FireUiaAccessibilityEvent(UIA_AutomationFocusChangedEventId, node);
 }
 
-void BrowserAccessibilityManagerWin::FireBlinkEvent(
-    ax::mojom::Event event_type,
-    BrowserAccessibility* node) {
-  BrowserAccessibilityManager::FireBlinkEvent(event_type, node);
+void BrowserAccessibilityManagerWin::FireBlinkEvent(ax::mojom::Event event_type,
+                                                    BrowserAccessibility* node,
+                                                    int action_request_id) {
+  DCHECK(CanFireEvents());
+
+  BrowserAccessibilityManager::FireBlinkEvent(event_type, node,
+                                              action_request_id);
+
   switch (event_type) {
     case ax::mojom::Event::kClicked:
       if (node->GetData().IsInvocable())
@@ -135,6 +138,10 @@ void BrowserAccessibilityManagerWin::FireBlinkEvent(
       // Event tests use kEndOfTest as a sentinel to mark the end of the test.
       FireUiaAccessibilityEvent(
           ui::UiaRegistrarWin::GetInstance().GetTestCompleteEventId(), node);
+      break;
+    case ax::mojom::Event::kLoadComplete:
+      FireWinAccessibilityEvent(IA2_EVENT_DOCUMENT_LOAD_COMPLETE, node);
+      FireUiaAccessibilityEvent(UIA_AsyncContentLoadedEventId, node);
       break;
     case ax::mojom::Event::kLocationChanged:
       FireWinAccessibilityEvent(IA2_EVENT_VISIBLE_DATA_CHANGED, node);
@@ -159,23 +166,6 @@ void BrowserAccessibilityManagerWin::FireGeneratedEvent(
     ui::AXEventGenerator::Event event_type,
     BrowserAccessibility* node) {
   BrowserAccessibilityManager::FireGeneratedEvent(event_type, node);
-  bool can_fire_events = CanFireEvents();
-
-  if (event_type == ui::AXEventGenerator::Event::LOAD_COMPLETE &&
-      can_fire_events)
-    load_complete_pending_ = false;
-
-  if (load_complete_pending_ && can_fire_events && GetRoot()) {
-    load_complete_pending_ = false;
-    FireWinAccessibilityEvent(IA2_EVENT_DOCUMENT_LOAD_COMPLETE, GetRoot());
-  }
-
-  if (!can_fire_events && !load_complete_pending_ &&
-      event_type == ui::AXEventGenerator::Event::LOAD_COMPLETE && GetRoot() &&
-      !GetRoot()->IsOffscreen() && GetRoot()->PlatformChildCount() > 0) {
-    load_complete_pending_ = true;
-  }
-
   switch (event_type) {
     case ui::AXEventGenerator::Event::ACCESS_KEY_CHANGED:
       FireUiaPropertyChangedEvent(UIA_AccessKeyPropertyId, node);
@@ -185,7 +175,10 @@ void BrowserAccessibilityManagerWin::FireGeneratedEvent(
       break;
     case ui::AXEventGenerator::Event::ALERT:
       FireWinAccessibilityEvent(EVENT_SYSTEM_ALERT, node);
-      FireUiaAccessibilityEvent(UIA_SystemAlertEventId, node);
+      // Generated 'ALERT' events come from role=alert nodes in the tree.
+      // These should just be treated as normal live region changed events,
+      // since we don't want web pages to be performing system-wide alerts.
+      FireUiaAccessibilityEvent(UIA_LiveRegionChangedEventId, node);
       break;
     case ui::AXEventGenerator::Event::ATOMIC_CHANGED:
       HandleAriaPropertiesChangedEvent(*node);
@@ -262,7 +255,7 @@ void BrowserAccessibilityManagerWin::FireGeneratedEvent(
           // Fire the event on the root object, which in the absence of a text
           // field ancestor is the closest UIA text provider (other than the
           // focused object) in which the selection has changed.
-          DCHECK(node->IsPlatformDocument());
+          DCHECK(ui::IsPlatformDocument(node->GetRole()));
           EnqueueSelectionChangedEvent(*node);
 
           // "IA2_EVENT_TEXT_CARET_MOVED" should only be fired when a visible
@@ -355,9 +348,6 @@ void BrowserAccessibilityManagerWin::FireGeneratedEvent(
       FireUiaPropertyChangedEvent(UIA_LiveSettingPropertyId, node);
       HandleAriaPropertiesChangedEvent(*node);
       break;
-    case ui::AXEventGenerator::Event::LOAD_COMPLETE:
-      FireWinAccessibilityEvent(IA2_EVENT_DOCUMENT_LOAD_COMPLETE, node);
-      break;
     case ui::AXEventGenerator::Event::LAYOUT_INVALIDATED:
       FireUiaAccessibilityEvent(UIA_LayoutInvalidatedEventId, node);
       break;
@@ -385,7 +375,7 @@ void BrowserAccessibilityManagerWin::FireGeneratedEvent(
       }
       // Only fire name changes when the name comes from an attribute, otherwise
       // name changes are redundant with text removed/inserted events.
-      if (node->GetData().GetNameFrom() != ax::mojom::NameFrom::kContents)
+      if (node->GetNameFrom() != ax::mojom::NameFrom::kContents)
         FireWinAccessibilityEvent(EVENT_OBJECT_NAMECHANGE, node);
       break;
     case ui::AXEventGenerator::Event::OBJECT_ATTRIBUTE_CHANGED:
@@ -477,7 +467,6 @@ void BrowserAccessibilityManagerWin::FireGeneratedEvent(
       break;
     case ui::AXEventGenerator::Event::TEXT_ATTRIBUTE_CHANGED:
       FireWinAccessibilityEvent(IA2_EVENT_TEXT_ATTRIBUTE_CHANGED, node);
-      EnqueueTextChangedEvent(*node);
       break;
     case ui::AXEventGenerator::Event::VALUE_IN_TEXT_FIELD_CHANGED:
       DCHECK(node->IsTextField());
@@ -498,7 +487,6 @@ void BrowserAccessibilityManagerWin::FireGeneratedEvent(
     case ui::AXEventGenerator::Event::DOCUMENT_TITLE_CHANGED:
     case ui::AXEventGenerator::Event::FOCUS_CHANGED:
     case ui::AXEventGenerator::Event::LIVE_REGION_NODE_CHANGED:
-    case ui::AXEventGenerator::Event::LOAD_START:
     case ui::AXEventGenerator::Event::MENU_ITEM_SELECTED:
     case ui::AXEventGenerator::Event::OTHER_ATTRIBUTE_CHANGED:
     case ui::AXEventGenerator::Event::PARENT_CHANGED:
@@ -561,13 +549,24 @@ void BrowserAccessibilityManagerWin::FireUiaAccessibilityEvent(
     return;
   if (!ShouldFireEventForNode(node))
     return;
-  // Suppress events when |IGNORED_CHANGED| except for MenuClosed / MenuOpen
-  // since a change in the ignored state may show / hide a popup by exposing
-  // it to the tree or not.
+
+  // Suppress most events when the node just became ignored/unignored.
   if (IsIgnoredChangedNode(node)) {
     switch (uia_event) {
+      case UIA_LiveRegionChangedEventId:
+        // Don't suppress live region changed events on nodes that just became
+        // unignored, but suppress them on nodes that just became ignored. This
+        // ensures that ATs can announce LiveRegionChanged events on nodes that
+        // just appeared in the tree and not announce the ones that just got
+        // removed.
+        if (node->IsIgnored())
+          return;
+        break;
       case UIA_MenuClosedEventId:
       case UIA_MenuOpenedEventId:
+        // Don't suppress MenuClosed/MenuOpened events since a change in the
+        // ignored state may hide/show a popup by exposing it to the tree or
+        // not.
         break;
       default:
         return;
@@ -706,28 +705,6 @@ bool BrowserAccessibilityManagerWin::CanFireEvents() const {
   return BrowserAccessibilityManager::CanFireEvents() &&
          GetDelegateFromRootManager() &&
          GetDelegateFromRootManager()->AccessibilityGetAcceleratedWidget();
-}
-
-gfx::Rect BrowserAccessibilityManagerWin::GetViewBoundsInScreenCoordinates()
-    const {
-  // We have to take the device scale factor into account on Windows.
-  BrowserAccessibilityDelegate* delegate = GetDelegateFromRootManager();
-  if (delegate) {
-    gfx::Rect bounds = delegate->AccessibilityGetViewBounds();
-
-    // http://www.chromium.org/developers/design-documents/blink-coordinate-spaces
-    // The bounds returned by the delegate are always in device-independent
-    // pixels (DIPs), meaning physical pixels divided by device scale factor
-    // (DSF). However, if UseZoomForDSF is enabled, then Blink does not apply
-    // DSF when going from physical to screen pixels. In that case, we need to
-    // multiply DSF back in to get to Blink's notion of "screen pixels."
-    if (IsUseZoomForDSFEnabled() && device_scale_factor() > 0.0 &&
-        device_scale_factor() != 1.0) {
-      bounds = ScaleToEnclosingRect(bounds, device_scale_factor());
-    }
-    return bounds;
-  }
-  return gfx::Rect();
 }
 
 void BrowserAccessibilityManagerWin::OnSubtreeWillBeDeleted(ui::AXTree* tree,
@@ -950,7 +927,7 @@ void BrowserAccessibilityManagerWin::BeforeAccessibilityEvents() {
   for (const auto& targeted_event : event_generator()) {
     if (targeted_event.event_params.event ==
         ui::AXEventGenerator::Event::IGNORED_CHANGED) {
-      BrowserAccessibility* event_target = GetFromAXNode(targeted_event.node);
+      BrowserAccessibility* event_target = GetFromID(targeted_event.node_id);
       if (!event_target)
         continue;
 

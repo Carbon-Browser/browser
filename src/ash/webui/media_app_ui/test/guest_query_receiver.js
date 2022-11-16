@@ -49,6 +49,14 @@ function assertLastReceivedFileList() {
 }
 
 /**
+ * @return {!Array<!mediaApp.AbstractFile>}
+ */
+function assertLastReceivedFileArray() {
+  const fileList = assertLastReceivedFileList();
+  return Array.from({length: fileList.length}, (v, k) => fileList.item(k));
+}
+
+/**
  * @return {!mediaApp.AbstractFile}
  */
 function currentFile() {
@@ -76,7 +84,7 @@ function flattenFile(file) {
     token,
     lastModified,
     hasDelete,
-    hasRename
+    hasRename,
   };
 }
 
@@ -108,7 +116,38 @@ const SIMPLE_TEST_QUERIES = {
   getLastFile: async (data, resultData) => {
     Object.assign(resultData, flattenFile(currentFile()));
     return resultData.name;
-  }
+  },
+  getAllFiles: async (data, resultData) => {
+    Object.assign(resultData, assertLastReceivedFileArray().map(flattenFile));
+    return `${resultData.length}`;
+  },
+  notifyCurrentFile: (data, resultData) => {
+    DELEGATE.notifyCurrentFile(data.simpleArgs.name, data.simpleArgs.type);
+  },
+  openFileAtIndex: async (data, resultData) => {
+    const handle = assertLastReceivedFileList().item(data.simpleArgs.index);
+    const domFile = await handle.openFile();
+    handle.updateFile(domFile, domFile.name);
+    return 'opened and updated';
+  },
+  openFilesWithFilePicker: async (data, resultData) => {
+    /**
+     * @typedef {{
+     *   acceptTypeKeys: !Array<string>,
+     *   explicitToken: (number|undefined),
+     *   singleFile: ?boolean,
+     * }}
+     */
+    let Args;
+    const args = /** @type {Args} */ (data.simpleArgs);
+    let existingFile = assertLastReceivedFileList().item(0) || null;
+    if (args.explicitToken) {
+      existingFile = {token: args.explicitToken};
+    }
+    await assertLastReceivedFileList().openFilesWithFilePicker(
+        args.acceptTypeKeys, existingFile, args.singleFile);
+    return 'openFilesWithFilePicker resolved';
+  },
 };
 
 /**
@@ -161,7 +200,7 @@ async function runTestQuery(data) {
     }
     extraResultData = {
       receiverFileName: file.name,
-      receiverErrorName: file.error
+      receiverErrorName: file.error,
     };
   } else if (data.deleteLastFile) {
     // Simulate a user deleting the currently open file.
@@ -212,9 +251,6 @@ async function runTestQuery(data) {
     }
   } else if (data.getFileErrors) {
     result = assertLastReceivedFileList().files.map(file => file.error).join();
-  } else if (data.openFile) {
-    // Call open file on file list, simulating a user trying to open a new file.
-    await assertLastReceivedFileList().openFile();
   } else if (data.suppressCrashReports) {
     // TODO(b/172981864): Remove this once we stop triggering crash reports for
     // NotAFile errors.

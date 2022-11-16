@@ -11,7 +11,6 @@
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/check_op.h"
-#include "base/cxx17_backports.h"
 #include "base/lazy_instance.h"
 #include "content/public/renderer/render_thread.h"
 #include "content/public/renderer/worker_thread.h"
@@ -21,6 +20,10 @@
 #include "extensions/renderer/v8_helpers.h"
 #include "ipc/ipc_message.h"
 #include "ipc/ipc_message_macros.h"
+#include "v8/include/v8-context.h"
+#include "v8/include/v8-function.h"
+#include "v8/include/v8-persistent-handle.h"
+#include "v8/include/v8-primitive.h"
 
 namespace extensions {
 
@@ -57,6 +60,10 @@ class WakeEventPage::WakeEventPageNativeHandler
                             base::Unretained(this)));
   }
 
+  WakeEventPageNativeHandler(const WakeEventPageNativeHandler&) = delete;
+  WakeEventPageNativeHandler& operator=(const WakeEventPageNativeHandler&) =
+      delete;
+
   ~WakeEventPageNativeHandler() override {}
 
  private:
@@ -89,13 +96,11 @@ class WakeEventPage::WakeEventPageNativeHandler
         v8::Boolean::New(isolate, success),
     };
     context()->SafeCallFunction(v8::Local<v8::Function>::New(isolate, callback),
-                                base::size(args), args);
+                                std::size(args), args);
   }
 
   MakeRequestCallback make_request_;
   base::WeakPtrFactory<WakeEventPageNativeHandler> weak_ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(WakeEventPageNativeHandler);
 };
 
 // static

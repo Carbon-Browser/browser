@@ -9,7 +9,8 @@
 #include "base/json/json_reader.h"
 #include "base/memory/ref_counted.h"
 #include "base/message_loop/message_pump_type.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/test/task_environment.h"
 #include "base/threading/platform_thread.h"
 #include "base/threading/thread.h"
 #include "base/time/time.h"
@@ -25,8 +26,7 @@ namespace {
 class SyncWebSocketImplTest : public testing::Test {
  protected:
   SyncWebSocketImplTest()
-      : client_thread_("ClientThread"),
-        long_timeout_(base::TimeDelta::FromMinutes(1)) {}
+      : client_thread_("ClientThread"), long_timeout_(base::Minutes(1)) {}
   ~SyncWebSocketImplTest() override {}
 
   void SetUp() override {
@@ -40,6 +40,7 @@ class SyncWebSocketImplTest : public testing::Test {
 
   Timeout long_timeout() const { return Timeout(long_timeout_); }
 
+  base::test::SingleThreadTaskEnvironment task_environment;
   base::Thread client_thread_;
   TestHttpServer server_;
   scoped_refptr<URLRequestContextGetter> context_getter_;
@@ -97,9 +98,8 @@ TEST_F(SyncWebSocketImplTest, DetermineRecipient) {
   ASSERT_TRUE(message_value->GetAsDictionary(&message_dict));
   std::string method;
   ASSERT_TRUE(message_dict->GetString("method", &method));
-  int id;
-  ASSERT_TRUE(message_dict->GetInteger("id", &id));
   ASSERT_EQ(method, "Page.enable");
+  int id = message_dict->FindIntKey("id").value_or(-1);
   ASSERT_EQ(id, 1);
 }
 
@@ -180,10 +180,10 @@ TEST_F(SyncWebSocketImplTest, Reconnect) {
   ASSERT_TRUE(sock.Connect(server_.web_socket_url()));
   ASSERT_TRUE(sock.Send("1"));
   // Wait for SyncWebSocket to receive the response from the server.
-  Timeout response_timeout(base::TimeDelta::FromSeconds(20));
+  Timeout response_timeout(base::Seconds(20));
   while (!response_timeout.IsExpired()) {
     if (sock.IsConnected() && !sock.HasNextMessage())
-      base::PlatformThread::Sleep(base::TimeDelta::FromMilliseconds(10));
+      base::PlatformThread::Sleep(base::Milliseconds(10));
     else
       break;
   }
@@ -200,4 +200,32 @@ TEST_F(SyncWebSocketImplTest, Reconnect) {
             sock.ReceiveNextMessage(&message, long_timeout()));
   ASSERT_STREQ("3", message.c_str());
   ASSERT_FALSE(sock.HasNextMessage());
+}
+
+TEST_F(SyncWebSocketImplTest, NotificationArrives) {
+  base::RunLoop run_loop;
+  SyncWebSocketImpl sock(context_getter_.get());
+  bool notified = false;
+
+  sock.SetNotificationCallback(base::BindRepeating(
+      [](bool& flag, base::RepeatingClosure callback) {
+        flag = true;
+        callback.Run();
+      },
+      std::ref(notified), run_loop.QuitClosure()));
+
+  ASSERT_TRUE(sock.Connect(server_.web_socket_url()));
+  ASSERT_TRUE(sock.Send("there"));
+  std::string message;
+
+  EXPECT_EQ(SyncWebSocket::StatusCode::kOk,
+            sock.ReceiveNextMessage(&message, long_timeout()));
+
+  // Notification must arrive via the message queue.
+  // If it arrives earlier then we have a threading problem.
+  EXPECT_FALSE(notified);
+
+  run_loop.Run();
+
+  EXPECT_TRUE(notified);
 }

@@ -4,12 +4,16 @@
 
 #include "chrome/test/base/test_browser_window.h"
 
+#include "base/values.h"
+#include "build/build_config.h"
 #include "chrome/browser/sharing/sharing_dialog_data.h"
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/browser_list_observer.h"
 #include "chrome/browser/ui/find_bar/find_bar.h"
-#include "chrome/browser/ui/user_education/feature_promo_controller.h"
+#include "components/user_education/common/feature_promo_controller.h"
 #include "content/public/browser/keyboard_event_processing_result.h"
+#include "ui/base/interaction/element_identifier.h"
+#include "ui/color/color_provider_manager.h"
 #include "ui/gfx/geometry/rect.h"
 
 // Helpers --------------------------------------------------------------------
@@ -108,6 +112,22 @@ ui::NativeTheme* TestBrowserWindow::GetNativeTheme() {
   return nullptr;
 }
 
+const ui::ThemeProvider* TestBrowserWindow::GetThemeProvider() const {
+  return nullptr;
+}
+
+const ui::ColorProvider* TestBrowserWindow::GetColorProvider() const {
+  return ui::ColorProviderManager::Get().GetColorProviderFor(
+      {ui::ColorProviderManager::ColorMode::kLight,
+       ui::ColorProviderManager::ContrastMode::kNormal,
+       ui::ColorProviderManager::SystemTheme::kDefault,
+       ui::ColorProviderManager::FrameType::kChromium});
+}
+
+ui::ElementContext TestBrowserWindow::GetElementContext() {
+  return ui::ElementContext();
+}
+
 int TestBrowserWindow::GetTopControlsHeight() const {
   return 0;
 }
@@ -116,7 +136,7 @@ void TestBrowserWindow::SetTopControlsGestureScrollInProgress(
     bool in_progress) {}
 
 StatusBubble* TestBrowserWindow::GetStatusBubble() {
-  return NULL;
+  return nullptr;
 }
 
 gfx::Rect TestBrowserWindow::GetRestoredBounds() const {
@@ -154,6 +174,10 @@ bool TestBrowserWindow::IsFullscreen() const {
 }
 
 bool TestBrowserWindow::IsFullscreenBubbleVisible() const {
+  return false;
+}
+
+bool TestBrowserWindow::IsForceFullscreen() const {
   return false;
 }
 
@@ -208,6 +232,10 @@ bool TestBrowserWindow::IsToolbarShowing() const {
   return false;
 }
 
+bool TestBrowserWindow::IsLocationBarVisible() const {
+  return false;
+}
+
 ShowTranslateBubbleResult TestBrowserWindow::ShowTranslateBubble(
     content::WebContents* contents,
     translate::TranslateStep step,
@@ -218,12 +246,17 @@ ShowTranslateBubbleResult TestBrowserWindow::ShowTranslateBubble(
   return ShowTranslateBubbleResult::SUCCESS;
 }
 
+void TestBrowserWindow::ShowPartialTranslateBubble(
+    PartialTranslateBubbleModel::ViewState view_state,
+    const std::string& source_language,
+    const std::string& target_language,
+    const std::u16string& text_selection,
+    translate::TranslateErrors::Type error_type) {}
+
 qrcode_generator::QRCodeGeneratorBubbleView*
-TestBrowserWindow::ShowQRCodeGeneratorBubble(
-    content::WebContents* contents,
-    qrcode_generator::QRCodeGeneratorBubbleController* controller,
-    const GURL& url,
-    bool show_back_button) {
+TestBrowserWindow::ShowQRCodeGeneratorBubble(content::WebContents* contents,
+                                             const GURL& url,
+                                             bool show_back_button) {
   return nullptr;
 }
 
@@ -233,36 +266,36 @@ SharingDialog* TestBrowserWindow::ShowSharingDialog(
   return nullptr;
 }
 
-#if !defined(OS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID)
 sharing_hub::ScreenshotCapturedBubble*
-TestBrowserWindow::ShowScreenshotCapturedBubble(
-    content::WebContents* contents,
-    const gfx::Image& image,
-    sharing_hub::ScreenshotCapturedBubbleController* controller) {
+TestBrowserWindow::ShowScreenshotCapturedBubble(content::WebContents* contents,
+                                                const gfx::Image& image) {
   return nullptr;
 }
 #endif
 
 send_tab_to_self::SendTabToSelfBubbleView*
-TestBrowserWindow::ShowSendTabToSelfBubble(
-    content::WebContents* contents,
-    send_tab_to_self::SendTabToSelfBubbleController* controller,
-    bool is_user_gesture) {
+TestBrowserWindow::ShowSendTabToSelfDevicePickerBubble(
+    content::WebContents* contents) {
   return nullptr;
 }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+send_tab_to_self::SendTabToSelfBubbleView*
+TestBrowserWindow::ShowSendTabToSelfPromoBubble(content::WebContents* contents,
+                                                bool show_signin_button) {
+  return nullptr;
+}
+
+#if BUILDFLAG(IS_CHROMEOS)
 views::Button* TestBrowserWindow::GetSharingHubIconButton() {
   return nullptr;
 }
 #else
 sharing_hub::SharingHubBubbleView* TestBrowserWindow::ShowSharingHubBubble(
-    content::WebContents* contents,
-    sharing_hub::SharingHubBubbleController* controller,
-    bool is_user_gesture) {
+    share::ShareAttempt attempt) {
   return nullptr;
 }
-#endif
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 bool TestBrowserWindow::IsDownloadShelfVisible() const {
   return false;
@@ -270,6 +303,10 @@ bool TestBrowserWindow::IsDownloadShelfVisible() const {
 
 DownloadShelf* TestBrowserWindow::GetDownloadShelf() {
   return &download_shelf_;
+}
+
+DownloadBubbleUIController* TestBrowserWindow::GetDownloadBubbleUIController() {
+  return nullptr;
 }
 
 std::unique_ptr<FindBar> TestBrowserWindow::CreateFindBar() {
@@ -307,12 +344,50 @@ void TestBrowserWindow::SetCloseCallback(base::OnceClosure close_callback) {
   close_callback_ = std::move(close_callback);
 }
 
-FeaturePromoController* TestBrowserWindow::GetFeaturePromoController() {
+user_education::FeaturePromoController*
+TestBrowserWindow::GetFeaturePromoController() {
   return feature_promo_controller_.get();
 }
 
-FeaturePromoController* TestBrowserWindow::SetFeaturePromoController(
-    std::unique_ptr<FeaturePromoController> feature_promo_controller) {
+bool TestBrowserWindow::IsFeaturePromoActive(
+    const base::Feature& iph_feature,
+    bool include_continued_promos) const {
+  return feature_promo_controller_ &&
+         feature_promo_controller_->IsPromoActive(iph_feature,
+                                                  include_continued_promos);
+}
+
+bool TestBrowserWindow::MaybeShowFeaturePromo(
+    const base::Feature& iph_feature,
+    user_education::FeaturePromoSpecification::StringReplacements
+        body_text_replacements,
+    user_education::FeaturePromoController::BubbleCloseCallback
+        close_callback) {
+  return feature_promo_controller_ &&
+         feature_promo_controller_->MaybeShowPromo(
+             iph_feature, body_text_replacements, std::move(close_callback));
+}
+
+bool TestBrowserWindow::CloseFeaturePromo(const base::Feature& iph_feature) {
+  return feature_promo_controller_ &&
+         feature_promo_controller_->CloseBubble(iph_feature);
+}
+
+user_education::FeaturePromoController::PromoHandle
+TestBrowserWindow::CloseFeaturePromoAndContinue(
+    const base::Feature& iph_feature) {
+  return feature_promo_controller_
+             ? feature_promo_controller_->CloseBubbleAndContinuePromo(
+                   iph_feature)
+             : user_education::FeaturePromoController::PromoHandle();
+}
+
+void TestBrowserWindow::NotifyFeatureEngagementEvent(const char* event_name) {}
+
+user_education::FeaturePromoController*
+TestBrowserWindow::SetFeaturePromoController(
+    std::unique_ptr<user_education::FeaturePromoController>
+        feature_promo_controller) {
   feature_promo_controller_ = std::move(feature_promo_controller);
   return feature_promo_controller_.get();
 }

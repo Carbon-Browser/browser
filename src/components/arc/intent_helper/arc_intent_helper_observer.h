@@ -7,6 +7,7 @@
 
 #include <string>
 
+#include "ash/components/arc/mojom/intent_helper.mojom-forward.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
@@ -32,8 +33,20 @@ class ArcIntentHelperObserver {
   // package whose filters were changed.
   virtual void OnIntentFiltersUpdated(
       const absl::optional<std::string>& package_name) {}
-  // Called when the preferred apps changed in ARC.
-  virtual void OnPreferredAppsChanged() {}
+
+  // Called when the supported links setting ("Open Supported Links" under
+  // "Open by default" in ARC Settings) is changed for one or more packages.
+  // |added_packages| contains packages for which the setting was enabled,
+  // |removed_packages| contains packages for which the setting was disabled.
+  virtual void OnArcSupportedLinksChanged(
+      const std::vector<arc::mojom::SupportedLinksPtr>& added_packages,
+      const std::vector<arc::mojom::SupportedLinksPtr>& removed_packages,
+      arc::mojom::SupportedLinkChangeSource source) {}
+
+  virtual void OnIconInvalidated(const std::string& package_name) {}
+
+  // Called when ArcIntentHelperBridge is shut down.
+  virtual void OnArcIntentHelperBridgeShutdown() {}
 };
 
 }  // namespace arc

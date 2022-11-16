@@ -19,7 +19,7 @@
 #include "chrome/browser/ui/views/crostini/crostini_dialogue_browser_test_util.h"
 #include "chrome/browser/ui/webui/chromeos/crostini_upgrader/crostini_upgrader.mojom.h"
 #include "chrome/common/webui_url_constants.h"
-#include "chromeos/dbus/cicerone/cicerone_service.pb.h"
+#include "chromeos/ash/components/dbus/cicerone/cicerone_service.pb.h"
 #include "content/public/browser/web_ui.h"
 #include "content/public/test/browser_test.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -32,6 +32,11 @@ class CrostiniUpgraderDialogBrowserTest : public CrostiniDialogBrowserTest {
   CrostiniUpgraderDialogBrowserTest()
       : CrostiniDialogBrowserTest(true /*register_termina*/),
         app_id_(crostini::CrostiniTestHelper::GenerateAppId(kDesktopFileId)) {}
+
+  CrostiniUpgraderDialogBrowserTest(const CrostiniUpgraderDialogBrowserTest&) =
+      delete;
+  CrostiniUpgraderDialogBrowserTest& operator=(
+      const CrostiniUpgraderDialogBrowserTest&) = delete;
 
   // DialogBrowserTest:
   void ShowUi(const std::string& name) override {
@@ -100,8 +105,6 @@ class CrostiniUpgraderDialogBrowserTest : public CrostiniDialogBrowserTest {
 
  private:
   std::string app_id_;
-
-  DISALLOW_COPY_AND_ASSIGN(CrostiniUpgraderDialogBrowserTest);
 };
 
 IN_PROC_BROWSER_TEST_F(CrostiniUpgraderDialogBrowserTest,

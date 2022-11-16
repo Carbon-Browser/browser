@@ -5,7 +5,6 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_BINDINGS_CORE_V8_SCRIPT_CUSTOM_ELEMENT_DEFINITION_H_
 #define THIRD_PARTY_BLINK_RENDERER_BINDINGS_CORE_V8_SCRIPT_CUSTOM_ELEMENT_DEFINITION_H_
 
-#include "base/macros.h"
 #include "base/memory/scoped_refptr.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/html/custom/custom_element_definition.h"
@@ -37,6 +36,11 @@ class CORE_EXPORT ScriptCustomElementDefinition final
   ScriptCustomElementDefinition(const ScriptCustomElementDefinitionData& data,
                                 const CustomElementDescriptor&,
                                 CustomElementDefinition::Id);
+
+  ScriptCustomElementDefinition(const ScriptCustomElementDefinition&) = delete;
+  ScriptCustomElementDefinition& operator=(
+      const ScriptCustomElementDefinition&) = delete;
+
   ~ScriptCustomElementDefinition() override = default;
 
   void Trace(Visitor*) const override;
@@ -94,8 +98,6 @@ class CORE_EXPORT ScriptCustomElementDefinition final
   Member<V8VoidFunction> form_reset_callback_;
   Member<V8CustomElementFormDisabledCallback> form_disabled_callback_;
   Member<V8CustomElementFormStateRestoreCallback> form_state_restore_callback_;
-
-  DISALLOW_COPY_AND_ASSIGN(ScriptCustomElementDefinition);
 };
 
 }  // namespace blink

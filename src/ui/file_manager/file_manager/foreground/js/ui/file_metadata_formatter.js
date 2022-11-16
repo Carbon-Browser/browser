@@ -13,7 +13,6 @@ import {strf, util} from '../../../common/js/util.js';
 export class FileMetadataFormatter extends EventTarget {
   constructor() {
     super();
-    this.setDateTimeFormat(true);
 
     /** @private {?Intl.DateTimeFormat} */
     this.timeFormatter_;
@@ -27,29 +26,34 @@ export class FileMetadataFormatter extends EventTarget {
    * @param {boolean} use12hourClock True if 12 hours clock, False if 24 hours.
    */
   setDateTimeFormat(use12hourClock) {
+    const locale = util.getCurrentLocaleOrDefault();
     this.timeFormatter_ = new Intl.DateTimeFormat(
-        navigator.language,
-        {hour: 'numeric', minute: 'numeric', hour12: use12hourClock});
-    this.dateFormatter_ = new Intl.DateTimeFormat(navigator.language, {
+        locale, {hour: 'numeric', minute: 'numeric', hour12: use12hourClock});
+    this.dateFormatter_ = new Intl.DateTimeFormat(locale, {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
       hour: 'numeric',
       minute: 'numeric',
-      hour12: use12hourClock
+      hour12: use12hourClock,
     });
     dispatchSimpleEvent(this, 'date-time-format-changed');
   }
 
   /**
    * Generates a formatted modification time text.
-   * @param {Date} modTime
+   * @param {Date=} modTime
    * @return {string} A string that represents modification time.
    */
   formatModDate(modTime) {
     if (!modTime) {
-      return '...';
+      return '--';
     }
+
+    if (!(this.timeFormatter_ && this.dateFormatter_)) {
+      this.setDateTimeFormat(true);
+    }
+
     const today = new Date();
     today.setHours(0);
     today.setMinutes(0);

@@ -29,6 +29,7 @@
 #include "ui/base/webui/web_ui_util.h"
 #include "ui/chromeos/resources/grit/ui_chromeos_resources.h"
 #include "ui/gfx/image/image.h"
+#include "ui/gfx/image/image_skia_rep.h"
 
 namespace chromeos {
 
@@ -119,15 +120,15 @@ void EduAccountLoginHandler::ProfileImageFetcher::OnImageFetched(
 }
 
 void EduAccountLoginHandler::RegisterMessages() {
-  web_ui()->RegisterDeprecatedMessageCallback(
+  web_ui()->RegisterMessageCallback(
       "isNetworkReady",
       base::BindRepeating(&EduAccountLoginHandler::HandleIsNetworkReady,
                           base::Unretained(this)));
-  web_ui()->RegisterDeprecatedMessageCallback(
+  web_ui()->RegisterMessageCallback(
       "getParents",
       base::BindRepeating(&EduAccountLoginHandler::HandleGetParents,
                           base::Unretained(this)));
-  web_ui()->RegisterDeprecatedMessageCallback(
+  web_ui()->RegisterMessageCallback(
       "parentSignin",
       base::BindRepeating(&EduAccountLoginHandler::HandleParentSignin,
                           base::Unretained(this)));
@@ -142,50 +143,50 @@ void EduAccountLoginHandler::OnJavascriptDisallowed() {
   parent_signin_callback_id_.clear();
 }
 
-void EduAccountLoginHandler::HandleIsNetworkReady(const base::ListValue* args) {
+void EduAccountLoginHandler::HandleIsNetworkReady(
+    const base::Value::List& args) {
   AllowJavascript();
 
   bool is_network_ready =
       network_state_informer_->state() == NetworkStateInformer::ONLINE;
-  ResolveJavascriptCallback(args->GetList()[0], base::Value(is_network_ready));
+  ResolveJavascriptCallback(args[0], base::Value(is_network_ready));
 }
 
-void EduAccountLoginHandler::HandleGetParents(const base::ListValue* args) {
+void EduAccountLoginHandler::HandleGetParents(const base::Value::List& args) {
   AllowJavascript();
 
-  CHECK_EQ(args->GetList().size(), 1u);
+  CHECK_EQ(args.size(), 1u);
 
   if (!get_parents_callback_id_.empty()) {
     // HandleGetParents call is already in progress, reject the callback.
-    RejectJavascriptCallback(args->GetList()[0], base::Value());
+    RejectJavascriptCallback(args[0], base::Value());
     return;
   }
-  get_parents_callback_id_ = args->GetList()[0].GetString();
+  get_parents_callback_id_ = args[0].GetString();
 
   FetchFamilyMembers();
 }
 
-void EduAccountLoginHandler::HandleParentSignin(const base::ListValue* args) {
-  const base::Value::ConstListView& args_list = args->GetList();
-  CHECK_EQ(args_list.size(), 3u);
-  CHECK(args_list[0].is_string());
+void EduAccountLoginHandler::HandleParentSignin(const base::Value::List& args) {
+  CHECK_EQ(args.size(), 3u);
+  CHECK(args[0].is_string());
 
   if (!parent_signin_callback_id_.empty()) {
     // HandleParentSignin call is already in progress, reject the callback.
-    RejectJavascriptCallback(args_list[0], base::Value());
+    RejectJavascriptCallback(args[0], base::Value());
     return;
   }
-  parent_signin_callback_id_ = args_list[0].GetString();
+  parent_signin_callback_id_ = args[0].GetString();
 
   const base::DictionaryValue* parent = nullptr;
-  args_list[1].GetAsDictionary(&parent);
+  args[1].GetAsDictionary(&parent);
   CHECK(parent);
   const base::Value* obfuscated_gaia_id_value =
-      parent->FindKey(kObfuscatedGaiaIdKey);
+      parent->GetDict().Find(kObfuscatedGaiaIdKey);
   DCHECK(obfuscated_gaia_id_value);
   std::string obfuscated_gaia_id = obfuscated_gaia_id_value->GetString();
 
-  const std::string* password = args_list[2].GetIfString();
+  const std::string* password = args[2].GetIfString();
   FetchAccessToken(obfuscated_gaia_id, password ? *password : std::string());
 }
 
@@ -268,9 +269,9 @@ void EduAccountLoginHandler::OnGetFamilyMembersSuccess(
     }
 
     base::DictionaryValue parent;
-    parent.SetStringKey("email", member.email);
-    parent.SetStringKey("displayName", member.display_name);
-    parent.SetStringKey(kObfuscatedGaiaIdKey, member.obfuscated_gaia_id);
+    parent.GetDict().Set("email", member.email);
+    parent.GetDict().Set("displayName", member.display_name);
+    parent.GetDict().Set(kObfuscatedGaiaIdKey, member.obfuscated_gaia_id);
 
     parents.Append(std::move(parent));
     profile_image_urls[member.obfuscated_gaia_id] =
@@ -292,9 +293,9 @@ void EduAccountLoginHandler::OnParentProfileImagesFetched(
     std::map<std::string, gfx::Image> profile_images) {
   profile_image_fetcher_.reset();
 
-  for (auto& parent : parents.GetList()) {
+  for (auto& parent : parents.GetListDeprecated()) {
     const std::string* obfuscated_gaia_id =
-        parent.FindStringKey(kObfuscatedGaiaIdKey);
+        parent.GetDict().FindString(kObfuscatedGaiaIdKey);
     DCHECK(obfuscated_gaia_id);
     std::string profile_image;
     if (profile_images[*obfuscated_gaia_id].IsEmpty()) {
@@ -308,7 +309,7 @@ void EduAccountLoginHandler::OnParentProfileImagesFetched(
       profile_image = webui::GetBitmapDataUrl(
           profile_images[*obfuscated_gaia_id].AsBitmap());
     }
-    parent.SetStringKey("profileImage", profile_image);
+    parent.GetDict().Set("profileImage", profile_image);
   }
 
   ResolveJavascriptCallback(base::Value(get_parents_callback_id_), parents);
@@ -328,7 +329,7 @@ void EduAccountLoginHandler::CreateReAuthProofTokenForParent(
         << "Could not get access token to create ReAuthProofToken for parent"
         << error.ToString();
     base::DictionaryValue result;
-    result.SetBoolKey("isWrongPassword", false);
+    result.GetDict().Set("isWrongPassword", false);
     RejectJavascriptCallback(base::Value(parent_signin_callback_id_), result);
     parent_signin_callback_id_.clear();
     return;
@@ -353,7 +354,7 @@ void EduAccountLoginHandler::OnReAuthProofTokenFailure(
   gaia_auth_fetcher_.reset();
 
   base::DictionaryValue result;
-  result.SetBoolKey(
+  result.GetDict().Set(
       "isWrongPassword",
       error == GaiaAuthConsumer::ReAuthProofTokenStatus::kInvalidGrant);
   RejectJavascriptCallback(base::Value(parent_signin_callback_id_), result);

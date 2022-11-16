@@ -8,7 +8,7 @@
 #include <utility>
 
 #include "base/compiler_specific.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/ui/browser.h"
@@ -30,6 +30,10 @@ class TestScreen : public display::ScreenBase {
   TestScreen() : previous_screen_(display::Screen::GetScreen()) {
     display::Screen::SetScreenInstance(this);
   }
+
+  TestScreen(const TestScreen&) = delete;
+  TestScreen& operator=(const TestScreen&) = delete;
+
   ~TestScreen() override {
     display::Screen::SetScreenInstance(previous_screen_);
   }
@@ -43,9 +47,7 @@ class TestScreen : public display::ScreenBase {
   }
 
  private:
-  display::Screen* previous_screen_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestScreen);
+  raw_ptr<display::Screen> previous_screen_;
 };
 
 }  // namespace
@@ -120,7 +122,7 @@ void WindowSizerTestUtil::GetWindowBounds(const gfx::Rect& monitor1_bounds,
       std::move(provider), passed_in, browser, out_bounds, &ignored);
 }
 
-#if !defined(OS_MAC)
+#if !BUILDFLAG(IS_MAC)
 
 #if !BUILDFLAG(IS_CHROMEOS_ASH)
 // Passing null for the browser parameter of GetWindowBounds makes the test skip
@@ -332,4 +334,4 @@ TEST(WindowSizerTestCommon, AdjustFitSize) {
   }
 }
 
-#endif  // defined(OS_MAC)
+#endif  // !BUILDFLAG(IS_MAC)

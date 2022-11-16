@@ -4,13 +4,16 @@
 
 #include <set>
 
+#include "ash/components/arc/test/arc_util_test_support.h"
+#include "ash/components/settings/cros_settings_names.h"
+#include "ash/constants/ash_features.h"
 #include "base/bind.h"
 #include "base/command_line.h"
-#include "base/macros.h"
 #include "base/run_loop.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/ash/arc/arc_util.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager.h"
+#include "chrome/browser/ash/login/test/cryptohome_mixin.h"
 #include "chrome/browser/ash/login/ui/login_display_host.h"
 #include "chrome/browser/ash/policy/affiliation/affiliation_mixin.h"
 #include "chrome/browser/ash/policy/affiliation/affiliation_test_helper.h"
@@ -19,8 +22,6 @@
 #include "chrome/browser/ash/settings/cros_settings.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chromeos/settings/cros_settings_names.h"
-#include "components/arc/test/arc_util_test_support.h"
 #include "components/policy/proto/chrome_device_policy.pb.h"
 #include "content/public/test/browser_test.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -40,12 +41,29 @@ struct Params {
 
 class UnaffiliatedArcAllowedTest
     : public DevicePolicyCrosBrowserTest,
-      public ::testing::WithParamInterface<Params> {
+      public ::testing::WithParamInterface<std::tuple<Params, bool>> {
  public:
   UnaffiliatedArcAllowedTest() {
     set_exit_when_last_browser_closes(false);
-    affiliation_mixin_.set_affiliated(GetParam().affiliated);
+    affiliation_mixin_.set_affiliated(std::get<0>(GetParam()).affiliated);
+    cryptohome_mixin_.MarkUserAsExisting(affiliation_mixin_.account_id());
+
+    // TODO(crbug.com/1311355): This test is run with the feature
+    // kUseAuthsessionAuthentication enabled and disabled because of a
+    // transitive dependency of AffiliationTestHelper on that feature. Remove
+    // the parameter when kUseAuthsessionAuthentication is removed.
+    if (std::get<1>(GetParam())) {
+      feature_list_.InitAndEnableFeature(
+          ash::features::kUseAuthsessionAuthentication);
+    } else {
+      feature_list_.InitAndDisableFeature(
+          ash::features::kUseAuthsessionAuthentication);
+    }
   }
+
+  UnaffiliatedArcAllowedTest(const UnaffiliatedArcAllowedTest&) = delete;
+  UnaffiliatedArcAllowedTest& operator=(const UnaffiliatedArcAllowedTest&) =
+      delete;
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
     DevicePolicyCrosBrowserTest::SetUpCommandLine(command_line);
@@ -77,7 +95,7 @@ class UnaffiliatedArcAllowedTest
     base::RunLoop run_loop;
     base::CallbackListSubscription subscription =
         ash::CrosSettings::Get()->AddSettingsObserver(
-            chromeos::kUnaffiliatedArcAllowed, run_loop.QuitClosure());
+            ash::kUnaffiliatedArcAllowed, run_loop.QuitClosure());
     RefreshDevicePolicy();
     run_loop.Run();
   }
@@ -85,7 +103,8 @@ class UnaffiliatedArcAllowedTest
   AffiliationMixin affiliation_mixin_{&mixin_host_, policy_helper()};
 
  private:
-  DISALLOW_COPY_AND_ASSIGN(UnaffiliatedArcAllowedTest);
+  base::test::ScopedFeatureList feature_list_;
+  ash::CryptohomeMixin cryptohome_mixin_{&mixin_host_};
 };
 
 IN_PROC_BROWSER_TEST_P(UnaffiliatedArcAllowedTest, PRE_ProfileTest) {
@@ -96,9 +115,8 @@ IN_PROC_BROWSER_TEST_P(UnaffiliatedArcAllowedTest, ProfileTest) {
   AffiliationTestHelper::LoginUser(affiliation_mixin_.account_id());
   const user_manager::User* user = user_manager::UserManager::Get()->FindUser(
       affiliation_mixin_.account_id());
-  const Profile* profile =
-      chromeos::ProfileHelper::Get()->GetProfileByUser(user);
-  const bool affiliated = GetParam().affiliated;
+  const Profile* profile = ash::ProfileHelper::Get()->GetProfileByUser(user);
+  const bool affiliated = std::get<0>(GetParam()).affiliated;
 
   EXPECT_EQ(affiliated, user->IsAffiliated());
   EXPECT_TRUE(arc::IsArcAllowedForProfile(profile))
@@ -121,5 +139,7 @@ IN_PROC_BROWSER_TEST_P(UnaffiliatedArcAllowedTest, ProfileTest) {
 
 INSTANTIATE_TEST_SUITE_P(Blub,
                          UnaffiliatedArcAllowedTest,
-                         ::testing::Values(Params(true), Params(false)));
+                         ::testing::Combine(::testing::Values(Params(true),
+                                                              Params(false)),
+                                            ::testing::Bool()));
 }  // namespace policy

@@ -14,11 +14,13 @@ import 'chrome://resources/cr_elements/shared_style_css.m.js';
 import 'chrome://resources/cr_elements/shared_vars_css.m.js';
 import 'chrome://resources/polymer/v3_0/iron-flex-layout/iron-flex-layout-classes.js';
 import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
-import '../settings_shared_css.js';
+import '../settings_shared.css.js';
 
-import {assertNotReached} from 'chrome://resources/js/assert.m.js';
-import {I18nBehavior} from 'chrome://resources/js/i18n_behavior.m.js';
-import {html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {assertNotReached} from 'chrome://resources/js/assert_ts.js';
+import {I18nMixin} from 'chrome://resources/js/i18n_mixin.js';
+import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+
+import {getTemplate} from './safety_check_child.html.js';
 
 /**
  * UI states a safety check child can be in. Defines the basic UI of the child.
@@ -30,9 +32,7 @@ export enum SafetyCheckIconStatus {
   WARNING = 3,
 }
 
-const SettingsSafetyCheckChildElementBase =
-    mixinBehaviors([I18nBehavior], PolymerElement) as
-    {new (): PolymerElement & I18nBehavior};
+const SettingsSafetyCheckChildElementBase = I18nMixin(PolymerElement);
 
 export class SettingsSafetyCheckChildElement extends
     SettingsSafetyCheckChildElementBase {
@@ -41,7 +41,7 @@ export class SettingsSafetyCheckChildElement extends
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
   }
 
   static get properties() {
@@ -117,7 +117,6 @@ export class SettingsSafetyCheckChildElement extends
         return 'cr:warning';
       default:
         assertNotReached();
-        return null;
     }
   }
 
@@ -155,7 +154,6 @@ export class SettingsSafetyCheckChildElement extends
         return this.i18n('safetyCheckIconWarningAriaLabel');
       default:
         assertNotReached();
-        return '';
     }
   }
 
@@ -189,6 +187,12 @@ export class SettingsSafetyCheckChildElement extends
   private onRowClickableChanged_() {
     // For cr-actionable-row-style.
     this.toggleAttribute('effectively-disabled_', !this.rowClickable);
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'settings-safety-check-child': SettingsSafetyCheckChildElement;
   }
 }
 

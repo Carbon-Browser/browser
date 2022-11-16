@@ -11,7 +11,6 @@
 #include <vector>
 
 #include "base/component_export.h"
-#include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -40,7 +39,13 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) ChunkedDataPipeUploadDataStream
   ChunkedDataPipeUploadDataStream(
       scoped_refptr<ResourceRequestBody> resource_request_body,
       mojo::PendingRemote<mojom::ChunkedDataPipeGetter>
-          chunked_data_pipe_getter);
+          chunked_data_pipe_getter,
+      bool has_null_source = false);
+
+  ChunkedDataPipeUploadDataStream(const ChunkedDataPipeUploadDataStream&) =
+      delete;
+  ChunkedDataPipeUploadDataStream& operator=(
+      const ChunkedDataPipeUploadDataStream&) = delete;
 
   ~ChunkedDataPipeUploadDataStream() override;
 
@@ -107,8 +112,6 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) ChunkedDataPipeUploadDataStream
   CacheState cache_state_ = CacheState::kDisabled;
   size_t dst_window_size_ = kDefaultDestinationWindowSize;
   std::vector<char> cache_;
-
-  DISALLOW_COPY_AND_ASSIGN(ChunkedDataPipeUploadDataStream);
 };
 
 }  // namespace network

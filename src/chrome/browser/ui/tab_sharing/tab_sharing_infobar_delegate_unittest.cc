@@ -39,6 +39,9 @@ class MockTabSharingUIViews : public TabSharingUI {
       const std::vector<content::DesktopMediaID>& media_ids) override {
     return 0;
   }
+
+  void OnRegionCaptureRectChanged(
+      const absl::optional<gfx::Rect>& region_capture_rect) override {}
 };
 
 }  // namespace
@@ -60,8 +63,11 @@ class TabSharingInfoBarDelegateTest
     return TabSharingInfoBarDelegate::Create(
         infobars::ContentInfoBarManager::FromWebContents(
             browser()->tab_strip_model()->GetWebContentsAt(tab_index)),
-        shared_tab_name, app_name, shared_tab, can_share_instead, focus_target,
-        tab_sharing_mock_ui(), favicons_used_for_switch_to_tab_button_);
+        shared_tab_name, app_name, shared_tab,
+        can_share_instead ? TabSharingInfoBarDelegate::ButtonState::ENABLED
+                          : TabSharingInfoBarDelegate::ButtonState::NOT_SHOWN,
+        focus_target, tab_sharing_mock_ui(),
+        favicons_used_for_switch_to_tab_button_);
   }
 
   ConfirmInfoBarDelegate* CreateDelegate(
@@ -82,7 +88,7 @@ class TabSharingInfoBarDelegateTest
   }
 
   content::GlobalRenderFrameHostId GetGlobalId(int tab) {
-    auto* const main_frame = GetWebContents(tab)->GetMainFrame();
+    auto* const main_frame = GetWebContents(tab)->GetPrimaryMainFrame();
     return main_frame ? main_frame->GetGlobalId()
                       : content::GlobalRenderFrameHostId();
   }
@@ -90,11 +96,10 @@ class TabSharingInfoBarDelegateTest
   std::u16string GetExpectedSwitchToMessageForTargetTab(int tab) {
     return l10n_util::GetStringFUTF16(
         IDS_TAB_SHARING_INFOBAR_SWITCH_TO_BUTTON,
-        url_formatter::FormatUrlForSecurityDisplay(
+        url_formatter::FormatOriginForSecurityDisplay(
             GetWebContents(tab)
-                ->GetMainFrame()
-                ->GetLastCommittedURL()
-                .GetOrigin(),
+                ->GetPrimaryMainFrame()
+                ->GetLastCommittedOrigin(),
             url_formatter::SchemeDisplay::OMIT_HTTP_AND_HTTPS));
   }
 
@@ -255,7 +260,6 @@ TEST_P(TabSharingInfoBarDelegateTest, InfobarNotDismissedOnNavigation) {
       infobars::ContentInfoBarManager::FromWebContents(web_contents);
   CreateInfobar(kSharedTabName, kAppName, false, true);
   EXPECT_EQ(infobar_manager->infobar_count(), 1u);
-  content::NavigationController* controller = &web_contents->GetController();
-  NavigateAndCommit(controller, GURL("http://bar"));
+  NavigateAndCommit(web_contents, GURL("http://bar"));
   EXPECT_EQ(infobar_manager->infobar_count(), 1u);
 }

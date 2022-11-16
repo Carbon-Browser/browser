@@ -13,7 +13,6 @@
 #include "base/command_line.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/string_number_conversions.h"
-#include "content/browser/renderer_host/frame_tree_node.h"
 #include "content/browser/renderer_host/input/gesture_event_queue.h"
 #include "content/browser/renderer_host/input/input_disposition_handler.h"
 #include "content/browser/renderer_host/input/input_router_client.h"
@@ -31,6 +30,7 @@
 #include "third_party/blink/public/mojom/input/touch_event.mojom.h"
 #include "ui/events/blink/blink_event_util.h"
 #include "ui/events/blink/blink_features.h"
+#include "ui/events/blink/did_overscroll_params.h"
 #include "ui/events/blink/web_input_event_traits.h"
 #include "ui/events/event.h"
 #include "ui/events/keycodes/keyboard_codes.h"
@@ -66,16 +66,9 @@ std::unique_ptr<blink::WebCoalescedInputEvent> ScaleEvent(
     const ui::LatencyInfo& latency_info) {
   std::unique_ptr<blink::WebInputEvent> event_in_viewport =
       ui::ScaleWebInputEvent(event, scale);
-  if (event_in_viewport) {
-    return std::make_unique<blink::WebCoalescedInputEvent>(
-        std::move(event_in_viewport),
-        std::vector<std::unique_ptr<WebInputEvent>>(),
-        std::vector<std::unique_ptr<WebInputEvent>>(),
-        latency_info.ScaledBy(scale));
-  }
-
   return std::make_unique<blink::WebCoalescedInputEvent>(
-      event.Clone(), std::vector<std::unique_ptr<WebInputEvent>>(),
+      event_in_viewport ? std::move(event_in_viewport) : event.Clone(),
+      std::vector<std::unique_ptr<WebInputEvent>>(),
       std::vector<std::unique_ptr<WebInputEvent>>(), latency_info);
 }
 
@@ -183,6 +176,15 @@ void InputRouterImpl::SendGestureEventWithoutQueueing(
     return;
   }
 
+  // Handle scroll gesture events for stylus writing. If we could not start
+  // writing for any reason, we should not filter the scroll events.
+  if (HandleGestureScrollForStylusWriting(gesture_event.event)) {
+    disposition_handler_->OnGestureEventAck(
+        gesture_event, blink::mojom::InputEventResultSource::kBrowser,
+        blink::mojom::InputEventResultState::kConsumed);
+    return;
+  }
+
   wheel_event_queue_.OnGestureScrollEvent(gesture_event);
 
   if (gesture_event.event.SourceDevice() ==
@@ -215,6 +217,60 @@ void InputRouterImpl::SendGestureEventWithoutQueueing(
         gesture_event, blink::mojom::InputEventResultSource::kBrowser,
         blink::mojom::InputEventResultState::kConsumed);
   }
+}
+
+bool InputRouterImpl::HandleGestureScrollForStylusWriting(
+    const blink::WebGestureEvent& event) {
+  switch (event.GetType()) {
+    case WebInputEvent::Type::kGestureScrollBegin: {
+      if (event.data.scroll_begin.pointer_count != 1)
+        break;
+
+      const float& deltaXHint = event.data.scroll_begin.delta_x_hint;
+      const float& deltaYHint = event.data.scroll_begin.delta_y_hint;
+      if (deltaXHint == 0.0 && deltaYHint == 0.0)
+        break;
+
+      if (!client_->GetRenderWidgetHostViewBase())
+        break;
+
+      absl::optional<cc::TouchAction> allowed_touch_action =
+          AllowedTouchAction();
+      // Don't handle for non-writable areas as kInternalNotWritable bit is set.
+      if (!allowed_touch_action.has_value() ||
+          (allowed_touch_action.value() &
+           cc::TouchAction::kInternalNotWritable) ==
+              cc::TouchAction::kInternalNotWritable)
+        break;
+
+      // Request to start stylus writing as we have detected stylus writing
+      // movement, and treat scroll gesture as stylus input if started.
+      if (client_->GetRenderWidgetHostViewBase()->RequestStartStylusWriting()) {
+        stylus_writing_started_ = true;
+        // The below call is done to Focus the stylus writable input element.
+        client_->OnStartStylusWriting();
+        return true;
+      }
+      break;
+    }
+    case WebInputEvent::Type::kGestureScrollUpdate:
+      // TODO(crbug.com/1330817): Pass the queued scroll delta to stylus
+      // writing recognition system.
+      return stylus_writing_started_;
+    case WebInputEvent::Type::kGestureScrollEnd: {
+      // When stylus writing starts, Touch Move events would be forwarded to
+      // stylus recognition system and gesture detection would be reset. We
+      // would receive the GestureScrollEnd here after that.
+      if (stylus_writing_started_) {
+        stylus_writing_started_ = false;
+        return true;
+      }
+      break;
+    }
+    default:
+      break;
+  }
+  return false;
 }
 
 void InputRouterImpl::SendTouchEvent(
@@ -280,6 +336,19 @@ void InputRouterImpl::SetTouchActionFromMain(cc::TouchAction touch_action) {
   touch_event_queue_.StopTimeoutMonitor();
   ProcessDeferredGestureEventQueue();
   UpdateTouchAckTimeoutEnabled();
+}
+
+void InputRouterImpl::SetPanAction(blink::mojom::PanAction pan_action) {
+  if (pan_action_ == pan_action)
+    return;
+  pan_action_ = pan_action;
+
+  // TODO(mahesh.ma): Update PanAction state to view, once RenderWidgetHostView
+  // is set again.
+  if (!client_->GetRenderWidgetHostViewBase())
+    return;
+  client_->GetRenderWidgetHostViewBase()->SetHoverActionStylusWritable(
+      pan_action_ == blink::mojom::PanAction::kStylusWritable);
 }
 
 void InputRouterImpl::OnSetCompositorAllowedTouchAction(

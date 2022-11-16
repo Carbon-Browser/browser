@@ -12,14 +12,12 @@ import androidx.annotation.VisibleForTesting;
 import org.chromium.base.ContextUtils;
 import org.chromium.chrome.browser.preferences.ChromePreferenceKeys;
 import org.chromium.chrome.browser.preferences.SharedPreferencesManager;
-import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.signin.SyncConsentActivityLauncherImpl;
-import org.chromium.chrome.browser.signin.services.IdentityServicesProvider;
 import org.chromium.chrome.browser.signin.services.ProfileDataCache;
 import org.chromium.chrome.browser.signin.services.SigninManager;
 import org.chromium.chrome.browser.signin.services.SigninManager.SignInStateObserver;
 import org.chromium.chrome.browser.signin.services.SigninPreferencesManager;
-import org.chromium.chrome.browser.signin.ui.SigninPromoController;
+import org.chromium.chrome.browser.ui.signin.SigninPromoController;
 import org.chromium.components.signin.AccountManagerFacade;
 import org.chromium.components.signin.AccountManagerFacadeProvider;
 import org.chromium.components.signin.AccountsChangeObserver;
@@ -42,11 +40,6 @@ public abstract class SignInPromo {
     private static boolean sDisablePromoForTests;
 
     /**
-     * Whether the signin status means that the user has the possibility to sign in.
-     */
-    private boolean mCanSignIn;
-
-    /**
      * Whether personalized suggestions can be shown. If it's not the case, we have no reason to
      * offer the user to sign in.
      */
@@ -54,22 +47,21 @@ public abstract class SignInPromo {
     private boolean mIsVisible;
 
     private final SigninObserver mSigninObserver;
+    private final SigninManager mSigninManager;
     protected final SigninPromoController mSigninPromoController;
     protected final ProfileDataCache mProfileDataCache;
 
     protected SignInPromo(SigninManager signinManager) {
         Context context = ContextUtils.getApplicationContext();
 
-        // TODO(bsazonov): Signin manager should check for native status in isSignInAllowed
-        mCanSignIn = signinManager.isSignInAllowed()
-                && !signinManager.getIdentityManager().hasPrimaryAccount(ConsentLevel.SYNC);
+        mSigninManager = signinManager;
         updateVisibility();
 
         mProfileDataCache = ProfileDataCache.createWithDefaultImageSizeAndNoBadge(context);
         mSigninPromoController = new SigninPromoController(
                 SigninAccessPoint.NTP_CONTENT_SUGGESTIONS, SyncConsentActivityLauncherImpl.get());
 
-        mSigninObserver = new SigninObserver(signinManager);
+        mSigninObserver = new SigninObserver();
     }
 
     /** Clear any dependencies. */
@@ -120,8 +112,7 @@ public abstract class SignInPromo {
     }
 
     public boolean isUserSignedInButNotSyncing() {
-        IdentityManager identityManager = IdentityServicesProvider.get().getIdentityManager(
-                Profile.getLastUsedRegularProfile());
+        IdentityManager identityManager = mSigninManager.getIdentityManager();
         return identityManager.hasPrimaryAccount(ConsentLevel.SIGNIN)
                 && !identityManager.hasPrimaryAccount(ConsentLevel.SYNC);
     }
@@ -132,10 +123,11 @@ public abstract class SignInPromo {
     private void updateVisibility() {
         final boolean isAccountsCachePopulated =
                 AccountManagerFacadeProvider.getInstance().getAccounts().isFulfilled();
-        boolean canShowPersonalizedSigninPromo =
-                mCanSignIn && mCanShowPersonalizedSuggestions && isAccountsCachePopulated;
-        boolean canShowPersonalizedSyncPromo = isUserSignedInButNotSyncing()
+        boolean canShowPersonalizedSigninPromo = mSigninManager.isSigninAllowed()
                 && mCanShowPersonalizedSuggestions && isAccountsCachePopulated;
+        boolean canShowPersonalizedSyncPromo = mSigninManager.isSyncOptInAllowed()
+                && isUserSignedInButNotSyncing() && mCanShowPersonalizedSuggestions
+                && isAccountsCachePopulated;
         setVisibilityInternal(canShowPersonalizedSigninPromo || canShowPersonalizedSyncPromo);
     }
 
@@ -143,6 +135,7 @@ public abstract class SignInPromo {
      * Updates visibility status. Overridden by subclasses that want to track visibility changes.
      */
     protected void setVisibilityInternal(boolean visibility) {
+        if (!mIsVisible && visibility) mSigninPromoController.increasePromoShowCount();
         mIsVisible = visibility;
     }
 
@@ -174,14 +167,12 @@ public abstract class SignInPromo {
     @VisibleForTesting
     public class SigninObserver
             implements SignInStateObserver, ProfileDataCache.Observer, AccountsChangeObserver {
-        private final SigninManager mSigninManager;
         private final AccountManagerFacade mAccountManagerFacade;
 
         /** Guards {@link #unregister()}, which can be called multiple times. */
         private boolean mUnregistered;
 
-        private SigninObserver(SigninManager signinManager) {
-            mSigninManager = signinManager;
+        private SigninObserver() {
             mAccountManagerFacade = AccountManagerFacadeProvider.getInstance();
 
             mSigninManager.addSignInStateObserver(this);
@@ -204,7 +195,6 @@ public abstract class SignInPromo {
             // Listening to onSignInAllowedChanged is important for the FRE. Sign in is not allowed
             // until it is completed, but the NTP is initialised before the FRE is even shown. By
             // implementing this we can show the promo if the user did not sign in during the FRE.
-            mCanSignIn = mSigninManager.isSignInAllowed();
             updateVisibility();
             // Update the promo state between sign-in promo and sync promo if required.
             notifyDataChanged();
@@ -213,7 +203,6 @@ public abstract class SignInPromo {
         // SignInStateObserver implementation.
         @Override
         public void onSignedIn() {
-            mCanSignIn = false;
             updateVisibility();
             // Update the promo state between sign-in promo and sync promo if required.
             notifyDataChanged();
@@ -221,7 +210,6 @@ public abstract class SignInPromo {
 
         @Override
         public void onSignedOut() {
-            mCanSignIn = mSigninManager.isSignInAllowed();
             updateVisibility();
             // Update the promo state between sign-in promo and sync promo if required.
             notifyDataChanged();

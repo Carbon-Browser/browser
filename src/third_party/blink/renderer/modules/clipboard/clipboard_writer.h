@@ -9,7 +9,7 @@
 #include "third_party/blink/renderer/core/fileapi/blob.h"
 #include "third_party/blink/renderer/core/fileapi/file_reader_loader_client.h"
 #include "third_party/blink/renderer/modules/clipboard/clipboard_promise.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/heap/self_keep_alive.h"
 #include "third_party/skia/include/core/SkImage.h"
 
@@ -57,8 +57,7 @@ class ClipboardWriter : public GarbageCollected<ClipboardWriter>,
   // IsValidType() must return true on types passed into `mime_type`.
   static ClipboardWriter* Create(SystemClipboard* system_clipboard,
                                  const String& mime_type,
-                                 ClipboardPromise* promise,
-                                 bool is_custom_format_type);
+                                 ClipboardPromise* promise);
 
   ~ClipboardWriter() override;
 
@@ -70,7 +69,7 @@ class ClipboardWriter : public GarbageCollected<ClipboardWriter>,
   // IsValidType() is used for both ClipboardWriter and ClipboardReader, as read
   // and write currently support the same types. If this changes in the future,
   // please create separate IsValidType functions.
-  static bool IsValidType(const String& mime_type, bool is_custom_format_type);
+  static bool IsValidType(const String& mime_type);
   // Begins the sequence of writing the Blob to the system clipbaord.
   void WriteToSystem(Blob* blob);
 
@@ -118,7 +117,7 @@ class ClipboardWriter : public GarbageCollected<ClipboardWriter>,
 
   // Oilpan: ClipboardWriter must remain alive until Member<T>::Clear() is
   // called, to keep the FileReaderLoader alive and avoid unexpected UaPs.
-  SelfKeepAlive<ClipboardWriter> self_keep_alive_;
+  SelfKeepAlive<ClipboardWriter> self_keep_alive_{this};
 };
 
 }  // namespace blink

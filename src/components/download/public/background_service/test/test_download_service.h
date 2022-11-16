@@ -9,6 +9,7 @@
 #include <memory>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "components/download/public/background_service/background_download_service.h"
 #include "components/download/public/background_service/client.h"
 #include "components/download/public/background_service/download_params.h"
@@ -24,6 +25,10 @@ namespace test {
 class TestDownloadService : public BackgroundDownloadService {
  public:
   TestDownloadService();
+
+  TestDownloadService(const TestDownloadService&) = delete;
+  TestDownloadService& operator=(const TestDownloadService&) = delete;
+
   ~TestDownloadService() override;
 
   // DownloadService implementation.
@@ -75,11 +80,9 @@ class TestDownloadService : public BackgroundDownloadService {
   bool fail_at_start_;
   uint64_t file_size_;
 
-  Client* client_;
+  raw_ptr<Client> client_;
 
   std::list<absl::optional<DownloadParams>> downloads_;
-
-  DISALLOW_COPY_AND_ASSIGN(TestDownloadService);
 };
 
 }  // namespace test

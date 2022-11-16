@@ -13,10 +13,12 @@
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/system/unified/detailed_view_controller.h"
 #include "ash/system/unified/feature_pod_button.h"
+#include "ash/system/unified/unified_system_tray.h"
+#include "ash/system/unified/unified_system_tray_bubble.h"
 #include "ash/system/unified/unified_system_tray_controller.h"
-#include "ash/system/unified/unified_system_tray_model.h"
 #include "ash/system/unified/unified_system_tray_view.h"
 #include "ash/test/ash_test_base.h"
+#include "ash/test/ash_test_helper.h"
 #include "base/i18n/number_formatting.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
@@ -27,10 +29,12 @@
 #include "chromeos/services/bluetooth_config/scoped_bluetooth_config_test_helper.h"
 #include "ui/base/l10n/l10n_util.h"
 
+using chromeos::bluetooth_config::ScopedBluetoothConfigTestHelper;
 using chromeos::bluetooth_config::mojom::BatteryProperties;
 using chromeos::bluetooth_config::mojom::BluetoothDeviceProperties;
 using chromeos::bluetooth_config::mojom::BluetoothSystemState;
 using chromeos::bluetooth_config::mojom::DeviceBatteryInfo;
+using chromeos::bluetooth_config::mojom::DeviceBatteryInfoPtr;
 using chromeos::bluetooth_config::mojom::DeviceConnectionState;
 using chromeos::bluetooth_config::mojom::PairedBluetoothDeviceProperties;
 using chromeos::bluetooth_config::mojom::PairedBluetoothDevicePropertiesPtr;
@@ -42,6 +46,9 @@ namespace ash {
 const char* kDeviceNickname = "fancy squares";
 const char* kDevicePublicName = "Rubik's Cube";
 constexpr uint8_t kBatteryPercentage = 27;
+constexpr uint8_t kLeftBudBatteryPercentage = 23;
+constexpr uint8_t kRightBudBatteryPercentage = 11;
+constexpr uint8_t kCaseBatteryPercentage = 77;
 
 // How many devices to "pair" for tests that require multiple connected devices.
 constexpr int kMultipleDeviceCount = 3;
@@ -53,32 +60,67 @@ class BluetoothFeaturePodControllerTest : public AshTestBase {
 
     feature_list_.InitAndEnableFeature(features::kBluetoothRevamp);
 
-    tray_model_ = std::make_unique<UnifiedSystemTrayModel>(nullptr);
-    tray_controller_ =
-        std::make_unique<UnifiedSystemTrayController>(tray_model_.get());
-    tray_view_ = base::WrapUnique(tray_controller_->CreateView());
+    GetPrimaryUnifiedSystemTray()->ShowBubble();
+
     bluetooth_pod_controller_ =
-        std::make_unique<BluetoothFeaturePodController>(tray_controller_.get());
-    feature_pod_button_ = bluetooth_pod_controller_->CreateButton();
+        std::make_unique<BluetoothFeaturePodController>(tray_controller());
+    feature_pod_button_ =
+        base::WrapUnique(bluetooth_pod_controller_->CreateButton());
 
     base::RunLoop().RunUntilIdle();
   }
 
   void TearDown() override {
     bluetooth_pod_controller_.reset();
-    tray_view_.reset();
-    tray_controller_.reset();
-    tray_model_.reset();
 
     AshTestBase::TearDown();
   }
 
+  DeviceBatteryInfoPtr CreateDefaultBatteryInfo() {
+    DeviceBatteryInfoPtr battery_info = DeviceBatteryInfo::New();
+    battery_info->default_properties = BatteryProperties::New();
+    battery_info->default_properties->battery_percentage = kBatteryPercentage;
+    return battery_info;
+  }
+
+  DeviceBatteryInfoPtr CreateMultipleBatteryInfo(
+      absl::optional<int> left_bud_battery,
+      absl::optional<int> case_battery,
+      absl::optional<int> right_bud_battery) {
+    DeviceBatteryInfoPtr battery_info = DeviceBatteryInfo::New();
+
+    if (left_bud_battery) {
+      battery_info->left_bud_info = BatteryProperties::New();
+      battery_info->left_bud_info->battery_percentage =
+          left_bud_battery.value();
+    }
+
+    if (case_battery) {
+      battery_info->case_info = BatteryProperties::New();
+      battery_info->case_info->battery_percentage = case_battery.value();
+    }
+
+    if (right_bud_battery) {
+      battery_info->right_bud_info = BatteryProperties::New();
+      battery_info->right_bud_info->battery_percentage =
+          right_bud_battery.value();
+    }
+    return battery_info;
+  }
+
   void ExpectBluetoothDetailedViewFocused() {
-    EXPECT_TRUE(tray_view_->detailed_view());
+    EXPECT_TRUE(tray_view()->detailed_view());
     const FeaturePodIconButton::Views& children =
-        tray_view_->detailed_view()->children();
+        tray_view()->detailed_view()->children();
     EXPECT_EQ(1u, children.size());
     EXPECT_STREQ("BluetoothDetailedViewImpl", children.at(0)->GetClassName());
+  }
+
+  void LockScreen() {
+    bluetooth_config_test_helper()->session_manager()->SessionStarted();
+    bluetooth_config_test_helper()->session_manager()->SetSessionState(
+        session_manager::SessionState::LOCKED);
+    base::RunLoop().RunUntilIdle();
   }
 
   void PressIcon() {
@@ -105,7 +147,8 @@ class BluetoothFeaturePodControllerTest : public AshTestBase {
   }
 
   void SetSystemState(BluetoothSystemState system_state) {
-    scoped_bluetooth_config_test_helper_.fake_adapter_state_controller()
+    bluetooth_config_test_helper()
+        ->fake_adapter_state_controller()
         ->SetSystemState(system_state);
     base::RunLoop().RunUntilIdle();
   }
@@ -119,20 +162,29 @@ class BluetoothFeaturePodControllerTest : public AshTestBase {
   }
 
   chromeos::bluetooth_config::FakeDeviceCache* fake_device_cache() {
-    return scoped_bluetooth_config_test_helper_.fake_device_cache();
+    return bluetooth_config_test_helper()->fake_device_cache();
+  }
+
+  UnifiedSystemTrayController* tray_controller() {
+    return GetPrimaryUnifiedSystemTray()
+        ->bubble()
+        ->unified_system_tray_controller();
+  }
+
+  UnifiedSystemTrayView* tray_view() {
+    return GetPrimaryUnifiedSystemTray()->bubble()->unified_view();
   }
 
  protected:
-  FeaturePodButton* feature_pod_button_;
+  std::unique_ptr<FeaturePodButton> feature_pod_button_;
 
  private:
+  ScopedBluetoothConfigTestHelper* bluetooth_config_test_helper() {
+    return ash_test_helper()->bluetooth_config_test_helper();
+  }
+
   std::unique_ptr<BluetoothFeaturePodController> bluetooth_pod_controller_;
-  std::unique_ptr<UnifiedSystemTrayModel> tray_model_;
-  std::unique_ptr<UnifiedSystemTrayController> tray_controller_;
-  std::unique_ptr<UnifiedSystemTrayView> tray_view_;
   base::test::ScopedFeatureList feature_list_;
-  chromeos::bluetooth_config::ScopedBluetoothConfigTestHelper
-      scoped_bluetooth_config_test_helper_;
 };
 
 TEST_F(BluetoothFeaturePodControllerTest,
@@ -268,11 +320,7 @@ TEST_F(BluetoothFeaturePodControllerTest, HasCorrectMetadataWithOneDevice) {
   EXPECT_EQ(base::ASCIIToUTF16(kDeviceNickname), label_button->GetLabelText());
 
   // Change the device battery information and reset the paired device list.
-  paired_device->device_properties->battery_info = DeviceBatteryInfo::New();
-  paired_device->device_properties->battery_info->default_properties =
-      BatteryProperties::New();
-  paired_device->device_properties->battery_info->default_properties
-      ->battery_percentage = kBatteryPercentage;
+  paired_device->device_properties->battery_info = CreateDefaultBatteryInfo();
   SetConnectedDevice(paired_device);
 
   EXPECT_EQ(l10n_util::GetStringFUTF16(
@@ -282,15 +330,58 @@ TEST_F(BluetoothFeaturePodControllerTest, HasCorrectMetadataWithOneDevice) {
 }
 
 TEST_F(BluetoothFeaturePodControllerTest,
+       HasCorrectMetadataWithOneDevice_MultipleBatteries) {
+  SetSystemState(BluetoothSystemState::kEnabled);
+
+  const std::u16string public_name = base::ASCIIToUTF16(kDevicePublicName);
+  auto paired_device = PairedBluetoothDeviceProperties::New();
+  paired_device->device_properties = BluetoothDeviceProperties::New();
+  paired_device->device_properties->public_name = public_name;
+  paired_device->device_properties->connection_state =
+      DeviceConnectionState::kConnected;
+  paired_device->device_properties->battery_info =
+      CreateMultipleBatteryInfo(/*left_bud_battery=*/kLeftBudBatteryPercentage,
+                                /*case_battery=*/kCaseBatteryPercentage,
+                                /*right_battery=*/kRightBudBatteryPercentage);
+  SetConnectedDevice(paired_device);
+
+  const ash::FeaturePodLabelButton* label_button = feature_pod_label_button();
+  EXPECT_EQ(l10n_util::GetStringFUTF16(
+                IDS_ASH_STATUS_TRAY_BLUETOOTH_DEVICE_BATTERY_PERCENTAGE_LABEL,
+                base::NumberToString16(kLeftBudBatteryPercentage)),
+            label_button->GetSubLabelText());
+
+  paired_device->device_properties->battery_info =
+      CreateMultipleBatteryInfo(/*left_bud_battery=*/absl::nullopt,
+                                /*case_battery=*/kCaseBatteryPercentage,
+                                /*right_battery=*/kRightBudBatteryPercentage);
+  SetConnectedDevice(paired_device);
+  EXPECT_EQ(l10n_util::GetStringFUTF16(
+                IDS_ASH_STATUS_TRAY_BLUETOOTH_DEVICE_BATTERY_PERCENTAGE_LABEL,
+                base::NumberToString16(kRightBudBatteryPercentage)),
+            label_button->GetSubLabelText());
+
+  paired_device->device_properties->battery_info = CreateMultipleBatteryInfo(
+      /*left_bud_battery=*/absl::nullopt,
+      /*case_battery=*/kCaseBatteryPercentage, /*right_battery=*/absl::nullopt);
+  SetConnectedDevice(paired_device);
+  EXPECT_EQ(l10n_util::GetStringFUTF16(
+                IDS_ASH_STATUS_TRAY_BLUETOOTH_DEVICE_BATTERY_PERCENTAGE_LABEL,
+                base::NumberToString16(kCaseBatteryPercentage)),
+            label_button->GetSubLabelText());
+}
+
+TEST_F(BluetoothFeaturePodControllerTest,
        HasCorrectMetadataWithMultipleDevice) {
   SetSystemState(BluetoothSystemState::kEnabled);
 
-  // Create a device with zero configuration, mark it as connected, and reset
-  // the list of paired devices with multiple duplicates of it.
+  // Create a device with basic battery information, mark it as connected, and
+  // reset the list of paired devices with multiple duplicates of it.
   auto paired_device = PairedBluetoothDeviceProperties::New();
   paired_device->device_properties = BluetoothDeviceProperties::New();
   paired_device->device_properties->connection_state =
       DeviceConnectionState::kConnected;
+  paired_device->device_properties->battery_info = CreateDefaultBatteryInfo();
 
   std::vector<PairedBluetoothDevicePropertiesPtr> paired_devices;
   for (int i = 0; i < kMultipleDeviceCount; ++i) {
@@ -342,6 +433,18 @@ TEST_F(BluetoothFeaturePodControllerTest,
   EXPECT_TRUE(feature_pod_button_->IsToggled());
   PressLabel();
   ExpectBluetoothDetailedViewFocused();
+}
+
+TEST_F(BluetoothFeaturePodControllerTest,
+       FeaturePodIsDisabledWhenBluetoothCannotBeModified) {
+  EXPECT_TRUE(feature_pod_button_->GetEnabled());
+
+  // The lock screen is one of multiple session states where Bluetooth cannot be
+  // modified. For more information see
+  // chromeos::bluetooth_config::SystemPropertiesProvider.
+  LockScreen();
+
+  EXPECT_FALSE(feature_pod_button_->GetEnabled());
 }
 
 }  // namespace ash

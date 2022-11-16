@@ -145,6 +145,7 @@ needs to have at least one test case. Valid values are:
 - `chromeos_ash`
 - `chromeos_lacros`
 - `android`
+- `fuchsia`
 - `ios` (tested via separate [policy_test_cases.json](https://cs.chromium.org/chromium/src/ios/chrome/test/data/policy/policy_test_cases.json))
 
 The boolean `official_only` field indicates whether this policy is only
@@ -195,8 +196,8 @@ field's value is a dictionary, where the key is a policy name (should be one of
 the policies set in `policies`) and the value is a dictionary with `scope`
 (possible values are [`user`, `machine`], defaults to `user`) and `source`
 (possible values are [`enterprise_default`, `command_line`, `cloud`,
-`active_directory`, `local_account_override`, `platform`, `priority_cloud`,
-`merged`, `cloud_from_ash`], defaults to `cloud`).
+`active_directory`, `local_account_override`, `platform`, `merged`,
+`cloud_from_ash`], defaults to `cloud`).
 
 Each `PolicyPrefMappingTest` can also have a `required_preprocessor_macros`,
 which defines a list of required preprocessor macros for the test to run.
@@ -265,7 +266,7 @@ use the `PolicyTestCase`'s `can_be_recommended` though.
         "policies_settings": {
           "${policy_name_1}": {
             "scope": string, // optional, one of [user, machine], defaults to "user"
-            "source": string, // optional, one of [enterprise_default, command_line, cloud, active_directory, local_account_override, platform, priority_cloud, merged, cloud_from_ash], defaults to "cloud"
+            "source": string, // optional, one of [enterprise_default, command_line, cloud, active_directory, local_account_override, platform, merged, cloud_from_ash], defaults to "cloud"
           },
           ... // 0...N policies
         }, // optional

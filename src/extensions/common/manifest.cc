@@ -100,9 +100,8 @@ int GetManifestVersion(const base::DictionaryValue& manifest_value,
                        Manifest::Type type) {
   // Platform apps were launched after manifest version 2 was the preferred
   // version, so they default to that.
-  int manifest_version = type == Manifest::TYPE_PLATFORM_APP ? 2 : 1;
-  manifest_value.GetInteger(keys::kManifestVersion, &manifest_version);
-  return manifest_version;
+  return manifest_value.FindIntKey(keys::kManifestVersion)
+      .value_or(type == Manifest::TYPE_PLATFORM_APP ? 2 : 1);
 }
 
 // Helper class to filter available values from a manifest.
@@ -166,9 +165,9 @@ class AvailableValuesFilter {
       return true;
 
     return feature
-        ->IsAvailableToManifest(manifest.hashed_id(), manifest.type(),
-                                manifest.location(),
-                                manifest.manifest_version())
+        ->IsAvailableToManifest(
+            manifest.hashed_id(), manifest.type(), manifest.location(),
+            manifest.manifest_version(), kUnspecifiedContextId)
         .is_available();
   }
 
@@ -205,11 +204,11 @@ Manifest::Type Manifest::GetTypeFromManifestValue(
     const base::DictionaryValue& value,
     bool for_login_screen) {
   Type type = TYPE_UNKNOWN;
-  if (value.HasKey(keys::kTheme)) {
+  if (value.FindKey(keys::kTheme)) {
     type = TYPE_THEME;
-  } else if (value.HasKey(api::shared_module::ManifestKeys::kExport)) {
+  } else if (value.FindKey(api::shared_module::ManifestKeys::kExport)) {
     type = TYPE_SHARED_MODULE;
-  } else if (value.HasKey(keys::kApp)) {
+  } else if (value.FindKey(keys::kApp)) {
     if (value.Get(keys::kWebURLs, nullptr) ||
         value.Get(keys::kLaunchWebURL, nullptr)) {
       type = TYPE_HOSTED_APP;
@@ -218,7 +217,7 @@ Manifest::Type Manifest::GetTypeFromManifestValue(
     } else {
       type = TYPE_LEGACY_PACKAGED_APP;
     }
-  } else if (value.HasKey(keys::kChromeOSSystemExtension)) {
+  } else if (value.FindKey(keys::kChromeOSSystemExtension)) {
     type = TYPE_CHROMEOS_SYSTEM_EXTENSION;
   } else if (for_login_screen) {
     type = TYPE_LOGIN_SCREEN_EXTENSION;
@@ -285,7 +284,7 @@ bool Manifest::ValidateManifest(
     std::vector<InstallWarning>* warnings) const {
   *error = "";
 
-  // Check every feature to see if its in the manifest. Note that this means
+  // Check every feature to see if it's in the manifest. Note that this means
   // we will ignore keys that are not features; we do this for forward
   // compatibility.
 
@@ -297,7 +296,7 @@ bool Manifest::ValidateManifest(
       continue;
 
     Feature::Availability result = map_entry.second->IsAvailableToManifest(
-        hashed_id_, type_, location_, manifest_version_);
+        hashed_id_, type_, location_, manifest_version_, kUnspecifiedContextId);
     if (!result.is_available())
       warnings->push_back(InstallWarning(result.message(), map_entry.first));
   }
@@ -322,41 +321,24 @@ bool Manifest::ValidateManifest(
   return true;
 }
 
-bool Manifest::HasKey(const std::string& key) const {
-  return available_values_->HasKey(key);
+const base::Value* Manifest::FindKey(base::StringPiece key) const {
+  return available_values_->FindKey(key);
 }
 
-bool Manifest::HasPath(const std::string& path) const {
-  const base::Value* ignored = nullptr;
-  return available_values_->Get(path, &ignored);
+const base::Value* Manifest::FindPath(base::StringPiece path) const {
+  return available_values_->FindPath(path);
 }
 
-bool Manifest::Get(
-    const std::string& path, const base::Value** out_value) const {
-  return available_values_->Get(path, out_value);
+absl::optional<bool> Manifest::FindBoolPath(base::StringPiece path) const {
+  return available_values_->FindBoolPath(path);
 }
 
-bool Manifest::GetBoolean(
-    const std::string& path, bool* out_value) const {
-  absl::optional<bool> value = available_values_->FindBoolPath(path);
-  if (value)
-    *out_value = *value;
-  return value.has_value();
+absl::optional<int> Manifest::FindIntPath(base::StringPiece path) const {
+  return available_values_->FindIntPath(path);
 }
 
-bool Manifest::GetInteger(
-    const std::string& path, int* out_value) const {
-  return available_values_->GetInteger(path, out_value);
-}
-
-bool Manifest::GetString(
-    const std::string& path, std::string* out_value) const {
-  return available_values_->GetString(path, out_value);
-}
-
-bool Manifest::GetString(const std::string& path,
-                         std::u16string* out_value) const {
-  return available_values_->GetString(path, out_value);
+const std::string* Manifest::FindStringPath(base::StringPiece path) const {
+  return available_values_->FindStringPath(path);
 }
 
 bool Manifest::GetDictionary(

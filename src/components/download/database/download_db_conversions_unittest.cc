@@ -5,6 +5,7 @@
 #include "components/download/database/download_db_conversions.h"
 
 #include "base/test/scoped_feature_list.h"
+#include "base/time/time.h"
 #include "components/download/public/common/download_features.h"
 #include "components/download/public/common/download_schedule.h"
 #include "components/download/public/common/download_url_parameters.h"
@@ -24,7 +25,7 @@ InProgressInfo CreateInProgressInfo() {
   info.url_chain.emplace_back("http://foo");
   info.url_chain.emplace_back("http://foo2");
   info.referrer_url = GURL("http://foo1.com");
-  info.site_url = GURL("http://foo.com");
+  info.serialized_embedder_download_data = std::string();
   info.tab_url = GURL("http://foo.com");
   info.tab_referrer_url = GURL("http://abc.com");
   info.start_time = base::Time::NowFromSystemTime().LocalMidnight();
@@ -141,7 +142,8 @@ TEST_F(DownloadDBConversionsTest, DownloadSource) {
       DownloadSource::DRAG_AND_DROP, DownloadSource::FROM_RENDERER,
       DownloadSource::EXTENSION_API, DownloadSource::EXTENSION_INSTALLER,
       DownloadSource::INTERNAL_API,  DownloadSource::WEB_CONTENTS_API,
-      DownloadSource::OFFLINE_PAGE,  DownloadSource::CONTEXT_MENU};
+      DownloadSource::OFFLINE_PAGE,  DownloadSource::CONTEXT_MENU,
+      DownloadSource::RETRY,         DownloadSource::RETRY_FROM_BUBBLE};
 
   for (auto source : sources) {
     EXPECT_EQ(source, DownloadSourceFromProto(DownloadSourceToProto(source)));
@@ -166,6 +168,10 @@ TEST_F(DownloadDBConversionsTest, InProgressInfo) {
 
   // InProgressInfo with valid fields.
   info = CreateInProgressInfo();
+  EXPECT_EQ(info, InProgressInfoFromProto(InProgressInfoToProto(info)));
+
+  info.range_request_from = 5;
+  info.range_request_from = 10;
   EXPECT_EQ(info, InProgressInfoFromProto(InProgressInfoToProto(info)));
 }
 

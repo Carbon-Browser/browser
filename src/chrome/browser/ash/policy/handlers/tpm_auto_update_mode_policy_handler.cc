@@ -6,79 +6,76 @@
 
 #include <utility>
 
+#include "ash/components/settings/cros_settings_names.h"
+#include "ash/components/settings/cros_settings_provider.h"
 #include "base/bind.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "base/values.h"
 #include "chrome/browser/ash/policy/core/browser_policy_connector_ash.h"
+#include "chrome/browser/ash/tpm_firmware_update.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/browser_process_platform_part.h"
-#include "chrome/browser/chromeos/tpm_firmware_update.h"
 #include "chrome/common/pref_names.h"
-#include "chromeos/dbus/session_manager/session_manager_client.h"
-#include "chromeos/settings/cros_settings_names.h"
-#include "chromeos/settings/cros_settings_provider.h"
+#include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 #include "components/user_manager/user_manager.h"
 
+namespace policy {
+
 namespace {
 
 // Timeout for the TPM firmware update availability check.
-const base::TimeDelta kFirmwareAvailabilityCheckerTimeout =
-    base::TimeDelta::FromSeconds(20);
+const base::TimeDelta kFirmwareAvailabilityCheckerTimeout = base::Seconds(20);
 
-const base::TimeDelta kTPMUpdatePlannedNotificationWaitTime =
-    base::TimeDelta::FromDays(1);
+const base::TimeDelta kTPMUpdatePlannedNotificationWaitTime = base::Days(1);
 
 // Reads the value of the the device setting key
 // TPMFirmwareUpdateSettings.AutoUpdateMode from a trusted store. If the value
 // is temporarily untrusted |callback| will be invoked later when trusted values
 // are available and AutoUpdateMode::kNever will be returned. This value is set
 // via the device policy TPMFirmwareUpdateSettings.
-policy::AutoUpdateMode GetTPMAutoUpdateModeSetting(
+AutoUpdateMode GetTPMAutoUpdateModeSetting(
     const ash::CrosSettings* cros_settings,
     const base::RepeatingClosure callback) {
   if (!g_browser_process->platform_part()
            ->browser_policy_connector_ash()
            ->IsDeviceEnterpriseManaged()) {
-    return policy::AutoUpdateMode::kNever;
+    return AutoUpdateMode::kNever;
   }
 
-  chromeos::CrosSettingsProvider::TrustedStatus status =
+  ash::CrosSettingsProvider::TrustedStatus status =
       cros_settings->PrepareTrustedValues(callback);
-  if (status != chromeos::CrosSettingsProvider::TRUSTED)
-    return policy::AutoUpdateMode::kNever;
+  if (status != ash::CrosSettingsProvider::TRUSTED)
+    return AutoUpdateMode::kNever;
   const base::Value* tpm_settings =
-      cros_settings->GetPref(chromeos::kTPMFirmwareUpdateSettings);
+      cros_settings->GetPref(ash::kTPMFirmwareUpdateSettings);
 
   if (!tpm_settings)
-    return policy::AutoUpdateMode::kNever;
+    return AutoUpdateMode::kNever;
 
   const base::Value* const auto_update_mode = tpm_settings->FindKeyOfType(
-      chromeos::tpm_firmware_update::kSettingsKeyAutoUpdateMode,
+      ash::tpm_firmware_update::kSettingsKeyAutoUpdateMode,
       base::Value::Type::INTEGER);
 
   // Policy not set.
   if (!auto_update_mode || auto_update_mode->GetInt() == 0)
-    return policy::AutoUpdateMode::kNever;
+    return AutoUpdateMode::kNever;
 
   // Verify that the value is within range.
-  if (auto_update_mode->GetInt() <
-          static_cast<int>(policy::AutoUpdateMode::kNever) ||
+  if (auto_update_mode->GetInt() < static_cast<int>(AutoUpdateMode::kNever) ||
       auto_update_mode->GetInt() >
-          static_cast<int>(policy::AutoUpdateMode::kEnrollment)) {
+          static_cast<int>(AutoUpdateMode::kEnrollment)) {
     NOTREACHED() << "Invalid value for device policy key "
                     "TPMFirmwareUpdateSettings.AutoUpdateMode";
-    return policy::AutoUpdateMode::kNever;
+    return AutoUpdateMode::kNever;
   }
 
-  return static_cast<policy::AutoUpdateMode>(auto_update_mode->GetInt());
+  return static_cast<AutoUpdateMode>(auto_update_mode->GetInt());
 }
 
 }  // namespace
-
-namespace policy {
 
 TPMAutoUpdateModePolicyHandler::TPMAutoUpdateModePolicyHandler(
     ash::CrosSettings* cros_settings,
@@ -86,7 +83,7 @@ TPMAutoUpdateModePolicyHandler::TPMAutoUpdateModePolicyHandler(
     : cros_settings_(cros_settings), local_state_(local_state) {
   DCHECK(local_state_);
   policy_subscription_ = cros_settings_->AddSettingsObserver(
-      chromeos::kTPMFirmwareUpdateSettings,
+      ash::kTPMFirmwareUpdateSettings,
       base::BindRepeating(&TPMAutoUpdateModePolicyHandler::OnPolicyChanged,
                           weak_factory_.GetWeakPtr()));
 
@@ -131,7 +128,7 @@ void TPMAutoUpdateModePolicyHandler::OnPolicyChanged() {
 
 void TPMAutoUpdateModePolicyHandler::CheckForUpdate(
     base::OnceCallback<void(bool)> callback) {
-  chromeos::tpm_firmware_update::UpdateAvailable(
+  ash::tpm_firmware_update::UpdateAvailable(
       std::move(callback), kFirmwareAvailabilityCheckerTimeout);
 }
 
@@ -141,8 +138,7 @@ void TPMAutoUpdateModePolicyHandler::OnUpdateAvailableCheckResult(
   if (!update_available)
     return;
 
-  chromeos::SessionManagerClient::Get()->StartTPMFirmwareUpdate(
-      "preserve_stateful");
+  ash::SessionManagerClient::Get()->StartTPMFirmwareUpdate("preserve_stateful");
 }
 
 void TPMAutoUpdateModePolicyHandler::SetUpdateCheckerCallbackForTesting(

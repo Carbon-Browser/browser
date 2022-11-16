@@ -45,7 +45,7 @@
         <org.chromium.ui.widget.ChromeImageButton
             android:id="@+id/done_button"
             android:contentDescription="@string/screenshot_save_title"
-            android:src="@drawable/ic_checkmark_24dp"
+            android:src="@drawable/ic_check_googblue_24dp"
             android:layout_height="match_parent"
             android:layout_width="@dimen/long_screenshots_button_size"
             android:paddingHorizontal="@dimen/long_screenshots_button_padding"
@@ -55,7 +55,7 @@
 
     <View
         android:id="@+id/divider"
-        android:background="@color/divider_line_bg_color"
+        android:background="@macro/divider_line_bg_color"
         android:layout_above="@id/footer"
         android:layout_height="1dp"
         android:layout_width="match_parent"/>

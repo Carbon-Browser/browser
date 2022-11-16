@@ -25,11 +25,6 @@
         android:summary="@string/autocomplete_searches_and_urls_summary"
         android:persistent="false"/>
     <org.chromium.components.browser_ui.settings.ChromeSwitchPreference
-        android:key="navigation_error"
-        android:title="@string/navigation_error_suggestions_title"
-        android:summary="@string/navigation_error_suggestions_summary"
-        android:persistent="false"/>
-    <org.chromium.components.browser_ui.settings.ChromeSwitchPreference
         android:key="usage_and_crash_reports"
         android:title="@string/usage_and_crash_reports_title"
         android:summary="@string/usage_and_crash_reports_summary"
@@ -43,6 +38,11 @@
         android:key="autofill_assistant"
         android:title="@string/prefs_autofill_assistant_title"
         android:summary="@string/prefs_autofill_assistant_get_help_summary"
+        android:persistent="false"/>
+    <org.chromium.components.browser_ui.settings.ChromeSwitchPreference
+        android:key="price_tracking_annotations"
+        android:title="@string/track_prices_on_tabs"
+        android:summary="@string/track_prices_on_tabs_description"
         android:persistent="false"/>
     <org.chromium.components.browser_ui.settings.ChromeBasePreference
         android:key="autofill_assistant_subsection"

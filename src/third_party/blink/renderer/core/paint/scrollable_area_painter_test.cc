@@ -14,11 +14,11 @@ using testing::ElementsAre;
 
 namespace blink {
 
-using ScrollableAreaPainterTest = PaintControllerPaintTest;
+using ScrollableAreaPainterTest = PaintControllerPaintTestBase;
 
-INSTANTIATE_CAP_TEST_SUITE_P(ScrollableAreaPainterTest);
-
-TEST_P(ScrollableAreaPainterTest, OverlayScrollbars) {
+TEST_F(ScrollableAreaPainterTest, OverlayScrollbars) {
+  GetDocument().GetFrame()->GetSettings()->SetPreferCompositingToLCDTextEnabled(
+      true);
   SetBodyInnerHTML(R"HTML(
     <div id="target" style="overflow: scroll; width: 50px; height: 50px">
       <div style="width: 200px; height: 200px"></div>

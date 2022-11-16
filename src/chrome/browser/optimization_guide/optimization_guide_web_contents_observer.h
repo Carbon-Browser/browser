@@ -7,8 +7,7 @@
 
 #include <vector>
 
-#include "base/containers/flat_map.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "components/optimization_guide/core/insertion_ordered_set.h"
 #include "components/optimization_guide/core/optimization_guide_navigation_data.h"
@@ -35,6 +34,11 @@ class OptimizationGuideWebContentsObserver
       public content::WebContentsUserData<
           OptimizationGuideWebContentsObserver> {
  public:
+  OptimizationGuideWebContentsObserver(
+      const OptimizationGuideWebContentsObserver&) = delete;
+  OptimizationGuideWebContentsObserver& operator=(
+      const OptimizationGuideWebContentsObserver&) = delete;
+
   ~OptimizationGuideWebContentsObserver() override;
 
   // Notifies |this| to flush |last_navigation_data| so metrics are recorded.
@@ -67,8 +71,8 @@ class OptimizationGuideWebContentsObserver
       content::NavigationHandle* navigation_handle) override;
   void DidFinishNavigation(
       content::NavigationHandle* navigation_handle) override;
-  void DocumentOnLoadCompletedInMainFrame(
-      content::RenderFrameHost* render_frame_host) override;
+
+  void PostFetchHintsUsingManager();
 
   // Ask |hints_manager| to fetch hints for navigations that were predicted for
   // the current page load.
@@ -155,14 +159,13 @@ class OptimizationGuideWebContentsObserver
 
   // Initialized in constructor. It may be null if the
   // OptimizationGuideKeyedService feature is not enabled.
-  OptimizationGuideKeyedService* optimization_guide_keyed_service_ = nullptr;
+  raw_ptr<OptimizationGuideKeyedService> optimization_guide_keyed_service_ =
+      nullptr;
 
   base::WeakPtrFactory<OptimizationGuideWebContentsObserver> weak_factory_{
       this};
 
   WEB_CONTENTS_USER_DATA_KEY_DECL();
-
-  DISALLOW_COPY_AND_ASSIGN(OptimizationGuideWebContentsObserver);
 };
 
 #endif  // CHROME_BROWSER_OPTIMIZATION_GUIDE_OPTIMIZATION_GUIDE_WEB_CONTENTS_OBSERVER_H_

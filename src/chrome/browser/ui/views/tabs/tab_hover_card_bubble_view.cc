@@ -11,15 +11,16 @@
 #include <memory>
 #include <string>
 
-#include "base/containers/mru_cache.h"
+#include "base/containers/lru_cache.h"
 #include "base/i18n/break_iterator.h"
 #include "base/i18n/char_iterator.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/strings/string_piece.h"
 #include "build/build_config.h"
 #include "chrome/app/vector_icons/vector_icons.h"
-#include "chrome/browser/themes/theme_properties.h"
+#include "chrome/browser/ui/color/chrome_color_id.h"
 #include "chrome/browser/ui/tabs/tab_renderer_data.h"
 #include "chrome/browser/ui/tabs/tab_style.h"
 #include "chrome/browser/ui/thumbnails/thumbnail_image.h"
@@ -35,7 +36,8 @@
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
-#include "ui/base/theme_provider.h"
+#include "ui/color/color_id.h"
+#include "ui/color/color_provider.h"
 #include "ui/compositor/layer.h"
 #include "ui/gfx/animation/linear_animation.h"
 #include "ui/gfx/animation/slide_animation.h"
@@ -48,7 +50,6 @@
 #include "ui/gfx/text_constants.h"
 #include "ui/gfx/text_elider.h"
 #include "ui/gfx/text_utils.h"
-#include "ui/native_theme/native_theme.h"
 #include "ui/resources/grit/ui_resources.h"
 #include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/background.h"
@@ -63,7 +64,7 @@
 #include "ui/views/view_class_properties.h"
 #include "ui/views/widget/widget.h"
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 #include "ui/base/win/shell.h"
 #endif
 
@@ -75,11 +76,13 @@ constexpr int kHoverCardTitleMaxLines = 2;
 constexpr int kHorizontalMargin = 18;
 constexpr int kVerticalMargin = 10;
 constexpr int kFootnoteVerticalMargin = 8;
-constexpr gfx::Insets kTitleMargins(kVerticalMargin, kHorizontalMargin);
-constexpr gfx::Insets kAlertMargins(kFootnoteVerticalMargin, kHorizontalMargin);
+constexpr auto kTitleMargins =
+    gfx::Insets::VH(kVerticalMargin, kHorizontalMargin);
+constexpr auto kAlertMargins =
+    gfx::Insets::VH(kFootnoteVerticalMargin, kHorizontalMargin);
 
 bool CustomShadowsSupported() {
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   return ui::win::IsAeroGlassEnabled();
 #else
   return true;
@@ -195,7 +198,7 @@ TabHoverCardBubbleView::FilenameElider::FindImageDimensions(
   // Find the start of the extension.
   const auto paren_pos = text.find_last_of(u'(');
   if (paren_pos == 0 || paren_pos == std::u16string::npos ||
-      !std::isspace(text[paren_pos - 1])) {
+      text[paren_pos - 1] != u' ') {
     return std::u16string::npos;
   }
 
@@ -486,8 +489,8 @@ class TabHoverCardBubbleView::FadeLabel : public views::View {
     label->SetElideBehavior(is_filename ? gfx::NO_ELIDE : gfx::ELIDE_TAIL);
   }
 
-  RenderTextFactoryLabel* primary_label_;
-  SolidLabel* label_fading_out_;
+  raw_ptr<RenderTextFactoryLabel> primary_label_;
+  raw_ptr<SolidLabel> label_fading_out_;
   absl::optional<bool> was_filename_;
   double percent_ = 1.0;
 };
@@ -558,19 +561,19 @@ class TabHoverCardBubbleView::ThumbnailView
     if (image_type_ == ImageType::kPlaceholder)
       return;
 
-    // Theme provider may be null if there is no associated widget. In that case
-    // there is nothing to render, and we can't get theme default colors to
-    // render with anyway, so bail out.
-    const ui::ThemeProvider* const theme_provider = GetThemeProvider();
-    if (!theme_provider)
+    // Color provider may be null if there is no associated widget. In that case
+    // there is nothing to render, and we can't get default colors to render
+    // with anyway, so bail out.
+    const auto* const color_provider = GetColorProvider();
+    if (!color_provider)
       return;
 
     StartFadeOut();
 
     // Check the no-preview color and size to see if it needs to be
     // regenerated. DPI or theme change can cause a regeneration.
-    const SkColor foreground_color = theme_provider->GetColor(
-        ThemeProperties::COLOR_HOVER_CARD_NO_PREVIEW_FOREGROUND);
+    const SkColor foreground_color =
+        color_provider->GetColor(kColorTabHoverCardForeground);
 
     // Set the no-preview placeholder image. All sizes are in DIPs.
     // gfx::CreateVectorIcon() caches its result so there's no need to store
@@ -625,8 +628,8 @@ class TabHoverCardBubbleView::ThumbnailView
         image_view->SetVerticalAlignment(views::ImageView::Alignment::kCenter);
         image_view->SetImageSize(image.size());
         image_view->SetBackground(views::CreateSolidBackground(
-            image_view->GetThemeProvider()->GetColor(
-                ThemeProperties::COLOR_HOVER_CARD_NO_PREVIEW_BACKGROUND)));
+            image_view->GetColorProvider()->GetColor(
+                kColorTabHoverCardBackground)));
         break;
       case ImageType::kThumbnail:
         image_view->SetVerticalAlignment(views::ImageView::Alignment::kLeading);
@@ -669,10 +672,10 @@ class TabHoverCardBubbleView::ThumbnailView
   void StartFadeOut() {
     // If we aren't visible, don't have a widget, or our widget is being
     // destructed and has no theme provider, skip trying to fade out since a
-    // ThemeProvider is needed for fading out placeholder images. (Note that
-    // GetThemeProvider() returns nullptr if there is no widget.)
+    // ColorProvider is needed for fading out placeholder images. (Note that
+    // GetColorProvider() returns nullptr if there is no widget.)
     // See: crbug.com/1246914
-    if (!GetVisible() || !GetThemeProvider())
+    if (!GetVisible() || !GetColorProvider())
       return;
 
     if (!GetPreviewImageCrossfadeStart().has_value())
@@ -708,16 +711,16 @@ class TabHoverCardBubbleView::ThumbnailView
     }
   }
 
-  TabHoverCardBubbleView* const bubble_view_;
+  const raw_ptr<TabHoverCardBubbleView> bubble_view_;
 
   // Displays the image that we are trying to display for the target/current
   // tab. Placed under `image_fading_out_` so that it is revealed as the
   // previous image fades out.
-  views::ImageView* target_tab_image_ = nullptr;
+  raw_ptr<views::ImageView> target_tab_image_ = nullptr;
 
   // Displays the previous image as it's fading out. Rendered over
   // `target_tab_image_` and has its alpha animated from 1 to 0.
-  views::ImageView* image_fading_out_ = nullptr;
+  raw_ptr<views::ImageView> image_fading_out_ = nullptr;
 
   // Provides a smooth fade out for `image_fading_out_`. We do not use a
   // LayerAnimation because we need to rewind the transparency at various
@@ -758,7 +761,7 @@ TabHoverCardBubbleView::TabHoverCardBubbleView(Tab* tab)
   // not become active. Setting this to false creates the need to explicitly
   // hide the hovercard on press, touch, and keyboard events.
   SetCanActivate(false);
-#if defined(OS_MAC)
+#if BUILDFLAG(IS_MAC)
   set_accept_events(false);
 #endif
 
@@ -806,7 +809,8 @@ TabHoverCardBubbleView::TabHoverCardBubbleView(Tab* tab)
     title_margins.set_bottom(0);
     domain_label_->SetProperty(
         views::kMarginsKey,
-        gfx::Insets(0, kHorizontalMargin, kVerticalMargin, kHorizontalMargin));
+        gfx::Insets::TLBR(0, kHorizontalMargin, kVerticalMargin,
+                          kHorizontalMargin));
   }
 
   title_label_->SetProperty(views::kMarginsKey, title_margins);
@@ -841,7 +845,7 @@ TabHoverCardBubbleView::TabHoverCardBubbleView(Tab* tab)
   // existing thumbnail to be decompressed.
   //
   // Note that this code has to go after CreateBubble() above, since setting up
-  // the placeholder image and background color require a ThemeProvider, which
+  // the placeholder image and background color require a ColorProvider, which
   // is only available once this View has been added to its widget.
   if (thumbnail_view_ && !tab->data().thumbnail->has_data() &&
       !tab->IsActive()) {
@@ -869,7 +873,7 @@ void TabHoverCardBubbleView::UpdateCardContent(const Tab* tab) {
   GURL domain_url;
   // Use committed URL to determine if no page has yet loaded, since the title
   // can be blank for some web pages.
-  if (tab->data().last_committed_url.is_empty()) {
+  if (!tab->data().last_committed_url.is_valid()) {
     domain_url = tab->data().visible_url;
     title = tab->data().IsCrashed()
                 ? l10n_util::GetStringUTF16(IDS_HOVER_CARD_CRASHED_TITLE)
@@ -890,13 +894,18 @@ void TabHoverCardBubbleView::UpdateCardContent(const Tab* tab) {
     if (domain_url.SchemeIsBlob()) {
       domain = l10n_util::GetStringUTF16(IDS_HOVER_CARD_BLOB_URL_SOURCE);
     } else {
-      domain = url_formatter::FormatUrl(
-          domain_url,
-          url_formatter::kFormatUrlOmitDefaults |
-              url_formatter::kFormatUrlOmitHTTPS |
-              url_formatter::kFormatUrlOmitTrivialSubdomains |
-              url_formatter::kFormatUrlTrimAfterHost,
-          net::UnescapeRule::NORMAL, nullptr, nullptr, nullptr);
+      if (tab->data().should_display_url) {
+        // Hide the domain when necessary. This leaves an empty space in the
+        // card, but this scenario is very rare. Also, shrinking the card to
+        // remove the space would result in visual noise, so we keep it simple.
+        domain = url_formatter::FormatUrl(
+            domain_url,
+            url_formatter::kFormatUrlOmitDefaults |
+                url_formatter::kFormatUrlOmitHTTPS |
+                url_formatter::kFormatUrlOmitTrivialSubdomains |
+                url_formatter::kFormatUrlTrimAfterHost,
+            base::UnescapeRule::NORMAL, nullptr, nullptr, nullptr);
+      }
 
       // Most of the time we want our standard (tail-elided) formatting for web
       // pages, but when viewing an image in the browser, many users want to
@@ -921,14 +930,13 @@ void TabHoverCardBubbleView::UpdateCardContent(const Tab* tab) {
         // Simulate the same look as the footnote view.
         // TODO(dfried): should we add this as a variation of
         // FootnoteContainerView? Currently it's only used here.
-        alert_label->SetBackground(
-            views::CreateSolidBackground(GetNativeTheme()->GetSystemColor(
-                ui::NativeTheme::kColorId_BubbleFooterBackground)));
+        const auto* color_provider = GetColorProvider();
+        alert_label->SetBackground(views::CreateSolidBackground(
+            color_provider->GetColor(ui::kColorBubbleFooterBackground)));
         alert_label->SetBorder(views::CreatePaddedBorder(
             views::CreateSolidSidedBorder(
-                0, 0, 1, 0,
-                GetNativeTheme()->GetSystemColor(
-                    ui::NativeTheme::kColorId_FootnoteContainerBorder)),
+                gfx::Insets::TLBR(0, 0, 1, 0),
+                color_provider->GetColor(ui::kColorBubbleFooterBorder)),
             kAlertMargins));
       }
       GetBubbleFrameView()->SetHeaderView(std::move(alert_label));

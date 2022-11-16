@@ -5,7 +5,6 @@
 #include "third_party/blink/renderer/platform/loader/fetch/url_loader/navigation_body_loader.h"
 
 #include "base/bind.h"
-#include "base/macros.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/numerics/safe_conversions.h"
@@ -15,6 +14,7 @@
 #include "services/network/public/cpp/url_loader_completion_status.h"
 #include "services/network/public/mojom/early_hints.mojom.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
+#include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/loader/referrer_utils.h"
 #include "third_party/blink/public/mojom/loader/code_cache.mojom.h"
 #include "third_party/blink/public/mojom/navigation/navigation_params.mojom.h"
@@ -60,7 +60,8 @@ void NavigationBodyLoader::OnReceiveEarlyHints(
 }
 
 void NavigationBodyLoader::OnReceiveResponse(
-    network::mojom::URLResponseHeadPtr head) {
+    network::mojom::URLResponseHeadPtr head,
+    mojo::ScopedDataPipeConsumerHandle body) {
   // This has already happened in the browser process.
   NOTREACHED();
 }
@@ -85,28 +86,17 @@ void NavigationBodyLoader::OnReceiveCachedMetadata(mojo_base::BigBuffer data) {
   // TODO(horo, kinuko): Make a test to cover this function.
   // TODO(https://crbug.com/930000): Add support for inline script code caching
   // with the service worker service.
+  base::UmaHistogramBoolean(
+      base::StrCat({"V8.InlineCodeCache.",
+                    is_main_frame_ ? "MainFrame" : "Subframe",
+                    ".CacheTimesMatch"}),
+      true);
   client_->BodyCodeCacheReceived(std::move(data));
 }
 
 void NavigationBodyLoader::OnTransferSizeUpdated(int32_t transfer_size_diff) {
   resource_load_info_notifier_wrapper_->NotifyResourceTransferSizeUpdated(
       transfer_size_diff);
-}
-
-void NavigationBodyLoader::OnStartLoadingResponseBody(
-    mojo::ScopedDataPipeConsumerHandle handle) {
-  TRACE_EVENT1("loading", "NavigationBodyLoader::OnStartLoadingResponseBody",
-               "url", original_url_.GetString().Utf8());
-  DCHECK(!has_received_body_handle_);
-  DCHECK(!has_received_completion_);
-  has_received_body_handle_ = true;
-  has_seen_end_of_data_ = false;
-  handle_ = std::move(handle);
-  DCHECK(handle_.is_valid());
-  handle_watcher_.Watch(handle_.get(), MOJO_HANDLE_SIGNAL_READABLE,
-                        base::BindRepeating(&NavigationBodyLoader::OnReadable,
-                                            base::Unretained(this)));
-  OnReadable(MOJO_RESULT_OK);
 }
 
 void NavigationBodyLoader::OnComplete(
@@ -128,46 +118,95 @@ void NavigationBodyLoader::SetDefersLoading(WebLoaderFreezeMode mode) {
 
 void NavigationBodyLoader::StartLoadingBody(
     WebNavigationBodyLoader::Client* client,
-    mojom::CodeCacheHost* code_cache_host) {
+    CodeCacheHost* code_cache_host) {
   TRACE_EVENT1("loading", "NavigationBodyLoader::StartLoadingBody", "url",
                original_url_.GetString().Utf8());
   client_ = client;
 
   base::Time response_head_response_time = response_head_->response_time;
   resource_load_info_notifier_wrapper_->NotifyResourceResponseReceived(
-      std::move(response_head_), PreviewsTypes::PREVIEWS_OFF);
+      std::move(response_head_));
 
   if (code_cache_host) {
-    code_cache_loader_ = WebCodeCacheLoader::Create(code_cache_host);
-    code_cache_loader_->FetchFromCodeCache(
-        mojom::CodeCacheType::kJavascript, original_url_,
-        base::BindOnce(&NavigationBodyLoader::CodeCacheReceived,
-                       weak_factory_.GetWeakPtr(), base::TimeTicks::Now(),
-                       response_head_response_time));
+    if (code_cache_data_) {
+      ContinueWithCodeCache(base::TimeTicks::Now(),
+                            response_head_response_time);
+      return;
+    }
+
+    // Save these for when the code cache is ready.
+    code_cache_wait_start_time_ = base::TimeTicks::Now();
+    response_head_response_time_ = response_head_response_time;
+
+    // If the code cache loader hasn't been created yet the request hasn't
+    // started, so start it now.
+    if (!code_cache_loader_)
+      StartLoadingCodeCache(code_cache_host);
+
+    // TODO(crbug.com/1274867): See if this can be enabled for subframes too.
+    if (base::FeatureList::IsEnabled(features::kEarlyBodyLoad) &&
+        is_main_frame_) {
+      // Start loading the body in parallel with the code cache.
+      BindURLLoaderAndStartLoadingResponseBodyIfPossible();
+    }
     return;
   }
 
-  BindURLLoaderAndStartLoadingResponseBodyIfPossible();
+  code_cache_data_ = mojo_base::BigBuffer();
+  ContinueWithCodeCache(base::TimeTicks::Now(), response_head_response_time);
 }
 
-void NavigationBodyLoader::CodeCacheReceived(
+void NavigationBodyLoader::StartLoadingCodeCache(
+    CodeCacheHost* code_cache_host) {
+  code_cache_loader_ = WebCodeCacheLoader::Create(code_cache_host);
+  code_cache_loader_->FetchFromCodeCache(
+      mojom::CodeCacheType::kJavascript, original_url_,
+      base::BindOnce(&NavigationBodyLoader::CodeCacheReceived,
+                     weak_factory_.GetWeakPtr()));
+}
+
+void NavigationBodyLoader::CodeCacheReceived(base::Time response_time,
+                                             mojo_base::BigBuffer data) {
+  code_cache_data_ = std::move(data);
+  code_cache_response_time_ = response_time;
+  if (!code_cache_wait_start_time_.is_null()) {
+    ContinueWithCodeCache(code_cache_wait_start_time_,
+                          response_head_response_time_);
+  }
+}
+
+void NavigationBodyLoader::ContinueWithCodeCache(
     base::TimeTicks start_time,
-    base::Time response_head_response_time,
-    base::Time response_time,
-    mojo_base::BigBuffer data) {
-  base::UmaHistogramTimes(
-      base::StrCat({"Navigation.CodeCacheTime.",
-                    is_main_frame_ ? "MainFrame" : "Subframe"}),
-      base::TimeTicks::Now() - start_time);
+    base::Time response_head_response_time) {
+  if (code_cache_loader_) {
+    base::UmaHistogramTimes(
+        base::StrCat({"Navigation.CodeCacheTime.",
+                      is_main_frame_ ? "MainFrame" : "Subframe"}),
+        base::TimeTicks::Now() - start_time);
+  }
+
   // Check that the times match to ensure that the code cache data is for this
   // response. See https://crbug.com/1099587.
-  if (response_head_response_time == response_time && client_) {
-    base::WeakPtr<NavigationBodyLoader> weak_self = weak_factory_.GetWeakPtr();
-    client_->BodyCodeCacheReceived(std::move(data));
+  const bool is_cache_usable =
+      (response_head_response_time == code_cache_response_time_);
+  base::UmaHistogramBoolean(
+      base::StrCat({"V8.InlineCodeCache.",
+                    is_main_frame_ ? "MainFrame" : "Subframe",
+                    ".CacheTimesMatch"}),
+      is_cache_usable);
+  if (!is_cache_usable)
+    code_cache_data_ = mojo_base::BigBuffer();
+
+  auto weak_self = weak_factory_.GetWeakPtr();
+  if (client_) {
+    client_->BodyCodeCacheReceived(std::move(*code_cache_data_));
     if (!weak_self)
       return;
   }
   code_cache_loader_.reset();
+  NotifyCompletionIfAppropriate();
+  if (!weak_self)
+    return;
 
   // TODO(dgozman): we should explore retrieveing code cache in parallel with
   // receiving response or reading the first data chunk.
@@ -256,7 +295,7 @@ void NavigationBodyLoader::ReadFromDataPipe() {
 }
 
 void NavigationBodyLoader::NotifyCompletionIfAppropriate() {
-  if (!has_received_completion_ || !has_seen_end_of_data_)
+  if (!has_received_completion_ || !has_seen_end_of_data_ || code_cache_loader_)
     return;
 
   handle_watcher_.Cancel();
@@ -282,18 +321,32 @@ void NavigationBodyLoader::NotifyCompletionIfAppropriate() {
 
 void NavigationBodyLoader::
     BindURLLoaderAndStartLoadingResponseBodyIfPossible() {
+  if (!response_body_) {
+    DCHECK(base::FeatureList::IsEnabled(features::kEarlyBodyLoad));
+    return;
+  }
   // Bind the mojo::URLLoaderClient interface in advance, because we will start
   // to read from the data pipe immediately which may potentially postpone the
   // method calls from the remote. That causes the flakiness of some layout
   // tests.
-  // TODO(minggang): The binding was executed after OnStartLoadingResponseBody
+  // TODO(minggang): The binding was executed after OnReceiveResponse
   // originally (prior to passing the response body from the browser process
   // during navigation), we should try to put it back if all the
   // webkit_layout_tests can pass in that way.
   BindURLLoaderAndContinue();
 
   DCHECK(response_body_.is_valid());
-  OnStartLoadingResponseBody(std::move(response_body_));
+
+  DCHECK(!has_received_body_handle_);
+  DCHECK(!has_received_completion_);
+  has_received_body_handle_ = true;
+  has_seen_end_of_data_ = false;
+  handle_ = std::move(response_body_);
+  DCHECK(handle_.is_valid());
+  handle_watcher_.Watch(handle_.get(), MOJO_HANDLE_SIGNAL_READABLE,
+                        base::BindRepeating(&NavigationBodyLoader::OnReadable,
+                                            base::Unretained(this)));
+  OnReadable(MOJO_RESULT_OK);
   // Don't use |this| here as it might have been destroyed.
 }
 
@@ -317,17 +370,10 @@ void WebNavigationBodyLoader::FillNavigationParamsResponseAndBodyLoader(
                                 : KURL(common_params->url);
   KURL url = original_url;
   resource_load_info_notifier_wrapper->NotifyResourceLoadInitiated(
-      request_id, url,
+      request_id, GURL(url),
       !commit_params->original_method.empty() ? commit_params->original_method
                                               : common_params->method,
-      common_params->referrer->url,
-      // TODO(kinuko): This should use the same value as in the request that
-      // was used in browser process, i.e. what CreateResourceRequest in
-      // content/browser/loader/navigation_url_loader_impl.cc gives.
-      // (Currently we don't propagate the value from the browser on
-      // navigation commit.)
-      is_main_frame ? network::mojom::RequestDestination::kDocument
-                    : network::mojom::RequestDestination::kIframe,
+      common_params->referrer->url, common_params->request_destination,
       is_main_frame ? net::HIGHEST : net::LOWEST);
   size_t redirect_count = commit_params->redirect_response.size();
 
@@ -354,7 +400,10 @@ void WebNavigationBodyLoader::FillNavigationParamsResponseAndBodyLoader(
     if (url.ProtocolIsData())
       redirect.redirect_response.SetHttpStatusCode(200);
     redirect.new_url = KURL(redirect_info.new_url);
-    redirect.new_referrer = WebString::FromUTF8(redirect_info.new_referrer);
+    // WebString treats default and empty strings differently while std::string
+    // does not. A default value is expected for new_referrer rather than empty.
+    if (!redirect_info.new_referrer.empty())
+      redirect.new_referrer = WebString::FromUTF8(redirect_info.new_referrer);
     redirect.new_referrer_policy = ReferrerUtils::NetToMojoReferrerPolicy(
         redirect_info.new_referrer_policy);
     redirect.new_http_method = WebString::FromLatin1(redirect_info.new_method);

@@ -7,12 +7,11 @@
 
 #include <stdint.h>
 
-#include <list>
 #include <string>
 
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "net/base/completion_once_callback.h"
 #include "net/base/io_buffer.h"
@@ -44,6 +43,9 @@ class BackendIO : public BackgroundIO {
   BackendIO(InFlightIO* controller,
             BackendImpl* backend,
             RangeResultCallback callback);
+
+  BackendIO(const BackendIO&) = delete;
+  BackendIO& operator=(const BackendIO&) = delete;
 
   // Runs the actual operation on the background thread.
   void ExecuteOperation();
@@ -152,14 +154,15 @@ class BackendIO : public BackgroundIO {
   void ExecuteBackendOperation();
   void ExecuteEntryOperation();
 
-  BackendImpl* backend_;
+  raw_ptr<BackendImpl, DanglingUntriaged> backend_;
   net::CompletionOnceCallback callback_;
-  Operation operation_;
+  Operation operation_ = OP_NONE;
 
   // Used for ops that open or create entries.
   EntryResultCallback entry_result_callback_;
-  Entry* out_entry_;  // if set, already has the user's ref added.
-  bool out_entry_opened_;
+  // if set, already has the user's ref added.
+  raw_ptr<Entry, DanglingUntriaged> out_entry_ = nullptr;
+  bool out_entry_opened_ = false;
 
   // For GetAvailableRange
   RangeResultCallback range_result_callback_;
@@ -169,19 +172,17 @@ class BackendIO : public BackgroundIO {
   std::string key_;
   base::Time initial_time_;
   base::Time end_time_;
-  Rankings::Iterator* iterator_;
+  raw_ptr<Rankings::Iterator, DanglingUntriaged> iterator_ = nullptr;
   std::unique_ptr<Rankings::Iterator> scoped_iterator_;
-  EntryImpl* entry_;
-  int index_;
-  int offset_;
+  raw_ptr<EntryImpl> entry_ = nullptr;
+  int index_ = 0;
+  int offset_ = 0;
   scoped_refptr<net::IOBuffer> buf_;
-  int buf_len_;
-  bool truncate_;
-  int64_t offset64_;
+  int buf_len_ = 0;
+  bool truncate_ = false;
+  int64_t offset64_ = 0;
   base::TimeTicks start_time_;
   base::OnceClosure task_;
-
-  DISALLOW_COPY_AND_ASSIGN(BackendIO);
 };
 
 // The specialized controller that keeps track of current operations.
@@ -190,6 +191,10 @@ class InFlightBackendIO : public InFlightIO {
   InFlightBackendIO(
       BackendImpl* backend,
       const scoped_refptr<base::SingleThreadTaskRunner>& background_thread);
+
+  InFlightBackendIO(const InFlightBackendIO&) = delete;
+  InFlightBackendIO& operator=(const InFlightBackendIO&) = delete;
+
   ~InFlightBackendIO() override;
 
   // Proxied operations.
@@ -262,11 +267,9 @@ class InFlightBackendIO : public InFlightIO {
 
  private:
   void PostOperation(const base::Location& from_here, BackendIO* operation);
-  BackendImpl* backend_;
+  raw_ptr<BackendImpl> backend_;
   scoped_refptr<base::SingleThreadTaskRunner> background_thread_;
   base::WeakPtrFactory<InFlightBackendIO> ptr_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(InFlightBackendIO);
 };
 
 }  // namespace disk_cache

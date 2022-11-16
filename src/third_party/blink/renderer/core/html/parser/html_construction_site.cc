@@ -63,7 +63,7 @@
 #include "third_party/blink/renderer/core/svg/svg_script_element.h"
 #include "third_party/blink/renderer/platform/bindings/microtask.h"
 #include "third_party/blink/renderer/platform/bindings/v8_per_isolate_data.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
 #include "third_party/blink/renderer/platform/text/text_break_iterator.h"
 
@@ -279,6 +279,11 @@ void HTMLConstructionSite::FlushPendingText(FlushMode mode) {
     unsigned break_index =
         FindBreakIndexBetween(string, current_position, proposed_break_index);
     DCHECK_LE(break_index, string.length());
+    if (!break_index) {
+      // FindBreakIndexBetween returns 0 if it cannot find a breakpoint. In this
+      // case, just keep the entire string.
+      break_index = string.length();
+    }
     String substring =
         string.Substring(current_position, break_index - current_position);
     substring = AtomizeIfAllWhitespace(substring, pending_text.whitespace_mode);
@@ -432,8 +437,7 @@ void HTMLConstructionSite::InsertHTMLHtmlStartTagBeforeHTML(
   }
   SetAttributes(element, token, parser_content_policy_);
   AttachLater(attachment_root_, element);
-  open_elements_.PushHTMLHtmlElement(
-      MakeGarbageCollected<HTMLStackItem>(element, token));
+  open_elements_.PushHTMLHtmlElement(HTMLStackItem::Create(element, token));
 
   ExecuteQueuedTasks();
   element->InsertedByParser();
@@ -682,7 +686,7 @@ void HTMLConstructionSite::InsertCommentOnHTMLHtmlElement(
 
 void HTMLConstructionSite::InsertHTMLHeadElement(AtomicHTMLToken* token) {
   DCHECK(!ShouldFosterParent());
-  head_ = MakeGarbageCollected<HTMLStackItem>(
+  head_ = HTMLStackItem::Create(
       CreateElement(token, html_names::xhtmlNamespaceURI), token);
   AttachLater(CurrentNode(), head_->GetElement());
   open_elements_.PushHTMLHeadElement(head_);
@@ -692,8 +696,7 @@ void HTMLConstructionSite::InsertHTMLBodyElement(AtomicHTMLToken* token) {
   DCHECK(!ShouldFosterParent());
   Element* body = CreateElement(token, html_names::xhtmlNamespaceURI);
   AttachLater(CurrentNode(), body);
-  open_elements_.PushHTMLBodyElement(
-      MakeGarbageCollected<HTMLStackItem>(body, token));
+  open_elements_.PushHTMLBodyElement(HTMLStackItem::Create(body, token));
   if (document_)
     document_->WillInsertBody();
 }
@@ -709,7 +712,7 @@ void HTMLConstructionSite::InsertHTMLFormElement(AtomicHTMLToken* token,
                       WebFeature::kDemotedFormElement);
   }
   AttachLater(CurrentNode(), form_element);
-  open_elements_.Push(MakeGarbageCollected<HTMLStackItem>(form_element, token));
+  open_elements_.Push(HTMLStackItem::Create(form_element, token));
 }
 
 void HTMLConstructionSite::InsertHTMLTemplateElement(
@@ -719,14 +722,13 @@ void HTMLConstructionSite::InsertHTMLTemplateElement(
       CreateElement(token, html_names::xhtmlNamespaceURI));
   template_element->SetDeclarativeShadowRootType(declarative_shadow_root_type);
   AttachLater(CurrentNode(), template_element);
-  open_elements_.Push(
-      MakeGarbageCollected<HTMLStackItem>(template_element, token));
+  open_elements_.Push(HTMLStackItem::Create(template_element, token));
 }
 
 void HTMLConstructionSite::InsertHTMLElement(AtomicHTMLToken* token) {
   Element* element = CreateElement(token, html_names::xhtmlNamespaceURI);
   AttachLater(CurrentNode(), element);
-  open_elements_.Push(MakeGarbageCollected<HTMLStackItem>(element, token));
+  open_elements_.Push(HTMLStackItem::Create(element, token));
 }
 
 void HTMLConstructionSite::InsertSelfClosingHTMLElementDestroyingToken(
@@ -775,7 +777,7 @@ void HTMLConstructionSite::InsertScriptElement(AtomicHTMLToken* token) {
   SetAttributes(element, token, parser_content_policy_);
   if (ScriptingContentIsAllowed(parser_content_policy_))
     AttachLater(CurrentNode(), element);
-  open_elements_.Push(MakeGarbageCollected<HTMLStackItem>(element, token));
+  open_elements_.Push(HTMLStackItem::Create(element, token));
 }
 
 void HTMLConstructionSite::InsertForeignElement(
@@ -791,8 +793,7 @@ void HTMLConstructionSite::InsertForeignElement(
     AttachLater(CurrentNode(), element, token->SelfClosing());
   }
   if (!token->SelfClosing()) {
-    open_elements_.Push(
-        MakeGarbageCollected<HTMLStackItem>(element, token, namespace_uri));
+    open_elements_.Push(HTMLStackItem::Create(element, token, namespace_uri));
   }
 }
 
@@ -1054,11 +1055,16 @@ HTMLStackItem* HTMLConstructionSite::CreateElementFromSavedToken(
     HTMLStackItem* item) {
   Element* element;
   // NOTE: Moving from item -> token -> item copies the Attribute vector twice!
+  Vector<Attribute> attributes;
+  attributes.ReserveInitialCapacity(
+      static_cast<wtf_size_t>(item->Attributes().size()));
+  for (Attribute& attr : item->Attributes()) {
+    attributes.push_back(std::move(attr));
+  }
   AtomicHTMLToken fake_token(HTMLToken::kStartTag, item->LocalName(),
-                             item->Attributes());
+                             std::move(attributes));
   element = CreateElement(&fake_token, item->NamespaceURI());
-  return MakeGarbageCollected<HTMLStackItem>(element, &fake_token,
-                                             item->NamespaceURI());
+  return HTMLStackItem::Create(element, &fake_token, item->NamespaceURI());
 }
 
 bool HTMLConstructionSite::IndexOfFirstUnopenFormattingElement(

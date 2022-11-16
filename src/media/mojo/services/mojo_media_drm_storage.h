@@ -8,7 +8,6 @@
 #include <string>
 
 #include "base/compiler_specific.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "media/base/media_drm_storage.h"
 #include "media/mojo/mojom/media_drm_storage.mojom.h"
@@ -23,6 +22,10 @@ class MEDIA_MOJO_EXPORT MojoMediaDrmStorage final : public MediaDrmStorage {
  public:
   explicit MojoMediaDrmStorage(
       mojo::PendingRemote<mojom::MediaDrmStorage> media_drm_storage);
+
+  MojoMediaDrmStorage(const MojoMediaDrmStorage&) = delete;
+  MojoMediaDrmStorage& operator=(const MojoMediaDrmStorage&) = delete;
+
   ~MojoMediaDrmStorage() override;
 
   // MediaDrmStorage implementation:
@@ -44,8 +47,6 @@ class MEDIA_MOJO_EXPORT MojoMediaDrmStorage final : public MediaDrmStorage {
 
   mojo::Remote<mojom::MediaDrmStorage> media_drm_storage_;
   base::WeakPtrFactory<MojoMediaDrmStorage> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(MojoMediaDrmStorage);
 };
 
 }  // namespace media

@@ -31,6 +31,7 @@ component("aura") {
     "env_input_state_controller.h",
     "env_observer.h",
     "event_injector.h",
+    "host_frame_rate_throttler.h",
     "input_state_lookup.h",
     "layout_manager.h",
     "null_window_targeter.h",
@@ -73,6 +74,7 @@ component("aura") {
     "env.cc",
     "env_input_state_controller.cc",
     "event_injector.cc",
+    "host_frame_rate_throttler.cc",
     "input_state_lookup.cc",
     "layout_manager.cc",
     "native_window_occlusion_tracker.cc",
@@ -134,7 +136,7 @@ component("aura") {
   ]
 
   public_deps = [
-    "//ui/base/cursor:cursor_base",
+    "//ui/base/cursor",
     "//ui/base/dragdrop:types",
     "//ui/base/dragdrop/mojom:mojom_headers",
     "//ui/base/ime",
@@ -151,20 +153,11 @@ component("aura") {
     ]
   }
 
-  if (use_x11) {
-    public_deps += [ "//ui/base/x" ]
-    deps += [
-      "//ui/events/platform/x11",
-      "//ui/platform_window/x11",
-    ]
-  }
-
   if (is_win) {
     sources -= [ "input_state_lookup.cc" ]
 
     deps += [
       "//ipc",
-      "//ui/base/cursor",
       "//ui/platform_window/win",
     ]
   }
@@ -181,8 +174,6 @@ component("aura") {
     public += [ "screen_ozone.h" ]
     sources += [ "screen_ozone.cc" ]
   }
-
-  configs += [ "//build/config/compiler:noshadowing" ]
 }
 
 static_library("test_support") {
@@ -237,7 +228,7 @@ static_library("test_support") {
     "//skia",
     "//testing/gtest",
     "//ui/base:test_support",
-    "//ui/base/cursor:cursor_base",
+    "//ui/base/cursor",
     "//ui/base/cursor/mojom:cursor_type",
     "//ui/base/ime/init",
     "//ui/compositor:test_support",
@@ -253,23 +244,6 @@ static_library("test_support") {
 
   if (is_win) {
     sources += [ "test/ui_controls_factory_aurawin.cc" ]
-  }
-
-  if (is_linux || is_chromeos) {
-    sources += [ "test/ui_controls_factory_aura_linux.cc" ]
-  }
-
-  if (use_x11) {
-    sources += [
-      "test/ui_controls_aurax11.cc",
-      "test/ui_controls_aurax11.h",
-      "test/x11_event_sender.h",
-    ]
-
-    deps += [
-      "//ui/events/platform/x11",
-      "//ui/gfx/x",
-    ]
   }
 
   if (use_ozone) {
@@ -314,10 +288,6 @@ executable("aura_demo") {
     "//ui/gl",
     "//ui/gl/init",
   ]
-
-  if (use_x11) {
-    deps += [ "//ui/gfx/x" ]
-  }
 }
 
 test("aura_unittests") {
@@ -374,8 +344,11 @@ test("aura_unittests") {
   }
 
   if (is_fuchsia) {
-    additional_manifest_fragments =
-        [ "//build/config/fuchsia/test/present_view_capabilities.test-cmx" ]
+    use_cfv2 = false
+    additional_manifest_fragments = [
+      "//build/config/fuchsia/test/present_view_capabilities.test-cmx",
+      "//build/config/fuchsia/test/vulkan_capabilities.test-cmx",
+    ]
   }
 
   data_deps = [ "//third_party/mesa_headers" ]
@@ -394,6 +367,7 @@ source_set("aura_interactive_ui_tests") {
       "//base/test:test_support",
       "//mojo/core/embedder",
       "//testing/gtest",
+      "//ui/base:test_support",
       "//ui/base/ime/init",
       "//ui/display:display",
       "//ui/gfx",

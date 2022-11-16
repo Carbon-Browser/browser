@@ -36,17 +36,17 @@ namespace content {
 
 namespace {
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 
 // These inset and flags simulate when we are not extending into the cutout.
-const gfx::Insets kNoCutoutInsets = gfx::Insets();
+const auto kNoCutoutInsets = gfx::Insets();
 
 // These inset and flags simulate when the we are extending into the cutout.
-const gfx::Insets kCutoutInsets = gfx::Insets(1, 0, 1, 0);
+const auto kCutoutInsets = gfx::Insets::TLBR(1, 0, 1, 0);
 
 // These inset and flags simulate when we are extending into the cutout and have
 // rotated the device so that the cutout is on the other sides.
-const gfx::Insets kRotatedCutoutInsets = gfx::Insets(0, 1, 0, 1);
+const auto kRotatedCutoutInsets = gfx::Insets::TLBR(0, 1, 0, 1);
 
 #endif
 
@@ -54,6 +54,9 @@ class TestWebContentsObserver : public WebContentsObserver {
  public:
   explicit TestWebContentsObserver(content::WebContents* web_contents)
       : WebContentsObserver(web_contents) {}
+
+  TestWebContentsObserver(const TestWebContentsObserver&) = delete;
+  TestWebContentsObserver& operator=(const TestWebContentsObserver&) = delete;
 
   // WebContentsObserver override.
   void ViewportFitChanged(blink::mojom::ViewportFit value) override {
@@ -79,8 +82,6 @@ class TestWebContentsObserver : public WebContentsObserver {
   base::RunLoop run_loop_;
   absl::optional<blink::mojom::ViewportFit> value_;
   blink::mojom::ViewportFit wanted_value_ = blink::mojom::ViewportFit::kAuto;
-
-  DISALLOW_COPY_AND_ASSIGN(TestWebContentsObserver);
 };
 
 // Used for forcing a specific |blink::mojom::DisplayMode| during a test.
@@ -117,6 +118,9 @@ class DisplayCutoutBrowserTest : public ContentBrowserTest {
  public:
   DisplayCutoutBrowserTest() = default;
 
+  DisplayCutoutBrowserTest(const DisplayCutoutBrowserTest&) = delete;
+  DisplayCutoutBrowserTest& operator=(const DisplayCutoutBrowserTest&) = delete;
+
   void SetUpCommandLine(base::CommandLine* command_line) override {
     command_line->AppendSwitchASCII(switches::kEnableBlinkFeatures,
                                     "DisplayCutoutAPI");
@@ -144,7 +148,7 @@ class DisplayCutoutBrowserTest : public ContentBrowserTest {
         "<meta name='viewport' content='viewport-fit=" +
         value + "'>";
 
-    FrameTreeNode* root = web_contents_impl()->GetFrameTree()->root();
+    FrameTreeNode* root = web_contents_impl()->GetPrimaryFrameTree().root();
     FrameTreeNode* child = root->child_at(0);
 
     ASSERT_TRUE(NavigateToURLFromRenderer(child, GURL(data)));
@@ -202,11 +206,11 @@ class DisplayCutoutBrowserTest : public ContentBrowserTest {
   }
 
   RenderFrameHostImpl* MainFrame() {
-    return web_contents_impl()->GetMainFrame();
+    return web_contents_impl()->GetPrimaryMainFrame();
   }
 
   RenderFrameHostImpl* ChildFrame() {
-    FrameTreeNode* root = web_contents_impl()->GetFrameTree()->root();
+    FrameTreeNode* root = web_contents_impl()->GetPrimaryFrameTree().root();
     return root->child_at(0)->current_frame_host();
   }
 
@@ -216,12 +220,10 @@ class DisplayCutoutBrowserTest : public ContentBrowserTest {
 
  private:
   base::ScopedTempDir temp_dir_;
-
-  DISALLOW_COPY_AND_ASSIGN(DisplayCutoutBrowserTest);
 };
 
 // The viewport meta tag is only enabled on Android.
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 
 IN_PROC_BROWSER_TEST_F(DisplayCutoutBrowserTest, ViewportFit_Fullscreen) {
   LoadTestPageWithViewportFitFromMeta("cover");

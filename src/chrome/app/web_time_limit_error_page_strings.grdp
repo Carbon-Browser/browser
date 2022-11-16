@@ -6,7 +6,7 @@
   </message>
 
   <message name="IDS_WEB_TIME_LIMIT_ERROR_PAGE_APP_MESSAGE" desc="A paragraph informing the user that web time limit has been reached and the error page is being shown in PWAs.">
-  The limit on <ph name="IDS_SHORT_PRODUCT_NAME">$1<ex>Carbon Browser Browser Browser</ex></ph> or <ph name="IDS_SHORT_PRODUCT_NAME">$1<ex>Carbon Browser Browser Browser</ex></ph> apps that your parent set ran out.
+  The limit on <ph name="IDS_SHORT_PRODUCT_NAME">$1<ex>Carbon Browser</ex></ph> or <ph name="IDS_SHORT_PRODUCT_NAME">$1<ex>Carbon Browser</ex></ph> apps that your parent set ran out.
   </message>
 
   <message name="IDS_WEB_TIME_LIMIT_ERROR_PAGE_CHROME_HEADER" desc="A heading for the user when the web time limit has been reached.">
@@ -14,7 +14,7 @@
   </message>
 
   <message name="IDS_WEB_TIME_LIMIT_ERROR_PAGE_CHROME_MESSAGE" desc="A paragraph informing the user that web time limit has been reached.">
-   You reached the time limit your parent set for <ph name="IDS_SHORT_PRODUCT_NAME">$1<ex>Carbon Browser Browser Browser</ex></ph>.
+   You reached the time limit your parent set for <ph name="IDS_SHORT_PRODUCT_NAME">$1<ex>Carbon Browser</ex></ph>.
   </message>
 
   <message name="IDS_WEB_TIME_LIMIT_ERROR_PAGE_NEXT_ACCESS_TIME" desc="A paragraph informing the user the next time the user will be able to use chrome or PWA.">
@@ -22,7 +22,7 @@
   </message>
 
   <message name="IDS_WEB_TIME_LIMIT_ERROR_PAGE_TITLE" desc="The title for the blocked page.">
-    <ph name="IDS_SHORT_PRODUCT_NAME">$1<ex>Carbon Browser Browser Browser</ex></ph> is paused
+    <ph name="IDS_SHORT_PRODUCT_NAME">$1<ex>Carbon Browser</ex></ph> is paused
   </message>
 
 </grit-part>

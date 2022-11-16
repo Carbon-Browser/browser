@@ -5,7 +5,6 @@
 #ifndef UI_VIEWS_INPUT_EVENT_ACTIVATION_PROTECTOR_H_
 #define UI_VIEWS_INPUT_EVENT_ACTIVATION_PROTECTOR_H_
 
-#include "base/macros.h"
 #include "base/time/time.h"
 #include "ui/views/views_export.h"
 
@@ -20,6 +19,11 @@ namespace views {
 class VIEWS_EXPORT InputEventActivationProtector {
  public:
   InputEventActivationProtector() = default;
+
+  InputEventActivationProtector(const InputEventActivationProtector&) = delete;
+  InputEventActivationProtector& operator=(
+      const InputEventActivationProtector&) = delete;
+
   ~InputEventActivationProtector() = default;
 
   // Updates the state of the protector based off of visibility changes. This
@@ -33,6 +37,9 @@ class VIEWS_EXPORT InputEventActivationProtector {
   // Resets the state for click tracking.
   void ResetForTesting();
 
+  // Integration tests can disable all input event activation protectors.
+  static void DisableForTesting();
+
  private:
   // Timestamp of when the view being tracked is first shown.
   base::TimeTicks view_shown_time_stamp_;
@@ -40,8 +47,6 @@ class VIEWS_EXPORT InputEventActivationProtector {
   base::TimeTicks last_event_timestamp_;
   // Number of repeated UI events with short intervals.
   size_t repeated_event_count_ = 0;
-
-  DISALLOW_COPY_AND_ASSIGN(InputEventActivationProtector);
 };
 
 }  // namespace views

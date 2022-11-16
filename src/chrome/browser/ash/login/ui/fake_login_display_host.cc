@@ -12,8 +12,11 @@ namespace ash {
 
 class FakeLoginDisplayHost::FakeBaseScreen : public BaseScreen {
  public:
-  explicit FakeBaseScreen(chromeos::OobeScreenId screen_id)
+  explicit FakeBaseScreen(OobeScreenId screen_id)
       : BaseScreen(screen_id, OobeScreenPriority::DEFAULT) {}
+
+  FakeBaseScreen(const FakeBaseScreen&) = delete;
+  FakeBaseScreen& operator=(const FakeBaseScreen&) = delete;
 
   ~FakeBaseScreen() override = default;
 
@@ -21,13 +24,15 @@ class FakeLoginDisplayHost::FakeBaseScreen : public BaseScreen {
   // BaseScreen:
   void ShowImpl() override {}
   void HideImpl() override {}
-
-  DISALLOW_COPY_AND_ASSIGN(FakeBaseScreen);
 };
 
 FakeLoginDisplayHost::FakeLoginDisplayHost()
-    : session_manager_(std::make_unique<session_manager::SessionManager>()),
-      wizard_context_(std::make_unique<WizardContext>()) {}
+    : wizard_context_(std::make_unique<WizardContext>()) {
+  // Only one SessionManager can be instantiated at a time. Check to see if one
+  // has already been instantiated before creating one.
+  if (!session_manager::SessionManager::Get())
+    session_manager_ = std::make_unique<session_manager::SessionManager>();
+}
 
 FakeLoginDisplayHost::~FakeLoginDisplayHost() = default;
 
@@ -40,6 +45,10 @@ ExistingUserController* FakeLoginDisplayHost::GetExistingUserController() {
 }
 
 gfx::NativeWindow FakeLoginDisplayHost::GetNativeWindow() const {
+  return nullptr;
+}
+
+views::Widget* FakeLoginDisplayHost::GetLoginWindowWidget() const {
   return nullptr;
 }
 
@@ -56,6 +65,10 @@ WebUILoginView* FakeLoginDisplayHost::GetWebUILoginView() const {
 }
 
 void FakeLoginDisplayHost::BeforeSessionStart() {}
+
+bool FakeLoginDisplayHost::IsFinalizing() {
+  return false;
+}
 
 void FakeLoginDisplayHost::Finalize(base::OnceClosure) {}
 
@@ -79,14 +92,16 @@ KioskLaunchController* FakeLoginDisplayHost::GetKioskLaunchController() {
   return nullptr;
 }
 
+WizardContext* FakeLoginDisplayHost::GetWizardContext() {
+  return nullptr;
+}
+
 void FakeLoginDisplayHost::StartUserAdding(
     base::OnceClosure completion_callback) {}
 
 void FakeLoginDisplayHost::CancelUserAdding() {}
 
 void FakeLoginDisplayHost::StartSignInScreen() {}
-
-void FakeLoginDisplayHost::OnPreferencesChanged() {}
 
 void FakeLoginDisplayHost::StartKiosk(const KioskAppId& kiosk_app_id,
                                       bool is_auto_launch) {}
@@ -115,9 +130,13 @@ bool FakeLoginDisplayHost::IsUserAllowlisted(
 
 void FakeLoginDisplayHost::ShowGaiaDialog(const AccountId& prefilled_account) {}
 
+void FakeLoginDisplayHost::ShowAllowlistCheckFailedError() {}
+
 void FakeLoginDisplayHost::ShowOsInstallScreen() {}
 
-void FakeLoginDisplayHost::HideOobeDialog() {}
+void FakeLoginDisplayHost::ShowGuestTosScreen() {}
+
+void FakeLoginDisplayHost::HideOobeDialog(bool saml_page_closed) {}
 
 void FakeLoginDisplayHost::SetShelfButtonsEnabled(bool enabled) {}
 
@@ -165,6 +184,15 @@ bool FakeLoginDisplayHost::IsWizardControllerCreated() const {
 
 WizardContext* FakeLoginDisplayHost::GetWizardContextForTesting() {
   NOTREACHED();
+  return nullptr;
+}
+
+bool FakeLoginDisplayHost::IsWebUIStarted() const {
+  return wizard_controller_.get();
+}
+
+base::WeakPtr<ash::quick_start::TargetDeviceBootstrapController>
+FakeLoginDisplayHost::GetQuickStartBootstrapController() {
   return nullptr;
 }
 

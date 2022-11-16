@@ -7,7 +7,9 @@
 #include <cmath>
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/numerics/ranges.h"
+#include "base/time/time.h"
 #include "chrome/browser/vr/elements/draw_phase.h"
 #include "chrome/browser/vr/test/animation_utils.h"
 #include "chrome/browser/vr/test/constants.h"
@@ -15,7 +17,7 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/gfx/geometry/insets_f.h"
 #include "ui/gfx/geometry/quaternion.h"
-#include "ui/gfx/transform.h"
+#include "ui/gfx/geometry/transform.h"
 
 namespace vr {
 
@@ -34,8 +36,8 @@ bool MatricesAreNearlyEqual(const gfx::Transform& lhs,
                             const gfx::Transform& rhs) {
   for (int row = 0; row < 4; ++row) {
     for (int col = 0; col < 4; ++col) {
-      if (!base::IsApproximatelyEqual(lhs.matrix().get(row, col),
-                                      rhs.matrix().get(row, col), kEpsilon)) {
+      if (!base::IsApproximatelyEqual(lhs.matrix().rc(row, col),
+                                      rhs.matrix().rc(row, col), kEpsilon)) {
         return false;
       }
     }
@@ -135,8 +137,7 @@ class ViewportAwareRootTest : public testing::Test {
   bool AnimateWithForwardVector(base::TimeDelta delta,
                                 const gfx::Vector3dF& forward_vector) {
     base::TimeTicks target_time = current_time_ + delta;
-    base::TimeDelta frame_duration =
-        base::TimeDelta::FromSecondsD(1.0 / kFramesPerSecond);
+    base::TimeDelta frame_duration = base::Seconds(1.0 / kFramesPerSecond);
     bool changed = false;
     gfx::Quaternion head_movement_quat(forward_vector, {0.f, 0.f, -1.f});
     gfx::Transform head_pose(head_movement_quat);
@@ -150,8 +151,8 @@ class ViewportAwareRootTest : public testing::Test {
     return changed;
   }
 
-  ViewportAwareRootForTesting* viewport_root;
-  UiElement* viewport_element;
+  raw_ptr<ViewportAwareRootForTesting> viewport_root;
+  raw_ptr<UiElement> viewport_element;
 
  private:
   std::unique_ptr<UiScene> scene_;

@@ -10,14 +10,14 @@
 #include <string>
 #include <vector>
 
-#include "base/macros.h"
-#include "base/single_thread_task_runner.h"
+#include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "remoting/host/action_executor.h"
+#include "remoting/host/base/desktop_environment_options.h"
+#include "remoting/host/base/screen_controls.h"
 #include "remoting/host/desktop_environment.h"
-#include "remoting/host/desktop_environment_options.h"
 #include "remoting/host/fake_mouse_cursor_monitor.h"
 #include "remoting/host/input_injector.h"
-#include "remoting/host/screen_controls.h"
 #include "remoting/protocol/fake_desktop_capturer.h"
 
 namespace remoting {
@@ -25,6 +25,10 @@ namespace remoting {
 class FakeInputInjector : public InputInjector {
  public:
   FakeInputInjector();
+
+  FakeInputInjector(const FakeInputInjector&) = delete;
+  FakeInputInjector& operator=(const FakeInputInjector&) = delete;
+
   ~FakeInputInjector() override;
 
   void Start(
@@ -55,15 +59,13 @@ class FakeInputInjector : public InputInjector {
  private:
   friend class FakeDesktopEnvironment;
 
-  std::vector<protocol::KeyEvent>* key_events_ = nullptr;
-  std::vector<protocol::TextEvent>* text_events_ = nullptr;
-  std::vector<protocol::MouseEvent>* mouse_events_ = nullptr;
-  std::vector<protocol::TouchEvent>* touch_events_ = nullptr;
-  std::vector<protocol::ClipboardEvent>* clipboard_events_ = nullptr;
+  raw_ptr<std::vector<protocol::KeyEvent>> key_events_ = nullptr;
+  raw_ptr<std::vector<protocol::TextEvent>> text_events_ = nullptr;
+  raw_ptr<std::vector<protocol::MouseEvent>> mouse_events_ = nullptr;
+  raw_ptr<std::vector<protocol::TouchEvent>> touch_events_ = nullptr;
+  raw_ptr<std::vector<protocol::ClipboardEvent>> clipboard_events_ = nullptr;
 
   base::WeakPtrFactory<FakeInputInjector> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(FakeInputInjector);
 };
 
 class FakeScreenControls : public ScreenControls {
@@ -72,7 +74,8 @@ class FakeScreenControls : public ScreenControls {
   ~FakeScreenControls() override;
 
   // ScreenControls implementation.
-  void SetScreenResolution(const ScreenResolution& resolution) override;
+  void SetScreenResolution(const ScreenResolution& resolution,
+                           absl::optional<webrtc::ScreenId> screen_id) override;
 };
 
 class FakeDesktopEnvironment : public DesktopEnvironment {
@@ -80,6 +83,10 @@ class FakeDesktopEnvironment : public DesktopEnvironment {
   explicit FakeDesktopEnvironment(
       scoped_refptr<base::SingleThreadTaskRunner> capture_thread,
       const DesktopEnvironmentOptions& options);
+
+  FakeDesktopEnvironment(const FakeDesktopEnvironment&) = delete;
+  FakeDesktopEnvironment& operator=(const FakeDesktopEnvironment&) = delete;
+
   ~FakeDesktopEnvironment() override;
 
   // Sets frame generator to be used for protocol::FakeDesktopCapturer created
@@ -89,6 +96,10 @@ class FakeDesktopEnvironment : public DesktopEnvironment {
     frame_generator_ = std::move(frame_generator);
   }
 
+  void set_desktop_session_id(uint32_t desktop_session_id) {
+    desktop_session_id_ = desktop_session_id;
+  }
+
   const DesktopEnvironmentOptions& options() const;
 
   // DesktopEnvironment implementation.
@@ -96,7 +107,8 @@ class FakeDesktopEnvironment : public DesktopEnvironment {
   std::unique_ptr<AudioCapturer> CreateAudioCapturer() override;
   std::unique_ptr<InputInjector> CreateInputInjector() override;
   std::unique_ptr<ScreenControls> CreateScreenControls() override;
-  std::unique_ptr<webrtc::DesktopCapturer> CreateVideoCapturer() override;
+  std::unique_ptr<DesktopCapturer> CreateVideoCapturer() override;
+  DesktopDisplayInfoMonitor* GetDisplayInfoMonitor() override;
   std::unique_ptr<webrtc::MouseCursorMonitor> CreateMouseCursorMonitor()
       override;
   std::unique_ptr<KeyboardLayoutMonitor> CreateKeyboardLayoutMonitor(
@@ -110,6 +122,8 @@ class FakeDesktopEnvironment : public DesktopEnvironment {
   uint32_t GetDesktopSessionId() const override;
   std::unique_ptr<DesktopAndCursorConditionalComposer>
   CreateComposingVideoCapturer() override;
+  std::unique_ptr<RemoteWebAuthnStateChangeNotifier>
+  CreateRemoteWebAuthnStateChangeNotifier() override;
 
   base::WeakPtr<FakeInputInjector> last_input_injector() {
     return last_input_injector_;
@@ -120,20 +134,24 @@ class FakeDesktopEnvironment : public DesktopEnvironment {
 
   scoped_refptr<base::SingleThreadTaskRunner> capture_thread_;
   protocol::FakeDesktopCapturer::FrameGenerator frame_generator_;
+  uint32_t desktop_session_id_ = UINT32_MAX;
 
   base::WeakPtr<FakeInputInjector> last_input_injector_;
 
   const DesktopEnvironmentOptions options_;
 
   base::WeakPtrFactory<FakeDesktopEnvironment> weak_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(FakeDesktopEnvironment);
 };
 
 class FakeDesktopEnvironmentFactory : public DesktopEnvironmentFactory {
  public:
   explicit FakeDesktopEnvironmentFactory(
       scoped_refptr<base::SingleThreadTaskRunner> capture_thread);
+
+  FakeDesktopEnvironmentFactory(const FakeDesktopEnvironmentFactory&) = delete;
+  FakeDesktopEnvironmentFactory& operator=(
+      const FakeDesktopEnvironmentFactory&) = delete;
+
   ~FakeDesktopEnvironmentFactory() override;
 
   // Sets frame generator to be used for protocol::FakeDesktopCapturer created
@@ -143,9 +161,14 @@ class FakeDesktopEnvironmentFactory : public DesktopEnvironmentFactory {
     frame_generator_ = std::move(frame_generator);
   }
 
+  void set_desktop_session_id(uint32_t desktop_session_id) {
+    desktop_session_id_ = desktop_session_id;
+  }
+
   // DesktopEnvironmentFactory implementation.
   std::unique_ptr<DesktopEnvironment> Create(
       base::WeakPtr<ClientSessionControl> client_session_control,
+      base::WeakPtr<ClientSessionEvents> client_session_events,
       const DesktopEnvironmentOptions& options) override;
   bool SupportsAudioCapture() const override;
 
@@ -156,10 +179,9 @@ class FakeDesktopEnvironmentFactory : public DesktopEnvironmentFactory {
  private:
   scoped_refptr<base::SingleThreadTaskRunner> capture_thread_;
   protocol::FakeDesktopCapturer::FrameGenerator frame_generator_;
+  uint32_t desktop_session_id_ = UINT32_MAX;
 
   base::WeakPtr<FakeDesktopEnvironment> last_desktop_environment_;
-
-  DISALLOW_COPY_AND_ASSIGN(FakeDesktopEnvironmentFactory);
 };
 
 }  // namespace remoting

@@ -5,6 +5,7 @@
 #include "content/public/test/mock_render_process_host.h"
 
 #include <algorithm>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -12,11 +13,14 @@
 #include "base/callback_helpers.h"
 #include "base/lazy_instance.h"
 #include "base/location.h"
+#include "base/no_destructor.h"
 #include "base/process/process_handle.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
+#include "build/build_config.h"
 #include "content/browser/child_process_security_policy_impl.h"
+#include "content/browser/process_lock.h"
 #include "content/browser/renderer_host/render_process_host_impl.h"
 #include "content/browser/renderer_host/render_view_host_impl.h"
 #include "content/browser/renderer_host/render_widget_host_impl.h"
@@ -116,13 +120,21 @@ void MockRenderProcessHost::SimulateRenderProcessExit(
   ChildProcessTerminationInfo termination_info;
   termination_info.status = status;
   termination_info.exit_code = exit_code;
+#if BUILDFLAG(IS_ANDROID)
   termination_info.renderer_has_visible_clients = VisibleClientCount() > 0;
+#endif
   NotificationService::current()->Notify(
       NOTIFICATION_RENDERER_PROCESS_CLOSED, Source<RenderProcessHost>(this),
       Details<ChildProcessTerminationInfo>(&termination_info));
 
   for (auto& observer : observers_)
     observer.RenderProcessExited(this, termination_info);
+}
+
+void MockRenderProcessHost::SimulateReady() {
+  is_ready_ = true;
+  for (auto& observer : observers_)
+    observer.RenderProcessReady(this);
 }
 
 // static
@@ -256,7 +268,7 @@ const base::Process& MockRenderProcessHost::GetProcess() {
 }
 
 bool MockRenderProcessHost::IsReady() {
-  return false;
+  return is_ready_;
 }
 
 bool MockRenderProcessHost::Send(IPC::Message* msg) {
@@ -266,8 +278,12 @@ bool MockRenderProcessHost::Send(IPC::Message* msg) {
   return true;
 }
 
-int MockRenderProcessHost::GetID() {
+int MockRenderProcessHost::GetID() const {
   return id_;
+}
+
+base::SafeRef<RenderProcessHost> MockRenderProcessHost::GetSafeRef() const {
+  return weak_ptr_factory_.GetSafeRef();
 }
 
 bool MockRenderProcessHost::IsInitializedAndNotDead() {
@@ -292,7 +308,9 @@ void MockRenderProcessHost::Cleanup() {
       ChildProcessTerminationInfo termination_info;
       termination_info.status = base::TERMINATION_STATUS_NORMAL_TERMINATION;
       termination_info.exit_code = 0;
+#if BUILDFLAG(IS_ANDROID)
       termination_info.renderer_has_visible_clients = VisibleClientCount() > 0;
+#endif
       for (auto& observer : observers_)
         observer.RenderProcessExited(this, termination_info);
     }
@@ -328,7 +346,7 @@ bool MockRenderProcessHost::HasPriorityOverride() {
 
 void MockRenderProcessHost::ClearPriorityOverride() {}
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 ChildProcessImportance MockRenderProcessHost::GetEffectiveImportance() {
   NOTIMPLEMENTED();
   return ChildProcessImportance::NORMAL;
@@ -361,7 +379,7 @@ void MockRenderProcessHost::AddFilter(BrowserMessageFilter* filter) {
 }
 
 base::TimeDelta MockRenderProcessHost::GetChildProcessIdleTime() {
-  return base::TimeDelta::FromMilliseconds(0);
+  return base::Milliseconds(0);
 }
 
 void MockRenderProcessHost::BindReceiver(
@@ -389,19 +407,41 @@ size_t MockRenderProcessHost::GetKeepAliveRefCount() const {
   return keep_alive_ref_count_;
 }
 
-void MockRenderProcessHost::IncrementKeepAliveRefCount() {
+void MockRenderProcessHost::IncrementKeepAliveRefCount(uint64_t handle_id) {
   ++keep_alive_ref_count_;
 }
 
-void MockRenderProcessHost::DecrementKeepAliveRefCount() {
+void MockRenderProcessHost::DecrementKeepAliveRefCount(uint64_t handle_id) {
   --keep_alive_ref_count_;
 }
+
+std::string MockRenderProcessHost::GetKeepAliveDurations() const {
+  return std::string("MockRenderProcessHost: durations not tracked.");
+}
+
+size_t MockRenderProcessHost::GetShutdownDelayRefCount() const {
+  return 0;
+}
+
+int MockRenderProcessHost::GetRenderFrameHostCount() const {
+  return 0;
+}
+
+void MockRenderProcessHost::RegisterRenderFrameHost(
+    const GlobalRenderFrameHostId& render_frame_host_id) {}
+
+void MockRenderProcessHost::UnregisterRenderFrameHost(
+    const GlobalRenderFrameHostId& render_frame_host_id) {}
+
+void MockRenderProcessHost::ForEachRenderFrameHost(
+    base::RepeatingCallback<void(RenderFrameHost*)> on_render_frame_host) {}
 
 void MockRenderProcessHost::IncrementWorkerRefCount() {
   ++worker_ref_count_;
 }
 
 void MockRenderProcessHost::DecrementWorkerRefCount() {
+  DCHECK_GT(worker_ref_count_, 0);
   --worker_ref_count_;
 }
 
@@ -432,8 +472,8 @@ mojom::Renderer* MockRenderProcessHost::GetRendererInterface() {
   if (!renderer_interface_) {
     renderer_interface_ =
         std::make_unique<mojo::AssociatedRemote<mojom::Renderer>>();
-    ignore_result(
-        renderer_interface_->BindNewEndpointAndPassDedicatedReceiver());
+    std::ignore =
+        renderer_interface_->BindNewEndpointAndPassDedicatedReceiver();
   }
   return renderer_interface_->get();
 }
@@ -472,15 +512,17 @@ void MockRenderProcessHost::SetProcessLock(
     const IsolationContext& isolation_context,
     const ProcessLock& process_lock) {
   ChildProcessSecurityPolicyImpl::GetInstance()->LockProcess(
-      isolation_context, GetID(), process_lock);
+      isolation_context, GetID(), !IsUnused(), process_lock);
   if (process_lock.IsASiteOrOrigin())
     is_renderer_locked_to_site_ = true;
 }
 
+ProcessLock MockRenderProcessHost::GetProcessLock() const {
+  return ChildProcessSecurityPolicyImpl::GetInstance()->GetProcessLock(GetID());
+}
+
 bool MockRenderProcessHost::IsProcessLockedToSiteForTesting() {
-  ProcessLock lock =
-      ChildProcessSecurityPolicyImpl::GetInstance()->GetProcessLock(GetID());
-  return lock.is_locked_to_site();
+  return GetProcessLock().is_locked_to_site();
 }
 
 void MockRenderProcessHost::BindCacheStorage(
@@ -497,21 +539,13 @@ void MockRenderProcessHost::BindIndexedDB(
   idb_factory_receiver_ = std::move(receiver);
 }
 
-void MockRenderProcessHost::
-    CleanupNetworkServicePluginExceptionsUponDestruction() {}
-
 std::string
 MockRenderProcessHost::GetInfoForBrowserContextDestructionCrashReporting() {
   return std::string();
 }
 
-void MockRenderProcessHost::WriteIntoTrace(perfetto::TracedValue context) {
-  auto dict = std::move(context).WriteDictionary();
-  dict.Add("id", GetID());
-}
-
 void MockRenderProcessHost::WriteIntoTrace(
-    perfetto::TracedProto<perfetto::protos::pbzero::RenderProcessHost> proto) {
+    perfetto::TracedProto<TraceProto> proto) const {
   proto->set_id(GetID());
 }
 

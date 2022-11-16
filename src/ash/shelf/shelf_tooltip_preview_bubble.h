@@ -26,8 +26,12 @@ class ASH_EXPORT ShelfTooltipPreviewBubble : public ShelfBubble,
   ShelfTooltipPreviewBubble(views::View* anchor,
                             const std::vector<aura::Window*>& windows,
                             ShelfTooltipManager* manager,
-                            ShelfAlignment alignment,
-                            SkColor background_color);
+                            ShelfAlignment alignment);
+
+  ShelfTooltipPreviewBubble(const ShelfTooltipPreviewBubble&) = delete;
+  ShelfTooltipPreviewBubble& operator=(const ShelfTooltipPreviewBubble&) =
+      delete;
+
   ~ShelfTooltipPreviewBubble() override;
 
  private:
@@ -53,8 +57,6 @@ class ASH_EXPORT ShelfTooltipPreviewBubble : public ShelfBubble,
 
   ShelfTooltipManager* manager_;
   base::OneShotTimer dismiss_timer_;
-
-  DISALLOW_COPY_AND_ASSIGN(ShelfTooltipPreviewBubble);
 };
 
 }  // namespace ash

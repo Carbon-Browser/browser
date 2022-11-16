@@ -9,7 +9,6 @@
 #include <memory>
 #include <vector>
 
-#include "base/macros.h"
 #include "base/timer/timer.h"
 #include "chrome/browser/ui/passwords/manage_passwords_state.h"
 #include "chrome/browser/ui/passwords/passwords_client_ui_delegate.h"
@@ -57,6 +56,10 @@ class ManagePasswordsUIController
       public PasswordsModelDelegate,
       public PasswordsClientUIDelegate {
  public:
+  ManagePasswordsUIController(const ManagePasswordsUIController&) = delete;
+  ManagePasswordsUIController& operator=(const ManagePasswordsUIController&) =
+      delete;
+
   ~ManagePasswordsUIController() override;
 
 #if defined(UNIT_TEST)
@@ -95,7 +98,8 @@ class ManagePasswordsUIController
       const std::vector<const password_manager::PasswordForm*>*
           federated_matches) override;
   void OnCredentialLeak(password_manager::CredentialLeakType leak_dialog_type,
-                        const GURL& origin) override;
+                        const GURL& url,
+                        const std::u16string& username) override;
   void OnShowMoveToAccountBubble(
       std::unique_ptr<password_manager::PasswordFormManagerForUI> form_to_move)
       override;
@@ -218,8 +222,7 @@ class ManagePasswordsUIController
   bool IsShowingBubbleForTest() const { return IsShowingBubble(); }
 
   // content::WebContentsObserver:
-  void DidFinishNavigation(
-      content::NavigationHandle* navigation_handle) override;
+  void PrimaryPageChanged(content::Page& page) override;
   void OnVisibilityChanged(content::Visibility visibility) override;
 
  private:
@@ -228,6 +231,8 @@ class ManagePasswordsUIController
   // PasswordsLeakDialogDelegate:
   void NavigateToPasswordCheckup(
       password_manager::PasswordCheckReferrer referrer) override;
+  void StartAutomatedPasswordChange(const GURL& origin,
+                                    const std::u16string& username) override;
   void OnLeakDialogHidden() override;
 
   enum class BubbleStatus {
@@ -257,9 +262,9 @@ class ManagePasswordsUIController
   // it shouldn't anymore.
   void ClearPopUpFlagForBubble();
 
-  // Closes the account chooser gracefully so the callback is called. Then sets
-  // the state to MANAGE_STATE.
-  void DestroyAccountChooser();
+  // Closes the account chooser gracefully so the callback is called. Closes the
+  // password bubble. Then sets the state to MANAGE_STATE.
+  void DestroyPopups();
 
   // content::WebContentsObserver:
   void WebContentsDestroyed() override;
@@ -353,8 +358,6 @@ class ManagePasswordsUIController
   base::WeakPtrFactory<ManagePasswordsUIController> weak_ptr_factory_{this};
 
   WEB_CONTENTS_USER_DATA_KEY_DECL();
-
-  DISALLOW_COPY_AND_ASSIGN(ManagePasswordsUIController);
 };
 
 #endif  // CHROME_BROWSER_UI_PASSWORDS_MANAGE_PASSWORDS_UI_CONTROLLER_H_

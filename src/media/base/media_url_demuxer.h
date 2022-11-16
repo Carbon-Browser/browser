@@ -8,7 +8,7 @@
 #include <stddef.h>
 
 #include "base/callback.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "media/base/demuxer.h"
 #include "url/gurl.h"
@@ -43,6 +43,10 @@ class MEDIA_EXPORT MediaUrlDemuxer : public Demuxer {
       const url::Origin& top_frame_origin,
       bool allow_credentials,
       bool is_hls);
+
+  MediaUrlDemuxer(const MediaUrlDemuxer&) = delete;
+  MediaUrlDemuxer& operator=(const MediaUrlDemuxer&) = delete;
+
   ~MediaUrlDemuxer() override;
 
   // MediaResource interface.
@@ -73,11 +77,9 @@ class MEDIA_EXPORT MediaUrlDemuxer : public Demuxer {
 
  private:
   MediaUrlParams params_;
-  DemuxerHost* host_;
+  raw_ptr<DemuxerHost> host_;
 
   scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
-
-  DISALLOW_COPY_AND_ASSIGN(MediaUrlDemuxer);
 };
 
 }  // namespace media

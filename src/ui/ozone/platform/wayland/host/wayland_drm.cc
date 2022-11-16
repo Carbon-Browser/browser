@@ -11,34 +11,40 @@
 #include "base/logging.h"
 #include "ui/gfx/buffer_format_util.h"
 #include "ui/gfx/linux/drm_util_linux.h"
+#include "ui/ozone/platform/wayland/host/wayland_buffer_factory.h"
 #include "ui/ozone/platform/wayland/host/wayland_connection.h"
 #include "ui/ozone/platform/wayland/host/wayland_drm.h"
 
 namespace ui {
 
 namespace {
-constexpr uint32_t kMinWlDrmVersion = 2;
+constexpr uint32_t kMinVersion = 2;
 }
 
 // static
-void WaylandDrm::Register(WaylandConnection* connection) {
-  connection->RegisterGlobalObjectFactory("wl_drm", &WaylandDrm::Instantiate);
-}
+constexpr char WaylandDrm::kInterfaceName[];
 
 // static
 void WaylandDrm::Instantiate(WaylandConnection* connection,
                              wl_registry* registry,
                              uint32_t name,
+                             const std::string& interface,
                              uint32_t version) {
-  if (connection->drm_ || version < kMinWlDrmVersion)
+  DCHECK_EQ(interface, kInterfaceName);
+
+  auto* buffer_factory = connection->wayland_buffer_factory();
+  if (buffer_factory->wayland_drm_ ||
+      !wl::CanBind(interface, version, kMinVersion, kMinVersion)) {
     return;
+  }
 
   auto wl_drm = wl::Bind<struct wl_drm>(registry, name, version);
   if (!wl_drm) {
     LOG(ERROR) << "Failed to bind wl_drm";
     return;
   }
-  connection->drm_ = std::make_unique<WaylandDrm>(wl_drm.release(), connection);
+  buffer_factory->wayland_drm_ =
+      std::make_unique<WaylandDrm>(wl_drm.release(), connection);
 }
 
 WaylandDrm::WaylandDrm(wl_drm* drm, WaylandConnection* connection)
@@ -63,7 +69,7 @@ bool WaylandDrm::SupportsDrmPrime() const {
   return authenticated_ && !!wl_drm_;
 }
 
-void WaylandDrm::CreateBuffer(base::ScopedFD fd,
+void WaylandDrm::CreateBuffer(const base::ScopedFD& fd,
                               const gfx::Size& size,
                               const std::vector<uint32_t>& strides,
                               const std::vector<uint32_t>& offsets,
@@ -87,6 +93,12 @@ void WaylandDrm::CreateBuffer(base::ScopedFD fd,
   connection_->ScheduleFlush();
 
   std::move(callback).Run(std::move(buffer));
+}
+
+bool WaylandDrm::CanCreateBufferImmed() const {
+  // Unlike the WaylandZwpLinuxDmabuf, the WaylandDrm always creates wl_buffers
+  // immediately.
+  return true;
 }
 
 void WaylandDrm::HandleDrmFailure(const std::string& error) {
@@ -116,6 +128,11 @@ void WaylandDrm::Authenticate(const char* drm_device_path) {
   base::ScopedFD drm_fd(open(drm_device_path, O_RDWR));
   if (!drm_fd.is_valid()) {
     HandleDrmFailure("Drm open failed: " + std::string(drm_device_path));
+    return;
+  }
+
+  if (drmGetNodeTypeFromFd(drm_fd.get()) != DRM_NODE_PRIMARY) {
+    DrmDeviceAuthenticated(wl_drm_.get());
     return;
   }
 

@@ -5,6 +5,8 @@
 #include "chrome/browser/enterprise/browser_management/management_service_factory.h"
 
 #include "base/memory/singleton.h"
+#include "base/no_destructor.h"
+#include "build/chromeos_buildflags.h"
 #include "chrome/browser/enterprise/browser_management/browser_management_service.h"
 #include "chrome/browser/profiles/incognito_helpers.h"
 #include "chrome/browser/profiles/profile.h"
@@ -13,6 +15,9 @@
 #include "components/policy/core/common/management/platform_management_service.h"
 #include "content/public/browser/browser_context.h"
 #include "extensions/buildflags/buildflags.h"
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "chrome/browser/enterprise/browser_management/browser_management_status_provider.h"
+#endif
 
 namespace policy {
 
@@ -24,7 +29,17 @@ ManagementServiceFactory* ManagementServiceFactory::GetInstance() {
 
 // static
 ManagementService* ManagementServiceFactory::GetForPlatform() {
-  return &(GetInstance()->platform_management_service_);
+  auto* instance = PlatformManagementService::GetInstance();
+  // This has to be done here since `DeviceManagementStatusProvider` cannot be
+  // defined in `components/policy/`, also we need we need the
+  // `g_browser_process->platform_part()`.
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  if (!instance->has_cros_status_provider()) {
+    instance->AddChromeOsStatusProvider(
+        std::make_unique<DeviceManagementStatusProvider>());
+  }
+#endif
+  return instance;
 }
 
 // static

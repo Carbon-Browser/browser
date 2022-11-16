@@ -13,10 +13,10 @@ import {DivView} from './view.js';
  * This UI allows a user to query and update the browser's list of per-domain
  * security policies. These policies include:
  * - HSTS: HTTPS Strict Transport Security. A way for sites to elect to always
- *   use HTTPS. See http://dev.chromium.org/sts
+ *   use HTTPS. See https://www.chromium.org/hsts
  * - Expect-CT. A way for sites to elect to always require valid Certificate
  *   Transparency information to be present. See
- *   https://tools.ietf.org/html/draft-ietf-httpbis-expect-ct-01
+ *   https://tools.ietf.org/html/draft-ietf-httpbis-expect-ct
  */
 
 export class DomainSecurityPolicyView extends DivView {
@@ -113,11 +113,11 @@ export class DomainSecurityPolicyView extends DivView {
 
   onHSTSQueryResult_(result) {
     this.queryStsOutputDiv_.innerHTML = trustedTypes.emptyHTML;
-    if (result.error != undefined) {
+    if (result.error !== undefined) {
       const s = addNode(this.queryStsOutputDiv_, 'span');
       s.textContent = result.error;
       s.style.color = '#e00';
-    } else if (result.result == false) {
+    } else if (result.result === false) {
       const notFound = document.createElement('b');
       notFound.textContent = 'Not found';
       this.queryStsOutputDiv_.appendChild(notFound);
@@ -150,7 +150,7 @@ export class DomainSecurityPolicyView extends DivView {
       const staticHashes = [];
       for (let i = 0; i < kStaticHashKeys.length; ++i) {
         const staticHashValue = result[kStaticHashKeys[i]];
-        if (staticHashValue != undefined && staticHashValue != '') {
+        if (staticHashValue !== undefined && staticHashValue !== '') {
           staticHashes.push(staticHashValue);
         }
 
@@ -161,7 +161,7 @@ export class DomainSecurityPolicyView extends DivView {
 
           // If there are no static_hashes, do not make it seem like there is a
           // static PKP policy in place.
-          if (staticHashes.length == 0 && key.startsWith('static_pkp_')) {
+          if (staticHashes.length === 0 && key.startsWith('static_pkp_')) {
             addNode(this.queryStsOutputDiv_, 'br');
             continue;
           }
@@ -173,14 +173,15 @@ export class DomainSecurityPolicyView extends DivView {
             addNodeWithText(this.queryStsOutputDiv_, 'tt', modeToString(value));
           } else {
             addNodeWithText(
-                this.queryStsOutputDiv_, 'tt', value == undefined ? '' : value);
+                this.queryStsOutputDiv_, 'tt',
+                value === undefined ? '' : value);
           }
           addNode(this.queryStsOutputDiv_, 'br');
         }
       }
     }
 
-    yellowFade(this.queryStsOutputDiv_);
+    highlightFade(this.queryStsOutputDiv_);
     for (const observer of this.hstsObservers_) {
       observer.onHSTSQueryResult(result);
     }
@@ -212,11 +213,11 @@ export class DomainSecurityPolicyView extends DivView {
 
   onExpectCTQueryResult_(result) {
     this.queryExpectCTOutputDiv_.innerHTML = trustedTypes.emptyHTML;
-    if (result.error != undefined) {
+    if (result.error !== undefined) {
       const s = addNode(this.queryExpectCTOutputDiv_, 'span');
       s.textContent = result.error;
       s.style.color = '#e00';
-    } else if (result.result == false) {
+    } else if (result.result === false) {
       const notFound = document.createElement('b');
       notFound.textContent = 'Not found';
       this.queryExpectCTOutputDiv_.appendChild(notFound);
@@ -241,12 +242,12 @@ export class DomainSecurityPolicyView extends DivView {
         addTextNode(this.queryExpectCTOutputDiv_, ' ' + key + ': ');
         addNodeWithText(
             this.queryExpectCTOutputDiv_, 'tt',
-            value == undefined ? '' : value);
+            value === undefined ? '' : value);
         addNode(this.queryExpectCTOutputDiv_, 'br');
       }
     }
 
-    yellowFade(this.queryExpectCTOutputDiv_);
+    highlightFade(this.queryExpectCTOutputDiv_);
     for (const observer of this.expectCTObservers_) {
       observer.onExpectCTQueryResult(result);
     }
@@ -268,7 +269,7 @@ export class DomainSecurityPolicyView extends DivView {
     addTextNode(
         this.testExpectCTOutputDiv_,
         result === 'success' ? 'Test report succeeded' : 'Test report failed');
-    yellowFade(this.testExpectCTOutputDiv_);
+    highlightFade(this.testExpectCTOutputDiv_);
     for (const observer of this.expectCTObservers_) {
       observer.onExpectCTTestReportResult(result);
     }
@@ -278,22 +279,22 @@ export class DomainSecurityPolicyView extends DivView {
 function modeToString(m) {
   // These numbers must match those in
   // TransportSecurityState::STSState::UpgradeMode.
-  if (m == 0) {
+  if (m === 0) {
     return 'FORCE_HTTPS';
-  } else if (m == 1) {
+  } else if (m === 1) {
     return 'DEFAULT';
   } else {
     return 'UNKNOWN';
   }
 }
 
-function yellowFade(element) {
+function highlightFade(element) {
   element.style.transitionProperty = 'background-color';
-  element.style.transitionDuration = '0';
-  element.style.backgroundColor = '#fffccf';
+  element.style.transitionDuration = '0ms';
+  element.style.backgroundColor = 'var(--color-highlight)';
   setTimeout(function() {
-    element.style.transitionDuration = '1000ms';
-    element.style.backgroundColor = '#fff';
+    element.style.transitionDuration = '1s';
+    element.style.backgroundColor = 'var(--color-background)';
   }, 0);
 }
 

@@ -9,6 +9,7 @@
 #include <string>
 
 #include "base/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/themes/theme_service.h"
 #include "chrome/browser/ui/page_action/page_action_icon_type.h"
 #include "chrome/browser/ui/tabs/tab_strip_model_observer.h"
@@ -19,11 +20,20 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "third_party/skia/include/core/SkRegion.h"
+#include "ui/color/color_provider.h"
+#include "ui/color/color_provider_manager.h"
+#include "url/gurl.h"
 
 class Browser;
 class BrowserThemePack;
 class CustomThemeSupplier;
 class TabMenuModelFactory;
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+namespace ash {
+class SystemWebAppDelegate;
+}
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 namespace gfx {
 class Rect;
@@ -35,7 +45,6 @@ class ImageModel;
 
 namespace web_app {
 
-class SystemWebAppDelegate;
 class WebAppBrowserController;
 
 // Returns true if |app_url| and |page_url| are the same origin. To avoid
@@ -45,9 +54,11 @@ class WebAppBrowserController;
 bool IsSameHostAndPort(const GURL& app_url, const GURL& page_url);
 
 // Class to encapsulate logic to control the browser UI for web apps.
-class AppBrowserController : public TabStripModelObserver,
-                             public content::WebContentsObserver,
-                             public BrowserThemeProviderDelegate {
+class AppBrowserController
+    : public ui::ColorProviderManager::InitializerSupplier,
+      public TabStripModelObserver,
+      public content::WebContentsObserver,
+      public BrowserThemeProviderDelegate {
  public:
   AppBrowserController(const AppBrowserController&) = delete;
   AppBrowserController& operator=(const AppBrowserController&) = delete;
@@ -120,12 +131,20 @@ class AppBrowserController : public TabStripModelObserver,
   // Gets the short name of the app.
   virtual std::u16string GetAppShortName() const = 0;
 
+  // Returns the human-readable name for title in Media Controls.
+  // If the returned value is an empty string, it means that there is no
+  // human-readable name.
+  std::string GetTitleForMediaControls() const;
+
   // Gets the origin of the app start url suitable for display (e.g
   // example.com.au).
   virtual std::u16string GetFormattedUrlOrigin() const = 0;
 
   // Gets the start_url for the app.
   virtual GURL GetAppStartUrl() const = 0;
+
+  // Gets the new tab URL for tabbed apps.
+  virtual GURL GetAppNewTabUrl() const;
 
   // Determines whether the specified url is 'inside' the app |this| controls.
   virtual bool IsUrlInAppScope(const GURL& url) const = 0;
@@ -161,8 +180,10 @@ class AppBrowserController : public TabStripModelObserver,
   // Whether the browser should show the reload button in the toolbar.
   virtual bool HasReloadButton() const;
 
+#if BUILDFLAG(IS_CHROMEOS_ASH)
   // Returns the SystemWebAppDelegate if any for this controller.
-  virtual const SystemWebAppDelegate* system_app() const;
+  virtual const ash::SystemWebAppDelegate* system_app() const;
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
   // Updates the custom tab bar's visibility based on whether it should be
   // currently visible or not. If |animate| is set, the change will be
@@ -179,7 +200,7 @@ class AppBrowserController : public TabStripModelObserver,
 
   // content::WebContentsObserver:
   void DidStartNavigation(content::NavigationHandle* handle) override;
-  void ReadyToCommitNavigation(
+  void DidFinishNavigation(
       content::NavigationHandle* navigation_handle) override;
   void DOMContentLoaded(content::RenderFrameHost* render_frame_host) override;
   void DidChangeThemeColor() override;
@@ -193,6 +214,12 @@ class AppBrowserController : public TabStripModelObserver,
 
   // BrowserThemeProviderDelegate:
   CustomThemeSupplier* GetThemeSupplier() const override;
+  bool ShouldUseSystemTheme() const override;
+  bool ShouldUseCustomFrame() const override;
+
+  // ui::ColorProviderManager::InitializerSupplier
+  void AddColorMixers(ui::ColorProvider* provider,
+                      const ui::ColorProviderManager::Key& key) const override;
 
   void UpdateDraggableRegion(const SkRegion& region);
   const absl::optional<SkRegion>& draggable_region() const {
@@ -223,7 +250,7 @@ class AppBrowserController : public TabStripModelObserver,
 
   void UpdateThemePack();
 
-  Browser* const browser_;
+  const raw_ptr<Browser> browser_;
   const AppId app_id_;
   const bool has_tab_strip_;
   GURL initial_url_;

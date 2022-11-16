@@ -32,7 +32,7 @@
 #include "third_party/blink/public/mojom/permissions_policy/permissions_policy.mojom-blink.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/bindings/core/v8/source_location.h"
-#include "third_party/blink/renderer/core/frame/deprecation.h"
+#include "third_party/blink/renderer/core/frame/deprecation/deprecation.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/navigator.h"
 #include "third_party/blink/renderer/core/frame/performance_monitor.h"
@@ -40,6 +40,7 @@
 #include "third_party/blink/renderer/core/inspector/console_message.h"
 #include "third_party/blink/renderer/core/page/page.h"
 #include "third_party/blink/renderer/core/probe/core_probes.h"
+#include "third_party/blink/renderer/core/timing/epoch_time_stamp.h"
 #include "third_party/blink/renderer/modules/geolocation/geolocation_coordinates.h"
 #include "third_party/blink/renderer/modules/geolocation/geolocation_error.h"
 
@@ -64,8 +65,7 @@ Geoposition* CreateGeoposition(
       position.heading >= 0. && position.heading <= 360., position.heading,
       position.speed >= 0., position.speed);
   return MakeGarbageCollected<Geoposition>(
-      coordinates,
-      ConvertSecondsToDOMTimeStamp(position.timestamp.ToDoubleT()));
+      coordinates, ConvertTimeToEpochTimeStamp(position.timestamp));
 }
 
 GeolocationPositionError* CreatePositionError(
@@ -307,8 +307,8 @@ bool Geolocation::HaveSuitableCachedPosition(const PositionOptions* options) {
     return false;
   if (!options->maximumAge())
     return false;
-  DOMTimeStamp current_time_millis =
-      ConvertSecondsToDOMTimeStamp(base::Time::Now().ToDoubleT());
+  EpochTimeStamp current_time_millis =
+      ConvertTimeToEpochTimeStamp(base::Time::Now());
   return last_position_->timestamp() >
          current_time_millis - options->maximumAge();
 }
@@ -502,6 +502,16 @@ void Geolocation::OnPositionUpdated(
   } else {
     GeolocationPositionError* position_error =
         CreatePositionError(position->error_code, position->error_message);
+
+    auto* context = GetExecutionContext();
+    DCHECK(context);
+    if (!position->error_technical.IsEmpty()) {
+      context->AddConsoleMessage(MakeGarbageCollected<ConsoleMessage>(
+          mojom::blink::ConsoleMessageSource::kNetwork,
+          mojom::blink::ConsoleMessageLevel::kError,
+          position->error_technical));
+    }
+
     if (position_error->code() == GeolocationPositionError::kPermissionDenied) {
       position_error->SetIsFatal(true);
     }
@@ -512,7 +522,13 @@ void Geolocation::OnPositionUpdated(
 }
 
 void Geolocation::PageVisibilityChanged() {
-  UpdateGeolocationConnection(nullptr);
+  for (auto& notifier : *one_shots_)
+    UpdateGeolocationConnection(notifier);
+
+  HeapVector<Member<GeoNotifier>> watchers;
+  watchers_->CopyNotifiersToVector(watchers);
+  for (auto& notifier : watchers)
+    UpdateGeolocationConnection(notifier);
 }
 
 bool Geolocation::HasPendingActivity() const {

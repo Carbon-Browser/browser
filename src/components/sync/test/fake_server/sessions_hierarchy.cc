@@ -8,7 +8,7 @@
 
 namespace fake_server {
 
-SessionsHierarchy::SessionsHierarchy() {}
+SessionsHierarchy::SessionsHierarchy() = default;
 
 SessionsHierarchy::SessionsHierarchy(const SessionsHierarchy& other) = default;
 
@@ -16,7 +16,7 @@ SessionsHierarchy::SessionsHierarchy(
     std::initializer_list<std::multiset<std::string>> windows)
     : windows_(windows) {}
 
-SessionsHierarchy::~SessionsHierarchy() {}
+SessionsHierarchy::~SessionsHierarchy() = default;
 
 void SessionsHierarchy::AddWindow(const std::string& tab) {
   windows_.insert({tab});
@@ -29,17 +29,19 @@ void SessionsHierarchy::AddWindow(const std::multiset<std::string>& tabs) {
 std::string SessionsHierarchy::ToString() const {
   std::stringstream output;
   output << "{";
-  for (auto window_it = windows_.begin(); window_it != windows_.end();
-       ++window_it) {
-    if (window_it != windows_.begin())
+  bool first_window = true;
+  for (const Window& window : windows_) {
+    if (!first_window)
       output << ",";
     output << "{";
+    first_window = false;
 
-    Window window = *window_it;
-    for (auto tab_it = window.begin(); tab_it != window.end(); ++tab_it) {
-      if (tab_it != window.begin())
+    bool first_tab = true;
+    for (const std::string& tab : window) {
+      if (!first_tab)
         output << ",";
-      output << *tab_it;
+      output << tab;
+      first_tab = false;
     }
     output << "}";
   }

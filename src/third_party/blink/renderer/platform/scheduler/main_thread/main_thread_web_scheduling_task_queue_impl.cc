@@ -42,8 +42,8 @@ bool MainThreadWebSchedulingTaskQueueImpl::WebSchedulingTaskRunner::
 
 base::SingleThreadTaskRunner* MainThreadWebSchedulingTaskQueueImpl::
     WebSchedulingTaskRunner::GetTaskRunnerForDelay(base::TimeDelta delay) {
-  return delay > base::TimeDelta() ? delayed_task_runner_.get()
-                                   : immediate_task_runner_.get();
+  return delay.is_positive() ? delayed_task_runner_.get()
+                             : immediate_task_runner_.get();
 }
 
 MainThreadWebSchedulingTaskQueueImpl::MainThreadWebSchedulingTaskQueueImpl(
@@ -51,9 +51,9 @@ MainThreadWebSchedulingTaskQueueImpl::MainThreadWebSchedulingTaskQueueImpl(
     base::WeakPtr<MainThreadTaskQueue> delayed_task_queue)
     : task_runner_(base::MakeRefCounted<WebSchedulingTaskRunner>(
           immediate_task_queue->CreateTaskRunner(
-              TaskType::kExperimentalWebScheduling),
+              TaskType::kWebSchedulingPostedTask),
           delayed_task_queue->CreateTaskRunner(
-              TaskType::kExperimentalWebScheduling))),
+              TaskType::kWebSchedulingPostedTask))),
       immediate_task_queue_(std::move(immediate_task_queue)),
       delayed_task_queue_(std::move(delayed_task_queue)) {}
 

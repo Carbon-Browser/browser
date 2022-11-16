@@ -9,6 +9,7 @@
 
 #include "base/memory/scoped_refptr.h"
 #include "base/threading/thread.h"
+#include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -31,6 +32,10 @@ class VideoCaptureServiceImpl : public mojom::VideoCaptureService {
   VideoCaptureServiceImpl(
       mojo::PendingReceiver<mojom::VideoCaptureService> receiver,
       scoped_refptr<base::SingleThreadTaskRunner> ui_task_runner);
+
+  VideoCaptureServiceImpl(const VideoCaptureServiceImpl&) = delete;
+  VideoCaptureServiceImpl& operator=(const VideoCaptureServiceImpl&) = delete;
+
   ~VideoCaptureServiceImpl() override;
 
   // mojom::VideoCaptureService implementation.
@@ -48,7 +53,9 @@ class VideoCaptureServiceImpl : public mojom::VideoCaptureService {
   void SetRetryCount(int32_t count) override;
   void BindControlsForTesting(
       mojo::PendingReceiver<mojom::TestingControls> receiver) override;
-
+#if BUILDFLAG(IS_WIN)
+  void OnGpuInfoUpdate(const CHROME_LUID& luid) override;
+#endif
  private:
   class GpuDependenciesContext;
 
@@ -64,8 +71,6 @@ class VideoCaptureServiceImpl : public mojom::VideoCaptureService {
   std::unique_ptr<GpuDependenciesContext> gpu_dependencies_context_;
 
   scoped_refptr<base::SingleThreadTaskRunner> ui_task_runner_;
-
-  DISALLOW_COPY_AND_ASSIGN(VideoCaptureServiceImpl);
 };
 
 }  // namespace video_capture

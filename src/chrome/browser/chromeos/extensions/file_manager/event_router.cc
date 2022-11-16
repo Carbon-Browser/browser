@@ -6,33 +6,49 @@
 
 #include <stddef.h>
 
+#include <cmath>
 #include <memory>
 #include <set>
 #include <utility>
+#include <vector>
 
+#include "ash/components/arc/arc_prefs.h"
+#include "ash/components/disks/disk.h"
 #include "ash/components/drivefs/drivefs_host.h"
+#include "ash/constants/ash_features.h"
+#include "ash/constants/ash_pref_names.h"
 #include "ash/public/cpp/tablet_mode.h"
+#include "ash/webui/file_manager/file_manager_ui.h"
 #include "base/bind.h"
 #include "base/command_line.h"
+#include "base/containers/adapters.h"
 #include "base/containers/contains.h"
 #include "base/files/file_util.h"
+#include "base/metrics/histogram.h"
+#include "base/metrics/histogram_macros.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
 #include "chrome/browser/app_mode/app_mode_utils.h"
+#include "chrome/browser/apps/app_service/app_service_proxy.h"
+#include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
 #include "chrome/browser/ash/arc/arc_util.h"
 #include "chrome/browser/ash/crostini/crostini_pref_names.h"
 #include "chrome/browser/ash/drive/drive_integration_service.h"
 #include "chrome/browser/ash/drive/file_system_util.h"
 #include "chrome/browser/ash/file_manager/app_id.h"
 #include "chrome/browser/ash/file_manager/fileapi_util.h"
+#include "chrome/browser/ash/file_manager/io_task.h"
 #include "chrome/browser/ash/file_manager/open_util.h"
 #include "chrome/browser/ash/file_manager/path_util.h"
 #include "chrome/browser/ash/file_manager/volume_manager.h"
+#include "chrome/browser/ash/file_system_provider/provided_file_system_info.h"
+#include "chrome/browser/ash/guest_os/public/guest_os_service.h"
 #include "chrome/browser/ash/login/lock/screen_locker.h"
 #include "chrome/browser/ash/login/ui/login_display_host.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_features.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_pref_names.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_util.h"
+#include "chrome/browser/chromeos/extensions/file_manager/file_system_provider_metrics_util.h"
 #include "chrome/browser/chromeos/extensions/file_manager/private_api_util.h"
 #include "chrome/browser/extensions/api/file_system/chrome_file_system_delegate.h"
 #include "chrome/browser/extensions/extension_service.h"
@@ -41,14 +57,14 @@
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/pref_names.h"
+#include "chromeos/components/disks/disks_prefs.h"
 #include "chromeos/dbus/power/power_manager_client.h"
-#include "chromeos/disks/disk.h"
 #include "chromeos/login/login_state/login_state.h"
-#include "components/arc/arc_prefs.h"
 #include "components/arc/intent_helper/arc_intent_helper_bridge.h"
 #include "components/drive/drive_pref_names.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_service.h"
+#include "components/services/app_service/public/cpp/app_registry_cache.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/network_service_instance.h"
 #include "content/public/browser/render_process_host.h"
@@ -61,8 +77,8 @@
 #include "storage/common/file_system/file_system_types.h"
 #include "storage/common/file_system/file_system_util.h"
 
-using chromeos::disks::Disk;
-using chromeos::disks::DiskMountManager;
+using ::ash::disks::Disk;
+using ::ash::disks::DiskMountManager;
 using content::BrowserThread;
 using drive::DriveIntegrationService;
 using drive::DriveIntegrationServiceFactory;
@@ -77,6 +93,11 @@ namespace {
 // Frequency of sending onFileTransferUpdated.
 const int64_t kProgressEventFrequencyInMilliseconds = 1000;
 
+// Whether Files SWA has any open windows.
+bool DoFilesSwaWindowsExist(Profile* profile) {
+  return ash::file_manager::FileManagerUI::GetNumInstances() != 0;
+}
+
 // Checks if the Recovery Tool is running. This is a temporary solution.
 // TODO(mtomasz): Replace with crbug.com/341902 solution.
 bool IsRecoveryToolRunning(Profile* profile) {
@@ -90,7 +111,7 @@ bool IsRecoveryToolRunning(Profile* profile) {
       "jndclpdbaamdhonoechobihbbiimdgai"   // Recovery tool prod
   };
 
-  for (size_t i = 0; i < base::size(kRecoveryToolIds); ++i) {
+  for (size_t i = 0; i < std::size(kRecoveryToolIds); ++i) {
     const std::string extension_id = kRecoveryToolIds[i];
     if (extension_prefs->IsExtensionRunning(extension_id))
       return true;
@@ -103,7 +124,7 @@ bool IsRecoveryToolRunning(Profile* profile) {
 void BroadcastEvent(Profile* profile,
                     extensions::events::HistogramValue histogram_value,
                     const std::string& event_name,
-                    std::vector<base::Value> event_args) {
+                    base::Value::List event_args) {
   extensions::EventRouter::Get(profile)->BroadcastEvent(
       std::make_unique<extensions::Event>(histogram_value, event_name,
                                           std::move(event_args)));
@@ -116,95 +137,83 @@ void DispatchEventToExtension(
     const std::string& extension_id,
     extensions::events::HistogramValue histogram_value,
     const std::string& event_name,
-    std::vector<base::Value> event_args) {
+    base::Value::List event_args) {
   extensions::EventRouter::Get(profile)->DispatchEventToExtension(
       extension_id, std::make_unique<extensions::Event>(
                         histogram_value, event_name, std::move(event_args)));
 }
 
-file_manager_private::MountCompletedStatus
-MountErrorToMountCompletedStatus(chromeos::MountError error) {
-  switch (error) {
-    case chromeos::MOUNT_ERROR_NONE:
-      return file_manager_private::MOUNT_COMPLETED_STATUS_SUCCESS;
-    case chromeos::MOUNT_ERROR_UNKNOWN:
-      return file_manager_private::MOUNT_COMPLETED_STATUS_ERROR_UNKNOWN;
-    case chromeos::MOUNT_ERROR_INTERNAL:
-      return file_manager_private::MOUNT_COMPLETED_STATUS_ERROR_INTERNAL;
-    case chromeos::MOUNT_ERROR_INVALID_ARGUMENT:
-      return file_manager_private::
-          MOUNT_COMPLETED_STATUS_ERROR_INVALID_ARGUMENT;
-    case chromeos::MOUNT_ERROR_INVALID_PATH:
-      return file_manager_private::MOUNT_COMPLETED_STATUS_ERROR_INVALID_PATH;
-    case chromeos::MOUNT_ERROR_PATH_ALREADY_MOUNTED:
-      return file_manager_private::
-          MOUNT_COMPLETED_STATUS_ERROR_PATH_ALREADY_MOUNTED;
-    case chromeos::MOUNT_ERROR_PATH_NOT_MOUNTED:
-      return file_manager_private::
-          MOUNT_COMPLETED_STATUS_ERROR_PATH_NOT_MOUNTED;
-    case chromeos::MOUNT_ERROR_DIRECTORY_CREATION_FAILED:
-      return file_manager_private::
-          MOUNT_COMPLETED_STATUS_ERROR_DIRECTORY_CREATION_FAILED;
-    case chromeos::MOUNT_ERROR_INVALID_MOUNT_OPTIONS:
-      return file_manager_private::
-          MOUNT_COMPLETED_STATUS_ERROR_INVALID_MOUNT_OPTIONS;
-    case chromeos::MOUNT_ERROR_INVALID_UNMOUNT_OPTIONS:
-      return file_manager_private::
-          MOUNT_COMPLETED_STATUS_ERROR_INVALID_UNMOUNT_OPTIONS;
-    case chromeos::MOUNT_ERROR_INSUFFICIENT_PERMISSIONS:
-      return file_manager_private::
-          MOUNT_COMPLETED_STATUS_ERROR_INSUFFICIENT_PERMISSIONS;
-    case chromeos::MOUNT_ERROR_MOUNT_PROGRAM_NOT_FOUND:
-      return file_manager_private::
-          MOUNT_COMPLETED_STATUS_ERROR_MOUNT_PROGRAM_NOT_FOUND;
-    case chromeos::MOUNT_ERROR_MOUNT_PROGRAM_FAILED:
-      return file_manager_private::
-          MOUNT_COMPLETED_STATUS_ERROR_MOUNT_PROGRAM_FAILED;
-    case chromeos::MOUNT_ERROR_INVALID_DEVICE_PATH:
-      return file_manager_private::
-          MOUNT_COMPLETED_STATUS_ERROR_INVALID_DEVICE_PATH;
-    case chromeos::MOUNT_ERROR_UNKNOWN_FILESYSTEM:
-      return file_manager_private::
-          MOUNT_COMPLETED_STATUS_ERROR_UNKNOWN_FILESYSTEM;
-    case chromeos::MOUNT_ERROR_UNSUPPORTED_FILESYSTEM:
-      return file_manager_private::
-          MOUNT_COMPLETED_STATUS_ERROR_UNSUPPORTED_FILESYSTEM;
-    case chromeos::MOUNT_ERROR_INVALID_ARCHIVE:
-      return file_manager_private::MOUNT_COMPLETED_STATUS_ERROR_INVALID_ARCHIVE;
-    case chromeos::MOUNT_ERROR_NEED_PASSWORD:
-      return file_manager_private::MOUNT_COMPLETED_STATUS_ERROR_NEED_PASSWORD;
-    // Not a real error.
-    case chromeos::MOUNT_ERROR_COUNT:
-      NOTREACHED();
-  }
-  NOTREACHED();
-  return file_manager_private::MOUNT_COMPLETED_STATUS_NONE;
-}
-
 file_manager_private::CopyOrMoveProgressStatusType
 CopyOrMoveProgressTypeToCopyOrMoveProgressStatusType(
-    storage::FileSystemOperation::CopyOrMoveProgressType type) {
+    FileManagerCopyOrMoveHookDelegate::ProgressType type) {
   switch (type) {
-    case storage::FileSystemOperation::CopyOrMoveProgressType::kBegin:
+    case FileManagerCopyOrMoveHookDelegate::ProgressType::kBegin:
       return file_manager_private::COPY_OR_MOVE_PROGRESS_STATUS_TYPE_BEGIN;
-    case storage::FileSystemOperation::CopyOrMoveProgressType::kProgress:
+    case FileManagerCopyOrMoveHookDelegate::ProgressType::kProgress:
       return file_manager_private::COPY_OR_MOVE_PROGRESS_STATUS_TYPE_PROGRESS;
-    case storage::FileSystemOperation::CopyOrMoveProgressType::kEndCopy:
+    case FileManagerCopyOrMoveHookDelegate::ProgressType::kEndCopy:
       return file_manager_private::COPY_OR_MOVE_PROGRESS_STATUS_TYPE_END_COPY;
-    case storage::FileSystemOperation::CopyOrMoveProgressType::kEndMove:
+    case FileManagerCopyOrMoveHookDelegate::ProgressType::kEndMove:
       return file_manager_private::COPY_OR_MOVE_PROGRESS_STATUS_TYPE_END_MOVE;
-    case storage::FileSystemOperation::CopyOrMoveProgressType::kEndRemoveSource:
+    case FileManagerCopyOrMoveHookDelegate::ProgressType::kEndRemoveSource:
       return file_manager_private::
           COPY_OR_MOVE_PROGRESS_STATUS_TYPE_END_REMOVE_SOURCE;
-    case storage::FileSystemOperation::CopyOrMoveProgressType::kError:
+    case FileManagerCopyOrMoveHookDelegate::ProgressType::kError:
       return file_manager_private::COPY_OR_MOVE_PROGRESS_STATUS_TYPE_ERROR;
   }
   NOTREACHED();
   return file_manager_private::COPY_OR_MOVE_PROGRESS_STATUS_TYPE_NONE;
 }
 
+// Convert the IO Task State enum to the Private API enum.
+file_manager_private::IOTaskState GetIOTaskState(
+    file_manager::io_task::State state) {
+  switch (state) {
+    case file_manager::io_task::State::kQueued:
+      return file_manager_private::IO_TASK_STATE_QUEUED;
+    case file_manager::io_task::State::kInProgress:
+      return file_manager_private::IO_TASK_STATE_IN_PROGRESS;
+    case file_manager::io_task::State::kSuccess:
+      return file_manager_private::IO_TASK_STATE_SUCCESS;
+    case file_manager::io_task::State::kError:
+      return file_manager_private::IO_TASK_STATE_ERROR;
+    case file_manager::io_task::State::kNeedPassword:
+      return file_manager_private::IO_TASK_STATE_NEED_PASSWORD;
+    case file_manager::io_task::State::kCancelled:
+      return file_manager_private::IO_TASK_STATE_CANCELLED;
+    default:
+      NOTREACHED();
+      return file_manager_private::IO_TASK_STATE_ERROR;
+  }
+}
+
+// Convert the IO Task Type enum to the Private API enum.
+file_manager_private::IOTaskType GetIOTaskType(
+    file_manager::io_task::OperationType type) {
+  switch (type) {
+    case file_manager::io_task::OperationType::kCopy:
+      return file_manager_private::IO_TASK_TYPE_COPY;
+    case file_manager::io_task::OperationType::kDelete:
+      return file_manager_private::IO_TASK_TYPE_DELETE;
+    case file_manager::io_task::OperationType::kEmptyTrash:
+      return file_manager_private::IO_TASK_TYPE_EMPTY_TRASH;
+    case file_manager::io_task::OperationType::kExtract:
+      return file_manager_private::IO_TASK_TYPE_EXTRACT;
+    case file_manager::io_task::OperationType::kMove:
+      return file_manager_private::IO_TASK_TYPE_MOVE;
+    case file_manager::io_task::OperationType::kRestore:
+      return file_manager_private::IO_TASK_TYPE_RESTORE;
+    case file_manager::io_task::OperationType::kTrash:
+      return file_manager_private::IO_TASK_TYPE_TRASH;
+    case file_manager::io_task::OperationType::kZip:
+      return file_manager_private::IO_TASK_TYPE_ZIP;
+    default:
+      NOTREACHED();
+      return file_manager_private::IO_TASK_TYPE_COPY;
+  }
+}
+
 std::string FileErrorToErrorName(base::File::Error error_code) {
-  namespace js = extensions::api::file_manager_private;
   switch (error_code) {
     case base::File::FILE_ERROR_NOT_FOUND:
       return "NotFoundError";
@@ -279,7 +288,7 @@ bool ShouldShowNotificationForVolume(
   // If the disable-default-apps flag is on, the Files app is not opened
   // automatically on device mount not to obstruct the manual test.
   if (base::CommandLine::ForCurrentProcess()->HasSwitch(
-          switches::kDisablePreinstalledApps)) {
+          switches::kDisableDefaultApps)) {
     return false;
   }
 
@@ -305,26 +314,15 @@ bool ShouldShowNotificationForVolume(
   return true;
 }
 
-std::set<std::string> GetEventListenerExtensionIds(
-    Profile* profile,
-    const std::string& event_name) {
-  const extensions::EventListenerMap::ListenerList& listeners =
-      extensions::EventRouter::Get(profile)
-          ->listeners()
-          .GetEventListenersByName(event_name);
-  std::set<std::string> extension_ids;
-  for (const auto& listener : listeners) {
-    extension_ids.insert(listener->extension_id());
-  }
-  return extension_ids;
-}
-
 // Sub-part of the event router for handling device events.
 class DeviceEventRouterImpl : public DeviceEventRouter {
  public:
   DeviceEventRouterImpl(SystemNotificationManager* notification_manager,
                         Profile* profile)
       : DeviceEventRouter(notification_manager), profile_(profile) {}
+
+  DeviceEventRouterImpl(const DeviceEventRouterImpl&) = delete;
+  DeviceEventRouterImpl& operator=(const DeviceEventRouterImpl&) = delete;
 
   // DeviceEventRouter overrides.
   void OnDeviceEvent(file_manager_private::DeviceEventType type,
@@ -348,13 +346,12 @@ class DeviceEventRouterImpl : public DeviceEventRouter {
   // DeviceEventRouter overrides.
   bool IsExternalStorageDisabled() override {
     DCHECK_CURRENTLY_ON(BrowserThread::UI);
-    return profile_->GetPrefs()->GetBoolean(prefs::kExternalStorageDisabled);
+    return profile_->GetPrefs()->GetBoolean(
+        disks::prefs::kExternalStorageDisabled);
   }
 
  private:
   Profile* const profile_;
-
-  DISALLOW_COPY_AND_ASSIGN(DeviceEventRouterImpl);
 };
 
 class DriveFsEventRouterImpl : public DriveFsEventRouter {
@@ -385,6 +382,12 @@ class DriveFsEventRouterImpl : public DriveFsEventRouter {
       } else {
         urls.insert(listener->listener_url());
       }
+    }
+    // In SWA, there may not be a window open to listen to the event, so always
+    // add the File Manager URL so events can be sent to the
+    // SystemNotificationManager.
+    if (ash::features::IsFileManagerSwaEnabled()) {
+      urls.insert(file_manager::util::GetFileManagerURL());
     }
     return urls;
   }
@@ -419,7 +422,7 @@ class DriveFsEventRouterImpl : public DriveFsEventRouter {
 
   void BroadcastEvent(extensions::events::HistogramValue histogram_value,
                       const std::string& event_name,
-                      std::vector<base::Value> event_args) override {
+                      base::Value::List event_args) override {
     std::unique_ptr<extensions::Event> event =
         std::make_unique<extensions::Event>(histogram_value, event_name,
                                             std::move(event_args));
@@ -432,7 +435,117 @@ class DriveFsEventRouterImpl : public DriveFsEventRouter {
       file_watchers_;
 };
 
+// Observes App Service and notifies Files app when there are any changes in the
+// apps which might affect which file tasks are currently available, e.g. when
+// an app is installed or uninstalled.
+class RecalculateTasksObserver : public apps::AppRegistryCache::Observer {
+ public:
+  explicit RecalculateTasksObserver(Profile* profile) : profile_(profile) {}
+
+  // Tell Files app frontend that file tasks might have changed.
+  void OnAppUpdate(const apps::AppUpdate& update) override {
+    // TODO(petermarshall): Filter update more carefully.
+    BroadcastEvent(profile_,
+                   extensions::events::FILE_MANAGER_PRIVATE_ON_APPS_UPDATED,
+                   file_manager_private::OnAppsUpdated::kEventName,
+                   file_manager_private::OnAppsUpdated::Create());
+  }
+
+  void OnAppRegistryCacheWillBeDestroyed(
+      apps::AppRegistryCache* cache) override {
+    apps::AppRegistryCache::Observer::Observe(nullptr);
+  }
+
+ private:
+  Profile* profile_;
+};
+
+// Records mounted File System Provider type if known otherwise UNKNOWN.
+void RecordFileSystemProviderMountMetrics(const Volume& volume) {
+  const ash::file_system_provider::ProviderId& provider_id =
+      volume.provider_id();
+  if (provider_id.GetType() != ash::file_system_provider::ProviderId::INVALID) {
+    using FileSystemProviderMountedTypeMap =
+        std::unordered_map<std::string, FileSystemProviderMountedType>;
+
+    const std::string fsp_key = provider_id.ToString();
+    FileSystemProviderMountedTypeMap fsp_sample_map =
+        GetUmaForFileSystemProvider();
+    FileSystemProviderMountedTypeMap::iterator sample =
+        fsp_sample_map.find(fsp_key);
+    if (sample != fsp_sample_map.end())
+      UMA_HISTOGRAM_ENUMERATION(kFileSystemProviderMountedMetricName,
+                                sample->second);
+    else
+      UMA_HISTOGRAM_ENUMERATION(kFileSystemProviderMountedMetricName,
+                                FileSystemProviderMountedType::UNKNOWN);
+  }
+}
+
 }  // namespace
+
+file_manager_private::MountCompletedStatus MountErrorToMountCompletedStatus(
+    chromeos::MountError error) {
+  switch (error) {
+    case chromeos::MOUNT_ERROR_NONE:
+      return file_manager_private::MOUNT_COMPLETED_STATUS_SUCCESS;
+    case chromeos::MOUNT_ERROR_UNKNOWN:
+      return file_manager_private::MOUNT_COMPLETED_STATUS_ERROR_UNKNOWN;
+    case chromeos::MOUNT_ERROR_INTERNAL:
+      return file_manager_private::MOUNT_COMPLETED_STATUS_ERROR_INTERNAL;
+    case chromeos::MOUNT_ERROR_INVALID_ARGUMENT:
+      return file_manager_private::
+          MOUNT_COMPLETED_STATUS_ERROR_INVALID_ARGUMENT;
+    case chromeos::MOUNT_ERROR_INVALID_PATH:
+      return file_manager_private::MOUNT_COMPLETED_STATUS_ERROR_INVALID_PATH;
+    case chromeos::MOUNT_ERROR_PATH_ALREADY_MOUNTED:
+      return file_manager_private::
+          MOUNT_COMPLETED_STATUS_ERROR_PATH_ALREADY_MOUNTED;
+    case chromeos::MOUNT_ERROR_PATH_NOT_MOUNTED:
+      return file_manager_private::
+          MOUNT_COMPLETED_STATUS_ERROR_PATH_NOT_MOUNTED;
+    case chromeos::MOUNT_ERROR_DIRECTORY_CREATION_FAILED:
+      return file_manager_private::
+          MOUNT_COMPLETED_STATUS_ERROR_DIRECTORY_CREATION_FAILED;
+    case chromeos::MOUNT_ERROR_INVALID_MOUNT_OPTIONS:
+      return file_manager_private::
+          MOUNT_COMPLETED_STATUS_ERROR_INVALID_MOUNT_OPTIONS;
+    case chromeos::MOUNT_ERROR_INVALID_UNMOUNT_OPTIONS:
+      return file_manager_private::
+          MOUNT_COMPLETED_STATUS_ERROR_INVALID_UNMOUNT_OPTIONS;
+    case chromeos::MOUNT_ERROR_INSUFFICIENT_PERMISSIONS:
+      return file_manager_private::
+          MOUNT_COMPLETED_STATUS_ERROR_INSUFFICIENT_PERMISSIONS;
+    case chromeos::MOUNT_ERROR_MOUNT_PROGRAM_NOT_FOUND:
+      return file_manager_private::
+          MOUNT_COMPLETED_STATUS_ERROR_MOUNT_PROGRAM_NOT_FOUND;
+    case chromeos::MOUNT_ERROR_MOUNT_PROGRAM_FAILED:
+      return file_manager_private::
+          MOUNT_COMPLETED_STATUS_ERROR_MOUNT_PROGRAM_FAILED;
+    case chromeos::MOUNT_ERROR_INVALID_DEVICE_PATH:
+      return file_manager_private::
+          MOUNT_COMPLETED_STATUS_ERROR_INVALID_DEVICE_PATH;
+    case chromeos::MOUNT_ERROR_UNKNOWN_FILESYSTEM:
+      return file_manager_private::
+          MOUNT_COMPLETED_STATUS_ERROR_UNKNOWN_FILESYSTEM;
+    case chromeos::MOUNT_ERROR_UNSUPPORTED_FILESYSTEM:
+      return file_manager_private::
+          MOUNT_COMPLETED_STATUS_ERROR_UNSUPPORTED_FILESYSTEM;
+    case chromeos::MOUNT_ERROR_INVALID_ARCHIVE:
+      return file_manager_private::MOUNT_COMPLETED_STATUS_ERROR_INVALID_ARCHIVE;
+    case chromeos::MOUNT_ERROR_NEED_PASSWORD:
+      return file_manager_private::MOUNT_COMPLETED_STATUS_ERROR_NEED_PASSWORD;
+    case chromeos::MOUNT_ERROR_IN_PROGRESS:
+      return file_manager_private::MOUNT_COMPLETED_STATUS_ERROR_IN_PROGRESS;
+    case chromeos::MOUNT_ERROR_CANCELLED:
+      return file_manager_private::MOUNT_COMPLETED_STATUS_ERROR_CANCELLED;
+    // Not a real error.
+    case chromeos::MOUNT_ERROR_COUNT:
+      NOTREACHED();
+  }
+  NOTREACHED();
+  return file_manager_private::MOUNT_COMPLETED_STATUS_NONE;
+}
 
 EventRouter::EventRouter(Profile* profile)
     : pref_change_registrar_(std::make_unique<PrefChangeRegistrar>()),
@@ -446,6 +559,8 @@ EventRouter::EventRouter(Profile* profile)
           std::make_unique<DriveFsEventRouterImpl>(notification_manager_.get(),
                                                    profile,
                                                    &file_watchers_)),
+      recalculate_tasks_observer_(
+          std::make_unique<RecalculateTasksObserver>(profile)),
       dispatch_directory_change_event_impl_(
           base::BindRepeating(&EventRouter::DispatchDirectoryChangeEventImpl,
                               base::Unretained(this))) {
@@ -478,7 +593,7 @@ void EventRouter::Shutdown() {
   if (intent_helper)
     intent_helper->RemoveObserver(this);
 
-  chromeos::system::TimezoneSettings::GetInstance()->RemoveObserver(this);
+  ash::system::TimezoneSettings::GetInstance()->RemoveObserver(this);
 
   DLOG_IF(WARNING, !file_watchers_.empty())
       << "Not all file watchers are "
@@ -505,11 +620,27 @@ void EventRouter::Shutdown() {
   if (volume_manager) {
     volume_manager->RemoveObserver(this);
     volume_manager->RemoveObserver(device_event_router_.get());
+    auto* io_task_controller = volume_manager->io_task_controller();
+    if (io_task_controller)
+      io_task_controller->RemoveObserver(this);
   }
 
   chromeos::PowerManagerClient* const power_manager_client =
       chromeos::PowerManagerClient::Get();
   power_manager_client->RemoveObserver(device_event_router_.get());
+
+  if (base::FeatureList::IsEnabled(chromeos::features::kGuestOsFiles)) {
+    auto* registry = guest_os::GuestOsService::GetForProfile(profile_)
+                         ->MountProviderRegistry();
+    registry->RemoveObserver(this);
+  }
+
+  if (apps::AppServiceProxyFactory::IsAppServiceAvailableForProfile(profile_)) {
+    apps::AppServiceProxy* proxy =
+        apps::AppServiceProxyFactory::GetForProfile(profile_);
+    DCHECK(proxy);
+    proxy->AppRegistryCache().RemoveObserver(recalculate_tasks_observer_.get());
+  }
 
   profile_ = nullptr;
 }
@@ -532,6 +663,11 @@ void EventRouter::ObserveEvents() {
   if (volume_manager) {
     volume_manager->AddObserver(this);
     volume_manager->AddObserver(device_event_router_.get());
+    auto* io_task_controller = volume_manager->io_task_controller();
+    if (io_task_controller) {
+      io_task_controller->AddObserver(this);
+      notification_manager_->SetIOTaskController(io_task_controller);
+    }
   }
 
   chromeos::PowerManagerClient* const power_manager_client =
@@ -571,6 +707,7 @@ void EventRouter::ObserveEvents() {
   pref_change_registrar_->Add(arc::prefs::kArcEnabled, callback);
   pref_change_registrar_->Add(arc::prefs::kArcHasAccessToRemovableMedia,
                               callback);
+  pref_change_registrar_->Add(ash::prefs::kFilesAppFolderShortcuts, callback);
 
   auto plugin_vm_callback = base::BindRepeating(&EventRouter::OnPluginVmChanged,
                                                 weak_factory_.GetWeakPtr());
@@ -582,7 +719,7 @@ void EventRouter::ObserveEvents() {
   pref_change_registrar_->Add(plugin_vm::prefs::kPluginVmImageExists,
                               plugin_vm_callback);
 
-  chromeos::system::TimezoneSettings::GetInstance()->AddObserver(this);
+  ash::system::TimezoneSettings::GetInstance()->AddObserver(this);
 
   auto* intent_helper =
       arc::ArcIntentHelperBridge::GetForBrowserContext(profile_);
@@ -597,6 +734,19 @@ void EventRouter::ObserveEvents() {
   ash::TabletMode* tablet_mode = ash::TabletMode::Get();
   if (tablet_mode)
     tablet_mode->AddObserver(this);
+
+  if (base::FeatureList::IsEnabled(chromeos::features::kGuestOsFiles)) {
+    auto* registry = guest_os::GuestOsService::GetForProfile(profile_)
+                         ->MountProviderRegistry();
+    registry->AddObserver(this);
+  }
+
+  if (apps::AppServiceProxyFactory::IsAppServiceAvailableForProfile(profile_)) {
+    apps::AppServiceProxy* proxy =
+        apps::AppServiceProxyFactory::GetForProfile(profile_);
+    DCHECK(proxy);
+    proxy->AppRegistryCache().AddObserver(recalculate_tasks_observer_.get());
+  }
 }
 
 // File watch setup routines.
@@ -685,7 +835,7 @@ void EventRouter::OnCopyCompleted(int copy_id,
 
 void EventRouter::OnCopyProgress(
     int copy_id,
-    storage::FileSystemOperation::CopyOrMoveProgressType type,
+    FileManagerCopyOrMoveHookDelegate::ProgressType type,
     const GURL& source_url,
     const GURL& destination_url,
     int64_t size) {
@@ -694,27 +844,28 @@ void EventRouter::OnCopyProgress(
   file_manager_private::CopyOrMoveProgressStatus status;
   status.type = CopyOrMoveProgressTypeToCopyOrMoveProgressStatusType(type);
   status.source_url = std::make_unique<std::string>(source_url.spec());
-  if (type == storage::FileSystemOperation::CopyOrMoveProgressType::kError) {
+  if (type == FileManagerCopyOrMoveHookDelegate::ProgressType::kError) {
     // For cross-filesystems moves, no destination_url is provided when an error
     // occurs. This translates into to a non-valid destination GURL.
     // status.destination_url should never be used in this case.
     status.destination_url =
         std::make_unique<std::string>(destination_url.possibly_invalid_spec());
-  } else if (type != storage::FileSystemOperation::CopyOrMoveProgressType::
+  } else if (type != FileManagerCopyOrMoveHookDelegate::ProgressType::
                          kEndRemoveSource) {
     status.destination_url =
         std::make_unique<std::string>(destination_url.spec());
   }
 
-  if (type == storage::FileSystemOperation::CopyOrMoveProgressType::kError)
+  if (type == FileManagerCopyOrMoveHookDelegate::ProgressType::kError) {
     status.error = std::make_unique<std::string>(
         FileErrorToErrorName(base::File::FILE_ERROR_FAILED));
-  if (type == storage::FileSystemOperation::CopyOrMoveProgressType::kProgress)
+  }
+  if (type == FileManagerCopyOrMoveHookDelegate::ProgressType::kProgress)
     status.size = std::make_unique<double>(size);
 
   // Discard error progress since current JS code cannot handle this properly.
   // TODO(yawano): Remove this after JS side is implemented correctly.
-  if (type == storage::FileSystemOperation::CopyOrMoveProgressType::kError)
+  if (type == FileManagerCopyOrMoveHookDelegate::ProgressType::kError)
     return;
 
   // Should not skip events other than TYPE_PROGRESS.
@@ -829,13 +980,13 @@ void EventRouter::DispatchDirectoryChangeEventWithEntryDefinition(
                          ? file_manager_private::FILE_WATCH_EVENT_TYPE_ERROR
                          : file_manager_private::FILE_WATCH_EVENT_TYPE_CHANGED;
 
-  event.entry.additional_properties.SetString(
+  event.entry.additional_properties.SetStringKey(
       "fileSystemName", entry_definition.file_system_name);
-  event.entry.additional_properties.SetString(
+  event.entry.additional_properties.SetStringKey(
       "fileSystemRoot", entry_definition.file_system_root_url);
-  event.entry.additional_properties.SetString(
+  event.entry.additional_properties.SetStringKey(
       "fileFullPath", "/" + entry_definition.full_path.value());
-  event.entry.additional_properties.SetBoolean("fileIsDirectory",
+  event.entry.additional_properties.SetBoolKey("fileIsDirectory",
                                                entry_definition.is_directory);
 
   BroadcastEvent(profile_,
@@ -878,6 +1029,11 @@ void EventRouter::OnVolumeMounted(chromeos::MountError error_code,
       file_manager_private::MOUNT_COMPLETED_EVENT_TYPE_MOUNT, error_code,
       volume);
 
+  // If the Files SWA is enabled, record the UMA metrics for mounted FSPs.
+  if (ash::features::IsFileManagerSwaEnabled()) {
+    RecordFileSystemProviderMountMetrics(volume);
+  }
+
   // TODO(mtomasz): Move VolumeManager and part of the event router outside of
   // file_manager, so there is no dependency between File System API and the
   // file_manager code.
@@ -890,6 +1046,11 @@ void EventRouter::OnVolumeUnmounted(chromeos::MountError error_code,
   DispatchMountCompletedEvent(
       file_manager_private::MOUNT_COMPLETED_EVENT_TYPE_UNMOUNT, error_code,
       volume);
+
+  // TODO(mtomasz): Move VolumeManager and part of the event router outside of
+  // file_manager, so there is no dependency between File System API and the
+  // file_manager code.
+  extensions::file_system_api::DispatchVolumeListChangeEvent(profile_);
 }
 
 void EventRouter::DispatchMountCompletedEvent(
@@ -1026,12 +1187,12 @@ void EventRouter::PopulateCrostiniEvent(
   event.event_type = event_type;
   event.vm_name = vm_name;
   file_manager_private::CrostiniEvent::EntriesType entry;
-  entry.additional_properties.SetString(
+  entry.additional_properties.SetStringKey(
       "fileSystemRoot",
       storage::GetExternalFileSystemRootURIString(origin.GetURL(), mount_name));
-  entry.additional_properties.SetString("fileSystemName", file_system_name);
-  entry.additional_properties.SetString("fileFullPath", full_path);
-  entry.additional_properties.SetBoolean("fileIsDirectory", true);
+  entry.additional_properties.SetStringKey("fileSystemName", file_system_name);
+  entry.additional_properties.SetStringKey("fileFullPath", full_path);
+  entry.additional_properties.SetBoolKey("fileIsDirectory", true);
   event.entries.emplace_back(std::move(entry));
 }
 
@@ -1126,6 +1287,193 @@ void EventRouter::OnDriveDialogResult(drivefs::mojom::DialogResult result) {
 
 base::WeakPtr<EventRouter> EventRouter::GetWeakPtr() {
   return weak_factory_.GetWeakPtr();
+}
+
+void EventRouter::OnIOTaskStatus(const io_task::ProgressStatus& status) {
+  // Send the progress report to the system notification regardless of whether
+  // Files app window exists as we may need to remove an existing
+  // notification.
+  notification_manager_->HandleIOTaskProgress(status);
+  if (!DoFilesSwaWindowsExist(profile_) && !force_broadcasting_for_testing_) {
+    return;
+  }
+
+  // Send file watch notifications on I/O task completion. inotify is flaky on
+  // some filesystems, so send these notifications so that at least operations
+  // made from Files App are always reflected in the UI.
+  if (status.IsCompleted()) {
+    std::set<base::FilePath> updated_paths;
+    if (status.destination_folder.is_valid()) {
+      updated_paths.insert(status.destination_folder.path());
+    }
+    for (const auto& source : status.sources) {
+      updated_paths.insert(source.url.path().DirName());
+    }
+    for (const auto& output : status.outputs) {
+      updated_paths.insert(output.url.path().DirName());
+    }
+
+    for (const auto& path : updated_paths) {
+      HandleFileWatchNotification(path, false);
+    }
+  }
+
+  // If any Files app window exists we send the progress to all of them.
+  file_manager_private::ProgressStatus event_status;
+  event_status.task_id = status.task_id;
+  event_status.type = GetIOTaskType(status.type);
+  event_status.state = GetIOTaskState(status.state);
+
+  // Speedometer can produce infinite result which can't be serialized to JSON
+  // when sending the status via private API.
+  if (std::isfinite(status.remaining_seconds)) {
+    event_status.remaining_seconds = status.remaining_seconds;
+  }
+
+  if (status.destination_folder.is_valid()) {
+    event_status.destination_name =
+        util::GetDisplayablePath(profile_, status.destination_folder)
+            .value_or(base::FilePath())
+            .BaseName()
+            .value();
+  }
+
+  size_t processed = 0;
+  std::vector<storage::FileSystemURL> outputs;
+  for (const auto& file_status : status.outputs) {
+    if (file_status.error) {
+      if (status.type == file_manager::io_task::OperationType::kTrash &&
+          file_status.error.value() == base::File::FILE_OK) {
+        // These entries are currently used to undo a TrashIOTask so only
+        // consider the successfully trashed files.
+        outputs.push_back(file_status.url);
+      }
+      processed++;
+    }
+  }
+
+  event_status.num_remaining_items = status.sources.size() - processed;
+  event_status.item_count = status.sources.size();
+
+  // Get the last error occurrence in the `sources`.
+  for (const io_task::EntryStatus& source : base::Reversed(status.sources)) {
+    if (source.error && source.error.value() != base::File::FILE_OK) {
+      event_status.error_name = FileErrorToErrorName(source.error.value());
+    }
+  }
+  // If we have no error on 'sources', check if an error came from 'outputs'.
+  if (status.state == io_task::State::kError &&
+      event_status.error_name.empty()) {
+    for (const io_task::EntryStatus& dest : base::Reversed(status.outputs)) {
+      if (dest.error && dest.error.value() != base::File::FILE_OK) {
+        event_status.error_name = FileErrorToErrorName(dest.error.value());
+      }
+    }
+  }
+
+  if (status.sources.size() > 0) {
+    event_status.source_name =
+        util::GetDisplayablePath(profile_, status.sources.front().url)
+            .value_or(base::FilePath())
+            .BaseName()
+            .value();
+  }
+  event_status.bytes_transferred = status.bytes_transferred;
+  event_status.total_bytes = status.total_bytes;
+
+  // The TrashIOTask is the only IOTask that uses the output Entry's, so don't
+  // try to resolve the outputs for all other IOTasks.
+  if (GetIOTaskType(status.type) != file_manager_private::IO_TASK_TYPE_TRASH ||
+      outputs.size() == 0) {
+    BroadcastIOTask(std::move(event_status));
+    return;
+  }
+
+  // All FileSystemURLs in the output come from the same FileSystemContext, so
+  // use the first URL to obtain the context.
+  auto* file_system_context = util::GetFileSystemContextForSourceURL(
+      profile_, outputs[0].origin().GetURL());
+  if (file_system_context == nullptr) {
+    LOG(ERROR) << "Could not find file system context";
+    BroadcastIOTask(std::move(event_status));
+    return;
+  }
+
+  file_manager::util::FileDefinitionList file_definition_list;
+  for (const auto& url : outputs) {
+    file_manager::util::FileDefinition file_definition;
+    if (file_manager::util::ConvertAbsoluteFilePathToRelativeFileSystemPath(
+            profile_, url.origin().GetURL(), url.path(),
+            &file_definition.virtual_path)) {
+      file_definition_list.push_back(std::move(file_definition));
+    }
+  }
+
+  file_manager::util::ConvertFileDefinitionListToEntryDefinitionList(
+      file_system_context, outputs[0].origin(), std::move(file_definition_list),
+      base::BindOnce(
+          &EventRouter::OnConvertFileDefinitionListToEntryDefinitionList,
+          weak_factory_.GetWeakPtr(), std::move(event_status)));
+}
+
+void EventRouter::OnConvertFileDefinitionListToEntryDefinitionList(
+    file_manager_private::ProgressStatus event_status,
+    std::unique_ptr<file_manager::util::EntryDefinitionList>
+        entry_definition_list) {
+  if (entry_definition_list == nullptr) {
+    BroadcastIOTask(std::move(event_status));
+    return;
+  }
+  std::vector<OutputsType> outputs;
+  for (const auto& def : *entry_definition_list) {
+    if (def.error != base::File::FILE_OK) {
+      LOG(WARNING) << "File entry ignored: " << static_cast<int>(def.error);
+      continue;
+    }
+    OutputsType output_entry;
+    output_entry.additional_properties.SetStringKey("fileSystemName",
+                                                    def.file_system_name);
+    output_entry.additional_properties.SetStringKey("fileSystemRoot",
+                                                    def.file_system_root_url);
+    // The `full_path` comes back as relative to the file system root, but the
+    // UI requires it as an absolute path.
+    output_entry.additional_properties.SetStringKey(
+        "fileFullPath", base::FilePath("/").Append(def.full_path).value());
+    output_entry.additional_properties.SetBoolKey("fileIsDirectory",
+                                                  def.is_directory);
+    outputs.push_back(std::move(output_entry));
+  }
+  event_status.outputs =
+      std::make_unique<std::vector<OutputsType>>(std::move(outputs));
+  BroadcastIOTask(std::move(event_status));
+}
+
+void EventRouter::BroadcastIOTask(
+    const file_manager_private::ProgressStatus& event_status) {
+  BroadcastEvent(
+      profile_,
+      extensions::events::FILE_MANAGER_PRIVATE_ON_IO_TASK_PROGRESS_STATUS,
+      file_manager_private::OnIOTaskProgressStatus::kEventName,
+      file_manager_private::OnIOTaskProgressStatus::Create(event_status));
+}
+
+void EventRouter::OnRegistered(guest_os::GuestOsMountProviderRegistry::Id id,
+                               guest_os::GuestOsMountProvider* provider) {
+  OnMountableGuestsChanged();
+}
+
+void EventRouter::OnUnregistered(
+    guest_os::GuestOsMountProviderRegistry::Id id) {
+  OnMountableGuestsChanged();
+}
+
+void EventRouter::OnMountableGuestsChanged() {
+  auto guests = util::CreateMountableGuestList(profile_);
+  BroadcastEvent(
+      profile_,
+      extensions::events::FILE_MANAGER_PRIVATE_ON_IO_TASK_PROGRESS_STATUS,
+      file_manager_private::OnMountableGuestsChanged::kEventName,
+      file_manager_private::OnMountableGuestsChanged::Create(guests));
 }
 
 }  // namespace file_manager

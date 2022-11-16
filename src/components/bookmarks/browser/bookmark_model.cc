@@ -15,9 +15,10 @@
 #include "base/check_op.h"
 #include "base/guid.h"
 #include "base/i18n/string_compare.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
+#include "base/observer_list.h"
 #include "base/strings/string_util.h"
 #include "components/bookmarks/browser/bookmark_expanded_state_tracker.h"
 #include "components/bookmarks/browser/bookmark_load_details.h"
@@ -33,6 +34,7 @@
 #include "components/bookmarks/browser/url_and_title.h"
 #include "components/bookmarks/browser/url_index.h"
 #include "components/bookmarks/common/bookmark_constants.h"
+#include "components/bookmarks/common/bookmark_metrics.h"
 #include "components/favicon_base/favicon_types.h"
 #include "components/strings/grit/components_strings.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -97,6 +99,10 @@ class SortComparator {
 class EmptyUndoDelegate : public BookmarkUndoDelegate {
  public:
   EmptyUndoDelegate() {}
+
+  EmptyUndoDelegate(const EmptyUndoDelegate&) = delete;
+  EmptyUndoDelegate& operator=(const EmptyUndoDelegate&) = delete;
+
   ~EmptyUndoDelegate() override {}
 
  private:
@@ -106,8 +112,6 @@ class EmptyUndoDelegate : public BookmarkUndoDelegate {
                              const BookmarkNode* parent,
                              size_t index,
                              std::unique_ptr<BookmarkNode> node) override {}
-
-  DISALLOW_COPY_AND_ASSIGN(EmptyUndoDelegate);
 };
 
 }  // namespace
@@ -240,7 +244,7 @@ void BookmarkModel::RemoveAllUserBookmarks() {
   DCHECK(loaded_);
   std::set<GURL> removed_urls;
   struct RemoveNodeData {
-    const BookmarkNode* parent;
+    raw_ptr<const BookmarkNode> parent;
     int index;
     std::unique_ptr<BookmarkNode> node;
   };
@@ -320,6 +324,11 @@ void BookmarkModel::Move(const BookmarkNode* node,
 
   for (BookmarkModelObserver& observer : observers_)
     observer.BookmarkNodeMoved(this, old_parent, old_index, new_parent, index);
+}
+
+void BookmarkModel::UpdateLastUsedTime(const BookmarkNode* node,
+                                       base::Time time) {
+  // TODO(crbug.com/1320950): Use this hook to update the relevant field.
 }
 
 void BookmarkModel::Copy(const BookmarkNode* node,
@@ -607,6 +616,18 @@ const BookmarkNode* BookmarkModel::AddFolder(
   return AddNode(AsMutable(parent), index, std::move(new_node));
 }
 
+const BookmarkNode* BookmarkModel::AddNewURL(
+    const BookmarkNode* parent,
+    size_t index,
+    const std::u16string& title,
+    const GURL& url,
+    const BookmarkNode::MetaInfoMap* meta_info) {
+  // TODO(crbug.com/1313299): Record metrics for new bookmarks.
+  // TODO(crbug.com/1332341): Add bookmark_client hook for power bookmarks.
+  return AddURL(parent, index, title, url, meta_info, absl::nullopt,
+                absl::nullopt);
+}
+
 const BookmarkNode* BookmarkModel::AddURL(
     const BookmarkNode* parent,
     size_t index,
@@ -658,9 +679,8 @@ void BookmarkModel::SortChildren(const BookmarkNode* parent) {
   std::unique_ptr<icu::Collator> collator(icu::Collator::createInstance(error));
   if (U_FAILURE(error))
     collator.reset(nullptr);
-  BookmarkNode* mutable_parent = AsMutable(parent);
-  std::sort(mutable_parent->children_.begin(), mutable_parent->children_.end(),
-            SortComparator(collator.get()));
+
+  AsMutable(parent)->SortChildren(SortComparator(collator.get()));
 
   if (store_)
     store_->ScheduleSave();
@@ -688,14 +708,15 @@ void BookmarkModel::ReorderChildren(
     for (size_t i = 0; i < ordered_nodes.size(); ++i)
       order[ordered_nodes[i]] = i;
 
-    std::vector<std::unique_ptr<BookmarkNode>> new_children(
-        ordered_nodes.size());
-    BookmarkNode* mutable_parent = AsMutable(parent);
-    for (auto& child : mutable_parent->children_) {
-      size_t new_location = order[child.get()];
-      new_children[new_location] = std::move(child);
+    std::vector<size_t> new_order(ordered_nodes.size());
+    for (size_t old_index = 0; old_index < parent->children().size();
+         ++old_index) {
+      const BookmarkNode* node = parent->children()[old_index].get();
+      size_t new_index = order[node];
+      new_order[old_index] = new_index;
     }
-    mutable_parent->children_.swap(new_children);
+
+    AsMutable(parent)->ReorderChildren(new_order);
 
     if (store_)
       store_->ScheduleSave();
@@ -809,8 +830,7 @@ void BookmarkModel::DoneLoading(std::unique_ptr<BookmarkLoadDetails> details) {
       std::make_unique<TypedCountSorter>(client_.get()));
   // Sorting the permanent nodes has to happen on the main thread, so we do it
   // here, after loading completes.
-  std::stable_sort(root_->children_.begin(), root_->children_.end(),
-                   VisibilityComparator(client_.get()));
+  root_->SortChildren(VisibilityComparator(client_.get()));
 
   root_->SetMetaInfoMap(details->model_meta_info_map());
 
@@ -820,6 +840,10 @@ void BookmarkModel::DoneLoading(std::unique_ptr<BookmarkLoadDetails> details) {
       store_ ? base::BindRepeating(&BookmarkStorage::ScheduleSave,
                                    base::Unretained(store_.get()))
              : base::DoNothing());
+
+  const base::TimeDelta load_duration =
+      base::TimeTicks::Now() - details->load_start();
+  metrics::RecordTimeToLoadAtStartup(load_duration);
 
   // Notify our direct observers.
   for (BookmarkModelObserver& observer : observers_)
@@ -932,7 +956,7 @@ void BookmarkModel::SetUndoDelegate(BookmarkUndoDelegate* undo_delegate) {
 
 BookmarkUndoDelegate* BookmarkModel::undo_delegate() const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return undo_delegate_ ? undo_delegate_ : empty_undo_delegate_.get();
+  return undo_delegate_ ? undo_delegate_.get() : empty_undo_delegate_.get();
 }
 
 }  // namespace bookmarks

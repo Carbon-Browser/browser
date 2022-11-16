@@ -23,8 +23,13 @@ class GPUBindGroupLayout : public DawnObject<WGPUBindGroupLayout> {
   explicit GPUBindGroupLayout(GPUDevice* device,
                               WGPUBindGroupLayout bind_group_layout);
 
- private:
-  DISALLOW_COPY_AND_ASSIGN(GPUBindGroupLayout);
+  GPUBindGroupLayout(const GPUBindGroupLayout&) = delete;
+  GPUBindGroupLayout& operator=(const GPUBindGroupLayout&) = delete;
+
+  void setLabelImpl(const String& value) override {
+    std::string utf8_label = value.Utf8();
+    GetProcs().bindGroupLayoutSetLabel(GetHandle(), utf8_label.c_str());
+  }
 };
 
 }  // namespace blink

@@ -3,7 +3,6 @@
 // found in the LICENSE file.
 
 import './data_point.js';
-import './diagnostics_fonts_css.js';
 import './diagnostics_shared_css.js';
 
 import {assertNotReached} from 'chrome://resources/js/assert.m.js';
@@ -12,7 +11,7 @@ import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
 import {html, Polymer} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {Network, SecurityType} from './diagnostics_types.js';
-import {getSubnetMaskFromRoutingPrefix} from './diagnostics_utils.js';
+import {getSignalStrength, getSubnetMaskFromRoutingPrefix} from './diagnostics_utils.js';
 import {convertFrequencyToChannel} from './frequency_channel_utils.js';
 
 /**
@@ -39,7 +38,7 @@ Polymer({
      */
     security_: {
       type: String,
-      computed: 'computeSecurity_(network.typeProperties.wifi.security)'
+      computed: 'computeSecurity_(network.typeProperties.wifi.security)',
     },
 
     /**
@@ -49,8 +48,8 @@ Polymer({
     signalStrength_: {
       type: String,
       computed:
-          'computeSignalStrength_(network.typeProperties.wifi.signalStrength)'
-    }
+          'computeSignalStrength_(network.typeProperties.wifi.signalStrength)',
+    },
   },
 
   /**
@@ -102,10 +101,9 @@ Polymer({
    * @return {string}
    */
   computeSignalStrength_() {
-    if (this.network.typeProperties && this.network.typeProperties.wifi &&
-        this.network.typeProperties.wifi.signalStrength > 0) {
-      return `${this.network.typeProperties.wifi.signalStrength}`;
+    if (this.network.typeProperties && this.network.typeProperties.wifi) {
+      return getSignalStrength(this.network.typeProperties.wifi.signalStrength);
     }
     return '';
-  }
+  },
 });

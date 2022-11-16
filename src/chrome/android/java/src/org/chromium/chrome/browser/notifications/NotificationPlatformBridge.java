@@ -540,7 +540,7 @@ public class NotificationPlatformBridge {
         // Delegate notification to WebAPK.
         if (!webApkPackage.isEmpty()) {
             WebApkServiceClient.getInstance().notifyNotification(
-                    webApkPackage, notificationBuilder, notificationId, PLATFORM_ID);
+                    origin, webApkPackage, notificationBuilder, notificationId, PLATFORM_ID);
             return;
         }
 
@@ -568,8 +568,6 @@ public class NotificationPlatformBridge {
                         notification.getNotification());
             } catch (RuntimeException e) {
                 Log.e(TAG, "Failed to send notification, the IPC message might be corrupted.");
-                NotificationUmaTracker.getInstance().onFailedToNotify(
-                        NotificationUmaTracker.SystemNotificationType.SITES);
             }
         };
 

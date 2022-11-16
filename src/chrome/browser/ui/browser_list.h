@@ -12,11 +12,10 @@
 #include "base/callback_forward.h"
 #include "base/containers/flat_set.h"
 #include "base/lazy_instance.h"
-#include "base/macros.h"
 #include "base/observer_list.h"
 #include "build/build_config.h"
 
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 #error This file should only be included on desktop.
 #endif
 
@@ -37,6 +36,9 @@ class BrowserList {
   using CloseCallback = base::RepeatingCallback<void(const base::FilePath&)>;
   using const_iterator = BrowserVector::const_iterator;
   using const_reverse_iterator = BrowserVector::const_reverse_iterator;
+
+  BrowserList(const BrowserList&) = delete;
+  BrowserList& operator=(const BrowserList&) = delete;
 
   // Returns the last active browser for this list.
   Browser* GetLastActive() const;
@@ -197,8 +199,6 @@ class BrowserList {
       base::ObserverList<BrowserListObserver>::Unchecked>::Leaky observers_;
 
   static BrowserList* instance_;
-
-  DISALLOW_COPY_AND_ASSIGN(BrowserList);
 };
 
 #endif  // CHROME_BROWSER_UI_BROWSER_LIST_H_

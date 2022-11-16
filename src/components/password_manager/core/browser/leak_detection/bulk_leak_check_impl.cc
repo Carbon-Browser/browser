@@ -8,7 +8,6 @@
 
 #include "base/check.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/task/post_task.h"
 #include "base/task/thread_pool.h"
 #include "components/password_manager/core/browser/leak_detection/encryption_utils.h"
 #include "components/password_manager/core/browser/leak_detection/leak_detection_delegate_interface.h"
@@ -152,7 +151,7 @@ void BulkLeakCheckImpl::OnTokenReady(
   holder->network_request_ = network_request_factory_->CreateNetworkRequest();
   holder->network_request_->LookupSingleLeak(
       url_loader_factory_.get(), access_token_info.token,
-      std::move(holder->payload),
+      /*api_key=*/absl::nullopt, std::move(holder->payload),
       base::BindOnce(&BulkLeakCheckImpl::OnLookupLeakResponse,
                      weak_ptr_factory_.GetWeakPtr(), holder.get()));
   waiting_response_.push_back(std::move(holder));

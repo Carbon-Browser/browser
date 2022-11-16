@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {getFrameColor} from '../../common/js/api.js';
 import {FilesAppState} from '../../common/js/files_app_state.js';
 import {util} from '../../common/js/util.js';
 
@@ -20,7 +21,7 @@ const launcher = {};
 export const LaunchType = {
   ALWAYS_CREATE: 0,
   FOCUS_ANY_OR_CREATE: 1,
-  FOCUS_SAME_OR_CREATE: 2
+  FOCUS_SAME_OR_CREATE: 2,
 };
 
 /**
@@ -46,11 +47,11 @@ const FILE_MANAGER_WINDOW_CREATE_OPTIONS = {
     // We choose 1000px as default window width to fit 4 columns in grid view,
     // as long as the width doesn't exceed 80% of the screen width.
     width: Math.min(Math.round(window.screen.availWidth * 0.8), 1000),
-    height: Math.min(Math.round(window.screen.availHeight * 0.8), 600)
+    height: Math.min(Math.round(window.screen.availHeight * 0.8), 600),
   },
   frame: {color: '#ffffff'},
   minWidth: 480,
-  minHeight: 300
+  minHeight: 300,
 };
 
 /**
@@ -133,7 +134,7 @@ launcher.launchFileManager = async (
           return Promise.resolve(key);
         }
       } catch (e) {
-        console.error(e);
+        console.warn(e);
       }
     }
 
@@ -158,8 +159,11 @@ launcher.launchFileManager = async (
   nextFileManagerWindowID = Math.max(nextFileManagerWindowID, id + 1);
   const appId = FILES_ID_PREFIX + id;
 
-  const appWindow = new AppWindowWrapper(
-      'main.html', appId, FILE_MANAGER_WINDOW_CREATE_OPTIONS);
+  const windowCreateOptions = FILE_MANAGER_WINDOW_CREATE_OPTIONS;
+  windowCreateOptions.frame.color = await getFrameColor();
+
+  const appWindow =
+      new AppWindowWrapper('main.html', appId, windowCreateOptions);
 
   await appWindow.launch(appState || {}, false);
   if (!appWindow.rawAppWindow) {

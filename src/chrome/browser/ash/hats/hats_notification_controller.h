@@ -7,9 +7,8 @@
 
 #include "base/containers/flat_map.h"
 #include "base/gtest_prod_util.h"
-#include "base/macros.h"
 #include "base/memory/weak_ptr.h"
-#include "chromeos/network/portal_detector/network_portal_detector.h"
+#include "chromeos/ash/components/network/portal_detector/network_portal_detector.h"
 #include "ui/gfx/image/image_skia.h"
 #include "ui/message_center/public/cpp/notification_delegate.h"
 
@@ -41,6 +40,10 @@ class HatsNotificationController : public message_center::NotificationDelegate,
       const base::flat_map<std::string, std::string>& product_specific_data);
 
   HatsNotificationController(Profile* profile, const HatsConfig& config);
+
+  HatsNotificationController(const HatsNotificationController&) = delete;
+  HatsNotificationController& operator=(const HatsNotificationController&) =
+      delete;
 
   // Returns true if the survey needs to be displayed for the given |profile|.
   static bool ShouldShowSurveyToProfile(Profile* profile,
@@ -98,8 +101,6 @@ class HatsNotificationController : public message_center::NotificationDelegate,
   HatsState state_ = HatsState::kDeviceSelected;
 
   base::WeakPtrFactory<HatsNotificationController> weak_pointer_factory_{this};
-
-  DISALLOW_COPY_AND_ASSIGN(HatsNotificationController);
 };
 
 }  // namespace ash

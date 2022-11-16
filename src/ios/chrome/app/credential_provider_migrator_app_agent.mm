@@ -19,7 +19,7 @@
 
 @interface CredentialProviderAppAgent ()
 
-// |migrator| is in charge of migrating the password when Chrome comes to
+// `migrator` is in charge of migrating the password when Chrome comes to
 // foreground.
 @property(nonatomic, strong) CredentialProviderMigrator* migrator;
 
@@ -38,7 +38,7 @@
       anyScene.interfaceProvider.mainInterface.browserState;
   DCHECK(browserState);
   scoped_refptr<password_manager::PasswordStoreInterface> store =
-      IOSChromePasswordStoreFactory::GetInterfaceForBrowserState(
+      IOSChromePasswordStoreFactory::GetForBrowserState(
           browserState, ServiceAccessType::IMPLICIT_ACCESS);
   NSUserDefaults* userDefaults = app_group::GetGroupUserDefaults();
   self.migrator =

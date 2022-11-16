@@ -2,12 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// clang-format off
-// #import 'chrome://os-settings/strings.m.js';
-// #import 'chrome://resources/cr_components/chromeos/network/network_choose_mobile.m.js';
+import 'chrome://os-settings/strings.m.js';
+import 'chrome://resources/cr_components/chromeos/network/network_choose_mobile.m.js';
 
-// #import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-// clang-format on
+import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 suite('NetworkChooseMobileTest', function() {
   /** @type {!NetworkChooseMobile|undefined} */
@@ -21,11 +19,11 @@ suite('NetworkChooseMobileTest', function() {
     chooseMobile = document.createElement('network-choose-mobile');
     chooseMobile.managedProperties = {
       typeProperties: {
-        cellular: {}
-      }
+        cellular: {},
+      },
     };
     document.body.appendChild(chooseMobile);
-    Polymer.dom.flush();
+    flush();
   });
 
   test('Scan button enabled state', function() {
@@ -38,30 +36,30 @@ suite('NetworkChooseMobileTest', function() {
     chooseMobile.managedProperties = {
       connectionState: mojom.ConnectionStateType.kNotConnected,
       typeProperties: {
-        cellular: {}
-      }
+        cellular: {},
+      },
     };
     chooseMobile.deviceState = {
-      scanning: false
+      scanning: false,
     };
-    Polymer.dom.flush();
+    flush();
 
     // Scan button is enabled.
-    let isScanEnabled = !scanButton.disabled;
+    const isScanEnabled = !scanButton.disabled;
     assertTrue(isScanEnabled);
 
     // Set the device state to scanning.
     chooseMobile.deviceState = {
-      scanning: true
+      scanning: true,
     };
-    Polymer.dom.flush();
+    flush();
 
     // Scan button is disabled while the device is currently scanning.
     assertTrue(scanButton.disabled);
 
     // Reset scanning status.
     chooseMobile.deviceState = {
-      scanning: false
+      scanning: false,
     };
 
     // Every connection state but kNotConnected prevents scanning.
@@ -71,10 +69,10 @@ suite('NetworkChooseMobileTest', function() {
       chooseMobile.managedProperties = {
         connectionState: state,
         typeProperties: {
-          cellular: {}
-        }
+          cellular: {},
+        },
       };
-      Polymer.dom.flush();
+      flush();
 
       assertTrue(scanButton.disabled);
     }
@@ -88,12 +86,12 @@ suite('NetworkChooseMobileTest', function() {
           foundNetworks: [{
             networkId: '1',
             longName: 'network_name',
-          }]
-        }
-      }
+          }],
+        },
+      },
     };
     chooseMobile.deviceState = {scanning: false};
-    Polymer.dom.flush();
+    flush();
 
     const scanButton = chooseMobile.$$('cr-button');
     const select = chooseMobile.$$('select');

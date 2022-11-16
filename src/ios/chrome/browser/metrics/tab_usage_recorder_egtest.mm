@@ -31,8 +31,8 @@
 #endif
 
 using chrome_test_util::OpenLinkInNewTabButton;
+using chrome_test_util::SettingsDestinationButton;
 using chrome_test_util::SettingsDoneButton;
-using chrome_test_util::SettingsMenuButton;
 using chrome_test_util::SettingsMenuPrivacyButton;
 using chrome_test_util::TabGridCellAtIndex;
 using chrome_test_util::WebViewMatcher;
@@ -247,7 +247,7 @@ void SwitchToNormalMode() {
   for (NSUInteger i = 0; i < numberOfTabs; i++) {
     [ChromeEarlGrey selectTabAtIndex:i];
     // Clear the page so that we can check when page reload is complete.
-    [ChromeEarlGrey executeJavaScript:kClearPageScript];
+    [ChromeEarlGrey evaluateJavaScriptForSideEffect:kClearPageScript];
 
     [ChromeEarlGrey reload];
     [ChromeEarlGrey waitForWebStateContainingText:kURL1FirstWord];
@@ -460,6 +460,12 @@ void SwitchToNormalMode() {
 // Test that USER_DID_NOT_WAIT is reported if the user does not wait for the
 // reload to be complete after eviction.
 - (void)testEvictedTabSlowReload {
+  if ([ChromeEarlGrey isThumbstripEnabledForWindowWithNumber:0]) {
+    // Skip this test if thumbstrip is enabled. When enabled, the current tab
+    // is displayed at the bottom of the tab grid and not evicted.
+    EARL_GREY_TEST_SKIPPED(@"Thumbstrip keeps active tab alive.");
+  }
+
   std::map<GURL, std::string> responses;
   const GURL slowURL = web::test::HttpServer::MakeUrl("http://slow");
   responses[slowURL] = "Slow Page";
@@ -494,7 +500,7 @@ void SwitchToNormalMode() {
     // Wait for the page starting to load. It is possible that the page finish
     // loading before this test. In that case the wait will timeout. Ignore the
     // result.
-    bool unused =
+    unused =
         base::test::ios::WaitUntilConditionOrTimeout(kWaitForPageLoadTimeout, ^{
           return [ChromeEarlGrey isLoading];
         });
@@ -516,6 +522,12 @@ void SwitchToNormalMode() {
 // Test that the USER_DID_NOT_WAIT metric is logged when the user opens an NTP
 // while the evicted tab is still reloading.
 - (void)testEvictedTabReloadSwitchToNTP {
+  if ([ChromeEarlGrey isThumbstripEnabledForWindowWithNumber:0]) {
+    // Skip this test if thumbstrip is enabled. When enabled, the current tab
+    // is displayed at the bottom of the tab grid and not evicted.
+    EARL_GREY_TEST_SKIPPED(@"Thumbstrip keeps active tab alive.");
+  }
+
   std::map<GURL, std::string> responses;
   const GURL slowURL = web::test::HttpServer::MakeUrl("http://slow");
   responses[slowURL] = "Slow Page";
@@ -622,6 +634,12 @@ void SwitchToNormalMode() {
 // Tests that leaving Chrome while an evicted tab is reloading triggers the
 // recording of the USER_LEFT_CHROME metric.
 - (void)testEvictedTabReloadBackgrounded {
+  if ([ChromeEarlGrey isThumbstripEnabledForWindowWithNumber:0]) {
+    // Skip this test if thumbstrip is enabled. When enabled, the current tab
+    // is displayed at the bottom of the tab grid and not evicted.
+    EARL_GREY_TEST_SKIPPED(@"Thumbstrip keeps active tab alive.");
+  }
+
   std::map<GURL, std::string> responses;
   const GURL slowURL = web::test::HttpServer::MakeUrl("http://slow");
   responses[slowURL] = "Slow Page";
@@ -881,8 +899,7 @@ void SwitchToNormalMode() {
   // is for zero metrics recorded, it adds no flakiness.  However, this pause
   // makes the step more likely to fail in failure cases.  I.e. without it, this
   // test would sometimes pass even when it should fail.
-  base::test::ios::SpinRunLoopWithMaxDelay(
-      base::TimeDelta::FromMilliseconds(500));
+  base::test::ios::SpinRunLoopWithMaxDelay(base::Milliseconds(500));
 
   // Verify that zero Tab.StatusWhenSwitchedBackToForeground metrics were
   // recorded.  Tabs created at the time the user switches to them should not

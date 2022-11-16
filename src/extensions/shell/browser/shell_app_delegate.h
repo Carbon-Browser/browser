@@ -5,7 +5,6 @@
 #ifndef EXTENSIONS_SHELL_BROWSER_SHELL_APP_DELEGATE_H_
 #define EXTENSIONS_SHELL_BROWSER_SHELL_APP_DELEGATE_H_
 
-#include "base/macros.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "extensions/browser/app_window/app_delegate.h"
 
@@ -16,6 +15,10 @@ namespace extensions {
 class ShellAppDelegate : public AppDelegate {
  public:
   ShellAppDelegate();
+
+  ShellAppDelegate(const ShellAppDelegate&) = delete;
+  ShellAppDelegate& operator=(const ShellAppDelegate&) = delete;
+
   ~ShellAppDelegate() override;
 
   // AppDelegate overrides:
@@ -53,13 +56,8 @@ class ShellAppDelegate : public AppDelegate {
   void OnShow() override {}
   bool TakeFocus(content::WebContents* web_contents, bool reverse) override;
   content::PictureInPictureResult EnterPictureInPicture(
-      content::WebContents* web_contents,
-      const viz::SurfaceId& surface_id,
-      const gfx::Size& natural_size) override;
+      content::WebContents* web_contents) override;
   void ExitPictureInPicture() override;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ShellAppDelegate);
 };
 
 }  // namespace extensions

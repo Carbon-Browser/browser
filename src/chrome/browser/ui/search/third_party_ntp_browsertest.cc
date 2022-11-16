@@ -3,7 +3,6 @@
 // found in the LICENSE file.
 
 #include "base/command_line.h"
-#include "base/macros.h"
 #include "chrome/browser/search/instant_service.h"
 #include "chrome/browser/search/instant_service_factory.h"
 #include "chrome/browser/ui/browser.h"
@@ -28,6 +27,9 @@ class ThirdPartyNTPBrowserTest : public InProcessBrowserTest,
  public:
   ThirdPartyNTPBrowserTest() = default;
 
+  ThirdPartyNTPBrowserTest(const ThirdPartyNTPBrowserTest&) = delete;
+  ThirdPartyNTPBrowserTest& operator=(const ThirdPartyNTPBrowserTest&) = delete;
+
   void SetUpCommandLine(base::CommandLine* command_line) override {
     command_line->AppendSwitch(switches::kIgnoreCertificateErrors);
   }
@@ -37,9 +39,6 @@ class ThirdPartyNTPBrowserTest : public InProcessBrowserTest,
     host_resolver()->AddRule("*", "127.0.0.1");
     ASSERT_TRUE(https_test_server().Start());
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ThirdPartyNTPBrowserTest);
 };
 
 // Verifies that a third party NTP can successfully embed the most visited
@@ -59,7 +58,7 @@ IN_PROC_BROWSER_TEST_F(ThirdPartyNTPBrowserTest, EmbeddedMostVisitedIframe) {
   InstantService* instant_service =
       InstantServiceFactory::GetForProfile(browser()->profile());
   EXPECT_TRUE(instant_service->IsInstantProcess(
-      contents->GetMainFrame()->GetProcess()->GetID()));
+      contents->GetPrimaryMainFrame()->GetProcess()->GetID()));
 
   // Add a chrome-search://most-visited/title.html?rid=1&fs=0 subframe and
   // verify that navigation completes successfully, with no kills.
@@ -73,8 +72,8 @@ IN_PROC_BROWSER_TEST_F(ThirdPartyNTPBrowserTest, EmbeddedMostVisitedIframe) {
   nav_observer.WaitForNavigationFinished();
 
   // Verify that the subframe exists and has the expected origin.
-  ASSERT_EQ(2u, contents->GetAllFrames().size());
-  content::RenderFrameHost* subframe = contents->GetAllFrames()[1];
+  content::RenderFrameHost* subframe = ChildFrameAt(contents, 0);
+  ASSERT_TRUE(subframe);
   std::string subframe_origin;
   ASSERT_TRUE(content::ExecuteScriptAndExtractString(
       subframe, "domAutomationController.send(window.origin)",
@@ -125,8 +124,8 @@ IN_PROC_BROWSER_TEST_F(ThirdPartyNTPBrowserTest, ProcessPerSite) {
   }
 
   // Verify that |tab1| and |tab2| share a process.
-  EXPECT_EQ(tab1->GetMainFrame()->GetProcess(),
-            tab2->GetMainFrame()->GetProcess());
+  EXPECT_EQ(tab1->GetPrimaryMainFrame()->GetProcess(),
+            tab2->GetPrimaryMainFrame()->GetProcess());
 }
 
 // Verify that a third-party NTP commits in a remote NTP SiteInstance.
@@ -146,6 +145,7 @@ IN_PROC_BROWSER_TEST_F(ThirdPartyNTPBrowserTest, VerifySiteInstance) {
   EXPECT_EQ(ntp_url, content::EvalJs(web_contents, "window.location.href"));
 
   // Verify that NTP committed in remote NTP SiteInstance.
-  EXPECT_EQ(GURL("chrome-search://remote-ntp/"),
-            web_contents->GetMainFrame()->GetSiteInstance()->GetSiteURL());
+  EXPECT_EQ(
+      GURL("chrome-search://remote-ntp/"),
+      web_contents->GetPrimaryMainFrame()->GetSiteInstance()->GetSiteURL());
 }

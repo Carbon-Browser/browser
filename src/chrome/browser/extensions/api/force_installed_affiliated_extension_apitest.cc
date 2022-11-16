@@ -4,6 +4,7 @@
 
 #include "chrome/browser/extensions/api/force_installed_affiliated_extension_apitest.h"
 
+#include "ash/constants/ash_features.h"
 #include "base/files/file_path.h"
 #include "base/json/json_writer.h"
 #include "base/path_service.h"
@@ -14,7 +15,7 @@
 #include "chrome/common/chrome_paths.h"
 #include "chrome/test/base/mixin_based_in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
-#include "chromeos/dbus/session_manager/fake_session_manager_client.h"
+#include "chromeos/ash/components/dbus/session_manager/fake_session_manager_client.h"
 #include "components/prefs/pref_service.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/test/result_catcher.h"
@@ -31,13 +32,27 @@ base::FilePath GetTestDataDir() {
 namespace extensions {
 
 ForceInstalledAffiliatedExtensionApiTest::
-    ForceInstalledAffiliatedExtensionApiTest(bool is_affiliated)
+    ForceInstalledAffiliatedExtensionApiTest(bool is_affiliated,
+                                             bool is_auth_session_enabled)
     : test_install_attributes_(
-          chromeos::StubInstallAttributes::CreateCloudManaged("fake-domain",
-                                                              "fake-id")) {
+          ash::StubInstallAttributes::CreateCloudManaged("fake-domain",
+                                                         "fake-id")) {
+  // TODO(crbug.com/1311355): This test is run with the feature
+  // kUseAuthsessionAuthentication enabled and disabled because of a
+  // transitive dependency of AffiliationTestHelper on that feature. Remove
+  // the parameter when kUseAuthsessionAuthentication is removed.
+  if (is_auth_session_enabled) {
+    feature_list_.InitAndEnableFeature(
+        ash::features::kUseAuthsessionAuthentication);
+  } else {
+    feature_list_.InitAndDisableFeature(
+        ash::features::kUseAuthsessionAuthentication);
+  }
+
   set_exit_when_last_browser_closes(false);
   set_chromeos_user_ = false;
   affiliation_mixin_.set_affiliated(is_affiliated);
+  cryptohome_mixin_.MarkUserAsExisting(affiliation_mixin_.account_id());
 }
 
 ForceInstalledAffiliatedExtensionApiTest::
@@ -54,7 +69,7 @@ void ForceInstalledAffiliatedExtensionApiTest::
     SetUpInProcessBrowserTestFixture() {
   // Initialize clients here so they are available during setup. They will be
   // shutdown in ChromeBrowserMain.
-  chromeos::SessionManagerClient::InitializeFakeInMemory();
+  ash::SessionManagerClient::InitializeFakeInMemory();
 
   // Init the user policy provider.
   policy_provider_.SetDefaultReturns(
@@ -73,9 +88,9 @@ void ForceInstalledAffiliatedExtensionApiTest::
 void ForceInstalledAffiliatedExtensionApiTest::SetUpOnMainThread() {
   // Log in user that was created with
   // policy::AffiliationTestHelper::PreLoginUser() in the PRE_ test.
-  const base::ListValue* users =
-      g_browser_process->local_state()->GetList("LoggedInUsers");
-  if (!users->GetList().empty()) {
+  const base::Value::List& users =
+      g_browser_process->local_state()->GetValueList("LoggedInUsers");
+  if (!users.empty()) {
     policy::AffiliationTestHelper::LoginUser(affiliation_mixin_.account_id());
   }
 

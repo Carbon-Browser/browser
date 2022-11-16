@@ -22,6 +22,9 @@ export class FakeShortcutProvider {
     this.methods_.register('isMutable');
     this.methods_.register('addUserAccelerator');
     this.methods_.register('replaceAccelerator');
+    this.methods_.register('removeAccelerator');
+    this.methods_.register('restoreAllDefaults');
+    this.methods_.register('restoreActionDefaults');
   }
 
   /**
@@ -70,6 +73,36 @@ export class FakeShortcutProvider {
     this.methods_.setResult(
         'replaceAccelerator', AcceleratorConfigResult.kSuccess);
     return this.methods_.resolveMethod('replaceAccelerator');
+  }
+
+  /**
+   * @param {!AcceleratorSource} source
+   * @param {number} action
+   * @param {!AcceleratorKeys} accelerator
+   */
+  removeAccelerator(source, action, accelerator) {
+    // Always return kSuccess in this fake.
+    this.methods_.setResult(
+        'removeAccelerator', AcceleratorConfigResult.kSuccess);
+    return this.methods_.resolveMethod('removeAccelerator');
+  }
+
+  restoreAllDefaults() {
+    // Always return kSuccess in this fake.
+    this.methods_.setResult(
+        'restoreAllDefaults', AcceleratorConfigResult.kSuccess);
+    return this.methods_.resolveMethod('restoreAllDefaults');
+  }
+
+  /**
+   * @param {!AcceleratorSource} source
+   * @param {number} action
+   */
+  restoreActionDefaults(source, action) {
+    // Always return kSuccess in this fake.
+    this.methods_.setResult(
+        'restoreActionDefaults', AcceleratorConfigResult.kSuccess);
+    return this.methods_.resolveMethod('restoreActionDefaults');
   }
 
   /**

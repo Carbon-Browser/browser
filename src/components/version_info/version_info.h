@@ -15,9 +15,15 @@ class Version;
 
 namespace version_info {
 
-// Returns the product name and version information for UserAgent header,
-// e.g. "Chrome/a.b.c.d".
-std::string GetProductNameAndVersionForUserAgent();
+// Returns the product name and version information for the User-Agent header,
+// in the format: Chrome/<major_version>.<minor_version>.<build>.<patch>.
+const std::string& GetProductNameAndVersionForUserAgent();
+
+// Returns the product name and reduced version information for the User-Agent
+// header, in the format: Chrome/<major_version>.0.build_version.0, where
+// `build_version` is a frozen BUILD number.
+const std::string GetProductNameAndVersionForReducedUserAgent(
+    const std::string& build_version);
 
 // Returns the product name, e.g. "Chromium" or "Google Chrome".
 std::string GetProductName();
@@ -25,7 +31,11 @@ std::string GetProductName();
 // Returns the version number, e.g. "6.0.490.1".
 std::string GetVersionNumber();
 
-// Returns the major component of the version, e.g. "6".
+// Returns the major component (aka the milestone) of the version as an int,
+// e.g. 6 when the version is "6.0.490.1".
+int GetMajorVersionNumberAsInt();
+
+// Like GetMajorVersionNumberAsInt(), but returns a string.
 std::string GetMajorVersionNumber();
 
 // Returns the result of GetVersionNumber() as a base::Version.

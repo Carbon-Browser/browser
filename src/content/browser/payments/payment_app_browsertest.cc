@@ -6,7 +6,6 @@
 
 #include "base/bind.h"
 #include "base/command_line.h"
-#include "base/macros.h"
 #include "base/run_loop.h"
 #include "build/chromeos_buildflags.h"
 #include "content/browser/storage_partition_impl.h"
@@ -22,6 +21,7 @@
 #include "content/shell/browser/shell.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "third_party/blink/public/mojom/payments/payment_app.mojom.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_registration.mojom.h"
 
@@ -74,6 +74,10 @@ void InvokePaymentAppCallback(base::OnceClosure done_callback,
 class PaymentAppBrowserTest : public ContentBrowserTest {
  public:
   PaymentAppBrowserTest() {}
+
+  PaymentAppBrowserTest(const PaymentAppBrowserTest&) = delete;
+  PaymentAppBrowserTest& operator=(const PaymentAppBrowserTest&) = delete;
+
   ~PaymentAppBrowserTest() override {}
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
@@ -188,8 +192,9 @@ class PaymentAppBrowserTest : public ContentBrowserTest {
                                            ->GetBrowserContext()
                                            ->GetDefaultStoragePartition())
         ->ClearData(StoragePartition::REMOVE_DATA_MASK_SERVICE_WORKERS,
-                    StoragePartition::QUOTA_MANAGED_STORAGE_MASK_ALL, GURL(),
-                    base::Time(), base::Time::Max(), run_loop.QuitClosure());
+                    StoragePartition::QUOTA_MANAGED_STORAGE_MASK_ALL,
+                    blink::StorageKey(), base::Time(), base::Time::Max(),
+                    run_loop.QuitClosure());
 
     run_loop.Run();
   }
@@ -251,8 +256,6 @@ class PaymentAppBrowserTest : public ContentBrowserTest {
   }
 
   std::unique_ptr<net::EmbeddedTestServer> https_server_;
-
-  DISALLOW_COPY_AND_ASSIGN(PaymentAppBrowserTest);
 };
 
 // TODO(crbug.com/869790) Flakes on linux-chromeos-dbg

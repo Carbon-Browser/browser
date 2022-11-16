@@ -10,6 +10,7 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/loader/loading_behavior_flag.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
 #include "third_party/blink/renderer/platform/heap/persistent.h"
 #include "third_party/blink/renderer/platform/loader/fetch/console_logger.h"
 #include "third_party/blink/renderer/platform/loader/fetch/loading_behavior_observer.h"
@@ -702,7 +703,7 @@ TEST_F(ResourceLoadSchedulerTest, ConsoleMessage) {
 
   // Advance current time a little and triggers an life cycle event, but it
   // still won't awake the warning logic.
-  test_task_runner->FastForwardBy(base::TimeDelta::FromSeconds(50));
+  test_task_runner->FastForwardBy(base::Seconds(50));
   Scheduler()->OnLifecycleStateChanged(
       scheduler::SchedulingLifecycleState::kNotThrottled);
   EXPECT_FALSE(GetConsoleLogger()->HasMessage());
@@ -711,7 +712,7 @@ TEST_F(ResourceLoadSchedulerTest, ConsoleMessage) {
 
   // Modify current time to awake the console warning logic, and the second
   // client should be used for console logging.
-  test_task_runner->FastForwardBy(base::TimeDelta::FromSeconds(15));
+  test_task_runner->FastForwardBy(base::Seconds(15));
   Scheduler()->OnLifecycleStateChanged(
       scheduler::SchedulingLifecycleState::kNotThrottled);
   EXPECT_TRUE(GetConsoleLogger()->HasMessage());
@@ -733,7 +734,7 @@ TEST_F(ResourceLoadSchedulerTest, ConsiderNetworkStateInTigtMode) {
   Scheduler()->SetOutstandingLimitForTesting(2, 5);
 
   // Sets the RTT.
-  Scheduler()->SetHttpRttForTesting(base::TimeDelta::FromMilliseconds(1000));
+  Scheduler()->SetHttpRttForTesting(base::Milliseconds(1000));
 
   // Push 2 requests, 1 non-multiplexed request and the other is multiplexed.
   MockClient* client1 = MakeGarbageCollected<MockClient>();
@@ -788,7 +789,7 @@ TEST_F(ResourceLoadSchedulerTest,
   Scheduler()->SetOutstandingLimitForTesting(2, 1024);
 
   // Sets the RTT as a slow connection.
-  Scheduler()->SetHttpRttForTesting(base::TimeDelta::FromMilliseconds(5000));
+  Scheduler()->SetHttpRttForTesting(base::Milliseconds(5000));
 
   // Push three requests.
   MockClient* client1 = MakeGarbageCollected<MockClient>();

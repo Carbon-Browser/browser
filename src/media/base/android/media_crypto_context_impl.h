@@ -8,7 +8,7 @@
 #include <jni.h>
 
 #include "base/android/scoped_java_ref.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "media/base/android/media_crypto_context.h"
 #include "media/base/media_export.h"
 
@@ -25,15 +25,16 @@ class MEDIA_EXPORT MediaCryptoContextImpl final : public MediaCryptoContext {
   // The |media_drm_bridge| owns |this| and is guaranteed to outlive |this|.
   explicit MediaCryptoContextImpl(MediaDrmBridge* media_drm_bridge);
 
+  MediaCryptoContextImpl(const MediaCryptoContextImpl&) = delete;
+  MediaCryptoContextImpl& operator=(const MediaCryptoContextImpl&) = delete;
+
   ~MediaCryptoContextImpl() override;
 
   // MediaCryptoContext implementation.
   void SetMediaCryptoReadyCB(MediaCryptoReadyCB media_crypto_ready_cb) override;
 
  private:
-  MediaDrmBridge* const media_drm_bridge_;
-
-  DISALLOW_COPY_AND_ASSIGN(MediaCryptoContextImpl);
+  const raw_ptr<MediaDrmBridge> media_drm_bridge_;
 };
 
 }  // namespace media

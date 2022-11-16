@@ -5,6 +5,7 @@
 #ifndef UI_OZONE_PLATFORM_WAYLAND_HOST_WAYLAND_ZCR_CURSOR_SHAPES_H_
 #define UI_OZONE_PLATFORM_WAYLAND_HOST_WAYLAND_ZCR_CURSOR_SHAPES_H_
 
+#include "base/memory/raw_ptr.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/cursor/mojom/cursor_type.mojom-forward.h"
 #include "ui/ozone/platform/wayland/common/wayland_object.h"
@@ -19,10 +20,12 @@ class WaylandConnection;
 class WaylandZcrCursorShapes
     : public wl::GlobalObjectRegistrar<WaylandZcrCursorShapes> {
  public:
-  static void Register(WaylandConnection* connection);
+  static constexpr char kInterfaceName[] = "zcr_cursor_shapes_v1";
+
   static void Instantiate(WaylandConnection* connection,
                           wl_registry* registry,
                           uint32_t name,
+                          const std::string& interface,
                           uint32_t version);
 
   WaylandZcrCursorShapes(zcr_cursor_shapes_v1* zcr_cursor_shapes,
@@ -41,7 +44,7 @@ class WaylandZcrCursorShapes
 
  private:
   wl::Object<zcr_cursor_shapes_v1> zcr_cursor_shapes_v1_;
-  WaylandConnection* const connection_;
+  const raw_ptr<WaylandConnection> connection_;
 };
 
 }  // namespace ui

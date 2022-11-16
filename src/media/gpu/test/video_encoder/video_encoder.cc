@@ -6,7 +6,6 @@
 
 #include "base/bind.h"
 #include "base/memory/ptr_util.h"
-#include "gpu/ipc/service/gpu_memory_buffer_factory.h"
 #include "media/base/video_bitrate_allocation.h"
 #include "media/gpu/macros.h"
 #include "media/gpu/test/bitstream_helpers.h"
@@ -39,8 +38,7 @@ const char* EventName(VideoEncoder::EncoderEvent event) {
 }
 
 // Default timeout used when waiting for events.
-constexpr base::TimeDelta kDefaultEventWaitTimeout =
-    base::TimeDelta::FromSeconds(30);
+constexpr base::TimeDelta kDefaultEventWaitTimeout = base::Seconds(30);
 
 // Default initial size used for |video_encoder_events_|.
 constexpr size_t kDefaultEventListSize = 512;
@@ -52,10 +50,9 @@ constexpr std::pair<VideoEncoder::EncoderEvent, size_t> kInvalidEncodeUntil{
 // static
 std::unique_ptr<VideoEncoder> VideoEncoder::Create(
     const VideoEncoderClientConfig& config,
-    gpu::GpuMemoryBufferFactory* const gpu_memory_buffer_factory,
     std::vector<std::unique_ptr<BitstreamProcessor>> bitstream_processors) {
   auto video_encoder = base::WrapUnique(new VideoEncoder());
-  if (!video_encoder->CreateEncoderClient(config, gpu_memory_buffer_factory,
+  if (!video_encoder->CreateEncoderClient(config,
                                           std::move(bitstream_processors))) {
     return nullptr;
   }
@@ -79,7 +76,6 @@ VideoEncoder::~VideoEncoder() {
 
 bool VideoEncoder::CreateEncoderClient(
     const VideoEncoderClientConfig& config,
-    gpu::GpuMemoryBufferFactory* const gpu_memory_buffer_factory,
     std::vector<std::unique_ptr<BitstreamProcessor>> bitstream_processors) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK_EQ(video_encoder_state_.load(), EncoderState::kUninitialized);
@@ -91,9 +87,8 @@ bool VideoEncoder::CreateEncoderClient(
   EventCallback event_cb =
       base::BindRepeating(&VideoEncoder::NotifyEvent, base::Unretained(this));
 
-  encoder_client_ =
-      VideoEncoderClient::Create(event_cb, std::move(bitstream_processors),
-                                 gpu_memory_buffer_factory, config);
+  encoder_client_ = VideoEncoderClient::Create(
+      event_cb, std::move(bitstream_processors), config);
   if (!encoder_client_) {
     VLOGF(1) << "Failed to create video encoder client";
     return false;

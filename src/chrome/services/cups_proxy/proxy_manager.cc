@@ -15,7 +15,7 @@
 #include "base/containers/ring_buffer.h"
 #include "base/feature_list.h"
 #include "base/logging.h"
-#include "base/task/post_task.h"
+#include "base/time/time.h"
 #include "chrome/services/cups_proxy/cups_proxy_service_delegate.h"
 #include "chrome/services/cups_proxy/ipp_validator.h"
 #include "chrome/services/cups_proxy/printer_installer.h"
@@ -55,6 +55,9 @@ class ProxyManagerImpl : public ProxyManager {
     receiver_.set_disconnect_handler(
         base::BindOnce([] { LOG(ERROR) << "CupsProxy mojo connection lost"; }));
   }
+
+  ProxyManagerImpl(const ProxyManagerImpl&) = delete;
+  ProxyManagerImpl& operator=(const ProxyManagerImpl&) = delete;
 
   ~ProxyManagerImpl() override = default;
 
@@ -110,7 +113,6 @@ class ProxyManagerImpl : public ProxyManager {
 
   mojo::Receiver<mojom::CupsProxier> receiver_;
   base::WeakPtrFactory<ProxyManagerImpl> weak_factory_{this};
-  DISALLOW_COPY_AND_ASSIGN(ProxyManagerImpl);
 };
 
 absl::optional<std::vector<uint8_t>> RebuildIppRequest(
@@ -153,9 +155,8 @@ void ProxyManagerImpl::ProxyRequest(
   // kRateLimit, the request is blocked and the HTTP 429 Too Many Requests
   // response status code is returned.
   base::TimeTicks time = base::TimeTicks::Now();
-  bool block_request =
-      timestamp_.CurrentIndex() >= timestamp_.BufferSize() &&
-      time - timestamp_.ReadBuffer(0) < base::TimeDelta::FromSeconds(1);
+  bool block_request = timestamp_.CurrentIndex() >= timestamp_.BufferSize() &&
+                       time - timestamp_.ReadBuffer(0) < base::Seconds(1);
   timestamp_.SaveToBuffer(time);
   if (block_request) {
     LOG(WARNING) << "CupsPrintService: Rate limit (" << kRateLimit

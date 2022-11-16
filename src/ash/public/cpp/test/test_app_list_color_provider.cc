@@ -4,6 +4,7 @@
 
 #include "ash/public/cpp/test/test_app_list_color_provider.h"
 
+#include "ui/color/color_id.h"
 #include "ui/gfx/color_palette.h"
 
 namespace ash {
@@ -91,6 +92,10 @@ SkColor TestAppListColorProvider::GetFolderNameSelectionColor() const {
   return SkColorSetA(SK_ColorBLACK, 0x0F);
 }
 
+SkColor TestAppListColorProvider::GetFolderNotificationBadgeColor() const {
+  return SK_ColorWHITE;
+}
+
 SkColor TestAppListColorProvider::GetContentsBackgroundColor() const {
   return gfx::kGoogleGrey200;
 }
@@ -103,35 +108,38 @@ SkColor TestAppListColorProvider::GetGridBackgroundCardInactiveColor() const {
   return SkColorSetA(SK_ColorWHITE, 41 /* 16% */);
 }
 
-SkColor TestAppListColorProvider::GetSeparatorColor() const {
-  return SkColorSetA(SK_ColorWHITE, 0x24);
+ui::ColorId TestAppListColorProvider::GetSeparatorColorId() const {
+  return ui::kColorAshSystemUIMenuSeparator;
 }
 
 SkColor TestAppListColorProvider::GetFocusRingColor() const {
   return gfx::kGoogleBlue600;
 }
 
-float TestAppListColorProvider::GetFolderBackgrounBlurSigma() const {
-  return 30.0f;
-}
-
-SkColor TestAppListColorProvider::GetRippleAttributesBaseColor(
-    SkColor bg_color) const {
+SkColor TestAppListColorProvider::GetInkDropBaseColor(SkColor bg_color) const {
   return SK_ColorWHITE;
 }
 
-float TestAppListColorProvider::GetRippleAttributesInkDropOpacity(
-    SkColor bg_color) const {
+float TestAppListColorProvider::GetInkDropOpacity(SkColor bg_color) const {
   return 0.08f;
 }
 
-float TestAppListColorProvider::GetRippleAttributesHighlightOpacity(
+SkColor TestAppListColorProvider::GetInvertedInkDropBaseColor(
     SkColor bg_color) const {
-  return 0.08f;
+  return SK_ColorBLACK;
+}
+
+float TestAppListColorProvider::GetInvertedInkDropOpacity(
+    SkColor bg_color) const {
+  return 0.06f;
 }
 
 SkColor TestAppListColorProvider::GetSearchResultViewHighlightColor() const {
   return SkColorSetA(SK_ColorWHITE, 0x0D);
+}
+
+SkColor TestAppListColorProvider::GetTextColorURL() const {
+  return gfx::kGoogleBlue600;
 }
 
 }  // namespace ash

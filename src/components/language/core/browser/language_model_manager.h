@@ -22,9 +22,15 @@ class LanguageModelManager : public KeyedService {
     BASELINE,
     FLUENT,
     GEO,
+    ULP,
   };
 
+  LanguageModelManager() = delete;
+
   LanguageModelManager(PrefService* prefs, const std::string& ui_lang);
+
+  LanguageModelManager(const LanguageModelManager&) = delete;
+  LanguageModelManager& operator=(const LanguageModelManager&) = delete;
 
   ~LanguageModelManager() override;
 
@@ -35,14 +41,14 @@ class LanguageModelManager : public KeyedService {
   // through a call to AddModel.
   void SetPrimaryModel(ModelType type);
   LanguageModel* GetPrimaryModel() const;
+  ModelType GetPrimaryModelType() const;
+  LanguageModel* GetLanguageModel(ModelType type) const;
 
  private:
   std::unique_ptr<LanguageModel> default_model_;
   std::map<ModelType, std::unique_ptr<LanguageModel>> models_;
 
   ModelType primary_model_type_;
-
-  DISALLOW_IMPLICIT_CONSTRUCTORS(LanguageModelManager);
 };
 
 }  // namespace language

@@ -24,8 +24,8 @@ ImeModeView::ImeModeView(Shelf* shelf) : TrayItemView(shelf) {
   CreateLabel();
   SetupLabelForTray(label());
   Update();
-  SetBorder(views::CreateEmptyBorder(kUnifiedTrayTextTopPadding, 0, 0,
-                                     kUnifiedTrayTextRightPadding));
+  SetBorder(views::CreateEmptyBorder(gfx::Insets::TLBR(
+      kUnifiedTrayTextTopPadding, 0, 0, kUnifiedTrayTextRightPadding)));
 
   Shell::Get()->system_tray_notifier()->AddIMEObserver(this);
   Shell::Get()->system_tray_model()->locale()->AddObserver(this);
@@ -70,6 +70,12 @@ const char* ImeModeView::GetClassName() const {
 
 void ImeModeView::HandleLocaleChange() {
   Update();
+}
+
+void ImeModeView::OnThemeChanged() {
+  TrayItemView::OnThemeChanged();
+  label()->SetEnabledColor(
+      TrayIconColor(Shell::Get()->session_controller()->GetSessionState()));
 }
 
 void ImeModeView::Update() {

@@ -23,6 +23,7 @@ import android.text.TextUtils;
 import android.util.Pair;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.VisibleForTesting;
 import androidx.browser.trusted.sharing.ShareData;
 
 import org.xmlpull.v1.XmlPullParser;
@@ -32,13 +33,13 @@ import org.chromium.base.ContextUtils;
 import org.chromium.base.IntentUtils;
 import org.chromium.base.Log;
 import org.chromium.base.PackageManagerUtils;
+import org.chromium.blink.mojom.DisplayMode;
 import org.chromium.chrome.browser.IntentHandler;
 import org.chromium.chrome.browser.ShortcutHelper;
 import org.chromium.chrome.browser.browserservices.intents.BrowserServicesIntentDataProvider;
 import org.chromium.chrome.browser.browserservices.intents.WebApkExtras;
 import org.chromium.chrome.browser.browserservices.intents.WebApkExtras.ShortcutItem;
 import org.chromium.chrome.browser.browserservices.intents.WebApkShareTarget;
-import org.chromium.chrome.browser.browserservices.intents.WebDisplayMode;
 import org.chromium.chrome.browser.browserservices.intents.WebappConstants;
 import org.chromium.chrome.browser.browserservices.intents.WebappExtras;
 import org.chromium.chrome.browser.browserservices.intents.WebappIcon;
@@ -47,6 +48,7 @@ import org.chromium.components.webapk.lib.common.WebApkMetaDataKeys;
 import org.chromium.components.webapps.ShortcutSource;
 import org.chromium.components.webapps.WebApkDistributor;
 import org.chromium.device.mojom.ScreenOrientationLockType;
+import org.chromium.ui.util.ColorUtils;
 import org.chromium.webapk.lib.common.WebApkCommonUtils;
 import org.chromium.webapk.lib.common.WebApkMetaDataUtils;
 import org.chromium.webapk.lib.common.splash.SplashLayout;
@@ -257,16 +259,15 @@ public class WebApkIntentDataProviderFactory {
 
         String scope = IntentUtils.safeGetString(bundle, WebApkMetaDataKeys.SCOPE);
 
-        @WebDisplayMode
+        @DisplayMode.EnumType
         int displayMode = displayModeFromString(
                 IntentUtils.safeGetString(bundle, WebApkMetaDataKeys.DISPLAY_MODE));
         int orientation = orientationFromString(
                 IntentUtils.safeGetString(bundle, WebApkMetaDataKeys.ORIENTATION));
-        long themeColor = WebApkMetaDataUtils.getLongFromMetaData(bundle,
-                WebApkMetaDataKeys.THEME_COLOR, WebappConstants.MANIFEST_COLOR_INVALID_OR_MISSING);
-        long backgroundColor =
-                WebApkMetaDataUtils.getLongFromMetaData(bundle, WebApkMetaDataKeys.BACKGROUND_COLOR,
-                        WebappConstants.MANIFEST_COLOR_INVALID_OR_MISSING);
+        long themeColor = WebApkMetaDataUtils.getLongFromMetaData(
+                bundle, WebApkMetaDataKeys.THEME_COLOR, ColorUtils.INVALID_COLOR);
+        long backgroundColor = WebApkMetaDataUtils.getLongFromMetaData(
+                bundle, WebApkMetaDataKeys.BACKGROUND_COLOR, ColorUtils.INVALID_COLOR);
 
         // Fetch the default background color from the WebAPK's resources. Fetching the default
         // background color from the WebAPK is important for consistency when:
@@ -286,6 +287,8 @@ public class WebApkIntentDataProviderFactory {
 
         String manifestUrl = IntentUtils.safeGetString(bundle, WebApkMetaDataKeys.WEB_MANIFEST_URL);
         String manifestStartUrl = IntentUtils.safeGetString(bundle, WebApkMetaDataKeys.START_URL);
+        String manifestId = IntentUtils.safeGetString(bundle, WebApkMetaDataKeys.WEB_MANIFEST_ID);
+        String appKey = IntentUtils.safeGetString(bundle, WebApkMetaDataKeys.APP_KEY);
         Map<String, String> iconUrlToMurmur2HashMap = getIconUrlAndIconMurmur2HashMap(bundle);
 
         @WebApkDistributor
@@ -340,9 +343,9 @@ public class WebApkIntentDataProviderFactory {
                 new WebappIcon(webApkPackageName, splashIconId), name, shortName, displayMode,
                 orientation, source, themeColor, backgroundColor, defaultBackgroundColor,
                 isPrimaryIconMaskable, isSplashIconMaskable, webApkPackageName, shellApkVersion,
-                manifestUrl, manifestStartUrl, distributor, iconUrlToMurmur2HashMap, shareTarget,
-                forceNavigation, isSplashProvidedByWebApk, shareData,
-                parseShortcutItems(webApkPackageName, res), apkVersion);
+                manifestUrl, manifestStartUrl, manifestId, appKey, distributor,
+                iconUrlToMurmur2HashMap, shareTarget, forceNavigation, isSplashProvidedByWebApk,
+                shareData, parseShortcutItems(webApkPackageName, res), apkVersion);
     }
 
     /**
@@ -369,6 +372,10 @@ public class WebApkIntentDataProviderFactory {
      * @param manifestStartUrl         URL that the WebAPK should navigate to when launched from
      *                                 the homescreen. Different from the {@link url} parameter if
      *                                 the WebAPK is launched from a deep link.
+     * @param manifestId               Id of the WebAPK.
+     * @param appKey                   Key used to identified the WebAPK. This is either the
+     *                                 Manifest URL or the Manifest Unique ID depending on the
+     *                                 situation.
      * @param distributor              The source from where the WebAPK is installed.
      * @param iconUrlToMurmur2HashMap  Map of the WebAPK's icon URLs to Murmur2 hashes of the
      *                                 icon untransformed bytes.
@@ -384,13 +391,14 @@ public class WebApkIntentDataProviderFactory {
      */
     public static BrowserServicesIntentDataProvider create(Intent intent, String url, String scope,
             WebappIcon primaryIcon, WebappIcon splashIcon, String name, String shortName,
-            @WebDisplayMode int displayMode, int orientation, int source, long themeColor,
+            @DisplayMode.EnumType int displayMode, int orientation, int source, long themeColor,
             long backgroundColor, int defaultBackgroundColor, boolean isPrimaryIconMaskable,
             boolean isSplashIconMaskable, String webApkPackageName, int shellApkVersion,
-            String manifestUrl, String manifestStartUrl, @WebApkDistributor int distributor,
-            Map<String, String> iconUrlToMurmur2HashMap, WebApkShareTarget shareTarget,
-            boolean forceNavigation, boolean isSplashProvidedByWebApk, ShareData shareData,
-            List<ShortcutItem> shortcutItems, int webApkVersionCode) {
+            String manifestUrl, String manifestStartUrl, String manifestId, String appKey,
+            @WebApkDistributor int distributor, Map<String, String> iconUrlToMurmur2HashMap,
+            WebApkShareTarget shareTarget, boolean forceNavigation,
+            boolean isSplashProvidedByWebApk, ShareData shareData, List<ShortcutItem> shortcutItems,
+            int webApkVersionCode) {
         if (manifestStartUrl == null || webApkPackageName == null) {
             Log.e(TAG, "Incomplete data provided: " + manifestStartUrl + ", " + webApkPackageName);
             return null;
@@ -407,6 +415,10 @@ public class WebApkIntentDataProviderFactory {
             scope = ShortcutHelper.getScopeFromUrl(manifestStartUrl);
         }
 
+        if (TextUtils.isEmpty(appKey)) {
+            appKey = manifestUrl;
+        }
+
         if (primaryIcon == null) {
             primaryIcon = new WebappIcon();
         }
@@ -421,9 +433,9 @@ public class WebApkIntentDataProviderFactory {
                 WebappIntentUtils.colorFromLongColor(backgroundColor), defaultBackgroundColor,
                 false /* isIconGenerated */, isPrimaryIconMaskable, forceNavigation);
         WebApkExtras webApkExtras = new WebApkExtras(webApkPackageName, splashIcon,
-                isSplashIconMaskable, shellApkVersion, manifestUrl, manifestStartUrl, distributor,
-                iconUrlToMurmur2HashMap, shareTarget, isSplashProvidedByWebApk, shortcutItems,
-                webApkVersionCode);
+                isSplashIconMaskable, shellApkVersion, manifestUrl, manifestStartUrl, manifestId,
+                appKey, distributor, iconUrlToMurmur2HashMap, shareTarget, isSplashProvidedByWebApk,
+                shortcutItems, webApkVersionCode);
         boolean hasCustomToolbarColor = WebappIntentUtils.isLongColorValid(themeColor);
         int toolbarColor = hasCustomToolbarColor
                 ? (int) themeColor
@@ -473,7 +485,8 @@ public class WebApkIntentDataProviderFactory {
      * WebAPK's AndroidManifest.xml as following:
      * "URL1 hash1 URL2 hash2 URL3 hash3..."
      */
-    private static Map<String, String> getIconUrlAndIconMurmur2HashMap(Bundle metaData) {
+    @VisibleForTesting
+    static Map<String, String> getIconUrlAndIconMurmur2HashMap(Bundle metaData) {
         Map<String, String> iconUrlAndIconMurmur2HashMap = new HashMap<String, String>();
         String iconUrlsAndIconMurmur2Hashes =
                 metaData.getString(WebApkMetaDataKeys.ICON_URLS_AND_ICON_MURMUR2_HASHES);
@@ -481,39 +494,39 @@ public class WebApkIntentDataProviderFactory {
 
         // Parse the metadata tag which contains "URL1 hash1 URL2 hash2 URL3 hash3..." pairs and
         // create a hash map.
-        // TODO(hanxi): crbug.com/666349. Add a test to verify that the icon URLs in WebAPKs'
-        // AndroidManifest.xml don't contain space.
-        String[] urlsAndHashes = iconUrlsAndIconMurmur2Hashes.split("[ ]+");
+        String[] urlsAndHashes = iconUrlsAndIconMurmur2Hashes.split(" ");
         if (urlsAndHashes.length % 2 != 0) {
             Log.e(TAG, "The icon URLs and icon murmur2 hashes don't come in pairs.");
             return iconUrlAndIconMurmur2HashMap;
         }
         for (int i = 0; i < urlsAndHashes.length; i += 2) {
-            iconUrlAndIconMurmur2HashMap.put(urlsAndHashes[i], urlsAndHashes[i + 1]);
+            if (!TextUtils.isEmpty(urlsAndHashes[i])) {
+                iconUrlAndIconMurmur2HashMap.put(urlsAndHashes[i], urlsAndHashes[i + 1]);
+            }
         }
         return iconUrlAndIconMurmur2HashMap;
     }
 
     /**
-     * Returns the WebDisplayMode which matches {@link displayMode}.
+     * Returns the DisplayMode which matches {@link DisplayMode}.
      * @param displayMode One of https://www.w3.org/TR/appmanifest/#dfn-display-modes-values
-     * @return The matching WebDisplayMode. {@link WebDisplayMode#Undefined} if there is no match.
+     * @return The matching DisplayMode. {@link DisplayMode#Undefined} if there is no match.
      */
-    private static @WebDisplayMode int displayModeFromString(String displayMode) {
+    private static @DisplayMode.EnumType int displayModeFromString(String displayMode) {
         if (displayMode == null) {
-            return WebDisplayMode.UNDEFINED;
+            return DisplayMode.UNDEFINED;
         }
 
         if (displayMode.equals("fullscreen")) {
-            return WebDisplayMode.FULLSCREEN;
+            return DisplayMode.FULLSCREEN;
         } else if (displayMode.equals("standalone")) {
-            return WebDisplayMode.STANDALONE;
+            return DisplayMode.STANDALONE;
         } else if (displayMode.equals("minimal-ui")) {
-            return WebDisplayMode.MINIMAL_UI;
+            return DisplayMode.MINIMAL_UI;
         } else if (displayMode.equals("browser")) {
-            return WebDisplayMode.BROWSER;
+            return DisplayMode.BROWSER;
         } else {
-            return WebDisplayMode.UNDEFINED;
+            return DisplayMode.UNDEFINED;
         }
     }
 

@@ -14,6 +14,10 @@
 #include "build/build_config.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
+#if BUILDFLAG(IS_FUCHSIA)
+#include "base/fuchsia/file_utils.h"
+#endif
+
 namespace base {
 
 PerfTestSuite::PerfTestSuite(int argc, char** argv) : TestSuite(argc, argv) {}
@@ -26,10 +30,13 @@ void PerfTestSuite::Initialize() {
       CommandLine::ForCurrentProcess()->GetSwitchValuePath("log-file");
   if (log_path.empty()) {
     PathService::Get(FILE_EXE, &log_path);
-#if defined(OS_ANDROID) || defined(OS_FUCHSIA)
-    base::FilePath tmp_dir;
-    PathService::Get(base::DIR_CACHE, &tmp_dir);
+#if BUILDFLAG(IS_ANDROID)
+    FilePath tmp_dir;
+    PathService::Get(DIR_CACHE, &tmp_dir);
     log_path = tmp_dir.Append(log_path.BaseName());
+#elif BUILDFLAG(IS_FUCHSIA)
+    log_path =
+        FilePath(kPersistedDataDirectoryPath).Append(log_path.BaseName());
 #endif
     log_path = log_path.ReplaceExtension(FILE_PATH_LITERAL("log"));
     log_path = log_path.InsertBeforeExtension(FILE_PATH_LITERAL("_perf"));

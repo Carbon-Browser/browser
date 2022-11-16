@@ -15,9 +15,9 @@
 #include "gpu/gpu_gles2_export.h"
 #include "ui/gfx/buffer_types.h"
 #include "ui/gfx/geometry/rect.h"
+#include "ui/gfx/geometry/rrect_f.h"
+#include "ui/gfx/geometry/transform.h"
 #include "ui/gfx/overlay_transform.h"
-#include "ui/gfx/rrect_f.h"
-#include "ui/gfx/transform.h"
 #include "ui/gl/gl_bindings.h"
 
 // Define this for extra GL error debugging (slower).
@@ -146,8 +146,7 @@ CopyTextureMethod GetCopyTextureCHROMIUMMethod(const FeatureInfo* feature_info,
                                                GLenum dest_internal_format,
                                                bool flip_y,
                                                bool premultiply_alpha,
-                                               bool unpremultiply_alpha,
-                                               bool dither);
+                                               bool unpremultiply_alpha);
 
 bool ValidateCopyTextureCHROMIUMInternalFormats(const FeatureInfo* feature_info,
                                                 GLenum source_internal_format,
@@ -159,10 +158,11 @@ GLenum GetTextureBindingQuery(GLenum texture_type);
 gfx::OverlayTransform GetGFXOverlayTransform(GLenum plane_transform);
 
 bool GetGFXBufferFormat(GLenum internal_format, gfx::BufferFormat* out_format);
-bool GetGFXBufferUsage(GLenum buffer_usage, gfx::BufferUsage* out_usage);
 
 bool IsASTCFormat(GLenum internal_format);
 bool IsCompressedTextureFormat(GLenum internal_format);
+
+Texture* CreateGLES2TextureWithLightRef(GLuint service_id, GLenum target);
 
 }  // namespace gles2
 }  // namespace gpu

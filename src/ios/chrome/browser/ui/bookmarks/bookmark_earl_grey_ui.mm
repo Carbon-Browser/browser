@@ -34,7 +34,7 @@
 #define EarlGrey [self earlGrey]
 #pragma clang diagnostic pop
 
-using chrome_test_util::BookmarksMenuButton;
+using chrome_test_util::BookmarksDestinationButton;
 using chrome_test_util::BookmarksSaveEditDoneButton;
 using chrome_test_util::BookmarksSaveEditFolderButton;
 using chrome_test_util::ButtonWithAccessibilityLabelId;
@@ -43,12 +43,13 @@ using chrome_test_util::ContextBarLeadingButtonWithLabel;
 using chrome_test_util::ContextBarTrailingButtonWithLabel;
 using chrome_test_util::ContextMenuCopyButton;
 using chrome_test_util::CopyLinkButton;
+using chrome_test_util::DeleteButton;
 using chrome_test_util::EditButton;
 using chrome_test_util::MoveButton;
-using chrome_test_util::ShareButton;
-using chrome_test_util::DeleteButton;
-using chrome_test_util::OpenLinkInNewTabButton;
 using chrome_test_util::OpenLinkInIncognitoButton;
+using chrome_test_util::OpenLinkInNewTabButton;
+using chrome_test_util::ShareButton;
+using chrome_test_util::TabGridEditButton;
 using chrome_test_util::TappableBookmarkNodeWithLabel;
 
 namespace chrome_test_util {
@@ -57,8 +58,9 @@ id<GREYMatcher> BookmarksContextMenuEditButton() {
   // Making sure the edit button we're selecting is not on the bottom bar via
   // exclusion by accessibility ID and ancestry.
   return grey_allOf(
-      EditButton(),
+      EditButton(), grey_userInteractionEnabled(),
       grey_not(grey_accessibilityID(kBookmarkHomeTrailingButtonIdentifier)),
+      grey_not(TabGridEditButton()),
       grey_not(grey_ancestor(
           grey_accessibilityID(kBookmarkHomeTrailingButtonIdentifier))),
       nil);
@@ -118,20 +120,20 @@ id<GREYMatcher> SearchIconButton() {
 - (void)openBookmarks {
   // Opens the bookmark manager.
   [ChromeEarlGreyUI openToolsMenu];
-  [ChromeEarlGreyUI tapToolsMenuButton:BookmarksMenuButton()];
+  [ChromeEarlGreyUI tapToolsMenuButton:BookmarksDestinationButton()];
 
   // Assert the menu is gone.
-  [[EarlGrey selectElementWithMatcher:BookmarksMenuButton()]
+  [[EarlGrey selectElementWithMatcher:BookmarksDestinationButton()]
       assertWithMatcher:grey_nil()];
 }
 
 - (void)openBookmarksInWindowWithNumber:(int)windowNumber {
   // Opens the bookmark manager.
   [ChromeEarlGreyUI openToolsMenuInWindowWithNumber:windowNumber];
-  [ChromeEarlGreyUI tapToolsMenuButton:BookmarksMenuButton()];
+  [ChromeEarlGreyUI tapToolsMenuButton:BookmarksDestinationButton()];
 
   // Assert the menu is gone.
-  [[EarlGrey selectElementWithMatcher:BookmarksMenuButton()]
+  [[EarlGrey selectElementWithMatcher:BookmarksDestinationButton()]
       assertWithMatcher:grey_nil()];
 }
 
@@ -303,7 +305,7 @@ id<GREYMatcher> SearchIconButton() {
 
   // Verify options on the action sheets..
   // Verify that the edit menu option is enabled/disabled according to
-  // |editEnabled|.
+  // `editEnabled`.
   id<GREYMatcher> matcher =
       editEnabled ? grey_sufficientlyVisible()
                   : grey_accessibilityTrait(UIAccessibilityTraitNotEnabled);
@@ -333,7 +335,7 @@ id<GREYMatcher> SearchIconButton() {
 
   // Verify options on the action sheets.
   // Verify that the edit menu option is enabled/disabled according to
-  // |editEnabled|.
+  // `editEnabled`.
   id<GREYMatcher> matcher =
       editEnabled ? grey_sufficientlyVisible()
                   : grey_accessibilityTrait(UIAccessibilityTraitNotEnabled);
@@ -680,9 +682,12 @@ id<GREYMatcher> SearchIconButton() {
   [BookmarkEarlGreyUI starCurrentTab];
 
   // Set the bookmark name.
-  [[EarlGrey selectElementWithMatcher:ButtonWithAccessibilityLabelId(
-                                          IDS_IOS_BOOKMARK_ACTION_EDIT)]
-      performAction:grey_tap()];
+  [[EarlGrey
+      selectElementWithMatcher:grey_allOf(grey_userInteractionEnabled(),
+                                          grey_not(TabGridEditButton()),
+                                          ButtonWithAccessibilityLabelId(
+                                              IDS_IOS_BOOKMARK_ACTION_EDIT),
+                                          nil)] performAction:grey_tap()];
 
   NSString* titleIdentifier = @"Title Field_textField";
   [[EarlGrey

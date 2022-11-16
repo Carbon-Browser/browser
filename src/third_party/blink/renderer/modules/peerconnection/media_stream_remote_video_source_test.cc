@@ -10,10 +10,11 @@
 #include "base/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/run_loop.h"
-#include "base/single_thread_task_runner.h"
 #include "base/synchronization/waitable_event.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/gmock_callback_support.h"
 #include "base/test/scoped_feature_list.h"
+#include "base/time/time.h"
 #include "media/base/video_frame.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/features.h"
@@ -25,10 +26,11 @@
 #include "third_party/blink/renderer/modules/mediastream/mock_media_stream_video_sink.h"
 #include "third_party/blink/renderer/modules/peerconnection/adapters/web_rtc_cross_thread_copier.h"
 #include "third_party/blink/renderer/modules/peerconnection/mock_peer_connection_dependency_factory.h"
-#include "third_party/blink/renderer/platform/heap/heap.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_source.h"
 #include "third_party/blink/renderer/platform/testing/io_task_runner_testing_platform_support.h"
 #include "third_party/blink/renderer/platform/webrtc/track_observer.h"
+#include "third_party/blink/renderer/platform/wtf/cross_thread_copier_base.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 #include "third_party/webrtc/api/rtp_packet_infos.h"
 #include "third_party/webrtc/api/video/color_space.h"
@@ -49,7 +51,7 @@ using ::testing::Sequence;
 webrtc::VideoFrame::Builder CreateBlackFrameBuilder() {
   rtc::scoped_refptr<webrtc::I420Buffer> buffer =
       webrtc::I420Buffer::Create(8, 8);
-  webrtc::I420Buffer::SetBlack(buffer);
+  webrtc::I420Buffer::SetBlack(buffer.get());
   return webrtc::VideoFrame::Builder().set_video_frame_buffer(buffer);
 }
 
@@ -102,12 +104,13 @@ class MediaStreamRemoteVideoSourceTest : public ::testing::Test {
             CrossThreadUnretained(&waitable_event))));
     waitable_event.Wait();
 
-    remote_source_ =
-        new MediaStreamRemoteVideoSourceUnderTest(std::move(track_observer));
+    auto remote_source =
+        std::make_unique<MediaStreamRemoteVideoSourceUnderTest>(
+            std::move(track_observer));
+    remote_source_ = remote_source.get();
     source_ = MakeGarbageCollected<MediaStreamSource>(
         "dummy_source_id", MediaStreamSource::kTypeVideo, "dummy_source_name",
-        true /* remote */);
-    source_->SetPlatformSource(base::WrapUnique(remote_source_));
+        true /* remote */, std::move(remote_source));
   }
 
   void TearDown() override {
@@ -197,12 +200,11 @@ TEST_F(MediaStreamRemoteVideoSourceTest, StartTrack) {
   rtc::scoped_refptr<webrtc::I420Buffer> buffer(
       new rtc::RefCountedObject<webrtc::I420Buffer>(320, 240));
 
-  webrtc::I420Buffer::SetBlack(buffer);
+  webrtc::I420Buffer::SetBlack(buffer.get());
 
   source()->SinkInterfaceForTesting()->OnFrame(
       webrtc::VideoFrame::Builder()
           .set_video_frame_buffer(buffer)
-          .set_rotation(webrtc::kVideoRotation_0)
           .set_timestamp_us(1000)
           .build());
   run_loop.Run();
@@ -268,13 +270,10 @@ TEST_F(MediaStreamRemoteVideoSourceTest, PreservesColorSpace) {
                                  webrtc::ColorSpace::TransferID::kSMPTE240M,
                                  webrtc::ColorSpace::MatrixID::kSMPTE240M,
                                  webrtc::ColorSpace::RangeID::kLimited);
-  const webrtc::VideoFrame& input_frame =
-      webrtc::VideoFrame::Builder()
-          .set_video_frame_buffer(buffer)
-          .set_timestamp_ms(0)
-          .set_rotation(webrtc::kVideoRotation_0)
-          .set_color_space(kColorSpace)
-          .build();
+  const webrtc::VideoFrame& input_frame = webrtc::VideoFrame::Builder()
+                                              .set_video_frame_buffer(buffer)
+                                              .set_color_space(kColorSpace)
+                                              .build();
   source()->SinkInterfaceForTesting()->OnFrame(input_frame);
   run_loop.Run();
 
@@ -306,13 +305,10 @@ TEST_F(MediaStreamRemoteVideoSourceTest,
                                  webrtc::ColorSpace::TransferID::kUnspecified,
                                  webrtc::ColorSpace::MatrixID::kUnspecified,
                                  webrtc::ColorSpace::RangeID::kLimited);
-  const webrtc::VideoFrame& input_frame =
-      webrtc::VideoFrame::Builder()
-          .set_video_frame_buffer(buffer)
-          .set_timestamp_ms(0)
-          .set_rotation(webrtc::kVideoRotation_0)
-          .set_color_space(kColorSpace)
-          .build();
+  const webrtc::VideoFrame& input_frame = webrtc::VideoFrame::Builder()
+                                              .set_video_frame_buffer(buffer)
+                                              .set_color_space(kColorSpace)
+                                              .build();
   source()->SinkInterfaceForTesting()->OnFrame(input_frame);
   run_loop.Run();
 
@@ -346,13 +342,10 @@ TEST_F(MediaStreamRemoteVideoSourceTest, UnspecifiedColorSpaceIsIgnored) {
                                  webrtc::ColorSpace::TransferID::kUnspecified,
                                  webrtc::ColorSpace::MatrixID::kUnspecified,
                                  webrtc::ColorSpace::RangeID::kLimited);
-  const webrtc::VideoFrame& input_frame =
-      webrtc::VideoFrame::Builder()
-          .set_video_frame_buffer(buffer)
-          .set_timestamp_ms(0)
-          .set_rotation(webrtc::kVideoRotation_0)
-          .set_color_space(kColorSpace)
-          .build();
+  const webrtc::VideoFrame& input_frame = webrtc::VideoFrame::Builder()
+                                              .set_video_frame_buffer(buffer)
+                                              .set_color_space(kColorSpace)
+                                              .build();
   source()->SinkInterfaceForTesting()->OnFrame(input_frame);
   run_loop.Run();
 
@@ -399,7 +392,7 @@ TEST_F(MediaStreamRemoteVideoSourceTest,
       kCaptureTime + webrtc::TimeDelta::Millis(ntp_offset);
   // Expected capture time.
   base::TimeTicks kExpectedCaptureTime =
-      base::TimeTicks() + base::TimeDelta::FromMilliseconds(kCaptureTime.ms());
+      base::TimeTicks() + base::Milliseconds(kCaptureTime.ms());
 
   webrtc::RtpPacketInfos::vector_type packet_infos;
   for (int i = 0; i < 4; ++i) {
@@ -409,8 +402,8 @@ TEST_F(MediaStreamRemoteVideoSourceTest,
   }
   // Expected receive time should be the same as the last arrival time.
   base::TimeTicks kExpectedReceiveTime =
-      base::TimeTicks() + base::TimeDelta::FromMicroseconds(
-                              kProcessingStart.us() - (10000 - 3 * 30));
+      base::TimeTicks() +
+      base::Microseconds(kProcessingStart.us() - (10000 - 3 * 30));
 
   webrtc::VideoFrame input_frame =
       webrtc::VideoFrame::Builder()
@@ -479,18 +472,17 @@ TEST_F(MediaStreamRemoteVideoSourceTest, ReferenceTimeEqualsTimestampUs) {
   scoped_refptr<media::VideoFrame> output_frame = sink.last_frame();
   EXPECT_TRUE(output_frame);
 
-  EXPECT_FLOAT_EQ(
-      (*output_frame->metadata().reference_time -
-       (base::TimeTicks() + base::TimeDelta::FromMicroseconds(kTimestampUs)))
-          .InMillisecondsF(),
-      0.0f);
+  EXPECT_FLOAT_EQ((*output_frame->metadata().reference_time -
+                   (base::TimeTicks() + base::Microseconds(kTimestampUs)))
+                      .InMillisecondsF(),
+                  0.0f);
   track->RemoveSink(&sink);
 }
 
 TEST_F(MediaStreamRemoteVideoSourceTest, BaseTimeTicksAndRtcMicrosAreTheSame) {
   base::TimeTicks first_chromium_timestamp = base::TimeTicks::Now();
   base::TimeTicks webrtc_timestamp =
-      base::TimeTicks() + base::TimeDelta::FromMicroseconds(rtc::TimeMicros());
+      base::TimeTicks() + base::Microseconds(rtc::TimeMicros());
   base::TimeTicks second_chromium_timestamp = base::TimeTicks::Now();
 
   // Test that the timestamps are correctly ordered, which they can only be if
@@ -518,6 +510,7 @@ TEST_F(MediaStreamRemoteVideoSourceTest, NoTimestampUsMeansNoReferenceTime) {
 
   webrtc::VideoFrame input_frame =
       webrtc::VideoFrame::Builder().set_video_frame_buffer(buffer).build();
+  input_frame.set_render_parameters({.use_low_latency_rendering = true});
 
   source()->SinkInterfaceForTesting()->OnFrame(input_frame);
   run_loop.Run();

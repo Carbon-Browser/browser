@@ -13,7 +13,6 @@
 #import "ios/chrome/browser/ui/open_in/open_in_controller.h"
 #import "ios/chrome/browser/ui/open_in/open_in_controller_testing.h"
 #import "ios/web/public/test/fakes/fake_web_state.h"
-#include "ios/web/public/test/test_web_thread.h"
 #include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
 #include "services/network/test/test_url_loader_factory.h"
 #include "testing/platform_test.h"
@@ -87,15 +86,11 @@ class OpenInControllerTest : public PlatformTest {
 TEST_F(OpenInControllerTest, TestDisplayOpenInMenu) {
   histogram_tester_.ExpectTotalCount(kOpenInDownloadResultHistogram, 0);
 
-  // Pointer to allow us to grab the VC instance in our validation callback.
-  __block UIActivityViewController* activityViewController;
-
   id vc_partial_mock = OCMPartialMock(base_view_controller);
   [[vc_partial_mock expect]
       presentViewController:[OCMArg checkWithBlock:^BOOL(
                                         UIViewController* viewController) {
         if ([viewController isKindOfClass:[UIActivityViewController class]]) {
-          activityViewController = (UIActivityViewController*)viewController;
           return YES;
         }
         return NO;

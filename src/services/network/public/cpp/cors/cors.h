@@ -28,6 +28,7 @@ namespace header_names {
 
 COMPONENT_EXPORT(NETWORK_CPP)
 extern const char kAccessControlAllowCredentials[];
+// TODO(https://crbug.com/1263483): Remove this.
 COMPONENT_EXPORT(NETWORK_CPP)
 extern const char kAccessControlAllowExternal[];
 COMPONENT_EXPORT(NETWORK_CPP)
@@ -37,13 +38,18 @@ extern const char kAccessControlAllowMethods[];
 COMPONENT_EXPORT(NETWORK_CPP)
 extern const char kAccessControlAllowOrigin[];
 COMPONENT_EXPORT(NETWORK_CPP)
+extern const char kAccessControlAllowPrivateNetwork[];
+COMPONENT_EXPORT(NETWORK_CPP)
 extern const char kAccessControlMaxAge[];
+// TODO(https://crbug.com/1263483): Remove this.
 COMPONENT_EXPORT(NETWORK_CPP)
 extern const char kAccessControlRequestExternal[];
 COMPONENT_EXPORT(NETWORK_CPP)
 extern const char kAccessControlRequestHeaders[];
 COMPONENT_EXPORT(NETWORK_CPP)
 extern const char kAccessControlRequestMethod[];
+COMPONENT_EXPORT(NETWORK_CPP)
+extern const char kAccessControlRequestPrivateNetwork[];
 
 }  // namespace header_names
 
@@ -87,25 +93,6 @@ bool ShouldCheckCors(const GURL& request_url,
                      const absl::optional<url::Origin>& request_initiator,
                      mojom::RequestMode request_mode);
 
-// Given a redirected-to URL, checks if the location is allowed
-// according to CORS. That is:
-// - the URL has a CORS supported scheme and
-// - the URL does not contain the userinfo production.
-COMPONENT_EXPORT(NETWORK_CPP)
-absl::optional<CorsErrorStatus> CheckRedirectLocation(
-    const GURL& url,
-    mojom::RequestMode request_mode,
-    const absl::optional<url::Origin>& origin,
-    bool cors_flag,
-    bool tainted);
-
-// Checks errors for the currently experimental "Access-Control-Allow-External:"
-// header. Shares error conditions with standard preflight checking.
-// See https://crbug.com/590714.
-COMPONENT_EXPORT(NETWORK_CPP)
-absl::optional<CorsErrorStatus> CheckExternalPreflight(
-    const absl::optional<std::string>& allow_external);
-
 COMPONENT_EXPORT(NETWORK_CPP)
 bool IsCorsEnabledRequestMode(mojom::RequestMode mode);
 
@@ -140,8 +127,6 @@ std::vector<std::string> PrivilegedNoCorsHeaderNames();
 
 // Checks forbidden method in the fetch spec.
 // See https://fetch.spec.whatwg.org/#forbidden-method.
-// TODO(toyoshim): Move Blink FetchUtils::IsForbiddenMethod to cors:: and use
-// this implementation internally.
 COMPONENT_EXPORT(NETWORK_CPP) bool IsForbiddenMethod(const std::string& name);
 
 // https://fetch.spec.whatwg.org/#ok-status aka a successful 2xx status code,
@@ -150,12 +135,12 @@ COMPONENT_EXPORT(NETWORK_CPP) bool IsForbiddenMethod(const std::string& name);
 COMPONENT_EXPORT(NETWORK_CPP) bool IsOkStatus(int status);
 
 // Returns true if |type| is a response type which makes a response
-// CORS-same-origin. See https://html.spec.whatwg.org/#cors-same-origin.
+// CORS-same-origin. See https://html.spec.whatwg.org/C/#cors-same-origin.
 COMPONENT_EXPORT(NETWORK_CPP)
 bool IsCorsSameOriginResponseType(mojom::FetchResponseType type);
 
 // Returns true if |type| is a response type which makes a response
-// CORS-cross-origin. See https://html.spec.whatwg.org/#cors-cross-origin.
+// CORS-cross-origin. See https://html.spec.whatwg.org/C/#cors-cross-origin.
 COMPONENT_EXPORT(NETWORK_CPP)
 bool IsCorsCrossOriginResponseType(mojom::FetchResponseType type);
 

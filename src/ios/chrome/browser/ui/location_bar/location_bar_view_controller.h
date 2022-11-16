@@ -17,7 +17,6 @@
 @protocol ActivityServiceCommands;
 @protocol ApplicationCommands;
 @protocol BrowserCommands;
-@protocol InfobarCommands;
 @protocol LocationBarOffsetProvider;
 @protocol LoadQueryCommands;
 
@@ -42,6 +41,9 @@
 // action.
 - (void)locationBarVisitCopyLinkTapped;
 
+// Starts a reverse image search for the image currently in the pasteboard.
+- (void)searchCopiedImage;
+
 @end
 
 // The view controller displaying the location bar. Manages the two states of
@@ -65,7 +67,6 @@
 @property(nonatomic, weak) id<ActivityServiceCommands,
                               ApplicationCommands,
                               BrowserCommands,
-                              InfobarCommands,
                               LoadQueryCommands,
                               OmniboxCommands>
     dispatcher;
@@ -81,19 +82,19 @@
 // - non-editing state, with location icon and text.
 - (void)switchToEditing:(BOOL)editing;
 
-// Updates the location icon to become |icon| and use the new |statusText| for
+// Updates the location icon to become `icon` and use the new `statusText` for
 // a11y labeling.
 - (void)updateLocationIcon:(UIImage*)icon
         securityStatusText:(NSString*)statusText;
 // Updates the location text in the non-editing mode.
-// |clipTail| indicates whether the tail or the head should be clipped when the
+// `clipTail` indicates whether the tail or the head should be clipped when the
 // location text is too long.
 - (void)updateLocationText:(NSString*)text clipTail:(BOOL)clipTail;
 // Updates the location view to show a fake placeholder in the steady location
-// view and hides the trailing button if |isNTP|. Otherwise, shows the
+// view and hides the trailing button if `isNTP`. Otherwise, shows the
 // location text and the button as normal.
 - (void)updateForNTP:(BOOL)isNTP;
-// Sets |enabled| of the share button.
+// Sets `enabled` of the share button.
 - (void)setShareButtonEnabled:(BOOL)enabled;
 
 // Displays the voice search button instead of the share button in steady state,

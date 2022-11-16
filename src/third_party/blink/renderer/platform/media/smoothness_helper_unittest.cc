@@ -2,10 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "third_party/blink/public/platform/media/smoothness_helper.h"
+#include "third_party/blink/renderer/platform/media/smoothness_helper.h"
 
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
+#include "base/time/time.h"
 #include "media/learning/common/labelled_example.h"
 #include "media/learning/common/learning_task_controller.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -192,7 +193,7 @@ TEST_F(SmoothnessHelperTest, NNRTaskRecordsMaxNNRs) {
   // Fast forward by a lot, so that the next NNR isn't consecutive.  Nothing
   // should be reported, because it's less than the current maximum.
   EXPECT_CALL(*nnr_ltc_, UpdateDefaultTarget(_, OPT_TARGET(_))).Times(0);
-  FastForwardBy(base::TimeDelta::FromSeconds(1000));
+  FastForwardBy(base::Seconds(1000));
   helper_->NotifyNNR();
   // It might be okay if this reported 2, since it's a tie.
   helper_->NotifyNNR();

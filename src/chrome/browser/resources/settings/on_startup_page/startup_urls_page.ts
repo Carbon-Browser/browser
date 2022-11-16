@@ -12,32 +12,34 @@ import 'chrome://resources/cr_elements/action_link_css.m.js';
 import 'chrome://resources/polymer/v3_0/iron-flex-layout/iron-flex-layout-classes.js';
 import 'chrome://resources/polymer/v3_0/iron-list/iron-list.js';
 import '../controls/extension_controlled_indicator.js';
-import '../settings_shared_css.js';
+import '../settings_shared.css.js';
 import './startup_url_dialog.js';
 
 import {CrScrollableBehavior} from 'chrome://resources/cr_elements/cr_scrollable_behavior.m.js';
-import {assert} from 'chrome://resources/js/assert.m.js';
 import {focusWithoutInk} from 'chrome://resources/js/cr/ui/focus_without_ink.m.js';
-import {WebUIListenerBehavior} from 'chrome://resources/js/web_ui_listener_behavior.m.js';
-import {html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {WebUIListenerMixin, WebUIListenerMixinInterface} from 'chrome://resources/js/web_ui_listener_mixin.js';
+import {mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {EDIT_STARTUP_URL_EVENT} from './startup_url_entry.js';
+import {getTemplate} from './startup_urls_page.html.js';
 import {StartupPageInfo, StartupUrlsPageBrowserProxy, StartupUrlsPageBrowserProxyImpl} from './startup_urls_page_browser_proxy.js';
 
 
 const SettingsStartupUrlsPageElementBase =
     mixinBehaviors(
-        [CrScrollableBehavior, WebUIListenerBehavior], PolymerElement) as
-    {new (): PolymerElement & WebUIListenerBehavior & CrScrollableBehavior};
+        [CrScrollableBehavior], WebUIListenerMixin(PolymerElement)) as {
+      new (): PolymerElement & WebUIListenerMixinInterface &
+          CrScrollableBehavior,
+    };
 
-class SettingsStartupUrlsPageElement extends
+export class SettingsStartupUrlsPageElement extends
     SettingsStartupUrlsPageElementBase {
   static get is() {
     return 'settings-startup-urls-page';
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
   }
 
   static get properties() {
@@ -56,7 +58,8 @@ class SettingsStartupUrlsPageElement extends
     };
   }
 
-  private startupPages_: Array<StartupPageInfo>;
+  prefs: Object;
+  private startupPages_: StartupPageInfo[];
   private showStartupUrlDialog_: boolean;
   private startupUrlDialogModel_: StartupPageInfo|null;
   private lastFocused_: HTMLElement;
@@ -74,11 +77,11 @@ class SettingsStartupUrlsPageElement extends
     this.startupUrlDialogAnchor_ = null;
   }
 
-  connectedCallback() {
+  override connectedCallback() {
     super.connectedCallback();
 
     this.addWebUIListener(
-        'update-startup-pages', (startupPages: Array<StartupPageInfo>) => {
+        'update-startup-pages', (startupPages: StartupPageInfo[]) => {
           // If an "edit" URL dialog was open, close it, because the underlying
           // page might have just been removed (and model indices have changed
           // anyway).
@@ -111,7 +114,7 @@ class SettingsStartupUrlsPageElement extends
     this.showStartupUrlDialog_ = false;
     this.startupUrlDialogModel_ = null;
     if (this.startupUrlDialogAnchor_) {
-      focusWithoutInk(assert(this.startupUrlDialogAnchor_));
+      focusWithoutInk(this.startupUrlDialogAnchor_);
       this.startupUrlDialogAnchor_ = null;
     }
   }
@@ -126,6 +129,12 @@ class SettingsStartupUrlsPageElement extends
   private shouldAllowUrlsEdit_(): boolean {
     return this.get('prefs.session.startup_urls.enforcement') !==
         chrome.settingsPrivate.Enforcement.ENFORCED;
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'settings-startup-urls-page': SettingsStartupUrlsPageElement;
   }
 }
 

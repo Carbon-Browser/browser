@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # Copyright 2020 The Chromium Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -20,7 +20,6 @@ import json
 import os
 import pipes
 import platform
-import pprint
 import re
 import shutil
 import sys
@@ -80,7 +79,8 @@ def main(args):
   mbw = MetaBuildWrapper()
   return mbw.Main(args)
 
-class MetaBuildWrapper(object):
+
+class MetaBuildWrapper:
   def __init__(self):
     self.chromium_src_dir = CHROMIUM_SRC_DIR
     self.default_config = os.path.join(self.chromium_src_dir, 'tools', 'mb',
@@ -181,12 +181,15 @@ class MetaBuildWrapper(object):
                         help='Sets GN arg android_default_version_code')
       subp.add_argument('--android-version-name',
                         help='Sets GN arg android_default_version_name')
+      subp.add_argument('--rts',
+                        default=None,
+                        help='which regression test selection model to use'
+                        ' For more info about RTS, please see'
+                        ' //docs/testing/regression-test-selection.md')
       subp.add_argument('--use-rts',
                         action='store_true',
                         default=False,
-                        help='whether or not to use regression test selection'
-                        ' For more info about RTS, please see'
-                        ' //docs/testing/regression-test-selection.md')
+                        help='Deprecated argument for enabling RTS')
 
       # TODO(crbug.com/1060857): Remove this once swarming task templates
       # support command prefixes.
@@ -469,10 +472,15 @@ class MetaBuildWrapper(object):
     return 0
 
   def RtsSelect(self):
-    model_dir = self.PathJoin(
-        self.chromium_src_dir, 'testing', 'rts', self._CipdPlatform())
+    if self.args.rts == 'rts-ml-chromium':
+      model_dir = self.PathJoin(self.chromium_src_dir, 'testing', 'rts',
+                                self.args.rts, self._CipdPlatform())
+      exe = self.PathJoin(model_dir, self.args.rts)
+    else:
+      model_dir = self.PathJoin(self.chromium_src_dir, 'testing', 'rts',
+                                self._CipdPlatform())
+      exe = self.PathJoin(model_dir, self.args.rts)
 
-    exe = self.PathJoin(model_dir, 'rts-chromium')
     if self.platform == 'win32':
       exe += '.exe'
 
@@ -489,12 +497,12 @@ class MetaBuildWrapper(object):
             'rts-target-change-recall must be between (0 and 1]', None)
       args += ['-target-change-recall', str(self.args.rts_target_change_recall)]
 
-    ret, _, _ = self.Run(args, force_verbose=True)
+    ret, _, err = self.Run(args, force_verbose=True)
     if ret != 0:
       self.WriteFailureAndRaise(err, None)
 
   def CmdGen(self):
-    if self.args.use_rts:
+    if self.args.rts:
       self.RtsSelect()
     vals = self.Lookup()
     return self.RunGNGen(vals)
@@ -625,8 +633,7 @@ class MetaBuildWrapper(object):
     if self.args.swarmed:
       cmd, _ = self.GetSwarmingCommand(self.args.target, vals)
       return self._RunUnderSwarming(self.args.path, self.args.target, cmd)
-    else:
-      return self._RunLocallyIsolated(self.args.path, self.args.target)
+    return self._RunLocallyIsolated(self.args.path, self.args.target)
 
   def CmdZip(self):
     ret = self.CmdIsolate()
@@ -642,7 +649,9 @@ class MetaBuildWrapper(object):
           self.PathJoin(self.args.path, self.args.target + '.isolate'),
           '-outdir', zip_dir
       ]
-      self.Run(remap_cmd)
+      ret, _, _ = self.Run(remap_cmd)
+      if ret:
+        return ret
 
       zip_path = self.args.zip_path
       with zipfile.ZipFile(
@@ -651,6 +660,7 @@ class MetaBuildWrapper(object):
           for filename in files:
             path = self.PathJoin(root, filename)
             fp.write(path, self.RelPath(path, zip_dir))
+      return 0
     finally:
       if zip_dir:
         self.RemoveDirectory(zip_dir)
@@ -749,8 +759,9 @@ class MetaBuildWrapper(object):
       if ret != 0:
         return ret
       collect_json = json.loads(self.ReadFile(collect_output))
-      # The exit_code field is not included if the task was successful.
-      ret = collect_json.get(task_id, {}).get('results', {}).get('exit_code', 0)
+      # The exit_code field might not be included if the task was successful.
+      ret = int(
+          collect_json.get(task_id, {}).get('results', {}).get('exit_code', 0))
     finally:
       if json_dir:
         self.RemoveDirectory(json_dir)
@@ -801,22 +812,31 @@ class MetaBuildWrapper(object):
         config = self.builder_groups[builder_group][builder]
         if not config:
           continue
+
+        def flatten(config):
+          flattened_config = FlattenConfig(self.configs, self.mixins, config)
+          if flattened_config['gn_args'] == 'error':
+            return None
+          args = {'gn_args': gn_helpers.FromGNArgs(flattened_config['gn_args'])}
+          if flattened_config.get('args_file'):
+            args['args_file'] = flattened_config['args_file']
+          return args
+
         if isinstance(config, dict):
           # This is a 'phased' builder. Each key in the config is a different
           # phase of the builder.
           args = {}
           for k, v in config.items():
-            args[k] = gn_helpers.FromGNArgs(
-                FlattenConfig(self.configs, self.mixins, v)['gn_args'])
+            flattened = flatten(v)
+            if flattened is None:
+              continue
+            args[k] = flattened
         elif config.startswith('//'):
           args = config
         else:
-          flattened_config = FlattenConfig(self.configs, self.mixins, config)
-          if flattened_config['gn_args'] == 'error':
+          args = flatten(config)
+          if args is None:
             continue
-          args = {'gn_args': gn_helpers.FromGNArgs(flattened_config['gn_args'])}
-          if flattened_config.get('args_file'):
-            args['args_file'] = flattened_config['args_file']
         obj[builder_group][builder] = args
 
     return obj
@@ -864,6 +884,11 @@ class MetaBuildWrapper(object):
       jsonish_blob = self._ToJsonish()
       if not validation.CheckExpectations(self, jsonish_blob, expectations_dir):
         raise MBErr("Expectations out of date. Please run 'mb.py train'.")
+
+    validation.CheckKeyOrdering(errs, self.builder_groups, self.configs,
+                                self.mixins)
+    if errs:
+      raise MBErr('mb config file not sorted:\n' + '\n'.join(errs))
 
     if print_ok:
       self.Print('mb config file %s looks ok.' % self.args.config_file)
@@ -1023,7 +1048,8 @@ class MetaBuildWrapper(object):
     try:
       contents = ast.literal_eval(self.ReadFile(config_file))
     except SyntaxError as e:
-      raise MBErr('Failed to parse config file "%s": %s' % (config_file, e))
+      raise MBErr('Failed to parse config file "%s": %s' %
+                  (config_file, e)) from e
 
     self.configs = contents['configs']
     self.mixins = contents['mixins']
@@ -1048,8 +1074,8 @@ class MetaBuildWrapper(object):
               ', '.join(duplicates))
         isolate_maps.update(isolate_map)
       except SyntaxError as e:
-        raise MBErr(
-            'Failed to parse isolate map file "%s": %s' % (isolate_map, e))
+        raise MBErr('Failed to parse isolate map file "%s": %s' %
+                    (isolate_map, e)) from e
     return isolate_maps
 
   def ConfigFromArgs(self):
@@ -1166,7 +1192,7 @@ class MetaBuildWrapper(object):
     # Create a reverse map from isolate label to isolate dict.
     isolate_map = self.ReadIsolateMap()
     isolate_dict_map = {}
-    for key, isolate_dict in isolate_map.iteritems():
+    for key, isolate_dict in isolate_map.items():
       isolate_dict_map[isolate_dict['label']] = isolate_dict
       isolate_dict_map[isolate_dict['label']]['isolate_key'] = key
 
@@ -1310,15 +1336,8 @@ class MetaBuildWrapper(object):
 
       # For more info about RTS, please see
       # //docs/testing/regression-test-selection.md
-      if self.args.use_rts:
-        if target in self.banned_from_rts:
-          self.Print('%s is banned for RTS on this builder' % target)
-        else:
-          filter_file = target + '.filter'
-          filter_file_path = self.PathJoin(self.rts_out_dir, filter_file)
-          if self.Exists(self.ToAbsPath(build_dir, filter_file_path)):
-            command.append('--test-launcher-filter-file=%s' % filter_file_path)
-            self.Print('added RTS filter file to isolate: %s' % filter_file)
+      if self.args.rts:
+        self.AddFilterFileArg(target, build_dir, command)
 
       canonical_target = target.replace(':','_').replace('/','_')
       ret = self.WriteIsolateFiles(build_dir, command, canonical_target,
@@ -1326,6 +1345,18 @@ class MetaBuildWrapper(object):
       if ret != 0:
         return ret
     return 0
+
+  def AddFilterFileArg(self, target, build_dir, command):
+    if target in self.banned_from_rts:
+      self.Print('%s is banned for RTS on this builder' % target)
+    else:
+      filter_file = target + '.filter'
+      filter_file_path = self.PathJoin(self.rts_out_dir, filter_file)
+      abs_filter_file_path = self.ToAbsPath(build_dir, filter_file_path)
+
+      if self.Exists(abs_filter_file_path):
+        command.append('--test-launcher-filter-file=%s' % filter_file_path)
+        self.Print('added RTS filter file to command: %s' % filter_file)
 
   def PossibleRuntimeDepsPaths(self, vals, ninja_targets, isolate_map):
     """Returns a map of targets to possible .runtime_deps paths.
@@ -1357,7 +1388,7 @@ class MetaBuildWrapper(object):
         # shouldn't generate isolates for them.
         raise MBErr('Cannot generate isolate for %s since it is an '
                     'additional_compile_target.' % target)
-      elif fuchsia or ios or target_type == 'generated_script':
+      if fuchsia or ios or target_type == 'generated_script':
         # iOS and Fuchsia targets end up as groups.
         # generated_script targets are always actions.
         rpaths = [stamp_runtime_deps]
@@ -1444,9 +1475,11 @@ class MetaBuildWrapper(object):
     is_android = 'target_os="android"' in vals['gn_args']
     is_cros = ('target_os="chromeos"' in vals['gn_args']
                or 'is_chromeos_device=true' in vals['gn_args'])
-    is_mac = self.platform == 'darwin'
     is_msan = 'is_msan=true' in vals['gn_args']
     is_ios = 'target_os="ios"' in vals['gn_args']
+    # pylint: disable=consider-using-ternary
+    is_mac = ((self.platform == 'darwin' and not is_ios)
+              or 'target_os="mac"' in vals['gn_args'])
 
     err = ''
     for f in files:
@@ -1488,6 +1521,7 @@ class MetaBuildWrapper(object):
               'Chromium Helper.app/',
               'Chromium.app/',
               'ChromiumUpdater.app/',
+              'ChromiumUpdater_test.app/',
               'Content Shell.app/',
               'Google Chrome Framework.framework/',
               'Google Chrome Helper (Alerts).app/',
@@ -1497,6 +1531,7 @@ class MetaBuildWrapper(object):
               'Google Chrome Helper.app/',
               'Google Chrome.app/',
               'GoogleUpdater.app/',
+              'GoogleUpdater_test.app/',
               'UpdaterTestApp Framework.framework/',
               'UpdaterTestApp.app/',
               'blink_deprecated_test_plugin.plugin/',
@@ -1522,18 +1557,16 @@ class MetaBuildWrapper(object):
       return 1
 
     self.WriteFile(isolate_path,
-      pprint.pformat({
+      json.dumps({
         'variables': {
           'command': command,
           'files': files,
         }
-      }) + '\n')
+      }, sort_keys=True) + '\n')
 
     self.WriteJSON(
       {
         'args': [
-          '--isolated',
-          self.ToSrcRelPath('%s/%s.isolated' % (build_dir, target)),
           '--isolate',
           self.ToSrcRelPath('%s/%s.isolate' % (build_dir, target)),
         ],
@@ -1602,7 +1635,7 @@ class MetaBuildWrapper(object):
     if android_version_name:
       gn_args += ' android_default_version_name="%s"' % android_version_name
 
-    if self.args.use_rts:
+    if self.args.rts:
       gn_args += ' use_rts=true'
 
     args_gn_lines = []
@@ -1633,7 +1666,9 @@ class MetaBuildWrapper(object):
                or 'is_chromeos_device=true' in vals['gn_args'])
     is_cros_device = 'is_chromeos_device=true' in vals['gn_args']
     is_ios = 'target_os="ios"' in vals['gn_args']
-    is_mac = self.platform == 'darwin' and not is_ios
+    # pylint: disable=consider-using-ternary
+    is_mac = ((self.platform == 'darwin' and not is_ios)
+              or 'target_os="mac"' in vals['gn_args'])
     is_win = self.platform == 'win32' or 'target_os="win"' in vals['gn_args']
     is_lacros = 'chromeos_is_browser_only=true' in vals['gn_args']
 
@@ -1669,10 +1704,8 @@ class MetaBuildWrapper(object):
     # that one Ozone build can be used to run different backends. Currently,
     # tests are executed for the headless and X11 backends and both can run
     # under Xvfb on Linux.
-    # TODO(tonikitoo,msisov,fwang): Find a way to run tests for the Wayland
-    # backend.
-    use_xvfb = (self.platform == 'linux2' and not is_android and not is_fuchsia
-                and not is_cros_device)
+    use_xvfb = (self.platform.startswith('linux') and not is_android
+                and not is_fuchsia and not is_cros_device)
 
     asan = 'is_asan=true' in vals['gn_args']
     msan = 'is_msan=true' in vals['gn_args']
@@ -1686,15 +1719,10 @@ class MetaBuildWrapper(object):
     executable_suffix = isolate_map[target].get(
         'executable_suffix', '.exe' if is_win else '')
 
-    if isolate_map[target].get('python3'):
-      extra_files = ['../../.vpython3']
-      vpython_exe = 'vpython3'
-    else:
-      extra_files = ['../../.vpython']
-      vpython_exe = 'vpython'
-
-    extra_files += [
-      '../../testing/test_env.py',
+    vpython_exe = 'vpython3'
+    extra_files = [
+        '../../.vpython3',
+        '../../testing/test_env.py',
     ]
 
     if is_android and test_type != 'script':
@@ -1703,15 +1731,26 @@ class MetaBuildWrapper(object):
       cmdline += [
           vpython_exe, '../../build/android/test_wrapper/logdog_wrapper.py',
           '--target', target, '--logdog-bin-cmd',
-          '../../.task_template_packages/logdog_butler', '--store-tombstones'
+          '../../.task_template_packages/logdog_butler'
       ]
+      if test_type != 'junit_test':
+        cmdline += ['--store-tombstones']
       if clang_coverage or java_coverage:
         cmdline += ['--coverage-dir', '${ISOLATED_OUTDIR}']
     elif is_fuchsia and test_type != 'script':
+      # On Fuchsia, the generated bin/run_* test scripts are used both in
+      # infrastructure and by developers. test_env.py is intended to establish a
+      # predictable environment for automated testing. In particular, it adds
+      # CHROME_HEADLESS=1 to the environment for child processes. This variable
+      # is a signal to both test and production code that it is running in the
+      # context of automated an testing environment, and should not be present
+      # for normal developer workflows.
       cmdline += [
+          vpython_exe,
+          '../../testing/test_env.py',
           os.path.join('bin', 'run_%s' % target),
           '--test-launcher-bot-mode',
-          '--system-log-file', '${ISOLATED_OUTDIR}/system_log'
+          '--logs-dir=${ISOLATED_OUTDIR}',
       ]
     elif is_cros_device and test_type != 'script':
       cmdline += [
@@ -1726,11 +1765,7 @@ class MetaBuildWrapper(object):
           './' + str(executable) + executable_suffix,
           '--test-launcher-bot-mode',
           '--asan=%d' % asan,
-          # Enable lsan when asan is enabled except on Windows where LSAN isn't
-          # supported.
-          # TODO(https://crbug.com/948939): Enable on Mac once things pass.
-          # TODO(https://crbug.com/974478): Enable on ChromeOS once things pass.
-          '--lsan=%d' % (asan and not is_mac and not is_win and not is_cros),
+          '--lsan=%d' % asan,  # Enable lsan when asan is enabled.
           '--msan=%d' % msan,
           '--tsan=%d' % tsan,
           '--cfi-diag=%d' % cfi_diag,
@@ -1972,8 +2007,7 @@ class MetaBuildWrapper(object):
       self.WriteFile(path, json.dumps(obj, indent=2, sort_keys=True) + '\n',
                      force_verbose=force_verbose)
     except Exception as e:
-      raise MBErr('Error %s writing to the output path "%s"' %
-                 (e, path))
+      raise MBErr('Error %s writing to the output path "%s"' % (e, path)) from e
 
   def PrintCmd(self, cmd):
     if self.platform == 'win32':
@@ -2025,6 +2059,8 @@ class MetaBuildWrapper(object):
                            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                            env=env, stdin=subprocess.PIPE)
       out, err = p.communicate(input=stdin)
+      out = out.decode('utf-8')
+      err = err.decode('utf-8')
     else:
       p = subprocess.Popen(cmd, shell=False, cwd=self.chromium_src_dir,
                            env=env)
@@ -2119,7 +2155,7 @@ class MetaBuildWrapper(object):
       return fp.write(contents)
 
 
-class LedResult(object):
+class LedResult:
   """Holds the result of a led operation. Can be chained using |then|."""
 
   def __init__(self, result, run_cmd):

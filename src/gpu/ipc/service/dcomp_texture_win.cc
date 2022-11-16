@@ -13,9 +13,9 @@
 #include "gpu/command_buffer/service/mailbox_manager.h"
 #include "gpu/command_buffer/service/scheduler.h"
 #include "gpu/command_buffer/service/scheduler_task_runner.h"
-#include "gpu/command_buffer/service/shared_image_backing.h"
-#include "gpu/command_buffer/service/shared_image_backing_gl_image.h"
-#include "gpu/command_buffer/service/shared_image_factory.h"
+#include "gpu/command_buffer/service/shared_image/gl_image_backing.h"
+#include "gpu/command_buffer/service/shared_image/shared_image_backing.h"
+#include "gpu/command_buffer/service/shared_image/shared_image_factory.h"
 #include "gpu/ipc/common/gpu_channel.mojom.h"
 #include "gpu/ipc/service/gpu_channel.h"
 #include "gpu/ipc/service/gpu_channel_manager.h"
@@ -30,7 +30,7 @@ namespace gpu {
 namespace {
 
 constexpr base::TimeDelta kParentWindowPosPollingPeriod =
-    base::TimeDelta::FromMilliseconds(1000);
+    base::Milliseconds(1000);
 
 std::unique_ptr<ui::ScopedMakeCurrent> MakeCurrent(
     SharedContextState* context_state) {
@@ -44,8 +44,8 @@ std::unique_ptr<ui::ScopedMakeCurrent> MakeCurrent(
 }
 
 using InitializeGLTextureParams =
-    SharedImageBackingGLCommon::InitializeGLTextureParams;
-using UnpackStateAttribs = SharedImageBackingGLCommon::UnpackStateAttribs;
+    GLTextureImageBackingHelper::InitializeGLTextureParams;
+using UnpackStateAttribs = GLTextureImageBackingHelper::UnpackStateAttribs;
 
 }  // namespace
 
@@ -158,9 +158,9 @@ gpu::Mailbox DCOMPTexture::CreateSharedImage() {
   auto scoped_make_current = MakeCurrent(context_state_.get());
   auto mailbox = gpu::Mailbox::GenerateForSharedImage();
 
-  // Use SharedImageBackingGLImage as the backing to hold GLImageDCOMPSurface
+  // Use GLImageBacking as the backing to hold GLImageDCOMPSurface
   // and be able to retrieve it later via ProduceOverlay.
-  // Use some reasonable defaults for params to create SharedImageBackingGLImage
+  // Use some reasonable defaults for params to create GLImageBacking
   // since params are only used when the backing is accessed for GL.
   // Note: this backing shouldn't be accessed via GL at all.
   InitializeGLTextureParams params;
@@ -171,7 +171,7 @@ gpu::Mailbox DCOMPTexture::CreateSharedImage() {
   params.is_rgb_emulation = false;
   params.framebuffer_attachment_angle = false;
   UnpackStateAttribs attribs;
-  auto shared_image = std::make_unique<SharedImageBackingGLImage>(
+  auto shared_image = std::make_unique<GLImageBacking>(
       this, mailbox, viz::BGRA_8888, GetSize(), gfx::ColorSpace::CreateSRGB(),
       kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType,
       /*usage=*/SHARED_IMAGE_USAGE_DISPLAY, params, attribs,
@@ -231,7 +231,15 @@ void DCOMPTexture::SendOutputRect() {
   output_rect.set_x(window_relative_rect_.x() + parent_window_rect_.x());
   output_rect.set_y(window_relative_rect_.y() + parent_window_rect_.y());
   if (last_output_rect_ != output_rect) {
-    client_->OnOutputRectChange(output_rect);
+    if (!output_rect.IsEmpty()) {
+      // The initial `OnUpdateParentWindowRect()` call can cause an empty
+      // `output_rect`.
+      // Set MFMediaEngine's `UpdateVideoStream()` with an non-empty destination
+      // rectangle. Otherwise, the next `EnableWindowlessSwapchainMode()` call
+      // to MFMediaEngine will skip the creation of the DCOMP surface handle.
+      // Then, the next `GetVideoSwapchainHandle()` call returns S_FALSE.
+      client_->OnOutputRectChange(output_rect);
+    }
     last_output_rect_ = output_rect;
   }
 }

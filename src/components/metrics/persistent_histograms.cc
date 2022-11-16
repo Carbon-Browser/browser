@@ -9,27 +9,28 @@
 #include "base/files/file_enumerator.h"
 #include "base/files/file_util.h"
 #include "base/metrics/field_trial.h"
+#include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/persistent_histogram_allocator.h"
 #include "base/strings/string_util.h"
 #include "base/system/sys_info.h"
-#include "base/task/post_task.h"
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "components/metrics/persistent_system_profile.h"
-#include "components/variations/variations_associated_data.h"
-
-#if defined(OS_WIN)
-#include <windows.h>
-#endif
 
 namespace {
 
+constexpr char kMappedFileStr[] = "MappedFile";
+constexpr char kLocalMemoryStr[] = "LocalMemory";
+
+const base::FeatureParam<std::string> kPersistentHistogramsStorage{
+    &base::kPersistentHistogramsFeature, "storage", kMappedFileStr};
+
 // Creating a "spare" file for persistent metrics involves a lot of I/O and
 // isn't important so delay the operation for a while after startup.
-#if defined(OS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
 // Android needs the spare file and also launches faster.
 constexpr bool kSpareFileRequired = true;
 constexpr int kSpareFileCreateDelaySeconds = 10;
@@ -41,7 +42,7 @@ constexpr bool kSpareFileRequired = false;
 constexpr int kSpareFileCreateDelaySeconds = 90;
 #endif
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
 
 // Windows sometimes creates files of the form MyFile.pma~RF71cb1793.TMP
 // when trying to rename a file to something that exists but is in-use, and
@@ -52,7 +53,7 @@ void DeleteOldWindowsTempFiles(const base::FilePath& dir) {
   // exists on the order of milliseconds when working properly so "one day" is
   // generous but still ensures no big build up of these files. This is an
   // I/O intensive task so do it in the background (enforced by "file" calls).
-  base::Time one_day_ago = base::Time::Now() - base::TimeDelta::FromDays(1);
+  base::Time one_day_ago = base::Time::Now() - base::Days(1);
   base::FileEnumerator file_iter(dir, /*recursive=*/false,
                                  base::FileEnumerator::FILES);
   for (base::FilePath path = file_iter.Next(); !path.empty();
@@ -77,10 +78,9 @@ void DeleteOldWindowsTempFiles(const base::FilePath& dir) {
 // How much time after startup to run the above function. Two minutes is
 // enough for the system to stabilize and get the user what they want before
 // spending time on clean-up efforts.
-constexpr base::TimeDelta kDeleteOldWindowsTempFilesDelay =
-    base::TimeDelta::FromMinutes(2);
+constexpr base::TimeDelta kDeleteOldWindowsTempFilesDelay = base::Minutes(2);
 
-#endif  // defined(OS_WIN)
+#endif  // BUILDFLAG(IS_WIN)
 
 // Create persistent/shared memory and allow histograms to be stored in
 // it. Memory that is not actually used won't be physically mapped by the
@@ -126,18 +126,12 @@ InitResult InitWithMappedFile(const base::FilePath& metrics_dir,
     // "active" filename is supposed to be unique so this shouldn't happen.
     result = kMappedFileExists;
   } else {
-#if defined(OS_WIN)
-    // Disallow multiple writers on Windows. Needed to ensure multiple instances
-    // of Chrome aren't writing to the same file, which could happen in some
-    // rare circumstances observed in the wild (e.g. on FAT FS where the file
-    // name ends up not being unique due to truncation and two processes racing
-    // on base::PathExists(active_file) above).
-    // TODO(crbug.com/1176977): If this resolves the bug, consider making
-    // consistent on all platforms.
-    bool exclusive_write = true;
-#else
-    bool exclusive_write = false;
-#endif
+    // Disallow multiple writers (Windows only). Needed to ensure multiple
+    // instances of Chrome aren't writing to the same file, which could happen
+    // in some rare circumstances observed in the wild (e.g. on FAT FS where the
+    // file name ends up not being unique due to truncation and two processes
+    // racing on base::PathExists(active_file) above).
+    const bool exclusive_write = true;
     // Move any spare file into the active position.
     base::ReplaceFile(spare_file, active_file, nullptr);
     // Create global allocator using the |active_file|.
@@ -146,28 +140,6 @@ InitResult InitWithMappedFile(const base::FilePath& metrics_dir,
     } else if (base::GlobalHistogramAllocator::CreateWithFile(
                    active_file, kAllocSize, kAllocId, kBrowserMetricsName,
                    exclusive_write)) {
-      // TODO(crbug.com/1176977): Remove this instrumentation when bug is fixed.
-      // Log the drive type on Windows.
-#if defined(OS_WIN)
-      std::vector<std::wstring> path_components;
-      base::MakeAbsoluteFilePath(active_file).GetComponents(&path_components);
-      // Get the drive path with a backslash at the end as required by the API.
-      // https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getdrivetypew
-      path_components[0] += L"\\";
-      auto drive_type = GetDriveTypeW(path_components[0].c_str());
-      // Note: 6 is the max enum per the docs.
-      base::UmaHistogramExactLinear("UMA.PersistentHistograms.DriveType",
-                                    drive_type, 7);
-#endif  // defined(OS_WIN)
-      // We don't expect there to be any histograms in the file just opened. But
-      // if there are, log their hashes here to diagnose crbug.com/1176977.
-      base::PersistentHistogramAllocator::Iterator it(
-          base::GlobalHistogramAllocator::Get());
-      while (std::unique_ptr<base::HistogramBase> histogram = it.GetNext()) {
-        base::UmaHistogramSparse(
-            "UMA.PersistentHistograms.HistogramsInStartupFile",
-            static_cast<base::HistogramBase::Sample>(histogram->name_hash()));
-      }
       result = kMappedFileSuccess;
     } else {
       result = kMappedFileFailed;
@@ -181,7 +153,7 @@ InitResult InitWithMappedFile(const base::FilePath& metrics_dir,
       base::BindOnce(
           base::IgnoreResult(&base::GlobalHistogramAllocator::CreateSpareFile),
           std::move(spare_file), kAllocSize),
-      base::TimeDelta::FromSeconds(kSpareFileCreateDelaySeconds));
+      base::Seconds(kSpareFileCreateDelaySeconds));
 
   return result;
 }
@@ -249,44 +221,36 @@ void InstantiatePersistentHistogramsImpl(const base::FilePath& metrics_dir,
   // Create tracking histograms for the allocator and record storage file.
   allocator->CreateTrackingHistograms(kBrowserMetricsName);
 
-#if defined(OS_WIN)
+#if BUILDFLAG(IS_WIN)
   base::ThreadPool::PostDelayedTask(
       FROM_HERE,
       {base::MayBlock(), base::TaskPriority::LOWEST,
        base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN},
       base::BindOnce(&DeleteOldWindowsTempFiles, std::move(metrics_dir)),
       kDeleteOldWindowsTempFilesDelay);
-#endif  // defined(OS_WIN)
+#endif  // BUILDFLAG(IS_WIN)
 }
 
 }  // namespace
 
 const char kBrowserMetricsName[] = "BrowserMetrics";
 
-void InstantiatePersistentHistograms(const base::FilePath& metrics_dir,
-                                     bool default_local_memory) {
-  // TODO(crbug.com/1183166): Enable feature by default and use its state to
-  // determine if persistent histograms should be disabled. Move it out of base.
-  std::string storage = variations::GetVariationParamValueByFeature(
-      base::kPersistentHistogramsFeature, "storage");
-
-  static const char kMappedFileStr[] = "MappedFile";
-  static const char kLocalMemoryStr[] = "LocalMemory";
-
-  PersistentHistogramsMode mode;
-  if (storage == kMappedFileStr) {
-    mode = kMappedFile;
-  } else if (storage == kLocalMemoryStr) {
-    mode = kLocalMemory;
-  } else if (storage.empty()) {
-    mode = (default_local_memory ? kLocalMemory : kMappedFile);
-  } else {
-    mode = kNotEnabled;
+void InstantiatePersistentHistograms(const base::FilePath& metrics_dir) {
+  PersistentHistogramsMode mode = kNotEnabled;
+  // Note: The extra feature check is needed so that we don't use the default
+  // value of the storage param if the feature is disabled.
+  if (base::FeatureList::IsEnabled(base::kPersistentHistogramsFeature)) {
+    const std::string storage = kPersistentHistogramsStorage.Get();
+    if (storage == kMappedFileStr) {
+      mode = kMappedFile;
+    } else if (storage == kLocalMemoryStr) {
+      mode = kLocalMemory;
+    }
   }
 
 // TODO(crbug.com/1052397): Revisit the macro expression once build flag switch
 // of lacros-chrome is complete.
-#if defined(OS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
   // Linux kernel 4.4.0.* shows a huge number of SIGBUS crashes with persistent
   // histograms enabled using a mapped file.  Change this to use local memory.
   // https://bugs.chromium.org/p/chromium/issues/detail?id=753741

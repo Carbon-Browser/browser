@@ -9,19 +9,19 @@
 #include <string>
 #include <vector>
 
+#include "ash/components/settings/cros_settings_names.h"
 #include "base/logging.h"
 #include "chrome/browser/ash/printing/bulk_printers_calculator.h"
 #include "chrome/browser/ash/printing/bulk_printers_calculator_factory.h"
 #include "chrome/browser/ash/settings/cros_settings.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/pref_names.h"
-#include "chromeos/settings/cros_settings_names.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 #include "components/user_manager/user.h"
 
-namespace chromeos {
+namespace ash {
 
 namespace {
 
@@ -35,9 +35,9 @@ BulkPrintersCalculator::AccessMode ConvertToAccessMode(int mode_val) {
   return BulkPrintersCalculator::ALL_ACCESS;
 }
 
-std::vector<std::string> ConvertToVector(const base::ListValue* list) {
+std::vector<std::string> ConvertToVector(const base::Value* list) {
   std::vector<std::string> string_list;
-  if (!list) {
+  if (!list || !list->is_list()) {
     return string_list;
   }
 
@@ -107,11 +107,7 @@ class SettingsBinder : public CalculatorsPoliciesBinder {
   }
 
   std::vector<std::string> GetStringList(const char* name) const override {
-    const base::ListValue* list;
-    if (!settings_->GetList(name, &list)) {
-      list = nullptr;
-    }
-    return ConvertToVector(list);
+    return ConvertToVector(settings_->GetPref(name));
   }
 
  private:
@@ -211,4 +207,4 @@ void CalculatorsPoliciesBinder::UpdateBlocklist() {
   }
 }
 
-}  // namespace chromeos
+}  // namespace ash

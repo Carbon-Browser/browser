@@ -2,32 +2,25 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
+#include "base/time/time.h"
 #include "ui/base/idle/idle.h"
 #include "ui/base/idle/idle_internal.h"
+#include "ui/display/screen.h"
 
 #if defined(USE_DBUS)
 #include "base/bind.h"
 #include "base/logging.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/no_destructor.h"
+#include "base/task/task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
-#include "base/task_runner.h"
 #include "dbus/bus.h"
 #include "dbus/message.h"
 #include "dbus/object_path.h"
 #include "dbus/object_proxy.h"
-#endif
-
-#if defined(USE_X11)
-#include "ui/base/x/x11_idle_query.h"
-#include "ui/base/x/x11_screensaver.h"
-#endif
-
-#if defined(USE_OZONE)
-#include "ui/base/ui_base_features.h"
-#include "ui/display/screen.h"
 #endif
 
 namespace ui {
@@ -53,11 +46,12 @@ struct {
     {"org.cinnamon.ScreenSaver", "/org/cinnamon/ScreenSaver",
      "org.cinnamon.ScreenSaver"},
     // gnome-screensaver
-    {"org.gnome.ScreenSaver", "/", "org.gnome.ScreenSaver"},
+    {"org.gnome.ScreenSaver", "/org/gnome/ScreenSaver",
+     "org.gnome.ScreenSaver"},
     // mate-screensaver
-    {"org.mate.ScreenSaver", "/", "org.mate.ScreenSaver"},
+    {"org.mate.ScreenSaver", "/org/mate/ScreenSaver", "org.mate.ScreenSaver"},
     // xfce4-screensaver
-    {"org.xfce.ScreenSaver", "/", "org.xfce.ScreenSaver"},
+    {"org.xfce.ScreenSaver", "/org/xfce/ScreenSaver", "org.xfce.ScreenSaver"},
 };
 
 constexpr size_t kServiceCount = sizeof(kServices) / sizeof(kServices[0]);
@@ -209,7 +203,7 @@ class DBusScreenSaverWatcher {
 
   scoped_refptr<dbus::Bus> bus_;
   scoped_refptr<base::SequencedTaskRunner> task_runner_;
-  dbus::ObjectProxy* proxy_ = nullptr;
+  raw_ptr<dbus::ObjectProxy> proxy_ = nullptr;
 
   base::WeakPtrFactory<DBusScreenSaverWatcher> weak_factory_{this};
 };
@@ -224,22 +218,11 @@ DBusScreenSaverWatcher* GetDBusScreenSaverWatcher() {
 #endif  // defined(USE_DBUS)
 
 int CalculateIdleTime() {
-#if defined(USE_OZONE)
-  if (features::IsUsingOzonePlatform()) {
-    auto* const screen = display::Screen::GetScreen();
-    // The screen can be nullptr in tests.
-    if (!screen)
-      return 0;
-    return screen->CalculateIdleTime().InSeconds();
-  }
-#endif
-#if defined(USE_X11)
-  IdleQueryX11 idle_query;
-  return idle_query.IdleTime();
-#else
-  NOTIMPLEMENTED_LOG_ONCE();
-  return 0;
-#endif
+  auto* const screen = display::Screen::GetScreen();
+  // The screen can be nullptr in tests.
+  if (!screen)
+    return 0;
+  return screen->CalculateIdleTime().InSeconds();
 }
 
 bool CheckIdleStateIsLocked() {
@@ -252,22 +235,11 @@ bool CheckIdleStateIsLocked() {
     return lock_state == DBusScreenSaverWatcher::LockState::kLocked;
 #endif
 
-#if defined(USE_OZONE)
-  if (features::IsUsingOzonePlatform()) {
-    auto* const screen = display::Screen::GetScreen();
-    // The screen can be nullptr in tests.
-    if (!screen)
-      return false;
-    return screen->IsScreenSaverActive();
-  }
-#endif
-#if defined(USE_X11)
-  // Usually the screensaver is used to lock the screen.
-  return IsXScreensaverActive();
-#else
-  NOTIMPLEMENTED_LOG_ONCE();
-  return false;
-#endif
+  auto* const screen = display::Screen::GetScreen();
+  // The screen can be nullptr in tests.
+  if (!screen)
+    return false;
+  return screen->IsScreenSaverActive();
 }
 
 }  // namespace ui

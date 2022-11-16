@@ -9,18 +9,24 @@
 #include "base/strings/string_util.h"
 #include "chrome/app/vector_icons/vector_icons.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/autofill/save_update_address_profile_bubble_controller.h"
+#include "chrome/browser/ui/hats/hats_service.h"
+#include "chrome/browser/ui/hats/hats_service_factory.h"
 #include "chrome/browser/ui/views/accessibility/theme_tracking_non_accessible_image_view.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/grit/theme_resources.h"
 #include "components/autofill/core/browser/autofill_address_util.h"
 #include "components/autofill/core/browser/data_model/autofill_profile.h"
 #include "components/autofill/core/browser/field_types.h"
+#include "components/autofill/core/browser/geo/address_i18n.h"
 #include "components/autofill/core/common/autofill_features.h"
 #include "components/strings/grit/components_strings.h"
 #include "components/vector_icons/vector_icons.h"
+#include "content/public/browser/web_contents.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/models/simple_combobox_model.h"
+#include "ui/color/color_id.h"
 #include "ui/gfx/color_utils.h"
 #include "ui/views/controls/button/image_button.h"
 #include "ui/views/controls/button/image_button_factory.h"
@@ -41,7 +47,7 @@ constexpr int kIconSize = 16;
 // RECIPIENT type.
 ServerFieldType AddressFieldToServerFieldTypeWithHonorificPrefix(
     ::i18n::addressinput::AddressField address_field) {
-  ServerFieldType type = autofill::AddressFieldToServerFieldType(address_field);
+  ServerFieldType type = autofill::i18n::TypeForField(address_field);
   return type == NAME_FULL ? NAME_FULL_WITH_HONORIFIC_PREFIX : type;
 }
 
@@ -55,8 +61,8 @@ int ComboboxIconSize() {
 std::unique_ptr<views::ImageView> CreateAddressSectionIcon(
     const gfx::VectorIcon& icon) {
   auto icon_view = std::make_unique<views::ImageView>();
-  icon_view->SetImage(ui::ImageModel::FromVectorIcon(
-      icon, ui::NativeTheme::kColorId_SecondaryIconColor, kIconSize));
+  icon_view->SetImage(
+      ui::ImageModel::FromVectorIcon(icon, ui::kColorIconSecondary, kIconSize));
   return icon_view;
 }
 
@@ -72,10 +78,8 @@ void AddAddressSection(views::View* parent_view,
       .SetCollapseMargins(true)
       .SetDefault(
           views::kMarginsKey,
-          gfx::Insets(
-              /*vertical=*/0,
-              /*horizontal=*/ChromeLayoutProvider::Get()->GetDistanceMetric(
-                  views::DISTANCE_RELATED_CONTROL_HORIZONTAL)));
+          gfx::Insets::VH(0, ChromeLayoutProvider::Get()->GetDistanceMetric(
+                                 views::DISTANCE_RELATED_CONTROL_HORIZONTAL)));
   row->AddChildView(std::move(icon_view));
   row->AddChildView(std::move(view));
 }
@@ -171,8 +175,7 @@ std::unique_ptr<views::EditableCombobox> CreateNicknameEditableCombobox() {
       /*text=*/u"Home",
       /*dropdown_secondary_text=*/std::u16string(),
       /*icon=*/
-      ui::ImageModel::FromVectorIcon(kNavigateHomeIcon,
-                                     ui::NativeTheme::kColorId_DefaultIconColor,
+      ui::ImageModel::FromVectorIcon(kNavigateHomeIcon, ui::kColorIcon,
                                      ComboboxIconSize()));
 
   ui::SimpleComboboxModel::Item work(
@@ -180,8 +183,7 @@ std::unique_ptr<views::EditableCombobox> CreateNicknameEditableCombobox() {
       /*dropdown_secondary_text=*/std::u16string(),
       /*icon=*/
       ui::ImageModel::FromVectorIcon(vector_icons::kBusinessIcon,
-                                     ui::NativeTheme::kColorId_DefaultIconColor,
-                                     ComboboxIconSize()));
+                                     ui::kColorIcon, ComboboxIconSize()));
 
   std::vector<ui::SimpleComboboxModel::Item> nicknames{std::move(home),
                                                        std::move(work)};
@@ -263,10 +265,9 @@ SaveAddressProfileView::SaveAddressProfileView(
       .SetCollapseMargins(true)
       .SetDefault(
           views::kMarginsKey,
-          gfx::Insets(
-              /*vertical=*/ChromeLayoutProvider::Get()->GetDistanceMetric(
-                  DISTANCE_CONTROL_LIST_VERTICAL),
-              /*horizontal=*/0));
+          gfx::Insets::VH(ChromeLayoutProvider::Get()->GetDistanceMetric(
+                              DISTANCE_CONTROL_LIST_VERTICAL),
+                          0));
 
   const std::string locale = g_browser_process->GetApplicationLocale();
   const AutofillProfile& profile = controller_->GetProfileToSave();
@@ -308,6 +309,14 @@ SaveAddressProfileView::SaveAddressProfileView(
                       CreateAddressSectionIcon(vector_icons::kExtensionIcon),
                       CreateNicknameEditableCombobox());
   }
+
+  Profile* browser_profile =
+      Profile::FromBrowserContext(web_contents->GetBrowserContext());
+  HatsService* hats_service = HatsServiceFactory::GetForProfile(
+      browser_profile, /*create_if_necessary=*/true);
+  CHECK(hats_service);
+  hats_service->LaunchDelayedSurveyForWebContents(
+      kHatsSurveyTriggerAutofillAddress, web_contents, 10000);
 }
 
 SaveAddressProfileView::~SaveAddressProfileView() = default;
@@ -346,8 +355,8 @@ void SaveAddressProfileView::AddedToWidget() {
   auto image_view = std::make_unique<ThemeTrackingNonAccessibleImageView>(
       *bundle.GetImageSkiaNamed(IDR_SAVE_ADDRESS),
       *bundle.GetImageSkiaNamed(IDR_SAVE_ADDRESS_DARK),
-      base::BindRepeating(&views::BubbleFrameView::GetBackgroundColor,
-                          base::Unretained(GetBubbleFrameView())));
+      base::BindRepeating(&views::BubbleDialogDelegate::GetBackgroundColor,
+                          base::Unretained(this)));
   GetBubbleFrameView()->SetHeaderView(std::move(image_view));
 }
 
@@ -368,22 +377,23 @@ void SaveAddressProfileView::AlignIcons() {
     // Set views::kMarginsKey for flex layout to center the icon vertically with
     // the text in front of it. Label line height are guaranteed to be bigger
     // than kIconSize.
-    icon_view->SetProperty(views::kMarginsKey,
-                           gfx::Insets((label_line_height - kIconSize) / 2, 0));
+    icon_view->SetProperty(
+        views::kMarginsKey,
+        gfx::Insets::VH((label_line_height - kIconSize) / 2, 0));
   }
 
   int edit_button_height = edit_button_->GetPreferredSize().height();
   int height_difference = (edit_button_height - label_line_height) / 2;
   if (height_difference > 0) {
     // We need to push the `address_components_view` down.
-    address_components_view_->SetProperty(views::kMarginsKey,
-                                          gfx::Insets(height_difference, 0));
+    address_components_view_->SetProperty(
+        views::kMarginsKey, gfx::Insets::VH(height_difference, 0));
     edit_button_->SetProperty(views::kMarginsKey, gfx::Insets());
   } else {
     // We need to push the `edit_button` down.
     address_components_view_->SetProperty(views::kMarginsKey, gfx::Insets());
     edit_button_->SetProperty(views::kMarginsKey,
-                              gfx::Insets(-height_difference, 0));
+                              gfx::Insets::VH(-height_difference, 0));
   }
 }
 

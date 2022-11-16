@@ -17,7 +17,7 @@ luci.bucket(
         ),
         acl.entry(
             roles = acl.BUILDBUCKET_OWNER,
-            groups = "google/luci-task-force@google.com",
+            groups = "project-chromium-admins",
         ),
         acl.entry(
             roles = acl.SCHEDULER_OWNER,
@@ -40,10 +40,9 @@ defaults.build_numbers.set(True)
 defaults.cpu.set(cpu.X86_64)
 defaults.executable.set("recipe:chromium")
 defaults.execution_timeout.set(2 * time.hour)
-defaults.os.set(os.LINUX_XENIAL_OR_BIONIC_REMOVE)
+defaults.os.set(os.LINUX_DEFAULT)
 defaults.pool.set("luci.chromium.webrtc.fyi")
 defaults.service_account.set("chromium-ci-builder@chops-service-accounts.iam.gserviceaccount.com")
-defaults.swarming_tags.set(["vpython:native-python-wrapper"])
 defaults.triggered_by.set(["webrtc-gitiles-trigger"])
 
 # Builders are defined in lexicographic order by name
@@ -64,13 +63,13 @@ builder(
 )
 
 builder(
-    name = "WebRTC Chromium FYI Android Tests (dbg) (L Nexus5)",
-    triggered_by = ["WebRTC Chromium FYI Android Builder (dbg)"],
+    name = "WebRTC Chromium FYI Android Tests (dbg) (M Nexus5X)",
+    triggered_by = ["WebRTC Chromium FYI Android Builder ARM64 (dbg)"],
 )
 
 builder(
-    name = "WebRTC Chromium FYI Android Tests (dbg) (M Nexus5X)",
-    triggered_by = ["WebRTC Chromium FYI Android Builder ARM64 (dbg)"],
+    name = "WebRTC Chromium FYI Android Tests (dbg) (N Nexus5X)",
+    triggered_by = ["WebRTC Chromium FYI Android Builder (dbg)"],
 )
 
 builder(
@@ -90,14 +89,12 @@ builder(
 
 builder(
     name = "WebRTC Chromium FYI Mac Builder",
-    cores = 8,
     goma_backend = goma.backend.RBE_PROD,
     os = os.MAC_ANY,
 )
 
 builder(
     name = "WebRTC Chromium FYI Mac Builder (dbg)",
-    cores = 8,
     goma_backend = goma.backend.RBE_PROD,
     os = os.MAC_ANY,
 )
@@ -133,29 +130,15 @@ builder(
 # to swarming bots with appropriate OS using swarming
 # dimensions.
 builder(
-    name = "WebRTC Chromium FYI Win7 Tester",
-    os = os.WINDOWS_DEFAULT,
-    triggered_by = ["WebRTC Chromium FYI Win Builder"],
-)
-
-builder(
-    name = "WebRTC Chromium FYI Win8 Tester",
-    os = os.WINDOWS_DEFAULT,
-    triggered_by = ["WebRTC Chromium FYI Win Builder"],
-)
-
-builder(
     name = "WebRTC Chromium FYI ios-device",
-    executable = "recipe:webrtc/chromium_ios",
     goma_backend = goma.backend.RBE_PROD,
     os = os.MAC_ANY,
-    xcode = xcode.x12d4e,
+    xcode = xcode.x13main,
 )
 
 builder(
     name = "WebRTC Chromium FYI ios-simulator",
-    executable = "recipe:webrtc/chromium_ios",
     goma_backend = goma.backend.RBE_PROD,
     os = os.MAC_ANY,
-    xcode = xcode.x12d4e,
+    xcode = xcode.x13main,
 )

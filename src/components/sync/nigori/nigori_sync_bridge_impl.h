@@ -10,8 +10,6 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
-#include "base/macros.h"
 #include "base/sequence_checker.h"
 #include "base/time/time.h"
 #include "components/sync/engine/nigori/key_derivation_params.h"
@@ -48,11 +46,12 @@ class NigoriSyncBridgeImpl : public KeystoreKeysHandler,
                              public NigoriSyncBridge,
                              public SyncEncryptionHandler {
  public:
-  NigoriSyncBridgeImpl(
-      std::unique_ptr<NigoriLocalChangeProcessor> processor,
-      std::unique_ptr<NigoriStorage> storage,
-      const std::string& packed_explicit_passphrase_key,
-      const std::string& packed_keystore_keys);
+  NigoriSyncBridgeImpl(std::unique_ptr<NigoriLocalChangeProcessor> processor,
+                       std::unique_ptr<NigoriStorage> storage);
+
+  NigoriSyncBridgeImpl(const NigoriSyncBridgeImpl&) = delete;
+  NigoriSyncBridgeImpl& operator=(const NigoriSyncBridgeImpl&) = delete;
+
   ~NigoriSyncBridgeImpl() override;
 
   // SyncEncryptionHandler implementation.
@@ -62,8 +61,10 @@ class NigoriSyncBridgeImpl : public KeystoreKeysHandler,
   ModelTypeSet GetEncryptedTypes() override;
   Cryptographer* GetCryptographer() override;
   PassphraseType GetPassphraseType() override;
-  void SetEncryptionPassphrase(const std::string& passphrase) override;
-  void SetDecryptionPassphrase(const std::string& passphrase) override;
+  void SetEncryptionPassphrase(
+      const std::string& passphrase,
+      const KeyDerivationParams& key_derivation_params) override;
+  void SetExplicitPassphraseDecryptionKey(std::unique_ptr<Nigori> key) override;
   void AddTrustedVaultDecryptionKeys(
       const std::vector<std::vector<uint8_t>>& keys) override;
   base::Time GetKeystoreMigrationTime() override;
@@ -86,9 +87,6 @@ class NigoriSyncBridgeImpl : public KeystoreKeysHandler,
   const CryptographerImpl& GetCryptographerImplForTesting() const;
   bool HasPendingKeysForTesting() const;
   KeyDerivationParams GetCustomPassphraseKeyDerivationParamsForTesting() const;
-
-  static std::string PackExplicitPassphraseKeyForTesting(
-      const CryptographerImpl& cryptographer);
 
  private:
   absl::optional<ModelError> UpdateLocalState(
@@ -132,24 +130,9 @@ class NigoriSyncBridgeImpl : public KeystoreKeysHandler,
   // the appropriate observer methods (if any).
   void MaybeNotifyOfPendingKeys() const;
 
-  // Persists Nigori derived from explicit passphrase into preferences, in case
-  // error occurs during serialization/encryption, corresponding preference
-  // just won't be updated.
-  void MaybeNotifyBootstrapTokenUpdated() const;
-
   // Queues keystore rotation or full keystore migration if current state
   // assumes it should happen.
   void MaybeTriggerKeystoreReencryption();
-
-  // Prior to USS keystore keys were stored in preferences. To avoid redundant
-  // requests to the server and make USS implementation more robust against
-  // failing such requests, the value restored from preferences should be
-  // populated to current |state_|. Performs unpacking of
-  // |packed_keystore_keys| and populates them to
-  // |keystore_keys_cryptographer|. Has no effect if |packed_keystore_keys| is
-  // empty, errors occur during deserealization or
-  // |keystore_keys_cryptographer| already has keys.
-  void MaybeMigrateKeystoreKeys(const std::string& packed_keystore_keys);
 
   // Serializes state of the bridge and sync metadata into the proto.
   sync_pb::NigoriLocalData SerializeAsNigoriLocalData() const;
@@ -173,11 +156,6 @@ class NigoriSyncBridgeImpl : public KeystoreKeysHandler,
   const std::unique_ptr<NigoriLocalChangeProcessor> processor_;
   const std::unique_ptr<NigoriStorage> storage_;
 
-  // Stores a key derived from explicit passphrase and loaded from the prefs.
-  // Empty (i.e. default value) if prefs doesn't contain this key or in case of
-  // decryption/decoding errors.
-  const sync_pb::NigoriKey explicit_passphrase_key_;
-
   syncer::NigoriState state_;
 
   std::list<std::unique_ptr<PendingLocalNigoriCommit>>
@@ -189,8 +167,6 @@ class NigoriSyncBridgeImpl : public KeystoreKeysHandler,
   const std::unique_ptr<BroadcastingObserver> broadcasting_observer_;
 
   SEQUENCE_CHECKER(sequence_checker_);
-
-  DISALLOW_COPY_AND_ASSIGN(NigoriSyncBridgeImpl);
 };
 
 }  // namespace syncer

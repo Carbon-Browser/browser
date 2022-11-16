@@ -9,7 +9,7 @@
 
 #include "base/bind.h"
 #include "base/files/file_util.h"
-#include "base/task/post_task.h"
+#include "base/trace_event/trace_event.h"
 #include "components/safe_browsing/core/common/safebrowsing_constants.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/network_context_client_base.h"
@@ -22,6 +22,10 @@
 #include "services/network/network_context.h"
 #include "services/network/public/mojom/url_loader_factory.mojom.h"
 
+#if BUILDFLAG(IS_ANDROID)
+#include "base/android/remove_stale_data.h"
+#endif
+
 namespace safe_browsing {
 
 class SafeBrowsingNetworkContext::SharedURLLoaderFactory
@@ -29,10 +33,15 @@ class SafeBrowsingNetworkContext::SharedURLLoaderFactory
  public:
   SharedURLLoaderFactory(
       const base::FilePath& user_data_dir,
+      bool trigger_migration,
       NetworkContextParamsFactory network_context_params_factory)
       : user_data_dir_(user_data_dir),
+        trigger_migration_(trigger_migration),
         network_context_params_factory_(
             std::move(network_context_params_factory)) {}
+
+  SharedURLLoaderFactory(const SharedURLLoaderFactory&) = delete;
+  SharedURLLoaderFactory& operator=(const SharedURLLoaderFactory&) = delete;
 
   void Reset() {
     DCHECK(content::BrowserThread::CurrentlyOn(content::BrowserThread::UI));
@@ -111,38 +120,55 @@ class SafeBrowsingNetworkContext::SharedURLLoaderFactory
   ~SharedURLLoaderFactory() override = default;
 
   network::mojom::NetworkContextParamsPtr CreateNetworkContextParams() {
+    TRACE_EVENT0("startup",
+                 "SafeBrowsingNetworkContext::CreateNetworkContextParams");
     DCHECK(content::BrowserThread::CurrentlyOn(content::BrowserThread::UI));
     network::mojom::NetworkContextParamsPtr network_context_params =
         network_context_params_factory_.Run();
-
-    network_context_params->context_name = std::string("safe_browsing");
 
     network_context_params->http_cache_enabled = false;
 
     network_context_params->file_paths =
         network::mojom::NetworkContextFilePaths::New();
-    network_context_params->file_paths->data_path = user_data_dir_;
+    network_context_params->file_paths->data_directory = user_data_dir_.Append(
+        base::FilePath(base::FilePath::StringType(kSafeBrowsingBaseFilename) +
+                       FILE_PATH_LITERAL(" Network")));
+    network_context_params->file_paths->unsandboxed_data_path = user_data_dir_;
+    network_context_params->file_paths->trigger_migration = trigger_migration_;
     network_context_params->file_paths->cookie_database_name = base::FilePath(
         base::FilePath::StringType(kSafeBrowsingBaseFilename) + kCookiesFile);
     network_context_params->enable_encrypted_cookies = false;
+
+#if BUILDFLAG(IS_ANDROID)
+    // On Android the `data_directory` was used by some wrong builds instead of
+    // `unsandboxed_data_path`. Cleaning it up. See crbug.com/1331809.
+    // The `cookie_manager` is set by WebView, where the mistaken migration did
+    // not happen.
+    DCHECK(!trigger_migration_);
+    if (!network_context_params->cookie_manager) {
+      base::android::RemoveStaleDataDirectory(
+          network_context_params->file_paths->data_directory.path());
+    }
+#endif  // BUILDFLAG(IS_ANDROID)
 
     return network_context_params;
   }
 
   base::FilePath user_data_dir_;
+  bool trigger_migration_;
   NetworkContextParamsFactory network_context_params_factory_;
   mojo::Remote<network::mojom::NetworkContext> network_context_;
   mojo::Remote<network::mojom::URLLoaderFactory> url_loader_factory_;
-
-  DISALLOW_COPY_AND_ASSIGN(SharedURLLoaderFactory);
 };
 
 SafeBrowsingNetworkContext::SafeBrowsingNetworkContext(
     const base::FilePath& user_data_dir,
+    bool trigger_migration,
     NetworkContextParamsFactory network_context_params_factory) {
   DCHECK(content::BrowserThread::CurrentlyOn(content::BrowserThread::UI));
   url_loader_factory_ = base::MakeRefCounted<SharedURLLoaderFactory>(
-      user_data_dir, std::move(network_context_params_factory));
+      user_data_dir, trigger_migration,
+      std::move(network_context_params_factory));
 }
 
 SafeBrowsingNetworkContext::~SafeBrowsingNetworkContext() {

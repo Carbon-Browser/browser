@@ -10,6 +10,7 @@
 
 #include "base/strings/string_util.h"
 #include "base/values.h"
+#include "chrome/browser/external_protocol/constants.h"
 #include "chrome/common/pref_names.h"
 #include "components/policy/core/browser/policy_error_map.h"
 #include "components/policy/core/common/policy_map.h"
@@ -20,10 +21,6 @@
 #include "url/gurl.h"
 
 namespace policy {
-
-const char AutoLaunchProtocolsPolicyHandler::kProtocolNameKey[] = "protocol";
-const char AutoLaunchProtocolsPolicyHandler::kOriginListKey[] =
-    "allowed_origins";
 
 namespace {
 const char kValidProtocolChars[] =
@@ -72,14 +69,14 @@ bool AutoLaunchProtocolsPolicyHandler::CheckPolicySettings(
   if (!CheckAndGetValue(policies, nullptr, &policy_value) || !policy_value)
     return false;
 
-  base::Value::ConstListView policy_list = policy_value->GetList();
+  base::Value::ConstListView policy_list = policy_value->GetListDeprecated();
   for (size_t i = 0; i < policy_list.size(); ++i) {
     const base::DictionaryValue& protocol_origins_map =
         base::Value::AsDictionaryValue(policy_list[i]);
 
     // If the protocol is invalid mark it as an error.
     const std::string* protocol = protocol_origins_map.FindStringKey(
-        AutoLaunchProtocolsPolicyHandler::kProtocolNameKey);
+        policy::external_protocol::kProtocolNameKey);
     DCHECK(protocol);
     if (!IsValidProtocol(*protocol)) {
       errors->AddError(policy::key::kAutoLaunchProtocolsFromOrigins, i,
@@ -87,8 +84,8 @@ bool AutoLaunchProtocolsPolicyHandler::CheckPolicySettings(
     }
 
     const base::Value* origins_list = protocol_origins_map.FindListKey(
-        AutoLaunchProtocolsPolicyHandler::kOriginListKey);
-    for (const auto& entry : origins_list->GetList()) {
+        policy::external_protocol::kOriginListKey);
+    for (const auto& entry : origins_list->GetListDeprecated()) {
       const std::string pattern = entry.GetString();
       // If it's not a valid origin pattern mark it as an error.
       if (!IsValidOriginMatchingPattern(pattern)) {
@@ -97,7 +94,7 @@ bool AutoLaunchProtocolsPolicyHandler::CheckPolicySettings(
       }
     }
     // If the origin list is empty mark it as an error.
-    if (origins_list->GetList().empty()) {
+    if (origins_list->GetListDeprecated().empty()) {
       errors->AddError(policy::key::kAutoLaunchProtocolsFromOrigins, i,
                        IDS_POLICY_VALUE_FORMAT_ERROR);
     }
@@ -115,22 +112,22 @@ void AutoLaunchProtocolsPolicyHandler::ApplyPolicySettings(
   CheckAndGetValue(policies, nullptr, &policy_value);
 
   base::ListValue validated_pref_values;
-  for (auto& protocol_origins_map : policy_value->GetList()) {
+  for (auto& protocol_origins_map : policy_value->GetListDeprecated()) {
     // If the protocol is invalid skip the entry.
     const std::string* protocol = protocol_origins_map.FindStringKey(
-        AutoLaunchProtocolsPolicyHandler::kProtocolNameKey);
+        policy::external_protocol::kProtocolNameKey);
     DCHECK(protocol);
     if (!IsValidProtocol(*protocol))
       continue;
 
     // Remove invalid patterns from the list.
     base::Value* origin_patterns_list = protocol_origins_map.FindListKey(
-        AutoLaunchProtocolsPolicyHandler::kOriginListKey);
+        policy::external_protocol::kOriginListKey);
     origin_patterns_list->EraseListValueIf([](const base::Value& pattern) {
       return !IsValidOriginMatchingPattern(pattern.GetString());
     });
     // If the origin list is empty skip the entry.
-    if (origin_patterns_list->GetList().size() == 0)
+    if (origin_patterns_list->GetListDeprecated().size() == 0)
       continue;
 
     validated_pref_values.Append(protocol_origins_map.Clone());

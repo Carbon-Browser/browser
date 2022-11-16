@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "components/omnibox/browser/in_memory_url_index.h"
+
 #include <stddef.h>
 #include <stdint.h>
 
@@ -13,11 +15,11 @@
 #include <utility>
 
 #include "base/auto_reset.h"
-#include "base/cxx17_backports.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/i18n/case_conversion.h"
+#include "base/memory/raw_ptr.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/strings/string_split.h"
@@ -26,12 +28,12 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
+#include "base/time/time.h"
 #include "components/history/core/browser/history_backend.h"
 #include "components/history/core/browser/history_database.h"
 #include "components/history/core/browser/history_service.h"
 #include "components/history/core/test/history_service_test_util.h"
 #include "components/omnibox/browser/history_index_restore_observer.h"
-#include "components/omnibox/browser/in_memory_url_index.h"
 #include "components/omnibox/browser/in_memory_url_index_test_util.h"
 #include "components/omnibox/browser/in_memory_url_index_types.h"
 #include "components/omnibox/browser/url_index_private_data.h"
@@ -171,7 +173,7 @@ class InMemoryURLIndexTest : public testing::Test {
   base::ScopedTempDir temp_dir_;
   base::test::TaskEnvironment task_environment_;
   std::unique_ptr<history::HistoryService> history_service_;
-  history::HistoryDatabase* history_database_ = nullptr;
+  raw_ptr<history::HistoryDatabase> history_database_ = nullptr;
   std::unique_ptr<TemplateURLService> template_url_service_;
   std::unique_ptr<InMemoryURLIndex> url_index_;
 };
@@ -259,7 +261,7 @@ void InMemoryURLIndexTest::SetUp() {
   // Update [urls.last_visit_time] and [visits.visit_time] to represent a time
   // relative to 'now'.
   base::Time time_right_now = base::Time::NowFromSystemTime();
-  base::TimeDelta day_delta = base::TimeDelta::FromDays(1);
+  base::TimeDelta day_delta = base::Days(1);
   {
     sql::Statement s(db.GetUniqueStatement(
         "UPDATE urls SET last_visit_time = ? - ? * last_visit_time"));
@@ -277,7 +279,7 @@ void InMemoryURLIndexTest::SetUp() {
 
   // Set up a simple template URL service with a default search engine.
   template_url_service_ = std::make_unique<TemplateURLService>(
-      kTemplateURLData, base::size(kTemplateURLData));
+      kTemplateURLData, std::size(kTemplateURLData));
   TemplateURL* template_url = template_url_service_->GetTemplateURLForKeyword(
       kDefaultTemplateURLKeyword);
   template_url_service_->SetUserSelectedDefaultSearchProvider(template_url);
@@ -699,8 +701,8 @@ TEST_F(InMemoryURLIndexTest, TrimHistoryIds) {
   constexpr int kLowVisitCount = 20;
   constexpr int kHighVisitCount = 200;
 
-  constexpr base::TimeDelta kOld = base::TimeDelta::FromDays(15);
-  constexpr base::TimeDelta kNew = base::TimeDelta::FromDays(2);
+  constexpr base::TimeDelta kOld = base::Days(15);
+  constexpr base::TimeDelta kNew = base::Days(2);
 
   constexpr int kMinRowId = 5000;
 
@@ -1096,7 +1098,7 @@ TEST_F(InMemoryURLIndexTest, AllowlistedURLs) {
   };
 
   const SchemeSet& allowlist(scheme_allowlist());
-  for (size_t i = 0; i < base::size(data); ++i) {
+  for (size_t i = 0; i < std::size(data); ++i) {
     GURL url(data[i].url_spec);
     EXPECT_EQ(data[i].expected_is_allowlisted,
               URLIndexPrivateData::URLSchemeIsAllowlisted(url, allowlist));
@@ -1214,12 +1216,19 @@ TEST_F(InMemoryURLIndexTest, DISABLED_CacheSaveRestore) {
   ExpectPrivateDataEqual(*old_data, new_data);
 }
 
-TEST_F(InMemoryURLIndexTest, RebuildFromHistoryIfCacheOld) {
-  // Test specifically covers the flag-disabled behavior.
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndDisableFeature(
-      omnibox::kHistoryQuickProviderAblateInMemoryURLIndexCacheFile);
+class InMemoryURLIndexDisabledTest : public InMemoryURLIndexTest {
+ public:
+  InMemoryURLIndexDisabledTest() {
+    feature_list_.InitAndDisableFeature(
+        omnibox::kHistoryQuickProviderAblateInMemoryURLIndexCacheFile);
+  }
 
+ private:
+  base::test::ScopedFeatureList feature_list_;
+};
+
+TEST_F(InMemoryURLIndexDisabledTest, RebuildFromHistoryIfCacheOld) {
+  // Test specifically covers the flag-disabled behavior.
   ASSERT_TRUE(temp_dir_.CreateUniqueTempDir());
   set_history_dir(temp_dir_.GetPath());
 
@@ -1244,8 +1253,7 @@ TEST_F(InMemoryURLIndexTest, RebuildFromHistoryIfCacheOld) {
   // Overwrite the build time so that we'll think the data is too old
   // and rebuild the cache from history.
   const base::Time fake_rebuild_time =
-      private_data.last_time_rebuilt_from_history_ -
-      base::TimeDelta::FromDays(30);
+      private_data.last_time_rebuilt_from_history_ - base::Days(30);
   private_data.last_time_rebuilt_from_history_ = fake_rebuild_time;
 
   // Capture the current private data for later comparison to restored data.
@@ -1350,7 +1358,7 @@ TEST_F(InMemoryURLIndexTest, CalculateWordStartsOffsets) {
                     {"abcd :", 5, 2, {0, 1, kInvalid}},
                     {"abcd :", 2, 3, {0, 0, 1}}};
 
-  for (size_t i = 0; i < base::size(test_cases); ++i) {
+  for (size_t i = 0; i < std::size(test_cases); ++i) {
     SCOPED_TRACE(testing::Message()
                  << "search_string = " << test_cases[i].search_string
                  << ", cursor_position = " << test_cases[i].cursor_position);
@@ -1390,7 +1398,7 @@ TEST_F(InMemoryURLIndexTest, CalculateWordStartsOffsetsUnderscore) {
                     {"abcd_", 4, 2, {0, 1, kInvalid}},
                     {"ab_cd", 5, 1, {0, kInvalid, kInvalid}}};
 
-  for (size_t i = 0; i < base::size(test_cases); ++i) {
+  for (size_t i = 0; i < std::size(test_cases); ++i) {
     SCOPED_TRACE(testing::Message()
                  << "search_string = " << test_cases[i].search_string
                  << ", cursor_position = " << test_cases[i].cursor_position);
@@ -1455,14 +1463,14 @@ bool InMemoryURLIndexCacheTest::GetCacheFilePath(
 }
 
 TEST_F(InMemoryURLIndexCacheTest, CacheFilePath) {
-  base::FilePath expectedPath =
+  base::FilePath expected_path =
       temp_dir_.GetPath().Append(FILE_PATH_LITERAL("History Provider Cache"));
-  std::vector<base::FilePath::StringType> expected_parts;
-  expectedPath.GetComponents(&expected_parts);
+  std::vector<base::FilePath::StringType> expected_parts =
+      expected_path.GetComponents();
   base::FilePath full_file_path;
   ASSERT_TRUE(GetCacheFilePath(&full_file_path));
-  std::vector<base::FilePath::StringType> actual_parts;
-  full_file_path.GetComponents(&actual_parts);
+  std::vector<base::FilePath::StringType> actual_parts =
+      full_file_path.GetComponents();
   ASSERT_EQ(expected_parts.size(), actual_parts.size());
   size_t count = expected_parts.size();
   for (size_t i = 0; i < count; ++i)

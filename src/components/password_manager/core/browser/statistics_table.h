@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "base/callback_forward.h"
-#include "base/macros.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "url/gurl.h"
 
@@ -40,6 +40,10 @@ bool operator==(const InteractionsStats& lhs, const InteractionsStats& rhs);
 class StatisticsTable {
  public:
   StatisticsTable();
+
+  StatisticsTable(const StatisticsTable&) = delete;
+  StatisticsTable& operator=(const StatisticsTable&) = delete;
+
   ~StatisticsTable();
 
   // Initializes |db_|.
@@ -79,9 +83,7 @@ class StatisticsTable {
   std::vector<InteractionsStats> GetAllRowsForTest();
 
  private:
-  sql::Database* db_ = nullptr;
-
-  DISALLOW_COPY_AND_ASSIGN(StatisticsTable);
+  raw_ptr<sql::Database> db_ = nullptr;
 };
 
 }  // namespace password_manager

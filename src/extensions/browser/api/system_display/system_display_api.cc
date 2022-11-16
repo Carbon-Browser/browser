@@ -10,7 +10,6 @@
 #include <string>
 
 #include "base/bind.h"
-#include "base/macros.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "content/public/browser/web_contents.h"
@@ -37,10 +36,10 @@ class OverscanTracker;
 
 // Singleton class to track overscan calibration overlays. An observer is
 // created per WebContents which tracks any calbiration overlays by id.
-// If the render frame is deleted (e.g. the tab is closed) before the overlay
-// calibraiton is completed, the observer will call the overscan complete
-// method to remove the overlay. When all observers are removed, the singleton
-// tracker will delete itself.
+// If the primary main render frame is deleted (e.g. the tab is closed)
+// before the overlay calibraiton is completed, the observer will call the
+// overscan complete method to remove the overlay. When all observers are
+// removed, the singleton tracker will delete itself.
 class OverscanTracker {
  public:
   static void AddDisplay(content::WebContents* web_contents,
@@ -50,6 +49,10 @@ class OverscanTracker {
   static void RemoveObserver(content::WebContents* web_contents);
 
   OverscanTracker() {}
+
+  OverscanTracker(const OverscanTracker&) = delete;
+  OverscanTracker& operator=(const OverscanTracker&) = delete;
+
   ~OverscanTracker() {}
 
  private:
@@ -62,8 +65,6 @@ class OverscanTracker {
   using ObserverMap =
       std::map<content::WebContents*, std::unique_ptr<OverscanWebObserver>>;
   ObserverMap observers_;
-
-  DISALLOW_COPY_AND_ASSIGN(OverscanTracker);
 };
 
 class OverscanTracker::OverscanWebObserver
@@ -71,11 +72,17 @@ class OverscanTracker::OverscanWebObserver
  public:
   explicit OverscanWebObserver(content::WebContents* web_contents)
       : content::WebContentsObserver(web_contents) {}
+
+  OverscanWebObserver(const OverscanWebObserver&) = delete;
+  OverscanWebObserver& operator=(const OverscanWebObserver&) = delete;
+
   ~OverscanWebObserver() override {}
 
   // WebContentsObserver
   void RenderFrameDeleted(
       content::RenderFrameHost* render_frame_host) override {
+    if (!render_frame_host->IsInPrimaryMainFrame())
+      return;
     for (const std::string& id : display_ids_) {
       // Reset any uncomitted calibraiton changes and complete calibration to
       // hide the overlay.
@@ -95,8 +102,6 @@ class OverscanTracker::OverscanWebObserver
 
  private:
   std::set<std::string> display_ids_;
-
-  DISALLOW_COPY_AND_ASSIGN(OverscanWebObserver);
 };
 
 static OverscanTracker* g_overscan_tracker = nullptr;

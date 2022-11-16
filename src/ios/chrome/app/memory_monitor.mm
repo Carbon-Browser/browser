@@ -14,7 +14,6 @@
 #import "base/mac/foundation_util.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/system/sys_info.h"
-#include "base/task/post_task.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
 #import "components/previous_session_info/previous_session_info.h"
@@ -25,7 +24,7 @@
 #endif
 
 namespace {
-// Delay between each invocations of |UpdateMemoryValues|.
+// Delay between each invocations of `UpdateMemoryValues`.
 const int64_t kMemoryMonitorDelayInSeconds = 30;
 
 // Checks the values of free RAM and free disk space and updates breakpad with
@@ -35,7 +34,6 @@ void UpdateMemoryValues() {
                                                 base::BlockingType::WILL_BLOCK);
   const int free_memory =
       static_cast<int>(base::SysInfo::AmountOfAvailablePhysicalMemory() / 1024);
-  crash_keys::SetCurrentFreeMemoryInKB(free_memory);
 
   NSURL* fileURL = [[NSURL alloc] initFileURLWithPath:NSHomeDirectory()];
   NSDictionary* results = [fileURL resourceValuesForKeys:@[
@@ -48,19 +46,24 @@ void UpdateMemoryValues() {
         results[NSURLVolumeAvailableCapacityForImportantUsageKey];
     free_disk_space_kilobytes = [available_bytes integerValue] / 1024;
   }
-  crash_keys::SetCurrentFreeDiskInKB(free_disk_space_kilobytes);
-  [[PreviousSessionInfo sharedInstance]
-      updateAvailableDeviceStorage:(NSInteger)free_disk_space_kilobytes];
+
+  // As a workaround to crbug.com/1247282, dispatch back to the main thread.
+  dispatch_async(dispatch_get_main_queue(), ^{
+    crash_keys::SetCurrentFreeMemoryInKB(free_memory);
+    crash_keys::SetCurrentFreeDiskInKB(free_disk_space_kilobytes);
+    [[PreviousSessionInfo sharedInstance]
+        updateAvailableDeviceStorage:(NSInteger)free_disk_space_kilobytes];
+  });
 }
 
-// Invokes |UpdateMemoryValues| and schedules itself to be called after
-// |kMemoryMonitorDelayInSeconds|.
+// Invokes `UpdateMemoryValues` and schedules itself to be called after
+// `kMemoryMonitorDelayInSeconds`.
 void AsynchronousFreeMemoryMonitor() {
   UpdateMemoryValues();
   base::ThreadPool::PostDelayedTask(
       FROM_HERE, {base::MayBlock(), base::TaskPriority::BEST_EFFORT},
       base::BindOnce(&AsynchronousFreeMemoryMonitor),
-      base::TimeDelta::FromSeconds(kMemoryMonitorDelayInSeconds));
+      base::Seconds(kMemoryMonitorDelayInSeconds));
 }
 }  // namespace
 

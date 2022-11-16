@@ -7,7 +7,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "base/macros.h"
 #include "base/values.h"
 #include "content/common/font_list.h"
 #include "content/public/browser/browser_ppapi_host.h"
@@ -24,6 +23,9 @@ class FontMessageFilter : public ppapi::host::ResourceMessageFilter {
  public:
   FontMessageFilter();
 
+  FontMessageFilter(const FontMessageFilter&) = delete;
+  FontMessageFilter& operator=(const FontMessageFilter&) = delete;
+
   // ppapi::host::ResourceMessageFilter implementation.
   scoped_refptr<base::SequencedTaskRunner> OverrideTaskRunnerForMessage(
       const IPC::Message& msg) override;
@@ -36,8 +38,6 @@ class FontMessageFilter : public ppapi::host::ResourceMessageFilter {
 
   // Message handler.
   int32_t OnHostMsgGetFontFamilies(ppapi::host::HostMessageContext* context);
-
-  DISALLOW_COPY_AND_ASSIGN(FontMessageFilter);
 };
 
 FontMessageFilter::FontMessageFilter() {}
@@ -66,15 +66,14 @@ int32_t FontMessageFilter::OnResourceMessageReceived(
 int32_t FontMessageFilter::OnHostMsgGetFontFamilies(
     ppapi::host::HostMessageContext* context) {
   // OK to use "slow blocking" version since we're on the blocking pool.
-  std::unique_ptr<base::ListValue> list(GetFontList_SlowBlocking());
+  base::Value::List list(GetFontList_SlowBlocking());
 
-  base::Value::ConstListView list_view = list->GetList();
   std::string output;
-  for (const auto& i : list_view) {
+  for (const auto& i : list) {
     if (!i.is_list())
       continue;
 
-    base::Value::ConstListView cur_font = i.GetList();
+    const base::Value::List& cur_font = i.GetList();
 
     // Each entry is actually a list of (font name, localized name).
     // We only care about the regular name.

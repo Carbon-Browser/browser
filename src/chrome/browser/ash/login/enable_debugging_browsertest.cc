@@ -11,7 +11,7 @@
 #include "base/location.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
-#include "base/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/ash/login/startup_utils.h"
 #include "chrome/browser/ash/login/test/js_checker.h"
@@ -26,20 +26,21 @@
 #include "chrome/common/chrome_paths.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/pref_names.h"
+#include "chromeos/ash/components/dbus/update_engine/fake_update_engine_client.h"
 #include "chromeos/dbus/constants/dbus_switches.h"
 #include "chromeos/dbus/dbus_thread_manager.h"
+#include "chromeos/dbus/debug_daemon/debug_daemon_client.h"
 #include "chromeos/dbus/debug_daemon/fake_debug_daemon_client.h"
 #include "chromeos/dbus/power/fake_power_manager_client.h"
-#include "chromeos/dbus/update_engine/fake_update_engine_client.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/test_utils.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
-namespace chromeos {
-
+namespace ash {
 namespace {
+
 constexpr char kDebuggingScreenId[] = "debugging";
 
 const test::UIPath kRemoveProtectionDialog = {kDebuggingScreenId,
@@ -174,6 +175,10 @@ class TestDebugDaemonClient : public FakeDebugDaemonClient {
 class EnableDebuggingTestBase : public OobeBaseTest {
  public:
   EnableDebuggingTestBase() = default;
+
+  EnableDebuggingTestBase(const EnableDebuggingTestBase&) = delete;
+  EnableDebuggingTestBase& operator=(const EnableDebuggingTestBase&) = delete;
+
   ~EnableDebuggingTestBase() override = default;
 
   // OobeBaseTest:
@@ -181,20 +186,24 @@ class EnableDebuggingTestBase : public OobeBaseTest {
     OobeBaseTest::SetUpCommandLine(command_line);
     // Disable HID detection because it takes precedence and could block
     // enable-debugging UI.
-    command_line->AppendSwitch(
-        chromeos::switches::kDisableHIDDetectionOnOOBEForTesting);
+    command_line->AppendSwitch(switches::kDisableHIDDetectionOnOOBEForTesting);
   }
-  void SetUpInProcessBrowserTestFixture() override {
-    debug_daemon_client_ = new TestDebugDaemonClient;
-    chromeos::DBusThreadManager::GetSetterForTesting()->SetDebugDaemonClient(
-        std::unique_ptr<DebugDaemonClient>(debug_daemon_client_));
 
+  void SetUpInProcessBrowserTestFixture() override {
     OobeBaseTest::SetUpInProcessBrowserTestFixture();
+    debug_daemon_client_ = std::make_unique<TestDebugDaemonClient>();
+    DebugDaemonClient::SetInstanceForTest(debug_daemon_client_.get());
+  }
+
+  void TearDownInProcessBrowserTestFixture() override {
+    DebugDaemonClient::SetInstanceForTest(nullptr);
+    debug_daemon_client_.reset();
+    OobeBaseTest::TearDownInProcessBrowserTestFixture();
   }
 
   void InvokeEnableDebuggingScreen() {
     LoginDisplayHost::default_host()->HandleAccelerator(
-        ash::LoginAcceleratorAction::kEnableDebugging);
+        LoginAcceleratorAction::kEnableDebugging);
 
     OobeScreenWaiter(EnableDebuggingScreenView::kScreenId).Wait();
   }
@@ -231,10 +240,7 @@ class EnableDebuggingTestBase : public OobeBaseTest {
     test::OobeJS().ExpectVisiblePath(kPasswordNote);
   }
 
-  TestDebugDaemonClient* debug_daemon_client_ = nullptr;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(EnableDebuggingTestBase);
+  std::unique_ptr<TestDebugDaemonClient> debug_daemon_client_;
 };
 
 class EnableDebuggingDevTest : public EnableDebuggingTestBase {
@@ -263,6 +269,13 @@ IN_PROC_BROWSER_TEST_F(EnableDebuggingDevTest, ShowAndCancelRemoveProtection) {
 // Show remove protection, click on [Remove protection] button and wait for
 // reboot.
 IN_PROC_BROWSER_TEST_F(EnableDebuggingDevTest, ShowAndRemoveProtection) {
+  // Disarm faked reboot, otherwise Chrome just stops and there's nothing to
+  // verify.
+  chromeos::FakePowerManagerClient* fake_power_manager_client =
+      chromeos::FakePowerManagerClient::Get();
+  ASSERT_NE(fake_power_manager_client, nullptr);
+  fake_power_manager_client->set_restart_callback(base::DoNothing());
+
   ShowRemoveProtectionScreen();
   debug_daemon_client_->ResetWait();
   test::OobeJS().TapOnPath(kRemoveProtectionButton);
@@ -273,7 +286,7 @@ IN_PROC_BROWSER_TEST_F(EnableDebuggingDevTest, ShowAndRemoveProtection) {
   base::RunLoop().RunUntilIdle();
   EXPECT_EQ(debug_daemon_client_->num_remove_protection(), 1);
   EXPECT_EQ(debug_daemon_client_->num_enable_debugging_features(), 0);
-  EXPECT_EQ(FakePowerManagerClient::Get()->num_request_restart_calls(), 1);
+  EXPECT_EQ(fake_power_manager_client->num_request_restart_calls(), 1);
 }
 
 // Show setup screen. Click on [Enable] button. Wait until done screen is shown.
@@ -362,19 +375,11 @@ IN_PROC_BROWSER_TEST_F(EnableDebuggingDevTest, WaitForDebugDaemon) {
   test::OobeJS().ExpectVisiblePath(kRemoveProtectionDialog);
 }
 
-class EnableDebuggingNonDevTest : public EnableDebuggingTestBase {
- public:
-  EnableDebuggingNonDevTest() = default;
-
-  void SetUpInProcessBrowserTestFixture() override {
-    chromeos::DBusThreadManager::GetSetterForTesting()->SetDebugDaemonClient(
-        std::unique_ptr<DebugDaemonClient>(new FakeDebugDaemonClient));
-    EnableDebuggingTestBase::SetUpInProcessBrowserTestFixture();
-  }
-};
+// Uses the base class setup, with a TestDebugDaemonClient.
+using EnableDebuggingTest = EnableDebuggingTestBase;
 
 // Try to show enable debugging dialog, we should see error screen here.
-IN_PROC_BROWSER_TEST_F(EnableDebuggingNonDevTest, NoShowInNonDevMode) {
+IN_PROC_BROWSER_TEST_F(EnableDebuggingTest, NoShowInNonDevMode) {
   test::OobeJS().ExpectHidden(kDebuggingScreenId);
   InvokeEnableDebuggingScreen();
   test::OobeJS().CreateVisibilityWaiter(true, kErrorDialog)->Wait();
@@ -387,7 +392,7 @@ class EnableDebuggingRequestedTest : public EnableDebuggingDevTest {
   // EnableDebuggingDevTest overrides:
   bool SetUpUserDataDirectory() override {
     base::DictionaryValue local_state_dict;
-    local_state_dict.SetBoolean(prefs::kDebuggingFeaturesRequested, true);
+    local_state_dict.SetBoolKey(prefs::kDebuggingFeaturesRequested, true);
 
     base::FilePath user_data_dir;
     CHECK(base::PathService::Get(chrome::DIR_USER_DATA, &user_data_dir));
@@ -418,4 +423,4 @@ IN_PROC_BROWSER_TEST_F(EnableDebuggingRequestedTest, CancelAutoShowSetup) {
   test::OobeJS().ExpectHidden(kDebuggingScreenId);
 }
 
-}  // namespace chromeos
+}  // namespace ash

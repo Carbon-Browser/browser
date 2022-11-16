@@ -7,7 +7,6 @@
 
 #include <memory>
 
-#include "base/macros.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "content/public/browser/web_contents_user_data.h"
 
@@ -52,6 +51,9 @@ class SafeBrowsingTabObserver
     CreateClientSideDetectionHost(content::WebContents* web_contents) = 0;
   };
 
+  SafeBrowsingTabObserver(const SafeBrowsingTabObserver&) = delete;
+  SafeBrowsingTabObserver& operator=(const SafeBrowsingTabObserver&) = delete;
+
   ~SafeBrowsingTabObserver() override;
 
  private:
@@ -68,16 +70,11 @@ class SafeBrowsingTabObserver
   // Handles IPCs.
   std::unique_ptr<ClientSideDetectionHost> safebrowsing_detection_host_;
 
-  // Our owning WebContents.
-  content::WebContents* web_contents_;
-
   std::unique_ptr<Delegate> delegate_;
 
   PrefChangeRegistrar pref_change_registrar_;
 
   WEB_CONTENTS_USER_DATA_KEY_DECL();
-
-  DISALLOW_COPY_AND_ASSIGN(SafeBrowsingTabObserver);
 };
 
 }  // namespace safe_browsing

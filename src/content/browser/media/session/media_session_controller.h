@@ -5,7 +5,7 @@
 #ifndef CONTENT_BROWSER_MEDIA_SESSION_MEDIA_SESSION_CONTROLLER_H_
 #define CONTENT_BROWSER_MEDIA_SESSION_MEDIA_SESSION_CONTROLLER_H_
 
-#include "base/compiler_specific.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "content/browser/media/session/media_session_player_observer.h"
@@ -34,6 +34,10 @@ class CONTENT_EXPORT MediaSessionController
  public:
   MediaSessionController(const MediaPlayerId& id,
                          WebContentsImpl* web_contents);
+
+  MediaSessionController(const MediaSessionController&) = delete;
+  MediaSessionController& operator=(const MediaSessionController&) = delete;
+
   ~MediaSessionController() override;
 
   // Must be called when media player metadata changes.
@@ -69,6 +73,8 @@ class CONTENT_EXPORT MediaSessionController
   bool HasVideo(int player_id) const override;
   std::string GetAudioOutputSinkId(int player_id) const override;
   bool SupportsAudioOutputDeviceSwitching(int player_id) const override;
+  media::MediaContentType GetMediaContentType() const override;
+
   // Test helpers.
   int get_player_id_for_testing() const { return player_id_; }
 
@@ -104,10 +110,10 @@ class CONTENT_EXPORT MediaSessionController
   const MediaPlayerId id_;
 
   // Outlives |this|.
-  WebContentsImpl* const web_contents_;
+  const raw_ptr<WebContentsImpl> web_contents_;
 
   // Outlives |this|.
-  MediaSessionImpl* const media_session_;
+  const raw_ptr<MediaSessionImpl> media_session_;
 
   absl::optional<media_session::MediaPosition> position_;
 
@@ -126,8 +132,6 @@ class CONTENT_EXPORT MediaSessionController
   bool supports_audio_output_device_switching_ = true;
   media::MediaContentType media_content_type_ =
       media::MediaContentType::Persistent;
-
-  DISALLOW_COPY_AND_ASSIGN(MediaSessionController);
 };
 
 }  // namespace content

@@ -181,11 +181,6 @@ void TaskQueue::ShutdownTaskQueue() {
     return;
   }
   impl_->SetBlameContext(nullptr);
-  impl_->SetOnTaskStartedHandler(
-      internal::TaskQueueImpl::OnTaskStartedHandler());
-  impl_->SetOnTaskCompletedHandler(
-      internal::TaskQueueImpl::OnTaskCompletedHandler());
-  impl_->SetOnTaskPostedHandler(internal::TaskQueueImpl::OnTaskPostedHandler());
   sequence_manager_->UnregisterTaskQueueImpl(TakeTaskQueueImpl());
 }
 
@@ -235,18 +230,18 @@ bool TaskQueue::HasTaskToRunImmediatelyOrReadyDelayedTask() const {
   return impl_->HasTaskToRunImmediatelyOrReadyDelayedTask();
 }
 
-absl::optional<DelayedWakeUp> TaskQueue::GetNextDesiredWakeUp() {
+absl::optional<WakeUp> TaskQueue::GetNextDesiredWakeUp() {
   DCHECK_CALLED_ON_VALID_THREAD(associated_thread_->thread_checker);
   if (!impl_)
     return absl::nullopt;
   return impl_->GetNextDesiredWakeUp();
 }
 
-void TaskQueue::UpdateDelayedWakeUp(LazyNow* lazy_now) {
+void TaskQueue::UpdateWakeUp(LazyNow* lazy_now) {
   DCHECK_CALLED_ON_VALID_THREAD(associated_thread_->thread_checker);
   if (!impl_)
     return;
-  impl_->UpdateDelayedWakeUp(lazy_now);
+  impl_->UpdateWakeUp(lazy_now);
 }
 
 void TaskQueue::SetQueuePriority(TaskQueue::QueuePriority priority) {
@@ -275,20 +270,6 @@ void TaskQueue::RemoveTaskObserver(TaskObserver* task_observer) {
   if (!impl_)
     return;
   impl_->RemoveTaskObserver(task_observer);
-}
-
-void TaskQueue::SetTimeDomain(TimeDomain* time_domain) {
-  DCHECK_CALLED_ON_VALID_THREAD(associated_thread_->thread_checker);
-  if (!impl_)
-    return;
-  impl_->SetTimeDomain(time_domain);
-}
-
-TimeDomain* TaskQueue::GetTimeDomain() const {
-  DCHECK_CALLED_ON_VALID_THREAD(associated_thread_->thread_checker);
-  if (!impl_)
-    return nullptr;
-  return impl_->GetTimeDomain();
 }
 
 void TaskQueue::SetBlameContext(trace_event::BlameContext* blame_context) {
@@ -386,12 +367,21 @@ void TaskQueue::SetOnTaskCompletedHandler(OnTaskCompletedHandler handler) {
   impl_->SetOnTaskCompletedHandler(std::move(handler));
 }
 
-void TaskQueue::SetOnTaskPostedHandler(OnTaskPostedHandler handler) {
+std::unique_ptr<TaskQueue::OnTaskPostedCallbackHandle>
+TaskQueue::AddOnTaskPostedHandler(OnTaskPostedHandler handler) {
+  DCHECK_CALLED_ON_VALID_THREAD(associated_thread_->thread_checker);
+  if (!impl_)
+    return nullptr;
+
+  return impl_->AddOnTaskPostedHandler(std::move(handler));
+}
+
+void TaskQueue::SetTaskExecutionTraceLogger(TaskExecutionTraceLogger logger) {
   DCHECK_CALLED_ON_VALID_THREAD(associated_thread_->thread_checker);
   if (!impl_)
     return;
 
-  impl_->SetOnTaskPostedHandler(std::move(handler));
+  impl_->SetTaskExecutionTraceLogger(std::move(logger));
 }
 
 }  // namespace sequence_manager

@@ -42,6 +42,8 @@ const char kErrorInvalidTransformScheme[] =
     "values are: [*].";
 const char kErrorQueryAndTransformBothSpecified[] =
     "Rule with id * cannot specify both \"*\" and \"*\" keys.";
+const char kErrorDomainsAndInitiatorDomainsBothSpecified[] =
+    "Rule with id * cannot use deprecated field \"*\". Use \"*\" instead.";
 const char kErrorJavascriptRedirect[] =
     "Rule with id * specifies an incorrect value for the \"*\" key. Redirects "
     "to javascript urls are not supported.";
@@ -57,9 +59,6 @@ const char kErrorInvalidAllowAllRequestsResourceType[] =
 const char kErrorRegexTooLarge[] =
     "Rule with id * specified a more complex regex than allowed as part of the "
     "\"*\" key.";
-const char kErrorRegexesTooLarge[] =
-    "Rules with ids [*] specified a more complex regex than allowed as part of "
-    "the \"*\" key.";
 const char kErrorNoHeaderListsSpecified[] =
     "Rule with id * does not specify a value for \"*\" or \"*\" key. At least "
     "one of these keys must be specified with a non-empty list.";
@@ -125,6 +124,10 @@ const char kTabNotFoundError[] = "No tab with id: *.";
 const char kIncrementActionCountWithoutUseAsBadgeTextError[] =
     "Cannot increment action count unless displaying action count as badge "
     "text.";
+
+const char kInvalidTestURLError[] = "Invalid test request URL.";
+const char kInvalidTestInitiatorError[] = "Invalid test request initiator.";
+const char kInvalidTestTabIdError[] = "Invalid test request tab ID.";
 
 const char kIndexAndPersistRulesTimeHistogram[] =
     "Extensions.DeclarativeNetRequest.IndexAndPersistRulesTime";

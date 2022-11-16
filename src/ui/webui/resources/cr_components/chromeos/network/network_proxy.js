@@ -73,7 +73,7 @@ Polymer({
     proxyTypes_: {
       type: Array,
       value: ['Direct', 'PAC', 'WPAD', 'Manual'],
-      readOnly: true
+      readOnly: true,
     },
 
     /**
@@ -233,7 +233,7 @@ Polymer({
       proxy.excludeDomains =
           proxy.excludeDomains || this.savedExcludeDomains_ || {
             activeValue: [],
-            policySource: chromeos.networkConfig.mojom.PolicySource.kNone
+            policySource: chromeos.networkConfig.mojom.PolicySource.kNone,
           };
     }
     return proxy;
@@ -260,7 +260,9 @@ Polymer({
     if (proxy.type.activeValue === 'WPAD') {
       // Set the Web Proxy Auto Discovery URL for display purposes.
       const ipv4 = this.managedProperties ?
-          OncMojo.getIPConfigForType(this.managedProperties, 'IPv4') :
+          OncMojo.getIPConfigForType(
+              this.managedProperties,
+              chromeos.networkConfig.mojom.IPConfigType.kIPv4) :
           null;
       this.wpad_ = (ipv4 && ipv4.webProxyAutoDiscoveryUrl) ||
           this.i18n('networkProxyWpadNone');

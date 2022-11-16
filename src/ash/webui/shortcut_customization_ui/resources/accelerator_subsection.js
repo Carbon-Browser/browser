@@ -2,14 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import './accelerator_row.js'
+import './accelerator_row.js';
 
 import {assert} from 'chrome://resources/js/assert.m.js';
 import {html, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {AcceleratorLookupManager} from './accelerator_lookup_manager.js';
 import {fakeSubCategories} from './fake_data.js';
-import {AcceleratorInfo} from './shortcut_types.js';
+import {AcceleratorInfo, AcceleratorState, AcceleratorType} from './shortcut_types.js';
 
 /**
  * @fileoverview
@@ -47,13 +47,14 @@ export class AcceleratorSubsectionElement extends PolymerElement {
        * TODO(jimmyxgong): Fetch the shortcuts and it accelerators with the
        * mojom::source_id and mojom::subsection_id. This serves as a
        * temporary way to populate a subsection.
-       * @type {Array<!Object<string, number, Array<!AcceleratorInfo>>>}
+       * @type {Array<!Object<string, number, number,
+       *     Array<!AcceleratorInfo>>>}
        */
       acceleratorContainer: {
         type: Array,
         value: [],
-      }
-    }
+      },
+    };
   }
 
   /** @override */
@@ -62,6 +63,15 @@ export class AcceleratorSubsectionElement extends PolymerElement {
 
     /** @private {!AcceleratorLookupManager} */
     this.lookupManager_ = AcceleratorLookupManager.getInstance();
+  }
+
+  updateSubsection() {
+    // Force the rendered list to reset, Polymer's dom-repeat does not perform
+    // a deep check on objects so it won't detect changes to same size length
+    // array of objects.
+    this.set('acceleratorContainer', []);
+    this.$.list.render();
+    this.onCategoryUpdated_();
   }
 
   /** @protected */
@@ -84,15 +94,21 @@ export class AcceleratorSubsectionElement extends PolymerElement {
     // updates as one which results in strange behaviors with updating
     // individual subsections. An atomic replacement makes ensures each
     // subsection's accelerators are kept distinct from each other.
-    let tempAccelContainer = [];
+    const tempAccelContainer = [];
     layoutInfos.forEach((value) => {
       const acceleratorInfos =
-          this.lookupManager_.getAccelerators(value.source, value.action);
-
+          this.lookupManager_.getAccelerators(value.source, value.action)
+              .filter((accel) => {
+                // Hide accelerators that are default and disabled.
+                return !(accel.type === AcceleratorType.kDefault &&
+                    accel.state === AcceleratorState.kDisabledByUser);
+              });
       const accel =
-          /**@type {!Object<string, number, Array<!AcceleratorInfo>>}*/ ({
+          /**@type {!Object<string, number, number, Array<!AcceleratorInfo>>}*/
+          ({
             description: this.lookupManager_.getAcceleratorName(
                 value.source, value.action),
+            action: value.action,
             source: value.source,
             acceleratorInfos: acceleratorInfos,
           });
